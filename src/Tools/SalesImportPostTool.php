@@ -33,8 +33,8 @@ class SalesImportPostTool extends FoodAlchemistTool implements ToolContract, Too
 
     public function getDescription(): string
     {
-        return 'Verkaufs-Ist (CSV/TSV) ins Verkaufsjournal einlesen. `file` ist ein DATEINAME aus dem '
-            . 'Ablage-Ordner foodalchemist/import, kein Pfad. `mapping` ordnet Felder auf Spalten-Indizes '
+        return 'Verkaufs-Ist (CSV/TSV) ins Verkaufsjournal einlesen. `file` ist ein DATEINAME aus der '
+            . 'team-eigenen Ablage (foodalchemist/sales-import/<team>), kein Pfad. `mapping` ordnet Felder auf Spalten-Indizes '
             . '(0-basiert): bezeichnung, umsatz und datum sind Pflicht, menge und bereich optional. '
             . 'OHNE apply=true ist der Lauf ein Trockenlauf und schreibt nichts — der Bericht ist derselbe. '
             . 'Mit columns=true kommt nur die Kopfzeile samt Zuordnungsvorschlag zurück. Zeilen ohne '
@@ -47,7 +47,7 @@ class SalesImportPostTool extends FoodAlchemistTool implements ToolContract, Too
         return [
             'type' => 'object',
             'properties' => [
-                'file' => ['type' => 'string', 'description' => 'Dateiname im Ablage-Ordner (kein Pfad)'],
+                'file' => ['type' => 'string', 'description' => 'Dateiname in der team-eigenen Ablage (kein Pfad)'],
                 'columns' => ['type' => 'boolean', 'description' => 'nur Kopfzeile + Zuordnungsvorschlag lesen'],
                 'mapping' => [
                     'type' => 'object',
@@ -82,7 +82,7 @@ class SalesImportPostTool extends FoodAlchemistTool implements ToolContract, Too
 
         try {
             if ((bool) ($arguments['columns'] ?? false)) {
-                return ToolResult::success($svc->kopf($datei));
+                return ToolResult::success($svc->kopf($team, $datei));
             }
 
             $mapping = [];

@@ -23,7 +23,7 @@ beforeEach(function () {
     $this->seedTeamHierarchy();
     $this->import = app(SalesImportService::class);
 
-    $this->ordner = storage_path('app/' . SalesImportService::ORDNER);
+    $this->ordner = storage_path('app/' . SalesImportService::ordnerFuer($this->rootTeam));
     if (! is_dir($this->ordner)) {
         mkdir($this->ordner, 0775, true);
     }
@@ -64,7 +64,7 @@ afterEach(function () {
 it('erkennt Kopfzeile und schlägt eine Spalten-Zuordnung vor', function () {
     $name = ($this->schreibe)('verkauf_kopf.csv', "Artikel;Anzahl;Umsatz netto;Datum;Kostenstelle\nSchnitzel;3;27,00;01.07.2026;Kantine\n");
 
-    $kopf = $this->import->kopf($name);
+    $kopf = $this->import->kopf($this->rootTeam, $name);
 
     expect($kopf['spalten'])->toHaveCount(5)
         ->and($kopf['vorschlag'])->toMatchArray([
@@ -147,13 +147,13 @@ it('überspringt unlesbare Zeilen und benennt sie', function () {
 it('weist eine xlsx-Datei mit einem Weg statt einer Fehlermeldung ab', function () {
     ($this->schreibe)('verkauf.xlsx', 'egal');
 
-    expect(fn () => $this->import->kopf('verkauf.xlsx'))
+    expect(fn () => $this->import->kopf($this->rootTeam, 'verkauf.xlsx'))
         ->toThrow(RuntimeException::class, 'als CSV');
 });
 
 it('nimmt keinen freien Pfad an', function () {
     // Ein Import, der Pfade annimmt, ist ein Lesezugriff aufs Server-Dateisystem.
-    expect(fn () => $this->import->kopf('../../../../etc/passwd.csv'))
+    expect(fn () => $this->import->kopf($this->rootTeam, '../../../../etc/passwd.csv'))
         ->toThrow(RuntimeException::class, 'Datei nicht gefunden');
 });
 
@@ -196,4 +196,24 @@ it('hält das Verkaufsjournal strikt am eigenen Team', function () {
     // childA ist ein Kind von rootTeam — Umsätze des Eltern-Betriebs gehen es nichts an.
     expect(FoodAlchemistSalesFact::where('team_id', $this->childA->id)->count())->toBe(0)
         ->and(app(MenuEngineeringService::class)->matrix($this->childA)['quelle'])->not->toBe('sales');
+});
+
+it('trennt die Import-Ablage je Team', function () {
+    // Der Artikel-Import teilt sich einen flachen Ordner. Für Verkaufsdaten wäre das eine
+    // Cross-Tenant-Lücke: Betrieb A könnte die Datei von B überschreiben und — schlimmer —
+    // dessen UMSÄTZE ins eigene Journal einlesen. Erreichbar über UI und sales_import.POST.
+    $name = ($this->schreibe)('fremd_umsatz.csv', "Artikel;Umsatz;Datum\nGeheim;9999,00;01.07.2026\n");
+
+    // rootTeam hat die Datei abgelegt und sieht sie …
+    expect($this->import->dateien($this->rootTeam))->toContain($name);
+
+    // … childA weder in der Liste …
+    expect($this->import->dateien($this->childA))->not->toContain($name);
+
+    // … noch über den Namen lesbar.
+    expect(fn () => $this->import->kopf($this->childA, $name))
+        ->toThrow(RuntimeException::class, 'Datei nicht gefunden');
+
+    expect(SalesImportService::ordnerFuer($this->rootTeam))
+        ->not->toBe(SalesImportService::ordnerFuer($this->childA));
 });

@@ -31,8 +31,23 @@ use RuntimeException;
  */
 class SalesImportService
 {
-    /** Ablage-Ordner relativ zu `storage/app` — derselbe wie beim Artikel-Import. */
-    public const ORDNER = 'foodalchemist/import';
+    /**
+     * Basis-Ablage relativ zu `storage/app`. Die tatsächliche Ablage ist **je Team** ein
+     * eigener Unterordner ({@see self::ordnerFuer}).
+     *
+     * Der Artikel-Import teilt sich einen flachen Ordner über alle Teams. Für Verkaufsdaten
+     * geht das nicht: ein geteilter Ordner hiesse, dass Betrieb A die Dateinamen von Betrieb B
+     * sieht, dessen Datei überschreiben und — schlimmer — dessen UMSÄTZE ins eigene Journal
+     * einlesen kann. Das ist über die UI und über `sales_import.POST` erreichbar, also wird
+     * hier je Team getrennt.
+     */
+    public const ORDNER = 'foodalchemist/sales-import';
+
+    /** Team-eigene Ablage — die einzige Stelle, die einen Pfad bildet. */
+    public static function ordnerFuer(Team $team): string
+    {
+        return self::ORDNER . '/' . (int) $team->id;
+    }
 
     /** Die Felder, auf die eine Spalte gelegt werden kann. `bereich` und `menge` sind optional. */
     public const FELDER = ['bezeichnung', 'menge', 'umsatz', 'datum', 'bereich'];
@@ -46,9 +61,9 @@ class SalesImportService
      *
      * @return array{spalten: list<string>, vorschlag: array<string,int>, beispiel: list<array<int,string>>, trenner: string}
      */
-    public function kopf(string $dateiname, int $beispielZeilen = 3): array
+    public function kopf(Team $team, string $dateiname, int $beispielZeilen = 3): array
     {
-        [$kopfFelder, $zeilen, $trenner] = $this->lies($dateiname);
+        [$kopfFelder, $zeilen, $trenner] = $this->lies($team, $dateiname);
 
         $vorschlag = [];
         foreach ($kopfFelder as $idx => $titel) {
@@ -82,7 +97,7 @@ class SalesImportService
             }
         }
 
-        [, $zeilen] = $this->lies($dateiname);
+        [, $zeilen] = $this->lies($team, $dateiname);
         $batchId ??= 'sales-' . substr(sha1($dateiname . microtime(false)), 0, 12);
 
         $katalog = $this->katalog($team);
@@ -182,10 +197,10 @@ class SalesImportService
         return true;
     }
 
-    /** Dateien im Ablage-Ordner (Dateinamen, keine Pfade). @return list<string> */
-    public function dateien(): array
+    /** Dateien im TEAM-EIGENEN Ablage-Ordner (Dateinamen, keine Pfade). @return list<string> */
+    public function dateien(Team $team): array
     {
-        $dir = storage_path('app/' . self::ORDNER);
+        $dir = storage_path('app/' . self::ordnerFuer($team));
         if (! is_dir($dir)) {
             return [];
         }
@@ -208,7 +223,7 @@ class SalesImportService
      *
      * @return array{0: list<string>, 1: list<array<int,string>>, 2: string}
      */
-    private function lies(string $dateiname): array
+    private function lies(Team $team, string $dateiname): array
     {
         $name = basename(trim($dateiname));
         $endung = strtolower((string) pathinfo($name, PATHINFO_EXTENSION));
@@ -223,9 +238,9 @@ class SalesImportService
             throw new RuntimeException("Unbekannte Endung [{$endung}] — erwartet .csv oder .tsv.");
         }
 
-        $pfad = storage_path('app/' . self::ORDNER . '/' . $name);
+        $pfad = storage_path('app/' . self::ordnerFuer($team) . '/' . $name);
         if (! is_file($pfad) || ! is_readable($pfad)) {
-            throw new RuntimeException("Datei nicht gefunden: {$name} (erwartet in " . self::ORDNER . ').');
+            throw new RuntimeException("Datei nicht gefunden: {$name}.");
         }
 
         $roh = file_get_contents($pfad);

@@ -135,7 +135,7 @@ class VkSnapshotService
      * genau diesen Erstfall — getrennt gehalten, weil „noch nie freigegeben" fachlich etwas
      * anderes ist als „weggelaufen" und der Signal-Detektor nur Letzteres meldet.
      *
-     * @return list<array{presentation_id:int, recipe_id:int, recipe_name:string, live_net:float}>
+     * @return list<array{presentation_id:int, recipe_id:int, recipe_name:string, form:?string, live_net:float}>
      */
     public function nieFreigegeben(Team $team, int $limit = 200): array
     {
@@ -148,10 +148,14 @@ class VkSnapshotService
 
         // Nur EIGENE Darreichungen: release() schreibt ohnehin nur diese, also darf die Liste
         // auch keine fremden anbieten — sonst klickt man ins Leere.
+        // Ein Gericht hat mehrere Darreichungen mit je eigenem Preis. Ohne die Form in der
+        // Zeile stehen in der Freigabe-Liste identische Namen mit verschiedenen Beträgen
+        // nebeneinander und man weiss nicht, was man da freigibt.
         $darreichungen = FoodAlchemistRecipeDarreichung::whereIn('recipe_id', $recipeIds)
             ->where('team_id', $team->id)
             ->whereNotNull('sales_net')->where('sales_net', '>', 0)
-            ->get(['id', 'recipe_id', 'sales_net']);
+            ->with('servierform:id,label')
+            ->get(['id', 'recipe_id', 'serving_form_id', 'sales_net']);
         if ($darreichungen->isEmpty()) {
             return [];
         }
@@ -170,6 +174,7 @@ class VkSnapshotService
                 'presentation_id' => (int) $d->id,
                 'recipe_id' => (int) $d->recipe_id,
                 'recipe_name' => $recipeNames[$d->recipe_id] ?? (string) $d->recipe_id,
+                'form' => $d->servierform?->label,
                 'live_net' => (float) $d->sales_net,
             ];
             if (count($out) >= $limit) {

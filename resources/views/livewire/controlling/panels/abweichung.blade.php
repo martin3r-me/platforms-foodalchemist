@@ -45,7 +45,9 @@
             </div>
             <div class="rounded-lg bg-black/[0.03] px-3 py-2">
                 <div class="{{ $label }}">laut Rezeptur</div>
-                <div class="text-lg font-semibold tabular-nums text-gray-900">{{ $eur($a['theoretisch']) }}</div>
+                {{-- 0,00 € sähe aus wie ein Messwert. Ohne belastbare Datenlage steht hier
+                     nichts — dieselbe Zurückhaltung wie bei der Abweichung daneben. --}}
+                <div class="text-lg font-semibold tabular-nums text-gray-900">{{ $a['theoretisch'] > 0 ? $eur($a['theoretisch']) : '—' }}</div>
             </div>
             <div class="rounded-lg bg-black/[0.03] px-3 py-2">
                 <div class="{{ $label }}">Abweichung</div>

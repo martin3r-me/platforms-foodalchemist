@@ -89,7 +89,12 @@
                                     <input type="checkbox" wire:model.live="auswahl" value="{{ $z['presentation_id'] }}"
                                            data-ctrl-vk-pick="{{ $z['presentation_id'] }}" />
                                 </td>
-                                <td class="{{ $td }} text-gray-900">{{ $z['recipe_name'] }}</td>
+                                <td class="{{ $td }} text-gray-900">
+                                    {{ $z['recipe_name'] }}
+                                    {{-- Ein Gericht hat mehrere Darreichungen mit eigenem Preis —
+                                         ohne die Form sind die Zeilen nicht auseinanderzuhalten. --}}
+                                    @if($z['form'])<span class="text-[10px] text-gray-500">· {{ $z['form'] }}</span>@endif
+                                </td>
                                 <td class="{{ $td }} text-right tabular-nums text-gray-900">{{ $eur($z['live_net']) }}</td>
                             </tr>
                         @endforeach

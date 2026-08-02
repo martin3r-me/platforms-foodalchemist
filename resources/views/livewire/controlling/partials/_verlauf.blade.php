@@ -21,8 +21,24 @@
             @endif
         </p>
 
-        @if($verlauf['metriken'] === [])
-            <p class="text-xs text-gray-500">Keine Metrik im letzten Lauf — nichts zu zeigen.</p>
+        {{-- Kurzform-`@php(...)` statt Block: ein Block-@php darf in dieser Datei nur ÜBER allen
+             Kurzformen stehen (Raw-Block-Falle, BladeCompilesTest). Oben steht schon eine.
+
+             Der Dienst liefert JEDE gemessene Metrik, auch die dauerhaft auf null stehenden —
+             im Dev-Bestand über 20 Zeilen, die Hälfte leer. Gezeigt wird, was einen Bestand hat
+             oder sich bewegt hat; der Rest nur als Zahl. --}}
+        @php($sichtbar = array_values(array_filter($verlauf['metriken'], fn ($m) => $m['count'] > 0 || ($m['delta'] ?? 0) != 0)))
+        @php(usort($sichtbar, fn ($a, $b) => abs($b['delta'] ?? 0) <=> abs($a['delta'] ?? 0) ?: $b['count'] <=> $a['count']))
+        @php($ruhig = count($verlauf['metriken']) - count($sichtbar))
+        {{-- Mehrere Metriken teilen sich ein Label (z. B. drei Ausprägungen von „EK-Kette
+             unvollständig"). Ohne den technischen Schlüssel daneben stehen identische Zeilen
+             mit verschiedenen Zahlen — unlesbar. --}}
+        @php($mehrfach = array_keys(array_filter(array_count_values(array_column($sichtbar, 'label')), fn ($n) => $n > 1)))
+
+        @if($sichtbar === [])
+            <p class="text-xs text-gray-500">
+                Alle {{ count($verlauf['metriken']) }} gemessenen Metriken stehen auf null — nichts offen.
+            </p>
         @else
             <div class="overflow-x-auto">
                 <table class="{{ $table }}">
@@ -35,10 +51,15 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach($verlauf['metriken'] as $m)
+                        @foreach($sichtbar as $m)
                             @php($d = $m['delta'])
                             <tr class="{{ $tr }}">
-                                <td class="{{ $td }} text-gray-900">{{ $m['label'] }}</td>
+                                <td class="{{ $td }} text-gray-900">
+                                    {{ $m['label'] }}
+                                    @if(in_array($m['label'], $mehrfach, true))
+                                        <span class="text-[10px] text-gray-500">· {{ $m['metric_key'] }}</span>
+                                    @endif
+                                </td>
                                 <td class="{{ $td }} text-right tabular-nums text-gray-900">{{ number_format($m['count'], 0, ',', '.') }}</td>
                                 <td class="{{ $td }} text-right tabular-nums text-gray-500">{{ $m['previous'] === null ? '—' : number_format($m['previous'], 0, ',', '.') }}</td>
                                 {{-- Weniger offene Befunde = besser, deshalb ist ein negatives Delta grün. --}}
@@ -50,6 +71,10 @@
                     </tbody>
                 </table>
             </div>
+        @endif
+
+        @if($ruhig > 0)
+            <p class="text-[10px] text-gray-500 mt-1">{{ $ruhig }} weitere Metriken stehen auf null.</p>
         @endif
 
         <a href="{{ route('foodalchemist.review') }}" class="{{ $btnGhostXs }} mt-3" wire:navigate>

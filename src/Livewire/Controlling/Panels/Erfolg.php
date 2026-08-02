@@ -69,8 +69,17 @@ class Erfolg extends Component
 
         $this->validate(['datei' => 'required|file|mimes:csv,txt,tsv|max:20480'], [], ['datei' => 'Datei']);
 
+        $team = $this->team();
+        if ($team === null) {
+            $this->fehler = 'Kein Team zugeordnet.';
+
+            return;
+        }
+
+        // Team-eigene Ablage: ein geteilter Ordner hiesse, dass ein Betrieb die Datei eines
+        // anderen überschreiben und dessen Umsätze einlesen könnte.
         $name = preg_replace('/[^A-Za-z0-9._-]+/', '_', (string) $this->datei->getClientOriginalName()) ?: 'verkauf.csv';
-        $this->datei->storeAs(SalesImportService::ORDNER, $name);
+        $this->datei->storeAs(SalesImportService::ordnerFuer($team), $name);
 
         $this->datei = null;
         $this->dateiname = $name;
@@ -89,7 +98,14 @@ class Erfolg extends Component
             return;
         }
         try {
-            $this->kopf = $import->kopf($this->dateiname);
+            $team = $this->team();
+            if ($team === null) {
+                $this->kopf = null;
+                $this->fehler = 'Kein Team zugeordnet.';
+
+                return;
+            }
+            $this->kopf = $import->kopf($team, $this->dateiname);
             $this->mapping = array_map('strval', $this->kopf['vorschlag']);
         } catch (RuntimeException $e) {
             $this->kopf = null;
@@ -187,7 +203,7 @@ class Erfolg extends Component
             ->groupBy('raw_label')->orderByDesc('umsatz')->limit(30)->get();
 
         return view('foodalchemist::livewire.controlling.panels.erfolg', [
-            'dateien' => $import->dateien(),
+            'dateien' => $team !== null ? $import->dateien($team) : [],
             'felder' => SalesImportService::FELDER,
             'matrix' => $team !== null
                 ? $engineering->matrix($team, $this->von ?: null, $this->bis ?: null)

@@ -130,7 +130,8 @@
             @endif
 
             @if($tab === 'erfolg')
-                <x-foodalchemist::modal-section title="Verkaufs-Ist &amp; Menu-Engineering">
+                {{-- Kein „&amp;" im Titel: der Slot escaped den Wert erneut und im Kopf stand „&AMP;". --}}
+                <x-foodalchemist::modal-section title="Verkaufs-Ist und Menu-Engineering">
                     <livewire:foodalchemist.controlling.panels.erfolg />
                 </x-foodalchemist::modal-section>
 
