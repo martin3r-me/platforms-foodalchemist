@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Enums\AusgabeStatus;
+use Platform\FoodAlchemist\Services\Concerns\PruefstOutletZuordnung;
 use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipeDarreichung;
@@ -30,6 +31,8 @@ use Platform\FoodAlchemist\Models\FoodAlchemistSpeisekarteRubrik;
  */
 class SpeisekarteService
 {
+    use PruefstOutletZuordnung;
+
     public function __construct(
         private ConceptService $concepts,
         private DarreichungResolver $darreichung,
@@ -79,6 +82,10 @@ class SpeisekarteService
 
     public function create(Team $team, array $in): FoodAlchemistSpeisekarte
     {
+        // Spec 33 P2: fremde Betriebe fallen hier raus — `outlet_id` zeigt auf ein Team-Vokabular
+        // und wird vom Datensatz-Guard nicht mit erfasst.
+        $in = $this->pruefeOutlet($team, $in);
+
         return FoodAlchemistSpeisekarte::create([
             'team_id' => $team->id,
             'name' => trim((string) ($in['name'] ?? 'Neue Speisekarte')) ?: 'Neue Speisekarte',
@@ -121,7 +128,9 @@ class SpeisekarteService
     {
         $karte = FoodAlchemistSpeisekarte::visibleToTeam($team)->findOrFail($id);
         $this->guard($karte, $team);
-        $karte->update($this->normalisiereFelder(array_intersect_key($in, array_flip(self::FELDER))));
+        $karte->update($this->normalisiereFelder(
+            $this->pruefeOutlet($team, array_intersect_key($in, array_flip(self::FELDER))),
+        ));
 
         return $karte->refresh();
     }
@@ -151,11 +160,13 @@ class SpeisekarteService
         ];
 
         return DB::transaction(function () use ($quelle, $team, $overrides, $kopfFelder) {
-            $neu = FoodAlchemistSpeisekarte::create(array_merge(
+            // Auch hier durch den Guard: die Quelle kann über die Team-Kette sichtbar sein und
+            // einen Betrieb tragen, der dem kopierenden Team nicht gehört.
+            $neu = FoodAlchemistSpeisekarte::create($this->pruefeOutlet($team, array_merge(
                 ['team_id' => $team->id, 'name' => $quelle->name . ' (Kopie)', 'status' => AusgabeStatus::Entwurf->value, 'code' => null],
                 array_intersect_key($quelle->only($kopfFelder), array_flip($kopfFelder)),
                 array_intersect_key($overrides, array_flip(array_merge(self::FELDER, ['name']))),
-            ));
+            )));
 
             // Rubriken flach kopieren (parent_id in 2. Pass), dann Positionen.
             $map = [];

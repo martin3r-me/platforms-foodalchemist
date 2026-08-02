@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Enums\AusgabeStatus;
+use Platform\FoodAlchemist\Services\Concerns\PruefstOutletZuordnung;
 use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
 use Platform\FoodAlchemist\Models\FoodAlchemistConceptSlot;
 use Platform\FoodAlchemist\Models\FoodAlchemistDishIdea;
@@ -32,6 +33,8 @@ use Platform\FoodAlchemist\Models\FoodAlchemistTargetGroup;
  */
 class FoodbookService
 {
+    use PruefstOutletZuordnung;
+
     public function __construct(private ConceptService $concepts)
     {
     }
@@ -71,6 +74,10 @@ class FoodbookService
 
     public function create(Team $team, array $in): FoodAlchemistFoodbook
     {
+        // Spec 33 P2: fremde Betriebe fallen hier raus — `outlet_id` zeigt auf ein Team-Vokabular
+        // und wird vom Datensatz-Guard nicht mit erfasst.
+        $in = $this->pruefeOutlet($team, $in);
+
         return FoodAlchemistFoodbook::create([
             'team_id' => $team->id,
             'label' => trim((string) ($in['label'] ?? 'Neues Foodbook')) ?: 'Neues Foodbook',
@@ -119,7 +126,9 @@ class FoodbookService
     {
         $fb = FoodAlchemistFoodbook::visibleToTeam($team)->findOrFail($id);
         $this->guard($fb, $team);
-        $fb->update($this->normalisiereFelder(array_intersect_key($in, array_flip(self::FELDER))));
+        $fb->update($this->normalisiereFelder(
+            $this->pruefeOutlet($team, array_intersect_key($in, array_flip(self::FELDER))),
+        ));
 
         return $fb->refresh();
     }

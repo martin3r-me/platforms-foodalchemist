@@ -7,6 +7,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Enums\AusgabeStatus;
+use Platform\FoodAlchemist\Services\Concerns\PruefstOutletZuordnung;
 use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
 use Platform\FoodAlchemist\Models\FoodAlchemistPaket;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
@@ -22,6 +23,8 @@ use Platform\FoodAlchemist\Models\FoodAlchemistSpeiseplanLinie;
  */
 class SpeiseplanService
 {
+    use PruefstOutletZuordnung;
+
     public function __construct(private ConceptService $concepts)
     {
     }
@@ -79,6 +82,10 @@ class SpeiseplanService
 
     public function create(Team $team, array $in): FoodAlchemistSpeiseplan
     {
+        // Spec 33 P2: fremde Betriebe fallen hier raus — `outlet_id` zeigt auf ein Team-Vokabular
+        // und wird vom Datensatz-Guard nicht mit erfasst.
+        $in = $this->pruefeOutlet($team, $in);
+
         $plan = FoodAlchemistSpeiseplan::create([
             'team_id' => $team->id,
             'name' => trim((string) ($in['name'] ?? 'Neuer Speiseplan')) ?: 'Neuer Speiseplan',
@@ -105,7 +112,7 @@ class SpeiseplanService
     {
         $plan = FoodAlchemistSpeiseplan::visibleToTeam($team)->findOrFail($id);
         $this->guard($plan, $team);
-        $update = array_intersect_key($in, array_flip(self::FELDER));
+        $update = $this->pruefeOutlet($team, array_intersect_key($in, array_flip(self::FELDER)));
         // Spec 33 P0: Status IMMER durch den Enum schleusen — `status` steht in FELDER und ist
         // damit über Service UND MCP frei beschreibbar.
         if (array_key_exists('status', $update)) {

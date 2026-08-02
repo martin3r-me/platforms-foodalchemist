@@ -405,6 +405,10 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\SalesFactsGetTool::class,
                     \Platform\FoodAlchemist\Tools\SalesImportPostTool::class,
                     \Platform\FoodAlchemist\Tools\MenuEngineeringGetTool::class,
+                    // Spec 33 P8: Portfolio-Steuerung — wer fährt gerade was (inkl. Konflikte,
+                    // Lücken, Nicht-Zugeordnete) und was bringt eine laufende Ausgabe.
+                    \Platform\FoodAlchemist\Tools\PortfolioGetTool::class,
+                    \Platform\FoodAlchemist\Tools\PortfolioPromotionGetTool::class,
                     \Platform\FoodAlchemist\Tools\GpLeadGetTool::class,
                     \Platform\FoodAlchemist\Tools\GpLeadPutTool::class,
                     // 05·P5: Prozessanker deterministisch erden (MCP-Lockstep)

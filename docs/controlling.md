@@ -9,7 +9,7 @@ Das Controlling-Zentrum beantwortet eine Frage: **Wie steht der Betrieb wirtscha
 was kann ich daran ändern?** Der zweite Teil ist der wichtigere. Jede Zahl hier steht neben dem
 Hebel, der sie bewegt.
 
-Der Klick in der Seitenleiste öffnet direkt die Werkbank: ein Vollbild mit sieben Reitern.
+Der Klick in der Seitenleiste öffnet direkt die Werkbank: ein Vollbild mit neun Reitern.
 Schließt du sie, bleibt darunter das Lagebild — sechs Kacheln, die zurück in den passenden Reiter
 springen.
 
@@ -35,8 +35,30 @@ Erkenntnisgewinn — siehe unten.
 Der Überblick: Ø Wareneinsatz gegen Ziel, EK-Abdeckung (wie viele Gerichte überhaupt einen
 Einkaufspreis tragen — ohne diese Zahl ist der Durchschnitt daneben nicht einzuordnen), Einkauf
 der letzten 30 Tage, Break-even und die offenen Geld-Signale. Dazu der Portfolio-Benchmark gegen
-die anderen Betriebe der Gruppe (anonym, nur Kennzahlen) und der Signal-Verlauf: nicht „wie viele
-offene Befunde", sondern „wird es besser oder schlechter".
+die anderen Betriebe der Gruppe (anonym, nur Kennzahlen).
+
+Die Lage ist bewusst eine **Momentaufnahme**. Die Bewegung steht im eigenen Reiter „Verlauf" —
+solange beides auf einer Fläche lag, hat man weder das eine noch das andere gelesen.
+
+### Portfolio
+**Wer fährt gerade was.** Eine Matrix über alle drei Ausgabeformen — Foodbook, Speisekarte,
+Speiseplan — mit einem Stichtags-Regler. Zwei Brillen: **Betrieb** (was läuft an welchem
+Standort) und **Kunde** (was läuft bei welchem Kunden). Dieselbe Matrix, andere Zeilenachse.
+
+Beobachtet wird hier, geschaltet an der Ausgabe selbst — dieselbe Trennung wie zwischen Einkauf
+(handeln) und Controlling (auswerten).
+
+Der Wert liegt nicht in der Liste, sondern in dem, was daran nicht stimmt:
+
+- **leere Zelle** = an diesem Standort läuft gerade nichts
+- **zwei Einträge** = Parallellauf. Ein Hinweis, kein Fehler — eine Übergangsphase oder eine
+  Sonderkarte neben der Standardkarte kann gewollt sein.
+- **ohne Zuordnung** = weder Betrieb noch Kunde. Diese Ausgaben tauchen in keiner der beiden
+  Brillen auf und stehen deshalb in einem eigenen Block. Ohne ihn wären sie unsichtbar.
+
+Warum etwas *nicht* läuft, steht dabei — und zwar unterschieden: `Entwurf` (war nie draußen),
+`inaktiv` (bewusst vom Netz genommen), `abgelaufen` (Status aktiv, aber das Gültigkeitsfenster
+ist vorbei — „noch nicht archiviert"). Der Status ändert sich vom Ansehen **nie** von selbst.
 
 ### Preise
 Pro Grundprodukt der günstigste und der teuerste Lieferant, die Spanne dazwischen, optional
@@ -73,6 +95,19 @@ rechnerisch, es wird nichts verändert.
 ### Erfolg
 Hier kommt die Verkaufsseite herein.
 
+Zuoberst **was die laufenden Ausgaben bringen**: Umsatz je laufender Karte, je laufendem Plan, je
+laufendem Foodbook — jeweils in deren eigenem Gültigkeitsfenster. Zwei Vorbehalte stehen
+gleichrangig neben den Zahlen, weil die Liste sich sonst genauer läse, als sie ist:
+
+- **Die Spalten sind nicht summierbar.** Steht ein Gericht in zwei laufenden Ausgaben, zählt sein
+  Umsatz bei beiden — die Summe übersteigt dann den Gesamtumsatz. Das ist kein Rechenfehler,
+  sondern die Natur der Frage. Die Spalte „davon exklusiv" nennt den Teil, der eindeutig dieser
+  einen Ausgabe gehört.
+- **Zuordnungs-Abdeckung.** Verkaufszeilen ohne Gericht lassen sich keiner Ausgabe zurechnen.
+  Liegt die Abdeckung unter 80 %, sagt die Fläche das, statt zu rechnen.
+
+Darunter das Gericht-Detail:
+
 1. **Verkaufs-Ist einlesen.** CSV aus Kasse oder Abrechnung. Die Spalten ordnest du selbst zu —
    es gibt kein einheitliches Exportformat. Erst Trockenlauf, dann schreiben.
 2. **Offene Zuordnungen.** Zeilen, die keinem Gericht zugeordnet werden konnten, bleiben mit
@@ -98,6 +133,11 @@ Die sechs wirtschaftlichen Befunde aus der Signal-Inbox — Preis-Anomalie, Prei
 Preise, Marge unter Ziel, Wareneinsatz über Ziel, VK-Anpassung empfohlen. Bearbeitet werden sie
 auf der Signale-Seite; hier stehen sie nur gefiltert, damit man sie nicht zwischen den
 Datenqualitäts-Befunden suchen muss.
+
+### Verlauf
+Die Bewegung statt des Zustands: nicht „wie viele offene Befunde", sondern „wird es besser oder
+schlechter". Die Messreihe entsteht aus den Detektor-Läufen — ohne Lauf gibt es keine Reihe, und
+die Fläche sagt das, statt eine leere Tabelle zu zeigen.
 
 ### Kennzahlen
 Zielmarge, Ziel-Wareneinsatz, effektiver Zuschlag, Fixkosten, Break-even, Mehrwertsteuer. Die

@@ -53,6 +53,7 @@ Was dein Team anlegt, sieht dein Team. Übergreifende Stammdaten (z. B. ein zent
 | [📔 Foodbook](foodbook) | Concepts zu Kunden-Angeboten bündeln |
 | [🧮 Kalkulation](kalkulation) | Vom Wareneinsatz zur Vollkosten- und Verkaufspreis-Rechnung |
 | [📊 Controlling](controlling) | Preise, Wareneinsatz, Simulation, Verkaufs-Ist — Befund und Hebel an einem Ort |
+| [🗂️ Portfolio](portfolio) | Wer fährt gerade was: Ausgaben aktiv stellen, je Betrieb und je Kunde |
 | [🛒 Einkauf](einkauf) | Bestellschienen je Lieferant, Gebinde, Versand |
 | [🗓️ Speiseplan](speiseplan) | Bausteine über Tage, Mahlzeiten und Wochen verteilen |
 | [🍽️ Speisekarte](speisekarte) | Restaurant-à-la-carte-Karte: Rubriken, Gerichte, Menüs, Getränke |

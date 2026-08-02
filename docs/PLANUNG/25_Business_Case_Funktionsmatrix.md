@@ -237,6 +237,20 @@ FB-13) — neu sind hier die Handlungen und die gesamte Erlösseite.
 | CT-11 | Wareneinsatz Ist gegen Rezeptur | die echte Quote statt der kalkulierten | gebaut | verweigert die Aussage unter 80 % Zuordnungs-Abdeckung (`F+R`) | D |
 | CT-12 | Abweichungs-Signal | Auffälligkeit kommt zu einem, nicht man zu ihr | gebaut | Schwelle in pp; unterhalb still; knopflos (`F`) | D |
 
+## 8b. Portfolio-Steuerung (Spec 33)
+
+Die Mehrbetriebs-Sicht über die drei Ausgabeformen. Vorher gab es zwar Status-Felder, aber
+niemanden, der sie abfragt — „läuft heute" war keine beantwortbare Frage.
+
+| ID | Kleine Business-Funktion | Geschäftlicher Nutzen | Ist-Status | Noch erforderlicher Abnahmetest | Phase |
+|---|---|---|---|---|---|
+| PF-01 | Ausgabe aktiv/inaktiv schalten | eine Karte vom Netz nehmen, ohne sie abzuschließen | gebaut | ein Statusfeld, kein Parallelzustand; Versenden setzt auf aktiv; fremde id schaltet nichts (`F+T+B`) | D |
+| PF-02 | Gültigkeitsfenster je Ausgabe | das Portfolio wächst nicht endlos | gebaut | abgelaufenes Fenster läuft NICHT trotz Status aktiv; Status wechselt nie von selbst (`F`) | D |
+| PF-03 | Betrieb und Kunde zuordnen | zwei Kantinen im selben Team unterscheidbar | gebaut | beide Achsen an allen drei Formen, beide optional; fremder Betrieb nicht zuweisbar (`F+T`) | D |
+| PF-04 | Portfolio-Matrix mit Stichtag | „wer fährt gerade was" — und was im September läuft | gebaut | zwei Brillen auf einer Matrix; Lücke, Parallellauf und Nicht-Zugeordnete sichtbar (`F+B`) | D |
+| PF-05 | Grund nennen, warum etwas nicht läuft | Entwurf, inaktiv und abgelaufen sind drei Sachverhalte | gebaut | vier Fixtures, vier unterscheidbare Gründe; Anzeigen ändert nichts (`F`) | D |
+| PF-06 | Umsatz je laufender Ausgabe | was eine Karte tatsächlich bringt | gebaut | exklusiver Anteil bei Mehrfachzuordnung; Abdeckung unter 80 % wird benannt; **Realdaten-Lauf offen** (`F+R`) | D |
+
 ## 9. Qualität, Wissen, KI, Pairing und Trends
 
 | ID | Kleine Business-Funktion | Geschäftlicher Nutzen | Ist-Status | Noch erforderlicher Abnahmetest | Phase |
