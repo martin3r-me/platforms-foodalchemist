@@ -67,7 +67,7 @@ class FoodbookService
 
     // ── Foodbook ────────────────────────────────────────────────────────────
 
-    private const FELDER = ['code', 'label', 'jahr', 'customer', 'personen', 'status', 'description', 'note', 'crm_company_id', 'crm_contact_id', 'writing_style_id', 'kundentyp', 'default_niveau', 'default_convenience', 'default_event_type_id', 'default_serving_form_id', 'target_food_cost_pct', 'food_cost_tolerance_pp', 'creative_mode_default'];
+    private const FELDER = ['code', 'label', 'jahr', 'gueltig_von', 'gueltig_bis', 'customer', 'personen', 'status', 'description', 'note', 'crm_company_id', 'crm_contact_id', 'writing_style_id', 'kundentyp', 'default_niveau', 'default_convenience', 'default_event_type_id', 'default_serving_form_id', 'target_food_cost_pct', 'food_cost_tolerance_pp', 'creative_mode_default'];
 
     public function create(Team $team, array $in): FoodAlchemistFoodbook
     {
@@ -83,11 +83,25 @@ class FoodbookService
         ]);
     }
 
-    /** Spec 33 P0: eingehenden Status auf das gültige Vokabular abbilden (eine Regel, ein Ort). */
-    private function normalisiereStatus(array $update): array
+    /**
+     * Spec 33: eingehende Werte auf das gültige Format bringen — eine Regel, ein Ort, und
+     * damit auch für MCP-Aufrufe gültig, nicht nur für das Formular.
+     *
+     * - Status durch den Enum (P0): `status` steht in FELDER und war ohne das mit jedem
+     *   beliebigen String beschreibbar — so kam ein `final` in den Bestand.
+     * - Leere Datumsfelder zu NULL (P1): das Formular liefert `''` für ein nicht gesetztes
+     *   Datum, und MySQL nimmt das in einer DATE-Spalte im Strict Mode nicht an.
+     */
+    private function normalisiereFelder(array $update): array
     {
         if (array_key_exists('status', $update)) {
             $update['status'] = AusgabeStatus::normalisiere((string) $update['status'])->value;
+        }
+
+        foreach (['gueltig_von', 'gueltig_bis'] as $datum) {
+            if (array_key_exists($datum, $update) && ($update[$datum] === '' || $update[$datum] === false)) {
+                $update[$datum] = null;
+            }
         }
 
         return $update;
@@ -97,7 +111,7 @@ class FoodbookService
     {
         $fb = FoodAlchemistFoodbook::visibleToTeam($team)->findOrFail($id);
         $this->guard($fb, $team);
-        $fb->update($this->normalisiereStatus(array_intersect_key($in, array_flip(self::FELDER))));
+        $fb->update($this->normalisiereFelder(array_intersect_key($in, array_flip(self::FELDER))));
 
         return $fb->refresh();
     }

@@ -87,11 +87,20 @@ class SpeisekarteService
         ]);
     }
 
-    /** Spec 33 P0: eingehenden Status auf das gültige Vokabular abbilden (eine Regel, ein Ort). */
-    private function normalisiereStatus(array $update): array
+    /**
+     * Spec 33: Status durch den Enum (P0) und leere Datumsfelder zu NULL (P1) — eine Regel,
+     * ein Ort, damit auch MCP-Aufrufe abgedeckt sind und nicht nur das Formular.
+     */
+    private function normalisiereFelder(array $update): array
     {
         if (array_key_exists('status', $update)) {
             $update['status'] = AusgabeStatus::normalisiere((string) $update['status'])->value;
+        }
+
+        foreach (['gueltig_von', 'gueltig_bis'] as $datum) {
+            if (array_key_exists($datum, $update) && ($update[$datum] === '' || $update[$datum] === false)) {
+                $update[$datum] = null;
+            }
         }
 
         return $update;
@@ -101,7 +110,7 @@ class SpeisekarteService
     {
         $karte = FoodAlchemistSpeisekarte::visibleToTeam($team)->findOrFail($id);
         $this->guard($karte, $team);
-        $karte->update($this->normalisiereStatus(array_intersect_key($in, array_flip(self::FELDER))));
+        $karte->update($this->normalisiereFelder(array_intersect_key($in, array_flip(self::FELDER))));
 
         return $karte->refresh();
     }

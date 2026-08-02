@@ -28,6 +28,8 @@ class FoodAlchemistFoodbook extends Model
     protected $casts = [
         'uuid' => 'string',
         'jahr' => 'integer',
+        'gueltig_von' => 'date',      // Spec 33 P1
+        'gueltig_bis' => 'date',
         'personen' => 'integer',
         'target_food_cost_pct' => 'decimal:2',
         'food_cost_tolerance_pp' => 'decimal:2',

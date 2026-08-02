@@ -198,6 +198,11 @@
                              zwei Werte, die weder Migration noch Service kannten. --}}
                         <select wire:model="form.status" class="{{ $input }}">@foreach(\Platform\FoodAlchemist\Enums\AusgabeStatus::optionen() as $v => $l)<option value="{{ $v }}">{{ $l }}</option>@endforeach</select>
                     </div>
+                    {{-- Spec 33 P1: Gültigkeitsfenster. Leer = unbefristet; ein abgelaufenes
+                         „bis" nimmt das Foodbook aus dem laufenden Portfolio, ohne den Status
+                         anzufassen. --}}
+                    <div><label class="{{ $label }}">Gültig ab</label><input type="date" wire:model="form.gueltig_von" class="{{ $input }}" /></div>
+                    <div><label class="{{ $label }}">Gültig bis</label><input type="date" wire:model="form.gueltig_bis" class="{{ $input }}" /></div>
                 </div>
 
                 {{-- R4.3-Phasen-Stepper wanderte auf Tab-Ebene (E5.2, oben in der Leitstellen-Leiste). --}}

@@ -560,6 +560,10 @@ class Index extends Component
         $this->form = [
             'label' => $fb->label, 'customer' => $fb->customer ?? '', 'jahr' => $fb->jahr,
             'personen' => $fb->personen, 'status' => $fb->statusWert()->value, 'description' => $fb->description ?? '',
+            // Spec 33 P1: Gültigkeitsfenster — ohne `bis` bliebe ein aktiv gesetztes Foodbook
+            // für immer im Portfolio (nichts läuft von selbst ab).
+            'gueltig_von' => $fb->gueltig_von?->format('Y-m-d') ?? '',
+            'gueltig_bis' => $fb->gueltig_bis?->format('Y-m-d') ?? '',
         ];
         // UX 2026-07-21: Foodbook-Wahl landet auf dem Foodbook-KOPF (übergeordnete Ebene),
         // NICHT mehr automatisch im ersten Kapitel — Kopf und Speisen sind getrennte Ansichten.
