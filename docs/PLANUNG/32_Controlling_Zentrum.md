@@ -1,6 +1,6 @@
 # Spec 32 — Controlling-Zentrum
 
-- **Status:** C0–C4 gebaut, Abnahme offen
+- **Status:** C0–C5 gebaut, Browser-Abnahme durch, Tenant-Nachweis für die neuen Aktionen erbracht
 - **Stand:** 02.08.2026
 - **Bezug:** Business-Case CT-01…CT-12 · Zielbild-Plan Phase B (Preiswahrheit) und Phase D (KPI/Erlös)
 - **Historischer Vorlauf:** [Spec 12 — Wirtschaftlichkeits-Intelligenz](../_archiv/2026-07-28_dokumentationsbereinigung/PLANUNG/12_Wirtschaftlichkeits_Intelligenz_R2-Rest.md) (R2.3/R2.5)
@@ -119,8 +119,15 @@ Lageraufbau oder eine falsche Rezeptmenge sein. Das entscheidet die Küche, nich
       keinen Realdaten-Lauf.
 - [ ] demo-Deploy inkl. Migrationen `2026_08_02_000005` (sales_facts) und `000006`
       (Abweichungs-Schwelle).
-- [ ] Tenant-Adversarial-Lauf über die neuen Schreibaktionen in die A-01-Matrix aufnehmen
-      (Phase A des Zielbild-Plans — C2/C3 haben die öffentliche Angriffsfläche vergrößert).
+- [x] **Tenant-Adversarial-Lauf über die neuen Schreibaktionen** — `ControllingTenantTest`
+      (9 Fälle: Batch-Umstellung, Zuordnung in beide Richtungen, Zielwerte, drei MCP-Tools,
+      fremde Ablage inkl. Pfad-Umweg). Dabei gefunden und gefixt: der Verkaufs-Import lag
+      im geteilten Ordner `foodalchemist/import` — jeder Betrieb konnte die Datei eines
+      anderen überschreiben und dessen Umsätze ins eigene Journal einlesen (UI **und**
+      `sales_import.POST`). Ablage jetzt je Team.
+- [ ] A-01 als Ganzes bleibt offen: geprüft ist, was Spec 32 dazugelegt hat, nicht die
+      bestehende Angriffsfläche des Moduls. Vor einem Ausbau der FA-eigenen Matrix lohnt
+      die Frage nach `CORE-W02` (wiederverwendbare Adversarial-Matrix im Core).
 - [ ] Perf am Zielvolumen: Optimizer, Batch-Vorschau und Matrix mit Querybudget messen.
 
 ## 10. Verzahnung
