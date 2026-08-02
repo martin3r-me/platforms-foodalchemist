@@ -16,7 +16,7 @@ use Platform\FoodAlchemist\Services\SignalTrendService;
 use Platform\FoodAlchemist\Services\TeamSettingsService;
 
 /**
- * Spec 32 — Controlling-Zentrum.
+ * Spec 32/33 — Controlling-Zentrum.
  *
  * Die Fläche existiert, weil die Controlling-Teile zwar alle gebaut, aber über fünf Seiten
  * verstreut waren (Preisvergleich und Optimierung unter „Einkauf", Simulation hinter
@@ -44,15 +44,24 @@ use Platform\FoodAlchemist\Services\TeamSettingsService;
  */
 class Cockpit extends Component
 {
-    /** Reihenfolge = Anzeige. Links die Lage, dann die Kostenseite, dann die Erlösseite. */
+    /**
+     * Reihenfolge = Anzeige. Links die Lage, dann die Mehrbetriebs-Sicht, dann die Kostenseite,
+     * dann die Erlösseite, zuletzt Befunde und Bewegung.
+     */
     public const TABS = [
         'lage' => 'Lage',
+        // Spec 33 P4: die Mehrbetriebs-Sicht steht direkt hinter der Lage — „wer fährt gerade
+        // was" ist die zweite Frage nach „wie stehen wir da", vor allen Kostendetails.
+        'portfolio' => 'Portfolio',
         'preise' => 'Preise',
         'wareneinsatz' => 'Wareneinsatz',
         'simulation' => 'Simulation',
         'erfolg' => 'Erfolg',
         'signale' => 'Geld-Signale',
         'kennzahlen' => 'Kennzahlen',
+        // Spec 33 P7: der Signal-Verlauf hat den Lage-Tab überladen (20+ Zeilen unter zwei
+        // Kacheln). Lage ist die Momentaufnahme, Verlauf die Bewegung — zwei Fragen, zwei Tabs.
+        'verlauf' => 'Verlauf',
     ];
 
     /**
@@ -133,7 +142,7 @@ class Cockpit extends Component
             // Peer-Vergleich und Signal-Verlauf kosten je einen Lauf über alle Peer-Teams bzw. die
             // Zeitreihe — nur im Lage-Tab holen, nicht im Kopf.
             'benchmark' => $team !== null && $this->tab === 'lage' ? $benchmark->benchmark($team) : null,
-            'verlauf' => $team !== null && $this->tab === 'lage'
+            'verlauf' => $team !== null && $this->tab === 'verlauf'
                 ? $trend->uebersicht($team)
                 : ['measured_at' => null, 'previous_at' => null, 'metriken' => []],
         ])->layout('platform::layouts.app');

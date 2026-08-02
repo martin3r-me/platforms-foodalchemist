@@ -56,9 +56,9 @@
             </div>
 
             <p class="mt-4 text-xs text-gray-500">
-                Die Auswertung passiert in der Werkbank — Preise, Wareneinsatz, Simulation, Erfolg,
-                Geld-Signale und Kennzahlen liegen dort als Tabs nebeneinander, jeweils mit den
-                Hebeln daneben.
+                Die Auswertung passiert in der Werkbank — Portfolio, Preise, Wareneinsatz,
+                Simulation, Erfolg, Geld-Signale, Kennzahlen und Verlauf liegen dort als Tabs
+                nebeneinander, jeweils mit den Hebeln daneben.
             </p>
         @endif
 
@@ -92,10 +92,20 @@
                 :tabs="\Platform\FoodAlchemist\Livewire\Controlling\Cockpit::TABS" />
 
             @if($tab === 'lage')
+                {{-- Spec 33 P7: der Signal-Verlauf ist raus — er hatte die Lage überladen.
+                     Lage ist die Momentaufnahme, Verlauf ist die Bewegung. --}}
                 <x-foodalchemist::modal-section title="Portfolio-Benchmark">
                     @include('foodalchemist::livewire.controlling.partials._benchmark', ['benchmark' => $benchmark])
                 </x-foodalchemist::modal-section>
+            @endif
 
+            @if($tab === 'portfolio')
+                <x-foodalchemist::modal-section title="Wer fährt gerade was">
+                    <livewire:foodalchemist.controlling.panels.portfolio />
+                </x-foodalchemist::modal-section>
+            @endif
+
+            @if($tab === 'verlauf')
                 <x-foodalchemist::modal-section title="Signal-Verlauf">
                     @include('foodalchemist::livewire.controlling.partials._verlauf', ['verlauf' => $verlauf])
                 </x-foodalchemist::modal-section>
