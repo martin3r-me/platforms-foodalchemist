@@ -28,7 +28,7 @@ it('Stufe D: dupliziere kopiert Rubrik-Baum + Positionen als neuen Entwurf', fun
     $kopie = $this->karten->dupliziere($this->rootTeam, $karte->id, ['name' => 'Sommerkarte', 'karten_typ' => 'saisonkarte']);
 
     expect($kopie->name)->toBe('Sommerkarte')
-        ->and($kopie->status)->toBe('entwurf')
+        ->and($kopie->status)->toBe(\Platform\FoodAlchemist\Enums\AusgabeStatus::Entwurf)   // Spec 33 P0: `status` ist gecastet
         ->and($kopie->karten_typ)->toBe('saisonkarte')
         ->and($kopie->id)->not->toBe($karte->id);
 

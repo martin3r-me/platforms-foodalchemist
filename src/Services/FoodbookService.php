@@ -8,6 +8,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Platform\Core\Models\Team;
+use Platform\FoodAlchemist\Enums\AusgabeStatus;
 use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
 use Platform\FoodAlchemist\Models\FoodAlchemistConceptSlot;
 use Platform\FoodAlchemist\Models\FoodAlchemistDishIdea;
@@ -76,17 +77,27 @@ class FoodbookService
             'customer' => $in['customer'] ?? null,
             'jahr' => $in['jahr'] ?? null,
             'personen' => $in['personen'] ?? null,
-            'status' => $in['status'] ?? 'draft',
+            'status' => AusgabeStatus::normalisiere($in['status'] ?? null)->value,
             'description' => $in['description'] ?? null,
             'creative_mode_default' => $in['creative_mode_default'] ?? null,   // Spec 19 E9.1
         ]);
+    }
+
+    /** Spec 33 P0: eingehenden Status auf das gültige Vokabular abbilden (eine Regel, ein Ort). */
+    private function normalisiereStatus(array $update): array
+    {
+        if (array_key_exists('status', $update)) {
+            $update['status'] = AusgabeStatus::normalisiere((string) $update['status'])->value;
+        }
+
+        return $update;
     }
 
     public function update(Team $team, int $id, array $in): FoodAlchemistFoodbook
     {
         $fb = FoodAlchemistFoodbook::visibleToTeam($team)->findOrFail($id);
         $this->guard($fb, $team);
-        $fb->update(array_intersect_key($in, array_flip(self::FELDER)));
+        $fb->update($this->normalisiereStatus(array_intersect_key($in, array_flip(self::FELDER))));
 
         return $fb->refresh();
     }

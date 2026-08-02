@@ -96,10 +96,10 @@ it('zählt einen Entwurf ab Phase kalkulation zur Arbeitsmenge', function () {
     expect($this->dq->countFor($this->rootTeam, 'foodbook_kapitel_leer'))->toBe(1);
 });
 
-it('erkennt beide Schreibweisen des Aktiv-Status (Vokabular-Drift aktiv/active)', function () {
-    // Die Migration kommentiert `aktiv`, das Leitstellen-Dropdown schreibt `active`
-    // (index.blade.php:135). Solange der Kanon offen ist, darf ein live geschaltetes Buch
-    // an keiner der beiden Schreibweisen durchfallen — sonst misst der Check am UI vorbei.
+it('erkennt jede Alt-Schreibweise des Aktiv-Status (Kanon seit Spec 33 P0)', function () {
+    // Früher duldete der Check zwei Schreibweisen, weil der Kanon offen war. Jetzt ist er
+    // geschlossen: `aktiv`, `active` und `versendet` landen alle auf AusgabeStatus::Aktiv,
+    // schon beim Schreiben. Der Test bleibt — er belegt, dass kein Weg daran vorbeiführt.
     $this->makeFoodbook($this->rootTeam, 'Deutsch geschrieben', ['status' => 'aktiv']);
     $this->makeFoodbook($this->rootTeam, 'Englisch geschrieben', ['status' => 'active']);
     $this->makeFoodbook($this->rootTeam, 'Versendet', ['status' => 'versendet']);

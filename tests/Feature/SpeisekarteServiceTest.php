@@ -28,7 +28,8 @@ beforeEach(function () {
 
 it('Stufe A: Karte + Rubrik + gericht_ref-Position; Preis flach aus Rezept', function () {
     $karte = $this->karten->create($this->rootTeam, ['name' => 'Abendkarte', 'karten_typ' => 'alacarte']);
-    expect($karte->status)->toBe('entwurf')->and($karte->karten_typ)->toBe('alacarte');
+    expect($karte->status)->toBe(\Platform\FoodAlchemist\Enums\AusgabeStatus::Entwurf)   // Spec 33 P0: `status` ist gecastet
+        ->and($karte->karten_typ)->toBe('alacarte');
 
     $rubrik = $this->karten->addRubrik($this->rootTeam, $karte->id, ['title' => 'Hauptgänge', 'art' => 'speisen']);
     $pos = $this->karten->addPosition($this->rootTeam, $rubrik->id, [

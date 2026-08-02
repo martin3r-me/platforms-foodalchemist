@@ -6,6 +6,7 @@ use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Platform\Core\Models\Team;
+use Platform\FoodAlchemist\Enums\AusgabeStatus;
 use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
 use Platform\FoodAlchemist\Models\FoodAlchemistPaket;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
@@ -78,7 +79,7 @@ class SpeiseplanService
             'start_date' => $in['start_date'] ?? Carbon::now()->startOfWeek()->format('Y-m-d'),
             'cycle_weeks' => max(1, (int) ($in['cycle_weeks'] ?? 4)),
             'min_abstand_tage' => max(0, (int) ($in['min_abstand_tage'] ?? 0)),
-            'status' => $in['status'] ?? 'draft',
+            'status' => AusgabeStatus::normalisiere($in['status'] ?? null)->value,
         ]);
 
         // Starter-Linien (Kantinen-Standard) — pro Plan frei änderbar
@@ -94,6 +95,11 @@ class SpeiseplanService
         $plan = FoodAlchemistSpeiseplan::visibleToTeam($team)->findOrFail($id);
         $this->guard($plan, $team);
         $update = array_intersect_key($in, array_flip(self::FELDER));
+        // Spec 33 P0: Status IMMER durch den Enum schleusen — `status` steht in FELDER und ist
+        // damit über Service UND MCP frei beschreibbar.
+        if (array_key_exists('status', $update)) {
+            $update['status'] = AusgabeStatus::normalisiere((string) $update['status'])->value;
+        }
         foreach (['cycle_weeks' => 1, 'min_abstand_tage' => 0, 'default_pax' => 1] as $f => $min) {
             if (array_key_exists($f, $update)) {
                 $update[$f] = max($min, (int) $update[$f]);

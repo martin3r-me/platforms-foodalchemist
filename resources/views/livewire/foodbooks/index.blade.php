@@ -194,7 +194,9 @@
                     <div class="md:col-span-2"><label class="{{ $label }}">Bezeichnung</label><input type="text" wire:model="form.label" class="{{ $input }}" /></div>
                     <div><label class="{{ $label }}">Kunde</label><input type="text" wire:model="form.customer" class="{{ $input }}" /></div>
                     <div><label class="{{ $label }}">Status</label>
-                        <select wire:model="form.status" class="{{ $input }}">@foreach(['draft' => 'Entwurf', 'active' => 'Aktiv', 'versendet' => 'Versendet', 'archiviert' => 'Archiviert'] as $v => $l)<option value="{{ $v }}">{{ $l }}</option>@endforeach</select>
+                        {{-- Spec 33 P0: Werte kommen aus dem Enum. Vorher stand hier `active` und `versendet` —
+                             zwei Werte, die weder Migration noch Service kannten. --}}
+                        <select wire:model="form.status" class="{{ $input }}">@foreach(\Platform\FoodAlchemist\Enums\AusgabeStatus::optionen() as $v => $l)<option value="{{ $v }}">{{ $l }}</option>@endforeach</select>
                     </div>
                 </div>
 

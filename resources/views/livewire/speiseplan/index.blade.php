@@ -1,8 +1,10 @@
 {{-- Speiseplan-Browser (Spec 29 / Editor-Rollout) — Übersichts-Liste; Planen im Fullscreen-Editor.
      Zeilen-Klick / „+ Neuer Plan" öffnen den Editor per speiseplan-editor.bearbeiten. --}}
 @php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
-@php($statusLabel = ['draft' => 'Entwurf', 'active' => 'Aktiv', 'archiviert' => 'Archiviert'])
-@php($statusVariant = ['draft' => 'secondary', 'active' => 'success', 'archiviert' => 'secondary'])
+{{-- Spec 33 P0: Labels und Farben aus dem Enum statt aus einer eigenen Map (hier stand
+     `active`, das Foodbook-Blade schrieb dasselbe, die Migration meinte `aktiv`). --}}
+@php($statusLabel = \Platform\FoodAlchemist\Enums\AusgabeStatus::optionen())
+@php($statusVariant = collect(\Platform\FoodAlchemist\Enums\AusgabeStatus::cases())->mapWithKeys(fn ($c) => [$c->value => $c->badgeVariant()])->all())
 
 <x-ui-page>
     <x-slot:navbar>
@@ -26,7 +28,7 @@
                         <button type="button" wire:key="sp-list-{{ $p->id }}" wire:click="waehle({{ $p->id }})" data-sp-zeile="{{ $p->id }}"
                             class="w-full text-left px-2 py-1.5 rounded-lg text-xs transition-all {{ $selectedId === $p->id ? 'bg-violet-500/10 text-violet-700' : 'hover:bg-black/[0.03] text-gray-700' }}">
                             <div class="font-medium truncate">{{ $p->name }}</div>
-                            <div class="text-[10px] text-gray-500">{{ $statusLabel[$p->status] ?? $p->status }} · {{ $p->cycle_weeks }} Wo. · {{ $p->entries_count }} Einträge</div>
+                            <div class="text-[10px] text-gray-500">{{ $p->statusWert()->label() }} · {{ $p->cycle_weeks }} Wo. · {{ $p->entries_count }} Einträge</div>
                         </button>
                     @empty
                         <div class="px-2 py-6 text-center text-[11px] text-gray-500">Keine Pläne. Oben „+ Neuer Plan".</div>

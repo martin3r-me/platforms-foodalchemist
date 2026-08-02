@@ -27,7 +27,7 @@ class SpeisekartenSearchTool extends FoodAlchemistTool implements ToolContract, 
             'type' => 'object',
             'properties' => [
                 'q' => ['type' => 'string', 'description' => 'Suchtext (Name/Code)'],
-                'status' => ['type' => 'string', 'enum' => ['entwurf', 'aktiv', 'veroeffentlicht', 'archiviert']],
+                'status' => ['type' => 'string', 'enum' => array_column(\Platform\FoodAlchemist\Enums\AusgabeStatus::cases(), 'value')],
                 'karten_typ' => ['type' => 'string', 'enum' => ['alacarte', 'tageskarte', 'saisonkarte', 'getraenkekarte', 'weinkarte']],
                 'limit' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 100, 'default' => 25],
             ],

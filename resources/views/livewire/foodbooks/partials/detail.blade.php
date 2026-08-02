@@ -19,7 +19,7 @@
         <dl class="space-y-2 text-xs">
             <div class="flex items-center justify-between gap-3">
                 <dt class="text-gray-500">Status</dt>
-                <dd><span class="{{ $pill }} {{ $variantPill[$statusVariant[$fb->status] ?? 'secondary'] }}">{{ $statusLabel[$fb->status] ?? $fb->status }}</span></dd>
+                <dd><span class="{{ $pill }} {{ $variantPill[$fb->statusWert()->badgeVariant()] }}">{{ $fb->statusWert()->label() }}</span></dd>
             </div>
             <div class="flex items-center justify-between gap-3">
                 <dt class="text-gray-500">Erstellt</dt>

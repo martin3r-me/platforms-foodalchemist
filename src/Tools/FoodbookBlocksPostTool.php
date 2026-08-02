@@ -6,6 +6,7 @@ use Platform\Core\Contracts\ToolContract;
 use Platform\Core\Contracts\ToolContext;
 use Platform\Core\Contracts\ToolMetadataContract;
 use Platform\Core\Contracts\ToolResult;
+use Platform\FoodAlchemist\Enums\AusgabeStatus;
 use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
 use Platform\FoodAlchemist\Models\FoodAlchemistFoodbook;
 use Platform\FoodAlchemist\Models\FoodAlchemistFoodbookKapitel;
@@ -97,8 +98,10 @@ class FoodbookBlocksPostTool extends FoodAlchemistTool implements ToolContract, 
         if ($fb === null) {
             return ToolResult::error('Kapitel nicht sichtbar/vorhanden.', 'NOT_FOUND');
         }
-        if ((string) $fb->status !== 'draft') {
-            return ToolResult::error("Foodbook hat Status \"{$fb->status}\" — via MCP ist nur draft editierbar.", 'ACCESS_DENIED');
+        // Spec 33 P0: Status ist gecastet und heisst jetzt `entwurf` — der alte Vergleich
+        // `(string) …->status !== 'draft'` warf am Enum UND traf das falsche Vokabular.
+        if ($fb->statusWert() !== AusgabeStatus::Entwurf) {
+            return ToolResult::error("Foodbook hat Status \"{$fb->statusWert()->label()}\" — via MCP ist nur ein Entwurf editierbar.", 'ACCESS_DENIED');
         }
         if (isset($arguments['concept_id'])
             && ! FoodAlchemistConcept::visibleToTeam($team)->whereKey((int) $arguments['concept_id'])->exists()) {

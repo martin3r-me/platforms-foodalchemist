@@ -25,7 +25,7 @@
         <dl class="space-y-2 text-xs">
             <div class="flex items-center justify-between gap-3">
                 <dt class="text-gray-500">Status</dt>
-                <dd><span class="{{ $pill }} {{ $variantPill[$statusVariant[$karte->status] ?? 'secondary'] }}">{{ $statusLabel[$karte->status] ?? $karte->status }}</span></dd>
+                <dd><span class="{{ $pill }} {{ $variantPill[$karte->statusWert()->badgeVariant()] }}">{{ $karte->statusWert()->label() }}</span></dd>
             </div>
             <div class="flex items-center justify-between gap-3">
                 <dt class="text-gray-500">Erstellt</dt>

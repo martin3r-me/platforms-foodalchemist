@@ -559,7 +559,7 @@ class Index extends Component
         $this->selectedId = $id;
         $this->form = [
             'label' => $fb->label, 'customer' => $fb->customer ?? '', 'jahr' => $fb->jahr,
-            'personen' => $fb->personen, 'status' => $fb->status, 'description' => $fb->description ?? '',
+            'personen' => $fb->personen, 'status' => $fb->statusWert()->value, 'description' => $fb->description ?? '',
         ];
         // UX 2026-07-21: Foodbook-Wahl landet auf dem Foodbook-KOPF (übergeordnete Ebene),
         // NICHT mehr automatisch im ersten Kapitel — Kopf und Speisen sind getrennte Ansichten.

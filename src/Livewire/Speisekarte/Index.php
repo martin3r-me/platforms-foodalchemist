@@ -77,7 +77,8 @@ class Index extends Component
         $this->karteId = $id;
         $this->name = $karte->name;
         $this->kartenTyp = $karte->karten_typ;
-        $this->status = $karte->status;
+        // Spec 33 P0: `status` ist gecastet — die Livewire-Property ist ein String.
+        $this->status = $karte->statusWert()->value;
         $this->gueltigVon = $karte->gueltig_von?->format('Y-m-d');
         $this->gueltigBis = $karte->gueltig_bis?->format('Y-m-d');
         $this->editPosId = null;

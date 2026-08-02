@@ -8,6 +8,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Platform\Core\Models\Team;
+use Platform\FoodAlchemist\Enums\AusgabeStatus;
 use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipeDarreichung;
@@ -78,7 +79,7 @@ class SpeisekarteService
         return FoodAlchemistSpeisekarte::create([
             'team_id' => $team->id,
             'name' => trim((string) ($in['name'] ?? 'Neue Speisekarte')) ?: 'Neue Speisekarte',
-            'status' => $in['status'] ?? 'entwurf',
+            'status' => AusgabeStatus::normalisiere($in['status'] ?? null)->value,
             'karten_typ' => in_array($in['karten_typ'] ?? '', FoodAlchemistSpeisekarte::KARTEN_TYPEN, true) ? $in['karten_typ'] : 'alacarte',
             'outlet_id' => $in['outlet_id'] ?? null,
             'preis_anzeige_brutto' => $in['preis_anzeige_brutto'] ?? true,
@@ -86,11 +87,21 @@ class SpeisekarteService
         ]);
     }
 
+    /** Spec 33 P0: eingehenden Status auf das gültige Vokabular abbilden (eine Regel, ein Ort). */
+    private function normalisiereStatus(array $update): array
+    {
+        if (array_key_exists('status', $update)) {
+            $update['status'] = AusgabeStatus::normalisiere((string) $update['status'])->value;
+        }
+
+        return $update;
+    }
+
     public function update(Team $team, int $id, array $in): FoodAlchemistSpeisekarte
     {
         $karte = FoodAlchemistSpeisekarte::visibleToTeam($team)->findOrFail($id);
         $this->guard($karte, $team);
-        $karte->update(array_intersect_key($in, array_flip(self::FELDER)));
+        $karte->update($this->normalisiereStatus(array_intersect_key($in, array_flip(self::FELDER))));
 
         return $karte->refresh();
     }
@@ -121,7 +132,7 @@ class SpeisekarteService
 
         return DB::transaction(function () use ($quelle, $team, $overrides, $kopfFelder) {
             $neu = FoodAlchemistSpeisekarte::create(array_merge(
-                ['team_id' => $team->id, 'name' => $quelle->name . ' (Kopie)', 'status' => 'entwurf', 'code' => null],
+                ['team_id' => $team->id, 'name' => $quelle->name . ' (Kopie)', 'status' => AusgabeStatus::Entwurf->value, 'code' => null],
                 array_intersect_key($quelle->only($kopfFelder), array_flip($kopfFelder)),
                 array_intersect_key($overrides, array_flip(array_merge(self::FELDER, ['name']))),
             ));

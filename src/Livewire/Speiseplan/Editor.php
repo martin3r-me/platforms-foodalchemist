@@ -74,7 +74,7 @@ class Editor extends Component
             'start_date' => optional($sp->start_date)->format('Y-m-d'),
             'cycle_weeks' => $sp->cycle_weeks,
             'min_abstand_tage' => $sp->min_abstand_tage,
-            'status' => $sp->status,
+            'status' => $sp->statusWert()->value,   // Spec 33 P0: gecastet, Form-Array braucht String
             'default_pax' => $sp->default_pax,
             'budget_wareneinsatz' => $sp->budget_wareneinsatz,
         ];

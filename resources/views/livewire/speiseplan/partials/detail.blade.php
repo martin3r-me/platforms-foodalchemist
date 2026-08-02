@@ -14,7 +14,7 @@
         <dl class="space-y-2 text-xs">
             <div class="flex items-center justify-between gap-3">
                 <dt class="text-gray-500">Status</dt>
-                <dd><span class="{{ $pill }} {{ $variantPill[$statusVariant[$plan->status] ?? 'secondary'] }}">{{ $statusLabel[$plan->status] ?? $plan->status }}</span></dd>
+                <dd><span class="{{ $pill }} {{ $variantPill[$plan->statusWert()->badgeVariant()] }}">{{ $plan->statusWert()->label() }}</span></dd>
             </div>
             <div class="flex items-center justify-between gap-3">
                 <dt class="text-gray-500">Erstellt</dt>

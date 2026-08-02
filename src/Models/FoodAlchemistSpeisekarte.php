@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 use Platform\ActivityLog\Traits\LogsActivity;
 use Platform\FoodAlchemist\Models\Concerns\BelongsToTeamHierarchy;
 use Platform\FoodAlchemist\Models\Concerns\HasUuidV7;
+use Platform\FoodAlchemist\Models\Concerns\HatAusgabeStatus;
 
 /**
  * @ai.description Speisekarte — dritte Ausgabeform (Gastronomie-à-la-carte-Karte)
@@ -18,14 +19,11 @@ use Platform\FoodAlchemist\Models\Concerns\HasUuidV7;
  */
 class FoodAlchemistSpeisekarte extends Model
 {
-    use HasUuidV7, LogsActivity, BelongsToTeamHierarchy, SoftDeletes;
+    use HasUuidV7, HatAusgabeStatus, LogsActivity, BelongsToTeamHierarchy, SoftDeletes;
 
     protected $table = 'foodalchemist_menu_cards';
 
     protected $guarded = ['id'];
-
-    /** Karten-Status. */
-    public const STATUS = ['entwurf', 'aktiv', 'veroeffentlicht', 'archiviert'];
 
     /** Karten-Typen (steuern das Druck-Layout). */
     public const KARTEN_TYPEN = ['alacarte', 'tageskarte', 'saisonkarte', 'getraenkekarte', 'weinkarte'];
