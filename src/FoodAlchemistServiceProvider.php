@@ -433,6 +433,10 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\KapitelIdeenGetTool::class,
                     \Platform\FoodAlchemist\Tools\KapitelIdeenPostTool::class,
                     \Platform\FoodAlchemist\Tools\KapitelIdeenPutTool::class,
+                    // Planungs-/Kreativ-Ebene (Doppel-Diamant): Session-CRUD. „Go" bleibt human-only (kein MCP-Trigger).
+                    \Platform\FoodAlchemist\Tools\PlanungSessionGetTool::class,
+                    \Platform\FoodAlchemist\Tools\PlanungSessionPostTool::class,
+                    \Platform\FoodAlchemist\Tools\PlanungSessionPutTool::class,
                     // Spec 19 E7.6: Kapitel-Go „Anlegen" — READ-ONLY (Stempel-Vorschau + Trockenlauf + Anlage-Stand; Go selbst human-only, kein MCP-Trigger)
                     \Platform\FoodAlchemist\Tools\KapitelFreigabeGetTool::class,
                     // Spec 19 E9: Pairing-Inspiration der Kreativ-Phase — READ-ONLY (Aroma-Nachbarn je Modus, abstrakt/geerdet)

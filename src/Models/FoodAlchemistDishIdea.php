@@ -50,10 +50,16 @@ class FoodAlchemistDishIdea extends Model
         return $this->belongsTo(FoodAlchemistFoodbookKapitel::class, 'chapter_id');
     }
 
-    /** Owner-Konzept (XOR mit chapter). */
+    /** Owner-Konzept (XOR mit chapter/planningSession). */
     public function concept(): BelongsTo
     {
         return $this->belongsTo(FoodAlchemistConcept::class, 'concept_id');
+    }
+
+    /** Owner-Planungs-Session (3-Wege-XOR mit chapter/concept, Doppel-Diamant). */
+    public function planningSession(): BelongsTo
+    {
+        return $this->belongsTo(FoodAlchemistPlanningSession::class, 'planning_session_id');
     }
 
     /** Paket-Gruppe, falls target_form=paket. */

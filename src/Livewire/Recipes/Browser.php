@@ -278,6 +278,13 @@ class Browser extends Component
         if ($this->recipeId !== null) {
             $this->dispatch('recipe-selected', id: $this->recipeId); // Kontext-Erhalt nach Reload
         }
+        // Planungs-„Go"-Handoff (Session-Flash): den KI-Generator vorbefüllt öffnen.
+        $handoff = session('fa_plan_handoff');
+        if (is_array($handoff) && ($handoff['target'] ?? null) === 'basisrezept') {
+            $this->dispatch('generator-modal.oeffnen',
+                description: (string) ($handoff['brief'] ?? ''),
+                planningSessionId: isset($handoff['planning_session_id']) ? (int) $handoff['planning_session_id'] : null);
+        }
     }
 
     public function render(RecipeService $recipes)

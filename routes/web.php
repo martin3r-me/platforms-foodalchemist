@@ -103,6 +103,10 @@ Route::get('/wissen', \Platform\FoodAlchemist\Livewire\Knowledge\Browser::class)
 Route::get('/trendradar', \Platform\FoodAlchemist\Livewire\Trendradar\Index::class)
     ->name('foodalchemist.trendradar.index');
 
+// Planungs-/Kreativ-Ebene (Doppel-Diamant): Trend/Brief → Analyse/Skizzen/Planung → Go.
+Route::get('/planung', \Platform\FoodAlchemist\Livewire\Planung\Index::class)
+    ->name('foodalchemist.planung.index');
+
 /**
  * Einstellungen (M1-01, D-1 §4) — Sektion in der URL (V-17: kein Tab-State-Verlust).
  */

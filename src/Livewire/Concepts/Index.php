@@ -52,6 +52,20 @@ class Index extends Component
 
     public ?string $generatorFehler = null;
 
+    /** Planungs-„Go"-Handoff: Session als Lineage-Träger, bis der Konzept-Entwurf steht. */
+    public ?int $pendingPlanningSessionId = null;
+
+    public function mount(): void
+    {
+        // Planungs-„Go"-Handoff (Session-Flash): Generator vorbefüllt öffnen + Lineage vormerken.
+        $handoff = session('fa_plan_handoff');
+        if (is_array($handoff) && ($handoff['target'] ?? null) === 'concept') {
+            $this->generatorBrief = (string) ($handoff['brief'] ?? '');
+            $this->pendingPlanningSessionId = isset($handoff['planning_session_id']) ? (int) $handoff['planning_session_id'] : null;
+            $this->generatorOffen = true;
+        }
+    }
+
     public function generatorStart(): void
     {
         $this->generatorFehler = null;
@@ -77,6 +91,15 @@ class Index extends Component
             'coverage' => $ergebnis['coverage']['zusammenfassung'] ?? [],
             'coverage_gesamt' => $ergebnis['coverage']['ampel_gesamt'] ?? null,
         ];
+        // Planungs-„Go"-Lineage: Trend-Herkunft ans Konzept + Session→konvergenz.
+        if ($this->pendingPlanningSessionId !== null) {
+            $planSvc = app(\Platform\FoodAlchemist\Services\PlanningSessionService::class);
+            $session = $planSvc->get($this->team(), $this->pendingPlanningSessionId);
+            if ($session !== null) {
+                $planSvc->verknuepfeArtefakt($session, 'concept', (int) $ergebnis['concept']->id);
+            }
+            $this->pendingPlanningSessionId = null;
+        }
         $this->generatorBrief = '';
         $this->generatorName = '';
         $this->generatorFavorites = false;

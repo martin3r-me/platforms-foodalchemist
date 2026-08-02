@@ -89,6 +89,15 @@ class GenerateRecipeJob implements ShouldQueue
             if ($r === [] || ! isset($r['recipe'])) {
                 throw new \RuntimeException('Generierung lieferte kein Ergebnis.');
             }
+            // Planungs-„Go"-Lineage: Trend-Herkunft + created_via=plan_go ans Rezept, Session→konvergenz.
+            $planId = isset($this->parameter['planning_session_id']) ? (int) $this->parameter['planning_session_id'] : null;
+            if ($planId !== null) {
+                $planSvc = app(\Platform\FoodAlchemist\Services\PlanningSessionService::class);
+                $session = $planSvc->get($team, $planId);
+                if ($session !== null) {
+                    $planSvc->verknuepfeArtefakt($session, 'recipe', (int) $r['recipe']->id);
+                }
+            }
             $payload = [
                 'status' => 'done',
                 'recipe_id' => $r['recipe']->id,

@@ -77,6 +77,9 @@ class VkGeneratorModal extends Component
     /** 06·H4b: Favoriten-Block auf Convenience-getaggte verengen (nur bei aktivem Favoriten-Modus). */
     public bool $favoritesConvenienceOnly = false;
 
+    /** Planungs-Ebene: gesetzt beim „Go"-Handoff — Lineage-Träger (verknuepfeArtefakt). */
+    public ?int $planningSessionId = null;
+
     public function togglePill(string $feld, string $wert): void
     {
         if ($feld === 'diaet_hart') {                                 // Multi-Select (hart erzwungen)
@@ -96,9 +99,12 @@ class VkGeneratorModal extends Component
     public ?array $ergebnis = null;
 
     #[On('vk-generator-modal.oeffnen')]
-    public function oeffnen(): void
+    public function oeffnen(?string $description = null, ?int $planningSessionId = null): void
     {
-        $this->reset('fehler', 'ergebnis', 'description', 'zielVk', 'laeuft', 'runId', 'anreicherung', 'hardstopMeldung', 'hardstopOffenIndex');
+        $this->reset('fehler', 'ergebnis', 'description', 'planningSessionId', 'zielVk', 'laeuft', 'runId', 'anreicherung', 'hardstopMeldung', 'hardstopOffenIndex');
+        // Planungs-„Go"-Handoff: Brief vorbefüllen + Session als Lineage-Träger.
+        $this->description = $description ?? '';
+        $this->planningSessionId = $planningSessionId;
         $this->dispatch('modal.open', name: 'vk-generator-modal');
     }
 
@@ -123,6 +129,9 @@ class VkGeneratorModal extends Component
         $parameter = array_filter($parameter, fn ($v) => $v !== '' && $v !== null);
         $parameter['use_favorites_list'] = $this->useFavoritesList; // 06·H4 opt-in (nach array_filter, sonst würde false gestrippt)
         $parameter['favorites_convenience_only'] = $this->useFavoritesList && $this->favoritesConvenienceOnly; // H4b
+        if ($this->planningSessionId !== null) {                       // Planungs-„Go": Lineage-Durchreichung
+            $parameter['planning_session_id'] = $this->planningSessionId;
+        }
 
         // L8b-2: unbrauchbare Eingabe wird hier GESAGT, nicht still verworfen —
         // anders als beim KI-Vorschlag (`portionG`, L8b-1). Der Unterschied ist der

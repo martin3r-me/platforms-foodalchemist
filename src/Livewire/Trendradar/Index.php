@@ -9,6 +9,7 @@ use Livewire\Attributes\Url;
 use Livewire\Component;
 use Platform\FoodAlchemist\Services\Ai\KnowledgeContextService;
 use Platform\FoodAlchemist\Services\Ai\KnowledgeEmbeddingService;
+use Platform\FoodAlchemist\Services\PlanningSessionService;
 use Platform\FoodAlchemist\Services\TrendRadarService;
 use Platform\FoodAlchemist\Support\TeamScope;
 
@@ -62,6 +63,30 @@ class Index extends Component
     public function deselect(): void
     {
         $this->selectedSlug = null;
+    }
+
+    /** Trend-Carry-in: aus dem gewählten Trend eine Planungs-Session eröffnen (Kontext wandert mit). */
+    public function inPlanungOeffnen(PlanningSessionService $svc)
+    {
+        if ($this->selectedSlug === null) {
+            return null;
+        }
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team === null) {
+            return null;
+        }
+        $docId = TeamScope::applyVisible(
+            DB::table('foodalchemist_knowledge_documents')
+                ->where('category', 'trend')->where('active', 1)->whereNull('deleted_at'),
+            'team_id', $team
+        )->where('slug', $this->selectedSlug)->value('id');
+        if ($docId === null) {
+            return null;
+        }
+        $session = $svc->ausTrend($team, (int) $docId);
+
+        // open=1 öffnet den Black-Editor direkt (nicht nur die Vorschau selektieren).
+        return redirect()->route('foodalchemist.planung.index', ['session' => $session->id, 'open' => 1]);
     }
 
     /** Klick im Taxonomie-Baum → Kategorie/Klasse-Filter setzen. */

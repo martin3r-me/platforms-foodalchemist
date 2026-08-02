@@ -119,6 +119,12 @@ return [
             'group' => 'Rezepte & Konzepte',
             'items' => [
                 [
+                    // Doppel-Diamant: Trend/Brief → Analyse/Skizzen → Go auf Basisrezept/Gericht/Concept.
+                    'label' => 'Planung',
+                    'route' => 'foodalchemist.planung.index',
+                    'icon'  => 'heroicon-o-light-bulb',
+                ],
+                [
                     'label' => 'Basisrezepte',
                     'route' => 'foodalchemist.recipes.index',
                     'icon'  => 'heroicon-o-book-open',

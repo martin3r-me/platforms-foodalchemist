@@ -39,6 +39,9 @@ class GeneratorModal extends Component
     /** 06·H4b: Favoriten-Block auf Convenience-getaggte verengen (nur bei aktivem Favoriten-Modus). */
     public bool $favoritesConvenienceOnly = false;
 
+    /** Planungs-Ebene: gesetzt, wenn das Modal aus einem „Go" kommt — Lineage-Träger (verknuepfeArtefakt). */
+    public ?int $planningSessionId = null;
+
     /** Pill-Gruppen fürs View (NICHT als @php-Block — Blade-Raw-Block-Falle mit @php(...)-Einzeilern). */
     public const RICHTUNGEN = [
         ['field' => 'convenience', 'label' => 'Convenience (Eigenleistung)', 'optionen' => ['' => '(egal)', 'from_scratch' => 'From Scratch', 'teil_convenience' => 'Teil-Convenience', 'voll_convenience' => 'Voll-Convenience'], 'hint' => ['' => 'Keine Vorgabe', 'from_scratch' => 'alles selbst — Pool dreht auf Roh/Sub-Rezepte', 'teil_convenience' => 'Halbfabrikate erlaubt', 'voll_convenience' => 'Fertigprodukte bevorzugt']],
@@ -67,9 +70,12 @@ class GeneratorModal extends Component
     public ?array $ergebnis = null;
 
     #[On('generator-modal.oeffnen')]
-    public function oeffnen(): void
+    public function oeffnen(?string $description = null, ?int $planningSessionId = null): void
     {
-        $this->reset('fehler', 'ergebnis', 'description', 'laeuft', 'runId', 'anreicherung', 'hardstopMeldung', 'hardstopOffenIndex');
+        $this->reset('fehler', 'ergebnis', 'description', 'planningSessionId', 'laeuft', 'runId', 'anreicherung', 'hardstopMeldung', 'hardstopOffenIndex');
+        // Planungs-„Go"-Handoff: Brief vorbefüllen + Session als Lineage-Träger mitführen.
+        $this->description = $description ?? '';
+        $this->planningSessionId = $planningSessionId;
         $this->dispatch('modal.open', name: 'generator-modal');
     }
 
@@ -96,6 +102,9 @@ class GeneratorModal extends Component
         $parameter['bio'] = $parameter['bio_praeferenz'] === 'bio';
         $parameter['use_favorites_list'] = $this->useFavoritesList; // 06·H4 opt-in
         $parameter['favorites_convenience_only'] = $this->useFavoritesList && $this->favoritesConvenienceOnly; // H4b
+        if ($this->planningSessionId !== null) {                       // Planungs-„Go": Lineage-Durchreichung
+            $parameter['planning_session_id'] = $this->planningSessionId;
+        }
 
         $this->starteLauf($team->id, trim($this->description), $parameter, vkModus: false);
     }

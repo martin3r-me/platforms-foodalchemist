@@ -163,6 +163,11 @@
                         <h3 class="text-sm font-semibold text-gray-800 leading-snug">{{ $selected->title }}</h3>
                         <button wire:click="deselect" class="{{ $btnGhostXs }}">schließen</button>
                     </div>
+
+                    <button wire:click="inPlanungOeffnen" class="{{ $btnPrimary }} w-full justify-center">
+                        @svg('heroicon-o-light-bulb', 'w-4 h-4')
+                        In Planung öffnen
+                    </button>
                     <div class="flex flex-wrap gap-1">
                         @if($selected->category)  {!! $chip($selected->category, 'bg-violet-500/10 text-violet-700') !!} @endif
                         @if($selected->trend_class)  {!! $chip($selected->trend_class) !!} @endif
