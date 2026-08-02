@@ -9,6 +9,8 @@ use Livewire\Component;
 use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
 use Platform\FoodAlchemist\Models\FoodAlchemistPaket;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
+use Platform\FoodAlchemist\Enums\AusgabeStatus;
+use Platform\FoodAlchemist\Models\FoodAlchemistSpeiseplan;
 use Platform\FoodAlchemist\Services\SpeiseplanService;
 
 /**
@@ -77,6 +79,10 @@ class Editor extends Component
             'status' => $sp->statusWert()->value,   // Spec 33 P0: gecastet, Form-Array braucht String
             'default_pax' => $sp->default_pax,
             'budget_wareneinsatz' => $sp->budget_wareneinsatz,
+            // Spec 33 P2: beide Zuordnungsachsen — vorher hing der Plan nur an team_id,
+            // zwei Kantinen im selben Team waren nicht unterscheidbar.
+            'outlet_id' => $sp->outlet_id,
+            'customer' => $sp->customer ?? '',
         ];
         $this->prodHinweis = null;
         $this->prodFehler = null;
@@ -96,6 +102,20 @@ class Editor extends Component
             $svc->update($this->team(), $this->planId, $this->form);
             $this->dispatch('speiseplan-geaendert');
         }
+    }
+
+    /** Spec 33 P5 — Schnellschalter aktiv ⇄ inaktiv (ohne Umweg über das Dropdown, ohne Archiv). */
+    public function aktivUmschalten(SpeiseplanService $svc): void
+    {
+        $plan = $this->planId !== null
+            ? FoodAlchemistSpeiseplan::visibleToTeam($this->team())->find($this->planId) : null;
+        if ($plan === null) {
+            return;
+        }
+
+        $neu = $plan->statusWert() === AusgabeStatus::Aktiv ? AusgabeStatus::Inaktiv : AusgabeStatus::Aktiv;
+        $svc->update($this->team(), $this->planId, ['status' => $neu->value]);
+        $this->form['status'] = $neu->value;
     }
 
     public function loeschen(int $id, SpeiseplanService $svc): void
@@ -294,6 +314,20 @@ class Editor extends Component
 
         return view('foodalchemist::livewire.speiseplan.editor', [
             'sp' => $sp,
+            // Spec 33 P5: das Bauteil erwartet die Ausgabe selbst; `sp` ist derselbe Datensatz,
+            // nur unter dem Namen, den das Bauteil in allen drei Editoren benutzt.
+            'plan' => $sp,
+            'betriebe' => \Platform\FoodAlchemist\Models\FoodAlchemistOutlet::where('team_id', $this->team()->id)
+                ->where('is_inactive', false)->orderBy('sort_order')->orderBy('name')->get(['id', 'name']),
+            // Der Plan hat kein eigenes Fenster — es steht in seinen Einträgen. Statt eines
+            // toten Datumsfelds zeigt das Bauteil den abgeleiteten Zeitraum als Klartext.
+            'fensterHinweis' => $sp === null ? null : (
+                $sp->gueltigVon() === null
+                    ? 'Noch keine Einträge — der Zeitraum ergibt sich aus dem ersten und letzten Plantag.'
+                    : $sp->gueltigVon()->format('d.m.Y') . ' – ' . $sp->gueltigBis()?->format('d.m.Y')
+                      . ' (aus den Einträgen abgeleitet)'
+            ),
+            'portfolioKonflikt' => null,   // kommt mit P3 (PortfolioService::konflikte)
             'linien' => $sp !== null ? $sp->lines : collect(),
             'wochenTage' => $wochenTage,
             'montagDt' => $montag,

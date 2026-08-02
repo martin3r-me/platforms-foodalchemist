@@ -99,22 +99,16 @@
                             @endforeach
                         </select>
                     </div>
-                    <div>
-                        <div class="{{ $label }} mb-1">Status</div>
-                        <select wire:model="status" class="{{ $input }}">
-                            @foreach($statusLabel as $key => $lbl)
-                                <option value="{{ $key }}">{{ $lbl }}</option>
-                            @endforeach
-                        </select>
-                    </div>
-                    <div>
-                        <div class="{{ $label }} mb-1">Gültig ab</div>
-                        <input type="date" wire:model="gueltigVon" class="{{ $input }}" />
-                    </div>
-                    <div>
-                        <div class="{{ $label }} mb-1">Gültig bis</div>
-                        <input type="date" wire:model="gueltigBis" class="{{ $input }}" />
-                    </div>
+                </div>
+
+                {{-- Spec 33 P5: Status, Fenster und beide Zuordnungsachsen aus dem geteilten
+                     Bauteil — dieselbe Bedienung wie in Foodbook und Speiseplan. --}}
+                <div class="mt-3 pt-3 border-t border-black/5">
+                    <x-foodalchemist::ausgabe-status
+                        status-model="status" von-model="gueltigVon" bis-model="gueltigBis"
+                        outlet-model="outletId" kunde-model="kunde"
+                        :betriebe="$betriebe" :zustand="$karte->laufZustand()" :grund="$karte->laufGrund()"
+                        :konflikt="$portfolioKonflikt" toggle="aktivUmschalten" />
                 </div>
                 <div class="mt-3 flex flex-wrap gap-2">
                     <button type="button" wire:click="kiKartenText" class="{{ $btnAi }}">✨ KI-Einleitung</button>
