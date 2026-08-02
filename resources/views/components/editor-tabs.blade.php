@@ -53,6 +53,7 @@
     'marker' => null,              {{-- data-{marker}-tabs am Root + data-{marker}-tab je Button --}}
     'action' => null,              {{-- Server-Modus: Livewire-Methode, z. B. 'setTab' --}}
     'active' => null,              {{-- Server-Modus: aktiver Tab-Schlüssel aus der Komponente --}}
+    'counts' => [],                {{-- Server-Modus (optional): ['key' => int] → Zähler-Badge, nur wenn > 0 --}}
 ])
 @php
     $sichtbar = array_filter($tabs, fn ($label) => $label !== null && $label !== false && $label !== '');
@@ -68,9 +69,10 @@
     {{-- Server-Modus: nur die Leiste. Kein Alpine-Scope — der aktive Tab kommt aus der Komponente. --}}
     <div class="{{ $leiste }} mt-1 py-2" data-fa-editor-tabs @if($marker) data-{{ $marker }}-tabs @endif>
         @foreach($sichtbar as $tabKey => $tabLabel)
+            @php $cnt = $counts[$tabKey] ?? null; @endphp
             <button type="button" wire:click="{{ $action }}('{{ $tabKey }}')"
-                    class="{{ $knopf }} {{ $active === $tabKey ? $an : $aus }}"
-                    data-fa-editor-tab="{{ $tabKey }}" @if($marker) data-{{ $marker }}-tab="{{ $tabKey }}" @endif>{{ $tabLabel }}</button>
+                    class="{{ $knopf }} inline-flex items-center {{ $active === $tabKey ? $an : $aus }}"
+                    data-fa-editor-tab="{{ $tabKey }}" @if($marker) data-{{ $marker }}-tab="{{ $tabKey }}" @endif>{{ $tabLabel }}@if($cnt !== null && $cnt > 0)<span class="ml-1.5 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-semibold {{ $active === $tabKey ? 'bg-violet-500/15 text-violet-700' : 'bg-black/[0.06] text-gray-500' }}">{{ number_format($cnt, 0, ',', '.') }}</span>@endif</button>
         @endforeach
     </div>
 @else

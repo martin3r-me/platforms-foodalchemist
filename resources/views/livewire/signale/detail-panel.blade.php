@@ -109,18 +109,12 @@
             </x-slot:actions>
 
             @if($betroffen && count($betroffen['items']))
-                @php($teilBulk = $plan !== null && $plan['kind'] === 'deterministic' && $sig->status->istOffen())
                 <div class="space-y-0.5">
                     @foreach($betroffen['items'] as $it)
                         @php($istGewaehlt = $objektKind === $it['kind'] && $objektId === $it['id'])
                         <div wire:key="sigobj-{{ $it['kind'] }}-{{ $it['id'] }}-{{ $loop->index }}"
                              class="rounded-lg {{ $istGewaehlt ? 'bg-violet-500/[0.06]' : 'hover:bg-black/[0.03]' }} transition-colors">
                             <div class="flex items-center gap-1.5 px-1.5 py-1">
-                                @if($teilBulk && in_array($it['kind'], ['recipe', 'gp'], true))
-                                    <input type="checkbox" wire:model.live="auswahl" value="{{ $it['id'] }}"
-                                           class="shrink-0 w-3.5 h-3.5 rounded border-gray-300 text-violet-600 focus:ring-violet-500"
-                                           title="Für Teil-Fix auswählen" data-signal-pick="{{ $it['id'] }}">
-                                @endif
                                 @if($it['kind'] === 'recipe')
                                     {{-- Tranche B (S5b): bei `rezept_plausi_ki` öffnet das Modal direkt mit den
                                          abgelegten Befunden — das Signal zählt genau die, und der Fix passiert
@@ -197,67 +191,6 @@
                                             {{ count($objektSignale) }} Befunde am selben Objekt — in einem Durchgang beheben statt {{ count($objektSignale) }}× öffnen.
                                         </p>
                                     @endif
-
-                                    {{-- ── Punkt 5 (S3b-3): Ursachen-Kette nach unten ──────
-                                         Warum ist DIESES Objekt betroffen — unbepreiste Zutat → GP →
-                                         Lead-LA-Lage bzw. verletztes § mit Sprung ins Wissens-Modul.
-                                         Nur Kurzform-@php hier: ein Roh-Block unterhalb einer Kurzform
-                                         reißt die halbe View mit (s. Warnung ganz oben). --}}
-                                    @foreach($objektUrsachen as $uB)
-                                        <div wire:key="urs-{{ $it['kind'] }}-{{ $it['id'] }}-{{ $uB['art'] }}"
-                                             class="mt-2 pt-2 border-t border-black/[0.06]" data-signal-ursache="{{ $uB['art'] }}">
-                                            <p class="text-[10px] font-medium uppercase tracking-wider text-gray-500 mb-1">
-                                                {{ $uB['titel'] }}
-                                                <span class="normal-case tracking-normal text-gray-400">· {{ $uB['kopf'] }}</span>
-                                            </p>
-
-                                            @if($uB['art'] === 'regelwerk')
-                                                <div class="space-y-1">
-                                                    @foreach($uB['glieder'] as $g)
-                                                        <div wire:key="ursreg-{{ $it['id'] }}-{{ $g['fall'] }}" class="rounded-md bg-amber-500/[0.07] px-2 py-1.5">
-                                                            <div class="flex items-center gap-1.5">
-                                                                <span class="text-[10px] font-medium text-amber-700">{{ $g['paragraph'] }}</span>
-                                                                @if($g['url'])
-                                                                    <a href="{{ $g['url'] }}" wire:navigate
-                                                                       class="text-[10px] text-sky-600 hover:underline" data-signal-paragraph="{{ $g['fall'] }}">nachlesen →</a>
-                                                                @endif
-                                                            </div>
-                                                            <p class="text-[10px] leading-relaxed text-gray-600 mt-0.5">{{ $g['regel'] }}</p>
-                                                        </div>
-                                                    @endforeach
-                                                </div>
-                                            @else
-                                                <div class="space-y-1">
-                                                    @foreach($uB['glieder'] as $gi => $g)
-                                                        <div wire:key="ursek-{{ $it['id'] }}-{{ $gi }}"
-                                                             class="rounded-md px-2 py-1.5 {{ $g['fixbar'] ? 'bg-emerald-500/[0.06]' : 'bg-black/[0.03]' }}">
-                                                            <div class="flex items-center gap-1.5">
-                                                                <span class="min-w-0 flex-1 truncate text-[11px] font-medium text-gray-700">{{ $g['zutat'] }}</span>
-                                                                @if($g['menge'])<span class="shrink-0 text-[10px] text-gray-400">{{ $g['menge'] }}</span>@endif
-                                                            </div>
-                                                            <p class="text-[10px] text-gray-600 mt-0.5">
-                                                                <span class="{{ $g['fixbar'] ? 'text-emerald-700' : 'text-rose-600' }}">{{ $g['ursache'] }}</span>
-                                                                @if($g['gp_name'])
-                                                                    · <a href="{{ route('foodalchemist.gps.index', ['gp' => $g['gp_id']]) }}" wire:navigate
-                                                                         class="text-violet-600 hover:underline">{{ $g['gp_name'] }}</a>
-                                                                @endif
-                                                            </p>
-                                                            <p class="text-[10px] leading-relaxed text-gray-500 mt-0.5">{{ $g['weiter'] }}</p>
-                                                        </div>
-                                                    @endforeach
-                                                </div>
-                                                @if($uB['gekappt'] > 0)
-                                                    <p class="text-[10px] text-gray-400 mt-1">… und {{ $uB['gekappt'] }} weitere unbepreiste Zutat(en).</p>
-                                                @endif
-                                                @if($uB['ungemappt'] > 0)
-                                                    <p class="text-[10px] text-gray-500 mt-1">
-                                                        Zusätzlich {{ $uB['ungemappt'] }} ungemappte Zutat(en) — die zählen gar nicht erst in
-                                                        die EK-Kette und senken den Wert still.
-                                                    </p>
-                                                @endif
-                                            @endif
-                                        </div>
-                                    @endforeach
                                 </div>
                             @endif
                         </div>
@@ -270,67 +203,6 @@
                         {{ number_format($betroffen['total'], 0, ',', '.') }} (Kappung bei {{ $panelLimit }}) — die übrigen
                         erscheinen, sobald diese behoben sind.
                     </p>
-                @endif
-
-                {{-- ── Punkt 7: Teil-Bulk + Punkt 3: Dry-Run davor ───────────── --}}
-                @if($teilBulk)
-                    <div class="mt-3 pt-2.5 border-t border-black/[0.06] flex flex-wrap items-center gap-1.5" data-signal-bulkbar>
-                        <button type="button" wire:click="alleWaehlen"
-                                class="px-2 py-0.5 rounded-md text-[10px] text-gray-500 hover:text-gray-800 hover:bg-black/[0.04]">alle</button>
-                        <button type="button" wire:click="auswahlLeeren"
-                                class="px-2 py-0.5 rounded-md text-[10px] text-gray-500 hover:text-gray-800 hover:bg-black/[0.04]">keine</button>
-                        <span class="text-[10px] text-gray-400">{{ count($auswahl) }} gewählt</span>
-                        <span class="flex-1"></span>
-                        <button type="button" wire:click="vorschauZeigen"
-                                class="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium text-gray-700 bg-black/[0.05] hover:bg-black/[0.08]"
-                                data-signal-vorschau>
-                            @svg('heroicon-o-eye', 'w-3 h-3') Vorschau
-                        </button>
-                        <button type="button" wire:click="teilFixAusfuehren" @disabled(count($auswahl) === 0)
-                                class="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium text-white bg-violet-600 hover:bg-violet-700 disabled:opacity-40 disabled:cursor-not-allowed"
-                                data-signal-teilfix>
-                            @svg('heroicon-o-bolt', 'w-3 h-3') diese {{ count($auswahl) ?: '' }} fixen
-                        </button>
-                    </div>
-
-                    @if($vorschau !== null)
-                        <div class="mt-2 rounded-xl border border-violet-500/20 bg-white/70 px-3 py-2.5" data-signal-dryrun>
-                            <p class="text-[10px] font-medium uppercase tracking-wider text-gray-500 mb-1">
-                                Fix-Vorschau ({{ $vorschau['scope'] === 'teilmenge' ? 'Auswahl' : 'ganzer Satz' }})
-                            </p>
-                            <p class="text-[11px] text-gray-600 mb-2">
-                                {{ number_format($vorschau['total'], 0, ',', '.') }} betroffen ·
-                                geprüft {{ $vorschau['gezeigt'] }} ·
-                                <span class="text-emerald-700">{{ $vorschau['wirkt'] }} würden geändert</span>
-                                @if($vorschau['wirkt_nicht'] > 0)
-                                    · <span class="text-gray-500">{{ $vorschau['wirkt_nicht'] }} bleiben unberührt</span>
-                                @endif
-                            </p>
-                            <div class="space-y-1">
-                                @foreach($vorschau['items'] as $vi)
-                                    <div wire:key="dry-{{ $vi['kind'] }}-{{ $vi['id'] }}"
-                                         class="rounded-lg px-2 py-1.5 {{ $vi['wirkt'] ? 'bg-emerald-500/[0.06]' : 'bg-black/[0.03]' }}">
-                                        <div class="flex items-center gap-1.5">
-                                            <span class="text-[10px] {{ $vi['wirkt'] ? 'text-emerald-600' : 'text-gray-400' }}">{{ $vi['wirkt'] ? '✓' : '–' }}</span>
-                                            <span class="min-w-0 flex-1 truncate text-[11px] font-medium text-gray-700">{{ $vi['name'] }}</span>
-                                        </div>
-                                        @foreach($vi['felder'] as $feld => $wert)
-                                            <p class="text-[10px] text-gray-600 ml-4 font-mono">{{ $feld }}: {{ $wert }}</p>
-                                        @endforeach
-                                        @if($vi['hinweis'])
-                                            <p class="text-[10px] text-gray-500 ml-4 italic">{{ $vi['hinweis'] }}</p>
-                                        @endif
-                                    </div>
-                                @endforeach
-                            </div>
-                            @if($vorschau['total'] > $vorschau['gezeigt'])
-                                <p class="text-[10px] text-gray-400 mt-1.5">
-                                    Aufgeschlüsselt sind die ersten {{ $vorschau['gezeigt'] }} — die Zähler oben gelten für
-                                    genau diese, nicht für alle {{ number_format($vorschau['total'], 0, ',', '.') }}.
-                                </p>
-                            @endif
-                        </div>
-                    @endif
                 @endif
             @elseif($betroffen)
                 <p class="text-[11px] text-gray-500">

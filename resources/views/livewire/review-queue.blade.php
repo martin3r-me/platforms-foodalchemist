@@ -45,40 +45,16 @@
             </div>
         @endif
 
-        {{-- ── Tab-Leiste (Segmented, house-style) ──────────────────────────── --}}
-        @php
-            $pflegeGesamt = $vkOhneKlasse->count() + $imReviewZahl + $ungemapptZahl;
-            $tabs = [
-                ['key' => 'ueberblick', 'label' => 'Überblick', 'icon' => 'heroicon-o-squares-2x2', 'count' => null],
-                ['key' => 'signale', 'label' => 'Signale', 'icon' => 'heroicon-o-bell-alert', 'count' => $signalOffen],
-                ['key' => 'ki', 'label' => 'KI-Vorschläge', 'icon' => 'heroicon-o-sparkles', 'count' => $bulkZahl],
-                ['key' => 'matches', 'label' => 'Matches & Terminologie', 'icon' => 'heroicon-o-link', 'count' => $matchZahl],
-                ['key' => 'pflege', 'label' => 'Pflege', 'icon' => 'heroicon-o-wrench-screwdriver', 'count' => $pflegeGesamt],
-            ];
-        @endphp
-        <div class="flex flex-wrap items-center justify-between gap-3">
-            <div class="flex flex-wrap items-center gap-0.5 p-1 rounded-xl bg-black/[0.03] w-fit" data-rq-tabs>
-                @foreach($tabs as $t)
-                    <button type="button" wire:key="tab-{{ $t['key'] }}" wire:click="setTab('{{ $t['key'] }}')"
-                            data-rq-tab="{{ $t['key'] }}"
-                            class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs transition-all {{ $tab === $t['key'] ? 'bg-white shadow-sm font-medium text-violet-700' : 'text-gray-500 hover:text-gray-900' }}">
-                        @svg($t['icon'], 'w-3.5 h-3.5 '.($tab === $t['key'] ? 'text-violet-600' : 'text-gray-400'))
-                        {{ $t['label'] }}
-                        @if($t['count'] !== null && $t['count'] > 0)
-                            <span class="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-semibold {{ $tab === $t['key'] ? 'bg-violet-500/15 text-violet-700' : 'bg-black/[0.06] text-gray-500' }}">{{ number_format($t['count'], 0, ',', '.') }}</span>
-                        @endif
-                    </button>
-                @endforeach
-            </div>
-
-            {{-- Die beiden Lauf-Knöpfe. Sie standen bis 2026-07-28 im `<x-slot:end>` des
-                 Core-`x-ui-page-actionbar` — und dessen Inhalt rendert auf demo NICHT (dieselbe
-                 Ursache liess auf der Wissens-Seite „+ Neues Wissen" verschwinden, obwohl der
-                 Hinweistext dort darauf zeigt). Ein Feature-Eingang, den niemand anklicken kann,
-                 ist kein Feature: darum leben sie hier, in unserem eigenen Markup, wo wir das
-                 Rendering kontrollieren. Der Core-Slot bleibt für Martin zu reparieren.
-                 Getrennt, weil links gratis ist und rechts Provider-Geld kostet. --}}
-            <div class="flex flex-wrap items-center gap-2" data-rq-laeufe>
+        {{-- ── Lauf-Knöpfe (eigene Zeile, rechtsbündig) ──────────────────────
+             Über der Tab-Leiste, weil die geteilte `editor-tabs`-Leiste volle Breite
+             (`-mx-6 px-6`, sticky) einnimmt und sich die Zeile nicht mehr teilt.
+             Die beiden Knöpfe standen bis 2026-07-28 im `<x-slot:end>` des Core-
+             `x-ui-page-actionbar` — dessen Inhalt rendert auf demo NICHT (dieselbe Ursache
+             liess auf der Wissens-Seite „+ Neues Wissen" verschwinden). Ein Feature-Eingang,
+             den niemand anklicken kann, ist kein Feature: darum leben sie hier, in unserem
+             eigenen Markup. Der Core-Slot bleibt für Martin zu reparieren. Getrennt, weil
+             links (Ampel) gratis ist und rechts (KI-Befunde) Provider-Geld kostet. --}}
+        <div class="flex flex-wrap items-center justify-end gap-2" data-rq-laeufe>
                 <button type="button" wire:click="detektorLaufen" wire:target="detektorLaufen" wire:loading.attr="disabled"
                         data-rq-ampel
                         class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-gray-600 bg-white/60 border border-black/5 hover:bg-white/90 hover:text-gray-900 transition-all disabled:opacity-60"
@@ -103,24 +79,40 @@
             </div>
         </div>
 
+        {{-- ── Tab-Leiste (geteilte editor-tabs, Server-Modus) ────────────────
+             `marker="rq"` erhält die E2E-Hooks (`data-rq-tabs`, `data-rq-tab="<key>"`).
+             `:counts` zeigt die offenen Zähler je Tab (nachgerüstete optionale Prop). --}}
+        @php
+            $pflegeGesamt = $vkOhneKlasse->count() + $imReviewZahl + $ungemapptZahl;
+            $vorschlaegeZahl = $bulkZahl + $matchZahl;
+        @endphp
+        <x-foodalchemist::editor-tabs action="setTab" :active="$tab" marker="rq"
+            :tabs="['ueberblick' => 'Überblick', 'signale' => 'Signale', 'vorschlaege' => 'Vorschläge', 'pflege' => 'Pflege']"
+            :counts="['signale' => $signalOffen, 'vorschlaege' => $vorschlaegeZahl, 'pflege' => $pflegeGesamt]" />
+
         {{-- ════════════════════════ TAB: ÜBERBLICK ════════════════════════ --}}
         @if($tab === 'ueberblick')
             @php
                 $sevK = $severitySplit['kritisch'] ?? 0;
                 $sevW = $severitySplit['warnung'] ?? 0;
                 $mut = 'bg-black/5 text-gray-400';
-                $kacheln = [
+                // Lagebild = die zwei echten Arbeitsvorräte. Die Pflege-Listen (VK ohne Klasse /
+                // Im Review / Ungemappt) sind unten NUR Sprung-Shortcuts — kein zweiter Zähler-Ort,
+                // ihre Wahrheit steht im Pflege-Tab. Vorher standen sie hier als eigene KPI-Kacheln
+                // und die Zahl las sich doppelt.
+                $lage = [
                     ['icon' => 'heroicon-o-bell-alert', 'label' => 'Signale offen', 'wert' => $signalOffen, 'hint' => $sevK.' kritisch · '.$sevW.' Warnung', 'tab' => 'signale', 'tint' => $sevK > 0 ? 'bg-rose-500/10 text-rose-600' : ($signalOffen > 0 ? 'bg-amber-500/10 text-amber-600' : $mut), 'farbe' => $sevK > 0 ? 'text-rose-600' : ($signalOffen > 0 ? 'text-gray-900' : 'text-gray-300')],
-                    ['icon' => 'heroicon-o-sparkles', 'label' => 'KI-Vorschläge', 'wert' => $bulkZahl, 'hint' => 'Bulk-Anreicherung', 'tab' => 'ki', 'tint' => $bulkZahl > 0 ? 'bg-amber-500/10 text-amber-600' : $mut, 'farbe' => $bulkZahl > 0 ? 'text-gray-900' : 'text-gray-300'],
-                    ['icon' => 'heroicon-o-link', 'label' => 'LA → GP Matches', 'wert' => $matchZahl, 'hint' => 'offene Vorschläge', 'tab' => 'matches', 'tint' => $matchZahl > 0 ? 'bg-amber-500/10 text-amber-600' : $mut, 'farbe' => $matchZahl > 0 ? 'text-gray-900' : 'text-gray-300'],
-                    ['icon' => 'heroicon-o-tag', 'label' => 'VK ohne Klasse', 'wert' => $vkOhneKlasse->count(), 'hint' => 'V-22-Gate', 'tab' => 'pflege', 'tint' => $vkOhneKlasse->count() > 0 ? 'bg-amber-500/10 text-amber-600' : $mut, 'farbe' => $vkOhneKlasse->count() > 0 ? 'text-gray-900' : 'text-gray-300'],
-                    ['icon' => 'heroicon-o-clock', 'label' => 'Im Review', 'wert' => $imReviewZahl, 'hint' => 'freigeben / zurück', 'tab' => 'pflege', 'tint' => $imReviewZahl > 0 ? 'bg-amber-500/10 text-amber-600' : $mut, 'farbe' => $imReviewZahl > 0 ? 'text-gray-900' : 'text-gray-300'],
-                    ['icon' => 'heroicon-o-question-mark-circle', 'label' => 'Ungemappte Zutaten', 'wert' => $ungemapptZahl, 'hint' => 'Allergene unbekannt', 'tab' => 'pflege', 'tint' => $ungemapptZahl > 0 ? 'bg-rose-500/10 text-rose-600' : $mut, 'farbe' => $ungemapptZahl > 0 ? 'text-rose-600' : 'text-gray-300'],
+                    ['icon' => 'heroicon-o-inbox', 'label' => 'Vorschläge offen', 'wert' => $vorschlaegeZahl, 'hint' => $bulkZahl.' KI-Anreicherung · '.$matchZahl.' Matches', 'tab' => 'vorschlaege', 'tint' => $vorschlaegeZahl > 0 ? 'bg-amber-500/10 text-amber-600' : $mut, 'farbe' => $vorschlaegeZahl > 0 ? 'text-gray-900' : 'text-gray-300'],
+                ];
+                $pflegeShortcuts = [
+                    ['icon' => 'heroicon-o-tag', 'label' => 'VK ohne Klasse', 'wert' => $vkOhneKlasse->count(), 'krit' => false],
+                    ['icon' => 'heroicon-o-clock', 'label' => 'Im Review', 'wert' => $imReviewZahl, 'krit' => false],
+                    ['icon' => 'heroicon-o-question-mark-circle', 'label' => 'Ungemappt', 'wert' => $ungemapptZahl, 'krit' => true],
                 ];
             @endphp
-            <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3" data-rq-kpi>
-                @foreach($kacheln as $k)
-                    <button type="button" wire:key="kpi-{{ $loop->index }}" wire:click="setTab('{{ $k['tab'] }}')"
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3" data-rq-kpi>
+                @foreach($lage as $k)
+                    <button type="button" wire:key="lage-{{ $loop->index }}" wire:click="setTab('{{ $k['tab'] }}')"
                             class="group relative overflow-hidden {{ $card }} px-4 py-3.5 text-left hover:-translate-y-0.5 hover:shadow-md hover:shadow-black/5 transition-all duration-150">
                         <div class="{{ $cardAccent }}"></div>
                         <div class="flex items-center justify-between">
@@ -132,6 +124,27 @@
                         <p class="text-[10px] text-gray-400 mt-0.5">{{ $k['hint'] }}</p>
                     </button>
                 @endforeach
+            </div>
+
+            {{-- Pflege-Shortcuts: dieselben Zahlen wie im Pflege-Tab, hier NUR als Sprung. --}}
+            <div class="relative overflow-hidden {{ $card }} px-4 py-3" data-rq-pflege-shortcuts>
+                <div class="{{ $cardAccent }}"></div>
+                <div class="flex items-center justify-between gap-2 mb-2">
+                    <h3 class="text-[11px] font-medium text-gray-500 uppercase tracking-wider">Pflege-Listen</h3>
+                    <button type="button" wire:click="setTab('pflege')" class="inline-flex items-center gap-1 text-[11px] font-medium text-gray-500 hover:text-violet-700 transition-colors">Alle @svg('heroicon-o-arrow-right', 'w-3.5 h-3.5')</button>
+                </div>
+                <div class="grid grid-cols-3 gap-2">
+                    @foreach($pflegeShortcuts as $sc)
+                        <button type="button" wire:key="pfsc-{{ $loop->index }}" wire:click="setTab('pflege')"
+                                class="group flex items-center gap-2 rounded-lg px-2.5 py-2 text-left hover:bg-violet-500/[0.05] transition-colors">
+                            <span class="shrink-0 grid place-items-center w-7 h-7 rounded-lg {{ $sc['wert'] > 0 ? ($sc['krit'] ? 'bg-rose-500/10 text-rose-600' : 'bg-amber-500/10 text-amber-600') : $mut }}">@svg($sc['icon'], 'w-3.5 h-3.5')</span>
+                            <span class="min-w-0">
+                                <span class="block text-sm font-semibold tabular-nums {{ $sc['wert'] > 0 ? ($sc['krit'] ? 'text-rose-600' : 'text-gray-900') : 'text-gray-300' }}">{{ number_format($sc['wert'], 0, ',', '.') }}</span>
+                                <span class="block text-[10px] text-gray-500 truncate">{{ $sc['label'] }}</span>
+                            </span>
+                        </button>
+                    @endforeach
+                </div>
             </div>
 
             {{-- Kritischste offene Signale --}}
@@ -148,10 +161,7 @@
                     @forelse($kritischste as $sig)
                         @include('foodalchemist::livewire.partials._signal-row', ['sig' => $sig])
                     @empty
-                        <div class="flex flex-col items-center justify-center py-8 text-center">
-                            @svg('heroicon-o-check-badge', 'w-8 h-8 text-emerald-400/70')
-                            <p class="text-xs text-gray-500 mt-2">Keine offenen Signale — alles sauber.</p>
-                        </div>
+                        @include('foodalchemist::livewire.partials._leer-zustand', ['icon' => 'heroicon-o-check-badge', 'text' => 'Keine offenen Signale — alles sauber.', 'ton' => 'gut'])
                     @endforelse
                 </div>
             </div>
@@ -186,10 +196,13 @@
                 </div>
 
                 {{-- Zustands-Zeilen (Spec 21 · E2): bekannte Lagen als EINE Zeile statt n Alarmen.
-                     Nur in der ungefilterten Offen-Ansicht — mit gewähltem Typ sieht man die Einzelfälle. --}}
+                     Das Kontext-Band bleibt bei jedem Typ-Wechsel stehen (nur `offen`) — vorher
+                     verschwand es beim ersten Filter-Klick und die Listen-Semantik kippte still.
+                     Der gerade ausgewählte Typ fällt aus dem Band (er ist unten aufgeklappt). --}}
                 @php
-                    $zustandsZeilen = $signalStatus === 'offen' && $signalTyp === ''
-                        ? array_values(array_filter($signalZustand ?? [], fn ($z) => $z['aggregiert'] || $z['state'] === 'frist_abgelaufen'))
+                    $zustandsZeilen = $signalStatus === 'offen'
+                        ? array_values(array_filter($signalZustand ?? [],
+                            fn ($z) => ($z['aggregiert'] || $z['state'] === 'frist_abgelaufen') && $z['type'] !== $signalTyp))
                         : [];
                 @endphp
                 @if($zustandsZeilen !== [])
@@ -223,24 +236,25 @@
                     @forelse($signale as $sig)
                         @include('foodalchemist::livewire.partials._signal-row', ['sig' => $sig])
                     @empty
-                        <div class="flex flex-col items-center justify-center py-10 text-center">
-                            @svg('heroicon-o-check-badge', 'w-9 h-9 text-emerald-400/70')
-                            <p class="text-xs text-gray-500 mt-2">Keine Signale ({{ $signalStatus }}).</p>
-                        </div>
+                        @include('foodalchemist::livewire.partials._leer-zustand', ['icon' => 'heroicon-o-check-badge', 'text' => 'Keine Signale ('.$signalStatus.').', 'ton' => 'gut'])
                     @endforelse
                 </div>
                 <div class="mt-3">{{ $signale->links() }}</div>
             </div>
         @endif
 
-        {{-- ════════════════════════ TAB: KI-VORSCHLÄGE ════════════════════════ --}}
-        @if($tab === 'ki')
+        {{-- ════════════════════════ TAB: VORSCHLÄGE ════════════════════════
+             KI-Anreicherung (Bulk) + LA→GP-Matches — beide sind Annehmen/Verwerfen-Queues,
+             darum ein Tab mit zwei Sektionen (früher zwei getrennte Tabs). „KI" als Verb steht
+             bewusst nur noch hier als Sektions-Titel und am Zeilen-Knopf „KI erledigen lassen". --}}
+        @if($tab === 'vorschlaege')
+            {{-- Sektion 1 · KI-Anreicherung (Bulk, M7-06) --}}
             <div class="relative overflow-hidden {{ $card }} px-5 py-4" data-rq-bulks>
                 <div class="{{ $cardAccent }}"></div>
                 <div class="flex items-center gap-2 mb-3">
                     <span class="grid place-items-center w-8 h-8 rounded-lg bg-violet-500/10 text-violet-600">@svg('heroicon-o-sparkles', 'w-4 h-4')</span>
                     <div>
-                        <h3 class="font-medium tracking-tight text-gray-900">KI-Vorschläge <span class="text-gray-400 font-normal">(Bulk-Anreicherung)</span></h3>
+                        <h3 class="font-medium tracking-tight text-gray-900">KI-Anreicherung <span class="text-gray-400 font-normal">(Bulk)</span></h3>
                         <p class="text-[11px] text-gray-500">{{ number_format($bulkZahl, 0, ',', '.') }} offen · übernehmen schreibt den Wert ins Rezept.</p>
                     </div>
                 </div>
@@ -258,18 +272,12 @@
                             </span>
                         </div>
                     @empty
-                        <div class="flex flex-col items-center justify-center py-10 text-center">
-                            @svg('heroicon-o-sparkles', 'w-9 h-9 text-gray-300')
-                            <p class="text-xs text-gray-500 mt-2">Keine offenen KI-Vorschläge.</p>
-                        </div>
+                        @include('foodalchemist::livewire.partials._leer-zustand', ['icon' => 'heroicon-o-sparkles', 'text' => 'Keine offenen KI-Vorschläge.'])
                     @endforelse
                 </div>
             </div>
-        @endif
 
-        {{-- ════════════════════════ TAB: MATCHES & TERMINOLOGIE ════════════════════════ --}}
-        @if($tab === 'matches')
-            {{-- LA→GP-Match-Vorschläge (M3-11, tentative Queue) --}}
+            {{-- Sektion 2 · LA→GP-Match-Vorschläge (M3-11, tentative Queue) --}}
             <div class="relative overflow-hidden {{ $card }} px-5 py-4" data-rq-matches>
                 <div class="{{ $cardAccent }}"></div>
                 <div class="flex items-center gap-2 mb-3">
@@ -293,44 +301,8 @@
                             </span>
                         </div>
                     @empty
-                        <div class="flex flex-col items-center justify-center py-8 text-center">
-                            @svg('heroicon-o-link', 'w-8 h-8 text-gray-300')
-                            <p class="text-xs text-gray-500 mt-2">Keine offenen Match-Vorschläge.</p>
-                        </div>
+                        @include('foodalchemist::livewire.partials._leer-zustand', ['icon' => 'heroicon-o-link', 'text' => 'Keine offenen Match-Vorschläge.'])
                     @endforelse
-                </div>
-            </div>
-
-            {{-- Terminologie lernen (E7-c, #507) — wirkt sofort im Matching (kein Deploy) --}}
-            <div class="relative overflow-hidden {{ $card }} px-5 py-4" data-rq-terminologie>
-                <div class="flex items-center gap-2 mb-1">
-                    <span class="grid place-items-center w-8 h-8 rounded-lg bg-fuchsia-500/10 text-fuchsia-600">@svg('heroicon-o-academic-cap', 'w-4 h-4')</span>
-                    <h3 class="font-medium tracking-tight text-gray-900">Terminologie lernen</h3>
-                </div>
-                <p class="text-[11px] text-gray-500 mb-3">Passt ein Vorschlag nur wegen eines Synonyms/Dialekts nicht — oder trifft er eine Verwechslung? Hier lehren; wirkt sofort im nächsten Matching (kein Deploy).</p>
-
-                <div class="grid gap-3 md:grid-cols-2">
-                    <div class="rounded-xl bg-black/[0.02] border border-black/5 p-3">
-                        <p class="text-[11px] font-medium text-gray-700 mb-1.5">Alias-Gruppe <span class="text-gray-400 font-normal">(Synonyme, kommagetrennt, ≥2)</span></p>
-                        <div class="flex items-center gap-2">
-                            <input type="text" wire:model="termAlias" wire:keydown.enter="terminologieAlias"
-                                   placeholder="paradeiser, tomate" class="min-w-0 flex-1 bg-white/70 border border-black/10 rounded-lg px-2.5 py-1.5 text-[11px] focus:ring-2 focus:ring-violet-500/20 focus:bg-white transition-all" data-rq-term-alias-input>
-                            <button type="button" wire:click="terminologieAlias" wire:loading.attr="disabled" wire:target="terminologieAlias"
-                                    class="shrink-0 inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium text-emerald-600 bg-emerald-500/[0.08] hover:bg-emerald-500/[0.15] transition-colors" data-rq-term-alias-save>@svg('heroicon-o-check', 'w-3.5 h-3.5') Lernen</button>
-                        </div>
-                    </div>
-
-                    <div class="rounded-xl bg-black/[0.02] border border-black/5 p-3">
-                        <p class="text-[11px] font-medium text-gray-700 mb-1.5">Anti-Marker <span class="text-gray-400 font-normal">(Verwechslung sperren)</span></p>
-                        <div class="flex items-center gap-1.5">
-                            <input type="text" wire:model="termTrigger" placeholder="brie" class="min-w-0 w-16 bg-white/70 border border-black/10 rounded-lg px-2 py-1.5 text-[11px] focus:ring-2 focus:ring-violet-500/20 focus:bg-white transition-all" title="Query-Token">
-                            <span class="text-gray-400 text-[11px] shrink-0">↛</span>
-                            <input type="text" wire:model="termForbid" placeholder="bries" class="min-w-0 w-16 bg-white/70 border border-black/10 rounded-lg px-2 py-1.5 text-[11px] focus:ring-2 focus:ring-violet-500/20 focus:bg-white transition-all" title="zu sperrendes Kandidaten-Token">
-                            <input type="text" wire:model="termUnless" placeholder="außer: bries" class="min-w-0 flex-1 bg-white/70 border border-black/10 rounded-lg px-2 py-1.5 text-[11px] focus:ring-2 focus:ring-violet-500/20 focus:bg-white transition-all" title="Guard-Token (optional)">
-                            <button type="button" wire:click="terminologieAntiMarker" wire:loading.attr="disabled" wire:target="terminologieAntiMarker"
-                                    class="shrink-0 inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium text-rose-600 bg-rose-500/[0.08] hover:bg-rose-500/[0.15] transition-colors" data-rq-term-anti-save>@svg('heroicon-o-no-symbol', 'w-3.5 h-3.5') Sperren</button>
-                        </div>
-                    </div>
                 </div>
             </div>
         @endif
@@ -367,6 +339,40 @@
                         </div>
                     </div>
                 @endforeach
+            </div>
+
+            {{-- Terminologie lernen (E7-c, #507) — Config, keine Queue: von „Matches" hierher
+                 verschoben. Wirkt sofort im Matching (kein Deploy). --}}
+            <div class="relative overflow-hidden {{ $card }} px-5 py-4" data-rq-terminologie>
+                <div class="flex items-center gap-2 mb-1">
+                    <span class="grid place-items-center w-8 h-8 rounded-lg bg-fuchsia-500/10 text-fuchsia-600">@svg('heroicon-o-academic-cap', 'w-4 h-4')</span>
+                    <h3 class="font-medium tracking-tight text-gray-900">Terminologie lernen</h3>
+                </div>
+                <p class="text-[11px] text-gray-500 mb-3">Passt ein Vorschlag nur wegen eines Synonyms/Dialekts nicht — oder trifft er eine Verwechslung? Hier lehren; wirkt sofort im nächsten Matching (kein Deploy).</p>
+
+                <div class="grid gap-3 md:grid-cols-2">
+                    <div class="rounded-xl bg-black/[0.02] border border-black/5 p-3">
+                        <p class="text-[11px] font-medium text-gray-700 mb-1.5">Alias-Gruppe <span class="text-gray-400 font-normal">(Synonyme, kommagetrennt, ≥2)</span></p>
+                        <div class="flex items-center gap-2">
+                            <input type="text" wire:model="termAlias" wire:keydown.enter="terminologieAlias"
+                                   placeholder="paradeiser, tomate" class="min-w-0 flex-1 bg-white/70 border border-black/10 rounded-lg px-2.5 py-1.5 text-[11px] focus:ring-2 focus:ring-violet-500/20 focus:bg-white transition-all" data-rq-term-alias-input>
+                            <button type="button" wire:click="terminologieAlias" wire:loading.attr="disabled" wire:target="terminologieAlias"
+                                    class="shrink-0 inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium text-emerald-600 bg-emerald-500/[0.08] hover:bg-emerald-500/[0.15] transition-colors" data-rq-term-alias-save>@svg('heroicon-o-check', 'w-3.5 h-3.5') Lernen</button>
+                        </div>
+                    </div>
+
+                    <div class="rounded-xl bg-black/[0.02] border border-black/5 p-3">
+                        <p class="text-[11px] font-medium text-gray-700 mb-1.5">Anti-Marker <span class="text-gray-400 font-normal">(Verwechslung sperren)</span></p>
+                        <div class="flex items-center gap-1.5">
+                            <input type="text" wire:model="termTrigger" placeholder="brie" class="min-w-0 w-16 bg-white/70 border border-black/10 rounded-lg px-2 py-1.5 text-[11px] focus:ring-2 focus:ring-violet-500/20 focus:bg-white transition-all" title="Query-Token">
+                            <span class="text-gray-400 text-[11px] shrink-0">↛</span>
+                            <input type="text" wire:model="termForbid" placeholder="bries" class="min-w-0 w-16 bg-white/70 border border-black/10 rounded-lg px-2 py-1.5 text-[11px] focus:ring-2 focus:ring-violet-500/20 focus:bg-white transition-all" title="zu sperrendes Kandidaten-Token">
+                            <input type="text" wire:model="termUnless" placeholder="außer: bries" class="min-w-0 flex-1 bg-white/70 border border-black/10 rounded-lg px-2 py-1.5 text-[11px] focus:ring-2 focus:ring-violet-500/20 focus:bg-white transition-all" title="Guard-Token (optional)">
+                            <button type="button" wire:click="terminologieAntiMarker" wire:loading.attr="disabled" wire:target="terminologieAntiMarker"
+                                    class="shrink-0 inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium text-rose-600 bg-rose-500/[0.08] hover:bg-rose-500/[0.15] transition-colors" data-rq-term-anti-save>@svg('heroicon-o-no-symbol', 'w-3.5 h-3.5') Sperren</button>
+                        </div>
+                    </div>
+                </div>
             </div>
         @endif
     </x-ui-page-container>

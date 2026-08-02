@@ -197,32 +197,6 @@ it('MCP signal_causes.GET: liefert dieselbe Kette wie die UI', function () {
         ->and(collect($res->data['ursachen'])->firstWhere('art', 'ek')['glieder'][0]['gp_name'])->toBe('Sahne');
 });
 
-it('Panel: die Kette erscheint erst mit dem aufgeklappten Objekt und nennt den blockierenden GP', function () {
-    $this->actingAs($this->makeUser($this->rootTeam, 'Ursachen User'));
-
-    $gp = $this->makeGp($this->rootTeam, 'Wachtelei');
-    $r = ($this->mkRezept)('Fond: Wachtelei', $gp);   // GP ohne LA ⇒ EK bricht
-
-    $sig = app(\Platform\FoodAlchemist\Services\SignalService::class)->erzeuge(
-        $this->rootTeam,
-        \Platform\FoodAlchemist\Enums\SignalTyp::EkKetteUnvollstaendig,
-        \Platform\FoodAlchemist\Enums\SignalSeverity::Warnung,
-        'Basisrezepte ohne EK',
-        ['dedup_key' => 'dq-br-ek-null', 'source' => 'data-quality',
-            'payload' => ['metrik' => 'br_ek_null', 'anzahl' => 1]]
-    );
-
-    $lw = \Livewire\Livewire::test(\Platform\FoodAlchemist\Livewire\Signale\DetailPanel::class)
-        ->dispatch('signal-selected', id: $sig->id);
-
-    // Zugeklappt wird nichts gerechnet — die Kette kostet Auflöse-Fragen je Objekt.
-    expect($lw->viewData('objektUrsachen'))->toBe([]);
-
-    $lw->call('objektWaehlen', 'recipe', $r->id);
-    $ek = collect($lw->viewData('objektUrsachen'))->firstWhere('art', 'ek');
-    expect($ek['glieder'][0]['gp_name'])->toBe('Wachtelei');
-
-    // Objektwechsel/Zuklappen räumt sie wieder weg (keine Kette zum falschen Objekt).
-    $lw->call('objektWaehlen', 'recipe', $r->id);
-    expect($lw->viewData('objektUrsachen'))->toBe([]);
-});
+// Hinweis: Die Ursachen-Kette wird seit dem Panel-Verschlanken (2026-08) nicht mehr im
+// DetailPanel gerendert — sie bleibt als SignalCauseService + MCP-Tool `SignalCausesGetTool`
+// erhalten und ist oben darüber getestet. Der frühere Panel-Render-Test entfällt darum.

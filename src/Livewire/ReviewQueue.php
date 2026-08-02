@@ -32,7 +32,15 @@ class ReviewQueue extends Component
     public ?string $fehler = null;
 
     /** Cockpit-Tabs — Ansicht liegt in der URL (V-17/Kontext-Erhalt). */
-    public const TABS = ['ueberblick', 'signale', 'ki', 'matches', 'pflege'];
+    public const TABS = ['ueberblick', 'signale', 'vorschlaege', 'pflege'];
+
+    /**
+     * Alt-Tab-Schlüssel → neuer Tab (Kompat): die früher getrennten Tabs `ki`
+     * (KI-Vorschläge) und `matches` (LA→GP + Terminologie) sind zu `vorschlaege`
+     * verschmolzen. Gespeicherte/verlinkte URLs `?tab=ki`/`?tab=matches` landen so
+     * weiter auf einer sinnvollen Ansicht statt im Start-Tab-Fallback.
+     */
+    private const TAB_ALIASES = ['ki' => 'vorschlaege', 'matches' => 'vorschlaege'];
 
     #[Url(as: 'tab')]
     public string $tab = 'signale';
@@ -71,6 +79,7 @@ class ReviewQueue extends Component
 
     public function mount(): void
     {
+        $this->tab = self::TAB_ALIASES[$this->tab] ?? $this->tab;
         if (! in_array($this->tab, self::TABS, true)) {
             $this->tab = 'signale';
         }
