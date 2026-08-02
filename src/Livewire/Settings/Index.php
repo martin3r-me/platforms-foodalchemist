@@ -46,6 +46,9 @@ class Index extends Component
         // Spec 30 E3: Arbeitsplätze mit optionaler Tageskapazität — bewusst getrennt vom
         // Koch-Equipment (das sagt „was braucht ein Rezept", der Posten „wo wird gearbeitet").
         'posten' => ['label' => 'Posten & Kapazität', 'hint' => 'Küchen-Arbeitsplätze · netto verplanbare Minuten/Tag (freiwillig) · Wochentag-Abweichungen'],
+        // Stufe 3 P3.1: Rollen als Kostenträger (Küchenchef/Koch/Hilfskoch) — Satz je Rolle.
+        // Rolle ≠ Mensch: keine Namen/Schichten. Posten-Besetzung leitet Kapazität + Kosten ab.
+        'rollen' => ['label' => 'Rollen & Sätze', 'hint' => 'Küchen-Rollen als Kostenträger · €/Std je Rolle · speist Kapazität + Produktionskosten'],
         'wissenskategorien' => ['label' => 'Wissens-Kategorien', 'hint' => 'Vokabular fürs Wissens-Modul (#469) — Klassifikation + grobe Routing-Ebene'],
         'einsatzorte' => ['label' => 'Einsatzorte (Wissen)', 'hint' => 'Bindungs-Ziele fürs Wissen (#469) — Bereiche grob + KI-Prompts fein'],
     ];

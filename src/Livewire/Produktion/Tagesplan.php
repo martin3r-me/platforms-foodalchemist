@@ -11,6 +11,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistProductionOrderLine;
 use Platform\FoodAlchemist\Models\FoodAlchemistProductionStation;
 use Platform\FoodAlchemist\Services\ProductionCapacityService;
 use Platform\FoodAlchemist\Services\ProductionOrderService;
+use Platform\FoodAlchemist\Services\ProductionPlanService;
 
 /**
  * Spec 30 E3 — Tagesplan: was steht an welchem Tag an welchem Posten an, über ALLE Aufträge.
@@ -33,7 +34,18 @@ class Tagesplan extends Component
     #[Url(as: 'posten')]
     public ?int $postenFilter = null;
 
+    /** Gewählter Auftrag fürs Detail-Panel (3-Panel-Layout wie im Produktions-Browser). */
+    #[Url(as: 'auftrag')]
+    public ?int $orderId = null;
+
+    /** Ausgabe-Modus: '' = normal (3 Panels), 'wall' = Küchen-Wandmodus (chrome-arm, groß). */
+    #[Url(as: 'display')]
+    public string $display = '';
+
     public ?string $fehler = null;
+
+    /** Stufe 3 P3.4 — der zuletzt gerechnete Planungs-Vorschlag (Review vor Übernahme), oder null. */
+    public ?array $vorschlag = null;
 
     public function mount(): void
     {
@@ -55,6 +67,42 @@ class Tagesplan extends Component
     public function postenWaehlen(?int $id): void
     {
         $this->postenFilter = $this->postenFilter === $id ? null : $id;
+    }
+
+    /** Auftrag ins Detail-Panel wählen — zweiter Klick auf dieselbe Zeile schließt es. */
+    public function waehleAuftrag(?int $id): void
+    {
+        $this->orderId = $this->orderId === $id ? null : $id;
+    }
+
+    /** Stufe 3 P3.4 — Planungs-Vorschlag über das aktuelle Fenster rechnen (schreibt nichts). */
+    public function vorschlagen(ProductionPlanService $planer): void
+    {
+        $this->fehler = null;
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team === null) {
+            $this->fehler = 'Kein Team zugeordnet.';
+
+            return;
+        }
+        $von = Carbon::parse($this->von)->toDateString();
+        $bis = Carbon::parse($this->von)->addDays(max(1, min(60, $this->tage)) - 1)->toDateString();
+        $this->vorschlag = $planer->schlage($team, $von, $bis);
+    }
+
+    public function vorschlagUebernehmen(ProductionPlanService $planer): void
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team === null || $this->vorschlag === null) {
+            return;
+        }
+        $planer->uebernehmen($team, $this->vorschlag['vorschlag']);
+        $this->vorschlag = null;
+    }
+
+    public function vorschlagVerwerfen(): void
+    {
+        $this->vorschlag = null;
     }
 
     /** Zeile auf einen anderen Tag ziehen — der Vorlauf folgt dem Liefertag, nicht umgekehrt. */
@@ -114,6 +162,6 @@ class Tagesplan extends Component
                 ? FoodAlchemistProductionStation::visibleToTeam($team)->where('is_inactive', false)
                     ->orderBy('sort_order')->orderBy('name')->get(['id', 'name'])
                 : collect(),
-        ]);
+        ])->layout('platform::layouts.app');
     }
 }

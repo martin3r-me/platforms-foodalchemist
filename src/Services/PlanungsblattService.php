@@ -705,7 +705,9 @@ class PlanungsblattService
                 'benoetigt_ansaetze' => round($roh, 3),      // fraktional — Transparenz „ganze Ansätze vs. Bedarf"
                 'basis_yield_kg' => $basisYieldKg,
                 'produzierte_menge_kg' => $basisYieldKg !== null ? round($basisYieldKg * $batches, 3) : null,
-                'arbeitszeit_min' => $recipe->work_time_min !== null ? (int) round((float) $recipe->work_time_min * $batches) : null,
+                // Stufe 3 P3.2: nicht-lineare Zeit (Rüst + Marginal je Koch-Batch unter Topf-Deckel).
+                // Posten unbekannt bei der Explosion → nur Rezept-Deckel; Defaults = heutiges Verhalten.
+                'arbeitszeit_min' => $recipe->arbeitszeitMin($roh, $istVk),
                 'zubereitung' => $recipe->preparation ?: null,        // Spiegel-Freitext (Fallback für Rezepte ohne Schritte)
                 'schritte' => $this->schritteFuer($recipe),           // Spec 27: die eigentliche Anleitung (Nummer + Text + Fotos)
                 'darreichung' => $istVk ? $this->darreichungsInfo($recipe) : null, // Regeneration/Behälter/Vehikel der Standard-Form

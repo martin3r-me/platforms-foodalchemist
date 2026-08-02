@@ -12,6 +12,9 @@
             @endforeach
             <span class="text-gray-300">|</span>
             <a href="{{ route('foodalchemist.angebote.dokument', $angebot->id) }}" target="_blank" class="{{ $btnGhostXs }}" title="Versendbares Angebots-Dokument (Druck/PDF)">Dokument</a>
+            {{-- Stufe 3 — Angebot → Produktion (concept × Pax → Produktionsauftrag am Event-Tag). --}}
+            <button type="button" wire:click="anProduktion" class="{{ $btnGhostXs }}"
+                    title="Angebot in die Produktion übergeben — danach im Tagesplan planbar" data-angebot-produktion>→ Produktion</button>
             <button type="button" wire:click="loeschen" wire:confirm="Angebot löschen?" class="{{ $btnGhostXs }} text-red-600" data-angebot-loeschen>Löschen</button>
         @endif
     </x-slot:actions>

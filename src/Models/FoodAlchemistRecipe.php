@@ -39,6 +39,12 @@ class FoodAlchemistRecipe extends Model
         'yield_kg' => 'decimal:3',
         'yield_kg_manual' => 'decimal:3',
         'yield_pieces' => 'decimal:2',   // Basisrezept-Ertrag in Stück (kg↔Stück)
+        // Stufe 3 (Auto-Produktionsplaner)
+        'default_station_id' => 'integer',
+        'max_vorlauf_tage' => 'integer',
+        'setup_time_min' => 'integer',
+        'batch_max_kg' => 'decimal:3',
+        'batch_max_pieces' => 'decimal:2',
         'ek_total_eur' => 'decimal:4',
         'ek_per_kg_eur' => 'decimal:4',
         'ek_price_basis' => EkPriceBasis::class,   // V-014: woher die EK-Zahl kommt (lead/avg/mixed/unknown)
@@ -83,6 +89,59 @@ class FoodAlchemistRecipe extends Model
     public function steps(): HasMany
     {
         return $this->hasMany(FoodAlchemistRecipeStep::class, 'recipe_id')->orderBy('position');
+    }
+
+    /** Stufe 3 — Default-Posten des Rezepts (weiche Referenz, team-scoped, kein DB-FK). */
+    public function defaultStation(): BelongsTo
+    {
+        return $this->belongsTo(FoodAlchemistProductionStation::class, 'default_station_id');
+    }
+
+    /**
+     * Stufe 3 — Koch-Vorgänge (Batches) für eine Bedarfsmenge unter dem Topf-Deckel.
+     * Deckel = kleinster aus Rezept- und (optional) Posten-Deckel; ohne Deckel = 1 Ertrag je Batch
+     * (dann Koch-Batches = Ertrags-Ansätze, heutiges Verhalten). Rechnet in kg oder Stück.
+     */
+    /** Stück-Ertrag statt kg: wenn kein kg-Yield, aber ein Stück-Yield gepflegt ist (z. B. Törtchen). */
+    public function istStueckErtrag(): bool
+    {
+        return ($this->yield_kg_manual ?? $this->yield_kg) === null && (float) ($this->yield_pieces ?? 0) > 0;
+    }
+
+    public function kochBatches(float $rohBatches, ?float $stationDeckel = null, ?bool $stueck = null): int
+    {
+        $stueck ??= $this->istStueckErtrag();
+        $yield = $stueck
+            ? (float) ($this->yield_pieces ?? 0)
+            : (float) ($this->yield_kg_manual ?? $this->yield_kg ?? 0);
+
+        $rezeptDeckel = $stueck ? $this->batch_max_pieces : $this->batch_max_kg;
+        $deckel = collect([$rezeptDeckel, $stationDeckel])
+            ->filter(fn ($v) => $v !== null && (float) $v > 0)
+            ->map(fn ($v) => (float) $v)->min();
+
+        // Ohne echten Deckel ist 1 Koch-Batch = 1 Ertrags-Ansatz.
+        if ($deckel === null || $deckel <= 0 || $yield <= 0) {
+            return (int) max(1, ceil($rohBatches - 1e-9));
+        }
+
+        return (int) max(1, ceil(($rohBatches * $yield) / $deckel - 1e-9));
+    }
+
+    /**
+     * Stufe 3 — nicht-lineare Arbeitszeit: Rüstzeit (einmal je Lauf) + Marginal je Koch-Batch.
+     * Defaults (setup=0, kein Deckel) reproduzieren das heutige lineare `work_time_min × Ansätze`.
+     * VK-Gerichte bleiben linear-fraktional (kein Topf). `null`, wenn gar keine Zeit hinterlegt ist.
+     */
+    public function arbeitszeitMin(float $rohBatches, bool $istVk, ?float $stationDeckel = null, ?bool $stueck = null): ?int
+    {
+        if ($this->work_time_min === null && (int) ($this->setup_time_min ?? 0) === 0) {
+            return null;
+        }
+
+        $kochBatches = $istVk ? $rohBatches : (float) $this->kochBatches($rohBatches, $stationDeckel, $stueck);
+
+        return (int) round((int) ($this->setup_time_min ?? 0) + (float) ($this->work_time_min ?? 0) * $kochBatches);
     }
 
     /** Alle Fotos des Rezepts (Media-Pool) — verlinkt an Schritte oder „allgemein". */

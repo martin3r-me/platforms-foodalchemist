@@ -5,6 +5,7 @@ namespace Platform\FoodAlchemist\Livewire\Settings;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
 use Livewire\Component;
+use Platform\FoodAlchemist\Models\FoodAlchemistKitchenRole;
 use Platform\FoodAlchemist\Models\FoodAlchemistProductionStation;
 
 /**
@@ -78,6 +79,8 @@ class Posten extends Component
             'name' => trim($wert) !== '' ? $posten->name = trim($wert) : $this->fehler = 'Name darf nicht leer sein.',
             'group_name' => $posten->group_name = trim($wert) ?: null,
             'kapazitaet' => $posten->kapazitaet_min_pro_tag = $this->minuten($wert),
+            'schicht' => $posten->schicht_minuten = $this->minuten($wert),                 // Stufe 3
+            'batch_max_kg' => $posten->batch_max_kg = $this->zahl($wert),                    // Stufe 3 (Topf)
             default => null,
         };
 
@@ -110,6 +113,27 @@ class Posten extends Component
         $posten->kapazitaet_wochentag = $tage === [] ? null : $tage;
         $posten->save();
         $this->meldung = 'Gespeichert.';
+    }
+
+    /** Stufe 3 — Anzahl einer Rolle am Posten setzen (0/leer = Rolle raus). Leitet Kapazität + Kosten ab. */
+    public function besetzungSetzen(int $id, int $roleId, string $wert): void
+    {
+        $posten = $this->eigener($id);
+        if ($posten === null) {
+            return;
+        }
+
+        $besetzung = $posten->besetzung ?? [];
+        $anzahl = max(0, (int) trim($wert));
+        if ($anzahl === 0) {
+            unset($besetzung[(string) $roleId]);
+        } else {
+            $besetzung[(string) $roleId] = $anzahl;
+        }
+
+        $posten->besetzung = $besetzung === [] ? null : $besetzung;
+        $posten->save();
+        $this->meldung = 'Besetzung gespeichert.';
     }
 
     public function aktivToggle(int $id): void
@@ -146,6 +170,14 @@ class Posten extends Component
         return $roh === '' ? null : max(0, (int) $roh);
     }
 
+    /** Dezimal-Eingabe (Topf-Deckel): leer ⇒ null, Komma erlaubt, ≥ 0. */
+    private function zahl(string $roh): ?float
+    {
+        $roh = trim(str_replace(',', '.', $roh));
+
+        return $roh === '' ? null : max(0.0, (float) $roh);
+    }
+
     public function render()
     {
         $team = Auth::user()?->currentTeamRelation;
@@ -153,6 +185,10 @@ class Posten extends Component
         return view('foodalchemist::livewire.settings.posten', [
             'posten' => $team !== null
                 ? FoodAlchemistProductionStation::visibleToTeam($team)
+                    ->orderBy('sort_order')->orderBy('name')->get()
+                : collect(),
+            'rollen' => $team !== null
+                ? FoodAlchemistKitchenRole::visibleToTeam($team)->where('is_inactive', false)
                     ->orderBy('sort_order')->orderBy('name')->get()
                 : collect(),
             'eigenesTeamId' => $team?->id,

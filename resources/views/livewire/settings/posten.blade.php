@@ -73,6 +73,42 @@
                         @endif
                     </td>
                 </tr>
+                @if($eigen)
+                    {{-- Stufe 3 — Rollen-Besetzung → Kapazität (Köpfe × Schicht) + Kosten; Topf-Deckel. --}}
+                    <tr class="border-b border-black/5" wire:key="pbes-{{ $p->id }}" data-posten-besetzung="{{ $p->id }}">
+                        <td colspan="6" class="px-3 pb-2">
+                            <div class="flex flex-wrap items-end gap-3 text-[11px] text-gray-600 pl-1">
+                                @if($rollen->isEmpty())
+                                    <span class="text-amber-600">Erst <a href="{{ route('foodalchemist.einstellungen', ['sektion' => 'rollen']) }}" class="underline">Rollen &amp; Sätze</a> anlegen, dann hier besetzen.</span>
+                                @else
+                                    <span class="text-gray-400">Besetzung:</span>
+                                    @foreach($rollen as $rolle)
+                                        <label class="flex items-center gap-1">{{ $rolle->name }}
+                                            <input type="text" inputmode="numeric" value="{{ ($p->besetzung ?? [])[(string) $rolle->id] ?? '' }}"
+                                                   wire:change="besetzungSetzen({{ $p->id }}, {{ $rolle->id }}, $event.target.value)"
+                                                   class="{{ $input }} !py-0.5 !w-12 text-right tabular-nums" placeholder="0"
+                                                   data-posten-besetzung-rolle="{{ $rolle->id }}" />
+                                        </label>
+                                    @endforeach
+                                    <label class="flex items-center gap-1">Schicht min
+                                        <input type="text" inputmode="numeric" value="{{ $p->schicht_minuten }}"
+                                               wire:change="feldSetzen({{ $p->id }}, 'schicht', $event.target.value)"
+                                               class="{{ $input }} !py-0.5 !w-16 text-right tabular-nums" placeholder="480" data-posten-schicht />
+                                    </label>
+                                    <label class="flex items-center gap-1">Topf kg
+                                        <input type="text" inputmode="decimal" value="{{ $p->batch_max_kg }}"
+                                               wire:change="feldSetzen({{ $p->id }}, 'batch_max_kg', $event.target.value)"
+                                               class="{{ $input }} !py-0.5 !w-16 text-right tabular-nums" placeholder="—" data-posten-topf />
+                                    </label>
+                                    @php($abg = $p->abgeleiteteKapazitaet())
+                                    @if($abg !== null)
+                                        <span class="text-violet-700" title="{{ $p->kapazitaet_min_pro_tag !== null ? 'manueller Wert oben überschreibt' : 'wird als Kapazität genutzt' }}">abgeleitet: {{ $abg }} min/Tag</span>
+                                    @endif
+                                @endif
+                            </div>
+                        </td>
+                    </tr>
+                @endif
             @empty
                 <tr><td colspan="6" class="{{ $td }} text-[12px] text-gray-500">Noch keine Posten. Unten anlegen — z. B. „Warme Küche", „Kalte Küche", „Patisserie".</td></tr>
             @endforelse

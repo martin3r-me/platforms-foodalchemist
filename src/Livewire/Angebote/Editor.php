@@ -100,6 +100,19 @@ class Editor extends Component
         $this->dispatch('angebot-gespeichert');
     }
 
+    /** Stufe 3 — Angebot in die Produktion übergeben (concept × Pax → Produktionsauftrag). */
+    public function anProduktion(AngebotService $svc): void
+    {
+        if ($this->selectedId === null) {
+            return;
+        }
+        $res = $svc->anProduktion($this->team(), $this->selectedId, \Illuminate\Support\Facades\Auth::id());
+        session()->flash('angebot_produktion', $res['order_id'] !== null
+            ? "In Produktion übergeben ({$res['ziele']} Ziele) — jetzt im Tagesplan planbar."
+            : 'Kein Menü/Concept im Angebot — nichts zu übergeben.');
+        $this->dispatch('angebot-gespeichert');
+    }
+
     public function statusSetzen(string $status, AngebotService $svc): void
     {
         if ($this->selectedId === null) {

@@ -25,6 +25,9 @@ class RecipeModal extends Component
         'temperature' => '', 'function' => '', 'status' => 'draft',
         'yield_kg_manual' => null, 'yield_pieces' => null, 'description' => '', 'preparation' => '',
         'notes_manual' => '', 'equipment_ids' => [], 'is_sales_recipe' => false,
+        // Stufe 3 — Auto-Produktionsplaner
+        'default_station_id' => null, 'max_vorlauf_tage' => null, 'setup_time_min' => null,
+        'batch_max_kg' => null, 'batch_max_pieces' => null,
     ];
 
     public ?int $recipeId = null;
@@ -93,6 +96,11 @@ class RecipeModal extends Component
                     'taste_direction' => $r->taste_direction ?? '',
                     'production_depth' => $r->production_depth ?? '',
                     'work_time_min' => $r->work_time_min,
+                    'default_station_id' => $r->default_station_id,
+                    'max_vorlauf_tage' => $r->max_vorlauf_tage,
+                    'setup_time_min' => $r->setup_time_min,
+                    'batch_max_kg' => $r->batch_max_kg,
+                    'batch_max_pieces' => $r->batch_max_pieces,
                     'temperature' => $r->temperature ?? '',
                     'function' => $r->function ?? '',
                     'status' => $r->status->value,
@@ -138,10 +146,17 @@ class RecipeModal extends Component
 
                 return;
             }
+            $ganz = fn ($v) => $v !== null && $v !== '' ? max(0, (int) $v) : null;
             $in = [...$this->form,
                 'work_time_min' => $this->form['work_time_min'] !== null && $this->form['work_time_min'] !== '' ? (int) $this->form['work_time_min'] : null,
                 'yield_kg_manual' => $rohYield !== '' ? (float) $rohYield : null,
                 'yield_pieces' => $rohStk !== '' ? (float) $rohStk : null,
+                // Stufe 3 — Planer-Felder sanitisieren
+                'default_station_id' => $this->form['default_station_id'] ?: null,
+                'max_vorlauf_tage' => $ganz($this->form['max_vorlauf_tage']),
+                'setup_time_min' => $ganz($this->form['setup_time_min']),
+                'batch_max_kg' => ($b = trim(str_replace(',', '.', (string) ($this->form['batch_max_kg'] ?? '')))) !== '' ? (float) $b : null,
+                'batch_max_pieces' => ($bp = trim(str_replace(',', '.', (string) ($this->form['batch_max_pieces'] ?? '')))) !== '' ? (float) $bp : null,
             ];
             $warNeu = $this->recipeId === null;
             if (! $warNeu) {
@@ -679,6 +694,11 @@ class RecipeModal extends Component
                 ? FoodAlchemistRecipeCategory::visibleToTeam($team)->where('main_group_id', $this->form['hauptgruppe_id'])->orderBy('sort_order')->get()
                 : collect(),
             'keyVorschau' => trim($this->form['name']) !== '' ? $recipes->rezeptKey($this->form['name']) : '',
+            // Stufe 3 — Posten-Liste fürs Default-Posten-Dropdown des Auto-Planers.
+            'posten' => $team !== null
+                ? \Platform\FoodAlchemist\Models\FoodAlchemistProductionStation::visibleToTeam($team)
+                    ->where('is_inactive', false)->orderBy('sort_order')->orderBy('name')->get(['id', 'name'])
+                : collect(),
             'sensorik' => $this->recipeId !== null ? app(\Platform\FoodAlchemist\Services\SensorikService::class)->fuerRezept($this->recipeId) : null,
             'pairing' => $r !== null ? app(\Platform\FoodAlchemist\Services\PairingService::class)->panelRecipe($r) : null,
         ]);

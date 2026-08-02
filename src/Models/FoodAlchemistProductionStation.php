@@ -35,6 +35,10 @@ class FoodAlchemistProductionStation extends Model
         'uuid' => 'string',
         'kapazitaet_min_pro_tag' => 'integer',
         'kapazitaet_wochentag' => 'array',
+        'besetzung' => 'array',
+        'schicht_minuten' => 'integer',
+        'batch_max_kg' => 'decimal:3',
+        'batch_max_pieces' => 'decimal:2',
         'sort_order' => 'integer',
         'is_inactive' => 'boolean',
     ];
@@ -42,6 +46,26 @@ class FoodAlchemistProductionStation extends Model
     public function lines(): HasMany
     {
         return $this->hasMany(FoodAlchemistProductionOrderLine::class, 'station_id');
+    }
+
+    /** Summe der Köpfe aus der Rollen-Besetzung (Stufe 3). */
+    public function koepfe(): int
+    {
+        return (int) array_sum(array_map('intval', $this->besetzung ?? []));
+    }
+
+    /**
+     * Aus der Besetzung abgeleitete Tageskapazität = Köpfe × Schicht-Minuten. `null`, wenn keine
+     * Besetzung oder keine Schicht gepflegt ist — dann greift der manuelle Wert (oder gar keiner).
+     */
+    public function abgeleiteteKapazitaet(): ?int
+    {
+        $koepfe = $this->koepfe();
+        if ($koepfe <= 0 || ! $this->schicht_minuten) {
+            return null;
+        }
+
+        return $koepfe * (int) $this->schicht_minuten;
     }
 
     /**
@@ -57,9 +81,13 @@ class FoodAlchemistProductionStation extends Model
         $abweichung = ($this->kapazitaet_wochentag ?? [])[$iso] ?? null;
 
         if ($abweichung !== null) {
-            return max(0, (int) $abweichung);
+            return max(0, (int) $abweichung);           // manueller Wochentag-Override gewinnt
         }
 
-        return $this->kapazitaet_min_pro_tag;
+        if ($this->kapazitaet_min_pro_tag !== null) {
+            return $this->kapazitaet_min_pro_tag;        // manueller Tageswert gewinnt (Override-Ebene)
+        }
+
+        return $this->abgeleiteteKapazitaet();           // sonst: aus Rollen-Besetzung ableiten (Stufe 3)
     }
 }

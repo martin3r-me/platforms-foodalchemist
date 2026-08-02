@@ -300,6 +300,33 @@ Route::get('/speisekarten/{id}/praesentation', \Platform\FoodAlchemist\Livewire\
 Route::get('/produktion/tagesplan', \Platform\FoodAlchemist\Livewire\Produktion\Tagesplan::class)
     ->name('foodalchemist.produktion.tagesplan');
 
+// Spec 30 E8 — druckbares Posten-Blatt der Tages-Ausgabe: pro Tag pro Posten eine
+// Abhak-Checkliste über alle Aufträge. Aggregation wie die Tagesplan-Komponente
+// (gleiches Fenster/Posten-Filter), aber als Druck-HTML statt Livewire-Seite.
+Route::get('/produktion/tagesplan/blatt', function (\Platform\FoodAlchemist\Services\ProductionCapacityService $kap) {
+    $team = \Illuminate\Support\Facades\Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
+    $von = \Illuminate\Support\Carbon::parse(request('von') ?: now()->toDateString())->toDateString();
+    $tage = max(1, min(60, request()->integer('tage') ?: 14));
+    $bis = \Illuminate\Support\Carbon::parse($von)->addDays($tage - 1)->toDateString();
+    $postenFilter = request()->integer('posten') ?: null;
+
+    $auslastung = $kap->auslastung($team, $von, $bis);
+    $zeilen = $kap->tagesplanZeilen($team, $von, $bis);
+    if ($postenFilter !== null) {
+        $zeilen = $zeilen->where('station_id', $postenFilter);
+        $auslastung = collect($auslastung)
+            ->map(fn ($b) => array_values(array_filter($b, fn ($x) => $x['station_id'] === $postenFilter)))
+            ->filter(fn ($b) => $b !== [])->all();
+    }
+
+    return view('foodalchemist::dokumente.tagesplan_blatt', [
+        'von' => $von,
+        'bis' => $bis,
+        'auslastung' => $auslastung,
+        'zeilenNachTag' => $zeilen->groupBy(fn ($z) => \Illuminate\Support\Carbon::parse($z->plan_date)->toDateString()),
+    ]);
+})->name('foodalchemist.produktion.tagesplan.blatt');
+
 Route::get('/produktion', \Platform\FoodAlchemist\Livewire\Produktion\Browser::class)
     ->name('foodalchemist.produktion.index');
 

@@ -324,8 +324,32 @@
         </x-slot:actions>
         <div class="grid grid-cols-2 gap-3">
             <div>
-                <label class="block {{ $label }} mb-1">Arbeitszeit (min)</label>
+                <label class="block {{ $label }} mb-1">Arbeitszeit (min) <span class="normal-case text-gray-500">je Ansatz</span></label>
                 <input type="number" wire:model="form.work_time_min" min="0" class="{{ $input }}" />
+            </div>
+            {{-- Stufe 3 — Auto-Produktionsplaner: nicht-lineare Zeit + Routing + Vorproduzierbarkeit. --}}
+            <div>
+                <label class="block {{ $label }} mb-1">Rüstzeit (min) <span class="normal-case text-gray-500">einmal je Lauf</span></label>
+                <input type="number" wire:model="form.setup_time_min" min="0" class="{{ $input }}" placeholder="0" data-recipe-setup />
+            </div>
+            <div>
+                <label class="block {{ $label }} mb-1">Default-Posten <span class="normal-case text-gray-500">(Planer-Routing)</span></label>
+                <select wire:model="form.default_station_id" class="{{ $input }}" data-recipe-default-station>
+                    <option value="">— keiner —</option>
+                    @foreach($posten as $p)<option value="{{ $p->id }}">{{ $p->name }}</option>@endforeach
+                </select>
+            </div>
+            <div>
+                <label class="block {{ $label }} mb-1">Vorproduzierbar (Tage) <span class="normal-case text-gray-500">0 = nur am Tag</span></label>
+                <input type="number" wire:model="form.max_vorlauf_tage" min="0" max="14" class="{{ $input }}" placeholder="—" data-recipe-vorlauf />
+            </div>
+            <div>
+                <label class="block {{ $label }} mb-1">Topf-Deckel (kg) <span class="normal-case text-gray-500">max je Koch-Vorgang</span></label>
+                <input type="text" inputmode="decimal" wire:model="form.batch_max_kg" class="{{ $input }}" placeholder="—" data-recipe-topf />
+            </div>
+            <div>
+                <label class="block {{ $label }} mb-1">Topf-Deckel (Stück) <span class="normal-case text-gray-500">für Stück-Rezepte</span></label>
+                <input type="text" inputmode="decimal" wire:model="form.batch_max_pieces" class="{{ $input }}" placeholder="—" data-recipe-topf-stueck />
             </div>
             <div>
                 <label class="block {{ $label }} mb-1">Temperatur</label>

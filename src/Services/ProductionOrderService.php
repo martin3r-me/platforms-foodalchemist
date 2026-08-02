@@ -287,6 +287,12 @@ class ProductionOrderService
         );
         $order->save();
         $this->syncPlanDates($order);
+
+        // Stufe 3 P3.2: Zeilen mit (via Overlay überlebtem) Posten tragen ggf. dessen Topf-Deckel —
+        // Arbeitszeit danach neu rechnen, sonst fiele der Posten-Deckel bei jedem Recompute weg.
+        foreach ($order->lines()->whereNotNull('station_id')->whereNotNull('recipe_id')->get() as $line) {
+            $this->aktualisiereStationArbeitszeit($line);
+        }
     }
 
     /**
@@ -339,10 +345,48 @@ class ProductionOrderService
         }
         $line->save();
 
+        // Stufe 3 P3.2: Posten kann einen engeren/größeren Topf-Deckel haben als das Rezept →
+        // Arbeitszeit mit min(Rezept, Posten)-Deckel neu rechnen, sobald ein Posten hängt.
+        if (array_key_exists('station_id', $input)) {
+            $this->aktualisiereStationArbeitszeit($line);
+        }
+
         // Vorlauf geändert ⇒ abgeleitetes plan_date nachziehen (einziger Schreiber, s. o.)
         $this->syncPlanDates($line->productionOrder);
 
         return $line->refresh();
+    }
+
+    /**
+     * Stufe 3 P3.2 — Arbeitszeit einer Zeile unter Berücksichtigung des Posten-Topf-Deckels neu
+     * rechnen (min aus Rezept- und Posten-Deckel). Schreibt nur, wenn sich der Wert ändert; ohne
+     * Posten-Deckel bleibt alles beim Rezept-Wert (rückwärtskompatibel). Freie Positionen ohne
+     * Rezept bleiben unangetastet.
+     */
+    private function aktualisiereStationArbeitszeit(FoodAlchemistProductionOrderLine $line): void
+    {
+        if ($line->recipe_id === null) {
+            return;
+        }
+        $recipe = FoodAlchemistRecipe::find($line->recipe_id);
+        if ($recipe === null) {
+            return;
+        }
+
+        $stueck = $recipe->istStueckErtrag();
+        $deckel = null;
+        if ($line->station_id !== null) {
+            $station = FoodAlchemistProductionStation::find($line->station_id);
+            $roh = $stueck ? $station?->batch_max_pieces : $station?->batch_max_kg;
+            $deckel = $roh !== null ? (float) $roh : null;
+        }
+
+        $rohBatches = (float) ($line->benoetigt_ansaetze ?? $line->ansaetze ?? 0);
+        $neu = $recipe->arbeitszeitMin($rohBatches, (bool) $recipe->is_sales_recipe, $deckel, $stueck);
+
+        if ((int) $line->arbeitszeit_min !== (int) $neu) {
+            $line->forceFill(['arbeitszeit_min' => $neu])->save();
+        }
     }
 
     /**

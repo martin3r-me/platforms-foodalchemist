@@ -37,6 +37,20 @@ Grenze gefallen — und man sieht es im Diff. Wording konsequent „Verantwortli
 **Rückweg:** `foodalchemist_production_stations` droppen, `station_id`/`assignee`/`vorlauf_tage`
 aus den Zeilen entfernen. Der Rest des Moduls hängt nicht daran.
 
+### 1a. Fortschreibung 2026-08-02 (Stufe 3): Rollen als Kostenträger
+
+Für den kosten-/kapazitätsbewussten Auto-Planer (Stufe 3) wird die Grenze **um eine Ebene ergänzt,
+nicht aufgeweicht**: Es gibt **Rollen** (Küchenchef / Koch / Hilfskoch …) mit einem €/Std-Satz
+(`foodalchemist_kitchen_roles`), und ein Posten wird mit einer **Anzahl je Rolle** besetzt. Daraus
+leiten sich Kapazität (Köpfe × Schicht-Minuten) und Produktionskosten (Σ Rollensatz × Minuten) ab.
+
+> Erlaubt ist ausschließlich die **Rollen-/Posten-Ebene** (Aggregat). Weiterhin **Nicht-Ziel**:
+> namentliche Personen, `user_id`, Schichtpläne, Verfügbarkeiten, Abwesenheiten, Personalstammdaten,
+> Stundenkonten und jede Aggregation *je Person*. Die Rolle ist ein Kostenträger, kein Mensch.
+
+Die Wand aus §1 gilt unverändert — sie bekommt nur einen benannten Kostensatz auf Posten-Ebene.
+Kanonischer Docblock: Migration `2026_08_02_000001_create_foodalchemist_kitchen_roles_table.php`.
+
 ## 2. Architekturentscheidung: ein Auftrag = ein Tag, Vorproduktion ist ein Offset
 
 Spec 18 führt „Mehrtages-Produktionszeiträume" als Nicht-Ziel. Statt den Auftrag zu einem Zeitraum
@@ -175,6 +189,7 @@ eingefrorene Häkchen an inzwischen geänderten Mengen.
 | E6 | Küchen-Sicht „Abarbeiten" | ✅ |
 | E7 | Spec, Benutzerhandbuch, MCP-Lockstep, Matrizen | ✅ |
 | E0 | Kleinkram: doppelter Recompute beim Anlegen, `basisEinheit`-Reset, Angebot-Ziel ohne Mengenfeld | ✅ |
+| E8 | Tagesplan als **Tages-Ausgabe**: Tag→Posten-Gruppierung, 3-Panel (Sidebar/Center/Detail wie Browser), Wandmodus (`?display=wall`), druckbares **Posten-Blatt** (`produktion.tagesplan.blatt`) | ✅ |
 
 **MCP im Lockstep:** `production_orders.LINE_OVERRIDE` · `LINE_ASSIGN` · `LINE_STATUS` · `DELETE`
 neu; `buffer_pct` in `UPDATE` ergänzt; der Docblock von `UPDATE_LINE` behauptete wörtlich, Ansätze
@@ -184,6 +199,10 @@ seien „NICHT manuell überschreibbar" — korrigiert, das war eine Falle für 
 
 ## 7. Offen / Folgeschritte
 
+- **Auto-vorgeschlagener Tagesplan (die entscheidende Stufe, eigene Session):** heute ist der
+  Tagesplan rein mechanisch (Zeilen nach `vorlauf_tage`-Offset). Smart wäre: das System *schlägt*
+  die Tagesverteilung vor — welche Zeile an welchem Tag/Posten, kapazitätsbewusst. Setzt das
+  Equipment↔Posten-Mapping voraus (siehe nächster Punkt).
 - **Equipment ↔ Posten mappen** — Voraussetzung für sinnvolle Auto-Verteilung.
 - `ARCHITEKTUR.md` §10: die Zeile „Touren- und Personalplanung" um die Präzisierung aus §1
   ergänzen (Dokument von Dominique, Änderung liegt bei ihm).

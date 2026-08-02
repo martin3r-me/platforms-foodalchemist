@@ -299,6 +299,36 @@ class AngebotService
         return collect($adhoc)->merge($ref)->values();
     }
 
+    /**
+     * Stufe 3 — Angebot → Produktion. Baut aus den Concepts des Angebots `targets` (concept × Pax)
+     * und legt EINEN Produktionsauftrag am Event-Tag an (Fallback: heute). Spiegelt
+     * `SpeiseplanService::wocheAnProduktion` — Ziel ist, dass ein Angebot direkt in den Auto-Planer fließt.
+     *
+     * @return array{order_id: ?int, ziele: int}
+     */
+    public function anProduktion(Team $team, int $angebotId, ?int $userId = null): array
+    {
+        $angebot = FoodAlchemistAngebot::visibleToTeam($team)->findOrFail($angebotId);
+        $pax = max(1, (int) ($angebot->personen ?? 0));
+        $datum = $angebot->event_date
+            ? \Illuminate\Support\Carbon::parse($angebot->event_date)->toDateString()
+            : now()->toDateString();
+
+        $targets = [];
+        foreach ($this->menueConcepts($angebot) as $c) {
+            $targets[] = ['concept_id' => (int) $c->id, 'persons' => $pax, 'source_ref' => 'angebot:' . $angebot->id . ':c' . $c->id];
+        }
+        if ($targets === []) {
+            return ['order_id' => null, 'ziele' => 0];
+        }
+
+        $name = 'Angebot: ' . $angebot->name . ' (' . $pax . ' Pers.)';
+        $order = app(\Platform\FoodAlchemist\Services\ProductionOrderService::class)
+            ->saveNew($team, $datum, $name, $targets, 'Angebot #' . $angebot->id, null, $userId);
+
+        return ['order_id' => $order->id, 'ziele' => count($targets)];
+    }
+
     /** Verknüpft ein STANDARDISIERTES Katalog-Concept mit dem Angebot (geteilt, nicht besessen). */
     public function referenziereConcept(Team $team, int $angebotId, int $conceptId): void
     {

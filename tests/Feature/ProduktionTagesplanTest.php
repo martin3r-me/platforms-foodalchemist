@@ -121,8 +121,43 @@ it('sagt im Leerzustand, was der Tagesplan überhaupt zeigt', function () {
 });
 
 it('das Zeitfenster steht in der URL — Kontext überlebt einen Reload', function () {
+    // Spec 30 E8: orderId (Detail-Panel) + display (Wandmodus) sind ebenfalls URL-Zustand,
+    // damit ein Reload / geteilter Link die gewählte Ausgabe wiederherstellt.
     expect(collect((new ReflectionClass(Tagesplan::class))->getProperties())
         ->filter(fn ($p) => $p->getAttributes(\Livewire\Attributes\Url::class) !== [])
         ->map(fn ($p) => $p->getName())->values()->all())
-        ->toBe(['von', 'tage', 'postenFilter']);
+        ->toBe(['von', 'tage', 'postenFilter', 'orderId', 'display']);
+});
+
+// ── Spec 30 E8: Tages-Ausgabe (3-Panel, Wandmodus, Posten-Blatt) ──────────────
+
+it('wählt einen Auftrag ins Detail-Panel und wieder ab', function () {
+    ($this->plan)()->set('tage', 14)
+        ->call('waehleAuftrag', $this->a1->id)->assertSet('orderId', $this->a1->id)
+        ->call('waehleAuftrag', $this->a1->id)->assertSet('orderId', null);   // zweiter Klick schließt
+});
+
+it('rendert den Wandmodus ohne zu krachen', function () {
+    Livewire::test(Tagesplan::class, ['von' => '2026-08-18', 'display' => 'wall'])
+        ->assertOk()
+        ->assertSee('Brauner Fond')
+        ->assertSee('Normalansicht');            // Toggle zurück zur Normalansicht
+});
+
+it('druckt ein Posten-Blatt über alle Aufträge des Fensters', function () {
+    $this->get(route('foodalchemist.produktion.tagesplan.blatt', ['von' => '2026-08-18', 'tage' => 14]))
+        ->assertOk()
+        ->assertSeeHtml('data-tagesplan-blatt')
+        ->assertSee('Brauner Fond')->assertSee('Glace de Viande')
+        ->assertSee('Hochzeit Meyer');
+});
+
+it('respektiert den Posten-Filter im Posten-Blatt', function () {
+    $p = Posten::create(['team_id' => $this->rootTeam->id, 'slug' => 'wk', 'name' => 'Warme Küche']);
+    $this->svc->assignLine($this->rootTeam, Line::where('production_order_id', $this->a1->id)->value('id'), ['station_id' => $p->id]);
+
+    $this->get(route('foodalchemist.produktion.tagesplan.blatt', ['von' => '2026-08-18', 'tage' => 14, 'posten' => $p->id]))
+        ->assertOk()
+        ->assertSee('Brauner Fond')
+        ->assertDontSee('Glace de Viande');       // hängt an keinem Posten
 });

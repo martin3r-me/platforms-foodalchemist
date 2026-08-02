@@ -177,9 +177,11 @@ return [
                     'icon'  => 'heroicon-o-fire',
                 ],
                 [
-                    // Spec 30 E3: was steht wann an welchem Posten an — über alle Aufträge hinweg.
-                    // Eigene Sicht, weil Vorproduktion tagesübergreifend ist, der Auftrag aber
-                    // bewusst ein einzelner Liefertag bleibt.
+                    // Spec 30 E3/E8: eigene AUSGABE, kein zweites Planungswerkzeug — Aggregation
+                    // Tag×Posten über ALLE Aufträge ("was ist heute an welchem Posten zu tun"),
+                    // während Produktion (oben) die einzelnen Aufträge PLANT. Bewusst eigener
+                    // Menüpunkt, nicht als Tab in Produktion — Input (Planen) ≠ Output (Ausgabe).
+                    // Vorproduktion ist tagesübergreifend, der Auftrag bleibt ein Liefertag-Punkt.
                     'label' => 'Tagesplan',
                     'route' => 'foodalchemist.produktion.tagesplan',
                     'icon'  => 'heroicon-o-clock',
