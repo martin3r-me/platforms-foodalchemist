@@ -39,7 +39,7 @@ it('importiert Klasse A, ist idempotent und zählt version bei Inhalts-Änderung
     expect(DB::table('foodalchemist_knowledge_documents')->count())->toBe(3)
         ->and(DB::table('foodalchemist_knowledge_documents')->where('slug', 'pairing.salbei')->value('category'))->toBe('pairing')
         ->and(DB::table('foodalchemist_knowledge_aliases')->count())->toBe(2)
-        ->and(DB::table('foodalchemist_knowledge_routings')->count())->toBe(14);   // Spec 19 E6.4 (je 2) + Spec 08 P6 (je +1 concept)
+        ->and(DB::table('foodalchemist_knowledge_routings')->count())->toBe(16);   // Spec 19 E6.4 (je 2) + Spec 08 P6 (je +1 concept) + Trendradar (je +1 trend: foodbook.plan + concept.brief_geruest)
 
     // 2. Lauf: nichts ändert sich (idempotent)
     $this->artisan('foodalchemist:knowledge-import', ['--vault' => $this->vault, '--rust-src' => $this->rustSrc])->assertSuccessful();
