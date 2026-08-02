@@ -41,7 +41,7 @@ it('seedet die Planungs-Routings inklusive der concept-Zeile', function () {
         ->whereIn('feature', ['foodbook.plan', 'concept.plan'])
         ->get()->map(fn ($r) => "{$r->feature}:{$r->category}:{$r->mode}")->all();
 
-    expect($zeilen)->toHaveCount(6)
+    expect($zeilen)->toHaveCount(7)   // + Trendradar: foodbook.plan:trend:discovery
         ->and($zeilen)->toContain('foodbook.plan:concept:always')
         ->and($zeilen)->toContain('concept.plan:concept:always')
         ->and($zeilen)->toContain('foodbook.plan:cross_cutting:always')

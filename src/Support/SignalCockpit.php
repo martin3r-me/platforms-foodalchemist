@@ -149,6 +149,10 @@ final class SignalCockpit
             . 'eine Kante — trägt er sie nicht, ist die Behauptung im Dokument zu streichen. Entschieden wird am Dokument.',
         'sortiments_luecke' => 'Beschaffungs-Entscheidung: einen tragenden GP für das gewünschte Aroma anlegen bzw. '
             . 'beim Lieferanten anfragen (Grundprodukte / Lieferanten). Bis dahin bleibt die Kreativ-Idee ungeerdet.',
+        // Trendradar-Automatisierung: ein proaktiver Info-Vorschlag (kein Datenmangel) — der Weg
+        // führt in den Concepter, wo die erzeugten Entwürfe geprüft werden.
+        'trend_konzept_vorschlag' => 'Die automatisch aus den Top-Trends erzeugten Konzept-Entwürfe im Concepter '
+            . 'prüfen (Concepter → Entwürfe) — verfeinern oder verwerfen. Ein Vorschlag, keine Datenlücke.',
         // Spec 21 Tranche A — Küchen-Wissen am Einzelfall. Kein Sammel-propose (s. ASSIST),
         // aber sehr wohl ein benennbarer Ort.
         'rezept_ohne_zubereitung' => 'Zubereitung am Rezept ergänzen (Basisrezepte → Rezept → Zubereitung) — '
