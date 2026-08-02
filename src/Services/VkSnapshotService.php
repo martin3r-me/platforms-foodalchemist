@@ -124,4 +124,59 @@ class VkSnapshotService
 
         return $out;
     }
+
+    /**
+     * Darreichungen mit Live-Preis, die noch NIE freigegeben wurden.
+     *
+     * Spec 32: {@see self::pending} beantwortet bewusst nur „welcher freigegebene Preis ist
+     * weggelaufen" — es braucht einen Vorgänger-Snapshot, um ein Delta zu bilden. In einem
+     * Betrieb, der noch nie freigegeben hat, ist die Liste damit leer, und die Freigabe-Fläche
+     * hätte nichts zu tun, obwohl der ganze Katalog unveröffentlicht ist. Diese Methode liefert
+     * genau diesen Erstfall — getrennt gehalten, weil „noch nie freigegeben" fachlich etwas
+     * anderes ist als „weggelaufen" und der Signal-Detektor nur Letzteres meldet.
+     *
+     * @return list<array{presentation_id:int, recipe_id:int, recipe_name:string, live_net:float}>
+     */
+    public function nieFreigegeben(Team $team, int $limit = 200): array
+    {
+        $recipeIds = FoodAlchemistRecipe::visibleToTeam($team)->where('is_sales_recipe', true)->pluck('id');
+        if ($recipeIds->isEmpty()) {
+            return [];
+        }
+        $recipeNames = FoodAlchemistRecipe::visibleToTeam($team)
+            ->whereIn('foodalchemist_recipes.id', $recipeIds)->pluck('name', 'id');
+
+        // Nur EIGENE Darreichungen: release() schreibt ohnehin nur diese, also darf die Liste
+        // auch keine fremden anbieten — sonst klickt man ins Leere.
+        $darreichungen = FoodAlchemistRecipeDarreichung::whereIn('recipe_id', $recipeIds)
+            ->where('team_id', $team->id)
+            ->whereNotNull('sales_net')->where('sales_net', '>', 0)
+            ->get(['id', 'recipe_id', 'sales_net']);
+        if ($darreichungen->isEmpty()) {
+            return [];
+        }
+
+        $schonFreigegeben = DB::table('foodalchemist_vk_price_snapshots')
+            ->whereIn('presentation_id', $darreichungen->pluck('id'))->whereNull('deleted_at')
+            ->distinct()->pluck('presentation_id')->all();
+        $bekannt = array_fill_keys(array_map('intval', $schonFreigegeben), true);
+
+        $out = [];
+        foreach ($darreichungen as $d) {
+            if (isset($bekannt[(int) $d->id])) {
+                continue;
+            }
+            $out[] = [
+                'presentation_id' => (int) $d->id,
+                'recipe_id' => (int) $d->recipe_id,
+                'recipe_name' => $recipeNames[$d->recipe_id] ?? (string) $d->recipe_id,
+                'live_net' => (float) $d->sales_net,
+            ];
+            if (count($out) >= $limit) {
+                break;
+            }
+        }
+
+        return $out;
+    }
 }

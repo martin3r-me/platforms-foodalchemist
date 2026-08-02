@@ -76,6 +76,14 @@ return [
                     'icon'  => 'heroicon-o-home',
                 ],
                 [
+                    // Spec 32: Controlling-Zentrum — Werkbank, an der Befund und Hebel nebeneinander
+                    // liegen (Preise · Wareneinsatz · Simulation · Erfolg · Geld-Signale · Kennzahlen).
+                    // Der Klick springt direkt in den Voll-Editor; die Seite darunter ist das Lagebild.
+                    'label' => 'Controlling',
+                    'route' => 'foodalchemist.controlling.index',
+                    'icon'  => 'heroicon-o-presentation-chart-line',
+                ],
+                [
                     // #378: „Zu prüfen" → „Signale" — Aufmerksamkeits-Inbox (Klasse A Entscheidungs-Queues + Klasse B detektierte Signale)
                     'label' => 'Signale',
                     'route' => 'foodalchemist.review',
@@ -195,27 +203,12 @@ return [
             ],
         ],
         [
-            // Einkauf: Beschaffung/Kostenseite — Preisvergleich + Wareneinsatz-Optimierung +
-            // Preissimulation (Kalkulations-Werkzeug, 2026-08-01 aus „Ausgabe" hierher) + das
-            // eigentliche Bestellen (Bestellungen 2026-08-01 aus „Planung" hierher, wo es hingehört).
+            // Einkauf: nur noch das HANDELN. Die drei Auswertungs-Flächen (Preisvergleich,
+            // Wareneinsatz-Optimierung, Preissimulation) sind mit Spec 32 ins Controlling-Zentrum
+            // gewandert — Beschaffung und Auswertung sind zwei Tätigkeiten, nicht eine Liste.
+            // Die alten Routen bleiben als Redirects in den passenden Controlling-Tab bestehen.
             'group' => 'Einkauf',
             'items' => [
-                [
-                    'label' => 'Preisvergleich',
-                    'route' => 'foodalchemist.einkauf.index',
-                    'icon'  => 'heroicon-o-scale',
-                ],
-                [
-                    'label' => 'Wareneinsatz-Optimierung',
-                    'route' => 'foodalchemist.einkauf.optimierung',
-                    'icon'  => 'heroicon-o-sparkles',
-                ],
-                [
-                    // #502: Was-wäre-wenn-Preissimulation — Kalkulations-Werkzeug, gehört zur Kostenseite.
-                    'label' => 'Preissimulation',
-                    'route' => 'foodalchemist.kalkulation.index',
-                    'icon'  => 'heroicon-o-calculator',
-                ],
                 [
                     // Spec 17/S2: Bestellschienen je Lieferant (mini-WaWi, N-Track).
                     'label' => 'Bestellungen',

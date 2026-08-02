@@ -144,15 +144,36 @@ class LeadLaService
     /** R9.2: GP-nutzende Rezepte neu rechnen (Direktnutzer + transitive Eltern). */
     private function recomputeGpNutzer(FoodAlchemistGp $gp): void
     {
-        $recipeIds = DB::table('foodalchemist_recipe_ingredients')
-            ->where('gp_id', $gp->id)->whereNull('deleted_at')->distinct()->pluck('recipe_id');
-        if ($recipeIds->isEmpty()) {
-            return;
+        $this->recomputeNutzerFuerGps([(int) $gp->id]);
+    }
+
+    /**
+     * Dieselbe Kaskade für eine GANZE GP-Menge — ein Lauf über die Vereinigung.
+     *
+     * Spec 32: die Batch-Umstellung im Controlling-Zentrum stellt N Bezugsquellen auf einmal um.
+     * Würde sie N-mal {@see self::setLeadLa} mit `recompute: true` rufen, liefe die teure
+     * Rezeptbaum-Kaskade N-mal über weitgehend DIESELBEN Eltern-Gerichte. Der Aufrufer setzt
+     * darum ohne Recompute und ruft am Ende einmal hier her.
+     *
+     * V-049 gilt auf beiden Ebenen: eine Menge, ein Lauf.
+     *
+     * @param  list<int>  $gpIds
+     * @return int Anzahl neu gerechneter Rezepte (inkl. transitiver Eltern)
+     */
+    public function recomputeNutzerFuerGps(array $gpIds): int
+    {
+        $gpIds = array_values(array_unique(array_map('intval', $gpIds)));
+        if ($gpIds === []) {
+            return 0;
         }
-        // V-049: eine Menge, ein Lauf — gemeinsame Eltern-Gerichte werden einmal gerechnet
-        // statt einmal je Direktnutzer (ein GP steckt typischerweise in vielen Basisrezepten,
-        // die in denselben Gerichten landen).
-        app(RecipeRecomputeService::class)->recomputeMany($recipeIds->all());
+
+        $recipeIds = DB::table('foodalchemist_recipe_ingredients')
+            ->whereIn('gp_id', $gpIds)->whereNull('deleted_at')->distinct()->pluck('recipe_id');
+        if ($recipeIds->isEmpty()) {
+            return 0;
+        }
+
+        return count(app(RecipeRecomputeService::class)->recomputeMany($recipeIds->all()));
     }
 
     /**
