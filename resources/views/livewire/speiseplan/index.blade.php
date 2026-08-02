@@ -21,45 +21,57 @@
             <div class="p-3 space-y-2">
                 <input type="search" wire:model.live.debounce.300ms="search" placeholder="Plan suchen …" class="{{ $input }}" />
                 <button type="button" wire:click="neu" class="{{ $btnPrimary }} w-full justify-center" data-sp-neu>+ Neuer Plan</button>
+                <div class="mt-2 space-y-1">
+                    @forelse($plaene as $p)
+                        <button type="button" wire:key="sp-list-{{ $p->id }}" wire:click="waehle({{ $p->id }})" data-sp-zeile="{{ $p->id }}"
+                            class="w-full text-left px-2 py-1.5 rounded-lg text-xs transition-all {{ $selectedId === $p->id ? 'bg-violet-500/10 text-violet-700' : 'hover:bg-black/[0.03] text-gray-700' }}">
+                            <div class="font-medium truncate">{{ $p->name }}</div>
+                            <div class="text-[10px] text-gray-500">{{ $statusLabel[$p->status] ?? $p->status }} · {{ $p->cycle_weeks }} Wo. · {{ $p->entries_count }} Einträge</div>
+                        </button>
+                    @empty
+                        <div class="px-2 py-6 text-center text-[11px] text-gray-500">Keine Pläne. Oben „+ Neuer Plan".</div>
+                    @endforelse
+                </div>
+                <div class="pt-1">{{ $plaene->links() }}</div>
             </div>
         </x-ui-page-sidebar>
+    </x-slot>
+
+    {{-- Rechtes Detail-Panel (read-only Info) — konsistent zu Speisekarte/Foodbook --}}
+    <x-slot name="activity">
+        <x-foodalchemist::detail-sidebar title="Detail" width="w-80" scope="activity_speiseplan" side="right" icon="heroicon-o-information-circle" :default-open="true">
+            @if($plan)
+                @include('foodalchemist::livewire.speiseplan.partials.detail', ['plan' => $plan])
+            @else
+                <div class="p-4 text-[11px] text-gray-400">Wähle links einen Plan, um Details zu sehen.</div>
+            @endif
+        </x-foodalchemist::detail-sidebar>
     </x-slot>
 
     {{-- Editor (Fullscreen-Dark, pro Plan) statt Master-Detail — geöffnet per speiseplan-editor.bearbeiten --}}
     <livewire:foodalchemist.speiseplan.editor />
 
     <x-ui-page-container padding="px-6 pb-6" spacing="space-y-4">
-        <div class="relative overflow-hidden {{ $card }}">
-            <div class="{{ $cardAccent }}"></div>
-            <div class="max-h-[70vh] overflow-auto">
-                <table class="{{ $table }}">
-                    <thead>
-                        <tr>
-                            <th class="{{ $th }} w-full text-left sticky top-0 z-20 bg-white/95 backdrop-blur-xl">Name</th>
-                            <th class="{{ $th }} text-left sticky top-0 z-20 bg-white/95 backdrop-blur-xl">Status</th>
-                            <th class="{{ $th }} text-right sticky top-0 z-20 bg-white/95 backdrop-blur-xl">Zyklus</th>
-                            <th class="{{ $th }} text-right sticky top-0 z-20 bg-white/95 backdrop-blur-xl">Einträge</th>
-                            <th class="{{ $th }} text-left sticky top-0 z-20 bg-white/95 backdrop-blur-xl">Start</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @forelse($plaene as $p)
-                            <x-foodalchemist::table-row wire:key="sp-{{ $p->id }}" wire:click="waehle({{ $p->id }})" data-sp-zeile="{{ $p->id }}">
-                                <td class="{{ $td }} font-medium text-gray-900">{{ $p->name }}</td>
-                                <td class="{{ $td }}">
-                                    <span class="{{ $pill }} {{ $variantPill[$statusVariant[$p->status] ?? 'secondary'] }}">{{ $statusLabel[$p->status] ?? $p->status }}</span>
-                                </td>
-                                <td class="{{ $td }} text-right tabular-nums text-gray-600">{{ $p->cycle_weeks }} Wo.</td>
-                                <td class="{{ $td }} text-right tabular-nums text-gray-600">{{ $p->entries_count }}</td>
-                                <td class="{{ $td }} text-gray-600">{{ $p->start_date ? $p->start_date->format('d.m.Y') : '—' }}</td>
-                            </x-foodalchemist::table-row>
-                        @empty
-                            <tr wire:key="sp-empty"><td colspan="5" class="px-3 py-10 text-center text-sm text-gray-500">Keine Speisepläne. Links „+ Neuer Plan".</td></tr>
-                        @endforelse
-                    </tbody>
-                </table>
+        @if(! $plan)
+            <div class="relative overflow-hidden {{ $card }} p-10 text-center text-sm text-gray-500">
+                <div class="{{ $cardAccent }}"></div>
+                Wähle links einen Speiseplan oder lege einen neuen an.
             </div>
-        </div>
-        <div>{{ $plaene->links() }}</div>
+        @else
+            {{-- Vorschau-Kopf: Aktionen. „Bearbeiten" öffnet den Fullscreen-Editor (Wochen-Matrix/Linien). --}}
+            <div class="flex flex-wrap items-center justify-between gap-3">
+                <div class="min-w-0">
+                    <h1 class="text-lg font-semibold tracking-tight text-gray-900 truncate">{{ $plan->name }}</h1>
+                    <p class="text-[11px] text-gray-500">{{ $plan->cycle_weeks }}-Wochen-Zyklus · {{ $plan->entries->count() }} Einträge</p>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                    <button type="button" wire:click="bearbeiten" class="{{ $btnPrimary }}" data-sp-bearbeiten>@svg('heroicon-o-pencil-square', 'w-4 h-4') Bearbeiten</button>
+                    <a href="{{ route('foodalchemist.speiseplan.dokument', $plan->id) }}?mahlzeit={{ $vorschauMahlzeit }}" target="_blank" class="{{ $btnGhost }}">Aushang (Druck)</a>
+                </div>
+            </div>
+
+            {{-- Aushang (Druck-Layout, read-only) --}}
+            @include('foodalchemist::livewire.speiseplan.partials.vorschau', ['vorschau' => $vorschau])
+        @endif
     </x-ui-page-container>
 </x-ui-page>

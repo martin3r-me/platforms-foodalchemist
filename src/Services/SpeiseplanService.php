@@ -346,6 +346,22 @@ class SpeiseplanService
      *
      * @return Collection<int, FoodAlchemistRecipe>
      */
+    /**
+     * Anzeigename eines Eintrags fürs Kunden-/Aushang-Dokument: Gericht über die Wording-Kette
+     * (saubere Kunden-Namen, ohne interne [HG]/[KAE]-Marker), Paket/Concept behalten ihren Namen.
+     */
+    public function eintragName(FoodAlchemistSpeiseplanEintrag $e): string
+    {
+        if ($e->sales_recipe_id !== null) {
+            $dish = $e->relationLoaded('dish') ? $e->dish : $e->dish()->first();
+            if ($dish !== null) {
+                return app(WordingResolver::class)->fuerGericht($dish)['text'] ?? $e->inhaltName();
+            }
+        }
+
+        return $e->inhaltName();
+    }
+
     public function eintragGerichte(FoodAlchemistSpeiseplanEintrag $e): Collection
     {
         $key = $e->inhaltKey();
@@ -461,7 +477,7 @@ class SpeiseplanService
                 }
             }
 
-            return ['name' => $e->inhaltName(), 'codes' => $codes];
+            return ['name' => $this->eintragName($e), 'codes' => $codes];
         };
 
         $for = fn (Carbon $d) => $d->format('Y-m-d');

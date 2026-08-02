@@ -38,6 +38,17 @@
         </x-ui-page-sidebar>
     </x-slot>
 
+    {{-- Rechtes Detail-Panel (read-only Info): Logo · Status/Datum/Nummer · Eckdaten der Auswahl --}}
+    <x-slot name="activity">
+        <x-foodalchemist::detail-sidebar title="Detail" width="w-80" scope="activity_speisekarte" side="right" icon="heroicon-o-information-circle" :default-open="true">
+            @if($karte)
+                @include('foodalchemist::livewire.speisekarte.partials.detail', ['karte' => $karte])
+            @else
+                <div class="p-4 text-[11px] text-gray-400">Wähle links eine Karte, um Details zu sehen.</div>
+            @endif
+        </x-foodalchemist::detail-sidebar>
+    </x-slot>
+
     <x-ui-page-container padding="px-6 pb-6" spacing="space-y-4">
         @if(! $karte)
             <div class="relative overflow-hidden {{ $card }} p-10 text-center text-sm text-gray-500">
@@ -45,6 +56,31 @@
                 Wähle links eine Speisekarte oder lege eine neue an.
             </div>
         @else
+            {{-- Vorschau-Kopf: Aktionen. „Bearbeiten" öffnet den Editor als Fullscreen-Modal (Foodbook-Muster). --}}
+            <div class="flex flex-wrap items-center justify-between gap-3">
+                <div class="min-w-0">
+                    <h1 class="text-lg font-semibold tracking-tight text-gray-900 truncate">{{ $karte->name }}</h1>
+                    <p class="text-[11px] text-gray-500 flex items-center gap-1.5">{{ $typLabel[$karte->karten_typ] ?? $karte->karten_typ }} · <span class="{{ $pill }} {{ $variantPill[$statusVariant[$karte->status] ?? 'secondary'] }}">{{ $statusLabel[$karte->status] ?? $karte->status }}</span></p>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                    <button type="button" @click="$dispatch('modal.open', { name: 'speisekarte-editor' })" class="{{ $btnPrimary }}" data-sk-bearbeiten>@svg('heroicon-o-pencil-square', 'w-4 h-4') Bearbeiten</button>
+                    <a href="{{ route('foodalchemist.speisekarte.dokument', $karte->id) }}" target="_blank" class="{{ $btnGhost }}">Dokument</a>
+                    <a href="{{ route('foodalchemist.speisekarte.praesentation', $karte->id) }}" target="_blank" class="{{ $btnGhost }}">Präsentation</a>
+                    <button type="button" wire:click="duplizieren" class="{{ $btnGhost }}">Duplizieren</button>
+                </div>
+            </div>
+
+            {{-- Live-Ergebnis (Kundensicht, read-only) — Wording aufgelöst, Preise, Fußnoten. --}}
+            @include('foodalchemist::livewire.speisekarte.partials.vorschau', ['vorschau' => $vorschau])
+
+            {{-- ═══════════════ EDITOR = Fullscreen-Modal (Foodbook-Muster) ═══════════════ --}}
+            <x-foodalchemist::modal name="speisekarte-editor" fullscreen title="Speisekarte bearbeiten" :title-name="$name">
+                <x-slot:actions>
+                    <button type="button" wire:click="speichern" class="{{ $btnPrimary }}" data-sk-speichern>Speichern</button>
+                    <button type="button" wire:click="loeschen" wire:confirm="Diese Speisekarte wirklich löschen?" class="{{ $btnGhostXs }} text-red-600" data-sk-loeschen>Löschen</button>
+                </x-slot:actions>
+
+                <div class="space-y-4">
             {{-- Karten-Kopf / Meta --}}
             <div class="relative overflow-hidden {{ $card }} p-4" wire:key="sk-head-{{ $karte->id }}">
                 <div class="{{ $cardAccent }}"></div>
@@ -79,13 +115,7 @@
                     </div>
                 </div>
                 <div class="mt-3 flex flex-wrap gap-2">
-                    <button type="button" wire:click="speichern" class="{{ $btnPrimary }}" data-sk-speichern>Speichern</button>
-                    <a href="{{ route('foodalchemist.speisekarte.dokument', $karte->id) }}" target="_blank" class="{{ $btnGhost }}">Dokument</a>
-                    <a href="{{ route('foodalchemist.speisekarte.praesentation', $karte->id) }}" target="_blank" class="{{ $btnGhost }}">Präsentation</a>
-                    <button type="button" wire:click="duplizieren" class="{{ $btnGhost }}">Duplizieren</button>
                     <button type="button" wire:click="kiKartenText" class="{{ $btnAi }}">✨ KI-Einleitung</button>
-                    <span class="flex-1"></span>
-                    <button type="button" wire:click="loeschen" wire:confirm="Diese Speisekarte wirklich löschen?" class="{{ $btnGhost }} text-red-600">Löschen</button>
                 </div>
                 @if($kiKartenVorschau !== null)
                     <div class="mt-3 p-3 rounded-lg bg-violet-500/[0.04] ring-1 ring-inset ring-violet-500/15">
@@ -170,6 +200,8 @@
                     <div class="px-2 py-8 text-center text-[11px] text-gray-500">Noch keine Rubriken. Oben eine anlegen.</div>
                 @endforelse
             </div>
+                </div>{{-- /space-y-4 im Editor-Modal --}}
+            </x-foodalchemist::modal>
         @endif
     </x-ui-page-container>
 </x-ui-page>
