@@ -121,12 +121,12 @@ it('Panel öffnet über signal-selected, sortiert die Liste und klappt die Objek
     $lw->call('objektWaehlen', 'recipe', $erstesRezept->id)->assertSet('objektId', null);
 });
 
-it('Signale-Seite bindet das Panel in die rechte Fläche ein (vorher ungenutzt)', function () {
+it('Signale-Seite bindet das Panel als Modal ein (2026-08: aus dem kollabierenden activity-Slot)', function () {
     $this->actingAs($this->makeUser($this->rootTeam, 'Seiten User'));
 
     Livewire::test(ReviewQueue::class)
         ->assertSeeLivewire(DetailPanel::class)
-        ->assertSee('activity_signale', false);      // eigener Sidebar-Scope, keine Kollision
+        ->assertSee('data-modal="signal-detail"', false);   // Detail läuft als Modal, nicht mehr im activity-Slot
 });
 
 it('Panel zeigt kein fremdes Signal (Tenancy) und überlebt eine gelöschte Auswahl', function () {
@@ -138,7 +138,7 @@ it('Panel zeigt kein fremdes Signal (Tenancy) und überlebt eine gelöschte Ausw
     Livewire::test(DetailPanel::class)
         ->dispatch('signal-selected', id: $fremd->id)
         ->assertViewHas('sig', null)
-        ->assertSee('Signal in der Liste');
+        ->assertSee('Kein Signal gewählt');
 });
 
 // ── Etappe S3b-2: Policy-Regler (Punkt 8) + Trend-Sparkline (Punkt 4) ──────

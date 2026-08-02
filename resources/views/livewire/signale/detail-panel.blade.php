@@ -25,12 +25,10 @@
     };
 @endphp
 
-<div class="p-4 space-y-4 min-h-full bg-gray-500/[0.04]" data-signal-panel>
+<x-foodalchemist::modal name="signal-detail" title="Signal-Detail" size="max-w-2xl">
+    <div data-signal-panel class="space-y-4">
     @if($sig === null)
-        <div class="text-center text-xs text-gray-500 py-12">
-            <div class="text-2xl mb-2">@svg('heroicon-o-bell-alert', 'w-3.5 h-3.5 inline-block align-middle')</div>
-            Signal in der Liste auf „Reinschauen" klicken —<br>betroffene Objekte erscheinen hier.
-        </div>
+        <div class="text-center text-xs text-gray-500 py-8">Kein Signal gewählt.</div>
     @else
         {{-- Kopf --}}
         <div>
@@ -310,4 +308,5 @@
             @endif
         </x-foodalchemist::section>
     @endif
-</div>
+    </div>
+</x-foodalchemist::modal>

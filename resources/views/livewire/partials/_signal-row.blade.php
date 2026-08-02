@@ -64,12 +64,11 @@
         </div>
 
         <div class="shrink-0 flex items-center gap-1 pt-0.5">
-            {{-- Öffnet das rechte Panel; der Alpine-Teil klappt die Fläche auf, falls sie
-                 zugeschoben ist (sonst „passiert nichts" beim Klick). --}}
+            {{-- Öffnet das Signal-Detail als Modal: `signal-selected` lädt das DetailPanel,
+                 das danach selbst `modal.open` feuert (2026-08-02, s. review-queue). --}}
             <button type="button" wire:click="$dispatch('signal-selected', { id: {{ $sig->id }} })"
-                    x-on:click="$store.ui?.mSet('activity_signale', 'open', true)"
                     class="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-medium text-gray-500 hover:text-gray-800 hover:bg-black/5 transition-colors"
-                    title="Betroffene Objekte im Detail-Panel anzeigen" data-signal-reinschauen="{{ $sig->id }}">
+                    title="Betroffene Objekte anzeigen" data-signal-reinschauen="{{ $sig->id }}">
                 @svg('heroicon-o-arrow-right-circle', 'w-3.5 h-3.5')
                 Reinschauen
             </button>

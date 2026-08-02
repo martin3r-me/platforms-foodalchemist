@@ -20,18 +20,16 @@
         </x-ui-page-actionbar>
     </x-slot>
 
-    {{-- Spec 21 · S3a: die rechte Fläche war die einzige der sieben Cockpit-Seiten ohne
-         Panel. Öffnen über „Reinschauen" in der Signal-Zeile (Event `signal-selected`). --}}
-    <x-slot name="activity">
-        <x-foodalchemist::detail-sidebar title="Signal-Detail" width="w-96" :maxWidth="640"
-                                        scope="activity_signale" side="right" icon="heroicon-o-bell-alert" :defaultOpen="true">
-            <livewire:foodalchemist.signale.detail-panel />
-        </x-foodalchemist::detail-sidebar>
-    </x-slot>
-
-    {{-- Klick-Ziele der Rezept-Listen (Signale/KI/Pflege-Tabs) --}}
+    {{-- Klick-Ziele der Rezept-Listen (Signale/KI/Pflege-Tabs) + „Reinschauen"-Detail.
+         2026-08-02: Das Signal-Detail lief bis hier im `activity`-Slot (rechte Fläche). Der
+         Slot liess auf DIESER Seite die Haupt-Content-Region auf Höhe 0 kollabieren (per
+         CDP nachgemessen: das `h-full`-Panel wurde ein Vollhöhen-Geschwister und frass die
+         Höhe). Darum jetzt als Modal wie recipe-/vk-modal — `position:fixed`, ausserhalb des
+         Flusses, kein Layout-Einfluss. Öffnen via `signal-selected` (DetailPanel feuert danach
+         `modal.open`). --}}
     <livewire:foodalchemist.recipes.recipe-modal />
     <livewire:foodalchemist.verkauf.vk-modal />
+    <livewire:foodalchemist.signale.detail-panel />
 
     <x-ui-page-container padding="px-6 pb-6" spacing="space-y-5">
         @if($meldung !== null)
