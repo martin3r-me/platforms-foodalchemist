@@ -87,6 +87,21 @@ class DetailPanel extends Component
         $this->meldung = null;
         $this->fehler = null;
         $this->policyForm = false;   // Formularwerte gehören zum vorigen TYP
+        // 2026-08-02: Panel läuft als Modal (der `activity`-Slot kollabierte die Signale-Seite,
+        // s. review-queue). Öffnen wie RecipeModal — nach dem Laden `modal.open` feuern.
+        $this->dispatch('modal.open', name: 'signal-detail');
+    }
+
+    /** Hartes Schließen (Backdrop/Escape/✕) → State räumen, damit das nächste Öffnen frisch startet. */
+    #[On('modal.closed')]
+    public function beiModalClosed(?string $name = null): void
+    {
+        if ($name === 'signal-detail') {
+            $this->signalId = null;
+            $this->objektKind = null;
+            $this->objektId = null;
+            $this->policyForm = false;
+        }
     }
 
     /**
