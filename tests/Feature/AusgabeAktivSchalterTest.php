@@ -112,3 +112,23 @@ it('zeigt beim Speiseplan den abgeleiteten Zeitraum statt eines toten Datumsfeld
         ->assertSee('Noch keine Einträge')
         ->assertViewHas('fensterHinweis', fn ($h) => str_contains((string) $h, 'ersten und letzten Plantag'));
 });
+
+it('warnt im Editor, wenn parallel schon etwas läuft — verbietet es aber nicht', function () {
+    // Spec 33 P3/P5: Überschneidungen können gewollt sein (Übergangsphase, Sonderkarte).
+    // Die Fläche sagt es, hindert aber niemanden.
+    $betrieb = FoodAlchemistOutlet::create(['team_id' => $this->rootTeam->id, 'name' => 'Kantine Nord']);
+    app(SpeisekarteService::class)->create($this->rootTeam, [
+        'name' => 'Sommerkarte', 'status' => 'aktiv', 'outlet_id' => $betrieb->id,
+    ]);
+    $zweite = app(SpeisekarteService::class)->create($this->rootTeam, [
+        'name' => 'Sonderkarte', 'status' => 'aktiv', 'outlet_id' => $betrieb->id,
+    ]);
+
+    Livewire::test(SpeisekarteEditor::class)->call('waehle', $zweite->id)
+        ->assertSeeHtml('data-ausgabe-konflikt')
+        ->assertSee('Sommerkarte')
+        // Der Status bleibt, was er ist — kein Verbot, keine stille Korrektur.
+        ->assertSet('status', 'aktiv');
+
+    expect($zweite->refresh()->statusWert())->toBe(AusgabeStatus::Aktiv);
+});

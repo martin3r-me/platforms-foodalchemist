@@ -79,6 +79,10 @@ class FoodbookService
             'outlet_id' => $in['outlet_id'] ?? null,
             'crm_company_id' => $in['crm_company_id'] ?? null,
             'crm_contact_id' => $in['crm_contact_id'] ?? null,
+            // Spec 33 P1: Fenster schon beim Anlegen — sonst muss man jede Ausgabe zweimal
+            // anfassen, und ein Import/MCP-Aufruf verliert die Angabe stillschweigend.
+            'gueltig_von' => ($in['gueltig_von'] ?? '') !== '' ? $in['gueltig_von'] : null,
+            'gueltig_bis' => ($in['gueltig_bis'] ?? '') !== '' ? $in['gueltig_bis'] : null,
             'jahr' => $in['jahr'] ?? null,
             'personen' => $in['personen'] ?? null,
             'status' => AusgabeStatus::normalisiere($in['status'] ?? null)->value,

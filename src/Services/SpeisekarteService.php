@@ -89,6 +89,10 @@ class SpeisekarteService
             'customer' => $in['customer'] ?? null,
             'crm_company_id' => $in['crm_company_id'] ?? null,
             'crm_contact_id' => $in['crm_contact_id'] ?? null,
+            // Spec 33 P1: Fenster schon beim Anlegen — sonst muss man jede Ausgabe zweimal
+            // anfassen, und ein Import/MCP-Aufruf verliert die Angabe stillschweigend.
+            'gueltig_von' => ($in['gueltig_von'] ?? '') !== '' ? $in['gueltig_von'] : null,
+            'gueltig_bis' => ($in['gueltig_bis'] ?? '') !== '' ? $in['gueltig_bis'] : null,
             'preis_anzeige_brutto' => $in['preis_anzeige_brutto'] ?? true,
             'description' => $in['description'] ?? null,
         ]);

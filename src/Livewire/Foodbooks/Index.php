@@ -1298,8 +1298,11 @@ class Index extends Component
             // Betriebe — ein deaktivierter Standort soll nicht neu zugeordnet werden.
             'betriebe' => \Platform\FoodAlchemist\Models\FoodAlchemistOutlet::where('team_id', $team->id)
                 ->where('is_inactive', false)->orderBy('sort_order')->orderBy('name')->get(['id', 'name']),
-            // Konflikt-Hinweis kommt mit P3 (PortfolioService::konflikte) — bis dahin null.
-            'portfolioKonflikt' => null,
+            // Spec 33 P3: Hinweis, kein Verbot — zwei parallel laufende Ausgaben derselben
+            // Art in derselben Zuordnung können gewollt sein (Übergang, Sonderfall).
+            'portfolioKonflikt' => $fb === null ? null
+                : app(\Platform\FoodAlchemist\Services\PortfolioService::class)
+                    ->konfliktHinweis($team, 'foodbook', (int) $fb->id),
             // D (UX-Umbau): Kunden-Vorschau (Menü-Ansicht) mit aufgelöster Wording-Kette — dieselbe Quelle wie das Druck-Dokument
             'menue' => $menue,
             'feedbackAgg' => $feedbackAgg,

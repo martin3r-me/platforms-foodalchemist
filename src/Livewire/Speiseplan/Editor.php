@@ -327,7 +327,10 @@ class Editor extends Component
                     : $sp->gueltigVon()->format('d.m.Y') . ' – ' . $sp->gueltigBis()?->format('d.m.Y')
                       . ' (aus den Einträgen abgeleitet)'
             ),
-            'portfolioKonflikt' => null,   // kommt mit P3 (PortfolioService::konflikte)
+            // Spec 33 P3: Hinweis, kein Verbot.
+            'portfolioKonflikt' => $sp === null ? null
+                : app(\Platform\FoodAlchemist\Services\PortfolioService::class)
+                    ->konfliktHinweis($this->team(), 'speiseplan', (int) $sp->id),
             'linien' => $sp !== null ? $sp->lines : collect(),
             'wochenTage' => $wochenTage,
             'montagDt' => $montag,

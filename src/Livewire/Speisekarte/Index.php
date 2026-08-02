@@ -377,7 +377,10 @@ class Index extends Component
             // Spec 33 P5: Auswahl fürs Status-/Zuordnungs-Bauteil (nur aktive Betriebe).
             'betriebe' => \Platform\FoodAlchemist\Models\FoodAlchemistOutlet::where('team_id', $team->id)
                 ->where('is_inactive', false)->orderBy('sort_order')->orderBy('name')->get(['id', 'name']),
-            'portfolioKonflikt' => null,   // kommt mit P3 (PortfolioService::konflikte)
+            // Spec 33 P3: Hinweis, kein Verbot.
+            'portfolioKonflikt' => $karte === null ? null
+                : app(\Platform\FoodAlchemist\Services\PortfolioService::class)
+                    ->konfliktHinweis($team, 'speisekarte', (int) $karte->id),
         ])->layout('platform::layouts.app');
     }
 
