@@ -1,9 +1,13 @@
 <?php
 
+use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
 use Platform\FoodAlchemist\Livewire\Controlling\Cockpit;
 use Platform\FoodAlchemist\Livewire\Controlling\Panels\Portfolio;
+use Platform\FoodAlchemist\Livewire\Controlling\Panels\Promotion;
 use Platform\FoodAlchemist\Models\FoodAlchemistOutlet;
+use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
+use Platform\FoodAlchemist\Models\FoodAlchemistSalesFact;
 use Platform\FoodAlchemist\Services\SpeisekarteService;
 use Platform\FoodAlchemist\Services\SpeiseplanService;
 use Platform\FoodAlchemist\Tests\Support\SeedsTeamHierarchy;
@@ -141,4 +145,58 @@ it('zeigt keine fremden Ausgaben', function () {
     app(SpeisekarteService::class)->create($this->childB, ['name' => 'Fremde Karte', 'status' => 'aktiv']);
 
     Livewire::test(Portfolio::class)->assertDontSee('Fremde Karte');
+});
+
+// ── P6 · Promotion-Überwachung ────────────────────────────────────────────────
+
+it('hängt die Promotion-Überwachung vor das Menu-Engineering im Erfolg-Tab', function () {
+    Livewire::test(Cockpit::class)->call('setTab', 'erfolg')
+        ->assertSee('Was bringen die laufenden Ausgaben')
+        ->assertSeeHtml('data-ctrl-promotion');
+});
+
+it('nennt die Doppelzählung dort, wo die Zahlen stehen — nicht als Fußnote irgendwo', function () {
+    // Die Warnung darf nicht erst erscheinen, wenn der Fall eintritt: wer die Spalte liest,
+    // muss beim Lesen wissen, dass sich Ausgaben überlappen können.
+    $karte = app(SpeisekarteService::class)->create($this->rootTeam, [
+        'name' => 'Nordkarte', 'status' => 'aktiv', 'outlet_id' => $this->nord->id,
+    ]);
+    $rubrik = app(SpeisekarteService::class)->addRubrik($this->rootTeam, (int) $karte->id, ['name' => 'Speisen']);
+    $gericht = FoodAlchemistRecipe::create([
+        'team_id' => $this->rootTeam->id, 'recipe_key' => 'schnitzel', 'name' => 'Schnitzel',
+        'status' => 'approved', 'is_sales_recipe' => true, 'sales_unit_count' => 1,
+    ]);
+    DB::table('foodalchemist_menu_card_items')->insert([
+        'uuid' => (string) \Symfony\Component\Uid\UuidV7::generate(),
+        'team_id' => $this->rootTeam->id, 'section_id' => $rubrik->id,
+        'type' => 'gericht_ref', 'sales_recipe_id' => $gericht->id, 'position' => 1,
+        'created_at' => now(), 'updated_at' => now(),
+    ]);
+    FoodAlchemistSalesFact::create([
+        'team_id' => $this->rootTeam->id, 'recipe_id' => $gericht->id, 'raw_label' => 'Schnitzel',
+        'qty_sold' => 10, 'revenue_net' => 120.00, 'sold_at' => now()->subDay()->toDateString(),
+        'source' => 'csv_import', 'source_hash' => 'p6',
+    ]);
+
+    Livewire::test(Promotion::class)
+        ->assertSee('Nordkarte')
+        ->assertSee('davon exklusiv')
+        ->assertSee('sein Umsatz zählt dann');
+});
+
+it('sagt im Leerzustand, dass Verkaufs-Ist fehlt, statt Nullen zu zeigen', function () {
+    // Kritischer Punkt 3 der Spec: im Dev-Bestand gibt es kein Verkaufsjournal. Eine Tabelle
+    // voller 0,00 € wäre eine Aussage, die die Daten nicht hergeben.
+    Livewire::test(Promotion::class)
+        ->assertSeeHtml('data-ctrl-promo-hinweis')
+        ->assertSee('Kein Verkaufs-Ist');
+});
+
+it('rechnet zum gewählten Stichtag und findet über Heute zurück', function () {
+    Livewire::test(Promotion::class)
+        ->set('stichtag', '2026-01-15')
+        ->assertSee('15.01.2026')
+        ->call('heute')
+        ->assertSet('stichtag', '')
+        ->assertSee(now()->format('d.m.Y'));
 });

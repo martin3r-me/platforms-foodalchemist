@@ -140,6 +140,13 @@
             @endif
 
             @if($tab === 'erfolg')
+                {{-- Spec 33 P6: erst was die laufenden Ausgaben bringen, dann das Gericht-Detail.
+                     Die Ausgabe ist die Einheit, in der entschieden wird — das Gericht die, in
+                     der nachgesehen wird. --}}
+                <x-foodalchemist::modal-section title="Was bringen die laufenden Ausgaben">
+                    <livewire:foodalchemist.controlling.panels.promotion />
+                </x-foodalchemist::modal-section>
+
                 {{-- Kein „&amp;" im Titel: der Slot escaped den Wert erneut und im Kopf stand „&AMP;". --}}
                 <x-foodalchemist::modal-section title="Verkaufs-Ist und Menu-Engineering">
                     <livewire:foodalchemist.controlling.panels.erfolg />
