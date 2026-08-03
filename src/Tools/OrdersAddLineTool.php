@@ -24,11 +24,13 @@ class OrdersAddLineTool extends FoodAlchemistTool implements ToolContract, ToolM
 
     public function getDescription(): string
     {
-        return 'Fügt einen Lieferantenartikel manuell zur offenen Bestellschiene seines Lieferanten hinzu '
+        return 'Fügt einen Lieferantenartikel manuell zur offenen Bestellung seines Lieferanten hinzu '
             . '(Direktbestellung, ohne Ziel/Produktion). supplier_item_id = Lieferantenartikel-ID, '
-            . 'qty_packs = Anzahl Gebinde (manuelle Menge, bleibt beim Recompute stehen), note = optionale '
-            . 'Zeilen-Notiz. Legt die Draft-Schiene an, wenn nötig; erneuter Aufruf für denselben Artikel '
-            . 'setzt die Menge neu (idempotent). Liefert die Zeile + berührte order_id zurück.';
+            . 'qty_packs = Anzahl Gebinde (manuelle Menge, bleibt beim Recompute stehen), '
+            . 'desired_delivery_date (YYYY-MM-DD) = Liefertag der Ziel-Bestellung (optional; ohne Angabe: '
+            . 'undatierte Bestellung), note = optionale Zeilen-Notiz. Legt die Draft-Bestellung je '
+            . '(Lieferant, Liefertag) an, wenn nötig; erneuter Aufruf für denselben Artikel setzt die Menge '
+            . 'neu (idempotent). Liefert die Zeile + berührte order_id zurück.';
     }
 
     public function getSchema(): array
@@ -36,8 +38,9 @@ class OrdersAddLineTool extends FoodAlchemistTool implements ToolContract, ToolM
         return [
             'type' => 'object',
             'properties' => [
-                'supplier_item_id' => ['type' => 'integer', 'description' => 'Lieferantenartikel-ID (bestimmt den Lieferanten der Schiene)'],
+                'supplier_item_id' => ['type' => 'integer', 'description' => 'Lieferantenartikel-ID (bestimmt den Lieferanten der Bestellung)'],
                 'qty_packs' => ['type' => 'number', 'description' => 'Anzahl Gebinde (manuelle Menge)'],
+                'desired_delivery_date' => ['type' => 'string', 'description' => 'Liefertag YYYY-MM-DD (optional; wählt/legt die Bestellung des Lieferanten an diesem Tag)'],
                 'note' => ['type' => 'string', 'description' => 'Zeilen-Notiz (optional; "" löscht)'],
             ],
             'required' => ['supplier_item_id', 'qty_packs'],
@@ -58,6 +61,7 @@ class OrdersAddLineTool extends FoodAlchemistTool implements ToolContract, ToolM
                 (float) $arguments['qty_packs'],
                 array_key_exists('note', $arguments) ? (string) $arguments['note'] : null,
                 method_exists($context->user, 'getKey') ? (int) $context->user->getKey() : null,
+                array_key_exists('desired_delivery_date', $arguments) ? (string) $arguments['desired_delivery_date'] : null,
             );
         } catch (\RuntimeException $e) {
             return ToolResult::error($e->getMessage(), 'NOT_ALLOWED');

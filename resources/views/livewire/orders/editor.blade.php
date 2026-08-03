@@ -225,12 +225,12 @@
                     </x-slot:actions>
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
                         <div>
-                            <label class="text-[10px] text-gray-500">Anlass / Referenz</label>
-                            <input type="text" wire:model="formReference" class="{{ $input }}" placeholder="z. B. Sommerfest" />
+                            <label class="text-[10px] text-gray-500">Liefertag</label>
+                            <input type="date" wire:model="formDeliveryDate" class="{{ $input }}" />
                         </div>
                         <div>
-                            <label class="text-[10px] text-gray-500">Wunsch-Liefertermin</label>
-                            <input type="date" wire:model="formDeliveryDate" class="{{ $input }}" />
+                            <label class="text-[10px] text-gray-500">Anlass / Referenz</label>
+                            <input type="text" wire:model="formReference" class="{{ $input }}" placeholder="z. B. Sommerfest" />
                         </div>
                         <div class="md:col-span-3">
                             <label class="text-[10px] text-gray-500">Notiz</label>

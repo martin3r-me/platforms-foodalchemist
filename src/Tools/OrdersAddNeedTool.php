@@ -24,10 +24,11 @@ class OrdersAddNeedTool extends FoodAlchemistTool implements ToolContract, ToolM
 
     public function getDescription(): string
     {
-        return 'Übernimmt den Bedarf eines Ziels in die Bestellschienen je Lieferant (in ganzen Gebinden). '
+        return 'Übernimmt den Bedarf eines Ziels in die Bestellungen je Lieferant (in ganzen Gebinden). '
             . 'Ziel = concept_id + persons ODER recipe_id + portions ODER chapter_id + persons (Foodbook-Kapitel-Scope, '
             . 'variant_choices {gruppe: block_id} für Wahl-Gruppen). portions ist doppeldeutig: VK-Gericht = '
             . 'Portionen, Basisrezept = Anzahl Ansätze; beim Basisrezept alternativ amount_kg (Ziel-Kilogramm). '
+            . 'desired_delivery_date (YYYY-MM-DD) = Liefertag der Ziel-Bestellungen (optional; ohne Angabe: undatiert). '
             . 'source_ref = Quell-Kennung (z. B. "concept:12@100p"); gleiche Quelle erneut ⇒ ersetzt ihren Beitrag '
             . '(idempotent). Liefert die berührten order_ids + GPs ohne Lead-LA (skipped_ohne_la).';
     }
@@ -44,6 +45,7 @@ class OrdersAddNeedTool extends FoodAlchemistTool implements ToolContract, ToolM
                 'portions' => ['type' => 'number', 'description' => 'VK-Gericht: Portionen. Basisrezept: Anzahl Ansätze.'],
                 'amount_kg' => ['type' => 'number', 'description' => 'Nur Basisrezept: Ziel-Kilogramm (Alternative zu portions/Ansätze).'],
                 'variant_choices' => ['type' => 'object', 'description' => 'Nur chapter_id: {variant_group_id: block_id} je Wahl-Gruppe (Default: erster Block).'],
+                'desired_delivery_date' => ['type' => 'string', 'description' => 'Liefertag YYYY-MM-DD (optional; die Bestellungen je Lieferant werden an diesem Liefertag angelegt/getroffen)'],
                 'source_ref' => ['type' => 'string', 'description' => 'Quell-Kennung; Re-Import ersetzt diesen Schlüssel'],
                 'strategy' => ['type' => 'string', 'enum' => ['guenstigster_preis', 'stamm_lieferant', 'prioritaets_kette'], 'description' => 'Preisstrategie-Override für die Lead-LA-Wahl (Spec 20 · E3); weglassen = Team-Haupteinstellung. Übernahme landet dann in denselben Schienen wie orders.RESOURCE.'],
             ],
@@ -84,9 +86,10 @@ class OrdersAddNeedTool extends FoodAlchemistTool implements ToolContract, ToolM
         }
 
         $strategie = isset($arguments['strategy']) ? LeadLaStrategie::tryFrom((string) $arguments['strategy']) : null;
+        $liefertag = isset($arguments['desired_delivery_date']) ? (string) $arguments['desired_delivery_date'] : null;
 
         try {
-            $res = app(OrderService::class)->addNeedFromTarget($team, $ziel, (string) $arguments['source_ref'], null, $strategie);
+            $res = app(OrderService::class)->addNeedFromTarget($team, $ziel, (string) $arguments['source_ref'], null, $strategie, $liefertag);
         } catch (\Throwable $e) {
             return ToolResult::error($e->getMessage(), 'ERROR');
         }

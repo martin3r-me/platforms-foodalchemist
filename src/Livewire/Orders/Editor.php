@@ -217,7 +217,7 @@ class Editor extends Component
     public function artikelHinzufuegen(int $supplierItemId, OrderService $orders): void
     {
         $this->fuehreAus(function ($team) use ($orders, $supplierItemId) {
-            $line = $orders->addManualLine($team, $supplierItemId, 1.0, null, Auth::id());
+            $line = $orders->addManualLine($team, $supplierItemId, 1.0, null, Auth::id(), $this->formDeliveryDate ?: null);
             $this->orderId = (int) $line->order_id;
             $this->ladeKopf();
         }, 'Artikel hinzugefügt.');
@@ -276,7 +276,7 @@ class Editor extends Component
 
         try {
             $team = Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
-            $res = $orders->addNeedFromTarget($team, $ziel, $sourceRef, Auth::id());
+            $res = $orders->addNeedFromTarget($team, $ziel, $sourceRef, Auth::id(), null, $this->formDeliveryDate ?: null);
             if (! empty($res['orders'])) {
                 $this->orderId = (int) $res['orders'][0];
                 $this->ladeKopf();

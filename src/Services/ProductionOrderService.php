@@ -1013,13 +1013,15 @@ class ProductionOrderService
     public function anBestellungUebergeben(Team $team, int $orderId, OrderService $orders, ?int $userId = null): array
     {
         $order = FoodAlchemistProductionOrder::visibleToTeam($team)->findOrFail($orderId);
+        // Liefertag der Bestellung(en) = Produktions-/Einsatztag des Auftrags (Y-m-d oder null).
+        $liefertag = $order->production_date?->toDateString();
 
         $touched = [];
         $skipped = [];
         $warnungen = [];
         foreach (($order->targets ?? []) as $ziel) {
             $sourceRef = self::sourceRefFor($orderId, (string) ($ziel['source_ref'] ?? ''));
-            $res = $orders->addNeedFromTarget($team, Arr::except($ziel, ['source_ref', 'label']), $sourceRef, $userId);
+            $res = $orders->addNeedFromTarget($team, Arr::except($ziel, ['source_ref', 'label']), $sourceRef, $userId, null, $liefertag);
             $touched = array_merge($touched, $res['orders']);
             $skipped = array_merge($skipped, $res['skipped_ohne_la']);
             $warnungen = array_merge($warnungen, $res['warnungen']);

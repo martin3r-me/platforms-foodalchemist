@@ -87,6 +87,76 @@ it('draftForSupplier: nur EIN offener Draft je (team, supplier)', function () {
         ->and(FoodAlchemistOrder::where('supplier_id', $chefs->id)->where('status', 'draft')->count())->toBe(1);
 });
 
+it('draftForSupplier: Liefertag trennt offene Drafts je (team, supplier, Liefertag)', function () {
+    $chefs = FoodAlchemistSupplier::where('name', 'Chefs')->first();
+
+    $mo = $this->svc->draftForSupplier($this->rootTeam, $chefs->id, '2026-08-03');
+    $moWieder = $this->svc->draftForSupplier($this->rootTeam, $chefs->id, '2026-08-03');
+    $do = $this->svc->draftForSupplier($this->rootTeam, $chefs->id, '2026-08-06');
+    $undatiert = $this->svc->draftForSupplier($this->rootTeam, $chefs->id, null);
+
+    expect($mo->id)->toBe($moWieder->id)           // gleicher Liefertag ⇒ dieselbe Bestellung
+        ->and($do->id)->not->toBe($mo->id)         // anderer Liefertag ⇒ getrennte Bestellung
+        ->and($undatiert->id)->not->toBe($mo->id)  // undatiert ⇒ eigener Bucket
+        ->and($mo->desired_delivery_date?->toDateString())->toBe('2026-08-03')
+        ->and(FoodAlchemistOrder::where('supplier_id', $chefs->id)->where('status', 'draft')->count())->toBe(3);
+});
+
+it('addNeedFromTarget: Liefertag landet an der Bestellung + trennt Bestellungen desselben Lieferanten', function () {
+    // Dasselbe Ziel an zwei Liefertagen (eigene source_refs) ⇒ zwei getrennte Chefs-Bestellungen.
+    $this->svc->addNeedFromTarget($this->rootTeam, $this->ziel, 'recipe:kuchen@mo', null, null, '2026-08-03');
+    $this->svc->addNeedFromTarget($this->rootTeam, $this->ziel, 'recipe:kuchen@do', null, null, '2026-08-06');
+
+    $chefsBestellungen = FoodAlchemistOrder::whereHas('supplier', fn ($q) => $q->where('name', 'Chefs'))
+        ->where('status', 'draft')->orderBy('desired_delivery_date')->get();
+
+    expect($chefsBestellungen)->toHaveCount(2)
+        ->and($chefsBestellungen->pluck('desired_delivery_date')->map->toDateString()->all())->toBe(['2026-08-03', '2026-08-06'])
+        ->and((float) $chefsBestellungen[0]->total_net)->toBe(21.0)   // je Liefertag der volle Bedarf
+        ->and((float) $chefsBestellungen[1]->total_net)->toBe(21.0);
+});
+
+it('updateHeader: Liefertag-Wechsel auf belegten (Lieferant, Tag) ⇒ Kollisions-Fehler (kein Auto-Merge)', function () {
+    $chefs = FoodAlchemistSupplier::where('name', 'Chefs')->first();
+    $this->svc->draftForSupplier($this->rootTeam, $chefs->id, '2026-08-03');
+    $do = $this->svc->draftForSupplier($this->rootTeam, $chefs->id, '2026-08-06');
+
+    // $do auf den bereits belegten Montag umdatieren ⇒ Kollision.
+    expect(fn () => $this->svc->updateHeader($this->rootTeam, $do->id, ['desired_delivery_date' => '2026-08-03']))
+        ->toThrow(\RuntimeException::class);
+
+    // Freier Tag ist ok.
+    $this->svc->updateHeader($this->rootTeam, $do->id, ['desired_delivery_date' => '2026-08-07']);
+    expect($do->refresh()->desired_delivery_date?->toDateString())->toBe('2026-08-07');
+});
+
+it('UI: Index filtert nach Liefertag-Fenster + gruppiert; Basis-Umschalter auf Bestelldatum', function () {
+    $this->actingAs($this->makeUser($this->rootTeam));
+    $chefs = FoodAlchemistSupplier::where('name', 'Chefs')->first();
+    $hanos = FoodAlchemistSupplier::where('name', 'Hanos')->first();
+
+    $mo = $this->svc->createDraft($this->rootTeam, $chefs->id, ['desired_delivery_date' => '2026-08-03'], null);
+    $do = $this->svc->createDraft($this->rootTeam, $hanos->id, ['desired_delivery_date' => '2026-08-06'], null);
+
+    // Liefertag-Fenster nur Montag ⇒ nur die Montags-Bestellung sichtbar.
+    Livewire::test(OrdersIndex::class)
+        ->set('von', '2026-08-03')->set('bis', '2026-08-03')
+        ->assertSee('ord-' . $mo->id)
+        ->assertDontSee('ord-' . $do->id);
+
+    // Ohne Fenster: beide sichtbar, nach Liefertag gruppiert (Datum als Zelle sichtbar).
+    Livewire::test(OrdersIndex::class)
+        ->assertSee('ord-' . $mo->id)
+        ->assertSee('ord-' . $do->id)
+        ->assertSee('03.08.2026');
+
+    // Basis-Umschalter auf Bestelldatum bricht das Rendern nicht (beide angelegt = heute).
+    Livewire::test(OrdersIndex::class)
+        ->set('datumsbasis', 'bestelldatum')
+        ->assertSee('ord-' . $mo->id)
+        ->assertSee('ord-' . $do->id);
+});
+
 it('addNeedFromTarget: je Lieferant eine Schiene, Gebinde-Zeilen + total_net (echte Gebinde)', function () {
     $res = $this->svc->addNeedFromTarget($this->rootTeam, $this->ziel, 'recipe:kuchen@100');
 

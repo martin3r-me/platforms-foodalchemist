@@ -39,13 +39,22 @@ class OrderService
 
     // ── Schiene holen/anlegen ─────────────────────────────────────────────
 
-    /** Ein-offener-draft-Guard je (team, supplier): Transaktion + Lock gegen Doppelklick. */
-    public function draftForSupplier(Team $team, int $supplierId, ?int $userId = null): FoodAlchemistOrder
+    /**
+     * Ein-offener-draft-Guard je (team, supplier, Liefertag): Transaktion + Lock gegen
+     * Doppelklick. `$deliveryDate` = Liefertag (Y-m-d) oder null (undatierter Bucket) — so
+     * koexistieren mehrere offene Bestellungen desselben Lieferanten für verschiedene
+     * Liefertage. Der Liefertag ist damit Teil des Schlüssels, nicht nur ein Kopf-Feld.
+     */
+    public function draftForSupplier(Team $team, int $supplierId, ?string $deliveryDate = null, ?int $userId = null): FoodAlchemistOrder
     {
-        return DB::transaction(function () use ($team, $supplierId, $userId) {
+        $deliveryDate = ($deliveryDate !== null && $deliveryDate !== '') ? $deliveryDate : null;
+
+        return DB::transaction(function () use ($team, $supplierId, $deliveryDate, $userId) {
             $draft = FoodAlchemistOrder::where('team_id', $team->id)
                 ->where('supplier_id', $supplierId)
                 ->where('status', OrderStatus::Draft->value)
+                ->when($deliveryDate !== null, fn ($q) => $q->whereDate('desired_delivery_date', $deliveryDate))
+                ->when($deliveryDate === null, fn ($q) => $q->whereNull('desired_delivery_date'))
                 ->lockForUpdate()
                 ->first();
 
@@ -53,6 +62,7 @@ class OrderService
                 'team_id' => $team->id,
                 'supplier_id' => $supplierId,
                 'status' => OrderStatus::Draft->value,
+                'desired_delivery_date' => $deliveryDate,
                 'created_by' => $userId,
                 'total_net' => 0,
             ]);
@@ -68,10 +78,13 @@ class OrderService
      * Spec 20 · E3: optionaler $strategieOverride (Preisstrategie) steuert die Lead-LA-Wahl
      * des Vorschlags — so wechselt die Übernahme dieselbe Schiene wie eine spätere „Neu quellen".
      *
+     * $deliveryDate (Liefertag, Y-m-d oder null) bestimmt, in welche Bestellung je Lieferant der
+     * Bedarf läuft — Bestellungen sind je (Lieferant, Liefertag) getrennt.
+     *
      * @param  array{concept_id?:int, recipe_id?:int, persons?:int|float, portions?:int|float}  $ziel
      * @return array{orders:list<int>, skipped_ohne_la:list<string>, warnungen:list<string>}
      */
-    public function addNeedFromTarget(Team $team, array $ziel, string $sourceRef, ?int $userId = null, ?LeadLaStrategie $strategieOverride = null): array
+    public function addNeedFromTarget(Team $team, array $ziel, string $sourceRef, ?int $userId = null, ?LeadLaStrategie $strategieOverride = null, ?string $deliveryDate = null): array
     {
         $vorschlag = $this->planung->bestellvorschlag($team, $ziel, $strategieOverride);
         $touched = [];
@@ -84,7 +97,7 @@ class OrderService
 
                 continue;
             }
-            $draft = $this->draftForSupplier($team, (int) $supplierId, $userId);
+            $draft = $this->draftForSupplier($team, (int) $supplierId, $deliveryDate, $userId);
             foreach ($grp['positionen'] as $pos) {
                 $this->upsertContribution($team, $draft, $pos, $sourceRef);
             }
@@ -238,8 +251,8 @@ class OrderService
     /**
      * Spec 20 · E2 — „Neue Bestellung": eine (leere) Draft-Schiene für einen Lieferanten
      * anlegen bzw. die bestehende offene zurückgeben (findOrCreate, idempotent je (team,
-     * supplier)). Nur team-sichtbare Lieferanten (D1). Optionale Kopf-Felder werden direkt
-     * gesetzt (reference/desired_delivery_date/note).
+     * supplier, Liefertag)). Nur team-sichtbare Lieferanten (D1). Optionale Kopf-Felder werden
+     * direkt gesetzt (reference/desired_delivery_date/note); der Liefertag ist Teil des Schlüssels.
      *
      * @param  array{reference?:?string, desired_delivery_date?:?string, note?:?string}  $header
      */
@@ -249,9 +262,11 @@ class OrderService
         if ($supplier === null) {
             throw new \RuntimeException('Lieferant nicht gefunden.');
         }
-        $draft = $this->draftForSupplier($team, (int) $supplier->id, $userId);
+        // Liefertag ist Teil des Draft-Schlüssels → schon beim find-or-create setzen.
+        $deliveryDate = ($header['desired_delivery_date'] ?? null) ?: null;
+        $draft = $this->draftForSupplier($team, (int) $supplier->id, $deliveryDate, $userId);
 
-        $kopf = array_intersect_key($header, array_flip(['reference', 'desired_delivery_date', 'note']));
+        $kopf = array_intersect_key($header, array_flip(['reference', 'note']));
         if ($kopf !== []) {
             $draft = $this->updateHeader($team, (int) $draft->id, $kopf);
         }
@@ -268,7 +283,7 @@ class OrderService
      * Artikel bereits eine Zeile in der Schiene, wird deren Menge manuell übersteuert
      * (Setter-Semantik, idempotent) statt eine Dublette anzulegen.
      */
-    public function addManualLine(Team $team, int $supplierItemId, float $qtyPacks, ?string $note = null, ?int $userId = null): FoodAlchemistOrderLine
+    public function addManualLine(Team $team, int $supplierItemId, float $qtyPacks, ?string $note = null, ?int $userId = null, ?string $deliveryDate = null): FoodAlchemistOrderLine
     {
         // D1: nur team-sichtbare Artikel (eigenes Team + Master-Kette/Seed) sind bestellbar.
         $la = FoodAlchemistSupplierItem::visibleToTeam($team)->with('structure')->find($supplierItemId);
@@ -279,7 +294,7 @@ class OrderService
             throw new \RuntimeException('Lieferantenartikel ohne Lieferant — nicht bestellbar.');
         }
         $qty = max(0.0, (float) $qtyPacks);
-        $draft = $this->draftForSupplier($team, (int) $la->supplier_id, $userId);
+        $draft = $this->draftForSupplier($team, (int) $la->supplier_id, $deliveryDate, $userId);
 
         $line = FoodAlchemistOrderLine::where('order_id', $draft->id)
             ->where('supplier_item_id', $la->id)
@@ -326,7 +341,19 @@ class OrderService
             $order->note = ($input['note'] ?? '') !== '' ? $input['note'] : null;
         }
         if (array_key_exists('desired_delivery_date', $input)) {
-            $order->desired_delivery_date = ($input['desired_delivery_date'] ?? '') !== '' ? $input['desired_delivery_date'] : null;
+            $neuerLiefertag = ($input['desired_delivery_date'] ?? '') !== '' ? $input['desired_delivery_date'] : null;
+            // Liefertag ist Teil des Draft-Schlüssels: kein zweiter offener Entwurf je (Lieferant, Liefertag).
+            $kollision = FoodAlchemistOrder::where('team_id', $team->id)
+                ->where('supplier_id', $order->supplier_id)
+                ->where('status', OrderStatus::Draft->value)
+                ->where('id', '!=', $order->id)
+                ->when($neuerLiefertag !== null, fn ($q) => $q->whereDate('desired_delivery_date', $neuerLiefertag))
+                ->when($neuerLiefertag === null, fn ($q) => $q->whereNull('desired_delivery_date'))
+                ->exists();
+            if ($kollision) {
+                throw new \RuntimeException('Für diesen Lieferanten gibt es an diesem Liefertag bereits eine offene Bestellung.');
+            }
+            $order->desired_delivery_date = $neuerLiefertag;
         }
         $order->save();
 
@@ -571,15 +598,38 @@ class OrderService
 
     // ── Lesen / Aggregate ─────────────────────────────────────────────────
 
-    /** @return Collection<int, FoodAlchemistOrder> */
-    public function listForTeam(Team $team, ?string $status = null): Collection
+    /**
+     * Bestell-Liste fürs Team, optional nach Status + Datumsfenster gefiltert.
+     * `$filters`: datumsbasis ('liefertag'|'bestelldatum'), von/bis (Y-m-d oder null).
+     *  • liefertag   → Fenster/Sortierung auf `desired_delivery_date` (aufsteigend, undatiert ans Ende);
+     *  • bestelldatum → Fenster/Sortierung auf `created_at` (angelegt, absteigend).
+     *
+     * @param  array{datumsbasis?:string, von?:?string, bis?:?string}  $filters
+     * @return Collection<int, FoodAlchemistOrder>
+     */
+    public function listForTeam(Team $team, ?string $status = null, array $filters = []): Collection
     {
-        return FoodAlchemistOrder::visibleToTeam($team)
+        $basis = ($filters['datumsbasis'] ?? 'liefertag') === 'bestelldatum' ? 'bestelldatum' : 'liefertag';
+        $spalte = $basis === 'bestelldatum' ? 'created_at' : 'desired_delivery_date';
+        $von = ($filters['von'] ?? null) ?: null;
+        $bis = ($filters['bis'] ?? null) ?: null;
+
+        $q = FoodAlchemistOrder::visibleToTeam($team)
             ->with('supplier:id,name')
             ->when($status !== null, fn ($q) => $q->where('status', $status))
-            ->orderByRaw("CASE status WHEN 'draft' THEN 0 ELSE 1 END")
-            ->orderByDesc('updated_at')
-            ->get();
+            ->when($von !== null, fn ($q) => $q->whereDate($spalte, '>=', $von))
+            ->when($bis !== null, fn ($q) => $q->whereDate($spalte, '<=', $bis));
+
+        if ($basis === 'bestelldatum') {
+            $q->orderByDesc('created_at');
+        } else {
+            // Liefertag aufsteigend (anstehende zuerst), undatierte ans Ende, dann jüngste zuerst.
+            $q->orderByRaw('desired_delivery_date IS NULL')
+                ->orderBy('desired_delivery_date')
+                ->orderByDesc('updated_at');
+        }
+
+        return $q->get();
     }
 
     /** Detail-Aggregat für UI/MCP inkl. MOQ-Ampel. */

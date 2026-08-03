@@ -11,17 +11,20 @@ Zwei Tätigkeiten, zwei Orte.
 
 ---
 
-## Bestellschienen
+## Bestellungen
 
-Eine Bestellung entsteht nicht als Formular, sondern als **Schiene je Lieferant**: ein offener
-Entwurf, in den Bedarf hineinläuft, bis du ihn absendest.
+Eine Bestellung entsteht nicht als Formular, sondern als offener Entwurf je **Lieferant und
+Liefertag**, in den Bedarf hineinläuft, bis du ihn absendest. Der **Liefertag** trennt die
+Bestellungen: derselbe Lieferant kann für Montag und für Donnerstag je eine eigene offene
+Bestellung haben. Bedarf, der aus der Produktion kommt, landet automatisch in der Bestellung des
+passenden Liefertags (= Produktions-/Einsatztag des Auftrags).
 
 Bedarf kommt aus drei Richtungen:
 
 | Woher | Wie |
 |-------|-----|
-| **Produktion** | Aus dem Planungsblatt: „＋ Bedarf in Bestellschiene" rechnet die Rezepturen auf Gebinde herunter. |
-| **Preisvergleich** | Aus dem Controlling: „→ Schiene" legt einen einzelnen Artikel dazu. |
+| **Produktion** | Aus dem Planungsblatt: „＋ Bedarf in Bestellung" rechnet die Rezepturen auf Gebinde herunter (Liefertag = Produktionstag). |
+| **Preisvergleich** | Aus dem Controlling: „→ Bestellung" legt einen einzelnen Artikel dazu. |
 | **von Hand** | Sonderbedarf direkt in der Bestellung erfassen. |
 
 Gerechnet wird in **Gebinden**, nicht in Kilogramm — bestellt wird, was der Lieferant liefert.
@@ -29,6 +32,14 @@ Die Rundung passiert auf dem Gesamtbedarf je Grundprodukt, nicht je Quelle; sons
 aufgerundet, wenn derselbe Artikel aus Produktion und Handeingabe kommt.
 
 Eine Ampel zeigt, ob die Mindestbestellmenge erreicht ist.
+
+### Übersicht: nach Liefertag
+
+Der Bestell-Browser stellt die **einzelnen Bestellungen** in den Vordergrund, nicht den
+Lieferanten. Gefiltert und sortiert wird nach **Liefertag** (Standard, nach Tag gruppiert) oder
+umgeschaltet nach **Bestelldatum** (angelegt). Ein Zeitraum-Schnellfilter (heute, diese/nächste
+Woche) und ein freies von/bis-Fenster grenzen die Liste ein; Lieferant, Status und Freitext
+bleiben als Zusatzfilter. Bearbeitet wird jede Bestellung im Vollbild-Editor.
 
 ---
 

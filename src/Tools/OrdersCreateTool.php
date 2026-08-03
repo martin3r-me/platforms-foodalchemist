@@ -9,11 +9,12 @@ use Platform\Core\Contracts\ToolResult;
 use Platform\FoodAlchemist\Services\OrderService;
 
 /**
- * Spec 20 · E2 (write): „Neue Bestellung" — eine (leere) Draft-Bestellschiene für einen
- * Lieferanten anlegen bzw. die bestehende offene zurückgeben (findOrCreate je (team,
- * supplier), idempotent). Nur team-sichtbare Lieferanten. Optionale Kopf-Felder (Anlass,
- * Wunsch-Liefertermin, Notiz) werden direkt gesetzt. Zeilen kommen danach über ADD_LINE
- * (manuell) bzw. ADD_NEED (aus einem Ziel).
+ * Spec 20 · E2 (write): „Neue Bestellung" — eine (leere) Draft-Bestellung für einen
+ * Lieferanten an einem Liefertag anlegen bzw. die bestehende offene zurückgeben (findOrCreate
+ * je (team, supplier, Liefertag), idempotent). Der Liefertag (desired_delivery_date) trennt
+ * die Bestellungen: derselbe Lieferant kann pro Liefertag eine eigene offene Bestellung haben.
+ * Nur team-sichtbare Lieferanten. Optionale Kopf-Felder (Anlass, Notiz) werden direkt gesetzt.
+ * Zeilen kommen danach über ADD_LINE (manuell) bzw. ADD_NEED (aus einem Ziel).
  */
 class OrdersCreateTool extends FoodAlchemistTool implements ToolContract, ToolMetadataContract
 {
@@ -24,10 +25,11 @@ class OrdersCreateTool extends FoodAlchemistTool implements ToolContract, ToolMe
 
     public function getDescription(): string
     {
-        return 'Legt eine offene Bestellschiene (Draft) für einen Lieferanten an oder gibt die '
-            . 'bestehende offene zurück (findOrCreate, idempotent je Lieferant). supplier_id = Lieferant, '
-            . 'optional reference (Anlass), desired_delivery_date (YYYY-MM-DD), note. Liefert order_id + '
-            . 'Status. Zeilen danach via orders.ADD_LINE (manueller Artikel) oder orders.ADD_NEED (aus Ziel).';
+        return 'Legt eine offene Bestellung (Draft) für einen Lieferanten an einem Liefertag an oder '
+            . 'gibt die bestehende offene zurück (findOrCreate, idempotent je (Lieferant, Liefertag)). '
+            . 'supplier_id = Lieferant, desired_delivery_date (YYYY-MM-DD) = Liefertag (trennt Bestellungen '
+            . 'desselben Lieferanten), optional reference (Anlass), note. Liefert order_id + Status. '
+            . 'Zeilen danach via orders.ADD_LINE (manueller Artikel) oder orders.ADD_NEED (aus Ziel).';
     }
 
     public function getSchema(): array
@@ -37,7 +39,7 @@ class OrdersCreateTool extends FoodAlchemistTool implements ToolContract, ToolMe
             'properties' => [
                 'supplier_id' => ['type' => 'integer'],
                 'reference' => ['type' => 'string', 'description' => 'Anlass (optional)'],
-                'desired_delivery_date' => ['type' => 'string', 'description' => 'Wunsch-Liefertermin YYYY-MM-DD (optional)'],
+                'desired_delivery_date' => ['type' => 'string', 'description' => 'Liefertag YYYY-MM-DD (optional; trennt Bestellungen desselben Lieferanten)'],
                 'note' => ['type' => 'string', 'description' => 'Notiz (optional)'],
             ],
             'required' => ['supplier_id'],
@@ -86,7 +88,7 @@ class OrdersCreateTool extends FoodAlchemistTool implements ToolContract, ToolMe
             'category' => 'command',
             'tags' => ['foodalchemist', 'bestellung', 'order', 'direktbestellung', 'einkauf', 'schiene'],
             'read_only' => false,
-            'idempotent' => true,   // findOrCreate je (team, supplier)
+            'idempotent' => true,   // findOrCreate je (team, supplier, Liefertag)
             'risk_level' => 'low',
         ];
     }
