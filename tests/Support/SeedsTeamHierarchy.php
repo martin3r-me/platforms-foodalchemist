@@ -259,7 +259,7 @@ trait SeedsTeamHierarchy
 
     /**
      * Konzept, das die Tranche-C-Checks (Spec 21 · S4a) ÜBERHAUPT erreichen: Status
-     * `aktiv` = „in Gebrauch". Bewusst nicht `draft` — die Checks messen nur benutzte
+     * `active` = „in Gebrauch". Bewusst nicht `draft` — die Checks messen nur benutzte
      * Konzepte, ein Entwurf wäre für jeden Positivfall unsichtbar. Wer den Negativfall
      * „Entwurf zählt nicht" prüfen will, setzt `status` explizit auf `draft`.
      *
@@ -272,7 +272,7 @@ trait SeedsTeamHierarchy
         return \Platform\FoodAlchemist\Models\FoodAlchemistConcept::create(array_merge([
             'team_id' => $owner->id,
             'name' => $name,
-            'status' => 'aktiv',
+            'status' => 'active',
             'is_template' => false,
         ], $attrs));
     }

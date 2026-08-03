@@ -3,6 +3,7 @@
 namespace Platform\FoodAlchemist\Services;
 
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
 use Platform\FoodAlchemist\Models\FoodAlchemistDishIdea;
@@ -335,6 +336,97 @@ class IdeenService
         ];
     }
 
+    /**
+     * Concept-Divergenz (P1b): KI erfindet freie Gericht-Skizzen für EIN Konzept — produkt-blind,
+     * erdet NICHTS (das macht der Fan-out beim Go). Spiegelt {@see kiDivergenz} (Kapitel), aber
+     * owner=concept: lädt das Konzept + dessen PlanningFrame (owner_type='concept', vom Concept-
+     * Generator angelegt) als Rahmen; nutzt denselben produkt-blinden Prompt `foodbook.kapitel_ideen`.
+     * Legt bis zu `$anzahl` Entwurf-Skizzen mit `concept_id` an (Owner-XOR trägt concept bereits).
+     *
+     * Ohne LLM-Provider wirft `propose()` typisiert — der Aufrufer (Fan-out) fängt das graceful ab.
+     *
+     * @return array{angelegt: list<FoodAlchemistDishIdea>, roh: int, confidence: ?float, call_log_id: ?int}
+     */
+    public function kiDivergenzConcept(Team $team, int $conceptId, int $anzahl = 5, ?string $slotRolle = null, ?int $trendDocId = null): array
+    {
+        $anzahl = max(1, min(12, $anzahl));
+
+        $concept = FoodAlchemistConcept::visibleToTeam($team)->findOrFail($conceptId);
+        if (! $concept->isOwnedBy($team)) {
+            throw new \RuntimeException('Geerbtes Konzept — KI-Divergenz nur durchs Besitzer-Team (D1).');
+        }
+
+        $frameSvc = app(PlanningFrameService::class);
+        $frame = $frameSvc->find('concept', $conceptId);
+
+        $beschreibung = trim(implode(' ', array_filter([
+            (string) $concept->name, (string) ($concept->brief ?? ''), (string) ($concept->description ?? ''),
+        ])));
+        // Wissen+Trend verdrahten: voller Food-/Concept-/Domain-Stack (concept.plan) + generisches
+        // Trendradar-Wissen (concept.brief_geruest = trend/discovery) + der KONKRETE Ursprungs-Trend
+        // dieser Planung (per ID). concept.brief_geruest allein liefert NUR Trend, kein Food-Wissen.
+        $kctx = app(KnowledgeContextService::class);
+        $plan = $kctx->contextFor('concept.plan', $beschreibung);
+        $trend = $kctx->contextFor('concept.brief_geruest', $beschreibung);
+        $ursprung = $trendDocId !== null ? $this->ursprungsTrendBlock($team, $trendDocId) : null;
+        $wissen = [
+            'block' => implode("\n\n", array_filter([$plan['block'] ?? '', $trend['block'] ?? '', $ursprung], fn ($b) => is_string($b) && $b !== '')),
+            'files_used' => array_values(array_unique(array_merge($plan['files_used'] ?? [], $trend['files_used'] ?? []))),
+        ];
+
+        $kontext = [
+            'kapitel' => (string) $concept->name,   // produkt-blindes Prompt-Feld — hier trägt es das Konzept
+            'kapitel_beschreibung' => $this->clean($concept->brief ?? $concept->description),
+            'slot_rolle' => $slotRolle,
+            'anzahl' => $anzahl,
+            'ziele' => array_filter([
+                'target_price_pp' => $frame?->target_price_pp,
+                'price_min_pp' => $frame?->price_min_pp,
+                'price_max_pp' => $frame?->price_max_pp,
+                'level' => $concept->level,
+            ], fn ($v) => $v !== null && $v !== ''),
+            'rahmen' => $frame !== null ? $frameSvc->promptKontext($frame) : null,
+        ];
+
+        $proposal = app(AiGatewayService::class)->propose('foodbook.kapitel_ideen', $kontext, array_filter([
+            'knowledge' => ($wissen['block'] ?? '') !== '' ? $wissen['block'] : null,
+            'knowledge_used' => $wissen['files_used'] ?? null,
+        ], fn ($v) => $v !== null));
+
+        $rohe = is_array($proposal->werte['ideen'] ?? null) ? $proposal->werte['ideen'] : [];
+        $owner = ['chapter_id' => null, 'concept_id' => $conceptId, 'planning_session_id' => null];
+        $angelegt = [];
+        foreach ($rohe as $i) {
+            if (! is_array($i)) {
+                continue;
+            }
+            $titel = trim((string) ($i['titel'] ?? $i['title'] ?? ''));
+            if ($titel === '') {
+                continue;
+            }
+            $angelegt[] = FoodAlchemistDishIdea::create([
+                'team_id' => $team->id,
+                'chapter_id' => null,
+                'concept_id' => $conceptId,
+                'position' => $this->naechstePosition($team, $owner, FoodAlchemistDishIdea::class),
+                'title' => $titel,
+                'description' => $this->clean($i['beschreibung'] ?? $i['description'] ?? null),
+                'sales_recipe_id' => null,
+                'target_form' => 'einzel',
+                'group_id' => null,
+                'status' => 'entwurf',
+                'created_via' => 'ai_gateway',
+                'source_meta' => [
+                    'quelle' => 'ki_divergenz_concept',
+                    'confidence' => $proposal->confidence,
+                    'call_log_id' => $proposal->callLogId,
+                ],
+            ]);
+        }
+
+        return ['angelegt' => $angelegt, 'roh' => count($rohe), 'confidence' => $proposal->confidence, 'call_log_id' => $proposal->callLogId];
+    }
+
     // ── Helpers ──────────────────────────────────────────────────────────────
 
     /**
@@ -479,6 +571,28 @@ class IdeenService
         $s = trim((string) ($wert ?? ''));
 
         return $s === '' ? null : $s;
+    }
+
+    /**
+     * Der KONKRETE Ursprungs-Trend einer Planung (per knowledge_documents.id) als Kontext-Block —
+     * additiv zum generischen thematischen Trend-Discovery. Ohne den würde der Ausgangs-Trend, aus dem
+     * die Planung gestartet wurde, evtl. gar nicht in der Divergenz landen. Frontmatter gestrippt, gekürzt.
+     */
+    private function ursprungsTrendBlock(Team $team, int $docId): ?string
+    {
+        $doc = DB::table('foodalchemist_knowledge_documents')
+            ->where('id', $docId)->where('category', 'trend')->whereNull('deleted_at')
+            ->first(['title', 'content_md']);
+        if ($doc === null) {
+            return null;
+        }
+        $body = preg_replace('/\A\x{FEFF}?\s*---\R.*?\R---\R?/su', '', (string) ($doc->content_md ?? '')) ?? '';
+        $body = trim($body);
+        if ($body === '') {
+            return null;
+        }
+
+        return "# URSPRUNGS-TREND (Ausgangspunkt dieser Planung)\n## {$doc->title}\n\n" . mb_substr($body, 0, 1500);
     }
 
     private function preis(mixed $wert): ?float

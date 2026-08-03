@@ -243,6 +243,22 @@ class SpeisekarteService
 
     private const RUBRIK_FELDER = ['title', 'consumer_title', 'claim', 'description', 'art', 'preis_anzeige', 'status'];
 
+    /**
+     * Rubrik für einen Voll-Kaskade-Frame-Slot (P4): findet die Rubrik per Titel oder legt sie an
+     * (idempotent — ein zweiter Kaskaden-Lauf mintet keine Dublette). Gibt die Rubrik-ID zurück.
+     */
+    public function rubrikFuerSlot(Team $team, int $karteId, string $title): int
+    {
+        $title = trim($title) !== '' ? trim($title) : 'Rubrik';
+        $bestehend = FoodAlchemistSpeisekarteRubrik::where('menu_card_id', $karteId)
+            ->where('title', $title)->whereNull('deleted_at')->first(['id']);
+        if ($bestehend !== null) {
+            return (int) $bestehend->id;
+        }
+
+        return (int) $this->addRubrik($team, $karteId, ['title' => $title])->id;
+    }
+
     public function updateRubrik(Team $team, int $id, array $in): FoodAlchemistSpeisekarteRubrik
     {
         $rubrik = $this->ownedRubrik($team, $id);

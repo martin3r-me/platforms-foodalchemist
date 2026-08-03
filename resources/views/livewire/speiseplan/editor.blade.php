@@ -12,8 +12,14 @@
     <x-slot:actions>
         @if($sp)
             <button type="button" wire:click="speichern" class="{{ $btnPrimary }}" data-sp-speichern>Speichern</button>
+            {{-- P5: Voll-Kaskade — leere Zellen (Mo–Fr × Mittag × Linien) mit erfundenen Gerichten füllen. --}}
+            <button type="button" wire:click="vollKaskadeStarten" class="{{ $btnPrimary }}" wire:loading.attr="disabled" data-sp-voll-kaskade>
+                <span wire:loading.remove wire:target="vollKaskadeStarten">@svg('heroicon-o-bolt', 'w-4 h-4 inline-block align-middle') Voll-Kaskade</span>
+                <span wire:loading wire:target="vollKaskadeStarten">Starte …</span>
+            </button>
             <button type="button" wire:click="loeschen({{ $sp->id }})" wire:confirm="Speiseplan löschen?" class="{{ $btnGhostXs }} text-red-600" data-sp-loeschen>Löschen</button>
             @if($ausrollenInfo)<span class="text-[12px] text-violet-300 ml-2 self-center" data-sp-ausrollen-info>{{ $ausrollenInfo }}</span>@endif
+            @if($kaskadeMeldung)<span class="text-[12px] text-amber-300 ml-2 self-center">{{ $kaskadeMeldung }}</span>@endif
             @if($prodHinweis)<span class="text-[12px] text-emerald-300 ml-2 self-center" data-sp-prod-hinweis>✓ {{ $prodHinweis }}</span>@endif
             @if($prodFehler)<span class="text-[12px] text-rose-300 ml-2 self-center" data-sp-prod-fehler>{{ $prodFehler }}</span>@endif
         @endif

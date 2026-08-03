@@ -406,6 +406,18 @@
                         @endif
                     </div>
 
+                    {{-- P3: Voll-Kaskade — Foodbook-Gerüst → je Slot ein Konzept (an sein Kapitel gehängt) + Gericht-Fan-out.
+                         Legt eine Planungs-Session an und öffnet den Planung-Editor (Live-Fortschritt + Freigabe). --}}
+                    <div class="space-y-1.5">
+                        <button type="button" wire:click="vollKaskadeStarten" class="{{ $btnPrimary }} w-full justify-center" wire:loading.attr="disabled" data-voll-kaskade>
+                            <span wire:loading.remove wire:target="vollKaskadeStarten">@svg('heroicon-o-bolt', 'w-4 h-4') Voll-Kaskade — je Kapitel ein Konzept + Gerichte erfinden</span>
+                            <span wire:loading wire:target="vollKaskadeStarten">Starte Kaskade …</span>
+                        </button>
+                        @if($kaskadeMeldung !== null)
+                            <div class="rounded-lg bg-amber-500/10 border border-amber-500/30 px-2.5 py-1.5 text-[11px] text-amber-700">{{ $kaskadeMeldung }}</div>
+                        @endif
+                    </div>
+
                     {{-- R4.2: Soll/Ist-Coverage live beim Befüllen — Lücken-Klick öffnet den VK-Browser gefiltert --}}
                     @if(($coverage ?? null) !== null && $coverage['hat_geruest'])
                         @include('foodalchemist::livewire.planning.partials.coverage-panel', ['coverageFillRoute' => route('foodalchemist.verkauf.index')])

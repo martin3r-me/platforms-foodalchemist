@@ -218,7 +218,15 @@
                 <div class="flex items-center gap-2 mb-3">
                     <input type="text" wire:model="neueRubrik" wire:keydown.enter="rubrikNeu" placeholder="Neue Rubrik (z. B. Vorspeisen) …" class="{{ $input }} max-w-xs" />
                     <button type="button" wire:click="rubrikNeu" class="{{ $btnGhost }}">+ Rubrik</button>
+                    {{-- P4: Voll-Kaskade — je Rubrik ein Konzept + Gerichte erfinden, Review im Planung-Editor. --}}
+                    <button type="button" wire:click="vollKaskadeStarten" class="{{ $btnPrimary }}" wire:loading.attr="disabled" data-sk-voll-kaskade>
+                        <span wire:loading.remove wire:target="vollKaskadeStarten">@svg('heroicon-o-bolt', 'w-4 h-4') Voll-Kaskade</span>
+                        <span wire:loading wire:target="vollKaskadeStarten">Starte …</span>
+                    </button>
                 </div>
+                @if($kaskadeMeldung !== null)
+                    <div class="mb-3 rounded-lg bg-amber-500/10 border border-amber-500/30 px-2.5 py-1.5 text-[11px] text-amber-700">{{ $kaskadeMeldung }}</div>
+                @endif
 
                 @forelse($karte->sections->whereNull('parent_id') as $rubrik)
                     @include('foodalchemist::livewire.speisekarte.partials.rubrik', ['rubrik' => $rubrik, 'depth' => 0])

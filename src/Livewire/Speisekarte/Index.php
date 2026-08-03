@@ -27,6 +27,9 @@ class Index extends Component
     #[Url(as: 'sk')]
     public ?int $karteId = null;
 
+    /** Meldung des Voll-Kaskade-Go (P4). */
+    public ?string $kaskadeMeldung = null;
+
     // Karten-Meta (Editor)
     public string $name = '';
     public string $kartenTyp = 'alacarte';
@@ -382,6 +385,53 @@ class Index extends Component
                 : app(\Platform\FoodAlchemist\Services\PortfolioService::class)
                     ->konfliktHinweis($team, 'speisekarte', (int) $karte->id),
         ])->layout('platform::layouts.app');
+    }
+
+    /**
+     * Voll-Kaskade (P4): leitet den Rahmen aus den Rubriken der Karte ab (falls keiner existiert — Rubriken =
+     * Struktur), erzeugt je Rubrik ein Konzept (an die Rubrik gehängt) + Gericht-Fan-out. Legt eine Planungs-
+     * Session als Review-Wurzel an und leitet in den Planung-Editor (Fortschritt + Freigabe).
+     */
+    public function vollKaskadeStarten(
+        \Platform\FoodAlchemist\Services\PlanningCascadeService $cascade,
+        \Platform\FoodAlchemist\Services\PlanningSessionService $sessions,
+        \Platform\FoodAlchemist\Services\PlanningFrameService $frames
+    ) {
+        $this->kaskadeMeldung = null;
+        $team = $this->team();
+        if ($team === null || $this->karteId === null) {
+            return null;
+        }
+        $karte = FoodAlchemistSpeisekarte::visibleToTeam($team)->with('sections')->find($this->karteId);
+        if ($karte === null) {
+            return null;
+        }
+        try {
+            $frame = $frames->frameFor($team, 'speisekarte', (int) $this->karteId, 'speisekarte_vollkaskade');
+            if ($frame->slots()->count() === 0) {
+                foreach ($karte->sections as $rubrik) {
+                    $frames->addSlot($team, $frame, ['label' => (string) $rubrik->title, 'slot_type' => 'station', 'target_count' => 3]);
+                }
+            }
+            if ($frame->slots()->count() === 0) {
+                $this->kaskadeMeldung = 'Erst Rubriken anlegen — daraus entsteht der Kaskaden-Rahmen.';
+
+                return null;
+            }
+            $session = $sessions->create($team, [
+                'title' => 'Voll-Kaskade: ' . ($karte->name ?: ('Speisekarte #' . $this->karteId)),
+                'created_via' => 'speisekarte_vollkaskade',
+            ]);
+            $cascade->starteKaskade($team, 'vollkaskade', $session, 'voll_kreativ', [
+                'owner_type' => 'speisekarte', 'owner_id' => (int) $this->karteId, 'created_via' => 'speisekarte_vollkaskade',
+            ]);
+
+            return redirect()->route('foodalchemist.planung.index', ['session' => $session->id, 'open' => 1]);
+        } catch (\Throwable $e) {
+            $this->kaskadeMeldung = $e->getMessage();
+
+            return null;
+        }
     }
 
     private function team()

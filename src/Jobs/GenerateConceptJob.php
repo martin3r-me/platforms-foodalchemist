@@ -1,0 +1,169 @@
+<?php
+
+namespace Platform\FoodAlchemist\Jobs;
+
+use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Foundation\Bus\Dispatchable;
+use Illuminate\Queue\InteractsWithQueue;
+use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
+use Platform\Core\Models\Team;
+use Platform\Core\Models\User;
+use Platform\FoodAlchemist\Services\ConceptGeneratorService;
+
+/**
+ * Async-Konzept-Generierung für die Planungs-Kaskade (P1a).
+ *
+ * Spiegelt {@see GenerateRecipeJob}: der Concept-Assembler ruft `AiGatewayService::propose`
+ * (Gerüst) + den deterministischen Assembler — im synchronen Web-Request derselbe
+ * nginx-fastcgi-Timeout-/502-Risiko wie beim Rezept. Also in die Queue, UI pollt den Step.
+ *
+ * **Reuse-Modus (P1a):** `generiereAusBrief` baut das Konzept AUSSCHLIESSLICH aus echten
+ * VK-Gerichten (keine Erfindung — Slot ohne Treffer bleibt leer). Das Erfinden + der
+ * Gericht-Fan-out kommen in P1b. Ergebnis ist immer `status=draft`.
+ */
+class GenerateConceptJob implements ShouldQueue
+{
+    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+
+    /** Gerüst-Propose (~1 Call) + deterministischer Assembler — unter dem Worker-Timeout (600 s). */
+    public int $timeout = 180;
+
+    /** KI-Kosten: kein stiller Auto-Retry. */
+    public int $tries = 1;
+
+    public function __construct(
+        public string $runId,
+        public int $teamId,
+        public int $userId,
+        public string $brief,
+        public ?string $name = null,
+        public ?int $planningSessionId = null,
+        public ?int $cascadeStepId = null,
+        public string $creativeMode = 'datenbank',
+        public bool $useFavorites = false,
+        public bool $favoritesConvenienceOnly = false,
+        /** Voll-Kaskade (P3/P4): erzeugtes Konzept ans Ausgabe-Kapitel/-Rubrik hängen. */
+        public ?string $attachOwnerType = null,
+        public ?int $attachContainerId = null,
+    ) {}
+
+    public static function cacheKey(string $runId): string
+    {
+        return "fa:concept-gen:{$runId}";
+    }
+
+    public function handle(ConceptGeneratorService $generator): void
+    {
+        $team = Team::find($this->teamId);
+        $user = User::find($this->userId);
+        if ($team === null || $user === null) {
+            $this->schreibe(['status' => 'error', 'fehler' => 'Team oder User nicht gefunden.']);
+            $this->meldeKaskade(false, null, 'Team oder User nicht gefunden.');
+
+            return;
+        }
+
+        Auth::login($user);   // Team-Kontext für AiGatewayService (Kill-Switch/DNA/Call-Log)
+
+        try {
+            $r = $generator->generiereAusBrief($team, $this->brief, $this->name, 'plan_go', $this->useFavorites, $this->favoritesConvenienceOnly);
+            $concept = $r['concept'] ?? null;
+            if ($concept === null) {
+                throw new \RuntimeException('Konzept-Generierung lieferte kein Ergebnis.');
+            }
+            // Planungs-„Go"-Lineage: Trend-Herkunft ans Konzept, Session→konvergenz.
+            if ($this->planningSessionId !== null) {
+                $planSvc = app(\Platform\FoodAlchemist\Services\PlanningSessionService::class);
+                $session = $planSvc->get($team, $this->planningSessionId);
+                if ($session !== null) {
+                    $planSvc->verknuepfeArtefakt($session, 'concept', (int) $concept->id);
+                }
+            }
+            $this->schreibe([
+                'status' => 'done',
+                'concept_id' => (int) $concept->id,
+                'name' => (string) $concept->name,
+                'coverage' => $r['coverage'] ?? null,
+            ]);
+            // Voll-Kaskade (P3/P4): das erzeugte Konzept ans Ausgabe-Kapitel/-Rubrik hängen (concept_ref/menue_ref).
+            $this->attachToOutput($team, (int) $concept->id);
+            // P1b: in den Erfinden-Modi fächert das Konzept in erfundene Gerichte auf (je leerem Slot
+            // eine KI-Idee → eigener Kind-Step + Materialisierungs-Job). Reuse-Modus (datenbank) tut nichts.
+            // Muss VOR meldeKaskade laufen (dessen recompute soll die Kind-Steps schon sehen). Graceful:
+            // ohne LLM/Slots bleibt es beim Konzept — der Run geht dann direkt auf review.
+            if ($this->cascadeStepId !== null && in_array($this->creativeMode, ['voll_kreativ', 'hybrid'], true)) {
+                try {
+                    // Ursprungs-Trend der Planung (falls vorhanden) fließt in die Erfindungs-Divergenz.
+                    $trendDocId = null;
+                    if ($this->planningSessionId !== null) {
+                        $sess = app(\Platform\FoodAlchemist\Services\PlanningSessionService::class)->get($team, $this->planningSessionId);
+                        $trendDocId = $sess?->source_knowledge_document_id !== null ? (int) $sess->source_knowledge_document_id : null;
+                    }
+                    app(\Platform\FoodAlchemist\Services\PlanningCascadeService::class)
+                        ->fanoutConceptInvention($team, $this->cascadeStepId, (int) $concept->id, $this->creativeMode, $trendDocId, $this->planningSessionId);
+                } catch (\Throwable) {
+                    // Fan-out-Fehler darf das erzeugte Konzept nicht kippen.
+                }
+            }
+            $this->meldeKaskade(true, (int) $concept->id, null);
+        } catch (\Throwable $e) {
+            $this->schreibe(['status' => 'error', 'fehler' => $e->getMessage()]);
+            $this->meldeKaskade(false, null, $e->getMessage());
+        }
+    }
+
+    /** Job-Tod (Timeout/Fatal außerhalb des handle-try) → Status trotzdem setzen. */
+    public function failed(\Throwable $e): void
+    {
+        $this->schreibe(['status' => 'error', 'fehler' => 'Konzept-Generierung abgebrochen: ' . $e->getMessage()]);
+        $this->meldeKaskade(false, null, 'Konzept-Generierung abgebrochen: ' . $e->getMessage());
+    }
+
+    /**
+     * Voll-Kaskade-Attach: hängt das erzeugte Konzept an sein Ausgabe-Kapitel (Foodbook, concept_ref-Block)
+     * bzw. seine Rubrik (Speisekarte, menue_ref-Position). No-op ohne attach-Info (Standalone/Depth-1). Wirft nie.
+     */
+    private function attachToOutput(\Platform\Core\Models\Team $team, int $conceptId): void
+    {
+        if ($this->attachOwnerType === null || $this->attachContainerId === null) {
+            return;
+        }
+        try {
+            if ($this->attachOwnerType === 'foodbook') {
+                app(\Platform\FoodAlchemist\Services\FoodbookService::class)
+                    ->addBlock($team, $this->attachContainerId, ['type' => 'concept_ref', 'concept_id' => $conceptId]);
+            } elseif ($this->attachOwnerType === 'speisekarte') {
+                app(\Platform\FoodAlchemist\Services\SpeisekarteService::class)
+                    ->addPosition($team, $this->attachContainerId, ['type' => 'menue_ref', 'concept_id' => $conceptId]);
+            }
+        } catch (\Throwable) {
+            // Attach-Fehler darf das erzeugte Konzept nicht kippen.
+        }
+    }
+
+    /** Ergebnis/Fehler an den Kaskaden-Step zurückmelden (No-op ohne cascadeStepId). Wirft nie. */
+    private function meldeKaskade(bool $erfolg, ?int $conceptId, ?string $fehler): void
+    {
+        if ($this->cascadeStepId === null) {
+            return;
+        }
+        try {
+            $svc = app(\Platform\FoodAlchemist\Services\PlanningCascadeService::class);
+            if ($erfolg && $conceptId !== null) {
+                $svc->markStepDone($this->cascadeStepId, 'concept', $conceptId);
+            } else {
+                $svc->markStepFailed($this->cascadeStepId, (string) ($fehler ?? 'Konzept-Generierung fehlgeschlagen.'));
+            }
+        } catch (\Throwable) {
+            // Rückkanal-Fehler bewusst schlucken.
+        }
+    }
+
+    private function schreibe(array $data): void
+    {
+        Cache::put(self::cacheKey($this->runId), $data, now()->addMinutes(15));
+    }
+}

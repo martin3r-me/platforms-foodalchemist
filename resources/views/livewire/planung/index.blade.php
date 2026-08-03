@@ -231,19 +231,72 @@
                 </x-foodalchemist::modal-section>
 
                 <x-foodalchemist::modal-section title="Go — erzeugen (Draft)">
-                    <p class="{{ $label ?? 'text-[11px] text-gray-500' }} mb-2">Übergibt den Brief an den KI-Generator des Ziels — dort prüfst du die Regler und erzeugst den Entwurf.</p>
+                    <p class="{{ $label ?? 'text-[11px] text-gray-500' }} mb-2">
+                        Wähle die Stufe — der Entwurf entsteht in-place (Draft), im Hintergrund. Jede Stufe ist
+                        einzeln abrufbar; die Kaskade läuft im Ergebnis unten sichtbar durch.
+                    </p>
                     <div class="flex flex-wrap gap-2">
-                        <button wire:click="goRezept(false)" class="{{ $btnGhost }}">
+                        <button wire:click="goKaskade('rezept')" @disabled($laeuft) class="{{ $btnGhost }} disabled:opacity-40">
                             @svg('heroicon-o-beaker', 'w-4 h-4') Basisrezept
                         </button>
-                        <button wire:click="goRezept(true)" class="{{ $btnGhost }}">
+                        <button wire:click="goKaskade('gericht')" @disabled($laeuft) class="{{ $btnGhost }} disabled:opacity-40">
                             @svg('heroicon-o-cake', 'w-4 h-4') Gericht
                         </button>
-                        <button wire:click="goConcept" class="{{ $btnPrimary }}">
+                        <button wire:click="goKaskade('concept')" @disabled($laeuft) class="{{ $btnPrimary }} disabled:opacity-40">
                             @svg('heroicon-o-squares-2x2', 'w-4 h-4') Concept
                         </button>
                     </div>
+
+                    @if($laeuft)
+                        <div wire:poll.1500ms="pruefeLauf" class="mt-3 flex items-center gap-2 text-xs text-amber-300">
+                            @svg('heroicon-o-arrow-path', 'w-4 h-4 animate-spin')
+                            <span>Entwurf wird erzeugt — läuft im Hintergrund …</span>
+                        </div>
+                    @endif
                 </x-foodalchemist::modal-section>
+
+                {{-- Ergebnis des Laufs (Steps + erzeugte Draft-Artefakte) + Freigabe (Gate 2). --}}
+                @if($lauf)
+                    @php
+                        $stepLabel = ['queued' => 'wartet', 'running' => 'läuft', 'done' => 'Entwurf', 'freigegeben' => 'freigegeben', 'verworfen' => 'verworfen', 'failed' => 'Fehler', 'skipped' => 'übernommen'];
+                        $stepColor = ['queued' => 'text-amber-300', 'running' => 'text-amber-300', 'done' => 'text-emerald-300', 'freigegeben' => 'text-emerald-400', 'verworfen' => 'text-gray-500', 'failed' => 'text-rose-300', 'skipped' => 'text-gray-400'];
+                        $refRoute = ['gericht' => 'foodalchemist.verkauf.index', 'rezept' => 'foodalchemist.recipes.index', 'concept' => 'foodalchemist.concepts.index'];
+                        $offeneEntwuerfe = $lauf->steps->where('status', 'done')->count();
+                    @endphp
+                    <x-foodalchemist::modal-section title="Ergebnis (Entwürfe) — Freigabe">
+                        @if($offeneEntwuerfe > 0)
+                            <div class="flex items-center justify-between gap-2 mb-2 pb-2 border-b border-white/10">
+                                <span class="text-[11px] text-gray-400">{{ $offeneEntwuerfe }} Entwurf/Entwürfe warten auf Freigabe</span>
+                                <span class="flex gap-2">
+                                    <button wire:click="alleFrei" class="text-[11px] text-emerald-300 hover:text-emerald-200">Alle freigeben</button>
+                                    <button wire:click="alleVerwerfen" class="text-[11px] text-rose-300 hover:text-rose-200">Alle verwerfen</button>
+                                </span>
+                            </div>
+                        @endif
+                        <div class="space-y-1.5">
+                            @forelse($lauf->steps as $st)
+                                <div wire:key="step-{{ $st->id }}" class="flex items-center justify-between gap-3 text-xs">
+                                    <span class="truncate text-gray-200">{{ $st->label ?: ucfirst($st->kind) }}</span>
+                                    <span class="shrink-0 flex items-center gap-2">
+                                        <span class="{{ $stepColor[$st->status] ?? 'text-gray-400' }}">{{ $stepLabel[$st->status] ?? $st->status }}</span>
+                                        @if($st->ref_id && isset($refRoute[$st->kind]) && in_array($st->status, ['done', 'freigegeben'], true))
+                                            <a href="{{ route($refRoute[$st->kind]) }}" class="text-violet-300 hover:text-violet-200 underline">öffnen</a>
+                                        @endif
+                                        @if($st->status === 'done')
+                                            <button wire:click="gibFrei({{ $st->id }})" class="text-emerald-300 hover:text-emerald-200" title="Freigeben">@svg('heroicon-o-check', 'w-4 h-4')</button>
+                                            <button wire:click="verwirf({{ $st->id }})" class="text-rose-300 hover:text-rose-200" title="Verwerfen">@svg('heroicon-o-trash', 'w-4 h-4')</button>
+                                        @endif
+                                    </span>
+                                </div>
+                                @if($st->status === 'failed' && $st->error)
+                                    <p class="text-[10px] text-rose-400/80 pl-1">{{ \Illuminate\Support\Str::limit($st->error, 160) }}</p>
+                                @endif
+                            @empty
+                                <p class="text-xs text-gray-500">Noch keine Schritte.</p>
+                            @endforelse
+                        </div>
+                    </x-foodalchemist::modal-section>
+                @endif
             </div>
         @endif
     </x-foodalchemist::modal>
