@@ -7,9 +7,12 @@ use Illuminate\Support\Str;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Jobs\GenerateConceptJob;
 use Platform\FoodAlchemist\Jobs\GenerateRecipeJob;
+use Platform\FoodAlchemist\Jobs\MaterializeConceptIdeaJob;
 use Platform\FoodAlchemist\Models\FoodAlchemistCascadeRun;
 use Platform\FoodAlchemist\Models\FoodAlchemistCascadeRunStep;
 use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
+use Platform\FoodAlchemist\Models\FoodAlchemistConceptSlot;
+use Platform\FoodAlchemist\Models\FoodAlchemistDishIdea;
 use Platform\FoodAlchemist\Models\FoodAlchemistPlanningSession;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use RuntimeException;
@@ -91,7 +94,7 @@ class PlanningCascadeService
         ]);
 
         if ($scope === 'concept') {
-            $this->dispatchConceptStep($team, $step, $brief, $session?->id);
+            $this->dispatchConceptStep($team, $step, $brief, $session?->id, $creativeMode);
         } else {
             $this->dispatchRezeptStep($team, $step, $brief, $params, $scope === 'gericht', $vollAnreichern, $session?->id);
         }
@@ -123,13 +126,112 @@ class PlanningCascadeService
         GenerateRecipeJob::dispatch($runId, $team->id, (int) (\Illuminate\Support\Facades\Auth::id() ?? 0), $brief, $jobParams, $vkModus, $vollAnreichern);
     }
 
-    /** Dispatch der Konzept-Generierung für einen Step (Reuse-Assembler, queued wegen 502-Risiko). */
-    private function dispatchConceptStep(Team $team, FoodAlchemistCascadeRunStep $step, string $brief, ?int $planningSessionId): void
+    /** Dispatch der Konzept-Generierung für einen Step (Reuse-Assembler; im Erfinden-Modus fächert der Job auf). */
+    private function dispatchConceptStep(Team $team, FoodAlchemistCascadeRunStep $step, string $brief, ?int $planningSessionId, string $creativeMode): void
     {
         $runId = (string) Str::uuid();
         $step->update(['generator_run_id' => $runId]);
         Cache::put(GenerateConceptJob::cacheKey($runId), ['status' => 'pending'], now()->addMinutes(self::RESULT_TTL_MIN));
-        GenerateConceptJob::dispatch($runId, $team->id, (int) (\Illuminate\Support\Facades\Auth::id() ?? 0), $brief, null, $planningSessionId, $step->id);
+        GenerateConceptJob::dispatch($runId, $team->id, (int) (\Illuminate\Support\Facades\Auth::id() ?? 0), $brief, null, $planningSessionId, $step->id, $creativeMode);
+    }
+
+    // ── P1b: Erfinden — Fan-out des Concepts in erfundene Gerichte ─────────
+
+    /**
+     * Fächert ein frisch erzeugtes Konzept in erfundene Gerichte auf (Erfinden-Modus). Je LEEREM Slot
+     * (kein Gericht, kein Paket) lässt die KI eine Gericht-Idee erfinden ({@see IdeenService::kiDivergenzConcept},
+     * EIN Call für alle Slots), ordnet Ideen den Slots der Reihe nach zu, legt je Idee einen Kind-Step
+     * (kind=gericht, parent=Concept-Step) an und dispatcht {@see MaterializeConceptIdeaJob} (erdet + verdrahtet).
+     *
+     * Graceful: ohne LLM (Sandbox/Kill-Switch) wirft die Divergenz → 0 Ideen, 0 Kind-Steps; der Run geht
+     * mit dem Konzept allein auf review. Wirft NIE (der Concept-Job fängt zusätzlich ab).
+     */
+    public function fanoutConceptInvention(Team $team, int $conceptStepId, int $conceptId, string $mode): void
+    {
+        $conceptStep = FoodAlchemistCascadeRunStep::find($conceptStepId);
+        if ($conceptStep === null) {
+            return;
+        }
+        $runId = (int) $conceptStep->cascade_run_id;
+
+        $leere = FoodAlchemistConceptSlot::where('concept_id', $conceptId)
+            ->whereNull('sales_recipe_id')
+            ->whereNull('package_id')
+            ->whereNotIn('type', ['text', 'spacer', 'header', 'header_preis'])
+            ->orderBy('position')->orderBy('id')
+            ->get();
+        if ($leere->isEmpty()) {
+            return;   // nichts zu erfinden — Reuse hat alle Slots gefüllt
+        }
+
+        try {
+            $div = app(IdeenService::class)->kiDivergenzConcept($team, $conceptId, $leere->count());
+        } catch (\Throwable) {
+            return;   // KI nicht verfügbar → keine Erfindung, Konzept bleibt (graceful)
+        }
+        $ideen = is_array($div['angelegt'] ?? null) ? $div['angelegt'] : [];
+
+        foreach (array_values($ideen) as $idx => $idee) {
+            $slot = $leere[$idx] ?? null;
+            if ($slot === null) {
+                break;   // mehr Ideen als leere Slots — Rest ignorieren
+            }
+            $idee->update([
+                'generation_status' => 'queued',
+                'source_meta' => array_merge($idee->source_meta ?? [], ['target_concept_slot_id' => (int) $slot->id]),
+            ]);
+            $step = FoodAlchemistCascadeRunStep::create([
+                'team_id' => $team->id,
+                'cascade_run_id' => $runId,
+                'parent_step_id' => $conceptStepId,
+                'kind' => 'gericht',
+                'label' => Str::limit((string) $idee->title, 120),
+                'status' => 'running',
+                'sort' => $idx + 1,
+            ]);
+            MaterializeConceptIdeaJob::dispatch($team->id, (int) (\Illuminate\Support\Facades\Auth::id() ?? 0), (int) $idee->id, (int) $step->id);
+        }
+    }
+
+    /**
+     * Worker-Logik (aus {@see MaterializeConceptIdeaJob}): erdet EINE erfundene Concept-Idee zu einem
+     * echten VK-Gericht ({@see RecipeGeneratorService::generiere}, vkModus) und verdrahtet es in den
+     * vorgemerkten leeren Slot ({@see ConceptService::fillSlot}); Lineage an die Idee, Rückmeldung an
+     * den Kind-Step. Fehler (inkl. KI-Ausfall) → Step failed, Idee markiert — kein „halbes Wrack".
+     */
+    public function materialisiereConceptGericht(Team $team, int $ideaId, int $stepId): void
+    {
+        $idee = FoodAlchemistDishIdea::where('team_id', $team->id)->find($ideaId);
+        if ($idee === null) {
+            $this->markStepFailed($stepId, 'Idee nicht gefunden.');
+
+            return;
+        }
+        $slotId = (int) ($idee->source_meta['target_concept_slot_id'] ?? 0);
+        $beschreibung = trim(implode(' — ', array_filter([(string) $idee->title, (string) $idee->description]))) ?: (string) $idee->title;
+
+        try {
+            $gen = app(RecipeGeneratorService::class)->generiere($team, $beschreibung, [], null, true, 'plan_go');
+            $recipe = $gen['recipe'] ?? null;
+            if ($recipe === null) {
+                throw new RuntimeException('Generierung lieferte kein Rezept.');
+            }
+            if ($slotId > 0) {
+                app(ConceptService::class)->fillSlot($team, $slotId, ['sales_recipe_id' => (int) $recipe->id, 'type' => 'gericht']);
+            }
+            $idee->update([
+                'generation_status' => 'erstellt',
+                'status' => 'freigegeben',
+                'generated_recipe_id' => (int) $recipe->id,
+                'materialized_at' => now(),
+                'materialized_ref' => ['concept_slot_id' => $slotId, 'recipe_id' => (int) $recipe->id],
+                'source_meta' => array_merge($idee->source_meta ?? [], ['erdung' => 'ki_generiert', 'original_titel' => (string) $idee->title]),
+            ]);
+            $this->markStepDone($stepId, 'recipe', (int) $recipe->id);
+        } catch (\Throwable $e) {
+            $idee->update(['generation_status' => 'fehlgeschlagen', 'source_meta' => array_merge($idee->source_meta ?? [], ['generation_fehler' => mb_substr($e->getMessage(), 0, 500)])]);
+            $this->markStepFailed($stepId, $e->getMessage());
+        }
     }
 
     // ── Rückkanal aus dem Job (läuft im Queue-Worker) ──────────────────────

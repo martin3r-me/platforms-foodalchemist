@@ -42,6 +42,7 @@ class GenerateConceptJob implements ShouldQueue
         public ?string $name = null,
         public ?int $planningSessionId = null,
         public ?int $cascadeStepId = null,
+        public string $creativeMode = 'datenbank',
         public bool $useFavorites = false,
         public bool $favoritesConvenienceOnly = false,
     ) {}
@@ -84,6 +85,18 @@ class GenerateConceptJob implements ShouldQueue
                 'name' => (string) $concept->name,
                 'coverage' => $r['coverage'] ?? null,
             ]);
+            // P1b: in den Erfinden-Modi fächert das Konzept in erfundene Gerichte auf (je leerem Slot
+            // eine KI-Idee → eigener Kind-Step + Materialisierungs-Job). Reuse-Modus (datenbank) tut nichts.
+            // Muss VOR meldeKaskade laufen (dessen recompute soll die Kind-Steps schon sehen). Graceful:
+            // ohne LLM/Slots bleibt es beim Konzept — der Run geht dann direkt auf review.
+            if ($this->cascadeStepId !== null && in_array($this->creativeMode, ['voll_kreativ', 'hybrid'], true)) {
+                try {
+                    app(\Platform\FoodAlchemist\Services\PlanningCascadeService::class)
+                        ->fanoutConceptInvention($team, $this->cascadeStepId, (int) $concept->id, $this->creativeMode);
+                } catch (\Throwable) {
+                    // Fan-out-Fehler darf das erzeugte Konzept nicht kippen.
+                }
+            }
             $this->meldeKaskade(true, (int) $concept->id, null);
         } catch (\Throwable $e) {
             $this->schreibe(['status' => 'error', 'fehler' => $e->getMessage()]);

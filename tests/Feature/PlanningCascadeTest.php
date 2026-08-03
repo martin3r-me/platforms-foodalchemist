@@ -4,13 +4,17 @@ use Illuminate\Support\Facades\Queue;
 use Livewire\Livewire;
 use Platform\FoodAlchemist\Jobs\GenerateConceptJob;
 use Platform\FoodAlchemist\Jobs\GenerateRecipeJob;
+use Platform\FoodAlchemist\Jobs\MaterializeConceptIdeaJob;
 use Platform\FoodAlchemist\Livewire\Planung\Index as PlanungIndex;
 use Platform\FoodAlchemist\Models\FoodAlchemistCascadeRun;
 use Platform\FoodAlchemist\Models\FoodAlchemistCascadeRunStep;
 use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
+use Platform\FoodAlchemist\Models\FoodAlchemistDishIdea;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
+use Platform\FoodAlchemist\Services\IdeenService;
 use Platform\FoodAlchemist\Services\PlanningCascadeService;
 use Platform\FoodAlchemist\Services\PlanningSessionService;
+use Platform\FoodAlchemist\Services\RecipeGeneratorService;
 use Platform\FoodAlchemist\Tests\Support\SeedsTeamHierarchy;
 use Platform\FoodAlchemist\Tests\TestCase;
 
@@ -244,4 +248,86 @@ it('Cockpit: Editor rendert die Freigabe-UI und gibt einen Entwurf über die Kom
 
     expect($step->refresh()->status)->toBe('freigegeben')
         ->and($recipe->refresh()->status->value)->toBe('approved');
+});
+
+// ── P1b: Erfinden (Concept-Divergenz + Fan-out) ─────────────────────────────
+// LLM-Aufrufe (Divergenz, Rezept-Gen) sind gemockt — Verdrahtung/Graceful lokal, Output demo-verifiziert.
+
+it('Go (concept, voll_kreativ): reicht creative_mode an GenerateConceptJob durch', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Sommer', 'brief' => 'Sommer-Buffet.']);
+
+    app(PlanningCascadeService::class)->starteKaskade($this->rootTeam, 'concept', $session, 'voll_kreativ');
+
+    Queue::assertPushed(GenerateConceptJob::class, fn ($job) => $job->creativeMode === 'voll_kreativ');
+});
+
+it('Fan-out: je leerem Slot ein Kind-Step (kind=gericht) + MaterializeConceptIdeaJob (Divergenz gemockt)', function () {
+    $concept = $this->makeConcept($this->rootTeam, 'Buffet', ['status' => 'draft']);
+    $s1 = $this->makeConceptSlot($concept, ['position' => 1]);
+    $s2 = $this->makeConceptSlot($concept, ['position' => 2]);
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'concept', 'status' => 'running']);
+    $conceptStep = FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'concept', 'status' => 'running', 'ref_type' => 'concept', 'ref_id' => $concept->id]);
+
+    $mkIdee = fn (string $t) => FoodAlchemistDishIdea::create(['team_id' => $this->rootTeam->id, 'concept_id' => $concept->id, 'title' => $t, 'status' => 'entwurf', 'target_form' => 'einzel', 'generation_status' => 'entwurf', 'position' => 1, 'created_via' => 'test']);
+    $i1 = $mkIdee('Erfunden A');
+    $i2 = $mkIdee('Erfunden B');
+    $this->mock(IdeenService::class, fn ($m) => $m->shouldReceive('kiDivergenzConcept')->once()
+        ->andReturn(['angelegt' => [$i1, $i2], 'roh' => 2, 'confidence' => 0.8, 'call_log_id' => null]));
+
+    app(PlanningCascadeService::class)->fanoutConceptInvention($this->rootTeam, (int) $conceptStep->id, (int) $concept->id, 'voll_kreativ');
+
+    $kinder = $run->steps()->where('kind', 'gericht')->where('parent_step_id', $conceptStep->id)->get();
+    expect($kinder)->toHaveCount(2)
+        ->and((int) ($i1->refresh()->source_meta['target_concept_slot_id'] ?? 0))->toBe((int) $s1->id)
+        ->and((int) ($i2->refresh()->source_meta['target_concept_slot_id'] ?? 0))->toBe((int) $s2->id);
+    Queue::assertPushed(MaterializeConceptIdeaJob::class, 2);
+});
+
+it('Fan-out ist graceful: ohne LLM-Provider 0 erfundene Gerichte, kein Job (Konzept bleibt)', function () {
+    $concept = $this->makeConcept($this->rootTeam, 'Buffet', ['status' => 'draft']);
+    $this->makeConceptSlot($concept, ['position' => 1]);
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'concept', 'status' => 'running']);
+    $conceptStep = FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'concept', 'status' => 'running', 'ref_type' => 'concept', 'ref_id' => $concept->id]);
+
+    // Kein Mock → echte Divergenz trifft im Test-Env keinen LLM-Provider → wirft → wird graceful gefangen.
+    app(PlanningCascadeService::class)->fanoutConceptInvention($this->rootTeam, (int) $conceptStep->id, (int) $concept->id, 'voll_kreativ');
+
+    expect($run->steps()->where('kind', 'gericht')->count())->toBe(0);
+    Queue::assertNotPushed(MaterializeConceptIdeaJob::class);
+});
+
+it('materialisiereConceptGericht: erdet die Idee, verdrahtet ins Slot, Step done (Gen gemockt)', function () {
+    $concept = $this->makeConcept($this->rootTeam, 'Buffet', ['status' => 'draft']);
+    $slot = $this->makeConceptSlot($concept, ['position' => 1]);
+    $recipe = $this->makeRecipe($this->rootTeam, 'Erdung', ['status' => 'draft', 'is_sales_recipe' => true]);
+    $idee = FoodAlchemistDishIdea::create(['team_id' => $this->rootTeam->id, 'concept_id' => $concept->id, 'title' => 'Erfunden', 'status' => 'entwurf', 'target_form' => 'einzel', 'generation_status' => 'queued', 'position' => 1, 'created_via' => 'test', 'source_meta' => ['target_concept_slot_id' => (int) $slot->id]]);
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'concept', 'status' => 'running']);
+    $step = FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht', 'status' => 'running']);
+
+    $this->mock(RecipeGeneratorService::class, fn ($m) => $m->shouldReceive('generiere')->once()
+        ->andReturn(['recipe' => $recipe, 'statistik' => [], 'offene' => []]));
+
+    app(PlanningCascadeService::class)->materialisiereConceptGericht($this->rootTeam, (int) $idee->id, (int) $step->id);
+
+    expect((int) $slot->refresh()->sales_recipe_id)->toBe((int) $recipe->id)
+        ->and($step->refresh()->status)->toBe('done')
+        ->and((int) $step->refresh()->ref_id)->toBe((int) $recipe->id)
+        ->and($idee->refresh()->generation_status)->toBe('erstellt');
+});
+
+it('materialisiereConceptGericht: Generierungs-Fehler → Step failed, Idee fehlgeschlagen', function () {
+    $concept = $this->makeConcept($this->rootTeam, 'Buffet', ['status' => 'draft']);
+    $slot = $this->makeConceptSlot($concept, ['position' => 1]);
+    $idee = FoodAlchemistDishIdea::create(['team_id' => $this->rootTeam->id, 'concept_id' => $concept->id, 'title' => 'Erfunden', 'status' => 'entwurf', 'target_form' => 'einzel', 'generation_status' => 'queued', 'position' => 1, 'created_via' => 'test', 'source_meta' => ['target_concept_slot_id' => (int) $slot->id]]);
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'concept', 'status' => 'running']);
+    $step = FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht', 'status' => 'running']);
+
+    $this->mock(RecipeGeneratorService::class, fn ($m) => $m->shouldReceive('generiere')->once()
+        ->andThrow(new RuntimeException('KI kaputt')));
+
+    app(PlanningCascadeService::class)->materialisiereConceptGericht($this->rootTeam, (int) $idee->id, (int) $step->id);
+
+    expect($step->refresh()->status)->toBe('failed')
+        ->and($idee->refresh()->generation_status)->toBe('fehlgeschlagen')
+        ->and($slot->refresh()->sales_recipe_id)->toBeNull();   // nichts verdrahtet
 });
