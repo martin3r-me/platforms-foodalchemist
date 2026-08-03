@@ -25,6 +25,14 @@
     .fa-editor-panel .text-gray-800, .fa-editor-panel .text-gray-700{ color:#e2e8f0 !important; }
     .fa-editor-panel .text-gray-600{ color:#cbd5e1 !important; }
     .fa-editor-panel .text-gray-500, .fa-editor-panel .text-gray-400{ color:#94a3b8 !important; }
+    /* Violett als Akzentfarbe (Sprung-Links, hervorgehobene Betraege): die 600/700er Toene sind
+       fuer WEISSEN Grund gewaehlt. Gemessen gegen den schlechtesten Grund im Editor (Section-
+       Flaeche ueber dem hellen Ende des Verlaufs, #293445) kam violet-700 auf 1,77:1 — die
+       AA-Schwelle fuer Fliesstext ist 4,5:1. violet-300 bringt 6,81:1 und damit Luft, auch wenn
+       eine Zeile mal auf einer helleren Flaeche sitzt; violet-400 waere mit 4,62:1 gerade so
+       drueber gewesen. Steht VOR der KI-Chip-Regel: haengen beide Klassen am selben Element,
+       soll dessen weisse Schrift gewinnen (gleiche Spezifitaet, letzte Regel zaehlt). */
+    .fa-editor-panel .text-violet-600, .fa-editor-panel .text-violet-700{ color:#c4b5fd !important; }
     /* Flächen: Ghost-Buttons / KPI-Kacheln / frosted Tiles */
     .fa-editor-panel .bg-white\/60, .fa-editor-panel .bg-white\/70, .fa-editor-panel .bg-white\/90, .fa-editor-panel [data-fa-kpis] > div, .fa-editor-panel [data-editor-kpis] > div, .fa-editor-panel [data-vk-editor-kpis] > div{ background:rgba(255,255,255,.06) !important; border-color:rgba(255,255,255,.10) !important; }
     /* Sticky-Tableiste */
