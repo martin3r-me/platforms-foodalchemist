@@ -99,6 +99,12 @@ class VkModal extends Component
                 // kundenspezifisch am Foodbook-Block (Spalte bleibt als WaWi-Import-Spiegel).
                 'description' => $r->description,
                 'work_time_min' => $r->work_time_min,
+                // Auto-Produktionsplaner (Parität Basisrezept-Editor 2026-08-03): Posten-Routing +
+                // Rüstzeit + Vorproduzierbarkeit. Ohne diese landeten Gericht-Zeilen im Planer immer
+                // „nicht zugeteilt" (ProductionPlanService routet über recipe.default_station_id).
+                'setup_time_min' => $r->setup_time_min,
+                'default_station_id' => $r->default_station_id,
+                'max_vorlauf_tage' => $r->max_vorlauf_tage,
                 'additional_costs_eur' => $r->additional_costs_eur,             // M-K8: direkte Einzelkosten → HK2 (#379)
                 'temperature' => $r->temperature,
                 'function' => $r->function,
@@ -798,6 +804,11 @@ class VkModal extends Component
             'behaelter' => TeamScope::applyVisible(DB::table('foodalchemist_vocab_containers')->whereNull('deleted_at'), 'team_id', $team)->orderBy('group_name')->orderBy('sort_order')->get(['id', 'name', 'group_name', 'is_inactive']),
             'geraete' => TeamScope::applyVisible(DB::table('foodalchemist_vocab_regeneration_devices')->whereNull('deleted_at'), 'team_id', $team)->orderBy('sort_order')->get(['id', 'name', 'is_inactive']),
             'vehikel' => TeamScope::applyVisible(DB::table('foodalchemist_vocab_serving_vehicles')->whereNull('deleted_at'), 'team_id', $team)->orderBy('group_name')->orderBy('sort_order')->get(['id', 'name', 'group_name', 'is_inactive']),
+            // Stufe 3 — Posten-Liste fürs Default-Posten-Dropdown (Parität Basisrezept-Editor).
+            'posten' => $team !== null
+                ? \Platform\FoodAlchemist\Models\FoodAlchemistProductionStation::visibleToTeam($team)
+                    ->where('is_inactive', false)->orderBy('sort_order')->orderBy('name')->get(['id', 'name'])
+                : collect(),
             'regenZeilen' => $this->recipeId !== null
                 ? DB::table('foodalchemist_recipe_regenerations AS rr')
                     ->leftJoin('foodalchemist_vocab_regeneration_devices AS g', 'g.id', '=', 'rr.device_vocab_id')

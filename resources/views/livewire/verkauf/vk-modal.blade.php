@@ -119,6 +119,7 @@
             :tabs="[
                 'aufbau' => 'Aufbau',
                 'stammdaten' => 'Stammdaten',
+                'preparation' => 'Zubereitung',
                 'allergene' => 'Deklaration',
                 'kalkulation' => 'Kalkulation',
                 'darreichungen' => 'Darreichungen',
@@ -188,8 +189,53 @@
             </div>
         </x-foodalchemist::modal-section>
 
+        {{-- Produktion / Auto-Planer (Parität Basisrezept-Editor, 2026-08-03): Posten-Routing +
+             Rüstzeit + Vorproduzierbarkeit. Der Auto-Planer routet Gericht-Auftragszeilen über
+             recipe.default_station_id (ProductionPlanService) — ohne diese Felder blieben sie
+             „nicht zugeteilt". Als eigene, klar benannte Sektion (nicht in „Eigenschaften"
+             vergraben), damit die Zuweisung auffindbar ist. --}}
+        <x-foodalchemist::modal-section title="Produktion (Auto-Planer)">
+            <div class="grid grid-cols-3 gap-3" data-vk-produktion>
+                <div>
+                    <label class="block {{ $label }} mb-1">Default-Posten <span class="normal-case text-gray-500">(Planer-Routing)</span></label>
+                    <select wire:model="form.default_station_id" class="{{ $input }}" data-vk-default-station>
+                        <option value="">— keiner —</option>
+                        @foreach($posten as $p)<option value="{{ $p->id }}">{{ $p->name }}</option>@endforeach
+                    </select>
+                </div>
+                <div>
+                    <label class="block {{ $label }} mb-1">Rüstzeit (min) <span class="normal-case text-gray-500">einmal je Lauf</span></label>
+                    <input type="number" wire:model="form.setup_time_min" min="0" class="{{ $input }}" placeholder="0" data-vk-setup />
+                </div>
+                <div>
+                    <label class="block {{ $label }} mb-1">Vorproduzierbar (Tage) <span class="normal-case text-gray-500">0 = nur am Tag</span></label>
+                    <input type="number" wire:model="form.max_vorlauf_tage" min="0" max="14" class="{{ $input }}" placeholder="—" data-vk-vorlauf />
+                </div>
+            </div>
+            @if($posten->isEmpty())
+                <p class="text-[10px] text-amber-600 mt-2">Noch keine Posten angelegt — unter Einstellungen → „Posten &amp; Kapazität" anlegen, dann hier zuweisen.</p>
+            @endif
+        </x-foodalchemist::modal-section>
+
         {{-- M9-01a/b: Zutaten INLINE (P-8-Kern, VK-Kontext = Rollen-Spalte) + 🎭 + KPI-Leiste --}}
         </div>{{-- /Tab STAMMDATEN --}}
+
+        {{-- ── Tab: ZUBEREITUNG (Step-by-Step, 2026-08-03) ───────────────────
+             Gleiche Schrittfolge wie im Basisrezept-Editor: der eingebettete StepEditor
+             ist typ-agnostisch (hängt nur an recipe_id, kein is_sales_recipe-Guard) und
+             schreibt in `foodalchemist_recipe_steps` (Master); `recipes.preparation` ist
+             der gerenderte Lese-Spiegel. Kein $neu-Freitext-Zweig — der VK-Editor öffnet
+             nur mit bestehendem Gericht ($rezept !== null), die recipe_id existiert also
+             immer. Lineage-Buttons (manual/Reset) bleiben dem Basisrezept-Editor
+             vorbehalten (RecipeModal-Methoden), hier nicht verdrahtet. --}}
+        <div x-show="tab === 'preparation'" x-cloak class="pt-4 space-y-4">
+        <x-foodalchemist::modal-section title="Zubereitung">
+            <livewire:foodalchemist.recipes.step-editor :recipe-id="$rezept->id" wire:key="schritt-editor-vk-{{ $rezept->id }}" />
+            <p class="text-[10px] text-gray-500 mt-1">
+                Schritte sind der Master — der Markdown in <code>preparation</code> wird daraus erzeugt (Produktionsdruck, Suche und Prozessanker lesen ihn). Gleiche Anleitung wie im Basisrezept-Editor.
+            </p>
+        </x-foodalchemist::modal-section>
+        </div>{{-- /Tab ZUBEREITUNG --}}
 
         {{-- ── Tab: AUFBAU (nur Komponenten) ─────────────────────────────── --}}
         <div x-show="tab === 'aufbau'" x-cloak class="pt-4 space-y-4">
@@ -688,7 +734,7 @@
         </x-foodalchemist::modal-section>
 
         {{-- M9-01g: Plating & Service (Teller-Aufbau, Mengenverteilung — keine Produktion) --}}
-        <x-foodalchemist::modal-section title="Plating &amp; Service">
+        <x-foodalchemist::modal-section title="Plating & Service">
             <x-slot:actions>
                 <button type="button" wire:click="ki('plating')" class="{{ $btnAi }}" title="vk.plating: Hybrid-Plating-Anweisung" data-ki-plating>@svg('heroicon-o-sparkles', 'w-3.5 h-3.5')Plating</button>
             </x-slot:actions>

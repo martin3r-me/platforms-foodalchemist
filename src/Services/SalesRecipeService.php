@@ -156,6 +156,9 @@ class SalesRecipeService
         'dish_main_group_id' => FoodAlchemistDishMainGroup::class,
         'markup_class_id' => \Platform\FoodAlchemist\Models\FoodAlchemistMarkupClass::class,
         'sales_unit_vocab_id' => \Platform\FoodAlchemist\Models\FoodAlchemistVocabEinheit::class,
+        // Auto-Produktionsplaner (2026-08-03): Posten-FK team-autorisieren (wie RecipeService),
+        // sonst könnte ein Gericht auf einen Fremd-Team-Posten zeigen.
+        'default_station_id' => \Platform\FoodAlchemist\Models\FoodAlchemistProductionStation::class,
     ];
 
     /** Erlaubte VK-Feldgruppen (V-12: Policy-Grenze mitten durchs geteilte Modell). */
@@ -173,6 +176,9 @@ class SalesRecipeService
         'marketing_text', 'description', 'work_time_min', 'temperature', 'function',
         'production_depth', 'plating_text', 'notes_manual',
         'additional_costs_eur',                                            // M12: Energie/Nebenkosten je Charge (HK2)
+        // Auto-Produktionsplaner (2026-08-03): Parität zum Basisrezept-Editor — sonst verwirft
+        // die Whitelist die Werte still und der Planer routet Gericht-Zeilen nie.
+        'default_station_id', 'setup_time_min', 'max_vorlauf_tage',
     ];
 
     public function updateVk(Team $team, int $id, array $in): FoodAlchemistRecipe

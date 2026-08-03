@@ -327,22 +327,6 @@
                 <label class="block {{ $label }} mb-1">Arbeitszeit (min) <span class="normal-case text-gray-500">je Ansatz</span></label>
                 <input type="number" wire:model="form.work_time_min" min="0" class="{{ $input }}" />
             </div>
-            {{-- Stufe 3 — Auto-Produktionsplaner: nicht-lineare Zeit + Routing + Vorproduzierbarkeit. --}}
-            <div>
-                <label class="block {{ $label }} mb-1">Rüstzeit (min) <span class="normal-case text-gray-500">einmal je Lauf</span></label>
-                <input type="number" wire:model="form.setup_time_min" min="0" class="{{ $input }}" placeholder="0" data-recipe-setup />
-            </div>
-            <div>
-                <label class="block {{ $label }} mb-1">Default-Posten <span class="normal-case text-gray-500">(Planer-Routing)</span></label>
-                <select wire:model="form.default_station_id" class="{{ $input }}" data-recipe-default-station>
-                    <option value="">— keiner —</option>
-                    @foreach($posten as $p)<option value="{{ $p->id }}">{{ $p->name }}</option>@endforeach
-                </select>
-            </div>
-            <div>
-                <label class="block {{ $label }} mb-1">Vorproduzierbar (Tage) <span class="normal-case text-gray-500">0 = nur am Tag</span></label>
-                <input type="number" wire:model="form.max_vorlauf_tage" min="0" max="14" class="{{ $input }}" placeholder="—" data-recipe-vorlauf />
-            </div>
             <div>
                 <label class="block {{ $label }} mb-1">Topf-Deckel (kg) <span class="normal-case text-gray-500">max je Koch-Vorgang</span></label>
                 <input type="text" inputmode="decimal" wire:model="form.batch_max_kg" class="{{ $input }}" placeholder="—" data-recipe-topf />
@@ -380,6 +364,32 @@
                 </select>
             </div>
         </div>
+    </x-foodalchemist::modal-section>
+
+    {{-- Produktion / Auto-Planer (2026-08-03): aus „Eigenschaften" herausgelöst in eine eigene,
+         klar benannte Sektion — Parität mit dem Gericht-Editor + Auffindbarkeit. Der Auto-Planer
+         (ProductionPlanService) routet über recipe.default_station_id. --}}
+    <x-foodalchemist::modal-section title="Produktion (Auto-Planer)">
+        <div class="grid grid-cols-3 gap-3" data-recipe-produktion>
+            <div>
+                <label class="block {{ $label }} mb-1">Default-Posten <span class="normal-case text-gray-500">(Planer-Routing)</span></label>
+                <select wire:model="form.default_station_id" class="{{ $input }}" data-recipe-default-station>
+                    <option value="">— keiner —</option>
+                    @foreach($posten as $p)<option value="{{ $p->id }}">{{ $p->name }}</option>@endforeach
+                </select>
+            </div>
+            <div>
+                <label class="block {{ $label }} mb-1">Rüstzeit (min) <span class="normal-case text-gray-500">einmal je Lauf</span></label>
+                <input type="number" wire:model="form.setup_time_min" min="0" class="{{ $input }}" placeholder="0" data-recipe-setup />
+            </div>
+            <div>
+                <label class="block {{ $label }} mb-1">Vorproduzierbar (Tage) <span class="normal-case text-gray-500">0 = nur am Tag</span></label>
+                <input type="number" wire:model="form.max_vorlauf_tage" min="0" max="14" class="{{ $input }}" placeholder="—" data-recipe-vorlauf />
+            </div>
+        </div>
+        @if($posten->isEmpty())
+            <p class="text-[10px] text-amber-600 mt-2">Noch keine Posten angelegt — unter Einstellungen → „Posten &amp; Kapazität" anlegen, dann hier zuweisen.</p>
+        @endif
     </x-foodalchemist::modal-section>
 
     {{-- EIGNUNG (M9-01k) — klickbare Toggle-Chips, Detail-Panel-Kartei via section-Prop --}}

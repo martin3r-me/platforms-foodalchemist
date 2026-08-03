@@ -183,8 +183,11 @@
             </x-slot:footer>
         </x-foodalchemist::modal>
 
-        {{-- Geschirr-Artikel: Neu + Bearbeiten geteilt --}}
-        <x-foodalchemist::modal name="g-artikel" title="Geschirr-Artikel" size="max-w-3xl">
+        {{-- Geschirr-Artikel: Neu + Bearbeiten geteilt. Edit-Modus = schwarzer Fullscreen-Editor
+             (fa-editor-panel), Neuanlage bleibt hell/klein — Muster wie suppliers/item-modal. --}}
+        <x-foodalchemist::modal name="g-artikel" title="Geschirr-Artikel" size="max-w-3xl"
+            :title-name="$editItemId !== null ? ($artikelForm['label'] ?: null) : null"
+            :fullscreen="$editItemId !== null" :dark-canvas="$editItemId !== null">
             @if($fehler)<p class="text-xs text-red-600">{{ $fehler }}</p>@endif
             <x-foodalchemist::modal-section title="Artikel">
                 <div class="grid grid-cols-3 gap-3">

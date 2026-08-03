@@ -57,11 +57,18 @@ class Index extends Component
     public function neuePlanung(PlanningSessionService $svc): void
     {
         $team = $this->team();
-        if ($team === null || trim($this->neuTitel) === '') {
+        if ($team === null) {
+            $this->fehler = 'Kein Team zugeordnet — Planung kann nicht angelegt werden.';
+
             return;
         }
-        $session = $svc->create($team, ['title' => $this->neuTitel, 'created_via' => 'ui']);
+        // „+" ohne Titel legt trotzdem eine Planung an (Default = Placeholder) und öffnet sie
+        // sofort — sonst reagiert der Button bei leerem Feld still gar nicht (Bug 2026-08-03).
+        // Umbenennen geht danach im Editor-Kopf (form.title).
+        $titel = trim($this->neuTitel) !== '' ? trim($this->neuTitel) : 'Neue Planung';
+        $session = $svc->create($team, ['title' => $titel, 'created_via' => 'ui']);
         $this->neuTitel = '';
+        $this->fehler = null;
         $this->oeffne($session->id);
     }
 

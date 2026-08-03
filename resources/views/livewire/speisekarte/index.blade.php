@@ -76,13 +76,35 @@
             @include('foodalchemist::livewire.speisekarte.partials.vorschau', ['vorschau' => $vorschau])
 
             {{-- ═══════════════ EDITOR = Fullscreen-Modal (Foodbook-Muster) ═══════════════ --}}
-            <x-foodalchemist::modal name="speisekarte-editor" fullscreen title="Speisekarte bearbeiten" :title-name="$name">
+            <x-foodalchemist::modal name="speisekarte-editor" fullscreen dark-canvas title="Speisekarte bearbeiten" :title-name="$name">
                 <x-slot:actions>
                     <button type="button" wire:click="speichern" class="{{ $btnPrimary }}" data-sk-speichern>Speichern</button>
                     <button type="button" wire:click="loeschen" wire:confirm="Diese Speisekarte wirklich löschen?" class="{{ $btnGhostXs }} text-red-600" data-sk-loeschen>Löschen</button>
                 </x-slot:actions>
 
-                <div class="space-y-4">
+                {{-- Voll-Umbau 2026-08-03: KPI-Streifen fix im Kopf (Editor-Parität). --}}
+                <x-slot:kpiHeader>
+                    <x-foodalchemist::kpi-tiles marker="sk-editor-kpis" :cols="4" :tiles="[
+                        ['kpi' => 'typ', 'label' => 'Kartentyp', 'value' => $typLabel[$karte->karten_typ] ?? $karte->karten_typ, 'tone' => 'accent'],
+                        ['kpi' => 'status', 'label' => 'Status', 'value' => $karte->statusWert()->label(), 'tone' => (['success' => 'good', 'warning' => 'warn', 'danger' => 'bad'][$karte->statusWert()->badgeVariant()] ?? 'neutral')],
+                        ['kpi' => 'rubriken', 'label' => 'Rubriken', 'value' => (string) $karte->sections->whereNull('parent_id')->count()],
+                        ['kpi' => 'positionen', 'label' => 'Positionen', 'value' => (string) count($preise), 'tone' => count($preise) > 0 ? 'good' : 'warn'],
+                    ]" />
+                </x-slot:kpiHeader>
+
+                {{-- Voll-Umbau 2026-08-03: sticky Tab-Leiste über den Baustein editor-tabs (Parität
+                     Rezept/Gericht). „Aufbau" (Rubriken/Positionen) zuerst — wird am häufigsten
+                     geändert. Panels bleiben im DOM (x-show); leitstelle-rail nicht neu mounten. --}}
+                <x-foodalchemist::editor-tabs marker="sk" wire-key="sk-tabs-{{ $karte->id }}" :init="'aufbau'"
+                    :tabs="[
+                        'aufbau' => 'Aufbau',
+                        'stammdaten' => 'Stammdaten',
+                        'branding' => 'Branding / CI',
+                        'leitstelle' => 'Leitstelle',
+                    ]">
+
+                {{-- ── Tab: STAMMDATEN ─────────────────────────────────────────── --}}
+                <div x-show="tab === 'stammdaten'" x-cloak class="pt-4 space-y-4">
             {{-- Karten-Kopf / Meta --}}
             <div class="relative overflow-hidden {{ $card }} p-4" wire:key="sk-head-{{ $karte->id }}">
                 <div class="{{ $cardAccent }}"></div>
@@ -123,20 +145,25 @@
                 @endif
                 @error('kiKartenVorschau')<div class="mt-2 text-[11px] text-red-500">{{ $message }}</div>@enderror
             </div>
+                </div>{{-- /Tab STAMMDATEN --}}
 
+                {{-- ── Tab: LEITSTELLE (Cockpit, Stufe E) ──────────────────────── --}}
+                <div x-show="tab === 'leitstelle'" x-cloak class="pt-4 space-y-4">
             {{-- Leitstelle-Cockpit (Stufe E) --}}
             <livewire:foodalchemist.speisekarte.leitstelle-rail :karte-id="$karte->id" wire:key="sk-ls-rail-{{ $karte->id }}" />
+                </div>{{-- /Tab LEITSTELLE --}}
 
-            {{-- Branding / CI (Stufe C) --}}
-            <div class="relative overflow-hidden {{ $card }} p-4" wire:key="sk-brand-{{ $karte->id }}" x-data="{ auf: false }">
+                {{-- ── Tab: BRANDING / CI ──────────────────────────────────────── --}}
+                <div x-show="tab === 'branding'" x-cloak class="pt-4 space-y-4">
+            {{-- Branding / CI (Stufe C) — im eigenen Tab, kein Akkordeon (Feinschliff 2026-08-03:
+                 der Toggle war im dedizierten Tab redundant, der ▲ blieb verwaist stehen). --}}
+            <div class="relative overflow-hidden {{ $card }} p-4" wire:key="sk-brand-{{ $karte->id }}">
                 <div class="{{ $cardAccent }}"></div>
-                <button type="button" @click="auf = !auf" class="flex items-center gap-2 w-full text-left">
+                <div class="flex items-center gap-2">
                     <span class="font-semibold text-gray-900 text-sm">Branding / CI</span>
                     <span class="{{ $pill }} {{ $variantPill['secondary'] }}">Design</span>
-                    <span class="flex-1"></span>
-                    <span class="text-xs text-gray-400" x-text="auf ? '▲' : '▼'"></span>
-                </button>
-                <div x-show="auf" x-cloak class="mt-3 grid grid-cols-1 md:grid-cols-2 gap-4">
+                </div>
+                <div class="mt-3 grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div class="space-y-2">
                         <div>
                             <div class="{{ $label }} mb-1">Markenfarbe</div>
@@ -180,7 +207,10 @@
                     </div>
                 </div>
             </div>
+                </div>{{-- /Tab BRANDING --}}
 
+                {{-- ── Tab: AUFBAU — Rubriken + Positionen ─────────────────────── --}}
+                <div x-show="tab === 'aufbau'" x-cloak class="pt-4 space-y-4">
             {{-- Rubriken + Positionen --}}
             <div class="relative overflow-hidden {{ $card }} p-4" wire:key="sk-body-{{ $karte->id }}">
                 <div class="{{ $cardAccent }}"></div>
@@ -196,7 +226,8 @@
                     <div class="px-2 py-8 text-center text-[11px] text-gray-500">Noch keine Rubriken. Oben eine anlegen.</div>
                 @endforelse
             </div>
-                </div>{{-- /space-y-4 im Editor-Modal --}}
+                </div>{{-- /Tab AUFBAU --}}
+                </x-foodalchemist::editor-tabs>
             </x-foodalchemist::modal>
         @endif
     </x-ui-page-container>
