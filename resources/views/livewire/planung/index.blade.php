@@ -231,19 +231,58 @@
                 </x-foodalchemist::modal-section>
 
                 <x-foodalchemist::modal-section title="Go — erzeugen (Draft)">
-                    <p class="{{ $label ?? 'text-[11px] text-gray-500' }} mb-2">Übergibt den Brief an den KI-Generator des Ziels — dort prüfst du die Regler und erzeugst den Entwurf.</p>
+                    <p class="{{ $label ?? 'text-[11px] text-gray-500' }} mb-2">
+                        Wähle die Stufe — der Entwurf entsteht in-place (Draft). Basisrezept &amp; Gericht laufen
+                        über den Kaskaden-Motor; Concept öffnet vorerst den Konzept-Generator.
+                    </p>
                     <div class="flex flex-wrap gap-2">
-                        <button wire:click="goRezept(false)" class="{{ $btnGhost }}">
+                        <button wire:click="goKaskade('rezept')" @disabled($laeuft) class="{{ $btnGhost }} disabled:opacity-40">
                             @svg('heroicon-o-beaker', 'w-4 h-4') Basisrezept
                         </button>
-                        <button wire:click="goRezept(true)" class="{{ $btnGhost }}">
+                        <button wire:click="goKaskade('gericht')" @disabled($laeuft) class="{{ $btnGhost }} disabled:opacity-40">
                             @svg('heroicon-o-cake', 'w-4 h-4') Gericht
                         </button>
-                        <button wire:click="goConcept" class="{{ $btnPrimary }}">
+                        <button wire:click="goConcept" @disabled($laeuft) class="{{ $btnPrimary }} disabled:opacity-40">
                             @svg('heroicon-o-squares-2x2', 'w-4 h-4') Concept
                         </button>
                     </div>
+
+                    @if($laeuft)
+                        <div wire:poll.1500ms="pruefeLauf" class="mt-3 flex items-center gap-2 text-xs text-amber-300">
+                            @svg('heroicon-o-arrow-path', 'w-4 h-4 animate-spin')
+                            <span>Entwurf wird erzeugt — läuft im Hintergrund …</span>
+                        </div>
+                    @endif
                 </x-foodalchemist::modal-section>
+
+                {{-- Ergebnis des Laufs (Steps + erzeugte Draft-Artefakte). --}}
+                @if($lauf)
+                    @php
+                        $stepLabel = ['queued' => 'wartet', 'running' => 'läuft', 'done' => 'erstellt', 'failed' => 'Fehler', 'skipped' => 'übernommen'];
+                        $stepColor = ['queued' => 'text-amber-300', 'running' => 'text-amber-300', 'done' => 'text-emerald-300', 'failed' => 'text-rose-300', 'skipped' => 'text-gray-400'];
+                        $refRoute = ['gericht' => 'foodalchemist.verkauf.index', 'rezept' => 'foodalchemist.recipes.index'];
+                    @endphp
+                    <x-foodalchemist::modal-section title="Ergebnis (Entwürfe)">
+                        <div class="space-y-1.5">
+                            @forelse($lauf->steps as $st)
+                                <div wire:key="step-{{ $st->id }}" class="flex items-center justify-between gap-3 text-xs">
+                                    <span class="truncate text-gray-200">{{ $st->label ?: ucfirst($st->kind) }}</span>
+                                    <span class="shrink-0 flex items-center gap-2">
+                                        <span class="{{ $stepColor[$st->status] ?? 'text-gray-400' }}">{{ $stepLabel[$st->status] ?? $st->status }}</span>
+                                        @if($st->status === 'done' && $st->ref_id && isset($refRoute[$st->kind]))
+                                            <a href="{{ route($refRoute[$st->kind]) }}" class="text-violet-300 hover:text-violet-200 underline">öffnen</a>
+                                        @endif
+                                    </span>
+                                </div>
+                                @if($st->status === 'failed' && $st->error)
+                                    <p class="text-[10px] text-rose-400/80 pl-1">{{ \Illuminate\Support\Str::limit($st->error, 160) }}</p>
+                                @endif
+                            @empty
+                                <p class="text-xs text-gray-500">Noch keine Schritte.</p>
+                            @endforelse
+                        </div>
+                    </x-foodalchemist::modal-section>
+                @endif
             </div>
         @endif
     </x-foodalchemist::modal>

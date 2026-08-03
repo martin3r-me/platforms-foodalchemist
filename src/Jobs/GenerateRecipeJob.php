@@ -112,8 +112,12 @@ class GenerateRecipeJob implements ShouldQueue
                     ->anreichern($team, $r['recipe'], $this->zielVk());
             }
             $this->schreibe($payload);
+            // Kaskaden-Rückkanal (P0): meldet Ergebnis an den Step, wenn dieser Job Teil einer
+            // Planungs-Kaskade ist. Backward-kompatibel — ohne cascade_step_id passiert nichts.
+            $this->meldeKaskade(true, (int) $r['recipe']->id, null);
         } catch (\Throwable $e) {
             $this->schreibe(['status' => 'error', 'fehler' => $e->getMessage()]);
+            $this->meldeKaskade(false, null, $e->getMessage());
         }
     }
 
@@ -135,6 +139,38 @@ class GenerateRecipeJob implements ShouldQueue
     public function failed(\Throwable $e): void
     {
         $this->schreibe(['status' => 'error', 'fehler' => 'Generierung abgebrochen: ' . $e->getMessage()]);
+        $this->meldeKaskade(false, null, 'Generierung abgebrochen: ' . $e->getMessage());
+    }
+
+    /** cascade_step_id aus dem Parameter-Bündel (Rückkanal-Ziel), null wenn kein Kaskaden-Lauf. */
+    private function cascadeStepId(): ?int
+    {
+        $roh = $this->parameter['cascade_step_id'] ?? null;
+
+        return is_numeric($roh) ? (int) $roh : null;
+    }
+
+    /**
+     * Ergebnis/Fehler an den Kaskaden-Step zurückmelden (P0). No-op ohne cascade_step_id — hält die
+     * Bestandspfade (Generator-Modals) byte-identisch. Wirft nie: ein Fehler im Rückkanal darf den
+     * Job-Ausgang (Cache) nicht kippen.
+     */
+    private function meldeKaskade(bool $erfolg, ?int $recipeId, ?string $fehler): void
+    {
+        $stepId = $this->cascadeStepId();
+        if ($stepId === null) {
+            return;
+        }
+        try {
+            $svc = app(\Platform\FoodAlchemist\Services\PlanningCascadeService::class);
+            if ($erfolg && $recipeId !== null) {
+                $svc->markStepDone($stepId, 'recipe', $recipeId);
+            } else {
+                $svc->markStepFailed($stepId, (string) ($fehler ?? 'Generierung fehlgeschlagen.'));
+            }
+        } catch (\Throwable) {
+            // Rückkanal-Fehler bewusst schlucken.
+        }
     }
 
     private function schreibe(array $data): void

@@ -9,6 +9,7 @@ use Livewire\Component;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Models\FoodAlchemistPlanningSession;
 use Platform\FoodAlchemist\Services\IdeenService;
+use Platform\FoodAlchemist\Services\PlanningCascadeService;
 use Platform\FoodAlchemist\Services\PlanningSessionService;
 use Platform\FoodAlchemist\Support\TeamScope;
 
@@ -37,6 +38,12 @@ class Index extends Component
     public string $paketName = '';
 
     public ?string $meldung = null;
+
+    /** Aktiver Kaskaden-Lauf (in-place „Go") — Ziel des wire:poll. */
+    public ?int $laufId = null;
+
+    /** true, solange der Lauf im Hintergrund rechnet (steuert das Polling). */
+    public bool $laeuft = false;
 
     /** Deep-Link `?session=X&open=1` (z.B. vom Trendradar-Carry-in) öffnet den Editor direkt. */
     public function mount(): void
@@ -78,12 +85,29 @@ class Index extends Component
         $this->fehler = null;
         $this->meldung = null;
         $this->ladeForm();
+        $this->ladeLetztenLauf();
         $this->dispatch('modal.open', name: 'planung-editor');
     }
 
     public function waehle(int $id): void
     {
         $this->sessionId = $id;
+        $this->ladeLetztenLauf();
+    }
+
+    /** Beim Öffnen/Wählen den letzten Kaskaden-Lauf laden — läuft er noch, wird das Polling fortgesetzt. */
+    private function ladeLetztenLauf(): void
+    {
+        $team = $this->team();
+        if ($team === null || $this->sessionId === null) {
+            $this->laufId = null;
+            $this->laeuft = false;
+
+            return;
+        }
+        $lauf = app(PlanningCascadeService::class)->letzterLauf($team, $this->sessionId);
+        $this->laufId = $lauf?->id;
+        $this->laeuft = $lauf !== null && $lauf->status === 'running';
     }
 
     private function ladeForm(): void
@@ -164,16 +188,60 @@ class Index extends Component
         }
     }
 
-    // ── „Go" / Handoff an den bestehenden KI-Generator ─────────────────
+    // ── „Go" — Tiefen-Leiter über den geteilten Kaskaden-Motor ─────────
 
-    /** Go → Basisrezept (vk=false) / Gericht (vk=true): Handoff an das bestehende KI-Rezept-Modal. */
-    public function goRezept(bool $vk)
+    /**
+     * Go → in-place Generierung über {@see PlanningCascadeService}. `$scope` = Einstiegs-Stufe
+     * (P0: `rezept`|`gericht`). Speichert erst den Rahmen (Titel/Brief/Modus), dann startet der Lauf
+     * im Hintergrund; die Fläche pollt {@see pruefeLauf}. Kein Redirect mehr.
+     */
+    public function goKaskade(string $scope, PlanningCascadeService $cascade, PlanningSessionService $svc): void
     {
-        return $this->handoff($vk ? 'gericht' : 'basisrezept',
-            $vk ? 'foodalchemist.verkauf.index' : 'foodalchemist.recipes.index');
+        $team = $this->team();
+        $session = $this->aktiveSession();
+        if ($team === null || $session === null) {
+            return;
+        }
+        // Rahmen persistieren, damit der Motor mit dem aktuellen Brief/Modus arbeitet (spiegelt speichern()).
+        $this->speichern($svc);
+        $session = $this->aktiveSession();
+        if ($session === null) {
+            return;
+        }
+        try {
+            $run = $cascade->starteKaskade($team, $scope, $session, (string) $session->creative_mode, [
+                'created_via' => 'plan_go',
+            ]);
+            $this->laufId = $run->id;
+            $this->laeuft = true;
+            $this->meldung = 'Kaskade gestartet — Entwurf wird erzeugt …';
+            $this->fehler = null;
+        } catch (\Throwable $e) {
+            $this->fehler = $e->getMessage();
+        }
     }
 
-    /** Go → Concept: Handoff an den bestehenden KI-Konzept-Generator (Concepts-Seite). */
+    /** Poll-Ziel (wire:poll während $laeuft): Lauf-Status aus der DB lesen. */
+    public function pruefeLauf(PlanningCascadeService $cascade): void
+    {
+        $team = $this->team();
+        if ($team === null || $this->laufId === null) {
+            $this->laeuft = false;
+
+            return;
+        }
+        $lauf = $cascade->lauf($team, $this->laufId);
+        if ($lauf === null || $lauf->status !== 'running') {
+            $this->laeuft = false;
+            if ($lauf !== null && $lauf->status === 'review') {
+                $this->meldung = 'Entwurf erzeugt — im Ergebnis unten prüfen.';
+            } elseif ($lauf !== null && $lauf->status === 'failed') {
+                $this->fehler = 'Generierung fehlgeschlagen — Details im Ergebnis unten.';
+            }
+        }
+    }
+
+    /** Go → Concept: Handoff an den bestehenden KI-Konzept-Generator (Concepts-Seite). P1 zieht ihn an den Motor. */
     public function goConcept()
     {
         return $this->handoff('concept', 'foodalchemist.concepts.index');
@@ -250,11 +318,17 @@ class Index extends Component
             $skizzen = app(IdeenService::class)->liste($team, null, null, false, $active->id);
         }
 
+        // Aktiver Kaskaden-Lauf (in-place „Go") inkl. Steps — für Fortschritt + Ergebnis-Liste.
+        $lauf = ($team !== null && $this->laufId !== null)
+            ? app(PlanningCascadeService::class)->lauf($team, $this->laufId)
+            : null;
+
         return view('foodalchemist::livewire.planung.index', [
             'sessions' => $sessions,
             'baum' => $baum,
             'active' => $active,
             'skizzen' => $skizzen,
+            'lauf' => $lauf,
         ])->layout('platform::layouts.app');
     }
 }

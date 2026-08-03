@@ -112,15 +112,17 @@ it('schreibt Lineage beim „Go" (Trend-FK + created_via=plan_go, Session→konv
         ->and($s->refresh()->status)->toBe('konvergenz');
 });
 
-it('Go übergibt den Brief per Handoff-Flash an den Ziel-Browser (kein Parallel-Pfad)', function () {
+it('Go → Concept übergibt den Brief per Handoff-Flash an den Ziel-Browser (kein Parallel-Pfad)', function () {
+    // Seit P0 laufen Basisrezept/Gericht in-place über den Kaskaden-Motor (goKaskade, siehe
+    // PlanningCascadeTest); nur der Concept-Pfad nutzt weiter den Handoff-Redirect (P1 zieht ihn nach).
     $s = $this->svc->create($this->rootTeam, ['title' => 'Go-Test', 'brief' => 'leichte Küche']);
 
     Livewire::test(\Platform\FoodAlchemist\Livewire\Planung\Index::class, ['sessionId' => $s->id])
-        ->call('goRezept', false)
-        ->assertRedirect(route('foodalchemist.recipes.index'));
+        ->call('goConcept')
+        ->assertRedirect(route('foodalchemist.concepts.index'));
 
     $h = session('fa_plan_handoff');
-    expect($h['target'])->toBe('basisrezept')
+    expect($h['target'])->toBe('concept')
         ->and($h['planning_session_id'])->toBe($s->id)
         ->and($h['brief'])->toContain('leichte Küche');
 });
