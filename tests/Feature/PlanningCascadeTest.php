@@ -331,3 +331,21 @@ it('materialisiereConceptGericht: Generierungs-Fehler → Step failed, Idee fehl
         ->and($idee->refresh()->generation_status)->toBe('fehlgeschlagen')
         ->and($slot->refresh()->sales_recipe_id)->toBeNull();   // nichts verdrahtet
 });
+
+it('Wissen/Trend: erfundenes Rezept erbt die Trend-Herkunft der Planung (Lineage durchgereicht)', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Trend-Plan', 'brief' => 'x', 'source_knowledge_document_id' => 4242]);
+    $concept = $this->makeConcept($this->rootTeam, 'Buffet', ['status' => 'draft']);
+    $slot = $this->makeConceptSlot($concept, ['position' => 1]);
+    $recipe = $this->makeRecipe($this->rootTeam, 'Erfunden', ['status' => 'draft', 'is_sales_recipe' => true]);
+    $idee = FoodAlchemistDishIdea::create(['team_id' => $this->rootTeam->id, 'concept_id' => $concept->id, 'title' => 'Erfunden', 'status' => 'entwurf', 'target_form' => 'einzel', 'generation_status' => 'queued', 'position' => 1, 'created_via' => 'test', 'source_meta' => ['target_concept_slot_id' => (int) $slot->id]]);
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'concept', 'status' => 'running']);
+    $step = FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht', 'status' => 'running']);
+
+    $this->mock(RecipeGeneratorService::class, fn ($m) => $m->shouldReceive('generiere')->once()
+        ->andReturn(['recipe' => $recipe, 'statistik' => [], 'offene' => []]));
+
+    app(PlanningCascadeService::class)->materialisiereConceptGericht($this->rootTeam, (int) $idee->id, (int) $step->id, (int) $session->id);
+
+    expect((int) $recipe->refresh()->source_knowledge_document_id)->toBe(4242)   // Trend-Herkunft geerbt
+        ->and($recipe->refresh()->created_via)->toBe('plan_go');
+});

@@ -146,7 +146,7 @@ class PlanningCascadeService
      * Graceful: ohne LLM (Sandbox/Kill-Switch) wirft die Divergenz → 0 Ideen, 0 Kind-Steps; der Run geht
      * mit dem Konzept allein auf review. Wirft NIE (der Concept-Job fängt zusätzlich ab).
      */
-    public function fanoutConceptInvention(Team $team, int $conceptStepId, int $conceptId, string $mode): void
+    public function fanoutConceptInvention(Team $team, int $conceptStepId, int $conceptId, string $mode, ?int $trendDocId = null, ?int $planningSessionId = null): void
     {
         $conceptStep = FoodAlchemistCascadeRunStep::find($conceptStepId);
         if ($conceptStep === null) {
@@ -165,7 +165,8 @@ class PlanningCascadeService
         }
 
         try {
-            $div = app(IdeenService::class)->kiDivergenzConcept($team, $conceptId, $leere->count());
+            // Wissen+Trend fließen in die Divergenz (voller Stack + generischer Trend + Ursprungs-Trend der Planung).
+            $div = app(IdeenService::class)->kiDivergenzConcept($team, $conceptId, $leere->count(), null, $trendDocId);
         } catch (\Throwable) {
             return;   // KI nicht verfügbar → keine Erfindung, Konzept bleibt (graceful)
         }
@@ -189,7 +190,7 @@ class PlanningCascadeService
                 'status' => 'running',
                 'sort' => $idx + 1,
             ]);
-            MaterializeConceptIdeaJob::dispatch($team->id, (int) (\Illuminate\Support\Facades\Auth::id() ?? 0), (int) $idee->id, (int) $step->id);
+            MaterializeConceptIdeaJob::dispatch($team->id, (int) (\Illuminate\Support\Facades\Auth::id() ?? 0), (int) $idee->id, (int) $step->id, $planningSessionId);
         }
     }
 
@@ -199,7 +200,7 @@ class PlanningCascadeService
      * vorgemerkten leeren Slot ({@see ConceptService::fillSlot}); Lineage an die Idee, Rückmeldung an
      * den Kind-Step. Fehler (inkl. KI-Ausfall) → Step failed, Idee markiert — kein „halbes Wrack".
      */
-    public function materialisiereConceptGericht(Team $team, int $ideaId, int $stepId): void
+    public function materialisiereConceptGericht(Team $team, int $ideaId, int $stepId, ?int $planningSessionId = null): void
     {
         $idee = FoodAlchemistDishIdea::where('team_id', $team->id)->find($ideaId);
         if ($idee === null) {
@@ -227,6 +228,13 @@ class PlanningCascadeService
                 'materialized_ref' => ['concept_slot_id' => $slotId, 'recipe_id' => (int) $recipe->id],
                 'source_meta' => array_merge($idee->source_meta ?? [], ['erdung' => 'ki_generiert', 'original_titel' => (string) $idee->title]),
             ]);
+            // Trend-Herkunft aufs erfundene Rezept durchreichen (source_knowledge_document_id + created_via=plan_go).
+            if ($planningSessionId !== null) {
+                $sess = app(PlanningSessionService::class)->get($team, $planningSessionId);
+                if ($sess !== null) {
+                    app(PlanningSessionService::class)->verknuepfeArtefakt($sess, 'recipe', (int) $recipe->id);
+                }
+            }
             $this->markStepDone($stepId, 'recipe', (int) $recipe->id);
         } catch (\Throwable $e) {
             $idee->update(['generation_status' => 'fehlgeschlagen', 'source_meta' => array_merge($idee->source_meta ?? [], ['generation_fehler' => mb_substr($e->getMessage(), 0, 500)])]);

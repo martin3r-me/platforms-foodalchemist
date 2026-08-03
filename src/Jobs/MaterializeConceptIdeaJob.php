@@ -36,6 +36,7 @@ class MaterializeConceptIdeaJob implements ShouldQueue
         public int $userId,
         public int $ideaId,
         public int $cascadeStepId,
+        public ?int $planningSessionId = null,
     ) {}
 
     public function handle(): void
@@ -51,7 +52,7 @@ class MaterializeConceptIdeaJob implements ShouldQueue
             Auth::login($user);   // Team-Kontext für AiGatewayService (Kill-Switch/DNA/Call-Log)
         }
 
-        app(PlanningCascadeService::class)->materialisiereConceptGericht($team, $this->ideaId, $this->cascadeStepId);
+        app(PlanningCascadeService::class)->materialisiereConceptGericht($team, $this->ideaId, $this->cascadeStepId, $this->planningSessionId);
     }
 
     /** Job-Tod (Timeout/Fatal) → Step trotzdem terminal setzen, sonst hängt der Run auf „running". */

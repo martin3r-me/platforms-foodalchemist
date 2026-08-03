@@ -91,8 +91,14 @@ class GenerateConceptJob implements ShouldQueue
             // ohne LLM/Slots bleibt es beim Konzept — der Run geht dann direkt auf review.
             if ($this->cascadeStepId !== null && in_array($this->creativeMode, ['voll_kreativ', 'hybrid'], true)) {
                 try {
+                    // Ursprungs-Trend der Planung (falls vorhanden) fließt in die Erfindungs-Divergenz.
+                    $trendDocId = null;
+                    if ($this->planningSessionId !== null) {
+                        $sess = app(\Platform\FoodAlchemist\Services\PlanningSessionService::class)->get($team, $this->planningSessionId);
+                        $trendDocId = $sess?->source_knowledge_document_id !== null ? (int) $sess->source_knowledge_document_id : null;
+                    }
                     app(\Platform\FoodAlchemist\Services\PlanningCascadeService::class)
-                        ->fanoutConceptInvention($team, $this->cascadeStepId, (int) $concept->id, $this->creativeMode);
+                        ->fanoutConceptInvention($team, $this->cascadeStepId, (int) $concept->id, $this->creativeMode, $trendDocId, $this->planningSessionId);
                 } catch (\Throwable) {
                     // Fan-out-Fehler darf das erzeugte Konzept nicht kippen.
                 }
