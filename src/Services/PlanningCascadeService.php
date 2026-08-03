@@ -8,6 +8,7 @@ use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Jobs\GenerateConceptJob;
 use Platform\FoodAlchemist\Jobs\GenerateRecipeJob;
 use Platform\FoodAlchemist\Jobs\MaterializeConceptIdeaJob;
+use Platform\FoodAlchemist\Jobs\MaterializeSpeiseplanCellJob;
 use Platform\FoodAlchemist\Models\FoodAlchemistCascadeRun;
 use Platform\FoodAlchemist\Models\FoodAlchemistCascadeRunStep;
 use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
@@ -15,6 +16,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistConceptSlot;
 use Platform\FoodAlchemist\Models\FoodAlchemistDishIdea;
 use Platform\FoodAlchemist\Models\FoodAlchemistPlanningSession;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
+use Platform\FoodAlchemist\Models\FoodAlchemistSpeiseplan;
 use RuntimeException;
 
 /**
@@ -35,6 +37,9 @@ class PlanningCascadeService
     /** Async-Result via Cache (Job-Vertrag) — Minuten, bis der Worker den Step abschließt. */
     private const RESULT_TTL_MIN = 15;
 
+    /** Deckel gegen Runaway-Kosten: max. Zellen (= KI-Gericht-Generierungen) je Speiseplan-Voll-Kaskade. */
+    private const SPEISEPLAN_MAX_ZELLEN = 30;
+
     /**
      * Startet einen Kaskaden-Lauf und gibt ihn zurück (Status `running`). Die eigentliche Generierung
      * läuft asynchron im Queue-Job; die Fläche pollt den Run/seine Steps.
@@ -54,9 +59,13 @@ class PlanningCascadeService
         if (! in_array($creativeMode, FoodAlchemistPlanningSession::CREATIVE_MODES, true)) {
             $creativeMode = 'voll_kreativ';
         }
-        // Voll-Kaskade (P3+): Ausgabe-Frame → 1 Concept je Slot → je Concept der Gericht-Fan-out.
-        // Owner (foodbook|speisekarte) kommt über $optionen, nicht über die Session.
+        // Voll-Kaskade (P3+): Ausgabe → Gerichte/Concepts. foodbook|speisekarte = 1 Concept je Slot;
+        // speiseplan (P5) = ein Gericht je leerer Zyklus-Zelle (Zeitachse, kein Concept-Zwischenschritt).
         if ($scope === 'vollkaskade') {
+            if ((string) ($optionen['owner_type'] ?? '') === 'speiseplan') {
+                return $this->starteSpeiseplanVollkaskade($team, $session, $creativeMode, $optionen);
+            }
+
             return $this->starteVollkaskade($team, $session, $creativeMode, $optionen);
         }
 
@@ -249,6 +258,117 @@ class PlanningCascadeService
         }
 
         return 'Konzept für die Rolle ' . implode(' — ', $teile) . '.';
+    }
+
+    // ── P5: Speiseplan-Voll-Kaskade — ein Gericht je leerer Zyklus-Zelle ──
+
+    /**
+     * Speiseplan-Voll-Kaskade (P5): füllt leere Zellen des Zyklus (cycle_weeks × Mo–Fr × Mittag × Linien) mit
+     * erfundenen Gerichten. Anders als Foodbook/Speisekarte (Slot → Concept) hält eine Zelle EIN Gericht — je
+     * leerer Zelle ein Gericht-Step + {@see MaterializeSpeiseplanCellJob} (generiert + trägt via addEintrag ein).
+     * Gedeckelt ({@see SPEISEPLAN_MAX_ZELLEN}) gegen Runaway-Kosten; die Zahl der übersprungenen Zellen steht
+     * im Run (`params.gedeckelt_zellen_offen`) — kein stiller Deckel.
+     */
+    private function starteSpeiseplanVollkaskade(Team $team, ?FoodAlchemistPlanningSession $session, string $creativeMode, array $optionen): FoodAlchemistCascadeRun
+    {
+        $planId = (int) ($optionen['owner_id'] ?? 0);
+        $plan = $planId > 0 ? FoodAlchemistSpeiseplan::visibleToTeam($team)->with(['lines', 'entries'])->find($planId) : null;
+        if ($plan === null) {
+            throw new RuntimeException('Speiseplan nicht gefunden.');
+        }
+        if ($plan->lines->isEmpty()) {
+            throw new RuntimeException('Speiseplan hat keine Menü-Linien — erst Linien anlegen.');
+        }
+
+        $run = FoodAlchemistCascadeRun::create([
+            'team_id' => $team->id,
+            'planning_session_id' => $session?->id,
+            'scope' => 'vollkaskade',
+            'creative_mode' => $creativeMode,
+            'brief' => 'Voll-Kaskade speiseplan #' . $planId,
+            'status' => 'running',
+            'source_owner_type' => 'speiseplan',
+            'source_owner_id' => $planId,
+            'created_via' => (string) ($optionen['created_via'] ?? 'plan_go'),
+        ]);
+
+        $start = \Illuminate\Support\Carbon::parse($plan->start_date ?? now())->startOfWeek();   // Montag
+        $weeks = max(1, (int) ($plan->cycle_weeks ?? 1));
+        $meal = 'mittag';
+        $belegt = [];
+        foreach ($plan->entries as $e) {
+            if ($e->entry_date !== null) {
+                $belegt[$e->entry_date->format('Y-m-d') . '|' . $e->meal . '|' . (int) $e->line_id] = true;
+            }
+        }
+
+        $idx = 0;
+        $offen = 0;
+        foreach (range(1, $weeks) as $week) {
+            foreach (range(1, 5) as $weekday) {   // Mo–Fr (GV-Werktage)
+                $datum = $start->copy()->addDays(($week - 1) * 7 + ($weekday - 1))->format('Y-m-d');
+                foreach ($plan->lines as $linie) {
+                    if (isset($belegt[$datum . '|' . $meal . '|' . (int) $linie->id])) {
+                        continue;   // Zelle belegt
+                    }
+                    if ($idx >= self::SPEISEPLAN_MAX_ZELLEN) {
+                        $offen++;
+                        continue;
+                    }
+                    $brief = 'Mittagsgericht für die Linie „' . $linie->name . '“' . ($linie->is_vegetarian ? ' (vegetarisch)' : '') . '.';
+                    $step = FoodAlchemistCascadeRunStep::create([
+                        'team_id' => $team->id,
+                        'cascade_run_id' => $run->id,
+                        'parent_step_id' => null,
+                        'kind' => 'gericht',
+                        'label' => Str::limit($linie->name . ' · ' . $datum, 120),
+                        'status' => 'running',
+                        'sort' => $idx,
+                    ]);
+                    MaterializeSpeiseplanCellJob::dispatch(
+                        $team->id, (int) (\Illuminate\Support\Facades\Auth::id() ?? 0),
+                        $planId, $datum, $meal, (int) $linie->id, $brief, (int) $step->id, $session?->id
+                    );
+                    $idx++;
+                }
+            }
+        }
+        if ($offen > 0) {
+            $run->update(['params' => ['gedeckelt_zellen_offen' => $offen]]);
+        }
+        if ($idx === 0) {
+            $run->update(['status' => 'done']);   // keine leere Zelle → nichts zu tun (kein Fehler)
+        }
+
+        return $run;
+    }
+
+    /**
+     * Worker-Logik (aus {@see MaterializeSpeiseplanCellJob}): erdet EINE Speiseplan-Zelle zu einem VK-Gericht
+     * ({@see RecipeGeneratorService}, vkModus) und trägt es via {@see SpeiseplanService::addEintrag} in die
+     * Zelle (Datum/Mahlzeit/Linie) ein; Trend-Lineage + Rückmeldung an den Step.
+     */
+    public function materialisiereSpeiseplanZelle(Team $team, int $planId, string $entryDate, string $meal, int $lineId, string $brief, int $stepId, ?int $planningSessionId = null): void
+    {
+        try {
+            $gen = app(RecipeGeneratorService::class)->generiere($team, $brief, [], null, true, 'plan_go');
+            $recipe = $gen['recipe'] ?? null;
+            if ($recipe === null) {
+                throw new RuntimeException('Generierung lieferte kein Rezept.');
+            }
+            app(SpeiseplanService::class)->addEintrag($team, $planId, [
+                'entry_date' => $entryDate, 'mahlzeit' => $meal, 'line_id' => $lineId, 'sales_recipe_id' => (int) $recipe->id,
+            ]);
+            if ($planningSessionId !== null) {
+                $sess = app(PlanningSessionService::class)->get($team, $planningSessionId);
+                if ($sess !== null) {
+                    app(PlanningSessionService::class)->verknuepfeArtefakt($sess, 'recipe', (int) $recipe->id);
+                }
+            }
+            $this->markStepDone($stepId, 'recipe', (int) $recipe->id);
+        } catch (\Throwable $e) {
+            $this->markStepFailed($stepId, $e->getMessage());
+        }
     }
 
     // ── P1b: Erfinden — Fan-out des Concepts in erfundene Gerichte ─────────

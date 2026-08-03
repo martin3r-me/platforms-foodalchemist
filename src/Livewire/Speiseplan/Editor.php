@@ -62,6 +62,9 @@ class Editor extends Component
 
     public ?string $ausrollenInfo = null;
 
+    /** Meldung des Voll-Kaskade-Go (P5). */
+    public ?string $kaskadeMeldung = null;
+
     #[On('speiseplan-editor.bearbeiten')]
     public function oeffnenBearbeiten(int $id): void
     {
@@ -282,6 +285,40 @@ class Editor extends Component
         $n = $svc->vorlageAusrollen($this->team(), $this->planId, $this->ausrollenBis);
         $this->ausrollenInfo = $n > 0 ? "{$n} Einträge ausgerollt." : 'Nichts auszurollen (Vorlage leer oder schon belegt).';
         $this->dispatch('speiseplan-geaendert');
+    }
+
+    /**
+     * Voll-Kaskade (P5): füllt die leeren Zyklus-Zellen (Mo–Fr × Mittag × Linien) mit erfundenen Gerichten.
+     * Legt eine Planungs-Session als Review-Wurzel an und leitet in den Planung-Editor (Fortschritt + Freigabe).
+     */
+    public function vollKaskadeStarten(
+        \Platform\FoodAlchemist\Services\PlanningCascadeService $cascade,
+        \Platform\FoodAlchemist\Services\PlanningSessionService $sessions
+    ) {
+        $this->kaskadeMeldung = null;
+        $team = $this->team();
+        if ($team === null || $this->planId === null) {
+            return null;
+        }
+        $plan = FoodAlchemistSpeiseplan::visibleToTeam($team)->find($this->planId);
+        if ($plan === null) {
+            return null;
+        }
+        try {
+            $session = $sessions->create($team, [
+                'title' => 'Voll-Kaskade: ' . ($plan->name ?: ('Speiseplan #' . $this->planId)),
+                'created_via' => 'speiseplan_vollkaskade',
+            ]);
+            $cascade->starteKaskade($team, 'vollkaskade', $session, 'voll_kreativ', [
+                'owner_type' => 'speiseplan', 'owner_id' => (int) $this->planId, 'created_via' => 'speiseplan_vollkaskade',
+            ]);
+
+            return redirect()->route('foodalchemist.planung.index', ['session' => $session->id, 'open' => 1]);
+        } catch (\Throwable $e) {
+            $this->kaskadeMeldung = $e->getMessage();
+
+            return null;
+        }
     }
 
     public function render(SpeiseplanService $svc)

@@ -5,6 +5,7 @@ use Livewire\Livewire;
 use Platform\FoodAlchemist\Jobs\GenerateConceptJob;
 use Platform\FoodAlchemist\Jobs\GenerateRecipeJob;
 use Platform\FoodAlchemist\Jobs\MaterializeConceptIdeaJob;
+use Platform\FoodAlchemist\Jobs\MaterializeSpeiseplanCellJob;
 use Platform\FoodAlchemist\Livewire\Planung\Index as PlanungIndex;
 use Platform\FoodAlchemist\Models\FoodAlchemistCascadeRun;
 use Platform\FoodAlchemist\Models\FoodAlchemistCascadeRunStep;
@@ -444,4 +445,53 @@ it('Speisekarte-Leitstelle: Voll-Kaskade-Go leitet Rahmen aus Rubriken ab + star
 
     expect(FoodAlchemistCascadeRun::where('source_owner_type', 'speisekarte')->where('source_owner_id', $karte->id)->count())->toBe(1);
     Queue::assertPushed(GenerateConceptJob::class, 2);   // 2 Rubriken → 2 Slots → 2 Konzepte
+});
+
+// ── P5: Speiseplan-Voll-Kaskade (Zell-Fan-out) ──────────────────────────────
+
+it('vollkaskade (speiseplan): ein Gericht-Step je leerer Zelle + MaterializeSpeiseplanCellJob', function () {
+    $svc = app(\Platform\FoodAlchemist\Services\SpeiseplanService::class);
+    $plan = $svc->create($this->rootTeam, ['name' => 'Wochenplan', 'start_date' => '2026-08-03']);
+    $plan->load('lines');
+    // cycle_weeks × Mo–Fr × Linien, gedeckelt auf SPEISEPLAN_MAX_ZELLEN (Runaway-Schutz).
+    $erwartet = min($plan->lines->count() * 5 * max(1, (int) $plan->cycle_weeks), 30);
+    Queue::fake();
+
+    $run = app(PlanningCascadeService::class)->starteKaskade($this->rootTeam, 'vollkaskade', null, 'voll_kreativ', ['owner_type' => 'speiseplan', 'owner_id' => (int) $plan->id]);
+
+    expect($run->source_owner_type)->toBe('speiseplan')
+        ->and($run->steps()->where('kind', 'gericht')->count())->toBe($erwartet)
+        ->and($erwartet)->toBeGreaterThan(0);
+    Queue::assertPushed(MaterializeSpeiseplanCellJob::class, $erwartet);
+});
+
+it('materialisiereSpeiseplanZelle: erdet die Zelle → Rezept + Speiseplan-Eintrag, Step done (Gen gemockt)', function () {
+    $svc = app(\Platform\FoodAlchemist\Services\SpeiseplanService::class);
+    $plan = $svc->create($this->rootTeam, ['name' => 'Plan', 'start_date' => '2026-08-03']);
+    $plan->load('lines');
+    $line = $plan->lines->first();
+    $recipe = $this->makeRecipe($this->rootTeam, 'Zell-Gericht', ['status' => 'draft', 'is_sales_recipe' => true]);
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'vollkaskade', 'source_owner_type' => 'speiseplan', 'source_owner_id' => $plan->id, 'status' => 'running']);
+    $step = FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht', 'status' => 'running']);
+
+    $this->mock(RecipeGeneratorService::class, fn ($m) => $m->shouldReceive('generiere')->once()
+        ->andReturn(['recipe' => $recipe, 'statistik' => [], 'offene' => []]));
+
+    app(PlanningCascadeService::class)->materialisiereSpeiseplanZelle($this->rootTeam, (int) $plan->id, '2026-08-03', 'mittag', (int) $line->id, 'Mittagsgericht', (int) $step->id);
+
+    expect($step->refresh()->status)->toBe('done')
+        ->and(\Platform\FoodAlchemist\Models\FoodAlchemistSpeiseplanEintrag::where('menu_plan_id', $plan->id)->where('sales_recipe_id', $recipe->id)->count())->toBe(1);
+});
+
+it('Speiseplan-Editor: Voll-Kaskade-Go startet den Zell-Fan-out + redirected', function () {
+    $plan = app(\Platform\FoodAlchemist\Services\SpeiseplanService::class)->create($this->rootTeam, ['name' => 'Wochenplan', 'start_date' => '2026-08-03']);
+    Queue::fake();
+
+    Livewire::test(\Platform\FoodAlchemist\Livewire\Speiseplan\Editor::class)
+        ->call('oeffnenBearbeiten', $plan->id)
+        ->call('vollKaskadeStarten')
+        ->assertRedirect();   // → Planung-Editor
+
+    expect(FoodAlchemistCascadeRun::where('source_owner_type', 'speiseplan')->where('source_owner_id', $plan->id)->count())->toBe(1);
+    Queue::assertPushed(MaterializeSpeiseplanCellJob::class);
 });
