@@ -54,10 +54,10 @@ class PlanningCascadeService
         if (! in_array($creativeMode, FoodAlchemistPlanningSession::CREATIVE_MODES, true)) {
             $creativeMode = 'voll_kreativ';
         }
-        // P0/P1a: rezept|gericht|concept sind orchestriert (je Depth-1). Die volle Kaskade
-        // (Frame → mehrere Concepts → Fan-out) kommt in P3 — bis dahin ehrlich blocken.
+        // Voll-Kaskade (P3+): Ausgabe-Frame → 1 Concept je Slot → je Concept der Gericht-Fan-out.
+        // Owner (foodbook|speisekarte) kommt über $optionen, nicht über die Session.
         if ($scope === 'vollkaskade') {
-            throw new RuntimeException('Scope «vollkaskade» ist noch nicht verfügbar (P3).');
+            return $this->starteVollkaskade($team, $session, $creativeMode, $optionen);
         }
 
         $brief = trim((string) ($optionen['brief'] ?? ''));
@@ -133,6 +133,113 @@ class PlanningCascadeService
         $step->update(['generator_run_id' => $runId]);
         Cache::put(GenerateConceptJob::cacheKey($runId), ['status' => 'pending'], now()->addMinutes(self::RESULT_TTL_MIN));
         GenerateConceptJob::dispatch($runId, $team->id, (int) (\Illuminate\Support\Facades\Auth::id() ?? 0), $brief, null, $planningSessionId, $step->id, $creativeMode);
+    }
+
+    // ── P3/P4: Voll-Kaskade — Ausgabe-Frame → 1 Concept je Slot ───────────
+
+    /**
+     * Voll-Kaskade aus einem Ausgabe-Frame (P3 Foodbook, P4 Speisekarte): je Frame-Slot ein Concept-Step
+     * + eigener {@see GenerateConceptJob} (der ans Ausgabe-Kapitel/-Rubrik hängt und danach in Gerichte
+     * fächert). Owner + ID kommen über `$optionen['owner_type']`/`['owner_id']`; die Slots werden owner-
+     * spezifisch in Container (Kapitel/Rubrik) materialisiert. Ohne Frame/Slots → ehrlicher Fehler.
+     *
+     * @param  array{owner_type?:string, owner_id?:int, created_via?:string}  $optionen
+     */
+    private function starteVollkaskade(Team $team, ?FoodAlchemistPlanningSession $session, string $creativeMode, array $optionen): FoodAlchemistCascadeRun
+    {
+        $ownerType = (string) ($optionen['owner_type'] ?? '');
+        $ownerId = (int) ($optionen['owner_id'] ?? 0);
+        // P3: foodbook. P4 schaltet 'speisekarte' frei (resolveOwner + rubrikFuerSlot), P5 den Speiseplan (eigener Pfad).
+        if ($ownerType !== 'foodbook' || $ownerId <= 0) {
+            throw new RuntimeException('Voll-Kaskade braucht owner_type=foodbook + owner_id (Speisekarte/Speiseplan folgen).');
+        }
+
+        $frame = app(PlanningFrameService::class)->find($ownerType, $ownerId);
+        if ($frame === null || $frame->slots()->count() === 0) {
+            throw new RuntimeException('Ausgabe hat noch kein Planungs-Gerüst — erst Kickoff/Struktur anlegen.');
+        }
+
+        $run = FoodAlchemistCascadeRun::create([
+            'team_id' => $team->id,
+            'planning_session_id' => $session?->id,
+            'scope' => 'vollkaskade',
+            'creative_mode' => $creativeMode,
+            'brief' => 'Voll-Kaskade ' . $ownerType . ' #' . $ownerId,
+            'status' => 'running',
+            'source_owner_type' => $ownerType,
+            'source_owner_id' => $ownerId,
+            'created_via' => (string) ($optionen['created_via'] ?? 'plan_go'),
+        ]);
+
+        $slots = $this->vollkaskadeSlots($team, $ownerType, $ownerId, $frame);
+        $idx = 0;
+        foreach ($slots as [$slot, $containerId]) {
+            $step = FoodAlchemistCascadeRunStep::create([
+                'team_id' => $team->id,
+                'cascade_run_id' => $run->id,
+                'parent_step_id' => null,
+                'kind' => 'concept',
+                'label' => Str::limit((string) ($slot->label ?: 'Konzept'), 120),
+                'status' => 'running',
+                'sort' => $idx,
+            ]);
+            $runId = (string) Str::uuid();
+            $step->update(['generator_run_id' => $runId]);
+            Cache::put(GenerateConceptJob::cacheKey($runId), ['status' => 'pending'], now()->addMinutes(self::RESULT_TTL_MIN));
+            GenerateConceptJob::dispatch(
+                $runId, $team->id, (int) (\Illuminate\Support\Facades\Auth::id() ?? 0),
+                $this->slotBrief($ownerType, $ownerId, $slot), (string) ($slot->label ?: null),
+                $session?->id, $step->id, $creativeMode, false, false, $ownerType, $containerId
+            );
+            $idx++;
+        }
+        if ($idx === 0) {
+            $run->update(['status' => 'failed']);   // Frame ohne verwertbare Slots
+        }
+
+        return $run;
+    }
+
+    /**
+     * Slots eines Ausgabe-Frames in Container materialisieren + als [slot, containerId] zurückgeben.
+     * foodbook: `strukturAusGeruest` legt je Slot ein Kapitel an (chapter_id). speisekarte: je Slot eine
+     * Rubrik (idempotent per Titel).
+     *
+     * @return list<array{0: \Platform\FoodAlchemist\Models\FoodAlchemistPlanningFrameSlot, 1: int}>
+     */
+    private function vollkaskadeSlots(Team $team, string $ownerType, int $ownerId, $frame): array
+    {
+        $out = [];
+        if ($ownerType === 'foodbook') {
+            app(FoodbookService::class)->strukturAusGeruest($team, $ownerId);   // Slots → Kapitel (idempotent)
+            $frame->load('slots');
+            foreach ($frame->slots as $slot) {
+                if ($slot->chapter_id !== null) {
+                    $out[] = [$slot, (int) $slot->chapter_id];
+                }
+            }
+
+            return $out;
+        }
+
+        return $out;   // P4 ergänzt hier den speisekarte-Zweig (Slot → Rubrik)
+    }
+
+    /** Kompakter Brief je Slot für die Concept-Erzeugung (Rolle/Label + Ziele + Preis-Anker). */
+    private function slotBrief(string $ownerType, int $ownerId, $slot): string
+    {
+        $teile = ['[' . ($slot->label ?: 'Gang') . ']'];
+        if ((int) $slot->target_count > 0) {
+            $teile[] = 'Zielanzahl Gerichte: ' . (int) $slot->target_count;
+        }
+        if ($slot->price_anchor !== null) {
+            $teile[] = 'Preis-Anker p.P.: ' . $slot->price_anchor . ' €';
+        }
+        if ($slot->note !== null && trim((string) $slot->note) !== '') {
+            $teile[] = trim((string) $slot->note);
+        }
+
+        return 'Konzept für die Rolle ' . implode(' — ', $teile) . '.';
     }
 
     // ── P1b: Erfinden — Fan-out des Concepts in erfundene Gerichte ─────────

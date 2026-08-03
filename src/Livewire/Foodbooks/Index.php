@@ -215,6 +215,9 @@ class Index extends Component
     // ── Phase 3a: „Struktur anwenden" — Gerüst-Slots als Kapitel materialisieren (Slot = Kapitel) ──
     public ?array $strukturErgebnis = null;
 
+    /** Fehlermeldung des Voll-Kaskade-Go (P3), wenn kein Gerüst da ist. */
+    public ?string $kaskadeMeldung = null;
+
     public function strukturAnwenden(FoodbookService $svc): void
     {
         $this->strukturErgebnis = null;
@@ -224,6 +227,38 @@ class Index extends Component
         $this->strukturErgebnis = $svc->strukturAusGeruest($this->team(), $this->selectedId);
         // Gerüst neu laden, damit $frameSlots die frisch gesetzten chapter_id trägt.
         $this->frameLaden();
+    }
+
+    /**
+     * Voll-Kaskade (P3): aus dem Foodbook-Gerüst je Slot ein Concept erzeugen (an sein Kapitel gehängt) +
+     * je Concept der Gericht-Fan-out. Legt eine Planungs-Session als Review-Wurzel an und leitet in den
+     * Planung-Editor (Live-Fortschritt + Freigabe). Ohne Gerüst → Meldung.
+     */
+    public function vollKaskadeStarten(
+        \Platform\FoodAlchemist\Services\PlanningCascadeService $cascade,
+        \Platform\FoodAlchemist\Services\PlanningSessionService $sessions
+    ) {
+        $this->kaskadeMeldung = null;
+        $team = $this->team();
+        if ($team === null || $this->selectedId === null) {
+            return null;
+        }
+        $fb = \Platform\FoodAlchemist\Models\FoodAlchemistFoodbook::visibleToTeam($team)->find($this->selectedId);
+        try {
+            $session = $sessions->create($team, [
+                'title' => 'Voll-Kaskade: ' . ($fb?->label ?? ('Foodbook #' . $this->selectedId)),
+                'created_via' => 'foodbook_vollkaskade',
+            ]);
+            $cascade->starteKaskade($team, 'vollkaskade', $session, 'voll_kreativ', [
+                'owner_type' => 'foodbook', 'owner_id' => (int) $this->selectedId, 'created_via' => 'foodbook_vollkaskade',
+            ]);
+
+            return redirect()->route('foodalchemist.planung.index', ['session' => $session->id, 'open' => 1]);
+        } catch (\Throwable $e) {
+            $this->kaskadeMeldung = $e->getMessage();
+
+            return null;
+        }
     }
 
     // ── Spec 19 E6.3: Kreativ-Skizzenfläche (IdeenService) ──────────────────────

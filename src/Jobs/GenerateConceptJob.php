@@ -45,6 +45,9 @@ class GenerateConceptJob implements ShouldQueue
         public string $creativeMode = 'datenbank',
         public bool $useFavorites = false,
         public bool $favoritesConvenienceOnly = false,
+        /** Voll-Kaskade (P3/P4): erzeugtes Konzept ans Ausgabe-Kapitel/-Rubrik hängen. */
+        public ?string $attachOwnerType = null,
+        public ?int $attachContainerId = null,
     ) {}
 
     public static function cacheKey(string $runId): string
@@ -85,6 +88,8 @@ class GenerateConceptJob implements ShouldQueue
                 'name' => (string) $concept->name,
                 'coverage' => $r['coverage'] ?? null,
             ]);
+            // Voll-Kaskade (P3/P4): das erzeugte Konzept ans Ausgabe-Kapitel/-Rubrik hängen (concept_ref/menue_ref).
+            $this->attachToOutput($team, (int) $concept->id);
             // P1b: in den Erfinden-Modi fächert das Konzept in erfundene Gerichte auf (je leerem Slot
             // eine KI-Idee → eigener Kind-Step + Materialisierungs-Job). Reuse-Modus (datenbank) tut nichts.
             // Muss VOR meldeKaskade laufen (dessen recompute soll die Kind-Steps schon sehen). Graceful:
@@ -115,6 +120,28 @@ class GenerateConceptJob implements ShouldQueue
     {
         $this->schreibe(['status' => 'error', 'fehler' => 'Konzept-Generierung abgebrochen: ' . $e->getMessage()]);
         $this->meldeKaskade(false, null, 'Konzept-Generierung abgebrochen: ' . $e->getMessage());
+    }
+
+    /**
+     * Voll-Kaskade-Attach: hängt das erzeugte Konzept an sein Ausgabe-Kapitel (Foodbook, concept_ref-Block)
+     * bzw. seine Rubrik (Speisekarte, menue_ref-Position). No-op ohne attach-Info (Standalone/Depth-1). Wirft nie.
+     */
+    private function attachToOutput(\Platform\Core\Models\Team $team, int $conceptId): void
+    {
+        if ($this->attachOwnerType === null || $this->attachContainerId === null) {
+            return;
+        }
+        try {
+            if ($this->attachOwnerType === 'foodbook') {
+                app(\Platform\FoodAlchemist\Services\FoodbookService::class)
+                    ->addBlock($team, $this->attachContainerId, ['type' => 'concept_ref', 'concept_id' => $conceptId]);
+            } elseif ($this->attachOwnerType === 'speisekarte') {
+                app(\Platform\FoodAlchemist\Services\SpeisekarteService::class)
+                    ->addPosition($team, $this->attachContainerId, ['type' => 'menue_ref', 'concept_id' => $conceptId]);
+            }
+        } catch (\Throwable) {
+            // Attach-Fehler darf das erzeugte Konzept nicht kippen.
+        }
     }
 
     /** Ergebnis/Fehler an den Kaskaden-Step zurückmelden (No-op ohne cascadeStepId). Wirft nie. */

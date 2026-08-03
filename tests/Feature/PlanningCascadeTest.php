@@ -13,6 +13,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistDishIdea;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Services\IdeenService;
 use Platform\FoodAlchemist\Services\PlanningCascadeService;
+use Platform\FoodAlchemist\Services\PlanningFrameService;
 use Platform\FoodAlchemist\Services\PlanningSessionService;
 use Platform\FoodAlchemist\Services\RecipeGeneratorService;
 use Platform\FoodAlchemist\Tests\Support\SeedsTeamHierarchy;
@@ -348,4 +349,54 @@ it('Wissen/Trend: erfundenes Rezept erbt die Trend-Herkunft der Planung (Lineage
 
     expect((int) $recipe->refresh()->source_knowledge_document_id)->toBe(4242)   // Trend-Herkunft geerbt
         ->and($recipe->refresh()->created_via)->toBe('plan_go');
+});
+
+// ── P3: Voll-Kaskade aus dem Foodbook-Frame ─────────────────────────────────
+
+it('vollkaskade (foodbook): 1 Concept-Step je Frame-Slot + GenerateConceptJob mit Attach ans Kapitel', function () {
+    $fb = $this->makeFoodbook($this->rootTeam, 'Sommer-Foodbook', ['status' => 'draft']);
+    $frameSvc = app(PlanningFrameService::class);
+    $frame = $frameSvc->frameFor($this->rootTeam, 'foodbook', (int) $fb->id);
+    $frameSvc->addSlot($this->rootTeam, $frame, ['label' => 'Vorspeisen', 'slot_type' => 'kapitel', 'target_count' => 3]);
+    $frameSvc->addSlot($this->rootTeam, $frame, ['label' => 'Hauptgang', 'slot_type' => 'kapitel', 'target_count' => 2]);
+
+    $run = app(PlanningCascadeService::class)->starteKaskade($this->rootTeam, 'vollkaskade', null, 'voll_kreativ', ['owner_type' => 'foodbook', 'owner_id' => (int) $fb->id]);
+
+    expect($run->scope)->toBe('vollkaskade')
+        ->and($run->source_owner_type)->toBe('foodbook')
+        ->and((int) $run->source_owner_id)->toBe((int) $fb->id)
+        ->and($run->steps()->where('kind', 'concept')->count())->toBe(2);
+
+    Queue::assertPushed(GenerateConceptJob::class, 2);
+    Queue::assertPushed(GenerateConceptJob::class, fn ($job) => $job->attachOwnerType === 'foodbook' && (int) $job->attachContainerId > 0 && $job->creativeMode === 'voll_kreativ');
+});
+
+it('vollkaskade ohne Frame/Slots wirft ehrlich', function () {
+    $fb = $this->makeFoodbook($this->rootTeam, 'Leer', ['status' => 'draft']);
+
+    expect(fn () => app(PlanningCascadeService::class)->starteKaskade($this->rootTeam, 'vollkaskade', null, 'voll_kreativ', ['owner_type' => 'foodbook', 'owner_id' => (int) $fb->id]))
+        ->toThrow(RuntimeException::class);
+    Queue::assertNotPushed(GenerateConceptJob::class);
+});
+
+it('vollkaskade mit falschem Owner (nicht foodbook) wirft ehrlich', function () {
+    expect(fn () => app(PlanningCascadeService::class)->starteKaskade($this->rootTeam, 'vollkaskade', null, 'voll_kreativ', ['owner_type' => 'speisekarte', 'owner_id' => 1]))
+        ->toThrow(RuntimeException::class);
+    Queue::assertNothingPushed();
+});
+
+it('Foodbook-Leitstelle: Voll-Kaskade-Go startet die Kaskade + leitet in den Planung-Editor', function () {
+    $fb = $this->makeFoodbook($this->rootTeam, 'Sommer-Foodbook', ['status' => 'draft']);
+    $frameSvc = app(PlanningFrameService::class);
+    $frame = $frameSvc->frameFor($this->rootTeam, 'foodbook', (int) $fb->id);
+    $frameSvc->addSlot($this->rootTeam, $frame, ['label' => 'Vorspeisen', 'slot_type' => 'kapitel', 'target_count' => 2]);
+    Queue::fake();
+
+    Livewire::test(\Platform\FoodAlchemist\Livewire\Foodbooks\Index::class)
+        ->call('waehle', $fb->id)
+        ->call('vollKaskadeStarten')
+        ->assertRedirect();   // → Planung-Editor (Review-Session)
+
+    Queue::assertPushed(GenerateConceptJob::class);
+    expect(FoodAlchemistCascadeRun::where('source_owner_type', 'foodbook')->where('source_owner_id', $fb->id)->count())->toBe(1);
 });
