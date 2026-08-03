@@ -255,22 +255,36 @@
                     @endif
                 </x-foodalchemist::modal-section>
 
-                {{-- Ergebnis des Laufs (Steps + erzeugte Draft-Artefakte). --}}
+                {{-- Ergebnis des Laufs (Steps + erzeugte Draft-Artefakte) + Freigabe (Gate 2). --}}
                 @if($lauf)
                     @php
-                        $stepLabel = ['queued' => 'wartet', 'running' => 'läuft', 'done' => 'erstellt', 'failed' => 'Fehler', 'skipped' => 'übernommen'];
-                        $stepColor = ['queued' => 'text-amber-300', 'running' => 'text-amber-300', 'done' => 'text-emerald-300', 'failed' => 'text-rose-300', 'skipped' => 'text-gray-400'];
+                        $stepLabel = ['queued' => 'wartet', 'running' => 'läuft', 'done' => 'Entwurf', 'freigegeben' => 'freigegeben', 'verworfen' => 'verworfen', 'failed' => 'Fehler', 'skipped' => 'übernommen'];
+                        $stepColor = ['queued' => 'text-amber-300', 'running' => 'text-amber-300', 'done' => 'text-emerald-300', 'freigegeben' => 'text-emerald-400', 'verworfen' => 'text-gray-500', 'failed' => 'text-rose-300', 'skipped' => 'text-gray-400'];
                         $refRoute = ['gericht' => 'foodalchemist.verkauf.index', 'rezept' => 'foodalchemist.recipes.index', 'concept' => 'foodalchemist.concepts.index'];
+                        $offeneEntwuerfe = $lauf->steps->where('status', 'done')->count();
                     @endphp
-                    <x-foodalchemist::modal-section title="Ergebnis (Entwürfe)">
+                    <x-foodalchemist::modal-section title="Ergebnis (Entwürfe) — Freigabe">
+                        @if($offeneEntwuerfe > 0)
+                            <div class="flex items-center justify-between gap-2 mb-2 pb-2 border-b border-white/10">
+                                <span class="text-[11px] text-gray-400">{{ $offeneEntwuerfe }} Entwurf/Entwürfe warten auf Freigabe</span>
+                                <span class="flex gap-2">
+                                    <button wire:click="alleFrei" class="text-[11px] text-emerald-300 hover:text-emerald-200">Alle freigeben</button>
+                                    <button wire:click="alleVerwerfen" class="text-[11px] text-rose-300 hover:text-rose-200">Alle verwerfen</button>
+                                </span>
+                            </div>
+                        @endif
                         <div class="space-y-1.5">
                             @forelse($lauf->steps as $st)
                                 <div wire:key="step-{{ $st->id }}" class="flex items-center justify-between gap-3 text-xs">
                                     <span class="truncate text-gray-200">{{ $st->label ?: ucfirst($st->kind) }}</span>
                                     <span class="shrink-0 flex items-center gap-2">
                                         <span class="{{ $stepColor[$st->status] ?? 'text-gray-400' }}">{{ $stepLabel[$st->status] ?? $st->status }}</span>
-                                        @if($st->status === 'done' && $st->ref_id && isset($refRoute[$st->kind]))
+                                        @if($st->ref_id && isset($refRoute[$st->kind]) && in_array($st->status, ['done', 'freigegeben'], true))
                                             <a href="{{ route($refRoute[$st->kind]) }}" class="text-violet-300 hover:text-violet-200 underline">öffnen</a>
+                                        @endif
+                                        @if($st->status === 'done')
+                                            <button wire:click="gibFrei({{ $st->id }})" class="text-emerald-300 hover:text-emerald-200" title="Freigeben">@svg('heroicon-o-check', 'w-4 h-4')</button>
+                                            <button wire:click="verwirf({{ $st->id }})" class="text-rose-300 hover:text-rose-200" title="Verwerfen">@svg('heroicon-o-trash', 'w-4 h-4')</button>
                                         @endif
                                     </span>
                                 </div>

@@ -7,6 +7,8 @@ use Platform\FoodAlchemist\Jobs\GenerateRecipeJob;
 use Platform\FoodAlchemist\Livewire\Planung\Index as PlanungIndex;
 use Platform\FoodAlchemist\Models\FoodAlchemistCascadeRun;
 use Platform\FoodAlchemist\Models\FoodAlchemistCascadeRunStep;
+use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
+use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Services\PlanningCascadeService;
 use Platform\FoodAlchemist\Services\PlanningSessionService;
 use Platform\FoodAlchemist\Tests\Support\SeedsTeamHierarchy;
@@ -158,4 +160,88 @@ it('Cockpit: goKaskade startet den Lauf in-place (kein Redirect) und pollt', fun
 
     Queue::assertPushed(GenerateRecipeJob::class, fn ($job) => $job->vkModus === true);
     expect(FoodAlchemistCascadeRun::where('planning_session_id', $session->id)->count())->toBe(1);
+});
+
+// ── P2: Freigabe / Verwerfen (Gate 2) ───────────────────────────────────────
+// (Run+Step inline erzeugt — keine globale Helfer-Funktion in der Testdatei, Parallel-Worker-Regel.)
+
+it('Freigabe (gericht): Rezept → approved, Step freigegeben, Run done', function () {
+    $recipe = $this->makeRecipe($this->rootTeam, 'Draft-Gericht', ['status' => 'draft']);
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'gericht', 'status' => 'review']);
+    $step = FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht', 'status' => 'done', 'ref_type' => 'recipe', 'ref_id' => $recipe->id]);
+
+    app(PlanningCascadeService::class)->gibStepFrei($this->rootTeam, (int) $step->id);
+
+    expect($recipe->refresh()->status->value)->toBe('approved')     // RecipeStatus-Enum-Cast
+        ->and($step->refresh()->status)->toBe('freigegeben')
+        ->and($run->refresh()->status)->toBe('done');
+});
+
+it('Verwerfen (gericht): Draft-Rezept soft-deleted, Step verworfen, Run failed', function () {
+    $recipe = $this->makeRecipe($this->rootTeam, 'Weg damit', ['status' => 'draft']);
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'gericht', 'status' => 'review']);
+    $step = FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht', 'status' => 'done', 'ref_type' => 'recipe', 'ref_id' => $recipe->id]);
+
+    app(PlanningCascadeService::class)->verwirfStep($this->rootTeam, (int) $step->id);
+
+    expect(FoodAlchemistRecipe::find($recipe->id))->toBeNull()                        // soft-deleted
+        ->and(FoodAlchemistRecipe::withTrashed()->find($recipe->id))->not->toBeNull()
+        ->and($step->refresh()->status)->toBe('verworfen')
+        ->and($run->refresh()->status)->toBe('failed');
+});
+
+it('Freigabe (concept): Konzept → active', function () {
+    $concept = $this->makeConcept($this->rootTeam, 'Draft-Konzept', ['status' => 'draft']);
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'concept', 'status' => 'review']);
+    $step = FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'concept', 'status' => 'done', 'ref_type' => 'concept', 'ref_id' => $concept->id]);
+
+    app(PlanningCascadeService::class)->gibStepFrei($this->rootTeam, (int) $step->id);
+
+    expect($concept->refresh()->status)->toBe('active')
+        ->and($step->refresh()->status)->toBe('freigegeben');
+});
+
+it('Bulk-Freigabe hebt alle offenen Entwürfe auf freigegeben, Run done', function () {
+    $r1 = $this->makeRecipe($this->rootTeam, 'A', ['status' => 'draft']);
+    $r2 = $this->makeRecipe($this->rootTeam, 'B', ['status' => 'draft']);
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'gericht', 'status' => 'review']);
+    foreach ([$r1, $r2] as $r) {
+        FoodAlchemistCascadeRunStep::create([
+            'team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id,
+            'kind' => 'gericht', 'status' => 'done', 'ref_type' => 'recipe', 'ref_id' => $r->id,
+        ]);
+    }
+
+    app(PlanningCascadeService::class)->gibRunFrei($this->rootTeam, (int) $run->id);
+
+    expect($run->refresh()->status)->toBe('done')
+        ->and($run->steps()->where('status', 'freigegeben')->count())->toBe(2)
+        ->and($r1->refresh()->status->value)->toBe('approved');
+});
+
+it('Freigabe ist team-gescoped: geerbter Step wird abgewiesen (D1)', function () {
+    $recipe = $this->makeRecipe($this->rootTeam, 'Tenancy', ['status' => 'draft']);
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'gericht', 'status' => 'review']);
+    $step = FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht', 'status' => 'done', 'ref_type' => 'recipe', 'ref_id' => $recipe->id]);
+
+    // childA erbt den Root-Katalog (sichtbar), besitzt ihn aber nicht → Freigabe verboten.
+    expect(fn () => app(PlanningCascadeService::class)->gibStepFrei($this->childA, (int) $step->id))
+        ->toThrow(RuntimeException::class);
+    expect($recipe->refresh()->status->value)->toBe('draft');   // nichts passiert
+});
+
+it('Cockpit: Editor rendert die Freigabe-UI und gibt einen Entwurf über die Komponente frei', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Freigabe-Test', 'brief' => 'x']);
+    $recipe = $this->makeRecipe($this->rootTeam, 'Cockpit-Draft', ['status' => 'draft']);
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'planning_session_id' => $session->id, 'scope' => 'gericht', 'status' => 'review']);
+    $step = FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht', 'status' => 'done', 'ref_type' => 'recipe', 'ref_id' => $recipe->id]);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)         // ladeLetztenLauf → laufId=run (Freigabe-UI rendert)
+        ->assertSee('warten auf Freigabe')     // Bulk-Kopf sichtbar (blade-Render des done-Pfads)
+        ->call('gibFrei', $step->id)
+        ->assertSet('meldung', 'Freigegeben.');
+
+    expect($step->refresh()->status)->toBe('freigegeben')
+        ->and($recipe->refresh()->status->value)->toBe('approved');
 });

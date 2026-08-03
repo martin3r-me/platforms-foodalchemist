@@ -29,8 +29,12 @@ class FoodAlchemistCascadeRunStep extends Model
     /** Artefakt-Typ, den dieser Step erzeugt. */
     public const KINDS = ['concept', 'gericht', 'rezept', 'gp'];
 
-    /** queued → running → done | failed | skipped (skipped = Reuse-Treffer, keine Generierung nötig). */
-    public const STATUSES = ['queued', 'running', 'done', 'failed', 'skipped'];
+    /**
+     * queued → running → done → (freigegeben | verworfen); failed/skipped terminal.
+     * `done` = Draft erzeugt, wartet auf Entscheidung (Gate 2); `freigegeben` = Artefakt live
+     * (Rezept approved / Concept active); `verworfen` = Draft soft-deleted; `skipped` = Reuse-Treffer.
+     */
+    public const STATUSES = ['queued', 'running', 'done', 'freigegeben', 'verworfen', 'failed', 'skipped'];
 
     protected $casts = [
         'uuid' => 'string',

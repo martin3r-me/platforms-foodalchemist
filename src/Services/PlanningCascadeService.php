@@ -9,7 +9,9 @@ use Platform\FoodAlchemist\Jobs\GenerateConceptJob;
 use Platform\FoodAlchemist\Jobs\GenerateRecipeJob;
 use Platform\FoodAlchemist\Models\FoodAlchemistCascadeRun;
 use Platform\FoodAlchemist\Models\FoodAlchemistCascadeRunStep;
+use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
 use Platform\FoodAlchemist\Models\FoodAlchemistPlanningSession;
+use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use RuntimeException;
 
 /**
@@ -155,8 +157,11 @@ class PlanningCascadeService
     }
 
     /**
-     * Run-Status aus den Steps ableiten: solange ein Step läuft → `running`; sonst wenn mindestens
-     * ein Step fertig ist → `review` (Drafts warten aufs Gate); wenn alle fehlgeschlagen → `failed`.
+     * Run-Status aus den Steps ableiten:
+     * - ein Step läuft (queued|running)                       → `running`
+     * - ein Step ist erzeugt, aber unentschieden (done)       → `review` (Gate 2 offen)
+     * - alles entschieden, mind. ein freigegeben|skipped       → `done`
+     * - alles entschieden, nur verworfen|failed                → `failed`
      */
     public function recomputeRunStatus(int $runId): void
     {
@@ -165,16 +170,98 @@ class PlanningCascadeService
             return;
         }
         $steps = $run->steps()->get(['status']);
-        $offen = $steps->whereIn('status', ['queued', 'running'])->count();
-        if ($offen > 0) {
+        if ($steps->whereIn('status', ['queued', 'running'])->count() > 0) {
             if ($run->status !== 'running') {
                 $run->update(['status' => 'running']);
             }
 
             return;
         }
-        $fertig = $steps->whereIn('status', ['done', 'skipped'])->count();
-        $run->update(['status' => $fertig > 0 ? 'review' : 'failed']);
+        if ($steps->where('status', 'done')->count() > 0) {
+            $run->update(['status' => 'review']);
+
+            return;
+        }
+        $positiv = $steps->whereIn('status', ['freigegeben', 'skipped'])->count();
+        $run->update(['status' => $positiv > 0 ? 'done' : 'failed']);
+    }
+
+    // ── Freigabe / Verwerfen (Gate 2 — inline im Editor) ───────────────────
+
+    /**
+     * Step freigeben: das Draft-Artefakt live setzen (Rezept → approved, Concept → active) über die
+     * sanktionierten Services, Step → `freigegeben`, Run neu bewerten. Nur `done`-Steps sind freigebbar.
+     */
+    public function gibStepFrei(Team $team, int $stepId): void
+    {
+        $step = $this->ownedStep($team, $stepId);
+        if ($step->status !== 'done') {
+            return;
+        }
+        if ($step->ref_id !== null) {
+            if ($step->ref_type === 'recipe') {
+                app(RecipeService::class)->setStatus($team, (int) $step->ref_id, 'approved');
+            } elseif ($step->ref_type === 'concept') {
+                app(ConceptService::class)->setStatus($team, (int) $step->ref_id, 'active');
+            }
+        }
+        $step->update(['status' => 'freigegeben']);
+        $this->recomputeRunStatus((int) $step->cascade_run_id);
+    }
+
+    /**
+     * Step verwerfen: das Draft-Artefakt soft-deleten (kein DB-Müll), Step → `verworfen`, Run neu
+     * bewerten. Greift bei `done` (generiert) und `failed` (Teil-Wrack aufräumen).
+     */
+    public function verwirfStep(Team $team, int $stepId): void
+    {
+        $step = $this->ownedStep($team, $stepId);
+        if (! in_array($step->status, ['done', 'failed'], true)) {
+            return;
+        }
+        if ($step->ref_id !== null) {
+            if ($step->ref_type === 'recipe') {
+                FoodAlchemistRecipe::where('team_id', $team->id)->whereKey($step->ref_id)->delete();
+            } elseif ($step->ref_type === 'concept') {
+                FoodAlchemistConcept::where('team_id', $team->id)->whereKey($step->ref_id)->delete();
+            }
+        }
+        $step->update(['status' => 'verworfen']);
+        $this->recomputeRunStatus((int) $step->cascade_run_id);
+    }
+
+    /** Bulk-Freigabe aller noch offenen (done) Steps eines Laufs. */
+    public function gibRunFrei(Team $team, int $runId): void
+    {
+        $run = $this->lauf($team, $runId);
+        if ($run === null) {
+            return;
+        }
+        foreach ($run->steps->where('status', 'done') as $s) {
+            $this->gibStepFrei($team, (int) $s->id);
+        }
+    }
+
+    /** Bulk-Verwerfen aller noch offenen (done|failed) Steps eines Laufs. */
+    public function verwirfRun(Team $team, int $runId): void
+    {
+        $run = $this->lauf($team, $runId);
+        if ($run === null) {
+            return;
+        }
+        foreach ($run->steps->whereIn('status', ['done', 'failed']) as $s) {
+            $this->verwirfStep($team, (int) $s->id);
+        }
+    }
+
+    private function ownedStep(Team $team, int $stepId): FoodAlchemistCascadeRunStep
+    {
+        $step = FoodAlchemistCascadeRunStep::visibleToTeam($team)->findOrFail($stepId);
+        if (! $step->isOwnedBy($team)) {
+            throw new RuntimeException('Geerbter Kaskaden-Step — Freigabe nur durchs Besitzer-Team (D1).');
+        }
+
+        return $step;
     }
 
     // ── Abfragen (für die Fläche) ─────────────────────────────────────────

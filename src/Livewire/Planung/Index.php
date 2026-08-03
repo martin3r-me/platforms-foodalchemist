@@ -241,6 +241,62 @@ class Index extends Component
         }
     }
 
+    // ── Freigabe / Verwerfen (Gate 2 — inline im Editor) ───────────────
+
+    /** Einen erzeugten Draft freigeben (→ live) — Rezept approved / Concept active. */
+    public function gibFrei(int $stepId, PlanningCascadeService $cascade): void
+    {
+        $team = $this->team();
+        if ($team === null) {
+            return;
+        }
+        try {
+            $cascade->gibStepFrei($team, $stepId);
+            $this->meldung = 'Freigegeben.';
+            $this->fehler = null;
+        } catch (\Throwable $e) {
+            $this->fehler = $e->getMessage();
+        }
+    }
+
+    /** Einen Draft verwerfen (soft-delete). */
+    public function verwirf(int $stepId, PlanningCascadeService $cascade): void
+    {
+        $team = $this->team();
+        if ($team === null) {
+            return;
+        }
+        try {
+            $cascade->verwirfStep($team, $stepId);
+            $this->meldung = 'Verworfen.';
+            $this->fehler = null;
+        } catch (\Throwable $e) {
+            $this->fehler = $e->getMessage();
+        }
+    }
+
+    /** Alle offenen Entwürfe des Laufs freigeben. */
+    public function alleFrei(PlanningCascadeService $cascade): void
+    {
+        $team = $this->team();
+        if ($team === null || $this->laufId === null) {
+            return;
+        }
+        $cascade->gibRunFrei($team, $this->laufId);
+        $this->meldung = 'Alle Entwürfe freigegeben.';
+    }
+
+    /** Alle offenen Entwürfe des Laufs verwerfen. */
+    public function alleVerwerfen(PlanningCascadeService $cascade): void
+    {
+        $team = $this->team();
+        if ($team === null || $this->laufId === null) {
+            return;
+        }
+        $cascade->verwirfRun($team, $this->laufId);
+        $this->meldung = 'Alle Entwürfe verworfen.';
+    }
+
     // ── Datenbeschaffung ───────────────────────────────────────────────
 
     private function aktiveSession(): ?FoodAlchemistPlanningSession
