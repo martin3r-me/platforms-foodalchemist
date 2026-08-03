@@ -29,12 +29,15 @@ use Platform\FoodAlchemist\Models\FoodAlchemistRecipeIngredient;
  * (1−putz)×(1−gar) aus den Zutat-Feldern — DB-verifiziert über GT-1/GT-2.
  * A-2-Ziel: Yield- und Kosten-Pfad nutzen BEIDE die volle T1-Kaskade.
  * A-3: Kalkulations-Yield = COALESCE(yield_kg_manual, yield_kg).
- * A-5-Ziel: Tiefe > 3 BLOCKT beim Verknüpfen (kein Warn-Flag).
+ * A-5 (2026-08-03 gelockert): KEIN hartes Tiefenlimit mehr — Menü-/Komposit-Stapelung
+ *   ([FIN]→[SUP]→Komponente→Basisrezept→Fond) ist legitim tief. Einzige Verknüpfungs-
+ *   Invariante bleibt Zyklus-Schutz + Selbstreferenz. Regelwerk BR §4.3.
  * I9: vk_* wird hier NIEMALS geschrieben.
  */
 class RecipeRecomputeService
 {
-    private const MAX_TIEFE = 3;        // Regelwerk BR §4 (SUBRECIPE_MAX_DEPTH)
+    // A-5 (2026-08-03): Kein hartes Sub-Rezept-Tiefenlimit mehr (Regelwerk BR §4.3 gelockert).
+    // Die Tiefen-BFS terminiert allein über das Visited-Set; Zyklen fängt pruefeVerknuepfung.
 
     private const PROPAGATION_LIMIT = 10;
 
@@ -316,14 +319,13 @@ class RecipeRecomputeService
             $ebene = $kinder;
         }
 
-        // GT-7: Ahnen des Parents zählen mit — Kette A→B→C + Link C→D ⇒ projiziert 4
+        // Projizierte Tiefe bleibt informativ (Ahnen des Parents + Sub-Baum), aber sie
+        // BLOCKT nicht mehr (A-5 2026-08-03 gelockert): tiefe Menü-/Komposit-Ketten sind
+        // legitim. Verworfen wird nur bei Selbstreferenz/Zyklus (oben geprüft).
         $tiefe = max(
             $this->ahnenHoehe($parentId) + $this->subtreeTiefe($subId),
             $this->subtreeTiefe($parentId),
         );
-        if ($tiefe > self::MAX_TIEFE) {
-            return ['erlaubt' => false, 'grund' => 'Tiefe > ' . self::MAX_TIEFE . ' (Regelwerk §4 — Block, A-5)', 'projizierte_tiefe' => $tiefe];
-        }
 
         return ['erlaubt' => true, 'grund' => null, 'projizierte_tiefe' => $tiefe];
     }
@@ -334,7 +336,7 @@ class RecipeRecomputeService
         $hoehe = 1;
         $ebene = [$recipeId];
         $besucht = [$recipeId => true];
-        while ($ebene !== [] && $hoehe <= self::MAX_TIEFE + 2) {
+        while ($ebene !== []) {                                    // Visited-Set garantiert Terminierung (kein Tiefen-Cap)
             $eltern = FoodAlchemistRecipeIngredient::whereIn('referenced_recipe_id', $ebene)
                 ->whereNull('deleted_at')->distinct()->pluck('recipe_id')
                 ->reject(fn ($id) => isset($besucht[$id]))->values()->all();
@@ -357,7 +359,7 @@ class RecipeRecomputeService
         $tiefe = 1;
         $ebene = [$recipeId];
         $besucht = [$recipeId => true];
-        while ($ebene !== [] && $tiefe <= self::MAX_TIEFE + 2) {
+        while ($ebene !== []) {                                    // Visited-Set garantiert Terminierung (kein Tiefen-Cap)
             $kinder = FoodAlchemistRecipeIngredient::whereIn('recipe_id', $ebene)
                 ->whereNotNull('referenced_recipe_id')->whereNull('deleted_at')
                 ->distinct()->pluck('referenced_recipe_id')->reject(fn ($id) => isset($besucht[$id]))->values()->all();

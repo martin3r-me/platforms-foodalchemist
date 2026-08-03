@@ -37,7 +37,8 @@ use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
  */
 class PlanungsblattService
 {
-    private const MAX_TIEFE = 4; // Regelwerk BR §4: Sub-Rezept-Tiefe ≤ 3 + Top-Ebene
+    // A-5 (2026-08-03): kein festes Tiefenlimit — Longest-Path per Fixpunkt-Relaxation
+    // (siehe rollup unten), Bound = Knotenzahl. Regelwerk BR §4.3 gelockert.
 
     /** @var array<int, FoodAlchemistRecipe> Rezept-Memo (mit geladenen Zutaten) je Lauf. */
     private array $recipeCache = [];
@@ -612,14 +613,25 @@ class PlanungsblattService
         foreach ($tops as $t) {
             $tiefe[(int) $t['recipe']->id] = 0;
         }
-        for ($pass = 0; $pass < self::MAX_TIEFE + 1; $pass++) {
+        // Fixpunkt-Relaxation statt fester Pass-Zahl — kein hartes Tiefenlimit mehr
+        // (A-5 2026-08-03). Konvergiert in ≤ Kettenlänge Pässen; Bound = Knotenzahl
+        // schützt gegen (per Recompute-Guard eigentlich ausgeschlossene) Zyklen.
+        $maxPasses = count($kanten) + 1;
+        for ($pass = 0; $pass < $maxPasses; $pass++) {
+            $changed = false;
             foreach ($kanten as $pid => $subs) {
                 if (! isset($tiefe[$pid])) {
                     continue;
                 }
                 foreach ($subs as $e) {
-                    $tiefe[$e['sub']] = max($tiefe[$e['sub']] ?? 0, $tiefe[$pid] + 1);
+                    if ($tiefe[$pid] + 1 > ($tiefe[$e['sub']] ?? 0)) {
+                        $tiefe[$e['sub']] = $tiefe[$pid] + 1;
+                        $changed = true;
+                    }
                 }
+            }
+            if (! $changed) {
+                break;
             }
         }
         asort($tiefe); // Verarbeitung nach Tiefe aufsteigend (Top zuerst)
