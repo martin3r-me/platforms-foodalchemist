@@ -1,8 +1,10 @@
 <?php
 
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
 use Livewire\Livewire;
+use Platform\FoodAlchemist\Jobs\GenerateConceptJob;
 use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
 use Platform\FoodAlchemist\Models\FoodAlchemistPlanningSession;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
@@ -112,19 +114,20 @@ it('schreibt Lineage beim „Go" (Trend-FK + created_via=plan_go, Session→konv
         ->and($s->refresh()->status)->toBe('konvergenz');
 });
 
-it('Go → Concept übergibt den Brief per Handoff-Flash an den Ziel-Browser (kein Parallel-Pfad)', function () {
-    // Seit P0 laufen Basisrezept/Gericht in-place über den Kaskaden-Motor (goKaskade, siehe
-    // PlanningCascadeTest); nur der Concept-Pfad nutzt weiter den Handoff-Redirect (P1 zieht ihn nach).
+it('Go → alle drei Stufen laufen in-place über den Kaskaden-Motor (kein Handoff-Redirect mehr)', function () {
+    // Seit P1a laufen Basisrezept/Gericht/Concept in-place über goKaskade (Details in PlanningCascadeTest);
+    // der alte Handoff-Redirect ist weg (Editor = Kommandozentrum, kein Wegspringen).
+    Queue::fake();
     $s = $this->svc->create($this->rootTeam, ['title' => 'Go-Test', 'brief' => 'leichte Küche']);
 
-    Livewire::test(\Platform\FoodAlchemist\Livewire\Planung\Index::class, ['sessionId' => $s->id])
-        ->call('goConcept')
-        ->assertRedirect(route('foodalchemist.concepts.index'));
+    Livewire::test(\Platform\FoodAlchemist\Livewire\Planung\Index::class)
+        ->call('oeffne', $s->id)
+        ->call('goKaskade', 'concept')
+        ->assertSet('laeuft', true)
+        ->assertNoRedirect();
 
-    $h = session('fa_plan_handoff');
-    expect($h['target'])->toBe('concept')
-        ->and($h['planning_session_id'])->toBe($s->id)
-        ->and($h['brief'])->toContain('leichte Küche');
+    Queue::assertPushed(GenerateConceptJob::class);
+    expect(session('fa_plan_handoff'))->toBeNull();     // kein Parallel-Pfad, kein Flash mehr
 });
 
 it('kappt Cross-Team-Zugriff auf fremde Sessions (Tenancy)', function () {

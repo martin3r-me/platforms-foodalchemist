@@ -232,8 +232,8 @@
 
                 <x-foodalchemist::modal-section title="Go — erzeugen (Draft)">
                     <p class="{{ $label ?? 'text-[11px] text-gray-500' }} mb-2">
-                        Wähle die Stufe — der Entwurf entsteht in-place (Draft). Basisrezept &amp; Gericht laufen
-                        über den Kaskaden-Motor; Concept öffnet vorerst den Konzept-Generator.
+                        Wähle die Stufe — der Entwurf entsteht in-place (Draft), im Hintergrund. Jede Stufe ist
+                        einzeln abrufbar; die Kaskade läuft im Ergebnis unten sichtbar durch.
                     </p>
                     <div class="flex flex-wrap gap-2">
                         <button wire:click="goKaskade('rezept')" @disabled($laeuft) class="{{ $btnGhost }} disabled:opacity-40">
@@ -242,7 +242,7 @@
                         <button wire:click="goKaskade('gericht')" @disabled($laeuft) class="{{ $btnGhost }} disabled:opacity-40">
                             @svg('heroicon-o-cake', 'w-4 h-4') Gericht
                         </button>
-                        <button wire:click="goConcept" @disabled($laeuft) class="{{ $btnPrimary }} disabled:opacity-40">
+                        <button wire:click="goKaskade('concept')" @disabled($laeuft) class="{{ $btnPrimary }} disabled:opacity-40">
                             @svg('heroicon-o-squares-2x2', 'w-4 h-4') Concept
                         </button>
                     </div>
@@ -260,7 +260,7 @@
                     @php
                         $stepLabel = ['queued' => 'wartet', 'running' => 'läuft', 'done' => 'erstellt', 'failed' => 'Fehler', 'skipped' => 'übernommen'];
                         $stepColor = ['queued' => 'text-amber-300', 'running' => 'text-amber-300', 'done' => 'text-emerald-300', 'failed' => 'text-rose-300', 'skipped' => 'text-gray-400'];
-                        $refRoute = ['gericht' => 'foodalchemist.verkauf.index', 'rezept' => 'foodalchemist.recipes.index'];
+                        $refRoute = ['gericht' => 'foodalchemist.verkauf.index', 'rezept' => 'foodalchemist.recipes.index', 'concept' => 'foodalchemist.concepts.index'];
                     @endphp
                     <x-foodalchemist::modal-section title="Ergebnis (Entwürfe)">
                         <div class="space-y-1.5">

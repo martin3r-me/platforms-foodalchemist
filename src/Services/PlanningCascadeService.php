@@ -5,6 +5,7 @@ namespace Platform\FoodAlchemist\Services;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 use Platform\Core\Models\Team;
+use Platform\FoodAlchemist\Jobs\GenerateConceptJob;
 use Platform\FoodAlchemist\Jobs\GenerateRecipeJob;
 use Platform\FoodAlchemist\Models\FoodAlchemistCascadeRun;
 use Platform\FoodAlchemist\Models\FoodAlchemistCascadeRunStep;
@@ -20,8 +21,9 @@ use RuntimeException;
  * Freigabe an eine Live-Ausgabe ist das zweite Gate (Sammel-Review, P2).
  *
  * Tiefen-Leiter (`scope`): `rezept` ⊂ `gericht` ⊂ `concept` ⊂ `vollkaskade`; der Motor läuft von der
- * gewählten Stufe abwärts. **P0 orchestriert `rezept`/`gericht`** (Depth-1, ein Step je Go); `concept`
- * und `vollkaskade` folgen in P1/P3 und werfen bis dahin bewusst.
+ * gewählten Stufe abwärts. **P0/P1a orchestrieren `rezept`/`gericht`/`concept`** (je Depth-1, ein Step
+ * je Go — Concept im Reuse-Assembler); der Gericht-Fan-out beim Concept (Erfinden) und `vollkaskade`
+ * folgen in P1b/P3 und werfen bis dahin bewusst.
  */
 class PlanningCascadeService
 {
@@ -47,10 +49,10 @@ class PlanningCascadeService
         if (! in_array($creativeMode, FoodAlchemistPlanningSession::CREATIVE_MODES, true)) {
             $creativeMode = 'voll_kreativ';
         }
-        // P0: nur die beiden Blatt-Stufen sind orchestriert. Die Concept-/Voll-Kaskade
-        // (Erfindung + Fan-out) kommt in P1/P3 — bis dahin ehrlich blocken statt still nichts tun.
-        if (! in_array($scope, ['rezept', 'gericht'], true)) {
-            throw new RuntimeException("Scope «{$scope}» ist noch nicht verfügbar (P1/P3).");
+        // P0/P1a: rezept|gericht|concept sind orchestriert (je Depth-1). Die volle Kaskade
+        // (Frame → mehrere Concepts → Fan-out) kommt in P3 — bis dahin ehrlich blocken.
+        if ($scope === 'vollkaskade') {
+            throw new RuntimeException('Scope «vollkaskade» ist noch nicht verfügbar (P3).');
         }
 
         $brief = trim((string) ($optionen['brief'] ?? ''));
@@ -75,19 +77,22 @@ class PlanningCascadeService
             'created_via' => (string) ($optionen['created_via'] ?? 'plan_go'),
         ]);
 
-        // Depth-1: genau ein Rezept-/Gericht-Step, der einen GenerateRecipeJob umhüllt.
-        $vkModus = $scope === 'gericht';
+        // Depth-1: genau ein Step (rezept|gericht → GenerateRecipeJob, concept → GenerateConceptJob).
         $step = FoodAlchemistCascadeRunStep::create([
             'team_id' => $team->id,
             'cascade_run_id' => $run->id,
             'parent_step_id' => null,
-            'kind' => $scope,   // 'rezept' | 'gericht'
+            'kind' => $scope,   // 'rezept' | 'gericht' | 'concept'
             'label' => Str::limit($brief, 120),
             'status' => 'running',
             'sort' => 0,
         ]);
 
-        $this->dispatchRezeptStep($team, $step, $brief, $params, $vkModus, $vollAnreichern, $session?->id);
+        if ($scope === 'concept') {
+            $this->dispatchConceptStep($team, $step, $brief, $session?->id);
+        } else {
+            $this->dispatchRezeptStep($team, $step, $brief, $params, $scope === 'gericht', $vollAnreichern, $session?->id);
+        }
 
         return $run;
     }
@@ -114,6 +119,15 @@ class PlanningCascadeService
         $step->update(['generator_run_id' => $runId]);
         Cache::put(GenerateRecipeJob::cacheKey($runId), ['status' => 'pending'], now()->addMinutes(self::RESULT_TTL_MIN));
         GenerateRecipeJob::dispatch($runId, $team->id, (int) (\Illuminate\Support\Facades\Auth::id() ?? 0), $brief, $jobParams, $vkModus, $vollAnreichern);
+    }
+
+    /** Dispatch der Konzept-Generierung für einen Step (Reuse-Assembler, queued wegen 502-Risiko). */
+    private function dispatchConceptStep(Team $team, FoodAlchemistCascadeRunStep $step, string $brief, ?int $planningSessionId): void
+    {
+        $runId = (string) Str::uuid();
+        $step->update(['generator_run_id' => $runId]);
+        Cache::put(GenerateConceptJob::cacheKey($runId), ['status' => 'pending'], now()->addMinutes(self::RESULT_TTL_MIN));
+        GenerateConceptJob::dispatch($runId, $team->id, (int) (\Illuminate\Support\Facades\Auth::id() ?? 0), $brief, null, $planningSessionId, $step->id);
     }
 
     // ── Rückkanal aus dem Job (läuft im Queue-Worker) ──────────────────────

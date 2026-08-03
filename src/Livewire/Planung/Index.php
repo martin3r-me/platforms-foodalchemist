@@ -241,45 +241,6 @@ class Index extends Component
         }
     }
 
-    /** Go → Concept: Handoff an den bestehenden KI-Konzept-Generator (Concepts-Seite). P1 zieht ihn an den Motor. */
-    public function goConcept()
-    {
-        return $this->handoff('concept', 'foodalchemist.concepts.index');
-    }
-
-    /**
-     * Übergibt Brief + Session (Lineage-Träger) per Session-Flash an den Ziel-Browser und leitet
-     * dorthin — dessen mount() öffnet den vorhandenen KI-Generator vorbefüllt. Kein Parallel-Pfad;
-     * die Trend-Herkunft schreibt {@see PlanningSessionService::verknuepfeArtefakt} nach der Erzeugung.
-     */
-    private function handoff(string $target, string $route)
-    {
-        $session = $this->aktiveSession();
-        if ($this->team() === null || $session === null) {
-            return null;
-        }
-        session()->flash('fa_plan_handoff', [
-            'target' => $target,
-            'brief' => $this->goBrief($session),
-            'planning_session_id' => $session->id,
-        ]);
-
-        return redirect()->route($route);
-    }
-
-    /** Brief für die Erzeugung: Session-Brief + Analyse-Auszug. */
-    private function goBrief(FoodAlchemistPlanningSession $session): string
-    {
-        $brief = trim((string) $session->brief);
-        $analyse = trim((string) $session->analysis);
-        $text = $brief !== '' ? $brief : (string) $session->title;
-        if ($analyse !== '') {
-            $text .= "\n\nKontext:\n" . mb_substr($analyse, 0, 800);
-        }
-
-        return $text;
-    }
-
     // ── Datenbeschaffung ───────────────────────────────────────────────
 
     private function aktiveSession(): ?FoodAlchemistPlanningSession

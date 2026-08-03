@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Queue;
 use Livewire\Livewire;
+use Platform\FoodAlchemist\Jobs\GenerateConceptJob;
 use Platform\FoodAlchemist\Jobs\GenerateRecipeJob;
 use Platform\FoodAlchemist\Livewire\Planung\Index as PlanungIndex;
 use Platform\FoodAlchemist\Models\FoodAlchemistCascadeRun;
@@ -60,13 +61,36 @@ it('Go (rezept): dispatcht als Basisrezept (vkModus=false), Step-kind=rezept', f
     Queue::assertPushed(GenerateRecipeJob::class, fn ($job) => $job->vkModus === false);
 });
 
-it('noch nicht orchestrierte Scopes (concept/vollkaskade) werfen ehrlich', function () {
-    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Geschmortes Rind', 'brief' => 'Schmorgericht mit Wurzelgemuese.']);
-    $svc = app(PlanningCascadeService::class);
+it('Go (concept): legt Concept-Step an und dispatcht GenerateConceptJob mit Rückkanal + Lineage', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Sommer-Buffet', 'brief' => 'Leichtes Sommer-Buffet, mediterran.']);
 
-    expect(fn () => $svc->starteKaskade($this->rootTeam, 'concept', $session, 'voll_kreativ'))
-        ->toThrow(RuntimeException::class);
-    expect(fn () => $svc->starteKaskade($this->rootTeam, 'vollkaskade', $session, 'voll_kreativ'))
+    $run = app(PlanningCascadeService::class)->starteKaskade($this->rootTeam, 'concept', $session, 'voll_kreativ');
+
+    expect($run->scope)->toBe('concept')->and($run->status)->toBe('running');
+    $step = $run->steps()->first();
+    expect($step->kind)->toBe('concept')->and($step->status)->toBe('running')->and($step->generator_run_id)->not->toBeNull();
+
+    Queue::assertPushed(GenerateConceptJob::class, function ($job) use ($step, $session) {
+        return (int) $job->cascadeStepId === (int) $step->id
+            && (int) $job->planningSessionId === (int) $session->id;
+    });
+});
+
+it('Concept-Job-Hook: failed() meldet an den Step zurück → Run failed', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Sommer-Buffet', 'brief' => 'Leichtes Sommer-Buffet.']);
+    $run = app(PlanningCascadeService::class)->starteKaskade($this->rootTeam, 'concept', $session, 'voll_kreativ');
+    $step = $run->steps()->first();
+
+    $job = new GenerateConceptJob('run-c', $this->rootTeam->id, 1, 'brief', null, null, (int) $step->id);
+    $job->failed(new RuntimeException('boom'));
+
+    expect($step->refresh()->status)->toBe('failed')->and($run->refresh()->status)->toBe('failed');
+});
+
+it('vollkaskade ist noch nicht orchestriert und wirft ehrlich (P3)', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Geschmortes Rind', 'brief' => 'Schmorgericht mit Wurzelgemuese.']);
+
+    expect(fn () => app(PlanningCascadeService::class)->starteKaskade($this->rootTeam, 'vollkaskade', $session, 'voll_kreativ'))
         ->toThrow(RuntimeException::class);
     Queue::assertNothingPushed();
 });
