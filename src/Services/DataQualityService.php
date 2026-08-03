@@ -806,7 +806,7 @@ class DataQualityService
             ->where('is_template', false)
             ->where('status', '!=', 'archiviert')
             ->where(fn ($w) => $w
-                ->where('status', 'aktiv')
+                ->where('status', 'active')   // kanonisch englisch (ConceptService schreibt 'active')
                 ->orWhereNotNull('offer_id')
                 ->orWhereExists(fn ($q) => $q->select(DB::raw(1))->from('foodalchemist_offer_concept as oc')
                     ->whereColumn('oc.concept_id', 'foodalchemist_concepts.id'))

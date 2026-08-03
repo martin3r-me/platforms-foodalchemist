@@ -85,7 +85,7 @@ class ConceptService
         ]);
     }
 
-    /** Concept-Status setzen (draft|aktiv|archiviert) — Inline-Pflege aus dem Browser. */
+    /** Concept-Status setzen (draft|active|archiviert) — Inline-Pflege aus dem Browser. */
     public function setStatus(Team $team, int $id, string $status): void
     {
         if (! in_array($status, ['draft', 'active', 'archiviert'], true)) {
