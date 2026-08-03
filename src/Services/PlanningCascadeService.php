@@ -149,9 +149,9 @@ class PlanningCascadeService
     {
         $ownerType = (string) ($optionen['owner_type'] ?? '');
         $ownerId = (int) ($optionen['owner_id'] ?? 0);
-        // P3: foodbook. P4 schaltet 'speisekarte' frei (resolveOwner + rubrikFuerSlot), P5 den Speiseplan (eigener Pfad).
-        if ($ownerType !== 'foodbook' || $ownerId <= 0) {
-            throw new RuntimeException('Voll-Kaskade braucht owner_type=foodbook + owner_id (Speisekarte/Speiseplan folgen).');
+        // P3 foodbook, P4 speisekarte (je 1 Concept/Slot). Der Speiseplan (P5) läuft über einen eigenen Zell-Pfad.
+        if (! in_array($ownerType, ['foodbook', 'speisekarte'], true) || $ownerId <= 0) {
+            throw new RuntimeException('Voll-Kaskade braucht owner_type=foodbook|speisekarte + owner_id.');
         }
 
         $frame = app(PlanningFrameService::class)->find($ownerType, $ownerId);
@@ -221,8 +221,17 @@ class PlanningCascadeService
 
             return $out;
         }
+        if ($ownerType === 'speisekarte') {
+            $svc = app(SpeisekarteService::class);
+            $frame->load('slots');
+            foreach ($frame->slots as $slot) {
+                $out[] = [$slot, $svc->rubrikFuerSlot($team, $ownerId, (string) ($slot->label ?: 'Rubrik'))];
+            }
 
-        return $out;   // P4 ergänzt hier den speisekarte-Zweig (Slot → Rubrik)
+            return $out;
+        }
+
+        return $out;
     }
 
     /** Kompakter Brief je Slot für die Concept-Erzeugung (Rolle/Label + Ziele + Preis-Anker). */

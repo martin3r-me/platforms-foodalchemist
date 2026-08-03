@@ -9,6 +9,8 @@ use Platform\FoodAlchemist\Models\FoodAlchemistPlanningFrame;
 use Platform\FoodAlchemist\Models\FoodAlchemistPlanningFrameRule;
 use Platform\FoodAlchemist\Models\FoodAlchemistPlanningFrameSlot;
 use Platform\FoodAlchemist\Models\FoodAlchemistSaison;
+use Platform\FoodAlchemist\Models\FoodAlchemistSpeisekarte;
+use Platform\FoodAlchemist\Models\FoodAlchemistSpeiseplan;
 use RuntimeException;
 
 /**
@@ -25,7 +27,9 @@ class PlanningFrameService
         return match ($ownerType) {
             'foodbook' => FoodAlchemistFoodbook::visibleToTeam($team)->findOrFail($ownerId),
             'concept' => FoodAlchemistConcept::visibleToTeam($team)->findOrFail($ownerId),
-            default => throw new RuntimeException("Unbekannter Gerüst-Owner-Typ „{$ownerType}“ — erlaubt: foodbook|concept."),
+            'speisekarte' => FoodAlchemistSpeisekarte::visibleToTeam($team)->findOrFail($ownerId),
+            'speiseplan' => FoodAlchemistSpeiseplan::visibleToTeam($team)->findOrFail($ownerId),
+            default => throw new RuntimeException("Unbekannter Gerüst-Owner-Typ „{$ownerType}“ — erlaubt: foodbook|concept|speisekarte|speiseplan."),
         };
     }
 

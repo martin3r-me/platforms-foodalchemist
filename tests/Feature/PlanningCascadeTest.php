@@ -400,3 +400,48 @@ it('Foodbook-Leitstelle: Voll-Kaskade-Go startet die Kaskade + leitet in den Pla
     Queue::assertPushed(GenerateConceptJob::class);
     expect(FoodAlchemistCascadeRun::where('source_owner_type', 'foodbook')->where('source_owner_id', $fb->id)->count())->toBe(1);
 });
+
+// ── P4: Voll-Kaskade aus der Speisekarte ────────────────────────────────────
+
+it('vollkaskade (speisekarte): Concept-Step je Frame-Slot + GenerateConceptJob mit Rubrik-Attach', function () {
+    $karte = app(\Platform\FoodAlchemist\Services\SpeisekarteService::class)->create($this->rootTeam, ['name' => 'Sommerkarte']);
+    $frameSvc = app(PlanningFrameService::class);
+    $frame = $frameSvc->frameFor($this->rootTeam, 'speisekarte', (int) $karte->id);
+    $frameSvc->addSlot($this->rootTeam, $frame, ['label' => 'Vorspeisen', 'slot_type' => 'station', 'target_count' => 2]);
+
+    $run = app(PlanningCascadeService::class)->starteKaskade($this->rootTeam, 'vollkaskade', null, 'voll_kreativ', ['owner_type' => 'speisekarte', 'owner_id' => (int) $karte->id]);
+
+    expect($run->source_owner_type)->toBe('speisekarte')
+        ->and($run->steps()->where('kind', 'concept')->count())->toBe(1);
+    Queue::assertPushed(GenerateConceptJob::class, fn ($job) => $job->attachOwnerType === 'speisekarte' && (int) $job->attachContainerId > 0);
+    // rubrikFuerSlot hat die Rubrik idempotent angelegt (Slot-Label → Rubrik-Titel)
+    expect(\Platform\FoodAlchemist\Models\FoodAlchemistSpeisekarteRubrik::where('menu_card_id', $karte->id)->where('title', 'Vorspeisen')->count())->toBe(1);
+});
+
+it('CoverageService kennt die Speisekarte (istSpeisekarte, kein Fehl-Read als Concept)', function () {
+    $karte = app(\Platform\FoodAlchemist\Services\SpeisekarteService::class)->create($this->rootTeam, ['name' => 'Karte']);
+    $frameSvc = app(PlanningFrameService::class);
+    $frame = $frameSvc->frameFor($this->rootTeam, 'speisekarte', (int) $karte->id);
+    $frameSvc->addSlot($this->rootTeam, $frame, ['label' => 'Hauptgang', 'slot_type' => 'station', 'target_count' => 3]);
+
+    $cov = app(\Platform\FoodAlchemist\Services\CoverageService::class)->coverage($this->rootTeam, 'speisekarte', (int) $karte->id);
+
+    expect($cov['hat_geruest'])->toBeTrue()
+        ->and($cov)->toHaveKey('befunde');
+});
+
+it('Speisekarte-Leitstelle: Voll-Kaskade-Go leitet Rahmen aus Rubriken ab + startet + redirected', function () {
+    $svc = app(\Platform\FoodAlchemist\Services\SpeisekarteService::class);
+    $karte = $svc->create($this->rootTeam, ['name' => 'Sommerkarte']);
+    $svc->addRubrik($this->rootTeam, (int) $karte->id, ['title' => 'Vorspeisen']);
+    $svc->addRubrik($this->rootTeam, (int) $karte->id, ['title' => 'Hauptgang']);
+    Queue::fake();
+
+    Livewire::test(\Platform\FoodAlchemist\Livewire\Speisekarte\Index::class)
+        ->call('waehle', $karte->id)
+        ->call('vollKaskadeStarten')
+        ->assertRedirect();   // → Planung-Editor
+
+    expect(FoodAlchemistCascadeRun::where('source_owner_type', 'speisekarte')->where('source_owner_id', $karte->id)->count())->toBe(1);
+    Queue::assertPushed(GenerateConceptJob::class, 2);   // 2 Rubriken → 2 Slots → 2 Konzepte
+});

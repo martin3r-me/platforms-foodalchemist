@@ -6,6 +6,7 @@ use Illuminate\Support\Collection;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
 use Platform\FoodAlchemist\Models\FoodAlchemistFoodbook;
+use Platform\FoodAlchemist\Models\FoodAlchemistSpeisekarte;
 use Platform\FoodAlchemist\Models\FoodAlchemistPlanningFrame;
 use Platform\FoodAlchemist\Models\FoodAlchemistPlanningFrameRule;
 use Platform\FoodAlchemist\Models\FoodAlchemistPlanningFrameSlot;
@@ -48,9 +49,11 @@ class CoverageService
         }
         $frame->loadMissing(['slots.rules', 'rules']);
 
-        $ist = $ownerType === 'foodbook'
-            ? $this->istFoodbook($team, $owner)
-            : $this->istConcept($owner);
+        $ist = match ($ownerType) {
+            'foodbook' => $this->istFoodbook($team, $owner),
+            'speisekarte' => $this->istSpeisekarte($owner),
+            default => $this->istConcept($owner),   // concept (+ speiseplan-Coverage folgt separat)
+        };
 
         $befunde = $this->befundeFuer($frame, $ist);
         ['zusammenfassung' => $zaehler, 'ampel_gesamt' => $gesamt] = $this->ampelZusammenfassung($befunde);
@@ -219,6 +222,57 @@ class CoverageService
             'scopes' => $scopes,
             'preis_pp' => $cockpit['price_per_person'] > 0 ? (float) $cockpit['price_per_person'] : null,
             'saison_ids' => $concept->seasons->pluck('id')->map(fn ($v) => (int) $v)->all(),
+            'kapitel' => [],
+        ];
+    }
+
+    /**
+     * Ist-Quelle Speisekarte (P4): Rubriken (sections) → Positionen → Gericht (gericht_ref) bzw. Concept
+     * (menue_ref, dessen Slot-Gerichte). Scope-Key = Rubrik-Titel (Label-Match mit den Frame-Slots).
+     * Kein p.P.-Preis (à la carte) — die PreisKopf-Prüfung degradiert dann sauber.
+     *
+     * @return array{gerichte:Collection, scopes:array<string,Collection>, preis_pp:?float, saison_ids:list<int>, kapitel:array}
+     */
+    private function istSpeisekarte(FoodAlchemistSpeisekarte $karte): array
+    {
+        $karte->load([
+            'sections' => fn ($q) => $q->orderBy('position'),
+            'sections.items.dish.dishClass:id,diet_form',
+            'sections.items.dish.ingredients.gp:id,name', 'sections.items.dish.ingredients.referencedRecipe:id,name',
+            'sections.items.concept.slots.dish.dishClass:id,diet_form',
+            'sections.items.concept.slots.dish.ingredients.gp:id,name', 'sections.items.concept.slots.dish.ingredients.referencedRecipe:id,name',
+        ]);
+
+        $gerichte = collect();
+        $scopes = [];
+        foreach ($karte->sections as $rubrik) {
+            $zeilen = collect();
+            foreach ($rubrik->items as $item) {
+                if ($item->dish) {
+                    $zeilen->push($this->gerichtZeile($item->dish));
+                } elseif ($item->concept) {
+                    foreach ($item->concept->slots as $slot) {
+                        if ($slot->dish) {
+                            $zeilen->push($this->gerichtZeile($slot->dish));
+                        }
+                    }
+                }
+            }
+            if ($zeilen->isEmpty()) {
+                continue;
+            }
+            $gerichte = $gerichte->merge($zeilen);
+            $key = mb_strtolower(trim((string) $rubrik->title));
+            if ($key !== '') {
+                $scopes[$key] = ($scopes[$key] ?? collect())->merge($zeilen);
+            }
+        }
+
+        return [
+            'gerichte' => $gerichte->unique('id')->values(),
+            'scopes' => $scopes,
+            'preis_pp' => null,
+            'saison_ids' => [],
             'kapitel' => [],
         ];
     }
