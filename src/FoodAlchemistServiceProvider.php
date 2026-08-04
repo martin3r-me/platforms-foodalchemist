@@ -179,10 +179,10 @@ class FoodAlchemistServiceProvider extends ServiceProvider
         // Embedding-Store-Routing (Runbook 34_Qdrant): FA deklariert selbst, in welchen
         // Store seine Pools gehen — Cores EmbeddingStoreRegistry bleibt entity-agnostisch
         // (der bevorzugte, lose gekoppelte Weg statt zentraler config('embeddings.routing')).
-        // INVARIANTE: alle acht foodalchemist_*-Pools teilen sich EINEN Store. candidates()
+        // INVARIANTE: alle neun foodalchemist_*-Pools teilen sich EINEN Store. candidates()
         // in SemanticRetrievalService übergibt gemischte entity_type-Arrays (z. B. [GP, RECIPE]);
         // search() routet am ersten Typ → nur bei gemeinsamem Store liefern Mixed-Type-Suchen
-        // vollständig. Store-Wechsel deshalb immer für ALLE acht gleichzeitig.
+        // vollständig. Store-Wechsel deshalb immer für ALLE neun gleichzeitig.
         // Kill-Switch/Rollback: FOODALCHEMIST_EMBEDDING_STORE — Default 'mysql' = No-op
         // (Verhalten wie bisher), Flip auf 'qdrant' beim Cutover per ENV (kein Deploy nötig).
         // Geschützt wie die Tool-Registrierung: das Registry-Binding kann auf älteren
@@ -201,6 +201,7 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Services\Ai\PoolEmbeddingService::ENTITY_TYPE_CONCEPT,
                     \Platform\FoodAlchemist\Services\Ai\PoolEmbeddingService::ENTITY_TYPE_FOODBOOK,
                     \Platform\FoodAlchemist\Services\Ai\PoolEmbeddingService::ENTITY_TYPE_LAB_NOTE,
+                    \Platform\FoodAlchemist\Services\Ai\PoolEmbeddingService::ENTITY_TYPE_SUPPLIER_ITEM,
                     \Platform\FoodAlchemist\Services\Ai\KnowledgeEmbeddingService::ENTITY_TYPE,
                     \Platform\FoodAlchemist\Services\Ai\KnowledgeEmbeddingService::ENTITY_TYPE_ANKER,
                 ] as $embeddingEntityType) {

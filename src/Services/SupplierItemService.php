@@ -63,6 +63,24 @@ class SupplierItemService
             ->withQueryString();
     }
 
+    /**
+     * Sichtbare LAs nach IDs, in derselben Form wie searchGlobal (structure.gp eager,
+     * aktiver_preis-Subquery) — damit von der Semantik nachgereichte Kandidaten im
+     * LaCandidateFinder dieselbe Ranking-Sicht haben wie die lexikalischen. Reihenfolge
+     * egal (der Finder rankt selbst neu).
+     *
+     * @param  list<int>  $ids
+     * @return \Illuminate\Database\Eloquent\Collection<int, FoodAlchemistSupplierItem>
+     */
+    public function byIds(Team $team, array $ids): \Illuminate\Database\Eloquent\Collection
+    {
+        if ($ids === []) {
+            return FoodAlchemistSupplierItem::query()->whereRaw('1 = 0')->get();
+        }
+
+        return $this->baseQuery($team, [])->whereIn('id', $ids)->get();
+    }
+
     private function baseQuery(Team $team, array $filters): Builder
     {
         return FoodAlchemistSupplierItem::visibleToTeam($team)

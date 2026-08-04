@@ -5,8 +5,11 @@ namespace Platform\FoodAlchemist\Services;
 use Illuminate\Support\Collection;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem;
+use Platform\FoodAlchemist\Services\Ai\PoolEmbeddingService;
+use Platform\FoodAlchemist\Services\Ai\SemanticRetrievalService;
 use Platform\FoodAlchemist\Services\Matching\MatchHeuristics;
 use Platform\FoodAlchemist\Services\Matching\TokenEngine;
+use Throwable;
 
 /**
  * Spec 16·S2 — WG-Lead-gescopter LA-Kandidaten-Finder.
@@ -40,7 +43,11 @@ class LaCandidateFinder
         private TerminologyService $terminology,
         private StammLieferantService $stamm,
         private SupplierItemService $items,
+        // E-LA (Spec 15 §5c): additive semantische LA-Recall-Schicht. Nullable +
+        // lazy aufgelöst wie in IngredientMatchService — kein Aufrufer bricht.
+        private ?SemanticRetrievalService $semantic = null,
     ) {
+        $this->semantic ??= app(SemanticRetrievalService::class);
     }
 
     /**
@@ -90,6 +97,31 @@ class LaCandidateFinder
         if ($pool->isEmpty()) {
             $pool = $this->pool($team, $searchPhrases, []);
         }
+
+        // E-LA (Spec 15 §5c): additive semantische Recall-Schicht über den LA-Pool
+        // (foodalchemist_supplier_item, geroutet nach Qdrant). Fängt, was Lexik + WG-
+        // Scoping verfehlt (Synonyme/Fremdbegriffe/verbose Bezeichnung, cross-WG). LÄUFT
+        // AUCH bei leerem Lexik-Pool — sonst verpufft der Recall-Gewinn genau dort, wo er
+        // gebraucht wird. Rein additiv: der deterministische Namensscore bleibt der
+        // Entscheider, cosine ist nur Aufnahme-Grund + Score-Floor. Graceful (GL-13
+        // Invariante 6): Flag aus / Fehler ⇒ still rein lexikalisch.
+        $cos = [];   // la_id => cosine
+        if ($this->semantic !== null && $this->semantic->enabled()) {
+            try {
+                $cap = max($k * 3, (int) config('foodalchemist.semantic_search.pool_cap', 15));
+                foreach ($this->semantic->candidates($team, $ingredientName, [PoolEmbeddingService::ENTITY_TYPE_SUPPLIER_ITEM], $cap) as $hit) {
+                    $cos[(int) $hit['entity_id']] = (float) $hit['score'];
+                }
+                $known = $pool->map(fn ($la) => (int) $la->id)->all();
+                $missing = array_values(array_diff(array_keys($cos), $known));
+                if ($missing !== []) {
+                    $pool = $pool->concat($this->items->byIds($team, $missing));
+                }
+            } catch (Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('[LaCandidateFinder] semantic recall failed', ['error' => $e->getMessage()]);
+            }
+        }
+
         if ($pool->isEmpty()) {
             return collect();
         }
@@ -97,11 +129,17 @@ class LaCandidateFinder
         $leadSet = array_flip($leadIds);
 
         $ranked = $pool
+            ->unique('id')
             // S2 Anti-Marker (Weg-2): bekannte Verwechslungs-Fallen raus (Brie↛Bries).
             ->reject(fn ($la) => $this->terminology->isAntiMarker($ingredientName, (string) $la->designation))
-            ->map(function ($la) use ($queryTokens, $aliasVariants, $leadSet) {
+            ->map(function ($la) use ($queryTokens, $aliasVariants, $leadSet, $cos) {
                 $slug = $la->structure?->main_ingredient_slug;
-                $la->setAttribute('score', $this->bestScore($queryTokens, $aliasVariants, (string) $la->designation, $slug));
+                $lexScore = $this->bestScore($queryTokens, $aliasVariants, (string) $la->designation, $slug);
+                $c = $cos[(int) $la->id] ?? null;
+                // both → max(lexikalisch, cosine); nur semantisch → cosine (überlebt den
+                // score>0-Filter, obwohl die Lexik 0 ergab — genau der Synonym-Fall).
+                $la->setAttribute('score', $c !== null ? max($lexScore, $c) : $lexScore);
+                $la->setAttribute('origin', $c !== null ? ($lexScore > 0.0 ? 'both' : 'semantic') : 'lexical');
                 $la->setAttribute('ist_lead', isset($leadSet[(int) $la->supplier_id]));
 
                 return $la;

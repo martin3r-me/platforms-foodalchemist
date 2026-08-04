@@ -17,7 +17,7 @@ use Platform\FoodAlchemist\Services\Ai\PoolEmbeddingService;
 class EmbedCommand extends Command
 {
     protected $signature = 'foodalchemist:embed
-        {--pool=all : gps|recipes|knowledge|suppliers|concepts|foodbooks|lab_notes|all}
+        {--pool=all : gps|recipes|knowledge|suppliers|concepts|foodbooks|lab_notes|la|all}
         {--team= : nur diese reale team_id (Default: alle Partitionen)}';
 
     protected $description = 'Backfill der Embedding-Pools (GPs, Rezepte, Wissen) für die semantische Recall-Schicht (#507)';
@@ -28,7 +28,7 @@ class EmbedCommand extends Command
         $teamOpt = $this->option('team');
         $team = ($teamOpt === null || $teamOpt === '') ? null : (int) $teamOpt;
 
-        $allowed = ['gps', 'recipes', 'knowledge', 'suppliers', 'concepts', 'foodbooks', 'lab_notes', 'all'];
+        $allowed = ['gps', 'recipes', 'knowledge', 'suppliers', 'concepts', 'foodbooks', 'lab_notes', 'la', 'all'];
         if (! in_array($pool, $allowed, true)) {
             $this->error("Unbekannter --pool='{$pool}'. Erlaubt: " . implode('|', $allowed) . '.');
 
@@ -82,6 +82,13 @@ class EmbedCommand extends Command
             $rows[] = ['Wissen (alle Kategorien)', $stats['candidates'], implode(', ', array_keys($stats['kategorien']))];
             $anker = $knowledge->embedAnkers();
             $rows[] = ['Anker (Vokabular)', $anker['candidates'], '—'];
+        }
+
+        // LA-Pool (~264k) bewusst NUR bei explizitem --pool=la — nicht Teil von 'all'
+        // (Größe + off-peak, Spec 15 §5c). Braucht den gerouteten Qdrant-Store.
+        if ($pool === 'la') {
+            $stats = $pools->embedSupplierItems($team);
+            $rows[] = ['Lieferantenartikel (LA)', $stats['candidates'], $this->fmtPartitions($stats['partitions'])];
         }
 
         $this->table(['Pool', 'Kandidaten', 'Partitionen / Details'], $rows);

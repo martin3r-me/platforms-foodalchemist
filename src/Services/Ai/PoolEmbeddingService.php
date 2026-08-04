@@ -67,6 +67,13 @@ class PoolEmbeddingService
 
     public const ENTITY_TYPE_LAB_NOTE = 'foodalchemist_lab_note';
 
+    /**
+     * Spec 15 §5c: der LA-Pool (Lieferantenartikel, ~264k) — jetzt aktiviert, weil die
+     * Store-/Qdrant-Frage geklärt ist. Sprengt die MySQL-Cosine-Grenze → nur sinnvoll
+     * mit geroutetem Qdrant-Store. Wird NICHT von --pool=all mitgezogen (separat off-peak).
+     */
+    public const ENTITY_TYPE_SUPPLIER_ITEM = 'foodalchemist_supplier_item';
+
     /** Max. Zeichen für Freitext-Leads (Beschreibung/Body) — kompakt, kein Vektor-Verwässern. */
     private const LEAD_MAX = 400;
 
@@ -409,6 +416,63 @@ class PoolEmbeddingService
             $onlyTeamId);
     }
 
+    /**
+     * LA-Pool-Backfill (Spec 15 §5c, ~264k). BEWUSST nicht über embedSimple (das lädt
+     * die ganze Tabelle in den Speicher) — stattdessen keyset-gechunkte Iteration
+     * (chunkById, speicherflach) + LEFT JOIN auf die Structure-Schicht: der klassifizierte
+     * Haupt-Slug ist das stärkere Ähnlichkeits-Signal als die verbose Bezeichnung.
+     * Idempotent über source_hash. Discontinued/gelöschte LAs bleiben draußen.
+     *
+     * @return array{available: bool, candidates: int, partitions: array<int,int>}
+     */
+    public function embedSupplierItems(?int $onlyTeamId = null): array
+    {
+        if (! $this->isProviderAvailable()) {
+            return ['available' => false, 'candidates' => 0, 'partitions' => []];
+        }
+
+        $service = app(EmbeddingService::class);
+        $providerName = $this->providerName();
+        $partitions = [];
+        $candidates = 0;
+
+        $query = DB::table('foodalchemist_supplier_items as si')
+            ->leftJoin('foodalchemist_supplier_item_structures as st', 'st.supplier_item_id', '=', 'si.id')
+            ->whereNull('si.deleted_at')
+            ->where(fn ($w) => $w->where('si.is_discontinued', false)->orWhereNull('si.is_discontinued'));
+        if ($onlyTeamId !== null) {
+            $query->where('si.team_id', $onlyTeamId);
+        }
+
+        $query->select(
+            'si.id', 'si.team_id', 'si.designation', 'si.marketing_name', 'si.brand',
+            'st.main_ingredient_display', 'st.gp_name_derived',
+        )->chunkById(2000, function ($rows) use ($service, $providerName, &$partitions, &$candidates): void {
+            $byTeam = [];
+            foreach ($rows as $row) {
+                $text = $this->supplierItemEmbedText($row);
+                if ($text === '') {
+                    continue;
+                }
+                $byTeam[$this->partitionTeamId($row->team_id)][] = ['id' => (int) $row->id, 'text' => $text];
+            }
+            foreach ($byTeam as $teamId => $entries) {
+                foreach ($this->chunkByBudget($entries) as $sub) {
+                    $service->embedAndStoreBatch(
+                        teamId: (int) $teamId,
+                        entityType: self::ENTITY_TYPE_SUPPLIER_ITEM,
+                        entries: $sub,
+                        providerName: $providerName,
+                    );
+                }
+                $partitions[(int) $teamId] = ($partitions[(int) $teamId] ?? 0) + count($entries);
+                $candidates += count($entries);
+            }
+        }, 'si.id', 'id');
+
+        return ['available' => true, 'candidates' => $candidates, 'partitions' => $partitions];
+    }
+
     public function queueSupplier(FoodAlchemistSupplier $s): void
     {
         $this->queueSimple(self::ENTITY_TYPE_SUPPLIER, $s,
@@ -478,6 +542,22 @@ class PoolEmbeddingService
     public function labNoteEmbedText(object $n): string
     {
         return $this->joinParts([$n->title ?? '', self::lead((string) ($n->body ?? ''))]);
+    }
+
+    /**
+     * LA: klassifizierter Haupt-Slug + abgeleiteter GP-Name zuerst (stärkstes Signal,
+     * symmetrisch zur Zutaten-Query), dann die rohe Bezeichnung/Marke als Ergänzung.
+     * Gebinde/Grammaturen bleiben draußen (verwässern den Vektor, GP-Regelwerk §7.1).
+     */
+    public function supplierItemEmbedText(object $si): string
+    {
+        return $this->joinParts([
+            $si->main_ingredient_display ?? '',
+            $si->gp_name_derived ?? '',
+            $si->designation ?? '',
+            $si->marketing_name ?? '',
+            $si->brand ?? '',
+        ]);
     }
 
     // ── Interna ──────────────────────────────────────────────────────────────

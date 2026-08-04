@@ -342,12 +342,14 @@ return [
      * 'min_score' = Cosine-Schwelle; darunter gilt ein Treffer als irrelevant.
      */
     /*
-     * Embedding-Store-Ziel für ALLE acht foodalchemist_*-Pools (GP/Rezept/Lieferant/
-     * Konzept/Foodbook/Lab-Note + Wissen/Pairing-Anker). Der FoodAlchemistServiceProvider
-     * routet damit in Cores EmbeddingStoreRegistry (route()). Werte: 'mysql' | 'qdrant'.
-     * Default 'mysql' = No-op (Verhalten wie bisher) — Cutover auf 'qdrant' per ENV,
-     * gleichzeitig Sofort-Rollback (solange der MySQL-Bestand nicht gepurged ist).
-     * Alle acht MÜSSEN denselben Store nutzen (Mixed-Type-Suche routet am ersten Typ).
+     * Embedding-Store-Ziel für ALLE neun foodalchemist_*-Pools (GP/Rezept/Lieferant/
+     * Konzept/Foodbook/Lab-Note/Lieferantenartikel + Wissen/Pairing-Anker). Der
+     * FoodAlchemistServiceProvider routet damit in Cores EmbeddingStoreRegistry (route()).
+     * Werte: 'mysql' | 'qdrant'. Default 'mysql' = No-op (Verhalten wie bisher) — Cutover
+     * auf 'qdrant' per ENV, gleichzeitig Sofort-Rollback (solange MySQL nicht gepurged ist).
+     * Alle neun MÜSSEN denselben Store nutzen (Mixed-Type-Suche routet am ersten Typ).
+     * Hinweis: Der LA-Pool (~264k) ist bei 'mysql' nur bedingt tragfähig (Cosine-in-PHP
+     * skaliert bis ~50k/Partition) — er ist praktisch für 'qdrant' gedacht.
      */
     'embedding_store' => env('FOODALCHEMIST_EMBEDDING_STORE', 'mysql'),
 

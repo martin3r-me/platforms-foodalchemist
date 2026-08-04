@@ -4,7 +4,7 @@
 > **Vorgeschichte:** `MySqlJsonEmbeddingStore` (Cosine in PHP) hat dokumentierte Grenze ~50k Vektoren/Partition. Die **LA-Pool (Lieferantenartikel, ~100k)** wurde bewusst NICHT embedded — „bis Store/Qdrant-Entscheid" (Spec 15 §5c). Dieses Runbook löst genau diesen Entscheid ein.
 > **Referenz:** `docs/_archiv/.../PLANUNG/02_RAG_System_FoodAlchemist.md` (Gesamtplan RAG), `EmbeddingStoreContract` (platforms-core).
 >
-> **Umsetzung FA (Stand 2026-08-04):** Core-Registry ist da (`EmbeddingStoreRegistry` + `QdrantEmbeddingStore`, beide Stores benannt registriert `mysql`/`qdrant`). FA-Code-Teil **fertig + Suite grün (2241)**: alle 8 `foodalchemist_*`-Pools werden im `FoodAlchemistServiceProvider::boot()` per `route()` deklariert (Store aus `config('foodalchemist.embedding_store')`, Default `mysql`), und `SemanticRetrievalService::candidates()` löst den Store jetzt über die Registry auf statt über den (in Core **bewusst nicht mehr gebundenen**) `EmbeddingStoreContract`. Offen = reine Ops: Backfill + Flip auf demo (unten §5).
+> **Umsetzung FA (Stand 2026-08-04):** Core-Registry ist da (`EmbeddingStoreRegistry` + `QdrantEmbeddingStore`, beide Stores benannt registriert `mysql`/`qdrant`). FA-Code-Teil **fertig + Suite grün**: alle **9** `foodalchemist_*`-Pools (GP/Rezept/Lieferant/Konzept/Foodbook/Lab-Note/**Lieferantenartikel** + Wissen/Pairing-Anker) werden im `FoodAlchemistServiceProvider::boot()` per `route()` deklariert (Store aus `config('foodalchemist.embedding_store')`, Default `mysql`), und `SemanticRetrievalService::candidates()` löst den Store jetzt über die Registry auf statt über den (in Core **bewusst nicht mehr gebundenen**) `EmbeddingStoreContract`. Der **LA-Pool (§5c)** ist neu aktiviert: `embedSupplierItems()` (chunkById, +Structure-Slug) + additive semantische Recall-Schicht im `LaCandidateFinder`. Offen = reine Ops: Backfill + Flip auf demo (unten §5).
 
 ---
 
@@ -113,14 +113,15 @@ kein Fehler). Deshalb off-peak. Reihenfolge:
 0. **Deploy** (FA-Code ist No-op bis Flip): im demo-Repo `git pull` → `composer update` → `composer.lock` committen/pushen. Danach `php8.4 artisan config:clear`.
 1. **Provisionieren** (Christian/RM): VM, Firewall/Private Net, docker-compose up, API-Key, TLS. Collections legt der Store beim ersten `store()` selbst an — kein manuelles Setup.
 2. **Flip off-peak:** `FOODALCHEMIST_EMBEDDING_STORE=qdrant` setzen (+ `QDRANT_URL`/`QDRANT_API_KEY`/ggf. `QDRANT_QUANTIZATION=scalar`), `config:clear`. Ab jetzt gehen Reads+Writes nach Qdrant (noch leer → lexikalischer Fallback).
-3. **Backfill off-peak** (Embed-Jobs erzeugen Last → nie parallel zur Nutzung, sonst 502; ~15k Vektoren, idempotent per `source_hash`, Re-Run sicher):
+3. **Backfill off-peak** (Embed-Jobs erzeugen Last → nie parallel zur Nutzung, sonst 502; ~15k Vektoren für die 8 kleinen Pools + **~264k** für den LA-Pool, idempotent per `source_hash`, Re-Run sicher):
    - `php8.4 artisan foodalchemist:knowledge-embed`      (Wissenskorpus + Anker, team_id=0)
    - `php8.4 artisan foodalchemist:embed --pool=all`      (gps/recipes/suppliers/concepts/foodbooks/lab_notes)
+   - `php8.4 artisan foodalchemist:embed --pool=la`       (**LA-Pool ~264k** — bewusst SEPARAT, nicht in `--pool=all`; längster Lauf, strikt off-peak; braucht `scalar`-Quantisierung wegen RAM)
 4. **Recall verifizieren:** `php8.4 artisan foodalchemist:embed-eval --team=<id>` — Recall@K + Anti-Marker gegen die MySQL-Baseline. **Quantisierung darf den Floor nicht unter ~66 % drücken.** Sinkt Recall → `QDRANT_QUANTIZATION` lockern (`scalar`→unset) oder CAX21-RAM nutzen, dann `--pool=all` erneut (Collection neu füllen). **+ Foodbook-Leak-Check** (tenant-privat): Tenant-Query darf nur eigene Ahnenkette + Global sehen, nie fremde Foodbooks.
 5. **Stabil?** Wenn Recall + Leak-Check ok → fertig, Qdrant ist live. Falls nicht: `FOODALCHEMIST_EMBEDDING_STORE=mysql` + `config:clear` = Sofort-Rollback (MySQL trägt noch).
 6. **Altpfad abräumen** (erst nach stabiler Verifikation): `core_embeddings`-Zeilen der 8 Typen entfernen. Erst wenn Qdrant nachweislich trägt — vorher ist es der Rollback-Anker.
 
-> **LA-Pool (~100k, bisher zurückgehalten, Spec 15 §5c)** ist **kein** Teil dieser 8-Pool-Migration — separater Backfill, wenn der LA-Embed-Pfad gebaut ist.
+> **LA-Pool (~264k, Spec 15 §5c)** ist jetzt **aktiviert** und Teil dieser Migration — aber als **eigener** Backfill-Schritt (`--pool=la`, nicht in `--pool=all`), weil er der mit Abstand größte/längste Lauf ist und die Quantisierung braucht.
 
 ---
 
