@@ -66,15 +66,16 @@ it('keine passende LA → KEIN GP (Doktrin), sondern null', function () {
         ->and(FoodAlchemistGp::count())->toBe($vorher);
 });
 
-it('Generator-Integration: Lücke mit LA erhöht gp_neu_aus_la auf 1', function () {
+it('Generator-Integration: Lücke mit LA wird vorgeschlagen, aber noch nicht gemintet', function () {
     config(['foodalchemist.ai.provider' => 'fake']);
     foreach ([
         ['slug' => 'g', 'display_de' => 'Gramm', 'dimension' => 'mass', 'default_in_g' => 1],
     ] as $e) {
         FoodAlchemistVocabEinheit::create(['team_id' => $this->rootTeam->id, ...$e]);
     }
-    ($this->mkLa)('Tahin');   // LA vorhanden, aber noch kein GP → Generator mintet LA-First
+    $la = ($this->mkLa)('Tahin');
 
+    $vorher = FoodAlchemistGp::count();
     $resultat = app(RecipeGeneratorService::class)->generiere(
         $this->rootTeam, 'Sesam-Dip', [], kiRezeptOverride: [
             'name' => 'Dip: Sesam',
@@ -82,10 +83,11 @@ it('Generator-Integration: Lücke mit LA erhöht gp_neu_aus_la auf 1', function 
         ],
     );
 
-    expect($resultat['statistik']['gp_neu_aus_la'])->toBe(1)
-        ->and($resultat['statistik']['offen'])->toBe(0);
+    expect($resultat['statistik']['gp_neu_aus_la'])->toBe(0)
+        ->and($resultat['statistik']['offen'])->toBe(1)
+        ->and($resultat['offene'][0]['la_kandidaten'][0]['id'])->toBe($la->id);
 
     $zeile = $resultat['recipe']->ingredients()->first();
-    expect($zeile->gp_id)->not->toBeNull()
-        ->and(FoodAlchemistGp::find($zeile->gp_id)->status->value)->toBe('tentative');
+    expect($zeile->gp_id)->toBeNull()
+        ->and(FoodAlchemistGp::count())->toBe($vorher);
 });

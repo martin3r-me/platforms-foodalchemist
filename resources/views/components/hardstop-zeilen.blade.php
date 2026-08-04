@@ -9,8 +9,8 @@
     Drei Wege, bewusst ungleich (Begründung in HardstopResolveService):
       • Basisrezept anlegen  → legt an + verknüpft (Halbfabrikat-Fall)
       • Meintest du? …       → bindet einen Bestands-Treffer aus der Shortlist
-      • Beschaffung anstoßen → KEIN GP-Write (LA-First: kein GP ohne LA), nur
-        Sourcing-Wunsch; die Zeile bleibt danach ehrlich offen stehen.
+      • Lieferantenartikel wählen → noch kein Write; danach vorhandenes oder
+        neues GP bewusst bestätigen. Ohne Treffer bleibt Beschaffung möglich.
 
     Eine Fläche für beide Generator-Modals (wie oneshot-toggle/-ergebnis/stub-offen).
 --}}
@@ -30,9 +30,11 @@
                                 class="{{ $btnGhost }} text-[11px] py-0.5"
                                 data-{{ $prefix }}hardstop-stub="{{ $idx }}">@svg('heroicon-o-puzzle-piece', 'w-3.5 h-3.5 inline-block align-middle') Basisrezept anlegen</button>
                     @else
-                        <button type="button" wire:click="hardstopBeschaffen({{ $idx }})"
-                                class="{{ $btnGhost }} text-[11px] py-0.5"
-                                data-{{ $prefix }}hardstop-beschaffen="{{ $idx }}">@svg('heroicon-o-arrow-down-tray', 'w-3.5 h-3.5 inline-block align-middle') Beschaffung anstoßen</button>
+                        @if(count($offen['la_kandidaten'] ?? []) === 0)
+                            <button type="button" wire:click="hardstopBeschaffen({{ $idx }})"
+                                    class="{{ $btnGhost }} text-[11px] py-0.5"
+                                    data-{{ $prefix }}hardstop-beschaffen="{{ $idx }}">@svg('heroicon-o-arrow-down-tray', 'w-3.5 h-3.5 inline-block align-middle') Keine Artikel gefunden – Beschaffung anstoßen</button>
+                        @endif
                         <button type="button" wire:click="hardstopStubAnlegen({{ $idx }})"
                                 class="{{ $btnGhost }} text-[11px] py-0.5"
                                 data-{{ $prefix }}hardstop-stub="{{ $idx }}">@svg('heroicon-o-puzzle-piece', 'w-3.5 h-3.5 inline-block align-middle') Doch Basisrezept</button>
@@ -45,6 +47,39 @@
                         </button>
                     @endif
                 </div>
+                @if(($offen['primaer'] ?? null) !== 'basisrezept_anlegen' && count($offen['la_kandidaten'] ?? []) > 0)
+                    <div class="mt-2 space-y-1" data-{{ $prefix }}hardstop-la-kandidaten="{{ $idx }}">
+                        <p class="text-[10px] font-medium text-gray-600">1. Lieferantenartikel wählen</p>
+                        @foreach($offen['la_kandidaten'] as $la)
+                            <button type="button" wire:click="hardstopLaWaehlen({{ $idx }}, {{ (int) $la['id'] }})"
+                                    class="w-full text-left text-[11px] rounded border px-1.5 py-1 {{ (int) ($offen['selected_la_id'] ?? 0) === (int) $la['id'] ? 'border-emerald-500 bg-emerald-50' : 'border-gray-200 hover:bg-[var(--ui-muted-5)]' }}"
+                                    data-{{ $prefix }}hardstop-la="{{ (int) $la['id'] }}">
+                                {{ $la['designation'] }}
+                                @if(($la['supplier'] ?? '') !== '')<span class="text-gray-400">· {{ $la['supplier'] }}</span>@endif
+                                @if(($la['gp_name'] ?? null) !== null)<span class="{{ $pill }} {{ $variantPill['success'] }}">GP: {{ $la['gp_name'] }}</span>@endif
+                            </button>
+                        @endforeach
+                        <button type="button" wire:click="hardstopBeschaffen({{ $idx }})"
+                                class="{{ $btnGhost }} text-[11px] py-0.5" data-{{ $prefix }}hardstop-beschaffen="{{ $idx }}">Keiner passt – Beschaffung anstoßen</button>
+                    </div>
+                    @if(($offen['selected_la_id'] ?? null) !== null)
+                        @php($selectedLa = collect($offen['la_kandidaten'])->first(fn ($la) => (int) $la['id'] === (int) $offen['selected_la_id']))
+                        <div class="mt-2 space-y-1" data-{{ $prefix }}hardstop-gp-schritt="{{ $idx }}">
+                            <p class="text-[10px] font-medium text-gray-600">2. Passendes GP bestätigen</p>
+                            @if(($selectedLa['gp_id'] ?? null) !== null)
+                                <button type="button" wire:click="hardstopLaGpBestaetigen({{ $idx }}, {{ (int) $selectedLa['gp_id'] }})"
+                                        class="{{ $btnPrimary }} text-[11px] py-0.5">Vorhandenes GP „{{ $selectedLa['gp_name'] }}“ verwenden</button>
+                            @else
+                                @foreach(collect($offen['shortlist'] ?? [])->where('kind', 'gp') as $gp)
+                                    <button type="button" wire:click="hardstopLaGpBestaetigen({{ $idx }}, {{ (int) $gp['id'] }})"
+                                            class="{{ $btnGhost }} text-[11px] py-0.5">Mit GP „{{ $gp['name'] }}“ verknüpfen</button>
+                                @endforeach
+                                <button type="button" wire:click="hardstopLaGpBestaetigen({{ $idx }})"
+                                        class="{{ $btnPrimary }} text-[11px] py-0.5" data-{{ $prefix }}hardstop-gp-neu="{{ $idx }}">Neues GP aus gewähltem Artikel anlegen</button>
+                            @endif
+                        </div>
+                    @endif
+                @endif
                 @if(($aufgeklappt[$idx] ?? false) && count($offen['shortlist'] ?? []) > 0)
                     <div class="mt-1.5 space-y-1" data-{{ $prefix }}hardstop-kandidaten="{{ $idx }}">
                         @foreach($offen['shortlist'] as $kandidat)

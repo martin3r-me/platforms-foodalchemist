@@ -44,7 +44,7 @@ class RecipesGenerateTool extends FoodAlchemistTool implements ToolContract, Too
         return 'Generiert aus einer Beschreibung ein ENTWURFS-Rezept (status=draft, created_via=mcp — nie automatisch aktiv). '
             . 'Mit vk=true entsteht statt eines Basisrezepts ein VK-Gericht (is_sales_recipe, Speisen-Klasse/Aufschlagsklasse aus dem Vorschlag) '
             . 'inklusive Kohärenz-Messung. Der Bestand wird ZUERST genutzt: Zutaten werden gegen vorhandene GPs und Basisrezepte gematcht, '
-            . 'Neues entsteht nur für echte Lücken (Sub-Rezept-Stub bei Halbfabrikaten, GP-Mint aus passendem Lieferantenartikel). '
+            . 'Fehlende Basisrezepte oder GPs werden nicht automatisch angelegt. Passende Lieferantenartikel kommen als Vorschläge zurück; '
             . 'Zutaten ohne Treffer bleiben ungematcht und kommen als "offene" zurück — nie geraten; sie erst mit foodalchemist.gps.MATCH '
             . 'erden bzw. per foodalchemist.gp_proposals.POST anlegen und dann mit foodalchemist.recipe_ingredients.PUT nachziehen. '
             . 'Mit voll_anreichern=true laeuft danach der One-Shot-Anreicherungs-Pass durch und fuellt die noch leeren Textfelder '
@@ -181,18 +181,22 @@ class RecipesGenerateTool extends FoodAlchemistTool implements ToolContract, Too
             'statistik' => $statistik,
             'offene' => array_map(fn (array $o) => [
                 'text' => $o['text'],
-                'primaer' => $o['primaer'],                       // gp_anlegen | basisrezept_anlegen
+                'primaer' => $o['primaer'],                       // lieferantenartikel_waehlen | basisrezept_anlegen
                 'shortlist' => array_map(fn (array $k) => [
                     'kind' => $k['kind'], 'id' => $k['id'], 'name' => $k['name'], 'score' => $k['score'],
                 ], array_slice($o['shortlist'] ?? [], 0, 3)),
+                'la_kandidaten' => array_map(fn (array $la) => [
+                    'id' => $la['id'], 'designation' => $la['designation'], 'supplier' => $la['supplier'],
+                    'score' => $la['score'], 'gp_id' => $la['gp_id'], 'gp_name' => $la['gp_name'],
+                ], array_slice($o['la_kandidaten'] ?? [], 0, 3)),
             ], $resultat['offene']),
             'kohaerenz' => $statistik['kohaerenz'] ?? null,        // nur VK-Modus: deterministischer Aroma-Score (GL-10 Achse 1)
             // nur mit voll_anreichern=true; enthält `kohaerenz_urteil` (GL-10 Achse 2, nie
             // mit Achse 1 verrechnet) und bei vk=true `wirtschaftlichkeit` (03·L8).
             'anreicherung' => $anreicherung,
             'hinweis' => ($offen > 0
-                    ? "⚠ {$offen} Zutat(en) ohne Treffer — bewusst NICHT geraten. Pro Zeile: foodalchemist.gps.MATCH prüfen, "
-                        . 'sonst GP/Basisrezept anlegen und mit foodalchemist.recipe_ingredients.PUT nachziehen. '
+                    ? "⚠ {$offen} Zutat(en) ohne Treffer — bewusst NICHT geraten. Pro Zeile Bestand prüfen; bei GP-Lücken "
+                        . 'zuerst einen vorgeschlagenen Lieferantenartikel bestätigen, danach GP zuordnen/anlegen. '
                     : '')
                 . 'Entwurf (Draft-Quarantäne): Freigabe bleibt menschlich.',
         ]);

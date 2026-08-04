@@ -30,8 +30,8 @@ use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
  *    Was übrig bleibt, wird sofort übernommen — sonst wäre das Ergebnis eben
  *    nicht „voll", sondern wieder eine Aufgabenliste.
  *
- * 3. **Synchron im ohnehin asynchronen Kontext.** Aufrufer ist der
- *    `GenerateRecipeJob` (Queue, Timeout 300 s) bzw. ein MCP-Call. Darum
+ * 3. **Synchron im ohnehin asynchronen Kontext.** Aufrufer ist der separate
+ *    `EnrichGeneratedRecipeJob` bzw. ein MCP-Call. Darum
  *    `verarbeiteRezept()` direkt statt `starte()`: ein dispatchter `BulkEnrichJob`
  *    liefe auf demo parallel, und `alleUebernehmen()` fände noch keine Vorschläge.
  *

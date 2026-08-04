@@ -61,10 +61,29 @@ it('Toggle aus lässt den Job den Bestandspfad fahren (kein Anreicherungs-Pass)'
     Queue::assertPushed(GenerateRecipeJob::class, fn ($job) => $job->vollAnreichern === false);
 });
 
-it('One-Shot hebt das Job-Timeout an (Kaskade = 1–4 Calls mehr, Kill wäre ein halbes Wrack)', function () {
+it('Generierung und Anreicherung haben getrennte Job-Zeitfenster', function () {
     expect((new GenerateRecipeJob('r', 1, 1, 'x', [], false, false))->timeout)->toBe(300)
-        ->and((new GenerateRecipeJob('r', 1, 1, 'x', [], true, true))->timeout)->toBe(540)   // < Worker-Timeout 600 s
-        ->and((new GenerateRecipeJob('r', 1, 1, 'x', [], true, true))->tries)->toBe(1);      // kein stiller Auto-Retry der KI-Kosten
+        ->and((new GenerateRecipeJob('r', 1, 1, 'x', [], true, true))->timeout)->toBe(300)
+        ->and((new \Platform\FoodAlchemist\Jobs\EnrichGeneratedRecipeJob('r', 1, 1, 2, []))->timeout)->toBe(300)
+        ->and((new GenerateRecipeJob('r', 1, 1, 'x', [], true, true))->tries)->toBe(1);
+});
+
+it('Poll zeigt das gespeicherte Rezept schon während der separaten Anreicherung', function () {
+    $comp = Livewire::test(GeneratorModal::class)
+        ->set('description', 'Kalbsfond')
+        ->call('generieren');
+
+    Cache::put(GenerateRecipeJob::cacheKey($comp->get('runId')), [
+        'status' => 'enriching', 'recipe_id' => 98, 'name' => 'Kalbsfond',
+        'statistik' => ['bestand_gp' => 2, 'bestand_sub' => 0, 'stub_neu' => 0, 'offen' => 0],
+        'offene' => [],
+    ], now()->addMinutes(5));
+
+    $comp->call('pruefeErgebnis')
+        ->assertSet('laeuft', true)
+        ->assertSet('ergebnis.recipe_id', 98)
+        ->assertSee('Vollanreicherung läuft separat')
+        ->assertDispatched('recipe-selected');
 });
 
 it('leere Beschreibung startet keinen Lauf (beide Flächen)', function () {

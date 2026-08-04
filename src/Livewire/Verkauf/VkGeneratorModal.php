@@ -101,7 +101,7 @@ class VkGeneratorModal extends Component
     #[On('vk-generator-modal.oeffnen')]
     public function oeffnen(?string $description = null, ?int $planningSessionId = null): void
     {
-        $this->reset('fehler', 'ergebnis', 'description', 'planningSessionId', 'zielVk', 'laeuft', 'runId', 'anreicherung', 'hardstopMeldung', 'hardstopOffenIndex');
+        $this->reset('fehler', 'ergebnis', 'description', 'planningSessionId', 'zielVk', 'laeuft', 'runId', 'anreicherung', 'hardstopMeldung', 'hardstopOffenIndex', 'freigegeben');
         // Planungs-„Go"-Handoff: Brief vorbefüllen + Session als Lineage-Träger.
         $this->description = $description ?? '';
         $this->planningSessionId = $planningSessionId;

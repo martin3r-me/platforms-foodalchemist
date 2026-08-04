@@ -156,8 +156,8 @@ it('L5: Zutat ohne Treffer wird NICHT geraten — kommt als offene Zeile mit Han
     expect($res->success)->toBeTrue()
         ->and($res->data['statistik']['offen'])->toBe(1)
         ->and($res->data['offene'][0]['text'])->toBe('Sanddorn-Direktsaft')
-        ->and($res->data['offene'][0]['primaer'])->toBeIn(['gp_anlegen', 'basisrezept_anlegen'])
-        ->and($res->data['hinweis'])->toContain('foodalchemist.gps.MATCH')
+        ->and($res->data['offene'][0]['primaer'])->toBeIn(['lieferantenartikel_waehlen', 'basisrezept_anlegen'])
+        ->and($res->data['hinweis'])->toContain('Lieferantenartikel')
         ->and(FoodAlchemistRecipeIngredient::where('recipe_id', $res->data['recipe']['id'])->first()->match_method->value)->toBe('unmatched');   // Lücke bleibt Lücke
 });
 

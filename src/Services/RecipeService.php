@@ -536,7 +536,7 @@ class RecipeService
                 // und bei Ablehnung stillschweigend verworfen (kein Throw fürs Auto-Grounding).
                 $groundedMethod = null;
                 $groundedConfidence = null;
-                if ($gpId === null && $subId === null) {
+                if ($gpId === null && $subId === null && ($z['auto_ground'] ?? true)) {
                     $groundName = trim((string) ($z['display_name'] ?? '')) ?: trim((string) ($z['raw_text'] ?? ''));
                     if ($groundName !== '') {
                         $treffer = app(IngredientMatchService::class)->matchIngredient(

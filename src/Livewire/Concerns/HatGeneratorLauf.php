@@ -17,8 +17,8 @@ use Platform\FoodAlchemist\Jobs\GenerateRecipeJob;
  * VK-Modal rief `RecipeGeneratorService::generiere()` weiter synchron in der
  * Livewire-Action — obwohl der VK-Pfad der teurere ist (zusätzliche
  * Taxonomie im Prompt, Kohärenz-Rechnung danach). Der One-Shot kostet 1–4
- * weitere Provider-Calls: am Basisrezept laufen sie in der 300-s-Queue-
- * Ausführung mit, im Web-Request lägen sie obendrauf. Ein Toggle dort wäre
+ * weitere Provider-Calls: sie laufen nach erfolgreicher Generierung in einem
+ * eigenen Queue-Job; im Web-Request lägen sie obendrauf. Ein Toggle dort wäre
  * also entweder gar nicht baubar oder einer, der garantiert timeoutet.
  *
  * Darum fahren jetzt beide Flächen `GenerateRecipeJob` (der `vkModus`
@@ -71,25 +71,32 @@ trait HatGeneratorLauf
             return;   // noch am Rechnen → weiter pollen
         }
 
-        $this->laeuft = false;
         if (($stand['status'] ?? null) === 'error') {
+            $this->laeuft = false;
             $this->fehler = $stand['fehler'] ?? 'Generierung fehlgeschlagen.';
 
             return;
         }
 
-        $this->ergebnis = [
-            'recipe_id' => $stand['recipe_id'],
-            'name' => $stand['name'],
-            'statistik' => $stand['statistik'],
-            'offene' => $stand['offene'],
-        ];
+        if ($this->ergebnis === null) {
+            $this->ergebnis = [
+                'recipe_id' => $stand['recipe_id'],
+                'name' => $stand['name'],
+                'statistik' => $stand['statistik'],
+                'offene' => $stand['offene'],
+            ];
+            $this->dispatch('recipe-gespeichert');
+            $this->dispatch($this->auswahlEvent(), id: $stand['recipe_id']);
+        }
+
+        if (($stand['status'] ?? null) === 'enriching') {
+            return; // Phase 1 ist sichtbar, Phase 2 wird weiter gepollt.
+        }
+
+        $this->laeuft = false;
         // Der Pass wirft nie (L7a) — ein Fehlschlag steht als `fehler` im Block
         // und wird als Lücken-Zeile gezeigt, nicht als Generierungs-Fehler.
         $this->anreicherung = is_array($stand['anreicherung'] ?? null) ? $stand['anreicherung'] : null;
-
-        $this->dispatch('recipe-gespeichert');
-        $this->dispatch($this->auswahlEvent(), id: $stand['recipe_id']);
     }
 
     /** Selektions-Event der jeweiligen Fläche (Basisrezept-Browser vs. VK-Browser). */

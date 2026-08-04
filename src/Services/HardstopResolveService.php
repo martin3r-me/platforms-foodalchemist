@@ -8,6 +8,7 @@ use Platform\FoodAlchemist\Enums\MatchMethod;
 use Platform\FoodAlchemist\Models\FoodAlchemistGp;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipeIngredient;
+use Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem;
 
 /**
  * Spec 03 L7b-2b — die Auflösung EINER Hard-Stop-Zeile aus dem Generator-Lauf.
@@ -29,12 +30,10 @@ use Platform\FoodAlchemist\Models\FoodAlchemistRecipeIngredient;
  *  - `stubAnlegen`   → legt wirklich an (Basisrezept-Stub, Halbfabrikat-Fall)
  *  - `verknuepfe`    → bindet einen BESTANDS-Treffer aus der Shortlist
  *                      („Meintest du?" — der Mensch übersteuert das no_match)
- *  - `beschaffungAnstossen` → legt KEINEN GP an. Unter der LA-First-Doktrin
- *    (kein GP ohne LA) hat der Mint (`LaFirstGpService::mintFromLa`) im selben
- *    Lauf schon erfolglos gesucht; ein Knopf, der hier trotzdem einen GP
- *    schriebe, wäre genau der Guardrail-Bruch. Was der Mensch stattdessen
- *    auslösen kann, ist der Beschaffungs-Wunsch (`GpProposalService`) — und die
- *    Zeile bleibt ehrlich offen.
+ *  - `lieferantenartikelMitGpVerknuepfen` → erst nach menschlicher LA-Auswahl;
+ *    vorhandenes GP verwenden oder ein tentatives GP aus genau diesem LA anlegen.
+ *  - `beschaffungAnstossen` → wenn kein vorgeschlagener LA passt, kein GP-Write,
+ *    sondern Beschaffungs-Wunsch; die Zeile bleibt ehrlich offen.
  */
 class HardstopResolveService
 {
@@ -42,6 +41,8 @@ class HardstopResolveService
         private readonly RecipeService $recipes,
         private readonly RecipeRecomputeService $recompute,
         private readonly GpProposalService $proposals,
+        private readonly GpNamingService $naming,
+        private readonly LeadLaService $leadLa,
     ) {}
 
     /**
@@ -121,6 +122,62 @@ class HardstopResolveService
     }
 
     /**
+     * Menschlich bestätigter Zwei-Schritt-Pfad: LA wählen, danach vorhandenes GP
+     * bestätigen oder ein tentatives GP aus genau diesem Artikel anlegen.
+     */
+    public function lieferantenartikelMitGpVerknuepfen(
+        Team $team,
+        int $recipeId,
+        int $position,
+        int $laId,
+        ?int $gpId,
+        string $zutatenText,
+    ): array {
+        $recipe = $this->besitzRezept($team, $recipeId);
+        $zeile = $this->offeneZeile($recipe, $position);
+        if ($zeile === null) {
+            return ['ok' => false, 'meldung' => 'Zeile ist nicht mehr offen — vermutlich schon verknüpft.'];
+        }
+
+        $la = FoodAlchemistSupplierItem::visibleToTeam($team)->with('structure.gp')->find($laId);
+        if ($la === null) {
+            return ['ok' => false, 'meldung' => 'Lieferantenartikel nicht gefunden.'];
+        }
+
+        $neuGp = false;
+        $bereitsGp = $la->structure?->gp;
+        if ($bereitsGp !== null) {
+            if ($gpId !== null && (int) $bereitsGp->id !== $gpId) {
+                return ['ok' => false, 'meldung' => 'Der Artikel ist bereits einem anderen GP zugeordnet.'];
+            }
+            $gp = $bereitsGp;
+        } elseif ($gpId !== null) {
+            $gp = FoodAlchemistGp::visibleToTeam($team)->where('is_platzhalter', false)->find($gpId);
+            if ($gp === null) {
+                return ['ok' => false, 'meldung' => 'GP nicht gefunden (oder Platzhalter).'];
+            }
+            $this->leadLa->verknuepfen($team, $gp, $laId);
+        } else {
+            $hauptzutat = $this->hauptzutatAusText($zutatenText);
+            $guard = $this->naming->anlageGuard(
+                $team, $this->naming->buildGpKey($this->naming->slugify($hauptzutat), null, null), $hauptzutat
+            );
+            $gp = ($guard['blockiert'] && $guard['vorhandenes_gp'] !== null)
+                ? $guard['vorhandenes_gp']
+                : $this->naming->createGp($team, ['hauptzutat' => $hauptzutat]);
+            $neuGp = ! ($guard['blockiert'] && $guard['vorhandenes_gp'] !== null);
+            $this->leadLa->verknuepfen($team, $gp, $laId);
+        }
+
+        $this->binde($zeile, (int) $gp->id, null, MatchMethod::OverrideGp);
+
+        return [
+            'ok' => true, 'kind' => 'gp', 'name' => $gp->name, 'gp_id' => (int) $gp->id, 'gp_neu' => $neuGp,
+            'meldung' => 'Lieferantenartikel «' . $la->designation . '» bestätigt und GP «' . $gp->name . '» verknüpft.',
+        ];
+    }
+
+    /**
      * GP-Lücke ohne passende LA → Beschaffungs-Wunsch (KEIN GP-Write, s.
      * Klassen-Doc). Die Zeile bleibt unmatched; das ist die ehrliche Ausgabe.
      *
@@ -140,7 +197,7 @@ class HardstopResolveService
             'kontext' => "Hard-Stop im Generator-Lauf zu Rezept #{$recipe->id} ({$recipe->name})",
             'source_kind' => 'recipe',
             'source_id' => $recipe->id,
-            'reasoning' => 'Weder Bestands-GP noch LA-First-Mint möglich — Artikel fehlt im Sortiment.',
+            'reasoning' => 'Weder Bestands-GP noch ein bestätigter Lieferantenartikel verfügbar — Artikel fehlt im Sortiment.',
         ], $userId);
 
         return ['ok' => true, 'created' => $ergebnis['created'], 'proposal_id' => (int) $ergebnis['proposal']->id,
@@ -187,5 +244,10 @@ class HardstopResolveService
 
         // Genau EIN Recompute je Auflösung (Yield/Allergene/EK + Eltern).
         $this->recompute->recomputeAndPropagate((int) $zeile->recipe_id);
+    }
+
+    private function hauptzutatAusText(string $text): string
+    {
+        return trim((string) preg_replace('/^[\d.,\/\s]+(g|kg|ml|l|el|tl|stk|stück|prise[n]?)?\s+/iu', '', $text)) ?: trim($text);
     }
 }

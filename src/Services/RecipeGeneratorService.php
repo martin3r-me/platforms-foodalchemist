@@ -16,9 +16,8 @@ use Platform\FoodAlchemist\Services\Matching\MatchHeuristics;
  *   1. KI-Vorschlag (recipe.generator) → {name, description, preparation, zutaten[]}
  *   2. Resolver je Zutat: BESTAND ZUERST (GL-04 voll — Aliasse, Pools, Tiebreaker
  *      mit den Richtungs-Parametern als Hooks), NEUES nur für Lücken:
- *      Halbfabrikat ohne Treffer → Sub-Rezept-Stub (F4.1); Grund-Zutat ohne
- *      Treffer → unmatched (Hard-Stop-Zeile: „GP anlegen" vs „Basisrezept anlegen"
- *      per Button-Heuristik P8)
+ *      Treffer bleiben offen: Halbfabrikat → Basisrezept bestätigen/anlegen;
+ *      Grund-Zutat → Lieferantenartikel wählen, danach GP bestätigen/anlegen.
  *   3. Anlage (draft) + Zutaten-Sync + GL-02-Recompute — EIN Durchstich.
  *
  * Parameter-Mapping (A-1: Rust ist neuer als die Doku):
@@ -37,7 +36,6 @@ class RecipeGeneratorService
         private IngredientMatchService $matcher,
         private MatchHeuristics $heuristik,
         private RecipeService $recipes,
-        private LaFirstGpService $laFirst,
     ) {
     }
 
@@ -173,12 +171,9 @@ class RecipeGeneratorService
                 ], fn ($v) => $v !== null));
             }
 
-            // `stubs` = die NEU angelegten Sub-Rezept-Stubs mit Namen (L7-DoD:
-            // „Stub + Flag ausrezeptieren offen"). Der dauerhafte Flag ist bewusst
-            // KEINE neue Spalte: `rezept_sub_stub_offen` (21·S1b) erkennt genau
-            // diesen Zustand schon aus dem Bestand (status stub/draft + 0 Zutaten +
-            // referenziert). Was fehlte, ist die Sichtbarkeit im Moment der
-            // Entstehung — `stub_neu` zählt sie, sagt aber nicht, WELCHE offen sind.
+            // Diese Schlüssel bleiben für die Ergebnisfläche stabil. Bei der
+            // Generierung selbst werden keine Stubs/GPs mehr automatisch angelegt;
+            // eine spätere menschliche Hard-Stop-Aktion aktualisiert sie lokal.
             $statistik = ['bestand_gp' => 0, 'bestand_sub' => 0, 'stub_neu' => 0, 'stubs' => [], 'gp_neu_aus_la' => 0, 'offen' => 0];
             $offene = [];
             $zeilen = [];
@@ -194,6 +189,9 @@ class RecipeGeneratorService
                     'quantity' => (float) ($z['quantity'] ?? 1),
                     'unit_vocab_id' => $einheitId,
                     'note' => $z['note'] ?? null,
+                    // Der Generator hat bereits bewusst geroutet. Ein Miss bleibt
+                    // bis zur menschlichen LA-/GP- bzw. Subrezept-Bestätigung offen.
+                    'auto_ground' => false,
                 ];
 
                 // Agentischer Resolver: BESTAND ZUERST (GL-04 voll, inkl. §4/§5-Aliasse)
@@ -207,34 +205,31 @@ class RecipeGeneratorService
                     $zeile['referenced_recipe_id'] = $treffer['recipe_id'];
                     $zeile['match_method'] = 'recipe_ref';
                     $statistik['bestand_sub']++;
-                } elseif ($this->heuristik->queryIstHalbfabrikat(app(Matching\TokenEngine::class)->tokenize($text))) {
-                    // Lücke + Halbfabrikat ⇒ Stub anlegen (Neues NUR für Lücken)
-                    $stub = $this->recipes->createSubRecipeStub($team, $this->stubName($text), $recipe->id);
-                    $zeile['referenced_recipe_id'] = $stub['recipe']->id;
-                    $zeile['match_method'] = 'recipe_ref';
-                    $statistik['stub_neu'] += $stub['neu'] ? 1 : 0;
-                    $statistik['bestand_sub'] += $stub['neu'] ? 0 : 1;
-                    if ($stub['neu']) {
-                        // Nur die NEUEN: ein wiederverwendeter Bestands-Stub ist keine
-                        // Bringschuld dieses Laufs (und steht ggf. schon im Signal).
-                        $statistik['stubs'][] = ['id' => $stub['recipe']->id, 'name' => $stub['recipe']->name];
-                    }
-                } elseif (($autoGp = $this->laFirst->mintFromLa($team, $text, $z['slug'] ?? null, $this->wgHint($z['commodity_group'] ?? $z['warengruppe'] ?? null))) !== null) {   // Spec 16·E1: WG-Hint aus Erzeugungs-Kontext (KI-Schema liefert commodity_group)
-                    // 07·M1 (ex-#505 Slice 2): Lücke ohne GP → LaFirstGpService mintet FA-nativ ein
-                    // GP aus passender LA (tentative, LA-verknüpft → Allergene/Nährwerte/EK LA-abgeleitet).
-                    // Geteilte Fähigkeit — dieselbe Logik hängt künftig auch an syncIngredients/MCP.
-                    $zeile['gp_id'] = $autoGp->id;
-                    $zeile['match_method'] = 'gemini_proposed';   // KI-Pipeline-Provenienz (gültiger MatchMethod-Case)
-                    $statistik['gp_neu_aus_la']++;
                 } else {
-                    // Hard-Stop-Zeile: Button-Heuristik entscheidet die primäre Aktion (P8)
+                    // Keine automatische Anlage: Basisrezept-Stub bzw. LA→GP werden
+                    // erst nach menschlicher Auswahl in getrennten Schritten angelegt.
                     $zeile['match_method'] = 'unmatched';
                     $statistik['offen']++;
+                    $istBasisrezept = $this->heuristik->queryIstHalbfabrikat(
+                        app(Matching\TokenEngine::class)->tokenize($text)
+                    );
+                    $laKandidaten = $istBasisrezept ? [] : app(LaCandidateFinder::class)
+                        ->find($team, $text, $this->wgHint($z['commodity_group'] ?? $z['warengruppe'] ?? null), 3)
+                        ->map(fn ($la) => [
+                            'id' => (int) $la->id,
+                            'designation' => (string) $la->designation,
+                            'supplier' => (string) ($la->supplier?->name ?? ''),
+                            'score' => (float) ($la->score ?? 0),
+                            'gp_id' => $la->structure?->gp_id !== null ? (int) $la->structure->gp_id : null,
+                            'gp_name' => $la->structure?->gp?->name,
+                        ])->all();
                     $offene[] = [
                         'index' => $i,
                         'text' => $text,
-                        'primaer' => $this->heuristik->istSubRezeptKandidat($text) ? 'basisrezept_anlegen' : 'gp_anlegen',
+                        'primaer' => $istBasisrezept || $this->heuristik->istSubRezeptKandidat($text)
+                            ? 'basisrezept_anlegen' : 'lieferantenartikel_waehlen',
                         'shortlist' => $this->matcher->candidatesFor($team, $text, $z['slug'] ?? null, 5),
+                        'la_kandidaten' => $laKandidaten,
                     ];
                 }
                 $zeilen[] = $zeile;
@@ -280,12 +275,6 @@ class RecipeGeneratorService
             })
             ->orderByRaw("CASE status WHEN 'approved' THEN 0 WHEN 'review' THEN 1 ELSE 2 END")
             ->orderBy('name')->limit($limit)->pluck('name')->all();
-    }
-
-    /** „500 ml brauner Kalbsfond" → Stub-Name ohne Mengen-Präfix. */
-    private function stubName(string $text): string
-    {
-        return trim((string) preg_replace('/^[\d.,\/\s]+(g|kg|ml|l|el|tl|stk|stück|prise[n]?)?\s+/iu', '', $text)) ?: $text;
     }
 
     /**

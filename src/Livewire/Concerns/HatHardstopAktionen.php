@@ -4,6 +4,7 @@ namespace Platform\FoodAlchemist\Livewire\Concerns;
 
 use Illuminate\Support\Facades\Auth;
 use Platform\FoodAlchemist\Services\HardstopResolveService;
+use Platform\FoodAlchemist\Services\RecipeService;
 
 /**
  * Spec 03 L7b-2b — die Hard-Stop-Fläche für BEIDE Generator-Modals.
@@ -30,6 +31,8 @@ trait HatHardstopAktionen
     /** Aufgeklappte „Meintest du?"-Shortlist je Hard-Stop-Index. */
     public array $hardstopOffenIndex = [];
 
+    public bool $freigegeben = false;
+
     public function toggleShortlist(int $index): void
     {
         $this->hardstopOffenIndex[$index] = ! ($this->hardstopOffenIndex[$index] ?? false);
@@ -49,6 +52,58 @@ trait HatHardstopAktionen
         $this->hardstopAktion($index, fn ($team, $zeile) => app(HardstopResolveService::class)->stubAnlegen(
             $team, (int) $this->ergebnis['recipe_id'], $zeile['index'] + 1, (string) $zeile['text'],
         ));
+    }
+
+    /** Schritt 1: vorgeschlagenen Lieferantenartikel auswählen, noch nichts schreiben. */
+    public function hardstopLaWaehlen(int $index, int $laId): void
+    {
+        foreach ($this->ergebnis['offene'] ?? [] as $key => $offen) {
+            if ((int) ($offen['index'] ?? -1) !== $index) {
+                continue;
+            }
+            $gueltig = collect($offen['la_kandidaten'] ?? [])->contains(
+                fn (array $la) => (int) ($la['id'] ?? 0) === $laId
+            );
+            if ($gueltig) {
+                $this->ergebnis['offene'][$key]['selected_la_id'] = $laId;
+                $this->hardstopMeldung = 'Lieferantenartikel gewählt — jetzt vorhandenes oder neues GP bestätigen.';
+            }
+            return;
+        }
+    }
+
+    /** Schritt 2: gewählten LA mit vorhandenem/neuem GP verbinden und Rezeptzeile binden. */
+    public function hardstopLaGpBestaetigen(int $index, ?int $gpId = null): void
+    {
+        $this->hardstopAktion($index, function ($team, $zeile) use ($gpId) {
+            $laId = (int) ($zeile['selected_la_id'] ?? 0);
+            if ($laId <= 0) {
+                return ['ok' => false, 'meldung' => 'Bitte zuerst einen Lieferantenartikel wählen.'];
+            }
+
+            return app(HardstopResolveService::class)->lieferantenartikelMitGpVerknuepfen(
+                $team, (int) $this->ergebnis['recipe_id'], $zeile['index'] + 1,
+                $laId, $gpId, (string) $zeile['text'],
+            );
+        });
+    }
+
+    /** Rezeptfreigabe bleibt eine bewusste, separate Aktion nach allen Zuordnungen. */
+    public function generatorFreigeben(): void
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team === null || ($this->ergebnis['recipe_id'] ?? null) === null) {
+            return;
+        }
+        if (count($this->ergebnis['offene'] ?? []) > 0) {
+            $this->fehler = 'Vor der Freigabe bitte alle offenen Zutaten zuordnen.';
+            return;
+        }
+
+        app(RecipeService::class)->setStatus($team, (int) $this->ergebnis['recipe_id'], 'approved');
+        $this->freigegeben = true;
+        $this->hardstopMeldung = 'Rezept freigegeben.';
+        $this->dispatch('recipe-gespeichert');
     }
 
     /**
@@ -76,7 +131,7 @@ trait HatHardstopAktionen
         $this->hardstopMeldung = $ergebnis['meldung'];
     }
 
-    /** @return array{index:int, text:string, primaer:?string, shortlist:array}|null */
+    /** @return array|null */
     private function hardstopZeile(int $index): ?array
     {
         foreach ($this->ergebnis['offene'] ?? [] as $offen) {
@@ -123,6 +178,8 @@ trait HatHardstopAktionen
         if (($ergebnis['neu'] ?? false) === true) {
             $this->ergebnis['statistik']['stub_neu'] = (int) ($this->ergebnis['statistik']['stub_neu'] ?? 0) + 1;
             $this->ergebnis['statistik']['stubs'][] = ['id' => (int) $ergebnis['recipe_id'], 'name' => (string) $ergebnis['name']];
+        } elseif (($ergebnis['gp_neu'] ?? false) === true) {
+            $this->ergebnis['statistik']['gp_neu_aus_la'] = (int) ($this->ergebnis['statistik']['gp_neu_aus_la'] ?? 0) + 1;
         } else {
             $schluessel = ($ergebnis['kind'] ?? null) === 'gp' ? 'bestand_gp' : 'bestand_sub';
             $this->ergebnis['statistik'][$schluessel] = (int) ($this->ergebnis['statistik'][$schluessel] ?? 0) + 1;

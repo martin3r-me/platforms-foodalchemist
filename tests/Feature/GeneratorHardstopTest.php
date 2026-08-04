@@ -6,6 +6,9 @@ use Platform\FoodAlchemist\Livewire\Recipes\GeneratorModal;
 use Platform\FoodAlchemist\Livewire\Verkauf\VkGeneratorModal;
 use Platform\FoodAlchemist\Models\FoodAlchemistGpNewProposal;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
+use Platform\FoodAlchemist\Models\FoodAlchemistSupplier;
+use Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem;
+use Platform\FoodAlchemist\Models\FoodAlchemistSupplierItemStructure;
 use Platform\FoodAlchemist\Services\HardstopResolveService;
 use Platform\FoodAlchemist\Tests\Support\SeedsTeamHierarchy;
 use Platform\FoodAlchemist\Tests\TestCase;
@@ -44,7 +47,7 @@ function hardstopRezept($test): FoodAlchemistRecipe
     }, $test, $test)();
 }
 
-function hardstopErgebnis(FoodAlchemistRecipe $recipe, array $shortlist = [], string $primaer = 'gp_anlegen'): array
+function hardstopErgebnis(FoodAlchemistRecipe $recipe, array $shortlist = [], string $primaer = 'lieferantenartikel_waehlen', array $laKandidaten = []): array
 {
     return [
         'recipe_id' => $recipe->id,
@@ -55,6 +58,7 @@ function hardstopErgebnis(FoodAlchemistRecipe $recipe, array $shortlist = [], st
             'text' => 'Kalbsjus',
             'primaer' => $primaer,
             'shortlist' => $shortlist,
+            'la_kandidaten' => $laKandidaten,
         ]],
     ];
 }
@@ -77,6 +81,53 @@ it('«Meintest du?» bindet den Bestands-GP an die offene Zeile (als Override, o
         ->and($zeile->referenced_recipe_id)->toBeNull()
         ->and($zeile->match_method)->toBe(MatchMethod::OverrideGp)
         ->and($zeile->match_confidence)->toBeNull();
+});
+
+it('LA und GP werden in zwei getrennten Schritten bestätigt; erst dann wird die Zeile gebunden', function () {
+    $recipe = hardstopRezept($this);
+    $supplier = FoodAlchemistSupplier::create(['team_id' => $this->rootTeam->id, 'name' => 'Necta']);
+    $la = FoodAlchemistSupplierItem::create([
+        'team_id' => $this->rootTeam->id, 'supplier_id' => $supplier->id,
+        'designation' => 'Kalbsjus Premium', 'qty' => 1, 'unit_code' => 'kg',
+    ]);
+    $laDaten = [['id' => $la->id, 'designation' => $la->designation, 'supplier' => 'Necta', 'score' => 0.9, 'gp_id' => null, 'gp_name' => null]];
+
+    $comp = Livewire::test(GeneratorModal::class)
+        ->set('ergebnis', hardstopErgebnis($recipe, [], 'lieferantenartikel_waehlen', $laDaten))
+        ->call('hardstopLaWaehlen', 0, $la->id)
+        ->assertSet('ergebnis.offene.0.selected_la_id', $la->id)
+        ->assertSet('ergebnis.statistik.offen', 1)
+        ->assertSee('Passendes GP bestätigen')
+        ->call('hardstopLaGpBestaetigen', 0)
+        ->assertSet('ergebnis.statistik.offen', 0);
+
+    $zeile = $recipe->ingredients()->where('position', 1)->first();
+    expect($zeile->gp_id)->not->toBeNull()
+        ->and(FoodAlchemistSupplierItemStructure::where('supplier_item_id', $la->id)->value('gp_id'))->toBe($zeile->gp_id);
+});
+
+it('Rezeptfreigabe ist separat und erst ohne offene Zutaten möglich', function () {
+    $recipe = hardstopRezept($this);
+
+    Livewire::test(GeneratorModal::class)
+        ->set('ergebnis', hardstopErgebnis($recipe))
+        ->call('generatorFreigeben')
+        ->assertSet('freigegeben', false)
+        ->assertSet('fehler', 'Vor der Freigabe bitte alle offenen Zutaten zuordnen.');
+
+    $gp = $this->makeGp($this->rootTeam, 'Kalbsjus');
+    app(HardstopResolveService::class)->verknuepfe($this->rootTeam, $recipe->id, 1, 'gp', $gp->id);
+
+    $bereit = hardstopErgebnis($recipe);
+    $bereit['offene'] = [];
+    $bereit['statistik']['offen'] = 0;
+
+    Livewire::test(GeneratorModal::class)
+        ->set('ergebnis', $bereit)
+        ->call('generatorFreigeben')
+        ->assertSet('freigegeben', true);
+
+    expect($recipe->refresh()->status->value)->toBe('approved');
 });
 
 it('Halbfabrikat-Lücke: Basisrezept-Stub wird angelegt, verknüpft und als Bringschuld gezählt', function () {

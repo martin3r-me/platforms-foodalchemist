@@ -14,7 +14,7 @@ uses(TestCase::class, SeedsTeamHierarchy::class);
 
 /**
  * M4-14: Generator end-to-end — Bestand-Hybrid-Resolver (GP aus Bestand,
- * Stub für Halbfabrikat-Lücke, Hard-Stop für GP-Lücke), Anlage + Recompute.
+ * Bestands-Reuse und getrennte Auflösung offener Basisrezept-/GP-Zeilen), Anlage + Recompute.
  * $kiRezeptOverride = Test-Grenze (FakeProvider ist ein Kontext-Echo und kann
  * strukturell kein Rezept erfinden — dokumentiert in der Roadmap-Notiz).
  */
@@ -46,7 +46,7 @@ beforeEach(function () {
     };
 });
 
-it('DoD M4-14: 1 Rezept end-to-end — Bestand-GP + Sub-Stub für Halbfabrikat + Hard-Stop für Lücke', function () {
+it('DoD M4-14: Bestand wird gebunden, fehlende Basisrezepte und GPs bleiben zur Bestätigung offen', function () {
     ($this->mkGpMitPreis)('Schalotten: frisch, ganz', 'schalotten', 4.00);
     ($this->mkGpMitPreis)('Rotwein: trocken, Spätburgunder', 'rotwein', 6.00);
 
@@ -60,7 +60,7 @@ it('DoD M4-14: 1 Rezept end-to-end — Bestand-GP + Sub-Stub für Halbfabrikat +
         'zutaten' => [
             ['text' => 'Schalotten', 'slug' => 'schalotten', 'quantity' => 200, 'unit' => 'g'],
             ['text' => 'Rotwein', 'slug' => 'rotwein', 'quantity' => 500, 'unit' => 'ml'],
-            ['text' => 'brauner Kalbsfond', 'quantity' => 250, 'unit' => 'ml'],   // Halbfabrikat-Lücke ⇒ Stub
+            ['text' => 'brauner Kalbsfond', 'quantity' => 250, 'unit' => 'ml'],   // Halbfabrikat-Lücke ⇒ offen
             ['text' => 'Drachenfrucht-Essenz', 'quantity' => 10, 'unit' => 'ml'], // GP-Lücke ⇒ Hard-Stop
         ],
     ]);
@@ -72,32 +72,23 @@ it('DoD M4-14: 1 Rezept end-to-end — Bestand-GP + Sub-Stub für Halbfabrikat +
         ->and($recipe->description_source)->toBe('ki')
         ->and($recipe->ingredients()->count())->toBe(4);
 
-    // Stub existiert als Basisrezept (status stub, generator-markiert) — §4-Alias griff NICHT
-    // (BRAUNER KALBSFOND existiert nicht), also Stub mit geputztem Namen
-    $stub = FoodAlchemistRecipe::where('status', 'stub')->firstOrFail();
-
-    // Statistik: 2 Bestand-GPs, 1 Stub neu, 1 offen (Lücken-Zutat fand keine LA → kein Auto-GP, #505 Slice 2).
-    // L7b-2: `stubs` nennt den neuen Stub beim Namen — „stub_neu: 1" allein sagt nicht,
-    // WAS noch ausrezeptiert werden muss, und genau das ist die offene Arbeit des Laufs.
+    // Keine automatische Anlage während der Generierung: beide Lücken bleiben offen.
     expect($resultat['statistik'])->toBe([
-        'bestand_gp' => 2, 'bestand_sub' => 0, 'stub_neu' => 1,
-        'stubs' => [['id' => $stub->id, 'name' => $stub->name]],
-        'gp_neu_aus_la' => 0, 'offen' => 1,
+        'bestand_gp' => 2, 'bestand_sub' => 0, 'stub_neu' => 0,
+        'stubs' => [], 'gp_neu_aus_la' => 0, 'offen' => 2,
     ]);
 
-    expect($stub->last_modified_by)->toBe('generator_stub')
-        ->and(mb_strtolower($stub->name))->toContain('kalbsfond');
+    expect(FoodAlchemistRecipe::where('status', 'stub')->count())->toBe(0)
+        ->and($resultat['offene'][0]['text'])->toBe('brauner Kalbsfond')
+        ->and($resultat['offene'][0]['primaer'])->toBe('basisrezept_anlegen')
+        ->and($resultat['offene'][1]['text'])->toBe('Drachenfrucht-Essenz')
+        ->and($resultat['offene'][1]['primaer'])->toBe('lieferantenartikel_waehlen');
 
-    // Hard-Stop: Button-Heuristik sagt GP anlegen (keine Zubereitungs-Marker)
-    expect($resultat['offene'][0]['text'])->toBe('Drachenfrucht-Essenz')
-        ->and($resultat['offene'][0]['primaer'])->toBe('gp_anlegen');
-
-    // Recompute lief: Yield aus 200 g + 500 ml (Stub + offen tragen 0 €/Daten bei)
+    // Recompute lief: offene Zeilen tragen Menge, aber noch keine EK-/Stammdaten.
     expect((float) $recipe->yield_kg)->toBeGreaterThan(0.9)
         ->and((float) $recipe->ek_total_eur)->toBeGreaterThan(0);
 
-    // n_zutaten_ungemappt = 1 (Hard-Stop) ⇒ F7.1: Allergene unbekannt, Konfidenz low
-    expect($recipe->n_ingredients_unmapped)->toBe(1)
+    expect($recipe->n_ingredients_unmapped)->toBe(2)
         ->and($recipe->allergens_confidence)->toBe('low');
 });
 

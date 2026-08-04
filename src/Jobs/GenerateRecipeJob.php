@@ -35,13 +35,7 @@ class GenerateRecipeJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    /**
-     * < Worker-Timeout (600 s), > typischer Lauf (~25 s + Nachbearbeitung).
-     * Mit One-Shot (L7b) kommen 1–4 weitere Provider-Calls dazu → im Konstruktor
-     * angehoben; ein Timeout-Kill mitten in der Kaskade wäre genau das „halbe
-     * Wrack", das die Kaskade laut DoD nie hinterlassen darf (Rezept existiert,
-     * die UI liest „abgebrochen").
-     */
+    /** Nur Phase 1; die Anreicherung hat einen eigenen Queue-Job. */
     public int $timeout = 300;
 
     /** KI-Kosten: kein stiller Auto-Retry der ganzen Generierung. */
@@ -54,17 +48,9 @@ class GenerateRecipeJob implements ShouldQueue
         public string $description,
         public array $parameter = [],
         public bool $vkModus = false,
-        /**
-         * Spec 03 L7a: One-Shot — nach der Generierung läuft der Anreicherungs-Pass
-         * in DERSELBEN Queue-Ausführung durch (der Web-Request ist längst zurück).
-         * Default aus, damit die Bestandspfade byte-identisch bleiben; der Toggle
-         * am Generator-Modal schaltet ihn an (L7b).
-         */
+        /** Nach erfolgreicher Generierung einen separaten Anreicherungs-Job starten. */
         public bool $vollAnreichern = false,
     ) {
-        if ($vollAnreichern) {
-            $this->timeout = 540;   // bleibt unter dem demo-Worker-Timeout (600 s)
-        }
     }
 
     public static function cacheKey(string $runId): string
@@ -99,22 +85,33 @@ class GenerateRecipeJob implements ShouldQueue
                 }
             }
             $payload = [
-                'status' => 'done',
                 'recipe_id' => $r['recipe']->id,
                 'name' => $r['recipe']->name,
                 'statistik' => $r['statistik'],
                 'offene' => $r['offene'],
             ];
-            if ($this->vollAnreichern) {
-                // L7a: der Pass wirft nie — ein Fehlschlag steht als `fehler` im
-                // Ergebnis, das Rezept bleibt trotzdem `done`.
-                $payload['anreicherung'] = app(\Platform\FoodAlchemist\Services\RecipeOneShotService::class)
-                    ->anreichern($team, $r['recipe'], $this->zielVk());
-            }
-            $this->schreibe($payload);
             // Kaskaden-Rückkanal (P0): meldet Ergebnis an den Step, wenn dieser Job Teil einer
             // Planungs-Kaskade ist. Backward-kompatibel — ohne cascade_step_id passiert nichts.
             $this->meldeKaskade(true, (int) $r['recipe']->id, null);
+            if (! $this->vollAnreichern) {
+                $this->schreibe(['status' => 'done', ...$payload]);
+
+                return;
+            }
+
+            // Phase 1 ist vollständig und sichtbar; Phase 2 arbeitet separat.
+            $this->schreibe(['status' => 'enriching', ...$payload]);
+            try {
+                EnrichGeneratedRecipeJob::dispatch(
+                    $this->runId, $this->teamId, $this->userId, (int) $r['recipe']->id,
+                    $payload, $this->zielVk(),
+                );
+            } catch (\Throwable $e) {
+                (new EnrichGeneratedRecipeJob(
+                    $this->runId, $this->teamId, $this->userId, (int) $r['recipe']->id,
+                    $payload, $this->zielVk(),
+                ))->failed($e);
+            }
         } catch (\Throwable $e) {
             $this->schreibe(['status' => 'error', 'fehler' => $e->getMessage()]);
             $this->meldeKaskade(false, null, $e->getMessage());

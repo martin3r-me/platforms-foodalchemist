@@ -6,14 +6,14 @@
         <p class="text-xs text-rose-600 mb-3" data-generator-fehler>{{ $fehler }}</p>
     @endif
 
-    @if($laeuft)
+    @if($laeuft && $ergebnis === null)
         {{-- Async (2026-07-20): Generierung läuft im Queue-Job, UI pollt das Ergebnis (kein Web-Timeout/502) --}}
         <div wire:poll.2s="pruefeErgebnis" class="flex items-center gap-3 py-6 justify-center text-sm text-gray-600" data-generator-laeuft>
             <svg class="animate-spin h-5 w-5 text-violet-600" viewBox="0 0 24 24" fill="none">
                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                 <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
             </svg>
-            <span>Rezept wird generiert{{ $vollAnreichern ? ' und angereichert' : '' }} — das dauert bis zu ~{{ $vollAnreichern ? 60 : 30 }} Sekunden. Das Fenster kann offen bleiben.</span>
+            <span>Rezept wird generiert — das Fenster kann offen bleiben.</span>
         </div>
     @elseif($ergebnis === null)
         <x-foodalchemist::modal-section title="Beschreibung">
@@ -97,6 +97,9 @@
             <x-foodalchemist::hardstop-zeilen :offene="$ergebnis['offene']" prefix=""
                                              :aufgeklappt="$hardstopOffenIndex" :meldung="$hardstopMeldung" />
             <x-foodalchemist::stub-offen :stubs="$ergebnis['statistik']['stubs'] ?? []" />
+            @if($laeuft)
+                <p wire:poll.2s="pruefeErgebnis" class="text-[11px] text-violet-700 mt-3" data-generator-anreicherung-laeuft>⚡ Rezept gespeichert — Vollanreicherung läuft separat …</p>
+            @endif
             <x-foodalchemist::oneshot-ergebnis :anreicherung="$anreicherung" />
         </x-foodalchemist::modal-section>
     @endif
@@ -104,9 +107,12 @@
     <x-slot:footer>
         <button type="button" wire:click="$dispatch('modal.close', { name: 'generator-modal' })" class="{{ $btnGhost }}">{{ $ergebnis === null ? 'Abbrechen' : 'Schließen' }}</button>
         @if($laeuft)
-            <button type="button" disabled class="{{ $btnPrimary }} opacity-60 cursor-not-allowed" data-generator-laeuft-btn>⏳ Generiere …</button>
+            <button type="button" disabled class="{{ $btnPrimary }} opacity-60 cursor-not-allowed" data-generator-laeuft-btn>⏳ {{ $ergebnis === null ? 'Generiere' : 'Reichere an' }} …</button>
         @elseif($ergebnis === null)
             <button type="button" wire:click="generieren" wire:loading.attr="disabled" class="{{ $btnPrimary }}" data-generator-start><span class="inline-flex items-center gap-1.5">@svg('heroicon-o-sparkles', 'w-3.5 h-3.5') Generieren</span></button>
+        @elseif(!$freigegeben)
+            <button type="button" wire:click="generatorFreigeben" @disabled(count($ergebnis['offene'] ?? []) > 0)
+                    class="{{ $btnPrimary }} {{ count($ergebnis['offene'] ?? []) > 0 ? 'opacity-50 cursor-not-allowed' : '' }}" data-generator-freigeben>Rezept freigeben</button>
         @endif
     </x-slot:footer>
 </x-foodalchemist::modal>
