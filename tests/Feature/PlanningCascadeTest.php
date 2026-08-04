@@ -119,6 +119,37 @@ it('markStepDone: hält das Artefakt fest und hebt den Run auf review', function
         ->and($run->status)->toBe('review');
 });
 
+it('teilt identische fehlende Basisrezepte im Lauf und bindet das Ergebnis an alle Eltern', function () {
+    $run = \Platform\FoodAlchemist\Models\FoodAlchemistCascadeRun::create([
+        'team_id' => $this->rootTeam->id, 'scope' => 'vollkaskade', 'status' => 'running',
+    ]);
+    $parents = collect([1, 2])->map(function ($sort) use ($run) {
+        return FoodAlchemistCascadeRunStep::create([
+            'team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id,
+            'kind' => 'gericht', 'status' => 'running', 'sort' => $sort,
+        ]);
+    });
+    $recipes = $parents->map(fn ($step, $i) => $this->makeRecipe($this->rootTeam, 'Gericht ' . $i));
+    $ingredients = $recipes->map(fn ($recipe) => $this->makeIngredient($recipe, 'Geflügelfond'));
+    $workflow = app(\Platform\FoodAlchemist\Services\RecipeDependencyWorkflowService::class);
+
+    foreach ($parents as $i => $step) {
+        $workflow->afterGenerated($this->rootTeam, $step->id, auth()->id(), $recipes[$i], [[
+            'index' => 0, 'text' => 'Geflügelfond', 'primaer' => 'basisrezept_anlegen',
+        ]], ['auto_dependencies' => true]);
+    }
+
+    $children = FoodAlchemistCascadeRunStep::where('cascade_run_id', $run->id)->where('depth', 1)->get();
+    expect($children)->toHaveCount(1)
+        ->and(\Platform\FoodAlchemist\Models\FoodAlchemistCascadeRecipeDependency::count())->toBe(2);
+    Queue::assertPushed(GenerateRecipeJob::class, 1);
+
+    $fond = $this->makeRecipe($this->rootTeam, 'Geflügelfond');
+    $workflow->afterGenerated($this->rootTeam, $children->first()->id, auth()->id(), $fond, [], []);
+    expect($ingredients[0]->refresh()->referenced_recipe_id)->toBe($fond->id)
+        ->and($ingredients[1]->refresh()->referenced_recipe_id)->toBe($fond->id);
+});
+
 it('markStepFailed: einziger Step scheitert → Run failed', function () {
     $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Geschmortes Rind', 'brief' => 'Schmorgericht mit Wurzelgemuese.']);
     $svc = app(PlanningCascadeService::class);

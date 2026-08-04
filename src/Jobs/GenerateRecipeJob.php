@@ -71,7 +71,12 @@ class GenerateRecipeJob implements ShouldQueue
         Auth::login($user);   // Team-Kontext für AiGatewayService (Kill-Switch/DNA/Call-Log)
 
         try {
-            $r = $generator->generiere($team, $this->description, $this->parameter, null, $this->vkModus);
+            $stepId = $this->cascadeStepId();
+            $prepared = $stepId !== null
+                ? app(\Platform\FoodAlchemist\Services\RecipeDependencyWorkflowService::class)
+                    ->prepare($team, $stepId, $this->description, $this->parameter, $this->vkModus)
+                : null;
+            $r = $generator->generiere($team, $this->description, $this->parameter, null, $this->vkModus, null, $prepared);
             if ($r === [] || ! isset($r['recipe'])) {
                 throw new \RuntimeException('Generierung lieferte kein Ergebnis.');
             }
@@ -90,6 +95,11 @@ class GenerateRecipeJob implements ShouldQueue
                 'statistik' => $r['statistik'],
                 'offene' => $r['offene'],
             ];
+            if ($stepId !== null) {
+                app(\Platform\FoodAlchemist\Services\RecipeDependencyWorkflowService::class)->afterGenerated(
+                    $team, $stepId, $this->userId, $r['recipe'], $r['offene'], $this->parameter,
+                );
+            }
             // Kaskaden-Rückkanal (P0): meldet Ergebnis an den Step, wenn dieser Job Teil einer
             // Planungs-Kaskade ist. Backward-kompatibel — ohne cascade_step_id passiert nichts.
             $this->meldeKaskade(true, (int) $r['recipe']->id, null);

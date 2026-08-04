@@ -43,6 +43,7 @@ class LaCandidateFinder
         private TerminologyService $terminology,
         private StammLieferantService $stamm,
         private SupplierItemService $items,
+        private LeadLaStrategieResolver $strategie,
         // E-LA (Spec 15 §5c): additive semantische LA-Recall-Schicht. Nullable +
         // lazy aufgelöst wie in IngredientMatchService — kein Aufrufer bricht.
         private ?SemanticRetrievalService $semantic = null,
@@ -154,7 +155,20 @@ class LaCandidateFinder
             ])
             ->values();
 
-        return $ranked->take($k);
+        // Erst fachliche Relevanz herstellen, dann innerhalb dieser Shortlist die
+        // Einkaufsstrategie des Teams anwenden. So gewinnt kein billiger, aber
+        // unpassender Artikel aus dem breiten Katalog.
+        $shortlist = $ranked->take(max($k * 3, 9))->map(function ($la) {
+            $la->setAttribute('supplier_item_id', (int) $la->id);
+            $la->setAttribute('vergleichspreis', $la->aktiver_preis !== null ? (float) $la->aktiver_preis : null);
+
+            return $la;
+        });
+        $stammIds = $wgCode !== null && $wgCode !== ''
+            ? $this->stamm->stammSupplierIdsFor($team, $wgCode)
+            : [];
+
+        return $this->strategie->sortiere($team, $shortlist, $stammIds, $wgCode)->take($k)->values();
     }
 
     /**

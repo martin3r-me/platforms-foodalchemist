@@ -129,6 +129,7 @@ class PlanningCascadeService
             $jobParams['planning_session_id'] = $planningSessionId;
         }
         $jobParams['cascade_step_id'] = $step->id;
+        $jobParams['auto_dependencies'] = true;
 
         $step->update(['generator_run_id' => $runId]);
         Cache::put(GenerateRecipeJob::cacheKey($runId), ['status' => 'pending'], now()->addMinutes(self::RESULT_TTL_MIN));
@@ -351,7 +352,10 @@ class PlanningCascadeService
     public function materialisiereSpeiseplanZelle(Team $team, int $planId, string $entryDate, string $meal, int $lineId, string $brief, int $stepId, ?int $planningSessionId = null): void
     {
         try {
-            $gen = app(RecipeGeneratorService::class)->generiere($team, $brief, [], null, true, 'plan_go');
+            $params = ['auto_dependencies' => true, 'cascade_step_id' => $stepId];
+            $workflow = app(RecipeDependencyWorkflowService::class);
+            $context = $workflow->prepare($team, $stepId, $brief, $params, true);
+            $gen = app(RecipeGeneratorService::class)->generiere($team, $brief, $params, null, true, 'plan_go', $context);
             $recipe = $gen['recipe'] ?? null;
             if ($recipe === null) {
                 throw new RuntimeException('Generierung lieferte kein Rezept.');
@@ -365,6 +369,7 @@ class PlanningCascadeService
                     app(PlanningSessionService::class)->verknuepfeArtefakt($sess, 'recipe', (int) $recipe->id);
                 }
             }
+            $workflow->afterGenerated($team, $stepId, (int) (\Illuminate\Support\Facades\Auth::id() ?? 0), $recipe, $gen['offene'] ?? [], $params);
             $this->markStepDone($stepId, 'recipe', (int) $recipe->id);
         } catch (\Throwable $e) {
             $this->markStepFailed($stepId, $e->getMessage());
@@ -448,7 +453,10 @@ class PlanningCascadeService
         $beschreibung = trim(implode(' — ', array_filter([(string) $idee->title, (string) $idee->description]))) ?: (string) $idee->title;
 
         try {
-            $gen = app(RecipeGeneratorService::class)->generiere($team, $beschreibung, [], null, true, 'plan_go');
+            $params = ['auto_dependencies' => true, 'cascade_step_id' => $stepId];
+            $workflow = app(RecipeDependencyWorkflowService::class);
+            $context = $workflow->prepare($team, $stepId, $beschreibung, $params, true);
+            $gen = app(RecipeGeneratorService::class)->generiere($team, $beschreibung, $params, null, true, 'plan_go', $context);
             $recipe = $gen['recipe'] ?? null;
             if ($recipe === null) {
                 throw new RuntimeException('Generierung lieferte kein Rezept.');
@@ -471,6 +479,7 @@ class PlanningCascadeService
                     app(PlanningSessionService::class)->verknuepfeArtefakt($sess, 'recipe', (int) $recipe->id);
                 }
             }
+            $workflow->afterGenerated($team, $stepId, (int) (\Illuminate\Support\Facades\Auth::id() ?? 0), $recipe, $gen['offene'] ?? [], $params);
             $this->markStepDone($stepId, 'recipe', (int) $recipe->id);
         } catch (\Throwable $e) {
             $idee->update(['generation_status' => 'fehlgeschlagen', 'source_meta' => array_merge($idee->source_meta ?? [], ['generation_fehler' => mb_substr($e->getMessage(), 0, 500)])]);

@@ -38,6 +38,8 @@ class FoodAlchemistCascadeRunStep extends Model
 
     protected $casts = [
         'uuid' => 'string',
+        'depth' => 'integer',
+        'context_snapshot' => 'array',
     ];
 
     public function run(): BelongsTo

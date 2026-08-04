@@ -45,28 +45,14 @@ class RecipeGeneratorService
      *                            Default null = byte-identisches Verhalten der UI-Pfade.
      * @return array{recipe: FoodAlchemistRecipe, statistik: array, offene: array}
      */
-    public function generiere(Team $team, string $description, array $parameter = [], ?array $kiRezeptOverride = null, bool $vkModus = false, ?string $createdVia = null): array
+    public function generiere(Team $team, string $description, array $parameter = [], ?array $kiRezeptOverride = null, bool $vkModus = false, ?string $createdVia = null, ?array $preparedContext = null): array
     {
         $kiRezept = $kiRezeptOverride;
         if ($kiRezept === null) {
-            // M5-06 / GL-13: Souschef-Wissen (7 Always-Load + Domains + Pairing-Block)
-            // als Fakten-Block in den User-Prompt; Stil-Filter (Achse 10) zieht im
-            // VK-Modus über kompositions_stil. Leere Wissensbasis = leer, nie Fehler.
-            $wissen = app(Ai\KnowledgeContextService::class)->contextFor(
-                'ai_generate_recipe', $description, $parameter['kompositions_stil'] ?? null
-            );
-            $kontext = [
-                'description' => $description,
-                'parameter' => $parameter,
-            ];
-            // M7-07: Küchen-Profil VOR den Hooks (Soft-Default-Schicht,
-            // commands.rs:12590-Pendant) — explizite Richtungs-Parameter gewinnen
-            $kuechenTyp = app(TeamSettingsService::class)->kuechenTyp($team);
-            if ($kuechenTyp !== null) {
-                $kontext = ['kuechen_profil' => 'Mandanten-Profil (Soft-Default — explizite '
-                    . 'Richtungs-Parameter haben VORRANG): '
-                    . TeamSettingsService::KUECHEN_TYPEN[$kuechenTyp]] + $kontext;
-            }
+            $preparedContext ??= app(RecipeGenerationContextService::class)->build($team, $description, $parameter, $vkModus);
+            $kontext = $preparedContext['prompt'];
+            $wissen = ['block' => $preparedContext['knowledge'], 'files_used' => $preparedContext['knowledge_used']];
+
             // M6-07 / V-04 (Audit-Hebel 3): Reuse-at-Generation — lexikalischer
             // Prefetch des Bestands VOR der Benennung; die KI soll vorhandene
             // Basisrezepte EXAKT so benennen (billiger als Nach-Matching).
@@ -82,15 +68,6 @@ class RecipeGeneratorService
                     ->orderBy('foodalchemist_dish_classes.id')->pluck('label', 'id')->all();
                 $kontext['aufschlagsklassen'] = \Platform\FoodAlchemist\Models\FoodAlchemistMarkupClass::where('is_inactive', false)
                     ->orderBy('code')->pluck('label', 'code')->all();
-            }
-            // #505 Slice 1: hybrides Grounding — reale GP-/Rezept-Kandidaten + Anker-Graph-
-            // Pairing (rollenabhängig) additiv in den Prompt, damit die KI auf EXISTIERENDE
-            // GPs benennt (weniger Drift) statt Namen zu erfinden. Food DNA injiziert propose() selbst.
-            // 06·H3: opt-in Favoriten (Default aus → byte-identisch); H4b: optional nur Convenience-Favoriten
-            $useFavoritesList = (bool) ($parameter['use_favorites_list'] ?? false);
-            $favoritesConvenienceOnly = (bool) ($parameter['favorites_convenience_only'] ?? false);
-            foreach (app(GenerationContextService::class)->forGeneration($team, $description, $vkModus, $useFavoritesList, $favoritesConvenienceOnly) as $gKey => $gVal) {
-                $kontext[$gKey] = $gVal;
             }
             $vorschlag = $this->ki->propose($vkModus ? 'vk.generator' : 'recipe.generator', $kontext, [
                 'knowledge' => $wissen['block'],
@@ -230,6 +207,8 @@ class RecipeGeneratorService
                             ? 'basisrezept_anlegen' : 'lieferantenartikel_waehlen',
                         'shortlist' => $this->matcher->candidatesFor($team, $text, $z['slug'] ?? null, 5),
                         'la_kandidaten' => $laKandidaten,
+                        'lieferantenstrategie' => $istBasisrezept ? null : app(TeamSettingsService::class)
+                            ->leadLaStrategie($team, $this->wgHint($z['commodity_group'] ?? $z['warengruppe'] ?? null))->value,
                     ];
                 }
                 $zeilen[] = $zeile;

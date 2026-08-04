@@ -29,9 +29,9 @@ class LeadLaStrategieResolver
      * @param Collection<int, object> $kandidaten
      * @param array<int> $stammSupplierIds Stamm-Lieferanten des Teams (für WG, M1-06)
      */
-    public function sortiere(Team $team, Collection $kandidaten, array $stammSupplierIds = []): Collection
+    public function sortiere(Team $team, Collection $kandidaten, array $stammSupplierIds = [], ?string $warengruppeCode = null): Collection
     {
-        $strategie = $this->settings->leadLaStrategie($team);
+        $strategie = $this->settings->leadLaStrategie($team, $warengruppeCode);
         $prioritaeten = $this->settings->leadLaPrioritaeten($team);
 
         return $kandidaten
