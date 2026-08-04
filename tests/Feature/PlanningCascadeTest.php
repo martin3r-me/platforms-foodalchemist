@@ -136,13 +136,16 @@ it('teilt identische fehlende Basisrezepte im Lauf und bindet das Ergebnis an al
     foreach ($parents as $i => $step) {
         $workflow->afterGenerated($this->rootTeam, $step->id, auth()->id(), $recipes[$i], [[
             'index' => 0, 'text' => 'Geflügelfond', 'primaer' => 'basisrezept_anlegen',
-        ]], ['auto_dependencies' => true]);
+        ]], ['auto_dependencies' => true, '_voll_anreichern' => true]);
     }
 
     $children = FoodAlchemistCascadeRunStep::where('cascade_run_id', $run->id)->where('depth', 1)->get();
     expect($children)->toHaveCount(1)
         ->and(\Platform\FoodAlchemist\Models\FoodAlchemistCascadeRecipeDependency::count())->toBe(2);
     Queue::assertPushed(GenerateRecipeJob::class, 1);
+    Queue::assertPushed(GenerateRecipeJob::class, fn ($job) => $job->vkModus === false
+        && $job->vollAnreichern === true
+        && ! array_key_exists('_voll_anreichern', $job->parameter));
 
     $fond = $this->makeRecipe($this->rootTeam, 'Geflügelfond');
     $workflow->afterGenerated($this->rootTeam, $children->first()->id, auth()->id(), $fond, [], []);

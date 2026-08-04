@@ -239,13 +239,29 @@ it('L7a: voll_anreichern ist ein Parameter — Default aus lässt den Aufruf unv
     $tool = $this->registry->get('foodalchemist.recipes.GENERATE');
 
     expect($tool->getSchema()['properties'])->toHaveKey('voll_anreichern')
-        ->and($tool->getSchema()['properties']['voll_anreichern']['default'])->toBeFalse();
+        ->and($tool->getSchema()['properties']['voll_anreichern']['default'])->toBeFalse()
+        ->and($tool->getSchema()['properties'])->toHaveKey('complete_coverage')
+        ->and($tool->getSchema()['properties']['complete_coverage']['default'])->toBeFalse();
 
     $res = $tool->execute(['description' => 'Dunkle Rotwein-Schalotten-Reduktion'], $this->kontext);
 
     expect($res->success)->toBeTrue()
         ->and($res->data['anreicherung'])->toBeNull()                   // ohne Flag kein Pass
         ->and(DB::table('foodalchemist_bulk_runs')->count())->toBe(0);
+});
+
+it('MCP Complete-Coverage ist explizit: ohne voll_anreichern kein Write', function () {
+    $tool = $this->registry->get('foodalchemist.recipes.GENERATE');
+    $vorher = FoodAlchemistRecipe::count();
+
+    $res = $tool->execute([
+        'description' => 'Dunkle Rotwein-Schalotten-Reduktion',
+        'complete_coverage' => true,
+    ], $this->kontext);
+
+    expect($res->success)->toBeFalse()
+        ->and($res->errorCode)->toBe('VALIDATION_ERROR')
+        ->and(FoodAlchemistRecipe::count())->toBe($vorher);
 });
 
 it('L7a: voll_anreichern=true hängt die Kaskade an — die Lücken sind nach dem EINEN Aufruf gefüllt', function () {

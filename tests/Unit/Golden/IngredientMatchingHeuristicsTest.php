@@ -185,6 +185,18 @@ it('sub_kandidat_lehnt_rohprodukte_ab', function () {
     }
 });
 
+it('direktartikel bleiben gp/la-first statt basisrezept-kandidaten', function () {
+    foreach (['Fleur de Sel', 'fertig belegtes Broetchen', 'Microgreens als Deko'] as $name) {
+        expect($this->h->istDirektArtikelKandidat($name))->toBeTrue($name)
+            ->and($this->h->istSubRezeptKandidat($name))->toBeFalse($name);
+    }
+
+    foreach (['Geflügelfond', 'Rotweinreduktion'] as $name) {
+        expect($this->h->istDirektArtikelKandidat($name))->toBeFalse($name)
+            ->and($this->h->istSubRezeptKandidat($name))->toBeTrue($name);
+    }
+});
+
 // ──── 4.4l/m/n: Varianten-Tiebreaker ─────────────────────────────────────
 
 it('variant_rank_signals', function () {

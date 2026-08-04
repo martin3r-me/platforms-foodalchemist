@@ -193,6 +193,10 @@
                 </div>
                 <div class="flex gap-2">
                     <button type="button" wire:click="speichern" class="{{ $btnPrimary }}">Speichern</button>
+                    <a href="{{ route('foodalchemist.concepts.dokument', ['id' => $selected->id, 'profil' => 'voll']) }}" target="_blank"
+                       class="{{ $btnGhost }}" title="Druck-/PDF-Report mit voller Gericht→Basisrezept→GP→LA-Kaskade" data-concept-druck>
+                        @svg('heroicon-o-printer', 'w-3.5 h-3.5 inline-block align-middle') Druck
+                    </a>
                     <button type="button" wire:click="zielpreisToggle" class="{{ $btnGhost }} {{ $zielModus ? 'text-violet-600' : '' }}">@svg('heroicon-o-flag', 'w-3.5 h-3.5 inline-block align-middle') Zielpreis</button>
                     <button type="button" wire:click="loeschen({{ $selected->id }})" wire:confirm="Concept löschen?" class="{{ $btnGhost }} text-red-600">Löschen</button>
                 </div>

@@ -146,17 +146,15 @@ it('L1b: VK-Schritte auf einem Basisrezept erzeugen einen ehrlichen Fehler statt
         ->and($basis->fresh()->plating_text)->toBeNull();
 });
 
-it('L1b: das VkModal fährt den Lauf und rendert die Status-Zeile mit »Alle übernehmen«', function () {
+it('L1b: das VkModal fährt die Vollanreicherung direkt inkl. Coverage-Ergebnis', function () {
     $c = Livewire::test(VkModal::class)
         ->call('oeffnen', $this->vk->id)
         ->call('allesAnreichern')
         ->assertSet('fehler', null);
 
-    expect($c->get('bulkRunId'))->not->toBeNull();
-    expect($c->html())->toContain('data-vk-anreichern-status')
-        ->and($c->html())->toContain('data-vk-anreichern-uebernehmen');
-
-    $c->call('bulkAlleUebernehmen')->assertSet('bulkRunId', null);
+    expect($c->get('bulkRunId'))->toBeNull()
+        ->and($c->get('anreicherung'))->not->toBeNull()
+        ->and($c->html())->toContain('data-oneshot-ergebnis');
 
     expect($this->vk->fresh()->sales_wording_standard)->toBe('Zarter Rinderrücken');
 });

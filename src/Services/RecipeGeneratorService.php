@@ -171,8 +171,12 @@ class RecipeGeneratorService
                     'auto_ground' => false,
                 ];
 
-                // Agentischer Resolver: BESTAND ZUERST (GL-04 voll, inkl. §4/§5-Aliasse)
-                $treffer = $this->matcher->matchIngredient($team, $text, $z['slug'] ?? null, $mode, $pref, $preferRaw, $bio);
+                // Agentischer Resolver: BESTAND ZUERST (GL-04 voll, inkl. §4/§5-Aliasse).
+                // VK bleibt Komponenten-/Basisrezept-first, außer klar kaufbaren Einzelartikeln
+                // (Deko, Gewürz, fertig belegte Artikel): dort gewinnt vorhandenes GP, sonst LA→GP.
+                $direktArtikel = $vkModus && $this->heuristik->istDirektArtikelKandidat($text);
+                $zeilenMode = $direktArtikel ? 'gp_first' : $mode;
+                $treffer = $this->matcher->matchIngredient($team, $text, $z['slug'] ?? null, $zeilenMode, $pref, $preferRaw, $bio);
                 if ($treffer['target'] === 'gp') {
                     $zeile['gp_id'] = $treffer['gp_id'];
                     $zeile['match_method'] = 'gemini_proposed';
@@ -187,7 +191,7 @@ class RecipeGeneratorService
                     // erst nach menschlicher Auswahl in getrennten Schritten angelegt.
                     $zeile['match_method'] = 'unmatched';
                     $statistik['offen']++;
-                    $istBasisrezept = $this->heuristik->queryIstHalbfabrikat(
+                    $istBasisrezept = ! $direktArtikel && $this->heuristik->queryIstHalbfabrikat(
                         app(Matching\TokenEngine::class)->tokenize($text)
                     );
                     $laKandidaten = $istBasisrezept ? [] : app(LaCandidateFinder::class)
@@ -203,7 +207,7 @@ class RecipeGeneratorService
                     $offene[] = [
                         'index' => $i,
                         'text' => $text,
-                        'primaer' => $istBasisrezept || $this->heuristik->istSubRezeptKandidat($text)
+                        'primaer' => $istBasisrezept || (! $direktArtikel && $this->heuristik->istSubRezeptKandidat($text))
                             ? 'basisrezept_anlegen' : 'lieferantenartikel_waehlen',
                         'shortlist' => $this->matcher->candidatesFor($team, $text, $z['slug'] ?? null, 5),
                         'la_kandidaten' => $laKandidaten,

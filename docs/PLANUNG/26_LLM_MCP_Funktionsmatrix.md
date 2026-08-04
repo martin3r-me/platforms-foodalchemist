@@ -334,6 +334,10 @@ foodalchemist.recipe_klasse.POST
 foodalchemist.recipe_steps.GET
 foodalchemist.recipe_steps.PUT
 foodalchemist.recipes.GENERATE
+  - Ein Tool für Basisrezepte und VK-Gerichte (`vk=true`).
+  - Die Tool-API bleibt gemeinsam, die Wissens-/Agenten-Workflows sind getrennt: `workflow.rezept_anlegen_mcp` für Basisrezepte, `workflow.gericht_anlegen_mcp` für Gerichte/VK-Rezepte.
+  - `voll_anreichern=true` füllt Text-/Klassifikations-Lücken.
+  - `complete_coverage=true` ist nur mit `voll_anreichern=true` gültig und synchronisiert zusätzlich operative Detail-Bausteine: Fertigungstiefe, Arbeitszeit/Eigenschaften, Equipment, belastbar ableitbaren Default-Posten, Prozessanker, Step-by-step und Sensorik. Step-by-step und Sensorik werden dabei bewusst neu geschrieben, damit geänderte Rezepte/Gerichte wieder konsistent sind.
 foodalchemist.recipes.GET
 foodalchemist.recipes.LIST
 foodalchemist.recipes.POST

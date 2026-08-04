@@ -228,7 +228,7 @@ class VkModal extends Component
     {
         $this->reset(['recipeId', 'form', 'neuName', 'basisSuche', 'basisId', 'regenForm', 'regenEditId', 'kundeName', 'kundeMarketing', 'fehler', 'rollenVorschlag', 'regenVorschlaege',
             'ueberarbeitenOffen', 'anweisung', 'ueberarbeitung',     // L1a: Revise-Vorschau darf nicht ins nächste Gericht lecken
-            'bulkRunId']);                                          // L1b: dito für die Anreicherungs-Lauf-Box
+            'bulkRunId', 'anreicherung']);                          // L1b: dito für die Anreicherungs-Lauf-Box
         $this->copilotZuruecksetzen();                              // L6b: Befunde gehören zu GENAU diesem Gericht
     }
 
@@ -710,18 +710,29 @@ class VkModal extends Component
 
     public ?int $bulkRunId = null;
 
+    public ?array $anreicherung = null;
+
     public function allesAnreichern(): void
     {
         $this->fehler = null;
+        $this->anreicherung = null;
         $team = Auth::user()?->currentTeamRelation;
         if ($team === null || $this->recipeId === null) {
             return;
         }
         try {
-            $this->bulkRunId = app(\Platform\FoodAlchemist\Services\BulkEnrichService::class)
-                ->starteVk($team, [$this->recipeId]);
-        } catch (\RuntimeException $e) {
-            $this->fehler = $e->getMessage();                          // sync-Queue (demo) ohne Provider → graceful
+            $recipe = app(SalesRecipeService::class)->detail($team, $this->recipeId);
+            if ($recipe === null) {
+                return;
+            }
+            $anreicherung = app(\Platform\FoodAlchemist\Services\RecipeOneShotService::class)
+                ->anreichern($team, $recipe, completeCoverage: true);
+            $this->bulkRunId = null;
+            $this->oeffnen($this->recipeId);
+            $this->anreicherung = $anreicherung;
+            $this->dispatch('vk-recipe-gespeichert');
+        } catch (\Throwable $e) {
+            $this->fehler = $e->getMessage();                          // Provider-/Coverage-Fehler → graceful im Editor
         }
     }
 

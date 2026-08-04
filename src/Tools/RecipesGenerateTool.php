@@ -50,6 +50,9 @@ class RecipesGenerateTool extends FoodAlchemistTool implements ToolContract, Too
             . 'Mit voll_anreichern=true laeuft danach der One-Shot-Anreicherungs-Pass durch und fuellt die noch leeren Textfelder '
             . '(Beschreibung, VK-Wording, Plating, Klassifikation) — je fehlendes Feld ein weiterer Provider-Call — und bei vk=true '
             . 'zum Schluss das Wirtschaftlichkeits-Glied: das Gericht kommt bepreist zurueck (EK, VK, Wareneinsatz-% gegen das Team-Ziel). '
+            . 'Mit complete_coverage=true synchronisiert der MCP-Pfad zusaetzlich operative Detail-Bausteine neu: Fertigungstiefe, '
+            . 'Arbeitszeit/Eigenschaften, Equipment, Default-Posten soweit belastbar ableitbar, Prozessanker, Step-by-step und Sensorik. Bestehende '
+            . 'Schritte und vorhandene Sensorik werden dabei bewusst ueberschrieben, damit Aenderungen am Rezept wieder konsistent sind. '
             . 'Mit vk=true kann ein ziel_vk (Netto je Portion) vorgegeben werden: er steuert den Vorschlag (Komponenten/Grammatur) und wird danach '
             . 'gegen den gerechneten Preis gehalten — gedrueckt wird der VK nie. '
             . 'Braucht einen LLM-Provider und dauert je nach Modell ~20–40 s. Freigabe (approved) macht nur ein Mensch im Editor.';
@@ -78,6 +81,7 @@ class RecipesGenerateTool extends FoodAlchemistTool implements ToolContract, Too
                 'serviceform' => ['type' => 'string', 'enum' => ['tellerservice', 'buffet', 'flying', 'stehempfang', 'boxed'], 'description' => 'Nur vk=true: Serviceform'],
                 'kompositions_stil' => ['type' => 'string', 'enum' => ['klassisch', 'kreativ', 'gewagt'], 'description' => 'Nur vk=true: filtert den Pairing-Wissensblock (gewagt = nur belegte Paarungen)'],
                 'voll_anreichern' => ['type' => 'boolean', 'default' => false, 'description' => '03·L7: One-Shot — nach der Erdung laeuft der Anreicherungs-Pass durch und fuellt die noch LEEREN Textfelder (Basisrezept: Beschreibung/Kategorie/Geschmack; vk=true: Beschreibung/VK-Wording/Plating/Speisen-Klasse). Kostet 1 Provider-Call je fehlendes Feld und verlaengert den Aufruf entsprechend; bereits gefuellte Felder werden nie angetastet. Mit vk=true und mindestens 2 Komponenten kommt danach EIN weiterer Call fuer das kulinarische Kohaerenz-Urteil (anreicherung.kohaerenz_urteil: score/label/schwachstelle) — das ist die zweite Achse, nicht der deterministische Aroma-Score im Feld kohaerenz. Mit vk=true laeuft zum Schluss das Wirtschaftlichkeits-Glied (03·L8, KEIN Provider-Call): Aufschlagsklasse + Standard-Darreichung werden gesetzt, sofern sie fehlen, danach steht der VK (Cost-plus, price_mode=auto, jederzeit ueberschreibbar) und die Food-Cost-Ampel in anreicherung.wirtschaftlichkeit (sales_net/wareneinsatz_pct/ziel_pct/ampel/luecken/vorlaeufig). Die Portionsgroesse (g je Verkaufseinheit) kommt aus dem KI-Vorschlag selbst und wird NICHT aus dem Yield abgeleitet (das waere der Chargenpreis); liefert das Modell keinen plausiblen Wert (Band 20–3000 g), steht "portion" in anreicherung.wirtschaftlichkeit.luecken und es gibt bewusst keinen VK (luecken kennt ausserdem "aufschlagsklasse" und "darreichung" — jede offene Vorbedingung wird benannt statt still zu bleiben)'],
+                'complete_coverage' => ['type' => 'boolean', 'default' => false, 'description' => 'Produktionsreife Komplett-Coverage fuer MCP, nur mit voll_anreichern=true: synchronisiert nach den Text-/Klassifikations-Luecken auch operative Detail-Bausteine neu: Fertigungstiefe, Arbeitszeit/Eigenschaften, Equipment, Default-Posten soweit belastbar ableitbar, Prozessanker, Step-by-step und Sensorik. Bestehende Schritte und vorhandene Sensorik werden bewusst ueberschrieben, damit ein geaendertes Rezept wieder konsistent ist. Bereits gefuellte Text-/Stammdatenfelder bleiben geschuetzt. Fuer einzelne Rezepte gedacht; grosse Konzept-Laeufe sollen ueber Queue/Run-Orchestrierung laufen.'],
                 'ziel_vk' => ['type' => 'number', 'description' => '03·L8b: angestrebter NETTO-Verkaufspreis je Portion in EUR (0,50–500). Nur mit vk=true erlaubt. Wirkt zweifach: als Constraint im Vorschlag (Komponenten/Qualitaeten/Grammatur werden auf den Preis hin gewaehlt) und mit voll_anreichern=true als Abgleich nach der Kalkulation (anreicherung.wirtschaftlichkeit.ziel_delta_eur = Ist minus Ziel, ziel_wareneinsatz_pct = Wareneinsatz, den der Zielpreis bedeuten wuerde, ziel_ampel nach derselben Leiter wie die Ist-Ampel). Der Preis wird NIE auf das Ziel gesetzt — es gibt keinen Solver'],
                 'use_favorites_list' => ['type' => 'boolean', 'default' => false, 'description' => '06·H3: bevorzugt aus der kuratierten Favoriten-GP-Liste bauen (bevorzugt, nicht ausschließlich)'],
                 'favorites_convenience_only' => ['type' => 'boolean', 'default' => false, 'description' => '06·H4b: Favoriten-Block auf Convenience-getaggte GPs verengen (nur wirksam mit use_favorites_list)'],
@@ -97,6 +101,11 @@ class RecipesGenerateTool extends FoodAlchemistTool implements ToolContract, Too
             return ToolResult::error('description ist Pflicht — beschreibe, was entstehen soll.', 'VALIDATION_ERROR');
         }
         $vkModus = (bool) ($arguments['vk'] ?? false);
+        $vollAnreichern = (bool) ($arguments['voll_anreichern'] ?? false);
+        $completeCoverage = (bool) ($arguments['complete_coverage'] ?? false);
+        if ($completeCoverage && ! $vollAnreichern) {
+            return ToolResult::error('complete_coverage wirkt nur zusammen mit voll_anreichern=true.', 'VALIDATION_ERROR');
+        }
 
         // Parameter-Bau wie in den beiden Modals: leere Strings strippen (sonst
         // landet "(egal)" als Vorgabe im Prompt), bools NACH dem Filter setzen.
@@ -151,8 +160,9 @@ class RecipesGenerateTool extends FoodAlchemistTool implements ToolContract, Too
         // AN steht: dort läuft die Kaskade in der Queue, hier synchron im Tool-Call —
         // 3–4 zusätzliche Provider-Calls würden die Antwortzeit vervielfachen. Der
         // Client entscheidet, ob er sie zahlt.
-        $anreicherung = (bool) ($arguments['voll_anreichern'] ?? false)
-            ? app(\Platform\FoodAlchemist\Services\RecipeOneShotService::class)->anreichern($team, $recipe, $zielVk)
+        $anreicherung = $vollAnreichern
+            ? app(\Platform\FoodAlchemist\Services\RecipeOneShotService::class)
+                ->anreichern($team, $recipe, $zielVk, completeCoverage: $completeCoverage)
             : null;
         if ($anreicherung !== null) {
             $recipe = $recipe->fresh() ?? $recipe;
@@ -192,7 +202,9 @@ class RecipesGenerateTool extends FoodAlchemistTool implements ToolContract, Too
             ], $resultat['offene']),
             'kohaerenz' => $statistik['kohaerenz'] ?? null,        // nur VK-Modus: deterministischer Aroma-Score (GL-10 Achse 1)
             // nur mit voll_anreichern=true; enthält `kohaerenz_urteil` (GL-10 Achse 2, nie
-            // mit Achse 1 verrechnet) und bei vk=true `wirtschaftlichkeit` (03·L8).
+            // mit Achse 1 verrechnet), bei vk=true `wirtschaftlichkeit` (03·L8) und
+            // optional `coverage` (operative Detail-Bausteine: Fertigung, Eigenschaften,
+            // Equipment, Posten, Prozessanker, Step-by-step, Sensorik; nur wenn complete_coverage=true).
             'anreicherung' => $anreicherung,
             'hinweis' => ($offen > 0
                     ? "⚠ {$offen} Zutat(en) ohne Treffer — bewusst NICHT geraten. Pro Zeile Bestand prüfen; bei GP-Lücken "

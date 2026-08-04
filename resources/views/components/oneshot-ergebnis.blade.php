@@ -43,8 +43,50 @@
             <p class="text-[11px] text-amber-700 mt-1.5" data-oneshot-fehler>
                 @svg('heroicon-o-exclamation-triangle', 'w-3.5 h-3.5 inline-block align-middle')️ Anreicherung unvollständig: {{ $anreicherung['fehler'] }} — das Rezept selbst ist fertig und geerdet, die restlichen Felder bleiben offen.
             </p>
-        @elseif(($anreicherung['uebernommen'] ?? 0) === 0 && count($anreicherung['schritte'] ?? []) === 0)
+        @elseif(($anreicherung['uebernommen'] ?? 0) === 0 && count($anreicherung['schritte'] ?? []) === 0 && ($anreicherung['coverage'] ?? null) === null)
             <p class="text-[11px] text-gray-500 mt-1.5">Alle Ziel-Felder waren schon belegt — kein zusätzlicher KI-Call nötig.</p>
+        @endif
+
+        @if(($anreicherung['coverage'] ?? null) !== null)
+            @php($cov = $anreicherung['coverage'])
+            @php($steps = $cov['steps'] ?? null)
+            @php($sens = $cov['sensorik'] ?? null)
+            <div class="flex flex-wrap gap-1.5 mt-1.5" data-oneshot-coverage>
+                @foreach([
+                    'fertigung' => 'Fertigung',
+                    'eigenschaften' => 'Eigenschaften',
+                    'equipment' => 'Equipment',
+                    'posten' => 'Posten',
+                    'prozessanker' => 'Prozessanker',
+                ] as $key => $label)
+                    @if(($cov[$key] ?? null) !== null)
+                        @php($status = $cov[$key]['status'] ?? 'offen')
+                        <span class="{{ $pill }} {{ in_array($status, ['erstellt', 'aktualisiert', 'bewertet'], true) ? $variantPill['success'] : ($status === 'fehler' ? $variantPill['warning'] : $variantPill['secondary']) }}">
+                            {{ $label }}: {{ str_replace('_', ' ', $status) }}
+                        </span>
+                    @endif
+                @endforeach
+                @if($steps !== null)
+                    @php($stepStatus = $steps['status'] ?? 'offen')
+                    <span class="{{ $pill }} {{ in_array($stepStatus, ['erstellt', 'aktualisiert'], true) ? $variantPill['success'] : ($stepStatus === 'fehler' ? $variantPill['warning'] : $variantPill['secondary']) }}" data-oneshot-steps>
+                        Schritte: {{ in_array($stepStatus, ['erstellt', 'aktualisiert'], true) ? (($steps['n_steps'] ?? 0) . ' ' . $stepStatus) : str_replace('_', ' ', $stepStatus) }}
+                    </span>
+                @endif
+                @if($sens !== null)
+                    @php($sensStatus = $sens['status'] ?? 'offen')
+                    <span class="{{ $pill }} {{ in_array($sensStatus, ['bewertet', 'unveraendert'], true) ? $variantPill['success'] : ($sensStatus === 'fehler' ? $variantPill['warning'] : $variantPill['secondary']) }}" data-oneshot-sensorik>
+                        Sensorik: {{ str_replace('_', ' ', $sensStatus) }}
+                    </span>
+                @endif
+            </div>
+            @php($coverageFehler = collect($cov)->filter(fn ($glied) => is_array($glied) && ($glied['fehler'] ?? null) !== null))
+            @if($coverageFehler->isNotEmpty())
+                <p class="text-[11px] text-amber-700 mt-1" data-oneshot-coverage-fehler>
+                    @foreach($coverageFehler as $key => $glied)
+                        {{ ucfirst((string) $key) }} offen: {{ $glied['fehler'] }}
+                    @endforeach
+                </p>
+            @endif
         @endif
 
         @if(($anreicherung['kohaerenz_urteil'] ?? null) !== null)

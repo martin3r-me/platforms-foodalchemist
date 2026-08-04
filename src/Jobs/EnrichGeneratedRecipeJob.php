@@ -48,7 +48,7 @@ class EnrichGeneratedRecipeJob implements ShouldQueue
             $this->schreibe([
                 ...$this->recipePayload,
                 'status' => 'done',
-                'anreicherung' => $oneShot->anreichern($team, $recipe, $this->zielVk),
+                'anreicherung' => $oneShot->anreichern($team, $recipe, $this->zielVk, completeCoverage: true),
             ]);
         } catch (\Throwable $e) {
             $this->fertigMitFehler($e->getMessage());
@@ -70,7 +70,7 @@ class EnrichGeneratedRecipeJob implements ShouldQueue
                 'run_id' => null, 'schritte' => [], 'uebersprungen' => [],
                 'uebernommen' => 0, 'offen' => 0,
                 'fehler' => mb_strimwidth($fehler, 0, 300),
-                'kohaerenz_urteil' => null, 'wirtschaftlichkeit' => null,
+                'kohaerenz_urteil' => null, 'wirtschaftlichkeit' => null, 'coverage' => null,
             ],
         ]);
     }

@@ -36,6 +36,9 @@ class RecipeDependencyWorkflowService
         if (! ($parameter['auto_dependencies'] ?? false) || (int) $step->depth >= self::MAX_DEPTH) {
             return;
         }
+        $kindVollAnreichern = (bool) ($parameter['_voll_anreichern'] ?? false);
+        $childParameter = $parameter;
+        unset($childParameter['_voll_anreichern']);
 
         foreach ($offene as $open) {
             if (($open['primaer'] ?? null) !== 'basisrezept_anlegen') {
@@ -90,10 +93,10 @@ class RecipeDependencyWorkflowService
                 $child->update(['generator_run_id' => $runId]);
                 Cache::put(GenerateRecipeJob::cacheKey($runId), ['status' => 'pending'], now()->addMinutes(60));
                 GenerateRecipeJob::dispatch($runId, $team->id, $userId, $text, [
-                    ...$parameter,
+                    ...$childParameter,
                     'cascade_step_id' => $child->id,
                     'auto_dependencies' => true,
-                ], false, false);
+                ], false, $kindVollAnreichern);
             }
         }
     }

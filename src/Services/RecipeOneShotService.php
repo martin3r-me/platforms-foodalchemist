@@ -4,7 +4,10 @@ namespace Platform\FoodAlchemist\Services;
 
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Enums\BulkRunType;
+use Platform\FoodAlchemist\Models\FoodAlchemistProductionStation;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
+use Platform\FoodAlchemist\Models\FoodAlchemistRecipeStep;
+use Platform\FoodAlchemist\Models\FoodAlchemistVocabKochequipment;
 
 /**
  * Spec 03 L7a — der Kaskaden-Motor der One-Shot-Vollerstellung.
@@ -12,6 +15,9 @@ use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
  * Bis hierher endete jede Generierung beim geerdeten Zutaten-Gerüst samt
  * Aggregation; die Anreicherung war ein SEPARATER Klick („✨ Alles anreichern")
  * mit Review-Liste dahinter. Dieser Service verkettet beides zu einem Durchlauf.
+ * Für den KI-Erstell-Knopf kann zusätzlich die Coverage-Phase laufen:
+ * Step-by-step, Sensorik, Produktions-/Equipment-Felder und Prozessanker werden
+ * neu synchronisiert, weil sie vom aktuellen Rezeptstand abhängen.
  *
  * Drei Entscheidungen tragen ihn:
  *
@@ -77,9 +83,9 @@ class RecipeOneShotService
      *                       NIRGENDS geschrieben, sondern nach der Kalkulation gegen
      *                       das Ergebnis gehalten (kein Solver, s. `zielAbgleich`).
      *
-     * @return array{run_id: ?int, schritte: list<string>, uebersprungen: list<string>, uebernommen: int, offen: int, fehler: ?string, kohaerenz_urteil: ?array{score: ?int, label: ?string, schwachstelle: ?string, fehler: ?string}, wirtschaftlichkeit: ?array}
+     * @return array{run_id: ?int, schritte: list<string>, uebersprungen: list<string>, uebernommen: int, offen: int, fehler: ?string, kohaerenz_urteil: ?array{score: ?int, label: ?string, schwachstelle: ?string, fehler: ?string}, wirtschaftlichkeit: ?array, coverage?: array}
      */
-    public function anreichern(Team $team, FoodAlchemistRecipe $recipe, ?float $zielVk = null): array
+    public function anreichern(Team $team, FoodAlchemistRecipe $recipe, ?float $zielVk = null, bool $completeCoverage = false): array
     {
         $alle = $recipe->is_sales_recipe ? BulkEnrichService::SCHRITTE_VK : BulkEnrichService::SCHRITTE;
         $schritte = $this->bulk->luecken($recipe, $alle);
@@ -93,6 +99,7 @@ class RecipeOneShotService
             'fehler' => null,
             'kohaerenz_urteil' => null,
             'wirtschaftlichkeit' => null,
+            'coverage' => null,
         ];
 
         if ($schritte !== []) {                                // leer ⇒ nichts zu füllen, kein Lauf, kein Call
@@ -125,8 +132,285 @@ class RecipeOneShotService
 
         $ergebnis['kohaerenz_urteil'] = $this->kohaerenzGlied($team, $recipe);
         $ergebnis['wirtschaftlichkeit'] = $this->wirtschaftlichkeitsGlied($team, $recipe, $zielVk);
+        if ($completeCoverage) {
+            $ergebnis['coverage'] = $this->coverageGlieder($team, $recipe->fresh() ?? $recipe);
+        }
 
         return $ergebnis;
+    }
+
+    /**
+     * Vollerstellungs-Coverage fuer den KI-Knopf: Bausteine neu synchronisieren,
+     * die im Editor eigene KI-Aktionen haben. Anders als Einzel-KI-Knoepfe ist
+     * "voll anreichern" eine bewusste Aktualisierung nach Rezeptaenderungen.
+     *
+     * @return array<string, array{status: string, fehler?: string}>
+     */
+    private function coverageGlieder(Team $team, FoodAlchemistRecipe $recipe): array
+    {
+        $fertigung = $this->fertigungsGlied($recipe);
+        $eigenschaften = $this->eigenschaftenGlied($recipe);
+        $equipment = $this->equipmentGlied($team, $recipe->fresh() ?? $recipe);
+        $posten = $this->postenGlied($team, $recipe->fresh() ?? $recipe);
+        $steps = $this->stepGlied($recipe->fresh() ?? $recipe);
+        $prozessanker = $this->prozessankerGlied($recipe->fresh() ?? $recipe);
+        $sensorik = $this->sensorikGlied($recipe->fresh() ?? $recipe);
+
+        return [
+            'fertigung' => $fertigung,
+            'eigenschaften' => $eigenschaften,
+            'equipment' => $equipment,
+            'posten' => $posten,
+            'steps' => $steps,
+            'prozessanker' => $prozessanker,
+            'sensorik' => $sensorik,
+        ];
+    }
+
+    /** @return array{status: string, production_depth?: ?string, fehler?: string} */
+    private function fertigungsGlied(FoodAlchemistRecipe $recipe): array
+    {
+        try {
+            $vorschlag = app(Ai\AiGatewayService::class)->propose('recipe.production_depth', [
+                'name' => $recipe->name,
+                'production_depth' => $recipe->production_depth,
+                'zutaten' => $recipe->ingredients()->whereNull('deleted_at')->pluck('raw_text')->take(30)->all(),
+            ], [
+                'target_table' => 'foodalchemist_recipes',
+                'target_id' => $recipe->id,
+            ]);
+
+            $wert = $vorschlag->werte['production_depth'] ?? null;
+            if (! in_array($wert, ['from_scratch', 'teilfertig', 'convenience'], true)) {
+                return ['status' => 'leer', 'production_depth' => $recipe->production_depth];
+            }
+
+            $recipe->forceFill(['production_depth' => $wert])->save();
+
+            return ['status' => 'aktualisiert', 'production_depth' => $wert];
+        } catch (\Throwable $e) {
+            return ['status' => 'fehler', 'fehler' => mb_strimwidth($e->getMessage(), 0, 300)];
+        }
+    }
+
+    /** @return array{status: string, work_time_min?: ?int, temperature?: ?string, function?: ?string, fehler?: string} */
+    private function eigenschaftenGlied(FoodAlchemistRecipe $recipe): array
+    {
+        try {
+            $vorschlag = app(Ai\AiGatewayService::class)->propose('recipe.eigenschaften', [
+                'name' => $recipe->name,
+                'haltbarkeit_tage' => null,
+                'regenerierbarkeit' => null,
+                'transportstabilitaet' => null,
+                'work_time_min' => $recipe->work_time_min,
+                'temperature' => $recipe->temperature,
+                'function' => $recipe->function,
+                'preparation' => $recipe->preparation,
+                'zutaten' => $recipe->ingredients()->whereNull('deleted_at')->pluck('raw_text')->take(30)->all(),
+            ], [
+                'target_table' => 'foodalchemist_recipes',
+                'target_id' => $recipe->id,
+            ]);
+
+            $update = [];
+            if (isset($vorschlag->werte['work_time_min']) && is_numeric($vorschlag->werte['work_time_min'])) {
+                $update['work_time_min'] = max(0, (int) $vorschlag->werte['work_time_min']);
+            }
+            foreach (['temperature', 'function'] as $feld) {
+                $wert = $vorschlag->werte[$feld] ?? null;
+                if (is_string($wert) && trim($wert) !== '') {
+                    $update[$feld] = trim($wert);
+                }
+            }
+
+            if ($update === []) {
+                return ['status' => 'leer'];
+            }
+
+            $recipe->forceFill($update)->save();
+
+            return [
+                'status' => 'aktualisiert',
+                'work_time_min' => isset($update['work_time_min']) ? (int) $update['work_time_min'] : $recipe->work_time_min,
+                'temperature' => $update['temperature'] ?? $recipe->temperature,
+                'function' => $update['function'] ?? $recipe->function,
+            ];
+        } catch (\Throwable $e) {
+            return ['status' => 'fehler', 'fehler' => mb_strimwidth($e->getMessage(), 0, 300)];
+        }
+    }
+
+    /** @return array{status: string, n_equipment?: int, fehler?: string} */
+    private function equipmentGlied(Team $team, FoodAlchemistRecipe $recipe): array
+    {
+        try {
+            $vokabular = FoodAlchemistVocabKochequipment::visibleToTeam($team)
+                ->where('is_inactive', false)->orderBy('sort_order')->pluck('slug')->all();
+
+            $vorschlag = app(Ai\AiGatewayService::class)->propose('recipe.equipment', [
+                'name' => $recipe->name,
+                'equipment_slugs' => $recipe->equipment()->pluck('slug')->all(),
+                'vokabular' => $vokabular,
+                'preparation' => $recipe->preparation,
+                'zutaten' => $recipe->ingredients()->whereNull('deleted_at')->pluck('raw_text')->take(30)->all(),
+            ], [
+                'target_table' => 'foodalchemist_recipe_equipment',
+                'target_id' => $recipe->id,
+            ]);
+
+            $slugs = array_values(array_filter((array) ($vorschlag->werte['equipment_slugs'] ?? []), 'is_string'));
+            $ids = $slugs === [] ? collect() : FoodAlchemistVocabKochequipment::visibleToTeam($team)
+                ->whereIn('slug', $slugs)->pluck('id');
+            $recipe->equipment()->sync($ids->all());
+
+            return ['status' => $ids->isEmpty() ? 'leer' : 'aktualisiert', 'n_equipment' => $ids->count()];
+        } catch (\Throwable $e) {
+            return ['status' => 'fehler', 'fehler' => mb_strimwidth($e->getMessage(), 0, 300)];
+        }
+    }
+
+    /** @return array{status: string, station_id?: ?int, station?: ?string, fehler?: string} */
+    private function postenGlied(Team $team, FoodAlchemistRecipe $recipe): array
+    {
+        try {
+            $station = $this->stationVorschlag($team, $recipe);
+            if ($station === null) {
+                return ['status' => 'offen'];
+            }
+
+            $update = ['default_station_id' => $station->id];
+            if ($recipe->batch_max_kg === null && $station->batch_max_kg !== null) {
+                $update['batch_max_kg'] = $station->batch_max_kg;
+            }
+            if ($recipe->batch_max_pieces === null && $station->batch_max_pieces !== null) {
+                $update['batch_max_pieces'] = $station->batch_max_pieces;
+            }
+            $recipe->forceFill($update)->save();
+
+            return ['status' => 'aktualisiert', 'station_id' => (int) $station->id, 'station' => $station->name];
+        } catch (\Throwable $e) {
+            return ['status' => 'fehler', 'fehler' => mb_strimwidth($e->getMessage(), 0, 300)];
+        }
+    }
+
+    private function stationVorschlag(Team $team, FoodAlchemistRecipe $recipe): ?FoodAlchemistProductionStation
+    {
+        $stations = FoodAlchemistProductionStation::visibleToTeam($team)
+            ->where('is_inactive', false)->orderBy('sort_order')->orderBy('name')->get();
+        if ($stations->isEmpty()) {
+            return null;
+        }
+
+        $text = mb_strtolower(implode(' ', array_filter([
+            $recipe->name,
+            $recipe->function,
+            $recipe->temperature,
+            $recipe->production_depth,
+            $recipe->preparation,
+            implode(' ', $recipe->equipment()->pluck('slug')->all()),
+            implode(' ', $recipe->equipment()->pluck('name')->all()),
+        ])));
+
+        $best = null;
+        $bestScore = 0;
+        foreach ($stations as $station) {
+            $tokens = preg_split('/[^a-z0-9äöüß]+/iu', mb_strtolower($station->slug . ' ' . $station->name . ' ' . ($station->group_name ?? ''))) ?: [];
+            $tokens = array_values(array_unique(array_filter($tokens, fn ($t) => mb_strlen($t) >= 4)));
+            $score = 0;
+            foreach ($tokens as $token) {
+                if (str_contains($text, $token)) {
+                    $score++;
+                }
+            }
+            if ($score > $bestScore) {
+                $best = $station;
+                $bestScore = $score;
+            }
+        }
+
+        return $bestScore > 0 ? $best : null;
+    }
+
+    /** @return array{status: string, matched?: list<string>, added?: list<string>, removed?: list<string>, fehler?: string} */
+    private function prozessankerGlied(FoodAlchemistRecipe $recipe): array
+    {
+        try {
+            $r = app(ProcessAnchorService::class)->groundRecipe($recipe, true);
+
+            return [
+                'status' => ($r['matched'] ?? []) === [] ? 'leer' : 'aktualisiert',
+                'matched' => $r['matched'] ?? [],
+                'added' => $r['added'] ?? [],
+                'removed' => $r['removed'] ?? [],
+            ];
+        } catch (\Throwable $e) {
+            return ['status' => 'fehler', 'fehler' => mb_strimwidth($e->getMessage(), 0, 300)];
+        }
+    }
+
+    /** @return array{status: string, n_steps?: int, fehler?: string} */
+    private function stepGlied(FoodAlchemistRecipe $recipe): array
+    {
+        $bestehend = FoodAlchemistRecipeStep::where('recipe_id', $recipe->id)->count();
+
+        try {
+            $vorschlag = app(Ai\AiGatewayService::class)->propose('recipe.steps', [
+                'name' => $recipe->name,
+                'zutaten' => $recipe->ingredients()->whereNull('deleted_at')->pluck('raw_text')->take(30)->all(),
+                'schritte_bestand' => FoodAlchemistRecipeStep::where('recipe_id', $recipe->id)
+                    ->orderBy('position')->orderBy('id')->get(['phase', 'text'])->map(fn ($s) => [
+                        'phase' => $s->phase,
+                        'text' => $s->text,
+                    ])->all(),
+                'modus' => $bestehend > 0 ? 'voll_anreichern_ueberschreiben' : 'voll_anreichern_erstellen',
+            ], [
+                'target_table' => 'foodalchemist_recipe_steps',
+                'target_id' => $recipe->id,
+                'structural_retry' => fn (array $p) => is_array($p['werte']['steps'] ?? null) && $p['werte']['steps'] !== [],
+            ]);
+
+            $steps = [];
+            foreach ($vorschlag->werte['steps'] ?? [] as $s) {
+                $text = trim((string) ($s['text'] ?? ''));
+                if ($text === '') {
+                    continue;
+                }
+                $phase = trim((string) ($s['phase'] ?? ''));
+                $steps[] = ['phase' => $phase !== '' ? $phase : null, 'text' => $text];
+            }
+
+            if ($steps === []) {
+                return ['status' => 'leer', 'n_steps' => 0];
+            }
+
+            app(RecipeStepService::class)->sync($recipe, $steps);
+            $recipe->update([
+                'preparation_source' => 'ki',
+                'preparation_ai_confidence' => max(0.0, min(1.0, $vorschlag->confidence)),
+            ]);
+
+            return ['status' => $bestehend > 0 ? 'aktualisiert' : 'erstellt', 'n_steps' => count($steps)];
+        } catch (\Throwable $e) {
+            return ['status' => 'fehler', 'n_steps' => 0, 'fehler' => mb_strimwidth($e->getMessage(), 0, 300)];
+        }
+    }
+
+    /** @return array{status: string, fehler?: string} */
+    private function sensorikGlied(FoodAlchemistRecipe $recipe): array
+    {
+        $recipe = $recipe->fresh() ?? $recipe;
+        if (trim((string) $recipe->preparation) === '') {
+            return ['status' => 'uebersprungen_ohne_zubereitung'];
+        }
+        if ((int) $recipe->ingredients()->whereNull('deleted_at')->count() === 0) {
+            return ['status' => 'uebersprungen_ohne_zutaten'];
+        }
+
+        try {
+            return app(SensorikService::class)->bewerteRezept((int) $recipe->id, true);
+        } catch (\Throwable $e) {
+            return ['status' => 'fehler', 'fehler' => mb_strimwidth($e->getMessage(), 0, 300)];
+        }
     }
 
     /**

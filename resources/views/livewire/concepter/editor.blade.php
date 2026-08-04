@@ -17,6 +17,12 @@
                 <button type="button" wire:click="zurueckZumConcept" class="{{ $btnGhost }}" title="Paket sichern und zurück ins Concept">← Speichern &amp; zurück zum Concept</button>
             @endif
             <button type="button" wire:click="speichern" class="{{ $btnPrimary }}">Speichern</button>
+            @if($concept)
+                <a href="{{ route('foodalchemist.concepts.dokument', ['id' => $concept->id, 'profil' => 'voll']) }}" target="_blank"
+                   class="{{ $btnGhost }}" title="Druck-/PDF-Report mit voller Gericht→Basisrezept→GP→LA-Kaskade" data-concepter-druck>
+                    @svg('heroicon-o-printer', 'w-3.5 h-3.5') Druck
+                </a>
+            @endif
             @if($concept && ! $concept->is_template)
                 <button type="button" wire:click="alsVorlage" class="{{ $btnGhost }}">Als Vorlage speichern</button>
             @endif

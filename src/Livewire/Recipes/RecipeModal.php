@@ -81,6 +81,7 @@ class RecipeModal extends Component
     private function ladeRezept(?int $id): void
     {
         $this->reset('fehler');
+        $this->anreicherung = null;
         $this->copilotZuruecksetzen();                             // L6b: Befunde gehören zu GENAU diesem Rezept
         $this->recipeId = $id;
         $this->form = self::LEER;
@@ -606,18 +607,29 @@ class RecipeModal extends Component
 
     public ?int $bulkRunId = null;
 
+    public ?array $anreicherung = null;
+
     public function allesAnreichern(): void
     {
         $this->fehler = null;
+        $this->anreicherung = null;
         $team = Auth::user()?->currentTeamRelation;
         if ($team === null || $this->recipeId === null) {
             return;
         }
         try {
-            $this->bulkRunId = app(\Platform\FoodAlchemist\Services\BulkEnrichService::class)
-                ->starte($team, [$this->recipeId]);
-        } catch (\RuntimeException $e) {
-            $this->fehler = $e->getMessage();                          // sync-Queue (demo) ohne Provider → graceful
+            $recipe = app(RecipeService::class)->detail($team, $this->recipeId);
+            if ($recipe === null) {
+                return;
+            }
+            $anreicherung = app(\Platform\FoodAlchemist\Services\RecipeOneShotService::class)
+                ->anreichern($team, $recipe, completeCoverage: true);
+            $this->bulkRunId = null;
+            $this->oeffnen($this->recipeId);
+            $this->anreicherung = $anreicherung;
+            $this->dispatch('recipe-gespeichert');
+        } catch (\Throwable $e) {
+            $this->fehler = $e->getMessage();                          // Provider-/Coverage-Fehler → graceful im Editor
         }
     }
 

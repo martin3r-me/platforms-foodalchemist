@@ -8,13 +8,17 @@
     @if($rezept !== null)
         <x-slot:actions>
             <button type="button" wire:click="speichern" class="{{ $btnPrimary }}" data-vk-speichern>Speichern</button>
+            <a href="{{ route('foodalchemist.rezepte.dokument', ['id' => $rezept->id, 'profil' => 'produktion']) }}" target="_blank"
+               class="{{ $btnGhostXs }}" title="Druck-/PDF-Report mit Profilen und Filtern" data-vk-druck>
+                @svg('heroicon-o-printer', 'w-3.5 h-3.5') Druck
+            </a>
             <button type="button" wire:click="$dispatch('zutaten-editor.oeffnen', { id: {{ $rezept->id }} })" class="{{ $btnGhostXs }}" data-vk-zutaten>Komponenten bearbeiten</button>
             <button type="button" wire:click="loeschen" wire:confirm="Gericht wirklich löschen? Nur der VK-Layer wird entfernt — Basisrezepte und GP-Verknüpfungen bleiben bestehen."
                     class="{{ $btnGhostXs }} text-rose-600" data-vk-loeschen>Löschen</button>
             <span class="text-gray-300">|</span>
-            {{-- Spec 03 L1b: ✨ Alles anreichern — VK-Schrittfolge (Beschreibung · VK-Wording · Plating · Speisen-Klasse) --}}
+            {{-- Spec 03 L1b: ✨ Alles anreichern — VK-Schrittfolge + operative OneShot-Coverage --}}
             <button type="button" wire:click="allesAnreichern" class="{{ $btnAi }}"
-                    title="Vorschläge für Beschreibung · VK-Wording · Plating · Speisen-Klasse (Review-Liste, nie Auto-Persistenz)"
+                    title="Voll-Coverage: VK-Text-Lücken füllen und abhängige Detail-Bausteine wie Eigenschaften, Equipment, Posten, Steps, Prozessanker, Sensorik, Wirtschaftlichkeit und Kohärenz neu synchronisieren"
                     data-vk-alles-anreichern>@svg('heroicon-o-sparkles', 'w-3.5 h-3.5')Alles anreichern</button>
         </x-slot:actions>
     @endif
@@ -70,7 +74,7 @@
         <p class="text-xs text-rose-600" data-vk-fehler>{{ $fehler }}</p>
     @endif
 
-    {{-- Spec 03 L1b: ✨-Anreicherungs-Lauf am Gericht (M7-06-Mechanik, VK-Schrittfolge) --}}
+    {{-- Legacy-Bulk-Status (falls ein alter Lauf noch offen ist); der Button nutzt inzwischen OneShot-Coverage. --}}
     @if($bulkRun !== null)
         <div class="mb-3 rounded-lg bg-violet-500/10 border border-violet-500/30 px-3 py-2 text-xs flex items-center gap-2"
              @if($bulkRun->status === 'running') wire:poll.2s @endif data-vk-anreichern-status>
@@ -82,6 +86,8 @@
             @endif
         </div>
     @endif
+
+    <x-foodalchemist::oneshot-ergebnis :anreicherung="$anreicherung" />
 
     @if($rezept === null)
         {{-- Anlage-Modus (DoD: VK aus Basisrezept manuell) --}}

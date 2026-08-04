@@ -8,11 +8,15 @@
     <x-slot:actions>
         <button type="button" wire:click="speichern" x-on:click="$dispatch('zutaten-speichern', { recipeId: @js($recipeId) })" class="{{ $btnPrimary }}" data-rezept-speichern>{{ $neu ? 'Anlegen' : 'Speichern' }}</button>
         @if(!$neu)
+            <a href="{{ route('foodalchemist.rezepte.dokument', ['id' => $recipeId, 'profil' => 'produktion']) }}" target="_blank"
+               class="{{ $btnGhostXs }}" title="Druck-/PDF-Report mit Profilen und Filtern" data-rezept-druck>
+                @svg('heroicon-o-printer', 'w-3.5 h-3.5') Druck
+            </a>
             <button type="button" wire:click="loeschen" wire:confirm="Rezept wirklich löschen? (Als Sub-Rezept referenzierte Rezepte sind geschützt)"
                     class="{{ $btnGhostXs }} text-rose-600" data-rezept-loeschen>Löschen</button>
             <span class="text-gray-300">|</span>
             <button type="button" wire:click="allesAnreichern" class="{{ $btnAi }}"
-                    title="D-5 §4.4: Vorschläge für Beschreibung · Kategorie · Geschmack (Review, nie Auto-Persistenz)" data-alles-anreichern>@svg('heroicon-o-sparkles', 'w-3.5 h-3.5') Alles anreichern</button>
+                    title="Voll-Coverage: Text-Lücken füllen und abhängige Detail-Bausteine wie Eigenschaften, Equipment, Posten, Steps, Prozessanker und Sensorik neu synchronisieren" data-alles-anreichern>@svg('heroicon-o-sparkles', 'w-3.5 h-3.5') Alles anreichern</button>
             {{-- R6: Template-Markierung (Basis für «Aus Template» im Browser) --}}
             <button type="button" wire:click="templateToggle" class="{{ $btnGhostXs }} {{ $istTemplate ? '!text-orange-600 !bg-orange-500/10 !border-orange-500/20' : '' }}"
                     title="Template = Vorlage für neue Rezepte (Browser: «Aus Template»)" data-template-toggle>
@@ -48,7 +52,7 @@
         <p class="text-xs text-rose-600 mb-3" data-modal-fehler>{{ $fehler }}</p>
     @endif
 
-    {{-- ✨-Anreichern-Lauf (M7-06-Mechanik auf EIN Rezept) --}}
+    {{-- Legacy-Bulk-Status (falls ein alter Lauf noch offen ist); der Button nutzt inzwischen OneShot-Coverage. --}}
     @if($bulkRun !== null)
         <div class="mb-3 rounded-lg bg-violet-500/10 border border-violet-500/30 px-3 py-2 text-xs flex items-center gap-2"
              @if($bulkRun->status === 'running') wire:poll.2s @endif data-anreichern-status>
@@ -60,6 +64,8 @@
             @endif
         </div>
     @endif
+
+    <x-foodalchemist::oneshot-ergebnis :anreicherung="$anreicherung" />
 
     {{-- Spec 28 / E0.1: sticky Tab-Leiste + Alpine-Scope liegen im Baustein `editor-tabs`
          (Panels bleiben hier und alle im DOM — der eingebettete Zutaten-Editor darf nicht neu

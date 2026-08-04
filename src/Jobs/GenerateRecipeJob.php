@@ -96,8 +96,9 @@ class GenerateRecipeJob implements ShouldQueue
                 'offene' => $r['offene'],
             ];
             if ($stepId !== null) {
+                $workflowParameter = [...$this->parameter, '_voll_anreichern' => $this->vollAnreichern];
                 app(\Platform\FoodAlchemist\Services\RecipeDependencyWorkflowService::class)->afterGenerated(
-                    $team, $stepId, $this->userId, $r['recipe'], $r['offene'], $this->parameter,
+                    $team, $stepId, $this->userId, $r['recipe'], $r['offene'], $workflowParameter,
                 );
             }
             // Kaskaden-Rückkanal (P0): meldet Ergebnis an den Step, wenn dieser Job Teil einer

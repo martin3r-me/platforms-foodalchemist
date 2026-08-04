@@ -92,6 +92,42 @@ it('DoD M4-14: Bestand wird gebunden, fehlende Basisrezepte und GPs bleiben zur 
         ->and($recipe->allergens_confidence)->toBe('low');
 });
 
+it('VK-Generator nutzt vorhandene Grundprodukte fuer Direktartikel wie Fleur de Sel zuerst', function () {
+    $fleur = ($this->mkGpMitPreis)('Fleur de Sel: trocken', 'fleur_de_sel', 18.00);
+
+    $resultat = $this->svc->generiere($this->rootTeam, 'Gericht mit Finish-Salz', [
+        'convenience' => 'from_scratch', 'frische' => 'frisch',
+    ], kiRezeptOverride: [
+        'name' => 'Gericht: Tomate mit Salz',
+        'zutaten' => [
+            ['text' => 'Fleur de Sel', 'slug' => 'fleur_de_sel', 'quantity' => 2, 'unit' => 'g'],
+        ],
+    ], vkModus: true);
+
+    expect($resultat['recipe']->is_sales_recipe)->toBeTrue()
+        ->and($resultat['statistik']['bestand_gp'])->toBe(1)
+        ->and($resultat['offene'])->toBe([])
+        ->and($resultat['recipe']->ingredients()->first()->gp_id)->toBe($fleur->id);
+});
+
+it('VK-Generator routet fehlende Direktartikel nach LA→GP, Subrezept-Komponenten aber als Basisrezept', function () {
+    $resultat = $this->svc->generiere($this->rootTeam, 'Suppe mit Finish und Fond', [
+        'convenience' => 'from_scratch', 'frische' => 'frisch',
+    ], kiRezeptOverride: [
+        'name' => 'Gericht: Suppe mit Fleur de Sel',
+        'zutaten' => [
+            ['text' => 'Geflügelfond', 'quantity' => 500, 'unit' => 'ml'],
+            ['text' => 'Fleur de Sel', 'quantity' => 2, 'unit' => 'g'],
+        ],
+    ], vkModus: true);
+
+    expect($resultat['statistik']['offen'])->toBe(2)
+        ->and($resultat['offene'][0]['text'])->toBe('Geflügelfond')
+        ->and($resultat['offene'][0]['primaer'])->toBe('basisrezept_anlegen')
+        ->and($resultat['offene'][1]['text'])->toBe('Fleur de Sel')
+        ->and($resultat['offene'][1]['primaer'])->toBe('lieferantenartikel_waehlen');
+});
+
 it('§4-Alias greift im Generator: Rinderbrühe nutzt den BESTAND statt einen Stub anzulegen', function () {
     $fond = FoodAlchemistRecipe::create([
         'team_id' => $this->rootTeam->id, 'recipe_key' => 'heller_kalbsfond',

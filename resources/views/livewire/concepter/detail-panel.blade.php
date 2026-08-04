@@ -33,6 +33,10 @@
             <div class="flex flex-wrap items-center gap-1.5 mt-2">
                 @if($concept)
                     <button type="button" wire:click="$dispatch('concepter-editor.oeffnen', { type: 'concepts', id: {{ $concept->id }} })" class="{{ $btnGhostXs }}">@svg('heroicon-o-pencil-square', 'w-3.5 h-3.5') Bearbeiten</button>
+                    <a href="{{ route('foodalchemist.concepts.dokument', ['id' => $concept->id, 'profil' => 'voll']) }}" target="_blank"
+                       class="{{ $btnGhostXs }}" title="Druck-/PDF-Report mit voller Kaskade" data-concepter-panel-druck>
+                        @svg('heroicon-o-printer', 'w-3.5 h-3.5') Druck
+                    </a>
                     @if($concept->is_template)
                         <button type="button" wire:click="ausVorlage" class="{{ $btnGhostXs }} text-violet-600">↧ Als Concept nutzen</button>
                     @else

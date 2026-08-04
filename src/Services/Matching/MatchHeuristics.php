@@ -64,6 +64,14 @@ class MatchHeuristics
         'gedaempft', 'geduenstet', 'geraeuchert', 'karamellisiert', 'flambiert', 'confiert',
     ];
 
+    /** D-6: Einzel-/Deko-/Convenience-Artikel bleiben GP/LA-first, auch im Gericht. */
+    public const DIREKT_ARTIKEL_MARKER = [
+        'fleur', 'sel', 'salz', 'meersalz', 'gewuerz', 'gewuerze', 'kresse',
+        'microgreen', 'microgreens', 'bluete', 'blueten', 'deko', 'garnitur',
+        'crisp', 'crisps', 'chip', 'chips', 'fertig', 'belegt', 'broetchen',
+        'sandwich', 'canape', 'wrap',
+    ];
+
     public function __construct(private TokenEngine $engine)
     {
     }
@@ -105,6 +113,9 @@ class MatchHeuristics
     /** P8 — Button-Heuristik: Label-Hinweis ODER Halbfabrikat ODER Zubereitungs-Marker. */
     public function istSubRezeptKandidat(string $name): bool
     {
+        if ($this->istDirektArtikelKandidat($name)) {
+            return false;
+        }
         $lower = mb_strtolower($name);
         if (str_contains($lower, 'basisrezept') || str_contains($lower, 'sub-rezept') || str_contains($lower, 'sub rezept')) {
             return true;
@@ -116,6 +127,25 @@ class MatchHeuristics
         foreach ($tokens as $t) {
             foreach (self::ZUBEREITUNG_MARKER as $m) {
                 if (mb_strlen($m) >= 4 && str_contains($t, $m)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /** Einzelartikel, die im VK-Gericht ueber GP/LA laufen sollen, nicht als Basisrezept. */
+    public function istDirektArtikelKandidat(string $name): bool
+    {
+        $tokens = $this->engine->tokenize($name);
+        if ($tokens === [] || $this->queryIstHalbfabrikat($tokens)) {
+            return false;
+        }
+
+        foreach ($tokens as $t) {
+            foreach (self::DIREKT_ARTIKEL_MARKER as $m) {
+                if (self::patternMatchesToken($t, $m)) {
                     return true;
                 }
             }

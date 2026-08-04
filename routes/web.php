@@ -153,6 +153,47 @@ Route::get('/pakete', \Platform\FoodAlchemist\Livewire\Pakete\Index::class)
     ->name('foodalchemist.pakete.index');
 
 /**
+ * Rezept-/Gericht-/Concept-Reports — Druck-HTML mit Profilen; ?pdf=1 rendert DomPDF.
+ * Profile: kurz | produktion | kalkulation | voll. Filter als Query-Booleans:
+ * preise, lieferanten, steps, sensorik, produktion, notizen, kaskade.
+ */
+Route::get('/rezepte/{id}/dokument', function (int $id, \Platform\FoodAlchemist\Services\ReportExportService $svc) {
+    $team = \Illuminate\Support\Facades\Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
+    $optionen = $svc->optionen(request()->query(), 'recipe');
+    $data = $svc->rezeptDaten($team, $id, $optionen);
+
+    if (request()->boolean('pdf')) {
+        if (! class_exists(\Barryvdh\DomPDF\Facade\Pdf::class)) {
+            \Illuminate\Support\Facades\Log::warning('Rezept-Report-PDF angefordert, aber DomPDF ist nicht installiert.', ['recipe_id' => $id]);
+            abort(500, 'PDF-Export nicht verfügbar: DomPDF ist auf diesem Server nicht installiert.');
+        }
+
+        return \Barryvdh\DomPDF\Facade\Pdf::loadView('foodalchemist::dokumente.report', $data + ['istPdf' => true])
+            ->download(($data['typ'] === 'gericht' ? 'Gericht-' : 'Basisrezept-') . $id . '.pdf');
+    }
+
+    return view('foodalchemist::dokumente.report', $data + ['istPdf' => false]);
+})->whereNumber('id')->name('foodalchemist.rezepte.dokument');
+
+Route::get('/concepts/{id}/dokument', function (int $id, \Platform\FoodAlchemist\Services\ReportExportService $svc) {
+    $team = \Illuminate\Support\Facades\Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
+    $optionen = $svc->optionen(request()->query(), 'concept');
+    $data = $svc->conceptDaten($team, $id, $optionen);
+
+    if (request()->boolean('pdf')) {
+        if (! class_exists(\Barryvdh\DomPDF\Facade\Pdf::class)) {
+            \Illuminate\Support\Facades\Log::warning('Concept-Report-PDF angefordert, aber DomPDF ist nicht installiert.', ['concept_id' => $id]);
+            abort(500, 'PDF-Export nicht verfügbar: DomPDF ist auf diesem Server nicht installiert.');
+        }
+
+        return \Barryvdh\DomPDF\Facade\Pdf::loadView('foodalchemist::dokumente.report', $data + ['istPdf' => true])
+            ->download('Concept-' . $id . '.pdf');
+    }
+
+    return view('foodalchemist::dokumente.report', $data + ['istPdf' => false]);
+})->whereNumber('id')->name('foodalchemist.concepts.dokument');
+
+/**
  * M11: Foodbook / Portfolio — stellt Concepts zu Kunden-Angeboten zusammen.
  */
 Route::get('/foodbooks', \Platform\FoodAlchemist\Livewire\Foodbooks\Index::class)
