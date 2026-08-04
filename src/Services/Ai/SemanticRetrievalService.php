@@ -2,8 +2,8 @@
 
 namespace Platform\FoodAlchemist\Services\Ai;
 
-use Platform\Core\Contracts\EmbeddingStoreContract;
 use Platform\Core\Services\EmbeddingProviderRegistry;
+use Platform\Core\Services\EmbeddingStoreRegistry;
 use Platform\FoodAlchemist\Models\FoodAlchemistGp;
 use Platform\Core\Models\Team;
 use Throwable;
@@ -91,7 +91,13 @@ class SemanticRetrievalService
                 return [];
             }
             $vector = $vectors[0];
-            $store = app(EmbeddingStoreContract::class);
+            // Store über die Registry am entity_type auflösen (Routing kommt aus dem
+            // FA-Provider via route()). Cores EmbeddingStoreContract ist bewusst NICHT
+            // mehr im Container gebunden — die Store-Wahl ist dynamisch pro entity_type.
+            // Alle FA-Pools teilen EINEN Store, daher genügt der erste Typ als Route-Key
+            // ($entityTypes ist hier garantiert nicht leer, s. Guard oben). Query wird
+            // weiterhin EINMAL embeddet, dann Store-Suche je Partition (Perf unverändert).
+            $store = app(EmbeddingStoreRegistry::class)->resolve(null, $entityTypes[0]);
 
             $best = [];   // "type\0id" => hit (max Score)
             foreach ($this->partitionsFor($team) as $partition) {

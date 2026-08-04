@@ -341,6 +341,16 @@ return [
      *   (core_embeddings.team_id ist nur indizierter bigint, kein FK).
      * 'min_score' = Cosine-Schwelle; darunter gilt ein Treffer als irrelevant.
      */
+    /*
+     * Embedding-Store-Ziel für ALLE acht foodalchemist_*-Pools (GP/Rezept/Lieferant/
+     * Konzept/Foodbook/Lab-Note + Wissen/Pairing-Anker). Der FoodAlchemistServiceProvider
+     * routet damit in Cores EmbeddingStoreRegistry (route()). Werte: 'mysql' | 'qdrant'.
+     * Default 'mysql' = No-op (Verhalten wie bisher) — Cutover auf 'qdrant' per ENV,
+     * gleichzeitig Sofort-Rollback (solange der MySQL-Bestand nicht gepurged ist).
+     * Alle acht MÜSSEN denselben Store nutzen (Mixed-Type-Suche routet am ersten Typ).
+     */
+    'embedding_store' => env('FOODALCHEMIST_EMBEDDING_STORE', 'mysql'),
+
     'semantic_search' => [
         'enabled'        => (bool) env('FOODALCHEMIST_SEMANTIC_SEARCH', false),
         'provider'       => env('FOODALCHEMIST_EMBEDDING_PROVIDER'),     // null = Core-Default
