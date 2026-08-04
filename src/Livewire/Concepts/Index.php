@@ -18,6 +18,7 @@ use Platform\FoodAlchemist\Services\ConceptService;
 class Index extends Component
 {
     use WithPagination;
+    use \Platform\FoodAlchemist\Livewire\Concerns\InteractsWithSavedToast;
 
     #[Url(as: 'q')]
     public string $search = '';
@@ -216,6 +217,7 @@ class Index extends Component
     {
         if ($this->selectedId !== null) {
             $svc->update($this->team(), $this->selectedId, $this->form);
+            $this->savedToast('Konzept-Vorlage gespeichert');
         }
     }
 

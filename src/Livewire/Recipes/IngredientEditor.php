@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\On;
 use Livewire\Attributes\Renderless;
 use Livewire\Component;
+use Platform\FoodAlchemist\Livewire\Concerns\InteractsWithSavedToast;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Models\FoodAlchemistVocabEinheit;
 use Platform\FoodAlchemist\Services\RecipeRecomputeService;
@@ -24,6 +25,8 @@ use Platform\FoodAlchemist\Support\TeamScope;
  */
 class IngredientEditor extends Component
 {
+    use InteractsWithSavedToast;
+
     public ?int $recipeId = null;
 
     public ?string $fehler = null;
@@ -102,6 +105,7 @@ class IngredientEditor extends Component
             }
             $this->dispatch('recipe-gespeichert');
             $this->dispatch('recipe-selected', id: $this->recipeId);
+            $this->savedToast('Zutaten gespeichert');
             // #511: das fehlende Glied im Live-Refresh. syncIngredients hat Kind +
             // transitive Eltern server-seitig bereits neu gerechnet (recomputeAndPropagate);
             // dieses Signal zieht die kosten-abhängigen Panels (Kalkulation, Eltern-Cockpits)

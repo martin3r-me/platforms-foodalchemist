@@ -20,6 +20,7 @@ use RuntimeException;
 class Index extends Component
 {
     use WithPagination;
+    use \Platform\FoodAlchemist\Livewire\Concerns\InteractsWithSavedToast;
 
     #[Url(as: 'lieferant')]
     public ?int $supplierId = null;
@@ -133,6 +134,7 @@ class Index extends Component
             $this->reset('neuLieferant', 'fehler');
             $this->dispatch('modal.close', name: 'lieferant-neu');
             $this->waehleLieferant($supplier->id);
+            $this->savedToast('Lieferant angelegt');
         } catch (RuntimeException $e) {
             $this->fehler = $e->getMessage();
         }
@@ -149,6 +151,7 @@ class Index extends Component
             $this->reset('neuArtikel', 'fehler');
             $this->dispatch('modal.close', name: 'artikel-neu');
             $this->dispatch('item-modal.oeffnen', id: $item->id);
+            $this->savedToast('Artikel angelegt');
         } catch (RuntimeException $e) {
             $this->fehler = $e->getMessage();
         }

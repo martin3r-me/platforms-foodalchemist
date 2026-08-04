@@ -20,6 +20,7 @@ use Platform\FoodAlchemist\Services\SpeisekarteService;
 class Index extends Component
 {
     use WithFileUploads, WithPagination;
+    use \Platform\FoodAlchemist\Livewire\Concerns\InteractsWithSavedToast;
 
     #[Url(as: 'q')]
     public string $search = '';
@@ -122,6 +123,7 @@ class Index extends Component
             'customer' => $this->kunde ?: null,
         ]);
         $this->dispatch('gespeichert');
+        $this->savedToast('Speisekarte gespeichert');
     }
 
     /** Spec 33 P5 — Schnellschalter aktiv ⇄ inaktiv (ohne Umweg über das Dropdown, ohne Archiv). */

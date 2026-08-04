@@ -10,6 +10,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistDishClass;
 use Platform\FoodAlchemist\Models\FoodAlchemistWritingStyle;
 use Platform\FoodAlchemist\Livewire\Concerns\ManagesCanvas;
 use Platform\FoodAlchemist\Livewire\Concerns\ManagesPhase;
+use Platform\FoodAlchemist\Livewire\Concerns\InteractsWithSavedToast;
 use Platform\FoodAlchemist\Livewire\Concerns\ManagesPlanningFrame;
 use Platform\FoodAlchemist\Services\ConceptService;
 use Platform\FoodAlchemist\Services\ConcepterAggregateService;
@@ -30,7 +31,7 @@ use Platform\FoodAlchemist\Services\SalesRecipeService;
  */
 class Editor extends Component
 {
-    use ManagesCanvas, ManagesPlanningFrame, ManagesPhase;
+    use ManagesCanvas, ManagesPlanningFrame, ManagesPhase, InteractsWithSavedToast;
 
     /** R4.3: Owner für den Phasen-Stepper (nur Concepts — Pakete haben keine Phase). */
     protected function phaseOwner(): array
@@ -246,6 +247,7 @@ class Editor extends Component
             return;
         }
         $this->fehler = null;
+        $this->savedToast($this->type === 'pakete' ? 'Paket gespeichert' : 'Konzept gespeichert');
         $this->dispatch('concepter-gespeichert', id: $this->id);
     }
 

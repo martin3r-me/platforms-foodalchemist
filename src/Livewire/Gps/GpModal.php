@@ -28,6 +28,8 @@ use Platform\FoodAlchemist\Support\Curate;
  */
 class GpModal extends Component
 {
+    use \Platform\FoodAlchemist\Livewire\Concerns\InteractsWithSavedToast;
+
     private const BUILDER_LEER = [
         'hauptzutat' => '', 'condition' => '', 'processing' => '', 'form' => '',
         'portion' => '', 'pflichtangabe' => '',
@@ -147,6 +149,7 @@ class GpModal extends Component
             $this->dispatch('modal.close', name: 'gp-modal');
             $this->dispatch('gp-gespeichert');
             $this->dispatch('gp-selected', id: $gp->id);
+            $this->savedToast('Grundprodukt gespeichert');
         } catch (\RuntimeException $e) {
             $this->fehler = $e->getMessage();
         }

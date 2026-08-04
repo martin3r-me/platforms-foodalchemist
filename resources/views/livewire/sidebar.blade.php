@@ -6,6 +6,10 @@
 @php($gruppen = config('foodalchemist.sidebar', []))
 
 <div>
+    {{-- Globaler „Gespeichert"-Toast — einmal hier gemountet (Sidebar liegt via
+         platform::layouts.app auf jeder FA-Seite, überlebt Modal-Close/wire:navigate). --}}
+    <x-foodalchemist::saved-toast />
+
     {{-- Modul Header --}}
     <div x-show="!collapsed" class="p-3 text-xs italic text-[var(--ui-secondary)] uppercase border-b border-[var(--ui-border)] mb-2">
         Food Alchemist

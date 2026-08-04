@@ -18,6 +18,7 @@ use Platform\FoodAlchemist\Services\RecipeService;
 class RecipeModal extends Component
 {
     use \Platform\FoodAlchemist\Livewire\Concerns\HatRezeptCopilot;   // Spec 03 L6b
+    use \Platform\FoodAlchemist\Livewire\Concerns\InteractsWithSavedToast;
 
     private const LEER = [
         'name' => '', 'origin_source' => '', 'category_id' => null, 'hauptgruppe_id' => null,
@@ -182,6 +183,7 @@ class RecipeModal extends Component
             }
             $this->dispatch('recipe-gespeichert');
             $this->dispatch('recipe-selected', id: $recipe->id);
+            $this->savedToast($warNeu ? 'Rezept angelegt' : 'Rezept gespeichert');
         } catch (\RuntimeException $e) {
             $this->fehler = $e->getMessage();
         }

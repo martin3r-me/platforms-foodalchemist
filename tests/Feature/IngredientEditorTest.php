@@ -110,7 +110,8 @@ it('Modal-Roundtrip: speichern synct + dispatcht Events; D1-Gate blockt fremde T
             ['id' => null, 'gp_id' => $gp->id, 'raw_text' => '300 g Karotte', 'quantity' => '300', 'unit_vocab_id' => $this->g->id],
         ])
         ->assertSet('fehler', null)
-        ->assertDispatched('recipe-gespeichert');
+        ->assertDispatched('recipe-gespeichert')
+        ->assertDispatched('fa-saved');                 // einheitliche „Gespeichert"-Rückmeldung
 
     expect((float) $this->rezept->fresh()->yield_kg)->toBe(0.3);
 

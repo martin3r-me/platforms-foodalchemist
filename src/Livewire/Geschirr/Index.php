@@ -18,6 +18,7 @@ use RuntimeException;
 class Index extends Component
 {
     use WithPagination;
+    use \Platform\FoodAlchemist\Livewire\Concerns\InteractsWithSavedToast;
 
     #[Url(as: 'lieferant')]
     public ?int $supplierId = null;
@@ -113,6 +114,7 @@ class Index extends Component
         try {
             app(GeschirrService::class)->updateSupplier(Auth::user()->currentTeamRelation, (int) $this->supplierId, $this->editLieferant);
             $this->dispatch('modal.close', name: 'g-lieferant-edit');
+            $this->savedToast('Geschirr-Lieferant gespeichert');
         } catch (RuntimeException $e) {
             $this->fehler = $e->getMessage();
         }
@@ -163,6 +165,7 @@ class Index extends Component
             }
             $this->reset('artikelForm', 'fehler', 'editItemId');
             $this->dispatch('modal.close', name: 'g-artikel');
+            $this->savedToast('Geschirr-Artikel gespeichert');
         } catch (RuntimeException $e) {
             $this->fehler = $e->getMessage();
         }

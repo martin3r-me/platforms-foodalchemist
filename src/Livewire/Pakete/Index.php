@@ -17,6 +17,7 @@ use Platform\FoodAlchemist\Services\PaketService;
 class Index extends Component
 {
     use WithPagination;
+    use \Platform\FoodAlchemist\Livewire\Concerns\InteractsWithSavedToast;
 
     #[Url(as: 'q')]
     public string $search = '';
@@ -110,6 +111,7 @@ class Index extends Component
         }
         $svc->update($this->team(), $this->selectedId, $this->form);
         $this->dispatch('paket-gespeichert');
+        $this->savedToast('Paket gespeichert');
         $this->waehle($this->selectedId, $svc);
     }
 

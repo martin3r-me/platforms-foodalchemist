@@ -17,6 +17,8 @@ use Platform\FoodAlchemist\Support\TeamScope;
  */
 class Browser extends Component
 {
+    use \Platform\FoodAlchemist\Livewire\Concerns\InteractsWithSavedToast;
+
     #[Url(as: 'q')]
     public string $search = '';
 
@@ -241,6 +243,7 @@ class Browser extends Component
             DB::table('foodalchemist_knowledge_documents')->where('id', $this->selectedId)
                 ->update($payload + ['version' => DB::raw('version + 1')]);
         }
+        $this->savedToast('Wissensdokument gespeichert');
         $this->fehler = null;
     }
 

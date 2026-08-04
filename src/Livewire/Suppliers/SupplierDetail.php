@@ -23,6 +23,8 @@ use RuntimeException;
  */
 class SupplierDetail extends Component
 {
+    use \Platform\FoodAlchemist\Livewire\Concerns\InteractsWithSavedToast;
+
     public ?int $supplierId = null;
 
     public string $status = 'aktiv';
@@ -285,6 +287,7 @@ class SupplierDetail extends Component
     {
         $this->hinweis = $text;
         $this->fehler = null;
+        $this->savedToast($text);
     }
 
     /** Leerstrings zu null (Datums-/Zahlenfelder), damit optionale Angaben nicht als '' landen. */

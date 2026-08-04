@@ -41,6 +41,8 @@ use Platform\FoodAlchemist\Services\TeamSettingsService;
  */
 class LeitstelleRail extends Component
 {
+    use \Platform\FoodAlchemist\Livewire\Concerns\InteractsWithSavedToast;
+
     public int $foodbookId;
 
     public ?int $kapitelId = null;
@@ -100,6 +102,7 @@ class LeitstelleRail extends Component
         }
         $svc->updateKapitel($this->team(), $this->kapitelId, $in);
         $this->dispatch('leitstelle-kapitel-geaendert');
+        $this->savedToast('Kapitel-Ziele gespeichert');
     }
 
     /** Zielgruppen-Stempel des Kapitels umschalten (PUT-sync auf die volle Liste). */

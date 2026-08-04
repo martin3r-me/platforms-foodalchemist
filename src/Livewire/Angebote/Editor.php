@@ -17,6 +17,7 @@ use Platform\FoodAlchemist\Services\AngebotService;
 class Editor extends Component
 {
     use ManagesCanvas;
+    use \Platform\FoodAlchemist\Livewire\Concerns\InteractsWithSavedToast;
 
     public ?int $selectedId = null;
 
@@ -98,6 +99,7 @@ class Editor extends Component
         $svc->update($this->team(), $this->selectedId, $this->form);
         $this->ladeForm();
         $this->dispatch('angebot-gespeichert');
+        $this->savedToast('Angebot gespeichert');
     }
 
     /** Stufe 3 — Angebot in die Produktion übergeben (concept × Pax → Produktionsauftrag). */

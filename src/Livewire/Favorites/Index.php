@@ -15,6 +15,8 @@ use Platform\FoodAlchemist\Services\FavoriteGpService;
  */
 class Index extends Component
 {
+    use \Platform\FoodAlchemist\Livewire\Concerns\InteractsWithSavedToast;
+
     public string $q = '';
 
     public bool $nurGepinnt = false;
@@ -26,14 +28,15 @@ class Index extends Component
         $team = Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
         $gp = FoodAlchemistGp::visibleToTeam($team)->find($gpId);
         if ($gp === null || ! $gp->isOwnedBy($team)) {
-            $this->dispatch('notify', type: 'error', message: 'GP nicht editierbar (global/Master ist read-only).');
+            $this->errorToast('GP nicht editierbar (global/Master ist read-only).');
 
             return;
         }
         try {
             app(FavoriteGpService::class)->pin($gp, $rank);
+            $this->savedToast('Favorit gepinnt');
         } catch (\RuntimeException $e) {
-            $this->dispatch('notify', type: 'error', message: $e->getMessage());
+            $this->errorToast($e->getMessage());
         }
     }
 
@@ -42,11 +45,12 @@ class Index extends Component
         $team = Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
         $gp = FoodAlchemistGp::visibleToTeam($team)->find($gpId);
         if ($gp === null || ! $gp->isOwnedBy($team)) {
-            $this->dispatch('notify', type: 'error', message: 'GP nicht editierbar.');
+            $this->errorToast('GP nicht editierbar.');
 
             return;
         }
         app(FavoriteGpService::class)->exclude($gp);
+        $this->savedToast('Favorit ausgeschlossen');
     }
 
     public function setRank(int $gpId, ?int $rank): void

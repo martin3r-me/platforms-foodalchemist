@@ -15,6 +15,8 @@ use Platform\FoodAlchemist\Services\GpService;
  */
 class PlatzhalterModal extends Component
 {
+    use \Platform\FoodAlchemist\Livewire\Concerns\InteractsWithSavedToast;
+
     public string $neuName = '';
 
     public ?int $editId = null;
@@ -46,6 +48,7 @@ class PlatzhalterModal extends Component
             app(GpService::class)->createPlatzhalter($team, $this->neuName);
             $this->neuName = '';
             $this->dispatch('gp-gespeichert');
+            $this->savedToast('Platzhalter angelegt');
         } catch (\RuntimeException $e) {
             $this->fehler = $e->getMessage();
         }
@@ -70,6 +73,7 @@ class PlatzhalterModal extends Component
             $this->editId = null;
             $this->editName = '';
             $this->dispatch('gp-gespeichert');
+            $this->savedToast('Platzhalter gespeichert');
         } catch (\RuntimeException $e) {
             $this->fehler = $e->getMessage();
         }

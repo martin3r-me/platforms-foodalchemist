@@ -27,6 +27,7 @@ use Platform\FoodAlchemist\Support\TeamScope;
 class VkModal extends Component
 {
     use \Platform\FoodAlchemist\Livewire\Concerns\HatRezeptCopilot;   // Spec 03 L6b
+    use \Platform\FoodAlchemist\Livewire\Concerns\InteractsWithSavedToast;
 
     public ?int $recipeId = null;                                    // null = Anlage-Modus
 
@@ -254,6 +255,7 @@ class VkModal extends Component
         $this->oeffnen($vk->id);                                     // direkt in den Edit-Modus
         $this->dispatch('recipe-gespeichert');
         $this->dispatch('vk-recipe-selected', id: $vk->id);
+        $this->savedToast('Gericht angelegt');
     }
 
     public function speichern(): void
@@ -273,6 +275,7 @@ class VkModal extends Component
         }
         $this->dispatch('recipe-gespeichert');
         $this->dispatch('modal.close', name: 'vk-modal');
+        $this->savedToast('Gericht gespeichert');
     }
 
     /** VK-Layer lösen (D-6): löscht NUR das Gericht — Basisrezepte + GP-Verknüpfungen bleiben. */

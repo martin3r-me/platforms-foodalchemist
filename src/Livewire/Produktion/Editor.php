@@ -29,6 +29,8 @@ use Platform\FoodAlchemist\Services\ProductionOrderService;
  */
 class Editor extends Component
 {
+    use \Platform\FoodAlchemist\Livewire\Concerns\InteractsWithSavedToast;
+
     public ?int $orderId = null;
 
     public string $productionDate = '';
@@ -389,6 +391,7 @@ class Editor extends Component
             }
             $this->dispatch('modal.close', name: 'produktion-editor');
             $this->dispatch('produktion-gespeichert', id: (int) $order->id);
+            $this->savedToast('Produktionsauftrag gespeichert');
         } catch (\Throwable $e) {
             $this->fehler = $e->getMessage();
         }

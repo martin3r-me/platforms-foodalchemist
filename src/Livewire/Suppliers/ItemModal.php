@@ -20,6 +20,8 @@ use RuntimeException;
  */
 class ItemModal extends Component
 {
+    use \Platform\FoodAlchemist\Livewire\Concerns\InteractsWithSavedToast;
+
     public ?int $itemId = null;
 
     public array $stammdaten = [];
@@ -89,6 +91,7 @@ class ItemModal extends Component
             ]);
             $this->fehler = null;
             $this->dispatch('item-gespeichert');
+            $this->savedToast('Artikel gespeichert');
         } catch (RuntimeException $e) {
             $this->fehler = $e->getMessage();
         }

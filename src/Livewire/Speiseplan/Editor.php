@@ -24,6 +24,8 @@ use Platform\FoodAlchemist\Services\SpeiseplanService;
  */
 class Editor extends Component
 {
+    use \Platform\FoodAlchemist\Livewire\Concerns\InteractsWithSavedToast;
+
     public ?int $planId = null;
 
     public array $form = ['name' => '', 'start_date' => null, 'cycle_weeks' => 4, 'min_abstand_tage' => 0, 'status' => 'draft', 'default_pax' => 100, 'budget_wareneinsatz' => null];
@@ -104,6 +106,7 @@ class Editor extends Component
         if ($this->planId !== null) {
             $svc->update($this->team(), $this->planId, $this->form);
             $this->dispatch('speiseplan-geaendert');
+            $this->savedToast('Speiseplan gespeichert');
         }
     }
 

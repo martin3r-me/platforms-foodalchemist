@@ -15,6 +15,8 @@ use Platform\FoodAlchemist\Services\FeedbackService;
  */
 class FeedbackPanel extends Component
 {
+    use \Platform\FoodAlchemist\Livewire\Concerns\InteractsWithSavedToast;
+
     public int $recipeId;
 
     /** Formular */
@@ -85,6 +87,7 @@ class FeedbackPanel extends Component
         }
         $this->reset(['score', 'machbarkeit', 'aufwand', 'geschmack', 'gaeste_reaktion', 'comment', 'kontext_label', 'kontext_datum']);
         $this->dispatch('feedback-aktualisiert', recipeId: $this->recipeId); // Browser/Editor können Ø nachziehen
+        $this->savedToast('Feedback gespeichert');
     }
 
     public function loeschen(int $id, FeedbackService $svc): void

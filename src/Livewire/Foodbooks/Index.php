@@ -25,6 +25,7 @@ use Platform\FoodAlchemist\Services\IdeenService;
 class Index extends Component
 {
     use WithPagination, WithFileUploads, ManagesCanvas, ManagesPlanningFrame, ManagesPhase;
+    use \Platform\FoodAlchemist\Livewire\Concerns\InteractsWithSavedToast;
 
     // ── Phase 6: Branding / CI (pro Foodbook) — verdrahtet die FoodbookService-Branding-API ──
     public array $brandingForm = ['brand_color' => '#6d28d9', 'band_color' => '', 'footer_text' => ''];
@@ -657,6 +658,7 @@ class Index extends Component
         // prominente Button ließe die CI-Änderungen unbemerkt liegen (Falle des hochgezogenen
         // Speicherns). Idempotent, wenn Branding nicht angefasst wurde; Hex-Fehler → brandingFehler.
         $this->brandingSpeichern($svc);
+        $this->savedToast('Foodbook gespeichert');
         // Der übernommene KI-Text ist jetzt echter Feld-Inhalt — die Vorschau-Fläche hat
         // nichts mehr zu sagen und würde sonst als „noch offen" stehen bleiben.
         $this->kiTextHinweis = null;

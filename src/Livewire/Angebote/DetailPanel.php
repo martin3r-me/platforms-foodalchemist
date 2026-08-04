@@ -17,6 +17,7 @@ use Platform\FoodAlchemist\Services\AngebotService;
 class DetailPanel extends Component
 {
     use ManagesCanvas;
+    use \Platform\FoodAlchemist\Livewire\Concerns\InteractsWithSavedToast;
 
     public ?int $selectedId = null;
 
@@ -101,6 +102,7 @@ class DetailPanel extends Component
         $svc->update($this->team(), $this->selectedId, $this->form);
         $this->ladeForm();   // frisch (auto-Gesamtpreis, preis_modus) zurück ins Formular
         $this->dispatch('angebot-gespeichert');
+        $this->savedToast('Angebot gespeichert');
     }
 
     /** Lifecycle-Übergang über die Workflow-Buttons (#380). */
