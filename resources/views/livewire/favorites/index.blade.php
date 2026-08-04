@@ -27,6 +27,10 @@
                 <label class="flex items-center gap-1.5 text-[11px] text-gray-600">
                     <input type="checkbox" wire:model.live="nurGepinnt" /> nur gepinnte (★)
                 </label>
+                <a href="{{ route('foodalchemist.favorites.dokument', ['profil' => 'kalkulation', 'limit' => $limit]) }}" target="_blank"
+                   class="{{ $btnGhostXs }}" title="Druck-/PDF-Report der Favoriten-GPs inkl. Score, Lead-LA und Preisabdeckung" data-favoriten-druck>
+                    @svg('heroicon-o-printer', 'w-3.5 h-3.5 inline-block align-middle') Druck
+                </a>
                 <span class="text-[11px] text-gray-500">{{ $anzahlGepinnt }} gepinnt · {{ $items->count() }} Zeilen</span>
             </div>
 

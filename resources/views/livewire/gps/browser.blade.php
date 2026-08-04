@@ -76,6 +76,12 @@
         <div class="flex items-center justify-between pt-1">
             <div class="flex items-center gap-2">
                 <button type="button" wire:click="$dispatch('gp-modal.oeffnen')" class="{{ $btnPrimary }}" data-gp-anlegen>+ Neues Grundprodukt</button>
+                @if($gpId !== null)
+                    <a href="{{ route('foodalchemist.gps.dokument', ['id' => $gpId, 'profil' => 'kalkulation']) }}" target="_blank"
+                       class="{{ $btnGhostXs }}" title="Druck-/PDF-Report zum ausgewählten Grundprodukt inkl. LA/Preis/Verwendung" data-gp-druck>
+                        @svg('heroicon-o-printer', 'w-3.5 h-3.5 inline-block align-middle') Druck
+                    </a>
+                @endif
                 <button type="button" wire:click="$dispatch('platzhalter-modal.oeffnen')" class="{{ $btnGhostXs }}" data-platzhalter-oeffnen title="Neutrale Platzhalter für Grundrezept-Templates verwalten">@svg('heroicon-o-square-2-stack', 'w-3.5 h-3.5 inline-block align-middle') Platzhalter</button>
             </div>
             <x-foodalchemist::kpi-bar :kpis="$kpis" />

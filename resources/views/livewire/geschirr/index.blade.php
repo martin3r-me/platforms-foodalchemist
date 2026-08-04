@@ -62,6 +62,10 @@
                         <button type="button" wire:click="lieferantDeaktivieren({{ $aktiverLieferant->is_inactive ? 'false' : 'true' }})"
                                 class="{{ $btnGhostXs }} {{ $aktiverLieferant->is_inactive ? '' : 'text-red-500' }}">{{ $aktiverLieferant->is_inactive ? 'Aktivieren' : 'Deaktivieren' }}</button>
                     @endif
+                    <a href="{{ route('foodalchemist.geschirr.dokument', ['id' => $aktiverLieferant->id, 'profil' => 'kalkulation']) }}" target="_blank"
+                       class="{{ $btnGhostXs }}" title="Druck-/PDF-Report zum Geschirr-Lieferanten inkl. Artikel und Leihpreisen" data-geschirr-druck>
+                        @svg('heroicon-o-printer', 'w-3.5 h-3.5 inline-block align-middle') Druck
+                    </a>
                 @endif
                 <label class="flex items-center gap-2 {{ $label }} cursor-pointer">
                     <input type="checkbox" wire:model.live="onlyActive" class="rounded border-gray-300" /> Nur aktive

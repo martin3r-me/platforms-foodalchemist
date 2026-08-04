@@ -193,6 +193,74 @@ Route::get('/concepts/{id}/dokument', function (int $id, \Platform\FoodAlchemist
     return view('foodalchemist::dokumente.report', $data + ['istPdf' => false]);
 })->whereNumber('id')->name('foodalchemist.concepts.dokument');
 
+Route::get('/gps/{id}/dokument', function (int $id, \Platform\FoodAlchemist\Services\ReportExportService $svc) {
+    $team = \Illuminate\Support\Facades\Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
+    $data = $svc->gpDaten($team, $id, $svc->optionen(request()->query(), 'gp'));
+
+    if (request()->boolean('pdf')) {
+        if (! class_exists(\Barryvdh\DomPDF\Facade\Pdf::class)) {
+            \Illuminate\Support\Facades\Log::warning('GP-Report-PDF angefordert, aber DomPDF ist nicht installiert.', ['gp_id' => $id]);
+            abort(500, 'PDF-Export nicht verfügbar: DomPDF ist auf diesem Server nicht installiert.');
+        }
+
+        return \Barryvdh\DomPDF\Facade\Pdf::loadView('foodalchemist::dokumente.report', $data + ['istPdf' => true])
+            ->download('Grundprodukt-' . $id . '.pdf');
+    }
+
+    return view('foodalchemist::dokumente.report', $data + ['istPdf' => false]);
+})->whereNumber('id')->name('foodalchemist.gps.dokument');
+
+Route::get('/lieferanten/{id}/dokument', function (int $id, \Platform\FoodAlchemist\Services\ReportExportService $svc) {
+    $team = \Illuminate\Support\Facades\Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
+    $data = $svc->supplierDaten($team, $id, $svc->optionen(request()->query(), 'supplier'));
+
+    if (request()->boolean('pdf')) {
+        if (! class_exists(\Barryvdh\DomPDF\Facade\Pdf::class)) {
+            \Illuminate\Support\Facades\Log::warning('Lieferanten-Report-PDF angefordert, aber DomPDF ist nicht installiert.', ['supplier_id' => $id]);
+            abort(500, 'PDF-Export nicht verfügbar: DomPDF ist auf diesem Server nicht installiert.');
+        }
+
+        return \Barryvdh\DomPDF\Facade\Pdf::loadView('foodalchemist::dokumente.report', $data + ['istPdf' => true])
+            ->download('Lieferant-' . $id . '.pdf');
+    }
+
+    return view('foodalchemist::dokumente.report', $data + ['istPdf' => false]);
+})->whereNumber('id')->name('foodalchemist.suppliers.dokument');
+
+Route::get('/geschirr/{id}/dokument', function (int $id, \Platform\FoodAlchemist\Services\ReportExportService $svc) {
+    $team = \Illuminate\Support\Facades\Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
+    $data = $svc->geschirrDaten($team, $id, $svc->optionen(request()->query(), 'geschirr'));
+
+    if (request()->boolean('pdf')) {
+        if (! class_exists(\Barryvdh\DomPDF\Facade\Pdf::class)) {
+            \Illuminate\Support\Facades\Log::warning('Geschirr-Report-PDF angefordert, aber DomPDF ist nicht installiert.', ['tableware_supplier_id' => $id]);
+            abort(500, 'PDF-Export nicht verfügbar: DomPDF ist auf diesem Server nicht installiert.');
+        }
+
+        return \Barryvdh\DomPDF\Facade\Pdf::loadView('foodalchemist::dokumente.report', $data + ['istPdf' => true])
+            ->download('Geschirr-' . $id . '.pdf');
+    }
+
+    return view('foodalchemist::dokumente.report', $data + ['istPdf' => false]);
+})->whereNumber('id')->name('foodalchemist.geschirr.dokument');
+
+Route::get('/favoriten/dokument', function (\Platform\FoodAlchemist\Services\ReportExportService $svc) {
+    $team = \Illuminate\Support\Facades\Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
+    $data = $svc->favoritenDaten($team, $svc->optionen(request()->query(), 'favoriten'), request()->integer('limit') ?: 300);
+
+    if (request()->boolean('pdf')) {
+        if (! class_exists(\Barryvdh\DomPDF\Facade\Pdf::class)) {
+            \Illuminate\Support\Facades\Log::warning('Favoriten-Report-PDF angefordert, aber DomPDF ist nicht installiert.');
+            abort(500, 'PDF-Export nicht verfügbar: DomPDF ist auf diesem Server nicht installiert.');
+        }
+
+        return \Barryvdh\DomPDF\Facade\Pdf::loadView('foodalchemist::dokumente.report', $data + ['istPdf' => true])
+            ->download('Favoriten.pdf');
+    }
+
+    return view('foodalchemist::dokumente.report', $data + ['istPdf' => false]);
+})->name('foodalchemist.favorites.dokument');
+
 /**
  * M11: Foodbook / Portfolio — stellt Concepts zu Kunden-Angeboten zusammen.
  */

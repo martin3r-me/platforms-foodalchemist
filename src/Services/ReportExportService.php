@@ -5,8 +5,10 @@ namespace Platform\FoodAlchemist\Services;
 use Illuminate\Support\Collection;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
+use Platform\FoodAlchemist\Models\FoodAlchemistGeschirrSupplier;
 use Platform\FoodAlchemist\Models\FoodAlchemistGp;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
+use Platform\FoodAlchemist\Models\FoodAlchemistSupplier;
 
 /**
  * Zentrale Datenaufbereitung für druckbare/PDF-fähige Reports.
@@ -161,6 +163,170 @@ class ReportExportService
                 'moments' => $concept->serviceMoments->pluck('name')->values()->all(),
                 'seasons' => $concept->seasons->pluck('name')->values()->all(),
                 'slots' => $slots->all(),
+            ],
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    public function gpDaten(Team $team, int $id, array $optionen): array
+    {
+        $gp = FoodAlchemistGp::visibleToTeam($team)
+            ->with([
+                'commodity_group',
+                'leadLa.supplier:id,name',
+                'leadLa.prices' => fn ($q) => $q->orderByDesc('change_date')->orderByDesc('id')->limit(1),
+                'structures.item.supplier:id,name',
+                'recipeIngredients.recipe:id,name,is_sales_recipe,ek_total_eur,sales_net',
+            ])
+            ->findOrFail($id);
+
+        $lead = $gp->leadLa;
+        $price = $lead?->prices instanceof Collection ? $lead->prices->first() : null;
+
+        return [
+            'typ' => 'gp',
+            'titel' => 'Grundprodukt',
+            'name' => $gp->name,
+            'optionen' => $optionen,
+            'recipe' => null,
+            'concept' => null,
+            'report' => [
+                'kind' => 'gp',
+                'gp' => [
+                    'id' => (int) $gp->id,
+                    'name' => $gp->name,
+                    'status' => $gp->status?->value ?? (string) $gp->status,
+                    'warengruppe' => $gp->commodity_group?->name ?? $gp->commodity_group_code,
+                    'sub_category' => $gp->sub_category,
+                    'lead_la' => $lead ? [
+                        'supplier' => $lead->supplier?->name,
+                        'article_number' => $lead->article_number,
+                        'designation' => $lead->designation,
+                        'packaging_unit' => $lead->packaging_unit,
+                        'qty' => $lead->qty,
+                        'unit_code' => $lead->unit_code,
+                        'price' => $price?->price,
+                    ] : null,
+                    'tags' => $gp->setTags(),
+                    'strukturen' => $gp->structures->map(fn ($s) => [
+                        'supplier' => $s->item?->supplier?->name,
+                        'article_number' => $s->item?->article_number,
+                        'designation' => $s->item?->designation,
+                        'needs_review' => (bool) $s->needs_review,
+                    ])->values()->all(),
+                    'verwendung' => $gp->recipeIngredients->map(fn ($ri) => [
+                        'recipe' => $ri->recipe?->name,
+                        'typ' => $ri->recipe?->is_sales_recipe ? 'Gericht' : 'Basisrezept',
+                        'quantity' => $ri->quantity,
+                        'raw_text' => $ri->raw_text,
+                    ])->values()->all(),
+                ],
+            ],
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    public function supplierDaten(Team $team, int $id, array $optionen): array
+    {
+        $supplier = FoodAlchemistSupplier::visibleToTeam($team)
+            ->with(['items' => fn ($q) => $q->whereNull('deleted_at')->orderBy('designation')])
+            ->findOrFail($id);
+
+        $items = $supplier->items()->whereNull('deleted_at')
+            ->with(['structure.gp:id,name,lead_la_supplier_item_id', 'prices' => fn ($q) => $q->orderByDesc('change_date')->orderByDesc('id')->limit(1)])
+            ->orderBy('designation')->get();
+
+        return [
+            'typ' => 'lieferant',
+            'titel' => 'Lieferant',
+            'name' => $supplier->name,
+            'optionen' => $optionen,
+            'recipe' => null,
+            'concept' => null,
+            'report' => [
+                'kind' => 'supplier',
+                'supplier' => [
+                    'id' => (int) $supplier->id,
+                    'name' => $supplier->name,
+                    'status' => $supplier->status?->value ?? null,
+                    'city' => $supplier->city,
+                    'email_order' => $supplier->email_order,
+                    'homepage' => $supplier->homepage,
+                    'is_inactive' => (bool) $supplier->is_inactive,
+                    'items' => $items->map(fn ($item) => [
+                        'article_number' => $item->article_number,
+                        'designation' => $item->designation,
+                        'packaging_unit' => $item->packaging_unit,
+                        'qty' => $item->qty,
+                        'unit_code' => $item->unit_code,
+                        'is_discontinued' => (bool) $item->is_discontinued,
+                        'price' => $item->prices->first()?->price,
+                        'gp' => $item->structure?->gp?->name,
+                        'is_lead' => $item->structure?->gp !== null
+                            && (int) $item->structure->gp->lead_la_supplier_item_id === (int) $item->id,
+                    ])->values()->all(),
+                ],
+            ],
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    public function geschirrDaten(Team $team, int $id, array $optionen): array
+    {
+        $supplier = FoodAlchemistGeschirrSupplier::visibleToTeam($team)
+            ->with(['items' => fn ($q) => $q->whereNull('deleted_at')->orderBy('label')])
+            ->findOrFail($id);
+
+        return [
+            'typ' => 'geschirr',
+            'titel' => 'Geschirr',
+            'name' => $supplier->name,
+            'optionen' => $optionen,
+            'recipe' => null,
+            'concept' => null,
+            'report' => [
+                'kind' => 'geschirr',
+                'supplier' => [
+                    'id' => (int) $supplier->id,
+                    'name' => $supplier->name,
+                    'city' => $supplier->city,
+                    'email_order' => $supplier->email_order,
+                    'homepage' => $supplier->homepage,
+                    'is_inactive' => (bool) $supplier->is_inactive,
+                    'items' => $supplier->items->map(fn ($item) => [
+                        'artikel_nr' => $item->artikel_nr,
+                        'label' => $item->label,
+                        'category' => $item->category,
+                        'material' => $item->material,
+                        'form' => $item->form,
+                        'color' => $item->color,
+                        'masse' => $item->masse_label,
+                        'rental_price' => $item->rental_price,
+                        'pfand' => $item->pfand,
+                        'unit' => $item->unit,
+                        'is_inactive' => (bool) $item->is_inactive,
+                    ])->values()->all(),
+                ],
+            ],
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    public function favoritenDaten(Team $team, array $optionen, int $limit = 300): array
+    {
+        $items = app(FavoriteGpService::class)->suggest($team, $limit, null, false);
+
+        return [
+            'typ' => 'favoriten',
+            'titel' => 'Favoriten',
+            'name' => 'Favoriten-Grundprodukte',
+            'optionen' => $optionen,
+            'recipe' => null,
+            'concept' => null,
+            'report' => [
+                'kind' => 'favoriten',
+                'items' => $items->values()->all(),
+                'n_favoriten' => $items->where('is_favorite', true)->count(),
             ],
         ];
     }

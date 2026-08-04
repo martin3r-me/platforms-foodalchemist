@@ -68,6 +68,10 @@
                     <button type="button" wire:click="$dispatch('supplier-detail.oeffnen', { id: {{ $aktiverLieferant->id }} })"
                             class="{{ $btnGhostXs }} text-violet-600" data-beziehung-btn
                             title="R9: Beziehungs-Ebene — Status, Konditionen, Absprachen, Verträge/Fristen, Bündelungs-Proxy">Beziehung</button>
+                    <a href="{{ route('foodalchemist.suppliers.dokument', ['id' => $aktiverLieferant->id, 'profil' => 'kalkulation']) }}" target="_blank"
+                       class="{{ $btnGhostXs }}" title="Druck-/PDF-Report zum Lieferanten inkl. Artikel, GP-Mapping und Preisen" data-lieferant-druck>
+                        @svg('heroicon-o-printer', 'w-3.5 h-3.5 inline-block align-middle') Druck
+                    </a>
                     @if($darfLieferantEdit)
                         {{-- „Bearbeiten" entfernt 2026-08-01: Stammdaten-Pflege lebt jetzt im Detail-Editor (Beziehung → Stammblatt). --}}
                         <button type="button" wire:click="lieferantDeaktivieren({{ $aktiverLieferant->is_inactive ? 'false' : 'true' }})"

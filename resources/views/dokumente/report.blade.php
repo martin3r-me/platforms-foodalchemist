@@ -73,7 +73,154 @@
         <div class="muted">Profil: {{ $profile[$opt['profil'] ?? 'produktion'] ?? ($opt['profil'] ?? '—') }}</div>
     </header>
 
-    @if($concept)
+    @if($report ?? null)
+        @php($kind = $report['kind'] ?? null)
+
+        @if($kind === 'gp')
+            @php($gp = $report['gp'])
+            <section>
+                <h2>Grundprodukt</h2>
+                <div class="grid meta">
+                    <div><span>ID</span>#{{ $gp['id'] }}</div>
+                    <div><span>Status</span>{{ $gp['status'] ?? '—' }}</div>
+                    <div><span>Warengruppe</span>{{ $gp['warengruppe'] ?? '—' }}</div>
+                    <div><span>Sub-Kategorie</span>{{ $gp['sub_category'] ?? '—' }}</div>
+                </div>
+                @if($gp['lead_la'])
+                    <h3>Lead-Lieferantenartikel</h3>
+                    <div class="grid meta">
+                        <div><span>Lieferant</span>{{ $gp['lead_la']['supplier'] ?? '—' }}</div>
+                        <div><span>Artikel-Nr.</span>{{ $gp['lead_la']['article_number'] ?? '—' }}</div>
+                        <div><span>Gebinde</span>{{ $gp['lead_la']['packaging_unit'] ?? '—' }}</div>
+                        <div><span>Preis</span>{{ $money($gp['lead_la']['price'] ?? null) }}</div>
+                        <div class="wide"><span>Bezeichnung</span>{{ $gp['lead_la']['designation'] ?? '—' }}</div>
+                    </div>
+                @endif
+                @if(count($gp['tags'] ?? []))
+                    <p class="muted">Tags: {{ collect($gp['tags'])->map(fn ($v, $k) => $k . '=' . ($v ? 'ja' : 'nein'))->implode(' · ') }}</p>
+                @endif
+            </section>
+
+            <section>
+                <h2>Lieferantenartikel / Mapping</h2>
+                <table>
+                    <thead><tr><th>Lieferant</th><th>ArtNr</th><th>Bezeichnung</th><th>Review</th></tr></thead>
+                    <tbody>
+                        @forelse($gp['strukturen'] as $s)
+                            <tr><td>{{ $s['supplier'] ?? '—' }}</td><td>{{ $s['article_number'] ?? '—' }}</td><td>{{ $s['designation'] ?? '—' }}</td><td>{{ $s['needs_review'] ? 'ja' : 'nein' }}</td></tr>
+                        @empty
+                            <tr><td colspan="4" class="muted">Keine Lieferantenartikel verknüpft.</td></tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </section>
+
+            <section>
+                <h2>Verwendung</h2>
+                <table>
+                    <thead><tr><th>Typ</th><th>Rezept/Gericht</th><th>Menge</th><th>Rohtext</th></tr></thead>
+                    <tbody>
+                        @forelse($gp['verwendung'] as $v)
+                            <tr><td>{{ $v['typ'] }}</td><td>{{ $v['recipe'] ?? '—' }}</td><td>{{ $v['quantity'] ?? '—' }}</td><td>{{ $v['raw_text'] ?? '—' }}</td></tr>
+                        @empty
+                            <tr><td colspan="4" class="muted">Keine Verwendung gefunden.</td></tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </section>
+        @elseif($kind === 'supplier')
+            @php($supplier = $report['supplier'])
+            <section>
+                <h2>Lieferant</h2>
+                <div class="grid meta">
+                    <div><span>ID</span>#{{ $supplier['id'] }}</div>
+                    <div><span>Status</span>{{ $supplier['status'] ?? ($supplier['is_inactive'] ? 'inaktiv' : 'aktiv') }}</div>
+                    <div><span>Ort</span>{{ $supplier['city'] ?? '—' }}</div>
+                    <div><span>Bestell-E-Mail</span>{{ $supplier['email_order'] ?? '—' }}</div>
+                    <div class="wide"><span>Homepage</span>{{ $supplier['homepage'] ?? '—' }}</div>
+                </div>
+            </section>
+            <section>
+                <h2>Artikel</h2>
+                <table>
+                    <thead><tr><th>ArtNr</th><th>Bezeichnung</th><th>Gebinde</th><th>Preis</th><th>GP</th><th>Lead</th><th>Status</th></tr></thead>
+                    <tbody>
+                        @forelse($supplier['items'] as $item)
+                            <tr>
+                                <td>{{ $item['article_number'] ?? '—' }}</td>
+                                <td>{{ $item['designation'] ?? '—' }}</td>
+                                <td>{{ trim(($item['packaging_unit'] ?? '') . ' ' . ($item['qty'] ?? '') . ' ' . ($item['unit_code'] ?? '')) ?: '—' }}</td>
+                                <td>{{ $money($item['price'] ?? null) }}</td>
+                                <td>{{ $item['gp'] ?? '—' }}</td>
+                                <td>{{ $item['is_lead'] ? '★' : '—' }}</td>
+                                <td>{{ $item['is_discontinued'] ? 'ausgelistet' : 'aktiv' }}</td>
+                            </tr>
+                        @empty
+                            <tr><td colspan="7" class="muted">Keine Artikel.</td></tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </section>
+        @elseif($kind === 'geschirr')
+            @php($supplier = $report['supplier'])
+            <section>
+                <h2>Geschirr-Lieferant</h2>
+                <div class="grid meta">
+                    <div><span>ID</span>#{{ $supplier['id'] }}</div>
+                    <div><span>Status</span>{{ $supplier['is_inactive'] ? 'inaktiv' : 'aktiv' }}</div>
+                    <div><span>Ort</span>{{ $supplier['city'] ?? '—' }}</div>
+                    <div><span>E-Mail</span>{{ $supplier['email_order'] ?? '—' }}</div>
+                    <div class="wide"><span>Homepage</span>{{ $supplier['homepage'] ?? '—' }}</div>
+                </div>
+            </section>
+            <section>
+                <h2>Geschirr-Artikel</h2>
+                <table>
+                    <thead><tr><th>ArtNr</th><th>Bezeichnung</th><th>Kategorie</th><th>Material</th><th>Maße</th><th>Leihpreis</th><th>Pfand</th><th>Status</th></tr></thead>
+                    <tbody>
+                        @forelse($supplier['items'] as $item)
+                            <tr>
+                                <td>{{ $item['artikel_nr'] ?? '—' }}</td>
+                                <td>{{ $item['label'] ?? '—' }}</td>
+                                <td>{{ $item['category'] ?? '—' }}</td>
+                                <td>{{ $item['material'] ?? '—' }}</td>
+                                <td>{{ $item['masse'] ?? '—' }}</td>
+                                <td>{{ $money($item['rental_price'] ?? null) }}{{ $item['unit'] ? ' / ' . $item['unit'] : '' }}</td>
+                                <td>{{ $money($item['pfand'] ?? null) }}</td>
+                                <td>{{ $item['is_inactive'] ? 'inaktiv' : 'aktiv' }}</td>
+                            </tr>
+                        @empty
+                            <tr><td colspan="8" class="muted">Keine Artikel.</td></tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </section>
+        @elseif($kind === 'favoriten')
+            <section>
+                <h2>Favoriten-Grundprodukte</h2>
+                <p class="muted">{{ $report['n_favoriten'] ?? 0 }} gepinnt · {{ count($report['items'] ?? []) }} Zeilen</p>
+                <table>
+                    <thead><tr><th>★</th><th>Rang</th><th>GP</th><th>Nutzung</th><th>Lead-LA</th><th>Preis</th><th>Score</th><th>Convenience</th></tr></thead>
+                    <tbody>
+                        @forelse($report['items'] as $item)
+                            <tr>
+                                <td>{{ $item['is_favorite'] ? '★' : '—' }}</td>
+                                <td>{{ $item['favorite_rank'] ?? '—' }}</td>
+                                <td>{{ $item['name'] }} <span class="muted">#{{ $item['gp_id'] }}</span></td>
+                                <td>{{ $item['usage'] }}</td>
+                                <td>{{ $item['has_lead_la'] ? 'ja' : 'nein' }}</td>
+                                <td>{{ $item['has_price'] ? 'ja' : 'nein' }}</td>
+                                <td>{{ number_format((float) $item['score'], 2, ',', '.') }}</td>
+                                <td>{{ $item['is_convenience'] ? 'ja' : 'nein' }}</td>
+                            </tr>
+                        @empty
+                            <tr><td colspan="8" class="muted">Keine Favoriten.</td></tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </section>
+        @endif
+    @elseif($concept)
         <section>
             <h2>Concept-Übersicht</h2>
             <div class="grid meta">
