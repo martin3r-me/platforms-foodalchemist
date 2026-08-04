@@ -130,7 +130,7 @@ class PortfolioService
                 ->get(['id', 'name'])->mapWithKeys(fn ($o) => [(int) $o->id => (string) $o->name])->all();
             $keyVon = fn (array $z) => $z['outlet_id'];
         } else {
-            // Kunden sind kein gepflegtes Vokabular — die Menge ergibt sich aus dem Bestand.
+            // Kunden sind CRM-Firmen; alte Freitexte zählen nicht mehr als Kundenachse.
             $zuordnungen = [];
             foreach ($this->uebersicht($team, $stichtag) as $z) {
                 if ($z['kunde_key'] !== null) {
@@ -217,15 +217,15 @@ class PortfolioService
 
         if ($nurArt === null || $nurArt === 'foodbook') {
             $out['foodbook'] = FoodAlchemistFoodbook::visibleToTeam($team)
-                ->with('outlet:id,name')->withCount('chapters')->get();
+                ->with(['outlet:id,name', 'crmCompany', 'crmContact'])->withCount('chapters')->get();
         }
         if ($nurArt === null || $nurArt === 'speisekarte') {
             $out['speisekarte'] = FoodAlchemistSpeisekarte::visibleToTeam($team)
-                ->with('outlet:id,name')->withCount('sections')->get();
+                ->with(['outlet:id,name', 'crmCompany', 'crmContact'])->withCount('sections')->get();
         }
         if ($nurArt === null || $nurArt === 'speiseplan') {
             $out['speiseplan'] = FoodAlchemistSpeiseplan::visibleToTeam($team)
-                ->with('outlet:id,name')->withCount('entries')
+                ->with(['outlet:id,name', 'crmCompany', 'crmContact'])->withCount('entries')
                 ->withMin('entries', 'entry_date')->withMax('entries', 'entry_date')->get();
         }
 
@@ -255,12 +255,7 @@ class PortfolioService
             'outlet_id' => $a->outlet_id !== null ? (int) $a->outlet_id : null,
             'outlet_name' => $a->outlet?->name,
             'kunde' => $kunde,
-            // Kunden haben kein Vokabular: die CRM-id ist der stabile Schlüssel, sonst der
-            // normalisierte Freitext. Ohne Normalisierung wären „Klinikum West" und
-            // „klinikum west " zwei Kunden.
-            'kunde_key' => $a->crm_company_id !== null
-                ? 'crm:' . (int) $a->crm_company_id
-                : ($kunde !== null ? 'txt:' . mb_strtolower(trim($kunde)) : null),
+            'kunde_key' => $a->crm_company_id !== null ? 'crm:' . (int) $a->crm_company_id : null,
             'n_positionen' => (int) ($a->chapters_count ?? $a->sections_count ?? $a->entries_count ?? 0),
             'route' => route(self::ARTEN[$art]['route'], [self::ARTEN[$art]['param'] => $a->id]),
         ];

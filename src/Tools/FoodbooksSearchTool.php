@@ -10,8 +10,8 @@ use Platform\FoodAlchemist\Models\FoodAlchemistFoodbook;
 use Platform\FoodAlchemist\Services\Ai\PoolEmbeddingService;
 
 /**
- * Spec 15 §5a: Foodbooks durchsuchen. Hybrid: lexikalisch (Label/Kunde) plus —
- * sofern der Embedding-Provider aktiv ist — ein semantischer Pass über Titel/Kunde/
+ * Spec 15 §5a: Foodbooks durchsuchen. Hybrid: lexikalisch (Label/CRM-Kunde) plus —
+ * sofern der Embedding-Provider aktiv ist — ein semantischer Pass über Titel/CRM-Kunde/
  * Beschreibung (via: lexical|semantic je Treffer). Details via foodalchemist.foodbooks.GET.
  */
 class FoodbooksSearchTool extends FoodAlchemistTool implements ToolContract, ToolMetadataContract
@@ -24,7 +24,7 @@ class FoodbooksSearchTool extends FoodAlchemistTool implements ToolContract, Too
     public function getDescription(): string
     {
         return 'Durchsucht die Foodbooks des aktuellen Teams. Hybrid: lexikalisch (Label/Kunde) plus — '
-            . 'sofern der Embedding-Provider aktiv ist — ein semantischer Pass über Titel/Kunde/Beschreibung '
+            . 'sofern der Embedding-Provider aktiv ist — ein semantischer Pass über Titel/CRM-Kunde/Beschreibung '
             . '(via: lexical|semantic je Treffer). Ohne Provider rein lexikalisch. Liefert id, label, customer, '
             . 'jahr, status — Details (Kapitel/Blöcke) via foodalchemist.foodbooks.GET.';
     }
@@ -50,20 +50,22 @@ class FoodbooksSearchTool extends FoodAlchemistTool implements ToolContract, Too
         $q = trim((string) $arguments['q']);
         $limit = min(50, max(1, (int) ($arguments['limit'] ?? 15)));
 
-        $cols = ['id', 'label', 'customer', 'jahr', 'status'];
+        $cols = ['id', 'label', 'crm_company_id', 'crm_contact_id', 'jahr', 'status'];
         $foodbooks = $q === '' ? []
             : FoodAlchemistFoodbook::visibleToTeam($team)
-                ->where(fn ($w) => $w->where('label', 'like', '%' . $q . '%')->orWhere('customer', 'like', '%' . $q . '%'))
+                ->with('crmCompany')
+                ->where(fn ($w) => $w->where('label', 'like', '%' . $q . '%')
+                    ->orWhereHas('crmCompany', fn ($c) => $c->where('name', 'like', '%' . $q . '%')))
                 ->orderBy('label')->limit($limit)->get($cols)
                 ->map(fn ($f) => [
-                    'id' => $f->id, 'label' => $f->label, 'customer' => $f->customer,
+                    'id' => $f->id, 'label' => $f->label, 'customer' => $f->crmCompany?->display_name,
                     'jahr' => $f->jahr, 'status' => $f->status, 'via' => 'lexical',
                 ])->all();
 
         // Spec 15 §5a: semantische Ergänzung — nur was die Lexik NICHT schon fand.
         $semScores = $this->semanticPoolIds($team, $q, PoolEmbeddingService::ENTITY_TYPE_FOODBOOK, array_column($foodbooks, 'id'), $limit);
         if ($semScores !== []) {
-            $rows = FoodAlchemistFoodbook::visibleToTeam($team)->whereIn('id', array_keys($semScores))->get($cols)->keyBy('id');
+            $rows = FoodAlchemistFoodbook::visibleToTeam($team)->with('crmCompany')->whereIn('id', array_keys($semScores))->get($cols)->keyBy('id');
             arsort($semScores);
             foreach ($semScores as $id => $score) {
                 $f = $rows->get($id);
@@ -71,7 +73,7 @@ class FoodbooksSearchTool extends FoodAlchemistTool implements ToolContract, Too
                     continue;
                 }
                 $foodbooks[] = [
-                    'id' => $f->id, 'label' => $f->label, 'customer' => $f->customer,
+                    'id' => $f->id, 'label' => $f->label, 'customer' => $f->crmCompany?->display_name,
                     'jahr' => $f->jahr, 'status' => $f->status,
                     'via' => 'semantic', 'semantic_score' => round($score, 3),
                 ];

@@ -210,39 +210,8 @@
         {{-- ═══ Tab: KUNDE & BUSINESS-CASE ═══ --}}
         <div x-show="tab === 'kunde'" x-cloak class="pt-4 space-y-4">
             <x-foodalchemist::modal-section title="Kunde (CRM)">
-                @if(! $crmVerfuegbar)
-                    <p class="text-[11px] text-gray-500">CRM-Modul nicht verfügbar.</p>
-                @else
-                    <div class="text-xs text-gray-600 space-y-0.5">
-                        <div>Firma: <span class="font-medium text-gray-900">{{ $angebot->crmCompany?->display_name ?? '—' }}</span></div>
-                        <div>Kontakt: <span class="font-medium text-gray-900">{{ $angebot->crmContact?->display_name ?? '—' }}</span></div>
-                        @if($angebot->crm_company_id || $angebot->crm_contact_id)
-                            <button type="button" wire:click="loeseKunde" class="{{ $btnGhostXs }} mt-1">Verknüpfung lösen</button>
-                        @endif
-                    </div>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
-                        <div>
-                            <input type="search" wire:model.live.debounce.300ms="firmaSuche" placeholder="Firma suchen …" class="{{ $input }}" />
-                            @if($firmen->isNotEmpty())
-                                <div class="space-y-0.5 mt-1">
-                                    @foreach($firmen as $f)
-                                        <button type="button" wire:key="fi-{{ $f->id }}" wire:click="verknuepfeFirma({{ $f->id }})" class="w-full text-left px-2 py-1 rounded-lg text-xs hover:bg-violet-500/10">{{ $f->display_name }}</button>
-                                    @endforeach
-                                </div>
-                            @endif
-                        </div>
-                        <div>
-                            <input type="search" wire:model.live.debounce.300ms="kontaktSuche" placeholder="Kontakt suchen …" class="{{ $input }}" />
-                            @if($kontakte->isNotEmpty())
-                                <div class="space-y-0.5 mt-1">
-                                    @foreach($kontakte as $k)
-                                        <button type="button" wire:key="ko-{{ $k->id }}" wire:click="verknuepfeKontakt({{ $k->id }})" class="w-full text-left px-2 py-1 rounded-lg text-xs hover:bg-violet-500/10">{{ $k->display_name }}</button>
-                                    @endforeach
-                                </div>
-                            @endif
-                        </div>
-                    </div>
-                @endif
+                <x-foodalchemist::crm-kunde-picker
+                    :ausgabe="$angebot" :crm-verfuegbar="$crmVerfuegbar" :firmen="$firmen" :kontakte="$kontakte" />
             </x-foodalchemist::modal-section>
 
             <x-foodalchemist::modal-section title="Business-Case (Canvas)">

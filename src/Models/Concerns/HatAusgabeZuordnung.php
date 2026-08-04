@@ -8,7 +8,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistOutlet;
 /**
  * Spec 33 · P2 — die zwei Zuordnungsachsen einer Ausgabeform.
  *
- * **Betrieb** (`outlet_id`) und **Kunde** (`customer` / `crm_company_id` / `crm_contact_id`),
+ * **Betrieb** (`outlet_id`) und **Kunde** (`crm_company_id` / `crm_contact_id`),
  * beide optional, an allen drei Formen. Das Leitbild ist die Mehrbetriebs-Sicht: welcher
  * Standort fährt gerade was — und im Betreibermodell zusätzlich: für welchen Kunden.
  *
@@ -44,20 +44,14 @@ trait HatAusgabeZuordnung
     public function hatZuordnung(): bool
     {
         return ($this->outlet_id ?? null) !== null
-            || ($this->crm_company_id ?? null) !== null
-            || trim((string) ($this->customer ?? '')) !== '';
+            || ($this->crm_company_id ?? null) !== null;
     }
 
     /**
-     * Kunden-Bezeichnung für die Anzeige: der verknüpfte CRM-Name, sonst der Freitext.
-     *
-     * Der Freitext bleibt der Fallback, weil nicht jeder Kunde im CRM steht — und weil er
-     * historisch das einzige Feld war.
+     * Kunden-Bezeichnung für die Anzeige: ausschließlich der verknüpfte CRM-Name.
      */
     public function kundeLabel(): ?string
     {
-        $freitext = trim((string) ($this->customer ?? ''));
-
         if (($this->crm_company_id ?? null) !== null && $this->relationLoaded('crmCompany')) {
             $name = trim((string) ($this->crmCompany?->name ?? ''));
             if ($name !== '') {
@@ -65,6 +59,6 @@ trait HatAusgabeZuordnung
             }
         }
 
-        return $freitext !== '' ? $freitext : null;
+        return null;
     }
 }

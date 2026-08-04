@@ -128,10 +128,12 @@
                 <div class="mt-3 pt-3 border-t border-black/5">
                     <x-foodalchemist::ausgabe-status
                         status-model="status" von-model="gueltigVon" bis-model="gueltigBis"
-                        outlet-model="outletId" kunde-model="kunde"
+                        outlet-model="outletId"
                         :betriebe="$betriebe" :zustand="$karte->laufZustand()" :grund="$karte->laufGrund()"
                         :konflikt="$portfolioKonflikt" toggle="aktivUmschalten" />
                 </div>
+                <x-foodalchemist::crm-kunde-picker
+                    :ausgabe="$karte" :crm-verfuegbar="$crmVerfuegbar" :firmen="$firmen" :kontakte="$kontakte" />
                 <div class="mt-3 flex flex-wrap gap-2">
                     <button type="button" wire:click="kiKartenText" class="{{ $btnAi }}">✨ KI-Einleitung</button>
                 </div>

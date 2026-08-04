@@ -30,7 +30,7 @@
                         <button type="button" wire:key="fb-{{ $f->id }}" wire:click="waehle({{ $f->id }})"
                                 class="w-full text-left px-2 py-1 rounded-lg text-xs {{ $selectedId === $f->id ? $aktiv : $hover }}">
                             <span class="truncate block">{{ $f->label }}</span>
-                            <span class="text-[10px] text-gray-500">{{ $f->customer ?? 'ohne Kunde' }} · {{ $f->kapitel_count }} Kapitel · <span class="text-violet-500/80">{{ \Platform\FoodAlchemist\Services\PhaseService::LABELS[$f->phase] ?? $f->phase }}</span></span>
+                            <span class="text-[10px] text-gray-500">{{ $f->crmCompany?->display_name ?? 'ohne Kunde' }} · {{ $f->kapitel_count }} Kapitel · <span class="text-violet-500/80">{{ \Platform\FoodAlchemist\Services\PhaseService::LABELS[$f->phase] ?? $f->phase }}</span></span>
                         </button>
                     @empty
                         <p class="px-2 py-3 text-[11px] text-gray-500">Noch keine Foodbooks.</p>
@@ -64,7 +64,7 @@
             <div class="flex flex-wrap items-center justify-between gap-3">
                 <div class="min-w-0">
                     <h1 class="text-lg font-semibold tracking-tight text-gray-900 truncate">{{ $fb->label }}</h1>
-                    <p class="text-[11px] text-gray-500">{{ $fb->customer ?? 'ohne Kunde' }} · <span class="text-violet-500/80">{{ \Platform\FoodAlchemist\Services\PhaseService::LABELS[$fb->phase] ?? $fb->phase }}</span></p>
+                    <p class="text-[11px] text-gray-500">{{ $fb->crmCompany?->display_name ?? 'ohne Kunde' }} · <span class="text-violet-500/80">{{ \Platform\FoodAlchemist\Services\PhaseService::LABELS[$fb->phase] ?? $fb->phase }}</span></p>
                 </div>
                 <div class="flex flex-wrap gap-2">
                     <button type="button" @click="$dispatch('modal.open', { name: 'foodbook-editor' })" class="{{ $btnPrimary }}" data-fb-bearbeiten>@svg('heroicon-o-pencil-square', 'w-4 h-4') Bearbeiten</button>
@@ -201,7 +201,7 @@
                 <div class="pt-1 border-t border-black/5">
                     <x-foodalchemist::ausgabe-status
                         status-model="form.status" von-model="form.gueltig_von" bis-model="form.gueltig_bis"
-                        outlet-model="form.outlet_id" kunde-model="form.customer"
+                        outlet-model="form.outlet_id"
                         :betriebe="$betriebe" :zustand="$fb->laufZustand()" :grund="$fb->laufGrund()"
                         :konflikt="$portfolioKonflikt" toggle="aktivUmschalten" />
                 </div>
@@ -222,43 +222,8 @@
 
                 {{-- Kickoff-Wizard → in den Planung-Tab verschoben (Spec 29 / S7 — Briefing entlastet) --}}
 
-                {{-- #369: CRM-Kunde-Link (MVP, nur verlinken) — ergänzt das Freitext-Feld „Kunde" --}}
-                <div class="space-y-2 pt-1 border-t border-black/5">
-                    <span class="{{ $label }}">Kunde (CRM)</span>
-                    @if(! $crmVerfuegbar)
-                        <p class="text-[11px] text-gray-500">CRM-Modul nicht verfügbar — Freitext-Feld „Kunde" oben nutzen.</p>
-                    @else
-                        <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-600">
-                            <div>Firma: <span class="font-medium text-gray-900">{{ $fb->crmCompany?->display_name ?? '—' }}</span></div>
-                            <div>Kontakt: <span class="font-medium text-gray-900">{{ $fb->crmContact?->display_name ?? '—' }}</span></div>
-                            @if($fb->crm_company_id || $fb->crm_contact_id)
-                                <button type="button" wire:click="loeseKunde" class="{{ $btnGhostXs }}">Verknüpfung lösen</button>
-                            @endif
-                        </div>
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
-                            <div>
-                                <input type="search" wire:model.live.debounce.300ms="firmaSuche" placeholder="Firma suchen …" class="{{ $input }}" />
-                                @if($firmen->isNotEmpty())
-                                    <div class="space-y-0.5 mt-1">
-                                        @foreach($firmen as $f)
-                                            <button type="button" wire:key="fbfi-{{ $f->id }}" wire:click="verknuepfeFirma({{ $f->id }})" class="w-full text-left px-2 py-1 rounded-lg text-xs hover:bg-violet-500/10">{{ $f->display_name }}</button>
-                                        @endforeach
-                                    </div>
-                                @endif
-                            </div>
-                            <div>
-                                <input type="search" wire:model.live.debounce.300ms="kontaktSuche" placeholder="Kontakt suchen …" class="{{ $input }}" />
-                                @if($kontakte->isNotEmpty())
-                                    <div class="space-y-0.5 mt-1">
-                                        @foreach($kontakte as $k)
-                                            <button type="button" wire:key="fbko-{{ $k->id }}" wire:click="verknuepfeKontakt({{ $k->id }})" class="w-full text-left px-2 py-1 rounded-lg text-xs hover:bg-violet-500/10">{{ $k->display_name }}</button>
-                                        @endforeach
-                                    </div>
-                                @endif
-                            </div>
-                        </div>
-                    @endif
-                </div>
+                <x-foodalchemist::crm-kunde-picker
+                    :ausgabe="$fb" :crm-verfuegbar="$crmVerfuegbar" :firmen="$firmen" :kontakte="$kontakte" />
 
                 <div>
                     <div class="flex items-center justify-between">

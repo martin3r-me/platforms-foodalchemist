@@ -35,6 +35,10 @@ class Editor extends Component
 
     public ?string $prodFehler = null;
 
+    public string $firmaSuche = '';
+
+    public string $kontaktSuche = '';
+
     public string $mahlzeit = 'mittag';
 
     public string $ansicht = 'woche';                 // woche | monat
@@ -87,7 +91,6 @@ class Editor extends Component
             // Spec 33 P2: beide Zuordnungsachsen — vorher hing der Plan nur an team_id,
             // zwei Kantinen im selben Team waren nicht unterscheidbar.
             'outlet_id' => $sp->outlet_id,
-            'customer' => $sp->customer ?? '',
         ];
         $this->prodHinweis = null;
         $this->prodFehler = null;
@@ -108,6 +111,34 @@ class Editor extends Component
             $this->dispatch('speiseplan-geaendert');
             $this->savedToast('Speiseplan gespeichert');
         }
+    }
+
+    public function verknuepfeFirma(int $companyId, SpeiseplanService $svc): void
+    {
+        if ($this->planId === null) {
+            return;
+        }
+        $plan = $svc->detail($this->team(), $this->planId);
+        $svc->verknuepfeKunde($this->team(), $this->planId, $companyId, $plan?->crm_contact_id);
+        $this->firmaSuche = '';
+    }
+
+    public function verknuepfeKontakt(int $contactId, SpeiseplanService $svc): void
+    {
+        if ($this->planId === null) {
+            return;
+        }
+        $plan = $svc->detail($this->team(), $this->planId);
+        $svc->verknuepfeKunde($this->team(), $this->planId, $plan?->crm_company_id, $contactId);
+        $this->kontaktSuche = '';
+    }
+
+    public function loeseKunde(SpeiseplanService $svc): void
+    {
+        if ($this->planId === null) {
+            return;
+        }
+        $svc->verknuepfeKunde($this->team(), $this->planId, null, null);
     }
 
     /** Spec 33 P5 — Schnellschalter aktiv ⇄ inaktiv (ohne Umweg über das Dropdown, ohne Archiv). */
@@ -371,6 +402,9 @@ class Editor extends Component
             'portfolioKonflikt' => $sp === null ? null
                 : app(\Platform\FoodAlchemist\Services\PortfolioService::class)
                     ->konfliktHinweis($this->team(), 'speiseplan', (int) $sp->id),
+            'crmVerfuegbar' => $svc->crmVerfuegbar(),
+            'firmen' => $svc->sucheFirmen($this->firmaSuche),
+            'kontakte' => $svc->sucheKontakte($this->kontaktSuche),
             'linien' => $sp !== null ? $sp->lines : collect(),
             'wochenTage' => $wochenTage,
             'montagDt' => $montag,

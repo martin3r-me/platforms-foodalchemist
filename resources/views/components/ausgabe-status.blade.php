@@ -13,7 +13,7 @@
     Nutzung:
         x-foodalchemist::ausgabe-status
             status-model="form.status"  von-model="form.gueltig_von"  bis-model="form.gueltig_bis"
-            outlet-model="form.outlet_id"  kunde-model="form.customer"
+            outlet-model="form.outlet_id"
             :betriebe="$betriebe"  :zustand="$fb->laufZustand()"  :grund="$fb->laufGrund()"
             :konflikt="$konflikt"  toggle="aktivUmschalten"
 --}}
@@ -22,7 +22,6 @@
     'vonModel' => null,          {{-- null = Form hat kein eigenes Fenster (Speiseplan) --}}
     'bisModel' => null,
     'outletModel' => null,
-    'kundeModel' => null,
     'betriebe' => null,          {{-- Collection|null — ohne gepflegte Betriebe kein Select --}}
     'zustand' => null,           {{-- laeuft|geplant|abgelaufen|entwurf|inaktiv|archiviert --}}
     'grund' => null,
@@ -120,16 +119,10 @@
             </div>
         @endif
 
-        @if($kundeModel)
-            <div>
-                <label class="{{ $label }} block mb-1">Kunde</label>
-                <input type="text" wire:model="{{ $kundeModel }}" class="{{ $input }}" placeholder="optional" />
-            </div>
-        @endif
     </div>
 
     <p class="text-[10px] text-gray-500">
-        Betrieb und Kunde sind beide optional. Eine Ausgabe ohne beides erscheint im Controlling
+        Betrieb und CRM-Kunde sind beide optional. Eine Ausgabe ohne beides erscheint im Controlling
         unter „ohne Zuordnung" — sie ist nicht verloren, aber in keiner der beiden Brillen.
     </p>
 </div>

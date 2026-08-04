@@ -42,7 +42,6 @@ it('Foodbook-Editor: anlegen, Kapitel, Concept einfügen, €/Person im Cockpit'
     $comp = Livewire::test(FoodbooksIndex::class)
         ->call('waehle', $fb->id)
         ->set('form.label', 'Angebot Adler')
-        ->set('form.customer', 'Hotel Adler')
         ->set('form.personen', 100)
         ->call('speichern')
         ->set('neuesKapitelTitel', 'Menü')

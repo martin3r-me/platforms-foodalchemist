@@ -68,7 +68,8 @@ class SpeiseplanService
                 'entries.concept:id,name,price_per_person_cache',
                 'entries.package:id,name,price_per_person,ek_per_person',
                 'entries.dish:id,name,sales_net,ek_total_eur',
-                'entries.line:id,name,color,is_vegetarian'])
+                'entries.line:id,name,color,is_vegetarian',
+                'crmCompany', 'crmContact'])
             ->find($id);
     }
 
@@ -77,7 +78,7 @@ class SpeiseplanService
         'default_pax', 'budget_wareneinsatz',
         // Spec 33 P2: beide Zuordnungsachsen. Ohne `outlet_id` waren zwei Kantinen im selben
         // Team nicht unterscheidbar — die größte Lücke der drei Ausgabeformen.
-        'outlet_id', 'customer', 'crm_company_id', 'crm_contact_id',
+        'outlet_id', 'crm_company_id', 'crm_contact_id',
     ];
 
     public function create(Team $team, array $in): FoodAlchemistSpeiseplan
@@ -95,7 +96,6 @@ class SpeiseplanService
             'status' => AusgabeStatus::normalisiere($in['status'] ?? null)->value,
             // Spec 33 P2: beide Zuordnungsachsen, beide optional.
             'outlet_id' => $in['outlet_id'] ?? null,
-            'customer' => $in['customer'] ?? null,
             'crm_company_id' => $in['crm_company_id'] ?? null,
             'crm_contact_id' => $in['crm_contact_id'] ?? null,
         ]);
@@ -130,6 +130,36 @@ class SpeiseplanService
         $plan->update($update);
 
         return $plan->refresh();
+    }
+
+    public function verknuepfeKunde(Team $team, int $id, ?int $companyId, ?int $contactId): FoodAlchemistSpeiseplan
+    {
+        return $this->update($team, $id, ['crm_company_id' => $companyId, 'crm_contact_id' => $contactId]);
+    }
+
+    public function crmVerfuegbar(): bool
+    {
+        return class_exists(\Platform\Crm\Services\CompanyLinkService::class);
+    }
+
+    public function sucheFirmen(string $suche, int $limit = 10): Collection
+    {
+        $suche = trim($suche);
+        if ($suche === '' || ! $this->crmVerfuegbar()) {
+            return collect();
+        }
+
+        return app(\Platform\Crm\Services\CompanyLinkService::class)->searchCompanies($suche, $limit);
+    }
+
+    public function sucheKontakte(string $suche, int $limit = 10): Collection
+    {
+        $suche = trim($suche);
+        if ($suche === '' || ! class_exists(\Platform\Crm\Services\ContactLinkService::class)) {
+            return collect();
+        }
+
+        return app(\Platform\Crm\Services\ContactLinkService::class)->searchContacts($suche, $limit);
     }
 
     public function delete(Team $team, int $id): void

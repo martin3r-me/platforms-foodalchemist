@@ -255,11 +255,13 @@
                             <div class="mt-3 pt-3 border-t border-black/5">
                                 <x-foodalchemist::ausgabe-status
                                     status-model="form.status"
-                                    outlet-model="form.outlet_id" kunde-model="form.customer"
+                                    outlet-model="form.outlet_id"
                                     :betriebe="$betriebe" :zustand="$plan->laufZustand()" :grund="$plan->laufGrund()"
                                     :fenster-hinweis="$fensterHinweis" :konflikt="$portfolioKonflikt"
                                     toggle="aktivUmschalten" />
                             </div>
+                            <x-foodalchemist::crm-kunde-picker
+                                :ausgabe="$plan" :crm-verfuegbar="$crmVerfuegbar" :firmen="$firmen" :kontakte="$kontakte" />
                         </x-foodalchemist::modal-section>
 
                         <x-foodalchemist::modal-section title="Teilnehmer & Wareneinsatz-Budget">

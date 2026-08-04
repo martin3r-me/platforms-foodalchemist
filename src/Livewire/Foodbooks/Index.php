@@ -515,7 +515,7 @@ class Index extends Component
     #[Url(as: 'kap')]
     public ?int $selectedKapitelId = null;
 
-    public array $form = ['label' => '', 'customer' => '', 'jahr' => null, 'personen' => null, 'status' => 'draft', 'description' => ''];
+    public array $form = ['label' => '', 'jahr' => null, 'personen' => null, 'status' => 'draft', 'description' => ''];
 
     /** `description` = Kapitel-Kundentext (Spec 03 · L2b) — im Editor vorher gar nicht erreichbar. */
     public array $kapitelForm = ['title' => '', 'consumer_title' => '', 'description' => '', 'price_mode' => 'auto', 'price_per_person' => null];
@@ -596,7 +596,7 @@ class Index extends Component
         }
         $this->selectedId = $id;
         $this->form = [
-            'label' => $fb->label, 'customer' => $fb->customer ?? '', 'jahr' => $fb->jahr,
+            'label' => $fb->label, 'jahr' => $fb->jahr,
             'personen' => $fb->personen, 'status' => $fb->statusWert()->value, 'description' => $fb->description ?? '',
             // Spec 33 P1: Gültigkeitsfenster — ohne `bis` bliebe ein aktiv gesetztes Foodbook
             // für immer im Portfolio (nichts läuft von selbst ab).

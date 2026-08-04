@@ -46,9 +46,7 @@ class SpeisekarteService
         'code', 'name', 'status', 'outlet_id', 'karten_typ', 'gueltig_von', 'gueltig_bis',
         'preis_anzeige_brutto', 'description', 'note', 'kundentyp', 'default_niveau',
         'default_convenience', 'writing_style_id',
-        // Spec 33 P2: Kundenachse — auch eine Karte kann für einen Kunden gemacht sein
-        // (Betreibermodell: der Betrieb führt die Kantine eines Kunden).
-        'customer', 'crm_company_id', 'crm_contact_id',
+        'crm_company_id', 'crm_contact_id',
     ];
 
     public function paginateBrowser(array $filters, Team $team, int $perPage = 100): LengthAwarePaginator
@@ -75,7 +73,7 @@ class SpeisekarteService
                 'sections.items' => fn ($q) => $q->orderBy('position'),
                 'sections.items.dish:id,name,sales_net,ek_total_eur',
                 'sections.items.concept:id,name,price_per_person_cache',
-                'outlet',
+                'outlet', 'crmCompany', 'crmContact',
             ])
             ->find($id);
     }
@@ -92,8 +90,6 @@ class SpeisekarteService
             'status' => AusgabeStatus::normalisiere($in['status'] ?? null)->value,
             'karten_typ' => in_array($in['karten_typ'] ?? '', FoodAlchemistSpeisekarte::KARTEN_TYPEN, true) ? $in['karten_typ'] : 'alacarte',
             'outlet_id' => $in['outlet_id'] ?? null,
-            // Spec 33 P2: auch eine Karte kann für einen Kunden gemacht sein (Betreibermodell).
-            'customer' => $in['customer'] ?? null,
             'crm_company_id' => $in['crm_company_id'] ?? null,
             'crm_contact_id' => $in['crm_contact_id'] ?? null,
             // Spec 33 P1: Fenster schon beim Anlegen — sonst muss man jede Ausgabe zweimal
@@ -133,6 +129,36 @@ class SpeisekarteService
         ));
 
         return $karte->refresh();
+    }
+
+    public function verknuepfeKunde(Team $team, int $id, ?int $companyId, ?int $contactId): FoodAlchemistSpeisekarte
+    {
+        return $this->update($team, $id, ['crm_company_id' => $companyId, 'crm_contact_id' => $contactId]);
+    }
+
+    public function crmVerfuegbar(): bool
+    {
+        return class_exists(\Platform\Crm\Services\CompanyLinkService::class);
+    }
+
+    public function sucheFirmen(string $suche, int $limit = 10): Collection
+    {
+        $suche = trim($suche);
+        if ($suche === '' || ! $this->crmVerfuegbar()) {
+            return collect();
+        }
+
+        return app(\Platform\Crm\Services\CompanyLinkService::class)->searchCompanies($suche, $limit);
+    }
+
+    public function sucheKontakte(string $suche, int $limit = 10): Collection
+    {
+        $suche = trim($suche);
+        if ($suche === '' || ! class_exists(\Platform\Crm\Services\ContactLinkService::class)) {
+            return collect();
+        }
+
+        return app(\Platform\Crm\Services\ContactLinkService::class)->searchContacts($suche, $limit);
     }
 
     public function delete(Team $team, int $id): void

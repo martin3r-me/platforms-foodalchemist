@@ -37,9 +37,10 @@ class Index extends Component
     public string $status = 'entwurf';
     public ?string $gueltigVon = null;
     public ?string $gueltigBis = null;
-    // Spec 33 P2/P5: beide Zuordnungsachsen, beide optional.
+    // Spec 33 P2/P5: Betriebsachse optional; Kunde ist CRM-only.
     public ?int $outletId = null;
-    public ?string $kunde = null;
+    public string $firmaSuche = '';
+    public string $kontaktSuche = '';
 
     // Rubrik-Anlage
     public string $neueRubrik = '';
@@ -90,7 +91,6 @@ class Index extends Component
         $this->gueltigVon = $karte->gueltig_von?->format('Y-m-d');
         $this->gueltigBis = $karte->gueltig_bis?->format('Y-m-d');
         $this->outletId = $karte->outlet_id;
-        $this->kunde = $karte->customer;
         $this->editPosId = null;
         $this->brandColor = $karte->brand_color ?: '#6d28d9';
         $this->bandColor = $karte->band_color;
@@ -120,10 +120,37 @@ class Index extends Component
             'gueltig_von' => $this->gueltigVon ?: null,
             'gueltig_bis' => $this->gueltigBis ?: null,
             'outlet_id' => $this->outletId ?: null,
-            'customer' => $this->kunde ?: null,
         ]);
         $this->dispatch('gespeichert');
         $this->savedToast('Speisekarte gespeichert');
+    }
+
+    public function verknuepfeFirma(int $companyId, SpeisekarteService $svc): void
+    {
+        if ($this->karteId === null) {
+            return;
+        }
+        $karte = $svc->detail($this->team(), $this->karteId);
+        $svc->verknuepfeKunde($this->team(), $this->karteId, $companyId, $karte?->crm_contact_id);
+        $this->firmaSuche = '';
+    }
+
+    public function verknuepfeKontakt(int $contactId, SpeisekarteService $svc): void
+    {
+        if ($this->karteId === null) {
+            return;
+        }
+        $karte = $svc->detail($this->team(), $this->karteId);
+        $svc->verknuepfeKunde($this->team(), $this->karteId, $karte?->crm_company_id, $contactId);
+        $this->kontaktSuche = '';
+    }
+
+    public function loeseKunde(SpeisekarteService $svc): void
+    {
+        if ($this->karteId === null) {
+            return;
+        }
+        $svc->verknuepfeKunde($this->team(), $this->karteId, null, null);
     }
 
     /** Spec 33 P5 — Schnellschalter aktiv ⇄ inaktiv (ohne Umweg über das Dropdown, ohne Archiv). */
@@ -386,6 +413,9 @@ class Index extends Component
             'portfolioKonflikt' => $karte === null ? null
                 : app(\Platform\FoodAlchemist\Services\PortfolioService::class)
                     ->konfliktHinweis($team, 'speisekarte', (int) $karte->id),
+            'crmVerfuegbar' => $svc->crmVerfuegbar(),
+            'firmen' => $svc->sucheFirmen($this->firmaSuche),
+            'kontakte' => $svc->sucheKontakte($this->kontaktSuche),
         ])->layout('platform::layouts.app');
     }
 

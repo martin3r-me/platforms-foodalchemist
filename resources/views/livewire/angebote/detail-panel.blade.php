@@ -87,39 +87,8 @@
             </x-slot:footer>
         </x-foodalchemist::modal>
 
-        {{-- CRM-Verknüpfung (MVP: nur verlinken) --}}
-        <div class="space-y-2 pt-3 border-t border-black/5">
-            <span class="{{ $label }}">Kunde (CRM)</span>
-            @if(! $crmVerfuegbar)
-                <p class="text-[11px] text-gray-500">CRM-Modul nicht verfügbar.</p>
-            @else
-                <div class="text-xs text-gray-600 space-y-0.5">
-                    <div>Firma: <span class="font-medium text-gray-900">{{ $angebot->crmCompany?->display_name ?? '—' }}</span></div>
-                    <div>Kontakt: <span class="font-medium text-gray-900">{{ $angebot->crmContact?->display_name ?? '—' }}</span></div>
-                    @if($angebot->crm_company_id || $angebot->crm_contact_id)
-                        <button type="button" wire:click="loeseKunde" class="{{ $btnGhostXs }} mt-1">Verknüpfung lösen</button>
-                    @endif
-                </div>
-                <input type="search" wire:model.live.debounce.300ms="firmaSuche" placeholder="Firma suchen …" class="{{ $input }}" />
-                @if($firmen->isNotEmpty())
-                    <div class="space-y-0.5">
-                        @foreach($firmen as $f)
-                            <button type="button" wire:key="fi-{{ $f->id }}" wire:click="verknuepfeFirma({{ $f->id }})"
-                                    class="w-full text-left px-2 py-1 rounded-lg text-xs hover:bg-violet-500/10">{{ $f->display_name }}</button>
-                        @endforeach
-                    </div>
-                @endif
-                <input type="search" wire:model.live.debounce.300ms="kontaktSuche" placeholder="Kontakt suchen …" class="{{ $input }}" />
-                @if($kontakte->isNotEmpty())
-                    <div class="space-y-0.5">
-                        @foreach($kontakte as $k)
-                            <button type="button" wire:key="ko-{{ $k->id }}" wire:click="verknuepfeKontakt({{ $k->id }})"
-                                    class="w-full text-left px-2 py-1 rounded-lg text-xs hover:bg-violet-500/10">{{ $k->display_name }}</button>
-                        @endforeach
-                    </div>
-                @endif
-            @endif
-        </div>
+        <x-foodalchemist::crm-kunde-picker
+            :ausgabe="$angebot" :crm-verfuegbar="$crmVerfuegbar" :firmen="$firmen" :kontakte="$kontakte" />
 
         {{-- Menü-Composer: angebots-lokale Menüs, gebaut im wiederverwendeten Concepter-Editor (#380) --}}
         <div class="space-y-1.5 pt-3 border-t border-black/5">

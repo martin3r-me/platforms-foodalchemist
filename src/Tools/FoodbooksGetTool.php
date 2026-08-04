@@ -47,7 +47,9 @@ class FoodbooksGetTool extends FoodAlchemistTool implements ToolContract, ToolMe
         return ToolResult::success([
             'id' => $fb->id,
             'label' => $fb->label,
-            'customer' => $fb->customer,
+            'customer' => $fb->crmCompany?->display_name,
+            'crm_company_id' => $fb->crm_company_id,
+            'crm_contact_id' => $fb->crm_contact_id,
             'personen' => $fb->personen,
             'status' => $fb->status instanceof \BackedEnum ? $fb->status->value : $fb->status,
             'phase' => $fb->phase, // R4.3 Statusmaschine

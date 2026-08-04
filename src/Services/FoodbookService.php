@@ -42,12 +42,13 @@ class FoodbookService
     public function paginateBrowser(array $filters, Team $team, int $perPage = 100): LengthAwarePaginator
     {
         return FoodAlchemistFoodbook::visibleToTeam($team)
+            ->with('crmCompany')
             ->withCount('chapters')
             ->when(($filters['search'] ?? '') !== '', function ($q) use ($filters) {
                 $s = '%' . mb_strtolower($filters['search']) . '%';
                 $q->where(fn ($w) => $w
                     ->whereRaw('LOWER(label) LIKE ?', [$s])
-                    ->orWhereRaw('LOWER(COALESCE(customer, \'\')) LIKE ?', [$s])
+                    ->orWhereHas('crmCompany', fn ($c) => $c->whereRaw('LOWER(name) LIKE ?', [$s]))
                     ->orWhereRaw('LOWER(COALESCE(code, \'\')) LIKE ?', [$s]));
             })
             ->when(($filters['status'] ?? '') !== '', fn ($q) => $q->where('status', $filters['status']))
@@ -70,7 +71,7 @@ class FoodbookService
 
     // ── Foodbook ────────────────────────────────────────────────────────────
 
-    private const FELDER = ['code', 'label', 'jahr', 'gueltig_von', 'gueltig_bis', 'outlet_id', 'customer', 'personen', 'status', 'description', 'note', 'crm_company_id', 'crm_contact_id', 'writing_style_id', 'kundentyp', 'default_niveau', 'default_convenience', 'default_event_type_id', 'default_serving_form_id', 'target_food_cost_pct', 'food_cost_tolerance_pp', 'creative_mode_default'];
+    private const FELDER = ['code', 'label', 'jahr', 'gueltig_von', 'gueltig_bis', 'outlet_id', 'personen', 'status', 'description', 'note', 'crm_company_id', 'crm_contact_id', 'writing_style_id', 'kundentyp', 'default_niveau', 'default_convenience', 'default_event_type_id', 'default_serving_form_id', 'target_food_cost_pct', 'food_cost_tolerance_pp', 'creative_mode_default'];
 
     public function create(Team $team, array $in): FoodAlchemistFoodbook
     {
@@ -81,7 +82,6 @@ class FoodbookService
         return FoodAlchemistFoodbook::create([
             'team_id' => $team->id,
             'label' => trim((string) ($in['label'] ?? 'Neues Foodbook')) ?: 'Neues Foodbook',
-            'customer' => $in['customer'] ?? null,
             // Spec 33 P2: der Betrieb am Foodbook-KOPF (das Kapitel-Outlet bleibt ein Tag).
             'outlet_id' => $in['outlet_id'] ?? null,
             'crm_company_id' => $in['crm_company_id'] ?? null,
@@ -1715,8 +1715,8 @@ class FoodbookService
             'intern' => $intern,
             'kapitel' => $rows,
             'gesamt' => $this->gesamt($team, $fb),
-            // #369: CRM-Firma bevorzugt, sonst Freitext-kunde; Kontaktperson separat.
-            'customer' => $fb->crmCompany?->display_name ?: $fb->customer,
+            // CRM-only: Kontaktperson separat.
+            'customer' => $fb->crmCompany?->display_name,
             'kontakt' => $fb->crmContact?->display_name,
             // Kundendokument-Vollständigkeit: gesetzlicher MwSt-Satz + Stand-Datum.
             'mwst' => app(TeamSettingsService::class)->mwst($team),
@@ -1804,7 +1804,7 @@ class FoodbookService
         }
 
         return [
-            'customer' => $fb->customer,
+            'customer' => $fb->crmCompany?->display_name,
             'briefing' => $fb->description,
             'personen' => $fb->personen,
             'concepts' => $conceptNamen->unique()->values()->all(),
@@ -1913,7 +1913,7 @@ class FoodbookService
         return [
             'ebene' => 'foodbook',
             'titel' => $voll->label,
-            'kunde' => $voll->customer,
+            'kunde' => $voll->crmCompany?->display_name,
             'personen' => $voll->personen,
             'briefing_ist' => $briefing !== '' ? $briefing : null,
             'gliederung' => $gliederung,
@@ -1948,7 +1948,7 @@ class FoodbookService
             'ebene' => 'kapitel',
             'titel' => trim((string) ($k->consumer_title ?: $k->title)),
             'foodbook_titel' => $fb->label,
-            'kunde' => $fb->customer,
+            'kunde' => $fb->crmCompany?->display_name,
             'personen' => $fb->personen,
             'briefing_ist' => $kapitelText !== '' ? $kapitelText : null,
             'rahmen_einleitung' => $rahmen !== '' ? $rahmen : null,

@@ -9,6 +9,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistSpeiseplan;
 use Platform\FoodAlchemist\Services\FoodbookService;
 use Platform\FoodAlchemist\Services\SpeisekarteService;
 use Platform\FoodAlchemist\Services\SpeiseplanService;
+use Platform\Crm\Models\CrmCompany;
 use Platform\FoodAlchemist\Tests\Support\SeedsTeamHierarchy;
 use Platform\FoodAlchemist\Tests\TestCase;
 
@@ -34,27 +35,31 @@ beforeEach(function () {
     $this->betrieb = FoodAlchemistOutlet::create([
         'team_id' => $this->rootTeam->id, 'name' => 'Kantine Nord',
     ]);
+    $this->kunde = CrmCompany::create([
+        'team_id' => $this->rootTeam->id, 'name' => 'Klinikum West', 'is_active' => true,
+    ]);
 });
 
 it('nimmt an allen drei Formen Betrieb UND Kunde an', function () {
     $fb = app(FoodbookService::class)->create($this->rootTeam, ['label' => 'FB']);
     app(FoodbookService::class)->update($this->rootTeam, (int) $fb->id, [
-        'outlet_id' => $this->betrieb->id, 'customer' => 'Klinikum West',
+        'outlet_id' => $this->betrieb->id, 'crm_company_id' => $this->kunde->id,
     ]);
 
     $karte = app(SpeisekarteService::class)->create($this->rootTeam, ['name' => 'Karte']);
     app(SpeisekarteService::class)->update($this->rootTeam, (int) $karte->id, [
-        'outlet_id' => $this->betrieb->id, 'customer' => 'Klinikum West',
+        'outlet_id' => $this->betrieb->id, 'crm_company_id' => $this->kunde->id,
     ]);
 
     $plan = app(SpeiseplanService::class)->create($this->rootTeam, ['name' => 'Plan']);
     app(SpeiseplanService::class)->update($this->rootTeam, (int) $plan->id, [
-        'outlet_id' => $this->betrieb->id, 'customer' => 'Klinikum West',
+        'outlet_id' => $this->betrieb->id, 'crm_company_id' => $this->kunde->id,
     ]);
 
     foreach ([$fb->refresh(), $karte->refresh(), $plan->refresh()] as $ausgabe) {
+        $ausgabe->load('crmCompany');
         expect((int) $ausgabe->outlet_id)->toBe((int) $this->betrieb->id)
-            ->and($ausgabe->customer)->toBe('Klinikum West')
+            ->and((int) $ausgabe->crm_company_id)->toBe((int) $this->kunde->id)
             ->and($ausgabe->outlet->name)->toBe('Kantine Nord')
             ->and($ausgabe->hatZuordnung())->toBeTrue()
             ->and($ausgabe->kundeLabel())->toBe('Klinikum West');
@@ -71,7 +76,7 @@ it('lässt beide Achsen leer — eine freistehende Ausgabe bleibt anlegbar', fun
 
 it('erkennt eine Zuordnung auch, wenn nur eine der beiden Achsen gesetzt ist', function () {
     $nurBetrieb = app(SpeisekarteService::class)->create($this->rootTeam, ['name' => 'A', 'outlet_id' => $this->betrieb->id]);
-    $nurKunde = app(SpeisekarteService::class)->create($this->rootTeam, ['name' => 'B', 'customer' => 'Kunde X']);
+    $nurKunde = app(SpeisekarteService::class)->create($this->rootTeam, ['name' => 'B', 'crm_company_id' => $this->kunde->id]);
 
     expect($nurBetrieb->hatZuordnung())->toBeTrue()
         ->and($nurKunde->hatZuordnung())->toBeTrue();

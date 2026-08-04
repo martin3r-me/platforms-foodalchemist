@@ -41,7 +41,7 @@
         <dl class="space-y-2 text-xs">
             <div class="flex items-center justify-between gap-3">
                 <dt class="text-gray-500">Kunde</dt>
-                <dd class="text-gray-900 text-right truncate">{{ $fb->crmCompany?->display_name ?: ($fb->customer ?: 'ohne Kunde') }}</dd>
+                <dd class="text-gray-900 text-right truncate">{{ $fb->crmCompany?->display_name ?? 'ohne Kunde' }}</dd>
             </div>
             <div class="flex items-center justify-between gap-3">
                 <dt class="text-gray-500">Jahr</dt>

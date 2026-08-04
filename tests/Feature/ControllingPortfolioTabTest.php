@@ -12,6 +12,7 @@ use Platform\FoodAlchemist\Services\SpeisekarteService;
 use Platform\FoodAlchemist\Services\SpeiseplanService;
 use Platform\FoodAlchemist\Tests\Support\SeedsTeamHierarchy;
 use Platform\FoodAlchemist\Tests\TestCase;
+use Platform\Crm\Models\CrmCompany;
 
 uses(TestCase::class, SeedsTeamHierarchy::class);
 
@@ -29,6 +30,7 @@ beforeEach(function () {
 
     $this->nord = FoodAlchemistOutlet::create(['team_id' => $this->rootTeam->id, 'name' => 'Kantine Nord']);
     $this->sued = FoodAlchemistOutlet::create(['team_id' => $this->rootTeam->id, 'name' => 'Bistro Süd']);
+    $this->kunde = CrmCompany::create(['team_id' => $this->rootTeam->id, 'name' => 'Klinikum West', 'is_active' => true]);
 });
 
 it('hängt als Tab im Controlling-Editor', function () {
@@ -66,7 +68,7 @@ it('zeigt je Betrieb, was dort läuft', function () {
 
 it('wechselt mit der Brille die Zeilenachse, nicht die Fläche', function () {
     app(SpeisekarteService::class)->create($this->rootTeam, [
-        'name' => 'Kundenkarte', 'status' => 'aktiv', 'customer' => 'Klinikum West',
+        'name' => 'Kundenkarte', 'status' => 'aktiv', 'crm_company_id' => $this->kunde->id,
     ]);
 
     // Geprüft wird die MATRIX, nicht die Seite: die Gesamtliste unten zeigt Betrieb und Kunde
