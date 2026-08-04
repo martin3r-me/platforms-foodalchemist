@@ -369,18 +369,34 @@ Route::get('/speisekarten/{id}/praesentation', \Platform\FoodAlchemist\Livewire\
 Route::get('/produktion/tagesplan', \Platform\FoodAlchemist\Livewire\Produktion\Tagesplan::class)
     ->name('foodalchemist.produktion.tagesplan');
 
+Route::get('/produktion/wandmonitor', \Platform\FoodAlchemist\Livewire\Produktion\Tagesplan::class)
+    ->defaults('display', 'wall')
+    ->defaults('tage', 1)
+    ->defaults('ansicht', 'posten')
+    ->name('foodalchemist.produktion.wandmonitor');
+
 // Spec 30 E8 — druckbares Posten-Blatt der Tages-Ausgabe: pro Tag pro Posten eine
 // Abhak-Checkliste über alle Aufträge. Aggregation wie die Tagesplan-Komponente
 // (gleiches Fenster/Posten-Filter), aber als Druck-HTML statt Livewire-Seite.
 Route::get('/produktion/tagesplan/blatt', function (\Platform\FoodAlchemist\Services\ProductionCapacityService $kap) {
+    abort_unless(config('foodalchemist.features.production_cockpit', true), 404);
     $team = \Illuminate\Support\Facades\Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
     $von = \Illuminate\Support\Carbon::parse(request('von') ?: now()->toDateString())->toDateString();
     $tage = max(1, min(60, request()->integer('tage') ?: 14));
-    $bis = \Illuminate\Support\Carbon::parse($von)->addDays($tage - 1)->toDateString();
+    $bis = request('bis')
+        ? \Illuminate\Support\Carbon::parse(request('bis'))->toDateString()
+        : \Illuminate\Support\Carbon::parse($von)->addDays($tage - 1)->toDateString();
+    if (\Illuminate\Support\Carbon::parse($bis)->lt(\Illuminate\Support\Carbon::parse($von))) {
+        $bis = \Illuminate\Support\Carbon::parse($von)->toDateString();
+    }
+    if ((int) \Illuminate\Support\Carbon::parse($von)->diffInDays(\Illuminate\Support\Carbon::parse($bis)) >= 60) {
+        $bis = \Illuminate\Support\Carbon::parse($von)->addDays(59)->toDateString();
+    }
     $postenFilter = request()->integer('posten') ?: null;
 
     $auslastung = $kap->auslastung($team, $von, $bis);
-    $zeilen = $kap->tagesplanZeilen($team, $von, $bis);
+    $ansicht = in_array(request('ansicht'), ['posten', 'gericht'], true) ? request('ansicht') : 'posten';
+    $zeilen = $kap->tagesplanZeilen($team, $von, $bis, true);
     if ($postenFilter !== null) {
         $zeilen = $zeilen->where('station_id', $postenFilter);
         $auslastung = collect($auslastung)
@@ -392,6 +408,7 @@ Route::get('/produktion/tagesplan/blatt', function (\Platform\FoodAlchemist\Serv
         'von' => $von,
         'bis' => $bis,
         'auslastung' => $auslastung,
+        'ansicht' => $ansicht,
         'zeilenNachTag' => $zeilen->groupBy(fn ($z) => \Illuminate\Support\Carbon::parse($z->plan_date)->toDateString()),
     ]);
 })->name('foodalchemist.produktion.tagesplan.blatt');

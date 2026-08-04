@@ -43,6 +43,9 @@ class ProductionOrdersLineStatusTool extends FoodAlchemistTool implements ToolCo
             'properties' => [
                 'line_id' => ['type' => 'integer'],
                 'status' => ['type' => 'string', 'enum' => ['open', 'in_progress', 'done', 'skipped']],
+                'reason' => ['type' => ['string', 'null'], 'description' => 'Pflicht bei skipped'],
+                'note' => ['type' => ['string', 'null']],
+                'expected_updated_at' => ['type' => ['string', 'null'], 'description' => 'optimistische Version als ISO-8601 updated_at'],
             ],
             'required' => ['line_id', 'status'],
         ];
@@ -61,7 +64,13 @@ class ProductionOrdersLineStatusTool extends FoodAlchemistTool implements ToolCo
         }
 
         try {
-            $line = app(ProductionOrderService::class)->setLineStatus($team, (int) $arguments['line_id'], $ziel);
+            $line = app(ProductionOrderService::class)->setLineStatus(
+                $team,
+                (int) $arguments['line_id'],
+                $ziel,
+                $arguments['reason'] ?? null,
+                ['note' => $arguments['note'] ?? null, 'expected_updated_at' => $arguments['expected_updated_at'] ?? null],
+            );
         } catch (\RuntimeException $e) {
             return ToolResult::error($e->getMessage(), 'NOT_ALLOWED');
         } catch (\Throwable $e) {
@@ -73,6 +82,7 @@ class ProductionOrdersLineStatusTool extends FoodAlchemistTool implements ToolCo
             'line_status' => $line->line_status->value,
             'line_status_label' => $line->line_status->label(),
             'done_at' => $line->done_at?->toIso8601String(),
+            'updated_at' => $line->updated_at?->toIso8601String(),
         ]);
     }
 

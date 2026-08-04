@@ -61,8 +61,35 @@ Jede Zeile kann einem Posten zugeteilt werden, einen **Verantwortlichen** (freie
 einen **Vorlauf in Tagen** vor dem Liefertag. Der Vorlauf ist ein Abstand, kein Datum: Verschiebt
 sich das Event von Freitag auf Samstag, wandert der ganze Vorproduktions-Plan automatisch mit.
 
-Der **Tagesplan** (Produktion → Tagesplan) zeigt über *alle* Aufträge hinweg, was an welchem Tag an
-welchem Posten ansteht — nach Posten filterbar, mit Auslastungsbalken je Tag.
+Die Produktions-Hauptseite ist das **Küchenchef-Dashboard**: Sie steuert den Betrieb, nicht die
+einzelne Kochanleitung. Im großen Hauptpanel sieht der Küchenchef wahlweise **3 / 7 / 14 / 30 Tage**,
+oder einen gezielten **Von/Bis-Zeitraum per Kalender**. So kann man von heute, morgen, einem
+Event-Start oder einem beliebigen Monatsfenster nach vorne schauen. Sichtbar sind Tageshorizont, Auslastung nach
+Posten, Klärfälle, offene Speisen/Zeilen und „Als nächstes". Zusätzlich bündelt der Leitstand vier
+operative Karten: **Planung in Manntagen**, **Change Log** für kurzfristige Änderungen,
+**Produktion-Ampeln** für pünktlich/eng/kritisch und **Performance & Engpässe** je Posten. Die
+Auftragsliste bleibt darunter als Such- und Arbeitsliste.
+
+Der **Tagesordnung Editor** (Produktion → Tagesplanung Details) ist die Koch-Arbeitsansicht im
+gleichen Editor-Duktus wie der Produktionsauftrag-Editor: Dark-Editor-Fläche, KPI-Kopf,
+Von/Bis-Kalender, Posten- und Gerichtssicht. Er zeigt über *alle* Aufträge hinweg, was an welchem Tag
+an welchem Posten ansteht — nach Posten filterbar, mit Auslastungsbalken je Tag.
+
+Mit dem Umschalter **Posten / Gericht** wechselst du zwischen der Arbeitsplatz-Sicht und dem
+Zusammenhang eines Auftrags mit seinen Basisrezepten. Ein Klick auf eine Position öffnet die beim
+Rechnen eingefrorene Zutaten- und Schrittfolge. Dieselbe Anleitung steht auf dem Posten- oder
+Gericht-Blatt.
+
+Die Klärfälle-Leiste macht unzugeteilte Positionen, fehlende Arbeitszeiten oder Anleitungen,
+ungeprüftes Material, Überlast, Blocker und überfällige Arbeit sichtbar. Blocker sperren den
+Produktionsstart; Warnungen erlauben den Start nur mit dokumentiertem Override-Grund.
+
+Der **Wandmonitor** ist bewusst ein Tagesmonitor: Beim Wechsel in den Wandmodus springt das Fenster
+auf einen Tag. Statt der Desktop-Tabelle zeigt er große Touch-Karten in Lanes nach Posten, oben die
+kritischen Zahlen und Klärfälle, auf jeder Karte Start/Erledigt/Blocker/Entblocken/Anleitung und
+unten die letzten Produktionsereignisse. Der Editor wird im Wandmodus nicht geladen; geplant wird
+weiter in der normalen Tagesplan- oder Auftragsansicht. Für Küchenbildschirme gibt es einen eigenen
+Link: `/foodalchemist/produktion/wandmonitor`.
 
 > **Die Auslastung ist opt-in.** Ein Posten ohne hinterlegte Kapazität warnt nie. Wo Kapazität
 > gepflegt ist, zeigt der Balken bis 85 % grün, bis 100 % eng, darüber Überlast — als Hinweis, nicht
@@ -90,10 +117,22 @@ Personalstammdaten. Geplant werden Posten, nicht Menschen. Der Verantwortliche i
 Ist-Mengen** — ein halb gepflegtes Zahlenfeld, dem später niemand traut, ist schlechter als keins.
 Ein zweiter Klick nimmt den Haken zurück.
 
+Eine laufende Position kann zusätzlich **gestartet**, mit einem **Blocker** versehen oder mit einem
+Pflichtgrund **übersprungen** werden. Blocker können direkt im Cockpit wieder gelöst werden.
+Statuswechsel, Blocker, Overrides und Abschlussnotizen landen gemeinsam mit der Änderung in einem
+append-only Produktionsprotokoll. Start- und Endzeitpunkte dienen der Nachvollziehbarkeit, nicht der
+Messung einzelner Personen oder einer vermeintlich exakten Ist-Arbeitszeit.
+
 Der Fortschritt („7/12 erledigt") wird jedes Mal frisch aus den Zeilen gerechnet. Der
 **Auftragsstatus springt nie von allein weiter**: „Fertig melden" bleibt deine Entscheidung. Meldest
-du fertig, während noch Zeilen offen sind, fragt das Modul nach — und lässt die offenen Zeilen offen
-stehen, statt sie stillschweigend abzuhaken.
+du fertig, während noch Zeilen offen oder blockiert sind, verlangt das Modul eine Abschlussnotiz —
+und lässt die offenen Zeilen offen stehen, statt sie stillschweigend abzuhaken. Parallele
+Statusänderungen werden über `updated_at` geschützt; ist ein Zettel im Browser veraltet, muss neu
+geladen werden.
+
+Das digitale Cockpit hat einen schlanken Kill-Switch:
+`FOODALCHEMIST_PRODUCTION_COCKPIT=false` sperrt Tagesplan und Druckroute, ohne Produktionsdaten zu
+ändern. Der versionierte Ausdruck bleibt der Rückfall bei Geräte- oder Netzausfall.
 
 ---
 

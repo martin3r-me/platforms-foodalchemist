@@ -104,6 +104,11 @@ it('Trait-Vertrag: ALLE Models tragen LogsActivity + BelongsToTeamHierarchy + Ha
             // Bewusst ohne LogsActivity: Massendaten (221k), Audit über Import-Reports (M2-Entscheid im Model)
             $pflichten = array_diff($pflichten, ['LogsActivity']);
         }
+        if (class_basename($klasse) === 'FoodAlchemistProductionEvent') {
+            // Spec 35 K4: append-only Fachprotokoll. Absichtlich kein zweites Activity-Log,
+            // keine Vererbung, UUID/Update/SoftDelete — Events werden nur angefügt und team-strikt gelesen.
+            $pflichten = [];
+        }
         foreach ($pflichten as $pflicht) {
             if (! $traits->contains($pflicht)) {
                 $fehlend[] = class_basename($klasse) . " ohne {$pflicht}";

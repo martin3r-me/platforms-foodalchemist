@@ -1,11 +1,15 @@
 <?php
 
 use Livewire\Livewire;
+use Illuminate\Support\Facades\Route;
 use Platform\FoodAlchemist\Enums\ProductionOrderStatus;
 use Platform\FoodAlchemist\Livewire\Produktion\Tagesplan;
 use Platform\FoodAlchemist\Models\FoodAlchemistProductionOrderLine as Line;
 use Platform\FoodAlchemist\Models\FoodAlchemistProductionStation as Posten;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
+use Platform\FoodAlchemist\Models\FoodAlchemistProductionEvent;
+use Platform\FoodAlchemist\Models\FoodAlchemistVocabKochequipment;
+use Platform\FoodAlchemist\Enums\ProductionLineStatus;
 use Platform\FoodAlchemist\Services\ProductionOrderService;
 use Platform\FoodAlchemist\Tests\Support\SeedsTeamHierarchy;
 use Platform\FoodAlchemist\Tests\TestCase;
@@ -107,7 +111,7 @@ it('filtert auf einen Posten und wieder zurück', function () {
 
 it('blendet erledigte und stornierte Aufträge aus', function () {
     $this->svc->setStatus($this->rootTeam, $this->a1->id, ProductionOrderStatus::InProgress);
-    $this->svc->setStatus($this->rootTeam, $this->a1->id, ProductionOrderStatus::Done);
+    $this->svc->setStatus($this->rootTeam, $this->a1->id, ProductionOrderStatus::Done, ['finish_note' => 'Rest ist nicht mehr nötig.']);
 
     ($this->plan)()->set('tage', 14)
         ->assertDontSee('Hochzeit Meyer')
@@ -126,7 +130,17 @@ it('das Zeitfenster steht in der URL — Kontext überlebt einen Reload', functi
     expect(collect((new ReflectionClass(Tagesplan::class))->getProperties())
         ->filter(fn ($p) => $p->getAttributes(\Livewire\Attributes\Url::class) !== [])
         ->map(fn ($p) => $p->getName())->values()->all())
-        ->toBe(['von', 'tage', 'postenFilter', 'orderId', 'display']);
+        ->toBe(['von', 'bis', 'tage', 'postenFilter', 'orderId', 'display', 'ansicht']);
+});
+
+it('ist ein Tagesordnung-Editor im Produktions-Editor-Design mit Von-Bis-Kalender', function () {
+    Livewire::test(Tagesplan::class, ['von' => '2026-08-15', 'bis' => '2026-08-18'])
+        ->assertSeeHtml('data-tagesordnung-editor')
+        ->assertSeeHtml('data-tagesordnung-editor-kpis')
+        ->assertSeeHtml('data-tagesordnung-editor-tools')
+        ->assertSeeHtml('data-tagesordnung-editor-zeitraum')
+        ->assertSee('Tagesordnung Editor')
+        ->assertSee('Produktions-Tagesplanung');
 });
 
 // ── Spec 30 E8: Tages-Ausgabe (3-Panel, Wandmodus, Posten-Blatt) ──────────────
@@ -138,10 +152,30 @@ it('wählt einen Auftrag ins Detail-Panel und wieder ab', function () {
 });
 
 it('rendert den Wandmodus ohne zu krachen', function () {
+    $l1 = Line::where('production_order_id', $this->a1->id)->firstOrFail();
+    $l2 = Line::where('production_order_id', $this->a2->id)->firstOrFail();
+    $this->svc->assignLine($this->rootTeam, $l1->id, ['vorlauf_tage' => 2]);
+    $this->svc->assignLine($this->rootTeam, $l2->id, ['vorlauf_tage' => 3]);
+
     Livewire::test(Tagesplan::class, ['von' => '2026-08-18', 'display' => 'wall'])
         ->assertOk()
+        ->assertSet('tage', 1)
+        ->assertSeeHtml('data-tagesplan-wall-root')
+        ->assertSeeHtml('data-tagesplan-wall-lanes')
+        ->assertSeeHtml('data-tagesplan-wall-card')
         ->assertSee('Brauner Fond')
-        ->assertSee('Normalansicht');            // Toggle zurück zur Normalansicht
+        ->assertSee('Normalansicht')             // Toggle zurück zur Normalansicht
+        ->assertDontSeeHtml('data-tagesplan-zeile')
+        ->assertDontSeeHtml('name="produktion-editor"');
+});
+
+it('hat einen separaten Wandmonitor-Link ohne Query-Parameter-Pflicht', function () {
+    $route = Route::getRoutes()->getByName('foodalchemist.produktion.wandmonitor');
+
+    expect(route('foodalchemist.produktion.wandmonitor'))->toContain('/produktion/wandmonitor')
+        ->and($route?->defaults['display'] ?? null)->toBe('wall')
+        ->and($route?->defaults['tage'] ?? null)->toBe(1)
+        ->and($route?->defaults['ansicht'] ?? null)->toBe('posten');
 });
 
 it('druckt ein Posten-Blatt über alle Aufträge des Fensters', function () {
@@ -160,4 +194,91 @@ it('respektiert den Posten-Filter im Posten-Blatt', function () {
         ->assertOk()
         ->assertSee('Brauner Fond')
         ->assertDontSee('Glace de Viande');       // hängt an keinem Posten
+});
+
+it('lässt bei besetztem Posten die Besetzung gewinnen und nutzt die Standardschicht', function () {
+    $p = Posten::create([
+        'team_id' => $this->rootTeam->id, 'slug' => 'doppelt', 'name' => 'Doppelt',
+        'kapazitaet_min_pro_tag' => 480, 'besetzung' => ['koch' => 2],
+    ]);
+    expect($p->kapazitaetAm(\Illuminate\Support\Carbon::parse('2026-08-20')))->toBe(960);
+    $p->kapazitaet_wochentag = ['4' => 600];
+    expect($p->kapazitaetAm(\Illuminate\Support\Carbon::parse('2026-08-20')))->toBe(600);
+});
+
+it('liefert und druckt die eingefrorene Anleitung und zeigt den Leerfall', function () {
+    $line = Line::where('production_order_id', $this->a1->id)->firstOrFail();
+    $line->forceFill(['steps_snapshot' => [['nr' => 1, 'text' => 'Fond langsam passieren.']], 'zubereitung' => null])->save();
+
+    ($this->plan)()->set('tage', 14)->call('oeffneAnleitung', $line->id)
+        ->assertSet('anleitungZeileId', $line->id)->assertSee('Fond langsam passieren.');
+    $this->get(route('foodalchemist.produktion.tagesplan.blatt', ['von' => '2026-08-18', 'tage' => 14]))
+        ->assertOk()->assertSee('Fond langsam passieren.')->assertSee('Keine Anleitung hinterlegt.');
+});
+
+it('zeigt Equipment in der Koch-Anleitung der Tagesplanung', function () {
+    $geraet = FoodAlchemistVocabKochequipment::create([
+        'team_id' => $this->rootTeam->id,
+        'slug' => 'kessel-60',
+        'name' => 'Kessel 60 l',
+        'group_name' => 'Warmküche',
+    ]);
+    $this->fond->equipment()->attach($geraet->id, ['note' => 'groß']);
+    $line = Line::where('production_order_id', $this->a1->id)->firstOrFail();
+
+    ($this->plan)()->set('tage', 14)->call('oeffneAnleitung', $line->id)
+        ->assertSeeHtml('data-tagesplan-equipment')
+        ->assertSee('Kessel 60 l')
+        ->assertSee('groß');
+});
+
+it('startet einen Auftrag aus dem Cockpit und protokolliert den Übergang', function () {
+    ($this->plan)()->set('tage', 14)
+        ->call('produktionStarten', $this->a1->id)
+        ->assertSet('startOrderId', $this->a1->id)
+        ->set('startOverrideReason', 'Küche hat Material und Anleitung geprüft.')
+        ->call('produktionStartenBestaetigen')
+        ->assertSet('fehler', null);
+    expect($this->a1->fresh()->status)->toBe(ProductionOrderStatus::InProgress)
+        ->and(FoodAlchemistProductionEvent::where('order_id', $this->a1->id)->where('event_type', 'order_status_changed')->exists())->toBeTrue();
+});
+
+it('verlangt beim Überspringen einen Grund und protokolliert Status und Blocker atomar', function () {
+    $this->svc->setStatus($this->rootTeam, $this->a1->id, ProductionOrderStatus::InProgress);
+    $line = Line::where('production_order_id', $this->a1->id)->firstOrFail();
+    expect(fn () => $this->svc->setLineStatus($this->rootTeam, $line->id, ProductionLineStatus::Skipped))
+        ->toThrow(RuntimeException::class, 'Grund');
+    $this->svc->setLineStatus($this->rootTeam, $line->id, ProductionLineStatus::Skipped, 'Material fehlt');
+    $this->svc->setLineBlocked($this->rootTeam, $line->id, 'equipment', 'Kessel defekt');
+
+    expect($line->fresh()->skipped_reason)->toBe('Material fehlt')
+        ->and($line->fresh()->blocked_reason)->toBe('equipment')
+        ->and(FoodAlchemistProductionEvent::where('line_id', $line->id)->count())->toBe(2);
+});
+
+it('loest Blocker und schuetzt Zeilen per erwarteter Version', function () {
+    $this->svc->setStatus($this->rootTeam, $this->a1->id, ProductionOrderStatus::InProgress);
+    $line = Line::where('production_order_id', $this->a1->id)->firstOrFail();
+    expect(fn () => $this->svc->setLineBlocked($this->rootTeam, $line->id, 'equipment', null, ['expected_updated_at' => '2026-01-01T00:00:00+00:00']))
+        ->toThrow(RuntimeException::class, 'zwischenzeitlich');
+
+    $blocked = $this->svc->setLineBlocked($this->rootTeam, $line->id, 'equipment', 'Kessel defekt');
+    $this->svc->unblockLine($this->rootTeam, $blocked->id, 'Kessel wieder frei');
+
+    expect($blocked->fresh()->blocked_reason)->toBeNull()
+        ->and(FoodAlchemistProductionEvent::where('line_id', $line->id)->where('event_type', 'line_unblocked')->exists())->toBeTrue();
+});
+
+it('zeigt Klärfälle und die Gerichtssicht', function () {
+    ($this->plan)()->set('tage', 14)->set('ansicht', 'gericht')
+        ->assertSeeHtml('data-tagesplan-klaerfaelle')
+        ->assertSee('Nicht zugeteilt')->assertSee('Ohne Anleitung')
+        ->assertSeeHtml('data-tagesplan-auftrag-gruppe');
+});
+
+it('druckt die Gerichtssicht nach Auftrag gruppiert', function () {
+    $this->get(route('foodalchemist.produktion.tagesplan.blatt', ['von' => '2026-08-18', 'tage' => 14, 'ansicht' => 'gericht']))
+        ->assertOk()
+        ->assertSee('Gericht-Blatt')
+        ->assertSeeHtml('data-tagesplan-blatt-auftrag="' . $this->a1->id . '"');
 });
