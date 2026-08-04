@@ -7,6 +7,8 @@
         'kalkulation' => 'Kalkulation',
         'voll' => 'Volle Kaskade',
     ];
+    $brand = '#6d28d9';
+    $footerText = 'Erstellt mit Food Alchemist';
     $money = fn ($v, $dec = 2) => $v !== null && $v !== '' ? number_format((float) $v, $dec, ',', '.') . ' €' : '—';
 @endphp
 <!doctype html>
@@ -15,38 +17,70 @@
     <meta charset="utf-8">
     <title>{{ $titel ?? 'Report' }} – {{ $name ?? '' }}</title>
     <style>
-        @page { margin: {{ $pdf ? '1.6cm 1.25cm' : '0' }}; }
-        body { font-family: DejaVu Sans, sans-serif; color: #111827; background: {{ $pdf ? '#fff' : '#f3f4f6' }}; margin: 0; font-size: 11px; line-height: 1.45; }
-        .doc { max-width: {{ $pdf ? 'none' : '960px' }}; margin: 0 auto; background: #fff; padding: {{ $pdf ? '0' : '32px' }}; }
-        .actions { background: #111827; color: #fff; padding: 12px 16px; margin: {{ $pdf ? '0' : '-32px -32px 24px' }}; }
+        /* DomPDF-Leitplanken wie Speisekarte: keine CSS-Variablen, kein Flex/Grid, feste Bänder, Tabellen/Blocks statt App-CSS. */
+        @page { margin: {{ $pdf ? '2.4cm 1.5cm 1.7cm 1.5cm' : '0' }}; }
+        * { box-sizing: border-box; }
+        body { font-family: "DejaVu Sans", Arial, sans-serif; color: #1f2937; background: {{ $pdf ? '#fff' : '#f3f4f6' }}; margin: 0; padding: 0; font-size: 11px; line-height: 1.5; }
+        .doc { max-width: {{ $pdf ? 'none' : '960px' }}; margin: 0 auto; background: #fff; padding: {{ $pdf ? '0' : '2.4cm 1.5cm 1.7cm 1.5cm' }}; }
+        .band-top {
+            {{ $pdf ? 'position: fixed; top: -2.4cm; left: -1.5cm; width: 21cm;' : '' }}
+            height: 1.4cm; background: {{ $brand }}; color: #fff; padding: 0 1.5cm;
+        }
+        .band-top .bt-label { {{ $pdf ? 'display: block; padding-top: 0.52cm;' : 'float: left; line-height: 1.4cm;' }} font-size: 10px; letter-spacing: .08em; text-transform: uppercase; opacity: .94; }
+        .band-bottom {
+            {{ $pdf ? 'position: fixed; bottom: -1.7cm; left: -1.5cm; width: 21cm;' : '' }}
+            height: 1.0cm; border-top: 2px solid {{ $brand }}; color: #9ca3af; font-size: 9px; padding: 0 1.5cm;
+        }
+        .band-bottom .bb-foot { {{ $pdf ? 'display: block;' : '' }} line-height: 1.0cm; }
+        .actions { background: #111827; color: #fff; padding: 12px 16px; margin: {{ $pdf ? '0' : '-2.4cm -1.5cm 24px' }}; }
         .actions a { display: inline-block; color: #fff; text-decoration: none; border: 1px solid rgba(255,255,255,.25); border-radius: 999px; padding: 5px 10px; margin: 2px; font-size: 11px; }
-        .actions a.active { background: #7c3aed; border-color: #7c3aed; }
+        .actions a.active { background: {{ $brand }}; border-color: {{ $brand }}; }
         .actions .secondary a { color: #e5e7eb; }
-        h1 { font-size: 24px; margin: 0 0 4px; letter-spacing: -.02em; }
-        h2 { font-size: 18px; margin: 24px 0 8px; border-top: 2px solid #111827; padding-top: 10px; }
+        header { margin-bottom: 14px; }
+        .kicker { font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: #6b7280; }
+        h1 { font-size: 26px; margin: 2px 0 4px; letter-spacing: -.02em; color: #111827; }
+        .rule { height: 3px; width: 4.2cm; background: {{ $brand }}; margin: 10px 0 12px; border-radius: 2px; }
+        h2 { font-size: 17px; margin: 22px 0 8px; border-top: 2px solid #111827; padding-top: 9px; page-break-after: avoid; }
         h3 { font-size: 15px; margin: 18px 0 8px; border-top: 1px solid #d1d5db; padding-top: 8px; }
-        h4 { font-size: 12px; margin: 14px 0 6px; color: #374151; text-transform: uppercase; letter-spacing: .05em; }
+        h4 { font-size: 11px; margin: 14px 0 6px; color: #374151; text-transform: uppercase; letter-spacing: .06em; page-break-after: avoid; }
         h5 { font-size: 11px; margin: 12px 0 6px; color: #4b5563; }
         .muted { color: #6b7280; font-weight: normal; }
         .warn { color: #b45309; background: #fffbeb; border: 1px solid #fde68a; padding: 6px 8px; border-radius: 6px; }
         .intro { margin: 12px 0 18px; color: #374151; white-space: pre-line; }
-        .grid { display: table; width: 100%; border-collapse: collapse; margin: 8px 0 10px; }
-        .grid > div { display: table-cell; width: 25%; border: 1px solid #e5e7eb; padding: 6px 8px; vertical-align: top; }
+        .grid { width: 100%; margin: 8px 0 10px; font-size: 0; }
+        .grid > div { display: inline-block; width: 25%; min-height: 34px; border: 1px solid #e5e7eb; padding: 6px 8px; vertical-align: top; font-size: 11px; margin-right: -1px; margin-bottom: -1px; overflow-wrap: anywhere; }
         .grid > div.wide { width: 50%; }
         .grid span { display: block; color: #6b7280; font-size: 9px; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 2px; }
-        table { width: 100%; border-collapse: collapse; margin: 8px 0 12px; }
-        th, td { border: 1px solid #e5e7eb; padding: 5px 6px; text-align: left; vertical-align: top; }
+        table { width: 100%; border-collapse: collapse; margin: 8px 0 12px; table-layout: fixed; page-break-inside: auto; }
+        tr { page-break-inside: avoid; page-break-after: auto; }
+        th, td { border: 1px solid #e5e7eb; padding: 5px 6px; text-align: left; vertical-align: top; overflow-wrap: anywhere; }
         th { background: #f9fafb; color: #374151; font-size: 9px; text-transform: uppercase; letter-spacing: .05em; }
         .copy { white-space: pre-line; color: #374151; }
-        .step { margin: 4px 0; }
+        .step { margin: 7px 0; padding: 7px 8px; border: 1px solid #e5e7eb; page-break-inside: avoid; }
+        .step-nr { display: inline-block; min-width: 18px; font-weight: 700; color: {{ $brand }}; }
+        .step-phase { font-style: italic; color: #4b5563; }
+        .step-photos { margin: 7px -4px 0; }
+        .step-photo { display: inline-block; width: 31%; margin: 0 4px 6px; vertical-align: top; }
+        .step-photo img { display: block; max-width: 100%; max-height: 3.2cm; border: 1px solid #e5e7eb; object-fit: cover; }
+        .step-photo .caption { display: block; margin-top: 2px; font-size: 8px; color: #6b7280; line-height: 1.25; }
         .recipe-node.depth-1 { margin-left: {{ $pdf ? '0' : '12px' }}; }
         .recipe-node.depth-2, .recipe-node.depth-3, .recipe-node.depth-4 { margin-left: {{ $pdf ? '0' : '20px' }}; }
         .slot { border: 1px solid #e5e7eb; border-radius: 8px; padding: 8px 10px; margin: 8px 0; page-break-inside: avoid; }
         .badge { display: inline-block; border-radius: 999px; background: #f3f4f6; padding: 2px 7px; font-size: 10px; color: #374151; }
+        .sensorik-radar { display: table; width: 100%; margin: 8px 0 10px; page-break-inside: avoid; }
+        .sensorik-radar-chart { display: table-cell; width: 44%; vertical-align: top; text-align: center; border: 1px solid #e5e7eb; padding: 8px; }
+        .sensorik-radar-values { display: table-cell; width: 56%; vertical-align: top; padding-left: 10px; }
+        .sensorik-radar-values table { margin-top: 0; }
         @media print { .actions { display: none; } body { background: #fff; } .doc { padding: 0; } }
     </style>
 </head>
 <body>
+<div class="band-top">
+    <span class="bt-label">{{ $titel ?? 'Report' }} · {{ $name ?? '' }}</span>
+</div>
+<div class="band-bottom">
+    <span class="bb-foot">{{ $footerText }}</span>
+</div>
 <main class="doc">
     @unless($pdf)
         <div class="actions">
@@ -60,7 +94,7 @@
             </div>
             <div class="secondary" style="margin-top:6px">
                 <strong>Filter:</strong>
-                @foreach(['preise' => 'Preise', 'lieferanten' => 'Lieferanten', 'steps' => 'Steps', 'sensorik' => 'Sensorik', 'produktion' => 'Produktion', 'notizen' => 'Notizen', 'kaskade' => 'Kaskade'] as $key => $label)
+                @foreach(['preise' => 'Preise', 'lieferanten' => 'Lieferanten', 'steps' => 'Anleitung', 'bilder' => 'Bilder', 'deklaration' => 'Deklaration', 'naehrwerte' => 'Nährwerte', 'sensorik' => 'Sensorik', 'produktion' => 'Produktion', 'notizen' => 'Notizen', 'kaskade' => 'Kaskade'] as $key => $label)
                     <a href="{{ request()->fullUrlWithQuery([$key => ($opt[$key] ?? false) ? 0 : 1, 'pdf' => null]) }}" class="{{ ($opt[$key] ?? false) ? 'active' : '' }}">{{ $label }}</a>
                 @endforeach
             </div>
@@ -68,8 +102,9 @@
     @endunless
 
     <header>
-        <div class="muted">{{ $titel ?? 'Report' }} · {{ now()->format('d.m.Y H:i') }}</div>
+        <div class="kicker">{{ $titel ?? 'Report' }} · {{ now()->format('d.m.Y H:i') }}</div>
         <h1>{{ $name ?? 'Report' }}</h1>
+        <div class="rule"></div>
         <div class="muted">Profil: {{ $profile[$opt['profil'] ?? 'produktion'] ?? ($opt['profil'] ?? '—') }}</div>
     </header>
 
@@ -98,6 +133,12 @@
                 @endif
                 @if(count($gp['tags'] ?? []))
                     <p class="muted">Tags: {{ collect($gp['tags'])->map(fn ($v, $k) => $k . '=' . ($v ? 'ja' : 'nein'))->implode(' · ') }}</p>
+                @endif
+                @if($opt['deklaration'] ?? false)
+                    @include('foodalchemist::dokumente.partials.report-declaration', ['deklaration' => $gp['deklaration'] ?? []])
+                @endif
+                @if($opt['naehrwerte'] ?? false)
+                    @include('foodalchemist::dokumente.partials.report-nutrition', ['naehrwerte' => $gp['naehrwerte'] ?? []])
                 @endif
             </section>
 

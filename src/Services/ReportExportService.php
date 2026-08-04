@@ -3,6 +3,7 @@
 namespace Platform\FoodAlchemist\Services;
 
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Storage;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
 use Platform\FoodAlchemist\Models\FoodAlchemistGeschirrSupplier;
@@ -31,22 +32,22 @@ class ReportExportService
             'kurz' => [
                 'stammdaten' => true, 'zutaten' => true, 'steps' => false, 'sensorik' => false,
                 'produktion' => false, 'preise' => false, 'lieferanten' => false, 'kaskade' => false,
-                'notizen' => false, 'intern' => false,
+                'bilder' => false, 'deklaration' => false, 'naehrwerte' => false, 'notizen' => false, 'intern' => false,
             ],
             'kalkulation' => [
                 'stammdaten' => true, 'zutaten' => true, 'steps' => false, 'sensorik' => false,
                 'produktion' => false, 'preise' => true, 'lieferanten' => true, 'kaskade' => true,
-                'notizen' => false, 'intern' => true,
+                'bilder' => false, 'deklaration' => false, 'naehrwerte' => true, 'notizen' => false, 'intern' => true,
             ],
             'voll' => [
                 'stammdaten' => true, 'zutaten' => true, 'steps' => true, 'sensorik' => true,
                 'produktion' => true, 'preise' => true, 'lieferanten' => true, 'kaskade' => true,
-                'notizen' => true, 'intern' => true,
+                'bilder' => false, 'deklaration' => true, 'naehrwerte' => true, 'notizen' => true, 'intern' => true,
             ],
             default => [
                 'stammdaten' => true, 'zutaten' => true, 'steps' => true, 'sensorik' => false,
                 'produktion' => true, 'preise' => false, 'lieferanten' => false, 'kaskade' => true,
-                'notizen' => false, 'intern' => false,
+                'bilder' => false, 'deklaration' => false, 'naehrwerte' => false, 'notizen' => false, 'intern' => false,
             ],
         };
 
@@ -208,6 +209,8 @@ class ReportExportService
                         'price' => $price?->price,
                     ] : null,
                     'tags' => $gp->setTags(),
+                    'deklaration' => $this->gpDeklaration($gp),
+                    'naehrwerte' => $this->gpNaehrwerte($gp),
                     'strukturen' => $gp->structures->map(fn ($s) => [
                         'supplier' => $s->item?->supplier?->name,
                         'article_number' => $s->item?->article_number,
@@ -343,6 +346,7 @@ class ReportExportService
             'defaultStation:id,name,slug,group_name',
             'equipment:id,slug,name',
             'steps',
+            'steps.photos',
             'ingredients' => fn ($q) => $q->whereNull('deleted_at')->orderBy('position'),
             'ingredients.unit:id,slug,display_de',
             'ingredients.gp.leadLa.supplier:id,name',
@@ -421,7 +425,17 @@ class ReportExportService
                 'position' => (int) $s->position,
                 'phase' => $s->phase,
                 'text' => $s->text,
+                'photos' => ($optionen['bilder'] ?? false)
+                    ? $s->photos->map(fn ($foto) => [
+                        'id' => (int) $foto->id,
+                        'caption' => $foto->caption,
+                        'url' => $foto->url(),
+                        'src' => $this->photoDataUri($foto->pfad) ?? $foto->url(),
+                    ])->values()->all()
+                    : [],
             ])->all(),
+            'deklaration' => $this->recipeDeklaration($recipe),
+            'naehrwerte' => $this->recipeNaehrwerte($recipe),
             'sensorik' => $sensorik,
             'ingredients' => $recipe->ingredients->map(fn ($z) => $this->ingredientNode($z, $optionen, $tiefe, $visited))->values()->all(),
         ];
@@ -481,5 +495,114 @@ class ReportExportService
 
         return rtrim(rtrim(number_format((float) $quantity, 3, ',', '.'), '0'), ',')
             . ($unit ? ' ' . ($unit->display_de ?? $unit->slug) : '');
+    }
+
+    /** @return array<string, mixed> */
+    private function recipeDeklaration(FoodAlchemistRecipe $recipe): array
+    {
+        $allergene = [];
+        foreach (\Platform\FoodAlchemist\Models\FoodAlchemistItemAllergen::ALLERGENE as $feld => $label) {
+            $allergene[] = ['key' => $feld, 'label' => $label, 'wert' => $recipe->{"allergen_{$feld}"} ?? 'unbekannt'];
+        }
+
+        $zusatzstoffe = [];
+        foreach (\Platform\FoodAlchemist\Models\FoodAlchemistItemDeclaration::STOFFE as $feld => $label) {
+            $zusatzstoffe[] = ['key' => $feld, 'label' => $label, 'wert' => $recipe->{"additive_{$feld}"}];
+        }
+
+        return [
+            'specs' => [
+                'Vegan' => $recipe->spec_is_vegan,
+                'Vegetarisch' => $recipe->spec_is_vegetarian,
+                'Halal' => $recipe->spec_is_halal,
+                'Glutenfrei' => $recipe->spec_is_gluten_free,
+                'Laktosefrei' => $recipe->spec_is_lactose_free,
+                'Enthält Schwein' => $recipe->spec_contains_pork,
+                'Enthält Rind' => $recipe->spec_contains_beef,
+            ],
+            'allergene' => $allergene,
+            'allergens_confidence' => $recipe->allergens_confidence,
+            'zusatzstoffe' => $zusatzstoffe,
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    private function recipeNaehrwerte(FoodAlchemistRecipe $recipe): array
+    {
+        return [
+            'kcal' => $recipe->nutri_kcal_per_100g,
+            'protein_g' => $recipe->nutri_protein_g_per_100g,
+            'fat_g' => $recipe->nutri_fat_g_per_100g,
+            'saturated_fat_g' => $recipe->nutri_saturated_fat_g_per_100g,
+            'carbs_g' => $recipe->nutri_carbs_g_per_100g,
+            'sugar_g' => $recipe->nutri_sugar_g_per_100g,
+            'salt_g' => $recipe->nutri_salt_g_per_100g,
+            'confidence' => $recipe->nutri_confidence,
+            'mapped' => $recipe->nutri_n_ingredients_mapped,
+            'total' => $recipe->nutri_n_ingredients_total,
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    private function gpDeklaration(FoodAlchemistGp $gp): array
+    {
+        $allergene = [];
+        foreach (\Platform\FoodAlchemist\Models\FoodAlchemistItemAllergen::ALLERGENE as $feld => $label) {
+            $allergene[] = ['key' => $feld, 'label' => $label, 'wert' => $gp->{"allergen_{$feld}"} ?? 'unbekannt'];
+        }
+
+        return [
+            'specs' => [
+                'Vegan' => $gp->tag_is_vegan,
+                'Vegetarisch' => $gp->tag_is_vegetarian,
+                'Halal' => $gp->tag_is_halal,
+                'Glutenfrei' => $gp->tag_is_gluten_free,
+                'Laktosefrei' => $gp->tag_is_lactose_free,
+                'Enthält Schwein' => $gp->tag_contains_pork,
+                'Enthält Rind' => $gp->tag_contains_beef,
+            ],
+            'allergene' => $allergene,
+            'allergens_confidence' => $gp->allergens_confidence,
+            'zusatzstoffe' => [],
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    private function gpNaehrwerte(FoodAlchemistGp $gp): array
+    {
+        return [
+            'kcal' => $gp->nutri_kcal_per_100g,
+            'protein_g' => $gp->nutri_protein_g_per_100g,
+            'fat_g' => $gp->nutri_fat_g_per_100g,
+            'saturated_fat_g' => null,
+            'carbs_g' => $gp->nutri_carbs_g_per_100g,
+            'sugar_g' => null,
+            'salt_g' => $gp->nutri_salt_g_per_100g,
+            'confidence' => $gp->nutri_ai_confidence,
+            'source' => $gp->nutri_source,
+            'mapped' => null,
+            'total' => null,
+        ];
+    }
+
+    private function photoDataUri(?string $pfad): ?string
+    {
+        if (! $pfad) {
+            return null;
+        }
+
+        try {
+            $disk = Storage::disk('public');
+            if (! $disk->exists($pfad)) {
+                return null;
+            }
+
+            $mime = $disk->mimeType($pfad) ?: 'image/jpeg';
+            $data = $disk->get($pfad);
+
+            return 'data:' . $mime . ';base64,' . base64_encode($data);
+        } catch (\Throwable) {
+            return null;
+        }
     }
 }

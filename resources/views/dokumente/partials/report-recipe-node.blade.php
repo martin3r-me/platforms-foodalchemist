@@ -106,9 +106,23 @@
         @endif
 
         @if($opt['steps'] ?? false)
-            <h4>Step-by-step</h4>
+            <h4>Anleitung</h4>
             @forelse($node['steps'] ?? [] as $s)
-                <p class="step"><strong>{{ $s['position'] }}.</strong> @if($s['phase'])<em>{{ $s['phase'] }}:</em> @endif{{ $s['text'] }}</p>
+                <div class="step">
+                    <div><span class="step-nr">{{ $s['position'] }}.</span> @if($s['phase'])<span class="step-phase">{{ $s['phase'] }}:</span> @endif{{ $s['text'] }}</div>
+                    @if(($opt['bilder'] ?? false) && count($s['photos'] ?? []))
+                        <div class="step-photos">
+                            @foreach($s['photos'] as $foto)
+                                @if($foto['src'] ?? null)
+                                    <span class="step-photo">
+                                        <img src="{{ $foto['src'] }}" alt="{{ $foto['caption'] ?? ('Schritt ' . $s['position']) }}">
+                                        @if($foto['caption'] ?? null)<span class="caption">{{ $foto['caption'] }}</span>@endif
+                                    </span>
+                                @endif
+                            @endforeach
+                        </div>
+                    @endif
+                </div>
             @empty
                 <p class="muted">Keine Schritte gepflegt.</p>
             @endforelse
@@ -120,14 +134,26 @@
             @if(! $sensorik || ($sensorik['leer'] ?? false))
                 <p class="muted">Keine Sensorikdaten.</p>
             @else
-                <div class="grid meta">
-                    @foreach(($sensorik['geschmack'] ?? []) as $dim => $wert)
-                        <div><span>{{ $dim }}</span>{{ number_format((float) $wert, 2, ',', '.') }}</div>
-                    @endforeach
-                    <div class="wide"><span>Textur</span>{{ collect($sensorik['textur'] ?? [])->pluck('label')->implode(', ') ?: '—' }}</div>
-                    @if($sensorik['monotonie'] ?? null)<div class="wide"><span>Hinweis</span>{{ $sensorik['monotonie'] }}</div>@endif
-                </div>
+                @include('foodalchemist::dokumente.partials.report-sensory-radar', [
+                    'geschmack' => $sensorik['geschmack'] ?? [],
+                    'dominant' => $sensorik['dominant'] ?? [],
+                    'luecken' => $sensorik['luecken'] ?? [],
+                ])
+                @if(count($sensorik['textur'] ?? []) || ($sensorik['monotonie'] ?? null))
+                    <div class="grid meta">
+                        <div class="wide"><span>Textur</span>{{ collect($sensorik['textur'] ?? [])->pluck('label')->implode(', ') ?: '—' }}</div>
+                        @if($sensorik['monotonie'] ?? null)<div class="wide"><span>Hinweis</span>{{ $sensorik['monotonie'] }}</div>@endif
+                    </div>
+                @endif
             @endif
+        @endif
+
+        @if($opt['deklaration'] ?? false)
+            @include('foodalchemist::dokumente.partials.report-declaration', ['deklaration' => $node['deklaration'] ?? []])
+        @endif
+
+        @if($opt['naehrwerte'] ?? false)
+            @include('foodalchemist::dokumente.partials.report-nutrition', ['naehrwerte' => $node['naehrwerte'] ?? []])
         @endif
 
         @if(($opt['notizen'] ?? false) && ($node['notes_manual'] ?? null))
