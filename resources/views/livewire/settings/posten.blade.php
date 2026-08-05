@@ -102,7 +102,7 @@
                                     </label>
                                     @php($abg = $p->abgeleiteteKapazitaet())
                                     @if($abg !== null)
-                                        <span class="text-violet-700" title="Wird als Kapazität genutzt und überschreibt Min./Tag">aktiv: {{ $abg }} min/Tag aus Besetzung</span>
+                                        <span class="text-violet-700" title="{{ $p->kapazitaet_min_pro_tag !== null ? 'manueller Wert oben überschreibt' : 'wird als Kapazität genutzt' }}">abgeleitet: {{ $abg }} min/Tag</span>
                                     @endif
                                 @endif
                             </div>

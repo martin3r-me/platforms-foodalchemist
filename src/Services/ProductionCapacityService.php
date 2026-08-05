@@ -130,9 +130,9 @@ class ProductionCapacityService
      * Die Zeilen für den Tagesplan — auftragsübergreifend, mit dem Auftrag als Kontext.
      * Ohne ihn weiß am Posten niemand, wofür der Fond eigentlich ist.
      */
-    public function tagesplanZeilen(Team $team, string $von, string $bis, bool $mitAnleitung = false): Collection
+    public function tagesplanZeilen(Team $team, string $von, string $bis): Collection
     {
-        $zeilen = DB::table('foodalchemist_production_order_lines as l')
+        return DB::table('foodalchemist_production_order_lines as l')
             ->join('foodalchemist_production_orders as o', 'o.id', '=', 'l.production_order_id')
             ->leftJoin('foodalchemist_recipes as r', 'r.id', '=', 'l.recipe_id')
             ->leftJoin('foodalchemist_production_stations as s', 's.id', '=', 'l.station_id')
@@ -142,77 +142,22 @@ class ProductionCapacityService
             ->where('l.is_struck', false)
             ->whereDate('l.plan_date', '>=', $von)->whereDate('l.plan_date', '<=', $bis)
             ->orderBy('l.plan_date')->orderBy('s.sort_order')->orderBy('l.position')
-            ->select(array_merge([
+            ->select([
                 'l.id', 'l.plan_date', 'l.station_id', 'l.assignee', 'l.arbeitszeit_min',
                 'l.ansaetze', 'l.manual_ansaetze', 'l.is_manual_ansaetze', 'l.titel', 'l.vorlauf_tage',
-                'l.recipe_id', 'l.tiefe', 'l.position', 'l.is_basisrezept',
-                'l.blocked_reason', 'l.blocked_note', 'l.skipped_reason', 'l.started_at', 'l.updated_at',
                 'l.line_status',                       // Spec 30 E6: Küchen-Checkliste
                 'o.status as auftrag_status',          // abgehakt wird nur im laufenden Auftrag
-                'o.updated_at as auftrag_updated_at',
                 's.name as station',
                 'r.name as rezept',
                 'o.id as order_id', 'o.name as auftrag', 'o.production_date as liefertag',
-            ], $mitAnleitung ? ['l.zutaten', 'l.steps_snapshot', 'l.zubereitung'] : []))->get();
-
-        $equipmentNachRezept = collect();
-        if ($mitAnleitung) {
-            $recipeIds = $zeilen->pluck('recipe_id')->filter()->unique()->values()->all();
-            $equipmentNachRezept = empty($recipeIds) ? collect() : DB::table('foodalchemist_recipe_equipment as re')
-                ->join('foodalchemist_vocab_kitchen_equipment as e', 'e.id', '=', 're.equipment_id')
-                ->whereIn('re.recipe_id', $recipeIds)
-                ->whereNull('e.deleted_at')
-                ->orderBy('e.group_name')->orderBy('e.sort_order')->orderBy('e.name')
-                ->get(['re.recipe_id', 'e.name', 'e.group_name', 're.note'])
-                ->groupBy('recipe_id');
-        }
-
-        return $zeilen->map(function ($z) use ($equipmentNachRezept, $mitAnleitung) {
+            ])->get()
+            ->map(function ($z) {
                 $z->name = $z->rezept ?? $z->titel ?? '—';
                 $z->ansaetze_effektiv = $z->is_manual_ansaetze && $z->manual_ansaetze !== null
                     ? (float) $z->manual_ansaetze : (float) $z->ansaetze;
-                if (property_exists($z, 'steps_snapshot')) {
-                    $z->schritte = is_string($z->steps_snapshot)
-                        ? (json_decode($z->steps_snapshot, true) ?: []) : ($z->steps_snapshot ?? []);
-                    $z->zutaten = is_string($z->zutaten)
-                        ? (json_decode($z->zutaten, true) ?: []) : ($z->zutaten ?? []);
-                }
-                if ($mitAnleitung) {
-                    $z->equipment = $z->recipe_id
-                        ? ($equipmentNachRezept->get($z->recipe_id, collect())->values())
-                        : collect();
-                }
-                $z->version = Carbon::parse($z->updated_at)->toIso8601String();
-                $z->auftrag_version = Carbon::parse($z->auftrag_updated_at)->toIso8601String();
 
                 return $z;
             });
-    }
-
-    /** @return Collection<int, object> */
-    public function alsNaechstes(Collection $zeilen, int $limit = 12): Collection
-    {
-        return $zeilen->reject(fn ($z) => in_array($z->line_status, ['done', 'skipped'], true))
-            ->sortBy([
-                fn ($a, $b) => strcmp((string) $a->plan_date, (string) $b->plan_date),
-                fn ($a, $b) => ($a->blocked_reason ? 1 : 0) <=> ($b->blocked_reason ? 1 : 0),
-                fn ($a, $b) => ($a->station_id ?? PHP_INT_MAX) <=> ($b->station_id ?? PHP_INT_MAX),
-                fn ($a, $b) => ((int) $a->position) <=> ((int) $b->position),
-            ])->take(max(1, min(50, $limit)))->values();
-    }
-
-    /** Wahrer Cockpit-Feed aus dem append-only Ereignisprotokoll. */
-    public function letzteAenderungen(Team $team, string $von, string $bis, int $limit = 12): Collection
-    {
-        return DB::table('foodalchemist_production_events as e')
-            ->join('foodalchemist_production_orders as o', 'o.id', '=', 'e.order_id')
-            ->leftJoin('foodalchemist_production_order_lines as l', 'l.id', '=', 'e.line_id')
-            ->leftJoin('foodalchemist_recipes as r', 'r.id', '=', 'l.recipe_id')
-            ->where('e.team_id', $team->id)->where('o.team_id', $team->id)
-            ->whereDate('e.created_at', '>=', $von)->whereDate('e.created_at', '<=', $bis)
-            ->orderByDesc('e.created_at')->limit(max(1, min(50, $limit)))
-            ->get(['e.event_type', 'e.from_state', 'e.to_state', 'e.reason_code', 'e.created_at',
-                'o.name as auftrag', 'r.name as rezept', 'l.titel']);
     }
 
     /** Aktive Posten des Teams, keyed by id (≤ ~30 Zeilen — die Kapazität rechnet PHP). */

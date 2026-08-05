@@ -27,8 +27,6 @@ class FoodAlchemistProductionStation extends Model
 {
     use HasUuidV7, LogsActivity, BelongsToTeamHierarchy, SoftDeletes;
 
-    public const STANDARD_SCHICHT_MIN = 480;
-
     protected $table = 'foodalchemist_production_stations';
 
     protected $guarded = ['id'];
@@ -58,16 +56,16 @@ class FoodAlchemistProductionStation extends Model
 
     /**
      * Aus der Besetzung abgeleitete Tageskapazität = Köpfe × Schicht-Minuten. `null`, wenn keine
-     * Besetzung gepflegt ist. Ohne explizite Schicht gilt die dokumentierte Standardschicht.
+     * Besetzung oder keine Schicht gepflegt ist — dann greift der manuelle Wert (oder gar keiner).
      */
     public function abgeleiteteKapazitaet(): ?int
     {
         $koepfe = $this->koepfe();
-        if ($koepfe <= 0) {
+        if ($koepfe <= 0 || ! $this->schicht_minuten) {
             return null;
         }
 
-        return $koepfe * (int) ($this->schicht_minuten ?: self::STANDARD_SCHICHT_MIN);
+        return $koepfe * (int) $this->schicht_minuten;
     }
 
     /**
@@ -86,11 +84,10 @@ class FoodAlchemistProductionStation extends Model
             return max(0, (int) $abweichung);           // manueller Wochentag-Override gewinnt
         }
 
-        $abgeleitet = $this->abgeleiteteKapazitaet();
-        if ($abgeleitet !== null) {
-            return $abgeleitet;                          // besetzter Posten gewinnt
+        if ($this->kapazitaet_min_pro_tag !== null) {
+            return $this->kapazitaet_min_pro_tag;        // manueller Tageswert gewinnt (Override-Ebene)
         }
 
-        return $this->kapazitaet_min_pro_tag;             // sonst manueller Tageswert oder null
+        return $this->abgeleiteteKapazitaet();           // sonst: aus Rollen-Besetzung ableiten (Stufe 3)
     }
 }

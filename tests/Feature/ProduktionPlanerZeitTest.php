@@ -56,16 +56,16 @@ it('gibt null, wenn gar keine Zeit hinterlegt ist', function () {
     expect(recipe(['work_time_min' => null, 'setup_time_min' => null])->arbeitszeitMin(3.0, false))->toBeNull();
 });
 
-it('leitet die Posten-Kapazität aus Köpfen × Schicht ab, Besetzung gewinnt', function () {
+it('leitet die Posten-Kapazität aus Köpfen × Schicht ab, manueller Wert gewinnt', function () {
     $s = new Station();
     $s->forceFill(['besetzung' => ['1' => 2, '2' => 1], 'schicht_minuten' => 480]);   // 3 Köpfe × 480
     expect($s->koepfe())->toBe(3)
         ->and($s->abgeleiteteKapazitaet())->toBe(1440)
         ->and($s->kapazitaetAm(new DateTime('2026-08-05')))->toBe(1440);
 
-    // Besetzung überschreibt den manuellen Tageswert (Spec 35 K1)
+    // manueller Tageswert überschreibt die Ableitung
     $s->kapazitaet_min_pro_tag = 900;
-    expect($s->kapazitaetAm(new DateTime('2026-08-05')))->toBe(1440);
+    expect($s->kapazitaetAm(new DateTime('2026-08-05')))->toBe(900);
 
     // Wochentag-Override gewinnt über alles
     $s->kapazitaet_wochentag = ['3' => 300];   // Mi

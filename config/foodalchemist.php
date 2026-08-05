@@ -32,12 +32,6 @@ return [
      */
     'guard' => 'web',
 
-    'features' => [
-        // Produktreife-Rueckfall fuer das digitale Tagesplan-Cockpit. Aus = papierene
-        // Produktionsblaetter/alte Auftragsansicht bleiben nutzbar, Cockpit-Routes sperren.
-        'production_cockpit' => env('FOODALCHEMIST_PRODUCTION_COCKPIT', true),
-    ],
-
     /**
      * Navigation-Konfiguration
      * 
@@ -205,11 +199,6 @@ return [
                     'label' => 'Tagesplan',
                     'route' => 'foodalchemist.produktion.tagesplan',
                     'icon'  => 'heroicon-o-clock',
-                ],
-                [
-                    'label' => 'Wandmonitor',
-                    'route' => 'foodalchemist.produktion.wandmonitor',
-                    'icon'  => 'heroicon-o-tv',
                 ],
             ],
         ],

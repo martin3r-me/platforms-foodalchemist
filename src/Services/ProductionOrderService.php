@@ -36,7 +36,6 @@ class ProductionOrderService
 {
     public function __construct(
         private PlanungsblattService $planung,
-        private ProductionEventService $events,
     ) {
     }
 
@@ -650,49 +649,16 @@ class ProductionOrderService
      * Die Übergänge sind bewusst frei (Checkliste, kein Beleg-Lebenszyklus): ein Fehlklick
      * muss ohne Datenbank-Eingriff korrigierbar sein.
      */
-    public function setLineStatus(Team $team, int $lineId, ProductionLineStatus $ziel, ?string $reason = null, array $options = []): FoodAlchemistProductionOrderLine
+    public function setLineStatus(Team $team, int $lineId, ProductionLineStatus $ziel): FoodAlchemistProductionOrderLine
     {
-        return DB::transaction(function () use ($team, $lineId, $ziel, $reason, $options) {
-            $line = $this->ownedRunningLine($team, $lineId);
-            $this->assertExpectedVersion($line, $options['expected_updated_at'] ?? null);
-            $from = $line->line_status instanceof ProductionLineStatus ? $line->line_status : ProductionLineStatus::from($line->line_status);
-            if ($ziel === ProductionLineStatus::Skipped && trim((string) $reason) === '') {
-                throw new \RuntimeException('Überspringen braucht einen Grund.');
-            }
-            $line->line_status = $ziel;
-            $line->started_at = $ziel === ProductionLineStatus::InProgress ? ($line->started_at ?: now()) : $line->started_at;
-            $line->started_by = $ziel === ProductionLineStatus::InProgress ? ($line->started_by ?: Auth::id()) : $line->started_by;
-            $line->done_at = $ziel === ProductionLineStatus::Done ? now() : null;
-            $line->done_by = $ziel === ProductionLineStatus::Done ? Auth::id() : null;
-            $line->skipped_reason = $ziel === ProductionLineStatus::Skipped ? trim((string) $reason) : null;
-            $line->save();
-            $this->events->record((int) $team->id, (int) $line->production_order_id, 'line_status_changed', [
-                'line_id' => (int) $line->id, 'from_state' => $from->value, 'to_state' => $ziel->value,
-                'reason_code' => $line->skipped_reason, 'note' => $options['note'] ?? null,
-            ]);
-            return $line->refresh();
-        });
-    }
+        $line = $this->ownedRunningLine($team, $lineId);
 
-    public function setLineBlocked(Team $team, int $lineId, ?string $reason, ?string $note = null, array $options = []): FoodAlchemistProductionOrderLine
-    {
-        return DB::transaction(function () use ($team, $lineId, $reason, $note, $options) {
-            $line = $this->ownedRunningLine($team, $lineId);
-            $this->assertExpectedVersion($line, $options['expected_updated_at'] ?? null);
-            $line->blocked_reason = trim((string) $reason) ?: null;
-            $line->blocked_note = $line->blocked_reason ? (trim((string) $note) ?: null) : null;
-            $line->save();
-            $this->events->record((int) $team->id, (int) $line->production_order_id,
-                $line->blocked_reason ? 'line_blocked' : 'line_unblocked', [
-                    'line_id' => (int) $line->id, 'reason_code' => $line->blocked_reason, 'note' => $line->blocked_note,
-                ]);
-            return $line->refresh();
-        });
-    }
+        $line->line_status = $ziel;
+        $line->done_at = $ziel === ProductionLineStatus::Done ? now() : null;
+        $line->done_by = $ziel === ProductionLineStatus::Done ? Auth::id() : null;
+        $line->save();
 
-    public function unblockLine(Team $team, int $lineId, ?string $note = null, array $options = []): FoodAlchemistProductionOrderLine
-    {
-        return $this->setLineBlocked($team, $lineId, null, $note, $options);
+        return $line->refresh();
     }
 
     /**
@@ -754,11 +720,9 @@ class ProductionOrderService
 
     // ── Status-Lebenszyklus (guarded) ───────────────────────────────────────
 
-    public function setStatus(Team $team, int $orderId, ProductionOrderStatus $ziel, array $options = []): FoodAlchemistProductionOrder
+    public function setStatus(Team $team, int $orderId, ProductionOrderStatus $ziel): FoodAlchemistProductionOrder
     {
-        return DB::transaction(function () use ($team, $orderId, $ziel, $options) {
         $order = $this->ownedOrder($team, $orderId);
-        $this->assertExpectedVersion($order, $options['expected_updated_at'] ?? null);
         $aktuell = $order->status instanceof ProductionOrderStatus ? $order->status : ProductionOrderStatus::from((string) $order->status);
         if ($aktuell === $ziel) {
             return $order;
@@ -768,21 +732,9 @@ class ProductionOrderService
         }
         // Beim Start: letzten planned-Stand rechnen = Snapshot einfrieren, dann Status setzen.
         if ($ziel === ProductionOrderStatus::InProgress) {
-            if (! empty($options['readiness_blockers'])) {
-                throw new \RuntimeException('Produktionsstart hat noch Blocker.');
-            }
-            if (! empty($options['readiness_warnings']) && trim((string) ($options['override_reason'] ?? '')) === '') {
-                throw new \RuntimeException('Produktionsstart mit Warnungen braucht einen Override-Grund.');
-            }
             $this->recomputeOrder($team, $order);
             $order->started_at = now();
         } elseif ($ziel === ProductionOrderStatus::Done) {
-            $offene = $order->lines()->where('is_struck', false)
-                ->whereNotIn('line_status', [ProductionLineStatus::Done->value, ProductionLineStatus::Skipped->value])->count();
-            $blockiert = $order->lines()->where('is_struck', false)->whereNotNull('blocked_reason')->count();
-            if (($offene > 0 || $blockiert > 0) && trim((string) ($options['finish_note'] ?? '')) === '') {
-                throw new \RuntimeException('Fertigmelden mit offenen oder blockierten Zeilen braucht eine Abschlussnotiz.');
-            }
             $order->finished_at = now();
         } elseif ($ziel === ProductionOrderStatus::Cancelled) {
             $order->cancelled_at = now();
@@ -790,19 +742,7 @@ class ProductionOrderService
         $order->status = $ziel;
         $order->save();
 
-        $this->events->record((int) $team->id, (int) $order->id, 'order_status_changed', [
-            'from_state' => $aktuell->value, 'to_state' => $ziel->value,
-            'reason_code' => $options['override_reason'] ?? null,
-            'note' => $options['finish_note'] ?? ($options['note'] ?? null),
-            'payload' => array_filter([
-                'readiness_warnings' => $options['readiness_warnings'] ?? null,
-                'finish_open_lines' => $offene ?? null,
-                'finish_blocked_lines' => $blockiert ?? null,
-            ], fn ($v) => $v !== null && $v !== []),
-        ]);
-
         return $order;
-        });
     }
 
     // ── Lesen / Aggregate ────────────────────────────────────────────────────
@@ -1206,17 +1146,6 @@ class ProductionOrderService
     private function zahl(float $n): string
     {
         return rtrim(rtrim(number_format($n, 2, ',', '.'), '0'), ',');
-    }
-
-    private function assertExpectedVersion(\Illuminate\Database\Eloquent\Model $model, ?string $expected): void
-    {
-        if ($expected === null || $expected === '') {
-            return;
-        }
-        $actual = $model->updated_at?->toIso8601String();
-        if ($actual !== $expected) {
-            throw new \RuntimeException('Der Datensatz wurde zwischenzeitlich geändert. Bitte neu laden.');
-        }
     }
 
     // ── Guards ───────────────────────────────────────────────────────────────

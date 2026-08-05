@@ -1,4 +1,4 @@
-{{-- Spec 30 E8 — Tagesplan-Blatt: Posten- oder Gerichtssicht als papierener Rückfall. --}}
+{{-- Spec 30 E8 — Posten-Blatt der Tages-Ausgabe: pro Tag pro Posten eine Abhak-Checkliste. --}}
 @php($vonC = \Illuminate\Support\Carbon::parse($von))
 @php($bisC = \Illuminate\Support\Carbon::parse($bis))
 <!DOCTYPE html>
@@ -25,9 +25,7 @@
         .right { text-align: right; white-space: nowrap; }
         .box { display: inline-block; width: 13px; height: 13px; border: 1px solid #9ca3af; border-radius: 2px; }
         .ctx { color: #6b7280; font-size: 11px; }
-        .anweisung { margin: 3px 0 8px 22px; color: #374151; font-size: 10px; }
         .muted { color: #9ca3af; }
-        .blocked { color: #92400e; }
         .foot { margin-top: 28px; color: #9ca3af; font-size: 10px; border-top: 1px solid #ececec; padding-top: 10px; }
         .actions { margin-bottom: 18px; }
         .btn { display: inline-block; padding: 6px 12px; background: #6d28d9; color: #fff; text-decoration: none; border-radius: 6px; margin-right: 6px; }
@@ -42,58 +40,28 @@
     </div>
 
     <div class="head">
-        <h1>Tagesplan · {{ $ansicht === 'gericht' ? 'Gericht-Blatt' : 'Posten-Blatt' }}</h1>
-        <div class="sub">{{ $vonC->format('d.m.') }} – {{ $bisC->format('d.m.Y') }} · Stand {{ now()->format('d.m.Y H:i') }} · {{ $ansicht === 'gericht' ? 'nach Auftrag und Gericht gruppiert' : 'nach Tag und Posten gruppiert' }}</div>
+        <h1>Tagesplan · Posten-Blatt</h1>
+        <div class="sub">{{ $vonC->format('d.m.') }} – {{ $bisC->format('d.m.Y') }} · was steht an welchem Tag an welchem Posten an</div>
     </div>
 
     @forelse($zeilenNachTag as $tag => $zeilen)
         @php($tagC = \Illuminate\Support\Carbon::parse($tag))
+        @php($nachPosten = $zeilen->groupBy(fn ($z) => $z->station_id === null ? '_none' : (int) $z->station_id))
         <div class="tag-block" data-tagesplan-blatt-tag="{{ $tag }}">
             <h2>{{ $tagC->locale('de')->isoFormat('dddd, DD.MM.YYYY') }}</h2>
 
-            @if($ansicht === 'gericht')
-                @foreach($zeilen->groupBy('order_id') as $auftragZeilen)
-                    <div class="posten" data-tagesplan-blatt-auftrag="{{ $auftragZeilen->first()->order_id }}">
-                        <h3>{{ $auftragZeilen->first()->auftrag }} <span class="cap">· für {{ \Illuminate\Support\Carbon::parse($auftragZeilen->first()->liefertag)->format('d.m.Y') }}</span></h3>
-                        <table>
-                            <thead><tr><th style="width:22px">✓</th><th>Position</th><th>Posten</th><th class="right">Ansätze</th><th class="right">Zeit</th></tr></thead>
-                            <tbody>
-                                @foreach($auftragZeilen->sortBy(['tiefe', 'position']) as $z)
-                                    <tr>
-                                        <td><span class="box"></span></td>
-                                        <td style="padding-left: {{ 6 + min(3, (int) $z->tiefe) * 14 }}px">{{ $z->name }} @if($z->blocked_reason)<span class="blocked">· Blocker: {{ $z->blocked_reason }}</span>@endif</td>
-                                        <td class="ctx">{{ $z->station ?: 'Nicht zugeteilt' }}</td>
-                                        <td class="right">{{ rtrim(rtrim(number_format((float) $z->ansaetze_effektiv, 2, ',', '.'), '0'), ',') }}</td>
-                                        <td class="right">{{ $z->arbeitszeit_min !== null ? $z->arbeitszeit_min . ' min' : '—' }}</td>
-                                    </tr>
-                                    <tr><td></td><td colspan="4" class="anweisung">
-                                        @if(!empty($z->schritte))
-                                            @foreach($z->schritte as $s)<strong>{{ $s['nr'] ?? $loop->iteration }}.</strong> {{ $s['text'] ?? '' }}@if(!$loop->last) · @endif @endforeach
-                                        @elseif(!empty($z->zubereitung))
-                                            {{ $z->zubereitung }}
-                                        @else
-                                            <span class="muted">Keine Anleitung hinterlegt.</span>
-                                        @endif
-                                    </td></tr>
-                                @endforeach
-                            </tbody>
-                        </table>
-                    </div>
-                @endforeach
-            @else
-                @php($nachPosten = $zeilen->groupBy(fn ($z) => $z->station_id === null ? '_none' : (int) $z->station_id))
-                @foreach($auslastung[$tag] ?? [] as $b)
-                    @php($schluessel = $b['station_id'] === null ? '_none' : (int) $b['station_id'])
-                    @php($blockZeilen = $nachPosten[$schluessel] ?? collect())
-                    @continue($blockZeilen->isEmpty())
-                    <div class="posten">
-                        <h3>
-                            {{ $b['station'] }}
-                            <span class="cap">
-                                · {{ $b['geplant_min'] }}@if($b['kapazitaet_min'] !== null) / {{ $b['kapazitaet_min'] }}@endif min
-                                @if($b['stufe'] === 'ueberlast')<span class="warn">· {{ $b['prozent'] }} % Überlast</span>@endif
-                            </span>
-                        </h3>
+            @foreach($auslastung[$tag] ?? [] as $b)
+                @php($schluessel = $b['station_id'] === null ? '_none' : (int) $b['station_id'])
+                @php($blockZeilen = $nachPosten[$schluessel] ?? collect())
+                @continue($blockZeilen->isEmpty())
+                <div class="posten">
+                    <h3>
+                        {{ $b['station'] }}
+                        <span class="cap">
+                            · {{ $b['geplant_min'] }}@if($b['kapazitaet_min'] !== null) / {{ $b['kapazitaet_min'] }}@endif min
+                            @if($b['stufe'] === 'ueberlast')<span class="warn">· {{ $b['prozent'] }} % Überlast</span>@endif
+                        </span>
+                    </h3>
                     <table>
                         <thead>
                             <tr>
@@ -108,32 +76,22 @@
                             @foreach($blockZeilen as $z)
                                 <tr>
                                     <td><span class="box"></span></td>
-                                    <td>{{ $z->name }} @if($z->blocked_reason)<span class="blocked">· Blocker: {{ $z->blocked_reason }}</span>@endif</td>
+                                    <td>{{ $z->name }}</td>
                                     <td class="right">{{ rtrim(rtrim(number_format((float) $z->ansaetze_effektiv, 2, ',', '.'), '0'), ',') }}</td>
                                     <td class="right">{{ $z->arbeitszeit_min !== null ? $z->arbeitszeit_min . ' min' : '—' }}</td>
                                     <td class="ctx">{{ $z->auftrag }} <span class="muted">· für {{ \Illuminate\Support\Carbon::parse($z->liefertag)->format('d.m.') }}</span></td>
                                 </tr>
-                                <tr><td></td><td colspan="4" class="anweisung">
-                                    @if(!empty($z->schritte))
-                                        @foreach($z->schritte as $s)<strong>{{ $s['nr'] ?? $loop->iteration }}.</strong> {{ $s['text'] ?? '' }}@if(!$loop->last) · @endif @endforeach
-                                    @elseif(!empty($z->zubereitung))
-                                        {{ $z->zubereitung }}
-                                    @else
-                                        <span class="muted">Keine Anleitung hinterlegt.</span>
-                                    @endif
-                                </td></tr>
                             @endforeach
                         </tbody>
                     </table>
                 </div>
-                @endforeach
-            @endif
+            @endforeach
         </div>
     @empty
         <p class="muted" data-tagesplan-blatt-leer>In diesem Zeitraum steht nichts an.</p>
     @endforelse
 
-    <div class="foot">Food Alchemist · Tagesplan-{{ $ansicht === 'gericht' ? 'Gericht' : 'Posten' }}-Blatt · versionierter Rückfallausdruck · erstellt {{ now()->format('d.m.Y H:i') }}</div>
+    <div class="foot">Food Alchemist · Tagesplan-Posten-Blatt · erstellt {{ now()->format('d.m.Y H:i') }}</div>
 </div>
 </body>
 </html>

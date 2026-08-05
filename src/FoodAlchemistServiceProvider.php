@@ -527,10 +527,6 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\ProductionOrdersLineOverrideTool::class,
                     \Platform\FoodAlchemist\Tools\ProductionOrdersLineAssignTool::class,
                     \Platform\FoodAlchemist\Tools\ProductionOrdersLineStatusTool::class,
-                    \Platform\FoodAlchemist\Tools\ProductionOrdersLineBlockTool::class,
-                    \Platform\FoodAlchemist\Tools\ProductionOrdersLineUnblockTool::class,
-                    \Platform\FoodAlchemist\Tools\ProductionOrdersStartTool::class,
-                    \Platform\FoodAlchemist\Tools\ProductionOrdersFinishTool::class,
                     \Platform\FoodAlchemist\Tools\ProductionOrdersDeleteTool::class,
                     // R2.6: Praxis-Feedback (Küche/Kunde/Event) je Gericht/Rezept
                     \Platform\FoodAlchemist\Tools\FeedbackSearchTool::class,

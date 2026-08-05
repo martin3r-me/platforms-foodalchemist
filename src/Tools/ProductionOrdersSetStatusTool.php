@@ -35,9 +35,6 @@ class ProductionOrdersSetStatusTool extends FoodAlchemistTool implements ToolCon
             'properties' => [
                 'order_id' => ['type' => 'integer'],
                 'status' => ['type' => 'string', 'enum' => ['in_progress', 'done', 'cancelled']],
-                'expected_updated_at' => ['type' => ['string', 'null'], 'description' => 'optimistische Version als ISO-8601 updated_at'],
-                'override_reason' => ['type' => ['string', 'null'], 'description' => 'Pflicht beim Start trotz Warnungen'],
-                'finish_note' => ['type' => ['string', 'null'], 'description' => 'Pflicht beim Fertigmelden mit offenen/blockierten Zeilen'],
             ],
             'required' => ['order_id', 'status'],
         ];
@@ -55,11 +52,7 @@ class ProductionOrdersSetStatusTool extends FoodAlchemistTool implements ToolCon
         }
 
         try {
-            $order = app(ProductionOrderService::class)->setStatus($team, (int) $arguments['order_id'], $ziel, [
-                'expected_updated_at' => $arguments['expected_updated_at'] ?? null,
-                'override_reason' => $arguments['override_reason'] ?? null,
-                'finish_note' => $arguments['finish_note'] ?? null,
-            ]);
+            $order = app(ProductionOrderService::class)->setStatus($team, (int) $arguments['order_id'], $ziel);
         } catch (\RuntimeException $e) {
             return ToolResult::error($e->getMessage(), 'NOT_ALLOWED');
         } catch (\Throwable $e) {
@@ -70,8 +63,6 @@ class ProductionOrdersSetStatusTool extends FoodAlchemistTool implements ToolCon
             'order_id' => (int) $order->id,
             'status' => $order->status instanceof ProductionOrderStatus ? $order->status->value : (string) $order->status,
             'started_at' => $order->started_at?->toDateTimeString(),
-            'finished_at' => $order->finished_at?->toDateTimeString(),
-            'updated_at' => $order->updated_at?->toIso8601String(),
         ]);
     }
 

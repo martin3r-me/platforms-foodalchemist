@@ -116,7 +116,7 @@ it('Haken zurücknehmen räumt Zeitstempel und Person wieder ab', function () {
 it('abhaken im fertigen Auftrag ist verboten', function () {
     ($this->starte)();
     $id = ($this->zeile)($this->fond)->id;
-    $this->svc->setStatus($this->rootTeam, $this->order->id, ProductionOrderStatus::Done, ['finish_note' => 'Testabschluss.']);
+    $this->svc->setStatus($this->rootTeam, $this->order->id, ProductionOrderStatus::Done);
 
     expect(fn () => $this->svc->setLineStatus($this->rootTeam, $id, ProductionLineStatus::Open))
         ->toThrow(\RuntimeException::class);
@@ -146,7 +146,7 @@ it('Fortschritt zählt erledigt und übersprungen, nicht offen', function () {
         ->and($fs['alle_erledigt'])->toBeFalse();
 
     // `skipped` = „hätten wir sollen, haben wir nicht" — zählt als abgearbeitet, aber getrennt.
-    $this->svc->setLineStatus($this->rootTeam, ($this->zeile)($this->jus)->id, ProductionLineStatus::Skipped, 'Nicht mehr benötigt');
+    $this->svc->setLineStatus($this->rootTeam, ($this->zeile)($this->jus)->id, ProductionLineStatus::Skipped);
     $fs = $this->svc->detail($this->rootTeam, $this->order->id)['fortschritt'];
 
     expect($fs['uebersprungen'])->toBe(1)
@@ -190,11 +190,9 @@ it('der Auftragsstatus wird durch das letzte Häkchen NICHT weitergeschaltet', f
         ->and($detail['status'])->toBe('in_progress');
 });
 
-it('fertig melden mit offenen Zeilen braucht Notiz und hakt nichts automatisch ab', function () {
+it('fertig melden mit offenen Zeilen ist erlaubt und hakt nichts automatisch ab', function () {
     ($this->starte)();
-    expect(fn () => $this->svc->setStatus($this->rootTeam, $this->order->id, ProductionOrderStatus::Done))
-        ->toThrow(RuntimeException::class, 'Abschlussnotiz');
-    $this->svc->setStatus($this->rootTeam, $this->order->id, ProductionOrderStatus::Done, ['finish_note' => 'Rest entfällt nach Rücksprache.']);
+    $this->svc->setStatus($this->rootTeam, $this->order->id, ProductionOrderStatus::Done);
 
     $detail = $this->svc->detail($this->rootTeam, $this->order->id);
 
@@ -207,11 +205,13 @@ it('fertig melden mit offenen Zeilen braucht Notiz und hakt nichts automatisch a
 
 it('Tagesplan zeigt Häkchen nur im laufenden Auftrag', function () {
     Livewire::test(Tagesplan::class, ['von' => '2026-08-18'])
+        ->set('modus', 'editor')
         ->assertDontSeeHtml('data-tagesplan-abhaken');
 
     ($this->starte)();
 
     Livewire::test(Tagesplan::class, ['von' => '2026-08-18'])
+        ->set('modus', 'editor')
         ->assertSeeHtml('data-tagesplan-abhaken');
 });
 
