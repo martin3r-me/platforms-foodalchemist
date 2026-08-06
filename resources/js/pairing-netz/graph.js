@@ -16,9 +16,13 @@ import { zoom } from 'd3-zoom';
 import { line as d3line, curveNatural } from 'd3-shape';
 import { scaleLinear } from 'd3-scale';
 
-const TYP_FARBE = { erprobt: '#d6409f', aroma: '#f59e0b', kontrast: '#06b6d4' };
-const TYP_DASH = { erprobt: null, aroma: '5 4', kontrast: '1 4' };
-const TYP_FILL = { erprobt: '#fbcfe8', aroma: '#fde68a', kontrast: '#a5f3fc' };
+// Inspire-Umbau 2a — Buckets: best = Inspire-Bestmatch (L3, ★★★) · harmonie =
+// übrige Harmonie (L2 ★★ / L1 ★) · kontrast = eigene Achse (⇄). Farben auf den
+// schwarzen Editor-Grund abgestimmt (helle Akzente, gedämpfte Füllungen).
+const TYP_FARBE = { best: '#f472b6', harmonie: '#fbbf24', kontrast: '#22d3ee' };
+const TYP_DASH = { best: null, harmonie: '5 4', kontrast: '1 4' };
+const TYP_FILL = { best: 'rgba(244,114,182,.22)', harmonie: 'rgba(251,191,36,.18)', kontrast: 'rgba(34,211,238,.15)' };
+const LEVEL_SYM = { 3: '★★★', 2: '★★', 1: '★', 0: '⇄' };
 
 export function pairingNetzGraph(config) {
   return {
@@ -28,8 +32,8 @@ export function pairingNetzGraph(config) {
     canvasW: config.canvasW || 1000,
     canvasH: config.canvasH || 760,
     onNodeClick: config.onNodeClick || null,
-    // Typ-Filter: erprobt an, aroma/kontrast zuschaltbar (Default aus meta).
-    typAktiv: Object.assign({ erprobt: true, aroma: false, kontrast: false }, config.typDefault || {}),
+    // Filter: best + harmonie (vertrauenswürdig) an, kontrast zuschaltbar (Default aus meta).
+    typAktiv: Object.assign({ best: true, harmonie: true, kontrast: false }, config.typDefault || {}),
     hoverId: null,
 
     _svg: null,
@@ -219,7 +223,7 @@ export function pairingNetzGraph(config) {
         .attr('dominant-baseline', (d) => (this._istRadial(d) || d.kind === 'zentrum' ? 'middle' : 'auto'))
         .attr('font-size', (d) => this._fontSize(d))
         .style('paint-order', 'stroke')
-        .style('stroke', 'rgba(255,255,255,.9)')
+        .style('stroke', 'rgba(2,6,23,.72)') // dunkler Halo für helle Schrift auf schwarzem Grund
         .style('stroke-width', (d) => (this.mode === 'preview' ? '2.5px' : '3.5px'))
         .style('fill', (d) => this._labelFill(d))
         .style('font-weight', (d) => (d.kind === 'zentrum' ? '600' : '500'))
@@ -298,7 +302,10 @@ export function pairingNetzGraph(config) {
 
     _title(d) {
       if (d.kind === 'anker') return (d.label || d.slug || '') + ' (Kern-Anker)';
-      if (d.kind === 'kandidat') return `${d.label} — ${d.typ}${d.cover > 1 ? ` · passt zu ${d.cover} Ankern` : ''}`;
+      if (d.kind === 'kandidat') {
+        const sym = LEVEL_SYM[d.level] || d.typ;
+        return `${d.label} — ${sym}${d.cover > 1 ? ` · passt zu ${d.cover} Ankern` : ''}`;
+      }
       if (d.kind === 'basisrezept') return `${d.label} — komplementär (${d.typ} über ${d.via})`;
 
       return d.label || '';
@@ -326,12 +333,13 @@ export function pairingNetzGraph(config) {
     },
 
     _labelFill(d) {
-      if (d.kind === 'zentrum') return '#111827';
-      if (d.kind === 'anker') return '#6d28d9';        // Violett, passend zum Anker-Knoten
-      if (d.kind === 'basisrezept') return '#166534';
-      if (d.kind === 'kandidat') return TYP_FARBE[d.typ] || '#4b5563';
+      // Helle Schrift auf schwarzem Editor-Grund.
+      if (d.kind === 'zentrum') return '#f8fafc';
+      if (d.kind === 'anker') return '#c4b5fd';        // helles Violett, passend zum Anker-Knoten
+      if (d.kind === 'basisrezept') return '#86efac';
+      if (d.kind === 'kandidat') return TYP_FARBE[d.typ] || '#cbd5e1';
 
-      return '#4b5563';
+      return '#cbd5e1';
     },
 
     _setHover(id) {

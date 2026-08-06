@@ -41,7 +41,7 @@ class DetailPanel extends Component
 
     public string $pairingSuche = '';
 
-    public string $pairingTyp = 'erprobt';
+    public string $pairingTyp = 'aroma';
 
     /** Ersatz-Logik: Suchtext für die Gegenseite (GP/Rezept) im Verknüpfen-Feld. */
     public string $ersatzSuche = '';

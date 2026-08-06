@@ -251,7 +251,6 @@
             @endif
             <div class="flex items-center gap-1" data-pairing-add>
                 <select wire:model="pairingTyp" class="{{ $input }} !py-0.5 !text-[11px] !w-24 shrink-0">
-                    <option value="erprobt">erprobt</option>
                     <option value="aroma">aroma</option>
                     <option value="kontrast">kontrast</option>
                 </select>
