@@ -231,7 +231,7 @@ it('erledigte und stornierte Aufträge belegen nichts mehr', function () {
     $this->svc->setStatus($this->rootTeam, $this->order->id, ProductionOrderStatus::InProgress);
     expect($this->kap->auslastung($this->rootTeam, '2026-08-01', '2026-08-31'))->not->toBe([]);
 
-    $this->svc->setStatus($this->rootTeam, $this->order->id, ProductionOrderStatus::Done);
+    $this->svc->setStatus($this->rootTeam, $this->order->id, ProductionOrderStatus::Done, ['finish_note' => 'Kapazitätstest abgeschlossen.']);
     expect($this->kap->auslastung($this->rootTeam, '2026-08-01', '2026-08-31'))->toBe([]);
 });
 

@@ -452,9 +452,12 @@ Route::get('/produktion/tagesplan/blatt', function (\Platform\FoodAlchemist\Serv
     $tage = max(1, min(60, request()->integer('tage') ?: 14));
     $bis = \Illuminate\Support\Carbon::parse($von)->addDays($tage - 1)->toDateString();
     $postenFilter = request()->integer('posten') ?: null;
+    // Posten- oder Gerichtssicht (Spec 35): steuert die Gruppierung im Blatt-Template.
+    $ansicht = request('ansicht') === 'gericht' ? 'gericht' : 'posten';
 
     $auslastung = $kap->auslastung($team, $von, $bis);
-    $zeilen = $kap->tagesplanZeilen($team, $von, $bis);
+    // mitAnleitung=true: lädt Schritte/Zubereitung/Blocker je Zeile für den papierenen Rückfall.
+    $zeilen = $kap->tagesplanZeilen($team, $von, $bis, true);
     if ($postenFilter !== null) {
         $zeilen = $zeilen->where('station_id', $postenFilter);
         $auslastung = collect($auslastung)
@@ -465,6 +468,7 @@ Route::get('/produktion/tagesplan/blatt', function (\Platform\FoodAlchemist\Serv
     return view('foodalchemist::dokumente.tagesplan_blatt', [
         'von' => $von,
         'bis' => $bis,
+        'ansicht' => $ansicht,
         'auslastung' => $auslastung,
         'zeilenNachTag' => $zeilen->groupBy(fn ($z) => \Illuminate\Support\Carbon::parse($z->plan_date)->toDateString()),
     ]);

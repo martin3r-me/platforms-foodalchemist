@@ -12,6 +12,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistProductionStation;
 use Platform\FoodAlchemist\Services\ProductionCapacityService;
 use Platform\FoodAlchemist\Services\ProductionOrderService;
 use Platform\FoodAlchemist\Services\ProductionPlanService;
+use Platform\FoodAlchemist\Services\ProductionReadinessService;
 
 /**
  * Spec 30 E3 — Tagesplan: was steht an welchem Tag an welchem Posten an, über ALLE Aufträge.
@@ -55,6 +56,12 @@ class Tagesplan extends Component
 
     /** Stufe 3 P3.4 — der zuletzt gerechnete Planungs-Vorschlag (Review vor Übernahme), oder null. */
     public ?array $vorschlag = null;
+
+    /** Wandmonitor (Spec 35): Ansicht der Wand — 'lanes' (nach Posten) | 'mise' (zusammengefasst). */
+    public string $wallAnsicht = 'lanes';
+
+    /** Wandmonitor: Zeile, deren Anleitung gerade im Overlay offen ist (null = zu). */
+    public ?int $anleitungLineId = null;
 
     private const DASHBOARD_FENSTER = [3, 7, 14, 30];
 
@@ -199,6 +206,24 @@ class Tagesplan extends Component
         }
     }
 
+    /** Wandmonitor (Spec 35): zwischen Posten-Lanes und zusammengefasster Mise-en-Place umschalten. */
+    public function wallAnsichtSetzen(string $a): void
+    {
+        $this->wallAnsicht = in_array($a, ['lanes', 'mise'], true) ? $a : 'lanes';
+    }
+
+    /** Wandmonitor: Anleitung (Schritte + Zutaten) einer Zeile im Overlay öffnen. */
+    public function oeffneAnleitung(int $lineId): void
+    {
+        $this->anleitungLineId = $lineId;
+        $this->dispatch('modal.open', name: 'wall-anleitung');
+    }
+
+    public function anleitungSchliessen(): void
+    {
+        $this->anleitungLineId = null;
+    }
+
     public function render(ProductionCapacityService $kap)
     {
         $team = Auth::user()?->currentTeamRelation;
@@ -214,18 +239,81 @@ class Tagesplan extends Component
                 ->filter(fn ($b) => $b !== [])->all();
         }
 
+        // Wandmonitor-Extras nur im Wall-Modus rechnen (Readiness zieht eine zweite, teurere Abfrage).
+        $istWall = $this->display === 'wall';
+        $readiness = ($istWall && $team !== null) ? app(ProductionReadinessService::class)->findings($team, $von, $bis) : [];
+        $miseEnPlace = $istWall ? $this->miseEnPlace($zeilen) : collect();
+        $anleitung = $istWall ? $this->anleitungAufloesen($zeilen) : null;
+
         return view('foodalchemist::livewire.produktion.tagesplan', [
             'modus' => $this->modus,
+            'istWall' => $istWall,
             'von' => $von,
             'bis' => $bis,
             'auslastung' => $auslastung,
             'zeilenNachTag' => $zeilen->groupBy(fn ($z) => Carbon::parse($z->plan_date)->toDateString()),
             'dashboard' => $this->dashboard($zeilen, $auslastung, $von, $bis),
+            'readiness' => $readiness,
+            'miseEnPlace' => $miseEnPlace,
+            'anleitung' => $anleitung,
             'postenListe' => $team !== null
                 ? FoodAlchemistProductionStation::visibleToTeam($team)->where('is_inactive', false)
                     ->orderBy('sort_order')->orderBy('name')->get(['id', 'name'])
                 : collect(),
         ])->layout('platform::layouts.app');
+    }
+
+    /**
+     * Wunsch #3 „Zusammenfassen": gleiche Komponente (recipe_id) über ALLE Gerichte/Aufträge des
+     * Fensters bündeln — Mise-en-Place-Sicht. Der Fond für drei Events ist EIN Produktionsposten,
+     * nicht drei. Read-only Aggregat; abgehakt wird weiter je Zeile in den Lanes (in_progress-Gate).
+     *
+     * @return \Illuminate\Support\Collection<int, object>
+     */
+    private function miseEnPlace($zeilen): \Illuminate\Support\Collection
+    {
+        return $zeilen->groupBy(fn ($z) => $z->recipe_id !== null ? 'r:' . $z->recipe_id : 't:' . $z->name)
+            ->map(function ($grp) {
+                $first = $grp->first();
+
+                return (object) [
+                    'name' => $first->name,
+                    'ist_basisrezept' => (bool) ($first->is_basisrezept ?? false),
+                    'auftraege' => $grp->pluck('auftrag')->filter()->unique()->values(),
+                    'anzahl' => $grp->count(),
+                    'ansaetze' => (float) $grp->sum('ansaetze_effektiv'),
+                    'minuten' => (int) $grp->sum('arbeitszeit_min'),
+                    'stationen' => $grp->pluck('station')->filter()->unique()->values(),
+                    'offen' => $grp->reject(fn ($z) => in_array($z->line_status, ['done', 'skipped'], true))->count(),
+                    'gesamt' => $grp->count(),
+                    'erste_line_id' => $first->id,
+                ];
+            })
+            ->sortByDesc(fn ($m) => [$m->anzahl, $m->minuten])->values();
+    }
+
+    /** Wandmonitor: die im Overlay gewählte Zeile team-sicher (gegen die Fenster-Zeilen) auflösen + Schritte/Zutaten laden. */
+    private function anleitungAufloesen($zeilen): ?array
+    {
+        if ($this->anleitungLineId === null) {
+            return null;
+        }
+        $treffer = $zeilen->firstWhere('id', $this->anleitungLineId);
+        if ($treffer === null) {
+            return null;   // nicht im aktuellen (team-strikten) Fenster → nichts zeigen
+        }
+        $line = FoodAlchemistProductionOrderLine::find($this->anleitungLineId);
+        if ($line === null) {
+            return null;
+        }
+
+        return [
+            'name' => $treffer->name,
+            'auftrag' => $treffer->auftrag,
+            'schritte' => $line->steps_snapshot ?? [],
+            'zubereitung' => $line->zubereitung,
+            'zutaten' => $line->zutaten ?? [],
+        ];
     }
 
     /** @return array<string, mixed> */
