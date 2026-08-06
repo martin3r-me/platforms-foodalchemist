@@ -155,6 +155,10 @@
 
     <x-slot:footer>
         <button type="button" wire:click="$dispatch('modal.close', { name: 'vk-generator-modal' })" class="{{ $btnGhost }}">{{ $ergebnis === null ? 'Abbrechen' : 'Schließen' }}</button>
+        {{-- Sichtbar machen, WAS rauskommt: volle Gericht-Ansicht (Komponenten, Wording, Plating, Kalkulation) --}}
+        @if($ergebnis !== null)
+            <button type="button" wire:click="$dispatch('vk-modal.oeffnen', { id: {{ (int) ($ergebnis['recipe_id'] ?? 0) }} })" class="{{ $btnGhost }}" data-vk-generator-ansehen><span class="inline-flex items-center gap-1.5">@svg('heroicon-o-eye', 'w-3.5 h-3.5') Gericht ansehen</span></button>
+        @endif
         @if($laeuft)
             <button type="button" disabled class="{{ $btnPrimary }} opacity-60 cursor-not-allowed" data-vk-generator-laeuft-btn>⏳ {{ $ergebnis === null ? 'Generiere' : 'Reichere an' }} …</button>
         @elseif($ergebnis === null)

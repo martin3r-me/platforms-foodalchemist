@@ -112,6 +112,10 @@
 
     <x-slot:footer>
         <button type="button" wire:click="$dispatch('modal.close', { name: 'generator-modal' })" class="{{ $btnGhost }}">{{ $ergebnis === null ? 'Abbrechen' : 'Schließen' }}</button>
+        {{-- Sichtbar machen, WAS rauskommt: volle Rezept-Ansicht (Zutaten+Treffer, Beschreibung, Zubereitung, Schritte, Sensorik) --}}
+        @if($ergebnis !== null)
+            <button type="button" wire:click="$dispatch('recipe-modal.oeffnen', { id: {{ (int) ($ergebnis['recipe_id'] ?? 0) }} })" class="{{ $btnGhost }}" data-generator-ansehen><span class="inline-flex items-center gap-1.5">@svg('heroicon-o-eye', 'w-3.5 h-3.5') Rezept ansehen</span></button>
+        @endif
         @if($laeuft)
             <button type="button" disabled class="{{ $btnPrimary }} opacity-60 cursor-not-allowed" data-generator-laeuft-btn>⏳ {{ $ergebnis === null ? 'Generiere' : 'Reichere an' }} …</button>
         @elseif($ergebnis === null)
