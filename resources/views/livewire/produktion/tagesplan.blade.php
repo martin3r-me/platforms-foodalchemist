@@ -1,4 +1,5 @@
-{{-- Spec 30 — Tagesplanung: Dashboard als Leitstand, Editor als separater Koch-Arbeitsplatz. --}}
+{{-- Spec 30/35 — Tagesplanung: Dashboard als Leitstand, Editor als separater Koch-Arbeitsplatz
+     im FA-Dark-Editor-Duktus (.fa-editor-panel · kpi-tiles · frosted Sections, wie andere Editoren). --}}
 @php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
 @php($istWall = $display === 'wall')
 
@@ -21,7 +22,7 @@
                     <a href="{{ route('foodalchemist.produktion.tagesplan', ['von' => $von, 'bis' => $bis, 'tage' => $tage]) }}"
                        wire:navigate class="{{ $btnGhostXs }}" data-tagesplan-dashboard-link>@svg('heroicon-o-chart-bar', 'w-3.5 h-3.5') Dashboard</a>
                 @endif
-                <a href="{{ route('foodalchemist.produktion.tagesplan.blatt', array_filter(['von' => $von, 'tage' => $tage, 'posten' => $postenFilter])) }}"
+                <a href="{{ route('foodalchemist.produktion.tagesplan.blatt', array_filter(['von' => $von, 'tage' => $tage, 'posten' => $postenFilter, 'ansicht' => $ansicht])) }}"
                    target="_blank" class="{{ $btnGhostXs }}" data-tagesplan-drucken>Blatt drucken</a>
                 <a href="{{ route('foodalchemist.produktion.wandmonitor', ['von' => $von, 'tage' => 1]) }}"
                    wire:navigate class="{{ $btnGhostXs }}" data-tagesplan-wall-toggle>@svg('heroicon-o-tv', 'w-3.5 h-3.5') Wandmonitor</a>
@@ -289,74 +290,80 @@
         </x-ui-page-container>
     @else
         <livewire:foodalchemist.produktion.editor />
+        {{-- Dark-Editor-Grund (.fa-editor-panel) — kaskadiert die Hell-Utilities nach dunkel,
+             identischer Duktus wie Produktionsauftrag-/Foodbook-Editor (Spec 28/29, kein dark:). --}}
+        @include('foodalchemist::partials.editor-dark')
 
         <x-ui-page-container padding="px-6 pb-6" spacing="space-y-4">
             @if($fehler)<x-foodalchemist::alert tone="danger" data-tagesplan-fehler>{{ $fehler }}</x-foodalchemist::alert>@endif
 
-            <section class="overflow-hidden rounded-2xl border border-slate-700 bg-slate-950 text-slate-100 shadow-2xl" data-tagesplan-editor>
-                <div class="border-b border-slate-700 bg-slate-900/80 px-5 py-4">
-                    <div class="flex flex-wrap items-start justify-between gap-3">
+            <section class="fa-editor-panel relative overflow-hidden rounded-2xl border shadow-2xl shadow-black/20" data-tagesplan-editor>
+                <div class="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-violet-500/50 to-transparent"></div>
+
+                {{-- Kopf: Titel + Aktionen --}}
+                <div class="border-b border-white/10 px-6 pt-4 pb-3">
+                    <div class="flex flex-wrap items-start justify-between gap-4">
                         <div>
-                            <p class="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Tagesplan Editor</p>
-                            <h1 class="text-xl font-semibold tracking-tight">Produktions-Tagesplanung</h1>
-                            <p class="text-sm text-slate-400 mt-1">{{ \Illuminate\Support\Carbon::parse($von)->format('d.m.Y') }} – {{ \Illuminate\Support\Carbon::parse($bis)->format('d.m.Y') }} · {{ $ansicht === 'gericht' ? 'Gerichtssicht' : 'Postensicht' }}</p>
+                            <p class="text-[10px] font-semibold uppercase tracking-wider text-gray-500">Tagesordnung Editor</p>
+                            <h1 class="text-xl font-semibold tracking-tight text-gray-900 flex items-center gap-2 min-w-0">
+                                <span class="shrink-0">Produktions-Tagesplanung</span>
+                                <span class="px-2.5 py-0.5 rounded-lg text-sm bg-violet-500/10 ring-1 ring-violet-500/20 text-violet-700">{{ $ansicht === 'gericht' ? 'Gerichtssicht' : 'Postensicht' }}</span>
+                            </h1>
+                            <p class="text-sm text-gray-500 mt-1">{{ \Illuminate\Support\Carbon::parse($von)->format('d.m.Y') }} – {{ \Illuminate\Support\Carbon::parse($bis)->format('d.m.Y') }}</p>
                         </div>
                         <div class="flex flex-wrap items-center justify-end gap-2">
-                            <button type="button" wire:click="vorschlagen" class="rounded-lg bg-violet-600 px-3 py-2 text-xs font-semibold text-white hover:bg-violet-500" data-tagesplan-vorschlagen>@svg('heroicon-o-sparkles', 'w-3.5 h-3.5 inline') Vorschlag rechnen</button>
-                            <a href="{{ route('foodalchemist.produktion.tagesplan.blatt', array_filter(['von' => $von, 'tage' => $tage, 'posten' => $postenFilter])) }}" target="_blank" class="rounded-lg bg-slate-700 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-600" data-tagesplan-drucken>Blatt drucken</a>
+                            <button type="button" wire:click="vorschlagen" class="{{ $btnAi }}" data-tagesplan-vorschlagen>@svg('heroicon-o-sparkles', 'w-3.5 h-3.5') Vorschlag rechnen</button>
+                            <a href="{{ route('foodalchemist.produktion.tagesplan.blatt', array_filter(['von' => $von, 'tage' => $tage, 'posten' => $postenFilter, 'ansicht' => $ansicht])) }}"
+                               target="_blank" class="{{ $btnGhostXs }}" data-tagesplan-drucken>Blatt drucken</a>
                         </div>
                     </div>
 
-                    <div class="mt-4 grid grid-cols-1 lg:grid-cols-[18rem_minmax(0,1fr)] gap-3">
-                        <div class="rounded-xl border border-slate-700 bg-slate-900 p-3" data-tagesplan-steuerung>
-                            <div class="flex items-center gap-1">
-                                <button type="button" wire:click="verschiebe(-7)" class="rounded-md border border-slate-700 px-2 py-1 text-xs text-slate-200">‹ Woche</button>
-                                <button type="button" wire:click="heute" class="rounded-md border border-slate-700 px-2 py-1 text-xs text-slate-200" data-tagesplan-heute>heute</button>
-                                <button type="button" wire:click="verschiebe(7)" class="rounded-md border border-slate-700 px-2 py-1 text-xs text-slate-200">Woche ›</button>
-                            </div>
-                            <div class="mt-3 grid grid-cols-2 gap-2">
-                                <label><span class="text-[10px] uppercase text-slate-500">von</span><input type="date" wire:model.live="von" class="mt-1 w-full rounded-md border border-slate-700 bg-slate-800 px-2 py-1 text-sm text-slate-100" /></label>
-                                <label><span class="text-[10px] uppercase text-slate-500">bis</span><input type="date" wire:model.live="bis" class="mt-1 w-full rounded-md border border-slate-700 bg-slate-800 px-2 py-1 text-sm text-slate-100" /></label>
+                    {{-- Zeitfenster-Steuerung + KPI-Streifen (kpi-tiles wie andere Editoren) --}}
+                    <div class="mt-4 grid grid-cols-1 lg:grid-cols-[22rem_minmax(0,1fr)] gap-3 items-end">
+                        <div data-tagesplan-steuerung>
+                            <span class="{{ $label }}">Zeitraum</span>
+                            <div class="mt-1 flex flex-wrap items-end gap-1">
+                                <button type="button" wire:click="verschiebe(-7)" class="{{ $btnGhostXs }}">‹ Woche</button>
+                                <button type="button" wire:click="heute" class="{{ $btnGhostXs }}" data-tagesplan-heute>heute</button>
+                                <button type="button" wire:click="verschiebe(7)" class="{{ $btnGhostXs }}">Woche ›</button>
+                                <label class="ml-1"><span class="{{ $label }}">von</span><input type="date" wire:model.live="von" class="{{ $input }} !py-1 !w-32" /></label>
+                                <label><span class="{{ $label }}">bis</span><input type="date" wire:model.live="bis" class="{{ $input }} !py-1 !w-32" /></label>
                             </div>
                         </div>
-                        <div class="grid grid-cols-2 md:grid-cols-5 gap-2" data-tagesplan-kennzahlen>
-                            @foreach([
-                                ['label' => 'Offen', 'wert' => $dashboard['kpis']['offen']],
-                                ['label' => 'Arbeitszeit', 'wert' => $dashboard['kpis']['minuten']],
-                                ['label' => 'Überlast', 'wert' => $dashboard['kpis']['ueberlast']],
-                                ['label' => 'Posten', 'wert' => $dashboard['kpis']['posten']],
-                                ['label' => 'Manntage', 'wert' => number_format($dashboard['kpis']['minuten'] / 480, 1, ',', '.')],
-                            ] as $kpi)
-                                <div class="rounded-xl border border-slate-700 bg-slate-900 px-4 py-3">
-                                    <p class="text-2xl font-semibold tabular-nums text-white">{{ $kpi['wert'] }}</p>
-                                    <p class="text-[10px] uppercase tracking-wider text-slate-400">{{ $kpi['label'] }}</p>
-                                </div>
-                            @endforeach
-                        </div>
+                        <x-foodalchemist::kpi-tiles marker="tagesplan-editor" :tiles="[
+                            ['kpi' => 'offen', 'label' => 'Offen', 'tone' => 'accent', 'value' => (string) $dashboard['kpis']['offen']],
+                            ['kpi' => 'zeit', 'label' => 'Arbeitszeit', 'value' => $dashboard['kpis']['minuten'] . ' min'],
+                            ['kpi' => 'manntage', 'label' => 'Manntage', 'value' => number_format($dashboard['kpis']['minuten'] / 480, 1, ',', '.')],
+                            ['kpi' => 'ueberlast', 'label' => 'Überlast', 'tone' => $dashboard['kpis']['ueberlast'] > 0 ? 'warn' : 'neutral', 'value' => (string) $dashboard['kpis']['ueberlast']],
+                            ['kpi' => 'posten', 'label' => 'Posten', 'value' => (string) $dashboard['kpis']['posten']],
+                        ]" />
                     </div>
                 </div>
 
-                <div class="grid min-h-[58vh] grid-cols-1 xl:grid-cols-[17rem_minmax(0,1fr)_22rem]">
-                    <aside class="border-b border-slate-800 bg-slate-900/70 p-4 xl:border-b-0 xl:border-r" data-tagesplan-postenfilter>
-                        <p class="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Posten</p>
+                {{-- Körper: Posten-Filter · Tagesordnung · Nächste Jobs --}}
+                <div class="grid min-h-[58vh] grid-cols-1 xl:grid-cols-[16rem_minmax(0,1fr)_20rem]">
+                    <aside class="border-b border-white/10 p-4 xl:border-b-0 xl:border-r" data-tagesplan-postenfilter>
+                        <p class="{{ $label }}">Posten</p>
                         <div class="mt-2 flex flex-wrap gap-1">
                             @foreach($postenListe as $p)
-                                <button type="button" wire:click="postenWaehlen({{ $p->id }})" class="rounded-full border px-2 py-1 text-xs {{ $postenFilter === $p->id ? 'border-violet-400 bg-violet-500/20 text-violet-100' : 'border-slate-700 text-slate-300' }}">{{ $p->name }}</button>
+                                <button type="button" wire:click="postenWaehlen({{ $p->id }})" wire:key="tpf-{{ $p->id }}"
+                                        class="{{ $pill }} {{ $postenFilter === $p->id ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $p->name }}</button>
                             @endforeach
                             @if($postenFilter !== null)
-                                <button type="button" wire:click="postenWaehlen(null)" class="rounded-full border border-slate-700 px-2 py-1 text-xs text-slate-300">alle</button>
+                                <button type="button" wire:click="postenWaehlen(null)" class="{{ $btnGhostXs }} mt-1">alle</button>
                             @endif
                         </div>
                     </aside>
 
-                    <main class="max-h-[65vh] overflow-auto bg-slate-800/60 p-4">
+                    <main class="max-h-[65vh] overflow-auto p-4 space-y-4">
                         @forelse($zeilenNachTag as $tag => $zeilen)
                             @php($tagC = \Illuminate\Support\Carbon::parse($tag))
                             @php($nachPosten = $zeilen->groupBy(fn ($z) => $z->station_id === null ? '_none' : (int) $z->station_id))
-                            <section class="mb-4 overflow-hidden rounded-xl border border-slate-700 bg-slate-900" data-tagesplan-tag="{{ $tag }}">
-                                <div class="flex items-baseline gap-2 border-b border-slate-700 px-4 py-3">
-                                    <h3 class="font-semibold text-slate-100">{{ $tagC->locale('de')->isoFormat('dd DD.MM.') }}</h3>
-                                    <span class="text-xs text-slate-500">{{ $zeilen->count() }} Positionen</span>
+                            <section data-modal-zone="section" class="rounded-2xl border border-white/10 overflow-hidden" data-tagesplan-tag="{{ $tag }}">
+                                <div class="flex items-baseline gap-2 border-b border-white/10 px-4 py-3">
+                                    <h3 class="font-semibold text-gray-900">{{ $tagC->locale('de')->isoFormat('dd DD.MM.') }}</h3>
+                                    @if($tagC->isToday())<span class="{{ $pill }} {{ $variantPill['primary'] }}">heute</span>@endif
+                                    <span class="text-xs text-gray-500">{{ $zeilen->count() }} Positionen</span>
                                 </div>
                                 @foreach($auslastung[$tag] ?? [] as $b)
                                     @php($schluessel = $b['station_id'] === null ? '_none' : (int) $b['station_id'])
@@ -364,40 +371,49 @@
                                     @continue($blockZeilen->isEmpty())
                                     <div class="px-4 py-3" data-tagesplan-auslastung>
                                         <div class="mb-2 flex items-center gap-2">
-                                            <span class="w-44 shrink-0 truncate text-xs font-semibold text-slate-200">{{ $b['station'] }}</span>
-                                            <span class="w-28 shrink-0 text-xs tabular-nums text-slate-400">{{ $b['geplant_min'] }}@if($b['kapazitaet_min'] !== null) / {{ $b['kapazitaet_min'] }}@endif min</span>
-                                            <span class="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-700">
-                                                @php($bar = $b['stufe'] === 'ueberlast' ? 'bg-rose-500' : ($b['stufe'] === 'eng' ? 'bg-amber-500' : 'bg-emerald-500'))
-                                                <span class="block h-full {{ $bar }}" style="width: {{ min(100, (int) ($b['prozent'] ?? 0)) }}%"></span>
+                                            <span class="w-44 shrink-0 truncate text-xs font-semibold text-gray-800">{{ $b['station'] }}</span>
+                                            <span class="w-28 shrink-0 text-xs tabular-nums text-gray-500">{{ $b['geplant_min'] }}@if($b['kapazitaet_min'] !== null) / {{ $b['kapazitaet_min'] }}@endif min</span>
+                                            <span class="h-1.5 flex-1 overflow-hidden rounded-full bg-white/10">
+                                                @if($b['kapazitaet_min'] !== null)
+                                                    @php($bar = $b['stufe'] === 'ueberlast' ? 'bg-rose-500' : ($b['stufe'] === 'eng' ? 'bg-amber-500' : 'bg-emerald-500'))
+                                                    <span class="block h-full {{ $bar }}" style="width: {{ min(100, (int) ($b['prozent'] ?? 0)) }}%"></span>
+                                                @endif
                                             </span>
                                             @if($b['stufe'] === 'ueberlast')
-                                                <span class="rounded-full bg-rose-500/15 px-2 py-0.5 text-[10px] font-semibold text-rose-200">Überlast {{ $b['prozent'] }} %</span>
+                                                <span class="{{ $pill }} {{ $variantPill['danger'] }} shrink-0">{{ $b['prozent'] }} % Überlast</span>
                                             @elseif($b['stufe'] === 'eng')
-                                                <span class="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold text-amber-200">{{ $b['prozent'] }} %</span>
+                                                <span class="{{ $pill }} {{ $variantPill['warning'] }} shrink-0">{{ $b['prozent'] }} %</span>
                                             @endif
-                                            @if($b['ohne_zeit'] > 0)<span class="text-[10px] text-amber-300">{{ $b['ohne_zeit'] }} ohne Zeit</span>@endif
+                                            @if($b['ohne_zeit'] > 0)<span class="text-[10px] text-amber-600 shrink-0">{{ $b['ohne_zeit'] }} ohne Zeit</span>@endif
                                         </div>
-                                        <table class="w-full text-sm">
-                                            <tbody class="divide-y divide-slate-800">
+                                        <table class="{{ $table }}">
+                                            <tbody>
                                                 @foreach($blockZeilen as $z)
                                                     @php($erledigt = $z->line_status === 'done')
                                                     @php($laeuft = $z->auftrag_status === 'in_progress')
-                                                    <tr class="{{ $erledigt ? 'opacity-50' : '' }}" data-tagesplan-zeile="{{ $z->id }}">
-                                                        <td class="w-8 py-2">
+                                                    <tr class="{{ $tr }} {{ $erledigt ? 'opacity-60' : '' }}" wire:key="tpz-{{ $z->id }}" data-tagesplan-zeile="{{ $z->id }}">
+                                                        <td class="{{ $td }} w-px">
                                                             @if($laeuft)
-                                                                <button type="button" wire:click="abhaken({{ $z->id }})" class="h-5 w-5 rounded border {{ $erledigt ? 'border-emerald-500 bg-emerald-500 text-white' : 'border-slate-600' }}" data-tagesplan-abhaken>{{ $erledigt ? '✓' : '' }}</button>
+                                                                <button type="button" wire:click="abhaken({{ $z->id }})"
+                                                                        class="w-5 h-5 rounded border {{ $erledigt ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-white/20 hover:border-violet-400' }} text-[11px] leading-none"
+                                                                        title="{{ $erledigt ? 'Haken zurücknehmen' : 'als erledigt abhaken' }}" data-tagesplan-abhaken>{{ $erledigt ? '✓' : '' }}</button>
                                                             @else
-                                                                <span class="inline-block h-5 w-5 rounded border border-dashed border-slate-700"></span>
+                                                                <span class="inline-block w-5 h-5 rounded border border-dashed border-white/15" title="Auftrag läuft noch nicht — abgehakt wird erst ab «in Arbeit»."></span>
                                                             @endif
                                                         </td>
-                                                        <td class="py-2 font-medium text-slate-100">{{ $z->name }} @if($z->assignee)<span class="text-xs text-slate-500">· {{ $z->assignee }}</span>@endif</td>
-                                                        <td class="py-2 text-right tabular-nums text-slate-200">{{ rtrim(rtrim(number_format($z->ansaetze_effektiv, 2, ',', '.'), '0'), ',') }} Ans.</td>
-                                                        <td class="py-2 text-right tabular-nums text-slate-300">{{ $z->arbeitszeit_min !== null ? $z->arbeitszeit_min . ' min' : '—' }}</td>
-                                                        <td class="py-2 text-right">
-                                                            <button type="button" wire:click="$dispatch('produktion-editor.bearbeiten', { id: {{ $z->order_id }} })" class="text-xs text-sky-300 hover:underline" data-tagesplan-auftrag>{{ $z->auftrag }}</button>
-                                                            <span class="ml-1 text-[10px] text-slate-500">für {{ \Illuminate\Support\Carbon::parse($z->liefertag)->format('d.m.') }}</span>
+                                                        <td class="{{ $td }} {{ $erledigt ? 'line-through' : '' }} font-medium text-gray-900">
+                                                            {{ $z->name }}@if($z->assignee)<span class="text-[11px] text-gray-500 ml-1">· {{ $z->assignee }}</span>@endif
                                                         </td>
-                                                        <td class="w-16 py-2 text-right"><input type="text" inputmode="numeric" value="{{ $z->vorlauf_tage }}" wire:change="vorlaufSetzen({{ $z->id }}, $event.target.value)" class="w-12 rounded-md border border-slate-700 bg-slate-800 px-1 py-0.5 text-right text-xs text-slate-100" data-tagesplan-vorlauf /></td>
+                                                        <td class="{{ $td }} text-right tabular-nums whitespace-nowrap">{{ rtrim(rtrim(number_format($z->ansaetze_effektiv, 2, ',', '.'), '0'), ',') }} Ans.</td>
+                                                        <td class="{{ $td }} text-right tabular-nums whitespace-nowrap">{{ $z->arbeitszeit_min !== null ? $z->arbeitszeit_min . ' min' : '—' }}</td>
+                                                        <td class="{{ $td }} whitespace-nowrap">
+                                                            <button type="button" wire:click="$dispatch('produktion-editor.bearbeiten', { id: {{ $z->order_id }} })" class="text-[11px] text-sky-600 hover:underline" data-tagesplan-auftrag>{{ $z->auftrag }}</button>
+                                                            <span class="text-[10px] text-gray-500 ml-1">für {{ \Illuminate\Support\Carbon::parse($z->liefertag)->format('d.m.') }}</span>
+                                                        </td>
+                                                        <td class="{{ $td }} text-right whitespace-nowrap w-px">
+                                                            <input type="text" inputmode="numeric" value="{{ $z->vorlauf_tage }}" wire:change="vorlaufSetzen({{ $z->id }}, $event.target.value)"
+                                                                   class="{{ $input }} !py-0.5 !w-14 text-right tabular-nums" title="Tage Vorlauf vor dem Liefertag" data-tagesplan-vorlauf />
+                                                        </td>
                                                     </tr>
                                                 @endforeach
                                             </tbody>
@@ -406,26 +422,39 @@
                                 @endforeach
                             </section>
                         @empty
-                            <div class="rounded-xl border border-dashed border-slate-700 px-4 py-10 text-center text-sm text-slate-400" data-tagesplan-leer>
-                                In diesem Zeitraum steht nichts an.
+                            <div data-modal-zone="section" class="rounded-2xl border border-white/10 px-4 py-10 text-center text-sm text-gray-500" data-tagesplan-leer>
+                                In diesem Zeitraum steht nichts an.<br>
+                                Der Tagesplan zeigt Zeilen aus <strong>geplanten und laufenden</strong> Aufträgen.
                             </div>
                         @endforelse
                     </main>
 
-                    <aside class="border-t border-slate-800 bg-slate-900/70 p-4 xl:border-l xl:border-t-0">
-                        <p class="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Nächste Jobs</p>
+                    <aside class="border-t border-white/10 p-4 xl:border-l xl:border-t-0" data-tagesplan-next>
+                        <p class="{{ $label }}">Nächste Jobs</p>
                         <div class="mt-3 space-y-2">
                             @forelse($dashboard['naechstes'] as $z)
-                                <div class="rounded-lg bg-slate-800 px-3 py-2">
-                                    <p class="truncate text-sm font-medium text-slate-100">{{ $z->name }}</p>
-                                    <p class="text-[11px] text-slate-500">{{ \Illuminate\Support\Carbon::parse($z->plan_date)->format('d.m.') }} · {{ $z->station ?: 'ohne Posten' }}</p>
+                                <div data-modal-zone="section" class="rounded-xl border border-white/10 px-3 py-2">
+                                    <p class="truncate text-sm font-medium text-gray-900">{{ $z->name }}</p>
+                                    <p class="text-[11px] text-gray-500">{{ \Illuminate\Support\Carbon::parse($z->plan_date)->format('d.m.') }} · {{ $z->station ?: 'ohne Posten' }}</p>
                                 </div>
                             @empty
-                                <p class="text-sm text-slate-500">Keine Jobs.</p>
+                                <p class="text-sm text-gray-500">Keine Jobs.</p>
                             @endforelse
                         </div>
                     </aside>
                 </div>
+
+                @if($vorschlag !== null)
+                    <div class="border-t border-white/10 px-6 py-4" data-tagesplan-vorschlag>
+                        <div class="flex flex-wrap items-center justify-between gap-2">
+                            <h3 class="font-medium text-violet-700">Planungs-Vorschlag · {{ $vorschlag['aenderungen'] }} Änderungen</h3>
+                            <div class="flex items-center gap-2">
+                                <button type="button" wire:click="vorschlagUebernehmen" class="{{ $btnPrimary }} !py-1">Übernehmen</button>
+                                <button type="button" wire:click="vorschlagVerwerfen" class="{{ $btnGhostXs }}">Verwerfen</button>
+                            </div>
+                        </div>
+                    </div>
+                @endif
             </section>
         </x-ui-page-container>
     @endif
