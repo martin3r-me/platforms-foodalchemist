@@ -71,6 +71,9 @@ class GenerateRecipeJob implements ShouldQueue
         Auth::login($user);   // Team-Kontext für AiGatewayService (Kill-Switch/DNA/Call-Log)
 
         try {
+            // Phase 0 — erste Stufe sichtbar machen (Seed fürs gestufte Generieren):
+            // der teure LLM-Entwurf startet, die UI zeigt statt „läuft …" eine Stufe.
+            $this->fortschritt($this->vkModus ? 'Gericht wird entworfen …' : 'Rezept wird entworfen …');
             $stepId = $this->cascadeStepId();
             $prepared = $stepId !== null
                 ? app(\Platform\FoodAlchemist\Services\RecipeDependencyWorkflowService::class)
@@ -178,6 +181,26 @@ class GenerateRecipeJob implements ShouldQueue
             }
         } catch (\Throwable) {
             // Rückkanal-Fehler bewusst schlucken.
+        }
+    }
+
+    /**
+     * Phase 0 — Stufen-Fortschritt in denselben Cache-Key schreiben: Status bleibt
+     * `pending`, `gestartet_at` wird bewahrt (UI-Watchdog). Die UI zeigt `progress`
+     * im Spinner. Wirft nie kaskadierend — die Fortschritts-Anzeige ist Kosmetik und
+     * darf den Lauf nicht kippen.
+     */
+    private function fortschritt(string $label): void
+    {
+        try {
+            $vorher = Cache::get(self::cacheKey($this->runId));
+            $gestartet = is_array($vorher) && isset($vorher['gestartet_at'])
+                ? $vorher['gestartet_at'] : now()->timestamp;
+            Cache::put(self::cacheKey($this->runId), [
+                'status' => 'pending', 'progress' => $label, 'gestartet_at' => $gestartet,
+            ], now()->addMinutes(15));
+        } catch (\Throwable) {
+            // Fortschritts-Write bewusst schlucken.
         }
     }
 

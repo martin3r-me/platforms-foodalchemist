@@ -72,7 +72,7 @@ class GeneratorModal extends Component
     #[On('generator-modal.oeffnen')]
     public function oeffnen(?string $description = null, ?int $planningSessionId = null): void
     {
-        $this->reset('fehler', 'ergebnis', 'description', 'planningSessionId', 'laeuft', 'runId', 'anreicherung', 'hardstopMeldung', 'hardstopOffenIndex', 'freigegeben');
+        $this->reset('fehler', 'ergebnis', 'description', 'planningSessionId', 'laeuft', 'runId', 'anreicherung', 'hinweis', 'fortschritt', 'hardstopMeldung', 'hardstopOffenIndex', 'freigegeben');
         // Planungs-„Go"-Handoff: Brief vorbefüllen + Session als Lineage-Träger mitführen.
         $this->description = $description ?? '';
         $this->planningSessionId = $planningSessionId;

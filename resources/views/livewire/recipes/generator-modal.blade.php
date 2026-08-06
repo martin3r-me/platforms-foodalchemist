@@ -8,12 +8,18 @@
 
     @if($laeuft && $ergebnis === null)
         {{-- Async (2026-07-20): Generierung läuft im Queue-Job, UI pollt das Ergebnis (kein Web-Timeout/502) --}}
-        <div wire:poll.2s="pruefeErgebnis" class="flex items-center gap-3 py-6 justify-center text-sm text-gray-600" data-generator-laeuft>
-            <svg class="animate-spin h-5 w-5 text-violet-600" viewBox="0 0 24 24" fill="none">
-                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
-            </svg>
-            <span>Rezept wird generiert — das Fenster kann offen bleiben.</span>
+        <div wire:poll.2s="pruefeErgebnis" class="py-6" data-generator-laeuft>
+            <div class="flex items-center gap-3 justify-center text-sm text-gray-600">
+                <svg class="animate-spin h-5 w-5 text-violet-600" viewBox="0 0 24 24" fill="none">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+                </svg>
+                <span data-generator-fortschritt>{{ $fortschritt ?? 'Rezept wird generiert — das Fenster kann offen bleiben.' }}</span>
+            </div>
+            {{-- Phase 0 Watchdog: pending zu lange → sichtbarer Hinweis statt endlosem Spinner --}}
+            @if($hinweis !== null)
+                <p class="mt-3 text-[11px] text-amber-600 text-center" data-generator-hinweis>⏱ {{ $hinweis }}</p>
+            @endif
         </div>
     @elseif($ergebnis === null)
         <x-foodalchemist::modal-section title="Beschreibung">
