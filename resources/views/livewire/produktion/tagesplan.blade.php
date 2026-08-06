@@ -288,6 +288,168 @@
                 </div>
             @endif
         </x-ui-page-container>
+    @elseif($istWall)
+        {{-- Spec 35 — Wandmonitor (Wunsch #2/#3): cleaner Küchenmonitor. Readiness-Hilfe,
+             Posten-Lanes mit Touch-Karten + Anleitung-Overlay (Komponenten abarbeiten),
+             und Mise-en-Place-Zusammenfassung (gleiche Komponente über alle Gerichte gebündelt). --}}
+        <livewire:foodalchemist.produktion.editor />
+        @include('foodalchemist::partials.editor-dark')
+        @php($heute = $zeilenNachTag->keys()->first())
+        @php($wallZeilen = $heute ? $zeilenNachTag->get($heute) : collect())
+        @php($wallBuckets = collect($auslastung[$heute] ?? []))
+        @php($offen = $wallZeilen->reject(fn ($z) => in_array($z->line_status, ['done', 'skipped'], true))->count())
+        @php($fertig = $wallZeilen->filter(fn ($z) => $z->line_status === 'done')->count())
+        @php($krit = $wallBuckets->where('stufe', 'ueberlast')->count())
+
+        <x-ui-page-container padding="px-4 pb-6" spacing="space-y-3">
+            @if($fehler)<x-foodalchemist::alert tone="danger" data-tagesplan-fehler>{{ $fehler }}</x-foodalchemist::alert>@endif
+
+            <section class="fa-editor-panel rounded-2xl border shadow-2xl shadow-black/20 p-4 md:p-6" data-tagesplan-wall>
+                <div class="flex flex-wrap items-center justify-between gap-4">
+                    <div>
+                        <p class="text-[11px] font-semibold uppercase tracking-wider text-gray-500">Küchenmonitor</p>
+                        <h1 class="text-3xl md:text-4xl font-bold tracking-tight text-gray-900">
+                            {{ $heute ? \Illuminate\Support\Carbon::parse($heute)->locale('de')->isoFormat('dddd, D. MMMM') : 'Kein Tag geplant' }}
+                        </h1>
+                    </div>
+                    <div class="flex items-center gap-2" data-tagesplan-steuerung>
+                        <button type="button" wire:click="verschiebe(-1)" class="{{ $btnGhostXs }} !text-base !px-3 !py-2">‹</button>
+                        <button type="button" wire:click="heute" class="{{ $btnGhostXs }} !text-base !px-3 !py-2" data-tagesplan-heute>heute</button>
+                        <button type="button" wire:click="verschiebe(1)" class="{{ $btnGhostXs }} !text-base !px-3 !py-2">›</button>
+                    </div>
+                </div>
+
+                {{-- KPI-Kacheln + Readiness-Hilfe (Pre-Flight: was steht der Produktion im Weg) --}}
+                <div class="mt-4 grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-2">
+                    <div data-modal-zone="section" class="rounded-2xl border border-white/10 p-3 text-center"><p class="text-3xl font-bold tabular-nums text-gray-900">{{ $offen }}</p><p class="text-[11px] text-gray-500">offen</p></div>
+                    <div data-modal-zone="section" class="rounded-2xl border border-white/10 p-3 text-center"><p class="text-3xl font-bold tabular-nums text-emerald-500">{{ $fertig }}</p><p class="text-[11px] text-gray-500">erledigt</p></div>
+                    <div data-modal-zone="section" class="rounded-2xl border border-white/10 p-3 text-center"><p class="text-3xl font-bold tabular-nums {{ $krit > 0 ? 'text-rose-500' : 'text-gray-900' }}">{{ $krit }}</p><p class="text-[11px] text-gray-500">Posten Überlast</p></div>
+                    <div data-modal-zone="section" class="rounded-2xl border border-white/10 p-3 text-center"><p class="text-3xl font-bold tabular-nums text-gray-900">{{ (int) $wallZeilen->sum('arbeitszeit_min') }}</p><p class="text-[11px] text-gray-500">Min gesamt</p></div>
+                    @foreach(collect($readiness)->take(2) as $f)
+                        <div data-modal-zone="section" class="rounded-2xl border {{ $f['level'] === 'blocker' ? 'border-rose-400/40' : 'border-amber-400/40' }} p-3 text-center" data-tagesplan-readiness>
+                            <p class="text-3xl font-bold tabular-nums {{ $f['level'] === 'blocker' ? 'text-rose-500' : 'text-amber-500' }}">{{ $f['count'] }}</p>
+                            <p class="text-[11px] text-gray-500">{{ $f['label'] }}</p>
+                        </div>
+                    @endforeach
+                </div>
+
+                @if(count($readiness) > 2)
+                    <div class="mt-2 flex flex-wrap gap-1.5" data-tagesplan-readiness-chips>
+                        @foreach(collect($readiness)->slice(2) as $f)
+                            <span class="{{ $pill }} {{ $f['level'] === 'blocker' ? $variantPill['danger'] : $variantPill['warning'] }}">{{ $f['label'] }}: {{ $f['count'] }}</span>
+                        @endforeach
+                    </div>
+                @endif
+
+                @if($wallBuckets->isNotEmpty())
+                    <div class="mt-3 flex flex-wrap gap-2" data-tagesplan-ampeln>
+                        @foreach($wallBuckets as $b)
+                            @php($dot = ['ueberlast' => 'bg-rose-500', 'eng' => 'bg-amber-500', 'ok' => 'bg-emerald-500'][$b['stufe']] ?? 'bg-slate-500')
+                            <span class="inline-flex items-center gap-2 rounded-full border border-white/10 px-3 py-1 text-xs text-gray-700">
+                                <span class="w-2.5 h-2.5 rounded-full {{ $dot }}"></span>{{ $b['station'] }}
+                                <span class="tabular-nums text-gray-500">{{ $b['geplant_min'] }}@if($b['kapazitaet_min'] !== null)/{{ $b['kapazitaet_min'] }}@endif</span>
+                            </span>
+                        @endforeach
+                    </div>
+                @endif
+
+                <div class="mt-4 inline-flex rounded-xl border border-white/10 p-0.5" data-tagesplan-wall-ansicht>
+                    <button type="button" wire:click="wallAnsichtSetzen('lanes')" class="px-4 py-1.5 rounded-lg text-sm {{ $wallAnsicht === 'lanes' ? 'bg-violet-500/20 text-violet-700 font-semibold' : 'text-gray-500' }}">Nach Posten</button>
+                    <button type="button" wire:click="wallAnsichtSetzen('mise')" class="px-4 py-1.5 rounded-lg text-sm {{ $wallAnsicht === 'mise' ? 'bg-violet-500/20 text-violet-700 font-semibold' : 'text-gray-500' }}" data-tagesplan-wall-mise>Zusammengefasst · Mise en Place</button>
+                </div>
+            </section>
+
+            @if($wallAnsicht === 'mise')
+                <section class="fa-editor-panel rounded-2xl border border-white/10 shadow-xl p-4" data-tagesplan-mise>
+                    <h2 class="text-lg font-semibold text-gray-900 mb-1">Mise en Place — über alle Gerichte gebündelt</h2>
+                    <p class="text-[12px] text-gray-500 mb-3">Gleiche Komponente einmal produzieren, nicht je Gericht. Tippen für die Anleitung.</p>
+                    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">
+                        @forelse($miseEnPlace as $m)
+                            <button type="button" wire:click="oeffneAnleitung({{ $m->erste_line_id }})" data-modal-zone="section"
+                                    class="text-left rounded-2xl border border-white/10 p-3 hover:border-violet-400/50 transition-colors {{ $m->offen === 0 ? 'opacity-50' : '' }}" data-tagesplan-mise-karte>
+                                <div class="flex items-start justify-between gap-2">
+                                    <p class="font-semibold text-gray-900">{{ $m->name }}</p>
+                                    @if($m->ist_basisrezept)<span class="{{ $pill }} {{ $variantPill['secondary'] }}">Basis</span>@endif
+                                </div>
+                                <p class="mt-1 text-[12px] text-gray-500">{{ $m->anzahl }}× · Σ {{ rtrim(rtrim(number_format($m->ansaetze, 2, ',', '.'), '0'), ',') }} Ans. · {{ $m->minuten }} min</p>
+                                <p class="text-[11px] text-gray-400 truncate">für {{ $m->auftraege->implode(', ') }}</p>
+                                @if($m->stationen->isNotEmpty())<p class="text-[11px] text-gray-400">Posten: {{ $m->stationen->implode(', ') }}</p>@endif
+                            </button>
+                        @empty
+                            <p class="text-sm text-gray-500" data-tagesplan-leer>Heute ist nichts zu produzieren.</p>
+                        @endforelse
+                    </div>
+                </section>
+            @else
+                <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3" data-tagesplan-lanes>
+                    @php($nachPosten = $wallZeilen->groupBy(fn ($z) => $z->station_id === null ? '_none' : (int) $z->station_id))
+                    @foreach($wallBuckets as $b)
+                        @php($schluessel = $b['station_id'] === null ? '_none' : (int) $b['station_id'])
+                        @php($laneZeilen = $nachPosten[$schluessel] ?? collect())
+                        @continue($laneZeilen->isEmpty())
+                        @php($tone = ['ueberlast' => 'border-rose-400/40', 'eng' => 'border-amber-400/40', 'ok' => 'border-emerald-400/40'][$b['stufe']] ?? 'border-white/10')
+                        <section class="fa-editor-panel rounded-2xl border {{ $tone }} shadow-xl overflow-hidden" data-tagesplan-lane="{{ $schluessel }}">
+                            <div class="flex items-center justify-between gap-2 border-b border-white/10 px-4 py-3">
+                                <h3 class="font-semibold text-gray-900">{{ $b['station'] }}</h3>
+                                <span class="text-xs tabular-nums text-gray-500">{{ $b['geplant_min'] }}@if($b['kapazitaet_min'] !== null)/{{ $b['kapazitaet_min'] }}@endif min</span>
+                            </div>
+                            <div class="p-3 space-y-2">
+                                @foreach($laneZeilen as $z)
+                                    @php($erledigt = $z->line_status === 'done')
+                                    @php($laeuft = $z->auftrag_status === 'in_progress')
+                                    <div class="flex items-center gap-3 rounded-xl border border-white/10 p-3 {{ $erledigt ? 'opacity-50' : '' }}" wire:key="wl-{{ $z->id }}" data-tagesplan-zeile="{{ $z->id }}">
+                                        @if($laeuft)
+                                            <button type="button" wire:click="abhaken({{ $z->id }})" class="w-9 h-9 shrink-0 rounded-lg border text-lg leading-none {{ $erledigt ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-white/25 hover:border-violet-400' }}" data-tagesplan-abhaken>{{ $erledigt ? '✓' : '' }}</button>
+                                        @else
+                                            <span class="w-9 h-9 shrink-0 rounded-lg border border-dashed border-white/15" title="Auftrag noch nicht gestartet — abgehakt wird erst ab «in Arbeit»."></span>
+                                        @endif
+                                        <button type="button" wire:click="oeffneAnleitung({{ $z->id }})" class="flex-1 min-w-0 text-left" data-tagesplan-wall-karte>
+                                            <p class="font-medium text-gray-900 truncate {{ $erledigt ? 'line-through' : '' }}">{{ $z->name }}</p>
+                                            <p class="text-[11px] text-gray-500 truncate">
+                                                {{ rtrim(rtrim(number_format($z->ansaetze_effektiv, 2, ',', '.'), '0'), ',') }} Ans. · {{ $z->arbeitszeit_min !== null ? $z->arbeitszeit_min . ' min' : '—' }} · {{ $z->auftrag }}
+                                                @if($z->blocked_reason)<span class="text-rose-500">· blockiert: {{ $z->blocked_reason }}</span>@endif
+                                            </p>
+                                        </button>
+                                        @svg('heroicon-o-chevron-right', 'w-4 h-4 text-gray-400 shrink-0')
+                                    </div>
+                                @endforeach
+                            </div>
+                        </section>
+                    @endforeach
+                    @if($wallZeilen->isEmpty())
+                        <div class="fa-editor-panel rounded-2xl border border-white/10 px-4 py-10 text-center text-sm text-gray-500 md:col-span-2 xl:col-span-3" data-tagesplan-leer>
+                            Heute steht nichts an.
+                        </div>
+                    @endif
+                </div>
+            @endif
+
+            {{-- Anleitung-Overlay: Schritt-für-Schritt der angetippten Komponente (Wunsch #2) --}}
+            <x-foodalchemist::modal name="wall-anleitung" fullscreen dark-canvas title="Anleitung" :title-name="$anleitung['name'] ?? null" :close-via="'anleitungSchliessen'">
+                @if($anleitung)
+                    <p class="text-sm text-gray-500 mb-3">für {{ $anleitung['auftrag'] }}</p>
+                    @if(!empty($anleitung['zutaten']))
+                        <x-foodalchemist::modal-section title="Zutaten">
+                            <ul class="text-sm space-y-0.5">
+                                @foreach($anleitung['zutaten'] as $zt)
+                                    <li class="flex justify-between gap-2 border-b border-white/5 py-1">
+                                        <span>{{ $zt['name'] ?? ($zt['bezeichnung'] ?? '—') }}</span>
+                                        <span class="tabular-nums text-gray-500">{{ $zt['menge'] ?? ($zt['quantity'] ?? '') }} {{ $zt['einheit'] ?? ($zt['unit'] ?? '') }}</span>
+                                    </li>
+                                @endforeach
+                            </ul>
+                        </x-foodalchemist::modal-section>
+                    @endif
+                    <x-foodalchemist::modal-section title="Zubereitung">
+                        @include('foodalchemist::dokumente.partials.schritt-karten-css')
+                        @include('foodalchemist::dokumente.partials.schritt-karten', ['schritte' => $anleitung['schritte'], 'zubereitung' => $anleitung['zubereitung'], 'mitFotos' => true, 'istPdf' => false])
+                        @if(empty($anleitung['schritte']) && empty($anleitung['zubereitung']))
+                            <p class="text-sm text-gray-400">Keine Anleitung hinterlegt.</p>
+                        @endif
+                    </x-foodalchemist::modal-section>
+                @endif
+            </x-foodalchemist::modal>
+        </x-ui-page-container>
     @else
         <livewire:foodalchemist.produktion.editor />
         {{-- Dark-Editor-Grund (.fa-editor-panel) — kaskadiert die Hell-Utilities nach dunkel,

@@ -147,11 +147,28 @@ it('wählt einen Auftrag ins Detail-Panel und wieder ab', function () {
 });
 
 it('rendert den Wandmodus ohne zu krachen', function () {
+    // Spec 35: Der Wandmonitor ist ein eigenes Küchenmonitor-Layout (nicht mehr die Editor-Ansicht).
     Livewire::test(Tagesplan::class, ['von' => '2026-08-18', 'display' => 'wall'])
         ->set('modus', 'editor')
         ->assertOk()
         ->assertSee('Brauner Fond')
-        ->assertSeeHtml('data-tagesplan-editor');
+        ->assertSeeHtml('data-tagesplan-wall')
+        ->assertSeeHtml('data-tagesplan-wall-mise');   // Mise-en-Place-Umschalter da (Wunsch #3)
+});
+
+it('fasst gleiche Komponenten über Gerichte zusammen (Mise en Place)', function () {
+    // Zwei Aufträge, dieselbe Komponente „Brauner Fond" → EINE Mise-en-Place-Karte, 2×.
+    $this->svc->saveNew($this->rootTeam, '2026-08-20', 'Zweite Hochzeit', [
+        ['source_ref' => 'r:fond', 'recipe_id' => $this->fond->id, 'amount_kg' => 2.0],
+    ]);
+
+    Livewire::test(Tagesplan::class, ['von' => '2026-08-18', 'display' => 'wall'])
+        ->set('modus', 'editor')
+        ->call('wallAnsichtSetzen', 'mise')
+        ->assertSet('wallAnsicht', 'mise')
+        ->assertSeeHtml('data-tagesplan-mise')
+        ->assertSee('Brauner Fond')
+        ->assertSee('2×');
 });
 
 it('druckt ein Posten-Blatt über alle Aufträge des Fensters', function () {
