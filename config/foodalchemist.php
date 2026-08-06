@@ -678,8 +678,9 @@ return [
         'recipe.pairing' => [
             'tier' => 'A',                                            // groesster Ist-Kostenblock — Qualitaet zaehlt
             'task' => 'Schlage 12-25 BELEGTE Flavor-Pairing-Partner aus dem mitgegebenen '
-                . 'Grounding vor (typ klassisch|modern|kontrast, konfidenz hoch|mittel|niedrig; '
-                . 'erfinde KEINE unbelegten Paarungen): werte = {pairings: [{slug, typ, konfidenz}]}.',
+                . 'Grounding vor (typ aroma|kontrast, konfidenz hoch|mittel|niedrig; '
+                . 'erfinde KEINE unbelegten Paarungen; Vorschlaege sind KEIN Gold — nie als '
+                . 'erprobt/klassisch/modern einlagern): werte = {pairings: [{slug, typ, konfidenz}]}.',
         ],
         'recipe.anker' => [
             'tier' => 'B',

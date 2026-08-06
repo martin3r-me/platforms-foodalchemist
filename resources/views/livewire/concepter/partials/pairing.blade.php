@@ -51,24 +51,12 @@
         </div>
 
         <div class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-3 mt-3 items-start">
-        @if(count($pairing['nachbarn']))
-            <div class="relative overflow-hidden {{ $card }}">
-                <div class="{{ $cardAccent }}"></div>
-                <div class="px-5 py-4 space-y-2">
-                    <h3 class="font-medium tracking-tight text-gray-900">Passt erprobt zu</h3>
-                    <div class="flex flex-wrap gap-1">
-                        @foreach($pairing['nachbarn'] as $n)<span class="{{ $pill }} {{ $variantPill['info'] }}">{{ $n }}</span>@endforeach
-                    </div>
-                </div>
-            </div>
-        @endif
-
         @if(count($pairing['aroma'] ?? []))
             <div class="relative overflow-hidden {{ $card }}">
                 <div class="{{ $cardAccent }}"></div>
                 <div class="px-5 py-4 space-y-2">
-                    <h3 class="font-medium tracking-tight text-gray-900">Molekular verwandt (Aroma-Layer)</h3>
-                    <p class="text-[11px] text-gray-500">Aromen mit gemeinsamem Aromamolekül (Foodpairing) — harmonieren über die Molekülebene.</p>
+                    <h3 class="font-medium tracking-tight text-gray-900">Passt dazu (Harmonie)</h3>
+                    <p class="text-[11px] text-gray-500">Harmonie-Partner aus Foodpairing Inspire (gemessen) + Molekülebene.</p>
                     <div class="flex flex-wrap gap-1">
                         @foreach($pairing['aroma'] as $n)<span class="{{ $pill }} {{ $variantPill['primary'] }}">≈ {{ $n }}</span>@endforeach
                     </div>

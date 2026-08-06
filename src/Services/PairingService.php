@@ -16,12 +16,11 @@ use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
  */
 class PairingService
 {
-    // Taxonomie 2026-07-12: drei zeitlose Kanten-Typen. erprobt = in der Küche bewährt
-    // (verschmilzt das frühere klassisch+modern — Ära ist kein Fit-Kriterium), aroma =
-    // geteiltes Aromamolekül (Buch/computed), kontrast = passt durch Gegensatz.
-    private const GEWICHTE = ['erprobt' => 1.0, 'aroma' => 0.9, 'kontrast' => 0.5]; // Tabelle 1
-
-    private const TYP_PRIO = ['erprobt' => 1, 'aroma' => 2, 'kontrast' => 3];
+    // Inspire-Umbau 2a (2026-08-06): das Ranking ist jetzt PROVENIENZ-getrieben — jede Kante
+    // trägt ein explizites `weight` (inspire 1.0/0.9, computed 0.6×conf). GEWICHTE ist nur noch
+    // Sicherheitsnetz für Kanten ohne weight: aroma (Buch) 0.9, kontrast (kuratiert) 0.5.
+    // `erprobt` ist gewipt (Gate A: kein Gold) — Schlüssel nur vestigial belassen.
+    private const GEWICHTE = ['erprobt' => 1.0, 'aroma' => 0.9, 'kontrast' => 0.5];
 
     /** Geschmacks-Achsen (anchor_taste_vectors / vocab_process_sensory_deltas). */
     private const TASTE_ACHSEN = ['suess', 'salzig', 'sauer', 'bitter', 'umami', 'fettig', 'scharf'];
@@ -940,10 +939,11 @@ class PairingService
     }
 
     /** Manuelles Pairing setzen (recipe_pairings, created_via='manual' — bewusst gesetzt, gewinnt). */
-    public function setRecipePairing(Team $team, int $recipeId, int $ankerId, string $typ = 'erprobt'): void
+    public function setRecipePairing(Team $team, int $recipeId, int $ankerId, string $typ = 'aroma'): void
     {
         $recipe = FoodAlchemistRecipe::visibleToTeam($team)->findOrFail($recipeId);
-        $typ = in_array($typ, ['erprobt', 'aroma', 'kontrast', 'verbund', 'trinitas'], true) ? $typ : 'erprobt';
+        // erprobt ist gewipt — manuelle Pairings nur noch aroma/kontrast/verbund/trinitas.
+        $typ = in_array($typ, ['aroma', 'kontrast', 'verbund', 'trinitas'], true) ? $typ : 'aroma';
         DB::table('foodalchemist_recipe_pairings')->updateOrInsert(
             ['recipe_id' => $recipe->id, 'anchor_id' => $ankerId, 'type' => $typ],
             ['uuid' => (string) \Symfony\Component\Uid\UuidV7::generate(), 'team_id' => $team->id,
@@ -1090,7 +1090,8 @@ class PairingService
             $vorschlaege = collect($sug['klassiker'])->map($mapV)->all();
             $signature = collect($sug['signature'])->map($mapV)->all();
         } else {
-            $nachbarn = $this->ankerNachbarnAggregiert($slugs, $eigene, 'erprobt');
+            // erprobt ist gewipt → vertrauenswürdige Harmonie-Nachbarn (Inspire+Molekül).
+            $nachbarn = $this->ankerNachbarnAggregiert($slugs, $eigene, 'aroma');
             $team = Team::find((int) $recipe->team_id);
             $verwandte = $team !== null
                 ? $this->recipesSharingPairings($team, $recipe->id)->all()
@@ -1131,7 +1132,8 @@ class PairingService
         return [
             'type' => 'gp',
             'anker' => $anker->map(fn ($a) => ['slug' => $a->slug, 'display_de' => $a->display_de, 'source' => $a->source])->all(),
-            'nachbarn' => $this->ankerNachbarnAggregiert($slugs, $eigene, 'erprobt'),
+            // erprobt ist gewipt → vertrauenswürdige Harmonie-Nachbarn.
+            'nachbarn' => $this->ankerNachbarnAggregiert($slugs, $eigene, 'aroma'),
             'aroma' => $this->ankerNachbarnAggregiert($slugs, $eigene, 'aroma'),
             'kontrast' => $this->ankerNachbarnAggregiert($slugs, $eigene, 'kontrast'),
             'geschmack' => $this->aggregatedTaste($eigene),
@@ -1158,9 +1160,9 @@ class PairingService
     // als äusserer Kreis drumherum (nach Typ in zusammenhängende Bögen sortiert).
     private const R_ANKER = 150.0;      // Innenring Kern-Anker
 
-    private const R_ERPROBT = 320.0;    // mittlerer Vollkreis: erprobte Kandidaten (rosa)
+    private const R_BEST = 320.0;       // mittlerer Vollkreis: best-Kandidaten (Inspire L3, ★★★)
 
-    private const R_OUTER = 470.0;      // Aussenkreis: aroma (gelb) + kontrast (blau) + Basisrezepte (grün)
+    private const R_OUTER = 470.0;      // Aussenkreis: harmonie (★★/★) + kontrast (⇄) + Basisrezepte
 
     private const KANDIDATEN_PRO_TYP = 14;   // Cap je Typ
 
@@ -1241,8 +1243,8 @@ class PairingService
             })(),
             0, self::KANDIDATEN_PRO_TYP
         );
-        $erprobt = $jeTyp('erprobt');
-        $aroma = $jeTyp('aroma');
+        $best = $jeTyp('best');
+        $harmonie = $jeTyp('harmonie');
         $kontrast = $jeTyp('kontrast');
 
         $basis = $this->komplementaerBasisrezepte($team, $recipeId, $candMeta);
@@ -1250,34 +1252,36 @@ class PairingService
         $kandidatNodes = [];
         $basisNodes = [];
 
-        // Mittlerer Vollkreis: erprobte Kandidaten gleichmässig rundum (wie Vorschau).
-        $mE = max(1, count($erprobt));
-        foreach ($erprobt as $idx => $c) {
-            [$x, $y] = $this->positionAufKreis($idx, $mE, self::R_ERPROBT, $cx, $cy);
+        // Mittlerer Vollkreis: best-Kandidaten (Inspire L3, ★★★) gleichmässig rundum.
+        $mB = max(1, count($best));
+        foreach ($best as $idx => $c) {
+            [$x, $y] = $this->positionAufKreis($idx, $mB, self::R_BEST, $cx, $cy);
             $kandidatNodes[] = [
-                'id' => 'k:'.$c['id'], 'kind' => 'kandidat', 'typ' => 'erprobt', 'label' => $c['display_de'],
-                'slug' => $c['slug'], 'cover' => $c['cover'], 'x' => $x, 'y' => $y,
+                'id' => 'k:'.$c['id'], 'kind' => 'kandidat', 'typ' => 'best', 'level' => $c['level'] ?? 3,
+                'label' => $c['display_de'], 'slug' => $c['slug'], 'cover' => $c['cover'], 'x' => $x, 'y' => $y,
             ];
             foreach ($c['partner'] as $p) {
                 $edges[] = ['source' => 'k:'.$c['id'], 'target' => 'a:'.$p['anker_id'], 'kind' => 'kandidat',
-                    'typ' => $p['typ'], 'weight' => $p['weight'], 'computed' => $p['computed'], 'visible' => true];
+                    'typ' => $p['typ'], 'level' => $p['level'] ?? 1, 'weight' => $p['weight'],
+                    'computed' => $p['computed'], 'visible' => true];
             }
         }
 
-        // Äusserer Vollkreis: aroma + kontrast + Basisrezepte, in zusammenhängenden
-        // Typ-Bögen (gelb, blau, grün) rund um den erprobt-Kreis.
-        $outerTotal = max(1, count($aroma) + count($kontrast) + count($basis));
+        // Äusserer Vollkreis: harmonie (★★/★) + kontrast (⇄) + Basisrezepte, in
+        // zusammenhängenden Bögen rund um den best-Kreis.
+        $outerTotal = max(1, count($harmonie) + count($kontrast) + count($basis));
         $oi = 0;
-        foreach ([['aroma', $aroma], ['kontrast', $kontrast]] as [$typ, $liste]) {
+        foreach ([['harmonie', $harmonie], ['kontrast', $kontrast]] as [$typ, $liste]) {
             foreach ($liste as $c) {
                 [$x, $y] = $this->positionAufKreis($oi++, $outerTotal, self::R_OUTER, $cx, $cy);
                 $kandidatNodes[] = [
-                    'id' => 'k:'.$c['id'], 'kind' => 'kandidat', 'typ' => $typ, 'label' => $c['display_de'],
-                    'slug' => $c['slug'], 'cover' => $c['cover'], 'x' => $x, 'y' => $y,
+                    'id' => 'k:'.$c['id'], 'kind' => 'kandidat', 'typ' => $typ, 'level' => $c['level'] ?? ($typ === 'kontrast' ? 0 : 1),
+                    'label' => $c['display_de'], 'slug' => $c['slug'], 'cover' => $c['cover'], 'x' => $x, 'y' => $y,
                 ];
                 foreach ($c['partner'] as $p) {
                     $edges[] = ['source' => 'k:'.$c['id'], 'target' => 'a:'.$p['anker_id'], 'kind' => 'kandidat',
-                        'typ' => $p['typ'], 'weight' => $p['weight'], 'computed' => $p['computed'], 'visible' => true];
+                        'typ' => $p['typ'], 'level' => $p['level'] ?? 1, 'weight' => $p['weight'],
+                        'computed' => $p['computed'], 'visible' => true];
                 }
             }
         }
@@ -1303,11 +1307,12 @@ class PairingService
                 'recipe_id' => $recipeId,
                 'canvas_w' => self::CANVAS_W,
                 'canvas_h' => self::CANVAS_H,
-                // Typ-Filter-Defaults: erprobt an, aroma/kontrast zuschaltbar.
-                'typ_default' => ['erprobt' => true, 'aroma' => false, 'kontrast' => false],
+                // Filter-Defaults: vertrauenswürdige Harmonie (best + harmonie) an,
+                // Kontrast zuschaltbar (eigene Achse).
+                'typ_default' => ['best' => true, 'harmonie' => true, 'kontrast' => false],
                 'counts' => [
-                    'erprobt' => count(array_filter($kandidatNodes, fn ($n) => $n['typ'] === 'erprobt')),
-                    'aroma' => count(array_filter($kandidatNodes, fn ($n) => $n['typ'] === 'aroma')),
+                    'best' => count(array_filter($kandidatNodes, fn ($n) => $n['typ'] === 'best')),
+                    'harmonie' => count(array_filter($kandidatNodes, fn ($n) => $n['typ'] === 'harmonie')),
                     'kontrast' => count(array_filter($kandidatNodes, fn ($n) => $n['typ'] === 'kontrast')),
                     'basis' => count($basisNodes),
                 ],
@@ -1332,25 +1337,27 @@ class PairingService
             ->join('foodalchemist_vocab_pairing_anchors AS a', 'a.id', '=', 'e.anchor_b_id')
             ->whereIn('e.anchor_a_id', $innerIds)
             ->whereNotIn('e.anchor_b_id', $innerIds)
-            ->get(['e.anchor_a_id', 'e.anchor_b_id', 'e.type', 'e.weight', 'e.source_slug', 'a.slug', 'a.display_de']);
+            ->get(['e.anchor_a_id', 'e.anchor_b_id', 'e.type', 'e.weight', 'e.level', 'e.source_slug', 'a.slug', 'a.display_de']);
 
         $agg = [];
         foreach ($rows as $r) {
-            $typ = self::TYP_NORMALISIERT[$r->type] ?? null;
-            if ($typ === null) {
-                continue;
-            }
+            // Inspire-Umbau 2a: Bucket nach Achse+Stufe statt Kanten-Typ.
+            //   best = Harmonie-Stufe 3 (Inspire L3, ★★★) · harmonie = übrige Harmonie (★★/★)
+            //   kontrast = eigene Achse (⇄). Stufe (level) fürs Symbol am Knoten.
+            $istKontrast = ($r->type === 'kontrast');
+            $level = $r->level !== null ? (int) $r->level : ($istKontrast ? 0 : 1);
+            $bucket = $istKontrast ? 'kontrast' : ($level >= 3 ? 'best' : 'harmonie');
             $cid = (int) $r->anchor_b_id;
-            $w = $r->weight !== null ? (float) $r->weight : (self::GEWICHTE[$typ] ?? 0.5);
+            $w = $r->weight !== null ? (float) $r->weight : (self::GEWICHTE[$r->type] ?? 0.5);
             if (! isset($agg[$cid])) {
                 $agg[$cid] = ['id' => $cid, 'slug' => $r->slug, 'display_de' => $r->display_de,
-                    'partner' => [], 'ankerSet' => [], 'best' => ['typ' => $typ, 'weight' => -1.0]];
+                    'partner' => [], 'ankerSet' => [], 'best' => ['typ' => $bucket, 'weight' => -1.0, 'level' => $level]];
             }
-            $agg[$cid]['partner'][] = ['anker_id' => (int) $r->anchor_a_id, 'typ' => $typ, 'weight' => $w,
-                'computed' => $r->source_slug === 'computed'];
+            $agg[$cid]['partner'][] = ['anker_id' => (int) $r->anchor_a_id, 'typ' => $bucket, 'level' => $level,
+                'weight' => $w, 'computed' => $r->source_slug === 'computed'];
             $agg[$cid]['ankerSet'][(int) $r->anchor_a_id] = true;
             if ($w > $agg[$cid]['best']['weight']) {
-                $agg[$cid]['best'] = ['typ' => $typ, 'weight' => $w];
+                $agg[$cid]['best'] = ['typ' => $bucket, 'weight' => $w, 'level' => $level];
             }
         }
 
@@ -1367,7 +1374,8 @@ class PairingService
             }
             $kandidaten[] = [
                 'id' => $cid, 'slug' => $c['slug'], 'display_de' => $c['display_de'],
-                'typ' => $c['best']['typ'], 'weight' => $c['best']['weight'], 'cover' => $cover, 'partner' => $c['partner'],
+                'typ' => $c['best']['typ'], 'level' => $c['best']['level'], 'weight' => $c['best']['weight'],
+                'cover' => $cover, 'partner' => $c['partner'],
             ];
             $candMeta[$cid] = ['typ' => $c['best']['typ'], 'anker_id' => $primaerAnker, 'slug' => $c['slug']];
         }
