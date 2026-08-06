@@ -518,7 +518,9 @@ class ImportSliceCommand extends Command
                 'type' => $r['type'],
                 'evidence' => self::nullIfBlank($r['evidence'] ?? null),
                 'source_slug' => self::nullIfBlank($r['source_slug'] ?? null),
-            ], skipRow: fn (array $r) => ! isset($ankerMap[(int) $r['anker_a_id']]) || ! isset($ankerMap[(int) $r['anker_b_id']]));
+            ], skipRow: fn (array $r) => ! isset($ankerMap[(int) $r['anker_a_id']]) || ! isset($ankerMap[(int) $r['anker_b_id']])
+                // Inspire-Umbau 2a: erprobt ist gewipt — Reimport darf es nicht zurückholen.
+                || in_array($r['type'] ?? '', ['erprobt', 'klassisch', 'modern'], true));
 
         $stats['gp_anker_mapping'] = $this->importBulk($pdo, $dryRun, 'gp_anker_mapping', 'foodalchemist_gp_anchor_mappings', 'mapping_id',
             fn (array $r) => [
@@ -551,7 +553,9 @@ class ImportSliceCommand extends Command
                 'confidence' => $r['confidence'] ?? 'medium',
                 'note' => self::nullIfBlank($r['note'] ?? null),
                 'created_via' => $r['created_via'] ?? null,
-            ], skipRow: fn (array $r) => ! isset($recipeMap[(int) $r['recipe_id']]) || ! isset($ankerMap[(int) $r['pairing_anker_vocab_id']]));
+            ], skipRow: fn (array $r) => ! isset($recipeMap[(int) $r['recipe_id']]) || ! isset($ankerMap[(int) $r['pairing_anker_vocab_id']])
+                // Inspire-Umbau 2a: erprobt-Chips nicht reimportieren.
+                || in_array($r['type'] ?? '', ['erprobt', 'klassisch', 'modern'], true));
 
         $stats['recipe_prozess_anker'] = $this->importBulk($pdo, $dryRun, 'recipe_prozess_anker', 'foodalchemist_recipe_process_anchors', 'mapping_id',
             fn (array $r) => [
@@ -567,19 +571,19 @@ class ImportSliceCommand extends Command
         // die Quelle selbst trägt Asymmetrien). Fehlende Gegenkanten deterministisch ergänzen.
         if (! $dryRun) {
             $fehlend = DB::select('
-                SELECT e.anker_a_id, e.anker_b_id, e.type, e.evidence, e.source_slug
+                SELECT e.anchor_a_id, e.anchor_b_id, e.type, e.evidence, e.source_slug
                 FROM foodalchemist_pairing_anchor_edges e
                 WHERE NOT EXISTS (
                     SELECT 1 FROM foodalchemist_pairing_anchor_edges r
-                    WHERE r.anker_a_id = e.anker_b_id AND r.anker_b_id = e.anker_a_id AND r.type = e.type
+                    WHERE r.anchor_a_id = e.anchor_b_id AND r.anchor_b_id = e.anchor_a_id AND r.type = e.type
                 )');
             $now = now()->toDateTimeString();
             foreach ($fehlend as $kante) {
                 DB::table('foodalchemist_pairing_anchor_edges')->insertOrIgnore([
                     'uuid' => (string) UuidV7::generate(),
                     'team_id' => $this->teamId,
-                    'anchor_a_id' => $kante->anker_b_id,
-                    'anchor_b_id' => $kante->anker_a_id,
+                    'anchor_a_id' => $kante->anchor_b_id,
+                    'anchor_b_id' => $kante->anchor_a_id,
                     'type' => $kante->type,
                     'evidence' => $kante->evidence,
                     'source_slug' => 'symmetrie_backfill:' . ($kante->source_slug ?? ''),
@@ -590,7 +594,7 @@ class ImportSliceCommand extends Command
                 SELECT COUNT(*) AS n FROM foodalchemist_pairing_anchor_edges e
                 WHERE NOT EXISTS (
                     SELECT 1 FROM foodalchemist_pairing_anchor_edges r
-                    WHERE r.anker_a_id = e.anker_b_id AND r.anker_b_id = e.anker_a_id AND r.type = e.type
+                    WHERE r.anchor_a_id = e.anchor_b_id AND r.anchor_b_id = e.anchor_a_id AND r.type = e.type
                 )')->n;
             $this->line(($rest === 0 ? '✅' : '❌') . ' pairing_edges-Symmetrie (V-23): ' . count($fehlend) . " Gegenkanten ergänzt, {$rest} offen");
         }

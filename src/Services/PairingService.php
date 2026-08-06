@@ -16,12 +16,11 @@ use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
  */
 class PairingService
 {
-    // Taxonomie 2026-07-12: drei zeitlose Kanten-Typen. erprobt = in der Küche bewährt
-    // (verschmilzt das frühere klassisch+modern — Ära ist kein Fit-Kriterium), aroma =
-    // geteiltes Aromamolekül (Buch/computed), kontrast = passt durch Gegensatz.
-    private const GEWICHTE = ['erprobt' => 1.0, 'aroma' => 0.9, 'kontrast' => 0.5]; // Tabelle 1
-
-    private const TYP_PRIO = ['erprobt' => 1, 'aroma' => 2, 'kontrast' => 3];
+    // Inspire-Umbau 2a (2026-08-06): das Ranking ist jetzt PROVENIENZ-getrieben — jede Kante
+    // trägt ein explizites `weight` (inspire 1.0/0.9, computed 0.6×conf). GEWICHTE ist nur noch
+    // Sicherheitsnetz für Kanten ohne weight: aroma (Buch) 0.9, kontrast (kuratiert) 0.5.
+    // `erprobt` ist gewipt (Gate A: kein Gold) — Schlüssel nur vestigial belassen.
+    private const GEWICHTE = ['erprobt' => 1.0, 'aroma' => 0.9, 'kontrast' => 0.5];
 
     /** Geschmacks-Achsen (anchor_taste_vectors / vocab_process_sensory_deltas). */
     private const TASTE_ACHSEN = ['suess', 'salzig', 'sauer', 'bitter', 'umami', 'fettig', 'scharf'];

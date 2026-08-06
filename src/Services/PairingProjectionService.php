@@ -53,12 +53,19 @@ class PairingProjectionService
         if ($apply) {
             // Ein atomarer INSERT..SELECT: schnell, und interrupt-sicher (InnoDB rollt
             // die Anweisung ganz zurück statt teilweise). Re-Run überspringt via holes-only.
+            // Provenienz-Achse (Inspire-Umbau 2a): source/axis/level mitschreiben.
+            //  axis = type-Spiegel (aroma→harmony, kontrast→contrast);
+            //  level = nur Harmonie: conf≥0.8 → 2 (◕, Konsens) sonst 1 (○). Kontrast: NULL.
+            //  ● bleibt exklusiv Inspire L3 — computed erreicht nie level 3.
             $inserted = DB::affectingStatement(
                 'INSERT INTO foodalchemist_pairing_anchor_edges '
-                .'(uuid, team_id, anchor_a_id, anchor_b_id, type, weight, evidence, source_slug, created_at, updated_at) '
+                .'(uuid, team_id, anchor_a_id, anchor_b_id, type, weight, source, axis, level, evidence, source_slug, created_at, updated_at) '
                 .'SELECT UUID(), ?, p.a, p.b, '
                 ."CASE WHEN (p.best_harm > 0 OR p.any_synergie = 1) THEN 'aroma' ELSE 'kontrast' END, "
                 .'ROUND(? * p.best_conf, 3), '
+                ."'computed', "
+                ."CASE WHEN (p.best_harm > 0 OR p.any_synergie = 1) THEN 'harmony' ELSE 'contrast' END, "
+                .'CASE WHEN (p.best_harm > 0 OR p.any_synergie = 1) THEN (CASE WHEN p.best_conf >= 0.8 THEN 2 ELSE 1 END) ELSE NULL END, '
                 ."CONCAT('computed (conf=', ROUND(p.best_conf, 3), '): ', COALESCE(p.evidence, '')), "
                 ."'computed', NOW(), NOW() "
                 .'FROM tmp_proj_pairs p '

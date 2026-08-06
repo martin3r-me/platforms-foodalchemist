@@ -19,8 +19,8 @@ class PairingsGetTool extends FoodAlchemistTool implements ToolContract, ToolMet
     public function getDescription(): string
     {
         return 'Liefert Flavor-Pairing-Partner für eine Zutat (Name oder Anker-Slug) aus dem '
-            . 'Anker-Graph (kuratiert + abgeleitete Molekül-Kanten). typ filtert auf '
-            . 'aroma|erprobt|kontrast. Bei Geschmacks-Kombinationen '
+            . 'Anker-Graph (Foodpairing Inspire + Molekül-Kanten + Kontrast). typ filtert auf '
+            . 'aroma|kontrast. Bei Geschmacks-Kombinationen '
             . '(Rezept, Komposition, Menü) IMMER zuerst hier nachschlagen statt zu raten.';
     }
 
@@ -30,7 +30,7 @@ class PairingsGetTool extends FoodAlchemistTool implements ToolContract, ToolMet
             'type' => 'object',
             'properties' => [
                 'zutat' => ['type' => 'string', 'description' => 'Zutat-Name oder Anker-Slug, z. B. "Kürbis" oder "kuerbis"'],
-                'type' => ['type' => 'string', 'enum' => ['aroma', 'erprobt', 'kontrast'], 'description' => 'Optionaler Kanten-Filter'],
+                'type' => ['type' => 'string', 'enum' => ['aroma', 'kontrast'], 'description' => 'Optionaler Kanten-Filter (aroma = Harmonie inkl. Inspire, kontrast = Gegensatz)'],
                 'limit' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 100, 'default' => 20],
             ],
             'required' => ['zutat'],
