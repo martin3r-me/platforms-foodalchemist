@@ -1,7 +1,8 @@
 {{--
     Spec 03 L7b: der One-Shot-Toggle „⚡ Voll anreichern" — eine Fläche für BEIDE
-    Generator-Modals (Basisrezept + Gericht). Default AN: „Beschreibung rein,
-    fertiges Rezept raus" ist der Sinn des Knopfes.
+    Generator-Modals (Basisrezept + Gericht). Recipe-first (2026-08-06): Default AUS —
+    zuerst die Rezept-Basis, die Anreicherung ist ein bewusster Schritt nach dem Review.
+    Toggle AN = „Beschreibung rein, fertiges Rezept raus" in einem Durchlauf (opt-in).
 
     Der Hinweistext nennt die Schrittfolge der jeweiligen Ebene, weil sie sich
     unterscheidet (Basis: Beschreibung/Kategorie/Geschmack · Gericht: Beschreibung/

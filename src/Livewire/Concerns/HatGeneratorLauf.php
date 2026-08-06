@@ -36,11 +36,14 @@ trait HatGeneratorLauf
     use InteractsWithSavedToast;
 
     /**
-     * L7-DoD: Default AN — „Beschreibung rein, fertiges Rezept raus" ist der
-     * Sinn des Knopfes. Aus lässt sich der Toggle für den schnellen Gerüst-Lauf
-     * (kein zusätzlicher Provider-Call, Anreicherung später per Sammel-Klick).
+     * Recipe-first (2026-08-06, Dominique „Rezept ist am Anfang das Wichtigste"):
+     * Default AUS. Am Anfang zählt die Rezept-BASIS (Zutaten + Matching); die
+     * Anreicherung (Beschreibung/Wording/Plating/Schritte/Sensorik = mehrere teure
+     * Provider-Calls) ist ein BEWUSSTER Schritt NACH Review/Freigabe, nicht
+     * automatisch mit der Generierung. Toggle AN = alte „Beschreibung rein, fertiges
+     * Rezept raus"-Strecke in einem Durchlauf (opt-in).
      */
-    public bool $vollAnreichern = true;
+    public bool $vollAnreichern = false;
 
     /** Async: läuft, während der Queue-Job rechnet; UI pollt über die Run-ID. */
     public bool $laeuft = false;

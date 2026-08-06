@@ -31,10 +31,11 @@ beforeEach(function () {
     Queue::fake();
 });
 
-it('Basisrezept-Generator: Toggle ist Default AN und geht als vollAnreichern in den Job', function () {
+it('Basisrezept-Generator: Toggle ist Default AUS (recipe-first) — Anreicherung ist opt-in im Job', function () {
     Livewire::test(GeneratorModal::class)
-        ->assertSet('vollAnreichern', true)
+        ->assertSet('vollAnreichern', false)                 // recipe-first: erst die Basis, Anreicherung bewusst danach
         ->set('description', 'Dunkle Rotwein-Schalotten-Reduktion')
+        ->set('vollAnreichern', true)                        // opt-in → geht als vollAnreichern in den Job
         ->call('generieren')
         ->assertSet('laeuft', true);
 
@@ -43,13 +44,13 @@ it('Basisrezept-Generator: Toggle ist Default AN und geht als vollAnreichern in 
 
 it('VK-Generator: dispatcht in die Queue statt synchron zu rechnen (V-035)', function () {
     Livewire::test(VkGeneratorModal::class)
-        ->assertSet('vollAnreichern', true)
+        ->assertSet('vollAnreichern', false)                 // recipe-first Default
         ->set('description', 'Geschmortes Rind mit Wurzelgemüse')
         ->call('generieren')
         ->assertSet('laeuft', true)
         ->assertSet('ergebnis', null);          // nichts wird im Request gerechnet
 
-    Queue::assertPushed(GenerateRecipeJob::class, fn ($job) => $job->vkModus === true && $job->vollAnreichern === true);
+    Queue::assertPushed(GenerateRecipeJob::class, fn ($job) => $job->vkModus === true);
 });
 
 it('Toggle aus lässt den Job den Bestandspfad fahren (kein Anreicherungs-Pass)', function () {
