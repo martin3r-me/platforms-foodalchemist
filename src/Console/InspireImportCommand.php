@@ -9,6 +9,8 @@ use Platform\FoodAlchemist\Services\InspireImportService;
  * Inspire-Voll-Import — mintet je Inspire-Zutat einen Anker (+ label_en-Brücke) und
  * schreibt die Kanten (pairings_strong L2+L3) in einem Pass. Kein Merge auf Bestand.
  * Default = Dry-Run. Redo mit --purge (löscht alle Inspire-Anker/-Kanten vorher).
+ * Schreibt KEINE Embeddings — danach `foodalchemist:embed --pool=knowledge` off-peak
+ * (sonst findet die semantische Anker-Auflösung / Qdrant-RAG die neuen Anker nicht).
  *
  *   php artisan foodalchemist:inspire-import --source=/pfad/foodpairing_kompakt.db
  *   php artisan foodalchemist:inspire-import --source=/pfad/foodpairing_kompakt.db --apply
@@ -71,7 +73,17 @@ class InspireImportCommand extends Command
 
         if (! $apply) {
             $this->line('→ Dry-Run. Mit --apply schreiben (--purge für Redo).');
+
+            return self::SUCCESS;
         }
+
+        // Der Import schreibt NUR Anker/Kanten (core_embeddings bleibt per Design unberührt).
+        // Ohne Nach-Embed findet die semantische Anker-Auflösung (RAG/Qdrant) die neuen Anker nicht.
+        $this->newLine();
+        $this->warn('Anker + Kanten geschrieben — aber KEINE Embeddings (core_embeddings unberührt).');
+        $this->warn('→ Jetzt OFF-PEAK nachziehen (sonst sieht die semantische Anker-Suche die neuen Anker nicht,');
+        $this->warn('  und nicht parallel zur Nutzung — schwerer Embed-Job):');
+        $this->line('    php artisan foodalchemist:embed --pool=knowledge');
 
         return self::SUCCESS;
     }
