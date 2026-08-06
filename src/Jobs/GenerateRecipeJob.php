@@ -79,7 +79,12 @@ class GenerateRecipeJob implements ShouldQueue
                 ? app(\Platform\FoodAlchemist\Services\RecipeDependencyWorkflowService::class)
                     ->prepare($team, $stepId, $this->description, $this->parameter, $this->vkModus)
                 : null;
-            $r = $generator->generiere($team, $this->description, $this->parameter, null, $this->vkModus, null, $prepared);
+            // P0.2: der Fortschritts-Callback schreibt jede Stufe in den Cache-Key (progress) —
+            // die UI zeigt sie live; ein OOM-/Hänger-Tod bleibt an der letzten Stufe stehen.
+            $r = $generator->generiere(
+                $team, $this->description, $this->parameter, null, $this->vkModus, null, $prepared,
+                fn (string $stufe) => $this->fortschritt($stufe),
+            );
             if ($r === [] || ! isset($r['recipe'])) {
                 throw new \RuntimeException('Generierung lieferte kein Ergebnis.');
             }

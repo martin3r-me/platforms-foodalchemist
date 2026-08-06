@@ -45,10 +45,18 @@ class RecipeGeneratorService
      *                            Default null = byte-identisches Verhalten der UI-Pfade.
      * @return array{recipe: FoodAlchemistRecipe, statistik: array, offene: array}
      */
-    public function generiere(Team $team, string $description, array $parameter = [], ?array $kiRezeptOverride = null, bool $vkModus = false, ?string $createdVia = null, ?array $preparedContext = null): array
+    public function generiere(Team $team, string $description, array $parameter = [], ?array $kiRezeptOverride = null, bool $vkModus = false, ?string $createdVia = null, ?array $preparedContext = null, ?callable $onProgress = null): array
     {
+        // P0.2: feine Fortschritts-Stufen — die UI zeigt live, WO der Lauf steht; ein
+        // OOM-/Hänger-Tod bleibt am zuletzt gemeldeten Schritt stehen (Pinpoint der Ursache).
+        $melde = static function (string $stufe) use ($onProgress): void {
+            if ($onProgress !== null) {
+                $onProgress($stufe);
+            }
+        };
         $kiRezept = $kiRezeptOverride;
         if ($kiRezept === null) {
+            $melde('Kontext & Wissen werden geladen …');
             $preparedContext ??= app(RecipeGenerationContextService::class)->build($team, $description, $parameter, $vkModus);
             $kontext = $preparedContext['prompt'];
             $wissen = ['block' => $preparedContext['knowledge'], 'files_used' => $preparedContext['knowledge_used']];
@@ -69,6 +77,7 @@ class RecipeGeneratorService
                 $kontext['aufschlagsklassen'] = \Platform\FoodAlchemist\Models\FoodAlchemistMarkupClass::where('is_inactive', false)
                     ->orderBy('code')->pluck('label', 'code')->all();
             }
+            $melde('KI schreibt das Rezept …');
             $vorschlag = $this->ki->propose($vkModus ? 'vk.generator' : 'recipe.generator', $kontext, [
                 'knowledge' => $wissen['block'],
                 'knowledge_used' => $wissen['files_used'],            // M7-01: GL-13-§6-Audit-Lücke geschlossen
@@ -77,6 +86,10 @@ class RecipeGeneratorService
                 'structural_retry' => fn (array $parsed) => ! empty($parsed['werte']['name']) && ! empty($parsed['werte']['zutaten']),
             ]);
             $kiRezept = $vorschlag->werte;
+            // P0.2: die grossen Kontext-/Wissen-/Inventar-Arrays werden ab hier nicht mehr
+            // gebraucht (die Transaktions-Closure haelt sie NICHT) → jetzt freigeben, damit
+            // der Peak-Speicher waehrend Matching/Sync sinkt (OOM-Gegenmassnahme).
+            unset($preparedContext, $kontext, $wissen, $inventar, $vorschlag);
         }
         if (empty($kiRezept['name']) || empty($kiRezept['zutaten']) || ! is_array($kiRezept['zutaten'])) {
             throw new \RuntimeException('KI lieferte kein verwertbares Rezept (name + zutaten nötig) — Roh-Antwort prüfen.');
@@ -95,7 +108,9 @@ class RecipeGeneratorService
         };
         $bio = ($parameter['bio'] ?? false) ? 'bio' : 'conventional';        // Bio nur auf Ansage (4.4r)
 
-        return DB::transaction(function () use ($team, $kiRezept, $parameter, $mode, $pref, $preferRaw, $bio, $vkModus, $createdVia) {
+        $melde('Zutaten werden zugeordnet …');
+
+        return DB::transaction(function () use ($team, $kiRezept, $parameter, $mode, $pref, $preferRaw, $bio, $vkModus, $createdVia, $melde) {
             $recipe = $this->recipes->create($team, [
                 'name' => $kiRezept['name'],
                 'is_sales_recipe' => $vkModus,
@@ -222,6 +237,7 @@ class RecipeGeneratorService
 
             // #505 Slice 2: VK-Kohärenz nach Zutaten-Sync (recipeCohesion braucht persistierte Zeilen).
             if ($vkModus) {
+                $melde('Kohärenz wird geprüft …');
                 try {
                     $statistik['kohaerenz'] = app(PairingService::class)->recipeCohesion($recipe);
                 } catch (\Throwable $e) {
