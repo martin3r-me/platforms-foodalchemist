@@ -396,7 +396,7 @@ class KnowledgeContextService
         // 2b. Fallback: Slug-/Titel-Token-Match, nur wenn das Mapping kaum greift
         if (count($slugs) < 2 && $tokens !== []) {
             $scored = [];
-            foreach ($this->domainDocs()->keys() as $slug) {
+            foreach ($this->domainSlugs() as $slug) {
                 $slugTokens = $this->tokenize($slug);
                 $score = $this->jaccard($tokens, $slugTokens);
                 $wordHits = count(array_filter($tokens, fn ($t) => str_contains($slug, $t)
@@ -422,18 +422,43 @@ class KnowledgeContextService
 
         $slugList = array_map('strval', array_keys($slugs));
         sort($slugList);
-        $docs = $this->domainDocs();
+        $topK = array_slice($slugList, 0, self::DOMAIN_TOP_K);
+        $docs = $this->domainDocsBySlug($topK);   // Volltext NUR für die gewählten (Tauri-Muster)
 
         return array_values(array_filter(array_map(
             fn ($slug) => $docs->get($slug),
-            array_slice($slugList, 0, self::DOMAIN_TOP_K)
+            $topK
         )));
     }
 
-    private function domainDocs(): \Illuminate\Support\Collection
+    /**
+     * Nur die Domain-Slugs (KEIN content_md) fürs Discovery-Scoring — spiegelt die Tauri-App
+     * (`vault_context.rs`: Verzeichnis listen + nach Dateinamen scoren). Früher zog `domainDocs()`
+     * ALLE Dossier-Volltexte in den PHP-Speicher, nur um Slugs zu scoren (2×/Lauf, ungecacht) —
+     * das war der zweite Speicherfresser neben der (abgeschalteten) Embedding-Schicht.
+     *
+     * @return list<string>
+     */
+    private function domainSlugs(): array
     {
         return DB::table('foodalchemist_knowledge_documents')
             ->where('category', 'domain')->where('active', 1)->whereNull('deleted_at')
+            ->orderBy('slug')->pluck('slug')->map(fn ($s) => (string) $s)->all();
+    }
+
+    /**
+     * content_md NUR für die ausgewählten Top-K-Slugs laden (entspricht dem `read_truncated`
+     * je Top-K der Tauri-App). Leere Auswahl → leere Collection (kein Query).
+     */
+    private function domainDocsBySlug(array $slugs): \Illuminate\Support\Collection
+    {
+        if ($slugs === []) {
+            return collect();
+        }
+
+        return DB::table('foodalchemist_knowledge_documents')
+            ->where('category', 'domain')->where('active', 1)->whereNull('deleted_at')
+            ->whereIn('slug', $slugs)
             ->get(['slug', 'content_md', 'version'])->keyBy('slug');
     }
 
