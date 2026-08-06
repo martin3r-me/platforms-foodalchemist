@@ -114,7 +114,8 @@ it('filtert auf einen Posten und wieder zurück', function () {
 
 it('blendet erledigte und stornierte Aufträge aus', function () {
     $this->svc->setStatus($this->rootTeam, $this->a1->id, ProductionOrderStatus::InProgress);
-    $this->svc->setStatus($this->rootTeam, $this->a1->id, ProductionOrderStatus::Done);
+    // Spec 35 K4: Fertigmelden mit offenen Zeilen braucht eine Abschlussnotiz.
+    $this->svc->setStatus($this->rootTeam, $this->a1->id, ProductionOrderStatus::Done, ['finish_note' => 'Testabschluss.']);
 
     ($this->plan)()->set('tage', 14)
         ->assertDontSee('Hochzeit Meyer')

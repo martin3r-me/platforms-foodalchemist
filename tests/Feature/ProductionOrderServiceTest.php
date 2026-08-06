@@ -157,7 +157,9 @@ it('Status-Guard: planned→in_progress friert Snapshot ein, illegale Übergäng
     expect(fn () => $this->svc->setStatus($this->rootTeam, $order->id, ProductionOrderStatus::Planned))
         ->toThrow(\RuntimeException::class); // in_progress→planned gibt es nicht
 
-    $fertig = $this->svc->setStatus($this->rootTeam, $order->id, ProductionOrderStatus::Done);
+    expect(fn () => $this->svc->setStatus($this->rootTeam, $order->id, ProductionOrderStatus::Done))
+        ->toThrow(\RuntimeException::class, 'Abschlussnotiz');
+    $fertig = $this->svc->setStatus($this->rootTeam, $order->id, ProductionOrderStatus::Done, ['finish_note' => 'Rest ist dokumentiert offen.']);
     expect($fertig->status)->toBe(ProductionOrderStatus::Done)->and($fertig->finished_at)->not->toBeNull();
     expect(fn () => $this->svc->setStatus($this->rootTeam, $order->id, ProductionOrderStatus::Cancelled))
         ->toThrow(\RuntimeException::class); // done = Endstation
@@ -256,7 +258,18 @@ it('MCP im Lockstep: production_orders.GET/ADD_TARGET/SET_STATUS/UPDATE_LINE reg
     $registry = app(\Platform\Core\Tools\ToolRegistry::class);
     $kontext = new \Platform\Core\Contracts\ToolContext($user, $this->rootTeam);
 
-    foreach (['production_orders.GET' => true, 'production_orders.ADD_TARGET' => false, 'production_orders.REMOVE_TARGET' => false, 'production_orders.UPDATE' => false, 'production_orders.SET_STATUS' => false, 'production_orders.UPDATE_LINE' => false] as $t => $readonly) {
+    foreach ([
+        'production_orders.GET' => true,
+        'production_orders.ADD_TARGET' => false,
+        'production_orders.REMOVE_TARGET' => false,
+        'production_orders.UPDATE' => false,
+        'production_orders.SET_STATUS' => false,
+        'production_orders.UPDATE_LINE' => false,
+        'production_orders.LINE_BLOCK' => false,
+        'production_orders.LINE_UNBLOCK' => false,
+        'production_orders.START' => false,
+        'production_orders.FINISH' => false,
+    ] as $t => $readonly) {
         $tool = $registry->get("foodalchemist.{$t}");
         expect($tool)->not->toBeNull()
             ->and($tool->getMetadata()['read_only'])->toBe($readonly);
@@ -308,7 +321,7 @@ it('MCP im Lockstep: production_orders.GET/ADD_TARGET/SET_STATUS/UPDATE_LINE reg
     expect($detail2->data['editierbar'])->toBeFalse();
 
     // Illegaler Sprung (in_progress→planned gibt es nicht) → Guard
-    $bad = $registry->get('foodalchemist.production_orders.SET_STATUS')->execute(['order_id' => $orderId, 'status' => 'done'], $kontext);
+    $bad = $registry->get('foodalchemist.production_orders.SET_STATUS')->execute(['order_id' => $orderId, 'status' => 'done', 'finish_note' => 'MCP-Abschluss mit offenen Zeilen.'], $kontext);
     expect($bad->success)->toBeTrue(); // in_progress→done IST erlaubt
 });
 

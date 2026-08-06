@@ -95,6 +95,12 @@ it('Trait-Vertrag: ALLE Models tragen LogsActivity + BelongsToTeamHierarchy + Ha
         if (! class_exists($klasse) || (new ReflectionClass($klasse))->isAbstract()) {
             continue;
         }
+        if (class_basename($klasse) === 'FoodAlchemistProductionEvent') {
+            // Spec 35 K4: append-only Fachprotokoll (eigenes id/created_at, $timestamps=false).
+            // Bewusst ohne die vier Standard-Traits — kein zweites Activity-Log, kein Team-Aggregat,
+            // kein Soft-Delete. Ein Ereignis wird geschrieben, nie geändert.
+            continue;
+        }
         $traits = collect(class_uses_recursive($klasse))->keys()->map(fn ($t) => class_basename($t));
         $ohneHierarchie = array_merge($satelliten, $messreihen);
         $pflichten = in_array(class_basename($klasse), $ohneHierarchie, true)

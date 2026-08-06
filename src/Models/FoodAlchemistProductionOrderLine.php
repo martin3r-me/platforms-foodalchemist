@@ -54,6 +54,7 @@ class FoodAlchemistProductionOrderLine extends Model
         'plan_date' => 'date',              // abgeleitet — einziger Schreiber: syncPlanDates()
         'line_status' => ProductionLineStatus::class,   // Spec 30 E6: Küchen-Checkliste
         'done_at' => 'datetime',
+        'started_at' => 'datetime',
     ];
 
     public function productionOrder(): BelongsTo
