@@ -354,15 +354,19 @@ return [
     'embedding_store' => env('FOODALCHEMIST_EMBEDDING_STORE', 'mysql'),
 
     'semantic_search' => [
-        // Phase 0 (2026-08-06): RAG-Hot-Path HART AUS. Der mysql-Embedding-Store macht
-        // Cosine-in-PHP (Vektoren in den Speicher, s. embedding_store-Kommentar oben) und
-        // blockiert/OOMt generiere() bei der Stufe „Kontext & Wissen", VOR dem LLM (auf demo
-        // reproduziert: Spinner hängt dort). Bis der Store stabil ist (Qdrant-Cutover bzw.
-        // Core-Embedding-Timeout, Martins Baustelle) bleibt der semantische Fallback aus —
-        // lexikalisches Wissen + Matching laufen unverändert weiter. Alle Embedding-Konsumenten
-        // (KnowledgeContextService::semanticSlugs, SemanticRetrievalService, PairingService)
-        // hängen an diesem Flag. Wieder scharfstellen: (bool) env('FOODALCHEMIST_SEMANTIC_SEARCH', false).
-        'enabled'        => false,
+        // Phase 0 (2026-08-06): RAG-Hot-Path war HART AUS — der mysql-Embedding-Store macht
+        // Cosine-in-PHP und blockierte/OOMte generiere() bei „Kontext & Wissen", VOR dem LLM.
+        // Reversibel-Reaktivierung (2026-08-06): jetzt ENV-gesteuert (Default weiter false →
+        // ändert nichts, bis FOODALCHEMIST_SEMANTIC_SEARCH=true gesetzt ist; Rollback = ENV weg,
+        // KEIN Redeploy). Zwei Punkte VOR dem Scharfstellen auf demo:
+        //  1) Der zweite Speicherfresser (domainDocs-Volltext-Massen-Load) ist seit Phase 1.1
+        //     gefixt → der Kontext-Bau ist deutlich leichter; evtl. war DAS der Haupt-Hänger.
+        //  2) Restrisiko bleibt der Vektor-Cosine über große Pools. LA (~264k) NICHT im
+        //     Generierungs-Pfad; der Wissens-/Pairing-Pass schon. Darum: nur OFF-PEAK
+        //     einschalten und EINE Generierung beobachten (bei Hänger ENV zurück).
+        // Alle Embedding-Konsumenten (KnowledgeContextService::semanticSlugs,
+        // SemanticRetrievalService, PairingService) hängen an diesem einen Flag.
+        'enabled'        => (bool) env('FOODALCHEMIST_SEMANTIC_SEARCH', false),
         'provider'       => env('FOODALCHEMIST_EMBEDDING_PROVIDER'),     // null = Core-Default
         'global_team_id' => (int) env('FOODALCHEMIST_SEMANTIC_GLOBAL_TEAM_ID', 0),
         'min_score'      => (float) env('FOODALCHEMIST_SEMANTIC_MIN_SCORE', 0.30),
