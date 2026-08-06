@@ -427,6 +427,12 @@ return [
                 . '{name (§1-Syntax <Typ>: <Bezeichnung>), description (§8-Stil), taste_direction (grobe Menue-Richtung, NUR EIN Wort: suess|herzhaft|neutral — das Aroma-Profil gehoert in description), '
                 . 'preparation (Markdown-Schritte), zutaten: [{text, quantity, unit (g|ml|kg|l|el|tl|stk), '
                 . 'slug (hauptzutat), commodity_group, note}]}. Diät-harte Vorgaben sind VERBINDLICH. '
+                // Fit-Guard (2026-08-06, Rahmeis-in-Tomatensuppe): das Inventar ist ein ANGEBOT,
+                // kein Befehl — vorher stand hier gar keine Anweisung und die Liste wirkte als
+                // implizites "nimm das". Die KI soll fachlich urteilen, nicht gehorchen.
+                . 'Wenn bestands_inventar mitgegeben ist: pruefe je Eintrag, ob er FACHLICH in dieses '
+                . 'Gericht passt — nur dann als Komponente nutzen und EXAKT wie gelistet benennen; '
+                . 'passt nichts, benenne frei. Zwinge NIE eine unpassende Bestands-Komponente ins Rezept. '
                 // Spec 16·E1: WG-Hint verengt die LA-Beschaffung auf die Warengruppen-Lead-Lieferanten.
                 // Optional — nur setzen, wenn die Warengruppe der HAUPTZUTAT eindeutig ist, sonst weglassen
                 // (ein falscher/fehlender Code fällt sicher auf die globale Lead-Suche zurück).
@@ -466,8 +472,12 @@ return [
                 . 'keine Marketing-Adjektive), description (§8-Stil), taste_direction (grobe Menue-Richtung, NUR EIN Wort: suess|herzhaft|neutral — das Aroma-Profil gehoert in description), '
                 . 'preparation (= PLATING & SERVICE: Teller-Aufbau, Mengenverteilung, Service-Anweisung — '
                 . 'NICHT die Produktion), zutaten: [{text, quantity, unit (g|ml|kg|l|el|tl|stk), slug, note}] '
-                . '(Komponenten bevorzugt als Basisrezepte; wenn bestands_inventar mitgegeben ist, benenne '
-                . 'passende Komponenten EXAKT wie dort gelistet — vorhandene Basisrezepte zuerst), '
+                // Fit-Guard (2026-08-06): "vorhandene zuerst" war Reuse-Druck ohne Passt-Prüfung —
+                // das Inventar ist ein Angebot, die fachliche Passung entscheidet.
+                . '(Komponenten bevorzugt als Basisrezepte; wenn bestands_inventar mitgegeben ist: nutze '
+                . 'einen Eintrag NUR, wenn er fachlich in dieses Gericht passt — dann EXAKT wie gelistet '
+                . 'benennen; unpassende Eintraege ignorieren und frei benennen, NIE eine unpassende '
+                . 'Bestands-Komponente ins Rezept zwingen), '
                 . 'dish_class_id (aus der mitgegebenen Liste, '
                 . 'null wenn unsicher), aufschlagsklasse_code (aus der mitgegebenen Liste), '
                 // Spec 03 L8b: die Portion ist PREIS-RELEVANT (Auto-VK = EK je Portion ×

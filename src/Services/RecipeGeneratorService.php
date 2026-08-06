@@ -4,6 +4,7 @@ namespace Platform\FoodAlchemist\Services;
 
 use Illuminate\Support\Facades\DB;
 use Platform\Core\Models\Team;
+use Platform\FoodAlchemist\Enums\MatchBand;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Models\FoodAlchemistVocabEinheit;
 use Platform\FoodAlchemist\Services\Ai\AiGatewayService;
@@ -192,12 +193,24 @@ class RecipeGeneratorService
                 $direktArtikel = $vkModus && $this->heuristik->istDirektArtikelKandidat($text);
                 $zeilenMode = $direktArtikel ? 'gp_first' : $mode;
                 $treffer = $this->matcher->matchIngredient($team, $text, $z['slug'] ?? null, $zeilenMode, $pref, $preferRaw, $bio);
-                if ($treffer['target'] === 'gp') {
+
+                // Band-Gate (2026-08-06, Rahmeis-in-Tomatensuppe): FuzzyLow heißt laut
+                // GL-04 §4.1 wörtlich „Review nötig" — der Generator ist aber der teuerste
+                // Ort für einen stillen Fehl-Match (ein fremdes Sub-Rezept wird unbemerkt
+                // in ein NEUES Rezept verdrahtet: „Balsamico-Reduktion" → „Rahmeis:
+                // Balsamico", 1 von 2 Tokens = Score 0.50). Echte „gleiches Produkt,
+                // mehr Deskriptoren"-Treffer hebt der Head-Match-Floor (0.90) ohnehin
+                // auf Exact — was im FuzzyLow-Band bleibt, ist überproportional Gift.
+                // Darum: nur Exact/FuzzyHigh wird verdrahtet, FuzzyLow bleibt OFFEN
+                // (Review-Pfad mit Shortlist — der Mensch entscheidet). Der Matcher
+                // selbst (Schwellen, 84 GL-04-Goldens) bleibt unberührt.
+                $verdrahtbar = $treffer['status'] === MatchBand::Exact || $treffer['status'] === MatchBand::FuzzyHigh;
+                if ($verdrahtbar && $treffer['target'] === 'gp') {
                     $zeile['gp_id'] = $treffer['gp_id'];
                     $zeile['match_method'] = 'gemini_proposed';
                     $zeile['match_confidence'] = round($treffer['score'], 3);
                     $statistik['bestand_gp']++;
-                } elseif ($treffer['target'] === 'sub_recipe') {
+                } elseif ($verdrahtbar && $treffer['target'] === 'sub_recipe') {
                     $zeile['referenced_recipe_id'] = $treffer['recipe_id'];
                     $zeile['match_method'] = 'recipe_ref';
                     $statistik['bestand_sub']++;
@@ -228,6 +241,13 @@ class RecipeGeneratorService
                         'la_kandidaten' => $laKandidaten,
                         'lieferantenstrategie' => $istBasisrezept ? null : app(TeamSettingsService::class)
                             ->leadLaStrategie($team, $this->wgHint($z['commodity_group'] ?? $z['warengruppe'] ?? null))->value,
+                        // Band-Gate-Transparenz: der abgewiesene FuzzyLow-Kandidat bleibt
+                        // für die Review-Fläche sichtbar (Mensch bestätigt oder verwirft).
+                        'schwacher_treffer' => $treffer['target'] !== 'none' ? [
+                            'target' => $treffer['target'],
+                            'name' => $treffer['gp_name'] ?? $treffer['recipe_name'],
+                            'score' => round((float) $treffer['score'], 3),
+                        ] : null,
                     ];
                 }
                 $zeilen[] = $zeile;

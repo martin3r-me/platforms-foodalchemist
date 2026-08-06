@@ -150,3 +150,48 @@ it('Fake-Provider ohne Override degradiert mit klarer Fehlermeldung (Echo kann k
     expect(fn () => $this->svc->generiere($this->rootTeam, 'Irgendwas Feines'))
         ->toThrow(RuntimeException::class, 'strukturell unbrauchbar');
 });
+
+it('Band-Gate: FuzzyLow-Halbtreffer wird NICHT verdrahtet — Balsamico-Reduktion landet offen statt am Rahmeis', function () {
+    // Rahmeis-in-Tomatensuppe (2026-08-06): 1 von 2 Query-Tokens matcht („balsamico"),
+    // Kopf-Nomen „Rahmeis" fehlt in der Query → Score exakt 0.50 = FuzzyLow =
+    // laut GL-04 §4.1 „Review nötig". Vorher wurde das Dessert still als
+    // Sub-Rezept in die Suppe verdrahtet; jetzt bleibt die Zeile offen.
+    $rahmeis = FoodAlchemistRecipe::create([
+        'team_id' => $this->rootTeam->id, 'recipe_key' => 'rahmeis_balsamico',
+        'name' => 'Rahmeis: Balsamico', 'status' => 'approved', 'ek_per_kg_eur' => 3.0,
+    ]);
+
+    $resultat = $this->svc->generiere($this->rootTeam, 'Tomatensuppe mit Basilikum', [], kiRezeptOverride: [
+        'name' => 'Suppe: Tomate-Basilikum',
+        'zutaten' => [['text' => 'Balsamico-Reduktion', 'quantity' => 30, 'unit' => 'ml']],
+    ]);
+
+    expect($resultat['statistik']['bestand_sub'])->toBe(0)
+        ->and($resultat['statistik']['offen'])->toBe(1)
+        ->and($resultat['offene'][0]['text'])->toBe('Balsamico-Reduktion')
+        // Transparenz: der abgewiesene Kandidat bleibt für die Review-Fläche sichtbar.
+        ->and($resultat['offene'][0]['schwacher_treffer']['target'])->toBe('sub_recipe')
+        ->and($resultat['offene'][0]['schwacher_treffer']['name'])->toBe('Rahmeis: Balsamico')
+        ->and($resultat['offene'][0]['schwacher_treffer']['score'])->toBeLessThan(0.70);
+
+    $zeile = $resultat['recipe']->ingredients()->first();
+    expect($zeile->referenced_recipe_id)->toBeNull()
+        ->and($zeile->gp_id)->toBeNull()
+        ->and($zeile->match_method->value)->toBe('unmatched');
+});
+
+it('Band-Gate blockt nur Schwaches: exakte Benennung verdrahtet das Sub-Rezept weiterhin', function () {
+    $rahmeis = FoodAlchemistRecipe::create([
+        'team_id' => $this->rootTeam->id, 'recipe_key' => 'rahmeis_balsamico',
+        'name' => 'Rahmeis: Balsamico', 'status' => 'approved', 'ek_per_kg_eur' => 3.0,
+    ]);
+
+    $resultat = $this->svc->generiere($this->rootTeam, 'Dessert-Teller', [], kiRezeptOverride: [
+        'name' => 'Dessert: Balsamico-Erdbeeren',
+        'zutaten' => [['text' => 'Rahmeis: Balsamico', 'quantity' => 80, 'unit' => 'g']],
+    ]);
+
+    expect($resultat['statistik']['bestand_sub'])->toBe(1)
+        ->and($resultat['statistik']['offen'])->toBe(0)
+        ->and($resultat['recipe']->ingredients()->first()->referenced_recipe_id)->toBe($rahmeis->id);
+});
