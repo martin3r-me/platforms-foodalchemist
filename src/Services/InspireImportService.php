@@ -78,7 +78,9 @@ class InspireImportService
                 $usedSlugs[$slug] = true;
 
                 if ($apply) {
-                    $note = trim(((string) ($r['category'] ?? '')).' / '.((string) ($r['subcategory'] ?? '')), ' /');
+                    $cat = trim((string) ($r['category'] ?? ''));
+                    $sub = trim((string) ($r['subcategory'] ?? ''));
+                    $note = trim($cat.' / '.$sub, ' /');
                     $anchorId = DB::table(self::ANCHORS)->insertGetId([
                         'uuid' => (string) UuidV7::generate(),
                         'team_id' => $teamId,
@@ -86,6 +88,9 @@ class InspireImportService
                         'display_de' => $name,
                         'source_path' => 'foodpairing_inspire',
                         'note' => $note !== '' ? $note : null,
+                        // Strukturiert für den Composer-Picker-Filter (parallel zu note).
+                        'category' => $cat !== '' ? $cat : null,
+                        'subcategory' => $sub !== '' ? $sub : null,
                         'created_at' => $ts,
                         'updated_at' => $ts,
                     ]);

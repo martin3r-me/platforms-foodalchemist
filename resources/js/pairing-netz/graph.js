@@ -318,7 +318,7 @@ export function pairingNetzGraph(config) {
 
     _fill(d) {
       if (d.kind === 'zentrum') return '#fdba74';
-      if (d.kind === 'anker') return '#ddd6fe';        // Violett — deutlich von erprobt (rosa) unterschieden
+      if (d.kind === 'anker') return d.orphan ? '#fde68a' : '#ddd6fe'; // Orphan = warm (passt nicht), sonst Violett
       if (d.kind === 'basisrezept') return '#86efac';
 
       return TYP_FILL[d.typ] || '#e5e7eb'; // kandidat
@@ -326,14 +326,20 @@ export function pairingNetzGraph(config) {
 
     _stroke(d) {
       if (d.kind === 'zentrum') return '#ea580c';
-      if (d.kind === 'anker') return '#7c3aed';        // Violett
+      if (d.kind === 'anker') return d.orphan ? '#d97706' : '#7c3aed'; // Orphan = Bernstein-Warn-Ring
       if (d.kind === 'basisrezept') return '#16a34a';
 
       return TYP_FARBE[d.typ] || '#9ca3af'; // kandidat
     },
 
     _title(d) {
-      if (d.kind === 'anker') return (d.label || d.slug || '') + ' (Kern-Anker)';
+      if (d.kind === 'anker') {
+        const base = (d.label || d.slug || '') + ' (Kern-Anker)';
+        if (d.orphan) return base + ' — passt (noch) nicht zu den anderen';
+        if (d.fit != null) return base + ` — Fit ${d.fit}%`;
+
+        return base;
+      }
       if (d.kind === 'kandidat') {
         const sym = LEVEL_SYM[d.level] || d.typ;
         return `${d.label} — ${sym}${d.cover > 1 ? ` · passt zu ${d.cover} Ankern` : ''}`;
@@ -346,7 +352,7 @@ export function pairingNetzGraph(config) {
     _labelText(d) {
       if (d.kind === 'zentrum') return ''; // Titel steht schon im Modal-Header / ist aus Kontext bekannt
       if (d.kind === 'basisrezept') return this._trunc(d.label, 38);
-      if (d.kind === 'anker') return '★ ' + (d.slug || d.label || '');
+      if (d.kind === 'anker') return d.slug || d.label || '';
 
       return d.slug || d.label || ''; // kandidat
     },

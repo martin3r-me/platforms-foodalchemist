@@ -224,3 +224,21 @@ it('pairingNetzForAnkers: Ad-hoc-Netz aus freier Anker-Menge (Planungs-Composer)
     // Leere Auswahl → leeres Netz (kein Absturz).
     expect($this->svc->pairingNetzForAnkers($this->rootTeam, [])['nodes'])->toBe([]);
 });
+
+it('composerCohesion: Score + Orphan-Erkennung (passt-nicht-Anker)', function () {
+    $fremd = mkAnker('fremd'); // ganz ohne Kanten → muss als Orphan erkannt werden
+    mkKante($this->kichererbse, $this->tahin, 'aroma', 3, 0.9); // starkes Paar
+
+    $co = $this->svc->composerCohesion([$this->kichererbse, $this->tahin, $fremd]);
+
+    expect($co['rated_pairs'])->toBe(1)               // nur kichererbse↔tahin bewertet
+        ->and($co['total_pairs'])->toBe(3)
+        ->and($co['score'])->toBeGreaterThan(0);
+
+    // 'fremd' hat keine Kante zu den anderen → is_orphan; die anderen nicht.
+    $orphans = collect($co['komponenten'])->where('is_orphan', true)->pluck('label')->all();
+    expect($orphans)->toBe(['Fremd']);
+
+    // <2 Anker → neutraler Null-Score (kein Absturz).
+    expect($this->svc->composerCohesion([$this->kichererbse])['score'])->toBe(0);
+});

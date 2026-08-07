@@ -1420,6 +1420,92 @@ class PairingService
     }
 
     /**
+     * Composer: Kohäsion einer freien Anker-Menge — „passen die gewählten Anker zusammen?".
+     * Baut die komponenten-Struktur aus den Ankern und delegiert an {@see cohesionFor}
+     * (liefert score/min_score/weakest_pair + je Anker fit/is_orphan = der „passt-nicht"-Flag).
+     *
+     * @param  array<int>  $ankerIds
+     */
+    public function composerCohesion(array $ankerIds): array
+    {
+        $ids = array_values(array_unique(array_map('intval', $ankerIds)));
+        $leer = ['score' => 0, 'min_score' => 0, 'rated_pairs' => 0, 'total_pairs' => 0,
+            'coverage_pct' => 0, 'weakest_pair' => null, 'unrated_pairs' => [], 'komponenten' => []];
+        if (count($ids) < 2) {
+            return $leer;
+        }
+        $rows = DB::table('foodalchemist_vocab_pairing_anchors')
+            ->whereIn('id', $ids)->get(['id', 'slug', 'display_de'])->keyBy('id');
+
+        $komponenten = [];
+        foreach ($ids as $id) {
+            $a = $rows->get($id);
+            if ($a === null) {
+                continue;
+            }
+            $komponenten[] = [
+                'kern' => (int) $a->id,
+                'prozess' => [],
+                'label' => $a->display_de ?: $a->slug,
+                'via' => $a->slug,
+            ];
+        }
+
+        return $this->cohesionFor($komponenten);
+    }
+
+    /**
+     * Composer-Picker: browsebare Anker-Liste (wie der GP-Picker `IngredientEditor::browseKatalog`).
+     * Gefiltert nach Kategorie + Suche, aktuelle Auswahl ausgeschlossen; je Anker ein Best/Good-Badge
+     * relativ zur Auswahl (aus {@see kandidatenFuerAnker}) + das Kategorie-Vokabular für den Dropdown.
+     *
+     * @param  array<int>  $selectedIds
+     * @return array{items: list<array>, total: int, kategorien: list<string>}
+     */
+    public function composerAnkerBrowse(Team $team, string $q, ?string $category, array $selectedIds, int $limit = 200): array
+    {
+        $selected = array_values(array_unique(array_map('intval', $selectedIds)));
+        $q = trim($q);
+
+        $query = DB::table('foodalchemist_vocab_pairing_anchors')
+            ->whereNull('deleted_at')
+            ->when($q !== '', function ($w) use ($q) {
+                $like = '%'.$q.'%';
+                $w->where(fn ($x) => $x->where('slug', 'like', $like)->orWhere('display_de', 'like', $like));
+            })
+            ->when($category !== null && $category !== '', fn ($w) => $w->where('category', $category))
+            ->when($selected !== [], fn ($w) => $w->whereNotIn('id', $selected));
+
+        $total = (clone $query)->count();
+        $rows = $query->orderBy('display_de')->limit($limit)->get(['id', 'slug', 'display_de', 'category']);
+
+        // Best/Good relativ zur aktuellen Auswahl (Partner der Auswahl, gebucketet).
+        $badge = [];
+        if ($selected !== []) {
+            [$kand] = $this->kandidatenFuerAnker($selected);
+            foreach ($kand as $c) {
+                $badge[(int) $c['id']] = $c['typ']; // stern3 | stern2
+            }
+        }
+
+        $kategorien = DB::table('foodalchemist_vocab_pairing_anchors')
+            ->whereNull('deleted_at')->whereNotNull('category')
+            ->distinct()->orderBy('category')->pluck('category')->all();
+
+        return [
+            'items' => $rows->map(fn ($a) => [
+                'id' => (int) $a->id,
+                'slug' => $a->slug,
+                'label' => $a->display_de ?: $a->slug,
+                'category' => $a->category,
+                'typ' => $badge[(int) $a->id] ?? null,
+            ])->all(),
+            'total' => $total,
+            'kategorien' => $kategorien,
+        ];
+    }
+
+    /**
      * Kanten ZWISCHEN den Kern-Ankern (innere Ebene des Netzes). Beantwortet
      * „wie hängen die ausgewählten Anker untereinander zusammen" — die eigentliche
      * Beweisführung des Foodpairing-Modells, die im Zutat→Anker-Netz fehlt.

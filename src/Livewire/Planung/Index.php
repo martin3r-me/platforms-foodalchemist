@@ -9,7 +9,6 @@ use Livewire\Component;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Models\FoodAlchemistPlanningSession;
 use Platform\FoodAlchemist\Services\IdeenService;
-use Platform\FoodAlchemist\Services\PairingInspirationService;
 use Platform\FoodAlchemist\Services\PairingService;
 use Platform\FoodAlchemist\Services\PlanningCascadeService;
 use Platform\FoodAlchemist\Services\PlanningSessionService;
@@ -44,6 +43,9 @@ class Index extends Component
 
     /** Composer-Suchfeld (live). */
     public string $composerTerm = '';
+
+    /** Composer-Picker: Kategorie-Filter (leer = alle). */
+    public string $composerCategory = '';
 
     public ?string $meldung = null;
 
@@ -374,20 +376,33 @@ class Index extends Component
             ? app(PlanningCascadeService::class)->lauf($team, $this->laufId)
             : null;
 
-        // Composer-Tab: Ad-hoc-Netz aus der Anker-Auswahl + Live-Suchtreffer.
+        // Composer-Tab: Ad-hoc-Netz + Kohäsion (fit/orphan je Anker) + browsebarer Picker.
         $composerNetz = ['nodes' => [], 'edges' => [], 'meta' => []];
-        $composerTreffer = [];
+        $composerCohesion = null;
+        $composerBrowse = ['items' => [], 'total' => 0, 'kategorien' => []];
         if ($team !== null) {
+            $pairing = app(PairingService::class);
             $composerIds = array_map('intval', array_column($this->composerAnker, 'id'));
             if ($composerIds !== []) {
-                $composerNetz = app(PairingService::class)->pairingNetzForAnkers($team, $composerIds);
+                $composerNetz = $pairing->pairingNetzForAnkers($team, $composerIds);
+                $composerCohesion = $pairing->composerCohesion($composerIds);
+                // Fit/Orphan je Anker auf die Netz-Knoten mergen (Match slug↔via) — Graph zeichnet es.
+                $fitByVia = [];
+                foreach (($composerCohesion['komponenten'] ?? []) as $k) {
+                    $fitByVia[$k['via']] = ['fit' => $k['fit'], 'orphan' => $k['is_orphan']];
+                }
+                $composerNetz['nodes'] = array_map(function ($n) use ($fitByVia) {
+                    if (($n['kind'] ?? '') === 'anker' && isset($fitByVia[$n['slug'] ?? ''])) {
+                        $n['fit'] = $fitByVia[$n['slug']]['fit'];
+                        $n['orphan'] = $fitByVia[$n['slug']]['orphan'];
+                    }
+
+                    return $n;
+                }, $composerNetz['nodes']);
             }
-            if (mb_strlen(trim($this->composerTerm)) >= 2) {
-                $composerTreffer = app(PairingInspirationService::class)
-                    ->sucheAnker(trim($this->composerTerm), 12)
-                    ->reject(fn ($a) => in_array((int) $a->id, $composerIds, true))
-                    ->values()->all();
-            }
+            $composerBrowse = $pairing->composerAnkerBrowse(
+                $team, (string) $this->composerTerm, $this->composerCategory !== '' ? $this->composerCategory : null, $composerIds
+            );
         }
 
         return view('foodalchemist::livewire.planung.index', [
@@ -397,7 +412,8 @@ class Index extends Component
             'skizzen' => $skizzen,
             'lauf' => $lauf,
             'composerNetz' => $composerNetz,
-            'composerTreffer' => $composerTreffer,
+            'composerCohesion' => $composerCohesion,
+            'composerBrowse' => $composerBrowse,
         ])->layout('platform::layouts.app');
     }
 }

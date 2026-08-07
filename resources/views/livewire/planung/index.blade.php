@@ -308,26 +308,26 @@
             {{-- COMPOSER — Foodpairing-Fläche: Anker zusammenstellen, Netz zeigt live was passt (★★★/★★).
                  Graph-only (keine Generierung — separates Thema). Klick auf Kandidat nimmt ihn auf. --}}
             <div x-show="tab==='composer'" class="space-y-4">
+                {{-- Reicher Anker-Picker: Kategorie + Suche + browsebare Liste + gewählte Chips --}}
                 <x-foodalchemist::modal-section title="Foodpairing — Komposition">
                     <p class="{{ $label ?? 'text-[11px] text-gray-500' }} mb-2">
                         Zutaten/Anker zusammenstellen — das Netz zeigt live, was harmoniert (★★★ Best · ★★ Good).
-                        Suche unten oder klick einen Kandidaten im Netz.
+                        Filtere/such unten oder klick einen Kandidaten im Netz.
                     </p>
-                    <input type="text" wire:model.live.debounce.300ms="composerTerm"
-                           placeholder="Zutat / Anker suchen …" class="{{ $input }}" />
-                    @if(!empty($composerTreffer))
-                        <div class="mt-2 flex flex-wrap gap-1.5">
-                            @foreach($composerTreffer as $t)
-                                <button type="button" wire:key="ctreffer-{{ $t->id }}" wire:click="composerAdd({{ $t->id }})"
-                                        class="px-2 py-1 rounded-full text-[11px] bg-white/10 text-gray-100 hover:bg-white/20 border border-white/15">
-                                    + {{ $t->display_de ?: $t->slug }}
-                                </button>
+
+                    <div class="flex flex-wrap gap-2 mb-2">
+                        <select wire:model.live="composerCategory" class="{{ $input }} sm:w-56">
+                            <option value="">Alle Kategorien</option>
+                            @foreach($composerBrowse['kategorien'] as $kat)
+                                <option value="{{ $kat }}">{{ $kat }}</option>
                             @endforeach
-                        </div>
-                    @endif
+                        </select>
+                        <input type="search" wire:model.live.debounce.300ms="composerTerm"
+                               placeholder="Anker suchen …" class="{{ $input }} flex-1 min-w-[12rem]" />
+                    </div>
 
                     @if(!empty($composerAnker))
-                        <div class="flex flex-wrap gap-1.5 mt-3">
+                        <div class="flex flex-wrap gap-1.5 mb-2">
                             @foreach($composerAnker as $a)
                                 <span wire:key="canker-{{ $a['id'] }}"
                                       class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] bg-violet-500/25 text-violet-100 border border-violet-400/40">
@@ -338,13 +338,52 @@
                             @endforeach
                         </div>
                     @endif
+
+                    <p class="text-[10px] text-slate-500 mb-1">{{ $composerBrowse['total'] }} Anker · Punkt = Fit zur Auswahl · Klick fügt hinzu</p>
+                    <div class="max-h-64 overflow-y-auto rounded-lg border border-white/10 divide-y divide-white/5">
+                        @forelse($composerBrowse['items'] as $it)
+                            <button type="button" wire:key="cbrowse-{{ $it['id'] }}" wire:click="composerAdd({{ $it['id'] }})"
+                                    class="w-full flex items-center gap-2 px-2.5 py-1.5 text-left text-[12px] text-slate-100 hover:bg-white/10">
+                                <span class="w-2 h-2 rounded-full shrink-0"
+                                      style="background: {{ $it['typ'] === 'stern3' ? '#fcd34d' : ($it['typ'] === 'stern2' ? '#f59e0b' : 'transparent') }}; {{ $it['typ'] ? '' : 'border:1px solid rgba(148,163,184,.35);' }}"
+                                      title="{{ $it['typ'] === 'stern3' ? '★★★ Best-Match' : ($it['typ'] === 'stern2' ? '★★ Good-Match' : 'kein Match zur Auswahl') }}"></span>
+                                <span class="flex-1 truncate">{{ $it['label'] }}</span>
+                                @if($it['category'])
+                                    <span class="text-[10px] text-slate-500 shrink-0">{{ $it['category'] }}</span>
+                                @endif
+                                <span class="text-violet-300 shrink-0">+</span>
+                            </button>
+                        @empty
+                            <p class="px-2.5 py-2 text-[12px] text-slate-500">Keine Anker — Filter/Suche anpassen.</p>
+                        @endforelse
+                    </div>
                 </x-foodalchemist::modal-section>
 
-                <x-foodalchemist::modal-section title="Was passt zusammen">
+                {{-- Kohäsions-Readout: passen die gewählten Anker zusammen? --}}
+                @if($composerCohesion !== null && !empty($composerAnker))
+                    @php $co = $composerCohesion; $orphans = collect($co['komponenten'])->where('is_orphan', true)->pluck('label')->all(); @endphp
+                    <x-foodalchemist::modal-section title="Passt das zusammen?">
+                        <div class="flex flex-wrap items-center gap-x-5 gap-y-1 text-[12px] text-slate-200">
+                            <span>Kohäsion:
+                                <strong class="{{ $co['score'] >= 70 ? 'text-emerald-300' : ($co['score'] >= 40 ? 'text-amber-300' : 'text-rose-300') }}">{{ $co['score'] }}%</strong>
+                            </span>
+                            <span class="text-slate-400">Paare bewertet: {{ $co['rated_pairs'] }}/{{ $co['total_pairs'] }} ({{ $co['coverage_pct'] }}%)</span>
+                            @if($co['weakest_pair'])
+                                <span class="text-slate-400">schwächstes Paar: {{ $co['weakest_pair']['a'] }} ↔ {{ $co['weakest_pair']['b'] }} ({{ $co['weakest_pair']['score'] }}%)</span>
+                            @endif
+                        </div>
+                        @if(!empty($orphans))
+                            <p class="mt-1 text-[12px] text-amber-300">⚠ passt (noch) nicht zu den anderen: {{ implode(', ', $orphans) }}</p>
+                        @endif
+                    </x-foodalchemist::modal-section>
+                @endif
+
+                {{-- Netz + Filter-Chips in EINER Alpine-Instanz (wie im Detail-Modal) --}}
+                <x-foodalchemist::modal-section title="Netz">
                     @if(empty($composerAnker))
                         <p class="text-[13px] text-slate-400">
-                            Noch keine Zutat gewählt — such oben eine und füg sie hinzu. Dann zeigt das Netz die
-                            passenden Kandidaten (★★★/★★) und wie die Anker untereinander zusammenhängen.
+                            Noch keine Zutat gewählt — oben eine hinzufügen. Dann zeigt das Netz die passenden
+                            Kandidaten (★★★/★★), wie die Anker zusammenhängen und wo etwas nicht passt.
                         </p>
                     @else
                         <div wire:ignore
@@ -358,8 +397,23 @@
                                  typDefault: @js($composerNetz['meta']['typ_default'] ?? ['stern3' => true, 'stern2' => true]),
                                  onKandidatClick: (id) => $wire.composerAdd(id),
                              })">
+                            <div class="flex flex-wrap items-center gap-2 mb-2 text-[11px]">
+                                <span class="text-slate-400 mr-1">Zeigen:</span>
+                                <button type="button" @click="toggleTyp('stern3')"
+                                        :class="typAktiv['stern3'] ? 'ring-2 ring-offset-1 ring-offset-slate-900' : 'opacity-45'"
+                                        class="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-slate-200"
+                                        style="border-color:#fcd34d; --tw-ring-color:#fcd34d;">
+                                    <span class="w-2 h-2 rounded-full" style="background:#fcd34d"></span> ★★★ Best
+                                </button>
+                                <button type="button" @click="toggleTyp('stern2')"
+                                        :class="typAktiv['stern2'] ? 'ring-2 ring-offset-1 ring-offset-slate-900' : 'opacity-45'"
+                                        class="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-slate-200"
+                                        style="border-color:#f59e0b; --tw-ring-color:#f59e0b;">
+                                    <span class="w-2 h-2 rounded-full" style="background:#f59e0b"></span> ★★ Good
+                                </button>
+                            </div>
                             <svg viewBox="0 0 1200 980" preserveAspectRatio="xMidYMid meet"
-                                 class="w-full rounded-xl" style="height:64vh; background:#0b1120" data-fa-netz-mount></svg>
+                                 class="w-full rounded-xl" style="height:60vh; background:#0b1120" data-fa-netz-mount></svg>
                         </div>
                     @endif
                 </x-foodalchemist::modal-section>
