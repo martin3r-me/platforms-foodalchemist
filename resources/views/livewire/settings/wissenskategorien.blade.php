@@ -28,7 +28,7 @@
                         <td class="{{ $td }} whitespace-nowrap">
                             <button type="button" wire:click="edit({{ $kat->id }})" class="{{ $btnGhostXs }}" data-kat-edit>Bearbeiten</button>
                             <button type="button" wire:click="toggleActive({{ $kat->id }})" class="{{ $btnGhostXs }}">{{ $kat->active ? 'deaktivieren' : 'aktivieren' }}</button>
-                            <button type="button" wire:click="delete({{ $kat->id }})" wire:confirm="Diese Kategorie löschen?" class="{{ $btnGhostXs }} text-red-500" title="löschen (nur wenn ungenutzt)">Löschen</button>
+                            <button type="button" wire:click="delete({{ $kat->id }})" wire:confirm="Kategorie „{{ $kat->label }}&#8220; und {{ $docCounts[$kat->slug] ?? 0 }} Dokument(e) endgültig löschen? Kann nicht rückgängig gemacht werden." class="{{ $btnGhostXs }} text-red-500" title="Kategorie samt aller Dokumente endgültig löschen">Löschen</button>
                         </td>
                     @endif
                 </tr>
