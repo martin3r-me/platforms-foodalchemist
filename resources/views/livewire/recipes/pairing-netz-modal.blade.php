@@ -10,9 +10,11 @@
 
 @php
     $zentrumNode = collect($netz['nodes'])->firstWhere('kind', 'zentrum');
-    $counts = $netz['meta']['counts'] ?? ['stern3' => 0, 'stern2' => 0, 'stern1' => 0, 'basis' => 0];
-    $typDefault = $netz['meta']['typ_default'] ?? ['stern3' => true, 'stern2' => true, 'stern1' => true];
-    $chips = ['stern3' => ['#fcd34d', '★★★ Best'], 'stern2' => ['#f59e0b', '★★ Good'], 'stern1' => ['#94a3b8', '★ Basis']];
+    $counts = $netz['meta']['counts'] ?? ['stern3' => 0, 'stern2' => 0, 'basis' => 0];
+    $typDefault = $netz['meta']['typ_default'] ?? ['stern3' => true, 'stern2' => true];
+    // Zweistufige Inspire-Harmonie: nur ★★★ (L3) + ★★ (L2). „★ Basis" (stern1) war
+    // strukturell leer und kollidierte mit den grünen „Basisrezept"-Knoten — entfernt.
+    $chips = ['stern3' => ['#fcd34d', '★★★ Best'], 'stern2' => ['#f59e0b', '★★ Good']];
 @endphp
 <x-foodalchemist::modal name="pairing-netz" title="Pairing-Netz: {{ $zentrumNode['label'] ?? '' }}" size="max-w-7xl">
     @if($zentrumNode === null)
@@ -59,7 +61,8 @@
                 <span class="text-slate-600">|</span>
                 <span class="inline-flex items-center gap-1"><svg width="22" height="6"><line x1="0" y1="3" x2="22" y2="3" stroke="#fcd34d" stroke-width="2.4"/></svg> ★★★ Best-Match</span>
                 <span class="inline-flex items-center gap-1"><svg width="22" height="6"><line x1="0" y1="3" x2="22" y2="3" stroke="#f59e0b" stroke-width="2" stroke-dasharray="5 3"/></svg> ★★ Good-Match</span>
-                <span class="inline-flex items-center gap-1"><svg width="22" height="6"><line x1="0" y1="3" x2="22" y2="3" stroke="#94a3b8" stroke-width="1.6" stroke-dasharray="2 3"/></svg> ★ Basis</span>
+                <span class="text-slate-600">|</span>
+                <span class="inline-flex items-center gap-1"><svg width="22" height="6"><line x1="0" y1="3" x2="22" y2="3" stroke="#fcd34d" stroke-width="3.2"/></svg> Linie zwischen Kern-Ankern = wie gut sie zusammenpassen (★★–★★★)</span>
             </div>
         </div>
     @endif

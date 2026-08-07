@@ -92,8 +92,54 @@ it('pairingNetz: Zentrum + Kern-Anker innen, Kandidaten nach Stern-Stufe, dish_c
     expect($kknob)->toHaveCount(2)                                      // zu kichererbse + tahin
         ->and($kknob->every(fn ($e) => $e['typ'] === 'stern3'))->toBeTrue();
 
-    expect($netz['meta']['counts'])->toBe(['stern3' => 1, 'stern2' => 2, 'stern1' => 0, 'basis' => 1])
-        ->and($netz['meta']['typ_default'])->toBe(['stern3' => true, 'stern2' => true, 'stern1' => true]);
+    // Zweistufiges Modell: stern1 raus; anker_anker (innere Ebene) hier 0 (kichererbse↔tahin ungepaart).
+    expect($netz['meta']['counts'])->toBe(['stern3' => 1, 'stern2' => 2, 'basis' => 1, 'anker_anker' => 0])
+        ->and($netz['meta']['typ_default'])->toBe(['stern3' => true, 'stern2' => true]);
+});
+
+it('pairingNetz: Anker↔Anker-Kante aus der Harmonie-Matrix (innere Ebene)', function () {
+    // Ohne Kante zwischen den Kern-Ankern gibt es keine innere Linie.
+    $netz = $this->svc->pairingNetz($this->rootTeam, $this->rezept->id);
+    expect(collect($netz['edges'])->where('kind', 'anker_anker'))->toHaveCount(0)
+        ->and($netz['meta']['counts']['anker_anker'])->toBe(0);
+
+    // kichererbse ↔ tahin als Best-Match (level 3) verdrahten → genau eine stern3-Linie.
+    mkKante($this->kichererbse, $this->tahin, 'aroma', 3, 0.95);
+    $netz = $this->svc->pairingNetz($this->rootTeam, $this->rezept->id);
+
+    $aa = collect($netz['edges'])->where('kind', 'anker_anker')->values();
+    expect($aa)->toHaveCount(1)                              // eine Kante je ungeordnetem Paar (bidirektional dedupt)
+        ->and($aa[0]['typ'])->toBe('stern3')
+        ->and($aa[0]['level'])->toBe(3)
+        ->and($netz['meta']['counts']['anker_anker'])->toBe(1);
+
+    // Endpunkte sind exakt die beiden Kern-Anker.
+    $eps = collect([$aa[0]['source'], $aa[0]['target']])->sort()->values()->all();
+    $soll = collect(['a:'.$this->kichererbse, 'a:'.$this->tahin])->sort()->values()->all();
+    expect($eps)->toBe($soll);
+});
+
+it('pairingNetz: Anker↔Anker — beste Stufe gewinnt, kontrast ausgeschlossen, kein Selbst-Loop', function () {
+    // minze als dritten Kern-Anker dazu.
+    $this->svc->setRecipeAnker($this->rootTeam, $this->rezept->id, $this->minze);
+
+    // kichererbse↔tahin doppelt (★★ und ★★★) → dedup auf beste Stufe (★★★).
+    mkKante($this->kichererbse, $this->tahin, 'aroma', 2, 0.5);
+    mkKante($this->kichererbse, $this->tahin, 'aroma', 3, 0.9);
+    // kichererbse↔minze nur als Kontrast (eigene Achse) → NICHT als Harmonie-Linie.
+    mkKante($this->kichererbse, $this->minze, 'kontrast', null, null);
+    // Selbst-Loop (defensiv) → darf nie als Kante entstehen.
+    DB::table('foodalchemist_pairing_anchor_edges')->insert([
+        'uuid' => (string) \Symfony\Component\Uid\UuidV7::generate(),
+        'anchor_a_id' => $this->kichererbse, 'anchor_b_id' => $this->kichererbse,
+        'type' => 'aroma', 'level' => 3, 'weight' => 1.0, 'created_at' => now(), 'updated_at' => now(),
+    ]);
+
+    $netz = $this->svc->pairingNetz($this->rootTeam, $this->rezept->id);
+    $aa = collect($netz['edges'])->where('kind', 'anker_anker')->values();
+
+    expect($aa)->toHaveCount(1)                              // nur kichererbse↔tahin; kontrast+Selbst-Loop raus
+        ->and($aa[0]['typ'])->toBe('stern3');                // beste Stufe gewann
 });
 
 it('pairingNetz: komplementäres Basisrezept (baut auf Kandidat auf), VK ausgeschlossen', function () {

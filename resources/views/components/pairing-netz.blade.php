@@ -15,13 +15,14 @@
     $zentrumNode = collect($netz['nodes'])->firstWhere('kind', 'zentrum');
     $ankerNodes = collect($netz['nodes'])->where('kind', 'anker')->values();
 
-    // Preview zeigt Gericht + Kern-Anker + die gemessenen Harmonie-Kandidaten (alle Stern-Stufen).
-    $sichtbar = ['stern3', 'stern2', 'stern1'];
+    // Preview zeigt Gericht + Kern-Anker + die gemessenen Harmonie-Kandidaten (★★/★★★).
+    $sichtbar = ['stern3', 'stern2'];
     $previewNodes = collect($netz['nodes'])
         ->filter(fn ($n) => in_array($n['kind'], ['zentrum', 'anker'], true) || ($n['kind'] === 'kandidat' && in_array($n['typ'] ?? null, $sichtbar, true)))
         ->values()->all();
+    // anker_anker = innere Ebene (wie die Kern-Anker zusammenhängen) — immer mit.
     $previewEdges = collect($netz['edges'])
-        ->filter(fn ($e) => $e['kind'] === 'zentrum_anker' || ($e['kind'] === 'kandidat' && in_array($e['typ'] ?? null, $sichtbar, true)))
+        ->filter(fn ($e) => in_array($e['kind'], ['zentrum_anker', 'anker_anker'], true) || ($e['kind'] === 'kandidat' && in_array($e['typ'] ?? null, $sichtbar, true)))
         ->values()->all();
 @endphp
 

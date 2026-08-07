@@ -1282,6 +1282,13 @@ class PairingService
             $edges[] = ['source' => 'z', 'target' => 'a:'.$a['id'], 'kind' => 'zentrum_anker', 'visible' => true];
         }
 
+        // ── Innere Ebene: Kanten ZWISCHEN den Kern-Ankern ───────────────────
+        // Zeigt, wie die ausgewählten Anker laut Foodpairing-Matrix zusammenhängen
+        // (die eigentliche Beweisführung): Best-/Good-Match zwischen den violetten
+        // Ankern selbst, nicht nur Anker→Zutat. Kein Match → keine Linie.
+        $ankerKanten = $this->innerAnkerKanten($innerIds);
+        $edges = array_merge($edges, $ankerKanten);
+
         // ── Kandidaten: Aroma-Partner der Kern-Anker (ausserhalb), typisiert ──
         [$kandidaten, $candMeta] = $this->kandidatenFuerAnker($innerIds);
         $jeTyp = fn ($typ) => array_slice(
@@ -1293,9 +1300,10 @@ class PairingService
             })(),
             0, self::KANDIDATEN_PRO_TYP
         );
+        // Zweistufiges Inspire-Modell: nur ★★★ (L3) + ★★ (L2). stern1 (★) ist
+        // strukturell leer (Inspire kennt kein L1) und aus dem UI entfernt.
         $stern3 = $jeTyp('stern3');
         $stern2 = $jeTyp('stern2');
-        $stern1 = $jeTyp('stern1');
 
         $basis = $this->komplementaerBasisrezepte($team, $recipeId, $candMeta);
 
@@ -1317,11 +1325,11 @@ class PairingService
             }
         }
 
-        // Äusserer Vollkreis: ★★ (Inspire L2) + ★ (schwächste Stufe) + Basisrezepte,
+        // Äusserer Vollkreis: ★★ (Inspire L2) + Basisrezepte,
         // in zusammenhängenden Bögen rund um den ★★★-Kreis.
-        $outerTotal = max(1, count($stern2) + count($stern1) + count($basis));
+        $outerTotal = max(1, count($stern2) + count($basis));
         $oi = 0;
-        foreach ([['stern2', $stern2], ['stern1', $stern1]] as [$typ, $liste]) {
+        foreach ([['stern2', $stern2]] as [$typ, $liste]) {
             foreach ($liste as $c) {
                 [$x, $y] = $this->positionAufKreis($oi++, $outerTotal, self::R_OUTER, $cx, $cy);
                 $kandidatNodes[] = [
@@ -1362,16 +1370,74 @@ class PairingService
                 // sich sig → wire:key wechselt → Livewire ersetzt die Insel → D3 re-initialisiert
                 // mit frischen Daten. Ohne das friert das Modal auf dem Erst-Öffnungsstand ein.
                 'sig' => substr(md5(implode('|', array_map(static fn ($n) => $n['id'], $nodes))), 0, 10),
-                // Filter-Defaults: alle Stern-Stufen an (reine Inspire-Harmonie).
-                'typ_default' => ['stern3' => true, 'stern2' => true, 'stern1' => true],
+                // Filter-Defaults: beide Stern-Stufen an (zweistufige Inspire-Harmonie).
+                'typ_default' => ['stern3' => true, 'stern2' => true],
                 'counts' => [
                     'stern3' => count(array_filter($kandidatNodes, fn ($n) => $n['typ'] === 'stern3')),
                     'stern2' => count(array_filter($kandidatNodes, fn ($n) => $n['typ'] === 'stern2')),
-                    'stern1' => count(array_filter($kandidatNodes, fn ($n) => $n['typ'] === 'stern1')),
                     'basis' => count($basisNodes),
+                    // Kanten zwischen den Kern-Ankern (innere Ebene).
+                    'anker_anker' => count($ankerKanten),
                 ],
             ],
         ];
+    }
+
+    /**
+     * Kanten ZWISCHEN den Kern-Ankern (innere Ebene des Netzes). Beantwortet
+     * „wie hängen die ausgewählten Anker untereinander zusammen" — die eigentliche
+     * Beweisführung des Foodpairing-Modells, die im Zutat→Anker-Netz fehlt.
+     *
+     * Signal = die gemessene Foodpairing-Harmonie-Matrix (`pairing_anchor_edges`):
+     * beste Kante je UNGEORDNETEM Paar (max level, tie-break weight), Selbst-Loops
+     * raus. Nur Harmonie-Stufen ★★/★★★ (kontrast ist eine eigene Achse und wird hier
+     * nicht als Anker-Harmonie gezeigt). Bucket-Ableitung gespiegelt aus
+     * kandidatenFuerAnker. Existiert keine Kante, entsteht keine Linie.
+     *
+     * @param  array<int>  $innerIds
+     * @return list<array{source:string,target:string,kind:string,typ:string,level:int,weight:float,visible:bool}>
+     */
+    private function innerAnkerKanten(array $innerIds): array
+    {
+        if (count($innerIds) < 2) {
+            return [];
+        }
+
+        $best = []; // "minId:maxId" => [level, weight, a, b]
+        foreach (DB::table('foodalchemist_pairing_anchor_edges')
+            ->whereIn('anchor_a_id', $innerIds)
+            ->whereIn('anchor_b_id', $innerIds)
+            ->whereColumn('anchor_a_id', '<>', 'anchor_b_id')
+            ->get(['anchor_a_id', 'anchor_b_id', 'type', 'weight', 'level']) as $k) {
+            if ($k->type === 'kontrast') {
+                continue; // eigene Achse — nicht als Harmonie zwischen den Ankern zeigen
+            }
+            $level = $k->level !== null ? max(1, min(3, (int) $k->level)) : 1;
+            $w = $k->weight !== null ? (float) $k->weight : (self::GEWICHTE[$k->type] ?? 0.5);
+            $a = (int) $k->anchor_a_id;
+            $b = (int) $k->anchor_b_id;
+            $key = min($a, $b).':'.max($a, $b);
+            if (! isset($best[$key])
+                || $level > $best[$key]['level']
+                || ($level === $best[$key]['level'] && $w > $best[$key]['weight'])) {
+                $best[$key] = ['level' => $level, 'weight' => $w, 'a' => $a, 'b' => $b];
+            }
+        }
+
+        $out = [];
+        foreach ($best as $e) {
+            $out[] = [
+                'source' => 'a:'.$e['a'],
+                'target' => 'a:'.$e['b'],
+                'kind' => 'anker_anker',
+                'typ' => 'stern'.$e['level'],
+                'level' => $e['level'],
+                'weight' => $e['weight'],
+                'visible' => true,
+            ];
+        }
+
+        return $out;
     }
 
     /**

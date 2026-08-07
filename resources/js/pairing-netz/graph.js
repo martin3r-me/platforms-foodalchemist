@@ -140,6 +140,8 @@ export function pairingNetzGraph(config) {
         .attr('stroke-dasharray', (d) => this._edgeDash(d))
         .style('opacity', (d) => this._edgeOpacity(d))
         .style('transition', 'opacity .15s');
+      // Hover-Tooltip auf den Anker↔Anker-Kanten: „X ↔ Y · ★★★ Best-Match".
+      this._edgeSel.append('title').text((d) => this._edgeTitle(d));
     },
 
     _edgePath(d, cx, cy, lineGen) {
@@ -165,6 +167,7 @@ export function pairingNetzGraph(config) {
     },
 
     _edgeDash(d) {
+      if (d.kind === 'anker_anker') return null; // strukturell → durchgezogen
       if (d.kind === 'basis') return '3 4';
       if (d.typ) return TYP_DASH[d.typ];
 
@@ -172,6 +175,8 @@ export function pairingNetzGraph(config) {
     },
 
     _edgeWidth(d) {
+      // Anker↔Anker: Dicke nach Stern-Stufe (★★★ dick … ★ dünn) — deine 1/2/3-Matrix.
+      if (d.kind === 'anker_anker') return { 3: 3.2, 2: 2.2, 1: 1.3 }[d.level] || 2;
       if (d.kind === 'zentrum_anker') return 0.8;
       if (d.kind === 'basis') return 1;
       if (d.weight == null) return 1.4;
@@ -180,10 +185,23 @@ export function pairingNetzGraph(config) {
     },
 
     _edgeOpacity(d) {
+      if (d.kind === 'anker_anker') return 0.85; // Kern-Aussage → präsent (vs. zentrum_anker 0.14)
       if (d.kind === 'zentrum_anker') return 0.14;
       if (d.kind === 'basis') return 0.5;
 
       return 0.7;
+    },
+
+    // Tooltip-Text der Anker↔Anker-Kante: „Beef Rib Steak ↔ Korean BBQ · ★★★ Best-Match".
+    _edgeTitle(d) {
+      if (d.kind !== 'anker_anker') return '';
+      const s = this._byId.get(d.source);
+      const t = this._byId.get(d.target);
+      if (!s || !t) return '';
+      const name = (n) => n.label || n.slug || '';
+      const wort = { 3: 'Best-Match', 2: 'Good-Match', 1: 'Match' }[d.level] || '';
+
+      return `${name(s)} ↔ ${name(t)} · ${LEVEL_SYM[d.level] || ''} ${wort}`.trim();
     },
 
     // ── Knoten ──────────────────────────────────────────────────────────
