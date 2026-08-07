@@ -265,6 +265,39 @@ class Browser extends Component
         }
     }
 
+    /**
+     * Wissensdokument löschen (Soft-Delete). `deleted_at` genügt: Liste, Detail, Semantik-Suche
+     * UND alle KI-Kontext-Pfade (KnowledgeContextService / -EmbeddingService, Alias- und
+     * Embedding-Auflösung, Rückwärts-Trace) filtern durchgängig `whereNull('deleted_at')` — ein
+     * gelöschtes Doc kann also nicht mehr in einen Prompt geraten. Aliase/Bindungen bleiben
+     * dormant liegen (nichts liest sie ohne das Doc) und fielen bei einem echten Purge per
+     * FK-Cascade. Nur das Besitzer-Team darf löschen — Master/geerbtes/globales Wissen ist
+     * read-only (wie save()/toggleActive()).
+     */
+    public function delete(int $id): void
+    {
+        $doc = $this->sichtbaresDoc($id, ['id', 'team_id']);
+        if ($doc === null) {
+            return;
+        }
+        if (! TeamScope::owns($doc->team_id, Auth::user()?->currentTeamRelation)) {
+            $this->fehler = 'Geerbtes/Master-Wissen — nur das Besitzer-Team kann löschen.';
+
+            return;
+        }
+        DB::table('foodalchemist_knowledge_documents')->where('id', $id)
+            ->update(['deleted_at' => now(), 'updated_at' => now()]);
+
+        if ($this->selectedId === $id) {
+            $this->selectedId = null;
+            $this->form = [];
+            $this->vorschau = true;
+        }
+        $this->creating = false;
+        $this->fehler = null;
+        $this->savedToast('Wissensdokument gelöscht');
+    }
+
     public function addAlias(): void
     {
         $alias = Str::slug(trim($this->newAlias), '_');
@@ -408,6 +441,12 @@ class Browser extends Component
             ? $this->sichtbaresDoc($this->selectedId)          // MVP-036: nur Sichtbares ins Detail
             : null;
 
+        // Nur das Besitzer-Team darf bearbeiten/löschen (Master/geerbt/global = read-only).
+        // Steuert die Sichtbarkeit des Löschen-Buttons — die delete()-Methode prüft dasselbe
+        // nochmal serverseitig (nie der Client-Sichtbarkeit vertrauen).
+        $editable = $selected !== null
+            && TeamScope::owns($selected->team_id, Auth::user()?->currentTeamRelation);
+
         $aliases = $selected
             ? DB::table('foodalchemist_knowledge_aliases')->where('knowledge_document_id', $selected->id)
                 ->orderBy('alias_slug')->get()
@@ -459,6 +498,7 @@ class Browser extends Component
             'kategorien' => $kategorien,
             'docs' => $docs,
             'selected' => $selected,
+            'editable' => $editable,
             'aliases' => $aliases,
             'bindings' => $bindings,
             'routings' => $routings,
