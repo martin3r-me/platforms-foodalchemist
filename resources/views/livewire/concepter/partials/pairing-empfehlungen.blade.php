@@ -10,9 +10,8 @@
 @php($signature = $istRecipe ? ($pr['signature'] ?? []) : [])
 @php($nachbarn = $istRecipe ? ($pr['nachbarn'] ?? []) : [])
 @php($kontrast = $istRecipe ? ($pr['kontrast'] ?? []) : [])
-@php($molekular = $istRecipe ? ($pr['aroma'] ?? []) : [])
 @php($verwandte = $istRecipe ? ($pr['verwandte'] ?? []) : [])
-@if(count($anker) || count($vorschlaege) || count($signature) || count($nachbarn) || count($kontrast) || count($molekular) || count($verwandte))
+@if(count($anker) || count($vorschlaege) || count($signature) || count($nachbarn) || count($kontrast) || count($verwandte))
     <div class="space-y-3">
         @if(count($anker))
             <div>
@@ -44,14 +43,6 @@
                 <h4 class="text-[11px] font-medium text-gray-600 mb-1.5">Kontrast (Aroma-Gegenpol)</h4>
                 <div class="flex flex-wrap gap-1">
                     @foreach($kontrast as $n)<span class="{{ $pill }}" style="background-color: rgba(6,182,212,0.14); color: #0891b2;">↔ {{ $n }}</span>@endforeach
-                </div>
-            </div>
-        @endif
-        @if(count($molekular))
-            <div>
-                <h4 class="text-[11px] font-medium text-gray-600 mb-1.5">Molekular verwandt <span class="font-normal text-gray-400">· Aroma-Layer</span></h4>
-                <div class="flex flex-wrap gap-1">
-                    @foreach($molekular as $n)<span class="{{ $pill }} {{ $variantPill['primary'] }}">≈ {{ $n }}</span>@endforeach
                 </div>
             </div>
         @endif
