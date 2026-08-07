@@ -145,6 +145,7 @@ trait HatGeneratorLauf
                 'name' => $stand['name'],
                 'statistik' => $stand['statistik'],
                 'offene' => $stand['offene'],
+                'kontext' => $stand['kontext'] ?? null,   // Kontext-Inspektor: verwendetes Wissen
             ];
             $this->dispatch('recipe-gespeichert');
             $this->dispatch($this->auswahlEvent(), id: $stand['recipe_id']);

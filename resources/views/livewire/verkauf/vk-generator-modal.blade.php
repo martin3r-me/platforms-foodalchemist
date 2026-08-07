@@ -145,6 +145,7 @@
             <x-foodalchemist::hardstop-zeilen :offene="$ergebnis['offene']" prefix="vk-"
                                              :aufgeklappt="$hardstopOffenIndex" :meldung="$hardstopMeldung" />
             <x-foodalchemist::stub-offen :stubs="$ergebnis['statistik']['stubs'] ?? []" />
+            <x-foodalchemist::kontext-inspektor :kontext="$ergebnis['kontext'] ?? null" />
             <p class="text-[10px] text-gray-500 mt-2">VK-Daten (Klasse/Aufschlagsklasse) aus dem Vorschlag übernommen, soweit valide — Rest im VK-Editor pflegen.</p>
             @if($laeuft)
                 <p wire:poll.2s="pruefeErgebnis" class="text-[11px] text-violet-700 mt-3" data-vk-generator-anreicherung-laeuft>⚡ Gericht gespeichert — Vollanreicherung läuft separat …</p>

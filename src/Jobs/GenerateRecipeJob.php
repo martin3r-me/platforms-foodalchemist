@@ -102,6 +102,7 @@ class GenerateRecipeJob implements ShouldQueue
                 'name' => $r['recipe']->name,
                 'statistik' => $r['statistik'],
                 'offene' => $r['offene'],
+                'kontext' => $r['kontext'] ?? null,   // Kontext-Inspektor: verwendetes Wissen fürs UI
             ];
             if ($stepId !== null) {
                 $workflowParameter = [...$this->parameter, '_voll_anreichern' => $this->vollAnreichern];
