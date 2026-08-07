@@ -1357,6 +1357,11 @@ class PairingService
                 'recipe_id' => $recipeId,
                 'canvas_w' => self::CANVAS_W,
                 'canvas_h' => self::CANVAS_H,
+                // Inhalts-Signatur (Knoten-IDs in Reihenfolge): keyt die wire:ignore-D3-Insel
+                // in Vorschau + Modal. Ändert sich der Ankersatz (o. die Kandidaten), ändert
+                // sich sig → wire:key wechselt → Livewire ersetzt die Insel → D3 re-initialisiert
+                // mit frischen Daten. Ohne das friert das Modal auf dem Erst-Öffnungsstand ein.
+                'sig' => substr(md5(implode('|', array_map(static fn ($n) => $n['id'], $nodes))), 0, 10),
                 // Filter-Defaults: alle Stern-Stufen an (reine Inspire-Harmonie).
                 'typ_default' => ['stern3' => true, 'stern2' => true, 'stern1' => true],
                 'counts' => [

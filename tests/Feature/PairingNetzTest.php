@@ -21,19 +21,25 @@ function mkAnker(string $slug): int
     return (int) DB::getPdo()->lastInsertId();
 }
 
-function mkKante(int $a, int $b, string $typ, ?float $weight = null): void
+/**
+ * Inspire-Umbau: Kanten tragen jetzt eine Stern-Stufe (`level` 3=★★★ / 2=★★ / 1=★).
+ * `type='kontrast'` bleibt die eigene Achse (level=NULL). mkKante seedt bidirektional.
+ */
+function mkKante(int $a, int $b, string $typ, ?int $level = null, ?float $weight = null): void
 {
     foreach ([[$a, $b], [$b, $a]] as [$x, $y]) {
         DB::table('foodalchemist_pairing_anchor_edges')->insert([
             'uuid' => (string) UuidV7::generate(), 'anchor_a_id' => $x, 'anchor_b_id' => $y,
-            'type' => $typ, 'weight' => $weight, 'created_at' => now(), 'updated_at' => now(),
+            'type' => $typ, 'level' => $level, 'weight' => $weight,
+            'created_at' => now(), 'updated_at' => now(),
         ]);
     }
 }
 
 /**
- * M5-07: Pairing-Netz — Empfehler-Datenbasis (Kern-Anker innen, typisierte
- * Kandidaten in Sektoren, komplementäre Basisrezepte) + Modal-Smoke.
+ * M5-07 / Inspire-Umbau 2a: Pairing-Netz — Empfehler-Datenbasis (Kern-Anker innen,
+ * Kandidaten in Stern-Sektoren ★★★/★★/★, komplementäre Basisrezepte) + Modal-Smoke
+ * + Inhalts-Signatur (`meta.sig`), die die wire:ignore-D3-Insel neu keyt.
  */
 beforeEach(function () {
     $this->seedTeamHierarchy();
@@ -41,15 +47,15 @@ beforeEach(function () {
 
     $this->kichererbse = mkAnker('kichererbse');
     $this->tahin = mkAnker('tahin');
-    $this->knoblauch = mkAnker('knoblauch');     // erprobt-Partner beider Kern-Anker
-    $this->granatapfel = mkAnker('granatapfel'); // kontrast-Partner
-    $this->minze = mkAnker('minze');             // aroma-Partner
+    $this->knoblauch = mkAnker('knoblauch');     // ★★★-Partner beider Kern-Anker (cover 2)
+    $this->granatapfel = mkAnker('granatapfel'); // ★★-Partner von kichererbse
+    $this->minze = mkAnker('minze');             // ★★-Partner von tahin
 
-    // Kern-Anker ↔ Kandidaten (typisiert). knoblauch passt zu BEIDEN (cover=2).
-    mkKante($this->kichererbse, $this->knoblauch, 'erprobt');
-    mkKante($this->tahin, $this->knoblauch, 'erprobt');
-    mkKante($this->kichererbse, $this->granatapfel, 'kontrast');
-    mkKante($this->tahin, $this->minze, 'aroma');
+    // Kern-Anker ↔ Kandidaten mit Stern-Stufe. knoblauch passt zu BEIDEN (cover=2).
+    mkKante($this->kichererbse, $this->knoblauch, 'aroma', 3, 0.9);
+    mkKante($this->tahin, $this->knoblauch, 'aroma', 3, 0.9);
+    mkKante($this->kichererbse, $this->granatapfel, 'aroma', 2, 0.6);
+    mkKante($this->tahin, $this->minze, 'aroma', 2, 0.6);
 
     $this->rezept = FoodAlchemistRecipe::create(['team_id' => $this->rootTeam->id, 'recipe_key' => 'hummus', 'name' => 'Creme: Hummus', 'status' => 'draft']);
     $this->svc->setRecipeAnker($this->rootTeam, $this->rezept->id, $this->kichererbse);
@@ -63,7 +69,7 @@ beforeEach(function () {
     $this->svc->setRecipeAnker($this->rootTeam, $this->vk->id, $this->knoblauch);
 });
 
-it('pairingNetz: Zentrum + Kern-Anker innen, Kandidaten typisiert in Sektoren, dish_cover', function () {
+it('pairingNetz: Zentrum + Kern-Anker innen, Kandidaten nach Stern-Stufe, dish_cover', function () {
     $netz = $this->svc->pairingNetz($this->rootTeam, $this->rezept->id);
 
     expect(collect($netz['nodes'])->firstWhere('kind', 'zentrum')['label'])->toBe('Creme: Hummus');
@@ -73,20 +79,21 @@ it('pairingNetz: Zentrum + Kern-Anker innen, Kandidaten typisiert in Sektoren, d
         ->and($anker->every(fn ($a) => $a['kern'] === true))->toBeTrue();
 
     $kand = collect($netz['nodes'])->where('kind', 'kandidat')->keyBy('slug');
-    expect($kand['knoblauch']['typ'])->toBe('erprobt')
-        ->and($kand['granatapfel']['typ'])->toBe('kontrast')
-        ->and($kand['minze']['typ'])->toBe('aroma');
+    expect($kand['knoblauch']['typ'])->toBe('stern3')
+        ->and($kand['knoblauch']['level'])->toBe(3)
+        ->and($kand['granatapfel']['typ'])->toBe('stern2')
+        ->and($kand['minze']['typ'])->toBe('stern2');
     // knoblauch bedient beide Kern-Anker → cover 2
     expect($kand['knoblauch']['cover'])->toBe(2)
         ->and($kand['granatapfel']['cover'])->toBe(1);
 
-    // Kandidaten-Kanten tragen ihren Typ
+    // Kandidaten-Kanten tragen ihre Stufe
     $kknob = collect($netz['edges'])->where('kind', 'kandidat')->where('source', 'k:'.$this->knoblauch);
     expect($kknob)->toHaveCount(2)                                      // zu kichererbse + tahin
-        ->and($kknob->every(fn ($e) => $e['typ'] === 'erprobt'))->toBeTrue();
+        ->and($kknob->every(fn ($e) => $e['typ'] === 'stern3'))->toBeTrue();
 
-    expect($netz['meta']['counts'])->toBe(['erprobt' => 1, 'aroma' => 1, 'kontrast' => 1, 'basis' => 1])
-        ->and($netz['meta']['typ_default'])->toBe(['erprobt' => true, 'aroma' => false, 'kontrast' => false]);
+    expect($netz['meta']['counts'])->toBe(['stern3' => 1, 'stern2' => 2, 'stern1' => 0, 'basis' => 1])
+        ->and($netz['meta']['typ_default'])->toBe(['stern3' => true, 'stern2' => true, 'stern1' => true]);
 });
 
 it('pairingNetz: komplementäres Basisrezept (baut auf Kandidat auf), VK ausgeschlossen', function () {
@@ -95,7 +102,7 @@ it('pairingNetz: komplementäres Basisrezept (baut auf Kandidat auf), VK ausgesc
     $basis = collect($netz['nodes'])->where('kind', 'basisrezept');
     expect($basis)->toHaveCount(1)
         ->and($basis->first()['label'])->toBe('Sauce: Aioli')        // is_sales_recipe=false
-        ->and($basis->first()['typ'])->toBe('erprobt')               // via knoblauch (erprobt)
+        ->and($basis->first()['typ'])->toBe('stern3')                // via knoblauch (★★★)
         ->and($basis->first()['via'])->toBe('knoblauch');
 
     // VK-Rezept (Dip: Knoblauch) darf nicht als Basisrezept erscheinen
@@ -112,7 +119,23 @@ it('pairingNetz: alle Knoten liegen im Canvas (0..W, 0..H)', function () {
     }
 });
 
-it('Modal: öffnen liefert Netz-Payload, Klick auf Basisrezept navigiert und schließt', function () {
+it('pairingNetz: meta.sig ist stabil, ändert sich aber wenn ein Kern-Anker dazukommt', function () {
+    // Sichert den Modal-„detail blick"-Bug ab: die wire:ignore-D3-Insel wird auf sig
+    // gekeyt. Ändert sich der Ankersatz, MUSS sig wechseln, sonst friert das Modal
+    // auf dem Erst-Öffnungsstand ein (frischer Anker kommt nicht im grossen Panel an).
+    $a = $this->svc->pairingNetz($this->rootTeam, $this->rezept->id)['meta']['sig'] ?? null;
+    $b = $this->svc->pairingNetz($this->rootTeam, $this->rezept->id)['meta']['sig'] ?? null;
+
+    expect($a)->toBeString()->toMatch('/^[0-9a-f]{10}$/')
+        ->and($b)->toBe($a);                                   // deterministisch bei gleichen Daten
+
+    $this->svc->setRecipeAnker($this->rootTeam, $this->rezept->id, $this->minze); // +1 Kern-Anker
+    $c = $this->svc->pairingNetz($this->rootTeam, $this->rezept->id)['meta']['sig'] ?? null;
+
+    expect($c)->not->toBe($a);                                 // Ankersatz änderte sich → neuer Key
+});
+
+it('Modal: öffnen liefert Netz-Payload (inkl. sig), Klick auf Basisrezept navigiert und schließt', function () {
     $this->actingAs($this->makeUser($this->rootTeam));
 
     $c = Livewire::test(PairingNetzModal::class);
@@ -123,8 +146,9 @@ it('Modal: öffnen liefert Netz-Payload, Klick auf Basisrezept navigiert und sch
             $hatZentrum = collect($netz['nodes'])->firstWhere('kind', 'zentrum') !== null;
             $hatKandidat = collect($netz['nodes'])->where('kind', 'kandidat')->isNotEmpty();
             $hatBasis = collect($netz['nodes'])->firstWhere('id', 'b:'.$this->basis->id) !== null;
+            $hatSig = ! empty($netz['meta']['sig'] ?? null);
 
-            return $hatZentrum && $hatKandidat && $hatBasis;
+            return $hatZentrum && $hatKandidat && $hatBasis && $hatSig;
         });
 
     $c->call('zeigeRezept', $this->basis->id)

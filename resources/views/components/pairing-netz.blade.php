@@ -30,7 +30,7 @@
 @else
     <div
         wire:ignore
-        wire:key="pairing-netz-preview-{{ $recipeId }}"
+        wire:key="pairing-netz-preview-{{ $recipeId }}-{{ $netz['meta']['sig'] ?? '' }}"
         x-data="pairingNetzGraph({
             nodes: @js($previewNodes),
             edges: @js($previewEdges),

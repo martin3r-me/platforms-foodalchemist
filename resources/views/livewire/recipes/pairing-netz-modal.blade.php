@@ -20,7 +20,7 @@
     @else
         <div
             wire:ignore
-            wire:key="pairing-netz-{{ $recipeId }}"
+            wire:key="pairing-netz-{{ $recipeId }}-{{ $netz['meta']['sig'] ?? '' }}"
             class="rounded-xl p-3"
             style="background:#0b1120"
             x-data="pairingNetzGraph({
