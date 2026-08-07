@@ -47,7 +47,7 @@ class KnowledgeContextService
      * @param  list<string>  $hauptzutatSlugs  nur für Grounding-Features (ai_suggest_pairings, ai_infer_ankers)
      * @return array{block: string, files_used: list<string>, total_chars: int}
      */
-    public function contextFor(string $feature, string $description, ?string $stil = null, array $hauptzutatSlugs = []): array
+    public function contextFor(string $feature, string $description, ?string $stil = null, array $hauptzutatSlugs = [], array $params = []): array
     {
         $routing = DB::table('foodalchemist_knowledge_routings')
             ->where('feature', $feature)
@@ -117,6 +117,30 @@ class KnowledgeContextService
         // ── 3. Pairing-Doku-Grounding (Anker-/Pairing-Inferenz) ──
         if (($r = $routing->get('pairing:grounding')) !== null) {
             $parts[] = $this->groundingBlock($hauptzutatSlugs, (int) $r->max_docs, (int) $r->max_chars_per_doc, $filesUsed);
+        }
+
+        // ── 4. GENERISCHE discovery-Kategorien (S1 Skalierbarkeit) ──
+        // Jede als `discovery` geroutete Kategorie OHNE Spezial-Handler (domain/pairing/
+        // trend/concept haben eigene, oben) wird hier generisch per Beschreibung + Leitplanken-
+        // Werten (Niveau/Sektor) entdeckt und gedeckelt geladen. Damit skaliert die Wissensbasis:
+        // eine neue Kategorie braucht nur eine Routing-Zeile, KEINEN Service-Code. Bestehende
+        // Kategorien werden übersprungen → Verhalten für sie byte-identisch (golden-safe).
+        $spezial = ['domain', 'pairing', 'trend', 'concept', 'cross_cutting'];
+        $leitplankenQuery = trim($description . ' ' . implode(' ', array_filter([
+            (string) ($params['niveau'] ?? $params['level'] ?? ''),
+            (string) ($params['sektor'] ?? ''),
+        ], fn ($v) => $v !== '')));
+        foreach ($routing as $r) {
+            if ($r->mode !== 'discovery' || in_array($r->category, $spezial, true)) {
+                continue;
+            }
+            $generic = $this->discoverGenericBlock(
+                (string) $r->category, $leitplankenQuery,
+                (int) ($r->max_docs ?: 3), (int) ($r->max_chars_per_doc ?: 3000), $filesUsed
+            );
+            if ($generic !== null) {
+                $parts[] = $generic;
+            }
         }
 
         // (#469-Bindungs-Injektion passiert jetzt zentral im AiGatewayService::propose für ALLE Prompts.)
@@ -385,6 +409,67 @@ class KnowledgeContextService
             ->get(['slug', 'content_md', 'version'])->keyBy('slug');
 
         return array_values(array_filter(array_map(fn ($slug) => $docs->get($slug), self::ALWAYS_LOAD_CROSS_CUTTING)));
+    }
+
+    /**
+     * S1 (Skalierbarkeit): generische discovery für JEDE als `discovery` geroutete Kategorie
+     * OHNE eigenen Spezial-Handler. Rankt die aktiven Docs der Kategorie gegen die (Leitplanken-
+     * augmentierte) Query — Alias-Bonus, dann Slug-Token (Jaccard + Wort-Treffer, wie der
+     * Domain-Fallback) — und lädt Top-K gedeckelt. So trägt jedes neu gepflegte Doc automatisch,
+     * ohne Service-Änderung; der Prompt bleibt durch top_k/chars beschränkt (O(1), nicht O(n)).
+     */
+    private function discoverGenericBlock(string $category, string $query, int $topK, int $maxChars, array &$filesUsed): ?string
+    {
+        $tokens = $this->tokenize($query);
+        if ($tokens === [] || $topK <= 0) {
+            return null;
+        }
+
+        $docs = DB::table('foodalchemist_knowledge_documents')
+            ->where('category', $category)->where('active', 1)->whereNull('deleted_at')
+            ->get(['id', 'slug', 'content_md', 'version']);
+        if ($docs->isEmpty()) {
+            return null;
+        }
+
+        // Alias-Treffer (falls gepflegt) → Bonus, damit ein exakt passendes Doc sicher oben landet.
+        $aliasBySlug = [];
+        foreach (DB::table('foodalchemist_knowledge_aliases as a')
+            ->join('foodalchemist_knowledge_documents as d', 'd.id', 'a.knowledge_document_id')
+            ->where('d.category', $category)->where('d.active', 1)->whereNull('d.deleted_at')
+            ->get(['a.alias_slug', 'd.slug']) as $al) {
+            $a = mb_strtolower($al->alias_slug);
+            foreach ($tokens as $t) {
+                if ($t === $a || (mb_strlen($t) >= 4 && str_contains($a, $t)) || (mb_strlen($a) >= 4 && str_contains($t, $a))) {
+                    $aliasBySlug[$al->slug] = true;
+                    break;
+                }
+            }
+        }
+
+        $scored = [];
+        foreach ($docs as $doc) {
+            $slugTokens = $this->tokenize((string) $doc->slug);
+            $score = $this->jaccard($tokens, $slugTokens)
+                + 0.1 * count(array_filter($tokens, fn ($t) => count(array_filter($slugTokens, fn ($st) => str_contains($st, $t))) > 0))
+                + (isset($aliasBySlug[$doc->slug]) ? 1.0 : 0.0);
+            if ($score > 0.0) {
+                $scored[] = [$doc, $score];
+            }
+        }
+        if ($scored === []) {
+            return null;
+        }
+        usort($scored, fn ($x, $y) => $y[1] <=> $x[1]);
+
+        $label = mb_strtoupper($category);
+        $blocks = [];
+        foreach (array_slice($scored, 0, $topK) as [$doc]) {
+            $blocks[] = "## {$label}: {$doc->slug}\n\n" . $this->truncate((string) $doc->content_md, $maxChars);
+            $filesUsed[] = "{$doc->slug}@v{$doc->version}";
+        }
+
+        return '# ' . $label . "-WISSEN\n\n" . implode("\n\n---\n\n", $blocks);
     }
 
     /**

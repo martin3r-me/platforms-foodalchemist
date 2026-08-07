@@ -213,3 +213,34 @@ it('DoD: Assembly hält das Gesamtbudget — übergroße Docs auf ≈52k Zeichen
         ->and(substr_count($ctx['block'], '[…gekürzt für KI-Kontext…]'))->toBe(7 + 3)
         ->and($ctx['total_chars'])->toBe(mb_strlen($ctx['block']));
 });
+
+// ── S1 (2026-08-07): generische, skalierbare discovery für wachsende Kategorien ──
+
+it('S1: Niveau-Docs werden parametrisch geladen — nur die aktive Stufe (top_k=1)', function () {
+    ($this->seedGenerator)();
+    // Stufen-Docs in der Vault-Slug-Konvention (niveau.<datei>). Routing kommt aus der
+    // Migration 2026_08_07_000001 (niveau:discovery, top_k 1) — der Test beweist die Verdrahtung mit.
+    ($this->mkDoc)('niveau.niveau-1-haute-cuisine', 'niveau', 'Haute-Cuisine: Reduktionen, Praezision, Mise en Place.');
+    ($this->mkDoc)('niveau.niveau-2-gehoben', 'niveau', 'Gehoben: solide Klassik, gute Produkte.');
+    ($this->mkDoc)('niveau.niveau-3-klassisch', 'niveau', 'Klassisch: bewaehrte Hausmannskost.');
+
+    $haute = $this->svc->contextFor('ai_generate_recipe', 'Rotwein-Schalotten-Reduktion', null, [], ['niveau' => 'haute_cuisine']);
+    expect($haute['files_used'])->toContain('niveau.niveau-1-haute-cuisine@v1')
+        ->and($haute['files_used'])->not->toContain('niveau.niveau-2-gehoben@v1')      // top_k=1 + Param-Wahl
+        ->and($haute['files_used'])->not->toContain('niveau.niveau-3-klassisch@v1')
+        ->and($haute['block'])->toContain('Haute-Cuisine: Reduktionen');
+
+    // Anderer Parameter → andere Stufe (Beweis: parametrisch, nicht statisch)
+    $klass = $this->svc->contextFor('ai_generate_recipe', 'Rotwein-Schalotten-Reduktion', null, [], ['niveau' => 'klassisch']);
+    expect($klass['files_used'])->toContain('niveau.niveau-3-klassisch@v1')
+        ->and($klass['files_used'])->not->toContain('niveau.niveau-1-haute-cuisine@v1');
+});
+
+it('S1: eine Kategorie OHNE Routing bleibt draußen (search-only ist gültig, kein Bloat)', function () {
+    ($this->seedGenerator)();
+    ($this->mkDoc)('regelwerk.gp-naming', 'regelwerk', 'Lange normative GP-Naming-Regeln.');
+
+    // regelwerk ist bewusst NICHT für ai_generate_recipe geroutet → trotz Wort-Treffer nicht im Grounding.
+    $ctx = $this->svc->contextFor('ai_generate_recipe', 'GP naming Regelwerk Schalotten', null, [], []);
+    expect($ctx['files_used'])->not->toContain('regelwerk.gp-naming@v1');
+});

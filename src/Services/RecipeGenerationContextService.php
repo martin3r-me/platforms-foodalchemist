@@ -20,7 +20,7 @@ class RecipeGenerationContextService
 
     public function build(Team $team, string $description, array $parameter, bool $vkModus): array
     {
-        $wissen = $this->knowledge->contextFor('ai_generate_recipe', $description, $parameter['kompositions_stil'] ?? null);
+        $wissen = $this->knowledge->contextFor('ai_generate_recipe', $description, $parameter['kompositions_stil'] ?? null, [], $parameter);
         $prompt = ['description' => $description, 'parameter' => $parameter];
         if (($typ = $this->settings->kuechenTyp($team)) !== null) {
             $prompt = ['kuechen_profil' => 'Mandanten-Profil (Soft-Default): ' . TeamSettingsService::KUECHEN_TYPEN[$typ]] + $prompt;
