@@ -269,6 +269,56 @@ class KnowledgeEmbeddingService
     }
 
     /**
+     * Semantische Anker-Auflösung, Mehrfach-Variante: Freitext → Liste passender Anker-Slugs
+     * (bestes zuerst). Ersetzt für die Pairing-Erdung die frühere Doc-basierte
+     * searchSlugs(['pairing']) — die Token→Anker-Brücke lebt jetzt am Anker-Graphen
+     * (embedAnkers), damit die Pairing-Docs aufgeräumt werden können, ohne den semantischen
+     * Recall zu verlieren. Leeres Ergebnis bei fehlendem Provider / Fehler (GL-13 Invariante 6).
+     *
+     * @return list<string>
+     */
+    public function searchAnkerSlugs(string $query, int $limit = 4, ?float $minScore = null): array
+    {
+        $query = trim($query);
+        if ($query === '' || $limit <= 0 || ! $this->isProviderAvailable()) {
+            return [];
+        }
+        $minScore ??= (float) config('foodalchemist.semantic_search.min_score', 0.30);
+
+        try {
+            $hits = app(EmbeddingService::class)->search(
+                teamId: $this->globalTeamId(),
+                queryText: $query,
+                entityTypes: [self::ENTITY_TYPE_ANKER],
+                limit: $limit,
+                minScore: $minScore,
+                providerName: $this->providerName(),
+            );
+        } catch (Throwable $e) {
+            Log::warning('[KnowledgeEmbeddingService] anker slug search failed', ['error' => $e->getMessage()]);
+
+            return [];
+        }
+        if ($hits === []) {
+            return [];
+        }
+
+        // entity_id → Anker-Slug auflösen, Score-Reihenfolge erhalten.
+        $ids = array_map(static fn ($h) => (int) $h['entity_id'], $hits);
+        $slugs = DB::table('foodalchemist_vocab_pairing_anchors')
+            ->whereIn('id', $ids)->whereNull('deleted_at')->pluck('slug', 'id');
+        $out = [];
+        foreach ($hits as $h) {
+            $slug = $slugs->get((int) $h['entity_id']);
+            if ($slug !== null) {
+                $out[$slug] = true;
+            }
+        }
+
+        return array_keys($out);
+    }
+
+    /**
      * Semantische Suche → Liste passender knowledge_documents-Slugs der
      * gewünschten Kategorie(n), bestes Match zuerst. Leeres Ergebnis bei
      * fehlendem Provider / Fehler (GL-13 Invariante 6).
