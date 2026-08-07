@@ -2,6 +2,7 @@
 
 namespace Platform\FoodAlchemist\Services\Ai;
 
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Platform\Core\Services\EmbeddingProviderRegistry;
@@ -263,20 +264,7 @@ class KnowledgeEmbeddingService
         }
         $minScore ??= (float) config('foodalchemist.semantic_search.anker_min_score', 0.55);
 
-        try {
-            $hits = app(EmbeddingService::class)->search(
-                teamId: $this->globalTeamId(),
-                queryText: $name,
-                entityTypes: [self::ENTITY_TYPE_ANKER],
-                limit: 1,
-                minScore: $minScore,
-                providerName: $this->providerName(),
-            );
-        } catch (Throwable $e) {
-            Log::warning('[KnowledgeEmbeddingService] anker resolve failed', ['error' => $e->getMessage()]);
-
-            return null;
-        }
+        $hits = $this->searchMerged($name, self::ENTITY_TYPE_ANKER, 1, $minScore);
 
         if (! isset($hits[0])) {
             return null;
@@ -302,20 +290,7 @@ class KnowledgeEmbeddingService
         }
         $minScore ??= (float) config('foodalchemist.semantic_search.min_score', 0.30);
 
-        try {
-            $hits = app(EmbeddingService::class)->search(
-                teamId: $this->globalTeamId(),
-                queryText: $query,
-                entityTypes: [self::ENTITY_TYPE_ANKER],
-                limit: $limit,
-                minScore: $minScore,
-                providerName: $this->providerName(),
-            );
-        } catch (Throwable $e) {
-            Log::warning('[KnowledgeEmbeddingService] anker slug search failed', ['error' => $e->getMessage()]);
-
-            return [];
-        }
+        $hits = $this->searchMerged($query, self::ENTITY_TYPE_ANKER, $limit, $minScore);
         if ($hits === []) {
             return [];
         }
@@ -352,20 +327,7 @@ class KnowledgeEmbeddingService
         }
         $minScore ??= (float) config('foodalchemist.semantic_search.min_score', 0.30);
 
-        try {
-            $hits = app(EmbeddingService::class)->search(
-                teamId: $this->globalTeamId(),
-                queryText: $query,
-                entityTypes: [self::ENTITY_TYPE],
-                limit: $limit * 3,              // Überhang für den Kategorie-Filter
-                minScore: $minScore,
-                providerName: $this->providerName(),
-            );
-        } catch (Throwable $e) {
-            Log::warning('[KnowledgeEmbeddingService] search failed', ['error' => $e->getMessage()]);
-
-            return [];
-        }
+        $hits = $this->searchMerged($query, self::ENTITY_TYPE, $limit * 3, $minScore);
 
         if ($hits === []) {
             return [];
@@ -417,22 +379,82 @@ class KnowledgeEmbeddingService
         }
         $minScore ??= (float) config('foodalchemist.semantic_search.min_score', 0.30);
 
-        try {
-            $hits = app(EmbeddingService::class)->search(
-                teamId: $this->globalTeamId(),
-                queryText: $query,
-                entityTypes: [self::ENTITY_TYPE],
-                limit: $limit,
-                minScore: $minScore,
-                providerName: $this->providerName(),
-            );
-        } catch (Throwable $e) {
-            Log::warning('[KnowledgeEmbeddingService] doc search failed', ['error' => $e->getMessage()]);
-
-            return [];
-        }
+        $hits = $this->searchMerged($query, self::ENTITY_TYPE, $limit, $minScore);
 
         return array_values(array_map(static fn ($h) => (int) $h['entity_id'], $hits));
+    }
+
+    /**
+     * Sichtbare Suchpartitionen für die Vokabular-/Doc-Lookups: die Ahnenkette des
+     * aktuellen Teams ∪ Global-Sentinel — identisch zu
+     * {@see SemanticRetrievalService::partitionsFor}. Ohne Auth-Team (Konsole/Job
+     * ohne Team-Kontext) bleibt es der reine Sentinel (= bisheriges Verhalten).
+     *
+     * @return list<int>
+     */
+    private function searchPartitions(): array
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team === null) {
+            return [$this->globalTeamId()];
+        }
+
+        return app(SemanticRetrievalService::class)->partitionsFor($team);
+    }
+
+    /**
+     * Semantische Suche über {@see searchPartitions()} statt nur im Sentinel:
+     * je Partition suchen, dedupe je entity_id mit max. Score, Score-absteigend,
+     * auf $limit gekappt. Spiegelt {@see SemanticRetrievalService::candidates} für
+     * die Anker-/Doc-Auflösung — team-eigene Anker/Docs (unter der realen team_id)
+     * werden gefunden, nicht nur der Sentinel-Korpus. Nie Fehler nach oben
+     * (GL-13 Invariante 6).
+     *
+     * @return list<array{entity_id: int, score: float}>
+     */
+    private function searchMerged(string $query, string $entityType, int $limit, float $minScore): array
+    {
+        $service = app(EmbeddingService::class);
+        $best = [];   // entity_id => max. Score
+        foreach ($this->searchPartitions() as $partition) {
+            try {
+                $hits = $service->search(
+                    teamId: $partition,
+                    queryText: $query,
+                    entityTypes: [$entityType],
+                    limit: $limit,
+                    minScore: $minScore,
+                    providerName: $this->providerName(),
+                );
+            } catch (Throwable $e) {
+                Log::warning('[KnowledgeEmbeddingService] partition search failed', [
+                    'team' => $partition,
+                    'error' => $e->getMessage(),
+                ]);
+
+                continue;
+            }
+            foreach ($hits as $hit) {
+                $id = (int) $hit['entity_id'];
+                $score = (float) ($hit['score'] ?? 0.0);
+                if (! isset($best[$id]) || $score > $best[$id]) {
+                    $best[$id] = $score;
+                }
+            }
+        }
+        if ($best === []) {
+            return [];
+        }
+        arsort($best);
+        $out = [];
+        foreach ($best as $id => $score) {
+            $out[] = ['entity_id' => $id, 'score' => $score];
+            if (count($out) >= $limit) {
+                break;
+            }
+        }
+
+        return $out;
     }
 
     /**
