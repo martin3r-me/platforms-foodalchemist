@@ -224,14 +224,14 @@ it('S1: Niveau-Docs werden parametrisch geladen — nur die aktive Stufe (top_k=
     ($this->mkDoc)('niveau.niveau-2-gehoben', 'niveau', 'Gehoben: solide Klassik, gute Produkte.');
     ($this->mkDoc)('niveau.niveau-3-klassisch', 'niveau', 'Klassisch: bewaehrte Hausmannskost.');
 
-    $haute = $this->svc->contextFor('ai_generate_recipe', 'Rotwein-Schalotten-Reduktion', null, [], ['niveau' => 'haute_cuisine']);
+    $haute = $this->svc->contextFor('ai_generate_recipe', 'Rotwein-Schalotten-Reduktion', null, [], ['niveau' => 'haute_cuisine', 'rezept_typ' => 'gericht']);
     expect($haute['files_used'])->toContain('niveau.niveau-1-haute-cuisine@v1')
         ->and($haute['files_used'])->not->toContain('niveau.niveau-2-gehoben@v1')      // top_k=1 + Param-Wahl
         ->and($haute['files_used'])->not->toContain('niveau.niveau-3-klassisch@v1')
         ->and($haute['block'])->toContain('Haute-Cuisine: Reduktionen');
 
     // Anderer Parameter → andere Stufe (Beweis: parametrisch, nicht statisch)
-    $klass = $this->svc->contextFor('ai_generate_recipe', 'Rotwein-Schalotten-Reduktion', null, [], ['niveau' => 'klassisch']);
+    $klass = $this->svc->contextFor('ai_generate_recipe', 'Rotwein-Schalotten-Reduktion', null, [], ['niveau' => 'klassisch', 'rezept_typ' => 'gericht']);
     expect($klass['files_used'])->toContain('niveau.niveau-3-klassisch@v1')
         ->and($klass['files_used'])->not->toContain('niveau.niveau-1-haute-cuisine@v1');
 });
@@ -251,7 +251,7 @@ it('Kontext-Inspektor: used_by_category gruppiert je Kanal und deckt sich exakt 
     ($this->seedGenerator)();
     ($this->mkDoc)('niveau.niveau-1-haute-cuisine', 'niveau', 'Haute-Cuisine: Reduktionen, Praezision.');
 
-    $ctx = $this->svc->contextFor('ai_generate_recipe', 'Lachs mit brauner Butter und Walnuss', null, [], ['niveau' => 'haute_cuisine']);
+    $ctx = $this->svc->contextFor('ai_generate_recipe', 'Lachs mit brauner Butter und Walnuss', null, [], ['niveau' => 'haute_cuisine', 'rezept_typ' => 'gericht']);
 
     // Rückgabe-Kontrakt: neuer Key da, gruppiert nach den erwarteten Kanälen.
     expect($ctx)->toHaveKey('used_by_category')
@@ -266,4 +266,29 @@ it('Kontext-Inspektor: used_by_category gruppiert je Kanal und deckt sich exakt 
     $erwartet = $ctx['files_used'];
     sort($erwartet);
     expect($flach)->toBe($erwartet);
+});
+
+// ── Spec 37 (2026-08-07): Niveau-Auswahl ist TYP-ABHÄNGIG (Baustein/Komponente vs. Teller) ──
+
+it('Spec 37: Basisrezept zieht den Basis-Niveau-Doc, Gericht den Teller-Doc (gleicher Level-Token)', function () {
+    ($this->seedGenerator)();
+    ($this->mkDoc)('niveau.niveau-1-haute-cuisine', 'niveau', 'Teller: 7-10 Komponenten, Menuegang.');
+    ($this->mkDoc)('niveau.niveau-basis-1-haute-cuisine', 'niveau', 'Baustein: Technik an EINER Komponente, KEIN 7-10-Teller.');
+
+    // Basisrezept → der Basis-Doc (…basis…), NICHT der Teller-Doc.
+    $basis = $this->svc->contextFor('ai_generate_recipe', 'Tomatensuppe', null, [], ['niveau' => 'haute_cuisine', 'rezept_typ' => 'basisrezept']);
+    expect($basis['used_by_category']['niveau'] ?? [])->toBe(['niveau.niveau-basis-1-haute-cuisine@v1'])
+        ->and($basis['block'])->toContain('EINER Komponente');
+
+    // Gericht → der Teller-Doc (kein …basis…), obwohl der Level-Token derselbe ist.
+    $gericht = $this->svc->contextFor('ai_generate_recipe', 'Tomatensuppe', null, [], ['niveau' => 'haute_cuisine', 'rezept_typ' => 'gericht']);
+    expect($gericht['used_by_category']['niveau'] ?? [])->toBe(['niveau.niveau-1-haute-cuisine@v1']);
+});
+
+it('Spec 37: ohne Niveau kein Niveau-Doc (Default egal, kein Fehl-Load)', function () {
+    ($this->seedGenerator)();
+    ($this->mkDoc)('niveau.niveau-basis-1-haute-cuisine', 'niveau', 'x');
+
+    $ctx = $this->svc->contextFor('ai_generate_recipe', 'Tomatensuppe', null, [], ['rezept_typ' => 'basisrezept']);
+    expect($ctx['used_by_category']['niveau'] ?? null)->toBeNull();
 });

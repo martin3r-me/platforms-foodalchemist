@@ -437,7 +437,17 @@ return [
         'recipe.generator' => [
             'tier' => 'B',
             'max_tokens' => 8000,   // volles Rezept-JSON inkl. Zutatenliste — Reasoning-Headroom
-            'task' => 'Erzeuge ein Basisrezept aus der Beschreibung unter Beachtung der Richtungs-'
+            // Spec 37 (2026-08-07): Typ-Rahmung + Anti-Über-Elaboration + nüchterne Namen VORNE,
+            // damit die KI zuerst weiß, dass ein Basisrezept EIN Baustein ist (nicht ein Teller).
+            // Sprache gespiegelt aus recipe.bauart. Nüchterne Namen heben zugleich den Match-Score.
+            'task' => 'Du erzeugst ein BASISREZEPT = einen wiederverwendbaren Baustein / eine KOMPONENTE '
+                . '(Sauce, Fond, Creme, Teig, Beilage, Würzbasis — EIN in sich stimmiges Element), NICHT '
+                . 'einen angerichteten Teller. Baue EINE kohärente Komponente, keine Mehr-Komponenten-'
+                . 'Zusammenstellung. Bleib nah an der angefragten Identität: eine Tomatensuppe bleibt eine '
+                . 'Suppe — dekonstruiere oder erweitere NICHT (kein Gel/Schaum/Öl/Wasser-Zerlegen), außer '
+                . 'die Beschreibung fordert es ausdrücklich. Benenne Zutaten NÜCHTERN und matchbar (die '
+                . 'reine Ware ohne Marketing-Adjektive: «Tomaten», nicht «reife aromatische Tomaten»). '
+                . 'Erzeuge das Basisrezept aus der Beschreibung unter Beachtung der Richtungs-'
                 . 'Parameter (convenience, frische, bio, niveau, sektor, diaet_hart, aroma): werte = '
                 . '{name (§1-Syntax <Typ>: <Bezeichnung>), description (§8-Stil), taste_direction (grobe Menue-Richtung, NUR EIN Wort: suess|herzhaft|neutral — das Aroma-Profil gehoert in description), '
                 . 'preparation (Markdown-Schritte), zutaten: [{text, quantity, unit (g|ml|kg|l|el|tl|stk), '
@@ -449,6 +459,11 @@ return [
                 . 'role (V-21: aroma_treiber|komponente|beilage|garnitur), '
                 . 'fit (EIN kurzer Halbsatz: warum gehört diese Zutat FACHLICH in DIESES Gericht)}]}. '
                 . 'Diät-harte Vorgaben sind VERBINDLICH. '
+                // Spec 37: Niveau typ-relativ — am Baustein hebt es Technik/Qualität, nicht die Zahl der Teile.
+                . 'Das Niveau hebt bei einem Basisrezept die TECHNIK und ZUTATENQUALITÄT dieser EINEN '
+                . 'Komponente — NICHT die Komponentenzahl. Haute Cuisine heißt hier: präziseste Technik '
+                . 'und Produktqualität an EINEM Element (z. B. eine klar geklärte, tief reduzierte '
+                . 'Tomatenessenz), KEIN 7–10-teiliger dekonstruierter Teller. '
                 // Fit-Guard (2026-08-06, Rahmeis-in-Tomatensuppe): das Inventar ist ein ANGEBOT,
                 // kein Befehl — vorher stand hier gar keine Anweisung und die Liste wirkte als
                 // implizites "nimm das". Die KI soll fachlich urteilen, nicht gehorchen.
@@ -487,13 +502,25 @@ return [
         'vk.generator' => [
             'tier' => 'B',
             'max_tokens' => 8000,   // volles VK-Rezept inkl. Zutaten/Plating — Reasoning-Headroom
-            'task' => 'Erzeuge ein VERKAUFSREZEPT (Teller/Speise mit VK-Preis) aus der Beschreibung '
+            // Spec 37 (2026-08-07): Typ-Rahmung — ein GERICHT ist ein angerichteter Teller; Komposition
+            // ist hier erlaubt (Gegenstück zum Basisrezept). Identität + nüchterne Namen bleiben Pflicht.
+            'task' => 'Du erzeugst ein GERICHT = eine essfertige, angerichtete Zusammenstellung '
+                . '(Hauptkomponente plus Begleiter, oder ein vollständiger Teller/Bowl/Sandwich). '
+                . 'Komposition und Elaboration sind erlaubt, wenn Niveau/Anlass sie tragen — das Niveau '
+                . 'darf hier die volle Komplexität (mehrere abgestimmte Komponenten, Textur-Spiel) '
+                . 'entfalten. Bleib dennoch nah an der angefragten Gericht-Identität und benenne Zutaten '
+                . 'NÜCHTERN und matchbar (reine Ware ohne Marketing-Adjektive). '
+                . 'Erzeuge das VERKAUFSREZEPT (Teller/Speise mit VK-Preis) aus der Beschreibung '
                 . 'unter Beachtung der Richtungs-Parameter (convenience, frische, bio, niveau, sektor, '
                 . 'diaet_hart, aroma, anlass, serviceform, kompositions_stil): werte = '
                 . '{name (Pipe-Syntax §4.4 «<HG-Code>: Hauptkomponente | Komponente | …», max 5 Felder, '
                 . 'keine Marketing-Adjektive), description (§8-Stil), taste_direction (grobe Menue-Richtung, NUR EIN Wort: suess|herzhaft|neutral — das Aroma-Profil gehoert in description), '
                 . 'preparation (= PLATING & SERVICE: Teller-Aufbau, Mengenverteilung, Service-Anweisung — '
-                . 'NICHT die Produktion), zutaten: [{text, quantity, unit (g|ml|kg|l|el|tl|stk), slug, note}] '
+                // Spec 37: role/fit-Parität zum Basis-Prompt — dieselbe Zutaten-Selbstbegründung
+                // (senkt plausibel klingende Fremdkörper VOR dem Kritiker-Pass, sobald das VK-Gate scharf wird).
+                . 'NICHT die Produktion), zutaten: [{text, quantity, unit (g|ml|kg|l|el|tl|stk), slug, note, '
+                . 'role (V-21: aroma_treiber|komponente|beilage|garnitur), '
+                . 'fit (EIN kurzer Halbsatz: warum gehört diese Zutat FACHLICH in DIESES Gericht)}] '
                 // Fit-Guard (2026-08-06): "vorhandene zuerst" war Reuse-Druck ohne Passt-Prüfung —
                 // das Inventar ist ein Angebot, die fachliche Passung entscheidet.
                 . '(Komponenten bevorzugt als Basisrezepte; wenn bestands_inventar mitgegeben ist: nutze '
