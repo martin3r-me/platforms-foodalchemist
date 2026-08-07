@@ -111,6 +111,7 @@
             <x-foodalchemist::hardstop-zeilen :offene="$ergebnis['offene']" prefix=""
                                              :aufgeklappt="$hardstopOffenIndex" :meldung="$hardstopMeldung" />
             <x-foodalchemist::stub-offen :stubs="$ergebnis['statistik']['stubs'] ?? []" />
+            <x-foodalchemist::kontext-inspektor :kontext="$ergebnis['kontext'] ?? null" />
             @if($laeuft)
                 <p wire:poll.2s="pruefeErgebnis" class="text-[11px] text-violet-700 mt-3" data-generator-anreicherung-laeuft>⚡ Rezept gespeichert — Vollanreicherung läuft separat …</p>
             @endif

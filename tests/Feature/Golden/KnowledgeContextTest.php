@@ -244,3 +244,26 @@ it('S1: eine Kategorie OHNE Routing bleibt draußen (search-only ist gültig, ke
     $ctx = $this->svc->contextFor('ai_generate_recipe', 'GP naming Regelwerk Schalotten', null, [], []);
     expect($ctx['files_used'])->not->toContain('regelwerk.gp-naming@v1');
 });
+
+// ── Kontext-Inspektor (2026-08-07): used_by_category gruppiert das Grounding je Kanal fürs UI ──
+
+it('Kontext-Inspektor: used_by_category gruppiert je Kanal und deckt sich exakt mit files_used', function () {
+    ($this->seedGenerator)();
+    ($this->mkDoc)('niveau.niveau-1-haute-cuisine', 'niveau', 'Haute-Cuisine: Reduktionen, Praezision.');
+
+    $ctx = $this->svc->contextFor('ai_generate_recipe', 'Lachs mit brauner Butter und Walnuss', null, [], ['niveau' => 'haute_cuisine']);
+
+    // Rückgabe-Kontrakt: neuer Key da, gruppiert nach den erwarteten Kanälen.
+    expect($ctx)->toHaveKey('used_by_category')
+        ->and($ctx['used_by_category'])->toHaveKey('cross_cutting')->toHaveKey('domain')->toHaveKey('niveau');
+    expect($ctx['used_by_category']['cross_cutting'])->toHaveCount(7)
+        ->and($ctx['used_by_category']['domain'])->toHaveCount(3)
+        ->and($ctx['used_by_category']['niveau'])->toBe(['niveau.niveau-1-haute-cuisine@v1']);
+
+    // Delta-Trick korrekt: Union aller Gruppen == files_used (nichts verloren, nichts dupliziert).
+    $flach = array_merge(...array_values($ctx['used_by_category']));
+    sort($flach);
+    $erwartet = $ctx['files_used'];
+    sort($erwartet);
+    expect($flach)->toBe($erwartet);
+});

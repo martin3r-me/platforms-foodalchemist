@@ -49,10 +49,24 @@ class RecipeGenerationContextService
             $prompt['rezept_templates'] = $templateContext;
         }
 
+        // Kontext-Inspektor (2026-08-07): kompaktes, UI-fertiges Bündel „auf welches Wissen
+        // greift der Generator" — gruppierte Wissens-Docs je Kanal + gematchte Templates
+        // (nur score>0 = echt zur Beschreibung passend) + Zeichen-Budget des Wissens-Blocks.
+        // Reine String-/Int-Listen → gefahrlos durch Job-Cache + Livewire-Ergebnis reichbar.
+        $kontext = [
+            'wissen' => $wissen['used_by_category'] ?? [],
+            'chars' => (int) ($wissen['total_chars'] ?? 0),
+            'templates' => array_values(array_map(
+                fn ($t) => ['id' => $t['id'], 'name' => $t['name']],
+                array_filter($templateContext, fn ($t) => ($t['score'] ?? 0) > 0),
+            )),
+        ];
+
         return [
             'prompt' => $prompt,
             'knowledge' => $wissen['block'],
             'knowledge_used' => $wissen['files_used'],
+            'kontext' => $kontext,
             'snapshot' => [
                 'knowledge_files' => $wissen['files_used'],
                 'template_ids' => array_column($templateContext, 'id'),

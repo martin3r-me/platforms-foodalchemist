@@ -45,7 +45,7 @@ class KnowledgeContextService
      * Haupt-Einstieg (Pseudocode §3): baut den Wissens-Block für ein KI-Feature.
      *
      * @param  list<string>  $hauptzutatSlugs  nur für Grounding-Features (ai_suggest_pairings, ai_infer_ankers)
-     * @return array{block: string, files_used: list<string>, total_chars: int}
+     * @return array{block: string, files_used: list<string>, used_by_category: array<string, list<string>>, total_chars: int}
      */
     public function contextFor(string $feature, string $description, ?string $stil = null, array $hauptzutatSlugs = [], array $params = []): array
     {
@@ -54,12 +54,25 @@ class KnowledgeContextService
             ->get()->keyBy(fn ($r) => $r->category . ':' . $r->mode);
 
         $filesUsed = [];
+        $usedByCategory = [];
         $parts = [];
+
+        // Kontext-Inspektor (2026-08-07): jedem Block das Delta an $filesUsed SEINER Kategorie
+        // zuordnen — additiv, ohne die Block-Methoden-Signaturen anzufassen. Speist die UI-
+        // Transparenz „auf welches Wissen greift der Generator" (gruppiert je Kanal). Verändert
+        // $filesUsed/$block nicht → golden-safe.
+        $snap = function (string $cat, int $before) use (&$filesUsed, &$usedByCategory): void {
+            $delta = array_slice($filesUsed, $before);
+            if ($delta !== []) {
+                $usedByCategory[$cat] = array_values(array_merge($usedByCategory[$cat] ?? [], $delta));
+            }
+        };
 
         // ── 0. CONCEPTING-WISSEN (Spec 08 P6, nur Planungs-Features) ──
         // Steht bewusst VOR dem Food-Wissen: es sagt, wie ein Konzept gebaut ist,
         // und rahmt damit die Zutaten-Ebene darunter. Leere Kategorie ⇒ kein Block.
         if (($r = $routing->get('concept:always')) !== null) {
+            $before = count($filesUsed);
             $concept = $this->conceptBlock(
                 (int) ($r->max_docs ?: self::CONCEPT_MAX_DOCS),
                 (int) ($r->max_chars_per_doc ?: self::CONCEPT_TRUNCATE_CHARS),
@@ -68,12 +81,14 @@ class KnowledgeContextService
             if ($concept !== null) {
                 $parts[] = $concept;
             }
+            $snap('concept', $before);
         }
 
         // ── 0b. TREND-WISSEN (Trendradar) — discovery, thematisch zur Beschreibung ──
         // Steht bei den rahmenden Blöcken: aktuelle Trends sagen, WAS gerade relevant
         // ist (Anlass/Inspiration), bevor die Zutaten-Ebene darunter greift.
         if (($r = $routing->get('trend:discovery')) !== null) {
+            $before = count($filesUsed);
             $trend = $this->trendBlock(
                 (int) ($r->max_docs ?: 5),
                 (int) ($r->max_chars_per_doc ?: 1500),
@@ -83,21 +98,26 @@ class KnowledgeContextService
             if ($trend !== null) {
                 $parts[] = $trend;
             }
+            $snap('trend', $before);
         }
 
         // ── 1. VAULT-WISSEN: Cross-Cutting (always) + Domains (discovery) ──
         $blocks = [];
         if ($routing->has('cross_cutting:always')) {
+            $before = count($filesUsed);
             foreach ($this->crossCuttingDocs() as $doc) {
                 $blocks[] = "## CROSS_CUTTING: {$doc->slug}\n\n" . $this->truncate($doc->content_md, self::CROSS_CUTTING_TRUNCATE_CHARS);
                 $filesUsed[] = "{$doc->slug}@v{$doc->version}";
             }
+            $snap('cross_cutting', $before);
         }
         if ($routing->has('domain:discovery')) {
+            $before = count($filesUsed);
             foreach ($this->discoverDomains($description) as $doc) {
                 $blocks[] = "## DOMAIN: {$doc->slug}\n\n" . $this->truncate($doc->content_md, self::DOMAIN_TRUNCATE_CHARS);
                 $filesUsed[] = "{$doc->slug}@v{$doc->version}";
             }
+            $snap('domain', $before);
         }
         if ($blocks !== []) {
             $parts[] = "# VAULT-WISSEN (Catering-Wissensbasis)\n\n"
@@ -108,15 +128,19 @@ class KnowledgeContextService
 
         // ── 2. FLAVOR-PAIRING-Block (Generator-Features; SQL-Anker-Graph bleibt primär, GL-10) ──
         if ($routing->has('pairing:discovery')) {
+            $before = count($filesUsed);
             $pairing = $this->pairingBlock($description, $stil, $filesUsed);
             if ($pairing !== null) {
                 $parts[] = $pairing;
             }
+            $snap('pairing', $before);
         }
 
         // ── 3. Pairing-Doku-Grounding (Anker-/Pairing-Inferenz) ──
         if (($r = $routing->get('pairing:grounding')) !== null) {
+            $before = count($filesUsed);
             $parts[] = $this->groundingBlock($hauptzutatSlugs, (int) $r->max_docs, (int) $r->max_chars_per_doc, $filesUsed);
+            $snap('pairing_grounding', $before);
         }
 
         // ── 4. GENERISCHE discovery-Kategorien (S1 Skalierbarkeit) ──
@@ -134,6 +158,7 @@ class KnowledgeContextService
             if ($r->mode !== 'discovery' || in_array($r->category, $spezial, true)) {
                 continue;
             }
+            $before = count($filesUsed);
             $generic = $this->discoverGenericBlock(
                 (string) $r->category, $leitplankenQuery,
                 (int) ($r->max_docs ?: 3), (int) ($r->max_chars_per_doc ?: 3000), $filesUsed
@@ -141,13 +166,14 @@ class KnowledgeContextService
             if ($generic !== null) {
                 $parts[] = $generic;
             }
+            $snap((string) $r->category, $before);
         }
 
         // (#469-Bindungs-Injektion passiert jetzt zentral im AiGatewayService::propose für ALLE Prompts.)
 
         $block = implode("\n\n", $parts);
 
-        return ['block' => $block, 'files_used' => $filesUsed, 'total_chars' => mb_strlen($block)];
+        return ['block' => $block, 'files_used' => $filesUsed, 'used_by_category' => $usedByCategory, 'total_chars' => mb_strlen($block)];
     }
 
     /**

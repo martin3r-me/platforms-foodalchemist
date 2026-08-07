@@ -56,9 +56,14 @@ class RecipeGeneratorService
             }
         };
         $kiRezept = $kiRezeptOverride;
+        // Kontext-Inspektor: das UI-fertige „auf welches Wissen greift der Generator"-Bündel.
+        // VOR dem OOM-`unset` unten gesichert (winzige String-Listen) und am Ende ans Ergebnis
+        // gehängt. null im Override-Pfad (kein frischer Kontext) → UI blendet das Panel aus.
+        $kontextAudit = null;
         if ($kiRezept === null) {
             $melde('Kontext & Wissen werden geladen …');
             $preparedContext ??= app(RecipeGenerationContextService::class)->build($team, $description, $parameter, $vkModus);
+            $kontextAudit = $preparedContext['kontext'] ?? null;
             $kontext = $preparedContext['prompt'];
             $wissen = ['block' => $preparedContext['knowledge'], 'files_used' => $preparedContext['knowledge_used']];
 
@@ -284,6 +289,8 @@ class RecipeGeneratorService
         if (! $vkModus) {
             $result = $this->kohaerenzGate($team, $result, $melde);
         }
+
+        $result['kontext'] = $kontextAudit;   // Kontext-Inspektor fürs UI (null im Override-Pfad)
 
         return $result;
     }
