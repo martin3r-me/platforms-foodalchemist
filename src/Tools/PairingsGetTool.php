@@ -8,7 +8,7 @@ use Platform\Core\Contracts\ToolMetadataContract;
 use Platform\Core\Contracts\ToolResult;
 use Platform\FoodAlchemist\Services\PairingService;
 
-/** Phase K: Pairing-Partner einer Zutat aus dem Anker-Graph (1000 Anker; kuratiert + abgeleitete Molekül-Kanten). */
+/** Phase K: Pairing-Partner einer Zutat aus dem Anker-Graph (Foodpairing Inspire; kuratiert + abgeleitete Molekül-Kanten). */
 class PairingsGetTool extends FoodAlchemistTool implements ToolContract, ToolMetadataContract
 {
     public function getName(): string
@@ -20,8 +20,13 @@ class PairingsGetTool extends FoodAlchemistTool implements ToolContract, ToolMet
     {
         return 'Liefert Flavor-Pairing-Partner für eine Zutat (Name oder Anker-Slug) aus dem '
             . 'Anker-Graph (Foodpairing Inspire + Molekül-Kanten + Kontrast). typ filtert auf '
-            . 'aroma|kontrast. Bei Geschmacks-Kombinationen '
-            . '(Rezept, Komposition, Menü) IMMER zuerst hier nachschlagen statt zu raten.';
+            . 'aroma|kontrast. Die Namens-Auflösung ist hybrid: exakter/normalisierter Slug → '
+            . 'lexikalischer Anker-Index → — sofern der Embedding-Provider aktiv ist — ein '
+            . 'semantischer Fallback, der deutsche Begriffe gegen den englischen Inspire-Graph '
+            . 'auflöst (z. B. „Aubergine" → „eggplant"), die die Tokensuche verfehlt. Der Weg steht '
+            . 'in anker.resolution.via (slug|lexical|semantic; semantic mit score). Ohne Provider '
+            . 'rein lexikalisch. Bei Geschmacks-Kombinationen (Rezept, Komposition, Menü) IMMER '
+            . 'zuerst hier nachschlagen statt zu raten.';
     }
 
     public function getSchema(): array

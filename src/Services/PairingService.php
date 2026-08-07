@@ -148,6 +148,36 @@ class PairingService
     }
 
     /**
+     * Quality-Gate für einen lexikalischen Anker-Treffer: NUR akzeptieren, wenn
+     * ein Anker-Term als ganzes Wort in der Anfrage steht. resolveByName matcht
+     * auch beliebige Substrings — „auberGINe" trifft so den „Gin"-Anker. Ein
+     * solcher Substring-Zufall ist ein stiller Falsch-Treffer, der den
+     * semantischen Fallback fälschlich verhindern würde → hier verworfen.
+     * fold() umschließt mit Spaces ⇒ Wortgrenze = space-delimitiertes Vorkommen
+     * (konsistent zu anchorIndex/resolveByName; nur strenger — keine Substrings).
+     */
+    private function lexicalAnkerIsSolid(string $name, object $anker): bool
+    {
+        $q = $this->fold($name);
+        foreach ([(string) $anker->slug, (string) $anker->display_de] as $raw) {
+            $folded = trim($this->fold($raw));
+            if ($folded === '') {
+                continue;
+            }
+            if (str_contains($q, ' ' . $folded . ' ')) {          // ganzer Term als Wortfolge
+                return true;
+            }
+            foreach (explode(' ', $folded) as $wort) {            // Einzelwörter ≥4 (wie anchorIndex prio 2)
+                if (mb_strlen($wort) >= 4 && str_contains($q, ' ' . $wort . ' ')) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * B: semantische Anker-Auflösung als Fallback (opt-in). Gibt die Anker-ID
      * des besten Embedding-Treffers über der Schwelle zurück, sonst null.
      * Deaktiviert (Default) / kein Provider / Fehler ⇒ null (kein Verhalten).
@@ -159,6 +189,26 @@ class PairingService
         }
         try {
             return app(\Platform\FoodAlchemist\Services\Ai\KnowledgeEmbeddingService::class)->resolveAnkerId($name);
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    /**
+     * Wie resolveAnkerSemantically, aber mit Score — für die transparente
+     * Match-Weg-Kennzeichnung in neighborsForName (via=semantic + score).
+     * Gleiche Gates: aus / kein Provider / Fehler ⇒ null.
+     *
+     * @return array{id: int, score: float}|null
+     */
+    private function resolveAnkerSemanticallyScored(string $name): ?array
+    {
+        if (trim($name) === '' || ! config('foodalchemist.semantic_search.enabled', false)) {
+            return null;
+        }
+        try {
+            return app(\Platform\FoodAlchemist\Services\Ai\KnowledgeEmbeddingService::class)
+                ->resolveAnkerWithScore($name);
         } catch (\Throwable) {
             return null;
         }
@@ -1981,28 +2031,67 @@ class PairingService
 
     /**
      * MCP-Discovery (Phase K): Pairing-Partner für einen Zutat-NAMEN oder
-     * Anker-Slug. Auflösung: exakter/normalisierter Slug → resolveByName
-     * (Anker-Index). Liefert den aufgelösten Anker mit, damit der Client
-     * sieht, worauf gematcht wurde.
+     * Anker-Slug. Auflösung ist HYBRID (analog gps.SEARCH): exakter/
+     * normalisierter Slug → lexikalischer Anker-Index (resolveByName) →
+     * semantischer Fallback (opt-in, Konfidenz-Floor), der deutsche Begriffe
+     * gegen den englischen Inspire-Graph auflöst. Der Match-Weg steht in
+     * anker.resolution.via (slug|lexical|semantic; semantic zusätzlich mit
+     * score), damit der Client sieht, worauf UND WIE gematcht wurde.
      *
-     * @return array{anker: ?array{id: int, slug: string, display_de: ?string}, partner: list<object>}
+     * @return array{anker: ?array{id: int, slug: string, display_de: ?string, resolution: array{via: string, score?: float}}, partner: list<object>}
      */
     public function neighborsForName(string $name, ?string $typ = null, int $limit = 30): array
     {
+        $via = 'slug';
+        $score = null;
+
         $anker = DB::table('foodalchemist_vocab_pairing_anchors')
             ->whereIn('slug', array_unique([trim($name), $this->normalizeAnkerSlug($name)]))
             ->first(['id', 'slug', 'display_de']);
 
+        // Lexikalischer Anker-Index — aber nur akzeptieren, wenn der Treffer ein
+        // Wortgrenzen-Match ist (lexicalAnkerIsSolid). Ein Substring-Zufall
+        // („auberGINe" → Gin) wird verworfen, damit der semantische Fallback
+        // greifen kann statt still den falschen Anker zurückzugeben.
         if ($anker === null && ($ankerId = $this->resolveByName($name)) !== null) {
-            $anker = DB::table('foodalchemist_vocab_pairing_anchors')
+            $kandidat = DB::table('foodalchemist_vocab_pairing_anchors')
                 ->where('id', $ankerId)->first(['id', 'slug', 'display_de']);
+            if ($kandidat !== null && $this->lexicalAnkerIsSolid($name, $kandidat)) {
+                $via = 'lexical';
+                $anker = $kandidat;
+            }
         }
+
+        // B (Hybrid): semantischer Fallback, wenn die Lexik nichts findet. Fängt
+        // deutsche Gastro-Begriffe gegen den englischen Inspire-Graph ab
+        // („Aubergine" → „eggplant"). Opt-in (semantic_search.enabled) + Konfidenz-
+        // Floor (anker_min_score); ohne Provider / aus ⇒ reine Lexik wie zuvor.
+        if ($anker === null && ($hit = $this->resolveAnkerSemanticallyScored($name)) !== null) {
+            $treffer = DB::table('foodalchemist_vocab_pairing_anchors')
+                ->where('id', $hit['id'])->first(['id', 'slug', 'display_de']);
+            if ($treffer !== null) {
+                $anker = $treffer;
+                $via = 'semantic';
+                $score = round($hit['score'], 3);
+            }
+        }
+
         if ($anker === null) {
             return ['anker' => null, 'partner' => []];
         }
 
+        $resolution = ['via' => $via];
+        if ($score !== null) {
+            $resolution['score'] = $score;
+        }
+
         return [
-            'anker' => ['id' => (int) $anker->id, 'slug' => $anker->slug, 'display_de' => $anker->display_de],
+            'anker' => [
+                'id' => (int) $anker->id,
+                'slug' => $anker->slug,
+                'display_de' => $anker->display_de,
+                'resolution' => $resolution,
+            ],
             'partner' => $this->ankerNeighbors($anker->slug, $typ, $limit)->all(),
         ];
     }

@@ -244,6 +244,19 @@ class KnowledgeEmbeddingService
      */
     public function resolveAnkerId(string $name, ?float $minScore = null): ?int
     {
+        return $this->resolveAnkerWithScore($name, $minScore)['id'] ?? null;
+    }
+
+    /**
+     * Wie resolveAnkerId, aber mit Konfidenz: Anker-ID + Score des besten
+     * Treffers über der Schwelle. Für die hybride Namens-Auflösung, die den
+     * Match-Weg transparent machen will (analog gps.SEARCH semantic_score).
+     * null bei kein Treffer / kein Provider / Fehler.
+     *
+     * @return array{id: int, score: float}|null
+     */
+    public function resolveAnkerWithScore(string $name, ?float $minScore = null): ?array
+    {
         $name = trim($name);
         if ($name === '' || ! $this->isProviderAvailable()) {
             return null;
@@ -265,7 +278,11 @@ class KnowledgeEmbeddingService
             return null;
         }
 
-        return isset($hits[0]) ? (int) $hits[0]['entity_id'] : null;
+        if (! isset($hits[0])) {
+            return null;
+        }
+
+        return ['id' => (int) $hits[0]['entity_id'], 'score' => (float) $hits[0]['score']];
     }
 
     /**
