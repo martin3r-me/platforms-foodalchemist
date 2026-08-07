@@ -143,13 +143,31 @@ class KnowledgeContextService
             $snap('pairing_grounding', $before);
         }
 
+        // ── 3b. NIVEAU-WISSEN (Spec 37, TYP-ABHÄNGIG) ──
+        // Bewusst NICHT im generischen discovery-Loop unten: Basisrezept-Doc (…basis…) und Teller-Doc
+        // tragen denselben Level-Token (haute/gehoben/klassisch) → fuzzy-Ranking wäre nicht eindeutig.
+        // Deterministisch: der Typ (params['rezept_typ']) wählt die Slug-Familie, der Level die Stufe.
+        if (($r = $routing->get('niveau:discovery')) !== null) {
+            $before = count($filesUsed);
+            $niveau = $this->niveauBlock(
+                (int) ($r->max_chars_per_doc ?: 3000),
+                (string) ($params['niveau'] ?? $params['level'] ?? ''),
+                (string) ($params['rezept_typ'] ?? 'basisrezept'),
+                $filesUsed
+            );
+            if ($niveau !== null) {
+                $parts[] = $niveau;
+            }
+            $snap('niveau', $before);
+        }
+
         // ── 4. GENERISCHE discovery-Kategorien (S1 Skalierbarkeit) ──
         // Jede als `discovery` geroutete Kategorie OHNE Spezial-Handler (domain/pairing/
         // trend/concept haben eigene, oben) wird hier generisch per Beschreibung + Leitplanken-
         // Werten (Niveau/Sektor) entdeckt und gedeckelt geladen. Damit skaliert die Wissensbasis:
         // eine neue Kategorie braucht nur eine Routing-Zeile, KEINEN Service-Code. Bestehende
         // Kategorien werden übersprungen → Verhalten für sie byte-identisch (golden-safe).
-        $spezial = ['domain', 'pairing', 'trend', 'concept', 'cross_cutting'];
+        $spezial = ['domain', 'pairing', 'trend', 'concept', 'cross_cutting', 'niveau'];   // niveau hat einen eigenen typ-abhängigen Selektor (3b)
         $leitplankenQuery = trim($description . ' ' . implode(' ', array_filter([
             (string) ($params['niveau'] ?? $params['level'] ?? ''),
             (string) ($params['sektor'] ?? ''),
@@ -496,6 +514,45 @@ class KnowledgeContextService
         }
 
         return '# ' . $label . "-WISSEN\n\n" . implode("\n\n---\n\n", $blocks);
+    }
+
+    /**
+     * NIVEAU-WISSEN typ-abhängig (Spec 37): der Rezept-Typ wählt die Slug-Familie
+     * (Basisrezept → `…basis…`-Docs = Komponenten-Niveau; Gericht → die Teller-Docs), der
+     * Level die Stufe. Deterministisch statt fuzzy — beide Familien tragen denselben Level-Token
+     * (haute/gehoben/klassisch), nur der Typ trennt sie sauber. Leeres/unbekanntes Niveau ⇒ kein
+     * Block (Default egal). Slug-Match tolerant gegen -/_ (LIKE auf Token). Fehlt der typ-spezifische
+     * Doc (z. B. Basis-Docs noch nicht importiert) ⇒ null statt falschem Teller-Doc.
+     *
+     * @param  list<string>  $filesUsed  by-ref-Audit
+     */
+    private function niveauBlock(int $maxChars, string $level, string $rezeptTyp, array &$filesUsed): ?string
+    {
+        $levelToken = match ($level) {
+            'haute_cuisine' => 'haute',
+            'gehoben' => 'gehoben',
+            'klassisch' => 'klassisch',
+            default => null,
+        };
+        if ($levelToken === null) {
+            return null;
+        }
+        $istBasis = $rezeptTyp === 'basisrezept';
+        $doc = DB::table('foodalchemist_knowledge_documents')
+            ->where('category', 'niveau')->where('active', 1)->whereNull('deleted_at')
+            ->where('slug', 'like', '%' . $levelToken . '%')
+            ->when(
+                $istBasis,
+                fn ($q) => $q->where('slug', 'like', '%basis%'),
+                fn ($q) => $q->where('slug', 'not like', '%basis%'),
+            )
+            ->orderBy('slug')->first(['slug', 'content_md', 'version']);
+        if ($doc === null) {
+            return null;
+        }
+        $filesUsed[] = "{$doc->slug}@v{$doc->version}";
+
+        return "# NIVEAU-WISSEN\n\n## NIVEAU: {$doc->slug}\n\n" . $this->truncate((string) $doc->content_md, $maxChars);
     }
 
     /**

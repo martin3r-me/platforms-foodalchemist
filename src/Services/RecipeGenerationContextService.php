@@ -20,8 +20,18 @@ class RecipeGenerationContextService
 
     public function build(Team $team, string $description, array $parameter, bool $vkModus): array
     {
-        $wissen = $this->knowledge->contextFor('ai_generate_recipe', $description, $parameter['kompositions_stil'] ?? null, [], $parameter);
-        $prompt = ['description' => $description, 'parameter' => $parameter];
+        // Spec 37 (2026-08-07): Rezept-Typ explizit. Steuert (a) die typ-abhängige Niveau-Auswahl
+        // (der Selektor liest params['rezept_typ']) und geht (b) als eigenes Kontext-Feld an die KI
+        // — Gürtel & Hosenträger zur Prompt-Einleitung (Basisrezept = Baustein, Gericht = Teller).
+        $rezeptTyp = $vkModus ? 'gericht' : 'basisrezept';
+        $wissen = $this->knowledge->contextFor('ai_generate_recipe', $description, $parameter['kompositions_stil'] ?? null, [], $parameter + ['rezept_typ' => $rezeptTyp]);
+        $prompt = [
+            'rezept_typ' => $vkModus
+                ? 'GERICHT (essfertig angerichteter Verkaufsteller — Komposition erlaubt)'
+                : 'BASISREZEPT (wiederverwendbarer Baustein / EINE Komponente — kein angerichteter Teller)',
+            'description' => $description,
+            'parameter' => $parameter,
+        ];
         if (($typ = $this->settings->kuechenTyp($team)) !== null) {
             $prompt = ['kuechen_profil' => 'Mandanten-Profil (Soft-Default): ' . TeamSettingsService::KUECHEN_TYPEN[$typ]] + $prompt;
         }
