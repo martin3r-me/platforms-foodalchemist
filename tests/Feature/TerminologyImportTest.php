@@ -114,3 +114,55 @@ it('--kind=alias --apply schreibt Alias-Gruppen provenienz-getaggt und ist idemp
     $this->artisan('foodalchemist:terminology-import', ['--kind' => 'alias', '--apply' => true])->assertSuccessful();
     expect(\Platform\FoodAlchemist\Models\FoodAlchemistTerminologyAlias::query()->where('created_via', 'knowledge_import')->count())->toBe(2);
 });
+
+// ── Tabellen-Grenze (2026-08-07): eine fremde Tabelle nach Leerzeile/Überschrift darf NICHT unter
+//    den Header der vorigen Tabelle rutschen. Real-Fall: Synonyme.md — „Begriff|gleichbedeutend"-Tabelle,
+//    Leerzeile, dann „## Wichtige Schreibvariationen / Mojibake" mit Header „Falsch|Korrekt" → sonst
+//    leakte `falsch = korrekt` (+ mojibake-Tokens) als Alias-Gruppe. ──
+
+$LEAK_ALIAS = <<<'MD'
+## Cross-Sprachliche Synonyme
+| Begriff | gleichbedeutend mit | Domain |
+|---------|---------------------|--------|
+| Aubergine | Melanzani / Eierfrucht | Gemuese |
+
+## Wichtige Schreibvariationen / Mojibake
+| Falsch | Korrekt |
+|--------|---------|
+| Aubrgine | Aubergine |
+| Gerã–stete | Geroestete |
+| Maracujā | Maracuja |
+MD;
+
+it('parseAliases: fremde Tabelle nach Leerzeile leakt NICHT unter den alten Header', function () use ($LEAK_ALIAS) {
+    $gruppen = (new TerminologyImportCommand())->parseAliases($LEAK_ALIAS);
+
+    // Nur die echte Synonym-Tabelle wird zur Gruppe; die Falsch/Korrekt-Tabelle bleibt außen vor.
+    expect($gruppen)->toHaveCount(1);
+    $flach = collect($gruppen)->flatten()->all();
+    expect($flach)->toContain('aubergine')->toContain('melanzani')->toContain('eierfrucht')
+        ->and($flach)->not->toContain('aubrgine')   // Tippfehler-Trigger der fremden Tabelle
+        ->and($flach)->not->toContain('korrekt')
+        ->and($flach)->not->toContain('geroestete')
+        ->and($flach)->not->toContain('maracuja');
+});
+
+$LEAK_AM = <<<'MD'
+## Gold
+| # | String | Falsch-Match-Risiko | Korrekte Domain | Wie unterscheiden |
+|---|--------|---------------------|-----------------|-------------------|
+| 1 | **Brie** | Bries | Kaese | s-Regel |
+
+## Andere 5-Spalten-Tabelle (KEINE Anti-Marker)
+| A | B | C | D | E |
+|---|---|---|---|---|
+| x | Salz | Pfeffer | y | z |
+MD;
+
+it('parseAntiMarkers: fremde Tabelle nach Leerzeile leakt NICHT unter den alten Header', function () use ($LEAK_AM) {
+    $regeln = (new TerminologyImportCommand())->parseAntiMarkers($LEAK_AM);
+
+    // Nur brie ↛ bries; die 5-Spalten-Fremdtabelle erzeugt ohne Guard salz ↛ pfeffer.
+    $paare = array_map(fn ($r) => $r['trigger'] . '↛' . $r['forbid'], $regeln);
+    expect($paare)->toBe(['brie↛bries']);
+});
