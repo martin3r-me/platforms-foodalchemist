@@ -185,6 +185,30 @@ class KnowledgeContextService
         }
     }
 
+    /**
+     * Semantischer Recall für Pairing über die ANKER-Embeddings (embedAnkers), nicht die
+     * Pairing-Docs. Gleiche Gates wie semanticSlugs (config + Provider), damit deaktivierte
+     * Semantik/kein Provider sauber zu no-op werden.
+     *
+     * @return list<string> Anker-Slugs, bestes zuerst
+     */
+    private function semanticAnkerStems(string $description, int $limit): array
+    {
+        if ($limit <= 0 || ! config('foodalchemist.semantic_search.enabled', false)) {
+            return [];
+        }
+        try {
+            $svc = app(KnowledgeEmbeddingService::class);
+            if (! $svc->searchEnabled()) {
+                return [];
+            }
+
+            return $svc->searchAnkerSlugs($description, $limit);
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
     /** Invariante 3: hartes Per-Dokument-Budget mit wörtlichem Kürzungs-Marker. */
     public function truncate(string $text, int $maxChars): string
     {
@@ -507,10 +531,11 @@ class KnowledgeContextService
             }
         }
 
-        // Semantischer Recall (Hybrid, opt-in): ergänzt eine dünne/leere Lexik um
-        // semantisch passende Pairing-Stems. Deaktiviert (Default) = no-op.
+        // Semantischer Recall (Hybrid, opt-in): ergänzt eine dünne/leere Lexik um semantisch
+        // passende Anker-Stems (über die Anker-Embeddings, NICHT mehr Pairing-Docs).
+        // Deaktiviert (Default) = no-op.
         if (count($matched) < self::PAIRING_TOP_K) {
-            foreach ($this->semanticSlugs($description, ['pairing'], self::PAIRING_TOP_K) as $stem) {
+            foreach ($this->semanticAnkerStems($description, self::PAIRING_TOP_K) as $stem) {
                 if (! in_array($stem, $matched, true)) {
                     $matched[] = $stem;
                 }
@@ -599,15 +624,22 @@ class KnowledgeContextService
         return implode("\n\n", $blocks);
     }
 
-    /** @return list<string> Pairing-Doc-Stems (Slug ohne »pairing.«-Präfix), sortiert */
+    /**
+     * @return list<string> Anker-Slugs aus dem Pairing-Graphen (Inspire-Anker-Vokabular), sortiert.
+     *
+     * Quelle ist seit 2026-08-07 das Anker-VOKABULAR (foodalchemist_vocab_pairing_anchors),
+     * nicht mehr die Pairing-Docs (category='pairing'). Die Token→Anker-Brücke lebt damit am
+     * Graphen selbst — die Pairing-Docs sind für die KI-Rezept-Erdung nicht mehr nötig und
+     * dürfen aufgeräumt werden (die Partner kommen ohnehin aus PairingService, nicht aus den
+     * Docs). 'neutral' bleibt außen vor (kein Aroma), konsistent mit embedAnkers().
+     */
     private function pairingStems(): array
     {
         static $stems = null;
         if ($stems === null || app()->runningUnitTests()) {
-            $stems = DB::table('foodalchemist_knowledge_documents')
-                ->where('category', 'pairing')->where('active', 1)->whereNull('deleted_at')
+            $stems = DB::table('foodalchemist_vocab_pairing_anchors')
+                ->whereNull('deleted_at')->where('slug', '!=', 'neutral')
                 ->orderBy('slug')->pluck('slug')
-                ->map(fn ($s) => str_starts_with($s, 'pairing.') ? substr($s, 8) : $s)
                 ->all();
         }
 
