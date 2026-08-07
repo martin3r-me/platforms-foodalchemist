@@ -32,6 +32,9 @@ export function pairingNetzGraph(config) {
     canvasW: config.canvasW || 1000,
     canvasH: config.canvasH || 760,
     onNodeClick: config.onNodeClick || null,
+    // Composer: Klick auf einen Kandidaten nimmt dessen Anker in die Auswahl auf.
+    // Nur der Composer übergibt den Callback — Detail-Panel/Modal lassen ihn null.
+    onKandidatClick: config.onKandidatClick || null,
     // Filter: alle Stern-Stufen an (Default aus meta).
     typAktiv: Object.assign({ stern3: true, stern2: true, stern1: true }, config.typDefault || {}),
     hoverId: null,
@@ -204,6 +207,15 @@ export function pairingNetzGraph(config) {
       return `${name(s)} ↔ ${name(t)} · ${LEVEL_SYM[d.level] || ''} ${wort}`.trim();
     },
 
+    // Klickbar (Cursor + Click): Basisrezept immer (öffnet Rezept), Kandidat nur wenn
+    // ein onKandidatClick vorliegt (Composer-Modus). Alles andere ist inert.
+    _clickable(d) {
+      if (d.kind === 'basisrezept') return true;
+      if (d.kind === 'kandidat') return typeof this.onKandidatClick === 'function';
+
+      return false;
+    },
+
     // ── Knoten ──────────────────────────────────────────────────────────
     _drawNodes() {
       const g = this._rootG.append('g').attr('data-fa-nodes', '');
@@ -214,12 +226,14 @@ export function pairingNetzGraph(config) {
         .append('g')
         .attr('class', 'fa-node')
         .attr('transform', (d) => `translate(${d.x},${d.y})`)
-        .style('cursor', (d) => (d.kind === 'basisrezept' ? 'pointer' : 'default'))
+        .style('cursor', (d) => this._clickable(d) ? 'pointer' : 'default')
         .on('mouseenter', (event, d) => this._setHover(d.id))
         .on('mouseleave', () => this._setHover(null))
         .on('click', (event, d) => {
           if (d.kind === 'basisrezept' && typeof this.onNodeClick === 'function') {
             this.onNodeClick(parseInt(String(d.id).replace('b:', ''), 10));
+          } else if (d.kind === 'kandidat' && typeof this.onKandidatClick === 'function') {
+            this.onKandidatClick(parseInt(String(d.id).replace('k:', ''), 10));
           }
         });
 

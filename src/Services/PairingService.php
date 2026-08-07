@@ -1251,9 +1251,6 @@ class PairingService
             return ['nodes' => [], 'edges' => [], 'meta' => ['recipe_id' => $recipeId]];
         }
 
-        $cx = self::CANVAS_W / 2;
-        $cy = self::CANVAS_H / 2;
-
         // Innenring = Kern-Anker (Identität). Fallback: gespeicherte Pairing-Anker,
         // falls das Rezept (noch) keine Kern-Anker gemappt hat.
         $inner = $this->recipeAnkers($recipeId)
@@ -1265,6 +1262,45 @@ class PairingService
                 ->distinct()->get(['a.id', 'a.slug', 'a.display_de'])
                 ->map(fn ($a) => ['id' => (int) $a->id, 'slug' => $a->slug, 'display_de' => $a->display_de]);
         }
+
+        return $this->baueNetz($team, $inner, (string) $recipe->name, $recipeId);
+    }
+
+    /**
+     * Ad-hoc-Netz aus einer freien Anker-Menge (Planungs-Composer): kein Rezept,
+     * Zentrum = frei benennbare „Komposition". Gleiche Downstream-Logik wie
+     * {@see pairingNetz} — nur der Innenring kommt direkt als Anker-ID-Liste
+     * (Auswahl-Reihenfolge bleibt erhalten).
+     *
+     * @param  array<int>  $ankerIds
+     */
+    public function pairingNetzForAnkers(Team $team, array $ankerIds, string $centerLabel = 'Komposition'): array
+    {
+        $ids = array_values(array_unique(array_map('intval', $ankerIds)));
+        if ($ids === []) {
+            return ['nodes' => [], 'edges' => [], 'meta' => ['recipe_id' => 0]];
+        }
+        $inner = DB::table('foodalchemist_vocab_pairing_anchors')
+            ->whereIn('id', $ids)
+            ->get(['id', 'slug', 'display_de'])
+            ->map(fn ($a) => ['id' => (int) $a->id, 'slug' => $a->slug, 'display_de' => $a->display_de])
+            ->sortBy(fn ($a) => array_search($a['id'], $ids, true))->values();
+
+        return $this->baueNetz($team, $inner, $centerLabel, 0);
+    }
+
+    /**
+     * Gemeinsamer Netz-Aufbau (rezept- ODER anker-getrieben). $inner = roher Innenring
+     * (wird auf INNER_ANKER_MAX gekappt). $recipeId nur für meta + Selbst-Ausschluss der
+     * komplementären Basisrezepte (0 = keiner). $centerLabel = Label des Zentrum-Knotens.
+     *
+     * @param  \Illuminate\Support\Collection<int,array{id:int,slug:string,display_de:?string}>  $inner
+     */
+    private function baueNetz(Team $team, \Illuminate\Support\Collection $inner, string $centerLabel, int $recipeId): array
+    {
+        $cx = self::CANVAS_W / 2;
+        $cy = self::CANVAS_H / 2;
+
         $inner = $inner->unique('id')->take(self::INNER_ANKER_MAX)->values();
         $innerIds = $inner->pluck('id')->all();
 
@@ -1354,7 +1390,7 @@ class PairingService
         }
 
         $nodes = array_merge(
-            [['id' => 'z', 'kind' => 'zentrum', 'label' => $recipe->name, 'x' => $cx, 'y' => $cy]],
+            [['id' => 'z', 'kind' => 'zentrum', 'label' => $centerLabel, 'x' => $cx, 'y' => $cy]],
             $ankerNodes, $kandidatNodes, $basisNodes
         );
 

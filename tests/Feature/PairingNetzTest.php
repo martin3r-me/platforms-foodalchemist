@@ -201,3 +201,26 @@ it('Modal: öffnen liefert Netz-Payload (inkl. sig), Klick auf Basisrezept navig
         ->assertDispatched('recipe-selected', id: $this->basis->id)
         ->assertDispatched('modal.close');
 });
+
+it('pairingNetzForAnkers: Ad-hoc-Netz aus freier Anker-Menge (Planungs-Composer)', function () {
+    // Zwei Anker mit Best-Match-Kante untereinander (innere Ebene).
+    mkKante($this->kichererbse, $this->tahin, 'aroma', 3, 0.9);
+
+    $netz = $this->svc->pairingNetzForAnkers($this->rootTeam, [$this->kichererbse, $this->tahin], 'Komposition');
+
+    // Zentrum trägt das freie Label (kein Rezept nötig).
+    expect(collect($netz['nodes'])->firstWhere('kind', 'zentrum')['label'])->toBe('Komposition');
+
+    // Beide gewählten Anker sind Innenring-Knoten.
+    expect(collect($netz['nodes'])->where('kind', 'anker')->pluck('slug')->sort()->values()->all())
+        ->toBe(['kichererbse', 'tahin']);
+
+    // Kandidaten werden mitgerechnet (knoblauch bedient beide → cover 2).
+    expect(collect($netz['nodes'])->where('kind', 'kandidat')->pluck('slug'))->toContain('knoblauch');
+
+    // Anker↔Anker-Kante (innere Ebene) ist da.
+    expect(collect($netz['edges'])->where('kind', 'anker_anker'))->toHaveCount(1);
+
+    // Leere Auswahl → leeres Netz (kein Absturz).
+    expect($this->svc->pairingNetzForAnkers($this->rootTeam, [])['nodes'])->toBe([]);
+});

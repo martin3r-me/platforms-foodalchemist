@@ -9,6 +9,8 @@ use Livewire\Component;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Models\FoodAlchemistPlanningSession;
 use Platform\FoodAlchemist\Services\IdeenService;
+use Platform\FoodAlchemist\Services\PairingInspirationService;
+use Platform\FoodAlchemist\Services\PairingService;
 use Platform\FoodAlchemist\Services\PlanningCascadeService;
 use Platform\FoodAlchemist\Services\PlanningSessionService;
 use Platform\FoodAlchemist\Support\TeamScope;
@@ -36,6 +38,12 @@ class Index extends Component
     public string $ideeTitel = '';
 
     public string $paketName = '';
+
+    /** Composer-Tab: gewählte Anker (Einträge {id, slug, label}), Cap = INNER_ANKER_MAX (12). */
+    public array $composerAnker = [];
+
+    /** Composer-Suchfeld (live). */
+    public string $composerTerm = '';
 
     public ?string $meldung = null;
 
@@ -297,6 +305,32 @@ class Index extends Component
         $this->meldung = 'Alle Entwürfe verworfen.';
     }
 
+    // ── Composer-Tab (Foodpairing-Fläche: Anker zusammenstellen) ───────
+
+    /** Einen Anker in die Auswahl aufnehmen (aus Suchtreffer ODER Kandidaten-Klick im Netz). */
+    public function composerAdd(int $id): void
+    {
+        $ids = array_column($this->composerAnker, 'id');
+        if (in_array($id, $ids, true) || count($this->composerAnker) >= 12) {
+            return;
+        }
+        $a = DB::table('foodalchemist_vocab_pairing_anchors')->where('id', $id)->first(['id', 'slug', 'display_de']);
+        if ($a === null) {
+            return;
+        }
+        $this->composerAnker[] = ['id' => (int) $a->id, 'slug' => $a->slug, 'label' => $a->display_de ?: $a->slug];
+        $this->composerTerm = '';
+    }
+
+    /** Einen Anker aus der Auswahl entfernen. */
+    public function composerRemove(int $id): void
+    {
+        $this->composerAnker = array_values(array_filter(
+            $this->composerAnker,
+            fn ($a) => (int) $a['id'] !== $id
+        ));
+    }
+
     // ── Datenbeschaffung ───────────────────────────────────────────────
 
     private function aktiveSession(): ?FoodAlchemistPlanningSession
@@ -340,12 +374,30 @@ class Index extends Component
             ? app(PlanningCascadeService::class)->lauf($team, $this->laufId)
             : null;
 
+        // Composer-Tab: Ad-hoc-Netz aus der Anker-Auswahl + Live-Suchtreffer.
+        $composerNetz = ['nodes' => [], 'edges' => [], 'meta' => []];
+        $composerTreffer = [];
+        if ($team !== null) {
+            $composerIds = array_map('intval', array_column($this->composerAnker, 'id'));
+            if ($composerIds !== []) {
+                $composerNetz = app(PairingService::class)->pairingNetzForAnkers($team, $composerIds);
+            }
+            if (mb_strlen(trim($this->composerTerm)) >= 2) {
+                $composerTreffer = app(PairingInspirationService::class)
+                    ->sucheAnker(trim($this->composerTerm), 12)
+                    ->reject(fn ($a) => in_array((int) $a->id, $composerIds, true))
+                    ->values()->all();
+            }
+        }
+
         return view('foodalchemist::livewire.planung.index', [
             'sessions' => $sessions,
             'baum' => $baum,
             'active' => $active,
             'skizzen' => $skizzen,
             'lauf' => $lauf,
+            'composerNetz' => $composerNetz,
+            'composerTreffer' => $composerTreffer,
         ])->layout('platform::layouts.app');
     }
 }

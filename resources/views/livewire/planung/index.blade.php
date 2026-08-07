@@ -1,5 +1,8 @@
 {{-- Planungs-/Kreativ-Cockpit (Doppel-Diamant). Haus-Layout: links Kategorie→Session-Baum,
-     Mitte Dashboard/Vorschau, rechts Detail; „Öffnen" → Fullscreen-Dark-Editor (Analyse·Skizzen·Planung). --}}
+     Mitte Dashboard/Vorschau, rechts Detail; „Öffnen" → Fullscreen-Dark-Editor (Analyse·Skizzen·Planung·Composer). --}}
+@assets
+<script src="/_platform/fa-assets/foodalchemist-pairing-netz.iife.js?v={{ config('platform.fa_pairing_netz_hash', '0') }}" defer></script>
+@endassets
 @php
     extract(\Platform\FoodAlchemist\Support\Ui::maps());
     $statusLabel = ['divergenz' => 'Divergenz', 'konvergenz' => 'Konvergenz', 'erledigt' => 'Erledigt'];
@@ -158,6 +161,9 @@
                 <button type="button" @click="tab='planung'"
                         :class="tab==='planung' ? 'bg-violet-500/25 text-white' : 'text-gray-300 hover:text-white'"
                         class="px-3 py-1.5 rounded-t-md text-xs font-medium">Planung</button>
+                <button type="button" @click="tab='composer'"
+                        :class="tab==='composer' ? 'bg-violet-500/25 text-white' : 'text-gray-300 hover:text-white'"
+                        class="px-3 py-1.5 rounded-t-md text-xs font-medium">Composer</button>
             </div>
         </x-slot:tabs>
 
@@ -297,6 +303,66 @@
                         </div>
                     </x-foodalchemist::modal-section>
                 @endif
+            </div>
+
+            {{-- COMPOSER — Foodpairing-Fläche: Anker zusammenstellen, Netz zeigt live was passt (★★★/★★).
+                 Graph-only (keine Generierung — separates Thema). Klick auf Kandidat nimmt ihn auf. --}}
+            <div x-show="tab==='composer'" class="space-y-4">
+                <x-foodalchemist::modal-section title="Foodpairing — Komposition">
+                    <p class="{{ $label ?? 'text-[11px] text-gray-500' }} mb-2">
+                        Zutaten/Anker zusammenstellen — das Netz zeigt live, was harmoniert (★★★ Best · ★★ Good).
+                        Suche unten oder klick einen Kandidaten im Netz.
+                    </p>
+                    <input type="text" wire:model.live.debounce.300ms="composerTerm"
+                           placeholder="Zutat / Anker suchen …" class="{{ $input }}" />
+                    @if(!empty($composerTreffer))
+                        <div class="mt-2 flex flex-wrap gap-1.5">
+                            @foreach($composerTreffer as $t)
+                                <button type="button" wire:key="ctreffer-{{ $t->id }}" wire:click="composerAdd({{ $t->id }})"
+                                        class="px-2 py-1 rounded-full text-[11px] bg-white/10 text-gray-100 hover:bg-white/20 border border-white/15">
+                                    + {{ $t->display_de ?: $t->slug }}
+                                </button>
+                            @endforeach
+                        </div>
+                    @endif
+
+                    @if(!empty($composerAnker))
+                        <div class="flex flex-wrap gap-1.5 mt-3">
+                            @foreach($composerAnker as $a)
+                                <span wire:key="canker-{{ $a['id'] }}"
+                                      class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] bg-violet-500/25 text-violet-100 border border-violet-400/40">
+                                    {{ $a['label'] }}
+                                    <button type="button" wire:click="composerRemove({{ $a['id'] }})"
+                                            class="text-violet-200 hover:text-white leading-none">&times;</button>
+                                </span>
+                            @endforeach
+                        </div>
+                    @endif
+                </x-foodalchemist::modal-section>
+
+                <x-foodalchemist::modal-section title="Was passt zusammen">
+                    @if(empty($composerAnker))
+                        <p class="text-[13px] text-slate-400">
+                            Noch keine Zutat gewählt — such oben eine und füg sie hinzu. Dann zeigt das Netz die
+                            passenden Kandidaten (★★★/★★) und wie die Anker untereinander zusammenhängen.
+                        </p>
+                    @else
+                        <div wire:ignore
+                             wire:key="composer-netz-{{ $composerNetz['meta']['sig'] ?? '0' }}"
+                             x-data="pairingNetzGraph({
+                                 nodes: @js($composerNetz['nodes']),
+                                 edges: @js($composerNetz['edges']),
+                                 mode: 'modal',
+                                 canvasW: {{ (float) ($composerNetz['meta']['canvas_w'] ?? 1000) }},
+                                 canvasH: {{ (float) ($composerNetz['meta']['canvas_h'] ?? 760) }},
+                                 typDefault: @js($composerNetz['meta']['typ_default'] ?? ['stern3' => true, 'stern2' => true]),
+                                 onKandidatClick: (id) => $wire.composerAdd(id),
+                             })">
+                            <svg viewBox="0 0 1200 980" preserveAspectRatio="xMidYMid meet"
+                                 class="w-full rounded-xl" style="height:64vh; background:#0b1120" data-fa-netz-mount></svg>
+                        </div>
+                    @endif
+                </x-foodalchemist::modal-section>
             </div>
         @endif
     </x-foodalchemist::modal>
