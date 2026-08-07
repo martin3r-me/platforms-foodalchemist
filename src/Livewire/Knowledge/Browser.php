@@ -266,13 +266,20 @@ class Browser extends Component
     }
 
     /**
-     * Wissensdokument löschen (Soft-Delete). `deleted_at` genügt: Liste, Detail, Semantik-Suche
-     * UND alle KI-Kontext-Pfade (KnowledgeContextService / -EmbeddingService, Alias- und
-     * Embedding-Auflösung, Rückwärts-Trace) filtern durchgängig `whereNull('deleted_at')` — ein
-     * gelöschtes Doc kann also nicht mehr in einen Prompt geraten. Aliase/Bindungen bleiben
-     * dormant liegen (nichts liest sie ohne das Doc) und fielen bei einem echten Purge per
-     * FK-Cascade. Nur das Besitzer-Team darf löschen — Master/geerbtes/globales Wissen ist
-     * read-only (wie save()/toggleActive()).
+     * Wissensdokument endgültig löschen (HARD-Delete). Zweck ist das Aufräumen des Korpus —
+     * ein Soft-Delete ließe die Zeilen liegen und verfehlte genau das. Kein Undo.
+     *
+     * Was mitgeht:
+     *  - Aliase, Bindungen und trend_meta hängen per FK `cascadeOnDelete` am Dokument → die
+     *    DB räumt sie mit. Neu hinzukommende Kind-Tabellen fallen automatisch mit, solange sie
+     *    denselben FK deklarieren (kein zu pflegender Hand-Delete-Katalog).
+     *  - Der Semantik-Index (Core `core_embeddings`) hat KEINEN FK → wird über die Core-API
+     *    explizit entfernt, sonst blieben verwaiste Vektoren zurück. Best-effort: ein fehlender
+     *    Provider/Store darf das Löschen nicht blockieren (Index-Rest löst ohne Doc nie auf).
+     *
+     * Nur das Besitzer-Team darf löschen — Master/geerbtes/globales Wissen ist read-only (wie
+     * save()/toggleActive()). Global geseedete Docs (team_id NULL, u.a. die 767 Pairing-Docs)
+     * sind damit nicht löschbar; die `nullOnDelete`-Kante an den Pairing-Ankern ist unerreichbar.
      */
     public function delete(int $id): void
     {
@@ -285,8 +292,15 @@ class Browser extends Component
 
             return;
         }
-        DB::table('foodalchemist_knowledge_documents')->where('id', $id)
-            ->update(['deleted_at' => now(), 'updated_at' => now()]);
+
+        try {
+            app(\Platform\Core\Services\EmbeddingService::class)
+                ->delete((int) $doc->team_id, KnowledgeEmbeddingService::ENTITY_TYPE, $id);
+        } catch (\Throwable) {
+            // Index-Bereinigung ist Beiwerk — nie den eigentlichen Löschvorgang daran hängen.
+        }
+
+        DB::table('foodalchemist_knowledge_documents')->where('id', $id)->delete();
 
         if ($this->selectedId === $id) {
             $this->selectedId = null;

@@ -243,12 +243,12 @@
                                 data-wissen-modus="bearbeiten">Bearbeiten</button>
                     </div>
                     <div class="flex items-end gap-2 pb-0.5">
-                        {{-- Löschen (Soft-Delete): nur bei bereits gespeichertem, EIGENEM Dokument.
-                             Geerbtes/Master-Wissen ist read-only → Button ausgeblendet. Bestätigung
-                             per wire:confirm wie in den Einstellungen. --}}
+                        {{-- Löschen (Hard-Delete, endgültig): nur bei bereits gespeichertem, EIGENEM
+                             Dokument. Geerbtes/Master-Wissen ist read-only → Button ausgeblendet.
+                             Bestätigung per wire:confirm wie in den Einstellungen. --}}
                         @if($editable && ! $creating)
                             <button type="button" wire:click="delete({{ $selected->id }})"
-                                    wire:confirm="Wissensdokument „{{ $selected->title }}" löschen?"
+                                    wire:confirm="Wissensdokument „{{ $selected->title }}" endgültig löschen? Das kann nicht rückgängig gemacht werden."
                                     class="inline-flex items-center whitespace-nowrap gap-1.5 px-3.5 py-2 text-[13px] font-medium text-red-600 bg-white/60 border border-red-500/20 rounded-lg hover:bg-red-500/10 transition-all duration-150"
                                     data-wissen-delete>
                                 @svg('heroicon-o-trash', 'w-4 h-4') Löschen

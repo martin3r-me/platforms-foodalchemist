@@ -86,13 +86,24 @@ it('degradiert ohne Provider sauber: Hinweis + Fallback auf die Textsuche', func
         ->assertViewHas('docs', fn ($docs) => $docs->contains(fn ($d) => $d->slug === 'regelwerk.pfeffer'));
 });
 
-it('löscht ein eigenes Dokument (Soft-Delete), räumt die Auswahl ab und nimmt es aus der Liste', function () {
+it('löscht ein eigenes Dokument endgültig (Hard-Delete) samt Aliasen/Bindungen (FK-Cascade)', function () {
     // Eigenes Doc des aktiven Teams (rootTeam) — nicht ($this->mkDoc), das legt global (team_id NULL) an.
     $id = DB::table('foodalchemist_knowledge_documents')->insertGetId([
         'uuid' => (string) UuidV7::generate(), 'slug' => 'regelwerk.eigen', 'title' => 'Eigenes Doc',
         'category' => 'regelwerk', 'content_md' => "# Eigen\nInhalt.\n", 'version' => 1,
         'content_hash' => hash('sha256', 'x'), 'char_count' => 12, 'active' => 1,
         'team_id' => $this->rootTeam->id, 'created_at' => now(), 'updated_at' => now(),
+    ]);
+    // Kind-Zeilen anhängen, um den FK-Cascade zu belegen.
+    DB::table('foodalchemist_knowledge_aliases')->insert([
+        'alias_slug' => 'eigen_alias', 'knowledge_document_id' => $id,
+        'created_at' => now(), 'updated_at' => now(),
+    ]);
+    DB::table('foodalchemist_knowledge_bindings')->insert([
+        'uuid' => (string) UuidV7::generate(), 'team_id' => $this->rootTeam->id,
+        'knowledge_document_id' => $id, 'binding_type' => 'layer', 'target_key' => 'gp',
+        'mode' => 'discovery', 'weight' => 0, 'active' => 1, 'source' => 'ui',
+        'created_at' => now(), 'updated_at' => now(),
     ]);
 
     Livewire::test(Browser::class)
@@ -104,9 +115,11 @@ it('löscht ein eigenes Dokument (Soft-Delete), räumt die Auswahl ab und nimmt 
         ->assertSet('fehler', null)
         ->assertViewHas('docs', fn ($docs) => $docs->doesntContain(fn ($d) => $d->id === $id));
 
-    // Soft-Delete: Zeile existiert, aber deleted_at ist gesetzt (kein Hard-Delete).
-    expect(DB::table('foodalchemist_knowledge_documents')->where('id', $id)->whereNull('deleted_at')->exists())->toBeFalse();
-    expect(DB::table('foodalchemist_knowledge_documents')->where('id', $id)->whereNotNull('deleted_at')->exists())->toBeTrue();
+    // Hard-Delete: die Zeile ist WEG (nicht nur deleted_at gesetzt).
+    expect(DB::table('foodalchemist_knowledge_documents')->where('id', $id)->exists())->toBeFalse();
+    // Cascade: Kind-Zeilen mitgenommen.
+    expect(DB::table('foodalchemist_knowledge_aliases')->where('knowledge_document_id', $id)->exists())->toBeFalse();
+    expect(DB::table('foodalchemist_knowledge_bindings')->where('knowledge_document_id', $id)->exists())->toBeFalse();
 });
 
 it('lehnt das Löschen von geerbtem/globalem Wissen ab (read-only für Nicht-Besitzer)', function () {
