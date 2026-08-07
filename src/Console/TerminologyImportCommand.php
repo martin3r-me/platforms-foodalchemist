@@ -155,6 +155,11 @@ class TerminologyImportCommand extends Command
         $header = null;
 
         foreach ($this->tableRows($markdown) as $row) {
+            if ($row['cells'] === []) {                          // Tabellen-Ende (Leerzeile/Überschrift) → Header-Kontext schließen
+                $header = null;
+
+                continue;
+            }
             if ($row['header'] !== null) {
                 $lower = $row['header'];
                 $t = $this->firstIndex($lower, ['string']);
@@ -204,6 +209,11 @@ class TerminologyImportCommand extends Command
         $header = null;
 
         foreach ($this->tableRows($markdown) as $row) {
+            if ($row['cells'] === []) {                          // Tabellen-Ende (Leerzeile/Überschrift) → Header-Kontext schließen
+                $header = null;
+
+                continue;
+            }
             if ($row['header'] !== null) {
                 $lower = $row['header'];
                 $b = $this->firstIndex($lower, ['begriff']);
