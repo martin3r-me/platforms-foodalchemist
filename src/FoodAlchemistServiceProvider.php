@@ -69,6 +69,7 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                 \Platform\FoodAlchemist\Console\EmbeddingsMigrateStoreCommand::class,
                 \Platform\FoodAlchemist\Console\EmbedEvalCommand::class,
                 \Platform\FoodAlchemist\Console\MatcherEvalCommand::class,
+                \Platform\FoodAlchemist\Console\GeneratorEvalCommand::class,
                 \Platform\FoodAlchemist\Console\TeamOnboardingCommand::class,
                 \Platform\FoodAlchemist\Console\SignaleDetektorCommand::class,
                 \Platform\FoodAlchemist\Console\PairingProjectComputedCommand::class,
