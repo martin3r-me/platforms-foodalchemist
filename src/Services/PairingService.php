@@ -1243,21 +1243,21 @@ class PairingService
             })(),
             0, self::KANDIDATEN_PRO_TYP
         );
-        $best = $jeTyp('best');
-        $harmonie = $jeTyp('harmonie');
-        $kontrast = $jeTyp('kontrast');
+        $stern3 = $jeTyp('stern3');
+        $stern2 = $jeTyp('stern2');
+        $stern1 = $jeTyp('stern1');
 
         $basis = $this->komplementaerBasisrezepte($team, $recipeId, $candMeta);
 
         $kandidatNodes = [];
         $basisNodes = [];
 
-        // Mittlerer Vollkreis: best-Kandidaten (Inspire L3, ★★★) gleichmässig rundum.
-        $mB = max(1, count($best));
-        foreach ($best as $idx => $c) {
+        // Mittlerer Vollkreis: ★★★-Kandidaten (Inspire L3, Best-Match) gleichmässig rundum.
+        $mB = max(1, count($stern3));
+        foreach ($stern3 as $idx => $c) {
             [$x, $y] = $this->positionAufKreis($idx, $mB, self::R_BEST, $cx, $cy);
             $kandidatNodes[] = [
-                'id' => 'k:'.$c['id'], 'kind' => 'kandidat', 'typ' => 'best', 'level' => $c['level'] ?? 3,
+                'id' => 'k:'.$c['id'], 'kind' => 'kandidat', 'typ' => 'stern3', 'level' => 3,
                 'label' => $c['display_de'], 'slug' => $c['slug'], 'cover' => $c['cover'], 'x' => $x, 'y' => $y,
             ];
             foreach ($c['partner'] as $p) {
@@ -1267,15 +1267,15 @@ class PairingService
             }
         }
 
-        // Äusserer Vollkreis: harmonie (★★/★) + kontrast (⇄) + Basisrezepte, in
-        // zusammenhängenden Bögen rund um den best-Kreis.
-        $outerTotal = max(1, count($harmonie) + count($kontrast) + count($basis));
+        // Äusserer Vollkreis: ★★ (Inspire L2) + ★ (schwächste Stufe) + Basisrezepte,
+        // in zusammenhängenden Bögen rund um den ★★★-Kreis.
+        $outerTotal = max(1, count($stern2) + count($stern1) + count($basis));
         $oi = 0;
-        foreach ([['harmonie', $harmonie], ['kontrast', $kontrast]] as [$typ, $liste]) {
+        foreach ([['stern2', $stern2], ['stern1', $stern1]] as [$typ, $liste]) {
             foreach ($liste as $c) {
                 [$x, $y] = $this->positionAufKreis($oi++, $outerTotal, self::R_OUTER, $cx, $cy);
                 $kandidatNodes[] = [
-                    'id' => 'k:'.$c['id'], 'kind' => 'kandidat', 'typ' => $typ, 'level' => $c['level'] ?? ($typ === 'kontrast' ? 0 : 1),
+                    'id' => 'k:'.$c['id'], 'kind' => 'kandidat', 'typ' => $typ, 'level' => $c['level'] ?? (int) substr($typ, -1),
                     'label' => $c['display_de'], 'slug' => $c['slug'], 'cover' => $c['cover'], 'x' => $x, 'y' => $y,
                 ];
                 foreach ($c['partner'] as $p) {
@@ -1307,13 +1307,12 @@ class PairingService
                 'recipe_id' => $recipeId,
                 'canvas_w' => self::CANVAS_W,
                 'canvas_h' => self::CANVAS_H,
-                // Filter-Defaults: vertrauenswürdige Harmonie (best + harmonie) an,
-                // Kontrast zuschaltbar (eigene Achse).
-                'typ_default' => ['best' => true, 'harmonie' => true, 'kontrast' => false],
+                // Filter-Defaults: alle Stern-Stufen an (reine Inspire-Harmonie).
+                'typ_default' => ['stern3' => true, 'stern2' => true, 'stern1' => true],
                 'counts' => [
-                    'best' => count(array_filter($kandidatNodes, fn ($n) => $n['typ'] === 'best')),
-                    'harmonie' => count(array_filter($kandidatNodes, fn ($n) => $n['typ'] === 'harmonie')),
-                    'kontrast' => count(array_filter($kandidatNodes, fn ($n) => $n['typ'] === 'kontrast')),
+                    'stern3' => count(array_filter($kandidatNodes, fn ($n) => $n['typ'] === 'stern3')),
+                    'stern2' => count(array_filter($kandidatNodes, fn ($n) => $n['typ'] === 'stern2')),
+                    'stern1' => count(array_filter($kandidatNodes, fn ($n) => $n['typ'] === 'stern1')),
                     'basis' => count($basisNodes),
                 ],
             ],
@@ -1341,12 +1340,12 @@ class PairingService
 
         $agg = [];
         foreach ($rows as $r) {
-            // Inspire-Umbau 2a: Bucket nach Achse+Stufe statt Kanten-Typ.
-            //   best = Harmonie-Stufe 3 (Inspire L3, ★★★) · harmonie = übrige Harmonie (★★/★)
-            //   kontrast = eigene Achse (⇄). Stufe (level) fürs Symbol am Knoten.
+            // Inspire-Umbau: Bucket = Stern-Stufe (level). stern3 = Inspire L3 (★★★),
+            // stern2 = Inspire L2 (★★), stern1 = schwächste Harmonie (★, aktuell leer —
+            // rein Inspire kennt nur L2/L3). kontrast = eigene Achse (nach drop-legacy leer).
             $istKontrast = ($r->type === 'kontrast');
             $level = $r->level !== null ? (int) $r->level : ($istKontrast ? 0 : 1);
-            $bucket = $istKontrast ? 'kontrast' : ($level >= 3 ? 'best' : 'harmonie');
+            $bucket = $istKontrast ? 'kontrast' : 'stern'.max(1, min(3, $level));
             $cid = (int) $r->anchor_b_id;
             $w = $r->weight !== null ? (float) $r->weight : (self::GEWICHTE[$r->type] ?? 0.5);
             if (! isset($agg[$cid])) {

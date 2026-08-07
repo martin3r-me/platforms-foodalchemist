@@ -1,7 +1,7 @@
 {{--
     FA Pairing-Netz — kompakter Inline-Hub fürs Detail-Panel: Gericht zentral,
     Kern-Anker im Innenkreis, die vertrauenswürdigen Pairing-Kandidaten aussen
-    (best ★★★ + harmonie ★★/★). Inspire-Umbau 2a. Positionen/Buckets fertig aus
+    (Stern-Stufen ★★★ / ★★ / ★). Positionen/Buckets fertig aus
     PairingService::pairingNetz (deterministisch) — D3 zeichnet nur. Voller Filter
     (kontrast, Basisrezepte) im „Netz öffnen"-Overlay. Schwarzer Grund (kein dark:).
 --}}
@@ -15,8 +15,8 @@
     $zentrumNode = collect($netz['nodes'])->firstWhere('kind', 'zentrum');
     $ankerNodes = collect($netz['nodes'])->where('kind', 'anker')->values();
 
-    // Preview zeigt Gericht + Kern-Anker + die vertrauenswürdigen Kandidaten (best + harmonie).
-    $sichtbar = ['best', 'harmonie'];
+    // Preview zeigt Gericht + Kern-Anker + die gemessenen Harmonie-Kandidaten (alle Stern-Stufen).
+    $sichtbar = ['stern3', 'stern2', 'stern1'];
     $previewNodes = collect($netz['nodes'])
         ->filter(fn ($n) => in_array($n['kind'], ['zentrum', 'anker'], true) || ($n['kind'] === 'kandidat' && in_array($n['typ'] ?? null, $sichtbar, true)))
         ->values()->all();
@@ -37,7 +37,7 @@
             mode: 'preview',
             canvasW: {{ (float) ($netz['meta']['canvas_w'] ?? 1000) }},
             canvasH: {{ (float) ($netz['meta']['canvas_h'] ?? 760) }},
-            typDefault: { best: true, harmonie: true, kontrast: false },
+            typDefault: { stern3: true, stern2: true, stern1: true },
         })"
         class="w-full"
     >
