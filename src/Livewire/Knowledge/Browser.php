@@ -265,6 +265,53 @@ class Browser extends Component
         }
     }
 
+    /**
+     * Wissensdokument endgültig löschen (HARD-Delete). Zweck ist das Aufräumen des Korpus —
+     * ein Soft-Delete ließe die Zeilen liegen und verfehlte genau das. Kein Undo.
+     *
+     * Was mitgeht:
+     *  - Aliase, Bindungen und trend_meta hängen per FK `cascadeOnDelete` am Dokument → die
+     *    DB räumt sie mit. Neu hinzukommende Kind-Tabellen fallen automatisch mit, solange sie
+     *    denselben FK deklarieren (kein zu pflegender Hand-Delete-Katalog).
+     *  - Der Semantik-Index (Core `core_embeddings`) hat KEINEN FK → wird über die Core-API
+     *    explizit entfernt, sonst blieben verwaiste Vektoren zurück. Best-effort: ein fehlender
+     *    Provider/Store darf das Löschen nicht blockieren (Index-Rest löst ohne Doc nie auf).
+     *
+     * Nur das Besitzer-Team darf löschen — Master/geerbtes/globales Wissen ist read-only (wie
+     * save()/toggleActive()). Global geseedete Docs (team_id NULL, u.a. die 767 Pairing-Docs)
+     * sind damit nicht löschbar; die `nullOnDelete`-Kante an den Pairing-Ankern ist unerreichbar.
+     */
+    public function delete(int $id): void
+    {
+        $doc = $this->sichtbaresDoc($id, ['id', 'team_id']);
+        if ($doc === null) {
+            return;
+        }
+        if (! TeamScope::owns($doc->team_id, Auth::user()?->currentTeamRelation)) {
+            $this->fehler = 'Geerbtes/Master-Wissen — nur das Besitzer-Team kann löschen.';
+
+            return;
+        }
+
+        try {
+            app(\Platform\Core\Services\EmbeddingService::class)
+                ->delete((int) $doc->team_id, KnowledgeEmbeddingService::ENTITY_TYPE, $id);
+        } catch (\Throwable) {
+            // Index-Bereinigung ist Beiwerk — nie den eigentlichen Löschvorgang daran hängen.
+        }
+
+        DB::table('foodalchemist_knowledge_documents')->where('id', $id)->delete();
+
+        if ($this->selectedId === $id) {
+            $this->selectedId = null;
+            $this->form = [];
+            $this->vorschau = true;
+        }
+        $this->creating = false;
+        $this->fehler = null;
+        $this->savedToast('Wissensdokument gelöscht');
+    }
+
     public function addAlias(): void
     {
         $alias = Str::slug(trim($this->newAlias), '_');
@@ -408,6 +455,12 @@ class Browser extends Component
             ? $this->sichtbaresDoc($this->selectedId)          // MVP-036: nur Sichtbares ins Detail
             : null;
 
+        // Nur das Besitzer-Team darf bearbeiten/löschen (Master/geerbt/global = read-only).
+        // Steuert die Sichtbarkeit des Löschen-Buttons — die delete()-Methode prüft dasselbe
+        // nochmal serverseitig (nie der Client-Sichtbarkeit vertrauen).
+        $editable = $selected !== null
+            && TeamScope::owns($selected->team_id, Auth::user()?->currentTeamRelation);
+
         $aliases = $selected
             ? DB::table('foodalchemist_knowledge_aliases')->where('knowledge_document_id', $selected->id)
                 ->orderBy('alias_slug')->get()
@@ -459,6 +512,7 @@ class Browser extends Component
             'kategorien' => $kategorien,
             'docs' => $docs,
             'selected' => $selected,
+            'editable' => $editable,
             'aliases' => $aliases,
             'bindings' => $bindings,
             'routings' => $routings,
