@@ -74,3 +74,43 @@ it('Default ist dry-run — ohne --apply wird NICHTS geschrieben', function () u
 
     expect(FoodAlchemistTerminologyAntiMarker::query()->where('created_via', 'knowledge_import')->count())->toBe(0);
 });
+
+// ── Move 2 (2026-08-07): Synonym-Tabelle → deterministische Alias-Gruppen (additiv) ──
+
+$SYN = <<<'MD'
+# Synonyme & Schreibvarianten
+
+## Cross-Sprachliche Synonyme
+### Fisch & Seafood
+| Begriff | gleichbedeutend mit | Domain |
+|---------|---------------------|--------|
+| Wolfsbarsch | Loup de Mer / Branzino / Sea Bass | Fisch_Seafood |
+| Forelle | Trout | Fisch_Seafood |
+
+## Freitext — wird NICHT geparst
+- irgendwas
+MD;
+
+it('parseAliases liest Synonym-Tabellen deterministisch (Begriff + /,-getrennte Synonyme, ≥2 Glieder)', function () use ($SYN) {
+    $gruppen = (new \Platform\FoodAlchemist\Console\TerminologyImportCommand())->parseAliases($SYN);
+
+    expect($gruppen)->toHaveCount(2);
+    $wolf = collect($gruppen)->first(fn ($g) => in_array('wolfsbarsch', $g, true));
+    expect($wolf)->toContain('branzino')->toContain('loup de mer')->toContain('sea bass')
+        ->and(collect($gruppen)->first(fn ($g) => in_array('forelle', $g, true)))->toContain('trout');
+});
+
+it('--kind=alias --apply schreibt Alias-Gruppen provenienz-getaggt und ist idempotent', function () use ($SYN) {
+    DB::table('foodalchemist_knowledge_documents')->insert([
+        'uuid' => (string) UuidV7::generate(), 'slug' => 'synonyme', 'title' => 'Synonyme',
+        'category' => 'cross_cutting', 'content_md' => $SYN, 'version' => 1,
+        'content_hash' => hash('sha256', $SYN), 'char_count' => mb_strlen($SYN),
+        'active' => 1, 'created_at' => now(), 'updated_at' => now(),
+    ]);
+
+    $this->artisan('foodalchemist:terminology-import', ['--kind' => 'alias', '--apply' => true])->assertSuccessful();
+    expect(\Platform\FoodAlchemist\Models\FoodAlchemistTerminologyAlias::query()->where('created_via', 'knowledge_import')->count())->toBe(2);
+
+    $this->artisan('foodalchemist:terminology-import', ['--kind' => 'alias', '--apply' => true])->assertSuccessful();
+    expect(\Platform\FoodAlchemist\Models\FoodAlchemistTerminologyAlias::query()->where('created_via', 'knowledge_import')->count())->toBe(2);
+});
