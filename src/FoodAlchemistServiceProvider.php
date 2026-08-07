@@ -579,6 +579,8 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\SpeisekartenSearchTool::class,
                     \Platform\FoodAlchemist\Tools\SpeisekartenGetTool::class,
                     \Platform\FoodAlchemist\Tools\SpeisekarteLeitstelleGetTool::class,
+                    \Platform\FoodAlchemist\Tools\KnowledgeRoutingsGetTool::class,
+                    \Platform\FoodAlchemist\Tools\KnowledgeRoutingsPutTool::class,
                 ] as $toolClass) {
                     try {
                         $tool = new $toolClass();
