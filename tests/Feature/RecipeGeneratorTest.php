@@ -73,9 +73,16 @@ it('DoD M4-14: Bestand wird gebunden, fehlende Basisrezepte und GPs bleiben zur 
         ->and($recipe->ingredients()->count())->toBe(4);
 
     // Keine automatische Anlage während der Generierung: beide Lücken bleiben offen.
-    expect($resultat['statistik'])->toBe([
+    // (Kohärenz-Gate 2026-08-07: statistik trägt jetzt zusätzlich kohaerenz + kritiker —
+    // darum toMatchArray statt toBe.)
+    expect($resultat['statistik'])->toMatchArray([
         'bestand_gp' => 2, 'bestand_sub' => 0, 'stub_neu' => 0,
         'stubs' => [], 'gp_neu_aus_la' => 0, 'offen' => 2,
+    ]);
+    // Dieses Rezept hat KEINE verdrahteten Sub-Rezepte (Kalbsfond = offene Lücke) → der
+    // Kritiker-Call wird gegatet übersprungen, die Regel findet nichts, nichts wird entdrahtet.
+    expect($resultat['statistik']['kritiker'])->toMatchArray([
+        'geprueft' => false, 'uebersprungen_gating' => true, 'entdrahtet' => 0,
     ]);
 
     expect(FoodAlchemistRecipe::where('status', 'stub')->count())->toBe(0)

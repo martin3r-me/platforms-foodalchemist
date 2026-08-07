@@ -99,6 +99,14 @@
                 <span class="{{ $pill }} {{ $variantPill['info'] }}">{{ $ergebnis['statistik']['bestand_sub'] }} Sub-Rezepte</span>
                 <span class="{{ $pill }} {{ $variantPill['warning'] }}">{{ $ergebnis['statistik']['stub_neu'] }} Stubs neu</span>
                 <span class="{{ $pill }} {{ $ergebnis['statistik']['offen'] > 0 ? $variantPill['danger'] : $variantPill['secondary'] }}">{{ $ergebnis['statistik']['offen'] }} offen</span>
+                {{-- Kohärenz-Gate: entdrahtete Fremdkörper + (coverage-gated) Aroma-Kohärenz-Zahl --}}
+                @if((int) data_get($ergebnis, 'statistik.kritiker.entdrahtet', 0) > 0)
+                    <span class="{{ $pill }} {{ $variantPill['danger'] }}" data-generator-kritiker>{{ (int) data_get($ergebnis, 'statistik.kritiker.entdrahtet', 0) }} Fremdkörper entdrahtet</span>
+                @endif
+                @php($koh = $ergebnis['statistik']['kohaerenz'] ?? null)
+                @if(is_array($koh) && (float) ($koh['coverage_pct'] ?? 0) > 0)
+                    <span class="{{ $pill }} {{ $variantPill['secondary'] }}" data-generator-kohaerenz>Kohärenz {{ number_format((float) ($koh['score'] ?? 0), 2, ',', '.') }} · {{ round((float) $koh['coverage_pct']) }} % Abdeckung</span>
+                @endif
             </div>
             <x-foodalchemist::hardstop-zeilen :offene="$ergebnis['offene']" prefix=""
                                              :aufgeklappt="$hardstopOffenIndex" :meldung="$hardstopMeldung" />

@@ -41,6 +41,12 @@ class RecipeDependencyWorkflowService
         unset($childParameter['_voll_anreichern']);
 
         foreach ($offene as $open) {
+            // Kohärenz-Gate (2026-08-07): ENTdrahtete Fremdkörper-Zeilen tragen einen `kritiker`-
+            // Grund. Sie dürfen NICHT auto-nachgeneriert werden — sonst liesse die Kaskade den
+            // gerade als unpassend entfernten Fremdkörper als frisches Sub-Rezept wiederauferstehen.
+            if (isset($open['kritiker'])) {
+                continue;
+            }
             if (($open['primaer'] ?? null) !== 'basisrezept_anlegen') {
                 continue;
             }

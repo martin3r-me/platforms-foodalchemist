@@ -24,6 +24,15 @@
             @php($idx = (int) $offen['index'])
             <div class="rounded border border-gray-200 px-2 py-1.5" data-{{ $prefix }}hardstop="{{ $idx }}">
                 <p class="text-[11px] text-gray-700 inline-flex items-center gap-1.5"><span class="inline-block w-1.5 h-1.5 rounded-full bg-rose-500 align-middle"></span> {{ $offen['text'] }}</p>
+                {{-- Kohärenz-Gate: WARUM diese Zeile entdrahtet wurde (Regel = süß-in-herzhaft, KI = Kritiker-Urteil). --}}
+                @if(!empty($offen['kritiker']))
+                    @php($k = $offen['kritiker'])
+                    <p class="text-[10px] mt-0.5 text-rose-700" data-{{ $prefix }}kritiker="{{ $idx }}">
+                        @svg('heroicon-o-exclamation-triangle', 'w-3.5 h-3.5 inline-block align-middle')
+                        {{ ($k['quelle'] ?? '') === 'regel' ? 'Regel' : 'Kritiker' }}: «{{ $k['name'] }}» passt fachlich nicht — {{ $k['grund'] }}
+                        <span class="text-gray-400">· {{ round((float) ($k['konfidenz'] ?? 0) * 100) }} %</span>
+                    </p>
+                @endif
                 <div class="flex flex-wrap items-center gap-1.5 mt-1">
                     @if(($offen['primaer'] ?? null) === 'basisrezept_anlegen')
                         <button type="button" wire:click="hardstopStubAnlegen({{ $idx }})"
@@ -44,6 +53,23 @@
                                 class="{{ $btnGhost }} text-[11px] py-0.5"
                                 data-{{ $prefix }}hardstop-shortlist="{{ $idx }}">
                             @svg('heroicon-o-question-mark-circle', 'w-3.5 h-3.5 inline-block align-middle') Meintest du? ({{ count($offen['shortlist']) }})
+                        </button>
+                    @endif
+                    {{-- Kohärenz-Gate: „Trotzdem verwenden" bindet genau das entdrahtete Objekt wieder (Override). --}}
+                    @if(!empty($offen['kritiker']) && (int) ($offen['kritiker']['ziel_id'] ?? 0) > 0)
+                        <button type="button"
+                                wire:click="hardstopVerknuepfen({{ $idx }}, '{{ ($offen['kritiker']['target'] ?? '') === 'sub_recipe' ? 'sub' : 'gp' }}', {{ (int) $offen['kritiker']['ziel_id'] }})"
+                                class="{{ $btnGhost }} text-[11px] py-0.5" data-{{ $prefix }}kritiker-trotzdem="{{ $idx }}">
+                            @svg('heroicon-o-arrow-uturn-left', 'w-3.5 h-3.5 inline-block align-middle') Trotzdem verwenden
+                        </button>
+                    @endif
+                    {{-- Band-Gate: der abgewiesene FuzzyLow-Kandidat — „Meintest du?" mit Verknüpfen (Override). --}}
+                    @if(!empty($offen['schwacher_treffer']) && (int) ($offen['schwacher_treffer']['id'] ?? 0) > 0)
+                        @php($st = $offen['schwacher_treffer'])
+                        <button type="button"
+                                wire:click="hardstopVerknuepfen({{ $idx }}, '{{ ($st['target'] ?? '') === 'sub_recipe' ? 'sub' : 'gp' }}', {{ (int) $st['id'] }})"
+                                class="{{ $btnGhost }} text-[11px] py-0.5" data-{{ $prefix }}schwacher-treffer="{{ $idx }}">
+                            @svg('heroicon-o-question-mark-circle', 'w-3.5 h-3.5 inline-block align-middle') Meintest du «{{ $st['name'] }}»? ({{ number_format((float) ($st['score'] ?? 0), 2, ',', '.') }})
                         </button>
                     @endif
                 </div>

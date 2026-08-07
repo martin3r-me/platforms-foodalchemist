@@ -430,7 +430,14 @@ return [
                 . 'Parameter (convenience, frische, bio, niveau, sektor, diaet_hart, aroma): werte = '
                 . '{name (§1-Syntax <Typ>: <Bezeichnung>), description (§8-Stil), taste_direction (grobe Menue-Richtung, NUR EIN Wort: suess|herzhaft|neutral — das Aroma-Profil gehoert in description), '
                 . 'preparation (Markdown-Schritte), zutaten: [{text, quantity, unit (g|ml|kg|l|el|tl|stk), '
-                . 'slug (hauptzutat), commodity_group, note}]}. Diät-harte Vorgaben sind VERBINDLICH. '
+                . 'slug (hauptzutat), commodity_group, note, '
+                // Kohärenz-Gate (2026-08-07): role füllt das V-21-Rollenfeld (Schicht 1) im
+                // selben Call; fit ZWINGT zur Selbst-Begründung — eine Zutat, die sich nicht in
+                // einem Halbsatz fachlich rechtfertigen lässt, gehört nicht ins Gericht (senkt
+                // die Rate plausibel klingender Fremdkörper VOR dem Kritiker-Pass).
+                . 'role (V-21: aroma_treiber|komponente|beilage|garnitur), '
+                . 'fit (EIN kurzer Halbsatz: warum gehört diese Zutat FACHLICH in DIESES Gericht)}]}. '
+                . 'Diät-harte Vorgaben sind VERBINDLICH. '
                 // Fit-Guard (2026-08-06, Rahmeis-in-Tomatensuppe): das Inventar ist ein ANGEBOT,
                 // kein Befehl — vorher stand hier gar keine Anweisung und die Liste wirkte als
                 // implizites "nimm das". Die KI soll fachlich urteilen, nicht gehorchen.
@@ -640,14 +647,19 @@ return [
             'max_tokens' => 6000,                                     // Befund-Liste ueber das ganze Rezept + Reasoning-Headroom
             'task' => 'Pruefe das Produktionsrezept als Sous-Chef auf Plausibilitaet: Mengen-'
                 . 'verhaeltnisse, falsche Einheiten, fehlende Schluesselkomponenten (Saeure, Salz, '
-                . 'Fett, Bindung), Ueberfluessiges. KONKRETE Befunde statt Floskeln — lieber drei '
-                . 'belastbare als zehn vage. Je Befund die art waehlen: menge (zutat_id + neue '
-                . 'quantity) | einheit (zutat_id + einheit_slug) | entfernen (zutat_id) | fehlt '
-                . '(zutat_text + quantity + einheit_slug einer NEUEN Zutat) | hinweis (nur Text, '
-                . 'kein Schreibziel — fuer alles Technik-/Reihenfolge-Bezogene). Nutze die '
-                . 'mitgegebenen zutat-ids unveraendert; erfinde keine ids. Konfidenz 0..1: '
-                . 'werte = {befunde: [{art, zutat_id, zutat_text, quantity, einheit_slug, '
-                . 'begruendung, konfidenz}], gesamturteil}.',
+                . 'Fett, Bindung), Ueberfluessiges UND kulinarische Fremdkoerper. KONKRETE Befunde '
+                . 'statt Floskeln — lieber drei belastbare als zehn vage. Je Befund die art waehlen: '
+                . 'menge (zutat_id + neue quantity) | einheit (zutat_id + einheit_slug) | entfernen '
+                . '(zutat_id) | fehlt (zutat_text + quantity + einheit_slug einer NEUEN Zutat) | '
+                . 'fremdkoerper (zutat_id — eine Komponente, die fachlich/kulinarisch NICHT in DIESES '
+                . 'Gericht gehoert: suesses/Dessert-Bauteil im herzhaften Gericht [Massstab: das Feld '
+                . 'geschmack im Kontext], thematisch falsche Fond-/Sub-Variante, stilfremde Garnitur. '
+                . 'Beurteile die GENANNTEN Komponenten-Namen — sie sind die verdrahtete Realitaet, '
+                . 'nicht was gemeint war. Im Zweifel KEIN Befund: lieber durchlassen als Legitimes '
+                . 'faelschlich flaggen) | hinweis (nur Text, kein Schreibziel — fuer alles Technik-/'
+                . 'Reihenfolge-Bezogene). Nutze die mitgegebenen zutat-ids unveraendert; erfinde '
+                . 'keine ids. Konfidenz 0..1: werte = {befunde: [{art, zutat_id, zutat_text, '
+                . 'quantity, einheit_slug, begruendung, konfidenz}], gesamturteil}.',
         ],
         'recipe.bauart' => [
             'tier' => 'B',                                            // Spec 21 S5b-2 — Klassifikator, kein Kreativ-Pass (darum auch KEINE Food-DNA)

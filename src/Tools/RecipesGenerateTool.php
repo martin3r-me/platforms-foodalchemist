@@ -199,6 +199,11 @@ class RecipesGenerateTool extends FoodAlchemistTool implements ToolContract, Too
                     'id' => $la['id'], 'designation' => $la['designation'], 'supplier' => $la['supplier'],
                     'score' => $la['score'], 'gp_id' => $la['gp_id'], 'gp_name' => $la['gp_name'],
                 ], array_slice($o['la_kandidaten'] ?? [], 0, 3)),
+                // Kohärenz-Gate (2026-08-07): WARUM eine Zeile entdrahtet wurde (Regel/KI) bzw. der
+                // vom Band-Gate abgewiesene FuzzyLow-Kandidat — der MCP-Client sieht denselben Grund
+                // wie die UI. Nur gesetzt, wenn das Gate/Band zugeschlagen hat.
+                'kritiker' => $o['kritiker'] ?? null,
+                'schwacher_treffer' => $o['schwacher_treffer'] ?? null,
             ], $resultat['offene']),
             'kohaerenz' => $statistik['kohaerenz'] ?? null,        // nur VK-Modus: deterministischer Aroma-Score (GL-10 Achse 1)
             // nur mit voll_anreichern=true; enthält `kohaerenz_urteil` (GL-10 Achse 2, nie

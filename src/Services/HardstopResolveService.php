@@ -206,6 +206,44 @@ class HardstopResolveService
                 : '«' . $text . '» stand bereits als Beschaffungs-Wunsch im Backlog (nicht doppelt angelegt).'];
     }
 
+    /**
+     * Kohärenz-Gate (Umkehrung von `binde()`): eine als Fremdkörper erkannte, VERDRAHTETE
+     * Zeile ENTdrahten. Die Verknüpfung (gp_id/referenced_recipe_id) fällt weg, die Zeile
+     * bleibt als offener Hard-Stop stehen — raw_text/Menge/Einheit unberührt; der Mensch
+     * bindet neu (Shortlist/LA-Kette) oder verwirft.
+     *
+     * Bewusst gezielter Row-Update + GENAU EIN `recomputeAndPropagate`, NICHT `syncIngredients`:
+     * dessen Voll-Ersatz-Semantik würde die frisch gelöste Zeile über den GL-04-Resolver
+     * (Re-Grounding via raw_text) sofort wieder an dasselbe GP/Sub binden — der Fremdkörper
+     * käme zurück. Idempotent: eine bereits offene Zeile bleibt unangetastet.
+     */
+    public function entdrahte(Team $team, int $recipeId, int $ingredientId): FoodAlchemistRecipe
+    {
+        $recipe = $this->besitzRezept($team, $recipeId);
+        $zeile = $recipe->ingredients()->whereKey($ingredientId)->first();
+        if ($zeile === null) {
+            throw new \RuntimeException('Zeile gehört nicht zu diesem Rezept.');
+        }
+        if ($zeile->gp_id === null && $zeile->referenced_recipe_id === null) {
+            return $recipe;                                           // schon offen — nichts zu lösen
+        }
+
+        DB::transaction(function () use ($zeile) {
+            $zeile->update([
+                'gp_id' => null,
+                'referenced_recipe_id' => null,
+                'match_method' => MatchMethod::Unmatched,
+                'match_confidence' => null,
+            ]);
+        });
+
+        // Genau EIN Recompute (Yield/Allergene/EK + Eltern) — die gelöste Zeile zählt
+        // nicht mehr als geerdet.
+        $this->recompute->recomputeAndPropagate((int) $zeile->recipe_id);
+
+        return $recipe->refresh();
+    }
+
     /** Besitzer-Regel wie im Voll-Sync: geerbte Rezepte werden nicht geschrieben (D1). */
     private function besitzRezept(Team $team, int $recipeId): FoodAlchemistRecipe
     {

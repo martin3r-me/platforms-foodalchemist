@@ -29,8 +29,13 @@ use Platform\FoodAlchemist\Services\Matching\MatchHeuristics;
  */
 class RecipeReviewService
 {
-    /** Befund-Arten DIESES Passes (CJ-Parität). `hinweis` ist bewusst nie anwendbar — er hat kein Schreibziel. */
-    public const ARTEN_COPILOT = ['menge', 'einheit', 'entfernen', 'fehlt', 'hinweis'];
+    /**
+     * Befund-Arten DIESES Passes (CJ-Parität). `hinweis` ist bewusst nie anwendbar — er hat
+     * kein Schreibziel. `fremdkoerper` (Kohärenz-Gate 2026-08-07): eine fachlich unpassende,
+     * aber VERDRAHTETE Zutat — Übernahme = ENTdrahten (Verknüpfung lösen, Zeile bleibt als
+     * offener Hard-Stop stehen), nicht löschen. Der Mensch bindet neu oder verwirft.
+     */
+    public const ARTEN_COPILOT = ['menge', 'einheit', 'entfernen', 'fehlt', 'fremdkoerper', 'hinweis'];
 
     /**
      * Spec 21 · S5b-2 — Befund-Arten über das Rezept ALS GANZES, erzeugt von einem
@@ -42,7 +47,7 @@ class RecipeReviewService
     public const ARTEN_STRUKTUR = ['bauart'];
 
     /** Alle bekannten Arten — was hier nicht steht, wird zum `hinweis` entschärft. */
-    public const ARTEN = ['menge', 'einheit', 'entfernen', 'fehlt', 'hinweis', 'bauart'];
+    public const ARTEN = ['menge', 'einheit', 'entfernen', 'fehlt', 'fremdkoerper', 'hinweis', 'bauart'];
 
     /**
      * Read-only Prüf-Pass. Persistiert NICHTS ausser dem Gateway-Audit (GL-07 I3).
@@ -110,6 +115,10 @@ class RecipeReviewService
             'description' => $r->description,
             'preparation' => $r->preparation,
             'kategorie' => $r->kategorie?->label,
+            // Kohärenz-Gate (2026-08-07): die grobe Geschmacksrichtung ist der Massstab
+            // für süß-in-herzhaft — ohne sie kann der Prüf-Pass einen Dessert-Fremdkörper
+            // in einem herzhaften Gericht gar nicht sehen. Sicht-neutral (schadet VK nicht).
+            'geschmack' => $r->taste_direction,
             'zutaten' => $r->ingredients->map(fn ($z) => [
                 'id' => $z->id,
                 'text' => $z->gp?->name ?? $z->referencedRecipe?->name ?? $z->display_name ?? $z->raw_text,
@@ -261,6 +270,20 @@ class RecipeReviewService
                     }
                     break;
 
+                case 'fremdkoerper':
+                    // Kohärenz-Gate: eine fachlich unpassende, aber verdrahtete Zutat. Anwendbar
+                    // heisst ENTdrahten (Verknüpfung lösen) — nur sinnvoll, wenn die Zielzeile
+                    // existiert UND wirklich verdrahtet ist. Eine bereits offene Zeile ist kein
+                    // Fremdkörper mehr; ohne Zielzeile gibt es nichts zu lösen.
+                    if ($ziel === null) {
+                        $befund['status'] = 'kein_ziel';
+                    } elseif ($ziel->gp_id === null && $ziel->referenced_recipe_id === null) {
+                        $befund['status'] = 'schon_offen';
+                    } else {
+                        $befund['auto_applicable'] = true;
+                    }
+                    break;
+
                 case 'bauart':
                     // S5b-2: der Befund fragt, ob `is_sales_recipe` stimmt. Daran hängen
                     // Taxonomie, VK-Felder und Darreichungen — das ist keine Zeile, die
@@ -315,6 +338,20 @@ class RecipeReviewService
         }
         if (($befund['auto_applicable'] ?? false) !== true) {
             throw new \RuntimeException('Befund ist nicht anwendbar — er ist ein Hinweis, kein Auftrag.');
+        }
+
+        // Kohärenz-Gate: Fremdkörper wird ENTdrahtet, nicht überschrieben. Der direkte
+        // Row-Update (Umkehrung von binde()) ist die richtige Waffe — NICHT der Voll-Ersatz
+        // via syncIngredients, dessen GL-04-Resolver die frisch gelöste Zeile über ihren
+        // raw_text sofort wieder an dasselbe Ziel bände. Ein Weg für beide Auslöser
+        // (Copilot hier, Generator-Gate direkt).
+        if (($befund['art'] ?? '') === 'fremdkoerper') {
+            $zielId = ($befund['zutat_id'] ?? null) !== null ? (int) $befund['zutat_id'] : null;
+            if ($zielId === null) {
+                throw new \RuntimeException('Fremdkörper-Befund ohne Zielzeile — nichts zu lösen.');
+            }
+
+            return app(HardstopResolveService::class)->entdrahte($team, $recipeId, $zielId);
         }
 
         $revise = app(RecipeReviseService::class);

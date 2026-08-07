@@ -111,7 +111,7 @@ class RecipeGeneratorService
 
         $melde('Zutaten werden zugeordnet …');
 
-        return DB::transaction(function () use ($team, $kiRezept, $parameter, $mode, $pref, $preferRaw, $bio, $vkModus, $createdVia, $melde) {
+        $result = DB::transaction(function () use ($team, $kiRezept, $parameter, $mode, $pref, $preferRaw, $bio, $vkModus, $createdVia, $melde) {
             $recipe = $this->recipes->create($team, [
                 'name' => $kiRezept['name'],
                 'is_sales_recipe' => $vkModus,
@@ -182,6 +182,10 @@ class RecipeGeneratorService
                     'quantity' => (float) ($z['quantity'] ?? 1),
                     'unit_vocab_id' => $einheitId,
                     'note' => $z['note'] ?? null,
+                    // Kohärenz-Gate (2026-08-07): die V-21-Rolle aus dem Vorschlag füllt das
+                    // bisher tote role-Feld (Schicht 1). Whitelist-Guard wie taste_direction —
+                    // nur gültige Rollen, sonst null (kein Insert-Crash durch Freitext).
+                    'role' => in_array($z['role'] ?? null, SpeisenKlassenService::ROLLEN, true) ? $z['role'] : null,
                     // Der Generator hat bereits bewusst geroutet. Ein Miss bleibt
                     // bis zur menschlichen LA-/GP- bzw. Subrezept-Bestätigung offen.
                     'auto_ground' => false,
@@ -245,6 +249,9 @@ class RecipeGeneratorService
                         // für die Review-Fläche sichtbar (Mensch bestätigt oder verwirft).
                         'schwacher_treffer' => $treffer['target'] !== 'none' ? [
                             'target' => $treffer['target'],
+                            // id, damit die Review-Fläche „Meintest du?" auch VERKNÜPFEN kann
+                            // (hardstopVerknuepfen bindet als Override — der Mensch übersteuert das Band-Gate).
+                            'id' => (int) ($treffer['target'] === 'gp' ? $treffer['gp_id'] : $treffer['recipe_id']),
                             'name' => $treffer['gp_name'] ?? $treffer['recipe_name'],
                             'score' => round((float) $treffer['score'], 3),
                         ] : null,
@@ -255,18 +262,176 @@ class RecipeGeneratorService
 
             $recipe = $this->recipes->syncIngredients($team, $recipe->id, $zeilen);   // inkl. Recompute
 
-            // #505 Slice 2: VK-Kohärenz nach Zutaten-Sync (recipeCohesion braucht persistierte Zeilen).
-            if ($vkModus) {
-                $melde('Kohärenz wird geprüft …');
-                try {
-                    $statistik['kohaerenz'] = app(PairingService::class)->recipeCohesion($recipe);
-                } catch (\Throwable $e) {
-                    // Kohärenz ist Diagnose, kein Blocker der Generierung.
-                }
+            // #505 / Kohärenz-Gate (2026-08-07): recipeCohesion nach Zutaten-Sync (braucht
+            // persistierte Zeilen) — jetzt auch für BASIS, nicht nur VK. Diagnose-Zahl, kein
+            // Blocker; DB-only + fail-open. Die Anzeige konditioniert Phase 3 auf coverage_pct.
+            $melde('Kohärenz wird geprüft …');
+            try {
+                $statistik['kohaerenz'] = app(PairingService::class)->recipeCohesion($recipe);
+            } catch (\Throwable $e) {
+                // Kohärenz ist Diagnose, kein Blocker der Generierung.
             }
 
             return ['recipe' => $recipe, 'statistik' => $statistik, 'offene' => $offene];
         });
+
+        // Kohärenz-Gate (Phase 2, 2026-08-07) — NACH dem Transaktions-Commit, VOR dem Return.
+        // Bewusst ausserhalb der Transaktion: der Kritiker ist ein KI-Call (Tier A, potenziell
+        // >10 s) und darf die Zutaten-Transaktion nicht offen halten. Nur BASIS ist scharf — VK
+        // folgt in eigener Runde. Die Konsumenten (GenerateRecipeJob, PlanningCascadeService)
+        // rufen afterGenerated erst mit dem Rückgabewert $result['offene'] → sie sehen die
+        // entdrahteten Zeilen automatisch; keine verwaisten Dependencies.
+        if (! $vkModus) {
+            $result = $this->kohaerenzGate($team, $result, $melde);
+        }
+
+        return $result;
+    }
+
+    /**
+     * Kohärenz-Gate (Phase 2, 2026-08-07) — der Qualitäts-Post-Check NACH dem Verdrahten.
+     *
+     * Zwei Stufen, aufsteigend teuer:
+     *  a) REGEL (deterministisch, 0 Kosten, läuft immer): süß-in-herzhaft zwischen dem Gericht
+     *     (taste_direction) und einem verdrahteten Sub-Rezept. Fängt den Rahmeis-Fall.
+     *  b) KRITIKER (1 KI-Call, recipe.review) — GEGATET: nur wenn verdrahtete Sub-Rezepte
+     *     existieren (die reale Risikofläche; beide Referenzfälle vom 2026-08-06 waren Subs).
+     *     Reine GP-Rezepte überspringen den Call → keine Doppel-Latenz im Normalfall. Er
+     *     beurteilt die VERDRAHTETEN Namen (nicht die KI-Absicht) und fängt den thematisch
+     *     falschen „Gemüsefond: Bohne-Speck", den die Regel nicht sieht.
+     *
+     * Konsequenz je Treffer: die Zeile wird ENTdrahtet (Verknüpfung gelöst, Zeile bleibt als
+     * offener Hard-Stop) und in offene[] mit `kritiker`-Grund gehängt — NIE stilles Löschen.
+     * Fail-open: jeder Fehler im Gate lässt die Generierung unangetastet durch (Diagnose, kein
+     * Blocker, kein OOM-Risiko — reiner Text-Call).
+     *
+     * @param  array{recipe: FoodAlchemistRecipe, statistik: array, offene: array}  $result
+     * @return array{recipe: FoodAlchemistRecipe, statistik: array, offene: array}
+     */
+    private function kohaerenzGate(Team $team, array $result, callable $melde): array
+    {
+        /** @var FoodAlchemistRecipe $recipe */
+        $recipe = $result['recipe'];
+        $statistik = $result['statistik'];
+        $offene = $result['offene'];
+        $statistik['kritiker'] = ['geprueft' => false, 'uebersprungen_gating' => false, 'entdrahtet' => 0, 'befunde_abgelegt' => 0];
+
+        try {
+            $zeilen = $recipe->ingredients()
+                ->with(['referencedRecipe:id,name,taste_direction', 'gp:id,name'])->get()->keyBy('id');
+            $wiredSubs = $zeilen->filter(fn ($z) => $z->referenced_recipe_id !== null);
+
+            // Treffer sammeln: ingredient_id => ['grund','konfidenz','quelle']. Regel gewinnt (billiger, hart).
+            $treffer = [];
+
+            // Stufe a — Regel: Geschmacks-Konflikt Gericht × verdrahtetes Sub (null/neutral = kein Urteil).
+            $parentTaste = $recipe->taste_direction;
+            if (in_array($parentTaste, ['suess', 'herzhaft'], true)) {
+                foreach ($wiredSubs as $z) {
+                    $subTaste = $z->referencedRecipe?->taste_direction;
+                    if (in_array($subTaste, ['suess', 'herzhaft'], true) && $subTaste !== $parentTaste) {
+                        $treffer[(int) $z->id] = [
+                            'grund' => "Geschmacks-Konflikt: Gericht {$parentTaste}, Komponente «{$z->referencedRecipe->name}» {$subTaste}.",
+                            'konfidenz' => 1.0,
+                            'quelle' => 'regel',
+                        ];
+                    }
+                }
+            }
+
+            // Stufe b — Kritiker (GEGATET auf verdrahtete Sub-Rezepte). Übrige Befunde in die Ablage.
+            // Eigenes try/catch: scheitert der KI-Call, bleibt die deterministische Regel (Stufe a)
+            // trotzdem wirksam — sie ist die billige, ausfallsichere Vorstufe, kein Anhängsel.
+            if ($wiredSubs->isNotEmpty()) {
+                try {
+                    $melde('Kohärenz-Gate: Fremdkörper werden geprüft …');
+                    $review = app(RecipeReviewService::class)->pruefe($team, $recipe->id);
+                    $rest = [];
+                    foreach ($review['befunde'] as $b) {
+                        $istFremd = ($b['art'] ?? '') === 'fremdkoerper' && ($b['zutat_id'] ?? null) !== null;
+                        if ($istFremd && (float) ($b['konfidenz'] ?? 0) >= RecipeFindingService::KONFIDENZ_SCHWELLE) {
+                            $id = (int) $b['zutat_id'];
+                            if (! isset($treffer[$id])) {                // Regel gewinnt bei Doppel-Flag
+                                $treffer[$id] = [
+                                    'grund' => (string) ($b['begruendung'] ?? 'Passt fachlich nicht ins Gericht.'),
+                                    'konfidenz' => (float) $b['konfidenz'],
+                                    'quelle' => 'ki',
+                                ];
+                            }
+                        } else {
+                            $rest[] = $b;                                // menge/einheit/fehlt/hinweis + Fremdkörper < Schwelle
+                        }
+                    }
+                    if ($rest !== []) {                                  // Copilot/Signale sehen die übrigen Befunde
+                        $abgelegt = app(RecipeFindingService::class)->speichere($team, $recipe->id, $rest);
+                        $statistik['kritiker']['befunde_abgelegt'] = (int) ($abgelegt['neu'] ?? 0);
+                    }
+                    $statistik['kritiker']['geprueft'] = true;
+                } catch (\Throwable $e) {
+                    $statistik['kritiker']['fehler'] = true;             // Regel bleibt, Generierung läuft weiter
+                }
+            } else {
+                $statistik['kritiker']['uebersprungen_gating'] = true;
+            }
+
+            // Entdrahten + offene[]-Eintrag je Treffer (Regel + Kritiker).
+            foreach ($treffer as $id => $info) {
+                $z = $zeilen->get($id);
+                if ($z === null || ($z->gp_id === null && $z->referenced_recipe_id === null)) {
+                    continue;                                            // nicht mehr da / schon offen
+                }
+                $wasSub = $z->referenced_recipe_id !== null;
+                // Ziel-id VOR dem Entdrahten sichern — „Trotzdem verwenden" bindet genau dieses
+                // Objekt wieder (hardstopVerknuepfen als Override).
+                $zielRefId = (int) ($wasSub ? $z->referenced_recipe_id : $z->gp_id);
+                $zielName = (string) (($wasSub ? $z->referencedRecipe?->name : $z->gp?->name) ?? $z->display_name ?? $z->raw_text);
+                $text = (string) (($z->raw_text ?? '') !== '' ? $z->raw_text : ($z->display_name ?: $zielName));
+                $position = (int) $z->position;
+
+                app(HardstopResolveService::class)->entdrahte($team, $recipe->id, $id);
+                $statistik['kritiker']['entdrahtet']++;
+                // Zähler ehrlich halten: die Zeile ist nicht mehr verdrahtet, sondern offen.
+                if ($wasSub) {
+                    $statistik['bestand_sub'] = max(0, (int) ($statistik['bestand_sub'] ?? 0) - 1);
+                } else {
+                    $statistik['bestand_gp'] = max(0, (int) ($statistik['bestand_gp'] ?? 0) - 1);
+                }
+                $statistik['offen'] = (int) ($statistik['offen'] ?? 0) + 1;
+
+                $istSub = $wasSub || $this->heuristik->istSubRezeptKandidat($text);
+                $offene[] = [
+                    'index' => $position - 1,                            // Kontrakt afterGenerated: position === index + 1
+                    'text' => $text,
+                    'primaer' => $istSub ? 'basisrezept_anlegen' : 'lieferantenartikel_waehlen',
+                    'shortlist' => $this->matcher->candidatesFor($team, $text, null, 5),
+                    'la_kandidaten' => [],
+                    'lieferantenstrategie' => null,
+                    'schwacher_treffer' => null,
+                    // Kohärenz-Gate: WARUM die Zeile ENTdrahtet wurde (Review-Fläche Phase 3).
+                    'kritiker' => [
+                        'name' => $zielName,
+                        'target' => $wasSub ? 'sub_recipe' : 'gp',
+                        'ziel_id' => $zielRefId,                        // „Trotzdem verwenden" bindet dieses Objekt wieder
+                        'grund' => $info['grund'],
+                        'konfidenz' => round((float) $info['konfidenz'], 3),
+                        'quelle' => $info['quelle'],
+                    ],
+                ];
+            }
+
+            if ($statistik['kritiker']['entdrahtet'] > 0) {
+                $result['recipe'] = $recipe->refresh();
+            }
+        } catch (\Throwable $e) {
+            // Fail-open: das Gate ist Qualität/Diagnose, kein Blocker. Der Lauf kommt normal durch.
+            $statistik['kritiker'] = ['geprueft' => false, 'uebersprungen_gating' => false,
+                'entdrahtet' => 0, 'befunde_abgelegt' => 0, 'fehler' => true];
+        }
+
+        $result['statistik'] = $statistik;
+        $result['offene'] = $offene;
+
+        return $result;
     }
 
     /**
