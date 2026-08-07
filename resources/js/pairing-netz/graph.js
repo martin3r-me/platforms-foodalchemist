@@ -16,12 +16,12 @@ import { zoom } from 'd3-zoom';
 import { line as d3line, curveNatural } from 'd3-shape';
 import { scaleLinear } from 'd3-scale';
 
-// Inspire-Umbau 2a — Buckets: best = Inspire-Bestmatch (L3, ★★★) · harmonie =
-// übrige Harmonie (L2 ★★ / L1 ★) · kontrast = eigene Achse (⇄). Farben auf den
-// schwarzen Editor-Grund abgestimmt (helle Akzente, gedämpfte Füllungen).
-const TYP_FARBE = { best: '#f472b6', harmonie: '#fbbf24', kontrast: '#22d3ee' };
-const TYP_DASH = { best: null, harmonie: '5 4', kontrast: '1 4' };
-const TYP_FILL = { best: 'rgba(244,114,182,.22)', harmonie: 'rgba(251,191,36,.18)', kontrast: 'rgba(34,211,238,.15)' };
+// Inspire-Umbau — Stern-Stufen der gemessenen Foodpairing-Harmonie:
+// stern3 = ★★★ (Inspire L3, Best-Match) · stern2 = ★★ (Inspire L2, Good-Match) ·
+// stern1 = ★ (schwächste, aktuell leer). Gold-Gradient auf schwarzem Editor-Grund.
+const TYP_FARBE = { stern3: '#fcd34d', stern2: '#f59e0b', stern1: '#94a3b8', kontrast: '#22d3ee' };
+const TYP_DASH = { stern3: null, stern2: '5 4', stern1: '2 4', kontrast: '1 4' };
+const TYP_FILL = { stern3: 'rgba(252,211,77,.24)', stern2: 'rgba(245,158,11,.18)', stern1: 'rgba(148,163,184,.14)', kontrast: 'rgba(34,211,238,.15)' };
 const LEVEL_SYM = { 3: '★★★', 2: '★★', 1: '★', 0: '⇄' };
 
 export function pairingNetzGraph(config) {
@@ -32,8 +32,8 @@ export function pairingNetzGraph(config) {
     canvasW: config.canvasW || 1000,
     canvasH: config.canvasH || 760,
     onNodeClick: config.onNodeClick || null,
-    // Filter: best + harmonie (vertrauenswürdig) an, kontrast zuschaltbar (Default aus meta).
-    typAktiv: Object.assign({ best: true, harmonie: true, kontrast: false }, config.typDefault || {}),
+    // Filter: alle Stern-Stufen an (Default aus meta).
+    typAktiv: Object.assign({ stern3: true, stern2: true, stern1: true }, config.typDefault || {}),
     hoverId: null,
 
     _svg: null,
