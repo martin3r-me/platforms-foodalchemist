@@ -245,6 +245,13 @@ class KnowledgeImportCommand extends Command
             ['ai_generate_recipe', 'cross_cutting', 'always', null, null],
             ['ai_generate_recipe', 'domain', 'discovery', null, null],
             ['ai_generate_recipe', 'pairing', 'discovery', null, null],
+            // S1 (Skalierbarkeit 2026-08-07): suggestive, WACHSENDE Kategorien generisch als
+            // `discovery` — jedes neu gepflegte Doc trägt automatisch, gedeckelt (kein `always` =
+            // kein Bloat). Niveau parametrisch (Leitplanken-Wert augmentiert die Query, top_k 1 =
+            // nur die aktive Stufe). Spiegel von Migration 2026_08_07_000001.
+            ['ai_generate_recipe', 'niveau', 'discovery', 1, 3000],
+            ['ai_generate_recipe', 'kueche', 'discovery', 3, 3000],
+            ['ai_generate_recipe', 'kreativ_input', 'discovery', 3, 2000],
             ['ai_plan_dishes', 'cross_cutting', 'always', null, null],
             ['ai_plan_dishes', 'domain', 'discovery', null, null],
             // Spec 19 E6.4 / Spec 08 P6: Kreativ-Divergenz am Kapitel (foodbook.plan) bzw.

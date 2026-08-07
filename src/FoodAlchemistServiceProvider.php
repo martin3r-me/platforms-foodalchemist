@@ -70,6 +70,7 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                 \Platform\FoodAlchemist\Console\EmbedEvalCommand::class,
                 \Platform\FoodAlchemist\Console\MatcherEvalCommand::class,
                 \Platform\FoodAlchemist\Console\GeneratorEvalCommand::class,
+                \Platform\FoodAlchemist\Console\TerminologyImportCommand::class,
                 \Platform\FoodAlchemist\Console\TeamOnboardingCommand::class,
                 \Platform\FoodAlchemist\Console\SignaleDetektorCommand::class,
                 \Platform\FoodAlchemist\Console\PairingProjectComputedCommand::class,
@@ -578,6 +579,8 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\SpeisekartenSearchTool::class,
                     \Platform\FoodAlchemist\Tools\SpeisekartenGetTool::class,
                     \Platform\FoodAlchemist\Tools\SpeisekarteLeitstelleGetTool::class,
+                    \Platform\FoodAlchemist\Tools\KnowledgeRoutingsGetTool::class,
+                    \Platform\FoodAlchemist\Tools\KnowledgeRoutingsPutTool::class,
                 ] as $toolClass) {
                     try {
                         $tool = new $toolClass();
