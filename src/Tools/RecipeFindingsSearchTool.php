@@ -27,7 +27,8 @@ class RecipeFindingsSearchTool extends FoodAlchemistTool implements ToolContract
     public function getDescription(): string
     {
         return 'Listet abgelegte KI-Befunde am Rezept (Batch-Pässe): Menge/Einheit falsch, Zutat '
-            . 'entfernen, Zutat fehlt, Hinweis (Rezept-Copilot) sowie bauart = Zweifel, ob das Rezept ein '
+            . 'entfernen, Zutat fehlt, Fremdkörper (fachlich unpassende, verdrahtete Zutat → Übernahme '
+            . 'löst die Verknüpfung), Hinweis (Rezept-Copilot) sowie bauart = Zweifel, ob das Rezept ein '
             . 'Gericht oder eine Komponente ist — je Befund Konfidenz, Anwendbarkeit und wie oft er schon '
             . 'gemeldet wurde. Default: offene. Entscheiden via foodalchemist.recipe_findings.PUT.';
     }

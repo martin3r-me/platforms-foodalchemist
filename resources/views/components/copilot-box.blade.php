@@ -22,6 +22,8 @@
         'einheit' => 'text-amber-700 bg-amber-500/10 border-amber-500/30',
         'entfernen' => 'text-rose-700 bg-rose-500/10 border-rose-500/30',
         'fehlt' => 'text-violet-700 bg-violet-500/10 border-violet-500/30',
+        // Kohärenz-Gate: fachlich unpassende, verdrahtete Zutat → Übernahme löst die Verknüpfung.
+        'fremdkoerper' => 'text-orange-700 bg-orange-500/10 border-orange-500/30',
         'hinweis' => 'text-gray-600 bg-black/[0.03] border-black/10',
         // S5b-2: Bauart-Befund — andere Herkunft (eigener Pass), andere Auflösung
         // (Struktur statt Zeile). Eigene Farbe, damit er in der Liste nicht als
@@ -30,7 +32,7 @@
     ];
     $artWort = [
         'menge' => 'Menge', 'einheit' => 'Einheit', 'entfernen' => 'Entfernen',
-        'fehlt' => 'Fehlt', 'hinweis' => 'Hinweis', 'bauart' => 'Bauart',
+        'fehlt' => 'Fehlt', 'fremdkoerper' => 'Fremdkörper', 'hinweis' => 'Hinweis', 'bauart' => 'Bauart',
     ];
     // Das WARUM kommt aus dem Service (`status`) — hier wird es nur übersetzt.
     $warum = [
@@ -39,6 +41,7 @@
         'schon_drin' => 'Steht bereits im Rezept — nichts zu tun.',
         'letzte_zutat' => 'Letzte Zeile: ein Rezept ohne ' . $zeilenWort . 'en wird nicht gespeichert.',
         'nur_hinweis' => 'Hinweis ohne Schreibziel — zur Kenntnis.',
+        'schon_offen' => 'Zeile ist bereits offen — es gibt keine Verknüpfung zu lösen.',
         // Bewusst kein Knopf: die Umstellung kippt is_sales_recipe samt Taxonomie,
         // Verkaufs-Facetten und Darreichungen. Das entscheidet ein Mensch im Editor.
         'strukturentscheidung' => 'Struktur-Entscheidung: Einordnung als Gericht bzw. Komponente von Hand umstellen — '
@@ -88,7 +91,7 @@
 
                     @if($b['auto_applicable'])
                         <div class="mt-1 flex items-center gap-1.5">
-                            <button type="button" wire:click="copilotUebernehmen({{ $i }})" class="{{ $btnGhostXs }} text-emerald-600" data-{{ $prefix }}copilot-apply>Übernehmen</button>
+                            <button type="button" wire:click="copilotUebernehmen({{ $i }})" class="{{ $btnGhostXs }} text-emerald-600" data-{{ $prefix }}copilot-apply>{{ $b['art'] === 'fremdkoerper' ? 'Entdrahten' : 'Übernehmen' }}</button>
                             @if($b['art'] === 'fehlt' && $b['ziel'] !== null)
                                 <span class="text-[10px] text-emerald-700">→ {{ $b['kind'] === 'gp' ? 'GP' : 'Rezept' }}: {{ $b['ziel'] }}</span>
                             @endif
