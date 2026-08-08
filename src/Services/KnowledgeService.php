@@ -27,6 +27,9 @@ class KnowledgeService
 {
     private const BINDING_MODES = ['always', 'discovery', 'grounding', 'reference'];
 
+    /** Max. Slug-Länge einer Wissens-Kategorie = Breite von foodalchemist_knowledge_documents.category (VARCHAR 24). */
+    private const MAX_CATEGORY_SLUG_LEN = 24;
+
     /**
      * Legt ein neues Wissens-Dokument an (inaktiv). Optional: Aliase + Einsatzort-Bindungen.
      *
@@ -279,6 +282,15 @@ class KnowledgeService
         $slug = ($slug !== null && trim($slug) !== '') ? Str::slug($slug, '_') : Str::slug($label, '_');
         if ($slug === '') {
             throw new RuntimeException("Aus «{$label}» lässt sich kein gültiger Kategorie-Slug bilden.");
+        }
+        // Der Slug muss in foodalchemist_knowledge_documents.category (VARCHAR 24) passen —
+        // sonst liesse sich die Kategorie zwar anlegen, aber kein Doc darin speichern (knowledge.POST
+        // kippt beim Insert). Lieber hier klar abweisen als eine unbrauchbare Kategorie erzeugen.
+        if (mb_strlen($slug) > self::MAX_CATEGORY_SLUG_LEN) {
+            throw new RuntimeException(
+                "Slug «{$slug}» ist zu lang (".mb_strlen($slug).' Zeichen, max. '.self::MAX_CATEGORY_SLUG_LEN
+                .'). Kürzeres label oder einen kürzeren slug wählen.'
+            );
         }
         $exists = DB::table('foodalchemist_knowledge_categories')
             ->where('slug', $slug)
