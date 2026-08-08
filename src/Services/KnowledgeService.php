@@ -19,9 +19,10 @@ use Symfony\Component\Uid\UuidV7;
  *    Browser, erst dann fließen sie in den KI-Kontext (~48 Prompts). Kein stiller
  *    Einzug KI-generierten Wissens.
  *  - Herkunft `created_via='mcp'`; Bindungen `source='mcp'` (Provenienz/Audit).
- *  - Vault-verwaltete Docs (source_path != null) sind für den MCP-Pfad GESPERRT
- *    — sie werden im Vault gepflegt (Import-Guard-Gegenstück). MCP wächst nur
- *    NEUES Wissen bzw. editiert sein eigenes.
+ *  - Vault-verwaltete Docs des EIGENEN Teams sind via MCP editierbar (Browser-Parität) —
+ *    der Import-Guard (App-wins) schützt den Edit: content_hash weicht dann von
+ *    imported_hash ab, der Re-Import überschreibt NICHT (außer --force). source_path bleibt
+ *    (Provenienz). Globales Master-/Seed-Wissen (team_id NULL) bleibt read-only.
  */
 class KnowledgeService
 {
@@ -82,8 +83,10 @@ class KnowledgeService
     }
 
     /**
-     * Aktualisiert ein NICHT Vault-verwaltetes Dokument (per slug). Inhalts-Änderung
-     * ⇒ version+1 + neuer content_hash. Optional: Aliase/Bindungen ergänzen.
+     * Aktualisiert ein Wissens-Dokument (per slug) — auch Vault-verwaltete des EIGENEN
+     * Teams (Browser-Parität; der Import-Guard schützt den Edit vor Re-Import-Überschreiben,
+     * s. Klassen-Doc). Globales Master-/Seed-Wissen (team_id NULL) bleibt read-only.
+     * Inhalts-Änderung ⇒ version+1 + neuer content_hash. Optional: Aliase/Bindungen ergänzen.
      *
      * @param  array{title?:string,category?:string,content_md?:string,active?:bool,aliases?:array,bind_layers?:array}  $data
      */
@@ -93,13 +96,16 @@ class KnowledgeService
         if ($doc === null) {
             throw new RuntimeException("Wissens-Dokument \"{$slug}\" nicht gefunden.");
         }
-        if ($doc->source_path !== null) {
-            throw new RuntimeException("\"{$slug}\" ist Vault-verwaltet — via MCP nicht editierbar. "
-                . 'Pflege es über den Vault-Import oder im Browser.');
-        }
-        // Nur EIGENE Dokumente editierbar — Master/Seed (team_id NULL) + Fremd-Teams read-only.
-        // Bewusst als "nicht gefunden" (NOT_FOUND, kein Existenz-Leak über die Teamgrenze).
+        // Vault-Lock aufgehoben (Browser-Parität): auch Vault-verwaltete Docs des EIGENEN
+        // Teams sind editierbar. Der Inhalts-Edit bumpt content_hash, lässt imported_hash
+        // unberührt ⇒ der knowledge-import erkennt „in-App editiert" und überschreibt NICHT
+        // (App-wins, außer --force). source_path bleibt (Provenienz + reversibel via --force).
         if (! TeamScope::owns($doc->team_id, $team)) {
+            // Globales Master-/Seed-Wissen (team_id NULL) bleibt read-only — das pflegt das
+            // Master-Team bzw. der Vault-Import. Fremd-Team-Docs: "nicht gefunden" (kein Leak).
+            if ($doc->team_id === null) {
+                throw new RuntimeException("\"{$slug}\" ist globales Master-/Seed-Wissen — via MCP nicht editierbar (Master-Team bzw. Vault-Import).");
+            }
             throw new RuntimeException("Wissens-Dokument \"{$slug}\" nicht gefunden.");
         }
 
