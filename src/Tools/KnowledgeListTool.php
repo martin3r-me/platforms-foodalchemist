@@ -55,6 +55,7 @@ class KnowledgeListTool extends FoodAlchemistTool implements ToolContract, ToolM
                 'offset' => ['type' => 'integer', 'minimum' => 0, 'default' => 0, 'description' => 'Start-Offset fürs Paging (next_offset aus der Vorantwort).'],
                 'limit' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 200, 'default' => 100, 'description' => 'Seitengröße (max. 200).'],
                 'with_frontmatter' => ['type' => 'boolean', 'default' => true, 'description' => 'Frontmatter je Dokument mitliefern (thema/sub_thema/relevanz/recherche_datum/tags). false = schlanke, schnellere Enumeration.'],
+                'include_inactive' => ['type' => 'boolean', 'default' => false, 'description' => 'true → auch DEAKTIVIERTE Docs listen (zum Wiederfinden/Reaktivieren via knowledge.SET_ACTIVE). Jede Zeile trägt active (true/false).'],
             ],
             'required' => [],
         ];
@@ -84,6 +85,7 @@ class KnowledgeListTool extends FoodAlchemistTool implements ToolContract, ToolM
             (int) ($arguments['offset'] ?? 0),
             (int) ($arguments['limit'] ?? 100),
             (bool) ($arguments['with_frontmatter'] ?? true),
+            ($arguments['include_inactive'] ?? false) === true,
         );
 
         return ToolResult::success($ergebnis);
