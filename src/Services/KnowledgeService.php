@@ -259,6 +259,77 @@ class KnowledgeService
         }
     }
 
+    /**
+     * MCP-Kategorie-Anlage: neue Wissens-Kategorie team-scoped anlegen. Slug aus dem
+     * Label, Dedup gegen globales Master-Vokabular + eigenes Team. SOFORT aktiv, damit
+     * sie unmittelbar in knowledge.POST/PUT ({@see assertKategorie}) nutzbar ist — anders
+     * als Docs, die in Quarantäne bleiben (eine leere Kategorie fließt in keinen Prompt,
+     * daher unkritisch). Spiegelt Settings\Wissenskategorien::create().
+     *
+     * @return array{slug:string,label:string,description:?string,scope:string,active:bool}
+     */
+    public function createCategory(Team $team, string $label, ?string $description = null, ?string $slug = null): array
+    {
+        $label = trim($label);
+        if ($label === '') {
+            throw new RuntimeException('label ist Pflicht.');
+        }
+        // Slug: expliziter Override (für deutsche Formen wie ernaehrung/geschaeftsmodell),
+        // sonst aus dem Label abgeleitet — beides normalisiert (wie die Settings-UI).
+        $slug = ($slug !== null && trim($slug) !== '') ? Str::slug($slug, '_') : Str::slug($label, '_');
+        if ($slug === '') {
+            throw new RuntimeException("Aus «{$label}» lässt sich kein gültiger Kategorie-Slug bilden.");
+        }
+        $exists = DB::table('foodalchemist_knowledge_categories')
+            ->where('slug', $slug)
+            ->where(fn ($q) => $q->whereNull('team_id')->orWhere('team_id', $team->id))
+            ->whereNull('deleted_at')->exists();
+        if ($exists) {
+            throw new RuntimeException("Kategorie \"{$slug}\" existiert schon (global oder in diesem Team).");
+        }
+        $description = ($description !== null && trim($description) !== '') ? trim($description) : null;
+        $maxSort = (int) DB::table('foodalchemist_knowledge_categories')->max('sort_order');
+        DB::table('foodalchemist_knowledge_categories')->insert([
+            'uuid' => (string) Str::uuid7(),
+            'team_id' => $team->id,
+            'slug' => $slug,
+            'label' => $label,
+            'description' => $description,
+            'sort_order' => $maxSort + 10,
+            'active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        return ['slug' => $slug, 'label' => $label, 'description' => $description, 'scope' => 'team', 'active' => true];
+    }
+
+    /**
+     * MCP: sichtbare Wissens-Kategorien (globales Master-Vokabular + eigenes Team),
+     * sortiert. Standard nur aktive; $includeInactive=true zeigt auch deaktivierte
+     * (Selbst-Kontrolle des Agenten über seine eigenen/inaktiven Kategorien).
+     *
+     * @return list<array{slug:string,label:string,description:?string,scope:string,active:bool}>
+     */
+    public function listCategories(Team $team, bool $includeInactive = false): array
+    {
+        $q = DB::table('foodalchemist_knowledge_categories')->whereNull('deleted_at')
+            ->where(fn ($qq) => $qq->whereNull('team_id')->orWhere('team_id', $team->id));
+        if (! $includeInactive) {
+            $q->where('active', true);
+        }
+
+        return $q->orderBy('sort_order')->orderBy('slug')
+            ->get(['slug', 'label', 'description', 'team_id', 'active'])
+            ->map(fn ($r) => [
+                'slug' => $r->slug,
+                'label' => $r->label,
+                'description' => $r->description,
+                'scope' => $r->team_id === null ? 'global' : 'team',
+                'active' => (bool) $r->active,
+            ])->all();
+    }
+
     private function uniqueSlug(string $title, ?string $explicit = null): string
     {
         if ($explicit !== null && trim($explicit) !== '') {
