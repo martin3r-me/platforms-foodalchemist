@@ -98,7 +98,7 @@ it('aktualisiert ein MCP-Doc: content ⇒ version+1', function () {
     expect(DB::table('foodalchemist_knowledge_documents')->where('slug', $slug)->value('content_md'))->toContain('v2');
 });
 
-it('sperrt ein Vault-verwaltetes Doc für den MCP-Pfad (LOCKED)', function () {
+it('sperrt globales Master-/Seed-Wissen (team_id NULL) für den MCP-Pfad (LOCKED)', function () {
     DB::table('foodalchemist_knowledge_documents')->insert([
         'uuid' => (string) UuidV7::generate(), 'slug' => 'regelwerk.grundprodukte',
         'title' => 'Regelwerk Grundprodukte', 'category' => 'regelwerk',
@@ -114,4 +114,25 @@ it('sperrt ein Vault-verwaltetes Doc für den MCP-Pfad (LOCKED)', function () {
     expect($put->success)->toBeFalse()
         ->and($put->errorCode)->toBe('LOCKED')
         ->and(DB::table('foodalchemist_knowledge_documents')->where('slug', 'regelwerk.grundprodukte')->value('content_md'))->toBe('# Regelwerk');
+});
+
+it('editiert ein Vault-verwaltetes Doc des EIGENEN Teams (Browser-Parität, Import-Guard schützt)', function () {
+    DB::table('foodalchemist_knowledge_documents')->insert([
+        'uuid' => (string) UuidV7::generate(), 'team_id' => $this->rootTeam->id,
+        'slug' => 'domain.eigenes-vault-doc', 'title' => 'Eigenes Vault-Doc', 'category' => 'domain',
+        'content_md' => '# v1', 'version' => 1, 'content_hash' => hash('sha256', 'v1'),
+        'imported_hash' => hash('sha256', 'v1'), 'char_count' => 4, 'active' => 1,
+        'source_path' => '07_WISSEN/domains/eigenes.md', 'created_via' => 'import',
+        'created_at' => now(), 'updated_at' => now(),
+    ]);
+
+    $put = $this->registry->get('foodalchemist.knowledge.PUT')->execute([
+        'slug' => 'domain.eigenes-vault-doc', 'content_md' => '# v2 editiert',
+    ], $this->kontext);
+
+    expect($put->success)->toBeTrue()->and($put->data['document']['version'])->toBe(2);
+    $row = DB::table('foodalchemist_knowledge_documents')->where('slug', 'domain.eigenes-vault-doc')->first();
+    expect($row->content_md)->toContain('v2')
+        ->and($row->source_path)->not->toBeNull()                    // Vault-Link bleibt (Provenienz)
+        ->and($row->content_hash)->not->toBe($row->imported_hash);   // ⇒ Import-Guard (App-wins) greift
 });

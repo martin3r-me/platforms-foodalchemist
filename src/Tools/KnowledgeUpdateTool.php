@@ -9,11 +9,11 @@ use Platform\Core\Contracts\ToolResult;
 use Platform\FoodAlchemist\Services\KnowledgeService;
 
 /**
- * #469 v3: bestehendes, NICHT Vault-verwaltetes Wissens-Dokument aktualisieren
- * (per slug). Inhalts-Änderung ⇒ version+1. Vault-Regelwerke (source_path gesetzt)
- * sind gesperrt — die pflegt der Vault-Import bzw. der Browser. Optional Aliase/
- * Bindungen ergänzen. active kann gesetzt werden (aktivieren bleibt bewusst auch
- * hier möglich, ist aber ein expliziter Schritt — Default beim Anlegen ist inaktiv).
+ * #469 v3: bestehendes Wissens-Dokument aktualisieren (per slug) — auch Vault-verwaltete
+ * des EIGENEN Teams (Browser-Parität; der Import-Guard schützt den Edit vor Re-Import-
+ * Überschreiben). Globales Master-/Seed-Wissen (team_id NULL) bleibt read-only. Inhalts-
+ * Änderung ⇒ version+1. Optional Aliase/Bindungen ergänzen. active kann gesetzt werden
+ * (aktivieren bleibt bewusst auch hier möglich; Default beim Anlegen ist inaktiv).
  */
 class KnowledgeUpdateTool extends FoodAlchemistTool implements ToolContract, ToolMetadataContract
 {
@@ -24,9 +24,10 @@ class KnowledgeUpdateTool extends FoodAlchemistTool implements ToolContract, Too
 
     public function getDescription(): string
     {
-        return 'Aktualisiert ein per MCP/Browser angelegtes Wissens-Dokument (slug aus knowledge.SEARCH/POST). '
+        return 'Aktualisiert ein bestehendes Wissens-Dokument (slug aus knowledge.SEARCH/LIST/GET). '
             . 'Änderbar: title, category (Vokabular-Slug), content_md (⇒ version+1), active, aliases, bind_layers. '
-            . 'Vault-verwaltete Dokumente sind gesperrt.';
+            . 'Auch Vault-verwaltete Docs des eigenen Teams editierbar (Import-Guard schützt den Edit vor '
+            . 'Re-Import-Überschreiben); nur globales Master-/Seed-Wissen bleibt read-only.';
     }
 
     public function getSchema(): array
@@ -70,10 +71,11 @@ class KnowledgeUpdateTool extends FoodAlchemistTool implements ToolContract, Too
         try {
             $doc = app(KnowledgeService::class)->update($team, (string) $arguments['slug'], $data);
         } catch (\RuntimeException $e) {
-            $code = str_contains($e->getMessage(), 'nicht gefunden') ? 'NOT_FOUND'
-                : (str_contains($e->getMessage(), 'Vault-verwaltet') ? 'LOCKED' : 'VALIDATION_ERROR');
+            $msg = $e->getMessage();
+            $code = str_contains($msg, 'nicht gefunden') ? 'NOT_FOUND'
+                : (str_contains($msg, 'Master-/Seed-Wissen') ? 'LOCKED' : 'VALIDATION_ERROR');
 
-            return ToolResult::error($e->getMessage(), $code);
+            return ToolResult::error($msg, $code);
         }
 
         return ToolResult::success([
