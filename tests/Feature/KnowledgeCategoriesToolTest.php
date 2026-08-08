@@ -77,6 +77,15 @@ it('weist Dubletten und leeres Label ab', function () {
     expect($leer->success)->toBeFalse()->and($leer->errorCode)->toBe('VALIDATION_ERROR');
 });
 
+it('weist einen zu langen Slug ab (passt sonst nicht in documents.category)', function () {
+    $res = $this->registry->get('foodalchemist.knowledge_categories.POST')->execute([
+        'label' => 'X', 'slug' => 'viel_zu_langer_kategorie_slug_ueber_vierundzwanzig_zeichen',
+    ], $this->kontext);
+    expect($res->success)->toBeFalse()
+        ->and($res->errorCode)->toBe('VALIDATION_ERROR')
+        ->and($res->error)->toContain('zu lang');
+});
+
 it('listet Kategorien und blendet inaktive per Default aus', function () {
     $this->registry->get('foodalchemist.knowledge_categories.POST')->execute(['label' => 'Format'], $this->kontext);
 
