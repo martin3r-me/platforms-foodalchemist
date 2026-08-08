@@ -583,6 +583,7 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\KnowledgeRoutingsPutTool::class,
                     \Platform\FoodAlchemist\Tools\KnowledgeCategoriesGetTool::class,
                     \Platform\FoodAlchemist\Tools\KnowledgeCategoriesPostTool::class,
+                    \Platform\FoodAlchemist\Tools\KnowledgeSetActiveTool::class,
                 ] as $toolClass) {
                     try {
                         $tool = new $toolClass();
