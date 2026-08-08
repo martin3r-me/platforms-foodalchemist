@@ -831,7 +831,7 @@ class KnowledgeContextService
      *
      * @return list<array{slug: string, titel: string, kategorie: string, version: int, char_count: int, score: float}>
      */
-    public function searchDocuments(string $q, ?string $kategorie = null, int $limit = 10): array
+    public function searchDocuments(string $q, ?string $kategorie = null, int $limit = 10, bool $includeInactive = false): array
     {
         $tokens = $this->tokenize($q);
         if ($tokens === []) {
@@ -847,9 +847,10 @@ class KnowledgeContextService
 
         $scored = [];
         $docs = DB::table('foodalchemist_knowledge_documents')
-            ->where('active', 1)->whereNull('deleted_at')
+            ->whereNull('deleted_at')
+            ->when(! $includeInactive, fn ($query) => $query->where('active', 1))
             ->when($kategorie !== null, fn ($query) => $query->where('category', $kategorie))
-            ->get(['id', 'slug', 'title', 'category', 'version', 'char_count']);
+            ->get(['id', 'slug', 'title', 'category', 'active', 'version', 'char_count']);
         foreach ($docs as $doc) {
             $haystack = $this->tokenize($doc->slug . ' ' . $doc->title);
             $score = count(array_intersect($tokens, $haystack))
@@ -864,6 +865,7 @@ class KnowledgeContextService
             'slug' => $item['doc']->slug,
             'title' => $item['doc']->title,
             'category' => $item['doc']->category,
+            'active' => (bool) $item['doc']->active,
             'version' => (int) $item['doc']->version,
             'char_count' => (int) $item['doc']->char_count,
             'score' => $item['score'],
@@ -879,9 +881,10 @@ class KnowledgeContextService
                 $ids = $embed->searchDocIds($q, $limit * 2);
                 if ($ids !== []) {
                     $semDocs = DB::table('foodalchemist_knowledge_documents')
-                        ->whereIn('id', $ids)->where('active', 1)->whereNull('deleted_at')
+                        ->whereIn('id', $ids)->whereNull('deleted_at')
+                        ->when(! $includeInactive, fn ($query) => $query->where('active', 1))
                         ->when($kategorie !== null, fn ($query) => $query->where('category', $kategorie))
-                        ->get(['id', 'slug', 'title', 'category', 'version', 'char_count'])->keyBy('id');
+                        ->get(['id', 'slug', 'title', 'category', 'active', 'version', 'char_count'])->keyBy('id');
                     foreach ($ids as $id) {            // bereits Score-sortiert
                         $doc = $semDocs->get($id);
                         if ($doc === null || isset($vorhanden[$doc->slug]) || count($out) >= $limit) {
@@ -890,6 +893,7 @@ class KnowledgeContextService
                         $vorhanden[$doc->slug] = true;
                         $out[] = [
                             'slug' => $doc->slug, 'title' => $doc->title, 'category' => $doc->category,
+                            'active' => (bool) $doc->active,
                             'version' => (int) $doc->version, 'char_count' => (int) $doc->char_count,
                             'score' => 0, 'via' => 'semantic',
                         ];
@@ -910,22 +914,24 @@ class KnowledgeContextService
      *
      * @return array{total: int, offset: int, limit: int, next_offset: ?int, categories: array<string,int>, documents: list<array>}
      */
-    public function listDocuments(?string $kategorie, int $offset, int $limit, bool $mitFrontmatter = true): array
+    public function listDocuments(?string $kategorie, int $offset, int $limit, bool $mitFrontmatter = true, bool $includeInactive = false): array
     {
         $limit = max(1, min(200, $limit));
         $offset = max(0, $offset);
 
         $base = DB::table('foodalchemist_knowledge_documents')
-            ->where('active', 1)->whereNull('deleted_at')
+            ->whereNull('deleted_at')
+            ->when(! $includeInactive, fn ($q) => $q->where('active', 1))
             ->when($kategorie !== null, fn ($q) => $q->where('category', $kategorie));
 
         $total = (clone $base)->count();
         $categories = DB::table('foodalchemist_knowledge_documents')
-            ->where('active', 1)->whereNull('deleted_at')
+            ->whereNull('deleted_at')
+            ->when(! $includeInactive, fn ($q) => $q->where('active', 1))
             ->select('category', DB::raw('COUNT(*) AS c'))->groupBy('category')
             ->pluck('c', 'category')->map(fn ($c) => (int) $c)->all();
 
-        $spalten = ['slug', 'title', 'category', 'version', 'char_count', 'updated_at'];
+        $spalten = ['slug', 'title', 'category', 'active', 'version', 'char_count', 'updated_at'];
         if ($mitFrontmatter) {
             $spalten[] = 'content_md';
         }
@@ -937,6 +943,7 @@ class KnowledgeContextService
                 'slug' => $doc->slug,
                 'title' => $doc->title,
                 'category' => $doc->category,
+                'active' => (bool) $doc->active,
                 'version' => (int) $doc->version,
                 'char_count' => (int) $doc->char_count,
                 'updated_at' => $doc->updated_at,

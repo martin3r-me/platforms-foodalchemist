@@ -44,6 +44,7 @@ class KnowledgeSearchTool extends FoodAlchemistTool implements ToolContract, Too
                     . 'Planungs-Ebene). Der Bestand ist pflegbar; ein unbekannter Slug wird abgelehnt und nennt '
                     . 'die verfügbaren.'],
                 'limit' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 50, 'default' => 10],
+                'include_inactive' => ['type' => 'boolean', 'default' => false, 'description' => 'true → auch DEAKTIVIERTE Docs finden (zum Reaktivieren via knowledge.SET_ACTIVE). Jeder Treffer trägt active (true/false).'],
             ],
             'required' => ['q'],
         ];
@@ -72,6 +73,7 @@ class KnowledgeSearchTool extends FoodAlchemistTool implements ToolContract, Too
             (string) $arguments['q'],
             $kategorie,
             (int) ($arguments['limit'] ?? 10),
+            ($arguments['include_inactive'] ?? false) === true,
         );
 
         return ToolResult::success(['total' => count($treffer), 'documents' => $treffer]);
