@@ -342,6 +342,39 @@ class KnowledgeService
             ])->all();
     }
 
+    /**
+     * MCP: ein Wissens-Dokument aktiv/inaktiv schalten (Kuration — „Einstampfen" alter
+     * Docs oder Freigeben eigener Entwürfe). Anders als {@see update()} NICHT durch den
+     * Vault-Content-Guard gesperrt: der active-Flag ist reine Kuration, kein Inhalt, und
+     * der knowledge-import fasst ihn NICHT an (Re-Import ändert nur Inhalt) — ein
+     * Deaktivieren bleibt also bestehen. Spiegelt Browser\Knowledge\Browser::toggleActive:
+     * nur das Besitzer-Team darf (de)aktivieren; geerbtes/globales Master-Wissen ist gesperrt.
+     *
+     * @return array{slug:string,title:string,active:bool,vault_managed:bool,changed:bool}
+     */
+    public function setActive(Team $team, string $slug, bool $active): array
+    {
+        $doc = $this->findSichtbar($team, $slug);
+        if (! TeamScope::owns($doc->team_id, $team)) {
+            throw new RuntimeException(
+                "\"{$slug}\" ist geerbtes/globales Master-Wissen — nur das Besitzer-Team kann es (de)aktivieren."
+            );
+        }
+        $changed = (bool) $doc->active !== $active;
+        if ($changed) {
+            DB::table('foodalchemist_knowledge_documents')->where('id', $doc->id)
+                ->update(['active' => $active, 'updated_at' => now()]);
+        }
+
+        return [
+            'slug' => $doc->slug,
+            'title' => $doc->title,
+            'active' => $active,
+            'vault_managed' => $doc->source_path !== null,
+            'changed' => $changed,
+        ];
+    }
+
     private function uniqueSlug(string $title, ?string $explicit = null): string
     {
         if ($explicit !== null && trim($explicit) !== '') {
