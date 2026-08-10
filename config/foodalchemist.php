@@ -499,6 +499,19 @@ return [
             'task' => 'Normalisiere den Rezept-Namen auf die §1-Syntax «<Typ>: <Bezeichnung>[, Zusatz]» '
                 . '(Typ aus dem §1.2-Vokabular, Singular, keine Abkürzungen): werte = {name}.',
         ],
+        // Composer: Anker-Anzeigenamen (Englisch) ins Deutsche übersetzen — Batch.
+        'pairing.anchor_translate' => [
+            'tier' => 'B',
+            'task' => 'Übersetze Lebensmittel-Anzeigenamen ins Deutsche. Kontext `items` = Liste '
+                . '[{index, name}] mit englischen Anker-Namen. Antworte: werte = {items: [{index, de}]} '
+                . '— je Eintrag den deutschen Anzeigenamen, index unverändert durchreichen. '
+                . 'REGELN: (1) Generische Zutaten/Zubereitungen übersetzen (z.B. "Apple Juice"→"Apfelsaft", '
+                . '"Grilled Zucchini"→"Gegrillte Zucchini", "Veal Fond"→"Kalbsfond", "Dried Thyme"→"Getrockneter Thymian"). '
+                . '(2) Marken, Eigennamen und eigenständige Spezialprodukte NICHT übersetzen, unverändert '
+                . 'zurückgeben (z.B. "A1 Original Sauce", "ABC Kecap Manis", "Kecap Manis", "Gochujang", '
+                . '"Mirin", "Ciabatta", "Miso"). (3) Nur der Name — keine Erklärungen, keine Klammer-Zusätze, '
+                . 'keine Anführungszeichen. Im Zweifel (Eigenname?) unverändert lassen.',
+        ],
         'vk.generator' => [
             'tier' => 'B',
             'max_tokens' => 8000,   // volles VK-Rezept inkl. Zutaten/Plating — Reasoning-Headroom

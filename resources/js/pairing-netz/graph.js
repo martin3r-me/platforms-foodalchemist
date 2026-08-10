@@ -367,9 +367,9 @@ export function pairingNetzGraph(config) {
     _labelText(d) {
       if (d.kind === 'zentrum') return ''; // Titel steht schon im Modal-Header / ist aus Kontext bekannt
       if (d.kind === 'basisrezept') return this._trunc(d.label, 38);
-      if (d.kind === 'anker') return d.slug || d.label || '';
+      if (d.kind === 'anker') return d.label || d.slug || '';
 
-      return d.slug || d.label || ''; // kandidat
+      return d.label || d.slug || ''; // kandidat — Anzeigename (display_de) statt technischem Slug
     },
 
     _trunc(s, n) {
