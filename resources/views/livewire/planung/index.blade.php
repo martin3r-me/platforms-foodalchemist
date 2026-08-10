@@ -362,21 +362,25 @@
                     </div>
                 </x-foodalchemist::modal-section>
 
-                {{-- Kohäsions-Readout: passen die gewählten Anker zusammen? --}}
-                @if($composerCohesion !== null && !empty($composerAnker))
-                    @php $co = $composerCohesion; $orphans = collect($co['komponenten'])->where('is_orphan', true)->pluck('label')->all(); @endphp
+                {{-- „Passt das zusammen?" — geerdet auf GETEILTE Partner (Brücken), nicht auf die
+                     in Inspire fast immer leeren Direktkanten (die die irreführende 0 % erzeugten). --}}
+                @php $bridge = $composerNetz['meta']['bridge'] ?? null; @endphp
+                @if($bridge !== null && count($composerAnker) >= 2)
                     <x-foodalchemist::modal-section title="Passt das zusammen?">
                         <div class="flex flex-wrap items-center gap-x-5 gap-y-1 text-[12px] text-slate-200">
-                            <span>Kohäsion:
-                                <strong class="{{ $co['score'] >= 70 ? 'text-emerald-300' : ($co['score'] >= 40 ? 'text-amber-300' : 'text-rose-300') }}">{{ $co['score'] }}%</strong>
+                            <span>Verbunden:
+                                <strong class="{{ ($bridge['pairs_total'] > 0 && $bridge['pairs_connected'] === $bridge['pairs_total']) ? 'text-emerald-300' : ($bridge['pairs_connected'] > 0 ? 'text-amber-300' : 'text-rose-300') }}">{{ $bridge['pairs_connected'] }}/{{ $bridge['pairs_total'] }}</strong>
+                                Anker-Paare über gemeinsame Partner
                             </span>
-                            <span class="text-slate-400">Paare bewertet: {{ $co['rated_pairs'] }}/{{ $co['total_pairs'] }} ({{ $co['coverage_pct'] }}%)</span>
-                            @if($co['weakest_pair'])
-                                <span class="text-slate-400">schwächstes Paar: {{ $co['weakest_pair']['a'] }} ↔ {{ $co['weakest_pair']['b'] }} ({{ $co['weakest_pair']['score'] }}%)</span>
+                            @if(!empty($bridge['top']))
+                                <span class="text-slate-400">stärkste Brücken: {{ implode(', ', $bridge['top']) }}</span>
                             @endif
                         </div>
-                        @if(!empty($orphans))
-                            <p class="mt-1 text-[12px] text-amber-300">⚠ passt (noch) nicht zu den anderen: {{ implode(', ', $orphans) }}</p>
+                        @if($composerCohesion !== null && ($composerCohesion['rated_pairs'] ?? 0) > 0)
+                            <p class="mt-1 text-[11px] text-slate-500">direktes Pairing: {{ $composerCohesion['rated_pairs'] }}/{{ $composerCohesion['total_pairs'] }} Paare (Kohäsion {{ $composerCohesion['score'] }}%)</p>
+                        @endif
+                        @if(!empty($bridge['orphans']))
+                            <p class="mt-1 text-[12px] text-amber-300">⚠ passt (noch) nicht zu den anderen: {{ implode(', ', $bridge['orphans']) }}</p>
                         @endif
                     </x-foodalchemist::modal-section>
                 @endif

@@ -242,3 +242,28 @@ it('composerCohesion: Score + Orphan-Erkennung (passt-nicht-Anker)', function ()
     // <2 Anker → neutraler Null-Score (kein Absturz).
     expect($this->svc->composerCohesion([$this->kichererbse])['score'])->toBe(0);
 });
+
+it('pairingNetzForAnkers: Brücken-Kanten aus geteilten Partnern + Orphan-Flag', function () {
+    $fremd = mkAnker('fremd'); // teilt mit niemandem einen Partner
+
+    // kichererbse & tahin haben KEINE Direktkante, teilen aber knoblauch (beide ★★★, cover 2).
+    $netz = $this->svc->pairingNetzForAnkers($this->rootTeam, [$this->kichererbse, $this->tahin, $fremd]);
+
+    // Genau eine Brücke (kichererbse↔tahin über knoblauch), obwohl keine Direktkante existiert.
+    $bridges = collect($netz['edges'])->where('kind', 'bridge')->values();
+    expect($bridges)->toHaveCount(1)
+        ->and($bridges[0]['partners'])->toContain('Knoblauch')
+        ->and(collect($netz['edges'])->where('kind', 'anker_anker'))->toHaveCount(0);
+
+    // Brücken-Zusammenfassung: 1 von 3 Paaren verbunden, fremd ist Orphan.
+    $b = $netz['meta']['bridge'];
+    expect($b['pairs_connected'])->toBe(1)
+        ->and($b['pairs_total'])->toBe(3)
+        ->and($b['orphans'])->toBe(['Fremd']);
+
+    // Orphan-Flag steckt am Anker-Knoten (für den Warn-Ring).
+    $orphan = collect($netz['nodes'])->where('kind', 'anker')->mapWithKeys(fn ($n) => [$n['slug'] => $n['orphan'] ?? null]);
+    expect($orphan['fremd'])->toBeTrue()
+        ->and($orphan['kichererbse'])->toBeFalse()
+        ->and($orphan['tahin'])->toBeFalse();
+});

@@ -1286,7 +1286,7 @@ class PairingService
             ->map(fn ($a) => ['id' => (int) $a->id, 'slug' => $a->slug, 'display_de' => $a->display_de])
             ->sortBy(fn ($a) => array_search($a['id'], $ids, true))->values();
 
-        return $this->baueNetz($team, $inner, $centerLabel, 0);
+        return $this->baueNetz($team, $inner, $centerLabel, 0, true);
     }
 
     /**
@@ -1296,7 +1296,7 @@ class PairingService
      *
      * @param  \Illuminate\Support\Collection<int,array{id:int,slug:string,display_de:?string}>  $inner
      */
-    private function baueNetz(Team $team, \Illuminate\Support\Collection $inner, string $centerLabel, int $recipeId): array
+    private function baueNetz(Team $team, \Illuminate\Support\Collection $inner, string $centerLabel, int $recipeId, bool $withBridges = false): array
     {
         $cx = self::CANVAS_W / 2;
         $cy = self::CANVAS_H / 2;
@@ -1327,6 +1327,75 @@ class PairingService
 
         // ── Kandidaten: Aroma-Partner der Kern-Anker (ausserhalb), typisiert ──
         [$kandidaten, $candMeta] = $this->kandidatenFuerAnker($innerIds);
+
+        // ── Brücken-Ebene (nur Composer): wie hängen die Anker über GETEILTE Partner
+        // zusammen? Direkte Anker↔Anker-Kanten sind in Inspire fast immer leer — die
+        // Verbindung läuft über gemeinsame Partner (cover ≥ 2). Macht das im Graphen
+        // sichtbar (Linie zwischen Ankern, Dicke = #geteilte Partner) + ehrliche Kohäsion.
+        $bridgeMeta = null;
+        if ($withBridges) {
+            $ankerLabel = [];
+            foreach ($inner as $a) {
+                $ankerLabel[(int) $a['id']] = $a['display_de'] ?: $a['slug'];
+            }
+            $pairPartners = []; // "a:b" (a<b) => [partnerLabel, …]
+            $touched = array_fill_keys($innerIds, false);
+            foreach ($kandidaten as $c) {
+                $served = array_values(array_unique(array_map(static fn ($p) => (int) $p['anker_id'], $c['partner'])));
+                if (count($served) < 2) {
+                    continue;
+                }
+                sort($served);
+                $pl = $c['display_de'] ?: $c['slug'];
+                $n = count($served);
+                for ($i = 0; $i < $n; $i++) {
+                    for ($j = $i + 1; $j < $n; $j++) {
+                        $pairPartners[$served[$i].':'.$served[$j]][] = $pl;
+                        $touched[$served[$i]] = true;
+                        $touched[$served[$j]] = true;
+                    }
+                }
+            }
+            foreach ($pairPartners as $key => $partners) {
+                [$a, $b] = array_map('intval', explode(':', $key));
+                $edges[] = ['source' => 'a:'.$a, 'target' => 'a:'.$b, 'kind' => 'bridge',
+                    'shared' => count($partners),
+                    'partners' => array_slice(array_values(array_unique($partners)), 0, 6),
+                    'visible' => true];
+            }
+            // Direkte Anker-Kanten (selten) zählen ebenfalls als „verbunden".
+            $directTouched = [];
+            foreach ($ankerKanten as $e) {
+                $directTouched[(int) substr($e['source'], 2)] = true;
+                $directTouched[(int) substr($e['target'], 2)] = true;
+            }
+            // Orphan = weder geteilter Partner noch direkte Kante → Flag am Anker-Knoten.
+            $orphanLabels = [];
+            foreach ($ankerNodes as &$an) {
+                $aid = (int) substr($an['id'], 2);
+                $isOrphan = ! ($touched[$aid] ?? false) && ! ($directTouched[$aid] ?? false);
+                $an['orphan'] = $isOrphan;
+                if ($isOrphan) {
+                    $orphanLabels[] = $ankerLabel[$aid] ?? (string) $aid;
+                }
+            }
+            unset($an);
+            $topCount = [];
+            foreach ($pairPartners as $partners) {
+                foreach (array_unique($partners) as $pl) {
+                    $topCount[$pl] = ($topCount[$pl] ?? 0) + 1;
+                }
+            }
+            arsort($topCount);
+            $nReal = count($innerIds);
+            $bridgeMeta = [
+                'pairs_connected' => count($pairPartners),
+                'pairs_total' => $nReal >= 2 ? (int) ($nReal * ($nReal - 1) / 2) : 0,
+                'top' => array_slice(array_keys($topCount), 0, 5),
+                'orphans' => $orphanLabels,
+            ];
+        }
+
         $jeTyp = fn ($typ) => array_slice(
             (function () use ($kandidaten, $typ) {
                 $l = array_values(array_filter($kandidaten, fn ($c) => $c['typ'] === $typ));
@@ -1415,6 +1484,8 @@ class PairingService
                     // Kanten zwischen den Kern-Ankern (innere Ebene).
                     'anker_anker' => count($ankerKanten),
                 ],
+                // Brücken-Zusammenfassung (nur Composer/withBridges, sonst null).
+                'bridge' => $bridgeMeta,
             ],
         ];
     }

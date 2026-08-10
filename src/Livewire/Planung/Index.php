@@ -384,21 +384,11 @@ class Index extends Component
             $pairing = app(PairingService::class);
             $composerIds = array_map('intval', array_column($this->composerAnker, 'id'));
             if ($composerIds !== []) {
+                // Netz inkl. Brücken-Ebene — das Orphan-Flag (bridge-basiert) steckt schon
+                // in den Anker-Knoten, die Brücken-Zusammenfassung in meta.bridge.
                 $composerNetz = $pairing->pairingNetzForAnkers($team, $composerIds);
+                // Direkt-Pairing-Kohäsion nur als Sekundär-Info im Readout (Brücken-Metrik = meta.bridge).
                 $composerCohesion = $pairing->composerCohesion($composerIds);
-                // Fit/Orphan je Anker auf die Netz-Knoten mergen (Match slug↔via) — Graph zeichnet es.
-                $fitByVia = [];
-                foreach (($composerCohesion['komponenten'] ?? []) as $k) {
-                    $fitByVia[$k['via']] = ['fit' => $k['fit'], 'orphan' => $k['is_orphan']];
-                }
-                $composerNetz['nodes'] = array_map(function ($n) use ($fitByVia) {
-                    if (($n['kind'] ?? '') === 'anker' && isset($fitByVia[$n['slug'] ?? ''])) {
-                        $n['fit'] = $fitByVia[$n['slug']]['fit'];
-                        $n['orphan'] = $fitByVia[$n['slug']]['orphan'];
-                    }
-
-                    return $n;
-                }, $composerNetz['nodes']);
             }
             $composerBrowse = $pairing->composerAnkerBrowse(
                 $team, (string) $this->composerTerm, $this->composerCategory !== '' ? $this->composerCategory : null, $composerIds

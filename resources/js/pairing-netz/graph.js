@@ -164,13 +164,15 @@ export function pairingNetzGraph(config) {
     },
 
     _edgeColor(d) {
+      if (d.kind === 'bridge') return '#a78bfa'; // Brücke (geteilte Partner) = anker-violett
       if (d.typ) return TYP_FARBE[d.typ] || '#9ca3af';
 
       return '#9ca3af';
     },
 
     _edgeDash(d) {
-      if (d.kind === 'anker_anker') return null; // strukturell → durchgezogen
+      if (d.kind === 'anker_anker') return null; // direktes Pairing → durchgezogen
+      if (d.kind === 'bridge') return null;       // Brücke → durchgezogen (Dicke trägt die Aussage)
       if (d.kind === 'basis') return '3 4';
       if (d.typ) return TYP_DASH[d.typ];
 
@@ -180,6 +182,8 @@ export function pairingNetzGraph(config) {
     _edgeWidth(d) {
       // Anker↔Anker: Dicke nach Stern-Stufe (★★★ dick … ★ dünn) — deine 1/2/3-Matrix.
       if (d.kind === 'anker_anker') return { 3: 3.2, 2: 2.2, 1: 1.3 }[d.level] || 2;
+      // Brücke: Dicke nach Anzahl GETEILTER Partner (mehr gemeinsame Partner = stärkere Verbindung).
+      if (d.kind === 'bridge') return scaleLinear().domain([1, 6]).range([1.2, 4.2]).clamp(true)(d.shared || 1);
       if (d.kind === 'zentrum_anker') return 0.8;
       if (d.kind === 'basis') return 1;
       if (d.weight == null) return 1.4;
@@ -189,22 +193,31 @@ export function pairingNetzGraph(config) {
 
     _edgeOpacity(d) {
       if (d.kind === 'anker_anker') return 0.85; // Kern-Aussage → präsent (vs. zentrum_anker 0.14)
+      if (d.kind === 'bridge') return 0.6;
       if (d.kind === 'zentrum_anker') return 0.14;
       if (d.kind === 'basis') return 0.5;
 
       return 0.7;
     },
 
-    // Tooltip-Text der Anker↔Anker-Kante: „Beef Rib Steak ↔ Korean BBQ · ★★★ Best-Match".
+    // Tooltip der inneren Kanten: direktes Pairing (anker_anker) ODER Brücke über geteilte Partner.
     _edgeTitle(d) {
-      if (d.kind !== 'anker_anker') return '';
       const s = this._byId.get(d.source);
       const t = this._byId.get(d.target);
       if (!s || !t) return '';
       const name = (n) => n.label || n.slug || '';
-      const wort = { 3: 'Best-Match', 2: 'Good-Match', 1: 'Match' }[d.level] || '';
+      if (d.kind === 'anker_anker') {
+        const wort = { 3: 'Best-Match', 2: 'Good-Match', 1: 'Match' }[d.level] || '';
 
-      return `${name(s)} ↔ ${name(t)} · ${LEVEL_SYM[d.level] || ''} ${wort}`.trim();
+        return `${name(s)} ↔ ${name(t)} · ${LEVEL_SYM[d.level] || ''} ${wort}`.trim();
+      }
+      if (d.kind === 'bridge') {
+        const liste = (d.partners || []).join(', ');
+
+        return `${name(s)} ↔ ${name(t)} · verbunden über ${d.shared} Partner${liste ? ': ' + liste : ''}`;
+      }
+
+      return '';
     },
 
     // Klickbar (Cursor + Click): Basisrezept immer (öffnet Rezept), Kandidat nur wenn
@@ -312,6 +325,8 @@ export function pairingNetzGraph(config) {
       if (d.kind === 'zentrum') return this.mode === 'preview' ? 22 : 30;
       if (d.kind === 'anker') return this.mode === 'preview' ? 8 : 11;
       if (d.kind === 'basisrezept') return 9;
+      // Brücken-Zutat (bedient ≥2 Kern-Anker) = grösser, als Verbindungs-Hub sichtbar.
+      if (d.kind === 'kandidat' && (d.cover || 0) >= 2) return 10;
 
       return 7; // kandidat
     },
