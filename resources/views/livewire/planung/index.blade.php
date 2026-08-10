@@ -307,7 +307,10 @@
 
             {{-- COMPOSER — Foodpairing-Fläche: Anker zusammenstellen, Netz zeigt live was passt (★★★/★★).
                  Graph-only (keine Generierung — separates Thema). Klick auf Kandidat nimmt ihn auf. --}}
-            <div x-show="tab==='composer'" class="space-y-4">
+            <div x-show="tab==='composer'">
+                <div class="grid grid-cols-1 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] gap-4 items-start">
+                {{-- LINKE SPALTE: Picker + Kohäsion --}}
+                <div class="space-y-4 min-w-0">
                 {{-- Reicher Anker-Picker: Kategorie + Suche + browsebare Liste + gewählte Chips --}}
                 <x-foodalchemist::modal-section title="Foodpairing — Komposition">
                     <p class="{{ $label ?? 'text-[11px] text-gray-500' }} mb-2">
@@ -377,7 +380,10 @@
                         @endif
                     </x-foodalchemist::modal-section>
                 @endif
+                </div>{{-- /linke Spalte --}}
 
+                {{-- RECHTE SPALTE: Netz --}}
+                <div class="min-w-0">
                 {{-- Netz + Filter-Chips in EINER Alpine-Instanz (wie im Detail-Modal) --}}
                 <x-foodalchemist::modal-section title="Netz">
                     @if(empty($composerAnker))
@@ -413,10 +419,12 @@
                                 </button>
                             </div>
                             <svg viewBox="0 0 1200 980" preserveAspectRatio="xMidYMid meet"
-                                 class="w-full rounded-xl" style="height:60vh; background:#0b1120" data-fa-netz-mount></svg>
+                                 class="w-full rounded-xl" style="height:70vh; background:#0b1120" data-fa-netz-mount></svg>
                         </div>
                     @endif
                 </x-foodalchemist::modal-section>
+                </div>{{-- /rechte Spalte --}}
+                </div>{{-- /grid --}}
             </div>
         @endif
     </x-foodalchemist::modal>
