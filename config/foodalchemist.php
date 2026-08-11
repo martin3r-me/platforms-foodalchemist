@@ -663,7 +663,11 @@ return [
             'tier' => 'A',                                            // langer, strukturierter Einzeltext
             'max_tokens' => 8000,
             'task' => 'Schreibe die Zubereitung fuers PRODUKTIONS-Rezept als Schrittfolge. '
-                . 'Pro Schritt GENAU EINE Handlung, Temperaturen/Zeiten/Mengen konkret, keine Fuellsaetze. '
+                . 'Buendele zusammengehoerige Kuechenhandlungen sinnvoll; keine Mikro-Schritte fuer Waschen, Schneiden, '
+                . 'Pfanne erhitzen oder einzelne Gewuerzzugaben, wenn sie fachlich zusammengehoeren. '
+                . 'Einfache Rezepte: 3-5 Schritte; komplexe Rezepte: 6-9 Schritte; maximal 9 Schritte. '
+                . 'Temperaturen/Zeiten/Mengen konkret, aber Kleinstmengen nicht mechanisch in jeden Satz kopieren. '
+                . 'Keine Fuellsaetze. '
                 . 'phase = Abschnittsname (z. B. Mise en Place, Garen, Finish) oder null, gleiche Phase '
                 . 'fuer aufeinanderfolgende Schritte desselben Abschnitts. Nur was aus den Zutaten '
                 . 'ableitbar ist — nichts erfinden: werte = {steps: [{phase, text}]}.',

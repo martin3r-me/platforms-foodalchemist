@@ -252,6 +252,12 @@ class KnowledgeImportCommand extends Command
             ['ai_generate_recipe', 'niveau', 'discovery', 1, 3000],
             ['ai_generate_recipe', 'kueche', 'discovery', 3, 3000],
             ['ai_generate_recipe', 'kreativ_input', 'discovery', 3, 2000],
+            // Step-by-Step nutzt Technik-/Domain-Wissen, aber keine kreative Rezept-Ideen-Ebene.
+            // Spiegel von Migration 2026_08_11_000003.
+            ['recipe.steps', 'cross_cutting', 'always', null, null],
+            ['recipe.steps', 'domain', 'discovery', null, null],
+            ['recipe.steps', 'kueche', 'discovery', 3, 3000],
+            ['recipe.steps', 'niveau', 'discovery', 1, 3000],
             ['ai_plan_dishes', 'cross_cutting', 'always', null, null],
             ['ai_plan_dishes', 'domain', 'discovery', null, null],
             // Spec 19 E6.4 / Spec 08 P6: Kreativ-Divergenz am Kapitel (foodbook.plan) bzw.

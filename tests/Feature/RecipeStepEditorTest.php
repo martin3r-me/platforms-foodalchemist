@@ -3,6 +3,8 @@
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
+use Platform\Core\Models\ContextFile;
+use Platform\Core\Services\ImageGenerationService;
 use Platform\FoodAlchemist\Livewire\Recipes\StepEditor;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipeStep;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipeStepPhoto;
@@ -117,6 +119,67 @@ it('Upload mit aktivem Schritt legt das Foto in den Pool UND verlinkt es', funct
         ->and($foto->context_file_id)->not->toBeNull()
         ->and($s->fresh()->photos->pluck('id')->all())->toBe([$foto->id]);
     Storage::disk('public')->assertExists($foto->pfad);
+});
+
+it('KI-Fotos erzeugt Bilder fuer alle Schritte ohne Foto und laesst bestehende Fotos stehen', function () {
+    $user = $this->makeUser($this->rootTeam, 'Root KI-Foto');
+    $this->actingAs($user);
+
+    app(\Platform\FoodAlchemist\Services\RecipeStepService::class)->sync($this->rezept, [
+        ['phase' => 'Mise en Place', 'text' => 'Champignons putzen und schneiden.'],
+        ['phase' => 'Garen', 'text' => 'Champignons heiß anbraten.'],
+        ['phase' => 'Finish', 'text' => 'Mit Balsamico glacieren.'],
+    ]);
+    $steps = FoodAlchemistRecipeStep::where('recipe_id', $this->rezept->id)->orderBy('position')->get();
+    $bestehend = ($this->foto)('echt.jpg');
+    $steps[0]->photos()->attach($bestehend->id, ['position' => 1]);
+
+    $lauf = 0;
+    $rootTeamId = $this->rootTeam->id;
+    $this->mock(ImageGenerationService::class, function ($mock) use (&$lauf, $user, $rootTeamId) {
+        $mock->shouldReceive('generateAndStore')->twice()->andReturnUsing(function (
+            string $prompt,
+            string $contextType,
+            int $contextId,
+            int $userId,
+            int $teamId
+        ) use (&$lauf, $user, $rootTeamId) {
+            $lauf++;
+            expect($prompt)->toContain('Photorealistic professional catering kitchen process photo')
+                ->and($contextType)->toBe('foodalchemist.recipe')
+                ->and($userId)->toBe($user->id)
+                ->and($teamId)->toBe($rootTeamId);
+
+            $token = 'ki-step-' . $lauf . '-' . \Illuminate\Support\Str::random(8);
+            $file = ContextFile::create([
+                'token' => $token,
+                'team_id' => $teamId,
+                'user_id' => $userId,
+                'context_type' => $contextType,
+                'context_id' => $contextId,
+                'disk' => 'public',
+                'path' => "foodalchemist/rezepte/{$contextId}/{$token}.webp",
+                'file_name' => "{$token}.webp",
+                'original_name' => "{$token}.png",
+                'mime_type' => 'image/webp',
+                'file_size' => 1234,
+                'width' => 1024,
+                'height' => 1024,
+                'keep_original' => false,
+            ]);
+
+            return ['id' => $file->id, 'revised_prompt' => $prompt];
+        });
+    });
+
+    ($this->editor)()->call('kiFotos')->assertSet('fehler', null);
+
+    $neu = FoodAlchemistRecipeStepPhoto::where('recipe_id', $this->rezept->id)->orderBy('id')->get();
+    expect($neu)->toHaveCount(3)
+        ->and($steps[0]->fresh()->photos->pluck('id')->all())->toBe([$bestehend->id])
+        ->and($steps[1]->fresh()->photos)->toHaveCount(1)
+        ->and($steps[2]->fresh()->photos)->toHaveCount(1)
+        ->and($steps[1]->fresh()->photos->first()->caption)->toBe('KI-Foto: Schritt 2');
 });
 
 it('Schritt löschen nummeriert neu und lässt das Foto im Pool', function () {

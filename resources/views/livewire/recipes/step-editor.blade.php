@@ -67,6 +67,12 @@
                         <span wire:loading.remove wire:target="kiSchritte">Schritte</span>
                         <span wire:loading wire:target="kiSchritte">denkt …</span>
                     </button>
+                    <button type="button" wire:click="kiFotos" wire:loading.attr="disabled" wire:target="kiFotos"
+                            class="{{ $btnAi }}" title="KI-Fotos für alle Schritte ohne Foto erzeugen" data-ki-fotos>
+                        @svg('heroicon-o-photo', 'w-3.5 h-3.5')
+                        <span wire:loading.remove wire:target="kiFotos">KI-Fotos</span>
+                        <span wire:loading wire:target="kiFotos">malt …</span>
+                    </button>
                     <button type="button" wire:click="$toggle('importOffen')" class="{{ $btnGhostXs }}"
                             title="Markdown einfügen und in Schritte parsen" data-import-toggle>Markdown einfügen</button>
                     @if($schritte->isNotEmpty())

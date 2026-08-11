@@ -354,6 +354,7 @@ class RecipeOneShotService
         $bestehend = FoodAlchemistRecipeStep::where('recipe_id', $recipe->id)->count();
 
         try {
+            $wissen = $this->stepWissen($recipe);
             $vorschlag = app(Ai\AiGatewayService::class)->propose('recipe.steps', [
                 'name' => $recipe->name,
                 'zutaten' => $recipe->ingredients()->whereNull('deleted_at')->pluck('raw_text')->take(30)->all(),
@@ -364,6 +365,8 @@ class RecipeOneShotService
                     ])->all(),
                 'modus' => $bestehend > 0 ? 'voll_anreichern_ueberschreiben' : 'voll_anreichern_erstellen',
             ], [
+                'knowledge' => $wissen['block'],
+                'knowledge_used' => $wissen['files_used'],
                 'target_table' => 'foodalchemist_recipe_steps',
                 'target_id' => $recipe->id,
                 'structural_retry' => fn (array $p) => is_array($p['werte']['steps'] ?? null) && $p['werte']['steps'] !== [],
@@ -393,6 +396,21 @@ class RecipeOneShotService
         } catch (\Throwable $e) {
             return ['status' => 'fehler', 'n_steps' => 0, 'fehler' => mb_strimwidth($e->getMessage(), 0, 300)];
         }
+    }
+
+    /** @return array{block: string, files_used: list<string>} */
+    private function stepWissen(FoodAlchemistRecipe $recipe): array
+    {
+        $zutaten = $recipe->ingredients()->whereNull('deleted_at')->pluck('raw_text')->take(30)->filter()->implode(', ');
+        $beschreibung = trim((string) $recipe->name . "\n" . $zutaten);
+        $wissen = app(Ai\KnowledgeContextService::class)->contextFor('recipe.steps', $beschreibung, null, [], [
+            'rezept_typ' => 'basisrezept',
+        ]);
+
+        return [
+            'block' => (string) ($wissen['block'] ?? ''),
+            'files_used' => $wissen['files_used'] ?? [],
+        ];
     }
 
     /** @return array{status: string, fehler?: string} */

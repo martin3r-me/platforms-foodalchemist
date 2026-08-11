@@ -4,12 +4,15 @@ namespace Platform\FoodAlchemist\Livewire\Recipes;
 
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
+use Platform\Core\Models\ContextFile;
 use Platform\Core\Models\Team;
+use Platform\Core\Services\ImageGenerationService;
 use Platform\FoodAlchemist\Livewire\Settings\Concerns\ReordersLists;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipeStep;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipeStepPhoto;
 use Platform\FoodAlchemist\Services\Ai\AiGatewayService;
+use Platform\FoodAlchemist\Services\Ai\KnowledgeContextService;
 use Platform\FoodAlchemist\Services\FoodAlchemistMediaService;
 use Platform\FoodAlchemist\Services\RecipeStepService;
 
@@ -271,6 +274,35 @@ class StepEditor extends Component
         $foto->delete();
     }
 
+    public function kiFotos(): void
+    {
+        $this->fehler = null;
+        $r = $this->schreibbaresRezept();
+        if ($r === null) {
+            return;
+        }
+
+        $steps = FoodAlchemistRecipeStep::where('recipe_id', $r->id)
+            ->withCount('photos')
+            ->orderBy('position')->orderBy('id')->get()
+            ->filter(fn (FoodAlchemistRecipeStep $step) => (int) $step->photos_count === 0)
+            ->values();
+
+        if ($steps->isEmpty()) {
+            $this->fehler = 'Alle Schritte haben bereits ein Foto.';
+
+            return;
+        }
+
+        try {
+            foreach ($steps as $step) {
+                $this->kiFotoFuerSchritt($r, $step);
+            }
+        } catch (\Throwable $e) {
+            $this->fehler = 'KI-Foto konnte nicht erzeugt werden: ' . mb_strimwidth($e->getMessage(), 0, 180);
+        }
+    }
+
     // ── Markdown-Import (Schnellschreiben / Paste aus Word) ──────────────
 
     public function markdownUebernehmen(RecipeStepService $svc): void
@@ -303,12 +335,15 @@ class StepEditor extends Component
         }
 
         try {
+            $wissen = $this->stepWissen($r);
             $vorschlag = $ki->propose('recipe.steps', [
                 'name' => $r->name,
                 'zutaten' => $r->ingredients->pluck('raw_text')->take(30)->all(),
                 'schritte_bestand' => FoodAlchemistRecipeStep::where('recipe_id', $r->id)
                     ->orderBy('position')->pluck('text')->all(),
             ], [
+                'knowledge' => $wissen['block'],
+                'knowledge_used' => $wissen['files_used'],
                 'target_table' => 'foodalchemist_recipe_steps',
                 'target_id' => $r->id,
                 // Ein valides JSON ohne Schritte ist strukturell unbrauchbar → Gateway re-rollt.
@@ -370,6 +405,69 @@ class StepEditor extends Component
     }
 
     // ── intern ───────────────────────────────────────────────────────────
+
+    /** @return array{block: string, files_used: list<string>} */
+    private function stepWissen(FoodAlchemistRecipe $recipe): array
+    {
+        $zutaten = $recipe->ingredients->pluck('raw_text')->take(30)->filter()->implode(', ');
+        $beschreibung = trim((string) $recipe->name . "\n" . $zutaten);
+        $wissen = app(KnowledgeContextService::class)->contextFor('recipe.steps', $beschreibung, null, [], [
+            'rezept_typ' => 'basisrezept',
+        ]);
+
+        return [
+            'block' => (string) ($wissen['block'] ?? ''),
+            'files_used' => $wissen['files_used'] ?? [],
+        ];
+    }
+
+    private function kiFotoFuerSchritt(FoodAlchemistRecipe $recipe, FoodAlchemistRecipeStep $step): void
+    {
+        $result = app(ImageGenerationService::class)->generateAndStore(
+            $this->kiFotoPrompt($recipe, $step),
+            'foodalchemist.recipe',
+            $recipe->id,
+            (int) Auth::id(),
+            (int) $recipe->team_id,
+            ['size' => '1024x1024', 'quality' => 'standard', 'style' => 'natural'],
+        );
+        $contextFile = ContextFile::findOrFail((int) $result['id']);
+
+        $foto = FoodAlchemistRecipeStepPhoto::create([
+            'team_id' => $recipe->team_id,
+            'recipe_id' => $recipe->id,
+            'pfad' => (string) $contextFile->path,
+            'context_file_id' => (int) $contextFile->id,
+            'caption' => 'KI-Foto: Schritt ' . $step->position,
+            'sort_order' => (int) $step->position * 10,
+        ]);
+
+        $step->photos()->attach($foto->id, ['position' => 1]);
+    }
+
+    private function kiFotoPrompt(FoodAlchemistRecipe $recipe, FoodAlchemistRecipeStep $step): string
+    {
+        $zutaten = $recipe->ingredients->pluck('raw_text')->take(20)->filter()->implode(', ');
+        $alleSchritte = FoodAlchemistRecipeStep::where('recipe_id', $recipe->id)
+            ->orderBy('position')->orderBy('id')
+            ->get(['position', 'phase', 'text'])
+            ->map(fn (FoodAlchemistRecipeStep $s) => $s->position . '. ' . trim(($s->phase ? "[{$s->phase}] " : '') . $s->text))
+            ->implode("\n");
+
+        return trim(<<<PROMPT
+Photorealistic professional catering kitchen process photo.
+Recipe: {$recipe->name}
+Ingredients: {$zutaten}
+
+Create one consistent visual documentation image for this exact preparation step:
+Step {$step->position} ({$step->phase}): {$step->text}
+
+Full step sequence for continuity:
+{$alleSchritte}
+
+Style rules: realistic food photography, same neutral stainless-steel catering kitchen, 45-degree angle, natural light, clean gastro containers and pans, no people, no hands, no faces, no text, no labels, no logos, no packaging, no surreal props. Show the food state of this step, not the final plated dish unless the step is plating or finishing.
+PROMPT);
+    }
 
     private function team(): Team
     {
