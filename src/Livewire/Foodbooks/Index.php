@@ -658,6 +658,7 @@ class Index extends Component
         // prominente Button ließe die CI-Änderungen unbemerkt liegen (Falle des hochgezogenen
         // Speicherns). Idempotent, wenn Branding nicht angefasst wurde; Hex-Fehler → brandingFehler.
         $this->brandingSpeichern($svc);
+        $svc->vorschauSnapshotAktualisieren($this->team(), $this->selectedId);
         $this->savedToast('Foodbook gespeichert');
         // Der übernommene KI-Text ist jetzt echter Feld-Inhalt — die Vorschau-Fläche hat
         // nichts mehr zu sagen und würde sonst als „noch offen" stehen bleiben.
@@ -1304,9 +1305,9 @@ class Index extends Component
             $kreativInspiration = $inspSvc->inspiration($team, $seeds, $kreativModus['modus']);
         }
 
-        $menue = $fb !== null ? $svc->dokumentDaten($team, $fb) : null;
+        $menue = $fb !== null ? $svc->vorschauSnapshot($fb) : null;
 
-        // R2.6: Ø-Feedback je Gericht fürs interne Foodbook (Bulk über alle Menü-Zeilen).
+        // R2.6: Ø-Feedback je Gericht fürs interne Foodbook (Bulk über alle Snapshot-Zeilen).
         // $menue ist assoziativ (customer/gesamt/kapitel…) → über $menue['kapitel'] laufen.
         $menueRecipeIds = collect($menue['kapitel'] ?? [])
             ->flatMap(fn ($k) => collect($k['bloecke'] ?? [])->flatMap(fn ($b) => collect($b['gerichte'] ?? [])->pluck('recipe_id')))
@@ -1342,6 +1343,7 @@ class Index extends Component
                     ->konfliktHinweis($team, 'foodbook', (int) $fb->id),
             // D (UX-Umbau): Kunden-Vorschau (Menü-Ansicht) mit aufgelöster Wording-Kette — dieselbe Quelle wie das Druck-Dokument
             'menue' => $menue,
+            'menueSnapshotAt' => $fb?->preview_snapshot_at,
             'feedbackAgg' => $feedbackAgg,
             'kapitelTree' => $fb !== null ? $svc->kapitelTree($team, $fb->id) : [],
             'kapitel' => $kapitel,

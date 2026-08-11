@@ -1,8 +1,8 @@
-{{-- Spec 29: Menü-Vorschau (Kundensicht, read-only) — das LIVE-Ergebnis des Foodbooks.
-     Quelle = dieselbe aufgelöste Wording-Kette wie Druck-Dokument/Präsentation
-     ($menue = FoodbookService::dokumentDaten). Herausgelöst aus dem alten `vorschau`-Tab,
+{{-- Spec 29: Menü-Vorschau (Kundensicht, read-only) — gespeicherter Stand der letzten Foodbook-Speicherung.
+     Quelle = Snapshot aus FoodbookService::vorschauSnapshotAktualisieren; Druck/Präsentation bleiben live.
+     Herausgelöst aus dem alten `vorschau`-Tab,
      damit die Listen-Seite das fertige Ergebnis dauerhaft zeigt (Ansehen ≠ Bearbeiten).
-     Erwartet im Scope: $fb, $menue, $feedbackAgg, $card, $cardAccent. --}}
+     Erwartet im Scope: $fb, $menue, $menueSnapshotAt, $feedbackAgg, $card, $cardAccent. --}}
 <div class="relative overflow-hidden {{ $card }} p-6 space-y-5" data-fb-menue-vorschau>
     <div class="{{ $cardAccent }}"></div>
     <div class="flex items-baseline justify-between border-b border-black/5 pb-3">
@@ -10,8 +10,17 @@
             <h2 class="text-lg font-semibold tracking-tight text-gray-900">{{ $fb->label }}</h2>
             @if($menue['customer'] ?? null)<p class="text-xs text-gray-500">{{ $menue['customer'] }}@if(($menue['kontakt'] ?? null) && $menue['kontakt'] !== $menue['customer']) · {{ $menue['kontakt'] }}@endif</p>@endif
         </div>
-        @if(($menue['gesamt']['vk_pro_person'] ?? 0) > 0)<span class="text-sm font-semibold text-emerald-600 tabular-nums">{{ number_format((float) $menue['gesamt']['vk_pro_person'], 2, ',', '.') }} €/P</span>@endif
+        <div class="text-right">
+            @if(($menue['gesamt']['vk_pro_person'] ?? 0) > 0)<span class="block text-sm font-semibold text-emerald-600 tabular-nums">{{ number_format((float) $menue['gesamt']['vk_pro_person'], 2, ',', '.') }} €/P</span>@endif
+            @if($menueSnapshotAt)<span class="block text-[10px] text-gray-400">Stand {{ $menueSnapshotAt->format('d.m.Y H:i') }}</span>@endif
+        </div>
     </div>
+    @if($menue === null)
+        <div class="py-8 text-center">
+            <p class="text-xs font-medium text-gray-600">Noch kein gespeicherter Vorschau-Stand.</p>
+            <p class="text-[11px] text-gray-500 mt-1">Einmal im Editor speichern, dann lädt diese Übersicht aus dem Snapshot.</p>
+        </div>
+    @else
     @forelse($menue['kapitel'] ?? [] as $k)
         <section style="margin-left: {{ $k['depth'] * 16 }}px">
             <div class="flex items-baseline gap-2 border-b border-black/5 pb-1 mb-2">
@@ -39,5 +48,6 @@
     @empty
         <p class="text-xs text-gray-500 py-6 text-center">Noch keine Kapitel — im Editor anlegen und Concepts einfügen.</p>
     @endforelse
+    @endif
     <p class="text-[11px] text-gray-500 pt-2 border-t border-black/5">Gericht-Namen aus der Wording-Kette: Foodbook-Override → Konzept-Wording → VK-Standard → interner Name. Amber = kein Wording gepflegt.</p>
 </div>{{-- /Menü-Vorschau-Karte --}}

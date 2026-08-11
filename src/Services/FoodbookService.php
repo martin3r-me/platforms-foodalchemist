@@ -1726,6 +1726,35 @@ class FoodbookService
         ];
     }
 
+    public function vorschauSnapshot(FoodAlchemistFoodbook $fb): ?array
+    {
+        $snapshot = $fb->preview_snapshot_json;
+        if (! is_array($snapshot)) {
+            return null;
+        }
+
+        $snapshot['snapshot_at'] = $fb->preview_snapshot_at;
+
+        return $snapshot;
+    }
+
+    public function vorschauSnapshotAktualisieren(Team $team, int $foodbookId): array
+    {
+        $fb = FoodAlchemistFoodbook::visibleToTeam($team)->findOrFail($foodbookId);
+        $this->guard($fb, $team);
+
+        $snapshot = $this->dokumentDaten($team, $fb);
+        unset($snapshot['fb']);
+        $snapshot['snapshot_version'] = 1;
+
+        $fb->forceFill([
+            'preview_snapshot_json' => $snapshot,
+            'preview_snapshot_at' => now(),
+        ])->save();
+
+        return $snapshot;
+    }
+
     /**
      * Kunden-Label eines Blocks — concept_ref/recipe_ref über die Wording-Kette
      * (WordingResolver: wording → kundentext-Legacy → Standard → Name);

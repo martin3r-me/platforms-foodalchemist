@@ -34,6 +34,8 @@ class FoodAlchemistFoodbook extends Model
         'personen' => 'integer',
         'target_food_cost_pct' => 'decimal:2',
         'food_cost_tolerance_pp' => 'decimal:2',
+        'preview_snapshot_json' => 'array',
+        'preview_snapshot_at' => 'datetime',
     ];
 
     /**
