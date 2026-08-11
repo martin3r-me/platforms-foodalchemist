@@ -4,7 +4,7 @@
 @php($statusLabel = ['draft' => 'Entwurf', 'aktiv' => 'Aktiv', 'versendet' => 'Versendet', 'archiviert' => 'Archiviert'])
 @php($statusVariant = ['draft' => 'secondary', 'aktiv' => 'success', 'versendet' => 'info', 'archiviert' => 'secondary'])
 @php($niveauLabel = ['klassisch' => 'Klassisch', 'gehoben' => 'Gehoben', 'haute_cuisine' => 'Haute Cuisine'])
-@php($logoUrl = $fb->logo_path ? \Illuminate\Support\Facades\Storage::disk('public')->url($fb->logo_path) : null)
+@php($logoUrl = $fb->logo_path ? app(\Platform\FoodAlchemist\Services\FoodAlchemistMediaService::class)->url($fb->logo_context_file_id, $fb->logo_path) : null)
 @php($phasen = \Platform\FoodAlchemist\Services\PhaseService::LABELS)
 
 <div class="p-4 space-y-5">

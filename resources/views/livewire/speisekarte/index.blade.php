@@ -188,7 +188,7 @@
                             <div class="{{ $label }} mb-1">Logo</div>
                             @if($logoPath)
                                 <div class="flex items-center gap-2">
-                                    <img src="{{ \Illuminate\Support\Facades\Storage::disk('public')->url($logoPath) }}" alt="Logo" class="h-8 rounded bg-white/60 p-1" />
+                                    <img src="{{ app(\Platform\FoodAlchemist\Services\FoodAlchemistMediaService::class)->url($karte?->logo_context_file_id, $logoPath) }}" alt="Logo" class="h-8 rounded bg-white/60 p-1" />
                                     <button type="button" wire:click="brandingLogoEntfernen" class="{{ $btnGhostXs }} text-red-600">entfernen</button>
                                 </div>
                             @endif
@@ -199,7 +199,7 @@
                             <div class="{{ $label }} mb-1">Titelbild</div>
                             @if($coverPath)
                                 <div class="flex items-center gap-2">
-                                    <img src="{{ \Illuminate\Support\Facades\Storage::disk('public')->url($coverPath) }}" alt="Cover" class="h-12 rounded" />
+                                    <img src="{{ app(\Platform\FoodAlchemist\Services\FoodAlchemistMediaService::class)->url($karte?->cover_context_file_id, $coverPath) }}" alt="Cover" class="h-12 rounded" />
                                     <button type="button" wire:click="brandingCoverEntfernen" class="{{ $btnGhostXs }} text-red-600">entfernen</button>
                                 </div>
                             @endif

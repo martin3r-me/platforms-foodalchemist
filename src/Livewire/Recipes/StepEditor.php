@@ -4,6 +4,7 @@ namespace Platform\FoodAlchemist\Livewire\Recipes;
 
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
+use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Livewire\Settings\Concerns\ReordersLists;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipeStep;
@@ -369,6 +370,11 @@ class StepEditor extends Component
     }
 
     // ── intern ───────────────────────────────────────────────────────────
+
+    private function team(): Team
+    {
+        return Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
+    }
 
     private function rezept(): ?FoodAlchemistRecipe
     {

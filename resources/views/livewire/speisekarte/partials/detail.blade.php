@@ -4,7 +4,7 @@
 @php($statusLabel = ['entwurf' => 'Entwurf', 'aktiv' => 'Aktiv', 'veroeffentlicht' => 'Veröffentlicht', 'archiviert' => 'Archiviert'])
 @php($statusVariant = ['entwurf' => 'secondary', 'aktiv' => 'success', 'veroeffentlicht' => 'primary', 'archiviert' => 'secondary'])
 @php($typLabel = ['alacarte' => 'À la carte', 'tageskarte' => 'Tageskarte', 'saisonkarte' => 'Saisonkarte', 'getraenkekarte' => 'Getränkekarte', 'weinkarte' => 'Weinkarte'])
-@php($logoUrl = $karte->logo_path ? \Illuminate\Support\Facades\Storage::disk('public')->url($karte->logo_path) : null)
+@php($logoUrl = $karte->logo_path ? app(\Platform\FoodAlchemist\Services\FoodAlchemistMediaService::class)->url($karte->logo_context_file_id, $karte->logo_path) : null)
 @php($rubrikenN = $karte->sections->count())
 @php($positionenN = $karte->sections->flatMap->items->count())
 @php($gueltig = ($karte->gueltig_von || $karte->gueltig_bis)

@@ -664,7 +664,7 @@
                             <div class="rounded-lg overflow-hidden border border-black/10">
                                 <div class="flex items-center justify-between gap-2 px-3 h-9 text-white text-[11px] uppercase tracking-wide" :style="`background:${band || brand}`">
                                     <span class="truncate">{{ $fb->label }}</span>
-                                    @if($fb->logo_path)<img src="{{ \Storage::disk('public')->url($fb->logo_path) }}" alt="Logo" class="max-h-5 max-w-[90px] object-contain shrink-0" />@endif
+                                    @if($fb->logo_path)<img src="{{ app(\Platform\FoodAlchemist\Services\FoodAlchemistMediaService::class)->url($fb->logo_context_file_id, $fb->logo_path) }}" alt="Logo" class="max-h-5 max-w-[90px] object-contain shrink-0" />@endif
                                 </div>
                                 <div class="px-3 py-3 text-[11px] text-gray-600" :style="`border-top:3px solid ${brand}`">
                                     <span x-text="footer || 'Erstellt mit Food Alchemist'"></span>
@@ -706,7 +706,7 @@
                                 <label class="{{ $label }}">Logo</label>
                                 @if($fb->logo_path)
                                     <div class="flex items-center gap-2 mt-1 mb-1">
-                                        <img src="{{ \Storage::disk('public')->url($fb->logo_path) }}" alt="Logo" class="h-10 max-w-[120px] object-contain rounded border border-black/5 bg-white p-1" />
+                                        <img src="{{ app(\Platform\FoodAlchemist\Services\FoodAlchemistMediaService::class)->url($fb->logo_context_file_id, $fb->logo_path) }}" alt="Logo" class="h-10 max-w-[120px] object-contain rounded border border-black/5 bg-white p-1" />
                                         <button type="button" wire:click="brandingLogoEntfernen" class="{{ $btnGhostXs }} text-red-600" data-logo-entfernen>entfernen</button>
                                     </div>
                                 @endif
@@ -718,7 +718,7 @@
                                 <label class="{{ $label }}">Cover-Bild</label>
                                 @if($fb->cover_image_path)
                                     <div class="flex items-center gap-2 mt-1 mb-1">
-                                        <img src="{{ \Storage::disk('public')->url($fb->cover_image_path) }}" alt="Cover" class="h-10 max-w-[120px] object-cover rounded border border-black/5" />
+                                        <img src="{{ app(\Platform\FoodAlchemist\Services\FoodAlchemistMediaService::class)->url($fb->cover_context_file_id, $fb->cover_image_path) }}" alt="Cover" class="h-10 max-w-[120px] object-cover rounded border border-black/5" />
                                         <button type="button" wire:click="brandingCoverEntfernen" class="{{ $btnGhostXs }} text-red-600" data-cover-entfernen>entfernen</button>
                                     </div>
                                 @endif
