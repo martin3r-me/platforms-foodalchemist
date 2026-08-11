@@ -83,7 +83,11 @@ it('hartes Schließen räumt den Serverzustand ab (State-Leak-Vertrag)', functio
     Livewire::test(RecipeModal::class)
         ->dispatch('recipe-modal.oeffnen', id: $rezept->id)
         ->assertSet('istOffen', true)
+        ->assertSet('recipeId', $rezept->id)
+        ->assertSet('form.name', 'BBQ Texas')
         // `modal.closed` erreicht Livewire — sechs Komponenten bauen per #[On] darauf auf.
         ->dispatch('modal.closed', name: 'recipe-modal')
-        ->assertSet('istOffen', false);
+        ->assertSet('istOffen', false)
+        ->assertSet('recipeId', null)
+        ->assertSet('form.name', '');
 });

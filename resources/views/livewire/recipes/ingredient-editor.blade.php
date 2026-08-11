@@ -37,10 +37,12 @@
             rezFilter: { hg: '', kat: '', niveau: '', mehr: false },
             browseQ: '',                                             // zentrales Suchfeld → filtert BEIDE Listen
             gpListe: [], gpTotal: 0, rezListe: [], rezTotal: 0,
+            browserGeladen: false,
             geparkt: null,                                           // [+]-Klick parkt das Ziel in der Anzeigezeile
             tauschIdx: null,                                         // ⇄: Index der Zeile, deren Produkt getauscht wird (null = normaler Add-Flow)
 
             async browse() {
+                this.browserGeladen = true;
                 const r = await this.$wire.browseKatalog(
                     { wg: this.gpFilter.wg, sub: this.gpFilter.sub, condition: this.gpFilter.condition, bio: this.gpFilter.bio, regional: this.gpFilter.regional, nur_favoriten: this.gpFilter.nur_favoriten },
                     { hg: this.rezFilter.hg, kat: this.rezFilter.kat, niveau: this.rezFilter.level },
@@ -48,6 +50,9 @@
                 );
                 this.gpListe = r.gps.items; this.gpTotal = r.gps.total;
                 this.rezListe = r.rezepte.items; this.rezTotal = r.rezepte.total;
+            },
+            browseOnce() {
+                if (!this.browserGeladen) this.browse();
             },
             subKategorienFuerWg() {
                 return (this.vokabular?.subKategorien ?? []).filter(s => this.gpFilter.wg === '' || s.commodity_group_code === this.gpFilter.wg);
@@ -203,7 +208,8 @@
                     if (Number(detail.recipeId) !== Number(this.$wire.recipeId)) return;   // meint eine andere Instanz
                     this.$wire.speichern(this.payload(), Number(detail.recipeId));
                 });
-                this.browse();                                       // R18: Seitenspalten initial füllen
+                // R18/R23: Seitenspalten erst bei Fokus/Filter füllen. Das entlastet
+                // das Öffnen des Voll-Editors, ohne die serverseitige Suche zu ändern.
             },
             zahl(v) { const n = parseFloat(String(v ?? '').replace(',', '.')); return isNaN(n) ? null : n; },
             mengeAvg(z) {
