@@ -429,7 +429,7 @@ class StepEditor extends Component
             $recipe->id,
             (int) Auth::id(),
             (int) $recipe->team_id,
-            ['size' => '1024x1024', 'quality' => 'medium'],
+            ['size' => '1024x1024', 'quality' => 'low'],
         );
         $contextFile = ContextFile::findOrFail((int) $result['id']);
 
