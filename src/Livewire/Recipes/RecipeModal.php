@@ -42,6 +42,9 @@ class RecipeModal extends Component
 
     public bool $istOffen = false;
 
+    /** @var array<string, bool> Legacy-Client-State aus kurzzeitigem Lazy-Tab-Render; bleibt als No-op, bis alte Livewire-Snapshots verschwunden sind. */
+    public array $geladeneTabs = ['aufbau' => true];
+
     /**
      * $copilot = Sprung aus dem Signal-Cockpit (Spec 21 · S5b): die abgelegten Befunde
      * werden direkt aufgeklappt. Kein Prüf-Call — s. `copilotAusAblage()`.
@@ -92,6 +95,7 @@ class RecipeModal extends Component
         $this->zutatenVersion = 0;
         $this->bulkRunId = null;
         $this->anreicherung = null;
+        $this->geladeneTabs = ['aufbau' => true];
         $this->copilotZuruecksetzen();
     }
 
@@ -102,6 +106,7 @@ class RecipeModal extends Component
         $this->copilotZuruecksetzen();                             // L6b: Befunde gehören zu GENAU diesem Rezept
         $this->recipeId = $id;
         $this->form = self::LEER;
+        $this->geladeneTabs = [($id === null ? 'eigenschaften' : 'aufbau') => true];
 
         if ($id !== null) {
             $team = Auth::user()?->currentTeamRelation;
@@ -139,6 +144,13 @@ class RecipeModal extends Component
 
         $this->istOffen = true;
         $this->dispatch('modal.open', name: 'recipe-modal');
+    }
+
+    public function tabLaden(string $tab): void
+    {
+        if (in_array($tab, ['aufbau', 'eigenschaften', 'preparation', 'details', 'sensorik', 'feedback', 'notes'], true)) {
+            $this->geladeneTabs[$tab] = true;
+        }
     }
 
     public function speichern(RecipeService $recipes): void
