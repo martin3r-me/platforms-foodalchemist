@@ -697,25 +697,34 @@ it('E2: MCP im Lockstep — orders.CREATE + orders.ADD_LINE registriert + End-to
 
 // ── Spec 20 · E2 UI (Direktbestellung im Einkauf-Cockpit) ───────────────────
 
-it('E2 UI: „Neue Bestellung" legt leere Draft-Schiene an + wählt sie', function () {
+it('E2 UI: „Neue Bestellung" öffnet den neutralen Start ohne Lieferanten-Schiene', function () {
     $this->actingAs($this->makeUser($this->rootTeam));
-    $chefs = FoodAlchemistSupplier::where('name', 'Chefs')->first();
-    expect(FoodAlchemistOrder::where('supplier_id', $chefs->id)->count())->toBe(0);
+    expect(FoodAlchemistOrder::count())->toBe(0);
 
     Livewire::test(OrdersIndex::class)
-        ->set('neuerLieferant', $chefs->id)
+        ->set('neuerLiefertag', '2026-08-13')
         ->call('neueBestellung')
-        ->assertDispatched('orders-editor.bearbeiten')   // öffnet den Editor mit dem neuen Draft
-        ->assertSet('neuerLieferant', null);
+        ->assertDispatched('orders-editor.neu')
+        ->assertSet('neuerLiefertag', null)
+        ->assertSet('fehler', null);
 
-    expect(FoodAlchemistOrder::where('supplier_id', $chefs->id)->where('status', 'draft')->count())->toBe(1);
+    expect(FoodAlchemistOrder::count())->toBe(0);
 });
 
-it('E2 UI: „Neue Bestellung" ohne Lieferant → Fehlerhinweis, keine Schiene', function () {
+it('E2 UI: neutraler Start zeigt Artikel- und Bedarfswege', function () {
     $this->actingAs($this->makeUser($this->rootTeam));
+
     Livewire::test(OrdersIndex::class)
         ->call('neueBestellung')
-        ->assertSet('fehler', fn ($v) => str_contains((string) $v, 'Lieferant'));
+        ->assertDispatched('orders-editor.neu');
+
+    Livewire::test(OrdersEditor::class)
+        ->call('oeffnenNeu', '2026-08-13')
+        ->assertSet('orderId', null)
+        ->assertSet('formDeliveryDate', '2026-08-13')
+        ->assertSee('Artikel direkt beim Lieferanten bestellen')
+        ->assertSee('Bedarf aus Gericht / Basisrezept');
+
     expect(FoodAlchemistOrder::count())->toBe(0);
 });
 
@@ -779,6 +788,23 @@ it('E2 UI: Bedarf-Schnellerfassung Basisrezept in kg → amount_kg-Ziel', functi
 
     // Vanillesauce (yield 1 kg) 2 kg = 2 Ansätze → Zucker 1 kg (Chefs) + Butter 1 kg (Hanos)
     expect(FoodAlchemistOrder::where('status', 'draft')->count())->toBe(2);
+});
+
+it('E2 UI: Produktions-Handover erscheint in Bestellungen als Produktionskontext', function () {
+    $this->actingAs($this->makeUser($this->rootTeam));
+    $produktion = app(\Platform\FoodAlchemist\Services\ProductionOrderService::class);
+    $po = $produktion->saveNew($this->rootTeam, '2026-08-08', 'Bankett', [
+        ['recipe_id' => $this->kuchen->id, 'portions' => 100, 'source_ref' => 'recipe:kuchen@100'],
+    ]);
+
+    $produktion->anBestellungUebergeben($this->rootTeam, $po->id, $this->svc);
+
+    Livewire::test(OrdersIndex::class)
+        ->set('productionFilter', $po->id)
+        ->assertSee('Bankett')
+        ->assertSee('Chefs')
+        ->assertSee('Hanos')
+        ->assertSeeHtml('data-orders-zeile');
 });
 
 it('E2 UI: Bedarf-Schnellerfassung ohne Menge → Fehler, keine Schiene', function () {

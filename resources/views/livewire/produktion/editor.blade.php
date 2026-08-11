@@ -460,6 +460,7 @@
                     @if($ops['is_owned'] && in_array($ops['status'], ['planned', 'in_progress'], true))
                         <button type="button" wire:click="anBestellungUebergeben" class="{{ $btnGhostXs }}" data-produktion-uebergeben>→ An Bestellung übergeben</button>
                     @endif
+                    <a href="{{ route('foodalchemist.orders.index', ['p' => $ops['id']]) }}" class="{{ $btnGhostXs }}" data-produktion-bestellungen-kontext>Bestellungen öffnen</a>
                     @if(\Illuminate\Support\Facades\Route::has('foodalchemist.produktion.auftraege.dokument'))
                         <a href="{{ route('foodalchemist.produktion.auftraege.dokument', ['order' => $ops['id']]) }}" target="_blank" class="{{ $btnGhostXs }}" title="Produktionsschein + Einkauf">@svg('heroicon-o-printer', 'w-3.5 h-3.5') Doku</a>
                     @endif

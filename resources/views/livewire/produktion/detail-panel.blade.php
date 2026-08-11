@@ -140,8 +140,11 @@
                 @endif
                 <div class="flex items-center justify-between gap-2 text-[12px] mb-2" data-einkauf-deckung="{{ $uebergebenCount }}/{{ $zieleCount }}">
                     <span class="text-gray-500">Deckungsgrad</span>
-                    <span class="{{ $pill }} font-medium {{ $uebergebenCount === 0 ? $variantPill['secondary'] : ($uebergebenCount >= $zieleCount ? $variantPill['success'] : $variantPill['warning']) }}">
-                        {{ $uebergebenCount }}/{{ $zieleCount }} Ziele übergeben
+                    <span class="flex items-center gap-1.5">
+                        <a href="{{ route('foodalchemist.orders.index', ['p' => $detail['id']]) }}" class="{{ $btnGhostXs }}" data-produktion-bestellungen-kontext>Bestellungen öffnen</a>
+                        <span class="{{ $pill }} font-medium {{ $uebergebenCount === 0 ? $variantPill['secondary'] : ($uebergebenCount >= $zieleCount ? $variantPill['success'] : $variantPill['warning']) }}">
+                            {{ $uebergebenCount }}/{{ $zieleCount }} Ziele übergeben
+                        </span>
                     </span>
                 </div>
                 @if($verknuepfteOrders->isNotEmpty())

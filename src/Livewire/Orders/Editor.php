@@ -75,6 +75,23 @@ class Editor extends Component
         $this->dispatch('modal.open', name: 'orders-editor');
     }
 
+    #[On('orders-editor.neu')]
+    public function oeffnenNeu(?string $deliveryDate = null): void
+    {
+        $this->orderId = null;
+        $this->hinweis = null;
+        $this->fehler = null;
+        $this->resourceVorschau = null;
+        $this->altLineId = null;
+        $this->artikelSuche = '';
+        $this->bedarfRezeptZuruecksetzen();
+        $this->formReference = '';
+        $this->formDeliveryDate = $deliveryDate ?: '';
+        $this->formNote = '';
+        $this->formStrategy = '';
+        $this->dispatch('modal.open', name: 'orders-editor');
+    }
+
     /** Kopf-Felder des aktiven Belegs in die Form spiegeln. */
     private function ladeKopf(): void
     {
@@ -219,6 +236,7 @@ class Editor extends Component
         $this->fuehreAus(function ($team) use ($orders, $supplierItemId) {
             $line = $orders->addManualLine($team, $supplierItemId, 1.0, null, Auth::id(), $this->formDeliveryDate ?: null);
             $this->orderId = (int) $line->order_id;
+            $this->kopfNachStartSpeichern($orders, [$this->orderId]);
             $this->ladeKopf();
         }, 'Artikel hinzugefügt.');
         $this->artikelSuche = '';
@@ -277,6 +295,7 @@ class Editor extends Component
         try {
             $team = Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
             $res = $orders->addNeedFromTarget($team, $ziel, $sourceRef, Auth::id(), null, $this->formDeliveryDate ?: null);
+            $this->kopfNachStartSpeichern($orders, array_map('intval', $res['orders'] ?? []));
             if (! empty($res['orders'])) {
                 $this->orderId = (int) $res['orders'][0];
                 $this->ladeKopf();
@@ -295,6 +314,25 @@ class Editor extends Component
             $this->dispatch('orders-geaendert');
         } catch (\Throwable $e) {
             $this->fehler = $e->getMessage();
+        }
+    }
+
+    /** Beim neutralen Start auf alle gerade erzeugten Lieferanten-Schienen stempeln. */
+    private function kopfNachStartSpeichern(OrderService $orders, array $orderIds): void
+    {
+        $kopf = [
+            'reference' => $this->formReference,
+            'note' => $this->formNote,
+        ];
+        if (trim($kopf['reference']) === '' && trim($kopf['note']) === '') {
+            return;
+        }
+
+        $team = Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
+        foreach (array_unique($orderIds) as $id) {
+            if ((int) $id > 0) {
+                $orders->updateHeader($team, (int) $id, $kopf);
+            }
         }
     }
 
@@ -330,11 +368,14 @@ class Editor extends Component
             $q = FoodAlchemistSupplierItem::visibleToTeam($team)
                 ->where('is_discontinued', false)
                 ->whereNotNull('supplier_id')
-                ->with('supplier:id,name');
+                ->with(['supplier:id,name', 'structure.gp:id,name']);
             foreach (Suche::tokens($aq) as $token) {
+                $needle = mb_strtolower($token);
                 $q->where(fn ($x) => $x
-                    ->whereRaw('LOWER(designation) LIKE ?', ['%' . $token . '%'])
-                    ->orWhere('article_number', 'like', $token . '%'));
+                    ->whereRaw('LOWER(designation) LIKE ?', ['%' . $needle . '%'])
+                    ->orWhere('article_number', 'like', $token . '%')
+                    ->orWhereHas('supplier', fn ($s) => $s->whereRaw('LOWER(name) LIKE ?', ['%' . $needle . '%']))
+                    ->orWhereHas('structure.gp', fn ($gp) => $gp->whereRaw('LOWER(name) LIKE ?', ['%' . $needle . '%'])));
             }
             $artikelTreffer = $q->orderBy('designation')->limit(12)
                 ->get(['id', 'designation', 'article_number', 'packaging_unit', 'supplier_id'])
@@ -343,6 +384,7 @@ class Editor extends Component
                     'designation' => $a->designation,
                     'article_number' => $a->article_number,
                     'supplier' => $a->supplier?->name ?? '—',
+                    'gp' => $a->structure?->gp?->name,
                 ])->values();
         }
 

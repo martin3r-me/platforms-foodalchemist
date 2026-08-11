@@ -8,7 +8,6 @@ use Livewire\Attributes\On;
 use Livewire\Attributes\Url;
 use Livewire\Component;
 use Platform\FoodAlchemist\Enums\OrderStatus;
-use Platform\FoodAlchemist\Models\FoodAlchemistSupplier;
 use Platform\FoodAlchemist\Services\OrderService;
 
 /**
@@ -32,6 +31,10 @@ class Index extends Component
     #[Url(as: 'lief')]
     public ?int $supplierFilter = null;
 
+    /** Kontextfilter: alle Lieferanten-Schienen, die aus dieser Produktion befüllt wurden. */
+    #[Url(as: 'p')]
+    public ?int $productionFilter = null;
+
     #[Url(as: 'q')]
     public string $suche = '';
 
@@ -49,9 +52,7 @@ class Index extends Component
     #[Url(as: 'zeitraum')]
     public string $zeitraum = '';
 
-    /** „Neue Bestellung": Lieferant + Liefertag (Liefertag ist Teil des Bestell-Schlüssels). */
-    public ?int $neuerLieferant = null;
-
+    /** „Neue Bestellung": neutraler Start; Lieferant ergibt sich erst aus Artikel/Bedarf. */
     public ?string $neuerLiefertag = null;
 
     public ?string $hinweis = null;
@@ -108,30 +109,13 @@ class Index extends Component
         $this->zeitraum = '';
     }
 
-    /** „Neue Bestellung": Draft je (Lieferant, Liefertag) anlegen und direkt im Editor öffnen. */
-    public function neueBestellung(OrderService $orders): void
+    /** „Neue Bestellung": Editor neutral öffnen; die Schienen entstehen beim Hinzufügen. */
+    public function neueBestellung(): void
     {
-        if ($this->neuerLieferant === null) {
-            $this->fehler = 'Erst einen Lieferanten wählen.';
-
-            return;
-        }
         $this->hinweis = null;
         $this->fehler = null;
-        try {
-            $team = Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
-            $draft = $orders->createDraft(
-                $team,
-                (int) $this->neuerLieferant,
-                ['desired_delivery_date' => $this->neuerLiefertag ?: null],
-                Auth::id(),
-            );
-            $this->neuerLieferant = null;
-            $this->neuerLiefertag = null;
-            $this->dispatch('orders-editor.bearbeiten', id: (int) $draft->id);
-        } catch (\Throwable $e) {
-            $this->fehler = $e->getMessage();
-        }
+        $this->dispatch('orders-editor.neu', deliveryDate: $this->neuerLiefertag ?: null);
+        $this->neuerLiefertag = null;
     }
 
     /** Editor meldet eine Änderung — die Liste (Summen/Status) neu rendern. */
@@ -160,11 +144,32 @@ class Index extends Component
             ->map(fn ($o) => ['id' => (int) $o->supplier->id, 'name' => (string) $o->supplier->name])
             ->unique('id')->sortBy('name')->values();
 
+        $herkunftByOrder = $roh->mapWithKeys(function ($o) use ($orders) {
+            $refs = $o->lines
+                ->flatMap(fn ($l) => array_keys((array) ($l->source_contributions ?? [])))
+                ->values()->all();
+
+            return [(int) $o->id => $orders->herkunftAggregat($refs)];
+        });
+
+        $herkunftByOrder = $herkunftByOrder->map(fn ($items) => $orders->herkunftMitProduktionsnamen($team, $items));
+
+        $produktionen = $herkunftByOrder
+            ->flatten(1)
+            ->filter(fn ($h) => ($h['production_order_id'] ?? null) !== null)
+            ->map(fn ($h) => ['id' => (int) $h['production_order_id'], 'label' => (string) $h['label']])
+            ->unique('id')
+            ->sortBy('label')
+            ->values();
+
         $suche = trim(mb_strtolower($this->suche));
         $liste = $roh
             ->when($this->supplierFilter !== null, fn ($c) => $c->filter(fn ($o) => (int) $o->supplier_id === $this->supplierFilter))
-            ->when($suche !== '', fn ($c) => $c->filter(function ($o) use ($suche) {
-                $hay = mb_strtolower(($o->supplier?->name ?? '') . ' ' . ($o->reference ?? ''));
+            ->when($this->productionFilter !== null, fn ($c) => $c->filter(fn ($o) => collect($herkunftByOrder[(int) $o->id] ?? [])
+                ->contains(fn ($h) => (int) ($h['production_order_id'] ?? 0) === $this->productionFilter)))
+            ->when($suche !== '', fn ($c) => $c->filter(function ($o) use ($suche, $herkunftByOrder) {
+                $herkunft = collect($herkunftByOrder[(int) $o->id] ?? [])->pluck('label')->implode(' ');
+                $hay = mb_strtolower(($o->supplier?->name ?? '') . ' ' . ($o->reference ?? '') . ' ' . $herkunft);
 
                 return str_contains($hay, $suche);
             }))
@@ -175,6 +180,7 @@ class Index extends Component
                 'total_net' => (float) $o->total_net,
                 'reference' => $o->reference,
                 'liefertag' => $o->desired_delivery_date?->toDateString(),
+                'herkunft' => $herkunftByOrder[(int) $o->id] ?? [],
             ])->values();
 
         // Bei Liefertag-Basis nach Tag gruppieren (Reihenfolge kommt sortiert aus dem Service,
@@ -184,16 +190,12 @@ class Index extends Component
             ? $liste->groupBy(fn ($o) => $o['liefertag'] ?? '')
             : collect(['' => $liste]);
 
-        $alleLieferanten = FoodAlchemistSupplier::visibleToTeam($team)
-            ->orderBy('name')->get(['id', 'name'])
-            ->map(fn ($s) => ['id' => (int) $s->id, 'name' => (string) $s->name])->values();
-
         return view('foodalchemist::livewire.orders.index', [
             'liste' => $liste,
             'gruppen' => $gruppen,
             'gruppiert' => $gruppiert,
             'lieferanten' => $lieferanten,
-            'alleLieferanten' => $alleLieferanten,
+            'produktionen' => $produktionen,
             'statusFaelle' => OrderStatus::cases(),
         ])->layout('platform::layouts.app');
     }
