@@ -17,6 +17,7 @@ beforeEach(function () {
     $this->seedTeamHierarchy();
     $this->user = $this->makeUser($this->rootTeam);
     $this->actingAs($this->user);
+    config(['filesystems.default' => 'public']);
     Storage::fake('public');
     $this->svc = app(FoodbookService::class);
 });
@@ -51,7 +52,7 @@ it('setBranding setzt Marken-Farbe + Footer, validiert Hex, leert band mit ""', 
         ->toThrow(\RuntimeException::class);
 });
 
-it('storeLogo speichert auf public-Disk + brandingDaten liefert base64-Data-URI; clearLogo räumt', function () {
+it('storeLogo speichert als Core ContextFile + brandingDaten liefert base64-Data-URI; clearLogo räumt', function () {
     $fb = $this->svc->create($this->rootTeam, ['label' => 'Logo-FB']);
     $file = UploadedFile::fake()->image('logo.png', 40, 40);
 
@@ -59,7 +60,8 @@ it('storeLogo speichert auf public-Disk + brandingDaten liefert base64-Data-URI;
 
     expect($pfad)->toStartWith("foodalchemist/branding/{$fb->id}/");
     Storage::disk('public')->assertExists($pfad);
-    expect($fb->refresh()->logo_path)->toBe($pfad);
+    expect($fb->refresh()->logo_path)->toBe($pfad)
+        ->and($fb->logo_context_file_id)->not->toBeNull();
 
     // DomPDF-tauglich: als base64 im Blade-Datenpaket (nicht http-URL)
     $data = $this->svc->dokumentDaten($this->rootTeam, $fb->refresh(), false);
@@ -68,7 +70,8 @@ it('storeLogo speichert auf public-Disk + brandingDaten liefert base64-Data-URI;
     // Aufräumen: Datei weg + Spalte null
     $this->svc->clearLogo($this->rootTeam, $fb->id);
     Storage::disk('public')->assertMissing($pfad);
-    expect($fb->refresh()->logo_path)->toBeNull();
+    expect($fb->refresh()->logo_path)->toBeNull()
+        ->and($fb->logo_context_file_id)->toBeNull();
 });
 
 it('Owner-Guard (D1): geerbtes Foodbook lässt sich nicht branden', function () {

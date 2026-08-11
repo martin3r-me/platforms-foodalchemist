@@ -3,13 +3,13 @@
 namespace Platform\FoodAlchemist\Livewire\Recipes;
 
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Storage;
 use Livewire\Component;
 use Platform\FoodAlchemist\Livewire\Settings\Concerns\ReordersLists;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipeStep;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipeStepPhoto;
 use Platform\FoodAlchemist\Services\Ai\AiGatewayService;
+use Platform\FoodAlchemist\Services\FoodAlchemistMediaService;
 use Platform\FoodAlchemist\Services\RecipeStepService;
 
 /**
@@ -218,10 +218,19 @@ class StepEditor extends Component
 
         $this->validate(['fotoUpload' => 'image|max:8192'], [], ['fotoUpload' => 'Foto']);
 
+        $media = app(FoodAlchemistMediaService::class)->storeImage(
+            $this->fotoUpload,
+            $this->team(),
+            'foodalchemist.recipe',
+            $r->id,
+            "foodalchemist/rezepte/{$r->id}",
+        );
+
         $foto = FoodAlchemistRecipeStepPhoto::create([
             'team_id' => $r->team_id,
             'recipe_id' => $r->id,
-            'pfad' => $this->fotoUpload->store("foodalchemist/rezepte/{$r->id}", 'public'),
+            'pfad' => $media['path'],
+            'context_file_id' => $media['context_file_id'],
             'caption' => trim($this->fotoCaption) ?: null,
         ]);
 
@@ -257,7 +266,7 @@ class StepEditor extends Component
             return;
         }
         $foto->steps()->detach();
-        Storage::disk('public')->delete($foto->pfad);
+        app(FoodAlchemistMediaService::class)->delete($foto->context_file_id, $foto->pfad, $this->team());
         $foto->delete();
     }
 

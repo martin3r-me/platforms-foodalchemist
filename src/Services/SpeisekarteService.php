@@ -6,7 +6,6 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Enums\AusgabeStatus;
 use Platform\FoodAlchemist\Services\Concerns\PruefstOutletZuordnung;
@@ -695,8 +694,6 @@ class SpeisekarteService
 
     // ── Branding / CI (Stufe C) ──────────────────────────────────────────────
 
-    private const BRANDING_STORAGE_DISK = 'public';
-
     /** Marken-Farben + Footer setzen. Leere band_color ⇒ Ableitung aus brand_color im Blade. */
     public function setBranding(Team $team, int $karteId, array $in): FoodAlchemistSpeisekarte
     {
@@ -746,12 +743,22 @@ class SpeisekarteService
         $karte = FoodAlchemistSpeisekarte::visibleToTeam($team)->findOrFail($karteId);
         $this->guard($karte, $team);
 
+        $contextSpalte = $this->brandingContextSpalte($spalte);
         $alt = (string) $karte->{$spalte};
-        if ($alt !== '' && Storage::disk(self::BRANDING_STORAGE_DISK)->exists($alt)) {
-            Storage::disk(self::BRANDING_STORAGE_DISK)->delete($alt);
-        }
-        $pfad = $file->store("foodalchemist/branding/menu_card/{$karteId}", self::BRANDING_STORAGE_DISK);
-        $karte->update([$spalte => $pfad]);
+        app(FoodAlchemistMediaService::class)->delete($karte->{$contextSpalte}, $alt, $team);
+
+        $media = app(FoodAlchemistMediaService::class)->storeImage(
+            $file,
+            $team,
+            'foodalchemist.speisekarte',
+            $karteId,
+            "foodalchemist/branding/menu_card/{$karteId}",
+        );
+        $pfad = $media['path'];
+        $karte->update([
+            $spalte => $pfad,
+            $contextSpalte => $media['context_file_id'],
+        ]);
 
         return $pfad;
     }
@@ -761,11 +768,13 @@ class SpeisekarteService
         $karte = FoodAlchemistSpeisekarte::visibleToTeam($team)->findOrFail($karteId);
         $this->guard($karte, $team);
 
+        $contextSpalte = $this->brandingContextSpalte($spalte);
         $alt = (string) $karte->{$spalte};
-        if ($alt !== '' && Storage::disk(self::BRANDING_STORAGE_DISK)->exists($alt)) {
-            Storage::disk(self::BRANDING_STORAGE_DISK)->delete($alt);
-        }
-        $karte->update([$spalte => null]);
+        app(FoodAlchemistMediaService::class)->delete($karte->{$contextSpalte}, $alt, $team);
+        $karte->update([
+            $spalte => null,
+            $contextSpalte => null,
+        ]);
 
         return $karte->refresh();
     }
@@ -783,22 +792,19 @@ class SpeisekarteService
         return [
             'color' => $color,
             'band' => ($karte->band_color ?? '') !== '' ? $karte->band_color : $color,
-            'logo' => $this->alsDataUri($karte->logo_path),
-            'cover' => $this->alsDataUri($karte->cover_image_path),
+            'logo' => app(FoodAlchemistMediaService::class)->dataUri($karte->logo_context_file_id, $karte->logo_path),
+            'cover' => app(FoodAlchemistMediaService::class)->dataUri($karte->cover_context_file_id, $karte->cover_image_path),
             'footer' => ($karte->footer_text ?? '') !== '' ? $karte->footer_text : null,
         ];
     }
 
-    private function alsDataUri(?string $pfad): ?string
+    private function brandingContextSpalte(string $spalte): string
     {
-        $pfad = (string) $pfad;
-        if ($pfad === '' || ! Storage::disk(self::BRANDING_STORAGE_DISK)->exists($pfad)) {
-            return null;
-        }
-        $mime = Storage::disk(self::BRANDING_STORAGE_DISK)->mimeType($pfad) ?: 'image/png';
-        $bytes = Storage::disk(self::BRANDING_STORAGE_DISK)->get($pfad);
-
-        return 'data:' . $mime . ';base64,' . base64_encode($bytes);
+        return match ($spalte) {
+            'logo_path' => 'logo_context_file_id',
+            'cover_image_path' => 'cover_context_file_id',
+            default => throw new \InvalidArgumentException("Unbekannte Branding-Bildspalte: {$spalte}"),
+        };
     }
 
     /** Hex-Validierung. erlaubeLeer=true → '' ⇒ null (Blade leitet aus brand_color ab). */

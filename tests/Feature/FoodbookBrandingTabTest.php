@@ -77,6 +77,7 @@ it('Der Tab-übergreifende Speichern sichert Stammdaten UND Branding', function 
 });
 
 it('Logo-Upload legt Datei ab (Storage::fake) und Entfernen räumt sie', function () {
+    config(['filesystems.default' => 'public']);
     Storage::fake('public');
 
     $comp = Livewire::test(FoodbooksIndex::class)
@@ -86,8 +87,10 @@ it('Logo-Upload legt Datei ab (Storage::fake) und Entfernen räumt sie', functio
     // updatedLogoUpload greift beim Set → storeLogo schreibt auf die public-Disk.
     $logoPath = $this->fb->refresh()->logo_path;
     expect($logoPath)->not->toBeNull();
+    expect($this->fb->logo_context_file_id)->not->toBeNull();
     Storage::disk('public')->assertExists($logoPath);
 
     $comp->call('brandingLogoEntfernen');
-    expect($this->fb->refresh()->logo_path)->toBeNull();
+    expect($this->fb->refresh()->logo_path)->toBeNull()
+        ->and($this->fb->logo_context_file_id)->toBeNull();
 });

@@ -98,6 +98,7 @@ it('verknüpft ein Foto per Klick an mehrere Schritte und löst es wieder (M:N)'
 });
 
 it('Upload mit aktivem Schritt legt das Foto in den Pool UND verlinkt es', function () {
+    config(['filesystems.default' => 'public']);
     Storage::fake('public');
     $this->actingAs($this->makeUser($this->rootTeam, 'Root E'));
 
@@ -113,6 +114,7 @@ it('Upload mit aktivem Schritt legt das Foto in den Pool UND verlinkt es', funct
 
     $foto = FoodAlchemistRecipeStepPhoto::where('recipe_id', $this->rezept->id)->firstOrFail();
     expect($foto->caption)->toBe('Brunoise')
+        ->and($foto->context_file_id)->not->toBeNull()
         ->and($s->fresh()->photos->pluck('id')->all())->toBe([$foto->id]);
     Storage::disk('public')->assertExists($foto->pfad);
 });

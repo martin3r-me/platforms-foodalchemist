@@ -6,10 +6,11 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use Illuminate\Support\Facades\Storage;
 use Platform\ActivityLog\Traits\LogsActivity;
+use Platform\Core\Models\ContextFile;
 use Platform\FoodAlchemist\Models\Concerns\BelongsToTeamHierarchy;
 use Platform\FoodAlchemist\Models\Concerns\HasUuidV7;
+use Platform\FoodAlchemist\Services\FoodAlchemistMediaService;
 
 /**
  * @ai.description Foto im Media-Pool eines Rezepts (R6); Datei auf dem public-Disk.
@@ -36,6 +37,11 @@ class FoodAlchemistRecipeStepPhoto extends Model
         return $this->belongsTo(FoodAlchemistRecipe::class, 'recipe_id');
     }
 
+    public function contextFile(): BelongsTo
+    {
+        return $this->belongsTo(ContextFile::class, 'context_file_id');
+    }
+
     /** Schritte, an denen dieses Foto hängt (Spec 27, M:N — 0..n). */
     public function steps(): BelongsToMany
     {
@@ -49,6 +55,6 @@ class FoodAlchemistRecipeStepPhoto extends Model
 
     public function url(): string
     {
-        return Storage::disk('public')->url($this->pfad);
+        return app(FoodAlchemistMediaService::class)->url($this->context_file_id, $this->pfad);
     }
 }

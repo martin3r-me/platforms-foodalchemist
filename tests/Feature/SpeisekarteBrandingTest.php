@@ -31,19 +31,23 @@ it('Stufe C: Farben + Footer setzen; ungültiges Hex wirft', function () {
 });
 
 it('Stufe C: Logo-Upload → brandingDaten liefert base64-Data-URI', function () {
+    config(['filesystems.default' => 'public']);
     Storage::fake('public');
     $karte = $this->karten->create($this->rootTeam, ['name' => 'K']);
 
     $this->karten->storeLogo($this->rootTeam, $karte->id, UploadedFile::fake()->image('logo.png', 200, 80));
+    expect($karte->refresh()->logo_context_file_id)->not->toBeNull();
     $branding = $this->karten->brandingDaten($karte->refresh());
     expect($branding['logo'])->toStartWith('data:image/')
         ->and($branding['logo'])->toContain('base64,');
 
     $this->karten->clearLogo($this->rootTeam, $karte->id);
-    expect($this->karten->brandingDaten($karte->refresh())['logo'])->toBeNull();
+    expect($this->karten->brandingDaten($karte->refresh())['logo'])->toBeNull()
+        ->and($karte->logo_context_file_id)->toBeNull();
 });
 
 it('Stufe C: Branding-Tab im Editor speichert Farbe', function () {
+    config(['filesystems.default' => 'public']);
     Storage::fake('public');
     $this->user = $this->makeUser($this->rootTeam);
     $this->actingAs($this->user);

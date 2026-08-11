@@ -6,7 +6,6 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Enums\AusgabeStatus;
 use Platform\FoodAlchemist\Services\Concerns\PruefstOutletZuordnung;
@@ -2017,10 +2016,8 @@ class FoodbookService
     // ── Branding (pro Foodbook) ─────────────────────────────────────────────────
     //
     // UI-agnostische API: der Branding/CI-Tab im Cockpit (separate Session) UND MCP/Console
-    // rufen dieselben Methoden. Owner-Guard wie überall (D1). Bilder liegen auf der
-    // public-Disk; fürs PDF werden sie in dokumentDaten als base64 kodiert (DomPDF-tauglich).
-
-    private const BRANDING_STORAGE_DISK = 'public';
+    // rufen dieselben Methoden. Owner-Guard wie überall (D1). Bilder laufen fuer neue Uploads
+    // ueber Core ContextFiles (zentraler Disk/S3), alte public-Pfade bleiben lesbar.
 
     /** Setzt Farb-/Text-Marke. $in: brand_color, band_color, footer_text (jeweils optional). */
     public function setBranding(Team $team, int $foodbookId, array $in): FoodAlchemistFoodbook
@@ -2072,12 +2069,22 @@ class FoodbookService
         $fb = FoodAlchemistFoodbook::visibleToTeam($team)->findOrFail($foodbookId);
         $this->guard($fb, $team);
 
+        $contextSpalte = $this->brandingContextSpalte($spalte);
         $alt = (string) $fb->{$spalte};
-        if ($alt !== '' && Storage::disk(self::BRANDING_STORAGE_DISK)->exists($alt)) {
-            Storage::disk(self::BRANDING_STORAGE_DISK)->delete($alt);
-        }
-        $pfad = $file->store("foodalchemist/branding/{$foodbookId}", self::BRANDING_STORAGE_DISK);
-        $fb->update([$spalte => $pfad]);
+        app(FoodAlchemistMediaService::class)->delete($fb->{$contextSpalte}, $alt, $team);
+
+        $media = app(FoodAlchemistMediaService::class)->storeImage(
+            $file,
+            $team,
+            'foodalchemist.foodbook',
+            $foodbookId,
+            "foodalchemist/branding/{$foodbookId}",
+        );
+        $pfad = $media['path'];
+        $fb->update([
+            $spalte => $pfad,
+            $contextSpalte => $media['context_file_id'],
+        ]);
 
         return $pfad;
     }
@@ -2087,11 +2094,13 @@ class FoodbookService
         $fb = FoodAlchemistFoodbook::visibleToTeam($team)->findOrFail($foodbookId);
         $this->guard($fb, $team);
 
+        $contextSpalte = $this->brandingContextSpalte($spalte);
         $alt = (string) $fb->{$spalte};
-        if ($alt !== '' && Storage::disk(self::BRANDING_STORAGE_DISK)->exists($alt)) {
-            Storage::disk(self::BRANDING_STORAGE_DISK)->delete($alt);
-        }
-        $fb->update([$spalte => null]);
+        app(FoodAlchemistMediaService::class)->delete($fb->{$contextSpalte}, $alt, $team);
+        $fb->update([
+            $spalte => null,
+            $contextSpalte => null,
+        ]);
 
         return $fb->refresh();
     }
@@ -2110,22 +2119,19 @@ class FoodbookService
         return [
             'color' => $color,
             'band' => ($fb->band_color ?? '') !== '' ? $fb->band_color : $color,
-            'logo' => $this->alsDataUri($fb->logo_path),
-            'cover' => $this->alsDataUri($fb->cover_image_path),
+            'logo' => app(FoodAlchemistMediaService::class)->dataUri($fb->logo_context_file_id, $fb->logo_path),
+            'cover' => app(FoodAlchemistMediaService::class)->dataUri($fb->cover_context_file_id, $fb->cover_image_path),
             'footer' => ($fb->footer_text ?? '') !== '' ? $fb->footer_text : null,
         ];
     }
 
-    private function alsDataUri(?string $pfad): ?string
+    private function brandingContextSpalte(string $spalte): string
     {
-        $pfad = (string) $pfad;
-        if ($pfad === '' || ! Storage::disk(self::BRANDING_STORAGE_DISK)->exists($pfad)) {
-            return null;
-        }
-        $mime = Storage::disk(self::BRANDING_STORAGE_DISK)->mimeType($pfad) ?: 'image/png';
-        $bytes = Storage::disk(self::BRANDING_STORAGE_DISK)->get($pfad);
-
-        return 'data:' . $mime . ';base64,' . base64_encode($bytes);
+        return match ($spalte) {
+            'logo_path' => 'logo_context_file_id',
+            'cover_image_path' => 'cover_context_file_id',
+            default => throw new \InvalidArgumentException("Unbekannte Branding-Bildspalte: {$spalte}"),
+        };
     }
 
     /** Hex-Validierung wie Settings\Kueche::sanitizeFarben. erlaubeLeer=true → '' ⇒ null. */
