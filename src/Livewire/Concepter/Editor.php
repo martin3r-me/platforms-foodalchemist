@@ -1114,6 +1114,11 @@ class Editor extends Component
         $sektionSumme = [];
         $kandidaten = collect();
         $paketKandidaten = collect();
+        $istAufbau = $this->tab === 'aufbau';
+        $istStammdaten = $this->tab === 'stammdaten';
+        $istKonzeptTab = $this->tab === 'konzept';
+        $istGeschirrTab = $this->tab === 'geschirr';
+        $istSensorikTab = $this->tab === 'sensorik';
 
         // Gericht-Baum (geteilt von beiden Pickern): aktiv, sobald ein Filter ODER Suchtext gesetzt ist.
         $pickFilter = ['hauptgruppe' => $this->pickHg, 'class' => $this->pickKlasse, 'geschmack' => $this->pickGeschmack, 'diet_form' => $this->pickDiaet];
@@ -1123,70 +1128,78 @@ class Editor extends Component
             $concept = $concepts->detail($team, $this->id);
             if ($concept !== null) {
                 $cockpit = $concepts->preisCockpit($concept);
-                $sektionSumme = $this->sektionsSummen($concept, $cockpit['zeilen']);
+                $sektionSumme = $istAufbau ? $this->sektionsSummen($concept, $cockpit['zeilen']) : [];
                 $aggregat = $agg->conceptAggregat($concept);
                 $bewertet = $bewertung->bewerten($concept, $cockpit, $aggregat);
                 $kalkulation = $kalk->conceptHk($team, $concept);
-                foreach ($concept->slots as $slot) {
-                    $tauschbar[$slot->id] = $concepts->tauschbarePakete($team, $slot);
+                if ($istAufbau) {
+                    foreach ($concept->slots as $slot) {
+                        $tauschbar[$slot->id] = $concepts->tauschbarePakete($team, $slot);
+                    }
                 }
-                // Umbau-Spec Phase 5: aufgelöste Darreichung je Position sichtbar machen +
-                // „Variante fehlt", wenn die Konzept-Servierform keine passende Form findet
-                $resolver = app(\Platform\FoodAlchemist\Services\DarreichungResolver::class);
-                foreach ($concept->slots as $slot) {
-                    if ($slot->sales_recipe_id === null) {
-                        continue;
-                    }
-                    $slot->setRelation('concept', $concept);
-                    $formen = \Platform\FoodAlchemist\Models\FoodAlchemistRecipeDarreichung::with('servingForm')
-                        ->where('recipe_id', $slot->sales_recipe_id)->orderByDesc('is_standard')->get();
-                    if ($formen->count() > 1) {
-                        // A1: Form-Picker je Position (nur sinnvoll bei mehreren Formen)
-                        $darreichungOptionen[$slot->id] = $formen
-                            ->map(fn ($f) => ['id' => $f->id, 'label' => $f->servingForm?->label ?? '—'])->all();
-                    }
-                    $dar = $resolver->fuerSlot($slot);
-                    if ($dar !== null) {
-                        $passtZurKonzeptForm = $concept->serving_form_id !== null
-                            && (int) $dar->serving_form_id === (int) $concept->serving_form_id;
-                        $darreichungInfo[$slot->id] = ($passtZurKonzeptForm || $concept->serving_form_id === null)
-                            ? ($dar->servingForm?->label ?? '—')
-                            : 'Standard: ' . ($dar->servingForm?->label ?? '—');
-                        // Default-Geschirr der Form → Vorschlag am Slot (nur wenn dort noch keins gesetzt)
-                        if ($dar->tableware_item_id !== null && $slot->tableware_item_id === null && $dar->dishwareItem !== null) {
-                            $geschirrVorschlag[$slot->id] = [
-                                'id' => $dar->tableware_item_id,
-                                'label' => $dar->dishwareItem->label,
-                                'form' => $dar->servingForm?->label,
-                            ];
+                if ($istAufbau || $istGeschirrTab) {
+                    // Umbau-Spec Phase 5: aufgelöste Darreichung je Position sichtbar machen +
+                    // „Variante fehlt", wenn die Konzept-Servierform keine passende Form findet
+                    $resolver = app(\Platform\FoodAlchemist\Services\DarreichungResolver::class);
+                    foreach ($concept->slots as $slot) {
+                        if ($slot->sales_recipe_id === null) {
+                            continue;
                         }
-                    }
-                    if ($concept->serving_form_id !== null) {
-                        $hatForm = \Platform\FoodAlchemist\Models\FoodAlchemistRecipeDarreichung::where('recipe_id', $slot->sales_recipe_id)
-                            ->where('serving_form_id', $concept->serving_form_id)->exists();
-                        if (! $hatForm) {
-                            $varianteFehlt[$slot->id] = true;
+                        $slot->setRelation('concept', $concept);
+                        if ($istAufbau) {
+                            $formen = \Platform\FoodAlchemist\Models\FoodAlchemistRecipeDarreichung::with('servingForm')
+                                ->where('recipe_id', $slot->sales_recipe_id)->orderByDesc('is_standard')->get();
+                            if ($formen->count() > 1) {
+                                // A1: Form-Picker je Position (nur sinnvoll bei mehreren Formen)
+                                $darreichungOptionen[$slot->id] = $formen
+                                    ->map(fn ($f) => ['id' => $f->id, 'label' => $f->servingForm?->label ?? '—'])->all();
+                            }
+                        }
+                        $dar = $resolver->fuerSlot($slot);
+                        if ($dar !== null) {
+                            $passtZurKonzeptForm = $concept->serving_form_id !== null
+                                && (int) $dar->serving_form_id === (int) $concept->serving_form_id;
+                            $darreichungInfo[$slot->id] = ($passtZurKonzeptForm || $concept->serving_form_id === null)
+                                ? ($dar->servingForm?->label ?? '—')
+                                : 'Standard: ' . ($dar->servingForm?->label ?? '—');
+                            // Default-Geschirr der Form → Vorschlag am Slot (nur wenn dort noch keins gesetzt)
+                            if ($dar->tableware_item_id !== null && $slot->tableware_item_id === null && $dar->dishwareItem !== null) {
+                                $geschirrVorschlag[$slot->id] = [
+                                    'id' => $dar->tableware_item_id,
+                                    'label' => $dar->dishwareItem->label,
+                                    'form' => $dar->servingForm?->label,
+                                ];
+                            }
+                        }
+                        if ($istAufbau && $concept->serving_form_id !== null) {
+                            $hatForm = \Platform\FoodAlchemist\Models\FoodAlchemistRecipeDarreichung::where('recipe_id', $slot->sales_recipe_id)
+                                ->where('serving_form_id', $concept->serving_form_id)->exists();
+                            if (! $hatForm) {
+                                $varianteFehlt[$slot->id] = true;
+                            }
                         }
                     }
                 }
                 // Phase 3: persistente Seiten-Listen — links Basisrezepte ODER Pakete (Umschalter), rechts VK-Gerichte.
                 // Kombi-Suche (wie Gerichte-Editor) filtert beide Seiten; sonst die jeweilige Listen-Suche.
-                $linkeSuche = $this->kombiSuche !== '' ? $this->kombiSuche : $this->basisSuche;
-                $rechteSuche = $this->kombiSuche !== '' ? $this->kombiSuche : $this->gerichtSuche;
-                $basisListe = $this->linkeListe === 'basisrezept'
-                    ? $pakete->basisKandidaten($team, $linkeSuche, [
-                        'hauptgruppe' => $this->basisHg, 'category' => $this->basisKat, 'level' => $this->basisNiveau,
-                    ])
-                    : collect();
-                $paketListe = $this->linkeListe === 'paket'
-                    ? $pakete->paketKandidaten($team, $linkeSuche, ['class' => $this->paketKlasse])
-                    : collect();
-                $gerichtListe = $pakete->gerichtKandidaten($team, $rechteSuche, $pickFilter);
-                if ($this->fillSlotId !== null) {
-                    if ($this->pickTyp === 'basisrezept') {
-                        $kandidaten = $this->gerichtSuche !== '' ? $pakete->basisKandidaten($team, $this->gerichtSuche) : collect();
-                    } elseif ($pickAktiv($this->gerichtSuche)) {
-                        $kandidaten = $pakete->gerichtKandidaten($team, $this->gerichtSuche, $pickFilter);
+                if ($istAufbau) {
+                    $linkeSuche = $this->kombiSuche !== '' ? $this->kombiSuche : $this->basisSuche;
+                    $rechteSuche = $this->kombiSuche !== '' ? $this->kombiSuche : $this->gerichtSuche;
+                    $basisListe = $this->linkeListe === 'basisrezept'
+                        ? $pakete->basisKandidaten($team, $linkeSuche, [
+                            'hauptgruppe' => $this->basisHg, 'category' => $this->basisKat, 'level' => $this->basisNiveau,
+                        ])
+                        : collect();
+                    $paketListe = $this->linkeListe === 'paket'
+                        ? $pakete->paketKandidaten($team, $linkeSuche, ['class' => $this->paketKlasse])
+                        : collect();
+                    $gerichtListe = $pakete->gerichtKandidaten($team, $rechteSuche, $pickFilter);
+                    if ($this->fillSlotId !== null) {
+                        if ($this->pickTyp === 'basisrezept') {
+                            $kandidaten = $this->gerichtSuche !== '' ? $pakete->basisKandidaten($team, $this->gerichtSuche) : collect();
+                        } elseif ($pickAktiv($this->gerichtSuche)) {
+                            $kandidaten = $pakete->gerichtKandidaten($team, $this->gerichtSuche, $pickFilter);
+                        }
                     }
                 }
             }
@@ -1195,11 +1208,11 @@ class Editor extends Component
             if ($paket !== null) {
                 $aggregat = $agg->paketAggregat($paket);
                 $kalkulation = $kalk->paketHk($team, $paket);
-                if ($this->paketQuelle === 'basisrezept') {
+                if ($istAufbau && $this->paketQuelle === 'basisrezept') {
                     $paketKandidaten = $this->paketGerichtSuche !== ''
                         ? $pakete->basisKandidaten($team, $this->paketGerichtSuche)
                         : collect();
-                } elseif ($pickAktiv($this->paketGerichtSuche)) {
+                } elseif ($istAufbau && $pickAktiv($this->paketGerichtSuche)) {
                     $paketKandidaten = $pakete->gerichtKandidaten($team, $this->paketGerichtSuche, $pickFilter);
                 }
             }
@@ -1207,13 +1220,13 @@ class Editor extends Component
 
         // R4.2: Soll/Ist-Coverage live gegen das Planungs-Gerüst (nur wenn eines existiert).
         $coverage = null;
-        if ($concept !== null && $this->frameId !== null) {
+        if ($istKonzeptTab && $concept !== null && $this->frameId !== null) {
             $coverage = app(\Platform\FoodAlchemist\Services\CoverageService::class)->coverage($team, 'concept', $concept->id);
         }
 
         // R4.4: Zutaten-Zeilen des aufgeklappten Gericht-Slots (read-first) + Ersatz-Hinweise.
         $slotZutaten = [];
-        if ($this->zutatenOffenSlotId !== null && $concept !== null) {
+        if ($istAufbau && $this->zutatenOffenSlotId !== null && $concept !== null) {
             $zSlot = $concept->slots->firstWhere('id', $this->zutatenOffenSlotId);
             if ($zSlot?->sales_recipe_id !== null) {
                 $zutaten = \Platform\FoodAlchemist\Models\FoodAlchemistRecipeIngredient::where('recipe_id', $zSlot->sales_recipe_id)
@@ -1240,13 +1253,13 @@ class Editor extends Component
         return view('foodalchemist::livewire.concepter.editor', [
             'slotZutaten' => $slotZutaten,
             'coverage' => $coverage,
-            'pickHauptgruppen' => $sales->dishMainGroups($team),
-            'pickHgCounts' => $sales->hauptgruppenCounts($team),
-            'pickKlassen' => $this->pickHg !== null
+            'pickHauptgruppen' => $istAufbau ? $sales->dishMainGroups($team) : collect(),
+            'pickHgCounts' => $istAufbau ? $sales->hauptgruppenCounts($team) : [],
+            'pickKlassen' => $istAufbau && $this->pickHg !== null
                 ? FoodAlchemistDishClass::where('dish_main_group_id', $this->pickHg)->orderBy('label')->get(['id', 'label'])
                 : collect(),
             // Die Hauptgruppe reist jetzt im Filtersatz statt als eigener Parameter (MVP-048).
-            'pickKlassenCounts' => $this->pickHg !== null ? $sales->klassenCounts($team, ['hauptgruppe' => $this->pickHg]) : [],
+            'pickKlassenCounts' => $istAufbau && $this->pickHg !== null ? $sales->klassenCounts($team, ['hauptgruppe' => $this->pickHg]) : [],
             'concept' => $concept,
             'paket' => $paket,
             'cockpit' => $cockpit,
@@ -1254,11 +1267,11 @@ class Editor extends Component
             'sektionSumme' => $sektionSumme,
             // B (UX-Umbau): aufgelöstes Wording je Gericht-Slot für die Menü-Ansicht
             // (Kette Konzept-Wording → VK-Wording-Standard → Name; Quelle für die Herkunft-Badge)
-            'slotWording' => $concept
+            'slotWording' => $istAufbau && $concept
                 ? collect($concept->slots)->filter(fn ($s) => $s->sales_recipe_id !== null)
                     ->mapWithKeys(fn ($s) => [$s->id => app(\Platform\FoodAlchemist\Services\WordingResolver::class)->fuerSlot($s)])->all()
                 : [],
-            'einheiten' => app(\Platform\FoodAlchemist\Services\VocabularyService::class)->listEinheiten($team),
+            'einheiten' => $istAufbau ? app(\Platform\FoodAlchemist\Services\VocabularyService::class)->listEinheiten($team) : collect(),
             'aggregat' => $aggregat,
             'bewertung' => $bewertet,
             'kalkulation' => $kalkulation,
@@ -1270,39 +1283,39 @@ class Editor extends Component
             'kandidaten' => $kandidaten,
             'basisListe' => $basisListe ?? collect(),
             'paketListe' => $paketListe ?? collect(),
-            'paketKlassenListe' => $this->type === 'concepts' ? $pakete->klassen($team) : [],
+            'paketKlassenListe' => $istAufbau && $this->type === 'concepts' ? $pakete->klassen($team) : [],
             'gerichtListe' => $gerichtListe ?? collect(),
-            'basisHauptgruppen' => $this->type === 'concepts' ? app(\Platform\FoodAlchemist\Services\RecipeService::class)->mainGroups($team) : collect(),
-            'basisKategorien' => ($this->type === 'concepts' && $this->basisHg !== null)
+            'basisHauptgruppen' => $istAufbau && $this->type === 'concepts' ? app(\Platform\FoodAlchemist\Services\RecipeService::class)->mainGroups($team) : collect(),
+            'basisKategorien' => ($istAufbau && $this->type === 'concepts' && $this->basisHg !== null)
                 ? \Platform\FoodAlchemist\Models\FoodAlchemistRecipeCategory::visibleToTeam($team)
                     ->where('main_group_id', $this->basisHg)->orderBy('label')->get(['id', 'label'])
                 : collect(),
             'basisNiveaus' => [['slug' => 'haute_cuisine', 'label' => 'Haute'], ['slug' => 'gehoben', 'label' => 'Gehoben'], ['slug' => 'klassisch', 'label' => 'Klassisch']],
             'typFarben' => app(\Platform\FoodAlchemist\Services\TeamSettingsService::class)->typFarben($team),
             'paketKandidaten' => $paketKandidaten,
-            'sektorSlugs' => $concept !== null ? $concepts->sektorEignungSlugs($concept) : [],
+            'sektorSlugs' => $istStammdaten && $concept !== null ? $concepts->sektorEignungSlugs($concept) : [],
             // 4c: Kategorie-Feld abgelöst — kategorienFlat nicht mehr benötigt
             // Facetten-Vokabulare (Umbau-Spec Phase 4b)
             // MVP-025: teamgescopt wie die drei Facetten darunter — vorher als Einzelfall ungescopt.
-            'servierformen' => \Platform\FoodAlchemist\Models\FoodAlchemistServierform::visibleToTeam($team)
-                ->where('is_inactive', false)->orderBy('sort_order')->get(['id', 'code', 'label']),
-            'eventtypen' => \Platform\FoodAlchemist\Models\FoodAlchemistEventtyp::visibleToTeam($team)
-                ->where('is_inactive', false)->orderBy('sort_order')->get(['id', 'name']),
-            'einsatzmomente' => \Platform\FoodAlchemist\Models\FoodAlchemistEinsatzmoment::visibleToTeam($team)
-                ->where('is_inactive', false)->orderBy('sort_order')->get(['id', 'name']),
-            'saisons' => \Platform\FoodAlchemist\Models\FoodAlchemistSaison::visibleToTeam($team)
-                ->where('is_inactive', false)->orderBy('sort_order')->get(['id', 'name']),
-            'klassen' => $this->type === 'pakete' ? $pakete->klassen($team) : $concepts->klassen($team),
-            'rollen' => $pakete->rollen($team),
-            'schreibstile' => FoodAlchemistWritingStyle::visibleToTeam($team)->where('is_inactive', false)
-                ->orderBy('sort_order')->orderBy('name')->get(['id', 'name']),
+            'servierformen' => $istStammdaten ? \Platform\FoodAlchemist\Models\FoodAlchemistServierform::visibleToTeam($team)
+                ->where('is_inactive', false)->orderBy('sort_order')->get(['id', 'code', 'label']) : collect(),
+            'eventtypen' => $istStammdaten ? \Platform\FoodAlchemist\Models\FoodAlchemistEventtyp::visibleToTeam($team)
+                ->where('is_inactive', false)->orderBy('sort_order')->get(['id', 'name']) : collect(),
+            'einsatzmomente' => $istStammdaten ? \Platform\FoodAlchemist\Models\FoodAlchemistEinsatzmoment::visibleToTeam($team)
+                ->where('is_inactive', false)->orderBy('sort_order')->get(['id', 'name']) : collect(),
+            'saisons' => $istStammdaten ? \Platform\FoodAlchemist\Models\FoodAlchemistSaison::visibleToTeam($team)
+                ->where('is_inactive', false)->orderBy('sort_order')->get(['id', 'name']) : collect(),
+            'klassen' => $istStammdaten ? ($this->type === 'pakete' ? $pakete->klassen($team) : $concepts->klassen($team)) : [],
+            'rollen' => $istStammdaten ? $pakete->rollen($team) : [],
+            'schreibstile' => $istStammdaten ? FoodAlchemistWritingStyle::visibleToTeam($team)->where('is_inactive', false)
+                ->orderBy('sort_order')->orderBy('name')->get(['id', 'name']) : collect(),
             // #388 Geschirr-Tab: Kandidaten nur wenn ein Picker offen ist (sonst leer = günstig).
-            'geschirrKandidaten' => ($this->tab === 'geschirr' && $this->geschirrPickSlotId !== null)
+            'geschirrKandidaten' => ($istGeschirrTab && $this->geschirrPickSlotId !== null)
                 ? app(\Platform\FoodAlchemist\Services\GeschirrService::class)->searchItems(
                     $team, $this->geschirrSuche, 12, $this->geschirrVehikelBevorzugt($concept))
                 : collect(),
             // Sensorik-Tab: Geschmacks-Balance + Textur über die Concept-Gerichte (nur wenn Tab aktiv).
-            'sensorik' => ($this->tab === 'sensorik' && $concept !== null)
+            'sensorik' => ($istSensorikTab && $concept !== null)
                 ? app(\Platform\FoodAlchemist\Services\SensorikService::class)->fuerConcept($concept)
                 : null,
         ]);
