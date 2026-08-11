@@ -96,16 +96,126 @@
                 <input type="checkbox" wire:model.live="nurMitPositionen" class="rounded border-gray-300 text-violet-600 focus:ring-violet-500" />
                 nur mit Positionen
             </label>
+            <label class="inline-flex items-center gap-2 pb-2 text-[12px] text-gray-600">
+                <input type="checkbox" wire:model.live="nurMitKlaerung" class="rounded border-gray-300 text-violet-600 focus:ring-violet-500" />
+                nur mit Klärung
+            </label>
         </div>
 
-        {{-- Bestell-Liste (nach Liefertag gruppiert, sonst flach nach Bestelldatum) --}}
+        <div class="flex flex-wrap gap-2 text-[12px]">
+            @foreach(['bestellungen' => 'Bestellungen', 'liefertage' => 'Liefertage', 'lieferanten' => 'Lieferanten'] as $key => $lbl)
+                <button type="button" wire:click="$set('sicht','{{ $key }}')"
+                    class="px-3 py-1.5 rounded-md font-medium {{ $sicht === $key ? 'bg-violet-600 text-white shadow-sm' : 'bg-black/[0.04] text-gray-600 hover:bg-black/[0.07]' }}">
+                    {{ $lbl }}
+                </button>
+            @endforeach
+        </div>
+
+        {{-- Bestell-Hub: drei Sichten auf dieselben gefilterten Daten. --}}
         <div class="relative overflow-hidden {{ $card }}" data-orders-tabelle>
             <div class="{{ $cardAccent }}"></div>
             <div class="px-5 pt-4 pb-2 flex items-baseline justify-between">
-                <h3 class="font-medium tracking-tight text-gray-900">Bestellungen</h3>
+                <h3 class="font-medium tracking-tight text-gray-900">{{ ['bestellungen' => 'Bestellungen finden', 'liefertage' => 'Nach Liefertag planen', 'lieferanten' => 'Nach Lieferant bündeln'][$sicht] ?? 'Bestellungen' }}</h3>
                 <span class="{{ $label }}">{{ number_format($liste->count(), 0, ',', '.') }} Treffer</span>
             </div>
             <div class="max-h-[70vh] overflow-auto">
+                @if($sicht === 'liefertage')
+                    <div class="divide-y divide-black/5">
+                        @forelse($liefertagGruppen as $gruppe)
+                            <div class="px-5 py-3">
+                                <div class="flex flex-wrap items-baseline justify-between gap-2 mb-2">
+                                    <div>
+                                        <div class="text-[13px] font-semibold text-gray-900">{{ $gruppe['label'] }}</div>
+                                        <div class="text-[11px] text-gray-500">{{ $gruppe['suppliers'] }} Lieferanten · {{ $gruppe['orders']->count() }} Bestellungen · {{ $gruppe['line_count'] }} Positionen</div>
+                                    </div>
+                                    <div class="text-[13px] font-semibold text-gray-900">{{ number_format($gruppe['total_net'], 2, ',', '.') }} €</div>
+                                </div>
+                                <table class="{{ $table }}">
+                                    <thead><tr>
+                                        <th class="{{ $th }} text-left">Lieferant</th>
+                                        <th class="{{ $th }} text-left">Produktion / Anlass</th>
+                                        <th class="{{ $th }} text-right">Pos.</th>
+                                        <th class="{{ $th }} text-right">Netto</th>
+                                        <th class="{{ $th }}">Status</th>
+                                        <th class="{{ $th }}">Hinweise</th>
+                                    </tr></thead>
+                                    <tbody>
+                                        @foreach($gruppe['orders'] as $o)
+                                            <x-foodalchemist::table-row wire:key="day-{{ md5($gruppe['key']) }}-{{ $o['id'] }}" wire:click="oeffnen({{ $o['id'] }})">
+                                                <td class="{{ $td }} font-medium text-gray-900 whitespace-nowrap">{{ $o['supplier'] }}</td>
+                                                <td class="{{ $td }} text-gray-600">
+                                                    @if(!empty($o['herkunft']))
+                                                        <div class="flex flex-wrap gap-1">
+                                                            @foreach($o['herkunft'] as $h)
+                                                                <span class="{{ $pill }} {{ $variantPill[($h['production_order_id'] ?? null) !== null ? 'primary' : ($h['type'] === 'concept' ? 'info' : 'secondary')] }}">{{ $h['label'] }}</span>
+                                                            @endforeach
+                                                        </div>
+                                                    @else
+                                                        {{ $o['reference'] ?: '—' }}
+                                                    @endif
+                                                </td>
+                                                <td class="{{ $td }} text-right tabular-nums">{{ $o['line_count'] }}</td>
+                                                <td class="{{ $td }} text-right tabular-nums">{{ number_format($o['total_net'], 2, ',', '.') }} €</td>
+                                                <td class="{{ $td }}"><span class="{{ $pill }} font-medium {{ $variantPill[$o['status']->badgeVariant()] ?? $variantPill['secondary'] }}">{{ $o['status']->label() }}</span></td>
+                                                <td class="{{ $td }}">@foreach($o['warnings'] as $w)<span class="{{ $pill }} {{ $variantPill['warning'] ?? $variantPill['secondary'] }}">{{ $w }}</span>@endforeach</td>
+                                            </x-foodalchemist::table-row>
+                                        @endforeach
+                                    </tbody>
+                                </table>
+                            </div>
+                        @empty
+                            <div class="px-5 py-10 text-center text-gray-500">Keine Liefertage im Filter.</div>
+                        @endforelse
+                    </div>
+                @elseif($sicht === 'lieferanten')
+                    <div class="divide-y divide-black/5">
+                        @forelse($lieferantGruppen as $gruppe)
+                            <div class="px-5 py-3">
+                                <div class="flex flex-wrap items-baseline justify-between gap-2 mb-2">
+                                    <div>
+                                        <div class="text-[13px] font-semibold text-gray-900">{{ $gruppe['supplier'] }}</div>
+                                        <div class="text-[11px] text-gray-500">{{ $gruppe['dates'] }} Liefertage · {{ $gruppe['orders']->count() }} Bestellungen · {{ $gruppe['line_count'] }} Positionen</div>
+                                    </div>
+                                    <div class="text-[13px] font-semibold text-gray-900">{{ number_format($gruppe['total_net'], 2, ',', '.') }} €</div>
+                                </div>
+                                <table class="{{ $table }}">
+                                    <thead><tr>
+                                        <th class="{{ $th }} text-left">Datum</th>
+                                        <th class="{{ $th }} text-left">Produktion / Anlass</th>
+                                        <th class="{{ $th }} text-right">Pos.</th>
+                                        <th class="{{ $th }} text-right">Netto</th>
+                                        <th class="{{ $th }}">Status</th>
+                                        <th class="{{ $th }}">Hinweise</th>
+                                    </tr></thead>
+                                    <tbody>
+                                        @foreach($gruppe['orders'] as $o)
+                                            <x-foodalchemist::table-row wire:key="supplier-{{ md5($gruppe['supplier']) }}-{{ $o['id'] }}" wire:click="oeffnen({{ $o['id'] }})">
+                                                <td class="{{ $td }} whitespace-nowrap tabular-nums text-gray-700">{{ $o['liefertag'] ? \Carbon\Carbon::parse($o['liefertag'])->format('d.m.Y') : '—' }}</td>
+                                                <td class="{{ $td }} text-gray-600">
+                                                    @if(!empty($o['herkunft']))
+                                                        <div class="flex flex-wrap gap-1">
+                                                            @foreach($o['herkunft'] as $h)
+                                                                <span class="{{ $pill }} {{ $variantPill[($h['production_order_id'] ?? null) !== null ? 'primary' : ($h['type'] === 'concept' ? 'info' : 'secondary')] }}">{{ $h['label'] }}</span>
+                                                            @endforeach
+                                                        </div>
+                                                    @else
+                                                        {{ $o['reference'] ?: '—' }}
+                                                    @endif
+                                                </td>
+                                                <td class="{{ $td }} text-right tabular-nums">{{ $o['line_count'] }}</td>
+                                                <td class="{{ $td }} text-right tabular-nums">{{ number_format($o['total_net'], 2, ',', '.') }} €</td>
+                                                <td class="{{ $td }}"><span class="{{ $pill }} font-medium {{ $variantPill[$o['status']->badgeVariant()] ?? $variantPill['secondary'] }}">{{ $o['status']->label() }}</span></td>
+                                                <td class="{{ $td }}">@foreach($o['warnings'] as $w)<span class="{{ $pill }} {{ $variantPill['warning'] ?? $variantPill['secondary'] }}">{{ $w }}</span>@endforeach</td>
+                                            </x-foodalchemist::table-row>
+                                        @endforeach
+                                    </tbody>
+                                </table>
+                            </div>
+                        @empty
+                            <div class="px-5 py-10 text-center text-gray-500">Keine Lieferanten im Filter.</div>
+                        @endforelse
+                    </div>
+                @else
                 <table class="{{ $table }}">
                     <thead><tr class="text-left">
                         <th class="{{ $th }} whitespace-nowrap sticky top-0 z-20 bg-white/95 backdrop-blur-xl">Liefertag</th>
@@ -167,6 +277,7 @@
                         @endif
                     </tbody>
                 </table>
+                @endif
             </div>
         </div>
 

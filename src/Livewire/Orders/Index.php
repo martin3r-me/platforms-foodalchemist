@@ -56,6 +56,12 @@ class Index extends Component
     #[Url(as: 'pos')]
     public bool $nurMitPositionen = false;
 
+    #[Url(as: 'sicht')]
+    public string $sicht = 'bestellungen';
+
+    #[Url(as: 'klaer')]
+    public bool $nurMitKlaerung = false;
+
     /** „Neue Bestellung": neutraler Start; Lieferant ergibt sich erst aus Artikel/Bedarf. */
     public ?string $neuerLiefertag = null;
 
@@ -172,6 +178,7 @@ class Index extends Component
             ->when($this->productionFilter !== null, fn ($c) => $c->filter(fn ($o) => collect($herkunftByOrder[(int) $o->id] ?? [])
                 ->contains(fn ($h) => (int) ($h['production_order_id'] ?? 0) === $this->productionFilter)))
             ->when($this->nurMitPositionen, fn ($c) => $c->filter(fn ($o) => $o->lines->count() > 0))
+            ->when($this->nurMitKlaerung, fn ($c) => $c->filter(fn ($o) => $o->lines->count() === 0 || (float) $o->total_net <= 0.0))
             ->when($suche !== '', fn ($c) => $c->filter(function ($o) use ($suche, $herkunftByOrder) {
                 $herkunft = collect($herkunftByOrder[(int) $o->id] ?? [])->pluck('label')->implode(' ');
                 $hay = mb_strtolower(($o->supplier?->name ?? '') . ' ' . ($o->reference ?? '') . ' ' . $herkunft);
@@ -187,6 +194,10 @@ class Index extends Component
                 'reference' => $o->reference,
                 'liefertag' => $o->desired_delivery_date?->toDateString(),
                 'herkunft' => $herkunftByOrder[(int) $o->id] ?? [],
+                'warnings' => array_values(array_filter([
+                    $o->lines->count() === 0 ? 'leer' : null,
+                    (float) $o->total_net <= 0.0 ? 'Klärung' : null,
+                ])),
             ])->values();
 
         // Bei Liefertag-Basis nach Tag gruppieren (Reihenfolge kommt sortiert aus dem Service,
@@ -196,9 +207,32 @@ class Index extends Component
             ? $liste->groupBy(fn ($o) => $o['liefertag'] ?? '')
             : collect(['' => $liste]);
 
+        $liefertagGruppen = $liste->groupBy(fn ($o) => $o['liefertag'] ?? '')
+            ->map(fn ($items, $tag) => [
+                'key' => (string) $tag,
+                'label' => $tag === '' ? 'Ohne Liefertag' : Carbon::parse($tag)->locale('de')->isoFormat('dddd, DD.MM.YYYY'),
+                'orders' => $items->values(),
+                'suppliers' => $items->pluck('supplier')->unique()->count(),
+                'total_net' => round((float) $items->sum('total_net'), 2),
+                'line_count' => (int) $items->sum('line_count'),
+                'warnings' => $items->flatMap(fn ($o) => $o['warnings'])->unique()->values()->all(),
+            ])->values();
+
+        $lieferantGruppen = $liste->groupBy('supplier')
+            ->map(fn ($items, $supplier) => [
+                'supplier' => (string) $supplier,
+                'orders' => $items->sortBy(fn ($o) => $o['liefertag'] ?? '9999-12-31')->values(),
+                'dates' => $items->pluck('liefertag')->filter()->unique()->count(),
+                'total_net' => round((float) $items->sum('total_net'), 2),
+                'line_count' => (int) $items->sum('line_count'),
+                'warnings' => $items->flatMap(fn ($o) => $o['warnings'])->unique()->values()->all(),
+            ])->sortBy('supplier')->values();
+
         return view('foodalchemist::livewire.orders.index', [
             'liste' => $liste,
             'gruppen' => $gruppen,
+            'liefertagGruppen' => $liefertagGruppen,
+            'lieferantGruppen' => $lieferantGruppen,
             'gruppiert' => $gruppiert,
             'lieferanten' => $lieferanten,
             'produktionen' => $produktionen,
