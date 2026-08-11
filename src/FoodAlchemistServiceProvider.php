@@ -636,6 +636,10 @@ class FoodAlchemistServiceProvider extends ServiceProvider
         $baseNamespace = 'Platform\\FoodAlchemist\\Livewire';
         $prefix = 'foodalchemist';
 
+        // Kritische eingebettete Komponenten explizit registrieren: diese Tags werden in
+        // Blade direkt gerendert und dürfen nicht von Auto-Discovery/Cache-Zustand abhängen.
+        Livewire::component('foodalchemist.orders.editor', \Platform\FoodAlchemist\Livewire\Orders\Editor::class);
+
         // Prüfe ob Verzeichnis existiert
         if (!is_dir($basePath)) {
             return;
