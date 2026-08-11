@@ -10,6 +10,7 @@ use Platform\FoodAlchemist\Enums\OrderStatus;
 use Platform\FoodAlchemist\Models\FoodAlchemistGp;
 use Platform\FoodAlchemist\Models\FoodAlchemistOrder;
 use Platform\FoodAlchemist\Models\FoodAlchemistOrderLine;
+use Platform\FoodAlchemist\Models\FoodAlchemistProductionOrder;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplier;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem;
 
@@ -104,6 +105,8 @@ class OrderService
             $this->recomputeOrder($draft->refresh());
             $touched[] = (int) $draft->id;
         }
+
+        $herkunft = $this->herkunftMitProduktionsnamen($team, $this->herkunftAggregat($alleRefs));
 
         return [
             'orders' => array_values(array_unique($touched)),
@@ -615,7 +618,7 @@ class OrderService
         $bis = ($filters['bis'] ?? null) ?: null;
 
         $q = FoodAlchemistOrder::visibleToTeam($team)
-            ->with('supplier:id,name')
+            ->with(['supplier:id,name', 'lines:id,order_id,source_contributions'])
             ->when($status !== null, fn ($q) => $q->where('status', $status))
             ->when($von !== null, fn ($q) => $q->whereDate($spalte, '>=', $von))
             ->when($bis !== null, fn ($q) => $q->whereDate($spalte, '<=', $bis));
@@ -682,7 +685,7 @@ class OrderService
             'is_owned' => $order->isOwnedBy($team),
             'editierbar' => $status->istOffen() && $order->isOwnedBy($team),
             'moq' => $this->moqAmpel($order),
-            'herkunft' => $this->herkunftAggregat($alleRefs),   // E1: Schienen-weite Quellen-Übersicht (dedupliziert, mit Links)
+            'herkunft' => $herkunft,   // E1: Schienen-weite Quellen-Übersicht (dedupliziert, mit Links)
             'zeilen' => $zeilen,
         ];
     }
@@ -760,7 +763,7 @@ class OrderService
      * @param  list<string>  $refs
      * @return list<array{key:string, type:string, label:string, production_order_id:?int}>
      */
-    private function herkunftAggregat(array $refs): array
+    public function herkunftAggregat(array $refs): array
     {
         $byKey = [];
         foreach ($this->parseHerkunft($refs) as $h) {
@@ -776,6 +779,41 @@ class OrderService
         }
 
         return array_values($byKey);
+    }
+
+    /**
+     * Produktion-Herkunft als echten Produktionskontext beschriften, nicht nur als ID.
+     *
+     * @param  list<array{key:string, type:string, label:string, production_order_id:?int}>  $herkunft
+     * @return list<array{key:string, type:string, label:string, production_order_id:?int}>
+     */
+    public function herkunftMitProduktionsnamen(Team $team, array $herkunft): array
+    {
+        $ids = collect($herkunft)
+            ->pluck('production_order_id')
+            ->filter()
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values();
+
+        if ($ids->isEmpty()) {
+            return $herkunft;
+        }
+
+        $namen = FoodAlchemistProductionOrder::visibleToTeam($team)
+            ->whereIn('id', $ids)
+            ->get(['id', 'name', 'production_date'])
+            ->mapWithKeys(fn ($p) => [
+                (int) $p->id => trim(($p->name ?: 'Produktion #' . $p->id) . ($p->production_date ? ' · ' . $p->production_date->format('d.m.Y') : '')),
+            ]);
+
+        return collect($herkunft)->map(function ($h) use ($namen) {
+            if (($h['production_order_id'] ?? null) !== null) {
+                $h['label'] = $namen[(int) $h['production_order_id']] ?? $h['label'];
+            }
+
+            return $h;
+        })->values()->all();
     }
 
     /** S3: Volldaten für Bestell-Dokument (PDF/Druck/CSV) — Lieferant-Stammdaten + Zeilen. */

@@ -33,7 +33,78 @@
     @endif
 
     @if($detail === null)
-        <p class="pt-4 text-[12px] text-gray-500">Kein Beleg geladen.</p>
+        <div class="pt-4 space-y-4">
+            <x-foodalchemist::modal-section title="Neue Bestellung">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div>
+                        <label class="text-[10px] text-gray-500">Liefertag</label>
+                        <input type="date" wire:model="formDeliveryDate" class="{{ $input }}" />
+                    </div>
+                    <div class="md:col-span-2">
+                        <label class="text-[10px] text-gray-500">Anlass / Referenz</label>
+                        <input type="text" wire:model="formReference" class="{{ $input }}" placeholder="z. B. Wochenbestellung" />
+                    </div>
+                </div>
+            </x-foodalchemist::modal-section>
+
+            <x-foodalchemist::modal-section title="Artikel direkt beim Lieferanten bestellen">
+                <input type="search" wire:model.live.debounce.300ms="artikelSuche" placeholder="Lieferant / Grundprodukt / Artikel / Art-Nr…" class="{{ $input }}" data-orders-artikel-suche />
+                @if($artikelTreffer->isNotEmpty())
+                    <div class="mt-1 rounded-lg border border-white/10 divide-y divide-white/5 max-h-60 overflow-y-auto">
+                        @foreach($artikelTreffer as $a)
+                            <button type="button" wire:click="artikelHinzufuegen({{ $a['id'] }})" wire:key="art-start-{{ $a['id'] }}"
+                                class="block w-full text-left px-2.5 py-1.5 hover:bg-violet-500/10">
+                                <span class="text-[12px] text-gray-800">{{ $a['designation'] ?: '—' }}</span>
+                                <span class="text-[10px] text-gray-400 block">{{ $a['supplier'] }}@if($a['gp']) · GP {{ $a['gp'] }}@endif@if($a['article_number']) · Art. {{ $a['article_number'] }}@endif</span>
+                            </button>
+                        @endforeach
+                    </div>
+                @elseif(mb_strlen(trim($artikelSuche)) >= 2)
+                    <p class="text-[11px] text-gray-400 mt-1">Kein Artikel gefunden.</p>
+                @endif
+            </x-foodalchemist::modal-section>
+
+            <x-foodalchemist::modal-section title="Bedarf aus Gericht / Basisrezept">
+                <p class="text-[11px] text-gray-500 mb-2">Gerichte und Basisrezepte erzeugen die passenden Lieferanten-Schienen aus ihren Grundprodukten und Lead-Artikeln.</p>
+                @if($bedarfRecipeId === null)
+                    <input type="search" wire:model.live.debounce.300ms="bedarfSuche" placeholder="Gericht / Basisrezept…" class="{{ $input }}" data-orders-bedarf-suche />
+                    @if($bedarfTreffer->isNotEmpty())
+                        <div class="mt-1 rounded-lg border border-white/10 divide-y divide-white/5 max-h-60 overflow-y-auto">
+                            @foreach($bedarfTreffer as $r)
+                                <button type="button" wire:click="bedarfRezeptWaehlen({{ $r['id'] }})" wire:key="brz-start-{{ $r['id'] }}"
+                                    class="flex items-center gap-1.5 w-full text-left px-2.5 py-1.5 hover:bg-violet-500/10">
+                                    <span class="text-[12px] text-gray-800 truncate">{{ $r['name'] }}</span>
+                                    <span class="{{ $pill }} {{ $variantPill[$r['is_sales_recipe'] ? 'info' : 'secondary'] }} shrink-0">{{ $r['is_sales_recipe'] ? 'Gericht' : 'Basisrezept' }}</span>
+                                </button>
+                            @endforeach
+                        </div>
+                    @elseif(mb_strlen(trim($bedarfSuche)) >= 2)
+                        <p class="text-[11px] text-gray-400 mt-1">Kein Rezept gefunden.</p>
+                    @endif
+                @else
+                    <div class="space-y-1.5">
+                        <div class="flex items-center justify-between gap-1">
+                            <span class="text-[12px] text-gray-800 truncate">{{ $bedarfRecipeName }}
+                                <span class="{{ $pill }} {{ $variantPill[$bedarfRecipeVk ? 'info' : 'secondary'] }}">{{ $bedarfRecipeVk ? 'Gericht' : 'Basisrezept' }}</span>
+                            </span>
+                            <button type="button" wire:click="bedarfRezeptZuruecksetzen" class="text-[11px] text-gray-400 shrink-0">ändern</button>
+                        </div>
+                        <div class="flex flex-wrap gap-1 items-center">
+                            <input type="number" min="0" step="0.1" wire:model="bedarfMenge" placeholder="Menge" class="{{ $input }} w-32" />
+                            @if($bedarfRecipeVk)
+                                <span class="inline-flex items-center px-2 text-[11px] text-gray-500 whitespace-nowrap">Portionen</span>
+                            @else
+                                <select wire:model="bedarfEinheit" class="{{ $input }} !w-auto">
+                                    <option value="ansaetze">Ansätze</option>
+                                    <option value="kg">kg</option>
+                                </select>
+                            @endif
+                            <button type="button" wire:click="bedarfUebernehmen" class="{{ $btnGhost }}" data-orders-bedarf-uebernehmen>Bedarf übernehmen</button>
+                        </div>
+                    </div>
+                @endif
+            </x-foodalchemist::modal-section>
+        </div>
     @else
     <x-foodalchemist::editor-tabs marker="orders" wire-key="orders-tabs-{{ $detail['id'] }}" :init="'positionen'"
         :tabs="[
@@ -142,14 +213,14 @@
         <div x-show="tab === 'hinzufuegen'" x-cloak class="pt-4 space-y-4">
             @if($detail['editierbar'])
                 <x-foodalchemist::modal-section title="Artikel direkt bestellen">
-                    <input type="search" wire:model.live.debounce.300ms="artikelSuche" placeholder="Artikel / Art-Nr… (aus der Liste mit Klick einfügen)" class="{{ $input }}" data-orders-artikel-suche />
+                    <input type="search" wire:model.live.debounce.300ms="artikelSuche" placeholder="Lieferant / Grundprodukt / Artikel / Art-Nr…" class="{{ $input }}" data-orders-artikel-suche />
                     @if($artikelTreffer->isNotEmpty())
                         <div class="mt-1 rounded-lg border border-white/10 divide-y divide-white/5 max-h-60 overflow-y-auto">
                             @foreach($artikelTreffer as $a)
                                 <button type="button" wire:click="artikelHinzufuegen({{ $a['id'] }})" wire:key="art-{{ $a['id'] }}"
                                     class="block w-full text-left px-2.5 py-1.5 hover:bg-violet-500/10">
                                     <span class="text-[12px] text-gray-800">{{ $a['designation'] ?: '—' }}</span>
-                                    <span class="text-[10px] text-gray-400 block">{{ $a['supplier'] }}@if($a['article_number']) · Art. {{ $a['article_number'] }}@endif</span>
+                                    <span class="text-[10px] text-gray-400 block">{{ $a['supplier'] }}@if($a['gp']) · GP {{ $a['gp'] }}@endif@if($a['article_number']) · Art. {{ $a['article_number'] }}@endif</span>
                                 </button>
                             @endforeach
                         </div>

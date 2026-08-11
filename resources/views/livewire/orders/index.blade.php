@@ -23,19 +23,13 @@
         @if($hinweis)<div class="{{ $sectionCard }} !bg-emerald-500/[0.06] !border-emerald-500/20 text-[12px] text-emerald-700">✓ {{ $hinweis }}</div>@endif
         @if($fehler)<div class="{{ $sectionCard }} !bg-rose-500/[0.06] !border-rose-500/20 text-[12px] text-rose-700">{{ $fehler }}</div>@endif
 
-        {{-- Neue Bestellung (Lieferant + Liefertag) --}}
+        {{-- Neue Bestellung: neutral öffnen; Lieferant entsteht erst aus Artikel/Bedarf. --}}
         <div class="flex flex-wrap items-end gap-2">
             <div>
                 <span class="{{ $label }} block mb-1">Neue Bestellung</span>
                 <div class="flex flex-wrap gap-1">
-                    <select wire:model="neuerLieferant" class="{{ $input }}">
-                        <option value="">Lieferant…</option>
-                        @foreach($alleLieferanten as $l)
-                            <option value="{{ $l['id'] }}">{{ $l['name'] }}</option>
-                        @endforeach
-                    </select>
                     <input type="date" wire:model="neuerLiefertag" class="{{ $input }}" title="Liefertag" />
-                    <button type="button" wire:click="neueBestellung" class="{{ $btnPrimary }} shrink-0" data-orders-neu>+ Anlegen</button>
+                    <button type="button" wire:click="neueBestellung" class="{{ $btnPrimary }} shrink-0" data-orders-neu>+ Bestellung öffnen</button>
                 </div>
             </div>
         </div>
@@ -76,7 +70,7 @@
             </div>
             <div>
                 <span class="{{ $label }} block mb-1">Suche</span>
-                <input type="search" wire:model.live.debounce.300ms="suche" placeholder="Lieferant / Anlass…" class="{{ $input }}" />
+                <input type="search" wire:model.live.debounce.300ms="suche" placeholder="Lieferant / Produktion / Anlass…" class="{{ $input }}" />
             </div>
             <div>
                 <span class="{{ $label }} block mb-1">Lieferant</span>
@@ -87,6 +81,17 @@
                     @endforeach
                 </select>
             </div>
+            @if($produktionen->isNotEmpty())
+                <div>
+                    <span class="{{ $label }} block mb-1">Produktion</span>
+                    <select wire:model.live="productionFilter" class="{{ $input }}">
+                        <option value="">alle Produktionen</option>
+                        @foreach($produktionen as $p)
+                            <option value="{{ $p['id'] }}">{{ $p['label'] }}</option>
+                        @endforeach
+                    </select>
+                </div>
+            @endif
         </div>
 
         {{-- Bestell-Liste (nach Liefertag gruppiert, sonst flach nach Bestelldatum) --}}
@@ -101,7 +106,7 @@
                     <thead><tr class="text-left">
                         <th class="{{ $th }} whitespace-nowrap sticky top-0 z-20 bg-white/95 backdrop-blur-xl">Liefertag</th>
                         <th class="{{ $th }} sticky top-0 z-20 bg-white/95 backdrop-blur-xl">Lieferant</th>
-                        <th class="{{ $th }} w-full sticky top-0 z-20 bg-white/95 backdrop-blur-xl">Anlass</th>
+                        <th class="{{ $th }} w-full sticky top-0 z-20 bg-white/95 backdrop-blur-xl">Produktion / Anlass</th>
                         <th class="{{ $th }} text-right whitespace-nowrap sticky top-0 z-20 bg-white/95 backdrop-blur-xl">Netto</th>
                         <th class="{{ $th }} sticky top-0 z-20 bg-white/95 backdrop-blur-xl">Status</th>
                     </tr></thead>
@@ -122,7 +127,27 @@
                                     <x-foodalchemist::table-row wire:key="ord-{{ $o['id'] }}" wire:click="oeffnen({{ $o['id'] }})" data-orders-zeile="{{ $o['id'] }}">
                                         <td class="{{ $td }} whitespace-nowrap tabular-nums text-gray-700">{{ $o['liefertag'] ? \Carbon\Carbon::parse($o['liefertag'])->format('d.m.Y') : '—' }}</td>
                                         <td class="{{ $td }} font-medium text-gray-900 whitespace-nowrap">{{ $o['supplier'] }}</td>
-                                        <td class="{{ $td }} text-gray-600">{{ $o['reference'] ?: '—' }}</td>
+                                        <td class="{{ $td }} text-gray-600">
+                                            @if(!empty($o['herkunft']))
+                                                <div class="flex flex-wrap gap-1">
+                                                    @foreach($o['herkunft'] as $h)
+                                                        @if(($h['production_order_id'] ?? null) !== null)
+                                                            <a href="{{ route('foodalchemist.produktion.index', ['auftrag' => $h['production_order_id']]) }}"
+                                                               onclick="event.stopPropagation()"
+                                                               class="{{ $pill }} {{ $variantPill['primary'] }} hover:underline"
+                                                               title="{{ $h['key'] }}">{{ $h['label'] }} ↗</a>
+                                                        @else
+                                                            <span class="{{ $pill }} {{ $variantPill[$h['type'] === 'concept' ? 'info' : 'secondary'] }}" title="{{ $h['key'] }}">{{ $h['label'] }}</span>
+                                                        @endif
+                                                    @endforeach
+                                                </div>
+                                                @if($o['reference'])
+                                                    <div class="mt-1 text-[11px] text-gray-500">{{ $o['reference'] }}</div>
+                                                @endif
+                                            @else
+                                                {{ $o['reference'] ?: '—' }}
+                                            @endif
+                                        </td>
                                         <td class="{{ $td }} text-right whitespace-nowrap tabular-nums text-gray-700">{{ number_format($o['total_net'], 2, ',', '.') }} €</td>
                                         <td class="{{ $td }}"><span class="{{ $pill }} font-medium {{ $variantPill[$o['status']->badgeVariant()] ?? $variantPill['secondary'] }}">{{ $o['status']->label() }}</span></td>
                                     </x-foodalchemist::table-row>
