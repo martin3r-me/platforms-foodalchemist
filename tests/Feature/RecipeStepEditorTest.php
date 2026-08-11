@@ -9,6 +9,8 @@ use Platform\Core\Services\ImageGenerationService;
 use Platform\FoodAlchemist\Livewire\Recipes\StepEditor;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipeStep;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipeStepPhoto;
+use Platform\FoodAlchemist\Services\Ai\AiGatewayService;
+use Platform\FoodAlchemist\Services\Ai\AiProposal;
 use Platform\FoodAlchemist\Tests\Support\SeedsTeamHierarchy;
 use Platform\FoodAlchemist\Tests\TestCase;
 
@@ -189,6 +191,42 @@ it('KI-Fotos erzeugt Bilder fuer alle Schritte ohne Foto und laesst bestehende F
         ->and($logs->pluck('tier')->unique()->all())->toBe(['I'])
         ->and($logs->pluck('target_table')->unique()->all())->toBe(['foodalchemist_recipe_step_photos'])
         ->and($logs->whereNotNull('error'))->toHaveCount(0);
+});
+
+it('rahmt KI-Schritte fuer Verkaufsgerichte als Service und Anrichten statt Komponenten-Produktion', function () {
+    $user = $this->makeUser($this->rootTeam, 'Root VK-Schritte');
+    $this->actingAs($user);
+
+    $komponente = $this->makeRecipe($this->rootTeam, 'Vanille-Topfencreme', [
+        'preparation' => 'Topfencreme glatt ruehren und kaltstellen.',
+    ]);
+    $gericht = $this->makeRecipe($this->rootTeam, '[DES] Marillenknoedel | Vanille-Topfencreme | Crumble', [
+        'is_sales_recipe' => true,
+        'sales_quantity_per_unit_g' => 140,
+        'sales_unit_count' => 1,
+    ]);
+    $this->makeIngredient($gericht, 'Vanille-Topfencreme', null, '60', 1)
+        ->update(['referenced_recipe_id' => $komponente->id]);
+
+    $this->mock(AiGatewayService::class, function ($mock) use ($komponente) {
+        $mock->shouldReceive('propose')->once()->with('recipe.steps', \Mockery::on(function (array $payload) use ($komponente) {
+            return ($payload['rezept_typ'] ?? null) === 'gericht'
+                && str_contains((string) ($payload['zubereitungsziel'] ?? ''), 'Anrichteablauf')
+                && str_contains((string) ($payload['hinweis'] ?? ''), 'Nicht neu herstellen')
+                && ($payload['komponenten'][0]['name'] ?? null) === $komponente->name
+                && ($payload['komponenten'][0]['typ'] ?? null) === 'basisrezept'
+                && ($payload['verkaufseinheit']['portion_g'] ?? null) === 140;
+        }), \Mockery::any())->andReturn(new AiProposal([
+            'steps' => [
+                ['phase' => 'Mise en Place', 'text' => 'Komponenten kalt bereitstellen.'],
+                ['phase' => 'Anrichten', 'text' => 'Topfencreme und Knoedel portionieren und mit Crumble abschliessen.'],
+            ],
+        ], 0.91, 'Mock', [], 'vk-steps'));
+    });
+
+    Livewire::test(StepEditor::class, ['recipeId' => $gericht->id])
+        ->call('kiSchritte')
+        ->assertSet('fehler', null);
 });
 
 it('Schritt löschen nummeriert neu und lässt das Foto im Pool', function () {

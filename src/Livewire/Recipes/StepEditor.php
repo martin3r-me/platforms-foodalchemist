@@ -338,12 +338,7 @@ class StepEditor extends Component
 
         try {
             $wissen = $this->stepWissen($r);
-            $vorschlag = $ki->propose('recipe.steps', [
-                'name' => $r->name,
-                'zutaten' => $r->ingredients->pluck('raw_text')->take(30)->all(),
-                'schritte_bestand' => FoodAlchemistRecipeStep::where('recipe_id', $r->id)
-                    ->orderBy('position')->pluck('text')->all(),
-            ], [
+            $vorschlag = $ki->propose('recipe.steps', $this->stepKontext($r), [
                 'knowledge' => $wissen['block'],
                 'knowledge_used' => $wissen['files_used'],
                 'target_table' => 'foodalchemist_recipe_steps',
@@ -411,15 +406,64 @@ class StepEditor extends Component
     /** @return array{block: string, files_used: list<string>} */
     private function stepWissen(FoodAlchemistRecipe $recipe): array
     {
-        $zutaten = $recipe->ingredients->pluck('raw_text')->take(30)->filter()->implode(', ');
-        $beschreibung = trim((string) $recipe->name . "\n" . $zutaten);
+        $zutaten = $recipe->ingredients()
+            ->whereNull('deleted_at')
+            ->with('referencedRecipe:id,name,is_sales_recipe')
+            ->orderBy('position')
+            ->limit(30)
+            ->get();
+        $beschreibung = trim((string) $recipe->name . "\n" . $zutaten->map(
+            fn ($z) => $z->referencedRecipe?->name ?? $z->raw_text
+        )->filter()->implode(', '));
         $wissen = app(KnowledgeContextService::class)->contextFor('recipe.steps', $beschreibung, null, [], [
-            'rezept_typ' => 'basisrezept',
+            'rezept_typ' => $recipe->is_sales_recipe ? 'gericht' : 'basisrezept',
         ]);
 
         return [
             'block' => (string) ($wissen['block'] ?? ''),
             'files_used' => $wissen['files_used'] ?? [],
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    private function stepKontext(FoodAlchemistRecipe $recipe): array
+    {
+        $zutaten = $recipe->ingredients()
+            ->whereNull('deleted_at')
+            ->with(['referencedRecipe:id,name,is_sales_recipe,preparation', 'gp:id,name'])
+            ->orderBy('position')
+            ->limit(30)
+            ->get();
+        $gericht = (bool) $recipe->is_sales_recipe;
+
+        return [
+            'name' => $recipe->name,
+            'rezept_typ' => $gericht ? 'gericht' : 'basisrezept',
+            'zubereitungsziel' => $gericht
+                ? 'Service-, Regenerations- und Anrichteablauf fuer ein Verkaufsgericht.'
+                : 'Produktions-Zubereitung fuer ein Basisrezept.',
+            'hinweis' => $gericht
+                ? 'Komponenten sind vorbereitet oder fertig produziert. Nicht neu herstellen; nur bereitstellen, regenerieren, finalisieren, portionieren und anrichten.'
+                : 'Rohwaren und Teilkomponenten fachlich produzieren.',
+            'zutaten' => $zutaten->pluck('raw_text')->filter()->values()->all(),
+            'komponenten' => $zutaten->filter(fn ($z) => $z->referencedRecipe !== null)->map(fn ($z) => [
+                'name' => $z->referencedRecipe?->name,
+                'typ' => $z->referencedRecipe?->is_sales_recipe ? 'gericht' : 'basisrezept',
+                'menge' => $z->quantity,
+                'raw_text' => $z->raw_text,
+                'bestehende_zubereitung' => mb_strimwidth((string) ($z->referencedRecipe?->preparation ?? ''), 0, 500),
+            ])->values()->all(),
+            'rohwaren' => $zutaten->filter(fn ($z) => $z->referencedRecipe === null)->map(fn ($z) => [
+                'name' => $z->gp?->name ?? $z->raw_text,
+                'menge' => $z->quantity,
+                'raw_text' => $z->raw_text,
+            ])->values()->all(),
+            'verkaufseinheit' => $gericht ? [
+                'anzahl' => $recipe->sales_unit_count,
+                'portion_g' => $recipe->sales_quantity_per_unit_g,
+            ] : null,
+            'schritte_bestand' => FoodAlchemistRecipeStep::where('recipe_id', $recipe->id)
+                ->orderBy('position')->pluck('text')->all(),
         ];
     }
 

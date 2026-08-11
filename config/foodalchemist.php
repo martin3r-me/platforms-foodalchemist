@@ -670,7 +670,12 @@ return [
         'recipe.steps' => [
             'tier' => 'A',                                            // langer, strukturierter Einzeltext
             'max_tokens' => 8000,
-            'task' => 'Schreibe die Zubereitung fuers PRODUKTIONS-Rezept als Schrittfolge. '
+            'task' => 'Schreibe die Zubereitung als Schrittfolge. '
+                . 'Wenn rezept_typ=gericht: schreibe KEINE Herstellung der Komponenten, sondern einen kompakten '
+                . 'Service-, Regenerations- und Anrichteablauf fuer ein Verkaufsgericht. Komponenten gelten als '
+                . 'vorbereitet bzw. fertig produziert; nur temperieren, regenerieren, warmhalten, finalisieren, '
+                . 'portionieren und anrichten. '
+                . 'Wenn rezept_typ=basisrezept: schreibe die Produktions-Zubereitung des Basisrezepts. '
                 . 'Buendele zusammengehoerige Kuechenhandlungen sinnvoll; keine Mikro-Schritte fuer Waschen, Schneiden, '
                 . 'Pfanne erhitzen oder einzelne Gewuerzzugaben, wenn sie fachlich zusammengehoeren. '
                 . 'Einfache Rezepte: 3-5 Schritte; komplexe Rezepte: 6-9 Schritte; maximal 9 Schritte. '
