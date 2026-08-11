@@ -51,7 +51,10 @@ class Ki extends Component
 
         // M9-04: €-Schätzung je Feature (Tokens × Tier-Preis aus der Deployment-Config)
         $preise = config('foodalchemist.ai.kosten_pro_mio', []);
-        $euro = fn ($z) => ((float) $z->t_in * ($preise[$z->tier]['in'] ?? 0) + (float) $z->t_out * ($preise[$z->tier]['out'] ?? 0)) / 1_000_000;
+        $bildpreise = config('foodalchemist.ai.bildkosten', []);
+        $euro = fn ($z) => array_key_exists($z->feature, $bildpreise)
+            ? (float) $z->calls * (float) $bildpreise[$z->feature]
+            : ((float) $z->t_in * ($preise[$z->tier]['in'] ?? 0) + (float) $z->t_out * ($preise[$z->tier]['out'] ?? 0)) / 1_000_000;
 
         return view('foodalchemist::livewire.settings.ki', [
             'kosten' => $statistik->mapWithKeys(fn ($z) => [$z->feature . '|' . $z->tier => $euro($z)]),

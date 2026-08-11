@@ -334,6 +334,14 @@ return [
             'C' => ['in' => (float) env('FOODALCHEMIST_AI_KOSTEN_C_IN', 2.80), 'out' => (float) env('FOODALCHEMIST_AI_KOSTEN_C_OUT', 14.00)],
             'D' => ['in' => (float) env('FOODALCHEMIST_AI_KOSTEN_D_IN', 2.80), 'out' => (float) env('FOODALCHEMIST_AI_KOSTEN_D_OUT', 14.00)],
         ],
+
+        /*
+         * Bild-Calls haben keine Text-Tokens im ai_call_log. Der Betrag ist daher
+         * eine Deployment-Pauschale pro erfolgreich/versucht geloggtem Bild-Call.
+         */
+        'bildkosten' => [
+            'recipe.step_photos' => (float) env('FOODALCHEMIST_AI_IMAGE_STEP_PHOTO_EUR', 0.0),
+        ],
     ],
 
     /*

@@ -56,7 +56,7 @@
                 </tbody>
                 <tfoot>
                     <tr class="border-t border-black/10">
-                        <td colspan="7" class="{{ $td }} text-right text-[11px] text-gray-500">≈ Gesamt (Tokens × Tier-Preis, Deployment-Config <code>ai.kosten_pro_mio</code>)</td>
+                        <td colspan="7" class="{{ $td }} text-right text-[11px] text-gray-500">≈ Gesamt (Tokens × Tier-Preis + Bildpauschalen, Deployment-Config <code>ai.kosten_pro_mio</code>/<code>ai.bildkosten</code>)</td>
                         <td class="{{ $td }} text-right font-medium tabular-nums" data-ki-kosten-gesamt>{{ number_format($kostenGesamt, 2, ',', '.') }} €</td>
                     </tr>
                 </tfoot>

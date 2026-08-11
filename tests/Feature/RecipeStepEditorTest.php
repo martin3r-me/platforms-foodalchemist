@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
 use Platform\Core\Models\ContextFile;
@@ -180,6 +181,14 @@ it('KI-Fotos erzeugt Bilder fuer alle Schritte ohne Foto und laesst bestehende F
         ->and($steps[1]->fresh()->photos)->toHaveCount(1)
         ->and($steps[2]->fresh()->photos)->toHaveCount(1)
         ->and($steps[1]->fresh()->photos->first()->caption)->toBe('KI-Foto: Schritt 2');
+
+    $logs = DB::table('foodalchemist_ai_call_log')->where('feature', 'recipe.step_photos')->get();
+    expect($logs)->toHaveCount(2)
+        ->and($logs->pluck('team_id')->unique()->all())->toBe([$this->rootTeam->id])
+        ->and($logs->pluck('user_id')->unique()->all())->toBe([$user->id])
+        ->and($logs->pluck('tier')->unique()->all())->toBe(['I'])
+        ->and($logs->pluck('target_table')->unique()->all())->toBe(['foodalchemist_recipe_step_photos'])
+        ->and($logs->whereNotNull('error'))->toHaveCount(0);
 });
 
 it('Schritt löschen nummeriert neu und lässt das Foto im Pool', function () {
