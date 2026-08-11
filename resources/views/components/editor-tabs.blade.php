@@ -53,7 +53,6 @@
     'marker' => null,              {{-- data-{marker}-tabs am Root + data-{marker}-tab je Button --}}
     'action' => null,              {{-- Server-Modus: Livewire-Methode, z. B. 'setTab' --}}
     'active' => null,              {{-- Server-Modus: aktiver Tab-Schlüssel aus der Komponente --}}
-    'visitAction' => null,         {{-- Alpine-Modus: optionale Livewire-Methode, die beim ersten Tab-Besuch lazy Inhalte freischaltet --}}
     'counts' => [],                {{-- Server-Modus (optional): ['key' => int] → Zähler-Badge, nur wenn > 0 --}}
 ])
 @php
@@ -89,7 +88,7 @@
         @if(count($sichtbar) > 1)
             <div class="{{ $leiste }} -mt-4 pt-4">
                 @foreach($sichtbar as $tabKey => $tabLabel)
-                    <button type="button" @click="tab = @js($tabKey)@if($visitAction); $wire.{{ $visitAction }}(@js($tabKey))@endif"
+                    <button type="button" @click="tab = @js($tabKey)"
                             :class="tab === @js($tabKey) ? '{{ $an }}' : '{{ $aus }}'"
                             class="{{ $knopf }}"
                             data-fa-editor-tab="{{ $tabKey }}" @if($marker) data-{{ $marker }}-tab="{{ $tabKey }}" @endif>{{ $tabLabel }}</button>

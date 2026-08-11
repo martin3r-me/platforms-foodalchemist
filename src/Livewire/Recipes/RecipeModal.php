@@ -42,9 +42,6 @@ class RecipeModal extends Component
 
     public bool $istOffen = false;
 
-    /** @var array<string, bool> Lazy-Render: schwere Tab-Inhalte erst nach erstem Besuch bauen. */
-    public array $geladeneTabs = ['aufbau' => true];
-
     /**
      * $copilot = Sprung aus dem Signal-Cockpit (Spec 21 · S5b): die abgelegten Befunde
      * werden direkt aufgeklappt. Kein Prüf-Call — s. `copilotAusAblage()`.
@@ -95,7 +92,6 @@ class RecipeModal extends Component
         $this->zutatenVersion = 0;
         $this->bulkRunId = null;
         $this->anreicherung = null;
-        $this->geladeneTabs = ['aufbau' => true];
         $this->copilotZuruecksetzen();
     }
 
@@ -106,7 +102,6 @@ class RecipeModal extends Component
         $this->copilotZuruecksetzen();                             // L6b: Befunde gehören zu GENAU diesem Rezept
         $this->recipeId = $id;
         $this->form = self::LEER;
-        $this->geladeneTabs = [($id === null ? 'eigenschaften' : 'aufbau') => true];
 
         if ($id !== null) {
             $team = Auth::user()?->currentTeamRelation;
@@ -144,13 +139,6 @@ class RecipeModal extends Component
 
         $this->istOffen = true;
         $this->dispatch('modal.open', name: 'recipe-modal');
-    }
-
-    public function tabLaden(string $tab): void
-    {
-        if (in_array($tab, ['aufbau', 'eigenschaften', 'preparation', 'details', 'sensorik', 'feedback', 'notes'], true)) {
-            $this->geladeneTabs[$tab] = true;
-        }
     }
 
     public function speichern(RecipeService $recipes): void
@@ -724,7 +712,6 @@ class RecipeModal extends Component
             'istTemplate' => (bool) ($r?->is_template ?? false),
             'voll' => $voll,
             'bulkRun' => $bulkRun,
-            'tabGeladen' => $this->geladeneTabs,
             'bulkOffen' => $bulkRun !== null
                 ? app(\Platform\FoodAlchemist\Services\BulkEnrichService::class)->offeneVorschlaege($team, $this->bulkRunId) : 0,
             'zustaende' => [
@@ -743,10 +730,8 @@ class RecipeModal extends Component
                 ? \Platform\FoodAlchemist\Models\FoodAlchemistProductionStation::visibleToTeam($team)
                     ->where('is_inactive', false)->orderBy('sort_order')->orderBy('name')->get(['id', 'name'])
                 : collect(),
-            'sensorik' => $this->recipeId !== null && ($this->geladeneTabs['sensorik'] ?? false)
-                ? app(\Platform\FoodAlchemist\Services\SensorikService::class)->fuerRezept($this->recipeId) : null,
-            'pairing' => $r !== null && ($this->geladeneTabs['sensorik'] ?? false)
-                ? app(\Platform\FoodAlchemist\Services\PairingService::class)->panelRecipe($r) : null,
+            'sensorik' => $this->recipeId !== null ? app(\Platform\FoodAlchemist\Services\SensorikService::class)->fuerRezept($this->recipeId) : null,
+            'pairing' => $r !== null ? app(\Platform\FoodAlchemist\Services\PairingService::class)->panelRecipe($r) : null,
         ]);
     }
 }

@@ -72,7 +72,7 @@
          gemountet werden). Start-Tab: «Aufbau», bei Neuanlage «Stammdaten» (Aufbau ist ohne
          Zutaten leer). Die drei Morph-Fallen (wire:key · x-effect-Reset · ein Scope für Leiste
          und Panels) stecken im Baustein. --}}
-    <x-foodalchemist::editor-tabs marker="rezept" wire-key="rezept-tabs-{{ $recipeId ?? 'neu' }}" visit-action="tabLaden"
+    <x-foodalchemist::editor-tabs marker="rezept" wire-key="rezept-tabs-{{ $recipeId ?? 'neu' }}"
         :init="$neu ? 'eigenschaften' : 'aufbau'"
         :tabs="[
             'aufbau' => 'Aufbau',
@@ -190,7 +190,6 @@
 
     {{-- ── Tab: ZUBEREITUNG (Equipment + Zubereitung) ────────────────── --}}
     <div x-show="tab === 'preparation'" x-cloak class="pt-4 space-y-4">
-    @if($tabGeladen['preparation'] ?? false)
     {{-- EQUIPMENT (§4.2.6) — gruppiert nach Vokabular-Gruppe (Ist-App-Layout) --}}
     <x-foodalchemist::modal-section title="Equipment">
         <x-slot:actions>
@@ -264,12 +263,10 @@
             </p>
         @endif
     </x-foodalchemist::modal-section>
-    @endif
     </div>{{-- /Tab ZUBEREITUNG --}}
 
     {{-- ── Tab: STAMMDATEN (Stammdaten + Eigenschaften, 2026-07-31 zusammengelegt) ── --}}
     <div x-show="tab === 'eigenschaften'" x-cloak class="pt-4 space-y-4">
-    @if($tabGeladen['eigenschaften'] ?? false)
     {{-- STAMMDATEN (§4.2.2) — Name/Herkunft/Status/Taxonomie --}}
     <x-foodalchemist::modal-section title="Stammdaten" class="!p-3">
         <x-slot:actions>
@@ -437,12 +434,10 @@
             <p class="text-xs text-gray-500">Ersatz lässt sich nach dem ersten Speichern verknüpfen.</p>
         @endif
     </x-foodalchemist::modal-section>
-    @endif
     </div>{{-- /Tab EIGENSCHAFTEN --}}
 
     {{-- ── Tab: DEKLARATION — Allergene · Zusatzstoffe (Detail-Panel-Embed) + Nährwerte ── --}}
     <div x-show="tab === 'details'" x-cloak class="pt-4 space-y-4">
-        @if($tabGeladen['details'] ?? false)
         @if($recipeId !== null)
             <livewire:foodalchemist.recipes.detail-panel :recipe-id="$recipeId" :embedded="true" wire:key="rdetail-{{ $recipeId }}" />
 
@@ -478,12 +473,10 @@
         @else
             <p class="text-xs text-gray-500 py-6 text-center">Deklaration erscheint nach dem ersten Speichern.</p>
         @endif
-        @endif
     </div>
 
     {{-- ── Tab: SENSORIK & PAIRING (Geschmacks-Balance + Textur + Aroma-Kohäsion über die Zutaten-GPs) ── --}}
     <div x-show="tab === 'sensorik'" x-cloak class="pt-4">
-        @if($tabGeladen['sensorik'] ?? false)
         @unless($neu)
             <div class="flex items-center justify-between gap-2 mb-2">
                 <span class="text-[11px] text-gray-500">Gegartes Profil — KI liest Zutaten + Zubereitung.</span>
@@ -496,27 +489,22 @@
         @include('foodalchemist::livewire.concepter.partials.sensorik')
         <h3 class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 mt-5 mb-2">Pairing</h3>
         @include('foodalchemist::livewire.concepter.partials.pairing')
-        @endif
     </div>
 
     {{-- ── Tab: FEEDBACK (R2.6 — Praxis-Feedback Küche/Kunde/Event) ───── --}}
     @if(! $neu && $recipeId !== null)
     <div x-show="tab === 'feedback'" x-cloak class="pt-4">
-        @if($tabGeladen['feedback'] ?? false)
         <livewire:foodalchemist.recipes.feedback-panel :recipe-id="$recipeId" wire:key="feedback-rez-{{ $recipeId }}" />
-        @endif
     </div>
     @endif
 
     {{-- ── Tab: NOTIZEN ──────────────────────────────────────────────── --}}
     <div x-show="tab === 'notes'" x-cloak class="pt-4 space-y-4">
-    @if($tabGeladen['notes'] ?? false)
     {{-- NOTIZEN (§9.1 — manuelle Insel) --}}
     <x-foodalchemist::modal-section title="Notizen (§9.1 — bleibt bei jedem KI-Sync erhalten)">
         <textarea wire:model="form.notes_manual" rows="3" class="{{ $input }}" data-rezept-notes
                   placeholder="z. B. Anpassung im Catering-Kontext, Mengen-Korrektur, …"></textarea>
     </x-foodalchemist::modal-section>
-    @endif
     </div>{{-- /Tab NOTIZEN --}}
     </x-foodalchemist::editor-tabs>
 
