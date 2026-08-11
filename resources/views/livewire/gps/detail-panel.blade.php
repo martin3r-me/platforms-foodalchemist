@@ -24,8 +24,14 @@
                 @endif
                 @if($gp->is_derivat)<span class="{{ $pill }} {{ $variantPill['info'] }}">Derivat{{ $gp->derivedFrom ? ' von ' . $gp->derivedFrom->name : '' }}</span>@endif
                 @if($gp->is_platzhalter)<span class="{{ $pill }} {{ $variantPill['secondary'] }}">Platzhalter</span>@endif
+                <a href="{{ route('foodalchemist.gps.dokument', ['id' => $gp->id, 'profil' => 'kalkulation']) }}" target="_blank"
+                   class="{{ $btnGhostXs }} ml-auto" title="Druck-/PDF-Report zum Grundprodukt" data-gp-panel-druck>
+                    @svg('heroicon-o-printer', 'w-3.5 h-3.5') Druck
+                </a>
+                <a href="{{ route('foodalchemist.gps.dokument', ['id' => $gp->id, 'profil' => 'kalkulation', 'pdf' => 1]) }}"
+                   class="{{ $btnGhostXs }}" title="PDF herunterladen" data-gp-panel-pdf>PDF</a>
                 @if($kannKuratieren)
-                    <button type="button" wire:click="$dispatch('gp-modal.oeffnen', { id: {{ $gp->id }} })" class="{{ $btnGhostXs }} ml-auto" data-gp-bearbeiten>@svg('heroicon-o-pencil-square', 'w-3.5 h-3.5') Bearbeiten</button>
+                    <button type="button" wire:click="$dispatch('gp-modal.oeffnen', { id: {{ $gp->id }} })" class="{{ $btnGhostXs }}" data-gp-bearbeiten>@svg('heroicon-o-pencil-square', 'w-3.5 h-3.5') Bearbeiten</button>
                 @endif
             </div>
         </div>

@@ -92,6 +92,10 @@
                     </select>
                 </div>
             @endif
+            <label class="inline-flex items-center gap-2 pb-2 text-[12px] text-gray-600">
+                <input type="checkbox" wire:model.live="nurMitPositionen" class="rounded border-gray-300 text-violet-600 focus:ring-violet-500" />
+                nur mit Positionen
+            </label>
         </div>
 
         {{-- Bestell-Liste (nach Liefertag gruppiert, sonst flach nach Bestelldatum) --}}
@@ -148,7 +152,14 @@
                                                 {{ $o['reference'] ?: '—' }}
                                             @endif
                                         </td>
-                                        <td class="{{ $td }} text-right whitespace-nowrap tabular-nums text-gray-700">{{ number_format($o['total_net'], 2, ',', '.') }} €</td>
+                                        <td class="{{ $td }} text-right whitespace-nowrap tabular-nums text-gray-700">
+                                            {{ number_format($o['total_net'], 2, ',', '.') }} €
+                                            @if($o['line_count'] === 0)
+                                                <div class="text-[10px] text-amber-600">leer</div>
+                                            @elseif((float) $o['total_net'] === 0.0)
+                                                <div class="text-[10px] text-amber-600">Preis/Klärung</div>
+                                            @endif
+                                        </td>
                                         <td class="{{ $td }}"><span class="{{ $pill }} font-medium {{ $variantPill[$o['status']->badgeVariant()] ?? $variantPill['secondary'] }}">{{ $o['status']->label() }}</span></td>
                                     </x-foodalchemist::table-row>
                                 @endforeach

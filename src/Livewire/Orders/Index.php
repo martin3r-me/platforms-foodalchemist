@@ -52,6 +52,10 @@ class Index extends Component
     #[Url(as: 'zeitraum')]
     public string $zeitraum = '';
 
+    /** Optional leere 0-Euro-Entwürfe ausblenden. */
+    #[Url(as: 'pos')]
+    public bool $nurMitPositionen = false;
+
     /** „Neue Bestellung": neutraler Start; Lieferant ergibt sich erst aus Artikel/Bedarf. */
     public ?string $neuerLiefertag = null;
 
@@ -167,6 +171,7 @@ class Index extends Component
             ->when($this->supplierFilter !== null, fn ($c) => $c->filter(fn ($o) => (int) $o->supplier_id === $this->supplierFilter))
             ->when($this->productionFilter !== null, fn ($c) => $c->filter(fn ($o) => collect($herkunftByOrder[(int) $o->id] ?? [])
                 ->contains(fn ($h) => (int) ($h['production_order_id'] ?? 0) === $this->productionFilter)))
+            ->when($this->nurMitPositionen, fn ($c) => $c->filter(fn ($o) => $o->lines->count() > 0))
             ->when($suche !== '', fn ($c) => $c->filter(function ($o) use ($suche, $herkunftByOrder) {
                 $herkunft = collect($herkunftByOrder[(int) $o->id] ?? [])->pluck('label')->implode(' ');
                 $hay = mb_strtolower(($o->supplier?->name ?? '') . ' ' . ($o->reference ?? '') . ' ' . $herkunft);
@@ -178,6 +183,7 @@ class Index extends Component
                 'supplier' => $o->supplier?->name ?? '—',
                 'status' => $o->status instanceof OrderStatus ? $o->status : OrderStatus::from((string) $o->status),
                 'total_net' => (float) $o->total_net,
+                'line_count' => $o->lines->count(),
                 'reference' => $o->reference,
                 'liefertag' => $o->desired_delivery_date?->toDateString(),
                 'herkunft' => $herkunftByOrder[(int) $o->id] ?? [],

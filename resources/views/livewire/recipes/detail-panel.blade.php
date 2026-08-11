@@ -95,6 +95,12 @@
                 <h3 class="text-base font-semibold tracking-tight text-gray-900 leading-snug">{{ $rezept->name }}</h3>
                 <div class="flex items-center gap-1.5 shrink-0">
                     <button type="button" wire:click="$dispatch('recipe-modal.oeffnen', { id: {{ $rezept->id }} })" class="{{ $btnGhostXs }}" data-rezept-bearbeiten>@svg('heroicon-o-pencil-square', 'w-3.5 h-3.5') Bearbeiten</button>
+                    <a href="{{ route('foodalchemist.rezepte.dokument', ['id' => $rezept->id, 'profil' => 'produktion']) }}" target="_blank"
+                       class="{{ $btnGhostXs }}" title="Druck-/PDF-Report mit Profilen und Filtern" data-rezept-panel-druck>
+                        @svg('heroicon-o-printer', 'w-3.5 h-3.5') Druck
+                    </a>
+                    <a href="{{ route('foodalchemist.rezepte.dokument', ['id' => $rezept->id, 'profil' => 'produktion', 'pdf' => 1]) }}"
+                       class="{{ $btnGhostXs }}" title="PDF herunterladen" data-rezept-panel-pdf>PDF</a>
                     <button type="button" wire:click="neuBerechnen" class="{{ $btnGhostXs }}" title="GL-02-Pipeline + Eltern-Propagation" data-recompute-btn>@svg('heroicon-o-arrow-path', 'w-3.5 h-3.5')</button>
                     <span class="{{ $pill }} font-medium {{ $statusPill[$rezept->status->value] ?? $variantPill['secondary'] }}">{{ $rezept->status->label() }}</span>
                 </div>

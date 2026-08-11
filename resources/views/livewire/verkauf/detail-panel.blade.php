@@ -19,6 +19,12 @@
             @endif
             <div class="flex flex-wrap items-center gap-1.5 mt-2.5" data-vk-aktionen>
                 <button type="button" wire:click="$dispatch('vk-modal.oeffnen', { id: {{ $rezept->id }} })" class="{{ $btnGhostXs }}" data-vk-bearbeiten>@svg('heroicon-o-pencil-square', 'w-3.5 h-3.5') Bearbeiten</button>
+                <a href="{{ route('foodalchemist.rezepte.dokument', ['id' => $rezept->id, 'profil' => 'produktion']) }}" target="_blank"
+                   class="{{ $btnGhostXs }}" title="Druck-/PDF-Report mit Profilen und Filtern" data-vk-panel-druck>
+                    @svg('heroicon-o-printer', 'w-3.5 h-3.5') Druck
+                </a>
+                <a href="{{ route('foodalchemist.rezepte.dokument', ['id' => $rezept->id, 'profil' => 'produktion', 'pdf' => 1]) }}"
+                   class="{{ $btnGhostXs }}" title="PDF herunterladen" data-vk-panel-pdf>PDF</a>
                 <button type="button" wire:click="$dispatch('zutaten-editor.oeffnen', { id: {{ $rezept->id }} })" class="{{ $btnGhostXs }}" data-vk-komponenten>@svg('heroicon-o-squares-2x2', 'w-3.5 h-3.5') Komponenten</button>
                 <button type="button" wire:click="ai_klassifizieren" class="{{ $btnAi }}" title="ai_classify_speisen_klasse (GL-07)" data-vk-klassifizieren>@svg('heroicon-o-sparkles', 'w-3.5 h-3.5') Klassifizieren</button>
                 <button type="button" wire:click="ai_rollen" class="{{ $btnAi }}" title="ai_verteile_rollen (V-21)" data-vk-rollen>@svg('heroicon-o-user-group', 'w-3.5 h-3.5') Rollen</button>

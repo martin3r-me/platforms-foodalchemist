@@ -7,6 +7,8 @@ use Livewire\Attributes\On;
 use Livewire\Component;
 use Platform\FoodAlchemist\Enums\LeadLaStrategie;
 use Platform\FoodAlchemist\Enums\OrderStatus;
+use Platform\FoodAlchemist\Models\FoodAlchemistGp;
+use Platform\FoodAlchemist\Models\FoodAlchemistProductionOrder;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem;
 use Platform\FoodAlchemist\Services\OrderService;
@@ -41,6 +43,12 @@ class Editor extends Component
     /** Bedarf-Schnellerfassung: Gericht/Basisrezept → addNeedFromTarget. */
     public string $bedarfSuche = '';
 
+    /** Grundprodukt-Suche fürs neue Bestellcockpit. */
+    public string $gpSuche = '';
+
+    /** Produktion-Suche fürs neue Bestellcockpit. */
+    public string $produktionSuche = '';
+
     public ?int $bedarfRecipeId = null;
 
     public string $bedarfRecipeName = '';
@@ -58,6 +66,13 @@ class Editor extends Component
     /** Vorschau der Wechsel aus resourceOrder(apply=false); null = kein Dialog offen. */
     public ?array $resourceVorschau = null;
 
+    /** Neues Bestellcockpit: Quellen erst sammeln, dann auflösen/speichern. */
+    public array $cockpitSources = [];
+
+    public ?array $cockpitPreview = null;
+
+    public string $cockpitStrategy = '';
+
     /** Zeile, deren Ausweichquellen-Dropdown offen ist (nur eine gleichzeitig). */
     public ?int $altLineId = null;
 
@@ -70,6 +85,9 @@ class Editor extends Component
         $this->resourceVorschau = null;
         $this->altLineId = null;
         $this->artikelSuche = '';
+        $this->gpSuche = '';
+        $this->produktionSuche = '';
+        $this->cockpitReset();
         $this->bedarfRezeptZuruecksetzen();
         $this->ladeKopf();
         $this->dispatch('modal.open', name: 'orders-editor');
@@ -84,6 +102,9 @@ class Editor extends Component
         $this->resourceVorschau = null;
         $this->altLineId = null;
         $this->artikelSuche = '';
+        $this->gpSuche = '';
+        $this->produktionSuche = '';
+        $this->cockpitReset();
         $this->bedarfRezeptZuruecksetzen();
         $this->formReference = '';
         $this->formDeliveryDate = $deliveryDate ?: '';
@@ -214,6 +235,11 @@ class Editor extends Component
         return $this->formStrategy !== '' ? LeadLaStrategie::tryFrom($this->formStrategy) : null;
     }
 
+    private function cockpitStrategieAusForm(): ?LeadLaStrategie
+    {
+        return $this->cockpitStrategy !== '' ? LeadLaStrategie::tryFrom($this->cockpitStrategy) : null;
+    }
+
     private function fuehreAus(callable $fn, string $ok): void
     {
         $this->hinweis = null;
@@ -229,6 +255,135 @@ class Editor extends Component
     }
 
     // ── Direktbestellung im Editor (Bedarf/Artikel hinzufügen) ────────────────
+
+    private function cockpitReset(): void
+    {
+        $this->cockpitSources = [];
+        $this->cockpitPreview = null;
+        $this->cockpitStrategy = '';
+    }
+
+    public function cockpitArtikelEinfuegen(int $supplierItemId): void
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        $la = $team ? FoodAlchemistSupplierItem::visibleToTeam($team)->with('supplier:id,name')->find($supplierItemId) : null;
+        if ($la === null) {
+            return;
+        }
+        $this->cockpitSources[] = [
+            'type' => 'supplier_item',
+            'id' => (int) $la->id,
+            'label' => trim(($la->designation ?: 'Artikel #' . $la->id) . ($la->supplier?->name ? ' · ' . $la->supplier->name : '')),
+            'qty' => 1,
+            'unit' => 'gebinde',
+            'delivery_date' => $this->formDeliveryDate ?: null,
+            'reference' => $this->formReference ?: null,
+        ];
+        $this->artikelSuche = '';
+        $this->cockpitPreview = null;
+    }
+
+    public function cockpitGpEinfuegen(int $gpId): void
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        $gp = $team ? FoodAlchemistGp::visibleToTeam($team)->find($gpId) : null;
+        if ($gp === null) {
+            return;
+        }
+        $this->cockpitSources[] = [
+            'type' => 'gp',
+            'id' => (int) $gp->id,
+            'label' => $gp->name,
+            'qty' => 1,
+            'unit' => 'kg',
+            'delivery_date' => $this->formDeliveryDate ?: null,
+            'reference' => $this->formReference ?: null,
+        ];
+        $this->gpSuche = '';
+        $this->cockpitPreview = null;
+    }
+
+    public function cockpitRezeptEinfuegen(int $recipeId): void
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        $recipe = $team ? FoodAlchemistRecipe::visibleToTeam($team)->find($recipeId) : null;
+        if ($recipe === null) {
+            return;
+        }
+        $this->cockpitSources[] = [
+            'type' => 'recipe',
+            'id' => (int) $recipe->id,
+            'label' => $recipe->name,
+            'qty' => 1,
+            'unit' => $recipe->is_sales_recipe ? 'portions' : 'ansaetze',
+            'delivery_date' => $this->formDeliveryDate ?: null,
+            'reference' => $this->formReference ?: null,
+        ];
+        $this->bedarfSuche = '';
+        $this->bedarfRecipeId = null;
+        $this->cockpitPreview = null;
+    }
+
+    public function cockpitProduktionEinfuegen(int $productionOrderId): void
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        $production = $team ? FoodAlchemistProductionOrder::visibleToTeam($team)->find($productionOrderId) : null;
+        if ($production === null) {
+            return;
+        }
+        $this->cockpitSources[] = [
+            'type' => 'production',
+            'id' => (int) $production->id,
+            'label' => $production->name ?: ('Produktion #' . $production->id),
+            'qty' => 1,
+            'unit' => 'auftrag',
+            'delivery_date' => $this->formDeliveryDate ?: $production->production_date?->toDateString(),
+            'reference' => $this->formReference ?: ($production->name ?: null),
+        ];
+        $this->produktionSuche = '';
+        $this->cockpitPreview = null;
+    }
+
+    public function cockpitQuelleEntfernen(int $index): void
+    {
+        if (! array_key_exists($index, $this->cockpitSources)) {
+            return;
+        }
+        array_splice($this->cockpitSources, $index, 1);
+        $this->cockpitPreview = null;
+    }
+
+    public function cockpitVorschau(OrderService $orders): void
+    {
+        $this->hinweis = null;
+        $this->fehler = null;
+        try {
+            $team = Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
+            $this->cockpitPreview = $orders->previewFromSources($team, $this->cockpitSources, $this->cockpitStrategieAusForm());
+        } catch (\Throwable $e) {
+            $this->fehler = $e->getMessage();
+        }
+    }
+
+    public function cockpitSpeichern(OrderService $orders): void
+    {
+        $this->hinweis = null;
+        $this->fehler = null;
+        try {
+            $team = Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
+            $res = $orders->generateDraftsFromSources($team, $this->cockpitSources, $this->cockpitStrategieAusForm(), Auth::id());
+            $this->cockpitPreview = $res['preview'] ?? null;
+            if (! empty($res['orders'])) {
+                $this->orderId = (int) $res['orders'][0];
+                $this->ladeKopf();
+            }
+            $this->hinweis = count($res['orders'] ?? []) . ' Bestellschiene(n) gespeichert'
+                . (count($res['unresolved'] ?? []) > 0 ? ' · ' . count($res['unresolved']) . ' Klärpunkt(e)' : '') . '.';
+            $this->dispatch('orders-geaendert');
+        } catch (\Throwable $e) {
+            $this->fehler = $e->getMessage();
+        }
+    }
 
     /** „＋ Artikel": manuelle Zeile (Menge 1) an die Draft-Schiene des Lieferanten hängen. */
     public function artikelHinzufuegen(int $supplierItemId, OrderService $orders): void
@@ -401,6 +556,33 @@ class Editor extends Component
                 ])->values();
         }
 
+        $gpTreffer = collect();
+        $gq = trim($this->gpSuche);
+        if (mb_strlen($gq) >= 2) {
+            $gpQuery = FoodAlchemistGp::visibleToTeam($team);
+            foreach (Suche::tokens($gq) as $token) {
+                $needle = mb_strtolower($token);
+                $gpQuery->whereRaw('LOWER(name) LIKE ?', ['%' . $needle . '%']);
+            }
+            $gpTreffer = $gpQuery->orderBy('name')->limit(12)->get(['id', 'name'])
+                ->map(fn ($gp) => ['id' => (int) $gp->id, 'name' => (string) $gp->name])
+                ->values();
+        }
+
+        $produktionTreffer = collect();
+        $pq = trim($this->produktionSuche);
+        if (mb_strlen($pq) >= 2) {
+            $produktionTreffer = FoodAlchemistProductionOrder::visibleToTeam($team)
+                ->where('name', 'like', '%' . $pq . '%')
+                ->orderByDesc('production_date')->limit(12)
+                ->get(['id', 'name', 'production_date'])
+                ->map(fn ($p) => [
+                    'id' => (int) $p->id,
+                    'name' => (string) ($p->name ?: 'Produktion #' . $p->id),
+                    'date' => $p->production_date?->format('d.m.Y'),
+                ])->values();
+        }
+
         $alternativen = [];
         if ($this->altLineId !== null && $detail !== null && $detail['editierbar']) {
             try {
@@ -417,6 +599,8 @@ class Editor extends Component
             'alternativen' => $alternativen,
             'artikelTreffer' => $artikelTreffer,
             'bedarfTreffer' => $bedarfTreffer,
+            'gpTreffer' => $gpTreffer,
+            'produktionTreffer' => $produktionTreffer,
             'strategieOptionen' => LeadLaStrategie::cases(),
         ]);
     }

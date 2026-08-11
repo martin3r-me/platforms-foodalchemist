@@ -5,6 +5,8 @@ use Platform\FoodAlchemist\Enums\OrderStatus;
 use Platform\FoodAlchemist\Models\FoodAlchemistOrder;
 use Platform\FoodAlchemist\Models\FoodAlchemistOrderLine;
 use Platform\FoodAlchemist\Models\FoodAlchemistPrice;
+use Platform\FoodAlchemist\Models\FoodAlchemistGp;
+use Platform\FoodAlchemist\Models\FoodAlchemistProductionOrder;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplier;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem;
@@ -175,6 +177,72 @@ it('addNeedFromTarget: je Lieferant eine Schiene, Gebinde-Zeilen + total_net (ec
         ->and((float) $mehlLine->line_total)->toBe(20.0)
         ->and($mehlLine->article_number)->toBe('ART-MEH')
         ->and((float) $mehlLine->needed_base_g)->toBe(10000.0);
+});
+
+it('Cockpit Preview: rechnet Lieferant+Liefertag ohne DB-Schreibungen', function () {
+    $preview = $this->svc->previewFromSources($this->rootTeam, [[
+        'type' => 'recipe',
+        'id' => $this->kuchen->id,
+        'qty' => 100,
+        'unit' => 'portions',
+        'delivery_date' => '2026-08-13',
+        'reference' => 'Bankett',
+    ]]);
+
+    expect(FoodAlchemistOrder::count())->toBe(0)
+        ->and($preview['totals']['groups'])->toBe(2)
+        ->and($preview['totals']['positions'])->toBe(3)
+        ->and($preview['totals']['total_net'])->toBe(33.0)
+        ->and(collect($preview['orders_preview'])->pluck('delivery_date')->unique()->values()->all())->toBe(['2026-08-13']);
+});
+
+it('Cockpit Generate: zwei gleiche Quellen gleicher Lieferant+Liefertag bündeln in Drafts', function () {
+    $res = $this->svc->generateDraftsFromSources($this->rootTeam, [
+        ['type' => 'recipe', 'id' => $this->kuchen->id, 'qty' => 100, 'unit' => 'portions', 'delivery_date' => '2026-08-13', 'reference' => 'Bankett A'],
+        ['type' => 'recipe', 'id' => $this->kuchen->id, 'qty' => 50, 'unit' => 'portions', 'delivery_date' => '2026-08-13', 'reference' => 'Bankett B'],
+    ]);
+
+    expect($res['orders'])->toHaveCount(2);
+
+    $chefs = FoodAlchemistOrder::whereHas('supplier', fn ($q) => $q->where('name', 'Chefs'))->whereDate('desired_delivery_date', '2026-08-13')->first();
+    $hanos = FoodAlchemistOrder::whereHas('supplier', fn ($q) => $q->where('name', 'Hanos'))->whereDate('desired_delivery_date', '2026-08-13')->first();
+
+    expect($chefs)->not->toBeNull()
+        ->and($hanos)->not->toBeNull()
+        ->and(FoodAlchemistOrder::where('status', 'draft')->count())->toBe(2)
+        ->and((float) $chefs->total_net)->toBe(32.0)
+        ->and((float) $hanos->total_net)->toBe(24.0);
+});
+
+it('Cockpit Generate: gleicher Bedarf mit anderem Liefertag erzeugt getrennte Drafts', function () {
+    $this->svc->generateDraftsFromSources($this->rootTeam, [
+        ['type' => 'recipe', 'id' => $this->kuchen->id, 'qty' => 100, 'unit' => 'portions', 'delivery_date' => '2026-08-13'],
+        ['type' => 'recipe', 'id' => $this->kuchen->id, 'qty' => 100, 'unit' => 'portions', 'delivery_date' => '2026-08-14'],
+    ]);
+
+    $chefsDates = FoodAlchemistOrder::whereHas('supplier', fn ($q) => $q->where('name', 'Chefs'))
+        ->orderBy('desired_delivery_date')
+        ->get()
+        ->pluck('desired_delivery_date')
+        ->map->toDateString()
+        ->all();
+
+    expect($chefsDates)->toBe(['2026-08-13', '2026-08-14']);
+});
+
+it('Cockpit Preview: ungeklärte GP landen in der Klärliste und blockieren bestellbare Quellen nicht', function () {
+    $unklar = FoodAlchemistGp::create(['team_id' => $this->rootTeam->id, 'gp_key' => 'mystery-gp', 'name' => 'Mystery GP']);
+
+    $preview = $this->svc->previewFromSources($this->rootTeam, [
+        ['type' => 'gp', 'id' => $unklar->id, 'qty' => 1, 'unit' => 'kg', 'delivery_date' => '2026-08-13'],
+        ['type' => 'supplier_item', 'id' => $this->laOf['Mehl']->id, 'qty' => 2, 'unit' => 'gebinde', 'delivery_date' => '2026-08-13'],
+    ]);
+
+    expect($preview['totals']['groups'])->toBe(1)
+        ->and($preview['totals']['unresolved'])->toBe(1)
+        ->and($preview['unresolved'][0]['code'])->toBe('lead_la_fehlt')
+        ->and($preview['orders_preview'][0]['supplier'])->toBe('Chefs')
+        ->and($preview['orders_preview'][0]['total_net'])->toBe(4.0);
 });
 
 it('E10: dieselbe Quelle erneut übernehmen ersetzt ihren Beitrag (verdoppelt NICHT)', function () {
@@ -722,10 +790,28 @@ it('E2 UI: neutraler Start zeigt Artikel- und Bedarfswege', function () {
         ->call('oeffnenNeu', '2026-08-13')
         ->assertSet('orderId', null)
         ->assertSet('formDeliveryDate', '2026-08-13')
-        ->assertSee('Artikel direkt beim Lieferanten bestellen')
-        ->assertSee('Bedarf aus Gericht / Basisrezept');
+        ->assertSee('Quellen einfügen')
+        ->assertSee('Auflösung nach Lieferant + Liefertag')
+        ->assertSee('Klärliste');
 
     expect(FoodAlchemistOrder::count())->toBe(0);
+});
+
+it('Cockpit UI: Quelle einfügen, Vorschau sehen und Drafts speichern', function () {
+    $this->actingAs($this->makeUser($this->rootTeam));
+
+    Livewire::test(OrdersEditor::class)
+        ->call('oeffnenNeu', '2026-08-13')
+        ->call('cockpitRezeptEinfuegen', $this->kuchen->id)
+        ->assertSet('cockpitSources', fn ($v) => is_array($v) && count($v) === 1 && $v[0]['type'] === 'recipe')
+        ->set('cockpitSources.0.qty', 100)
+        ->call('cockpitVorschau')
+        ->assertSet('cockpitPreview', fn ($v) => is_array($v) && ($v['totals']['groups'] ?? 0) === 2)
+        ->call('cockpitSpeichern')
+        ->assertSet('hinweis', fn ($v) => str_contains((string) $v, 'Bestellschiene'))
+        ->assertSet('orderId', fn ($v) => $v !== null);
+
+    expect(FoodAlchemistOrder::where('status', 'draft')->count())->toBe(2);
 });
 
 it('E2 UI: „＋ Artikel"-Livesearch findet Artikel + hängt manuelle Zeile an dessen Schiene', function () {

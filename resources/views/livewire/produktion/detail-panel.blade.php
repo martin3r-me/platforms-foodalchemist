@@ -15,6 +15,12 @@
                     @if($detail['editierbar'])
                         <button type="button" wire:click="$dispatch('produktion-editor.bearbeiten', { id: {{ $detail['id'] }} })" class="{{ $btnGhostXs }}" data-produktion-bearbeiten>@svg('heroicon-o-pencil-square', 'w-3.5 h-3.5') Bearbeiten</button>
                     @endif
+                    <a href="{{ route('foodalchemist.produktion.auftraege.dokument', ['order' => $detail['id']]) }}" target="_blank"
+                       class="{{ $btnGhostXs }}" title="Produktionsschein + Einkauf drucken" data-produktion-panel-druck>
+                        @svg('heroicon-o-printer', 'w-3.5 h-3.5') Druck
+                    </a>
+                    <a href="{{ route('foodalchemist.produktion.auftraege.dokument', ['order' => $detail['id'], 'pdf' => 1]) }}"
+                       class="{{ $btnGhostXs }}" title="PDF herunterladen" data-produktion-panel-pdf>PDF</a>
                     <span class="{{ $pill }} font-medium {{ $variantPill[\Platform\FoodAlchemist\Enums\ProductionOrderStatus::from($detail['status'])->badgeVariant()] ?? $variantPill['secondary'] }}">{{ $detail['status_label'] }}</span>
                 </div>
             </div>

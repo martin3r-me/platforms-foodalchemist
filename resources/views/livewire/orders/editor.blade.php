@@ -35,75 +35,213 @@
     @if($detail === null)
         <div class="pt-4 space-y-4">
             <x-foodalchemist::modal-section title="Neue Bestellung">
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <x-slot:actions>
+                    <button type="button" wire:click="cockpitVorschau" class="{{ $btnGhostXs }}" data-orders-cockpit-preview>Vorschau neu generieren</button>
+                    <button type="button" wire:click="cockpitSpeichern" class="{{ $btnPrimary }}" @disabled(count($cockpitSources) === 0) data-orders-cockpit-save>Bestellungen speichern</button>
+                </x-slot:actions>
+                <div class="grid grid-cols-1 lg:grid-cols-4 gap-3">
                     <div>
-                        <label class="text-[10px] text-gray-500">Liefertag</label>
-                        <input type="date" wire:model="formDeliveryDate" class="{{ $input }}" />
+                        <label class="text-[10px] text-gray-500">Standard-Liefertag</label>
+                        <input type="date" wire:model.live="formDeliveryDate" class="{{ $input }}" />
                     </div>
-                    <div class="md:col-span-2">
+                    <div>
+                        <label class="text-[10px] text-gray-500">Einkaufsstrategie</label>
+                        <select wire:model.live="cockpitStrategy" class="{{ $input }}">
+                            <option value="">Team-Standard</option>
+                            @foreach($strategieOptionen as $s)
+                                <option value="{{ $s->value }}">{{ $s->label() }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div class="lg:col-span-2">
                         <label class="text-[10px] text-gray-500">Anlass / Referenz</label>
-                        <input type="text" wire:model="formReference" class="{{ $input }}" placeholder="z. B. Wochenbestellung" />
+                        <input type="text" wire:model.live="formReference" class="{{ $input }}" placeholder="z. B. Wochenbestellung, Bankett, Produktion" />
                     </div>
                 </div>
             </x-foodalchemist::modal-section>
 
-            <x-foodalchemist::modal-section title="Artikel direkt beim Lieferanten bestellen">
-                <input type="search" wire:model.live.debounce.300ms="artikelSuche" placeholder="Lieferant / Grundprodukt / Artikel / Art-Nr…" class="{{ $input }}" data-orders-artikel-suche />
-                @if($artikelTreffer->isNotEmpty())
-                    <div class="mt-1 rounded-lg border border-white/10 divide-y divide-white/5 max-h-60 overflow-y-auto">
-                        @foreach($artikelTreffer as $a)
-                            <button type="button" wire:click="artikelHinzufuegen({{ $a['id'] }})" wire:key="art-start-{{ $a['id'] }}"
-                                class="block w-full text-left px-2.5 py-1.5 hover:bg-violet-500/10">
-                                <span class="text-[12px] text-gray-800">{{ $a['designation'] ?: '—' }}</span>
-                                <span class="text-[10px] text-gray-400 block">{{ $a['supplier'] }}@if($a['gp']) · GP {{ $a['gp'] }}@endif@if($a['article_number']) · Art. {{ $a['article_number'] }}@endif</span>
-                            </button>
-                        @endforeach
-                    </div>
-                @elseif(mb_strlen(trim($artikelSuche)) >= 2)
-                    <p class="text-[11px] text-gray-400 mt-1">Kein Artikel gefunden.</p>
-                @endif
-            </x-foodalchemist::modal-section>
+            <div class="grid grid-cols-1 xl:grid-cols-[minmax(300px,0.9fr)_minmax(420px,1.35fr)_minmax(260px,0.75fr)] gap-4">
+                <div class="space-y-4">
+                    <x-foodalchemist::modal-section title="Quellen einfügen">
+                        <div class="space-y-3">
+                            <div>
+                                <label class="text-[10px] text-gray-500">Lieferantenartikel</label>
+                                <input type="search" wire:model.live.debounce.300ms="artikelSuche" placeholder="Lieferant / Grundprodukt / Artikel / Art-Nr…" class="{{ $input }}" data-orders-artikel-suche />
+                                @if($artikelTreffer->isNotEmpty())
+                                    <div class="mt-1 rounded-lg border border-white/10 divide-y divide-white/5 max-h-44 overflow-y-auto">
+                                        @foreach($artikelTreffer as $a)
+                                            <button type="button" wire:click="cockpitArtikelEinfuegen({{ $a['id'] }})" wire:key="cockpit-art-{{ $a['id'] }}"
+                                                class="block w-full text-left px-2.5 py-1.5 hover:bg-violet-500/10">
+                                                <span class="text-[12px] text-gray-800">{{ $a['designation'] ?: '—' }}</span>
+                                                <span class="text-[10px] text-gray-400 block">{{ $a['supplier'] }}@if($a['gp']) · GP {{ $a['gp'] }}@endif@if($a['article_number']) · Art. {{ $a['article_number'] }}@endif</span>
+                                            </button>
+                                        @endforeach
+                                    </div>
+                                @endif
+                            </div>
 
-            <x-foodalchemist::modal-section title="Bedarf aus Gericht / Basisrezept">
-                <p class="text-[11px] text-gray-500 mb-2">Gerichte und Basisrezepte erzeugen die passenden Lieferanten-Schienen aus ihren Grundprodukten und Lead-Artikeln.</p>
-                @if($bedarfRecipeId === null)
-                    <input type="search" wire:model.live.debounce.300ms="bedarfSuche" placeholder="Gericht / Basisrezept…" class="{{ $input }}" data-orders-bedarf-suche />
-                    @if($bedarfTreffer->isNotEmpty())
-                        <div class="mt-1 rounded-lg border border-white/10 divide-y divide-white/5 max-h-60 overflow-y-auto">
-                            @foreach($bedarfTreffer as $r)
-                                <button type="button" wire:click="bedarfRezeptWaehlen({{ $r['id'] }})" wire:key="brz-start-{{ $r['id'] }}"
-                                    class="flex items-center gap-1.5 w-full text-left px-2.5 py-1.5 hover:bg-violet-500/10">
-                                    <span class="text-[12px] text-gray-800 truncate">{{ $r['name'] }}</span>
-                                    <span class="{{ $pill }} {{ $variantPill[$r['is_sales_recipe'] ? 'info' : 'secondary'] }} shrink-0">{{ $r['is_sales_recipe'] ? 'Gericht' : 'Basisrezept' }}</span>
-                                </button>
+                            <div>
+                                <label class="text-[10px] text-gray-500">Grundprodukt</label>
+                                <input type="search" wire:model.live.debounce.300ms="gpSuche" placeholder="Grundprodukt…" class="{{ $input }}" data-orders-gp-suche />
+                                @if($gpTreffer->isNotEmpty())
+                                    <div class="mt-1 rounded-lg border border-white/10 divide-y divide-white/5 max-h-44 overflow-y-auto">
+                                        @foreach($gpTreffer as $gp)
+                                            <button type="button" wire:click="cockpitGpEinfuegen({{ $gp['id'] }})" wire:key="cockpit-gp-{{ $gp['id'] }}"
+                                                class="block w-full text-left px-2.5 py-1.5 text-[12px] text-gray-800 hover:bg-violet-500/10">{{ $gp['name'] }}</button>
+                                        @endforeach
+                                    </div>
+                                @endif
+                            </div>
+
+                            <div>
+                                <label class="text-[10px] text-gray-500">Gericht / Basisrezept</label>
+                                <input type="search" wire:model.live.debounce.300ms="bedarfSuche" placeholder="Gericht / Basisrezept…" class="{{ $input }}" data-orders-bedarf-suche />
+                                @if($bedarfTreffer->isNotEmpty())
+                                    <div class="mt-1 rounded-lg border border-white/10 divide-y divide-white/5 max-h-44 overflow-y-auto">
+                                        @foreach($bedarfTreffer as $r)
+                                            <button type="button" wire:click="cockpitRezeptEinfuegen({{ $r['id'] }})" wire:key="cockpit-recipe-{{ $r['id'] }}"
+                                                class="flex items-center gap-1.5 w-full text-left px-2.5 py-1.5 hover:bg-violet-500/10">
+                                                <span class="text-[12px] text-gray-800 truncate">{{ $r['name'] }}</span>
+                                                <span class="{{ $pill }} {{ $variantPill[$r['is_sales_recipe'] ? 'info' : 'secondary'] }} shrink-0">{{ $r['is_sales_recipe'] ? 'Gericht' : 'Basis' }}</span>
+                                            </button>
+                                        @endforeach
+                                    </div>
+                                @endif
+                            </div>
+
+                            <div>
+                                <label class="text-[10px] text-gray-500">Produktion</label>
+                                <input type="search" wire:model.live.debounce.300ms="produktionSuche" placeholder="Produktionsauftrag…" class="{{ $input }}" data-orders-produktion-suche />
+                                @if($produktionTreffer->isNotEmpty())
+                                    <div class="mt-1 rounded-lg border border-white/10 divide-y divide-white/5 max-h-44 overflow-y-auto">
+                                        @foreach($produktionTreffer as $p)
+                                            <button type="button" wire:click="cockpitProduktionEinfuegen({{ $p['id'] }})" wire:key="cockpit-prod-{{ $p['id'] }}"
+                                                class="block w-full text-left px-2.5 py-1.5 hover:bg-violet-500/10">
+                                                <span class="text-[12px] text-gray-800">{{ $p['name'] }}</span>
+                                                @if($p['date'])<span class="text-[10px] text-gray-400 block">{{ $p['date'] }}</span>@endif
+                                            </button>
+                                        @endforeach
+                                    </div>
+                                @endif
+                            </div>
+                        </div>
+                    </x-foodalchemist::modal-section>
+
+                    <x-foodalchemist::modal-section title="Arbeitsstand ({{ count($cockpitSources) }})">
+                        <div class="space-y-2">
+                            @forelse($cockpitSources as $i => $s)
+                                <div class="rounded-md border border-white/10 bg-white/[0.04] p-2 space-y-2" wire:key="cockpit-source-{{ $i }}">
+                                    <div class="flex items-start justify-between gap-2">
+                                        <div class="min-w-0">
+                                            <span class="{{ $pill }} {{ $variantPill[$s['type'] === 'production' ? 'primary' : ($s['type'] === 'recipe' ? 'info' : 'secondary')] }}">{{ $s['type'] }}</span>
+                                            <p class="text-[12px] text-gray-800 truncate mt-1">{{ $s['label'] ?? ($s['id'] ?? 'Quelle') }}</p>
+                                        </div>
+                                        <button type="button" wire:click="cockpitQuelleEntfernen({{ $i }})" class="text-[11px] text-rose-500 shrink-0">Entfernen</button>
+                                    </div>
+                                    <div class="grid grid-cols-[80px_105px_1fr] gap-1.5">
+                                        <input type="number" min="0" step="0.1" wire:model.live="cockpitSources.{{ $i }}.qty" class="{{ $input }} !py-1" />
+                                        <select wire:model.live="cockpitSources.{{ $i }}.unit" class="{{ $input }} !py-1">
+                                            @if($s['type'] === 'supplier_item')
+                                                <option value="gebinde">Gebinde</option>
+                                            @elseif($s['type'] === 'gp')
+                                                <option value="kg">kg</option>
+                                                <option value="g">g</option>
+                                                <option value="stk">Stk</option>
+                                            @elseif($s['type'] === 'production')
+                                                <option value="auftrag">Auftrag</option>
+                                            @else
+                                                <option value="portions">Portionen</option>
+                                                <option value="ansaetze">Ansätze</option>
+                                                <option value="kg">kg</option>
+                                            @endif
+                                        </select>
+                                        <input type="date" wire:model.live="cockpitSources.{{ $i }}.delivery_date" class="{{ $input }} !py-1" />
+                                    </div>
+                                    <input type="text" wire:model.live="cockpitSources.{{ $i }}.reference" class="{{ $input }} !py-1" placeholder="Anlass für diese Quelle…" />
+                                </div>
+                            @empty
+                                <p class="text-[11px] text-gray-400">Noch keine Quelle eingefügt.</p>
+                            @endforelse
+                        </div>
+                    </x-foodalchemist::modal-section>
+                </div>
+
+                <x-foodalchemist::modal-section title="Auflösung nach Lieferant + Liefertag">
+                    @if($cockpitPreview === null)
+                        <p class="text-[12px] text-gray-500">Quellen einfügen und Vorschau generieren.</p>
+                    @elseif(empty($cockpitPreview['orders_preview']))
+                        <p class="text-[12px] text-gray-500">Keine bestellbare Position in der Vorschau.</p>
+                    @else
+                        <div class="space-y-3">
+                            @foreach($cockpitPreview['orders_preview'] as $g)
+                                <div class="rounded-md border border-white/10 bg-white/[0.04] overflow-hidden" wire:key="cockpit-preview-{{ $g['supplier_id'] }}-{{ $g['delivery_date'] ?? 'none' }}">
+                                    <div class="flex flex-wrap items-center justify-between gap-2 px-3 py-2 bg-white/[0.05]">
+                                        <div>
+                                            <div class="text-[13px] font-semibold text-gray-900">{{ $g['supplier'] }}</div>
+                                            <div class="text-[10px] text-gray-400">Liefertag {{ $g['delivery_date'] ? \Illuminate\Support\Carbon::parse($g['delivery_date'])->format('d.m.Y') : 'ohne Datum' }}</div>
+                                        </div>
+                                        <div class="text-right">
+                                            <div class="text-[13px] font-semibold text-gray-900">{{ number_format($g['total_net'], 2, ',', '.') }} €</div>
+                                            @if($g['moq']['unter_mindestbestellwert'])
+                                                <div class="text-[10px] text-amber-600">{{ number_format($g['moq']['fehlt_bis_min'], 2, ',', '.') }} € bis Mindestwert</div>
+                                            @elseif($g['moq']['frei_haus'])
+                                                <div class="text-[10px] text-emerald-600">frei Haus</div>
+                                            @endif
+                                        </div>
+                                    </div>
+                                    <div class="divide-y divide-white/5">
+                                        @foreach($g['positionen'] as $p)
+                                            <div class="grid grid-cols-[1fr_auto] gap-2 px-3 py-2">
+                                                <div class="min-w-0">
+                                                    <div class="text-[12px] text-gray-800 truncate">{{ $p['designation'] ?: ($p['gp'] ?: 'Position') }}</div>
+                                                    <div class="text-[10px] text-gray-400">
+                                                        @if($p['article_number'])Art. {{ $p['article_number'] }} · @endif
+                                                        Bedarf {{ $p['needed_display'] !== null ? rtrim(rtrim(number_format($p['needed_display'], 3, ',', '.'), '0'), ',') . ' ' . $p['needed_unit'] : 'direkt' }}
+                                                        @if($p['source_label']) · {{ $p['source_label'] }}@endif
+                                                    </div>
+                                                    @if(!empty($p['reference']))
+                                                        <span class="{{ $pill }} {{ $variantPill['primary'] }} mt-1">{{ $p['reference'] }}</span>
+                                                    @endif
+                                                </div>
+                                                <div class="text-right whitespace-nowrap">
+                                                    <div class="text-[12px] text-gray-900">{{ rtrim(rtrim(number_format($p['qty_packs'], 2, ',', '.'), '0'), ',') }} {{ $p['packaging_unit'] }}</div>
+                                                    <div class="text-[10px] {{ $p['bestellbar'] ? 'text-gray-400' : 'text-amber-600' }}">{{ number_format($p['line_total'], 2, ',', '.') }} €</div>
+                                                </div>
+                                            </div>
+                                        @endforeach
+                                    </div>
+                                </div>
                             @endforeach
                         </div>
-                    @elseif(mb_strlen(trim($bedarfSuche)) >= 2)
-                        <p class="text-[11px] text-gray-400 mt-1">Kein Rezept gefunden.</p>
                     @endif
-                @else
-                    <div class="space-y-1.5">
-                        <div class="flex items-center justify-between gap-1">
-                            <span class="text-[12px] text-gray-800 truncate">{{ $bedarfRecipeName }}
-                                <span class="{{ $pill }} {{ $variantPill[$bedarfRecipeVk ? 'info' : 'secondary'] }}">{{ $bedarfRecipeVk ? 'Gericht' : 'Basisrezept' }}</span>
-                            </span>
-                            <button type="button" wire:click="bedarfRezeptZuruecksetzen" class="text-[11px] text-gray-400 shrink-0">ändern</button>
+                </x-foodalchemist::modal-section>
+
+                <x-foodalchemist::modal-section title="Klärliste">
+                    @if($cockpitPreview === null)
+                        <p class="text-[12px] text-gray-500">Die Klärliste erscheint nach der Vorschau.</p>
+                    @elseif(empty($cockpitPreview['unresolved']))
+                        <p class="text-[12px] text-emerald-600">Keine Klärpunkte.</p>
+                    @else
+                        <div class="space-y-2">
+                            @foreach($cockpitPreview['unresolved'] as $u)
+                                <div class="rounded-md border border-amber-500/20 bg-amber-500/[0.08] p-2" wire:key="unresolved-{{ $loop->index }}">
+                                    <div class="text-[12px] font-medium text-gray-900">{{ $u['label'] }}</div>
+                                    <div class="text-[10px] text-amber-700">{{ $u['message'] }}</div>
+                                    <div class="text-[10px] text-gray-400 mt-1">{{ $u['code'] }}</div>
+                                </div>
+                            @endforeach
                         </div>
-                        <div class="flex flex-wrap gap-1 items-center">
-                            <input type="number" min="0" step="0.1" wire:model="bedarfMenge" placeholder="Menge" class="{{ $input }} w-32" />
-                            @if($bedarfRecipeVk)
-                                <span class="inline-flex items-center px-2 text-[11px] text-gray-500 whitespace-nowrap">Portionen</span>
-                            @else
-                                <select wire:model="bedarfEinheit" class="{{ $input }} !w-auto">
-                                    <option value="ansaetze">Ansätze</option>
-                                    <option value="kg">kg</option>
-                                </select>
-                            @endif
-                            <button type="button" wire:click="bedarfUebernehmen" class="{{ $btnGhost }}" data-orders-bedarf-uebernehmen>Bedarf übernehmen</button>
+                    @endif
+
+                    @if($cockpitPreview && !empty($cockpitPreview['warnings']))
+                        <div class="mt-3 space-y-1">
+                            @foreach($cockpitPreview['warnings'] as $w)
+                                <p class="text-[10px] text-amber-600">{{ $w }}</p>
+                            @endforeach
                         </div>
-                    </div>
-                @endif
-            </x-foodalchemist::modal-section>
+                    @endif
+                </x-foodalchemist::modal-section>
+            </div>
         </div>
     @else
     <x-foodalchemist::editor-tabs marker="orders" wire-key="orders-tabs-{{ $detail['id'] }}" :init="'positionen'"
