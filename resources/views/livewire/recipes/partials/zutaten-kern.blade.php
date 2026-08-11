@@ -94,7 +94,7 @@
                 <button type="button" @click="tauschIdx = null" class="{{ $btnGhostXs }} shrink-0 ml-auto" data-tausch-abbrechen>Abbrechen</button>
             </div>
             <div x-show="geparkt === null" class="flex items-center gap-2">
-                <input type="search" x-model="browseQ" @input.debounce.300ms="sucheGetippt()"
+                <input type="search" x-model="browseQ" @focus="browseOnce()" @input.debounce.300ms="sucheGetippt()"
                        placeholder="Suchen — filtert Produkte UND Rezepte … (Übernehmen per [+] in den Spalten)"
                        class="{{ $input }} !py-1 flex-1" data-browse-suche />
             </div>

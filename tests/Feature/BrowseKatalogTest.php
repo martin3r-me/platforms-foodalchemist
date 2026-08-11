@@ -71,3 +71,14 @@ it('q wirkt als Textfilter auf BEIDE Listen gleichzeitig', function () {
         ->and($r['rezepte']['total'])->toBe(1)
         ->and($r['rezepte']['items'][0]['name'])->toBe('↳ Fond: Tomate');
 });
+
+it('lädt den Drei-Spalten-Browser erst bei Fokus oder Filterinteraktion', function () {
+    $modulRoot = dirname((new ReflectionClass(\Platform\FoodAlchemist\FoodAlchemistServiceProvider::class))->getFileName(), 2);
+    $editor = file_get_contents($modulRoot . '/resources/views/livewire/recipes/ingredient-editor.blade.php');
+    $kern = file_get_contents($modulRoot . '/resources/views/livewire/recipes/partials/zutaten-kern.blade.php');
+
+    expect($editor)->toContain('browserGeladen: false')
+        ->and($editor)->toContain('browseOnce()')
+        ->and($editor)->not->toContain('this.browse();                                       // R18: Seitenspalten initial füllen')
+        ->and($kern)->toContain('@focus="browseOnce()"');
+});

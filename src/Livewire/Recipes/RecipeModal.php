@@ -72,10 +72,27 @@ class RecipeModal extends Component
     #[On('modal.closed')]
     public function beiModalClosed(?string $name = null): void
     {
-        if ($name === 'recipe-modal') {                            // hartes Schließen (Backdrop/Escape/✕ ohne Stack) → Stack leeren
-            $this->istOffen = false;
-            $this->navStack = [];
+        if ($name === 'recipe-modal') {                            // hartes Schließen (Backdrop/Escape/✕ ohne Stack) → schweren Editor-State entladen
+            $this->editorStateEntladen();
         }
+    }
+
+    private function editorStateEntladen(): void
+    {
+        $this->istOffen = false;
+        $this->navStack = [];
+        $this->recipeId = null;
+        $this->form = self::LEER;
+        $this->fehler = null;
+
+        $this->kiVorschlag = [];
+        $this->ueberarbeitenOffen = false;
+        $this->anweisung = '';
+        $this->ueberarbeitung = null;
+        $this->zutatenVersion = 0;
+        $this->bulkRunId = null;
+        $this->anreicherung = null;
+        $this->copilotZuruecksetzen();
     }
 
     private function ladeRezept(?int $id): void
