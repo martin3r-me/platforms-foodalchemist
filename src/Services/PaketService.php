@@ -326,8 +326,12 @@ class PaketService
         return FoodAlchemistRecipe::visibleToTeam($team)->verkauf()
             ->whereNull('variant_source_recipe_id') // R4.4: Slot-Varianten sind konzept-lokal, nicht pickbar
             ->when($suche !== '', fn ($q) => \Platform\FoodAlchemist\Support\Suche::like($q, 'name', $suche))
-            ->when($filter['hauptgruppe'] ?? null, fn ($q, $hg) => $q
-                ->whereIn('dish_class_id', FoodAlchemistDishClass::where('dish_main_group_id', $hg)->pluck('id')))
+            // Modell A: HG = eigene Achse (recipes.dish_main_group_id) — DIREKT filtern, exakt wie
+            // SalesRecipeService::browserQuery/hauptgruppenCounts (Count-Quelle des Chips). Vorher lief
+            // der HG-Filter indirekt über dish_class (dish_class.dish_main_group_id) und lieferte 0 Treffer
+            // trotz Count, weil die Gerichte an globalen Diätform-Klassen (dish_main_group_id=NULL) hängen.
+            // Zähler und Liste MÜSSEN dieselbe Filtersemantik haben, sonst laufen sie auseinander.
+            ->when($filter['hauptgruppe'] ?? null, fn ($q, $hg) => $q->where('dish_main_group_id', $hg))
             ->when($filter['class'] ?? null, fn ($q, $k) => $q->where('dish_class_id', $k))
             ->when(($filter['geschmack'] ?? '') !== '', fn ($q) => $q->where('taste_direction', $filter['geschmack']))
             // R4.2 Lücken-Klick: Diät-Filter über die kanonische Klassen-Achse (dish_classes.diet_form)

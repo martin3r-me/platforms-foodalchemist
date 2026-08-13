@@ -196,7 +196,8 @@ class Editor extends Component
     {
         // Spec 28 / E6: 'stammdaten' ist neu — die Feldleiste wurde aus dem Dauer-Kopf in einen
         // eigenen Tab gelegt. Fehlt der Wert hier, tut der Klick auf die Lasche stillschweigend nichts.
-        if (in_array($tab, ['aufbau', 'stammdaten', 'konzept', 'allergene', 'kalkulation', 'geschirr', 'sensorik', 'notes'], true)) {
+        // 'sensorik'-Tab 2026-08-13 aus dem Concepter entfernt (Dominique) — Aggregat-Service bleibt bestehen.
+        if (in_array($tab, ['aufbau', 'stammdaten', 'konzept', 'allergene', 'kalkulation', 'geschirr', 'notes'], true)) {
             $this->tab = $tab;
         }
     }
@@ -249,6 +250,22 @@ class Editor extends Component
         $this->fehler = null;
         $this->savedToast($this->type === 'pakete' ? 'Paket gespeichert' : 'Konzept gespeichert');
         $this->dispatch('concepter-gespeichert', id: $this->id);
+    }
+
+    /**
+     * #5 (2026-08-13, Dominique): EIN Speichern für den Tab «Konzept & Planung».
+     * Sichert Stammdaten (form) + kreatives Canvas + Planungs-Rahmen-Kopf in einem Klick —
+     * die einzelnen Sub-Save-Buttons der Partials sind im Concepter per hideSave-Flag ausgeblendet.
+     * Nur ein Toast (aus speichern()); canvasSpeichern/frameKopfSpeichern setzen nur ihre Flags.
+     */
+    public function konzeptSpeichern(): void
+    {
+        if ($this->type !== 'concepts' || $this->id === null) {
+            return;
+        }
+        $this->speichern();          // Stammdaten (+ Toast + concepter-gespeichert-Event)
+        $this->canvasSpeichern();    // kreatives Foodkonzept (Leitidee, Geschmackswelten)
+        $this->frameKopfSpeichern(); // Planungs-Rahmen-Kopf (Zielpreis, Notiz)
     }
 
     /** A1: explizite Form je Position setzen ('' = auto → Konzept-Form/Standard). */
