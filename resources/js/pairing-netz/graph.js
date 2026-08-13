@@ -131,9 +131,13 @@ export function pairingNetzGraph(config) {
       const cx = this.canvasW / 2;
       const cy = this.canvasH / 2;
       const g = this._rootG.append('g').attr('data-fa-edges', '');
+      // Zeichen-Reihenfolge: Anker-Verbindungen (Brücke + direktes Pairing) ZULETZT = obenauf,
+      // damit die violette Beziehung klar über dem Kandidaten-Gewirr liegt (stabiler Sort).
+      const zLayer = (d) => (d.kind === 'bridge' || d.kind === 'anker_anker' ? 2 : d.kind === 'zentrum_anker' ? 0 : 1);
+      const drawEdges = this.edges.map((e, i) => [e, i]).sort((a, b) => (zLayer(a[0]) - zLayer(b[0])) || (a[1] - b[1])).map((p) => p[0]);
       this._edgeSel = g
         .selectAll('path')
-        .data(this.edges)
+        .data(drawEdges)
         .enter()
         .append('path')
         .attr('fill', 'none')
@@ -193,7 +197,7 @@ export function pairingNetzGraph(config) {
 
     _edgeOpacity(d) {
       if (d.kind === 'anker_anker') return 0.85; // Kern-Aussage → präsent (vs. zentrum_anker 0.14)
-      if (d.kind === 'bridge') return 0.6;
+      if (d.kind === 'bridge') return 0.78;
       if (d.kind === 'zentrum_anker') return 0.14;
       if (d.kind === 'basis') return 0.5;
 
