@@ -100,6 +100,18 @@ class Index extends Component
     /** true, solange der Lauf im Hintergrund rechnet (steuert das Polling). */
     public bool $laeuft = false;
 
+    /**
+     * Queue-Watchdog (2026-08): gesetzt, wenn der Lauf ungewöhnlich lange auf `running` steht,
+     * OHNE dass ein Schritt je Fortschritt machte — fast sicher kein Queue-Worker aktiv (ein echter
+     * Fehler ruft markStepFailed → status=failed). Kein Abbruch, nur ein sichtbarer Hinweis statt
+     * endlosem Spinner. Die Leitstelle ist der EINZIGE KI-Erstell-Pfad → derselbe Schutz, den die
+     * Modals in Phase 0 bekamen (HatGeneratorLauf), gehört auch hierher.
+     */
+    public ?string $hinweis = null;
+
+    /** Sekunden auf `running` ohne jeden Step-Fortschritt, ab denen der Watchdog anschlägt (über der realistischen Erst-Dauer). */
+    protected const WATCHDOG_SEKUNDEN = 90;
+
     /** Deep-Link `?session=X&open=1` (z.B. vom Trendradar-Carry-in) öffnet den Editor direkt. */
     public function mount(): void
     {
@@ -369,6 +381,7 @@ class Index extends Component
             ]);
             $this->laufId = $run->id;
             $this->laeuft = true;
+            $this->hinweis = null;
             $this->meldung = 'Kaskade gestartet — Entwurf wird erzeugt …';
             $this->fehler = null;
         } catch (\Throwable $e) {
@@ -388,12 +401,23 @@ class Index extends Component
         $lauf = $cascade->lauf($team, $this->laufId);
         if ($lauf === null || $lauf->status !== 'running') {
             $this->laeuft = false;
+            $this->hinweis = null;
             if ($lauf !== null && $lauf->status === 'review') {
                 $this->meldung = 'Entwurf erzeugt — im Ergebnis unten prüfen.';
             } elseif ($lauf !== null && $lauf->status === 'failed') {
                 $this->fehler = 'Generierung fehlgeschlagen — Details im Ergebnis unten.';
             }
+
+            return;
         }
+        // Queue-Watchdog: hat KEIN Schritt je Fortschritt gemacht (alle noch queued/running) UND
+        // läuft der Run schon ungewöhnlich lange → fast sicher kein Worker. Sobald irgendein Schritt
+        // done/failed/… erreicht, ist der Worker bewiesen aktiv (legitim langer Fan-out) → kein Hinweis.
+        $fortschritt = $lauf->steps->contains(fn ($s) => ! in_array($s->status, ['queued', 'running'], true));
+        $alterSek = $lauf->created_at !== null ? $lauf->created_at->diffInSeconds(now()) : 0;
+        $this->hinweis = (! $fortschritt && $alterSek > self::WATCHDOG_SEKUNDEN)
+            ? 'Der Lauf läuft ungewöhnlich lange und kein Schritt ist fertig — vermutlich läuft kein Hintergrund-Worker (Queue). Sobald er den Job abarbeitet, erscheint der Entwurf automatisch.'
+            : null;
     }
 
     // ── Freigabe / Verwerfen (Gate 2 — inline im Editor) ───────────────

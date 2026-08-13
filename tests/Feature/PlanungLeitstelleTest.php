@@ -130,3 +130,32 @@ it('Cockpit rendert die Regler-Leitplanken + die freie Erstell-Leiste (Blade kom
         ->assertSeeHtml('data-frei-rezept')          // freie 1-Klick-Erstellung
         ->assertSeeHtml('data-planung-ziel-vk');     // Gericht-Achse Ziel-VK
 });
+
+it('Queue-Watchdog: Lauf hängt lange OHNE Step-Fortschritt → sichtbarer Hinweis (kein Worker), kein Abbruch', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'X', 'brief' => 'y']);
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'planning_session_id' => $session->id, 'scope' => 'rezept', 'status' => 'running']);
+    FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'rezept', 'status' => 'running']);
+    // Raw-Update, um den created_at-Touch zu umgehen: „vor 2 Minuten gestartet, immer noch nichts fertig".
+    FoodAlchemistCascadeRun::where('id', $run->id)->update(['created_at' => now()->subSeconds(120)]);
+
+    Livewire::test(PlanungIndex::class)
+        ->set('laufId', $run->id)
+        ->set('laeuft', true)
+        ->call('pruefeLauf')
+        ->assertSet('laeuft', true)              // kein Abbruch — weiter pollen
+        ->assertNotSet('hinweis', null);         // Watchdog schlägt an
+});
+
+it('Queue-Watchdog schweigt, wenn ein Schritt Fortschritt gemacht hat (Worker bewiesen aktiv, legitim langer Fan-out)', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'X', 'brief' => 'y']);
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'planning_session_id' => $session->id, 'scope' => 'concept', 'status' => 'running']);
+    FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'concept', 'status' => 'done']);      // Fortschritt!
+    FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht', 'status' => 'running']);
+    FoodAlchemistCascadeRun::where('id', $run->id)->update(['created_at' => now()->subSeconds(300)]);
+
+    Livewire::test(PlanungIndex::class)
+        ->set('laufId', $run->id)
+        ->set('laeuft', true)
+        ->call('pruefeLauf')
+        ->assertSet('hinweis', null);            // trotz 5 Min Laufzeit kein Hinweis — Worker lebt
+});

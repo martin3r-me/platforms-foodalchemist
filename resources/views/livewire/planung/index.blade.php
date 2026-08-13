@@ -384,6 +384,10 @@
                             @svg('heroicon-o-arrow-path', 'w-4 h-4 animate-spin')
                             <span>Entwurf wird erzeugt — läuft im Hintergrund …</span>
                         </div>
+                        {{-- Queue-Watchdog: hängt der Lauf ohne Step-Fortschritt (kein Worker?), sichtbar sagen statt endlos spinnen. --}}
+                        @if($hinweis !== null)
+                            <p class="mt-2 text-[11px] text-amber-400" data-planung-watchdog>⏱ {{ $hinweis }}</p>
+                        @endif
                     @endif
                 </x-foodalchemist::modal-section>
 
