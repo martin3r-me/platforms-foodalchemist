@@ -149,6 +149,46 @@ export function pairingNetzGraph(config) {
         .style('transition', 'opacity .15s');
       // Hover-Tooltip auf den Anker↔Anker-Kanten: „X ↔ Y · ★★★ Best-Match".
       this._edgeSel.append('title').text((d) => this._edgeTitle(d));
+
+      // Stärke-Marker auf den Anker-Verbindungen (Foodpairing-Stil: Punktgröße = Best/Good/Match).
+      const tierR = { best: 7, good: 5, match: 3.5 };
+      const marks = drawEdges.filter((d) => this._edgeTier(d) && this._edgeMidpoint(d, cx, cy));
+      const mSel = g.selectAll('circle.fa-strength').data(marks).enter().append('circle')
+        .attr('class', 'fa-strength')
+        .attr('cx', (d) => this._edgeMidpoint(d, cx, cy)[0])
+        .attr('cy', (d) => this._edgeMidpoint(d, cx, cy)[1])
+        .attr('r', (d) => tierR[this._edgeTier(d)])
+        .attr('fill', (d) => this._edgeColor(d))
+        .attr('stroke', '#0b1120').attr('stroke-width', 1.5)
+        .style('opacity', 0.95);
+      mSel.append('title').text((d) => this._edgeTitle(d));
+    },
+
+    // Stärke-Stufe einer Anker-Verbindung → Best/Good/Match (Foodpairing-3-Stufen).
+    // Direktes Pairing über die Stern-Stufe; Brücke über die Anzahl geteilter Partner.
+    _edgeTier(d) {
+      if (d.kind === 'anker_anker') return d.level >= 3 ? 'best' : (d.level >= 2 ? 'good' : 'match');
+      if (d.kind === 'bridge') {
+        const n = d.shared || 0;
+
+        return n >= 5 ? 'best' : (n >= 3 ? 'good' : 'match');
+      }
+
+      return null;
+    },
+
+    // Punkt auf der (leicht gewölbten) Verbindungslinie — Sitz des Stärke-Markers.
+    _edgeMidpoint(d, cx, cy) {
+      const s = this._byId.get(d.source);
+      const t = this._byId.get(d.target);
+      if (!s || !t) return null;
+      const mx = (s.x + t.x) / 2;
+      const my = (s.y + t.y) / 2;
+      const dist = Math.hypot(mx - cx, my - cy) || 1;
+      const len = Math.hypot(t.x - s.x, t.y - s.y);
+      const bow = len * 0.08;
+
+      return [mx + ((mx - cx) / dist) * bow, my + ((my - cy) / dist) * bow];
     },
 
     _edgePath(d, cx, cy, lineGen) {
