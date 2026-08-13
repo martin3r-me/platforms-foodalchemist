@@ -74,8 +74,12 @@
         </div>
     @endforeach
 
+    {{-- hideSave: der Concepter blendet den Sub-Save aus und sichert Canvas über EIN Tab-Speichern
+         (konzeptSpeichern). Alle anderen Einbindungen (Food-DNA/Angebote/Foodbooks) zeigen ihn weiter. --}}
+    @unless($hideSave ?? false)
     <div class="flex items-center gap-3">
         <button type="button" wire:click="canvasSpeichern" class="{{ $btnPrimary }}" data-canvas-speichern>Speichern</button>
         <span wire:loading wire:target="canvasSpeichern" class="text-[11px] text-gray-500">speichere …</span>
     </div>
+    @endunless
 </div>

@@ -286,16 +286,23 @@ class ConcepterAggregateService
             'zucker' => 'nutri_sugar_g_per_100g', 'gesfett' => 'nutri_saturated_fat_g_per_100g',
         ];
         $summe = ['kcal' => 0.0, 'protein' => 0.0, 'fett' => 0.0, 'kh' => 0.0, 'salz' => 0.0, 'zucker' => 0.0, 'gesfett' => 0.0];
-        $nTotal = 0;
-        $nOk = 0;
+        // Coverage 2026-08-13 auf DISTINKTE Gerichte umgestellt (Dominique): der Header „Aggregiert aus
+        // N Gerichten" (Allergen-Rollup) dedupliziert ebenfalls → beide Labels müssen dieselbe Grundmenge
+        // zeigen (vorher lief hier der Positions-Zähler → 5 vs. 6). Die SUMME bleibt bewusst über ALLE
+        // Positionen: ein doppelt eingesetztes Gericht = 2 Portionen/Person und trägt korrekt doppelt bei.
+        $beitragPositionen = 0;   // Positionen mit gültigem Beitrag → treibt Summe + null-Entscheidung
         $minKonf = null;
+        $dishSeen = [];           // dish_id => true  (Nenner = distinkte Gerichte)
+        $dishOk = [];             // dish_id => true  (mind. eine Position hat beigetragen)
+        $dishFail = [];           // dish_id => true  (mind. eine Position ohne Nährwert/Portionsgramm)
 
         foreach ($mitMenge as $row) {
             $g = $row['gericht'] ?? null;
             if ($g === null) {
                 continue;
             }
-            $nTotal++;
+            $gid = $g->id ?? spl_object_id($g);
+            $dishSeen[$gid] = true;
             $hatNutri = $g->nutri_kcal_per_100g !== null;
 
             // Basisrezept: Menge = GRAMM/Person → Nährwert = pro 100 g × g/Person ÷ 100
@@ -303,6 +310,8 @@ class ConcepterAggregateService
             if (! (bool) ($g->is_sales_recipe ?? true)) {
                 $mengeG = $row['quantity'] !== null ? (float) $row['quantity'] : null;
                 if ($mengeG === null || $mengeG <= 0 || ! $hatNutri) {
+                    $dishFail[$gid] = true;
+
                     continue;
                 }
                 $faktorBasis = $mengeG / 100.0;
@@ -311,7 +320,8 @@ class ConcepterAggregateService
                         $summe[$key] += (float) $g->{$spalte} * $faktorBasis;
                     }
                 }
-                $nOk++;
+                $beitragPositionen++;
+                $dishOk[$gid] = true;
                 $kB = self::KONF_RANG[$g->nutri_confidence] ?? 0;
                 $minKonf = $minKonf === null ? $kB : min($minKonf, $kB);
 
@@ -325,6 +335,8 @@ class ConcepterAggregateService
                 $g,
             );
             if ($portionG === null || $portionG <= 0 || ! $hatNutri || $pae === null) {
+                $dishFail[$gid] = true;
+
                 continue; // unvollständig — trägt nicht bei, deckelt später die Konfidenz
             }
             // Effektive Gramm/Person = Portions-Äquivalent × Portionsgramm.
@@ -334,10 +346,16 @@ class ConcepterAggregateService
                     $summe[$key] += (float) $g->{$spalte} * $faktor;
                 }
             }
-            $nOk++;
+            $beitragPositionen++;
+            $dishOk[$gid] = true;
             $k = self::KONF_RANG[$g->nutri_confidence] ?? 0;
             $minKonf = $minKonf === null ? $k : min($minKonf, $k);
         }
+
+        // Ein Gericht zählt als „hat Nährwert + Portionsgramm", wenn ALLE seine Positionen beigetragen
+        // haben — sonst ist die Summe für dieses Gericht eine Untergrenze und es zählt ehrlich als Lücke.
+        $nTotal = count($dishSeen);
+        $nOk = count(array_filter(array_keys($dishSeen), fn ($id) => isset($dishOk[$id]) && ! isset($dishFail[$id])));
 
         $vollstaendig = $nTotal > 0 && $nOk === $nTotal;
         $konfRang = $minKonf ?? 0;
@@ -346,17 +364,17 @@ class ConcepterAggregateService
         }
 
         return [
-            'kcal' => $nOk ? round($summe['kcal']) : null,
-            'protein_g' => $nOk ? round($summe['protein'], 1) : null,
-            'fett_g' => $nOk ? round($summe['fett'], 1) : null,
-            'kh_g' => $nOk ? round($summe['kh'], 1) : null,
-            'salz_g' => $nOk ? round($summe['salz'], 2) : null,
-            'zucker_g' => $nOk ? round($summe['zucker'], 1) : null,
-            'gesfett_g' => $nOk ? round($summe['gesfett'], 1) : null,
+            'kcal' => $beitragPositionen ? round($summe['kcal']) : null,
+            'protein_g' => $beitragPositionen ? round($summe['protein'], 1) : null,
+            'fett_g' => $beitragPositionen ? round($summe['fett'], 1) : null,
+            'kh_g' => $beitragPositionen ? round($summe['kh'], 1) : null,
+            'salz_g' => $beitragPositionen ? round($summe['salz'], 2) : null,
+            'zucker_g' => $beitragPositionen ? round($summe['zucker'], 1) : null,
+            'gesfett_g' => $beitragPositionen ? round($summe['gesfett'], 1) : null,
             'n_gerichte' => $nTotal,
             'n_mit_naehrwerten' => $nOk,
             'vollstaendig' => $vollstaendig,
-            'confidence' => $nOk === 0 ? 'unknown' : (array_search($konfRang, self::KONF_RANG, true) ?: 'unknown'),
+            'confidence' => $beitragPositionen === 0 ? 'unknown' : (array_search($konfRang, self::KONF_RANG, true) ?: 'unknown'),
         ];
     }
 

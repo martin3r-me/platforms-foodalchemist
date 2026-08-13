@@ -554,6 +554,14 @@
                             </div>
                             <svg viewBox="0 0 1200 980" preserveAspectRatio="xMidYMid meet"
                                  class="w-full rounded-xl" style="height:70vh; background:#0b1120" data-fa-netz-mount></svg>
+                            {{-- Legende (Foodpairing-Stil): Punkt auf der Anker-Linie = Stärke der Beziehung --}}
+                            <div class="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-[10px] text-slate-400">
+                                <span class="text-slate-500">Anker-Beziehung (Punkt = Stärke):</span>
+                                <span class="inline-flex items-center gap-1.5"><span class="inline-block rounded-full" style="width:12px;height:12px;background:#a78bfa"></span> Best</span>
+                                <span class="inline-flex items-center gap-1.5"><span class="inline-block rounded-full" style="width:9px;height:9px;background:#a78bfa"></span> Good</span>
+                                <span class="inline-flex items-center gap-1.5"><span class="inline-block rounded-full" style="width:6px;height:6px;background:#a78bfa"></span> Match</span>
+                                <span class="text-slate-500">· violett = über gemeinsame Partner · gold/orange = direktes Pairing · Hover zeigt die Partner</span>
+                            </div>
                         </div>
                     @endif
                 </x-foodalchemist::modal-section>

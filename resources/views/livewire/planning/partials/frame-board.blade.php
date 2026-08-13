@@ -41,7 +41,8 @@
                           @input="$el.style.height='auto'; $el.style.height=$el.scrollHeight+'px'"
                           class="{{ $input }} resize-none overflow-hidden min-h-[4.5rem]" placeholder="z. B. Anker-Logik, Preisschienen (Basic/Hochwertig/Premium), Wareneinsatz-Ziel, Budget-Kontext — wächst mit"></textarea>
             </div>
-            <button type="button" wire:click="frameKopfSpeichern" class="{{ $btnPrimary }}" data-frame-kopf-speichern>Rahmen speichern</button>
+            {{-- hideSave: Concepter sichert den Rahmen über EIN Tab-Speichern (konzeptSpeichern); Foodbooks zeigt ihn weiter. --}}
+            @unless($hideSave ?? false)<button type="button" wire:click="frameKopfSpeichern" class="{{ $btnPrimary }}" data-frame-kopf-speichern>Rahmen speichern</button>@endunless
         </div>
     </div>
 
