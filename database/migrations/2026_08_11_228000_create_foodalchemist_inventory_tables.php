@@ -45,8 +45,8 @@ return new class extends Migration
                 $table->timestamps();
                 $table->softDeletes();
 
-                $table->index(['team_id', 'inventory_location_id', 'gp_id', 'base_unit']);
-                $table->index(['team_id', 'inventory_location_id', 'supplier_item_id', 'base_unit']);
+                $table->index(['team_id', 'inventory_location_id', 'gp_id', 'base_unit'], 'fa_inv_stocks_team_loc_gp_unit_idx');
+                $table->index(['team_id', 'inventory_location_id', 'supplier_item_id', 'base_unit'], 'fa_inv_stocks_team_loc_supplier_unit_idx');
             });
         }
 
