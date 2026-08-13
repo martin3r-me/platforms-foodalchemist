@@ -69,7 +69,7 @@
 
     </div>
 
-    <div class="{{ $card }} p-5 space-y-3" data-lagerorte>
+    <div id="lagerorte" class="{{ $card }} p-5 space-y-3 scroll-mt-6" data-lagerorte>
         <div>
             <h3 class="font-medium tracking-tight text-gray-900">Lagerorte</h3>
             <p class="text-[11px] text-gray-500 mt-0.5">WaWi light: Wareneingänge buchen auf das Standardlager. Weitere Lagerorte sind die Grundlage für spätere Umlagerung, Inventur und Produktion.</p>

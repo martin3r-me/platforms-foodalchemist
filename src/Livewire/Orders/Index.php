@@ -202,13 +202,34 @@ class Index extends Component
             ->when($this->nurMitKlaerung, fn ($c) => $c->filter(fn ($o) => $orders->orderWarnings($o) !== []))
             ->when($suche !== '', fn ($c) => $c->filter(function ($o) use ($suche, $herkunftByOrder) {
                 $herkunft = collect($herkunftByOrder[(int) $o->id] ?? [])->pluck('label')->implode(' ');
+                $positionen = $o->lines
+                    ->map(fn ($l) => implode(' ', [
+                        $l->designation ?? '',
+                        $l->article_number ?? '',
+                        $l->packaging_unit ?? '',
+                        $l->supplierItem?->designation ?? '',
+                        $l->supplierItem?->article_number ?? '',
+                        $l->gp?->name ?? '',
+                        $l->note ?? '',
+                        $l->received_note ?? '',
+                        $l->invoice_note ?? '',
+                        $l->claim_note ?? '',
+                    ]))
+                    ->implode(' ');
                 $hay = mb_strtolower(implode(' ', [
                     'ord-' . (int) $o->id,
+                    '#' . (int) $o->id,
                     $o->supplier?->name ?? '',
                     $o->reference ?? '',
                     $o->supplier_order_number ?? '',
                     $o->invoice_number ?? '',
+                    $o->supplier_confirmation_note ?? '',
+                    $o->invoice_note ?? '',
+                    $o->payment_note ?? '',
+                    $o->approval_note ?? '',
+                    $o->note ?? '',
                     $herkunft,
+                    $positionen,
                 ]));
 
                 return str_contains($hay, $suche);

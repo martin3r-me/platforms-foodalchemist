@@ -1481,7 +1481,12 @@ class OrderService
         $bis = ($filters['bis'] ?? null) ?: null;
 
         $q = FoodAlchemistOrder::visibleToTeam($team)
-            ->with(['supplier:id,name,min_order_value,free_shipping_threshold,delivery_days,order_cutoff_time,order_lead_days', 'lines:id,order_id,supplier_item_id,qty_packs,pack_price,received_qty_packs,quota_consumed_packs,source_contributions'])
+            ->with([
+                'supplier:id,name,min_order_value,free_shipping_threshold,delivery_days,order_cutoff_time,order_lead_days',
+                'lines:id,order_id,supplier_item_id,gp_id,article_number,designation,packaging_unit,qty_packs,pack_price,received_qty_packs,quota_consumed_packs,source_contributions,note,received_note,invoice_note,claim_note',
+                'lines.supplierItem:id,designation,article_number',
+                'lines.gp:id,name',
+            ])
             ->when($status !== null, fn ($q) => $q->where('status', $status))
             ->when($von !== null, fn ($q) => $q->whereDate($spalte, '>=', $von))
             ->when($bis !== null, fn ($q) => $q->whereDate($spalte, '<=', $bis));

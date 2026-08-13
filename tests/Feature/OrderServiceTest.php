@@ -162,6 +162,31 @@ it('UI: Index filtert nach Liefertag-Fenster + gruppiert; Basis-Umschalter auf B
         ->assertSee('ord-' . $do->id);
 });
 
+it('UI: Index-Suche findet Bestellungen ueber Positionsartikel und Referenzen', function () {
+    $this->actingAs($this->makeUser($this->rootTeam));
+    $this->svc->addNeedFromTarget($this->rootTeam, $this->ziel, 'recipe:kuchen@100');
+
+    $chefs = FoodAlchemistOrder::whereHas('supplier', fn ($q) => $q->where('name', 'Chefs'))->first();
+    $hanos = FoodAlchemistOrder::whereHas('supplier', fn ($q) => $q->where('name', 'Hanos'))->first();
+    $chefs->update(['supplier_order_number' => 'AB-SUCHE-77']);
+    FoodAlchemistOrder::whereIn('id', [$chefs->id, $hanos->id])->update(['reference' => 'Wochenrunde Dessert']);
+
+    Livewire::test(OrdersIndex::class)
+        ->set('suche', 'ART-MEH')
+        ->assertSee('ord-' . $chefs->id)
+        ->assertDontSee('ord-' . $hanos->id);
+
+    Livewire::test(OrdersIndex::class)
+        ->set('suche', 'Wochenrunde Dessert')
+        ->assertSee('ord-' . $chefs->id)
+        ->assertSee('ord-' . $hanos->id);
+
+    Livewire::test(OrdersIndex::class)
+        ->set('suche', 'AB-SUCHE-77')
+        ->assertSee('ord-' . $chefs->id)
+        ->assertDontSee('ord-' . $hanos->id);
+});
+
 it('addNeedFromTarget: je Lieferant eine Schiene, Gebinde-Zeilen + total_net (echte Gebinde)', function () {
     $res = $this->svc->addNeedFromTarget($this->rootTeam, $this->ziel, 'recipe:kuchen@100');
 

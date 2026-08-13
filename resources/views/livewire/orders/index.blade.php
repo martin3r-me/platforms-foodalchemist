@@ -24,9 +24,9 @@
         @if($fehler)<div class="{{ $sectionCard }} !bg-rose-500/[0.06] !border-rose-500/20 text-[12px] text-rose-700">{{ $fehler }}</div>@endif
 
         {{-- Neue Bestellung: neutral öffnen; Lieferant entsteht erst aus Artikel/Bedarf. --}}
-        <div class="flex flex-wrap items-end gap-2">
+        <div class="flex flex-wrap items-end justify-between gap-3">
             <div>
-                <span class="{{ $label }} block mb-1">Neue Bestellung</span>
+                <span class="{{ $label }} block mb-1">Neue Bestellrunde</span>
                 <div class="flex flex-wrap gap-1">
                     <input type="date" wire:model="neuerLiefertag" class="{{ $input }}" title="Liefertag" />
                     <select wire:model="neueStrategie" class="{{ $input }}" title="Einkaufsstrategie">
@@ -35,8 +35,13 @@
                             <option value="{{ $s->value }}">{{ $s->label() }}</option>
                         @endforeach
                     </select>
-                    <button type="button" wire:click="neueBestellung" class="{{ $btnPrimary }} shrink-0" data-orders-neu>+ Bestellung öffnen</button>
+                    <button type="button" wire:click="neueBestellung" class="{{ $btnPrimary }} shrink-0" data-orders-neu>+ Bestellrunde öffnen</button>
                 </div>
+                <p class="text-[11px] text-gray-500 mt-1">Eine Runde erzeugt beim Speichern die passenden Lieferanten-Belege je Lieferant + Liefertag.</p>
+            </div>
+            <div class="flex flex-wrap items-center gap-2 pb-0.5">
+                <a href="{{ route('foodalchemist.einstellungen', ['sektion' => 'einkauf']) }}#lagerorte"
+                   class="{{ $btnGhostXs }}">Lagerorte</a>
             </div>
         </div>
 
@@ -85,7 +90,7 @@
             </div>
             <div>
                 <span class="{{ $label }} block mb-1">Suche</span>
-                <input type="search" wire:model.live.debounce.300ms="suche" placeholder="Lieferant / Produktion / Anlass…" class="{{ $input }}" />
+                <input type="search" wire:model.live.debounce.300ms="suche" placeholder="Beleg / Referenz / Artikel / Produktion…" class="{{ $input }}" />
             </div>
             <div>
                 <span class="{{ $label }} block mb-1">Lieferant</span>
@@ -133,7 +138,12 @@
         <div class="relative overflow-hidden {{ $card }}" data-orders-tabelle>
             <div class="{{ $cardAccent }}"></div>
             <div class="px-5 pt-4 pb-2 flex items-baseline justify-between">
-                <h3 class="font-medium tracking-tight text-gray-900">{{ ['bestellungen' => 'Bestellungen finden', 'liefertage' => 'Nach Liefertag planen', 'lieferanten' => 'Nach Lieferant bündeln'][$sicht] ?? 'Bestellungen' }}</h3>
+                <div>
+                    <h3 class="font-medium tracking-tight text-gray-900">{{ ['bestellungen' => 'Bestellungen finden', 'liefertage' => 'Nach Liefertag planen', 'lieferanten' => 'Nach Lieferant bündeln'][$sicht] ?? 'Bestellungen' }}</h3>
+                    @if($sicht === 'bestellungen')
+                        <p class="text-[11px] text-gray-500 mt-0.5">Zeilen sind Lieferanten-Belege einer Bestellrunde; Suche geht über Beleg, Referenz, Artikel, Produktion und Lieferant.</p>
+                    @endif
+                </div>
                 <span class="{{ $label }}">{{ number_format($liste->count(), 0, ',', '.') }} Treffer</span>
             </div>
             <div class="max-h-[70vh] overflow-auto">
@@ -270,7 +280,7 @@
                     </tr></thead>
                     <tbody>
                         @if($liste->isEmpty())
-                            <tr><td colspan="9" class="px-5 py-10 text-center text-gray-500">Keine Bestellungen. „Neue Bestellung" oben oder Bedarf aus der Produktion übergeben.</td></tr>
+                            <tr><td colspan="9" class="px-5 py-10 text-center text-gray-500">Keine Bestellungen. „Neue Bestellrunde" oben oder Bedarf aus der Produktion übergeben.</td></tr>
                         @else
                             @foreach($gruppen as $tag => $zeilen)
                                 @if($gruppiert)
