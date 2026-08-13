@@ -5,11 +5,14 @@
 <x-foodalchemist::modal name="orders-editor" fullscreen dark-canvas title="Bestellung bearbeiten"
     :title-name="$detail['supplier'] ?? null">
     <x-slot:actions>
+        @php($sendBlockers = $detail['send_blockers'] ?? [])
         @if($detail && $erlaubteStatus)
             @foreach($erlaubteStatus as $z)
                 <button type="button" wire:click="setStatus('{{ $z->value }}')"
                     class="{{ $z->value === 'sent' ? $btnPrimary : $btnGhostXs }}"
                     @if($z->value === 'cancelled') onclick="return confirm('Bestellung stornieren?')" @endif
+                    @disabled($z->value === 'sent' && !empty($sendBlockers))
+                    @if($z->value === 'sent' && !empty($sendBlockers)) title="Versand gesperrt: {{ implode(', ', $sendBlockers) }}" @endif
                     data-status-{{ $z->value }}>{{ $z === \Platform\FoodAlchemist\Enums\OrderStatus::Sent ? 'Absenden' : $z->label() }}</button>
             @endforeach
         @endif
@@ -20,6 +23,8 @@
     @if($detail)
         <x-slot:kpiHeader>
             @php($moq = $detail['moq'])
+            @php($warnings = $detail['warnings'] ?? [])
+            @php($sendBlockers = $detail['send_blockers'] ?? [])
             <x-foodalchemist::kpi-tiles marker="orders-kpis" :tiles="[
                 ['kpi' => 'artikel', 'label' => 'Artikel', 'value' => (string) count($detail['zeilen'])],
                 ['kpi' => 'netto', 'label' => 'Wareneinsatz netto', 'tone' => 'accent',
@@ -27,7 +32,35 @@
                 ['kpi' => 'moq', 'label' => 'Mindestbestellwert',
                  'tone' => $moq['unter_mindestbestellwert'] ? 'warn' : ($moq['min_order_value'] !== null ? 'good' : 'neutral'),
                  'value' => $moq['unter_mindestbestellwert'] ? '− ' . number_format((float) $moq['fehlt_bis_min'], 2, ',', '.') . ' €' : ($moq['min_order_value'] !== null ? 'erreicht' : '—')],
+                ['kpi' => 'strategie', 'label' => 'Strategie',
+                 'value' => $detail['sourcing_strategy'] ? (\Platform\FoodAlchemist\Enums\LeadLaStrategie::tryFrom($detail['sourcing_strategy'])?->label() ?? $detail['sourcing_strategy']) : 'Team-Standard'],
+                ['kpi' => 'hinweise', 'label' => 'Hinweise',
+                 'tone' => !empty($sendBlockers) ? 'bad' : (!empty($warnings) ? 'warn' : 'good'),
+                 'value' => count($warnings) > 0 ? (string) count($warnings) : 'ok'],
+                ['kpi' => 'wareneingang', 'label' => 'Wareneingang',
+                 'tone' => ($detail['receipt']['differences'] ?? 0) > 0 ? 'warn' : (($detail['receipt']['missing'] ?? 0) > 0 ? 'neutral' : 'good'),
+                 'value' => ($detail['receipt']['booked'] ?? 0) . '/' . ($detail['receipt']['lines'] ?? 0)],
+                ['kpi' => 'rechnung', 'label' => 'Rechnung',
+                 'tone' => ($detail['invoice']['differences'] ?? 0) > 0 ? 'warn' : (($detail['invoice']['missing'] ?? 0) > 0 ? 'neutral' : 'good'),
+                 'value' => ($detail['invoice']['checked'] ?? 0) . '/' . ($detail['invoice']['lines'] ?? 0)],
+                ['kpi' => 'lager', 'label' => 'Lager',
+                 'tone' => ($detail['inventory']['shortage'] ?? 0) > 0 ? 'warn' : (($detail['inventory']['tracked'] ?? 0) > 0 ? 'good' : 'neutral'),
+                 'value' => ($detail['inventory']['tracked'] ?? 0) > 0 ? (($detail['inventory']['covered'] ?? 0) . '/' . ($detail['inventory']['tracked'] ?? 0)) : '—'],
                 ['kpi' => 'status', 'label' => 'Status', 'value' => $detail['status_label']],
+            ]" />
+        </x-slot:kpiHeader>
+    @endif
+
+    @if($detail === null)
+        <x-slot:kpiHeader>
+            @php($previewTotals = $cockpitPreview['totals'] ?? ['sources' => count($cockpitSources), 'groups' => 0, 'positions' => 0, 'unresolved' => 0, 'total_net' => 0])
+            <x-foodalchemist::kpi-tiles marker="orders-cockpit-kpis" :tiles="[
+                ['kpi' => 'sources', 'label' => 'Quellen', 'value' => number_format((int) ($previewTotals['sources'] ?? 0), 0, ',', '.')],
+                ['kpi' => 'tracks', 'label' => 'Schienen', 'value' => number_format((int) ($previewTotals['groups'] ?? 0), 0, ',', '.')],
+                ['kpi' => 'positions', 'label' => 'Positionen', 'value' => number_format((int) ($previewTotals['positions'] ?? 0), 0, ',', '.')],
+                ['kpi' => 'netto', 'label' => 'Netto Vorschau', 'tone' => 'accent', 'value' => number_format((float) ($previewTotals['total_net'] ?? 0), 2, ',', '.') . ' €'],
+                ['kpi' => 'strategy', 'label' => 'Strategie', 'value' => $cockpitStrategy !== '' ? (\Platform\FoodAlchemist\Enums\LeadLaStrategie::tryFrom($cockpitStrategy)?->label() ?? $cockpitStrategy) : 'Team-Standard'],
+                ['kpi' => 'clarifications', 'label' => 'Klärpunkte', 'tone' => ((int) ($previewTotals['unresolved'] ?? 0)) > 0 ? 'warn' : 'good', 'value' => number_format((int) ($previewTotals['unresolved'] ?? 0), 0, ',', '.')],
             ]" />
         </x-slot:kpiHeader>
     @endif
@@ -189,8 +222,16 @@
                                             @endif
                                         </div>
                                     </div>
+                                    @if(!empty($g['warnings']))
+                                        <div class="flex flex-wrap gap-1 px-3 py-1.5 bg-amber-500/[0.06] border-t border-amber-500/10">
+                                            @foreach($g['warnings'] as $w)
+                                                <span class="px-1.5 py-0.5 rounded bg-amber-500/10 text-[10px] text-amber-700">{{ $w }}</span>
+                                            @endforeach
+                                        </div>
+                                    @endif
                                     <div class="divide-y divide-white/5">
                                         @foreach($g['positionen'] as $p)
+                                            @php($previewAltKey = (string) ($p['override_key'] ?? md5(($g['supplier_id'] ?? '') . '|' . ($g['delivery_date'] ?? '') . '|' . ($p['source_ref'] ?? '') . '|' . ($p['gp_id'] ?? ''))))
                                             <div class="grid grid-cols-[1fr_auto] gap-2 px-3 py-2">
                                                 <div class="min-w-0">
                                                     <div class="text-[12px] text-gray-800 truncate">{{ $p['designation'] ?: ($p['gp'] ?: 'Position') }}</div>
@@ -201,6 +242,38 @@
                                                     </div>
                                                     @if(!empty($p['reference']))
                                                         <span class="{{ $pill }} {{ $variantPill['primary'] }} mt-1">{{ $p['reference'] }}</span>
+                                                    @endif
+                                                    @if(array_key_exists($previewAltKey, $cockpitOverrides))
+                                                        <button type="button" wire:click="cockpitAlternativeZuruecksetzen('{{ $previewAltKey }}')" class="{{ $pill }} {{ $variantPill['warning'] }} mt-1">
+                                                            manuell gewählt · auto wiederherstellen
+                                                        </button>
+                                                    @endif
+                                                    @if(($p['gp_id'] ?? null) !== null)
+                                                        <button type="button"
+                                                            wire:click="cockpitAlternativenUmschalten('{{ $previewAltKey }}', {{ (int) $p['gp_id'] }}, {{ (int) $g['supplier_id'] }}, {{ ($p['lead_la_id'] ?? null) !== null ? (int) $p['lead_la_id'] : 'null' }})"
+                                                            class="mt-1 text-[10px] text-violet-600 hover:underline">
+                                                            {{ $cockpitAltKey === $previewAltKey ? '▾ Alternativen schließen' : '⇄ Lieferant / Artikel wechseln' }}
+                                                        </button>
+                                                        @if($cockpitAltKey === $previewAltKey)
+                                                            <div class="mt-1 rounded-md border border-violet-500/20 bg-violet-500/[0.06] p-1.5 space-y-0.5">
+                                                                @forelse($cockpitAlternativen as $alt)
+                                                                    <button type="button"
+                                                                        wire:click="cockpitAlternativeWaehlen('{{ $previewAltKey }}', {{ $alt['la_id'] }})"
+                                                                        @disabled($alt['gesperrt'])
+                                                                        class="block w-full text-left px-1.5 py-1 rounded bg-black/[0.03] hover:bg-black/[0.08] {{ $alt['gesperrt'] ? 'opacity-40 cursor-not-allowed' : '' }}"
+                                                                        wire:key="preview-alt-{{ md5($previewAltKey) }}-{{ $alt['la_id'] }}">
+                                                                        <span class="text-[11px] text-gray-800">{{ $alt['designation'] ?: '—' }}</span>
+                                                                        <span class="text-[10px] text-gray-400 block">
+                                                                            {{ $alt['supplier'] ?? '—' }}@if($alt['schiene_wechsel']) · andere Schiene @endif
+                                                                            @if($alt['ist_stamm']) · Stamm @endif
+                                                                            @if($alt['vergleichspreis'] !== null) · {{ number_format($alt['vergleichspreis'], 2, ',', '.') }} {{ $alt['vergleichspreis_einheit'] ?? '' }} @endif
+                                                                        </span>
+                                                                    </button>
+                                                                @empty
+                                                                    <p class="text-[10px] text-gray-400 px-1">Keine Alternative.</p>
+                                                                @endforelse
+                                                            </div>
+                                                        @endif
                                                     @endif
                                                 </div>
                                                 <div class="text-right whitespace-nowrap">
@@ -247,6 +320,8 @@
     <x-foodalchemist::editor-tabs marker="orders" wire-key="orders-tabs-{{ $detail['id'] }}" :init="'positionen'"
         :tabs="[
             'positionen' => 'Positionen',
+            'wareneingang' => !in_array($detail['status'], ['draft', 'cancelled'], true) ? 'Wareneingang' : null,
+            'rechnung' => !in_array($detail['status'], ['draft', 'cancelled'], true) ? 'Rechnung' : null,
             'hinzufuegen' => $detail['editierbar'] ? 'Hinzufügen' : null,
             'kopf' => 'Kopf, Status & Versand',
         ]">
@@ -271,6 +346,19 @@
                                 {{ $z['designation'] ?: '—' }}
                                 @if($z['article_number'])<br><span class="text-[10px] text-gray-400">Art. {{ $z['article_number'] }}@if($z['packaging_unit']) · {{ $z['packaging_unit'] }}@endif</span>@endif
                                 @unless($z['bestellbar'])<br><span class="text-[10px] text-amber-600">nicht in Gebinde bestellbar (Preis/Gebinde fehlt)</span>@endunless
+                                @if($z['quota'])
+                                    <div class="mt-1 text-[10px] {{ $z['quota']['exceeded'] || ! $z['quota']['is_valid_date'] ? 'text-amber-600' : 'text-emerald-600' }}">
+                                        Kontingent: {{ rtrim(rtrim(number_format($z['quota']['remaining_before_packs'], 2, ',', '.'), '0'), ',') }} {{ $z['packaging_unit'] ?: 'Geb.' }} frei
+                                        · nach Bestellung {{ rtrim(rtrim(number_format($z['quota']['remaining_after_packs'], 2, ',', '.'), '0'), ',') }}
+                                        @if(!$z['quota']['is_valid_date']) · außerhalb Gültigkeit @endif
+                                    </div>
+                                @endif
+                                @if(!empty($z['inventory']))
+                                    <div class="mt-1 text-[10px] text-sky-600">
+                                        Lager: {{ $z['inventory']['display'] }} verfügbar
+                                        · Restbedarf {{ $z['inventory']['shortage_display'] }}
+                                    </div>
+                                @endif
                                 @if(!empty($z['herkunft']))
                                     <div class="flex flex-wrap gap-1 mt-1">
                                         @foreach($z['herkunft'] as $h)
@@ -288,7 +376,7 @@
                                 @if($detail['editierbar'] && $z['gp_id'] !== null)
                                     <button type="button" wire:click="alternativenUmschalten({{ $z['id'] }})"
                                         class="mt-1 text-[10px] text-violet-600 hover:underline">
-                                        {{ $altLineId === $z['id'] ? '▾ Ausweichquelle schließen' : '⇄ Ausweichquelle' }}
+                                        {{ $altLineId === $z['id'] ? '▾ Wechsel schließen' : '⇄ Lieferant / Artikel wechseln' }}
                                     </button>
                                     @if($altLineId === $z['id'])
                                         <div class="mt-1 rounded-md border border-violet-500/20 bg-violet-500/[0.06] p-1.5 space-y-0.5">
@@ -345,6 +433,293 @@
                 <p class="text-[11px] text-gray-400 mt-2">Versendeter Beleg — eingefroren, nicht mehr editierbar.</p>
             @endunless
         </x-foodalchemist::modal-section>
+        </div>
+
+        {{-- ═══ Tab: WARENEINGANG ═══ --}}
+        <div x-show="tab === 'wareneingang'" x-cloak class="pt-4">
+            <x-foodalchemist::modal-section title="Wareneingang">
+                <x-slot:actions>
+                    @if($detail['wareneingang_editierbar'])
+                        @if(($detail['receipt']['backorderable'] ?? 0) > 0)
+                            <button type="button" wire:click="createBackorder" class="{{ $btnGhostXs }}">Nachlieferung anlegen</button>
+                        @endif
+                        <button type="button" wire:click="completeReceipt" class="{{ $btnGhostXs }}">Alles vollständig übernehmen</button>
+                    @endif
+                </x-slot:actions>
+                @php($receipt = $detail['receipt'])
+                <div class="flex flex-wrap gap-2 text-[11px] mb-3">
+                    <span class="px-2 py-0.5 rounded-md bg-black/10 text-gray-600">{{ $receipt['booked'] }}/{{ $receipt['lines'] }} Zeilen gebucht</span>
+                    @if($receipt['missing'] > 0)
+                        <span class="px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-700">{{ $receipt['missing'] }} offen</span>
+                    @endif
+                    @if($receipt['differences'] > 0)
+                        <span class="px-2 py-0.5 rounded-md bg-rose-500/10 text-rose-700">{{ $receipt['differences'] }} Differenzen</span>
+                    @endif
+                    <span class="px-2 py-0.5 rounded-md bg-violet-500/10 text-violet-700">WE netto {{ number_format((float) $receipt['received_net'], 2, ',', '.') }} €</span>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="{{ $table }}">
+                        <thead><tr>
+                            <th class="{{ $th }} text-left">Artikel</th>
+                            <th class="{{ $th }} text-right">Bestellt</th>
+                            <th class="{{ $th }} text-right">Geliefert</th>
+                            <th class="{{ $th }} text-right">Differenz</th>
+                            <th class="{{ $th }} text-left">Notiz</th>
+                        </tr></thead>
+                        <tbody>
+                            @foreach($detail['zeilen'] as $z)
+                                @php($diff = $z['receipt_diff_packs'])
+                                <tr class="border-t border-black/5 align-top" wire:key="receipt-line-{{ $z['id'] }}">
+                                    <td class="{{ $td }} text-gray-800">
+                                        {{ $z['designation'] ?: '—' }}
+                                        @if($z['article_number'])<br><span class="text-[10px] text-gray-400">Art. {{ $z['article_number'] }}</span>@endif
+                                @if($z['received_at'])<br><span class="text-[10px] text-gray-400">gebucht {{ \Carbon\Carbon::parse($z['received_at'])->format('d.m.Y H:i') }}</span>@endif
+                                        @if(!empty($z['inventory']))
+                                            <br><span class="text-[10px] text-sky-600">Lager danach: {{ $z['inventory']['display'] }} · Rest {{ $z['inventory']['shortage_display'] }}</span>
+                                        @endif
+                                    </td>
+                                    <td class="{{ $td }} text-right whitespace-nowrap">{{ rtrim(rtrim(number_format((float) $z['qty_packs'], 2, ',', '.'), '0'), ',') }} {{ $z['packaging_unit'] }}</td>
+                                    <td class="{{ $td }} text-right whitespace-nowrap">
+                                        @if($detail['wareneingang_editierbar'])
+                                            <input type="number" min="0" step="0.01" value="{{ $z['received_qty_packs'] }}"
+                                                wire:change="updateReceiptLine({{ $z['id'] }}, $event.target.value, null)"
+                                                class="w-20 text-right {{ $input }}" />
+                                        @else
+                                            {{ $z['received_qty_packs'] !== null ? rtrim(rtrim(number_format((float) $z['received_qty_packs'], 2, ',', '.'), '0'), ',') : '—' }}
+                                        @endif
+                                        @if($z['packaging_unit'])<span class="text-[10px] text-gray-400"> {{ $z['packaging_unit'] }}</span>@endif
+                                    </td>
+                                    <td class="{{ $td }} text-right whitespace-nowrap">
+                                        @if($diff === null)
+                                            <span class="text-gray-400">offen</span>
+                                        @elseif(abs((float) $diff) < 0.01)
+                                            <span class="text-emerald-600">ok</span>
+                                        @else
+                                            <span class="{{ (float) $diff < 0 ? 'text-rose-600' : 'text-amber-700' }}">{{ (float) $diff > 0 ? '+' : '' }}{{ rtrim(rtrim(number_format((float) $diff, 2, ',', '.'), '0'), ',') }}</span>
+                                        @endif
+                                    </td>
+                                    <td class="{{ $td }}">
+                                        @if($detail['wareneingang_editierbar'])
+                                            <input type="text" value="{{ $z['received_note'] }}" placeholder="Differenz, Ersatz, Bruch..."
+                                                wire:change="updateReceiptNote({{ $z['id'] }}, $event.target.value)"
+                                                class="{{ $input }} !py-1 !text-[11px]" />
+                                        @else
+                                            <span class="text-[11px] text-gray-500">{{ $z['received_note'] ?: '—' }}</span>
+                                        @endif
+                                    </td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+                @if(!$detail['wareneingang_editierbar'])
+                    <p class="text-[11px] text-gray-400 mt-2">Wareneingang ist bei gesendeten oder bestätigten Bestellungen editierbar.</p>
+                @endif
+            </x-foodalchemist::modal-section>
+        </div>
+
+        {{-- ═══ Tab: RECHNUNG ═══ --}}
+        <div x-show="tab === 'rechnung'" x-cloak class="pt-4">
+            <x-foodalchemist::modal-section title="Rechnungsprüfung">
+                <x-slot:actions>
+                    @if($detail['rechnung_editierbar'])
+                        <button type="button" wire:click="completeInvoiceFromReceipt" class="{{ $btnGhostXs }}">Aus Wareneingang übernehmen</button>
+                    @endif
+                </x-slot:actions>
+                @php($invoice = $detail['invoice'])
+                @php($claims = $detail['claims'])
+                <div class="flex flex-wrap gap-2 text-[11px] mb-3">
+                    <span class="px-2 py-0.5 rounded-md bg-black/10 text-gray-600">{{ $invoice['checked'] }}/{{ $invoice['lines'] }} Zeilen geprüft</span>
+                    @if($invoice['missing'] > 0)
+                        <span class="px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-700">{{ $invoice['missing'] }} offen</span>
+                    @endif
+                    @if($invoice['differences'] > 0)
+                        <span class="px-2 py-0.5 rounded-md bg-rose-500/10 text-rose-700">{{ $invoice['differences'] }} Differenzen</span>
+                    @endif
+                    <span class="px-2 py-0.5 rounded-md bg-violet-500/10 text-violet-700">Rechnung netto {{ number_format((float) $invoice['invoice_net'], 2, ',', '.') }} €</span>
+                    @if(abs((float) $invoice['diff_net']) >= 0.01)
+                        <span class="px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-700">Diff. {{ number_format((float) $invoice['diff_net'], 2, ',', '.') }} €</span>
+                    @endif
+                    @if(($claims['lines'] ?? 0) > 0)
+                        <span class="px-2 py-0.5 rounded-md {{ (($claims['open'] ?? 0) + ($claims['credit_expected'] ?? 0)) > 0 ? 'bg-amber-500/10 text-amber-700' : 'bg-emerald-500/10 text-emerald-700' }}">Reklamation {{ $claims['lines'] }} · {{ number_format((float) ($claims['credit_expected_net'] ?? 0), 2, ',', '.') }} €</span>
+                    @endif
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-3 mb-3 rounded-md border border-white/10 bg-white/[0.04] p-3">
+                    <div>
+                        <label class="text-[10px] text-gray-500">Rechnungsnummer</label>
+                        @if($detail['rechnung_editierbar'])
+                            <input type="text" wire:model="formInvoiceNumber" class="{{ $input }}" />
+                        @else
+                            <div class="text-[12px] text-gray-700">{{ $detail['invoice_number'] ?: '—' }}</div>
+                        @endif
+                    </div>
+                    <div>
+                        <label class="text-[10px] text-gray-500">Rechnungsdatum</label>
+                        @if($detail['rechnung_editierbar'])
+                            <input type="date" wire:model="formInvoiceDate" class="{{ $input }}" />
+                        @else
+                            <div class="text-[12px] text-gray-700">{{ $detail['invoice_date'] ?: '—' }}</div>
+                        @endif
+                    </div>
+                    <div>
+                        <label class="text-[10px] text-gray-500">Fälligkeit</label>
+                        <div class="text-[12px] text-gray-700">
+                            {{ $detail['invoice_due_date'] ? \Carbon\Carbon::parse($detail['invoice_due_date'])->format('d.m.Y') : '—' }}
+                        </div>
+                        @if($detail['payment_term_days'] !== null)
+                            <div class="text-[10px] text-gray-400">{{ $detail['payment_term_days'] }} Tage Zahlungsziel</div>
+                        @endif
+                    </div>
+                    <div class="md:col-span-4">
+                        <label class="text-[10px] text-gray-500">Rechnungsnotiz</label>
+                        @if($detail['rechnung_editierbar'])
+                            <textarea wire:model="formInvoiceNote" rows="2" class="{{ $input }}"></textarea>
+                            <button type="button" wire:click="saveInvoiceHeader" class="{{ $btnGhostXs }} mt-2">Rechnungskopf speichern</button>
+                        @else
+                            <div class="text-[12px] text-gray-700">{{ $detail['invoice_note'] ?: '—' }}</div>
+                        @endif
+                    </div>
+                </div>
+                @if($detail['invoice_number'] || $detail['invoice_date'])
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-3 mb-3 rounded-md border border-white/10 bg-white/[0.04] p-3">
+                        <div>
+                            <label class="text-[10px] text-gray-500">Zahlungsstatus</label>
+                            @if($detail['rechnung_editierbar'])
+                                <select wire:model="formPaymentStatus" class="{{ $input }}">
+                                    <option value="">offen</option>
+                                    <option value="open">offen</option>
+                                    <option value="disputed">strittig</option>
+                                    <option value="paid">bezahlt</option>
+                                </select>
+                            @else
+                                <div class="text-[12px] text-gray-700">{{ $detail['payment']['label'] ?? '—' }}</div>
+                            @endif
+                        </div>
+                        <div>
+                            <label class="text-[10px] text-gray-500">Bezahlt am</label>
+                            @if($detail['rechnung_editierbar'])
+                                <input type="date" wire:model="formInvoicePaidAt" class="{{ $input }}" />
+                            @else
+                                <div class="text-[12px] text-gray-700">{{ $detail['invoice_paid_at'] ?: '—' }}</div>
+                            @endif
+                        </div>
+                        <div>
+                            <label class="text-[10px] text-gray-500">OP-Status</label>
+                            <div class="text-[12px] font-medium {{ ($detail['payment']['state'] ?? '') === 'overdue' ? 'text-amber-600' : ((($detail['payment']['state'] ?? '') === 'paid') ? 'text-emerald-600' : 'text-gray-700') }}">
+                                {{ $detail['payment']['label'] ?? '—' }}
+                            </div>
+                            @if(($detail['payment']['overdue_days'] ?? 0) > 0)
+                                <div class="text-[10px] text-amber-600">{{ $detail['payment']['overdue_days'] }} Tage überfällig</div>
+                            @endif
+                        </div>
+                        <div class="md:col-span-4">
+                            <label class="text-[10px] text-gray-500">Zahlungsnotiz</label>
+                            @if($detail['rechnung_editierbar'])
+                                <textarea wire:model="formPaymentNote" rows="2" class="{{ $input }}"></textarea>
+                                <button type="button" wire:click="savePayment" class="{{ $btnGhostXs }} mt-2">Zahlungsstatus speichern</button>
+                            @else
+                                <div class="text-[12px] text-gray-700">{{ $detail['payment_note'] ?: '—' }}</div>
+                            @endif
+                        </div>
+                    </div>
+                @endif
+                <div class="overflow-x-auto">
+                    <table class="{{ $table }}">
+                        <thead><tr>
+                            <th class="{{ $th }} text-left">Artikel</th>
+                            <th class="{{ $th }} text-right">Basis</th>
+                            <th class="{{ $th }} text-right">Rechnung Menge</th>
+                            <th class="{{ $th }} text-right">Rechnung Preis</th>
+                            <th class="{{ $th }} text-right">Diff. netto</th>
+                            <th class="{{ $th }} text-left">Notiz</th>
+                            <th class="{{ $th }} text-left">Reklamation</th>
+                        </tr></thead>
+                        <tbody>
+                            @foreach($detail['zeilen'] as $z)
+                                @php($diffNet = $z['invoice_diff_net'])
+                                <tr class="border-t border-black/5 align-top" wire:key="invoice-line-{{ $z['id'] }}">
+                                    <td class="{{ $td }} text-gray-800">
+                                        {{ $z['designation'] ?: '—' }}
+                                        @if($z['article_number'])<br><span class="text-[10px] text-gray-400">Art. {{ $z['article_number'] }}</span>@endif
+                                        @if($z['invoice_checked_at'])<br><span class="text-[10px] text-gray-400">geprüft {{ \Carbon\Carbon::parse($z['invoice_checked_at'])->format('d.m.Y H:i') }}</span>@endif
+                                    </td>
+                                    <td class="{{ $td }} text-right whitespace-nowrap">
+                                        {{ rtrim(rtrim(number_format((float) ($z['received_qty_packs'] ?? $z['qty_packs']), 2, ',', '.'), '0'), ',') }} {{ $z['packaging_unit'] }}
+                                        <br><span class="text-[10px] text-gray-400">{{ $z['pack_price'] !== null ? number_format((float) $z['pack_price'], 2, ',', '.') . ' €' : '—' }}</span>
+                                    </td>
+                                    <td class="{{ $td }} text-right whitespace-nowrap">
+                                        @if($detail['rechnung_editierbar'])
+                                            <input type="number" min="0" step="0.01" value="{{ $z['invoice_qty_packs'] }}"
+                                                wire:change="updateInvoiceLine({{ $z['id'] }}, $event.target.value, {{ $z['invoice_pack_price'] !== null ? (float) $z['invoice_pack_price'] : 'null' }}, null)"
+                                                class="w-20 text-right {{ $input }}" />
+                                        @else
+                                            {{ $z['invoice_qty_packs'] !== null ? rtrim(rtrim(number_format((float) $z['invoice_qty_packs'], 2, ',', '.'), '0'), ',') : '—' }}
+                                        @endif
+                                    </td>
+                                    <td class="{{ $td }} text-right whitespace-nowrap">
+                                        @if($detail['rechnung_editierbar'])
+                                            <input type="number" min="0" step="0.01" value="{{ $z['invoice_pack_price'] }}"
+                                                wire:change="updateInvoiceLine({{ $z['id'] }}, {{ $z['invoice_qty_packs'] !== null ? (float) $z['invoice_qty_packs'] : 'null' }}, $event.target.value, null)"
+                                                class="w-24 text-right {{ $input }}" />
+                                        @else
+                                            {{ $z['invoice_pack_price'] !== null ? number_format((float) $z['invoice_pack_price'], 2, ',', '.') . ' €' : '—' }}
+                                        @endif
+                                    </td>
+                                    <td class="{{ $td }} text-right whitespace-nowrap">
+                                        @if($diffNet === null)
+                                            <span class="text-gray-400">offen</span>
+                                        @elseif(abs((float) $diffNet) < 0.01)
+                                            <span class="text-emerald-600">ok</span>
+                                        @else
+                                            <span class="{{ (float) $diffNet < 0 ? 'text-emerald-700' : 'text-rose-600' }}">{{ (float) $diffNet > 0 ? '+' : '' }}{{ number_format((float) $diffNet, 2, ',', '.') }} €</span>
+                                        @endif
+                                    </td>
+                                    <td class="{{ $td }}">
+                                        @if($detail['rechnung_editierbar'])
+                                            <input type="text" value="{{ $z['invoice_note'] }}" placeholder="Preisabweichung, Gutschrift..."
+                                                wire:change="updateInvoiceNote({{ $z['id'] }}, $event.target.value)"
+                                                class="{{ $input }} !py-1 !text-[11px]" />
+                                        @else
+                                            <span class="text-[11px] text-gray-500">{{ $z['invoice_note'] ?: '—' }}</span>
+                                        @endif
+                                    </td>
+                                    <td class="{{ $td }} min-w-[220px]">
+                                        @if($detail['rechnung_editierbar'])
+                                            <div class="grid grid-cols-2 gap-1">
+                                                <select class="{{ $input }} !py-1 !text-[11px]" wire:change="updateClaimStatus({{ $z['id'] }}, $event.target.value)">
+                                                    <option value="" @selected(!$z['claim_status'])>—</option>
+                                                    <option value="open" @selected($z['claim_status'] === 'open')>offen</option>
+                                                    <option value="credit_expected" @selected($z['claim_status'] === 'credit_expected')>Gutschrift erwartet</option>
+                                                    <option value="credited" @selected($z['claim_status'] === 'credited')>gutgeschrieben</option>
+                                                    <option value="resolved" @selected($z['claim_status'] === 'resolved')>erledigt</option>
+                                                </select>
+                                                <input type="number" min="0" step="0.01" value="{{ $z['claim_qty_packs'] }}"
+                                                    placeholder="Menge"
+                                                    wire:change="updateClaimQty({{ $z['id'] }}, $event.target.value)"
+                                                    class="{{ $input }} !py-1 !text-[11px]" />
+                                                <input type="number" min="0" step="0.01" value="{{ $z['credit_expected_net'] }}"
+                                                    placeholder="Gutschrift €"
+                                                    wire:change="updateClaimCredit({{ $z['id'] }}, $event.target.value)"
+                                                    class="{{ $input }} !py-1 !text-[11px]" />
+                                                <input type="text" value="{{ $z['claim_note'] }}" placeholder="Notiz..."
+                                                    wire:change="updateClaimNote({{ $z['id'] }}, $event.target.value)"
+                                                    class="{{ $input }} !py-1 !text-[11px]" />
+                                            </div>
+                                        @else
+                                            <span class="text-[11px] text-gray-500">{{ $z['claim_status_label'] ?? '—' }}</span>
+                                            @if($z['credit_expected_net'] !== null)<br><span class="text-[10px] text-gray-400">{{ number_format((float) $z['credit_expected_net'], 2, ',', '.') }} €</span>@endif
+                                            @if($z['claim_note'])<br><span class="text-[10px] text-gray-400">{{ $z['claim_note'] }}</span>@endif
+                                        @endif
+                                    </td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+                @if(!$detail['rechnung_editierbar'])
+                    <p class="text-[11px] text-gray-400 mt-2">Rechnungsprüfung ist nach dem Absenden editierbar.</p>
+                @endif
+            </x-foodalchemist::modal-section>
         </div>
 
         {{-- ═══ Tab: HINZUFÜGEN (Direktbestellung — nur Entwurf) ═══ --}}
@@ -426,6 +801,61 @@
                     <span class="px-2 py-0.5 rounded-md bg-black/10 text-gray-600">{{ number_format($moq['fehlt_bis_frei_haus'], 2, ',', '.') }} € bis frei Haus</span>
                 @endif
             </div>
+            @if(!empty($detail['warnings']))
+                <x-foodalchemist::modal-section title="WaWi-Hinweise">
+                    <div class="flex flex-wrap gap-1.5">
+                        @foreach($detail['warnings'] as $w)
+                            @php($hard = in_array($w, $detail['send_blockers'] ?? [], true))
+                            <span class="px-2 py-0.5 rounded-md text-[11px] {{ $hard ? 'bg-rose-500/10 text-rose-700' : 'bg-amber-500/10 text-amber-700' }}">
+                                {{ $w }}
+                            </span>
+                        @endforeach
+                    </div>
+                    @if(!empty($detail['send_blockers']))
+                        <p class="mt-2 text-[11px] text-rose-600">Absenden ist gesperrt, bis diese Punkte geklärt sind.</p>
+                    @endif
+                    @if(!empty($detail['logistik']['deadline']))
+                        <p class="mt-1 text-[10px] text-gray-400">Bestellschluss: {{ \Carbon\Carbon::parse($detail['logistik']['deadline'])->format('d.m.Y H:i') }}</p>
+                    @endif
+                </x-foodalchemist::modal-section>
+            @endif
+
+            <x-foodalchemist::modal-section title="Freigabe">
+                <x-slot:actions>
+                    @if($detail['is_owned'])
+                        <button type="button" wire:click="saveApproval" class="{{ $btnGhostXs }}">Freigabe speichern</button>
+                    @endif
+                </x-slot:actions>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div>
+                        <label class="text-[10px] text-gray-500">Status</label>
+                        @if($detail['is_owned'])
+                            <select wire:model="formApprovalStatus" class="{{ $input }}">
+                                <option value="">keine Freigabe</option>
+                                <option value="requested">angefragt</option>
+                                <option value="approved">freigegeben</option>
+                                <option value="rejected">abgelehnt</option>
+                            </select>
+                        @else
+                            <div class="text-[12px] text-gray-700">{{ $detail['approval']['label'] ?? '—' }}</div>
+                        @endif
+                    </div>
+                    <div>
+                        <label class="text-[10px] text-gray-500">Zeitpunkt</label>
+                        <div class="text-[12px] text-gray-700">
+                            {{ ($detail['approval']['approved_at'] ?? null) ?: (($detail['approval']['requested_at'] ?? null) ?: '—') }}
+                        </div>
+                    </div>
+                    <div class="md:col-span-3">
+                        <label class="text-[10px] text-gray-500">Freigabenotiz</label>
+                        @if($detail['is_owned'])
+                            <textarea wire:model="formApprovalNote" rows="2" class="{{ $input }}"></textarea>
+                        @else
+                            <div class="text-[12px] text-gray-700">{{ $detail['approval_note'] ?: '—' }}</div>
+                        @endif
+                    </div>
+                </div>
+            </x-foodalchemist::modal-section>
 
             @if($detail['editierbar'])
                 <x-foodalchemist::modal-section title="Liefer-Logistik & Anlass">
@@ -480,6 +910,27 @@
                     @endif
                 </x-foodalchemist::modal-section>
             @else
+                @if(!in_array($detail['status'], ['draft', 'cancelled'], true))
+                    <x-foodalchemist::modal-section title="Lieferantenbestätigung">
+                        <x-slot:actions>
+                            <button type="button" wire:click="saveSupplierConfirmation" class="{{ $btnGhostXs }}">Bestätigung speichern</button>
+                        </x-slot:actions>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                            <div>
+                                <label class="text-[10px] text-gray-500">Bestell-/AB-Nummer</label>
+                                <input type="text" wire:model="formSupplierOrderNumber" class="{{ $input }}" />
+                            </div>
+                            <div>
+                                <label class="text-[10px] text-gray-500">Bestätigter Liefertag</label>
+                                <input type="date" wire:model="formConfirmedDeliveryDate" class="{{ $input }}" />
+                            </div>
+                            <div class="md:col-span-3">
+                                <label class="text-[10px] text-gray-500">Bestätigungsnotiz</label>
+                                <textarea wire:model="formSupplierConfirmationNote" rows="2" class="{{ $input }}"></textarea>
+                            </div>
+                        </div>
+                    </x-foodalchemist::modal-section>
+                @endif
                 <x-foodalchemist::modal-section title="Kopf">
                     <div class="space-y-1 text-[11px] text-gray-600">
                         @if($detail['reference'])<div><span class="text-gray-400">Anlass:</span> {{ $detail['reference'] }}</div>@endif

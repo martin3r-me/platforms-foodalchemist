@@ -1,7 +1,10 @@
 <?php
 
+use Carbon\Carbon;
 use Platform\FoodAlchemist\Enums\LeadLaStrategie;
 use Platform\FoodAlchemist\Enums\OrderStatus;
+use Platform\FoodAlchemist\Models\FoodAlchemistInventoryMovement;
+use Platform\FoodAlchemist\Models\FoodAlchemistInventoryStock;
 use Platform\FoodAlchemist\Models\FoodAlchemistOrder;
 use Platform\FoodAlchemist\Models\FoodAlchemistOrderLine;
 use Platform\FoodAlchemist\Models\FoodAlchemistPrice;
@@ -245,6 +248,88 @@ it('Cockpit Preview: ungeklärte GP landen in der Klärliste und blockieren best
         ->and($preview['orders_preview'][0]['total_net'])->toBe(4.0);
 });
 
+it('Cockpit Preview: Lieferlogistik warnt schon vor dem Speichern', function () {
+    Carbon::setTestNow(Carbon::parse('2026-08-11 16:00'));
+
+    try {
+        FoodAlchemistSupplier::where('name', 'Chefs')->update([
+            'delivery_days' => '4',
+            'order_lead_days' => 1,
+            'order_cutoff_time' => '12:00',
+        ]);
+
+        $preview = $this->svc->previewFromSources($this->rootTeam, [[
+            'type' => 'gp',
+            'id' => $this->mehl->id,
+            'qty' => 2,
+            'unit' => 'kg',
+            'delivery_date' => '2026-08-12',
+        ]]);
+
+        $gruppe = $preview['orders_preview'][0];
+        expect($gruppe['warnings'])->toContain('Liefertag nicht beliefert')
+            ->and($gruppe['warnings'])->toContain('Bestellschluss verpasst');
+    } finally {
+        Carbon::setTestNow();
+    }
+});
+
+it('Cockpit Overrides: einzelne Zutat wechselt Lieferant in Vorschau und Speicherung ohne Doppelbedarf', function () {
+    $hanos = FoodAlchemistSupplier::where('name', 'Hanos')->first();
+    $mehlHanos = FoodAlchemistSupplierItem::create([
+        'team_id' => $this->rootTeam->id,
+        'supplier_id' => $hanos->id,
+        'designation' => 'Mehl 1kg Hanos',
+        'article_number' => 'ART-MEH-H',
+        'qty' => 1.0,
+        'unit_code' => 'kg',
+        'packaging_unit' => 'Sack',
+    ]);
+    FoodAlchemistSupplierItemStructure::create(['team_id' => $this->rootTeam->id, 'supplier_item_id' => $mehlHanos->id, 'gp_id' => $this->mehl->id]);
+    FoodAlchemistPrice::create(['team_id' => $this->rootTeam->id, 'supplier_item_id' => $mehlHanos->id, 'price' => 3.00, 'status' => '0']);
+
+    $sources = [[
+        'type' => 'recipe',
+        'id' => $this->kuchen->id,
+        'qty' => 100,
+        'unit' => 'portions',
+        'delivery_date' => '2026-08-13',
+        'reference' => 'Bankett',
+    ]];
+
+    $preview = $this->svc->previewFromSources($this->rootTeam, $sources);
+    $mehlPreview = collect($preview['orders_preview'])
+        ->flatMap(fn ($g) => $g['positionen'])
+        ->firstWhere('gp_id', $this->mehl->id);
+    $overrideKey = $mehlPreview['override_key'];
+
+    $overridePreview = $this->svc->previewFromSources($this->rootTeam, $sources, null, [$overrideKey => $mehlHanos->id]);
+    $hanosPreview = collect($overridePreview['orders_preview'])->firstWhere('supplier', 'Hanos');
+
+    expect($hanosPreview['positionen'])->toHaveCount(2)
+        ->and(collect($hanosPreview['positionen'])->firstWhere('gp_id', $this->mehl->id)['lead_la_id'])->toBe($mehlHanos->id)
+        ->and((float) $hanosPreview['total_net'])->toBe(42.0);
+
+    // Erst normal speichern, danach dieselbe Quelle mit Override: der alte Source-Beitrag muss wandern.
+    $this->svc->generateDraftsFromSources($this->rootTeam, $sources);
+    $this->svc->generateDraftsFromSources($this->rootTeam, $sources, LeadLaStrategie::GuenstigsterPreis, null, [$overrideKey => $mehlHanos->id]);
+
+    $chefsOrder = FoodAlchemistOrder::whereHas('supplier', fn ($q) => $q->where('name', 'Chefs'))
+        ->whereDate('desired_delivery_date', '2026-08-13')
+        ->first();
+    $hanosOrder = FoodAlchemistOrder::whereHas('supplier', fn ($q) => $q->where('name', 'Hanos'))
+        ->whereDate('desired_delivery_date', '2026-08-13')
+        ->first();
+
+    expect($chefsOrder->lines()->where('gp_id', $this->mehl->id)->count())->toBe(0)
+        ->and($chefsOrder->lines()->where('gp_id', $this->zucker->id)->count())->toBe(1)
+        ->and((float) $chefsOrder->refresh()->total_net)->toBe(1.0)
+        ->and($hanosOrder->lines()->where('gp_id', $this->mehl->id)->first()->supplier_item_id)->toBe($mehlHanos->id)
+        ->and((float) $hanosOrder->refresh()->total_net)->toBe(42.0)
+        ->and($chefsOrder->sourcing_strategy)->toBe('guenstigster_preis')
+        ->and($hanosOrder->sourcing_strategy)->toBe('guenstigster_preis');
+});
+
 it('E10: dieselbe Quelle erneut übernehmen ersetzt ihren Beitrag (verdoppelt NICHT)', function () {
     $this->svc->addNeedFromTarget($this->rootTeam, $this->ziel, 'recipe:kuchen@100');
     $this->svc->addNeedFromTarget($this->rootTeam, $this->ziel, 'recipe:kuchen@100'); // Re-Import gleiche Quelle
@@ -359,7 +444,20 @@ it('MCP im Lockstep: orders.GET/ADD_NEED/SET_STATUS registriert + End-to-End', f
     expect($list->success)->toBeTrue()->and($list->data['count'])->toBe(2);
 
     // GET Detail: Chefs = 21 € + MOQ-Ampel vorhanden
-    $chefsId = collect($list->data['orders'])->firstWhere('supplier', 'Chefs')['id'];
+    $chefsListRow = collect($list->data['orders'])->firstWhere('supplier', 'Chefs');
+    expect($chefsListRow['positions_count'])->toBe(2)
+        ->and(array_keys($chefsListRow))->toContain('desired_delivery_date')
+        ->and(array_keys($chefsListRow))->toContain('supplier_order_number')
+        ->and(array_keys($chefsListRow))->toContain('confirmed_delivery_date')
+        ->and(array_keys($chefsListRow))->toContain('invoice_number')
+        ->and(array_keys($chefsListRow))->toContain('invoice_date')
+        ->and(array_keys($chefsListRow))->toContain('invoice_due_date')
+        ->and(array_keys($chefsListRow))->toContain('payment_term_days')
+        ->and(array_keys($chefsListRow))->toContain('payment')
+        ->and(array_keys($chefsListRow))->toContain('approval')
+        ->and(array_keys($chefsListRow))->toContain('warnings')
+        ->and(array_keys($chefsListRow))->toContain('send_blockers');
+    $chefsId = $chefsListRow['id'];
     $detail = $registry->get('foodalchemist.orders.GET')->execute(['order_id' => $chefsId], $kontext);
     expect($detail->data['total_net'])->toBe(21.0)
         ->and($detail->data['moq'])->toHaveKey('unter_mindestbestellwert')
@@ -367,7 +465,10 @@ it('MCP im Lockstep: orders.GET/ADD_NEED/SET_STATUS registriert + End-to-End', f
 
     // SET_STATUS (write): versenden; danach nicht mehr editierbar
     $sent = $registry->get('foodalchemist.orders.SET_STATUS')->execute(['order_id' => $chefsId, 'status' => 'sent'], $kontext);
-    expect($sent->success)->toBeTrue()->and($sent->data['status'])->toBe('sent');
+    expect($sent->success)->toBeTrue()
+        ->and($sent->data['status'])->toBe('sent')
+        ->and(array_keys($sent->data))->toContain('warnings')
+        ->and(array_keys($sent->data))->toContain('send_blockers');
     $detail2 = $registry->get('foodalchemist.orders.GET')->execute(['order_id' => $chefsId], $kontext);
     expect($detail2->data['editierbar'])->toBeFalse();
 
@@ -432,22 +533,448 @@ it('UI: Bestellungen-Seite listet Schienen, Detail + Absenden + manuelle Menge',
 });
 
 it('S3: dokument() + mailtoData() + Bestell-Dokument-Blade rendert', function () {
-    FoodAlchemistSupplier::where('name', 'Chefs')->update(['email_order' => 'einkauf@chefs.test', 'city' => 'Köln']);
+    FoodAlchemistSupplier::where('name', 'Chefs')->update(['email_order' => 'einkauf@chefs.test', 'city' => 'Köln', 'payment_term_days' => 10]);
     $this->svc->addNeedFromTarget($this->rootTeam, $this->ziel, 'recipe:kuchen@100');
     $chefs = FoodAlchemistOrder::whereHas('supplier', fn ($q) => $q->where('name', 'Chefs'))->first();
+    $mehlLine = $chefs->lines()->where('gp_id', $this->mehl->id)->first();
+    $user = $this->makeUser($this->rootTeam);
+    $this->svc->updateApproval($this->rootTeam, $chefs->id, [
+        'approval_status' => 'approved',
+        'approval_note' => 'Budget ok',
+    ], $user->id);
+    $this->svc->setStatus($this->rootTeam, $chefs->id, OrderStatus::Sent);
+    $this->svc->updateSupplierConfirmation($this->rootTeam, $chefs->id, [
+        'supplier_order_number' => 'AB-DOK-1',
+        'confirmed_delivery_date' => '2026-08-14',
+    ]);
+    $this->svc->updateReceiptLine($this->rootTeam, $mehlLine->id, 9, '1 Sack fehlt');
+    $this->svc->updateInvoiceHeader($this->rootTeam, $chefs->id, [
+        'invoice_number' => 'RE-DOK-1',
+        'invoice_date' => '2026-08-15',
+    ]);
+    $this->svc->updatePayment($this->rootTeam, $chefs->id, [
+        'payment_status' => 'disputed',
+        'payment_note' => 'Gutschrift offen',
+    ]);
+    $this->svc->updateInvoiceLine($this->rootTeam, $mehlLine->id, 9, 2.25, 'Preis prüfen');
+    $this->svc->updateClaimLine($this->rootTeam, $mehlLine->id, [
+        'claim_status' => 'credit_expected',
+        'claim_qty_packs' => 1,
+        'credit_expected_net' => 2.25,
+        'claim_note' => 'Preisgutschrift offen',
+    ]);
 
     $dok = $this->svc->dokument($this->rootTeam, $chefs->id);
     expect($dok['zeilen'])->toHaveCount(2)
         ->and($dok['total_net'])->toBe(21.0)
-        ->and($dok['lieferant']['email_order'])->toBe('einkauf@chefs.test');
+        ->and($dok['lieferant']['email_order'])->toBe('einkauf@chefs.test')
+        ->and($dok['supplier_order_number'])->toBe('AB-DOK-1')
+        ->and($dok['invoice_number'])->toBe('RE-DOK-1')
+        ->and($dok['payment_term_days'])->toBe(10)
+        ->and($dok['invoice_due_date'])->toBe('2026-08-25')
+        ->and($dok['payment']['state'])->toBe('disputed')
+        ->and($dok['payment_note'])->toBe('Gutschrift offen')
+        ->and($dok['approval']['state'])->toBe('approved')
+        ->and($dok['approval_note'])->toBe('Budget ok')
+        ->and($dok['approved_by'])->toBe($user->id)
+        ->and($dok['claims']['credit_expected'])->toBe(1)
+        ->and($dok['claims']['credit_expected_net'])->toBe(2.25)
+        ->and($dok['receipt']['differences'])->toBe(1)
+        ->and($dok['invoice']['differences'])->toBe(1);
 
     $html = view('foodalchemist::dokumente.bestellung', ['dok' => $dok, 'istPdf' => true])->render();
-    expect($html)->toContain('Chefs')->toContain('ART-MEH')->toContain('Wareneinsatz netto')->toContain('21,00');
+    expect($html)->toContain('Chefs')->toContain('ART-MEH')->toContain('Wareneinsatz netto')->toContain('21,00')
+        ->toContain('AB-DOK-1')->toContain('RE-DOK-1')->toContain('2026-08-25')->toContain('strittig')
+        ->toContain('Freigabe')->toContain('freigegeben')->toContain('Budget ok')
+        ->toContain('Gutschrift erwartet')->toContain('Preisgutschrift offen')
+        ->toContain('Wareneingang')->toContain('Rechnung');
 
     $m = $this->svc->mailtoData($this->rootTeam, $chefs->id);
     expect($m['to'])->toBe('einkauf@chefs.test')
         ->and($m['subject'])->toContain('Chefs')
         ->and($m['body'])->toContain('Mehl')->toContain('Netto gesamt: 21,00 €');
+});
+
+it('WaWi: Freigabe-light warnt bei Anfrage und blockiert bewusst abgelehnte Bestellungen', function () {
+    $user = $this->makeUser($this->rootTeam);
+    $this->actingAs($user);
+
+    $line = $this->svc->addManualLine($this->rootTeam, $this->laOf['Mehl']->id, 2);
+    $order = $line->order()->with(['supplier', 'lines'])->first();
+
+    $requested = $this->svc->updateApproval($this->rootTeam, $order->id, [
+        'approval_status' => 'requested',
+        'approval_note' => 'Bitte Einkaufsleitung prüfen',
+    ], $user->id);
+
+    expect($requested->approval_requested_at)->not->toBeNull()
+        ->and($this->svc->approvalSummary($requested)['state'])->toBe('requested')
+        ->and($this->svc->orderWarnings($requested))->toContain('Freigabe offen')
+        ->and($this->svc->sendBlockers($requested))->not->toContain('Freigabe offen');
+
+    $approved = $this->svc->updateApproval($this->rootTeam, $order->id, [
+        'approval_status' => 'approved',
+        'approval_note' => 'freigegeben',
+    ], $user->id);
+
+    expect($approved->approved_by)->toBe($user->id)
+        ->and($approved->approved_at)->not->toBeNull()
+        ->and($this->svc->orderWarnings($approved))->not->toContain('Freigabe offen');
+
+    $sent = $this->svc->setStatus($this->rootTeam, $order->id, OrderStatus::Sent);
+    expect($sent->status)->toBe(OrderStatus::Sent);
+
+    $blockedLine = $this->svc->addManualLine($this->rootTeam, $this->laOf['Butter']->id, 1);
+    $blockedOrder = $blockedLine->order()->with(['supplier', 'lines'])->first();
+    $this->svc->updateApproval($this->rootTeam, $blockedOrder->id, [
+        'approval_status' => 'rejected',
+        'approval_note' => 'Budget überschritten',
+    ], $user->id);
+
+    expect($this->svc->orderWarnings($blockedOrder->refresh()))->toContain('Freigabe abgelehnt')
+        ->and($this->svc->sendBlockers($blockedOrder->refresh()))->toContain('Freigabe abgelehnt');
+
+    expect(fn () => $this->svc->setStatus($this->rootTeam, $blockedOrder->id, OrderStatus::Sent))
+        ->toThrow(\RuntimeException::class, 'Freigabe abgelehnt');
+});
+
+it('WaWi: leere und ungeklärte Entwürfe werden vor dem Absenden blockiert', function () {
+    $chefs = FoodAlchemistSupplier::where('name', 'Chefs')->first();
+    $draft = $this->svc->createDraft($this->rootTeam, $chefs->id, ['desired_delivery_date' => '2026-08-13'], null);
+
+    expect($this->svc->orderWarnings($draft))->toContain('leer')
+        ->and($this->svc->orderWarnings($draft))->toContain('Klärung')
+        ->and($this->svc->sendBlockers($draft))->toContain('leer')
+        ->and($this->svc->sendBlockers($draft))->toContain('Klärung');
+
+    expect(fn () => $this->svc->setStatus($this->rootTeam, $draft->id, OrderStatus::Sent))
+        ->toThrow(\RuntimeException::class, 'Bestellung kann nicht versendet werden');
+});
+
+it('WaWi: Bestellschluss und Liefertage erzeugen operative Hinweise und Versandsperren', function () {
+    Carbon::setTestNow(Carbon::parse('2026-08-11 16:00'));
+
+    try {
+        $chefs = FoodAlchemistSupplier::where('name', 'Chefs')->first();
+        $chefs->update([
+            'delivery_days' => '3',
+            'order_lead_days' => 1,
+            'order_cutoff_time' => '12:00',
+        ]);
+
+        $line = $this->svc->addManualLine($this->rootTeam, $this->laOf['Mehl']->id, 2, null, null, '2026-08-12');
+        $order = $line->order()->with(['supplier', 'lines'])->first();
+        $warnings = $this->svc->orderWarnings($order);
+
+        expect($warnings)->toContain('Bestellschluss verpasst')
+            ->and($warnings)->not->toContain('Liefertag nicht beliefert')
+            ->and($this->svc->sendBlockers($order))->toContain('Bestellschluss verpasst');
+
+        expect(fn () => $this->svc->setStatus($this->rootTeam, $order->id, OrderStatus::Sent))
+            ->toThrow(\RuntimeException::class, 'Bestellung kann nicht versendet werden');
+
+        $chefs->update(['delivery_days' => '4', 'order_lead_days' => 0, 'order_cutoff_time' => null]);
+        $order->refresh()->load(['supplier', 'lines']);
+
+        expect($this->svc->orderWarnings($order))->toContain('Liefertag nicht beliefert');
+    } finally {
+        Carbon::setTestNow();
+    }
+});
+
+it('WaWi: Wareneingang bucht gelieferte Mengen und bewahrt Differenzen beim Geliefert-Status', function () {
+    $this->svc->addNeedFromTarget($this->rootTeam, $this->ziel, 'recipe:kuchen@100');
+    $chefs = FoodAlchemistOrder::whereHas('supplier', fn ($q) => $q->where('name', 'Chefs'))->first();
+    $mehlLine = $chefs->lines()->where('gp_id', $this->mehl->id)->first();
+    $zuckerLine = $chefs->lines()->where('gp_id', $this->zucker->id)->first();
+
+    $this->svc->setStatus($this->rootTeam, $chefs->id, OrderStatus::Sent);
+    $this->svc->updateReceiptLine($this->rootTeam, $mehlLine->id, 8, '2 Sack fehlen');
+
+    $detail = $this->svc->detail($this->rootTeam, $chefs->id);
+    $mehlDetail = collect($detail['zeilen'])->firstWhere('id', $mehlLine->id);
+
+    expect($detail['receipt']['booked'])->toBe(1)
+        ->and($detail['receipt']['missing'])->toBe(1)
+        ->and($detail['receipt']['differences'])->toBe(1)
+        ->and($detail['receipt']['backorderable'])->toBe(1)
+        ->and($mehlDetail['receipt_status'])->toBe('unterliefert')
+        ->and($mehlDetail['receipt_diff_packs'])->toBe(-2.0)
+        ->and($this->svc->orderWarnings($chefs->refresh()))->toContain('WE-Differenz');
+
+    $this->svc->setStatus($this->rootTeam, $chefs->id, OrderStatus::Delivered);
+
+    expect((float) $mehlLine->refresh()->received_qty_packs)->toBe(8.0)
+        ->and((float) $zuckerLine->refresh()->received_qty_packs)->toBe(1.0)
+        ->and($chefs->refresh()->status)->toBe(OrderStatus::Delivered);
+});
+
+it('WaWi: Nachlieferung erzeugt aus Unterlieferung einen neuen Draft mit Fehlmenge', function () {
+    $this->svc->addNeedFromTarget($this->rootTeam, $this->ziel, 'recipe:kuchen@100');
+    $chefs = FoodAlchemistOrder::whereHas('supplier', fn ($q) => $q->where('name', 'Chefs'))->first();
+    $mehlLine = $chefs->lines()->where('gp_id', $this->mehl->id)->first();
+
+    $this->svc->setStatus($this->rootTeam, $chefs->id, OrderStatus::Sent);
+    $this->svc->updateReceiptLine($this->rootTeam, $mehlLine->id, 8, '2 Sack fehlen');
+
+    $backorder = $this->svc->createBackorderFromReceipt($this->rootTeam, $chefs->id, '2026-08-20');
+    $draft = FoodAlchemistOrder::find($backorder['order_id']);
+    $line = $draft->lines()->where('supplier_item_id', $this->laOf['Mehl']->id)->first();
+
+    expect($backorder['lines'])->toBe(1)
+        ->and($backorder['total_qty_packs'])->toBe(2.0)
+        ->and($draft->status)->toBe(OrderStatus::Draft)
+        ->and($draft->desired_delivery_date?->toDateString())->toBe('2026-08-20')
+        ->and($draft->reference)->toContain('Nachlieferung ord-' . $chefs->id)
+        ->and((float) $line->qty_packs)->toBe(2.0)
+        ->and((float) $draft->total_net)->toBe(4.0);
+});
+
+it('WaWi: Rechnungsprüfung vergleicht berechnete Mengen und Preise gegen Wareneingang', function () {
+    $this->svc->addNeedFromTarget($this->rootTeam, $this->ziel, 'recipe:kuchen@100');
+    $chefs = FoodAlchemistOrder::whereHas('supplier', fn ($q) => $q->where('name', 'Chefs'))->first();
+    $mehlLine = $chefs->lines()->where('gp_id', $this->mehl->id)->first();
+
+    $this->svc->setStatus($this->rootTeam, $chefs->id, OrderStatus::Sent);
+    $this->svc->updateReceiptLine($this->rootTeam, $mehlLine->id, 8, '2 Sack fehlen');
+    $this->svc->updateInvoiceLine($this->rootTeam, $mehlLine->id, 8, 2.50, 'Preis weicht ab');
+
+    $detail = $this->svc->detail($this->rootTeam, $chefs->id);
+    $mehlDetail = collect($detail['zeilen'])->firstWhere('id', $mehlLine->id);
+
+    expect($detail['invoice']['checked'])->toBe(1)
+        ->and($detail['invoice']['missing'])->toBe(1)
+        ->and($detail['invoice']['differences'])->toBe(1)
+        ->and($detail['invoice']['invoice_net'])->toBe(20.0)
+        ->and($detail['invoice']['diff_net'])->toBe(4.0)
+        ->and($mehlDetail['invoice_status'])->toBe('abweichung')
+        ->and($mehlDetail['invoice_diff_net'])->toBe(4.0)
+        ->and($this->svc->orderWarnings($chefs->refresh()))->toContain('RE-Differenz');
+});
+
+it('WaWi: Massenaktionen übernehmen Wareneingang und Rechnung aus Bestellung', function () {
+    $this->svc->addNeedFromTarget($this->rootTeam, $this->ziel, 'recipe:kuchen@100');
+    $chefs = FoodAlchemistOrder::whereHas('supplier', fn ($q) => $q->where('name', 'Chefs'))->first();
+
+    $this->svc->setStatus($this->rootTeam, $chefs->id, OrderStatus::Sent);
+    $this->svc->completeReceipt($this->rootTeam, $chefs->id);
+    $receipt = $this->svc->detail($this->rootTeam, $chefs->id)['receipt'];
+
+    expect($receipt['booked'])->toBe(2)
+        ->and($receipt['missing'])->toBe(0)
+        ->and($receipt['differences'])->toBe(0);
+
+    $this->svc->completeInvoiceFromReceipt($this->rootTeam, $chefs->id);
+    $invoice = $this->svc->detail($this->rootTeam, $chefs->id)['invoice'];
+
+    expect($invoice['checked'])->toBe(2)
+        ->and($invoice['missing'])->toBe(0)
+        ->and($invoice['differences'])->toBe(0)
+        ->and($invoice['invoice_net'])->toBe(21.0)
+        ->and($invoice['diff_net'])->toBe(0.0);
+});
+
+it('WaWi: Lieferantenbestätigung und Rechnungskopf werden nach dem Absenden gepflegt', function () {
+    $this->svc->addNeedFromTarget($this->rootTeam, $this->ziel, 'recipe:kuchen@100');
+    $chefs = FoodAlchemistOrder::whereHas('supplier', fn ($q) => $q->where('name', 'Chefs'))->first();
+    FoodAlchemistSupplier::whereKey($chefs->supplier_id)->update(['payment_term_days' => 14]);
+
+    expect(fn () => $this->svc->updateSupplierConfirmation($this->rootTeam, $chefs->id, [
+        'supplier_order_number' => 'AB-1',
+    ]))->toThrow(\RuntimeException::class, 'erst nach dem Absenden');
+
+    $this->svc->setStatus($this->rootTeam, $chefs->id, OrderStatus::Sent);
+    $this->svc->updateSupplierConfirmation($this->rootTeam, $chefs->id, [
+        'supplier_order_number' => 'AB-2026-77',
+        'confirmed_delivery_date' => '2026-08-14',
+        'supplier_confirmation_note' => 'Teillieferung telefonisch bestätigt',
+    ]);
+    $this->svc->updateInvoiceHeader($this->rootTeam, $chefs->id, [
+        'invoice_number' => 'RE-2026-99',
+        'invoice_date' => '2026-08-15',
+        'invoice_note' => 'Skonto prüfen',
+    ]);
+
+    $detail = $this->svc->detail($this->rootTeam, $chefs->id);
+
+    expect($detail['supplier_order_number'])->toBe('AB-2026-77')
+        ->and($detail['confirmed_delivery_date'])->toBe('2026-08-14')
+        ->and($detail['supplier_confirmation_note'])->toBe('Teillieferung telefonisch bestätigt')
+        ->and($detail['status'])->toBe('confirmed')
+        ->and($this->svc->orderWarnings($chefs->refresh()))->toContain('Liefertag abweichend')
+        ->and($detail['invoice_number'])->toBe('RE-2026-99')
+        ->and($detail['invoice_date'])->toBe('2026-08-15')
+        ->and($detail['payment_term_days'])->toBe(14)
+        ->and($detail['invoice_due_date'])->toBe('2026-08-29')
+        ->and($detail['invoice_note'])->toBe('Skonto prüfen');
+
+    $this->actingAs($this->makeUser($this->rootTeam));
+    Livewire::test(OrdersIndex::class)
+        ->set('suche', 'AB-2026-77')
+        ->assertSee('AB-2026-77')
+        ->assertSee('RE-2026-99')
+        ->assertSee('ord-' . $chefs->id);
+});
+
+it('WaWi: Zahlungsstatus bildet offene Posten, überfällig und bezahlt ab', function () {
+    Carbon::setTestNow('2026-08-11 10:00');
+    try {
+        $this->svc->addNeedFromTarget($this->rootTeam, $this->ziel, 'recipe:kuchen@100');
+        $chefs = FoodAlchemistOrder::whereHas('supplier', fn ($q) => $q->where('name', 'Chefs'))->first();
+        FoodAlchemistSupplier::whereKey($chefs->supplier_id)->update(['payment_term_days' => 7]);
+
+        $this->svc->setStatus($this->rootTeam, $chefs->id, OrderStatus::Sent);
+        $this->svc->updateInvoiceHeader($this->rootTeam, $chefs->id, [
+            'invoice_number' => 'RE-OP-1',
+            'invoice_date' => '2026-08-01',
+        ]);
+
+        $detail = $this->svc->detail($this->rootTeam, $chefs->id);
+        expect($detail['invoice_due_date'])->toBe('2026-08-08')
+            ->and($detail['payment']['status'])->toBe('open')
+            ->and($detail['payment']['state'])->toBe('overdue')
+            ->and($detail['payment']['overdue_days'])->toBe(3)
+            ->and($this->svc->orderWarnings($chefs->refresh()))->toContain('Zahlung überfällig');
+
+        $this->svc->updatePayment($this->rootTeam, $chefs->id, [
+            'payment_status' => 'paid',
+            'invoice_paid_at' => '2026-08-10',
+            'payment_note' => 'per Bank bezahlt',
+        ]);
+
+        $paid = $this->svc->detail($this->rootTeam, $chefs->id);
+        expect($paid['payment_status'])->toBe('paid')
+            ->and($paid['invoice_paid_at'])->toBe('2026-08-10')
+            ->and($paid['payment_note'])->toBe('per Bank bezahlt')
+            ->and($paid['payment']['state'])->toBe('paid')
+            ->and($this->svc->orderWarnings($chefs->refresh()))->not->toContain('Zahlung überfällig');
+    } finally {
+        Carbon::setTestNow();
+    }
+});
+
+it('WaWi: Reklamation und Gutschrift werden pro Bestellzeile nachverfolgt', function () {
+    $this->svc->addNeedFromTarget($this->rootTeam, $this->ziel, 'recipe:kuchen@100');
+    $chefs = FoodAlchemistOrder::whereHas('supplier', fn ($q) => $q->where('name', 'Chefs'))->first();
+    $mehlLine = $chefs->lines()->where('gp_id', $this->mehl->id)->first();
+
+    $this->svc->setStatus($this->rootTeam, $chefs->id, OrderStatus::Sent);
+    $this->svc->updateReceiptLine($this->rootTeam, $mehlLine->id, 8, '2 Sack fehlen');
+    $this->svc->updateInvoiceLine($this->rootTeam, $mehlLine->id, 10, 2.25, 'Preis plus Fehlmenge prüfen');
+    $claimLine = $this->svc->updateClaimLine($this->rootTeam, $mehlLine->id, [
+        'claim_status' => 'credit_expected',
+        'claim_qty_packs' => 2,
+        'credit_expected_net' => 4.50,
+        'claim_note' => 'Gutschrift angefordert',
+    ]);
+
+    $detail = $this->svc->detail($this->rootTeam, $chefs->id);
+    $mehlDetail = collect($detail['zeilen'])->firstWhere('id', $mehlLine->id);
+    expect($claimLine->claim_status)->toBe('credit_expected')
+        ->and($mehlDetail['claim_status_label'])->toBe('Gutschrift erwartet')
+        ->and($mehlDetail['claim_qty_packs'])->toBe(2.0)
+        ->and($mehlDetail['credit_expected_net'])->toBe(4.5)
+        ->and($detail['claims']['lines'])->toBe(1)
+        ->and($detail['claims']['credit_expected'])->toBe(1)
+        ->and($detail['claims']['credit_expected_net'])->toBe(4.5)
+        ->and($this->svc->orderWarnings($chefs->refresh()))->toContain('Reklamation offen');
+
+    $this->svc->updateClaimLine($this->rootTeam, $mehlLine->id, ['claim_status' => 'credited']);
+    expect($this->svc->orderWarnings($chefs->refresh()))->not->toContain('Reklamation offen');
+});
+
+it('WaWi: Kontingent am Lieferantenartikel zeigt Restmenge und operative Hinweise', function () {
+    $line = $this->svc->addManualLine($this->rootTeam, $this->laOf['Mehl']->id, 6, null, null, '2026-08-13');
+    $order = $line->order()->with(['supplier', 'lines'])->first();
+
+    $this->svc->updateLineQuota($this->rootTeam, $line->id, [
+        'quota_qty_packs' => 10,
+        'quota_used_packs' => 7,
+        'quota_valid_from' => '2026-08-01',
+        'quota_valid_to' => '2026-08-31',
+        'quota_note' => 'Rahmenabruf August',
+    ]);
+
+    $detail = $this->svc->detail($this->rootTeam, $order->id);
+    $zeile = collect($detail['zeilen'])->firstWhere('id', $line->id);
+
+    expect($zeile['quota']['qty_packs'])->toBe(10.0)
+        ->and($zeile['quota']['used_packs'])->toBe(7.0)
+        ->and($zeile['quota']['remaining_before_packs'])->toBe(3.0)
+        ->and($zeile['quota']['remaining_after_packs'])->toBe(-3.0)
+        ->and($zeile['quota']['exceeded'])->toBeTrue()
+        ->and($detail['quota']['exceeded'])->toBe(1)
+        ->and($this->svc->orderWarnings($order->refresh()))->toContain('Kontingent überschritten');
+
+    $this->svc->updateLineQuota($this->rootTeam, $line->id, ['quota_valid_to' => '2026-08-01']);
+    expect($this->svc->orderWarnings($order->refresh()))->toContain('Kontingent nicht gültig');
+});
+
+it('WaWi: Kontingentverbrauch folgt Wareneingang idempotent und korrigierbar', function () {
+    $line = $this->svc->addManualLine($this->rootTeam, $this->laOf['Mehl']->id, 6, null, null, '2026-08-13');
+    $order = $line->order()->with(['supplier', 'lines'])->first();
+    $this->svc->updateLineQuota($this->rootTeam, $line->id, [
+        'quota_qty_packs' => 10,
+        'quota_used_packs' => 7,
+        'quota_valid_to' => '2026-08-31',
+    ]);
+    $this->svc->setStatus($this->rootTeam, $order->id, OrderStatus::Sent);
+
+    $this->svc->updateReceiptLine($this->rootTeam, $line->id, 2, 'Teillieferung');
+    expect((float) $this->laOf['Mehl']->refresh()->quota_used_packs)->toBe(9.0)
+        ->and((float) $line->refresh()->quota_consumed_packs)->toBe(2.0);
+
+    $this->svc->updateReceiptLine($this->rootTeam, $line->id, 1, 'Korrektur');
+    expect((float) $this->laOf['Mehl']->refresh()->quota_used_packs)->toBe(8.0)
+        ->and((float) $line->refresh()->quota_consumed_packs)->toBe(1.0);
+
+    $this->svc->updateReceiptLine($this->rootTeam, $line->id, null, 'zurückgesetzt');
+    expect((float) $this->laOf['Mehl']->refresh()->quota_used_packs)->toBe(7.0)
+        ->and($line->refresh()->quota_consumed_packs)->toBeNull();
+});
+
+it('WaWi: Lagerbestand folgt Wareneingang idempotent und korrigierbar', function () {
+    $line = $this->svc->addManualLine($this->rootTeam, $this->laOf['Mehl']->id, 10, null, null, '2026-08-13');
+    $order = $line->order()->with(['supplier', 'lines'])->first();
+    $this->svc->setStatus($this->rootTeam, $order->id, OrderStatus::Sent);
+
+    $this->svc->updateReceiptLine($this->rootTeam, $line->id, 8, 'Teillieferung');
+    $stock = FoodAlchemistInventoryStock::where('team_id', $this->rootTeam->id)
+        ->where('gp_id', $this->mehl->id)
+        ->whereNull('supplier_item_id')
+        ->first();
+
+    expect($stock)->not->toBeNull()
+        ->and((float) $stock->qty_base)->toBe(8000.0)
+        ->and($stock->base_unit)->toBe('g')
+        ->and(FoodAlchemistInventoryMovement::where('order_line_id', $line->id)->count())->toBe(1);
+
+    $this->svc->updateReceiptLine($this->rootTeam, $line->id, 9, 'Korrektur');
+    expect((float) $stock->refresh()->qty_base)->toBe(9000.0)
+        ->and(FoodAlchemistInventoryMovement::where('order_line_id', $line->id)->count())->toBe(1);
+
+    $detailLine = collect($this->svc->detail($this->rootTeam, $order->id)['zeilen'])->firstWhere('id', $line->id);
+    expect($detailLine['inventory']['display'])->toBe('9 kg')
+        ->and($detailLine['inventory']['shortage_display'])->toBe('1 kg');
+
+    $this->svc->updateReceiptLine($this->rootTeam, $line->id, null, 'zurückgesetzt');
+    expect((float) $stock->refresh()->qty_base)->toBe(0.0)
+        ->and((float) FoodAlchemistInventoryMovement::where('order_line_id', $line->id)->first()->qty_base)->toBe(0.0);
+});
+
+it('WaWi: leere Drafts lassen sich sicher bereinigen ohne echte Bestellungen zu löschen', function () {
+    $chefs = FoodAlchemistSupplier::where('name', 'Chefs')->first();
+    $hanos = FoodAlchemistSupplier::where('name', 'Hanos')->first();
+    $leer = $this->svc->createDraft($this->rootTeam, $chefs->id, ['desired_delivery_date' => '2026-08-13'], null);
+    $mitPosition = $this->svc->addManualLine($this->rootTeam, $this->laOf['Butter']->id, 1, null, null, '2026-08-13')->order;
+    $gesendetLeer = $this->svc->createDraft($this->rootTeam, $hanos->id, ['desired_delivery_date' => '2026-08-14'], null);
+    $gesendetLeer->status = OrderStatus::Sent;
+    $gesendetLeer->save();
+
+    expect($this->svc->deleteEmptyDrafts($this->rootTeam))->toBe(1)
+        ->and(FoodAlchemistOrder::withTrashed()->find($leer->id)?->trashed())->toBeTrue()
+        ->and(FoodAlchemistOrder::find($mitPosition->id))->not->toBeNull()
+        ->and(FoodAlchemistOrder::find($gesendetLeer->id))->not->toBeNull();
 });
 
 it('S3: orders.UPDATE_LINE MCP — manuelle Menge + Zeile entfernen', function () {
@@ -468,15 +995,89 @@ it('S3: orders.UPDATE_LINE MCP — manuelle Menge + Zeile entfernen', function (
     expect($r->success)->toBeTrue()->and($r->data['is_manual_qty'])->toBeTrue()
         ->and((float) $chefs->refresh()->total_net)->toBe(31.0);   // 15×2 + 1
 
+    $quota = $tool->execute([
+        'line_id' => $mehlLine->id,
+        'quota_qty_packs' => 20,
+        'quota_used_packs' => 3,
+        'quota_valid_from' => '2026-08-01',
+        'quota_valid_to' => '2026-08-31',
+        'quota_note' => 'MCP-Rahmen',
+    ], $kontext);
+    expect($quota->success)->toBeTrue()
+        ->and($quota->data['quota_qty_packs'])->toBe(20.0)
+        ->and($quota->data['quota_used_packs'])->toBe(3.0)
+        ->and($quota->data['quota_valid_to'])->toBe('2026-08-31')
+        ->and($quota->data['quota_note'])->toBe('MCP-Rahmen');
+
     $rm = $tool->execute(['line_id' => $zuckerLine->id, 'remove' => true], $kontext);
     expect($rm->success)->toBeTrue()->and($rm->data['removed'])->toBeTrue()
         ->and($chefs->refresh()->lines()->count())->toBe(1);
+});
+
+it('WaWi: orders.UPDATE_LINE MCP pflegt Wareneingang und Rechnungsprüfung nach dem Absenden', function () {
+    $user = $this->makeUser($this->rootTeam);
+    $this->actingAs($user);
+    $registry = app(ToolRegistry::class);
+    $kontext = new ToolContext($user, $this->rootTeam);
+
+    $this->svc->addNeedFromTarget($this->rootTeam, $this->ziel, 'recipe:kuchen@100');
+    $chefs = FoodAlchemistOrder::whereHas('supplier', fn ($q) => $q->where('name', 'Chefs'))->first();
+    $mehlLine = $chefs->lines()->where('gp_id', $this->mehl->id)->first();
+    $this->svc->setStatus($this->rootTeam, $chefs->id, OrderStatus::Sent);
+
+    $tool = $registry->get('foodalchemist.orders.UPDATE_LINE');
+
+    $receipt = $tool->execute([
+        'line_id' => $mehlLine->id,
+        'received_qty_packs' => 9,
+        'received_note' => 'ein Sack fehlt',
+    ], $kontext);
+    expect($receipt->success)->toBeTrue()
+        ->and($receipt->data['received_qty_packs'])->toBe(9.0)
+        ->and($receipt->data['received_note'])->toBe('ein Sack fehlt');
+
+    $invoiceQty = $tool->execute(['line_id' => $mehlLine->id, 'invoice_qty_packs' => 9], $kontext);
+    expect($invoiceQty->success)->toBeTrue()
+        ->and($invoiceQty->data['invoice_qty_packs'])->toBe(9.0)
+        ->and($invoiceQty->data['invoice_pack_price'])->toBeNull();
+
+    $invoicePrice = $tool->execute([
+        'line_id' => $mehlLine->id,
+        'invoice_pack_price' => 2.25,
+        'invoice_note' => 'Preis abweichend',
+    ], $kontext);
+    expect($invoicePrice->success)->toBeTrue()
+        ->and($invoicePrice->data['invoice_qty_packs'])->toBe(9.0)
+        ->and($invoicePrice->data['invoice_pack_price'])->toBe(2.25)
+        ->and($invoicePrice->data['invoice_note'])->toBe('Preis abweichend');
+
+    $claim = $tool->execute([
+        'line_id' => $mehlLine->id,
+        'claim_status' => 'credit_expected',
+        'claim_qty_packs' => 1,
+        'credit_expected_net' => 2.25,
+        'claim_note' => 'Gutschrift angefragt',
+    ], $kontext);
+    expect($claim->success)->toBeTrue()
+        ->and($claim->data['claim_status'])->toBe('credit_expected')
+        ->and($claim->data['claim_qty_packs'])->toBe(1.0)
+        ->and($claim->data['credit_expected_net'])->toBe(2.25)
+        ->and($claim->data['claim_note'])->toBe('Gutschrift angefragt');
 });
 
 it('S3: Dokument-Route liefert HTML + CSV-Download', function () {
     $this->actingAs($this->makeUser($this->rootTeam));
     $this->svc->addNeedFromTarget($this->rootTeam, $this->ziel, 'recipe:kuchen@100');
     $chefs = FoodAlchemistOrder::whereHas('supplier', fn ($q) => $q->where('name', 'Chefs'))->first();
+    FoodAlchemistSupplier::whereKey($chefs->supplier_id)->update(['payment_term_days' => 7]);
+    $mehlLine = $chefs->lines()->where('gp_id', $this->mehl->id)->first();
+    $this->svc->setStatus($this->rootTeam, $chefs->id, OrderStatus::Sent);
+    $this->svc->updateSupplierConfirmation($this->rootTeam, $chefs->id, ['supplier_order_number' => 'AB-CSV']);
+    $this->svc->updateInvoiceHeader($this->rootTeam, $chefs->id, ['invoice_number' => 'RE-CSV', 'invoice_date' => '2026-08-15']);
+    $this->svc->updatePayment($this->rootTeam, $chefs->id, ['payment_status' => 'paid', 'invoice_paid_at' => '2026-08-20']);
+    $this->svc->updateReceiptLine($this->rootTeam, $mehlLine->id, 10);
+    $this->svc->updateInvoiceLine($this->rootTeam, $mehlLine->id, 10, 2);
+    $this->svc->updateClaimLine($this->rootTeam, $mehlLine->id, ['claim_note' => 'Gutschrift erledigt', 'credit_expected_net' => 1.50, 'claim_status' => 'credited']);
 
     $this->get(route('foodalchemist.orders.dokument', ['order' => $chefs->id]))
         ->assertOk()->assertSee('Wareneinsatz netto');
@@ -484,7 +1085,11 @@ it('S3: Dokument-Route liefert HTML + CSV-Download', function () {
     $csv = $this->get(route('foodalchemist.orders.dokument', ['order' => $chefs->id, 'csv' => 1]));
     $csv->assertOk();
     expect($csv->headers->get('content-type'))->toContain('text/csv')
-        ->and($csv->streamedContent())->toContain('Artikel-Nr')->toContain('ART-MEH');
+        ->and($csv->streamedContent())->toContain('Artikel-Nr')->toContain('ART-MEH')
+        ->toContain('AB-CSV')->toContain('RE-CSV')->toContain('Faellig am')->toContain('2026-08-22')
+        ->toContain('Zahlungsstatus')->toContain('bezahlt')->toContain('2026-08-20')
+        ->toContain('Reklamation Status')->toContain('gutgeschrieben')->toContain('Gutschrift erledigt')
+        ->toContain('WE Anzahl')->toContain('RE Diff. EUR');
 })->skip(fn () => ! \Illuminate\Support\Facades\Route::has('foodalchemist.orders.dokument'), 'Modul-Route im Test-Harness nicht registriert');
 
 it('removeLine + leere Quelle: Zeile verschwindet, total_net rechnet nach', function () {
@@ -607,6 +1212,91 @@ it('E1: MCP orders.UPDATE registriert + End-to-End (Kopf im Draft) + Guard nach 
     $this->svc->setStatus($this->rootTeam, $chefs->id, OrderStatus::Sent);
     $blocked = $tool->execute(['order_id' => $chefs->id, 'reference' => 'zu spät'], $kontext);
     expect($blocked->success)->toBeFalse()->and($blocked->errorCode)->toBe('NOT_ALLOWED');
+});
+
+it('WaWi: MCP orders.UPDATE pflegt AB, bestätigten Liefertag und Rechnungskopf', function () {
+    $user = $this->makeUser($this->rootTeam);
+    $this->actingAs($user);
+    $registry = app(ToolRegistry::class);
+    $kontext = new ToolContext($user, $this->rootTeam);
+
+    $this->svc->addNeedFromTarget($this->rootTeam, $this->ziel, 'recipe:kuchen@100');
+    $chefs = FoodAlchemistOrder::whereHas('supplier', fn ($q) => $q->where('name', 'Chefs'))->first();
+    FoodAlchemistSupplier::whereKey($chefs->supplier_id)->update(['payment_term_days' => 30]);
+    $this->svc->setStatus($this->rootTeam, $chefs->id, OrderStatus::Sent);
+
+    $tool = $registry->get('foodalchemist.orders.UPDATE');
+    $result = $tool->execute([
+        'order_id' => $chefs->id,
+        'supplier_order_number' => 'AB-MCP-77',
+        'confirmed_delivery_date' => '2026-09-02',
+        'supplier_confirmation_note' => 'kommt mit Tour 2',
+        'invoice_number' => 'RE-MCP-99',
+        'invoice_date' => '2026-09-10',
+        'invoice_note' => 'Skonto pruefen',
+        'payment_status' => 'paid',
+        'invoice_paid_at' => '2026-09-20',
+        'payment_note' => 'Zahlung importiert',
+        'approval_status' => 'approved',
+        'approval_note' => 'MCP-Freigabe',
+    ], $kontext);
+
+    expect($result->success)->toBeTrue()
+        ->and($result->data['status'])->toBe('confirmed')
+        ->and($result->data['supplier_order_number'])->toBe('AB-MCP-77')
+        ->and($result->data['confirmed_delivery_date'])->toBe('2026-09-02')
+        ->and($result->data['supplier_confirmation_note'])->toBe('kommt mit Tour 2')
+        ->and($result->data['invoice_number'])->toBe('RE-MCP-99')
+        ->and($result->data['invoice_date'])->toBe('2026-09-10')
+        ->and($result->data['payment_term_days'])->toBe(30)
+        ->and($result->data['invoice_due_date'])->toBe('2026-10-10')
+        ->and($result->data['invoice_note'])->toBe('Skonto pruefen')
+        ->and($result->data['payment_status'])->toBe('paid')
+        ->and($result->data['invoice_paid_at'])->toBe('2026-09-20')
+        ->and($result->data['payment']['state'])->toBe('paid')
+        ->and($result->data['payment_note'])->toBe('Zahlung importiert')
+        ->and($result->data['approval_status'])->toBe('approved')
+        ->and($result->data['approval']['state'])->toBe('approved')
+        ->and($result->data['approval_note'])->toBe('MCP-Freigabe')
+        ->and($result->data['approved_by'])->toBe($user->id)
+        ->and($result->data['warnings'])->toContain('Liefertag abweichend');
+});
+
+it('WaWi: MCP orders.UPDATE uebernimmt Wareneingang und Rechnung als Massenaktion', function () {
+    $user = $this->makeUser($this->rootTeam);
+    $this->actingAs($user);
+    $registry = app(ToolRegistry::class);
+    $kontext = new ToolContext($user, $this->rootTeam);
+
+    $this->svc->addNeedFromTarget($this->rootTeam, $this->ziel, 'recipe:kuchen@100');
+    $chefs = FoodAlchemistOrder::whereHas('supplier', fn ($q) => $q->where('name', 'Chefs'))->first();
+    $this->svc->setStatus($this->rootTeam, $chefs->id, OrderStatus::Sent);
+
+    $tool = $registry->get('foodalchemist.orders.UPDATE');
+    $receipt = $tool->execute(['order_id' => $chefs->id, 'complete_receipt' => true], $kontext);
+    expect($receipt->success)->toBeTrue()
+        ->and($receipt->data['receipt']['checked_lines'])->toBe(2)
+        ->and($receipt->data['receipt']['diff_lines'])->toBe(0);
+
+    $invoice = $tool->execute(['order_id' => $chefs->id, 'complete_invoice_from_receipt' => true], $kontext);
+    expect($invoice->success)->toBeTrue()
+        ->and($invoice->data['invoice']['checked_lines'])->toBe(2)
+        ->and($invoice->data['invoice']['diff_net'])->toBe(0.0);
+
+    $line = $this->svc->addManualLine($this->rootTeam, $this->laOf['Butter']->id, 3, null, null, '2026-09-01');
+    $backorderSource = $line->order;
+    $this->svc->setStatus($this->rootTeam, $backorderSource->id, OrderStatus::Sent);
+    $this->svc->updateReceiptLine($this->rootTeam, $line->id, 1, '2 fehlen');
+
+    $backorder = $tool->execute([
+        'order_id' => $backorderSource->id,
+        'create_backorder_from_receipt' => true,
+        'backorder_delivery_date' => '2026-09-03',
+    ], $kontext);
+    expect($backorder->success)->toBeTrue()
+        ->and($backorder->data['backorder']['lines'])->toBe(1)
+        ->and($backorder->data['backorder']['total_qty_packs'])->toBe(2.0)
+        ->and(FoodAlchemistOrder::find($backorder->data['backorder']['order_id'])->desired_delivery_date?->toDateString())->toBe('2026-09-03');
 });
 
 it('E1: UI — 3-Panel-Cockpit, Lieferant-Filter + Kopf speichern + Zeilen-Notiz', function () {
@@ -771,8 +1461,9 @@ it('E2 UI: „Neue Bestellung" öffnet den neutralen Start ohne Lieferanten-Schi
 
     Livewire::test(OrdersIndex::class)
         ->set('neuerLiefertag', '2026-08-13')
+        ->set('neueStrategie', 'guenstigster_preis')
         ->call('neueBestellung')
-        ->assertDispatched('orders-editor.neu')
+        ->assertDispatched('orders-editor.neu', deliveryDate: '2026-08-13', strategy: 'guenstigster_preis')
         ->assertSet('neuerLiefertag', null)
         ->assertSet('fehler', null);
 
@@ -787,9 +1478,10 @@ it('E2 UI: neutraler Start zeigt Artikel- und Bedarfswege', function () {
         ->assertDispatched('orders-editor.neu');
 
     Livewire::test(OrdersEditor::class)
-        ->call('oeffnenNeu', '2026-08-13')
+        ->call('oeffnenNeu', '2026-08-13', 'guenstigster_preis')
         ->assertSet('orderId', null)
         ->assertSet('formDeliveryDate', '2026-08-13')
+        ->assertSet('cockpitStrategy', 'guenstigster_preis')
         ->assertSee('Quellen einfügen')
         ->assertSee('Auflösung nach Lieferant + Liefertag')
         ->assertSee('Klärliste');

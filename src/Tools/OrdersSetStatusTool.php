@@ -13,7 +13,8 @@ use Platform\FoodAlchemist\Services\OrderService;
  * Spec 17/S2 (write): Status einer Bestellung setzen (Lebenszyklus mit Guard).
  * Erlaubt: draft→sent|cancelled · sent→confirmed|delivered|cancelled ·
  * confirmed→delivered|cancelled. „sent" friert den Beleg-Snapshot ein (E2);
- * „delivered" ist ein manueller Haken OHNE Bestandsbuchung (E4). Nur eigene Belege.
+ * „delivered" ist ein manueller Haken OHNE Bestandsbuchung (E4), übernimmt aber noch
+ * offene WE-Zeilen mit der bestellten Menge. Nur eigene Belege.
  */
 class OrdersSetStatusTool extends FoodAlchemistTool implements ToolContract, ToolMetadataContract
 {
@@ -26,7 +27,7 @@ class OrdersSetStatusTool extends FoodAlchemistTool implements ToolContract, Too
     {
         return 'Setzt den Status einer Bestellung (Guard): draft→sent (versenden, friert Snapshot ein) '
             . '| sent→confirmed (bestätigt) | →delivered (geliefert, manueller Haken ohne Bestand) | →cancelled. '
-            . 'Nur eigene Team-Belege.';
+            . 'Versand wird bei leeren/ungeklärten/nicht bestellbaren Belegen blockiert. Nur eigene Team-Belege.';
     }
 
     public function getSchema(): array
@@ -53,7 +54,8 @@ class OrdersSetStatusTool extends FoodAlchemistTool implements ToolContract, Too
         }
 
         try {
-            $order = app(OrderService::class)->setStatus($team, (int) $arguments['order_id'], $ziel);
+            $svc = app(OrderService::class);
+            $order = $svc->setStatus($team, (int) $arguments['order_id'], $ziel);
         } catch (\RuntimeException $e) {
             return ToolResult::error($e->getMessage(), 'NOT_ALLOWED');
         } catch (\Throwable $e) {
@@ -64,6 +66,8 @@ class OrdersSetStatusTool extends FoodAlchemistTool implements ToolContract, Too
             'order_id' => (int) $order->id,
             'status' => $order->status instanceof OrderStatus ? $order->status->value : (string) $order->status,
             'sent_at' => $order->sent_at?->toDateTimeString(),
+            'warnings' => $svc->orderWarnings($order->refresh()),
+            'send_blockers' => $svc->sendBlockers($order),
         ]);
     }
 

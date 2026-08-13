@@ -30,7 +30,12 @@ class FoodAlchemistOrder extends Model
         'total_net' => 'decimal:2',
         'sent_at' => 'datetime',
         'confirmed_at' => 'datetime',
+        'confirmed_delivery_date' => 'date',
         'delivered_at' => 'datetime',
+        'invoice_date' => 'date',
+        'invoice_paid_at' => 'date',
+        'approval_requested_at' => 'datetime',
+        'approved_at' => 'datetime',
     ];
 
     public function supplier(): BelongsTo

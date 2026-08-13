@@ -29,6 +29,7 @@ class FoodAlchemistSupplier extends Model
         'payment_term_days' => 'integer',
         'min_order_value' => 'decimal:2',
         'free_shipping_threshold' => 'decimal:2',
+        'order_lead_days' => 'integer',
     ];
 
     public function items(): HasMany

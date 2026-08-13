@@ -548,8 +548,35 @@ Route::get('/bestellungen/{order}/dokument', function (int $order, \Platform\Foo
         return response()->streamDownload(function () use ($dok) {
             $out = fopen('php://output', 'w');
             fwrite($out, "\xEF\xBB\xBF"); // UTF-8 BOM
-            fputcsv($out, ['Artikel-Nr', 'Bezeichnung', 'Gebinde', 'Anzahl', 'Gebinde-Inhalt', 'Einheit', 'Preis/Gebinde EUR', 'Summe EUR', 'Bedarf kg'], ';');
+            fputcsv($out, [
+                'Bestellung', 'Status', 'Lieferant', 'Liefertag', 'AB-Nr', 'Bestaetigter Liefertag',
+                'Rechnungs-Nr', 'Rechnungsdatum', 'Faellig am', 'Zahlungsziel Tage', 'Zahlungsstatus',
+                'Bezahlt am', 'Zahlungsnotiz', 'Freigabe', 'Freigabe angefragt am', 'Freigegeben am',
+                'Freigegeben durch', 'Freigabenotiz',
+            ], ';');
+            fputcsv($out, [
+                'ord-' . $dok['id'], $dok['status_label'], $dok['lieferant']['name'] ?? '',
+                $dok['desired_delivery_date'] ?? '', $dok['supplier_order_number'] ?? '',
+                $dok['confirmed_delivery_date'] ?? '', $dok['invoice_number'] ?? '', $dok['invoice_date'] ?? '',
+                $dok['invoice_due_date'] ?? '', $dok['payment_term_days'] ?? '',
+                ($dok['payment']['status'] ?? null) ? ($dok['payment']['label'] ?? '') : '',
+                $dok['invoice_paid_at'] ?? '', $dok['payment_note'] ?? '',
+                ($dok['approval']['status'] ?? null) ? ($dok['approval']['label'] ?? '') : '',
+                $dok['approval_requested_at'] ?? '', $dok['approved_at'] ?? '', $dok['approved_by'] ?? '',
+                $dok['approval_note'] ?? '',
+            ], ';');
+            fputcsv($out, [], ';');
+            fputcsv($out, [
+                'Artikel-Nr', 'Bezeichnung', 'Gebinde', 'Anzahl bestellt', 'Gebinde-Inhalt', 'Einheit',
+                'Preis/Gebinde EUR', 'Summe EUR', 'Bedarf kg', 'WE Anzahl', 'WE Diff.', 'WE Notiz',
+                'RE Anzahl', 'RE Preis/Gebinde EUR', 'RE Summe EUR', 'RE Diff. EUR', 'RE Notiz',
+                'Reklamation Status', 'Reklamation Menge', 'Gutschrift erwartet EUR', 'Reklamation Notiz',
+                'Kontingent Menge', 'Kontingent verbraucht', 'Kontingent frei vorher', 'Kontingent frei nachher',
+                'Kontingent verbucht durch Zeile', 'Kontingent verbucht am',
+                'Kontingent gueltig von', 'Kontingent gueltig bis', 'Kontingent Notiz',
+            ], ';');
             foreach ($dok['zeilen'] as $z) {
+                $quota = $z['quota'] ?? null;
                 fputcsv($out, [
                     $z['article_number'] ?? '',
                     $z['designation'] ?? '',
@@ -560,10 +587,31 @@ Route::get('/bestellungen/{order}/dokument', function (int $order, \Platform\Foo
                     $z['pack_price'] !== null ? number_format($z['pack_price'], 2, ',', '') : '',
                     number_format($z['line_total'], 2, ',', ''),
                     number_format($z['needed_base_g'] / 1000, 3, ',', ''),
+                    $z['received_qty_packs'] !== null ? number_format($z['received_qty_packs'], 2, ',', '') : '',
+                    $z['receipt_diff_packs'] !== null ? number_format($z['receipt_diff_packs'], 2, ',', '') : '',
+                    $z['received_note'] ?? '',
+                    $z['invoice_qty_packs'] !== null ? number_format($z['invoice_qty_packs'], 2, ',', '') : '',
+                    $z['invoice_pack_price'] !== null ? number_format($z['invoice_pack_price'], 2, ',', '') : '',
+                    $z['invoice_line_total'] !== null ? number_format($z['invoice_line_total'], 2, ',', '') : '',
+                    $z['invoice_diff_net'] !== null ? number_format($z['invoice_diff_net'], 2, ',', '') : '',
+                    $z['invoice_note'] ?? '',
+                    $z['claim_status_label'] ?? '',
+                    $z['claim_qty_packs'] !== null ? number_format($z['claim_qty_packs'], 2, ',', '') : '',
+                    $z['credit_expected_net'] !== null ? number_format($z['credit_expected_net'], 2, ',', '') : '',
+                    $z['claim_note'] ?? '',
+                    $quota !== null ? number_format($quota['qty_packs'], 2, ',', '') : '',
+                    $quota !== null ? number_format($quota['used_packs'], 2, ',', '') : '',
+                    $quota !== null ? number_format($quota['remaining_before_packs'], 2, ',', '') : '',
+                    $quota !== null ? number_format($quota['remaining_after_packs'], 2, ',', '') : '',
+                    $z['quota_consumed_packs'] !== null ? number_format($z['quota_consumed_packs'], 2, ',', '') : '',
+                    $z['quota_consumed_at'] ?? '',
+                    $quota['valid_from'] ?? '',
+                    $quota['valid_to'] ?? '',
+                    $quota['note'] ?? '',
                 ], ';');
             }
             fputcsv($out, [], ';');
-            fputcsv($out, ['', '', '', '', '', '', 'Netto gesamt', number_format($dok['total_net'], 2, ',', ''), ''], ';');
+            fputcsv($out, ['', '', '', '', '', '', 'Netto gesamt', number_format($dok['total_net'], 2, ',', ''), '', '', '', '', '', '', 'Rechnung netto', number_format($dok['invoice']['invoice_net'], 2, ',', ''), '', 'Gutschrift erwartet', '', number_format($dok['claims']['credit_expected_net'] ?? 0, 2, ',', '')], ';');
             fclose($out);
         }, $dateiname, ['Content-Type' => 'text/csv; charset=UTF-8']);
     }

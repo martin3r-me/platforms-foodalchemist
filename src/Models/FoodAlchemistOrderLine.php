@@ -31,6 +31,15 @@ class FoodAlchemistOrderLine extends Model
         'pack_qty' => 'decimal:3',
         'pack_price' => 'decimal:4',
         'line_total' => 'decimal:2',
+        'received_qty_packs' => 'decimal:2',
+        'received_at' => 'datetime',
+        'invoice_qty_packs' => 'decimal:2',
+        'invoice_pack_price' => 'decimal:4',
+        'invoice_checked_at' => 'datetime',
+        'claim_qty_packs' => 'decimal:2',
+        'credit_expected_net' => 'decimal:2',
+        'quota_consumed_packs' => 'decimal:2',
+        'quota_consumed_at' => 'datetime',
     ];
 
     public function order(): BelongsTo

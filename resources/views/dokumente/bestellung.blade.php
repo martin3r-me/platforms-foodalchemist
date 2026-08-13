@@ -50,6 +50,12 @@
         @if($dok['lieferant']['postal_code'] || $dok['lieferant']['city']){{ trim(($dok['lieferant']['postal_code'] ?? '') . ' ' . ($dok['lieferant']['city'] ?? '')) }}<br>@endif
         @if($dok['lieferant']['email_order'])<span class="muted">{{ $dok['lieferant']['email_order'] }}</span><br>@endif
         @if($dok['desired_delivery_date'])<span>Wunsch-Liefertermin: <strong>{{ $dok['desired_delivery_date'] }}</strong></span>@endif
+        @if($dok['supplier_order_number'])<br><span>AB-/Bestellnummer Lieferant: <strong>{{ $dok['supplier_order_number'] }}</strong></span>@endif
+        @if($dok['confirmed_delivery_date'])<br><span>Bestätigter Liefertag: <strong>{{ $dok['confirmed_delivery_date'] }}</strong></span>@endif
+        @if($dok['invoice_number'])<br><span>Rechnung: <strong>{{ $dok['invoice_number'] }}</strong>@if($dok['invoice_date']) vom {{ $dok['invoice_date'] }}@endif @if($dok['invoice_due_date']) · fällig {{ $dok['invoice_due_date'] }}@endif</span>@endif
+        @if(($dok['payment']['status'] ?? null))<br><span>Zahlung: <strong>{{ $dok['payment']['label'] }}</strong>@if($dok['invoice_paid_at']) am {{ $dok['invoice_paid_at'] }}@endif</span>@endif
+        @if(($dok['approval']['status'] ?? null))<br><span>Freigabe: <strong>{{ $dok['approval']['label'] }}</strong>@if($dok['approved_at']) am {{ $dok['approved_at'] }}@elseif($dok['approval_requested_at']) seit {{ $dok['approval_requested_at'] }}@endif</span>@endif
+        @if($dok['approval_note'])<br><span class="muted">Freigabenotiz: {{ $dok['approval_note'] }}</span>@endif
     </div>
 
     <table>
@@ -59,6 +65,9 @@
             <th class="right">Anzahl</th>
             <th class="right">Preis/Geb.</th>
             <th class="right">Summe</th>
+            @if(($dok['receipt']['booked'] ?? 0) > 0)<th class="right">WE</th>@endif
+            @if(($dok['invoice']['checked'] ?? 0) > 0)<th class="right">RE Diff.</th>@endif
+            @if(($dok['claims']['lines'] ?? 0) > 0)<th>Reklamation</th>@endif
         </tr></thead>
         <tbody>
             @forelse($dok['zeilen'] as $z)
@@ -67,19 +76,60 @@
                         {{ $z['designation'] ?: '—' }}
                         @if($z['article_number'])<br><span class="art">Art. {{ $z['article_number'] }}</span>@endif
                         @unless($z['bestellbar'])<br><span class="art" style="color:#b45309">Preis/Gebinde fehlt — bitte prüfen</span>@endunless
+                        @if($z['quota'])
+                            <br><span class="art" style="color:{{ $z['quota']['exceeded'] || ! $z['quota']['is_valid_date'] ? '#b45309' : '#047857' }}">
+                                Kontingent: {{ rtrim(rtrim(number_format($z['quota']['remaining_before_packs'], 2, ',', '.'), '0'), ',') }} frei,
+                                nach Bestellung {{ rtrim(rtrim(number_format($z['quota']['remaining_after_packs'], 2, ',', '.'), '0'), ',') }}
+                                @if(($z['quota']['consumed_packs'] ?? 0) > 0) · verbraucht {{ rtrim(rtrim(number_format($z['quota']['consumed_packs'], 2, ',', '.'), '0'), ',') }} @endif
+                                @if(!$z['quota']['is_valid_date']) · außerhalb Gültigkeit @endif
+                            </span>
+                        @endif
                     </td>
                     <td class="right">{{ $z['packaging_unit'] ?: '—' }}@if($z['pack_qty'])<br><span class="art">{{ rtrim(rtrim(number_format($z['pack_qty'], 3, ',', '.'), '0'), ',') }} {{ $z['unit_code'] }}</span>@endif</td>
                     <td class="right"><strong>{{ rtrim(rtrim(number_format($z['qty_packs'], 2, ',', '.'), '0'), ',') }}</strong></td>
                     <td class="right">{{ $z['pack_price'] !== null ? number_format($z['pack_price'], 2, ',', '.') . ' €' : '—' }}</td>
                     <td class="right">{{ number_format($z['line_total'], 2, ',', '.') }} €</td>
+                    @if(($dok['receipt']['booked'] ?? 0) > 0)
+                        <td class="right">
+                            {{ $z['received_qty_packs'] !== null ? rtrim(rtrim(number_format($z['received_qty_packs'], 2, ',', '.'), '0'), ',') : '—' }}
+                            @if($z['receipt_diff_packs'] !== null && abs((float) $z['receipt_diff_packs']) >= 0.01)<br><span class="art" style="color:#b45309">Diff. {{ (float) $z['receipt_diff_packs'] > 0 ? '+' : '' }}{{ rtrim(rtrim(number_format($z['receipt_diff_packs'], 2, ',', '.'), '0'), ',') }}</span>@endif
+                        </td>
+                    @endif
+                    @if(($dok['invoice']['checked'] ?? 0) > 0)
+                        <td class="right">
+                            {{ $z['invoice_diff_net'] !== null ? number_format($z['invoice_diff_net'], 2, ',', '.') . ' €' : '—' }}
+                            @if($z['invoice_line_total'] !== null)<br><span class="art">RE {{ number_format($z['invoice_line_total'], 2, ',', '.') }} €</span>@endif
+                        </td>
+                    @endif
+                    @if(($dok['claims']['lines'] ?? 0) > 0)
+                        <td>
+                            {{ $z['claim_status_label'] ?? '—' }}
+                            @if($z['claim_qty_packs'] !== null)<br><span class="art">{{ rtrim(rtrim(number_format($z['claim_qty_packs'], 2, ',', '.'), '0'), ',') }} Gebinde</span>@endif
+                            @if($z['credit_expected_net'] !== null)<br><span class="art">{{ number_format($z['credit_expected_net'], 2, ',', '.') }} € Gutschrift</span>@endif
+                            @if($z['claim_note'])<br><span class="art">{{ $z['claim_note'] }}</span>@endif
+                        </td>
+                    @endif
                 </tr>
             @empty
-                <tr><td colspan="5" class="muted">Keine Positionen.</td></tr>
+                <tr><td colspan="{{ 5 + (($dok['receipt']['booked'] ?? 0) > 0 ? 1 : 0) + (($dok['invoice']['checked'] ?? 0) > 0 ? 1 : 0) + (($dok['claims']['lines'] ?? 0) > 0 ? 1 : 0) }}" class="muted">Keine Positionen.</td></tr>
             @endforelse
         </tbody>
     </table>
 
     <div class="grand">Wareneinsatz netto: {{ number_format($dok['total_net'], 2, ',', '.') }} €</div>
+    @if(($dok['receipt']['booked'] ?? 0) > 0 || ($dok['invoice']['checked'] ?? 0) > 0)
+        <div class="moq">
+            @if(($dok['receipt']['booked'] ?? 0) > 0)
+                <span class="{{ ($dok['receipt']['differences'] ?? 0) > 0 ? 'warn' : 'ok' }}">Wareneingang: {{ $dok['receipt']['booked'] }}/{{ $dok['receipt']['lines'] }} Zeilen@if(($dok['receipt']['differences'] ?? 0) > 0) · {{ $dok['receipt']['differences'] }} Differenz(en)@endif</span>
+            @endif
+            @if(($dok['invoice']['checked'] ?? 0) > 0)
+                <span class="{{ ($dok['invoice']['differences'] ?? 0) > 0 ? 'warn' : 'ok' }}"> · Rechnung: {{ number_format($dok['invoice']['invoice_net'], 2, ',', '.') }} €@if(abs((float) ($dok['invoice']['diff_net'] ?? 0)) >= 0.01) · Diff. {{ number_format($dok['invoice']['diff_net'], 2, ',', '.') }} €@endif</span>
+            @endif
+            @if(($dok['claims']['lines'] ?? 0) > 0)
+                <span class="{{ (($dok['claims']['open'] ?? 0) + ($dok['claims']['credit_expected'] ?? 0)) > 0 ? 'warn' : 'ok' }}"> · Reklamation: {{ $dok['claims']['lines'] }} Zeile(n)@if(($dok['claims']['credit_expected_net'] ?? 0) > 0) · {{ number_format($dok['claims']['credit_expected_net'], 2, ',', '.') }} € erwartet@endif</span>
+            @endif
+        </div>
+    @endif
 
     @php($moq = $dok['moq'])
     <div class="moq">

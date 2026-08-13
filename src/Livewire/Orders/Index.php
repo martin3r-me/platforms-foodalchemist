@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\On;
 use Livewire\Attributes\Url;
 use Livewire\Component;
+use Platform\FoodAlchemist\Enums\LeadLaStrategie;
 use Platform\FoodAlchemist\Enums\OrderStatus;
 use Platform\FoodAlchemist\Services\OrderService;
 
@@ -64,6 +65,9 @@ class Index extends Component
 
     /** „Neue Bestellung": neutraler Start; Lieferant ergibt sich erst aus Artikel/Bedarf. */
     public ?string $neuerLiefertag = null;
+
+    /** Einkaufsstrategie für den neutralen Cockpit-Start. */
+    public string $neueStrategie = '';
 
     public ?string $hinweis = null;
 
@@ -124,8 +128,25 @@ class Index extends Component
     {
         $this->hinweis = null;
         $this->fehler = null;
-        $this->dispatch('orders-editor.neu', deliveryDate: $this->neuerLiefertag ?: null);
+        $this->dispatch('orders-editor.neu', deliveryDate: $this->neuerLiefertag ?: null, strategy: $this->neueStrategie ?: null);
         $this->neuerLiefertag = null;
+    }
+
+    public function leereEntwuerfeLoeschen(OrderService $orders): void
+    {
+        $team = Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
+        $count = $orders->deleteEmptyDrafts($team);
+        $this->hinweis = $count === 1 ? '1 leerer Entwurf gelöscht.' : $count . ' leere Entwürfe gelöscht.';
+        $this->fehler = null;
+    }
+
+    private function strategieLabel(?string $value): string
+    {
+        if ($value === null || $value === '') {
+            return 'Team-Standard';
+        }
+
+        return LeadLaStrategie::tryFrom($value)?->label() ?? $value;
     }
 
     /** Editor meldet eine Änderung — die Liste (Summen/Status) neu rendern. */
@@ -178,27 +199,61 @@ class Index extends Component
             ->when($this->productionFilter !== null, fn ($c) => $c->filter(fn ($o) => collect($herkunftByOrder[(int) $o->id] ?? [])
                 ->contains(fn ($h) => (int) ($h['production_order_id'] ?? 0) === $this->productionFilter)))
             ->when($this->nurMitPositionen, fn ($c) => $c->filter(fn ($o) => $o->lines->count() > 0))
-            ->when($this->nurMitKlaerung, fn ($c) => $c->filter(fn ($o) => $o->lines->count() === 0 || (float) $o->total_net <= 0.0))
+            ->when($this->nurMitKlaerung, fn ($c) => $c->filter(fn ($o) => $orders->orderWarnings($o) !== []))
             ->when($suche !== '', fn ($c) => $c->filter(function ($o) use ($suche, $herkunftByOrder) {
                 $herkunft = collect($herkunftByOrder[(int) $o->id] ?? [])->pluck('label')->implode(' ');
-                $hay = mb_strtolower(($o->supplier?->name ?? '') . ' ' . ($o->reference ?? '') . ' ' . $herkunft);
+                $hay = mb_strtolower(implode(' ', [
+                    'ord-' . (int) $o->id,
+                    $o->supplier?->name ?? '',
+                    $o->reference ?? '',
+                    $o->supplier_order_number ?? '',
+                    $o->invoice_number ?? '',
+                    $herkunft,
+                ]));
 
                 return str_contains($hay, $suche);
             }))
-            ->map(fn ($o) => [
-                'id' => (int) $o->id,
-                'supplier' => $o->supplier?->name ?? '—',
-                'status' => $o->status instanceof OrderStatus ? $o->status : OrderStatus::from((string) $o->status),
-                'total_net' => (float) $o->total_net,
-                'line_count' => $o->lines->count(),
-                'reference' => $o->reference,
-                'liefertag' => $o->desired_delivery_date?->toDateString(),
-                'herkunft' => $herkunftByOrder[(int) $o->id] ?? [],
-                'warnings' => array_values(array_filter([
-                    $o->lines->count() === 0 ? 'leer' : null,
-                    (float) $o->total_net <= 0.0 ? 'Klärung' : null,
-                ])),
-            ])->values();
+            ->map(function ($o) use ($herkunftByOrder, $orders) {
+                $lineCount = $o->lines->count();
+                $totalNet = (float) $o->total_net;
+                $invoiceDueDate = $o->invoice_date !== null && $o->supplier?->payment_term_days !== null
+                    ? $o->invoice_date->copy()->addDays(max(0, (int) $o->supplier->payment_term_days))->toDateString()
+                    : null;
+                $payment = $orders->paymentSummary($o);
+                $approval = $orders->approvalSummary($o);
+
+                return [
+                    'id' => (int) $o->id,
+                    'order_label' => 'ord-' . (int) $o->id,
+                    'supplier_order_number' => $o->supplier_order_number,
+                    'invoice_number' => $o->invoice_number,
+                    'invoice_date' => $o->invoice_date?->toDateString(),
+                    'invoice_due_date' => $invoiceDueDate,
+                    'payment_term_days' => $o->supplier?->payment_term_days,
+                    'payment' => $payment,
+                    'approval' => $approval,
+                    'supplier' => $o->supplier?->name ?? '—',
+                    'status' => $o->status instanceof OrderStatus ? $o->status : OrderStatus::from((string) $o->status),
+                    'total_net' => $totalNet,
+                    'line_count' => $lineCount,
+                    'reference' => $o->reference,
+                    'liefertag' => $o->desired_delivery_date?->toDateString(),
+                    'strategy' => (string) ($o->sourcing_strategy ?? ''),
+                    'strategy_label' => $this->strategieLabel($o->sourcing_strategy),
+                    'herkunft' => $herkunftByOrder[(int) $o->id] ?? [],
+                    'warnings' => $orders->orderWarnings($o),
+                ];
+            })->values();
+
+        $kpis = [
+            'orders' => $liste->count(),
+            'drafts' => $liste->filter(fn ($o) => $o['status'] === OrderStatus::Draft)->count(),
+            'ready' => $liste->filter(fn ($o) => $o['status'] === OrderStatus::Draft && $o['line_count'] > 0 && (float) $o['total_net'] > 0.0 && empty($o['warnings']))->count(),
+            'positions' => (int) $liste->sum('line_count'),
+            'total_net' => round((float) $liste->sum('total_net'), 2),
+            'clarifications' => $liste->filter(fn ($o) => ! empty($o['warnings']))->count(),
+            'suppliers' => $liste->pluck('supplier')->filter(fn ($s) => $s !== '—')->unique()->count(),
+        ];
 
         // Bei Liefertag-Basis nach Tag gruppieren (Reihenfolge kommt sortiert aus dem Service,
         // undatierte landen als '' am Ende). Bei Bestelldatum: eine flache Gruppe.
@@ -237,6 +292,8 @@ class Index extends Component
             'lieferanten' => $lieferanten,
             'produktionen' => $produktionen,
             'statusFaelle' => OrderStatus::cases(),
+            'strategieOptionen' => LeadLaStrategie::cases(),
+            'kpis' => $kpis,
         ])->layout('platform::layouts.app');
     }
 }

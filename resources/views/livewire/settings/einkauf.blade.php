@@ -69,6 +69,95 @@
 
     </div>
 
+    <div class="{{ $card }} p-5 space-y-3" data-lagerorte>
+        <div>
+            <h3 class="font-medium tracking-tight text-gray-900">Lagerorte</h3>
+            <p class="text-[11px] text-gray-500 mt-0.5">WaWi light: Wareneingänge buchen auf das Standardlager. Weitere Lagerorte sind die Grundlage für spätere Umlagerung, Inventur und Produktion.</p>
+        </div>
+
+        <div class="grid grid-cols-1 xl:grid-cols-[1fr_auto] gap-2 items-end">
+            <div class="grid grid-cols-1 md:grid-cols-[1.2fr_.6fr_.7fr_1.4fr] gap-2">
+                <label class="block">
+                    <span class="{{ $label }}">Name</span>
+                    <input type="text" wire:model="lagerNeu.name" class="{{ $input }}" placeholder="z. B. Hauptlager" />
+                </label>
+                <label class="block">
+                    <span class="{{ $label }}">Code</span>
+                    <input type="text" wire:model="lagerNeu.code" class="{{ $input }}" placeholder="MAIN" />
+                </label>
+                <label class="block">
+                    <span class="{{ $label }}">Typ</span>
+                    <select wire:model="lagerNeu.type" class="{{ $input }}">
+                        @foreach($lagerTypen as $key => $labelText)
+                            <option value="{{ $key }}">{{ $labelText }}</option>
+                        @endforeach
+                    </select>
+                </label>
+                <label class="block">
+                    <span class="{{ $label }}">Notiz</span>
+                    <input type="text" wire:model="lagerNeu.note" class="{{ $input }}" placeholder="optional" />
+                </label>
+            </div>
+            <button type="button" wire:click="lagerAnlegen" class="{{ $btnPrimary }}">+ Lager anlegen</button>
+        </div>
+
+        <div class="overflow-x-auto border border-black/5 rounded-lg">
+            <table class="min-w-full text-xs">
+                <thead class="bg-black/[0.03] text-[11px] uppercase tracking-wide text-gray-500">
+                    <tr>
+                        <th class="px-3 py-2 text-left">Lager</th>
+                        <th class="px-3 py-2 text-left">Code</th>
+                        <th class="px-3 py-2 text-left">Typ</th>
+                        <th class="px-3 py-2 text-left">Notiz</th>
+                        <th class="px-3 py-2 text-center">Aktiv</th>
+                        <th class="px-3 py-2 text-right">Bestände</th>
+                        <th class="px-3 py-2 text-right">Aktionen</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @forelse($lagerorte as $lager)
+                        <tr class="border-t border-black/5" wire:key="lagerort-{{ $lager->id }}">
+                            <td class="px-3 py-2 min-w-48">
+                                <input type="text" wire:model="lagerEdit.{{ $lager->id }}.name" class="{{ $input }} !py-1 !text-xs" />
+                                @if($lager->is_default)
+                                    <span class="inline-flex mt-1 px-2 py-0.5 rounded-full bg-emerald-500/10 text-[10px] text-emerald-700">Standard</span>
+                                @endif
+                            </td>
+                            <td class="px-3 py-2 min-w-28">
+                                <input type="text" wire:model="lagerEdit.{{ $lager->id }}.code" class="{{ $input }} !py-1 !text-xs" />
+                            </td>
+                            <td class="px-3 py-2 min-w-36">
+                                <select wire:model="lagerEdit.{{ $lager->id }}.type" class="{{ $input }} !py-1 !text-xs">
+                                    @foreach($lagerTypen as $key => $labelText)
+                                        <option value="{{ $key }}">{{ $labelText }}</option>
+                                    @endforeach
+                                </select>
+                            </td>
+                            <td class="px-3 py-2 min-w-56">
+                                <input type="text" wire:model="lagerEdit.{{ $lager->id }}.note" class="{{ $input }} !py-1 !text-xs" />
+                            </td>
+                            <td class="px-3 py-2 text-center">
+                                <input type="checkbox" wire:model="lagerEdit.{{ $lager->id }}.is_active" class="rounded border-gray-300" />
+                            </td>
+                            <td class="px-3 py-2 text-right text-gray-500">{{ $lager->stocks_count }}</td>
+                            <td class="px-3 py-2 text-right whitespace-nowrap space-x-1">
+                                <button type="button" wire:click="lagerSpeichern({{ $lager->id }})" class="{{ $btnGhostXs }}">Speichern</button>
+                                @unless($lager->is_default)
+                                    <button type="button" wire:click="lagerStandardSetzen({{ $lager->id }})" class="{{ $btnGhostXs }}">Standard</button>
+                                @endunless
+                                <button type="button" wire:click="lagerEntfernen({{ $lager->id }})" class="{{ $btnGhostXs }} text-red-500" onclick="return confirm('Lagerort entfernen oder deaktivieren?')">Entfernen</button>
+                            </td>
+                        </tr>
+                    @empty
+                        <tr>
+                            <td colspan="7" class="px-3 py-4 text-xs text-gray-500">Noch keine Lagerorte angelegt. Beim ersten Wareneingang würde automatisch ein Hauptlager entstehen.</td>
+                        </tr>
+                    @endforelse
+                </tbody>
+            </table>
+        </div>
+    </div>
+
     {{-- M1-06: Stamm-Lieferanten-Matrix (Lieferant × Warengruppe) --}}
     <div class="{{ $card }} p-5 space-y-1" data-stamm-matrix>
         <div class="mb-3">

@@ -24,8 +24,8 @@ class OrdersGetTool extends FoodAlchemistTool implements ToolContract, ToolMetad
     {
         return 'Bestellungen/Bestellschienen des Teams. Ohne order_id: Liste (offene Entwürfe zuerst; '
             . 'optional status=draft|sent|confirmed|delivered|cancelled). Mit order_id: Detail mit '
-            . 'Gebinde-Zeilen (Artikel-Nr, Anzahl Gebinde, Preis, Zeilensumme), total_net und MOQ-Ampel '
-            . '(Mindestbestellwert/Frei-Haus). Read-only.';
+            . 'Gebinde-Zeilen (Artikel-Nr, Anzahl Gebinde, Preis, Zeilensumme), Freigabe, Wareneingang, '
+            . 'Rechnung, Lagerbestand je Zeile, total_net, MOQ-Ampel, Warnungen und Sende-Blockern. Read-only.';
     }
 
     public function getSchema(): array
@@ -56,14 +56,33 @@ class OrdersGetTool extends FoodAlchemistTool implements ToolContract, ToolMetad
         }
 
         $status = $arguments['status'] ?? null;
-        $liste = $svc->listForTeam($team, $status)->map(fn ($o) => [
-            'id' => (int) $o->id,
-            'supplier' => $o->supplier?->name,
-            'status' => $o->status instanceof OrderStatus ? $o->status->value : (string) $o->status,
-            'total_net' => (float) $o->total_net,
-            'reference' => $o->reference,
-            'sent_at' => $o->sent_at?->toDateTimeString(),
-        ])->all();
+        $liste = $svc->listForTeam($team, $status)->map(function ($o) use ($svc) {
+            $invoiceDueDate = $o->invoice_date !== null && $o->supplier?->payment_term_days !== null
+                ? $o->invoice_date->copy()->addDays(max(0, (int) $o->supplier->payment_term_days))->toDateString()
+                : null;
+
+            return [
+                'id' => (int) $o->id,
+                'supplier' => $o->supplier?->name,
+                'status' => $o->status instanceof OrderStatus ? $o->status->value : (string) $o->status,
+                'total_net' => (float) $o->total_net,
+                'reference' => $o->reference,
+                'desired_delivery_date' => $o->desired_delivery_date?->toDateString(),
+                'supplier_order_number' => $o->supplier_order_number,
+                'confirmed_delivery_date' => $o->confirmed_delivery_date?->toDateString(),
+                'invoice_number' => $o->invoice_number,
+                'invoice_date' => $o->invoice_date?->toDateString(),
+                'invoice_due_date' => $invoiceDueDate,
+                'payment_term_days' => $o->supplier?->payment_term_days,
+                'payment' => $svc->paymentSummary($o),
+                'approval' => $svc->approvalSummary($o),
+                'quota' => $svc->quotaSummary($o),
+                'positions_count' => (int) $o->lines->count(),
+                'warnings' => $svc->orderWarnings($o),
+                'send_blockers' => $svc->sendBlockers($o),
+                'sent_at' => $o->sent_at?->toDateTimeString(),
+            ];
+        })->all();
 
         return ToolResult::success(['orders' => $liste, 'count' => count($liste)]);
     }

@@ -32,6 +32,28 @@ class Editor extends Component
 
     public string $formNote = '';
 
+    public string $formSupplierOrderNumber = '';
+
+    public string $formConfirmedDeliveryDate = '';
+
+    public string $formSupplierConfirmationNote = '';
+
+    public string $formInvoiceNumber = '';
+
+    public string $formInvoiceDate = '';
+
+    public string $formInvoiceNote = '';
+
+    public string $formPaymentStatus = '';
+
+    public string $formInvoicePaidAt = '';
+
+    public string $formPaymentNote = '';
+
+    public string $formApprovalStatus = '';
+
+    public string $formApprovalNote = '';
+
     public ?string $hinweis = null;
 
     public ?string $fehler = null;
@@ -73,8 +95,16 @@ class Editor extends Component
 
     public string $cockpitStrategy = '';
 
+    /** override_key => lead_la_id für einzelne Cockpit-Zutaten vor dem Speichern. */
+    public array $cockpitOverrides = [];
+
     /** Zeile, deren Ausweichquellen-Dropdown offen ist (nur eine gleichzeitig). */
     public ?int $altLineId = null;
+
+    /** Vorschau-Zutat, deren Ausweichquellen-Dropdown offen ist. */
+    public ?string $cockpitAltKey = null;
+
+    public array $cockpitAlternativen = [];
 
     #[On('orders-editor.bearbeiten')]
     public function oeffnenBearbeiten(int $id): void
@@ -94,7 +124,7 @@ class Editor extends Component
     }
 
     #[On('orders-editor.neu')]
-    public function oeffnenNeu(?string $deliveryDate = null): void
+    public function oeffnenNeu(?string $deliveryDate = null, ?string $strategy = null): void
     {
         $this->orderId = null;
         $this->hinweis = null;
@@ -109,7 +139,19 @@ class Editor extends Component
         $this->formReference = '';
         $this->formDeliveryDate = $deliveryDate ?: '';
         $this->formNote = '';
-        $this->formStrategy = '';
+        $this->formSupplierOrderNumber = '';
+        $this->formConfirmedDeliveryDate = '';
+        $this->formSupplierConfirmationNote = '';
+        $this->formInvoiceNumber = '';
+        $this->formInvoiceDate = '';
+        $this->formInvoiceNote = '';
+        $this->formPaymentStatus = '';
+        $this->formInvoicePaidAt = '';
+        $this->formPaymentNote = '';
+        $this->formApprovalStatus = '';
+        $this->formApprovalNote = '';
+        $this->formStrategy = (string) ($strategy ?? '');
+        $this->cockpitStrategy = (string) ($strategy ?? '');
         $this->dispatch('modal.open', name: 'orders-editor');
     }
 
@@ -119,6 +161,17 @@ class Editor extends Component
         $this->formReference = '';
         $this->formDeliveryDate = '';
         $this->formNote = '';
+        $this->formSupplierOrderNumber = '';
+        $this->formConfirmedDeliveryDate = '';
+        $this->formSupplierConfirmationNote = '';
+        $this->formInvoiceNumber = '';
+        $this->formInvoiceDate = '';
+        $this->formInvoiceNote = '';
+        $this->formPaymentStatus = '';
+        $this->formInvoicePaidAt = '';
+        $this->formPaymentNote = '';
+        $this->formApprovalStatus = '';
+        $this->formApprovalNote = '';
         $this->formStrategy = '';
         if ($this->orderId === null) {
             return;
@@ -129,6 +182,17 @@ class Editor extends Component
             $this->formReference = (string) ($d['reference'] ?? '');
             $this->formDeliveryDate = (string) ($d['desired_delivery_date'] ?? '');
             $this->formNote = (string) ($d['note'] ?? '');
+            $this->formSupplierOrderNumber = (string) ($d['supplier_order_number'] ?? '');
+            $this->formConfirmedDeliveryDate = (string) ($d['confirmed_delivery_date'] ?? '');
+            $this->formSupplierConfirmationNote = (string) ($d['supplier_confirmation_note'] ?? '');
+            $this->formInvoiceNumber = (string) ($d['invoice_number'] ?? '');
+            $this->formInvoiceDate = (string) ($d['invoice_date'] ?? '');
+            $this->formInvoiceNote = (string) ($d['invoice_note'] ?? '');
+            $this->formPaymentStatus = (string) ($d['payment_status'] ?? '');
+            $this->formInvoicePaidAt = (string) ($d['invoice_paid_at'] ?? '');
+            $this->formPaymentNote = (string) ($d['payment_note'] ?? '');
+            $this->formApprovalStatus = (string) ($d['approval_status'] ?? '');
+            $this->formApprovalNote = (string) ($d['approval_note'] ?? '');
             $this->formStrategy = (string) ($d['sourcing_strategy'] ?? '');
         } catch (\Throwable) {
             // Detail wird in render() defensiv behandelt.
@@ -156,6 +220,53 @@ class Editor extends Component
         $this->fuehreAus(fn ($team) => $orders->setStatus($team, $this->orderId, $ziel), 'Status gesetzt.');
     }
 
+    public function saveSupplierConfirmation(OrderService $orders): void
+    {
+        if ($this->orderId === null) {
+            return;
+        }
+        $this->fuehreAus(fn ($team) => $orders->updateSupplierConfirmation($team, $this->orderId, [
+            'supplier_order_number' => $this->formSupplierOrderNumber,
+            'confirmed_delivery_date' => $this->formConfirmedDeliveryDate,
+            'supplier_confirmation_note' => $this->formSupplierConfirmationNote,
+        ]), 'Lieferantenbestätigung gespeichert.');
+    }
+
+    public function saveInvoiceHeader(OrderService $orders): void
+    {
+        if ($this->orderId === null) {
+            return;
+        }
+        $this->fuehreAus(fn ($team) => $orders->updateInvoiceHeader($team, $this->orderId, [
+            'invoice_number' => $this->formInvoiceNumber,
+            'invoice_date' => $this->formInvoiceDate,
+            'invoice_note' => $this->formInvoiceNote,
+        ]), 'Rechnungskopf gespeichert.');
+    }
+
+    public function savePayment(OrderService $orders): void
+    {
+        if ($this->orderId === null) {
+            return;
+        }
+        $this->fuehreAus(fn ($team) => $orders->updatePayment($team, $this->orderId, [
+            'payment_status' => $this->formPaymentStatus,
+            'invoice_paid_at' => $this->formInvoicePaidAt,
+            'payment_note' => $this->formPaymentNote,
+        ]), 'Zahlungsstatus gespeichert.');
+    }
+
+    public function saveApproval(OrderService $orders): void
+    {
+        if ($this->orderId === null) {
+            return;
+        }
+        $this->fuehreAus(fn ($team) => $orders->updateApproval($team, $this->orderId, [
+            'approval_status' => $this->formApprovalStatus,
+            'approval_note' => $this->formApprovalNote,
+        ], Auth::id()), 'Freigabe gespeichert.');
+    }
+
     public function updateLineQty(int $lineId, $qty, OrderService $orders): void
     {
         $this->fuehreAus(fn ($team) => $orders->updateLine($team, $lineId, ['qty_packs' => $qty]), 'Menge angepasst.');
@@ -169,6 +280,80 @@ class Editor extends Component
     public function updateLineNote(int $lineId, $note, OrderService $orders): void
     {
         $this->fuehreAus(fn ($team) => $orders->updateLine($team, $lineId, ['note' => $note]), 'Notiz gespeichert.');
+    }
+
+    public function updateReceiptLine(int $lineId, $qty, ?string $note, OrderService $orders): void
+    {
+        $this->fuehreAus(fn ($team) => $orders->updateReceiptLine($team, $lineId, $qty, $note), 'Wareneingang gebucht.');
+    }
+
+    public function updateReceiptNote(int $lineId, ?string $note, OrderService $orders): void
+    {
+        $this->fuehreAus(fn ($team) => $orders->updateReceiptNote($team, $lineId, $note), 'Wareneingangsnotiz gespeichert.');
+    }
+
+    public function completeReceipt(OrderService $orders): void
+    {
+        if ($this->orderId === null) {
+            return;
+        }
+        $this->fuehreAus(fn ($team) => $orders->completeReceipt($team, $this->orderId), 'Wareneingang vollständig übernommen.');
+    }
+
+    public function createBackorder(OrderService $orders): void
+    {
+        if ($this->orderId === null) {
+            return;
+        }
+        $this->fuehreAus(fn ($team) => $orders->createBackorderFromReceipt($team, $this->orderId, null, Auth::id()), 'Nachlieferung als Entwurf angelegt.');
+    }
+
+    public function updateInvoiceLine(int $lineId, $qty, $price, ?string $note, OrderService $orders): void
+    {
+        $this->fuehreAus(fn ($team) => $orders->updateInvoiceLine($team, $lineId, $qty, $price, $note), 'Rechnungszeile geprüft.');
+    }
+
+    public function updateInvoiceNote(int $lineId, ?string $note, OrderService $orders): void
+    {
+        $this->fuehreAus(fn ($team) => $orders->updateInvoiceNote($team, $lineId, $note), 'Rechnungsnotiz gespeichert.');
+    }
+
+    public function updateClaimLine(int $lineId, string $status, $qty, $credit, ?string $note, OrderService $orders): void
+    {
+        $this->fuehreAus(fn ($team) => $orders->updateClaimLine($team, $lineId, [
+            'claim_status' => $status,
+            'claim_qty_packs' => $qty,
+            'credit_expected_net' => $credit,
+            'claim_note' => $note,
+        ]), 'Reklamation gespeichert.');
+    }
+
+    public function updateClaimStatus(int $lineId, string $status, OrderService $orders): void
+    {
+        $this->fuehreAus(fn ($team) => $orders->updateClaimLine($team, $lineId, ['claim_status' => $status]), 'Reklamation gespeichert.');
+    }
+
+    public function updateClaimQty(int $lineId, $qty, OrderService $orders): void
+    {
+        $this->fuehreAus(fn ($team) => $orders->updateClaimLine($team, $lineId, ['claim_qty_packs' => $qty]), 'Reklamationsmenge gespeichert.');
+    }
+
+    public function updateClaimCredit(int $lineId, $credit, OrderService $orders): void
+    {
+        $this->fuehreAus(fn ($team) => $orders->updateClaimLine($team, $lineId, ['credit_expected_net' => $credit]), 'Gutschrift gespeichert.');
+    }
+
+    public function updateClaimNote(int $lineId, ?string $note, OrderService $orders): void
+    {
+        $this->fuehreAus(fn ($team) => $orders->updateClaimLine($team, $lineId, ['claim_note' => $note]), 'Reklamationsnotiz gespeichert.');
+    }
+
+    public function completeInvoiceFromReceipt(OrderService $orders): void
+    {
+        if ($this->orderId === null) {
+            return;
+        }
+        $this->fuehreAus(fn ($team) => $orders->completeInvoiceFromReceipt($team, $this->orderId), 'Rechnung aus Wareneingang übernommen.');
     }
 
     public function removeLine(int $lineId, OrderService $orders): void
@@ -261,6 +446,14 @@ class Editor extends Component
         $this->cockpitSources = [];
         $this->cockpitPreview = null;
         $this->cockpitStrategy = '';
+        $this->cockpitOverrides = [];
+        $this->cockpitAlternativenSchliessen();
+    }
+
+    private function cockpitAlternativenSchliessen(): void
+    {
+        $this->cockpitAltKey = null;
+        $this->cockpitAlternativen = [];
     }
 
     public function cockpitArtikelEinfuegen(int $supplierItemId): void
@@ -281,6 +474,28 @@ class Editor extends Component
         ];
         $this->artikelSuche = '';
         $this->cockpitPreview = null;
+        $this->cockpitOverrides = [];
+        $this->cockpitAlternativenSchliessen();
+    }
+
+    public function cockpitAlternativenUmschalten(string $key, int $gpId, ?int $supplierId, ?int $leadLaId, OrderService $orders): void
+    {
+        if ($this->cockpitAltKey === $key) {
+            $this->cockpitAltKey = null;
+            $this->cockpitAlternativen = [];
+
+            return;
+        }
+
+        $this->cockpitAltKey = $key;
+        try {
+            $team = Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
+            $this->cockpitAlternativen = $orders->gpAlternativen($team, $gpId, $supplierId, $leadLaId);
+        } catch (\Throwable $e) {
+            $this->cockpitAltKey = null;
+            $this->cockpitAlternativen = [];
+            $this->fehler = $e->getMessage();
+        }
     }
 
     public function cockpitGpEinfuegen(int $gpId): void
@@ -301,6 +516,8 @@ class Editor extends Component
         ];
         $this->gpSuche = '';
         $this->cockpitPreview = null;
+        $this->cockpitOverrides = [];
+        $this->cockpitAlternativenSchliessen();
     }
 
     public function cockpitRezeptEinfuegen(int $recipeId): void
@@ -322,6 +539,8 @@ class Editor extends Component
         $this->bedarfSuche = '';
         $this->bedarfRecipeId = null;
         $this->cockpitPreview = null;
+        $this->cockpitOverrides = [];
+        $this->cockpitAlternativenSchliessen();
     }
 
     public function cockpitProduktionEinfuegen(int $productionOrderId): void
@@ -342,6 +561,8 @@ class Editor extends Component
         ];
         $this->produktionSuche = '';
         $this->cockpitPreview = null;
+        $this->cockpitOverrides = [];
+        $this->cockpitAlternativenSchliessen();
     }
 
     public function cockpitQuelleEntfernen(int $index): void
@@ -351,18 +572,35 @@ class Editor extends Component
         }
         array_splice($this->cockpitSources, $index, 1);
         $this->cockpitPreview = null;
+        $this->cockpitOverrides = [];
+        $this->cockpitAlternativenSchliessen();
     }
 
     public function cockpitVorschau(OrderService $orders): void
     {
         $this->hinweis = null;
         $this->fehler = null;
+        $this->cockpitAlternativenSchliessen();
         try {
             $team = Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
-            $this->cockpitPreview = $orders->previewFromSources($team, $this->cockpitSources, $this->cockpitStrategieAusForm());
+            $this->cockpitPreview = $orders->previewFromSources($team, $this->cockpitSources, $this->cockpitStrategieAusForm(), $this->cockpitOverrides);
         } catch (\Throwable $e) {
             $this->fehler = $e->getMessage();
         }
+    }
+
+    public function cockpitAlternativeWaehlen(string $key, int $leadLaId, OrderService $orders): void
+    {
+        $this->cockpitOverrides[$key] = $leadLaId;
+        $this->cockpitVorschau($orders);
+        $this->hinweis = 'Alternative in der Vorschau gesetzt.';
+    }
+
+    public function cockpitAlternativeZuruecksetzen(string $key, OrderService $orders): void
+    {
+        unset($this->cockpitOverrides[$key]);
+        $this->cockpitVorschau($orders);
+        $this->hinweis = 'Automatische Quelle wiederhergestellt.';
     }
 
     public function cockpitSpeichern(OrderService $orders): void
@@ -371,7 +609,7 @@ class Editor extends Component
         $this->fehler = null;
         try {
             $team = Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
-            $res = $orders->generateDraftsFromSources($team, $this->cockpitSources, $this->cockpitStrategieAusForm(), Auth::id());
+            $res = $orders->generateDraftsFromSources($team, $this->cockpitSources, $this->cockpitStrategieAusForm(), Auth::id(), $this->cockpitOverrides);
             $this->cockpitPreview = $res['preview'] ?? null;
             if (! empty($res['orders'])) {
                 $this->orderId = (int) $res['orders'][0];
@@ -597,6 +835,8 @@ class Editor extends Component
             'erlaubteStatus' => $erlaubteStatus,
             'mailto' => $mailto,
             'alternativen' => $alternativen,
+            'cockpitAlternativen' => $this->cockpitAlternativen,
+            'cockpitAltKey' => $this->cockpitAltKey,
             'artikelTreffer' => $artikelTreffer,
             'bedarfTreffer' => $bedarfTreffer,
             'gpTreffer' => $gpTreffer,

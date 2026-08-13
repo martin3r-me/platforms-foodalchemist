@@ -38,6 +38,10 @@ class FoodAlchemistSupplierItem extends Model
         'is_preorder' => 'boolean',
         'preorder_days' => 'integer',
         'vat' => 'decimal:2',
+        'quota_qty_packs' => 'decimal:2',
+        'quota_used_packs' => 'decimal:2',
+        'quota_valid_from' => 'date',
+        'quota_valid_to' => 'date',
     ];
 
     public function supplier(): BelongsTo
