@@ -379,6 +379,24 @@
                         </button>
                     </div>
 
+                    {{-- #1b Grounding-Preview: VOR dem Go sehen, welches Wissen/Pairing/Template die Generierung
+                         für die aktuellen Regler zieht (on-demand, ohne zu generieren). --}}
+                    <div class="mt-3">
+                        <button type="button" wire:click="wissenVorschau(false)" @disabled($laeuft)
+                                wire:loading.attr="disabled" wire:target="wissenVorschau"
+                                class="text-[11px] text-violet-300 hover:text-violet-200 disabled:opacity-40 inline-flex items-center gap-1" data-planung-wissen-vorab>
+                            @svg('heroicon-o-magnifying-glass', 'w-3.5 h-3.5')
+                            <span wire:loading.remove wire:target="wissenVorschau">Wissen vorab prüfen (Basisrezept)</span>
+                            <span wire:loading wire:target="wissenVorschau">Wissen wird geladen …</span>
+                        </button>
+                        @if($wissenVorschau !== null)
+                            <div class="mt-2 rounded-lg bg-white/5 p-2" data-planung-wissen-vorschau>
+                                <p class="text-[10px] text-gray-400 mb-1">Das würde die KI nutzen (Vorschau — noch nicht generiert):</p>
+                                <x-foodalchemist::kontext-inspektor :kontext="$wissenVorschau" />
+                            </div>
+                        @endif
+                    </div>
+
                     @if($laeuft)
                         <div wire:poll.1500ms="pruefeLauf" class="mt-3 flex items-center gap-2 text-xs text-amber-300">
                             @svg('heroicon-o-arrow-path', 'w-4 h-4 animate-spin')
@@ -398,8 +416,23 @@
                         $stepColor = ['queued' => 'text-amber-300', 'running' => 'text-amber-300', 'done' => 'text-emerald-300', 'freigegeben' => 'text-emerald-400', 'verworfen' => 'text-gray-500', 'failed' => 'text-rose-300', 'skipped' => 'text-gray-400'];
                         $refRoute = ['gericht' => 'foodalchemist.verkauf.index', 'rezept' => 'foodalchemist.recipes.index', 'concept' => 'foodalchemist.concepts.index'];
                         $offeneEntwuerfe = $lauf->steps->where('status', 'done')->count();
+                        $laufRunning = $lauf->steps->whereIn('status', ['queued', 'running'])->count();
+                        $laufDone = $lauf->steps->whereIn('status', ['done', 'freigegeben'])->count();
+                        $laufFailed = $lauf->steps->where('status', 'failed')->count();
                     @endphp
                     <x-foodalchemist::modal-section title="Ergebnis (Entwürfe) — Freigabe">
+                        {{-- #2/#3: Worker-/Fortschritts-Status aus den Steps abgeleitet (in-place, kein globaler Worker-Ping) — prominent oben statt nur dünne Liste. --}}
+                        <div class="flex items-center gap-2 mb-3 text-xs font-medium">
+                            @if($laufRunning > 0 && $hinweis !== null)
+                                <span class="inline-flex items-center gap-1.5 text-amber-400">@svg('heroicon-o-exclamation-triangle', 'w-4 h-4') Worker hängt? — {{ $laufRunning }} Schritt(e) warten (vermutlich kein Queue-Worker)</span>
+                            @elseif($laufRunning > 0)
+                                <span class="inline-flex items-center gap-1.5 text-amber-300">@svg('heroicon-o-arrow-path', 'w-4 h-4 animate-spin') Worker arbeitet — {{ $laufRunning }} Schritt(e) laufen{{ $laufDone > 0 ? ', ' . $laufDone . ' fertig' : '' }}</span>
+                            @elseif($laufDone > 0)
+                                <span class="inline-flex items-center gap-1.5 text-emerald-300">@svg('heroicon-o-check-circle', 'w-4 h-4') Fertig — {{ $laufDone }} Entwurf/Entwürfe erzeugt (rechts „ansehen" / freigeben)</span>
+                            @elseif($laufFailed > 0)
+                                <span class="inline-flex items-center gap-1.5 text-rose-300">@svg('heroicon-o-x-circle', 'w-4 h-4') Fehlgeschlagen — Details unten</span>
+                            @endif
+                        </div>
                         @if($offeneEntwuerfe > 0)
                             <div class="flex items-center justify-between gap-2 mb-2 pb-2 border-b border-white/10">
                                 <span class="text-[11px] text-gray-400">{{ $offeneEntwuerfe }} Entwurf/Entwürfe warten auf Freigabe</span>
@@ -409,32 +442,20 @@
                                 </span>
                             </div>
                         @endif
+                        {{-- #4 Fan-out-Baum: root-Steps + ihre Kinder (parent_step_id) eingerückt — man sieht,
+                             wie beim „Gericht" der Worker die Basisrezepte darunter abarbeitet. Step-Zeile inkl.
+                             In-Context-Ansicht + „Verwendetes Wissen" (#1a) liegt im geteilten Partial. --}}
+                        @php
+                            $rootSteps = $lauf->steps->whereNull('parent_step_id')->values();
+                            $childrenBy = $lauf->steps->whereNotNull('parent_step_id')->groupBy('parent_step_id');
+                            $stepArgs = fn ($s, $indent) => ['st' => $s, 'stepLabel' => $stepLabel, 'stepColor' => $stepColor, 'refRoute' => $refRoute, 'indent' => $indent];
+                        @endphp
                         <div class="space-y-1.5">
-                            @forelse($lauf->steps as $st)
-                                <div wire:key="step-{{ $st->id }}" class="flex items-center justify-between gap-3 text-xs">
-                                    <span class="truncate text-gray-200">{{ $st->label ?: ucfirst($st->kind) }}</span>
-                                    <span class="shrink-0 flex items-center gap-2">
-                                        <span class="{{ $stepColor[$st->status] ?? 'text-gray-400' }}">{{ $stepLabel[$st->status] ?? $st->status }}</span>
-                                        {{-- In-Context-Ansicht: den erzeugten Entwurf ÜBER dem Editor zeigen (kein Wegspringen
-                                             auf die Listen-Seite mehr). rezept/gericht = eigenes Detail-Modal; concept = Liste (kein Modal). --}}
-                                        @if($st->ref_id && in_array($st->status, ['done', 'freigegeben'], true))
-                                            @if($st->kind === 'rezept')
-                                                <button type="button" wire:click="$dispatch('recipe-modal.oeffnen', { id: {{ (int) $st->ref_id }} })" class="text-violet-300 hover:text-violet-200 underline">ansehen</button>
-                                            @elseif($st->kind === 'gericht')
-                                                <button type="button" wire:click="$dispatch('vk-modal.oeffnen', { id: {{ (int) $st->ref_id }} })" class="text-violet-300 hover:text-violet-200 underline">ansehen</button>
-                                            @elseif(isset($refRoute[$st->kind]))
-                                                <a href="{{ route($refRoute[$st->kind]) }}" class="text-violet-300 hover:text-violet-200 underline">öffnen</a>
-                                            @endif
-                                        @endif
-                                        @if($st->status === 'done')
-                                            <button wire:click="gibFrei({{ $st->id }})" class="text-emerald-300 hover:text-emerald-200" title="Freigeben">@svg('heroicon-o-check', 'w-4 h-4')</button>
-                                            <button wire:click="verwirf({{ $st->id }})" class="text-rose-300 hover:text-rose-200" title="Verwerfen">@svg('heroicon-o-trash', 'w-4 h-4')</button>
-                                        @endif
-                                    </span>
-                                </div>
-                                @if($st->status === 'failed' && $st->error)
-                                    <p class="text-[10px] text-rose-400/80 pl-1">{{ \Illuminate\Support\Str::limit($st->error, 160) }}</p>
-                                @endif
+                            @forelse($rootSteps as $st)
+                                @include('foodalchemist::livewire.planung.partials.step-zeile', $stepArgs($st, false))
+                                @foreach($childrenBy[$st->id] ?? [] as $child)
+                                    @include('foodalchemist::livewire.planung.partials.step-zeile', $stepArgs($child, true))
+                                @endforeach
                             @empty
                                 <p class="text-xs text-gray-500">Noch keine Schritte.</p>
                             @endforelse

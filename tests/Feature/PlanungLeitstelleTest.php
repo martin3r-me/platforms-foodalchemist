@@ -159,3 +159,37 @@ it('Queue-Watchdog schweigt, wenn ein Schritt Fortschritt gemacht hat (Worker be
         ->call('pruefeLauf')
         ->assertSet('hinweis', null);            // trotz 5 Min Laufzeit kein Hinweis — Worker lebt
 });
+
+it('#1b Grounding-Preview: wissenVorschau baut nur den Kontext, generiert NICHT (kein Lauf)', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Rotwein-Reduktion', 'brief' => 'Dunkle Reduktion.']);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->assertSet('wissenVorschau', null)
+        ->call('wissenVorschau', false)
+        ->assertSet('laeuft', false);            // Vorschau startet keinen Lauf
+
+    // Preview ≠ Generierung: kein Kaskaden-Lauf angelegt.
+    expect(FoodAlchemistCascadeRun::where('planning_session_id', $session->id)->count())->toBe(0);
+});
+
+it('#4/#1a Cockpit-Baum: Fan-out-Kind eingerückt + „Verwendetes Wissen" aus context_snapshot', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'X', 'brief' => 'y']);
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'planning_session_id' => $session->id, 'scope' => 'gericht', 'status' => 'review']);
+    $parent = FoodAlchemistCascadeRunStep::create([
+        'team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht', 'status' => 'done',
+        'label' => 'Wurzel-Gericht', 'context_snapshot' => ['knowledge_files' => ['pairings/tomate.md', 'domains/suppen.md']],
+    ]);
+    FoodAlchemistCascadeRunStep::create([
+        'team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'parent_step_id' => $parent->id,
+        'kind' => 'rezept', 'status' => 'done', 'label' => 'Kind-Basisrezept',
+    ]);
+
+    Livewire::test(PlanungIndex::class)
+        ->set('sessionId', $session->id)
+        ->set('laufId', $run->id)
+        ->assertSee('Wurzel-Gericht')
+        ->assertSee('Kind-Basisrezept')          // #4 Fan-out-Kind sichtbar
+        ->assertSee('Verwendetes Wissen')        // #1a aus context_snapshot
+        ->assertSee('↳');                        // Einrückungs-Marker des Kindes
+});

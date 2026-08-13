@@ -79,6 +79,9 @@ class Index extends Component
      */
     public bool $vollAnreichern = false;
 
+    /** #1b Grounding-Preview: welches Wissen/Pairing/Template ein Basisrezept-Lauf ziehen würde (on-demand, ohne Generierung). */
+    public ?array $wissenVorschau = null;
+
     /**
      * Pill-Gruppen fürs Cockpit-View (Parität zu GeneratorModal::RICHTUNGEN). Inline
      * gehalten statt aus dem Modal referenziert — die Leitstelle ist der neue Ort der
@@ -339,6 +342,35 @@ class Index extends Component
         return $eur >= 0.5 && $eur <= 500.0 ? $eur : null;
     }
 
+    /**
+     * #1b Grounding-Preview: zeigt VOR dem Go, welches Wissen/Pairing/Template die Generierung für die
+     * aktuellen Regler ziehen würde — OHNE zu generieren. Ruft denselben Kontext-Bau wie die Generierung
+     * ({@see RecipeGenerationContextService::build}) und legt das `kontext`-Bündel für den Kontext-Inspektor
+     * ab. Fail-soft: eine Preview darf den Editor nie brechen.
+     */
+    public function wissenVorschau(bool $vk = false): void
+    {
+        $team = $this->team();
+        $session = $this->aktiveSession();
+        if ($team === null || $session === null) {
+            return;
+        }
+        $brief = trim((string) ($session->brief !== null && $session->brief !== '' ? $session->brief : $session->title));
+        if ($brief === '') {
+            $this->fehler = 'Für die Wissens-Vorschau erst einen Brief oder Titel setzen.';
+
+            return;
+        }
+        try {
+            $ctx = app(\Platform\FoodAlchemist\Services\RecipeGenerationContextService::class)
+                ->build($team, $brief, $this->reglerParams($vk), $vk);
+            $this->wissenVorschau = is_array($ctx['kontext'] ?? null) ? $ctx['kontext'] : null;
+            $this->fehler = null;
+        } catch (\Throwable $e) {
+            $this->fehler = 'Wissens-Vorschau fehlgeschlagen: ' . $e->getMessage();
+        }
+    }
+
     // ── „Go" — Tiefen-Leiter über den geteilten Kaskaden-Motor ─────────
 
     /**
@@ -389,6 +421,7 @@ class Index extends Component
             $this->laufId = $run->id;
             $this->laeuft = true;
             $this->hinweis = null;
+            $this->wissenVorschau = null;   // neue Kaskade → Vorschau weg; die Steps zeigen dann das ECHTE Wissen (#1a)
             $this->meldung = 'Kaskade gestartet — Entwurf wird erzeugt …';
             $this->fehler = null;
         } catch (\Throwable $e) {
