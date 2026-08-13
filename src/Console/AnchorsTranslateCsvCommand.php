@@ -95,6 +95,7 @@ class AnchorsTranslateCsvCommand extends Command
 
         $treffer = 0;
         $ohne = 0;
+        $fehler = 0;
         $beispieleOhne = [];
         foreach ($anker as $a) {
             $hit = $map[$this->norm($a->display_de)] ?? null;
@@ -110,18 +111,29 @@ class AnchorsTranslateCsvCommand extends Command
             if (! $apply) {
                 continue;
             }
+            // Defensiv auf die Spaltenbreiten kürzen (category 48, subcategory 150).
             $upd = ['display_en' => $a->display_de, 'display_de' => $hit['de'], 'updated_at' => now()];
             if ($hit['kat'] !== '') {
-                $upd['category'] = $hit['kat'];
+                $upd['category'] = mb_substr($hit['kat'], 0, 48);
             }
             if ($hit['sub'] !== '') {
-                $upd['subcategory'] = $hit['sub'];
+                $upd['subcategory'] = mb_substr($hit['sub'], 0, 150);
             }
-            DB::table(self::ANCHORS)->where('id', $a->id)->update($upd);
+            try {
+                DB::table(self::ANCHORS)->where('id', $a->id)->update($upd);
+            } catch (\Throwable $e) {
+                $fehler++;
+                if ($fehler <= 5) {
+                    $this->warn(sprintf('  Anker %d (%s) übersprungen: %s', $a->id, $a->display_de, $e->getMessage()));
+                }
+                // display_en bleibt NULL → beim nächsten Lauf erneut versucht.
+            }
         }
 
-        $this->info(sprintf('Anker offen: %d · CSV-Treffer: %d · ohne CSV-Eintrag: %d%s.',
-            $anker->count(), $treffer, $ohne, $apply ? ' (geschrieben)' : ''));
+        $this->info(sprintf('Anker offen: %d · CSV-Treffer: %d · ohne CSV-Eintrag: %d%s%s.',
+            $anker->count(), $treffer, $ohne,
+            $apply ? ' (geschrieben)' : '',
+            $fehler > 0 ? ' · '.$fehler.' Fehler (offen geblieben)' : ''));
         if ($ohne > 0) {
             $this->line('Nicht abgedeckt (Beispiele): '.implode(', ', $beispieleOhne));
             $this->line('→ ggf. via foodalchemist:anchors-translate (KI-Fallback) nachziehen.');
