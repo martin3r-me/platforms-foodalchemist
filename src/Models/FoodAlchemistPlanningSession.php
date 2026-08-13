@@ -34,8 +34,21 @@ class FoodAlchemistPlanningSession extends Model
     /** Kreativ-Modus (speist PairingInspirationService, spiegelt die E9-Modi). */
     public const CREATIVE_MODES = ['voll_kreativ', 'hybrid', 'datenbank'];
 
+    /**
+     * Richtungs-Regler (Leitplanken), die am Planung-Go gesetzt und in den Kaskaden-
+     * Fan-out vererbt werden. Whitelist gegen beliebiges JSON — die Keys spiegeln die
+     * Modal-RICHTUNGEN + die Hooks/Prompt-Keys von RecipeGeneratorService::generiere.
+     * Flow-Steuerung (planning_session_id/cascade_step_id) gehört NICHT hierher.
+     */
+    public const ALLOWED_GENERATION_PARAMS = [
+        'convenience', 'frische', 'bio', 'bio_praeferenz', 'bestand', 'level', 'sektor',
+        'diaet_hart', 'aroma', 'use_favorites_list', 'favorites_convenience_only',
+        'occasion', 'serviceform', 'kompositions_stil', 'ziel_vk_eur',
+    ];
+
     protected $casts = [
         'uuid' => 'string',
+        'generation_params' => 'array',
     ];
 
     /** Skizzen dieser Session (dritter Owner der bestehenden Kreativ-Ebene). */

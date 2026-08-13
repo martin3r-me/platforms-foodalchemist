@@ -345,6 +345,23 @@ class PlanningCascadeService
     }
 
     /**
+     * Die am Planung-Go gesetzten Richtungs-Regler (Leitplanken) der Session — leer, wenn keine
+     * Session/keine Regler. Der Kaskaden-Fan-out erbt sie damit an die erzeugten Gerichte, sodass
+     * Niveau/Convenience/Bio/Diät/… nicht nur beim Depth-1-Go greifen, sondern durch die ganze Kaskade.
+     *
+     * @return array<string,mixed>
+     */
+    private function sessionGenerationParams(Team $team, ?int $planningSessionId): array
+    {
+        if ($planningSessionId === null) {
+            return [];
+        }
+        $sess = app(PlanningSessionService::class)->get($team, $planningSessionId);
+
+        return is_array($sess?->generation_params) ? $sess->generation_params : [];
+    }
+
+    /**
      * Worker-Logik (aus {@see MaterializeSpeiseplanCellJob}): erdet EINE Speiseplan-Zelle zu einem VK-Gericht
      * ({@see RecipeGeneratorService}, vkModus) und trägt es via {@see SpeiseplanService::addEintrag} in die
      * Zelle (Datum/Mahlzeit/Linie) ein; Trend-Lineage + Rückmeldung an den Step.
@@ -352,7 +369,8 @@ class PlanningCascadeService
     public function materialisiereSpeiseplanZelle(Team $team, int $planId, string $entryDate, string $meal, int $lineId, string $brief, int $stepId, ?int $planningSessionId = null): void
     {
         try {
-            $params = ['auto_dependencies' => true, 'cascade_step_id' => $stepId];
+            // Fan-out erbt die Leitplanken der Session (Regler am Planung-Go); Steuer-Keys gewinnen.
+            $params = array_merge($this->sessionGenerationParams($team, $planningSessionId), ['auto_dependencies' => true, 'cascade_step_id' => $stepId]);
             $workflow = app(RecipeDependencyWorkflowService::class);
             $context = $workflow->prepare($team, $stepId, $brief, $params, true);
             $gen = app(RecipeGeneratorService::class)->generiere($team, $brief, $params, null, true, 'plan_go', $context);
@@ -453,7 +471,8 @@ class PlanningCascadeService
         $beschreibung = trim(implode(' — ', array_filter([(string) $idee->title, (string) $idee->description]))) ?: (string) $idee->title;
 
         try {
-            $params = ['auto_dependencies' => true, 'cascade_step_id' => $stepId];
+            // Fan-out erbt die Leitplanken der Session (Regler am Planung-Go); Steuer-Keys gewinnen.
+            $params = array_merge($this->sessionGenerationParams($team, $planningSessionId), ['auto_dependencies' => true, 'cascade_step_id' => $stepId]);
             $workflow = app(RecipeDependencyWorkflowService::class);
             $context = $workflow->prepare($team, $stepId, $beschreibung, $params, true);
             $gen = app(RecipeGeneratorService::class)->generiere($team, $beschreibung, $params, null, true, 'plan_go', $context);

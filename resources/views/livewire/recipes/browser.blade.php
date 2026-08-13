@@ -127,7 +127,7 @@
         <div class="flex items-center justify-between pt-1">
             <div class="flex items-center gap-2">
                 <button type="button" wire:click="$dispatch('recipe-modal.oeffnen')" class="{{ $btnPrimary }}" data-rezept-anlegen>+ Neues Basisrezept</button>
-                <button type="button" wire:click="$dispatch('generator-modal.oeffnen')" class="{{ $btnGhostXs }} text-violet-600" data-generator-oeffnen>@svg('heroicon-o-sparkles', 'w-3.5 h-3.5') KI-Rezept</button>
+                {{-- KI-Erstellung ist in die Planung-Leitstelle konsolidiert (2026-08): der KI-Rezept-Knopf lebt jetzt dort mit den Regler-Leitplanken. --}}
                 {{-- R6: «Aus Template» — Liste der 📐-Templates, Klick dupliziert + öffnet den Editor --}}
                 <div class="relative">
                     <button type="button" wire:click="$toggle('templateWahlOffen')" class="{{ $btnGhostXs }}" data-aus-template>@svg('heroicon-o-square-2-stack', 'w-3.5 h-3.5') Aus Template</button>

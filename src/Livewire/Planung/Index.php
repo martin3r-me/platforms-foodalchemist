@@ -47,6 +47,51 @@ class Index extends Component
     /** Composer-Picker: Kategorie-Filter (leer = alle). */
     public string $composerCategory = '';
 
+    // ── Leitstelle: Richtungs-Regler (Leitplanken) für den Go ──────────────
+    /**
+     * Die Regler des Planung-Go — Union aus Basisrezept- + Gericht-Achsen (die VK-
+     * eigenen occasion/serviceform/kompositions_stil/reglerZielVk greifen NUR bei
+     * scope=gericht). Spiegelt {@see GeneratorModal::$parameter}/{@see VkGeneratorModal::$parameter},
+     * damit die Leitstelle dieselbe Steuerung bietet — inline, ohne Modal. Am Go
+     * werden die gesetzten Werte in `generation_params` der Session persistiert, sodass
+     * der Kaskaden-Fan-out sie erbt (siehe PlanningCascadeService).
+     */
+    public array $regler = [
+        'convenience' => '', 'frische' => 'frisch', 'bestand' => 'hybrid',
+        'bio_praeferenz' => 'konventionell', 'level' => '', 'sektor' => '',
+        'diaet_hart' => [], 'aroma' => '',
+        'occasion' => '', 'serviceform' => '', 'kompositions_stil' => '',
+    ];
+
+    /** 06·H4: opt-in Favoriten-Modus (Default aus → keine Versteifung). */
+    public bool $reglerFavoriten = false;
+
+    /** 06·H4b: Favoriten-Block auf Convenience-getaggte verengen. */
+    public bool $reglerFavoritenConvenienceOnly = false;
+
+    /** Ziel-VK (nur scope=gericht): Freitext „8,50", normalisiert via zielVkEur(). */
+    public string $reglerZielVk = '';
+
+    /**
+     * Recipe-first (Default AUS): die Vollanreicherung ist ein bewusster Schritt NACH
+     * dem Review, nicht automatisch mit dem Go. Bindet an den oneshot-toggle, fließt als
+     * `voll_anreichern` in die Kaskade (starteKaskade default true → hier explizit setzen).
+     */
+    public bool $vollAnreichern = false;
+
+    /**
+     * Pill-Gruppen fürs Cockpit-View (Parität zu GeneratorModal::RICHTUNGEN). Inline
+     * gehalten statt aus dem Modal referenziert — die Leitstelle ist der neue Ort der
+     * Steuerung; die Modal-Knöpfe der Browser-Seiten entfallen.
+     */
+    public const RICHTUNGEN = [
+        ['field' => 'convenience', 'label' => 'Convenience (Eigenleistung)', 'optionen' => ['' => '(egal)', 'from_scratch' => 'From Scratch', 'teil_convenience' => 'Teil-Convenience', 'voll_convenience' => 'Voll-Convenience'], 'hint' => ['' => 'Keine Vorgabe', 'from_scratch' => 'alles selbst — Pool dreht auf Roh/Sub-Rezepte', 'teil_convenience' => 'Halbfabrikate erlaubt', 'voll_convenience' => 'Fertigprodukte bevorzugt']],
+        ['field' => 'level', 'label' => 'Niveau', 'optionen' => ['' => '(egal)', 'haute_cuisine' => 'Haute Cuisine', 'gehoben' => 'Gehoben', 'klassisch' => 'Klassisch'], 'hint' => ['' => 'Keine Vorgabe']],
+        ['field' => 'bestand', 'label' => 'Bestand-Nutzung', 'optionen' => ['hybrid' => 'Hybrid', 'nur_bestand' => 'Nur Bestand', 'komplett_neu' => 'Komplett neu'], 'hint' => ['hybrid' => 'Default — Bestand zuerst reusen, Neues nur für echte Lücken', 'nur_bestand' => 'ausschließlich vorhandene GPs/Rezepte', 'komplett_neu' => 'Bestand ignorieren']],
+        ['field' => 'bio_praeferenz', 'label' => 'Bio-Präferenz', 'optionen' => ['konventionell' => 'Konventionell', 'bio' => 'Bio', 'egal' => 'Egal'], 'hint' => ['konventionell' => 'Standard — kein Bio erzwungen (Default)', 'bio' => 'Bio bevorzugt (nur auf Ansage)', 'egal' => 'keine Präferenz']],
+        ['field' => 'frische', 'label' => 'Frische-Hook', 'optionen' => ['frisch' => 'Frisch', 'tk' => 'Alles aus TK', 'konserve' => 'Konserve/haltbar'], 'hint' => ['frisch' => 'fresh_first (Default)']],
+    ];
+
     public ?string $meldung = null;
 
     /** Aktiver Kaskaden-Lauf (in-place „Go") — Ziel des wire:poll. */
@@ -85,6 +130,32 @@ class Index extends Component
         $titel = trim($this->neuTitel) !== '' ? trim($this->neuTitel) : 'Neue Planung';
         $session = $svc->create($team, ['title' => $titel, 'created_via' => 'ui']);
         $this->neuTitel = '';
+        $this->fehler = null;
+        $this->oeffne($session->id);
+    }
+
+    /**
+     * Freie 1-Klick-Erstellung (Leitstelle, de-trend): legt eine leichte Session an
+     * (created_via=cockpit_frei, kein Trend) und öffnet den Editor direkt auf dem Planung-Tab,
+     * wo die Regler-Leitplanken + der Go liegen. Ein Klick bis zum Regler — kein Trend-Umweg.
+     */
+    public function schnellErstellen(string $scope, PlanningSessionService $svc): void
+    {
+        if (! in_array($scope, ['rezept', 'gericht', 'concept'], true)) {
+            return;
+        }
+        $team = $this->team();
+        if ($team === null) {
+            $this->fehler = 'Kein Team zugeordnet — Erstellung nicht möglich.';
+
+            return;
+        }
+        $titel = match ($scope) {
+            'gericht' => 'Freies Gericht',
+            'concept' => 'Freies Concept',
+            default => 'Freies Basisrezept',
+        };
+        $session = $svc->create($team, ['title' => $titel, 'created_via' => 'cockpit_frei']);
         $this->fehler = null;
         $this->oeffne($session->id);
     }
@@ -198,12 +269,71 @@ class Index extends Component
         }
     }
 
+    // ── Leitstelle: Regler-Bedienung ───────────────────────────────────
+
+    /** Pill-Toggle für die Richtungs-Regler (diaet_hart ist MULTI, sonst Single). */
+    public function reglerPill(string $feld, string $wert): void
+    {
+        if ($feld === 'diaet_hart') {
+            $this->regler['diaet_hart'] = in_array($wert, $this->regler['diaet_hart'], true)
+                ? array_values(array_diff($this->regler['diaet_hart'], [$wert]))
+                : [...$this->regler['diaet_hart'], $wert];
+
+            return;
+        }
+        if (array_key_exists($feld, $this->regler)) {
+            $this->regler[$feld] = $wert;
+        }
+    }
+
+    /**
+     * Regler → Richtungs-Param-Bündel — spiegelt EXAKT die Param-Logik der abgelösten
+     * Rich-Modals: bio-Bool aus bio_praeferenz, Leer-Hints strippen (diaet_hart-Array +
+     * Bools bleiben), Favoriten opt-in, VK-Achsen + Ziel-VK nur bei $vk. Wird am Go an
+     * die Kaskade UND (für den Fan-out) an generation_params gereicht.
+     *
+     * @return array<string,mixed>
+     */
+    private function reglerParams(bool $vk): array
+    {
+        $p = $this->regler;
+        $p['bio'] = $p['bio_praeferenz'] === 'bio';
+        if (! $vk) {                                            // Basisrezept: keine VK-Achsen
+            unset($p['occasion'], $p['serviceform'], $p['kompositions_stil']);
+        }
+        $p = array_filter($p, fn ($v) => $v !== '' && $v !== null && $v !== []);
+        $p['use_favorites_list'] = $this->reglerFavoriten;
+        $p['favorites_convenience_only'] = $this->reglerFavoriten && $this->reglerFavoritenConvenienceOnly;
+        if ($vk && ($ziel = $this->zielVkEur()) !== null) {
+            $p['ziel_vk_eur'] = $ziel;
+        }
+
+        return $p;
+    }
+
+    /** „8,50 €" → 8.5; außerhalb 0,50–500,00 € → null (Aufrufer meldet). Spiegel VkGeneratorModal. */
+    private function zielVkEur(): ?float
+    {
+        $roh = str_replace([' ', '€'], '', trim($this->reglerZielVk));
+        if ($roh === '') {
+            return null;
+        }
+        $roh = str_replace(',', '.', $roh);
+        if (! is_numeric($roh)) {
+            return null;
+        }
+        $eur = round((float) $roh, 2);
+
+        return $eur >= 0.5 && $eur <= 500.0 ? $eur : null;
+    }
+
     // ── „Go" — Tiefen-Leiter über den geteilten Kaskaden-Motor ─────────
 
     /**
      * Go → in-place Generierung über {@see PlanningCascadeService}. `$scope` = Einstiegs-Stufe
-     * (P0: `rezept`|`gericht`). Speichert erst den Rahmen (Titel/Brief/Modus), dann startet der Lauf
-     * im Hintergrund; die Fläche pollt {@see pruefeLauf}. Kein Redirect mehr.
+     * (`rezept`|`gericht`|`concept`). Sammelt die Richtungs-Regler (rezept/gericht), persistiert
+     * sie als `generation_params` (Fan-out-Vererbung) und reicht sie als Lauf-`params` an den Motor.
+     * Startet im Hintergrund; die Fläche pollt {@see pruefeLauf}. Kein Redirect.
      */
     public function goKaskade(string $scope, PlanningCascadeService $cascade, PlanningSessionService $svc): void
     {
@@ -212,15 +342,30 @@ class Index extends Component
         if ($team === null || $session === null) {
             return;
         }
+        // Ziel-VK-Eingabe (nur Gericht) wird GESAGT statt still verworfen — der Absender ist ein
+        // Mensch, der 8,5 statt 850 meinte, und kann korrigieren (L8b-2, Spiegel VkGeneratorModal).
+        if ($scope === 'gericht' && trim($this->reglerZielVk) !== '' && $this->zielVkEur() === null) {
+            $this->fehler = 'Ziel-VK: bitte einen Netto-Preis je Portion zwischen 0,50 € und 500,00 € angeben (z. B. 8,50) — oder das Feld leer lassen.';
+
+            return;
+        }
         // Rahmen persistieren, damit der Motor mit dem aktuellen Brief/Modus arbeitet (spiegelt speichern()).
         $this->speichern($svc);
         $session = $this->aktiveSession();
         if ($session === null) {
             return;
         }
+        // Regler nur für die direkte Rezept-/Gericht-Kaskade; Concept ist reuse-basiert (keine Regler).
+        $params = [];
+        if (in_array($scope, ['rezept', 'gericht'], true)) {
+            $params = $this->reglerParams($scope === 'gericht');
+            $svc->setGenerationParams($team, $session->id, $params);   // Leitplanken → Fan-out erbt
+        }
         try {
             $run = $cascade->starteKaskade($team, $scope, $session, (string) $session->creative_mode, [
                 'created_via' => 'plan_go',
+                'params' => $params,
+                'voll_anreichern' => $this->vollAnreichern,   // recipe-first: default AUS
             ]);
             $this->laufId = $run->id;
             $this->laeuft = true;

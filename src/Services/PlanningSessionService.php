@@ -117,6 +117,32 @@ class PlanningSessionService
     }
 
     /**
+     * Richtungs-Regler (Leitplanken) der Session setzen — gesetzt am Planung-Go,
+     * vererbt in den Kaskaden-Fan-out (siehe PlanningCascadeService). Gefiltert gegen
+     * ALLOWED_GENERATION_PARAMS (kein beliebiges JSON); leere/leerwertige Auswahl → null
+     * (kein leeres {} persistieren, damit der Fan-out sauber auf „keine Regler" fällt).
+     */
+    public function setGenerationParams(Team $team, int $id, array $params): FoodAlchemistPlanningSession
+    {
+        $session = $this->ownedSession($team, $id);
+        $session->update(['generation_params' => $this->filterGenerationParams($params)]);
+
+        return $session->refresh();
+    }
+
+    /** Whitelist + Leerwert-Filter für die Richtungs-Regler. @return array|null */
+    public function filterGenerationParams(array $params): ?array
+    {
+        $gefiltert = array_intersect_key(
+            $params,
+            array_flip(FoodAlchemistPlanningSession::ALLOWED_GENERATION_PARAMS)
+        );
+        $gefiltert = array_filter($gefiltert, static fn ($v) => $v !== null && $v !== '' && $v !== []);
+
+        return $gefiltert === [] ? null : $gefiltert;
+    }
+
+    /**
      * Lineage nach dem „Go": das erzeugte Artefakt bekommt die Trend-Herkunft (first-class FK),
      * eine ggf. materialisierte Skizze wird verknüpft, die Session geht auf „konvergenz".
      * Setzt NICHTS anderes am Artefakt (Erzeugung selbst macht der jeweilige Service, draft).
