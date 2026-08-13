@@ -371,7 +371,14 @@ class Index extends Component
         $params = [];
         if (in_array($scope, ['rezept', 'gericht'], true)) {
             $params = $this->reglerParams($scope === 'gericht');
-            $svc->setGenerationParams($team, $session->id, $params);   // Leitplanken → Fan-out erbt
+            // FAIL-SOFT: die Regler fließen ohnehin über die Lauf-`params` in den Depth-1-Job — die
+            // Session-Persistenz ist NUR für die Fan-out-Vererbung. Kippt sie (z. B. generation_params-
+            // Migration noch nicht durch), darf der Go NICHT sterben; die Leitplanken greifen direkt trotzdem.
+            try {
+                $svc->setGenerationParams($team, $session->id, $params);
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('[Planung] setGenerationParams übersprungen (Fan-out-Vererbung aus) — evtl. Migration fehlt', ['error' => $e->getMessage()]);
+            }
         }
         try {
             $run = $cascade->starteKaskade($team, $scope, $session, (string) $session->creative_mode, [

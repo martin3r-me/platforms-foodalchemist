@@ -415,8 +415,16 @@
                                     <span class="truncate text-gray-200">{{ $st->label ?: ucfirst($st->kind) }}</span>
                                     <span class="shrink-0 flex items-center gap-2">
                                         <span class="{{ $stepColor[$st->status] ?? 'text-gray-400' }}">{{ $stepLabel[$st->status] ?? $st->status }}</span>
-                                        @if($st->ref_id && isset($refRoute[$st->kind]) && in_array($st->status, ['done', 'freigegeben'], true))
-                                            <a href="{{ route($refRoute[$st->kind]) }}" class="text-violet-300 hover:text-violet-200 underline">öffnen</a>
+                                        {{-- In-Context-Ansicht: den erzeugten Entwurf ÜBER dem Editor zeigen (kein Wegspringen
+                                             auf die Listen-Seite mehr). rezept/gericht = eigenes Detail-Modal; concept = Liste (kein Modal). --}}
+                                        @if($st->ref_id && in_array($st->status, ['done', 'freigegeben'], true))
+                                            @if($st->kind === 'rezept')
+                                                <button type="button" wire:click="$dispatch('recipe-modal.oeffnen', { id: {{ (int) $st->ref_id }} })" class="text-violet-300 hover:text-violet-200 underline">ansehen</button>
+                                            @elseif($st->kind === 'gericht')
+                                                <button type="button" wire:click="$dispatch('vk-modal.oeffnen', { id: {{ (int) $st->ref_id }} })" class="text-violet-300 hover:text-violet-200 underline">ansehen</button>
+                                            @elseif(isset($refRoute[$st->kind]))
+                                                <a href="{{ route($refRoute[$st->kind]) }}" class="text-violet-300 hover:text-violet-200 underline">öffnen</a>
+                                            @endif
                                         @endif
                                         @if($st->status === 'done')
                                             <button wire:click="gibFrei({{ $st->id }})" class="text-emerald-300 hover:text-emerald-200" title="Freigeben">@svg('heroicon-o-check', 'w-4 h-4')</button>
@@ -570,4 +578,8 @@
             </div>
         @endif
     </x-foodalchemist::modal>
+    {{-- Leitstelle-In-Context: die erzeugten Entwürfe (Basisrezept/Gericht) im Cockpit ansehen,
+         statt auf die Listen-Seite zu springen. DOM NACH dem Editor-Modal → z-Stacking (öffnet darüber). --}}
+    <livewire:foodalchemist.recipes.recipe-modal />
+    <livewire:foodalchemist.verkauf.vk-modal />
 </x-ui-page>
