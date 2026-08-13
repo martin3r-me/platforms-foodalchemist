@@ -11,11 +11,11 @@
 @props(['title'])
 @php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
 
-<section {{ $attributes->merge(['class' => $sectionCard . ' mt-4 first:mt-0']) }} data-modal-zone="section">
-    <div class="flex items-center justify-between mb-2">
-        <h3 class="text-[11px] font-medium uppercase tracking-wider text-gray-500">{{ $title }}</h3>
+<section {{ $attributes->merge(['class' => $sectionCard . ' mt-4 first:mt-0 min-w-0']) }} data-modal-zone="section">
+    <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+        <h3 class="text-[11px] font-medium uppercase tracking-wider text-gray-500 min-w-0">{{ $title }}</h3>
         @isset($actions)
-            <div class="flex items-center gap-1.5" data-section-actions>{{ $actions }}</div>
+            <div class="flex flex-wrap items-center justify-end gap-1.5 min-w-0" data-section-actions>{{ $actions }}</div>
         @endisset
     </div>
     {{ $slot }}

@@ -59,6 +59,7 @@
 @once
     <style>
         [data-fa-kpis] .kpi-label{ font-size:11px !important; }
+        [data-fa-kpis] > div{ min-width:0; }
         /* tabular-nums: Ziffern müssen über die Kacheln hinweg auf einer Spalte stehen,
            sonst „wackelt" der Streifen bei jedem Live-Update (Concepter rechnet mit). */
         /* Textwerte (Lieferant, GP-Name) können lang sein — abschneiden statt das Raster sprengen.

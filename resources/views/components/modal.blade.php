@@ -102,13 +102,13 @@
                 </button>
             </div>
             @isset($actions)
-                <div class="px-6 pb-3 flex items-center gap-2" data-modal-zone="actions">
+                <div class="px-6 pb-3 flex flex-wrap items-center gap-2 min-w-0" data-modal-zone="actions">
                     {{ $actions }}
                 </div>
             @endisset
             {{-- KPI-Streifen: fix im Kopf (scrollt nie weg) — geteilt über alle Editoren --}}
             @isset($kpiHeader)
-                <div class="px-6 pb-3 border-t border-black/5 pt-3" data-modal-zone="kpi-header">
+                <div class="px-6 pb-3 border-t border-black/5 pt-3 min-w-0" data-modal-zone="kpi-header">
                     {{ $kpiHeader }}
                 </div>
             @endisset
@@ -124,7 +124,7 @@
              2026-07-31: dunklerer Slate-Canvas (Light-Theme, kein dark: — README §158),
              damit die helleren Frosted-Cards darüber schweben (DESIGN.md-Tiefe). darkCanvas =
              kräftiges Slate für die grossen Editoren, sonst dezent. --}}
-        <div class="flex-1 overflow-y-auto px-6 py-4 space-y-4 {{ $darkCanvas ? 'bg-gradient-to-b from-slate-700 to-slate-800' : 'bg-gradient-to-b from-slate-500/[0.06] to-slate-500/[0.02]' }}" data-modal-zone="body">
+        <div class="flex-1 overflow-y-auto overflow-x-hidden px-6 py-4 space-y-4 {{ $darkCanvas ? 'bg-gradient-to-b from-slate-700 to-slate-800' : 'bg-gradient-to-b from-slate-500/[0.06] to-slate-500/[0.02]' }}" data-modal-zone="body">
             {{ $slot }}
         </div>
 

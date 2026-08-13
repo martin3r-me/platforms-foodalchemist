@@ -93,8 +93,8 @@
                 </div>
             </x-foodalchemist::modal-section>
 
-            <div class="grid grid-cols-1 xl:grid-cols-[minmax(300px,0.9fr)_minmax(420px,1.35fr)_minmax(260px,0.75fr)] gap-4">
-                <div class="space-y-4">
+            <div class="grid grid-cols-1 xl:grid-cols-[minmax(280px,0.9fr)_minmax(0,1.25fr)] 2xl:grid-cols-[minmax(280px,0.85fr)_minmax(0,1.25fr)_minmax(260px,0.7fr)] gap-4 min-w-0">
+                <div class="space-y-4 min-w-0">
                     <x-foodalchemist::modal-section title="Quellen einfügen">
                         <div class="space-y-3">
                             <div>
@@ -199,7 +199,7 @@
                     </x-foodalchemist::modal-section>
                 </div>
 
-                <x-foodalchemist::modal-section title="Auflösung nach Lieferant + Liefertag">
+                <x-foodalchemist::modal-section title="Auflösung nach Lieferant + Liefertag" class="min-w-0">
                     @if($cockpitPreview === null)
                         <p class="text-[12px] text-gray-500">Quellen einfügen und Vorschau generieren.</p>
                     @elseif(empty($cockpitPreview['orders_preview']))
@@ -232,7 +232,7 @@
                                     <div class="divide-y divide-white/5">
                                         @foreach($g['positionen'] as $p)
                                             @php($previewAltKey = (string) ($p['override_key'] ?? md5(($g['supplier_id'] ?? '') . '|' . ($g['delivery_date'] ?? '') . '|' . ($p['source_ref'] ?? '') . '|' . ($p['gp_id'] ?? ''))))
-                                            <div class="grid grid-cols-[1fr_auto] gap-2 px-3 py-2">
+                                            <div class="grid grid-cols-[minmax(0,1fr)_auto] gap-2 px-3 py-2">
                                                 <div class="min-w-0">
                                                     <div class="text-[12px] text-gray-800 truncate">{{ $p['designation'] ?: ($p['gp'] ?: 'Position') }}</div>
                                                     <div class="text-[10px] text-gray-400">
@@ -289,7 +289,7 @@
                     @endif
                 </x-foodalchemist::modal-section>
 
-                <x-foodalchemist::modal-section title="Klärliste">
+                <x-foodalchemist::modal-section title="Klärliste" class="min-w-0">
                     @if($cockpitPreview === null)
                         <p class="text-[12px] text-gray-500">Die Klärliste erscheint nach der Vorschau.</p>
                     @elseif(empty($cockpitPreview['unresolved']))

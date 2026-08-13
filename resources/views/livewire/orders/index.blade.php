@@ -18,7 +18,7 @@
     {{-- Fullscreen-Editor (pro Bestellung), geöffnet per orders-editor.bearbeiten --}}
     <livewire:foodalchemist.orders.editor />
 
-    <x-ui-page-container padding="px-6 pb-6" spacing="space-y-4">
+    <x-ui-page-container padding="px-6 pt-4 pb-6" spacing="space-y-4">
 
         @if($hinweis)<div class="{{ $sectionCard }} !bg-emerald-500/[0.06] !border-emerald-500/20 text-[12px] text-emerald-700">✓ {{ $hinweis }}</div>@endif
         @if($fehler)<div class="{{ $sectionCard }} !bg-rose-500/[0.06] !border-rose-500/20 text-[12px] text-rose-700">{{ $fehler }}</div>@endif
