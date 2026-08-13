@@ -320,8 +320,8 @@
     <x-foodalchemist::editor-tabs marker="orders" wire-key="orders-tabs-{{ $detail['id'] }}" :init="'positionen'"
         :tabs="[
             'positionen' => 'Positionen',
-            'wareneingang' => !in_array($detail['status'], ['draft', 'cancelled'], true) ? 'Wareneingang' : null,
-            'rechnung' => !in_array($detail['status'], ['draft', 'cancelled'], true) ? 'Rechnung' : null,
+            'wareneingang' => 'Wareneingang',
+            'rechnung' => 'Rechnung',
             'hinzufuegen' => $detail['editierbar'] ? 'Hinzufügen' : null,
             'kopf' => 'Kopf, Status & Versand',
         ]">
@@ -447,6 +447,11 @@
                     @endif
                 </x-slot:actions>
                 @php($receipt = $detail['receipt'])
+                @if(!$detail['wareneingang_editierbar'])
+                    <div class="mb-3 rounded-md border border-amber-500/20 bg-amber-500/[0.08] px-3 py-2 text-[12px] text-amber-700">
+                        Wareneingang ist erst nach dem Absenden oder Bestätigen der Bestellung buchbar.
+                    </div>
+                @endif
                 <div class="flex flex-wrap gap-2 text-[11px] mb-3">
                     <span class="px-2 py-0.5 rounded-md bg-black/10 text-gray-600">{{ $receipt['booked'] }}/{{ $receipt['lines'] }} Zeilen gebucht</span>
                     @if($receipt['missing'] > 0)
@@ -512,9 +517,6 @@
                         </tbody>
                     </table>
                 </div>
-                @if(!$detail['wareneingang_editierbar'])
-                    <p class="text-[11px] text-gray-400 mt-2">Wareneingang ist bei gesendeten oder bestätigten Bestellungen editierbar.</p>
-                @endif
             </x-foodalchemist::modal-section>
         </div>
 
@@ -528,6 +530,11 @@
                 </x-slot:actions>
                 @php($invoice = $detail['invoice'])
                 @php($claims = $detail['claims'])
+                @if(!$detail['rechnung_editierbar'])
+                    <div class="mb-3 rounded-md border border-amber-500/20 bg-amber-500/[0.08] px-3 py-2 text-[12px] text-amber-700">
+                        Rechnungserfassung ist erst nach dem Absenden der Bestellung buchbar. Der Tab bleibt sichtbar, damit du den Prozess findest.
+                    </div>
+                @endif
                 <div class="flex flex-wrap gap-2 text-[11px] mb-3">
                     <span class="px-2 py-0.5 rounded-md bg-black/10 text-gray-600">{{ $invoice['checked'] }}/{{ $invoice['lines'] }} Zeilen geprüft</span>
                     @if($invoice['missing'] > 0)
@@ -716,9 +723,6 @@
                         </tbody>
                     </table>
                 </div>
-                @if(!$detail['rechnung_editierbar'])
-                    <p class="text-[11px] text-gray-400 mt-2">Rechnungsprüfung ist nach dem Absenden editierbar.</p>
-                @endif
             </x-foodalchemist::modal-section>
         </div>
 
