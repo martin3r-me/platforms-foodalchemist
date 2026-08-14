@@ -1,20 +1,21 @@
-{{-- Erstell-Tab (Basisrezept ODER Gericht): Brief + Kreativ-Modus + geteilte Leitplanken + Go + Wissen-vorab.
-     Erwartet: $scope (rezept|gericht), $vk (bool), $goLabel, $goIcon. Der Go schaltet auf den Worker-Tab. --}}
+{{-- Erstell-Tab (Basisrezept ODER Gericht): EIGENES Briefing + EIGENE Leitplanken je Scope + Go + Wissen-vorab.
+     Erwartet: $scope (rezept|gericht), $vk (bool), $goLabel, $goIcon. Jeder Tab ist unabhängig (eingabe.{scope}
+     + regler.{scope}). Der Go schaltet auf den Worker-Tab. --}}
 <div class="space-y-4">
     <x-foodalchemist::modal-section title="Eingabe — was soll entstehen">
         <label class="{{ $label ?? 'text-[11px] text-gray-500' }}">Titel</label>
-        <input type="text" wire:model="form.title" class="{{ $input }} mb-3" placeholder="z. B. Tomatensauce" data-planung-titel />
+        <input type="text" wire:model="eingabe.{{ $scope }}.titel" class="{{ $input }} mb-3" placeholder="z. B. Tomatensauce" data-planung-titel />
         <label class="{{ $label ?? 'text-[11px] text-gray-500' }}">Beschreibung (geht in die Erzeugung)</label>
-        <textarea wire:model="form.brief" rows="3" class="{{ $input }} mb-3" placeholder="Constraints, Anlass, Richtung …"></textarea>
+        <textarea wire:model="eingabe.{{ $scope }}.brief" rows="3" class="{{ $input }} mb-3" placeholder="Constraints, Anlass, Richtung …"></textarea>
         <label class="{{ $label ?? 'text-[11px] text-gray-500' }}">Kreativ-Modus</label>
-        <select wire:model="form.creative_mode" class="{{ $input }}">
+        <select wire:model="eingabe.{{ $scope }}.creative_mode" class="{{ $input }}">
             @foreach($modeLabel as $val => $lbl)
                 <option value="{{ $val }}">{{ $lbl }}</option>
             @endforeach
         </select>
     </x-foodalchemist::modal-section>
 
-    @include('foodalchemist::livewire.planung.partials.leitplanken', ['vk' => $vk])
+    @include('foodalchemist::livewire.planung.partials.leitplanken', ['scope' => $scope])
 
     <x-foodalchemist::modal-section title="Go — {{ $goLabel }} erzeugen (Draft)">
         <p class="{{ $label ?? 'text-[11px] text-gray-500' }} mb-2">
@@ -24,7 +25,7 @@
             <button wire:click="goKaskade('{{ $scope }}')" @click="tab='worker'" @disabled($laeuft) class="{{ $btnPrimary }} disabled:opacity-40">
                 @svg($goIcon, 'w-4 h-4') {{ $goLabel }} erzeugen
             </button>
-            <button type="button" wire:click="wissenVorschau({{ $vk ? 'true' : 'false' }})" @disabled($laeuft)
+            <button type="button" wire:click="wissenVorschau('{{ $scope }}')" @disabled($laeuft)
                     wire:loading.attr="disabled" wire:target="wissenVorschau"
                     class="{{ $btnGhost }} disabled:opacity-40 inline-flex items-center gap-1" data-planung-wissen-vorab>
                 @svg('heroicon-o-magnifying-glass', 'w-3.5 h-3.5')

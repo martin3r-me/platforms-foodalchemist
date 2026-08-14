@@ -631,8 +631,9 @@ it('goKaskade (concept): persistiert Leitplanken inkl. ki_bilder in generation_p
 
     Livewire::test(PlanungIndex::class)
         ->call('oeffne', $session->id)
-        ->set('reglerKiBilder', true)
-        ->set('regler.level', 'gehoben')
+        ->set('eingabe.concept.brief', 'Sommer-Buffet.')
+        ->set('regler.concept.ki_bilder', true)
+        ->set('regler.concept.level', 'gehoben')
         ->call('goKaskade', 'concept');
 
     $session->refresh();

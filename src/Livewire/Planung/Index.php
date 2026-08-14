@@ -50,45 +50,37 @@ class Index extends Component
     /** Composer-Fokus: aktiv fokussierter Anker (Klick im Netz) — Netz dimmt auf ihn, Picker rankt relativ zu ihm. */
     public ?int $composerFocus = null;
 
-    // ── Leitstelle: Richtungs-Regler (Leitplanken) für den Go ──────────────
+    // ── Leitstelle: PER-TAB Eingabe + Leitplanken (jeder Scope eigener Zustand) ──
     /**
-     * Die Regler des Planung-Go — Union aus Basisrezept- + Gericht-Achsen (die VK-
-     * eigenen occasion/serviceform/kompositions_stil/reglerZielVk greifen NUR bei
-     * scope=gericht). Spiegelt {@see GeneratorModal::$parameter}/{@see VkGeneratorModal::$parameter},
-     * damit die Leitstelle dieselbe Steuerung bietet — inline, ohne Modal. Am Go
-     * werden die gesetzten Werte in `generation_params` der Session persistiert, sodass
-     * der Kaskaden-Fan-out sie erbt (siehe PlanningCascadeService).
+     * Eingabe je Creation-Tab (rezept|gericht|concept): Titel/Beschreibung/Kreativ-Modus.
+     * Jeder Tab ist UNABHÄNGIG — Werte auf einem Tab wirken nicht auf die anderen. In mount()
+     * initialisiert. Am Go zählt der Satz des Start-Tabs.
+     * @var array<string,array{titel:string,brief:string,creative_mode:string}>
      */
-    public array $regler = [
+    public array $eingabe = [];
+
+    /**
+     * Richtungs-Regler (Leitplanken) JE Scope — jeder Tab hat einen eigenen kompletten Satz
+     * (inkl. favoriten/favoriten_conv_only/ziel_vk/voll_anreichern/ki_bilder). In mount() je Tab
+     * aus REGLER_DEFAULT kopiert. **Kaskaden-Regel (User-Entscheid 2026-08-14):** am Go zählt NUR
+     * der Satz des Start-Tabs; er wird als `generation_params` persistiert und propagiert die ganze
+     * Kaskade nach unten (Start-Tab gilt für alles darunter). Spiegelt Generator-/VkGenerator-Modal.
+     * @var array<string,array<string,mixed>>
+     */
+    public array $regler = [];
+
+    /** Die drei Creation-Scopes (Tabs mit eigener Eingabe + Leitplanken). */
+    public const SCOPES = ['rezept', 'gericht', 'concept'];
+
+    /** Default-Leitplanken-Satz je Scope (in mount() je Tab kopiert). */
+    public const REGLER_DEFAULT = [
         'convenience' => '', 'frische' => 'frisch', 'bestand' => 'hybrid',
         'bio_praeferenz' => 'konventionell', 'level' => '', 'sektor' => '',
         'diaet_hart' => [], 'aroma' => '',
         'occasion' => '', 'serviceform' => '', 'kompositions_stil' => '',
+        'favoriten' => false, 'favoriten_conv_only' => false,
+        'ziel_vk' => '', 'voll_anreichern' => false, 'ki_bilder' => false,
     ];
-
-    /** 06·H4: opt-in Favoriten-Modus (Default aus → keine Versteifung). */
-    public bool $reglerFavoriten = false;
-
-    /** 06·H4b: Favoriten-Block auf Convenience-getaggte verengen. */
-    public bool $reglerFavoritenConvenienceOnly = false;
-
-    /** Ziel-VK (nur scope=gericht): Freitext „8,50", normalisiert via zielVkEur(). */
-    public string $reglerZielVk = '';
-
-    /**
-     * KI-Bilder-Toggle (Preisfrage, Default AUS): steuert, ob die Anreicherung nach der Freigabe
-     * KI-Fotos erzeugt (Schritt-für-Schritt-Fotos + ein Produktfoto). Fließt als `ki_bilder` in die
-     * generation_params und wird durch die Kaskade an jede Rezept-/Gericht-Anreicherung vererbt.
-     * Kosten: jedes Bild ist ein `gpt-image-1.5`-Call (loggt in foodalchemist_ai_call_log) — darum opt-in.
-     */
-    public bool $reglerKiBilder = false;
-
-    /**
-     * Recipe-first (Default AUS): die Vollanreicherung ist ein bewusster Schritt NACH
-     * dem Review, nicht automatisch mit dem Go. Bindet an den oneshot-toggle, fließt als
-     * `voll_anreichern` in die Kaskade (starteKaskade default true → hier explizit setzen).
-     */
-    public bool $vollAnreichern = false;
 
     /** #1b Grounding-Preview: welches Wissen/Pairing/Template ein Basisrezept-Lauf ziehen würde (on-demand, ohne Generierung). */
     public ?array $wissenVorschau = null;
@@ -136,6 +128,11 @@ class Index extends Component
     /** Deep-Link `?session=X&open=1` (z.B. vom Trendradar-Carry-in) öffnet den Editor direkt. */
     public function mount(): void
     {
+        // Per-Tab-State initialisieren — jeder Scope eigene Eingabe + eigener Leitplanken-Satz.
+        foreach (self::SCOPES as $s) {
+            $this->eingabe[$s] = ['titel' => '', 'brief' => '', 'creative_mode' => 'voll_kreativ'];
+            $this->regler[$s] = self::REGLER_DEFAULT;
+        }
         if (request()->boolean('open') && $this->sessionId !== null && $this->aktiveSession() !== null) {
             $this->ladeForm();
             $this->dispatch('modal.open', name: 'planung-editor');
@@ -304,18 +301,22 @@ class Index extends Component
 
     // ── Leitstelle: Regler-Bedienung ───────────────────────────────────
 
-    /** Pill-Toggle für die Richtungs-Regler (diaet_hart ist MULTI, sonst Single). */
-    public function reglerPill(string $feld, string $wert): void
+    /** Pill-Toggle für die Richtungs-Regler EINES Scopes (diaet_hart ist MULTI, sonst Single). */
+    public function reglerPill(string $scope, string $feld, string $wert): void
     {
+        if (! isset($this->regler[$scope])) {
+            return;
+        }
         if ($feld === 'diaet_hart') {
-            $this->regler['diaet_hart'] = in_array($wert, $this->regler['diaet_hart'], true)
-                ? array_values(array_diff($this->regler['diaet_hart'], [$wert]))
-                : [...$this->regler['diaet_hart'], $wert];
+            $cur = (array) ($this->regler[$scope]['diaet_hart'] ?? []);
+            $this->regler[$scope]['diaet_hart'] = in_array($wert, $cur, true)
+                ? array_values(array_diff($cur, [$wert]))
+                : [...$cur, $wert];
 
             return;
         }
-        if (array_key_exists($feld, $this->regler)) {
-            $this->regler[$feld] = $wert;
+        if (array_key_exists($feld, $this->regler[$scope])) {
+            $this->regler[$scope][$feld] = $wert;
         }
     }
 
@@ -327,28 +328,35 @@ class Index extends Component
      *
      * @return array<string,mixed>
      */
-    private function reglerParams(bool $vk): array
+    private function reglerParams(string $scope): array
     {
-        $p = $this->regler;
-        $p['bio'] = $p['bio_praeferenz'] === 'bio';
-        if (! $vk) {                                            // Basisrezept: keine VK-Achsen
+        $r = $this->regler[$scope] ?? self::REGLER_DEFAULT;
+        $vk = $scope !== 'rezept';                              // Basisrezept: keine VK-Achsen
+        // Extra-Steuerwerte gesondert (sie werden übersetzt, nicht 1:1 durchgereicht).
+        $favoriten = (bool) ($r['favoriten'] ?? false);
+        $favConvOnly = (bool) ($r['favoriten_conv_only'] ?? false);
+        $kiBilder = (bool) ($r['ki_bilder'] ?? false);
+        $p = $r;
+        $p['bio'] = ($r['bio_praeferenz'] ?? '') === 'bio';
+        if (! $vk) {
             unset($p['occasion'], $p['serviceform'], $p['kompositions_stil']);
         }
+        unset($p['favoriten'], $p['favoriten_conv_only'], $p['ki_bilder'], $p['ziel_vk'], $p['voll_anreichern']);
         $p = array_filter($p, fn ($v) => $v !== '' && $v !== null && $v !== []);
-        $p['use_favorites_list'] = $this->reglerFavoriten;
-        $p['favorites_convenience_only'] = $this->reglerFavoriten && $this->reglerFavoritenConvenienceOnly;
-        $p['ki_bilder'] = $this->reglerKiBilder;   // Preisfrage: KI-Fotos bei Anreicherung ja/nein
-        if ($vk && ($ziel = $this->zielVkEur()) !== null) {
+        $p['use_favorites_list'] = $favoriten;
+        $p['favorites_convenience_only'] = $favoriten && $favConvOnly;
+        $p['ki_bilder'] = $kiBilder;   // Preisfrage: KI-Fotos bei Anreicherung ja/nein
+        if ($vk && ($ziel = $this->zielVkEur($scope)) !== null) {
             $p['ziel_vk_eur'] = $ziel;
         }
 
         return $p;
     }
 
-    /** „8,50 €" → 8.5; außerhalb 0,50–500,00 € → null (Aufrufer meldet). Spiegel VkGeneratorModal. */
-    private function zielVkEur(): ?float
+    /** „8,50 €" → 8.5; außerhalb 0,50–500,00 € → null (Aufrufer meldet). Spiegel VkGeneratorModal. Per Scope. */
+    private function zielVkEur(string $scope): ?float
     {
-        $roh = str_replace([' ', '€'], '', trim($this->reglerZielVk));
+        $roh = str_replace([' ', '€'], '', trim((string) ($this->regler[$scope]['ziel_vk'] ?? '')));
         if ($roh === '') {
             return null;
         }
@@ -368,11 +376,8 @@ class Index extends Component
      */
     private function effektiverBrief(string $scope): string
     {
-        $titel = trim((string) ($this->form['title'] ?? ''));
-        $besch = trim((string) ($this->form['brief'] ?? ''));
-        if (in_array($titel, ['Freies Basisrezept', 'Freies Gericht', 'Freies Concept', 'Neue Planung'], true)) {
-            $titel = '';
-        }
+        $titel = trim((string) ($this->eingabe[$scope]['titel'] ?? ''));
+        $besch = trim((string) ($this->eingabe[$scope]['brief'] ?? ''));
         if ($scope === 'concept') {
             return $besch;   // das Briefing ist die ganze Concept-Eingabe
         }
@@ -389,22 +394,21 @@ class Index extends Component
      * ({@see RecipeGenerationContextService::build}) und legt das `kontext`-Bündel für den Kontext-Inspektor
      * ab. Fail-soft: eine Preview darf den Editor nie brechen.
      */
-    public function wissenVorschau(bool $vk = false): void
+    public function wissenVorschau(string $scope): void
     {
         $team = $this->team();
-        $session = $this->aktiveSession();
-        if ($team === null || $session === null) {
+        if ($team === null || ! in_array($scope, self::SCOPES, true)) {
             return;
         }
-        $brief = trim((string) ($session->brief !== null && $session->brief !== '' ? $session->brief : $session->title));
+        $brief = $this->effektiverBrief($scope);
         if ($brief === '') {
-            $this->fehler = 'Für die Wissens-Vorschau erst einen Brief oder Titel setzen.';
+            $this->fehler = 'Für die Wissens-Vorschau erst Titel oder Beschreibung im Tab setzen.';
 
             return;
         }
         try {
             $ctx = app(\Platform\FoodAlchemist\Services\RecipeGenerationContextService::class)
-                ->build($team, $brief, $this->reglerParams($vk), $vk);
+                ->build($team, $brief, $this->reglerParams($scope), $scope !== 'rezept');
             $this->wissenVorschau = is_array($ctx['kontext'] ?? null) ? $ctx['kontext'] : null;
             $this->fehler = null;
         } catch (\Throwable $e) {
@@ -424,39 +428,41 @@ class Index extends Component
     {
         $team = $this->team();
         $session = $this->aktiveSession();
-        if ($team === null || $session === null) {
+        if ($team === null || $session === null || ! in_array($scope, self::SCOPES, true)) {
             return;
         }
-        // Ziel-VK-Eingabe (nur Gericht) wird GESAGT statt still verworfen — der Absender ist ein
+        $vk = $scope !== 'rezept';
+        // Ziel-VK-Eingabe (nur wo VK) wird GESAGT statt still verworfen — der Absender ist ein
         // Mensch, der 8,5 statt 850 meinte, und kann korrigieren (L8b-2, Spiegel VkGeneratorModal).
-        if ($scope === 'gericht' && trim($this->reglerZielVk) !== '' && $this->zielVkEur() === null) {
+        if ($vk && trim((string) ($this->regler[$scope]['ziel_vk'] ?? '')) !== '' && $this->zielVkEur($scope) === null) {
             $this->fehler = 'Ziel-VK: bitte einen Netto-Preis je Portion zwischen 0,50 € und 500,00 € angeben (z. B. 8,50) — oder das Feld leer lassen.';
 
             return;
         }
-        // Rahmen persistieren, damit der Motor mit dem aktuellen Brief/Modus arbeitet (spiegelt speichern()).
+        // Kontext des Start-Tabs auf die Session spiegeln (Dashboard-Anzeige + creative_mode) und persistieren.
+        $this->form['brief'] = (string) ($this->eingabe[$scope]['brief'] ?? '');
+        $this->form['creative_mode'] = (string) ($this->eingabe[$scope]['creative_mode'] ?? 'voll_kreativ');
         $this->speichern($svc);
         $session = $this->aktiveSession();
         if ($session === null) {
             return;
         }
-        // Leitplanken für ALLE Ebenen (auch Concept — die erfundenen Gerichte sind VK): so grundieren die
-        // Regler die ganze Kaskade. VK-Achsen nur wo sinnvoll (Basisrezept = ohne).
-        $params = $this->reglerParams($scope !== 'rezept');
+        // NUR der Start-Tab zählt: seine Leitplanken werden persistiert und propagieren die ganze
+        // Kaskade nach unten (Start-Tab gilt für alles darunter — User-Entscheid 2026-08-14).
+        $params = $this->reglerParams($scope);
         // FAIL-SOFT: die Regler fließen ohnehin über die Lauf-`params` in den Depth-1-Job — die
-        // Session-Persistenz ist NUR für die Fan-out-Vererbung. Kippt sie (z. B. generation_params-
-        // Migration noch nicht durch), darf der Go NICHT sterben; die Leitplanken greifen direkt trotzdem.
+        // Session-Persistenz ist NUR für die Fan-out-Vererbung. Kippt sie, darf der Go NICHT sterben.
         try {
             $svc->setGenerationParams($team, $session->id, $params);
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\Log::warning('[Planung] setGenerationParams übersprungen (Fan-out-Vererbung aus) — evtl. Migration fehlt', ['error' => $e->getMessage()]);
         }
         try {
-            $run = $cascade->starteKaskade($team, $scope, $session, (string) $session->creative_mode, [
+            $run = $cascade->starteKaskade($team, $scope, $session, (string) ($this->eingabe[$scope]['creative_mode'] ?? 'voll_kreativ'), [
                 'created_via' => 'plan_go',
                 'brief' => $this->effektiverBrief($scope),
                 'params' => $params,
-                'voll_anreichern' => $this->vollAnreichern,   // recipe-first: default AUS
+                'voll_anreichern' => (bool) ($this->regler[$scope]['voll_anreichern'] ?? false),   // recipe-first: default AUS
             ]);
             $this->laufId = $run->id;
             $this->laeuft = true;

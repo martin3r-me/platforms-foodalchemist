@@ -53,9 +53,10 @@ it('Leitstelle: goKaskade reicht die Regler als params UND persistiert sie als g
 
     Livewire::test(PlanungIndex::class)
         ->call('oeffne', $session->id)
-        ->set('regler.level', 'gehoben')
-        ->set('regler.convenience', 'from_scratch')
-        ->set('regler.bio_praeferenz', 'bio')      // → bio-Bool true
+        ->set('eingabe.rezept.brief', 'Dunkle Reduktion.')
+        ->set('regler.rezept.level', 'gehoben')
+        ->set('regler.rezept.convenience', 'from_scratch')
+        ->set('regler.rezept.bio_praeferenz', 'bio')      // → bio-Bool true
         ->call('goKaskade', 'rezept')
         ->assertSet('laeuft', true)
         ->assertNoRedirect();
@@ -165,8 +166,9 @@ it('#1b Grounding-Preview: wissenVorschau baut nur den Kontext, generiert NICHT 
 
     Livewire::test(PlanungIndex::class)
         ->call('oeffne', $session->id)
+        ->set('eingabe.rezept.brief', 'Dunkle Reduktion.')
         ->assertSet('wissenVorschau', null)
-        ->call('wissenVorschau', false)
+        ->call('wissenVorschau', 'rezept')
         ->assertSet('laeuft', false);            // Vorschau startet keinen Lauf
 
     // Preview ≠ Generierung: kein Kaskaden-Lauf angelegt.

@@ -264,18 +264,18 @@
             <div wire:key="planung-tab-concept" x-show="tab==='concept'" class="space-y-4">
                 <x-foodalchemist::modal-section title="Briefing — was für ein Menü / Concept">
                     <label class="{{ $label ?? 'text-[11px] text-gray-500' }}">Titel (optional)</label>
-                    <input type="text" wire:model="form.title" class="{{ $input }} mb-3" placeholder="z. B. CHEFS.CORNER — Sommer-Menü" data-planung-titel />
+                    <input type="text" wire:model="eingabe.concept.titel" class="{{ $input }} mb-3" placeholder="z. B. CHEFS.CORNER — Sommer-Menü" data-planung-titel />
                     <label class="{{ $label ?? 'text-[11px] text-gray-500' }}">Briefing (geht in die Erzeugung)</label>
-                    <textarea wire:model="form.brief" rows="4" class="{{ $input }} mb-3" placeholder="Anlass, Zielgruppe, Richtung, Pakete/Buffet-Struktur, Gänge …"></textarea>
+                    <textarea wire:model="eingabe.concept.brief" rows="4" class="{{ $input }} mb-3" placeholder="Anlass, Zielgruppe, Richtung, Pakete/Buffet-Struktur, Gänge …"></textarea>
                     <label class="{{ $label ?? 'text-[11px] text-gray-500' }}">Kreativ-Modus</label>
-                    <select wire:model="form.creative_mode" class="{{ $input }}">
+                    <select wire:model="eingabe.concept.creative_mode" class="{{ $input }}">
                         @foreach($modeLabel as $val => $lbl)
                             <option value="{{ $val }}">{{ $lbl }}</option>
                         @endforeach
                     </select>
                 </x-foodalchemist::modal-section>
 
-                @include('foodalchemist::livewire.planung.partials.leitplanken', ['vk' => true])
+                @include('foodalchemist::livewire.planung.partials.leitplanken', ['scope' => 'concept'])
 
                 <x-foodalchemist::modal-section title="Go — Concept erzeugen (Draft)">
                     <p class="{{ $label ?? 'text-[11px] text-gray-500' }} mb-2">Die LLM baut aus dem Briefing die Zusammenstellung (Pakete/Buffet) nach den Leitplanken; die Gerichte kommen nach der Freigabe. Fortschritt im <b>Worker</b>-Tab.</p>
