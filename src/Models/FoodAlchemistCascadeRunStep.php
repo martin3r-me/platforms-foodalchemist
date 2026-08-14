@@ -30,11 +30,14 @@ class FoodAlchemistCascadeRunStep extends Model
     public const KINDS = ['concept', 'gericht', 'rezept', 'gp'];
 
     /**
-     * queued → running → done → (freigegeben | verworfen); failed/skipped terminal.
-     * `done` = Draft erzeugt, wartet auf Entscheidung (Gate 2); `freigegeben` = Artefakt live
-     * (Rezept approved / Concept active); `verworfen` = Draft soft-deleted; `skipped` = Reuse-Treffer.
+     * geplant → queued → running → done → (freigegeben | verworfen); failed/skipped terminal.
+     * `geplant` = Sub-Rezept ist benannt, aber noch NICHT erzeugt — es wartet auf die Freigabe der
+     * Stufe darüber (gestufte Kaskade); es hängt kein Job daran, die Zeile ist der sichtbare Platz-
+     * halter der Basisrezepte-Stufe. `done` = Draft erzeugt, wartet auf Entscheidung (Gate 2);
+     * `freigegeben` = Artefakt live (Rezept approved / Concept active); `verworfen` = Draft
+     * soft-deleted; `skipped` = Reuse-Treffer (Bestands-Artefakt übernommen, nichts zu erzeugen).
      */
-    public const STATUSES = ['queued', 'running', 'done', 'freigegeben', 'verworfen', 'failed', 'skipped'];
+    public const STATUSES = ['geplant', 'queued', 'running', 'done', 'freigegeben', 'verworfen', 'failed', 'skipped'];
 
     protected $casts = [
         'uuid' => 'string',

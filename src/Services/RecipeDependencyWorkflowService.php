@@ -34,6 +34,10 @@ class RecipeDependencyWorkflowService
 
         $this->bindCompletedChild($team, $step, $recipe);
 
+        // Sichtbarkeit (Beobachtung Dominique 2026-08-14): die vom Generator direkt verdrahteten
+        // Sub-Rezepte gehören in die Basisrezepte-Stufe, nicht nur als 📖-Referenz in die Zutatenliste.
+        $this->spiegleReuseKinder($team, $step, $recipe);
+
         // Gestuft (Gate pro Ebene): die Sub-Rezepte NICHT sofort erzeugen, sondern die Kandidaten am Step
         // aufbewahren — die Freigabe dieses Steps arbeitet sie ab ({@see resumeDeferredChildren}).
         if ($parameter['_defer_children'] ?? false) {
@@ -42,6 +46,10 @@ class RecipeDependencyWorkflowService
                 'params' => $parameter,
                 'user_id' => $userId,
             ]]]);
+            // …aber sie werden SOFORT sichtbar: je Kandidat ein `geplant`-Step in der Basisrezepte-
+            // Stufe (Gericht = Basisrezepte, nicht flache Zutaten). Kein Job — die Freigabe der Stufe
+            // darüber schaltet sie scharf ({@see resumeDeferredChildren}).
+            $this->planChildren($team, $step, $recipe, $offene, $parameter);
 
             return;
         }
@@ -70,15 +78,55 @@ class RecipeDependencyWorkflowService
         $step->update(['deferred' => null]);
     }
 
-    /** Erzeugt je offener `basisrezept_anlegen`-Zeile einen Kind-Step + {@see GenerateRecipeJob} (eager Dispatch-Kern). */
+    /**
+     * Schaltet die geplanten Sub-Rezepte EINES Steps scharf: {@see planChildren} legt/findet die
+     * Kind-Steps, dieser Dispatch-Kern startet je noch nicht laufendem Kind einen
+     * {@see GenerateRecipeJob} (`geplant` → `running`). Ein im Lauf geteiltes Sub-Rezept wird nur
+     * EINMAL erzeugt und danach an alle Eltern-Zutaten gebunden.
+     */
     private function dispatchChildren(Team $team, FoodAlchemistCascadeRunStep $step, int $userId, FoodAlchemistRecipe $recipe, array $offene, array $parameter): void
     {
-        if ((int) $step->depth >= self::MAX_DEPTH) {
-            return;
-        }
         $kindVollAnreichern = (bool) ($parameter['_voll_anreichern'] ?? false);
         $childParameter = $parameter;
         unset($childParameter['_voll_anreichern'], $childParameter['_defer_children']);
+
+        foreach ($this->planChildren($team, $step, $recipe, $offene, $parameter) as [$child, $ingredientId, $text]) {
+            if ($child->status === 'done' && $child->ref_id !== null) {
+                $this->bindIngredient($team, $ingredientId, (int) $child->ref_id);
+
+                continue;
+            }
+            if ($child->status !== 'geplant') {
+                continue;   // schon unterwegs (running/queued) oder terminal — kein zweiter Job
+            }
+            $runId = (string) Str::uuid();
+            $child->update(['status' => 'running', 'generator_run_id' => $runId]);
+            Cache::put(GenerateRecipeJob::cacheKey($runId), ['status' => 'pending'], now()->addMinutes(60));
+            GenerateRecipeJob::dispatch($runId, $team->id, $userId, $text, [
+                ...$childParameter,
+                'cascade_step_id' => $child->id,
+                'auto_dependencies' => true,
+            ], false, $kindVollAnreichern);
+        }
+    }
+
+    /**
+     * Plant die Sub-Rezepte eines Steps: je offener `basisrezept_anlegen`-Zeile ein Kind-Step
+     * (`kind=rezept`, Status `geplant` = benannt, noch nicht erzeugt) + die Dependency auf die
+     * Eltern-Zutat. Legt KEINE Jobs an — das ist {@see dispatchChildren}. Idempotent über
+     * `dedupe_key` (identische Sub-Rezepte teilen sich EINEN Step im Lauf); gedeckelt durch
+     * {@see MAX_DEPTH}/{@see MAX_STEPS}, wobei `skipped`-Zeilen (reine Reuse-Sichtbarkeit) das
+     * Erzeugungs-Budget NICHT verbrauchen.
+     *
+     * @return list<array{0: FoodAlchemistCascadeRunStep, 1: int, 2: string}> je Kandidat
+     *                                                                       [Kind-Step, Zutat-ID, Kandidaten-Text (= Brief der Erzeugung)]
+     */
+    private function planChildren(Team $team, FoodAlchemistCascadeRunStep $step, FoodAlchemistRecipe $recipe, array $offene, array $parameter): array
+    {
+        if ((int) $step->depth >= self::MAX_DEPTH) {
+            return [];
+        }
+        $geplant = [];
 
         foreach ($offene as $open) {
             // Kohärenz-Gate (2026-08-07): ENTdrahtete Fremdkörper-Zeilen tragen einen `kritiker`-
@@ -90,7 +138,8 @@ class RecipeDependencyWorkflowService
             if (($open['primaer'] ?? null) !== 'basisrezept_anlegen') {
                 continue;
             }
-            if (FoodAlchemistCascadeRunStep::where('cascade_run_id', $step->cascade_run_id)->count() >= self::MAX_STEPS) {
+            if (FoodAlchemistCascadeRunStep::where('cascade_run_id', $step->cascade_run_id)
+                ->where('status', '!=', 'skipped')->count() >= self::MAX_STEPS) {
                 break;
             }
             $ingredient = $recipe->ingredients()->where('position', ((int) ($open['index'] ?? 0)) + 1)->first();
@@ -106,13 +155,14 @@ class RecipeDependencyWorkflowService
                 $parameter['bio'] ?? null, $parameter['niveau'] ?? null,
             ]));
 
-            [$child, $created] = DB::transaction(function () use ($team, $step, $ingredient, $text, $dedupe) {
+            $child = DB::transaction(function () use ($team, $step, $ingredient, $text, $dedupe) {
                 $existing = FoodAlchemistCascadeRunStep::where('cascade_run_id', $step->cascade_run_id)
                     ->where('dedupe_key', $dedupe)->lockForUpdate()->first();
                 if ($existing !== null) {
-                    return [$existing, false];
+                    return $existing;
                 }
-                return [FoodAlchemistCascadeRunStep::create([
+
+                return FoodAlchemistCascadeRunStep::create([
                     'team_id' => $team->id,
                     'cascade_run_id' => $step->cascade_run_id,
                     'parent_step_id' => $step->id,
@@ -120,9 +170,9 @@ class RecipeDependencyWorkflowService
                     'kind' => 'rezept',
                     'label' => Str::limit($text, 120),
                     'dedupe_key' => $dedupe,
-                    'status' => 'running',
+                    'status' => 'geplant',
                     'sort' => (int) $ingredient->position,
-                ]), true];
+                ]);
             });
 
             FoodAlchemistCascadeRecipeDependency::firstOrCreate([
@@ -132,18 +182,48 @@ class RecipeDependencyWorkflowService
                 'ingredient_id' => $ingredient->id,
             ], ['child_step_id' => $child->id]);
 
-            if ($child->status === 'done' && $child->ref_id !== null) {
-                $this->bindIngredient($team, (int) $ingredient->id, (int) $child->ref_id);
-            } elseif ($created) {
-                $runId = (string) Str::uuid();
-                $child->update(['generator_run_id' => $runId]);
-                Cache::put(GenerateRecipeJob::cacheKey($runId), ['status' => 'pending'], now()->addMinutes(60));
-                GenerateRecipeJob::dispatch($runId, $team->id, $userId, $text, [
-                    ...$childParameter,
-                    'cascade_step_id' => $child->id,
-                    'auto_dependencies' => true,
-                ], false, $kindVollAnreichern);
+            $geplant[] = [$child, (int) $ingredient->id, $text];
+        }
+
+        return $geplant;
+    }
+
+    /**
+     * Reuse-Sichtbarkeit (Beobachtung Dominique 2026-08-14): die vom Generator DIREKT verdrahteten
+     * Sub-Rezepte (die 📖-Referenzen in der Zutatenliste) erscheinen als eigene Zeile der
+     * Basisrezepte-Stufe — Status `skipped` (Reuse-Treffer: nichts zu erzeugen, nur zu prüfen), mit
+     * Sprung aufs echte Rezept. Rein informativ: kein Job, keine Dependency, und das referenzierte
+     * Bestands-Rezept wird NIE angetastet. Fail-open — eine Sicht-Zeile darf keine Generierung kippen.
+     */
+    private function spiegleReuseKinder(Team $team, FoodAlchemistCascadeRunStep $step, FoodAlchemistRecipe $recipe): void
+    {
+        if (! in_array($step->kind, ['gericht', 'rezept'], true)) {
+            return;
+        }
+        try {
+            $zeilen = $recipe->ingredients()->whereNotNull('referenced_recipe_id')
+                ->with('referencedRecipe:id,name')->orderBy('position')->get();
+            foreach ($zeilen as $z) {
+                if ((int) $z->referenced_recipe_id === (int) $recipe->id) {
+                    continue;   // Selbstbezug kann nie eine eigene Stufe sein
+                }
+                FoodAlchemistCascadeRunStep::firstOrCreate([
+                    'cascade_run_id' => $step->cascade_run_id,
+                    'dedupe_key' => 'reuse:' . (int) $z->referenced_recipe_id,
+                ], [
+                    'team_id' => $team->id,
+                    'parent_step_id' => $step->id,
+                    'depth' => ((int) $step->depth) + 1,
+                    'kind' => 'rezept',
+                    'label' => Str::limit((string) ($z->referencedRecipe?->name ?: ($z->display_name ?: $z->raw_text)), 120),
+                    'status' => 'skipped',
+                    'ref_type' => 'recipe',
+                    'ref_id' => (int) $z->referenced_recipe_id,
+                    'sort' => (int) $z->position,
+                ]);
             }
+        } catch (\Throwable) {
+            // Parallel angelegt (dedupe-Unique) oder Zeile weg — Sichtbarkeit ist kein Blocker.
         }
     }
 

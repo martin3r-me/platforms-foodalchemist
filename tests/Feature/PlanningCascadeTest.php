@@ -643,6 +643,132 @@ it('goKaskade (concept): persistiert Leitplanken inkl. ki_bilder in generation_p
     Queue::assertPushed(GenerateConceptJob::class);
 });
 
+// ── Etappe 1: Gericht = Basisrezepte — die Sub-Rezepte sind eine eigene Stufe ───
+// Beobachtung Dominique 2026-08-14: die Sub-Rezepte (Consommé/Espuma) lagen nur als 📖-Referenz IN
+// der Zutatenliste. Sie gehören als abarbeitbare Basisrezepte-Stufe ins Cockpit — sichtbar, sobald
+// das Gericht als Entwurf steht (`geplant`), bzw. als übernommener Reuse-Treffer (`skipped`).
+
+it('staged: aufgeschobene Sub-Rezepte stehen sofort als geplante Basisrezepte-Stufe (noch kein Job)', function () {
+    $gericht = $this->makeRecipe($this->rootTeam, 'Gericht mit Fond', ['status' => 'draft']);
+    $this->makeIngredient($gericht, 'Geflügelfond');
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'gericht', 'status' => 'running', 'staged' => true]);
+    $step = FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht', 'status' => 'running']);
+
+    app(\Platform\FoodAlchemist\Services\RecipeDependencyWorkflowService::class)->afterGenerated(
+        $this->rootTeam, (int) $step->id, (int) auth()->id(), $gericht,
+        [['index' => 0, 'text' => 'Geflügelfond', 'primaer' => 'basisrezept_anlegen']],
+        ['_defer_children' => true],
+    );
+
+    $kind = FoodAlchemistCascadeRunStep::where('parent_step_id', $step->id)->first();
+    expect($kind)->not->toBeNull()
+        ->and($kind->kind)->toBe('rezept')
+        ->and($kind->status)->toBe('geplant')
+        ->and($kind->label)->toBe('Geflügelfond')
+        ->and((int) $kind->depth)->toBe(1)
+        ->and($kind->generator_run_id)->toBeNull()
+        ->and(\Platform\FoodAlchemist\Models\FoodAlchemistCascadeRecipeDependency::where('child_step_id', $kind->id)->count())->toBe(1);
+    Queue::assertNotPushed(GenerateRecipeJob::class);   // geplant heisst: wartet auf den Menschen
+});
+
+it('Freigabe des Gerichts schaltet die geplanten Basisrezepte scharf — derselbe Step, keine Dublette', function () {
+    $gericht = $this->makeRecipe($this->rootTeam, 'Gericht mit Fond', ['status' => 'draft']);
+    $this->makeIngredient($gericht, 'Geflügelfond');
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'gericht', 'status' => 'running', 'staged' => true]);
+    $step = FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht', 'status' => 'running']);
+    app(\Platform\FoodAlchemist\Services\RecipeDependencyWorkflowService::class)->afterGenerated(
+        $this->rootTeam, (int) $step->id, (int) auth()->id(), $gericht,
+        [['index' => 0, 'text' => 'Geflügelfond', 'primaer' => 'basisrezept_anlegen']],
+        ['_defer_children' => true],
+    );
+    $geplant = FoodAlchemistCascadeRunStep::where('parent_step_id', $step->id)->firstOrFail();
+    $step->update(['status' => 'done', 'ref_type' => 'recipe', 'ref_id' => $gericht->id]);
+
+    app(PlanningCascadeService::class)->gibStepFrei($this->rootTeam, (int) $step->id);
+
+    $kinder = FoodAlchemistCascadeRunStep::where('parent_step_id', $step->id)->get();
+    expect($kinder)->toHaveCount(1)                                        // kein zweiter Step
+        ->and((int) $kinder->first()->id)->toBe((int) $geplant->id)        // derselbe Step
+        ->and($kinder->first()->status)->toBe('running')
+        ->and($kinder->first()->generator_run_id)->not->toBeNull();
+    Queue::assertPushed(GenerateRecipeJob::class, 1);
+    Queue::assertPushed(GenerateRecipeJob::class, fn ($job) => $job->description === 'Geflügelfond' && $job->vkModus === false);
+});
+
+it('Reuse-Sichtbarkeit: ein direkt verdrahtetes Sub-Rezept erscheint als übernommene Basisrezepte-Zeile', function () {
+    $fond = $this->makeRecipe($this->rootTeam, 'Heller Geflügelfond');
+    $gericht = $this->makeRecipe($this->rootTeam, 'Gericht mit Bestands-Fond', ['status' => 'draft']);
+    $zutat = $this->makeIngredient($gericht, 'Geflügelfond');
+    $zutat->update(['referenced_recipe_id' => $fond->id, 'match_method' => 'recipe_ref']);
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'gericht', 'status' => 'running', 'staged' => true]);
+    $step = FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht', 'status' => 'running']);
+
+    app(\Platform\FoodAlchemist\Services\RecipeDependencyWorkflowService::class)->afterGenerated(
+        $this->rootTeam, (int) $step->id, (int) auth()->id(), $gericht, [], ['_defer_children' => true],
+    );
+
+    $kind = FoodAlchemistCascadeRunStep::where('parent_step_id', $step->id)->first();
+    expect($kind)->not->toBeNull()
+        ->and($kind->kind)->toBe('rezept')
+        ->and($kind->status)->toBe('skipped')                     // Reuse-Treffer: nichts zu erzeugen
+        ->and($kind->label)->toBe('Heller Geflügelfond')
+        ->and((int) $kind->ref_id)->toBe((int) $fond->id);
+    Queue::assertNotPushed(GenerateRecipeJob::class);
+});
+
+it('Neu-Generieren räumt geplante + übernommene Sub-Zeilen weg — das Bestands-Rezept bleibt', function () {
+    $fond = $this->makeRecipe($this->rootTeam, 'Heller Geflügelfond');
+    $gericht = $this->makeRecipe($this->rootTeam, 'Gericht alt', ['status' => 'draft']);
+    $this->makeIngredient($gericht, 'Geflügelfond');
+    $zutat2 = $this->makeIngredient($gericht, 'Fond aus dem Bestand', null, '100', 2);
+    $zutat2->update(['referenced_recipe_id' => $fond->id, 'match_method' => 'recipe_ref']);
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'gericht', 'status' => 'running', 'staged' => true]);
+    $step = FoodAlchemistCascadeRunStep::create([
+        'team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht',
+        'status' => 'running', 'label' => 'Gericht alt',
+    ]);
+    app(\Platform\FoodAlchemist\Services\RecipeDependencyWorkflowService::class)->afterGenerated(
+        $this->rootTeam, (int) $step->id, (int) auth()->id(), $gericht,
+        [['index' => 0, 'text' => 'Geflügelfond', 'primaer' => 'basisrezept_anlegen']],
+        ['_defer_children' => true],
+    );
+    expect(FoodAlchemistCascadeRunStep::where('parent_step_id', $step->id)->count())->toBe(2);
+    $step->update(['status' => 'done', 'ref_type' => 'recipe', 'ref_id' => $gericht->id]);
+
+    app(PlanningCascadeService::class)->regeneriereStep($this->rootTeam, (int) $step->id);
+
+    expect(FoodAlchemistCascadeRunStep::where('parent_step_id', $step->id)->count())->toBe(0)
+        ->and(FoodAlchemistRecipe::find($fond->id))->not->toBeNull()          // fremdes Artefakt unangetastet
+        ->and($step->refresh()->status)->toBe('running');
+});
+
+it('stufen(): die Basisrezepte-Stufe ist erreicht, sobald Sub-Rezepte geplant sind (zustand=geplant)', function () {
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'gericht', 'status' => 'review', 'staged' => true]);
+    $gerichtStep = FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht', 'status' => 'done']);
+    FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'parent_step_id' => $gerichtStep->id, 'depth' => 1, 'kind' => 'rezept', 'status' => 'geplant', 'label' => 'Consommé']);
+    FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'parent_step_id' => $gerichtStep->id, 'depth' => 1, 'kind' => 'rezept', 'status' => 'skipped', 'label' => 'Espuma-Basis']);
+
+    $stufen = Livewire::test(PlanungIndex::class)->set('laufId', $run->id)->instance()->stufen();
+
+    $basis = collect($stufen)->firstWhere('kind', 'rezept');
+    expect($basis)->not->toBeNull()
+        ->and($basis['total'])->toBe(2)
+        ->and($basis['geplant'])->toBe(1)
+        ->and($basis['uebernommen'])->toBe(1)
+        ->and($basis['fertig'])->toBe(1)              // übernommen zählt als fertig, geplant nicht
+        ->and($basis['zustand'])->toBe('geplant');
+});
+
+it('Run-Status: geplante Sub-Rezepte halten den Lauf auf review (Mensch am Zug), nicht auf failed', function () {
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'gericht', 'status' => 'running', 'staged' => true]);
+    $gerichtStep = FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht', 'status' => 'freigegeben']);
+    FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'parent_step_id' => $gerichtStep->id, 'depth' => 1, 'kind' => 'rezept', 'status' => 'geplant', 'label' => 'Consommé']);
+
+    app(PlanningCascadeService::class)->recomputeRunStatus((int) $run->id);
+
+    expect($run->refresh()->status)->toBe('review');
+});
+
 it('stufen(): leitet Stufen-Zähler + Zustand aus den Steps ab (nur erreichte Stufen)', function () {
     $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'concept', 'status' => 'review', 'staged' => true]);
     FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'concept', 'status' => 'freigegeben']);

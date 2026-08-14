@@ -1,15 +1,15 @@
 {{-- Worker-Cockpit: Stufen-Abschnitte (Concept · Gerichte · Basisrezepte) mit Fortschritts-Headern +
      Stufen-Freigabe. Nur erreichte Stufen erscheinen (progressive Enthüllung). Erwartet $lauf gesetzt. --}}
 @php
-    $stepLabel = ['queued' => 'wartet', 'running' => 'läuft', 'done' => 'Vorschau', 'freigegeben' => 'freigegeben', 'verworfen' => 'verworfen', 'failed' => 'Fehler', 'skipped' => 'übernommen'];
-    $stepColor = ['queued' => 'text-amber-300', 'running' => 'text-amber-300', 'done' => 'text-emerald-300', 'freigegeben' => 'text-emerald-400', 'verworfen' => 'text-gray-500', 'failed' => 'text-rose-300', 'skipped' => 'text-gray-400'];
+    $stepLabel = ['geplant' => 'geplant', 'queued' => 'wartet', 'running' => 'läuft', 'done' => 'Vorschau', 'freigegeben' => 'freigegeben', 'verworfen' => 'verworfen', 'failed' => 'Fehler', 'skipped' => 'übernommen'];
+    $stepColor = ['geplant' => 'text-violet-300', 'queued' => 'text-amber-300', 'running' => 'text-amber-300', 'done' => 'text-emerald-300', 'freigegeben' => 'text-emerald-400', 'verworfen' => 'text-gray-500', 'failed' => 'text-rose-300', 'skipped' => 'text-gray-400'];
     $refRoute = ['gericht' => 'foodalchemist.verkauf.index', 'rezept' => 'foodalchemist.recipes.index', 'concept' => 'foodalchemist.concepts.index'];
     $laufRunning = $lauf->steps->whereIn('status', ['queued', 'running'])->count();
     $laufDone = $lauf->steps->whereIn('status', ['done', 'freigegeben'])->count();
     $laufFailed = $lauf->steps->where('status', 'failed')->count();
     $offeneEntwuerfe = $lauf->steps->where('status', 'done')->count();
     $stufen = $this->stufenAusSteps($lauf->steps);
-    $zustandPill = ['läuft' => 'bg-amber-500/15 text-amber-300', 'prüfen' => 'bg-emerald-500/15 text-emerald-300', 'erledigt' => 'bg-white/10 text-gray-400'];
+    $zustandPill = ['läuft' => 'bg-amber-500/15 text-amber-300', 'prüfen' => 'bg-emerald-500/15 text-emerald-300', 'geplant' => 'bg-violet-500/15 text-violet-300', 'erledigt' => 'bg-white/10 text-gray-400'];
     $stepArgs = fn ($s, $indent) => ['st' => $s, 'stepLabel' => $stepLabel, 'stepColor' => $stepColor, 'refRoute' => $refRoute, 'indent' => $indent];
     // Anreicherungs-Bilanz über die freigegebenen Rezept-/Gericht-Steps (deferred.enrich) — damit der
     // Abschluss ehrlich meldet: freigegeben + angereichert, oder Anreicherung läuft/fehlgeschlagen.
@@ -61,10 +61,15 @@
                 <div class="flex items-center justify-between gap-2 mb-2">
                     <span class="text-xs font-semibold text-gray-200">{{ $stufe['label'] }}</span>
                     <span class="flex items-center gap-2">
-                        <span class="text-[11px] text-gray-400">{{ $stufe['fertig'] }}/{{ $stufe['total'] }} fertig{{ $stufe['freigegeben'] > 0 ? ' · ' . $stufe['freigegeben'] . ' freigegeben' : '' }}</span>
+                        <span class="text-[11px] text-gray-400">{{ $stufe['fertig'] }}/{{ $stufe['total'] }} fertig{{ $stufe['freigegeben'] > 0 ? ' · ' . $stufe['freigegeben'] . ' freigegeben' : '' }}{{ ($stufe['geplant'] ?? 0) > 0 ? ' · ' . $stufe['geplant'] . ' geplant' : '' }}{{ ($stufe['uebernommen'] ?? 0) > 0 ? ' · ' . $stufe['uebernommen'] . ' übernommen' : '' }}</span>
                         <span class="px-1.5 py-0.5 rounded text-[10px] {{ $zustandPill[$stufe['zustand']] ?? 'bg-white/10 text-gray-400' }}">{{ $stufe['zustand'] }}</span>
                     </span>
                 </div>
+                @if(($stufe['geplant'] ?? 0) > 0)
+                    {{-- Gericht = Basisrezepte: die Sub-Rezepte stehen schon als eigene Stufe, erzeugt
+                         werden sie mit der Freigabe der Stufe darüber (gestufte Kaskade). --}}
+                    <p class="text-[10px] text-violet-300/70 mb-1.5">{{ $stufe['geplant'] }} Sub-Rezept(e) geplant — sie werden erzeugt, sobald die Stufe darüber freigegeben ist.</p>
+                @endif
                 <div class="space-y-1.5">
                     @foreach($stufeSteps as $st)
                         @include('foodalchemist::livewire.planung.partials.step-zeile', $stepArgs($st, (int) $st->depth > 0))

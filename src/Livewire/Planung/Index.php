@@ -625,6 +625,11 @@ class Index extends Component
      * Stufen-Ableitung fürs Cockpit: je Ebene (concept · gericht · rezept) Zähler + Zustand. Nur
      * erreichte Stufen (mind. 1 Step) — so enthüllt sich die Kaskade fortschreitend. Rein für die Anzeige.
      *
+     * Die Basisrezepte-Stufe ist erreicht, sobald das Gericht als Entwurf steht: ihre Zeilen sind
+     * dann `geplant` (Sub-Rezept benannt, erzeugt wird es bei der Freigabe der Stufe darüber) bzw.
+     * `skipped` (Bestands-Rezept übernommen). Zustand `geplant` heisst also: sichtbar, aber noch
+     * nicht erzeugt — kein Freigabe-Knopf (der käme erst bei `prüfen`).
+     *
      * @param  \Illuminate\Support\Collection<int,\Platform\FoodAlchemist\Models\FoodAlchemistCascadeRunStep>  $steps
      * @return list<array<string,mixed>>
      */
@@ -643,11 +648,16 @@ class Index extends Component
             $freigegeben = $grp->where('status', 'freigegeben')->count();
             $verworfen = $grp->where('status', 'verworfen')->count();
             $failed = $grp->where('status', 'failed')->count();
-            $zustand = $running > 0 ? 'läuft' : ($done > 0 ? 'prüfen' : 'erledigt');
+            // `geplant` = benanntes Sub-Rezept, das auf die Freigabe der Stufe darüber wartet;
+            // `skipped` = übernommenes Bestands-Rezept (Reuse) — nichts zu erzeugen, also fertig.
+            $geplant = $grp->where('status', 'geplant')->count();
+            $uebernommen = $grp->where('status', 'skipped')->count();
+            $zustand = $running > 0 ? 'läuft' : ($done > 0 ? 'prüfen' : ($geplant > 0 ? 'geplant' : 'erledigt'));
             $out[] = [
                 'kind' => $d['kind'], 'label' => $d['label'], 'total' => $total,
                 'running' => $running, 'done' => $done, 'freigegeben' => $freigegeben,
-                'verworfen' => $verworfen, 'failed' => $failed, 'fertig' => $done + $freigegeben,
+                'verworfen' => $verworfen, 'failed' => $failed, 'geplant' => $geplant,
+                'uebernommen' => $uebernommen, 'fertig' => $done + $freigegeben + $uebernommen,
                 'zustand' => $zustand,
             ];
         }

@@ -12,7 +12,9 @@
         <span class="truncate text-gray-200">{{ $indent ? '↳ ' : '' }}{{ $st->label ?: ucfirst($st->kind) }}</span>
         <span class="shrink-0 flex items-center gap-2">
             <span class="{{ $stepColor[$st->status] ?? 'text-gray-400' }}">{{ $stepLabel[$st->status] ?? $st->status }}</span>
-            @if($st->ref_id && in_array($st->status, ['done', 'freigegeben'], true))
+            {{-- `skipped` = übernommenes Bestands-Rezept (Reuse): ansehen ja, bearbeiten/freigeben nein
+                 (es ist fremdes, lebendes Artefakt — kein Draft dieses Laufs). --}}
+            @if($st->ref_id && in_array($st->status, ['done', 'freigegeben', 'skipped'], true))
                 @if($st->kind === 'rezept')
                     <button type="button" wire:click="$dispatch('recipe-modal.oeffnen', { id: {{ (int) $st->ref_id }} })" class="text-violet-300 hover:text-violet-200 underline">ansehen</button>
                 @elseif($st->kind === 'gericht')
@@ -48,6 +50,9 @@
     </div>
     @if($st->status === 'failed' && $st->error)
         <p class="text-[10px] text-rose-400/80 pl-1">{{ \Illuminate\Support\Str::limit($st->error, 160) }}</p>
+    @endif
+    @if($st->status === 'geplant')
+        <p class="text-[10px] text-violet-300/60 pl-1">wird erzeugt, sobald die Stufe darüber freigegeben ist</p>
     @endif
     {{-- A: voll-inline Zutaten-Review — sehen WAS angelegt wurde + tauschen/entfernen/ergänzen VOR der Freigabe.
          On-Demand gemountet (toggleZutaten), reused IngredientEditor (:eingebettet), nur für Rezept/Gericht-Drafts. --}}

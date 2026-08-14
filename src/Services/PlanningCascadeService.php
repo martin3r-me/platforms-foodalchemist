@@ -12,6 +12,7 @@ use Platform\FoodAlchemist\Jobs\GenerateConceptJob;
 use Platform\FoodAlchemist\Jobs\GenerateRecipeJob;
 use Platform\FoodAlchemist\Jobs\MaterializeConceptIdeaJob;
 use Platform\FoodAlchemist\Jobs\MaterializeSpeiseplanCellJob;
+use Platform\FoodAlchemist\Models\FoodAlchemistCascadeRecipeDependency;
 use Platform\FoodAlchemist\Models\FoodAlchemistCascadeRun;
 use Platform\FoodAlchemist\Models\FoodAlchemistCascadeRunStep;
 use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
@@ -550,8 +551,9 @@ class PlanningCascadeService
 
     /**
      * Run-Status aus den Steps ableiten:
-     * - ein Step läuft (queued|running)                       → `running`
-     * - ein Step ist erzeugt, aber unentschieden (done)       → `review` (Gate 2 offen)
+     * - ein Step läuft (queued|running)                        → `running`
+     * - ein Step ist erzeugt, aber unentschieden (done)        → `review` (Gate 2 offen)
+     * - ein Step ist geplant (Sub-Rezept wartet auf Freigabe)  → `review` (der Mensch ist am Zug)
      * - alles entschieden, mind. ein freigegeben|skipped       → `done`
      * - alles entschieden, nur verworfen|failed                → `failed`
      */
@@ -569,7 +571,9 @@ class PlanningCascadeService
 
             return;
         }
-        if ($steps->where('status', 'done')->count() > 0) {
+        // `geplant` = benanntes, noch nicht erzeugtes Sub-Rezept: es wartet auf einen MENSCHEN
+        // (Freigabe der Stufe darüber), nicht auf den Worker — also review, nicht running/failed.
+        if ($steps->whereIn('status', ['done', 'geplant'])->count() > 0) {
             $run->update(['status' => 'review']);
 
             return;
@@ -711,6 +715,9 @@ class PlanningCascadeService
                 FoodAlchemistConcept::where('team_id', $team->id)->whereKey($step->ref_id)->delete();
             }
         }
+        // Die geplanten/übernommenen Sub-Rezepte beschreiben die Zerlegung des ALTEN Entwurfs — der
+        // neue Lauf plant seine eigenen (sonst bleiben Zeilen stehen, die zu nichts mehr gehören).
+        $this->raeumeGeplanteKinder($step);
         $step->update(['status' => 'running', 'ref_type' => null, 'ref_id' => null, 'error' => null, 'deferred' => null]);
         $run = $step->run;
         $brief = (string) ($step->label ?? '');
@@ -742,8 +749,31 @@ class PlanningCascadeService
                 FoodAlchemistConcept::where('team_id', $team->id)->whereKey($step->ref_id)->delete();
             }
         }
+        $this->raeumeGeplanteKinder($step);
         $step->update(['status' => 'verworfen']);
         $this->recomputeRunStatus((int) $step->cascade_run_id);
+    }
+
+    /**
+     * Räumt die `geplant`/`skipped`-Kinder eines Steps weg (Verwerfen / Neu-Generieren): sie
+     * beschreiben die Zerlegung eines Entwurfs, den es nicht mehr gibt. Es werden AUSSCHLIESSLICH
+     * die Step-Zeilen entfernt — das bei `skipped` referenzierte Bestands-Rezept bleibt unangetastet
+     * (es ist fremdes, lebendes Artefakt, kein Draft dieses Laufs).
+     *
+     * Hart gelöscht (nicht soft), weil der Unique-Index (cascade_run_id, dedupe_key) soft-gelöschte
+     * Zeilen mitzählt — eine soft-gelöschte Planung würde die Neu-Planung desselben Sub-Rezepts
+     * blockieren. Verlorene Historie: keine, diese Zeilen haben nie etwas erzeugt.
+     */
+    private function raeumeGeplanteKinder(FoodAlchemistCascadeRunStep $step): void
+    {
+        $kinder = FoodAlchemistCascadeRunStep::where('parent_step_id', $step->id)
+            ->whereIn('status', ['geplant', 'skipped'])->get(['id']);
+        if ($kinder->isEmpty()) {
+            return;
+        }
+        $ids = $kinder->pluck('id')->all();
+        FoodAlchemistCascadeRecipeDependency::whereIn('child_step_id', $ids)->delete();
+        FoodAlchemistCascadeRunStep::whereIn('id', $ids)->forceDelete();
     }
 
     /** Bulk-Freigabe aller noch offenen (done) Steps eines Laufs. */
