@@ -177,9 +177,18 @@
                 <button type="button" @click="tab='skizzen'"
                         :class="tab==='skizzen' ? 'bg-violet-500/25 text-white' : 'text-gray-300 hover:text-white'"
                         class="px-3 py-1.5 rounded-t-md text-xs font-medium">Skizzen</button>
-                <button type="button" @click="tab='planung'"
-                        :class="tab==='planung' ? 'bg-violet-500/25 text-white' : 'text-gray-300 hover:text-white'"
-                        class="px-3 py-1.5 rounded-t-md text-xs font-medium">Planung</button>
+                <button type="button" @click="tab='basisrezept'"
+                        :class="tab==='basisrezept' ? 'bg-violet-500/25 text-white' : 'text-gray-300 hover:text-white'"
+                        class="px-3 py-1.5 rounded-t-md text-xs font-medium">Basisrezept</button>
+                <button type="button" @click="tab='gericht'"
+                        :class="tab==='gericht' ? 'bg-violet-500/25 text-white' : 'text-gray-300 hover:text-white'"
+                        class="px-3 py-1.5 rounded-t-md text-xs font-medium">Gericht</button>
+                <button type="button" @click="tab='concept'"
+                        :class="tab==='concept' ? 'bg-violet-500/25 text-white' : 'text-gray-300 hover:text-white'"
+                        class="px-3 py-1.5 rounded-t-md text-xs font-medium">Concept</button>
+                <button type="button" @click="tab='worker'"
+                        :class="tab==='worker' ? 'bg-violet-500/25 text-white' : 'text-gray-300 hover:text-white'"
+                        class="px-3 py-1.5 rounded-t-md text-xs font-medium inline-flex items-center gap-1">Worker @if($laeuft)<span class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span>@endif</button>
                 <button type="button" @click="tab='composer'"
                         :class="tab==='composer' ? 'bg-violet-500/25 text-white' : 'text-gray-300 hover:text-white'"
                         class="px-3 py-1.5 rounded-t-md text-xs font-medium">Composer</button>
@@ -240,13 +249,21 @@
                 </x-foodalchemist::modal-section>
             </div>
 
-            {{-- PLANUNG + GO --}}
-            <div x-show="tab==='planung'" class="space-y-4">
-                <x-foodalchemist::modal-section title="Rahmen">
-                    <label class="{{ $label ?? 'text-[11px] text-gray-500' }}">Titel</label>
-                    <input type="text" wire:model="form.title" class="{{ $input }} mb-3" />
+            {{-- BASISREZEPT — eigener Tab mit seinen Leitplanken --}}
+            <div x-show="tab==='basisrezept'">
+                @include('foodalchemist::livewire.planung.partials.erstellen-tab', ['scope' => 'rezept', 'vk' => false, 'goLabel' => 'Basisrezept', 'goIcon' => 'heroicon-o-beaker'])
+            </div>
+
+            {{-- GERICHT — Leitplanken inkl. VK-Achsen --}}
+            <div x-show="tab==='gericht'">
+                @include('foodalchemist::livewire.planung.partials.erstellen-tab', ['scope' => 'gericht', 'vk' => true, 'goLabel' => 'Gericht', 'goIcon' => 'heroicon-o-cake'])
+            </div>
+
+            {{-- CONCEPT — reuse-basiert, keine Rezept-Regler --}}
+            <div x-show="tab==='concept'" class="space-y-4">
+                <x-foodalchemist::modal-section title="Brief">
                     <label class="{{ $label ?? 'text-[11px] text-gray-500' }}">Brief (geht in die Erzeugung)</label>
-                    <textarea wire:model="form.brief" rows="3" class="{{ $input }} mb-3"></textarea>
+                    <textarea wire:model="form.brief" rows="3" class="{{ $input }} mb-3" placeholder="Konzept-Brief — Anlass, Zielgruppe, Richtung …"></textarea>
                     <label class="{{ $label ?? 'text-[11px] text-gray-500' }}">Kreativ-Modus</label>
                     <select wire:model="form.creative_mode" class="{{ $input }}">
                         @foreach($modeLabel as $val => $lbl)
@@ -254,213 +271,31 @@
                         @endforeach
                     </select>
                 </x-foodalchemist::modal-section>
-
-                {{-- Leitstelle: die volle Richtungs-Regler-Fläche (Leitplanken) — inline im Cockpit.
-                     Übernahme der KI-Rezept-Modal-Fläche der Browser-Seiten (nur die Knöpfe dort
-                     entfielen). Die VK-Achsen (Anlass/Serviceform/Kompositions-Stil/Ziel-VK) greifen
-                     nur beim „Gericht"-Go; die Werte werden am Go in generation_params persistiert
-                     und in den Kaskaden-Fan-out vererbt. --}}
-                <x-foodalchemist::modal-section title="Richtung (optional)">
-                    @php
-                        $pillAktiv = 'border-emerald-500 text-emerald-700 font-medium';
-                        $pillRuhe = 'border-black/10 text-gray-600 hover:border-violet-400';
-                    @endphp
-                    <div class="grid md:grid-cols-2 gap-x-6 gap-y-4" data-planung-regler>
-                        @foreach(\Platform\FoodAlchemist\Livewire\Planung\Index::RICHTUNGEN as $g)
-                            <div data-richtung="{{ $g['field'] }}">
-                                <p class="text-xs font-medium text-gray-900 mb-1">{{ $g['label'] }}</p>
-                                <div class="flex flex-wrap gap-1.5">
-                                    @foreach($g['optionen'] as $wert => $lbl)
-                                        <button type="button" wire:click="reglerPill('{{ $g['field'] }}', '{{ $wert }}')"
-                                                class="px-2.5 py-1 rounded-full border text-[11px] transition-colors {{ $regler[$g['field']] === $wert ? $pillAktiv : $pillRuhe }}">{{ $lbl }}</button>
-                                    @endforeach
-                                </div>
-                                <p class="text-[11px] text-gray-500 mt-1">{{ $g['hint'][$regler[$g['field']]] ?? '' }}</p>
-                            </div>
-                        @endforeach
-
-                        <div data-richtung="aroma">
-                            <p class="text-xs font-medium text-gray-900 mb-1">Aroma-Richtung</p>
-                            <input type="text" wire:model="regler.aroma" placeholder="frei — z. B. rauchig-karamellig, mediterran …" class="{{ $input }} !py-1.5" />
-                            <p class="text-[11px] text-gray-500 mt-1">{{ $regler['aroma'] === '' ? 'Keine Aroma-Vorgabe — KI wählt passend zur Beschreibung' : '' }}</p>
-                        </div>
-
-                        <div data-richtung="sektor">
-                            <p class="text-xs font-medium text-gray-900 mb-1">Sektor (Verpflegungskontext)</p>
-                            <select wire:model="regler.sektor" class="{{ $input }} !py-1.5">
-                                <option value="">(egal/universell)</option>
-                                <option value="betriebsgastronomie">Betriebsgastronomie</option>
-                                <option value="catering">Catering / Event</option>
-                                <option value="restaurant">Restaurant / à la carte</option>
-                                <option value="care">Care / Klinik</option>
-                                <option value="schule_kita">Schule / Kita</option>
-                            </select>
-                            <p class="text-[11px] text-gray-500 mt-1">{{ $regler['sektor'] === '' ? 'Kein Sektor-Constraint' : '' }}</p>
-                        </div>
-
-                        <div data-richtung="favoriten">
-                            <label class="flex items-start gap-2 text-xs font-medium text-gray-900">
-                                <input type="checkbox" wire:model.live="reglerFavoriten" class="mt-0.5" data-planung-favoriten />
-                                <span>⭐ Auf Basis meiner Favoriten bauen</span>
-                            </label>
-                            <p class="text-[11px] text-gray-500 mt-1">Bevorzugt die kuratierten Lieblings-GPs (bevorzugt, nicht ausschließlich). Aus = freie Kreativität.</p>
-                            <label x-show="$wire.reglerFavoriten" class="flex items-center gap-1.5 text-[11px] text-gray-600 mt-1.5 ml-6">
-                                <input type="checkbox" wire:model="reglerFavoritenConvenienceOnly" /> nur Convenience-Favoriten
-                            </label>
-                        </div>
-
-                        <x-foodalchemist::oneshot-toggle marker="planung" schritte="Beschreibung, Kategorie, Geschmacksrichtung" />
-
-                        <div class="md:col-span-2" data-richtung="diaet">
-                            <p class="text-xs font-medium text-gray-900 mb-1">Diät-Constraints (Multi-Select, hart erzwungen)</p>
-                            <div class="flex flex-wrap gap-1.5">
-                                @foreach(['vegan' => 'Vegan', 'vegetarisch' => 'Vegetarisch', 'glutenfrei' => 'Glutenfrei', 'laktosefrei' => 'Laktosefrei', 'halal' => 'Halal', 'low_carb' => 'Low Carb'] as $wert => $lbl)
-                                    <button type="button" wire:click="reglerPill('diaet_hart', '{{ $wert }}')"
-                                            class="px-2.5 py-1 rounded-full border text-[11px] transition-colors {{ in_array($wert, $regler['diaet_hart'], true) ? $pillAktiv : $pillRuhe }}">{{ $lbl }}</button>
-                                @endforeach
-                            </div>
-                        </div>
-
-                        {{-- VK-eigene Achsen — greifen nur beim „Gericht"-Go --}}
-                        <div class="md:col-span-2 border-t border-black/5 pt-3 mt-1" data-richtung="vk-achsen">
-                            <p class="text-[11px] text-gray-500 mb-2">Nur für „Gericht" (Verkaufsrezept):</p>
-                            <div class="grid md:grid-cols-3 gap-x-6 gap-y-3">
-                                <div>
-                                    <label class="block {{ $label ?? 'text-[11px] text-gray-500' }} mb-1">Anlass</label>
-                                    <select wire:model="regler.occasion" class="{{ $input }} !py-1.5">
-                                        <option value="">—</option>
-                                        @foreach(['fruehstueck' => 'Frühstück', 'lunch' => 'Lunch', 'konferenz' => 'Konferenz', 'empfang' => 'Empfang', 'dinner' => 'Dinner', 'late_night' => 'Late Night'] as $wert => $lbl)
-                                            <option value="{{ $wert }}">{{ $lbl }}</option>
-                                        @endforeach
-                                    </select>
-                                </div>
-                                <div>
-                                    <label class="block {{ $label ?? 'text-[11px] text-gray-500' }} mb-1">Serviceform</label>
-                                    <select wire:model="regler.serviceform" class="{{ $input }} !py-1.5">
-                                        <option value="">—</option>
-                                        @foreach(['tellerservice' => 'Tellerservice', 'buffet' => 'Buffet', 'flying' => 'Flying Service', 'stehempfang' => 'Stehempfang', 'boxed' => 'Boxed'] as $wert => $lbl)
-                                            <option value="{{ $wert }}">{{ $lbl }}</option>
-                                        @endforeach
-                                    </select>
-                                </div>
-                                <div>
-                                    <label class="block {{ $label ?? 'text-[11px] text-gray-500' }} mb-1">Kompositions-Stil</label>
-                                    <select wire:model="regler.kompositions_stil" class="{{ $input }} !py-1.5">
-                                        <option value="">—</option>
-                                        <option value="klassisch">klassisch</option>
-                                        <option value="kreativ">kreativ</option>
-                                        <option value="gewagt">gewagt (nur belegte Paarungen)</option>
-                                    </select>
-                                </div>
-                                <div class="md:col-span-3">
-                                    <p class="text-xs font-medium text-gray-900 mb-1">Ziel-VK (optional)</p>
-                                    <input type="text" wire:model="reglerZielVk" placeholder="z. B. 8,50" class="{{ $input }} !py-1.5 md:max-w-xs" data-planung-ziel-vk />
-                                    <p class="text-[11px] text-gray-500 mt-1">Netto je Portion. Geht als Vorgabe in den Vorschlag; der Preis wird nicht auf das Ziel gedrückt.</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                <x-foodalchemist::modal-section title="Go — Concept erzeugen (Draft)">
+                    <p class="{{ $label ?? 'text-[11px] text-gray-500' }} mb-2">Reuse-basiert — die Concept-Struktur entsteht aus dem Brief; Fortschritt im <b>Worker</b>-Tab.</p>
+                    <button wire:click="goKaskade('concept')" @click="tab='worker'" @disabled($laeuft) class="{{ $btnPrimary }} disabled:opacity-40">
+                        @svg('heroicon-o-squares-2x2', 'w-4 h-4') Concept erzeugen
+                    </button>
                 </x-foodalchemist::modal-section>
+            </div>
 
-                <x-foodalchemist::modal-section title="Go — erzeugen (Draft)">
-                    <p class="{{ $label ?? 'text-[11px] text-gray-500' }} mb-2">
-                        Wähle die Stufe — der Entwurf entsteht in-place (Draft), im Hintergrund. Jede Stufe ist
-                        einzeln abrufbar; die Kaskade läuft im Ergebnis unten sichtbar durch.
-                    </p>
-                    <div class="flex flex-wrap gap-2">
-                        <button wire:click="goKaskade('rezept')" @disabled($laeuft) class="{{ $btnGhost }} disabled:opacity-40">
-                            @svg('heroicon-o-beaker', 'w-4 h-4') Basisrezept
-                        </button>
-                        <button wire:click="goKaskade('gericht')" @disabled($laeuft) class="{{ $btnGhost }} disabled:opacity-40">
-                            @svg('heroicon-o-cake', 'w-4 h-4') Gericht
-                        </button>
-                        <button wire:click="goKaskade('concept')" @disabled($laeuft) class="{{ $btnPrimary }} disabled:opacity-40">
-                            @svg('heroicon-o-squares-2x2', 'w-4 h-4') Concept
-                        </button>
+            {{-- WORKER — alle Läufe/Entwürfe zusammen: Status + Fan-out-Baum + Freigabe --}}
+            <div x-show="tab==='worker'" class="space-y-4">
+                @if($laeuft)
+                    <div wire:poll.1500ms="pruefeLauf" class="flex items-center gap-2 text-xs text-amber-300">
+                        @svg('heroicon-o-arrow-path', 'w-4 h-4 animate-spin')
+                        <span>Läuft — der Worker arbeitet die Kaskade ab …</span>
                     </div>
-
-                    {{-- #1b Grounding-Preview: VOR dem Go sehen, welches Wissen/Pairing/Template die Generierung
-                         für die aktuellen Regler zieht (on-demand, ohne zu generieren). --}}
-                    <div class="mt-3">
-                        <button type="button" wire:click="wissenVorschau(false)" @disabled($laeuft)
-                                wire:loading.attr="disabled" wire:target="wissenVorschau"
-                                class="text-[11px] text-violet-300 hover:text-violet-200 disabled:opacity-40 inline-flex items-center gap-1" data-planung-wissen-vorab>
-                            @svg('heroicon-o-magnifying-glass', 'w-3.5 h-3.5')
-                            <span wire:loading.remove wire:target="wissenVorschau">Wissen vorab prüfen (Basisrezept)</span>
-                            <span wire:loading wire:target="wissenVorschau">Wissen wird geladen …</span>
-                        </button>
-                        @if($wissenVorschau !== null)
-                            <div class="mt-2 rounded-lg bg-white/5 p-2" data-planung-wissen-vorschau>
-                                <p class="text-[10px] text-gray-400 mb-1">Das würde die KI nutzen (Vorschau — noch nicht generiert):</p>
-                                <x-foodalchemist::kontext-inspektor :kontext="$wissenVorschau" />
-                            </div>
-                        @endif
-                    </div>
-
-                    @if($laeuft)
-                        <div wire:poll.1500ms="pruefeLauf" class="mt-3 flex items-center gap-2 text-xs text-amber-300">
-                            @svg('heroicon-o-arrow-path', 'w-4 h-4 animate-spin')
-                            <span>Entwurf wird erzeugt — läuft im Hintergrund …</span>
-                        </div>
-                        {{-- Queue-Watchdog: hängt der Lauf ohne Step-Fortschritt (kein Worker?), sichtbar sagen statt endlos spinnen. --}}
-                        @if($hinweis !== null)
-                            <p class="mt-2 text-[11px] text-amber-400" data-planung-watchdog>⏱ {{ $hinweis }}</p>
-                        @endif
+                    @if($hinweis !== null)
+                        <p class="text-[11px] text-amber-400" data-planung-watchdog>⏱ {{ $hinweis }}</p>
                     @endif
-                </x-foodalchemist::modal-section>
+                @endif
 
-                {{-- Ergebnis des Laufs (Steps + erzeugte Draft-Artefakte) + Freigabe (Gate 2). --}}
+            {{-- Worker-Ergebnis: Status + Fan-out-Baum + Freigabe (Gate 2) --}}
                 @if($lauf)
-                    @php
-                        $stepLabel = ['queued' => 'wartet', 'running' => 'läuft', 'done' => 'Entwurf', 'freigegeben' => 'freigegeben', 'verworfen' => 'verworfen', 'failed' => 'Fehler', 'skipped' => 'übernommen'];
-                        $stepColor = ['queued' => 'text-amber-300', 'running' => 'text-amber-300', 'done' => 'text-emerald-300', 'freigegeben' => 'text-emerald-400', 'verworfen' => 'text-gray-500', 'failed' => 'text-rose-300', 'skipped' => 'text-gray-400'];
-                        $refRoute = ['gericht' => 'foodalchemist.verkauf.index', 'rezept' => 'foodalchemist.recipes.index', 'concept' => 'foodalchemist.concepts.index'];
-                        $offeneEntwuerfe = $lauf->steps->where('status', 'done')->count();
-                        $laufRunning = $lauf->steps->whereIn('status', ['queued', 'running'])->count();
-                        $laufDone = $lauf->steps->whereIn('status', ['done', 'freigegeben'])->count();
-                        $laufFailed = $lauf->steps->where('status', 'failed')->count();
-                    @endphp
-                    <x-foodalchemist::modal-section title="Ergebnis (Entwürfe) — Freigabe">
-                        {{-- #2/#3: Worker-/Fortschritts-Status aus den Steps abgeleitet (in-place, kein globaler Worker-Ping) — prominent oben statt nur dünne Liste. --}}
-                        <div class="flex items-center gap-2 mb-3 text-xs font-medium">
-                            @if($laufRunning > 0 && $hinweis !== null)
-                                <span class="inline-flex items-center gap-1.5 text-amber-400">@svg('heroicon-o-exclamation-triangle', 'w-4 h-4') Worker hängt? — {{ $laufRunning }} Schritt(e) warten (vermutlich kein Queue-Worker)</span>
-                            @elseif($laufRunning > 0)
-                                <span class="inline-flex items-center gap-1.5 text-amber-300">@svg('heroicon-o-arrow-path', 'w-4 h-4 animate-spin') Worker arbeitet — {{ $laufRunning }} Schritt(e) laufen{{ $laufDone > 0 ? ', ' . $laufDone . ' fertig' : '' }}</span>
-                            @elseif($laufDone > 0)
-                                <span class="inline-flex items-center gap-1.5 text-emerald-300">@svg('heroicon-o-check-circle', 'w-4 h-4') Fertig — {{ $laufDone }} Entwurf/Entwürfe erzeugt (rechts „ansehen" / freigeben)</span>
-                            @elseif($laufFailed > 0)
-                                <span class="inline-flex items-center gap-1.5 text-rose-300">@svg('heroicon-o-x-circle', 'w-4 h-4') Fehlgeschlagen — Details unten</span>
-                            @endif
-                        </div>
-                        @if($offeneEntwuerfe > 0)
-                            <div class="flex items-center justify-between gap-2 mb-2 pb-2 border-b border-white/10">
-                                <span class="text-[11px] text-gray-400">{{ $offeneEntwuerfe }} Entwurf/Entwürfe warten auf Freigabe</span>
-                                <span class="flex gap-2">
-                                    <button wire:click="alleFrei" class="text-[11px] text-emerald-300 hover:text-emerald-200">Alle freigeben</button>
-                                    <button wire:click="alleVerwerfen" class="text-[11px] text-rose-300 hover:text-rose-200">Alle verwerfen</button>
-                                </span>
-                            </div>
-                        @endif
-                        {{-- #4 Fan-out-Baum: root-Steps + ihre Kinder (parent_step_id) eingerückt — man sieht,
-                             wie beim „Gericht" der Worker die Basisrezepte darunter abarbeitet. Step-Zeile inkl.
-                             In-Context-Ansicht + „Verwendetes Wissen" (#1a) liegt im geteilten Partial. --}}
-                        @php
-                            $rootSteps = $lauf->steps->whereNull('parent_step_id')->values();
-                            $childrenBy = $lauf->steps->whereNotNull('parent_step_id')->groupBy('parent_step_id');
-                            $stepArgs = fn ($s, $indent) => ['st' => $s, 'stepLabel' => $stepLabel, 'stepColor' => $stepColor, 'refRoute' => $refRoute, 'indent' => $indent];
-                        @endphp
-                        <div class="space-y-1.5">
-                            @forelse($rootSteps as $st)
-                                @include('foodalchemist::livewire.planung.partials.step-zeile', $stepArgs($st, false))
-                                @foreach($childrenBy[$st->id] ?? [] as $child)
-                                    @include('foodalchemist::livewire.planung.partials.step-zeile', $stepArgs($child, true))
-                                @endforeach
-                            @empty
-                                <p class="text-xs text-gray-500">Noch keine Schritte.</p>
-                            @endforelse
-                        </div>
-                    </x-foodalchemist::modal-section>
+                    @include('foodalchemist::livewire.planung.partials.ergebnis')
+                @else
+                    <div class="{{ $card }} p-4 text-xs text-gray-500">Noch kein Lauf — starte in „Basisrezept", „Gericht" oder „Concept" einen Go, der Fortschritt läuft hier durch.</div>
                 @endif
             </div>
 
