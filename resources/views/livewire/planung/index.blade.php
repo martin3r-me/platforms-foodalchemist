@@ -197,7 +197,7 @@
 
         @if($active)
             {{-- ANALYSE --}}
-            <div x-show="tab==='analyse'" class="space-y-4">
+            <div wire:key="planung-tab-analyse" x-show="tab==='analyse'" class="space-y-4">
                 <x-foodalchemist::modal-section title="Analyse / Ausgangslage">
                     <p class="{{ $label ?? 'text-[11px] text-gray-500' }} mb-1">Trend-Inhalt bzw. deine Analyse — die Grundlage für Skizzen und „Go".</p>
                     <textarea wire:model="form.analysis" rows="14" class="{{ $input }} font-mono text-[12px] leading-relaxed"
@@ -206,7 +206,7 @@
             </div>
 
             {{-- SKIZZEN (Divergenz-Board) --}}
-            <div x-show="tab==='skizzen'" class="space-y-4">
+            <div wire:key="planung-tab-skizzen" x-show="tab==='skizzen'" class="space-y-4">
                 <x-foodalchemist::modal-section title="Skizze hinzufügen">
                     <div class="flex gap-2">
                         <input type="text" wire:model="ideeTitel" wire:keydown.enter="ideeHinzu"
@@ -250,17 +250,17 @@
             </div>
 
             {{-- BASISREZEPT — eigener Tab mit seinen Leitplanken --}}
-            <div x-show="tab==='basisrezept'">
+            <div wire:key="planung-tab-basisrezept" x-show="tab==='basisrezept'">
                 @include('foodalchemist::livewire.planung.partials.erstellen-tab', ['scope' => 'rezept', 'vk' => false, 'goLabel' => 'Basisrezept', 'goIcon' => 'heroicon-o-beaker'])
             </div>
 
             {{-- GERICHT — Leitplanken inkl. VK-Achsen --}}
-            <div x-show="tab==='gericht'">
+            <div wire:key="planung-tab-gericht" x-show="tab==='gericht'">
                 @include('foodalchemist::livewire.planung.partials.erstellen-tab', ['scope' => 'gericht', 'vk' => true, 'goLabel' => 'Gericht', 'goIcon' => 'heroicon-o-cake'])
             </div>
 
             {{-- CONCEPT — reuse-basiert, keine Rezept-Regler --}}
-            <div x-show="tab==='concept'" class="space-y-4">
+            <div wire:key="planung-tab-concept" x-show="tab==='concept'" class="space-y-4">
                 <x-foodalchemist::modal-section title="Brief">
                     <label class="{{ $label ?? 'text-[11px] text-gray-500' }}">Brief (geht in die Erzeugung)</label>
                     <textarea wire:model="form.brief" rows="3" class="{{ $input }} mb-3" placeholder="Konzept-Brief — Anlass, Zielgruppe, Richtung …"></textarea>
@@ -280,7 +280,7 @@
             </div>
 
             {{-- WORKER — alle Läufe/Entwürfe zusammen: Status + Fan-out-Baum + Freigabe --}}
-            <div x-show="tab==='worker'" class="space-y-4">
+            <div wire:key="planung-tab-worker" x-show="tab==='worker'" class="space-y-4">
                 @if($laeuft)
                     <div wire:poll.1500ms="pruefeLauf" class="flex items-center gap-2 text-xs text-amber-300">
                         @svg('heroicon-o-arrow-path', 'w-4 h-4 animate-spin')
@@ -301,7 +301,7 @@
 
             {{-- COMPOSER — Foodpairing-Fläche: Anker zusammenstellen, Netz zeigt live was passt (★★★/★★).
                  Graph-only (keine Generierung — separates Thema). Klick auf Kandidat nimmt ihn auf. --}}
-            <div x-show="tab==='composer'">
+            <div wire:key="planung-tab-composer" x-show="tab==='composer'">
                 <div class="grid grid-cols-1 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] gap-4 items-start">
                 {{-- LINKE SPALTE: Picker + Kohäsion --}}
                 <div class="space-y-4 min-w-0">
