@@ -9,8 +9,8 @@ use Illuminate\Support\Facades\DB;
  * Importiert die menschlich reviewte DE/EN-Übersetzung der Foodpairing-Anker aus einer CSV
  * (Spalten: Original_Name_EN;Name_DE;Kategorie;Unterkategorie;…). DETERMINISTISCH, keine KI.
  *
- * Bevorzugter Weg vor {@see AnchorsTranslateCommand} (der KI-Fallback für Anker, die die CSV
- * nicht abdeckt). Match: `anchor.display_de` (aktuell Englisch aus dem Inspire-Import) ==
+ * Deterministischer Weg — der frühere KI-Fallback wurde entfernt, die CSV ist die alleinige
+ * Übersetzungsquelle. Match: `anchor.display_de` (aktuell Englisch aus dem Inspire-Import) ==
  * `CSV.Original_Name_EN` (case-insensitiv, getrimmt). Geschrieben wird:
  *   - display_de  = Name_DE (deutsch)
  *   - display_en  = bisheriger display_de (Original = Idempotenz-Marker)
@@ -136,7 +136,7 @@ class AnchorsTranslateCsvCommand extends Command
             $fehler > 0 ? ' · '.$fehler.' Fehler (offen geblieben)' : ''));
         if ($ohne > 0) {
             $this->line('Nicht abgedeckt (Beispiele): '.implode(', ', $beispieleOhne));
-            $this->line('→ ggf. via foodalchemist:anchors-translate (KI-Fallback) nachziehen.');
+            $this->line('→ CSV um die fehlenden Anker ergänzen und erneut ausführen.');
         }
 
         return self::SUCCESS;
