@@ -113,6 +113,9 @@ class Index extends Component
     /** true, solange der Lauf im Hintergrund rechnet (steuert das Polling). */
     public bool $laeuft = false;
 
+    /** Läuft nach einer Freigabe noch eine async Anreicherung nach (deferred.enrich=queued|running)? Hält das Polling am Leben, bis das Ergebnis wirklich brauchbar ist. */
+    public bool $anreicherungLaeuft = false;
+
     /**
      * Queue-Watchdog (2026-08): gesetzt, wenn der Lauf ungewöhnlich lange auf `running` steht,
      * OHNE dass ein Schritt je Fortschritt machte — fast sicher kein Queue-Worker aktiv (ein echter
@@ -496,13 +499,15 @@ class Index extends Component
 
             return;
         }
-        // Queue-Watchdog: hat KEIN Schritt je Fortschritt gemacht (alle noch queued/running) UND
-        // läuft der Run schon ungewöhnlich lange → fast sicher kein Worker. Sobald irgendein Schritt
-        // done/failed/… erreicht, ist der Worker bewiesen aktiv (legitim langer Fan-out) → kein Hinweis.
-        $fortschritt = $lauf->steps->contains(fn ($s) => ! in_array($s->status, ['queued', 'running'], true));
+        // Queue-Watchdog: „Job-Beweis" = ein Schritt ist done/failed (ein Generator-Job ist BEWIESEN
+        // gelaufen). freigegeben/skipped/verworfen zählen bewusst NICHT — sonst wird der Wächter blind,
+        // sobald eine Stufe freigegeben ist (Bug: stiller Endlos-Spinner, wenn danach der Worker fehlt).
+        // Läuft der Run ungewöhnlich lange OHNE Job-Beweis und warten Schritte → fast sicher kein Worker.
+        $jobBewiesen = $lauf->steps->contains(fn ($s) => in_array($s->status, ['done', 'failed'], true));
+        $wartet = $lauf->steps->contains(fn ($s) => in_array($s->status, ['queued', 'running'], true));
         $alterSek = $lauf->created_at !== null ? $lauf->created_at->diffInSeconds(now()) : 0;
-        $this->hinweis = (! $fortschritt && $alterSek > self::WATCHDOG_SEKUNDEN)
-            ? 'Der Lauf läuft ungewöhnlich lange und kein Schritt ist fertig — vermutlich läuft kein Hintergrund-Worker (Queue). Sobald er den Job abarbeitet, erscheint der Entwurf automatisch.'
+        $this->hinweis = (! $jobBewiesen && $wartet && $alterSek > self::WATCHDOG_SEKUNDEN)
+            ? 'Der Lauf läuft ungewöhnlich lange und kein Schritt kommt voran — vermutlich läuft kein Hintergrund-Worker (Queue). Sobald er die Jobs abarbeitet, geht es automatisch weiter.'
             : null;
     }
 
@@ -673,6 +678,46 @@ class Index extends Component
         }
         $lauf = $cascade->lauf($team, $this->laufId);
         $this->laeuft = $lauf !== null && $lauf->status === 'running';
+        $this->anreicherungLaeuft = $this->anreicherungOffen($lauf);
+    }
+
+    /**
+     * Läuft nach einer Freigabe noch eine async Anreicherung (deferred.enrich=queued|running) eines
+     * Rezept-/Gericht-Steps? Dann pollt die Fläche weiter, obwohl der Run schon „done" sein kann —
+     * so meldet „läuft durch" erst, wenn das Ergebnis wirklich brauchbar (oder der Fehler sichtbar) ist.
+     */
+    private function anreicherungOffen($lauf): bool
+    {
+        if ($lauf === null) {
+            return false;
+        }
+
+        return $lauf->steps->contains(function ($s) {
+            if ($s->status !== 'freigegeben' || ! in_array($s->kind, ['rezept', 'gericht'], true)) {
+                return false;
+            }
+            $deferred = is_array($s->deferred) ? $s->deferred : [];
+            $status = is_array($deferred['enrich'] ?? null) ? ($deferred['enrich']['status'] ?? null) : null;
+
+            return in_array($status, ['queued', 'running'], true);
+        });
+    }
+
+    /** „Neu anreichern" (Cockpit): Anreicherung eines freigegebenen Drafts erneut anstoßen (nach Fehler). */
+    public function neuAnreichern(int $stepId, PlanningCascadeService $cascade): void
+    {
+        $team = $this->team();
+        if ($team === null) {
+            return;
+        }
+        try {
+            $cascade->reAnreichern($team, $stepId);
+            $this->meldung = 'Anreicherung neu gestartet …';
+            $this->fehler = null;
+        } catch (\Throwable $e) {
+            $this->fehler = $e->getMessage();
+        }
+        $this->refreshLaeuft($cascade);
     }
 
     // ── Composer-Tab (Foodpairing-Fläche: Anker zusammenstellen) ───────
@@ -759,6 +804,11 @@ class Index extends Component
         $lauf = ($team !== null && $this->laufId !== null)
             ? app(PlanningCascadeService::class)->lauf($team, $this->laufId)
             : null;
+
+        // Anreicherung läuft async NACH der Freigabe → Polling am Leben halten, bis das Ergebnis
+        // wirklich angereichert (oder der Fehler sichtbar) ist. Bei einem flachen Gericht ist der Run
+        // sonst sofort „done", während das Gericht noch ein roher Entwurf wäre.
+        $this->anreicherungLaeuft = $this->anreicherungOffen($lauf);
 
         // Composer-Tab: Ad-hoc-Netz + Kohäsion (fit/orphan je Anker) + browsebarer Picker.
         $composerNetz = ['nodes' => [], 'edges' => [], 'meta' => []];

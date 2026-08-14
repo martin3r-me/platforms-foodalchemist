@@ -287,10 +287,16 @@
 
             {{-- WORKER — alle Läufe/Entwürfe zusammen: Status + Fan-out-Baum + Freigabe --}}
             <div wire:key="planung-tab-worker" x-show="tab==='worker'" class="space-y-4">
-                @if($laeuft)
+                @if($laeuft || $anreicherungLaeuft)
                     <div wire:poll.1500ms="pruefeLauf" class="flex items-center gap-2 text-xs text-amber-300">
                         @svg('heroicon-o-arrow-path', 'w-4 h-4 animate-spin')
-                        <span>Läuft — der Worker arbeitet die Kaskade ab …</span>
+                        <span>
+                            @if($laeuft)
+                                Läuft — der Worker arbeitet die Kaskade ab …
+                            @else
+                                Freigegeben — die Anreicherung läuft nach (Beschreibung, Kalkulation, Allergene) …
+                            @endif
+                        </span>
                     </div>
                     @if($hinweis !== null)
                         <p class="text-[11px] text-amber-400" data-planung-watchdog>⏱ {{ $hinweis }}</p>

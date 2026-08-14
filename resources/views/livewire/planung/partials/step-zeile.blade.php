@@ -24,6 +24,19 @@
                     <a href="{{ route($refRoute[$st->kind]) }}" class="text-violet-300 hover:text-violet-200 underline">öffnen</a>
                 @endif
             @endif
+            @php
+                $enr = (is_array($st->deferred) && is_array($st->deferred['enrich'] ?? null)) ? $st->deferred['enrich'] : null;
+                $enrStatus = $enr['status'] ?? null;
+            @endphp
+            @if($st->status === 'freigegeben' && in_array($st->kind, ['rezept', 'gericht'], true))
+                @if($enrStatus === 'done')
+                    <span class="text-[10px] text-emerald-400/80" title="angereichert {{ $enr['at'] ?? '' }}">angereichert ✓</span>
+                @elseif(in_array($enrStatus, ['queued', 'running'], true))
+                    <span class="text-[10px] text-amber-300/80 inline-flex items-center gap-1">@svg('heroicon-o-arrow-path', 'w-3 h-3 animate-spin') reichert an …</span>
+                @elseif($enrStatus === 'failed')
+                    <button wire:click="neuAnreichern({{ $st->id }})" class="text-[10px] text-rose-300 hover:text-rose-200 underline" title="{{ $enr['error'] ?? '' }}">Anreicherung fehlgeschlagen — neu anreichern</button>
+                @endif
+            @endif
             @if(in_array($st->status, ['done', 'failed'], true) && in_array($st->kind, ['rezept', 'gericht', 'concept'], true))
                 <button wire:click="neuGenerieren({{ $st->id }})" class="text-amber-300 hover:text-amber-200" title="Neu generieren (verwirft den aktuellen Entwurf)">@svg('heroicon-o-arrow-path', 'w-4 h-4')</button>
             @endif

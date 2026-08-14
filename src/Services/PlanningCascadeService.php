@@ -658,10 +658,39 @@ class PlanningCascadeService
             $params = is_array($step->run?->params) ? $step->run->params : [];
             $zielVk = isset($params['ziel_vk_eur']) ? (float) $params['ziel_vk_eur'] : null;
             $kiBilder = (bool) ($params['ki_bilder'] ?? false);
-            EnrichRecipeJob::dispatch($team->id, $userId, (int) $step->ref_id, $zielVk, $kiBilder);
+            // Anreicherung SYNCHRON als `queued` markieren → die Planung pollt sichtbar durch (der Run
+            // ist bei einem flachen Gericht sofort „done", der Job läuft aber async danach).
+            $this->markEnrichQueued($step);
+            EnrichRecipeJob::dispatch($team->id, $userId, (int) $step->ref_id, $zielVk, $kiBilder, (int) $step->id);
         }
 
         return false;
+    }
+
+    /** Anreicherungs-Status eines Rezept-/Gericht-Steps synchron auf `queued` setzen (Sicht-Signal fürs Polling). */
+    private function markEnrichQueued(FoodAlchemistCascadeRunStep $step): void
+    {
+        $fresh = $step->fresh() ?? $step;
+        $deferred = is_array($fresh->deferred) ? $fresh->deferred : [];
+        $deferred['enrich'] = ['status' => 'queued', 'at' => now()->toIso8601String()];
+        $fresh->update(['deferred' => $deferred]);
+    }
+
+    /**
+     * „Neu anreichern" (Cockpit): stößt die Anreicherung eines bereits freigegebenen Rezept-/Gericht-Steps
+     * erneut an — z. B. nachdem der erste EnrichRecipeJob-Lauf fehlschlug (deferred.enrich=failed).
+     */
+    public function reAnreichern(Team $team, int $stepId): void
+    {
+        $step = $this->ownedStep($team, $stepId);
+        if ($step->ref_type !== 'recipe' || $step->ref_id === null || ! in_array($step->kind, ['rezept', 'gericht'], true)) {
+            return;
+        }
+        $params = is_array($step->run?->params) ? $step->run->params : [];
+        $zielVk = isset($params['ziel_vk_eur']) ? (float) $params['ziel_vk_eur'] : null;
+        $kiBilder = (bool) ($params['ki_bilder'] ?? false);
+        $this->markEnrichQueued($step);
+        EnrichRecipeJob::dispatch($team->id, (int) (Auth::id() ?? 0), (int) $step->ref_id, $zielVk, $kiBilder, (int) $step->id);
     }
 
     /**

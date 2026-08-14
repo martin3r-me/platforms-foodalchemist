@@ -11,6 +11,20 @@
     $stufen = $this->stufenAusSteps($lauf->steps);
     $zustandPill = ['läuft' => 'bg-amber-500/15 text-amber-300', 'prüfen' => 'bg-emerald-500/15 text-emerald-300', 'erledigt' => 'bg-white/10 text-gray-400'];
     $stepArgs = fn ($s, $indent) => ['st' => $s, 'stepLabel' => $stepLabel, 'stepColor' => $stepColor, 'refRoute' => $refRoute, 'indent' => $indent];
+    // Anreicherungs-Bilanz über die freigegebenen Rezept-/Gericht-Steps (deferred.enrich) — damit der
+    // Abschluss ehrlich meldet: freigegeben + angereichert, oder Anreicherung läuft/fehlgeschlagen.
+    $freigegebenGesamt = $lauf->steps->where('status', 'freigegeben')->count();
+    $anrDone = 0; $anrFehler = 0; $anrOffen = 0;
+    foreach ($lauf->steps as $s) {
+        if ($s->status !== 'freigegeben' || ! in_array($s->kind, ['rezept', 'gericht'], true)) { continue; }
+        $enr = (is_array($s->deferred) && is_array($s->deferred['enrich'] ?? null)) ? $s->deferred['enrich'] : [];
+        $es = $enr['status'] ?? null;
+        if ($es === 'done') { $anrDone++; }
+        elseif ($es === 'failed') { $anrFehler++; }
+        elseif (in_array($es, ['queued', 'running'], true)) { $anrOffen++; }
+    }
+    // Terminal-Endzustand: nichts läuft mehr, keine offenen Entwürfe, aber freigegebene Artefakte da.
+    $terminal = $laufRunning === 0 && $offeneEntwuerfe === 0 && $freigegebenGesamt > 0;
 @endphp
 <x-foodalchemist::modal-section title="Kaskade — Stufen &amp; Freigabe">
     @if($lauf->brief)
@@ -18,17 +32,26 @@
     @endif
 
     {{-- Gesamt-Worker-Status (aus den Steps abgeleitet, kein globaler Ping). --}}
-    <div class="flex items-center gap-2 mb-3 text-xs font-medium">
+    <div class="flex items-center gap-2 mb-3 text-xs font-medium flex-wrap">
         @if($laufRunning > 0 && ($hinweis ?? null) !== null)
             <span class="inline-flex items-center gap-1.5 text-amber-400">@svg('heroicon-o-exclamation-triangle', 'w-4 h-4') Worker hängt? — {{ $laufRunning }} Schritt(e) warten (vermutlich kein Queue-Worker)</span>
         @elseif($laufRunning > 0)
             <span class="inline-flex items-center gap-1.5 text-amber-300">@svg('heroicon-o-arrow-path', 'w-4 h-4 animate-spin') Worker arbeitet — {{ $laufRunning }} Schritt(e) laufen{{ $laufDone > 0 ? ', ' . $laufDone . ' fertig' : '' }}</span>
-        @elseif($laufDone > 0)
-            <span class="inline-flex items-center gap-1.5 text-emerald-300">@svg('heroicon-o-check-circle', 'w-4 h-4') Vorschau fertig — {{ $laufDone }} Entwurf/Entwürfe (ansehen / stufenweise freigeben)</span>
+        @elseif($offeneEntwuerfe > 0)
+            <span class="inline-flex items-center gap-1.5 text-emerald-300">@svg('heroicon-o-check-circle', 'w-4 h-4') Vorschau fertig — {{ $offeneEntwuerfe }} Entwurf/Entwürfe (ansehen / stufenweise freigeben)</span>
+        @elseif($terminal)
+            <span class="inline-flex items-center gap-1.5 text-emerald-400">@svg('heroicon-o-check-badge', 'w-4 h-4') Kaskade abgeschlossen — {{ $freigegebenGesamt }} freigegeben{{ $anrOffen > 0 ? ', Anreicherung läuft …' : ($anrDone > 0 ? ' & angereichert' : '') }}</span>
+            @if($anrFehler > 0)
+                <span class="inline-flex items-center gap-1.5 text-rose-300">@svg('heroicon-o-exclamation-triangle', 'w-4 h-4') {{ $anrFehler }} Anreicherung(en) fehlgeschlagen — unten „neu anreichern"</span>
+            @endif
         @elseif($laufFailed > 0)
             <span class="inline-flex items-center gap-1.5 text-rose-300">@svg('heroicon-o-x-circle', 'w-4 h-4') Fehlgeschlagen — Details unten</span>
         @endif
     </div>
+
+    @if($laufRunning > 0 && $freigegebenGesamt > 0)
+        <p class="text-[11px] text-gray-500 mb-3">Eine Stufe ist freigegeben — die nächste wird gerade erzeugt. Jede Stufe wird separat freigegeben.</p>
+    @endif
 
     {{-- Stufen-Abschnitte: je Ebene ein Fortschritts-Header + Steps + Stufen-Freigabe (bei „prüfen"). --}}
     <div class="space-y-3">
