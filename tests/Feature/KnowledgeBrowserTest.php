@@ -137,3 +137,21 @@ it('lehnt das Löschen von geerbtem/globalem Wissen ab (read-only für Nicht-Bes
     // Doc bleibt unangetastet.
     expect(DB::table('foodalchemist_knowledge_documents')->where('id', $id)->whereNull('deleted_at')->exists())->toBeTrue();
 });
+
+it('öffnet ein Doc per Deep-Link (?doc=) ohne 500 — mount() befüllt das Form', function () {
+    $id = DB::table('foodalchemist_knowledge_documents')->insertGetId([
+        'uuid' => (string) UuidV7::generate(), 'slug' => 'regelwerk.deeplink', 'title' => 'Deeplink Doc',
+        'category' => 'regelwerk', 'content_md' => "# Deeplink\nInhalt.\n", 'version' => 1,
+        'content_hash' => hash('sha256', 'dl'), 'char_count' => 14, 'active' => 1,
+        'team_id' => $this->rootTeam->id, 'created_at' => now(), 'updated_at' => now(),
+    ]);
+
+    // #[Url(as: 'doc')] hydratisiert selectedId aus der Query — ohne mount() bliebe $form
+    // leer und der Editor-Render kippte an $form['title'] (Undefined array key → 500).
+    Livewire::withQueryParams(['doc' => $id])
+        ->test(Browser::class)
+        ->assertOk()
+        ->assertSet('selectedId', $id)
+        ->assertSet('form.title', 'Deeplink Doc')
+        ->assertSee('Deeplink Doc');
+});

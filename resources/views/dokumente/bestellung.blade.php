@@ -120,13 +120,13 @@
     @if(($dok['receipt']['booked'] ?? 0) > 0 || ($dok['invoice']['checked'] ?? 0) > 0)
         <div class="moq">
             @if(($dok['receipt']['booked'] ?? 0) > 0)
-                <span class="{{ ($dok['receipt']['differences'] ?? 0) > 0 ? 'warn' : 'ok' }}">Wareneingang: {{ $dok['receipt']['booked'] }}/{{ $dok['receipt']['lines'] }} Zeilen@if(($dok['receipt']['differences'] ?? 0) > 0) · {{ $dok['receipt']['differences'] }} Differenz(en)@endif</span>
+                <span class="{{ ($dok['receipt']['differences'] ?? 0) > 0 ? 'warn' : 'ok' }}">Wareneingang: {{ $dok['receipt']['booked'] }}/{{ $dok['receipt']['lines'] }} Zeilen{{ ($dok['receipt']['differences'] ?? 0) > 0 ? ' · '.$dok['receipt']['differences'].' Differenz(en)' : '' }}</span>
             @endif
             @if(($dok['invoice']['checked'] ?? 0) > 0)
-                <span class="{{ ($dok['invoice']['differences'] ?? 0) > 0 ? 'warn' : 'ok' }}"> · Rechnung: {{ number_format($dok['invoice']['invoice_net'], 2, ',', '.') }} €@if(abs((float) ($dok['invoice']['diff_net'] ?? 0)) >= 0.01) · Diff. {{ number_format($dok['invoice']['diff_net'], 2, ',', '.') }} €@endif</span>
+                <span class="{{ ($dok['invoice']['differences'] ?? 0) > 0 ? 'warn' : 'ok' }}"> · Rechnung: {{ number_format($dok['invoice']['invoice_net'], 2, ',', '.') }} €{{ abs((float) ($dok['invoice']['diff_net'] ?? 0)) >= 0.01 ? ' · Diff. '.number_format($dok['invoice']['diff_net'], 2, ',', '.').' €' : '' }}</span>
             @endif
             @if(($dok['claims']['lines'] ?? 0) > 0)
-                <span class="{{ (($dok['claims']['open'] ?? 0) + ($dok['claims']['credit_expected'] ?? 0)) > 0 ? 'warn' : 'ok' }}"> · Reklamation: {{ $dok['claims']['lines'] }} Zeile(n)@if(($dok['claims']['credit_expected_net'] ?? 0) > 0) · {{ number_format($dok['claims']['credit_expected_net'], 2, ',', '.') }} € erwartet@endif</span>
+                <span class="{{ (($dok['claims']['open'] ?? 0) + ($dok['claims']['credit_expected'] ?? 0)) > 0 ? 'warn' : 'ok' }}"> · Reklamation: {{ $dok['claims']['lines'] }} Zeile(n){{ ($dok['claims']['credit_expected_net'] ?? 0) > 0 ? ' · '.number_format($dok['claims']['credit_expected_net'], 2, ',', '.').' € erwartet' : '' }}</span>
             @endif
         </div>
     @endif

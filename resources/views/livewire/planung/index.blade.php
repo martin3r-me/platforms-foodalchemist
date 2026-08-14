@@ -378,6 +378,14 @@
                                 <strong class="{{ ($bridge['pairs_total'] > 0 && $bridge['pairs_connected'] === $bridge['pairs_total']) ? 'text-emerald-300' : ($bridge['pairs_connected'] > 0 ? 'text-amber-300' : 'text-rose-300') }}">{{ $bridge['pairs_connected'] }}/{{ $bridge['pairs_total'] }}</strong>
                                 Anker-Paare über gemeinsame Partner
                             </span>
+                            @php $tiers = $bridge['tiers'] ?? []; @endphp
+                            @if(($tiers['best'] ?? 0) + ($tiers['good'] ?? 0) > 0)
+                                <span class="text-slate-400">davon
+                                    @if(($tiers['best'] ?? 0) > 0)<strong class="text-violet-300">{{ $tiers['best'] }}× stark</strong>@endif
+                                    @if(($tiers['best'] ?? 0) > 0 && ($tiers['good'] ?? 0) > 0), @endif
+                                    @if(($tiers['good'] ?? 0) > 0){{ $tiers['good'] }}× mittel @endif
+                                </span>
+                            @endif
                             @if(!empty($bridge['top']))
                                 <span class="text-slate-400">stärkste Brücken: {{ implode(', ', $bridge['top']) }}</span>
                             @endif
