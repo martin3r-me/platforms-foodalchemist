@@ -159,6 +159,19 @@ class Browser extends Component
         return $doc;
     }
 
+    /**
+     * Deep-Link/Bookmark auf ein Doc: `#[Url(as: 'doc')]` hydratisiert $selectedId aus
+     * `?doc=`, ruft aber select() NICHT auf — dann bliebe $form leer und der Editor
+     * (rendert bei $selected) griffe auf $form['title'] eines leeren Arrays zu (500).
+     * Hier laden wir das Form nach, sodass ein direkter Link das Doc korrekt öffnet.
+     */
+    public function mount(): void
+    {
+        if ($this->selectedId !== null) {
+            $this->select($this->selectedId);
+        }
+    }
+
     public function select(int $id): void
     {
         $this->creating = false;

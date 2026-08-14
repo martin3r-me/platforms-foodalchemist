@@ -226,7 +226,7 @@
                             {{-- Lese-Ansicht: der Titel ist Überschrift, kein Eingabefeld. Ein Formularfeld
                                  über einem Lesetext lädt zum versehentlichen Tippen ein. --}}
                             <h2 class="text-base font-semibold tracking-tight text-gray-900 truncate" data-wissen-titel-lesen>
-                                {{ $form['title'] ?: 'Ohne Titel' }}
+                                {{ ($form['title'] ?? '') ?: 'Ohne Titel' }}
                             </h2>
                         @else
                             <label class="{{ $label }}">Titel</label>
