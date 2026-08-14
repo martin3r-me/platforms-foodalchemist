@@ -67,6 +67,22 @@ trait SeedsTeamHierarchy
                 // trug nur, solange die Tabelle leer blieb. Reihenfolge: nach users (FK).
                 $core . '/2025_01_09_000001_create_checkins_table.php',
                 $core . '/2025_01_21_000001_add_kpi_fields_to_checkins_table.php',
+                // `context_files` gehört CORE. FA-Branding (Logo/Cover an Foodbook &
+                // Speisekarte) speichert Bilder seit 07899da (2026-08-11) über Cores
+                // ContextFileService — die Module-Migration
+                // 2026_08_11_000002_attach_core_context_files_to_foodalchemist_images
+                // hängt FKs auf `context_files` an, und delete() liest
+                // `context_file_variants`. Ohne diese Tabellen scheitern die
+                // Branding-Upload-Tests mit "no such table: context_files". Die
+                // user_id-nullable-ALTER ist plain ->change() (Prod: user_id nullable,
+                // z.B. Upload ohne Acting-User) und SQLite-safe. Bewusst NICHT dabei:
+                // die ALTERs auf context_file_references (…_000004 / make_context_file_id_nullable)
+                // — die nutzen SHOW INDEX / DROP FOREIGN KEY / information_schema (MySQL-only)
+                // und brechen auf SQLite. Reihenfolge egal: Migrator sortiert nach Namen.
+                $core . '/2025_01_01_000001_create_context_files_table.php',
+                $core . '/2025_01_01_000002_create_context_file_variants_table.php',
+                $core . '/2025_01_01_000003_create_context_file_references_table.php',
+                $core . '/2026_02_15_000001_make_user_id_nullable_on_context_files_table.php',
                 $module,
             ],
         ])->run();
