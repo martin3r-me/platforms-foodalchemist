@@ -548,6 +548,43 @@ class Index extends Component
     }
 
     /**
+     * Ein geplantes Sub-Rezept einzeln JETZT erzeugen (Etappe 1, Teil 2) — vorziehen, ohne auf die
+     * Freigabe der Stufe darüber zu warten. Der Step geht auf `running`; die Fläche pollt wie beim Go.
+     */
+    public function erzeugeGeplant(int $stepId, PlanningCascadeService $cascade): void
+    {
+        $team = $this->team();
+        if ($team === null) {
+            return;
+        }
+        try {
+            $cascade->erzeugeGeplantenStep($team, $stepId);
+            $this->meldung = 'Sub-Rezept wird erzeugt …';
+            $this->fehler = null;
+        } catch (\Throwable $e) {
+            $this->fehler = $e->getMessage();
+        }
+        $this->refreshLaeuft($cascade);
+    }
+
+    /** Ein geplantes Sub-Rezept verwerfen („brauche ich nicht") — es wird bei der Stufen-Freigabe nicht erzeugt. */
+    public function verwirfGeplant(int $stepId, PlanningCascadeService $cascade): void
+    {
+        $team = $this->team();
+        if ($team === null) {
+            return;
+        }
+        try {
+            $cascade->verwirfGeplantenStep($team, $stepId);
+            $this->meldung = 'Sub-Rezept verworfen.';
+            $this->fehler = null;
+        } catch (\Throwable $e) {
+            $this->fehler = $e->getMessage();
+        }
+        $this->refreshLaeuft($cascade);
+    }
+
+    /**
      * A: Inline-Zutaten-Review eines Drafts auf-/zuklappen (voll editierbar vor Freigabe).
      * On-Demand — der IngredientEditor wird erst beim Öffnen gemountet.
      */

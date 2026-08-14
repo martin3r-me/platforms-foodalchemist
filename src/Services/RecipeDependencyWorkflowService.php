@@ -111,6 +111,44 @@ class RecipeDependencyWorkflowService
     }
 
     /**
+     * Schaltet EINEN geplanten Sub-Rezept-Step scharf — der „jetzt erzeugen"-Knopf je Zeile, VOR der
+     * Freigabe der Stufe darüber. Nutzt die am Eltern-Step aufgeschobenen Kind-Parameter
+     * ({@see afterGenerated}: `deferred.children.params`/`user_id`), fällt sonst auf die Lauf-Params
+     * zurück. Dispatcht genau EINEN {@see GenerateRecipeJob} (`geplant` → `running`). Die spätere
+     * Stufen-Freigabe ({@see dispatchChildren}) sieht den Step dann nicht mehr als `geplant` und
+     * startet ihn nicht doppelt. Kein Re-Planen: die Zeile + ihre Dependency stehen schon.
+     *
+     * @return bool true, wenn ein Job dispatcht wurde (Aufrufer recomputet den Run danach)
+     */
+    public function dispatchGeplantesKind(Team $team, FoodAlchemistCascadeRunStep $child): bool
+    {
+        if ($child->status !== 'geplant' || $child->kind !== 'rezept') {
+            return false;
+        }
+        $text = trim((string) $child->label);
+        if ($text === '') {
+            return false;
+        }
+        $parent = $child->parent_step_id !== null ? FoodAlchemistCascadeRunStep::find($child->parent_step_id) : null;
+        $d = is_array($parent?->deferred['children'] ?? null) ? $parent->deferred['children'] : [];
+        $params = is_array($d['params'] ?? null) ? $d['params'] : (is_array($child->run?->params) ? $child->run->params : []);
+        $userId = (int) ($d['user_id'] ?? \Illuminate\Support\Facades\Auth::id() ?? 0);
+        $kindVollAnreichern = (bool) ($params['_voll_anreichern'] ?? false);
+        unset($params['_voll_anreichern'], $params['_defer_children']);
+
+        $runId = (string) Str::uuid();
+        $child->update(['status' => 'running', 'generator_run_id' => $runId]);
+        Cache::put(GenerateRecipeJob::cacheKey($runId), ['status' => 'pending'], now()->addMinutes(60));
+        GenerateRecipeJob::dispatch($runId, $team->id, $userId, $text, [
+            ...$params,
+            'cascade_step_id' => $child->id,
+            'auto_dependencies' => true,
+        ], false, $kindVollAnreichern);
+
+        return true;
+    }
+
+    /**
      * Plant die Sub-Rezepte eines Steps: je offener `basisrezept_anlegen`-Zeile ein Kind-Step
      * (`kind=rezept`, Status `geplant` = benannt, noch nicht erzeugt) + die Dependency auf die
      * Eltern-Zutat. Legt KEINE Jobs an — das ist {@see dispatchChildren}. Idempotent über

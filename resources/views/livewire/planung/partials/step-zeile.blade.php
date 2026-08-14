@@ -46,6 +46,12 @@
                 <button wire:click="gibFrei({{ $st->id }})" class="text-emerald-300 hover:text-emerald-200" title="Freigeben">@svg('heroicon-o-check', 'w-4 h-4')</button>
                 <button wire:click="verwirf({{ $st->id }})" class="text-rose-300 hover:text-rose-200" title="Verwerfen">@svg('heroicon-o-trash', 'w-4 h-4')</button>
             @endif
+            {{-- Etappe 1, Teil 2: geplante Sub-Rezepte einzeln bedienen — jetzt erzeugen (vorziehen)
+                 oder verwerfen — VOR der Freigabe der Stufe darüber. --}}
+            @if($st->status === 'geplant')
+                <button wire:click="erzeugeGeplant({{ $st->id }})" class="text-emerald-300 hover:text-emerald-200" title="Jetzt erzeugen (vorziehen)">@svg('heroicon-o-bolt', 'w-4 h-4')</button>
+                <button wire:click="verwirfGeplant({{ $st->id }})" class="text-rose-300 hover:text-rose-200" title="Brauche ich nicht (verwerfen)">@svg('heroicon-o-trash', 'w-4 h-4')</button>
+            @endif
         </span>
     </div>
     @if($st->status === 'failed' && $st->error)

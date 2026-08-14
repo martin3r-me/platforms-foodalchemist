@@ -776,6 +776,38 @@ class PlanningCascadeService
         FoodAlchemistCascadeRunStep::whereIn('id', $ids)->forceDelete();
     }
 
+    /**
+     * „Jetzt erzeugen" je Zeile (Etappe 1, Teil 2): schaltet EINEN geplanten Sub-Rezept-Step scharf,
+     * OHNE auf die Freigabe der Stufe darüber zu warten — der Mensch kann ein einzelnes Sub-Rezept
+     * vorziehen. Nur `geplant`-Steps; die spätere Stufen-Freigabe dispatcht ihn nicht doppelt
+     * ({@see RecipeDependencyWorkflowService::dispatchGeplantesKind}).
+     */
+    public function erzeugeGeplantenStep(Team $team, int $stepId): void
+    {
+        $step = $this->ownedStep($team, $stepId);
+        if (app(RecipeDependencyWorkflowService::class)->dispatchGeplantesKind($team, $step)) {
+            $this->recomputeRunStatus((int) $step->cascade_run_id);
+        }
+    }
+
+    /**
+     * „Brauche ich nicht" je Zeile (Etappe 1, Teil 2): verwirft EINEN geplanten Sub-Rezept-Step vor
+     * seiner Erzeugung. Der Step wird als `verworfen` behalten (Tombstone), NICHT hart gelöscht — so
+     * schaltet die spätere Stufen-Freigabe ({@see RecipeDependencyWorkflowService::dispatchChildren})
+     * ihn über den `dedupe_key`-Treffer bewusst nicht scharf (Status ≠ `geplant` → übersprungen);
+     * die Eltern-Zutat bleibt als flache Zeile stehen. Die Dependency wird entfernt (kein Late-Bind).
+     */
+    public function verwirfGeplantenStep(Team $team, int $stepId): void
+    {
+        $step = $this->ownedStep($team, $stepId);
+        if ($step->status !== 'geplant') {
+            return;
+        }
+        FoodAlchemistCascadeRecipeDependency::where('child_step_id', $step->id)->delete();
+        $step->update(['status' => 'verworfen']);
+        $this->recomputeRunStatus((int) $step->cascade_run_id);
+    }
+
     /** Bulk-Freigabe aller noch offenen (done) Steps eines Laufs. */
     public function gibRunFrei(Team $team, int $runId): void
     {
