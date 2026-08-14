@@ -84,7 +84,7 @@ FA `main` = `eb85e3c`, demo deployt + Migration `[180] Ran`. Nachweis: `Planning
 - [x] **Ehrlicher Durchlauf (P0.A)** — Erfolgs-Banner „Kaskade abgeschlossen", Watchdog (done/failed = Job-Beweis, nicht mehr blind nach Freigabe), Anreicherungs-Status je Step (`deferred.enrich`), „neu anreichern", Polling hält bis Anreicherung durch (`demo-geprüft` — live bestätigt: „Kaskade abgeschlossen — 1 freigegeben, Anreicherung läuft …" + „reichert an …"-Badge sichtbar)
 - [x] **Zutaten-Review inline** — `IngredientEditor` je Draft (tauschen/entfernen/ergänzen vor Freigabe) (`demo-geprüft`)
 
-> **Offene Abnahme (Etappe 0):** (1) Anreicherung bis „angereichert ✓" abschließen (Screenshot zeigt noch „läuft"). (2) **Beobachtung Dominique:** im Worker liegen die Sub-Rezepte (Consommé/Espuma) nur als 📖-Referenz IN der Zutatenliste — sie sollten als eigene **Basisrezepte-Stufe** zum Abarbeiten/Freigeben erscheinen → Etappe 1. (3) Gericht-mit-Kindern 2-stufig, Worker-Stopp-Probe.
+> **Offene Abnahme (Etappe 0):** (1) Anreicherung bis „angereichert ✓" abschließen (Screenshot zeigt noch „läuft"). (2) ~~**Beobachtung Dominique:** im Worker liegen die Sub-Rezepte (Consommé/Espuma) nur als 📖-Referenz IN der Zutatenliste — sie sollten als eigene **Basisrezepte-Stufe** zum Abarbeiten/Freigeben erscheinen~~ → gebaut in Etappe 1 (`d018af1`), Real-Abnahme auf demo offen. (3) Gericht-mit-Kindern 2-stufig, Worker-Stopp-Probe.
 
 ---
 
@@ -93,7 +93,9 @@ FA `main` = `eb85e3c`, demo deployt + Migration `[180] Ran`. Nachweis: `Planning
 ### 🥇 Etappe 1 — Qualität: **Gericht = Basisrezepte** (das große Finetuning)
 *Das Kernversprechen. Heute baut die Generierung flache Zutaten statt Halbfabrikate (Sauce/Jus/Püree) als eigene Sub-Basisrezepte zu zerlegen (Beispiel: Steinpilze + Rinderjus → keine „Steinpilz-Rahmsauce").*
 
-- [ ] **★ Worker führt Basisrezepte als eigene Stufe** — die generierten Sub-Rezepte (Consommé/Espuma …) erscheinen als abarbeitbare **Basisrezepte-Stufe** (Vorschau/Freigabe je Stück), nicht nur als 📖-Referenz IN der Gericht-Zutatenliste (Beobachtung Dominique 2026-08-14)
+- [x] **★ Worker führt Basisrezepte als eigene Stufe** — die generierten Sub-Rezepte (Consommé/Espuma …) erscheinen als abarbeitbare **Basisrezepte-Stufe** (Vorschau/Freigabe je Stück), nicht nur als 📖-Referenz IN der Gericht-Zutatenliste (Beobachtung Dominique 2026-08-14)
+  → `d018af1` (`gebaut`, Sandbox `getestet`): neuer Step-Status **`geplant`** (Sub-Rezept benannt, noch nicht erzeugt, kein Job — wartet auf die Freigabe der Stufe darüber) wird schon beim Aufschieben angelegt; die Freigabe schaltet **denselben** Step scharf (`geplant`→`running`, keine Dublette). Direkt verdrahtete Sub-Rezepte stehen als **`skipped`** = „übernommen" (Reuse-Treffer, ansehbar, nicht freigebbar) in der Stufe. Run-Status: `geplant` → `review` (Mensch am Zug). Cockpit: Zähler „N geplant / N übernommen" + Zustand `geplant`. 6 neue Tests, 57/57 grün.
+  - [ ] **Rest-Chunk (Teil 2):** geplante Sub-Rezepte VOR der Gericht-Freigabe einzeln bedienen — „jetzt erzeugen" + „brauche ich nicht" (verwerfen) je `geplant`-Zeile. Heute sind sie sichtbar, aber nur als Ganzes über die Stufe darüber auslösbar.
 - [ ] **Scope-Treue** — ein „Freies Basisrezept"-Start erzeugte im Test eine „Gerichte"-Stufe (Tomatensuppe); der Start-Tab muss die Ebene korrekt setzen (Basisrezept ≠ Gericht)
 - [ ] **LLM-Contract:** `vk.generator` / `recipe.generator` (`config/foodalchemist.php`) bekommen einen Slot für **benannte Sub-Komponenten** (statt flachem `zutaten[]`)
 - [ ] **Heuristik erweitern:** `MatchHeuristics` Marker-Listen (`:51-65`) um `sauce/rahmsauce/jus/sud/essenz/dressing/vinaigrette` (Zwischenschritt, bleibt Keyword-Hack)
