@@ -377,7 +377,7 @@
                                 <span class="text-slate-400">davon
                                     @if(($tiers['best'] ?? 0) > 0)<strong class="text-violet-300">{{ $tiers['best'] }}× stark</strong>@endif
                                     @if(($tiers['best'] ?? 0) > 0 && ($tiers['good'] ?? 0) > 0), @endif
-                                    @if(($tiers['good'] ?? 0) > 0){{ $tiers['good'] }}× mittel@endif
+                                    @if(($tiers['good'] ?? 0) > 0){{ $tiers['good'] }}× mittel @endif
                                 </span>
                             @endif
                             @if(!empty($bridge['top']))
