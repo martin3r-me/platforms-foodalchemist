@@ -170,6 +170,23 @@ it('halbfabrikat_gate_rejects_grundzutaten', function () {
         ->and($this->h->queryIstHalbfabrikat(($this->ts)('Sojasauce')))->toBeFalse();
 });
 
+// Roadmap Etappe 1: gemachte Saucen/Reduktionen als Halbfabrikat (SUB_SAUCEN_MARKER)
+it('halbfabrikat_gate_erkennt_gemachte_saucen', function () {
+    foreach (['Steinpilz-Rahmsauce', 'Rotwein Jus', 'Kalbs-Sud',
+        'Limonen-Vinaigrette', 'Balsamico-Dressing', 'Sauce Beurre blanc'] as $name) {
+        expect($this->h->queryIstHalbfabrikat(($this->ts)($name)))->toBeTrue($name);
+    }
+});
+
+// Guard: gekaufte Ein-Wort-Kondimente bleiben Rohware — Token-EXAKT trifft sie nicht
+it('halbfabrikat_gate_verschont_gekaufte_kondimente', function () {
+    foreach (['Sojasauce', 'Fischsauce', 'Austernsauce'] as $name) {
+        expect($this->h->queryIstHalbfabrikat(($this->ts)($name)))->toBeFalse($name)
+            ->and($this->h->istSubRezeptKandidat($name))->toBeFalse($name);
+    }
+    expect($this->h->istSubRezeptKandidat('Steinpilz-Rahmsauce'))->toBeTrue();
+});
+
 // ──── P8: Button-Heuristik ───────────────────────────────────────────────
 
 it('sub_kandidat_erkennt_zubereitungen', function () {

@@ -54,6 +54,22 @@ class MatchHeuristics
         'bechamel', 'béchamel', 'mornay', 'hollandaise', 'bearnaise', 'béarnaise',
     ];
 
+    /**
+     * 4.4k (Erweiterung 2026-08-14, Roadmap Etappe 1 »Gericht = Basisrezepte«):
+     * gemachte Saucen/Reduktionen als Halbfabrikat-Marker — damit »Steinpilz-Rahmsauce«
+     * als eigenes Sub-Basisrezept gilt statt flach in Steinpilze + Sahne aufgelöst zu werden (§4).
+     * Token-EXAKT via patternMatchesToken (≤ 5 Chars exakt, länger als Präfix), NICHT Substring:
+     * so trifft »sauce«/»jus«/»sud« nur als eigenständiges Token (Tokenizer splittet »-«/Space),
+     * während gekaufte Ein-Wort-Kondimente (Sojasauce/Fischsauce) NICHT anschlagen
+     * (Golden-Test: Sojasauce = kein Halbfabrikat). Bleibt Keyword-Hack bis zum LLM-Komponenten-Flag.
+     * »essenz« bewusst NICHT aufgenommen: mehrdeutig zwischen gemachter Klar-Essenz (Sub) und
+     * gekaufter Frucht-Essenz/Extrakt (GP) — die DoD M4-14 pinnt »Drachenfrucht-Essenz« als GP-Lücke.
+     * Disambiguierung gehört ans LLM-Komponenten-Flag, nicht an ein blindes Keyword.
+     */
+    public const SUB_SAUCEN_MARKER = [
+        'sauce', 'rahmsauce', 'jus', 'sud', 'dressing', 'vinaigrette',
+    ];
+
     /** P8 — breitere Zubereitungs-Marker, NUR Button-Heuristik. */
     public const ZUBEREITUNG_MARKER = [
         'creme', 'crème', 'mousse', 'ganache', 'crumble', 'streusel', 'krokant',
@@ -102,6 +118,11 @@ class MatchHeuristics
         foreach ($queryTokens as $t) {
             foreach (self::HALBFABRIKAT_MARKER as $m) {
                 if (mb_strlen($m) >= 4 && str_contains($t, $m)) {
+                    return true;
+                }
+            }
+            foreach (self::SUB_SAUCEN_MARKER as $m) {
+                if (self::patternMatchesToken($t, $m)) {
                     return true;
                 }
             }
