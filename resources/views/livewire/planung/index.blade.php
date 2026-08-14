@@ -336,7 +336,13 @@
                         </div>
                     @endif
 
-                    <p class="text-[10px] text-slate-500 mb-1">{{ $composerBrowse['total'] }} Anker · Punkt = Fit zur Auswahl · Klick fügt hinzu</p>
+                    <p class="text-[10px] text-slate-500 mb-1">
+                        @if($composerFocus !== null && $composerFokusLabel)
+                            Punkt = passt zu <span class="text-violet-300">{{ $composerFokusLabel }}</span> · Klick fügt hinzu
+                        @else
+                            {{ $composerBrowse['total'] }} Anker · Punkt = Fit zur Auswahl · Klick fügt hinzu
+                        @endif
+                    </p>
                     <div class="max-h-64 overflow-y-auto rounded-lg border border-white/10 divide-y divide-white/5">
                         @forelse($composerBrowse['items'] as $it)
                             <button type="button" wire:key="cbrowse-{{ $it['id'] }}" wire:click="composerAdd({{ $it['id'] }})"
@@ -390,8 +396,19 @@
                             Kandidaten (★★★/★★), wie die Anker zusammenhängen und wo etwas nicht passt.
                         </p>
                     @else
+                        @if($composerFocus !== null && $composerFokusLabel)
+                            <div class="mb-2 flex flex-wrap items-center gap-2 text-[11px]">
+                                <span class="inline-flex items-center gap-1.5 px-2 py-1 rounded-full bg-violet-500/25 text-violet-100 border border-violet-400/40">
+                                    Fokus: {{ $composerFokusLabel }}
+                                    <button type="button" wire:click="composerFocus({{ $composerFocus }})" class="text-violet-200 hover:text-white leading-none" title="Fokus aufheben">&times;</button>
+                                </span>
+                                <span class="text-slate-500">nur seine Verbindungen · Klick aufs Zentrum oder × hebt auf</span>
+                            </div>
+                        @else
+                            <p class="mb-2 text-[10px] text-slate-500">Tipp: Klick auf einen Anker fokussiert ihn — nur seine Verbindungen + Stärke bleiben sichtbar.</p>
+                        @endif
                         <div wire:ignore
-                             wire:key="composer-netz-{{ $composerNetz['meta']['sig'] ?? '0' }}"
+                             wire:key="composer-netz-{{ $composerNetz['meta']['sig'] ?? '0' }}-f{{ $composerFocus ?? 0 }}"
                              x-data="pairingNetzGraph({
                                  nodes: @js($composerNetz['nodes']),
                                  edges: @js($composerNetz['edges']),
@@ -399,7 +416,9 @@
                                  canvasW: {{ (float) ($composerNetz['meta']['canvas_w'] ?? 1000) }},
                                  canvasH: {{ (float) ($composerNetz['meta']['canvas_h'] ?? 760) }},
                                  typDefault: @js($composerNetz['meta']['typ_default'] ?? ['stern3' => true, 'stern2' => true]),
+                                 focusId: {{ $composerFocus ?? 'null' }},
                                  onKandidatClick: (id) => $wire.composerAdd(id),
+                                 onAnkerClick: (id) => $wire.composerFocus(id),
                              })">
                             <div class="flex flex-wrap items-center gap-2 mb-2 text-[11px]">
                                 <span class="text-slate-400 mr-1">Zeigen:</span>

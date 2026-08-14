@@ -1533,7 +1533,7 @@ class PairingService
      * @param  array<int>  $selectedIds
      * @return array{items: list<array>, total: int, kategorien: list<string>}
      */
-    public function composerAnkerBrowse(Team $team, string $q, ?string $category, array $selectedIds, int $limit = 200): array
+    public function composerAnkerBrowse(Team $team, string $q, ?string $category, array $selectedIds, int $limit = 200, ?int $focusId = null): array
     {
         $selected = array_values(array_unique(array_map('intval', $selectedIds)));
         $q = trim($q);
@@ -1550,10 +1550,12 @@ class PairingService
         $total = (clone $query)->count();
         $rows = $query->orderBy('display_de')->limit($limit)->get(['id', 'slug', 'display_de', 'category']);
 
-        // Best/Good relativ zur aktuellen Auswahl (Partner der Auswahl, gebucketet).
+        // Best/Good-Badge: bei Fokus relativ zum EINEN fokussierten Anker („was passt zu X"),
+        // sonst relativ zur ganzen Auswahl.
+        $badgeBasis = $focusId !== null ? [$focusId] : $selected;
         $badge = [];
-        if ($selected !== []) {
-            [$kand] = $this->kandidatenFuerAnker($selected);
+        if ($badgeBasis !== []) {
+            [$kand] = $this->kandidatenFuerAnker($badgeBasis);
             foreach ($kand as $c) {
                 $badge[(int) $c['id']] = $c['typ']; // stern3 | stern2
             }
