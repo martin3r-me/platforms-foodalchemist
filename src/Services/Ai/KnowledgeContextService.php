@@ -41,6 +41,9 @@ class KnowledgeContextService
 
     public const CONCEPT_TRUNCATE_CHARS = 4000;
 
+    /** Etappe 1: Fallback-Budget für `regelwerk:always` — fasst die §2–§4-Region (~6,5k) mit Reserve. */
+    public const REGELWERK_TRUNCATE_CHARS = 7000;
+
     /**
      * Haupt-Einstieg (Pseudocode §3): baut den Wissens-Block für ein KI-Feature.
      *
@@ -99,6 +102,20 @@ class KnowledgeContextService
                 $parts[] = $trend;
             }
             $snap('trend', $before);
+        }
+
+        // ── 0c. REGELWERK BASISREZEPTE (Etappe 1 »Mise en Place«: Gericht = Basisrezepte) ──
+        // Verbindliche Bau-Regel (§2–§4) VOR dem Food-Wissen: sie sagt, WIE ein Gericht aus
+        // Sub-Basisrezepten gebaut wird (Sauce/Jus/Püree = eigenes Sub-Rezept), bevor die
+        // Zutaten-Ebene darunter greift. `always` + dediziert (NICHT die generische discovery —
+        // Regelwerk ist Handwerk, kein Produkt; s. regelwerkBlock). Leere Kategorie ⇒ kein Block.
+        if (($r = $routing->get('regelwerk:always')) !== null) {
+            $before = count($filesUsed);
+            $regelwerk = $this->regelwerkBlock((int) ($r->max_chars_per_doc ?: self::REGELWERK_TRUNCATE_CHARS), $filesUsed);
+            if ($regelwerk !== null) {
+                $parts[] = $regelwerk;
+            }
+            $snap('regelwerk', $before);
         }
 
         // ── 1. VAULT-WISSEN: Cross-Cutting (always) + Domains (discovery) ──
@@ -167,7 +184,7 @@ class KnowledgeContextService
         // Werten (Niveau/Sektor) entdeckt und gedeckelt geladen. Damit skaliert die Wissensbasis:
         // eine neue Kategorie braucht nur eine Routing-Zeile, KEINEN Service-Code. Bestehende
         // Kategorien werden übersprungen → Verhalten für sie byte-identisch (golden-safe).
-        $spezial = ['domain', 'pairing', 'trend', 'concept', 'cross_cutting', 'niveau'];   // niveau hat einen eigenen typ-abhängigen Selektor (3b)
+        $spezial = ['domain', 'pairing', 'trend', 'concept', 'cross_cutting', 'niveau', 'regelwerk'];   // niveau (3b) + regelwerk (0c) haben eigene dedizierte Selektoren
         $leitplankenQuery = trim($description . ' ' . implode(' ', array_filter([
             (string) ($params['niveau'] ?? $params['level'] ?? ''),
             (string) ($params['sektor'] ?? ''),
@@ -387,6 +404,60 @@ class KnowledgeContextService
         return "# CONCEPTING-WISSEN (Konzept-/Menü-Handwerk: Dramaturgie, Gang-Aufbau, Anlass- und Gäste-Fit, Balance)\n\n"
             . "Maßstab für den PLAN: es sagt, WIE ein gutes Konzept gebaut ist — nicht, welches Gericht darin steht.\n\n"
             . implode("\n\n---\n\n", $blocks);
+    }
+
+    /**
+     * Etappe 1 (Roadmap »Mise en Place« 2026-08-14): das REGELWERK BASISREZEPTE
+     * (§2 Verarbeitungs-Reduktion · §3 Pürees/Marks/Coulis · §4 Sub-Rezept-Hierarchie) als
+     * verbindliche Bau-Regel in den Rezept-Generator. Bewusst `always` + dediziert statt der
+     * generischen discovery: Regelwerk ist HANDWERK, kein Produkt-Dossier — eine
+     * Beschreibungs-Discovery (Slug-Token gegen die Zutaten) würde es bei realen Rezept-Briefs
+     * NIE treffen (kein Overlap »Steinpilz« ↔ »basisrezepte«). Deterministisch: der
+     * Basisrezepte-Slug wird gezielt gewählt und daraus die §2–§4-Region extrahiert (nicht der
+     * ganze ~53k-Text — §2 beginnt erst bei ~17k, ein blinder Head-Truncate verfehlt sie).
+     * Fehlt der Doc ⇒ null (Invariante 6); fehlen die §-Marker ⇒ Head-Ausschnitt als Fallback.
+     *
+     * @param  list<string>  $filesUsed  by-ref-Audit
+     */
+    private function regelwerkBlock(int $maxChars, array &$filesUsed): ?string
+    {
+        $doc = DB::table('foodalchemist_knowledge_documents')
+            ->where('category', 'regelwerk')->where('active', 1)->whereNull('deleted_at')
+            ->where('slug', 'like', '%basisrezept%')
+            ->orderBy('slug')->first(['slug', 'content_md', 'version']);
+        if ($doc === null) {
+            return null;                                             // Invariante 6: fehlende Quelle = leerer Kontext
+        }
+
+        $kern = trim($this->extrahiereRegelwerkKern((string) $doc->content_md));
+        if ($kern === '') {
+            return null;
+        }
+        $filesUsed[] = "{$doc->slug}@v{$doc->version}";
+
+        return "# REGELWERK BASISREZEPTE (verbindliche Bau-Regel — §2 Verarbeitungs-Reduktion · §3 Pürees · §4 Sub-Rezept-Hierarchie)\n\n"
+            . "Baue das Gericht AUS BASISREZEPTEN: Sauce/Jus/Fond/Sud/Püree/Espuma sind eigene "
+            . "Sub-Basisrezepte, keine flachen Rohzutaten (kein «Steinpilz-Rahmsauce» aus "
+            . "Steinpilzen + Sahne). Halte dich an diese Regeln:\n\n"
+            . $this->truncate($kern, $maxChars);
+    }
+
+    /**
+     * Schneidet aus dem Basisrezepte-Regelwerk die für die Rezept-Erzeugung tragende Region
+     * §2–§4 (»## §2 …« bis exkl. »## §5 …«). Ohne Start-Marker ⇒ ganzer Text (der Aufrufer
+     * Head-Truncatet dann); ohne End-Marker ⇒ ab §2 bis Doc-Ende. Rein string-basiert, keine
+     * DB — robust gegen künftige Umnummerierung (nie Fehler, Invariante 6).
+     */
+    private function extrahiereRegelwerkKern(string $md): string
+    {
+        $start = mb_strpos($md, '## §2');
+        if ($start === false) {
+            return $md;
+        }
+        $rest = mb_substr($md, $start);
+        $end = mb_strpos($rest, '## §5');
+
+        return $end === false ? $rest : mb_substr($rest, 0, $end);
     }
 
     /**

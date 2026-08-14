@@ -252,6 +252,12 @@ class KnowledgeImportCommand extends Command
             ['ai_generate_recipe', 'niveau', 'discovery', 1, 3000],
             ['ai_generate_recipe', 'kueche', 'discovery', 3, 3000],
             ['ai_generate_recipe', 'kreativ_input', 'discovery', 3, 2000],
+            // Etappe 1 (»Mise en Place« 2026-08-14): das Regelwerk Basisrezepte (§2 Verarbeitungs-
+            // Reduktion · §3 Pürees · §4 Sub-Rezept-Hierarchie) als verbindliche Bau-Regel in den
+            // Rezept-Generator. `always` + dediziert (regelwerkBlock) statt discovery: Regelwerk ist
+            // Handwerk, kein Produkt — eine Zutaten-Discovery würde es nie treffen. Spiegel von
+            // Migration 2026_08_14_000010. Deckel: 1 Doc (Basisrezepte), §2–§4-Region ~7k.
+            ['ai_generate_recipe', 'regelwerk', 'always', 1, 7000],
             // Step-by-Step nutzt Technik-/Domain-Wissen, aber keine kreative Rezept-Ideen-Ebene.
             // Spiegel von Migration 2026_08_11_000003.
             ['recipe.steps', 'cross_cutting', 'always', null, null],
