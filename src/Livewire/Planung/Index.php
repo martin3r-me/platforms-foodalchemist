@@ -47,6 +47,9 @@ class Index extends Component
     /** Composer-Picker: Kategorie-Filter (leer = alle). */
     public string $composerCategory = '';
 
+    /** Composer-Fokus: aktiv fokussierter Anker (Klick im Netz) — Netz dimmt auf ihn, Picker rankt relativ zu ihm. */
+    public ?int $composerFocus = null;
+
     // ── Leitstelle: Richtungs-Regler (Leitplanken) für den Go ──────────────
     /**
      * Die Regler des Planung-Go — Union aus Basisrezept- + Gericht-Achsen (die VK-
@@ -540,6 +543,22 @@ class Index extends Component
             $this->composerAnker,
             fn ($a) => (int) $a['id'] !== $id
         ));
+        if ($this->composerFocus === $id) {
+            $this->composerFocus = null;
+        }
+    }
+
+    /** Fokus auf einen Anker setzen/aufheben (Klick im Netz; 0 oder erneut derselbe = aufheben). */
+    public function composerFocus(int $id): void
+    {
+        if ($id === 0 || $this->composerFocus === $id) {
+            $this->composerFocus = null;
+
+            return;
+        }
+        if (in_array($id, array_map('intval', array_column($this->composerAnker, 'id')), true)) {
+            $this->composerFocus = $id;
+        }
     }
 
     // ── Datenbeschaffung ───────────────────────────────────────────────
@@ -599,9 +618,25 @@ class Index extends Component
                 // Direkt-Pairing-Kohäsion nur als Sekundär-Info im Readout (Brücken-Metrik = meta.bridge).
                 $composerCohesion = $pairing->composerCohesion($composerIds);
             }
+            // Fokus (falls gesetzt) → Picker-Badge/Sortierung relativ zum fokussierten Anker.
             $composerBrowse = $pairing->composerAnkerBrowse(
-                $team, (string) $this->composerTerm, $this->composerCategory !== '' ? $this->composerCategory : null, $composerIds
+                $team, (string) $this->composerTerm, $this->composerCategory !== '' ? $this->composerCategory : null,
+                $composerIds, 200, $this->composerFocus
             );
+        }
+
+        // Fokus-Label (und Fokus verwerfen, wenn der Anker nicht mehr in der Auswahl ist).
+        $composerFokusLabel = null;
+        if ($this->composerFocus !== null) {
+            foreach ($this->composerAnker as $a) {
+                if ((int) $a['id'] === $this->composerFocus) {
+                    $composerFokusLabel = $a['label'];
+                    break;
+                }
+            }
+            if ($composerFokusLabel === null) {
+                $this->composerFocus = null;
+            }
         }
 
         return view('foodalchemist::livewire.planung.index', [
@@ -613,6 +648,8 @@ class Index extends Component
             'composerNetz' => $composerNetz,
             'composerCohesion' => $composerCohesion,
             'composerBrowse' => $composerBrowse,
+            'composerFocus' => $this->composerFocus,
+            'composerFokusLabel' => $composerFokusLabel,
         ])->layout('platform::layouts.app');
     }
 }

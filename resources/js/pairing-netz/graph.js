@@ -35,6 +35,10 @@ export function pairingNetzGraph(config) {
     // Composer: Klick auf einen Kandidaten nimmt dessen Anker in die Auswahl auf.
     // Nur der Composer übergibt den Callback — Detail-Panel/Modal lassen ihn null.
     onKandidatClick: config.onKandidatClick || null,
+    // Composer-Fokus: Klick auf einen Anker fokussiert ihn (nur seine Verbindungen hell,
+    // Rest gedimmt, gestrichelter Ring). onAnkerClick meldet den Klick an Livewire.
+    onAnkerClick: config.onAnkerClick || null,
+    focusId: config.focusId != null ? 'a:' + config.focusId : null, // Knoten-ID des Fokus-Ankers
     // Filter: alle Stern-Stufen an (Default aus meta).
     typAktiv: Object.assign({ stern3: true, stern2: true, stern1: true }, config.typDefault || {}),
     hoverId: null,
@@ -43,6 +47,8 @@ export function pairingNetzGraph(config) {
     _rootG: null,
     _edgeSel: null,
     _nodeSel: null,
+    _markSel: null,
+    _focusRing: null,
     _byId: null,
 
     init() {
@@ -57,6 +63,9 @@ export function pairingNetzGraph(config) {
       this._drawEdges();
       this._drawNodes();
       this._applyVisibility();
+      // Fokus-Anker (Composer): nur wenn er im aktuellen Knotensatz existiert.
+      if (this.focusId && this._byId.get(this.focusId)) this._applyFocus();
+      else this.focusId = null;
       if (this.mode === 'modal') this._enableZoom();
     },
 
@@ -156,7 +165,7 @@ export function pairingNetzGraph(config) {
       const tierR = { best: 11, good: 6.5, match: 3.2 };
       const tierOp = { best: 1, good: 0.82, match: 0.5 };
       const marks = drawEdges.filter((d) => this._edgeTier(d) && this._edgeMidpoint(d, cx, cy));
-      const mSel = g.selectAll('circle.fa-strength').data(marks).enter().append('circle')
+      this._markSel = g.selectAll('circle.fa-strength').data(marks).enter().append('circle')
         .attr('class', 'fa-strength')
         .attr('cx', (d) => this._edgeMidpoint(d, cx, cy)[0])
         .attr('cy', (d) => this._edgeMidpoint(d, cx, cy)[1])
@@ -165,7 +174,7 @@ export function pairingNetzGraph(config) {
         .attr('stroke', (d) => (this._edgeTier(d) === 'best' ? '#ede9fe' : '#0b1120'))
         .attr('stroke-width', (d) => (this._edgeTier(d) === 'best' ? 2.2 : 1))
         .style('opacity', (d) => tierOp[this._edgeTier(d)]);
-      mSel.append('title').text((d) => this._edgeTitle(d));
+      this._markSel.append('title').text((d) => this._edgeTitle(d));
     },
 
     // Stärke-Stufe einer Anker-Verbindung → Best/Good/Match (Foodpairing-3-Stufen).
@@ -273,6 +282,8 @@ export function pairingNetzGraph(config) {
     _clickable(d) {
       if (d.kind === 'basisrezept') return true;
       if (d.kind === 'kandidat') return typeof this.onKandidatClick === 'function';
+      // Anker (fokussieren) + Zentrum (Fokus aufheben) — nur im Composer (onAnkerClick gesetzt).
+      if (d.kind === 'anker' || d.kind === 'zentrum') return typeof this.onAnkerClick === 'function';
 
       return false;
     },
@@ -295,6 +306,10 @@ export function pairingNetzGraph(config) {
             this.onNodeClick(parseInt(String(d.id).replace('b:', ''), 10));
           } else if (d.kind === 'kandidat' && typeof this.onKandidatClick === 'function') {
             this.onKandidatClick(parseInt(String(d.id).replace('k:', ''), 10));
+          } else if (d.kind === 'anker' && typeof this.onAnkerClick === 'function') {
+            this.onAnkerClick(parseInt(String(d.id).replace('a:', ''), 10)); // fokussieren (Livewire toggelt)
+          } else if (d.kind === 'zentrum' && typeof this.onAnkerClick === 'function') {
+            this.onAnkerClick(0); // Zentrum = Fokus aufheben
           }
         });
 
@@ -446,15 +461,27 @@ export function pairingNetzGraph(config) {
     _setHover(id) {
       this.hoverId = id;
       if (!this._edgeSel) return;
+      // Sticky: Maus-Leave (id=null) fällt auf den Fokus-Anker zurück statt „alles hell".
+      const eff = id != null ? id : this.focusId;
+      const touches = (e) => e.source === eff || e.target === eff;
       this._edgeSel.style('opacity', (d) => {
         const base = this._edgeOpacity(d);
-        if (id == null) return base;
+        if (eff == null) return base;
 
-        return d.source === id || d.target === id ? Math.min(1, base + 0.45) : base * 0.05;
+        return touches(d) ? Math.min(1, base + 0.45) : base * 0.05;
       });
+      // Stärke-Marker mitdimmen (sonst bleiben die Punkte auf gedimmten Kanten hell = Gewirr).
+      if (this._markSel) {
+        this._markSel.style('opacity', (d) => {
+          const base = { best: 1, good: 0.82, match: 0.5 }[this._edgeTier(d)] ?? 0.8;
+          if (eff == null) return base;
+
+          return touches(d) ? base : base * 0.06;
+        });
+      }
       const isDimmed = (n) => {
-        if (id == null || n.id === id) return false;
-        const nb = this.edges.some((e) => (e.source === id && e.target === n.id) || (e.target === id && e.source === n.id));
+        if (eff == null || n.id === eff) return false;
+        const nb = this.edges.some((e) => (e.source === eff && e.target === n.id) || (e.target === eff && e.source === n.id));
 
         return !nb;
       };
@@ -465,8 +492,28 @@ export function pairingNetzGraph(config) {
         .attr('stroke-width', (d) => {
           const dflt = d.kind === 'zentrum' || (d.kind === 'anker' && d.kern) ? 2.5 : 1.4;
 
-          return id != null && d.id === id ? dflt + 1.5 : dflt;
+          return eff != null && d.id === eff ? dflt + 1.5 : dflt;
         });
+    },
+
+    // Fokus anwenden: gestrichelter Ring auf dem Fokus-Anker + sticky Dim auf seine Verbindungen.
+    _applyFocus() {
+      if (this._focusRing) {
+        this._focusRing.remove();
+        this._focusRing = null;
+      }
+      const f = this.focusId ? this._byId.get(this.focusId) : null;
+      if (f) {
+        this._focusRing = this._rootG.append('circle')
+          .attr('cx', f.x).attr('cy', f.y)
+          .attr('r', this._radius(f) + 7)
+          .attr('fill', 'none')
+          .attr('stroke', '#a78bfa')
+          .attr('stroke-width', 2.5)
+          .attr('stroke-dasharray', '4 4')
+          .style('pointer-events', 'none');
+      }
+      this._setHover(null); // greift dank Fallback auf focusId
     },
 
     _enableZoom() {
