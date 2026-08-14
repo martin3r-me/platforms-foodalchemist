@@ -33,12 +33,52 @@ class RecipeDependencyWorkflowService
         }
 
         $this->bindCompletedChild($team, $step, $recipe);
+
+        // Gestuft (Gate pro Ebene): die Sub-Rezepte NICHT sofort erzeugen, sondern die Kandidaten am Step
+        // aufbewahren — die Freigabe dieses Steps arbeitet sie ab ({@see resumeDeferredChildren}).
+        if ($parameter['_defer_children'] ?? false) {
+            $step->update(['deferred' => ['children' => [
+                'offene' => array_values($offene),
+                'params' => $parameter,
+                'user_id' => $userId,
+            ]]]);
+
+            return;
+        }
+
         if (! ($parameter['auto_dependencies'] ?? false) || (int) $step->depth >= self::MAX_DEPTH) {
+            return;
+        }
+        $this->dispatchChildren($team, $step, $userId, $recipe, $offene, $parameter);
+    }
+
+    /**
+     * Fortsetzung eines aufgeschobenen Steps bei der Freigabe: die vorgemerkten Sub-Rezepte jetzt erzeugen.
+     * Ab hier eager — die freigegebene Ebene erzeugt ihre Kinder; tiefere Ebenen lösen sich automatisch auf.
+     */
+    public function resumeDeferredChildren(Team $team, FoodAlchemistCascadeRunStep $step, FoodAlchemistRecipe $recipe): void
+    {
+        $d = $step->deferred['children'] ?? null;
+        if (! is_array($d)) {
+            return;
+        }
+        $params = is_array($d['params'] ?? null) ? $d['params'] : [];
+        $params['auto_dependencies'] = true;
+        unset($params['_defer_children']);
+        $offene = is_array($d['offene'] ?? null) ? $d['offene'] : [];
+        $this->dispatchChildren($team, $step, (int) ($d['user_id'] ?? 0), $recipe, $offene, $params);
+        $step->update(['deferred' => null]);
+    }
+
+    /** Erzeugt je offener `basisrezept_anlegen`-Zeile einen Kind-Step + {@see GenerateRecipeJob} (eager Dispatch-Kern). */
+    private function dispatchChildren(Team $team, FoodAlchemistCascadeRunStep $step, int $userId, FoodAlchemistRecipe $recipe, array $offene, array $parameter): void
+    {
+        if ((int) $step->depth >= self::MAX_DEPTH) {
             return;
         }
         $kindVollAnreichern = (bool) ($parameter['_voll_anreichern'] ?? false);
         $childParameter = $parameter;
-        unset($childParameter['_voll_anreichern']);
+        unset($childParameter['_voll_anreichern'], $childParameter['_defer_children']);
 
         foreach ($offene as $open) {
             // Kohärenz-Gate (2026-08-07): ENTdrahtete Fremdkörper-Zeilen tragen einen `kritiker`-

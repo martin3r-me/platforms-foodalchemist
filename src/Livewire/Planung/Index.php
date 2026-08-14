@@ -76,6 +76,14 @@ class Index extends Component
     public string $reglerZielVk = '';
 
     /**
+     * KI-Bilder-Toggle (Preisfrage, Default AUS): steuert, ob die Anreicherung nach der Freigabe
+     * KI-Fotos erzeugt (Schritt-für-Schritt-Fotos + ein Produktfoto). Fließt als `ki_bilder` in die
+     * generation_params und wird durch die Kaskade an jede Rezept-/Gericht-Anreicherung vererbt.
+     * Kosten: jedes Bild ist ein `gpt-image-1.5`-Call (loggt in foodalchemist_ai_call_log) — darum opt-in.
+     */
+    public bool $reglerKiBilder = false;
+
+    /**
      * Recipe-first (Default AUS): die Vollanreicherung ist ein bewusster Schritt NACH
      * dem Review, nicht automatisch mit dem Go. Bindet an den oneshot-toggle, fließt als
      * `voll_anreichern` in die Kaskade (starteKaskade default true → hier explizit setzen).
@@ -329,6 +337,7 @@ class Index extends Component
         $p = array_filter($p, fn ($v) => $v !== '' && $v !== null && $v !== []);
         $p['use_favorites_list'] = $this->reglerFavoriten;
         $p['favorites_convenience_only'] = $this->reglerFavoriten && $this->reglerFavoritenConvenienceOnly;
+        $p['ki_bilder'] = $this->reglerKiBilder;   // Preisfrage: KI-Fotos bei Anreicherung ja/nein
         if ($vk && ($ziel = $this->zielVkEur()) !== null) {
             $p['ziel_vk_eur'] = $ziel;
         }
@@ -350,6 +359,28 @@ class Index extends Component
         $eur = round((float) $roh, 2);
 
         return $eur >= 0.5 && $eur <= 500.0 ? $eur : null;
+    }
+
+    /**
+     * Effektiver Brief für die Kaskade: Basisrezept/Gericht = „Titel — Beschreibung" (Titel = form.title,
+     * Beschreibung = form.brief), Concept = das Briefing (form.brief). Platzhalter-Titel der Schnell-
+     * Erstellung zählen nicht als Titel. Leer → starteKaskade fällt auf briefAusSession zurück.
+     */
+    private function effektiverBrief(string $scope): string
+    {
+        $titel = trim((string) ($this->form['title'] ?? ''));
+        $besch = trim((string) ($this->form['brief'] ?? ''));
+        if (in_array($titel, ['Freies Basisrezept', 'Freies Gericht', 'Freies Concept', 'Neue Planung'], true)) {
+            $titel = '';
+        }
+        if ($scope === 'concept') {
+            return $besch;   // das Briefing ist die ganze Concept-Eingabe
+        }
+        if ($titel !== '' && $besch !== '') {
+            return $titel . ' — ' . $besch;
+        }
+
+        return $besch !== '' ? $besch : $titel;
     }
 
     /**
@@ -409,22 +440,21 @@ class Index extends Component
         if ($session === null) {
             return;
         }
-        // Regler nur für die direkte Rezept-/Gericht-Kaskade; Concept ist reuse-basiert (keine Regler).
-        $params = [];
-        if (in_array($scope, ['rezept', 'gericht'], true)) {
-            $params = $this->reglerParams($scope === 'gericht');
-            // FAIL-SOFT: die Regler fließen ohnehin über die Lauf-`params` in den Depth-1-Job — die
-            // Session-Persistenz ist NUR für die Fan-out-Vererbung. Kippt sie (z. B. generation_params-
-            // Migration noch nicht durch), darf der Go NICHT sterben; die Leitplanken greifen direkt trotzdem.
-            try {
-                $svc->setGenerationParams($team, $session->id, $params);
-            } catch (\Throwable $e) {
-                \Illuminate\Support\Facades\Log::warning('[Planung] setGenerationParams übersprungen (Fan-out-Vererbung aus) — evtl. Migration fehlt', ['error' => $e->getMessage()]);
-            }
+        // Leitplanken für ALLE Ebenen (auch Concept — die erfundenen Gerichte sind VK): so grundieren die
+        // Regler die ganze Kaskade. VK-Achsen nur wo sinnvoll (Basisrezept = ohne).
+        $params = $this->reglerParams($scope !== 'rezept');
+        // FAIL-SOFT: die Regler fließen ohnehin über die Lauf-`params` in den Depth-1-Job — die
+        // Session-Persistenz ist NUR für die Fan-out-Vererbung. Kippt sie (z. B. generation_params-
+        // Migration noch nicht durch), darf der Go NICHT sterben; die Leitplanken greifen direkt trotzdem.
+        try {
+            $svc->setGenerationParams($team, $session->id, $params);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('[Planung] setGenerationParams übersprungen (Fan-out-Vererbung aus) — evtl. Migration fehlt', ['error' => $e->getMessage()]);
         }
         try {
             $run = $cascade->starteKaskade($team, $scope, $session, (string) $session->creative_mode, [
                 'created_via' => 'plan_go',
+                'brief' => $this->effektiverBrief($scope),
                 'params' => $params,
                 'voll_anreichern' => $this->vollAnreichern,   // recipe-first: default AUS
             ]);
@@ -486,6 +516,7 @@ class Index extends Component
         } catch (\Throwable $e) {
             $this->fehler = $e->getMessage();
         }
+        $this->refreshLaeuft($cascade);
     }
 
     /** Einen Draft verwerfen (soft-delete). */
@@ -502,6 +533,7 @@ class Index extends Component
         } catch (\Throwable $e) {
             $this->fehler = $e->getMessage();
         }
+        $this->refreshLaeuft($cascade);
     }
 
     /**
@@ -526,6 +558,7 @@ class Index extends Component
         }
         $cascade->gibRunFrei($team, $this->laufId);
         $this->meldung = 'Alle Entwürfe freigegeben.';
+        $this->refreshLaeuft($cascade);
     }
 
     /** Alle offenen Entwürfe des Laufs verwerfen. */
@@ -537,6 +570,103 @@ class Index extends Component
         }
         $cascade->verwirfRun($team, $this->laufId);
         $this->meldung = 'Alle Entwürfe verworfen.';
+        $this->refreshLaeuft($cascade);
+    }
+
+    /**
+     * Ganze Stufe freigeben (Stufen-Knopf im Cockpit): gibt alle offenen Entwürfe einer `kind` frei —
+     * das startet die nächste Stufe (siehe PlanningCascadeService::gibStufeFrei/gibStepFrei).
+     */
+    public function gibStufeFrei(string $kind, PlanningCascadeService $cascade): void
+    {
+        $team = $this->team();
+        if ($team === null || $this->laufId === null) {
+            return;
+        }
+        try {
+            $cascade->gibStufeFrei($team, $this->laufId, $kind);
+            $this->meldung = 'Stufe freigegeben — die nächste Stufe wird erzeugt.';
+            $this->fehler = null;
+        } catch (\Throwable $e) {
+            $this->fehler = $e->getMessage();
+        }
+        $this->refreshLaeuft($cascade);
+    }
+
+    /** Per-Step-KI: einen Entwurf neu generieren (altes Draft wird verworfen). */
+    public function neuGenerieren(int $stepId, PlanningCascadeService $cascade): void
+    {
+        $team = $this->team();
+        if ($team === null) {
+            return;
+        }
+        try {
+            $cascade->regeneriereStep($team, $stepId);
+            $this->meldung = 'Wird neu generiert …';
+            $this->fehler = null;
+        } catch (\Throwable $e) {
+            $this->fehler = $e->getMessage();
+        }
+        $this->refreshLaeuft($cascade);
+    }
+
+    /**
+     * Stufen-Ableitung fürs Cockpit: je Ebene (concept · gericht · rezept) Zähler + Zustand. Nur
+     * erreichte Stufen (mind. 1 Step) — so enthüllt sich die Kaskade fortschreitend. Rein für die Anzeige.
+     *
+     * @param  \Illuminate\Support\Collection<int,\Platform\FoodAlchemist\Models\FoodAlchemistCascadeRunStep>  $steps
+     * @return list<array<string,mixed>>
+     */
+    public function stufenAusSteps($steps): array
+    {
+        $defs = [['kind' => 'concept', 'label' => 'Concept'], ['kind' => 'gericht', 'label' => 'Gerichte'], ['kind' => 'rezept', 'label' => 'Basisrezepte']];
+        $out = [];
+        foreach ($defs as $d) {
+            $grp = $steps->where('kind', $d['kind']);
+            $total = $grp->count();
+            if ($total === 0) {
+                continue;
+            }
+            $running = $grp->whereIn('status', ['queued', 'running'])->count();
+            $done = $grp->where('status', 'done')->count();
+            $freigegeben = $grp->where('status', 'freigegeben')->count();
+            $verworfen = $grp->where('status', 'verworfen')->count();
+            $failed = $grp->where('status', 'failed')->count();
+            $zustand = $running > 0 ? 'läuft' : ($done > 0 ? 'prüfen' : 'erledigt');
+            $out[] = [
+                'kind' => $d['kind'], 'label' => $d['label'], 'total' => $total,
+                'running' => $running, 'done' => $done, 'freigegeben' => $freigegeben,
+                'verworfen' => $verworfen, 'failed' => $failed, 'fertig' => $done + $freigegeben,
+                'zustand' => $zustand,
+            ];
+        }
+
+        return $out;
+    }
+
+    /** Test-/Direkteinstieg: Stufen des aktiven Laufs (lädt den Run selbst). */
+    public function stufen(): array
+    {
+        $team = $this->team();
+        if ($team === null || $this->laufId === null) {
+            return [];
+        }
+        $lauf = app(PlanningCascadeService::class)->lauf($team, $this->laufId);
+
+        return $lauf === null ? [] : $this->stufenAusSteps($lauf->steps);
+    }
+
+    /** Nach einer Freigabe/Regenerierung neu bestimmen, ob der Lauf (wieder) rechnet → Polling steuern. */
+    private function refreshLaeuft(PlanningCascadeService $cascade): void
+    {
+        $team = $this->team();
+        if ($team === null || $this->laufId === null) {
+            $this->laeuft = false;
+
+            return;
+        }
+        $lauf = $cascade->lauf($team, $this->laufId);
+        $this->laeuft = $lauf !== null && $lauf->status === 'running';
     }
 
     // ── Composer-Tab (Foodpairing-Fläche: Anker zusammenstellen) ───────

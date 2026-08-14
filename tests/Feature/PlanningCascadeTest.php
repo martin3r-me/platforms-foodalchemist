@@ -2,6 +2,8 @@
 
 use Illuminate\Support\Facades\Queue;
 use Livewire\Livewire;
+use Platform\FoodAlchemist\Jobs\EnrichRecipeJob;
+use Platform\FoodAlchemist\Jobs\FanoutConceptJob;
 use Platform\FoodAlchemist\Jobs\GenerateConceptJob;
 use Platform\FoodAlchemist\Jobs\GenerateRecipeJob;
 use Platform\FoodAlchemist\Jobs\MaterializeConceptIdeaJob;
@@ -278,7 +280,7 @@ it('Cockpit: Editor rendert die Freigabe-UI und gibt einen Entwurf über die Kom
 
     Livewire::test(PlanungIndex::class)
         ->call('oeffne', $session->id)         // ladeLetztenLauf → laufId=run (Freigabe-UI rendert)
-        ->assertSee('warten auf Freigabe')     // Bulk-Kopf sichtbar (blade-Render des done-Pfads)
+        ->assertSee('Ganze Stufe freigeben')   // Stufen-Freigabe sichtbar (blade-Render des done-Pfads, Stufe „prüfen")
         ->call('gibFrei', $step->id)
         ->assertSet('meldung', 'Freigegeben.');
 
@@ -528,4 +530,127 @@ it('Speiseplan-Editor: Voll-Kaskade-Go startet den Zell-Fan-out + redirected', f
 
     expect(FoodAlchemistCascadeRun::where('source_owner_type', 'speiseplan')->where('source_owner_id', $plan->id)->count())->toBe(1);
     Queue::assertPushed(MaterializeSpeiseplanCellJob::class);
+});
+
+// ── Gestufte Kaskade (Gate pro Ebene) ───────────────────────────────────────
+
+it('staged: Cockpit-Go ist gestuft (staged=true), opt-out über optionen möglich', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'X', 'brief' => 'y']);
+    $svc = app(PlanningCascadeService::class);
+
+    $an = $svc->starteKaskade($this->rootTeam, 'gericht', $session, 'voll_kreativ');
+    $aus = $svc->starteKaskade($this->rootTeam, 'gericht', $session, 'voll_kreativ', ['staged' => false]);
+
+    expect($an->staged)->toBeTrue()->and($aus->staged)->toBeFalse();
+});
+
+it('staged Freigabe (concept): dispatcht FanoutConceptJob + Run läuft wieder', function () {
+    $concept = $this->makeConcept($this->rootTeam, 'K', ['status' => 'draft']);
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'concept', 'status' => 'review', 'staged' => true]);
+    $step = FoodAlchemistCascadeRunStep::create([
+        'team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'concept', 'status' => 'done',
+        'ref_type' => 'concept', 'ref_id' => $concept->id,
+        'deferred' => ['fanout' => ['mode' => 'voll_kreativ', 'trend_doc_id' => null, 'planning_session_id' => null]],
+    ]);
+
+    app(PlanningCascadeService::class)->gibStepFrei($this->rootTeam, (int) $step->id);
+
+    expect($step->refresh()->status)->toBe('freigegeben')
+        ->and($concept->refresh()->status)->toBe('active')
+        ->and($run->refresh()->status)->toBe('running');
+    Queue::assertPushed(FanoutConceptJob::class, fn ($job) => (int) $job->cascadeStepId === (int) $step->id);
+});
+
+it('staged Freigabe (gericht): Anreicherung als Job + ki_bilder/ziel_vk aus den Lauf-Params', function () {
+    $recipe = $this->makeRecipe($this->rootTeam, 'Gericht-Draft', ['status' => 'draft']);
+    $run = FoodAlchemistCascadeRun::create([
+        'team_id' => $this->rootTeam->id, 'scope' => 'gericht', 'status' => 'review', 'staged' => true,
+        'params' => ['ki_bilder' => true, 'ziel_vk_eur' => 12.5],
+    ]);
+    $step = FoodAlchemistCascadeRunStep::create([
+        'team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht', 'status' => 'done',
+        'ref_type' => 'recipe', 'ref_id' => $recipe->id,
+    ]);
+
+    app(PlanningCascadeService::class)->gibStepFrei($this->rootTeam, (int) $step->id);
+
+    expect($step->refresh()->status)->toBe('freigegeben')
+        ->and($recipe->refresh()->status->value)->toBe('approved');
+    Queue::assertPushed(EnrichRecipeJob::class, fn ($job) => (int) $job->recipeId === (int) $recipe->id
+        && $job->kiBilder === true && (float) $job->zielVk === 12.5);
+});
+
+it('staged Verwerfen (gericht): kein Kind-/Anreicherungs-Job', function () {
+    $recipe = $this->makeRecipe($this->rootTeam, 'Gericht-Draft', ['status' => 'draft']);
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'gericht', 'status' => 'review', 'staged' => true]);
+    $step = FoodAlchemistCascadeRunStep::create([
+        'team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht', 'status' => 'done',
+        'ref_type' => 'recipe', 'ref_id' => $recipe->id,
+        'deferred' => ['children' => ['offene' => [['primaer' => 'basisrezept_anlegen', 'index' => 0, 'text' => 'Fond']], 'params' => [], 'user_id' => 0]],
+    ]);
+
+    app(PlanningCascadeService::class)->verwirfStep($this->rootTeam, (int) $step->id);
+
+    expect($step->refresh()->status)->toBe('verworfen');
+    Queue::assertNotPushed(EnrichRecipeJob::class);
+    Queue::assertNotPushed(GenerateRecipeJob::class);
+});
+
+it('gibStufeFrei: gibt alle done-Steps einer Ebene frei', function () {
+    $r1 = $this->makeRecipe($this->rootTeam, 'G1', ['status' => 'draft']);
+    $r2 = $this->makeRecipe($this->rootTeam, 'G2', ['status' => 'draft']);
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'concept', 'status' => 'review', 'staged' => true]);
+    $steps = collect([$r1, $r2])->map(fn ($r) => FoodAlchemistCascadeRunStep::create([
+        'team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht', 'status' => 'done',
+        'ref_type' => 'recipe', 'ref_id' => $r->id,
+    ]));
+
+    app(PlanningCascadeService::class)->gibStufeFrei($this->rootTeam, (int) $run->id, 'gericht');
+
+    expect($steps[0]->refresh()->status)->toBe('freigegeben')
+        ->and($steps[1]->refresh()->status)->toBe('freigegeben');
+});
+
+it('neuGenerieren (regeneriereStep): verwirft das Draft und dispatcht die Generierung neu', function () {
+    $recipe = $this->makeRecipe($this->rootTeam, 'Regen', ['status' => 'draft']);
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'gericht', 'status' => 'review', 'staged' => true]);
+    $step = FoodAlchemistCascadeRunStep::create([
+        'team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht', 'status' => 'done',
+        'ref_type' => 'recipe', 'ref_id' => $recipe->id, 'label' => 'Regen',
+    ]);
+
+    app(PlanningCascadeService::class)->regeneriereStep($this->rootTeam, (int) $step->id);
+
+    expect($step->refresh()->status)->toBe('running')
+        ->and($step->refresh()->ref_id)->toBeNull();
+    Queue::assertPushed(GenerateRecipeJob::class);
+});
+
+it('goKaskade (concept): persistiert Leitplanken inkl. ki_bilder in generation_params', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Concept-Test', 'brief' => 'Sommer-Buffet.']);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->set('reglerKiBilder', true)
+        ->set('regler.level', 'gehoben')
+        ->call('goKaskade', 'concept');
+
+    $session->refresh();
+    expect($session->generation_params)->toBeArray()
+        ->and($session->generation_params['ki_bilder'] ?? null)->toBeTrue()
+        ->and($session->generation_params['level'] ?? null)->toBe('gehoben');
+    Queue::assertPushed(GenerateConceptJob::class);
+});
+
+it('stufen(): leitet Stufen-Zähler + Zustand aus den Steps ab (nur erreichte Stufen)', function () {
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'concept', 'status' => 'review', 'staged' => true]);
+    FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'concept', 'status' => 'freigegeben']);
+    FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht', 'status' => 'done']);
+    FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht', 'status' => 'running']);
+
+    $stufen = Livewire::test(PlanungIndex::class)->set('laufId', $run->id)->instance()->stufen();
+
+    expect($stufen)->toHaveCount(2);   // concept + gericht erreicht; rezept nicht (0 Steps)
+    $g = collect($stufen)->firstWhere('kind', 'gericht');
+    expect($g['total'])->toBe(2)->and($g['zustand'])->toBe('läuft');
 });

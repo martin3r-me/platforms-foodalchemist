@@ -40,6 +40,7 @@ class FoodAlchemistCascadeRunStep extends Model
         'uuid' => 'string',
         'depth' => 'integer',
         'context_snapshot' => 'array',
+        'deferred' => 'array',
     ];
 
     public function run(): BelongsTo

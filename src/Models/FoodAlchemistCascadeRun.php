@@ -35,6 +35,7 @@ class FoodAlchemistCascadeRun extends Model
     protected $casts = [
         'uuid' => 'string',
         'params' => 'array',
+        'staged' => 'boolean',
     ];
 
     /** Steps dieses Laufs (concept/gericht/rezept/gp), Baum über parent_step_id. */

@@ -2,9 +2,12 @@
 
 namespace Platform\FoodAlchemist\Services;
 
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 use Platform\Core\Models\Team;
+use Platform\FoodAlchemist\Jobs\EnrichRecipeJob;
+use Platform\FoodAlchemist\Jobs\FanoutConceptJob;
 use Platform\FoodAlchemist\Jobs\GenerateConceptJob;
 use Platform\FoodAlchemist\Jobs\GenerateRecipeJob;
 use Platform\FoodAlchemist\Jobs\MaterializeConceptIdeaJob;
@@ -79,6 +82,9 @@ class PlanningCascadeService
 
         $params = is_array($optionen['params'] ?? null) ? $optionen['params'] : [];
         $vollAnreichern = (bool) ($optionen['voll_anreichern'] ?? true);
+        // Gate pro Ebene: die Cockpit-Scopes (rezept|gericht|concept) laufen gestuft — jede Ebene hält an,
+        // bis sie freigegeben wird (dann startet die nächste). Opt-out via optionen['staged']=false.
+        $staged = (bool) ($optionen['staged'] ?? true);
 
         $run = FoodAlchemistCascadeRun::create([
             'team_id' => $team->id,
@@ -88,6 +94,7 @@ class PlanningCascadeService
             'brief' => $brief,
             'params' => $params !== [] ? $params : null,
             'status' => 'running',
+            'staged' => $staged,
             'created_via' => (string) ($optionen['created_via'] ?? 'plan_go'),
         ]);
 
@@ -105,7 +112,8 @@ class PlanningCascadeService
         if ($scope === 'concept') {
             $this->dispatchConceptStep($team, $step, $brief, $session?->id, $creativeMode);
         } else {
-            $this->dispatchRezeptStep($team, $step, $brief, $params, $scope === 'gericht', $vollAnreichern, $session?->id);
+            // Im gestuften Lauf schiebt der Root-Step (Basisrezept/Gericht) seine Kinder auf bis zur Freigabe.
+            $this->dispatchRezeptStep($team, $step, $brief, $params, $scope === 'gericht', $vollAnreichern, $session?->id, $staged);
         }
 
         return $run;
@@ -120,6 +128,7 @@ class PlanningCascadeService
         bool $vkModus,
         bool $vollAnreichern,
         ?int $planningSessionId,
+        bool $staged = false,
     ): void {
         $runId = (string) Str::uuid();
         // Parameter-Bündel: Lineage (planning_session_id, vom Job an verknuepfeArtefakt) + der
@@ -129,7 +138,10 @@ class PlanningCascadeService
             $jobParams['planning_session_id'] = $planningSessionId;
         }
         $jobParams['cascade_step_id'] = $step->id;
-        $jobParams['auto_dependencies'] = true;
+        // Gestuft: der Root-Step schiebt seine Sub-Rezepte auf (afterGenerated legt sie in `deferred` ab
+        // statt zu dispatchen); freigegeben wird die nächste Ebene erst bei der Freigabe. Sonst eager.
+        $jobParams['auto_dependencies'] = ! $staged;
+        $jobParams['_defer_children'] = $staged;
 
         $step->update(['generator_run_id' => $runId]);
         Cache::put(GenerateRecipeJob::cacheKey($runId), ['status' => 'pending'], now()->addMinutes(self::RESULT_TTL_MIN));
@@ -470,9 +482,15 @@ class PlanningCascadeService
         $slotId = (int) ($idee->source_meta['target_concept_slot_id'] ?? 0);
         $beschreibung = trim(implode(' — ', array_filter([(string) $idee->title, (string) $idee->description]))) ?: (string) $idee->title;
 
+        // Gestuft (Gate pro Ebene): das Gericht schiebt seine Basisrezepte auf bis zu seiner Freigabe.
+        $staged = (bool) (FoodAlchemistCascadeRunStep::find($stepId)?->run?->staged ?? false);
         try {
             // Fan-out erbt die Leitplanken der Session (Regler am Planung-Go); Steuer-Keys gewinnen.
-            $params = array_merge($this->sessionGenerationParams($team, $planningSessionId), ['auto_dependencies' => true, 'cascade_step_id' => $stepId]);
+            $params = array_merge($this->sessionGenerationParams($team, $planningSessionId), [
+                'auto_dependencies' => ! $staged,
+                '_defer_children' => $staged,
+                'cascade_step_id' => $stepId,
+            ]);
             $workflow = app(RecipeDependencyWorkflowService::class);
             $context = $workflow->prepare($team, $stepId, $beschreibung, $params, true);
             $gen = app(RecipeGeneratorService::class)->generiere($team, $beschreibung, $params, null, true, 'plan_go', $context);
@@ -580,6 +598,101 @@ class PlanningCascadeService
             }
         }
         $step->update(['status' => 'freigegeben']);
+
+        // Gestuft (Gate pro Ebene): die Freigabe startet die nächste Stufe UND reichert das Artefakt
+        // komplett an (beides als Queue-Job). Bei nicht-gestuften Läufen bleibt es bei der Live-Setzung.
+        // Beim async Concept-Fan-out (Job legt die Gericht-Steps erst später an) darf der recompute den
+        // Run NICHT auf „done" zurückfallen lassen — starteFolgestufe hält ihn dann selbst auf „running".
+        $asyncFolgestufe = $step->run?->staged ? $this->starteFolgestufe($team, $step->fresh()) : false;
+
+        if (! $asyncFolgestufe) {
+            $this->recomputeRunStatus((int) $step->cascade_run_id);
+        }
+    }
+
+    /**
+     * Freigabe einer ganzen Stufe: gibt alle noch offenen (`done`) Steps einer `kind` frei — der
+     * Stufen-Knopf im Cockpit. Jede Einzel-Freigabe startet die Kinder des Steps (siehe gibStepFrei).
+     */
+    public function gibStufeFrei(Team $team, int $runId, string $kind): void
+    {
+        $run = $this->lauf($team, $runId);
+        if ($run === null) {
+            return;
+        }
+        foreach ($run->steps->where('status', 'done')->where('kind', $kind) as $s) {
+            $this->gibStepFrei($team, (int) $s->id);
+        }
+    }
+
+    /**
+     * Fortsetzung nach der Freigabe eines gestuften Steps: Concept → Gericht-Fan-out ({@see FanoutConceptJob});
+     * Rezept/Gericht → aufgeschobene Sub-Rezepte erzeugen + volle Anreicherung (+ optional KI-Fotos, `ki_bilder`).
+     * Alles als Queue-Job (kein LLM/Anreicherung inline im Web-Request der Freigabe).
+     *
+     * @return bool true, wenn eine ASYNCHRONE Folgestufe läuft, die den Run-Status selbst neu bestimmt
+     *              (Concept-Fan-out) — dann darf der Aufrufer NICHT recomputen (sonst „done"-Rückfall).
+     */
+    private function starteFolgestufe(Team $team, FoodAlchemistCascadeRunStep $step): bool
+    {
+        $userId = (int) (Auth::id() ?? 0);
+
+        if ($step->kind === 'concept') {
+            if (is_array($step->deferred['fanout'] ?? null)) {
+                // Run auf running halten, bis der Job die Gerichte erzeugt (er recomputet danach selbst).
+                $step->run?->update(['status' => 'running']);
+                FanoutConceptJob::dispatch($team->id, $userId, (int) $step->id);
+
+                return true;
+            }
+
+            return false;
+        }
+
+        if ($step->ref_type === 'recipe' && $step->ref_id !== null) {
+            $recipe = FoodAlchemistRecipe::where('team_id', $team->id)->find((int) $step->ref_id);
+            if ($recipe !== null && is_array($step->deferred['children'] ?? null)) {
+                // dispatchChildren legt die Kind-Steps SYNCHRON als running an → recompute sieht sie korrekt.
+                app(RecipeDependencyWorkflowService::class)->resumeDeferredChildren($team, $step, $recipe);
+            }
+            $params = is_array($step->run?->params) ? $step->run->params : [];
+            $zielVk = isset($params['ziel_vk_eur']) ? (float) $params['ziel_vk_eur'] : null;
+            $kiBilder = (bool) ($params['ki_bilder'] ?? false);
+            EnrichRecipeJob::dispatch($team->id, $userId, (int) $step->ref_id, $zielVk, $kiBilder);
+        }
+
+        return false;
+    }
+
+    /**
+     * „Neu generieren" (per-Step-KI im Cockpit): verwirft das aktuelle Draft-Artefakt und stößt die
+     * Generierung dieses Steps erneut an (Brief = Step-Label, Params/Session/Staged vom Lauf). Nur
+     * rezept|gericht|concept. Der Step geht zurück auf `running`; die Fläche pollt wie beim Go.
+     */
+    public function regeneriereStep(Team $team, int $stepId): void
+    {
+        $step = $this->ownedStep($team, $stepId);
+        if (! in_array($step->kind, ['rezept', 'gericht', 'concept'], true)) {
+            return;
+        }
+        if ($step->ref_id !== null) {
+            if ($step->ref_type === 'recipe') {
+                FoodAlchemistRecipe::where('team_id', $team->id)->whereKey($step->ref_id)->delete();
+            } elseif ($step->ref_type === 'concept') {
+                FoodAlchemistConcept::where('team_id', $team->id)->whereKey($step->ref_id)->delete();
+            }
+        }
+        $step->update(['status' => 'running', 'ref_type' => null, 'ref_id' => null, 'error' => null, 'deferred' => null]);
+        $run = $step->run;
+        $brief = (string) ($step->label ?? '');
+        $params = is_array($run?->params) ? $run->params : [];
+        $sessionId = $run?->planning_session_id !== null ? (int) $run->planning_session_id : null;
+        $staged = (bool) ($run?->staged ?? false);
+        if ($step->kind === 'concept') {
+            $this->dispatchConceptStep($team, $step, $brief, $sessionId, (string) ($run?->creative_mode ?? 'voll_kreativ'));
+        } else {
+            $this->dispatchRezeptStep($team, $step, $brief, $params, $step->kind === 'gericht', false, $sessionId, $staged);
+        }
         $this->recomputeRunStatus((int) $step->cascade_run_id);
     }
 

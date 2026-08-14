@@ -1,9 +1,11 @@
 {{-- Erstell-Tab (Basisrezept ODER Gericht): Brief + Kreativ-Modus + geteilte Leitplanken + Go + Wissen-vorab.
      Erwartet: $scope (rezept|gericht), $vk (bool), $goLabel, $goIcon. Der Go schaltet auf den Worker-Tab. --}}
 <div class="space-y-4">
-    <x-foodalchemist::modal-section title="Brief">
-        <label class="{{ $label ?? 'text-[11px] text-gray-500' }}">Brief (geht in die Erzeugung)</label>
-        <textarea wire:model="form.brief" rows="3" class="{{ $input }} mb-3" placeholder="Was soll entstehen? Constraints, Anlass, Richtung …"></textarea>
+    <x-foodalchemist::modal-section title="Eingabe — was soll entstehen">
+        <label class="{{ $label ?? 'text-[11px] text-gray-500' }}">Titel</label>
+        <input type="text" wire:model="form.title" class="{{ $input }} mb-3" placeholder="z. B. Tomatensauce" data-planung-titel />
+        <label class="{{ $label ?? 'text-[11px] text-gray-500' }}">Beschreibung (geht in die Erzeugung)</label>
+        <textarea wire:model="form.brief" rows="3" class="{{ $input }} mb-3" placeholder="Constraints, Anlass, Richtung …"></textarea>
         <label class="{{ $label ?? 'text-[11px] text-gray-500' }}">Kreativ-Modus</label>
         <select wire:model="form.creative_mode" class="{{ $input }}">
             @foreach($modeLabel as $val => $lbl)

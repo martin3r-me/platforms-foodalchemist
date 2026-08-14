@@ -53,6 +53,14 @@
 
         <x-foodalchemist::oneshot-toggle marker="planung" schritte="Beschreibung, Kategorie, Geschmacksrichtung" />
 
+        <div data-richtung="ki-bilder">
+            <label class="flex items-start gap-2 text-xs font-medium text-gray-900">
+                <input type="checkbox" wire:model="reglerKiBilder" class="mt-0.5" data-planung-ki-bilder />
+                <span>📷 KI-Fotos bei Anreicherung erstellen</span>
+            </label>
+            <p class="text-[11px] text-gray-500 mt-1">Bei der Freigabe entstehen Schritt-für-Schritt-Fotos + ein Produktfoto (je Bild ein KI-Call → <b>Kosten</b>). Aus = keine Bilder.</p>
+        </div>
+
         <div class="md:col-span-2" data-richtung="diaet">
             <p class="text-xs font-medium text-gray-900 mb-1">Diät-Constraints (Multi-Select, hart erzwungen)</p>
             <div class="flex flex-wrap gap-1.5">

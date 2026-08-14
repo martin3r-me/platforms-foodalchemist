@@ -102,8 +102,19 @@ class GenerateConceptJob implements ShouldQueue
                         $sess = app(\Platform\FoodAlchemist\Services\PlanningSessionService::class)->get($team, $this->planningSessionId);
                         $trendDocId = $sess?->source_knowledge_document_id !== null ? (int) $sess->source_knowledge_document_id : null;
                     }
-                    app(\Platform\FoodAlchemist\Services\PlanningCascadeService::class)
-                        ->fanoutConceptInvention($team, $this->cascadeStepId, (int) $concept->id, $this->creativeMode, $trendDocId, $this->planningSessionId);
+                    $step = \Platform\FoodAlchemist\Models\FoodAlchemistCascadeRunStep::find($this->cascadeStepId);
+                    if ((bool) ($step?->run?->staged ?? false)) {
+                        // Gestuft (Gate pro Ebene): NICHT jetzt fächern — die Freigabe des Concept-Steps
+                        // startet den Gericht-Fan-out ({@see FanoutConceptJob}). Args am Step ablegen.
+                        $step?->update(['deferred' => ['fanout' => [
+                            'mode' => $this->creativeMode,
+                            'trend_doc_id' => $trendDocId,
+                            'planning_session_id' => $this->planningSessionId,
+                        ]]]);
+                    } else {
+                        app(\Platform\FoodAlchemist\Services\PlanningCascadeService::class)
+                            ->fanoutConceptInvention($team, $this->cascadeStepId, (int) $concept->id, $this->creativeMode, $trendDocId, $this->planningSessionId);
+                    }
                 } catch (\Throwable) {
                     // Fan-out-Fehler darf das erzeugte Konzept nicht kippen.
                 }

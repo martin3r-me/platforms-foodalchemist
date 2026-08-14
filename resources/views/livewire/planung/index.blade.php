@@ -259,11 +259,14 @@
                 @include('foodalchemist::livewire.planung.partials.erstellen-tab', ['scope' => 'gericht', 'vk' => true, 'goLabel' => 'Gericht', 'goIcon' => 'heroicon-o-cake'])
             </div>
 
-            {{-- CONCEPT — reuse-basiert, keine Rezept-Regler --}}
+            {{-- CONCEPT (= das „Menü"): Briefing → LLM füllt die semantischen Hüllen → Zusammenstellung
+                 (Pakete/Buffet) nach den Leitplanken; braucht Gerichte → kaskadiert nach unten. --}}
             <div wire:key="planung-tab-concept" x-show="tab==='concept'" class="space-y-4">
-                <x-foodalchemist::modal-section title="Brief">
-                    <label class="{{ $label ?? 'text-[11px] text-gray-500' }}">Brief (geht in die Erzeugung)</label>
-                    <textarea wire:model="form.brief" rows="3" class="{{ $input }} mb-3" placeholder="Konzept-Brief — Anlass, Zielgruppe, Richtung …"></textarea>
+                <x-foodalchemist::modal-section title="Briefing — was für ein Menü / Concept">
+                    <label class="{{ $label ?? 'text-[11px] text-gray-500' }}">Titel (optional)</label>
+                    <input type="text" wire:model="form.title" class="{{ $input }} mb-3" placeholder="z. B. CHEFS.CORNER — Sommer-Menü" data-planung-titel />
+                    <label class="{{ $label ?? 'text-[11px] text-gray-500' }}">Briefing (geht in die Erzeugung)</label>
+                    <textarea wire:model="form.brief" rows="4" class="{{ $input }} mb-3" placeholder="Anlass, Zielgruppe, Richtung, Pakete/Buffet-Struktur, Gänge …"></textarea>
                     <label class="{{ $label ?? 'text-[11px] text-gray-500' }}">Kreativ-Modus</label>
                     <select wire:model="form.creative_mode" class="{{ $input }}">
                         @foreach($modeLabel as $val => $lbl)
@@ -271,8 +274,11 @@
                         @endforeach
                     </select>
                 </x-foodalchemist::modal-section>
+
+                @include('foodalchemist::livewire.planung.partials.leitplanken', ['vk' => true])
+
                 <x-foodalchemist::modal-section title="Go — Concept erzeugen (Draft)">
-                    <p class="{{ $label ?? 'text-[11px] text-gray-500' }} mb-2">Reuse-basiert — die Concept-Struktur entsteht aus dem Brief; Fortschritt im <b>Worker</b>-Tab.</p>
+                    <p class="{{ $label ?? 'text-[11px] text-gray-500' }} mb-2">Die LLM baut aus dem Briefing die Zusammenstellung (Pakete/Buffet) nach den Leitplanken; die Gerichte kommen nach der Freigabe. Fortschritt im <b>Worker</b>-Tab.</p>
                     <button wire:click="goKaskade('concept')" @click="tab='worker'" @disabled($laeuft) class="{{ $btnPrimary }} disabled:opacity-40">
                         @svg('heroicon-o-squares-2x2', 'w-4 h-4') Concept erzeugen
                     </button>
@@ -457,4 +463,7 @@
          statt auf die Listen-Seite zu springen. DOM NACH dem Editor-Modal → z-Stacking (öffnet darüber). --}}
     <livewire:foodalchemist.recipes.recipe-modal />
     <livewire:foodalchemist.verkauf.vk-modal />
+    {{-- Vollen Conceptor-Editor inline: ein erzeugtes Concept öffnet mit allen Tabs/KPIs/Score/Kalkulation/
+         Geschirr direkt hier (öffnet via concepter-editor.oeffnen aus der step-zeile). Gleiches Muster wie Angebote. --}}
+    <livewire:foodalchemist.concepter.editor />
 </x-ui-page>

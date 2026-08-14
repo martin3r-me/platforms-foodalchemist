@@ -44,6 +44,8 @@ class FoodAlchemistPlanningSession extends Model
         'convenience', 'frische', 'bio', 'bio_praeferenz', 'bestand', 'level', 'sektor',
         'diaet_hart', 'aroma', 'use_favorites_list', 'favorites_convenience_only',
         'occasion', 'serviceform', 'kompositions_stil', 'ziel_vk_eur',
+        // KI-Bilder-Toggle (Preisfrage): steuert, ob die Anreicherung Schritt-Fotos + Produktfoto erzeugt.
+        'ki_bilder',
     ];
 
     protected $casts = [

@@ -182,7 +182,7 @@ it('#4/#1a Cockpit-Baum: Fan-out-Kind eingerückt + „Verwendetes Wissen" aus c
     ]);
     FoodAlchemistCascadeRunStep::create([
         'team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'parent_step_id' => $parent->id,
-        'kind' => 'rezept', 'status' => 'done', 'label' => 'Kind-Basisrezept',
+        'kind' => 'rezept', 'status' => 'done', 'label' => 'Kind-Basisrezept', 'depth' => 1,   // Fan-out-Kind → eingerückt
     ]);
 
     Livewire::test(PlanungIndex::class)
