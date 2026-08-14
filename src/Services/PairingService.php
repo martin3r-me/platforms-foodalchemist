@@ -783,6 +783,56 @@ class PairingService
         return $this->cohesionFor($komponenten);
     }
 
+    /**
+     * Roadmap Etappe 1 »LLM-Foodpairing als Assist«: das Aroma-Profil einer bereits
+     * (teil)belegten Menüfolge — die Anker der schon gesetzten Gerichte plus die
+     * harmonischen Partner-Anker aus dem Graphen (Expansion AUSSERHALB des getragenen
+     * Sets). Speist die KI-Ideen-Erfindung ({@see IdeenService::kiDivergenzConcept}),
+     * damit neue Gerichte auf der Aroma-Achse zur Folge PASSEN statt frei geraten zu
+     * werden. Liefert `null`, wenn die Folge keine auflösbaren Anker trägt (leeres oder
+     * ungemapptes Menü) — dann bleibt der Prompt byte-identisch, ohne Erdungs-Block.
+     *
+     * @param  iterable<FoodAlchemistRecipe>  $recipes  die bereits gesetzten Gerichte der Folge
+     * @return array{anker: list<string>, partner: list<string>}|null
+     */
+    public function menueAromaProfil(iterable $recipes, int $partnerLimit = 12): ?array
+    {
+        $ankerIds = [];
+        foreach ($this->resolveRecipeAnchorsMany($recipes) as $komponenten) {
+            foreach ($this->flacheAnker($komponenten) as $id) {
+                $ankerIds[(int) $id] = true;
+            }
+        }
+        $ankerIds = array_keys($ankerIds);
+        if ($ankerIds === []) {
+            return null;
+        }
+
+        // Anker-Namen der Folge (display_de, sonst slug) — stabil alphabetisch.
+        $anker = DB::table('foodalchemist_vocab_pairing_anchors')
+            ->whereIn('id', $ankerIds)->whereNull('deleted_at')
+            ->orderBy('display_de')->get(['slug', 'display_de'])
+            ->map(fn ($a) => (string) ($a->display_de ?: $a->slug))
+            ->filter()->unique()->values()->all();
+        if ($anker === []) {
+            return null;
+        }
+
+        // Harmonische Partner: gewichtsstärkste Expansion außerhalb der schon getragenen
+        // Anker (Stern-Stufe → Gewicht → Abdeckung). Dubletten-frei, gekappt.
+        [$kandidaten] = $this->kandidatenFuerAnker($ankerIds);
+        usort($kandidaten, fn ($a, $b) => [$b['level'], $b['weight'], $b['cover']] <=> [$a['level'], $a['weight'], $a['cover']]);
+        $partner = [];
+        foreach (array_slice($kandidaten, 0, max(0, $partnerLimit)) as $k) {
+            $lbl = (string) ($k['display_de'] ?: $k['slug']);
+            if ($lbl !== '') {
+                $partner[$lbl] = true;
+            }
+        }
+
+        return ['anker' => $anker, 'partner' => array_keys($partner)];
+    }
+
     // ── Suggest (3.3 — T8) ───────────────────────────────────────────────
 
     /** @return array{klassiker: array, signature: array} */

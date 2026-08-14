@@ -6,6 +6,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
+use Platform\FoodAlchemist\Models\FoodAlchemistConceptSlot;
 use Platform\FoodAlchemist\Models\FoodAlchemistDishIdea;
 use Platform\FoodAlchemist\Models\FoodAlchemistDishIdeaGroup;
 use Platform\FoodAlchemist\Models\FoodAlchemistFoodbookKapitel;
@@ -387,6 +388,28 @@ class IdeenService
             ], fn ($v) => $v !== null && $v !== ''),
             'rahmen' => $frame !== null ? $frameSvc->promptKontext($frame) : null,
         ];
+
+        // Menü-Erdung (Roadmap E1 »LLM-Foodpairing als Assist«): die schon gesetzten Gerichte der
+        // Folge tragen ein Aroma-Profil (Anker-Graph). Es fließt als Leitplanke in die Ideen-
+        // Erfindung, damit neue Gerichte auf der Aroma-Achse HARMONIEREN statt frei geraten zu
+        // werden. Fällt sauber weg (kein Block, byte-identisch), wenn die Folge noch leer/ungemappt
+        // ist — reine Erdung, keine harte Filterung.
+        $belegteIds = FoodAlchemistConceptSlot::where('concept_id', $conceptId)
+            ->whereNotNull('sales_recipe_id')
+            ->pluck('sales_recipe_id')->map(fn ($v) => (int) $v)->filter()->unique()->values()->all();
+        if ($belegteIds !== []) {
+            $belegte = FoodAlchemistRecipe::visibleToTeam($team)->whereIn('id', $belegteIds)->get();
+            $profil = app(PairingService::class)->menueAromaProfil($belegte);
+            if ($profil !== null) {
+                $kontext['menue_kohaesion'] = [
+                    'hinweis' => 'Die Menüfolge trägt bereits diese Aroma-Anker (Pairing-Graph). Erfinde '
+                        . 'Gerichte, die auf dieser Aroma-Achse HARMONIEREN — lehne dich an die harmonischen '
+                        . 'Partner an, statt frei zu raten. Wiederhole NICHT die gleiche Hauptzutat der Folge.',
+                    'bereits_im_menue' => $profil['anker'],
+                    'harmonische_partner' => $profil['partner'],
+                ];
+            }
+        }
 
         $proposal = app(AiGatewayService::class)->propose('foodbook.kapitel_ideen', $kontext, array_filter([
             'knowledge' => ($wissen['block'] ?? '') !== '' ? $wissen['block'] : null,
