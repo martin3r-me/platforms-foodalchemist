@@ -32,10 +32,11 @@ class PairingDropLegacyAnchorsCommand extends Command
     {
         $apply = (bool) $this->option('apply');
 
-        $legacyIds = DB::table(self::KEEP)
+        $legacyRows = DB::table(self::KEEP)
             ->where(fn ($q) => $q->whereNull('source_path')->orWhere('source_path', '<>', 'foodpairing_inspire'))
-            ->pluck('id');
-        $nLegacy = $legacyIds->count();
+            ->get(['id', 'team_id']);
+        $legacyIds = $legacyRows->pluck('id');
+        $nLegacy = $legacyRows->count();
         $nInspire = DB::table(self::KEEP)->where('source_path', 'foodpairing_inspire')->count();
 
         if ($nLegacy === 0) {
@@ -68,7 +69,8 @@ class PairingDropLegacyAnchorsCommand extends Command
         ]);
 
         if (! $apply) {
-            $this->line('→ Dry-Run. Mit --apply löschen. VORHER Snapshot! Danach GP/Rezept-Remap.');
+            $this->line("→ Dry-Run. Mit --apply löschen. VORHER Snapshot! Danach GP/Rezept-Remap.");
+            $this->line("→ Zusätzlich werden die Qdrant-Anker-Vektoren dieser {$nLegacy} Anker gepruned (keine Waisen).");
 
             return self::SUCCESS;
         }
@@ -83,10 +85,49 @@ class PairingDropLegacyAnchorsCommand extends Command
             DB::statement('DELETE FROM foodalchemist_anchor_ingredient_map WHERE anchor_id IS NOT NULL AND anchor_id NOT IN (SELECT id FROM '.self::KEEP.')');
         });
 
+        // Qdrant-Vektoren der gelöschten Anker nachputzen: der DB-DELETE cascadet NICHT
+        // nach Qdrant (externer Store, kein FK). Ohne das blieben die Vektoren als Waisen
+        // liegen und könnten die semantische Anker-Auflösung gelegentlich auf gelöschte
+        // Anker ziehen. Best-effort — die DB-Zeilen sind bereits weg.
+        $this->pruneAnkerVektoren($legacyRows);
+
         $rest = DB::table(self::KEEP)->count();
         $restEdges = DB::table('foodalchemist_pairing_anchor_edges')->count();
         $this->info("Fertig. Anker jetzt: {$rest} · Kanten: {$restEdges}. Danach computed re-projizieren + embed + Remap.");
 
         return self::SUCCESS;
+    }
+
+    /**
+     * Prunet die Qdrant-Vektoren der gelöschten Legacy-Anker. Der Core-Contract kann nur
+     * pro Entität löschen (kein Bulk); delete() braucht KEINEN Provider, nur den Store, und
+     * routet über den entityType in dieselbe Collection wie embedAnkers. Team-Mapping wie
+     * dort: team_id ?? globalTeam. Bricht bei Store-Fehler kontrolliert ab (Cleanup, kein
+     * Blocker — die Anker sind in der DB bereits entfernt).
+     *
+     * @param  \Illuminate\Support\Collection<int,object>  $rows  gelöschte Anker (id + team_id)
+     */
+    private function pruneAnkerVektoren(\Illuminate\Support\Collection $rows): void
+    {
+        if ($rows->isEmpty()) {
+            return;
+        }
+        $embeddings = app(\Platform\Core\Services\EmbeddingService::class);
+        $globalTeam = app(\Platform\FoodAlchemist\Services\Ai\KnowledgeEmbeddingService::class)->globalTeamId();
+        $typ = \Platform\FoodAlchemist\Services\Ai\KnowledgeEmbeddingService::ENTITY_TYPE_ANKER;
+
+        $pruned = 0;
+        try {
+            foreach ($rows as $r) {
+                $teamId = $r->team_id === null ? $globalTeam : (int) $r->team_id;
+                $embeddings->delete($teamId, $typ, (int) $r->id);
+                $pruned++;
+            }
+            $this->info("Qdrant: {$pruned} verwaiste Anker-Vektoren gepruned.");
+        } catch (\Throwable $e) {
+            $this->warn("Vektor-Prune bei {$pruned}/{$rows->count()} abgebrochen: {$e->getMessage()}");
+            $this->warn('→ Store nicht erreichbar? Auf demo mit laufendem Qdrant nachziehen — '
+                .'die Anker sind in der DB bereits entfernt.');
+        }
     }
 }
