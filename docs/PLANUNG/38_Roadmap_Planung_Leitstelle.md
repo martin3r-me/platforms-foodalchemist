@@ -27,6 +27,35 @@ Ein Nutzer startet mit **einem Satz Absicht** und einem Satz Leitplanken und erh
 
 ---
 
+## 🏗️ Zielarchitektur (Whiteboard 2026-08-14)
+
+```
+  Foodbook  ┐
+  Speiseplan ├─►  Briefing/Planung  ─►  ┌───────────┐
+  Speisekarte┘   (oder freier Brief)    │  PLANUNG  │  ← Leitstelle
+                                         └─────┬─────┘
+                                               ▼  dispatch (kein Web-Request rechnet LLM)
+                                         ┌─────────────┐
+   Erdung + Bestand (READ-only):        │ Queued Jobs │
+   Wissen · Pairing-Graph · DNA         └─────┬───────┘
+   Grundprodukte · Lieferantenartikel         ▼
+   Basisrezepte · Gerichte  ─────►  LLM Menü ─► LLM Gerichte ─► LLM Basisrezepte
+                                          └────── + LLM Foodpairing (Assist) ──────┘
+                                               │
+                                               ▼
+              Ausgänge:  Conceptor (Menü/Pakete) · Gerichte · Basisrezepte
+```
+
+**Lesart:**
+- **Eingang:** ein freier Brief ODER ein Ausgabe-Frame (Foodbook/Speiseplan/Speisekarte) liefert das Briefing → Planung. Die Ausgabe-Module sind damit **Quelle UND Ziel**.
+- **Planung = Leitstelle:** zerlegt die Absicht in **Queued Jobs** — nichts Schweres läuft im Web-Request.
+- **Drei LLM-Worker je Ebene, kaskadierend:** LLM Menü (Concept) → LLM Gerichte → LLM Basisrezepte. Jede Ebene: Vorschau → Freigabe → nächste Ebene.
+- **LLM Foodpairing = Assist:** erdet Gerichte/Menüs am **Pairing-Graph** (Aroma-Kohärenz), statt frei zu raten.
+- **Erdung/Bestand (Read-only):** die Worker reusen vorhandene Grundprodukte/Lieferantenartikel/Basisrezepte/Gerichte und erden an Wissen (Regelwerke/Domänen), Pairing-Graph und Marken-DNA.
+- **Ausgänge:** Conceptor (Menü/Pakete), Gerichte, Basisrezepte — fließen in die Ausgabe-Module zurück.
+
+---
+
 ## ⚙️ Das Prinzip (universelles Muster je Stufe)
 
 ```
@@ -70,6 +99,7 @@ FA `main` = `eb85e3c`, demo deployt + Migration `[180] Ran`. Nachweis: `Planning
 - [ ] **Heuristik erweitern:** `MatchHeuristics` Marker-Listen (`:51-65`) um `sauce/rahmsauce/jus/sud/essenz/dressing/vinaigrette` (Zwischenschritt, bleibt Keyword-Hack)
 - [ ] **Entscheidungsstelle:** `RecipeGeneratorService:247-248/408-412` liest künftig das LLM-Komponenten-Flag statt nur die Namens-Heuristik
 - [ ] **Wissens-Erdung:** Routing-Zeile `regelwerk` → `ai_generate_recipe` (analog `2026_08_07_000001`) → §2/§3/§4 [Regelwerk Basisrezepte] fließt in den Prompt
+- [ ] **LLM-Foodpairing als Assist** (Whiteboard-Baustein) — Gericht-/Menü-Erzeugung erdet am **Pairing-Graph** (Aroma-Kohärenz) statt frei zu raten (↔ Kohärenz-Gate/Anker-Graph)
 - [ ] **Auto-Zerlegung:** `RecipeDependencyWorkflowService:49/90`-Gating — soll auch Standalone-Gericht (ohne Kaskade) zerlegen?
 - [ ] **Abnahme:** Blindtest mit 3 Briefs + Golden-Eval (0 Fremdkörper, korrekte Sub-Rezept-Bildung)
 
@@ -106,7 +136,7 @@ FA `main` = `eb85e3c`, demo deployt + Migration `[180] Ran`. Nachweis: `Planning
 - [ ] **Titel-/Namensvorschlag** aus dem Brief (nüchtern, §-konform)
 
 ### 🍽️ Etappe 5 — Ausgabe-Anbindung (Frame-Kaskaden)
-*Die Voll-Kaskade braucht einen Ausgabe-Owner (foodbook/speisekarte/speiseplan) — sie wird aus den Ausgabe-Modulen getriggert, nicht frei im Cockpit.*
+*Die Voll-Kaskade braucht einen Ausgabe-Owner (foodbook/speisekarte/speiseplan) — sie wird aus den Ausgabe-Modulen getriggert, nicht frei im Cockpit. Die Ausgabe-Module sind **Quelle** (liefern das Briefing) **und Ziel** (nehmen das Ergebnis auf) — siehe Zielarchitektur.*
 
 - [ ] **Foodbook-Leitstelle** — Voll-Kaskade je Kapitel-Slot (↔ Spec [29](29_Foodbook_Editor_Umbau.md))
 - [ ] **Speisekarte** — Rubriken → Gerichte-Kaskade (↔ Spec [35](35_Spec_Tagesplan_Cockpit.md))
