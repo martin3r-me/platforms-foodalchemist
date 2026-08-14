@@ -153,7 +153,8 @@ FA `main` = `eb85e3c`, demo deployt + Migration `[180] Ran`. Nachweis: `Planning
 
 ### 🛡️ Etappe 8 — Robustheit & Skalierung
 - [ ] **Worker-Präsenz** ist mission-critical — Health-Anzeige + Doku (kein `queue:work` = Leitstelle produziert nichts)
-- [ ] **Fan-out-Caps** — defensiver Deckel bei Concept-Erfinden (analog Speiseplan)
+- [ ] **Fan-out-Cap Concept** — Concept-Erfinden hat KEINEN harten Deckel (Speiseplan schon: `SPEISEPLAN_MAX_ZELLEN=30`) → Runaway-/Kosten-Risiko bei großem Menü-Brief. Analogen Cap für den Concept-Fan-out (`fanoutConceptInvention`) einziehen.
+- [ ] **Save-Race Multi-Editor-Fan-out** (verify) — der Kaskaden-Fall mountet mehrere `IngredientEditor` gleichzeitig; prüfen, ob der MVP-046-Fix (eindeutige Editor-ID) auch bei parallel gemounteten Editoren hält — sonst überschreiben sich Draft-Speicherungen.
 - [ ] **Fehler-Transparenz** — jeder geschluckte Job-Fehler wird sichtbar (Anreicherung ✅ erledigt; Fan-out/Images noch prüfen)
 - [ ] **Idempotenz/Resume** — abgebrochene Kaskade sauber fortsetzbar
 - [ ] **Multi-Tenancy** — Reads `visibleToTeam`, Writes `isOwnedBy` konsequent (Audit)
