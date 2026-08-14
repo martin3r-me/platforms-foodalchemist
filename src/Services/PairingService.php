@@ -833,6 +833,50 @@ class PairingService
         return ['anker' => $anker, 'partner' => array_keys($partner)];
     }
 
+    /**
+     * Roadmap Etappe 1 »Menü-Folge-Kohärenz-Gate«: macht aus einem rohen
+     * {@see menuCohesion}-Ergebnis eine abgestufte, sichtbare Rückkopplung/Warnung.
+     * Ergänzt die Erdung ({@see menueAromaProfil}) um die Gegenprobe: nachdem die
+     * Erfindung am Graphen geerdet wurde, wird die entstandene Folge auch GEGEN die
+     * Folge-Kohäsion geprüft, nicht nur blind erzeugt.
+     *
+     * Die Schwellen sind byte-genau aus dem Anzeige-Panel gespiegelt
+     * (`kohaesion-panel.blade.php`: ≥60 emerald, ≥35 amber, sonst rose) — Gate und
+     * Farb-Band sagen damit dasselbe, keine zweite Wahrheit. Liefert `null`, wenn
+     * nichts zu beurteilen ist: zu wenige Gerichte ODER kein einziges bewertetes
+     * Gericht-Paar. Fehlende Graph-Daten sind KEIN schlechtes Menü (T9) — nur keine
+     * Aussage, und ein Nichts wird nicht als Warnung verkauft.
+     *
+     * @param  array  $kohaesion  Ergebnis aus {@see menuCohesion} / {@see cohesionFor}
+     * @return array{stufe: 'gut'|'schwach'|'kritisch', score: int, text: string}|null
+     */
+    public function menuKohaesionWarnung(array $kohaesion): ?array
+    {
+        if (($kohaesion['zu_wenig'] ?? false) === true) {
+            return null;
+        }
+        if ((int) ($kohaesion['rated_pairs'] ?? 0) < 1) {
+            return null;   // kein bewertetes Paar → keine Aussage (T9), nicht „schlecht"
+        }
+
+        $score = (int) ($kohaesion['score'] ?? 0);
+        $stufe = $score >= 60 ? 'gut' : ($score >= 35 ? 'schwach' : 'kritisch');
+
+        $weakest = $kohaesion['weakest_pair'] ?? null;
+        $paarHinweis = is_array($weakest)
+            ? sprintf(' Schwächste Brücke: %s ↔ %s (%d).',
+                (string) ($weakest['a'] ?? '?'), (string) ($weakest['b'] ?? '?'), (int) ($weakest['score'] ?? 0))
+            : '';
+
+        $text = match ($stufe) {
+            'gut' => sprintf('Die Menüfolge trägt auf der Aroma-Achse (Score %d).', $score),
+            'schwach' => sprintf('Die Menüfolge hängt nur lose zusammen (Score %d) — einzelne Gänge harmonieren schwach.%s', $score, $paarHinweis),
+            'kritisch' => sprintf('Die Menüfolge wirkt aroma-fremd (Score %d) — die Gänge stehen kaum in Verbindung.%s', $score, $paarHinweis),
+        };
+
+        return ['stufe' => $stufe, 'score' => $score, 'text' => $text];
+    }
+
     // ── Suggest (3.3 — T8) ───────────────────────────────────────────────
 
     /** @return array{klassiker: array, signature: array} */

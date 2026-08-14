@@ -23,6 +23,11 @@
                     <span class="text-2xl font-semibold tabular-nums {{ $scoreFarbe }}" data-kohaesion-score>{{ $score }}</span>
                     <span class="text-[11px] text-gray-500">Score · {{ $menueKohaesion['rated_pairs'] }}/{{ $menueKohaesion['total_pairs'] }} Gericht-Paare bewertet ({{ $menueKohaesion['coverage_pct'] }} % Graph-Abdeckung)</span>
                 </div>
+                @php($warnung = $menueKohaesion['warnung'] ?? null)
+                @if($warnung !== null)
+                    @php($warnFarbe = $warnung['stufe'] === 'gut' ? 'bg-emerald-50 text-emerald-700 ring-emerald-200' : ($warnung['stufe'] === 'schwach' ? 'bg-amber-50 text-amber-700 ring-amber-200' : 'bg-rose-50 text-rose-700 ring-rose-200'))
+                    <p class="text-[11px] px-2 py-1 rounded ring-1 {{ $warnFarbe }}" data-kohaesion-warnung data-kohaesion-stufe="{{ $warnung['stufe'] }}">{{ $warnung['text'] }}</p>
+                @endif
                 @if($menueKohaesion['weakest_pair'] !== null)
                     <p class="text-[11px] text-gray-600">Schwächstes Paar: <span class="font-medium">{{ $menueKohaesion['weakest_pair']['a'] }}</span> ↔ <span class="font-medium">{{ $menueKohaesion['weakest_pair']['b'] }}</span> ({{ $menueKohaesion['weakest_pair']['score'] }}, {{ $menueKohaesion['weakest_pair']['type'] }})</p>
                 @endif

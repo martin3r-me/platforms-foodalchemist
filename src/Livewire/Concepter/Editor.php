@@ -329,9 +329,13 @@ class Editor extends Component
                 }
             }
         }
+        $pairing = app(\Platform\FoodAlchemist\Services\PairingService::class);
         $this->menueKohaesion = count($dishes) >= 2
-            ? app(\Platform\FoodAlchemist\Services\PairingService::class)->menuCohesion(array_values($dishes))
+            ? $pairing->menuCohesion(array_values($dishes))
             : ['score' => 0, 'rated_pairs' => 0, 'total_pairs' => 0, 'coverage_pct' => 0, 'weakest_pair' => null, 'unrated_pairs' => [], 'komponenten' => [], 'zu_wenig' => true];
+        // Kohärenz-Gate: den Roh-Score als abgestufte, sichtbare Warnung mitführen
+        // (null = nichts zu beurteilen — zu wenig Gerichte oder kein bewertetes Paar).
+        $this->menueKohaesion['warnung'] = $pairing->menuKohaesionWarnung($this->menueKohaesion);
     }
 
     // ── R4.4: Zutaten-Baum + konzept-lokale Slot-Variante ──────────────

@@ -81,6 +81,14 @@ it('öffnet ein Paket und schnürt Gerichte (hinzufügen/entfernen)', function (
     expect($this->paket->gerichte()->count())->toBe(0);
 });
 
+it('kohaesionPruefen führt das Kohärenz-Gate mit (warnung-Feld gesetzt, hier zu wenig Gerichte)', function () {
+    Livewire::test(Editor::class)
+        ->call('oeffnen', 'concepts', $this->concept->id)
+        ->call('kohaesionPruefen')
+        ->assertSet('menueKohaesion.zu_wenig', true)      // leeres Konzept → Fallback-Dict
+        ->assertSet('menueKohaesion.warnung', null);       // Gate lief, schweigt ehrlich (nichts zu beurteilen)
+});
+
 it('Tab-Wechsel funktioniert', function () {
     Livewire::test(Editor::class)
         ->call('oeffnen', 'concepts', $this->concept->id)

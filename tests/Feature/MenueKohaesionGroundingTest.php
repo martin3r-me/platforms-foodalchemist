@@ -99,6 +99,51 @@ it('menueAromaProfil liefert null, wenn die Folge keine auflösbaren Anker träg
         ->and(app(PairingService::class)->menueAromaProfil([]))->toBeNull();
 });
 
+// ── PairingService::menuKohaesionWarnung — das Kohärenz-Gate (Roadmap E1) ────
+
+it('menuKohaesionWarnung stuft den Score in gut/schwach/kritisch (Panel-Schwellen)', function () {
+    $svc = app(PairingService::class);
+    $mk = fn (int $score) => ['score' => $score, 'rated_pairs' => 1, 'total_pairs' => 1,
+        'weakest_pair' => ['a' => 'Gang A', 'b' => 'Gang B', 'score' => $score, 'type' => 'aroma']];
+
+    expect($svc->menuKohaesionWarnung($mk(72))['stufe'])->toBe('gut')       // ≥ 60
+        ->and($svc->menuKohaesionWarnung($mk(60))['stufe'])->toBe('gut')     // Grenze inklusiv
+        ->and($svc->menuKohaesionWarnung($mk(45))['stufe'])->toBe('schwach') // 35..59
+        ->and($svc->menuKohaesionWarnung($mk(35))['stufe'])->toBe('schwach') // Grenze inklusiv
+        ->and($svc->menuKohaesionWarnung($mk(20))['stufe'])->toBe('kritisch'); // < 35
+});
+
+it('menuKohaesionWarnung nennt die schwächste Brücke bei schwach/kritisch, nicht bei gut', function () {
+    $svc = app(PairingService::class);
+    $mk = fn (int $score) => ['score' => $score, 'rated_pairs' => 2, 'total_pairs' => 3,
+        'weakest_pair' => ['a' => 'Zitrus-Ceviche', 'b' => 'Schoko-Tarte', 'score' => 12, 'type' => 'aroma']];
+
+    expect($svc->menuKohaesionWarnung($mk(30))['text'])->toContain('Zitrus-Ceviche ↔ Schoko-Tarte')
+        ->and($svc->menuKohaesionWarnung($mk(80))['text'])->not->toContain('Schwächste Brücke');
+});
+
+it('menuKohaesionWarnung liefert null, wenn nichts zu beurteilen ist (T9)', function () {
+    $svc = app(PairingService::class);
+
+    // zu wenig Gerichte (Panel-Fallback-Dict)
+    expect($svc->menuKohaesionWarnung(['zu_wenig' => true, 'score' => 0, 'rated_pairs' => 0]))->toBeNull()
+        // kein bewertetes Paar (Graph sieht die Folge nicht) — keine Aussage, nicht „schlecht"
+        ->and($svc->menuKohaesionWarnung(['score' => 0, 'rated_pairs' => 0, 'total_pairs' => 1, 'weakest_pair' => null]))->toBeNull();
+});
+
+it('Gate über echte Menü-Daten: unverbundene Gänge = kein bewertetes Paar = keine Warnung', function () {
+    // Räucherwaren (Gang 1) und Zitrus (Gang 2) haben KEINE Kante zueinander im
+    // Test-Graph → menuCohesion rated_pairs=0 → das Gate schweigt ehrlich.
+    $lachs = ($this->mkGericht)('r-lachs', 'HG: Räucherlachs', 'Räucherlachs', 'raeucherwaren');
+    $ceviche = ($this->mkGericht)('r-ceviche', 'VS: Zitrus-Ceviche', 'Limette', 'zitrus');
+
+    $svc = app(PairingService::class);
+    $kohaesion = $svc->menuCohesion([$lachs, $ceviche]);
+
+    expect($kohaesion['rated_pairs'])->toBe(0)
+        ->and($svc->menuKohaesionWarnung($kohaesion))->toBeNull();
+});
+
 // ── IdeenService::kiDivergenzConcept — die Verdrahtung in den LLM-Kontext ────
 
 /** Provider-Stub, der jede User-Nachricht (= JSON-Kontext) über $capture mitschneidet. */
