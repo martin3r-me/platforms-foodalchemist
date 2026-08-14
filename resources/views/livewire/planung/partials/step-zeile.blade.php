@@ -30,6 +30,24 @@
     @if($st->status === 'failed' && $st->error)
         <p class="text-[10px] text-rose-400/80 pl-1">{{ \Illuminate\Support\Str::limit($st->error, 160) }}</p>
     @endif
+    {{-- A: voll-inline Zutaten-Review — sehen WAS angelegt wurde + tauschen/entfernen/ergänzen VOR der Freigabe.
+         On-Demand gemountet (toggleZutaten), reused IngredientEditor (:eingebettet), nur für Rezept/Gericht-Drafts. --}}
+    @if($st->ref_id && in_array($st->kind, ['rezept', 'gericht'], true) && in_array($st->status, ['done', 'freigegeben'], true))
+        @php $zOffen = in_array($st->id, $zutatenOffen ?? [], true); @endphp
+        <div class="mt-1">
+            <button type="button" wire:click="toggleZutaten({{ $st->id }})"
+                    class="text-[10px] text-emerald-300/80 hover:text-emerald-200 inline-flex items-center gap-1 select-none">
+                @svg($zOffen ? 'heroicon-o-chevron-down' : 'heroicon-o-adjustments-horizontal', 'w-3 h-3')
+                {{ $zOffen ? 'Zutaten schließen' : 'Zutaten prüfen & ändern' }}
+            </button>
+            @if($zOffen)
+                <div class="mt-2 rounded-lg bg-white/[0.03] p-2" wire:key="zutaten-wrap-{{ $st->id }}">
+                    <p class="text-[10px] text-gray-400 mb-1.5">Entwurf — tauschen / entfernen / ergänzen, dann freigeben:</p>
+                    <livewire:foodalchemist.recipes.ingredient-editor :recipe-id="(int) $st->ref_id" :eingebettet="true" wire:key="worker-zutaten-{{ $st->id }}-{{ (int) $st->ref_id }}" />
+                </div>
+            @endif
+        </div>
+    @endif
     @if($wissenFiles !== [])
         <details class="mt-0.5">
             <summary class="text-[10px] text-gray-500 cursor-pointer hover:text-gray-300">Verwendetes Wissen ({{ count($wissenFiles) }})</summary>

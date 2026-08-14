@@ -193,3 +193,24 @@ it('#4/#1a Cockpit-Baum: Fan-out-Kind eingerückt + „Verwendetes Wissen" aus c
         ->assertSee('Verwendetes Wissen')        // #1a aus context_snapshot
         ->assertSee('↳');                        // Einrückungs-Marker des Kindes
 });
+
+it('A: Inline-Zutaten-Review — Toggle mountet den IngredientEditor on-demand für einen Draft', function () {
+    $rezept = $this->makeRecipe($this->rootTeam, 'Draft-Suppe', ['status' => 'draft']);
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'X', 'brief' => 'y']);
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'planning_session_id' => $session->id, 'scope' => 'rezept', 'status' => 'review']);
+    $step = FoodAlchemistCascadeRunStep::create([
+        'team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'rezept', 'status' => 'done',
+        'label' => 'Draft-Suppe', 'ref_id' => $rezept->id,
+    ]);
+
+    Livewire::test(PlanungIndex::class)
+        ->set('sessionId', $session->id)
+        ->set('laufId', $run->id)
+        ->assertSee('Zutaten prüfen')            // Toggle da, Editor NOCH nicht offen …
+        ->assertSet('zutatenOffen', [])
+        ->call('toggleZutaten', $step->id)
+        ->assertSet('zutatenOffen', [$step->id]) // … Klick öffnet DIESEN Draft
+        ->assertSee('Zutaten schließen')         // Editor gemountet (Toggle-Label kippt)
+        ->call('toggleZutaten', $step->id)
+        ->assertSet('zutatenOffen', []);         // zu
+});

@@ -86,6 +86,13 @@ class Index extends Component
     public ?array $wissenVorschau = null;
 
     /**
+     * A: Welche Draft-Steps ihren Inline-Zutaten-Editor offen haben (step_id-Liste).
+     * Kontrolliertes On-Demand-Mounten statt N eingebetteter Editoren beim Fan-out —
+     * erst beim Aufklappen wird der IngredientEditor für diesen Draft gerendert.
+     */
+    public array $zutatenOffen = [];
+
+    /**
      * Pill-Gruppen fürs Cockpit-View (Parität zu GeneratorModal::RICHTUNGEN). Inline
      * gehalten statt aus dem Modal referenziert — die Leitstelle ist der neue Ort der
      * Steuerung; die Modal-Knöpfe der Browser-Seiten entfallen.
@@ -494,6 +501,19 @@ class Index extends Component
             $this->fehler = null;
         } catch (\Throwable $e) {
             $this->fehler = $e->getMessage();
+        }
+    }
+
+    /**
+     * A: Inline-Zutaten-Review eines Drafts auf-/zuklappen (voll editierbar vor Freigabe).
+     * On-Demand — der IngredientEditor wird erst beim Öffnen gemountet.
+     */
+    public function toggleZutaten(int $stepId): void
+    {
+        if (in_array($stepId, $this->zutatenOffen, true)) {
+            $this->zutatenOffen = array_values(array_diff($this->zutatenOffen, [$stepId]));
+        } else {
+            $this->zutatenOffen[] = $stepId;
         }
     }
 
