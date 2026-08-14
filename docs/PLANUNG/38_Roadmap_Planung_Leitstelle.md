@@ -121,15 +121,8 @@ FA `main` = `eb85e3c`, demo deployt + Migration `[180] Ran`. Nachweis: `Planning
 - [ ] **Beide Pfade behalten:** Schnell (Brief → Go direkt) + Geplant (KI-Kopf → im Conceptor prüfen → Go „aus geprüftem Plan"); fail-soft, damit ein leerer Plan den Draft nicht kippt
 - [ ] **Kein Migration** (Prompt = config, `planConceptId` = transiente Prop) → Deploy = reiner Lock-Pin. Risiko: `fuelleBestehendesKonzept` muss leere Slots anlegen — bei Umsetzung verifizieren.
 
-### 🖥️ Etappe 3 — Hauptpage / Planung-Landing überarbeiten
-*Voraussetzung (Entscheid Dominique): **erst wenn der Editor steht und funktioniert**, dann die Hauptpage anfassen — sie muss Design & Flow des fertigen Editors spiegeln.*
-
-- [ ] **Design-/Flow-Parität** zum fertigen Editor-Cockpit (nicht zwei Welten)
-- [ ] **Status je Planung** in Liste + Karten (Entwurf · läuft · prüfen · freigegeben · fertig) + Fortschritt sichtbar
-- [ ] **Filter/Gruppierung** (Kategorie · Herkunft · Divergenz/Konvergenz) + Suche
-- [ ] **Direkt-Aktionen je Karte** (Editor öffnen · freigeben · duplizieren · verwerfen)
-- [ ] **„Neu erstellen" + Trend-Input + Skizzen** konsistent verankern (Trend = EIN Input, nicht der Rahmen)
-- [ ] **Details-Panel** aussagekräftig (Herkunft/Lineage/Skizzen/Kaskaden-Stand)
+### 🖥️ Etappe 3 — (verschoben) → Hauptseite kommt ZULETZT
+*Die Hauptseite / Planung-Landing wird bewusst als **letzter Bau-Schritt** geführt („erst wenn der Editor steht und funktioniert"). Der volle UI-Plan steht **ganz am Ende dieser Roadmap** (finale Etappe). Diese Nummer bleibt als Platzhalter, damit die Etappen 4–10 stabil bleiben — keine offenen Punkte hier.*
 
 ### 🥉 Etappe 4 — Eingabe-Reife
 - [ ] **Skizzen-Integration** — Ideen/Skizzen als Kaskaden-Eingang (bisher deferred)
@@ -190,3 +183,27 @@ FA `main` = `eb85e3c`, demo deployt + Migration `[180] Ran`. Nachweis: `Planning
 - [Regelwerk Basisrezepte] = `07_WISSEN/.../Regelwerke/Regelwerk_Basisrezepte.md` (Vault, §2 Verarbeitungs-Reduktion · §3 Pürees · §4 Sub-Rezept-Hierarchie)
 - Specs: [27 Step-by-Step](27_Spec_Step_by_Step_Zubereitung.md) · [29 Foodbook-Editor](29_Foodbook_Editor_Umbau.md) · [30 Produktion](30_Produktion_Ausbau.md) · [35 Tagesplan-Cockpit](35_Spec_Tagesplan_Cockpit.md) · [37 KI-Erstellen Typ/Niveau](37_Spec_KI_Erstellen_Typ_Niveau.md)
 - Steuerung: [24 Umsetzungsplan](24_Zielbild_2029_Umsetzungsplan.md) · [23 MVP-Audit](23_MVP_Audit.md)
+
+---
+
+## 🖥️ FINALE ETAPPE — Hauptseite / Planung-Landing (Arbeitsgrundlage)
+
+*Der LETZTE Bau-Schritt — erst wenn der Editor/Cockpit steht und rund läuft. Die Hauptseite muss Design & Flow des fertigen Editors spiegeln (nicht zwei Welten). Basis = die aktuelle Landing: „Planungen"-Liste links · „Neu erstellen" (Basisrezept/Gericht/Concept) · „KI-Leitstelle"-Intro · „Zuletzt"-Karten · Details-Panel rechts. Steht bewusst ganz am Ende, weil die Roadmap die Arbeitsgrundlage der Routine ist (top-down → Hauptseite zuletzt).*
+
+**Linke Spalte — „Planungen"-Liste**
+- [ ] Status-Badge je Eintrag (Entwurf · läuft · prüfen · freigegeben · fertig) statt nur Divergenz/Konvergenz
+- [ ] Gruppierung/Filter (Kategorie · Herkunft · Typ Basisrezept/Gericht/Concept) + Suche
+- [ ] laufende Planung optisch hervorheben (Puls bei `running`)
+
+**Mitte — „Neu erstellen" + „Zuletzt"**
+- [ ] „Neu erstellen"-Leiste im Editor-Look; Trend/Skizze klar als EIN Input dahinter (nicht der Rahmen)
+- [ ] „Zuletzt"-Karten mit Status + Kaskaden-Fortschritt (z.B. „Gerichte 1/1 · Basisrezepte 0/3") + Direkt-Aktionen (Öffnen · freigeben · duplizieren · verwerfen)
+- [ ] verwaiste Entwürfe (ohne Lauf) sichtbar machen
+
+**Rechte Spalte — Details-Panel**
+- [ ] bei Auswahl: Herkunft/Lineage · Status · Kaskaden-Stand je Stufe · Skizzen · „Im Editor öffnen"
+- [ ] Kaskaden-Kurzstatus (welche Stufe offen/freigegeben/angereichert) ohne den Editor zu öffnen
+
+**Gesamt**
+- [ ] Design-/Flow-Parität zum Editor-Cockpit (gleiche Sektionen/Farben/Abstände)
+- [ ] Verifikation: Sandbox-Render + kompiliertes-Blade-Lint; Real-Abnahme auf demo durch Dominique
