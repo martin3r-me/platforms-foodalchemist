@@ -182,6 +182,9 @@ export function pairingNetzGraph(config) {
     _edgeTier(d) {
       if (d.kind === 'anker_anker') return d.level >= 3 ? 'best' : (d.level >= 2 ? 'good' : 'match');
       if (d.kind === 'bridge') {
+        // Backend liefert den normalisierten Tier (Overlap-Anteil, hub-entzerrt). Fallback
+        // auf die rohe Anzahl nur für Altdaten ohne `tier`.
+        if (d.tier) return d.tier;
         const n = d.shared || 0;
 
         return n >= 5 ? 'best' : (n >= 3 ? 'good' : 'match');
@@ -239,8 +242,9 @@ export function pairingNetzGraph(config) {
     _edgeWidth(d) {
       // Anker↔Anker: Dicke nach Stern-Stufe (★★★ dick … ★ dünn) — deine 1/2/3-Matrix.
       if (d.kind === 'anker_anker') return { 3: 3.2, 2: 2.2, 1: 1.3 }[d.level] || 2;
-      // Brücke: Dicke nach Anzahl GETEILTER Partner (mehr gemeinsame Partner = stärkere Verbindung).
-      if (d.kind === 'bridge') return scaleLinear().domain([1, 6]).range([1.2, 4.2]).clamp(true)(d.shared || 1);
+      // Brücke: Dicke nach normalisierter Stärke (Overlap-Tier) — eine Stärke-Dimension,
+      // konsistent mit dem Best/Good/Match-Marker (früher: rohe Anzahl → hub-verzerrt).
+      if (d.kind === 'bridge') return { best: 4, good: 2.6, match: 1.5 }[this._edgeTier(d)] || 1.5;
       if (d.kind === 'zentrum_anker') return 0.8;
       if (d.kind === 'basis') return 1;
       if (d.weight == null) return 1.4;
@@ -270,8 +274,10 @@ export function pairingNetzGraph(config) {
       }
       if (d.kind === 'bridge') {
         const liste = (d.partners || []).join(', ');
+        const stufe = { best: 'Best', good: 'Good', match: 'Match' }[this._edgeTier(d)] || '';
+        const anteil = d.overlap != null ? ` · ${d.overlap}% Überlappung` : '';
 
-        return `${name(s)} ↔ ${name(t)} · verbunden über ${d.shared} Partner${liste ? ': ' + liste : ''}`;
+        return `${name(s)} ↔ ${name(t)} · ${stufe} · ${d.shared} geteilte Partner${anteil}${liste ? ': ' + liste : ''}`.trim();
       }
 
       return '';

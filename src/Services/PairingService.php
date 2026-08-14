@@ -1340,8 +1340,19 @@ class PairingService
             }
             $pairPartners = []; // "a:b" (a<b) => [partnerLabel, …]
             $touched = array_fill_keys($innerIds, false);
+            // Externe Partner-Zahl je Anker (im Kandidat-Raum = „Grad"). Basis für die
+            // NORMALISIERTE Brücken-Stärke: nicht die rohe Anzahl geteilter Partner (hub-
+            // verzerrt → alles wirkt „Best"), sondern ihr ANTEIL am kleineren Grad
+            // (Overlap-Koeffizient). Zählt ALLE Kandidaten, die den Anker bedienen — auch
+            // cover-1 — also vor dem <2-served-Skip.
+            $degCand = array_fill_keys($innerIds, 0);
             foreach ($kandidaten as $c) {
                 $served = array_values(array_unique(array_map(static fn ($p) => (int) $p['anker_id'], $c['partner'])));
+                foreach ($served as $s) {
+                    if (isset($degCand[$s])) {
+                        $degCand[$s]++;
+                    }
+                }
                 if (count($served) < 2) {
                     continue;
                 }
@@ -1356,10 +1367,20 @@ class PairingService
                     }
                 }
             }
+            $tierCount = ['best' => 0, 'good' => 0, 'match' => 0];
             foreach ($pairPartners as $key => $partners) {
                 [$a, $b] = array_map('intval', explode(':', $key));
+                $shared = count($partners);
+                // Overlap-Koeffizient: geteilte Partner / kleinerer Grad. Entzerrt Hubs —
+                // 6 geteilte bei zwei 8er-Ankern (0,75 = Best) ≠ 6 bei einem 65er (0,09 = Match).
+                $minDeg = max(1, min($degCand[$a] ?? 1, $degCand[$b] ?? 1));
+                $overlap = $shared / $minDeg;
+                $tier = $overlap >= 0.4 ? 'best' : ($overlap >= 0.2 ? 'good' : 'match');
+                $tierCount[$tier]++;
                 $edges[] = ['source' => 'a:'.$a, 'target' => 'a:'.$b, 'kind' => 'bridge',
-                    'shared' => count($partners),
+                    'shared' => $shared,
+                    'overlap' => (int) round($overlap * 100),
+                    'tier' => $tier,
                     'partners' => array_slice(array_values(array_unique($partners)), 0, 6),
                     'visible' => true];
             }
@@ -1393,6 +1414,9 @@ class PairingService
                 'pairs_total' => $nReal >= 2 ? (int) ($nReal * ($nReal - 1) / 2) : 0,
                 'top' => array_slice(array_keys($topCount), 0, 5),
                 'orphans' => $orphanLabels,
+                // Verteilung der Verbindungs-Stärke (normalisierter Overlap-Tier) — trägt den
+                // „davon N stark"-Zusatz in der Kohäsions-Lesung, damit die Stärke auch im Text steht.
+                'tiers' => $tierCount,
             ];
         }
 
