@@ -120,17 +120,30 @@ it('pairingNetz: Anker↔Anker-Kante aus der Harmonie-Matrix (innere Ebene)', fu
 });
 
 it('pairingNetz: Anker↔Anker — beste Stufe gewinnt, kontrast ausgeschlossen, kein Selbst-Loop', function () {
-    // minze als dritten Kern-Anker dazu.
-    $this->svc->setRecipeAnker($this->rootTeam, $this->rezept->id, $this->minze);
+    // Frischer 3. Kern-Anker OHNE beforeEach-Harmoniekante — bewusst NICHT minze:
+    // beforeEach seedt tahin↔minze (aroma), das ergäbe mit minze als Kern eine ZWEITE
+    // anker_anker-Linie und bräche toHaveCount(1). `fremd` trägt nur Kontrast (s.u.).
+    $fremd = mkAnker('fremd');
+    $this->svc->setRecipeAnker($this->rootTeam, $this->rezept->id, $fremd);
 
-    // kichererbse↔tahin doppelt (★★ und ★★★) → dedup auf beste Stufe (★★★).
-    mkKante($this->kichererbse, $this->tahin, 'aroma', 2, 0.5);
-    mkKante($this->kichererbse, $this->tahin, 'aroma', 3, 0.9);
-    // kichererbse↔minze nur als Kontrast (eigene Achse) → NICHT als Harmonie-Linie.
-    mkKante($this->kichererbse, $this->minze, 'kontrast', null, null);
+    // kichererbse↔tahin in beiden Richtungen VERSCHIEDEN gestuft (★★ / ★★★) → dedup muss
+    // die beste Stufe (★★★) wählen. Direkt-Inserts statt mkKante: UNIQUE(a,b,type) verbietet
+    // zwei gleich-typige Kanten je Richtung, aber die zwei Richtungen dürfen sich stufen.
+    DB::table('foodalchemist_pairing_anchor_edges')->insert([
+        'uuid' => (string) UuidV7::generate(), 'anchor_a_id' => $this->kichererbse,
+        'anchor_b_id' => $this->tahin, 'type' => 'aroma', 'level' => 2, 'weight' => 0.5,
+        'created_at' => now(), 'updated_at' => now(),
+    ]);
+    DB::table('foodalchemist_pairing_anchor_edges')->insert([
+        'uuid' => (string) UuidV7::generate(), 'anchor_a_id' => $this->tahin,
+        'anchor_b_id' => $this->kichererbse, 'type' => 'aroma', 'level' => 3, 'weight' => 0.9,
+        'created_at' => now(), 'updated_at' => now(),
+    ]);
+    // kichererbse↔fremd nur als Kontrast (eigene Achse) → NICHT als Harmonie-Linie.
+    mkKante($this->kichererbse, $fremd, 'kontrast', null, null);
     // Selbst-Loop (defensiv) → darf nie als Kante entstehen.
     DB::table('foodalchemist_pairing_anchor_edges')->insert([
-        'uuid' => (string) \Symfony\Component\Uid\UuidV7::generate(),
+        'uuid' => (string) UuidV7::generate(),
         'anchor_a_id' => $this->kichererbse, 'anchor_b_id' => $this->kichererbse,
         'type' => 'aroma', 'level' => 3, 'weight' => 1.0, 'created_at' => now(), 'updated_at' => now(),
     ]);
