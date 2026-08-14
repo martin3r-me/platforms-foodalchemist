@@ -122,6 +122,30 @@ it('Freie 1-Klick-Erstellung: schnellErstellen legt eine cockpit_frei-Session an
         ->and($session->source_knowledge_document_id)->toBeNull();   // kein Trend
 });
 
+it('Scope-Treue: schnellErstellen öffnet den Editor auf dem zur Ebene passenden Tab (Basisrezept ≠ Gericht)', function () {
+    // „Freies Basisrezept" (scope=rezept) muss auf dem Basisrezept-Tab landen, nicht auf Gericht —
+    // sonst erzeugte der nächste Go eine Gerichte-Stufe (Roadmap Etappe 1, Scope-Treue).
+    Livewire::test(PlanungIndex::class)
+        ->call('schnellErstellen', 'rezept')
+        ->assertDispatched('modal.open', name: 'planung-editor', tab: 'basisrezept');
+
+    Livewire::test(PlanungIndex::class)
+        ->call('schnellErstellen', 'gericht')
+        ->assertDispatched('modal.open', name: 'planung-editor', tab: 'gericht');
+
+    Livewire::test(PlanungIndex::class)
+        ->call('schnellErstellen', 'concept')
+        ->assertDispatched('modal.open', name: 'planung-editor', tab: 'concept');
+});
+
+it('oeffne aus der Liste (ohne Start-Tab) bleibt auf dem Editor-Default (tab=null → tabInit)', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'X', 'brief' => 'y']);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->assertDispatched('modal.open', name: 'planung-editor', tab: null);
+});
+
 it('Cockpit rendert die Regler-Leitplanken + die freie Erstell-Leiste (Blade kompiliert, KI-Fläche ist in der Planung)', function () {
     $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'X', 'brief' => 'y']);
 

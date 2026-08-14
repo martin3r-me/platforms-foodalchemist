@@ -190,17 +190,22 @@ class Index extends Component
         };
         $session = $svc->create($team, ['title' => $titel, 'created_via' => 'cockpit_frei']);
         $this->fehler = null;
-        $this->oeffne($session->id);
+        // Scope-Treue (Etappe 1): der Frei-Start setzt die Ebene korrekt — Basisrezept-Scope öffnet den
+        // Basisrezept-Tab (nicht den Gericht-Tab). scope 'rezept' → Tab-Key 'basisrezept'; sonst = scope-Key.
+        $startTab = $scope === 'rezept' ? 'basisrezept' : $scope;
+        $this->oeffne($session->id, $startTab);
     }
 
-    public function oeffne(int $id): void
+    public function oeffne(int $id, ?string $startTab = null): void
     {
         $this->sessionId = $id;
         $this->fehler = null;
         $this->meldung = null;
         $this->ladeForm();
         $this->ladeLetztenLauf();
-        $this->dispatch('modal.open', name: 'planung-editor');
+        // Scope-Treue: ein „Freies Basisrezept"-Start öffnet direkt auf dem Basisrezept-Tab (Ebene ≠ Gericht).
+        // Ohne $startTab bleibt der Editor-Default (tabInit='analyse') — z.B. beim Öffnen aus der Liste.
+        $this->dispatch('modal.open', name: 'planung-editor', tab: $startTab);
     }
 
     public function waehle(int $id): void

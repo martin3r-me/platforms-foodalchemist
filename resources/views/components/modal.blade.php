@@ -30,7 +30,7 @@
     'closeVia' => null,                                               {{-- optional: Livewire-Methode für das ✕ (z.B. Nav-Stack-Zurück) statt Alpine-close(); Backdrop/Escape bleiben hartes Schließen --}}
     'darkCanvas' => false,                                            {{-- 2026-07-31: dunkler Editor-Grund im Body (nur grosse Editoren); Karten schweben darauf --}}
     'titleName' => null,                                              {{-- 2026-07-31: hebt einen Namen (z.B. Rezept) im Titel als gerahmten Akzent-Chip hervor — präsenter, nicht grösser --}}
-    'tabInit' => null,                                                {{-- 2026-07-31: aktiviert eine fixe Tab-Leiste im Kopf (via <x-slot:tabs>); Wert = Start-Tab. Alpine-`tab` lebt am Panel, umspannt Kopf-Tabs + Body-Panels --}}
+    'tabInit' => null,                                                {{-- 2026-07-31: aktiviert eine fixe Tab-Leiste im Kopf (via <x-slot:tabs>); Wert = Default-Start-Tab. Alpine-`tab` lebt am Panel, umspannt Kopf-Tabs + Body-Panels. Ein `modal.open`-Dispatch darf per `tab:`-Detail einen anderen Start-Tab erzwingen (Scope-Treue: „Freies Basisrezept" öffnet auf dem Basisrezept-Tab) — ohne Detail bleibt tabInit. --}}
 ])
 
 @php
@@ -48,7 +48,7 @@
           nicht → explizite addEventListener in x-init; Event-Namen
           `modal.open`/`modal.close` (Planner-Konvention) bleiben unverändert. --}}
      x-init="
-        window.addEventListener('modal.open', e => { if (e.detail?.name === '{{ $name }}') { open = true; @if($tabInit) tab = '{{ $tabInit }}'; @endif } });
+        window.addEventListener('modal.open', e => { if (e.detail?.name === '{{ $name }}') { open = true; @if($tabInit) tab = e.detail?.tab || '{{ $tabInit }}'; @endif } });
         window.addEventListener('modal.close', e => { if (!e.detail?.name || e.detail.name === '{{ $name }}') close() });
      "
      x-show="open" x-cloak
