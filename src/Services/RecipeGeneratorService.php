@@ -228,9 +228,17 @@ class RecipeGeneratorService
                     // erst nach menschlicher Auswahl in getrennten Schritten angelegt.
                     $zeile['match_method'] = 'unmatched';
                     $statistik['offen']++;
-                    $istBasisrezept = ! $direktArtikel && $this->heuristik->queryIstHalbfabrikat(
+                    // Etappe 1 (2026-08-14): der Generator emittiert pro Zeile das
+                    // LLM-Komponenten-Flag `sub_rezept` (config/foodalchemist.php, b36ba00).
+                    // Ist es gesetzt, ENTSCHEIDET es (authoritativ, beide Richtungen) — es
+                    // löst die reine Namens-Heuristik ab (§4): `sub_rezept:true` zwingt zur
+                    // Basisrezept-Anlage auch bei heuristik-blinden Fällen (Klar-Essenz),
+                    // `sub_rezept:false` hält gekaufte Ware trotz Sauce/Jus-Token als LA.
+                    // Fehlt das Flag (Altprovider/kein Emit), bleibt die Heuristik der Fallback.
+                    $llmSub = $this->llmSubRezeptFlag($z);
+                    $istBasisrezept = ! $direktArtikel && ($llmSub ?? $this->heuristik->queryIstHalbfabrikat(
                         app(Matching\TokenEngine::class)->tokenize($text)
-                    );
+                    ));
                     $laKandidaten = $istBasisrezept ? [] : app(LaCandidateFinder::class)
                         ->find($team, $text, $this->wgHint($z['commodity_group'] ?? $z['warengruppe'] ?? null), 3)
                         ->map(fn ($la) => [
@@ -244,7 +252,10 @@ class RecipeGeneratorService
                     $offene[] = [
                         'index' => $i,
                         'text' => $text,
-                        'primaer' => $istBasisrezept || (! $direktArtikel && $this->heuristik->istSubRezeptKandidat($text))
+                        // Flag-authoritativ: `sub_rezept:false` darf NICHT über die breitere
+                        // Button-Heuristik (istSubRezeptKandidat: creme/mousse/pesto …) wieder
+                        // zur Basisrezept-Anlage zurückkippen — sonst wäre das LLM-Nein wirkungslos.
+                        'primaer' => ($llmSub ?? ($istBasisrezept || (! $direktArtikel && $this->heuristik->istSubRezeptKandidat($text))))
                             ? 'basisrezept_anlegen' : 'lieferantenartikel_waehlen',
                         'shortlist' => $this->matcher->candidatesFor($team, $text, $z['slug'] ?? null, 5),
                         'la_kandidaten' => $laKandidaten,
@@ -480,6 +491,43 @@ class RecipeGeneratorService
         }
 
         return preg_match('/^\s*(\d{2})\b/', $raw, $m) === 1 ? $m[1] : null;
+    }
+
+    /**
+     * Etappe 1 (2026-08-14): das LLM-Komponenten-Flag `sub_rezept` aus EINER
+     * Vorschlags-Zeile robust lesen. Kanonisch als JSON-Bool emittiert (b36ba00),
+     * aber ein LLM liefert das Feld auch mal als 1/0 oder "true"/"ja" — darum
+     * tolerant normalisieren. Rückgabe:
+     *   true  → Zeile IST ein Halbfabrikat/Sub-Basisrezept (authoritativ)
+     *   false → Zeile ist Rohware/Kondiment (authoritativ)
+     *   null  → Flag fehlt/unverständlich → Aufrufer fällt auf die Namens-Heuristik zurück
+     *
+     * Kein blindes (bool)-Cast: das würde ein fehlendes Feld zu `false` machen und
+     * so die Heuristik STILL abschalten — genau der Fallback, den wir behalten wollen.
+     */
+    private function llmSubRezeptFlag(array $z): ?bool
+    {
+        if (! array_key_exists('sub_rezept', $z)) {
+            return null;
+        }
+        $v = $z['sub_rezept'];
+        if (is_bool($v)) {
+            return $v;
+        }
+        if (is_int($v)) {
+            return $v === 1 ? true : ($v === 0 ? false : null);
+        }
+        if (is_string($v)) {
+            $s = mb_strtolower(trim($v));
+            if (in_array($s, ['true', '1', 'ja', 'yes'], true)) {
+                return true;
+            }
+            if (in_array($s, ['false', '0', 'nein', 'no', ''], true)) {
+                return false;
+            }
+        }
+
+        return null;
     }
 
     /**

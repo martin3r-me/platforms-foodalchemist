@@ -202,3 +202,48 @@ it('Band-Gate blockt nur Schwaches: exakte Benennung verdrahtet das Sub-Rezept w
         ->and($resultat['statistik']['offen'])->toBe(0)
         ->and($resultat['recipe']->ingredients()->first()->referenced_recipe_id)->toBe($rahmeis->id);
 });
+
+/**
+ * Etappe 1 (2026-08-14): das LLM-Komponenten-Flag `sub_rezept` löst die reine
+ * Namens-Heuristik an der Entscheidungsstelle ab — authoritativ in BEIDE Richtungen.
+ * Anker sind exakt die zwei Heuristik-Fälle aus DoD M4-14 (oben), hier per Flag gekippt:
+ *   - Drachenfrucht-Essenz: Heuristik = KEIN Sub (essenz bewusst ausgelassen) →
+ *     `sub_rezept:true` erzwingt trotzdem die Basisrezept-Anlage (gemachte Klar-Essenz).
+ *   - brauner Kalbsfond: Heuristik = Sub (fond-Marker) → `sub_rezept:false` hält die
+ *     Zeile als gekaufte Ware im LA-Pfad.
+ */
+it('LLM-Flag sub_rezept ist authoritativ und übersteuert die Namens-Heuristik in beide Richtungen', function () {
+    $resultat = $this->svc->generiere($this->rootTeam, 'Fond-und-Essenz-Teller', [
+        'convenience' => 'from_scratch', 'frische' => 'frisch',
+    ], kiRezeptOverride: [
+        'name' => 'Teller: Fond & Essenz',
+        'zutaten' => [
+            // Heuristik-blind (essenz), Flag zwingt zu Sub:
+            ['text' => 'Drachenfrucht-Essenz', 'quantity' => 10, 'unit' => 'ml', 'sub_rezept' => true],
+            // Heuristik = Sub (fond), Flag hält als Ware:
+            ['text' => 'brauner Kalbsfond', 'quantity' => 250, 'unit' => 'ml', 'sub_rezept' => false],
+        ],
+    ]);
+
+    expect($resultat['offene'])->toHaveCount(2)
+        ->and($resultat['offene'][0]['text'])->toBe('Drachenfrucht-Essenz')
+        ->and($resultat['offene'][0]['primaer'])->toBe('basisrezept_anlegen')  // Flag=true übersteuert Heuristik-Nein
+        ->and($resultat['offene'][0]['la_kandidaten'])->toBe([])                // Sub-Pfad → keine LA-Suche
+        ->and($resultat['offene'][1]['text'])->toBe('brauner Kalbsfond')
+        ->and($resultat['offene'][1]['primaer'])->toBe('lieferantenartikel_waehlen'); // Flag=false übersteuert Heuristik-Ja
+});
+
+it('Fehlt das sub_rezept-Flag, bleibt die Namens-Heuristik der Fallback (kein stiller bool-Cast)', function () {
+    $resultat = $this->svc->generiere($this->rootTeam, 'Fond-und-Essenz-Teller', [
+        'convenience' => 'from_scratch', 'frische' => 'frisch',
+    ], kiRezeptOverride: [
+        'name' => 'Teller: Fond & Essenz ohne Flag',
+        'zutaten' => [
+            ['text' => 'brauner Kalbsfond', 'quantity' => 250, 'unit' => 'ml'],   // kein Flag → Heuristik: Sub
+            ['text' => 'Drachenfrucht-Essenz', 'quantity' => 10, 'unit' => 'ml'], // kein Flag → Heuristik: Ware
+        ],
+    ]);
+
+    expect($resultat['offene'][0]['primaer'])->toBe('basisrezept_anlegen')
+        ->and($resultat['offene'][1]['primaer'])->toBe('lieferantenartikel_waehlen');
+});
