@@ -583,13 +583,13 @@
                             </div>
                             <svg viewBox="0 0 1200 980" preserveAspectRatio="xMidYMid meet"
                                  class="w-full rounded-xl" style="height:70vh; background:#0b1120" data-fa-netz-mount></svg>
-                            {{-- Legende (Foodpairing-Stil): Punkt auf der Anker-Linie = Stärke der Beziehung --}}
-                            <div class="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-[10px] text-slate-400">
-                                <span class="text-slate-500">Anker-Beziehung (Punkt = Stärke):</span>
-                                <span class="inline-flex items-center gap-1.5"><span class="inline-block rounded-full" style="width:12px;height:12px;background:#a78bfa"></span> Best</span>
-                                <span class="inline-flex items-center gap-1.5"><span class="inline-block rounded-full" style="width:9px;height:9px;background:#a78bfa"></span> Good</span>
-                                <span class="inline-flex items-center gap-1.5"><span class="inline-block rounded-full" style="width:6px;height:6px;background:#a78bfa"></span> Match</span>
-                                <span class="text-slate-500">· violett = über gemeinsame Partner · gold/orange = direktes Pairing · Hover zeigt die Partner</span>
+                            {{-- Legende: Punkt auf der Anker-Linie = Beziehungsstärke (groß→klein) --}}
+                            <div class="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-[11px] text-slate-300">
+                                <span class="text-slate-500">Beziehungsstärke:</span>
+                                <span class="inline-flex items-center gap-2"><span class="inline-block rounded-full" style="width:18px;height:18px;background:#a78bfa;box-shadow:0 0 0 2px #ede9fe"></span> Best</span>
+                                <span class="inline-flex items-center gap-2"><span class="inline-block rounded-full" style="width:11px;height:11px;background:#a78bfa;opacity:.82"></span> Good</span>
+                                <span class="inline-flex items-center gap-2"><span class="inline-block rounded-full" style="width:5px;height:5px;background:#a78bfa;opacity:.5"></span> Match</span>
+                                <span class="text-[10px] text-slate-500">· groß→klein = stark→schwach · violett = geteilte Partner, gold = direktes Pairing · Hover zeigt die Partner</span>
                             </div>
                         </div>
                     @endif

@@ -150,8 +150,11 @@ export function pairingNetzGraph(config) {
       // Hover-Tooltip auf den Anker↔Anker-Kanten: „X ↔ Y · ★★★ Best-Match".
       this._edgeSel.append('title').text((d) => this._edgeTitle(d));
 
-      // Stärke-Marker auf den Anker-Verbindungen (Foodpairing-Stil: Punktgröße = Best/Good/Match).
-      const tierR = { best: 7, good: 5, match: 3.5 };
+      // Stärke-Marker auf den Anker-Verbindungen (Foodpairing-Stil: Best/Good/Match).
+      // Deutlich distinkte Stufen: grosser Grössensprung + Best heller Ring + Match blasser,
+      // damit man gross/mittel/klein klar auseinanderhält.
+      const tierR = { best: 11, good: 6.5, match: 3.2 };
+      const tierOp = { best: 1, good: 0.82, match: 0.5 };
       const marks = drawEdges.filter((d) => this._edgeTier(d) && this._edgeMidpoint(d, cx, cy));
       const mSel = g.selectAll('circle.fa-strength').data(marks).enter().append('circle')
         .attr('class', 'fa-strength')
@@ -159,8 +162,9 @@ export function pairingNetzGraph(config) {
         .attr('cy', (d) => this._edgeMidpoint(d, cx, cy)[1])
         .attr('r', (d) => tierR[this._edgeTier(d)])
         .attr('fill', (d) => this._edgeColor(d))
-        .attr('stroke', '#0b1120').attr('stroke-width', 1.5)
-        .style('opacity', 0.95);
+        .attr('stroke', (d) => (this._edgeTier(d) === 'best' ? '#ede9fe' : '#0b1120'))
+        .attr('stroke-width', (d) => (this._edgeTier(d) === 'best' ? 2.2 : 1))
+        .style('opacity', (d) => tierOp[this._edgeTier(d)]);
       mSel.append('title').text((d) => this._edgeTitle(d));
     },
 
