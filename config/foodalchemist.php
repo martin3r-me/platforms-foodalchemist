@@ -460,6 +460,15 @@ return [
                 . '{name (§1-Syntax <Typ>: <Bezeichnung>), description (§8-Stil), taste_direction (grobe Menue-Richtung, NUR EIN Wort: suess|herzhaft|neutral — das Aroma-Profil gehoert in description), '
                 . 'preparation (Markdown-Schritte), zutaten: [{text, quantity, unit (g|ml|kg|l|el|tl|stk), '
                 . 'slug (hauptzutat), commodity_group, note, '
+                // Etappe 1 (2026-08-14): benannter Sub-Komponenten-Slot. Ein enthaltenes
+                // HALBFABRIKAT (Fond/Jus/Reduktion/Fischfond o. Ä., das selbst gekocht wird)
+                // gehört als EINE benannte Komponente in die Liste — NICHT als seine
+                // aufgelösten Rohzutaten (§4 Sub-Rezept-Hierarchie). Das Flag ist der spätere
+                // LLM-Komponenten-Marker (löst die reine Namens-Heuristik ab).
+                . 'sub_rezept (true, wenn diese Zeile ein eigenständiges Halbfabrikat / '
+                . 'Sub-Basisrezept ist — Sauce, Jus, Fond, Sud, Essenz, Reduktion, Püree, '
+                . 'Creme, Dressing, Vinaigrette, Espuma —, das als EIGENES Basisrezept anzulegen '
+                . 'ist statt es in Rohzutaten aufzulösen; false bei einer Rohzutat/Ware), '
                 // Kohärenz-Gate (2026-08-07): role füllt das V-21-Rollenfeld (Schicht 1) im
                 // selben Call; fit ZWINGT zur Selbst-Begründung — eine Zutat, die sich nicht in
                 // einem Halbsatz fachlich rechtfertigen lässt, gehört nicht ins Gericht (senkt
@@ -527,6 +536,15 @@ return [
                 // Spec 37: role/fit-Parität zum Basis-Prompt — dieselbe Zutaten-Selbstbegründung
                 // (senkt plausibel klingende Fremdkörper VOR dem Kritiker-Pass, sobald das VK-Gate scharf wird).
                 . 'NICHT die Produktion), zutaten: [{text, quantity, unit (g|ml|kg|l|el|tl|stk), slug, note, '
+                // Etappe 1 (2026-08-14): benannter Sub-Komponenten-Slot. Ein GERICHT wird aus
+                // BASISREZEPTEN gebaut — Saucen/Jus/Pürees/Fonds/Reduktionen gehören als EINE
+                // benannte Komponente (sub_rezept:true) in die Liste, NICHT flach als ihre
+                // Rohzutaten (kein «Steinpilz-Rahmsauce» aus Steinpilzen + Sahne, sondern eine
+                // Komponente «Rahmsauce» mit sub_rezept:true). Späterer LLM-Komponenten-Marker.
+                . 'sub_rezept (true, wenn diese Zeile ein eigenständiges Halbfabrikat / '
+                . 'Sub-Basisrezept ist — Sauce, Jus, Fond, Sud, Essenz, Reduktion, Püree, '
+                . 'Creme, Dressing, Vinaigrette, Espuma —, das als EIGENES Basisrezept anzulegen '
+                . 'ist statt es in Rohzutaten aufzulösen; false bei einer Rohzutat/Ware), '
                 . 'role (V-21: aroma_treiber|komponente|beilage|garnitur), '
                 . 'fit (EIN kurzer Halbsatz: warum gehört diese Zutat FACHLICH in DIESES Gericht)}] '
                 // Fit-Guard (2026-08-06): "vorhandene zuerst" war Reuse-Druck ohne Passt-Prüfung —
