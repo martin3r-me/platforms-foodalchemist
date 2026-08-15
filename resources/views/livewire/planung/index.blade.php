@@ -275,6 +275,19 @@
                     </select>
                 </x-foodalchemist::modal-section>
 
+                {{-- KI-Kopf (Etappe 2b, geplanter Pfad): arbeitet den Plan-Entwurf vorab aus (Leitidee/USP/
+                     Inszenierung/Geschmackswelten + Gänge-Gerüst) und öffnet ihn im Conceptor zur Prüfung —
+                     NOCH ohne Gerichte. Danach der Go „aus geprüftem Plan". Neben dem direkten „Go" unten. --}}
+                <x-foodalchemist::modal-section title="KI-Kopf — Plan vorab ausarbeiten (optional)">
+                    <p class="{{ $label ?? 'text-[11px] text-gray-500' }} mb-2">Die KI arbeitet aus dem Briefing einen vollständigen Konzept-Entwurf aus (Leitidee, USP, Inszenierung, Geschmackswelten, Gänge-Gerüst) und öffnet ihn zur Prüfung/Korrektur im Conceptor — <b>noch ohne</b> Gerichte zu erzeugen.</p>
+                    <button type="button" wire:click="kiKopf" @disabled($laeuft)
+                            wire:loading.attr="disabled" wire:target="kiKopf"
+                            class="{{ $btnGhost }} disabled:opacity-40" data-planung-kikopf>
+                        <span wire:loading.remove wire:target="kiKopf">@svg('heroicon-o-sparkles', 'w-4 h-4') KI-Kopf: Plan ausarbeiten</span>
+                        <span wire:loading wire:target="kiKopf">Plan wird ausgearbeitet …</span>
+                    </button>
+                </x-foodalchemist::modal-section>
+
                 @include('foodalchemist::livewire.planung.partials.leitplanken', ['scope' => 'concept'])
 
                 <x-foodalchemist::modal-section title="Go — Concept erzeugen (Draft)">

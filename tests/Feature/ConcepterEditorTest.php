@@ -41,6 +41,25 @@ it('öffnet ein Concept, lädt den Kopf + meldet modal.open', function () {
         ->assertDispatched('modal.open');
 });
 
+it('öffnet mit optionalem Start-Tab direkt auf „Konzept & Planung" (konzept) — KI-Kopf-Flow', function () {
+    Livewire::test(Editor::class)
+        ->call('oeffnen', 'concepts', $this->concept->id, 'konzept')
+        ->assertSet('id', $this->concept->id)
+        ->assertSet('tab', 'konzept')
+        ->assertDispatched('modal.open');
+});
+
+it('ungültiger/fehlender Start-Tab fällt auf den Aufbau-Default zurück (Öffnen aus der Step-Zeile)', function () {
+    // Fremd-Tab → Default 'aufbau' (kein stiller Wechsel auf einen Nicht-Tab).
+    Livewire::test(Editor::class)
+        ->call('oeffnen', 'concepts', $this->concept->id, 'gibtsnicht')
+        ->assertSet('tab', 'aufbau');
+    // Ganz ohne Start-Tab (Step-Zeilen-Öffnen) bleibt es beim Aufbau-Default.
+    Livewire::test(Editor::class)
+        ->call('oeffnen', 'concepts', $this->concept->id)
+        ->assertSet('tab', 'aufbau');
+});
+
 it('speichert die Kopf-Felder (Konsumentenname, Klasse, Zielpreis)', function () {
     Livewire::test(Editor::class)
         ->call('oeffnen', 'concepts', $this->concept->id)

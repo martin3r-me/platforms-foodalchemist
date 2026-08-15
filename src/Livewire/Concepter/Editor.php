@@ -45,6 +45,13 @@ class Editor extends Component
 
     public string $tab = 'aufbau';       // aufbau | allergene (Label „Deklaration": Diät + Nährwerte) | kalkulation | geschirr | notes
 
+    /**
+     * Gültige Editor-Laschen (Spec 28/E6; 'sensorik' 2026-08-13 entfernt). EINE Quelle für
+     * {@see setTab} UND den optionalen Start-Tab von {@see oeffnen} — z. B. der KI-Kopf/Planung-Flow
+     * öffnet direkt auf „Konzept & Planung" ('konzept').
+     */
+    public const TABS = ['aufbau', 'stammdaten', 'konzept', 'allergene', 'kalkulation', 'geschirr', 'notes'];
+
     /** @var array<string, mixed> */
     public array $form = [];
 
@@ -132,14 +139,16 @@ class Editor extends Component
     public ?string $fehler = null;
 
     #[On('concepter-editor.oeffnen')]
-    public function oeffnen(string $type, ?int $id): void
+    public function oeffnen(string $type, ?int $id, ?string $startTab = null): void
     {
         $this->reset(['form', 'slotForm', 'blockForm', 'auswahl', 'paketName', 'neuerSlotRolle', 'fillSlotId', 'fillOpenId', 'einfuegenNachId', 'linkeListe', 'paketKlasse', 'basisSuche', 'kombiSuche', 'basisHg', 'basisKat', 'basisNiveau', 'gerichtSuche', 'pickTyp',
             'paketGerichtSuche', 'paketQuelle', 'pickHg', 'pickKlasse', 'pickGeschmack', 'pickDiaet', 'zutatenOffenSlotId', 'menueKohaesion', 'slotVorschlaege',
             'zielModus', 'zielPreis', 'zielVorschlag', 'rueckSprungConceptId', 'fehler']);
         $this->type = in_array($type, ['concepts', 'pakete'], true) ? $type : 'concepts';
         $this->id = $id;
-        $this->tab = 'aufbau';
+        // Start-Tab: der KI-Kopf/Planung-Flow öffnet direkt auf „Konzept & Planung" ('konzept') zur
+        // Prüfung; ein ungültiger/fehlender Wert bleibt beim Aufbau-Default (Öffnen aus der Step-Zeile).
+        $this->tab = ($startTab !== null && in_array($startTab, self::TABS, true)) ? $startTab : 'aufbau';
         if ($id === null) {
             return;
         }
@@ -197,7 +206,7 @@ class Editor extends Component
         // Spec 28 / E6: 'stammdaten' ist neu — die Feldleiste wurde aus dem Dauer-Kopf in einen
         // eigenen Tab gelegt. Fehlt der Wert hier, tut der Klick auf die Lasche stillschweigend nichts.
         // 'sensorik'-Tab 2026-08-13 aus dem Concepter entfernt (Dominique) — Aggregat-Service bleibt bestehen.
-        if (in_array($tab, ['aufbau', 'stammdaten', 'konzept', 'allergene', 'kalkulation', 'geschirr', 'notes'], true)) {
+        if (in_array($tab, self::TABS, true)) {
             $this->tab = $tab;
         }
     }

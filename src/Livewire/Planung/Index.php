@@ -8,6 +8,7 @@ use Livewire\Attributes\Url;
 use Livewire\Component;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Models\FoodAlchemistPlanningSession;
+use Platform\FoodAlchemist\Services\ConceptGeneratorService;
 use Platform\FoodAlchemist\Services\IdeenService;
 use Platform\FoodAlchemist\Services\PairingService;
 use Platform\FoodAlchemist\Services\PlanningCascadeService;
@@ -522,6 +523,53 @@ class Index extends Component
         } catch (\Throwable $e) {
             $this->fehler = 'Wissens-Vorschau fehlgeschlagen: ' . $e->getMessage();
         }
+    }
+
+    // ── „KI-Kopf" — Concept-Plan vorab ausarbeiten (Etappe 2b, geplanter Pfad) ──
+
+    /**
+     * „KI-Kopf" (Etappe 2b): arbeitet aus dem Concept-Briefing einen vollständigen Plan-Entwurf aus
+     * ({@see ConceptGeneratorService::planAusBrief} → Draft-Concept + Gerüst + kreative Canvas + LEERE
+     * Fan-out-Slots) und öffnet den vollen inline-Conceptor direkt auf „Konzept & Planung" ({@see
+     * Concepter\Editor::oeffnen} Start-Tab 'konzept') zur Prüfung/Korrektur. Startet KEINE Kaskade —
+     * der geprüfte Plan geht später als `existing_concept_id` in den Go (nächster Chunk). Nur für den
+     * Concept-Scope sinnvoll (ein Concept ist ein Menü, kein Einzelrezept).
+     *
+     * Fail-soft (Nordstern): ein Fehler (leerer Brief / KI aus) wird gesagt, nicht geschluckt — der
+     * Absender ist ein Mensch, der korrigieren kann.
+     */
+    public function kiKopf(ConceptGeneratorService $svc, PlanningSessionService $sessions): void
+    {
+        $team = $this->team();
+        $session = $this->aktiveSession();
+        if ($team === null || $session === null) {
+            $this->fehler = 'Kein Team/Session — KI-Kopf nicht möglich.';
+
+            return;
+        }
+        $brief = $this->effektiverBrief('concept');
+        if ($brief === '') {
+            $this->fehler = 'Für den KI-Kopf erst ein Concept-Briefing eingeben.';
+
+            return;
+        }
+        // Concept-Briefing auf die Session spiegeln + persistieren (nicht verlieren) — wie beim Go.
+        $this->form['brief'] = (string) ($this->eingabe['concept']['brief'] ?? '');
+        $this->form['creative_mode'] = (string) ($this->eingabe['concept']['creative_mode'] ?? 'voll_kreativ');
+        $this->speichern($sessions);
+
+        $titel = trim((string) ($this->eingabe['concept']['titel'] ?? ''));
+        try {
+            $plan = $svc->planAusBrief($team, $brief, [], $titel !== '' ? $titel : null);
+        } catch (\Throwable $e) {
+            $this->fehler = 'KI-Kopf fehlgeschlagen: ' . $e->getMessage();
+
+            return;
+        }
+        $this->fehler = null;
+        $this->meldung = 'KI-Kopf: Plan ausgearbeitet — prüfe/korrigiere im Conceptor, dann „Go aus geprüftem Plan".';
+        // Vollen inline-Conceptor direkt auf „Konzept & Planung" öffnen (Start-Tab 'konzept').
+        $this->dispatch('concepter-editor.oeffnen', type: 'concepts', id: (int) $plan['concept']->id, startTab: 'konzept');
     }
 
     // ── „Go" — Tiefen-Leiter über den geteilten Kaskaden-Motor ─────────

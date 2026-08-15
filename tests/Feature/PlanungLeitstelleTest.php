@@ -2,9 +2,11 @@
 
 use Illuminate\Support\Facades\Queue;
 use Livewire\Livewire;
+use Platform\Core\Contracts\LLMProviderContract;
 use Platform\FoodAlchemist\Jobs\GenerateRecipeJob;
 use Platform\FoodAlchemist\Livewire\Planung\Index as PlanungIndex;
 use Platform\FoodAlchemist\Models\FoodAlchemistCascadeRun;
+use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
 use Platform\FoodAlchemist\Models\FoodAlchemistCascadeRunStep;
 use Platform\FoodAlchemist\Models\FoodAlchemistDishIdea;
 use Platform\FoodAlchemist\Models\FoodAlchemistPlanningSession;
@@ -409,4 +411,88 @@ it('A: Inline-Zutaten-Review — Toggle mountet den IngredientEditor on-demand f
         ->assertSee('Zutaten schließen')         // Editor gemountet (Toggle-Label kippt)
         ->call('toggleZutaten', $step->id)
         ->assertSet('zutatenOffen', []);         // zu
+});
+
+/**
+ * Provider-Stub für den KI-Kopf-Flow (Etappe 2b): minimales Gerüst (concept.brief_geruest) +
+ * kreative Canvas (concept.plan). Selbst-enthalten in DIESEM File (nicht auf ConceptGeneratorTest
+ * angewiesen — die Routine fährt PlanungLeitstelleTest gezielt, ohne das andere File zu laden).
+ */
+function bindKiKopfStub(): void
+{
+    config(['foodalchemist.ai.provider' => 'core']);
+    app()->bind(LLMProviderContract::class, fn () => new class implements LLMProviderContract
+    {
+        public function getName(): string
+        {
+            return 'test-stub';
+        }
+
+        public function chat(array $messages, array $options = []): array
+        {
+            $prompt = collect($messages)->pluck('content')->filter()->implode("\n");
+            if (str_contains($prompt, 'Concept-Canvas')) {   // concept.plan (kreative Handschrift)
+                return ['content' => json_encode(['werte' => [
+                    'name_claim' => 'Sommerglanz', 'leitidee' => 'Leichte Küche für laue Abende.',
+                ], 'confidence' => 0.7, 'reasoning' => 'stub']), 'usage' => [], 'model' => 'stub', 'tool_calls' => null];
+            }
+
+            // concept.brief_geruest (Slots/Preis) — 1 Gang = 1 Fan-out-Ziel
+            return ['content' => json_encode(['werte' => [
+                'name' => 'KI-Kopf-Menü', 'target_price_pp' => 42,
+                'slots' => [['label' => 'Hauptgang', 'slot_type' => 'gang', 'target_count' => 1]],
+            ], 'confidence' => 0.8, 'reasoning' => 'stub']), 'usage' => [], 'model' => 'stub', 'tool_calls' => null];
+        }
+
+        public function streamChat(array $messages, callable $onDelta, array $options = []): void {}
+
+        public function getAvailableModels(): array
+        {
+            return ['stub'];
+        }
+
+        public function getDefaultModel(): string
+        {
+            return 'stub';
+        }
+
+        public function isAvailable(): bool
+        {
+            return true;
+        }
+    });
+}
+
+it('KI-Kopf: arbeitet den Plan aus dem Concept-Briefing aus + öffnet den Conceptor auf „Konzept & Planung", startet KEINE Kaskade', function () {
+    bindKiKopfStub();
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Sommer-Menü']);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->set('eingabe.concept.brief', 'CHEFS.CORNER — Sommer-Menü, 30 Gäste, leicht, ca. 42 € p. P.')
+        ->set('eingabe.concept.titel', 'Sommerglanz')
+        ->call('kiKopf')
+        ->assertSet('fehler', null)
+        // öffnet den vollen inline-Conceptor direkt auf dem 'konzept'-Tab (Prüfung/Korrektur)
+        ->assertDispatched('concepter-editor.oeffnen', type: 'concepts', startTab: 'konzept');
+
+    // Draft-Concept steht (Lineage), Name aus dem Nutzer-Titel — und KEINE Kaskade gestartet.
+    $concept = FoodAlchemistConcept::where('team_id', $this->rootTeam->id)->where('created_via', 'concept_plan_ui')->first();
+    expect($concept)->not->toBeNull()
+        ->and($concept->name)->toBe('Sommerglanz')
+        ->and($concept->status)->toBe('draft');
+    expect(FoodAlchemistCascadeRun::where('planning_session_id', $session->id)->count())->toBe(0);
+});
+
+it('KI-Kopf: leeres Concept-Briefing wird gesagt (kein Draft, keine Öffnung)', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Leer']);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->set('eingabe.concept.brief', '   ')
+        ->call('kiKopf')
+        ->assertSet('fehler', 'Für den KI-Kopf erst ein Concept-Briefing eingeben.')
+        ->assertNotDispatched('concepter-editor.oeffnen');
+
+    expect(FoodAlchemistConcept::where('team_id', $this->rootTeam->id)->where('created_via', 'concept_plan_ui')->count())->toBe(0);
 });
