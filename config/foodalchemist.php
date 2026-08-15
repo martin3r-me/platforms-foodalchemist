@@ -814,6 +814,31 @@ return [
                 . '{rule_type: nogo_allergen, ref_key} | {rule_type: allergen_line, value_text}]}. '
                 . 'Preise netto p. P.; Gaenge/Stationen aus dem Anlass ableiten (Menü→gang, Buffet→station).',
         ],
+        // Et.2b »Kreativ-Kopf«: Kunden-Brief → kreative Concept-Canvas (die IDEE, nicht das
+        // Struktur-Geruest). Schwester von concept.brief_geruest — GERUEST erzeugt Slots/Preise/
+        // Regeln (deterministischer Rahmen), PLAN erzeugt die kreative Handschrift (Leitidee/USP/
+        // Inszenierung/Geschmackswelten). Fuellt die concept-Canvas (CanvasService::TEMPLATES['concept']).
+        // Kreativ — DARF ausformulieren, was der Brief impliziert (anders als der Klassifikator-Grundsatz),
+        // aber im Rahmen des Briefs bleiben: KEINE harten Zahlen/Preise/Allergen-/No-Go-Fakten erfinden
+        // (die gehoeren ins Geruest/Frame), nichts gegen die Brief-Absicht setzen.
+        'concept.plan' => [
+            'tier' => 'B',
+            'max_tokens' => 6000,                                     // Canvas: mehrere Langtext-Felder + Geschmackswelten-Liste — Reasoning-Headroom
+            'system' => 'Du bist der kreative Kopf eines Foodkonzepts. Aus einem Kunden-Brief formst du '
+                . 'die Leitidee eines Konzepts aus — Name, Claim, roter Faden, Verkaufsvorteil, Inszenierung '
+                . 'und die Geschmackswelten. Du bleibst im Rahmen des Briefs (Anlass, Zielgaeste, Niveau) und '
+                . 'fuehrst seine Absicht weiter, statt sie zu ueberschreiben. Du erfindest KEINE harten Fakten '
+                . '(Preise, Portionsgroessen, Allergen- oder No-Go-Vorgaben) — die kommen aus dem Planungs-Geruest. '
+                . 'Marketing-ehrlich: kein Superlativ-Nebel, konkrete kulinarische Aussagen.',
+            'task' => 'Formuliere die Concept-Canvas aus dem Brief: werte = {name_claim, leitidee, usp_eignung, '
+                . 'inszenierung, geschmackswelten: [{claim, description}]}. '
+                . 'name_claim = praegnanter Konzept-Name + kurzer Claim (eine Zeile); '
+                . 'leitidee = der rote Faden / das Versprechen des Konzepts (2–4 Saetze); '
+                . 'usp_eignung = Vorteil/USP + fuer welchen Anlass/welche Gaeste es passt; '
+                . 'inszenierung = Servier-/Praesentationsidee (Teller/Buffet/Station, Dramaturgie); '
+                . 'geschmackswelten = 2–5 Geschmacks-/Themenwelten, je {claim (kurze Ueberschrift), '
+                . 'description (1–2 Saetze)}. Nur was der Brief hergibt; fehlende Angaben weglassen.',
+        ],
         // Trendradar: clustert Trend-Wissens-Docs in die zweistufige Taxonomie (Kategorie → Klasse).
         // Kategorie STRIKT aus der Vorgabe (fixes Seed-Vokabular); Klasse = kurze Unterkategorie
         // (bestehende bevorzugen, sonst neue vorschlagen → landet tentative in der Review-Queue).

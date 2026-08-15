@@ -46,6 +46,7 @@ class AiGatewayService
         'vk.generator', 'vk.wording', 'vk.marketing', 'vk.plating', 'vk.servier_vehikel', 'vk.behaelter', 'vk.regeneration', 'vk.kohaerenz', 'vk.teller_heber', 'vk.review',
         'vk.ueberarbeiten',         // Spec 03 L1a: Revise formt Texte + Komponenten des Gerichts — ohne DNA-Kette revidiert sie gegen die Marke
         'concept.wording',
+        'concept.plan',             // Et.2b Kreativ-Kopf: die Concept-Leitidee IST Marke — ohne DNA-Kette formt sie am Team-/Kunden-Rahmen vorbei
         'foodbook.kapitel_ideen',   // Spec 19 E6.4: KI-Divergenz erbt die Food-DNA-Kette (Kontext-Vertrag)
         'foodbook.kundentext',      // Spec 03 L2: Kundentext IST die Marken-Stimme — ohne DNA-Kette wäre er beliebig
     ];
