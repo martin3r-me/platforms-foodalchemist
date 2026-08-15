@@ -118,6 +118,19 @@
                     </div>
                 </div>
                 <p class="text-[11px] text-gray-500 mt-1.5">Portfolio-Anteil (weiche Zusammenstellungs-Vorgabe), nicht der harte Ausschluss oben. Leer = keine Quote.</p>
+
+                {{-- Portfolio-Balance (Menü-Vielfalt) — weiche Zusammenstellungs-Vorgabe: wie breit das Menü
+                     über Proteine/Warengruppen/Garmethoden streut. Enum, kein Filter. Etappe 2a, Rest Teil 2. --}}
+                <div class="mt-3" data-menue-balance>
+                    <label class="block {{ $label ?? 'text-[11px] text-gray-500' }} mb-1">Portfolio-Balance (Vielfalt)</label>
+                    <select wire:model="regler.{{ $scope }}.menue_balance" class="{{ $input }} !py-1.5 md:max-w-xs" data-menue-balance-select>
+                        <option value="">— keine Vorgabe</option>
+                        @foreach(\Platform\FoodAlchemist\Livewire\Planung\Index::MENUE_BALANCE as $wert => $lbl)
+                            <option value="{{ $wert }}">{{ $lbl }}</option>
+                        @endforeach
+                    </select>
+                    <p class="text-[11px] text-gray-500 mt-1.5">Wie breit streut das Menü über Proteine, Warengruppen und Garmethoden? „Ausgewogen" = bewusste Vielfalt, Hauptzutaten nicht wiederholen; „Fokussiert" = ein Thema durchziehen. Leer = die KI entscheidet passend zum Briefing.</p>
+                </div>
             </div>
         @endif
 

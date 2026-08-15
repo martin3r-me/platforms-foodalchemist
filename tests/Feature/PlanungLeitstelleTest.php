@@ -274,6 +274,58 @@ it('Etappe 2a Teil 2: Concept-Tab rendert die Diät-Quoten-Felder (Anteil ≠ ha
         ->assertSeeHtml('data-menue-quote-vegetarisch');
 });
 
+it('Etappe 2a Rest: Concept-Go persistiert die Portfolio-Balance (Menü-Vielfalt) als menue_balance-Param', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Menü', 'brief' => 'Bunt gemischt.']);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->set('eingabe.concept.brief', 'Bunt gemischt.')
+        ->set('regler.concept.menue_balance', 'ausgewogen')
+        ->call('goKaskade', 'concept')
+        ->assertNoRedirect();
+
+    expect($session->refresh()->generation_params)->toMatchArray([
+        'menue_balance' => 'ausgewogen',
+    ]);
+});
+
+it('Etappe 2a Rest: Portfolio-Balance ist Concept-only — am Gericht-Tab fließt sie NICHT in die Params', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Gericht', 'brief' => 'Ein Teller.']);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->set('eingabe.gericht.brief', 'Ein Teller.')
+        ->set('regler.gericht.menue_balance', 'ausgewogen')       // gesetzt, aber Gericht-Scope ignoriert Menü-Achsen
+        ->call('goKaskade', 'gericht')
+        ->assertNoRedirect();
+
+    $params = $session->refresh()->generation_params ?? [];
+    expect($params)->not->toHaveKey('menue_balance');
+});
+
+it('Etappe 2a Rest: unbekannter Portfolio-Balance-Wert am Concept wird still verworfen (nur Enum durchgereicht)', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Menü', 'brief' => 'x']);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->set('eingabe.concept.brief', 'x')
+        ->set('regler.concept.menue_balance', 'chaotisch')        // kein MENUE_BALANCE-Enum → kein Key
+        ->call('goKaskade', 'concept')
+        ->assertNoRedirect();
+
+    $params = $session->refresh()->generation_params ?? [];
+    expect($params)->not->toHaveKey('menue_balance');
+});
+
+it('Etappe 2a Rest: Concept-Tab rendert das Portfolio-Balance-Feld', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'X', 'brief' => 'y']);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->assertSeeHtml('data-menue-balance')
+        ->assertSeeHtml('data-menue-balance-select');
+});
+
 it('Queue-Watchdog: Lauf hängt lange OHNE Step-Fortschritt → sichtbarer Hinweis (kein Worker), kein Abbruch', function () {
     $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'X', 'brief' => 'y']);
     $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'planning_session_id' => $session->id, 'scope' => 'rezept', 'status' => 'running']);

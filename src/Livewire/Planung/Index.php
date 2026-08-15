@@ -86,6 +86,20 @@ class Index extends Component
         // Diät-Quoten (Etappe 2a, Teil 2): Portfolio-Anteil vegan/vegetarisch in % (leer = keine Vorgabe).
         // reglerParams parst sie in kanonische _pct-Keys. Anteil ≠ harter Ausschluss (diaet_hart).
         'menue_quote_vegan' => '', 'menue_quote_vegetarisch' => '',
+        // Portfolio-Balance (Etappe 2a, Rest Teil 2): Menü-Vielfalt (leer = keine Vorgabe). reglerParams
+        // reicht nur einen erlaubten MENUE_BALANCE-Enum-Wert durch (Concept-Scope). Weich, kein Filter.
+        'menue_balance' => '',
+    ];
+
+    /**
+     * Portfolio-Balance-Achse (Menü-Vielfalt, Etappe 2a, Rest Teil 2) — Wert=>Label.
+     * WEICHE Zusammenstellungs-Vorgabe (kein harter Filter): wie breit das Menü über Proteine/
+     * Warengruppen/Garmethoden streut. Enum, damit reglerParams gegen einen definierten Satz prüft
+     * (Select kann nicht vertippt werden → kein Zahl-Guard wie bei Gänge/Quote nötig). Nur Concept.
+     */
+    public const MENUE_BALANCE = [
+        'ausgewogen' => 'Ausgewogen (breite Vielfalt)',
+        'fokussiert' => 'Fokussiert (ein roter Faden)',
     ];
 
     /** #1b Grounding-Preview: welches Wissen/Pairing/Template ein Basisrezept-Lauf ziehen würde (on-demand, ohne Generierung). */
@@ -360,7 +374,7 @@ class Index extends Component
         // (sie werden unten als kanonische _pp-Keys geparst und nur für den Concept-Scope gesetzt).
         unset($p['favoriten'], $p['favoriten_conv_only'], $p['ki_bilder'], $p['ziel_vk'], $p['voll_anreichern'],
             $p['menue_gaenge'], $p['menue_preis_min'], $p['menue_preis_ziel'], $p['menue_preis_max'],
-            $p['menue_quote_vegan'], $p['menue_quote_vegetarisch']);
+            $p['menue_quote_vegan'], $p['menue_quote_vegetarisch'], $p['menue_balance']);
         $p = array_filter($p, fn ($v) => $v !== '' && $v !== null && $v !== []);
         $p['use_favorites_list'] = $favoriten;
         $p['favorites_convenience_only'] = $favoriten && $favConvOnly;
@@ -390,6 +404,10 @@ class Index extends Component
             if (($qg = $this->menueQuote($scope, 'menue_quote_vegetarisch')) !== null) {
                 $p['menue_quote_vegetarisch_pct'] = $qg;
             }
+            // Portfolio-Balance (Menü-Vielfalt, weich): nur ein erlaubter Enum-Wert fliesst ein.
+            if (($bal = $this->menueBalance($scope)) !== null) {
+                $p['menue_balance'] = $bal;
+            }
         }
 
         return $p;
@@ -417,6 +435,14 @@ class Index extends Component
         $n = (int) $roh;
 
         return $n >= 0 && $n <= 100 ? $n : null;
+    }
+
+    /** Portfolio-Balance (Menü-Vielfalt): erlaubter {@see MENUE_BALANCE}-Enum-Wert, sonst null (leer/unbekannt = keine Vorgabe). Concept-Scope. */
+    private function menueBalance(string $scope): ?string
+    {
+        $roh = trim((string) ($this->regler[$scope]['menue_balance'] ?? ''));
+
+        return isset(self::MENUE_BALANCE[$roh]) ? $roh : null;
     }
 
     /** Menü-Preis je Person (min/ziel/max): „45,00 €" → 45.0; außerhalb 0,50–2.000,00 € → null. Analog {@see zielVkEur}. */

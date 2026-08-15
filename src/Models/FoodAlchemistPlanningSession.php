@@ -54,6 +54,9 @@ class FoodAlchemistPlanningSession extends Model
         // (0–100 %). Unterscheidet sich bewusst vom harten Ausschluss `diaet_hart` (ganzes Menü muss X
         // sein) — die Quote ist eine weiche Zusammenstellungs-Vorgabe (»mind. X % der Gänge vegan«).
         'menue_quote_vegan_pct', 'menue_quote_vegetarisch_pct',
+        // Portfolio-Balance (Etappe 2a, Rest Teil 2): Menü-Vielfalt (ausgewogen|fokussiert) — wie breit
+        // das Menü über Proteine/Warengruppen/Garmethoden streut. Weiche Zusammenstellungs-Vorgabe.
+        'menue_balance',
     ];
 
     protected $casts = [
