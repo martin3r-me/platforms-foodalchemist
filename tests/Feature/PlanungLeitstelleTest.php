@@ -658,3 +658,61 @@ it('Skizzen-Lineage fail-soft: eine inzwischen verworfene Skizze kippt den Go ni
     expect($run)->not->toBeNull()
         ->and($run->origin_dish_idea_id)->toBeNull();
 });
+
+/**
+ * Etappe 4 — Skizzen-Integration (Teil 2b — Status auf die Karte): der aus einer Skizze gestartete
+ * Gericht-Go (Teil 2a, origin_dish_idea_id) schlägt als abgestuftes Status-Badge auf die Skizzen-
+ * Karte im Divergenz-Board zurück (läuft/prüfen/fertig/fehlgeschlagen) — ohne den Worker zu öffnen.
+ */
+it('Skizzen-Status 2b: der verknüpfte Lauf (review) zeigt „▸ prüfen" auf der Skizzen-Karte', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Herbst-Menü']);
+    $idee = app(\Platform\FoodAlchemist\Services\IdeenService::class)->add($this->rootTeam, [
+        'planning_session_id' => $session->id,
+        'title' => 'Rehrücken mit Wacholderjus',
+        'description' => 'Kräftig, herbstlich.',
+    ]);
+    FoodAlchemistCascadeRun::create([
+        'team_id' => $this->rootTeam->id, 'planning_session_id' => $session->id,
+        'scope' => 'gericht', 'status' => 'review', 'origin_dish_idea_id' => $idee->id,
+    ]);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->assertSee('Rehrücken mit Wacholderjus')
+        ->assertSee('▸ prüfen');
+});
+
+it('Skizzen-Status 2b: eine Skizze OHNE verknüpften Lauf trägt kein Status-Badge', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Menü']);
+    app(\Platform\FoodAlchemist\Services\IdeenService::class)->add($this->rootTeam, [
+        'planning_session_id' => $session->id,
+        'title' => 'Skizze ohne Go', 'description' => 'Nur ein Entwurf.',
+    ]);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->assertSee('Skizze ohne Go')
+        ->assertDontSee('▸ ');   // keine der Status-Marken (läuft/prüfen/fertig/fehlgeschlagen)
+});
+
+it('Skizzen-Status 2b: bei mehreren Läufen je Skizze gewinnt der jüngste (Retry: done schlägt failed)', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Menü']);
+    $idee = app(\Platform\FoodAlchemist\Services\IdeenService::class)->add($this->rootTeam, [
+        'planning_session_id' => $session->id,
+        'title' => 'Zweiter Versuch', 'description' => 'Erst gescheitert, dann fertig.',
+    ]);
+    // Älterer Lauf failed, jüngerer (höhere id) done → die Karte zeigt den jüngsten.
+    FoodAlchemistCascadeRun::create([
+        'team_id' => $this->rootTeam->id, 'planning_session_id' => $session->id,
+        'scope' => 'gericht', 'status' => 'failed', 'origin_dish_idea_id' => $idee->id,
+    ]);
+    FoodAlchemistCascadeRun::create([
+        'team_id' => $this->rootTeam->id, 'planning_session_id' => $session->id,
+        'scope' => 'gericht', 'status' => 'done', 'origin_dish_idea_id' => $idee->id,
+    ]);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->assertSee('▸ fertig')
+        ->assertDontSee('▸ fehlgeschlagen');
+});

@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\DB;
 use Livewire\Attributes\Url;
 use Livewire\Component;
 use Platform\Core\Models\Team;
+use Platform\FoodAlchemist\Models\FoodAlchemistCascadeRun;
 use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
 use Platform\FoodAlchemist\Models\FoodAlchemistDishIdea;
 use Platform\FoodAlchemist\Models\FoodAlchemistPlanningSession;
@@ -1129,6 +1130,34 @@ class Index extends Component
             $skizzen = app(IdeenService::class)->liste($team, null, null, false, $active->id);
         }
 
+        // Status-Rückkopplung auf die Skizzen-Karte (Etappe 4, Teil 2b): der aus einer Skizze
+        // gestartete Gericht-Go stempelt sich per origin_dish_idea_id (Teil 2a) auf die Ursprungs-
+        // Skizze zurück. Hier den jüngsten verknüpften Lauf je Skizze auflösen → die Karte zeigt
+        // läuft/prüfen/fertig/fehlgeschlagen, ohne den Worker zu öffnen. Map: idea_id → {run_id,status,scope}.
+        $skizzenLauf = [];
+        if ($skizzen !== null && $team !== null) {
+            $ideaIds = collect($skizzen['einzel'])->pluck('id')
+                ->merge(collect($skizzen['gruppen'])->flatMap(fn ($g) => collect($g['ideen'])->pluck('id')))
+                ->filter()->map(fn ($v) => (int) $v)->unique()->values()->all();
+            if ($ideaIds !== []) {
+                // orderByDesc('id') → erster Treffer je Skizze = jüngster Lauf (Retry gewinnt).
+                $laeufe = FoodAlchemistCascadeRun::visibleToTeam($team)
+                    ->whereIn('origin_dish_idea_id', $ideaIds)
+                    ->orderByDesc('id')
+                    ->get(['id', 'scope', 'status', 'origin_dish_idea_id']);
+                foreach ($laeufe as $r) {
+                    $oid = (int) $r->origin_dish_idea_id;
+                    if (! isset($skizzenLauf[$oid])) {
+                        $skizzenLauf[$oid] = [
+                            'run_id' => (int) $r->id,
+                            'status' => (string) $r->status,
+                            'scope' => (string) $r->scope,
+                        ];
+                    }
+                }
+            }
+        }
+
         // Aktiver Kaskaden-Lauf (in-place „Go") inkl. Steps — für Fortschritt + Ergebnis-Liste.
         $lauf = ($team !== null && $this->laufId !== null)
             ? app(PlanningCascadeService::class)->lauf($team, $this->laufId)
@@ -1179,6 +1208,7 @@ class Index extends Component
             'baum' => $baum,
             'active' => $active,
             'skizzen' => $skizzen,
+            'skizzenLauf' => $skizzenLauf,
             'lauf' => $lauf,
             'composerNetz' => $composerNetz,
             'composerCohesion' => $composerCohesion,

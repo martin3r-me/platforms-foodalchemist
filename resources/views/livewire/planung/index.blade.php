@@ -9,6 +9,21 @@
     $modeLabel = ['voll_kreativ' => 'Voll kreativ', 'hybrid' => 'Hybrid', 'datenbank' => 'Datenbank'];
     $chip = fn ($t, $c = 'bg-black/[0.04] text-gray-600') => '<span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium ' . $c . '">' . e($t) . '</span>';
     $skizzenAnzahl = $skizzen ? (count($skizzen['einzel']) + collect($skizzen['gruppen'])->sum(fn ($g) => count($g['ideen']))) : 0;
+    // Skizzen-Lauf-Status (Etappe 4, Teil 2b): jüngster aus der Skizze gestarteter Gericht-Go → Karte.
+    $laufStatus = [
+        'running' => ['läuft', 'bg-amber-100 text-amber-700'],
+        'review' => ['prüfen', 'bg-violet-100 text-violet-700'],
+        'done' => ['fertig', 'bg-emerald-100 text-emerald-700'],
+        'failed' => ['fehlgeschlagen', 'bg-rose-100 text-rose-700'],
+    ];
+    $skizzeLaufBadge = function ($ideaId) use ($skizzenLauf, $laufStatus, $chip) {
+        $l = $skizzenLauf[(int) $ideaId] ?? null;
+        if ($l === null) {
+            return '';
+        }
+        [$lbl, $cls] = $laufStatus[$l['status']] ?? [$l['status'], 'bg-black/[0.04] text-gray-600'];
+        return $chip('▸ ' . $lbl, $cls);
+    };
 @endphp
 
 <x-ui-page>
@@ -230,6 +245,7 @@
                                         <div wire:key="gi-{{ $i->id }}" class="flex items-center justify-between text-xs text-gray-700">
                                             <span class="truncate">{{ $i->title }}</span>
                                             <div class="flex items-center gap-2 shrink-0">
+                                                {!! $skizzeLaufBadge($i->id) !!}
                                                 <button wire:click="skizzeAlsGericht({{ $i->id }})" @click="tab='gericht'" class="text-[10px] text-violet-600 hover:text-violet-700">als Gericht</button>
                                                 <button wire:click="ideeVerwerfen({{ $i->id }})" class="text-[10px] text-rose-500 hover:text-rose-600">verwerfen</button>
                                             </div>
@@ -244,6 +260,7 @@
                             <div wire:key="ei-{{ $i->id }}" class="flex items-center justify-between text-xs text-gray-700 py-0.5">
                                 <span class="truncate">{{ $i->title }}</span>
                                 <div class="flex items-center gap-2 shrink-0">
+                                    {!! $skizzeLaufBadge($i->id) !!}
                                     <button wire:click="skizzeAlsGericht({{ $i->id }})" @click="tab='gericht'" class="text-[10px] text-violet-600 hover:text-violet-700">als Gericht</button>
                                     <button wire:click="ideeVerwerfen({{ $i->id }})" class="text-[10px] text-rose-500 hover:text-rose-600">verwerfen</button>
                                 </div>
