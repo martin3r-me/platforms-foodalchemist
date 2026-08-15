@@ -291,10 +291,23 @@
                 @include('foodalchemist::livewire.planung.partials.leitplanken', ['scope' => 'concept'])
 
                 <x-foodalchemist::modal-section title="Go — Concept erzeugen (Draft)">
-                    <p class="{{ $label ?? 'text-[11px] text-gray-500' }} mb-2">Die LLM baut aus dem Briefing die Zusammenstellung (Pakete/Buffet) nach den Leitplanken; die Gerichte kommen nach der Freigabe. Fortschritt im <b>Worker</b>-Tab.</p>
-                    <button wire:click="goKaskade('concept')" @click="tab='worker'" @disabled($laeuft) class="{{ $btnPrimary }} disabled:opacity-40">
-                        @svg('heroicon-o-squares-2x2', 'w-4 h-4') Concept erzeugen
-                    </button>
+                    @if($planConceptId)
+                        {{-- Geplanter Pfad (Etappe 2b): ein KI-Kopf-Plan ist vorbereitet — der Go referenziert ihn
+                             statt neu zu generieren. „Plan verwerfen" wechselt zurück auf den Schnell-Pfad. --}}
+                        <div class="mb-2 flex items-center gap-2 text-[11px] text-emerald-300" data-planung-plan-bereit>
+                            @svg('heroicon-o-check-badge', 'w-4 h-4')
+                            <span>Geprüfter Plan vorbereitet — der Go verwendet ihn (statt neu zu generieren).</span>
+                            <button type="button" wire:click="planVerwerfen" @disabled($laeuft) class="underline hover:text-emerald-200 disabled:opacity-40">Plan verwerfen (frisch generieren)</button>
+                        </div>
+                        <button wire:click="goKaskade('concept')" @click="tab='worker'" @disabled($laeuft) class="{{ $btnPrimary }} disabled:opacity-40">
+                            @svg('heroicon-o-squares-2x2', 'w-4 h-4') Go aus geprüftem Plan
+                        </button>
+                    @else
+                        <p class="{{ $label ?? 'text-[11px] text-gray-500' }} mb-2">Die LLM baut aus dem Briefing die Zusammenstellung (Pakete/Buffet) nach den Leitplanken; die Gerichte kommen nach der Freigabe. Fortschritt im <b>Worker</b>-Tab.</p>
+                        <button wire:click="goKaskade('concept')" @click="tab='worker'" @disabled($laeuft) class="{{ $btnPrimary }} disabled:opacity-40">
+                            @svg('heroicon-o-squares-2x2', 'w-4 h-4') Concept erzeugen
+                        </button>
+                    @endif
                 </x-foodalchemist::modal-section>
             </div>
 

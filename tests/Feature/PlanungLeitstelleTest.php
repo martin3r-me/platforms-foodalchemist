@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Queue;
 use Livewire\Livewire;
 use Platform\Core\Contracts\LLMProviderContract;
+use Platform\FoodAlchemist\Jobs\GenerateConceptJob;
 use Platform\FoodAlchemist\Jobs\GenerateRecipeJob;
 use Platform\FoodAlchemist\Livewire\Planung\Index as PlanungIndex;
 use Platform\FoodAlchemist\Models\FoodAlchemistCascadeRun;
@@ -495,4 +496,60 @@ it('KI-Kopf: leeres Concept-Briefing wird gesagt (kein Draft, keine Öffnung)', 
         ->assertNotDispatched('concepter-editor.oeffnen');
 
     expect(FoodAlchemistConcept::where('team_id', $this->rootTeam->id)->where('created_via', 'concept_plan_ui')->count())->toBe(0);
+});
+
+// ── Etappe 2b: „Beide Pfade behalten" — Caller-Verdrahtung KI-Kopf → planConceptId → Go ──────
+
+it('Geplanter Pfad: KI-Kopf merkt planConceptId; der Concept-Go referenziert ihn (kein GenerateConceptJob) und verbraucht die Prop', function () {
+    bindKiKopfStub();
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Sommer-Menü']);
+
+    $component = Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->set('eingabe.concept.brief', 'CHEFS.CORNER — Sommer-Menü, 30 Gäste, leicht.')
+        ->call('kiKopf');
+
+    // KI-Kopf hat den geprüften Draft gemerkt (transient) → nächster Go ist der geplante Pfad.
+    $concept = FoodAlchemistConcept::where('team_id', $this->rootTeam->id)->where('created_via', 'concept_plan_ui')->firstOrFail();
+    $component->assertSet('planConceptId', (int) $concept->id);
+    Queue::assertNotPushed(GenerateConceptJob::class);   // KI-Kopf generiert synchron, kein Concept-Job
+
+    // Go: referenziert den geprüften Draft statt neu zu generieren; Prop wird verbraucht (→ null).
+    $component->call('goKaskade', 'concept')
+        ->assertSet('fehler', null)
+        ->assertSet('laeuft', true)
+        ->assertSet('planConceptId', null);
+
+    Queue::assertNotPushed(GenerateConceptJob::class);   // KEIN neuer Concept-Job — Step zeigt auf den Plan
+    $run = FoodAlchemistCascadeRun::where('planning_session_id', $session->id)->firstOrFail();
+    $step = $run->steps()->first();
+    expect($step->kind)->toBe('concept')
+        ->and($step->status)->toBe('done')
+        ->and($step->ref_type)->toBe('concept')
+        ->and((int) $step->ref_id)->toBe((int) $concept->id);
+});
+
+it('Fail-soft: ein toter planConceptId (gelöscht/Team-fremd) blockt den Go NICHT — er fällt auf den Schnell-Pfad zurück (frische Generierung)', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'X', 'brief' => 'Leichtes Sommer-Buffet.']);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->set('eingabe.concept.brief', 'Leichtes Sommer-Buffet.')
+        ->set('planConceptId', 999999)          // zeigt auf nichts (Existenz-/Team-Guard schlägt fehl)
+        ->call('goKaskade', 'concept')
+        ->assertSet('fehler', null)              // NICHT hart blocken
+        ->assertSet('laeuft', true)
+        ->assertSet('planConceptId', null);      // tote Referenz still verworfen
+
+    // Schnell-Pfad: es wird frisch generiert (GenerateConceptJob), nicht referenziert.
+    Queue::assertPushed(GenerateConceptJob::class);
+});
+
+it('planVerwerfen: löst die Plan-Referenz und wechselt zurück auf den Schnell-Pfad (löscht nichts)', function () {
+    Livewire::test(PlanungIndex::class)
+        ->set('planConceptId', 4242)
+        ->call('planVerwerfen')
+        ->assertSet('planConceptId', null)
+        ->assertSet('fehler', null)
+        ->assertSet('meldung', 'Vorbereiteter Plan verworfen — der Go generiert wieder frisch aus dem Briefing.');
 });

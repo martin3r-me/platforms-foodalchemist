@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\DB;
 use Livewire\Attributes\Url;
 use Livewire\Component;
 use Platform\Core\Models\Team;
+use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
 use Platform\FoodAlchemist\Models\FoodAlchemistPlanningSession;
 use Platform\FoodAlchemist\Services\ConceptGeneratorService;
 use Platform\FoodAlchemist\Services\IdeenService;
@@ -145,6 +146,15 @@ class Index extends Component
      * Modals in Phase 0 bekamen (HatGeneratorLauf), gehört auch hierher.
      */
     public ?string $hinweis = null;
+
+    /**
+     * Geplanter Pfad (Etappe 2b, „KI-Kopf"): die ID des vorab ausgearbeiteten, im Conceptor geprüften
+     * Draft-Concepts ({@see kiKopf} → {@see ConceptGeneratorService::planAusBrief}). Gesetzt = der nächste
+     * Concept-Go referenziert diesen Plan (`existing_concept_id`, KEIN neuer GenerateConceptJob), statt neu
+     * zu generieren. `null` = Schnell-Pfad (Brief → Go generiert frisch). **Transient** (keine DB-Spalte) —
+     * lebt nur, solange die Fläche gemountet ist; nach dem Go verbraucht ({@see goKaskade} setzt zurück).
+     */
+    public ?int $planConceptId = null;
 
     /** Sekunden auf `running` ohne jeden Step-Fortschritt, ab denen der Watchdog anschlägt (über der realistischen Erst-Dauer). */
     protected const WATCHDOG_SEKUNDEN = 90;
@@ -567,9 +577,24 @@ class Index extends Component
             return;
         }
         $this->fehler = null;
+        // Draft-ID merken (transient): der nächste Concept-Go referenziert diesen geprüften Plan statt
+        // neu zu generieren („Beide Pfade behalten", Etappe 2b). Verbraucht wird sie in goKaskade.
+        $this->planConceptId = (int) $plan['concept']->id;
         $this->meldung = 'KI-Kopf: Plan ausgearbeitet — prüfe/korrigiere im Conceptor, dann „Go aus geprüftem Plan".';
         // Vollen inline-Conceptor direkt auf „Konzept & Planung" öffnen (Start-Tab 'konzept').
         $this->dispatch('concepter-editor.oeffnen', type: 'concepts', id: (int) $plan['concept']->id, startTab: 'konzept');
+    }
+
+    /**
+     * Den vorbereiteten KI-Kopf-Plan verwerfen und zurück auf den Schnell-Pfad wechseln („Beide Pfade
+     * behalten", Etappe 2b): nur die transiente Referenz wird gelöst — der Concept-Go generiert dann
+     * wieder frisch aus dem Briefing. Das Draft-Concept selbst bleibt bestehen (löscht nichts).
+     */
+    public function planVerwerfen(): void
+    {
+        $this->planConceptId = null;
+        $this->meldung = 'Vorbereiteter Plan verworfen — der Go generiert wieder frisch aus dem Briefing.';
+        $this->fehler = null;
     }
 
     // ── „Go" — Tiefen-Leiter über den geteilten Kaskaden-Motor ─────────
@@ -636,16 +661,30 @@ class Index extends Component
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\Log::warning('[Planung] setGenerationParams übersprungen (Fan-out-Vererbung aus) — evtl. Migration fehlt', ['error' => $e->getMessage()]);
         }
+        $optionen = [
+            'created_via' => 'plan_go',
+            'brief' => $this->effektiverBrief($scope),
+            'params' => $params,
+            'voll_anreichern' => (bool) ($this->regler[$scope]['voll_anreichern'] ?? false),   // recipe-first: default AUS
+        ];
+        // GEPLANTER PFAD (Etappe 2b, „Beide Pfade behalten"): wurde vorab ein KI-Kopf-Plan ausgearbeitet
+        // und im Conceptor geprüft ($planConceptId), referenziert der Concept-Go dieses Draft-Concept
+        // (existing_concept_id → kein neuer GenerateConceptJob), statt neu zu generieren. Ohne Plan =
+        // SCHNELL-PFAD (frische Generierung). FAIL-SOFT: ist der Plan inzwischen weg (gelöscht/Team-fremd),
+        // NICHT hart blocken — Prop still verwerfen und frisch generieren (ein leerer/toter Plan kippt den Go nicht).
+        if ($scope === 'concept' && (int) ($this->planConceptId ?? 0) > 0) {
+            if (FoodAlchemistConcept::where('team_id', $team->id)->whereKey($this->planConceptId)->exists()) {
+                $optionen['existing_concept_id'] = (int) $this->planConceptId;
+            } else {
+                $this->planConceptId = null;
+            }
+        }
         try {
-            $run = $cascade->starteKaskade($team, $scope, $session, (string) ($this->eingabe[$scope]['creative_mode'] ?? 'voll_kreativ'), [
-                'created_via' => 'plan_go',
-                'brief' => $this->effektiverBrief($scope),
-                'params' => $params,
-                'voll_anreichern' => (bool) ($this->regler[$scope]['voll_anreichern'] ?? false),   // recipe-first: default AUS
-            ]);
+            $run = $cascade->starteKaskade($team, $scope, $session, (string) ($this->eingabe[$scope]['creative_mode'] ?? 'voll_kreativ'), $optionen);
             $this->laufId = $run->id;
             $this->laeuft = true;
             $this->hinweis = null;
+            $this->planConceptId = null;    // Plan verbraucht (referenziert ODER frisch generiert) → nächster Go ist wieder Schnell-Pfad
             $this->wissenVorschau = null;   // neue Kaskade → Vorschau weg; die Steps zeigen dann das ECHTE Wissen (#1a)
             $this->meldung = 'Kaskade gestartet — Entwurf wird erzeugt …';
             $this->fehler = null;
