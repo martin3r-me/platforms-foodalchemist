@@ -364,6 +364,39 @@ class Index extends Component
             'analysis' => (string) $session->analysis,
             'creative_mode' => (string) $session->creative_mode,
         ];
+
+        // Trendradar-Anbindung (Etappe 4, Teil 1): eine aus einem Trend eröffnete Session
+        // (`source_knowledge_document_id`, Carry-in via `?open=1`) trägt Brief/Titel bisher nur in
+        // die Analyse (`form`) — das eigentliche Go-Briefing je Tab (`eingabe[scope]`) blieb LEER,
+        // der Trend erreichte die Generierung also nie. Hier wird der Trend-Brief ins Tab-Briefing
+        // vorbefüllt, sodass der Nutzer mit einem gefüllten Briefing startet statt Blank Page.
+        if ($session->source_knowledge_document_id !== null) {
+            $this->seedBriefingAusTrendSession($session);
+        }
+    }
+
+    /**
+     * Trend-Herkunft → Go-Briefing: den Brief/Titel einer Trend-Session in alle Tab-Briefings
+     * ({@see SCOPES}) übertragen. **Nur befüllen, nie überschreiben** — ein bereits (vom Nutzer
+     * oder einer Vorlage) getipptes Tab-Briefing bleibt unangetastet. Der Trend-Brief ist bewusst
+     * scope-agnostisch formuliert (Konzept/Gericht/Basisrezept), daher füllt er alle Ebenen; der
+     * Nutzer wählt am Go den Tab. Kein „Go" — nur Prefill (Nordstern: nichts läuft still).
+     */
+    private function seedBriefingAusTrendSession(FoodAlchemistPlanningSession $session): void
+    {
+        $brief = trim((string) $session->brief);
+        $titel = trim((string) $session->title);
+        if ($brief === '') {
+            return;
+        }
+        foreach (self::SCOPES as $scope) {
+            if (trim((string) ($this->eingabe[$scope]['brief'] ?? '')) === '') {
+                $this->eingabe[$scope]['brief'] = $brief;
+            }
+            if ($titel !== '' && trim((string) ($this->eingabe[$scope]['titel'] ?? '')) === '') {
+                $this->eingabe[$scope]['titel'] = $titel;
+            }
+        }
     }
 
     public function speichern(PlanningSessionService $svc): void

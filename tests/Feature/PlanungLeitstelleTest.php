@@ -959,3 +959,57 @@ it('vorlagenFuer: Gericht hat Vorlagen, Basisrezept (rezept) hat in Teil 1 keine
         expect($sektoren)->toContain($v['sektor']);
     }
 });
+
+/**
+ * Etappe 4, Teil 1 — Trend-Anbindung: eine aus einem Trend eröffnete Session
+ * (source_knowledge_document_id gesetzt) muss ihren Brief/Titel ins Go-Briefing je Tab
+ * vorbefüllen, sonst erreicht das Trendradar-Signal die Generierung nie (Blank-Briefing-Bug).
+ */
+it('Trend-Anbindung: Trend-Session-Open befüllt alle Tab-Briefings + Titel', function () {
+    // source_knowledge_document_id ist ein loser Zeiger — der Wert muss nicht auf ein echtes
+    // Trend-Doc zeigen, damit der Prefill (rein sessionbasiert) greift.
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, [
+        'title' => 'Fermentierte Chili-Pasten',
+        'brief' => 'Aus diesem Food-Trend ein Konzept/Gericht/Basisrezept entwickeln: Fermentierte Chili-Pasten.',
+        'source_knowledge_document_id' => 4242,
+        'created_via' => 'trend',
+    ]);
+
+    $comp = Livewire::test(PlanungIndex::class)->call('oeffne', $session->id);
+
+    foreach (['rezept', 'gericht', 'concept'] as $scope) {
+        $comp->assertSet("eingabe.$scope.brief", 'Aus diesem Food-Trend ein Konzept/Gericht/Basisrezept entwickeln: Fermentierte Chili-Pasten.')
+            ->assertSet("eingabe.$scope.titel", 'Fermentierte Chili-Pasten');
+    }
+});
+
+it('Trend-Anbindung: ein bereits getipptes Tab-Briefing wird NICHT überschrieben (empty-only)', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, [
+        'title' => 'Trend-Titel',
+        'brief' => 'Trend-Brief.',
+        'source_knowledge_document_id' => 4242,
+        'created_via' => 'trend',
+    ]);
+
+    // Der Nutzer hat im Gericht-Tab schon etwas getippt; die Concept-/Rezept-Tabs sind leer.
+    Livewire::test(PlanungIndex::class)
+        ->set('eingabe.gericht.brief', 'Mein eigener Gericht-Brief.')
+        ->call('oeffne', $session->id)
+        ->assertSet('eingabe.gericht.brief', 'Mein eigener Gericht-Brief.')   // getipptes bleibt
+        ->assertSet('eingabe.concept.brief', 'Trend-Brief.')                  // leeres wird gefüllt
+        ->assertSet('eingabe.rezept.brief', 'Trend-Brief.');
+});
+
+it('Trend-Anbindung: eine Nicht-Trend-Session lässt die Tab-Briefings leer', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, [
+        'title' => 'Freie Planung',
+        'brief' => 'Session-Brief ohne Trend-Herkunft.',
+        // kein source_knowledge_document_id → kein Prefill
+    ]);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->assertSet('eingabe.gericht.brief', '')
+        ->assertSet('eingabe.concept.brief', '')
+        ->assertSet('eingabe.rezept.brief', '');
+});
