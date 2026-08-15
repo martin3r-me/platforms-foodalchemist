@@ -293,6 +293,84 @@ it('Menü-Leitplanken: ohne Preis-Achsen bleibt der KI-Gerüst-Kopf unangetastet
         ->and($frame->price_max_pp)->toBeNull();
 });
 
+/** Bindet einen Provider-Stub, der ein KI-Gerüst mit den übergebenen Slots liefert (kein echtes LLM nötig). */
+function bindGeruestSlots(array $slots): void
+{
+    config(['foodalchemist.ai.provider' => 'core']);
+    app()->bind(LLMProviderContract::class, fn () => new class($slots) implements LLMProviderContract
+    {
+        public function __construct(private array $slots) {}
+
+        public function getName(): string
+        {
+            return 'test-stub';
+        }
+
+        public function chat(array $messages, array $options = []): array
+        {
+            return ['content' => json_encode(['werte' => [
+                'name' => 'Gänge-Menü', 'target_price_pp' => 40, 'slots' => $this->slots,
+            ], 'confidence' => 0.8, 'reasoning' => 'stub']), 'usage' => [], 'model' => 'stub', 'tool_calls' => null];
+        }
+
+        public function streamChat(array $messages, callable $onDelta, array $options = []): void {}
+
+        public function getAvailableModels(): array
+        {
+            return ['stub'];
+        }
+
+        public function getDefaultModel(): string
+        {
+            return 'stub';
+        }
+
+        public function isAvailable(): bool
+        {
+            return true;
+        }
+    });
+}
+
+it('Menü-Leitplanken: »Anzahl Gänge« deckelt überzählige gang-Slots auf N (Dramaturgie-Reihenfolge bleibt)', function () {
+    // KI liefert 5 Gänge — der Nutzer wollte 3: die ersten drei bleiben in Reihenfolge, der Rest fällt weg.
+    bindGeruestSlots([
+        ['label' => 'Gruß aus der Küche', 'slot_type' => 'gang', 'target_count' => 1],
+        ['label' => 'Vorspeise', 'slot_type' => 'gang', 'target_count' => 1],
+        ['label' => 'Zwischengang', 'slot_type' => 'gang', 'target_count' => 1],
+        ['label' => 'Hauptgang', 'slot_type' => 'gang', 'target_count' => 1],
+        ['label' => 'Dessert', 'slot_type' => 'gang', 'target_count' => 1],
+    ]);
+    $this->actingAs($this->makeUser($this->rootTeam));
+
+    $e = $this->svc->generiereAusBrief(
+        $this->rootTeam, 'Galadinner, 60 Gäste', null, 'plan_go', false, false, ['menue_gaenge' => 3],
+    );
+
+    $frame = $this->frames->find('concept', $e['concept']->id);
+    expect($frame->slots()->orderBy('position')->pluck('label')->all())
+        ->toBe(['Gruß aus der Küche', 'Vorspeise', 'Zwischengang']);
+});
+
+it('Menü-Leitplanken: »Anzahl Gänge« lässt station/kapitel-Slots unberührt und ohne Achse bleibt das Gerüst voll', function () {
+    // Buffet-Gerüst (2 Stationen) + fehlende Achse: nichts wird gedeckelt (Stationen sind keine Gänge,
+    // leeres menue_gaenge = keine Vorgabe). Beweist beide Nicht-Eingriffs-Pfade in einem Lauf.
+    bindGeruestSlots([
+        ['label' => 'Warme Station', 'slot_type' => 'station', 'target_count' => 3],
+        ['label' => 'Süße Station', 'slot_type' => 'station', 'target_count' => 2],
+    ]);
+    $this->actingAs($this->makeUser($this->rootTeam));
+
+    // menue_gaenge = 1 gesetzt: greift NICHT, weil keine gang-Slots existieren.
+    $e = $this->svc->generiereAusBrief(
+        $this->rootTeam, 'Buffet, 40 Gäste', null, 'plan_go', false, false, ['menue_gaenge' => 1],
+    );
+
+    $frame = $this->frames->find('concept', $e['concept']->id);
+    expect($frame->slots()->pluck('label')->sort()->values()->all())
+        ->toBe(['Süße Station', 'Warme Station']);
+});
+
 it('Slot-Semantik: Dessert-Slot bevorzugt die Dessert-Hauptgruppe vor besser bepreisten HG-Gerichten', function () {
     // Dessert-HG + Dessert-Gericht (ohne Anker, ohne Preisvorteil) — Semantik muss stechen
     $desHg = FoodAlchemistDishMainGroup::create(['team_id' => $this->rootTeam->id, 'code' => 'DES', 'label' => 'Dessert']);

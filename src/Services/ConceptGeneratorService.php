@@ -182,8 +182,9 @@ class ConceptGeneratorService
      */
     /**
      * @param array<string,mixed> $menueAchsen Concept-Tab Menü-Leitplanken (kanonische Keys aus
-     *   reglerParams: menue_preis_{min,ziel,max}_pp …). Aktuell konsumiert: nur der Preis-Korridor
-     *   je Person — er überschreibt den KI-Gerüst-Kopf autoritativ (Start-Tab-Leitplanken propagieren).
+     *   reglerParams: menue_preis_{min,ziel,max}_pp, menue_gaenge …). Aktuell konsumiert: der Preis-
+     *   Korridor je Person (überschreibt den KI-Gerüst-Kopf autoritativ) und die Anzahl Gänge
+     *   (deckelt die gang-Slots des Gerüsts). Start-Tab-Leitplanken propagieren die Kaskade.
      */
     public function generiereAusBrief(Team $team, string $brief, ?string $name = null, string $via = 'ui', bool $useFavoritesList = false, bool $favoritesConvenienceOnly = false, array $menueAchsen = []): array
     {
@@ -247,6 +248,10 @@ class ConceptGeneratorService
         if ($sichereSlots === []) {
             throw new RuntimeException('KI-Gerüst enthielt keine gültigen Slots — Brief präzisieren.');
         }
+        // Menü-Leitplanke »Anzahl Gänge« (Concept-Tab) begrenzt das Gerüst autoritativ auf N gang-Slots
+        // (Nordstern: die Leitplanken des Start-Tabs propagieren). Nur ein Deckel — überzählige Gänge
+        // fallen weg, fehlt die Achse bleibt alles wie gehabt.
+        $sichereSlots = $this->menueGaengeCap($sichereSlots, $menueAchsen);
         $this->frames->replaceStructure($team, $frame, $sichereSlots, $sichereRules);
 
         // Assembler auf dem frischen Gerüst — Slots des leeren Konzepts füllen
@@ -343,6 +348,41 @@ class ConceptGeneratorService
         }
 
         return $out;
+    }
+
+    /**
+     * Menü-Leitplanke »Anzahl Gänge« (menue_gaenge, Concept-Tab) deckelt das Gerüst autoritativ auf
+     * N gang-Slots — ein 4-Gänge-Menü hat vier Gang-Slots (Nordstern: die Leitplanken des Start-Tabs
+     * propagieren die Kaskade). Bewusst NUR ein Deckel: überzählige gang-Slots werden in Dramaturgie-
+     * Reihenfolge abgeschnitten (die ersten N bleiben); produzierte die KI weniger Gänge als N, bleibt
+     * das Gerüst unangetastet — es werden keine Gänge erfunden (das Gerüst-System erfindet nichts).
+     * station/kapitel-Slots (Buffet-Stationen/Kapitel) sind KEINE Gänge und bleiben unberührt. Fehlt
+     * die Achse (kein/leeres menue_gaenge), bleibt das Gerüst byte-identisch (leer = keine Vorgabe).
+     *
+     * @param  list<array<string,mixed>>  $slots  bereits sanitisierte Slots (Reihenfolge = Dramaturgie)
+     * @param  array<string,mixed>  $achsen
+     * @return list<array<string,mixed>>
+     */
+    private function menueGaengeCap(array $slots, array $achsen): array
+    {
+        $n = $achsen['menue_gaenge'] ?? null;
+        if (! is_numeric($n) || (int) $n < 1) {
+            return $slots;
+        }
+        $n = (int) $n;
+
+        $gaenge = 0;
+        $out = [];
+        foreach ($slots as $slot) {
+            if (($slot['slot_type'] ?? null) === 'gang') {
+                if (++$gaenge > $n) {
+                    continue;   // überzähligen Gang abschneiden — Dramaturgie-Reihenfolge bleibt erhalten
+                }
+            }
+            $out[] = $slot;
+        }
+
+        return array_values($out);
     }
 
     /**
