@@ -83,6 +83,9 @@ class Index extends Component
         // Menü-Leitplanken (nur Concept-Tab, Etappe 2a): Anzahl Gänge + Zielpreis-Korridor je Person.
         // Als Text/Zahl gehalten (leer = keine Vorgabe); reglerParams parst sie in kanonische _pp-Keys.
         'menue_gaenge' => '', 'menue_preis_min' => '', 'menue_preis_ziel' => '', 'menue_preis_max' => '',
+        // Diät-Quoten (Etappe 2a, Teil 2): Portfolio-Anteil vegan/vegetarisch in % (leer = keine Vorgabe).
+        // reglerParams parst sie in kanonische _pct-Keys. Anteil ≠ harter Ausschluss (diaet_hart).
+        'menue_quote_vegan' => '', 'menue_quote_vegetarisch' => '',
     ];
 
     /** #1b Grounding-Preview: welches Wissen/Pairing/Template ein Basisrezept-Lauf ziehen würde (on-demand, ohne Generierung). */
@@ -356,7 +359,8 @@ class Index extends Component
         // Roh-Felder raus, die übersetzt (nicht 1:1) durchgereicht werden — inkl. der Menü-Roh-Eingaben
         // (sie werden unten als kanonische _pp-Keys geparst und nur für den Concept-Scope gesetzt).
         unset($p['favoriten'], $p['favoriten_conv_only'], $p['ki_bilder'], $p['ziel_vk'], $p['voll_anreichern'],
-            $p['menue_gaenge'], $p['menue_preis_min'], $p['menue_preis_ziel'], $p['menue_preis_max']);
+            $p['menue_gaenge'], $p['menue_preis_min'], $p['menue_preis_ziel'], $p['menue_preis_max'],
+            $p['menue_quote_vegan'], $p['menue_quote_vegetarisch']);
         $p = array_filter($p, fn ($v) => $v !== '' && $v !== null && $v !== []);
         $p['use_favorites_list'] = $favoriten;
         $p['favorites_convenience_only'] = $favoriten && $favConvOnly;
@@ -379,6 +383,13 @@ class Index extends Component
             if (($mx = $this->menuePreisEur($scope, 'menue_preis_max')) !== null) {
                 $p['menue_preis_max_pp'] = $mx;
             }
+            // Diät-Quoten (Portfolio-Anteil, weich): mind. X % der Positionen vegan/vegetarisch.
+            if (($qv = $this->menueQuote($scope, 'menue_quote_vegan')) !== null) {
+                $p['menue_quote_vegan_pct'] = $qv;
+            }
+            if (($qg = $this->menueQuote($scope, 'menue_quote_vegetarisch')) !== null) {
+                $p['menue_quote_vegetarisch_pct'] = $qg;
+            }
         }
 
         return $p;
@@ -394,6 +405,18 @@ class Index extends Component
         $n = (int) $roh;
 
         return $n >= 1 && $n <= 20 ? $n : null;
+    }
+
+    /** Diät-Quote (Portfolio-Anteil): ganze Prozentzahl 0–100, sonst null (leer/ungültig = keine Vorgabe). Concept-Scope. */
+    private function menueQuote(string $scope, string $feld): ?int
+    {
+        $roh = str_replace(['%', ' '], '', trim((string) ($this->regler[$scope][$feld] ?? '')));
+        if ($roh === '' || ! ctype_digit($roh)) {
+            return null;
+        }
+        $n = (int) $roh;
+
+        return $n >= 0 && $n <= 100 ? $n : null;
     }
 
     /** Menü-Preis je Person (min/ziel/max): „45,00 €" → 45.0; außerhalb 0,50–2.000,00 € → null. Analog {@see zielVkEur}. */
@@ -512,6 +535,13 @@ class Index extends Component
                 $this->fehler = 'Menü-Gänge: bitte eine ganze Zahl zwischen 1 und 20 angeben (z. B. 4) — oder das Feld leer lassen.';
 
                 return;
+            }
+            foreach (['menue_quote_vegan' => 'Vegan-Anteil', 'menue_quote_vegetarisch' => 'Vegetarisch-Anteil'] as $feld => $lbl) {
+                if (trim((string) ($this->regler[$scope][$feld] ?? '')) !== '' && $this->menueQuote($scope, $feld) === null) {
+                    $this->fehler = "Menü-{$lbl}: bitte einen Prozentwert zwischen 0 und 100 angeben (z. B. 30) — oder das Feld leer lassen.";
+
+                    return;
+                }
             }
         }
         // Kontext des Start-Tabs auf die Session spiegeln (Dashboard-Anzeige + creative_mode) und persistieren.

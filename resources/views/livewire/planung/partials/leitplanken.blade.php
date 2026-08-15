@@ -103,6 +103,21 @@
                     </div>
                 </div>
                 <p class="text-[11px] text-gray-500 mt-1.5">Netto je Person für das gesamte Menü. Leer = keine Vorgabe — die KI wählt Umfang und Preislage passend zum Briefing.</p>
+
+                {{-- Diät-Quoten (Portfolio-ANTEIL) — bewusst getrennt von den harten Diät-Constraints oben:
+                     hier steuert der Anteil der Positionen (»mind. X % vegan«), nicht ein Ausschluss für
+                     das ganze Menü. Etappe 2a, Teil 2. --}}
+                <div class="grid md:grid-cols-2 gap-x-6 gap-y-3 mt-3" data-menue-diaet-quoten>
+                    <div>
+                        <label class="block {{ $label ?? 'text-[11px] text-gray-500' }} mb-1">Vegan-Anteil (%)</label>
+                        <input type="number" min="0" max="100" step="1" wire:model="regler.{{ $scope }}.menue_quote_vegan" placeholder="z. B. 30" class="{{ $input }} !py-1.5" data-menue-quote-vegan />
+                    </div>
+                    <div>
+                        <label class="block {{ $label ?? 'text-[11px] text-gray-500' }} mb-1">Vegetarisch-Anteil (%)</label>
+                        <input type="number" min="0" max="100" step="1" wire:model="regler.{{ $scope }}.menue_quote_vegetarisch" placeholder="z. B. 50" class="{{ $input }} !py-1.5" data-menue-quote-vegetarisch />
+                    </div>
+                </div>
+                <p class="text-[11px] text-gray-500 mt-1.5">Portfolio-Anteil (weiche Zusammenstellungs-Vorgabe), nicht der harte Ausschluss oben. Leer = keine Quote.</p>
             </div>
         @endif
 

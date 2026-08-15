@@ -50,6 +50,10 @@ class FoodAlchemistPlanningSession extends Model
         // je Person. Steuern die ZUSAMMENSTELLUNG des Menüs (nicht die Rezept-Generierung) — sie
         // propagieren wie die übrigen Regler als generation_params in den Concept-Fan-out.
         'menue_gaenge', 'menue_preis_min_pp', 'menue_preis_ziel_pp', 'menue_preis_max_pp',
+        // Diät-Quoten (Etappe 2a, Teil 2): Portfolio-ANTEIL veganer/vegetarischer Positionen am Menü
+        // (0–100 %). Unterscheidet sich bewusst vom harten Ausschluss `diaet_hart` (ganzes Menü muss X
+        // sein) — die Quote ist eine weiche Zusammenstellungs-Vorgabe (»mind. X % der Gänge vegan«).
+        'menue_quote_vegan_pct', 'menue_quote_vegetarisch_pct',
     ];
 
     protected $casts = [

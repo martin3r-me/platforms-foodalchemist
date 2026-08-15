@@ -218,6 +218,62 @@ it('Etappe 2a: Concept-Tab rendert die Menü-Leitplanken-Sektion (Gänge + Korri
         ->assertSeeHtml('data-menue-preis-ziel');
 });
 
+it('Etappe 2a Teil 2: Concept-Go persistiert die Diät-Quoten (Vegan-/Vegetarisch-Anteil) als _pct-Params', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Menü', 'brief' => 'Grüner Fokus.']);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->set('eingabe.concept.brief', 'Grüner Fokus.')
+        ->set('regler.concept.menue_quote_vegan', '30')
+        ->set('regler.concept.menue_quote_vegetarisch', '50 %')   // %-Zeichen + Space werden tolerant gestrippt
+        ->call('goKaskade', 'concept')
+        ->assertNoRedirect();
+
+    expect($session->refresh()->generation_params)->toMatchArray([
+        'menue_quote_vegan_pct' => 30,
+        'menue_quote_vegetarisch_pct' => 50,
+    ]);
+});
+
+it('Etappe 2a Teil 2: Diät-Quoten sind Concept-only — am Gericht-Tab fließen sie NICHT in die Params', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Gericht', 'brief' => 'Ein Teller.']);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->set('eingabe.gericht.brief', 'Ein Teller.')
+        ->set('regler.gericht.menue_quote_vegan', '30')            // gesetzt, aber Gericht-Scope ignoriert Menü-Achsen
+        ->call('goKaskade', 'gericht')
+        ->assertNoRedirect();
+
+    $params = $session->refresh()->generation_params ?? [];
+    expect($params)->not->toHaveKey('menue_quote_vegan_pct')
+        ->and($params)->not->toHaveKey('menue_quote_vegetarisch_pct');
+});
+
+it('Etappe 2a Teil 2: mistgetippter Diät-Anteil am Concept wird GESAGT (fehler), kein Lauf gestartet', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Menü', 'brief' => 'x']);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->set('eingabe.concept.brief', 'x')
+        ->set('regler.concept.menue_quote_vegan', '150')           // außerhalb 0–100
+        ->call('goKaskade', 'concept')
+        ->assertSet('laeuft', false)                               // kein Lauf
+        ->assertNotSet('fehler', null);                            // Absender wird korrigiert statt still verworfen
+
+    expect(FoodAlchemistCascadeRun::where('planning_session_id', $session->id)->count())->toBe(0);
+});
+
+it('Etappe 2a Teil 2: Concept-Tab rendert die Diät-Quoten-Felder (Anteil ≠ harter Ausschluss)', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'X', 'brief' => 'y']);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->assertSeeHtml('data-menue-diaet-quoten')
+        ->assertSeeHtml('data-menue-quote-vegan')
+        ->assertSeeHtml('data-menue-quote-vegetarisch');
+});
+
 it('Queue-Watchdog: Lauf hängt lange OHNE Step-Fortschritt → sichtbarer Hinweis (kein Worker), kein Abbruch', function () {
     $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'X', 'brief' => 'y']);
     $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'planning_session_id' => $session->id, 'scope' => 'rezept', 'status' => 'running']);
