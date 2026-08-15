@@ -369,6 +369,14 @@ class PlanningCascadeService
      * Session/keine Regler. Der Kaskaden-Fan-out erbt sie damit an die erzeugten Gerichte, sodass
      * Niveau/Convenience/Bio/Diät/… nicht nur beim Depth-1-Go greifen, sondern durch die ganze Kaskade.
      *
+     * **Leitplanken-Trennung (Roadmap Et.2a):** dieser Helfer speist ausschliesslich die REZEPT-
+     * Erzeugung ({@see materialisiereConceptGericht}, {@see materialisiereSpeiseplanZelle}). Nur die
+     * REZEPT-Leitplanken (Niveau/Convenience/Frische/Bio/Diät/Aroma/…) propagieren an Gerichte/
+     * Basisrezepte. Die MENÜ-Leitplanken (`menue_*`: Anzahl Gänge · Preis-Korridor je Person · Diät-
+     * Quoten · Portfolio-Balance) steuern die ZUSAMMENSTELLUNG des Menüs (Concept-Ebene, gelesen beim
+     * Concept-Dispatch) und werden hier bewusst herausgefiltert — für ein einzelnes Gericht/Basisrezept
+     * sind sie bedeutungslos und würden, in den Rezept-Prompt serialisiert, die Generierung verfälschen.
+     *
      * @return array<string,mixed>
      */
     private function sessionGenerationParams(Team $team, ?int $planningSessionId): array
@@ -377,8 +385,10 @@ class PlanningCascadeService
             return [];
         }
         $sess = app(PlanningSessionService::class)->get($team, $planningSessionId);
+        $params = is_array($sess?->generation_params) ? $sess->generation_params : [];
 
-        return is_array($sess?->generation_params) ? $sess->generation_params : [];
+        // Menü-Leitplanken bleiben auf der Concept-Ebene — nicht in die Rezept-Generierung durchreichen.
+        return array_filter($params, fn ($k) => ! str_starts_with((string) $k, 'menue_'), ARRAY_FILTER_USE_KEY);
     }
 
     /**

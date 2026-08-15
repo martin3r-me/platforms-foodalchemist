@@ -47,8 +47,9 @@ class FoodAlchemistPlanningSession extends Model
         // KI-Bilder-Toggle (Preisfrage): steuert, ob die Anreicherung Schritt-Fotos + Produktfoto erzeugt.
         'ki_bilder',
         // Menü-Leitplanken (nur Concept-Scope, Etappe 2a): Anzahl Gänge/Positionen + Zielpreis-Korridor
-        // je Person. Steuern die ZUSAMMENSTELLUNG des Menüs (nicht die Rezept-Generierung) — sie
-        // propagieren wie die übrigen Regler als generation_params in den Concept-Fan-out.
+        // je Person. Steuern die ZUSAMMENSTELLUNG des Menüs, NICHT die Rezept-Generierung — anders als
+        // die übrigen Regler propagieren sie daher NICHT in den Gericht-/Basisrezept-Fan-out (der
+        // Fan-out-Erbe filtert `menue_*` heraus, {@see PlanningCascadeService::sessionGenerationParams}).
         'menue_gaenge', 'menue_preis_min_pp', 'menue_preis_ziel_pp', 'menue_preis_max_pp',
         // Diät-Quoten (Etappe 2a, Teil 2): Portfolio-ANTEIL veganer/vegetarischer Positionen am Menü
         // (0–100 %). Unterscheidet sich bewusst vom harten Ausschluss `diaet_hart` (ganzes Menü muss X

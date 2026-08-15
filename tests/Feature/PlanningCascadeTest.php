@@ -388,6 +388,69 @@ it('Wissen/Trend: erfundenes Rezept erbt die Trend-Herkunft der Planung (Lineage
         ->and($recipe->refresh()->created_via)->toBe('plan_go');
 });
 
+// ── Leitplanken-Trennung (Roadmap Et.2a): Rezept- vs. Menü-Leitplanken ───────
+// Der Concept-Fan-out erbt die Session-Leitplanken an die Gericht-Generierung. Die REZEPT-Achsen
+// (Niveau/Convenience/…) müssen ankommen, die MENÜ-Achsen (menue_*) steuern nur die Zusammenstellung
+// und dürfen NICHT in den Einzel-Gericht-Prompt durchsickern. `materialisiereConceptGericht` läuft über
+// denselben Erben (sessionGenerationParams) wie die Speiseplan-Zelle — ein Pfad beweist die Trennung.
+// (Setup inline gehalten: die Test-Helfer/$rootTeam sind protected — nur in der an die TestCase
+// gebundenen it()-Closure erreichbar, nicht in einer externen Funktion.)
+
+it('Fan-out-Vererbung: REZEPT-Leitplanken (Niveau/Convenience) erreichen die Gericht-Generierung', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Leitplanken', 'brief' => 'x']);
+    app(PlanningSessionService::class)->setGenerationParams($this->rootTeam, (int) $session->id, ['level' => 'gehoben', 'convenience' => 'niedrig', 'menue_gaenge' => 3]);
+    $concept = $this->makeConcept($this->rootTeam, 'Menü', ['status' => 'draft']);
+    $slot = $this->makeConceptSlot($concept, ['position' => 1]);
+    $recipe = $this->makeRecipe($this->rootTeam, 'Erfunden', ['status' => 'draft', 'is_sales_recipe' => true]);
+    $idee = FoodAlchemistDishIdea::create(['team_id' => $this->rootTeam->id, 'concept_id' => $concept->id, 'title' => 'Erfunden', 'status' => 'entwurf', 'target_form' => 'einzel', 'generation_status' => 'queued', 'position' => 1, 'created_via' => 'test', 'source_meta' => ['target_concept_slot_id' => (int) $slot->id]]);
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'concept', 'status' => 'running']);
+    $step = FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht', 'status' => 'running']);
+
+    $captured = [];
+    $this->mock(RecipeGeneratorService::class, function ($m) use (&$captured, $recipe) {
+        $m->shouldReceive('generiere')->once()->andReturnUsing(function ($team, $brief, $params) use (&$captured, $recipe) {
+            $captured = $params;
+
+            return ['recipe' => $recipe, 'statistik' => [], 'offene' => []];
+        });
+    });
+
+    app(PlanningCascadeService::class)->materialisiereConceptGericht($this->rootTeam, (int) $idee->id, (int) $step->id, (int) $session->id);
+
+    expect($captured['level'] ?? null)->toBe('gehoben')
+        ->and($captured['convenience'] ?? null)->toBe('niedrig');
+});
+
+it('Fan-out-Vererbung: MENÜ-Leitplanken (menue_*) sickern NICHT in den Einzel-Gericht-Prompt', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Leitplanken', 'brief' => 'x']);
+    app(PlanningSessionService::class)->setGenerationParams($this->rootTeam, (int) $session->id, [
+        'level' => 'gehoben', 'menue_gaenge' => 4, 'menue_preis_ziel_pp' => 45.0, 'menue_quote_vegan_pct' => 30, 'menue_balance' => 'fokussiert',
+    ]);
+    $concept = $this->makeConcept($this->rootTeam, 'Menü', ['status' => 'draft']);
+    $slot = $this->makeConceptSlot($concept, ['position' => 1]);
+    $recipe = $this->makeRecipe($this->rootTeam, 'Erfunden', ['status' => 'draft', 'is_sales_recipe' => true]);
+    $idee = FoodAlchemistDishIdea::create(['team_id' => $this->rootTeam->id, 'concept_id' => $concept->id, 'title' => 'Erfunden', 'status' => 'entwurf', 'target_form' => 'einzel', 'generation_status' => 'queued', 'position' => 1, 'created_via' => 'test', 'source_meta' => ['target_concept_slot_id' => (int) $slot->id]]);
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'concept', 'status' => 'running']);
+    $step = FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht', 'status' => 'running']);
+
+    $captured = [];
+    $this->mock(RecipeGeneratorService::class, function ($m) use (&$captured, $recipe) {
+        $m->shouldReceive('generiere')->once()->andReturnUsing(function ($team, $brief, $params) use (&$captured, $recipe) {
+            $captured = $params;
+
+            return ['recipe' => $recipe, 'statistik' => [], 'offene' => []];
+        });
+    });
+
+    app(PlanningCascadeService::class)->materialisiereConceptGericht($this->rootTeam, (int) $idee->id, (int) $step->id, (int) $session->id);
+
+    // Kein einziger menue_*-Key darf im Rezept-Param-Bündel landen …
+    $menueKeys = array_values(array_filter(array_keys($captured), fn ($k) => str_starts_with((string) $k, 'menue_')));
+    expect($menueKeys)->toBe([])
+        // … die Rezept-Leitplanke bleibt aber erhalten (die Trennung kappt nicht pauschal alles).
+        ->and($captured['level'] ?? null)->toBe('gehoben');
+});
+
 // ── P3: Voll-Kaskade aus dem Foodbook-Frame ─────────────────────────────────
 
 it('vollkaskade (foodbook): 1 Concept-Step je Frame-Slot + GenerateConceptJob mit Attach ans Kapitel', function () {
