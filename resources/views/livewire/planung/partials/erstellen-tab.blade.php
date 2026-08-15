@@ -3,6 +3,22 @@
      + regler.{scope}). Der Go schaltet auf den Worker-Tab. --}}
 <div class="space-y-4">
     <x-foodalchemist::modal-section title="Eingabe — was soll entstehen">
+        {{-- Schnellstart-Vorlagen je Sektor/Anlass (Etappe 4): füllen Briefing + Kontext, statt Blank Page.
+             Nur eingeblendet, wenn es für diesen Tab Vorlagen gibt (Teil 1: nur Gericht). --}}
+        @php($vorlagen = $this->vorlagenFuer($scope))
+        @if(count($vorlagen))
+            <div class="mb-3" data-brief-vorlagen>
+                <label class="{{ $label ?? 'text-[11px] text-gray-500' }} block mb-1">Schnellstart-Vorlage (optional)</label>
+                <div class="flex flex-wrap gap-1.5">
+                    @foreach($vorlagen as $vslug => $v)
+                        <button type="button" wire:click="briefVorlage('{{ $scope }}', '{{ $vslug }}')"
+                                class="px-2.5 py-1 rounded-full border border-black/10 bg-white/5 text-[11px] text-gray-700 hover:bg-violet-500/10 transition-colors"
+                                data-brief-vorlage="{{ $vslug }}">{{ $v['label'] }}</button>
+                    @endforeach
+                </div>
+                <p class="text-[11px] text-gray-500 mt-1">Füllt Briefing und Sektor/Anlass als Startpunkt — alles frei anpassbar.</p>
+            </div>
+        @endif
         <label class="{{ $label ?? 'text-[11px] text-gray-500' }}">Titel</label>
         <input type="text" wire:model="eingabe.{{ $scope }}.titel" class="{{ $input }} mb-3" placeholder="z. B. Tomatensauce" data-planung-titel />
         <label class="{{ $label ?? 'text-[11px] text-gray-500' }}">Beschreibung (geht in die Erzeugung)</label>

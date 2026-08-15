@@ -902,3 +902,60 @@ it('skizzenAuswahlLeeren: hebt die gezielte Auswahl auf', function () {
         ->call('skizzenAuswahlLeeren')
         ->assertSet('skizzenAuswahl', []);
 });
+
+// ── Brief-Vorlagen je Sektor/Anlass (Etappe 4 — Schnellstart statt Blank Page) ──
+
+it('briefVorlage: füllt Briefing + Sektor/Anlass/Serviceform in den Gericht-Tab, Titel nur wenn leer', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Event']);
+
+    $vorlage = PlanungIndex::BRIEF_VORLAGEN['catering_empfang_flying'];
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->call('briefVorlage', 'gericht', 'catering_empfang_flying')
+        ->assertSet('eingabe.gericht.brief', $vorlage['brief'])
+        ->assertSet('eingabe.gericht.titel', $vorlage['titel'])   // war leer → Vorlagen-Titel (hier '')
+        ->assertSet('regler.gericht.sektor', 'catering')
+        ->assertSet('regler.gericht.occasion', 'empfang')
+        ->assertSet('regler.gericht.serviceform', 'flying')
+        ->assertSet('fehler', null);
+});
+
+it('briefVorlage: überschreibt einen bereits getippten Titel NICHT', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Event']);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->set('eingabe.gericht.titel', 'Mein Amuse')
+        ->call('briefVorlage', 'gericht', 'catering_galadinner')
+        ->assertSet('eingabe.gericht.titel', 'Mein Amuse')       // getippter Titel bleibt
+        ->assertSet('regler.gericht.sektor', 'catering');        // Kontext wird trotzdem gesetzt
+});
+
+it('briefVorlage: unbekannter Key oder falscher Scope → fehler, keine Änderung', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Event']);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        // gültiger Key, aber für 'rezept' NICHT freigegeben (Teil 1: nur Gericht)
+        ->call('briefVorlage', 'rezept', 'catering_empfang_flying')
+        ->assertSet('fehler', 'Unbekannte oder für diesen Tab ungültige Vorlage.')
+        ->assertSet('eingabe.rezept.brief', '')
+        // unbekannter Key
+        ->call('briefVorlage', 'gericht', 'gibts_nicht')
+        ->assertSet('fehler', 'Unbekannte oder für diesen Tab ungültige Vorlage.')
+        ->assertSet('eingabe.gericht.brief', '');
+});
+
+it('vorlagenFuer: Gericht hat Vorlagen, Basisrezept (rezept) hat in Teil 1 keine', function () {
+    $comp = Livewire::test(PlanungIndex::class);
+    $inst = $comp->instance();
+
+    expect($inst->vorlagenFuer('gericht'))->not->toBeEmpty();
+    expect($inst->vorlagenFuer('rezept'))->toBe([]);
+    // jede Vorlage nutzt nur reale Leitplanken-Enums (keine erfundenen Sektoren/Anlässe)
+    $sektoren = ['betriebsgastronomie', 'catering', 'restaurant', 'care', 'schule_kita'];
+    foreach ($inst->vorlagenFuer('gericht') as $v) {
+        expect($sektoren)->toContain($v['sektor']);
+    }
+});

@@ -106,6 +106,73 @@ class Index extends Component
         'fokussiert' => 'Fokussiert (ein roter Faden)',
     ];
 
+    /**
+     * Brief-Vorlagen je Sektor/Anlass (Etappe 4 — „Schnellstart statt Blank Page"). Kuratierte
+     * Starter-Briefings, die die leere Seite bewusst füllen; der Mensch passt danach an. Jede Vorlage
+     * trägt den Kontext, für den sie steht — `sektor`/`occasion`/`serviceform` spiegeln 1:1 die
+     * Leitplanken-Enums (leitplanken.blade.php), es werden also KEINE neuen Vokabeln erfunden.
+     * `scopes` = auf welchen Creation-Tabs die Vorlage erscheint. Teil 1: nur Gericht (Sektor/Anlass
+     * sind Gericht-/Menü-Kontext; Basisrezept ist komponentenhaft sektor-agnostisch, Concept eigener
+     * Tab → Folge-Chunk). Der `brief` ist Guidance (nüchtern, keine harten Fakten/Werte als Wahrheit).
+     * @var array<string,array{label:string,scopes:list<string>,titel:string,brief:string,sektor:string,occasion:string,serviceform:string}>
+     */
+    public const BRIEF_VORLAGEN = [
+        'catering_empfang_flying' => [
+            'label' => 'Catering — Empfang / Flying',
+            'scopes' => ['gericht'],
+            'titel' => '',
+            'brief' => 'Fingerfood-Häppchen für einen Steh-Empfang, in einem Bissen ohne Besteck essbar und formstabil (auch nach kurzer Wartezeit auf der Platte). Ansprechend im Flying Service zu reichen.',
+            'sektor' => 'catering',
+            'occasion' => 'empfang',
+            'serviceform' => 'flying',
+        ],
+        'catering_galadinner' => [
+            'label' => 'Catering — Galadinner (Hauptgang)',
+            'scopes' => ['gericht'],
+            'titel' => '',
+            'brief' => 'Warmer Hauptgang für ein gesetztes Galadinner im Tellerservice, gehobenes Niveau, sauber anrichtbar und regenerierfähig für den Bankett-Ausstoß.',
+            'sektor' => 'catering',
+            'occasion' => 'dinner',
+            'serviceform' => 'tellerservice',
+        ],
+        'bgm_mittagstisch' => [
+            'label' => 'Betriebsgastro — Mittagstisch',
+            'scopes' => ['gericht'],
+            'titel' => '',
+            'brief' => 'Mittagsgericht für die Betriebsgastronomie am Buffet, warmhalte- und ausgabestabil über die Mittagslinie, kalkulierbarer Wareneinsatz und alltagstaugliche Zutaten.',
+            'sektor' => 'betriebsgastronomie',
+            'occasion' => 'lunch',
+            'serviceform' => 'buffet',
+        ],
+        'care_mittag' => [
+            'label' => 'Care / Klinik — Mittagsverpflegung',
+            'scopes' => ['gericht'],
+            'titel' => '',
+            'brief' => 'Mittagsgericht für die Care-/Klinikverpflegung im Tellerservice, gut kaufähig und bekömmlich, zurückhaltend gewürzt und regenerierfähig aus der Zentralküche.',
+            'sektor' => 'care',
+            'occasion' => 'lunch',
+            'serviceform' => 'tellerservice',
+        ],
+        'schule_mittag' => [
+            'label' => 'Schule / Kita — Mittagsverpflegung',
+            'scopes' => ['gericht'],
+            'titel' => '',
+            'brief' => 'Kindgerechtes Mittagsgericht für Schule/Kita am Buffet, mild gewürzt und akzeptanzstark, an DGE-Qualitätsstandards orientiert und in Serie ausgabefähig.',
+            'sektor' => 'schule_kita',
+            'occasion' => 'lunch',
+            'serviceform' => 'buffet',
+        ],
+        'restaurant_hauptgang' => [
+            'label' => 'Restaurant — à la carte Hauptgang',
+            'scopes' => ['gericht'],
+            'titel' => '',
+            'brief' => 'À-la-carte-Hauptgang fürs Restaurant im Tellerservice, à la minute abrufbar, sauberes Plating und eine klare geschmackliche Handschrift.',
+            'sektor' => 'restaurant',
+            'occasion' => 'dinner',
+            'serviceform' => 'tellerservice',
+        ],
+    ];
+
     /** #1b Grounding-Preview: welches Wissen/Pairing/Template ein Basisrezept-Lauf ziehen würde (on-demand, ohne Generierung). */
     public ?array $wissenVorschau = null;
 
@@ -537,6 +604,51 @@ class Index extends Component
         if (array_key_exists($feld, $this->regler[$scope])) {
             $this->regler[$scope][$feld] = $wert;
         }
+    }
+
+    /**
+     * Brief-Vorlagen, die für den gegebenen Creation-Tab gelten (Schnellstart statt Blank Page,
+     * Etappe 4). Die Blade blendet den Vorlagen-Block nur ein, wenn die Liste nicht leer ist —
+     * so trägt der Basisrezept-Tab (Teil 1: keine Vorlagen) keine leere Auswahl.
+     *
+     * @return array<string,array<string,mixed>>
+     */
+    public function vorlagenFuer(string $scope): array
+    {
+        return array_filter(self::BRIEF_VORLAGEN, fn ($v) => in_array($scope, $v['scopes'], true));
+    }
+
+    /**
+     * Lädt eine Brief-Vorlage in den Start-Tab (Schnellstart statt Blank Page, Etappe 4). Füllt das
+     * Briefing bewusst (Starter — die leere Seite soll weg) und setzt Sektor/Anlass/Serviceform als
+     * Kontext-Vorschlag; der Titel wird NUR gesetzt, wenn der Nutzer noch keinen getippt hat (nicht
+     * überschreiben). Alles bleibt frei anpassbar. Kein Go — der Mensch prüft und drückt selbst.
+     */
+    public function briefVorlage(string $scope, string $key): void
+    {
+        if (! isset($this->eingabe[$scope]) || ! isset($this->regler[$scope])) {
+            return;
+        }
+        $vorlage = self::BRIEF_VORLAGEN[$key] ?? null;
+        if ($vorlage === null || ! in_array($scope, $vorlage['scopes'], true)) {
+            $this->fehler = 'Unbekannte oder für diesen Tab ungültige Vorlage.';
+
+            return;
+        }
+        $this->eingabe[$scope]['brief'] = $vorlage['brief'];
+        if (trim((string) ($this->eingabe[$scope]['titel'] ?? '')) === '' && ($vorlage['titel'] ?? '') !== '') {
+            $this->eingabe[$scope]['titel'] = $vorlage['titel'];
+        }
+        // Sektor/Anlass/Serviceform als Vorschlag — nur Keys, die der Regler-Satz führt (Basisrezept
+        // strippt occasion/serviceform ohnehin am Go; Guard hält es sauber, falls Vorlagen später
+        // auch dort erscheinen).
+        foreach (['sektor', 'occasion', 'serviceform'] as $feld) {
+            if (($vorlage[$feld] ?? '') !== '' && array_key_exists($feld, $this->regler[$scope])) {
+                $this->regler[$scope][$feld] = $vorlage[$feld];
+            }
+        }
+        $this->fehler = null;
+        $this->meldung = 'Vorlage „'.$vorlage['label'].'" geladen — Briefing und Kontext vorbefüllt, bitte prüfen und anpassen.';
     }
 
     /**
