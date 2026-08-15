@@ -166,6 +166,14 @@ class Index extends Component
      */
     public ?int $skizzeGerichtId = null;
 
+    /**
+     * Gezielte Batch-Auswahl (Etappe 4, Teil 3b) — angehakte Skizzen-IDs im Divergenz-Board. Ist die
+     * Liste NICHT leer, startet {@see skizzenBatchAlsGerichte} nur GENAU diese (Schnittmenge mit den
+     * bearbeitbaren Skizzen); ist sie leer, bleibt es beim „alle"-Verhalten. Checkbox-Werte kommen als
+     * Strings aus Livewire — beim Filtern nach int normalisieren.
+     */
+    public array $skizzenAuswahl = [];
+
     /** Sekunden auf `running` ohne jeden Step-Fortschritt, ab denen der Watchdog anschlägt (über der realistischen Erst-Dauer). */
     protected const WATCHDOG_SEKUNDEN = 90;
 
@@ -406,8 +414,10 @@ class Index extends Component
      * → die Karte zeigt den Stand (Teil 2b).
      *
      * Auswahl: alle Session-Skizzen (Einzel + Gruppen), die (a) nicht `verworfen` sind und (b) KEIN
-     * Bestands-Gericht referenzieren (`sales_recipe_id` = Reuse-Zeiger, kein Generierungs-Brief). Die
-     * Gericht-Tab-Leitplanken (reglerParams) gelten für den ganzen Batch (Start-Tab-Regel). Cap
+     * Bestands-Gericht referenzieren (`sales_recipe_id` = Reuse-Zeiger, kein Generierungs-Brief). Ist
+     * {@see $skizzenAuswahl} NICHT leer (Etappe 4, Teil 3b — Checkboxen je Karte), wird zusätzlich auf
+     * GENAU diese IDs gefiltert (Schnittmenge mit den bearbeitbaren) — sonst „alle". Die Gericht-Tab-
+     * Leitplanken (reglerParams) gelten für den ganzen Batch (Start-Tab-Regel). Cap
      * {@see BATCH_SKIZZEN_MAX} als Runaway-/Kosten-Guard — darüber wird gedeckelt und gesagt.
      *
      * KEIN Cockpit-Hijack: der Batch feuert N gestufte Läufe; ihr Stand erscheint je Skizzen-Karte
@@ -422,14 +432,24 @@ class Index extends Component
         }
         // Bearbeitbare Session-Skizzen: nicht verworfen + kein Bestands-Zeiger (das wäre Reuse eines
         // echten Gerichts, kein Brief zum Generieren). Reihenfolge = Board-Reihenfolge.
-        $kandidaten = FoodAlchemistDishIdea::visibleToTeam($team)
+        $query = FoodAlchemistDishIdea::visibleToTeam($team)
             ->where('planning_session_id', $session->id)
             ->where('status', '!=', 'verworfen')
             ->whereNull('sales_recipe_id')
-            ->orderBy('position')->orderBy('id')
-            ->get();
+            ->orderBy('position')->orderBy('id');
+        // Gezielte Auswahl (Teil 3b): nur die angehakten Skizzen — Strings aus Livewire nach int
+        // normalisieren, leere/ungültige Einträge raus. Leere Auswahl = „alle" (Bestandsverhalten).
+        $gewaehlt = collect($this->skizzenAuswahl)
+            ->map(fn ($v) => (int) $v)->filter()->unique()->values();
+        $mitAuswahl = $gewaehlt->isNotEmpty();
+        if ($mitAuswahl) {
+            $query->whereIn('id', $gewaehlt->all());
+        }
+        $kandidaten = $query->get();
         if ($kandidaten->isEmpty()) {
-            $this->fehler = 'Keine bearbeitbaren Skizzen — leg oben eine an (Bestands-Übernahmen zählen nicht).';
+            $this->fehler = $mitAuswahl
+                ? 'Keine der angehakten Skizzen ist startbar (verworfen oder Bestands-Übernahme) — Auswahl prüfen.'
+                : 'Keine bearbeitbaren Skizzen — leg oben eine an (Bestands-Übernahmen zählen nicht).';
 
             return;
         }
@@ -484,10 +504,18 @@ class Index extends Component
 
             return;
         }
+        // Auswahl ist verbraucht — der nächste Klick ist wieder „alle" (sofern nicht neu angehakt).
+        $this->skizzenAuswahl = [];
         $this->fehler = null;
         $this->meldung = $gedeckelt
             ? "{$gestartet} Skizzen als Gerichte gestartet (auf ".self::BATCH_SKIZZEN_MAX.' gedeckelt) — Stand je Karte, dann prüfen/freigeben.'
             : "{$gestartet} Skizzen als Gerichte gestartet — Stand je Karte, dann prüfen/freigeben.";
+    }
+
+    /** Hebt die gezielte Skizzen-Auswahl (Teil 3b) auf → nächster Batch-Klick startet wieder „alle". */
+    public function skizzenAuswahlLeeren(): void
+    {
+        $this->skizzenAuswahl = [];
     }
 
     // ── Leitstelle: Regler-Bedienung ───────────────────────────────────

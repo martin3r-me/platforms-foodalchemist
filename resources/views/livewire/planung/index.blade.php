@@ -235,13 +235,26 @@
                     </div>
                 </x-foodalchemist::modal-section>
 
-                {{-- Batch-Kaskaden-Eingang (Etappe 4, Teil 3): alle bearbeitbaren Skizzen auf einmal als
-                     gestufte Gericht-Läufe starten. Stand je Karte (Teil 2b), Freigabe je Stück. --}}
+                {{-- Batch-Kaskaden-Eingang (Etappe 4, Teil 3): Skizzen als gestufte Gericht-Läufe starten.
+                     Ohne Häkchen = alle bearbeitbaren; mit Häkchen (Teil 3b) = nur die gewählten. Stand je
+                     Karte (Teil 2b), Freigabe je Stück. --}}
                 @if($skizzenAnzahl > 0)
+                    @php $auswahlN = count($skizzenAuswahl); @endphp
                     <div class="flex items-center justify-between gap-2">
-                        <p class="text-[11px] text-gray-500">Alle Skizzen auf einmal als gestufte Gericht-Läufe starten — Stand je Karte, Freigabe je Stück.</p>
-                        <button wire:click="skizzenBatchAlsGerichte" wire:loading.attr="disabled"
-                                class="{{ $btnGhost }} shrink-0">Alle als Gerichte</button>
+                        <p class="text-[11px] text-gray-500">
+                            @if($auswahlN > 0)
+                                {{ $auswahlN }} Skizze{{ $auswahlN === 1 ? '' : 'n' }} gewählt — als gestufte Gericht-Läufe starten (Stand je Karte, Freigabe je Stück).
+                            @else
+                                Skizzen als gestufte Gericht-Läufe starten — anhaken für gezielte Auswahl, sonst alle. Stand je Karte, Freigabe je Stück.
+                            @endif
+                        </p>
+                        <div class="flex items-center gap-2 shrink-0">
+                            @if($auswahlN > 0)
+                                <button wire:click="skizzenAuswahlLeeren" class="text-[10px] text-gray-500 hover:text-gray-700">Auswahl leeren</button>
+                            @endif
+                            <button wire:click="skizzenBatchAlsGerichte" wire:loading.attr="disabled"
+                                    class="{{ $btnGhost }} shrink-0">{{ $auswahlN > 0 ? 'Auswahl als Gerichte' : 'Alle als Gerichte' }}</button>
+                        </div>
                     </div>
                 @endif
 
@@ -253,7 +266,11 @@
                                 <div class="pl-3 space-y-1 mt-1">
                                     @foreach($g['ideen'] as $i)
                                         <div wire:key="gi-{{ $i->id }}" class="flex items-center justify-between text-xs text-gray-700">
-                                            <span class="truncate">{{ $i->title }}</span>
+                                            <label class="flex items-center gap-1.5 min-w-0">
+                                                <input type="checkbox" wire:model.live="skizzenAuswahl" value="{{ $i->id }}"
+                                                       class="shrink-0 rounded border-gray-300 text-violet-600 focus:ring-violet-500" />
+                                                <span class="truncate">{{ $i->title }}</span>
+                                            </label>
                                             <div class="flex items-center gap-2 shrink-0">
                                                 {!! $skizzeLaufBadge($i->id) !!}
                                                 <button wire:click="skizzeAlsGericht({{ $i->id }})" @click="tab='gericht'" class="text-[10px] text-violet-600 hover:text-violet-700">als Gericht</button>
@@ -268,7 +285,11 @@
 
                         @forelse($skizzen['einzel'] as $i)
                             <div wire:key="ei-{{ $i->id }}" class="flex items-center justify-between text-xs text-gray-700 py-0.5">
-                                <span class="truncate">{{ $i->title }}</span>
+                                <label class="flex items-center gap-1.5 min-w-0">
+                                    <input type="checkbox" wire:model.live="skizzenAuswahl" value="{{ $i->id }}"
+                                           class="shrink-0 rounded border-gray-300 text-violet-600 focus:ring-violet-500" />
+                                    <span class="truncate">{{ $i->title }}</span>
+                                </label>
                                 <div class="flex items-center gap-2 shrink-0">
                                     {!! $skizzeLaufBadge($i->id) !!}
                                     <button wire:click="skizzeAlsGericht({{ $i->id }})" @click="tab='gericht'" class="text-[10px] text-violet-600 hover:text-violet-700">als Gericht</button>

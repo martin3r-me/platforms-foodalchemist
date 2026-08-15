@@ -794,3 +794,58 @@ it('skizzenBatchAlsGerichte: mehr als der Cap → gedeckelt + gesagt', function 
     expect(FoodAlchemistCascadeRun::where('team_id', $this->rootTeam->id)->count())->toBe(12);
     Queue::assertPushed(GenerateRecipeJob::class, 12);
 });
+
+/**
+ * Etappe 4 — Teil 3b: gezielte AUSWAHL statt „alle". Sind Skizzen angehakt ($skizzenAuswahl), startet
+ * der Batch NUR genau diese (Schnittmenge mit den bearbeitbaren); leere Auswahl bleibt „alle".
+ */
+it('skizzenBatchAlsGerichte: mit Auswahl startet NUR die angehakten Skizzen (Rest unberührt), Auswahl danach verbraucht', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Auswahl-Menü']);
+    $svc = app(\Platform\FoodAlchemist\Services\IdeenService::class);
+    $a = $svc->add($this->rootTeam, ['planning_session_id' => $session->id, 'title' => 'Rehrücken', 'description' => 'Wild.']);
+    $b = $svc->add($this->rootTeam, ['planning_session_id' => $session->id, 'title' => 'Kürbissuppe', 'description' => 'Cremig.']);
+    $c = $svc->add($this->rootTeam, ['planning_session_id' => $session->id, 'title' => 'Apfeltarte', 'description' => 'Süß.']);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->set('skizzenAuswahl', [(string) $a->id, (string) $c->id])   // Strings wie aus Livewire-Checkboxen
+        ->call('skizzenBatchAlsGerichte')
+        ->assertSet('fehler', null)
+        ->assertSet('skizzenAuswahl', [])   // nach dem Start verbraucht
+        ->assertSee('2 Skizzen als Gerichte gestartet');
+
+    $runs = FoodAlchemistCascadeRun::where('team_id', $this->rootTeam->id)->get();
+    expect($runs)->toHaveCount(2)
+        ->and($runs->pluck('origin_dish_idea_id')->map(fn ($v) => (int) $v)->sort()->values()->all())
+        ->toBe([(int) $a->id, (int) $c->id]);   // b (nicht gewählt) blieb unberührt
+    Queue::assertPushed(GenerateRecipeJob::class, 2);
+});
+
+it('skizzenBatchAlsGerichte: sind nur nicht-startbare Skizzen angehakt, wird es spezifisch gesagt, kein Lauf', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Menü']);
+    $svc = app(\Platform\FoodAlchemist\Services\IdeenService::class);
+    $ok = $svc->add($this->rootTeam, ['planning_session_id' => $session->id, 'title' => 'Startbar', 'description' => 'Brief.']);
+    $weg = $svc->add($this->rootTeam, ['planning_session_id' => $session->id, 'title' => 'Verworfen']);
+    $svc->setStatus($this->rootTeam, $weg->id, 'verworfen');
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->set('skizzenAuswahl', [(string) $weg->id])   // nur die verworfene angehakt
+        ->call('skizzenBatchAlsGerichte')
+        ->assertSet('fehler', 'Keine der angehakten Skizzen ist startbar (verworfen oder Bestands-Übernahme) — Auswahl prüfen.');
+
+    expect(FoodAlchemistCascadeRun::where('team_id', $this->rootTeam->id)->count())->toBe(0);
+    Queue::assertNothingPushed();
+});
+
+it('skizzenAuswahlLeeren: hebt die gezielte Auswahl auf', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Menü']);
+    $svc = app(\Platform\FoodAlchemist\Services\IdeenService::class);
+    $a = $svc->add($this->rootTeam, ['planning_session_id' => $session->id, 'title' => 'Skizze A']);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->set('skizzenAuswahl', [(string) $a->id])
+        ->call('skizzenAuswahlLeeren')
+        ->assertSet('skizzenAuswahl', []);
+});
