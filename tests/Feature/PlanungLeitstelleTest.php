@@ -156,6 +156,68 @@ it('Cockpit rendert die Regler-Leitplanken + die freie Erstell-Leiste (Blade kom
         ->assertSeeHtml('data-planung-ziel-vk');     // Gericht-Achse Ziel-VK
 });
 
+it('Etappe 2a: Concept-Go persistiert die Menü-Leitplanken (Gänge + Zielpreis-Korridor je Person) als generation_params', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Sommer-Menü', 'brief' => 'Vier Gänge, mediterran.']);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->set('eingabe.concept.brief', 'Vier Gänge, mediterran.')
+        ->set('regler.concept.menue_gaenge', '4')
+        ->set('regler.concept.menue_preis_min', '35,00')
+        ->set('regler.concept.menue_preis_ziel', '45,00')
+        ->set('regler.concept.menue_preis_max', '60,00')
+        ->call('goKaskade', 'concept')
+        ->assertNoRedirect();
+
+    // Die Menü-Achsen werden in kanonische _pp-Keys geparst und (whitelist-gefiltert) persistiert → Fan-out erbt sie.
+    expect($session->refresh()->generation_params)->toMatchArray([
+        'menue_gaenge' => 4,
+        'menue_preis_min_pp' => 35.0,
+        'menue_preis_ziel_pp' => 45.0,
+        'menue_preis_max_pp' => 60.0,
+    ]);
+});
+
+it('Etappe 2a: Menü-Leitplanken sind Concept-only — am Gericht-Tab fließen menue_*-Felder NICHT in die Params', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Gericht', 'brief' => 'Ein Teller.']);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->set('eingabe.gericht.brief', 'Ein Teller.')
+        ->set('regler.gericht.menue_gaenge', '4')            // gesetzt, aber Gericht-Scope ignoriert Menü-Achsen
+        ->set('regler.gericht.menue_preis_ziel', '45,00')
+        ->call('goKaskade', 'gericht')
+        ->assertNoRedirect();
+
+    $params = $session->refresh()->generation_params ?? [];
+    expect($params)->not->toHaveKey('menue_gaenge')
+        ->and($params)->not->toHaveKey('menue_preis_ziel_pp');
+});
+
+it('Etappe 2a: mistgetippter Menü-Preis am Concept wird GESAGT (fehler), kein Lauf gestartet', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Menü', 'brief' => 'x']);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->set('eingabe.concept.brief', 'x')
+        ->set('regler.concept.menue_preis_ziel', 'viereuro')   // unparsbar
+        ->call('goKaskade', 'concept')
+        ->assertSet('laeuft', false)                            // kein Lauf
+        ->assertNotSet('fehler', null);                         // Absender wird korrigiert statt still verworfen
+
+    expect(FoodAlchemistCascadeRun::where('planning_session_id', $session->id)->count())->toBe(0);
+});
+
+it('Etappe 2a: Concept-Tab rendert die Menü-Leitplanken-Sektion (Gänge + Korridor-Felder)', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'X', 'brief' => 'y']);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->assertSeeHtml('data-menue-leitplanken')
+        ->assertSeeHtml('data-menue-gaenge')
+        ->assertSeeHtml('data-menue-preis-ziel');
+});
+
 it('Queue-Watchdog: Lauf hängt lange OHNE Step-Fortschritt → sichtbarer Hinweis (kein Worker), kein Abbruch', function () {
     $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'X', 'brief' => 'y']);
     $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'planning_session_id' => $session->id, 'scope' => 'rezept', 'status' => 'running']);

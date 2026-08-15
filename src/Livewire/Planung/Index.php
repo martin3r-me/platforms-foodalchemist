@@ -80,6 +80,9 @@ class Index extends Component
         'occasion' => '', 'serviceform' => '', 'kompositions_stil' => '',
         'favoriten' => false, 'favoriten_conv_only' => false,
         'ziel_vk' => '', 'voll_anreichern' => false, 'ki_bilder' => false,
+        // Menü-Leitplanken (nur Concept-Tab, Etappe 2a): Anzahl Gänge + Zielpreis-Korridor je Person.
+        // Als Text/Zahl gehalten (leer = keine Vorgabe); reglerParams parst sie in kanonische _pp-Keys.
+        'menue_gaenge' => '', 'menue_preis_min' => '', 'menue_preis_ziel' => '', 'menue_preis_max' => '',
     ];
 
     /** #1b Grounding-Preview: welches Wissen/Pairing/Template ein Basisrezept-Lauf ziehen würde (on-demand, ohne Generierung). */
@@ -340,6 +343,7 @@ class Index extends Component
     {
         $r = $this->regler[$scope] ?? self::REGLER_DEFAULT;
         $vk = $scope !== 'rezept';                              // Basisrezept: keine VK-Achsen
+        $menue = $scope === 'concept';                          // Menü-Leitplanken nur am Concept-Tab
         // Extra-Steuerwerte gesondert (sie werden übersetzt, nicht 1:1 durchgereicht).
         $favoriten = (bool) ($r['favoriten'] ?? false);
         $favConvOnly = (bool) ($r['favoriten_conv_only'] ?? false);
@@ -349,7 +353,10 @@ class Index extends Component
         if (! $vk) {
             unset($p['occasion'], $p['serviceform'], $p['kompositions_stil']);
         }
-        unset($p['favoriten'], $p['favoriten_conv_only'], $p['ki_bilder'], $p['ziel_vk'], $p['voll_anreichern']);
+        // Roh-Felder raus, die übersetzt (nicht 1:1) durchgereicht werden — inkl. der Menü-Roh-Eingaben
+        // (sie werden unten als kanonische _pp-Keys geparst und nur für den Concept-Scope gesetzt).
+        unset($p['favoriten'], $p['favoriten_conv_only'], $p['ki_bilder'], $p['ziel_vk'], $p['voll_anreichern'],
+            $p['menue_gaenge'], $p['menue_preis_min'], $p['menue_preis_ziel'], $p['menue_preis_max']);
         $p = array_filter($p, fn ($v) => $v !== '' && $v !== null && $v !== []);
         $p['use_favorites_list'] = $favoriten;
         $p['favorites_convenience_only'] = $favoriten && $favConvOnly;
@@ -357,8 +364,52 @@ class Index extends Component
         if ($vk && ($ziel = $this->zielVkEur($scope)) !== null) {
             $p['ziel_vk_eur'] = $ziel;
         }
+        if ($menue) {
+            // Menü-Leitplanken (Zusammenstellung): Anzahl Gänge + Zielpreis-Korridor je Person.
+            // Nur gültige Werte fließen ein (ungültige/leer = keine Vorgabe → kein Key, Prompt unverändert).
+            if (($g = $this->menueGaenge($scope)) !== null) {
+                $p['menue_gaenge'] = $g;
+            }
+            if (($mn = $this->menuePreisEur($scope, 'menue_preis_min')) !== null) {
+                $p['menue_preis_min_pp'] = $mn;
+            }
+            if (($mz = $this->menuePreisEur($scope, 'menue_preis_ziel')) !== null) {
+                $p['menue_preis_ziel_pp'] = $mz;
+            }
+            if (($mx = $this->menuePreisEur($scope, 'menue_preis_max')) !== null) {
+                $p['menue_preis_max_pp'] = $mx;
+            }
+        }
 
         return $p;
+    }
+
+    /** Menü-Gänge/Positionen: ganze Zahl 1–20, sonst null (leer/ungültig = keine Vorgabe). Concept-Scope. */
+    private function menueGaenge(string $scope): ?int
+    {
+        $roh = trim((string) ($this->regler[$scope]['menue_gaenge'] ?? ''));
+        if ($roh === '' || ! ctype_digit($roh)) {
+            return null;
+        }
+        $n = (int) $roh;
+
+        return $n >= 1 && $n <= 20 ? $n : null;
+    }
+
+    /** Menü-Preis je Person (min/ziel/max): „45,00 €" → 45.0; außerhalb 0,50–2.000,00 € → null. Analog {@see zielVkEur}. */
+    private function menuePreisEur(string $scope, string $feld): ?float
+    {
+        $roh = str_replace([' ', '€'], '', trim((string) ($this->regler[$scope][$feld] ?? '')));
+        if ($roh === '') {
+            return null;
+        }
+        $roh = str_replace(',', '.', $roh);
+        if (! is_numeric($roh)) {
+            return null;
+        }
+        $eur = round((float) $roh, 2);
+
+        return $eur >= 0.5 && $eur <= 2000.0 ? $eur : null;
     }
 
     /** „8,50 €" → 8.5; außerhalb 0,50–500,00 € → null (Aufrufer meldet). Spiegel VkGeneratorModal. Per Scope. */
@@ -446,6 +497,22 @@ class Index extends Component
             $this->fehler = 'Ziel-VK: bitte einen Netto-Preis je Portion zwischen 0,50 € und 500,00 € angeben (z. B. 8,50) — oder das Feld leer lassen.';
 
             return;
+        }
+        // Menü-Leitplanken (nur Concept): eine mistgetippte Zahl wird GESAGT statt still verworfen —
+        // derselbe Grundsatz wie bei Ziel-VK (der Absender ist ein Mensch, der korrigieren kann).
+        if ($scope === 'concept') {
+            foreach (['menue_preis_min' => 'Preis-Untergrenze', 'menue_preis_ziel' => 'Zielpreis', 'menue_preis_max' => 'Preis-Obergrenze'] as $feld => $lbl) {
+                if (trim((string) ($this->regler[$scope][$feld] ?? '')) !== '' && $this->menuePreisEur($scope, $feld) === null) {
+                    $this->fehler = "Menü-{$lbl}: bitte einen Netto-Preis je Person zwischen 0,50 € und 2.000,00 € angeben (z. B. 45,00) — oder das Feld leer lassen.";
+
+                    return;
+                }
+            }
+            if (trim((string) ($this->regler[$scope]['menue_gaenge'] ?? '')) !== '' && $this->menueGaenge($scope) === null) {
+                $this->fehler = 'Menü-Gänge: bitte eine ganze Zahl zwischen 1 und 20 angeben (z. B. 4) — oder das Feld leer lassen.';
+
+                return;
+            }
         }
         // Kontext des Start-Tabs auf die Session spiegeln (Dashboard-Anzeige + creative_mode) und persistieren.
         $this->form['brief'] = (string) ($this->eingabe[$scope]['brief'] ?? '');

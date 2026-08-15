@@ -79,6 +79,33 @@
             </div>
         </div>
 
+        @if($scope === 'concept')
+            {{-- Menü-Leitplanken (Zusammenstellung) — nur Concept: steuern das GANZE Menü (Anzahl Gänge +
+                 Zielpreis-Korridor je Person), nicht die Rezept-Generierung. Etappe 2a. --}}
+            <div class="md:col-span-2 border-t border-black/5 pt-3 mt-1" data-menue-leitplanken>
+                <p class="text-xs font-semibold text-gray-900 mb-2">🍽️ Menü-Leitplanken (Zusammenstellung)</p>
+                <div class="grid md:grid-cols-4 gap-x-6 gap-y-3">
+                    <div>
+                        <label class="block {{ $label ?? 'text-[11px] text-gray-500' }} mb-1">Anzahl Gänge / Positionen</label>
+                        <input type="number" min="1" max="20" step="1" wire:model="regler.{{ $scope }}.menue_gaenge" placeholder="z. B. 4" class="{{ $input }} !py-1.5" data-menue-gaenge />
+                    </div>
+                    <div>
+                        <label class="block {{ $label ?? 'text-[11px] text-gray-500' }} mb-1">Preis-Untergrenze p. P.</label>
+                        <input type="text" wire:model="regler.{{ $scope }}.menue_preis_min" placeholder="z. B. 35,00" class="{{ $input }} !py-1.5" data-menue-preis-min />
+                    </div>
+                    <div>
+                        <label class="block {{ $label ?? 'text-[11px] text-gray-500' }} mb-1">Zielpreis p. P.</label>
+                        <input type="text" wire:model="regler.{{ $scope }}.menue_preis_ziel" placeholder="z. B. 45,00" class="{{ $input }} !py-1.5" data-menue-preis-ziel />
+                    </div>
+                    <div>
+                        <label class="block {{ $label ?? 'text-[11px] text-gray-500' }} mb-1">Preis-Obergrenze p. P.</label>
+                        <input type="text" wire:model="regler.{{ $scope }}.menue_preis_max" placeholder="z. B. 60,00" class="{{ $input }} !py-1.5" data-menue-preis-max />
+                    </div>
+                </div>
+                <p class="text-[11px] text-gray-500 mt-1.5">Netto je Person für das gesamte Menü. Leer = keine Vorgabe — die KI wählt Umfang und Preislage passend zum Briefing.</p>
+            </div>
+        @endif
+
         @if($vk)
             {{-- VK-eigene Achsen — nur Gericht/Concept --}}
             <div class="md:col-span-2 border-t border-black/5 pt-3 mt-1" data-richtung="vk-achsen">
