@@ -48,7 +48,7 @@ class PlanningCascadeService
      * Startet einen Kaskaden-Lauf und gibt ihn zurück (Status `running`). Die eigentliche Generierung
      * läuft asynchron im Queue-Job; die Fläche pollt den Run/seine Steps.
      *
-     * @param  array{brief?:string, params?:array<string,mixed>, voll_anreichern?:bool, created_via?:string}  $optionen
+     * @param  array{brief?:string, params?:array<string,mixed>, voll_anreichern?:bool, created_via?:string, existing_concept_id?:int}  $optionen
      */
     public function starteKaskade(
         Team $team,
@@ -87,6 +87,15 @@ class PlanningCascadeService
         // bis sie freigegeben wird (dann startet die nächste). Opt-out via optionen['staged']=false.
         $staged = (bool) ($optionen['staged'] ?? true);
 
+        // Geplanter Pfad (Etappe 2b, „KI-Kopf"): der Concept-Step referenziert ein SCHON geprüftes
+        // Draft-Concept ({@see ConceptGeneratorService::planAusBrief}) statt eines neu zu generierenden.
+        // Ownership VOR der Run-Anlage prüfen — ein Fremd-/Fehl-Concept darf keinen Rumpf-Lauf hinterlassen.
+        $existingConceptId = $scope === 'concept' ? (int) ($optionen['existing_concept_id'] ?? 0) : 0;
+        if ($existingConceptId > 0
+            && ! FoodAlchemistConcept::where('team_id', $team->id)->whereKey($existingConceptId)->exists()) {
+            throw new RuntimeException("Geprüftes Konzept #{$existingConceptId} nicht gefunden (Team).");
+        }
+
         $run = FoodAlchemistCascadeRun::create([
             'team_id' => $team->id,
             'planning_session_id' => $session?->id,
@@ -111,7 +120,13 @@ class PlanningCascadeService
         ]);
 
         if ($scope === 'concept') {
-            $this->dispatchConceptStep($team, $step, $brief, $session?->id, $creativeMode, $params);
+            if ($existingConceptId > 0) {
+                // Kein GenerateConceptJob — Step zeigt direkt auf den geprüften Draft; der Gericht-Fan-out
+                // läuft über den bestehenden staged-Pfad (deferred.fanout → FanoutConceptJob).
+                $this->referenziereConceptStep($team, $step, $existingConceptId, $creativeMode, $staged, $session?->id);
+            } else {
+                $this->dispatchConceptStep($team, $step, $brief, $session?->id, $creativeMode, $params);
+            }
         } else {
             // Im gestuften Lauf schiebt der Root-Step (Basisrezept/Gericht) seine Kinder auf bis zur Freigabe.
             $this->dispatchRezeptStep($team, $step, $brief, $params, $scope === 'gericht', $vollAnreichern, $session?->id, $staged);
@@ -163,6 +178,57 @@ class PlanningCascadeService
             $runId, $team->id, (int) (\Illuminate\Support\Facades\Auth::id() ?? 0), $brief,
             null, $planningSessionId, $step->id, $creativeMode, false, false, null, null, $menueAchsen
         );
+    }
+
+    /**
+     * Geplanter Pfad (Etappe 2b, „KI-Kopf"): der Concept-Step zeigt auf ein SCHON existierendes, im
+     * Conceptor geprüftes Draft-Concept ({@see ConceptGeneratorService::planAusBrief}) — es wird NICHT
+     * neu generiert (kein {@see GenerateConceptJob}). Der Step wird direkt `done`; im Erfinden-Modus
+     * werden die aufgeschobenen Fan-out-Args wie beim normalen Concept-Job am Step abgelegt
+     * ({@see GenerateConceptJob} staged-Zweig, Zeile ~111), sodass die Freigabe den bestehenden
+     * Gericht-Fan-out startet ({@see FanoutConceptJob} → {@see fanoutConceptInvention}) — KEIN neuer
+     * Fan-out-Code.
+     *
+     * Ownership ist in {@see starteKaskade} vorab geprüft. Eager (nicht gestuft): der Fan-out läuft
+     * sofort, aber im Worker (LLM raus aus dem Web-Request) — denn {@see gibStepFrei} ruft
+     * {@see starteFolgestufe} nur bei `staged`.
+     */
+    private function referenziereConceptStep(
+        Team $team,
+        FoodAlchemistCascadeRunStep $step,
+        int $conceptId,
+        string $creativeMode,
+        bool $staged,
+        ?int $planningSessionId,
+    ): void {
+        // Nur die Erfinden-Modi fächern auf (Reuse/datenbank füllt keine leeren Slots) — spiegelt
+        // GenerateConceptJob. Ohne Erfindung bleibt es beim geprüften Konzept (Slots wie geplant).
+        $erfindet = in_array($creativeMode, ['voll_kreativ', 'hybrid'], true);
+        if ($erfindet) {
+            // Ursprungs-Trend der Planung (falls vorhanden) fließt in die spätere Erfindungs-Divergenz.
+            $trendDocId = null;
+            if ($planningSessionId !== null) {
+                $sess = app(PlanningSessionService::class)->get($team, $planningSessionId);
+                $trendDocId = $sess?->source_knowledge_document_id !== null ? (int) $sess->source_knowledge_document_id : null;
+            }
+            $step->update(['deferred' => ['fanout' => [
+                'mode' => $creativeMode,
+                'trend_doc_id' => $trendDocId,
+                'planning_session_id' => $planningSessionId,
+            ]]]);
+        }
+
+        // Step abschliessen: er zeigt auf das geprüfte Draft-Concept. recompute → gestuft: `review`
+        // (der Mensch gibt die Stufe frei → FanoutConceptJob). Noch ist kein Gericht-Kind da, das
+        // Kohäsion-Gate greift korrekt erst nach dem Fan-out.
+        $this->markStepDone((int) $step->id, 'concept', $conceptId);
+
+        // Eager (nicht gestuft): die Freigabe ruft starteFolgestufe NICHT (nur staged) — den Fan-out
+        // darum hier direkt anstossen, aber als Queue-Job (kein LLM inline im Web-Request des Go).
+        if ($erfindet && ! $staged) {
+            $step->run?->update(['status' => 'running']);
+            FanoutConceptJob::dispatch($team->id, (int) (Auth::id() ?? 0), (int) $step->id);
+        }
     }
 
     // ── P3/P4: Voll-Kaskade — Ausgabe-Frame → 1 Concept je Slot ───────────

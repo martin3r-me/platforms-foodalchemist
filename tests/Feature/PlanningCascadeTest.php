@@ -97,6 +97,78 @@ it('Concept-Job-Hook: failed() meldet an den Step zurück → Run failed', funct
     expect($step->refresh()->status)->toBe('failed')->and($run->refresh()->status)->toBe('failed');
 });
 
+// ── Etappe 2b: geplanter Pfad — existing_concept_id (KI-Kopf → geprüfter Draft → Go) ──────
+
+it('Go (concept, existing_concept_id): kein GenerateConceptJob — Step zeigt auf den geprüften Draft, staged → review + deferred.fanout', function () {
+    $concept = $this->makeConcept($this->rootTeam, 'Geprüfter Plan', ['status' => 'draft']);
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Sommer-Buffet', 'brief' => 'Leichtes Sommer-Buffet.']);
+
+    $run = app(PlanningCascadeService::class)->starteKaskade(
+        $this->rootTeam, 'concept', $session, 'voll_kreativ', ['existing_concept_id' => (int) $concept->id]
+    );
+
+    $step = $run->steps()->first();
+    expect($step->kind)->toBe('concept')
+        ->and($step->status)->toBe('done')
+        ->and($step->ref_type)->toBe('concept')
+        ->and((int) $step->ref_id)->toBe((int) $concept->id)
+        ->and($step->deferred['fanout']['mode'] ?? null)->toBe('voll_kreativ')
+        ->and((int) ($step->deferred['fanout']['planning_session_id'] ?? 0))->toBe((int) $session->id)
+        ->and($run->refresh()->status)->toBe('review')
+        ->and((bool) $run->staged)->toBeTrue();
+    // Nicht neu generiert; staged → der Gericht-Fan-out feuert erst bei der Freigabe (FanoutConceptJob).
+    Queue::assertNotPushed(GenerateConceptJob::class);
+    Queue::assertNotPushed(FanoutConceptJob::class);
+});
+
+it('Go (concept, existing_concept_id, staged=false): fächert sofort auf (FanoutConceptJob im Worker), Run läuft', function () {
+    $concept = $this->makeConcept($this->rootTeam, 'Geprüfter Plan', ['status' => 'draft']);
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'X', 'brief' => 'y']);
+
+    $run = app(PlanningCascadeService::class)->starteKaskade(
+        $this->rootTeam, 'concept', $session, 'voll_kreativ',
+        ['existing_concept_id' => (int) $concept->id, 'staged' => false]
+    );
+
+    $step = $run->steps()->first();
+    expect($step->status)->toBe('done')
+        ->and((int) $step->ref_id)->toBe((int) $concept->id)
+        ->and($run->refresh()->status)->toBe('running');
+    Queue::assertNotPushed(GenerateConceptJob::class);
+    Queue::assertPushed(FanoutConceptJob::class, fn ($job) => (int) $job->cascadeStepId === (int) $step->id);
+});
+
+it('Go (concept, existing_concept_id, datenbank): Reuse-Modus fächert nicht auf — Step done ohne deferred.fanout', function () {
+    $concept = $this->makeConcept($this->rootTeam, 'Geprüfter Plan', ['status' => 'draft']);
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'X', 'brief' => 'y']);
+
+    $run = app(PlanningCascadeService::class)->starteKaskade(
+        $this->rootTeam, 'concept', $session, 'datenbank', ['existing_concept_id' => (int) $concept->id]
+    );
+
+    $step = $run->steps()->first();
+    expect($step->status)->toBe('done')
+        ->and($step->deferred)->toBeNull()
+        ->and($run->refresh()->status)->toBe('review');
+    Queue::assertNotPushed(GenerateConceptJob::class);
+    Queue::assertNotPushed(FanoutConceptJob::class);
+});
+
+it('Go (concept, existing_concept_id): Fremd-Team-Concept wirft (isOwnedBy) und legt keinen Rumpf-Lauf an', function () {
+    $fremd = $this->makeConcept($this->childB, 'Fremder Plan', ['status' => 'draft']);
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'X', 'brief' => 'y']);
+    $vorher = FoodAlchemistCascadeRun::count();
+
+    expect(fn () => app(PlanningCascadeService::class)->starteKaskade(
+        $this->rootTeam, 'concept', $session, 'voll_kreativ', ['existing_concept_id' => (int) $fremd->id]
+    ))->toThrow(RuntimeException::class);
+
+    // Ownership-Guard VOR der Run-Anlage → kein verwaister Lauf, kein Job.
+    expect(FoodAlchemistCascadeRun::count())->toBe($vorher);
+    Queue::assertNotPushed(GenerateConceptJob::class);
+    Queue::assertNotPushed(FanoutConceptJob::class);
+});
+
 it('vollkaskade ist noch nicht orchestriert und wirft ehrlich (P3)', function () {
     $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Geschmortes Rind', 'brief' => 'Schmorgericht mit Wurzelgemuese.']);
 
