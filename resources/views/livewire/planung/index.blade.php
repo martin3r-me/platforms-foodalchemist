@@ -258,6 +258,19 @@
                     </div>
                 @endif
 
+                {{-- Live-Poll der Karten-Badges (Etappe 4, Teil 3b-b): solange ein aus einer Skizze
+                     gestarteter Lauf noch läuft (running), refresht sich das Board selbst — bare
+                     wire:poll → $refresh, render() liest $skizzenLauf frisch → die Badges kippen live
+                     von „läuft" auf „prüfen"/„fertig". Kein Einzel-Cockpit-Hijack ($laufId/$laeuft
+                     unangetastet). Sobald kein verknüpfter Lauf mehr running ist, entfällt das Element
+                     → Polling stoppt. --}}
+                @if($skizzenLaufAktiv)
+                    <div wire:poll.2500ms data-skizzen-poll class="flex items-center gap-1.5 text-[11px] text-amber-600">
+                        @svg('heroicon-o-arrow-path', 'w-3.5 h-3.5 animate-spin')
+                        <span>Stand der Skizzen-Läufe aktualisiert automatisch …</span>
+                    </div>
+                @endif
+
                 <x-foodalchemist::modal-section title="Skizzen ({{ $skizzenAnzahl }})">
                     @if($skizzen)
                         @forelse($skizzen['gruppen'] as $g)

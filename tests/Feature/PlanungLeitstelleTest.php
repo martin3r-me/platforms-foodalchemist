@@ -718,6 +718,59 @@ it('Skizzen-Status 2b: bei mehreren Läufen je Skizze gewinnt der jüngste (Retr
 });
 
 /**
+ * Etappe 4 — Skizzen-Integration (Teil 3b-b — Live-Poll der Karten-Badges): solange ein aus einer
+ * Skizze gestarteter Lauf noch `running` ist, refresht sich das Board selbst (bare wire:poll), damit
+ * die Badges live von „läuft" auf „prüfen"/„fertig" kippen — ohne das Einzel-Cockpit anzuwerfen.
+ * Sobald kein verknüpfter Lauf mehr running ist, entfällt das Poll-Element.
+ */
+it('Skizzen-Poll 3b-b: ein running-Lauf blendet den Live-Poll ein („▸ läuft" + wire:poll)', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Menü']);
+    $idee = app(\Platform\FoodAlchemist\Services\IdeenService::class)->add($this->rootTeam, [
+        'planning_session_id' => $session->id,
+        'title' => 'Läuft gerade', 'description' => 'Worker arbeitet.',
+    ]);
+    FoodAlchemistCascadeRun::create([
+        'team_id' => $this->rootTeam->id, 'planning_session_id' => $session->id,
+        'scope' => 'gericht', 'status' => 'running', 'origin_dish_idea_id' => $idee->id,
+    ]);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->assertSee('▸ läuft')
+        ->assertSeeHtml('data-skizzen-poll');
+});
+
+it('Skizzen-Poll 3b-b: ein wartender Lauf (review) zeigt das Badge, aber KEINEN Live-Poll', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Menü']);
+    $idee = app(\Platform\FoodAlchemist\Services\IdeenService::class)->add($this->rootTeam, [
+        'planning_session_id' => $session->id,
+        'title' => 'Wartet auf Freigabe', 'description' => 'Prüfen.',
+    ]);
+    FoodAlchemistCascadeRun::create([
+        'team_id' => $this->rootTeam->id, 'planning_session_id' => $session->id,
+        'scope' => 'gericht', 'status' => 'review', 'origin_dish_idea_id' => $idee->id,
+    ]);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->assertSee('▸ prüfen')
+        ->assertDontSeeHtml('data-skizzen-poll');
+});
+
+it('Skizzen-Poll 3b-b: ohne verknüpften Lauf kein Live-Poll', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Menü']);
+    app(\Platform\FoodAlchemist\Services\IdeenService::class)->add($this->rootTeam, [
+        'planning_session_id' => $session->id,
+        'title' => 'Nur Entwurf', 'description' => 'Kein Go.',
+    ]);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->assertSee('Nur Entwurf')
+        ->assertDontSeeHtml('data-skizzen-poll');
+});
+
+/**
  * Etappe 4 — Skizzen-Integration (Teil 3): KI-Divergenz-Skizzen als BATCH-Kaskaden-Eingang. Ein Klick
  * startet für ALLE bearbeitbaren Session-Skizzen je einen gestuften Gericht-Lauf (staged), jeder auf
  * seine Ursprungs-Skizze gestempelt (origin_dish_idea_id → Karte zeigt den Stand, Teil 2b). Kein

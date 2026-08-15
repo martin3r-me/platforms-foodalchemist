@@ -1287,6 +1287,19 @@ class Index extends Component
             }
         }
 
+        // Live-Poll der Karten-Badges (Etappe 4, Teil 3b-b): solange ein aus einer Skizze gestarteter
+        // Lauf noch `running` ist, refresht sich die Karte selbst (bare wire:poll → $refresh → render()
+        // liest $skizzenLauf frisch), ohne das Einzel-Cockpit ($laufId/$laeuft) anzuwerfen. Nur `running`
+        // ist transient (Worker-getrieben); `review`/`done`/`failed` warten auf den Menschen bzw. sind
+        // terminal → kein Poll-Grund → das Poll-Element entfällt und das Polling stoppt.
+        $skizzenLaufAktiv = false;
+        foreach ($skizzenLauf as $l) {
+            if (($l['status'] ?? null) === 'running') {
+                $skizzenLaufAktiv = true;
+                break;
+            }
+        }
+
         // Aktiver Kaskaden-Lauf (in-place „Go") inkl. Steps — für Fortschritt + Ergebnis-Liste.
         $lauf = ($team !== null && $this->laufId !== null)
             ? app(PlanningCascadeService::class)->lauf($team, $this->laufId)
@@ -1338,6 +1351,7 @@ class Index extends Component
             'active' => $active,
             'skizzen' => $skizzen,
             'skizzenLauf' => $skizzenLauf,
+            'skizzenLaufAktiv' => $skizzenLaufAktiv,
             'lauf' => $lauf,
             'composerNetz' => $composerNetz,
             'composerCohesion' => $composerCohesion,
