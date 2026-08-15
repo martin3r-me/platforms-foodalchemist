@@ -378,9 +378,11 @@ class Index extends Component
     /**
      * Trend-Herkunft → Go-Briefing: den Brief/Titel einer Trend-Session in alle Tab-Briefings
      * ({@see SCOPES}) übertragen. **Nur befüllen, nie überschreiben** — ein bereits (vom Nutzer
-     * oder einer Vorlage) getipptes Tab-Briefing bleibt unangetastet. Der Trend-Brief ist bewusst
-     * scope-agnostisch formuliert (Konzept/Gericht/Basisrezept), daher füllt er alle Ebenen; der
-     * Nutzer wählt am Go den Tab. Kein „Go" — nur Prefill (Nordstern: nichts läuft still).
+     * oder einer Vorlage) getipptes Tab-Briefing bleibt unangetastet. Der Session-Brief ist bewusst
+     * scope-agnostisch formuliert (die Session hat keine Ebene); beim Übertragen wird der Lead je Tab
+     * ebenen-spezifisch geschärft ({@see PlanningSessionService::briefFuerScope} — Basisrezept/Gericht/
+     * Konzept), Einordnung/Kernaussage bleiben unverändert. Kein „Go" — nur Prefill (Nordstern: nichts
+     * läuft still).
      */
     private function seedBriefingAusTrendSession(FoodAlchemistPlanningSession $session): void
     {
@@ -391,7 +393,7 @@ class Index extends Component
         }
         foreach (self::SCOPES as $scope) {
             if (trim((string) ($this->eingabe[$scope]['brief'] ?? '')) === '') {
-                $this->eingabe[$scope]['brief'] = $brief;
+                $this->eingabe[$scope]['brief'] = PlanningSessionService::briefFuerScope($brief, $scope);
             }
             if ($titel !== '' && trim((string) ($this->eingabe[$scope]['titel'] ?? '')) === '') {
                 $this->eingabe[$scope]['titel'] = $titel;

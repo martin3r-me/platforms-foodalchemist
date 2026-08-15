@@ -965,7 +965,7 @@ it('vorlagenFuer: Gericht hat Vorlagen, Basisrezept (rezept) hat in Teil 1 keine
  * (source_knowledge_document_id gesetzt) muss ihren Brief/Titel ins Go-Briefing je Tab
  * vorbefüllen, sonst erreicht das Trendradar-Signal die Generierung nie (Blank-Briefing-Bug).
  */
-it('Trend-Anbindung: Trend-Session-Open befüllt alle Tab-Briefings + Titel', function () {
+it('Trend-Anbindung: Trend-Session-Open befüllt alle Tab-Briefings + Titel (ebenen-spezifischer Lead, Teil 2)', function () {
     // source_knowledge_document_id ist ein loser Zeiger — der Wert muss nicht auf ein echtes
     // Trend-Doc zeigen, damit der Prefill (rein sessionbasiert) greift.
     $session = app(PlanningSessionService::class)->create($this->rootTeam, [
@@ -977,10 +977,46 @@ it('Trend-Anbindung: Trend-Session-Open befüllt alle Tab-Briefings + Titel', fu
 
     $comp = Livewire::test(PlanungIndex::class)->call('oeffne', $session->id);
 
-    foreach (['rezept', 'gericht', 'concept'] as $scope) {
-        $comp->assertSet("eingabe.$scope.brief", 'Aus diesem Food-Trend ein Konzept/Gericht/Basisrezept entwickeln: Fermentierte Chili-Pasten.')
+    // Teil 2: der agnostische Lead wird je Tab auf die Ziel-Ebene geschärft; Titel bleibt gleich.
+    $nomen = ['rezept' => 'Basisrezept', 'gericht' => 'Gericht', 'concept' => 'Konzept'];
+    foreach ($nomen as $scope => $wort) {
+        $comp->assertSet("eingabe.$scope.brief", "Aus diesem Food-Trend ein {$wort} entwickeln: Fermentierte Chili-Pasten.")
             ->assertSet("eingabe.$scope.titel", 'Fermentierte Chili-Pasten');
     }
+});
+
+it('Trend-Anbindung: Einordnung/Kernaussage bleiben scope-neutral, nur der Lead wird geschärft (Teil 2)', function () {
+    // Ein voll ausgebauter Trend-Brief (Lead + Einordnung + Kernaussage). Nur der Lead trägt die Ebene.
+    $brief = "Aus diesem Food-Trend ein Konzept/Gericht/Basisrezept entwickeln: Postbiotic Drinks.\n"
+        . "Einordnung: Getränke › Fermentierte Getränke.\n"
+        . 'Kernaussage: Fermentation ist ein starker Food-Trend 2026.';
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, [
+        'title' => 'Postbiotic Drinks',
+        'brief' => $brief,
+        'source_knowledge_document_id' => 7,
+        'created_via' => 'trend',
+    ]);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->assertSet('eingabe.gericht.brief',
+            "Aus diesem Food-Trend ein Gericht entwickeln: Postbiotic Drinks.\n"
+            . "Einordnung: Getränke › Fermentierte Getränke.\n"
+            . 'Kernaussage: Fermentation ist ein starker Food-Trend 2026.')
+        ->assertSet('eingabe.concept.brief',
+            "Aus diesem Food-Trend ein Konzept entwickeln: Postbiotic Drinks.\n"
+            . "Einordnung: Getränke › Fermentierte Getränke.\n"
+            . 'Kernaussage: Fermentation ist ein starker Food-Trend 2026.');
+});
+
+it('briefFuerScope: ein Brief ohne agnostischen Lead bleibt unverändert (Fallback = Bestandsverhalten)', function () {
+    // Edierter/fremder Brief ohne die »ein Konzept/Gericht/Basisrezept entwickeln«-Phrase.
+    expect(PlanningSessionService::briefFuerScope('Mein eigener Brief ohne Trend-Lead.', 'gericht'))
+        ->toBe('Mein eigener Brief ohne Trend-Lead.')
+        // unbekannter Scope → ebenfalls unverändert
+        ->and(PlanningSessionService::briefFuerScope(
+            'Aus diesem Food-Trend ein Konzept/Gericht/Basisrezept entwickeln: X.', 'foobar'))
+        ->toBe('Aus diesem Food-Trend ein Konzept/Gericht/Basisrezept entwickeln: X.');
 });
 
 it('Trend-Anbindung: ein bereits getipptes Tab-Briefing wird NICHT überschrieben (empty-only)', function () {

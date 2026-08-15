@@ -22,6 +22,15 @@ use RuntimeException;
  */
 class PlanningSessionService
 {
+    /**
+     * Scope → Nomen für die ebenen-spezifische Fassung des Trend-Briefs (Etappe 4, Teil 2 Folge-Chunk).
+     * Die Scope-Keys spiegeln {@see \Platform\FoodAlchemist\Livewire\Planung\Index::SCOPES}.
+     */
+    private const TREND_SCOPE_NOMEN = ['rezept' => 'Basisrezept', 'gericht' => 'Gericht', 'concept' => 'Konzept'];
+
+    /** Der scope-agnostische Nomen-Block im Trend-Brief-Lead (Reihenfolge historisch, byte-gepinnt). */
+    private const TREND_NOMEN_AGNOSTISCH = 'Konzept/Gericht/Basisrezept';
+
     public function create(Team $team, array $in): FoodAlchemistPlanningSession
     {
         $title = trim((string) ($in['title'] ?? ''));
@@ -88,7 +97,7 @@ class PlanningSessionService
      */
     private function briefAusTrend(Team $team, string $title, string $md, ?object $meta): string
     {
-        $zeilen = ["Aus diesem Food-Trend ein Konzept/Gericht/Basisrezept entwickeln: {$title}."];
+        $zeilen = ['Aus diesem Food-Trend ein ' . self::TREND_NOMEN_AGNOSTISCH . " entwickeln: {$title}."];
 
         $einordnung = $this->trendEinordnung($team, $meta);
         if ($einordnung !== '') {
@@ -101,6 +110,33 @@ class PlanningSessionService
         }
 
         return implode("\n", $zeilen);
+    }
+
+    /**
+     * Ebenen-spezifische Fassung eines (scope-agnostisch gebauten) Trend-Briefs: ersetzt im Lead
+     * »ein Konzept/Gericht/Basisrezept entwickeln« das Nomen durch das der Ziel-Ebene
+     * (rezept→Basisrezept, gericht→Gericht, concept→Konzept). Nur der Lead wird berührt —
+     * Einordnung/Kernaussage bleiben scope-neutral. Der Session-Brief selbst bleibt agnostisch
+     * (die Session hat keine Ebene); die Ebene entsteht erst beim Übertragen ins Tab-Briefing.
+     *
+     * Rein & deterministisch (keine Erfindung): trägt der Brief den agnostischen Lead nicht
+     * (edierter/fremder Text, unbekannter Scope), bleibt er unverändert — Fallback = Bestandsverhalten.
+     * Ersetzt nur das erste Vorkommen, damit ein Titel mit derselben Phrase nicht mit-editiert wird.
+     */
+    public static function briefFuerScope(string $brief, string $scope): string
+    {
+        $nomen = self::TREND_SCOPE_NOMEN[$scope] ?? null;
+        if ($nomen === null) {
+            return $brief;
+        }
+
+        $agnostisch = 'ein ' . self::TREND_NOMEN_AGNOSTISCH . ' entwickeln';
+        $pos = strpos($brief, $agnostisch);
+        if ($pos === false) {
+            return $brief;
+        }
+
+        return substr_replace($brief, 'ein ' . $nomen . ' entwickeln', $pos, strlen($agnostisch));
     }
 
     /**
