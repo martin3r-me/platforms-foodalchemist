@@ -364,8 +364,20 @@ class ConceptGeneratorService
             array_filter($extra, fn ($v) => $v !== null && $v !== '' && $v !== []),
         );
 
+        // Gerouteten Wissens-Block aktiv bauen: propose() lädt nur GEBUNDENES Wissen automatisch,
+        // die concept.plan-Routings (cross_cutting/domain/concept) fließen NUR, wenn der Aufrufer
+        // sie über KnowledgeContextService auflöst und als options['knowledge'] mitgibt (wie
+        // generiereAusBrief für concept.brief_geruest). Sonst liefe der Kreativ-Kopf wissens-blind.
+        $wissen = app(KnowledgeContextService::class)->contextFor('concept.plan', $brief);
+        $opts = $wissen['block'] !== ''
+            ? ['knowledge' => $wissen['block'], 'knowledge_used' => $wissen['files_used']]
+            : [];
+        // concept.plan ist ein FOOD_DNA_KEY: die Marken-DNA-Kaskade (Team-DNA → … → Concept) erdet
+        // die kreative Handschrift — propose() merged sie, wenn die Concept-Id mitkommt.
+        $opts['food_dna_concept_id'] = (int) $concept->id;
+
         try {
-            $proposal = app(AiGatewayService::class)->propose('concept.plan', $kontext);
+            $proposal = app(AiGatewayService::class)->propose('concept.plan', $kontext, $opts);
         } catch (\Throwable) {
             return null;   // KI nicht verfügbar → Canvas bleibt leer, Draft bleibt stehen
         }
