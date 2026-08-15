@@ -716,3 +716,81 @@ it('Skizzen-Status 2b: bei mehreren Läufen je Skizze gewinnt der jüngste (Retr
         ->assertSee('▸ fertig')
         ->assertDontSee('▸ fehlgeschlagen');
 });
+
+/**
+ * Etappe 4 — Skizzen-Integration (Teil 3): KI-Divergenz-Skizzen als BATCH-Kaskaden-Eingang. Ein Klick
+ * startet für ALLE bearbeitbaren Session-Skizzen je einen gestuften Gericht-Lauf (staged), jeder auf
+ * seine Ursprungs-Skizze gestempelt (origin_dish_idea_id → Karte zeigt den Stand, Teil 2b). Kein
+ * Cockpit-Hijack — der Stand erscheint je Karte, nicht im Einzel-Cockpit.
+ */
+it('skizzenBatchAlsGerichte: startet je bearbeitbarer Skizze einen gestuften Gericht-Lauf (gestempelt)', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Herbst-Menü']);
+    $svc = app(\Platform\FoodAlchemist\Services\IdeenService::class);
+    $a = $svc->add($this->rootTeam, ['planning_session_id' => $session->id, 'title' => 'Rehrücken', 'description' => 'Wild, herbstlich.']);
+    $b = $svc->add($this->rootTeam, ['planning_session_id' => $session->id, 'title' => 'Kürbissuppe', 'description' => 'Cremig.']);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->call('skizzenBatchAlsGerichte')
+        ->assertSet('fehler', null)
+        ->assertSet('laeuft', false)   // kein Cockpit-Hijack — der Stand erscheint je Karte
+        ->assertSee('2 Skizzen als Gerichte gestartet');
+
+    $runs = FoodAlchemistCascadeRun::where('team_id', $this->rootTeam->id)->get();
+    expect($runs)->toHaveCount(2)
+        ->and($runs->every(fn ($r) => $r->scope === 'gericht'))->toBeTrue()
+        ->and($runs->every(fn ($r) => (bool) $r->staged === true))->toBeTrue()
+        ->and($runs->pluck('origin_dish_idea_id')->map(fn ($v) => (int) $v)->sort()->values()->all())
+        ->toBe([(int) $a->id, (int) $b->id]);
+    Queue::assertPushed(GenerateRecipeJob::class, 2);
+});
+
+it('skizzenBatchAlsGerichte: verworfene + Bestands-Skizzen (sales_recipe_id) werden übersprungen', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Menü']);
+    $svc = app(\Platform\FoodAlchemist\Services\IdeenService::class);
+    $ok = $svc->add($this->rootTeam, ['planning_session_id' => $session->id, 'title' => 'Echtes Gericht', 'description' => 'Brief.']);
+    $weg = $svc->add($this->rootTeam, ['planning_session_id' => $session->id, 'title' => 'Verworfen']);
+    $svc->setStatus($this->rootTeam, $weg->id, 'verworfen');
+    // Bestands-Zeiger (Reuse eines echten VK-Gerichts, kein Generierungs-Brief) → nicht batchbar.
+    $bestand = $svc->add($this->rootTeam, ['planning_session_id' => $session->id, 'title' => 'Bestand']);
+    $bestand->update(['sales_recipe_id' => 999999]);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->call('skizzenBatchAlsGerichte')
+        ->assertSee('1 Skizzen als Gerichte gestartet');
+
+    $runs = FoodAlchemistCascadeRun::where('team_id', $this->rootTeam->id)->get();
+    expect($runs)->toHaveCount(1)
+        ->and((int) $runs->first()->origin_dish_idea_id)->toBe((int) $ok->id);
+    Queue::assertPushed(GenerateRecipeJob::class, 1);
+});
+
+it('skizzenBatchAlsGerichte: ohne bearbeitbare Skizze wird es gesagt (fehler), kein Lauf gestartet', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Leer']);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->call('skizzenBatchAlsGerichte')
+        ->assertSet('fehler', 'Keine bearbeitbaren Skizzen — leg oben eine an (Bestands-Übernahmen zählen nicht).');
+
+    expect(FoodAlchemistCascadeRun::where('team_id', $this->rootTeam->id)->count())->toBe(0);
+    Queue::assertNothingPushed();
+});
+
+it('skizzenBatchAlsGerichte: mehr als der Cap → gedeckelt + gesagt', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Viele']);
+    $svc = app(\Platform\FoodAlchemist\Services\IdeenService::class);
+    for ($n = 1; $n <= 13; $n++) {
+        $svc->add($this->rootTeam, ['planning_session_id' => $session->id, 'title' => "Skizze {$n}"]);
+    }
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->call('skizzenBatchAlsGerichte')
+        ->assertSee('12 Skizzen als Gerichte gestartet')
+        ->assertSee('gedeckelt');
+
+    expect(FoodAlchemistCascadeRun::where('team_id', $this->rootTeam->id)->count())->toBe(12);
+    Queue::assertPushed(GenerateRecipeJob::class, 12);
+});

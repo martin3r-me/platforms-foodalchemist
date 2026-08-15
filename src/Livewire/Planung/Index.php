@@ -169,6 +169,13 @@ class Index extends Component
     /** Sekunden auf `running` ohne jeden Step-Fortschritt, ab denen der Watchdog anschlägt (über der realistischen Erst-Dauer). */
     protected const WATCHDOG_SEKUNDEN = 90;
 
+    /**
+     * Batch-Kaskaden-Cap (Etappe 4, Teil 3) — Runaway-/Kosten-Guard: pro Klick höchstens so viele
+     * Skizzen-Gerichte auf einmal starten. Spiegelt die `kiDivergenz`-Obergrenze (max. 12 Skizzen
+     * je Lauf) — mehr wird gedeckelt und gesagt, nicht still verschluckt.
+     */
+    protected const BATCH_SKIZZEN_MAX = 12;
+
     /** Deep-Link `?session=X&open=1` (z.B. vom Trendradar-Carry-in) öffnet den Editor direkt. */
     public function mount(): void
     {
@@ -387,6 +394,100 @@ class Index extends Component
         $this->skizzeGerichtId = (int) $idee->id;
         $this->fehler = null;
         $this->meldung = 'Skizze in den Gericht-Tab übernommen — Leitplanken prüfen, dann „Go".';
+    }
+
+    /**
+     * Skizzen-Integration (Etappe 4, Teil 3) — KI-Divergenz-Skizzen als BATCH-Kaskaden-Eingang:
+     * statt jede Skizze einzeln in den Gericht-Tab zu übertragen (Teil 1, {@see skizzeAlsGericht}),
+     * startet dieser Knopf für ALLE bearbeitbaren Session-Skizzen auf einmal je einen GESTUFTEN
+     * Gericht-Lauf (staged → hält bei „prüfen" an; geführte Freigabe je Stück — Nordstern „nichts
+     * läuft still"). Reust den voll getesteten `starteKaskade('gericht', …)`-Pfad je Skizze (kein
+     * neuer Fan-out-Code) und stempelt jeden Lauf auf seine Ursprungs-Skizze (origin_dish_idea_id)
+     * → die Karte zeigt den Stand (Teil 2b).
+     *
+     * Auswahl: alle Session-Skizzen (Einzel + Gruppen), die (a) nicht `verworfen` sind und (b) KEIN
+     * Bestands-Gericht referenzieren (`sales_recipe_id` = Reuse-Zeiger, kein Generierungs-Brief). Die
+     * Gericht-Tab-Leitplanken (reglerParams) gelten für den ganzen Batch (Start-Tab-Regel). Cap
+     * {@see BATCH_SKIZZEN_MAX} als Runaway-/Kosten-Guard — darüber wird gedeckelt und gesagt.
+     *
+     * KEIN Cockpit-Hijack: der Batch feuert N gestufte Läufe; ihr Stand erscheint je Skizzen-Karte
+     * (Teil 2b), nicht im Einzel-Cockpit ($laufId/$laeuft bleiben unangetastet).
+     */
+    public function skizzenBatchAlsGerichte(PlanningCascadeService $cascade, PlanningSessionService $svc): void
+    {
+        $team = $this->team();
+        $session = $this->aktiveSession();
+        if ($team === null || $session === null) {
+            return;
+        }
+        // Bearbeitbare Session-Skizzen: nicht verworfen + kein Bestands-Zeiger (das wäre Reuse eines
+        // echten Gerichts, kein Brief zum Generieren). Reihenfolge = Board-Reihenfolge.
+        $kandidaten = FoodAlchemistDishIdea::visibleToTeam($team)
+            ->where('planning_session_id', $session->id)
+            ->where('status', '!=', 'verworfen')
+            ->whereNull('sales_recipe_id')
+            ->orderBy('position')->orderBy('id')
+            ->get();
+        if ($kandidaten->isEmpty()) {
+            $this->fehler = 'Keine bearbeitbaren Skizzen — leg oben eine an (Bestands-Übernahmen zählen nicht).';
+
+            return;
+        }
+        // Start-Tab-Regel: die Gericht-Tab-Leitplanken gelten für den ganzen Batch. Ein Ziel-VK-
+        // Tippfehler wird GESAGT (nicht still verworfen) — sonst startet ein ganzer Batch mit falscher
+        // Preis-Absicht (Spiegel goKaskade/VkGeneratorModal).
+        if (trim((string) ($this->regler['gericht']['ziel_vk'] ?? '')) !== '' && $this->zielVkEur('gericht') === null) {
+            $this->fehler = 'Ziel-VK: bitte einen Netto-Preis je Portion zwischen 0,50 € und 500,00 € angeben (z. B. 8,50) — oder das Feld leer lassen.';
+
+            return;
+        }
+
+        $gedeckelt = $kandidaten->count() > self::BATCH_SKIZZEN_MAX;
+        $auswahl = $kandidaten->take(self::BATCH_SKIZZEN_MAX);
+
+        $params = $this->reglerParams('gericht');
+        $creativeMode = (string) ($this->eingabe['gericht']['creative_mode'] ?? 'voll_kreativ');
+        $vollAnreichern = (bool) ($this->regler['gericht']['voll_anreichern'] ?? false);
+        // Fan-out-Vererbung wie beim Einzel-Go (fail-soft — kippt sie, darf der Batch NICHT sterben).
+        try {
+            $svc->setGenerationParams($team, $session->id, $params);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('[Planung] Batch setGenerationParams übersprungen', ['error' => $e->getMessage()]);
+        }
+
+        $gestartet = 0;
+        foreach ($auswahl as $idee) {
+            $titel = trim((string) $idee->title);
+            $besch = trim((string) ($idee->description ?? ''));
+            // Brief wie effektiverBrief('gericht'): Titel — Beschreibung, sonst was da ist.
+            $brief = ($titel !== '' && $besch !== '') ? $titel . ' — ' . $besch : ($besch !== '' ? $besch : $titel);
+            if ($brief === '') {
+                continue;   // titellose Skizze (Pflichtfeld sollte das verhindern) — kein Leer-Lauf
+            }
+            try {
+                $cascade->starteKaskade($team, 'gericht', $session, $creativeMode, [
+                    'created_via' => 'plan_batch_skizze',
+                    'brief' => $brief,
+                    'params' => $params,
+                    'voll_anreichern' => $vollAnreichern,
+                    'origin_dish_idea_id' => (int) $idee->id,
+                ]);
+                $gestartet++;
+            } catch (\Throwable $e) {
+                // Ein einzelner Fehlstart kippt den Batch NICHT — die restlichen Skizzen laufen weiter.
+                \Illuminate\Support\Facades\Log::warning('[Planung] Batch-Skizze übersprungen', ['idea_id' => $idee->id, 'error' => $e->getMessage()]);
+            }
+        }
+
+        if ($gestartet === 0) {
+            $this->fehler = 'Keine Skizze konnte gestartet werden — bitte Leitplanken/Brief prüfen.';
+
+            return;
+        }
+        $this->fehler = null;
+        $this->meldung = $gedeckelt
+            ? "{$gestartet} Skizzen als Gerichte gestartet (auf ".self::BATCH_SKIZZEN_MAX.' gedeckelt) — Stand je Karte, dann prüfen/freigeben.'
+            : "{$gestartet} Skizzen als Gerichte gestartet — Stand je Karte, dann prüfen/freigeben.";
     }
 
     // ── Leitstelle: Regler-Bedienung ───────────────────────────────────

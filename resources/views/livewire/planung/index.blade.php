@@ -235,6 +235,16 @@
                     </div>
                 </x-foodalchemist::modal-section>
 
+                {{-- Batch-Kaskaden-Eingang (Etappe 4, Teil 3): alle bearbeitbaren Skizzen auf einmal als
+                     gestufte Gericht-Läufe starten. Stand je Karte (Teil 2b), Freigabe je Stück. --}}
+                @if($skizzenAnzahl > 0)
+                    <div class="flex items-center justify-between gap-2">
+                        <p class="text-[11px] text-gray-500">Alle Skizzen auf einmal als gestufte Gericht-Läufe starten — Stand je Karte, Freigabe je Stück.</p>
+                        <button wire:click="skizzenBatchAlsGerichte" wire:loading.attr="disabled"
+                                class="{{ $btnGhost }} shrink-0">Alle als Gerichte</button>
+                    </div>
+                @endif
+
                 <x-foodalchemist::modal-section title="Skizzen ({{ $skizzenAnzahl }})">
                     @if($skizzen)
                         @forelse($skizzen['gruppen'] as $g)
