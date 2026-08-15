@@ -553,3 +553,42 @@ it('planVerwerfen: löst die Plan-Referenz und wechselt zurück auf den Schnell-
         ->assertSet('fehler', null)
         ->assertSet('meldung', 'Vorbereiteter Plan verworfen — der Go generiert wieder frisch aus dem Briefing.');
 });
+
+/**
+ * Etappe 4 — Skizzen-Integration (Teil 1): eine Session-Skizze wird zum Kaskaden-Eingang, indem
+ * sie in den Gericht-Tab übertragen wird (Titel → Titel, Beschreibung → Brief). Der Mensch drückt
+ * dann selbst „Go" — geführte Freigabe, kein stiller Lauf.
+ */
+it('skizzeAlsGericht: überträgt Titel + Beschreibung einer Session-Skizze in den Gericht-Tab', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Herbst-Menü']);
+    $idee = app(\Platform\FoodAlchemist\Services\IdeenService::class)->add($this->rootTeam, [
+        'planning_session_id' => $session->id,
+        'title' => 'Rehrücken mit Wacholderjus',
+        'description' => 'Kräftig, herbstlich, Wildaromatik.',
+    ]);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->call('skizzeAlsGericht', $idee->id)
+        ->assertSet('eingabe.gericht.titel', 'Rehrücken mit Wacholderjus')
+        ->assertSet('eingabe.gericht.brief', 'Kräftig, herbstlich, Wildaromatik.')
+        ->assertSet('fehler', null)
+        ->assertSet('meldung', 'Skizze in den Gericht-Tab übernommen — Leitplanken prüfen, dann „Go".');
+
+    // Prefill verbraucht die Skizze NICHT — sie bleibt entwurf (erst der Go erzeugt etwas).
+    expect($idee->refresh()->status)->toBe('entwurf');
+});
+
+it('skizzeAlsGericht: eine verworfene Skizze wird nicht übernommen (gesagt, nicht still) und lässt den Gericht-Tab leer', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Menü']);
+    $svc = app(\Platform\FoodAlchemist\Services\IdeenService::class);
+    $idee = $svc->add($this->rootTeam, ['planning_session_id' => $session->id, 'title' => 'Verworfene Idee']);
+    $svc->setStatus($this->rootTeam, $idee->id, 'verworfen');
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->call('skizzeAlsGericht', $idee->id)
+        ->assertSet('eingabe.gericht.titel', '')
+        ->assertSet('eingabe.gericht.brief', '')
+        ->assertSet('fehler', 'Skizze nicht gefunden (oder verworfen) — bitte neu wählen.');
+});

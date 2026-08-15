@@ -8,6 +8,7 @@ use Livewire\Attributes\Url;
 use Livewire\Component;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
+use Platform\FoodAlchemist\Models\FoodAlchemistDishIdea;
 use Platform\FoodAlchemist\Models\FoodAlchemistPlanningSession;
 use Platform\FoodAlchemist\Services\ConceptGeneratorService;
 use Platform\FoodAlchemist\Services\IdeenService;
@@ -336,6 +337,44 @@ class Index extends Component
         } catch (\Throwable $e) {
             $this->fehler = $e->getMessage();
         }
+    }
+
+    /**
+     * Skizzen-Integration (Etappe 4) — Skizze als Kaskaden-EINGANG (erster Teilschritt): statt die
+     * Skizze (wie der Foodbook-Pfad {@see MaterializeIdeaJob}) direkt zu materialisieren, überträgt
+     * diese Aktion sie in den Gericht-Tab (Titel → Titel, Beschreibung → Brief). Der Mensch prüft
+     * dort die Leitplanken und drückt „Go" ({@see goKaskade}) — der geführte, voll getestete
+     * Kaskaden-Pfad, ohne neue Fan-out-Verdrahtung/Migration. Erfüllt den Nordstern „nichts läuft
+     * still" (geführte Freigabe je Stufe).
+     *
+     * Scope-Entscheid: eine Divergenz-Board-Skizze IST eine Gericht-Idee → Gericht-Tab (nicht
+     * Basisrezept/Concept). Die Skizze bleibt `entwurf` — das Prefill verbraucht sie NICHT (erst der
+     * Go erzeugt etwas); der Mensch kann sie danach manuell verwerfen. Den Tab-Wechsel macht das
+     * Blade (Alpine `tab='gericht'`), damit der Mensch direkt bei den Leitplanken landet.
+     */
+    public function skizzeAlsGericht(int $ideaId): void
+    {
+        $team = $this->team();
+        $session = $this->aktiveSession();
+        if ($team === null || $session === null) {
+            return;
+        }
+        // Team-scoped + an die AKTIVE Session gebunden + nicht verworfen — eine fremde/gelöschte/
+        // Papierkorb-Skizze wird nicht übernommen (gesagt, nicht still verschluckt).
+        $idee = FoodAlchemistDishIdea::visibleToTeam($team)
+            ->where('planning_session_id', $session->id)
+            ->where('status', '!=', 'verworfen')
+            ->whereKey($ideaId)
+            ->first();
+        if ($idee === null) {
+            $this->fehler = 'Skizze nicht gefunden (oder verworfen) — bitte neu wählen.';
+
+            return;
+        }
+        $this->eingabe['gericht']['titel'] = (string) $idee->title;
+        $this->eingabe['gericht']['brief'] = (string) ($idee->description ?? '');
+        $this->fehler = null;
+        $this->meldung = 'Skizze in den Gericht-Tab übernommen — Leitplanken prüfen, dann „Go".';
     }
 
     // ── Leitstelle: Regler-Bedienung ───────────────────────────────────

@@ -229,7 +229,10 @@
                                     @foreach($g['ideen'] as $i)
                                         <div wire:key="gi-{{ $i->id }}" class="flex items-center justify-between text-xs text-gray-700">
                                             <span class="truncate">{{ $i->title }}</span>
-                                            <button wire:click="ideeVerwerfen({{ $i->id }})" class="text-[10px] text-rose-500 hover:text-rose-600">verwerfen</button>
+                                            <div class="flex items-center gap-2 shrink-0">
+                                                <button wire:click="skizzeAlsGericht({{ $i->id }})" @click="tab='gericht'" class="text-[10px] text-violet-600 hover:text-violet-700">als Gericht</button>
+                                                <button wire:click="ideeVerwerfen({{ $i->id }})" class="text-[10px] text-rose-500 hover:text-rose-600">verwerfen</button>
+                                            </div>
                                         </div>
                                     @endforeach
                                 </div>
@@ -240,7 +243,10 @@
                         @forelse($skizzen['einzel'] as $i)
                             <div wire:key="ei-{{ $i->id }}" class="flex items-center justify-between text-xs text-gray-700 py-0.5">
                                 <span class="truncate">{{ $i->title }}</span>
-                                <button wire:click="ideeVerwerfen({{ $i->id }})" class="text-[10px] text-rose-500 hover:text-rose-600">verwerfen</button>
+                                <div class="flex items-center gap-2 shrink-0">
+                                    <button wire:click="skizzeAlsGericht({{ $i->id }})" @click="tab='gericht'" class="text-[10px] text-violet-600 hover:text-violet-700">als Gericht</button>
+                                    <button wire:click="ideeVerwerfen({{ $i->id }})" class="text-[10px] text-rose-500 hover:text-rose-600">verwerfen</button>
+                                </div>
                             </div>
                         @empty
                             <p class="text-xs text-gray-500">Noch keine Skizzen — oben eine anlegen.</p>
