@@ -252,6 +252,10 @@ class ConceptGeneratorService
         // (Nordstern: die Leitplanken des Start-Tabs propagieren). Nur ein Deckel — überzählige Gänge
         // fallen weg, fehlt die Achse bleibt alles wie gehabt.
         $sichereSlots = $this->menueGaengeCap($sichereSlots, $menueAchsen);
+        // Menü-Leitplanke »Diät-Quoten« (Concept-Tab): ein gesetzter Vegan-/Vegetarisch-Anteil je Person
+        // wird als autoritative frame-Ebene-diet_quota-Rule (min %) ins Gerüst gelegt (schlägt eine
+        // gleichnamige KI-Prozent-Quote). Weiche Zusammenstellungs-Vorgabe, kein Filter.
+        $sichereRules = $this->menueDiaetQuotenMerge($sichereRules, $menueAchsen);
         $this->frames->replaceStructure($team, $frame, $sichereSlots, $sichereRules);
 
         // Assembler auf dem frischen Gerüst — Slots des leeren Konzepts füllen
@@ -383,6 +387,66 @@ class ConceptGeneratorService
         }
 
         return array_values($out);
+    }
+
+    /**
+     * Menü-Leitplanke »Diät-Quoten« (menue_quote_{vegan,vegetarisch}_pct, Concept-Tab) → autoritative
+     * frame-Ebene-diet_quota-Regeln (operator min, unit percent) im Gerüst. Der Concept-Tab-Anteil ist
+     * eine WEICHE Zusammenstellungs-Vorgabe (»mind. X % vegan/vegetarisch«) — kein Menü-Filter (der harte
+     * Ausschluss läuft über `diaet_hart`) — und landet als Soll-Quote am Rahmen, die der deterministische
+     * Assembler/das UI liest. Nordstern: die Leitplanken des Start-Tabs propagieren die Kaskade und
+     * schlagen den KI-Vorschlag.
+     *
+     * »vegetarisch« mappt auf das kanonische diet_form `vegi` ({@see FoodAlchemistPlanningFrameRule::DIET_FORMS}).
+     * »Autoritativ« = eine für dieselbe Diät-Form gesetzte KI-Prozent-Quote wird ERSETZT (nicht dupliziert);
+     * count-basierte Quoten und andere Diät-Formen bleiben unangetastet. Ein Anteil < 1 % ist keine echte
+     * Leitplanke (0 = keine Vorgabe) → wird übersprungen; fehlt/leer/ungültig die Achse, bleiben die
+     * KI-Regeln byte-identisch.
+     *
+     * @param  list<array<string,mixed>>  $rules   bereits sanitisierte Frame-Regeln (KI-Gerüst)
+     * @param  array<string,mixed>  $achsen
+     * @return list<array<string,mixed>>
+     */
+    private function menueDiaetQuotenMerge(array $rules, array $achsen): array
+    {
+        $map = [
+            'menue_quote_vegan_pct' => 'vegan',
+            'menue_quote_vegetarisch_pct' => 'vegi',
+        ];
+        $neu = [];
+        $ersetzt = [];   // diet_form → true (welche KI-Prozent-Quoten die Achse verdrängt)
+        foreach ($map as $quelle => $dietForm) {
+            $wert = $achsen[$quelle] ?? null;
+            if (! is_numeric($wert)) {
+                continue;
+            }
+            $pct = (int) $wert;
+            if ($pct < 1 || $pct > 100) {
+                continue;   // 0 = keine Vorgabe; >100 defensiv (reglerParams filtert schon 0–100)
+            }
+            $ersetzt[$dietForm] = true;
+            $neu[] = [
+                'rule_type' => 'diet_quota',
+                'ref_key' => $dietForm,
+                'ref_id' => null,
+                'operator' => 'min',
+                'value_num' => (float) $pct,
+                'unit' => 'percent',
+                'value_text' => null,
+                'severity' => null,
+            ];
+        }
+        if ($neu === []) {
+            return $rules;   // keine gesetzte Achse → KI-Regeln unangetastet
+        }
+        // autoritativ: eine KI-Prozent-Quote derselben Diät-Form weicht der Achse (kein Doppel-Eintrag)
+        $behalten = array_filter($rules, fn ($r) => ! (
+            ($r['rule_type'] ?? null) === 'diet_quota'
+            && ($r['unit'] ?? null) === 'percent'
+            && isset($ersetzt[$r['ref_key'] ?? null])
+        ));
+
+        return array_values(array_merge($behalten, $neu));
     }
 
     /**

@@ -371,6 +371,93 @@ it('Menü-Leitplanken: »Anzahl Gänge« lässt station/kapitel-Slots unberührt
         ->toBe(['Süße Station', 'Warme Station']);
 });
 
+/** Bindet einen Provider-Stub, der ein KI-Gerüst mit den übergebenen Slots UND frame-Ebene-Rules liefert. */
+function bindGeruestSlotsRules(array $slots, array $rules): void
+{
+    config(['foodalchemist.ai.provider' => 'core']);
+    app()->bind(LLMProviderContract::class, fn () => new class($slots, $rules) implements LLMProviderContract
+    {
+        public function __construct(private array $slots, private array $rules) {}
+
+        public function getName(): string
+        {
+            return 'test-stub';
+        }
+
+        public function chat(array $messages, array $options = []): array
+        {
+            return ['content' => json_encode(['werte' => [
+                'name' => 'Quoten-Menü', 'target_price_pp' => 40, 'slots' => $this->slots, 'rules' => $this->rules,
+            ], 'confidence' => 0.8, 'reasoning' => 'stub']), 'usage' => [], 'model' => 'stub', 'tool_calls' => null];
+        }
+
+        public function streamChat(array $messages, callable $onDelta, array $options = []): void {}
+
+        public function getAvailableModels(): array
+        {
+            return ['stub'];
+        }
+
+        public function getDefaultModel(): string
+        {
+            return 'stub';
+        }
+
+        public function isAvailable(): bool
+        {
+            return true;
+        }
+    });
+}
+
+it('Menü-Leitplanken: Diät-Quoten setzen frame-Ebene-diet_quota-Rules und überschreiben die gleichnamige KI-Prozent-Quote', function () {
+    // KI-Gerüst bringt drei frame-Regeln mit: vegan 10 % (wird überschrieben), vegan min 1 count (bleibt,
+    // andere Einheit), vegi 20 % (wird überschrieben). Nutzer stellt 40 % vegan + 60 % vegetarisch ein.
+    bindGeruestSlotsRules(
+        [['label' => 'Hauptgang', 'slot_type' => 'gang', 'target_count' => 1]],
+        [
+            ['rule_type' => 'diet_quota', 'ref_key' => 'vegan', 'operator' => 'min', 'value_num' => 10, 'unit' => 'percent'],
+            ['rule_type' => 'diet_quota', 'ref_key' => 'vegan', 'operator' => 'min', 'value_num' => 1, 'unit' => 'count'],
+            ['rule_type' => 'diet_quota', 'ref_key' => 'vegi', 'operator' => 'min', 'value_num' => 20, 'unit' => 'percent'],
+        ],
+    );
+    $this->actingAs($this->makeUser($this->rootTeam));
+
+    $e = $this->svc->generiereAusBrief(
+        $this->rootTeam, 'Sommerfest, 80 Gäste', null, 'plan_go', false, false,
+        ['menue_quote_vegan_pct' => 40, 'menue_quote_vegetarisch_pct' => 60],
+    );
+
+    $frame = $this->frames->find('concept', $e['concept']->id);
+    $frameRules = $frame->rules()->whereNull('slot_id')->get();
+    // vegan-Prozent überschrieben (40), vegan-count unberührt (1), vegi-Prozent überschrieben (60)
+    expect((float) $frameRules->firstWhere(fn ($r) => $r->ref_key === 'vegan' && $r->unit === 'percent')->value_num)->toBe(40.0)
+        ->and((float) $frameRules->firstWhere(fn ($r) => $r->ref_key === 'vegan' && $r->unit === 'count')->value_num)->toBe(1.0)
+        ->and((float) $frameRules->firstWhere(fn ($r) => $r->ref_key === 'vegi' && $r->unit === 'percent')->value_num)->toBe(60.0)
+        // keine Dublette: genau eine vegan-Prozent-Regel
+        ->and($frameRules->filter(fn ($r) => $r->ref_key === 'vegan' && $r->unit === 'percent')->count())->toBe(1);
+});
+
+it('Menü-Leitplanken: ohne (bzw. mit 0-)Diät-Quote bleiben die KI-Regeln unangetastet', function () {
+    // KI-Gerüst bringt eine vegan-10-%-Quote mit; Nutzer stellt vegan=0 (keine Vorgabe) + keine vegi-Achse.
+    bindGeruestSlotsRules(
+        [['label' => 'Hauptgang', 'slot_type' => 'gang', 'target_count' => 1]],
+        [['rule_type' => 'diet_quota', 'ref_key' => 'vegan', 'operator' => 'min', 'value_num' => 10, 'unit' => 'percent']],
+    );
+    $this->actingAs($this->makeUser($this->rootTeam));
+
+    $e = $this->svc->generiereAusBrief(
+        $this->rootTeam, 'Buffet, 40 Gäste', null, 'plan_go', false, false,
+        ['menue_quote_vegan_pct' => 0],
+    );
+
+    $frame = $this->frames->find('concept', $e['concept']->id);
+    $frameRules = $frame->rules()->whereNull('slot_id')->get();
+    expect($frameRules->count())->toBe(1)
+        ->and((float) $frameRules->first()->value_num)->toBe(10.0)   // KI-Wert bleibt (0 = keine Vorgabe)
+        ->and($frameRules->first()->ref_key)->toBe('vegan');
+});
+
 it('Slot-Semantik: Dessert-Slot bevorzugt die Dessert-Hauptgruppe vor besser bepreisten HG-Gerichten', function () {
     // Dessert-HG + Dessert-Gericht (ohne Anker, ohne Preisvorteil) — Semantik muss stechen
     $desHg = FoodAlchemistDishMainGroup::create(['team_id' => $this->rootTeam->id, 'code' => 'DES', 'label' => 'Dessert']);
