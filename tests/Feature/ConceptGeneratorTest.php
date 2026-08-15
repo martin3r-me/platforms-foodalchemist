@@ -458,6 +458,87 @@ it('Menü-Leitplanken: ohne (bzw. mit 0-)Diät-Quote bleiben die KI-Regeln unang
         ->and($frameRules->first()->ref_key)->toBe('vegan');
 });
 
+/** Bindet einen Provider-Spy, der die an chat() übergebenen Prompt-Messages festhält (für Prompt-Assertions). */
+function bindGeruestSpy(array $slots): object
+{
+    $spy = new stdClass();
+    $spy->messages = [];
+    config(['foodalchemist.ai.provider' => 'core']);
+    app()->bind(LLMProviderContract::class, fn () => new class($slots, $spy) implements LLMProviderContract
+    {
+        public function __construct(private array $slots, private object $spy) {}
+
+        public function getName(): string
+        {
+            return 'test-stub';
+        }
+
+        public function chat(array $messages, array $options = []): array
+        {
+            $this->spy->messages = $messages;
+
+            return ['content' => json_encode(['werte' => [
+                'name' => 'Balance-Menü', 'target_price_pp' => 40, 'slots' => $this->slots,
+            ], 'confidence' => 0.8, 'reasoning' => 'stub']), 'usage' => [], 'model' => 'stub', 'tool_calls' => null];
+        }
+
+        public function streamChat(array $messages, callable $onDelta, array $options = []): void {}
+
+        public function getAvailableModels(): array
+        {
+            return ['stub'];
+        }
+
+        public function getDefaultModel(): string
+        {
+            return 'stub';
+        }
+
+        public function isAvailable(): bool
+        {
+            return true;
+        }
+    });
+
+    return $spy;
+}
+
+/** Klebt alle festgehaltenen Message-Contents zu einem durchsuchbaren Prompt-String zusammen. */
+function spyPromptText(object $spy): string
+{
+    return collect($spy->messages)->pluck('content')->filter()->implode("\n");
+}
+
+it('Menü-Leitplanken: »Portfolio-Balance« landet als selbsterklärende Zusammenstellungs-Direktive im Gerüst-Prompt', function () {
+    // menue_balance = ausgewogen → ein menue_zusammenstellung-Block mit der AUSGEWOGEN-Direktive
+    // steht im KI-Gerüst-Prompt (der Kontext wird als JSON an die Task gehängt). Konzept entsteht als Draft.
+    $spy = bindGeruestSpy([['label' => 'Hauptgang', 'slot_type' => 'gang', 'target_count' => 1]]);
+    $this->actingAs($this->makeUser($this->rootTeam));
+
+    $e = $this->svc->generiereAusBrief(
+        $this->rootTeam, 'Galadinner, 60 Gäste', null, 'plan_go', false, false, ['menue_balance' => 'ausgewogen'],
+    );
+
+    $prompt = spyPromptText($spy);
+    expect($prompt)->toContain('menue_zusammenstellung')
+        ->and($prompt)->toContain('AUSGEWOGEN')
+        ->and($e['concept'])->not->toBeNull()
+        ->and($e['concept']->status)->toBe('draft');
+});
+
+it('Menü-Leitplanken: fehlende/fremde Balance-Achse lässt den Gerüst-Prompt ohne Zusammenstellungs-Block', function () {
+    // Enum-fremder Wert = keine Vorgabe → kein Block (reglerParams ließe ihn ohnehin nicht durch).
+    // Beweist den byte-identischen Pfad, damit die Achse den Prompt nur bei gültigem Enum verändert.
+    $spy = bindGeruestSpy([['label' => 'Hauptgang', 'slot_type' => 'gang', 'target_count' => 1]]);
+    $this->actingAs($this->makeUser($this->rootTeam));
+
+    $this->svc->generiereAusBrief(
+        $this->rootTeam, 'Buffet, 40 Gäste', null, 'plan_go', false, false, ['menue_balance' => 'quatsch'],
+    );
+
+    expect(spyPromptText($spy))->not->toContain('menue_zusammenstellung');
+});
+
 it('Slot-Semantik: Dessert-Slot bevorzugt die Dessert-Hauptgruppe vor besser bepreisten HG-Gerichten', function () {
     // Dessert-HG + Dessert-Gericht (ohne Anker, ohne Preisvorteil) — Semantik muss stechen
     $desHg = FoodAlchemistDishMainGroup::create(['team_id' => $this->rootTeam->id, 'code' => 'DES', 'label' => 'Dessert']);

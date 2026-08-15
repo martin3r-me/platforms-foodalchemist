@@ -182,9 +182,11 @@ class ConceptGeneratorService
      */
     /**
      * @param array<string,mixed> $menueAchsen Concept-Tab Menü-Leitplanken (kanonische Keys aus
-     *   reglerParams: menue_preis_{min,ziel,max}_pp, menue_gaenge …). Aktuell konsumiert: der Preis-
-     *   Korridor je Person (überschreibt den KI-Gerüst-Kopf autoritativ) und die Anzahl Gänge
-     *   (deckelt die gang-Slots des Gerüsts). Start-Tab-Leitplanken propagieren die Kaskade.
+     *   reglerParams: menue_preis_{min,ziel,max}_pp, menue_gaenge, menue_quote_{vegan,vegetarisch}_pct,
+     *   menue_balance …). Konsumiert: Preis-Korridor je Person (überschreibt den KI-Gerüst-Kopf
+     *   autoritativ), Anzahl Gänge (deckelt die gang-Slots), Diät-Quoten (frame-diet_quota-Rules) und
+     *   die Portfolio-Balance (Zusammenstellungs-Direktive an den Gerüst-Prompt). Start-Tab-Leitplanken
+     *   propagieren die Kaskade.
      */
     public function generiereAusBrief(Team $team, string $brief, ?string $name = null, string $via = 'ui', bool $useFavoritesList = false, bool $favoritesConvenienceOnly = false, array $menueAchsen = []): array
     {
@@ -204,6 +206,15 @@ class ConceptGeneratorService
             if ($fav !== null) {
                 $kontext['favorites'] = $fav;
             }
+        }
+        // Menü-Leitplanke »Portfolio-Balance« (menue_balance, Concept-Tab): WEICHE Zusammenstellungs-
+        // Direktive an den Gerüst-Prompt — wie breit das Menü über Proteine/Warengruppen/Garmethoden
+        // streut (ausgewogen ↔ fokussiert). Kein Frame-Kopf/Slot/Rule (das ist nicht messbar), sondern
+        // ein selbsterklärender Kontext-Block, den die KI-Gerüst-Erzeugung liest. Fehlt/leer die Achse
+        // (Enum-fremd) → kein Block → Prompt byte-identisch.
+        $balance = $this->menueBalanceDirektive($menueAchsen);
+        if ($balance !== null) {
+            $kontext['menue_zusammenstellung'] = $balance;
         }
 
         // Trend-Wissen (Trendradar) additiv einspeisen — der Prompt läuft NICHT durch
@@ -447,6 +458,35 @@ class ConceptGeneratorService
         ));
 
         return array_values(array_merge($behalten, $neu));
+    }
+
+    /**
+     * Menü-Leitplanke »Portfolio-Balance« (menue_balance, Concept-Tab) → selbsterklärende
+     * Zusammenstellungs-Direktive für den KI-Gerüst-Prompt. Anders als Preis/Gänge/Diät-Quote ist
+     * »Balance« nichts Messbares am Frame (Kopf/Slot/Rule), sondern eine WEICHE Vorgabe, wie breit das
+     * Menü über Proteine/Warengruppen/Garmethoden streut — sie steuert die Zusammenstellung, nicht die
+     * Struktur. Deshalb als Kontext-Block (der Prompt serialisiert den ganzen Kontext als JSON), nicht
+     * als Regel. Die zwei Stile spiegeln 1:1 das UI-Enum {@see \Platform\FoodAlchemist\Livewire\Planung\Index::MENUE_BALANCE}
+     * — kein erfundener Schwellwert. Nur ein bekannter Enum-Wert erzeugt einen Block; fehlt/leer/fremd
+     * die Achse → null → Prompt byte-identisch (leer = keine Vorgabe).
+     *
+     * @param  array<string,mixed>  $achsen
+     * @return array{stil: string, hinweis: string}|null
+     */
+    private function menueBalanceDirektive(array $achsen): ?array
+    {
+        $stil = is_string($achsen['menue_balance'] ?? null) ? trim($achsen['menue_balance']) : '';
+        $hinweise = [
+            'ausgewogen' => 'Stelle das Menü AUSGEWOGEN zusammen: streue breit über Proteine, Warengruppen '
+                . 'und Garmethoden; vermeide es, dieselbe Hauptzutat oder Garart über die Gänge zu wiederholen.',
+            'fokussiert' => 'Stelle das Menü FOKUSSIERT zusammen: ein klarer roter Faden (Leitzutat, Region '
+                . 'oder Technik) über die Gänge statt maximaler Vielfalt.',
+        ];
+        if (! isset($hinweise[$stil])) {
+            return null;   // unbekannt/leer = keine Vorgabe (reglerParams lässt nur die Enum-Werte durch)
+        }
+
+        return ['stil' => $stil, 'hinweis' => $hinweise[$stil]];
     }
 
     /**
