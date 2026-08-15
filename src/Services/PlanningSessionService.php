@@ -65,13 +65,102 @@ class PlanningSessionService
 
         $analyse = trim($body . ($quellen !== '' ? "\n\nQuellen:\n" . $quellen : ''));
 
+        // Strukturiertes Trend-Signal (Kategorie/Klasse) — denormalisiert je Doc in trend_meta.
+        $meta = DB::table('foodalchemist_trend_meta')
+            ->where('knowledge_document_id', (int) $doc->id)
+            ->first(['category', 'trend_class']);
+
         return $this->create($team, [
             'title' => (string) $doc->title,
-            'brief' => "Aus diesem Food-Trend ein Konzept/Gericht/Basisrezept entwickeln: {$doc->title}.",
+            'brief' => $this->briefAusTrend($team, (string) $doc->title, (string) $doc->content_md, $meta),
             'analysis' => $analyse,
             'source_knowledge_document_id' => (int) $doc->id,
             'created_via' => 'trend',
         ]);
+    }
+
+    /**
+     * Substantiver Start-Brief aus dem strukturierten Trend-Signal — deterministisch, KEINE Erfindung.
+     * Statt des generischen Einzeilers fließen (a) die Einordnung (Kategorie › Klasse aus
+     * {@see foodalchemist_trend_meta}) und (b) die Kernaussage (erster Prosa-Absatz des Trend-Bodys)
+     * in den Brief, damit das Trendradar-Signal die Generierung wirklich erreicht. Fehlt beides
+     * (kein geclustertes Meta + leerer Body), bleibt der Brief byte-identisch zum alten Platzhalter.
+     */
+    private function briefAusTrend(Team $team, string $title, string $md, ?object $meta): string
+    {
+        $zeilen = ["Aus diesem Food-Trend ein Konzept/Gericht/Basisrezept entwickeln: {$title}."];
+
+        $einordnung = $this->trendEinordnung($team, $meta);
+        if ($einordnung !== '') {
+            $zeilen[] = 'Einordnung: ' . $einordnung . '.';
+        }
+
+        $kern = $this->bodyLead($md, 320);
+        if ($kern !== '') {
+            $zeilen[] = 'Kernaussage: ' . $kern;
+        }
+
+        return implode("\n", $zeilen);
+    }
+
+    /**
+     * Einordnung »Kategorie › Klasse« aus dem geclusterten Trend-Meta. Das Kategorie-Label kommt aus
+     * der Taxonomie ({@see foodalchemist_trend_taxonomy}) — einzige Wahrheit, kein hartcodierter Katalog;
+     * die Klasse trägt in `trend_class` bereits das lesbare Label (TrendClusterCommand). Leer, wenn nichts
+     * zugeordnet ist.
+     */
+    private function trendEinordnung(Team $team, ?object $meta): string
+    {
+        if ($meta === null) {
+            return '';
+        }
+
+        $kategorie = $this->kategorieLabel($team, trim((string) ($meta->category ?? '')));
+        $klasse = trim((string) ($meta->trend_class ?? ''));
+
+        if ($kategorie !== '' && $klasse !== '') {
+            return $kategorie . ' › ' . $klasse;
+        }
+
+        return $kategorie !== '' ? $kategorie : $klasse;
+    }
+
+    /** Kategorie-Slug → lesbares Label aus der Taxonomie-Kategoriezeile (global). Fallback: der Slug selbst. */
+    private function kategorieLabel(Team $team, string $slug): string
+    {
+        if ($slug === '') {
+            return '';
+        }
+        $label = DB::table('foodalchemist_trend_taxonomy')
+            ->whereNull('deleted_at')->where('active', 1)
+            ->where('category', $slug)->whereNull('trend_class')
+            ->where(fn ($q) => $q->whereNull('team_id')->orWhere('team_id', $team->id))
+            ->orderByRaw('team_id IS NULL')   // team-eigene Zeile vor der globalen
+            ->value('description');
+
+        return trim((string) ($label ?? '')) !== '' ? trim((string) $label) : $slug;
+    }
+
+    /** Erster Prosa-Absatz des Bodys (ohne Frontmatter/Überschriften/Listen-Marker), auf ~$max Zeichen. */
+    private function bodyLead(string $md, int $max): string
+    {
+        $body = trim($this->strippeFrontmatter($md));
+        foreach (preg_split('/\R{2,}/u', $body) ?: [] as $absatz) {
+            $absatz = trim((string) $absatz);
+            if ($absatz === '' || str_starts_with($absatz, '#')) {
+                continue;                          // Leerblock / Überschrift überspringen
+            }
+            // führenden Listen-/Zitat-Marker glätten, interne Zeilenumbrüche zu einem Satz ziehen
+            $absatz = trim((string) preg_replace('/^\s*[>*\-+]\s+/u', '', $absatz));
+            $absatz = trim((string) preg_replace('/\s+/u', ' ', $absatz));
+            if ($absatz === '') {
+                continue;
+            }
+
+            return mb_strlen($absatz) > $max ? rtrim(mb_substr($absatz, 0, $max)) . '…' : $absatz;
+        }
+
+        return '';
     }
 
     public function update(Team $team, int $id, array $in): FoodAlchemistPlanningSession
@@ -212,9 +301,13 @@ class PlanningSessionService
     /** Body ohne YAML-Frontmatter, auf ~$max Zeichen gekürzt (für den Analyse-Prefill). */
     private function bodyAuszug(string $md, int $max): string
     {
-        $body = preg_replace('/\A\x{FEFF}?\s*---\R.*?\R---\R?/su', '', $md) ?? $md;
+        return mb_substr(trim($this->strippeFrontmatter($md)), 0, $max);
+    }
 
-        return mb_substr(trim($body), 0, $max);
+    /** YAML-Frontmatter (inkl. BOM) vom Markdown-Kopf abtrennen. */
+    private function strippeFrontmatter(string $md): string
+    {
+        return preg_replace('/\A\x{FEFF}?\s*---\R.*?\R---\R?/su', '', $md) ?? $md;
     }
 
     private function clean(mixed $wert): ?string

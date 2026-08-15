@@ -77,6 +77,56 @@ it('eröffnet eine Session aus einem Trend — Kontext wandert mit', function ()
         ->and($s->analysis)->toContain('Quelle A');       // quellen aus Frontmatter übernommen
 });
 
+/** Hängt ein geclustertes Trend-Meta (Kategorie/Klasse) an ein Trend-Doc. */
+function attachTrendMeta(int $docId, string $category, string $trendClass): void
+{
+    DB::table('foodalchemist_trend_meta')->insert([
+        'uuid' => (string) Str::uuid(),
+        'knowledge_document_id' => $docId,
+        'category' => $category,
+        'trend_class' => $trendClass,
+        'status' => 'approved',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+}
+
+it('baut den Trend-Brief aus dem strukturierten Signal (Einordnung Kategorie › Klasse + Kernaussage)', function () {
+    $docId = makeTrendDoc('Postbiotic Drinks');
+    attachTrendMeta($docId, 'getraenke', 'Fermentierte Getränke');
+
+    $s = $this->svc->ausTrend($this->rootTeam, $docId);
+
+    // Kategorie-Label kommt aus der Taxonomie-Seedzeile (getraenke → Getränke), Klasse aus trend_class.
+    expect($s->brief)->toContain('Einordnung: Getränke › Fermentierte Getränke.')
+        // Kernaussage = erster Prosa-Absatz des Bodys (Überschriften übersprungen).
+        ->and($s->brief)->toContain('Kernaussage: Fermentation ist ein starker Food-Trend 2026.')
+        ->and($s->brief)->toContain('entwickeln: Postbiotic Drinks.');
+});
+
+it('baut den Trend-Brief ohne Meta nur aus der Kernaussage (keine Einordnung erfunden)', function () {
+    $docId = makeTrendDoc('Nose to Tail');   // kein trend_meta angehängt
+
+    $s = $this->svc->ausTrend($this->rootTeam, $docId);
+
+    expect($s->brief)->toContain('Kernaussage: Fermentation ist ein starker Food-Trend 2026.')
+        ->and($s->brief)->not->toContain('Einordnung:');
+});
+
+it('fällt auf den generischen Platzhalter zurück, wenn Meta UND Body leer sind (byte-identisch)', function () {
+    $md = "---\nrelevanz: hoch\n---\n";   // Frontmatter only, kein Body-Absatz
+    $docId = DB::table('foodalchemist_knowledge_documents')->insertGetId([
+        'uuid' => (string) Str::uuid(), 'team_id' => null, 'slug' => 'trend.leer',
+        'title' => 'Leerer Trend', 'category' => 'trend', 'content_md' => $md,
+        'char_count' => mb_strlen($md), 'content_hash' => hash('sha256', $md), 'version' => 1,
+        'active' => 1, 'created_via' => 'import', 'created_at' => now(), 'updated_at' => now(),
+    ]);
+
+    $s = $this->svc->ausTrend($this->rootTeam, $docId);
+
+    expect($s->brief)->toBe('Aus diesem Food-Trend ein Konzept/Gericht/Basisrezept entwickeln: Leerer Trend.');
+});
+
 it('hängt Skizzen als dritten Owner an die Session (3-Wege-XOR)', function () {
     $s = $this->svc->create($this->rootTeam, ['title' => 'Board-Test']);
 
