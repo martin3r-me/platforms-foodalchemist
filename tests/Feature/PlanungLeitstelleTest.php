@@ -592,3 +592,69 @@ it('skizzeAlsGericht: eine verworfene Skizze wird nicht übernommen (gesagt, nic
         ->assertSet('eingabe.gericht.brief', '')
         ->assertSet('fehler', 'Skizze nicht gefunden (oder verworfen) — bitte neu wählen.');
 });
+
+/**
+ * Etappe 4 — Skizzen-Integration (Teil 2a — Lineage): startet der Gericht-Go aus einer übertragenen
+ * Skizze, wird der Kaskaden-Lauf auf sie zurückgestempelt (origin_dish_idea_id) — die Voraussetzung
+ * dafür, dass die Skizzen-Karte später den Lauf-Status zeigen kann (Teil 2b).
+ */
+it('Skizzen-Lineage: ein Gericht-Go aus einer übertragenen Skizze stempelt den Lauf auf sie zurück', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Herbst-Menü']);
+    $idee = app(\Platform\FoodAlchemist\Services\IdeenService::class)->add($this->rootTeam, [
+        'planning_session_id' => $session->id,
+        'title' => 'Rehrücken mit Wacholderjus',
+        'description' => 'Kräftig, herbstlich, Wildaromatik.',
+    ]);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->call('skizzeAlsGericht', $idee->id)
+        ->assertSet('skizzeGerichtId', $idee->id)   // gemerkt für den nächsten Gericht-Go
+        ->call('goKaskade', 'gericht')
+        ->assertSet('laeuft', true)
+        ->assertSet('skizzeGerichtId', null);       // nach dem Go verbraucht
+
+    $run = FoodAlchemistCascadeRun::where('team_id', $this->rootTeam->id)->latest('id')->first();
+    expect($run)->not->toBeNull()
+        ->and($run->scope)->toBe('gericht')
+        ->and((int) $run->origin_dish_idea_id)->toBe((int) $idee->id);
+});
+
+it('Skizzen-Lineage: ein Gericht-Go OHNE Skizzen-Ursprung lässt origin_dish_idea_id null', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Direkt', 'brief' => 'Direktes Gericht.']);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->set('eingabe.gericht.brief', 'Direktes Gericht.')
+        ->call('goKaskade', 'gericht')
+        ->assertSet('laeuft', true);
+
+    $run = FoodAlchemistCascadeRun::where('team_id', $this->rootTeam->id)->latest('id')->first();
+    expect($run)->not->toBeNull()
+        ->and($run->origin_dish_idea_id)->toBeNull();
+});
+
+it('Skizzen-Lineage fail-soft: eine inzwischen verworfene Skizze kippt den Go nicht (Lauf ohne Herkunft)', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Menü']);
+    $svc = app(\Platform\FoodAlchemist\Services\IdeenService::class);
+    $idee = $svc->add($this->rootTeam, [
+        'planning_session_id' => $session->id,
+        'title' => 'Skizze', 'description' => 'Ein Brief.',
+    ]);
+
+    $comp = Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->call('skizzeAlsGericht', $idee->id)
+        ->assertSet('skizzeGerichtId', $idee->id);
+
+    // Skizze NACH dem Prefill verwerfen — der Go muss trotzdem durchlaufen, nur ohne Herkunft.
+    $svc->setStatus($this->rootTeam, $idee->id, 'verworfen');
+
+    $comp->call('goKaskade', 'gericht')
+        ->assertSet('laeuft', true)
+        ->assertSet('skizzeGerichtId', null);   // tote Referenz still verworfen
+
+    $run = FoodAlchemistCascadeRun::where('team_id', $this->rootTeam->id)->latest('id')->first();
+    expect($run)->not->toBeNull()
+        ->and($run->origin_dish_idea_id)->toBeNull();
+});

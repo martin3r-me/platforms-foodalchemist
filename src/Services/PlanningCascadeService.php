@@ -48,7 +48,7 @@ class PlanningCascadeService
      * Startet einen Kaskaden-Lauf und gibt ihn zurück (Status `running`). Die eigentliche Generierung
      * läuft asynchron im Queue-Job; die Fläche pollt den Run/seine Steps.
      *
-     * @param  array{brief?:string, params?:array<string,mixed>, voll_anreichern?:bool, created_via?:string, existing_concept_id?:int}  $optionen
+     * @param  array{brief?:string, params?:array<string,mixed>, voll_anreichern?:bool, created_via?:string, existing_concept_id?:int, origin_dish_idea_id?:int}  $optionen
      */
     public function starteKaskade(
         Team $team,
@@ -96,6 +96,11 @@ class PlanningCascadeService
             throw new RuntimeException("Geprüftes Konzept #{$existingConceptId} nicht gefunden (Team).");
         }
 
+        // Lineage (Etappe 4, Teil 2a): startet der Lauf aus einer Divergenz-Board-Skizze (Skizze →
+        // Gericht-Tab → „Go"), trägt er die Ursprungs-Skizze — loser Zeiger für die Status-Rückkopplung
+        // auf die Skizzen-Karte. 0/fehlend = kein Skizzen-Ursprung (Bestandsverhalten).
+        $originDishIdeaId = (int) ($optionen['origin_dish_idea_id'] ?? 0);
+
         $run = FoodAlchemistCascadeRun::create([
             'team_id' => $team->id,
             'planning_session_id' => $session?->id,
@@ -106,6 +111,7 @@ class PlanningCascadeService
             'status' => 'running',
             'staged' => $staged,
             'created_via' => (string) ($optionen['created_via'] ?? 'plan_go'),
+            'origin_dish_idea_id' => $originDishIdeaId > 0 ? $originDishIdeaId : null,
         ]);
 
         // Depth-1: genau ein Step (rezept|gericht → GenerateRecipeJob, concept → GenerateConceptJob).

@@ -157,6 +157,14 @@ class Index extends Component
      */
     public ?int $planConceptId = null;
 
+    /**
+     * Ursprungs-Skizze für den Gericht-Go (Etappe 4, Teil 2a — Lineage). {@see skizzeAlsGericht} merkt
+     * die Skizze beim Übertragen in den Gericht-Tab; der nächste Gericht-`Go` stempelt sie als
+     * `origin_dish_idea_id` auf den Lauf ({@see goKaskade}) → die Skizzen-Karte kann später den
+     * Lauf-Status zurückspiegeln. **Transient** (keine DB-Spalte); nach dem Go verbraucht.
+     */
+    public ?int $skizzeGerichtId = null;
+
     /** Sekunden auf `running` ohne jeden Step-Fortschritt, ab denen der Watchdog anschlägt (über der realistischen Erst-Dauer). */
     protected const WATCHDOG_SEKUNDEN = 90;
 
@@ -373,6 +381,9 @@ class Index extends Component
         }
         $this->eingabe['gericht']['titel'] = (string) $idee->title;
         $this->eingabe['gericht']['brief'] = (string) ($idee->description ?? '');
+        // Lineage (Teil 2a): die Skizze für den nächsten Gericht-Go merken — der Lauf wird auf sie
+        // zurückgestempelt (origin_dish_idea_id), damit die Karte später den Stand zeigen kann.
+        $this->skizzeGerichtId = (int) $idee->id;
         $this->fehler = null;
         $this->meldung = 'Skizze in den Gericht-Tab übernommen — Leitplanken prüfen, dann „Go".';
     }
@@ -718,12 +729,29 @@ class Index extends Component
                 $this->planConceptId = null;
             }
         }
+        // SKIZZEN-LINEAGE (Etappe 4, Teil 2a): kam der Gericht-Go aus einer übertragenen Skizze
+        // ({@see skizzeAlsGericht} → $skizzeGerichtId), wird der Lauf auf sie zurückgestempelt
+        // (origin_dish_idea_id) — Voraussetzung für die Status-Rückkopplung auf die Skizzen-Karte.
+        // FAIL-SOFT: ist die Skizze inzwischen weg (gelöscht/verworfen/Team-fremd), NICHT blocken —
+        // Prop still verwerfen und ohne Herkunft generieren (eine tote Skizze kippt den Go nicht).
+        if ($scope === 'gericht' && (int) ($this->skizzeGerichtId ?? 0) > 0) {
+            $skizzeDa = FoodAlchemistDishIdea::visibleToTeam($team)
+                ->where('status', '!=', 'verworfen')
+                ->whereKey($this->skizzeGerichtId)
+                ->exists();
+            if ($skizzeDa) {
+                $optionen['origin_dish_idea_id'] = (int) $this->skizzeGerichtId;
+            } else {
+                $this->skizzeGerichtId = null;
+            }
+        }
         try {
             $run = $cascade->starteKaskade($team, $scope, $session, (string) ($this->eingabe[$scope]['creative_mode'] ?? 'voll_kreativ'), $optionen);
             $this->laufId = $run->id;
             $this->laeuft = true;
             $this->hinweis = null;
             $this->planConceptId = null;    // Plan verbraucht (referenziert ODER frisch generiert) → nächster Go ist wieder Schnell-Pfad
+            $this->skizzeGerichtId = null;  // Skizzen-Ursprung verbraucht (auf den Lauf gestempelt) → nächster Go ohne Herkunft
             $this->wissenVorschau = null;   // neue Kaskade → Vorschau weg; die Steps zeigen dann das ECHTE Wissen (#1a)
             $this->meldung = 'Kaskade gestartet — Entwurf wird erzeugt …';
             $this->fehler = null;

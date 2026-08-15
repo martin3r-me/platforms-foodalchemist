@@ -3,6 +3,7 @@
 namespace Platform\FoodAlchemist\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Platform\ActivityLog\Traits\LogsActivity;
@@ -43,5 +44,15 @@ class FoodAlchemistCascadeRun extends Model
     public function steps(): HasMany
     {
         return $this->hasMany(FoodAlchemistCascadeRunStep::class, 'cascade_run_id');
+    }
+
+    /**
+     * Ursprungs-Skizze (Divergenz-Board), aus der dieser Lauf gestartet wurde (Etappe 4, Teil 2a).
+     * Loser Zeiger — der Lauf überlebt die Skizze (kein Cascade). Trägt die Status-Rückkopplung
+     * auf die Skizzen-Karte (Teil 2b: läuft/prüfen/fertig).
+     */
+    public function originDishIdea(): BelongsTo
+    {
+        return $this->belongsTo(FoodAlchemistDishIdea::class, 'origin_dish_idea_id');
     }
 }
