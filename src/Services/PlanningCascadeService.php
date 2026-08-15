@@ -111,7 +111,7 @@ class PlanningCascadeService
         ]);
 
         if ($scope === 'concept') {
-            $this->dispatchConceptStep($team, $step, $brief, $session?->id, $creativeMode);
+            $this->dispatchConceptStep($team, $step, $brief, $session?->id, $creativeMode, $params);
         } else {
             // Im gestuften Lauf schiebt der Root-Step (Basisrezept/Gericht) seine Kinder auf bis zur Freigabe.
             $this->dispatchRezeptStep($team, $step, $brief, $params, $scope === 'gericht', $vollAnreichern, $session?->id, $staged);
@@ -150,12 +150,19 @@ class PlanningCascadeService
     }
 
     /** Dispatch der Konzept-Generierung für einen Step (Reuse-Assembler; im Erfinden-Modus fächert der Job auf). */
-    private function dispatchConceptStep(Team $team, FoodAlchemistCascadeRunStep $step, string $brief, ?int $planningSessionId, string $creativeMode): void
+    private function dispatchConceptStep(Team $team, FoodAlchemistCascadeRunStep $step, string $brief, ?int $planningSessionId, string $creativeMode, array $params = []): void
     {
         $runId = (string) Str::uuid();
         $step->update(['generator_run_id' => $runId]);
         Cache::put(GenerateConceptJob::cacheKey($runId), ['status' => 'pending'], now()->addMinutes(self::RESULT_TTL_MIN));
-        GenerateConceptJob::dispatch($runId, $team->id, (int) (\Illuminate\Support\Facades\Auth::id() ?? 0), $brief, null, $planningSessionId, $step->id, $creativeMode);
+        // Menü-Leitplanken des Concept-Tabs (menue_*-Keys aus reglerParams) an die Konzept-Erzeugung
+        // reichen — sie speisen den Gerüst-Kopf (Preis-Korridor je Person). Nur die menue_*-Teilmenge,
+        // damit der Job-Payload schlank und die Absicht klar bleibt.
+        $menueAchsen = array_filter($params, fn ($k) => str_starts_with((string) $k, 'menue_'), ARRAY_FILTER_USE_KEY);
+        GenerateConceptJob::dispatch(
+            $runId, $team->id, (int) (\Illuminate\Support\Facades\Auth::id() ?? 0), $brief,
+            null, $planningSessionId, $step->id, $creativeMode, false, false, null, null, $menueAchsen
+        );
     }
 
     // ── P3/P4: Voll-Kaskade — Ausgabe-Frame → 1 Concept je Slot ───────────

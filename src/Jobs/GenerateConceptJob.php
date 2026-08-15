@@ -48,6 +48,8 @@ class GenerateConceptJob implements ShouldQueue
         /** Voll-Kaskade (P3/P4): erzeugtes Konzept ans Ausgabe-Kapitel/-Rubrik hängen. */
         public ?string $attachOwnerType = null,
         public ?int $attachContainerId = null,
+        /** Concept-Tab Menü-Leitplanken (kanonische menue_*_pp-Keys); speisen den Gerüst-Kopf. */
+        public array $menueAchsen = [],
     ) {}
 
     public static function cacheKey(string $runId): string
@@ -69,7 +71,7 @@ class GenerateConceptJob implements ShouldQueue
         Auth::login($user);   // Team-Kontext für AiGatewayService (Kill-Switch/DNA/Call-Log)
 
         try {
-            $r = $generator->generiereAusBrief($team, $this->brief, $this->name, 'plan_go', $this->useFavorites, $this->favoritesConvenienceOnly);
+            $r = $generator->generiereAusBrief($team, $this->brief, $this->name, 'plan_go', $this->useFavorites, $this->favoritesConvenienceOnly, $this->menueAchsen);
             $concept = $r['concept'] ?? null;
             if ($concept === null) {
                 throw new \RuntimeException('Konzept-Generierung lieferte kein Ergebnis.');

@@ -180,7 +180,12 @@ class ConceptGeneratorService
      * Freitext-Brief → KI baut das Planungs-Gerüst (Rahmen), dann läuft der
      * deterministische Assembler. Gerüst + Konzept entstehen beide als Draft.
      */
-    public function generiereAusBrief(Team $team, string $brief, ?string $name = null, string $via = 'ui', bool $useFavoritesList = false, bool $favoritesConvenienceOnly = false): array
+    /**
+     * @param array<string,mixed> $menueAchsen Concept-Tab Menü-Leitplanken (kanonische Keys aus
+     *   reglerParams: menue_preis_{min,ziel,max}_pp …). Aktuell konsumiert: nur der Preis-Korridor
+     *   je Person — er überschreibt den KI-Gerüst-Kopf autoritativ (Start-Tab-Leitplanken propagieren).
+     */
+    public function generiereAusBrief(Team $team, string $brief, ?string $name = null, string $via = 'ui', bool $useFavoritesList = false, bool $favoritesConvenienceOnly = false, array $menueAchsen = []): array
     {
         $brief = trim($brief);
         if ($brief === '') {
@@ -231,6 +236,13 @@ class ConceptGeneratorService
             'price_max_pp' => is_numeric($werte['price_max_pp'] ?? null) ? (float) $werte['price_max_pp'] : null,
             'note' => 'Aus Brief generiert (KI-Vorschlag, Konfidenz ' . number_format((float) ($proposal->confidence ?? 0), 2) . ') — Rahmen prüfen.',
         ]);
+        // Menü-Leitplanken (Concept-Tab): ein explizit gesetzter Zielpreis-Korridor je Person ist
+        // autoritativ und überschreibt den KI-Vorschlag am Gerüst-Kopf (Nordstern: die Leitplanken
+        // des Start-Tabs propagieren die Kaskade). Nur gesetzte Achsen greifen (leer = KI-Wert bleibt).
+        $preisHead = $this->menuePreisHead($menueAchsen);
+        if ($preisHead !== []) {
+            $this->frames->setHead($team, $frame, $preisHead);
+        }
         [$sichereSlots, $sichereRules] = $this->sanitizeGeruestWerte($slots, is_array($werte['rules'] ?? null) ? $werte['rules'] : []);
         if ($sichereSlots === []) {
             throw new RuntimeException('KI-Gerüst enthielt keine gültigen Slots — Brief präzisieren.');
@@ -305,6 +317,32 @@ class ConceptGeneratorService
             'slots' => count($sichereSlots),
             'name' => is_string($werte['name'] ?? null) && trim($werte['name']) !== '' ? trim($werte['name']) : null,
         ];
+    }
+
+    /**
+     * Gerüst-Kopf-Überschreibungen aus den Concept-Menü-Achsen (nur Preis-Korridor je Person).
+     * `reglerParams` hat die Roh-Eingaben als kanonische `_pp`-Keys geparst; hier werden sie auf
+     * die Frame-Kopf-Felder gemappt. Nur vorhandene, numerische Achsen erzeugen einen Key
+     * (fehlend = kein Key → {@see PlanningFrameService::setHead} lässt den KI-Wert stehen).
+     *
+     * @param  array<string,mixed>  $achsen
+     * @return array<string,float>
+     */
+    private function menuePreisHead(array $achsen): array
+    {
+        $map = [
+            'menue_preis_ziel_pp' => 'target_price_pp',
+            'menue_preis_min_pp' => 'price_min_pp',
+            'menue_preis_max_pp' => 'price_max_pp',
+        ];
+        $out = [];
+        foreach ($map as $quelle => $ziel) {
+            if (isset($achsen[$quelle]) && is_numeric($achsen[$quelle])) {
+                $out[$ziel] = (float) $achsen[$quelle];
+            }
+        }
+
+        return $out;
     }
 
     /**

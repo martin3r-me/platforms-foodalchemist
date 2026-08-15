@@ -196,6 +196,103 @@ it('Brief-Pfad: KI baut das Gerüst (Provider-Stub), Assembler bleibt determinis
         ->and($e['brief_confidence'])->toBe(0.9);
 });
 
+it('Menü-Leitplanken: explizit gesetzter Preis-Korridor je Person überschreibt den KI-Gerüst-Kopf', function () {
+    // Provider-Stub liefert einen KI-Vorschlag mit Zielpreis 20 € — die Concept-Tab-Leitplanke gewinnt.
+    config(['foodalchemist.ai.provider' => 'core']);
+    app()->bind(LLMProviderContract::class, fn () => new class implements LLMProviderContract
+    {
+        public function getName(): string
+        {
+            return 'test-stub';
+        }
+
+        public function chat(array $messages, array $options = []): array
+        {
+            return ['content' => json_encode(['werte' => [
+                'name' => 'Menü mit Korridor',
+                'target_price_pp' => 20,
+                'slots' => [['label' => 'Hauptgang', 'slot_type' => 'gang', 'target_count' => 1]],
+            ], 'confidence' => 0.8, 'reasoning' => 'stub']), 'usage' => [], 'model' => 'stub', 'tool_calls' => null];
+        }
+
+        public function streamChat(array $messages, callable $onDelta, array $options = []): void {}
+
+        public function getAvailableModels(): array
+        {
+            return ['stub'];
+        }
+
+        public function getDefaultModel(): string
+        {
+            return 'stub';
+        }
+
+        public function isAvailable(): bool
+        {
+            return true;
+        }
+    });
+    $this->actingAs($this->makeUser($this->rootTeam));
+
+    // Menü-Achsen wie reglerParams sie liefert (kanonische _pp-Keys); Ziel 35, Spanne 30–45.
+    $e = $this->svc->generiereAusBrief(
+        $this->rootTeam, 'Galadinner, 60 Gäste, ca. 35 € p. P.', null, 'plan_go', false, false,
+        ['menue_preis_ziel_pp' => 35.0, 'menue_preis_min_pp' => 30.0, 'menue_preis_max_pp' => 45.0],
+    );
+
+    $frame = $this->frames->find('concept', $e['concept']->id);
+    expect($frame)->not->toBeNull()
+        ->and((float) $frame->target_price_pp)->toBe(35.0)   // KI-Wert 20 überschrieben
+        ->and((float) $frame->price_min_pp)->toBe(30.0)
+        ->and((float) $frame->price_max_pp)->toBe(45.0);
+});
+
+it('Menü-Leitplanken: ohne Preis-Achsen bleibt der KI-Gerüst-Kopf unangetastet', function () {
+    config(['foodalchemist.ai.provider' => 'core']);
+    app()->bind(LLMProviderContract::class, fn () => new class implements LLMProviderContract
+    {
+        public function getName(): string
+        {
+            return 'test-stub';
+        }
+
+        public function chat(array $messages, array $options = []): array
+        {
+            return ['content' => json_encode(['werte' => [
+                'name' => 'Menü ohne Korridor',
+                'target_price_pp' => 22,
+                'slots' => [['label' => 'Hauptgang', 'slot_type' => 'gang', 'target_count' => 1]],
+            ], 'confidence' => 0.7, 'reasoning' => 'stub']), 'usage' => [], 'model' => 'stub', 'tool_calls' => null];
+        }
+
+        public function streamChat(array $messages, callable $onDelta, array $options = []): void {}
+
+        public function getAvailableModels(): array
+        {
+            return ['stub'];
+        }
+
+        public function getDefaultModel(): string
+        {
+            return 'stub';
+        }
+
+        public function isAvailable(): bool
+        {
+            return true;
+        }
+    });
+    $this->actingAs($this->makeUser($this->rootTeam));
+
+    // Leere Achsen (Nutzer stellte keinen Korridor ein) → KI-Wert 22 bleibt, keine Spanne.
+    $e = $this->svc->generiereAusBrief($this->rootTeam, 'Buffet, 40 Gäste', null, 'plan_go', false, false, []);
+
+    $frame = $this->frames->find('concept', $e['concept']->id);
+    expect((float) $frame->target_price_pp)->toBe(22.0)
+        ->and($frame->price_min_pp)->toBeNull()
+        ->and($frame->price_max_pp)->toBeNull();
+});
+
 it('Slot-Semantik: Dessert-Slot bevorzugt die Dessert-Hauptgruppe vor besser bepreisten HG-Gerichten', function () {
     // Dessert-HG + Dessert-Gericht (ohne Anker, ohne Preisvorteil) — Semantik muss stechen
     $desHg = FoodAlchemistDishMainGroup::create(['team_id' => $this->rootTeam->id, 'code' => 'DES', 'label' => 'Dessert']);
