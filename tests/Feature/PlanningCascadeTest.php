@@ -848,3 +848,109 @@ it('stufen(): leitet Stufen-Zähler + Zustand aus den Steps ab (nur erreichte St
     $g = collect($stufen)->firstWhere('kind', 'gericht');
     expect($g['total'])->toBe(2)->and($g['zustand'])->toBe('läuft');
 });
+
+// ── Auto-Trigger: Menü-Folge-Kohärenz-Gate nach der Fan-out-Erfindung ───────
+//
+// Roadmap Etappe 1 »Auto-Trigger«: sobald ALLE erfundenen Gericht-Steps eines Concept-Steps durch
+// sind (Grounding komplett → Anker vorhanden → scorebar), scored der Motor die Menüfolge automatisch
+// (menuCohesion → menuKohaesionWarnung) und persistiert sie am Run (`cohesion_warning`) — ohne den
+// manuellen „Kohäsion prüfen"-Klick. Vorher (noch ein Kind offen) darf er NICHT feuern.
+
+// Builder als $this-gebundene Closure (freie Funktionen kommen nicht an die protected TestCase-Helfer).
+beforeEach(function () {
+    /** Baut einen minimalen Pairing-Graph + zwei verbundene Menü-Gerichte, in ein Konzept verdrahtet. */
+    $this->mkVerbundenesMenu = function (): \Platform\FoodAlchemist\Models\FoodAlchemistConcept {
+        $ins = function (string $table, array $row): int {
+            \Illuminate\Support\Facades\DB::table($table)->insert(array_merge(
+                ['uuid' => (string) \Symfony\Component\Uid\UuidV7::generate(), 'created_at' => now(), 'updated_at' => now()],
+                $row
+            ));
+
+            return (int) \Illuminate\Support\Facades\DB::getPdo()->lastInsertId();
+        };
+        $aId = $ins('foodalchemist_vocab_pairing_anchors', ['slug' => 'mkg-pilz', 'display_de' => 'Pilz']);
+        $bId = $ins('foodalchemist_vocab_pairing_anchors', ['slug' => 'mkg-rind', 'display_de' => 'Rind']);
+        // Kante A↔B → bewertetes Gericht-Paar (rated_pairs ≥ 1 ⇒ das Gate hat eine Aussage).
+        $ins('foodalchemist_pairing_anchor_edges',
+            ['anchor_a_id' => $aId, 'anchor_b_id' => $bId, 'type' => 'aroma', 'level' => 3, 'weight' => 0.9]);
+
+        $mkGericht = function (string $key, string $gpName, int $ankerId) use ($ins): \Platform\FoodAlchemist\Models\FoodAlchemistRecipe {
+            $gp = \Platform\FoodAlchemist\Models\FoodAlchemistGp::create([
+                'team_id' => $this->rootTeam->id, 'gp_key' => 'mkg|' . $key, 'name' => $gpName, 'status' => 'approved',
+            ]);
+            $ins('foodalchemist_gp_anchor_mappings', [
+                'team_id' => $this->rootTeam->id, 'gp_id' => $gp->id, 'anchor_id' => $ankerId,
+                'role' => 'kern', 'source' => 'ai_inferred', 'ai_confidence' => null,
+            ]);
+            $r = $this->makeRecipe($this->rootTeam, $gpName, ['status' => 'approved', 'is_sales_recipe' => true, 'sales_net' => 22.0]);
+            $this->makeIngredient($r, $gpName, $gp, '150', 1);
+
+            return $r;
+        };
+        $pilz = $mkGericht('pilz', 'Steinpilz-Consommé', $aId);
+        $rind = $mkGericht('rind', 'Rinderfilet', $bId);
+
+        $concept = $this->makeConcept($this->rootTeam, 'Fan-out-Menü', ['status' => 'draft']);
+        $this->makeConceptSlot($concept, ['position' => 1, 'sales_recipe_id' => $pilz->id]);
+        $this->makeConceptSlot($concept, ['position' => 2, 'sales_recipe_id' => $rind->id]);
+
+        return $concept;
+    };
+});
+
+it('Auto-Trigger: scored + persistiert die Menü-Warnung erst, wenn ALLE erfundenen Gerichte durch sind', function () {
+    $concept = ($this->mkVerbundenesMenu)();
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'concept', 'status' => 'running', 'staged' => true]);
+    $conceptStep = FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'concept', 'status' => 'freigegeben', 'ref_type' => 'concept', 'ref_id' => $concept->id]);
+    $g1 = FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht', 'parent_step_id' => $conceptStep->id, 'status' => 'running']);
+    $g2 = FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht', 'parent_step_id' => $conceptStep->id, 'status' => 'running']);
+
+    $svc = app(PlanningCascadeService::class);
+
+    // Erstes Kind fertig — das zweite läuft noch → Gate schweigt (die Folge ist noch nicht komplett geerdet).
+    $svc->markStepDone((int) $g1->id, 'recipe', 111);
+    expect($run->refresh()->cohesion_warning)->toBeNull();
+
+    // Letztes Kind fertig → Fan-out abgeschlossen → Gate feuert automatisch und persistiert die Warnung.
+    $svc->markStepDone((int) $g2->id, 'recipe', 222);
+    $warnung = $run->refresh()->cohesion_warning;
+    expect($warnung)->not->toBeNull()
+        ->and($warnung)->toHaveKeys(['stufe', 'score', 'text'])
+        ->and($warnung['stufe'])->toBeIn(['gut', 'schwach', 'kritisch']);
+});
+
+it('Auto-Trigger (eager): der Concept-Step schließt ab, wenn seine erfundenen Gerichte schon durch sind', function () {
+    $concept = ($this->mkVerbundenesMenu)();
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'concept', 'status' => 'running']);
+    $conceptStep = FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'concept', 'status' => 'running']);
+    // Kinder liefen schon inline durch (eager-Pfad: Fan-out VOR meldeKaskade).
+    FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht', 'parent_step_id' => $conceptStep->id, 'status' => 'done', 'ref_type' => 'recipe', 'ref_id' => 111]);
+    FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht', 'parent_step_id' => $conceptStep->id, 'status' => 'done', 'ref_type' => 'recipe', 'ref_id' => 222]);
+
+    // Jetzt meldet der Concept-Step selbst „done" (meldeKaskade nach dem Fan-out) → ref gesetzt → scorebar.
+    app(PlanningCascadeService::class)->markStepDone((int) $conceptStep->id, 'concept', (int) $concept->id);
+
+    expect($run->refresh()->cohesion_warning)->not->toBeNull()
+        ->and($run->refresh()->cohesion_warning)->toHaveKey('stufe');
+});
+
+it('Auto-Trigger schweigt, wenn es keine erfundenen Gerichte gibt (kein Fan-out, keine Folge)', function () {
+    $concept = $this->makeConcept($this->rootTeam, 'Ohne Fan-out', ['status' => 'draft']);
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'concept', 'status' => 'running']);
+    $conceptStep = FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'concept', 'status' => 'running']);
+
+    app(PlanningCascadeService::class)->markStepDone((int) $conceptStep->id, 'concept', (int) $concept->id);
+
+    expect($run->refresh()->cohesion_warning)->toBeNull();   // nichts erfunden → nichts zu beurteilen
+});
+
+it('Auto-Trigger rührt freie Gericht-Läufe (kein Concept-Eltern) nicht an', function () {
+    $recipe = $this->makeRecipe($this->rootTeam, 'HG: Solo | Gericht', ['status' => 'draft', 'is_sales_recipe' => true]);
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'gericht', 'status' => 'running']);
+    $step = FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht', 'status' => 'running']);
+
+    app(PlanningCascadeService::class)->markStepDone((int) $step->id, 'recipe', (int) $recipe->id);
+
+    expect($run->refresh()->cohesion_warning)->toBeNull()   // kein Menü-Gate für Einzel-Gerichte
+        ->and($run->refresh()->status)->toBe('review');
+});

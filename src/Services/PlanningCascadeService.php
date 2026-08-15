@@ -536,6 +536,7 @@ class PlanningCascadeService
         }
         $step->update(['status' => 'done', 'ref_type' => $refType, 'ref_id' => $refId, 'error' => null]);
         $this->recomputeRunStatus((int) $step->cascade_run_id);
+        $this->scoreConceptCohesionIfComplete($step);
     }
 
     /** Step fehlgeschlagen: Fehler festhalten (Artefakt bleibt ggf. teilweise erzeugt), Run neu bewerten. */
@@ -547,6 +548,97 @@ class PlanningCascadeService
         }
         $step->update(['status' => 'failed', 'error' => Str::limit($error, 500, '')]);
         $this->recomputeRunStatus((int) $step->cascade_run_id);
+        $this->scoreConceptCohesionIfComplete($step);
+    }
+
+    // ── Auto-Trigger: Menü-Folge-Kohärenz-Gate nach der Fan-out-Erfindung ──
+
+    /**
+     * Feuert das Menü-Folge-Kohärenz-Gate automatisch, sobald die per Fan-out ERFUNDENE Menüfolge
+     * eines Concept-Steps vollständig geerdet ist — statt auf den manuellen „Kohäsion prüfen"-Klick
+     * im Conceptor zu warten. Die erfundene Folge wird erst NACH dem Grounding scorebar (Skizzen /
+     * laufende Steps tragen noch keine Anker), deshalb hier am Fan-out-Abschluss und nicht schon bei
+     * der Erfindung ({@see fanoutConceptInvention}).
+     *
+     * Der Abschluss-Haken sitzt am Job-Rückkanal ({@see markStepDone}/{@see markStepFailed}): jeder
+     * {@see \Platform\FoodAlchemist\Jobs\MaterializeConceptIdeaJob} meldet EINEN Gericht-Step; der
+     * Handler bestimmt den zugehörigen Concept-Step (der meldende Step selbst = eager-Pfad, wo die
+     * Kinder inline liefen; oder dessen Concept-Eltern = async-Pfad, wo der LETZTE Kind-Job die
+     * Erfindung abschließt) und scored erst, wenn KEIN erfundenes Gericht mehr offen ist.
+     *
+     * Fail-soft: eine nicht-scorebare Folge (Provider-los, ungemappt, zu wenig Gerichte) persistiert
+     * `null` und darf den Rückkanal nie kippen.
+     */
+    private function scoreConceptCohesionIfComplete(?FoodAlchemistCascadeRunStep $step): void
+    {
+        if ($step === null) {
+            return;
+        }
+        // Den zugehörigen Concept-Step bestimmen: DIESER Step ist es selbst (eager: der Concept meldet
+        // sich fertig, seine erfundenen Gerichte liefen schon inline), oder ein erfundener Gericht-Step
+        // meldet sich (async: der letzte Kind-Job schließt die Fan-out-Erfindung ab).
+        if ($step->kind === 'concept') {
+            $conceptStep = $step;
+        } elseif ($step->kind === 'gericht' && $step->parent_step_id !== null) {
+            $conceptStep = FoodAlchemistCascadeRunStep::find($step->parent_step_id);
+        } else {
+            return;   // Rezept/GP-Steps oder freie Gericht-Läufe (kein Concept-Eltern) → kein Menü-Gate
+        }
+        if ($conceptStep === null || $conceptStep->kind !== 'concept' || $conceptStep->ref_id === null) {
+            return;
+        }
+
+        // Scorebar erst, wenn ALLE erfundenen Gericht-Geschwister durch sind (kein Job/Platzhalter mehr
+        // offen) UND überhaupt ein erfundenes Gericht existiert (ohne Fan-out gibt es keine Folge).
+        $gerichte = FoodAlchemistCascadeRunStep::where('parent_step_id', $conceptStep->id)
+            ->where('kind', 'gericht')->get(['status']);
+        if ($gerichte->isEmpty()
+            || $gerichte->whereIn('status', ['geplant', 'queued', 'running'])->isNotEmpty()) {
+            return;
+        }
+
+        $team = Team::find($conceptStep->team_id);
+        if ($team === null) {
+            return;
+        }
+        try {
+            $this->persistConceptCohesion((int) $conceptStep->cascade_run_id, $team, (int) $conceptStep->ref_id);
+        } catch (\Throwable) {
+            // fail-soft: eine nicht-scorebare Folge darf den Job-Rückkanal nie kippen
+        }
+    }
+
+    /**
+     * Berechnet die Aroma-Kohäsion der Gerichte eines Concepts ({@see PairingService::menuCohesion} →
+     * {@see PairingService::menuKohaesionWarnung}) und persistiert die abgestufte Warnung am Run
+     * (`cohesion_warning`). Gleiche Auffaltung der Gerichte wie {@see \Platform\FoodAlchemist\Livewire\Concepter\Editor::kohaesionPruefen}
+     * (Slot-Gericht + Paket-Gerichte, dubletten-frei). `null`, wenn nichts zu beurteilen ist.
+     */
+    private function persistConceptCohesion(int $runId, Team $team, int $conceptId): void
+    {
+        $concept = app(ConceptService::class)->detail($team, $conceptId);
+        if ($concept === null) {
+            return;
+        }
+        $dishes = [];
+        foreach ($concept->slots as $slot) {
+            if ($slot->dish) {
+                $dishes[$slot->dish->id] = $slot->dish;
+            } elseif ($slot->package) {
+                foreach ($slot->package->dishes as $pg) {
+                    if ($pg->dish) {
+                        $dishes[$pg->dish->id] = $pg->dish;
+                    }
+                }
+            }
+        }
+        $pairing = app(PairingService::class);
+        $kohaesion = count($dishes) >= 2
+            ? $pairing->menuCohesion(array_values($dishes))
+            : ['zu_wenig' => true];
+        $warnung = $pairing->menuKohaesionWarnung($kohaesion);
+
+        FoodAlchemistCascadeRun::find($runId)?->update(['cohesion_warning' => $warnung]);
     }
 
     /**

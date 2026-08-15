@@ -36,6 +36,7 @@ class FoodAlchemistCascadeRun extends Model
         'uuid' => 'string',
         'params' => 'array',
         'staged' => 'boolean',
+        'cohesion_warning' => 'array',
     ];
 
     /** Steps dieses Laufs (concept/gericht/rezept/gp), Baum über parent_step_id. */
