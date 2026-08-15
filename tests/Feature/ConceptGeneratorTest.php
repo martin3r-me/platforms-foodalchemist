@@ -539,6 +539,146 @@ it('Menü-Leitplanken: fehlende/fremde Balance-Achse lässt den Gerüst-Prompt o
     expect(spyPromptText($spy))->not->toContain('menue_zusammenstellung');
 });
 
+/**
+ * Bindet einen Provider-Stub für den Kreativ-Kopf: der Gerüst-Call (concept.brief_geruest)
+ * liefert Slots/Preis; der Plan-Call (concept.plan) liefert die kreative Canvas. Diskriminiert
+ * am Task-Text ('Concept-Canvas' steht nur im Plan-Prompt). $planWerte=null ⇒ Plan-Call wirft
+ * (KI-aus-Pfad, fail-soft).
+ */
+function bindPlanStub(array $slots, ?array $planWerte): void
+{
+    config(['foodalchemist.ai.provider' => 'core']);
+    app()->bind(LLMProviderContract::class, fn () => new class($slots, $planWerte) implements LLMProviderContract
+    {
+        public function __construct(private array $slots, private ?array $planWerte) {}
+
+        public function getName(): string
+        {
+            return 'test-stub';
+        }
+
+        public function chat(array $messages, array $options = []): array
+        {
+            $prompt = collect($messages)->pluck('content')->filter()->implode("\n");
+            if (str_contains($prompt, 'Concept-Canvas')) {   // concept.plan
+                if ($this->planWerte === null) {
+                    return ['content' => 'kein JSON — Plan-Call scheitert', 'usage' => [], 'model' => 'stub', 'tool_calls' => null];
+                }
+
+                return ['content' => json_encode(['werte' => $this->planWerte, 'confidence' => 0.77, 'reasoning' => 'stub']), 'usage' => [], 'model' => 'stub', 'tool_calls' => null];
+            }
+
+            // concept.brief_geruest
+            return ['content' => json_encode(['werte' => [
+                'name' => 'KI-Plan-Menü', 'target_price_pp' => 40, 'slots' => $this->slots,
+            ], 'confidence' => 0.82, 'reasoning' => 'stub']), 'usage' => [], 'model' => 'stub', 'tool_calls' => null];
+        }
+
+        public function streamChat(array $messages, callable $onDelta, array $options = []): void {}
+
+        public function getAvailableModels(): array
+        {
+            return ['stub'];
+        }
+
+        public function getDefaultModel(): string
+        {
+            return 'stub';
+        }
+
+        public function isAvailable(): bool
+        {
+            return true;
+        }
+    });
+}
+
+it('Kreativ-Kopf planAusBrief: Draft + Gerüst + kreative Canvas + LEERE Fan-out-Slots (nicht befüllt)', function () {
+    // Gerüst: Vorspeise (1) + Hauptgang (2) = 3 erfindbare Positionen. Plan: volle Canvas.
+    bindPlanStub(
+        [
+            ['label' => 'Vorspeise', 'slot_type' => 'gang', 'target_count' => 1],
+            ['label' => 'Hauptgang', 'slot_type' => 'gang', 'target_count' => 2],
+        ],
+        [
+            'name_claim' => 'Alpenglühen — der Berg auf dem Teller',
+            'leitidee' => 'Ein Menü, das die Aromen der Almwiese in Gänge übersetzt.',
+            'usp_eignung' => 'Regional, saisonal — passt zum Herbst-Galadinner.',
+            'inszenierung' => 'Auf Schieferplatten, Gang für Gang moderiert.',
+            'geschmackswelten' => [
+                ['claim' => 'Kräuterwiese', 'description' => 'Grün, frisch, heuartig.'],
+                ['claim' => 'Waldboden', 'description' => 'Erdig, pilzig, dunkel.'],
+                ['claim' => '', 'description' => ''],   // leere Welt wird übersprungen
+            ],
+        ],
+    );
+    $this->actingAs($this->makeUser($this->rootTeam));
+
+    $e = $this->svc->planAusBrief($this->rootTeam, 'Herbst-Galadinner, 40 Gäste, regional, ca. 40 € p. P.');
+    $concept = $e['concept'];
+
+    // Draft + Lineage + KI-Name übernommen (kein Nutzer-Name gesetzt)
+    expect($concept->status)->toBe('draft')
+        ->and($concept->created_via)->toBe('concept_plan_ui')
+        ->and($concept->name)->toBe('KI-Plan-Menü')
+        ->and($concept->description)->toContain('Herbst-Galadinner')
+        ->and($e['geruest_confidence'])->toBe(0.82)
+        ->and($e['plan_confidence'])->toBe(0.77);
+
+    // Frame hängt am Konzept (Reuse geruestAusBriefFuerOwner)
+    $frame = $this->frames->find('concept', $concept->id);
+    expect($frame)->not->toBeNull()
+        ->and($frame->slots()->count())->toBe(2)
+        ->and((float) $frame->target_price_pp)->toBe(40.0);
+
+    // LEERE Fan-out-Slots: 1 + 2 = 3 Positionen, alle leer (kein Gericht/Paket), Typ-Default 'gericht'
+    // → exakt der fanoutConceptInvention-Filter. NICHTS wurde vom Assembler befüllt.
+    expect($e['slots'])->toBe(3);
+    $fanoutZiele = FoodAlchemistConceptSlot::where('concept_id', $concept->id)
+        ->whereNull('sales_recipe_id')->whereNull('package_id')
+        ->whereNotIn('type', ['text', 'spacer', 'header', 'header_preis'])
+        ->get();
+    expect($fanoutZiele->count())->toBe(3)
+        ->and($fanoutZiele->pluck('role')->sort()->values()->all())->toBe(['Hauptgang', 'Hauptgang', 'Vorspeise'])
+        ->and(FoodAlchemistConceptSlot::where('concept_id', $concept->id)->whereNotNull('sales_recipe_id')->count())->toBe(0);
+
+    // Kreative Canvas gefüllt: Skalare + Geschmackswelten (leere übersprungen, description im meta)
+    $canvas = app(\Platform\FoodAlchemist\Services\CanvasService::class);
+    $cv = $canvas->find('concept', 'concept', $concept->id);
+    $werte = $canvas->werte($cv);
+    expect($werte['name_claim'])->toContain('Alpenglühen')
+        ->and($werte['leitidee'])->toContain('Almwiese')
+        ->and($werte['inszenierung'])->toContain('Schieferplatten')
+        ->and($werte['geschmackswelten'])->toHaveCount(2)
+        ->and($werte['geschmackswelten'][0]['value'])->toBe('Kräuterwiese')
+        ->and($werte['geschmackswelten'][0]['meta']['description'])->toBe('Grün, frisch, heuartig.');
+});
+
+it('Kreativ-Kopf planAusBrief: fail-soft — scheiternder concept.plan lässt Concept/Frame/Slots stehen, Canvas leer', function () {
+    bindPlanStub(
+        [['label' => 'Hauptgang', 'slot_type' => 'gang', 'target_count' => 1]],
+        null,   // Plan-Call scheitert (kein valides JSON)
+    );
+    $this->actingAs($this->makeUser($this->rootTeam));
+
+    // Eigener Name gesetzt → KI-Name greift nicht.
+    $e = $this->svc->planAusBrief($this->rootTeam, 'Buffet, 30 Gäste', [], 'Mein Konzept');
+    $concept = $e['concept'];
+
+    expect($concept->status)->toBe('draft')
+        ->and($concept->name)->toBe('Mein Konzept')
+        ->and($e['plan_confidence'])->toBeNull()               // Plan-Call scheiterte → null
+        ->and($e['slots'])->toBe(1);
+
+    // Gerüst + leerer Fan-out-Slot stehen trotz gescheitertem Plan
+    expect($this->frames->find('concept', $concept->id))->not->toBeNull()
+        ->and(FoodAlchemistConceptSlot::where('concept_id', $concept->id)->whereNull('sales_recipe_id')->count())->toBe(1);
+
+    // Canvas blieb leer (kein Entry angelegt)
+    $canvas = app(\Platform\FoodAlchemist\Services\CanvasService::class);
+    expect($canvas->find('concept', 'concept', $concept->id))->toBeNull();
+});
+
 it('Slot-Semantik: Dessert-Slot bevorzugt die Dessert-Hauptgruppe vor besser bepreisten HG-Gerichten', function () {
     // Dessert-HG + Dessert-Gericht (ohne Anker, ohne Preisvorteil) — Semantik muss stechen
     $desHg = FoodAlchemistDishMainGroup::create(['team_id' => $this->rootTeam->id, 'code' => 'DES', 'label' => 'Dessert']);

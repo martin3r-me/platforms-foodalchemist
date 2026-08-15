@@ -275,6 +275,167 @@ class ConceptGeneratorService
         return $ergebnis + ['brief_confidence' => $proposal->confidence ?? null];
     }
 
+    // ── Etappe 2b »Kreativ-Kopf«: Brief → Draft-Concept + Frame + Canvas + leere Fan-out-Slots ──
+
+    /**
+     * Kreativ-Kopf (der „alte Plan", vorab ausgearbeitet): Freitext-Brief → **Draft-Concept**
+     * + **Planungs-Gerüst** (Frame, Reuse {@see geruestAusBriefFuerOwner}: Gänge/Zielpreis/Diät)
+     * + **kreative Concept-Canvas** (`concept.plan`: name_claim/Leitidee/USP/Inszenierung/
+     * Geschmackswelten) + **materialisierte LEERE Concept-Slots** als Fan-out-Ziele.
+     *
+     * Anders als {@see generiereAusBrief} (deterministischer Assembler FÜLLT die Slots aus dem
+     * VK-Bestand) bleiben hier die Slots bewusst LEER — die spätere Kaskaden-Erfindung
+     * ({@see PlanningCascadeService::fanoutConceptInvention}) erfindet je leerem Slot ein Gericht.
+     * Dieser Service macht NUR die Vorbereitung; er startet KEINEN Fan-out (das ist der staged-Pfad
+     * über den Concept-Step, nächster Roadmap-Chunk `existing_concept_id`).
+     *
+     * Fail-soft (Nordstern-Grundsatz): ein leerer/fehlgeschlagener `concept.plan` kippt weder
+     * Concept noch Frame noch Slots — die kreative Canvas ist Kür, das Gerüst ist Pflicht. Das
+     * Gerüst selbst (Reuse) wirft typisiert (KiNichtVerfuegbar/KiDeaktiviert), wenn die KI kein
+     * verwertbares Gerüst liefert — dann steht kein sinnvoller Plan; den frisch angelegten Entwurf
+     * räumen wir in diesem Fall wieder ab, damit kein leerer Draft-Rumpf zurückbleibt.
+     *
+     * @param  array<string,mixed>  $extra  Segment + Marken-Kontext (DNA-Kaskade) + Anlässe … →
+     *   fließt an den Gerüst- UND den Plan-Prompt (damit Rahmen und Handschrift zur Marke passen).
+     * @return array{concept: FoodAlchemistConcept, frame: FoodAlchemistPlanningFrame, slots: int, geruest_confidence: float|null, plan_confidence: float|null}
+     */
+    public function planAusBrief(Team $team, string $brief, array $extra = [], ?string $name = null, string $via = 'ui'): array
+    {
+        $brief = trim($brief);
+        if ($brief === '') {
+            throw new RuntimeException('Leerer Brief — Freitext nötig.');
+        }
+
+        // Draft-Concept zuerst (als Gerüst-/Canvas-Owner). Description = Brief als Kontext.
+        $concept = $this->concepts->create($team, [
+            'name' => $name !== null && trim($name) !== '' ? trim($name) : 'Konzept-Entwurf (KI-Plan)',
+            'status' => 'draft',
+        ]);
+        $concept->update([
+            'created_via' => 'concept_plan_' . $via,
+            'description' => mb_substr($brief, 0, 2000),
+        ]);
+
+        // Frame — Reuse: KI baut Slots/Preise/Diät-Regeln aus dem Brief (Pflicht). Wirft die KI,
+        // ist kein sinnvoller Plan möglich → frisch angelegten Draft (+ evtl. Rumpf-Frame) abräumen.
+        try {
+            $geruest = $this->geruestAusBriefFuerOwner($team, 'concept', (int) $concept->id, $brief, $extra, $via);
+        } catch (\Throwable $e) {
+            $this->frames->find('concept', (int) $concept->id)?->delete();
+            $concept->delete();
+            throw $e;
+        }
+        $frame = $geruest['frame'];
+        // KI-Namensvorschlag übernehmen, wenn der Nutzer keinen gesetzt hat.
+        if (($name === null || trim($name) === '') && is_string($geruest['name'] ?? null) && trim($geruest['name']) !== '') {
+            $concept->update(['name' => trim($geruest['name'])]);
+        }
+
+        // Kreative Canvas (concept.plan) — fail-soft: leer/KI-aus kippt den Draft nicht.
+        $planConfidence = $this->fuelleCanvasAusPlan($team, $concept, $brief, $extra);
+
+        // Fan-out-Ziele: je Frame-Slot N LEERE Concept-Slots (NICHT befüllen).
+        $slotZahl = $this->materialisiereLeereSlots($team, $concept, $frame);
+
+        return [
+            'concept' => $concept->refresh(),
+            'frame' => $frame->refresh(),
+            'slots' => $slotZahl,
+            'geruest_confidence' => $geruest['confidence'] ?? null,
+            'plan_confidence' => $planConfidence,
+        ];
+    }
+
+    /**
+     * `concept.plan` → kreative Concept-Canvas füllen (fail-soft). Liefert die Plan-Konfidenz
+     * oder null, wenn der Call nichts Verwertbares brachte (KI aus/leer) — der Draft steht dann
+     * trotzdem (Canvas ist Kür). Mapping der Prompt-`werte` auf die concept-Canvas
+     * ({@see CanvasService::TEMPLATES}['concept']): die vier Langtext-/Text-Felder als Skalare,
+     * `geschmackswelten` als repeatable — je Welt `value` = Überschrift (`claim`), die
+     * ausführliche `description` ins Entry-`meta` (so rendert {@see CanvasService::promptKontext}
+     * „Überschrift – Beschreibung" ohne Dublette).
+     *
+     * @param  array<string,mixed>  $extra
+     */
+    private function fuelleCanvasAusPlan(Team $team, FoodAlchemistConcept $concept, string $brief, array $extra): ?float
+    {
+        $kontext = array_merge(
+            ['brief' => $brief],
+            array_filter($extra, fn ($v) => $v !== null && $v !== '' && $v !== []),
+        );
+
+        try {
+            $proposal = app(AiGatewayService::class)->propose('concept.plan', $kontext);
+        } catch (\Throwable) {
+            return null;   // KI nicht verfügbar → Canvas bleibt leer, Draft bleibt stehen
+        }
+        $werte = is_array($proposal->werte ?? null) ? $proposal->werte : [];
+        if ($werte === []) {
+            return $proposal->confidence ?? null;
+        }
+
+        $canvas = app(CanvasService::class)->canvasFor($team, 'concept', 'concept', (int) $concept->id);
+
+        // Skalare kreative Felder (nur nicht-leere setzen — fehlende Angaben nicht überschreiben).
+        $skalar = [];
+        foreach (['name_claim', 'leitidee', 'usp_eignung', 'inszenierung'] as $key) {
+            if (isset($werte[$key]) && is_string($werte[$key]) && trim($werte[$key]) !== '') {
+                $skalar[$key] = trim($werte[$key]);
+            }
+        }
+        if ($skalar !== []) {
+            app(CanvasService::class)->saveSkalare($canvas, $skalar);
+        }
+
+        // Geschmackswelten (repeatable): value = Überschrift (claim), description ins meta.
+        $welten = is_array($werte['geschmackswelten'] ?? null) ? $werte['geschmackswelten'] : [];
+        foreach ($welten as $welt) {
+            if (! is_array($welt)) {
+                continue;
+            }
+            $claim = is_string($welt['claim'] ?? null) ? trim($welt['claim']) : '';
+            $beschr = is_string($welt['description'] ?? null) ? trim($welt['description']) : '';
+            if ($claim === '' && $beschr === '') {
+                continue;   // leere Welt überspringen
+            }
+            app(CanvasService::class)->addEntry(
+                $canvas,
+                'geschmackswelten',
+                $claim !== '' ? $claim : $beschr,   // Überschrift; fehlt sie, trägt die Beschreibung
+                ['claim' => null, 'description' => $beschr !== '' ? $beschr : null],
+            );
+        }
+
+        return $proposal->confidence ?? null;
+    }
+
+    /**
+     * Fan-out-Vorbereitung: je Frame-Slot N LEERE Concept-Slots anlegen (role = Slot-Label,
+     * is_pflicht vom Frame-Slot geerbt), NICHT befüllen. Die Slots tragen den DB-Default-Typ
+     * `gericht` (kein sales_recipe_id/package_id) → {@see PlanningCascadeService::fanoutConceptInvention}
+     * erkennt sie als leere, erfindbare Positionen. N = target_count (mind. 1). Ein 2er-Slot wird
+     * also zu zwei erfindbaren Positionen, spiegelbildlich zur Assembler-Auffüllung.
+     *
+     * @return int  Zahl der angelegten leeren Slots
+     */
+    private function materialisiereLeereSlots(Team $team, FoodAlchemistConcept $concept, FoodAlchemistPlanningFrame $frame): int
+    {
+        $frame->loadMissing('slots');
+        $zahl = 0;
+        foreach ($frame->slots as $frameSlot) {
+            $n = max(1, (int) ($frameSlot->target_count ?? 1));
+            for ($i = 0; $i < $n; $i++) {
+                $this->concepts->addSlot($team, (int) $concept->id, [
+                    'role' => $frameSlot->label,
+                    'is_pflicht' => (bool) $frameSlot->is_pflicht,
+                ]);
+                $zahl++;
+            }
+        }
+
+        return $zahl;
+    }
+
     /**
      * Kickoff-Wizard: Freitext-Brief → KI baut NUR das Planungs-Gerüst (Slots+Rules)
      * für einen beliebigen Owner (foodbook|concept) — KEINE Konzept-Anlage, KEIN
