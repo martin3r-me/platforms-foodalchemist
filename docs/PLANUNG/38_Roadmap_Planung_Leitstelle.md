@@ -158,6 +158,8 @@ FA `main` = `eb85e3c`, demo deployt + Migration `[180] Ran`. Nachweis: `Planning
 
 ### 🥉 Etappe 4 — Eingabe-Reife
 - [ ] **Skizzen-Integration** — Ideen/Skizzen als Kaskaden-Eingang (bisher deferred)
+  - [x] **Teil 1 — Skizze → Gericht-Tab (geführter Kaskaden-Eingang):** je Skizze im Divergenz-Board ein Knopf „als Gericht" (`Planung\Index::skizzeAlsGericht`) — überträgt Titel→Titel + Beschreibung→Brief in den Gericht-Tab und springt dorthin (Alpine `tab='gericht'`); der Mensch prüft die Leitplanken und drückt selbst „Go".
+    → `137c1ec` (`gebaut`, Sandbox `getestet`): **bewusst Prefill statt Auto-Kaskade** — erfüllt den Nordstern „nichts läuft still" (geführte Freigabe) und reust den voll getesteten `goKaskade`-Pfad, ohne neue Fan-out-Verdrahtung/Migration/LLM-Call. **Scope-Entscheid:** eine Divergenz-Board-Skizze IST eine Gericht-Idee → Gericht-Tab (nicht Basisrezept/Concept). Die Skizze bleibt `entwurf` (Prefill verbraucht sie nicht — erst der Go erzeugt etwas; kein Doppel-Lauf-Risiko). Team-scoped + an die aktive Session gebunden + nicht-verworfen; eine fremde/gelöschte/Papierkorb-Skizze wird gesagt, nicht still verschluckt. Knopf in Einzel- UND Paket-Zeile. 2 neue Tests (Übertragung + entwurf bleibt · verworfene Skizze → fehler + Tab leer); `PlanungLeitstelle`+`PlanningCascade` 91/91 grün, Blade-Kompilat gelintet (0 Fehler). **Offen (Teil 2):** Kaskaden-Status zurück auf die Skizzen-Karte (läuft/prüfen/fertig) + Lineage. **Teil 3:** KI-Divergenz-Skizzen als Batch-Kaskaden-Eingang. Real-Abnahme auf demo offen.
 - [ ] **Brief-Vorlagen** je Sektor/Anlass (Schnellstart statt Blank Page)
 - [ ] **Trend-Anbindung** — Trendradar-Signal → vorbefülltes Briefing
 - [ ] **Titel-/Namensvorschlag** aus dem Brief (nüchtern, §-konform)
