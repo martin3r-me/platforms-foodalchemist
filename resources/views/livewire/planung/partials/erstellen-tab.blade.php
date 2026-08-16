@@ -20,7 +20,17 @@
             </div>
         @endif
         <label class="{{ $label ?? 'text-[11px] text-gray-500' }}">Titel</label>
-        <input type="text" wire:model="eingabe.{{ $scope }}.titel" class="{{ $input }} mb-3" placeholder="z. B. Tomatensauce" data-planung-titel />
+        <div class="flex items-center gap-2 mb-3">
+            <input type="text" wire:model="eingabe.{{ $scope }}.titel" class="{{ $input }} flex-1" placeholder="z. B. Tomatensauce" data-planung-titel />
+            {{-- Et.4 Teil 3: nüchterner §-konformer Titelvorschlag aus dem Briefing (nur wenn Titelfeld leer). Kein Go. --}}
+            <button type="button" wire:click="titelVorschlagen('{{ $scope }}')" @disabled($laeuft)
+                    wire:loading.attr="disabled" wire:target="titelVorschlagen"
+                    class="{{ $btnGhost }} disabled:opacity-40 inline-flex items-center gap-1 whitespace-nowrap" data-planung-titel-vorschlag>
+                @svg('heroicon-o-sparkles', 'w-3.5 h-3.5')
+                <span wire:loading.remove wire:target="titelVorschlagen">Titel vorschlagen</span>
+                <span wire:loading wire:target="titelVorschlagen">…</span>
+            </button>
+        </div>
         <label class="{{ $label ?? 'text-[11px] text-gray-500' }}">Beschreibung (geht in die Erzeugung)</label>
         <textarea wire:model="eingabe.{{ $scope }}.brief" rows="3" class="{{ $input }} mb-3" placeholder="Constraints, Anlass, Richtung …"></textarea>
         <label class="{{ $label ?? 'text-[11px] text-gray-500' }}">Kreativ-Modus</label>

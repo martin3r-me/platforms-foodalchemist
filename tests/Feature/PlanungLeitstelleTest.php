@@ -15,6 +15,7 @@ use Platform\FoodAlchemist\Services\PlanningCascadeService;
 use Platform\FoodAlchemist\Services\PlanningSessionService;
 use Platform\FoodAlchemist\Services\RecipeDependencyWorkflowService;
 use Platform\FoodAlchemist\Services\RecipeGeneratorService;
+use Platform\FoodAlchemist\Services\TitelVorschlagService;
 use Platform\FoodAlchemist\Tests\Support\SeedsTeamHierarchy;
 use Platform\FoodAlchemist\Tests\TestCase;
 
@@ -958,6 +959,67 @@ it('vorlagenFuer: Gericht hat Vorlagen, Basisrezept (rezept) hat in Teil 1 keine
     foreach ($inst->vorlagenFuer('gericht') as $v) {
         expect($sektoren)->toContain($v['sektor']);
     }
+});
+
+// ── Titel-/Namensvorschlag aus dem Brief (Etappe 4, Teil 3 — UI) ──
+
+it('titelVorschlagen: leeres Titelfeld + Brief → Service-Vorschlag füllt den Titel (empty-only)', function () {
+    $this->mock(TitelVorschlagService::class, function ($m) {
+        $m->shouldReceive('titelVorschlag')->once()
+            ->with('rezept', 'Dunkle Rotwein-Reduktion mit Schalotten.')
+            ->andReturn('Sauce: Rotwein-Reduktion');
+    });
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'X']);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->set('eingabe.rezept.brief', 'Dunkle Rotwein-Reduktion mit Schalotten.')
+        ->call('titelVorschlagen', 'rezept')
+        ->assertSet('eingabe.rezept.titel', 'Sauce: Rotwein-Reduktion')
+        ->assertSet('fehler', null);
+});
+
+it('titelVorschlagen: ein bereits getippter Titel wird NICHT überschrieben (Service nicht gerufen)', function () {
+    $this->mock(TitelVorschlagService::class, function ($m) {
+        $m->shouldNotReceive('titelVorschlag');    // empty-only Guard greift VOR dem Service
+    });
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'X']);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->set('eingabe.gericht.titel', 'Mein Teller')
+        ->set('eingabe.gericht.brief', 'Ein Hauptgang.')
+        ->call('titelVorschlagen', 'gericht')
+        ->assertSet('eingabe.gericht.titel', 'Mein Teller')   // getippter Titel bleibt
+        ->assertSet('fehler', null);
+});
+
+it('titelVorschlagen: leeres Briefing → fehler, kein Titel (Service nicht gerufen)', function () {
+    $this->mock(TitelVorschlagService::class, function ($m) {
+        $m->shouldNotReceive('titelVorschlag');    // Brief-leer-Guard greift VOR dem Service
+    });
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'X']);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->set('eingabe.rezept.brief', '   ')
+        ->call('titelVorschlagen', 'rezept')
+        ->assertSet('eingabe.rezept.titel', '')
+        ->assertSet('fehler', 'Für den Titelvorschlag erst ein Briefing im Tab eingeben.');
+});
+
+it('titelVorschlagen: Service liefert null (KI weg/leer) → fail-soft fehler, kein Titel gefüllt', function () {
+    $this->mock(TitelVorschlagService::class, function ($m) {
+        $m->shouldReceive('titelVorschlag')->once()->andReturn(null);
+    });
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'X']);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->set('eingabe.gericht.brief', 'Ein Teller mit unklarem Fokus.')
+        ->call('titelVorschlagen', 'gericht')
+        ->assertSet('eingabe.gericht.titel', '')
+        ->assertSet('fehler', 'Kein Titelvorschlag möglich — bitte das Briefing schärfen oder manuell benennen.');
 });
 
 /**

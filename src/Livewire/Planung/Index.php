@@ -16,6 +16,7 @@ use Platform\FoodAlchemist\Services\IdeenService;
 use Platform\FoodAlchemist\Services\PairingService;
 use Platform\FoodAlchemist\Services\PlanningCascadeService;
 use Platform\FoodAlchemist\Services\PlanningSessionService;
+use Platform\FoodAlchemist\Services\TitelVorschlagService;
 use Platform\FoodAlchemist\Support\TeamScope;
 
 /**
@@ -684,6 +685,49 @@ class Index extends Component
         }
         $this->fehler = null;
         $this->meldung = 'Vorlage „'.$vorlage['label'].'" geladen — Briefing und Kontext vorbefüllt, bitte prüfen und anpassen.';
+    }
+
+    /**
+     * Et.4 (Eingabe-Reife) »Titel-/Namensvorschlag aus dem Brief« — Teil 3 (UI). Schlägt aus dem
+     * Tab-Briefing einen nüchternen, §-konformen Titel vor ({@see TitelVorschlagService}, Teil 2 —
+     * `recipe.titel_vorschlag` §1 bzw. `vk.titel_vorschlag` §4.4-Pipe) und füllt ihn ins Tab-Titelfeld
+     * — **nur wenn dort noch keiner steht** (empty-only, Muster {@see briefVorlage}/{@see skizzeAlsGericht});
+     * ein bereits getippter Titel bleibt unangetastet. Kein Go — reiner Vorschlag, der Mensch prüft.
+     *
+     * `concept` ist bewusst außen vor (dessen `name_claim` liefert der kreative KI-Kopf, nicht der
+     * nüchterne Titel-Prompt) — die Blade blendet den Knopf nur im Basisrezept-/Gericht-Tab ein; der
+     * Scope-Guard hier fängt einen Fehl-Aufruf fail-soft ab.
+     */
+    public function titelVorschlagen(string $scope, TitelVorschlagService $svc): void
+    {
+        if (! in_array($scope, self::SCOPES, true) || ! isset($this->eingabe[$scope])) {
+            return;
+        }
+        // Empty-only: ein bereits gesetzter Titel wird NIE überschrieben.
+        if (trim((string) ($this->eingabe[$scope]['titel'] ?? '')) !== '') {
+            $this->fehler = null;
+            $this->meldung = 'Es steht bereits ein Titel — Vorschlag übersprungen (nicht überschrieben).';
+
+            return;
+        }
+        $brief = trim((string) ($this->eingabe[$scope]['brief'] ?? ''));
+        if ($brief === '') {
+            $this->fehler = 'Für den Titelvorschlag erst ein Briefing im Tab eingeben.';
+
+            return;
+        }
+        $vorschlag = $svc->titelVorschlag($scope, $brief);
+        if ($vorschlag === null) {
+            // concept (kein nüchterner Titel) ODER KI weg/leeres Ergebnis — fail-soft, kein Titel gefüllt.
+            $this->fehler = $scope === 'concept'
+                ? 'Für Concepts liefert der KI-Kopf den Namen — der Titelvorschlag gilt nur für Basisrezept/Gericht.'
+                : 'Kein Titelvorschlag möglich — bitte das Briefing schärfen oder manuell benennen.';
+
+            return;
+        }
+        $this->eingabe[$scope]['titel'] = $vorschlag;
+        $this->fehler = null;
+        $this->meldung = 'Titel vorgeschlagen: „'.$vorschlag.'" — bitte prüfen und anpassen.';
     }
 
     /**
