@@ -592,6 +592,15 @@ class PlanningCascadeService
                 '_defer_children' => $staged,
                 'cascade_step_id' => $stepId,
             ]);
+            // Et.6 (Roadmap Z.205): Zielpreis-Korridor Concept → Gericht — je erfundenem Gericht einen
+            // Ziel-VK aus dem Concept-Frame ableiten (aus dem Fan-out des Concepts, nicht aus dem Rezept-Regler).
+            // Ein bereits gesetzter ziel_vk_eur (explizite Rezept-Leitplanke) gewinnt und wird nicht überschrieben.
+            if (! isset($params['ziel_vk_eur'])) {
+                $zielVk = $this->conceptGerichtZielVk($team, $slotId);
+                if ($zielVk !== null) {
+                    $params['ziel_vk_eur'] = $zielVk;
+                }
+            }
             $workflow = app(RecipeDependencyWorkflowService::class);
             $context = $workflow->prepare($team, $stepId, $beschreibung, $params, true);
             $gen = app(RecipeGeneratorService::class)->generiere($team, $beschreibung, $params, null, true, 'plan_go', $context);
@@ -623,6 +632,64 @@ class PlanningCascadeService
             $idee->update(['generation_status' => 'fehlgeschlagen', 'source_meta' => array_merge($idee->source_meta ?? [], ['generation_fehler' => mb_substr($e->getMessage(), 0, 500)])]);
             $this->markStepFailed($stepId, $e->getMessage());
         }
+    }
+
+    /**
+     * Et.6 (Roadmap Z.205): **Zielpreis-Korridor Concept → Gericht (aus Frame).** Leitet für ein
+     * erfundenes Concept-Gericht einen Ziel-VK (netto je Portion) aus dem Concept-Frame ab, damit
+     * das Wirtschaftlichkeits-Glied der Anreicherung ({@see RecipeOneShotService::wirtschaftlichkeitsGlied}
+     * via {@see EnrichRecipeJob}) das Gericht gegen ein echtes Ziel misst statt gegen null.
+     *
+     * Quelle in Reihenfolge (keine Erfindung, „aus Frame"):
+     *   1. **Preis-Anker des passenden Frame-Slots** (per Gericht, via Slot-Rolle = Frame-Slot-Label
+     *      gematcht) — die verlustfreie per-Gericht-Angabe, die der Frame direkt trägt;
+     *   2. sonst der **Frame-Kopf-Zielpreis je Person** (`target_price_pp`) gleichmäßig auf die Positionen
+     *      verteilt (`target_price_pp / Σ target_count`). Ein Menü-Zielpreis je Person wird nur durch die
+     *      Zahl der Gänge zu einem per-Gericht-Wert — die Gleichverteilung ist eine bewusste, dokumentierte
+     *      Allokations-Annahme (kein erfundener Datenwert), greift nur, wenn kein Slot-Anker vorliegt.
+     * Kein Ziel-Slot / kein Frame / kein Preis / Wert ≤ 0 → null (kein `ziel_vk_eur`, Bestandsverhalten).
+     */
+    private function conceptGerichtZielVk(Team $team, int $slotId): ?float
+    {
+        if ($slotId <= 0) {
+            return null;
+        }
+        $slot = FoodAlchemistConceptSlot::find($slotId);
+        if ($slot === null) {
+            return null;
+        }
+        $frame = app(PlanningFrameService::class)->find('concept', (int) $slot->concept_id);
+        if ($frame === null) {
+            return null;
+        }
+        $frame->loadMissing('slots');
+
+        // 1) Preis-Anker des Frame-Slots mit gleicher Rolle (Label) — per Gericht, verlustfrei.
+        $rolle = trim((string) ($slot->role ?? ''));
+        if ($rolle !== '') {
+            $treffer = $frame->slots->first(
+                fn ($fs) => trim((string) ($fs->label ?? '')) === $rolle && $fs->price_anchor !== null
+            );
+            if ($treffer !== null) {
+                $anker = round((float) $treffer->price_anchor, 2);
+                if ($anker > 0) {
+                    return $anker;
+                }
+            }
+        }
+
+        // 2) Kopf-Zielpreis je Person, gleichmäßig auf die Positionen (Σ target_count) verteilt.
+        if ($frame->target_price_pp !== null) {
+            $positionen = (int) $frame->slots->sum(fn ($fs) => max(1, (int) ($fs->target_count ?? 1)));
+            if ($positionen > 0) {
+                $jeGericht = round((float) $frame->target_price_pp / $positionen, 2);
+                if ($jeGericht > 0) {
+                    return $jeGericht;
+                }
+            }
+        }
+
+        return null;
     }
 
     // ── Rückkanal aus dem Job (läuft im Queue-Worker) ──────────────────────

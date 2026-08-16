@@ -523,6 +523,93 @@ it('Fan-out-Vererbung: MENÜ-Leitplanken (menue_*) sickern NICHT in den Einzel-G
         ->and($captured['level'] ?? null)->toBe('gehoben');
 });
 
+// ── Et.6 (Roadmap Z.205): Zielpreis-Korridor Concept → Gericht (aus Frame) ──
+// Ein erfundenes Concept-Gericht bekommt einen Ziel-VK aus dem Concept-Frame — bevorzugt der
+// per-Gericht-Preis-Anker des Frame-Slots (via Rolle=Label), sonst der Kopf-Zielpreis je Person
+// gleichmäßig auf die Positionen verteilt. Nachweis über den erfassten Rezept-Param `ziel_vk_eur`.
+
+it('Zielpreis-Frame: Frame-Slot-Preis-Anker (per Gericht) landet als ziel_vk_eur am erfundenen Gericht', function () {
+    $concept = $this->makeConcept($this->rootTeam, 'Menü', ['status' => 'draft']);
+    $slot = $this->makeConceptSlot($concept, ['position' => 1, 'role' => 'Hauptgang']);
+    $frameSvc = app(PlanningFrameService::class);
+    $frame = $frameSvc->frameFor($this->rootTeam, 'concept', (int) $concept->id);
+    $frameSvc->setHead($this->rootTeam, $frame, ['target_price_pp' => 90.0]);   // Kopf da, aber Anker gewinnt
+    $frameSvc->addSlot($this->rootTeam, $frame, ['label' => 'Vorspeise', 'slot_type' => 'gang', 'target_count' => 1, 'price_anchor' => 12.0]);
+    $frameSvc->addSlot($this->rootTeam, $frame, ['label' => 'Hauptgang', 'slot_type' => 'gang', 'target_count' => 1, 'price_anchor' => 28.5]);
+
+    $recipe = $this->makeRecipe($this->rootTeam, 'Erfunden', ['status' => 'draft', 'is_sales_recipe' => true]);
+    $idee = FoodAlchemistDishIdea::create(['team_id' => $this->rootTeam->id, 'concept_id' => $concept->id, 'title' => 'Erfunden', 'status' => 'entwurf', 'target_form' => 'einzel', 'generation_status' => 'queued', 'position' => 1, 'created_via' => 'test', 'source_meta' => ['target_concept_slot_id' => (int) $slot->id]]);
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'concept', 'status' => 'running']);
+    $step = FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht', 'status' => 'running']);
+
+    $captured = [];
+    $this->mock(RecipeGeneratorService::class, function ($m) use (&$captured, $recipe) {
+        $m->shouldReceive('generiere')->once()->andReturnUsing(function ($team, $brief, $params) use (&$captured, $recipe) {
+            $captured = $params;
+
+            return ['recipe' => $recipe, 'statistik' => [], 'offene' => []];
+        });
+    });
+
+    app(PlanningCascadeService::class)->materialisiereConceptGericht($this->rootTeam, (int) $idee->id, (int) $step->id);
+
+    // Anker des Hauptgang-Slots (28,50) — nicht der Kopf-Zielpreis, nicht der Vorspeisen-Anker.
+    expect($captured['ziel_vk_eur'] ?? null)->toBe(28.5);
+});
+
+it('Zielpreis-Frame: ohne Slot-Anker fällt der Ziel-VK auf den Kopf-Zielpreis je Person / Positionen zurück', function () {
+    $concept = $this->makeConcept($this->rootTeam, 'Menü', ['status' => 'draft']);
+    $slot = $this->makeConceptSlot($concept, ['position' => 1, 'role' => 'Hauptgang']);
+    $frameSvc = app(PlanningFrameService::class);
+    $frame = $frameSvc->frameFor($this->rootTeam, 'concept', (int) $concept->id);
+    $frameSvc->setHead($this->rootTeam, $frame, ['target_price_pp' => 60.0]);
+    // 3 Positionen, KEIN Anker → Gleichverteilung 60 / 3 = 20.
+    $frameSvc->addSlot($this->rootTeam, $frame, ['label' => 'Vorspeise', 'slot_type' => 'gang', 'target_count' => 1]);
+    $frameSvc->addSlot($this->rootTeam, $frame, ['label' => 'Hauptgang', 'slot_type' => 'gang', 'target_count' => 1]);
+    $frameSvc->addSlot($this->rootTeam, $frame, ['label' => 'Dessert', 'slot_type' => 'gang', 'target_count' => 1]);
+
+    $recipe = $this->makeRecipe($this->rootTeam, 'Erfunden', ['status' => 'draft', 'is_sales_recipe' => true]);
+    $idee = FoodAlchemistDishIdea::create(['team_id' => $this->rootTeam->id, 'concept_id' => $concept->id, 'title' => 'Erfunden', 'status' => 'entwurf', 'target_form' => 'einzel', 'generation_status' => 'queued', 'position' => 1, 'created_via' => 'test', 'source_meta' => ['target_concept_slot_id' => (int) $slot->id]]);
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'concept', 'status' => 'running']);
+    $step = FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht', 'status' => 'running']);
+
+    $captured = [];
+    $this->mock(RecipeGeneratorService::class, function ($m) use (&$captured, $recipe) {
+        $m->shouldReceive('generiere')->once()->andReturnUsing(function ($team, $brief, $params) use (&$captured, $recipe) {
+            $captured = $params;
+
+            return ['recipe' => $recipe, 'statistik' => [], 'offene' => []];
+        });
+    });
+
+    app(PlanningCascadeService::class)->materialisiereConceptGericht($this->rootTeam, (int) $idee->id, (int) $step->id);
+
+    expect($captured['ziel_vk_eur'] ?? null)->toBe(20.0);
+});
+
+it('Zielpreis-Frame: ohne Frame / ohne Preis-Angabe bleibt ziel_vk_eur ungesetzt (Bestandsverhalten)', function () {
+    $concept = $this->makeConcept($this->rootTeam, 'Menü', ['status' => 'draft']);
+    $slot = $this->makeConceptSlot($concept, ['position' => 1, 'role' => 'Hauptgang']);
+    // KEIN Frame angelegt.
+    $recipe = $this->makeRecipe($this->rootTeam, 'Erfunden', ['status' => 'draft', 'is_sales_recipe' => true]);
+    $idee = FoodAlchemistDishIdea::create(['team_id' => $this->rootTeam->id, 'concept_id' => $concept->id, 'title' => 'Erfunden', 'status' => 'entwurf', 'target_form' => 'einzel', 'generation_status' => 'queued', 'position' => 1, 'created_via' => 'test', 'source_meta' => ['target_concept_slot_id' => (int) $slot->id]]);
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'concept', 'status' => 'running']);
+    $step = FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht', 'status' => 'running']);
+
+    $captured = [];
+    $this->mock(RecipeGeneratorService::class, function ($m) use (&$captured, $recipe) {
+        $m->shouldReceive('generiere')->once()->andReturnUsing(function ($team, $brief, $params) use (&$captured, $recipe) {
+            $captured = $params;
+
+            return ['recipe' => $recipe, 'statistik' => [], 'offene' => []];
+        });
+    });
+
+    app(PlanningCascadeService::class)->materialisiereConceptGericht($this->rootTeam, (int) $idee->id, (int) $step->id);
+
+    expect(array_key_exists('ziel_vk_eur', $captured))->toBeFalse();
+});
+
 // ── P3: Voll-Kaskade aus dem Foodbook-Frame ─────────────────────────────────
 
 it('vollkaskade (foodbook): 1 Concept-Step je Frame-Slot + GenerateConceptJob mit Attach ans Kapitel', function () {
