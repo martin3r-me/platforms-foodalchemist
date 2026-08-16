@@ -984,6 +984,30 @@ class PlanningCascadeService
     }
 
     /**
+     * Foto-Wiederverwendung (Cockpit, Etappe 7 Teil 3b): ein bereits vorhandenes Team-Foto als
+     * Rezept-Foto eines Rezept-/Gericht-Steps übernehmen — der Reuse-Picker-Endpunkt hinter dem
+     * Service-Primitive {@see RecipeImageService::uebernimmVorhandenesFoto} (Teil 3a). Owner-Guard
+     * über {@see ownedStep} (Schreiben nur durchs Besitzer-Team, D1); Ziel-Rezept UND Quell-Foto
+     * werden team-scoped aufgelöst ({@see FoodAlchemistRecipeStepPhoto::visibleToTeam}) — ein fremdes
+     * Quell-Foto findet der findOrFail gar nicht erst (zusätzlich zum Team-Guard im Primitive).
+     * COPY-ON-REUSE (Design-Entscheid #105): die Quell-Bytes werden physisch in eine frische
+     * ContextFile am Ziel kopiert, KEIN geteilter context_file_id → kein Lösch-Hazard; die Kopie
+     * trägt keinen Kosten-Call-Log (überlebt den KI-Re-Trigger-Purge). `$istErgebnis` → Hero (max. 1).
+     * Gibt das angelegte Foto zurück (oder null bei fremdem Step-Typ).
+     */
+    public function uebernimmVorhandenesFotoFuerStep(Team $team, int $stepId, int $quelleFotoId, bool $istErgebnis = false, ?string $caption = null): ?FoodAlchemistRecipeStepPhoto
+    {
+        $step = $this->ownedStep($team, $stepId);
+        if ($step->ref_type !== 'recipe' || $step->ref_id === null || ! in_array($step->kind, ['rezept', 'gericht'], true)) {
+            return null;
+        }
+        $recipe = FoodAlchemistRecipe::visibleToTeam($team)->findOrFail((int) $step->ref_id);
+        $quelle = FoodAlchemistRecipeStepPhoto::visibleToTeam($team)->findOrFail($quelleFotoId);
+
+        return app(RecipeImageService::class)->uebernimmVorhandenesFoto($team, $recipe, $quelle, $caption, $istErgebnis);
+    }
+
+    /**
      * „Neu anreichern" (Cockpit): stößt die Anreicherung eines bereits freigegebenen Rezept-/Gericht-Steps
      * erneut an — z. B. nachdem der erste EnrichRecipeJob-Lauf fehlschlug (deferred.enrich=failed).
      */

@@ -1640,3 +1640,113 @@ it('Cockpit-Upload: ohne gewählte Datei passiert nichts (empty-only, gesagt)', 
 
     expect(\Platform\FoodAlchemist\Models\FoodAlchemistRecipeStepPhoto::where('recipe_id', $recipe->id)->count())->toBe(0);
 });
+
+/*
+|--------------------------------------------------------------------------
+| Etappe 7 Teil 3b — Foto-Wiederverwendungs-Picker im Cockpit: ein vorhandenes
+| Team-Foto (aus einem anderen Rezept) COPY-ON-REUSE auf den Draft übernehmen,
+| statt neu hochzuladen. Kein KI-Call → überlebt den KI-Re-Trigger-Purge.
+| Verdrahtet fotoUebernehmen → uebernimmVorhandenesFotoFuerStep (Teil 3a-Primitive).
+|--------------------------------------------------------------------------
+*/
+
+it('Reuse-Picker: zeigt vorhandene Team-Fotos, schliesst die eigenen Rezept-Fotos aus', function () {
+    \Illuminate\Support\Facades\Storage::fake('public');
+    $img = app(\Platform\FoodAlchemist\Services\RecipeImageService::class);
+    // Quell-Rezept (woanders) mit einem wiederverwendbaren Foto …
+    $quellRezept = $this->makeRecipe($this->rootTeam, 'Reuse-Quelle');
+    $quelleFoto = $img->uebernimmManuellesFoto($this->rootTeam, $quellRezept, \Illuminate\Http\UploadedFile::fake()->image('quelle.jpg'));
+    // … und das Ziel-Rezept mit einem EIGENEN Foto (darf NICHT als Kandidat auftauchen).
+    $zielRezept = $this->makeRecipe($this->rootTeam, 'Reuse-Ziel', ['is_sales_recipe' => true, 'status' => 'draft']);
+    $eigenesFoto = $img->uebernimmManuellesFoto($this->rootTeam, $zielRezept, \Illuminate\Http\UploadedFile::fake()->image('eigen.jpg'));
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'gericht', 'status' => 'review']);
+    $step = FoodAlchemistCascadeRunStep::create([
+        'team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id,
+        'kind' => 'gericht', 'status' => 'freigegeben', 'ref_type' => 'recipe', 'ref_id' => $zielRezept->id, 'label' => 'Reuse-Ziel',
+    ]);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('fotoPickerOeffnen', $step->id)
+        ->assertSet('fotoPickerStep', $step->id)
+        ->assertViewHas('fotoPickerKandidaten', function ($kand) use ($quelleFoto, $eigenesFoto) {
+            $ids = array_column($kand, 'id');
+
+            return in_array((int) $quelleFoto->id, $ids, true)      // Fremd-Rezept-Foto = Kandidat
+                && ! in_array((int) $eigenesFoto->id, $ids, true);  // eigenes Rezept-Foto ausgeschlossen
+        })
+        ->call('fotoPickerSchliessen')
+        ->assertSet('fotoPickerStep', null);
+});
+
+it('Reuse-Picker: vorhandenes Foto als Pool-Foto übernehmen (Kopie, kein KI-Call, schliesst Picker)', function () {
+    \Illuminate\Support\Facades\Storage::fake('public');
+    $img = app(\Platform\FoodAlchemist\Services\RecipeImageService::class);
+    $quellRezept = $this->makeRecipe($this->rootTeam, 'Reuse-Q2');
+    $quelleFoto = $img->uebernimmManuellesFoto($this->rootTeam, $quellRezept, \Illuminate\Http\UploadedFile::fake()->image('q2.jpg'));
+    $zielRezept = $this->makeRecipe($this->rootTeam, 'Reuse-Z2', ['is_sales_recipe' => true, 'status' => 'draft']);
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'gericht', 'status' => 'review']);
+    $step = FoodAlchemistCascadeRunStep::create([
+        'team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id,
+        'kind' => 'gericht', 'status' => 'freigegeben', 'ref_type' => 'recipe', 'ref_id' => $zielRezept->id, 'label' => 'Reuse-Z2',
+    ]);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('fotoPickerOeffnen', $step->id)
+        ->call('fotoUebernehmen', $step->id, $quelleFoto->id, false)
+        ->assertSet('fehler', null)
+        ->assertSet('fotoPickerStep', null);   // nach der Übernahme zu
+
+    $kopie = \Platform\FoodAlchemist\Models\FoodAlchemistRecipeStepPhoto::where('recipe_id', $zielRezept->id)->first();
+    expect($kopie)->not->toBeNull()
+        ->and((bool) $kopie->is_result)->toBeFalse()
+        // COPY-ON-REUSE: frische ContextFile, NICHT der geteilte Quell-context_file_id.
+        ->and((int) $kopie->context_file_id)->not->toBe((int) $quelleFoto->context_file_id)
+        // Quelle unangetastet.
+        ->and(\Platform\FoodAlchemist\Models\FoodAlchemistRecipeStepPhoto::whereKey($quelleFoto->id)->exists())->toBeTrue();
+    // Kein Kosten-Call-Log (kein KI-Call) → überlebt loescheKiFotos.
+    expect(\Illuminate\Support\Facades\DB::table('foodalchemist_ai_call_log')
+        ->where('target_table', 'foodalchemist_recipe_step_photos')
+        ->where('target_id', $kopie->id)->exists())->toBeFalse();
+});
+
+it('Reuse-Picker: vorhandenes Foto als Ergebnis-/Hero-Foto übernehmen (is_result)', function () {
+    \Illuminate\Support\Facades\Storage::fake('public');
+    $img = app(\Platform\FoodAlchemist\Services\RecipeImageService::class);
+    $quellRezept = $this->makeRecipe($this->rootTeam, 'Reuse-Q3');
+    $quelleFoto = $img->uebernimmManuellesFoto($this->rootTeam, $quellRezept, \Illuminate\Http\UploadedFile::fake()->image('q3.jpg'));
+    $zielRezept = $this->makeRecipe($this->rootTeam, 'Reuse-Z3', ['is_sales_recipe' => true, 'status' => 'draft']);
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'gericht', 'status' => 'review']);
+    $step = FoodAlchemistCascadeRunStep::create([
+        'team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id,
+        'kind' => 'gericht', 'status' => 'freigegeben', 'ref_type' => 'recipe', 'ref_id' => $zielRezept->id, 'label' => 'Reuse-Z3',
+    ]);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('fotoUebernehmen', $step->id, $quelleFoto->id, true)
+        ->assertSet('fehler', null);
+
+    $kopie = \Platform\FoodAlchemist\Models\FoodAlchemistRecipeStepPhoto::where('recipe_id', $zielRezept->id)->first();
+    expect((bool) $kopie->is_result)->toBeTrue();
+});
+
+it('Reuse-Picker: fremd-Team-Quell-Foto wird nicht übernommen (fail-soft, kein Leak)', function () {
+    \Illuminate\Support\Facades\Storage::fake('public');
+    $img = app(\Platform\FoodAlchemist\Services\RecipeImageService::class);
+    // Ein eigenständiges Fremd-Team (nicht in der Ancestry von rootTeam) → visibleToTeam findet es nicht.
+    $fremdTeam = \Platform\Core\Models\Team::create(['name' => 'Fremd', 'user_id' => 1, 'personal_team' => false]);
+    $fremdRezept = $this->makeRecipe($fremdTeam, 'Fremd-Rezept');
+    $fremdFoto = $img->uebernimmManuellesFoto($fremdTeam, $fremdRezept, \Illuminate\Http\UploadedFile::fake()->image('fremd.jpg'));
+    $zielRezept = $this->makeRecipe($this->rootTeam, 'Reuse-Z4', ['is_sales_recipe' => true, 'status' => 'draft']);
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'gericht', 'status' => 'review']);
+    $step = FoodAlchemistCascadeRunStep::create([
+        'team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id,
+        'kind' => 'gericht', 'status' => 'freigegeben', 'ref_type' => 'recipe', 'ref_id' => $zielRezept->id, 'label' => 'Reuse-Z4',
+    ]);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('fotoUebernehmen', $step->id, $fremdFoto->id, false)
+        ->assertSet('fehler', fn ($f) => $f !== null);   // gesagt, nicht still verschluckt
+
+    // Kein Leak: das Ziel-Rezept hat kein Foto bekommen.
+    expect(\Platform\FoodAlchemist\Models\FoodAlchemistRecipeStepPhoto::where('recipe_id', $zielRezept->id)->count())->toBe(0);
+});

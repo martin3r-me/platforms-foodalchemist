@@ -13,6 +13,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
 use Platform\FoodAlchemist\Models\FoodAlchemistDishIdea;
 use Platform\FoodAlchemist\Models\FoodAlchemistPlanningSession;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
+use Platform\FoodAlchemist\Models\FoodAlchemistRecipeStepPhoto;
 use Platform\FoodAlchemist\Services\ConceptGeneratorService;
 use Platform\FoodAlchemist\Services\IdeenService;
 use Platform\FoodAlchemist\Services\PairingService;
@@ -38,6 +39,10 @@ class Index extends Component
     /** Etappe 7 Teil 2: manuell hochgeladene Fotos je Cockpit-Step (stepId → TemporaryUploadedFile) —
      *  die NICHT-KI-Alternative zur Bild-Erzeugung, gebunden pro Step (mehrere Drafts gleichzeitig). */
     public array $fotoUploads = [];
+
+    /** Etappe 7 Teil 3b: der Step, dessen Foto-Wiederverwendungs-Picker gerade offen ist (null = zu).
+     *  Nur einer offen zur Zeit — die Kandidatenliste rechnet render() nur für diesen Step. */
+    public ?int $fotoPickerStep = null;
 
     #[Url(as: 'session')]
     public ?int $sessionId = null;
@@ -1516,6 +1521,40 @@ class Index extends Component
         $this->refreshLaeuft($cascade);
     }
 
+    /** Foto-Wiederverwendungs-Picker öffnen (Etappe 7 Teil 3b): zeigt vorhandene Team-Fotos zur
+     *  Übernahme auf diesen Draft. Nur einer offen zur Zeit; die Kandidaten baut render(). */
+    public function fotoPickerOeffnen(int $stepId): void
+    {
+        $this->fotoPickerStep = $stepId;
+    }
+
+    /** Foto-Wiederverwendungs-Picker schliessen. */
+    public function fotoPickerSchliessen(): void
+    {
+        $this->fotoPickerStep = null;
+    }
+
+    /** Ein vorhandenes Team-Foto (aus dem Picker) auf den Draft übernehmen (Etappe 7 Teil 3b) —
+     *  COPY-ON-REUSE, kein KI-Call. `$istErgebnis=true` = Hero/Ergebnis-Foto (max. 1), sonst Pool.
+     *  Verdrahtet fotoUebernehmen → uebernimmVorhandenesFotoFuerStep (Teil 3a-Primitive). */
+    public function fotoUebernehmen(int $stepId, int $fotoId, bool $istErgebnis = false, ?PlanningCascadeService $cascade = null): void
+    {
+        $cascade ??= app(PlanningCascadeService::class);
+        $team = $this->team();
+        if ($team === null) {
+            return;
+        }
+        try {
+            $cascade->uebernimmVorhandenesFotoFuerStep($team, $stepId, $fotoId, $istErgebnis);
+            $this->meldung = $istErgebnis ? 'Ergebnis-Foto übernommen.' : 'Foto übernommen.';
+            $this->fehler = null;
+            $this->fotoPickerStep = null;
+        } catch (\Throwable $e) {
+            $this->fehler = $e->getMessage();
+        }
+        $this->refreshLaeuft($cascade);
+    }
+
     // ── Composer-Tab (Foodpairing-Fläche: Anker zusammenstellen) ───────
 
     /** Einen Anker in die Auswahl aufnehmen (aus Suchtreffer ODER Kandidaten-Klick im Netz). */
@@ -1784,6 +1823,35 @@ class Index extends Component
             }
         }
 
+        // Etappe 7 Teil 3b — Foto-Wiederverwendungs-Picker: NUR wenn offen, die Kandidaten bauen
+        // (vorhandene Team-Fotos zur Übernahme auf den offenen Draft). Team-scoped (visibleToTeam),
+        // OHNE die eigenen Fotos des Ziel-Rezepts (Reuse = von woanders holen), jüngste zuerst,
+        // gedeckelt (Kosten-/Runaway-Guard beim Rendern der Vorschau-URLs). Kein KI-Call — reine
+        // Auswahl; die Übernahme selbst läuft über fotoUebernehmen (COPY-ON-REUSE, Teil 3a).
+        $fotoPickerKandidaten = [];
+        if ($team !== null && $this->fotoPickerStep !== null) {
+            $pStep = DB::table('foodalchemist_cascade_run_steps')
+                ->where('team_id', $team->id)->where('id', $this->fotoPickerStep)
+                ->first(['ref_id', 'ref_type', 'kind']);
+            if ($pStep !== null && $pStep->ref_type === 'recipe' && in_array($pStep->kind, ['rezept', 'gericht'], true)) {
+                $kandidaten = FoodAlchemistRecipeStepPhoto::visibleToTeam($team)
+                    ->when($pStep->ref_id !== null, fn ($q) => $q->where('recipe_id', '!=', (int) $pStep->ref_id))
+                    ->with('recipe:id,name')
+                    ->orderByDesc('id')
+                    ->limit(24)
+                    ->get();
+                foreach ($kandidaten as $foto) {
+                    $fotoPickerKandidaten[] = [
+                        'id' => (int) $foto->id,
+                        'url' => $foto->url(),
+                        'caption' => (string) ($foto->caption ?? ''),
+                        'rezept' => (string) ($foto->recipe?->name ?? ''),
+                        'ergebnis' => (bool) $foto->is_result,
+                    ];
+                }
+            }
+        }
+
         return view('foodalchemist::livewire.planung.index', [
             'sessions' => $sessions,
             'baum' => $baum,
@@ -1796,6 +1864,8 @@ class Index extends Component
             'bildCalls' => $bildCalls,
             'bilderAngefordert' => $bilderAngefordert,
             'fotoCounts' => $fotoCounts,
+            'fotoPickerStep' => $this->fotoPickerStep,
+            'fotoPickerKandidaten' => $fotoPickerKandidaten,
             'composerNetz' => $composerNetz,
             'composerCohesion' => $composerCohesion,
             'composerBrowse' => $composerBrowse,

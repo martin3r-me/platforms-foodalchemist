@@ -135,8 +135,35 @@
                 <button wire:click="fotoHochladen({{ $st->id }}, false)" class="text-gray-300 hover:text-gray-100 underline" title="Als Pool-Foto übernehmen (kein KI-Call)">als Foto</button>
                 <button wire:click="fotoHochladen({{ $st->id }}, true)" class="text-emerald-300 hover:text-emerald-200 underline" title="Als Ergebnis-/Hero-Foto übernehmen (ersetzt das bisherige Ergebnis-Bild)">als Ergebnis</button>
             @endif
+            {{-- Etappe 7 Teil 3b — Foto-Wiederverwendung: ein vorhandenes Team-Foto (aus einem anderen
+                 Rezept) COPY-ON-REUSE auf diesen Draft übernehmen, statt neu hochzuladen. Kein KI-Call. --}}
+            @if(($fotoPickerStep ?? null) === $st->id)
+                <button wire:click="fotoPickerSchliessen" class="text-gray-400 hover:text-gray-200 underline">Picker schliessen</button>
+            @else
+                <button wire:click="fotoPickerOeffnen({{ $st->id }})" class="text-gray-300 hover:text-gray-100 underline" title="Vorhandenes Team-Foto wiederverwenden (kein KI-Call)">wiederverwenden</button>
+            @endif
             @error("fotoUploads.{$st->id}")<span class="text-rose-400/80">{{ $message }}</span>@enderror
         </div>
+        @if(($fotoPickerStep ?? null) === $st->id)
+            <div class="mt-1 pl-1" data-foto-picker="{{ $st->id }}">
+                @if(empty($fotoPickerKandidaten))
+                    <p class="text-[10px] text-gray-500">Keine wiederverwendbaren Fotos im Team.</p>
+                @else
+                    <div class="flex flex-wrap gap-1.5">
+                        @foreach($fotoPickerKandidaten as $kand)
+                            <div class="w-20 rounded border border-white/10 bg-white/[0.03] p-1" data-foto-kandidat="{{ $kand['id'] }}">
+                                <img src="{{ $kand['url'] }}" alt="{{ $kand['caption'] ?: $kand['rezept'] }}" class="h-12 w-full rounded object-cover bg-black/20" loading="lazy" />
+                                <p class="mt-0.5 truncate text-[9px] text-gray-400" title="{{ $kand['rezept'] }}{{ $kand['caption'] !== '' ? ' — ' . $kand['caption'] : '' }}">{{ $kand['rezept'] ?: '—' }}</p>
+                                <div class="mt-0.5 flex items-center justify-between text-[9px]">
+                                    <button wire:click="fotoUebernehmen({{ $st->id }}, {{ $kand['id'] }}, false)" class="text-gray-300 hover:text-gray-100 underline" title="Als Pool-Foto übernehmen (Kopie, kein KI-Call)">Foto</button>
+                                    <button wire:click="fotoUebernehmen({{ $st->id }}, {{ $kand['id'] }}, true)" class="text-emerald-300 hover:text-emerald-200 underline" title="Als Ergebnis-/Hero-Foto übernehmen (Kopie)">Ergebnis</button>
+                                </div>
+                            </div>
+                        @endforeach
+                    </div>
+                @endif
+            </div>
+        @endif
     @endif
     @if($st->status === 'failed' && $st->error)
         <p class="text-[10px] text-rose-400/80 pl-1">{{ \Illuminate\Support\Str::limit($st->error, 160) }}</p>
