@@ -269,6 +269,13 @@ class PlanningCascadeService
             'creative_mode' => $creativeMode,
             'brief' => 'Voll-Kaskade ' . $ownerType . ' #' . $ownerId,
             'status' => 'running',
+            // Bewusste Unterscheidung (Etappe 5): Ausgabe-Voll-Kaskaden laufen EAGER (staged=false) —
+            // alle Slot-Konzepte werden hier sofort dispatcht und am Ende gemeinsam (Sammel-Review) im
+            // Editor geprüft. Der Gegensatz sind die Cockpit-Scopes (rezept|gericht|concept), die
+            // gestuft laufen (staged=true, s. starteKaskade Z. 89) — Gate + Freigabe je Ebene. Der Wert
+            // ist explizit gesetzt (nicht dem DB-Default überlassen), damit die Absicht sichtbar und
+            // gegen ein Ändern des Defaults geschützt ist.
+            'staged' => false,
             'source_owner_type' => $ownerType,
             'source_owner_id' => $ownerId,
             'created_via' => (string) ($optionen['created_via'] ?? 'plan_go'),
@@ -381,6 +388,9 @@ class PlanningCascadeService
             'creative_mode' => $creativeMode,
             'brief' => 'Voll-Kaskade speiseplan #' . $planId,
             'status' => 'running',
+            // Wie Foodbook/Speisekarte: EAGER (staged=false) — je leerer Zelle sofort ein Gericht-Job,
+            // Sammel-Review im Editor. Explizit gesetzt (nicht DB-Default), s. starteVollkaskade.
+            'staged' => false,
             'source_owner_type' => 'speiseplan',
             'source_owner_id' => $planId,
             'created_via' => (string) ($optionen['created_via'] ?? 'plan_go'),

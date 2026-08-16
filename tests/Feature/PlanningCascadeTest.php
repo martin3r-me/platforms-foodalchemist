@@ -537,6 +537,7 @@ it('vollkaskade (foodbook): 1 Concept-Step je Frame-Slot + GenerateConceptJob mi
     expect($run->scope)->toBe('vollkaskade')
         ->and($run->source_owner_type)->toBe('foodbook')
         ->and((int) $run->source_owner_id)->toBe((int) $fb->id)
+        ->and((bool) $run->staged)->toBeFalse()   // Ausgabe-Voll-Kaskade = eager (Sammel-Review), nicht gestuft
         ->and($run->steps()->where('kind', 'concept')->count())->toBe(2);
 
     Queue::assertPushed(GenerateConceptJob::class, 2);
@@ -584,6 +585,7 @@ it('vollkaskade (speisekarte): Concept-Step je Frame-Slot + GenerateConceptJob m
     $run = app(PlanningCascadeService::class)->starteKaskade($this->rootTeam, 'vollkaskade', null, 'voll_kreativ', ['owner_type' => 'speisekarte', 'owner_id' => (int) $karte->id]);
 
     expect($run->source_owner_type)->toBe('speisekarte')
+        ->and((bool) $run->staged)->toBeFalse()   // eager (Sammel-Review)
         ->and($run->steps()->where('kind', 'concept')->count())->toBe(1);
     Queue::assertPushed(GenerateConceptJob::class, fn ($job) => $job->attachOwnerType === 'speisekarte' && (int) $job->attachContainerId > 0);
     // rubrikFuerSlot hat die Rubrik idempotent angelegt (Slot-Label → Rubrik-Titel)
@@ -631,6 +633,7 @@ it('vollkaskade (speiseplan): ein Gericht-Step je leerer Zelle + MaterializeSpei
     $run = app(PlanningCascadeService::class)->starteKaskade($this->rootTeam, 'vollkaskade', null, 'voll_kreativ', ['owner_type' => 'speiseplan', 'owner_id' => (int) $plan->id]);
 
     expect($run->source_owner_type)->toBe('speiseplan')
+        ->and((bool) $run->staged)->toBeFalse()   // eager (Sammel-Review), wie Foodbook/Speisekarte
         ->and($run->steps()->where('kind', 'gericht')->count())->toBe($erwartet)
         ->and($erwartet)->toBeGreaterThan(0);
     Queue::assertPushed(MaterializeSpeiseplanCellJob::class, $erwartet);
@@ -677,6 +680,26 @@ it('staged: Cockpit-Go ist gestuft (staged=true), opt-out über optionen möglic
     $aus = $svc->starteKaskade($this->rootTeam, 'gericht', $session, 'voll_kreativ', ['staged' => false]);
 
     expect($an->staged)->toBeTrue()->and($aus->staged)->toBeFalse();
+});
+
+it('bewusste Unterscheidung: Cockpit-Scope gestuft (staged=true) vs. Ausgabe-Voll-Kaskade eager (staged=false)', function () {
+    // Dokumentiert die Etappe-5-Entscheidung an EINER Stelle: die Cockpit-Ebenen (rezept|gericht|concept)
+    // laufen gestuft — Gate + Freigabe je Ebene; die aus den Ausgabe-Modulen getriggerte Voll-Kaskade
+    // (foodbook/speisekarte/speiseplan) läuft eager (Sammel-Review). Der Wert wird explizit gesetzt,
+    // nicht dem DB-Default überlassen (Schutz gegen ein Ändern des Defaults).
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'X', 'brief' => 'y']);
+    $svc = app(PlanningCascadeService::class);
+
+    $cockpit = $svc->starteKaskade($this->rootTeam, 'gericht', $session, 'voll_kreativ');
+
+    $fb = $this->makeFoodbook($this->rootTeam, 'Ausgabe-Foodbook', ['status' => 'draft']);
+    $frameSvc = app(PlanningFrameService::class);
+    $frame = $frameSvc->frameFor($this->rootTeam, 'foodbook', (int) $fb->id);
+    $frameSvc->addSlot($this->rootTeam, $frame, ['label' => 'Vorspeisen', 'slot_type' => 'kapitel', 'target_count' => 1]);
+    $ausgabe = $svc->starteKaskade($this->rootTeam, 'vollkaskade', null, 'voll_kreativ', ['owner_type' => 'foodbook', 'owner_id' => (int) $fb->id]);
+
+    expect((bool) $cockpit->staged)->toBeTrue()
+        ->and((bool) $ausgabe->staged)->toBeFalse();
 });
 
 it('staged Freigabe (concept): dispatcht FanoutConceptJob + Run läuft wieder', function () {
