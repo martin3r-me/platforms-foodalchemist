@@ -1,11 +1,15 @@
 <?php
 
+use Illuminate\Support\Facades\Queue;
 use Livewire\Livewire;
+use Platform\FoodAlchemist\Jobs\GenerateConceptJob;
 use Platform\FoodAlchemist\Livewire\Foodbooks\Index as FoodbooksIndex;
+use Platform\FoodAlchemist\Models\FoodAlchemistCascadeRun;
 use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
 use Platform\FoodAlchemist\Models\FoodAlchemistConceptSlot;
 use Platform\FoodAlchemist\Models\FoodAlchemistDishClass;
 use Platform\FoodAlchemist\Models\FoodAlchemistDishMainGroup;
+use Platform\FoodAlchemist\Models\FoodAlchemistPlanningSession;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Models\FoodAlchemistVocabEinheit;
 use Platform\FoodAlchemist\Services\FoodbookService;
@@ -277,4 +281,49 @@ it('ideeVerwerfen + ideeReaktivieren schalten den Skizzen-Status (entwurf ↔ ve
 
     $comp->call('ideeReaktivieren', $idee->id);
     expect($idee->refresh()->status)->toBe('entwurf');
+});
+
+/**
+ * Etappe 5 P3 — Foodbook als Leitstelle-Trigger: aus dem Foodbook-Gerüst eine Voll-Kaskade starten
+ * (Ausgabe-Modul = Quelle) und in den Planung-Editor zur Sammel-Review leiten. Der Service-Pfad
+ * (Frame → Concept-Step je Slot + GenerateConceptJob-Attach) ist in PlanningCascadeTest gepinnt;
+ * hier fehlte die Livewire-Trigger-Deckung (Session-Anlage, Redirect, Fehlerpfad).
+ */
+it('vollKaskadeStarten (Leitstelle P3): legt eine Review-Session an, startet die Voll-Kaskade (Concept-Step je Slot) und leitet in den Planung-Editor', function () {
+    Queue::fake();
+
+    Livewire::test(FoodbooksIndex::class)
+        ->call('waehle', $this->fb->id)
+        ->call('vollKaskadeStarten')
+        ->assertRedirect()
+        ->assertSet('kaskadeMeldung', null);
+
+    // Ausgabe-Modul = Quelle: die Review-Wurzel wird als Planungs-Session mit foodbook-Herkunft angelegt.
+    $session = FoodAlchemistPlanningSession::where('team_id', $this->rootTeam->id)
+        ->where('created_via', 'foodbook_vollkaskade')->latest('id')->first();
+    expect($session)->not->toBeNull();
+
+    // Genau ein Voll-Kaskaden-Lauf am Foodbook + ein Concept-Step (der eine Slot mit chapter_id) + Job ans Kapitel.
+    $run = FoodAlchemistCascadeRun::where('source_owner_type', 'foodbook')
+        ->where('source_owner_id', $this->fb->id)->latest('id')->first();
+    expect($run)->not->toBeNull()
+        ->and($run->scope)->toBe('vollkaskade')
+        ->and($run->status)->toBe('running')
+        ->and($run->planning_session_id)->toBe($session->id)
+        ->and($run->steps()->where('kind', 'concept')->count())->toBe(1);
+    Queue::assertPushed(GenerateConceptJob::class, fn ($job) => $job->attachOwnerType === 'foodbook' && (int) $job->attachContainerId > 0);
+});
+
+it('vollKaskadeStarten ohne Gerüst/Slots meldet ehrlich (kaskadeMeldung) — kein Lauf, kein Redirect', function () {
+    Queue::fake();
+    $leer = $this->fbSvc->create($this->rootTeam, ['label' => 'FB ohne Gerüst']);
+
+    Livewire::test(FoodbooksIndex::class)
+        ->call('waehle', $leer->id)
+        ->call('vollKaskadeStarten')
+        ->assertNoRedirect()
+        ->assertSet('kaskadeMeldung', fn ($v) => is_string($v) && $v !== '');
+
+    expect(FoodAlchemistCascadeRun::where('source_owner_type', 'foodbook')->where('source_owner_id', $leer->id)->count())->toBe(0);
+    Queue::assertNotPushed(GenerateConceptJob::class);
 });

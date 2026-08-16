@@ -33,8 +33,9 @@ use RuntimeException;
  *
  * Tiefen-Leiter (`scope`): `rezept` ⊂ `gericht` ⊂ `concept` ⊂ `vollkaskade`; der Motor läuft von der
  * gewählten Stufe abwärts. **P0/P1a orchestrieren `rezept`/`gericht`/`concept`** (je Depth-1, ein Step
- * je Go — Concept im Reuse-Assembler); der Gericht-Fan-out beim Concept (Erfinden) und `vollkaskade`
- * folgen in P1b/P3 und werfen bis dahin bewusst.
+ * je Go — Concept im Reuse-Assembler + Erfinden-Fan-out). Die `vollkaskade` (Etappe 5) braucht einen
+ * Ausgabe-Owner (`owner_type` foodbook|speisekarte|speiseplan) und wird aus den Ausgabe-Modulen
+ * getriggert, nicht frei im Cockpit — ohne Owner wirft {@see starteKaskade} bewusst.
  */
 class PlanningCascadeService
 {
