@@ -190,7 +190,8 @@ FA `main` = `eb85e3c`, demo deployt + Migration `[180] Ran`. Nachweis: `Planning
 ### 🍽️ Etappe 5 — Ausgabe-Anbindung (Frame-Kaskaden)
 *Die Voll-Kaskade braucht einen Ausgabe-Owner (foodbook/speisekarte/speiseplan) — sie wird aus den Ausgabe-Modulen getriggert, nicht frei im Cockpit. Die Ausgabe-Module sind **Quelle** (liefern das Briefing) **und Ziel** (nehmen das Ergebnis auf) — siehe Zielarchitektur.*
 
-- [ ] **Foodbook-Leitstelle** — Voll-Kaskade je Kapitel-Slot (↔ Spec [29](29_Foodbook_Editor_Umbau.md))
+- [x] **Foodbook-Leitstelle** — Voll-Kaskade je Kapitel-Slot (↔ Spec [29](29_Foodbook_Editor_Umbau.md))
+  → `0395241` (`gebaut`, Sandbox `getestet`): der Trigger-Pfad war seit P3 (`b494cab`) gebaut — Service `starteVollkaskade` (Frame → 1 Concept-Step je Slot mit `chapter_id` + `GenerateConceptJob` mit Kapitel-Attach) + Livewire `Foodbooks\Index::vollKaskadeStarten` (legt die Review-Session an, startet die Kaskade, leitet in den Planung-Editor). Am **Service-Layer** in `PlanningCascadeTest` gepinnt; es fehlte die **Livewire-Trigger-Deckung**. Dieser Chunk: 2 Tests in `FoodbookLeitstelleTest` (Happy-Path: `created_via=foodbook_vollkaskade`-Session · `scope=vollkaskade`-Lauf am Foodbook · 1 Concept-Step · Job-Attach ans Kapitel · Redirect; Fehlerpfad: Foodbook ohne Gerüst → `kaskadeMeldung`, kein Lauf/Redirect/Job) + Korrektur des stale `PlanningCascadeService`-Klassen-Docblocks (behauptete fälschlich, `vollkaskade` werfe „bis dahin bewusst" — tatsächlich wirft nur der **ownerlose** Aufruf). Pest 77/77 grün. Real-Abnahme (LLM erzeugt Kapitel-Konzepte spürbar) auf demo offen.
 - [ ] **Speisekarte** — Rubriken → Gerichte-Kaskade (↔ Spec [35](35_Spec_Tagesplan_Cockpit.md))
 - [ ] **Speiseplan** — Zell-Fan-out über die Zeitachse (Cap `SPEISEPLAN_MAX_ZELLEN`)
 - [ ] Ausgabe-Voll-Kaskaden bleiben `staged=false` (eager, Sammel-Review) — bewusste Unterscheidung dokumentieren
