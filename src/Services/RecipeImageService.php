@@ -5,6 +5,7 @@ namespace Platform\FoodAlchemist\Services;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Platform\Core\Models\ContextFile;
 use Platform\Core\Models\Team;
@@ -147,6 +148,108 @@ class RecipeImageService
                 'is_result' => $istErgebnis,
             ]);
         });
+    }
+
+    /**
+     * Ein VORHANDENES Team-Foto auf ein anderes Rezept übernehmen — die Foto-Wiederverwendung
+     * (Etappe 7: „Foto-Wiederverwendung / manueller Upload als Alternative", Teil 3). Statt eines
+     * neuen Uploads wird ein bereits existierendes {@see FoodAlchemistRecipeStepPhoto} des Teams als
+     * Vorlage genommen.
+     *
+     * COPY-ON-REUSE (Design-Entscheid #105): das Foto wird PHYSISCH kopiert — die Quell-Bytes werden
+     * gelesen und über {@see uebernimmManuellesFoto} in eine FRISCHE ContextFile am Ziel-Rezept
+     * gelegt. Es gibt KEINEN geteilten `context_file_id` zwischen Quelle und Kopie → damit auch keinen
+     * Waisen-/Doppel-Lösch-Hazard: ein {@see loescheKiFotos}/{@see FoodAlchemistMediaService::delete}
+     * am einen Rezept lässt das andere Foto unangetastet. Bewusst gegen „Sharing mit Ref-Count/Delete-
+     * Guard" gewählt — es hält die etablierte Anti-Sharing-Linie aus Teil 1 (frische ContextFile je
+     * Foto) konsistent; das Speicher-Duplikat ist der akzeptierte Preis für die Lösch-Sicherheit.
+     *
+     * Durch die Delegation an {@see uebernimmManuellesFoto} erbt die Kopie automatisch: KEIN Kosten-
+     * Call-Log (überlebt den KI-Re-Trigger-Purge) und die max.-1-Hero-Invariante bei `$istErgebnis`.
+     * Der Team-Guard schützt das Primitive selbst — der Reuse-Picker (Teil 3b) zeigt ohnehin nur
+     * `visibleToTeam`-Fotos.
+     *
+     * @throws \InvalidArgumentException wenn das Quell-Foto nicht zum Team gehört
+     * @throws \RuntimeException wenn die Quell-Datei physisch fehlt (gelöscht/nie geschrieben)
+     */
+    public function uebernimmVorhandenesFoto(
+        Team $team,
+        FoodAlchemistRecipe $zielRecipe,
+        FoodAlchemistRecipeStepPhoto $quelle,
+        ?string $caption = null,
+        bool $istErgebnis = false,
+    ): FoodAlchemistRecipeStepPhoto {
+        if ((int) $quelle->team_id !== (int) $team->id) {
+            throw new \InvalidArgumentException('Quell-Foto gehört nicht zum Team.');
+        }
+
+        $daten = $this->leseFotoBytes($quelle);
+        if ($daten === null) {
+            throw new \RuntimeException('Quell-Foto hat keine lesbare Datei.');
+        }
+
+        // Quell-Bytes in eine temporäre Datei, dann als (Test-Modus-)UploadedFile an die EINE
+        // Schreib-Wahrheit reichen. $test=true → copy() statt move_uploaded_file(), zulässig auch
+        // außerhalb eines HTTP-Requests. Die tmp-Datei wird nach dem Store wieder entfernt.
+        $tmp = tempnam(sys_get_temp_dir(), 'fa_foto_');
+        file_put_contents($tmp, $daten['bytes']);
+        $upload = new UploadedFile($tmp, 'reuse.' . $daten['ext'], $daten['mime'], null, true);
+
+        try {
+            return $this->uebernimmManuellesFoto(
+                $team,
+                $zielRecipe,
+                $upload,
+                $caption ?? (($quelle->caption ?? '') !== '' ? $quelle->caption : null),
+                $istErgebnis,
+            );
+        } finally {
+            @unlink($tmp);
+        }
+    }
+
+    /**
+     * Roh-Bytes + MIME + Datei-Endung eines vorhandenen Fotos lesen — Quelle in Reihenfolge:
+     * (1) die ContextFile (`context_file_id`), (2) der Legacy-`pfad` auf dem public-Disk. Null, wenn
+     * die Datei physisch fehlt. Spiegelt die Fallback-Kette aus {@see FoodAlchemistMediaService::dataUri}.
+     *
+     * @return array{bytes:string, mime:string, ext:string}|null
+     */
+    private function leseFotoBytes(FoodAlchemistRecipeStepPhoto $foto): ?array
+    {
+        $file = $foto->context_file_id ? ContextFile::find($foto->context_file_id) : null;
+        if ($file !== null && Storage::disk($file->disk)->exists($file->path)) {
+            $mime = $file->mime_type ?: (Storage::disk($file->disk)->mimeType($file->path) ?: 'image/jpeg');
+
+            return [
+                'bytes' => (string) Storage::disk($file->disk)->get($file->path),
+                'mime' => $mime,
+                'ext' => $this->endungFuerMime($mime),
+            ];
+        }
+
+        $legacy = trim((string) $foto->pfad);
+        if ($legacy !== '' && Storage::disk('public')->exists($legacy)) {
+            $mime = Storage::disk('public')->mimeType($legacy) ?: 'image/jpeg';
+
+            return [
+                'bytes' => (string) Storage::disk('public')->get($legacy),
+                'mime' => $mime,
+                'ext' => $this->endungFuerMime($mime),
+            ];
+        }
+
+        return null;
+    }
+
+    private function endungFuerMime(string $mime): string
+    {
+        return match (strtolower(trim($mime))) {
+            'image/png' => 'png',
+            'image/webp' => 'webp',
+            'image/gif' => 'gif',
+            default => 'jpg',
+        };
     }
 
     /** Ein Foto des fertig angerichteten Gerichts (Hero/Endergebnis, ohne Schritt-Kopplung → is_result). */
