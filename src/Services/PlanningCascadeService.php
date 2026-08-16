@@ -939,6 +939,31 @@ class PlanningCascadeService
         $fresh->update(['deferred' => $deferred]);
     }
 
+    /** Bild-Erzeugungs-Status eines Rezept-/Gericht-Steps synchron auf `queued` setzen (Sicht-Signal fürs Polling). */
+    private function markBilderQueued(FoodAlchemistCascadeRunStep $step): void
+    {
+        $fresh = $step->fresh() ?? $step;
+        $deferred = is_array($fresh->deferred) ? $fresh->deferred : [];
+        $deferred['bilder'] = ['status' => 'queued', 'at' => now()->toIso8601String()];
+        $fresh->update(['deferred' => $deferred]);
+    }
+
+    /**
+     * „Neu erzeugen" (Cockpit, Etappe 7 Teil 2b): stößt AUSSCHLIESSLICH die KI-Fotos eines bereits
+     * freigegebenen Rezept-/Gericht-Steps erneut an — ohne Voll-Anreicherung — z. B. nachdem die
+     * Bild-Erzeugung fehlschlug (deferred.bilder=failed). Der EnrichRecipeJob läuft im `nurBilder`-
+     * Modus: er ersetzt die alten KI-Fotos und lässt deferred.enrich unangetastet.
+     */
+    public function reBilder(Team $team, int $stepId): void
+    {
+        $step = $this->ownedStep($team, $stepId);
+        if ($step->ref_type !== 'recipe' || $step->ref_id === null || ! in_array($step->kind, ['rezept', 'gericht'], true)) {
+            return;
+        }
+        $this->markBilderQueued($step);
+        EnrichRecipeJob::dispatch($team->id, (int) (Auth::id() ?? 0), (int) $step->ref_id, null, false, (int) $step->id, true);
+    }
+
     /**
      * „Neu anreichern" (Cockpit): stößt die Anreicherung eines bereits freigegebenen Rezept-/Gericht-Steps
      * erneut an — z. B. nachdem der erste EnrichRecipeJob-Lauf fehlschlug (deferred.enrich=failed).

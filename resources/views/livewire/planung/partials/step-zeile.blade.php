@@ -51,8 +51,14 @@
                         $bldStatus = $bld['status'] ?? null;
                         $fotoN = (int) (($fotoCounts ?? [])[$st->ref_id] ?? 0);
                     @endphp
-                    @if($bldStatus === 'failed')
-                        <span class="text-[10px] text-rose-300/90 inline-flex items-center gap-1" data-bild-status="{{ $st->id }}" title="{{ $bld['error'] ?? 'Bild-Erzeugung fehlgeschlagen' }}">@svg('heroicon-o-photo', 'w-3 h-3') Fotos fehlgeschlagen{{ $fotoN > 0 ? ' (' . $fotoN . ' ok)' : '' }}</span>
+                    @if(in_array($bldStatus, ['queued', 'running'], true))
+                        {{-- Etappe 7 Teil 2b: „neu erzeugen" läuft (reBilder → EnrichRecipeJob nurBilder) — das
+                             Polling hält an (anreicherungOffen watcht deferred.bilder), das Badge kippt live. --}}
+                        <span class="text-[10px] text-amber-300/80 inline-flex items-center gap-1" data-bild-status="{{ $st->id }}">@svg('heroicon-o-arrow-path', 'w-3 h-3 animate-spin') erzeugt Fotos …</span>
+                    @elseif($bldStatus === 'failed')
+                        {{-- Etappe 7 Teil 2b: „neu erzeugen" — NUR die KI-Fotos re-triggern (ohne Voll-Anreicherung),
+                             analog zum „neu anreichern" am enrich=failed-Badge. --}}
+                        <button wire:click="bilderNeu({{ $st->id }})" class="text-[10px] text-rose-300 hover:text-rose-200 underline inline-flex items-center gap-1" data-bild-status="{{ $st->id }}" title="{{ $bld['error'] ?? 'Bild-Erzeugung fehlgeschlagen' }}">@svg('heroicon-o-photo', 'w-3 h-3') Fotos fehlgeschlagen{{ $fotoN > 0 ? ' (' . $fotoN . ' ok)' : '' }} — neu erzeugen</button>
                     @elseif($fotoN > 0)
                         <span class="text-[10px] text-emerald-400/80 inline-flex items-center gap-1" data-bild-status="{{ $st->id }}" title="{{ $fotoN }} KI-Foto(s) erzeugt">@svg('heroicon-o-photo', 'w-3 h-3') {{ $fotoN }} Foto{{ $fotoN === 1 ? '' : 's' }} ✓</span>
                     @else

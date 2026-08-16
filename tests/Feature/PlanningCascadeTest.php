@@ -1,6 +1,8 @@
 <?php
 
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Str;
 use Livewire\Livewire;
 use Platform\FoodAlchemist\Jobs\EnrichRecipeJob;
 use Platform\FoodAlchemist\Jobs\FanoutConceptJob;
@@ -14,6 +16,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistCascadeRunStep;
 use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
 use Platform\FoodAlchemist\Models\FoodAlchemistDishIdea;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
+use Platform\FoodAlchemist\Models\FoodAlchemistRecipeStepPhoto;
 use Platform\FoodAlchemist\Services\IdeenService;
 use Platform\FoodAlchemist\Services\PlanningCascadeService;
 use Platform\FoodAlchemist\Services\PlanningFrameService;
@@ -338,6 +341,78 @@ it('EnrichRecipeJob: ohne ki_bilder-Toggle wird KEIN deferred.bilder geschrieben
 
     expect($step->refresh()->deferred['bilder'] ?? null)->toBeNull()
         ->and($step->deferred['enrich']['status'] ?? null)->toBe('done');
+});
+
+// ── Etappe 7 — Bild-Status Teil 2b: „neu erzeugen" (Fotos allein re-triggern, ohne Voll-Anreicherung) ──
+// Der EnrichRecipeJob läuft im `nurBilder`-Modus: er ruft KEINE Anreicherung, ersetzt die alten
+// KI-Fotos (loescheKiFotos) und erzeugt sie neu; deferred.enrich bleibt unangetastet.
+
+it('EnrichRecipeJob nurBilder: erzeugt NUR die Fotos neu (kein anreichern, ersetzt Alt-Fotos) und persistiert deferred.bilder', function () {
+    $recipe = $this->makeRecipe($this->rootTeam, 'Nur-Bilder', ['status' => 'draft']);
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'gericht', 'status' => 'review']);
+    $step = FoodAlchemistCascadeRunStep::create([
+        'team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht', 'status' => 'freigegeben',
+        'ref_type' => 'recipe', 'ref_id' => $recipe->id,
+        'deferred' => ['enrich' => ['status' => 'done'], 'bilder' => ['status' => 'failed', 'error' => 'alt', 'n' => 0]],
+    ]);
+
+    $this->mock(RecipeOneShotService::class, fn ($m) => $m->shouldReceive('anreichern')->never());
+    $this->mock(RecipeImageService::class, function ($m) {
+        $m->shouldReceive('loescheKiFotos')->once()->andReturn(1);   // Alt-Fotos ersetzt, nicht angehäuft
+        $m->shouldReceive('erzeugeFuerRezept')->once()->andReturn(['erzeugt' => 3, 'fehler' => 0, 'letzter_fehler' => null]);
+    });
+
+    (new EnrichRecipeJob($this->rootTeam->id, (int) auth()->id(), (int) $recipe->id, null, false, (int) $step->id, true))
+        ->handle(app(RecipeOneShotService::class));
+
+    $step->refresh();
+    expect($step->deferred['bilder']['status'] ?? null)->toBe('done')
+        ->and($step->deferred['bilder']['n'] ?? null)->toBe(3)
+        ->and($step->deferred['enrich']['status'] ?? null)->toBe('done');   // Anreicherung unangetastet
+});
+
+it('reBilder: dispatcht den EnrichRecipeJob im nurBilder-Modus und setzt deferred.bilder=queued', function () {
+    $recipe = $this->makeRecipe($this->rootTeam, 'Re-Bilder', ['status' => 'draft']);
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'gericht', 'status' => 'review', 'params' => ['ki_bilder' => true]]);
+    $step = FoodAlchemistCascadeRunStep::create([
+        'team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht', 'status' => 'freigegeben',
+        'ref_type' => 'recipe', 'ref_id' => $recipe->id, 'deferred' => ['enrich' => ['status' => 'done'], 'bilder' => ['status' => 'failed']],
+    ]);
+
+    app(PlanningCascadeService::class)->reBilder($this->rootTeam, (int) $step->id);
+
+    expect($step->refresh()->deferred['bilder']['status'] ?? null)->toBe('queued');
+    Queue::assertPushed(EnrichRecipeJob::class, fn ($job) => (int) $job->recipeId === (int) $recipe->id && $job->nurBilder === true);
+});
+
+it('reBilder: ein Concept-Step (kein Rezept) löst KEINEN Job aus', function () {
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'concept', 'status' => 'review']);
+    $step = FoodAlchemistCascadeRunStep::create([
+        'team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'concept', 'status' => 'freigegeben', 'ref_type' => 'concept', 'ref_id' => 1,
+    ]);
+
+    app(PlanningCascadeService::class)->reBilder($this->rootTeam, (int) $step->id);
+
+    Queue::assertNotPushed(EnrichRecipeJob::class);
+});
+
+it('loescheKiFotos: entfernt KI-Fotos (Call-Log), lässt manuelle Uploads stehen', function () {
+    $recipe = $this->makeRecipe($this->rootTeam, 'Foto-Purge', ['status' => 'draft']);
+    // Zwei Fotos: eins mit Kosten-Call (KI-erzeugt), eins ohne (manueller Upload).
+    $ki = FoodAlchemistRecipeStepPhoto::create(['team_id' => $this->rootTeam->id, 'recipe_id' => $recipe->id, 'pfad' => 'ki.jpg']);
+    $manuell = FoodAlchemistRecipeStepPhoto::create(['team_id' => $this->rootTeam->id, 'recipe_id' => $recipe->id, 'pfad' => 'manuell.jpg']);
+    DB::table('foodalchemist_ai_call_log')->insert([
+        'uuid' => (string) Str::orderedUuid(), 'team_id' => $this->rootTeam->id, 'user_id' => null,
+        'feature' => RecipeImageService::FEATURE_PRODUKTFOTO, 'tier' => 'I', 'model' => 'gpt-image-1.5',
+        'prompt_hash' => 'x', 'response_summary' => 'x', 'tokens_in' => 0, 'tokens_out' => 0,
+        'target_table' => 'foodalchemist_recipe_step_photos', 'target_id' => $ki->id, 'created_at' => now(), 'updated_at' => now(),
+    ]);
+
+    $n = app(RecipeImageService::class)->loescheKiFotos($this->rootTeam, $recipe);
+
+    expect($n)->toBe(1)
+        ->and(FoodAlchemistRecipeStepPhoto::find($ki->id))->toBeNull()          // KI-Foto (soft-)gelöscht
+        ->and(FoodAlchemistRecipeStepPhoto::find($manuell->id))->not->toBeNull(); // manueller Upload bleibt
 });
 
 it('Cockpit: goKaskade startet den Lauf in-place (kein Redirect) und pollt', function () {

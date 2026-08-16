@@ -215,7 +215,7 @@ class Index extends Component
     /** true, solange der Lauf im Hintergrund rechnet (steuert das Polling). */
     public bool $laeuft = false;
 
-    /** Läuft nach einer Freigabe noch eine async Anreicherung nach (deferred.enrich=queued|running)? Hält das Polling am Leben, bis das Ergebnis wirklich brauchbar ist. */
+    /** Läuft nach einer Freigabe noch eine async Anreicherung (deferred.enrich) ODER KI-Foto-Erzeugung (deferred.bilder, „neu erzeugen") nach (queued|running)? Hält das Polling am Leben, bis das Ergebnis wirklich brauchbar ist. */
     public bool $anreicherungLaeuft = false;
 
     /**
@@ -1418,9 +1418,10 @@ class Index extends Component
     }
 
     /**
-     * Läuft nach einer Freigabe noch eine async Anreicherung (deferred.enrich=queued|running) eines
-     * Rezept-/Gericht-Steps? Dann pollt die Fläche weiter, obwohl der Run schon „done" sein kann —
-     * so meldet „läuft durch" erst, wenn das Ergebnis wirklich brauchbar (oder der Fehler sichtbar) ist.
+     * Läuft nach einer Freigabe noch eine async Anreicherung (deferred.enrich=queued|running) ODER eine
+     * KI-Foto-Erzeugung (deferred.bilder=queued|running, z. B. „neu erzeugen", Etappe 7 Teil 2b) eines
+     * Rezept-/Gericht-Steps? Dann pollt die Fläche weiter, obwohl der Run schon „done" sein kann — so
+     * kippt das Status-Badge live vom Spinner auf das Ergebnis (oder den sichtbaren Fehler).
      */
     private function anreicherungOffen($lauf): bool
     {
@@ -1433,9 +1434,11 @@ class Index extends Component
                 return false;
             }
             $deferred = is_array($s->deferred) ? $s->deferred : [];
-            $status = is_array($deferred['enrich'] ?? null) ? ($deferred['enrich']['status'] ?? null) : null;
+            $enrich = is_array($deferred['enrich'] ?? null) ? ($deferred['enrich']['status'] ?? null) : null;
+            $bilder = is_array($deferred['bilder'] ?? null) ? ($deferred['bilder']['status'] ?? null) : null;
 
-            return in_array($status, ['queued', 'running'], true);
+            return in_array($enrich, ['queued', 'running'], true)
+                || in_array($bilder, ['queued', 'running'], true);
         });
     }
 
@@ -1449,6 +1452,24 @@ class Index extends Component
         try {
             $cascade->reAnreichern($team, $stepId);
             $this->meldung = 'Anreicherung neu gestartet …';
+            $this->fehler = null;
+        } catch (\Throwable $e) {
+            $this->fehler = $e->getMessage();
+        }
+        $this->refreshLaeuft($cascade);
+    }
+
+    /** „Neu erzeugen" (Cockpit, Etappe 7 Teil 2b): NUR die KI-Fotos eines freigegebenen Drafts erneut
+     *  anstoßen (ohne Voll-Anreicherung) — nach deferred.bilder=failed. */
+    public function bilderNeu(int $stepId, PlanningCascadeService $cascade): void
+    {
+        $team = $this->team();
+        if ($team === null) {
+            return;
+        }
+        try {
+            $cascade->reBilder($team, $stepId);
+            $this->meldung = 'KI-Fotos werden neu erzeugt …';
             $this->fehler = null;
         } catch (\Throwable $e) {
             $this->fehler = $e->getMessage();

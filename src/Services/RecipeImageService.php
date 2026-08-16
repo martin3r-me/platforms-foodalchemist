@@ -74,6 +74,34 @@ class RecipeImageService
         return ['erzeugt' => $erzeugt, 'fehler' => $fehler, 'letzter_fehler' => $letzterFehler];
     }
 
+    /**
+     * KI-erzeugte Fotos eines Rezepts (soft-)löschen — für das „neu erzeugen" der Kaskade (Etappe 7,
+     * Teil 2b: {@see \Platform\FoodAlchemist\Jobs\EnrichRecipeJob} im `nurBilder`-Modus), damit ein
+     * Re-Trigger die alten Bilder ERSETZT statt sie anzuhäufen. Discriminator = der Kosten-Call-Log:
+     * nur Fotos, die als `target_id` eines BILD_FEATURES-Calls dieses Teams auftauchen, sind KI-erzeugt
+     * — MANUELLE Uploads (kein Call-Log) bleiben unangetastet. Rückgabe: Zahl der gelöschten Fotos.
+     */
+    public function loescheKiFotos(Team $team, FoodAlchemistRecipe $recipe): int
+    {
+        $kiFotoIds = DB::table('foodalchemist_ai_call_log')
+            ->where('team_id', $team->id)
+            ->where('target_table', 'foodalchemist_recipe_step_photos')
+            ->whereIn('feature', self::BILD_FEATURES)
+            ->whereNotNull('target_id')
+            ->pluck('target_id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+
+        if ($kiFotoIds === []) {
+            return 0;
+        }
+
+        return FoodAlchemistRecipeStepPhoto::where('team_id', $team->id)
+            ->where('recipe_id', $recipe->id)
+            ->whereIn('id', $kiFotoIds)
+            ->delete();
+    }
+
     /** Ein Foto des fertig angerichteten Gerichts (Hero/Endergebnis, ohne Schritt-Kopplung → is_result). */
     public function produktFoto(Team $team, FoodAlchemistRecipe $recipe): FoodAlchemistRecipeStepPhoto
     {

@@ -27,6 +27,11 @@ use Platform\FoodAlchemist\Services\RecipeOneShotService;
  * mehr stumm: das Ergebnis wird pro Step in `deferred.enrich` festgehalten (queued→running→
  * done|failed) und jeder Fehler geloggt, damit „läuft durch" nicht über einen rohen Entwurf lügt.
  * Die Planung pollt `deferred.enrich` und zeigt Status + „neu anreichern".
+ *
+ * Etappe 7, Teil 2b — »nur Bilder«-Modus (`$nurBilder`): re-triggert AUSSCHLIESSLICH die KI-Fotos
+ * (ohne Voll-Anreicherung), z. B. nach `deferred.bilder=failed` über den Cockpit-Knopf „neu erzeugen"
+ * ({@see \Platform\FoodAlchemist\Services\PlanningCascadeService::reBilder}). Ersetzt die alten
+ * KI-Fotos statt sie anzuhäufen (manuelle Uploads bleiben) und lässt `deferred.enrich` unangetastet.
  */
 class EnrichRecipeJob implements ShouldQueue
 {
@@ -42,6 +47,7 @@ class EnrichRecipeJob implements ShouldQueue
         public ?float $zielVk = null,
         public bool $kiBilder = false,
         public ?int $stepId = null,
+        public bool $nurBilder = false,
     ) {}
 
     public function handle(RecipeOneShotService $oneShot): void
@@ -50,26 +56,38 @@ class EnrichRecipeJob implements ShouldQueue
         $user = User::find($this->userId);
         $recipe = $team === null ? null : FoodAlchemistRecipe::visibleToTeam($team)->find($this->recipeId);
         if ($team === null || $user === null || $recipe === null) {
-            $this->markEnrich('failed', 'Team/User/Rezept nicht gefunden');
+            // Im »nur Bilder«-Modus lebt der Status in deferred.bilder — die Anreicherung war schon durch.
+            $this->nurBilder
+                ? $this->markBilder('failed', 'Team/User/Rezept nicht gefunden', 0)
+                : $this->markEnrich('failed', 'Team/User/Rezept nicht gefunden');
 
             return;
         }
 
         Auth::login($user);   // Team-Kontext (Call-Log/Kill-Switch/DNA)
-        $this->markEnrich('running');
 
-        try {
-            $oneShot->anreichern($team, $recipe, $this->zielVk, completeCoverage: true);
-            $this->markEnrich('done');
-        } catch (\Throwable $e) {
-            // Rezept bleibt live (fail-soft) — aber der Fehler wird sichtbar (Status + Log), nicht geschluckt.
-            Log::warning('[EnrichRecipeJob] Anreicherung fehlgeschlagen', ['recipe' => $this->recipeId, 'error' => $e->getMessage()]);
-            $this->markEnrich('failed', $e->getMessage());
+        // Voll-Anreicherung nur im Normalpfad — »nur Bilder« (Teil 2b) lässt das angereicherte
+        // Rezept + deferred.enrich unangetastet und erzeugt ausschliesslich die Fotos neu.
+        if (! $this->nurBilder) {
+            $this->markEnrich('running');
+            try {
+                $oneShot->anreichern($team, $recipe, $this->zielVk, completeCoverage: true);
+                $this->markEnrich('done');
+            } catch (\Throwable $e) {
+                // Rezept bleibt live (fail-soft) — aber der Fehler wird sichtbar (Status + Log), nicht geschluckt.
+                Log::warning('[EnrichRecipeJob] Anreicherung fehlgeschlagen', ['recipe' => $this->recipeId, 'error' => $e->getMessage()]);
+                $this->markEnrich('failed', $e->getMessage());
+            }
         }
 
-        if ($this->kiBilder) {
+        if ($this->kiBilder || $this->nurBilder) {
             try {
-                $res = app(RecipeImageService::class)->erzeugeFuerRezept($team, $recipe->refresh());
+                $imageService = app(RecipeImageService::class);
+                if ($this->nurBilder) {
+                    // „Neu erzeugen": vorhandene KI-Fotos ERSETZEN (nicht anhäufen) — manuelle Uploads bleiben.
+                    $imageService->loescheKiFotos($team, $recipe->refresh());
+                }
+                $res = $imageService->erzeugeFuerRezept($team, $recipe->refresh());
                 // Ehrlicher Bild-Status: ein einzelner fehlgeschlagener Call (Produkt- oder Schritt-Foto)
                 // macht die Erzeugung als Ganzes »failed« (Teil-Erfolge trägt `n`), sonst »done«.
                 $this->markBilder(
@@ -86,10 +104,13 @@ class EnrichRecipeJob implements ShouldQueue
         }
     }
 
-    /** Harter Job-Abbruch (nicht vom inneren try/catch abgefangen): Anreicherung als fehlgeschlagen markieren. */
+    /** Harter Job-Abbruch (nicht vom inneren try/catch abgefangen): als fehlgeschlagen markieren. */
     public function failed(\Throwable $e): void
     {
-        $this->markEnrich('failed', $e->getMessage());
+        // Im »nur Bilder«-Modus gehört der Fehler an deferred.bilder (die Anreicherung war längst durch).
+        $this->nurBilder
+            ? $this->markBilder('failed', $e->getMessage(), 0)
+            : $this->markEnrich('failed', $e->getMessage());
     }
 
     /**

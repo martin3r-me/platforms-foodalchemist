@@ -1457,6 +1457,35 @@ it('Cockpit Bild-Status: deferred.bilder=done fällt auf »N Fotos ✓« zurück
         ->assertDontSeeHtml('Fotos fehlgeschlagen');
 });
 
+// Etappe 7 Teil 2b: „neu erzeugen" — das failed-Badge bietet einen Knopf, der NUR die KI-Fotos
+// re-triggert (EnrichRecipeJob im nurBilder-Modus), ohne Voll-Anreicherung.
+
+it('Cockpit Bild-Status: failed-Badge bietet „neu erzeugen" und re-triggert nur die Fotos (nurBilder)', function () {
+    $recipe = $this->makeRecipe($this->rootTeam, 'Bild-Retrigger', ['is_sales_recipe' => true, 'status' => 'draft']);
+    $session = bildStatusRunMitBilder($this->rootTeam, $recipe, ['status' => 'failed', 'error' => 'API down', 'n' => 0]);
+    $step = FoodAlchemistCascadeRunStep::where('ref_id', $recipe->id)->where('ref_type', 'recipe')->firstOrFail();
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->assertSeeHtml('neu erzeugen')
+        ->assertSeeHtml('wire:click="bilderNeu(' . $step->id . ')"')
+        ->call('bilderNeu', $step->id);
+
+    expect($step->refresh()->deferred['bilder']['status'] ?? null)->toBe('queued');
+    Queue::assertPushed(\Platform\FoodAlchemist\Jobs\EnrichRecipeJob::class,
+        fn ($job) => (int) $job->recipeId === (int) $recipe->id && $job->nurBilder === true);
+});
+
+it('Cockpit Bild-Status: deferred.bilder=queued zeigt Spinner »erzeugt Fotos …« (Poll aktiv)', function () {
+    $recipe = $this->makeRecipe($this->rootTeam, 'Bild-Queued', ['is_sales_recipe' => true, 'status' => 'draft']);
+    $session = bildStatusRunMitBilder($this->rootTeam, $recipe, ['status' => 'queued']);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->assertSeeHtml('erzeugt Fotos …')
+        ->assertDontSeeHtml('Fotos fehlgeschlagen');
+});
+
 /*
 |--------------------------------------------------------------------------
 | Etappe 6 — Margen-Gate: Warnung bei Freigabe unter Aufschlagsklasse
