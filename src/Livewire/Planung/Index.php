@@ -1597,6 +1597,11 @@ class Index extends Component
         $kalkulation = [];
         // Etappe 7: Kosten-Transparenz je Call — Map recipe_id → {n, model} der KI-Bild-Calls.
         $bildCalls = [];
+        // Etappe 7 — Bild-Status im Cockpit (Teil 1): wurden KI-Fotos beim Go angefordert
+        // (run-level `ki_bilder`) + Map recipe_id → Zahl real existierender Fotos. Ehrlicher
+        // Status-Badge (erzeugt / angefordert-aber-leer), analog zum Anreicherungs-Badge.
+        $bilderAngefordert = $lauf !== null && (bool) (is_array($lauf->params ?? null) ? ($lauf->params['ki_bilder'] ?? false) : false);
+        $fotoCounts = [];
         if ($lauf !== null && $team !== null) {
             $rezeptRefIds = $lauf->steps
                 ->whereIn('kind', ['rezept', 'gericht'])
@@ -1660,6 +1665,28 @@ class Index extends Component
                     $bildCalls[(int) $row->rid] = ['n' => (int) $row->n, 'model' => (string) ($row->model ?? '')];
                 }
             }
+
+            // Etappe 7 — Bild-Status (Teil 1): Zahl der real existierenden Fotos je Draft
+            // (team-eigen, nicht gelöscht). NUR wenn KI-Fotos angefordert waren — sonst gibt es
+            // keinen Status zu zeigen (Bestandsverhalten). Ehrlich ableitbar OHNE neue Persistenz:
+            // Die KI-Fotos laufen im EnrichRecipeJob NACH der Anreicherung → am freigegebenen Step
+            // mit deferred.enrich=done heisst »0 Fotos trotz angefordert« = nichts erzeugt (die
+            // Bild-Erzeugung ist still fail-soft, ein expliziter »fehlgeschlagen«-Zustand wird
+            // heute NICHT protokolliert → kein erfundenes Fehler-Badge). Explizite Fehler-
+            // Persistenz + „neu erzeugen" = Folge-Chunk. Actual-Fotos statt bildCalls, weil ein
+            // manueller Upload keinen Kosten-Call trägt, für »erzeugt« aber zählt.
+            if ($bilderAngefordert && $rezeptRefIds !== []) {
+                $fotoRows = DB::table('foodalchemist_recipe_step_photos')
+                    ->whereNull('deleted_at')
+                    ->where('team_id', $team->id)
+                    ->whereIn('recipe_id', $rezeptRefIds)
+                    ->groupBy('recipe_id')
+                    ->selectRaw('recipe_id as rid, COUNT(*) as n')
+                    ->get();
+                foreach ($fotoRows as $row) {
+                    $fotoCounts[(int) $row->rid] = (int) $row->n;
+                }
+            }
         }
 
         // Composer-Tab: Ad-hoc-Netz + Kohäsion (fit/orphan je Anker) + browsebarer Picker.
@@ -1707,6 +1734,8 @@ class Index extends Component
             'lauf' => $lauf,
             'kalkulation' => $kalkulation,
             'bildCalls' => $bildCalls,
+            'bilderAngefordert' => $bilderAngefordert,
+            'fotoCounts' => $fotoCounts,
             'composerNetz' => $composerNetz,
             'composerCohesion' => $composerCohesion,
             'composerBrowse' => $composerBrowse,

@@ -38,6 +38,19 @@
                 @elseif($enrStatus === 'failed')
                     <button wire:click="neuAnreichern({{ $st->id }})" class="text-[10px] text-rose-300 hover:text-rose-200 underline" title="{{ $enr['error'] ?? '' }}">Anreicherung fehlgeschlagen — neu anreichern</button>
                 @endif
+                {{-- Etappe 7 — Bild-Status (Teil 1): erzeugt / angefordert-aber-leer, analog zum
+                     Anreicherungs-Badge. Nur wenn KI-Fotos angefordert waren ($bilderAngefordert,
+                     run-level) UND die Anreicherung durch ist (enrich=done — die Fotos laufen im
+                     selben Job DANACH). 0 Fotos trotz angefordert = nichts erzeugt (die Bild-
+                     Erzeugung ist still fail-soft; kein erfundenes »fehlgeschlagen«-Badge). --}}
+                @if(!empty($bilderAngefordert) && $enrStatus === 'done')
+                    @php $fotoN = (int) (($fotoCounts ?? [])[$st->ref_id] ?? 0); @endphp
+                    @if($fotoN > 0)
+                        <span class="text-[10px] text-emerald-400/80 inline-flex items-center gap-1" data-bild-status="{{ $st->id }}" title="{{ $fotoN }} KI-Foto(s) erzeugt">@svg('heroicon-o-photo', 'w-3 h-3') {{ $fotoN }} Foto{{ $fotoN === 1 ? '' : 's' }} ✓</span>
+                    @else
+                        <span class="text-[10px] text-amber-300/80 inline-flex items-center gap-1" data-bild-status="{{ $st->id }}" title="KI-Fotos angefordert, aber keine erzeugt">@svg('heroicon-o-photo', 'w-3 h-3') keine Fotos erzeugt</span>
+                    @endif
+                @endif
             @endif
             @if(in_array($st->status, ['done', 'failed'], true) && in_array($st->kind, ['rezept', 'gericht', 'concept'], true))
                 <button wire:click="neuGenerieren({{ $st->id }})" class="text-amber-300 hover:text-amber-200" title="Neu generieren (verwirft den aktuellen Entwurf)">@svg('heroicon-o-arrow-path', 'w-4 h-4')</button>

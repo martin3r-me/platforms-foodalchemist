@@ -1331,6 +1331,76 @@ it('Cockpit: fremd-Team-geloggte Bild-Calls zählen NICHT (Kosten dieses Teams)'
 
 /*
 |--------------------------------------------------------------------------
+| Etappe 7 — Bild-Status im Cockpit (Teil 1): erzeugt / angefordert-aber-leer,
+| analog zum Anreicherungs-Badge. Ehrlich ableitbar OHNE neue Persistenz:
+| run-level `ki_bilder` (angefordert) + deferred.enrich=done (Job durch, Fotos
+| laufen darin danach) + real existierende Fotos. »0 Fotos trotz angefordert«
+| = nichts erzeugt — KEIN erfundenes »fehlgeschlagen«-Badge (Bild-Erzeugung ist
+| still fail-soft, kein Fehler-Zustand protokolliert). Actual-Fotos statt Calls.
+|--------------------------------------------------------------------------
+*/
+
+// Legt N reale Fotos für ein Rezept an (ohne Kosten-Call — für den »erzeugt«-Status).
+function seedFotos(\Platform\FoodAlchemist\Models\FoodAlchemistRecipe $recipe, int $n): void
+{
+    for ($i = 0; $i < $n; $i++) {
+        \Platform\FoodAlchemist\Models\FoodAlchemistRecipeStepPhoto::create([
+            'team_id' => $recipe->team_id, 'recipe_id' => $recipe->id, 'pfad' => 'foto-' . uniqid() . '.jpg',
+        ]);
+    }
+}
+
+// review-Lauf mit einem freigegebenen (enrich=done) Gericht-Step; ki_bilder am Run steuerbar.
+function bildStatusRun($team, \Platform\FoodAlchemist\Models\FoodAlchemistRecipe $recipe, bool $kiBilder): \Platform\FoodAlchemist\Models\FoodAlchemistPlanningSession
+{
+    $session = app(PlanningSessionService::class)->create($team, ['title' => 'Bild-Status']);
+    $run = FoodAlchemistCascadeRun::create([
+        'team_id' => $team->id, 'planning_session_id' => $session->id,
+        'scope' => 'gericht', 'status' => 'review', 'params' => ['ki_bilder' => $kiBilder],
+    ]);
+    FoodAlchemistCascadeRunStep::create([
+        'team_id' => $team->id, 'cascade_run_id' => $run->id,
+        'kind' => 'gericht', 'status' => 'freigegeben', 'ref_type' => 'recipe', 'ref_id' => $recipe->id,
+        'label' => $recipe->name, 'deferred' => ['enrich' => ['status' => 'done']],
+    ]);
+
+    return $session;
+}
+
+it('Cockpit Bild-Status: angefordert + Fotos vorhanden zeigt »N Fotos ✓«', function () {
+    $recipe = $this->makeRecipe($this->rootTeam, 'Bild-OK', ['is_sales_recipe' => true, 'status' => 'draft']);
+    seedFotos($recipe, 2);
+    $session = bildStatusRun($this->rootTeam, $recipe, true);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->assertSeeHtml('data-bild-status="')
+        ->assertSeeHtml('2 Fotos ✓')
+        ->assertDontSeeHtml('keine Fotos erzeugt');
+});
+
+it('Cockpit Bild-Status: angefordert, aber 0 Fotos zeigt ehrlich »keine Fotos erzeugt« (kein Fehler-Fake)', function () {
+    $recipe = $this->makeRecipe($this->rootTeam, 'Bild-Leer', ['is_sales_recipe' => true, 'status' => 'draft']);
+    $session = bildStatusRun($this->rootTeam, $recipe, true);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->assertSeeHtml('data-bild-status="')
+        ->assertSeeHtml('keine Fotos erzeugt');
+});
+
+it('Cockpit Bild-Status: OHNE ki_bilder-Anforderung trägt keinen Bild-Status', function () {
+    $recipe = $this->makeRecipe($this->rootTeam, 'Bild-Aus', ['is_sales_recipe' => true, 'status' => 'draft']);
+    seedFotos($recipe, 1); // selbst mit Bestandsfoto: nicht angefordert → kein Status
+    $session = bildStatusRun($this->rootTeam, $recipe, false);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->assertDontSeeHtml('data-bild-status="');
+});
+
+/*
+|--------------------------------------------------------------------------
 | Etappe 6 — Margen-Gate: Warnung bei Freigabe unter Aufschlagsklasse
 |--------------------------------------------------------------------------
 | „unter Aufschlagsklasse" = ein MANUELLER VK, der den Klassen-Vorschlag
