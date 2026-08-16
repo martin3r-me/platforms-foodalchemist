@@ -54,6 +54,28 @@
             @endif
         </span>
     </div>
+    {{-- Etappe 6: EK/VK/Marge je Stufe — schon am Draft sichtbar (Kalkulation aus SalesRecipeService::cockpit,
+         gebündelt in Index::render). Nur Rezept/Gericht-Steps; Concept trägt keine Rezept-Marge.
+         Ampel färbt Marge %/Wareneinsatz % (grün=auf/unter Ziel · gelb=drüber · rot=>50% drüber · grau=unbekannt). --}}
+    @php $kalk = ($kalkulation ?? [])[$st->ref_id] ?? null; @endphp
+    @if($kalk !== null && in_array($st->kind, ['rezept', 'gericht'], true))
+        @php
+            $ampelTon = ['gruen' => 'text-emerald-300', 'gelb' => 'text-amber-300', 'rot' => 'text-rose-300', 'unbekannt' => 'text-gray-400'][$kalk['ampel'] ?? 'unbekannt'] ?? 'text-gray-400';
+        @endphp
+        <div class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[10px] pl-1" data-kalkulation="{{ $st->id }}">
+            <span class="text-gray-500">EK <span class="text-gray-200">{{ $kalk['ek_total'] !== null ? number_format($kalk['ek_total'], 2, ',', '.') . ' €' : '—' }}</span></span>
+            <span class="text-gray-500">VK <span class="text-gray-200">{{ $kalk['vk_netto'] !== null ? number_format($kalk['vk_netto'], 2, ',', '.') . ' €' : '—' }}</span></span>
+            <span class="text-gray-500">Marge <span class="{{ $ampelTon }}">{{ $kalk['marge_pct'] !== null ? number_format($kalk['marge_pct'], 1, ',', '.') . ' %' : '—' }}</span></span>
+            @if($kalk['we_pct'] !== null)
+                <span class="text-gray-500">WE <span class="{{ $ampelTon }}">{{ number_format($kalk['we_pct'], 1, ',', '.') }} %</span></span>
+            @endif
+            @if($kalk['formel_fehlt'])
+                <span class="text-amber-400/70" title="Keine Aufschlagsklasse/Formel hinterlegt — VK/Marge nicht berechenbar">Formel fehlt</span>
+            @elseif($kalk['vk_netto'] === null)
+                <span class="text-gray-500">noch nicht bepreist</span>
+            @endif
+        </div>
+    @endif
     @if($st->status === 'failed' && $st->error)
         <p class="text-[10px] text-rose-400/80 pl-1">{{ \Illuminate\Support\Str::limit($st->error, 160) }}</p>
     @endif

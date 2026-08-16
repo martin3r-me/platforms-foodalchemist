@@ -1111,3 +1111,68 @@ it('Trend-Anbindung: eine Nicht-Trend-Session lässt die Tab-Briefings leer', fu
         ->assertSet('eingabe.concept.brief', '')
         ->assertSet('eingabe.rezept.brief', '');
 });
+
+/**
+ * Etappe 6 — EK/VK/Marge je Stufe im Worker-Cockpit sichtbar (nicht erst nach dem Speichern):
+ * Index::render bündelt die abgeleitete Kalkulation (SalesRecipeService::cockpit) je Rezept-/
+ * Gericht-Step und die step-zeile rendert eine kompakte EK/VK/Marge-Kachel schon am Draft.
+ */
+it('Cockpit: Gericht-Step zeigt EK/VK/Marge-Kachel schon am Draft', function () {
+    $ak = \Platform\FoodAlchemist\Models\FoodAlchemistMarkupClass::create([
+        'code' => 'ALC', 'label' => 'A la Carte', 'raw_markup_pct' => 420, 'vat_rate' => 19, 'formula_type' => 'aufschlag',
+    ]);
+    // EK 2,50 € + manueller VK 10,00 € → Marge 75,0 % / Wareneinsatz 25,0 %.
+    $recipe = $this->makeRecipe($this->rootTeam, 'Marge-Gericht', [
+        'is_sales_recipe' => true, 'status' => 'draft',
+        'ek_total_eur' => 2.50, 'ek_per_kg_eur' => 5.00, 'sales_net' => 10.00,
+        'sales_quantity_per_unit_g' => 250, 'sales_unit_count' => 4,
+        'markup_class_id' => $ak->id, 'vat_rate' => 19,
+    ]);
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Marge']);
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'planning_session_id' => $session->id, 'scope' => 'gericht', 'status' => 'review']);
+    FoodAlchemistCascadeRunStep::create([
+        'team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id,
+        'kind' => 'gericht', 'status' => 'done', 'ref_type' => 'recipe', 'ref_id' => $recipe->id, 'label' => 'Marge-Gericht',
+    ]);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->assertSeeHtml('data-kalkulation="')
+        ->assertSeeHtml('2,50')      // EK gesamt
+        ->assertSeeHtml('10,00')     // VK netto
+        ->assertSeeHtml('75,0')      // Marge %
+        ->assertSeeHtml('25,0');     // Wareneinsatz %
+});
+
+it('Cockpit: Concept-Step trägt KEINE Rezept-Marge-Kachel (Menü ≠ Rezept)', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Menü']);
+    $concept = FoodAlchemistConcept::create(['team_id' => $this->rootTeam->id, 'name' => 'Menü A', 'status' => 'draft']);
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'planning_session_id' => $session->id, 'scope' => 'concept', 'status' => 'review']);
+    FoodAlchemistCascadeRunStep::create([
+        'team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id,
+        'kind' => 'concept', 'status' => 'done', 'ref_type' => 'concept', 'ref_id' => $concept->id, 'label' => 'Menü A',
+    ]);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->assertSeeHtml('Menü A')                 // Concept-Step rendert (Cockpit ist offen)
+        ->assertDontSeeHtml('data-kalkulation="'); // aber KEINE Rezept-Marge-Kachel
+});
+
+it('Cockpit: un-bepreister Draft zeigt die Kachel mit „noch nicht bepreist"', function () {
+    // Kein EK, kein VK, keine Aufschlagsklasse → Kachel da, aber ehrlich leer statt einer erfundenen Zahl.
+    $recipe = $this->makeRecipe($this->rootTeam, 'Roh-Gericht', [
+        'is_sales_recipe' => true, 'status' => 'draft', 'ek_total_eur' => null, 'sales_net' => null,
+    ]);
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Roh']);
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'planning_session_id' => $session->id, 'scope' => 'gericht', 'status' => 'review']);
+    FoodAlchemistCascadeRunStep::create([
+        'team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id,
+        'kind' => 'gericht', 'status' => 'done', 'ref_type' => 'recipe', 'ref_id' => $recipe->id, 'label' => 'Roh-Gericht',
+    ]);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->assertSeeHtml('data-kalkulation="')
+        ->assertSeeHtml('noch nicht bepreist');
+});

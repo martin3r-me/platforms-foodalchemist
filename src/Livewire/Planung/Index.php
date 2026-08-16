@@ -11,11 +11,13 @@ use Platform\FoodAlchemist\Models\FoodAlchemistCascadeRun;
 use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
 use Platform\FoodAlchemist\Models\FoodAlchemistDishIdea;
 use Platform\FoodAlchemist\Models\FoodAlchemistPlanningSession;
+use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Services\ConceptGeneratorService;
 use Platform\FoodAlchemist\Services\IdeenService;
 use Platform\FoodAlchemist\Services\PairingService;
 use Platform\FoodAlchemist\Services\PlanningCascadeService;
 use Platform\FoodAlchemist\Services\PlanningSessionService;
+use Platform\FoodAlchemist\Services\SalesRecipeService;
 use Platform\FoodAlchemist\Services\TitelVorschlagService;
 use Platform\FoodAlchemist\Support\TeamScope;
 
@@ -1501,6 +1503,43 @@ class Index extends Component
         // sonst sofort „done", während das Gericht noch ein roher Entwurf wäre.
         $this->anreicherungLaeuft = $this->anreicherungOffen($lauf);
 
+        // Etappe 6: EK/VK/Marge je Stufe im Cockpit sichtbar — schon am Draft, nicht erst nach dem
+        // Speichern/Öffnen im VK-Editor. Für jeden Rezept-/Gericht-Step mit erzeugtem Artefakt
+        // (ref_type=recipe) die ABGELEITETE Kalkulation über den EINEN Bündler ziehen
+        // (SalesRecipeService::cockpit → MargeService; GL-02 I9: VK/Marge sind abgeleitet, nicht
+        // persistiert). Rezepte gebündelt per whereIn laden (kein N+1 über die Blade-Step-Schleife).
+        // Concept-Steps tragen keine Rezept-Marge (Menü ≠ Rezept) → hier bewusst nicht gerechnet.
+        // Map: ref_id → kompakte Kachel-Werte (EK gesamt · VK netto · Marge % · Wareneinsatz % + Ampel).
+        $kalkulation = [];
+        if ($lauf !== null && $team !== null) {
+            $rezeptRefIds = $lauf->steps
+                ->whereIn('kind', ['rezept', 'gericht'])
+                ->where('ref_type', 'recipe')
+                ->whereIn('status', ['done', 'freigegeben', 'skipped'])
+                ->pluck('ref_id')
+                ->filter()
+                ->map(fn ($v) => (int) $v)
+                ->unique()
+                ->values()
+                ->all();
+            if ($rezeptRefIds !== []) {
+                $sales = app(SalesRecipeService::class);
+                $rezepte = FoodAlchemistRecipe::visibleToTeam($team)->whereIn('id', $rezeptRefIds)->get();
+                foreach ($rezepte as $rz) {
+                    $c = $sales->cockpit($rz, $team);
+                    $marge = is_array($c['marge'] ?? null) ? $c['marge'] : [];
+                    $kalkulation[(int) $rz->id] = [
+                        'ek_total' => $rz->ek_total_eur !== null ? (float) $rz->ek_total_eur : null,
+                        'vk_netto' => $c['vk']['sales_net'] ?? null,
+                        'marge_pct' => $marge['marge_pct'] ?? null,
+                        'we_pct' => $marge['wareneinsatz_pct'] ?? null,
+                        'ampel' => (string) ($c['ampel'] ?? 'unbekannt'),
+                        'formel_fehlt' => (bool) ($c['formel_fehlt'] ?? false),
+                    ];
+                }
+            }
+        }
+
         // Composer-Tab: Ad-hoc-Netz + Kohäsion (fit/orphan je Anker) + browsebarer Picker.
         $composerNetz = ['nodes' => [], 'edges' => [], 'meta' => []];
         $composerCohesion = null;
@@ -1544,6 +1583,7 @@ class Index extends Component
             'skizzenLauf' => $skizzenLauf,
             'skizzenLaufAktiv' => $skizzenLaufAktiv,
             'lauf' => $lauf,
+            'kalkulation' => $kalkulation,
             'composerNetz' => $composerNetz,
             'composerCohesion' => $composerCohesion,
             'composerBrowse' => $composerBrowse,
