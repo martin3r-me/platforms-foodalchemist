@@ -1179,6 +1179,79 @@ it('Cockpit: un-bepreister Draft zeigt die Kachel mit „noch nicht bepreist"', 
 });
 
 /*
+ * Etappe 6 — unvollständige Bepreisung sichtbar markieren (EK unvollständig):
+ * »teil-unbepreist« = EK IST da, aber nicht alle costed Zutaten tragen einen Preis
+ * (die Lücken tragen 0 € → EK/Marge zu günstig). Kanonische Wahrheit aus
+ * DataQualityService: ek_total_eur != null && ek_n_ingredients_priced < ..._total.
+ */
+it('Cockpit: teil-unbepreistes Gericht wird trotz gesunder Marge als »EK teil-unbepreist« markiert', function () {
+    $ak = \Platform\FoodAlchemist\Models\FoodAlchemistMarkupClass::create([
+        'code' => 'ALC2', 'label' => 'A la Carte', 'raw_markup_pct' => 420, 'vat_rate' => 19, 'formula_type' => 'aufschlag',
+    ]);
+    // EK 2,50 € da + hübsche Marge 75,0 % — ABER nur 2 von 3 Zutaten bepreist: die gezeigte
+    // Zahl unterschätzt den echten Wareneinsatz. Genau der still irreführende Fall.
+    $recipe = $this->makeRecipe($this->rootTeam, 'Teil-Gericht', [
+        'is_sales_recipe' => true, 'status' => 'draft',
+        'ek_total_eur' => 2.50, 'ek_per_kg_eur' => 5.00, 'sales_net' => 10.00,
+        'sales_quantity_per_unit_g' => 250, 'sales_unit_count' => 4,
+        'markup_class_id' => $ak->id, 'vat_rate' => 19,
+        'ek_n_ingredients_total' => 3, 'ek_n_ingredients_priced' => 2,
+    ]);
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Teil']);
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'planning_session_id' => $session->id, 'scope' => 'gericht', 'status' => 'review']);
+    FoodAlchemistCascadeRunStep::create([
+        'team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id,
+        'kind' => 'gericht', 'status' => 'done', 'ref_type' => 'recipe', 'ref_id' => $recipe->id, 'label' => 'Teil-Gericht',
+    ]);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->assertSeeHtml('EK teil-unbepreist')
+        ->assertSeeHtml('Nur 2 von 3 Zutaten bepreist')  // Tooltip trägt die Zahlen
+        ->assertSeeHtml('75,0');                          // Marge steht daneben — kein elseif, beides sichtbar
+});
+
+it('Cockpit: voll bepreistes Gericht (priced == total) trägt KEINEN teil-unbepreist-Marker', function () {
+    $recipe = $this->makeRecipe($this->rootTeam, 'Voll-Gericht', [
+        'is_sales_recipe' => true, 'status' => 'draft',
+        'ek_total_eur' => 2.50, 'ek_per_kg_eur' => 5.00, 'sales_net' => 10.00,
+        'ek_n_ingredients_total' => 3, 'ek_n_ingredients_priced' => 3,
+    ]);
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Voll']);
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'planning_session_id' => $session->id, 'scope' => 'gericht', 'status' => 'review']);
+    FoodAlchemistCascadeRunStep::create([
+        'team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id,
+        'kind' => 'gericht', 'status' => 'done', 'ref_type' => 'recipe', 'ref_id' => $recipe->id, 'label' => 'Voll-Gericht',
+    ]);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->assertSeeHtml('data-kalkulation="')     // Kachel da
+        ->assertDontSeeHtml('EK teil-unbepreist'); // aber kein Marker
+});
+
+it('Cockpit: fehlende Zähler (nie recomputet) markieren NICHT teil-unbepreist (keine unbelegte Behauptung)', function () {
+    // EK gesetzt, aber die Zutaten-Zähler NULL (Draft noch nicht durchgerechnet) → wir behaupten
+    // keine Unvollständigkeit, die wir nicht belegen können.
+    $recipe = $this->makeRecipe($this->rootTeam, 'Zaehlerlos-Gericht', [
+        'is_sales_recipe' => true, 'status' => 'draft',
+        'ek_total_eur' => 2.50, 'ek_per_kg_eur' => 5.00, 'sales_net' => 10.00,
+        'ek_n_ingredients_total' => null, 'ek_n_ingredients_priced' => null,
+    ]);
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Zaehlerlos']);
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'planning_session_id' => $session->id, 'scope' => 'gericht', 'status' => 'review']);
+    FoodAlchemistCascadeRunStep::create([
+        'team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id,
+        'kind' => 'gericht', 'status' => 'done', 'ref_type' => 'recipe', 'ref_id' => $recipe->id, 'label' => 'Zaehlerlos-Gericht',
+    ]);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->assertSeeHtml('data-kalkulation="')
+        ->assertDontSeeHtml('EK teil-unbepreist');
+});
+
+/*
 |--------------------------------------------------------------------------
 | Etappe 6 — Margen-Gate: Warnung bei Freigabe unter Aufschlagsklasse
 |--------------------------------------------------------------------------

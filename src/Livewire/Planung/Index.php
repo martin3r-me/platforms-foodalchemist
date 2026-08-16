@@ -1611,6 +1611,14 @@ class Index extends Component
                 foreach ($rezepte as $rz) {
                     $c = $sales->cockpit($rz, $team);
                     $marge = is_array($c['marge'] ?? null) ? $c['marge'] : [];
+                    // Etappe 6: unvollständige Bepreisung ehrlich markieren. »teil-unbepreist« =
+                    // ein EK IST da, aber nicht alle costed Zutaten tragen einen Preis — die
+                    // gezeigte EK/Marge ist damit ZU GÜNSTIG gerechnet (die Lücken tragen 0 €).
+                    // 1:1 die kanonische Wahrheit aus DataQualityService (SignalTyp::EkKetteUnvollstaendig
+                    // `vk_ek_teil`/`br_ek_teil`): ek_total_eur != null && priced < total — KEINE zweite,
+                    // qs-schlaue Definition (das wäre ein Widerspruch zum Signal-Cockpit).
+                    $nTotal = $rz->ek_n_ingredients_total !== null ? (int) $rz->ek_n_ingredients_total : null;
+                    $nPriced = $rz->ek_n_ingredients_priced !== null ? (int) $rz->ek_n_ingredients_priced : null;
                     $kalkulation[(int) $rz->id] = [
                         'ek_total' => $rz->ek_total_eur !== null ? (float) $rz->ek_total_eur : null,
                         'vk_netto' => $c['vk']['sales_net'] ?? null,
@@ -1618,6 +1626,10 @@ class Index extends Component
                         'we_pct' => $marge['wareneinsatz_pct'] ?? null,
                         'ampel' => (string) ($c['ampel'] ?? 'unbekannt'),
                         'formel_fehlt' => (bool) ($c['formel_fehlt'] ?? false),
+                        'ek_n_priced' => $nPriced,
+                        'ek_n_total' => $nTotal,
+                        'ek_teil_unbepreist' => $rz->ek_total_eur !== null
+                            && $nTotal !== null && $nPriced !== null && $nPriced < $nTotal,
                     ];
                 }
             }

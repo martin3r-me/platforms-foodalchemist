@@ -69,6 +69,12 @@
             @if($kalk['we_pct'] !== null)
                 <span class="text-gray-500">WE <span class="{{ $ampelTon }}">{{ number_format($kalk['we_pct'], 1, ',', '.') }} %</span></span>
             @endif
+            {{-- Etappe 6: unvollständige Bepreisung ehrlich markieren — EK ist da, trägt aber nicht alle
+                 Zutaten (Lücken = 0 €) → EK/Marge zu günstig. Kanonische Wahrheit: DataQualityService
+                 »teil-unbepreist«. Eigener @if (kein elseif): darf NEBEN einer gesunden Marge stehen. --}}
+            @if(!empty($kalk['ek_teil_unbepreist']))
+                <span class="text-amber-400/70" title="Nur {{ $kalk['ek_n_priced'] }} von {{ $kalk['ek_n_total'] }} Zutaten bepreist — EK/Marge sind zu günstig gerechnet">EK teil-unbepreist</span>
+            @endif
             @if($kalk['formel_fehlt'])
                 <span class="text-amber-400/70" title="Keine Aufschlagsklasse/Formel hinterlegt — VK/Marge nicht berechenbar">Formel fehlt</span>
             @elseif($kalk['vk_netto'] === null)
