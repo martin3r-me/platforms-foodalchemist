@@ -201,6 +201,13 @@ class Index extends Component
 
     public ?string $meldung = null;
 
+    /**
+     * Etappe 6 Margen-Gate: Warnung, wenn bei einer Stufen-Freigabe Positionen UNTER ihrer
+     * Aufschlagsklasse freigegeben wurden (manueller VK < Klassen-Vorschlag). Reine Rückkopplung,
+     * keine harte Sperre — der Mensch entscheidet (Nordstern). Wird je Freigabe frisch gesetzt.
+     */
+    public ?string $margenWarnung = null;
+
     /** Aktiver Kaskaden-Lauf (in-place „Go") — Ziel des wire:poll. */
     public ?int $laufId = null;
 
@@ -1236,14 +1243,90 @@ class Index extends Component
         if ($team === null || $this->laufId === null) {
             return;
         }
+        // Etappe 6 Margen-Gate: die anstehenden Drafts VOR der Freigabe prüfen — danach sind sie
+        // `freigegeben`, nicht mehr `done`, und der Klassen-Vergleich fände nichts mehr.
+        $unterKlasse = $this->stepsUnterAufschlagsklasse($team, $kind, $cascade);
+        $this->margenWarnung = null;
         try {
             $cascade->gibStufeFrei($team, $this->laufId, $kind);
             $this->meldung = 'Stufe freigegeben — die nächste Stufe wird erzeugt.';
             $this->fehler = null;
+            $this->margenWarnung = $this->margenWarnungText($unterKlasse);
         } catch (\Throwable $e) {
             $this->fehler = $e->getMessage();
         }
         $this->refreshLaeuft($cascade);
+    }
+
+    /**
+     * Etappe 6 Margen-Gate — welche der bei der Freigabe der Stufe $kind anstehenden Rezept-Drafts
+     * würden UNTER ihrer Aufschlagsklasse freigegeben? „unter Aufschlagsklasse" = ein MANUELLER VK,
+     * der den Klassen-Vorschlag unterschreitet (source=`manuell` und sales_net < vorschlag.sales_net).
+     *
+     * Reuse `SalesRecipeService::cockpit` (die EINE Kalkulations-Wahrheit, GL-02 I9) — keine neue
+     * Rechenlogik. Ein Auto-VK (source=`class`) trifft die Klasse exakt → nie drunter; ohne Vorschlag
+     * (kein EK / keine Portionierung / Formel fehlt) gibt es keine Klassen-Schwelle → keine Aussage,
+     * nicht geraten. Bewusst am Klassen-Vorschlag statt an der Food-Cost-Ampel (Team-Ziel-Wareneinsatz
+     * ist oft nicht gepflegt → Ampel `unbekannt`, s. Backlog #87); die Klassen-Schwelle trägt das
+     * Rezept selbst über seine markup_class.
+     *
+     * @return list<string> Namen der Positionen unter Aufschlagsklasse (leer = nichts zu warnen)
+     */
+    private function stepsUnterAufschlagsklasse(Team $team, string $kind, PlanningCascadeService $cascade): array
+    {
+        if ($this->laufId === null) {
+            return [];
+        }
+        $lauf = $cascade->lauf($team, $this->laufId);
+        if ($lauf === null) {
+            return [];
+        }
+        // Nur die freizugebenden Drafts (`done`) dieser Stufe — exakt die, die gibStufeFrei scharf schaltet.
+        $refIds = $lauf->steps
+            ->where('kind', $kind)
+            ->where('ref_type', 'recipe')
+            ->where('status', 'done')
+            ->pluck('ref_id')
+            ->filter()
+            ->map(fn ($v) => (int) $v)
+            ->unique()
+            ->values()
+            ->all();
+        if ($refIds === []) {
+            return [];
+        }
+        $sales = app(SalesRecipeService::class);
+        $rezepte = FoodAlchemistRecipe::visibleToTeam($team)->whereIn('id', $refIds)->get();
+        $unter = [];
+        foreach ($rezepte as $rz) {
+            $c = $sales->cockpit($rz, $team);
+            $vk = is_array($c['vk'] ?? null) ? $c['vk'] : [];
+            $vorschlag = is_array($vk['vorschlag'] ?? null) ? $vk['vorschlag'] : null;
+            if (($vk['source'] ?? null) === 'manuell'
+                && isset($vk['sales_net'], $vorschlag['sales_net'])
+                && (float) $vk['sales_net'] < (float) $vorschlag['sales_net']) {
+                $unter[] = (string) ($rz->name ?? ('#'.$rz->id));
+            }
+        }
+
+        return $unter;
+    }
+
+    /**
+     * Formuliert die Margen-Gate-Warnung aus den Namen der Positionen unter Aufschlagsklasse.
+     * `null`, wenn nichts drunter liegt (kein Rauschen bei sauberer Freigabe).
+     *
+     * @param  list<string>  $namen
+     */
+    private function margenWarnungText(array $namen): ?string
+    {
+        if ($namen === []) {
+            return null;
+        }
+        $anzahl = count($namen);
+        $kopf = $anzahl === 1 ? '1 Position unter Aufschlagsklasse freigegeben' : $anzahl.' Positionen unter Aufschlagsklasse freigegeben';
+
+        return sprintf('%s: %s — VK prüfen (Marge unter Klassen-Vorgabe).', $kopf, implode(', ', $namen));
     }
 
     /** Per-Step-KI: einen Entwurf neu generieren (altes Draft wird verworfen). */

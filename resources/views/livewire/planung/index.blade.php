@@ -182,6 +182,9 @@
             @if($fehler !== null)
                 <span class="text-xs text-rose-300">{{ $fehler }}</span>
             @endif
+            @if($margenWarnung !== null)
+                <span class="text-xs text-amber-300" data-margen-warnung>⚠ {{ $margenWarnung }}</span>
+            @endif
         </x-slot:actions>
 
         <x-slot:tabs>
