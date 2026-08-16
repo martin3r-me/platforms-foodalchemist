@@ -516,6 +516,15 @@ return [
             'task' => 'Normalisiere den Rezept-Namen auf die §1-Syntax «<Typ>: <Bezeichnung>[, Zusatz]» '
                 . '(Typ aus dem §1.2-Vokabular, Singular, keine Abkürzungen): werte = {name}.',
         ],
+        // Et.4 (Eingabe-Reife): Titel-VORSCHLAG aus dem freien Brief (vor der Generierung), nicht das
+        // Putzen eines fertigen Namens. Nüchtern + §1-konform; benennt nur, was der Brief hergibt.
+        'recipe.titel_vorschlag' => [
+            'tier' => 'B',
+            'task' => 'Leite aus dem Brief EINEN nüchternen Basisrezept-Titel in der §1-Syntax '
+                . '«<Typ>: <Bezeichnung>[, Modifikator]» ab (Typ aus dem §1.2-Vokabular, Singular, '
+                . 'keine Abkürzungen, keine Marketing-Adjektive). Benenne nur, was der Brief hergibt — '
+                . 'erfinde keine Leitkomponente, die nicht genannt ist: werte = {name}.',
+        ],
         'vk.generator' => [
             'tier' => 'B',
             'max_tokens' => 8000,   // volles VK-Rezept inkl. Zutaten/Plating — Reasoning-Headroom
@@ -790,6 +799,15 @@ return [
             'task' => 'Normalisiere den Verkaufsrezept-Namen auf die Pipe-Syntax §4.4 '
                 . '«<HG-Code>: Hauptkomponente | Komponente | …» (max 5 Felder, Title Case, '
                 . 'keine Marketing-Adjektive): werte = {name}.',
+        ],
+        // Et.4 (Eingabe-Reife): Titel-VORSCHLAG aus dem freien Brief (vor der Generierung), nicht das
+        // Putzen eines fertigen Namens. Nüchtern + §4.4-konform; benennt nur, was der Brief hergibt.
+        'vk.titel_vorschlag' => [
+            'tier' => 'B',
+            'task' => 'Leite aus dem Brief EINEN nüchternen Gericht-Titel in der Pipe-Syntax §4.4 '
+                . '«<HG-Code>: Hauptkomponente | Komponente | …» ab (max 5 Felder, Title Case, '
+                . 'keine Marketing-Adjektive). Benenne nur, was der Brief hergibt — erfinde keine '
+                . 'Komponente, die nicht genannt ist: werte = {name}.',
         ],
         'vk.marketing' => [
             'tier' => 'A',

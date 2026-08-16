@@ -17,7 +17,7 @@ const REGISTRY_SOLL = [
     'gp.anker' => 'B', 'gp.role' => 'B', 'gp.la_suggest' => 'B', 'gp.term_la_rank' => 'B',
     // Rezept-Welt
     'recipe.generator' => 'B', 'recipe.description' => 'C', 'recipe.category' => 'D',
-    'recipe.garverlust' => 'C', 'recipe.name_putzen' => 'D', 'recipe.sektor' => 'B',
+    'recipe.garverlust' => 'C', 'recipe.name_putzen' => 'D', 'recipe.titel_vorschlag' => 'B', 'recipe.sektor' => 'B',
     'recipe.level' => 'B', 'recipe.sub_typ' => 'B', 'recipe.production_depth' => 'B',
     'recipe.preparation' => 'A', 'recipe.eigenschaften' => 'B', 'recipe.geschmack' => 'B',
     'recipe.steps' => 'A',                                            // Spec 27: strukturierte Schritte (Master), preparation ist nur ihr Spiegel
@@ -29,7 +29,7 @@ const REGISTRY_SOLL = [
     'gp.naehrwerte' => 'B',                                           // R10: Nährwert-Fallback ohne LA-Daten (Ist-Feature)
     // VK-Welt
     'vk.generator' => 'B', 'vk.speisen_klasse' => 'B', 'vk.rollen' => 'B',
-    'vk.plating' => 'A', 'vk.name_putzen' => 'B', 'vk.marketing' => 'A', 'vk.wording' => 'A',
+    'vk.plating' => 'A', 'vk.name_putzen' => 'B', 'vk.titel_vorschlag' => 'B', 'vk.marketing' => 'A', 'vk.wording' => 'A',
     'vk.behaelter' => 'B', 'vk.regeneration' => 'B', 'vk.servier_vehikel' => 'B',
     'vk.review' => 'A', 'vk.kohaerenz' => 'A', 'vk.teller_heber' => 'A',
     'vk.ueberarbeiten' => 'A',                                        // Spec 03 L1a: VK-Revise (freie Anweisung, Facetten sind Vorgabe)
