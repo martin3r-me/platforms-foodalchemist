@@ -25,6 +25,12 @@ class RecipeImageService
     private const QUALITY = 'low';   // Kosten: „low" reicht für Vorschau-/Doku-Bilder
     private const MODEL = 'gpt-image-1.5';
 
+    /** Feature-Keys der KI-Foto-Calls im `foodalchemist_ai_call_log` — EINE Wahrheit für Erzeuger
+     *  UND Consumer (Kosten-Transparenz im Cockpit, {@see \Platform\FoodAlchemist\Livewire\Planung\Index}). */
+    public const FEATURE_PRODUKTFOTO = 'recipe.product_photo';
+    public const FEATURE_SCHRITTFOTOS = 'recipe.step_photos';
+    public const BILD_FEATURES = [self::FEATURE_PRODUKTFOTO, self::FEATURE_SCHRITTFOTOS];
+
     /** Produktfoto + je Schritt ein Foto. Jedes Bild einzeln abgesichert (ein Fehler kippt den Rest nicht). */
     public function erzeugeFuerRezept(Team $team, FoodAlchemistRecipe $recipe, bool $produktFoto = true, bool $schrittFotos = true): void
     {
@@ -53,7 +59,7 @@ class RecipeImageService
             . mb_strimwidth((string) ($recipe->description ?? ''), 0, 280)
             . ' Natürliches Licht, Restaurant-Qualität, klarer Fokus auf das Gericht, kein Text, kein Logo.');
 
-        return $this->generiereFoto($team, $recipe, $prompt, 'KI-Produktfoto', 0, true, 'recipe.product_photo', null);
+        return $this->generiereFoto($team, $recipe, $prompt, 'KI-Produktfoto', 0, true, self::FEATURE_PRODUKTFOTO, null);
     }
 
     /** Ein Foto zu einem Zubereitungsschritt (an den Schritt gehängt). */
@@ -66,7 +72,7 @@ class RecipeImageService
         $prompt = 'Food-Foto zum Zubereitungsschritt ' . $step->position . ' von «' . $recipe->name . '»: '
             . mb_strimwidth($text, 0, 280) . ' Realistischer Küchen-Kontext, klarer Fokus, kein Text.';
 
-        $foto = $this->generiereFoto($team, $recipe, $prompt, 'KI-Foto: Schritt ' . $step->position, (int) $step->position * 10, false, 'recipe.step_photos', (int) $step->id);
+        $foto = $this->generiereFoto($team, $recipe, $prompt, 'KI-Foto: Schritt ' . $step->position, (int) $step->position * 10, false, self::FEATURE_SCHRITTFOTOS, (int) $step->id);
         $step->photos()->syncWithoutDetaching([$foto->id => ['position' => 1]]);
     }
 

@@ -17,6 +17,7 @@ use Platform\FoodAlchemist\Services\IdeenService;
 use Platform\FoodAlchemist\Services\PairingService;
 use Platform\FoodAlchemist\Services\PlanningCascadeService;
 use Platform\FoodAlchemist\Services\PlanningSessionService;
+use Platform\FoodAlchemist\Services\RecipeImageService;
 use Platform\FoodAlchemist\Services\SalesRecipeService;
 use Platform\FoodAlchemist\Services\TitelVorschlagService;
 use Platform\FoodAlchemist\Support\TeamScope;
@@ -1594,6 +1595,8 @@ class Index extends Component
         // Concept-Steps tragen keine Rezept-Marge (Menü ≠ Rezept) → hier bewusst nicht gerechnet.
         // Map: ref_id → kompakte Kachel-Werte (EK gesamt · VK netto · Marge % · Wareneinsatz % + Ampel).
         $kalkulation = [];
+        // Etappe 7: Kosten-Transparenz je Call — Map recipe_id → {n, model} der KI-Bild-Calls.
+        $bildCalls = [];
         if ($lauf !== null && $team !== null) {
             $rezeptRefIds = $lauf->steps
                 ->whereIn('kind', ['rezept', 'gericht'])
@@ -1631,6 +1634,30 @@ class Index extends Component
                         'ek_teil_unbepreist' => $rz->ek_total_eur !== null
                             && $nTotal !== null && $nPriced !== null && $nPriced < $nTotal,
                     ];
+                }
+            }
+
+            // Etappe 7 — Kosten-Transparenz je Call: die bei der Anreicherung erzeugten KI-Fotos
+            // werden je Call in foodalchemist_ai_call_log protokolliert (RecipeImageService). Hier
+            // die Zahl der kostenpflichtigen Bild-Calls je Rezept-/Gericht-Draft ins Cockpit heben,
+            // damit die KI-Foto-Kosten dort sichtbar sind, wo der Mensch den Go setzt. BEWUSST KEIN
+            // EUR-Betrag (keine Preisquelle im Code → wäre Erfindung): gezeigt werden Call-Anzahl +
+            // genutztes Modell. Calls → Rezept über die erzeugten Fotos (target_id = photo.id,
+            // target_table = photos). Team-eigener Log (die Kosten dieses Teams). Map: recipe_id → {n, model}.
+            if ($rezeptRefIds !== []) {
+                $bildRows = DB::table('foodalchemist_ai_call_log as l')
+                    ->join('foodalchemist_recipe_step_photos as p', function ($j) {
+                        $j->on('p.id', '=', 'l.target_id')->whereNull('p.deleted_at');
+                    })
+                    ->where('l.team_id', $team->id)
+                    ->where('l.target_table', 'foodalchemist_recipe_step_photos')
+                    ->whereIn('l.feature', RecipeImageService::BILD_FEATURES)
+                    ->whereIn('p.recipe_id', $rezeptRefIds)
+                    ->groupBy('p.recipe_id')
+                    ->selectRaw('p.recipe_id as rid, COUNT(*) as n, MAX(l.model) as model')
+                    ->get();
+                foreach ($bildRows as $row) {
+                    $bildCalls[(int) $row->rid] = ['n' => (int) $row->n, 'model' => (string) ($row->model ?? '')];
                 }
             }
         }
@@ -1679,6 +1706,7 @@ class Index extends Component
             'skizzenLaufAktiv' => $skizzenLaufAktiv,
             'lauf' => $lauf,
             'kalkulation' => $kalkulation,
+            'bildCalls' => $bildCalls,
             'composerNetz' => $composerNetz,
             'composerCohesion' => $composerCohesion,
             'composerBrowse' => $composerBrowse,

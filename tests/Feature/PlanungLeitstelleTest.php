@@ -1253,6 +1253,84 @@ it('Cockpit: fehlende Zähler (nie recomputet) markieren NICHT teil-unbepreist (
 
 /*
 |--------------------------------------------------------------------------
+| Etappe 7 — Kosten-Transparenz je Call: die bei der Anreicherung erzeugten
+| KI-Fotos werden je Call in foodalchemist_ai_call_log protokolliert
+| (RecipeImageService). Das Cockpit hebt die Zahl der kostenpflichtigen
+| Bild-Calls + das Modell an den Rezept-/Gericht-Draft — KEIN EUR-Betrag
+| (keine Preisquelle im Code → wäre Erfindung).
+|--------------------------------------------------------------------------
+*/
+
+/** Loggt einen KI-Bild-Call auf ein neu angelegtes Foto des Rezepts (spiegelt RecipeImageService::logCall). */
+function seedBildCall(\Platform\FoodAlchemist\Models\FoodAlchemistRecipe $recipe, int $teamId, string $feature, string $model = 'gpt-image-1.5'): void
+{
+    $foto = \Platform\FoodAlchemist\Models\FoodAlchemistRecipeStepPhoto::create([
+        'team_id' => $recipe->team_id, 'recipe_id' => $recipe->id, 'pfad' => 'foto-' . uniqid() . '.jpg',
+    ]);
+    \Illuminate\Support\Facades\DB::table('foodalchemist_ai_call_log')->insert([
+        'uuid' => (string) \Illuminate\Support\Str::orderedUuid(),
+        'team_id' => $teamId, 'user_id' => null, 'feature' => $feature, 'tier' => 'I', 'model' => $model,
+        'prompt_hash' => hash('sha256', $feature), 'response_summary' => $feature,
+        'tokens_in' => 0, 'tokens_out' => 0,
+        'target_table' => 'foodalchemist_recipe_step_photos', 'target_id' => $foto->id,
+        'created_at' => now(), 'updated_at' => now(),
+    ]);
+}
+
+it('Cockpit: Gericht-Draft mit KI-Fotos zeigt die Zahl der kostenpflichtigen Bild-Calls + Modell', function () {
+    $recipe = $this->makeRecipe($this->rootTeam, 'Foto-Gericht', ['is_sales_recipe' => true, 'status' => 'draft']);
+    // Ein Produktfoto + ein Schrittfoto = 2 kostenpflichtige Calls.
+    seedBildCall($recipe, $this->rootTeam->id, \Platform\FoodAlchemist\Services\RecipeImageService::FEATURE_PRODUKTFOTO);
+    seedBildCall($recipe, $this->rootTeam->id, \Platform\FoodAlchemist\Services\RecipeImageService::FEATURE_SCHRITTFOTOS);
+
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Foto']);
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'planning_session_id' => $session->id, 'scope' => 'gericht', 'status' => 'review']);
+    FoodAlchemistCascadeRunStep::create([
+        'team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id,
+        'kind' => 'gericht', 'status' => 'done', 'ref_type' => 'recipe', 'ref_id' => $recipe->id, 'label' => 'Foto-Gericht',
+    ]);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->assertSeeHtml('data-bild-calls="')
+        ->assertSeeHtml('2 KI-Bild-Calls')       // Anzahl (Plural)
+        ->assertSeeHtml('gpt-image-1.5');        // Modell (Kosten-Transparenz, kein EUR)
+});
+
+it('Cockpit: Draft OHNE KI-Fotos trägt keinen Bild-Call-Hinweis', function () {
+    $recipe = $this->makeRecipe($this->rootTeam, 'Fotolos-Gericht', ['is_sales_recipe' => true, 'status' => 'draft']);
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Fotolos']);
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'planning_session_id' => $session->id, 'scope' => 'gericht', 'status' => 'review']);
+    FoodAlchemistCascadeRunStep::create([
+        'team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id,
+        'kind' => 'gericht', 'status' => 'done', 'ref_type' => 'recipe', 'ref_id' => $recipe->id, 'label' => 'Fotolos-Gericht',
+    ]);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->assertDontSeeHtml('data-bild-calls="');
+});
+
+it('Cockpit: fremd-Team-geloggte Bild-Calls zählen NICHT (Kosten dieses Teams)', function () {
+    // Rezept gehört rootTeam, der Bild-Call ist aber unter einem anderen Team protokolliert →
+    // im rootTeam-Cockpit unsichtbar (keine team-übergreifende Kosten-Vermischung).
+    $recipe = $this->makeRecipe($this->rootTeam, 'Fremd-Foto-Gericht', ['is_sales_recipe' => true, 'status' => 'draft']);
+    seedBildCall($recipe, $this->childB->id, \Platform\FoodAlchemist\Services\RecipeImageService::FEATURE_PRODUKTFOTO);
+
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Fremd']);
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'planning_session_id' => $session->id, 'scope' => 'gericht', 'status' => 'review']);
+    FoodAlchemistCascadeRunStep::create([
+        'team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id,
+        'kind' => 'gericht', 'status' => 'done', 'ref_type' => 'recipe', 'ref_id' => $recipe->id, 'label' => 'Fremd-Foto-Gericht',
+    ]);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->assertDontSeeHtml('data-bild-calls="');
+});
+
+/*
+|--------------------------------------------------------------------------
 | Etappe 6 — Margen-Gate: Warnung bei Freigabe unter Aufschlagsklasse
 |--------------------------------------------------------------------------
 | „unter Aufschlagsklasse" = ein MANUELLER VK, der den Klassen-Vorschlag

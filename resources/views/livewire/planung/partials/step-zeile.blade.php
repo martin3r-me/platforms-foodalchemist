@@ -82,6 +82,19 @@
             @endif
         </div>
     @endif
+    {{-- Etappe 7 — Kosten-Transparenz je Call: die KI-Fotos werden bei der Anreicherung je Call
+         protokolliert (foodalchemist_ai_call_log). Hier die Zahl der kostenpflichtigen Bild-Calls
+         + das Modell am Draft zeigen — KEIN EUR-Betrag (keine Preisquelle → wäre Erfindung). --}}
+    @php $bild = ($bildCalls ?? [])[$st->ref_id] ?? null; @endphp
+    @if($bild !== null && ($bild['n'] ?? 0) > 0 && in_array($st->kind, ['rezept', 'gericht'], true))
+        <div class="mt-0.5 text-[10px] pl-1" data-bild-calls="{{ $st->id }}">
+            <span class="text-gray-500 inline-flex items-center gap-1"
+                  title="{{ $bild['n'] }} kostenpflichtige KI-Bild-Generierung(en){{ ($bild['model'] ?? '') !== '' ? ' · Modell ' . $bild['model'] : '' }}">
+                @svg('heroicon-o-photo', 'w-3 h-3')
+                {{ $bild['n'] }} KI-Bild-Call{{ (int) $bild['n'] === 1 ? '' : 's' }}{{ ($bild['model'] ?? '') !== '' ? ' · ' . $bild['model'] : '' }}
+            </span>
+        </div>
+    @endif
     @if($st->status === 'failed' && $st->error)
         <p class="text-[10px] text-rose-400/80 pl-1">{{ \Illuminate\Support\Str::limit($st->error, 160) }}</p>
     @endif
