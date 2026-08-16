@@ -219,6 +219,20 @@ class FoodAlchemistServiceProvider extends ServiceProvider
             }
         }
 
+        // Roadmap Planung-Leitstelle · Et.8 »Worker-Präsenz«: jeder lebende Queue-Worker stempelt einen
+        // Herzschlag ({@see \Platform\FoodAlchemist\Services\WorkerHealthService}). `Looping` feuert bei
+        // JEDER Worker-Schleife — auch im Leerlauf — und ist damit die ehrliche „ein Worker ist da"-Quelle;
+        // `JobProcessing` hält busy-Phasen frisch. Der Stempel ist gedrosselt (10 s) und fail-soft, die
+        // Signale sind plattformweit (FA-Jobs teilen die Default-Queue → jeder Worker, der sie leert, zählt).
+        \Illuminate\Support\Facades\Event::listen(
+            \Illuminate\Queue\Events\Looping::class,
+            fn () => $this->app->make(\Platform\FoodAlchemist\Services\WorkerHealthService::class)->heartbeat(),
+        );
+        \Illuminate\Support\Facades\Event::listen(
+            \Illuminate\Queue\Events\JobProcessing::class,
+            fn () => $this->app->make(\Platform\FoodAlchemist\Services\WorkerHealthService::class)->heartbeat(),
+        );
+
         /**
          * SCHRITT 1: Modul-Registrierung prüfen
          * 
