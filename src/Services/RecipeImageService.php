@@ -2,6 +2,7 @@
 
 namespace Platform\FoodAlchemist\Services;
 
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -100,6 +101,41 @@ class RecipeImageService
             ->where('recipe_id', $recipe->id)
             ->whereIn('id', $kiFotoIds)
             ->delete();
+    }
+
+    /**
+     * Ein manuell hochgeladenes Foto als Rezept-Foto übernehmen — die NICHT-KI-Alternative zu
+     * {@see erzeugeFuerRezept} (Etappe 7: „Foto-Wiederverwendung / manueller Upload als Alternative",
+     * Teil 1). Nutzt {@see FoodAlchemistMediaService::storeImage} (frische ContextFile → kein Sharing-/
+     * Lösch-Hazard mit anderen Fotos) und legt eine {@see FoodAlchemistRecipeStepPhoto} an — BEWUSST
+     * OHNE Kosten-Call-Log, da kein KI-Call anfällt. Dadurch bleibt das Foto vom KI-Re-Trigger-Purge
+     * ({@see loescheKiFotos}) unangetastet: dessen Discriminator ist genau der (hier fehlende)
+     * BILD_FEATURES-Call-Log-Eintrag. Ein manuell übernommenes Foto überlebt also ein „neu erzeugen".
+     *
+     * Legt bewusst ein Pool-Foto an (`is_result=false`) — die Endprodukt-Markierung (max. 1 je Rezept)
+     * ist ein eigener Belang ({@see \Platform\FoodAlchemist\Services\RecipeStepService::endproduktSetzen}).
+     * Consumer (Cockpit-Upload-Knopf am Bild-Status) folgt als Teil 2.
+     */
+    public function uebernimmManuellesFoto(Team $team, FoodAlchemistRecipe $recipe, UploadedFile $datei, ?string $caption = null): FoodAlchemistRecipeStepPhoto
+    {
+        $media = app(FoodAlchemistMediaService::class)->storeImage(
+            $datei,
+            $team,
+            'foodalchemist.recipe',
+            (int) $recipe->id,
+            "foodalchemist/rezepte/{$recipe->id}",
+        );
+
+        $caption = $caption !== null ? trim($caption) : '';
+
+        return FoodAlchemistRecipeStepPhoto::create([
+            'team_id' => $team->id,
+            'recipe_id' => $recipe->id,
+            'pfad' => $media['path'],
+            'context_file_id' => $media['context_file_id'],
+            'caption' => $caption !== '' ? $caption : 'Manuelles Foto',
+            'is_result' => false,
+        ]);
     }
 
     /** Ein Foto des fertig angerichteten Gerichts (Hero/Endergebnis, ohne Schritt-Kopplung → is_result). */
