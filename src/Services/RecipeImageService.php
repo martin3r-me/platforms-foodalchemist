@@ -112,11 +112,14 @@ class RecipeImageService
      * ({@see loescheKiFotos}) unangetastet: dessen Discriminator ist genau der (hier fehlende)
      * BILD_FEATURES-Call-Log-Eintrag. Ein manuell übernommenes Foto überlebt also ein „neu erzeugen".
      *
-     * Legt bewusst ein Pool-Foto an (`is_result=false`) — die Endprodukt-Markierung (max. 1 je Rezept)
-     * ist ein eigener Belang ({@see \Platform\FoodAlchemist\Services\RecipeStepService::endproduktSetzen}).
-     * Consumer (Cockpit-Upload-Knopf am Bild-Status) folgt als Teil 2.
+     * Default = Pool-Foto (`is_result=false`). Mit `$istErgebnis=true` wird es zum HERO/Ergebnis-Bild
+     * (»so soll es aussehen«) — der häufigste Fall, wenn der Nutzer die KI-Erzeugung durch ein eigenes
+     * Teller-Foto ersetzt (Teil 2). Die max.-1-Invariante wird hier gewahrt: vor dem Anlegen werden alle
+     * bestehenden `is_result`-Fotos des Rezepts zurückgesetzt (in einer Transaktion), sodass genau EIN
+     * Ergebnis-Foto existiert — dieselbe Semantik wie {@see \Platform\FoodAlchemist\Services\RecipeStepService::endproduktSetzen},
+     * aber ohne Cross-Service-Kopplung. Consumer: der Cockpit-Upload-Knopf am Bild-Status ({@see \Platform\FoodAlchemist\Livewire\Planung\Index::fotoHochladen}).
      */
-    public function uebernimmManuellesFoto(Team $team, FoodAlchemistRecipe $recipe, UploadedFile $datei, ?string $caption = null): FoodAlchemistRecipeStepPhoto
+    public function uebernimmManuellesFoto(Team $team, FoodAlchemistRecipe $recipe, UploadedFile $datei, ?string $caption = null, bool $istErgebnis = false): FoodAlchemistRecipeStepPhoto
     {
         $media = app(FoodAlchemistMediaService::class)->storeImage(
             $datei,
@@ -128,14 +131,22 @@ class RecipeImageService
 
         $caption = $caption !== null ? trim($caption) : '';
 
-        return FoodAlchemistRecipeStepPhoto::create([
-            'team_id' => $team->id,
-            'recipe_id' => $recipe->id,
-            'pfad' => $media['path'],
-            'context_file_id' => $media['context_file_id'],
-            'caption' => $caption !== '' ? $caption : 'Manuelles Foto',
-            'is_result' => false,
-        ]);
+        return DB::transaction(function () use ($team, $recipe, $media, $caption, $istErgebnis) {
+            if ($istErgebnis) {
+                // Max.-1-Ergebnis-Invariante (wie endproduktSetzen): das neue Foto wird der einzige Hero.
+                FoodAlchemistRecipeStepPhoto::where('recipe_id', $recipe->id)
+                    ->where('is_result', true)->update(['is_result' => false]);
+            }
+
+            return FoodAlchemistRecipeStepPhoto::create([
+                'team_id' => $team->id,
+                'recipe_id' => $recipe->id,
+                'pfad' => $media['path'],
+                'context_file_id' => $media['context_file_id'],
+                'caption' => $caption !== '' ? $caption : 'Manuelles Foto',
+                'is_result' => $istErgebnis,
+            ]);
+        });
     }
 
     /** Ein Foto des fertig angerichteten Gerichts (Hero/Endergebnis, ohne Schritt-Kopplung → is_result). */

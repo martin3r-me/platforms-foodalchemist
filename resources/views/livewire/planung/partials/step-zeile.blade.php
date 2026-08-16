@@ -122,6 +122,22 @@
             </span>
         </div>
     @endif
+    {{-- Etappe 7 Teil 2 — manueller Foto-Upload: die NICHT-KI-Alternative zur Bild-Erzeugung, neben
+         „neu erzeugen". Für freigegebene Rezept-/Gericht-Drafts (hat ein reales Rezept). Kein KI-Call
+         → das Foto überlebt einen späteren KI-Re-Trigger (loescheKiFotos). „als Ergebnis" = Hero (max. 1),
+         sonst Pool-Foto. Immer verfügbar (auch ohne angeforderte KI-Fotos = der eigentliche Alternativ-Fall). --}}
+    @if($st->ref_id && $st->status === 'freigegeben' && in_array($st->kind, ['rezept', 'gericht'], true))
+        <div class="mt-0.5 flex flex-wrap items-center gap-2 text-[10px] pl-1" data-foto-upload="{{ $st->id }}">
+            <input type="file" accept="image/*" wire:model="fotoUploads.{{ $st->id }}"
+                   class="text-[10px] text-gray-400 file:mr-2 file:rounded file:border-0 file:bg-white/10 file:px-2 file:py-0.5 file:text-[10px] file:text-gray-200" />
+            <span wire:loading wire:target="fotoUploads.{{ $st->id }}" class="text-gray-500 inline-flex items-center gap-1">@svg('heroicon-o-arrow-path', 'w-3 h-3 animate-spin') lädt …</span>
+            @if(!empty($fotoUploads[$st->id]))
+                <button wire:click="fotoHochladen({{ $st->id }}, false)" class="text-gray-300 hover:text-gray-100 underline" title="Als Pool-Foto übernehmen (kein KI-Call)">als Foto</button>
+                <button wire:click="fotoHochladen({{ $st->id }}, true)" class="text-emerald-300 hover:text-emerald-200 underline" title="Als Ergebnis-/Hero-Foto übernehmen (ersetzt das bisherige Ergebnis-Bild)">als Ergebnis</button>
+            @endif
+            @error("fotoUploads.{$st->id}")<span class="text-rose-400/80">{{ $message }}</span>@enderror
+        </div>
+    @endif
     @if($st->status === 'failed' && $st->error)
         <p class="text-[10px] text-rose-400/80 pl-1">{{ \Illuminate\Support\Str::limit($st->error, 160) }}</p>
     @endif

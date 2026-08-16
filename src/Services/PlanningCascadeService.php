@@ -20,6 +20,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistConceptSlot;
 use Platform\FoodAlchemist\Models\FoodAlchemistDishIdea;
 use Platform\FoodAlchemist\Models\FoodAlchemistPlanningSession;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
+use Platform\FoodAlchemist\Models\FoodAlchemistRecipeStepPhoto;
 use Platform\FoodAlchemist\Models\FoodAlchemistSpeiseplan;
 use RuntimeException;
 
@@ -962,6 +963,24 @@ class PlanningCascadeService
         }
         $this->markBilderQueued($step);
         EnrichRecipeJob::dispatch($team->id, (int) (Auth::id() ?? 0), (int) $step->ref_id, null, false, (int) $step->id, true);
+    }
+
+    /**
+     * Manuelles Foto (Cockpit, Etappe 7 Teil 2): ein hochgeladenes Bild als Rezept-Foto eines
+     * Rezept-/Gericht-Steps übernehmen — die NICHT-KI-Alternative zur Foto-Erzeugung, OHNE KI-Call.
+     * Owner-Guard über {@see ownedStep} (Freigabe/Schreiben nur durchs Besitzer-Team, D1); das Rezept
+     * wird team-scoped aufgelöst. Delegiert an {@see RecipeImageService::uebernimmManuellesFoto}
+     * (`$istErgebnis` → Hero statt Pool). Gibt das angelegte Foto zurück (oder null bei fremdem Step-Typ).
+     */
+    public function uebernimmManuellesFotoFuerStep(Team $team, int $stepId, \Illuminate\Http\UploadedFile $datei, bool $istErgebnis = false, ?string $caption = null): ?FoodAlchemistRecipeStepPhoto
+    {
+        $step = $this->ownedStep($team, $stepId);
+        if ($step->ref_type !== 'recipe' || $step->ref_id === null || ! in_array($step->kind, ['rezept', 'gericht'], true)) {
+            return null;
+        }
+        $recipe = FoodAlchemistRecipe::visibleToTeam($team)->findOrFail((int) $step->ref_id);
+
+        return app(RecipeImageService::class)->uebernimmManuellesFoto($team, $recipe, $datei, $caption, $istErgebnis);
     }
 
     /**

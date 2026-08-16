@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Livewire\Attributes\Url;
 use Livewire\Component;
+use Livewire\WithFileUploads;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Models\FoodAlchemistCascadeRun;
 use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
@@ -30,7 +31,13 @@ use Platform\FoodAlchemist\Support\TeamScope;
  */
 class Index extends Component
 {
+    use WithFileUploads;
+
     public ?string $fehler = null;
+
+    /** Etappe 7 Teil 2: manuell hochgeladene Fotos je Cockpit-Step (stepId → TemporaryUploadedFile) —
+     *  die NICHT-KI-Alternative zur Bild-Erzeugung, gebunden pro Step (mehrere Drafts gleichzeitig). */
+    public array $fotoUploads = [];
 
     #[Url(as: 'session')]
     public ?int $sessionId = null;
@@ -1474,6 +1481,38 @@ class Index extends Component
         } catch (\Throwable $e) {
             $this->fehler = $e->getMessage();
         }
+        $this->refreshLaeuft($cascade);
+    }
+
+    /** Manuelles Foto hochladen (Cockpit, Etappe 7 Teil 2): ein eigenes Bild als Rezept-Foto eines
+     *  freigegebenen Rezept-/Gericht-Drafts übernehmen — die NICHT-KI-Alternative zur Foto-Erzeugung,
+     *  neben „neu erzeugen". `$istErgebnis=true` = Hero/Ergebnis-Foto (max. 1), sonst Pool-Foto. Kein
+     *  KI-Call → das Foto überlebt einen späteren KI-Re-Trigger (loescheKiFotos). Empty-only: ohne
+     *  gewählte Datei passiert nichts (gesagt). */
+    public function fotoHochladen(int $stepId, bool $istErgebnis = false, ?PlanningCascadeService $cascade = null): void
+    {
+        $cascade ??= app(PlanningCascadeService::class);
+        $team = $this->team();
+        if ($team === null) {
+            return;
+        }
+        $datei = $this->fotoUploads[$stepId] ?? null;
+        if ($datei === null) {
+            $this->fehler = 'Kein Foto gewählt.';
+
+            return;
+        }
+        $this->validate([
+            "fotoUploads.$stepId" => 'image|max:8192',   // max. 8 MB, nur Bilder
+        ]);
+        try {
+            $cascade->uebernimmManuellesFotoFuerStep($team, $stepId, $datei, $istErgebnis);
+            $this->meldung = $istErgebnis ? 'Ergebnis-Foto übernommen.' : 'Foto übernommen.';
+            $this->fehler = null;
+        } catch (\Throwable $e) {
+            $this->fehler = $e->getMessage();
+        }
+        unset($this->fotoUploads[$stepId]);
         $this->refreshLaeuft($cascade);
     }
 

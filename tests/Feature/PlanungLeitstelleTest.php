@@ -1571,3 +1571,72 @@ it('Margen-Gate: Auto-VK (source=class) und fehlender Vorschlag lösen KEINE War
         ->call('gibStufeFrei', 'gericht')
         ->assertSet('margenWarnung', null);
 });
+
+/*
+|--------------------------------------------------------------------------
+| Etappe 7 Teil 2 — manueller Foto-Upload im Cockpit: die NICHT-KI-Alternative
+| zur Bild-Erzeugung, neben „neu erzeugen". Empty-only, kein KI-Call, „als
+| Ergebnis" = Hero (max. 1). Verdrahtet fotoHochladen → uebernimmManuellesFotoFuerStep.
+|--------------------------------------------------------------------------
+*/
+
+// Hinweis: makeRecipe ist protected (TestCase-Trait) → der Step-Aufbau wird je Test INLINE im
+// Test-Case-Scope gebaut, nicht über einen globalen Helfer (der kann protected nicht rufen).
+
+it('Cockpit-Upload: manuelles Foto als Pool-Foto übernehmen (kein KI-Call)', function () {
+    \Illuminate\Support\Facades\Storage::fake('public');
+    $recipe = $this->makeRecipe($this->rootTeam, 'Upload-Pool', ['is_sales_recipe' => true, 'status' => 'draft']);
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'gericht', 'status' => 'review']);
+    $step = FoodAlchemistCascadeRunStep::create([
+        'team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id,
+        'kind' => 'gericht', 'status' => 'freigegeben', 'ref_type' => 'recipe', 'ref_id' => $recipe->id, 'label' => 'Upload-Pool',
+    ]);
+
+    Livewire::test(PlanungIndex::class)
+        ->set('fotoUploads.' . $step->id, \Illuminate\Http\UploadedFile::fake()->image('teller.jpg'))
+        ->call('fotoHochladen', $step->id, false)
+        ->assertSet('fehler', null);
+
+    $fotos = \Platform\FoodAlchemist\Models\FoodAlchemistRecipeStepPhoto::where('recipe_id', $recipe->id)->get();
+    expect($fotos)->toHaveCount(1)
+        ->and((bool) $fotos->first()->is_result)->toBeFalse();
+
+    // Kein Kosten-Call-Log (kein KI-Call).
+    expect(\Illuminate\Support\Facades\DB::table('foodalchemist_ai_call_log')
+        ->where('target_table', 'foodalchemist_recipe_step_photos')
+        ->where('target_id', $fotos->first()->id)->exists())->toBeFalse();
+});
+
+it('Cockpit-Upload: manuelles Foto als Ergebnis-/Hero-Foto (is_result)', function () {
+    \Illuminate\Support\Facades\Storage::fake('public');
+    $recipe = $this->makeRecipe($this->rootTeam, 'Upload-Hero', ['is_sales_recipe' => true, 'status' => 'draft']);
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'gericht', 'status' => 'review']);
+    $step = FoodAlchemistCascadeRunStep::create([
+        'team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id,
+        'kind' => 'gericht', 'status' => 'freigegeben', 'ref_type' => 'recipe', 'ref_id' => $recipe->id, 'label' => 'Upload-Hero',
+    ]);
+
+    Livewire::test(PlanungIndex::class)
+        ->set('fotoUploads.' . $step->id, \Illuminate\Http\UploadedFile::fake()->image('hero.jpg'))
+        ->call('fotoHochladen', $step->id, true)
+        ->assertSet('fehler', null);
+
+    $foto = \Platform\FoodAlchemist\Models\FoodAlchemistRecipeStepPhoto::where('recipe_id', $recipe->id)->first();
+    expect((bool) $foto->is_result)->toBeTrue();
+});
+
+it('Cockpit-Upload: ohne gewählte Datei passiert nichts (empty-only, gesagt)', function () {
+    \Illuminate\Support\Facades\Storage::fake('public');
+    $recipe = $this->makeRecipe($this->rootTeam, 'Upload-Leer', ['is_sales_recipe' => true, 'status' => 'draft']);
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'gericht', 'status' => 'review']);
+    $step = FoodAlchemistCascadeRunStep::create([
+        'team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id,
+        'kind' => 'gericht', 'status' => 'freigegeben', 'ref_type' => 'recipe', 'ref_id' => $recipe->id, 'label' => 'Upload-Leer',
+    ]);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('fotoHochladen', $step->id, false)
+        ->assertSet('fehler', 'Kein Foto gewählt.');
+
+    expect(\Platform\FoodAlchemist\Models\FoodAlchemistRecipeStepPhoto::where('recipe_id', $recipe->id)->count())->toBe(0);
+});

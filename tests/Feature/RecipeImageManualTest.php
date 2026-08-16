@@ -61,6 +61,31 @@ it('setzt einen Default-Caption, wenn keiner übergeben wird', function () {
     expect($foto->caption)->toBe('Manuelles Foto');
 });
 
+it('übernimmt ein manuelles Foto als Ergebnis-/Hero-Foto und wahrt die max.-1-Invariante', function () {
+    Storage::fake('public');
+
+    // Bestehendes Ergebnis-Foto — muss beim neuen Hero zurückgesetzt werden.
+    $alt = FoodAlchemistRecipeStepPhoto::create([
+        'team_id' => $this->rootTeam->id,
+        'recipe_id' => $this->rezept->id,
+        'pfad' => 'foodalchemist/rezepte/' . $this->rezept->id . '/alt.jpg',
+        'is_result' => true,
+    ]);
+
+    $neu = $this->service->uebernimmManuellesFoto(
+        $this->rootTeam,
+        $this->rezept,
+        UploadedFile::fake()->image('hero.jpg'),
+        null,
+        true,   // istErgebnis → Hero
+    );
+
+    expect((bool) $neu->is_result)->toBeTrue()
+        ->and((bool) $alt->refresh()->is_result)->toBeFalse()
+        // Genau EIN Ergebnis-Foto je Rezept.
+        ->and(FoodAlchemistRecipeStepPhoto::where('recipe_id', $this->rezept->id)->where('is_result', true)->count())->toBe(1);
+});
+
 it('manuelles Foto überlebt den KI-Re-Trigger-Purge (loescheKiFotos)', function () {
     Storage::fake('public');
 
