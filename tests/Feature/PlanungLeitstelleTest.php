@@ -1401,6 +1401,64 @@ it('Cockpit Bild-Status: OHNE ki_bilder-Anforderung trägt keinen Bild-Status', 
 
 /*
 |--------------------------------------------------------------------------
+| Etappe 7 — Bild-Status Teil 2: explizite Fehler-Persistenz. Der EnrichRecipeJob
+| hält das Bild-Ergebnis jetzt in deferred.bilder fest (status done|failed + n) →
+| ein echter »fehlgeschlagen«-Zustand statt des stummen 0-Foto-Fallbacks. Fehlt
+| deferred.bilder (Alt-Läufe), greift weiter die Teil-1-Foto-Zähl-Logik (oben).
+|--------------------------------------------------------------------------
+*/
+
+// review-Lauf mit freigegebenem (enrich=done) Gericht-Step + persistiertem deferred.bilder.
+function bildStatusRunMitBilder($team, \Platform\FoodAlchemist\Models\FoodAlchemistRecipe $recipe, array $bilder): \Platform\FoodAlchemist\Models\FoodAlchemistPlanningSession
+{
+    $session = app(PlanningSessionService::class)->create($team, ['title' => 'Bild-Status Teil 2']);
+    $run = FoodAlchemistCascadeRun::create([
+        'team_id' => $team->id, 'planning_session_id' => $session->id,
+        'scope' => 'gericht', 'status' => 'review', 'params' => ['ki_bilder' => true],
+    ]);
+    FoodAlchemistCascadeRunStep::create([
+        'team_id' => $team->id, 'cascade_run_id' => $run->id,
+        'kind' => 'gericht', 'status' => 'freigegeben', 'ref_type' => 'recipe', 'ref_id' => $recipe->id,
+        'label' => $recipe->name, 'deferred' => ['enrich' => ['status' => 'done'], 'bilder' => $bilder],
+    ]);
+
+    return $session;
+}
+
+it('Cockpit Bild-Status: deferred.bilder=failed zeigt »Fotos fehlgeschlagen« (Teil 2)', function () {
+    $recipe = $this->makeRecipe($this->rootTeam, 'Bild-Failed', ['is_sales_recipe' => true, 'status' => 'draft']);
+    $session = bildStatusRunMitBilder($this->rootTeam, $recipe, ['status' => 'failed', 'error' => 'API down', 'n' => 0]);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->assertSeeHtml('data-bild-status="')
+        ->assertSeeHtml('Fotos fehlgeschlagen')
+        ->assertDontSeeHtml('keine Fotos erzeugt');
+});
+
+it('Cockpit Bild-Status: Teil-Fehler (failed + n>0) zeigt »Fotos fehlgeschlagen (N ok)«', function () {
+    $recipe = $this->makeRecipe($this->rootTeam, 'Bild-Teil', ['is_sales_recipe' => true, 'status' => 'draft']);
+    seedFotos($recipe, 2); // Produktfoto ok, ein Schritt kippte
+    $session = bildStatusRunMitBilder($this->rootTeam, $recipe, ['status' => 'failed', 'error' => 'ein Schritt kippte', 'n' => 2]);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->assertSeeHtml('Fotos fehlgeschlagen (2 ok)');
+});
+
+it('Cockpit Bild-Status: deferred.bilder=done fällt auf »N Fotos ✓« zurück (kein Fehler-Badge)', function () {
+    $recipe = $this->makeRecipe($this->rootTeam, 'Bild-Done', ['is_sales_recipe' => true, 'status' => 'draft']);
+    seedFotos($recipe, 3);
+    $session = bildStatusRunMitBilder($this->rootTeam, $recipe, ['status' => 'done', 'n' => 3]);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->assertSeeHtml('3 Fotos ✓')
+        ->assertDontSeeHtml('Fotos fehlgeschlagen');
+});
+
+/*
+|--------------------------------------------------------------------------
 | Etappe 6 — Margen-Gate: Warnung bei Freigabe unter Aufschlagsklasse
 |--------------------------------------------------------------------------
 | „unter Aufschlagsklasse" = ein MANUELLER VK, der den Klassen-Vorschlag

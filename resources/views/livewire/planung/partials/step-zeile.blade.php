@@ -38,14 +38,22 @@
                 @elseif($enrStatus === 'failed')
                     <button wire:click="neuAnreichern({{ $st->id }})" class="text-[10px] text-rose-300 hover:text-rose-200 underline" title="{{ $enr['error'] ?? '' }}">Anreicherung fehlgeschlagen — neu anreichern</button>
                 @endif
-                {{-- Etappe 7 — Bild-Status (Teil 1): erzeugt / angefordert-aber-leer, analog zum
-                     Anreicherungs-Badge. Nur wenn KI-Fotos angefordert waren ($bilderAngefordert,
+                {{-- Etappe 7 — Bild-Status: erzeugt / fehlgeschlagen / angefordert-aber-leer, analog
+                     zum Anreicherungs-Badge. Nur wenn KI-Fotos angefordert waren ($bilderAngefordert,
                      run-level) UND die Anreicherung durch ist (enrich=done — die Fotos laufen im
-                     selben Job DANACH). 0 Fotos trotz angefordert = nichts erzeugt (die Bild-
-                     Erzeugung ist still fail-soft; kein erfundenes »fehlgeschlagen«-Badge). --}}
+                     selben Job DANACH). Teil 2 (Fehler-Persistenz): der EnrichRecipeJob hält das
+                     Bild-Ergebnis jetzt explizit in deferred.bilder fest (status done|failed + n) →
+                     ein echter »fehlgeschlagen«-Zustand statt des stummen 0-Foto-Fallbacks. Fehlt
+                     deferred.bilder (Alt-Läufe/kein Job-Rücklauf), greift die Teil-1-Foto-Zähl-Logik. --}}
                 @if(!empty($bilderAngefordert) && $enrStatus === 'done')
-                    @php $fotoN = (int) (($fotoCounts ?? [])[$st->ref_id] ?? 0); @endphp
-                    @if($fotoN > 0)
+                    @php
+                        $bld = (is_array($st->deferred) && is_array($st->deferred['bilder'] ?? null)) ? $st->deferred['bilder'] : null;
+                        $bldStatus = $bld['status'] ?? null;
+                        $fotoN = (int) (($fotoCounts ?? [])[$st->ref_id] ?? 0);
+                    @endphp
+                    @if($bldStatus === 'failed')
+                        <span class="text-[10px] text-rose-300/90 inline-flex items-center gap-1" data-bild-status="{{ $st->id }}" title="{{ $bld['error'] ?? 'Bild-Erzeugung fehlgeschlagen' }}">@svg('heroicon-o-photo', 'w-3 h-3') Fotos fehlgeschlagen{{ $fotoN > 0 ? ' (' . $fotoN . ' ok)' : '' }}</span>
+                    @elseif($fotoN > 0)
                         <span class="text-[10px] text-emerald-400/80 inline-flex items-center gap-1" data-bild-status="{{ $st->id }}" title="{{ $fotoN }} KI-Foto(s) erzeugt">@svg('heroicon-o-photo', 'w-3 h-3') {{ $fotoN }} Foto{{ $fotoN === 1 ? '' : 's' }} ✓</span>
                     @else
                         <span class="text-[10px] text-amber-300/80 inline-flex items-center gap-1" data-bild-status="{{ $st->id }}" title="KI-Fotos angefordert, aber keine erzeugt">@svg('heroicon-o-photo', 'w-3 h-3') keine Fotos erzeugt</span>

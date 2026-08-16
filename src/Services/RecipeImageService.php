@@ -31,25 +31,47 @@ class RecipeImageService
     public const FEATURE_SCHRITTFOTOS = 'recipe.step_photos';
     public const BILD_FEATURES = [self::FEATURE_PRODUKTFOTO, self::FEATURE_SCHRITTFOTOS];
 
-    /** Produktfoto + je Schritt ein Foto. Jedes Bild einzeln abgesichert (ein Fehler kippt den Rest nicht). */
-    public function erzeugeFuerRezept(Team $team, FoodAlchemistRecipe $recipe, bool $produktFoto = true, bool $schrittFotos = true): void
+    /**
+     * Produktfoto + je Schritt ein Foto. Jedes Bild einzeln abgesichert (ein Fehler kippt den Rest
+     * nicht) — aber NICHT mehr stumm: das Ergebnis wird als Bilanz zurückgegeben, damit der Aufrufer
+     * ({@see \Platform\FoodAlchemist\Jobs\EnrichRecipeJob}) einen ehrlichen Bild-Status persistieren
+     * kann (`deferred.bilder`, Cockpit-Badge). Rückgabe: `erzeugt` = angelegte Fotos, `fehler` =
+     * fehlgeschlagene Calls, `letzter_fehler` = Message des jüngsten Fehlers (oder null).
+     *
+     * @return array{erzeugt:int, fehler:int, letzter_fehler:?string}
+     */
+    public function erzeugeFuerRezept(Team $team, FoodAlchemistRecipe $recipe, bool $produktFoto = true, bool $schrittFotos = true): array
     {
+        $erzeugt = 0;
+        $fehler = 0;
+        $letzterFehler = null;
+
         if ($produktFoto) {
             try {
                 $this->produktFoto($team, $recipe);
-            } catch (\Throwable) {
-                // ein fehlgeschlagenes Bild darf die übrigen nicht verhindern
+                $erzeugt++;
+            } catch (\Throwable $e) {
+                // ein fehlgeschlagenes Bild darf die übrigen nicht verhindern — aber es wird gezählt
+                $fehler++;
+                $letzterFehler = $e->getMessage();
             }
         }
         if ($schrittFotos) {
             foreach (FoodAlchemistRecipeStep::where('recipe_id', $recipe->id)->orderBy('position')->get() as $step) {
                 try {
-                    $this->schrittFoto($team, $recipe, $step);
-                } catch (\Throwable) {
+                    if ($this->schrittFoto($team, $recipe, $step)) {
+                        $erzeugt++;
+                    }
+                    // schrittFoto liefert false bei leerem Schritt-Text (übersprungen, kein Fehler).
+                } catch (\Throwable $e) {
                     // dito — nächster Schritt
+                    $fehler++;
+                    $letzterFehler = $e->getMessage();
                 }
             }
         }
+
+        return ['erzeugt' => $erzeugt, 'fehler' => $fehler, 'letzter_fehler' => $letzterFehler];
     }
 
     /** Ein Foto des fertig angerichteten Gerichts (Hero/Endergebnis, ohne Schritt-Kopplung → is_result). */
@@ -62,18 +84,21 @@ class RecipeImageService
         return $this->generiereFoto($team, $recipe, $prompt, 'KI-Produktfoto', 0, true, self::FEATURE_PRODUKTFOTO, null);
     }
 
-    /** Ein Foto zu einem Zubereitungsschritt (an den Schritt gehängt). */
-    public function schrittFoto(Team $team, FoodAlchemistRecipe $recipe, FoodAlchemistRecipeStep $step): void
+    /** Ein Foto zu einem Zubereitungsschritt (an den Schritt gehängt). Rückgabe: true = Foto erzeugt,
+     *  false = übersprungen (leerer Schritt-Text — kein Fehler, kein erzeugtes Bild). */
+    public function schrittFoto(Team $team, FoodAlchemistRecipe $recipe, FoodAlchemistRecipeStep $step): bool
     {
         $text = trim((string) $step->text);
         if ($text === '') {
-            return;
+            return false;
         }
         $prompt = 'Food-Foto zum Zubereitungsschritt ' . $step->position . ' von «' . $recipe->name . '»: '
             . mb_strimwidth($text, 0, 280) . ' Realistischer Küchen-Kontext, klarer Fokus, kein Text.';
 
         $foto = $this->generiereFoto($team, $recipe, $prompt, 'KI-Foto: Schritt ' . $step->position, (int) $step->position * 10, false, self::FEATURE_SCHRITTFOTOS, (int) $step->id);
         $step->photos()->syncWithoutDetaching([$foto->id => ['position' => 1]]);
+
+        return true;
     }
 
     private function generiereFoto(Team $team, FoodAlchemistRecipe $recipe, string $prompt, string $caption, int $sort, bool $isResult, string $feature, ?int $stepId): FoodAlchemistRecipeStepPhoto

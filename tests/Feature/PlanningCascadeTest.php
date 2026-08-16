@@ -19,6 +19,8 @@ use Platform\FoodAlchemist\Services\PlanningCascadeService;
 use Platform\FoodAlchemist\Services\PlanningFrameService;
 use Platform\FoodAlchemist\Services\PlanningSessionService;
 use Platform\FoodAlchemist\Services\RecipeGeneratorService;
+use Platform\FoodAlchemist\Services\RecipeImageService;
+use Platform\FoodAlchemist\Services\RecipeOneShotService;
 use Platform\FoodAlchemist\Tests\Support\SeedsTeamHierarchy;
 use Platform\FoodAlchemist\Tests\TestCase;
 
@@ -260,6 +262,82 @@ it('Job-Hook: ohne cascade_step_id bleibt ein fremder Step unberührt (Bestandsp
     $job->failed(new RuntimeException('boom'));
 
     expect($step->refresh()->status)->toBe('queued');
+});
+
+// ── Etappe 7 — Bild-Status Teil 2: explizite Fehler-Persistenz (deferred.bilder) ─────────────
+// Der EnrichRecipeJob hält das KI-Foto-Ergebnis jetzt sichtbar am Step fest (status done|failed + n),
+// statt es still fail-soft zu schlucken. Ein einzelner fehlgeschlagener Call macht die Erzeugung
+// als Ganzes »failed« (Teil-Erfolge trägt `n`); ein Voll-Erfolg »done«.
+
+it('EnrichRecipeJob: Bild-Fehler wird als deferred.bilder=failed am Step persistiert', function () {
+    $recipe = $this->makeRecipe($this->rootTeam, 'Bild-Fehler', ['status' => 'draft']);
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'gericht', 'status' => 'review']);
+    $step = FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht', 'status' => 'freigegeben', 'ref_type' => 'recipe', 'ref_id' => $recipe->id]);
+
+    $this->mock(RecipeOneShotService::class, fn ($m) => $m->shouldReceive('anreichern')->once());
+    $this->mock(RecipeImageService::class, fn ($m) => $m->shouldReceive('erzeugeFuerRezept')->once()
+        ->andReturn(['erzeugt' => 0, 'fehler' => 1, 'letzter_fehler' => 'API down']));
+
+    (new EnrichRecipeJob($this->rootTeam->id, (int) auth()->id(), (int) $recipe->id, null, true, (int) $step->id))
+        ->handle(app(RecipeOneShotService::class));
+
+    $bilder = $step->refresh()->deferred['bilder'] ?? null;
+    expect($bilder['status'] ?? null)->toBe('failed')
+        ->and($bilder['n'] ?? null)->toBe(0)
+        ->and($bilder['error'] ?? '')->toContain('API down')
+        ->and($step->deferred['enrich']['status'] ?? null)->toBe('done');   // Anreicherung bleibt unabhängig
+});
+
+it('EnrichRecipeJob: Bild-Erfolg wird als deferred.bilder=done mit n persistiert', function () {
+    $recipe = $this->makeRecipe($this->rootTeam, 'Bild-OK', ['status' => 'draft']);
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'gericht', 'status' => 'review']);
+    $step = FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht', 'status' => 'freigegeben', 'ref_type' => 'recipe', 'ref_id' => $recipe->id]);
+
+    $this->mock(RecipeOneShotService::class, fn ($m) => $m->shouldReceive('anreichern')->once());
+    $this->mock(RecipeImageService::class, fn ($m) => $m->shouldReceive('erzeugeFuerRezept')->once()
+        ->andReturn(['erzeugt' => 3, 'fehler' => 0, 'letzter_fehler' => null]));
+
+    (new EnrichRecipeJob($this->rootTeam->id, (int) auth()->id(), (int) $recipe->id, null, true, (int) $step->id))
+        ->handle(app(RecipeOneShotService::class));
+
+    $bilder = $step->refresh()->deferred['bilder'] ?? null;
+    expect($bilder['status'] ?? null)->toBe('done')
+        ->and($bilder['n'] ?? null)->toBe(3)
+        ->and($bilder['error'] ?? null)->toBeNull();   // null-error wird nicht persistiert
+});
+
+it('EnrichRecipeJob: wirft die Bild-Erzeugung, bleibt fail-soft und persistiert deferred.bilder=failed', function () {
+    $recipe = $this->makeRecipe($this->rootTeam, 'Bild-Boom', ['status' => 'draft']);
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'gericht', 'status' => 'review']);
+    $step = FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht', 'status' => 'freigegeben', 'ref_type' => 'recipe', 'ref_id' => $recipe->id]);
+
+    $this->mock(RecipeOneShotService::class, fn ($m) => $m->shouldReceive('anreichern')->once());
+    $this->mock(RecipeImageService::class, fn ($m) => $m->shouldReceive('erzeugeFuerRezept')->once()
+        ->andThrow(new RuntimeException('boom')));
+
+    // Fail-soft: der Job darf NICHT rethrowen (die Freigabe/Anreicherung ist längst durch).
+    (new EnrichRecipeJob($this->rootTeam->id, (int) auth()->id(), (int) $recipe->id, null, true, (int) $step->id))
+        ->handle(app(RecipeOneShotService::class));
+
+    $bilder = $step->refresh()->deferred['bilder'] ?? null;
+    expect($bilder['status'] ?? null)->toBe('failed')
+        ->and($bilder['error'] ?? '')->toContain('boom')
+        ->and($step->deferred['enrich']['status'] ?? null)->toBe('done');
+});
+
+it('EnrichRecipeJob: ohne ki_bilder-Toggle wird KEIN deferred.bilder geschrieben', function () {
+    $recipe = $this->makeRecipe($this->rootTeam, 'Kein-Bild', ['status' => 'draft']);
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'gericht', 'status' => 'review']);
+    $step = FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht', 'status' => 'freigegeben', 'ref_type' => 'recipe', 'ref_id' => $recipe->id]);
+
+    $this->mock(RecipeOneShotService::class, fn ($m) => $m->shouldReceive('anreichern')->once());
+    $this->mock(RecipeImageService::class, fn ($m) => $m->shouldNotReceive('erzeugeFuerRezept'));
+
+    (new EnrichRecipeJob($this->rootTeam->id, (int) auth()->id(), (int) $recipe->id, null, false, (int) $step->id))
+        ->handle(app(RecipeOneShotService::class));
+
+    expect($step->refresh()->deferred['bilder'] ?? null)->toBeNull()
+        ->and($step->deferred['enrich']['status'] ?? null)->toBe('done');
 });
 
 it('Cockpit: goKaskade startet den Lauf in-place (kein Redirect) und pollt', function () {
