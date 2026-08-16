@@ -46,6 +46,9 @@ class PlanningCascadeService
     /** Deckel gegen Runaway-Kosten: max. Zellen (= KI-Gericht-Generierungen) je Speiseplan-Voll-Kaskade. */
     private const SPEISEPLAN_MAX_ZELLEN = 30;
 
+    /** Deckel gegen Runaway-Kosten: max. leere Slots (= erfundene KI-Gerichte) je Concept-Fan-out. */
+    private const CONCEPT_MAX_SLOTS = 30;
+
     /**
      * Startet einen Kaskaden-Lauf und gibt ihn zurück (Status `running`). Die eigentliche Generierung
      * läuft asynchron im Queue-Job; die Fläche pollt den Run/seine Steps.
@@ -516,6 +519,10 @@ class PlanningCascadeService
      * EIN Call für alle Slots), ordnet Ideen den Slots der Reihe nach zu, legt je Idee einen Kind-Step
      * (kind=gericht, parent=Concept-Step) an und dispatcht {@see MaterializeConceptIdeaJob} (erdet + verdrahtet).
      *
+     * Gedeckelt ({@see CONCEPT_MAX_SLOTS}) gegen Runaway-Kosten bei großem Menü-Brief; überzählige leere
+     * Slots werden übersprungen und ihre Zahl im Run (`params.gedeckelt_slots_offen`) vermerkt — kein
+     * stiller Deckel (analog {@see SPEISEPLAN_MAX_ZELLEN}).
+     *
      * Graceful: ohne LLM (Sandbox/Kill-Switch) wirft die Divergenz → 0 Ideen, 0 Kind-Steps; der Run geht
      * mit dem Konzept allein auf review. Wirft NIE (der Concept-Job fängt zusätzlich ab).
      */
@@ -535,6 +542,18 @@ class PlanningCascadeService
             ->get();
         if ($leere->isEmpty()) {
             return;   // nichts zu erfinden — Reuse hat alle Slots gefüllt
+        }
+
+        // Deckel gegen Runaway-/Kosten-Risiko bei großem Menü-Brief (analog SPEISEPLAN_MAX_ZELLEN): wir fragen
+        // die KI gar nicht erst nach mehr als N Ideen und legen höchstens N Kind-Steps/Jobs an. Die Zahl der
+        // übersprungenen Slots steht im Run (`params.gedeckelt_slots_offen`) — kein stiller Deckel.
+        if ($leere->count() > self::CONCEPT_MAX_SLOTS) {
+            $offen = $leere->count() - self::CONCEPT_MAX_SLOTS;
+            $leere = $leere->take(self::CONCEPT_MAX_SLOTS);
+            $run = FoodAlchemistCascadeRun::find($runId);
+            if ($run !== null) {
+                $run->update(['params' => array_merge(is_array($run->params) ? $run->params : [], ['gedeckelt_slots_offen' => $offen])]);
+            }
         }
 
         try {

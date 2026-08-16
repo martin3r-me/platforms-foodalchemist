@@ -559,6 +559,43 @@ it('Fan-out ist graceful: ohne LLM-Provider 0 erfundene Gerichte, kein Job (Konz
     Queue::assertNotPushed(MaterializeConceptIdeaJob::class);
 });
 
+it('Fan-out-Cap: über 30 leere Slots → KI wird nur nach 30 Ideen gefragt + gedeckelt_slots_offen vermerkt', function () {
+    $concept = $this->makeConcept($this->rootTeam, 'Riesen-Buffet', ['status' => 'draft']);
+    foreach (range(1, 33) as $pos) {                       // 33 leere Slots → 3 über dem Deckel (30)
+        $this->makeConceptSlot($concept, ['position' => $pos]);
+    }
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'concept', 'status' => 'running', 'params' => ['ziel_vk_eur' => 12.5]]);
+    $conceptStep = FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'concept', 'status' => 'running', 'ref_type' => 'concept', 'ref_id' => $concept->id]);
+
+    $mkIdee = fn (string $t) => FoodAlchemistDishIdea::create(['team_id' => $this->rootTeam->id, 'concept_id' => $concept->id, 'title' => $t, 'status' => 'entwurf', 'target_form' => 'einzel', 'generation_status' => 'entwurf', 'position' => 1, 'created_via' => 'test']);
+    $this->mock(IdeenService::class, fn ($m) => $m->shouldReceive('kiDivergenzConcept')
+        ->once()
+        ->withArgs(fn ($team, $conceptId, $anzahl, $extra = null, $trend = null) => $anzahl === 30)   // gedeckelt, nicht 33
+        ->andReturn(['angelegt' => [$mkIdee('A'), $mkIdee('B')], 'roh' => 2, 'confidence' => 0.8, 'call_log_id' => null]));
+
+    app(PlanningCascadeService::class)->fanoutConceptInvention($this->rootTeam, (int) $conceptStep->id, (int) $concept->id, 'voll_kreativ');
+
+    expect((int) ($run->refresh()->params['gedeckelt_slots_offen'] ?? 0))->toBe(3)   // kein stiller Deckel
+        ->and($run->params['ziel_vk_eur'] ?? null)->toBe(12.5);                       // Bestands-Params bleiben (merge)
+});
+
+it('Fan-out-Cap: bis 30 leere Slots kein Deckel-Vermerk (Bestandsverhalten)', function () {
+    $concept = $this->makeConcept($this->rootTeam, 'Buffet', ['status' => 'draft']);
+    $this->makeConceptSlot($concept, ['position' => 1]);
+    $this->makeConceptSlot($concept, ['position' => 2]);
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'concept', 'status' => 'running']);
+    $conceptStep = FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'concept', 'status' => 'running', 'ref_type' => 'concept', 'ref_id' => $concept->id]);
+
+    $this->mock(IdeenService::class, fn ($m) => $m->shouldReceive('kiDivergenzConcept')
+        ->once()
+        ->withArgs(fn ($team, $conceptId, $anzahl, $extra = null, $trend = null) => $anzahl === 2)   // exakt die 2 Slots
+        ->andReturn(['angelegt' => [], 'roh' => 0, 'confidence' => 0.0, 'call_log_id' => null]));
+
+    app(PlanningCascadeService::class)->fanoutConceptInvention($this->rootTeam, (int) $conceptStep->id, (int) $concept->id, 'voll_kreativ');
+
+    expect($run->refresh()->params['gedeckelt_slots_offen'] ?? null)->toBeNull();
+});
+
 it('materialisiereConceptGericht: erdet die Idee, verdrahtet ins Slot, Step done (Gen gemockt)', function () {
     $concept = $this->makeConcept($this->rootTeam, 'Buffet', ['status' => 'draft']);
     $slot = $this->makeConceptSlot($concept, ['position' => 1]);
