@@ -1750,3 +1750,48 @@ it('Reuse-Picker: fremd-Team-Quell-Foto wird nicht übernommen (fail-soft, kein 
     // Kein Leak: das Ziel-Rezept hat kein Foto bekommen.
     expect(\Platform\FoodAlchemist\Models\FoodAlchemistRecipeStepPhoto::where('recipe_id', $zielRezept->id)->count())->toBe(0);
 });
+
+/*
+ * Etappe 8 »Worker-Präsenz« Teil 2 — Health-Anzeige im Cockpit: die proaktive Ampel des
+ * WorkerHealthService (Teil 1) VOR dem Go. Ohne lebenden `queue:work` bleibt jeder Go in der
+ * Queue liegen → der Nutzer soll das SEHEN, statt nur einen Spinner. Ergänzt den reaktiven
+ * Watchdog-`hinweis` (der erst nach ~90 s eines hängenden Laufs anschlägt).
+ */
+it('Worker-Präsenz Teil 2: kein Herzschlag (unbekannt) → proaktive Warnung im Go zeigen', function () {
+    \Illuminate\Support\Facades\Cache::forget(\Platform\FoodAlchemist\Services\WorkerHealthService::HEARTBEAT_KEY);
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'W', 'brief' => 'y']);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->assertViewHas('workerState', 'unbekannt')       // nie ein Herzschlag gesehen
+        ->assertSeeHtml('data-worker-health');        // Warn-Banner am Go
+});
+
+it('Worker-Präsenz Teil 2: frischer Herzschlag (gesund) → keine Warnung (Fläche unverändert)', function () {
+    \Illuminate\Support\Facades\Cache::put(
+        \Platform\FoodAlchemist\Services\WorkerHealthService::HEARTBEAT_KEY,
+        now()->timestamp,
+        \Platform\FoodAlchemist\Services\WorkerHealthService::HEARTBEAT_TTL_SEKUNDEN
+    );
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'W', 'brief' => 'y']);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->assertViewHas('workerState', 'gesund')
+        ->assertViewHas('workerWarnung', null)
+        ->assertDontSeeHtml('data-worker-health');
+});
+
+it('Worker-Präsenz Teil 2: alter Herzschlag (still) → proaktive Warnung im Go zeigen', function () {
+    \Illuminate\Support\Facades\Cache::put(
+        \Platform\FoodAlchemist\Services\WorkerHealthService::HEARTBEAT_KEY,
+        now()->timestamp - (\Platform\FoodAlchemist\Services\WorkerHealthService::STILL_SEKUNDEN + 30),
+        \Platform\FoodAlchemist\Services\WorkerHealthService::HEARTBEAT_TTL_SEKUNDEN
+    );
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'W', 'brief' => 'y']);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->assertViewHas('workerState', 'still')
+        ->assertSeeHtml('data-worker-health');
+});

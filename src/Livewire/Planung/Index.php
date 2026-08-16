@@ -22,6 +22,7 @@ use Platform\FoodAlchemist\Services\PlanningSessionService;
 use Platform\FoodAlchemist\Services\RecipeImageService;
 use Platform\FoodAlchemist\Services\SalesRecipeService;
 use Platform\FoodAlchemist\Services\TitelVorschlagService;
+use Platform\FoodAlchemist\Services\WorkerHealthService;
 use Platform\FoodAlchemist\Support\TeamScope;
 
 /**
@@ -1852,9 +1853,21 @@ class Index extends Component
             }
         }
 
+        // Worker-Präsenz PROAKTIV (Etappe 8, Teil 2): die Ampel des Heartbeat-Service (Teil 1) VOR dem
+        // Go zeigen — ergänzend zum reaktiven Watchdog `hinweis` (der erst nach ~90 s eines hängenden
+        // Laufs anschlägt). Ist kein lebender `queue:work` da (`still`/`unbekannt`), bleibt jeder Go in
+        // der Queue liegen → der Nutzer sieht nur einen Spinner. Rein lesend/fail-soft; `gesund` = keine
+        // Warnung (Prompt/Fläche byte-unverändert wie bisher).
+        $workerState = app(WorkerHealthService::class)->status()['state'];
+        $workerWarnung = $workerState === 'gesund'
+            ? null
+            : 'Kein Hintergrund-Worker aktiv — ein Go bleibt in der Warteschlange liegen, bis der Worker (queue:work) läuft.';
+
         return view('foodalchemist::livewire.planung.index', [
             'sessions' => $sessions,
             'baum' => $baum,
+            'workerState' => $workerState,
+            'workerWarnung' => $workerWarnung,
             'active' => $active,
             'skizzen' => $skizzen,
             'skizzenLauf' => $skizzenLauf,

@@ -361,6 +361,7 @@
                 @include('foodalchemist::livewire.planung.partials.leitplanken', ['scope' => 'concept'])
 
                 <x-foodalchemist::modal-section title="Go — Concept erzeugen (Draft)">
+                    @include('foodalchemist::livewire.planung.partials.worker-praesenz')
                     @if($planConceptId)
                         {{-- Geplanter Pfad (Etappe 2b): ein KI-Kopf-Plan ist vorbereitet — der Go referenziert ihn
                              statt neu zu generieren. „Plan verwerfen" wechselt zurück auf den Schnell-Pfad. --}}

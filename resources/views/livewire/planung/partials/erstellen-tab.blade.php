@@ -44,6 +44,7 @@
     @include('foodalchemist::livewire.planung.partials.leitplanken', ['scope' => $scope])
 
     <x-foodalchemist::modal-section title="Go — {{ $goLabel }} erzeugen (Draft)">
+        @include('foodalchemist::livewire.planung.partials.worker-praesenz')
         <p class="{{ $label ?? 'text-[11px] text-gray-500' }} mb-2">
             Der Entwurf entsteht im Hintergrund (Draft); der Fortschritt läuft im <b>Worker</b>-Tab sichtbar durch.
         </p>
