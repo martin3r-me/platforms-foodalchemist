@@ -321,12 +321,12 @@ FA `main` = `eb85e3c`, demo deployt + Migration `[180] Ran`. Nachweis: `Planning
 
 **Linke Spalte — „Planungen"-Liste**
 - [x] Status-Badge je Eintrag (Entwurf · läuft · prüfen · fertig · fehlgeschlagen) statt nur Divergenz/Konvergenz → `d4e5f41`
-- [x] Filter + Suche: Volltext-Titel-Suche + Status-Filter (aus dem Kaskaden-Status), filtert Liste + Zuletzt konsistent → `a83750a`. *Offen: Typ-Filter (Basisrezept/Gericht/Concept) — der Scope liegt in der Map (`kaskaden[..].scope`), nur UI fehlt.*
+- [x] Filter + Suche: Volltext-Titel-Suche + Status-Filter (aus dem Kaskaden-Status) + **Typ-Filter** (Basisrezept/Gericht/Concept aus dem Lauf-Scope), filtert Liste + Zuletzt konsistent → `a83750a` + `738380f`.
 - [x] laufende Planung optisch hervorheben (Puls bei `running`) → `d4e5f41`
 
 **Mitte — „Neu erstellen" + „Zuletzt"**
 - [ ] „Neu erstellen"-Leiste im Editor-Look; Trend/Skizze klar als EIN Input dahinter (nicht der Rahmen) — *rein kosmetisch, offen für Real-Abnahme*
-- [~] „Zuletzt"-Karten mit Status + Kaskaden-Fortschritt („Gerichte 1/1 · Basisrezepte 0/3") ✅ (`d4e5f41`). *Offen: Direkt-Aktionen (freigeben/duplizieren/verwerfen) — neue Session-Mutationen, nach Real-Abnahme.*
+- [x] „Zuletzt"-Karten mit Status + Kaskaden-Fortschritt („Gerichte 1/1 · Basisrezepte 0/3") (`d4e5f41`) + **Direkt-Aktionen Öffnen · Duplizieren · Verwerfen** (`738380f`; Verwerfen = reversibler Soft-Delete mit Bestätigung). *Freigabe bleibt bewusst per-Step im Editor (kein Karten-Bulk-Freigeben).*
 - [x] verwaiste Entwürfe (ohne Lauf) sichtbar machen — „Entwurf"-Badge → `d4e5f41`
 
 **Rechte Spalte — Details-Panel**
