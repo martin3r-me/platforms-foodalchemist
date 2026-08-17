@@ -70,6 +70,20 @@
                     </button>
                 </div>
 
+                {{-- Suche + Status-Filter (finale Etappe #17) — filtern Liste UND Zuletzt-Karten. --}}
+                <div class="space-y-2">
+                    <input type="text" wire:model.live.debounce.300ms="sucheListe" placeholder="Planungen durchsuchen …"
+                           class="{{ $input }} !py-1.5" data-planung-suche />
+                    <select wire:model.live="filterStatus" class="{{ $input }} !py-1.5 text-xs" data-planung-filter-status>
+                        <option value="">Alle Status</option>
+                        <option value="entwurf">Entwurf</option>
+                        <option value="läuft">Läuft</option>
+                        <option value="prüfen">Prüfen</option>
+                        <option value="fertig">Fertig</option>
+                        <option value="fehlgeschlagen">Fehlgeschlagen</option>
+                    </select>
+                </div>
+
                 <div class="space-y-2 max-h-[68vh] overflow-y-auto -mx-1 px-1">
                     @forelse($baum as $ast)
                         <div wire:key="cat-{{ $loop->index }}">
@@ -88,7 +102,11 @@
                             </div>
                         </div>
                     @empty
-                        <p class="text-xs text-gray-500 px-1">Noch keine Planungen — links oben eine starten oder im Trendradar „In Planung öffnen".</p>
+                        @if($sucheListe !== '' || $filterStatus !== '')
+                            <p class="text-xs text-gray-500 px-1">Keine Planung passt zu Suche/Filter.</p>
+                        @else
+                            <p class="text-xs text-gray-500 px-1">Noch keine Planungen — links oben eine starten oder im Trendradar „In Planung öffnen".</p>
+                        @endif
                     @endforelse
                 </div>
             </div>

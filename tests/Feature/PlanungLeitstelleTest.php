@@ -739,6 +739,32 @@ it('#17 Hauptseite: die Landing rendert das Kaskaden-Status-Badge in der linken 
         ->assertSeeHtml('data-planung-status');
 });
 
+it('#17 Hauptseite: Volltext-Suche filtert die Planungs-Liste (Titel-contains)', function () {
+    app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Alpha-Menü']);
+    app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Beta-Buffet']);
+
+    Livewire::test(PlanungIndex::class)
+        ->assertSee('Alpha-Menü')
+        ->assertSee('Beta-Buffet')
+        ->set('sucheListe', 'alpha')
+        ->assertSee('Alpha-Menü')
+        ->assertDontSee('Beta-Buffet');
+});
+
+it('#17 Hauptseite: Status-Filter zeigt nur Planungen im gewählten Kaskaden-Status', function () {
+    // „läuft" = Session mit gestartetem Go; „entwurf" = Session ohne Lauf → vom Filter ausgeblendet.
+    $laeuft = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Laeuft-Session', 'brief' => 'x']);
+    app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Entwurf-Session']);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $laeuft->id)
+        ->set('eingabe.gericht.brief', 'x')
+        ->call('goKaskade', 'gericht')
+        ->set('filterStatus', 'läuft')
+        ->assertSee('Laeuft-Session')
+        ->assertDontSee('Entwurf-Session');
+});
+
 /**
  * Etappe 4 — Skizzen-Integration (Teil 1): eine Session-Skizze wird zum Kaskaden-Eingang, indem
  * sie in den Gericht-Tab übertragen wird (Titel → Titel, Beschreibung → Brief). Der Mensch drückt

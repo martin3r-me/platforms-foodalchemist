@@ -51,6 +51,12 @@ class Index extends Component
     /** Neue-Planung-Formular (Mitte-Dashboard). */
     public string $neuTitel = '';
 
+    /** Landing-Liste (finale Etappe #17): Volltext-Suche über den Session-Titel (live). */
+    public string $sucheListe = '';
+
+    /** Landing-Liste (finale Etappe #17): Status-Filter (''=alle | entwurf|läuft|prüfen|fertig|fehlgeschlagen). */
+    public string $filterStatus = '';
+
     /** Editor-Felder der aktiven Session. */
     public array $form = ['title' => '', 'brief' => '', 'analysis' => '', 'creative_mode' => 'voll_kreativ'];
 
@@ -1794,7 +1800,28 @@ class Index extends Component
         )->orderByDesc('s.updated_at')
             ->get(['s.id', 's.title', 's.status', 's.source_knowledge_document_id', 's.updated_at', 'm.category', 'm.trend_class']);
 
-        // Baum: Kategorie → Sessions (Frei-Bucket für ohne-Trend).
+        // Finale Etappe (Hauptseite): Kaskaden-Status je Session (Badge + Stufen-Fortschritt) — ein
+        // Query-Pass über die VOLLE Liste (vor dem Filter, damit der Status-Filter greifen kann).
+        $kaskaden = $this->landingKaskadenMap($team, $sessions->pluck('id')->map(fn ($v) => (int) $v)->all());
+
+        // Filter/Suche (finale Etappe #17): Volltext über den Titel + Status-Filter (aus $kaskaden).
+        // Filtert Liste UND Zuletzt-Karten konsistent; leere Filter = unveränderte Liste.
+        $suche = mb_strtolower(trim($this->sucheListe));
+        $filterStatus = trim($this->filterStatus);
+        if ($suche !== '' || $filterStatus !== '') {
+            $sessions = $sessions->filter(function ($s) use ($suche, $filterStatus, $kaskaden) {
+                if ($suche !== '' && ! str_contains(mb_strtolower((string) $s->title), $suche)) {
+                    return false;
+                }
+                if ($filterStatus !== '' && ($kaskaden[(int) $s->id]['status'] ?? 'entwurf') !== $filterStatus) {
+                    return false;
+                }
+
+                return true;
+            })->values();
+        }
+
+        // Baum: Kategorie → Sessions (Frei-Bucket für ohne-Trend). Auf der gefilterten Liste.
         $baum = $sessions->groupBy(fn ($s) => $s->category ?: '__frei')
             ->map(fn ($grp, $cat) => [
                 'category' => $cat === '__frei' ? 'Frei / ohne Kategorie' : $cat,
@@ -2033,10 +2060,6 @@ class Index extends Component
         $workerWarnung = $workerState === 'gesund'
             ? null
             : 'Kein Hintergrund-Worker aktiv — ein Go bleibt in der Warteschlange liegen, bis der Worker (queue:work) läuft.';
-
-        // Finale Etappe (Hauptseite): Kaskaden-Status je Session (Badge + Stufen-Fortschritt) —
-        // ein Query-Pass über die ganze Liste, von linker Liste, Zuletzt-Karten + Details-Panel gelesen.
-        $kaskaden = $this->landingKaskadenMap($team, $sessions->pluck('id')->map(fn ($v) => (int) $v)->all());
 
         return view('foodalchemist::livewire.planung.index', [
             'sessions' => $sessions,
