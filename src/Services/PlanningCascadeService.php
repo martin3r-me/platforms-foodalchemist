@@ -771,7 +771,11 @@ class PlanningCascadeService
     public function reapeVerwaisteSteps(Team $team, int $runId): int
     {
         $run = $this->lauf($team, $runId);
-        if ($run === null) {
+        // D1-Slice 3: sichtbarer, nicht besessener Lauf → sauberer No-op. Hier ist das KEINE Kosmetik,
+        // sondern ein echter Cross-Tenant-Write-Riegel: markStepFailed(stepId) trägt (anders als
+        // regeneriereStep) KEINEN ownedStep-Guard → ohne diese Zeile könnte ein Kind-Team die Steps
+        // des vererbten Eltern-Laufs auf `failed` setzen. Deckungsgleich mit `lauf()===null`.
+        if ($run === null || ! $run->isOwnedBy($team)) {
             return 0;
         }
         $grenze = now()->subMinutes(self::VERWAIST_NACH_MINUTEN);
@@ -807,7 +811,9 @@ class PlanningCascadeService
     public function setzeLaufFort(Team $team, int $runId): int
     {
         $run = $this->lauf($team, $runId);
-        if ($run === null) {
+        // D1-Slice 3: sichtbarer, nicht besessener Lauf → sauberer No-op statt lautem Wurf im ersten
+        // regeneriereStep (dessen ownedStep fängt es zwar, aber laut). Siehe reapeVerwaisteSteps/gibStufeFrei.
+        if ($run === null || ! $run->isOwnedBy($team)) {
             return 0;
         }
         $gescheitert = $run->steps->filter(fn ($s) => $s->status === 'failed'
@@ -981,7 +987,11 @@ class PlanningCascadeService
     public function gibStufeFrei(Team $team, int $runId, string $kind): void
     {
         $run = $this->lauf($team, $runId);
-        if ($run === null) {
+        // D1-Slice 3: ein SICHTBARER, aber nicht besessener Lauf (childA sieht den vererbten
+        // Root-Lauf) ist hier ein sauberer No-op — nicht ein lauter Wurf im ersten `gibStepFrei`.
+        // Der per-Step `ownedStep`-Guard fängt es zwar korrekt (kein Write), aber laut statt leise;
+        // ein Fremd-Lauf hat für dieses Team schlicht nichts freizugeben. Deckungsgleich mit `lauf()===null`.
+        if ($run === null || ! $run->isOwnedBy($team)) {
             return;
         }
         foreach ($run->steps->where('status', 'done')->where('kind', $kind) as $s) {
@@ -1239,7 +1249,8 @@ class PlanningCascadeService
     public function gibRunFrei(Team $team, int $runId): void
     {
         $run = $this->lauf($team, $runId);
-        if ($run === null) {
+        // D1-Slice 3: sichtbarer, nicht besessener Lauf → sauberer No-op (siehe gibStufeFrei).
+        if ($run === null || ! $run->isOwnedBy($team)) {
             return;
         }
         foreach ($run->steps->where('status', 'done') as $s) {
@@ -1251,7 +1262,8 @@ class PlanningCascadeService
     public function verwirfRun(Team $team, int $runId): void
     {
         $run = $this->lauf($team, $runId);
-        if ($run === null) {
+        // D1-Slice 3: sichtbarer, nicht besessener Lauf → sauberer No-op (siehe gibStufeFrei).
+        if ($run === null || ! $run->isOwnedBy($team)) {
             return;
         }
         foreach ($run->steps->whereIn('status', ['done', 'failed']) as $s) {

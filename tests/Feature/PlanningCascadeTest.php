@@ -711,6 +711,39 @@ it('D1-Audit: geerbter Step wird von jeder Schreib-Methode abgewiesen (isOwnedBy
     'uebernimmVorhandenesFotoFuerStep' => [fn ($svc, $team, $id) => $svc->uebernimmVorhandenesFotoFuerStep($team, $id, 1)],
 ]);
 
+// D1-Slice 3 (Etappe 8, Multi-Tenancy »Writes isOwnedBy konsequent«): die RUN-Ebene-Bulk-Methoden
+// (runId statt stepId) dürfen einen SICHTBAREN, aber nicht besessenen Lauf (childA sieht den vererbten
+// Root-Lauf lesend) nicht anfassen — sauberer No-op statt lautem Wurf im ersten per-Step-ownedStep.
+// Bei reapeVerwaisteSteps ist das KEINE Kosmetik, sondern ein echter Cross-Tenant-Write-Riegel:
+// markStepFailed(stepId) trägt (anders als regeneriereStep/gibStepFrei) KEINEN ownedStep-Guard →
+// ohne die Run-Ownership-Prüfung könnte childA die verwaisten Root-Steps auf `failed` setzen.
+it('D1-Slice 3: geerbter (sichtbarer, nicht besessener) Lauf ist für jede Run-Bulk-Methode ein No-op', function (Closure $call) {
+    $recipe = $this->makeRecipe($this->rootTeam, 'D1-Run-Bulk', ['status' => 'draft']);
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'gericht', 'status' => 'review']);
+    // Je ein Step in einem Zustand, den IRGENDEINE der Methoden anfassen WÜRDE (done→Freigabe,
+    // failed→Verwerfen/Resume, alt-running→Reap): so würde ein fehlender Guard sichtbar durchschlagen.
+    $done = FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht', 'status' => 'done', 'ref_type' => 'recipe', 'ref_id' => $recipe->id]);
+    $failed = FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht', 'status' => 'failed', 'ref_type' => 'recipe', 'ref_id' => $recipe->id]);
+    $verwaist = FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht', 'status' => 'running']);
+    FoodAlchemistCascadeRunStep::where('id', $verwaist->id)->update(['updated_at' => now()->subMinutes(45)]);   // verwaist (>30 Min)
+    $svc = app(PlanningCascadeService::class);
+
+    // childA erbt den Root-Lauf lesend (sichtbar), besitzt ihn aber NICHT → jede Bulk-Methode verpufft.
+    $call($svc, $this->childA, (int) $run->id);
+
+    expect($done->refresh()->status)->toBe('done')           // keine Freigabe
+        ->and($failed->refresh()->status)->toBe('failed')     // kein Verwerfen/Resume
+        ->and($verwaist->refresh()->status)->toBe('running')  // KEIN Reap-Write (Leak geschlossen)
+        ->and($recipe->refresh()->status->value)->toBe('draft');
+    Queue::assertNothingPushed();
+})->with([
+    'gibStufeFrei'        => [fn ($svc, $team, $id) => $svc->gibStufeFrei($team, $id, 'gericht')],
+    'gibRunFrei'          => [fn ($svc, $team, $id) => $svc->gibRunFrei($team, $id)],
+    'verwirfRun'          => [fn ($svc, $team, $id) => $svc->verwirfRun($team, $id)],
+    'setzeLaufFort'       => [fn ($svc, $team, $id) => $svc->setzeLaufFort($team, $id)],
+    'reapeVerwaisteSteps' => [fn ($svc, $team, $id) => $svc->reapeVerwaisteSteps($team, $id)],
+]);
+
 it('Cockpit: Editor rendert die Freigabe-UI und gibt einen Entwurf über die Komponente frei', function () {
     $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Freigabe-Test', 'brief' => 'x']);
     $recipe = $this->makeRecipe($this->rootTeam, 'Cockpit-Draft', ['status' => 'draft']);
