@@ -168,6 +168,11 @@
     @if($st->status === 'failed' && $st->error)
         <p class="text-[10px] text-rose-400/80 pl-1">{{ \Illuminate\Support\Str::limit($st->error, 160) }}</p>
     @endif
+    @php $fanoutErr = is_array($st->deferred) ? ($st->deferred['fanout_error'] ?? null) : null; @endphp
+    @if($fanoutErr)
+        {{-- #124: Fan-out crashte, aber das Concept ist freigegeben — amber (Teil-Problem), nicht rot. --}}
+        <p class="text-[10px] text-amber-400/80 pl-1">Auto-Gericht-Erfindung fehlgeschlagen: {{ \Illuminate\Support\Str::limit($fanoutErr, 140) }} — das Concept selbst ist freigegeben.</p>
+    @endif
     @if($st->status === 'geplant')
         <p class="text-[10px] text-violet-300/60 pl-1">wird erzeugt, sobald die Stufe darüber freigegeben ist</p>
     @endif

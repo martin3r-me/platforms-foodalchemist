@@ -60,14 +60,14 @@ class FanoutConceptJob implements ShouldQueue
     }
 
     /**
-     * Job-Tod (Timeout/Fatal in der Divergenz) → den Concept-Step trotzdem terminal + mit sichtbarem
-     * Grund setzen (Fehler-Transparenz, Etappe 8). Ohne diesen Haken schluckte der Fan-out seine
-     * Fehler still: der Web-Request der Freigabe war längst zurück, der Job starb im Worker, und das
-     * `finally` im {@see handle} recomputet den Run als wäre nichts gewesen — der Cockpit-Nutzer sah
-     * keine Erklärung, warum keine Gerichte kamen. Spiegelt {@see MaterializeConceptIdeaJob::failed}.
+     * Job-Tod (Timeout/Fatal in der Divergenz) → der Fehler wird sichtbar gemacht (Fehler-Transparenz,
+     * Etappe 8), ABER der Concept-Step NICHT auf `failed` gekippt (#124): das Concept-Rezept ist zu
+     * diesem Zeitpunkt längst angelegt + freigegeben — nur die automatische Gericht-Erfindung crashte.
+     * {@see PlanningCascadeService::markFanoutFailed} lässt den freigegebenen Step stehen und hält den
+     * Grund in `deferred.fanout_error` fest (Cockpit: „Auto-Gericht-Erfindung fehlgeschlagen").
      */
     public function failed(\Throwable $e): void
     {
-        app(PlanningCascadeService::class)->markStepFailed($this->cascadeStepId, 'Gericht-Fan-out abgebrochen: ' . $e->getMessage());
+        app(PlanningCascadeService::class)->markFanoutFailed($this->cascadeStepId, 'Gericht-Fan-out abgebrochen: ' . $e->getMessage());
     }
 }

@@ -263,6 +263,36 @@ it('markStepFailed: einziger Step scheitert → Run failed', function () {
         ->and($run->refresh()->status)->toBe('failed');
 });
 
+it('#124 markFanoutFailed: Fan-out-Abbruch lässt den freigegebenen Concept-Step live (nur fanout_error)', function () {
+    $svc = app(PlanningCascadeService::class);
+    $concept = FoodAlchemistConcept::create(['team_id' => $this->rootTeam->id, 'name' => 'Sommermenü', 'status' => 'active']);
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'concept', 'status' => 'running', 'staged' => true]);
+    $step = FoodAlchemistCascadeRunStep::create([
+        'team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'concept',
+        'status' => 'freigegeben', 'ref_type' => 'concept', 'ref_id' => $concept->id,
+        'deferred' => ['fanout' => ['mode' => 'voll_kreativ']],
+    ]);
+
+    $svc->markFanoutFailed((int) $step->id, 'Divergenz-Timeout');
+
+    $step->refresh();
+    expect($step->status)->toBe('freigegeben')                                 // Concept bleibt live, NICHT failed
+        ->and($step->deferred['fanout_error'] ?? null)->toContain('Divergenz-Timeout')
+        ->and(isset($step->deferred['fanout']))->toBeFalse();                  // verbrauchte Fan-out-Args weg
+});
+
+it('#124 markFanoutFailed: NICHT-freigegebener Step → echter Step-Fehler (Fallback)', function () {
+    $svc = app(PlanningCascadeService::class);
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'concept', 'status' => 'running', 'staged' => true]);
+    $step = FoodAlchemistCascadeRunStep::create([
+        'team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'concept', 'status' => 'running',
+    ]);
+
+    $svc->markFanoutFailed((int) $step->id, 'Concept nie live');
+
+    expect($step->refresh()->status)->toBe('failed');                          // war nie freigegeben → echter Fehler
+});
+
 it('Job-Hook: failed() meldet an den Step zurück, wenn cascade_step_id gesetzt ist', function () {
     $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Geschmortes Rind', 'brief' => 'Schmorgericht mit Wurzelgemuese.']);
     $run = app(PlanningCascadeService::class)->starteKaskade($this->rootTeam, 'gericht', $session, 'voll_kreativ');

@@ -750,6 +750,33 @@ class PlanningCascadeService
     }
 
     /**
+     * #124: Ein Fan-out-Abbruch ist NICHT „Concept kaputt". Das Concept-Rezept ist längst angelegt
+     * und freigegeben (der Fan-out läuft NACH der Freigabe) — nur die automatische Gericht-Erfindung
+     * crashte. Darum den Step-Status (`freigegeben`) LASSEN und den Fehler separat in
+     * `deferred.fanout_error` festhalten → Cockpit zeigt „Auto-Gericht-Erfindung fehlgeschlagen",
+     * nicht „Concept fehlgeschlagen". Ist der Step (wider Erwarten) noch nicht freigegeben, war das
+     * Concept nie live → dann echter Step-Fehler ({@see markStepFailed}).
+     */
+    public function markFanoutFailed(int $stepId, string $error): void
+    {
+        $step = FoodAlchemistCascadeRunStep::find($stepId);
+        if ($step === null) {
+            return;
+        }
+        if ($step->status !== 'freigegeben') {
+            $this->markStepFailed($stepId, $error);   // Concept war nie live → echter Fehler
+
+            return;
+        }
+        $deferred = is_array($step->deferred) ? $step->deferred : [];
+        unset($deferred['fanout']);                   // Fan-out-Args sind verbraucht/tot
+        $deferred['fanout_error'] = Str::limit($error, 500, '');
+        $step->update(['deferred' => $deferred]);
+        $this->recomputeRunStatus((int) $step->cascade_run_id);
+        $this->scoreConceptCohesionIfComplete($step);
+    }
+
+    /**
      * Idempotenz/Resume (Etappe 8) — eine abgebrochene Kaskade sauber fortsetzbar machen.
      *
      * Stirbt ein Generator-Job hart (OOM/Timeout/Worker-Kill), ohne seinen `failed()`-Haken zu feuern,
