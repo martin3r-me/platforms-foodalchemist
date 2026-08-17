@@ -279,11 +279,25 @@ FA `main` = `eb85e3c`, demo deployt + Migration `[180] Ran`. Nachweis: `Planning
 
 ---
 
-## 🔀 Offene Entscheidungen
-- **Zerlegungstiefe:** Wie tief zerlegt ein Gericht (max. Ebenen)? Regelwerk sagt Guideline 3, hart nur Zyklus/Selbstbezug.
-- **Bild-Kostenpolitik:** KI-Fotos default aus — pro Stufe, pro Kaskade oder global schaltbar?
-- **Standalone-Zerlegung:** Soll auch die Nicht-Kaskaden-Gericht-Erstellung (VkGenerator) automatisch zerlegen, oder bleibt Zerlegung Kaskaden-exklusiv?
-- **Concept-Plan-Pflicht:** Ist der KI-Kopf (Etappe 2) optional (beide Pfade) oder der neue Standard?
+## 🔀 Entscheidungen (beschlossen 2026-08-17, Dominique)
+- **Zerlegungstiefe:** ✅ Regelwerk-§4-Guideline bleibt — Ebene 3 weich, hart nur Zyklus/Selbstbezug. Kein Änderungsbedarf.
+- **Bild-Kostenpolitik:** ✅ KI-Fotos default aus, **pro Kaskade** schaltbar (bestehender `ki_bilder`-Toggle). Echte EUR-Kosten (Preis je Modell) **vertagt** — v1 zeigt Call-Anzahl + Modell (#95).
+- **Standalone-Zerlegung:** ✅ **gegenstandslos** — es gibt keinen user-seitigen Standalone-KI-Weg mehr (KI-Erstellung nur über Planung). Zerlegung bleibt **Kaskaden-exklusiv**; toter Direkt-Pfad braucht sie nicht (#26/54/84 → n/a).
+- **KI-Kopf (Concept-Plan):** ✅ **Standard** (Concept läuft immer plan-first) **+ persistent** (Plan übersteht Reload). *Persistenz = Ableitung aus „Standard"; bei Einspruch transient (#53).*
+- **Essenz-Klassifikation:** ✅ **fallweise per LLM-`sub_rezept`-Flag** (gemachte Klar-Essenz = Sub, gekaufter Extrakt = GP) — nicht hardcoden (#9).
+- **Buffet vs. Gänge-Achse:** ✅ Gänge-Achse bleibt **Menü-only** (Label „Anzahl Gänge (nur Menü)"); **Buffet = eigener Concept-Typ** mit eigener Positionen-Logik — nicht in die Gänge-Achse quetschen (#35).
+- **Trend-Input:** ✅ nur **`approved`** Trend-Zuordnungen in den Brief (kein `tentative`, #71).
+- **Titel-Vorschlag:** ✅ Contract **lockern** — HG-Code im KI-Titel optional; Code separat/deterministisch ableiten (#75).
+- **Ziel-VK Concept→Gericht:** ✅ **Slot-Anker (per-Gericht-Preis) gewinnt** vor dem gleichverteilten Kopf-Korridor (= aktuelles Verhalten, bestätigt #88).
+- **Fan-out-Fehler:** ✅ **trennen** — Concept bleibt `done`/live, nur der Fan-out-Teil wird `failed` (nicht der ganze Concept-Step, #124).
+
+### → Umzusetzen (aus den Beschlüssen — Routine greift diese offenen Punkte top-down auf)
+- [ ] **Trend-`approved`-Filter** — `ausTrend` liest Trend-Meta nur mit `status='approved'` (#71).
+- [ ] **Titel-Contract lockern** — `vk.titel_vorschlag`: HG-Code optional, separat ableiten (#75).
+- [ ] **Fan-out-Fehler trennen** — `markStepFailed` beim Fan-out-Abbruch lässt den Concept-Step `done`, markiert nur den Fan-out-Teil (#124).
+- [ ] **Buffet als eigener Concept-Typ** — Gänge-Achse-Label „(nur Menü)" + Buffet-Positionen eigene Logik (#35).
+- [ ] **KI-Kopf → Standard + persistent** — Concept immer plan-first; `planConceptId` persistieren (Etappe 2b, #53).
+- [ ] *Essenz (LLM-Flag) · Ziel-VK (Slot-Anker) · Zerlegungstiefe · Bild-Politik = bestätigtes bestehendes Verhalten → kein eigener Bau-Chunk.*
 
 ## ⚠️ Risiken & Abhängigkeiten
 - **Deploy:** `update.sh`/`composer update` tot am `platforms-avatar`-404 → Deploy nur via **Lock-Pin** auf FA-`main`-HEAD (main == Feature, sonst setzt `dev-main` zurück). Migrationen laufen NICHT automatisch mit `update.sh` — Forge migriert beim Push, sonst `php8.4 artisan migrate --force`.
