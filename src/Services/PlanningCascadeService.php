@@ -1298,6 +1298,87 @@ class PlanningCascadeService
         return FoodAlchemistCascadeRun::visibleToTeam($team)->with('steps')->find($runId);
     }
 
+    /**
+     * Etappe 9 (MCP): der READ-ONLY Kaskaden-Status eines Laufs als flache, KI-lesbare Struktur —
+     * die Statuszahlen, die das Cockpit zeigt, aber headless. Team-gescopt über {@see lauf()}
+     * (visibleToTeam = Read-Contract); `null`, wenn der Lauf für das Team nicht sichtbar ist.
+     *
+     * Rein ableitend, keine Erfindung: Lauf-Kopf + je Ebene (`kind`) ein Status-Aggregat + die
+     * Einzel-Schritte (inkl. Anreicherungs-/Bild-Status aus `deferred`) + ein `hinweis`, der den
+     * bestehenden Run-Status (running|review|done|failed) in einen Handlungs-Satz übersetzt
+     * (Freigabe/Fortsetzen bleiben human-only, kein MCP-Trigger).
+     *
+     * @return array<string, mixed>|null
+     */
+    public function laufStatus(Team $team, int $runId): ?array
+    {
+        $run = $this->lauf($team, $runId);
+        if ($run === null) {
+            return null;
+        }
+
+        $steps = $run->steps->sortBy('sort')->values();
+
+        $schritte = $steps->map(function (FoodAlchemistCascadeRunStep $s): array {
+            $deferred = is_array($s->deferred) ? $s->deferred : [];
+
+            return array_filter([
+                'id' => (int) $s->id,
+                'ebene' => (string) $s->kind,
+                'label' => (string) $s->label,
+                'status' => (string) $s->status,
+                'tiefe' => (int) $s->depth,
+                'ref_type' => $s->ref_type,
+                'ref_id' => $s->ref_id !== null ? (int) $s->ref_id : null,
+                'parent_step_id' => $s->parent_step_id !== null ? (int) $s->parent_step_id : null,
+                'anreicherung' => $deferred['enrich']['status'] ?? null,
+                'bilder' => $deferred['bilder']['status'] ?? null,
+                'fehler' => $s->error,
+            ], static fn ($v): bool => $v !== null && $v !== '');
+        })->all();
+
+        $stufen = $steps->groupBy('kind')->map(static function ($group, $kind): array {
+            return [
+                'ebene' => (string) $kind,
+                'gesamt' => $group->count(),
+                'geplant' => $group->where('status', 'geplant')->count(),
+                'laufend' => $group->whereIn('status', ['queued', 'running'])->count(),
+                'entwurf_offen' => $group->where('status', 'done')->count(),   // fertiger Draft, wartet auf Freigabe (Gate 2)
+                'freigegeben' => $group->where('status', 'freigegeben')->count(),
+                'uebernommen' => $group->where('status', 'skipped')->count(),   // Reuse-Treffer
+                'verworfen' => $group->where('status', 'verworfen')->count(),
+                'fehlgeschlagen' => $group->where('status', 'failed')->count(),
+            ];
+        })->values()->all();
+
+        return [
+            'lauf' => array_filter([
+                'id' => (int) $run->id,
+                'scope' => (string) $run->scope,
+                'status' => (string) $run->status,
+                'gestuft' => (bool) $run->staged,
+                'planning_session_id' => $run->planning_session_id !== null ? (int) $run->planning_session_id : null,
+                'origin_dish_idea_id' => $run->origin_dish_idea_id !== null ? (int) $run->origin_dish_idea_id : null,
+            ], static fn ($v): bool => $v !== null),
+            'stufen' => $stufen,
+            'schritte' => $schritte,
+            'kohaerenz_warnung' => is_array($run->cohesion_warning) ? $run->cohesion_warning : null,
+            'hinweis' => $this->laufStatusHinweis((string) $run->status),
+        ];
+    }
+
+    /** Übersetzt den Run-Status in einen Handlungs-Satz (Freigabe/Fortsetzen bleiben human-only). */
+    private function laufStatusHinweis(string $status): string
+    {
+        return match ($status) {
+            'running' => 'Der Worker rechnet noch (Steps queued/running). Auf Abschluss warten, dann prüfen/freigeben.',
+            'review' => 'Fertige Entwürfe warten auf die menschliche Freigabe (Gate 2); geplante Sub-Rezepte auf die Freigabe der Stufe darüber. Freigeben/Verwerfen ist human-only, kein MCP-Trigger.',
+            'done' => 'Lauf abgeschlossen — alle Artefakte freigegeben oder als Bestand übernommen.',
+            'failed' => 'Lauf fehlgeschlagen — gescheiterte Schritte lassen sich gebündelt fortsetzen (human-only im Cockpit).',
+            default => $status,
+        };
+    }
+
     /** Brief für die Erzeugung: Session-Brief (Fallback Titel) + Analyse-Auszug (spiegelt Planung::goBrief). */
     private function briefAusSession(FoodAlchemistPlanningSession $session): string
     {
