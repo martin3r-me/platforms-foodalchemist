@@ -107,9 +107,13 @@ class Index extends Component
 
     /** Default-Leitplanken-Satz je Scope (in mount() je Tab kopiert). */
     public const REGLER_DEFAULT = [
-        'convenience' => '', 'frische' => 'frisch', 'bestand' => 'hybrid',
+        // Frische = Multi-Select Erlaubnis-Liste (L1.5): [] = egal (kein Zustands-Filter). Ein/mehrere
+        // Werte = harte Erlaubnis (nur diese gps.condition). `bestand` wird aus dem Kreativ-Modus
+        // abgeleitet (nicht mehr eigener Chip, s. reglerParams) — Default bleibt als Fallback stehen.
+        'convenience' => '', 'frische' => [], 'bestand' => 'hybrid',
         'bio_praeferenz' => 'konventionell', 'level' => '', 'sektor' => '',
-        'diaet_hart' => [], 'aroma' => '',
+        // aroma = Freitext-Feinjustierung, aroma_kueche = kuratierte Küche (11 + Frei, L1.5).
+        'diaet_hart' => [], 'aroma' => '', 'aroma_kueche' => '',
         'occasion' => '', 'serviceform' => '', 'kompositions_stil' => '',
         'favoriten' => false, 'favoriten_conv_only' => false,
         'ziel_vk' => '', 'voll_anreichern' => false, 'ki_bilder' => false,
@@ -240,7 +244,35 @@ class Index extends Component
         // Kreativ-Modus-Select im Eingabe-Block (voll_kreativ|hybrid|datenbank). `bestand` wird daraus
         // in reglerParams abgeleitet, keine zweite konkurrierende Achse mehr.
         ['field' => 'bio_praeferenz', 'label' => 'Bio-Präferenz', 'optionen' => ['konventionell' => 'Konventionell', 'bio' => 'Bio', 'egal' => 'Egal'], 'hint' => ['konventionell' => 'Standard — kein Bio erzwungen (Default)', 'bio' => 'Bio bevorzugt (nur auf Ansage)', 'egal' => 'keine Präferenz']],
-        ['field' => 'frische', 'label' => 'Frische-Hook', 'optionen' => ['frisch' => 'Frisch', 'tk' => 'Alles aus TK', 'konserve' => 'Konserve/haltbar'], 'hint' => ['frisch' => 'fresh_first (Default)']],
+        // »Frische-Hook« ist jetzt Multi-Select (Erlaubnis-Liste) → eigener Block in leitplanken.blade
+        // (FRISCHE_OPTIONEN), nicht mehr Single-Pill hier.
+    ];
+
+    /**
+     * Frische-Erlaubnis-Liste (L1.5, Multi-Select): UI-Slug => Label. Nichts angehakt = egal (kein
+     * Zustands-Filter). Angehakt = harte Erlaubnis auf `gps.condition` (raw-Werte frisch|TK|trocken|
+     * konserviert). Deckt endlich »trocken« ab (§9, 1.301 GPs) — im Gegensatz zum alten 3-Wert-Hook.
+     */
+    public const FRISCHE_OPTIONEN = [
+        'frisch' => 'Frisch', 'tk' => 'TK', 'trocken' => 'Trocken', 'konserve' => 'Konserve/haltbar',
+    ];
+
+    /** UI-Slug => roher `gps.condition`-Wert (für den Post-Match-Zustands-Filter, spiegelt §9). */
+    public const FRISCHE_CONDITION = [
+        'frisch' => 'frisch', 'tk' => 'TK', 'trocken' => 'trocken', 'konserve' => 'konserviert',
+    ];
+
+    /**
+     * Aroma-Küchen (L1.5, Achse 4 aus _Entscheidungsachsen.md v1.9): Slug => Label. »Frei« (leer) =
+     * KI wählt zur Beschreibung. Jede Küche trägt zusätzlich Würz-Anker/Technik/Archetyp in den
+     * Prompt (RecipeGenerationContextService::aromaKuecheBlock) — verbindliches Regelwerk, keine Erfindung.
+     */
+    public const AROMA_KUECHEN = [
+        '' => 'Frei (KI wählt)',
+        'klassisch_de' => 'Klassisch DE', 'franzoesisch' => 'Französisch', 'mediterran' => 'Mediterran',
+        'italienisch' => 'Italienisch', 'asiatisch' => 'Asiatisch (allg.)', 'japanisch' => 'Japanisch',
+        'thai' => 'Thai', 'indisch' => 'Indisch', 'orient' => 'Orient', 'lateinamerika' => 'Lateinamerika',
+        'neu_nordisch' => 'Neu-Nordisch',
     ];
 
     public ?string $meldung = null;
@@ -730,15 +762,18 @@ class Index extends Component
 
     // ── Leitstelle: Regler-Bedienung ───────────────────────────────────
 
-    /** Pill-Toggle für die Richtungs-Regler EINES Scopes (diaet_hart ist MULTI, sonst Single). */
+    /** Multi-Select-Regler (Toggle in/aus der Liste): Diät-Constraints + Frische-Erlaubnis-Liste. */
+    private const MULTI_REGLER = ['diaet_hart', 'frische'];
+
+    /** Pill-Toggle für die Richtungs-Regler EINES Scopes (MULTI_REGLER togglen, sonst Single-Set). */
     public function reglerPill(string $scope, string $feld, string $wert): void
     {
         if (! isset($this->regler[$scope])) {
             return;
         }
-        if ($feld === 'diaet_hart') {
-            $cur = (array) ($this->regler[$scope]['diaet_hart'] ?? []);
-            $this->regler[$scope]['diaet_hart'] = in_array($wert, $cur, true)
+        if (in_array($feld, self::MULTI_REGLER, true)) {
+            $cur = (array) ($this->regler[$scope][$feld] ?? []);
+            $this->regler[$scope][$feld] = in_array($wert, $cur, true)
                 ? array_values(array_diff($cur, [$wert]))
                 : [...$cur, $wert];
 
@@ -873,6 +908,19 @@ class Index extends Component
             'hybrid' => 'hybrid',
             default => 'komplett_neu',   // voll_kreativ
         };
+        // Frische (L1.5): Multi-Select Erlaubnis-Liste → harte gps.condition-Erlaubnis + primärer Pref
+        // (Tiebreak). [] = egal (Key entfällt, kein Filter). Sonst: erlaubte Roh-Zustände + 'frisch'-Vorzug.
+        $frischeSlugs = array_values(array_filter(
+            (array) ($r['frische'] ?? []),
+            static fn ($s) => isset(self::FRISCHE_CONDITION[$s]),
+        ));
+        unset($p['frische']);   // Roh-Array wird übersetzt, nicht 1:1 durchgereicht
+        if ($frischeSlugs !== []) {
+            $p['frische_erlaubt'] = array_map(static fn ($s) => self::FRISCHE_CONDITION[$s], $frischeSlugs);
+            // Primärer Pref für den Match-Tiebreak (Generator mappt frisch|tk|konserve→VariantPref;
+            // 'trocken' fällt auf fresh_first, egal — der harte Filter erledigt die Zustands-Auswahl).
+            $p['frische'] = in_array('frisch', $frischeSlugs, true) ? 'frisch' : $frischeSlugs[0];
+        }
         if (! $vk) {
             unset($p['occasion'], $p['serviceform'], $p['kompositions_stil']);
         }

@@ -358,3 +358,65 @@ it('L2 teil_convenience: Convenience-GP gewinnt, ein Nicht-Convenience-GP wird z
     expect($offeneTexte)->toContain('Rahmspinat')
         ->and($offeneTexte)->not->toContain('Rotkohl');
 });
+
+// ── L1.5 — Frische-Erlaubnis-Liste (Post-Match-Zustands-Filter) ──────────────────────────────
+
+it('L1.5 Frische: GP mit nicht erlaubtem Zustand (TK) wird NICHT verdrahtet, wenn nur frisch erlaubt', function () {
+    $gp = ($this->mkGpMitPreis)('Erbsen', 'erbsen', 2.00);
+    $gp->update(['condition' => 'TK']);
+
+    $resultat = $this->svc->generiere($this->rootTeam, 'Erbsen-Beilage', [
+        'frische_erlaubt' => ['frisch'],
+    ], kiRezeptOverride: [
+        'name' => 'Basis: Erbsen',
+        'zutaten' => [['text' => 'Erbsen', 'slug' => 'erbsen', 'quantity' => 200, 'unit' => 'g']],
+    ]);
+
+    expect($resultat['statistik']['bestand_gp'])->toBe(0)     // TK-GP geblockt
+        ->and($resultat['statistik']['offen'])->toBe(1);
+    expect($resultat['recipe']->ingredients()->first()->gp_id)->toBeNull();
+});
+
+it('L1.5 Frische: GP mit erlaubtem Zustand (frisch) wird verdrahtet', function () {
+    $gp = ($this->mkGpMitPreis)('Erbsen', 'erbsen', 2.00);
+    $gp->update(['condition' => 'frisch']);
+
+    $resultat = $this->svc->generiere($this->rootTeam, 'Erbsen-Beilage', [
+        'frische_erlaubt' => ['frisch'],
+    ], kiRezeptOverride: [
+        'name' => 'Basis: Erbsen frisch',
+        'zutaten' => [['text' => 'Erbsen', 'slug' => 'erbsen', 'quantity' => 200, 'unit' => 'g']],
+    ]);
+
+    expect($resultat['statistik']['bestand_gp'])->toBe(1)     // frisch erlaubt → verdrahtet
+        ->and($resultat['statistik']['offen'])->toBe(0);
+});
+
+it('L1.5 Frische: leere Erlaubnis-Liste = egal (kein Filter, TK-GP wird verdrahtet)', function () {
+    $gp = ($this->mkGpMitPreis)('Erbsen', 'erbsen', 2.00);
+    $gp->update(['condition' => 'TK']);
+
+    $resultat = $this->svc->generiere($this->rootTeam, 'Erbsen-Beilage', [
+        // KEIN frische_erlaubt → egal
+    ], kiRezeptOverride: [
+        'name' => 'Basis: Erbsen egal',
+        'zutaten' => [['text' => 'Erbsen', 'slug' => 'erbsen', 'quantity' => 200, 'unit' => 'g']],
+    ]);
+
+    expect($resultat['statistik']['bestand_gp'])->toBe(1);    // kein Filter → TK darf
+});
+
+it('L1.5 Aroma-Küche: build() trägt den Würz-Anker der gewählten Küche als Prompt-Block', function () {
+    $ctx = app(\Platform\FoodAlchemist\Services\RecipeGenerationContextService::class)
+        ->build($this->rootTeam, 'Ein Hauptgang', ['aroma_kueche' => 'japanisch'], true);
+
+    expect($ctx['prompt']['aroma_kueche']['kueche'] ?? null)->toBe('Japanisch')
+        ->and($ctx['prompt']['aroma_kueche']['wuerz_anker'] ?? '')->toContain('Dashi');
+});
+
+it('L1.5 Aroma-Küche: »Frei« (leer) trägt keinen Küche-Block', function () {
+    $ctx = app(\Platform\FoodAlchemist\Services\RecipeGenerationContextService::class)
+        ->build($this->rootTeam, 'Ein Hauptgang', [], true);
+
+    expect($ctx['prompt'])->not->toHaveKey('aroma_kueche');
+});

@@ -25,10 +25,26 @@
             </div>
         @endforeach
 
+        <div data-richtung="frische">
+            <p class="text-xs font-medium text-gray-900 mb-1">Frische (Zustands-Erlaubnis)</p>
+            <div class="flex flex-wrap gap-1.5">
+                @foreach(\Platform\FoodAlchemist\Livewire\Planung\Index::FRISCHE_OPTIONEN as $wert => $lbl)
+                    <button type="button" wire:click="reglerPill('{{ $scope }}', 'frische', '{{ $wert }}')"
+                            class="px-2.5 py-1 rounded-full border text-[11px] transition-colors {{ in_array($wert, (array) ($r['frische'] ?? []), true) ? $pillAktiv : $pillRuhe }}" data-planung-frische="{{ $wert }}">{{ $lbl }}</button>
+                @endforeach
+            </div>
+            <p class="text-[11px] text-gray-500 mt-1">{{ empty($r['frische'] ?? []) ? 'Egal — kein Zustands-Filter (KI wählt frei)' : 'Nur diese Zustände zugelassen (harter Filter; innerhalb: frisch bevorzugt)' }}</p>
+        </div>
+
         <div data-richtung="aroma">
             <p class="text-xs font-medium text-gray-900 mb-1">Aroma-Richtung</p>
-            <input type="text" wire:model="regler.{{ $scope }}.aroma" placeholder="frei — z. B. rauchig-karamellig, mediterran …" class="{{ $input }} !py-1.5" />
-            <p class="text-[11px] text-gray-500 mt-1">{{ ($r['aroma'] ?? '') === '' ? 'Keine Aroma-Vorgabe — KI wählt passend zur Beschreibung' : '' }}</p>
+            <select wire:model="regler.{{ $scope }}.aroma_kueche" class="{{ $input }} !py-1.5 mb-1.5" data-planung-aroma-kueche>
+                @foreach(\Platform\FoodAlchemist\Livewire\Planung\Index::AROMA_KUECHEN as $wert => $lbl)
+                    <option value="{{ $wert }}">{{ $lbl }}</option>
+                @endforeach
+            </select>
+            <input type="text" wire:model="regler.{{ $scope }}.aroma" placeholder="Feinjustierung — z. B. rauchig-karamellig, umami-lastig …" class="{{ $input }} !py-1.5" />
+            <p class="text-[11px] text-gray-500 mt-1">Küche steuert die Würzung (Anker/Technik/Archetyp); Freitext justiert zusätzlich. Beides optional.</p>
         </div>
 
         <div data-richtung="sektor">

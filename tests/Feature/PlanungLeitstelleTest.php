@@ -2227,3 +2227,51 @@ it('L0.9 Plan-Verbrauch ist scope-gebunden: ein Gericht-Go löscht den vorbereit
 
     expect($session->refresh()->plan_concept_id)->toBe((int) $plan->id);
 });
+
+// ── L1.5 — Leitplanken-UI: Frische-Erlaubnis-Liste + Aroma-Küche ─────────────────────────────
+
+it('L1.5 reglerParams: Frische-Multiauswahl wird zu frische_erlaubt (Roh-Zustände) + primärer Pref', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Frische-Filter', 'brief' => 'x']);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->set('eingabe.rezept.brief', 'Erbsenpüree.')
+        ->call('reglerPill', 'rezept', 'frische', 'tk')
+        ->call('reglerPill', 'rezept', 'frische', 'trocken')
+        ->call('goKaskade', 'rezept')
+        ->assertSet('laeuft', true);
+
+    Queue::assertPushed(GenerateRecipeJob::class, function ($job) {
+        $erlaubt = $job->parameter['frische_erlaubt'] ?? null;
+        return is_array($erlaubt)
+            && in_array('TK', $erlaubt, true)
+            && in_array('trocken', $erlaubt, true)
+            && ($job->parameter['frische'] ?? null) === 'tk';   // kein 'frisch' gewählt → erste Wahl
+    });
+});
+
+it('L1.5 reglerParams: Frische frisch+... setzt primären Pref auf frisch', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Frische-Frisch', 'brief' => 'x']);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->set('eingabe.rezept.brief', 'Salat.')
+        ->call('reglerPill', 'rezept', 'frische', 'konserve')
+        ->call('reglerPill', 'rezept', 'frische', 'frisch')
+        ->call('goKaskade', 'rezept');
+
+    Queue::assertPushed(GenerateRecipeJob::class, fn ($job) => ($job->parameter['frische'] ?? null) === 'frisch');
+});
+
+it('L1.5 Aroma-Küche: aroma_kueche reist als Leitplanke in die Job-Params', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Küche', 'brief' => 'x']);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->set('eingabe.gericht.brief', 'Ein Hauptgang.')
+        ->set('regler.gericht.aroma_kueche', 'japanisch')
+        ->call('goKaskade', 'gericht');
+
+    Queue::assertPushed(GenerateRecipeJob::class, fn ($job) => ($job->parameter['aroma_kueche'] ?? null) === 'japanisch');
+    expect($session->refresh()->generation_params['aroma_kueche'] ?? null)->toBe('japanisch');
+});

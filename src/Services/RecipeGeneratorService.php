@@ -248,9 +248,17 @@ class RecipeGeneratorService
                     'voll_convenience' => false,                // Fertigkomponente kaufen → nie Sub erzwingen
                     default            => ! $istGpTreffer,      // egal/standard: Bestand zuerst (GP gewinnt), sonst Sub
                 };
-                // Ein GP-Treffer wird NUR verdrahtet, wenn die Zeile nicht ohnehin Basisrezept sein muss.
-                $gpBlockiert = $strongSub || $rolleWillSub;
-                // Vorentscheidung fürs unmatched-else (unten): Basisrezept vs. Lieferantenartikel.
+                // Frische-Erlaubnis (L1.5): ist eine Zustands-Liste gesetzt und der GP-Treffer trägt einen
+                // NICHT erlaubten Zustand, wird er NICHT verdrahtet → die Zeile bleibt offen (LA/GP im
+                // richtigen Zustand suchen). Harter Filter, aber am Post-Match-Gate (Matcher unangetastet).
+                $frischeErlaubt = array_values(array_filter((array) ($parameter['frische_erlaubt'] ?? []), 'is_string'));
+                $frischeBlockiert = $istGpTreffer && $frischeErlaubt !== []
+                    && ! $this->gpZustandErlaubt((int) ($treffer['gp_id'] ?? 0), $frischeErlaubt);
+                // Ein GP-Treffer wird NUR verdrahtet, wenn die Zeile nicht ohnehin Basisrezept sein muss
+                // UND der Zustand erlaubt ist.
+                $gpBlockiert = $strongSub || $rolleWillSub || $frischeBlockiert;
+                // Vorentscheidung fürs unmatched-else (unten): Basisrezept vs. Lieferantenartikel. Ein reiner
+                // Frische-Block macht die Zeile NICHT zum Basisrezept (der richtige Weg ist LA/GP im Zustand).
                 $istBasisrezept = $strongSub || $rolleWillSub || (! $direktArtikel && ($llmSub ?? $this->heuristik->istSubRezeptKandidat($text)));
 
                 if ($istGpTreffer && ! $gpBlockiert) {
@@ -571,6 +579,37 @@ class RecipeGeneratorService
 
         return (bool) \Platform\FoodAlchemist\Models\FoodAlchemistGp::query()
             ->whereKey($gpId)->value('tag_is_convenience');
+    }
+
+    /**
+     * Frische-Erlaubnis (L1.5): trägt der GP einen erlaubten Zustand? Vergleicht primär die rohe
+     * `gps.condition` (frisch|TK|trocken|konserviert — §9) gegen die Erlaubnis-Liste; ist die Spalte
+     * leer, fällt es lenient auf den Namens-Bucket zurück (nur so werden Zustands-lose GPs nicht
+     * fälschlich ausgefiltert). trocken/konserviert kollabieren im Bucket-Fallback (beide `preserved`).
+     *
+     * @param  list<string>  $erlaubtRaw  rohe Zustands-Werte (frisch|TK|trocken|konserviert)
+     */
+    private function gpZustandErlaubt(int $gpId, array $erlaubtRaw): bool
+    {
+        if ($gpId <= 0 || $erlaubtRaw === []) {
+            return true;
+        }
+        $gp = \Platform\FoodAlchemist\Models\FoodAlchemistGp::query()
+            ->whereKey($gpId)->first(['name', 'condition']);
+        if ($gp === null) {
+            return true;   // fail-open: kein GP zum Prüfen
+        }
+        $raw = trim((string) ($gp->condition ?? ''));
+        if ($raw !== '') {
+            return in_array($raw, $erlaubtRaw, true);
+        }
+        // condition unset → Namens-Bucket (lenient): erlaubte Roh-Werte auf Buckets abbilden.
+        $erlaubtBuckets = array_map(static fn ($z) => match ($z) {
+            'frisch' => 'fresh', 'TK' => 'frozen', 'trocken', 'konserviert' => 'preserved', default => 'unknown',
+        }, $erlaubtRaw);
+        $bucket = $this->heuristik->zustandClassResolved((string) $gp->name, null);
+
+        return in_array($bucket, $erlaubtBuckets, true);
     }
 
     /**
