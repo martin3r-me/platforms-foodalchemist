@@ -362,6 +362,68 @@ it('EnrichRecipeJob: ohne ki_bilder-Toggle wird KEIN deferred.bilder geschrieben
         ->and($step->deferred['enrich']['status'] ?? null)->toBe('done');
 });
 
+// ── Etappe 8 — Fehler-Transparenz (Images): harter Job-Abbruch der richtigen Phase zuordnen ──
+// failed() (Timeout/OOM, nicht vom inneren catch gefangen) darf einen Abbruch NACH abgeschlossener
+// Anreicherung nicht der Anreicherung unterschieben (enrich=done überschreiben), sondern der
+// Bild-Phase (deferred.bilder=failed). Sonst zeigt das Cockpit fälschlich „Anreicherung fehlgeschlagen".
+
+it('EnrichRecipeJob failed(): harter Abbruch NACH enrich=done wird der Bild-Phase zugeordnet', function () {
+    $recipe = $this->makeRecipe($this->rootTeam, 'Bild-Timeout', ['status' => 'draft']);
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'gericht', 'status' => 'review']);
+    $step = FoodAlchemistCascadeRunStep::create([
+        'team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht',
+        'status' => 'freigegeben', 'ref_type' => 'recipe', 'ref_id' => $recipe->id,
+        'deferred' => ['enrich' => ['status' => 'done', 'at' => now()->toIso8601String()]],
+    ]);
+
+    // Voll-Modus (nurBilder=false), Bilder angefordert (kiBilder=true), Anreicherung längst done →
+    // ein harter Job-Abbruch (Timeout/OOM in der Bild-Phase) gehört an deferred.bilder.
+    (new EnrichRecipeJob($this->rootTeam->id, (int) auth()->id(), (int) $recipe->id, null, true, (int) $step->id))
+        ->failed(new RuntimeException('image timeout'));
+
+    $step->refresh();
+    expect($step->deferred['bilder']['status'] ?? null)->toBe('failed')
+        ->and($step->deferred['bilder']['error'] ?? '')->toContain('image timeout')
+        ->and($step->deferred['enrich']['status'] ?? null)->toBe('done');   // NICHT überschrieben
+});
+
+it('EnrichRecipeJob failed(): harter Abbruch bei laufender Anreicherung bleibt bei enrich=failed', function () {
+    $recipe = $this->makeRecipe($this->rootTeam, 'Enrich-Timeout', ['status' => 'draft']);
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'gericht', 'status' => 'review']);
+    $step = FoodAlchemistCascadeRunStep::create([
+        'team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht',
+        'status' => 'freigegeben', 'ref_type' => 'recipe', 'ref_id' => $recipe->id,
+        'deferred' => ['enrich' => ['status' => 'running', 'at' => now()->toIso8601String()]],
+    ]);
+
+    // Anreicherung war noch nicht durch → der Abbruch betrifft die Anreicherung selbst, keine erfundene Bild-Zeile.
+    (new EnrichRecipeJob($this->rootTeam->id, (int) auth()->id(), (int) $recipe->id, null, true, (int) $step->id))
+        ->failed(new RuntimeException('enrich timeout'));
+
+    $step->refresh();
+    expect($step->deferred['enrich']['status'] ?? null)->toBe('failed')
+        ->and($step->deferred['enrich']['error'] ?? '')->toContain('enrich timeout')
+        ->and($step->deferred['bilder'] ?? null)->toBeNull();
+});
+
+it('EnrichRecipeJob failed(): ohne ki_bilder bleibt der harte Abbruch bei enrich=failed (keine Bild-Phase)', function () {
+    $recipe = $this->makeRecipe($this->rootTeam, 'Kein-Bild-Timeout', ['status' => 'draft']);
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'gericht', 'status' => 'review']);
+    $step = FoodAlchemistCascadeRunStep::create([
+        'team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht',
+        'status' => 'freigegeben', 'ref_type' => 'recipe', 'ref_id' => $recipe->id,
+        'deferred' => ['enrich' => ['status' => 'done', 'at' => now()->toIso8601String()]],
+    ]);
+
+    // enrich=done, aber KEINE Bilder angefordert → es gab keine Bild-Phase; der Abbruch gehört an enrich.
+    (new EnrichRecipeJob($this->rootTeam->id, (int) auth()->id(), (int) $recipe->id, null, false, (int) $step->id))
+        ->failed(new RuntimeException('boom'));
+
+    $step->refresh();
+    expect($step->deferred['enrich']['status'] ?? null)->toBe('failed')
+        ->and($step->deferred['bilder'] ?? null)->toBeNull();
+});
+
 // ── Etappe 7 — Bild-Status Teil 2b: „neu erzeugen" (Fotos allein re-triggern, ohne Voll-Anreicherung) ──
 // Der EnrichRecipeJob läuft im `nurBilder`-Modus: er ruft KEINE Anreicherung, ersetzt die alten
 // KI-Fotos (loescheKiFotos) und erzeugt sie neu; deferred.enrich bleibt unangetastet.

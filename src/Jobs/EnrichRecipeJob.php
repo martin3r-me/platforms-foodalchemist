@@ -28,6 +28,11 @@ use Platform\FoodAlchemist\Services\RecipeOneShotService;
  * done|failed) und jeder Fehler geloggt, damit „läuft durch" nicht über einen rohen Entwurf lügt.
  * Die Planung pollt `deferred.enrich` und zeigt Status + „neu anreichern".
  *
+ * Fehler-Transparenz auch beim HARTEN Abbruch (Timeout/OOM, nicht vom inneren try/catch gefangen):
+ * {@see self::failed} ordnet den Fehler der richtigen Phase zu — kippte der Job erst nach dem
+ * abgeschlossenen `enrich=done`, gehört er an `deferred.bilder` (Bild-Phase), nicht ans
+ * überschriebene enrich.
+ *
  * Etappe 7, Teil 2b — »nur Bilder«-Modus (`$nurBilder`): re-triggert AUSSCHLIESSLICH die KI-Fotos
  * (ohne Voll-Anreicherung), z. B. nach `deferred.bilder=failed` über den Cockpit-Knopf „neu erzeugen"
  * ({@see \Platform\FoodAlchemist\Services\PlanningCascadeService::reBilder}). Ersetzt die alten
@@ -104,13 +109,50 @@ class EnrichRecipeJob implements ShouldQueue
         }
     }
 
-    /** Harter Job-Abbruch (nicht vom inneren try/catch abgefangen): als fehlgeschlagen markieren. */
+    /** Harter Job-Abbruch (nicht vom inneren try/catch abgefangen, z. B. Timeout/OOM): als
+     *  fehlgeschlagen markieren — und den Fehler der RICHTIGEN Phase zuordnen (Fehler-Transparenz). */
     public function failed(\Throwable $e): void
     {
         // Im »nur Bilder«-Modus gehört der Fehler an deferred.bilder (die Anreicherung war längst durch).
-        $this->nurBilder
-            ? $this->markBilder('failed', $e->getMessage(), 0)
-            : $this->markEnrich('failed', $e->getMessage());
+        if ($this->nurBilder) {
+            $this->markBilder('failed', $e->getMessage(), 0);
+
+            return;
+        }
+
+        // Voll-Modus: kippte der Job HART erst NACH der abgeschlossenen Anreicherung (enrich=done),
+        // kann der Abbruch nur in der Bild-Phase passiert sein — das Einzige, was nach
+        // markEnrich('done') noch läuft. Dann den Fehler an deferred.bilder hängen, statt das korrekte
+        // enrich=done zu ÜBERSCHREIBEN und die Bild-Panne der Anreicherung unterzuschieben: das
+        // Cockpit-Badge zeigt so „Fotos fehlgeschlagen", nicht fälschlich „Anreicherung fehlgeschlagen".
+        if ($this->kiBilder && $this->enrichAbgeschlossen()) {
+            $this->markBilder('failed', $e->getMessage(), 0);
+
+            return;
+        }
+
+        $this->markEnrich('failed', $e->getMessage());
+    }
+
+    /**
+     * Ist die Voll-Anreicherung am Step bereits als `done` vermerkt? Für die Fehler-Zuordnung in
+     * {@see self::failed}: ein harter Abbruch danach betrifft nur noch die Bild-Phase, nicht die
+     * (erfolgreiche) Anreicherung. Fehlender Step / kein Vermerk / laufende Anreicherung → false
+     * (Abbruch der Anreicherung selbst → deferred.enrich). Lesen ist Beiwerk, nie blockierend.
+     */
+    private function enrichAbgeschlossen(): bool
+    {
+        if ($this->stepId === null) {
+            return false;
+        }
+        try {
+            $step = FoodAlchemistCascadeRunStep::find($this->stepId);
+
+            return is_array($step?->deferred)
+                && (($step->deferred['enrich']['status'] ?? null) === 'done');
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     /**
