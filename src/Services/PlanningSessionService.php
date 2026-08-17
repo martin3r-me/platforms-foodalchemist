@@ -75,8 +75,12 @@ class PlanningSessionService
         $analyse = trim($body . ($quellen !== '' ? "\n\nQuellen:\n" . $quellen : ''));
 
         // Strukturiertes Trend-Signal (Kategorie/Klasse) — denormalisiert je Doc in trend_meta.
+        // #71: NUR reviewte (`approved`) Cluster-Zuordnung fließt in den Brief. Eine `tentative`
+        // (Auto-Cluster, noch nicht Review-freigegeben) wird ignoriert → `briefAusTrend` fällt auf
+        // den neutralen Platzhalter zurück, statt auf einer unbestätigten Einordnung zu briefen.
         $meta = DB::table('foodalchemist_trend_meta')
             ->where('knowledge_document_id', (int) $doc->id)
+            ->where('status', 'approved')
             ->first(['category', 'trend_class']);
 
         return $this->create($team, [
