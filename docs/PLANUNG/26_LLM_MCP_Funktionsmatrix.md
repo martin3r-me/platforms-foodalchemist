@@ -22,7 +22,7 @@ Capability. Sie beantwortet:
 | Capability | Anzahl | Aktuelle Aussage |
 |---|---:|---|
 | Prompt-Keys in `config/foodalchemist.php` | 64 | Registry vorhanden; 11 Keys ohne direkte statische Referenz in `src/` (die 5 seit 01.08. ergänzten Keys sind alle direkt referenziert) |
-| MCP-Toolklassen mit `foodalchemist.*`-Name | 167 | alle 167 werden im Provider aufgeführt |
+| MCP-Toolklassen mit `foodalchemist.*`-Name | 169 | alle 169 werden im Provider aufgeführt |
 | Embedding-Pools mit Observern | 6 | GP, Rezept, Lieferant, Konzept, Foodbook, Lab Note |
 | Wissens-/Retrieval-Schichten | 2 | deterministisch plus optional semantisch |
 | dokumentierte vollständige MCP-Tenant-Abnahme | 0 | einzelne Tests vorhanden, keine 157-Tool-Matrix |
@@ -214,7 +214,7 @@ Betroffene MCP-Reads sind insbesondere `artikel.SEARCH`, `gps.SEARCH`,
 | Angebote | 4 | lesen, listen, suchen, anlegen | FB-16–17 |
 | Artikel/GPS/Lieferanten | 17 | Katalog, Matching, Lead, Volumen, Vereinbarungen | ST-01–25 |
 | Rezepte/Verkaufsrezepte | 15 | CRUD, Suche, Generierung, Review, Zutaten, Klasse, Zubereitungsschritte | RE-01–24 |
-| Konzepte/Planung/Canvas | 19 | CRUD, Slots, Varianten, Coverage, Phase, DNA, Planungs-Session, Kaskaden-Status | CO-01–11, FD-01–04 |
+| Konzepte/Planung/Canvas | 21 | CRUD, Slots, Varianten, Coverage, Phase, DNA, Planungs-Session, Kaskaden-Status/Start/Freigabe | CO-01–11, FD-01–04 |
 | Foodbook/Leitstelle | 14 | Buch, Kapitel, Blöcke, Ideen, Freigabe, Zielgruppen | FB-01–17 |
 | Speisekarte | 9 | Karte, Rubriken, Positionen, Duplikat, Suche, Leitstelle | noch ohne Business-IDs |
 | Kalkulation/Assemblierung | 8 | Kalkulation, Simulation, Benchmark, Proportion, Solver | WI-01–13 |
@@ -224,11 +224,11 @@ Betroffene MCP-Reads sind insbesondere `artikel.SEARCH`, `gps.SEARCH`,
 | Controlling/Verkaufs-Ist | 5 | Verkaufsjournal lesen, CSV-Import (Trockenlauf-Default), Menu-Engineering, Portfolio-Steuerung, Promotion-Umsatz | CT-08–12, PF-01–02 |
 | Navigation/Settings/Favoriten | 5 | UI öffnen, Settings lesen, Favoriten lesen/schreiben | UX-05, RE-22, AD-03 |
 
-Die Gruppensumme wird gegen die 167 Toolnamen automatisiert geprüft. Die Übersicht
+Die Gruppensumme wird gegen die 169 Toolnamen automatisiert geprüft. Die Übersicht
 ist fachlich gruppiert; der verbindliche technische Schlüssel ist immer der volle
 Toolname im folgenden Register.
 
-## 7. Vollständiges MCP-Register — 167 Tools
+## 7. Vollständiges MCP-Register — 169 Tools
 
 ```text
 foodalchemist.angebote.GET
@@ -313,7 +313,9 @@ foodalchemist.pairings.SUGGEST
 foodalchemist.phase.PUT
 foodalchemist.planning.GET
 foodalchemist.planning.PUT
+foodalchemist.planung_kaskade.FREIGABE
 foodalchemist.planung_kaskade.GET
+foodalchemist.planung_kaskade.START
 foodalchemist.planung_session.GET
 foodalchemist.planung_session.POST
 foodalchemist.planung_session.PUT
