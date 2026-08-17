@@ -46,6 +46,10 @@ class FoodAlchemistPlanningSession extends Model
         'occasion', 'serviceform', 'kompositions_stil', 'ziel_vk_eur',
         // KI-Bilder-Toggle (Preisfrage): steuert, ob die Anreicherung Schritt-Fotos + Produktfoto erzeugt.
         'ki_bilder',
+        // Concept-Typ (#35): Menü (Gänge) vs. Buffet (Stationen) — steuert Slot-Typ + Positionen-Label.
+        // Wie die übrigen menue_*-Achsen ein Concept-Concern (kein Per-Teller-Wert) → im Dish-Fan-out
+        // gefiltert, persistiert aber am Concept für Concept-Generierung + Resume.
+        'menue_typ',
         // Menü-Leitplanken (nur Concept-Scope, Etappe 2a): Anzahl Gänge/Positionen + Zielpreis-Korridor
         // je Person. Steuern die ZUSAMMENSTELLUNG des Menüs, NICHT die Rezept-Generierung — anders als
         // die übrigen Regler propagieren sie daher NICHT in den Gericht-/Basisrezept-Fan-out (der

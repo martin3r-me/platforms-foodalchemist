@@ -184,6 +184,36 @@ it('Etappe 2a: Concept-Go persistiert die Menü-Leitplanken (Gänge + Zielpreis-
     ]);
 });
 
+it('Concept-Typ Buffet (#35): menue_typ=buffet wird als generation_param persistiert (Fan-out-Erbe)', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Grill-Buffet', 'brief' => 'Sommerliches Grill-Buffet.']);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->set('eingabe.concept.brief', 'Sommerliches Grill-Buffet.')
+        ->set('regler.concept.menue_typ', 'buffet')
+        ->set('regler.concept.menue_gaenge', '6')
+        ->call('goKaskade', 'concept')
+        ->assertNoRedirect();
+
+    expect($session->refresh()->generation_params)->toMatchArray([
+        'menue_typ' => 'buffet',
+        'menue_gaenge' => 6,
+    ]);
+});
+
+it('Concept-Typ Menü (#35): Default menue_typ=menue setzt KEINEN generation_param (byte-identisch)', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Menü', 'brief' => 'Vier Gänge.']);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->set('eingabe.concept.brief', 'Vier Gänge.')
+        ->set('regler.concept.menue_typ', 'menue')
+        ->call('goKaskade', 'concept')
+        ->assertNoRedirect();
+
+    expect($session->refresh()->generation_params ?? [])->not->toHaveKey('menue_typ');
+});
+
 it('Etappe 2a: Menü-Leitplanken sind Concept-only — am Gericht-Tab fließen menue_*-Felder NICHT in die Params', function () {
     $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Gericht', 'brief' => 'Ein Teller.']);
 

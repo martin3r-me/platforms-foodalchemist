@@ -371,6 +371,28 @@ it('Menü-Leitplanken: »Anzahl Gänge« lässt station/kapitel-Slots unberührt
         ->toBe(['Süße Station', 'Warme Station']);
 });
 
+it('Concept-Typ Buffet (#35): »Anzahl Stationen« deckelt station-Slots auf N — gang-Slots bleiben unberührt', function () {
+    // Buffet-Gerüst mit 3 Stationen + 1 (fehlplatziertem) gang: menue_typ=buffet deckelt die STATIONEN
+    // auf 2 (Reihenfolge bleibt), der gang-Slot ist kein Station-Slot und bleibt stehen. Spiegelbild des
+    // Gänge-Caps für den Menü-Typ — beweist die typ-abhängige Slot-Wahl (#35).
+    bindGeruestSlots([
+        ['label' => 'Warme Station', 'slot_type' => 'station', 'target_count' => 3],
+        ['label' => 'Kalte Station', 'slot_type' => 'station', 'target_count' => 3],
+        ['label' => 'Süße Station', 'slot_type' => 'station', 'target_count' => 2],
+        ['label' => 'Gruß aus der Küche', 'slot_type' => 'gang', 'target_count' => 1],
+    ]);
+    $this->actingAs($this->makeUser($this->rootTeam));
+
+    $e = $this->svc->generiereAusBrief(
+        $this->rootTeam, 'Grill-Buffet, 80 Gäste', null, 'plan_go', false, false,
+        ['menue_typ' => 'buffet', 'menue_gaenge' => 2],
+    );
+
+    $frame = $this->frames->find('concept', $e['concept']->id);
+    expect($frame->slots()->orderBy('position')->pluck('label')->all())
+        ->toBe(['Warme Station', 'Kalte Station', 'Gruß aus der Küche']);
+});
+
 /** Bindet einen Provider-Stub, der ein KI-Gerüst mit den übergebenen Slots UND frame-Ebene-Rules liefert. */
 function bindGeruestSlotsRules(array $slots, array $rules): void
 {

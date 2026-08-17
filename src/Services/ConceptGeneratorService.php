@@ -216,6 +216,12 @@ class ConceptGeneratorService
         if ($balance !== null) {
             $kontext['menue_zusammenstellung'] = $balance;
         }
+        // Concept-Typ (#35): ein explizit als »Buffet« markiertes Concept baut STATIONEN (station-Slots,
+        // parallel), kein Gänge-Menü. Der Prompt-Hint (»Buffet→station«) greift damit autoritativ statt
+        // nur aus dem Freitext geraten zu werden. Menü/leer → kein Key → Kontext byte-identisch (gang).
+        if (($menueAchsen['menue_typ'] ?? null) === 'buffet') {
+            $kontext['struktur_typ'] = 'buffet';
+        }
 
         // Trend-Wissen (Trendradar) additiv einspeisen — der Prompt läuft NICHT durch
         // contextFor(), also hier holen und als options['knowledge'] durchreichen (Routing
@@ -544,8 +550,10 @@ class ConceptGeneratorService
      * propagieren die Kaskade). Bewusst NUR ein Deckel: überzählige gang-Slots werden in Dramaturgie-
      * Reihenfolge abgeschnitten (die ersten N bleiben); produzierte die KI weniger Gänge als N, bleibt
      * das Gerüst unangetastet — es werden keine Gänge erfunden (das Gerüst-System erfindet nichts).
-     * station/kapitel-Slots (Buffet-Stationen/Kapitel) sind KEINE Gänge und bleiben unberührt. Fehlt
-     * die Achse (kein/leeres menue_gaenge), bleibt das Gerüst byte-identisch (leer = keine Vorgabe).
+     * Der gedeckelte Slot-Typ folgt dem Concept-Typ (#35): »Menü« (Default) deckelt gang-Slots (ein
+     * 4-Gänge-Menü = vier Gang-Slots), »Buffet« (menue_typ='buffet') deckelt station-Slots (»Anzahl
+     * Stationen«). Der jeweils andere Typ + kapitel-Slots bleiben unberührt. Fehlt die Achse
+     * (kein/leeres menue_gaenge), bleibt das Gerüst byte-identisch (leer = keine Vorgabe).
      *
      * @param  list<array<string,mixed>>  $slots  bereits sanitisierte Slots (Reihenfolge = Dramaturgie)
      * @param  array<string,mixed>  $achsen
@@ -558,13 +566,15 @@ class ConceptGeneratorService
             return $slots;
         }
         $n = (int) $n;
+        // Buffet deckelt Stationen, Menü (Default/leer) deckelt Gänge.
+        $capType = ($achsen['menue_typ'] ?? null) === 'buffet' ? 'station' : 'gang';
 
-        $gaenge = 0;
+        $zaehler = 0;
         $out = [];
         foreach ($slots as $slot) {
-            if (($slot['slot_type'] ?? null) === 'gang') {
-                if (++$gaenge > $n) {
-                    continue;   // überzähligen Gang abschneiden — Dramaturgie-Reihenfolge bleibt erhalten
+            if (($slot['slot_type'] ?? null) === $capType) {
+                if (++$zaehler > $n) {
+                    continue;   // überzählige Position abschneiden — Dramaturgie-Reihenfolge bleibt erhalten
                 }
             }
             $out[] = $slot;

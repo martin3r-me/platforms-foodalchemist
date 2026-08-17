@@ -101,6 +101,9 @@ class Index extends Component
         'occasion' => '', 'serviceform' => '', 'kompositions_stil' => '',
         'favoriten' => false, 'favoriten_conv_only' => false,
         'ziel_vk' => '', 'voll_anreichern' => false, 'ki_bilder' => false,
+        // Concept-Typ (#35): Menü (Gänge) vs. Buffet (Stationen) — steuert Label + Positionen-Logik.
+        // Default 'menue' (byte-identisch bisher); nur 'buffet' ist ein Signal (station-Slots).
+        'menue_typ' => 'menue',
         // Menü-Leitplanken (nur Concept-Tab, Etappe 2a): Anzahl Gänge + Zielpreis-Korridor je Person.
         // Als Text/Zahl gehalten (leer = keine Vorgabe); reglerParams parst sie in kanonische _pp-Keys.
         'menue_gaenge' => '', 'menue_preis_min' => '', 'menue_preis_ziel' => '', 'menue_preis_max' => '',
@@ -121,6 +124,19 @@ class Index extends Component
     public const MENUE_BALANCE = [
         'ausgewogen' => 'Ausgewogen (breite Vielfalt)',
         'fokussiert' => 'Fokussiert (ein roter Faden)',
+    ];
+
+    /**
+     * Concept-Typ-Achse (#35) — Wert=>Label. Bestimmt, WIE die Positionen des Concepts gebaut werden:
+     * »Menü« = zeitliche Dramaturgie (gang-Slots, „Anzahl Gänge"), »Buffet« = parallele Stationen
+     * (station-Slots, „Anzahl Stationen"). Ein Buffet ist KEIN Menü mit vielen Gängen — es hat eine
+     * eigene Positionen-Logik (die Gänge-Achse gilt nur fürs Menü). Default = Menü: nur der explizite
+     * `buffet`-Wert ist ein Signal, `menue`/leer bleibt byte-identisch zum bisherigen Verhalten.
+     * Nur Concept-Scope.
+     */
+    public const MENUE_TYPEN = [
+        'menue' => 'Menü (Gänge nacheinander)',
+        'buffet' => 'Buffet (Stationen parallel)',
     ];
 
     /**
@@ -778,7 +794,7 @@ class Index extends Component
         // Roh-Felder raus, die übersetzt (nicht 1:1) durchgereicht werden — inkl. der Menü-Roh-Eingaben
         // (sie werden unten als kanonische _pp-Keys geparst und nur für den Concept-Scope gesetzt).
         unset($p['favoriten'], $p['favoriten_conv_only'], $p['ki_bilder'], $p['ziel_vk'], $p['voll_anreichern'],
-            $p['menue_gaenge'], $p['menue_preis_min'], $p['menue_preis_ziel'], $p['menue_preis_max'],
+            $p['menue_typ'], $p['menue_gaenge'], $p['menue_preis_min'], $p['menue_preis_ziel'], $p['menue_preis_max'],
             $p['menue_quote_vegan'], $p['menue_quote_vegetarisch'], $p['menue_balance']);
         $p = array_filter($p, fn ($v) => $v !== '' && $v !== null && $v !== []);
         $p['use_favorites_list'] = $favoriten;
@@ -788,6 +804,11 @@ class Index extends Component
             $p['ziel_vk_eur'] = $ziel;
         }
         if ($menue) {
+            // Concept-Typ (#35): nur 'buffet' fließt als Signal ein — Menü/leer lässt den Key weg
+            // (byte-identisch zum bisherigen Verhalten). Steuert Slot-Typ (station) + Gänge-Cap.
+            if (($typ = $this->menueTyp($scope)) !== null) {
+                $p['menue_typ'] = $typ;
+            }
             // Menü-Leitplanken (Zusammenstellung): Anzahl Gänge + Zielpreis-Korridor je Person.
             // Nur gültige Werte fließen ein (ungültige/leer = keine Vorgabe → kein Key, Prompt unverändert).
             if (($g = $this->menueGaenge($scope)) !== null) {
@@ -848,6 +869,18 @@ class Index extends Component
         $roh = trim((string) ($this->regler[$scope]['menue_balance'] ?? ''));
 
         return isset(self::MENUE_BALANCE[$roh]) ? $roh : null;
+    }
+
+    /**
+     * Concept-Typ (#35): NUR 'buffet' ist ein Signal (station-Slots + eigene Positionen-Logik). Menü/leer
+     * → null (kein Key → byte-identisch: gang-Slots wie bisher). Bewusst asymmetrisch, damit bestehende
+     * Menü-Flows unverändert bleiben. Concept-Scope. {@see MENUE_TYPEN}
+     */
+    private function menueTyp(string $scope): ?string
+    {
+        $roh = trim((string) ($this->regler[$scope]['menue_typ'] ?? ''));
+
+        return $roh === 'buffet' ? 'buffet' : null;
     }
 
     /** Menü-Preis je Person (min/ziel/max): „45,00 €" → 45.0; außerhalb 0,50–2.000,00 € → null. Analog {@see zielVkEur}. */

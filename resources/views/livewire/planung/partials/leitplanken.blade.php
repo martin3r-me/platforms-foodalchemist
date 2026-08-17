@@ -7,6 +7,8 @@
     $r = $regler[$scope] ?? [];
     $pillAktiv = 'border-emerald-500 text-emerald-700 font-medium';
     $pillRuhe = 'border-black/10 text-gray-600 hover:border-violet-400';
+    // Concept-Typ (#35): Buffet baut Stationen statt Gänge → Label/Header schalten mit.
+    $istBuffet = ($r['menue_typ'] ?? '') === 'buffet';
 @endphp
 <x-foodalchemist::modal-section title="Richtung (optional)">
     <div class="grid md:grid-cols-2 gap-x-6 gap-y-4" data-planung-regler="{{ $scope }}">
@@ -80,14 +82,25 @@
         </div>
 
         @if($scope === 'concept')
+            {{-- Concept-Typ (#35): Menü (Gänge nacheinander) vs. Buffet (Stationen parallel). Steuert
+                 das Positionen-Vokabular (Label + station-Slots + Gänge-Cap). Nur Concept. --}}
+            <div class="md:col-span-2 border-t border-black/5 pt-3 mt-1" data-menue-typ>
+                <label class="block {{ $label ?? 'text-[11px] text-gray-500' }} mb-1">Concept-Typ</label>
+                <select wire:model.live="regler.{{ $scope }}.menue_typ" class="{{ $input }} !py-1.5 md:max-w-xs" data-menue-typ-select>
+                    @foreach(\Platform\FoodAlchemist\Livewire\Planung\Index::MENUE_TYPEN as $wert => $lbl)
+                        <option value="{{ $wert }}">{{ $lbl }}</option>
+                    @endforeach
+                </select>
+                <p class="text-[11px] text-gray-500 mt-1.5">{{ $istBuffet ? 'Buffet = parallele Stationen (eigene Positionen-Logik). Die »Anzahl Stationen« deckelt die Stationen — es sind keine Gänge.' : 'Menü = Gänge in Dramaturgie-Reihenfolge. Für ein Buffet auf »Buffet« wechseln (baut Stationen statt Gänge).' }}</p>
+            </div>
             {{-- Menü-Leitplanken (Zusammenstellung) — nur Concept: steuern das GANZE Menü (Anzahl Gänge +
                  Zielpreis-Korridor je Person), nicht die Rezept-Generierung. Etappe 2a. --}}
-            <div class="md:col-span-2 border-t border-black/5 pt-3 mt-1" data-menue-leitplanken>
-                <p class="text-xs font-semibold text-gray-900 mb-2">🍽️ Menü-Leitplanken (Zusammenstellung)</p>
+            <div class="md:col-span-2 pt-1" data-menue-leitplanken>
+                <p class="text-xs font-semibold text-gray-900 mb-2">{{ $istBuffet ? '🍽️ Buffet-Leitplanken (Zusammenstellung)' : '🍽️ Menü-Leitplanken (Zusammenstellung)' }}</p>
                 <div class="grid md:grid-cols-4 gap-x-6 gap-y-3">
                     <div>
-                        <label class="block {{ $label ?? 'text-[11px] text-gray-500' }} mb-1">Anzahl Gänge / Positionen</label>
-                        <input type="number" min="1" max="20" step="1" wire:model="regler.{{ $scope }}.menue_gaenge" placeholder="z. B. 4" class="{{ $input }} !py-1.5" data-menue-gaenge />
+                        <label class="block {{ $label ?? 'text-[11px] text-gray-500' }} mb-1">{{ $istBuffet ? 'Anzahl Stationen' : 'Anzahl Gänge (nur Menü)' }}</label>
+                        <input type="number" min="1" max="20" step="1" wire:model="regler.{{ $scope }}.menue_gaenge" placeholder="{{ $istBuffet ? 'z. B. 6' : 'z. B. 4' }}" class="{{ $input }} !py-1.5" data-menue-gaenge />
                     </div>
                     <div>
                         <label class="block {{ $label ?? 'text-[11px] text-gray-500' }} mb-1">Preis-Untergrenze p. P.</label>
