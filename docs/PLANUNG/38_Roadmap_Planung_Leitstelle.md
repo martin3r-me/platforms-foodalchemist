@@ -265,6 +265,9 @@ FA `main` = `eb85e3c`, demo deployt + Migration `[180] Ran`. Nachweis: `Planning
 
 ### 🔌 Etappe 9 — MCP & Automatisierung
 - [ ] MCP-Tools für die Kaskade (Start/Freigabe/Status) — headless-fähig, im Lockstep mit dem UI
+  - [x] **Slice 1 — Status (READ-ONLY):** headless-Blick auf einen Kaskaden-Lauf (Lauf-Kopf + Ebenen-Aggregat + Schritte inkl. Anreicherungs-/Bild-Status + Handlungs-Hinweis).
+    → `b15b605` (`gebaut`, Sandbox `getestet`): neues Tool **`foodalchemist.planung_kaskade.GET`** (read-only/safe) + Service-Lese `PlanningCascadeService::laufStatus(team,runId)`. **Team-gescopt über `lauf()` (visibleToTeam = Read-Contract, Et.8-Slice 2)** → `null`/`NOT_FOUND` für einen nicht sichtbaren Lauf. Rein ableitend (keine Erfindung): Lauf-Kopf (scope/status/gestuft/Lineage) · je Ebene (kind) ein Status-Aggregat (gesamt/geplant/laufend/entwurf_offen/freigegeben/uebernommen/verworfen/fehlgeschlagen) · Einzel-Schritte (ebene/label/status/tiefe/ref + `deferred.enrich`/`deferred.bilder`) · `hinweis` = der Run-Status als Handlungs-Satz. **GO/FREIGABE bleiben human-only (kein MCP-Trigger)** — 1:1 die Linie von `LeitstelleGetTool` (Nordstern „nichts läuft still", Spec MCP-Lockstep); das Tool liest nur. 4 neue Tests (Registry-Smoke read-only · Kopf/Aggregat/Schritte/Hinweis · `deferred`-Status je Schritt · Tenancy Schwester-Team → NOT_FOUND); `PlanungKaskadeStatusMcpTest` + `PlanningCascadeTest` grün. Real-Abnahme auf demo offen.
+  - [ ] **Slice 2 — Start/Freigabe-Tools:** trägt die **human-only-Spannung** (Start = „Go", Freigabe = Gate 2 sind per Nordstern menschlich; die etablierte Modul-Linie hält beides aus MCP heraus). Vor dem Bau die Offene Entscheidung **„Kaskaden-Trigger via MCP?"** mit Dominique klären (Backlog) — sonst reiner READ-Contract wie Slice 1.
 - [ ] Prompt-/Tool-Inventar in [26_LLM_MCP_Funktionsmatrix](26_LLM_MCP_Funktionsmatrix.md) nachziehen
 
 ### 📚 Etappe 10 — Abnahme, Betrieb & Doku
