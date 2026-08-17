@@ -57,6 +57,9 @@ class Index extends Component
     /** Landing-Liste (finale Etappe #17): Status-Filter (''=alle | entwurf|läuft|prüfen|fertig|fehlgeschlagen). */
     public string $filterStatus = '';
 
+    /** Landing-Liste (finale Etappe #17): Typ-Filter (''=alle | rezept|gericht|concept — aus dem Lauf-Scope). */
+    public string $filterTyp = '';
+
     /** Editor-Felder der aktiven Session. */
     public array $form = ['title' => '', 'brief' => '', 'analysis' => '', 'creative_mode' => 'voll_kreativ'];
 
@@ -381,6 +384,49 @@ class Index extends Component
     {
         $this->sessionId = $id;
         $this->ladeLetztenLauf();
+    }
+
+    /**
+     * Zuletzt-Karte: Planung verwerfen (Soft-Delete, reversibel; finale Etappe #17). Team-owned (D1)
+     * über den Service. War die verworfene Session gerade aktiv, wird der Editor-/Lauf-Kontext gelöst.
+     */
+    public function planungVerwerfen(int $id, PlanningSessionService $svc): void
+    {
+        $team = $this->team();
+        if ($team === null) {
+            return;
+        }
+        try {
+            $svc->verwerfen($team, $id);
+            if ((int) $this->sessionId === $id) {
+                $this->sessionId = null;
+                $this->laufId = null;
+                $this->laeuft = false;
+            }
+            $this->meldung = 'Planung verworfen.';
+            $this->fehler = null;
+        } catch (\Throwable $e) {
+            $this->fehler = 'Verwerfen nicht möglich: ' . $e->getMessage();
+        }
+    }
+
+    /**
+     * Zuletzt-Karte: Planung duplizieren (frischer team-eigener Entwurf; finale Etappe #17). Team-owned
+     * (D1) über den Service. Wählt die Kopie NICHT automatisch aus — sie erscheint in der Liste.
+     */
+    public function planungDuplizieren(int $id, PlanningSessionService $svc): void
+    {
+        $team = $this->team();
+        if ($team === null) {
+            return;
+        }
+        try {
+            $kopie = $svc->duplizieren($team, $id);
+            $this->meldung = 'Planung dupliziert — „' . $kopie->title . '".';
+            $this->fehler = null;
+        } catch (\Throwable $e) {
+            $this->fehler = 'Duplizieren nicht möglich: ' . $e->getMessage();
+        }
     }
 
     /** Beim Öffnen/Wählen den letzten Kaskaden-Lauf laden — läuft er noch, wird das Polling fortgesetzt. */
@@ -1808,12 +1854,17 @@ class Index extends Component
         // Filtert Liste UND Zuletzt-Karten konsistent; leere Filter = unveränderte Liste.
         $suche = mb_strtolower(trim($this->sucheListe));
         $filterStatus = trim($this->filterStatus);
-        if ($suche !== '' || $filterStatus !== '') {
-            $sessions = $sessions->filter(function ($s) use ($suche, $filterStatus, $kaskaden) {
+        $filterTyp = trim($this->filterTyp);
+        if ($suche !== '' || $filterStatus !== '' || $filterTyp !== '') {
+            $sessions = $sessions->filter(function ($s) use ($suche, $filterStatus, $filterTyp, $kaskaden) {
                 if ($suche !== '' && ! str_contains(mb_strtolower((string) $s->title), $suche)) {
                     return false;
                 }
                 if ($filterStatus !== '' && ($kaskaden[(int) $s->id]['status'] ?? 'entwurf') !== $filterStatus) {
+                    return false;
+                }
+                // Typ = Scope des jüngsten Laufs; Sessions ohne Lauf (kein Scope) fallen bei gesetztem Typ raus.
+                if ($filterTyp !== '' && ($kaskaden[(int) $s->id]['scope'] ?? null) !== $filterTyp) {
                     return false;
                 }
 

@@ -74,14 +74,22 @@
                 <div class="space-y-2">
                     <input type="text" wire:model.live.debounce.300ms="sucheListe" placeholder="Planungen durchsuchen …"
                            class="{{ $input }} !py-1.5" data-planung-suche />
-                    <select wire:model.live="filterStatus" class="{{ $input }} !py-1.5 text-xs" data-planung-filter-status>
-                        <option value="">Alle Status</option>
-                        <option value="entwurf">Entwurf</option>
-                        <option value="läuft">Läuft</option>
-                        <option value="prüfen">Prüfen</option>
-                        <option value="fertig">Fertig</option>
-                        <option value="fehlgeschlagen">Fehlgeschlagen</option>
-                    </select>
+                    <div class="flex gap-2">
+                        <select wire:model.live="filterStatus" class="{{ $input }} !py-1.5 text-xs" data-planung-filter-status>
+                            <option value="">Alle Status</option>
+                            <option value="entwurf">Entwurf</option>
+                            <option value="läuft">Läuft</option>
+                            <option value="prüfen">Prüfen</option>
+                            <option value="fertig">Fertig</option>
+                            <option value="fehlgeschlagen">Fehlgeschlagen</option>
+                        </select>
+                        <select wire:model.live="filterTyp" class="{{ $input }} !py-1.5 text-xs" data-planung-filter-typ>
+                            <option value="">Alle Typen</option>
+                            <option value="rezept">Basisrezept</option>
+                            <option value="gericht">Gericht</option>
+                            <option value="concept">Concept</option>
+                        </select>
+                    </div>
                 </div>
 
                 <div class="space-y-2 max-h-[68vh] overflow-y-auto -mx-1 px-1">
@@ -173,19 +181,33 @@
                 @else
                     <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
                         @foreach($sessions->take(9) as $s)
-                            <button wire:key="dash-{{ $s->id }}" wire:click="waehle({{ $s->id }})"
-                                    class="{{ $card }} p-3 text-left hover:shadow-md transition-all" data-planung-karte="{{ $s->id }}">
-                                <div class="flex items-start justify-between gap-2">
-                                    <span class="text-xs font-semibold text-gray-800 truncate">{{ $s->title }}</span>
-                                    @if($kaskadeLaeuft($s->id))<span class="shrink-0 w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse mt-1" title="läuft"></span>@endif
+                            <div wire:key="dash-{{ $s->id }}" class="{{ $card }} p-3" data-planung-karte="{{ $s->id }}">
+                                <button type="button" wire:click="waehle({{ $s->id }})" class="w-full text-left hover:opacity-80 transition-opacity">
+                                    <div class="flex items-start justify-between gap-2">
+                                        <span class="text-xs font-semibold text-gray-800 truncate">{{ $s->title }}</span>
+                                        @if($kaskadeLaeuft($s->id))<span class="shrink-0 w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse mt-1" title="läuft"></span>@endif
+                                    </div>
+                                    <div class="mt-2 flex flex-wrap gap-1">
+                                        {!! $kaskadeBadge($s->id) !!}
+                                        @if($s->category)  {!! $chip($s->category, 'bg-sky-500/10 text-sky-700') !!} @endif
+                                    </div>
+                                    @php $fort = $kaskadeFortschritt($s->id); @endphp
+                                    @if($fort !== '')<p class="mt-1.5 text-[10px] text-gray-500 truncate" data-planung-fortschritt>{{ $fort }}</p>@endif
+                                </button>
+                                {{-- Direkt-Aktionen (finale Etappe #17): Öffnen · Duplizieren · Verwerfen (Soft-Delete).
+                                     Freigabe bleibt bewusst per-Step im Editor (kein Karten-Bulk-Freigeben). --}}
+                                <div class="mt-2 flex items-center gap-1 border-t border-black/5 pt-2" data-planung-karten-aktionen>
+                                    <button type="button" wire:click="oeffne({{ $s->id }})" class="{{ $btnGhostXs }}" title="Im Editor öffnen" data-planung-karte-oeffnen>
+                                        @svg('heroicon-o-pencil-square', 'w-3.5 h-3.5')
+                                    </button>
+                                    <button type="button" wire:click="planungDuplizieren({{ $s->id }})" class="{{ $btnGhostXs }}" title="Duplizieren" data-planung-karte-duplizieren>
+                                        @svg('heroicon-o-document-duplicate', 'w-3.5 h-3.5')
+                                    </button>
+                                    <button type="button" wire:click="planungVerwerfen({{ $s->id }})" wire:confirm="Diese Planung verwerfen? (reversibel — Soft-Delete)" class="{{ $btnGhostXs }} !text-rose-600" title="Verwerfen" data-planung-karte-verwerfen>
+                                        @svg('heroicon-o-trash', 'w-3.5 h-3.5')
+                                    </button>
                                 </div>
-                                <div class="mt-2 flex flex-wrap gap-1">
-                                    {!! $kaskadeBadge($s->id) !!}
-                                    @if($s->category)  {!! $chip($s->category, 'bg-sky-500/10 text-sky-700') !!} @endif
-                                </div>
-                                @php $fort = $kaskadeFortschritt($s->id); @endphp
-                                @if($fort !== '')<p class="mt-1.5 text-[10px] text-gray-500 truncate" data-planung-fortschritt>{{ $fort }}</p>@endif
-                            </button>
+                            </div>
                         @endforeach
                     </div>
                 @endif

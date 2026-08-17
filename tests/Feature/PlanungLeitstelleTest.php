@@ -765,6 +765,43 @@ it('#17 Hauptseite: Status-Filter zeigt nur Planungen im gewählten Kaskaden-Sta
         ->assertDontSee('Entwurf-Session');
 });
 
+it('#17 D: Typ-Filter zeigt nur Planungen des gewählten Kaskaden-Scopes', function () {
+    $gericht = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Gericht-Session', 'brief' => 'x']);
+    app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Ohne-Lauf-Session']);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $gericht->id)
+        ->set('eingabe.gericht.brief', 'x')
+        ->call('goKaskade', 'gericht')
+        ->set('filterTyp', 'gericht')
+        ->assertSee('Gericht-Session')
+        ->assertDontSee('Ohne-Lauf-Session');   // ohne Lauf = kein Scope → vom Typ-Filter ausgeblendet
+});
+
+it('#17 D: planungVerwerfen soft-löscht die Planung (team-owned) + löst den aktiven Kontext', function () {
+    $s = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Weg damit']);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $s->id)
+        ->assertSet('sessionId', $s->id)
+        ->call('planungVerwerfen', $s->id)
+        ->assertSet('sessionId', null);
+
+    expect(FoodAlchemistPlanningSession::whereKey($s->id)->exists())->toBeFalse()                 // aus dem Default-Scope raus
+        ->and(FoodAlchemistPlanningSession::withTrashed()->whereKey($s->id)->exists())->toBeTrue(); // aber nur soft-deleted (reversibel)
+});
+
+it('#17 D: planungDuplizieren legt eine team-eigene Kopie an (frischer Entwurf, Brief übernommen)', function () {
+    $s = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Original', 'brief' => 'Brief X']);
+
+    Livewire::test(PlanungIndex::class)->call('planungDuplizieren', $s->id);
+
+    $kopie = FoodAlchemistPlanningSession::where('team_id', $this->rootTeam->id)->where('title', 'Original (Kopie)')->first();
+    expect($kopie)->not->toBeNull()
+        ->and($kopie->brief)->toBe('Brief X')
+        ->and((int) $kopie->id)->not->toBe((int) $s->id);
+});
+
 /**
  * Etappe 4 — Skizzen-Integration (Teil 1): eine Session-Skizze wird zum Kaskaden-Eingang, indem
  * sie in den Gericht-Tab übertragen wird (Titel → Titel, Beschreibung → Brief). Der Mensch drückt

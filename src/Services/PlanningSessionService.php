@@ -328,6 +328,38 @@ class PlanningSessionService
         return FoodAlchemistPlanningSession::visibleToTeam($team)->find($id);
     }
 
+    /**
+     * Planung verwerfen = **Soft-Delete** (reversibel, kein Hard-Delete; die Zeile bleibt mit
+     * `deleted_at`). Team-owned (D1): nur das Besitzer-Team darf löschen, nicht ein Kind-Team über
+     * die geerbte Sichtbarkeit. Fehlt/geerbt → `ownedSession` wirft.
+     */
+    public function verwerfen(Team $team, int $id): void
+    {
+        $this->ownedSession($team, $id)->delete();
+    }
+
+    /**
+     * Planung duplizieren: eine **team-eigene Kopie** (Titel „… (Kopie)"; Brief/Analyse/Kreativ-Modus/
+     * `generation_params` übernommen). Bewusst ein FRISCHER Entwurf — KEIN Lauf, KEINE Skizzen, KEIN
+     * `plan_concept_id`, KEIN Trend-Ursprung (die Kopie ist nicht „aus Trend"). Team-owned (D1).
+     */
+    public function duplizieren(Team $team, int $id): FoodAlchemistPlanningSession
+    {
+        $q = $this->ownedSession($team, $id);
+        $kopie = $this->create($team, [
+            'title' => mb_substr(trim((string) $q->title), 0, 240) . ' (Kopie)',
+            'brief' => $q->brief,
+            'analysis' => $q->analysis,
+            'creative_mode' => $q->creative_mode,
+            'created_via' => 'duplikat',
+        ]);
+        if (is_array($q->generation_params) && $q->generation_params !== []) {
+            $kopie->update(['generation_params' => $q->generation_params]);
+        }
+
+        return $kopie->refresh();
+    }
+
     private function ownedSession(Team $team, int $id): FoodAlchemistPlanningSession
     {
         $session = FoodAlchemistPlanningSession::visibleToTeam($team)->findOrFail($id);
