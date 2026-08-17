@@ -126,6 +126,25 @@ it('Go (concept, existing_concept_id): kein GenerateConceptJob — Step zeigt au
     Queue::assertNotPushed(FanoutConceptJob::class);
 });
 
+it('Fan-out-Job-Hook: failed() meldet an den Concept-Step zurück → Run failed + sichtbarer Grund (Fehler-Transparenz)', function () {
+    $concept = $this->makeConcept($this->rootTeam, 'Geprüfter Plan', ['status' => 'draft']);
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'X', 'brief' => 'y']);
+    $run = app(PlanningCascadeService::class)->starteKaskade(
+        $this->rootTeam, 'concept', $session, 'voll_kreativ', ['existing_concept_id' => (int) $concept->id]
+    );
+    $step = $run->steps()->first();
+    expect($step->kind)->toBe('concept');   // Vorbedingung: der Fan-out-Job hängt am Concept-Step
+
+    // Ohne den Haken schluckte der Fan-out seine Fehler still (kein Rückkanal, `finally` recomputet blind).
+    $job = new FanoutConceptJob($this->rootTeam->id, 1, (int) $step->id);
+    $job->failed(new RuntimeException('provider down'));
+
+    expect($step->refresh()->status)->toBe('failed')
+        ->and($step->error)->toContain('Gericht-Fan-out abgebrochen')
+        ->and($step->error)->toContain('provider down')
+        ->and($run->refresh()->status)->toBe('failed');
+});
+
 it('Go (concept, existing_concept_id, staged=false): fächert sofort auf (FanoutConceptJob im Worker), Run läuft', function () {
     $concept = $this->makeConcept($this->rootTeam, 'Geprüfter Plan', ['status' => 'draft']);
     $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'X', 'brief' => 'y']);

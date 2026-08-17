@@ -58,4 +58,16 @@ class FanoutConceptJob implements ShouldQueue
             $cascade->recomputeRunStatus((int) $step->cascade_run_id);
         }
     }
+
+    /**
+     * Job-Tod (Timeout/Fatal in der Divergenz) → den Concept-Step trotzdem terminal + mit sichtbarem
+     * Grund setzen (Fehler-Transparenz, Etappe 8). Ohne diesen Haken schluckte der Fan-out seine
+     * Fehler still: der Web-Request der Freigabe war längst zurück, der Job starb im Worker, und das
+     * `finally` im {@see handle} recomputet den Run als wäre nichts gewesen — der Cockpit-Nutzer sah
+     * keine Erklärung, warum keine Gerichte kamen. Spiegelt {@see MaterializeConceptIdeaJob::failed}.
+     */
+    public function failed(\Throwable $e): void
+    {
+        app(PlanningCascadeService::class)->markStepFailed($this->cascadeStepId, 'Gericht-Fan-out abgebrochen: ' . $e->getMessage());
+    }
 }
