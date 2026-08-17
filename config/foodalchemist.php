@@ -804,10 +804,14 @@ return [
         // Putzen eines fertigen Namens. Nüchtern + §4.4-konform; benennt nur, was der Brief hergibt.
         'vk.titel_vorschlag' => [
             'tier' => 'B',
-            'task' => 'Leite aus dem Brief EINEN nüchternen Gericht-Titel in der Pipe-Syntax §4.4 '
-                . '«<HG-Code>: Hauptkomponente | Komponente | …» ab (max 5 Felder, Title Case, '
-                . 'keine Marketing-Adjektive). Benenne nur, was der Brief hergibt — erfinde keine '
-                . 'Komponente, die nicht genannt ist: werte = {name}.',
+            // #75: HG-Code NICHT vom LLM raten lassen — aus einem freien Brief kann es die
+            // Warengruppe kaum zuverlässig treffen. Der Titel-Vorschlag liefert nur die nüchterne
+            // Komponenten-Pipe OHNE Code-Präfix; der §4.4-HG-Code wird separat/deterministisch
+            // (bei der echten VK-Anlage über die Warengruppen-Klassifikation) ergänzt.
+            'task' => 'Leite aus dem Brief EINEN nüchternen Gericht-Titel als Komponenten-Pipe ab: '
+                . '«Hauptkomponente | Komponente | …» (max 5 Felder, Title Case, keine Marketing-'
+                . 'Adjektive). KEIN Warengruppen-Code/Präfix — nur die Komponenten. Benenne nur, was '
+                . 'der Brief hergibt — erfinde keine Komponente, die nicht genannt ist: werte = {name}.',
         ],
         'vk.marketing' => [
             'tier' => 'A',
