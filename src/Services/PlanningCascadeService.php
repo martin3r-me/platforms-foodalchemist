@@ -739,9 +739,34 @@ class PlanningCascadeService
         if ($step === null) {
             return;
         }
-        $step->update(['status' => 'done', 'ref_type' => $refType, 'ref_id' => $refId, 'error' => null]);
+        // L5: das Step-Label auf den ECHTEN Artefakt-Namen nachziehen. Bei der Anlage war es der auf
+        // 120 Zeichen geschnittene Brief — das Cockpit zeigte also den Briefing-Text statt des Rezept-/
+        // Concept-Namens. Der Brief bleibt separat im Run-Kopf sichtbar. Fail-soft (Name-Auflösung optional).
+        $artefaktName = $this->artefaktName($step->team_id ? (int) $step->team_id : null, $refType, $refId);
+        $updates = ['status' => 'done', 'ref_type' => $refType, 'ref_id' => $refId, 'error' => null];
+        if ($artefaktName !== null && $artefaktName !== '') {
+            $updates['label'] = Str::limit($artefaktName, 120, '');
+        }
+        $step->update($updates);
         $this->recomputeRunStatus((int) $step->cascade_run_id);
         $this->scoreConceptCohesionIfComplete($step);
+    }
+
+    /** L5: Anzeigename des erzeugten Artefakts (Recipe/Concept) — für das Step-Label. Fail-soft → null. */
+    private function artefaktName(?int $teamId, string $refType, int $refId): ?string
+    {
+        if ($teamId === null || $refId <= 0) {
+            return null;
+        }
+        try {
+            return match ($refType) {
+                'recipe' => FoodAlchemistRecipe::where('team_id', $teamId)->whereKey($refId)->value('name'),
+                'concept' => FoodAlchemistConcept::where('team_id', $teamId)->whereKey($refId)->value('name'),
+                default => null,
+            };
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     /** Step fehlgeschlagen: Fehler festhalten (Artefakt bleibt ggf. teilweise erzeugt), Run neu bewerten. */
@@ -1220,7 +1245,12 @@ class PlanningCascadeService
         $this->raeumeGeplanteKinder($step);
         $step->update(['status' => 'running', 'ref_type' => null, 'ref_id' => null, 'error' => null, 'deferred' => null]);
         $run = $step->run;
-        $brief = (string) ($step->label ?? '');
+        // L5: Wurzel-Step (Gericht/Concept) neu erzeugen aus dem VOLLEN Run-Brief — nicht aus dem Label,
+        // das markStepDone inzwischen auf den (kurzen) Artefakt-Namen gezogen hat (sonst schrumpfte das
+        // Briefing bei jedem „neu erzeugen"). Kind-Steps behalten ihr Label (= der Sub-Rezept-Name/Brief).
+        $brief = $step->parent_step_id === null && trim((string) ($run?->brief ?? '')) !== ''
+            ? (string) $run->brief
+            : (string) ($step->label ?? '');
         $params = is_array($run?->params) ? $run->params : [];
         $sessionId = $run?->planning_session_id !== null ? (int) $run->planning_session_id : null;
         $staged = (bool) ($run?->staged ?? false);

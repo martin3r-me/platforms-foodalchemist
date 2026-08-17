@@ -130,7 +130,10 @@ class RecipeGeneratorService
 
         $result = DB::transaction(function () use ($team, $kiRezept, $parameter, $mode, $pref, $preferRaw, $bio, $convenience, $vkModus, $createdVia, $melde) {
             $recipe = $this->recipes->create($team, [
-                'name' => $kiRezept['name'],
+                // L5: getippter Titel (titel_vorgabe) ist der Namens-Anker — er gewinnt vor dem KI-Namen
+                // (der Mensch hat bewusst benannt). Immer defensiv normalisieren (Umbrüche/Whitespace raus,
+                // Länge gedeckelt), damit kein Brief-Text als Name in die varchar-Spalte rutscht.
+                'name' => $this->normalisiereName((string) ($parameter['titel_vorgabe'] ?? '') ?: (string) $kiRezept['name']),
                 'is_sales_recipe' => $vkModus,
                 'created_via' => $createdVia,
                 'description' => $kiRezept['description'] ?? null,
@@ -608,6 +611,21 @@ class RecipeGeneratorService
         }
 
         return $g;
+    }
+
+    /**
+     * L5: Rezeptname defensiv normalisieren — Zeilenumbrüche/Tabs → Leerzeichen, Mehrfach-Whitespace
+     * kollabiert, getrimmt, Länge gedeckelt (die Spalte ist varchar(255); ein KI-Echo des ganzen
+     * Briefs darf nicht als Name landen). Leerer/whitespace-only Name fällt auf einen sicheren Default.
+     */
+    private function normalisiereName(string $name): string
+    {
+        $clean = trim((string) preg_replace('/\s+/u', ' ', str_replace(["\r", "\n", "\t"], ' ', $name)));
+        if ($clean === '') {
+            return 'Unbenannt';
+        }
+
+        return mb_strimwidth($clean, 0, 200, '…');
     }
 
     /** Allergen-Override des GP auf »enthalten« (NULL/spuren/unbekannt blockt bewusst nicht). */

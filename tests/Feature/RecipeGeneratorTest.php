@@ -484,3 +484,25 @@ it('L3 Diät: ohne diaet_hart/allergen_nogo wird das Gate übersprungen (kein Ei
     expect($resultat['statistik']['diaet']['uebersprungen'])->toBeTrue()
         ->and($resultat['statistik']['bestand_gp'])->toBe(1);
 });
+
+// ── L5 — Titel als Namens-Anker + Namens-Normalisierung ──────────────────────────────────────
+
+it('L5 Titel-Anker: titel_vorgabe gewinnt als Rezeptname vor dem KI-Namen', function () {
+    $resultat = $this->svc->generiere($this->rootTeam, 'Irgendein Brief', [
+        'titel_vorgabe' => 'Sommer-Bowl mit Ziegenkäse',
+    ], kiRezeptOverride: [
+        'name' => 'KI-erfundener Name',
+        'zutaten' => [['text' => 'Blattsalat', 'quantity' => 50, 'unit' => 'g']],
+    ]);
+
+    expect($resultat['recipe']->name)->toBe('Sommer-Bowl mit Ziegenkäse');
+});
+
+it('L5 Namens-Normalisierung: Zeilenumbrüche/Mehrfach-Whitespace werden geglättet', function () {
+    $resultat = $this->svc->generiere($this->rootTeam, 'Brief', [], kiRezeptOverride: [
+        'name' => "Zeile eins\n\nZeile   zwei\t\tdrei",
+        'zutaten' => [['text' => 'Blattsalat', 'quantity' => 50, 'unit' => 'g']],
+    ]);
+
+    expect($resultat['recipe']->name)->toBe('Zeile eins Zeile zwei drei');
+});

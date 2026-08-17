@@ -514,6 +514,73 @@ class Index extends Component
             && FoodAlchemistConcept::where('team_id', $team->id)->whereKey($session->plan_concept_id)->exists()) {
             $this->planConceptId = (int) $session->plan_concept_id;
         }
+
+        // L5: die beim Go persistierten Leitplanken (generation_params) in die Regler zurücklesen — sonst
+        // zeigt jeder Tab nach einem Reload wieder die Defaults, während der Lauf mit anderen Werten fuhr.
+        $this->rehydriereReglerAusParams($session);
+    }
+
+    /**
+     * L5: generation_params → Regler zurückspiegeln (Umkehrung von {@see reglerParams}). Fail-soft; nur
+     * gesetzte Achsen überschreiben den Default. Auf ALLE Scopes angewandt (die Session hält nur EINEN
+     * Satz — den des Start-Tabs; ohne Tab-Herkunft ist der beste Reload derselbe Satz je Tab). Bewusst
+     * NICHT rückformatiert: ziel_vk + menue_preis_* (Euro/Komma) — die tippt der Nutzer bei Bedarf neu.
+     */
+    private function rehydriereReglerAusParams(FoodAlchemistPlanningSession $session): void
+    {
+        $p = is_array($session->generation_params) ? $session->generation_params : [];
+        if ($p === []) {
+            return;
+        }
+        try {
+            // Frische: rohe condition-Werte → UI-Slugs (Umkehrung FRISCHE_CONDITION).
+            $condToSlug = array_flip(self::FRISCHE_CONDITION);
+            $frischeSlugs = array_values(array_filter(array_map(
+                static fn ($raw) => $condToSlug[$raw] ?? null,
+                (array) ($p['frische_erlaubt'] ?? []),
+            )));
+            $bioPraef = match ($p['bio_pref'] ?? null) {
+                'bio' => 'bio', 'neutral' => 'egal', 'conventional' => 'konventionell', default => null,
+            };
+            foreach (self::SCOPES as $scope) {
+                if (! isset($this->regler[$scope])) {
+                    continue;
+                }
+                foreach (['level', 'sektor', 'aroma', 'aroma_kueche', 'occasion', 'serviceform',
+                    'kompositions_stil', 'menue_balance', 'menue_typ'] as $k) {
+                    if (($p[$k] ?? '') !== '') {
+                        $this->regler[$scope][$k] = $p[$k];
+                    }
+                }
+                foreach (['diaet_hart', 'allergen_nogo'] as $k) {
+                    if (! empty($p[$k]) && is_array($p[$k])) {
+                        $this->regler[$scope][$k] = array_values($p[$k]);
+                    }
+                }
+                if ($frischeSlugs !== []) {
+                    $this->regler[$scope]['frische'] = $frischeSlugs;
+                }
+                if ($bioPraef !== null) {
+                    $this->regler[$scope]['bio_praeferenz'] = $bioPraef;
+                }
+                if (array_key_exists('use_favorites_list', $p)) {
+                    $this->regler[$scope]['favoriten'] = (bool) $p['use_favorites_list'];
+                    $this->regler[$scope]['favoriten_conv_only'] = (bool) ($p['favorites_convenience_only'] ?? false);
+                }
+                if (array_key_exists('ki_bilder', $p)) {
+                    $this->regler[$scope]['ki_bilder'] = (bool) $p['ki_bilder'];
+                }
+                // Menü-Gänge/Quoten als Zahl-String zurückschreiben (der Parser liest sie wieder als Zahl).
+                foreach (['menue_gaenge' => 'menue_gaenge', 'menue_quote_vegan_pct' => 'menue_quote_vegan',
+                    'menue_quote_vegetarisch_pct' => 'menue_quote_vegetarisch'] as $pk => $uiKey) {
+                    if (($p[$pk] ?? null) !== null && $p[$pk] !== '') {
+                        $this->regler[$scope][$uiKey] = (string) $p[$pk];
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('[Planung] Regler-Rehydrierung übersprungen', ['error' => $e->getMessage()]);
+        }
     }
 
     /**
@@ -1296,10 +1363,18 @@ class Index extends Component
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\Log::warning('[Planung] setGenerationParams übersprungen (Fan-out-Vererbung aus) — evtl. Migration fehlt', ['error' => $e->getMessage()]);
         }
+        // L5: Titel als Namens-Anker — getippten Titel getrennt vom Brief in die Lauf-Params geben
+        // (NICHT in die persistierten Session-Params, sonst erbte JEDES Fan-out-Kind den Gericht-Titel
+        // als Namen). Nur der Depth-1-Job sieht `titel_vorgabe`; der Generator nimmt ihn als Namen.
+        $laufParams = $params;
+        $titelVorgabe = trim((string) ($this->eingabe[$scope]['titel'] ?? ''));
+        if ($titelVorgabe !== '' && $scope !== 'concept') {   // concept: Name kommt aus dem KI-Kopf (name_claim)
+            $laufParams['titel_vorgabe'] = $titelVorgabe;
+        }
         $optionen = [
             'created_via' => 'plan_go',
             'brief' => $this->effektiverBrief($scope),
-            'params' => $params,
+            'params' => $laufParams,
             'voll_anreichern' => (bool) ($this->regler[$scope]['voll_anreichern'] ?? false),   // recipe-first: default AUS
         ];
         // GEPLANTER PFAD (Etappe 2b, „Beide Pfade behalten"): wurde vorab ein KI-Kopf-Plan ausgearbeitet

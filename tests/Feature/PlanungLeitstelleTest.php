@@ -2294,3 +2294,34 @@ it('L3 Allergen-No-Go: reglerPill togglet allergen_nogo (Multi) und reicht es in
         return is_array($nogo) && in_array('sesame', $nogo, true) && in_array('milk', $nogo, true);
     });
 });
+
+// ── L5 — Titel-Anker + Rehydrierung ──────────────────────────────────────────────────────────
+
+it('L5 Titel-Anker: getippter Gericht-Titel reist als titel_vorgabe in die Job-Params, NICHT in die Session-Params', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Titel-Test', 'brief' => 'x']);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->set('eingabe.gericht.titel', 'Sommerbowl')
+        ->set('eingabe.gericht.brief', 'Eine leichte Bowl.')
+        ->call('goKaskade', 'gericht')
+        ->assertSet('laeuft', true);
+
+    Queue::assertPushed(GenerateRecipeJob::class, fn ($job) => ($job->parameter['titel_vorgabe'] ?? null) === 'Sommerbowl');
+    // NICHT in den vererbten Session-Params (sonst erbte jedes Fan-out-Kind den Gericht-Titel als Namen).
+    expect($session->refresh()->generation_params['titel_vorgabe'] ?? null)->toBeNull();
+});
+
+it('L5 Rehydrierung: gesetzte Leitplanken kommen nach Reload zurück in die Regler', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Rehydrat', 'brief' => 'x']);
+    app(PlanningSessionService::class)->setGenerationParams($this->rootTeam, (int) $session->id, [
+        'level' => 'gehoben', 'sektor' => 'catering', 'diaet_hart' => ['vegan'], 'aroma_kueche' => 'japanisch',
+    ]);
+
+    $c = Livewire::test(PlanungIndex::class)->call('oeffne', $session->id);
+
+    $c->assertSet('regler.gericht.level', 'gehoben')
+        ->assertSet('regler.gericht.sektor', 'catering')
+        ->assertSet('regler.gericht.aroma_kueche', 'japanisch')
+        ->assertSet('regler.gericht.diaet_hart', ['vegan']);
+});

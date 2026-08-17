@@ -1839,3 +1839,16 @@ it('L4.4 regeneriereStep (Kind): Eltern-Zutat wird vor dem Loeschen entbunden (k
     expect(FoodAlchemistRecipe::where('team_id', $this->rootTeam->id)->whereKey($altSub->id)->exists())->toBeFalse();
     expect($zutat->refresh()->referenced_recipe_id)->toBeNull();
 });
+
+it('L5 markStepDone zieht das Step-Label auf den echten Artefakt-Namen (nicht der Briefing-Text)', function () {
+    $rezept = $this->makeRecipe($this->rootTeam, 'Rotwein-Reduktion', ['status' => 'draft']);
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'gericht', 'status' => 'running']);
+    $step = FoodAlchemistCascadeRunStep::create([
+        'team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht',
+        'status' => 'running', 'label' => 'Ein langer Briefing-Text der eigentlich kein Name ist', 'sort' => 1,
+    ]);
+
+    app(PlanningCascadeService::class)->markStepDone((int) $step->id, 'recipe', (int) $rezept->id);
+
+    expect($step->refresh()->label)->toBe('Rotwein-Reduktion');
+});

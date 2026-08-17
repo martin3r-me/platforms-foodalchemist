@@ -92,6 +92,7 @@ class RecipeDependencyWorkflowService
         // VK-Achsen beim Abstieg strippen: ein Basisrezept-Kind läuft gegen recipe.generator (vkModus=false),
         // dessen Prompt Ziel-VK/Anlass/Serviceform gar nicht kennt — sie würden nur Rauschen im JSON-Kontext.
         unset($childParameter['ziel_vk_eur'], $childParameter['occasion'], $childParameter['serviceform']);
+        unset($childParameter['titel_vorgabe']);   // L5: der Titel gilt nur fuers Gericht, nicht fuer seine Sub-Rezepte
 
         foreach ($this->planChildren($team, $step, $recipe, $offene, $parameter) as [$child, $ingredientId, $text]) {
             if ($child->status === 'done' && $child->ref_id !== null) {
@@ -140,6 +141,7 @@ class RecipeDependencyWorkflowService
         unset($params['_voll_anreichern'], $params['_defer_children']);
         // VK-Achsen beim Abstieg strippen (wie dispatchChildren) — das Basisrezept-Kind kennt sie nicht.
         unset($params['ziel_vk_eur'], $params['occasion'], $params['serviceform']);
+        unset($params['titel_vorgabe']);
 
         $runId = (string) Str::uuid();
         $child->update(['status' => 'running', 'generator_run_id' => $runId]);
