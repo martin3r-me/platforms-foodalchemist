@@ -701,6 +701,31 @@ it('Kreativ-Kopf planAusBrief: fail-soft — scheiternder concept.plan lässt Co
     expect($canvas->find('concept', 'concept', $concept->id))->toBeNull();
 });
 
+it('Kreativ-Kopf planAusBrief erbt die Menü-Achsen (#45/#53): »Anzahl Gänge« deckelt auch die leeren Fan-out-Slots', function () {
+    // Gerüst liefert 3 Gänge, der Nutzer wollte 2: der Gänge-Cap greift jetzt AUCH im plan-first-Pfad
+    // (leere Fan-out-Slots), nicht nur im Assembler — Beweis, dass planAusBrief die menueAchsen an
+    // geruestAusBriefFuerOwner durchreicht (#45). Grundlage dafür, dass der Standard-Concept-Go über
+    // planAusBrief (#53) die Concept-Leitplanken nicht verliert.
+    bindPlanStub(
+        [
+            ['label' => 'Vorspeise', 'slot_type' => 'gang', 'target_count' => 1],
+            ['label' => 'Hauptgang', 'slot_type' => 'gang', 'target_count' => 1],
+            ['label' => 'Dessert', 'slot_type' => 'gang', 'target_count' => 1],
+        ],
+        null,   // Canvas für diesen Test irrelevant
+    );
+    $this->actingAs($this->makeUser($this->rootTeam));
+
+    $e = $this->svc->planAusBrief($this->rootTeam, 'Galadinner, 3 Gänge angeboten', [], null, 'ui', ['menue_gaenge' => 2]);
+    $concept = $e['concept'];
+
+    // Cap auf 2 gang-Slots (Dessert fällt in Dramaturgie-Reihenfolge weg) → 2 leere Fan-out-Positionen.
+    $frame = $this->frames->find('concept', $concept->id);
+    expect($frame->slots()->orderBy('position')->pluck('label')->all())
+        ->toBe(['Vorspeise', 'Hauptgang'])
+        ->and($e['slots'])->toBe(2);
+});
+
 it('Slot-Semantik: Dessert-Slot bevorzugt die Dessert-Hauptgruppe vor besser bepreisten HG-Gerichten', function () {
     // Dessert-HG + Dessert-Gericht (ohne Anker, ohne Preisvorteil) — Semantik muss stechen
     $desHg = FoodAlchemistDishMainGroup::create(['team_id' => $this->rootTeam->id, 'code' => 'DES', 'label' => 'Dessert']);

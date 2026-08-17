@@ -305,7 +305,7 @@ class ConceptGeneratorService
      *   fließt an den Gerüst- UND den Plan-Prompt (damit Rahmen und Handschrift zur Marke passen).
      * @return array{concept: FoodAlchemistConcept, frame: FoodAlchemistPlanningFrame, slots: int, geruest_confidence: float|null, plan_confidence: float|null}
      */
-    public function planAusBrief(Team $team, string $brief, array $extra = [], ?string $name = null, string $via = 'ui'): array
+    public function planAusBrief(Team $team, string $brief, array $extra = [], ?string $name = null, string $via = 'ui', array $menueAchsen = []): array
     {
         $brief = trim($brief);
         if ($brief === '') {
@@ -325,7 +325,7 @@ class ConceptGeneratorService
         // Frame — Reuse: KI baut Slots/Preise/Diät-Regeln aus dem Brief (Pflicht). Wirft die KI,
         // ist kein sinnvoller Plan möglich → frisch angelegten Draft (+ evtl. Rumpf-Frame) abräumen.
         try {
-            $geruest = $this->geruestAusBriefFuerOwner($team, 'concept', (int) $concept->id, $brief, $extra, $via);
+            $geruest = $this->geruestAusBriefFuerOwner($team, 'concept', (int) $concept->id, $brief, $extra, $via, $menueAchsen);
         } catch (\Throwable $e) {
             $this->frames->find('concept', (int) $concept->id)?->delete();
             $concept->delete();
@@ -467,10 +467,17 @@ class ConceptGeneratorService
      * Reine KI-Frame-Erzeugung — wirft KiNichtVerfuegbar/KiDeaktiviert (typisiert),
      * die Aufrufer (Livewire/Tool) fangen als UI-Fehler ab (kein 500).
      *
+     * $menueAchsen (Concept-Menü-Leitplanken, kanonische menue_*-Keys) werden — falls gesetzt —
+     * autoritativ auf das Gerüst angewandt (Preis-Korridor-Kopf, Gänge/Stationen-Cap, Diät-Quoten,
+     * Portfolio-Balance + Concept-Typ als Kontext). Leer/fehlend = byte-identisch (No-op-Helfer) →
+     * der Foodbook-Kickoff-Aufrufer bleibt unberührt. Damit erbt auch der plan-first-Pfad
+     * ({@see planAusBrief}) die Concept-Tab-Leitplanken (#45/#53).
+     *
      * @param array<string,mixed> $extraKontext segment · marken_kontext · anlaesse …
+     * @param array<string,mixed> $menueAchsen  Concept-Menü-Leitplanken (kanonische menue_*-Keys)
      * @return array{frame: FoodAlchemistPlanningFrame, confidence: float|null, slots: int, name: ?string}
      */
-    public function geruestAusBriefFuerOwner(Team $team, string $ownerType, int $ownerId, string $brief, array $extraKontext = [], string $via = 'ui'): array
+    public function geruestAusBriefFuerOwner(Team $team, string $ownerType, int $ownerId, string $brief, array $extraKontext = [], string $via = 'ui', array $menueAchsen = []): array
     {
         $brief = trim($brief);
         if ($brief === '') {
@@ -482,6 +489,15 @@ class ConceptGeneratorService
             'diaet_vokabular' => \Platform\FoodAlchemist\Models\FoodAlchemistPlanningFrameRule::DIET_FORMS,
             'allergen_keys' => FoodAlchemistGp::ALLERGEN_FIELDS,
         ], array_filter($extraKontext, fn ($v) => $v !== null && $v !== '' && $v !== []));
+        // Menü-Leitplanken in den Prompt-Kontext (byte-identisch bei leer): Portfolio-Balance-Direktive
+        // + Concept-Typ (Buffet baut station-Slots). Spiegelt {@see generiereAusBrief}.
+        $balance = $this->menueBalanceDirektive($menueAchsen);
+        if ($balance !== null) {
+            $kontext['menue_zusammenstellung'] = $balance;
+        }
+        if (($menueAchsen['menue_typ'] ?? null) === 'buffet') {
+            $kontext['struktur_typ'] = 'buffet';
+        }
 
         // Trend-Wissen (Trendradar) additiv einspeisen — der Prompt läuft NICHT durch
         // contextFor(), also hier holen und als options['knowledge'] durchreichen (Routing
@@ -504,10 +520,18 @@ class ConceptGeneratorService
             'price_max_pp' => is_numeric($werte['price_max_pp'] ?? null) ? (float) $werte['price_max_pp'] : null,
             'note' => 'Aus Brief generiert (KI-Vorschlag, Konfidenz ' . number_format((float) ($proposal->confidence ?? 0), 2) . ') — Rahmen prüfen, dann „Struktur anwenden".',
         ]);
+        // Preis-Korridor-Kopf autoritativ aus den Menü-Achsen überschreiben (nur gesetzte Achsen).
+        $preisHead = $this->menuePreisHead($menueAchsen);
+        if ($preisHead !== []) {
+            $this->frames->setHead($team, $frame, $preisHead);
+        }
         [$sichereSlots, $sichereRules] = $this->sanitizeGeruestWerte($slots, is_array($werte['rules'] ?? null) ? $werte['rules'] : []);
         if ($sichereSlots === []) {
             throw new RuntimeException('KI-Gerüst enthielt keine gültigen Slots — Brief präzisieren.');
         }
+        // Gänge/Stationen-Cap (typ-abhängig) + Diät-Quoten autoritativ ins Gerüst (No-op bei leeren Achsen).
+        $sichereSlots = $this->menueGaengeCap($sichereSlots, $menueAchsen);
+        $sichereRules = $this->menueDiaetQuotenMerge($sichereRules, $menueAchsen);
         $this->frames->replaceStructure($team, $frame, $sichereSlots, $sichereRules);
 
         return [

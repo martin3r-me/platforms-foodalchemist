@@ -20,9 +20,11 @@ use Platform\FoodAlchemist\Services\ConceptGeneratorService;
  * (Gerüst) + den deterministischen Assembler — im synchronen Web-Request derselbe
  * nginx-fastcgi-Timeout-/502-Risiko wie beim Rezept. Also in die Queue, UI pollt den Step.
  *
- * **Reuse-Modus (P1a):** `generiereAusBrief` baut das Konzept AUSSCHLIESSLICH aus echten
- * VK-Gerichten (keine Erfindung — Slot ohne Treffer bleibt leer). Das Erfinden + der
- * Gericht-Fan-out kommen in P1b. Ergebnis ist immer `status=draft`.
+ * **Plan-first (#53, kreative Modi voll_kreativ/hybrid):** `planAusBrief` baut Draft + kreative
+ * Canvas + LEERE Fan-out-Slots; die Gerichte erfindet der Gericht-Fan-out bei der Freigabe.
+ * **Reuse-Modus (datenbank):** `generiereAusBrief` baut das Konzept AUSSCHLIESSLICH aus echten
+ * VK-Gerichten (keine Erfindung — Slot ohne Treffer bleibt leer). Beide erben die Menü-Achsen.
+ * Ergebnis ist immer `status=draft`.
  */
 class GenerateConceptJob implements ShouldQueue
 {
@@ -71,7 +73,15 @@ class GenerateConceptJob implements ShouldQueue
         Auth::login($user);   // Team-Kontext für AiGatewayService (Kill-Switch/DNA/Call-Log)
 
         try {
-            $r = $generator->generiereAusBrief($team, $this->brief, $this->name, 'plan_go', $this->useFavorites, $this->favoritesConvenienceOnly, $this->menueAchsen);
+            // #53 „Standard plan-first": in den kreativen Modi (voll_kreativ/hybrid) baut der Concept-Go
+            // den vollen Plan (Draft + kreative Canvas + LEERE Fan-out-Slots) — die Gerichte ERFINDET
+            // der Fan-out bei der Freigabe. Nur der Reuse-Modus (datenbank) füllt weiter deterministisch
+            // aus dem VK-Bestand (Assembler); Invention widerspräche seinem Zweck. Beide erben die
+            // Menü-Achsen (menueAchsen). Der Fan-out-Zweig unten gilt ohnehin nur für die kreativen Modi.
+            $planFirst = in_array($this->creativeMode, ['voll_kreativ', 'hybrid'], true);
+            $r = $planFirst
+                ? $generator->planAusBrief($team, $this->brief, [], $this->name, 'plan_go', $this->menueAchsen)
+                : $generator->generiereAusBrief($team, $this->brief, $this->name, 'plan_go', $this->useFavorites, $this->favoritesConvenienceOnly, $this->menueAchsen);
             $concept = $r['concept'] ?? null;
             if ($concept === null) {
                 throw new \RuntimeException('Konzept-Generierung lieferte kein Ergebnis.');
