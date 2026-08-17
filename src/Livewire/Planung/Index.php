@@ -413,6 +413,17 @@ class Index extends Component
         if ($session->source_knowledge_document_id !== null) {
             $this->seedBriefingAusTrendSession($session);
         }
+
+        // #53 Persistenz: einen vorbereiteten KI-Kopf-Plan (plan_concept_id) über den Reload retten —
+        // aber nur, wenn das Draft-Concept noch existiert + team-eigen ist (sonst still auf null; ein
+        // toter/verwaister Zeiger darf den Concept-Go nicht auf einen Geister-Plan schicken). Spiegelt
+        // die Fail-soft-Ownership-Prüfung in goKaskade.
+        $this->planConceptId = null;
+        $team = $this->team();
+        if ($team !== null && $session->plan_concept_id !== null
+            && FoodAlchemistConcept::where('team_id', $team->id)->whereKey($session->plan_concept_id)->exists()) {
+            $this->planConceptId = (int) $session->plan_concept_id;
+        }
     }
 
     /**
@@ -1004,9 +1015,17 @@ class Index extends Component
             return;
         }
         $this->fehler = null;
-        // Draft-ID merken (transient): der nächste Concept-Go referenziert diesen geprüften Plan statt
-        // neu zu generieren („Beide Pfade behalten", Etappe 2b). Verbraucht wird sie in goKaskade.
+        // Draft-ID merken: der nächste Concept-Go referenziert diesen geprüften Plan statt neu zu
+        // generieren („Beide Pfade behalten", Etappe 2b). Verbraucht wird sie in goKaskade.
         $this->planConceptId = (int) $plan['concept']->id;
+        // #53 persistent: an die Session schreiben, damit der geprüfte Plan einen Reload übersteht
+        // (rehydriert in ladeForm). Fail-soft: kippt die Persistenz, bleibt der Plan wenigstens in der
+        // laufenden Session (transiente Prop) nutzbar — ein Speicher-Fehler darf den KI-Kopf nicht kippen.
+        try {
+            $session->update(['plan_concept_id' => $this->planConceptId]);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('[Planung] plan_concept_id-Persistenz übersprungen (KI-Kopf bleibt für diese Session nutzbar) — evtl. Migration fehlt', ['error' => $e->getMessage()]);
+        }
         $this->meldung = 'KI-Kopf: Plan ausgearbeitet — prüfe/korrigiere im Conceptor, dann „Go aus geprüftem Plan".';
         // Vollen inline-Conceptor direkt auf „Konzept & Planung" öffnen (Start-Tab 'konzept').
         $this->dispatch('concepter-editor.oeffnen', type: 'concepts', id: (int) $plan['concept']->id, startTab: 'konzept');
@@ -1020,6 +1039,16 @@ class Index extends Component
     public function planVerwerfen(): void
     {
         $this->planConceptId = null;
+        // #53 persistent: auch den gespeicherten Zeiger lösen, sonst holt der Reload den verworfenen
+        // Plan wieder (rehydrate in ladeForm). Das Draft-Concept selbst bleibt bestehen (löscht nichts).
+        $session = $this->aktiveSession();
+        if ($session !== null && $session->plan_concept_id !== null) {
+            try {
+                $session->update(['plan_concept_id' => null]);
+            } catch (\Throwable) {
+                // Persistenz-Fehler darf das Verwerfen nicht kippen — die Prop ist bereits null.
+            }
+        }
         $this->meldung = 'Vorbereiteter Plan verworfen — der Go generiert wieder frisch aus dem Briefing.';
         $this->fehler = null;
     }
@@ -1128,6 +1157,15 @@ class Index extends Component
             $this->laeuft = true;
             $this->hinweis = null;
             $this->planConceptId = null;    // Plan verbraucht (referenziert ODER frisch generiert) → nächster Go ist wieder Schnell-Pfad
+            // #53 persistent: auch den gespeicherten Zeiger lösen (Plan ist verbraucht) — sonst würde ein
+            // Reload nach dem Go den bereits verbrauchten Plan wieder anbieten. Fail-soft.
+            if ($session->plan_concept_id !== null) {
+                try {
+                    $session->update(['plan_concept_id' => null]);
+                } catch (\Throwable) {
+                    // Persistenz-Fehler darf den bereits gestarteten Lauf nicht kippen.
+                }
+            }
             $this->skizzeGerichtId = null;  // Skizzen-Ursprung verbraucht (auf den Lauf gestempelt) → nächster Go ohne Herkunft
             $this->wissenVorschau = null;   // neue Kaskade → Vorschau weg; die Steps zeigen dann das ECHTE Wissen (#1a)
             $this->meldung = 'Kaskade gestartet — Entwurf wird erzeugt …';

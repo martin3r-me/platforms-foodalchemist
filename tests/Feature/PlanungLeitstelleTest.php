@@ -653,6 +653,61 @@ it('planVerwerfen: löst die Plan-Referenz und wechselt zurück auf den Schnell-
         ->assertSet('meldung', 'Vorbereiteter Plan verworfen — der Go generiert wieder frisch aus dem Briefing.');
 });
 
+// ── #53 KI-Kopf persistent: der geprüfte Plan übersteht einen Reload (plan_concept_id an der Session) ──
+
+it('#53 persistent: KI-Kopf schreibt plan_concept_id an die Session; der Go verbraucht + nullt sie', function () {
+    bindKiKopfStub();
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Persistenz-Menü']);
+
+    $component = Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->set('eingabe.concept.brief', 'Sommer-Menü, 30 Gäste, leicht.')
+        ->call('kiKopf');
+
+    $concept = FoodAlchemistConcept::where('team_id', $this->rootTeam->id)->where('created_via', 'concept_plan_ui')->firstOrFail();
+    // Persistiert an der Session → übersteht Reload (rehydrate in ladeForm).
+    expect((int) $session->refresh()->plan_concept_id)->toBe((int) $concept->id);
+
+    // Go verbraucht den Plan → gespeicherter Zeiger wieder null (kein Wieder-Anbieten nach Reload).
+    $component->call('goKaskade', 'concept')->assertSet('laeuft', true);
+    expect($session->refresh()->plan_concept_id)->toBeNull();
+});
+
+it('#53 persistent: oeffne rehydriert planConceptId aus der Session-Spalte (Plan übersteht Reload)', function () {
+    $concept = app(\Platform\FoodAlchemist\Services\ConceptService::class)->create($this->rootTeam, ['name' => 'Geprüfter Plan', 'status' => 'draft']);
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Reload-Menü']);
+    $session->update(['plan_concept_id' => (int) $concept->id]);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->assertSet('planConceptId', (int) $concept->id);
+});
+
+it('#53 persistent: oeffne verwirft einen toten plan_concept_id still (kein Geister-Plan)', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Tot']);
+    $session->update(['plan_concept_id' => 999999]);   // zeigt auf nichts
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->assertSet('planConceptId', null);
+});
+
+it('#53 persistent: planVerwerfen löst auch den gespeicherten Zeiger (löscht das Draft nicht)', function () {
+    $concept = app(\Platform\FoodAlchemist\Services\ConceptService::class)->create($this->rootTeam, ['name' => 'Plan', 'status' => 'draft']);
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Verwerfen']);
+    $session->update(['plan_concept_id' => (int) $concept->id]);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->assertSet('planConceptId', (int) $concept->id)
+        ->call('planVerwerfen')
+        ->assertSet('planConceptId', null);
+
+    // Spalte gelöst, das Draft-Concept selbst bleibt bestehen.
+    expect($session->refresh()->plan_concept_id)->toBeNull()
+        ->and(FoodAlchemistConcept::whereKey($concept->id)->exists())->toBeTrue();
+});
+
 /**
  * Etappe 4 — Skizzen-Integration (Teil 1): eine Session-Skizze wird zum Kaskaden-Eingang, indem
  * sie in den Gericht-Tab übertragen wird (Titel → Titel, Beschreibung → Brief). Der Mensch drückt
