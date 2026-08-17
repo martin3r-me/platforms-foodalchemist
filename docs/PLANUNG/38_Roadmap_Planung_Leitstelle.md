@@ -292,9 +292,9 @@ FA `main` = `eb85e3c`, demo deployt + Migration `[180] Ran`. Nachweis: `Planning
 - **Fan-out-Fehler:** ✅ **trennen** — Concept bleibt `done`/live, nur der Fan-out-Teil wird `failed` (nicht der ganze Concept-Step, #124).
 
 ### → Umzusetzen (aus den Beschlüssen — Routine greift diese offenen Punkte top-down auf)
-- [ ] **Trend-`approved`-Filter** — `ausTrend` liest Trend-Meta nur mit `status='approved'` (#71).
-- [ ] **Titel-Contract lockern** — `vk.titel_vorschlag`: HG-Code optional, separat ableiten (#75).
-- [ ] **Fan-out-Fehler trennen** — `markStepFailed` beim Fan-out-Abbruch lässt den Concept-Step `done`, markiert nur den Fan-out-Teil (#124).
+- [x] **Trend-`approved`-Filter** — `ausTrend` liest Trend-Meta nur mit `status='approved'` (#71). → `a4b2d51`
+- [x] **Titel-Contract lockern** — `vk.titel_vorschlag`: HG-Code optional, separat ableiten (#75). → `7e2ecbe`
+- [x] **Fan-out-Fehler trennen** — `markStepFailed` beim Fan-out-Abbruch lässt den Concept-Step `done`, markiert nur den Fan-out-Teil (#124). → `cb8b8e1` (markFanoutFailed)
 - [ ] **Buffet als eigener Concept-Typ** — Gänge-Achse-Label „(nur Menü)" + Buffet-Positionen eigene Logik (#35).
 - [ ] **KI-Kopf → Standard + persistent** — Concept immer plan-first; `planConceptId` persistieren (Etappe 2b, #53).
 - [ ] *Essenz (LLM-Flag) · Ziel-VK (Slot-Anker) · Zerlegungstiefe · Bild-Politik = bestätigtes bestehendes Verhalten → kein eigener Bau-Chunk.*
