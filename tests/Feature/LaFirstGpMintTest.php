@@ -91,3 +91,39 @@ it('Generator-Integration: Lücke mit LA wird vorgeschlagen, aber noch nicht gem
     expect($zeile->gp_id)->toBeNull()
         ->and(FoodAlchemistGp::count())->toBe($vorher);
 });
+
+// T5 (Top-Down-Abschluss beim Freigeben): minteFehlendeGps zieht GPs für Rohzutaten ohne GP aus der
+// besten LA (tentative) + verlinkt; kein LA → bleibt unbepreist (Doktrin); GP/Sub-Zeilen unangetastet.
+it('T5: minteFehlendeGps mintet fehlende GPs aus passender LA (tentative) + verlinkt; ohne LA bleibt unbepreist', function () {
+    $unit = FoodAlchemistVocabEinheit::create(['team_id' => $this->rootTeam->id, 'slug' => 'g', 'display_de' => 'Gramm', 'dimension' => 'mass', 'default_in_g' => 1]);
+    ($this->mkLa)('Sesampaste');
+    $recipe = \Platform\FoodAlchemist\Models\FoodAlchemistRecipe::create(['team_id' => $this->rootTeam->id, 'recipe_key' => 't5-mint', 'name' => 'T5-Rezept', 'status' => 'approved']);
+    $roh = \Platform\FoodAlchemist\Models\FoodAlchemistRecipeIngredient::create(['team_id' => $this->rootTeam->id, 'recipe_id' => $recipe->id, 'raw_text' => 'Sesampaste', 'quantity' => '100', 'unit_vocab_id' => $unit->id, 'position' => 1]);
+    $ohne = \Platform\FoodAlchemist\Models\FoodAlchemistRecipeIngredient::create(['team_id' => $this->rootTeam->id, 'recipe_id' => $recipe->id, 'raw_text' => 'Marsianische Nichtzutat', 'quantity' => '10', 'unit_vocab_id' => $unit->id, 'position' => 2]);
+
+    $r = app(\Platform\FoodAlchemist\Services\RecipeOneShotService::class)->minteFehlendeGps($this->rootTeam, $recipe->fresh());
+
+    expect($r['minted'])->toBe(1)
+        ->and($r['ohne_la'])->toBe(1);
+    expect($roh->fresh()->gp_id)->not->toBeNull()
+        ->and($ohne->fresh()->gp_id)->toBeNull();                                     // kein LA → kein GP
+    expect(FoodAlchemistGp::find($roh->fresh()->gp_id)->status->value)->toBe('tentative'); // Review-Queue
+});
+
+it('T5: Zutaten mit vorhandenem GP oder Sub-Rezept werden NICHT angefasst', function () {
+    $unit = FoodAlchemistVocabEinheit::create(['team_id' => $this->rootTeam->id, 'slug' => 'g', 'display_de' => 'Gramm', 'dimension' => 'mass', 'default_in_g' => 1]);
+    ($this->mkLa)('Sesampaste');
+    $bestandGp = $this->makeGp($this->rootTeam, 'Butter: frisch');
+    $sub = \Platform\FoodAlchemist\Models\FoodAlchemistRecipe::create(['team_id' => $this->rootTeam->id, 'recipe_key' => 't5-sub', 'name' => 'Sub', 'status' => 'approved']);
+    $recipe = \Platform\FoodAlchemist\Models\FoodAlchemistRecipe::create(['team_id' => $this->rootTeam->id, 'recipe_key' => 't5-skip', 'name' => 'T5-Skip', 'status' => 'approved']);
+    $mitGp = \Platform\FoodAlchemist\Models\FoodAlchemistRecipeIngredient::create(['team_id' => $this->rootTeam->id, 'recipe_id' => $recipe->id, 'gp_id' => $bestandGp->id, 'raw_text' => 'Butter', 'quantity' => '20', 'unit_vocab_id' => $unit->id, 'position' => 1]);
+    \Platform\FoodAlchemist\Models\FoodAlchemistRecipeIngredient::create(['team_id' => $this->rootTeam->id, 'recipe_id' => $recipe->id, 'referenced_recipe_id' => $sub->id, 'raw_text' => 'Sub', 'quantity' => '50', 'unit_vocab_id' => $unit->id, 'position' => 2]);
+
+    $vorher = FoodAlchemistGp::count();
+    $r = app(\Platform\FoodAlchemist\Services\RecipeOneShotService::class)->minteFehlendeGps($this->rootTeam, $recipe->fresh());
+
+    expect($r['status'])->toBe('vollständig')
+        ->and($r['minted'])->toBe(0);
+    expect($mitGp->fresh()->gp_id)->toBe($bestandGp->id)
+        ->and(FoodAlchemistGp::count())->toBe($vorher);   // nichts geminted
+});

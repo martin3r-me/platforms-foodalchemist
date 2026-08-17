@@ -130,13 +130,65 @@ class RecipeOneShotService
             }
         }
 
-        $ergebnis['kohaerenz_urteil'] = $this->kohaerenzGlied($team, $recipe);
-        $ergebnis['wirtschaftlichkeit'] = $this->wirtschaftlichkeitsGlied($team, $recipe, $zielVk);
+        if ($completeCoverage) {
+            // T5 (Top-Down-Abschluss »GPs aus LAs«): fehlende GPs ZUERST minten, damit die
+            // Wirtschaftlichkeit unten mit vollständigem EK rechnet.
+            $ergebnis['gp_mint'] = $this->minteFehlendeGps($team, $recipe->fresh() ?? $recipe);
+        }
+        $ergebnis['kohaerenz_urteil'] = $this->kohaerenzGlied($team, $recipe->fresh() ?? $recipe);
+        $ergebnis['wirtschaftlichkeit'] = $this->wirtschaftlichkeitsGlied($team, $recipe->fresh() ?? $recipe, $zielVk);
         if ($completeCoverage) {
             $ergebnis['coverage'] = $this->coverageGlieder($team, $recipe->fresh() ?? $recipe);
         }
 
         return $ergebnis;
+    }
+
+    /**
+     * T5 (Entscheidung 2026-08-17, Top-Down-Abschluss »GPs aus LAs«): für die ROHZUTATEN eines Rezepts
+     * (kein GP verknüpft, kein Sub-Rezept) fehlende Grundprodukte aus der besten passenden Lieferanten-
+     * Artikel minten ({@see LaFirstGpService::mintFromLa} — Status `tentative`, LA-verknüpft: die GPs
+     * gehen in die Review-Queue, die LA-First-Kuration bleibt gewahrt, KEINE ungeprüften GPs im
+     * approved-Set). Danach EK/Aggregat propagieren, damit die Kalkulation vollständig wird. Doktrin:
+     * kein LA → kein GP → die Zeile bleibt unbepreist (echte Sourcing-Lücke, kein geratenes GP).
+     * Fail-soft — ein gescheiterter Mint kippt die Anreicherung nie.
+     *
+     * @return array{status: string, minted: int, ohne_la: int, fehler?: string}
+     */
+    public function minteFehlendeGps(Team $team, FoodAlchemistRecipe $recipe): array
+    {
+        try {
+            $offene = $recipe->ingredients()
+                ->whereNull('deleted_at')->whereNull('gp_id')->whereNull('referenced_recipe_id')
+                ->get();
+            if ($offene->isEmpty()) {
+                return ['status' => 'vollständig', 'minted' => 0, 'ohne_la' => 0];
+            }
+            $mint = app(\Platform\FoodAlchemist\Services\LaFirstGpService::class);
+            $minted = 0;
+            $ohneLa = 0;
+            foreach ($offene as $zut) {
+                $text = trim((string) ($zut->display_name ?: $zut->raw_text));
+                if ($text === '') {
+                    continue;
+                }
+                $gp = $mint->mintFromLa($team, $text);
+                if ($gp !== null) {
+                    $zut->gp_id = $gp->id;
+                    $zut->save();
+                    $minted++;
+                } else {
+                    $ohneLa++;   // kein LA → Sourcing-Lücke, bleibt unbepreist (kein Rate-GP)
+                }
+            }
+            if ($minted > 0) {
+                app(\Platform\FoodAlchemist\Services\RecipeRecomputeService::class)->recomputeAndPropagate((int) $recipe->id);
+            }
+
+            return ['status' => $minted > 0 ? 'gemintet' : ($ohneLa > 0 ? 'kein_la' : 'vollständig'), 'minted' => $minted, 'ohne_la' => $ohneLa];
+        } catch (\Throwable $e) {
+            return ['status' => 'fehler', 'minted' => 0, 'ohne_la' => 0, 'fehler' => mb_strimwidth($e->getMessage(), 0, 200)];
+        }
     }
 
     /**
