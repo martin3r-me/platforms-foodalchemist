@@ -12,6 +12,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistCascadeRunStep;
 use Platform\FoodAlchemist\Models\FoodAlchemistDishIdea;
 use Platform\FoodAlchemist\Models\FoodAlchemistMarkupClass;
 use Platform\FoodAlchemist\Models\FoodAlchemistPlanningSession;
+use Platform\FoodAlchemist\Models\FoodAlchemistRecipeStepPhoto;
 use Platform\FoodAlchemist\Services\PlanningCascadeService;
 use Platform\FoodAlchemist\Services\PlanningSessionService;
 use Platform\FoodAlchemist\Services\RecipeDependencyWorkflowService;
@@ -1860,4 +1861,87 @@ it('Worker-Präsenz Teil 2: alter Herzschlag (still) → proaktive Warnung im Go
         ->call('oeffne', $session->id)
         ->assertViewHas('workerState', 'still')
         ->assertSeeHtml('data-worker-health');
+});
+
+// ── Multi-Tenancy Slice 2 (Etappe 8): Read-Audit der Livewire-Client-Actions ──────────
+// Die id-tragenden Cockpit-Properties (`laufId`, `fotoPickerStep`) sind PUBLIC und ungelockt
+// → der Client kann sie auf eine FREMDE (nicht team-sichtbare) id setzen. Slice 1 (`3ceaf6c`)
+// pinnte die step-mutierenden SERVICE-Methoden gegen einen geerbten Fremd-Step (Writes isOwnedBy).
+// Dieser Datensatz pinnt die READ-Seite der Fläche: jede lauf-/step-id-Action reicht die id an
+// eine team-gescopte Service-Lese (`lauf()` = visibleToTeam) bzw. render() liest den Step mit
+// `where team_id` → eine getürkte Fremd-id kann weder mutieren noch etwas enthüllen. childA ist
+// aus Root-Sicht ein KIND → dessen eigene Läufe/Steps sind für rootTeam NICHT sichtbar (Parent
+// sieht die Kinder nicht), also der saubere „fremd + unsichtbar"-Fall.
+
+// Run-Ebene: eine auf einen fremden (unsichtbaren) Lauf getürkte `laufId` lässt jede Run-Action
+// verpuffen — kein Job, keine Zustandsänderung am Fremd-Lauf (Service no-op über `lauf()`=null).
+it('Slice 2 / D1-Read: getürkte laufId auf fremden Lauf → Run-Action verpufft (kein Cross-Tenant-Write)', function (Closure $action) {
+    $fremdRezept = $this->makeRecipe($this->childA, 'Fremd-Gericht', ['status' => 'draft']);
+    $fremdRun = FoodAlchemistCascadeRun::create(['team_id' => $this->childA->id, 'scope' => 'gericht', 'status' => 'review']);
+    $done = FoodAlchemistCascadeRunStep::create([
+        'team_id' => $this->childA->id, 'cascade_run_id' => $fremdRun->id,
+        'kind' => 'gericht', 'status' => 'done', 'ref_type' => 'recipe', 'ref_id' => $fremdRezept->id,
+    ]);
+    $failed = FoodAlchemistCascadeRunStep::create([
+        'team_id' => $this->childA->id, 'cascade_run_id' => $fremdRun->id, 'kind' => 'rezept', 'status' => 'failed',
+    ]);
+
+    // Als rootTeam (beforeEach) den fremden Lauf als laufId setzen und die Action feuern.
+    $action(Livewire::test(PlanungIndex::class)->set('laufId', (int) $fremdRun->id));
+
+    // Nichts passiert: kein Generator-/Freigabe-Job, Fremd-Steps + Fremd-Rezept unangetastet.
+    Queue::assertNothingPushed();
+    expect($done->refresh()->status)->toBe('done')
+        ->and($failed->refresh()->status)->toBe('failed')
+        ->and($fremdRezept->refresh()->status->value)->toBe('draft');
+})->with([
+    'alleFrei' => [fn ($lw) => $lw->call('alleFrei')],
+    'alleVerwerfen' => [fn ($lw) => $lw->call('alleVerwerfen')],
+    'laufFortsetzen' => [fn ($lw) => $lw->call('laufFortsetzen')],
+    'laufWiederAufnehmen' => [fn ($lw) => $lw->call('laufWiederAufnehmen')],
+]);
+
+// render(): eine getürkte Fremd-`laufId` lädt keinen Lauf ins Cockpit (visibleToTeam → null).
+it('Slice 2 / D1-Read: getürkte laufId auf fremden Lauf → render lädt keinen Lauf', function () {
+    $fremdRun = FoodAlchemistCascadeRun::create(['team_id' => $this->childA->id, 'scope' => 'gericht', 'status' => 'running']);
+
+    Livewire::test(PlanungIndex::class)
+        ->set('laufId', (int) $fremdRun->id)
+        ->assertViewHas('lauf', null);
+});
+
+// Foto-Picker: der EINZIGE Roh-id-Read der Fläche (`fotoPickerOeffnen` setzt die id ungeprüft) —
+// render() liest den Step aber mit `where team_id` → eine Fremd-Step-id enthüllt NICHTS, obwohl
+// ein team-sichtbares Kandidaten-Foto existiert (Kontrast: derselbe Read auf einen EIGENEN Step
+// listet dieses Foto sehr wohl).
+it('Slice 2 / D1-Read: Foto-Picker auf EIGENEN Step listet team-sichtbare Kandidaten', function () {
+    $zielRezept = $this->makeRecipe($this->rootTeam, 'Ziel-Draft', ['status' => 'draft']);
+    $fotoRezept = $this->makeRecipe($this->rootTeam, 'Anderes mit Foto', ['status' => 'approved']);
+    FoodAlchemistRecipeStepPhoto::create(['team_id' => $this->rootTeam->id, 'recipe_id' => $fotoRezept->id, 'pfad' => 'a/b.jpg']);
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'gericht', 'status' => 'review']);
+    $step = FoodAlchemistCascadeRunStep::create([
+        'team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id,
+        'kind' => 'gericht', 'status' => 'done', 'ref_type' => 'recipe', 'ref_id' => $zielRezept->id,
+    ]);
+
+    Livewire::test(PlanungIndex::class)
+        ->set('fotoPickerStep', (int) $step->id)
+        ->assertViewHas('fotoPickerKandidaten', fn ($k) => count($k) === 1 && $k[0]['rezept'] === 'Anderes mit Foto');
+});
+
+it('Slice 2 / D1-Read: Foto-Picker auf FREMDEN Step → keine Kandidaten (Roh-id-Read team-gescopt)', function () {
+    // Ein team-sichtbares Foto existiert — würde es am Step-Scope NICHT scheitern, käme es durch.
+    $fotoRezept = $this->makeRecipe($this->rootTeam, 'Root-Foto', ['status' => 'approved']);
+    FoodAlchemistRecipeStepPhoto::create(['team_id' => $this->rootTeam->id, 'recipe_id' => $fotoRezept->id, 'pfad' => 'a/b.jpg']);
+    // Fremder (unsichtbarer) Step aus childA.
+    $fremdRezept = $this->makeRecipe($this->childA, 'Fremd', ['status' => 'draft']);
+    $fremdRun = FoodAlchemistCascadeRun::create(['team_id' => $this->childA->id, 'scope' => 'gericht', 'status' => 'review']);
+    $fremdStep = FoodAlchemistCascadeRunStep::create([
+        'team_id' => $this->childA->id, 'cascade_run_id' => $fremdRun->id,
+        'kind' => 'gericht', 'status' => 'done', 'ref_type' => 'recipe', 'ref_id' => $fremdRezept->id,
+    ]);
+
+    Livewire::test(PlanungIndex::class)
+        ->set('fotoPickerStep', (int) $fremdStep->id)
+        ->assertViewHas('fotoPickerKandidaten', []);
 });
