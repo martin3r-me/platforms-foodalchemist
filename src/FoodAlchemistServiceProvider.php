@@ -503,8 +503,13 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\PlanungSessionGetTool::class,
                     \Platform\FoodAlchemist\Tools\PlanungSessionPostTool::class,
                     \Platform\FoodAlchemist\Tools\PlanungSessionPutTool::class,
-                    // Etappe 9 (Planung-Leitstelle): Kaskaden-Status headless lesen — READ-ONLY (Start/Freigabe human-only, kein MCP-Trigger).
+                    // Etappe 9 (Planung-Leitstelle): Kaskaden-Status headless lesen — READ-ONLY.
                     \Platform\FoodAlchemist\Tools\PlanungKaskadeStatusGetTool::class,
+                    // Etappe 9 · Slice 2: Kaskaden-START (Go) + FREIGABE (Gate 2) via MCP — WRITE. Der
+                    // Kaskaden-Trigger via MCP ist bewusst freigegeben (Entscheidung 2026-08-17); Schutz =
+                    // Tenancy (Start isOwnedBy Session, Freigabe ownedStep). Nicht mehr human-only.
+                    \Platform\FoodAlchemist\Tools\PlanungKaskadeStartPostTool::class,
+                    \Platform\FoodAlchemist\Tools\PlanungKaskadeFreigabePostTool::class,
                     // Spec 19 E7.6: Kapitel-Go „Anlegen" — READ-ONLY (Stempel-Vorschau + Trockenlauf + Anlage-Stand; Go selbst human-only, kein MCP-Trigger)
                     \Platform\FoodAlchemist\Tools\KapitelFreigabeGetTool::class,
                     // Spec 19 E9: Pairing-Inspiration der Kreativ-Phase — READ-ONLY (Aroma-Nachbarn je Modus, abstrakt/geerdet)

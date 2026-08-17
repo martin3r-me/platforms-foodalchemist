@@ -15,9 +15,9 @@ use Platform\FoodAlchemist\Services\PlanningCascadeService;
  * je Ebene (rezept|gericht|concept|gp) ein Status-Aggregat, die Einzel-Schritte (inkl.
  * Anreicherungs-/Bild-Status) und ein Handlungs-Hinweis aus dem Run-Status.
  *
- * GO/FREIGABE OHNE MCP-TRIGGER: analog zur Foodbook-Leitstelle ({@see LeitstelleGetTool}) ist der
- * Start der Kaskade und jede Freigabe human-only (Nordstern »nichts läuft still«, Spec MCP-Lockstep).
- * Dieses Tool LIEST nur — es startet, verwirft oder gibt nichts frei.
+ * Dieses Tool LIEST nur. Der **Start** und die **Freigabe** der Kaskade laufen seit Slice 2
+ * (Entscheidung 2026-08-17) über eigene WRITE-Tools ({@see PlanungKaskadeStartPostTool},
+ * {@see PlanungKaskadeFreigabePostTool}) — tenancy-geschützt (isOwnedBy), nicht mehr human-only.
  */
 class PlanungKaskadeStatusGetTool extends FoodAlchemistTool implements ToolContract, ToolMetadataContract
 {
