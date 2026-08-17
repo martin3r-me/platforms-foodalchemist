@@ -113,7 +113,8 @@ class Index extends Component
         'convenience' => '', 'frische' => [], 'bestand' => 'hybrid',
         'bio_praeferenz' => 'konventionell', 'level' => '', 'sektor' => '',
         // aroma = Freitext-Feinjustierung, aroma_kueche = kuratierte Küche (11 + Frei, L1.5).
-        'diaet_hart' => [], 'aroma' => '', 'aroma_kueche' => '',
+        // allergen_nogo (L3): EU-14-Allergen-Ausschluss (hart geprüft, getrennt vom Diät-Ausschluss).
+        'diaet_hart' => [], 'allergen_nogo' => [], 'aroma' => '', 'aroma_kueche' => '',
         'occasion' => '', 'serviceform' => '', 'kompositions_stil' => '',
         'favoriten' => false, 'favoriten_conv_only' => false,
         'ziel_vk' => '', 'voll_anreichern' => false, 'ki_bilder' => false,
@@ -762,8 +763,20 @@ class Index extends Component
 
     // ── Leitstelle: Regler-Bedienung ───────────────────────────────────
 
-    /** Multi-Select-Regler (Toggle in/aus der Liste): Diät-Constraints + Frische-Erlaubnis-Liste. */
-    private const MULTI_REGLER = ['diaet_hart', 'frische'];
+    /** Multi-Select-Regler (Toggle in/aus der Liste): Diät + Frische-Erlaubnis + Allergen-No-Go. */
+    private const MULTI_REGLER = ['diaet_hart', 'frische', 'allergen_nogo'];
+
+    /**
+     * EU-14-Allergen-No-Go (L3): Key => Label. Harter Ausschluss (getrennt vom Diät-Ausschluss) —
+     * ein verdrahteter GP, der ein angehaktes Allergen »enthält«, wird im Diät-/Allergen-Gate
+     * entdrahtet + gemeldet. Keys spiegeln FoodAlchemistGp::ALLERGEN_FIELDS 1:1.
+     */
+    public const ALLERGEN_LABELS = [
+        'gluten' => 'Gluten', 'crustaceans' => 'Krebstiere', 'eggs' => 'Eier', 'fish' => 'Fisch',
+        'peanuts' => 'Erdnüsse', 'soy' => 'Soja', 'milk' => 'Milch', 'tree_nuts' => 'Schalenfrüchte',
+        'celery' => 'Sellerie', 'mustard' => 'Senf', 'sesame' => 'Sesam', 'sulphites' => 'Sulfite',
+        'lupin' => 'Lupine', 'molluscs' => 'Weichtiere',
+    ];
 
     /** Pill-Toggle für die Richtungs-Regler EINES Scopes (MULTI_REGLER togglen, sonst Single-Set). */
     public function reglerPill(string $scope, string $feld, string $wert): void

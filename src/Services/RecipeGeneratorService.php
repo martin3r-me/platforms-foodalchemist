@@ -5,6 +5,7 @@ namespace Platform\FoodAlchemist\Services;
 use Illuminate\Support\Facades\DB;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Enums\MatchBand;
+use Platform\FoodAlchemist\Models\FoodAlchemistGp;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Models\FoodAlchemistVocabEinheit;
 use Platform\FoodAlchemist\Services\Ai\AiGatewayService;
@@ -337,6 +338,13 @@ class RecipeGeneratorService
             $result = $this->kohaerenzGate($team, $result, $melde);
         }
 
+        // Diät-/Allergen-Gate (L3, Entscheid »prüfen + entdrahten + melden«): läuft für BEIDE Modi
+        // (ein veganes Gericht mit Butter ist ein VK-Fall). Deterministisch, 0 Kosten. Ein verdrahteter
+        // GP, der eine harte Diät-Vorgabe (diaet_hart) oder ein No-Go-Allergen (allergen_nogo) explizit
+        // verletzt, wird ENTdrahtet (Zeile bleibt offen) + als Befund gemeldet — der Mensch entscheidet
+        // (keine harte Sperre). NULL/unbewertet blockt NIE (Doktrin: unbekannt ≠ Verstoß).
+        $result = $this->diaetGate($team, $result, $parameter);
+
         $result['kontext'] = $kontextAudit;   // Kontext-Inspektor fürs UI (null im Override-Pfad)
 
         return $result;
@@ -486,6 +494,130 @@ class RecipeGeneratorService
         $result['offene'] = $offene;
 
         return $result;
+    }
+
+    /**
+     * Diät-/Allergen-Gate (L3) — deterministischer Post-Check nach dem Verdrahten, für BEIDE Modi.
+     * Ein verdrahteter GP, der eine harte Diät-Vorgabe (`diaet_hart`) oder ein No-Go-Allergen
+     * (`allergen_nogo`) EXPLIZIT verletzt, wird ENTdrahtet (Zeile bleibt offener Hard-Stop, primär
+     * »Lieferantenartikel wählen« = konforme Alternative) und als Befund gemeldet. Doktrin:
+     * NULL/unbewertet blockt NIE (unbekannt ≠ Verstoß), `low_carb` ist per GP-Flag nicht prüfbar →
+     * bewusst übersprungen. Prüft die GP-Diät-Tags (per-GP-Wahrheit) + Allergen-Override »enthalten«.
+     * Fail-open: jeder Fehler lässt den Lauf unangetastet (Diagnose, kein Blocker).
+     *
+     * @param  array{recipe: FoodAlchemistRecipe, statistik: array, offene: array}  $result
+     * @param  array<string,mixed>  $parameter
+     * @return array{recipe: FoodAlchemistRecipe, statistik: array, offene: array}
+     */
+    private function diaetGate(Team $team, array $result, array $parameter): array
+    {
+        /** @var FoodAlchemistRecipe $recipe */
+        $recipe = $result['recipe'];
+        $statistik = $result['statistik'];
+        $offene = $result['offene'] ?? [];
+        $statistik['diaet'] = ['geprueft' => false, 'uebersprungen' => false, 'entdrahtet' => 0, 'befunde' => []];
+
+        $diaetHart = array_values(array_filter((array) ($parameter['diaet_hart'] ?? []), 'is_string'));
+        $allergenNogo = array_values(array_filter((array) ($parameter['allergen_nogo'] ?? []), 'is_string'));
+        if ($diaetHart === [] && $allergenNogo === []) {
+            $statistik['diaet']['uebersprungen'] = true;
+            $result['statistik'] = $statistik;
+
+            return $result;
+        }
+
+        try {
+            $zeilen = $recipe->ingredients()->whereNull('deleted_at')->whereNotNull('gp_id')->with('gp')->orderBy('position')->get();
+            foreach ($zeilen as $z) {
+                $gp = $z->gp;
+                if ($gp === null) {
+                    continue;
+                }
+                $gruende = $this->diaetVerstoesse($gp, $diaetHart, $allergenNogo);
+                if ($gruende === []) {
+                    continue;
+                }
+                $text = (string) (($z->raw_text ?? '') !== '' ? $z->raw_text : ($z->display_name ?: $gp->name));
+                $position = (int) $z->position;
+                $zielGpId = (int) $z->gp_id;
+
+                app(HardstopResolveService::class)->entdrahte($team, (int) $recipe->id, (int) $z->id);
+                $statistik['diaet']['entdrahtet']++;
+                $statistik['bestand_gp'] = max(0, (int) ($statistik['bestand_gp'] ?? 0) - 1);
+                $statistik['offen'] = (int) ($statistik['offen'] ?? 0) + 1;
+                $statistik['diaet']['befunde'][] = $text . ': ' . implode(', ', $gruende);
+
+                $offene[] = [
+                    'index' => $position - 1,   // Kontrakt afterGenerated: position === index + 1
+                    'text' => $text,
+                    // Konforme Alternative suchen (kein Auto-Sub — ein Diät-Verstoß ist keine Zerlegungs-Frage).
+                    'primaer' => 'lieferantenartikel_waehlen',
+                    'shortlist' => $this->matcher->candidatesFor($team, $text, null, 5),
+                    'la_kandidaten' => [],
+                    'lieferantenstrategie' => null,
+                    'schwacher_treffer' => null,
+                    // Diät-/Allergen-Gate: WARUM die Zeile entdrahtet wurde (Review-Fläche + kein Auto-Plan).
+                    'diaet_verstoss' => [
+                        'ziel_id' => $zielGpId,          // „Trotzdem verwenden" bindet den GP wieder (Override)
+                        'gruende' => $gruende,
+                    ],
+                ];
+            }
+            $statistik['diaet']['geprueft'] = true;
+            if ($statistik['diaet']['entdrahtet'] > 0) {
+                $result['recipe'] = $recipe->refresh();
+            }
+        } catch (\Throwable $e) {
+            $statistik['diaet'] = ['geprueft' => false, 'uebersprungen' => false, 'entdrahtet' => 0, 'befunde' => [], 'fehler' => true];
+        }
+
+        $result['statistik'] = $statistik;
+        $result['offene'] = $offene;
+
+        return $result;
+    }
+
+    /**
+     * Explizite Diät-/Allergen-Verstöße eines GP (L3). Prüft die per-GP-Diät-Tags (tri-state:
+     * NULL=unbewertet blockt nicht) + Allergen-Override »enthalten«. Liefert Klartext-Gründe.
+     *
+     * @param  list<string>  $diaetHart      vegan|vegetarisch|glutenfrei|laktosefrei|halal|low_carb
+     * @param  list<string>  $allergenNogo   EU-14-Keys (gluten|milk|sesame|…)
+     * @return list<string>
+     */
+    private function diaetVerstoesse(FoodAlchemistGp $gp, array $diaetHart, array $allergenNogo): array
+    {
+        $g = [];
+        foreach ($diaetHart as $form) {
+            $verstoss = match ($form) {
+                'vegan'       => $gp->tag_is_vegan === false,
+                'vegetarisch' => $gp->tag_is_vegetarian === false,
+                'halal'       => $gp->tag_is_halal === false || $gp->tag_contains_pork === true,
+                'glutenfrei'  => $gp->tag_is_gluten_free === false || $this->gpAllergenEnthalten($gp, 'gluten'),
+                'laktosefrei' => $gp->tag_is_lactose_free === false || $this->gpAllergenEnthalten($gp, 'milk'),
+                default       => false,   // low_carb: kein GP-Flag → unprüfbar, nie blocken
+            };
+            if ($verstoss) {
+                $g[] = 'verletzt ' . $form;
+            }
+        }
+        foreach ($allergenNogo as $key) {
+            if ($this->gpAllergenEnthalten($gp, $key)) {
+                $g[] = 'enthält ' . $key;
+            }
+        }
+
+        return $g;
+    }
+
+    /** Allergen-Override des GP auf »enthalten« (NULL/spuren/unbekannt blockt bewusst nicht). */
+    private function gpAllergenEnthalten(FoodAlchemistGp $gp, string $field): bool
+    {
+        if (! in_array($field, FoodAlchemistGp::ALLERGEN_FIELDS, true)) {
+            return false;
+        }
+
+        return (string) $gp->getAttribute("allergen_{$field}") === 'enthalten';
     }
 
     /**

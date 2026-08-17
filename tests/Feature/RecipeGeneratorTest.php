@@ -420,3 +420,67 @@ it('L1.5 Aroma-Küche: »Frei« (leer) trägt keinen Küche-Block', function () 
 
     expect($ctx['prompt'])->not->toHaveKey('aroma_kueche');
 });
+
+// ── L3 — Diät-/Allergen-Gate (prüfen + entdrahten + melden) ──────────────────────────────────
+
+it('L3 Diät: veganes Ziel + verdrahteter nicht-veganer GP → entdrahtet + Befund (nicht mehr verdrahtet)', function () {
+    $gp = ($this->mkGpMitPreis)('Butter', 'butter', 5.00);
+    $gp->update(['tag_is_vegan' => false]);
+
+    $resultat = $this->svc->generiere($this->rootTeam, 'Etwas mit Butter', [
+        'diaet_hart' => ['vegan'],
+    ], kiRezeptOverride: [
+        'name' => 'Basis: Buttertest',
+        'zutaten' => [['text' => 'Butter', 'slug' => 'butter', 'quantity' => 50, 'unit' => 'g']],
+    ]);
+
+    expect($resultat['statistik']['diaet']['geprueft'])->toBeTrue()
+        ->and($resultat['statistik']['diaet']['entdrahtet'])->toBe(1)
+        ->and($resultat['statistik']['bestand_gp'])->toBe(0);
+    expect($resultat['recipe']->ingredients()->first()->gp_id)->toBeNull();
+    $verstoss = collect($resultat['offene'])->firstWhere('text', 'Butter');
+    expect($verstoss['diaet_verstoss']['gruende'] ?? [])->toContain('verletzt vegan');
+});
+
+it('L3 Diät: unbewerteter GP (tag_is_vegan NULL) wird NICHT entdrahtet (unbekannt ≠ Verstoß)', function () {
+    ($this->mkGpMitPreis)('Rätsel-Zutat', 'raetsel', 3.00);   // tag_is_vegan bleibt NULL
+
+    $resultat = $this->svc->generiere($this->rootTeam, 'Etwas mit Rätsel-Zutat', [
+        'diaet_hart' => ['vegan'],
+    ], kiRezeptOverride: [
+        'name' => 'Basis: Rätseltest',
+        'zutaten' => [['text' => 'Rätsel-Zutat', 'slug' => 'raetsel', 'quantity' => 50, 'unit' => 'g']],
+    ]);
+
+    expect($resultat['statistik']['diaet']['entdrahtet'])->toBe(0)
+        ->and($resultat['statistik']['bestand_gp'])->toBe(1);   // bleibt verdrahtet
+});
+
+it('L3 Allergen: allergen_nogo greift auf Allergen-Override „enthalten"', function () {
+    $gp = ($this->mkGpMitPreis)('Sesampaste', 'sesampaste', 4.00);
+    $gp->update(['allergen_sesame' => 'enthalten']);
+
+    $resultat = $this->svc->generiere($this->rootTeam, 'Etwas mit Sesam', [
+        'allergen_nogo' => ['sesame'],
+    ], kiRezeptOverride: [
+        'name' => 'Basis: Sesamtest',
+        'zutaten' => [['text' => 'Sesampaste', 'slug' => 'sesampaste', 'quantity' => 30, 'unit' => 'g']],
+    ]);
+
+    expect($resultat['statistik']['diaet']['entdrahtet'])->toBe(1);
+    $verstoss = collect($resultat['offene'])->firstWhere('text', 'Sesampaste');
+    expect($verstoss['diaet_verstoss']['gruende'] ?? [])->toContain('enthält sesame');
+});
+
+it('L3 Diät: ohne diaet_hart/allergen_nogo wird das Gate übersprungen (kein Eingriff)', function () {
+    $gp = ($this->mkGpMitPreis)('Butter', 'butter', 5.00);
+    $gp->update(['tag_is_vegan' => false]);
+
+    $resultat = $this->svc->generiere($this->rootTeam, 'Etwas mit Butter', [], kiRezeptOverride: [
+        'name' => 'Basis: Buttertest frei',
+        'zutaten' => [['text' => 'Butter', 'slug' => 'butter', 'quantity' => 50, 'unit' => 'g']],
+    ]);
+
+    expect($resultat['statistik']['diaet']['uebersprungen'])->toBeTrue()
+        ->and($resultat['statistik']['bestand_gp'])->toBe(1);
+});

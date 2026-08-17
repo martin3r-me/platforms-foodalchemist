@@ -88,13 +88,25 @@
         </div>
 
         <div class="md:col-span-2" data-richtung="diaet">
-            <p class="text-xs font-medium text-gray-900 mb-1">Diät-Constraints (Multi-Select, hart erzwungen)</p>
+            <p class="text-xs font-medium text-gray-900 mb-1">Diät-Constraints (Multi-Select, hart geprüft)</p>
             <div class="flex flex-wrap gap-1.5">
                 @foreach(['vegan' => 'Vegan', 'vegetarisch' => 'Vegetarisch', 'glutenfrei' => 'Glutenfrei', 'laktosefrei' => 'Laktosefrei', 'halal' => 'Halal', 'low_carb' => 'Low Carb'] as $wert => $lbl)
                     <button type="button" wire:click="reglerPill('{{ $scope }}', 'diaet_hart', '{{ $wert }}')"
                             class="px-2.5 py-1 rounded-full border text-[11px] transition-colors {{ in_array($wert, (array) ($r['diaet_hart'] ?? []), true) ? $pillAktiv : $pillRuhe }}">{{ $lbl }}</button>
                 @endforeach
             </div>
+            <p class="text-[11px] text-gray-500 mt-1">Nach der Erzeugung geprüft: verletzende Zutaten werden gelöst + gemeldet (keine harte Sperre — du entscheidest).</p>
+        </div>
+
+        <div class="md:col-span-2" data-richtung="allergen-nogo">
+            <p class="text-xs font-medium text-gray-900 mb-1">Allergen-Ausschluss (EU-14, hart geprüft)</p>
+            <div class="flex flex-wrap gap-1.5">
+                @foreach(\Platform\FoodAlchemist\Livewire\Planung\Index::ALLERGEN_LABELS as $wert => $lbl)
+                    <button type="button" wire:click="reglerPill('{{ $scope }}', 'allergen_nogo', '{{ $wert }}')"
+                            class="px-2.5 py-1 rounded-full border text-[11px] transition-colors {{ in_array($wert, (array) ($r['allergen_nogo'] ?? []), true) ? $pillAktiv : $pillRuhe }}" data-planung-allergen-nogo="{{ $wert }}">{{ $lbl }}</button>
+                @endforeach
+            </div>
+            <p class="text-[11px] text-gray-500 mt-1">{{ empty($r['allergen_nogo'] ?? []) ? 'Kein Allergen-Ausschluss' : 'Zutaten mit diesem Allergen werden nach der Erzeugung gelöst + gemeldet.' }}</p>
         </div>
 
         @if($scope === 'concept')

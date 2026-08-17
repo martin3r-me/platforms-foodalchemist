@@ -19,7 +19,7 @@ class RecipeGenerationContextService
     // (Label + Würz-Anker, s. build()), der Roh-Slug im parameter-Bündel wäre redundant.
     private const PROMPT_KEYS = [
         'convenience', 'frische', 'bio', 'bio_pref', 'bestand', 'level', 'sektor',
-        'diaet_hart', 'aroma', 'occasion', 'serviceform', 'kompositions_stil', 'ziel_vk_eur',
+        'diaet_hart', 'allergen_nogo', 'aroma', 'occasion', 'serviceform', 'kompositions_stil', 'ziel_vk_eur',
     ];
 
     /**

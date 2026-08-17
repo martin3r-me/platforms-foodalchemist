@@ -2275,3 +2275,22 @@ it('L1.5 Aroma-Küche: aroma_kueche reist als Leitplanke in die Job-Params', fun
     Queue::assertPushed(GenerateRecipeJob::class, fn ($job) => ($job->parameter['aroma_kueche'] ?? null) === 'japanisch');
     expect($session->refresh()->generation_params['aroma_kueche'] ?? null)->toBe('japanisch');
 });
+
+// ── L3 — Allergen-No-Go-Regler reist als Leitplanke mit ──────────────────────────────────────
+
+it('L3 Allergen-No-Go: reglerPill togglet allergen_nogo (Multi) und reicht es in die Job-Params', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Allergen', 'brief' => 'x']);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->set('eingabe.rezept.brief', 'Etwas ohne Sesam und Milch.')
+        ->call('reglerPill', 'rezept', 'allergen_nogo', 'sesame')
+        ->call('reglerPill', 'rezept', 'allergen_nogo', 'milk')
+        ->call('goKaskade', 'rezept')
+        ->assertSet('laeuft', true);
+
+    Queue::assertPushed(GenerateRecipeJob::class, function ($job) {
+        $nogo = $job->parameter['allergen_nogo'] ?? [];
+        return is_array($nogo) && in_array('sesame', $nogo, true) && in_array('milk', $nogo, true);
+    });
+});

@@ -172,10 +172,11 @@ class RecipeDependencyWorkflowService
         $geplant = [];
 
         foreach ($offene as $open) {
-            // Kohärenz-Gate (2026-08-07): ENTdrahtete Fremdkörper-Zeilen tragen einen `kritiker`-
-            // Grund. Sie dürfen NICHT auto-nachgeneriert werden — sonst liesse die Kaskade den
-            // gerade als unpassend entfernten Fremdkörper als frisches Sub-Rezept wiederauferstehen.
-            if (isset($open['kritiker'])) {
+            // Kohärenz-Gate (2026-08-07) + Diät-/Allergen-Gate (L3): ENTdrahtete Zeilen tragen einen
+            // `kritiker`- bzw. `diaet_verstoss`-Grund. Sie dürfen NICHT auto-nachgeneriert werden — sonst
+            // liesse die Kaskade den gerade entfernten Fremdkörper / Diät-Verstoß als frisches Sub-Rezept
+            // wiederauferstehen (der Mensch wählt eine konforme Alternative).
+            if (isset($open['kritiker']) || isset($open['diaet_verstoss'])) {
                 continue;
             }
             if (($open['primaer'] ?? null) !== 'basisrezept_anlegen') {
