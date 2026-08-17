@@ -317,20 +317,22 @@ FA `main` = `eb85e3c`, demo deployt + Migration `[180] Ran`. Nachweis: `Planning
 
 *Der LETZTE Bau-Schritt — erst wenn der Editor/Cockpit steht und rund läuft. Die Hauptseite muss Design & Flow des fertigen Editors spiegeln (nicht zwei Welten). Basis = die aktuelle Landing: „Planungen"-Liste links · „Neu erstellen" (Basisrezept/Gericht/Concept) · „KI-Leitstelle"-Intro · „Zuletzt"-Karten · Details-Panel rechts. Steht bewusst ganz am Ende, weil die Roadmap die Arbeitsgrundlage der Routine ist (top-down → Hauptseite zuletzt).*
 
+> **Stand 2026-08-17:** funktionaler Kern gebaut+getestet (`d4e5f41` Status-Backbone · `a83750a` Suche/Filter). Rückgrat = `landingKaskadenMap()` (jüngster Lauf je Session → Badge + Stufen-Fortschritt, ein Query-Pass, kein N+1). Rein visuelle Politur (Karten-Direktaktionen, „Neu erstellen"-Editor-Look, Pixel-Parität) bewusst offen — die entscheidet sich am besten an Dominiques Real-Abnahme auf demo (das ist der letzte Punkt hier).
+
 **Linke Spalte — „Planungen"-Liste**
-- [ ] Status-Badge je Eintrag (Entwurf · läuft · prüfen · freigegeben · fertig) statt nur Divergenz/Konvergenz
-- [ ] Gruppierung/Filter (Kategorie · Herkunft · Typ Basisrezept/Gericht/Concept) + Suche
-- [ ] laufende Planung optisch hervorheben (Puls bei `running`)
+- [x] Status-Badge je Eintrag (Entwurf · läuft · prüfen · fertig · fehlgeschlagen) statt nur Divergenz/Konvergenz → `d4e5f41`
+- [x] Filter + Suche: Volltext-Titel-Suche + Status-Filter (aus dem Kaskaden-Status), filtert Liste + Zuletzt konsistent → `a83750a`. *Offen: Typ-Filter (Basisrezept/Gericht/Concept) — der Scope liegt in der Map (`kaskaden[..].scope`), nur UI fehlt.*
+- [x] laufende Planung optisch hervorheben (Puls bei `running`) → `d4e5f41`
 
 **Mitte — „Neu erstellen" + „Zuletzt"**
-- [ ] „Neu erstellen"-Leiste im Editor-Look; Trend/Skizze klar als EIN Input dahinter (nicht der Rahmen)
-- [ ] „Zuletzt"-Karten mit Status + Kaskaden-Fortschritt (z.B. „Gerichte 1/1 · Basisrezepte 0/3") + Direkt-Aktionen (Öffnen · freigeben · duplizieren · verwerfen)
-- [ ] verwaiste Entwürfe (ohne Lauf) sichtbar machen
+- [ ] „Neu erstellen"-Leiste im Editor-Look; Trend/Skizze klar als EIN Input dahinter (nicht der Rahmen) — *rein kosmetisch, offen für Real-Abnahme*
+- [~] „Zuletzt"-Karten mit Status + Kaskaden-Fortschritt („Gerichte 1/1 · Basisrezepte 0/3") ✅ (`d4e5f41`). *Offen: Direkt-Aktionen (freigeben/duplizieren/verwerfen) — neue Session-Mutationen, nach Real-Abnahme.*
+- [x] verwaiste Entwürfe (ohne Lauf) sichtbar machen — „Entwurf"-Badge → `d4e5f41`
 
 **Rechte Spalte — Details-Panel**
-- [ ] bei Auswahl: Herkunft/Lineage · Status · Kaskaden-Stand je Stufe · Skizzen · „Im Editor öffnen"
-- [ ] Kaskaden-Kurzstatus (welche Stufe offen/freigegeben/angereichert) ohne den Editor zu öffnen
+- [x] bei Auswahl: Herkunft/Lineage · Status · Kaskaden-Stand je Stufe · Skizzen · „Im Editor öffnen" → `d4e5f41`
+- [x] Kaskaden-Kurzstatus (welche Stufe offen/freigegeben/angereichert) ohne den Editor zu öffnen → `d4e5f41`
 
 **Gesamt**
-- [ ] Design-/Flow-Parität zum Editor-Cockpit (gleiche Sektionen/Farben/Abstände)
-- [ ] Verifikation: Sandbox-Render + kompiliertes-Blade-Lint; Real-Abnahme auf demo durch Dominique
+- [ ] Design-/Flow-Parität zum Editor-Cockpit (gleiche Sektionen/Farben/Abstände) — *visuelle Feinarbeit, Real-Abnahme*
+- [~] Verifikation: Sandbox-Render + kompiliertes-Blade-Lint ✅ (Render-Tests grün); **Real-Abnahme auf demo durch Dominique offen**
