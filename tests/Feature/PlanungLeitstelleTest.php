@@ -802,6 +802,15 @@ it('#17 D: planungDuplizieren legt eine team-eigene Kopie an (frischer Entwurf, 
         ->and((int) $kopie->id)->not->toBe((int) $s->id);
 });
 
+it('#17 T1: Löschen-Aktion ist in der linken Liste + im Details-Panel erreichbar', function () {
+    $s = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Löschbar', 'brief' => 'x']);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('waehle', $s->id)                              // aktiv → Details-Panel sichtbar
+        ->assertSeeHtml('data-planung-listen-verwerfen')      // Papierkorb je Listen-Zeile
+        ->assertSeeHtml('data-planung-details-verwerfen');    // Verwerfen im Details-Panel
+});
+
 /**
  * Etappe 4 — Skizzen-Integration (Teil 1): eine Session-Skizze wird zum Kaskaden-Eingang, indem
  * sie in den Gericht-Tab übertragen wird (Titel → Titel, Beschreibung → Brief). Der Mensch drückt

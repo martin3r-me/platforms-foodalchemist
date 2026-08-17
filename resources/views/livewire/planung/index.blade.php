@@ -98,14 +98,25 @@
                             <p class="text-[11px] font-semibold text-gray-500 uppercase tracking-wide px-1 mb-0.5">{{ $ast['category'] }}</p>
                             <div class="space-y-0.5">
                                 @foreach($ast['sessions'] as $s)
-                                    <button wire:key="sess-{{ $s->id }}" wire:click="waehle({{ $s->id }})"
-                                            class="w-full flex items-center justify-between gap-2 text-left px-2 py-1 rounded-md text-xs hover:bg-black/[0.04] {{ $active && $active->id === $s->id ? 'bg-violet-500/10 text-violet-700' : 'text-gray-700' }}">
-                                        <span class="truncate">{{ $s->title }}</span>
-                                        <span class="shrink-0 flex items-center gap-1" data-planung-status="{{ $kaskaden[$s->id]['status'] ?? 'entwurf' }}">
-                                            @if($kaskadeLaeuft($s->id))<span class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" title="läuft" data-planung-puls></span>@endif
-                                            {!! $kaskadeBadge($s->id) !!}
-                                        </span>
-                                    </button>
+                                    {{-- Zeile = wählbarer Button + hover-eingeblendeter Papierkorb (Löschen, #17-Rest);
+                                         kein verschachtelter Button (group-flex-div). --}}
+                                    <div wire:key="sess-{{ $s->id }}"
+                                         class="group flex items-center gap-1 rounded-md {{ $active && $active->id === $s->id ? 'bg-violet-500/10' : 'hover:bg-black/[0.04]' }}">
+                                        <button type="button" wire:click="waehle({{ $s->id }})"
+                                                class="flex-1 min-w-0 flex items-center justify-between gap-2 text-left px-2 py-1 text-xs {{ $active && $active->id === $s->id ? 'text-violet-700' : 'text-gray-700' }}">
+                                            <span class="truncate">{{ $s->title }}</span>
+                                            <span class="shrink-0 flex items-center gap-1" data-planung-status="{{ $kaskaden[$s->id]['status'] ?? 'entwurf' }}">
+                                                @if($kaskadeLaeuft($s->id))<span class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" title="läuft" data-planung-puls></span>@endif
+                                                {!! $kaskadeBadge($s->id) !!}
+                                            </span>
+                                        </button>
+                                        <button type="button" wire:click="planungVerwerfen({{ $s->id }})"
+                                                wire:confirm="Diese Planung verwerfen? (reversibel — Soft-Delete)"
+                                                class="shrink-0 px-1.5 py-1 rounded text-gray-300 hover:text-rose-600 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity"
+                                                title="Planung verwerfen" data-planung-listen-verwerfen="{{ $s->id }}">
+                                            @svg('heroicon-o-trash', 'w-3.5 h-3.5')
+                                        </button>
+                                    </div>
                                 @endforeach
                             </div>
                         </div>
@@ -245,7 +256,14 @@
                             </div>
                         </div>
                     @endif
-                    <button wire:click="oeffne({{ $active->id }})" class="{{ $btnGhostXs }}">Im Editor öffnen</button>
+                    <div class="flex items-center gap-2 pt-1">
+                        <button wire:click="oeffne({{ $active->id }})" class="{{ $btnGhostXs }}">Im Editor öffnen</button>
+                        <button wire:click="planungVerwerfen({{ $active->id }})"
+                                wire:confirm="Diese Planung verwerfen? (reversibel — Soft-Delete)"
+                                class="{{ $btnGhostXs }} !text-rose-600" data-planung-details-verwerfen>
+                            @svg('heroicon-o-trash', 'w-3.5 h-3.5') Verwerfen
+                        </button>
+                    </div>
                 </div>
             @else
                 <div class="p-4 text-xs text-gray-500">Eine Planung wählen, um Herkunft, Status und Lineage zu sehen.</div>
