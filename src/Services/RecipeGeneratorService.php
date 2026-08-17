@@ -112,7 +112,14 @@ class RecipeGeneratorService
             'konserve' => 'preserved_first',
             default => 'fresh_first',
         };
-        $bio = ($parameter['bio'] ?? false) ? 'bio' : 'conventional';        // Bio nur auf Ansage (4.4r)
+        // Bio dreiwertig: bio_pref (bio|conventional|neutral) gewinnt — „egal" ⇒ neutral (Adjustment 0),
+        // damit Bio-GPs nicht ungewollt bestraft werden. Fallback auf den Bool `bio` (MCP-Pfad, 4.4r).
+        $bio = match ($parameter['bio_pref'] ?? null) {
+            'bio' => 'bio',
+            'neutral' => 'neutral',
+            'conventional' => 'conventional',
+            default => ($parameter['bio'] ?? false) ? 'bio' : 'conventional',
+        };
 
         $melde('Zutaten werden zugeordnet …');
 

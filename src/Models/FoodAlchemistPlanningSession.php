@@ -41,7 +41,7 @@ class FoodAlchemistPlanningSession extends Model
      * Flow-Steuerung (planning_session_id/cascade_step_id) gehört NICHT hierher.
      */
     public const ALLOWED_GENERATION_PARAMS = [
-        'convenience', 'frische', 'bio', 'bio_praeferenz', 'bestand', 'level', 'sektor',
+        'convenience', 'frische', 'bio', 'bio_pref', 'bio_praeferenz', 'bestand', 'level', 'sektor',
         'diaet_hart', 'aroma', 'use_favorites_list', 'favorites_convenience_only',
         'occasion', 'serviceform', 'kompositions_stil', 'ziel_vk_eur',
         // KI-Bilder-Toggle (Preisfrage): steuert, ob die Anreicherung Schritt-Fotos + Produktfoto erzeugt.

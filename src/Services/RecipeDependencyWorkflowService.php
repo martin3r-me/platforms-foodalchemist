@@ -89,6 +89,9 @@ class RecipeDependencyWorkflowService
         $kindVollAnreichern = (bool) ($parameter['_voll_anreichern'] ?? false);
         $childParameter = $parameter;
         unset($childParameter['_voll_anreichern'], $childParameter['_defer_children']);
+        // VK-Achsen beim Abstieg strippen: ein Basisrezept-Kind läuft gegen recipe.generator (vkModus=false),
+        // dessen Prompt Ziel-VK/Anlass/Serviceform gar nicht kennt — sie würden nur Rauschen im JSON-Kontext.
+        unset($childParameter['ziel_vk_eur'], $childParameter['occasion'], $childParameter['serviceform']);
 
         foreach ($this->planChildren($team, $step, $recipe, $offene, $parameter) as [$child, $ingredientId, $text]) {
             if ($child->status === 'done' && $child->ref_id !== null) {
@@ -135,6 +138,8 @@ class RecipeDependencyWorkflowService
         $userId = (int) ($d['user_id'] ?? \Illuminate\Support\Facades\Auth::id() ?? 0);
         $kindVollAnreichern = (bool) ($params['_voll_anreichern'] ?? false);
         unset($params['_voll_anreichern'], $params['_defer_children']);
+        // VK-Achsen beim Abstieg strippen (wie dispatchChildren) — das Basisrezept-Kind kennt sie nicht.
+        unset($params['ziel_vk_eur'], $params['occasion'], $params['serviceform']);
 
         $runId = (string) Str::uuid();
         $child->update(['status' => 'running', 'generator_run_id' => $runId]);
@@ -190,7 +195,10 @@ class RecipeDependencyWorkflowService
             }
             $dedupe = hash('sha256', mb_strtolower($text) . '|' . json_encode([
                 $parameter['convenience'] ?? null, $parameter['frische'] ?? null,
-                $parameter['bio'] ?? null, $parameter['niveau'] ?? null,
+                // Bio + Niveau: kanonisch heißen die Keys `bio`/`level` — der alte `niveau`-Read war immer
+                // null (Dead-Read), sodass zwei Läufe, die sich NUR im Niveau unterschieden, denselben
+                // dedupe_key trugen. Fallback auf `niveau` erhält Altverhalten, falls der Key doch mal kommt.
+                $parameter['bio'] ?? null, $parameter['level'] ?? $parameter['niveau'] ?? null,
             ]));
 
             $child = DB::transaction(function () use ($team, $step, $ingredient, $text, $dedupe) {

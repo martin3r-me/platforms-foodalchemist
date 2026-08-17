@@ -2147,3 +2147,83 @@ it('Slice 2 / D1-Read: Foto-Picker auf FREMDEN Step → keine Kandidaten (Roh-id
         ->set('fotoPickerStep', (int) $fremdStep->id)
         ->assertViewHas('fotoPickerKandidaten', []);
 });
+
+// ── L0 — Verdrahtungs-Lecks (Regressionsgarantien) ───────────────────────────────────────────
+
+it('L0.5 Bio dreiwertig: „egal" wird zu bio_pref=neutral (kein −2-Bio-Penalty), bio-Bool bleibt false', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Bio egal', 'brief' => 'x']);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->set('eingabe.rezept.brief', 'Rote-Bete-Salat.')
+        ->set('regler.rezept.bio_praeferenz', 'egal')
+        ->call('goKaskade', 'rezept')
+        ->assertSet('laeuft', true);
+
+    // Der Depth-1-Job trägt die dreiwertige Präferenz — „egal" ⇒ neutral (Adjustment 0), nicht 'conventional'.
+    Queue::assertPushed(GenerateRecipeJob::class, fn ($job) => ($job->parameter['bio_pref'] ?? null) === 'neutral'
+        && ($job->parameter['bio'] ?? null) === false);
+});
+
+it('L0.1 KI-Kopf reicht die Menü-Leitplanken (menue_*) an planAusBrief durch', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Menü mit Korridor']);
+    $draft = FoodAlchemistConcept::create(['team_id' => $this->rootTeam->id, 'name' => 'Stub', 'status' => 'draft']);
+
+    $erhalten = [];
+    $this->mock(\Platform\FoodAlchemist\Services\ConceptGeneratorService::class, function ($m) use (&$erhalten, $draft) {
+        $m->shouldReceive('planAusBrief')->andReturnUsing(function (...$args) use (&$erhalten, $draft) {
+            $erhalten = $args;
+            return ['concept' => $draft];
+        });
+    });
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->set('eingabe.concept.brief', 'Sommer-Menü, 4 Gänge, ca. 45 € p. P.')
+        ->set('regler.concept.menue_gaenge', '4')
+        ->set('regler.concept.menue_preis_ziel', '45,00')
+        ->call('kiKopf')
+        ->assertSet('fehler', null);
+
+    // 6. Argument von planAusBrief = $menueAchsen (kanonische menue_*-Keys), 5. = via 'ui' (Marker unverändert).
+    expect($erhalten[4] ?? null)->toBe('ui');
+    $menue = $erhalten[5] ?? [];
+    expect($menue['menue_gaenge'] ?? null)->toBe(4)
+        ->and($menue['menue_preis_ziel_pp'] ?? null)->toBe(45.0);
+});
+
+it('L0.1 KI-Kopf mit mistgetippter Menü-Zahl wird gesagt (kein planAusBrief-Aufruf)', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Menü fehlerhaft']);
+    $aufgerufen = false;
+    $this->mock(\Platform\FoodAlchemist\Services\ConceptGeneratorService::class, function ($m) use (&$aufgerufen) {
+        $m->shouldReceive('planAusBrief')->andReturnUsing(function () use (&$aufgerufen) {
+            $aufgerufen = true;
+            return ['concept' => null];
+        });
+    });
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->set('eingabe.concept.brief', 'Menü.')
+        ->set('regler.concept.menue_gaenge', '99')      // > 20 → ungültig
+        ->call('kiKopf')
+        ->assertSet('fehler', 'Menü-Gänge: bitte eine ganze Zahl zwischen 1 und 20 angeben (z. B. 4) — oder das Feld leer lassen.');
+
+    expect($aufgerufen)->toBeFalse();
+});
+
+it('L0.9 Plan-Verbrauch ist scope-gebunden: ein Gericht-Go löscht den vorbereiteten Concept-Plan NICHT', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Plan bleibt', 'brief' => 'x']);
+    $plan = FoodAlchemistConcept::create(['team_id' => $this->rootTeam->id, 'name' => 'Plan', 'status' => 'draft']);
+    $session->update(['plan_concept_id' => (int) $plan->id]);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->assertSet('planConceptId', (int) $plan->id)     // rehydriert
+        ->set('eingabe.gericht.brief', 'Ein einzelnes Gericht.')
+        ->call('goKaskade', 'gericht')
+        ->assertSet('laeuft', true)
+        ->assertSet('planConceptId', (int) $plan->id);    // NICHT verbraucht (falscher Scope)
+
+    expect($session->refresh()->plan_concept_id)->toBe((int) $plan->id);
+});

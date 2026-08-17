@@ -853,6 +853,14 @@ class Index extends Component
         $favConvOnly = (bool) ($r['favoriten_conv_only'] ?? false);
         $kiBilder = (bool) ($r['ki_bilder'] ?? false);
         $p = $r;
+        // Bio dreiwertig weiterreichen (bio|conventional|neutral) — der Generator/Matcher kennt einen
+        // NEUTRALEN Arm (Adjustment 0). Ohne ihn fiel „egal" auf das Bool false → 'conventional' → Bio-GPs
+        // wurden aktiv mit −2 bestraft (Bug). Der Bool `bio` bleibt für den MCP-Pfad rückwärtskompatibel.
+        $p['bio_pref'] = match ($r['bio_praeferenz'] ?? '') {
+            'bio' => 'bio',
+            'egal' => 'neutral',
+            default => 'conventional',
+        };
         $p['bio'] = ($r['bio_praeferenz'] ?? '') === 'bio';
         if (! $vk) {
             unset($p['occasion'], $p['serviceform'], $p['kompositions_stil']);
@@ -903,6 +911,55 @@ class Index extends Component
         }
 
         return $p;
+    }
+
+    /**
+     * Menü-Leitplanken (nur Concept) auf ihre kanonischen menue_*-Keys reduziert — dieselbe Teilmenge,
+     * die {@see PlanningCascadeService::dispatchConceptStep} an die Konzept-Erzeugung reicht. Damit
+     * bekommen BEIDE Concept-Wege (Schnell-Go über den Job UND KI-Kopf inline) exakt denselben
+     * Leitplanken-Satz. Leer für nicht-Concept-Scopes (keine Menü-Achsen).
+     *
+     * @return array<string,mixed>
+     */
+    private function menueAchsenFuer(string $scope): array
+    {
+        if ($scope !== 'concept') {
+            return [];
+        }
+
+        return array_filter(
+            $this->reglerParams($scope),
+            static fn ($k) => str_starts_with((string) $k, 'menue_'),
+            ARRAY_FILTER_USE_KEY,
+        );
+    }
+
+    /**
+     * Prüft die Concept-Menü-Leitplanken auf mistgetippte Zahlen und liefert eine Klartext-Fehlermeldung
+     * (oder null, wenn alles gültig/leer ist). Ein Mensch, der 45,x statt 45 meinte, wird GESAGT statt
+     * still verworfen — derselbe Grundsatz wie bei Ziel-VK. Geteilt von {@see goKaskade} und {@see kiKopf},
+     * damit der KI-Kopf-Pfad nicht mit einer stillschweigend verworfenen Vorgabe generiert.
+     */
+    private function menueLeitplankenFehler(string $scope): ?string
+    {
+        if ($scope !== 'concept') {
+            return null;
+        }
+        foreach (['menue_preis_min' => 'Preis-Untergrenze', 'menue_preis_ziel' => 'Zielpreis', 'menue_preis_max' => 'Preis-Obergrenze'] as $feld => $lbl) {
+            if (trim((string) ($this->regler[$scope][$feld] ?? '')) !== '' && $this->menuePreisEur($scope, $feld) === null) {
+                return "Menü-{$lbl}: bitte einen Netto-Preis je Person zwischen 0,50 € und 2.000,00 € angeben (z. B. 45,00) — oder das Feld leer lassen.";
+            }
+        }
+        if (trim((string) ($this->regler[$scope]['menue_gaenge'] ?? '')) !== '' && $this->menueGaenge($scope) === null) {
+            return 'Menü-Gänge: bitte eine ganze Zahl zwischen 1 und 20 angeben (z. B. 4) — oder das Feld leer lassen.';
+        }
+        foreach (['menue_quote_vegan' => 'Vegan-Anteil', 'menue_quote_vegetarisch' => 'Vegetarisch-Anteil'] as $feld => $lbl) {
+            if (trim((string) ($this->regler[$scope][$feld] ?? '')) !== '' && $this->menueQuote($scope, $feld) === null) {
+                return "Menü-{$lbl}: bitte einen Prozentwert zwischen 0 und 100 angeben (z. B. 30) — oder das Feld leer lassen.";
+            }
+        }
+
+        return null;
     }
 
     /** Menü-Gänge/Positionen: ganze Zahl 1–20, sonst null (leer/ungültig = keine Vorgabe). Concept-Scope. */
@@ -1056,6 +1113,13 @@ class Index extends Component
 
             return;
         }
+        // Menü-Leitplanken zuerst validieren (wie beim Go) — der KI-Kopf darf nicht mit einer
+        // stillschweigend verworfenen Zahl-Vorgabe generieren.
+        if (($menueFehler = $this->menueLeitplankenFehler('concept')) !== null) {
+            $this->fehler = $menueFehler;
+
+            return;
+        }
         // Concept-Briefing auf die Session spiegeln + persistieren (nicht verlieren) — wie beim Go.
         $this->form['brief'] = (string) ($this->eingabe['concept']['brief'] ?? '');
         $this->form['creative_mode'] = (string) ($this->eingabe['concept']['creative_mode'] ?? 'voll_kreativ');
@@ -1063,7 +1127,11 @@ class Index extends Component
 
         $titel = trim((string) ($this->eingabe['concept']['titel'] ?? ''));
         try {
-            $plan = $svc->planAusBrief($team, $brief, [], $titel !== '' ? $titel : null);
+            // Menü-Leitplanken (Gänge/Preis-Korridor/Quoten/Balance/Buffet) an den Plan durchreichen —
+            // sonst arbeitet der plan-first-Standard-Pfad ohne sie (Bug: nur der Schnell-Go über den Job
+            // reichte sie bisher). Gleiche menue_*-Teilmenge wie dispatchConceptStep. $via bleibt 'ui'
+            // (der created_via-Marker `concept_plan_ui` wird andernorts erwartet — nicht verändern).
+            $plan = $svc->planAusBrief($team, $brief, [], $titel !== '' ? $titel : null, 'ui', $this->menueAchsenFuer('concept'));
         } catch (\Throwable $e) {
             $this->fehler = 'KI-Kopf fehlgeschlagen: ' . $e->getMessage();
 
@@ -1133,26 +1201,10 @@ class Index extends Component
         }
         // Menü-Leitplanken (nur Concept): eine mistgetippte Zahl wird GESAGT statt still verworfen —
         // derselbe Grundsatz wie bei Ziel-VK (der Absender ist ein Mensch, der korrigieren kann).
-        if ($scope === 'concept') {
-            foreach (['menue_preis_min' => 'Preis-Untergrenze', 'menue_preis_ziel' => 'Zielpreis', 'menue_preis_max' => 'Preis-Obergrenze'] as $feld => $lbl) {
-                if (trim((string) ($this->regler[$scope][$feld] ?? '')) !== '' && $this->menuePreisEur($scope, $feld) === null) {
-                    $this->fehler = "Menü-{$lbl}: bitte einen Netto-Preis je Person zwischen 0,50 € und 2.000,00 € angeben (z. B. 45,00) — oder das Feld leer lassen.";
+        if (($menueFehler = $this->menueLeitplankenFehler($scope)) !== null) {
+            $this->fehler = $menueFehler;
 
-                    return;
-                }
-            }
-            if (trim((string) ($this->regler[$scope]['menue_gaenge'] ?? '')) !== '' && $this->menueGaenge($scope) === null) {
-                $this->fehler = 'Menü-Gänge: bitte eine ganze Zahl zwischen 1 und 20 angeben (z. B. 4) — oder das Feld leer lassen.';
-
-                return;
-            }
-            foreach (['menue_quote_vegan' => 'Vegan-Anteil', 'menue_quote_vegetarisch' => 'Vegetarisch-Anteil'] as $feld => $lbl) {
-                if (trim((string) ($this->regler[$scope][$feld] ?? '')) !== '' && $this->menueQuote($scope, $feld) === null) {
-                    $this->fehler = "Menü-{$lbl}: bitte einen Prozentwert zwischen 0 und 100 angeben (z. B. 30) — oder das Feld leer lassen.";
-
-                    return;
-                }
-            }
+            return;
         }
         // Kontext des Start-Tabs auf die Session spiegeln (Dashboard-Anzeige + creative_mode) und persistieren.
         $this->form['brief'] = (string) ($this->eingabe[$scope]['brief'] ?? '');
@@ -1211,17 +1263,24 @@ class Index extends Component
             $this->laufId = $run->id;
             $this->laeuft = true;
             $this->hinweis = null;
-            $this->planConceptId = null;    // Plan verbraucht (referenziert ODER frisch generiert) → nächster Go ist wieder Schnell-Pfad
-            // #53 persistent: auch den gespeicherten Zeiger lösen (Plan ist verbraucht) — sonst würde ein
-            // Reload nach dem Go den bereits verbrauchten Plan wieder anbieten. Fail-soft.
-            if ($session->plan_concept_id !== null) {
-                try {
-                    $session->update(['plan_concept_id' => null]);
-                } catch (\Throwable) {
-                    // Persistenz-Fehler darf den bereits gestarteten Lauf nicht kippen.
+            // Verbrauch AN DEN SCOPE binden: nur der Concept-Go verbraucht den KI-Kopf-Plan, nur der
+            // Gericht-Go die Skizzen-Herkunft. Sonst löschte ein Basisrezept-/Gericht-Go den vorbereiteten
+            // Concept-Plan, obwohl er für diesen Lauf nie gelesen wurde (und umgekehrt).
+            if ($scope === 'concept') {
+                $this->planConceptId = null;    // Plan verbraucht (referenziert ODER frisch generiert) → nächster Go Schnell-Pfad
+                // #53 persistent: auch den gespeicherten Zeiger lösen (Plan verbraucht) — sonst böte ein
+                // Reload nach dem Go den bereits verbrauchten Plan wieder an. Fail-soft.
+                if ($session->plan_concept_id !== null) {
+                    try {
+                        $session->update(['plan_concept_id' => null]);
+                    } catch (\Throwable) {
+                        // Persistenz-Fehler darf den bereits gestarteten Lauf nicht kippen.
+                    }
                 }
             }
-            $this->skizzeGerichtId = null;  // Skizzen-Ursprung verbraucht (auf den Lauf gestempelt) → nächster Go ohne Herkunft
+            if ($scope === 'gericht') {
+                $this->skizzeGerichtId = null;  // Skizzen-Ursprung verbraucht (auf den Lauf gestempelt) → nächster Go ohne Herkunft
+            }
             $this->wissenVorschau = null;   // neue Kaskade → Vorschau weg; die Steps zeigen dann das ECHTE Wissen (#1a)
             $this->meldung = 'Kaskade gestartet — Entwurf wird erzeugt …';
             $this->fehler = null;

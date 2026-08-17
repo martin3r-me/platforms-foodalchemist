@@ -183,7 +183,12 @@ class PlanningCascadeService
 
         $step->update(['generator_run_id' => $runId]);
         Cache::put(GenerateRecipeJob::cacheKey($runId), ['status' => 'pending'], now()->addMinutes(self::RESULT_TTL_MIN));
-        GenerateRecipeJob::dispatch($runId, $team->id, (int) (\Illuminate\Support\Facades\Auth::id() ?? 0), $brief, $jobParams, $vkModus, $vollAnreichern);
+        // Doppel-Anreicherung vermeiden: im gestuften Lauf IST die Freigabe der Anreicherungs-Schritt
+        // (starteFolgestufe → EnrichRecipeJob, completeCoverage). Eine Vor-Freigabe-Voll-Anreicherung am
+        // noch nicht freigegebenen Draft liefe dieselbe teure Coverage-Kette ein zweites Mal — darum im
+        // staged-Modus unterdrücken. Nicht-gestuft (Direkt-Materialisierung) behält das Alt-Verhalten.
+        $vorFreigabeAnreichern = $vollAnreichern && ! $staged;
+        GenerateRecipeJob::dispatch($runId, $team->id, (int) (\Illuminate\Support\Facades\Auth::id() ?? 0), $brief, $jobParams, $vkModus, $vorFreigabeAnreichern);
     }
 
     /** Dispatch der Konzept-Generierung für einen Step (Reuse-Assembler; im Erfinden-Modus fächert der Job auf). */
@@ -1189,7 +1194,10 @@ class PlanningCascadeService
         $sessionId = $run?->planning_session_id !== null ? (int) $run->planning_session_id : null;
         $staged = (bool) ($run?->staged ?? false);
         if ($step->kind === 'concept') {
-            $this->dispatchConceptStep($team, $step, $brief, $sessionId, (string) ($run?->creative_mode ?? 'voll_kreativ'));
+            // $params durchreichen — sonst verliert das „neu generieren" eines Concept-Steps SÄMTLICHE
+            // Menü-Leitplanken (Gänge/Preis-Korridor/Quoten/Balance/Buffet), weil dispatchConceptStep
+            // die menue_*-Teilmenge aus den Run-Params filtert (Default [] = kein Leitplanken-Erbe).
+            $this->dispatchConceptStep($team, $step, $brief, $sessionId, (string) ($run?->creative_mode ?? 'voll_kreativ'), $params);
         } else {
             $this->dispatchRezeptStep($team, $step, $brief, $params, $step->kind === 'gericht', false, $sessionId, $staged);
         }

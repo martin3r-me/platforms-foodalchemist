@@ -9,6 +9,40 @@ use Platform\FoodAlchemist\Services\Matching\TokenEngine;
 /** Baut alle Fakten vor dem eigentlichen KI-Call und liefert einen kleinen Audit-Snapshot. */
 class RecipeGenerationContextService
 {
+    /**
+     * Prompt-Whitelist: NUR semantisch bedeutsame Leitplanken landen im KI-Kontext. Steuer-/Ableitungs-
+     * Keys (ki_bilder, use_favorites_list, favorites_convenience_only, bio_praeferenz, cascade_step_id,
+     * auto_dependencies, _*) sind Rauschen im Prompt und werden weggelassen. Bewusst additiv gehalten —
+     * spätere Achsen (pax, ziel_portion_g, saison …) hier eintragen.
+     */
+    private const PROMPT_KEYS = [
+        'convenience', 'frische', 'bio', 'bio_pref', 'bestand', 'level', 'sektor',
+        'diaet_hart', 'aroma', 'occasion', 'serviceform', 'kompositions_stil', 'ziel_vk_eur',
+    ];
+
+    /**
+     * Reduziert das rohe Parameter-Bündel auf die Prompt-Whitelist und gleicht die Key-Sprache an den
+     * Prompt-Text an (der Prompt nennt »niveau«/»anlass«, die kanonischen Keys heißen level/occasion).
+     * So muss das Modell die Brücke nicht selbst raten.
+     *
+     * @param  array<string,mixed>  $parameter
+     * @return array<string,mixed>
+     */
+    private function promptParameter(array $parameter): array
+    {
+        $p = array_intersect_key($parameter, array_flip(self::PROMPT_KEYS));
+        if (array_key_exists('level', $p)) {
+            $p['niveau'] = $p['level'];
+            unset($p['level']);
+        }
+        if (array_key_exists('occasion', $p)) {
+            $p['anlass'] = $p['occasion'];
+            unset($p['occasion']);
+        }
+
+        return $p;
+    }
+
     public function __construct(
         private KnowledgeContextService $knowledge,
         private GenerationContextService $generation,
@@ -30,7 +64,7 @@ class RecipeGenerationContextService
                 ? 'GERICHT (essfertig angerichteter Verkaufsteller — Komposition erlaubt)'
                 : 'BASISREZEPT (wiederverwendbarer Baustein / EINE Komponente — kein angerichteter Teller)',
             'description' => $description,
-            'parameter' => $parameter,
+            'parameter' => $this->promptParameter($parameter),
         ];
         if (($typ = $this->settings->kuechenTyp($team)) !== null) {
             $prompt = ['kuechen_profil' => 'Mandanten-Profil (Soft-Default): ' . TeamSettingsService::KUECHEN_TYPEN[$typ]] + $prompt;
