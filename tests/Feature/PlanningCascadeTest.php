@@ -678,6 +678,39 @@ it('Freigabe ist team-gescoped: geerbter Step wird abgewiesen (D1)', function ()
     expect($recipe->refresh()->status->value)->toBe('draft');   // nichts passiert
 });
 
+// D1-Audit (Etappe 8, Multi-Tenancy »Writes isOwnedBy konsequent«): jede step-mutierende
+// Kaskaden-Methode muss einen GEERBTEN (visibleToTeam, aber nicht besessenen) Step über {@see
+// ownedStep} abweisen. gibStepFrei ist oben einzeln gepinnt; dieser Datensatz sperrt die übrigen
+// Schreib-Endpunkte gegen Cross-Tenant-Writes — sonst bliebe ein Refactor, der ownedStep in einer
+// dieser Methoden umgeht, ununterscheidbar von korrektem Code. ownedStep steht in JEDER dieser
+// Methoden als erste Anweisung → der Wurf greift VOR jeder Zustands-/Argument-Nutzung.
+it('D1-Audit: geerbter Step wird von jeder Schreib-Methode abgewiesen (isOwnedBy, konsequent)', function (Closure $write) {
+    $recipe = $this->makeRecipe($this->rootTeam, 'D1-Audit', ['status' => 'draft']);
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'gericht', 'status' => 'review']);
+    $step = FoodAlchemistCascadeRunStep::create([
+        'team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id,
+        'kind' => 'gericht', 'status' => 'done', 'ref_type' => 'recipe', 'ref_id' => $recipe->id,
+    ]);
+    $svc = app(PlanningCascadeService::class);
+
+    // childA erbt den Root-Katalog (sichtbar), besitzt ihn aber NICHT → Schreiben verboten.
+    expect(fn () => $write($svc, $this->childA, (int) $step->id))->toThrow(RuntimeException::class);
+
+    // Nichts passiert: Step-Status + Rezept unangetastet, kein Job dispatcht.
+    expect($step->refresh()->status)->toBe('done')
+        ->and($recipe->refresh()->status->value)->toBe('draft');
+    Queue::assertNothingPushed();
+})->with([
+    'reBilder' => [fn ($svc, $team, $id) => $svc->reBilder($team, $id)],
+    'reAnreichern' => [fn ($svc, $team, $id) => $svc->reAnreichern($team, $id)],
+    'regeneriereStep' => [fn ($svc, $team, $id) => $svc->regeneriereStep($team, $id)],
+    'verwirfStep' => [fn ($svc, $team, $id) => $svc->verwirfStep($team, $id)],
+    'erzeugeGeplantenStep' => [fn ($svc, $team, $id) => $svc->erzeugeGeplantenStep($team, $id)],
+    'verwirfGeplantenStep' => [fn ($svc, $team, $id) => $svc->verwirfGeplantenStep($team, $id)],
+    'uebernimmManuellesFotoFuerStep' => [fn ($svc, $team, $id) => $svc->uebernimmManuellesFotoFuerStep($team, $id, \Illuminate\Http\UploadedFile::fake()->create('d1.jpg', 10))],
+    'uebernimmVorhandenesFotoFuerStep' => [fn ($svc, $team, $id) => $svc->uebernimmVorhandenesFotoFuerStep($team, $id, 1)],
+]);
+
 it('Cockpit: Editor rendert die Freigabe-UI und gibt einen Entwurf über die Komponente frei', function () {
     $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Freigabe-Test', 'brief' => 'x']);
     $recipe = $this->makeRecipe($this->rootTeam, 'Cockpit-Draft', ['status' => 'draft']);
