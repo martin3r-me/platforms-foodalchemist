@@ -1159,6 +1159,30 @@ class Index extends Component
         $this->refreshLaeuft($cascade);
     }
 
+    /**
+     * Echtes Resume (Idempotenz/Resume, Etappe 8 Teil 3): alle GESCHEITERTEN generierbaren Steps des
+     * Laufs auf einmal wieder aufnehmen — statt sie einzeln über {@see regeneriereStep} („neu
+     * generieren") zu bedienen. Ergänzt {@see laufFortsetzen}: der Reaper (Teil 1) macht harte Hänger
+     * erst zu `failed`, dieser Resume ({@see PlanningCascadeService::setzeLaufFort}) nimmt dann alle
+     * `failed`-Steps (verwaist ODER regulär gescheitert) gebündelt wieder auf. Idempotent gegen
+     * Doppel-Jobs (Service-Vertrag: nur `failed`-Steps, die sofort auf `running` flippen).
+     */
+    public function laufWiederAufnehmen(PlanningCascadeService $cascade): void
+    {
+        $team = $this->team();
+        if ($team === null || $this->laufId === null) {
+            return;
+        }
+        $n = $cascade->setzeLaufFort($team, $this->laufId);
+        if ($n > 0) {
+            $this->meldung = $n . ' gescheiterte(r) Schritt(e) werden neu erzeugt — der Fortschritt läuft oben durch.';
+            $this->fehler = null;
+        } else {
+            $this->meldung = 'Kein gescheiterter Schritt zum Fortsetzen.';
+        }
+        $this->refreshLaeuft($cascade);
+    }
+
     // ── Freigabe / Verwerfen (Gate 2 — inline im Editor) ───────────────
 
     /** Einen erzeugten Draft freigeben (→ live) — Rezept approved / Concept active. */

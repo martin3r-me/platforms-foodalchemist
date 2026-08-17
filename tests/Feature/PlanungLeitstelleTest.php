@@ -394,6 +394,38 @@ it('laufFortsetzen: nichts verwaist → ehrliche Meldung, kein Step angetastet',
         ->and($run->refresh()->status)->toBe('running');
 });
 
+// ── Etappe 8 — Idempotenz/Resume Teil 3: „Gescheiterte Schritte fortsetzen" im Cockpit ──────────
+it('laufWiederAufnehmen: nimmt alle gescheiterten generierbaren Steps gebündelt wieder auf', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'X', 'brief' => 'y']);
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'planning_session_id' => $session->id, 'scope' => 'gericht', 'status' => 'failed', 'staged' => true]);
+    $f1 = FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht', 'status' => 'failed', 'label' => 'Fail 1']);
+    $f2 = FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'rezept', 'status' => 'failed', 'label' => 'Fail 2']);
+    $done = FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht', 'status' => 'done', 'ref_type' => 'recipe', 'ref_id' => 1]);
+
+    Livewire::test(PlanungIndex::class)
+        ->set('laufId', $run->id)
+        ->call('laufWiederAufnehmen')
+        ->assertSet('fehler', null);
+
+    expect($f1->refresh()->status)->toBe('running')
+        ->and($f2->refresh()->status)->toBe('running')
+        ->and($done->refresh()->status)->toBe('done');  // done unberührt
+    Queue::assertPushed(GenerateRecipeJob::class, 2);
+});
+
+it('laufWiederAufnehmen: kein gescheiterter Step → ehrliche Meldung, kein Job', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'X', 'brief' => 'y']);
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'planning_session_id' => $session->id, 'scope' => 'gericht', 'status' => 'review', 'staged' => true]);
+    FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht', 'status' => 'done', 'ref_type' => 'recipe', 'ref_id' => 1]);
+
+    Livewire::test(PlanungIndex::class)
+        ->set('laufId', $run->id)
+        ->call('laufWiederAufnehmen')
+        ->assertSet('meldung', 'Kein gescheiterter Schritt zum Fortsetzen.');
+
+    Queue::assertNotPushed(GenerateRecipeJob::class);
+});
+
 it('#1b Grounding-Preview: wissenVorschau baut nur den Kontext, generiert NICHT (kein Lauf)', function () {
     $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Rotwein-Reduktion', 'brief' => 'Dunkle Reduktion.']);
 

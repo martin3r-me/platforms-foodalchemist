@@ -7,6 +7,9 @@
     $laufRunning = $lauf->steps->whereIn('status', ['queued', 'running'])->count();
     $laufDone = $lauf->steps->whereIn('status', ['done', 'freigegeben'])->count();
     $laufFailed = $lauf->steps->where('status', 'failed')->count();
+    // Idempotenz/Resume (Etappe 8 Teil 3): gescheiterte GENERIERBARE Steps (rezept|gericht|concept)
+    // — nur diese trägt setzeLaufFort wieder auf (GP-/Referenz-Steps haben keinen Generator).
+    $laufFailedGenerierbar = $lauf->steps->where('status', 'failed')->whereIn('kind', ['rezept', 'gericht', 'concept'])->count();
     $offeneEntwuerfe = $lauf->steps->where('status', 'done')->count();
     $stufen = $this->stufenAusSteps($lauf->steps);
     $zustandPill = ['läuft' => 'bg-amber-500/15 text-amber-300', 'prüfen' => 'bg-emerald-500/15 text-emerald-300', 'geplant' => 'bg-violet-500/15 text-violet-300', 'erledigt' => 'bg-white/10 text-gray-400'];
@@ -48,6 +51,21 @@
             <span class="inline-flex items-center gap-1.5 text-rose-300">@svg('heroicon-o-x-circle', 'w-4 h-4') Fehlgeschlagen — Details unten</span>
         @endif
     </div>
+
+    {{-- Idempotenz/Resume (Etappe 8 Teil 3): gescheiterte Schritte gebündelt fortsetzen — statt sie
+         einzeln über „neu generieren" zu bedienen. Auch im gemischten Zustand (einige freigegeben,
+         einige gescheitert) sichtbar, deshalb bewusst außerhalb der Status-if-Kette. --}}
+    @if($laufFailedGenerierbar > 0)
+        <div class="flex items-center gap-2 flex-wrap mb-3" data-planung-resume>
+            <span class="text-[11px] text-rose-300">{{ $laufFailedGenerierbar }} Schritt(e) gescheitert.</span>
+            <button type="button" wire:click="laufWiederAufnehmen" wire:loading.attr="disabled"
+                    data-planung-resume-btn
+                    class="inline-flex items-center gap-1 text-[11px] text-emerald-300 underline underline-offset-2 hover:text-emerald-200">
+                @svg('heroicon-o-arrow-path', 'w-3.5 h-3.5')
+                Gescheiterte Schritte fortsetzen
+            </button>
+        </div>
+    @endif
 
     @if($laufRunning > 0 && $freigegebenGesamt > 0)
         <p class="text-[11px] text-gray-500 mb-3">Eine Stufe ist freigegeben — die nächste wird gerade erzeugt. Jede Stufe wird separat freigegeben.</p>
