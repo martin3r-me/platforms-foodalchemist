@@ -360,6 +360,40 @@ it('Queue-Watchdog schweigt, wenn ein Schritt Fortschritt gemacht hat (Worker be
         ->assertSet('hinweis', null);            // trotz 5 Min Laufzeit kein Hinweis — Worker lebt
 });
 
+// ── Etappe 8 — Idempotenz/Resume: „Abgebrochene Schritte freiräumen" im Cockpit ──────────────
+it('laufFortsetzen: reapt verwaiste Steps und macht den hängenden Lauf handlungsfähig', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'X', 'brief' => 'y']);
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'planning_session_id' => $session->id, 'scope' => 'gericht', 'status' => 'running']);
+    $step = FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht', 'status' => 'running']);
+    // Raw-Update (kein Timestamp-Touch): der Job liegt seit 45 Min ohne Rückmeldung → verwaist.
+    FoodAlchemistCascadeRunStep::where('id', $step->id)->update(['updated_at' => now()->subMinutes(45)]);
+
+    Livewire::test(PlanungIndex::class)
+        ->set('laufId', $run->id)
+        ->set('laeuft', true)
+        ->call('laufFortsetzen')
+        ->assertSet('fehler', null)
+        ->assertSet('laeuft', false);            // Run raus aus dem ewigen `running`
+
+    expect($step->refresh()->status)->toBe('failed')
+        ->and($run->refresh()->status)->toBe('failed');
+});
+
+it('laufFortsetzen: nichts verwaist → ehrliche Meldung, kein Step angetastet', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'X', 'brief' => 'y']);
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'planning_session_id' => $session->id, 'scope' => 'gericht', 'status' => 'running']);
+    $step = FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht', 'status' => 'running']);
+    // frisch — nicht verwaist
+
+    Livewire::test(PlanungIndex::class)
+        ->set('laufId', $run->id)
+        ->set('laeuft', true)
+        ->call('laufFortsetzen');
+
+    expect($step->refresh()->status)->toBe('running')
+        ->and($run->refresh()->status)->toBe('running');
+});
+
 it('#1b Grounding-Preview: wissenVorschau baut nur den Kontext, generiert NICHT (kein Lauf)', function () {
     $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Rotwein-Reduktion', 'brief' => 'Dunkle Reduktion.']);
 

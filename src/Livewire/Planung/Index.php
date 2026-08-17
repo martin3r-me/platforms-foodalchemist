@@ -1137,6 +1137,28 @@ class Index extends Component
             : null;
     }
 
+    /**
+     * Recovery bei hängendem Lauf (Idempotenz/Resume, Etappe 8): verwaiste in-flight Steps als
+     * `failed` markieren, damit der Lauf wieder handlungsfähig wird (neu generieren / verwerfen).
+     * Greift NUR bei wirklich verwaisten Steps ({@see PlanningCascadeService::VERWAIST_NACH_MINUTEN})
+     * — ein junger, evtl. noch lebender Job wird nicht abgewürgt; dann sagt es das ehrlich.
+     */
+    public function laufFortsetzen(PlanningCascadeService $cascade): void
+    {
+        $team = $this->team();
+        if ($team === null || $this->laufId === null) {
+            return;
+        }
+        $n = $cascade->reapeVerwaisteSteps($team, $this->laufId);
+        if ($n > 0) {
+            $this->meldung = $n . ' abgebrochene(r) Schritt(e) freigeräumt — jetzt unten neu generieren oder verwerfen.';
+            $this->fehler = null;
+        } else {
+            $this->meldung = 'Kein abgebrochener Schritt gefunden — der Lauf arbeitet vermutlich noch. Kurz warten.';
+        }
+        $this->refreshLaeuft($cascade);
+    }
+
     // ── Freigabe / Verwerfen (Gate 2 — inline im Editor) ───────────────
 
     /** Einen erzeugten Draft freigeben (→ live) — Rezept approved / Concept active. */

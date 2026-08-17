@@ -286,6 +286,54 @@ it('Job-Hook: ohne cascade_step_id bleibt ein fremder Step unberührt (Bestandsp
     expect($step->refresh()->status)->toBe('queued');
 });
 
+// ── Etappe 8 — Idempotenz/Resume: verwaiste in-flight Steps reapen ───────────────────────────
+// Stirbt ein Generator-Job hart (OOM/Timeout/Worker-Kill) OHNE failed()-Rückkanal, bleibt sein Step
+// ewig queued/running und der Run steckt in `running` (Sackgasse: verwerfen/freigeben setzen done/
+// failed voraus). reapeVerwaisteSteps markiert NUR wirklich verwaiste (alte) in-flight Steps als
+// failed → der Run wird wieder bewertet und handlungsfähig. Junge Steps bleiben unangetastet.
+
+it('reapeVerwaisteSteps: ein verwaister running-Step wird failed und der Run wieder bewertet', function () {
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'gericht', 'status' => 'running']);
+    $step = FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht', 'status' => 'running']);
+    // Raw-Update (kein Timestamp-Touch): der Job liegt seit 45 Min ohne Rückmeldung.
+    FoodAlchemistCascadeRunStep::where('id', $step->id)->update(['updated_at' => now()->subMinutes(45)]);
+
+    $n = app(PlanningCascadeService::class)->reapeVerwaisteSteps($this->rootTeam, (int) $run->id);
+
+    expect($n)->toBe(1)
+        ->and($step->refresh()->status)->toBe('failed')
+        ->and($step->error)->toContain('verwaist')
+        ->and($run->refresh()->status)->toBe('failed');   // einziger Step gescheitert
+});
+
+it('reapeVerwaisteSteps: ein junger in-flight Step bleibt unangetastet (kein Abwürgen)', function () {
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'gericht', 'status' => 'running']);
+    // frisch dispatcht (updated_at = jetzt) → noch nicht verwaist, evtl. noch lebender Job
+    $step = FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht', 'status' => 'running']);
+
+    $n = app(PlanningCascadeService::class)->reapeVerwaisteSteps($this->rootTeam, (int) $run->id);
+
+    expect($n)->toBe(0)
+        ->and($step->refresh()->status)->toBe('running')
+        ->and($run->refresh()->status)->toBe('running');
+});
+
+it('reapeVerwaisteSteps: gemischt — nur der verwaiste Step wird gereapt, done/geplant unberührt (Run → review)', function () {
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'concept', 'status' => 'running']);
+    $done = FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'concept', 'status' => 'done', 'ref_type' => 'recipe', 'ref_id' => 1]);
+    $geplant = FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'rezept', 'status' => 'geplant']);
+    $alt = FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht', 'status' => 'queued']);
+    FoodAlchemistCascadeRunStep::where('id', $alt->id)->update(['updated_at' => now()->subMinutes(45)]);
+
+    $n = app(PlanningCascadeService::class)->reapeVerwaisteSteps($this->rootTeam, (int) $run->id);
+
+    expect($n)->toBe(1)
+        ->and($alt->refresh()->status)->toBe('failed')
+        ->and($done->refresh()->status)->toBe('done')
+        ->and($geplant->refresh()->status)->toBe('geplant')
+        ->and($run->refresh()->status)->toBe('review');   // done/geplant übrig → review, nicht failed
+});
+
 // ── Etappe 7 — Bild-Status Teil 2: explizite Fehler-Persistenz (deferred.bilder) ─────────────
 // Der EnrichRecipeJob hält das KI-Foto-Ergebnis jetzt sichtbar am Step fest (status done|failed + n),
 // statt es still fail-soft zu schlucken. Ein einzelner fehlgeschlagener Call macht die Erzeugung

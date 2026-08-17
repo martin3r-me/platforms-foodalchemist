@@ -50,6 +50,17 @@ class PlanningCascadeService
     private const CONCEPT_MAX_SLOTS = 30;
 
     /**
+     * Ab wann ein in-flight Step (`queued`/`running`) als VERWAIST (abgebrochen) gilt — Urteil beim
+     * Lesen, kein Spalten-Zustand (Beweis-Philosophie wie {@see \Platform\FoodAlchemist\Models\FoodAlchemistBulkRun::istVerwaist}).
+     * Bewusst weit über jeder realen Generierung (Rezept-/Gericht-Generierung dauert Minuten, nicht
+     * eine halbe Stunde), damit ein noch lebender, langsamer Job NIE fälschlich für tot erklärt wird.
+     * Der 90-s-Watchdog ({@see \Platform\FoodAlchemist\Livewire\Planung\Index::WATCHDOG_SEKUNDEN})
+     * WARNT viel früher; das Reapen ({@see reapeVerwaisteSteps}) GREIFT erst, wenn der Job praktisch
+     * sicher tot ist.
+     */
+    public const VERWAIST_NACH_MINUTEN = 30;
+
+    /**
      * Startet einen Kaskaden-Lauf und gibt ihn zurück (Status `running`). Die eigentliche Generierung
      * läuft asynchron im Queue-Job; die Fläche pollt den Run/seine Steps.
      *
@@ -736,6 +747,42 @@ class PlanningCascadeService
         $step->update(['status' => 'failed', 'error' => Str::limit($error, 500, '')]);
         $this->recomputeRunStatus((int) $step->cascade_run_id);
         $this->scoreConceptCohesionIfComplete($step);
+    }
+
+    /**
+     * Idempotenz/Resume (Etappe 8) — eine abgebrochene Kaskade sauber fortsetzbar machen.
+     *
+     * Stirbt ein Generator-Job hart (OOM/Timeout/Worker-Kill), ohne seinen `failed()`-Haken zu feuern,
+     * bleibt sein Step ewig `queued`/`running`; der Run verharrt in `running` ({@see recomputeRunStatus}),
+     * der Cockpit-Spinner löst nie auf, und WEDER {@see verwirfStep}/{@see verwirfRun} (setzen `done`/
+     * `failed` voraus) NOCH {@see gibRunFrei} greifen — der Lauf ist eine Sackgasse.
+     *
+     * Dieser Reaper markiert die VERWAISTEN in-flight Steps (älter als {@see VERWAIST_NACH_MINUTEN})
+     * als `failed` — über {@see markStepFailed}, damit der Run neu bewertet wird (raus aus dem ewigen
+     * `running`) und bei Concept-Kindern das Kohärenz-Gate scoren kann. Danach ist der Lauf wieder
+     * handlungsfähig: der Mensch generiert die verwaisten Steps einzeln neu ({@see regeneriereStep})
+     * oder verwirft sie.
+     *
+     * Konservativ (Beweis-Philosophie): NICHT-verwaiste (junge) in-flight Steps bleiben unangetastet —
+     * ein langsamer, noch lebender Job wird nie abgewürgt. Team-scoped über {@see lauf}.
+     *
+     * @return int Zahl der reapten Steps (0 = nichts verwaist)
+     */
+    public function reapeVerwaisteSteps(Team $team, int $runId): int
+    {
+        $run = $this->lauf($team, $runId);
+        if ($run === null) {
+            return 0;
+        }
+        $grenze = now()->subMinutes(self::VERWAIST_NACH_MINUTEN);
+        $verwaist = $run->steps->filter(fn ($s) => in_array($s->status, ['queued', 'running'], true)
+            && $s->updated_at !== null
+            && $s->updated_at->lt($grenze));
+        foreach ($verwaist as $s) {
+            $this->markStepFailed((int) $s->id, 'Abgebrochen — keine Rückmeldung vom Worker (verwaist). Neu generieren oder verwerfen.');
+        }
+
+        return $verwaist->count();
     }
 
     // ── Auto-Trigger: Menü-Folge-Kohärenz-Gate nach der Fan-out-Erfindung ──

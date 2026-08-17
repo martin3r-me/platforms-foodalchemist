@@ -397,6 +397,12 @@
                     </div>
                     @if($hinweis !== null)
                         <p class="text-[11px] text-amber-400" data-planung-watchdog>⏱ {{ $hinweis }}</p>
+                        {{-- Recovery (Idempotenz/Resume): verwaiste Steps freiräumen → Lauf wieder handlungsfähig --}}
+                        <button type="button" wire:click="laufFortsetzen" wire:loading.attr="disabled"
+                                data-planung-fortsetzen
+                                class="mt-1 text-[11px] text-amber-300 underline underline-offset-2 hover:text-amber-200">
+                            Abgebrochene Schritte freiräumen
+                        </button>
                     @endif
                 @endif
 
