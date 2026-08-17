@@ -244,7 +244,14 @@ class RecipeGeneratorService
                     $nameHalbfabrikat = ! $direktArtikel && $this->heuristik->queryIstHalbfabrikat(
                         app(Matching\TokenEngine::class)->tokenize($text)
                     );
-                    $istBasisrezept = $nameHalbfabrikat || (! $direktArtikel && ($llmSub ?? false));
+                    // T4 (Entscheidung 2026-08-17, »Gericht = Basisrezepte«): rolle-hart — im VK-GERICHT
+                    // ist eine Zutat der Rolle komponente/beilage IMMER ein Sub-Basisrezept (überstimmt
+                    // KI + Namens-Heuristik); flach/GP bleibt nur echte Rohware (direktArtikel: Öl/Salz/
+                    // Gewürze/Kräuter) sowie garnitur/aroma_treiber (die laufen über T3-Marker/LLM). NUR
+                    // im vkModus — im Basisrezept sind komponente/beilage rohe Bauteile (kein Infinit-Rekurs).
+                    $rolleErzwingtSub = $vkModus && ! $direktArtikel
+                        && in_array($z['role'] ?? null, ['komponente', 'beilage'], true);
+                    $istBasisrezept = $rolleErzwingtSub || $nameHalbfabrikat || (! $direktArtikel && ($llmSub ?? false));
                     $laKandidaten = $istBasisrezept ? [] : app(LaCandidateFinder::class)
                         ->find($team, $text, $this->wgHint($z['commodity_group'] ?? $z['warengruppe'] ?? null), 3)
                         ->map(fn ($la) => [

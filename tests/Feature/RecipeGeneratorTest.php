@@ -234,6 +234,38 @@ it('LLM-Flag: true erzwingt Sub; ein hartes Halbfabrikat (fond/jus) überstimmt 
         ->and($resultat['offene'][2]['primaer'])->toBe('lieferantenartikel_waehlen'); // geschmort (Button) überstimmt Flag=false NICHT
 });
 
+// T4 »Gericht = Basisrezepte« rolle-hart: im VK-Gericht wird komponente/beilage IMMER Sub,
+// echte Rohware (direktArtikel) bleibt LA. Im Basisrezept greift die Regel nicht (kein Rekurs).
+it('T4: im Gericht (vkModus) wird komponente/beilage IMMER Basisrezept, Rohware bleibt LA', function () {
+    $resultat = $this->svc->generiere($this->rootTeam, 'Rolle-Teller', [
+        'convenience' => 'from_scratch', 'frische' => 'frisch',
+    ], kiRezeptOverride: [
+        'name' => 'Teller: Rolle-hart',
+        'zutaten' => [
+            ['text' => 'Kartoffelterrine', 'quantity' => 120, 'unit' => 'g', 'role' => 'beilage', 'sub_rezept' => false], // kein Marker + KI-flach → trotzdem Sub (Rolle)
+            ['text' => 'Aprikosenragout', 'quantity' => 60, 'unit' => 'g', 'role' => 'komponente'],                       // kein Marker/Flag → Sub (Rolle)
+            ['text' => 'Fleur de Sel', 'quantity' => 2, 'unit' => 'g', 'role' => 'garnitur'],                             // Rohware (direktArtikel) → LA
+        ],
+    ], vkModus: true);
+
+    expect($resultat['offene'][0]['primaer'])->toBe('basisrezept_anlegen')
+        ->and($resultat['offene'][1]['primaer'])->toBe('basisrezept_anlegen')
+        ->and($resultat['offene'][2]['primaer'])->toBe('lieferantenartikel_waehlen');
+});
+
+it('T4: im Basisrezept (kein vkModus) greift die Rolle-Regel NICHT (komponente = rohes Bauteil)', function () {
+    $resultat = $this->svc->generiere($this->rootTeam, 'Basis-Rolle', [
+        'convenience' => 'from_scratch',
+    ], kiRezeptOverride: [
+        'name' => 'Basis: Rolle-egal',
+        'zutaten' => [
+            ['text' => 'Kartoffelterrine', 'quantity' => 120, 'unit' => 'g', 'role' => 'beilage', 'sub_rezept' => false],
+        ],
+    ], vkModus: false);
+
+    expect($resultat['offene'][0]['primaer'])->toBe('lieferantenartikel_waehlen');
+});
+
 it('Fehlt das sub_rezept-Flag, bleibt die Namens-Heuristik der Fallback (kein stiller bool-Cast)', function () {
     $resultat = $this->svc->generiere($this->rootTeam, 'Fond-und-Essenz-Teller', [
         'convenience' => 'from_scratch', 'frische' => 'frisch',
