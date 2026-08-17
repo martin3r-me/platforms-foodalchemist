@@ -60,6 +60,9 @@ class Index extends Component
     /** Landing-Liste (finale Etappe #17): Typ-Filter (''=alle | rezept|gericht|concept — aus dem Lauf-Scope). */
     public string $filterTyp = '';
 
+    /** Worker (T2): Name eines manuell ergänzten Basisrezepts (Sub-Step, den die KI nicht erkannt hat). */
+    public string $neuerSubName = '';
+
     /** Editor-Felder der aktiven Session. */
     public array $form = ['title' => '', 'brief' => '', 'analysis' => '', 'creative_mode' => 'voll_kreativ'];
 
@@ -1358,6 +1361,29 @@ class Index extends Component
             $this->fehler = null;
         } catch (\Throwable $e) {
             $this->fehler = $e->getMessage();
+        }
+        $this->refreshLaeuft($cascade);
+    }
+
+    /**
+     * Manuell ein Basisrezept in die Basisrezepte-Stufe ergänzen (T2): ein Sub-Rezept, das die KI nicht
+     * als Komponente erkannt hat (z. B. ein fehlender Jus), als `geplant`-Step nachziehen. Erzeugt wird
+     * es danach je Zeile mit „jetzt erzeugen". Fail-soft; kein aktiver Lauf/leerer Name = No-op.
+     */
+    public function ergaenzeSubRezept(PlanningCascadeService $cascade): void
+    {
+        $team = $this->team();
+        $name = trim($this->neuerSubName);
+        if ($team === null || $this->laufId === null || $name === '') {
+            return;
+        }
+        try {
+            $cascade->ergaenzeManuellenSubStep($team, (int) $this->laufId, $name);
+            $this->neuerSubName = '';
+            $this->meldung = 'Basisrezept ergänzt — mit „jetzt erzeugen" generieren.';
+            $this->fehler = null;
+        } catch (\Throwable $e) {
+            $this->fehler = 'Ergänzen nicht möglich: ' . $e->getMessage();
         }
         $this->refreshLaeuft($cascade);
     }

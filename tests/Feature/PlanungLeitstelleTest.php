@@ -811,6 +811,20 @@ it('#17 T1: Löschen-Aktion ist in der linken Liste + im Details-Panel erreichba
         ->assertSeeHtml('data-planung-details-verwerfen');    // Verwerfen im Details-Panel
 });
 
+it('#17 T2: ergaenzeSubRezept ergänzt ein geplantes Basisrezept am aktiven Lauf', function () {
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'gericht', 'status' => 'review', 'staged' => true, 'brief' => 'Teller']);
+    FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht', 'status' => 'freigegeben', 'label' => 'Teller', 'depth' => 0, 'sort' => 1, 'parent_step_id' => null]);
+
+    Livewire::test(PlanungIndex::class)
+        ->set('laufId', (int) $run->id)
+        ->set('neuerSubName', 'Schweinejus')
+        ->call('ergaenzeSubRezept')
+        ->assertSet('neuerSubName', '');   // Feld nach dem Ergänzen geleert
+
+    expect(FoodAlchemistCascadeRunStep::where('cascade_run_id', $run->id)
+        ->where('kind', 'rezept')->where('label', 'Schweinejus')->where('status', 'geplant')->exists())->toBeTrue();
+});
+
 /**
  * Etappe 4 — Skizzen-Integration (Teil 1): eine Session-Skizze wird zum Kaskaden-Eingang, indem
  * sie in den Gericht-Tab übertragen wird (Titel → Titel, Beschreibung → Brief). Der Mensch drückt

@@ -93,6 +93,19 @@
                         @include('foodalchemist::livewire.planung.partials.step-zeile', $stepArgs($st, (int) $st->depth > 0))
                     @endforeach
                 </div>
+                @if($stufe['kind'] === 'rezept')
+                    {{-- Manuell ein Basisrezept ergänzen (T2): den geplanten Sub-Step legt der Motor an,
+                         „jetzt erzeugen" (je Zeile) generiert ihn. Für Sub-Rezepte, die die KI nicht erkannt hat. --}}
+                    <div class="mt-2 pt-2 border-t border-white/10 flex items-center gap-2" data-planung-sub-ergaenzen>
+                        <input type="text" wire:model="neuerSubName" wire:keydown.enter="ergaenzeSubRezept"
+                               placeholder="Basisrezept ergänzen (z. B. Schweinejus) …"
+                               class="flex-1 text-xs bg-white/5 border border-white/10 rounded px-2 py-1 text-gray-200 placeholder-gray-500" />
+                        <button type="button" wire:click="ergaenzeSubRezept"
+                                class="text-[11px] text-violet-300 hover:text-violet-200 inline-flex items-center gap-1 shrink-0">
+                            @svg('heroicon-o-plus', 'w-3.5 h-3.5') ergänzen
+                        </button>
+                    </div>
+                @endif
                 @if($stufe['zustand'] === 'prüfen')
                     <div class="mt-2 pt-2 border-t border-white/10 flex justify-end">
                         <button wire:click="gibStufeFrei('{{ $stufe['kind'] }}')" class="text-[11px] text-emerald-300 hover:text-emerald-200 inline-flex items-center gap-1">

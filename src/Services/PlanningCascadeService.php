@@ -1272,6 +1272,51 @@ class PlanningCascadeService
         $this->recomputeRunStatus((int) $step->cascade_run_id);
     }
 
+    /**
+     * Manuell ein Basisrezept in die Basisrezepte-Stufe ergänzen (T2, Real-Abnahme): ein Sub-Rezept,
+     * das die KI nicht als Komponente erkannt hat (z. B. ein fehlender Jus), wird von Hand nachgezogen.
+     * Legt einen `geplant`-Sub-Step (kind=rezept) unter dem Wurzel-Step des Laufs an — genau die Form,
+     * die {@see erzeugeGeplantenStep}/{@see RecipeDependencyWorkflowService::dispatchGeplantesKind} kennt
+     * (Brief=label, Params aus dem Eltern-`deferred.children` bzw. den Lauf-Params). Der Nutzer erzeugt
+     * ihn danach je Zeile mit „jetzt erzeugen". Team-owned (D1). Idempotent über `dedupe_key` (`manual:`+
+     * Name) — dasselbe Basisrezept doppelt ergänzt teilt sich einen Step.
+     */
+    public function ergaenzeManuellenSubStep(Team $team, int $runId, string $name): ?FoodAlchemistCascadeRunStep
+    {
+        $run = $this->lauf($team, $runId);
+        if ($run === null || ! $run->isOwnedBy($team)) {
+            return null;
+        }
+        $name = trim($name);
+        if ($name === '') {
+            return null;
+        }
+        // Anker = Wurzel-Step des Laufs (Gericht/Basisrezept), unter dem die Basisrezepte-Stufe hängt.
+        $root = $run->steps->first(fn ($s) => $s->parent_step_id === null) ?? $run->steps->first();
+        if ($root === null) {
+            return null;
+        }
+        $dedupe = 'manual:' . mb_strtolower($name);
+        $existing = FoodAlchemistCascadeRunStep::where('cascade_run_id', $run->id)->where('dedupe_key', $dedupe)->first();
+        if ($existing !== null) {
+            return $existing;   // schon ergänzt → idempotent
+        }
+        $step = FoodAlchemistCascadeRunStep::create([
+            'team_id' => $team->id,
+            'cascade_run_id' => (int) $run->id,
+            'parent_step_id' => (int) $root->id,
+            'depth' => ((int) $root->depth) + 1,
+            'kind' => 'rezept',
+            'label' => Str::limit($name, 120, ''),
+            'dedupe_key' => $dedupe,
+            'status' => 'geplant',
+            'sort' => (int) ($run->steps->max('sort') ?? 0) + 1,
+        ]);
+        $this->recomputeRunStatus((int) $run->id);
+
+        return $step;
+    }
+
     /** Bulk-Freigabe aller noch offenen (done) Steps eines Laufs. */
     public function gibRunFrei(Team $team, int $runId): void
     {

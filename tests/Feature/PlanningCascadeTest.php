@@ -364,6 +364,32 @@ it('reapeVerwaisteSteps: gemischt — nur der verwaiste Step wird gereapt, done/
         ->and($run->refresh()->status)->toBe('review');   // done/geplant übrig → review, nicht failed
 });
 
+// T2 (Real-Abnahme): ein Basisrezept, das die KI nicht erkannt hat, von Hand nachziehen.
+it('T2: ergaenzeManuellenSubStep legt einen geplanten rezept-Sub-Step unter der Wurzel an (idempotent, team-owned)', function () {
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'gericht', 'status' => 'review', 'staged' => true, 'brief' => 'Teller']);
+    $gericht = FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht', 'status' => 'freigegeben', 'label' => 'Teller', 'depth' => 0, 'sort' => 1, 'parent_step_id' => null]);
+
+    $svc = app(PlanningCascadeService::class);
+    $step = $svc->ergaenzeManuellenSubStep($this->rootTeam, (int) $run->id, 'Schweinejus');
+
+    expect($step)->not->toBeNull()
+        ->and($step->kind)->toBe('rezept')
+        ->and($step->status)->toBe('geplant')
+        ->and((int) $step->parent_step_id)->toBe((int) $gericht->id)   // hängt unter der Wurzel
+        ->and($step->label)->toBe('Schweinejus')
+        ->and((int) $step->depth)->toBe(1)
+        ->and($run->refresh()->status)->toBe('review');                // geplant → review (Stufe zeigt ihn)
+
+    // Idempotent (dedupe manual:name): gleicher Name → derselbe Step, kein zweiter.
+    $again = $svc->ergaenzeManuellenSubStep($this->rootTeam, (int) $run->id, 'Schweinejus');
+    expect((int) $again->id)->toBe((int) $step->id)
+        ->and(FoodAlchemistCascadeRunStep::where('cascade_run_id', $run->id)->where('kind', 'rezept')->count())->toBe(1);
+
+    // Tenancy (D1): ein Kind-Team besitzt den Root-Lauf nicht → null, kein Step angelegt.
+    expect($svc->ergaenzeManuellenSubStep($this->childA, (int) $run->id, 'Fremd-Jus'))->toBeNull()
+        ->and(FoodAlchemistCascadeRunStep::where('cascade_run_id', $run->id)->where('label', 'Fremd-Jus')->exists())->toBeFalse();
+});
+
 // ── Etappe 8 — Idempotenz/Resume Teil 2: gescheiterte Steps gebündelt re-dispatchen ──────────────
 // Teil 1 macht harte Hänger zu `failed`. Teil 2 (setzeLaufFort) nimmt ALLE failed-Steps auf einmal
 // wieder auf — statt sie einzeln über regeneriereStep neu zu generieren. IDEMPOTENT gegen Doppel-
