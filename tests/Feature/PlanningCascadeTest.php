@@ -334,6 +334,58 @@ it('reapeVerwaisteSteps: gemischt — nur der verwaiste Step wird gereapt, done/
         ->and($run->refresh()->status)->toBe('review');   // done/geplant übrig → review, nicht failed
 });
 
+// ── Etappe 8 — Idempotenz/Resume Teil 2: gescheiterte Steps gebündelt re-dispatchen ──────────────
+// Teil 1 macht harte Hänger zu `failed`. Teil 2 (setzeLaufFort) nimmt ALLE failed-Steps auf einmal
+// wieder auf — statt sie einzeln über regeneriereStep neu zu generieren. IDEMPOTENT gegen Doppel-
+// Jobs: nur failed-Steps werden angefasst (in-flight/done/geplant bleiben unberührt); da der Step
+// sofort auf `running` flippt, dispatcht ein zweiter Aufruf keinen Doppel-Job.
+
+it('setzeLaufFort: alle failed-Steps werden gebündelt re-dispatcht, andere Kinds unberührt', function () {
+    $g1 = $this->makeRecipe($this->rootTeam, 'Fail-Gericht 1', ['status' => 'draft']);
+    $g2 = $this->makeRecipe($this->rootTeam, 'Fail-Gericht 2', ['status' => 'draft']);
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'gericht', 'status' => 'failed', 'staged' => true]);
+    $f1 = FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht', 'status' => 'failed', 'ref_type' => 'recipe', 'ref_id' => $g1->id, 'label' => 'Fail-Gericht 1']);
+    $f2 = FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'rezept', 'status' => 'failed', 'ref_type' => 'recipe', 'ref_id' => $g2->id, 'label' => 'Fail-Rezept 2']);
+    // Diese beiden dürfen NICHT re-dispatcht werden (idempotent / kein Doppel-Job):
+    $laeuft = FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht', 'status' => 'running', 'label' => 'läuft noch']);
+    $fertig = FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht', 'status' => 'done', 'ref_type' => 'recipe', 'ref_id' => 1]);
+
+    $n = app(PlanningCascadeService::class)->setzeLaufFort($this->rootTeam, (int) $run->id);
+
+    expect($n)->toBe(2)
+        ->and($f1->refresh()->status)->toBe('running')   // re-dispatcht → running, Draft verworfen
+        ->and($f1->refresh()->ref_id)->toBeNull()
+        ->and($f2->refresh()->status)->toBe('running')
+        ->and($laeuft->refresh()->status)->toBe('running')  // in-flight unberührt
+        ->and($fertig->refresh()->status)->toBe('done');    // done unberührt
+    Queue::assertPushed(GenerateRecipeJob::class, 2);        // genau zwei Jobs, keine Dublette
+});
+
+it('setzeLaufFort: ohne failed-Step passiert nichts (kein Job, Rückgabe 0)', function () {
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'gericht', 'status' => 'review', 'staged' => true]);
+    $done = FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht', 'status' => 'done', 'ref_type' => 'recipe', 'ref_id' => 1]);
+
+    $n = app(PlanningCascadeService::class)->setzeLaufFort($this->rootTeam, (int) $run->id);
+
+    expect($n)->toBe(0)
+        ->and($done->refresh()->status)->toBe('done');
+    Queue::assertNotPushed(GenerateRecipeJob::class);
+});
+
+it('setzeLaufFort: der zweite Aufruf ist idempotent — kein Doppel-Job (Steps schon running)', function () {
+    $g1 = $this->makeRecipe($this->rootTeam, 'Resume-Idempotenz', ['status' => 'draft']);
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'gericht', 'status' => 'failed', 'staged' => true]);
+    FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht', 'status' => 'failed', 'ref_type' => 'recipe', 'ref_id' => $g1->id, 'label' => 'Resume-Idempotenz']);
+
+    $svc = app(PlanningCascadeService::class);
+    $erst = $svc->setzeLaufFort($this->rootTeam, (int) $run->id);
+    $zweit = $svc->setzeLaufFort($this->rootTeam, (int) $run->id);  // Doppel-Klick, Step ist jetzt running
+
+    expect($erst)->toBe(1)
+        ->and($zweit)->toBe(0);   // beim zweiten Mal ist nichts mehr failed → kein Re-Dispatch
+    Queue::assertPushed(GenerateRecipeJob::class, 1);
+});
+
 // ── Etappe 7 — Bild-Status Teil 2: explizite Fehler-Persistenz (deferred.bilder) ─────────────
 // Der EnrichRecipeJob hält das KI-Foto-Ergebnis jetzt sichtbar am Step fest (status done|failed + n),
 // statt es still fail-soft zu schlucken. Ein einzelner fehlgeschlagener Call macht die Erzeugung

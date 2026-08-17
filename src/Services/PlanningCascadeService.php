@@ -785,6 +785,40 @@ class PlanningCascadeService
         return $verwaist->count();
     }
 
+    /**
+     * Gebündeltes Resume (Idempotenz/Resume, Etappe 8 Teil 2): alle GESCHEITERTEN (`failed`)
+     * generierbaren Steps eines Laufs auf einmal RE-DISPATCHEN — statt sie einzeln über
+     * {@see regeneriereStep} neu zu generieren. Reust {@see regeneriereStep} je Step (verwirft das
+     * Teil-Wrack, setzt den Step auf `running` und dispatcht den passenden Generator-Job neu).
+     *
+     * IDEMPOTENT gegen Doppel-Jobs: es werden AUSSCHLIESSLICH `failed`-Steps angefasst — in-flight
+     * Steps (`queued`/`running`) bleiben unangetastet, ebenso `done`/`geplant`/`skipped`/`verworfen`.
+     * Da {@see regeneriereStep} den Step SOFORT auf `running` flippt, sieht ein zweiter Aufruf (Doppel-
+     * Klick, während der Resume-Lauf noch arbeitet) den Step nicht mehr als `failed` → kein Doppel-Job.
+     * {@see lauf} lädt die Steps je Aufruf frisch aus der DB, sodass die Idempotenz auch über getrennte
+     * Requests hält.
+     *
+     * Ergänzt den {@see reapeVerwaisteSteps}-Reaper (Teil 1): der macht harte Hänger erst zu `failed`,
+     * dieser Resume greift dann alle `failed`-Steps (verwaist ODER regulär gescheitert) gebündelt.
+     * Nur die generierbaren Kinds (rezept|gericht|concept); GP-/Referenz-Steps tragen keinen Generator.
+     *
+     * @return int Zahl der re-dispatchten Steps (0 = nichts Gescheitertes zum Fortsetzen)
+     */
+    public function setzeLaufFort(Team $team, int $runId): int
+    {
+        $run = $this->lauf($team, $runId);
+        if ($run === null) {
+            return 0;
+        }
+        $gescheitert = $run->steps->filter(fn ($s) => $s->status === 'failed'
+            && in_array($s->kind, ['rezept', 'gericht', 'concept'], true));
+        foreach ($gescheitert as $s) {
+            $this->regeneriereStep($team, (int) $s->id);
+        }
+
+        return $gescheitert->count();
+    }
+
     // ── Auto-Trigger: Menü-Folge-Kohärenz-Gate nach der Fan-out-Erfindung ──
 
     /**
