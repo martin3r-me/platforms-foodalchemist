@@ -59,15 +59,29 @@ class MatchHeuristics
      * gemachte Saucen/Reduktionen als Halbfabrikat-Marker — damit »Steinpilz-Rahmsauce«
      * als eigenes Sub-Basisrezept gilt statt flach in Steinpilze + Sahne aufgelöst zu werden (§4).
      * Token-EXAKT via patternMatchesToken (≤ 5 Chars exakt, länger als Präfix), NICHT Substring:
-     * so trifft »sauce«/»jus«/»sud« nur als eigenständiges Token (Tokenizer splittet »-«/Space),
-     * während gekaufte Ein-Wort-Kondimente (Sojasauce/Fischsauce) NICHT anschlagen
+     * so trifft »sauce« nur als eigenständiges Token (Tokenizer splittet »-«/Space), während
+     * gekaufte Ein-Wort-Kondimente (Sojasauce/Fischsauce) NICHT anschlagen
      * (Golden-Test: Sojasauce = kein Halbfabrikat). Bleibt Keyword-Hack bis zum LLM-Komponenten-Flag.
      * »essenz« bewusst NICHT aufgenommen: mehrdeutig zwischen gemachter Klar-Essenz (Sub) und
      * gekaufter Frucht-Essenz/Extrakt (GP) — die DoD M4-14 pinnt »Drachenfrucht-Essenz« als GP-Lücke.
      * Disambiguierung gehört ans LLM-Komponenten-Flag, nicht an ein blindes Keyword.
      */
     public const SUB_SAUCEN_MARKER = [
-        'sauce', 'rahmsauce', 'jus', 'sud', 'dressing', 'vinaigrette',
+        'sauce', 'rahmsauce', 'dressing', 'vinaigrette',
+    ];
+
+    /**
+     * Kompositum-fähige Halbfabrikat-Grundwörter (2026-08-17, Bug-Fix Real-Abnahme »Schweinejus«):
+     * `jus`/`sud` (3 Chars) als **SUFFIX** matchen, nicht exakt-Token — im Deutschen stehen sie als
+     * Grundwort im Kompositum (Schweinejus/Rotweinjus/Kalbsjus/Gemüsesud/Fischsud). Der frühere
+     * Exakt-Token-Match (aus Furcht vor »Sojasauce«) verfehlte genau diese Einwortformen → ein
+     * hausgemachter Jus blieb flache Zutat statt Basisrezept (§4). Suffix ist hier gefahrlos: kein
+     * gekauftes Ein-Wort-Kondiment endet auf »jus«/»sud« (anders als »sauce« ⊂ »sojasauce«); »fond«/
+     * »reduktion« (≥4) sind über den Substring-Zweig ohnehin abgedeckt. Standalone »jus«/»sud« endet
+     * auf sich selbst → weiterhin getroffen.
+     */
+    public const SUB_KOMPOSITUM_SUFFIX = [
+        'jus', 'sud',
     ];
 
     /** P8 — breitere Zubereitungs-Marker, NUR Button-Heuristik. */
@@ -123,6 +137,13 @@ class MatchHeuristics
             }
             foreach (self::SUB_SAUCEN_MARKER as $m) {
                 if (self::patternMatchesToken($t, $m)) {
+                    return true;
+                }
+            }
+            // Kompositum-Grundwort per Suffix (Schweinejus/Gemüsesud) — deckt die deutschen Einwortformen,
+            // die der Exakt-Token-Match verfehlt (standalone »jus«/»sud« endet auf sich selbst).
+            foreach (self::SUB_KOMPOSITUM_SUFFIX as $s) {
+                if (str_ends_with($t, $s)) {
                     return true;
                 }
             }

@@ -178,6 +178,20 @@ it('halbfabrikat_gate_erkennt_gemachte_saucen', function () {
     }
 });
 
+// Bug-Fix Real-Abnahme 2026-08-17: deutsche Kompositum-Einwortformen (»Schweinejus«) — jus/sud
+// als SUFFIX, nicht exakt-Token. Der frühere Exakt-Match verfehlte genau diese → hausgemachter Jus
+// blieb flache Zutat statt Basisrezept (§4).
+it('halbfabrikat_gate_erkennt_kompositum_jus_sud', function () {
+    foreach (['Schweinejus', 'Rotweinjus', 'Kalbsjus', 'Bratenjus', 'Gemüsesud', 'Fischsud'] as $name) {
+        expect($this->h->queryIstHalbfabrikat(($this->ts)($name)))->toBeTrue($name)
+            ->and($this->h->istSubRezeptKandidat($name))->toBeTrue($name);
+    }
+    // Guard bleibt: gekaufte Ein-Wort-Kondimente enden NICHT auf jus/sud → weiter kein Halbfabrikat.
+    foreach (['Sojasauce', 'Fischsauce', 'Austernsauce'] as $name) {
+        expect($this->h->queryIstHalbfabrikat(($this->ts)($name)))->toBeFalse($name);
+    }
+});
+
 // Guard: gekaufte Ein-Wort-Kondimente bleiben Rohware — Token-EXAKT trifft sie nicht
 it('halbfabrikat_gate_verschont_gekaufte_kondimente', function () {
     foreach (['Sojasauce', 'Fischsauce', 'Austernsauce'] as $name) {
