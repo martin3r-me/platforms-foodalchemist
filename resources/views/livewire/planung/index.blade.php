@@ -24,6 +24,26 @@
         [$lbl, $cls] = $laufStatus[$l['status']] ?? [$l['status'], 'bg-black/[0.04] text-gray-600'];
         return $chip('▸ ' . $lbl, $cls);
     };
+    // Finale Etappe (Hauptseite): Kaskaden-Status-Badge je Session aus $kaskaden (jüngster Lauf).
+    // Kein Lauf → „Entwurf" (verwaister Entwurf, sichtbar). Farben spiegeln $laufStatus.
+    $kaskaden = $kaskaden ?? [];
+    $kaskadeStatusStil = [
+        'entwurf' => 'bg-black/[0.04] text-gray-500',
+        'läuft' => 'bg-amber-100 text-amber-700',
+        'prüfen' => 'bg-violet-100 text-violet-700',
+        'fertig' => 'bg-emerald-100 text-emerald-700',
+        'fehlgeschlagen' => 'bg-rose-100 text-rose-700',
+    ];
+    $kaskadeBadge = function ($sessionId) use ($kaskaden, $kaskadeStatusStil, $chip) {
+        $status = $kaskaden[(int) $sessionId]['status'] ?? 'entwurf';
+        return $chip(\Illuminate\Support\Str::ucfirst($status), $kaskadeStatusStil[$status] ?? $kaskadeStatusStil['entwurf']);
+    };
+    $kaskadeLaeuft = fn ($sessionId) => (bool) ($kaskaden[(int) $sessionId]['running'] ?? false);
+    // Stufen-Fortschritt kompakt: „Gerichte 1/1 · Basisrezepte 0/3".
+    $kaskadeFortschritt = function ($sessionId) use ($kaskaden) {
+        $stufen = $kaskaden[(int) $sessionId]['stufen'] ?? [];
+        return collect($stufen)->map(fn ($st) => $st['label'] . ' ' . $st['fertig'] . '/' . $st['total'])->implode(' · ');
+    };
 @endphp
 
 <x-ui-page>
@@ -59,7 +79,10 @@
                                     <button wire:key="sess-{{ $s->id }}" wire:click="waehle({{ $s->id }})"
                                             class="w-full flex items-center justify-between gap-2 text-left px-2 py-1 rounded-md text-xs hover:bg-black/[0.04] {{ $active && $active->id === $s->id ? 'bg-violet-500/10 text-violet-700' : 'text-gray-700' }}">
                                         <span class="truncate">{{ $s->title }}</span>
-                                        <span class="shrink-0 text-[9px] text-gray-400">{{ $statusLabel[$s->status] ?? $s->status }}</span>
+                                        <span class="shrink-0 flex items-center gap-1" data-planung-status="{{ $kaskaden[$s->id]['status'] ?? 'entwurf' }}">
+                                            @if($kaskadeLaeuft($s->id))<span class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" title="läuft" data-planung-puls></span>@endif
+                                            {!! $kaskadeBadge($s->id) !!}
+                                        </span>
                                     </button>
                                 @endforeach
                             </div>
@@ -99,6 +122,7 @@
                     <div class="min-w-0">
                         <h2 class="text-lg font-semibold text-gray-800">{{ $active->title }}</h2>
                         <div class="mt-1 flex flex-wrap gap-1">
+                            {!! $kaskadeBadge($active->id) !!}
                             {!! $chip($statusLabel[$active->status] ?? $active->status, 'bg-violet-500/10 text-violet-700') !!}
                             {!! $chip($active->source_knowledge_document_id ? 'aus Trend' : 'Freier Brief', 'bg-sky-500/10 text-sky-700') !!}
                             {!! $chip($skizzenAnzahl . ' Skizzen') !!}
@@ -132,12 +156,17 @@
                     <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
                         @foreach($sessions->take(9) as $s)
                             <button wire:key="dash-{{ $s->id }}" wire:click="waehle({{ $s->id }})"
-                                    class="{{ $card }} p-3 text-left hover:shadow-md transition-all">
-                                <span class="text-xs font-semibold text-gray-800 truncate block">{{ $s->title }}</span>
+                                    class="{{ $card }} p-3 text-left hover:shadow-md transition-all" data-planung-karte="{{ $s->id }}">
+                                <div class="flex items-start justify-between gap-2">
+                                    <span class="text-xs font-semibold text-gray-800 truncate">{{ $s->title }}</span>
+                                    @if($kaskadeLaeuft($s->id))<span class="shrink-0 w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse mt-1" title="läuft"></span>@endif
+                                </div>
                                 <div class="mt-2 flex flex-wrap gap-1">
-                                    {!! $chip($statusLabel[$s->status] ?? $s->status, 'bg-violet-500/10 text-violet-700') !!}
+                                    {!! $kaskadeBadge($s->id) !!}
                                     @if($s->category)  {!! $chip($s->category, 'bg-sky-500/10 text-sky-700') !!} @endif
                                 </div>
+                                @php $fort = $kaskadeFortschritt($s->id); @endphp
+                                @if($fort !== '')<p class="mt-1.5 text-[10px] text-gray-500 truncate" data-planung-fortschritt>{{ $fort }}</p>@endif
                             </button>
                         @endforeach
                     </div>
@@ -153,6 +182,7 @@
                 <div class="p-4 space-y-3">
                     <h3 class="text-sm font-semibold text-gray-800">{{ $active->title }}</h3>
                     <div class="flex flex-wrap gap-1">
+                        {!! $kaskadeBadge($active->id) !!}
                         {!! $chip($statusLabel[$active->status] ?? $active->status, 'bg-violet-500/10 text-violet-700') !!}
                         {!! $chip($modeLabel[$active->creative_mode] ?? $active->creative_mode) !!}
                     </div>
@@ -160,6 +190,21 @@
                         <div class="flex justify-between"><dt>Herkunft</dt><dd>{{ $active->source_knowledge_document_id ? 'Trend #' . $active->source_knowledge_document_id : 'Freier Brief' }}</dd></div>
                         <div class="flex justify-between"><dt>Skizzen</dt><dd>{{ $skizzenAnzahl }}</dd></div>
                     </dl>
+                    {{-- Kaskaden-Kurzstatus je Stufe — ohne den Editor zu öffnen (finale Etappe). --}}
+                    @php $aktStufen = $kaskaden[$active->id]['stufen'] ?? []; @endphp
+                    @if($aktStufen !== [])
+                        <div class="pt-1" data-planung-kaskadenstand>
+                            <p class="text-[11px] font-semibold text-gray-600 mb-1">Kaskaden-Stand</p>
+                            <div class="space-y-0.5">
+                                @foreach($aktStufen as $st)
+                                    <div class="flex items-center justify-between text-[11px]">
+                                        <span class="text-gray-600">{{ $st['label'] }}</span>
+                                        <span class="text-gray-500">{{ $st['fertig'] }}/{{ $st['total'] }} · {{ $st['zustand'] }}</span>
+                                    </div>
+                                @endforeach
+                            </div>
+                        </div>
+                    @endif
                     <button wire:click="oeffne({{ $active->id }})" class="{{ $btnGhostXs }}">Im Editor öffnen</button>
                 </div>
             @else

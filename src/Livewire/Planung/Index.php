@@ -1521,6 +1521,60 @@ class Index extends Component
         return $out;
     }
 
+    /**
+     * Landing-Kaskaden-Status je Session (finale Etappe — Hauptseite): der JÜNGSTE Lauf einer Session
+     * bestimmt ihr Status-Badge und ihren Stufen-Fortschritt. Zwei Query-Pässe (Läufe + deren Steps),
+     * in PHP gruppiert — KEIN N+1 über die Session-Liste. Sessions ohne Lauf tauchen nicht auf → die
+     * Blade zeigt sie als „Entwurf" (verwaister Entwurf, sichtbar). Rein für die Anzeige.
+     *
+     * Status-Ableitung = jüngster Lauf-Status (running→läuft · review→prüfen · done→fertig ·
+     * failed→fehlgeschlagen), Spiegel von {@see PlanningCascadeService::recomputeRunStatus}.
+     *
+     * @param  list<int>  $sessionIds
+     * @return array<int,array<string,mixed>>  sessionId → {status, running, run_id, scope, stufen}
+     */
+    public function landingKaskadenMap(?Team $team, array $sessionIds): array
+    {
+        if ($team === null || $sessionIds === []) {
+            return [];
+        }
+        // Jüngster Lauf je Session (orderByDesc id → erster Treffer je Session gewinnt = Retry gewinnt).
+        $laeufe = FoodAlchemistCascadeRun::visibleToTeam($team)
+            ->whereIn('planning_session_id', $sessionIds)
+            ->orderByDesc('id')
+            ->get(['id', 'planning_session_id', 'scope', 'status']);
+        $latest = [];
+        foreach ($laeufe as $r) {
+            $sid = (int) $r->planning_session_id;
+            if (! isset($latest[$sid])) {
+                $latest[$sid] = $r;
+            }
+        }
+        if ($latest === []) {
+            return [];
+        }
+        // Steps aller jüngsten Läufe in EINEM Pass holen → je Lauf gruppieren (kein N+1).
+        $runIds = array_map(fn ($r) => (int) $r->id, array_values($latest));
+        $stepsByRun = \Platform\FoodAlchemist\Models\FoodAlchemistCascadeRunStep::whereIn('cascade_run_id', $runIds)
+            ->get(['cascade_run_id', 'kind', 'status'])
+            ->groupBy('cascade_run_id');
+
+        $badge = ['running' => 'läuft', 'review' => 'prüfen', 'done' => 'fertig', 'failed' => 'fehlgeschlagen'];
+        $out = [];
+        foreach ($latest as $sid => $r) {
+            $steps = $stepsByRun->get((int) $r->id) ?? collect();
+            $out[$sid] = [
+                'status' => $badge[$r->status] ?? (string) $r->status,
+                'running' => $r->status === 'running',
+                'run_id' => (int) $r->id,
+                'scope' => (string) $r->scope,
+                'stufen' => $this->stufenAusSteps($steps),
+            ];
+        }
+
+        return $out;
+    }
+
     /** Test-/Direkteinstieg: Stufen des aktiven Laufs (lädt den Run selbst). */
     public function stufen(): array
     {
@@ -1980,9 +2034,14 @@ class Index extends Component
             ? null
             : 'Kein Hintergrund-Worker aktiv — ein Go bleibt in der Warteschlange liegen, bis der Worker (queue:work) läuft.';
 
+        // Finale Etappe (Hauptseite): Kaskaden-Status je Session (Badge + Stufen-Fortschritt) —
+        // ein Query-Pass über die ganze Liste, von linker Liste, Zuletzt-Karten + Details-Panel gelesen.
+        $kaskaden = $this->landingKaskadenMap($team, $sessions->pluck('id')->map(fn ($v) => (int) $v)->all());
+
         return view('foodalchemist::livewire.planung.index', [
             'sessions' => $sessions,
             'baum' => $baum,
+            'kaskaden' => $kaskaden,
             'workerState' => $workerState,
             'workerWarnung' => $workerWarnung,
             'active' => $active,

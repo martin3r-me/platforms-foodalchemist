@@ -708,6 +708,37 @@ it('#53 persistent: planVerwerfen löst auch den gespeicherten Zeiger (löscht d
         ->and(FoodAlchemistConcept::whereKey($concept->id)->exists())->toBeTrue();
 });
 
+// ── #17 Hauptseite / Planung-Landing: Kaskaden-Status je Session (Badge + Stufen-Fortschritt) ──
+
+it('#17 Hauptseite: landingKaskadenMap spiegelt den jüngsten Lauf-Status je Session (läuft nach Go)', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Landing', 'brief' => 'Ein Teller.']);
+
+    $component = Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->set('eingabe.gericht.brief', 'Ein Teller.')
+        ->call('goKaskade', 'gericht')
+        ->assertSet('laeuft', true);
+
+    $map = $component->instance()->landingKaskadenMap($this->rootTeam, [(int) $session->id]);
+    expect($map[(int) $session->id]['status'])->toBe('läuft')
+        ->and($map[(int) $session->id]['running'])->toBeTrue()
+        ->and($map[(int) $session->id]['stufen'])->not->toBeEmpty();
+});
+
+it('#17 Hauptseite: Session ohne Lauf fehlt in der Map → die Blade zeigt „Entwurf" (verwaister Entwurf sichtbar)', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Verwaist']);
+
+    $map = Livewire::test(PlanungIndex::class)->instance()->landingKaskadenMap($this->rootTeam, [(int) $session->id]);
+    expect($map)->not->toHaveKey((int) $session->id);
+});
+
+it('#17 Hauptseite: die Landing rendert das Kaskaden-Status-Badge in der linken Liste', function () {
+    app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Badge-Test', 'brief' => 'x']);
+
+    Livewire::test(PlanungIndex::class)
+        ->assertSeeHtml('data-planung-status');
+});
+
 /**
  * Etappe 4 — Skizzen-Integration (Teil 1): eine Session-Skizze wird zum Kaskaden-Eingang, indem
  * sie in den Gericht-Tab übertragen wird (Titel → Titel, Beschreibung → Brief). Der Mensch drückt
