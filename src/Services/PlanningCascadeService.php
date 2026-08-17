@@ -14,8 +14,10 @@ use Platform\FoodAlchemist\Jobs\MaterializeConceptIdeaJob;
 use Platform\FoodAlchemist\Jobs\MaterializeSpeiseplanCellJob;
 use Platform\FoodAlchemist\Models\FoodAlchemistCascadeRecipeDependency;
 use Platform\FoodAlchemist\Models\FoodAlchemistCascadeRun;
+use Platform\FoodAlchemist\Models\FoodAlchemistVocabEinheit;
 use Platform\FoodAlchemist\Models\FoodAlchemistCascadeRunStep;
 use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
+use Platform\FoodAlchemist\Models\FoodAlchemistRecipeIngredient;
 use Platform\FoodAlchemist\Models\FoodAlchemistConceptSlot;
 use Platform\FoodAlchemist\Models\FoodAlchemistDishIdea;
 use Platform\FoodAlchemist\Models\FoodAlchemistPlanningSession;
@@ -977,7 +979,16 @@ class PlanningCascadeService
             return;
         }
         $positiv = $steps->whereIn('status', ['freigegeben', 'skipped'])->count();
-        $run->update(['status' => $positiv > 0 ? 'done' : 'failed']);
+        $hatFehler = $steps->where('status', 'failed')->count() > 0;
+        // L4: „done" darf nicht lügen. Ist ein Kind-Step gescheitert (und nichts mehr in-flight/geplant),
+        // bleibt der Run in `review` statt `done` — der Mensch sieht den Fehler im Cockpit und kann den
+        // Step neu erzeugen. Nur ein sauberer Abschluss ohne failed-Step meldet `done`.
+        if ($positiv > 0) {
+            $run->update(['status' => $hatFehler ? 'review' : 'done']);
+
+            return;
+        }
+        $run->update(['status' => 'failed']);
     }
 
     // ── Freigabe / Verwerfen (Gate 2 — inline im Editor) ───────────────────
@@ -1177,12 +1188,32 @@ class PlanningCascadeService
         if (! in_array($step->kind, ['rezept', 'gericht', 'concept'], true)) {
             return;
         }
+        // L4: Regenerieren eines KIND-Basisrezepts — die Eltern-Zutat zeigt noch auf den gleich
+        // gelöschten Draft. VOR dem Löschen die Bindung lösen (referenced_recipe_id NULL, unmatched),
+        // die Dependency aber BEHALTEN, damit der neue Lauf via bindCompletedChild sauber neu bindet.
+        // Sonst bliebe die Eltern-Zutat auf ein gelöschtes Rezept verdrahtet (tote Referenz).
+        $elternRezeptIds = [];
+        if ($step->ref_type === 'recipe' && $step->ref_id !== null) {
+            $deps = FoodAlchemistCascadeRecipeDependency::where('cascade_run_id', $step->cascade_run_id)
+                ->where('child_step_id', (int) $step->id)->get();
+            foreach ($deps as $dep) {
+                $zutat = FoodAlchemistRecipeIngredient::where('team_id', $team->id)->find((int) $dep->ingredient_id);
+                if ($zutat !== null && (int) $zutat->referenced_recipe_id === (int) $step->ref_id) {
+                    $elternRezeptIds[(int) $zutat->recipe_id] = true;
+                    $zutat->update(['referenced_recipe_id' => null, 'match_method' => 'unmatched', 'match_confidence' => null]);
+                }
+            }
+        }
         if ($step->ref_id !== null) {
             if ($step->ref_type === 'recipe') {
                 FoodAlchemistRecipe::where('team_id', $team->id)->whereKey($step->ref_id)->delete();
             } elseif ($step->ref_type === 'concept') {
                 FoodAlchemistConcept::where('team_id', $team->id)->whereKey($step->ref_id)->delete();
             }
+        }
+        // Eltern-Rezepte nach dem Lösen neu rechnen (EK/Allergene ohne die tote Zeile).
+        foreach (array_keys($elternRezeptIds) as $rid) {
+            app(RecipeRecomputeService::class)->recomputeAndPropagate((int) $rid);
         }
         // Die geplanten/übernommenen Sub-Rezepte beschreiben die Zerlegung des ALTEN Entwurfs — der
         // neue Lauf plant seine eigenen (sonst bleiben Zeilen stehen, die zu nichts mehr gehören).
@@ -1289,7 +1320,7 @@ class PlanningCascadeService
      * ihn danach je Zeile mit „jetzt erzeugen". Team-owned (D1). Idempotent über `dedupe_key` (`manual:`+
      * Name) — dasselbe Basisrezept doppelt ergänzt teilt sich einen Step.
      */
-    public function ergaenzeManuellenSubStep(Team $team, int $runId, string $name): ?FoodAlchemistCascadeRunStep
+    public function ergaenzeManuellenSubStep(Team $team, int $runId, string $name, ?int $parentStepId = null): ?FoodAlchemistCascadeRunStep
     {
         $run = $this->lauf($team, $runId);
         if ($run === null || ! $run->isOwnedBy($team)) {
@@ -1299,9 +1330,15 @@ class PlanningCascadeService
         if ($name === '') {
             return null;
         }
-        // Anker = Wurzel-Step des Laufs (Gericht/Basisrezept), unter dem die Basisrezepte-Stufe hängt.
-        $root = $run->steps->first(fn ($s) => $s->parent_step_id === null) ?? $run->steps->first();
-        if ($root === null) {
+        // Anker-Step: explizit gewählt (Gericht/Rezept-Step des Laufs) oder der Wurzel-Step als Default.
+        // So kann ein manuelles Basisrezept gezielt UNTER dem richtigen Gericht hängen (Concept-Fan-out).
+        $anker = null;
+        if ($parentStepId !== null) {
+            $anker = $run->steps->first(fn ($s) => (int) $s->id === $parentStepId
+                && in_array($s->kind, ['gericht', 'rezept'], true));
+        }
+        $anker ??= $run->steps->first(fn ($s) => $s->parent_step_id === null) ?? $run->steps->first();
+        if ($anker === null) {
             return null;
         }
         $dedupe = 'manual:' . mb_strtolower($name);
@@ -1312,14 +1349,45 @@ class PlanningCascadeService
         $step = FoodAlchemistCascadeRunStep::create([
             'team_id' => $team->id,
             'cascade_run_id' => (int) $run->id,
-            'parent_step_id' => (int) $root->id,
-            'depth' => ((int) $root->depth) + 1,
+            'parent_step_id' => (int) $anker->id,
+            'depth' => ((int) $anker->depth) + 1,
             'kind' => 'rezept',
             'label' => Str::limit($name, 120, ''),
             'dedupe_key' => $dedupe,
             'status' => 'geplant',
             'sort' => (int) ($run->steps->max('sort') ?? 0) + 1,
         ]);
+        // L4: Rückbindung herstellen — eine Eltern-Zutatenzeile (unmatched, Platzhalter) am Anker-Rezept
+        // + die Dependency auf den neuen Kind-Step. OHNE das wird das später erzeugte Basisrezept NIE ans
+        // Elterngericht gebunden (bekannte Wunde: referenced_recipe_id blieb NULL). Fail-soft: steht das
+        // Anker-Rezept noch nicht (ref_id NULL), bleibt es beim reinen Step (alt), keine Rückbindung möglich.
+        if ($anker->ref_type === 'recipe' && $anker->ref_id !== null) {
+            $parentRecipe = FoodAlchemistRecipe::where('team_id', $team->id)->find((int) $anker->ref_id);
+            if ($parentRecipe !== null) {
+                try {
+                    $einheitId = FoodAlchemistVocabEinheit::visibleToTeam($team)->where('slug', 'g')->value('id')
+                        ?? FoodAlchemistVocabEinheit::visibleToTeam($team)->orderBy('id')->value('id');
+                    $zutat = $parentRecipe->ingredients()->create([
+                        'team_id' => $team->id,
+                        'raw_text' => $name,
+                        'display_name' => $name,
+                        'quantity' => 0,   // Platzhalter — der Mensch trägt die Menge nach
+                        'unit_vocab_id' => $einheitId,
+                        'position' => (int) ($parentRecipe->ingredients()->max('position') ?? 0) + 1,
+                        'match_method' => 'unmatched',
+                        'auto_ground' => false,
+                    ]);
+                    FoodAlchemistCascadeRecipeDependency::firstOrCreate([
+                        'team_id' => $team->id,
+                        'cascade_run_id' => (int) $run->id,
+                        'parent_step_id' => (int) $anker->id,
+                        'ingredient_id' => (int) $zutat->id,
+                    ], ['child_step_id' => (int) $step->id]);
+                } catch (\Throwable $e) {
+                    \Illuminate\Support\Facades\Log::warning('[Planung] manuelles Sub-Rezept ohne Rückbindung angelegt (Zutat/Dependency übersprungen)', ['error' => $e->getMessage()]);
+                }
+            }
+        }
         $this->recomputeRunStatus((int) $run->id);
 
         return $step;

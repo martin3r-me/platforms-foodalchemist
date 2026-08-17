@@ -4,6 +4,7 @@ namespace Platform\FoodAlchemist\Services;
 
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Enums\BulkRunType;
+use Platform\FoodAlchemist\Models\FoodAlchemistCascadeRecipeDependency;
 use Platform\FoodAlchemist\Models\FoodAlchemistProductionStation;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipeStep;
@@ -161,8 +162,19 @@ class RecipeOneShotService
             $offene = $recipe->ingredients()
                 ->whereNull('deleted_at')->whereNull('gp_id')->whereNull('referenced_recipe_id')
                 ->get();
+            // L4: Zeilen, die die Kaskade als Basisrezept FÜHRT (Dependency zu einem Kind-Step), NICHT
+            // bemünzen — sonst überschreibt der Freigabe-Mint (T5) genau die als Sub geplanten Zeilen und
+            // sperrt deren spätere Rückbindung (bindIngredient bricht bei gesetztem gp_id still ab). Der
+            // Kritiker/Diät-entdrahtete Fall ist ebenfalls geschützt: solche Zeilen tragen match_method
+            // 'ignored' und/oder eine Dependency; nur echte, kaskaden-fremde Roh-Lücken werden gemintet.
+            $kaskadeGefuehrt = FoodAlchemistCascadeRecipeDependency::query()
+                ->whereIn('ingredient_id', $offene->pluck('id')->all())
+                ->pluck('ingredient_id')->map(fn ($v) => (int) $v)->all();
+            if ($kaskadeGefuehrt !== []) {
+                $offene = $offene->reject(fn ($z) => in_array((int) $z->id, $kaskadeGefuehrt, true))->values();
+            }
             if ($offene->isEmpty()) {
-                return ['status' => 'vollständig', 'minted' => 0, 'ohne_la' => 0];
+                return ['status' => 'vollständig', 'minted' => 0, 'ohne_la' => 0, 'kaskade_gefuehrt' => count($kaskadeGefuehrt)];
             }
             $mint = app(\Platform\FoodAlchemist\Services\LaFirstGpService::class);
             $minted = 0;

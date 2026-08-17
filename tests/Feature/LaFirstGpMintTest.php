@@ -127,3 +127,22 @@ it('T5: Zutaten mit vorhandenem GP oder Sub-Rezept werden NICHT angefasst', func
     expect($mitGp->fresh()->gp_id)->toBe($bestandGp->id)
         ->and(FoodAlchemistGp::count())->toBe($vorher);   // nichts geminted
 });
+
+// L4: minteFehlendeGps bemünzt KEINE Zeile, die die Kaskade als Basisrezept führt (Dependency).
+it('L4: minteFehlendeGps überspringt kaskaden-geführte Zeilen (Dependency zu Kind-Step)', function () {
+    $unit = FoodAlchemistVocabEinheit::create(['team_id' => $this->rootTeam->id, 'slug' => 'g', 'display_de' => 'Gramm', 'dimension' => 'mass', 'default_in_g' => 1]);
+    ($this->mkLa)('Sesampaste');                 // passende LA existiert (würde sonst gemintet)
+    $recipe = \Platform\FoodAlchemist\Models\FoodAlchemistRecipe::create(['team_id' => $this->rootTeam->id, 'recipe_key' => 'l4-dep', 'name' => 'L4-Rezept', 'status' => 'approved']);
+    $zut = \Platform\FoodAlchemist\Models\FoodAlchemistRecipeIngredient::create(['team_id' => $this->rootTeam->id, 'recipe_id' => $recipe->id, 'raw_text' => 'Sesampaste', 'quantity' => '100', 'unit_vocab_id' => $unit->id, 'position' => 1]);
+    // Die Zeile ist als Basisrezept GEPLANT (Kaskade führt sie) → Dependency auf einen Kind-Step.
+    $run = \Platform\FoodAlchemist\Models\FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'gericht', 'status' => 'review']);
+    $parent = \Platform\FoodAlchemist\Models\FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht', 'status' => 'done', 'ref_type' => 'recipe', 'ref_id' => $recipe->id, 'sort' => 1]);
+    $kind = \Platform\FoodAlchemist\Models\FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'parent_step_id' => $parent->id, 'kind' => 'rezept', 'status' => 'geplant', 'depth' => 1, 'sort' => 2, 'label' => 'Sesampaste']);
+    \Platform\FoodAlchemist\Models\FoodAlchemistCascadeRecipeDependency::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'parent_step_id' => $parent->id, 'ingredient_id' => $zut->id, 'child_step_id' => $kind->id]);
+
+    $r = app(\Platform\FoodAlchemist\Services\RecipeOneShotService::class)->minteFehlendeGps($this->rootTeam, $recipe->fresh());
+
+    // Nichts gemintet — die Zeile bleibt für die Sub-Rezept-Zerlegung frei (kein GP draufgesetzt).
+    expect($r['minted'])->toBe(0);
+    expect($zut->fresh()->gp_id)->toBeNull();
+});

@@ -1768,3 +1768,74 @@ it('L1 goKaskade: Kreativ-Modus datenbank leitet bestand=nur_bestand ab (in den 
     Queue::assertPushed(GenerateRecipeJob::class, fn ($job) => ($job->parameter['bestand'] ?? null) === 'nur_bestand');
     expect($session->refresh()->generation_params['bestand'] ?? null)->toBe('nur_bestand');
 });
+
+// ── L4 — Kaskaden-Nahtstellen ────────────────────────────────────────────────────────────────
+
+it('L4.3 recomputeRunStatus: freigegeben + failed → review (kein „done", das luegt)', function () {
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'concept', 'status' => 'running', 'staged' => true]);
+    FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht', 'status' => 'freigegeben', 'sort' => 1]);
+    FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'rezept', 'status' => 'failed', 'sort' => 2]);
+
+    app(PlanningCascadeService::class)->recomputeRunStatus((int) $run->id);
+
+    expect($run->refresh()->status)->toBe('review');   // nicht 'done'
+});
+
+it('L4.3 recomputeRunStatus: nur freigegeben/skipped (kein failed) → done', function () {
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'gericht', 'status' => 'running']);
+    FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht', 'status' => 'freigegeben', 'sort' => 1]);
+    FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'rezept', 'status' => 'skipped', 'sort' => 2]);
+
+    app(PlanningCascadeService::class)->recomputeRunStatus((int) $run->id);
+
+    expect($run->refresh()->status)->toBe('done');
+});
+
+it('L4.2 ergaenzeManuellenSubStep bindet zurück: Eltern-Zutat + Dependency entstehen', function () {
+    $this->unitG($this->rootTeam);   // 'g'-Einheit muss vorhanden sein (Prod: pro Team geseedet)
+    $gericht = $this->makeRecipe($this->rootTeam, 'Gericht mit manuellem Sub', ['status' => 'draft']);
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'gericht', 'status' => 'review', 'staged' => true]);
+    $root = FoodAlchemistCascadeRunStep::create([
+        'team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht',
+        'status' => 'done', 'ref_type' => 'recipe', 'ref_id' => $gericht->id, 'sort' => 1,
+    ]);
+
+    $step = app(PlanningCascadeService::class)->ergaenzeManuellenSubStep($this->rootTeam, (int) $run->id, 'Schweine Jus');
+
+    expect($step)->not->toBeNull()
+        ->and($step->kind)->toBe('rezept')
+        ->and($step->status)->toBe('geplant');
+    // Eltern-Zutatenzeile am Gericht + Dependency auf den neuen Kind-Step.
+    $zutat = $gericht->refresh()->ingredients()->where('raw_text', 'Schweine Jus')->first();
+    expect($zutat)->not->toBeNull();
+    $dep = \Platform\FoodAlchemist\Models\FoodAlchemistCascadeRecipeDependency::where('child_step_id', $step->id)->first();
+    expect($dep)->not->toBeNull()
+        ->and((int) $dep->ingredient_id)->toBe((int) $zutat->id);
+
+    // Wird das Kind erzeugt+gebunden, zeigt die Eltern-Zutat darauf (Rückbindung schließt sich).
+    $sub = $this->makeRecipe($this->rootTeam, 'Schweine Jus');
+    app(\Platform\FoodAlchemist\Services\RecipeDependencyWorkflowService::class)
+        ->afterGenerated($this->rootTeam, (int) $step->id, auth()->id(), $sub, [], []);
+    expect((int) $zutat->refresh()->referenced_recipe_id)->toBe((int) $sub->id);
+});
+
+it('L4.4 regeneriereStep (Kind): Eltern-Zutat wird vor dem Loeschen entbunden (keine tote Referenz)', function () {
+    config(['foodalchemist.ai.provider' => 'fake']);
+    $gericht = $this->makeRecipe($this->rootTeam, 'Gericht Regen', ['status' => 'draft']);
+    $altSub = $this->makeRecipe($this->rootTeam, 'Alte Jus', ['status' => 'draft']);
+    $zutat = $this->makeIngredient($gericht, 'Jus');
+    $zutat->update(['referenced_recipe_id' => $altSub->id, 'match_method' => 'recipe_ref']);
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'gericht', 'status' => 'review', 'staged' => true]);
+    $gerichtStep = FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht', 'status' => 'done', 'ref_type' => 'recipe', 'ref_id' => $gericht->id, 'sort' => 1]);
+    $kindStep = FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'parent_step_id' => $gerichtStep->id, 'kind' => 'rezept', 'status' => 'done', 'ref_type' => 'recipe', 'ref_id' => $altSub->id, 'depth' => 1, 'sort' => 2, 'label' => 'Jus']);
+    \Platform\FoodAlchemist\Models\FoodAlchemistCascadeRecipeDependency::create([
+        'team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'parent_step_id' => $gerichtStep->id,
+        'ingredient_id' => $zutat->id, 'child_step_id' => $kindStep->id,
+    ]);
+
+    app(PlanningCascadeService::class)->regeneriereStep($this->rootTeam, (int) $kindStep->id);
+
+    // Alter Sub geloescht, Eltern-Zutat entbunden (nicht mehr auf das geloeschte Rezept).
+    expect(FoodAlchemistRecipe::where('team_id', $this->rootTeam->id)->whereKey($altSub->id)->exists())->toBeFalse();
+    expect($zutat->refresh()->referenced_recipe_id)->toBeNull();
+});
