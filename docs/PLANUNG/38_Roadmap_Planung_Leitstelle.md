@@ -295,7 +295,8 @@ FA `main` = `eb85e3c`, demo deployt + Migration `[180] Ran`. Nachweis: `Planning
 - [x] **Trend-`approved`-Filter** — `ausTrend` liest Trend-Meta nur mit `status='approved'` (#71). → `a4b2d51`
 - [x] **Titel-Contract lockern** — `vk.titel_vorschlag`: HG-Code optional, separat ableiten (#75). → `7e2ecbe`
 - [x] **Fan-out-Fehler trennen** — `markStepFailed` beim Fan-out-Abbruch lässt den Concept-Step `done`, markiert nur den Fan-out-Teil (#124). → `cb8b8e1` (markFanoutFailed)
-- [ ] **Buffet als eigener Concept-Typ** — Gänge-Achse-Label „(nur Menü)" + Buffet-Positionen eigene Logik (#35).
+- [x] **Buffet als eigener Concept-Typ** — Gänge-Achse-Label „(nur Menü)" + Buffet-Positionen eigene Logik (#35). → `e6f1ef5`
+  → Concept-Typ-Achse `menue_typ` (Menü/Buffet) am Concept-Tab, Default `menue` = byte-identisch. Blade schaltet Labels live (»Anzahl Gänge (nur Menü)« ↔ »Anzahl Stationen«, Header »Menü-« ↔ »Buffet-Leitplanken«). Generator: `struktur_typ=buffet` im Gerüst-Kontext + `menueGaengeCap` deckelt typ-abhängig `gang` (Menü) bzw. `station` (Buffet). `menue_typ` in `ALLOWED_GENERATION_PARAMS` (Concept-Concern, im Dish-Fan-out über den `menue_*`-Filter automatisch gefiltert). **Keine Migration** (reitet auf dem `menue_*`-Pfad mit). +3 Tests; FA-Suite 218/218 grün. Real-Abnahme (LLM baut spürbar Stationen) auf demo offen.
 - [ ] **KI-Kopf → Standard + persistent** — Concept immer plan-first; `planConceptId` persistieren (Etappe 2b, #53).
 - [ ] *Essenz (LLM-Flag) · Ziel-VK (Slot-Anker) · Zerlegungstiefe · Bild-Politik = bestätigtes bestehendes Verhalten → kein eigener Bau-Chunk.*
 
