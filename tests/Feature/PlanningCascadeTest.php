@@ -1692,3 +1692,79 @@ it('Auto-Trigger rührt freie Gericht-Läufe (kein Concept-Eltern) nicht an', fu
     expect($run->refresh()->cohesion_warning)->toBeNull()   // kein Menü-Gate für Einzel-Gerichte
         ->and($run->refresh()->status)->toBe('review');
 });
+
+// ── L1 — Reuse-Achse (Kreativ-Modus → bestand) ───────────────────────────────────────────────
+
+it('L1 Reuse-Gate (hybrid): existierendes Basisrezept wird gebunden statt neu erzeugt (kein Job, skipped-Sichtzeile)', function () {
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'gericht', 'status' => 'running']);
+    $step = FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht', 'status' => 'running', 'sort' => 1]);
+    $gericht = $this->makeRecipe($this->rootTeam, 'Gericht mit Fond', ['status' => 'draft']);
+    $zutat = $this->makeIngredient($gericht, 'Geflügelfond');
+    // Bestand: dasselbe Basisrezept existiert schon.
+    $bestand = $this->makeRecipe($this->rootTeam, 'Geflügelfond');
+
+    app(\Platform\FoodAlchemist\Services\RecipeDependencyWorkflowService::class)->afterGenerated(
+        $this->rootTeam, $step->id, auth()->id(), $gericht,
+        [['index' => 0, 'text' => 'Geflügelfond', 'primaer' => 'basisrezept_anlegen']],
+        ['auto_dependencies' => true, 'bestand' => 'hybrid'],
+    );
+
+    // Gebunden an den Bestand, KEIN Erzeugungs-Job, Reuse-Sichtzeile (skipped) statt geplant.
+    expect($zutat->refresh()->referenced_recipe_id)->toBe($bestand->id);
+    Queue::assertNotPushed(GenerateRecipeJob::class);
+    $kinder = FoodAlchemistCascadeRunStep::where('cascade_run_id', $run->id)->where('depth', 1)->get();
+    expect($kinder)->toHaveCount(1)
+        ->and($kinder->first()->status)->toBe('skipped')
+        ->and((int) $kinder->first()->ref_id)->toBe($bestand->id);
+});
+
+it('L1 nur_bestand ohne Treffer: KEIN neues Rezept, Zeile bleibt offen (Hard-Stop)', function () {
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'gericht', 'status' => 'running']);
+    $step = FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht', 'status' => 'running', 'sort' => 1]);
+    $gericht = $this->makeRecipe($this->rootTeam, 'Gericht ohne Bestand', ['status' => 'draft']);
+    $zutat = $this->makeIngredient($gericht, 'Exotische Spezialpaste');
+
+    app(\Platform\FoodAlchemist\Services\RecipeDependencyWorkflowService::class)->afterGenerated(
+        $this->rootTeam, $step->id, auth()->id(), $gericht,
+        [['index' => 0, 'text' => 'Exotische Spezialpaste', 'primaer' => 'basisrezept_anlegen']],
+        ['auto_dependencies' => true, 'bestand' => 'nur_bestand'],
+    );
+
+    Queue::assertNotPushed(GenerateRecipeJob::class);
+    expect(FoodAlchemistCascadeRunStep::where('cascade_run_id', $run->id)->where('depth', 1)->count())->toBe(0)
+        ->and($zutat->refresh()->referenced_recipe_id)->toBeNull();   // offen, kein Neu-Rezept
+});
+
+it('L1 komplett_neu: Reuse-Gate übersprungen — trotz Bestand wird neu geplant/erzeugt', function () {
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'gericht', 'status' => 'running']);
+    $step = FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht', 'status' => 'running', 'sort' => 1]);
+    $gericht = $this->makeRecipe($this->rootTeam, 'Gericht komplett neu', ['status' => 'draft']);
+    $this->makeIngredient($gericht, 'Geflügelfond');
+    $this->makeRecipe($this->rootTeam, 'Geflügelfond');   // Bestand existiert — wird bewusst ignoriert
+
+    app(\Platform\FoodAlchemist\Services\RecipeDependencyWorkflowService::class)->afterGenerated(
+        $this->rootTeam, $step->id, auth()->id(), $gericht,
+        [['index' => 0, 'text' => 'Geflügelfond', 'primaer' => 'basisrezept_anlegen']],
+        ['auto_dependencies' => true, 'bestand' => 'komplett_neu'],
+    );
+
+    // Neu erzeugt (Job) statt Bestand gebunden.
+    Queue::assertPushed(GenerateRecipeJob::class, 1);
+    $kinder = FoodAlchemistCascadeRunStep::where('cascade_run_id', $run->id)->where('depth', 1)->get();
+    expect($kinder)->toHaveCount(1)
+        ->and($kinder->first()->status)->toBe('running');
+});
+
+it('L1 goKaskade: Kreativ-Modus datenbank leitet bestand=nur_bestand ab (in den Job-Params)', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'DB-Modus', 'brief' => 'x']);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->set('eingabe.gericht.brief', 'Ein Gericht.')
+        ->set('eingabe.gericht.creative_mode', 'datenbank')
+        ->call('goKaskade', 'gericht')
+        ->assertSet('laeuft', true);
+
+    Queue::assertPushed(GenerateRecipeJob::class, fn ($job) => ($job->parameter['bestand'] ?? null) === 'nur_bestand');
+    expect($session->refresh()->generation_params['bestand'] ?? null)->toBe('nur_bestand');
+});

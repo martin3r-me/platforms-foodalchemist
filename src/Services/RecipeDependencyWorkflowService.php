@@ -193,6 +193,39 @@ class RecipeDependencyWorkflowService
             if ($text === '') {
                 continue;
             }
+            // ── Reuse-Gate (L1, Reuse-Achse aus dem Kreativ-Modus) ────────────────────────────────
+            $bestand = (string) ($parameter['bestand'] ?? 'hybrid');
+            if ($bestand !== 'komplett_neu') {
+                // Bestand zuerst: existiert die Komponente als Basisrezept (Token-Set-Namensgleichheit)?
+                // Treffer → Eltern-Zutat binden + Reuse-Sichtzeile (skipped), KEIN neuer Erzeugungs-Lauf.
+                // Das ist der eigentliche Fix gegen „datenbank → sehr viele neue Rezepte".
+                $bestehend = app(\Platform\FoodAlchemist\Services\RecipeService::class)->findByTokenSet($team, $text);
+                if ($bestehend !== null && (int) $bestehend->id !== (int) $recipe->id) {
+                    $this->bindIngredient($team, (int) $ingredient->id, (int) $bestehend->id);
+                    FoodAlchemistCascadeRunStep::firstOrCreate([
+                        'cascade_run_id' => $step->cascade_run_id,
+                        'dedupe_key' => 'reuse:' . (int) $bestehend->id,
+                    ], [
+                        'team_id' => $team->id,
+                        'parent_step_id' => $step->id,
+                        'depth' => ((int) $step->depth) + 1,
+                        'kind' => 'rezept',
+                        'label' => Str::limit((string) $bestehend->name, 120),
+                        'status' => 'skipped',
+                        'ref_type' => 'recipe',
+                        'ref_id' => (int) $bestehend->id,
+                        'sort' => (int) $ingredient->position,
+                    ]);
+
+                    continue;
+                }
+            }
+            if ($bestand === 'nur_bestand') {
+                // »Nur Bestand« (Kreativ-Modus = Datenbank) + kein Treffer: NICHT neu anlegen. Die Zeile
+                // bleibt offen als sichtbarer Hard-Stop — der Mensch wählt ein Bestandsrezept oder wechselt
+                // den Modus. So ist „Nur Bestand" strukturell erfüllbar (statt still ein neues Rezept zu bauen).
+                continue;
+            }
             $dedupe = hash('sha256', mb_strtolower($text) . '|' . json_encode([
                 $parameter['convenience'] ?? null, $parameter['frische'] ?? null,
                 // Bio + Niveau: kanonisch heißen die Keys `bio`/`level` — der alte `niveau`-Read war immer

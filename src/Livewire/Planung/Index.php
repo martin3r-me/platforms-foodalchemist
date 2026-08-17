@@ -236,7 +236,9 @@ class Index extends Component
     public const RICHTUNGEN = [
         ['field' => 'convenience', 'label' => 'Convenience (Eigenleistung)', 'optionen' => ['' => '(egal)', 'from_scratch' => 'From Scratch', 'teil_convenience' => 'Teil-Convenience', 'voll_convenience' => 'Voll-Convenience'], 'hint' => ['' => 'Keine Vorgabe', 'from_scratch' => 'alles selbst — Pool dreht auf Roh/Sub-Rezepte', 'teil_convenience' => 'Halbfabrikate erlaubt', 'voll_convenience' => 'Fertigprodukte bevorzugt']],
         ['field' => 'level', 'label' => 'Niveau', 'optionen' => ['' => '(egal)', 'haute_cuisine' => 'Haute Cuisine', 'gehoben' => 'Gehoben', 'klassisch' => 'Klassisch'], 'hint' => ['' => 'Keine Vorgabe']],
-        ['field' => 'bestand', 'label' => 'Bestand-Nutzung', 'optionen' => ['hybrid' => 'Hybrid', 'nur_bestand' => 'Nur Bestand', 'komplett_neu' => 'Komplett neu'], 'hint' => ['hybrid' => 'Default — Bestand zuerst reusen, Neues nur für echte Lücken', 'nur_bestand' => 'ausschließlich vorhandene GPs/Rezepte', 'komplett_neu' => 'Bestand ignorieren']],
+        // »Bestand-Nutzung« (Chips) entfernt (2026-08-17): die Reuse-Achse ist jetzt EIN Regler — der
+        // Kreativ-Modus-Select im Eingabe-Block (voll_kreativ|hybrid|datenbank). `bestand` wird daraus
+        // in reglerParams abgeleitet, keine zweite konkurrierende Achse mehr.
         ['field' => 'bio_praeferenz', 'label' => 'Bio-Präferenz', 'optionen' => ['konventionell' => 'Konventionell', 'bio' => 'Bio', 'egal' => 'Egal'], 'hint' => ['konventionell' => 'Standard — kein Bio erzwungen (Default)', 'bio' => 'Bio bevorzugt (nur auf Ansage)', 'egal' => 'keine Präferenz']],
         ['field' => 'frische', 'label' => 'Frische-Hook', 'optionen' => ['frisch' => 'Frisch', 'tk' => 'Alles aus TK', 'konserve' => 'Konserve/haltbar'], 'hint' => ['frisch' => 'fresh_first (Default)']],
     ];
@@ -862,6 +864,15 @@ class Index extends Component
             default => 'conventional',
         };
         $p['bio'] = ($r['bio_praeferenz'] ?? '') === 'bio';
+        // Reuse-Achse: EINE Wahrheit ist der Kreativ-Modus (Select im Eingabe-Block). Der frühere
+        // Doppel-Regler »Bestand-Nutzung« (Chips) ist entfernt; `bestand` wird hier deterministisch
+        // aus dem Modus abgeleitet und reist über den bestehenden params/generation_params-Kanal in
+        // Generator + Fan-out (datenbank = nur Bestand, hybrid = Bestand zuerst, voll_kreativ = neu).
+        $p['bestand'] = match ((string) ($this->eingabe[$scope]['creative_mode'] ?? 'voll_kreativ')) {
+            'datenbank' => 'nur_bestand',
+            'hybrid' => 'hybrid',
+            default => 'komplett_neu',   // voll_kreativ
+        };
         if (! $vk) {
             unset($p['occasion'], $p['serviceform'], $p['kompositions_stil']);
         }

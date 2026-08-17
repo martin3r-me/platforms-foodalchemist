@@ -70,9 +70,13 @@ class RecipeGeneratorService
             // M6-07 / V-04 (Audit-Hebel 3): Reuse-at-Generation — lexikalischer
             // Prefetch des Bestands VOR der Benennung; die KI soll vorhandene
             // Basisrezepte EXAKT so benennen (billiger als Nach-Matching).
-            $inventar = $this->bestandsInventar($team, $description);
-            if ($inventar !== []) {
-                $kontext['bestands_inventar'] = $inventar;
+            // Reuse-Achse (L1): »komplett_neu« (Kreativ-Modus = Voll kreativ) ignoriert den Bestand
+            // bewusst → der Benennungs-Nudge entfällt, damit nicht doch auf Bestand geschielt wird.
+            if (($parameter['bestand'] ?? 'hybrid') !== 'komplett_neu') {
+                $inventar = $this->bestandsInventar($team, $description);
+                if ($inventar !== []) {
+                    $kontext['bestands_inventar'] = $inventar;
+                }
             }
             if ($vkModus) {
                 // M6-06: VK-Achsen + Taxonomie-Vorrat für Klasse/AK-Vorschlag
