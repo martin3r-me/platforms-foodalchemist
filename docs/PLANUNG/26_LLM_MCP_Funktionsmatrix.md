@@ -1,7 +1,7 @@
 # Food Alchemist — LLM- und MCP-Funktionsmatrix
 
 - **Status:** aktive Capability- und Abnahmeliste
-- **Stand:** 01.08.2026
+- **Stand:** 17.08.2026
 - **Quellen:** Prompt-Registry, `AiGatewayService`, Toolklassen und Service Provider
 - **Business-Bezug:** [Business-Case-Funktionsmatrix](25_Business_Case_Funktionsmatrix.md)
 - **Steuerung:** [Umsetzungsplan zum Zielbild](24_Zielbild_2029_Umsetzungsplan.md)
@@ -21,8 +21,8 @@ Capability. Sie beantwortet:
 
 | Capability | Anzahl | Aktuelle Aussage |
 |---|---:|---|
-| Prompt-Keys in `config/foodalchemist.php` | 59 | Registry vorhanden; 11 Keys ohne direkte statische Referenz in `src/` |
-| MCP-Toolklassen mit `foodalchemist.*`-Name | 157 | alle 157 werden im Provider aufgeführt |
+| Prompt-Keys in `config/foodalchemist.php` | 64 | Registry vorhanden; 11 Keys ohne direkte statische Referenz in `src/` (die 5 seit 01.08. ergänzten Keys sind alle direkt referenziert) |
+| MCP-Toolklassen mit `foodalchemist.*`-Name | 167 | alle 167 werden im Provider aufgeführt |
 | Embedding-Pools mit Observern | 6 | GP, Rezept, Lieferant, Konzept, Foodbook, Lab Note |
 | Wissens-/Retrieval-Schichten | 2 | deterministisch plus optional semantisch |
 | dokumentierte vollständige MCP-Tenant-Abnahme | 0 | einzelne Tests vorhanden, keine 157-Tool-Matrix |
@@ -107,11 +107,13 @@ Capability. Sie beantwortet:
 | `recipe.category` | Produktionskategorie vorschlagen | RE-03 | direkt genutzt; Kategorie team-scopen |
 | `recipe.garverlust` | Garverlust schätzen | RE-07 | statische Referenz vorhanden |
 | `recipe.name_putzen` | Namen normalisieren | RE-01, RE-11 | statische Referenz vorhanden |
+| `recipe.titel_vorschlag` | nüchterner Basisrezept-Titel aus Brief (§1-Syntax) | RE-01, RE-11 | direkt genutzt (`TitelVorschlagService`) |
 | `recipe.sektor` | Sektoreignung bewerten | RE-20 | statische Referenz vorhanden |
 | `recipe.level` | Niveaueignung bewerten | RE-20 | statische Referenz vorhanden |
 | `recipe.sub_typ` | Subrezepttyp bestimmen | RE-03 | keine direkte `src/`-Referenz gefunden |
 | `recipe.production_depth` | Fertigungstiefe bestimmen | RE-20 | direkt genutzt |
 | `recipe.preparation` | Produktionszubereitung schreiben | RE-01, RE-17 | direkt genutzt |
+| `recipe.steps` | Zubereitung als Schrittfolge (Step-by-step, Spec 27) | RE-01, RE-17 | direkt genutzt |
 | `recipe.eigenschaften` | Haltbarkeit und Eigenschaften | RE-20 | direkt genutzt |
 | `recipe.geschmack` | Geschmacksprofil ableiten | RE-20, PA-01 | direkt genutzt |
 | `recipe.sensorik` | Sensorik messen/ableiten | RE-20, PA-01 | direkt genutzt |
@@ -132,6 +134,7 @@ Capability. Sie beantwortet:
 | `vk.rollen` | Komponentenrollen verteilen | RE-20, PA-01 | statische Referenz vorhanden |
 | `vk.plating` | Anrichte-/Serviceanweisung | RE-15, RE-17 | direkt genutzt |
 | `vk.name_putzen` | VK-Namen normalisieren | RE-12, RE-17 | keine direkte `src/`-Referenz gefunden |
+| `vk.titel_vorschlag` | nüchterner Gericht-Titel aus Brief (§4.4-Pipe-Syntax) | RE-12, RE-11 | direkt genutzt (`TitelVorschlagService`) |
 | `vk.marketing` | Marketing-/Kundentext | RE-17, FB-05 | direkt genutzt |
 | `vk.wording` | kundengerechtes Wording | RE-17 | direkt genutzt |
 | `vk.behaelter` | passenden Behälter vorschlagen | RE-15, AD-18 | direkt genutzt |
@@ -147,6 +150,7 @@ Capability. Sie beantwortet:
 | Prompt-Key | Funktion | Business-IDs | Statushinweis |
 |---|---|---|---|
 | `concept.brief_geruest` | Brief in Konzeptgerüst übersetzen | CO-07 | direkt genutzt |
+| `concept.plan` | kreative Konzept-Leitidee/Canvas aus Brief (KI-Kopf) | CO-01, FD-01–04 | direkt genutzt (`ConceptGeneratorService::planAusBrief`) |
 | `concept.wording` | Konzepttext erzeugen | CO-01, FB-05 | direkt genutzt |
 | `foodbook.kapitel_ideen` | Kapitelideen erzeugen | FB-07–10 | direkt genutzt |
 | `foodbook.kundentext` | Kundentext erzeugen | FB-05, FB-10 | direkt genutzt |
@@ -157,6 +161,7 @@ Capability. Sie beantwortet:
 | `signal.serving_form_suggest` | Darreichung vorschlagen | QL-02–03, RE-15 | dynamisch genutzt |
 | `signal.recipe_category_suggest` | Rezeptkategorie vorschlagen | QL-02–03, RE-03 | dynamisch genutzt |
 | `signal.recipe_naming_suggest` | Rezeptnamen vorschlagen | QL-02–03, RE-11 | dynamisch genutzt |
+| `trend.cluster_label` | gesichtete Trends in zweistufige Taxonomie einordnen/labeln | TR-01 | direkt genutzt (`TrendClusterCommand`) |
 | `chat.message` | allgemeine Chatnachricht | kein freigegebener Business Case | keine direkte `src/`-Referenz gefunden |
 | `demo.echo` | Provider-/JSON-Smoke | Betrieb/Test | technische Referenz vorhanden; kein Produktfeature |
 
@@ -209,21 +214,21 @@ Betroffene MCP-Reads sind insbesondere `artikel.SEARCH`, `gps.SEARCH`,
 | Angebote | 4 | lesen, listen, suchen, anlegen | FB-16–17 |
 | Artikel/GPS/Lieferanten | 17 | Katalog, Matching, Lead, Volumen, Vereinbarungen | ST-01–25 |
 | Rezepte/Verkaufsrezepte | 15 | CRUD, Suche, Generierung, Review, Zutaten, Klasse, Zubereitungsschritte | RE-01–24 |
-| Konzepte/Planung/Canvas | 18 | CRUD, Slots, Varianten, Coverage, Phase, DNA, Planungs-Session | CO-01–11, FD-01–04 |
+| Konzepte/Planung/Canvas | 19 | CRUD, Slots, Varianten, Coverage, Phase, DNA, Planungs-Session, Kaskaden-Status | CO-01–11, FD-01–04 |
 | Foodbook/Leitstelle | 14 | Buch, Kapitel, Blöcke, Ideen, Freigabe, Zielgruppen | FB-01–17 |
 | Speisekarte | 9 | Karte, Rubriken, Positionen, Duplikat, Suche, Leitstelle | noch ohne Business-IDs |
 | Kalkulation/Assemblierung | 8 | Kalkulation, Simulation, Benchmark, Proportion, Solver | WI-01–13 |
-| Produktion/Bestellung | 30 | Bedarf, Aufträge, Zeilen (Override/Zuteilung/Abhaken), Status, Löschen, Dokumente, Handover, Einkaufs-Auswertungen, Rückvergütung | PR-01–04, OR-01–06 |
-| Wissen/Pairing/R&D | 17 | Wissen, Bindings, Pairing, Substitution, Lab Notes | KN-01–06, PA-01–06 |
+| Produktion/Bestellung | 34 | Bedarf, Aufträge, Zeilen (Override/Zuteilung/Abhaken/Blockieren), Start/Finish, Status, Löschen, Dokumente, Handover, Einkaufs-Auswertungen, Rückvergütung | PR-01–04, OR-01–06 |
+| Wissen/Pairing/R&D | 22 | Wissen, Kategorien, Routings, Aktiv-Schalten, Bindings, Pairing, Substitution, Lab Notes | KN-01–06, PA-01–06 |
 | Qualität/Signale/Runs | 15 | Listen, Ursachen, Policy, Fix, Trend, Qualitätsläufe | QL-01–05 |
 | Controlling/Verkaufs-Ist | 5 | Verkaufsjournal lesen, CSV-Import (Trockenlauf-Default), Menu-Engineering, Portfolio-Steuerung, Promotion-Umsatz | CT-08–12, PF-01–02 |
 | Navigation/Settings/Favoriten | 5 | UI öffnen, Settings lesen, Favoriten lesen/schreiben | UX-05, RE-22, AD-03 |
 
-Die Gruppensumme wird gegen die 157 Toolnamen automatisiert geprüft. Die Übersicht
+Die Gruppensumme wird gegen die 167 Toolnamen automatisiert geprüft. Die Übersicht
 ist fachlich gruppiert; der verbindliche technische Schlüssel ist immer der volle
 Toolname im folgenden Register.
 
-## 7. Vollständiges MCP-Register — 157 Tools
+## 7. Vollständiges MCP-Register — 167 Tools
 
 ```text
 foodalchemist.angebote.GET
@@ -284,7 +289,12 @@ foodalchemist.knowledge.LIST
 foodalchemist.knowledge.POST
 foodalchemist.knowledge.PUT
 foodalchemist.knowledge.SEARCH
+foodalchemist.knowledge.SET_ACTIVE
 foodalchemist.knowledge.UNBIND
+foodalchemist.knowledge_categories.GET
+foodalchemist.knowledge_categories.POST
+foodalchemist.knowledge_routings.GET
+foodalchemist.knowledge_routings.PUT
 foodalchemist.lab_notes.POST
 foodalchemist.lab_notes.SEARCH
 foodalchemist.leitstelle.GET
@@ -303,6 +313,7 @@ foodalchemist.pairings.SUGGEST
 foodalchemist.phase.PUT
 foodalchemist.planning.GET
 foodalchemist.planning.PUT
+foodalchemist.planung_kaskade.GET
 foodalchemist.planung_session.GET
 foodalchemist.planung_session.POST
 foodalchemist.planung_session.PUT
@@ -311,13 +322,17 @@ foodalchemist.portfolio_promotion.GET
 foodalchemist.process_anchors.GROUND
 foodalchemist.production_orders.ADD_TARGET
 foodalchemist.production_orders.DELETE
+foodalchemist.production_orders.FINISH
 foodalchemist.production_orders.GET
 foodalchemist.production_orders.HANDOVER
 foodalchemist.production_orders.LINE_ASSIGN
+foodalchemist.production_orders.LINE_BLOCK
 foodalchemist.production_orders.LINE_OVERRIDE
 foodalchemist.production_orders.LINE_STATUS
+foodalchemist.production_orders.LINE_UNBLOCK
 foodalchemist.production_orders.REMOVE_TARGET
 foodalchemist.production_orders.SET_STATUS
+foodalchemist.production_orders.START
 foodalchemist.production_orders.UPDATE
 foodalchemist.production_orders.UPDATE_LINE
 foodalchemist.produktionsblatt.GET
