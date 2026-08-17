@@ -236,9 +236,15 @@ class RecipeGeneratorService
                     // `sub_rezept:false` hält gekaufte Ware trotz Sauce/Jus-Token als LA.
                     // Fehlt das Flag (Altprovider/kein Emit), bleibt die Heuristik der Fallback.
                     $llmSub = $this->llmSubRezeptFlag($z);
-                    $istBasisrezept = ! $direktArtikel && ($llmSub ?? $this->heuristik->queryIstHalbfabrikat(
+                    // »Jus ist die Sauce« (Entscheidung 2026-08-17): ein STARKES Name-Halbfabrikat
+                    // (jus/sud/sauce/fond/reduktion/coulis/… — queryIstHalbfabrikat) ist IMMER ein
+                    // Sub-Basisrezept und ÜBERSTIMMT jetzt ein KI-»flach« (`sub_rezept:false`) — diese
+                    // Marker sind im From-Scratch-Kontext praktisch nie gekaufte Flachware. Nur beim
+                    // KI-Schweigen (null) bleibt die Heuristik der ohnehin gleiche Fallback.
+                    $nameHalbfabrikat = ! $direktArtikel && $this->heuristik->queryIstHalbfabrikat(
                         app(Matching\TokenEngine::class)->tokenize($text)
-                    ));
+                    );
+                    $istBasisrezept = $nameHalbfabrikat || (! $direktArtikel && ($llmSub ?? false));
                     $laKandidaten = $istBasisrezept ? [] : app(LaCandidateFinder::class)
                         ->find($team, $text, $this->wgHint($z['commodity_group'] ?? $z['warengruppe'] ?? null), 3)
                         ->map(fn ($la) => [
@@ -252,10 +258,12 @@ class RecipeGeneratorService
                     $offene[] = [
                         'index' => $i,
                         'text' => $text,
-                        // Flag-authoritativ: `sub_rezept:false` darf NICHT über die breitere
-                        // Button-Heuristik (istSubRezeptKandidat: creme/mousse/pesto …) wieder
-                        // zur Basisrezept-Anlage zurückkippen — sonst wäre das LLM-Nein wirkungslos.
-                        'primaer' => ($llmSub ?? ($istBasisrezept || (! $direktArtikel && $this->heuristik->istSubRezeptKandidat($text))))
+                        // Zwei Stufen: (1) ein STARKES Name-Halbfabrikat ($istBasisrezept, s. o.)
+                        // gewinnt IMMER — auch über ein KI-»flach«. (2) Sonst ist das KI-Flag
+                        // autoritativ; die breitere Button-Heuristik (istSubRezeptKandidat:
+                        // creme/mousse/geschmort …) darf ein `sub_rezept:false` NICHT überstimmen
+                        // (die kann legitim gekaufte Ware sein), greift aber beim KI-Schweigen (null).
+                        'primaer' => ($istBasisrezept || (! $direktArtikel && ($llmSub ?? $this->heuristik->istSubRezeptKandidat($text))))
                             ? 'basisrezept_anlegen' : 'lieferantenartikel_waehlen',
                         'shortlist' => $this->matcher->candidatesFor($team, $text, $z['slug'] ?? null, 5),
                         'la_kandidaten' => $laKandidaten,
