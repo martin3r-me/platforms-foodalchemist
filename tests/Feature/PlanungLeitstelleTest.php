@@ -2325,3 +2325,26 @@ it('L5 Rehydrierung: gesetzte Leitplanken kommen nach Reload zurück in die Regl
         ->assertSet('regler.gericht.aroma_kueche', 'japanisch')
         ->assertSet('regler.gericht.diaet_hart', ['vegan']);
 });
+
+// ── L6 — Menge & Ziel (Pax / Grammatur / Saison / Ziel-WE%) ──────────────────────────────────
+
+it('L6 Menge&Ziel: gültige Zahl-Achsen + Saison reisen in die Job-Params, ungültige entfallen', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Menge', 'brief' => 'x']);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->set('eingabe.gericht.brief', 'Ein Hauptgang.')
+        ->set('regler.gericht.pax', '50')
+        ->set('regler.gericht.ziel_portion_g', '180')
+        ->set('regler.gericht.saison', 'sommer')
+        ->set('regler.gericht.ziel_we_pct', '999')   // > 100 → ungültig, entfällt
+        ->call('goKaskade', 'gericht')
+        ->assertSet('laeuft', true);
+
+    Queue::assertPushed(GenerateRecipeJob::class, function ($job) {
+        return ($job->parameter['pax'] ?? null) === 50
+            && ($job->parameter['ziel_portion_g'] ?? null) === 180
+            && ($job->parameter['saison'] ?? null) === 'sommer'
+            && ! array_key_exists('ziel_we_pct', $job->parameter);   // 999 verworfen
+    });
+});

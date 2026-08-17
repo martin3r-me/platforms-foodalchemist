@@ -109,6 +109,29 @@
             <p class="text-[11px] text-gray-500 mt-1">{{ empty($r['allergen_nogo'] ?? []) ? 'Kein Allergen-Ausschluss' : 'Zutaten mit diesem Allergen werden nach der Erzeugung gelöst + gemeldet.' }}</p>
         </div>
 
+        <div class="md:col-span-2 grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-2" data-richtung="menge-ziel">
+            <div>
+                <label class="block {{ $label ?? 'text-[11px] text-gray-500' }} mb-1">Pax / Gäste</label>
+                <input type="number" min="1" max="100000" step="1" wire:model="regler.{{ $scope }}.pax" placeholder="z. B. 50" class="{{ $input }} !py-1.5" data-planung-pax />
+            </div>
+            <div>
+                <label class="block {{ $label ?? 'text-[11px] text-gray-500' }} mb-1">Ziel-Portion (g)</label>
+                <input type="number" min="1" max="5000" step="1" wire:model="regler.{{ $scope }}.ziel_portion_g" placeholder="z. B. 180" class="{{ $input }} !py-1.5" data-planung-portion-g />
+            </div>
+            <div>
+                <label class="block {{ $label ?? 'text-[11px] text-gray-500' }} mb-1">Saison</label>
+                <select wire:model="regler.{{ $scope }}.saison" class="{{ $input }} !py-1.5" data-planung-saison>
+                    @foreach(\Platform\FoodAlchemist\Livewire\Planung\Index::SAISON_OPTIONEN as $wert => $lbl)
+                        <option value="{{ $wert }}">{{ $lbl }}</option>
+                    @endforeach
+                </select>
+            </div>
+            <div>
+                <label class="block {{ $label ?? 'text-[11px] text-gray-500' }} mb-1">Ziel-Wareneinsatz (%)</label>
+                <input type="number" min="1" max="100" step="1" wire:model="regler.{{ $scope }}.ziel_we_pct" placeholder="z. B. 28" class="{{ $input }} !py-1.5" data-planung-we-pct />
+            </div>
+        </div>
+
         @if($scope === 'concept')
             {{-- Concept-Typ (#35): Menü (Gänge nacheinander) vs. Buffet (Stationen parallel). Steuert
                  das Positionen-Vokabular (Label + station-Slots + Gänge-Cap). Nur Concept. --}}

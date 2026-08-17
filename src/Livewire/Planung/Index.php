@@ -115,6 +115,8 @@ class Index extends Component
         // aroma = Freitext-Feinjustierung, aroma_kueche = kuratierte Küche (11 + Frei, L1.5).
         // allergen_nogo (L3): EU-14-Allergen-Ausschluss (hart geprüft, getrennt vom Diät-Ausschluss).
         'diaet_hart' => [], 'allergen_nogo' => [], 'aroma' => '', 'aroma_kueche' => '',
+        // L6 »Menge & Ziel« (KI-Vorgaben): Pax (Gäste), Ziel-Portionsgröße g, Saison, Ziel-Wareneinsatz %.
+        'pax' => '', 'ziel_portion_g' => '', 'saison' => '', 'ziel_we_pct' => '',
         'occasion' => '', 'serviceform' => '', 'kompositions_stil' => '',
         'favoriten' => false, 'favoriten_conv_only' => false,
         'ziel_vk' => '', 'voll_anreichern' => false, 'ki_bilder' => false,
@@ -274,6 +276,15 @@ class Index extends Component
         'italienisch' => 'Italienisch', 'asiatisch' => 'Asiatisch (allg.)', 'japanisch' => 'Japanisch',
         'thai' => 'Thai', 'indisch' => 'Indisch', 'orient' => 'Orient', 'lateinamerika' => 'Lateinamerika',
         'neu_nordisch' => 'Neu-Nordisch',
+    ];
+
+    /**
+     * Saison-Achse (L6): Slug => Label. »Ganzjährig« (Default-leer = keine Vorgabe). Prompt-Vorgabe
+     * (Erntefenster/Verfügbarkeit); die deterministische season_coverage-Frame-Rule ist Follow-up.
+     */
+    public const SAISON_OPTIONEN = [
+        '' => 'Ganzjährig / egal',
+        'fruehling' => 'Frühling', 'sommer' => 'Sommer', 'herbst' => 'Herbst', 'winter' => 'Winter',
     ];
 
     public ?string $meldung = null;
@@ -1001,6 +1012,21 @@ class Index extends Component
             // 'trocken' fällt auf fresh_first, egal — der harte Filter erledigt die Zustands-Auswahl).
             $p['frische'] = in_array('frisch', $frischeSlugs, true) ? 'frisch' : $frischeSlugs[0];
         }
+        // L6 »Menge & Ziel«: Zahl-Achsen mit Band-Guard (ungültig/leer → Key entfällt = keine Vorgabe),
+        // Saison als Enum-Durchreichung. Reine KI-Vorgaben (Prompt); deterministische Erzwingung Follow-up.
+        unset($p['pax'], $p['ziel_portion_g'], $p['ziel_we_pct']);   // Roh-Felder → geparst durchreichen
+        if (($pax = $this->intRegler($r['pax'] ?? '', 1, 100000)) !== null) {
+            $p['pax'] = $pax;
+        }
+        if (($portion = $this->intRegler($r['ziel_portion_g'] ?? '', 1, 5000)) !== null) {
+            $p['ziel_portion_g'] = $portion;
+        }
+        if (($wePct = $this->intRegler($r['ziel_we_pct'] ?? '', 1, 100)) !== null) {
+            $p['ziel_we_pct'] = $wePct;
+        }
+        if (! isset(self::SAISON_OPTIONEN[$p['saison'] ?? '']) || ($p['saison'] ?? '') === '') {
+            unset($p['saison']);   // leer/unbekannt = keine Saison-Vorgabe
+        }
         if (! $vk) {
             unset($p['occasion'], $p['serviceform'], $p['kompositions_stil']);
         }
@@ -1099,6 +1125,18 @@ class Index extends Component
         }
 
         return null;
+    }
+
+    /** L6: ganze Zahl im Band [min,max] aus einem Roh-Regler, sonst null (leer/ungültig = keine Vorgabe). */
+    private function intRegler(mixed $roh, int $min, int $max): ?int
+    {
+        $s = trim((string) $roh);
+        if ($s === '' || ! ctype_digit($s)) {
+            return null;
+        }
+        $n = (int) $s;
+
+        return ($n >= $min && $n <= $max) ? $n : null;
     }
 
     /** Menü-Gänge/Positionen: ganze Zahl 1–20, sonst null (leer/ungültig = keine Vorgabe). Concept-Scope. */

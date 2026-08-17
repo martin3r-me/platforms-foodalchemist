@@ -20,6 +20,8 @@ class RecipeGenerationContextService
     private const PROMPT_KEYS = [
         'convenience', 'frische', 'bio', 'bio_pref', 'bestand', 'level', 'sektor',
         'diaet_hart', 'allergen_nogo', 'aroma', 'occasion', 'serviceform', 'kompositions_stil', 'ziel_vk_eur',
+        // L6 »Menge & Ziel«
+        'pax', 'ziel_portion_g', 'saison', 'ziel_we_pct',
     ];
 
     /**
