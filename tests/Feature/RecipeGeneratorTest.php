@@ -280,3 +280,81 @@ it('Fehlt das sub_rezept-Flag, bleibt die Namens-Heuristik der Fallback (kein st
     expect($resultat['offene'][0]['primaer'])->toBe('basisrezept_anlegen')
         ->and($resultat['offene'][1]['primaer'])->toBe('lieferantenartikel_waehlen');
 });
+
+// ── L2 — Zerlegungs-Vorrang über Convenience (Entscheid 2026-08-17) ──────────────────────────
+// Kernfrage: darf ein bestehender GP-Treffer eine komponente/beilage-Zeile FLACH machen, oder
+// wird sie zum Basisrezept zerlegt? Die Convenience-Achse entscheidet.
+
+it('L2 from_scratch: komponente mit GP-Treffer wird TROTZDEM zerlegt (GP geblockt, basisrezept_anlegen)', function () {
+    ($this->mkGpMitPreis)('Rotkohl', 'rotkohl', 3.00);
+
+    $resultat = $this->svc->generiere($this->rootTeam, 'Teller mit Püree', [
+        'convenience' => 'from_scratch', 'frische' => 'frisch',
+    ], kiRezeptOverride: [
+        'name' => 'Gericht: Püree-Teller',
+        'zutaten' => [
+            ['text' => 'Rotkohl', 'slug' => 'rotkohl', 'quantity' => 200, 'unit' => 'g', 'role' => 'komponente'],
+        ],
+    ], vkModus: true);
+
+    expect($resultat['statistik']['bestand_gp'])->toBe(0)          // GP NICHT verdrahtet
+        ->and($resultat['statistik']['offen'])->toBe(1)
+        ->and($resultat['offene'][0]['primaer'])->toBe('basisrezept_anlegen');
+    expect($resultat['recipe']->ingredients()->first()->gp_id)->toBeNull();
+});
+
+it('L2 voll_convenience: komponente mit GP-Treffer bleibt FLACH (GP gewinnt, Fertigkomponente)', function () {
+    ($this->mkGpMitPreis)('Rotkohl', 'rotkohl', 3.00);
+
+    $resultat = $this->svc->generiere($this->rootTeam, 'Teller mit Püree', [
+        'convenience' => 'voll_convenience', 'frische' => 'frisch',
+    ], kiRezeptOverride: [
+        'name' => 'Gericht: Püree-Teller VC',
+        'zutaten' => [
+            ['text' => 'Rotkohl', 'slug' => 'rotkohl', 'quantity' => 200, 'unit' => 'g', 'role' => 'komponente'],
+        ],
+    ], vkModus: true);
+
+    expect($resultat['statistik']['bestand_gp'])->toBe(1)          // GP verdrahtet (gekauft)
+        ->and($resultat['statistik']['offen'])->toBe(0);
+    expect($resultat['recipe']->ingredients()->first()->gp_id)->not->toBeNull();
+});
+
+it('L2 egal (kein convenience-Key): komponente mit GP-Treffer bleibt FLACH (Bestand zuerst)', function () {
+    ($this->mkGpMitPreis)('Rotkohl', 'rotkohl', 3.00);
+
+    $resultat = $this->svc->generiere($this->rootTeam, 'Teller mit Püree', [
+        'frische' => 'frisch',   // KEIN convenience → default/egal
+    ], kiRezeptOverride: [
+        'name' => 'Gericht: Püree-Teller egal',
+        'zutaten' => [
+            ['text' => 'Rotkohl', 'slug' => 'rotkohl', 'quantity' => 200, 'unit' => 'g', 'role' => 'komponente'],
+        ],
+    ], vkModus: true);
+
+    expect($resultat['statistik']['bestand_gp'])->toBe(1)          // Bestand zuerst → GP gewinnt
+        ->and($resultat['statistik']['offen'])->toBe(0);
+});
+
+it('L2 teil_convenience: Convenience-GP gewinnt, ein Nicht-Convenience-GP wird zerlegt', function () {
+    $conv = ($this->mkGpMitPreis)('Rotkohl', 'rotkohl', 3.00);
+    $conv->update(['tag_is_convenience' => true]);
+    ($this->mkGpMitPreis)('Rahmspinat', 'rahmspinat', 2.50);   // kein Convenience-Tag
+
+    $resultat = $this->svc->generiere($this->rootTeam, 'Teller mit Beilagen', [
+        'convenience' => 'teil_convenience', 'frische' => 'frisch',
+    ], kiRezeptOverride: [
+        'name' => 'Gericht: Beilagen-Teller',
+        'zutaten' => [
+            ['text' => 'Rotkohl', 'slug' => 'rotkohl', 'quantity' => 200, 'unit' => 'g', 'role' => 'beilage'],
+            ['text' => 'Rahmspinat', 'slug' => 'rahmspinat', 'quantity' => 150, 'unit' => 'g', 'role' => 'beilage'],
+        ],
+    ], vkModus: true);
+
+    // Convenience-GP (Püree) verdrahtet, Nicht-Convenience-GP (Rahmspinat) zerlegt.
+    expect($resultat['statistik']['bestand_gp'])->toBe(1)
+        ->and($resultat['statistik']['offen'])->toBe(1);
+    $offeneTexte = array_column($resultat['offene'], 'text');
+    expect($offeneTexte)->toContain('Rahmspinat')
+        ->and($offeneTexte)->not->toContain('Rotkohl');
+});

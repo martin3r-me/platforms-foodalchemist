@@ -127,7 +127,7 @@ class RecipeGeneratorService
 
         $melde('Zutaten werden zugeordnet …');
 
-        $result = DB::transaction(function () use ($team, $kiRezept, $parameter, $mode, $pref, $preferRaw, $bio, $vkModus, $createdVia, $melde) {
+        $result = DB::transaction(function () use ($team, $kiRezept, $parameter, $mode, $pref, $preferRaw, $bio, $convenience, $vkModus, $createdVia, $melde) {
             $recipe = $this->recipes->create($team, [
                 'name' => $kiRezept['name'],
                 'is_sales_recipe' => $vkModus,
@@ -225,7 +225,35 @@ class RecipeGeneratorService
                 // (Review-Pfad mit Shortlist — der Mensch entscheidet). Der Matcher
                 // selbst (Schwellen, 84 GL-04-Goldens) bleibt unberührt.
                 $verdrahtbar = $treffer['status'] === MatchBand::Exact || $treffer['status'] === MatchBand::FuzzyHigh;
-                if ($verdrahtbar && $treffer['target'] === 'gp') {
+                $istGpTreffer = $verdrahtbar && $treffer['target'] === 'gp';
+
+                // ── Zerlegungs-Vorrang (L2, Entscheid 2026-08-17 »Convenience entscheidet«) ────────
+                // Die Sub-Entscheidung wird VOR die GP-Verdrahtung gezogen: bisher gewann ein GP-Treffer
+                // (Exact/FuzzyHigh) IMMER und §4/T4 lief nur im unmatched-else — ein bestehendes
+                // »Kartoffelpüree: TK«-GP übersteuerte die Zerlegung still. Jetzt entscheidet die
+                // Convenience-Achse, ob ein GP-Treffer die Zeile flach machen darf.
+                $llmSub = $this->llmSubRezeptFlag($z);
+                $nameHalbfabrikat = ! $direktArtikel && $this->heuristik->queryIstHalbfabrikat(
+                    app(Matching\TokenEngine::class)->tokenize($text)
+                );
+                // STARKES Sub (§4 »jus ist die sauce« / LLM-Flag true): IMMER Basisrezept — überstimmt
+                // auch einen GP-Treffer und jede Convenience-Stufe. Marker sind praktisch nie Flachware.
+                $strongSub = ! $direktArtikel && ($nameHalbfabrikat || ($llmSub === true));
+                // Rolle komponente/beilage im VK-Gericht (T4) — jetzt Convenience-gesteuert:
+                $rolleKomponente = $vkModus && ! $direktArtikel && in_array($z['role'] ?? null, ['komponente', 'beilage'], true);
+                $istConvenienceGp = $istGpTreffer && $this->istConvenienceGp((int) ($treffer['gp_id'] ?? 0));
+                $rolleWillSub = $rolleKomponente && match ($convenience) {
+                    'from_scratch'     => true,                 // hart: selbst bauen (auch über GP-Treffer)
+                    'teil_convenience' => ! $istConvenienceGp,  // Convenience-GP darf gewinnen, sonst Sub
+                    'voll_convenience' => false,                // Fertigkomponente kaufen → nie Sub erzwingen
+                    default            => ! $istGpTreffer,      // egal/standard: Bestand zuerst (GP gewinnt), sonst Sub
+                };
+                // Ein GP-Treffer wird NUR verdrahtet, wenn die Zeile nicht ohnehin Basisrezept sein muss.
+                $gpBlockiert = $strongSub || $rolleWillSub;
+                // Vorentscheidung fürs unmatched-else (unten): Basisrezept vs. Lieferantenartikel.
+                $istBasisrezept = $strongSub || $rolleWillSub || (! $direktArtikel && ($llmSub ?? $this->heuristik->istSubRezeptKandidat($text)));
+
+                if ($istGpTreffer && ! $gpBlockiert) {
                     $zeile['gp_id'] = $treffer['gp_id'];
                     $zeile['match_method'] = 'gemini_proposed';
                     $zeile['match_confidence'] = round($treffer['score'], 3);
@@ -237,32 +265,10 @@ class RecipeGeneratorService
                 } else {
                     // Keine automatische Anlage: Basisrezept-Stub bzw. LA→GP werden
                     // erst nach menschlicher Auswahl in getrennten Schritten angelegt.
+                    // $istBasisrezept / $strongSub / $rolleWillSub sind oben (Zerlegungs-Vorrang L2)
+                    // bereits berechnet — hier nur noch verwenden (§4 »jus«, LLM-Flag, Convenience-Rolle).
                     $zeile['match_method'] = 'unmatched';
                     $statistik['offen']++;
-                    // Etappe 1 (2026-08-14): der Generator emittiert pro Zeile das
-                    // LLM-Komponenten-Flag `sub_rezept` (config/foodalchemist.php, b36ba00).
-                    // Ist es gesetzt, ENTSCHEIDET es (authoritativ, beide Richtungen) — es
-                    // löst die reine Namens-Heuristik ab (§4): `sub_rezept:true` zwingt zur
-                    // Basisrezept-Anlage auch bei heuristik-blinden Fällen (Klar-Essenz),
-                    // `sub_rezept:false` hält gekaufte Ware trotz Sauce/Jus-Token als LA.
-                    // Fehlt das Flag (Altprovider/kein Emit), bleibt die Heuristik der Fallback.
-                    $llmSub = $this->llmSubRezeptFlag($z);
-                    // »Jus ist die Sauce« (Entscheidung 2026-08-17): ein STARKES Name-Halbfabrikat
-                    // (jus/sud/sauce/fond/reduktion/coulis/… — queryIstHalbfabrikat) ist IMMER ein
-                    // Sub-Basisrezept und ÜBERSTIMMT jetzt ein KI-»flach« (`sub_rezept:false`) — diese
-                    // Marker sind im From-Scratch-Kontext praktisch nie gekaufte Flachware. Nur beim
-                    // KI-Schweigen (null) bleibt die Heuristik der ohnehin gleiche Fallback.
-                    $nameHalbfabrikat = ! $direktArtikel && $this->heuristik->queryIstHalbfabrikat(
-                        app(Matching\TokenEngine::class)->tokenize($text)
-                    );
-                    // T4 (Entscheidung 2026-08-17, »Gericht = Basisrezepte«): rolle-hart — im VK-GERICHT
-                    // ist eine Zutat der Rolle komponente/beilage IMMER ein Sub-Basisrezept (überstimmt
-                    // KI + Namens-Heuristik); flach/GP bleibt nur echte Rohware (direktArtikel: Öl/Salz/
-                    // Gewürze/Kräuter) sowie garnitur/aroma_treiber (die laufen über T3-Marker/LLM). NUR
-                    // im vkModus — im Basisrezept sind komponente/beilage rohe Bauteile (kein Infinit-Rekurs).
-                    $rolleErzwingtSub = $vkModus && ! $direktArtikel
-                        && in_array($z['role'] ?? null, ['komponente', 'beilage'], true);
-                    $istBasisrezept = $rolleErzwingtSub || $nameHalbfabrikat || (! $direktArtikel && ($llmSub ?? false));
                     $laKandidaten = $istBasisrezept ? [] : app(LaCandidateFinder::class)
                         ->find($team, $text, $this->wgHint($z['commodity_group'] ?? $z['warengruppe'] ?? null), 3)
                         ->map(fn ($la) => [
@@ -276,13 +282,9 @@ class RecipeGeneratorService
                     $offene[] = [
                         'index' => $i,
                         'text' => $text,
-                        // Zwei Stufen: (1) ein STARKES Name-Halbfabrikat ($istBasisrezept, s. o.)
-                        // gewinnt IMMER — auch über ein KI-»flach«. (2) Sonst ist das KI-Flag
-                        // autoritativ; die breitere Button-Heuristik (istSubRezeptKandidat:
-                        // creme/mousse/geschmort …) darf ein `sub_rezept:false` NICHT überstimmen
-                        // (die kann legitim gekaufte Ware sein), greift aber beim KI-Schweigen (null).
-                        'primaer' => ($istBasisrezept || (! $direktArtikel && ($llmSub ?? $this->heuristik->istSubRezeptKandidat($text))))
-                            ? 'basisrezept_anlegen' : 'lieferantenartikel_waehlen',
+                        // $istBasisrezept (oben, Zerlegungs-Vorrang L2) enthält bereits: §4-Name /
+                        // LLM-Flag / Convenience-gesteuerte Rolle + den istSubRezeptKandidat-Fallback.
+                        'primaer' => $istBasisrezept ? 'basisrezept_anlegen' : 'lieferantenartikel_waehlen',
                         'shortlist' => $this->matcher->candidatesFor($team, $text, $z['slug'] ?? null, 5),
                         'la_kandidaten' => $laKandidaten,
                         'lieferantenstrategie' => $istBasisrezept ? null : app(TeamSettingsService::class)
@@ -554,6 +556,21 @@ class RecipeGeneratorService
         }
 
         return null;
+    }
+
+    /**
+     * Convenience-GP? (L2 Zerlegungs-Vorrang, teil_convenience): ein GP mit dem Convenience-Tag darf
+     * bei Rolle komponente/beilage die Zerlegung gewinnen (Halbfabrikat kaufen statt Sub-Rezept bauen).
+     * Fail-soft: kein/ungültiger GP → false (im Zweifel zerlegen, nicht flach kaufen).
+     */
+    private function istConvenienceGp(int $gpId): bool
+    {
+        if ($gpId <= 0) {
+            return false;
+        }
+
+        return (bool) \Platform\FoodAlchemist\Models\FoodAlchemistGp::query()
+            ->whereKey($gpId)->value('tag_is_convenience');
     }
 
     /**
