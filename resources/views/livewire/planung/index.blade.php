@@ -476,9 +476,12 @@
                 <x-foodalchemist::modal-section title="Go — Concept erzeugen (Draft)">
                     @include('foodalchemist::livewire.planung.partials.worker-praesenz')
                     @if($planConceptId)
+                        {{-- A0/A1: der ausgearbeitete Plan bleibt hier SICHTBAR + editierbar (Semantik + Menü-
+                             Aufbau) — kein Wegsprung in den Conceptor mehr. --}}
+                        @include('foodalchemist::livewire.planung.partials.concept-plan')
                         {{-- Geplanter Pfad (Etappe 2b): ein KI-Kopf-Plan ist vorbereitet — der Go referenziert ihn
                              statt neu zu generieren. „Plan verwerfen" wechselt zurück auf den Schnell-Pfad. --}}
-                        <div class="mb-2 flex items-center gap-2 text-[11px] text-emerald-300" data-planung-plan-bereit>
+                        <div class="mb-2 flex items-center gap-2 text-[11px] text-emerald-700" data-planung-plan-bereit>
                             @svg('heroicon-o-check-badge', 'w-4 h-4')
                             <span>Geprüfter Plan vorbereitet — der Go verwendet ihn (statt neu zu generieren).</span>
                             <button type="button" wire:click="planVerwerfen" @disabled($laeuft) class="underline hover:text-emerald-200 disabled:opacity-40">Plan verwerfen (frisch generieren)</button>

@@ -600,7 +600,7 @@ function bindKiKopfStub(): void
     });
 }
 
-it('KI-Kopf: arbeitet den Plan aus dem Concept-Briefing aus + öffnet den Conceptor auf „Konzept & Planung", startet KEINE Kaskade', function () {
+it('KI-Kopf: arbeitet den Plan aus + zeigt ihn INLINE in der Leitstelle (kein Wegsprung), startet KEINE Kaskade', function () {
     bindKiKopfStub();
     $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Sommer-Menü']);
 
@@ -610,8 +610,11 @@ it('KI-Kopf: arbeitet den Plan aus dem Concept-Briefing aus + öffnet den Concep
         ->set('eingabe.concept.titel', 'Sommerglanz')
         ->call('kiKopf')
         ->assertSet('fehler', null)
-        // öffnet den vollen inline-Conceptor direkt auf dem 'konzept'-Tab (Prüfung/Korrektur)
-        ->assertDispatched('concepter-editor.oeffnen', type: 'concepts', startTab: 'konzept');
+        // A0: KEIN Wegsprung mehr in den Conceptor — der Plan bleibt inline in der Leitstelle …
+        ->assertNotDispatched('concepter-editor.oeffnen')
+        // … und die Semantik-Felder sind editierbar geladen (aus der concept.plan-Canvas = LLM-Kontext).
+        ->assertSet('planForm.name_claim', 'Sommerglanz')
+        ->assertSet('planForm.leitidee', 'Leichte Küche für laue Abende.');
 
     // Draft-Concept steht (Lineage), Name aus dem Nutzer-Titel — und KEINE Kaskade gestartet.
     $concept = FoodAlchemistConcept::where('team_id', $this->rootTeam->id)->where('created_via', 'concept_plan_ui')->first();
@@ -619,6 +622,43 @@ it('KI-Kopf: arbeitet den Plan aus dem Concept-Briefing aus + öffnet den Concep
         ->and($concept->name)->toBe('Sommerglanz')
         ->and($concept->status)->toBe('draft');
     expect(FoodAlchemistCascadeRun::where('planning_session_id', $session->id)->count())->toBe(0);
+});
+
+it('Inline-Plan: planFeldSpeichern schreibt die editierte Leitidee in die concept.plan-Canvas (= LLM-Kontext)', function () {
+    bindKiKopfStub();
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Edit-Menü']);
+
+    $component = Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->set('eingabe.concept.brief', 'Leichtes Sommer-Menü.')
+        ->call('kiKopf');
+
+    $concept = FoodAlchemistConcept::where('team_id', $this->rootTeam->id)->where('created_via', 'concept_plan_ui')->firstOrFail();
+
+    // Inline die Leitidee ändern + speichern → landet in der Canvas (steuert die nächste Erzeugung).
+    $component->set('planForm.leitidee', 'Geändert: mediterran, viel Gemüse.')
+        ->call('planFeldSpeichern')
+        ->assertSet('fehler', null);
+
+    $svc = app(\Platform\FoodAlchemist\Services\CanvasService::class);
+    $werte = $svc->werte($svc->find('concept', 'concept', (int) $concept->id));
+    expect($werte['leitidee'])->toBe('Geändert: mediterran, viel Gemüse.');
+});
+
+it('Inline-Plan: planVorschau liefert Name + geplante Menü-Positionen (die Speisen werden sichtbar)', function () {
+    bindKiKopfStub();
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Vorschau-Menü']);
+
+    $inst = Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->set('eingabe.concept.brief', 'Sommer-Menü.')
+        ->call('kiKopf')
+        ->instance();
+
+    $pv = $inst->planVorschau();
+    expect($pv)->not->toBeNull()
+        ->and($pv['speisen'])->not->toBe([])                  // die Positionen aus dem Gerüst
+        ->and($pv['speisen'][0]['rolle'])->toBe('Hauptgang'); // Stub-Gerüst: 1 Gang „Hauptgang"
 });
 
 it('KI-Kopf: leeres Concept-Briefing wird gesagt (kein Draft, keine Öffnung)', function () {

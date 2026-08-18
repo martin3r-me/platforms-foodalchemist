@@ -109,6 +109,28 @@
             @endif
         </div>
     @endif
+    {{-- Concept-Step: die geplanten Menü-Positionen inline zeigen (WELCHE Speisen der Plan vorsieht) —
+         statt nur „öffnen". Die Gerichte selbst entstehen mit der Stufen-Freigabe (Fan-out) als eigene
+         Gericht-Steps. Genau das, was vorher nur im Conceptor sichtbar war (#2 „ich sehe nicht welche
+         Speisen er vorschlägt"). Eine Query, nur für Concept-Steps. --}}
+    @if($st->ref_id && $st->kind === 'concept' && in_array($st->status, ['done', 'freigegeben'], true))
+        @php $speisen = $this->conceptSpeisen((int) $st->ref_id); @endphp
+        @if($speisen !== [])
+            <div class="mt-1 pl-1" data-concept-speisen="{{ $st->id }}">
+                <p class="text-[10px] text-gray-500 mb-0.5">Menü-Aufbau — {{ count($speisen) }} Position(en); die Gerichte kommen mit der Freigabe:</p>
+                <ol class="space-y-0.5">
+                    @foreach($speisen as $sp)
+                        <li class="flex items-center gap-2 text-[11px] text-gray-300">
+                            <span class="text-gray-600 tabular-nums">{{ $loop->iteration }}.</span>
+                            <span>{{ $sp['titel'] !== '' ? $sp['titel'] : ($sp['rolle'] !== '' ? $sp['rolle'] : 'Position') }}</span>
+                            @if($sp['titel'] !== '' && $sp['rolle'] !== '')<span class="text-gray-500">· {{ $sp['rolle'] }}</span>@endif
+                            @if($sp['pflicht'])<span class="text-[10px] text-emerald-400/70 uppercase tracking-wide">Pflicht</span>@endif
+                        </li>
+                    @endforeach
+                </ol>
+            </div>
+        @endif
+    @endif
     {{-- Etappe 7 — Kosten-Transparenz je Call: die KI-Fotos werden bei der Anreicherung je Call
          protokolliert (foodalchemist_ai_call_log). Hier die Zahl der kostenpflichtigen Bild-Calls
          + das Modell am Draft zeigen — KEIN EUR-Betrag (keine Preisquelle → wäre Erfindung). --}}
