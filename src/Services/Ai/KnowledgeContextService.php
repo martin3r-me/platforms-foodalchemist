@@ -536,7 +536,7 @@ class KnowledgeContextService
     private function discoverGenericBlock(string $category, string $query, int $topK, int $maxChars, array &$filesUsed): ?string
     {
         $tokens = $this->tokenize($query);
-        if ($tokens === [] || $topK <= 0) {
+        if ($topK <= 0) {
             return null;
         }
 
@@ -572,14 +572,29 @@ class KnowledgeContextService
                 $scored[] = [$doc, $score];
             }
         }
-        if ($scored === []) {
+        usort($scored, fn ($x, $y) => $y[1] <=> $x[1]);
+        $ordered = array_map(static fn ($s) => (string) $s[0]->slug, $scored);   // Lexik-Rangfolge
+
+        // B2 — Semantischer Recall (Hybrid, opt-in): MERGEN statt nur auffüllen. Meaning-matched
+        // Slugs werden VOR die Lexik gereiht (RAG darf korrigieren, nicht bloß ergänzen), gefiltert
+        // auf die aktiven Kategorie-Docs. Deaktiviert (Default) / kein Provider ⇒ leer ⇒ die reine
+        // Lexik bleibt führend (byte-identisches Alt-Verhalten).
+        $docsBySlug = $docs->keyBy('slug');
+        $pick = [];
+        foreach ([...$this->semanticSlugs($query, [$category], $topK), ...$ordered] as $slug) {
+            if (isset($docsBySlug[$slug])) {
+                $pick[$slug] = true;
+            }
+        }
+        $pick = array_slice(array_keys($pick), 0, $topK);
+        if ($pick === []) {
             return null;
         }
-        usort($scored, fn ($x, $y) => $y[1] <=> $x[1]);
 
         $label = mb_strtoupper($category);
         $blocks = [];
-        foreach (array_slice($scored, 0, $topK) as [$doc]) {
+        foreach ($pick as $slug) {
+            $doc = $docsBySlug->get($slug);
             $blocks[] = "## {$label}: {$doc->slug}\n\n" . $this->truncate((string) $doc->content_md, $maxChars);
             $filesUsed[] = "{$doc->slug}@v{$doc->version}";
         }
@@ -675,12 +690,12 @@ class KnowledgeContextService
             }
         }
 
-        // 2c. Semantischer Recall (Hybrid, opt-in): füllt auf, wenn die Lexik
-        // < TOP_K Domains liefert. Deaktiviert (Default) = unverändertes Verhalten.
-        if (count($slugs) < self::DOMAIN_TOP_K) {
-            foreach ($this->semanticSlugs($description, ['domain'], self::DOMAIN_TOP_K - count($slugs)) as $slug) {
-                $slugs[$slug] = true;
-            }
+        // 2c. Semantischer Recall (Hybrid, opt-in): B2 — MERGEN statt nur auffüllen. Semantisch
+        // passende Domains treten der Kandidatenmenge IMMER bei (nicht erst bei dünner Lexik) und
+        // können via Top-K lexikalische verdrängen (RAG darf korrigieren). Deaktiviert (Default) /
+        // kein Provider ⇒ leer ⇒ unverändertes Verhalten.
+        foreach ($this->semanticSlugs($description, ['domain'], self::DOMAIN_TOP_K) as $slug) {
+            $slugs[$slug] = true;
         }
 
         $slugList = array_map('strval', array_keys($slugs));
@@ -770,14 +785,12 @@ class KnowledgeContextService
             }
         }
 
-        // Semantischer Recall (Hybrid, opt-in): ergänzt eine dünne/leere Lexik um semantisch
-        // passende Anker-Stems (über die Anker-Embeddings, NICHT mehr Pairing-Docs).
-        // Deaktiviert (Default) = no-op.
-        if (count($matched) < self::PAIRING_TOP_K) {
-            foreach ($this->semanticAnkerStems($description, self::PAIRING_TOP_K) as $stem) {
-                if (! in_array($stem, $matched, true)) {
-                    $matched[] = $stem;
-                }
+        // Semantischer Recall (Hybrid, opt-in): B2 — MERGEN statt nur auffüllen. Semantisch
+        // passende Anker-Stems (über die Anker-Embeddings, NICHT Pairing-Docs) treten IMMER bei
+        // und können via Top-K lexikalische Stems verdrängen. Deaktiviert (Default) = no-op.
+        foreach ($this->semanticAnkerStems($description, self::PAIRING_TOP_K) as $stem) {
+            if (! in_array($stem, $matched, true)) {
+                $matched[] = $stem;
             }
         }
 

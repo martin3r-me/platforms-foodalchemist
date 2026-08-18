@@ -12,6 +12,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistGp;
 use Platform\FoodAlchemist\Models\FoodAlchemistLabNote;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplier;
+use Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem;
 use Throwable;
 
 /**
@@ -501,6 +502,19 @@ class PoolEmbeddingService
             fn (): string => $this->labNoteEmbedText($n));
     }
 
+    /**
+     * Inkrementelles Re-Embed EINES Lieferartikels (Observer-Pfad, A3). Gate spiegelt
+     * {@see embedSupplierItems}: aktiv (nicht soft-deleted) UND nicht ausgelistet — sonst
+     * Vektor löschen. Der Embed-Text zieht die klassifizierte Oberfläche aus der
+     * Structure-Schicht (HasOne), darum loadMissing in {@see supplierItemRow}.
+     */
+    public function queueSupplierItem(FoodAlchemistSupplierItem $si): void
+    {
+        $this->queueSimple(self::ENTITY_TYPE_SUPPLIER_ITEM, $si,
+            fn (): bool => $si->deleted_at === null && ! (bool) $si->is_discontinued,
+            fn (): string => $this->supplierItemEmbedText($this->supplierItemRow($si)));
+    }
+
     public function deleteSupplier(int $id, int|string|null $rawTeamId = null): void
     {
         $this->safeDelete(self::ENTITY_TYPE_SUPPLIER, $this->partitionTeamId($rawTeamId), $id);
@@ -519,6 +533,11 @@ class PoolEmbeddingService
     public function deleteLabNote(int $id, int|string|null $rawTeamId = null): void
     {
         $this->safeDelete(self::ENTITY_TYPE_LAB_NOTE, $this->partitionTeamId($rawTeamId), $id);
+    }
+
+    public function deleteSupplierItem(int $id, int|string|null $rawTeamId = null): void
+    {
+        $this->safeDelete(self::ENTITY_TYPE_SUPPLIER_ITEM, $this->partitionTeamId($rawTeamId), $id);
     }
 
     public function supplierEmbedText(object $s): string
@@ -542,6 +561,25 @@ class PoolEmbeddingService
     public function labNoteEmbedText(object $n): string
     {
         return $this->joinParts([$n->title ?? '', self::lead((string) ($n->body ?? ''))]);
+    }
+
+    /**
+     * Baut die Embed-Zeile eines Lieferartikel-Models für {@see supplierItemEmbedText}:
+     * Item-Felder + die klassifizierte Oberfläche aus der Structure-HasOne (dieselben
+     * Spalten wie der LEFT JOIN in {@see embedSupplierItems}). loadMissing lädt die
+     * Relation nur, wenn sie noch nicht vorliegt (kein N+1 im Observer-Einzelpfad).
+     */
+    private function supplierItemRow(FoodAlchemistSupplierItem $si): object
+    {
+        $st = $si->loadMissing('structure')->structure;
+
+        return (object) [
+            'designation' => $si->designation,
+            'marketing_name' => $si->marketing_name,
+            'brand' => $si->brand,
+            'main_ingredient_display' => $st?->main_ingredient_display,
+            'gp_name_derived' => $st?->gp_name_derived,
+        ];
     }
 
     /**

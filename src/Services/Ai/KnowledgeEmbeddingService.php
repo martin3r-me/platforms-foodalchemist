@@ -143,7 +143,7 @@ class KnowledgeEmbeddingService
      * @param  list<string>|null  $kategorien  null = alle indizierbaren Kategorien
      * @return array{available: bool, candidates: int, kategorien: array<string,int>}
      */
-    public function embedCorpus(?array $kategorien = null): array
+    public function embedCorpus(?array $kategorien = null, bool $purge = false): array
     {
         if (! $this->isProviderAvailable()) {
             return ['available' => false, 'candidates' => 0, 'kategorien' => []];
@@ -189,7 +189,157 @@ class KnowledgeEmbeddingService
             $perKat[$kategorie] = $docs->count();
         }
 
-        return ['available' => true, 'candidates' => $candidates, 'kategorien' => $perKat];
+        $result = ['available' => true, 'candidates' => $candidates, 'kategorien' => $perKat];
+        if ($purge) {
+            // A2: verwaiste Vektoren (deaktivierte + historische Waisen) entfernen. Bewusst NUR bei
+            // ausdrücklichem --purge — der Probe-Delete ist zahlreich (off-peak, nicht jeder Backfill).
+            $result['purge'] = $this->purgeStale(true);
+        }
+
+        return $result;
+    }
+
+    // ── Inkrementell (Service-/UI-Pfad, kein Eloquent-Observer) ──────────────
+
+    /**
+     * Partition-Team eines Docs: NULL (global/BHG-kuratiert) → Sentinel, sonst reale ID.
+     * Identisch zu {@see PoolEmbeddingService::partitionTeamId} — der Store verlangt int.
+     */
+    public function partitionTeamId(int|string|null $teamId): int
+    {
+        return $teamId === null ? $this->globalTeamId() : (int) $teamId;
+    }
+
+    /**
+     * Inkrementelles Re-Embed EINES Wissens-Dokuments (Service-/UI-Pfad). Ein Eloquent-
+     * Observer ist unmöglich: {@see \Platform\FoodAlchemist\Services\KnowledgeService} und der
+     * Knowledge-Browser schreiben per DB::table (kein Model-Event). Darum ruft der Schreib-Pfad
+     * diese Methode explizit. Async über die Queue ({@see EmbeddingService::queueEmbedAndStore}
+     * → GenerateEmbeddingJob), source_hash-idempotent — Spiegel von PoolEmbeddingService::queueGp.
+     *
+     * Quarantäne-Invariante (identisch zum active=1-Filter in {@see embedCorpus}): NUR aktive,
+     * nicht gelöschte Docs gehören in den Recall-Pool. Inaktiv/soft-deleted ⇒ Vektor LÖSCHEN statt
+     * embedden — so decken Aktivieren (embed) UND Deaktivieren (purge) denselben Aufruf ab. Der
+     * Doc-Parameter ist eine volle Zeile (KnowledgeService::find / Browser DB::first). No-op ohne
+     * Provider (Sandbox) — nie Fehler nach oben (GL-13 Invariante 6).
+     */
+    public function queueDocument(object $doc): void
+    {
+        if (! $this->isProviderAvailable()) {
+            return;
+        }
+        $active = (int) ($doc->active ?? 0) === 1 && ($doc->deleted_at ?? null) === null;
+        if (! $active) {
+            $this->deleteDocument((int) $doc->id, $doc->team_id ?? null);
+
+            return;
+        }
+        $text = $this->embedText($doc);
+        if ($text === '') {
+            return;
+        }
+        app(EmbeddingService::class)->queueEmbedAndStore(
+            teamId: $this->partitionTeamId($doc->team_id ?? null),
+            entityType: self::ENTITY_TYPE,
+            entityId: (int) $doc->id,
+            text: $text,
+            providerName: $this->providerName(),
+        );
+    }
+
+    /** Löscht den Doc-Vektor (Deaktivierung/Hard-Delete). Fehler-tolerant (GL-13 Invariante 6). */
+    public function deleteDocument(int $id, int|string|null $rawTeamId = null): void
+    {
+        try {
+            app(EmbeddingService::class)->delete($this->partitionTeamId($rawTeamId), self::ENTITY_TYPE, $id);
+        } catch (Throwable $e) {
+            Log::warning('[KnowledgeEmbeddingService] delete failed', [
+                'entity_type' => self::ENTITY_TYPE, 'id' => $id, 'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * A2 — Waisen-Purge des Wissens-Index: entfernt Vektoren, die zu keinem AKTIVEN Doc
+     * (mehr) gehören. Der Soll-Zustand des Index = exakt die aktiven, nicht gelöschten Docs
+     * (identisch zum active=1-Filter in {@see embedCorpus}). Zwei Klassen von Stale:
+     *   (1) im Bestand, aber inaktiv/soft-deleted — enumerierbar, immer bereinigt.
+     *   (2) historische Waisen, deren Doc-ID gar nicht mehr in der Tabelle steht (Re-Import gab
+     *       neue IDs, alte nie gepurged). Nur per Probe über [1..maxId] erreichbar → nur bei $deep.
+     *
+     * Warum Probe statt gezielt: der Core-Store-Contract bietet KEINE Enumeration
+     * (store/search/delete/getSourceHash/purgeProvider). Ein Store-Delete einer nicht
+     * vorhandenen ID ist ein gefahrloser No-op (Qdrant/MySQL) → der Probe-Ansatz ist sicher,
+     * nur zahlreich (einmaliger Maintenance-Lauf, off-peak). Die Partition einer verschwundenen
+     * ID ist unbekannt → jede aktive Partition + der Sentinel werden probiert (Fehl-Partition = No-op).
+     *
+     * OFFENER CORE-WUNSCH (Martin): ein entityIds(teamId, entityType) (Qdrant-Scroll / MySQL-DISTINCT)
+     * würde (2) gezielt statt per Probe lösen — dann fällt der Brute-Force weg.
+     *
+     * @return array{available: bool, deleted: int, probed: int}
+     */
+    public function purgeStale(bool $deep = false): array
+    {
+        if (! $this->isProviderAvailable()) {
+            return ['available' => false, 'deleted' => 0, 'probed' => 0];
+        }
+
+        $service = app(EmbeddingService::class);
+
+        // Aktive Doc-IDs je Partition (global NULL → Sentinel) = der Soll-Index.
+        $liveByPartition = [];
+        foreach (DB::table('foodalchemist_knowledge_documents')
+            ->where('active', 1)->whereNull('deleted_at')->get(['id', 'team_id']) as $r) {
+            $liveByPartition[$this->partitionTeamId($r->team_id)][(int) $r->id] = true;
+        }
+
+        // (1) Enumerierbare Stale: Docs, die es noch gibt, aber NICHT (aktiv & nicht gelöscht) sind.
+        $deleted = 0;
+        foreach (DB::table('foodalchemist_knowledge_documents')
+            ->where(fn ($q) => $q->where('active', '!=', 1)->orWhereNotNull('deleted_at'))
+            ->get(['id', 'team_id']) as $r) {
+            $this->safeStoreDelete($service, $this->partitionTeamId($r->team_id), (int) $r->id);
+            $deleted++;
+        }
+
+        // (2) Historische Waisen: IDs, die gar nicht mehr in der Tabelle stehen. Probe je Partition.
+        $probed = 0;
+        if ($deep) {
+            $maxId = (int) DB::table('foodalchemist_knowledge_documents')->max('id');
+            $existing = DB::table('foodalchemist_knowledge_documents')->pluck('id')
+                ->mapWithKeys(fn ($i) => [(int) $i => true])->all();
+            $partitions = array_keys($liveByPartition);
+            $sentinel = $this->globalTeamId();
+            if (! in_array($sentinel, $partitions, true)) {
+                $partitions[] = $sentinel;   // historische globale Waisen liegen im Sentinel
+            }
+            foreach ($partitions as $partition) {
+                $live = $liveByPartition[$partition] ?? [];
+                for ($id = 1; $id <= $maxId; $id++) {
+                    if (isset($live[$id]) || isset($existing[$id])) {
+                        continue;   // aktiv (behalten) oder schon in (1) behandelt
+                    }
+                    $this->safeStoreDelete($service, $partition, $id);
+                    $probed++;
+                }
+            }
+        }
+
+        Log::info('[KnowledgeEmbeddingService] purgeStale', ['deep' => $deep, 'deleted' => $deleted, 'probed' => $probed]);
+
+        return ['available' => true, 'deleted' => $deleted, 'probed' => $probed];
+    }
+
+    /** Store-Delete eines einzelnen Vektors, fehler-tolerant (ein fehlender Punkt ist ein No-op). */
+    private function safeStoreDelete(EmbeddingService $service, int $teamId, int $id): void
+    {
+        try {
+            $service->delete($teamId, self::ENTITY_TYPE, $id);
+        } catch (Throwable $e) {
+            Log::warning('[KnowledgeEmbeddingService] purge delete failed', [
+                'team' => $teamId, 'id' => $id, 'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     /**

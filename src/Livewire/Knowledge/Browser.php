@@ -256,6 +256,9 @@ class Browser extends Component
             DB::table('foodalchemist_knowledge_documents')->where('id', $this->selectedId)
                 ->update($payload + ['version' => DB::raw('version + 1')]);
         }
+        // Recall-Index (A1) nachziehen — Anlage/Edit/Aktivierung im Browser ist die menschliche
+        // Freigabe (Quarantäne): erst dann soll das Doc semantisch auffindbar werden.
+        $this->reembed((int) $this->selectedId);
         $this->savedToast('Wissensdokument gespeichert');
         $this->fehler = null;
     }
@@ -275,6 +278,22 @@ class Browser extends Component
             ->update(['active' => ! $doc->active, 'updated_at' => now()]);
         if ($this->selectedId === $id) {
             $this->form['active'] = ! $doc->active;
+        }
+        // Aktivieren → embedden, Deaktivieren → purgen (queueDocument gated intern auf active).
+        $this->reembed($id);
+    }
+
+    /**
+     * Recall-Index (A1) nach einem Schreib-/Aktivierungs-Vorgang nachziehen. Der Browser
+     * schreibt per DB::table (kein Eloquent-Observer), darum expliziter Aufruf.
+     * {@see KnowledgeEmbeddingService::queueDocument} gated intern auf active (embed) bzw.
+     * inaktiv/gelöscht (purge). Async über die Queue, no-op ohne Provider (Sandbox).
+     */
+    private function reembed(int $id): void
+    {
+        $doc = DB::table('foodalchemist_knowledge_documents')->where('id', $id)->first();
+        if ($doc !== null) {
+            app(KnowledgeEmbeddingService::class)->queueDocument($doc);
         }
     }
 

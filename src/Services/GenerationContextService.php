@@ -4,6 +4,7 @@ namespace Platform\FoodAlchemist\Services;
 
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Models\FoodAlchemistGp;
+use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Services\Matching\TokenEngine;
 
 /**
@@ -89,6 +90,48 @@ class GenerationContextService
                 ->filter()->values()->all();
             if ($partner !== []) {
                 $pairing[$token] = $partner;
+            }
+        }
+
+        // B3: zusätzlicher SEMANTISCHER Pass über die GANZE Beschreibung (nicht nur je Leit-Token) —
+        // breiterer Reuse-Recall über Bedeutung. Additiv: ergänzt NUR Kandidaten, die die per-Token-
+        // Lexik noch nicht hat (Lexik behält Vorrang in Reihenfolge/Benennung). Leer ohne Flag/
+        // Provider ⇒ graceful, byte-identisches Verhalten.
+        $sem = app(Ai\SemanticRetrievalService::class)->candidates(
+            $team, $description,
+            [Ai\PoolEmbeddingService::ENTITY_TYPE_GP, Ai\PoolEmbeddingService::ENTITY_TYPE_RECIPE],
+            self::GP_CAND_MAX,
+        );
+        if ($sem !== []) {
+            $semGp = [];       // id => score (noch nicht per Lexik erfasst)
+            $semRezept = [];
+            foreach ($sem as $hit) {
+                $id = (int) $hit['entity_id'];
+                if ($hit['entity_type'] === Ai\PoolEmbeddingService::ENTITY_TYPE_GP && ! isset($gp[$id])) {
+                    $semGp[$id] = round((float) $hit['score'], 3);
+                } elseif ($hit['entity_type'] === Ai\PoolEmbeddingService::ENTITY_TYPE_RECIPE && ! isset($rezepte[$id])) {
+                    $semRezept[$id] = round((float) $hit['score'], 3);
+                }
+            }
+            if ($semGp !== []) {
+                $namen = FoodAlchemistGp::query()->visibleToTeam($team)
+                    ->whereIn('id', array_keys($semGp))->pluck('name', 'id');
+                foreach ($semGp as $id => $score) {
+                    $name = $namen->get($id);
+                    if ($name !== null && ! isset($gp[$id])) {
+                        $gp[$id] = ['id' => $id, 'name' => $name, 'score' => $score];
+                    }
+                }
+            }
+            if ($semRezept !== []) {
+                $namen = FoodAlchemistRecipe::visibleToTeam($team)->basis()
+                    ->whereIn('id', array_keys($semRezept))->pluck('name', 'id');
+                foreach ($semRezept as $id => $score) {
+                    $name = $namen->get($id);
+                    if ($name !== null && ! isset($rezepte[$id])) {
+                        $rezepte[$id] = ['id' => $id, 'name' => $name, 'score' => $score];
+                    }
+                }
             }
         }
 

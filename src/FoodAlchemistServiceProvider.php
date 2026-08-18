@@ -183,6 +183,10 @@ class FoodAlchemistServiceProvider extends ServiceProvider
         \Platform\FoodAlchemist\Models\FoodAlchemistFoodbook::observe(\Platform\FoodAlchemist\Observers\FoodbookEmbeddingObserver::class);
         \Platform\FoodAlchemist\Models\FoodAlchemistLabNote::observe(\Platform\FoodAlchemist\Observers\LabNoteEmbeddingObserver::class);
 
+        // RAG-Autoindex A3: Lieferartikel-Einzeledits synchron halten. Der Katalog-Bulk-Import
+        // umgeht Eloquent → bleibt der explizite Backfill (foodalchemist:embed --pool=la).
+        \Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem::observe(\Platform\FoodAlchemist\Observers\SupplierItemEmbeddingObserver::class);
+
         // Embedding-Store-Routing (Runbook 34_Qdrant): FA deklariert selbst, in welchen
         // Store seine Pools gehen — Cores EmbeddingStoreRegistry bleibt entity-agnostisch
         // (der bevorzugte, lose gekoppelte Weg statt zentraler config('embeddings.routing')).

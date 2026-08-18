@@ -468,30 +468,63 @@ class RecipeGeneratorService
     }
 
     /**
-     * V-04: Top-Bestands-Kandidaten zur Beschreibung (Token-LIKE über die
-     * Basisrezept-Namen, approved zuerst) — als »benenne EXAKT so«-Inventar.
+     * V-04 / B1: Top-Bestands-Kandidaten zur Beschreibung als »benenne EXAKT so«-Inventar
+     * vorhandener Basisrezepte. Semantischer Recall (Bedeutung) ZUERST — findet auch anders
+     * benannte Bestandskomponenten (z. B. „Kürbis-Espuma" für „Kürbissuppe"), die das reine
+     * Token-LIKE nie fände (#505-Dubletten-Schmerz). Der lexikalische LIKE-Pass bleibt als
+     * additiver Fallback-Kanal — und deckt den Provider-aus-/Sandbox-Fall, wo der semantische
+     * Pass leer zurückkommt (dann byte-nahes Alt-Verhalten).
+     *
+     * Rollen-Invariante (RAG §3.1): reiner PROMPT-Kontext, KEIN Matcher-Eingriff — Recall,
+     * nie Ranker. GP-Reuse läuft bewusst NICHT hier (würde die „das sind Basisrezepte"-Semantik
+     * des Prompts verwässern), sondern GP-typisiert in GenerationContextService (B3).
      *
      * @return list<string>
      */
     private function bestandsInventar(Team $team, string $description, int $limit = 30): array
     {
+        $namen = [];   // Name => true; Einfüge-Reihenfolge = Priorität (semantisch zuerst)
+
+        // (1) Semantischer Recall über die VOLLE Beschreibung (Bedeutung). Nur Basisrezepte der
+        //     Sichtbarkeitskette. Leer ohne Provider/Flag (graceful) → dann greift allein (2).
+        $treffer = app(Ai\SemanticRetrievalService::class)
+            ->candidates($team, $description, [Ai\PoolEmbeddingService::ENTITY_TYPE_RECIPE], $limit);
+        $recipeIds = array_map(static fn ($h) => (int) $h['entity_id'], $treffer);
+        if ($recipeIds !== []) {
+            $semNamen = FoodAlchemistRecipe::visibleToTeam($team)->basis()
+                ->whereIn('status', ['draft', 'review', 'approved'])
+                ->whereIn('id', $recipeIds)
+                ->pluck('name', 'id');
+            foreach ($recipeIds as $rid) {          // Score-Reihenfolge der candidates erhalten
+                $name = $semNamen->get($rid);
+                if ($name !== null && $name !== '') {
+                    $namen[$name] = true;
+                }
+            }
+        }
+
+        // (2) Lexikalischer Token-LIKE-Pass (additiv/Fallback) — wörtliche Treffer, die der
+        //     semantische Floor evtl. auslässt, plus das gesamte Provider-aus-Verhalten.
         $tokens = array_values(array_filter(
             app(Matching\TokenEngine::class)->tokenize($description),
             fn ($t) => mb_strlen($t) >= 4,
         ));
-        if ($tokens === []) {
-            return [];
+        if ($tokens !== []) {
+            $lexNamen = FoodAlchemistRecipe::visibleToTeam($team)->basis()
+                ->whereIn('status', ['draft', 'review', 'approved'])
+                ->where(function ($q) use ($tokens) {
+                    foreach ($tokens as $t) {
+                        $q->orWhereRaw('LOWER(name) LIKE ?', ['%' . $t . '%']);
+                    }
+                })
+                ->orderByRaw("CASE status WHEN 'approved' THEN 0 WHEN 'review' THEN 1 ELSE 2 END")
+                ->orderBy('name')->limit($limit)->pluck('name')->all();
+            foreach ($lexNamen as $name) {
+                $namen[$name] = true;
+            }
         }
 
-        return FoodAlchemistRecipe::visibleToTeam($team)->basis()
-            ->whereIn('status', ['draft', 'review', 'approved'])
-            ->where(function ($q) use ($tokens) {
-                foreach ($tokens as $t) {
-                    $q->orWhereRaw('LOWER(name) LIKE ?', ['%' . $t . '%']);
-                }
-            })
-            ->orderByRaw("CASE status WHEN 'approved' THEN 0 WHEN 'review' THEN 1 ELSE 2 END")
-            ->orderBy('name')->limit($limit)->pluck('name')->all();
+        return array_slice(array_keys($namen), 0, $limit);
     }
 
     /**
