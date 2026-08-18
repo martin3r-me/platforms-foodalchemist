@@ -65,13 +65,19 @@ it('speichere: leerer Name oder leerer Brief wirft', function () {
     expect(fn () => $svc->speichere($this->rootTeam, 'gericht', 'Name', '   ', []))->toThrow(RuntimeException::class);
 });
 
-it('kuratierte Globals sind read-only (loeschen/umbenennen wirft)', function () {
-    $global = FoodAlchemistBriefTemplate::whereNull('team_id')->first();
+it('Globals: Master-Team (root) kuratiert sie, ein Kind-Team nicht', function () {
+    $global = FoodAlchemistBriefTemplate::whereNull('team_id')->firstOrFail();
     $svc = app(BriefTemplateService::class);
 
-    expect(fn () => $svc->loeschen($this->rootTeam, (int) $global->id))->toThrow(RuntimeException::class);
-    expect(fn () => $svc->umbenennen($this->rootTeam, (int) $global->id, 'Neu'))->toThrow(RuntimeException::class);
-    expect(FoodAlchemistBriefTemplate::find($global->id))->not->toBeNull();   // unangetastet
+    // Kind-Team (childA, parent gesetzt) ist NICHT Master → globale Vorlage read-only.
+    expect(fn () => $svc->umbenennen($this->childA, (int) $global->id, 'Hack'))->toThrow(RuntimeException::class);
+    expect(fn () => $svc->loeschen($this->childA, (int) $global->id))->toThrow(RuntimeException::class);
+
+    // rootTeam (parent NULL = Master) DARF global kuratieren.
+    $svc->umbenennen($this->rootTeam, (int) $global->id, 'BHG-Empfang v2');
+    expect(FoodAlchemistBriefTemplate::find($global->id)->label)->toBe('BHG-Empfang v2');
+    $svc->loeschen($this->rootTeam, (int) $global->id);
+    expect(FoodAlchemistBriefTemplate::find($global->id))->toBeNull();
 });
 
 it('Tenancy: ein fremdes Team kann eine Vorlage nicht löschen (Owns-Guard)', function () {
@@ -151,8 +157,8 @@ it('MCP: voller CRUD einer eigenen Vorlage (POST → LIST → PUT → DELETE)', 
     expect(FoodAlchemistBriefTemplate::find($id))->toBeNull();
 });
 
-it('MCP: kuratierte Globals sind read-only (PUT/DELETE → error, unangetastet)', function () {
-    $ctx = new ToolContext($this->user, $this->rootTeam);
+it('MCP: ein Kind-Team kann Globals NICHT kuratieren (PUT/DELETE → error)', function () {
+    $ctx = new ToolContext($this->makeUser($this->childA), $this->childA);
     $global = FoodAlchemistBriefTemplate::whereNull('team_id')->firstOrFail();
 
     $put = (new BriefTemplatesPutTool())->execute(['id' => (int) $global->id, 'label' => 'Hack'], $ctx);
@@ -161,6 +167,15 @@ it('MCP: kuratierte Globals sind read-only (PUT/DELETE → error, unangetastet)'
     $del = (new BriefTemplatesDeleteTool())->execute(['id' => (int) $global->id], $ctx);
     expect($del->success)->toBeFalse();
     expect(FoodAlchemistBriefTemplate::find($global->id))->not->toBeNull();
+});
+
+it('MCP: Master-Team (root) kuratiert einen Global (PUT active=false greift)', function () {
+    $ctx = new ToolContext($this->user, $this->rootTeam);   // rootTeam = Master (parent NULL)
+    $global = FoodAlchemistBriefTemplate::whereNull('team_id')->firstOrFail();
+
+    $put = (new BriefTemplatesPutTool())->execute(['id' => (int) $global->id, 'active' => false], $ctx);
+    expect($put->success)->toBeTrue()->and($put->data['active'])->toBeFalse();
+    expect(FoodAlchemistBriefTemplate::find($global->id)->active)->toBeFalse();
 });
 
 // ── Settings-Verwaltungsseite ──────────────────────────────────────────────
