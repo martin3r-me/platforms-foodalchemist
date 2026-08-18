@@ -121,7 +121,7 @@ it('tiebreaker: FreshFirst/FrozenFirst/PreservedFirst/Neutral über Karotten-Var
     expect(($this->match)('Karotten', 'karotten', 'gp_first', 'fresh_first')['gp_name'])->toBe('Karotten: frisch, geschaelt')
         ->and(($this->match)('Karotten', 'karotten', 'gp_first', 'preserved_first')['gp_name'])->toBe('Karotten: TK, Baby')
         ->and(($this->match)('Karotten', 'karotten', 'gp_first', 'frozen_first')['gp_name'])->toBe('Karotten: TK, Baby')
-        ->and(($this->match)('Karotten', 'karotten')['gp_name'])->toBe('Karotten: TK, Baby')   // Neutral = Legacy: erster Max
+        ->and(($this->match)('Karotten', 'karotten')['gp_name'])->toBe('Karotten: frisch, geschaelt')   // D4 2026-08-18: neutral demotet Größen-Variante »Baby« → Basisform-näheres gewinnt (früher id-Reihenfolge)
         ->and(($this->match)('Salz', 'salz', 'gp_first', 'fresh_first')['gp_name'])->toBe('Speisesalz: jodiert');
 });
 

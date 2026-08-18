@@ -473,7 +473,7 @@ return [
                 // LLM-Komponenten-Marker (löst die reine Namens-Heuristik ab).
                 . 'sub_rezept (true, wenn diese Zeile ein eigenständiges Halbfabrikat / '
                 . 'Sub-Basisrezept ist — Sauce, Jus, Fond, Sud, Essenz, Reduktion, Püree, '
-                . 'Creme, Dressing, Vinaigrette, Espuma —, das als EIGENES Basisrezept anzulegen '
+                . 'Creme, Dressing, Vinaigrette, Espuma, Duxelles, Farce —, das als EIGENES Basisrezept anzulegen '
                 . 'ist statt es in Rohzutaten aufzulösen; false bei einer Rohzutat/Ware), '
                 // Kohärenz-Gate (2026-08-07): role füllt das V-21-Rollenfeld (Schicht 1) im
                 // selben Call; fit ZWINGT zur Selbst-Begründung — eine Zutat, die sich nicht in
@@ -564,7 +564,7 @@ return [
                 // Komponente «Rahmsauce» mit sub_rezept:true). Späterer LLM-Komponenten-Marker.
                 . 'sub_rezept (true, wenn diese Zeile ein eigenständiges Halbfabrikat / '
                 . 'Sub-Basisrezept ist — Sauce, Jus, Fond, Sud, Essenz, Reduktion, Püree, '
-                . 'Creme, Dressing, Vinaigrette, Espuma —, das als EIGENES Basisrezept anzulegen '
+                . 'Creme, Dressing, Vinaigrette, Espuma, Duxelles, Farce —, das als EIGENES Basisrezept anzulegen '
                 . 'ist statt es in Rohzutaten aufzulösen; false bei einer Rohzutat/Ware), '
                 . 'role (V-21: aroma_treiber|komponente|beilage|garnitur), '
                 . 'fit (EIN kurzer Halbsatz: warum gehört diese Zutat FACHLICH in DIESES Gericht)}] '

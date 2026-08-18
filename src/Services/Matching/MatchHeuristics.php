@@ -52,6 +52,7 @@ class MatchHeuristics
         'fond', 'bruehe', 'reduktion', 'demi', 'coulis',
         'pueree', 'glace', 'fumet', 'veloute', 'espuma', 'fumét',
         'bechamel', 'béchamel', 'mornay', 'hollandaise', 'bearnaise', 'béarnaise',
+        'duxelles', 'farce', 'salpicon', // D1 2026-08-18: benannte Sub-Zubereitungen (Pilz-Duxelles/Farce/Salpicon)
     ];
 
     /**
@@ -92,6 +93,32 @@ class MatchHeuristics
         'sautiert', 'gebraten', 'gebacken', 'geschmort', 'gegrillt', 'frittiert',
         'pochiert', 'glasiert', 'mariniert', 'paniert', 'gratiniert', 'blanchiert',
         'gedaempft', 'geduenstet', 'geraeuchert', 'karamellisiert', 'flambiert', 'confiert',
+    ];
+
+    /**
+     * D5 2026-08-18 — »<Typ>: <Name>«-Präfix des Generators (Gel:/Creme:/Jus:/Espuma: …) als
+     * starkes Sub-Zubereitungs-Signal. Deckt die Kurzform »Gel:« (3 Zeichen, verfehlt den
+     * Substring-Marker) und macht die Label-Konvention verbindlich — Rolle/GP-Treffer egal.
+     * NUR echte Zubereitungs-Typen, KEINE Rollen-/Warenlabels (Beilage/Fleisch/Kresse/Gemüse):
+     * die tragen nach dem Doppelpunkt eine Rohware und dürfen GP bleiben. Tokens normalisiert
+     * (Püree→pueree, Öl→oel, Crème→creme) wie TokenEngine::tokenize.
+     */
+    public const SUB_ZUBEREITUNG_PRAEFIX = [
+        'gel', 'gelee', 'creme', 'jus', 'fond', 'sud', 'sauce', 'espuma', 'schaum',
+        'mousse', 'pueree', 'coulis', 'reduktion', 'oel', 'emulsion', 'ganache',
+        'sorbet', 'parfait', 'sabayon', 'praline', 'duxelles', 'farce', 'glace',
+        'veloute', 'sirup', 'vinaigrette', 'dressing', 'chutney', 'kompott', 'pesto', 'marinade',
+    ];
+
+    /**
+     * D3 2026-08-18 — §11.2 Nebenprodukt-Derivat-Marker (NUR eindeutige, User-Entscheid). Saft/Fett/Grün
+     * bewusst RAUS (kontext-ambig: Saft-Derivat nur Zitrus, »entsafteter Saft« = Rezept). Kerne sind
+     * KEINE Derivate (§11.2-Anti-Pattern: Pinien/Walnuss/Kürbiskerne = eigene GPs) → nicht in der Liste.
+     * Tokens normalisiert (Parüren→parueren) wie TokenEngine::tokenize.
+     */
+    public const NEBENPRODUKT_MARKER = [
+        'abschnitte', 'abschnitt', 'knochen', 'karkasse', 'karkassen',
+        'paruere', 'parueren', 'schale', 'schalen', 'stiel', 'stiele', 'zeste', 'zesten',
     ];
 
     /** D-6: Einzel-/Deko-/Convenience-Artikel bleiben GP/LA-first, auch im Gericht. */
@@ -152,6 +179,60 @@ class MatchHeuristics
         return false;
     }
 
+    /** D5 2026-08-18 — »<Typ>:«-Präfix (Gel:/Creme:/Jus: …) = starke Sub-Zubereitung; prüft NUR das Label vor dem ersten Doppelpunkt. */
+    public function hatSubZubereitungsPraefix(string $name): bool
+    {
+        $pos = mb_strpos($name, ':');
+        if ($pos === false || $pos <= 0) {
+            return false;
+        }
+        foreach ($this->engine->tokenize(mb_substr($name, 0, $pos)) as $t) {
+            if (in_array($t, self::SUB_ZUBEREITUNG_PRAEFIX, true)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * D3 2026-08-18 — §11.2: erkennt ein Nebenprodukt-Derivat und trennt Mutter-Text von Derivat-Form.
+     * Compound »Rinderabschnitte« → [mutter_text: »rinder«, form: »Abschnitte«]; Mehr-Token
+     * »Kalb Parüren« → [»kalb«, »Parüren«]. null, wenn kein Marker greift oder kein Mutter-Rest bleibt
+     * (bloßes »Knochen« ohne Mutter → kein Split, fällt auf Sourcing-Lücke zurück).
+     *
+     * @return array{mutter_text: string, form: string}|null
+     */
+    public function nebenproduktDerivat(string $name): ?array
+    {
+        $tokens = $this->engine->tokenize($name);
+        if ($tokens === []) {
+            return null;
+        }
+        // Mehr-Token: ein ganzes Token IST der Marker → Rest = Mutter (»Kalb Parüren«).
+        if (count($tokens) > 1) {
+            foreach ($tokens as $i => $t) {
+                if (in_array($t, self::NEBENPRODUKT_MARKER, true)) {
+                    $mutter = array_values(array_diff_key($tokens, [$i => true]));
+                    if ($mutter !== []) {
+                        return ['mutter_text' => implode(' ', $mutter), 'form' => mb_convert_case($t, MB_CASE_TITLE, 'UTF-8')];
+                    }
+                }
+            }
+        }
+        // Compound-Suffix in einem Token (»rinderabschnitte« → Präfix »rinder«).
+        foreach ($tokens as $t) {
+            foreach (self::NEBENPRODUKT_MARKER as $m) {
+                $pos = mb_strpos($t, $m);
+                if ($pos !== false && mb_strlen(mb_substr($t, 0, $pos)) >= 3) {
+                    return ['mutter_text' => mb_substr($t, 0, $pos), 'form' => mb_convert_case($m, MB_CASE_TITLE, 'UTF-8')];
+                }
+            }
+        }
+
+        return null;
+    }
+
     /** P8 — Button-Heuristik: Label-Hinweis ODER Halbfabrikat ODER Zubereitungs-Marker. */
     public function istSubRezeptKandidat(string $name): bool
     {
@@ -160,6 +241,9 @@ class MatchHeuristics
         }
         $lower = mb_strtolower($name);
         if (str_contains($lower, 'basisrezept') || str_contains($lower, 'sub-rezept') || str_contains($lower, 'sub rezept')) {
+            return true;
+        }
+        if ($this->hatSubZubereitungsPraefix($name)) {
             return true;
         }
         $tokens = $this->engine->tokenize($name);
@@ -181,7 +265,7 @@ class MatchHeuristics
     public function istDirektArtikelKandidat(string $name): bool
     {
         $tokens = $this->engine->tokenize($name);
-        if ($tokens === [] || $this->queryIstHalbfabrikat($tokens)) {
+        if ($tokens === [] || $this->queryIstHalbfabrikat($tokens) || $this->hatSubZubereitungsPraefix($name)) {
             return false;
         }
 
@@ -335,7 +419,24 @@ class MatchHeuristics
             default => 0,
         };
 
-        return $zustandForm + $cut + $bioAdj;
+        // D4 2026-08-18: Basis-Form-Tiebreak — greift NUR bei komplett neutralen Parametern
+        // (pref + bio neutral, kein preferRaw), also genau dort, wo sonst ALLE Terme 0 sind und die
+        // id-Reihenfolge entschied (Kaskaden-Default; Live-Bug: »Karotte mini gemischt«, »Zwiebel
+        // geachtelt« gewannen gegen die Basisform). So kann er KEIN pref/bio/cut-Signal überstimmen
+        // (Sign-Semantik dieser Signale bleibt) — eine über-spezifische Größen-/Schnitt-Variante
+        // verliert nur im echten Gleichstand gegen die neutralere Basisform. Exakt-Token.
+        $baseForm = 0;
+        if ($pref === 'neutral' && $bio === 'neutral' && ! $preferRaw) {
+            foreach ($tokens as $t) {
+                if (in_array($t, ['mini', 'baby', 'gemischt', 'geachtelt', 'achtel'], true)) {
+                    $baseForm = -1;
+
+                    break;
+                }
+            }
+        }
+
+        return $zustandForm + $cut + $bioAdj + $baseForm;
     }
 
     /** 4.4n — Regelwerk §4 Default-Sub-Aliasse (deterministisch, hell/braun-bewusst). */
