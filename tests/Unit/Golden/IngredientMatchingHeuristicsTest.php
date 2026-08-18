@@ -188,6 +188,14 @@ it('sub_zubereitungs_praefix erkennt Prep-Typen, nicht Rollen-Label', function (
     }
 });
 
+// D4 2026-08-18: Basis-Form-Tiebreak — Basisform schlägt Größen-/Schnitt-Variante bei neutralen Parametern.
+it('variant_rank bevorzugt Basisform gegen Groesse/Schnitt (neutral)', function () {
+    expect($this->h->variantRankResolved('Karotte: frisch, mini, gemischt'))
+        ->toBeLessThan($this->h->variantRankResolved('Karotte: frisch, ganz'));
+    expect($this->h->variantRankResolved('Zwiebel: frisch, geachtelt'))
+        ->toBeLessThan($this->h->variantRankResolved('Zwiebel: frisch, ganz'));
+});
+
 // Roadmap Etappe 1: gemachte Saucen/Reduktionen als Halbfabrikat (SUB_SAUCEN_MARKER)
 it('halbfabrikat_gate_erkennt_gemachte_saucen', function () {
     foreach (['Steinpilz-Rahmsauce', 'Rotwein Jus', 'Kalbs-Sud',
@@ -259,7 +267,7 @@ it('variant_rank_signals', function () {
         ->and($vr('Karotten: frisch, geschaelt', 'preserved_first'))->toBeLessThan(0)
         ->and($vr('Karotten: TK, Baby', 'preserved_first'))->toBeGreaterThan(0)
         ->and($vr('Karotten: frisch, geschaelt', 'neutral'))->toBe(0)
-        ->and($vr('Karotten: TK, Baby', 'neutral'))->toBe(0)
+        ->and($vr('Karotten: TK, Baby', 'neutral'))->toBe(-1)   // D4 2026-08-18: »Baby« (Größe) bei neutral demotet → Basisform bricht den Gleichstand
         ->and($vr('Speisesalz: jodiert', 'fresh_first'))->toBe(0);
 });
 

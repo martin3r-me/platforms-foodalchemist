@@ -370,7 +370,24 @@ class MatchHeuristics
             default => 0,
         };
 
-        return $zustandForm + $cut + $bioAdj;
+        // D4 2026-08-18: Basis-Form-Tiebreak — greift NUR bei komplett neutralen Parametern
+        // (pref + bio neutral, kein preferRaw), also genau dort, wo sonst ALLE Terme 0 sind und die
+        // id-Reihenfolge entschied (Kaskaden-Default; Live-Bug: »Karotte mini gemischt«, »Zwiebel
+        // geachtelt« gewannen gegen die Basisform). So kann er KEIN pref/bio/cut-Signal überstimmen
+        // (Sign-Semantik dieser Signale bleibt) — eine über-spezifische Größen-/Schnitt-Variante
+        // verliert nur im echten Gleichstand gegen die neutralere Basisform. Exakt-Token.
+        $baseForm = 0;
+        if ($pref === 'neutral' && $bio === 'neutral' && ! $preferRaw) {
+            foreach ($tokens as $t) {
+                if (in_array($t, ['mini', 'baby', 'gemischt', 'geachtelt', 'achtel'], true)) {
+                    $baseForm = -1;
+
+                    break;
+                }
+            }
+        }
+
+        return $zustandForm + $cut + $bioAdj + $baseForm;
     }
 
     /** 4.4n — Regelwerk §4 Default-Sub-Aliasse (deterministisch, hell/braun-bewusst). */
