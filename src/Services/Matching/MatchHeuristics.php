@@ -52,6 +52,7 @@ class MatchHeuristics
         'fond', 'bruehe', 'reduktion', 'demi', 'coulis',
         'pueree', 'glace', 'fumet', 'veloute', 'espuma', 'fumét',
         'bechamel', 'béchamel', 'mornay', 'hollandaise', 'bearnaise', 'béarnaise',
+        'duxelles', 'farce', 'salpicon', // D1 2026-08-18: benannte Sub-Zubereitungen (Pilz-Duxelles/Farce/Salpicon)
     ];
 
     /**

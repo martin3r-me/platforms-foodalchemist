@@ -160,7 +160,11 @@ it('halbfabrikat_gate_detects_komposita', function () {
     expect($this->h->queryIstHalbfabrikat(($this->ts)('Braune Kalbsbrühe')))->toBeTrue()
         ->and($this->h->queryIstHalbfabrikat(($this->ts)('Kalbsfond')))->toBeTrue()
         ->and($this->h->queryIstHalbfabrikat(($this->ts)('Rotweinreduktion')))->toBeTrue()
-        ->and($this->h->queryIstHalbfabrikat(($this->ts)('Himbeercoulis')))->toBeTrue();
+        ->and($this->h->queryIstHalbfabrikat(($this->ts)('Himbeercoulis')))->toBeTrue()
+        // D1 2026-08-18: benannte Sub-Zubereitungen (Live-Bug „Steinpilz-Duxelles" blieb flache Zutat statt Sub-Rezept)
+        ->and($this->h->queryIstHalbfabrikat(($this->ts)('Steinpilz-Duxelles')))->toBeTrue()
+        ->and($this->h->queryIstHalbfabrikat(($this->ts)('Kalbsfarce')))->toBeTrue()
+        ->and($this->h->istSubRezeptKandidat('Steinpilz-Duxelles'))->toBeTrue();
 });
 
 it('halbfabrikat_gate_rejects_grundzutaten', function () {
