@@ -174,6 +174,20 @@ it('halbfabrikat_gate_rejects_grundzutaten', function () {
         ->and($this->h->queryIstHalbfabrikat(($this->ts)('Sojasauce')))->toBeFalse();
 });
 
+// D5 2026-08-18: »<Typ>:«-Präfix (Gel:/Creme:/Jus: …) = starke Sub-Zubereitung; Rollen-/Warenlabels NICHT.
+it('sub_zubereitungs_praefix erkennt Prep-Typen, nicht Rollen-Label', function () {
+    // Prep-Typen vor dem Doppelpunkt → Sub-Zubereitung (Symptom E: »Gel: Ginger Beer-Blutorange« wurde GP)
+    foreach (['Gel: Ginger Beer-Blutorange', 'Creme: Pommery-Senf', 'Jus: Rinderfond', 'Espuma: Kürbis', 'Öl: Basilikum'] as $name) {
+        expect($this->h->hatSubZubereitungsPraefix($name))->toBeTrue($name)
+            ->and($this->h->istSubRezeptKandidat($name))->toBeTrue($name)
+            ->and($this->h->istDirektArtikelKandidat($name))->toBeFalse($name);
+    }
+    // Rollen-/Warenlabels vor dem Doppelpunkt → KEIN Präfix-Sub (Rohware darf GP bleiben)
+    foreach (['Kresse: frisch, ganz', 'Beilage: Kartoffeln', 'Fleisch: Rinderfilet', 'Gemüse: Karotten'] as $name) {
+        expect($this->h->hatSubZubereitungsPraefix($name))->toBeFalse($name);
+    }
+});
+
 // Roadmap Etappe 1: gemachte Saucen/Reduktionen als Halbfabrikat (SUB_SAUCEN_MARKER)
 it('halbfabrikat_gate_erkennt_gemachte_saucen', function () {
     foreach (['Steinpilz-Rahmsauce', 'Rotwein Jus', 'Kalbs-Sud',

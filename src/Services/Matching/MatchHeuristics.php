@@ -95,6 +95,21 @@ class MatchHeuristics
         'gedaempft', 'geduenstet', 'geraeuchert', 'karamellisiert', 'flambiert', 'confiert',
     ];
 
+    /**
+     * D5 2026-08-18 — »<Typ>: <Name>«-Präfix des Generators (Gel:/Creme:/Jus:/Espuma: …) als
+     * starkes Sub-Zubereitungs-Signal. Deckt die Kurzform »Gel:« (3 Zeichen, verfehlt den
+     * Substring-Marker) und macht die Label-Konvention verbindlich — Rolle/GP-Treffer egal.
+     * NUR echte Zubereitungs-Typen, KEINE Rollen-/Warenlabels (Beilage/Fleisch/Kresse/Gemüse):
+     * die tragen nach dem Doppelpunkt eine Rohware und dürfen GP bleiben. Tokens normalisiert
+     * (Püree→pueree, Öl→oel, Crème→creme) wie TokenEngine::tokenize.
+     */
+    public const SUB_ZUBEREITUNG_PRAEFIX = [
+        'gel', 'gelee', 'creme', 'jus', 'fond', 'sud', 'sauce', 'espuma', 'schaum',
+        'mousse', 'pueree', 'coulis', 'reduktion', 'oel', 'emulsion', 'ganache',
+        'sorbet', 'parfait', 'sabayon', 'praline', 'duxelles', 'farce', 'glace',
+        'veloute', 'sirup', 'vinaigrette', 'dressing', 'chutney', 'kompott', 'pesto', 'marinade',
+    ];
+
     /** D-6: Einzel-/Deko-/Convenience-Artikel bleiben GP/LA-first, auch im Gericht. */
     public const DIREKT_ARTIKEL_MARKER = [
         'fleur', 'sel', 'salz', 'meersalz', 'gewuerz', 'gewuerze', 'kresse',
@@ -153,6 +168,22 @@ class MatchHeuristics
         return false;
     }
 
+    /** D5 2026-08-18 — »<Typ>:«-Präfix (Gel:/Creme:/Jus: …) = starke Sub-Zubereitung; prüft NUR das Label vor dem ersten Doppelpunkt. */
+    public function hatSubZubereitungsPraefix(string $name): bool
+    {
+        $pos = mb_strpos($name, ':');
+        if ($pos === false || $pos <= 0) {
+            return false;
+        }
+        foreach ($this->engine->tokenize(mb_substr($name, 0, $pos)) as $t) {
+            if (in_array($t, self::SUB_ZUBEREITUNG_PRAEFIX, true)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     /** P8 — Button-Heuristik: Label-Hinweis ODER Halbfabrikat ODER Zubereitungs-Marker. */
     public function istSubRezeptKandidat(string $name): bool
     {
@@ -161,6 +192,9 @@ class MatchHeuristics
         }
         $lower = mb_strtolower($name);
         if (str_contains($lower, 'basisrezept') || str_contains($lower, 'sub-rezept') || str_contains($lower, 'sub rezept')) {
+            return true;
+        }
+        if ($this->hatSubZubereitungsPraefix($name)) {
             return true;
         }
         $tokens = $this->engine->tokenize($name);
@@ -182,7 +216,7 @@ class MatchHeuristics
     public function istDirektArtikelKandidat(string $name): bool
     {
         $tokens = $this->engine->tokenize($name);
-        if ($tokens === [] || $this->queryIstHalbfabrikat($tokens)) {
+        if ($tokens === [] || $this->queryIstHalbfabrikat($tokens) || $this->hatSubZubereitungsPraefix($name)) {
             return false;
         }
 
