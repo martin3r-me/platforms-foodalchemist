@@ -5,6 +5,7 @@ namespace Platform\FoodAlchemist\Livewire\Produktion;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\On;
+use Livewire\Attributes\Renderless;
 use Livewire\Component;
 use Platform\FoodAlchemist\Enums\ProductionLineStatus;
 use Platform\FoodAlchemist\Enums\ProductionOrderStatus;
@@ -19,6 +20,8 @@ use Platform\FoodAlchemist\Services\ConcepterAggregateService;
 use Platform\FoodAlchemist\Services\OrderService;
 use Platform\FoodAlchemist\Services\PlanungsblattService;
 use Platform\FoodAlchemist\Services\ProductionOrderService;
+use Platform\FoodAlchemist\Support\Suche;
+use Platform\FoodAlchemist\Support\TeamScope;
 
 /**
  * Spec 18 — Produktionsauftrag-Editor (voller Modal, Karteien Stammdaten/Ziele/
@@ -196,6 +199,114 @@ class Editor extends Component
             $this->auswahlRecipeId = $id;
         }
         $this->zielHinzufuegen();
+    }
+
+    /**
+     * Ziele-Browser: flache, serverseitig gefilterte Listen fuer den Alpine-Picker.
+     * Das Browsen ist renderless; nur das Einfuegen veraendert den Auftrag.
+     */
+    #[Renderless]
+    public function browseZiele(string $typ, array $filter = [], string $q = ''): array
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team === null) {
+            return ['items' => [], 'total' => 0];
+        }
+
+        $suche = mb_strtolower(trim($q));
+        $typ = in_array($typ, ['concept', 'recipe', 'basisrezept', 'angebot'], true) ? $typ : 'concept';
+
+        if ($typ === 'concept') {
+            $query = FoodAlchemistConcept::visibleToTeam($team)
+                ->when($suche !== '', fn ($w) => Suche::like($w, 'name', $suche));
+            $total = (clone $query)->count();
+
+            return [
+                'items' => $query->orderBy('name')->limit(200)->get(['id', 'name'])
+                    ->map(fn ($c) => ['type' => 'concept', 'id' => (int) $c->id, 'name' => $c->name, 'meta' => []])->values()->all(),
+                'total' => $total,
+            ];
+        }
+
+        if (in_array($typ, ['recipe', 'basisrezept'], true)) {
+            $query = FoodAlchemistRecipe::visibleToTeam($team);
+            $query = $typ === 'basisrezept' ? $query->basis() : $query->verkauf();
+            $query
+                ->when($suche !== '', fn ($w) => Suche::like($w, 'foodalchemist_recipes.name', $suche))
+                ->when(($filter['hg'] ?? '') !== '', fn ($w) => $w->whereHas('category', fn ($k) => $k->where('main_group_id', (int) $filter['hg'])))
+                ->when(($filter['kat'] ?? '') !== '', fn ($w) => $w->where('category_id', (int) $filter['kat']))
+                ->when(($filter['niveau'] ?? '') !== '', fn ($w) => $w->whereHas('levelSuitabilities', fn ($n) => $n->where('level_slug', $filter['niveau'])));
+            $total = (clone $query)->count();
+
+            return [
+                'items' => $query->with('levelSuitabilities:id,recipe_id,level_slug')->orderBy('name')->limit(200)->get(['id', 'name'])
+                    ->map(fn ($r) => [
+                        'type' => $typ,
+                        'id' => (int) $r->id,
+                        'name' => $typ === 'basisrezept' ? '↳ ' . $r->name : $r->name,
+                        'meta' => ['niveaus' => $r->levelSuitabilities->pluck('level_slug')->values()->all()],
+                    ])->values()->all(),
+                'total' => $total,
+            ];
+        }
+
+        $query = FoodAlchemistAngebot::visibleToTeam($team)
+            ->when($suche !== '', fn ($w) => Suche::like($w, 'name', $suche));
+        $total = (clone $query)->count();
+
+        return [
+            'items' => $query->orderByDesc('id')->limit(200)->get(['id', 'name', 'personen'])
+                ->map(fn ($a) => [
+                    'type' => 'angebot',
+                    'id' => (int) $a->id,
+                    'name' => $a->name,
+                    'meta' => ['personen' => (int) ($a->personen ?: 0)],
+                ])->values()->all(),
+            'total' => $total,
+        ];
+    }
+
+    public function zielEinfuegen(string $typ, int $id, $menge, ?string $einheit = null): void
+    {
+        $typ = in_array($typ, ['concept', 'recipe', 'basisrezept', 'angebot'], true) ? $typ : 'concept';
+        $this->zielTyp = $typ;
+        $this->fehler = null;
+
+        if ($typ === 'angebot') {
+            $this->angebotZielHinzufuegen($id);
+
+            return;
+        }
+
+        $menge = (float) str_replace(',', '.', (string) $menge);
+        if ($id <= 0 || $menge <= 0) {
+            return;
+        }
+
+        $team = Auth::user()?->currentTeamRelation;
+        $sichtbar = match ($typ) {
+            'concept' => $team !== null && FoodAlchemistConcept::visibleToTeam($team)->whereKey($id)->exists(),
+            'basisrezept' => $team !== null && FoodAlchemistRecipe::visibleToTeam($team)->basis()->whereKey($id)->exists(),
+            default => $team !== null && FoodAlchemistRecipe::visibleToTeam($team)->verkauf()->whereKey($id)->exists(),
+        };
+        if (! $sichtbar) {
+            $this->fehler = 'Ziel nicht verfügbar.';
+
+            return;
+        }
+
+        if ($typ === 'concept') {
+            $ziel = ['concept_id' => $id, 'persons' => $menge];
+        } elseif ($typ === 'basisrezept' && $einheit === 'kg') {
+            $ziel = ['recipe_id' => $id, 'amount_kg' => $menge];
+        } else {
+            $ziel = ['recipe_id' => $id, 'portions' => $menge];
+        }
+
+        $sourceRef = ($typ === 'concept' ? 'concept:' . $id : 'recipe:' . $id) . '@' . uniqid();
+        $this->targets[] = array_merge($ziel, ['source_ref' => $sourceRef, 'label' => $this->labelFuer($ziel)]);
+        $this->basisEinheit = 'ansaetze';
+        $this->berechneVorschau();
     }
 
     /**
@@ -552,34 +663,6 @@ class Editor extends Component
     public function render(ProductionOrderService $svc)
     {
         $team = Auth::user()?->currentTeamRelation;
-        $konzepte = $team ? FoodAlchemistConcept::visibleToTeam($team)->orderBy('name')->get(['id', 'name']) : collect();
-        $treffer = collect();
-        if ($team && in_array($this->zielTyp, ['recipe', 'basisrezept'], true) && trim($this->suche) !== '') {
-            // P1: VK-Gericht ⇒ ->verkauf(), Basisrezept ⇒ ->basis() (Suche ohne Verkauf-Scope).
-            $query = FoodAlchemistRecipe::visibleToTeam($team);
-            $query = $this->zielTyp === 'basisrezept' ? $query->basis() : $query->verkauf();
-            $treffer = $query->where('name', 'like', '%' . trim($this->suche) . '%')
-                ->orderBy('name')->limit(20)->get(['id', 'name']);
-        }
-
-        // Ziele-Insert (Concepter-Muster): EINE browsebare Kandidatenliste je Ziel-Typ mit „+".
-        $kandidaten = collect();
-        if ($team !== null) {
-            if ($this->zielTyp === 'concept') {
-                $kandidaten = FoodAlchemistConcept::visibleToTeam($team)
-                    ->when(trim($this->suche) !== '', fn ($q) => $q->where('name', 'like', '%' . trim($this->suche) . '%'))
-                    ->orderBy('name')->limit(50)->get(['id', 'name']);
-            } elseif (in_array($this->zielTyp, ['recipe', 'basisrezept'], true)) {
-                $q2 = FoodAlchemistRecipe::visibleToTeam($team);
-                $q2 = $this->zielTyp === 'basisrezept' ? $q2->basis() : $q2->verkauf();
-                $kandidaten = $q2->when(trim($this->suche) !== '', fn ($q) => $q->where('name', 'like', '%' . trim($this->suche) . '%'))
-                    ->orderBy('name')->limit(50)->get(['id', 'name']);
-            } elseif ($this->zielTyp === 'angebot') {
-                $kandidaten = FoodAlchemistAngebot::visibleToTeam($team)
-                    ->when(trim($this->suche) !== '', fn ($q) => $q->where('name', 'like', '%' . trim($this->suche) . '%'))
-                    ->orderByDesc('id')->limit(50)->get(['id', 'name', 'personen']);
-            }
-        }
 
         // P2 Kapitel-Picker: Foodbooks, Kapitel-Baum (flach + Tiefe) und Wahl-Gruppen.
         $foodbooks = collect();
@@ -643,9 +726,7 @@ class Editor extends Component
             'postenSummen' => $postenSummen,
             'kapazitaetsWarnungen' => $kapazitaetsWarnungen,
             'allergenRollup' => $allergenRollup,
-            'konzepte' => $konzepte,
-            'treffer' => $treffer,
-            'kandidaten' => $kandidaten,
+            'zielVokabular' => $this->browserVokabular($team),
             'foodbooks' => $foodbooks,
             'kapitelBaum' => $kapitelBaum,
             'variantGroups' => $variantGroups,
@@ -654,6 +735,21 @@ class Editor extends Component
             'verknuepfteOrders' => $verknuepfteOrders,
             'zielUebergaben' => $zielUebergaben,
         ]);
+    }
+
+    private function browserVokabular($team): ?array
+    {
+        if ($team === null) {
+            return null;
+        }
+
+        return [
+            'hauptgruppen' => TeamScope::applyVisible(\Illuminate\Support\Facades\DB::table('foodalchemist_recipe_main_groups')
+                ->whereNull('deleted_at'), 'team_id', $team)->orderBy('sort_order')->get(['id', 'label'])->all(),
+            'kategorien' => TeamScope::applyVisible(\Illuminate\Support\Facades\DB::table('foodalchemist_recipe_categories')
+                ->whereNull('deleted_at'), 'team_id', $team)->orderBy('label')->get(['id', 'label', 'main_group_id'])->all(),
+            'niveaus' => [['slug' => 'haute_cuisine', 'label' => 'Haute'], ['slug' => 'gehoben', 'label' => 'Gehoben'], ['slug' => 'klassisch', 'label' => 'Klassisch']],
+        ];
     }
 
     /**

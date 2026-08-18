@@ -480,13 +480,12 @@ Route::get('/produktion', \Platform\FoodAlchemist\Livewire\Produktion\Browser::c
 Route::get('/blaetter', fn () => redirect()->route('foodalchemist.produktion.index'))
     ->name('foodalchemist.blaetter.index');
 
-// Spec 18/S3 — Produktionsschein: Druck-HTML | ?pdf=1 (DomPDF) | ?csv=1 (Download).
+// Spec 18/S3 — filterbare Produktionsdoku: HTML-Vorschau | ?pdf=1 | ?csv=1.
 Route::get('/produktion/auftraege/{order}/dokument', function (int $order, \Platform\FoodAlchemist\Services\ProductionOrderService $svc) {
     $team = \Illuminate\Support\Facades\Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
-    // Default: gebündelte interne Doku (Produktion + Einkauf). ?einkauf=0 → nur Produktionsschein.
-    $mitEinkauf = ! request()->has('einkauf') || request()->boolean('einkauf');
+    $optionen = $svc->dokumentOptionen(request()->query());
     try {
-        $dok = $svc->dokument($team, $order, $mitEinkauf);
+        $dok = $svc->dokument($team, $order, $optionen['einkauf']);
     } catch (\Throwable $e) {
         abort(404);
     }
@@ -511,9 +510,12 @@ Route::get('/produktion/auftraege/{order}/dokument', function (int $order, \Plat
         }, $dateiname, ['Content-Type' => 'text/csv; charset=UTF-8']);
     }
 
-    // Spec 27: ?fotos=0 druckt die Anleitung ohne Bilder (Text-Zettel), Default = mit Fotos.
-    $mitFotos = request()->query('fotos') !== '0';
-    $data = ['dok' => $dok, 'istPdf' => false, 'mitFotos' => $mitFotos];
+    $data = [
+        'dok' => $dok,
+        'istPdf' => false,
+        'optionen' => $optionen,
+        'mitFotos' => $optionen['bilder'],
+    ];
 
     if (request()->boolean('pdf')) {
         if (! class_exists(\Barryvdh\DomPDF\Facade\Pdf::class)) {

@@ -190,6 +190,27 @@ eingefrorene Häkchen an inzwischen geänderten Mengen.
 | E7 | Spec, Benutzerhandbuch, MCP-Lockstep, Matrizen | ✅ |
 | E0 | Kleinkram: doppelter Recompute beim Anlegen, `basisEinheit`-Reset, Angebot-Ziel ohne Mengenfeld | ✅ |
 | E8 | Tagesplan als **Tages-Ausgabe**: Tag→Posten-Gruppierung, 3-Panel (Sidebar/Center/Detail wie Browser), Wandmodus (`?display=wall`), druckbares **Posten-Blatt** (`produktion.tagesplan.blatt`) | ✅ |
+| E9 | Produktionsauftrag-UX: Alpine-first Ziele-Katalog mit Filtern, Park→Menge→Übernahme und Ziel-Korb; Editor in Tab-Partials zerlegt und Einkauf gestrafft; rechtes Panel als read-only Glance-Cockpit; Produktionsdokument mit Profilen, Inhalts- und Postenfiltern | ✅ (2026-08-18, Browser-Smoke + Produktions-Testkranz) |
+
+### E9 — Bedien- und Dokumenten-Politur (2026-08-18)
+
+Der Ziele-Tab arbeitet jetzt als zweispaltiger Katalog mit Ziel-Korb. Konzept, Gericht und
+Basisrezept werden ohne Voll-Render gesucht; Gerichte und Basisrezepte lassen sich nach
+Hauptgruppe, Kategorie und Niveau filtern. Der `+`-Flow parkt ein Ziel, fokussiert die Menge und
+übernimmt es anschließend in die bestehende `targets`-Rechenwahrheit. Kapitel und Angebote
+behalten ihre fachlichen Sonderflüsse. Direkte Ziel-IDs werden serverseitig erneut gegen Team und
+Rezepttyp geprüft.
+
+Das rechte Detail-Panel ist auf Status, Kennzahlen, Fortschritt und kompakte Verweise reduziert.
+Bearbeitung bleibt im Editor; dessen Tabs liegen nun in getrennten Partials. Der Einkauf-Tab zeigt
+keine massenhafte Küchen-Notiz-Eingabe mehr, weil diese weiterhin gezielt je Produktionszeile im
+Zeilen-Tab gepflegt wird.
+
+Das Produktionsdokument hat eine einzige Einstiegstaste und vier Profile (`Kurzblatt`,
+`Produktion`, `Einkauf`, `Komplett`). Inhaltsfilter werden in den PDF-Link übernommen. Das
+Einkaufsprofil springt ohne vorgeschaltete Rezeptseiten direkt zur Lieferantenübersicht. Ein
+Postenfilter zeigt nur die tatsächlich am Auftrag vorkommenden Posten sowie „Nicht zugeteilt";
+er filtert die Produktionszeilen, nicht den auftragsweiten Einkaufsbedarf.
 
 **MCP im Lockstep:** `production_orders.LINE_OVERRIDE` · `LINE_ASSIGN` · `LINE_STATUS` · `DELETE`
 neu; `buffer_pct` in `UPDATE` ergänzt; der Docblock von `UPDATE_LINE` behauptete wörtlich, Ansätze

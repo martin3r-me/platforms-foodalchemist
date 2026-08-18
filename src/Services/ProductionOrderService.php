@@ -1099,6 +1099,52 @@ class ProductionOrderService
         ];
     }
 
+    /** @return array{profil:string,rezepte:bool,zutaten:bool,anleitung:bool,bilder:bool,darreichung:bool,notizen:bool,einkauf:bool,posten:string} */
+    public function dokumentOptionen(array $query): array
+    {
+        $profil = (string) ($query['profil'] ?? 'produktion');
+        if (! in_array($profil, ['kurz', 'produktion', 'einkauf', 'voll'], true)) {
+            $profil = 'produktion';
+        }
+
+        $optionen = match ($profil) {
+            'kurz' => [
+                'rezepte' => true, 'zutaten' => false, 'anleitung' => false, 'bilder' => false,
+                'darreichung' => false, 'notizen' => false, 'einkauf' => false,
+            ],
+            'einkauf' => [
+                'rezepte' => false, 'zutaten' => false, 'anleitung' => false, 'bilder' => false,
+                'darreichung' => false, 'notizen' => false, 'einkauf' => true,
+            ],
+            'voll' => [
+                'rezepte' => true, 'zutaten' => true, 'anleitung' => true, 'bilder' => true,
+                'darreichung' => true, 'notizen' => true, 'einkauf' => true,
+            ],
+            default => [
+                'rezepte' => true, 'zutaten' => true, 'anleitung' => true, 'bilder' => true,
+                'darreichung' => true, 'notizen' => true, 'einkauf' => false,
+            ],
+        };
+
+        // `fotos` bleibt als kompatibler Alias für bestehende Deep-Links erhalten.
+        if (array_key_exists('fotos', $query) && ! array_key_exists('bilder', $query)) {
+            $query['bilder'] = $query['fotos'];
+        }
+
+        foreach (array_keys($optionen) as $key) {
+            if (array_key_exists($key, $query)) {
+                $optionen[$key] = filter_var($query[$key], FILTER_VALIDATE_BOOLEAN);
+            }
+        }
+
+        $posten = (string) ($query['posten'] ?? '');
+        if ($posten !== 'ohne' && (! ctype_digit($posten) || (int) $posten <= 0)) {
+            $posten = '';
+        }
+
+        return ['profil' => $profil, ...$optionen, 'posten' => $posten];
+    }
+
     /**
      * S3: Volldaten für Produktionsschein-Dokument (PDF/Druck/CSV).
      *
@@ -1109,7 +1155,9 @@ class ProductionOrderService
      */
     public function dokument(Team $team, int $orderId, bool $mitEinkauf = true): array
     {
-        $order = FoodAlchemistProductionOrder::visibleToTeam($team)->with('lines.recipe:id,name')->findOrFail($orderId);
+        $order = FoodAlchemistProductionOrder::visibleToTeam($team)
+            ->with(['lines.recipe:id,name', 'lines.station:id,name'])
+            ->findOrFail($orderId);
         $status = $order->status instanceof ProductionOrderStatus ? $order->status : ProductionOrderStatus::from((string) $order->status);
 
         $einkauf = null;
@@ -1140,6 +1188,8 @@ class ProductionOrderService
             // hat sie jemand gestrichen. Overrides gehen mit ihrem effektiven Wert raus.
             'zeilen' => $order->lines->reject(fn ($l) => (bool) $l->is_struck)->map(fn ($l) => [
                 'name' => $l->anzeigeName(),
+                'station_id' => $l->station_id !== null ? (int) $l->station_id : null,
+                'station' => $l->station?->name,
                 'ist_basisrezept' => (bool) $l->is_basisrezept,
                 'ansaetze' => (float) $l->ansaetze_effektiv,
                 'ist_manuelle_ansaetze' => (bool) $l->is_manual_ansaetze,

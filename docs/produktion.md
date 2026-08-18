@@ -30,6 +30,11 @@ Bedarf werden **ganze Ansätze** — eine halbe Ansatzmenge Fond kocht niemand.
 > ganze Rechnung neu aufstellen. Was du an den Zeilen von Hand gepflegt hast, überlebt das
 > trotzdem — siehe unten.
 
+Im **Ziele**-Tab stehen Katalog und Ziel-Korb nebeneinander. Du kannst zwischen Konzept, Gericht,
+Basisrezept, Kapitel und Angebot wechseln. Gerichte und Basisrezepte lassen sich nach Hauptgruppe,
+Kategorie und Niveau filtern. Mit `+` parkst du einen Treffer, trägst die Menge ein und übernimmst
+ihn in den Korb; Kennzahlen und Vorschau werden danach sofort neu berechnet.
+
 **Puffer:** Über die Überproduktions-Prozente skalierst du alles auf einmal — mehr Ansätze *und*
 mehr Einkauf. 10 % Puffer sind der Unterschied zwischen „reicht genau" und „reicht".
 
@@ -99,9 +104,15 @@ stehen, statt sie stillschweigend abzuhaken.
 
 ## Was rausgeht
 
-- **Produktionsblatt** — die Zeilen mit Ansätzen, Mengen und Zutaten.
-- **Produktionsauftrag** — der Zettel für die Küche, wahlweise mit oder ohne Fotos.
-- **Anleitung** — die Schritt-für-Schritt-Zubereitung je Rezept, ebenfalls mit Foto-Schalter.
+- **Dokument** — ein gemeinsamer Einstieg mit den Profilen Kurzblatt, Produktion, Einkauf und
+  Komplett. Inhalte wie Rezepte, Zutaten, Anleitung, Bilder, Darreichung und Notizen lassen sich
+  ein- oder ausblenden.
+- **Posten-Ausgabe** — filtert die Produktionszeilen auf einen tatsächlich belegten Posten oder
+  auf „Nicht zugeteilt". Der Einkaufsbedarf bleibt dabei vollständig, weil er zum ganzen Auftrag
+  gehört.
+- **Einkaufsprofil** — beginnt direkt mit der Lieferantenübersicht, ohne vorgeschaltete
+  Rezeptseiten.
+- **PDF und Druck** — verwenden dieselbe gewählte Dokumentzusammenstellung.
 - **Übergabe an den Einkauf** — der Bedarf wandert in Bestellschienen je Lieferant. Änderst du den
   Auftrag danach, sagt dir das Panel, dass die Übergabe veraltet ist.
 

@@ -7,6 +7,7 @@ use Platform\FoodAlchemist\Livewire\Produktion\DetailPanel as ProduktionDetailPa
 use Platform\FoodAlchemist\Livewire\Produktion\Editor as ProduktionEditor;
 use Platform\FoodAlchemist\Models\FoodAlchemistPrice;
 use Platform\FoodAlchemist\Models\FoodAlchemistProductionOrder;
+use Platform\FoodAlchemist\Models\FoodAlchemistProductionStation;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplier;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem;
@@ -211,6 +212,47 @@ it('UI: Editor legt einen Produktionsauftrag komplett an (Stammdaten + Ziel + Sp
         ->and($order->lines()->where('recipe_id', $this->kuchen->id)->exists())->toBeTrue();
 });
 
+it('UI: Ziele-Browser filtert VK-Gerichte und Basisrezepte ohne Editor-Renderliste', function () {
+    $this->actingAs($this->makeUser($this->rootTeam));
+    $kat = $this->makeRecipeCategory($this->rootTeam, 'BROWSE');
+    $this->sauce->update(['category_id' => $kat->id]);
+
+    $editor = app(ProduktionEditor::class);
+
+    $gerichte = $editor->browseZiele('recipe', [], 'Kuchen');
+    $basis = $editor->browseZiele('basisrezept', ['hg' => $kat->main_group_id, 'kat' => $kat->id], 'Vanille');
+
+    expect($gerichte['total'])->toBe(1)
+        ->and($gerichte['items'][0]['id'])->toBe($this->kuchen->id)
+        ->and($basis['total'])->toBe(1)
+        ->and($basis['items'][0]['id'])->toBe($this->sauce->id);
+});
+
+it('UI: Ziele-Picker fuegt geparktes Ziel ein und aktualisiert die Vorschau', function () {
+    $this->actingAs($this->makeUser($this->rootTeam));
+
+    Livewire::test(ProduktionEditor::class)
+        ->call('oeffnenNeu')
+        ->call('zielEinfuegen', 'recipe', $this->kuchen->id, 100, null)
+        ->assertSet('targets.0.recipe_id', $this->kuchen->id)
+        ->assertSet('targets.0.portions', 100.0)
+        ->assertSet('vorschau.rezepte.0.recipe_id', $this->kuchen->id);
+});
+
+it('UI: Ziele-Picker übernimmt keine fremde oder typfalsche ID', function () {
+    $this->actingAs($this->makeUser($this->rootTeam));
+    $fremd = $this->makeRecipe($this->childB, 'Fremdes Gericht', ['is_sales_recipe' => true]);
+
+    Livewire::test(ProduktionEditor::class)
+        ->call('oeffnenNeu')
+        ->call('zielEinfuegen', 'recipe', $fremd->id, 100, null)
+        ->assertSet('targets', [])
+        ->assertSet('fehler', 'Ziel nicht verfügbar.')
+        ->call('zielEinfuegen', 'basisrezept', $this->kuchen->id, 1, null)
+        ->assertSet('targets', [])
+        ->assertSet('fehler', 'Ziel nicht verfügbar.');
+});
+
 it('UI: Editor verweigert Speichern ohne Name (Pflichtfeld)', function () {
     $this->actingAs($this->makeUser($this->rootTeam));
 
@@ -241,7 +283,11 @@ it('UI: Browser listet Aufträge, Klick wählt sie im DetailPanel (Cockpit-KPIs)
 
     Livewire::test(ProduktionDetailPanel::class, ['orderId' => $order->id])
         ->assertSee('Sommer-Buffet')
-        ->assertSee('DES: Kuchen')
+        ->assertSee('Rezepte')
+        ->assertSee('Dokument')
+        ->assertSeeHtml('data-produktion-panel-dokument')
+        ->assertDontSeeHtml('data-produktion-panel-druck')
+        ->assertDontSeeHtml('data-produktion-panel-pdf')
         ->assertSee('Produktion starten');
 });
 
@@ -337,6 +383,73 @@ it('S3: dokument() + Produktionsschein-Blade rendert', function () {
 
     $html = view('foodalchemist::dokumente.produktionsauftrag', ['dok' => $dok, 'istPdf' => true])->render();
     expect($html)->toContain('Produktionsschein')->toContain('DES: Kuchen')->toContain('Vanillesauce')->toContain('Sommer-Buffet');
+});
+
+it('S3: Produktionsdokument-Profile und Filter steuern HTML und PDF-Inhalte identisch', function () {
+    $order = $this->svc->saveNew($this->rootTeam, '2026-08-01', 'Filterbarer Auftrag', [
+        ['recipe_id' => $this->kuchen->id, 'portions' => 100, 'source_ref' => 'recipe:kuchen@100'],
+    ]);
+    $dok = $this->svc->dokument($this->rootTeam, $order->id);
+
+    $produktion = $this->svc->dokumentOptionen(['profil' => 'produktion']);
+    expect($produktion)->toMatchArray([
+        'zutaten' => true,
+        'anleitung' => true,
+        'bilder' => true,
+        'einkauf' => false,
+    ]);
+
+    $html = view('foodalchemist::dokumente.produktionsauftrag', [
+        'dok' => $dok,
+        'istPdf' => false,
+        'optionen' => $produktion,
+    ])->render();
+    expect($html)->toContain('Profil:')
+        ->toContain('Kurzblatt')
+        ->toContain('PDF herunterladen')
+        ->toContain('Zutaten')
+        ->not->toContain('Einkauf / Bestellvorschlag');
+
+    $einkauf = $this->svc->dokumentOptionen(['profil' => 'einkauf']);
+    expect($einkauf['rezepte'])->toBeFalse();
+    $einkaufHtml = view('foodalchemist::dokumente.produktionsauftrag', [
+        'dok' => $dok,
+        'istPdf' => true,
+        'optionen' => $einkauf,
+    ])->render();
+    expect($einkaufHtml)->toContain('Einkauf / Bestellvorschlag')
+        ->not->toContain('class="rezept"')
+        ->not->toContain('<th>Zutat</th>');
+
+    expect($this->svc->dokumentOptionen(['profil' => 'kurz', 'zutaten' => '1', 'fotos' => '0']))
+        ->toMatchArray(['zutaten' => true, 'bilder' => false, 'einkauf' => false]);
+});
+
+it('S3: Postenfilter zeigt nur zugeteilte Produktionszeilen und bleibt im PDF erhalten', function () {
+    $order = $this->svc->saveNew($this->rootTeam, '2026-08-01', 'Posten-Auftrag', [
+        ['recipe_id' => $this->kuchen->id, 'portions' => 100, 'source_ref' => 'recipe:kuchen@100'],
+    ]);
+    $posten = FoodAlchemistProductionStation::create([
+        'team_id' => $this->rootTeam->id,
+        'slug' => 'patisserie-druck',
+        'name' => 'Patisserie',
+    ]);
+    $order->lines()->where('recipe_id', $this->kuchen->id)->update(['station_id' => $posten->id]);
+
+    $dok = $this->svc->dokument($this->rootTeam, $order->id, false);
+    $optionen = $this->svc->dokumentOptionen(['profil' => 'produktion', 'posten' => (string) $posten->id]);
+    $html = view('foodalchemist::dokumente.produktionsauftrag', [
+        'dok' => $dok,
+        'istPdf' => true,
+        'optionen' => $optionen,
+    ])->render();
+
+    expect($optionen['posten'])->toBe((string) $posten->id)
+        ->and($html)->toContain('Posten: Patisserie')
+        ->and($html)->toContain('DES: Kuchen')
+        ->and(substr_count($html, 'class="rezept"'))->toBe(1);
+
+    expect($this->svc->dokumentOptionen(['posten' => 'fremd'])['posten'])->toBe('');
 });
 
 it('S3-Bundle: dokument() enthält die Einkaufs-Sektion (Lieferant + EK); ?einkauf=0 lässt sie weg', function () {
@@ -457,19 +570,11 @@ it('P1 UI: Editor legt ein Basisrezept-kg-Ziel an (Einheiten-Umschalter kg)', fu
 it('P1 UI: Basisrezept-Zieltyp sucht im Basis-Scope, VK-Scope blendet Basisrezepte aus', function () {
     $this->actingAs($this->makeUser($this->rootTeam));
 
-    // Basisrezept-Modus (->basis()) findet die Vanillesauce.
-    Livewire::test(ProduktionEditor::class)
-        ->call('oeffnenNeu')
-        ->set('zielTyp', 'basisrezept')
-        ->set('suche', 'Vanille')
-        ->assertSee('Vanillesauce');
+    $editor = app(ProduktionEditor::class);
 
-    // VK-Gericht-Modus (->verkauf()) blendet sie aus.
-    Livewire::test(ProduktionEditor::class)
-        ->call('oeffnenNeu')
-        ->set('zielTyp', 'recipe')
-        ->set('suche', 'Vanille')
-        ->assertDontSee('Vanillesauce');
+    // Basisrezept-Modus (->basis()) findet die Vanillesauce; VK-Gericht-Modus blendet sie aus.
+    expect($editor->browseZiele('basisrezept', [], 'Vanille')['total'])->toBe(1)
+        ->and($editor->browseZiele('recipe', [], 'Vanille')['total'])->toBe(0);
 });
 
 it('P1 MCP: produktionsblatt/bestellvorschlag/ADD_TARGET akzeptieren amount_kg', function () {
@@ -593,8 +698,7 @@ it('P3 UI: DetailPanel zeigt Ziele-Sektion + Einkauf-Deckungsgrad (0/2 → 1/2)'
 
     Livewire::test(ProduktionDetailPanel::class, ['orderId' => $po->id])
         ->assertSeeHtml('data-einkauf-deckung="1/2"')
-        ->assertSeeHtml('data-ziel-uebergeben="1"')
-        ->assertSeeHtml('data-ziel-uebergeben="0"');
+        ->assertSee('übergeben 1/2');
 });
 
 // ── P4 · Einkaufs-Verdrahtung härten ────────────────────────────────────────

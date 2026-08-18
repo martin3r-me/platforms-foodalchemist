@@ -1,3 +1,42 @@
+@php
+    $pdf = $istPdf ?? false;
+    $opt = $optionen ?? [
+        'profil' => 'voll',
+        'rezepte' => true,
+        'zutaten' => true,
+        'anleitung' => true,
+        'bilder' => $mitFotos ?? true,
+        'darreichung' => true,
+        'notizen' => true,
+        'einkauf' => ($dok['einkauf'] ?? null) !== null,
+        'posten' => '',
+    ];
+    $profile = [
+        'kurz' => 'Kurzblatt',
+        'produktion' => 'Produktion',
+        'einkauf' => 'Einkauf',
+        'voll' => 'Komplett',
+    ];
+    $filter = [
+        'rezepte' => 'Rezepte',
+        'zutaten' => 'Zutaten',
+        'anleitung' => 'Anleitung',
+        'bilder' => 'Bilder',
+        'darreichung' => 'Darreichung',
+        'notizen' => 'Notizen',
+        'einkauf' => 'Einkauf',
+    ];
+    $profilReset = array_merge(array_fill_keys(array_keys($filter), null), ['posten' => null]);
+    $posten = collect($dok['zeilen'])
+        ->filter(fn ($z) => ($z['station_id'] ?? null) !== null)
+        ->mapWithKeys(fn ($z) => [(string) $z['station_id'] => $z['station'] ?? ('Posten #' . $z['station_id'])])
+        ->sort();
+    $hatOhnePosten = collect($dok['zeilen'])->contains(fn ($z) => ($z['station_id'] ?? null) === null);
+    $zeilen = collect($dok['zeilen'])
+        ->when(($opt['posten'] ?? '') === 'ohne', fn ($z) => $z->whereNull('station_id'))
+        ->when(($opt['posten'] ?? '') !== '' && ($opt['posten'] ?? '') !== 'ohne', fn ($z) => $z->where('station_id', (int) $opt['posten']))
+        ->values();
+@endphp
 <!DOCTYPE html>
 <html lang="de">
 <head>
@@ -5,8 +44,8 @@
     <title>Produktionsschein {{ $dok['production_date'] }}</title>
     <style>
         * { box-sizing: border-box; }
-        body { font-family: "DejaVu Sans", Arial, sans-serif; color: #1f2937; font-size: 12px; line-height: 1.5; margin: 0; padding: 32px; }
-        .doc { max-width: 760px; margin: 0 auto; }
+        body { font-family: "DejaVu Sans", Arial, sans-serif; color: #1f2937; background: {{ $pdf ? '#fff' : '#f3f4f6' }}; font-size: 12px; line-height: 1.5; margin: 0; padding: {{ $pdf ? '32px' : '52px 32px' }}; }
+        .doc { max-width: 900px; margin: 0 auto; background: #fff; padding: {{ $pdf ? '0' : '44px 56px' }}; }
         .head { border-bottom: 2px solid #6d28d9; padding-bottom: 12px; margin-bottom: 16px; }
         h1 { font-size: 20px; margin: 0 0 4px; color: #111827; }
         .sub { color: #6b7280; }
@@ -28,24 +67,45 @@
         table.einkauf-tbl td { padding: 3px 6px; border-bottom: 1px solid #f3f4f6; vertical-align: top; }
         .grand { margin-top: 14px; border-top: 2px solid #6d28d9; padding-top: 8px; font-size: 15px; font-weight: bold; text-align: right; }
         .foot { margin-top: 28px; color: #9ca3af; font-size: 10px; border-top: 1px solid #ececec; padding-top: 10px; }
-        .actions { margin-bottom: 18px; }
-        .btn { display: inline-block; padding: 6px 12px; background: #6d28d9; color: #fff; text-decoration: none; border-radius: 6px; margin-right: 6px; }
-        .btn.ghost { background: #eee; color: #374151; }
-        @media print { .actions { display: none; } body { padding: 0; } }
+        .actions { margin: {{ $pdf ? '0' : '-44px -56px 28px' }}; padding: 14px 16px; background: #111827; color: #fff; }
+        .action-row + .action-row { margin-top: 8px; }
+        .action-label { display: inline-block; min-width: 86px; font-size: 11px; font-weight: bold; }
+        .btn { display: inline-block; padding: 5px 10px; color: #e5e7eb; text-decoration: none; border: 1px solid rgba(255,255,255,.28); border-radius: 999px; margin: 2px; font-size: 11px; }
+        .btn.active, .btn.primary { background: #6d28d9; border-color: #6d28d9; color: #fff; }
+        @media print { .actions { display: none; } body { background: #fff; padding: 0; } .doc { padding: 0; } }
 @include('foodalchemist::dokumente.partials.schritt-karten-css')
     </style>
 </head>
 <body>
 <div class="doc">
-    @unless($istPdf ?? false)
+    @unless($pdf)
         <div class="actions">
-            <a class="btn" href="{{ request()->fullUrlWithQuery(['pdf' => 1]) }}">PDF herunterladen</a>
-            <a class="btn ghost" href="{{ request()->fullUrlWithQuery(['csv' => 1]) }}">CSV</a>
-            <a class="btn ghost" href="javascript:window.print()">Drucken</a>
-            @if($mitFotos ?? true)
-                <a class="btn ghost" href="{{ request()->fullUrlWithQuery(['fotos' => 0]) }}">Anleitung ohne Fotos</a>
-            @else
-                <a class="btn ghost" href="{{ request()->fullUrlWithQuery(['fotos' => 1]) }}">Anleitung mit Fotos</a>
+            <div class="action-row">
+                <span class="action-label">Profil:</span>
+                @foreach($profile as $key => $label)
+                    <a class="btn {{ ($opt['profil'] ?? '') === $key ? 'active' : '' }}" href="{{ request()->fullUrlWithQuery(array_merge($profilReset, ['profil' => $key, 'pdf' => null, 'csv' => null])) }}">{{ $label }}</a>
+                @endforeach
+                <a class="btn primary" href="{{ request()->fullUrlWithQuery(['pdf' => 1, 'csv' => null]) }}">PDF herunterladen</a>
+                <a class="btn" href="javascript:window.print()">Drucken</a>
+                <a class="btn" href="{{ request()->fullUrlWithQuery(['csv' => 1, 'pdf' => null]) }}">CSV</a>
+            </div>
+            <div class="action-row">
+                <span class="action-label">Inhalte:</span>
+                @foreach($filter as $key => $label)
+                    <a class="btn {{ ($opt[$key] ?? false) ? 'active' : '' }}" href="{{ request()->fullUrlWithQuery([$key => ($opt[$key] ?? false) ? 0 : 1, 'pdf' => null, 'csv' => null]) }}">{{ $label }}</a>
+                @endforeach
+            </div>
+            @if($posten->isNotEmpty() || $hatOhnePosten)
+                <div class="action-row">
+                    <span class="action-label">Posten:</span>
+                    <a class="btn {{ ($opt['posten'] ?? '') === '' ? 'active' : '' }}" href="{{ request()->fullUrlWithQuery(['posten' => null, 'pdf' => null, 'csv' => null]) }}">Alle</a>
+                    @foreach($posten as $id => $name)
+                        <a class="btn {{ (string) ($opt['posten'] ?? '') === (string) $id ? 'active' : '' }}" href="{{ request()->fullUrlWithQuery(['posten' => $id, 'rezepte' => 1, 'pdf' => null, 'csv' => null]) }}">{{ $name }}</a>
+                    @endforeach
+                    @if($hatOhnePosten)
+                        <a class="btn {{ ($opt['posten'] ?? '') === 'ohne' ? 'active' : '' }}" href="{{ request()->fullUrlWithQuery(['posten' => 'ohne', 'rezepte' => 1, 'pdf' => null, 'csv' => null]) }}">Nicht zugeteilt</a>
+                    @endif
+                </div>
             @endif
         </div>
     @endunless
@@ -59,10 +119,11 @@
         @if(count($dok['ziele']) > 0)
             <div class="muted">{{ implode(' · ', $dok['ziele']) }}</div>
         @endif
-        @if($dok['note'])<div class="muted">Notiz: {{ $dok['note'] }}</div>@endif
+        @if(($opt['notizen'] ?? false) && $dok['note'])<div class="muted">Notiz: {{ $dok['note'] }}</div>@endif
     </div>
 
-    @forelse($dok['zeilen'] as $z)
+    @if($opt['rezepte'] ?? false)
+    @forelse($zeilen as $z)
         <div class="rezept">
             <h2>{{ $z['name'] }}@if($z['ist_basisrezept']) <span class="muted">(Basisrezept)</span>@endif</h2>
             <div class="meta">
@@ -70,9 +131,10 @@
                 @if($z['portionen'] !== null) · {{ $z['portionen'] }} Portionen @endif
                 @if($z['produzierte_menge_kg'] !== null) · {{ number_format($z['produzierte_menge_kg'], 2, ',', '.') }} kg @endif
                 @if($z['arbeitszeit_min'] !== null) · {{ $z['arbeitszeit_min'] }} min Arbeitszeit @endif
+                · Posten: {{ $z['station'] ?? 'Nicht zugeteilt' }}
             </div>
 
-            @if($z['zutaten'])
+            @if(($opt['zutaten'] ?? false) && $z['zutaten'])
                 <table class="zutaten">
                     <thead><tr><th>Zutat</th><th class="right">Menge</th></tr></thead>
                     <tbody>
@@ -83,26 +145,29 @@
                 </table>
             @endif
 
-            @include('foodalchemist::dokumente.partials.schritt-karten', [
-                'schritte' => $z['schritte'] ?? [],
-                'zubereitung' => $z['zubereitung'] ?? null,
-                'mitFotos' => $mitFotos ?? true,
-                'istPdf' => $istPdf ?? false,
-            ])
+            @if($opt['anleitung'] ?? false)
+                @include('foodalchemist::dokumente.partials.schritt-karten', [
+                    'schritte' => $z['schritte'] ?? [],
+                    'zubereitung' => $z['zubereitung'] ?? null,
+                    'mitFotos' => $opt['bilder'] ?? false,
+                    'istPdf' => $pdf,
+                ])
+            @endif
 
-            @if($z['darreichung'])
+            @if(($opt['darreichung'] ?? false) && $z['darreichung'])
                 <div class="darreichung">
                     @foreach($z['darreichung'] as $k => $v)<span>{{ $k }}: {{ $v }} · </span>@endforeach
                 </div>
             @endif
         </div>
     @empty
-        <p class="muted">Keine Rezepte.</p>
+        <p class="muted">Keine Rezepte für den gewählten Posten.</p>
     @endforelse
+    @endif
 
     {{-- Einkauf/Bestellvorschlag — interne Ops-Sektion (Lieferant, Gebinde, EK). Wie der
          alte Planungsblatt-Bundle, jetzt im gebündelten Produktionsschein. --}}
-    @if(($dok['einkauf'] ?? null) !== null)
+    @if(($opt['einkauf'] ?? false) && ($dok['einkauf'] ?? null) !== null)
         <div class="einkauf-head">
             <h1 style="font-size:16px;margin:0 0 4px">Einkauf / Bestellvorschlag</h1>
             <div class="muted">GP-Bedarf nach Lieferant, in ganzen Gebinden · interne Ops-Angabe (EK netto)</div>
@@ -133,7 +198,7 @@
         <div class="grand">Wareneinsatz gesamt: {{ number_format($dok['einkauf']['ek_gesamt'], 2, ',', '.') }} € <span class="muted" style="font-weight:normal;font-size:11px">(netto)</span></div>
     @endif
 
-    <div class="foot">Food Alchemist · {{ ($dok['einkauf'] ?? null) !== null ? 'Produktionsschein + Einkauf (intern)' : 'Produktionsschein' }} · {{ $dok['id'] }}</div>
+    <div class="foot">Food Alchemist · {{ ($opt['einkauf'] ?? false) && ($dok['einkauf'] ?? null) !== null ? 'Produktionsschein + Einkauf (intern)' : 'Produktionsschein' }} · {{ $dok['id'] }}</div>
 </div>
 </body>
 </html>
