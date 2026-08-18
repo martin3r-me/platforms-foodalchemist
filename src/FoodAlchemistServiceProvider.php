@@ -610,6 +610,11 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\KnowledgeCategoriesGetTool::class,
                     \Platform\FoodAlchemist\Tools\KnowledgeCategoriesPostTool::class,
                     \Platform\FoodAlchemist\Tools\KnowledgeSetActiveTool::class,
+                    // Schnellstart-Vorlagen (Brief-Templates) — kunden-anlegbare Planung-Startpunkte (CRUD)
+                    \Platform\FoodAlchemist\Tools\BriefTemplatesListTool::class,
+                    \Platform\FoodAlchemist\Tools\BriefTemplatesPostTool::class,
+                    \Platform\FoodAlchemist\Tools\BriefTemplatesPutTool::class,
+                    \Platform\FoodAlchemist\Tools\BriefTemplatesDeleteTool::class,
                 ] as $toolClass) {
                     try {
                         $tool = new $toolClass();

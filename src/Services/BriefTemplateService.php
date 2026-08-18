@@ -60,6 +60,31 @@ class BriefTemplateService
     }
 
     /**
+     * Verwaltungs-Liste (Settings/MCP): alle SICHTBAREN Vorlagen inkl. INAKTIVE (zum Reaktivieren),
+     * optional scope-gefiltert — Globals zuerst. Anders als {@see fuer} (nur aktive, fürs Chip-Anwenden).
+     *
+     * @return \Illuminate\Support\Collection<int,FoodAlchemistBriefTemplate>
+     */
+    public function verwaltung(Team $team, ?string $scope = null): \Illuminate\Support\Collection
+    {
+        $q = TeamScope::applyVisible(FoodAlchemistBriefTemplate::query(), 'team_id', $team);
+        if ($scope !== null && $scope !== '') {
+            $q->where('scope', $scope);
+        }
+
+        return $q->orderByRaw('team_id IS NULL DESC')->orderBy('scope')->orderBy('sort_order')->orderBy('label')->get();
+    }
+
+    /** Aktiv-Flag einer team-EIGENEN Vorlage explizit setzen (MCP-Pfad; Globals read-only → wirft). */
+    public function setActive(Team $team, int $id, bool $active): FoodAlchemistBriefTemplate
+    {
+        $tpl = $this->eigene($team, $id);
+        $tpl->update(['active' => $active]);
+
+        return $tpl;
+    }
+
+    /**
      * Team-eigene Vorlage aus einem Editor-Snapshot anlegen: Brief + Kreativ-Modus + der komplette
      * Regler-Stand des Tabs. Der Regler-Snapshot wird as-is gespeichert (Anwenden setzt nur Keys, die
      * der Ziel-Regler-Satz führt — Guard im Anwender, damit ein Scope keine fremden Keys erbt).
