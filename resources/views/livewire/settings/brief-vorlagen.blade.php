@@ -51,15 +51,34 @@
     </div>
 
     <div>
-        <p class="{{ $dt }} mb-1">Kuratierte Vorlagen (BHG-Standard · read-only)</p>
+        <p class="{{ $dt }} mb-1">Kuratierte Vorlagen (BHG-Standard{{ $istMaster ? ' · dein Master-Team kuratiert sie für ALLE Teams' : ' · read-only' }})</p>
         <table class="{{ $table }}">
-            <thead><tr class="text-left">@foreach(['Name', 'Tab', 'Briefing'] as $h)<th class="{{ $th }}">{{ $h }}</th>@endforeach</tr></thead>
+            <thead><tr class="text-left">@foreach(($istMaster ? ['Name', 'Tab', 'Briefing', 'Status', ''] : ['Name', 'Tab', 'Briefing']) as $h)<th class="{{ $th }}">{{ $h }}</th>@endforeach</tr></thead>
             <tbody>
                 @foreach($globals as $t)
-                    <tr class="{{ $tr }}" wire:key="btg-{{ $t->id }}">
-                        <td class="{{ $td }} font-medium text-gray-900">{{ $t->label }}</td>
-                        <td class="{{ $td }} text-[11px] text-gray-500">{{ $scopeLabel[$t->scope] ?? $t->scope }}</td>
-                        <td class="{{ $td }} text-[11px] text-gray-500 max-w-[20rem] truncate">{{ \Illuminate\Support\Str::limit($t->brief, 70) }}</td>
+                    <tr class="{{ $tr }} {{ $t->active ? '' : 'opacity-50' }}" wire:key="btg-{{ $t->id }}">
+                        @if($istMaster && $editId === $t->id)
+                            <td class="{{ $td }}"><input type="text" wire:model="editLabel" class="{{ $input }} !py-1" /></td>
+                            <td class="{{ $td }} text-[11px] text-gray-500">{{ $scopeLabel[$t->scope] ?? $t->scope }}</td>
+                            <td class="{{ $td }} text-[11px] text-gray-500 max-w-[18rem] truncate">{{ \Illuminate\Support\Str::limit($t->brief, 60) }}</td>
+                            <td class="{{ $td }} text-[11px]">{{ $t->active ? 'aktiv' : 'inaktiv' }}</td>
+                            <td class="{{ $td }} whitespace-nowrap">
+                                <button type="button" wire:click="save" class="{{ $btnPrimary }}">Speichern</button>
+                                <button type="button" wire:click="cancel" class="{{ $btnGhostXs }}">Abbrechen</button>
+                            </td>
+                        @else
+                            <td class="{{ $td }} font-medium text-gray-900">{{ $t->label }}</td>
+                            <td class="{{ $td }} text-[11px] text-gray-500">{{ $scopeLabel[$t->scope] ?? $t->scope }}</td>
+                            <td class="{{ $td }} text-[11px] text-gray-500 max-w-[20rem] truncate">{{ \Illuminate\Support\Str::limit($t->brief, 70) }}</td>
+                            @if($istMaster)
+                                <td class="{{ $td }} text-[11px] text-gray-600">{{ $t->active ? 'aktiv' : 'inaktiv' }}</td>
+                                <td class="{{ $td }} whitespace-nowrap">
+                                    <button type="button" wire:click="edit({{ $t->id }})" class="{{ $btnGhostXs }}">Umbenennen</button>
+                                    <button type="button" wire:click="toggleActive({{ $t->id }})" class="{{ $btnGhostXs }}">{{ $t->active ? 'deaktivieren' : 'aktivieren' }}</button>
+                                    <button type="button" wire:click="loeschen({{ $t->id }})" wire:confirm="Globale Vorlage „{{ $t->label }}“ für ALLE Teams löschen?" class="{{ $btnGhostXs }} text-red-500">löschen</button>
+                                </td>
+                            @endif
+                        @endif
                     </tr>
                 @endforeach
             </tbody>

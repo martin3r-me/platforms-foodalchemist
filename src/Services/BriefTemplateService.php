@@ -148,12 +148,26 @@ class BriefTemplateService
         $this->eigene($team, $id)->delete();
     }
 
-    /** Team-eigene Vorlage per id — wirft, wenn nicht vorhanden ODER kuratiert/geerbt (Owns-Guard). */
+    /**
+     * Master-Team = Root der Hierarchie (parent_team_id NULL). Kuratiert die globalen Vorlagen
+     * (team_id NULL) für ALLE — spiegelt {@see \Platform\FoodAlchemist\Livewire\Settings\Wissenskategorien}.
+     */
+    public function istMaster(Team $team): bool
+    {
+        return $team->parent_team_id === null;
+    }
+
+    /**
+     * Editier-Guard: die Vorlage per id, wenn das Team sie bearbeiten darf — EIGENE (owns) ODER
+     * GLOBALE, wenn das Team Master ist. Sonst wirft es (nicht vorhanden / kuratiert / fremd).
+     */
     private function eigene(Team $team, int $id): FoodAlchemistBriefTemplate
     {
         $tpl = FoodAlchemistBriefTemplate::find($id);
-        if ($tpl === null || ! TeamScope::owns($tpl->team_id, $team)) {
-            throw new RuntimeException('Nur eigene Vorlagen sind bearbeitbar (kuratierte sind read-only).');
+        $darf = $tpl !== null
+            && (TeamScope::owns($tpl->team_id, $team) || ($tpl->team_id === null && $this->istMaster($team)));
+        if (! $darf) {
+            throw new RuntimeException('Nur eigene Vorlagen bearbeitbar; globale Vorlagen kuratiert nur das Master-Team.');
         }
 
         return $tpl;
