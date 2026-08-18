@@ -89,6 +89,11 @@ class RecipeDependencyWorkflowService
         $kindVollAnreichern = (bool) ($parameter['_voll_anreichern'] ?? false);
         $childParameter = $parameter;
         unset($childParameter['_voll_anreichern'], $childParameter['_defer_children']);
+        // VK-Achsen beim Abstieg strippen: ein Basisrezept-Kind läuft gegen recipe.generator (vkModus=false),
+        // dessen Prompt Ziel-VK/Anlass/Serviceform gar nicht kennt — sie würden nur Rauschen im JSON-Kontext.
+        unset($childParameter['ziel_vk_eur'], $childParameter['occasion'], $childParameter['serviceform']);
+        unset($childParameter['titel_vorgabe']);   // L5: der Titel gilt nur fuers Gericht, nicht fuer seine Sub-Rezepte
+        unset($childParameter['pax'], $childParameter['ziel_portion_g']);   // L6: teller-bezogen, nicht fuer Sub-Rezepte
 
         foreach ($this->planChildren($team, $step, $recipe, $offene, $parameter) as [$child, $ingredientId, $text]) {
             if ($child->status === 'done' && $child->ref_id !== null) {
@@ -135,6 +140,10 @@ class RecipeDependencyWorkflowService
         $userId = (int) ($d['user_id'] ?? \Illuminate\Support\Facades\Auth::id() ?? 0);
         $kindVollAnreichern = (bool) ($params['_voll_anreichern'] ?? false);
         unset($params['_voll_anreichern'], $params['_defer_children']);
+        // VK-Achsen beim Abstieg strippen (wie dispatchChildren) — das Basisrezept-Kind kennt sie nicht.
+        unset($params['ziel_vk_eur'], $params['occasion'], $params['serviceform']);
+        unset($params['titel_vorgabe']);
+        unset($params['pax'], $params['ziel_portion_g']);
 
         $runId = (string) Str::uuid();
         $child->update(['status' => 'running', 'generator_run_id' => $runId]);
@@ -167,10 +176,11 @@ class RecipeDependencyWorkflowService
         $geplant = [];
 
         foreach ($offene as $open) {
-            // Kohärenz-Gate (2026-08-07): ENTdrahtete Fremdkörper-Zeilen tragen einen `kritiker`-
-            // Grund. Sie dürfen NICHT auto-nachgeneriert werden — sonst liesse die Kaskade den
-            // gerade als unpassend entfernten Fremdkörper als frisches Sub-Rezept wiederauferstehen.
-            if (isset($open['kritiker'])) {
+            // Kohärenz-Gate (2026-08-07) + Diät-/Allergen-Gate (L3): ENTdrahtete Zeilen tragen einen
+            // `kritiker`- bzw. `diaet_verstoss`-Grund. Sie dürfen NICHT auto-nachgeneriert werden — sonst
+            // liesse die Kaskade den gerade entfernten Fremdkörper / Diät-Verstoß als frisches Sub-Rezept
+            // wiederauferstehen (der Mensch wählt eine konforme Alternative).
+            if (isset($open['kritiker']) || isset($open['diaet_verstoss'])) {
                 continue;
             }
             if (($open['primaer'] ?? null) !== 'basisrezept_anlegen') {
@@ -188,9 +198,45 @@ class RecipeDependencyWorkflowService
             if ($text === '') {
                 continue;
             }
+            // ── Reuse-Gate (L1, Reuse-Achse aus dem Kreativ-Modus) ────────────────────────────────
+            $bestand = (string) ($parameter['bestand'] ?? 'hybrid');
+            if ($bestand !== 'komplett_neu') {
+                // Bestand zuerst: existiert die Komponente als Basisrezept (Token-Set-Namensgleichheit)?
+                // Treffer → Eltern-Zutat binden + Reuse-Sichtzeile (skipped), KEIN neuer Erzeugungs-Lauf.
+                // Das ist der eigentliche Fix gegen „datenbank → sehr viele neue Rezepte".
+                $bestehend = app(\Platform\FoodAlchemist\Services\RecipeService::class)->findByTokenSet($team, $text);
+                if ($bestehend !== null && (int) $bestehend->id !== (int) $recipe->id) {
+                    $this->bindIngredient($team, (int) $ingredient->id, (int) $bestehend->id);
+                    FoodAlchemistCascadeRunStep::firstOrCreate([
+                        'cascade_run_id' => $step->cascade_run_id,
+                        'dedupe_key' => 'reuse:' . (int) $bestehend->id,
+                    ], [
+                        'team_id' => $team->id,
+                        'parent_step_id' => $step->id,
+                        'depth' => ((int) $step->depth) + 1,
+                        'kind' => 'rezept',
+                        'label' => Str::limit((string) $bestehend->name, 120),
+                        'status' => 'skipped',
+                        'ref_type' => 'recipe',
+                        'ref_id' => (int) $bestehend->id,
+                        'sort' => (int) $ingredient->position,
+                    ]);
+
+                    continue;
+                }
+            }
+            if ($bestand === 'nur_bestand') {
+                // »Nur Bestand« (Kreativ-Modus = Datenbank) + kein Treffer: NICHT neu anlegen. Die Zeile
+                // bleibt offen als sichtbarer Hard-Stop — der Mensch wählt ein Bestandsrezept oder wechselt
+                // den Modus. So ist „Nur Bestand" strukturell erfüllbar (statt still ein neues Rezept zu bauen).
+                continue;
+            }
             $dedupe = hash('sha256', mb_strtolower($text) . '|' . json_encode([
                 $parameter['convenience'] ?? null, $parameter['frische'] ?? null,
-                $parameter['bio'] ?? null, $parameter['niveau'] ?? null,
+                // Bio + Niveau: kanonisch heißen die Keys `bio`/`level` — der alte `niveau`-Read war immer
+                // null (Dead-Read), sodass zwei Läufe, die sich NUR im Niveau unterschieden, denselben
+                // dedupe_key trugen. Fallback auf `niveau` erhält Altverhalten, falls der Key doch mal kommt.
+                $parameter['bio'] ?? null, $parameter['level'] ?? $parameter['niveau'] ?? null,
             ]));
 
             $child = DB::transaction(function () use ($team, $step, $ingredient, $text, $dedupe) {

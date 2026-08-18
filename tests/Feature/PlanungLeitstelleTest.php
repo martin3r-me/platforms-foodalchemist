@@ -2147,3 +2147,204 @@ it('Slice 2 / D1-Read: Foto-Picker auf FREMDEN Step → keine Kandidaten (Roh-id
         ->set('fotoPickerStep', (int) $fremdStep->id)
         ->assertViewHas('fotoPickerKandidaten', []);
 });
+
+// ── L0 — Verdrahtungs-Lecks (Regressionsgarantien) ───────────────────────────────────────────
+
+it('L0.5 Bio dreiwertig: „egal" wird zu bio_pref=neutral (kein −2-Bio-Penalty), bio-Bool bleibt false', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Bio egal', 'brief' => 'x']);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->set('eingabe.rezept.brief', 'Rote-Bete-Salat.')
+        ->set('regler.rezept.bio_praeferenz', 'egal')
+        ->call('goKaskade', 'rezept')
+        ->assertSet('laeuft', true);
+
+    // Der Depth-1-Job trägt die dreiwertige Präferenz — „egal" ⇒ neutral (Adjustment 0), nicht 'conventional'.
+    Queue::assertPushed(GenerateRecipeJob::class, fn ($job) => ($job->parameter['bio_pref'] ?? null) === 'neutral'
+        && ($job->parameter['bio'] ?? null) === false);
+});
+
+it('L0.1 KI-Kopf reicht die Menü-Leitplanken (menue_*) an planAusBrief durch', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Menü mit Korridor']);
+    $draft = FoodAlchemistConcept::create(['team_id' => $this->rootTeam->id, 'name' => 'Stub', 'status' => 'draft']);
+
+    $erhalten = [];
+    $this->mock(\Platform\FoodAlchemist\Services\ConceptGeneratorService::class, function ($m) use (&$erhalten, $draft) {
+        $m->shouldReceive('planAusBrief')->andReturnUsing(function (...$args) use (&$erhalten, $draft) {
+            $erhalten = $args;
+            return ['concept' => $draft];
+        });
+    });
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->set('eingabe.concept.brief', 'Sommer-Menü, 4 Gänge, ca. 45 € p. P.')
+        ->set('regler.concept.menue_gaenge', '4')
+        ->set('regler.concept.menue_preis_ziel', '45,00')
+        ->call('kiKopf')
+        ->assertSet('fehler', null);
+
+    // 6. Argument von planAusBrief = $menueAchsen (kanonische menue_*-Keys), 5. = via 'ui' (Marker unverändert).
+    expect($erhalten[4] ?? null)->toBe('ui');
+    $menue = $erhalten[5] ?? [];
+    expect($menue['menue_gaenge'] ?? null)->toBe(4)
+        ->and($menue['menue_preis_ziel_pp'] ?? null)->toBe(45.0);
+});
+
+it('L0.1 KI-Kopf mit mistgetippter Menü-Zahl wird gesagt (kein planAusBrief-Aufruf)', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Menü fehlerhaft']);
+    $aufgerufen = false;
+    $this->mock(\Platform\FoodAlchemist\Services\ConceptGeneratorService::class, function ($m) use (&$aufgerufen) {
+        $m->shouldReceive('planAusBrief')->andReturnUsing(function () use (&$aufgerufen) {
+            $aufgerufen = true;
+            return ['concept' => null];
+        });
+    });
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->set('eingabe.concept.brief', 'Menü.')
+        ->set('regler.concept.menue_gaenge', '99')      // > 20 → ungültig
+        ->call('kiKopf')
+        ->assertSet('fehler', 'Menü-Gänge: bitte eine ganze Zahl zwischen 1 und 20 angeben (z. B. 4) — oder das Feld leer lassen.');
+
+    expect($aufgerufen)->toBeFalse();
+});
+
+it('L0.9 Plan-Verbrauch ist scope-gebunden: ein Gericht-Go löscht den vorbereiteten Concept-Plan NICHT', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Plan bleibt', 'brief' => 'x']);
+    $plan = FoodAlchemistConcept::create(['team_id' => $this->rootTeam->id, 'name' => 'Plan', 'status' => 'draft']);
+    $session->update(['plan_concept_id' => (int) $plan->id]);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->assertSet('planConceptId', (int) $plan->id)     // rehydriert
+        ->set('eingabe.gericht.brief', 'Ein einzelnes Gericht.')
+        ->call('goKaskade', 'gericht')
+        ->assertSet('laeuft', true)
+        ->assertSet('planConceptId', (int) $plan->id);    // NICHT verbraucht (falscher Scope)
+
+    expect($session->refresh()->plan_concept_id)->toBe((int) $plan->id);
+});
+
+// ── L1.5 — Leitplanken-UI: Frische-Erlaubnis-Liste + Aroma-Küche ─────────────────────────────
+
+it('L1.5 reglerParams: Frische-Multiauswahl wird zu frische_erlaubt (Roh-Zustände) + primärer Pref', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Frische-Filter', 'brief' => 'x']);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->set('eingabe.rezept.brief', 'Erbsenpüree.')
+        ->call('reglerPill', 'rezept', 'frische', 'tk')
+        ->call('reglerPill', 'rezept', 'frische', 'trocken')
+        ->call('goKaskade', 'rezept')
+        ->assertSet('laeuft', true);
+
+    Queue::assertPushed(GenerateRecipeJob::class, function ($job) {
+        $erlaubt = $job->parameter['frische_erlaubt'] ?? null;
+        return is_array($erlaubt)
+            && in_array('TK', $erlaubt, true)
+            && in_array('trocken', $erlaubt, true)
+            && ($job->parameter['frische'] ?? null) === 'tk';   // kein 'frisch' gewählt → erste Wahl
+    });
+});
+
+it('L1.5 reglerParams: Frische frisch+... setzt primären Pref auf frisch', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Frische-Frisch', 'brief' => 'x']);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->set('eingabe.rezept.brief', 'Salat.')
+        ->call('reglerPill', 'rezept', 'frische', 'konserve')
+        ->call('reglerPill', 'rezept', 'frische', 'frisch')
+        ->call('goKaskade', 'rezept');
+
+    Queue::assertPushed(GenerateRecipeJob::class, fn ($job) => ($job->parameter['frische'] ?? null) === 'frisch');
+});
+
+it('L1.5 Aroma-Küche: aroma_kueche reist als Leitplanke in die Job-Params', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Küche', 'brief' => 'x']);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->set('eingabe.gericht.brief', 'Ein Hauptgang.')
+        ->set('regler.gericht.aroma_kueche', 'japanisch')
+        ->call('goKaskade', 'gericht');
+
+    Queue::assertPushed(GenerateRecipeJob::class, fn ($job) => ($job->parameter['aroma_kueche'] ?? null) === 'japanisch');
+    expect($session->refresh()->generation_params['aroma_kueche'] ?? null)->toBe('japanisch');
+});
+
+// ── L3 — Allergen-No-Go-Regler reist als Leitplanke mit ──────────────────────────────────────
+
+it('L3 Allergen-No-Go: reglerPill togglet allergen_nogo (Multi) und reicht es in die Job-Params', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Allergen', 'brief' => 'x']);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->set('eingabe.rezept.brief', 'Etwas ohne Sesam und Milch.')
+        ->call('reglerPill', 'rezept', 'allergen_nogo', 'sesame')
+        ->call('reglerPill', 'rezept', 'allergen_nogo', 'milk')
+        ->call('goKaskade', 'rezept')
+        ->assertSet('laeuft', true);
+
+    Queue::assertPushed(GenerateRecipeJob::class, function ($job) {
+        $nogo = $job->parameter['allergen_nogo'] ?? [];
+        return is_array($nogo) && in_array('sesame', $nogo, true) && in_array('milk', $nogo, true);
+    });
+});
+
+// ── L5 — Titel-Anker + Rehydrierung ──────────────────────────────────────────────────────────
+
+it('L5 Titel-Anker: getippter Gericht-Titel reist als titel_vorgabe in die Job-Params, NICHT in die Session-Params', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Titel-Test', 'brief' => 'x']);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->set('eingabe.gericht.titel', 'Sommerbowl')
+        ->set('eingabe.gericht.brief', 'Eine leichte Bowl.')
+        ->call('goKaskade', 'gericht')
+        ->assertSet('laeuft', true);
+
+    Queue::assertPushed(GenerateRecipeJob::class, fn ($job) => ($job->parameter['titel_vorgabe'] ?? null) === 'Sommerbowl');
+    // NICHT in den vererbten Session-Params (sonst erbte jedes Fan-out-Kind den Gericht-Titel als Namen).
+    expect($session->refresh()->generation_params['titel_vorgabe'] ?? null)->toBeNull();
+});
+
+it('L5 Rehydrierung: gesetzte Leitplanken kommen nach Reload zurück in die Regler', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Rehydrat', 'brief' => 'x']);
+    app(PlanningSessionService::class)->setGenerationParams($this->rootTeam, (int) $session->id, [
+        'level' => 'gehoben', 'sektor' => 'catering', 'diaet_hart' => ['vegan'], 'aroma_kueche' => 'japanisch',
+    ]);
+
+    $c = Livewire::test(PlanungIndex::class)->call('oeffne', $session->id);
+
+    $c->assertSet('regler.gericht.level', 'gehoben')
+        ->assertSet('regler.gericht.sektor', 'catering')
+        ->assertSet('regler.gericht.aroma_kueche', 'japanisch')
+        ->assertSet('regler.gericht.diaet_hart', ['vegan']);
+});
+
+// ── L6 — Menge & Ziel (Pax / Grammatur / Saison / Ziel-WE%) ──────────────────────────────────
+
+it('L6 Menge&Ziel: gültige Zahl-Achsen + Saison reisen in die Job-Params, ungültige entfallen', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Menge', 'brief' => 'x']);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->set('eingabe.gericht.brief', 'Ein Hauptgang.')
+        ->set('regler.gericht.pax', '50')
+        ->set('regler.gericht.ziel_portion_g', '180')
+        ->set('regler.gericht.saison', 'sommer')
+        ->set('regler.gericht.ziel_we_pct', '999')   // > 100 → ungültig, entfällt
+        ->call('goKaskade', 'gericht')
+        ->assertSet('laeuft', true);
+
+    Queue::assertPushed(GenerateRecipeJob::class, function ($job) {
+        return ($job->parameter['pax'] ?? null) === 50
+            && ($job->parameter['ziel_portion_g'] ?? null) === 180
+            && ($job->parameter['saison'] ?? null) === 'sommer'
+            && ! array_key_exists('ziel_we_pct', $job->parameter);   // 999 verworfen
+    });
+});

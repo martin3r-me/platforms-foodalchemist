@@ -7,6 +7,12 @@
     extract(\Platform\FoodAlchemist\Support\Ui::maps());
     $statusLabel = ['divergenz' => 'Divergenz', 'konvergenz' => 'Konvergenz', 'erledigt' => 'Erledigt'];
     $modeLabel = ['voll_kreativ' => 'Voll kreativ', 'hybrid' => 'Hybrid', 'datenbank' => 'Datenbank'];
+    // Wirkungs-Hints je Modus (die EINE Reuse-Achse — ersetzt den früheren „Bestand-Nutzung"-Regler):
+    $modeHint = [
+        'voll_kreativ' => 'Neu erfinden — Bestand wird ignoriert, alle Komponenten frisch angelegt.',
+        'hybrid' => 'Bestand zuerst — vorhandene Basisrezepte werden wiederverwendet, Neues nur für echte Lücken.',
+        'datenbank' => 'Nur Bestand — ausschließlich vorhandene Basisrezepte; für Lücken ohne Treffer entsteht KEIN neues Rezept (offene Zeile bleibt sichtbar).',
+    ];
     $chip = fn ($t, $c = 'bg-black/[0.04] text-gray-600') => '<span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium ' . $c . '">' . e($t) . '</span>';
     $skizzenAnzahl = $skizzen ? (count($skizzen['einzel']) + collect($skizzen['gruppen'])->sum(fn ($g) => count($g['ideen']))) : 0;
     // Skizzen-Lauf-Status (Etappe 4, Teil 2b): jüngster aus der Skizze gestarteter Gericht-Go → Karte.
@@ -441,11 +447,12 @@
                     <label class="{{ $label ?? 'text-[11px] text-gray-500' }}">Briefing (geht in die Erzeugung)</label>
                     <textarea wire:model="eingabe.concept.brief" rows="4" class="{{ $input }} mb-3" placeholder="Anlass, Zielgruppe, Richtung, Pakete/Buffet-Struktur, Gänge …"></textarea>
                     <label class="{{ $label ?? 'text-[11px] text-gray-500' }}">Kreativ-Modus</label>
-                    <select wire:model="eingabe.concept.creative_mode" class="{{ $input }}">
+                    <select wire:model.live="eingabe.concept.creative_mode" class="{{ $input }}">
                         @foreach($modeLabel as $val => $lbl)
                             <option value="{{ $val }}">{{ $lbl }}</option>
                         @endforeach
                     </select>
+                    <p class="text-[11px] text-gray-500 mt-1">{{ $modeHint[$eingabe['concept']['creative_mode'] ?? 'voll_kreativ'] ?? '' }}</p>
                 </x-foodalchemist::modal-section>
 
                 {{-- KI-Kopf (Etappe 2b, geplanter Pfad): arbeitet den Plan-Entwurf vorab aus (Leitidee/USP/

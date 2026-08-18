@@ -456,7 +456,13 @@ return [
                 . 'die Beschreibung fordert es ausdrücklich. Benenne Zutaten NÜCHTERN und matchbar (die '
                 . 'reine Ware ohne Marketing-Adjektive: «Tomaten», nicht «reife aromatische Tomaten»). '
                 . 'Erzeuge das Basisrezept aus der Beschreibung unter Beachtung der Richtungs-'
-                . 'Parameter (convenience, frische, bio, niveau, sektor, diaet_hart, aroma): werte = '
+                // L3: Diät/Allergen sind VERBINDLICH — sie werden nach der Erzeugung deterministisch geprüft
+                // (verletzende Zutaten werden gelöst). Verwende von vornherein KEINE Zutat, die eine gesetzte
+                // diaet_hart-Form verletzt (vegan/vegetarisch/glutenfrei/laktosefrei/halal/low_carb) oder ein
+                // gesetztes allergen_nogo (EU-14) enthält — das spart eine Nachkorrektur.
+                // L6 »Menge & Ziel«: ist parameter.ziel_portion_g gesetzt, dimensioniere die Zutatenmengen auf
+                // diese Portionsgröße; parameter.saison lenkt die Zutatenwahl auf das Erntefenster.
+                . 'Parameter (convenience, frische, bio, niveau, sektor, diaet_hart, allergen_nogo, aroma, ziel_portion_g, saison): werte = '
                 . '{name (§1-Syntax <Typ>: <Bezeichnung>), description (§8-Stil), taste_direction (grobe Menue-Richtung, NUR EIN Wort: suess|herzhaft|neutral — das Aroma-Profil gehoert in description), '
                 . 'preparation (Markdown-Schritte), zutaten: [{text, quantity, unit (g|ml|kg|l|el|tl|stk), '
                 . 'slug (hauptzutat), commodity_group, note, '
@@ -537,8 +543,14 @@ return [
                 . 'entfalten. Bleib dennoch nah an der angefragten Gericht-Identität und benenne Zutaten '
                 . 'NÜCHTERN und matchbar (reine Ware ohne Marketing-Adjektive). '
                 . 'Erzeuge das VERKAUFSREZEPT (Teller/Speise mit VK-Preis) aus der Beschreibung '
+                // L3: Diät/Allergen sind VERBINDLICH — nach der Erzeugung deterministisch geprüft (verletzende
+                // Zutaten werden gelöst). Verwende KEINE Zutat, die eine gesetzte diaet_hart-Form verletzt oder
+                // ein gesetztes allergen_nogo (EU-14) enthält.
+                // L6 »Menge & Ziel«: parameter.pax = Gästezahl (Mengengerüst), ziel_portion_g = Ziel-Portionsgröße
+                // je Teller, saison = Erntefenster, ziel_we_pct = angestrebter Wareneinsatz-Anteil (wähle
+                // Qualitäten/Grammaturen entsprechend; GIB KEINEN PREIS AUS).
                 . 'unter Beachtung der Richtungs-Parameter (convenience, frische, bio, niveau, sektor, '
-                . 'diaet_hart, aroma, anlass, serviceform, kompositions_stil): werte = '
+                . 'diaet_hart, allergen_nogo, aroma, anlass, serviceform, kompositions_stil, pax, ziel_portion_g, saison, ziel_we_pct): werte = '
                 . '{name (Pipe-Syntax §4.4 «<HG-Code>: Hauptkomponente | Komponente | …», max 5 Felder, '
                 . 'keine Marketing-Adjektive), description (§8-Stil), taste_direction (grobe Menue-Richtung, NUR EIN Wort: suess|herzhaft|neutral — das Aroma-Profil gehoert in description), '
                 . 'preparation (= PLATING & SERVICE: Teller-Aufbau, Mengenverteilung, Service-Anweisung — '

@@ -280,3 +280,229 @@ it('Fehlt das sub_rezept-Flag, bleibt die Namens-Heuristik der Fallback (kein st
     expect($resultat['offene'][0]['primaer'])->toBe('basisrezept_anlegen')
         ->and($resultat['offene'][1]['primaer'])->toBe('lieferantenartikel_waehlen');
 });
+
+// ── L2 — Zerlegungs-Vorrang über Convenience (Entscheid 2026-08-17) ──────────────────────────
+// Kernfrage: darf ein bestehender GP-Treffer eine komponente/beilage-Zeile FLACH machen, oder
+// wird sie zum Basisrezept zerlegt? Die Convenience-Achse entscheidet.
+
+it('L2 from_scratch: komponente mit GP-Treffer wird TROTZDEM zerlegt (GP geblockt, basisrezept_anlegen)', function () {
+    ($this->mkGpMitPreis)('Rotkohl', 'rotkohl', 3.00);
+
+    $resultat = $this->svc->generiere($this->rootTeam, 'Teller mit Püree', [
+        'convenience' => 'from_scratch', 'frische' => 'frisch',
+    ], kiRezeptOverride: [
+        'name' => 'Gericht: Püree-Teller',
+        'zutaten' => [
+            ['text' => 'Rotkohl', 'slug' => 'rotkohl', 'quantity' => 200, 'unit' => 'g', 'role' => 'komponente'],
+        ],
+    ], vkModus: true);
+
+    expect($resultat['statistik']['bestand_gp'])->toBe(0)          // GP NICHT verdrahtet
+        ->and($resultat['statistik']['offen'])->toBe(1)
+        ->and($resultat['offene'][0]['primaer'])->toBe('basisrezept_anlegen');
+    expect($resultat['recipe']->ingredients()->first()->gp_id)->toBeNull();
+});
+
+it('L2 voll_convenience: komponente mit GP-Treffer bleibt FLACH (GP gewinnt, Fertigkomponente)', function () {
+    ($this->mkGpMitPreis)('Rotkohl', 'rotkohl', 3.00);
+
+    $resultat = $this->svc->generiere($this->rootTeam, 'Teller mit Püree', [
+        'convenience' => 'voll_convenience', 'frische' => 'frisch',
+    ], kiRezeptOverride: [
+        'name' => 'Gericht: Püree-Teller VC',
+        'zutaten' => [
+            ['text' => 'Rotkohl', 'slug' => 'rotkohl', 'quantity' => 200, 'unit' => 'g', 'role' => 'komponente'],
+        ],
+    ], vkModus: true);
+
+    expect($resultat['statistik']['bestand_gp'])->toBe(1)          // GP verdrahtet (gekauft)
+        ->and($resultat['statistik']['offen'])->toBe(0);
+    expect($resultat['recipe']->ingredients()->first()->gp_id)->not->toBeNull();
+});
+
+it('L2 egal (kein convenience-Key): komponente mit GP-Treffer bleibt FLACH (Bestand zuerst)', function () {
+    ($this->mkGpMitPreis)('Rotkohl', 'rotkohl', 3.00);
+
+    $resultat = $this->svc->generiere($this->rootTeam, 'Teller mit Püree', [
+        'frische' => 'frisch',   // KEIN convenience → default/egal
+    ], kiRezeptOverride: [
+        'name' => 'Gericht: Püree-Teller egal',
+        'zutaten' => [
+            ['text' => 'Rotkohl', 'slug' => 'rotkohl', 'quantity' => 200, 'unit' => 'g', 'role' => 'komponente'],
+        ],
+    ], vkModus: true);
+
+    expect($resultat['statistik']['bestand_gp'])->toBe(1)          // Bestand zuerst → GP gewinnt
+        ->and($resultat['statistik']['offen'])->toBe(0);
+});
+
+it('L2 teil_convenience: Convenience-GP gewinnt, ein Nicht-Convenience-GP wird zerlegt', function () {
+    $conv = ($this->mkGpMitPreis)('Rotkohl', 'rotkohl', 3.00);
+    $conv->update(['tag_is_convenience' => true]);
+    ($this->mkGpMitPreis)('Rahmspinat', 'rahmspinat', 2.50);   // kein Convenience-Tag
+
+    $resultat = $this->svc->generiere($this->rootTeam, 'Teller mit Beilagen', [
+        'convenience' => 'teil_convenience', 'frische' => 'frisch',
+    ], kiRezeptOverride: [
+        'name' => 'Gericht: Beilagen-Teller',
+        'zutaten' => [
+            ['text' => 'Rotkohl', 'slug' => 'rotkohl', 'quantity' => 200, 'unit' => 'g', 'role' => 'beilage'],
+            ['text' => 'Rahmspinat', 'slug' => 'rahmspinat', 'quantity' => 150, 'unit' => 'g', 'role' => 'beilage'],
+        ],
+    ], vkModus: true);
+
+    // Convenience-GP (Püree) verdrahtet, Nicht-Convenience-GP (Rahmspinat) zerlegt.
+    expect($resultat['statistik']['bestand_gp'])->toBe(1)
+        ->and($resultat['statistik']['offen'])->toBe(1);
+    $offeneTexte = array_column($resultat['offene'], 'text');
+    expect($offeneTexte)->toContain('Rahmspinat')
+        ->and($offeneTexte)->not->toContain('Rotkohl');
+});
+
+// ── L1.5 — Frische-Erlaubnis-Liste (Post-Match-Zustands-Filter) ──────────────────────────────
+
+it('L1.5 Frische: GP mit nicht erlaubtem Zustand (TK) wird NICHT verdrahtet, wenn nur frisch erlaubt', function () {
+    $gp = ($this->mkGpMitPreis)('Erbsen', 'erbsen', 2.00);
+    $gp->update(['condition' => 'TK']);
+
+    $resultat = $this->svc->generiere($this->rootTeam, 'Erbsen-Beilage', [
+        'frische_erlaubt' => ['frisch'],
+    ], kiRezeptOverride: [
+        'name' => 'Basis: Erbsen',
+        'zutaten' => [['text' => 'Erbsen', 'slug' => 'erbsen', 'quantity' => 200, 'unit' => 'g']],
+    ]);
+
+    expect($resultat['statistik']['bestand_gp'])->toBe(0)     // TK-GP geblockt
+        ->and($resultat['statistik']['offen'])->toBe(1);
+    expect($resultat['recipe']->ingredients()->first()->gp_id)->toBeNull();
+});
+
+it('L1.5 Frische: GP mit erlaubtem Zustand (frisch) wird verdrahtet', function () {
+    $gp = ($this->mkGpMitPreis)('Erbsen', 'erbsen', 2.00);
+    $gp->update(['condition' => 'frisch']);
+
+    $resultat = $this->svc->generiere($this->rootTeam, 'Erbsen-Beilage', [
+        'frische_erlaubt' => ['frisch'],
+    ], kiRezeptOverride: [
+        'name' => 'Basis: Erbsen frisch',
+        'zutaten' => [['text' => 'Erbsen', 'slug' => 'erbsen', 'quantity' => 200, 'unit' => 'g']],
+    ]);
+
+    expect($resultat['statistik']['bestand_gp'])->toBe(1)     // frisch erlaubt → verdrahtet
+        ->and($resultat['statistik']['offen'])->toBe(0);
+});
+
+it('L1.5 Frische: leere Erlaubnis-Liste = egal (kein Filter, TK-GP wird verdrahtet)', function () {
+    $gp = ($this->mkGpMitPreis)('Erbsen', 'erbsen', 2.00);
+    $gp->update(['condition' => 'TK']);
+
+    $resultat = $this->svc->generiere($this->rootTeam, 'Erbsen-Beilage', [
+        // KEIN frische_erlaubt → egal
+    ], kiRezeptOverride: [
+        'name' => 'Basis: Erbsen egal',
+        'zutaten' => [['text' => 'Erbsen', 'slug' => 'erbsen', 'quantity' => 200, 'unit' => 'g']],
+    ]);
+
+    expect($resultat['statistik']['bestand_gp'])->toBe(1);    // kein Filter → TK darf
+});
+
+it('L1.5 Aroma-Küche: build() trägt den Würz-Anker der gewählten Küche als Prompt-Block', function () {
+    $ctx = app(\Platform\FoodAlchemist\Services\RecipeGenerationContextService::class)
+        ->build($this->rootTeam, 'Ein Hauptgang', ['aroma_kueche' => 'japanisch'], true);
+
+    expect($ctx['prompt']['aroma_kueche']['kueche'] ?? null)->toBe('Japanisch')
+        ->and($ctx['prompt']['aroma_kueche']['wuerz_anker'] ?? '')->toContain('Dashi');
+});
+
+it('L1.5 Aroma-Küche: »Frei« (leer) trägt keinen Küche-Block', function () {
+    $ctx = app(\Platform\FoodAlchemist\Services\RecipeGenerationContextService::class)
+        ->build($this->rootTeam, 'Ein Hauptgang', [], true);
+
+    expect($ctx['prompt'])->not->toHaveKey('aroma_kueche');
+});
+
+// ── L3 — Diät-/Allergen-Gate (prüfen + entdrahten + melden) ──────────────────────────────────
+
+it('L3 Diät: veganes Ziel + verdrahteter nicht-veganer GP → entdrahtet + Befund (nicht mehr verdrahtet)', function () {
+    $gp = ($this->mkGpMitPreis)('Butter', 'butter', 5.00);
+    $gp->update(['tag_is_vegan' => false]);
+
+    $resultat = $this->svc->generiere($this->rootTeam, 'Etwas mit Butter', [
+        'diaet_hart' => ['vegan'],
+    ], kiRezeptOverride: [
+        'name' => 'Basis: Buttertest',
+        'zutaten' => [['text' => 'Butter', 'slug' => 'butter', 'quantity' => 50, 'unit' => 'g']],
+    ]);
+
+    expect($resultat['statistik']['diaet']['geprueft'])->toBeTrue()
+        ->and($resultat['statistik']['diaet']['entdrahtet'])->toBe(1)
+        ->and($resultat['statistik']['bestand_gp'])->toBe(0);
+    expect($resultat['recipe']->ingredients()->first()->gp_id)->toBeNull();
+    $verstoss = collect($resultat['offene'])->firstWhere('text', 'Butter');
+    expect($verstoss['diaet_verstoss']['gruende'] ?? [])->toContain('verletzt vegan');
+});
+
+it('L3 Diät: unbewerteter GP (tag_is_vegan NULL) wird NICHT entdrahtet (unbekannt ≠ Verstoß)', function () {
+    ($this->mkGpMitPreis)('Rätsel-Zutat', 'raetsel', 3.00);   // tag_is_vegan bleibt NULL
+
+    $resultat = $this->svc->generiere($this->rootTeam, 'Etwas mit Rätsel-Zutat', [
+        'diaet_hart' => ['vegan'],
+    ], kiRezeptOverride: [
+        'name' => 'Basis: Rätseltest',
+        'zutaten' => [['text' => 'Rätsel-Zutat', 'slug' => 'raetsel', 'quantity' => 50, 'unit' => 'g']],
+    ]);
+
+    expect($resultat['statistik']['diaet']['entdrahtet'])->toBe(0)
+        ->and($resultat['statistik']['bestand_gp'])->toBe(1);   // bleibt verdrahtet
+});
+
+it('L3 Allergen: allergen_nogo greift auf Allergen-Override „enthalten"', function () {
+    $gp = ($this->mkGpMitPreis)('Sesampaste', 'sesampaste', 4.00);
+    $gp->update(['allergen_sesame' => 'enthalten']);
+
+    $resultat = $this->svc->generiere($this->rootTeam, 'Etwas mit Sesam', [
+        'allergen_nogo' => ['sesame'],
+    ], kiRezeptOverride: [
+        'name' => 'Basis: Sesamtest',
+        'zutaten' => [['text' => 'Sesampaste', 'slug' => 'sesampaste', 'quantity' => 30, 'unit' => 'g']],
+    ]);
+
+    expect($resultat['statistik']['diaet']['entdrahtet'])->toBe(1);
+    $verstoss = collect($resultat['offene'])->firstWhere('text', 'Sesampaste');
+    expect($verstoss['diaet_verstoss']['gruende'] ?? [])->toContain('enthält sesame');
+});
+
+it('L3 Diät: ohne diaet_hart/allergen_nogo wird das Gate übersprungen (kein Eingriff)', function () {
+    $gp = ($this->mkGpMitPreis)('Butter', 'butter', 5.00);
+    $gp->update(['tag_is_vegan' => false]);
+
+    $resultat = $this->svc->generiere($this->rootTeam, 'Etwas mit Butter', [], kiRezeptOverride: [
+        'name' => 'Basis: Buttertest frei',
+        'zutaten' => [['text' => 'Butter', 'slug' => 'butter', 'quantity' => 50, 'unit' => 'g']],
+    ]);
+
+    expect($resultat['statistik']['diaet']['uebersprungen'])->toBeTrue()
+        ->and($resultat['statistik']['bestand_gp'])->toBe(1);
+});
+
+// ── L5 — Titel als Namens-Anker + Namens-Normalisierung ──────────────────────────────────────
+
+it('L5 Titel-Anker: titel_vorgabe gewinnt als Rezeptname vor dem KI-Namen', function () {
+    $resultat = $this->svc->generiere($this->rootTeam, 'Irgendein Brief', [
+        'titel_vorgabe' => 'Sommer-Bowl mit Ziegenkäse',
+    ], kiRezeptOverride: [
+        'name' => 'KI-erfundener Name',
+        'zutaten' => [['text' => 'Blattsalat', 'quantity' => 50, 'unit' => 'g']],
+    ]);
+
+    expect($resultat['recipe']->name)->toBe('Sommer-Bowl mit Ziegenkäse');
+});
+
+it('L5 Namens-Normalisierung: Zeilenumbrüche/Mehrfach-Whitespace werden geglättet', function () {
+    $resultat = $this->svc->generiere($this->rootTeam, 'Brief', [], kiRezeptOverride: [
+        'name' => "Zeile eins\n\nZeile   zwei\t\tdrei",
+        'zutaten' => [['text' => 'Blattsalat', 'quantity' => 50, 'unit' => 'g']],
+    ]);
+
+    expect($resultat['recipe']->name)->toBe('Zeile eins Zeile zwei drei');
+});
