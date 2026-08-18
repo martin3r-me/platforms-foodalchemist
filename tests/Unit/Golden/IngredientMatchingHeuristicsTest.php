@@ -160,7 +160,11 @@ it('halbfabrikat_gate_detects_komposita', function () {
     expect($this->h->queryIstHalbfabrikat(($this->ts)('Braune Kalbsbrühe')))->toBeTrue()
         ->and($this->h->queryIstHalbfabrikat(($this->ts)('Kalbsfond')))->toBeTrue()
         ->and($this->h->queryIstHalbfabrikat(($this->ts)('Rotweinreduktion')))->toBeTrue()
-        ->and($this->h->queryIstHalbfabrikat(($this->ts)('Himbeercoulis')))->toBeTrue();
+        ->and($this->h->queryIstHalbfabrikat(($this->ts)('Himbeercoulis')))->toBeTrue()
+        // D1 2026-08-18: benannte Sub-Zubereitungen (Live-Bug „Steinpilz-Duxelles" blieb flache Zutat statt Sub-Rezept)
+        ->and($this->h->queryIstHalbfabrikat(($this->ts)('Steinpilz-Duxelles')))->toBeTrue()
+        ->and($this->h->queryIstHalbfabrikat(($this->ts)('Kalbsfarce')))->toBeTrue()
+        ->and($this->h->istSubRezeptKandidat('Steinpilz-Duxelles'))->toBeTrue();
 });
 
 it('halbfabrikat_gate_rejects_grundzutaten', function () {
@@ -168,6 +172,40 @@ it('halbfabrikat_gate_rejects_grundzutaten', function () {
         ->and($this->h->queryIstHalbfabrikat(($this->ts)('Knoblauch')))->toBeFalse()
         ->and($this->h->queryIstHalbfabrikat(($this->ts)('Zwiebeln')))->toBeFalse()
         ->and($this->h->queryIstHalbfabrikat(($this->ts)('Sojasauce')))->toBeFalse();
+});
+
+// D5 2026-08-18: »<Typ>:«-Präfix (Gel:/Creme:/Jus: …) = starke Sub-Zubereitung; Rollen-/Warenlabels NICHT.
+it('sub_zubereitungs_praefix erkennt Prep-Typen, nicht Rollen-Label', function () {
+    // Prep-Typen vor dem Doppelpunkt → Sub-Zubereitung (Symptom E: »Gel: Ginger Beer-Blutorange« wurde GP)
+    foreach (['Gel: Ginger Beer-Blutorange', 'Creme: Pommery-Senf', 'Jus: Rinderfond', 'Espuma: Kürbis', 'Öl: Basilikum'] as $name) {
+        expect($this->h->hatSubZubereitungsPraefix($name))->toBeTrue($name)
+            ->and($this->h->istSubRezeptKandidat($name))->toBeTrue($name)
+            ->and($this->h->istDirektArtikelKandidat($name))->toBeFalse($name);
+    }
+    // Rollen-/Warenlabels vor dem Doppelpunkt → KEIN Präfix-Sub (Rohware darf GP bleiben)
+    foreach (['Kresse: frisch, ganz', 'Beilage: Kartoffeln', 'Fleisch: Rinderfilet', 'Gemüse: Karotten'] as $name) {
+        expect($this->h->hatSubZubereitungsPraefix($name))->toBeFalse($name);
+    }
+});
+
+// D4 2026-08-18: Basis-Form-Tiebreak — Basisform schlägt Größen-/Schnitt-Variante bei neutralen Parametern.
+it('variant_rank bevorzugt Basisform gegen Groesse/Schnitt (neutral)', function () {
+    expect($this->h->variantRankResolved('Karotte: frisch, mini, gemischt'))
+        ->toBeLessThan($this->h->variantRankResolved('Karotte: frisch, ganz'));
+    expect($this->h->variantRankResolved('Zwiebel: frisch, geachtelt'))
+        ->toBeLessThan($this->h->variantRankResolved('Zwiebel: frisch, ganz'));
+});
+
+// D3 2026-08-18: §11.2 Nebenprodukt-Derivat-Erkennung (Mutter-Text + Form; Kerne = Anti-Pattern).
+it('nebenprodukt_derivat trennt Mutter von Form + respektiert Anti-Pattern', function () {
+    $d = $this->h->nebenproduktDerivat('Rinderabschnitte');
+    expect($d['mutter_text'])->toBe('rinder')->and($d['form'])->toBe('Abschnitte');
+    expect($this->h->nebenproduktDerivat('Gurkenschale')['mutter_text'])->toBe('gurken');
+    expect($this->h->nebenproduktDerivat('Kalb Parüren')['mutter_text'])->toBe('kalb');
+    // Anti-Pattern §11.2: Kerne sind KEINE Derivate; Saft bewusst raus (kontext-ambig); bloßer Marker ohne Mutter → kein Split.
+    expect($this->h->nebenproduktDerivat('Kürbiskerne'))->toBeNull();
+    expect($this->h->nebenproduktDerivat('Karottensaft'))->toBeNull();
+    expect($this->h->nebenproduktDerivat('Knochen'))->toBeNull();
 });
 
 // Roadmap Etappe 1: gemachte Saucen/Reduktionen als Halbfabrikat (SUB_SAUCEN_MARKER)
@@ -241,7 +279,7 @@ it('variant_rank_signals', function () {
         ->and($vr('Karotten: frisch, geschaelt', 'preserved_first'))->toBeLessThan(0)
         ->and($vr('Karotten: TK, Baby', 'preserved_first'))->toBeGreaterThan(0)
         ->and($vr('Karotten: frisch, geschaelt', 'neutral'))->toBe(0)
-        ->and($vr('Karotten: TK, Baby', 'neutral'))->toBe(0)
+        ->and($vr('Karotten: TK, Baby', 'neutral'))->toBe(-1)   // D4 2026-08-18: »Baby« (Größe) bei neutral demotet → Basisform bricht den Gleichstand
         ->and($vr('Speisesalz: jodiert', 'fresh_first'))->toBe(0);
 });
 

@@ -240,9 +240,12 @@ class RecipeGeneratorService
                 $nameHalbfabrikat = ! $direktArtikel && $this->heuristik->queryIstHalbfabrikat(
                     app(Matching\TokenEngine::class)->tokenize($text)
                 );
+                // D5 2026-08-18: »<Typ>:«-Präfix (Gel:/Creme:/Jus:/Espuma: …) = starke Sub-Zubereitung,
+                // deckt die Kurzform »Gel:«, die kein Substring-Marker trifft (Symptom E, Ginger-Beer-Gel).
+                $prefixSub = ! $direktArtikel && $this->heuristik->hatSubZubereitungsPraefix($text);
                 // STARKES Sub (§4 »jus ist die sauce« / LLM-Flag true): IMMER Basisrezept — überstimmt
                 // auch einen GP-Treffer und jede Convenience-Stufe. Marker sind praktisch nie Flachware.
-                $strongSub = ! $direktArtikel && ($nameHalbfabrikat || ($llmSub === true));
+                $strongSub = ! $direktArtikel && ($nameHalbfabrikat || $prefixSub || ($llmSub === true));
                 // Rolle komponente/beilage im VK-Gericht (T4) — jetzt Convenience-gesteuert:
                 $rolleKomponente = $vkModus && ! $direktArtikel && in_array($z['role'] ?? null, ['komponente', 'beilage'], true);
                 $istConvenienceGp = $istGpTreffer && $this->istConvenienceGp((int) ($treffer['gp_id'] ?? 0));
