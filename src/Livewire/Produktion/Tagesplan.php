@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Url;
 use Livewire\Component;
 use Platform\FoodAlchemist\Enums\ProductionLineStatus;
+use Platform\FoodAlchemist\Enums\ProductionOrderStatus;
 use Platform\FoodAlchemist\Models\FoodAlchemistProductionOrderLine;
 use Platform\FoodAlchemist\Models\FoodAlchemistProductionStation;
 use Platform\FoodAlchemist\Services\ProductionCapacityService;
@@ -41,6 +42,10 @@ class Tagesplan extends Component
     /** Gewählter Auftrag fürs Detail-Panel (3-Panel-Layout wie im Produktions-Browser). */
     #[Url(as: 'auftrag')]
     public ?int $orderId = null;
+
+    /** Gewählter Tag fürs rechte Tagesdetail-Panel. */
+    #[Url(as: 'tag')]
+    public ?string $selectedDay = null;
 
     /** Ausgabe-Modus: '' = normal (3 Panels), 'wall' = Küchen-Wandmodus (chrome-arm, groß). */
     #[Url(as: 'display')]
@@ -83,6 +88,10 @@ class Tagesplan extends Component
             $this->von = now()->toDateString();
         }
         [$this->von, $this->bis] = $this->zeitraum();
+
+        if ($this->modus === 'editor' && $this->display !== 'wall') {
+            $this->dispatch('modal.open', name: 'tagesplan-editor');
+        }
     }
 
     public function verschiebe(int $tage): void
@@ -145,6 +154,25 @@ class Tagesplan extends Component
         $this->orderId = $this->orderId === $id ? null : $id;
     }
 
+    /** Tag ins Detail-Panel wählen — zweiter Klick auf denselben Tag schließt es. */
+    public function waehleTag(?string $tag): void
+    {
+        $this->selectedDay = $this->selectedDay === $tag ? null : $tag;
+    }
+
+    /** Schließt den Fullscreen-Editor und räumt den Deep-Link zurück aufs Dashboard. */
+    public function editorSchliessen()
+    {
+        return redirect(route('foodalchemist.produktion.tagesplan', array_filter([
+            'von' => $this->von,
+            'bis' => $this->bis,
+            'tage' => $this->tage,
+            'posten' => $this->postenFilter,
+            'ansicht' => $this->ansicht,
+            'tag' => $this->selectedDay,
+        ])), navigate: true);
+    }
+
     /** Stufe 3 P3.4 — Planungs-Vorschlag über das aktuelle Fenster rechnen (schreibt nichts). */
     public function vorschlagen(ProductionPlanService $planer): void
     {
@@ -200,10 +228,67 @@ class Tagesplan extends Component
             $ziel = $zeile->line_status === ProductionLineStatus::Done
                 ? ProductionLineStatus::Open
                 : ProductionLineStatus::Done;
-            $svc->setLineStatus($team, $lineId, $ziel);
+
+            $this->zeileSetzenMitWallStart($team, $zeile, $ziel, $svc);
         } catch (\Throwable $e) {
             $this->fehler = $e->getMessage();
         }
+    }
+
+    /** Wandmonitor: eine zusammengefasste Mise-en-Place-Komponente gesammelt abhaken. */
+    public function abhakenMise(int $lineId, ProductionOrderService $svc, ProductionCapacityService $kap): void
+    {
+        $this->fehler = null;
+        try {
+            $team = Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
+            [$von, $bis] = $this->zeitraum();
+            $zeilen = $kap->tagesplanZeilen($team, $von, $bis, true);
+            $referenz = $zeilen->first(fn ($z) => (int) $z->id === $lineId);
+            if ($referenz === null) {
+                throw new \RuntimeException('Mise-en-Place-Zeile nicht im aktuellen Tagesfenster.');
+            }
+
+            $gruppe = $zeilen->filter(fn ($z) => $referenz->recipe_id !== null
+                ? (int) $z->recipe_id === (int) $referenz->recipe_id
+                : (string) $z->name === (string) $referenz->name);
+            $ziel = $gruppe->every(fn ($z) => $z->line_status === ProductionLineStatus::Done->value)
+                ? ProductionLineStatus::Open
+                : ProductionLineStatus::Done;
+
+            foreach ($gruppe as $z) {
+                if ($z->line_status === $ziel->value) {
+                    continue;
+                }
+                $this->zeileSetzenMitWallStart($team, FoodAlchemistProductionOrderLine::findOrFail($z->id), $ziel, $svc);
+            }
+        } catch (\Throwable $e) {
+            $this->fehler = $e->getMessage();
+        }
+    }
+
+    private function zeileSetzenMitWallStart($team, FoodAlchemistProductionOrderLine $zeile, ProductionLineStatus $ziel, ProductionOrderService $svc): void
+    {
+        $lineId = (int) $zeile->id;
+        if ($this->display === 'wall' && $ziel === ProductionLineStatus::Done) {
+            $order = $zeile->productionOrder;
+            $status = $order?->status instanceof ProductionOrderStatus
+                ? $order->status
+                : ($order?->status !== null ? ProductionOrderStatus::from((string) $order->status) : null);
+
+            if ($order !== null && $status === ProductionOrderStatus::Planned) {
+                $svc->setStatus($team, (int) $order->id, ProductionOrderStatus::InProgress);
+
+                $neu = FoodAlchemistProductionOrderLine::query()
+                    ->where('production_order_id', $order->id)
+                    ->when($zeile->origin === 'computed', fn ($q) => $q->where('origin', 'computed')->where('recipe_id', $zeile->recipe_id))
+                    ->when($zeile->origin !== 'computed', fn ($q) => $q->whereKey($lineId))
+                    ->first();
+
+                $lineId = (int) ($neu?->id ?? $lineId);
+            }
+        }
+
+        $svc->setLineStatus($team, $lineId, $ziel);
     }
 
     /** Wandmonitor (Spec 35): zwischen Posten-Lanes und zusammengefasster Mise-en-Place umschalten. */
@@ -230,7 +315,8 @@ class Tagesplan extends Component
         [$von, $bis] = $this->zeitraum();
 
         $auslastung = $team !== null ? $kap->auslastung($team, $von, $bis) : [];
-        $zeilen = $team !== null ? $kap->tagesplanZeilen($team, $von, $bis) : collect();
+        $istWall = $this->display === 'wall';
+        $zeilen = $team !== null ? $kap->tagesplanZeilen($team, $von, $bis, $istWall) : collect();
 
         if ($this->postenFilter !== null) {
             $zeilen = $zeilen->where('station_id', $this->postenFilter);
@@ -240,10 +326,13 @@ class Tagesplan extends Component
         }
 
         // Wandmonitor-Extras nur im Wall-Modus rechnen (Readiness zieht eine zweite, teurere Abfrage).
-        $istWall = $this->display === 'wall';
         $readiness = ($istWall && $team !== null) ? app(ProductionReadinessService::class)->findings($team, $von, $bis) : [];
         $miseEnPlace = $istWall ? $this->miseEnPlace($zeilen) : collect();
+        $wallPostenGruppen = $istWall ? $this->wallPostenGruppen($zeilen) : collect();
         $anleitung = $istWall ? $this->anleitungAufloesen($zeilen) : null;
+
+        $zeilenNachTag = $zeilen->groupBy(fn ($z) => Carbon::parse($z->plan_date)->toDateString());
+        $tagDetail = $this->tagDetail($zeilenNachTag, $auslastung, $von, $bis);
 
         return view('foodalchemist::livewire.produktion.tagesplan', [
             'modus' => $this->modus,
@@ -251,16 +340,97 @@ class Tagesplan extends Component
             'von' => $von,
             'bis' => $bis,
             'auslastung' => $auslastung,
-            'zeilenNachTag' => $zeilen->groupBy(fn ($z) => Carbon::parse($z->plan_date)->toDateString()),
+            'zeilenNachTag' => $zeilenNachTag,
             'dashboard' => $this->dashboard($zeilen, $auslastung, $von, $bis),
+            'tagDetail' => $tagDetail,
             'readiness' => $readiness,
             'miseEnPlace' => $miseEnPlace,
+            'wallPostenGruppen' => $wallPostenGruppen,
             'anleitung' => $anleitung,
             'postenListe' => $team !== null
                 ? FoodAlchemistProductionStation::visibleToTeam($team)->where('is_inactive', false)
                     ->orderBy('sort_order')->orderBy('name')->get(['id', 'name'])
                 : collect(),
-        ])->layout('platform::layouts.app');
+        ])->layout($istWall ? 'foodalchemist::layouts.kiosk' : 'platform::layouts.app');
+    }
+
+    /**
+     * Wandmonitor: Küchenlesbare Struktur statt flacher Komponentenliste.
+     * Pro Posten erst Auftrag/Gericht, darunter die abhakbaren Rezept- und Basisrezept-Zeilen.
+     *
+     * @return \Illuminate\Support\Collection<string|int, \Illuminate\Support\Collection<int, object>>
+     */
+    private function wallPostenGruppen($zeilen): \Illuminate\Support\Collection
+    {
+        return $zeilen
+            ->groupBy(fn ($z) => $z->station_id === null ? '_none' : (int) $z->station_id)
+            ->map(fn ($postenZeilen) => $postenZeilen
+                ->groupBy(fn ($z) => implode('|', [
+                    (int) ($z->order_id ?? 0),
+                    (string) ($z->gericht_label ?: ((bool) ($z->is_basisrezept ?? false) ? 'Basisrezepte ohne Gericht' : $z->name)),
+                    (string) ($z->liefertag ?? ''),
+                ]))
+                ->map(function ($gruppe) {
+                    $first = $gruppe->first();
+                    $teile = $gruppe
+                        ->sortBy(fn ($z) => [
+                            (bool) ($z->is_basisrezept ?? false) ? 1 : 0,
+                            (int) ($z->position ?? 0),
+                            (int) ($z->id ?? 0),
+                        ])
+                        ->values();
+
+                    return (object) [
+                        'auftrag' => $first->auftrag,
+                        'liefertag' => $first->liefertag,
+                        'gericht' => $first->gericht_label ?: ((bool) ($first->is_basisrezept ?? false) ? 'Basisrezepte ohne Gericht' : $first->name),
+                        'hat_gericht' => $first->gericht_label !== null,
+                        'minuten' => (int) $gruppe->sum('arbeitszeit_min'),
+                        'gesamt' => $gruppe->count(),
+                        'offen' => $gruppe->reject(fn ($z) => in_array($z->line_status, ['done', 'skipped'], true))->count(),
+                        'erledigt' => $gruppe->filter(fn ($z) => $z->line_status === 'done')->count(),
+                        'sicherheit' => [
+                            'allergene' => $gruppe->flatMap(fn ($z) => $z->sicherheit['allergene'] ?? [])->unique('key')->values(),
+                            'diaet' => $gruppe->flatMap(fn ($z) => $z->sicherheit['diaet'] ?? [])->unique()->values(),
+                            'warnungen' => $gruppe->flatMap(fn ($z) => $z->sicherheit['warnungen'] ?? [])->unique()->values(),
+                        ],
+                        'zeilen' => $teile,
+                    ];
+                })
+                ->sortBy(fn ($gruppe) => [
+                    (string) $gruppe->liefertag,
+                    (string) $gruppe->auftrag,
+                    (string) $gruppe->gericht,
+                ])
+                ->values());
+    }
+
+    private function tagDetail($zeilenNachTag, array $auslastung, string $von, string $bis): ?array
+    {
+        if ($this->selectedDay === null) {
+            return null;
+        }
+
+        try {
+            $tag = Carbon::parse($this->selectedDay)->toDateString();
+        } catch (\Throwable) {
+            return null;
+        }
+
+        if (Carbon::parse($tag)->lt(Carbon::parse($von)) || Carbon::parse($tag)->gt(Carbon::parse($bis))) {
+            return null;
+        }
+
+        $zeilen = $zeilenNachTag->get($tag, collect());
+        $buckets = collect($auslastung[$tag] ?? []);
+
+        return [
+            'tag' => $tag,
+            'zeilen' => $zeilen,
+            'posten' => $zeilen->groupBy(fn ($z) => $z->station_id === null ? '_none' : (int) $z->station_id),
+            'auslastung' => $buckets,
+            'minuten' => (int) $zeilen->sum('arbeitszeit_min'),
+        ];
     }
 
     /**
@@ -286,6 +456,12 @@ class Tagesplan extends Component
                     'stationen' => $grp->pluck('station')->filter()->unique()->values(),
                     'offen' => $grp->reject(fn ($z) => in_array($z->line_status, ['done', 'skipped'], true))->count(),
                     'gesamt' => $grp->count(),
+                    'erledigt' => $grp->filter(fn ($z) => $z->line_status === 'done')->count(),
+                    'sicherheit' => [
+                        'allergene' => $grp->flatMap(fn ($z) => $z->sicherheit['allergene'] ?? [])->unique('key')->values(),
+                        'diaet' => $grp->flatMap(fn ($z) => $z->sicherheit['diaet'] ?? [])->unique()->values(),
+                        'warnungen' => $grp->flatMap(fn ($z) => $z->sicherheit['warnungen'] ?? [])->unique()->values(),
+                    ],
                     'erste_line_id' => $first->id,
                 ];
             })
@@ -298,21 +474,19 @@ class Tagesplan extends Component
         if ($this->anleitungLineId === null) {
             return null;
         }
-        $treffer = $zeilen->firstWhere('id', $this->anleitungLineId);
+        $treffer = $zeilen->first(fn ($z) => (int) $z->id === (int) $this->anleitungLineId);
         if ($treffer === null) {
             return null;   // nicht im aktuellen (team-strikten) Fenster → nichts zeigen
         }
         $line = FoodAlchemistProductionOrderLine::find($this->anleitungLineId);
-        if ($line === null) {
-            return null;
-        }
 
         return [
             'name' => $treffer->name,
             'auftrag' => $treffer->auftrag,
-            'schritte' => $line->steps_snapshot ?? [],
-            'zubereitung' => $line->zubereitung,
-            'zutaten' => $line->zutaten ?? [],
+            'schritte' => $treffer->schritte ?? ($line?->steps_snapshot ?? []),
+            'zubereitung' => $treffer->zubereitung ?? $line?->zubereitung,
+            'zutaten' => $treffer->zutaten ?? ($line?->zutaten ?? []),
+            'sicherheit' => $treffer->sicherheit ?? ['allergene' => [], 'diaet' => [], 'warnungen' => [], 'konfidenz' => 'unknown'],
         ];
     }
 

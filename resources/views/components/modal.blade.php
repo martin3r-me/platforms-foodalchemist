@@ -93,7 +93,7 @@
                 @else
                     <h2 class="text-lg font-semibold tracking-tight text-gray-900 truncate">{{ $title }}</h2>
                 @endif
-                <button type="button" @click="{{ $closeVia ? '$wire.' . $closeVia . '()' : 'close()' }}"
+                <button type="button" @click="{{ $closeVia ? '$wire.' . $closeVia . '(); close()' : 'close()' }}"
                         class="p-1.5 rounded-md text-gray-500 hover:text-violet-600 hover:bg-black/5 transition-colors duration-150"
                         aria-label="Schließen">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
