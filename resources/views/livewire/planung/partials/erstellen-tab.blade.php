@@ -3,22 +3,8 @@
      + regler.{scope}). Der Go schaltet auf den Worker-Tab. --}}
 <div class="space-y-4">
     <x-foodalchemist::modal-section title="Eingabe — was soll entstehen">
-        {{-- Schnellstart-Vorlagen je Sektor/Anlass (Etappe 4): füllen Briefing + Kontext, statt Blank Page.
-             Nur eingeblendet, wenn es für diesen Tab Vorlagen gibt (Teil 1: nur Gericht). --}}
-        @php($vorlagen = $this->vorlagenFuer($scope))
-        @if(count($vorlagen))
-            <div class="mb-3" data-brief-vorlagen>
-                <label class="{{ $label ?? 'text-[11px] text-gray-500' }} block mb-1">Schnellstart-Vorlage (optional)</label>
-                <div class="flex flex-wrap gap-1.5">
-                    @foreach($vorlagen as $vslug => $v)
-                        <button type="button" wire:click="briefVorlage('{{ $scope }}', '{{ $vslug }}')"
-                                class="px-2.5 py-1 rounded-full border border-black/10 bg-white/5 text-[11px] text-gray-700 hover:bg-violet-500/10 transition-colors"
-                                data-brief-vorlage="{{ $vslug }}">{{ $v['label'] }}</button>
-                    @endforeach
-                </div>
-                <p class="text-[11px] text-gray-500 mt-1">Füllt Briefing und Sektor/Anlass als Startpunkt — alles frei anpassbar.</p>
-            </div>
-        @endif
+        {{-- Schnellstart-Vorlagen (geteiltes Partial — auch im Concept-Tab): füllen Brief + Kreativ-Modus + Leitplanken. --}}
+        @include('foodalchemist::livewire.planung.partials.schnellstart-chips', ['scope' => $scope])
         <label class="{{ $label ?? 'text-[11px] text-gray-500' }}">Titel</label>
         <div class="flex items-center gap-2 mb-3">
             <input type="text" wire:model="eingabe.{{ $scope }}.titel" class="{{ $input }} flex-1" placeholder="z. B. Tomatensauce" data-planung-titel />
@@ -43,6 +29,8 @@
     </x-foodalchemist::modal-section>
 
     @include('foodalchemist::livewire.planung.partials.leitplanken', ['scope' => $scope])
+
+    @include('foodalchemist::livewire.planung.partials.schnellstart-speichern', ['scope' => $scope])
 
     <x-foodalchemist::modal-section title="Go — {{ $goLabel }} erzeugen (Draft)">
         @include('foodalchemist::livewire.planung.partials.worker-praesenz')

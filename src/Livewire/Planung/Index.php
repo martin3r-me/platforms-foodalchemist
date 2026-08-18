@@ -228,6 +228,12 @@ class Index extends Component
     /** #1b Grounding-Preview: welches Wissen/Pairing/Template ein Basisrezept-Lauf ziehen würde (on-demand, ohne Generierung). */
     public ?array $wissenVorschau = null;
 
+    /** Welche Schnellstart-Vorlage je Scope aktuell geladen ist (id) — fürs Chip-Highlight. Eine manuelle Brief-Änderung hebt sie auf ({@see updated()}). */
+    public array $aktiveVorlage = [];
+
+    /** Eingabe für „Als Vorlage speichern" (Snapshot-Name), im Erstell-Tab gebunden. */
+    public string $vorlageName = '';
+
     /**
      * A: Welche Draft-Steps ihren Inline-Zutaten-Editor offen haben (step_id-Liste).
      * Kontrolliertes On-Demand-Mounten statt N eingebetteter Editoren beim Fan-out —
@@ -884,7 +890,9 @@ class Index extends Component
      */
     public function vorlagenFuer(string $scope): array
     {
-        return array_filter(self::BRIEF_VORLAGEN, fn ($v) => in_array($scope, $v['scopes'], true));
+        $team = $this->team();
+
+        return $team ? app(\Platform\FoodAlchemist\Services\BriefTemplateService::class)->fuer($team, $scope) : [];
     }
 
     /**
@@ -898,26 +906,94 @@ class Index extends Component
         if (! isset($this->eingabe[$scope]) || ! isset($this->regler[$scope])) {
             return;
         }
-        $vorlage = self::BRIEF_VORLAGEN[$key] ?? null;
-        if ($vorlage === null || ! in_array($scope, $vorlage['scopes'], true)) {
+        $team = $this->team();
+        $tpl = $team ? app(\Platform\FoodAlchemist\Services\BriefTemplateService::class)->lade($team, (int) $key, $scope) : null;
+        if ($tpl === null) {
             $this->fehler = 'Unbekannte oder für diesen Tab ungültige Vorlage.';
 
             return;
         }
-        $this->eingabe[$scope]['brief'] = $vorlage['brief'];
-        if (trim((string) ($this->eingabe[$scope]['titel'] ?? '')) === '' && ($vorlage['titel'] ?? '') !== '') {
-            $this->eingabe[$scope]['titel'] = $vorlage['titel'];
+        $payload = is_array($tpl->payload) ? $tpl->payload : [];
+        $this->eingabe[$scope]['brief'] = (string) $tpl->brief;
+        if (trim((string) ($this->eingabe[$scope]['titel'] ?? '')) === '' && trim((string) $tpl->titel) !== '') {
+            $this->eingabe[$scope]['titel'] = (string) $tpl->titel;
         }
-        // Sektor/Anlass/Serviceform als Vorschlag — nur Keys, die der Regler-Satz führt (Basisrezept
-        // strippt occasion/serviceform ohnehin am Go; Guard hält es sauber, falls Vorlagen später
-        // auch dort erscheinen).
-        foreach (['sektor', 'occasion', 'serviceform'] as $feld) {
-            if (($vorlage[$feld] ?? '') !== '' && array_key_exists($feld, $this->regler[$scope])) {
-                $this->regler[$scope][$feld] = $vorlage[$feld];
+        if (! empty($payload['creative_mode']) && array_key_exists('creative_mode', $this->eingabe[$scope])) {
+            $this->eingabe[$scope]['creative_mode'] = (string) $payload['creative_mode'];
+        }
+        // Leitplanken-Snapshot anwenden — NUR Keys, die der Ziel-Regler-Satz dieses Scopes führt
+        // (kein Fremd-Key-Erbe; z. B. VK-/Menü-Achsen eines Gericht-Snapshots landen nicht im Basisrezept).
+        foreach (($payload['regler'] ?? []) as $feld => $wert) {
+            if (array_key_exists($feld, $this->regler[$scope])) {
+                $this->regler[$scope][$feld] = $wert;
             }
         }
+        $this->aktiveVorlage[$scope] = (string) $key;   // Chip-Highlight: sichtbar, WELCHE Vorlage geladen wurde
         $this->fehler = null;
-        $this->meldung = 'Vorlage „'.$vorlage['label'].'" geladen — Briefing und Kontext vorbefüllt, bitte prüfen und anpassen.';
+        $this->meldung = 'Vorlage „'.$tpl->label.'" geladen — Briefing, Kreativ-Modus und Leitplanken gesetzt, bitte prüfen und anpassen.';
+    }
+
+    /**
+     * Eine MANUELLE Brief-Änderung hebt die Schnellstart-Markierung des Scopes auf — die Vorlage war
+     * nur Startpunkt, ab hier ist es ein eigenes Briefing (ein stehender Chip-Highlight wäre irreführend).
+     * Feuert NICHT beim programmatischen Setzen in {@see briefVorlage()} (nur client-originierte Updates).
+     */
+    public function updated(string $name): void
+    {
+        if (preg_match('#^eingabe\.([^.]+)\.brief$#', $name, $m)) {
+            unset($this->aktiveVorlage[$m[1]]);
+        }
+    }
+
+    /**
+     * „Als Vorlage speichern": nimmt den AKTUELLEN Tab-Stand (Brief + Kreativ-Modus + kompletter
+     * Leitplanken-Satz) als benannte, team-eigene Schnellstart-Vorlage auf — genau dort, wo die Regler
+     * schon eingestellt sind (kein nachgebautes Formular). Erscheint danach als Chip auf DIESEM Scope.
+     */
+    public function alsVorlageSpeichern(string $scope): void
+    {
+        $team = $this->team();
+        if ($team === null || ! isset($this->eingabe[$scope]) || ! isset($this->regler[$scope])) {
+            return;
+        }
+        try {
+            $tpl = app(\Platform\FoodAlchemist\Services\BriefTemplateService::class)->speichere(
+                $team, $scope, $this->vorlageName, (string) ($this->eingabe[$scope]['brief'] ?? ''),
+                $this->regler[$scope],
+                $this->eingabe[$scope]['titel'] ?? null,
+                $this->eingabe[$scope]['creative_mode'] ?? null,
+                Auth::id(),
+            );
+        } catch (\RuntimeException $e) {
+            $this->fehler = $e->getMessage();
+
+            return;
+        }
+        $this->vorlageName = '';
+        $this->aktiveVorlage[$scope] = (string) $tpl->id;   // die gerade gespeicherte ist aktiv markiert
+        $this->fehler = null;
+        $this->meldung = 'Vorlage „'.$tpl->label.'" gespeichert — steht ab jetzt als Schnellstart bereit.';
+    }
+
+    /** Eine team-EIGENE Vorlage löschen (Globals sind read-only → Service wirft). Inline aus dem Chip. */
+    public function loeschenVorlage(string $scope, int $id): void
+    {
+        $team = $this->team();
+        if ($team === null) {
+            return;
+        }
+        try {
+            app(\Platform\FoodAlchemist\Services\BriefTemplateService::class)->loeschen($team, $id);
+        } catch (\RuntimeException $e) {
+            $this->fehler = $e->getMessage();
+
+            return;
+        }
+        if (($this->aktiveVorlage[$scope] ?? null) === (string) $id) {
+            unset($this->aktiveVorlage[$scope]);
+        }
+        $this->fehler = null;
+        $this->meldung = 'Vorlage gelöscht.';
     }
 
     /**

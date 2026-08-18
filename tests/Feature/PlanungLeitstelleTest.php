@@ -6,6 +6,7 @@ use Platform\Core\Contracts\LLMProviderContract;
 use Platform\FoodAlchemist\Jobs\GenerateConceptJob;
 use Platform\FoodAlchemist\Jobs\GenerateRecipeJob;
 use Platform\FoodAlchemist\Livewire\Planung\Index as PlanungIndex;
+use Platform\FoodAlchemist\Models\FoodAlchemistBriefTemplate;
 use Platform\FoodAlchemist\Models\FoodAlchemistCascadeRun;
 use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
 use Platform\FoodAlchemist\Models\FoodAlchemistCascadeRunStep;
@@ -1176,29 +1177,29 @@ it('skizzenAuswahlLeeren: hebt die gezielte Auswahl auf', function () {
 
 // ── Brief-Vorlagen je Sektor/Anlass (Etappe 4 — Schnellstart statt Blank Page) ──
 
-it('briefVorlage: füllt Briefing + Sektor/Anlass/Serviceform in den Gericht-Tab, Titel nur wenn leer', function () {
+it('briefVorlage: füllt Briefing + Sektor/Anlass/Serviceform in den Gericht-Tab (aus DB-Vorlage)', function () {
     $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Event']);
-
-    $vorlage = PlanungIndex::BRIEF_VORLAGEN['catering_empfang_flying'];
+    $tpl = FoodAlchemistBriefTemplate::whereNull('team_id')->where('slug', 'catering_empfang_flying')->firstOrFail();
 
     Livewire::test(PlanungIndex::class)
         ->call('oeffne', $session->id)
-        ->call('briefVorlage', 'gericht', 'catering_empfang_flying')
-        ->assertSet('eingabe.gericht.brief', $vorlage['brief'])
-        ->assertSet('eingabe.gericht.titel', $vorlage['titel'])   // war leer → Vorlagen-Titel (hier '')
+        ->call('briefVorlage', 'gericht', (string) $tpl->id)
+        ->assertSet('eingabe.gericht.brief', $tpl->brief)
         ->assertSet('regler.gericht.sektor', 'catering')
         ->assertSet('regler.gericht.occasion', 'empfang')
         ->assertSet('regler.gericht.serviceform', 'flying')
+        ->assertSet('aktiveVorlage.gericht', (string) $tpl->id)
         ->assertSet('fehler', null);
 });
 
 it('briefVorlage: überschreibt einen bereits getippten Titel NICHT', function () {
     $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Event']);
+    $tpl = FoodAlchemistBriefTemplate::whereNull('team_id')->where('slug', 'catering_galadinner')->firstOrFail();
 
     Livewire::test(PlanungIndex::class)
         ->call('oeffne', $session->id)
         ->set('eingabe.gericht.titel', 'Mein Amuse')
-        ->call('briefVorlage', 'gericht', 'catering_galadinner')
+        ->call('briefVorlage', 'gericht', (string) $tpl->id)
         ->assertSet('eingabe.gericht.titel', 'Mein Amuse')       // getippter Titel bleibt
         ->assertSet('regler.gericht.sektor', 'catering');        // Kontext wird trotzdem gesetzt
 });
@@ -1218,16 +1219,18 @@ it('briefVorlage: unbekannter Key oder falscher Scope → fehler, keine Änderun
         ->assertSet('eingabe.gericht.brief', '');
 });
 
-it('vorlagenFuer: Gericht hat Vorlagen, Basisrezept (rezept) hat in Teil 1 keine', function () {
+it('vorlagenFuer: Gericht hat die kuratierten Globals, Basisrezept (rezept) ohne eigene keine', function () {
     $comp = Livewire::test(PlanungIndex::class);
     $inst = $comp->instance();
 
-    expect($inst->vorlagenFuer('gericht'))->not->toBeEmpty();
-    expect($inst->vorlagenFuer('rezept'))->toBe([]);
-    // jede Vorlage nutzt nur reale Leitplanken-Enums (keine erfundenen Sektoren/Anlässe)
+    $gericht = $inst->vorlagenFuer('gericht');
+    expect($gericht)->toHaveCount(6);                    // die 6 geseedeten Globals
+    expect($inst->vorlagenFuer('rezept'))->toBe([]);     // kein Global auf Basisrezept (bis Kunde selbst anlegt)
+    // jede Vorlage ist global + nutzt nur reale Leitplanken-Enums (Sektor kommt aus dem Regler-Snapshot)
     $sektoren = ['betriebsgastronomie', 'catering', 'restaurant', 'care', 'schule_kita'];
-    foreach ($inst->vorlagenFuer('gericht') as $v) {
-        expect($sektoren)->toContain($v['sektor']);
+    foreach ($gericht as $v) {
+        expect($v['is_global'])->toBeTrue()
+            ->and($sektoren)->toContain($v['regler']['sektor']);
     }
 });
 

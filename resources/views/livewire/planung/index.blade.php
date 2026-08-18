@@ -442,6 +442,7 @@
                  (Pakete/Buffet) nach den Leitplanken; braucht Gerichte → kaskadiert nach unten. --}}
             <div wire:key="planung-tab-concept" x-show="tab==='concept'" class="space-y-4">
                 <x-foodalchemist::modal-section title="Briefing — was für ein Menü / Concept">
+                    @include('foodalchemist::livewire.planung.partials.schnellstart-chips', ['scope' => 'concept'])
                     <label class="{{ $label ?? 'text-[11px] text-gray-500' }}">Titel (optional)</label>
                     <input type="text" wire:model="eingabe.concept.titel" class="{{ $input }} mb-3" placeholder="z. B. CHEFS.CORNER — Sommer-Menü" data-planung-titel />
                     <label class="{{ $label ?? 'text-[11px] text-gray-500' }}">Briefing (geht in die Erzeugung)</label>
@@ -469,6 +470,8 @@
                 </x-foodalchemist::modal-section>
 
                 @include('foodalchemist::livewire.planung.partials.leitplanken', ['scope' => 'concept'])
+
+                @include('foodalchemist::livewire.planung.partials.schnellstart-speichern', ['scope' => 'concept'])
 
                 <x-foodalchemist::modal-section title="Go — Concept erzeugen (Draft)">
                     @include('foodalchemist::livewire.planung.partials.worker-praesenz')
