@@ -60,13 +60,12 @@ class Browser extends Component
         'posten' => ['Posten', ''],
         'datum' => ['Datum', ''],
         'status' => ['Status', ''],
-        'einkauf' => ['Einkauf', ''],
+        'bedarf' => ['Bedarf', ''],
     ];
 
     public const ANSICHTEN = [
-        'standard' => ['Standard', ['ziele', 'ansaetze', 'datum', 'status', 'einkauf']],
+        'standard' => ['Standard', ['ziele', 'ansaetze', 'datum', 'status', 'bedarf']],
         'kueche' => ['Küche', ['ansaetze', 'portionen', 'zeit', 'posten', 'datum', 'status']],
-        'einkauf' => ['Einkauf', ['ziele', 'datum', 'status', 'einkauf']],
     ];
 
     /** Zeitraum-Presets — häufiger gebraucht als zwei getippte Daten. */
@@ -194,7 +193,11 @@ class Browser extends Component
 
         return view('foodalchemist::livewire.produktion.browser', [
             'auftraege' => $auftraege,
-            'indikatoren' => $svc->einkaufsIndikatoren($team, $auftraege->getCollection()->pluck('id')->all()),
+            'indikatoren' => $auftraege->getCollection()->mapWithKeys(fn ($order) => [
+                (int) $order->id => $order->procurement_released_at === null
+                    ? 'entwurf'
+                    : ($svc->materialbedarfVeraltet($order) ? 'geaendert' : 'freigegeben'),
+            ])->all(),
             'statusFaelle' => ProductionOrderStatus::cases(),
             'statusCounts' => $svc->statusCounts($team, $filters),
             'gesamtCount' => $svc->browserGesamt($team, $filters),

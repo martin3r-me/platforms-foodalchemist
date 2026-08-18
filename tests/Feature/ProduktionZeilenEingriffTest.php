@@ -239,12 +239,12 @@ it('der Puffer skaliert den Override NICHT — ein Override ist absolut, kein Fa
 
 it('der Override propagiert NICHT in den Einkauf — er ist Küchen-Korrektur, kein Bedarfs-Eingriff', function () {
     $order = ($this->auftrag)();
-    $vorher = $this->svc->dokument($this->rootTeam, $order->id, true)['einkauf'];
+    $vorher = $this->svc->materialbedarfFreigeben($this->rootTeam, $order->id)->procurement_targets_snapshot;
 
     $this->svc->setLineAnsaetze($this->rootTeam, ($this->zeile)($order, $this->sauce->id)->id, 99.0);
 
-    $nachher = $this->svc->dokument($this->rootTeam, $order->id, true)['einkauf'];
-    expect($nachher['ek_gesamt'])->toBe($vorher['ek_gesamt']);
+    $nachher = $order->fresh()->procurement_targets_snapshot;
+    expect($nachher)->toBe($vorher);
 });
 
 // ── Streichen ──────────────────────────────────────────────────────────────
@@ -264,7 +264,7 @@ it('gestrichene Zeilen bleiben im Panel, fallen aber aus Summen und Druck', func
     // …aber nicht gezählt und nicht gedruckt
     $summeOhne = collect($detail['zeilen'])->reject(fn ($z) => $z['ist_gestrichen'])->sum('ansaetze');
     expect($detail['ansaetze_gesamt'])->toBe((float) $summeOhne)
-        ->and(collect($this->svc->dokument($this->rootTeam, $order->id, false)['zeilen'])->pluck('name'))
+        ->and(collect($this->svc->dokument($this->rootTeam, $order->id)['zeilen'])->pluck('name'))
         ->not->toContain('Vanillesauce');
 });
 

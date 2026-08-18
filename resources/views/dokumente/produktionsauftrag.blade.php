@@ -8,14 +8,11 @@
         'bilder' => $mitFotos ?? true,
         'darreichung' => true,
         'notizen' => true,
-        'einkauf' => ($dok['einkauf'] ?? null) !== null,
         'posten' => '',
     ];
     $profile = [
         'kurz' => 'Kurzblatt',
         'produktion' => 'Produktion',
-        'einkauf' => 'Einkauf',
-        'voll' => 'Komplett',
     ];
     $filter = [
         'rezepte' => 'Rezepte',
@@ -24,7 +21,6 @@
         'bilder' => 'Bilder',
         'darreichung' => 'Darreichung',
         'notizen' => 'Notizen',
-        'einkauf' => 'Einkauf',
     ];
     $profilReset = array_merge(array_fill_keys(array_keys($filter), null), ['posten' => null]);
     $posten = collect($dok['zeilen'])
@@ -165,40 +161,7 @@
     @endforelse
     @endif
 
-    {{-- Einkauf/Bestellvorschlag — interne Ops-Sektion (Lieferant, Gebinde, EK). Wie der
-         alte Planungsblatt-Bundle, jetzt im gebündelten Produktionsschein. --}}
-    @if(($opt['einkauf'] ?? false) && ($dok['einkauf'] ?? null) !== null)
-        <div class="einkauf-head">
-            <h1 style="font-size:16px;margin:0 0 4px">Einkauf / Bestellvorschlag</h1>
-            <div class="muted">GP-Bedarf nach Lieferant, in ganzen Gebinden · interne Ops-Angabe (EK netto)</div>
-        </div>
-
-        @foreach($dok['einkauf']['lieferanten'] as $g)
-            <div class="lieferant">
-                <h2>{{ $g['lieferant'] }}
-                    <span class="right-sum">{{ number_format($g['ek_summe'], 2, ',', '.') }} €@unless($g['ek_vollstaendig']) <span class="muted">(EK unvollst.)</span>@endunless</span>
-                </h2>
-                <table class="einkauf-tbl">
-                    <thead><tr><th>Artikel</th><th class="right">Bestellen</th><th class="right">Bedarf</th><th class="right">EK</th></tr></thead>
-                    <tbody>
-                        @foreach($g['positionen'] as $p)
-                            @php($geb = $p['gebinde'])
-                            <tr>
-                                <td>{{ $p['gp'] }}@if($p['lead_artikel'])<br><span class="muted">@if($geb['article_number']){{ $geb['article_number'] }} · @endif{{ $p['lead_artikel'] }}</span>@endif</td>
-                                <td class="right">@if($geb['berechenbar']){{ $geb['qty_packs'] }}× {{ rtrim(rtrim(number_format($geb['pack_qty'], 3, ',', '.'), '0'), ',') }} {{ $geb['pack_unit_code'] }}@if($geb['packaging_unit']) {{ $geb['packaging_unit'] }}@endif @else<span class="muted">{{ $geb['grund'] }}</span>@endif</td>
-                                <td class="right muted">{{ rtrim(rtrim(number_format($p['menge_kg'], 3, ',', '.'), '0'), ',') }} kg</td>
-                                <td class="right">{{ $p['ek_bekannt'] ? number_format($p['bestell_ek_eur'], 2, ',', '.') . ' €' : '—' }}</td>
-                            </tr>
-                        @endforeach
-                    </tbody>
-                </table>
-            </div>
-        @endforeach
-
-        <div class="grand">Wareneinsatz gesamt: {{ number_format($dok['einkauf']['ek_gesamt'], 2, ',', '.') }} € <span class="muted" style="font-weight:normal;font-size:11px">(netto)</span></div>
-    @endif
-
-    <div class="foot">Food Alchemist · {{ ($opt['einkauf'] ?? false) && ($dok['einkauf'] ?? null) !== null ? 'Produktionsschein + Einkauf (intern)' : 'Produktionsschein' }} · {{ $dok['id'] }}</div>
+    <div class="foot">Food Alchemist · Produktionsschein · {{ $dok['id'] }}</div>
 </div>
 </body>
 </html>

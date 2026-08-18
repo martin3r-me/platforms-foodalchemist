@@ -60,6 +60,20 @@ class Index extends Component
     #[Url(as: 'sicht')]
     public string $sicht = 'bestellungen';
 
+    public ?int $selectedRoundId = null;
+
+    public ?int $selectedOrderId = null;
+
+    /** @var list<int|string> */
+    public array $selectedDemandIds = [];
+
+    /** @var list<int|string> */
+    public array $selectedOrderIds = [];
+
+    public ?array $batchPreview = null;
+
+    public ?array $batchResult = null;
+
     #[Url(as: 'klaer')]
     public bool $nurMitKlaerung = false;
 
@@ -76,14 +90,17 @@ class Index extends Component
     public function mount(): void
     {
         if ($this->openId !== null) {
-            $this->dispatch('orders-editor.bearbeiten', id: $this->openId);
+            $this->selectedOrderId = $this->openId;
+        }
+        if ($this->productionFilter !== null) {
+            $this->sicht = 'bedarfe';
         }
     }
 
-    /** Zeilen-Klick → Editor für diese Bestellung öffnen. */
+    /** Zeilen-Klick → Bestellung in der rechten Detailspalte auswählen. */
     public function oeffnen(int $id): void
     {
-        $this->dispatch('orders-editor.bearbeiten', id: $id);
+        $this->selectedOrderId = $id;
     }
 
     /** Zeitraum-Preset togglen und das von/bis-Fenster daraus setzen. */
@@ -128,15 +145,130 @@ class Index extends Component
     {
         $this->hinweis = null;
         $this->fehler = null;
-        $this->dispatch('orders-editor.neu', deliveryDate: $this->neuerLiefertag ?: null, strategy: $this->neueStrategie ?: null);
+        $this->dispatch('orders-editor.neu', deliveryDate: $this->neuerLiefertag ?: null, strategy: $this->neueStrategie ?: null)->to(Editor::class);
         $this->neuerLiefertag = null;
+    }
+
+    public function bedarfPlanen(int $productionId): void
+    {
+        $this->dispatch('orders-editor.production', id: $productionId)->to(Editor::class);
+    }
+
+    public function ausgewaehlteBedarfePlanen(): void
+    {
+        $ids = array_values(array_unique(array_filter(array_map('intval', $this->selectedDemandIds))));
+        if ($ids === []) {
+            return;
+        }
+
+        $this->dispatch('orders-editor.productions', ids: $ids);
+    }
+
+    public function rundeWaehlen(int $roundId): void
+    {
+        $this->selectedRoundId = $roundId;
+    }
+
+    public function rundeBearbeiten(): void
+    {
+        if ($this->selectedRoundId === null) {
+            return;
+        }
+
+        $this->dispatch('orders-editor.round', id: $this->selectedRoundId)->to(Editor::class);
+    }
+
+    public function rundeVersenden(OrderService $orders): void
+    {
+        if ($this->selectedRoundId === null) {
+            return;
+        }
+        try {
+            $team = Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
+            $detail = $orders->sendRound($team, $this->selectedRoundId);
+            $this->hinweis = $detail['draft_count'] === 0 ? 'Bestellrunde versendet.' : 'Bestellrunde aktualisiert.';
+            $this->fehler = null;
+        } catch (\Throwable $e) {
+            $this->fehler = $e->getMessage();
+        }
+    }
+
+    public function versandfaehigeAusloesen(OrderService $orders): void
+    {
+        try {
+            $team = Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
+            $result = $orders->sendReadyDrafts($team);
+            $this->hinweis = $result['sent'].' Bestellung(en) ausgelöst.'
+                .($result['blocked'] > 0 ? ' '.$result['blocked'].' Beleg(e) bleiben zur Klärung offen.' : '');
+            $this->fehler = null;
+        } catch (\Throwable $e) {
+            $this->fehler = $e->getMessage();
+        }
+    }
+
+    public function alleVersandfaehigenWaehlen(OrderService $orders): void
+    {
+        $team = Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
+        $this->selectedOrderIds = $orders->readyDraftIds($team);
+        $this->batchPreview = null;
+        $this->batchResult = null;
+    }
+
+    public function auswahlLeeren(): void
+    {
+        $this->selectedOrderIds = [];
+        $this->batchPreview = null;
+        $this->batchResult = null;
+    }
+
+    public function updatedSelectedOrderIds(): void
+    {
+        $this->batchPreview = null;
+        $this->batchResult = null;
+    }
+
+    public function sammelversandPruefen(OrderService $orders): void
+    {
+        $team = Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
+        $this->batchPreview = $orders->selectedDraftPreview($team, $this->selectedOrderIds);
+        $this->batchResult = null;
+        $this->dispatch('modal.open', name: 'orders-batch');
+    }
+
+    public function auswahlAusloesen(OrderService $orders): void
+    {
+        try {
+            $team = Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
+            $this->batchResult = $orders->sendSelectedDrafts($team, $this->selectedOrderIds);
+            $this->hinweis = $this->batchResult['sent'].' Bestellung(en) ausgelöst.';
+            $this->fehler = null;
+            $this->selectedOrderIds = [];
+        } catch (\Throwable $e) {
+            $this->fehler = $e->getMessage();
+        }
+    }
+
+    public function auswahlStornieren(OrderService $orders): void
+    {
+        try {
+            $team = Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
+            $result = $orders->cancelSelectedDrafts($team, $this->selectedOrderIds);
+            $this->hinweis = $result['cancelled'].' Entwurf/Entwürfe storniert.';
+            $this->fehler = null;
+            $this->selectedOrderIds = [];
+            $this->batchPreview = null;
+            $this->batchResult = null;
+            $this->dispatch('modal.close', name: 'orders-batch');
+        } catch (\Throwable $e) {
+            $this->fehler = $e->getMessage();
+        }
     }
 
     public function leereEntwuerfeLoeschen(OrderService $orders): void
     {
         $team = Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
         $count = $orders->deleteEmptyDrafts($team);
-        $this->hinweis = $count === 1 ? '1 leerer Entwurf gelöscht.' : $count . ' leere Entwürfe gelöscht.';
+        $this->hinweis = $count === 1 ? '1 leerer Entwurf gelöscht.' : $count.' leere Entwürfe gelöscht.';
         $this->fehler = null;
     }
 
@@ -217,8 +349,8 @@ class Index extends Component
                     ]))
                     ->implode(' ');
                 $hay = mb_strtolower(implode(' ', [
-                    'ord-' . (int) $o->id,
-                    '#' . (int) $o->id,
+                    'ord-'.(int) $o->id,
+                    '#'.(int) $o->id,
                     $o->supplier?->name ?? '',
                     $o->reference ?? '',
                     $o->supplier_order_number ?? '',
@@ -245,7 +377,7 @@ class Index extends Component
 
                 return [
                     'id' => (int) $o->id,
-                    'order_label' => 'ord-' . (int) $o->id,
+                    'order_label' => 'ord-'.(int) $o->id,
                     'supplier_order_number' => $o->supplier_order_number,
                     'invoice_number' => $o->invoice_number,
                     'invoice_date' => $o->invoice_date?->toDateString(),
@@ -304,6 +436,16 @@ class Index extends Component
                 'warnings' => $items->flatMap(fn ($o) => $o['warnings'])->unique()->values()->all(),
             ])->sortBy('supplier')->values();
 
+        $runden = $orders->roundsForTeam($team);
+        $selectedRound = $this->selectedRoundId !== null
+            ? $runden->firstWhere('id', $this->selectedRoundId)
+            : null;
+        $bedarfe = $orders->productionDemandsForTeam($team)
+            ->when($this->von, fn ($items) => $items->filter(fn ($bedarf) => ($bedarf['production_date'] ?? '') >= $this->von))
+            ->when($this->bis, fn ($items) => $items->filter(fn ($bedarf) => ($bedarf['production_date'] ?? '9999-12-31') <= $this->bis))
+            ->when($suche !== '', fn ($items) => $items->filter(fn ($bedarf) => str_contains(mb_strtolower((string) $bedarf['name']), $suche)))
+            ->values();
+
         return view('foodalchemist::livewire.orders.index', [
             'liste' => $liste,
             'gruppen' => $gruppen,
@@ -315,6 +457,9 @@ class Index extends Component
             'statusFaelle' => OrderStatus::cases(),
             'strategieOptionen' => LeadLaStrategie::cases(),
             'kpis' => $kpis,
+            'runden' => $runden,
+            'selectedRound' => $selectedRound,
+            'bedarfe' => $bedarfe,
         ])->layout('platform::layouts.app');
     }
 }

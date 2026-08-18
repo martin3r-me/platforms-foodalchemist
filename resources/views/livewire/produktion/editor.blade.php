@@ -25,7 +25,7 @@
     </x-slot:kpiHeader>
 
     <x-foodalchemist::editor-tabs marker="produktion" wire-key="produktion-tabs-{{ $orderId ?? 'neu' }}" :init="'stammdaten'"
-        :tabs="['stammdaten' => 'Stammdaten', 'ziele' => 'Ziele', 'vorschau' => 'Vorschau', 'zeilen' => $orderId ? 'Zeilen' : null, 'einkauf' => $orderId ? 'Einkauf & Status' : null]">
+        :tabs="['stammdaten' => 'Stammdaten', 'ziele' => 'Ziele', 'vorschau' => 'Vorschau', 'zeilen' => $orderId ? 'Zeilen' : null, 'einkauf' => $orderId ? 'Bedarf & Status' : null]">
 
     @include('foodalchemist::livewire.produktion.partials.editor-stammdaten')
 

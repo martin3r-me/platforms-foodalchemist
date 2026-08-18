@@ -137,7 +137,7 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @php($einkaufPill = ['keine' => ['—', $variantPill['secondary'] ?? ''], 'offen' => ['offen', $variantPill['warning'] ?? ''], 'versendet' => ['versendet', $variantPill['success'] ?? '']])
+                        @php($bedarfPill = ['entwurf' => ['Entwurf', $variantPill['secondary'] ?? ''], 'freigegeben' => ['freigegeben', $variantPill['success'] ?? ''], 'geaendert' => ['geändert', $variantPill['warning'] ?? '']])
                         @forelse($auftraege as $a)
                             @php($aktiv = $a->lines->reject(fn ($l) => (bool) $l->is_struck))
                             @php($ziele = collect($a->targets ?? [])->pluck('label')->filter()->values())
@@ -174,9 +174,9 @@
                                         <td class="{{ $td }} whitespace-nowrap tabular-nums">{{ $a->production_date?->format('d.m.Y') }}</td>
                                     @elseif($sp === 'status')
                                         <td class="{{ $td }} whitespace-nowrap"><span class="{{ $pill }} font-medium {{ $variantPill[$a->status->badgeVariant()] ?? $variantPill['secondary'] }}">{{ $a->status->label() }}</span></td>
-                                    @elseif($sp === 'einkauf')
-                                        @php($ind = $einkaufPill[$indikatoren[$a->id] ?? 'keine'] ?? $einkaufPill['keine'])
-                                        <td class="{{ $td }} whitespace-nowrap"><span class="{{ $pill }} font-medium {{ $ind[1] }}" data-einkauf-indikator="{{ $indikatoren[$a->id] ?? 'keine' }}">{{ $ind[0] }}</span></td>
+                                    @elseif($sp === 'bedarf')
+                                        @php($ind = $bedarfPill[$indikatoren[$a->id] ?? 'entwurf'] ?? $bedarfPill['entwurf'])
+                                        <td class="{{ $td }} whitespace-nowrap"><span class="{{ $pill }} font-medium {{ $ind[1] }}" data-materialbedarf-indikator="{{ $indikatoren[$a->id] ?? 'entwurf' }}">{{ $ind[0] }}</span></td>
                                     @endif
                                 @endforeach
                             </x-foodalchemist::table-row>

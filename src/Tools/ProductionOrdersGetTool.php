@@ -26,8 +26,8 @@ class ProductionOrdersGetTool extends FoodAlchemistTool implements ToolContract,
         return 'Produktionsaufträge des Teams. Ohne order_id: Liste (offene/geplante zuerst; optional '
             . 'status=planned|in_progress|done|cancelled). Mit order_id: Detail mit Rezept-/Ansätze-Zeilen '
             . '(Ansätze, Portionen, Arbeitszeit, Zubereitung, Darreichung), Zielen und Kennzahlen sowie den '
-            . 'daraus entstandenen verknüpften Bestellschienen (verknuepfte_orders) inkl. Stale-Marker '
-            . '(einkauf_veraltet=true wenn Ziele seit der letzten Übergabe geändert wurden). Read-only.';
+            . 'Freigabestatus des Materialbedarfs (procurement_released_at/procurement_stale) und bereits '
+            . 'im Bestellwesen verknüpften Bestellschienen. Read-only.';
     }
 
     public function getSchema(): array

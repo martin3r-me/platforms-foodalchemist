@@ -485,7 +485,7 @@ Route::get('/produktion/auftraege/{order}/dokument', function (int $order, \Plat
     $team = \Illuminate\Support\Facades\Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
     $optionen = $svc->dokumentOptionen(request()->query());
     try {
-        $dok = $svc->dokument($team, $order, $optionen['einkauf']);
+        $dok = $svc->dokument($team, $order);
     } catch (\Throwable $e) {
         abort(404);
     }
@@ -533,6 +533,31 @@ Route::get('/produktion/auftraege/{order}/dokument', function (int $order, \Plat
 // Spec 17/S2 — Bestellungen (mini-WaWi Bestellschienen, N-Track)
 Route::get('/bestellungen', \Platform\FoodAlchemist\Livewire\Orders\Index::class)
     ->name('foodalchemist.orders.index');
+
+// Gebündeltes Versandprotokoll für eine bewusst ausgewählte Belegmenge.
+Route::get('/bestellungen/versandprotokoll', function (\Platform\FoodAlchemist\Services\OrderService $svc) {
+    $team = \Illuminate\Support\Facades\Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
+    $ids = collect(explode(',', (string) request('ids')))
+        ->map(fn ($id) => (int) $id)->filter()->unique()->take(100)->values();
+    $dokumente = $ids->map(function (int $id) use ($svc, $team) {
+        try {
+            return $svc->dokument($team, $id);
+        } catch (\Throwable) {
+            return null;
+        }
+    })->filter()->values();
+    abort_if($dokumente->isEmpty(), 404);
+
+    $data = ['dokumente' => $dokumente, 'istPdf' => false, 'erstelltAm' => now()->format('d.m.Y H:i')];
+    if (request()->boolean('pdf')) {
+        abort_unless(class_exists(\Barryvdh\DomPDF\Facade\Pdf::class), 500, 'PDF-Export nicht verfügbar.');
+
+        return \Barryvdh\DomPDF\Facade\Pdf::loadView('foodalchemist::dokumente.bestelllauf', $data + ['istPdf' => true])
+            ->download('Versandprotokoll-' . now()->format('Ymd-Hi') . '.pdf');
+    }
+
+    return view('foodalchemist::dokumente.bestelllauf', $data);
+})->name('foodalchemist.orders.versandprotokoll');
 
 // Spec 17/S3 — Bestell-Dokument: Druck-HTML | ?pdf=1 (DomPDF) | ?csv=1 (Download).
 Route::get('/bestellungen/{order}/dokument', function (int $order, \Platform\FoodAlchemist\Services\OrderService $svc) {

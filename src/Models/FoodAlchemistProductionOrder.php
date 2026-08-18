@@ -35,6 +35,8 @@ class FoodAlchemistProductionOrder extends Model
         'finished_at' => 'datetime',
         'cancelled_at' => 'datetime',
         'last_handover_at' => 'datetime',
+        'procurement_released_at' => 'datetime',
+        'procurement_targets_snapshot' => 'array',
     ];
 
     public function lines(): HasMany
