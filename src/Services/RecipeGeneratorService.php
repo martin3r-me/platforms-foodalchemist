@@ -5,6 +5,7 @@ namespace Platform\FoodAlchemist\Services;
 use Illuminate\Support\Facades\DB;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Enums\MatchBand;
+use Platform\FoodAlchemist\Models\FoodAlchemistGp;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Models\FoodAlchemistVocabEinheit;
 use Platform\FoodAlchemist\Services\Ai\AiGatewayService;
@@ -70,9 +71,13 @@ class RecipeGeneratorService
             // M6-07 / V-04 (Audit-Hebel 3): Reuse-at-Generation — lexikalischer
             // Prefetch des Bestands VOR der Benennung; die KI soll vorhandene
             // Basisrezepte EXAKT so benennen (billiger als Nach-Matching).
-            $inventar = $this->bestandsInventar($team, $description);
-            if ($inventar !== []) {
-                $kontext['bestands_inventar'] = $inventar;
+            // Reuse-Achse (L1): »komplett_neu« (Kreativ-Modus = Voll kreativ) ignoriert den Bestand
+            // bewusst → der Benennungs-Nudge entfällt, damit nicht doch auf Bestand geschielt wird.
+            if (($parameter['bestand'] ?? 'hybrid') !== 'komplett_neu') {
+                $inventar = $this->bestandsInventar($team, $description);
+                if ($inventar !== []) {
+                    $kontext['bestands_inventar'] = $inventar;
+                }
             }
             if ($vkModus) {
                 // M6-06: VK-Achsen + Taxonomie-Vorrat für Klasse/AK-Vorschlag
@@ -112,13 +117,23 @@ class RecipeGeneratorService
             'konserve' => 'preserved_first',
             default => 'fresh_first',
         };
-        $bio = ($parameter['bio'] ?? false) ? 'bio' : 'conventional';        // Bio nur auf Ansage (4.4r)
+        // Bio dreiwertig: bio_pref (bio|conventional|neutral) gewinnt — „egal" ⇒ neutral (Adjustment 0),
+        // damit Bio-GPs nicht ungewollt bestraft werden. Fallback auf den Bool `bio` (MCP-Pfad, 4.4r).
+        $bio = match ($parameter['bio_pref'] ?? null) {
+            'bio' => 'bio',
+            'neutral' => 'neutral',
+            'conventional' => 'conventional',
+            default => ($parameter['bio'] ?? false) ? 'bio' : 'conventional',
+        };
 
         $melde('Zutaten werden zugeordnet …');
 
-        $result = DB::transaction(function () use ($team, $kiRezept, $parameter, $mode, $pref, $preferRaw, $bio, $vkModus, $createdVia, $melde) {
+        $result = DB::transaction(function () use ($team, $kiRezept, $parameter, $mode, $pref, $preferRaw, $bio, $convenience, $vkModus, $createdVia, $melde) {
             $recipe = $this->recipes->create($team, [
-                'name' => $kiRezept['name'],
+                // L5: getippter Titel (titel_vorgabe) ist der Namens-Anker — er gewinnt vor dem KI-Namen
+                // (der Mensch hat bewusst benannt). Immer defensiv normalisieren (Umbrüche/Whitespace raus,
+                // Länge gedeckelt), damit kein Brief-Text als Name in die varchar-Spalte rutscht.
+                'name' => $this->normalisiereName((string) ($parameter['titel_vorgabe'] ?? '') ?: (string) $kiRezept['name']),
                 'is_sales_recipe' => $vkModus,
                 'created_via' => $createdVia,
                 'description' => $kiRezept['description'] ?? null,
@@ -214,7 +229,43 @@ class RecipeGeneratorService
                 // (Review-Pfad mit Shortlist — der Mensch entscheidet). Der Matcher
                 // selbst (Schwellen, 84 GL-04-Goldens) bleibt unberührt.
                 $verdrahtbar = $treffer['status'] === MatchBand::Exact || $treffer['status'] === MatchBand::FuzzyHigh;
-                if ($verdrahtbar && $treffer['target'] === 'gp') {
+                $istGpTreffer = $verdrahtbar && $treffer['target'] === 'gp';
+
+                // ── Zerlegungs-Vorrang (L2, Entscheid 2026-08-17 »Convenience entscheidet«) ────────
+                // Die Sub-Entscheidung wird VOR die GP-Verdrahtung gezogen: bisher gewann ein GP-Treffer
+                // (Exact/FuzzyHigh) IMMER und §4/T4 lief nur im unmatched-else — ein bestehendes
+                // »Kartoffelpüree: TK«-GP übersteuerte die Zerlegung still. Jetzt entscheidet die
+                // Convenience-Achse, ob ein GP-Treffer die Zeile flach machen darf.
+                $llmSub = $this->llmSubRezeptFlag($z);
+                $nameHalbfabrikat = ! $direktArtikel && $this->heuristik->queryIstHalbfabrikat(
+                    app(Matching\TokenEngine::class)->tokenize($text)
+                );
+                // STARKES Sub (§4 »jus ist die sauce« / LLM-Flag true): IMMER Basisrezept — überstimmt
+                // auch einen GP-Treffer und jede Convenience-Stufe. Marker sind praktisch nie Flachware.
+                $strongSub = ! $direktArtikel && ($nameHalbfabrikat || ($llmSub === true));
+                // Rolle komponente/beilage im VK-Gericht (T4) — jetzt Convenience-gesteuert:
+                $rolleKomponente = $vkModus && ! $direktArtikel && in_array($z['role'] ?? null, ['komponente', 'beilage'], true);
+                $istConvenienceGp = $istGpTreffer && $this->istConvenienceGp((int) ($treffer['gp_id'] ?? 0));
+                $rolleWillSub = $rolleKomponente && match ($convenience) {
+                    'from_scratch'     => true,                 // hart: selbst bauen (auch über GP-Treffer)
+                    'teil_convenience' => ! $istConvenienceGp,  // Convenience-GP darf gewinnen, sonst Sub
+                    'voll_convenience' => false,                // Fertigkomponente kaufen → nie Sub erzwingen
+                    default            => ! $istGpTreffer,      // egal/standard: Bestand zuerst (GP gewinnt), sonst Sub
+                };
+                // Frische-Erlaubnis (L1.5): ist eine Zustands-Liste gesetzt und der GP-Treffer trägt einen
+                // NICHT erlaubten Zustand, wird er NICHT verdrahtet → die Zeile bleibt offen (LA/GP im
+                // richtigen Zustand suchen). Harter Filter, aber am Post-Match-Gate (Matcher unangetastet).
+                $frischeErlaubt = array_values(array_filter((array) ($parameter['frische_erlaubt'] ?? []), 'is_string'));
+                $frischeBlockiert = $istGpTreffer && $frischeErlaubt !== []
+                    && ! $this->gpZustandErlaubt((int) ($treffer['gp_id'] ?? 0), $frischeErlaubt);
+                // Ein GP-Treffer wird NUR verdrahtet, wenn die Zeile nicht ohnehin Basisrezept sein muss
+                // UND der Zustand erlaubt ist.
+                $gpBlockiert = $strongSub || $rolleWillSub || $frischeBlockiert;
+                // Vorentscheidung fürs unmatched-else (unten): Basisrezept vs. Lieferantenartikel. Ein reiner
+                // Frische-Block macht die Zeile NICHT zum Basisrezept (der richtige Weg ist LA/GP im Zustand).
+                $istBasisrezept = $strongSub || $rolleWillSub || (! $direktArtikel && ($llmSub ?? $this->heuristik->istSubRezeptKandidat($text)));
+
+                if ($istGpTreffer && ! $gpBlockiert) {
                     $zeile['gp_id'] = $treffer['gp_id'];
                     $zeile['match_method'] = 'gemini_proposed';
                     $zeile['match_confidence'] = round($treffer['score'], 3);
@@ -226,32 +277,10 @@ class RecipeGeneratorService
                 } else {
                     // Keine automatische Anlage: Basisrezept-Stub bzw. LA→GP werden
                     // erst nach menschlicher Auswahl in getrennten Schritten angelegt.
+                    // $istBasisrezept / $strongSub / $rolleWillSub sind oben (Zerlegungs-Vorrang L2)
+                    // bereits berechnet — hier nur noch verwenden (§4 »jus«, LLM-Flag, Convenience-Rolle).
                     $zeile['match_method'] = 'unmatched';
                     $statistik['offen']++;
-                    // Etappe 1 (2026-08-14): der Generator emittiert pro Zeile das
-                    // LLM-Komponenten-Flag `sub_rezept` (config/foodalchemist.php, b36ba00).
-                    // Ist es gesetzt, ENTSCHEIDET es (authoritativ, beide Richtungen) — es
-                    // löst die reine Namens-Heuristik ab (§4): `sub_rezept:true` zwingt zur
-                    // Basisrezept-Anlage auch bei heuristik-blinden Fällen (Klar-Essenz),
-                    // `sub_rezept:false` hält gekaufte Ware trotz Sauce/Jus-Token als LA.
-                    // Fehlt das Flag (Altprovider/kein Emit), bleibt die Heuristik der Fallback.
-                    $llmSub = $this->llmSubRezeptFlag($z);
-                    // »Jus ist die Sauce« (Entscheidung 2026-08-17): ein STARKES Name-Halbfabrikat
-                    // (jus/sud/sauce/fond/reduktion/coulis/… — queryIstHalbfabrikat) ist IMMER ein
-                    // Sub-Basisrezept und ÜBERSTIMMT jetzt ein KI-»flach« (`sub_rezept:false`) — diese
-                    // Marker sind im From-Scratch-Kontext praktisch nie gekaufte Flachware. Nur beim
-                    // KI-Schweigen (null) bleibt die Heuristik der ohnehin gleiche Fallback.
-                    $nameHalbfabrikat = ! $direktArtikel && $this->heuristik->queryIstHalbfabrikat(
-                        app(Matching\TokenEngine::class)->tokenize($text)
-                    );
-                    // T4 (Entscheidung 2026-08-17, »Gericht = Basisrezepte«): rolle-hart — im VK-GERICHT
-                    // ist eine Zutat der Rolle komponente/beilage IMMER ein Sub-Basisrezept (überstimmt
-                    // KI + Namens-Heuristik); flach/GP bleibt nur echte Rohware (direktArtikel: Öl/Salz/
-                    // Gewürze/Kräuter) sowie garnitur/aroma_treiber (die laufen über T3-Marker/LLM). NUR
-                    // im vkModus — im Basisrezept sind komponente/beilage rohe Bauteile (kein Infinit-Rekurs).
-                    $rolleErzwingtSub = $vkModus && ! $direktArtikel
-                        && in_array($z['role'] ?? null, ['komponente', 'beilage'], true);
-                    $istBasisrezept = $rolleErzwingtSub || $nameHalbfabrikat || (! $direktArtikel && ($llmSub ?? false));
                     $laKandidaten = $istBasisrezept ? [] : app(LaCandidateFinder::class)
                         ->find($team, $text, $this->wgHint($z['commodity_group'] ?? $z['warengruppe'] ?? null), 3)
                         ->map(fn ($la) => [
@@ -265,13 +294,9 @@ class RecipeGeneratorService
                     $offene[] = [
                         'index' => $i,
                         'text' => $text,
-                        // Zwei Stufen: (1) ein STARKES Name-Halbfabrikat ($istBasisrezept, s. o.)
-                        // gewinnt IMMER — auch über ein KI-»flach«. (2) Sonst ist das KI-Flag
-                        // autoritativ; die breitere Button-Heuristik (istSubRezeptKandidat:
-                        // creme/mousse/geschmort …) darf ein `sub_rezept:false` NICHT überstimmen
-                        // (die kann legitim gekaufte Ware sein), greift aber beim KI-Schweigen (null).
-                        'primaer' => ($istBasisrezept || (! $direktArtikel && ($llmSub ?? $this->heuristik->istSubRezeptKandidat($text))))
-                            ? 'basisrezept_anlegen' : 'lieferantenartikel_waehlen',
+                        // $istBasisrezept (oben, Zerlegungs-Vorrang L2) enthält bereits: §4-Name /
+                        // LLM-Flag / Convenience-gesteuerte Rolle + den istSubRezeptKandidat-Fallback.
+                        'primaer' => $istBasisrezept ? 'basisrezept_anlegen' : 'lieferantenartikel_waehlen',
                         'shortlist' => $this->matcher->candidatesFor($team, $text, $z['slug'] ?? null, 5),
                         'la_kandidaten' => $laKandidaten,
                         'lieferantenstrategie' => $istBasisrezept ? null : app(TeamSettingsService::class)
@@ -315,6 +340,13 @@ class RecipeGeneratorService
         if (! $vkModus) {
             $result = $this->kohaerenzGate($team, $result, $melde);
         }
+
+        // Diät-/Allergen-Gate (L3, Entscheid »prüfen + entdrahten + melden«): läuft für BEIDE Modi
+        // (ein veganes Gericht mit Butter ist ein VK-Fall). Deterministisch, 0 Kosten. Ein verdrahteter
+        // GP, der eine harte Diät-Vorgabe (diaet_hart) oder ein No-Go-Allergen (allergen_nogo) explizit
+        // verletzt, wird ENTdrahtet (Zeile bleibt offen) + als Befund gemeldet — der Mensch entscheidet
+        // (keine harte Sperre). NULL/unbewertet blockt NIE (Doktrin: unbekannt ≠ Verstoß).
+        $result = $this->diaetGate($team, $result, $parameter);
 
         $result['kontext'] = $kontextAudit;   // Kontext-Inspektor fürs UI (null im Override-Pfad)
 
@@ -468,6 +500,145 @@ class RecipeGeneratorService
     }
 
     /**
+     * Diät-/Allergen-Gate (L3) — deterministischer Post-Check nach dem Verdrahten, für BEIDE Modi.
+     * Ein verdrahteter GP, der eine harte Diät-Vorgabe (`diaet_hart`) oder ein No-Go-Allergen
+     * (`allergen_nogo`) EXPLIZIT verletzt, wird ENTdrahtet (Zeile bleibt offener Hard-Stop, primär
+     * »Lieferantenartikel wählen« = konforme Alternative) und als Befund gemeldet. Doktrin:
+     * NULL/unbewertet blockt NIE (unbekannt ≠ Verstoß), `low_carb` ist per GP-Flag nicht prüfbar →
+     * bewusst übersprungen. Prüft die GP-Diät-Tags (per-GP-Wahrheit) + Allergen-Override »enthalten«.
+     * Fail-open: jeder Fehler lässt den Lauf unangetastet (Diagnose, kein Blocker).
+     *
+     * @param  array{recipe: FoodAlchemistRecipe, statistik: array, offene: array}  $result
+     * @param  array<string,mixed>  $parameter
+     * @return array{recipe: FoodAlchemistRecipe, statistik: array, offene: array}
+     */
+    private function diaetGate(Team $team, array $result, array $parameter): array
+    {
+        /** @var FoodAlchemistRecipe $recipe */
+        $recipe = $result['recipe'];
+        $statistik = $result['statistik'];
+        $offene = $result['offene'] ?? [];
+        $statistik['diaet'] = ['geprueft' => false, 'uebersprungen' => false, 'entdrahtet' => 0, 'befunde' => []];
+
+        $diaetHart = array_values(array_filter((array) ($parameter['diaet_hart'] ?? []), 'is_string'));
+        $allergenNogo = array_values(array_filter((array) ($parameter['allergen_nogo'] ?? []), 'is_string'));
+        if ($diaetHart === [] && $allergenNogo === []) {
+            $statistik['diaet']['uebersprungen'] = true;
+            $result['statistik'] = $statistik;
+
+            return $result;
+        }
+
+        try {
+            $zeilen = $recipe->ingredients()->whereNull('deleted_at')->whereNotNull('gp_id')->with('gp')->orderBy('position')->get();
+            foreach ($zeilen as $z) {
+                $gp = $z->gp;
+                if ($gp === null) {
+                    continue;
+                }
+                $gruende = $this->diaetVerstoesse($gp, $diaetHart, $allergenNogo);
+                if ($gruende === []) {
+                    continue;
+                }
+                $text = (string) (($z->raw_text ?? '') !== '' ? $z->raw_text : ($z->display_name ?: $gp->name));
+                $position = (int) $z->position;
+                $zielGpId = (int) $z->gp_id;
+
+                app(HardstopResolveService::class)->entdrahte($team, (int) $recipe->id, (int) $z->id);
+                $statistik['diaet']['entdrahtet']++;
+                $statistik['bestand_gp'] = max(0, (int) ($statistik['bestand_gp'] ?? 0) - 1);
+                $statistik['offen'] = (int) ($statistik['offen'] ?? 0) + 1;
+                $statistik['diaet']['befunde'][] = $text . ': ' . implode(', ', $gruende);
+
+                $offene[] = [
+                    'index' => $position - 1,   // Kontrakt afterGenerated: position === index + 1
+                    'text' => $text,
+                    // Konforme Alternative suchen (kein Auto-Sub — ein Diät-Verstoß ist keine Zerlegungs-Frage).
+                    'primaer' => 'lieferantenartikel_waehlen',
+                    'shortlist' => $this->matcher->candidatesFor($team, $text, null, 5),
+                    'la_kandidaten' => [],
+                    'lieferantenstrategie' => null,
+                    'schwacher_treffer' => null,
+                    // Diät-/Allergen-Gate: WARUM die Zeile entdrahtet wurde (Review-Fläche + kein Auto-Plan).
+                    'diaet_verstoss' => [
+                        'ziel_id' => $zielGpId,          // „Trotzdem verwenden" bindet den GP wieder (Override)
+                        'gruende' => $gruende,
+                    ],
+                ];
+            }
+            $statistik['diaet']['geprueft'] = true;
+            if ($statistik['diaet']['entdrahtet'] > 0) {
+                $result['recipe'] = $recipe->refresh();
+            }
+        } catch (\Throwable $e) {
+            $statistik['diaet'] = ['geprueft' => false, 'uebersprungen' => false, 'entdrahtet' => 0, 'befunde' => [], 'fehler' => true];
+        }
+
+        $result['statistik'] = $statistik;
+        $result['offene'] = $offene;
+
+        return $result;
+    }
+
+    /**
+     * Explizite Diät-/Allergen-Verstöße eines GP (L3). Prüft die per-GP-Diät-Tags (tri-state:
+     * NULL=unbewertet blockt nicht) + Allergen-Override »enthalten«. Liefert Klartext-Gründe.
+     *
+     * @param  list<string>  $diaetHart      vegan|vegetarisch|glutenfrei|laktosefrei|halal|low_carb
+     * @param  list<string>  $allergenNogo   EU-14-Keys (gluten|milk|sesame|…)
+     * @return list<string>
+     */
+    private function diaetVerstoesse(FoodAlchemistGp $gp, array $diaetHart, array $allergenNogo): array
+    {
+        $g = [];
+        foreach ($diaetHart as $form) {
+            $verstoss = match ($form) {
+                'vegan'       => $gp->tag_is_vegan === false,
+                'vegetarisch' => $gp->tag_is_vegetarian === false,
+                'halal'       => $gp->tag_is_halal === false || $gp->tag_contains_pork === true,
+                'glutenfrei'  => $gp->tag_is_gluten_free === false || $this->gpAllergenEnthalten($gp, 'gluten'),
+                'laktosefrei' => $gp->tag_is_lactose_free === false || $this->gpAllergenEnthalten($gp, 'milk'),
+                default       => false,   // low_carb: kein GP-Flag → unprüfbar, nie blocken
+            };
+            if ($verstoss) {
+                $g[] = 'verletzt ' . $form;
+            }
+        }
+        foreach ($allergenNogo as $key) {
+            if ($this->gpAllergenEnthalten($gp, $key)) {
+                $g[] = 'enthält ' . $key;
+            }
+        }
+
+        return $g;
+    }
+
+    /**
+     * L5: Rezeptname defensiv normalisieren — Zeilenumbrüche/Tabs → Leerzeichen, Mehrfach-Whitespace
+     * kollabiert, getrimmt, Länge gedeckelt (die Spalte ist varchar(255); ein KI-Echo des ganzen
+     * Briefs darf nicht als Name landen). Leerer/whitespace-only Name fällt auf einen sicheren Default.
+     */
+    private function normalisiereName(string $name): string
+    {
+        $clean = trim((string) preg_replace('/\s+/u', ' ', str_replace(["\r", "\n", "\t"], ' ', $name)));
+        if ($clean === '') {
+            return 'Unbenannt';
+        }
+
+        return mb_strimwidth($clean, 0, 200, '…');
+    }
+
+    /** Allergen-Override des GP auf »enthalten« (NULL/spuren/unbekannt blockt bewusst nicht). */
+    private function gpAllergenEnthalten(FoodAlchemistGp $gp, string $field): bool
+    {
+        if (! in_array($field, FoodAlchemistGp::ALLERGEN_FIELDS, true)) {
+            return false;
+        }
+
+        return (string) $gp->getAttribute("allergen_{$field}") === 'enthalten';
+    }
+
+    /**
      * V-04 / B1: Top-Bestands-Kandidaten zur Beschreibung als »benenne EXAKT so«-Inventar
      * vorhandener Basisrezepte. Semantischer Recall (Bedeutung) ZUERST — findet auch anders
      * benannte Bestandskomponenten (z. B. „Kürbis-Espuma" für „Kürbissuppe"), die das reine
@@ -576,6 +747,52 @@ class RecipeGeneratorService
         }
 
         return null;
+    }
+
+    /**
+     * Convenience-GP? (L2 Zerlegungs-Vorrang, teil_convenience): ein GP mit dem Convenience-Tag darf
+     * bei Rolle komponente/beilage die Zerlegung gewinnen (Halbfabrikat kaufen statt Sub-Rezept bauen).
+     * Fail-soft: kein/ungültiger GP → false (im Zweifel zerlegen, nicht flach kaufen).
+     */
+    private function istConvenienceGp(int $gpId): bool
+    {
+        if ($gpId <= 0) {
+            return false;
+        }
+
+        return (bool) \Platform\FoodAlchemist\Models\FoodAlchemistGp::query()
+            ->whereKey($gpId)->value('tag_is_convenience');
+    }
+
+    /**
+     * Frische-Erlaubnis (L1.5): trägt der GP einen erlaubten Zustand? Vergleicht primär die rohe
+     * `gps.condition` (frisch|TK|trocken|konserviert — §9) gegen die Erlaubnis-Liste; ist die Spalte
+     * leer, fällt es lenient auf den Namens-Bucket zurück (nur so werden Zustands-lose GPs nicht
+     * fälschlich ausgefiltert). trocken/konserviert kollabieren im Bucket-Fallback (beide `preserved`).
+     *
+     * @param  list<string>  $erlaubtRaw  rohe Zustands-Werte (frisch|TK|trocken|konserviert)
+     */
+    private function gpZustandErlaubt(int $gpId, array $erlaubtRaw): bool
+    {
+        if ($gpId <= 0 || $erlaubtRaw === []) {
+            return true;
+        }
+        $gp = \Platform\FoodAlchemist\Models\FoodAlchemistGp::query()
+            ->whereKey($gpId)->first(['name', 'condition']);
+        if ($gp === null) {
+            return true;   // fail-open: kein GP zum Prüfen
+        }
+        $raw = trim((string) ($gp->condition ?? ''));
+        if ($raw !== '') {
+            return in_array($raw, $erlaubtRaw, true);
+        }
+        // condition unset → Namens-Bucket (lenient): erlaubte Roh-Werte auf Buckets abbilden.
+        $erlaubtBuckets = array_map(static fn ($z) => match ($z) {
+            'frisch' => 'fresh', 'TK' => 'frozen', 'trocken', 'konserviert' => 'preserved', default => 'unknown',
+        }, $erlaubtRaw);
+        $bucket = $this->heuristik->zustandClassResolved((string) $gp->name, null);
+
+        return in_array($bucket, $erlaubtBuckets, true);
     }
 
     /**

@@ -400,15 +400,9 @@ class RecipeService
             throw new \RuntimeException('Stub-Name ist Pflicht.');
         }
 
-        $engine = app(\Platform\FoodAlchemist\Services\Matching\TokenEngine::class);
-        $zielTokens = $engine->tokenize($name);
-        sort($zielTokens);
-        foreach (FoodAlchemistRecipe::visibleToTeam($team)->basis()->orderBy('id')->cursor() as $r) {
-            $tokens = $engine->tokenize($r->name);
-            sort($tokens);
-            if ($tokens === $zielTokens) {
-                return ['recipe' => $r, 'neu' => false];           // idempotent (Dedupe by name)
-            }
+        $treffer = $this->findByTokenSet($team, $name);
+        if ($treffer !== null) {
+            return ['recipe' => $treffer, 'neu' => false];         // idempotent (Dedupe by name)
         }
 
         $stub = $this->create($team, ['name' => $name]);
@@ -422,6 +416,35 @@ class RecipeService
         }
 
         return ['recipe' => $stub->refresh(), 'neu' => true];
+    }
+
+    /**
+     * Bestands-Reuse-Lookup (Token-Set-Namensgleichheit, wie der GL-04-Alias-Resolver): findet ein
+     * bestehendes Basisrezept mit identischem Token-Set zum gegebenen Namen — ODER null. Read-only,
+     * legt NICHTS an (im Gegensatz zu {@see createSubRecipeStub}). Der eine Ort, an dem „Bestand zuerst"
+     * VOR der Neu-Anlage prüft, ob die Komponente schon existiert (Reuse-Gate der Kaskade).
+     */
+    public function findByTokenSet(Team $team, string $name): ?FoodAlchemistRecipe
+    {
+        $name = trim($name);
+        if ($name === '') {
+            return null;
+        }
+        $engine = app(\Platform\FoodAlchemist\Services\Matching\TokenEngine::class);
+        $zielTokens = $engine->tokenize($name);
+        sort($zielTokens);
+        if ($zielTokens === []) {
+            return null;
+        }
+        foreach (FoodAlchemistRecipe::visibleToTeam($team)->basis()->orderBy('id')->cursor() as $r) {
+            $tokens = $engine->tokenize((string) $r->name);
+            sort($tokens);
+            if ($tokens === $zielTokens) {
+                return $r;
+            }
+        }
+
+        return null;
     }
 
     /**

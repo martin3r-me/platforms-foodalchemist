@@ -34,11 +34,12 @@
         <label class="{{ $label ?? 'text-[11px] text-gray-500' }}">Beschreibung (geht in die Erzeugung)</label>
         <textarea wire:model="eingabe.{{ $scope }}.brief" rows="3" class="{{ $input }} mb-3" placeholder="Constraints, Anlass, Richtung …"></textarea>
         <label class="{{ $label ?? 'text-[11px] text-gray-500' }}">Kreativ-Modus</label>
-        <select wire:model="eingabe.{{ $scope }}.creative_mode" class="{{ $input }}">
+        <select wire:model.live="eingabe.{{ $scope }}.creative_mode" class="{{ $input }}">
             @foreach($modeLabel as $val => $lbl)
                 <option value="{{ $val }}">{{ $lbl }}</option>
             @endforeach
         </select>
+        <p class="text-[11px] text-gray-500 mt-1">{{ ($modeHint ?? [])[$eingabe[$scope]['creative_mode'] ?? 'voll_kreativ'] ?? '' }}</p>
     </x-foodalchemist::modal-section>
 
     @include('foodalchemist::livewire.planung.partials.leitplanken', ['scope' => $scope])

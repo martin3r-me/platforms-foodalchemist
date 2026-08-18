@@ -107,9 +107,16 @@ class Index extends Component
 
     /** Default-Leitplanken-Satz je Scope (in mount() je Tab kopiert). */
     public const REGLER_DEFAULT = [
-        'convenience' => '', 'frische' => 'frisch', 'bestand' => 'hybrid',
+        // Frische = Multi-Select Erlaubnis-Liste (L1.5): [] = egal (kein Zustands-Filter). Ein/mehrere
+        // Werte = harte Erlaubnis (nur diese gps.condition). `bestand` wird aus dem Kreativ-Modus
+        // abgeleitet (nicht mehr eigener Chip, s. reglerParams) — Default bleibt als Fallback stehen.
+        'convenience' => '', 'frische' => [], 'bestand' => 'hybrid',
         'bio_praeferenz' => 'konventionell', 'level' => '', 'sektor' => '',
-        'diaet_hart' => [], 'aroma' => '',
+        // aroma = Freitext-Feinjustierung, aroma_kueche = kuratierte Küche (11 + Frei, L1.5).
+        // allergen_nogo (L3): EU-14-Allergen-Ausschluss (hart geprüft, getrennt vom Diät-Ausschluss).
+        'diaet_hart' => [], 'allergen_nogo' => [], 'aroma' => '', 'aroma_kueche' => '',
+        // L6 »Menge & Ziel« (KI-Vorgaben): Pax (Gäste), Ziel-Portionsgröße g, Saison, Ziel-Wareneinsatz %.
+        'pax' => '', 'ziel_portion_g' => '', 'saison' => '', 'ziel_we_pct' => '',
         'occasion' => '', 'serviceform' => '', 'kompositions_stil' => '',
         'favoriten' => false, 'favoriten_conv_only' => false,
         'ziel_vk' => '', 'voll_anreichern' => false, 'ki_bilder' => false,
@@ -236,9 +243,48 @@ class Index extends Component
     public const RICHTUNGEN = [
         ['field' => 'convenience', 'label' => 'Convenience (Eigenleistung)', 'optionen' => ['' => '(egal)', 'from_scratch' => 'From Scratch', 'teil_convenience' => 'Teil-Convenience', 'voll_convenience' => 'Voll-Convenience'], 'hint' => ['' => 'Keine Vorgabe', 'from_scratch' => 'alles selbst — Pool dreht auf Roh/Sub-Rezepte', 'teil_convenience' => 'Halbfabrikate erlaubt', 'voll_convenience' => 'Fertigprodukte bevorzugt']],
         ['field' => 'level', 'label' => 'Niveau', 'optionen' => ['' => '(egal)', 'haute_cuisine' => 'Haute Cuisine', 'gehoben' => 'Gehoben', 'klassisch' => 'Klassisch'], 'hint' => ['' => 'Keine Vorgabe']],
-        ['field' => 'bestand', 'label' => 'Bestand-Nutzung', 'optionen' => ['hybrid' => 'Hybrid', 'nur_bestand' => 'Nur Bestand', 'komplett_neu' => 'Komplett neu'], 'hint' => ['hybrid' => 'Default — Bestand zuerst reusen, Neues nur für echte Lücken', 'nur_bestand' => 'ausschließlich vorhandene GPs/Rezepte', 'komplett_neu' => 'Bestand ignorieren']],
+        // »Bestand-Nutzung« (Chips) entfernt (2026-08-17): die Reuse-Achse ist jetzt EIN Regler — der
+        // Kreativ-Modus-Select im Eingabe-Block (voll_kreativ|hybrid|datenbank). `bestand` wird daraus
+        // in reglerParams abgeleitet, keine zweite konkurrierende Achse mehr.
         ['field' => 'bio_praeferenz', 'label' => 'Bio-Präferenz', 'optionen' => ['konventionell' => 'Konventionell', 'bio' => 'Bio', 'egal' => 'Egal'], 'hint' => ['konventionell' => 'Standard — kein Bio erzwungen (Default)', 'bio' => 'Bio bevorzugt (nur auf Ansage)', 'egal' => 'keine Präferenz']],
-        ['field' => 'frische', 'label' => 'Frische-Hook', 'optionen' => ['frisch' => 'Frisch', 'tk' => 'Alles aus TK', 'konserve' => 'Konserve/haltbar'], 'hint' => ['frisch' => 'fresh_first (Default)']],
+        // »Frische-Hook« ist jetzt Multi-Select (Erlaubnis-Liste) → eigener Block in leitplanken.blade
+        // (FRISCHE_OPTIONEN), nicht mehr Single-Pill hier.
+    ];
+
+    /**
+     * Frische-Erlaubnis-Liste (L1.5, Multi-Select): UI-Slug => Label. Nichts angehakt = egal (kein
+     * Zustands-Filter). Angehakt = harte Erlaubnis auf `gps.condition` (raw-Werte frisch|TK|trocken|
+     * konserviert). Deckt endlich »trocken« ab (§9, 1.301 GPs) — im Gegensatz zum alten 3-Wert-Hook.
+     */
+    public const FRISCHE_OPTIONEN = [
+        'frisch' => 'Frisch', 'tk' => 'TK', 'trocken' => 'Trocken', 'konserve' => 'Konserve/haltbar',
+    ];
+
+    /** UI-Slug => roher `gps.condition`-Wert (für den Post-Match-Zustands-Filter, spiegelt §9). */
+    public const FRISCHE_CONDITION = [
+        'frisch' => 'frisch', 'tk' => 'TK', 'trocken' => 'trocken', 'konserve' => 'konserviert',
+    ];
+
+    /**
+     * Aroma-Küchen (L1.5, Achse 4 aus _Entscheidungsachsen.md v1.9): Slug => Label. »Frei« (leer) =
+     * KI wählt zur Beschreibung. Jede Küche trägt zusätzlich Würz-Anker/Technik/Archetyp in den
+     * Prompt (RecipeGenerationContextService::aromaKuecheBlock) — verbindliches Regelwerk, keine Erfindung.
+     */
+    public const AROMA_KUECHEN = [
+        '' => 'Frei (KI wählt)',
+        'klassisch_de' => 'Klassisch DE', 'franzoesisch' => 'Französisch', 'mediterran' => 'Mediterran',
+        'italienisch' => 'Italienisch', 'asiatisch' => 'Asiatisch (allg.)', 'japanisch' => 'Japanisch',
+        'thai' => 'Thai', 'indisch' => 'Indisch', 'orient' => 'Orient', 'lateinamerika' => 'Lateinamerika',
+        'neu_nordisch' => 'Neu-Nordisch',
+    ];
+
+    /**
+     * Saison-Achse (L6): Slug => Label. »Ganzjährig« (Default-leer = keine Vorgabe). Prompt-Vorgabe
+     * (Erntefenster/Verfügbarkeit); die deterministische season_coverage-Frame-Rule ist Follow-up.
+     */
+    public const SAISON_OPTIONEN = [
+        '' => 'Ganzjährig / egal',
+        'fruehling' => 'Frühling', 'sommer' => 'Sommer', 'herbst' => 'Herbst', 'winter' => 'Winter',
     ];
 
     public ?string $meldung = null;
@@ -478,6 +524,73 @@ class Index extends Component
         if ($team !== null && $session->plan_concept_id !== null
             && FoodAlchemistConcept::where('team_id', $team->id)->whereKey($session->plan_concept_id)->exists()) {
             $this->planConceptId = (int) $session->plan_concept_id;
+        }
+
+        // L5: die beim Go persistierten Leitplanken (generation_params) in die Regler zurücklesen — sonst
+        // zeigt jeder Tab nach einem Reload wieder die Defaults, während der Lauf mit anderen Werten fuhr.
+        $this->rehydriereReglerAusParams($session);
+    }
+
+    /**
+     * L5: generation_params → Regler zurückspiegeln (Umkehrung von {@see reglerParams}). Fail-soft; nur
+     * gesetzte Achsen überschreiben den Default. Auf ALLE Scopes angewandt (die Session hält nur EINEN
+     * Satz — den des Start-Tabs; ohne Tab-Herkunft ist der beste Reload derselbe Satz je Tab). Bewusst
+     * NICHT rückformatiert: ziel_vk + menue_preis_* (Euro/Komma) — die tippt der Nutzer bei Bedarf neu.
+     */
+    private function rehydriereReglerAusParams(FoodAlchemistPlanningSession $session): void
+    {
+        $p = is_array($session->generation_params) ? $session->generation_params : [];
+        if ($p === []) {
+            return;
+        }
+        try {
+            // Frische: rohe condition-Werte → UI-Slugs (Umkehrung FRISCHE_CONDITION).
+            $condToSlug = array_flip(self::FRISCHE_CONDITION);
+            $frischeSlugs = array_values(array_filter(array_map(
+                static fn ($raw) => $condToSlug[$raw] ?? null,
+                (array) ($p['frische_erlaubt'] ?? []),
+            )));
+            $bioPraef = match ($p['bio_pref'] ?? null) {
+                'bio' => 'bio', 'neutral' => 'egal', 'conventional' => 'konventionell', default => null,
+            };
+            foreach (self::SCOPES as $scope) {
+                if (! isset($this->regler[$scope])) {
+                    continue;
+                }
+                foreach (['level', 'sektor', 'aroma', 'aroma_kueche', 'occasion', 'serviceform',
+                    'kompositions_stil', 'menue_balance', 'menue_typ'] as $k) {
+                    if (($p[$k] ?? '') !== '') {
+                        $this->regler[$scope][$k] = $p[$k];
+                    }
+                }
+                foreach (['diaet_hart', 'allergen_nogo'] as $k) {
+                    if (! empty($p[$k]) && is_array($p[$k])) {
+                        $this->regler[$scope][$k] = array_values($p[$k]);
+                    }
+                }
+                if ($frischeSlugs !== []) {
+                    $this->regler[$scope]['frische'] = $frischeSlugs;
+                }
+                if ($bioPraef !== null) {
+                    $this->regler[$scope]['bio_praeferenz'] = $bioPraef;
+                }
+                if (array_key_exists('use_favorites_list', $p)) {
+                    $this->regler[$scope]['favoriten'] = (bool) $p['use_favorites_list'];
+                    $this->regler[$scope]['favoriten_conv_only'] = (bool) ($p['favorites_convenience_only'] ?? false);
+                }
+                if (array_key_exists('ki_bilder', $p)) {
+                    $this->regler[$scope]['ki_bilder'] = (bool) $p['ki_bilder'];
+                }
+                // Menü-Gänge/Quoten als Zahl-String zurückschreiben (der Parser liest sie wieder als Zahl).
+                foreach (['menue_gaenge' => 'menue_gaenge', 'menue_quote_vegan_pct' => 'menue_quote_vegan',
+                    'menue_quote_vegetarisch_pct' => 'menue_quote_vegetarisch'] as $pk => $uiKey) {
+                    if (($p[$pk] ?? null) !== null && $p[$pk] !== '') {
+                        $this->regler[$scope][$uiKey] = (string) $p[$pk];
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('[Planung] Regler-Rehydrierung übersprungen', ['error' => $e->getMessage()]);
         }
     }
 
@@ -728,15 +841,30 @@ class Index extends Component
 
     // ── Leitstelle: Regler-Bedienung ───────────────────────────────────
 
-    /** Pill-Toggle für die Richtungs-Regler EINES Scopes (diaet_hart ist MULTI, sonst Single). */
+    /** Multi-Select-Regler (Toggle in/aus der Liste): Diät + Frische-Erlaubnis + Allergen-No-Go. */
+    private const MULTI_REGLER = ['diaet_hart', 'frische', 'allergen_nogo'];
+
+    /**
+     * EU-14-Allergen-No-Go (L3): Key => Label. Harter Ausschluss (getrennt vom Diät-Ausschluss) —
+     * ein verdrahteter GP, der ein angehaktes Allergen »enthält«, wird im Diät-/Allergen-Gate
+     * entdrahtet + gemeldet. Keys spiegeln FoodAlchemistGp::ALLERGEN_FIELDS 1:1.
+     */
+    public const ALLERGEN_LABELS = [
+        'gluten' => 'Gluten', 'crustaceans' => 'Krebstiere', 'eggs' => 'Eier', 'fish' => 'Fisch',
+        'peanuts' => 'Erdnüsse', 'soy' => 'Soja', 'milk' => 'Milch', 'tree_nuts' => 'Schalenfrüchte',
+        'celery' => 'Sellerie', 'mustard' => 'Senf', 'sesame' => 'Sesam', 'sulphites' => 'Sulfite',
+        'lupin' => 'Lupine', 'molluscs' => 'Weichtiere',
+    ];
+
+    /** Pill-Toggle für die Richtungs-Regler EINES Scopes (MULTI_REGLER togglen, sonst Single-Set). */
     public function reglerPill(string $scope, string $feld, string $wert): void
     {
         if (! isset($this->regler[$scope])) {
             return;
         }
-        if ($feld === 'diaet_hart') {
-            $cur = (array) ($this->regler[$scope]['diaet_hart'] ?? []);
-            $this->regler[$scope]['diaet_hart'] = in_array($wert, $cur, true)
+        if (in_array($feld, self::MULTI_REGLER, true)) {
+            $cur = (array) ($this->regler[$scope][$feld] ?? []);
+            $this->regler[$scope][$feld] = in_array($wert, $cur, true)
                 ? array_values(array_diff($cur, [$wert]))
                 : [...$cur, $wert];
 
@@ -853,7 +981,52 @@ class Index extends Component
         $favConvOnly = (bool) ($r['favoriten_conv_only'] ?? false);
         $kiBilder = (bool) ($r['ki_bilder'] ?? false);
         $p = $r;
+        // Bio dreiwertig weiterreichen (bio|conventional|neutral) — der Generator/Matcher kennt einen
+        // NEUTRALEN Arm (Adjustment 0). Ohne ihn fiel „egal" auf das Bool false → 'conventional' → Bio-GPs
+        // wurden aktiv mit −2 bestraft (Bug). Der Bool `bio` bleibt für den MCP-Pfad rückwärtskompatibel.
+        $p['bio_pref'] = match ($r['bio_praeferenz'] ?? '') {
+            'bio' => 'bio',
+            'egal' => 'neutral',
+            default => 'conventional',
+        };
         $p['bio'] = ($r['bio_praeferenz'] ?? '') === 'bio';
+        // Reuse-Achse: EINE Wahrheit ist der Kreativ-Modus (Select im Eingabe-Block). Der frühere
+        // Doppel-Regler »Bestand-Nutzung« (Chips) ist entfernt; `bestand` wird hier deterministisch
+        // aus dem Modus abgeleitet und reist über den bestehenden params/generation_params-Kanal in
+        // Generator + Fan-out (datenbank = nur Bestand, hybrid = Bestand zuerst, voll_kreativ = neu).
+        $p['bestand'] = match ((string) ($this->eingabe[$scope]['creative_mode'] ?? 'voll_kreativ')) {
+            'datenbank' => 'nur_bestand',
+            'hybrid' => 'hybrid',
+            default => 'komplett_neu',   // voll_kreativ
+        };
+        // Frische (L1.5): Multi-Select Erlaubnis-Liste → harte gps.condition-Erlaubnis + primärer Pref
+        // (Tiebreak). [] = egal (Key entfällt, kein Filter). Sonst: erlaubte Roh-Zustände + 'frisch'-Vorzug.
+        $frischeSlugs = array_values(array_filter(
+            (array) ($r['frische'] ?? []),
+            static fn ($s) => isset(self::FRISCHE_CONDITION[$s]),
+        ));
+        unset($p['frische']);   // Roh-Array wird übersetzt, nicht 1:1 durchgereicht
+        if ($frischeSlugs !== []) {
+            $p['frische_erlaubt'] = array_map(static fn ($s) => self::FRISCHE_CONDITION[$s], $frischeSlugs);
+            // Primärer Pref für den Match-Tiebreak (Generator mappt frisch|tk|konserve→VariantPref;
+            // 'trocken' fällt auf fresh_first, egal — der harte Filter erledigt die Zustands-Auswahl).
+            $p['frische'] = in_array('frisch', $frischeSlugs, true) ? 'frisch' : $frischeSlugs[0];
+        }
+        // L6 »Menge & Ziel«: Zahl-Achsen mit Band-Guard (ungültig/leer → Key entfällt = keine Vorgabe),
+        // Saison als Enum-Durchreichung. Reine KI-Vorgaben (Prompt); deterministische Erzwingung Follow-up.
+        unset($p['pax'], $p['ziel_portion_g'], $p['ziel_we_pct']);   // Roh-Felder → geparst durchreichen
+        if (($pax = $this->intRegler($r['pax'] ?? '', 1, 100000)) !== null) {
+            $p['pax'] = $pax;
+        }
+        if (($portion = $this->intRegler($r['ziel_portion_g'] ?? '', 1, 5000)) !== null) {
+            $p['ziel_portion_g'] = $portion;
+        }
+        if (($wePct = $this->intRegler($r['ziel_we_pct'] ?? '', 1, 100)) !== null) {
+            $p['ziel_we_pct'] = $wePct;
+        }
+        if (! isset(self::SAISON_OPTIONEN[$p['saison'] ?? '']) || ($p['saison'] ?? '') === '') {
+            unset($p['saison']);   // leer/unbekannt = keine Saison-Vorgabe
+        }
         if (! $vk) {
             unset($p['occasion'], $p['serviceform'], $p['kompositions_stil']);
         }
@@ -903,6 +1076,67 @@ class Index extends Component
         }
 
         return $p;
+    }
+
+    /**
+     * Menü-Leitplanken (nur Concept) auf ihre kanonischen menue_*-Keys reduziert — dieselbe Teilmenge,
+     * die {@see PlanningCascadeService::dispatchConceptStep} an die Konzept-Erzeugung reicht. Damit
+     * bekommen BEIDE Concept-Wege (Schnell-Go über den Job UND KI-Kopf inline) exakt denselben
+     * Leitplanken-Satz. Leer für nicht-Concept-Scopes (keine Menü-Achsen).
+     *
+     * @return array<string,mixed>
+     */
+    private function menueAchsenFuer(string $scope): array
+    {
+        if ($scope !== 'concept') {
+            return [];
+        }
+
+        return array_filter(
+            $this->reglerParams($scope),
+            static fn ($k) => str_starts_with((string) $k, 'menue_'),
+            ARRAY_FILTER_USE_KEY,
+        );
+    }
+
+    /**
+     * Prüft die Concept-Menü-Leitplanken auf mistgetippte Zahlen und liefert eine Klartext-Fehlermeldung
+     * (oder null, wenn alles gültig/leer ist). Ein Mensch, der 45,x statt 45 meinte, wird GESAGT statt
+     * still verworfen — derselbe Grundsatz wie bei Ziel-VK. Geteilt von {@see goKaskade} und {@see kiKopf},
+     * damit der KI-Kopf-Pfad nicht mit einer stillschweigend verworfenen Vorgabe generiert.
+     */
+    private function menueLeitplankenFehler(string $scope): ?string
+    {
+        if ($scope !== 'concept') {
+            return null;
+        }
+        foreach (['menue_preis_min' => 'Preis-Untergrenze', 'menue_preis_ziel' => 'Zielpreis', 'menue_preis_max' => 'Preis-Obergrenze'] as $feld => $lbl) {
+            if (trim((string) ($this->regler[$scope][$feld] ?? '')) !== '' && $this->menuePreisEur($scope, $feld) === null) {
+                return "Menü-{$lbl}: bitte einen Netto-Preis je Person zwischen 0,50 € und 2.000,00 € angeben (z. B. 45,00) — oder das Feld leer lassen.";
+            }
+        }
+        if (trim((string) ($this->regler[$scope]['menue_gaenge'] ?? '')) !== '' && $this->menueGaenge($scope) === null) {
+            return 'Menü-Gänge: bitte eine ganze Zahl zwischen 1 und 20 angeben (z. B. 4) — oder das Feld leer lassen.';
+        }
+        foreach (['menue_quote_vegan' => 'Vegan-Anteil', 'menue_quote_vegetarisch' => 'Vegetarisch-Anteil'] as $feld => $lbl) {
+            if (trim((string) ($this->regler[$scope][$feld] ?? '')) !== '' && $this->menueQuote($scope, $feld) === null) {
+                return "Menü-{$lbl}: bitte einen Prozentwert zwischen 0 und 100 angeben (z. B. 30) — oder das Feld leer lassen.";
+            }
+        }
+
+        return null;
+    }
+
+    /** L6: ganze Zahl im Band [min,max] aus einem Roh-Regler, sonst null (leer/ungültig = keine Vorgabe). */
+    private function intRegler(mixed $roh, int $min, int $max): ?int
+    {
+        $s = trim((string) $roh);
+        if ($s === '' || ! ctype_digit($s)) {
+            return null;
+        }
+        $n = (int) $s;
+
+        return ($n >= $min && $n <= $max) ? $n : null;
     }
 
     /** Menü-Gänge/Positionen: ganze Zahl 1–20, sonst null (leer/ungültig = keine Vorgabe). Concept-Scope. */
@@ -1056,6 +1290,13 @@ class Index extends Component
 
             return;
         }
+        // Menü-Leitplanken zuerst validieren (wie beim Go) — der KI-Kopf darf nicht mit einer
+        // stillschweigend verworfenen Zahl-Vorgabe generieren.
+        if (($menueFehler = $this->menueLeitplankenFehler('concept')) !== null) {
+            $this->fehler = $menueFehler;
+
+            return;
+        }
         // Concept-Briefing auf die Session spiegeln + persistieren (nicht verlieren) — wie beim Go.
         $this->form['brief'] = (string) ($this->eingabe['concept']['brief'] ?? '');
         $this->form['creative_mode'] = (string) ($this->eingabe['concept']['creative_mode'] ?? 'voll_kreativ');
@@ -1063,7 +1304,11 @@ class Index extends Component
 
         $titel = trim((string) ($this->eingabe['concept']['titel'] ?? ''));
         try {
-            $plan = $svc->planAusBrief($team, $brief, [], $titel !== '' ? $titel : null);
+            // Menü-Leitplanken (Gänge/Preis-Korridor/Quoten/Balance/Buffet) an den Plan durchreichen —
+            // sonst arbeitet der plan-first-Standard-Pfad ohne sie (Bug: nur der Schnell-Go über den Job
+            // reichte sie bisher). Gleiche menue_*-Teilmenge wie dispatchConceptStep. $via bleibt 'ui'
+            // (der created_via-Marker `concept_plan_ui` wird andernorts erwartet — nicht verändern).
+            $plan = $svc->planAusBrief($team, $brief, [], $titel !== '' ? $titel : null, 'ui', $this->menueAchsenFuer('concept'));
         } catch (\Throwable $e) {
             $this->fehler = 'KI-Kopf fehlgeschlagen: ' . $e->getMessage();
 
@@ -1133,26 +1378,10 @@ class Index extends Component
         }
         // Menü-Leitplanken (nur Concept): eine mistgetippte Zahl wird GESAGT statt still verworfen —
         // derselbe Grundsatz wie bei Ziel-VK (der Absender ist ein Mensch, der korrigieren kann).
-        if ($scope === 'concept') {
-            foreach (['menue_preis_min' => 'Preis-Untergrenze', 'menue_preis_ziel' => 'Zielpreis', 'menue_preis_max' => 'Preis-Obergrenze'] as $feld => $lbl) {
-                if (trim((string) ($this->regler[$scope][$feld] ?? '')) !== '' && $this->menuePreisEur($scope, $feld) === null) {
-                    $this->fehler = "Menü-{$lbl}: bitte einen Netto-Preis je Person zwischen 0,50 € und 2.000,00 € angeben (z. B. 45,00) — oder das Feld leer lassen.";
+        if (($menueFehler = $this->menueLeitplankenFehler($scope)) !== null) {
+            $this->fehler = $menueFehler;
 
-                    return;
-                }
-            }
-            if (trim((string) ($this->regler[$scope]['menue_gaenge'] ?? '')) !== '' && $this->menueGaenge($scope) === null) {
-                $this->fehler = 'Menü-Gänge: bitte eine ganze Zahl zwischen 1 und 20 angeben (z. B. 4) — oder das Feld leer lassen.';
-
-                return;
-            }
-            foreach (['menue_quote_vegan' => 'Vegan-Anteil', 'menue_quote_vegetarisch' => 'Vegetarisch-Anteil'] as $feld => $lbl) {
-                if (trim((string) ($this->regler[$scope][$feld] ?? '')) !== '' && $this->menueQuote($scope, $feld) === null) {
-                    $this->fehler = "Menü-{$lbl}: bitte einen Prozentwert zwischen 0 und 100 angeben (z. B. 30) — oder das Feld leer lassen.";
-
-                    return;
-                }
-            }
+            return;
         }
         // Kontext des Start-Tabs auf die Session spiegeln (Dashboard-Anzeige + creative_mode) und persistieren.
         $this->form['brief'] = (string) ($this->eingabe[$scope]['brief'] ?? '');
@@ -1172,10 +1401,18 @@ class Index extends Component
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\Log::warning('[Planung] setGenerationParams übersprungen (Fan-out-Vererbung aus) — evtl. Migration fehlt', ['error' => $e->getMessage()]);
         }
+        // L5: Titel als Namens-Anker — getippten Titel getrennt vom Brief in die Lauf-Params geben
+        // (NICHT in die persistierten Session-Params, sonst erbte JEDES Fan-out-Kind den Gericht-Titel
+        // als Namen). Nur der Depth-1-Job sieht `titel_vorgabe`; der Generator nimmt ihn als Namen.
+        $laufParams = $params;
+        $titelVorgabe = trim((string) ($this->eingabe[$scope]['titel'] ?? ''));
+        if ($titelVorgabe !== '' && $scope !== 'concept') {   // concept: Name kommt aus dem KI-Kopf (name_claim)
+            $laufParams['titel_vorgabe'] = $titelVorgabe;
+        }
         $optionen = [
             'created_via' => 'plan_go',
             'brief' => $this->effektiverBrief($scope),
-            'params' => $params,
+            'params' => $laufParams,
             'voll_anreichern' => (bool) ($this->regler[$scope]['voll_anreichern'] ?? false),   // recipe-first: default AUS
         ];
         // GEPLANTER PFAD (Etappe 2b, „Beide Pfade behalten"): wurde vorab ein KI-Kopf-Plan ausgearbeitet
@@ -1211,17 +1448,24 @@ class Index extends Component
             $this->laufId = $run->id;
             $this->laeuft = true;
             $this->hinweis = null;
-            $this->planConceptId = null;    // Plan verbraucht (referenziert ODER frisch generiert) → nächster Go ist wieder Schnell-Pfad
-            // #53 persistent: auch den gespeicherten Zeiger lösen (Plan ist verbraucht) — sonst würde ein
-            // Reload nach dem Go den bereits verbrauchten Plan wieder anbieten. Fail-soft.
-            if ($session->plan_concept_id !== null) {
-                try {
-                    $session->update(['plan_concept_id' => null]);
-                } catch (\Throwable) {
-                    // Persistenz-Fehler darf den bereits gestarteten Lauf nicht kippen.
+            // Verbrauch AN DEN SCOPE binden: nur der Concept-Go verbraucht den KI-Kopf-Plan, nur der
+            // Gericht-Go die Skizzen-Herkunft. Sonst löschte ein Basisrezept-/Gericht-Go den vorbereiteten
+            // Concept-Plan, obwohl er für diesen Lauf nie gelesen wurde (und umgekehrt).
+            if ($scope === 'concept') {
+                $this->planConceptId = null;    // Plan verbraucht (referenziert ODER frisch generiert) → nächster Go Schnell-Pfad
+                // #53 persistent: auch den gespeicherten Zeiger lösen (Plan verbraucht) — sonst böte ein
+                // Reload nach dem Go den bereits verbrauchten Plan wieder an. Fail-soft.
+                if ($session->plan_concept_id !== null) {
+                    try {
+                        $session->update(['plan_concept_id' => null]);
+                    } catch (\Throwable) {
+                        // Persistenz-Fehler darf den bereits gestarteten Lauf nicht kippen.
+                    }
                 }
             }
-            $this->skizzeGerichtId = null;  // Skizzen-Ursprung verbraucht (auf den Lauf gestempelt) → nächster Go ohne Herkunft
+            if ($scope === 'gericht') {
+                $this->skizzeGerichtId = null;  // Skizzen-Ursprung verbraucht (auf den Lauf gestempelt) → nächster Go ohne Herkunft
+            }
             $this->wissenVorschau = null;   // neue Kaskade → Vorschau weg; die Steps zeigen dann das ECHTE Wissen (#1a)
             $this->meldung = 'Kaskade gestartet — Entwurf wird erzeugt …';
             $this->fehler = null;

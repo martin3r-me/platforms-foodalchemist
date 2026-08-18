@@ -25,10 +25,26 @@
             </div>
         @endforeach
 
+        <div data-richtung="frische">
+            <p class="text-xs font-medium text-gray-900 mb-1">Frische (Zustands-Erlaubnis)</p>
+            <div class="flex flex-wrap gap-1.5">
+                @foreach(\Platform\FoodAlchemist\Livewire\Planung\Index::FRISCHE_OPTIONEN as $wert => $lbl)
+                    <button type="button" wire:click="reglerPill('{{ $scope }}', 'frische', '{{ $wert }}')"
+                            class="px-2.5 py-1 rounded-full border text-[11px] transition-colors {{ in_array($wert, (array) ($r['frische'] ?? []), true) ? $pillAktiv : $pillRuhe }}" data-planung-frische="{{ $wert }}">{{ $lbl }}</button>
+                @endforeach
+            </div>
+            <p class="text-[11px] text-gray-500 mt-1">{{ empty($r['frische'] ?? []) ? 'Egal — kein Zustands-Filter (KI wählt frei)' : 'Nur diese Zustände zugelassen (harter Filter; innerhalb: frisch bevorzugt)' }}</p>
+        </div>
+
         <div data-richtung="aroma">
             <p class="text-xs font-medium text-gray-900 mb-1">Aroma-Richtung</p>
-            <input type="text" wire:model="regler.{{ $scope }}.aroma" placeholder="frei — z. B. rauchig-karamellig, mediterran …" class="{{ $input }} !py-1.5" />
-            <p class="text-[11px] text-gray-500 mt-1">{{ ($r['aroma'] ?? '') === '' ? 'Keine Aroma-Vorgabe — KI wählt passend zur Beschreibung' : '' }}</p>
+            <select wire:model="regler.{{ $scope }}.aroma_kueche" class="{{ $input }} !py-1.5 mb-1.5" data-planung-aroma-kueche>
+                @foreach(\Platform\FoodAlchemist\Livewire\Planung\Index::AROMA_KUECHEN as $wert => $lbl)
+                    <option value="{{ $wert }}">{{ $lbl }}</option>
+                @endforeach
+            </select>
+            <input type="text" wire:model="regler.{{ $scope }}.aroma" placeholder="Feinjustierung — z. B. rauchig-karamellig, umami-lastig …" class="{{ $input }} !py-1.5" />
+            <p class="text-[11px] text-gray-500 mt-1">Küche steuert die Würzung (Anker/Technik/Archetyp); Freitext justiert zusätzlich. Beides optional.</p>
         </div>
 
         <div data-richtung="sektor">
@@ -72,12 +88,47 @@
         </div>
 
         <div class="md:col-span-2" data-richtung="diaet">
-            <p class="text-xs font-medium text-gray-900 mb-1">Diät-Constraints (Multi-Select, hart erzwungen)</p>
+            <p class="text-xs font-medium text-gray-900 mb-1">Diät-Constraints (Multi-Select, hart geprüft)</p>
             <div class="flex flex-wrap gap-1.5">
                 @foreach(['vegan' => 'Vegan', 'vegetarisch' => 'Vegetarisch', 'glutenfrei' => 'Glutenfrei', 'laktosefrei' => 'Laktosefrei', 'halal' => 'Halal', 'low_carb' => 'Low Carb'] as $wert => $lbl)
                     <button type="button" wire:click="reglerPill('{{ $scope }}', 'diaet_hart', '{{ $wert }}')"
                             class="px-2.5 py-1 rounded-full border text-[11px] transition-colors {{ in_array($wert, (array) ($r['diaet_hart'] ?? []), true) ? $pillAktiv : $pillRuhe }}">{{ $lbl }}</button>
                 @endforeach
+            </div>
+            <p class="text-[11px] text-gray-500 mt-1">Nach der Erzeugung geprüft: verletzende Zutaten werden gelöst + gemeldet (keine harte Sperre — du entscheidest).</p>
+        </div>
+
+        <div class="md:col-span-2" data-richtung="allergen-nogo">
+            <p class="text-xs font-medium text-gray-900 mb-1">Allergen-Ausschluss (EU-14, hart geprüft)</p>
+            <div class="flex flex-wrap gap-1.5">
+                @foreach(\Platform\FoodAlchemist\Livewire\Planung\Index::ALLERGEN_LABELS as $wert => $lbl)
+                    <button type="button" wire:click="reglerPill('{{ $scope }}', 'allergen_nogo', '{{ $wert }}')"
+                            class="px-2.5 py-1 rounded-full border text-[11px] transition-colors {{ in_array($wert, (array) ($r['allergen_nogo'] ?? []), true) ? $pillAktiv : $pillRuhe }}" data-planung-allergen-nogo="{{ $wert }}">{{ $lbl }}</button>
+                @endforeach
+            </div>
+            <p class="text-[11px] text-gray-500 mt-1">{{ empty($r['allergen_nogo'] ?? []) ? 'Kein Allergen-Ausschluss' : 'Zutaten mit diesem Allergen werden nach der Erzeugung gelöst + gemeldet.' }}</p>
+        </div>
+
+        <div class="md:col-span-2 grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-2" data-richtung="menge-ziel">
+            <div>
+                <label class="block {{ $label ?? 'text-[11px] text-gray-500' }} mb-1">Pax / Gäste</label>
+                <input type="number" min="1" max="100000" step="1" wire:model="regler.{{ $scope }}.pax" placeholder="z. B. 50" class="{{ $input }} !py-1.5" data-planung-pax />
+            </div>
+            <div>
+                <label class="block {{ $label ?? 'text-[11px] text-gray-500' }} mb-1">Ziel-Portion (g)</label>
+                <input type="number" min="1" max="5000" step="1" wire:model="regler.{{ $scope }}.ziel_portion_g" placeholder="z. B. 180" class="{{ $input }} !py-1.5" data-planung-portion-g />
+            </div>
+            <div>
+                <label class="block {{ $label ?? 'text-[11px] text-gray-500' }} mb-1">Saison</label>
+                <select wire:model="regler.{{ $scope }}.saison" class="{{ $input }} !py-1.5" data-planung-saison>
+                    @foreach(\Platform\FoodAlchemist\Livewire\Planung\Index::SAISON_OPTIONEN as $wert => $lbl)
+                        <option value="{{ $wert }}">{{ $lbl }}</option>
+                    @endforeach
+                </select>
+            </div>
+            <div>
+                <label class="block {{ $label ?? 'text-[11px] text-gray-500' }} mb-1">Ziel-Wareneinsatz (%)</label>
+                <input type="number" min="1" max="100" step="1" wire:model="regler.{{ $scope }}.ziel_we_pct" placeholder="z. B. 28" class="{{ $input }} !py-1.5" data-planung-we-pct />
             </div>
         </div>
 

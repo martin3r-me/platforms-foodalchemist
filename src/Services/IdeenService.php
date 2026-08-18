@@ -414,6 +414,10 @@ class IdeenService
         $proposal = app(AiGatewayService::class)->propose('foodbook.kapitel_ideen', $kontext, array_filter([
             'knowledge' => ($wissen['block'] ?? '') !== '' ? $wissen['block'] : null,
             'knowledge_used' => $wissen['files_used'] ?? null,
+            // Marken-DNA-Kette (#389): die geprüfte Concept-Canvas (Leitidee/USP/Inszenierung/
+            // Geschmackswelten) fließt so in die Fan-out-Erfindung — sonst erfand die Kaskade Gerichte
+            // OHNE die Handschrift, die der Mensch im KI-Kopf gerade korrigiert hat.
+            'food_dna_concept_id' => $conceptId,
         ], fn ($v) => $v !== null));
 
         $rohe = is_array($proposal->werte['ideen'] ?? null) ? $proposal->werte['ideen'] : [];
