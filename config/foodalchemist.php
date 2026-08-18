@@ -713,9 +713,12 @@ return [
         ],
         'recipe.eigenschaften' => [
             'tier' => 'B',
-            'task' => 'Schaetze die drei Rezept-Eigenschaften (haltbarkeit_tage, '
-                . 'regenerierbarkeit gut|bedingt|nein, transportstabilitaet gut|bedingt|nein): '
-                . 'werte = {haltbarkeit_tage, regenerierbarkeit, transportstabilitaet}.',
+            'task' => 'Schaetze die operativen Rezept-Eigenschaften: Arbeitszeit je Kochvorgang '
+                . '(work_time_min), einmalige Ruestzeit je Produktionslauf (setup_time_min), maximal '
+                . 'sinnvoll vorproduzierbare Tage (max_vorlauf_tage, 0-14), Serviertemperatur und '
+                . 'kulinarische Funktion. Mengen und vorhandene Zubereitung beachten; keine Zeiten '
+                . 'oder Haltbarkeit vortaeuschen, wenn sie nicht belastbar ableitbar sind: werte = '
+                . '{work_time_min, setup_time_min, max_vorlauf_tage, temperature, function}.',
         ],
         'recipe.geschmack' => [
             'tier' => 'B',                                            // Auto-Apply-Ausnahme (GL-07 §4.3)

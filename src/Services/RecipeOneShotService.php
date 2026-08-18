@@ -218,6 +218,9 @@ class RecipeOneShotService
         $posten = $this->postenGlied($team, $recipe->fresh() ?? $recipe);
         $steps = $this->stepGlied($recipe->fresh() ?? $recipe);
         $prozessanker = $this->prozessankerGlied($recipe->fresh() ?? $recipe);
+        $aromaanker = $this->aromaankerGlied($team, $recipe->fresh() ?? $recipe);
+        $pairings = $this->pairingGlied($team, $recipe->fresh() ?? $recipe);
+        $eignung = $this->eignungsGlied($team, $recipe->fresh() ?? $recipe);
         $sensorik = $this->sensorikGlied($recipe->fresh() ?? $recipe);
 
         return [
@@ -227,6 +230,9 @@ class RecipeOneShotService
             'posten' => $posten,
             'steps' => $steps,
             'prozessanker' => $prozessanker,
+            'aromaanker' => $aromaanker,
+            'pairings' => $pairings,
+            'eignung' => $eignung,
             'sensorik' => $sensorik,
         ];
     }
@@ -257,7 +263,7 @@ class RecipeOneShotService
         }
     }
 
-    /** @return array{status: string, work_time_min?: ?int, temperature?: ?string, function?: ?string, fehler?: string} */
+    /** @return array{status: string, work_time_min?: ?int, setup_time_min?: ?int, max_vorlauf_tage?: ?int, temperature?: ?string, function?: ?string, fehler?: string} */
     private function eigenschaftenGlied(FoodAlchemistRecipe $recipe): array
     {
         try {
@@ -267,6 +273,8 @@ class RecipeOneShotService
                 'regenerierbarkeit' => null,
                 'transportstabilitaet' => null,
                 'work_time_min' => $recipe->work_time_min,
+                'setup_time_min' => $recipe->setup_time_min,
+                'max_vorlauf_tage' => $recipe->max_vorlauf_tage,
                 'temperature' => $recipe->temperature,
                 'function' => $recipe->function,
                 'preparation' => $recipe->preparation,
@@ -279,6 +287,12 @@ class RecipeOneShotService
             $update = [];
             if (isset($vorschlag->werte['work_time_min']) && is_numeric($vorschlag->werte['work_time_min'])) {
                 $update['work_time_min'] = max(0, (int) $vorschlag->werte['work_time_min']);
+            }
+            if (isset($vorschlag->werte['setup_time_min']) && is_numeric($vorschlag->werte['setup_time_min'])) {
+                $update['setup_time_min'] = max(0, (int) $vorschlag->werte['setup_time_min']);
+            }
+            if (isset($vorschlag->werte['max_vorlauf_tage']) && is_numeric($vorschlag->werte['max_vorlauf_tage'])) {
+                $update['max_vorlauf_tage'] = max(0, min(14, (int) $vorschlag->werte['max_vorlauf_tage']));
             }
             foreach (['temperature', 'function'] as $feld) {
                 $wert = $vorschlag->werte[$feld] ?? null;
@@ -296,6 +310,8 @@ class RecipeOneShotService
             return [
                 'status' => 'aktualisiert',
                 'work_time_min' => isset($update['work_time_min']) ? (int) $update['work_time_min'] : $recipe->work_time_min,
+                'setup_time_min' => isset($update['setup_time_min']) ? (int) $update['setup_time_min'] : $recipe->setup_time_min,
+                'max_vorlauf_tage' => isset($update['max_vorlauf_tage']) ? (int) $update['max_vorlauf_tage'] : $recipe->max_vorlauf_tage,
                 'temperature' => $update['temperature'] ?? $recipe->temperature,
                 'function' => $update['function'] ?? $recipe->function,
             ];
@@ -407,6 +423,141 @@ class RecipeOneShotService
                 'added' => $r['added'] ?? [],
                 'removed' => $r['removed'] ?? [],
             ];
+        } catch (\Throwable $e) {
+            return ['status' => 'fehler', 'fehler' => mb_strimwidth($e->getMessage(), 0, 300)];
+        }
+    }
+
+    /** @return array{status: string, n_anker?: int, fehler?: string} */
+    private function aromaankerGlied(Team $team, FoodAlchemistRecipe $recipe): array
+    {
+        try {
+            $pairings = app(PairingService::class);
+            $vokabular = \Illuminate\Support\Facades\DB::table('foodalchemist_vocab_pairing_anchors')
+                ->whereNull('deleted_at')->orderBy('slug')->pluck('slug')->all();
+            $vorschlag = app(Ai\AiGatewayService::class)->propose('recipe.anker', [
+                'name' => $recipe->name,
+                'zubereitung' => $recipe->preparation,
+                'zutaten' => $recipe->ingredients()->whereNull('deleted_at')->pluck('raw_text')->take(30)->all(),
+                'vokabular' => $vokabular,
+            ], ['target_table' => 'foodalchemist_recipe_anchor_mappings', 'target_id' => $recipe->id]);
+
+            $manualCount = \Illuminate\Support\Facades\DB::table('foodalchemist_recipe_anchor_mappings')
+                ->where('recipe_id', $recipe->id)->where('source', 'manual')->whereNull('deleted_at')->count();
+            $freiePlaetze = max(0, PairingService::CAP_RECIPE - $manualCount);
+            $slugs = array_slice(array_values(array_unique(array_filter(
+                (array) ($vorschlag->werte['anker_slugs'] ?? []),
+                fn ($slug) => is_string($slug) && in_array($slug, $vokabular, true)
+            ))), 0, $freiePlaetze);
+            $ids = $slugs === [] ? collect() : \Illuminate\Support\Facades\DB::table('foodalchemist_vocab_pairing_anchors')
+                ->whereIn('slug', $slugs)->pluck('id', 'slug');
+
+            \Illuminate\Support\Facades\DB::table('foodalchemist_recipe_anchor_mappings')
+                ->where('recipe_id', $recipe->id)->where('source', 'ai_inferred')->whereNull('deleted_at')
+                ->update(['deleted_at' => now(), 'updated_at' => now()]);
+            foreach ($slugs as $slug) {
+                $pairings->setRecipeAnkerInference($team, (int) $recipe->id, (int) $ids[$slug], (float) $vorschlag->confidence);
+            }
+
+            return ['status' => $slugs === [] ? 'leer' : 'aktualisiert', 'n_anker' => count($slugs)];
+        } catch (\Throwable $e) {
+            return ['status' => 'fehler', 'fehler' => mb_strimwidth($e->getMessage(), 0, 300)];
+        }
+    }
+
+    /** @return array{status: string, n_pairings?: int, fehler?: string} */
+    private function pairingGlied(Team $team, FoodAlchemistRecipe $recipe): array
+    {
+        try {
+            $pairings = app(PairingService::class);
+            $anker = $pairings->recipeAnkers((int) $recipe->id);
+            $grounding = $anker->flatMap(fn ($a) => $pairings->ankerNeighbors($a->slug, 'aroma', 30)
+                ->concat($pairings->ankerNeighbors($a->slug, 'kontrast', 30)))
+                ->unique(fn ($a) => $a->slug . '|' . $a->type)->values();
+            if ($grounding->isEmpty()) {
+                return ['status' => 'uebersprungen_ohne_grounding', 'n_pairings' => 0];
+            }
+
+            $vorschlag = app(Ai\AiGatewayService::class)->propose('recipe.pairing', [
+                'name' => $recipe->name,
+                'anker' => $anker->pluck('slug')->all(),
+                'grounding' => $grounding->map(fn ($a) => [
+                    'slug' => $a->slug, 'typ' => $a->type, 'evidence' => $a->evidence,
+                ])->all(),
+            ], ['target_table' => 'foodalchemist_recipe_pairings', 'target_id' => $recipe->id]);
+
+            $erlaubt = $grounding->groupBy('slug');
+            $werte = collect((array) ($vorschlag->werte['pairings'] ?? []))
+                ->filter(function ($p) use ($erlaubt) {
+                    if (! is_array($p) || ! is_string($p['slug'] ?? null) || ! $erlaubt->has($p['slug'])) {
+                        return false;
+                    }
+
+                    return $erlaubt->get($p['slug'])->pluck('type')->contains($p['typ'] ?? null);
+                })
+                ->take(25)->values();
+            \Illuminate\Support\Facades\DB::table('foodalchemist_recipe_pairings')
+                ->where('recipe_id', $recipe->id)->where('created_via', 'ai_gateway')->whereNull('deleted_at')
+                ->update(['deleted_at' => now(), 'updated_at' => now()]);
+            foreach ($werte as $wert) {
+                $ankerZeile = $erlaubt->get($wert['slug'])->firstWhere('type', $wert['typ']);
+                $pairings->setRecipePairingInference(
+                    $team,
+                    (int) $recipe->id,
+                    (int) $ankerZeile->id,
+                    $wert['typ'],
+                    in_array($wert['konfidenz'] ?? null, ['hoch', 'mittel', 'niedrig'], true) ? $wert['konfidenz'] : 'mittel',
+                );
+            }
+
+            return ['status' => $werte->isEmpty() ? 'leer' : 'aktualisiert', 'n_pairings' => $werte->count()];
+        } catch (\Throwable $e) {
+            return ['status' => 'fehler', 'fehler' => mb_strimwidth($e->getMessage(), 0, 300)];
+        }
+    }
+
+    /** @return array{status: string, n_level?: int, n_sektor?: int, fehler?: string} */
+    private function eignungsGlied(Team $team, FoodAlchemistRecipe $recipe): array
+    {
+        try {
+            $kontext = [
+                'name' => $recipe->name,
+                'zubereitung' => $recipe->preparation,
+                'zutaten' => $recipe->ingredients()->whereNull('deleted_at')->pluck('raw_text')->take(30)->all(),
+            ];
+            $sektor = app(Ai\AiGatewayService::class)->propose('recipe.sektor', $kontext + [
+                'vokabular' => RecipeService::eignungVokabular()['sektor']['slugs'],
+            ], ['target_table' => 'foodalchemist_recipe_sector_suitability', 'target_id' => $recipe->id]);
+            $level = app(Ai\AiGatewayService::class)->propose('recipe.level', $kontext + [
+                'vokabular' => RecipeService::eignungVokabular()['level']['slugs'],
+            ], ['target_table' => 'foodalchemist_recipe_level_suitability', 'target_id' => $recipe->id]);
+
+            $anzahl = [];
+            foreach ([['sektor', 'sektoren', $sektor], ['level', 'niveaus', $level]] as [$typ, $key, $proposal]) {
+                $meta = RecipeService::eignungVokabular()[$typ];
+                \Illuminate\Support\Facades\DB::table($meta['tabelle'])->where('recipe_id', $recipe->id)
+                    ->where('source', 'ai_inferred')->whereNull('deleted_at')->update(['deleted_at' => now(), 'updated_at' => now()]);
+                $n = 0;
+                foreach ((array) ($proposal->werte[$key] ?? []) as $slug => $urteil) {
+                    if (! in_array($slug, $meta['slugs'], true) || ($urteil['eignung'] ?? null) !== 'geeignet') {
+                        continue;
+                    }
+                    $manuell = \Illuminate\Support\Facades\DB::table($meta['tabelle'])
+                        ->where('recipe_id', $recipe->id)->where($meta['spalte'], $slug)
+                        ->where('source', 'manual')->exists();
+                    if ($manuell) {
+                        continue;
+                    }
+                    app(RecipeService::class)->setzeEignung(
+                        $team, (int) $recipe->id, $typ, $slug, 'ai_inferred',
+                        (float) $proposal->confidence, is_string($urteil['grund'] ?? null) ? $urteil['grund'] : null
+                    );
+                    $n++;
+                }
+                $anzahl[$typ] = $n;
+            }
+
+            return ['status' => array_sum($anzahl) > 0 ? 'aktualisiert' : 'leer', 'n_level' => $anzahl['level'], 'n_sektor' => $anzahl['sektor']];
         } catch (\Throwable $e) {
             return ['status' => 'fehler', 'fehler' => mb_strimwidth($e->getMessage(), 0, 300)];
         }

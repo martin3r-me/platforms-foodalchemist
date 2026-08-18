@@ -1036,6 +1036,25 @@ class PairingService
         );
     }
 
+    /** KI-Inferenz fuer die Vollanreicherung; manuelle Mappings werden nie ersetzt. */
+    public function setRecipeAnkerInference(Team $team, int $recipeId, int $ankerId, float $confidence): void
+    {
+        $recipe = FoodAlchemistRecipe::visibleToTeam($team)->findOrFail($recipeId);
+        $manual = DB::table('foodalchemist_recipe_anchor_mappings')
+            ->where('recipe_id', $recipe->id)->where('anchor_id', $ankerId)
+            ->where('source', 'manual')->exists();
+        if ($manual) {
+            return;
+        }
+        DB::table('foodalchemist_recipe_anchor_mappings')->updateOrInsert(
+            ['recipe_id' => $recipe->id, 'anchor_id' => $ankerId],
+            ['uuid' => (string) \Symfony\Component\Uid\UuidV7::generate(), 'team_id' => $team->id,
+                'role' => 'kern', 'source' => 'ai_inferred', 'ai_confidence' => max(0, min(1, $confidence)),
+                'ai_reasoning' => 'Vollanreicherung', 'deleted_at' => null,
+                'updated_at' => now(), 'created_at' => now()],
+        );
+    }
+
     public function removeRecipeAnker(Team $team, int $recipeId, int $ankerId): void
     {
         FoodAlchemistRecipe::visibleToTeam($team)->findOrFail($recipeId);
@@ -1092,6 +1111,26 @@ class PairingService
             ['recipe_id' => $recipe->id, 'anchor_id' => $ankerId, 'type' => $typ],
             ['uuid' => (string) \Symfony\Component\Uid\UuidV7::generate(), 'team_id' => $team->id,
                 'confidence' => 'hoch', 'created_via' => 'manual', 'note' => null,
+                'deleted_at' => null, 'updated_at' => now(), 'created_at' => now()],
+        );
+    }
+
+    /** Geerdetes KI-Pairing; manuelle Zeilen bleiben unangetastet und gewinnen im Panel. */
+    public function setRecipePairingInference(Team $team, int $recipeId, int $ankerId, string $typ, string $confidence): void
+    {
+        $recipe = FoodAlchemistRecipe::visibleToTeam($team)->findOrFail($recipeId);
+        $typ = in_array($typ, ['aroma', 'kontrast'], true) ? $typ : 'aroma';
+        $manual = DB::table('foodalchemist_recipe_pairings')
+            ->where('recipe_id', $recipe->id)->where('anchor_id', $ankerId)->where('type', $typ)
+            ->where('created_via', 'manual')->exists();
+        if ($manual) {
+            return;
+        }
+        DB::table('foodalchemist_recipe_pairings')->updateOrInsert(
+            ['recipe_id' => $recipe->id, 'anchor_id' => $ankerId, 'type' => $typ],
+            ['uuid' => (string) \Symfony\Component\Uid\UuidV7::generate(), 'team_id' => $team->id,
+                'confidence' => in_array($confidence, ['hoch', 'mittel', 'niedrig'], true) ? $confidence : 'mittel',
+                'created_via' => 'ai_gateway', 'note' => 'Geerdet durch Vollanreicherung',
                 'deleted_at' => null, 'updated_at' => now(), 'created_at' => now()],
         );
     }
