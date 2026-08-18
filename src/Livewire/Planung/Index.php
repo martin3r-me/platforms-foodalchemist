@@ -1107,7 +1107,10 @@ class Index extends Component
         if (($pax = $this->intRegler($r['pax'] ?? '', 1, 100000)) !== null) {
             $p['pax'] = $pax;
         }
-        if (($portion = $this->intRegler($r['ziel_portion_g'] ?? '', 1, 5000)) !== null) {
+        // Ziel-Portion (g) ist eine per-Portion-Vorgabe (Gericht/Basisrezept). Für ein Concept (ganzes
+        // Menü aus vielen Gängen mit je eigener Portion) ist eine einzelne Gramm-Zahl scope-fremd und
+        // im Prompt nur Rauschen (Leitplanken-Hygiene 2026-08-18) → nur außerhalb des Concept-Scopes.
+        if ($scope !== 'concept' && ($portion = $this->intRegler($r['ziel_portion_g'] ?? '', 1, 5000)) !== null) {
             $p['ziel_portion_g'] = $portion;
         }
         if (($wePct = $this->intRegler($r['ziel_we_pct'] ?? '', 1, 100)) !== null) {
@@ -1137,7 +1140,10 @@ class Index extends Component
         $p['use_favorites_list'] = $favoriten;
         $p['favorites_convenience_only'] = $favoriten && $favConvOnly;
         $p['ki_bilder'] = $kiBilder;   // Preisfrage: KI-Fotos bei Anreicherung ja/nein
-        if ($vk && ($ziel = $this->zielVkEur($scope)) !== null) {
+        // Ziel-VK (Netto je Portion) ist die Gericht-Preisachse. Für ein Concept ist der Menü-Preis-
+        // Korridor p. P. (unten) die EINZIGE Preisquelle (Entscheid 2026-08-18) — kein konkurrierender
+        // Portions-VK im Concept-Prompt. rezept trägt ohnehin keinen VK ($vk deckt das mit ab).
+        if ($scope === 'gericht' && ($ziel = $this->zielVkEur($scope)) !== null) {
             $p['ziel_vk_eur'] = $ziel;
         }
         if ($menue) {

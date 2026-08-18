@@ -130,10 +130,14 @@
                     <label class="block {{ $label ?? 'text-[11px] text-gray-500' }} mb-1">Pax / Gäste</label>
                     <input type="number" min="1" max="100000" step="1" wire:model="regler.{{ $scope }}.pax" placeholder="z. B. 50" class="{{ $input }} !py-1.5" data-planung-pax />
                 </div>
-                <div>
-                    <label class="block {{ $label ?? 'text-[11px] text-gray-500' }} mb-1">Ziel-Portion (g)</label>
-                    <input type="number" min="1" max="5000" step="1" wire:model="regler.{{ $scope }}.ziel_portion_g" placeholder="z. B. 180" class="{{ $input }} !py-1.5" data-planung-portion-g />
-                </div>
+                {{-- Ziel-Portion (g) ist per-Portion — für ein Concept (ganzes Menü) scope-fremd, darum nur
+                     am Gericht (Leitplanken-Hygiene 2026-08-18). Der Concept-Umfang steuert der Menü-Block unten. --}}
+                @if($scope !== 'concept')
+                    <div>
+                        <label class="block {{ $label ?? 'text-[11px] text-gray-500' }} mb-1">Ziel-Portion (g)</label>
+                        <input type="number" min="1" max="5000" step="1" wire:model="regler.{{ $scope }}.ziel_portion_g" placeholder="z. B. 180" class="{{ $input }} !py-1.5" data-planung-portion-g />
+                    </div>
+                @endif
             @endif
             <div>
                 <label class="block {{ $label ?? 'text-[11px] text-gray-500' }} mb-1">Saison</label>
@@ -246,11 +250,15 @@
                             <option value="gewagt">gewagt (nur belegte Paarungen)</option>
                         </select>
                     </div>
-                    <div class="md:col-span-3">
-                        <p class="text-xs font-medium text-gray-900 mb-1">Ziel-VK (optional)</p>
-                        <input type="text" wire:model="regler.{{ $scope }}.ziel_vk" placeholder="z. B. 8,50" class="{{ $input }} !py-1.5 md:max-w-xs" data-planung-ziel-vk />
-                        <p class="text-[11px] text-gray-500 mt-1">Netto je Portion. Geht als Vorgabe in den Vorschlag; der Preis wird nicht auf das Ziel gedrückt.</p>
-                    </div>
+                    {{-- Ziel-VK ist der Portions-Preis (Gericht). Für ein Concept ist der Menü-Preis-Korridor
+                         p. P. oben die EINZIGE Preisquelle (Entscheid 2026-08-18) — hier kein zweiter Preis. --}}
+                    @if($scope === 'gericht')
+                        <div class="md:col-span-3">
+                            <p class="text-xs font-medium text-gray-900 mb-1">Ziel-VK (optional)</p>
+                            <input type="text" wire:model="regler.{{ $scope }}.ziel_vk" placeholder="z. B. 8,50" class="{{ $input }} !py-1.5 md:max-w-xs" data-planung-ziel-vk />
+                            <p class="text-[11px] text-gray-500 mt-1">Netto je Portion. Geht als Vorgabe in den Vorschlag; der Preis wird nicht auf das Ziel gedrückt.</p>
+                        </div>
+                    @endif
                 </div>
             </div>
         @endif
