@@ -11,6 +11,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistGp;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipeCategory;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipeMainGroup;
+use Platform\FoodAlchemist\Services\Ai\PoolEmbeddingService;
 use Platform\FoodAlchemist\Support\TeamScope;
 
 /**
@@ -631,7 +632,14 @@ class RecipeService
 
         app(RecipeRecomputeService::class)->recomputeAndPropagate($recipe->id);
 
-        return $recipe->refresh();
+        $recipe = $recipe->refresh();
+        // A4: Recall-Index nachziehen — die Top-Zutaten-Namen sind Teil des Rezept-Embed-Texts
+        // ({@see PoolEmbeddingService::recipeEmbedText}); eine Zutaten-Änderung driftet ihn sonst
+        // still (der Rezept-Observer feuert nur auf Rezept-Felder, nicht auf die Zutaten-Zeilen).
+        // Idempotent via source_hash (nur echter Text-Change embeddet neu), async, no-op ohne Provider.
+        app(PoolEmbeddingService::class)->queueRecipe($recipe);
+
+        return $recipe;
     }
 
     /**

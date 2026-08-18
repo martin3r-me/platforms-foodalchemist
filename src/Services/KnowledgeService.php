@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Platform\Core\Models\Team;
+use Platform\FoodAlchemist\Services\Ai\KnowledgeEmbeddingService;
 use Platform\FoodAlchemist\Support\TeamScope;
 use RuntimeException;
 use Symfony\Component\Uid\UuidV7;
@@ -141,7 +142,12 @@ class KnowledgeService
             $this->bindLayer($team, (int) $doc->id, $b['target_key'], $b['mode'], 'mcp');
         }
 
-        return $this->find($slug);
+        $fresh = $this->find($slug);
+        // Recall-Index nachziehen (A1): Inhalts-/Status-Edit ⇒ neu embedden bzw. bei
+        // Deaktivierung purgen (queueDocument gated intern auf active). Async, no-op ohne Provider.
+        app(KnowledgeEmbeddingService::class)->queueDocument($fresh);
+
+        return $fresh;
     }
 
     /** Bindet ein Doc an einen Einsatzort (knowledge_layers-Slug), Provenienz $source. */
@@ -370,6 +376,9 @@ class KnowledgeService
         if ($changed) {
             DB::table('foodalchemist_knowledge_documents')->where('id', $doc->id)
                 ->update(['active' => $active, 'updated_at' => now()]);
+            // Recall-Index nachziehen (A1): Aktivieren → embedden, Deaktivieren → purgen
+            // (queueDocument gated intern auf active). Nur bei echtem Statuswechsel — kein Churn.
+            app(KnowledgeEmbeddingService::class)->queueDocument($this->find($doc->slug));
         }
 
         return [

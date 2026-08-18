@@ -18,7 +18,8 @@ class EmbedCommand extends Command
 {
     protected $signature = 'foodalchemist:embed
         {--pool=all : gps|recipes|knowledge|suppliers|concepts|foodbooks|lab_notes|la|all}
-        {--team= : nur diese reale team_id (Default: alle Partitionen)}';
+        {--team= : nur diese reale team_id (Default: alle Partitionen)}
+        {--purge : (nur pool=knowledge/all) verwaiste Vektoren entfernen — Probe-Delete über [1..maxId], off-peak (A2)}';
 
     protected $description = 'Backfill der Embedding-Pools (GPs, Rezepte, Wissen) für die semantische Recall-Schicht (#507)';
 
@@ -78,8 +79,11 @@ class EmbedCommand extends Command
         }
 
         if ($pool === 'knowledge' || $pool === 'all') {
-            $stats = $knowledge->embedCorpus();
+            $stats = $knowledge->embedCorpus(null, (bool) $this->option('purge'));
             $rows[] = ['Wissen (alle Kategorien)', $stats['candidates'], implode(', ', array_keys($stats['kategorien']))];
+            if (isset($stats['purge'])) {
+                $rows[] = ['Wissen — Purge (Waisen)', $stats['purge']['deleted'], 'probed: ' . $stats['purge']['probed']];
+            }
             $anker = $knowledge->embedAnkers();
             $rows[] = ['Anker (Vokabular)', $anker['candidates'], '—'];
         }
