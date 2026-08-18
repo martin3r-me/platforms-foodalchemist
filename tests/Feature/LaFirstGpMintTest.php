@@ -66,6 +66,28 @@ it('keine passende LA → KEIN GP (Doktrin), sondern null', function () {
         ->and(FoodAlchemistGp::count())->toBe($vorher);
 });
 
+// D3 2026-08-18: §11.2 Auto-Derivat — Nebenprodukt ohne eigenen LA wird Derivat der (mit-gemintenen) Mutter.
+it('Nebenprodukt ohne eigenen LA wird als Derivat der Mutter angelegt (§11.2)', function () {
+    ($this->mkLa)('Rind');   // Mutter hat einen LA → wird mit-gemintet
+
+    $derivat = $this->svc->mintFromLa($this->rootTeam, 'Rinderabschnitte');
+
+    expect($derivat)->toBeInstanceOf(FoodAlchemistGp::class)
+        ->and((bool) $derivat->is_derivat)->toBeTrue()
+        ->and((bool) $derivat->requires_la)->toBeFalse()          // §11.2: Derivat braucht keinen LA
+        ->and($derivat->derivat_von_gp_id)->not->toBeNull();      // Mutter-FK (LIVE-Allergen-Vererbung §16)
+
+    $mutter = FoodAlchemistGp::find($derivat->derivat_von_gp_id);
+    expect($mutter)->not->toBeNull()
+        ->and((bool) $mutter->is_derivat)->toBeFalse();
+});
+
+it('Kerne sind KEIN Derivat (§11.2-Anti-Pattern) → ohne LA null', function () {
+    $vorher = FoodAlchemistGp::count();
+    expect($this->svc->mintFromLa($this->rootTeam, 'Kürbiskerne'))->toBeNull()
+        ->and(FoodAlchemistGp::count())->toBe($vorher);
+});
+
 it('Generator-Integration: Lücke mit LA wird vorgeschlagen, aber noch nicht gemintet', function () {
     config(['foodalchemist.ai.provider' => 'fake']);
     foreach ([

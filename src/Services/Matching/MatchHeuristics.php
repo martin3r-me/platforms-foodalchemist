@@ -110,6 +110,17 @@ class MatchHeuristics
         'veloute', 'sirup', 'vinaigrette', 'dressing', 'chutney', 'kompott', 'pesto', 'marinade',
     ];
 
+    /**
+     * D3 2026-08-18 — §11.2 Nebenprodukt-Derivat-Marker (NUR eindeutige, User-Entscheid). Saft/Fett/Grün
+     * bewusst RAUS (kontext-ambig: Saft-Derivat nur Zitrus, »entsafteter Saft« = Rezept). Kerne sind
+     * KEINE Derivate (§11.2-Anti-Pattern: Pinien/Walnuss/Kürbiskerne = eigene GPs) → nicht in der Liste.
+     * Tokens normalisiert (Parüren→parueren) wie TokenEngine::tokenize.
+     */
+    public const NEBENPRODUKT_MARKER = [
+        'abschnitte', 'abschnitt', 'knochen', 'karkasse', 'karkassen',
+        'paruere', 'parueren', 'schale', 'schalen', 'stiel', 'stiele', 'zeste', 'zesten',
+    ];
+
     /** D-6: Einzel-/Deko-/Convenience-Artikel bleiben GP/LA-first, auch im Gericht. */
     public const DIREKT_ARTIKEL_MARKER = [
         'fleur', 'sel', 'salz', 'meersalz', 'gewuerz', 'gewuerze', 'kresse',
@@ -182,6 +193,44 @@ class MatchHeuristics
         }
 
         return false;
+    }
+
+    /**
+     * D3 2026-08-18 — §11.2: erkennt ein Nebenprodukt-Derivat und trennt Mutter-Text von Derivat-Form.
+     * Compound »Rinderabschnitte« → [mutter_text: »rinder«, form: »Abschnitte«]; Mehr-Token
+     * »Kalb Parüren« → [»kalb«, »Parüren«]. null, wenn kein Marker greift oder kein Mutter-Rest bleibt
+     * (bloßes »Knochen« ohne Mutter → kein Split, fällt auf Sourcing-Lücke zurück).
+     *
+     * @return array{mutter_text: string, form: string}|null
+     */
+    public function nebenproduktDerivat(string $name): ?array
+    {
+        $tokens = $this->engine->tokenize($name);
+        if ($tokens === []) {
+            return null;
+        }
+        // Mehr-Token: ein ganzes Token IST der Marker → Rest = Mutter (»Kalb Parüren«).
+        if (count($tokens) > 1) {
+            foreach ($tokens as $i => $t) {
+                if (in_array($t, self::NEBENPRODUKT_MARKER, true)) {
+                    $mutter = array_values(array_diff_key($tokens, [$i => true]));
+                    if ($mutter !== []) {
+                        return ['mutter_text' => implode(' ', $mutter), 'form' => mb_convert_case($t, MB_CASE_TITLE, 'UTF-8')];
+                    }
+                }
+            }
+        }
+        // Compound-Suffix in einem Token (»rinderabschnitte« → Präfix »rinder«).
+        foreach ($tokens as $t) {
+            foreach (self::NEBENPRODUKT_MARKER as $m) {
+                $pos = mb_strpos($t, $m);
+                if ($pos !== false && mb_strlen(mb_substr($t, 0, $pos)) >= 3) {
+                    return ['mutter_text' => mb_substr($t, 0, $pos), 'form' => mb_convert_case($m, MB_CASE_TITLE, 'UTF-8')];
+                }
+            }
+        }
+
+        return null;
     }
 
     /** P8 — Button-Heuristik: Label-Hinweis ODER Halbfabrikat ODER Zubereitungs-Marker. */

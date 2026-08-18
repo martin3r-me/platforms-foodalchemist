@@ -196,6 +196,18 @@ it('variant_rank bevorzugt Basisform gegen Groesse/Schnitt (neutral)', function 
         ->toBeLessThan($this->h->variantRankResolved('Zwiebel: frisch, ganz'));
 });
 
+// D3 2026-08-18: §11.2 Nebenprodukt-Derivat-Erkennung (Mutter-Text + Form; Kerne = Anti-Pattern).
+it('nebenprodukt_derivat trennt Mutter von Form + respektiert Anti-Pattern', function () {
+    $d = $this->h->nebenproduktDerivat('Rinderabschnitte');
+    expect($d['mutter_text'])->toBe('rinder')->and($d['form'])->toBe('Abschnitte');
+    expect($this->h->nebenproduktDerivat('Gurkenschale')['mutter_text'])->toBe('gurken');
+    expect($this->h->nebenproduktDerivat('Kalb Parüren')['mutter_text'])->toBe('kalb');
+    // Anti-Pattern §11.2: Kerne sind KEINE Derivate; Saft bewusst raus (kontext-ambig); bloßer Marker ohne Mutter → kein Split.
+    expect($this->h->nebenproduktDerivat('Kürbiskerne'))->toBeNull();
+    expect($this->h->nebenproduktDerivat('Karottensaft'))->toBeNull();
+    expect($this->h->nebenproduktDerivat('Knochen'))->toBeNull();
+});
+
 // Roadmap Etappe 1: gemachte Saucen/Reduktionen als Halbfabrikat (SUB_SAUCEN_MARKER)
 it('halbfabrikat_gate_erkennt_gemachte_saucen', function () {
     foreach (['Steinpilz-Rahmsauce', 'Rotwein Jus', 'Kalbs-Sud',

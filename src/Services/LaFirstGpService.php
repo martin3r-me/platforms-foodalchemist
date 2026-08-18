@@ -6,6 +6,7 @@ use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Jobs\ClassifyLaJob;
 use Platform\FoodAlchemist\Models\FoodAlchemistGp;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplierItemStructure;
+use Platform\FoodAlchemist\Services\Matching\MatchHeuristics;
 
 /**
  * 07·M1 — LA-First-GP-Mint als GETEILTE Fähigkeit (Keystone).
@@ -42,14 +43,23 @@ class LaFirstGpService
      *                               verengt die LA-Suche auf die WG-Leads. Fehlt er → Suche über alle Leads.
      * @return FoodAlchemistGp|null  gemintetes/wiederverwendetes GP oder null (keine LA / §6-Verstoß / Fehler)
      */
-    public function mintFromLa(Team $team, string $text, ?string $slug = null, ?string $wgHint = null): ?FoodAlchemistGp
+    public function mintFromLa(Team $team, string $text, ?string $slug = null, ?string $wgHint = null, bool $allowDerivat = true): ?FoodAlchemistGp
     {
         try {
             // Spec 16·S3: WG-Lead-gescopter, Terminologie-gerankter Kandidat statt naivem
             // searchGlobal->items()[0]. Ohne WG-Hint + Einzeltreffer verhaltensgleich.
             $la = app(LaCandidateFinder::class)->best($team, $text, $wgHint);
             if ($la === null) {
-                return null;   // Kein LA → KEIN GP (Doktrin). Aufrufer erfasst Sourcing-Wunsch.
+                // D3 §11.2: Nebenprodukt (Knochen/Abschnitte/Karkasse/Schale/…) hat keinen LA →
+                // als Derivat der Mutter anlegen statt still unbepreist. Nur einmal (kein Rekurs).
+                if ($allowDerivat) {
+                    $derivat = $this->mintDerivat($team, $text, $wgHint);
+                    if ($derivat !== null) {
+                        return $derivat;
+                    }
+                }
+
+                return null;   // Kein LA (+ kein Derivat) → KEIN GP (Doktrin). Aufrufer erfasst Sourcing-Wunsch.
             }
             // LA bereits einem GP zugeordnet? → dieses GP direkt nutzen (kein Neu-Anlegen).
             $struktur = FoodAlchemistSupplierItemStructure::where('supplier_item_id', $la->id)
@@ -85,6 +95,49 @@ class LaFirstGpService
             return $gp;
         } catch (\Throwable $e) {
             return null;
+        }
+    }
+
+    /**
+     * D3 2026-08-18 — §11.2 Nebenprodukt-Derivat: Mutter auflösen (mit-minten via mintFromLa, das
+     * LA-Lookup + Dedup + Stemming rinder→rind selbst macht; rekursions-sicher via allowDerivat=false),
+     * dann Derivat »<Mutter>: frisch, <Form>« anlegen (is_derivat=1, derivat_von_gp_id, requires_la=0,
+     * LIVE-Allergen-Vererbung §16). null bei keiner sicheren Mutter (keine erfundene Mutter).
+     */
+    private function mintDerivat(Team $team, string $text, ?string $wgHint = null): ?FoodAlchemistGp
+    {
+        $d = app(MatchHeuristics::class)->nebenproduktDerivat($text);
+        if ($d === null) {
+            return null;   // kein Nebenprodukt
+        }
+        // Compound-Präfix (»rinder«) auf die Lemma-/Stammform (»rind«) bringen, damit die LA-Suche
+        // die Mutter trifft UND der Mutter-Name im §6.1-Singular landet.
+        $engine = app(\Platform\FoodAlchemist\Services\Matching\TokenEngine::class);
+        $mutterQuery = trim(implode(' ', array_map([$engine, 'stemGerman'], preg_split('/\s+/', $d['mutter_text']) ?: [])));
+        $mutter = $this->mintFromLa($team, $mutterQuery !== '' ? $mutterQuery : $d['mutter_text'], null, $wgHint, false);
+        if ($mutter === null) {
+            return null;   // auch Mutter ohne LA → Sourcing-Lücke (keine erfundene Mutter)
+        }
+        $mutterBasis = trim((string) (preg_split('/[:,]/u', (string) $mutter->name)[0] ?? $mutter->name));
+        if ($mutterBasis === '') {
+            return null;
+        }
+        $name = $mutterBasis . ': frisch, ' . $d['form'];
+        $naming = app(GpNamingService::class);
+        try {
+            return $naming->createGp($team, [
+                'name' => $name,
+                'hauptzutat' => $mutterBasis,
+                'condition' => 'frisch',
+                'form' => $d['form'],
+                'is_derivat' => 1,
+                'derivat_von_gp_id' => (int) $mutter->id,
+            ]);
+        } catch (\Throwable $e) {
+            // Derivat existiert schon (Dedup-Hard-Stop) → vorhandenes wiederverwenden, sonst null.
+            $g = $naming->anlageGuard($team, $naming->buildGpKey($naming->slugify($mutterBasis), null, $d['form']), $name);
+
+            return $g['vorhandenes_gp'] ?? null;
         }
     }
 
