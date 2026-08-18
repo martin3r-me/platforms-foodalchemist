@@ -116,7 +116,9 @@ class Index extends Component
         // allergen_nogo (L3): EU-14-Allergen-Ausschluss (hart geprüft, getrennt vom Diät-Ausschluss).
         'diaet_hart' => [], 'allergen_nogo' => [], 'aroma' => '', 'aroma_kueche' => '',
         // L6 »Menge & Ziel« (KI-Vorgaben): Pax (Gäste), Ziel-Portionsgröße g, Saison, Ziel-Wareneinsatz %.
+        // Basisrezept (Halbfabrikat, kein Teller): Ziel-Menge + Einheit statt Pax/Portion (scope-abhängig, s. Blade).
         'pax' => '', 'ziel_portion_g' => '', 'saison' => '', 'ziel_we_pct' => '',
+        'ziel_einheit' => '', 'ziel_menge' => '',
         'occasion' => '', 'serviceform' => '', 'kompositions_stil' => '',
         'favoriten' => false, 'favoriten_conv_only' => false,
         'ziel_vk' => '', 'voll_anreichern' => false, 'ki_bilder' => false,
@@ -291,6 +293,17 @@ class Index extends Component
     public const SAISON_OPTIONEN = [
         '' => 'Ganzjährig / egal',
         'fruehling' => 'Frühling', 'sommer' => 'Sommer', 'herbst' => 'Herbst', 'winter' => 'Winter',
+    ];
+
+    /**
+     * Ziel-Mengen-Einheiten fürs BASISREZEPT (Halbfabrikat) — value=>Label. Ein Basisrezept ist keine
+     * Teller-Portion für N Gäste, sondern eine Charge in einer Einheit (2 L Sauce, 5 kg Teig, 30 Stk).
+     * Kuratierte KI-Vorgabe-Liste (kein Vocab-Zwang — reiner Prompt-Hint), reglerParams whitelistet dagegen.
+     */
+    public const MENGE_EINHEITEN = [
+        '' => '(egal)',
+        'l' => 'Liter', 'ml' => 'Milliliter', 'kg' => 'Kilogramm', 'g' => 'Gramm',
+        'stk' => 'Stück', 'portionen' => 'Portionen',
     ];
 
     public ?string $meldung = null;
@@ -1099,6 +1112,15 @@ class Index extends Component
         }
         if (($wePct = $this->intRegler($r['ziel_we_pct'] ?? '', 1, 100)) !== null) {
             $p['ziel_we_pct'] = $wePct;
+        }
+        // Basisrezept-Ziel (scope=rezept): Menge (Dezimal erlaubt) + Einheit statt Pax/Portion — nur
+        // zusammen und mit gültiger Einheit durchreichen (reiner KI-Hint, whitelist gegen MENGE_EINHEITEN).
+        unset($p['ziel_menge'], $p['ziel_einheit']);
+        $mengeRaw = str_replace(',', '.', trim((string) ($r['ziel_menge'] ?? '')));
+        if ($mengeRaw !== '' && is_numeric($mengeRaw) && (float) $mengeRaw > 0
+            && ($r['ziel_einheit'] ?? '') !== '' && isset(self::MENGE_EINHEITEN[$r['ziel_einheit']])) {
+            $p['ziel_menge'] = (float) $mengeRaw;
+            $p['ziel_einheit'] = (string) $r['ziel_einheit'];
         }
         if (! isset(self::SAISON_OPTIONEN[$p['saison'] ?? '']) || ($p['saison'] ?? '') === '') {
             unset($p['saison']);   // leer/unbekannt = keine Saison-Vorgabe

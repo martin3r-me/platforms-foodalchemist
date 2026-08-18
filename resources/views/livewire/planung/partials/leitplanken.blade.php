@@ -110,14 +110,31 @@
         </div>
 
         <div class="md:col-span-2 grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-2" data-richtung="menge-ziel">
-            <div>
-                <label class="block {{ $label ?? 'text-[11px] text-gray-500' }} mb-1">Pax / Gäste</label>
-                <input type="number" min="1" max="100000" step="1" wire:model="regler.{{ $scope }}.pax" placeholder="z. B. 50" class="{{ $input }} !py-1.5" data-planung-pax />
-            </div>
-            <div>
-                <label class="block {{ $label ?? 'text-[11px] text-gray-500' }} mb-1">Ziel-Portion (g)</label>
-                <input type="number" min="1" max="5000" step="1" wire:model="regler.{{ $scope }}.ziel_portion_g" placeholder="z. B. 180" class="{{ $input }} !py-1.5" data-planung-portion-g />
-            </div>
+            @if($scope === 'rezept')
+                {{-- Basisrezept = Halbfabrikat (Charge in einer Einheit), kein Teller für N Gäste:
+                     Ziel-Menge + Einheit statt Pax/Portion (2 L Sauce, 5 kg Teig, 30 Stk …). --}}
+                <div>
+                    <label class="block {{ $label ?? 'text-[11px] text-gray-500' }} mb-1">Einheit</label>
+                    <select wire:model="regler.{{ $scope }}.ziel_einheit" class="{{ $input }} !py-1.5" data-planung-ziel-einheit>
+                        @foreach(\Platform\FoodAlchemist\Livewire\Planung\Index::MENGE_EINHEITEN as $wert => $lbl)
+                            <option value="{{ $wert }}">{{ $lbl }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div>
+                    <label class="block {{ $label ?? 'text-[11px] text-gray-500' }} mb-1">Ziel-Menge</label>
+                    <input type="number" min="0" step="any" wire:model="regler.{{ $scope }}.ziel_menge" placeholder="z. B. 2" class="{{ $input }} !py-1.5" data-planung-ziel-menge />
+                </div>
+            @else
+                <div>
+                    <label class="block {{ $label ?? 'text-[11px] text-gray-500' }} mb-1">Pax / Gäste</label>
+                    <input type="number" min="1" max="100000" step="1" wire:model="regler.{{ $scope }}.pax" placeholder="z. B. 50" class="{{ $input }} !py-1.5" data-planung-pax />
+                </div>
+                <div>
+                    <label class="block {{ $label ?? 'text-[11px] text-gray-500' }} mb-1">Ziel-Portion (g)</label>
+                    <input type="number" min="1" max="5000" step="1" wire:model="regler.{{ $scope }}.ziel_portion_g" placeholder="z. B. 180" class="{{ $input }} !py-1.5" data-planung-portion-g />
+                </div>
+            @endif
             <div>
                 <label class="block {{ $label ?? 'text-[11px] text-gray-500' }} mb-1">Saison</label>
                 <select wire:model="regler.{{ $scope }}.saison" class="{{ $input }} !py-1.5" data-planung-saison>
