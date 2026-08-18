@@ -14,7 +14,9 @@ use Platform\FoodAlchemist\Models\FoodAlchemistDishIdea;
 use Platform\FoodAlchemist\Models\FoodAlchemistPlanningSession;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipeStepPhoto;
+use Platform\FoodAlchemist\Services\CanvasService;
 use Platform\FoodAlchemist\Services\ConceptGeneratorService;
+use Platform\FoodAlchemist\Services\ConceptService;
 use Platform\FoodAlchemist\Services\IdeenService;
 use Platform\FoodAlchemist\Services\PairingService;
 use Platform\FoodAlchemist\Services\PlanningCascadeService;
@@ -343,6 +345,17 @@ class Index extends Component
     public ?int $planConceptId = null;
 
     /**
+     * Editierbare Semantik-Skalare des vorbereiteten KI-Kopf-Plans (Leitidee/Name+Claim/USP/Inszenierung/
+     * intern) — INLINE in der Leitstelle sichtbar + änderbar (statt Wegsprung in den Conceptor). Geladen
+     * aus der `concept.plan`-Canvas ({@see ladePlanForm}); {@see planFeldSpeichern} schreibt zurück. Diese
+     * Felder SIND der LLM-Kontext für die Concept-/Gericht-Erzeugung (fließen beim Go mit) — „ein Ort, ein
+     * Kontext". Geschmackswelten + die Menü-Positionen bleiben Lese-Anzeige ({@see planVorschau}).
+     *
+     * @var array<string,string>
+     */
+    public array $planForm = [];
+
+    /**
      * Ursprungs-Skizze für den Gericht-Go (Etappe 4, Teil 2a — Lineage). {@see skizzeAlsGericht} merkt
      * die Skizze beim Übertragen in den Gericht-Tab; der nächste Gericht-`Go` stempelt sie als
      * `origin_dish_idea_id` auf den Lauf ({@see goKaskade}) → die Skizzen-Karte kann später den
@@ -544,6 +557,8 @@ class Index extends Component
             && FoodAlchemistConcept::where('team_id', $team->id)->whereKey($session->plan_concept_id)->exists()) {
             $this->planConceptId = (int) $session->plan_concept_id;
         }
+        // Inline-Plan-Panel: die editierbaren Semantik-Felder aus der Canvas nachziehen (leert, wenn kein Plan).
+        $this->ladePlanForm();
 
         // L5: die beim Go persistierten Leitplanken (generation_params) in die Regler zurücklesen — sonst
         // zeigt jeder Tab nach einem Reload wieder die Defaults, während der Lauf mit anderen Werten fuhr.
@@ -1107,7 +1122,10 @@ class Index extends Component
         if (($pax = $this->intRegler($r['pax'] ?? '', 1, 100000)) !== null) {
             $p['pax'] = $pax;
         }
-        if (($portion = $this->intRegler($r['ziel_portion_g'] ?? '', 1, 5000)) !== null) {
+        // Ziel-Portion (g) ist eine per-Portion-Vorgabe (Gericht/Basisrezept). Für ein Concept (ganzes
+        // Menü aus vielen Gängen mit je eigener Portion) ist eine einzelne Gramm-Zahl scope-fremd und
+        // im Prompt nur Rauschen (Leitplanken-Hygiene 2026-08-18) → nur außerhalb des Concept-Scopes.
+        if ($scope !== 'concept' && ($portion = $this->intRegler($r['ziel_portion_g'] ?? '', 1, 5000)) !== null) {
             $p['ziel_portion_g'] = $portion;
         }
         if (($wePct = $this->intRegler($r['ziel_we_pct'] ?? '', 1, 100)) !== null) {
@@ -1137,7 +1155,10 @@ class Index extends Component
         $p['use_favorites_list'] = $favoriten;
         $p['favorites_convenience_only'] = $favoriten && $favConvOnly;
         $p['ki_bilder'] = $kiBilder;   // Preisfrage: KI-Fotos bei Anreicherung ja/nein
-        if ($vk && ($ziel = $this->zielVkEur($scope)) !== null) {
+        // Ziel-VK (Netto je Portion) ist die Gericht-Preisachse. Für ein Concept ist der Menü-Preis-
+        // Korridor p. P. (unten) die EINZIGE Preisquelle (Entscheid 2026-08-18) — kein konkurrierender
+        // Portions-VK im Concept-Prompt. rezept trägt ohnehin keinen VK ($vk deckt das mit ab).
+        if ($scope === 'gericht' && ($ziel = $this->zielVkEur($scope)) !== null) {
             $p['ziel_vk_eur'] = $ziel;
         }
         if ($menue) {
@@ -1424,9 +1445,115 @@ class Index extends Component
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\Log::warning('[Planung] plan_concept_id-Persistenz übersprungen (KI-Kopf bleibt für diese Session nutzbar) — evtl. Migration fehlt', ['error' => $e->getMessage()]);
         }
-        $this->meldung = 'KI-Kopf: Plan ausgearbeitet — prüfe/korrigiere im Conceptor, dann „Go aus geprüftem Plan".';
-        // Vollen inline-Conceptor direkt auf „Konzept & Planung" öffnen (Start-Tab 'konzept').
-        $this->dispatch('concepter-editor.oeffnen', type: 'concepts', id: (int) $plan['concept']->id, startTab: 'konzept');
+        // Inline-Plan-Panel: die Semantik-Felder in die Fläche laden — der Plan bleibt SICHTBAR in der
+        // Leitstelle (kein Wegsprung mehr in den Conceptor). „Ein Ort, ein Kontext": Leitidee/Menü hier
+        // prüfen + ändern (fließt in die LLM), dann „Go aus geprüftem Plan". Der Conceptor bleibt als
+        // optionaler Tiefen-Editor per Knopf im Panel erreichbar (Entscheid 2026-08-18).
+        $this->ladePlanForm();
+        $this->meldung = 'KI-Kopf: Plan ausgearbeitet — prüfe/ändere Leitidee & Menü direkt hier, dann „Go aus geprüftem Plan".';
+    }
+
+    /**
+     * Lädt die editierbaren Semantik-Skalare des vorbereiteten Plans aus der `concept.plan`-Canvas in
+     * {@see $planForm} (leert sie, wenn kein Plan/kein Canvas). Rein lesend, fail-soft: ein fehlender
+     * Canvas/Concept lässt das Panel leer, kippt aber nichts.
+     */
+    private function ladePlanForm(): void
+    {
+        $this->planForm = [];
+        $team = $this->team();
+        if ($team === null || (int) ($this->planConceptId ?? 0) <= 0) {
+            return;
+        }
+        $canvas = app(CanvasService::class)->find('concept', 'concept', (int) $this->planConceptId);
+        $werte = $canvas !== null ? app(CanvasService::class)->werte($canvas) : [];
+        foreach (['name_claim', 'leitidee', 'usp_eignung', 'inszenierung', 'intern'] as $key) {
+            $this->planForm[$key] = (string) ($werte[$key] ?? '');
+        }
+    }
+
+    /**
+     * Speichert die inline editierten Semantik-Felder ({@see $planForm}) zurück in die `concept.plan`-
+     * Canvas des vorbereiteten Plans. Diese Felder sind der LLM-Kontext für die Concept-/Gericht-Erzeugung
+     * — eine Änderung hier steuert also direkt, was beim nächsten Go entsteht („ein Ort, ein Kontext").
+     * Fail-soft (Nordstern): ist der Plan inzwischen weg, wird das GESAGT statt still geschluckt.
+     */
+    public function planFeldSpeichern(): void
+    {
+        $team = $this->team();
+        if ($team === null || (int) ($this->planConceptId ?? 0) <= 0) {
+            $this->fehler = 'Kein vorbereiteter Plan — nichts zu speichern.';
+
+            return;
+        }
+        $concept = FoodAlchemistConcept::where('team_id', $team->id)->whereKey($this->planConceptId)->first();
+        if ($concept === null) {   // Plan gelöscht/Team-fremd → Referenz still lösen, Panel schließt sich
+            $this->planConceptId = null;
+            $this->planForm = [];
+            $this->fehler = 'Der vorbereitete Plan ist nicht mehr da — bitte neu ausarbeiten.';
+
+            return;
+        }
+        $canvas = app(CanvasService::class)->canvasFor($team, 'concept', 'concept', (int) $concept->id);
+        app(CanvasService::class)->saveSkalare($canvas, $this->planForm);
+        $this->fehler = null;
+        $this->meldung = 'Plan aktualisiert — die geänderte Leitidee & co. fließen beim Erzeugen in die Gerichte.';
+    }
+
+    /**
+     * Lese-Anzeige des vorbereiteten Plans für das Inline-Panel: Name, Geschmackswelten (repeatable) und
+     * die geplanten Menü-Positionen ({@see FoodAlchemistConcept::slots} — Rolle/Titel/Pflicht). `null`,
+     * wenn kein Plan vorbereitet ist. Rein lesend (2 Queries) — im Render aufgerufen, fail-soft.
+     *
+     * @return array{name:string,geschmackswelten:array<int,array<string,mixed>>,speisen:array<int,array<string,mixed>>}|null
+     */
+    public function planVorschau(): ?array
+    {
+        $team = $this->team();
+        if ($team === null || (int) ($this->planConceptId ?? 0) <= 0) {
+            return null;
+        }
+        $concept = app(ConceptService::class)->detail($team, (int) $this->planConceptId);
+        if ($concept === null) {
+            return null;
+        }
+        $canvas = app(CanvasService::class)->find('concept', 'concept', (int) $concept->id);
+        $werte = $canvas !== null ? app(CanvasService::class)->werte($canvas) : [];
+
+        return [
+            'name' => (string) $concept->name,
+            'geschmackswelten' => is_array($werte['geschmackswelten'] ?? null) ? $werte['geschmackswelten'] : [],
+            'speisen' => $concept->slots->map(fn ($s) => [
+                'rolle' => (string) ($s->role ?? ''),
+                'titel' => (string) ($s->title ?? ''),
+                'pflicht' => (bool) $s->is_pflicht,
+            ])->values()->all(),
+        ];
+    }
+
+    /**
+     * Lese-Anzeige der geplanten Menü-Positionen eines Concept-Drafts (Worker-Concept-Step): Rolle/Titel
+     * je Slot, damit man SIEHT, welche Speisen der Plan vorschlägt — statt nur „öffnen". `[]`, wenn das
+     * Concept weg/Team-fremd ist. Rein lesend (eine Query, nur für Concept-Steps aufgerufen), fail-soft.
+     *
+     * @return array<int,array<string,mixed>>
+     */
+    public function conceptSpeisen(int $conceptId): array
+    {
+        $team = $this->team();
+        if ($team === null || $conceptId <= 0) {
+            return [];
+        }
+        $concept = app(ConceptService::class)->detail($team, $conceptId);
+        if ($concept === null) {
+            return [];
+        }
+
+        return $concept->slots->map(fn ($s) => [
+            'rolle' => (string) ($s->role ?? ''),
+            'titel' => (string) ($s->title ?? ''),
+            'pflicht' => (bool) $s->is_pflicht,
+        ])->values()->all();
     }
 
     /**
