@@ -55,6 +55,22 @@ it('setGenerationParams: filtert auf die Whitelist und macht leere Auswahl zu nu
     expect($session->refresh()->generation_params)->toBeNull();
 });
 
+it('Basisrezept: reglerParams nimmt Ziel-Menge + Einheit statt Pax (scope=rezept)', function () {
+    $inst = Livewire::test(PlanungIndex::class)->instance();
+    $call = Closure::bind(fn (string $s) => $this->reglerParams($s), $inst, PlanungIndex::class);
+
+    $inst->regler['rezept']['ziel_menge'] = '2,5';   // Dezimal mit Komma
+    $inst->regler['rezept']['ziel_einheit'] = 'l';
+    $params = $call('rezept');
+    expect($params['ziel_menge'])->toBe(2.5)
+        ->and($params['ziel_einheit'])->toBe('l')
+        ->and($params)->not->toHaveKey('pax');   // Basisrezept hat kein Pax
+
+    // Menge ohne gültige Einheit → verworfen (kein halber Hint).
+    $inst->regler['rezept']['ziel_einheit'] = '';
+    expect($call('rezept'))->not->toHaveKey('ziel_menge');
+});
+
 it('Leitstelle: goKaskade reicht die Regler als params UND persistiert sie als generation_params', function () {
     $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Rotwein-Reduktion', 'brief' => 'Dunkle Reduktion.']);
 
