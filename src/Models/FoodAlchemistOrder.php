@@ -5,6 +5,7 @@ namespace Platform\FoodAlchemist\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Platform\ActivityLog\Traits\LogsActivity;
 use Platform\FoodAlchemist\Enums\OrderStatus;
@@ -46,5 +47,15 @@ class FoodAlchemistOrder extends Model
     public function lines(): HasMany
     {
         return $this->hasMany(FoodAlchemistOrderLine::class, 'order_id')->orderBy('position');
+    }
+
+    public function rounds(): BelongsToMany
+    {
+        return $this->belongsToMany(
+            FoodAlchemistOrderRound::class,
+            'foodalchemist_order_round_links',
+            'order_id',
+            'round_id'
+        )->withTimestamps();
     }
 }

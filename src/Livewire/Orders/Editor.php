@@ -3,6 +3,7 @@
 namespace Platform\FoodAlchemist\Livewire\Orders;
 
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Str;
 use Livewire\Attributes\On;
 use Livewire\Component;
 use Platform\FoodAlchemist\Enums\LeadLaStrategie;
@@ -12,6 +13,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistProductionOrder;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem;
 use Platform\FoodAlchemist\Services\OrderService;
+use Platform\FoodAlchemist\Services\ProductionOrderService;
 use Platform\FoodAlchemist\Support\Suche;
 
 /**
@@ -91,6 +93,13 @@ class Editor extends Component
     /** Neues Bestellcockpit: Quellen erst sammeln, dann auflösen/speichern. */
     public array $cockpitSources = [];
 
+    public int $cockpitSeq = 0;
+
+    public ?int $roundId = null;
+
+    /** @var list<int> Produktionen, die beim Öffnen bereits Teil der Runde waren. */
+    public array $roundProductionIds = [];
+
     public ?array $cockpitPreview = null;
 
     public string $cockpitStrategy = '';
@@ -124,7 +133,7 @@ class Editor extends Component
     }
 
     #[On('orders-editor.neu')]
-    public function oeffnenNeu(?string $deliveryDate = null, ?string $strategy = null): void
+    public function oeffnenNeu(?string $deliveryDate = null, ?string $strategy = null, ?int $productionId = null): void
     {
         $this->orderId = null;
         $this->hinweis = null;
@@ -152,7 +161,76 @@ class Editor extends Component
         $this->formApprovalNote = '';
         $this->formStrategy = (string) ($strategy ?? '');
         $this->cockpitStrategy = (string) ($strategy ?? '');
+        if ($productionId !== null) {
+            $this->cockpitProduktionEinfuegen($productionId);
+        }
         $this->dispatch('modal.open', name: 'orders-editor');
+    }
+
+    #[On('orders-editor.production')]
+    public function oeffnenProduktion(int $id, ?int $roundId = null): void
+    {
+        $this->oeffnenNeu();
+        $ids = [$id];
+        if ($roundId !== null) {
+            try {
+                $team = Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
+                $round = app(OrderService::class)->roundDetail($team, $roundId);
+                $ids = array_values(array_unique(array_merge($round['production_ids'] ?? [], [$id])));
+                $this->roundId = $roundId;
+            } catch (\Throwable) {
+                $this->roundId = null;
+            }
+        }
+        foreach ($ids as $productionId) {
+            $this->cockpitProduktionEinfuegen((int) $productionId);
+        }
+        if ($this->cockpitSources !== []) {
+            $this->cockpitVorschau(app(OrderService::class));
+        }
+    }
+
+    #[On('orders-editor.round')]
+    public function oeffnenRunde(int $id, OrderService $orders): void
+    {
+        try {
+            $team = Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
+            $round = $orders->roundDetail($team, $id);
+
+            $this->oeffnenNeu(
+                $round['desired_delivery_date'] ?? null,
+                $round['sourcing_strategy'] ?? null,
+            );
+            $this->roundId = $id;
+            $this->formReference = (string) ($round['label'] ?? '');
+            $this->formNote = (string) ($round['note'] ?? '');
+            $this->roundProductionIds = array_values(array_unique(array_map('intval', $round['production_ids'] ?? [])));
+
+            foreach ($this->roundProductionIds as $productionId) {
+                $this->cockpitProduktionEinfuegen($productionId);
+            }
+            if ($this->cockpitSources !== []) {
+                $this->cockpitVorschau($orders);
+            } else {
+                $this->hinweis = 'Die Runde enthält keine rekonstruierbare Produktionsquelle. Lieferantenbelege können weiterhin einzeln bearbeitet werden.';
+            }
+        } catch (\Throwable $e) {
+            $this->fehler = $e->getMessage();
+        }
+    }
+
+    #[On('orders-editor.productions')]
+    public function oeffnenProduktionen(array $ids, OrderService $orders): void
+    {
+        $this->oeffnenNeu();
+        foreach (array_values(array_unique(array_map('intval', $ids))) as $id) {
+            if ($id > 0) {
+                $this->cockpitProduktionEinfuegen($id);
+            }
+        }
+        if ($this->cockpitSources !== []) {
+            $this->cockpitVorschau($orders);
+        }
     }
 
     /** Kopf-Felder des aktiven Belegs in die Form spiegeln. */
@@ -444,6 +522,9 @@ class Editor extends Component
     private function cockpitReset(): void
     {
         $this->cockpitSources = [];
+        $this->cockpitSeq = 0;
+        $this->roundId = null;
+        $this->roundProductionIds = [];
         $this->cockpitPreview = null;
         $this->cockpitStrategy = '';
         $this->cockpitOverrides = [];
@@ -464,9 +545,10 @@ class Editor extends Component
             return;
         }
         $this->cockpitSources[] = [
+            'uid' => $this->neueCockpitUid(),
             'type' => 'supplier_item',
             'id' => (int) $la->id,
-            'label' => trim(($la->designation ?: 'Artikel #' . $la->id) . ($la->supplier?->name ? ' · ' . $la->supplier->name : '')),
+            'label' => trim(($la->designation ?: 'Artikel #'.$la->id).($la->supplier?->name ? ' · '.$la->supplier->name : '')),
             'qty' => 1,
             'unit' => 'gebinde',
             'delivery_date' => $this->formDeliveryDate ?: null,
@@ -506,6 +588,7 @@ class Editor extends Component
             return;
         }
         $this->cockpitSources[] = [
+            'uid' => $this->neueCockpitUid(),
             'type' => 'gp',
             'id' => (int) $gp->id,
             'label' => $gp->name,
@@ -528,6 +611,7 @@ class Editor extends Component
             return;
         }
         $this->cockpitSources[] = [
+            'uid' => $this->neueCockpitUid(),
             'type' => 'recipe',
             'id' => (int) $recipe->id,
             'label' => $recipe->name,
@@ -551,9 +635,10 @@ class Editor extends Component
             return;
         }
         $this->cockpitSources[] = [
+            'uid' => $this->neueCockpitUid(),
             'type' => 'production',
             'id' => (int) $production->id,
-            'label' => $production->name ?: ('Produktion #' . $production->id),
+            'label' => $production->name ?: ('Produktion #'.$production->id),
             'qty' => 1,
             'unit' => 'auftrag',
             'delivery_date' => $this->formDeliveryDate ?: $production->production_date?->toDateString(),
@@ -565,15 +650,23 @@ class Editor extends Component
         $this->cockpitAlternativenSchliessen();
     }
 
-    public function cockpitQuelleEntfernen(int $index): void
+    public function cockpitQuelleEntfernen(string $uid): void
     {
-        if (! array_key_exists($index, $this->cockpitSources)) {
+        $index = collect($this->cockpitSources)->search(fn (array $source) => ($source['uid'] ?? null) === $uid);
+        if ($index === false) {
             return;
         }
         array_splice($this->cockpitSources, $index, 1);
         $this->cockpitPreview = null;
         $this->cockpitOverrides = [];
         $this->cockpitAlternativenSchliessen();
+    }
+
+    private function neueCockpitUid(): string
+    {
+        $this->cockpitSeq++;
+
+        return 'source-'.$this->cockpitSeq.'-'.Str::lower(Str::random(8));
     }
 
     public function cockpitVorschau(OrderService $orders): void
@@ -609,15 +702,26 @@ class Editor extends Component
         $this->fehler = null;
         try {
             $team = Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
-            $res = $orders->generateDraftsFromSources($team, $this->cockpitSources, $this->cockpitStrategieAusForm(), Auth::id(), $this->cockpitOverrides);
+            $res = $orders->generateDraftsFromSources(
+                $team,
+                $this->cockpitSources,
+                $this->cockpitStrategieAusForm(),
+                Auth::id(),
+                $this->cockpitOverrides,
+                [
+                    'id' => $this->roundId,
+                    'label' => $this->formReference ?: null,
+                    'desired_delivery_date' => $this->formDeliveryDate ?: null,
+                    'note' => $this->formNote ?: null,
+                    'replace_production_ids' => $this->roundProductionIds,
+                ]
+            );
             $this->cockpitPreview = $res['preview'] ?? null;
-            if (! empty($res['orders'])) {
-                $this->orderId = (int) $res['orders'][0];
-                $this->ladeKopf();
-            }
-            $this->hinweis = count($res['orders'] ?? []) . ' Bestellschiene(n) gespeichert'
-                . (count($res['unresolved'] ?? []) > 0 ? ' · ' . count($res['unresolved']) . ' Klärpunkt(e)' : '') . '.';
+            $this->roundId = isset($res['round']['id']) ? (int) $res['round']['id'] : $this->roundId;
+            $this->hinweis = count($res['orders'] ?? []).' Bestellschiene(n) gespeichert'
+                .(count($res['unresolved'] ?? []) > 0 ? ' · '.count($res['unresolved']).' Klärpunkt(e)' : '').'.';
             $this->dispatch('orders-geaendert');
+            $this->dispatch('modal.open', name: 'orders-editor');
         } catch (\Throwable $e) {
             $this->fehler = $e->getMessage();
         }
@@ -683,7 +787,7 @@ class Editor extends Component
         } else {
             $ziel['portions'] = $menge;
         }
-        $sourceRef = 'recipe:' . $this->bedarfRecipeId . '@' . uniqid();
+        $sourceRef = 'recipe:'.$this->bedarfRecipeId.'@'.uniqid();
 
         try {
             $team = Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
@@ -698,11 +802,11 @@ class Editor extends Component
 
                 return;
             }
-            $teile = [count($res['orders']) . ' Schiene(n) aktualisiert'];
+            $teile = [count($res['orders']).' Schiene(n) aktualisiert'];
             if (! empty($res['skipped_ohne_la'])) {
-                $teile[] = 'ohne Lead-LA übersprungen: ' . implode(', ', $res['skipped_ohne_la']);
+                $teile[] = 'ohne Lead-LA übersprungen: '.implode(', ', $res['skipped_ohne_la']);
             }
-            $this->hinweis = 'Bedarf übernommen — ' . implode(' · ', $teile) . '.';
+            $this->hinweis = 'Bedarf übernommen — '.implode(' · ', $teile).'.';
             $this->bedarfRezeptZuruecksetzen();
             $this->dispatch('orders-geaendert');
         } catch (\Throwable $e) {
@@ -736,6 +840,7 @@ class Editor extends Component
         $detail = null;
         $erlaubteStatus = [];
         $mailto = null;
+        $cancellationMailto = null;
         if ($this->orderId !== null) {
             try {
                 $detail = $orders->detail($team, $this->orderId);
@@ -747,7 +852,11 @@ class Editor extends Component
                 }
                 $m = $orders->mailtoData($team, $this->orderId);
                 if (($m['to'] ?? '') !== '') {
-                    $mailto = 'mailto:' . $m['to'] . '?subject=' . rawurlencode($m['subject']) . '&body=' . rawurlencode($m['body']);
+                    $mailto = 'mailto:'.$m['to'].'?subject='.rawurlencode($m['subject']).'&body='.rawurlencode($m['body']);
+                }
+                $cancelMail = $orders->cancellationMailtoData($team, $this->orderId);
+                if (($cancelMail['to'] ?? '') !== '') {
+                    $cancellationMailto = 'mailto:'.$cancelMail['to'].'?subject='.rawurlencode($cancelMail['subject']).'&body='.rawurlencode($cancelMail['body']);
                 }
             } catch (\Throwable) {
                 $this->orderId = null;
@@ -765,10 +874,10 @@ class Editor extends Component
             foreach (Suche::tokens($aq) as $token) {
                 $needle = mb_strtolower($token);
                 $q->where(fn ($x) => $x
-                    ->whereRaw('LOWER(designation) LIKE ?', ['%' . $needle . '%'])
-                    ->orWhere('article_number', 'like', $token . '%')
-                    ->orWhereHas('supplier', fn ($s) => $s->whereRaw('LOWER(name) LIKE ?', ['%' . $needle . '%']))
-                    ->orWhereHas('structure.gp', fn ($gp) => $gp->whereRaw('LOWER(name) LIKE ?', ['%' . $needle . '%'])));
+                    ->whereRaw('LOWER(designation) LIKE ?', ['%'.$needle.'%'])
+                    ->orWhere('article_number', 'like', $token.'%')
+                    ->orWhereHas('supplier', fn ($s) => $s->whereRaw('LOWER(name) LIKE ?', ['%'.$needle.'%']))
+                    ->orWhereHas('structure.gp', fn ($gp) => $gp->whereRaw('LOWER(name) LIKE ?', ['%'.$needle.'%'])));
             }
             $artikelTreffer = $q->orderBy('designation')->limit(12)
                 ->get(['id', 'designation', 'article_number', 'packaging_unit', 'supplier_id'])
@@ -785,7 +894,7 @@ class Editor extends Component
         $bq = trim($this->bedarfSuche);
         if ($this->bedarfRecipeId === null && mb_strlen($bq) >= 2) {
             $bedarfTreffer = FoodAlchemistRecipe::visibleToTeam($team)
-                ->where('name', 'like', '%' . $bq . '%')
+                ->where('name', 'like', '%'.$bq.'%')
                 ->orderBy('name')->limit(12)->get(['id', 'name', 'is_sales_recipe'])
                 ->map(fn ($r) => [
                     'id' => (int) $r->id,
@@ -800,7 +909,7 @@ class Editor extends Component
             $gpQuery = FoodAlchemistGp::visibleToTeam($team);
             foreach (Suche::tokens($gq) as $token) {
                 $needle = mb_strtolower($token);
-                $gpQuery->whereRaw('LOWER(name) LIKE ?', ['%' . $needle . '%']);
+                $gpQuery->whereRaw('LOWER(name) LIKE ?', ['%'.$needle.'%']);
             }
             $gpTreffer = $gpQuery->orderBy('name')->limit(12)->get(['id', 'name'])
                 ->map(fn ($gp) => ['id' => (int) $gp->id, 'name' => (string) $gp->name])
@@ -809,17 +918,24 @@ class Editor extends Component
 
         $produktionTreffer = collect();
         $pq = trim($this->produktionSuche);
-        if (mb_strlen($pq) >= 2) {
-            $produktionTreffer = FoodAlchemistProductionOrder::visibleToTeam($team)
-                ->where('name', 'like', '%' . $pq . '%')
-                ->orderByDesc('production_date')->limit(12)
-                ->get(['id', 'name', 'production_date'])
-                ->map(fn ($p) => [
-                    'id' => (int) $p->id,
-                    'name' => (string) ($p->name ?: 'Produktion #' . $p->id),
-                    'date' => $p->production_date?->format('d.m.Y'),
-                ])->values();
+        $selectedProductions = collect($this->cockpitSources)
+            ->where('type', 'production')
+            ->pluck('id')->map(fn ($id) => (int) $id)->all();
+        $produktionQuery = FoodAlchemistProductionOrder::visibleToTeam($team)
+            ->whereNotNull('procurement_released_at')
+            ->when($selectedProductions !== [], fn ($query) => $query->whereNotIn('id', $selectedProductions));
+        if ($pq !== '') {
+            $produktionQuery->where('name', 'like', '%'.$pq.'%');
         }
+        $produktionTreffer = $produktionQuery
+            ->orderByDesc('production_date')->limit(12)
+            ->get(['id', 'name', 'production_date', 'targets', 'procurement_targets_hash'])
+            ->filter(fn ($p) => $p->procurement_targets_hash === ProductionOrderService::targetsHash($p->targets))
+            ->map(fn ($p) => [
+                'id' => (int) $p->id,
+                'name' => (string) ($p->name ?: 'Produktion #'.$p->id),
+                'date' => $p->production_date?->format('d.m.Y'),
+            ])->values();
 
         $alternativen = [];
         if ($this->altLineId !== null && $detail !== null && $detail['editierbar']) {
@@ -830,13 +946,24 @@ class Editor extends Component
             }
         }
 
+        $roundDetail = null;
+        if ($this->roundId !== null) {
+            try {
+                $roundDetail = $orders->roundDetail($team, $this->roundId);
+            } catch (\Throwable) {
+                $this->roundId = null;
+            }
+        }
+
         return view('foodalchemist::livewire.orders.editor', [
             'detail' => $detail,
             'erlaubteStatus' => $erlaubteStatus,
             'mailto' => $mailto,
+            'cancellationMailto' => $cancellationMailto,
             'alternativen' => $alternativen,
             'cockpitAlternativen' => $this->cockpitAlternativen,
             'cockpitAltKey' => $this->cockpitAltKey,
+            'roundDetail' => $roundDetail,
             'artikelTreffer' => $artikelTreffer,
             'bedarfTreffer' => $bedarfTreffer,
             'gpTreffer' => $gpTreffer,

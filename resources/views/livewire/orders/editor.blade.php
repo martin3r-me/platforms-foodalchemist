@@ -6,6 +6,24 @@
     :title-name="$detail['supplier'] ?? null">
     <x-slot:actions>
         @php($sendBlockers = $detail['send_blockers'] ?? [])
+        @if($detail)
+            <a href="{{ route('foodalchemist.orders.dokument', ['order' => $detail['id']]) }}" target="_blank" class="{{ $btnGhostXs }}" title="Bestelldokument öffnen">@svg('heroicon-o-printer', 'w-3.5 h-3.5')</a>
+            <a href="{{ route('foodalchemist.orders.dokument', ['order' => $detail['id'], 'pdf' => 1]) }}" class="{{ $btnGhostXs }}">PDF</a>
+            <a href="{{ route('foodalchemist.orders.dokument', ['order' => $detail['id'], 'csv' => 1]) }}" class="{{ $btnGhostXs }}">CSV</a>
+            @if($mailto)
+                <a href="{{ $mailto }}" class="{{ $btnGhostXs }}" title="Bestellung per E-Mail vorbereiten">@svg('heroicon-o-envelope', 'w-3.5 h-3.5')</a>
+            @else
+                <span class="{{ $btnGhostXs }} opacity-40 cursor-not-allowed" title="Keine Bestell-Mail beim Lieferanten hinterlegt">@svg('heroicon-o-envelope', 'w-3.5 h-3.5')</span>
+            @endif
+            @if(in_array($detail['status'], ['sent', 'confirmed'], true))
+                @if($cancellationMailto)
+                    <a href="{{ $cancellationMailto }}" class="{{ $btnGhostXs }} text-rose-500" title="Storno-Mail an den Lieferanten vorbereiten" data-order-cancellation-mail>@svg('heroicon-o-envelope', 'w-3.5 h-3.5') Storno an Lieferant</a>
+                @else
+                    <span class="{{ $btnGhostXs }} opacity-40 cursor-not-allowed" title="Beim Lieferanten fehlt die Bestell-E-Mail" data-order-cancellation-mail-missing>@svg('heroicon-o-envelope', 'w-3.5 h-3.5') Storno an Lieferant</span>
+                @endif
+            @endif
+            <span class="h-5 w-px bg-white/10 mx-1"></span>
+        @endif
         @if($detail && $erlaubteStatus)
             @foreach($erlaubteStatus as $z)
                 <button type="button" wire:click="setStatus('{{ $z->value }}')"
@@ -13,7 +31,7 @@
                     @if($z->value === 'cancelled') onclick="return confirm('Bestellung stornieren?')" @endif
                     @disabled($z->value === 'sent' && !empty($sendBlockers))
                     @if($z->value === 'sent' && !empty($sendBlockers)) title="Versand gesperrt: {{ implode(', ', $sendBlockers) }}" @endif
-                    data-status-{{ $z->value }}>{{ $z === \Platform\FoodAlchemist\Enums\OrderStatus::Sent ? 'Absenden' : $z->label() }}</button>
+                    data-status-{{ $z->value }}>{{ $z === \Platform\FoodAlchemist\Enums\OrderStatus::Sent ? 'Absenden' : ($z === \Platform\FoodAlchemist\Enums\OrderStatus::Cancelled && $detail['status'] !== 'draft' ? 'Storno bestätigt' : $z->label()) }}</button>
             @endforeach
         @endif
         @if($hinweis)<span class="text-[12px] text-emerald-600 ml-2 self-center" data-orders-hinweis>✓ {{ $hinweis }}</span>@endif
@@ -67,7 +85,7 @@
 
     @if($detail === null)
         <div class="pt-4 space-y-4">
-            <x-foodalchemist::modal-section title="Neue Bestellung">
+            <x-foodalchemist::modal-section :title="$roundDetail ? $roundDetail['label'] : 'Neue Bestellrunde'">
                 <x-slot:actions>
                     <button type="button" wire:click="cockpitVorschau" class="{{ $btnGhostXs }}" data-orders-cockpit-preview>Vorschau neu generieren</button>
                     <button type="button" wire:click="cockpitSpeichern" class="{{ $btnPrimary }}" @disabled(count($cockpitSources) === 0) data-orders-cockpit-save>Bestellungen speichern</button>
@@ -91,6 +109,14 @@
                         <input type="text" wire:model.live="formReference" class="{{ $input }}" placeholder="z. B. Wochenbestellung, Bankett, Produktion" />
                     </div>
                 </div>
+                @if($roundDetail)
+                    <div class="mt-3 pt-3 border-t border-black/5 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-gray-500" data-orders-round="{{ $roundDetail['id'] }}">
+                        <span>{{ $roundDetail['supplier_count'] }} Lieferanten</span>
+                        <span>{{ $roundDetail['order_count'] }} Belege</span>
+                        <span>{{ $roundDetail['position_count'] }} Positionen</span>
+                        <span class="font-semibold text-gray-800">{{ number_format($roundDetail['total_net'], 2, ',', '.') }} €</span>
+                    </div>
+                @endif
             </x-foodalchemist::modal-section>
 
             <div class="grid grid-cols-1 xl:grid-cols-[minmax(280px,0.9fr)_minmax(0,1.25fr)] 2xl:grid-cols-[minmax(280px,0.85fr)_minmax(0,1.25fr)_minmax(260px,0.7fr)] gap-4 min-w-0">
@@ -143,7 +169,7 @@
                             </div>
 
                             <div>
-                                <label class="text-[10px] text-gray-500">Produktion</label>
+                                <label class="text-[10px] text-gray-500">Freigegebene Produktionen</label>
                                 <input type="search" wire:model.live.debounce.300ms="produktionSuche" placeholder="Produktionsauftrag…" class="{{ $input }}" data-orders-produktion-suche />
                                 @if($produktionTreffer->isNotEmpty())
                                     <div class="mt-1 rounded-lg border border-white/10 divide-y divide-white/5 max-h-44 overflow-y-auto">
@@ -163,13 +189,13 @@
                     <x-foodalchemist::modal-section title="Arbeitsstand ({{ count($cockpitSources) }})">
                         <div class="space-y-2">
                             @forelse($cockpitSources as $i => $s)
-                                <div class="rounded-md border border-white/10 bg-white/[0.04] p-2 space-y-2" wire:key="cockpit-source-{{ $i }}">
+                                <div class="rounded-md border border-white/10 bg-white/[0.04] p-2 space-y-2" wire:key="cockpit-source-{{ $s['uid'] }}">
                                     <div class="flex items-start justify-between gap-2">
                                         <div class="min-w-0">
                                             <span class="{{ $pill }} {{ $variantPill[$s['type'] === 'production' ? 'primary' : ($s['type'] === 'recipe' ? 'info' : 'secondary')] }}">{{ $s['type'] }}</span>
                                             <p class="text-[12px] text-gray-800 truncate mt-1">{{ $s['label'] ?? ($s['id'] ?? 'Quelle') }}</p>
                                         </div>
-                                        <button type="button" wire:click="cockpitQuelleEntfernen({{ $i }})" class="text-[11px] text-rose-500 shrink-0">Entfernen</button>
+                                        <button type="button" wire:click="cockpitQuelleEntfernen('{{ $s['uid'] }}')" class="text-[11px] text-rose-500 shrink-0">Entfernen</button>
                                     </div>
                                     <div class="grid grid-cols-[80px_105px_1fr] gap-1.5">
                                         <input type="number" min="0" step="0.1" wire:model.live="cockpitSources.{{ $i }}.qty" class="{{ $input }} !py-1" />
@@ -862,7 +888,7 @@
             </x-foodalchemist::modal-section>
 
             @if($detail['editierbar'])
-                <x-foodalchemist::modal-section title="Liefer-Logistik & Anlass">
+                <x-foodalchemist::modal-section title="Liefertag verschieben & Anlass">
                     <x-slot:actions>
                         <button type="button" wire:click="saveHeader" class="{{ $btnGhostXs }}" data-orders-kopf-speichern>Kopf speichern</button>
                     </x-slot:actions>
@@ -882,7 +908,7 @@
                     </div>
                 </x-foodalchemist::modal-section>
 
-                <x-foodalchemist::modal-section title="Preisstrategie & Neu quellen">
+                <x-foodalchemist::modal-section title="Preisstrategie & Lieferant neu ermitteln">
                     <select wire:model="formStrategy" class="{{ $input }} max-w-sm">
                         <option value="">Haupteinstellung (Team)</option>
                         @foreach($strategieOptionen as $s)
@@ -890,7 +916,7 @@
                         @endforeach
                     </select>
                     @if($resourceVorschau === null)
-                        <button type="button" wire:click="neuQuellenVorschau" class="{{ $btnGhost }} mt-2" data-neu-quellen-vorschau>Neu quellen (Vorschau)</button>
+                        <button type="button" wire:click="neuQuellenVorschau" class="{{ $btnGhost }} mt-2" data-neu-quellen-vorschau>Lieferantenwechsel prüfen</button>
                     @else
                         <div class="rounded-md border border-violet-500/20 bg-violet-500/[0.06] p-2 space-y-1 mt-2">
                             @if(empty($resourceVorschau['wechsel']))
@@ -960,18 +986,6 @@
                 </x-foodalchemist::modal-section>
             @endif
 
-            <x-foodalchemist::modal-section title="Export & Versand">
-                <div class="flex flex-wrap items-center gap-2">
-                    <a href="{{ route('foodalchemist.orders.dokument', ['order' => $detail['id']]) }}" target="_blank" class="{{ $btnGhostXs }}">@svg('heroicon-o-printer', 'w-3.5 h-3.5 inline-block align-middle') Dokument</a>
-                    <a href="{{ route('foodalchemist.orders.dokument', ['order' => $detail['id'], 'pdf' => 1]) }}" class="{{ $btnGhostXs }}">PDF</a>
-                    <a href="{{ route('foodalchemist.orders.dokument', ['order' => $detail['id'], 'csv' => 1]) }}" class="{{ $btnGhostXs }}">CSV</a>
-                    @if($mailto)
-                        <a href="{{ $mailto }}" class="{{ $btnGhostXs }}">@svg('heroicon-o-envelope', 'w-3.5 h-3.5 inline-block align-middle') E-Mail</a>
-                    @else
-                        <span class="text-[10px] text-gray-400">@svg('heroicon-o-envelope', 'w-3.5 h-3.5 inline-block align-middle') keine Bestell-Mail (Lieferant → email_order)</span>
-                    @endif
-                </div>
-            </x-foodalchemist::modal-section>
         </div>
     </x-foodalchemist::editor-tabs>
     @endif

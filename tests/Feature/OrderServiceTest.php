@@ -1,28 +1,33 @@
 <?php
 
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Route;
+use Livewire\Livewire;
+use Platform\Core\Contracts\ToolContext;
+use Platform\Core\Tools\ToolRegistry;
 use Platform\FoodAlchemist\Enums\LeadLaStrategie;
 use Platform\FoodAlchemist\Enums\OrderStatus;
+use Platform\FoodAlchemist\Enums\ProductionOrderStatus;
+use Platform\FoodAlchemist\Livewire\Orders\DetailPanel as OrdersDetailPanel;
+use Platform\FoodAlchemist\Livewire\Orders\Editor as OrdersEditor;
+use Platform\FoodAlchemist\Livewire\Orders\Index as OrdersIndex;
+use Platform\FoodAlchemist\Livewire\Produktion\DetailPanel;
+use Platform\FoodAlchemist\Models\FoodAlchemistGp;
 use Platform\FoodAlchemist\Models\FoodAlchemistInventoryMovement;
 use Platform\FoodAlchemist\Models\FoodAlchemistInventoryStock;
 use Platform\FoodAlchemist\Models\FoodAlchemistOrder;
 use Platform\FoodAlchemist\Models\FoodAlchemistOrderLine;
+use Platform\FoodAlchemist\Models\FoodAlchemistOrderRound;
 use Platform\FoodAlchemist\Models\FoodAlchemistPrice;
-use Platform\FoodAlchemist\Models\FoodAlchemistGp;
-use Platform\FoodAlchemist\Models\FoodAlchemistProductionOrder;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplier;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplierItemStructure;
 use Platform\FoodAlchemist\Models\FoodAlchemistVocabEinheit;
-use Livewire\Livewire;
-use Platform\Core\Contracts\ToolContext;
-use Platform\Core\Tools\ToolRegistry;
-use Platform\FoodAlchemist\Livewire\Orders\Editor as OrdersEditor;
-use Platform\FoodAlchemist\Livewire\Orders\Index as OrdersIndex;
 use Platform\FoodAlchemist\Services\LeadLaService;
 use Platform\FoodAlchemist\Services\OrderService;
 use Platform\FoodAlchemist\Services\PlanungsblattService;
+use Platform\FoodAlchemist\Services\ProductionOrderService;
 use Platform\FoodAlchemist\Services\RecipeRecomputeService;
 use Platform\FoodAlchemist\Services\TeamSettingsService;
 use Platform\FoodAlchemist\Tests\Support\SeedsTeamHierarchy;
@@ -47,7 +52,7 @@ beforeEach(function () {
         $gp = $this->makeGp($this->rootTeam, $name);
         $la = FoodAlchemistSupplierItem::create([
             'team_id' => $this->rootTeam->id, 'supplier_id' => $supplier->id,
-            'designation' => $name . ' 1kg', 'article_number' => 'ART-' . strtoupper(substr($name, 0, 3)),
+            'designation' => $name.' 1kg', 'article_number' => 'ART-'.strtoupper(substr($name, 0, 3)),
             'qty' => 1.0, 'unit_code' => 'kg', 'packaging_unit' => 'Sack',
         ]);
         FoodAlchemistSupplierItemStructure::create(['team_id' => $this->rootTeam->id, 'supplier_item_id' => $la->id, 'gp_id' => $gp->id]);
@@ -128,7 +133,7 @@ it('updateHeader: Liefertag-Wechsel auf belegten (Lieferant, Tag) ⇒ Kollisions
 
     // $do auf den bereits belegten Montag umdatieren ⇒ Kollision.
     expect(fn () => $this->svc->updateHeader($this->rootTeam, $do->id, ['desired_delivery_date' => '2026-08-03']))
-        ->toThrow(\RuntimeException::class);
+        ->toThrow(RuntimeException::class);
 
     // Freier Tag ist ok.
     $this->svc->updateHeader($this->rootTeam, $do->id, ['desired_delivery_date' => '2026-08-07']);
@@ -146,20 +151,20 @@ it('UI: Index filtert nach Liefertag-Fenster + gruppiert; Basis-Umschalter auf B
     // Liefertag-Fenster nur Montag ⇒ nur die Montags-Bestellung sichtbar.
     Livewire::test(OrdersIndex::class)
         ->set('von', '2026-08-03')->set('bis', '2026-08-03')
-        ->assertSee('ord-' . $mo->id)
-        ->assertDontSee('ord-' . $do->id);
+        ->assertSee('ord-'.$mo->id)
+        ->assertDontSee('ord-'.$do->id);
 
     // Ohne Fenster: beide sichtbar, nach Liefertag gruppiert (Datum als Zelle sichtbar).
     Livewire::test(OrdersIndex::class)
-        ->assertSee('ord-' . $mo->id)
-        ->assertSee('ord-' . $do->id)
+        ->assertSee('ord-'.$mo->id)
+        ->assertSee('ord-'.$do->id)
         ->assertSee('03.08.2026');
 
     // Basis-Umschalter auf Bestelldatum bricht das Rendern nicht (beide angelegt = heute).
     Livewire::test(OrdersIndex::class)
         ->set('datumsbasis', 'bestelldatum')
-        ->assertSee('ord-' . $mo->id)
-        ->assertSee('ord-' . $do->id);
+        ->assertSee('ord-'.$mo->id)
+        ->assertSee('ord-'.$do->id);
 });
 
 it('UI: Index-Suche findet Bestellungen ueber Positionsartikel und Referenzen', function () {
@@ -173,18 +178,18 @@ it('UI: Index-Suche findet Bestellungen ueber Positionsartikel und Referenzen', 
 
     Livewire::test(OrdersIndex::class)
         ->set('suche', 'ART-MEH')
-        ->assertSee('ord-' . $chefs->id)
-        ->assertDontSee('ord-' . $hanos->id);
+        ->assertSee('ord-'.$chefs->id)
+        ->assertDontSee('ord-'.$hanos->id);
 
     Livewire::test(OrdersIndex::class)
         ->set('suche', 'Wochenrunde Dessert')
-        ->assertSee('ord-' . $chefs->id)
-        ->assertSee('ord-' . $hanos->id);
+        ->assertSee('ord-'.$chefs->id)
+        ->assertSee('ord-'.$hanos->id);
 
     Livewire::test(OrdersIndex::class)
         ->set('suche', 'AB-SUCHE-77')
-        ->assertSee('ord-' . $chefs->id)
-        ->assertDontSee('ord-' . $hanos->id);
+        ->assertSee('ord-'.$chefs->id)
+        ->assertDontSee('ord-'.$hanos->id);
 });
 
 it('addNeedFromTarget: je Lieferant eine Schiene, Gebinde-Zeilen + total_net (echte Gebinde)', function () {
@@ -404,7 +409,7 @@ it('Status-Guard: draft→sent ok (sent_at gesetzt), draft→confirmed verboten,
     $chefs = FoodAlchemistOrder::whereHas('supplier', fn ($q) => $q->where('name', 'Chefs'))->first();
 
     expect(fn () => $this->svc->setStatus($this->rootTeam, $chefs->id, OrderStatus::Confirmed))
-        ->toThrow(\RuntimeException::class);
+        ->toThrow(RuntimeException::class);
 
     $sent = $this->svc->setStatus($this->rootTeam, $chefs->id, OrderStatus::Sent);
     expect($sent->status)->toBe(OrderStatus::Sent)->and($sent->sent_at)->not->toBeNull();
@@ -413,7 +418,7 @@ it('Status-Guard: draft→sent ok (sent_at gesetzt), draft→confirmed verboten,
     expect($delivered->status)->toBe(OrderStatus::Delivered)->and($delivered->delivered_at)->not->toBeNull();
 
     expect(fn () => $this->svc->setStatus($this->rootTeam, $chefs->id, OrderStatus::Cancelled))
-        ->toThrow(\RuntimeException::class); // delivered = Endstation
+        ->toThrow(RuntimeException::class); // delivered = Endstation
 });
 
 it('E11/E2: Draft-Preis lebt, versendeter Beleg friert ein', function () {
@@ -502,33 +507,26 @@ it('MCP im Lockstep: orders.GET/ADD_NEED/SET_STATUS registriert + End-to-End', f
     expect($bad->success)->toBeTrue(); // sent→cancelled IST erlaubt
 });
 
-it('UI: „An Bestellung übergeben" im Produktionsauftrag legt Schienen an (idempotent bei Re-Klick, Spec 18)', function () {
+it('UI: Produktion gibt Bedarf frei und das Bestellwesen plant daraus eine Runde', function () {
     $this->actingAs($this->makeUser($this->rootTeam));
-    $prod = app(\Platform\FoodAlchemist\Services\ProductionOrderService::class);
+    $prod = app(ProductionOrderService::class);
     $order = $prod->saveNew($this->rootTeam, '2026-08-01', 'Sommerfest', [
         ['recipe_id' => $this->kuchen->id, 'portions' => 100, 'source_ref' => 'recipe:kuchen@100'],
     ]);
 
-    $comp = Livewire::test(\Platform\FoodAlchemist\Livewire\Produktion\DetailPanel::class, ['orderId' => $order->id])
-        ->call('anBestellungUebergeben')
-        ->assertSet('hinweis', fn ($v) => str_contains((string) $v, 'Bestellschiene'));
+    Livewire::test(DetailPanel::class, ['orderId' => $order->id])
+        ->call('materialbedarfFreigeben')
+        ->assertSet('hinweis', fn ($v) => str_contains((string) $v, 'freigegeben'));
 
-    expect(FoodAlchemistOrder::where('status', 'draft')->count())->toBe(2);
+    expect(FoodAlchemistOrder::count())->toBe(0);
 
-    // Erneuter Klick (gleiche Quelle) → keine Verdopplung (E10)
-    $comp->call('anBestellungUebergeben');
-    $chefs = FoodAlchemistOrder::whereHas('supplier', fn ($q) => $q->where('name', 'Chefs'))->first();
-    expect(FoodAlchemistOrder::where('status', 'draft')->count())->toBe(2)
-        ->and((float) $chefs->total_net)->toBe(21.0);
+    $result = $this->svc->generateDraftsFromSources($this->rootTeam, [[
+        'type' => 'production', 'id' => $order->id, 'qty' => 1, 'unit' => 'auftrag',
+    ]], null, null, [], ['label' => 'Sommerfest']);
 
-    // Rückverknüpfung: der Produktionsauftrag findet die aus ihm erzeugten Bestellschienen
-    // (über den source_ref-Präfix produktion:{id}: — es gibt keine FK).
-    $verknuepft = $prod->verknuepfteOrders($this->rootTeam, $order->id);
-    expect($verknuepft->pluck('supplier.name')->sort()->values()->all())->toBe(['Chefs', 'Hanos']);
-
-    // Im DetailPanel sichtbar (der gemeldete Bug: Bestellung tauchte nicht auf).
-    Livewire::test(\Platform\FoodAlchemist\Livewire\Produktion\DetailPanel::class, ['orderId' => $order->id])
-        ->assertSee('Chefs')->assertSee('Hanos');
+    expect($result['orders'])->toHaveCount(2)
+        ->and($result['round']['label'])->toBe('Sommerfest')
+        ->and(FoodAlchemistOrderRound::count())->toBe(1);
 });
 
 it('UI: Bestellungen-Seite listet Schienen, Detail + Absenden + manuelle Menge', function () {
@@ -660,7 +658,7 @@ it('WaWi: Freigabe-light warnt bei Anfrage und blockiert bewusst abgelehnte Best
         ->and($this->svc->sendBlockers($blockedOrder->refresh()))->toContain('Freigabe abgelehnt');
 
     expect(fn () => $this->svc->setStatus($this->rootTeam, $blockedOrder->id, OrderStatus::Sent))
-        ->toThrow(\RuntimeException::class, 'Freigabe abgelehnt');
+        ->toThrow(RuntimeException::class, 'Freigabe abgelehnt');
 });
 
 it('WaWi: leere und ungeklärte Entwürfe werden vor dem Absenden blockiert', function () {
@@ -673,7 +671,55 @@ it('WaWi: leere und ungeklärte Entwürfe werden vor dem Absenden blockiert', fu
         ->and($this->svc->sendBlockers($draft))->toContain('Klärung');
 
     expect(fn () => $this->svc->setStatus($this->rootTeam, $draft->id, OrderStatus::Sent))
-        ->toThrow(\RuntimeException::class, 'Bestellung kann nicht versendet werden');
+        ->toThrow(RuntimeException::class, 'Bestellung kann nicht versendet werden');
+});
+
+it('WaWi: Sammelversand löst versandfähige Entwürfe aus und lässt Klärfälle offen', function () {
+    $readyLine = $this->svc->addManualLine($this->rootTeam, $this->laOf['Mehl']->id, 2);
+    $ready = $readyLine->order;
+    $blocked = $this->svc->createDraft(
+        $this->rootTeam,
+        FoodAlchemistSupplier::where('name', 'Hanos')->firstOrFail()->id,
+        [],
+        null,
+    );
+
+    $result = $this->svc->sendReadyDrafts($this->rootTeam);
+
+    expect($result['sent'])->toBe(1)
+        ->and($result['blocked'])->toBe(1)
+        ->and($ready->refresh()->status)->toBe(OrderStatus::Sent)
+        ->and($blocked->refresh()->status)->toBe(OrderStatus::Draft);
+});
+
+it('WaWi: Auswahl wird vor Versand geprüft, bestätigt und kann gesammelt storniert werden', function () {
+    $this->actingAs($this->makeUser($this->rootTeam));
+    $ready = $this->svc->addManualLine($this->rootTeam, $this->laOf['Mehl']->id, 2)->order;
+    $blocked = $this->svc->createDraft(
+        $this->rootTeam,
+        FoodAlchemistSupplier::where('name', 'Hanos')->firstOrFail()->id,
+        [],
+        null,
+    );
+
+    Livewire::test(OrdersIndex::class)
+        ->set('selectedOrderIds', [$ready->id, $blocked->id])
+        ->call('sammelversandPruefen')
+        ->assertSet('batchPreview.ready', 1)
+        ->assertSet('batchPreview.blocked', 1)
+        ->call('auswahlAusloesen')
+        ->assertSet('batchResult.sent', 1)
+        ->assertSet('batchResult.blocked', 1);
+
+    expect($ready->refresh()->status)->toBe(OrderStatus::Sent)
+        ->and($blocked->refresh()->status)->toBe(OrderStatus::Draft);
+
+    Livewire::test(OrdersIndex::class)
+        ->set('selectedOrderIds', [$blocked->id])
+        ->call('sammelversandPruefen')
+        ->call('auswahlStornieren');
+
+    expect($blocked->refresh()->status)->toBe(OrderStatus::Cancelled);
 });
 
 it('WaWi: Bestellschluss und Liefertage erzeugen operative Hinweise und Versandsperren', function () {
@@ -696,7 +742,7 @@ it('WaWi: Bestellschluss und Liefertage erzeugen operative Hinweise und Versands
             ->and($this->svc->sendBlockers($order))->toContain('Bestellschluss verpasst');
 
         expect(fn () => $this->svc->setStatus($this->rootTeam, $order->id, OrderStatus::Sent))
-            ->toThrow(\RuntimeException::class, 'Bestellung kann nicht versendet werden');
+            ->toThrow(RuntimeException::class, 'Bestellung kann nicht versendet werden');
 
         $chefs->update(['delivery_days' => '4', 'order_lead_days' => 0, 'order_cutoff_time' => null]);
         $order->refresh()->load(['supplier', 'lines']);
@@ -750,7 +796,7 @@ it('WaWi: Nachlieferung erzeugt aus Unterlieferung einen neuen Draft mit Fehlmen
         ->and($backorder['total_qty_packs'])->toBe(2.0)
         ->and($draft->status)->toBe(OrderStatus::Draft)
         ->and($draft->desired_delivery_date?->toDateString())->toBe('2026-08-20')
-        ->and($draft->reference)->toContain('Nachlieferung ord-' . $chefs->id)
+        ->and($draft->reference)->toContain('Nachlieferung ord-'.$chefs->id)
         ->and((float) $line->qty_packs)->toBe(2.0)
         ->and((float) $draft->total_net)->toBe(4.0);
 });
@@ -806,7 +852,7 @@ it('WaWi: Lieferantenbestätigung und Rechnungskopf werden nach dem Absenden gep
 
     expect(fn () => $this->svc->updateSupplierConfirmation($this->rootTeam, $chefs->id, [
         'supplier_order_number' => 'AB-1',
-    ]))->toThrow(\RuntimeException::class, 'erst nach dem Absenden');
+    ]))->toThrow(RuntimeException::class, 'erst nach dem Absenden');
 
     $this->svc->setStatus($this->rootTeam, $chefs->id, OrderStatus::Sent);
     $this->svc->updateSupplierConfirmation($this->rootTeam, $chefs->id, [
@@ -838,7 +884,7 @@ it('WaWi: Lieferantenbestätigung und Rechnungskopf werden nach dem Absenden gep
         ->set('suche', 'AB-2026-77')
         ->assertSee('AB-2026-77')
         ->assertSee('RE-2026-99')
-        ->assertSee('ord-' . $chefs->id);
+        ->assertSee('ord-'.$chefs->id);
 });
 
 it('WaWi: Zahlungsstatus bildet offene Posten, überfällig und bezahlt ab', function () {
@@ -1115,7 +1161,23 @@ it('S3: Dokument-Route liefert HTML + CSV-Download', function () {
         ->toContain('Zahlungsstatus')->toContain('bezahlt')->toContain('2026-08-20')
         ->toContain('Reklamation Status')->toContain('gutgeschrieben')->toContain('Gutschrift erledigt')
         ->toContain('WE Anzahl')->toContain('RE Diff. EUR');
-})->skip(fn () => ! \Illuminate\Support\Facades\Route::has('foodalchemist.orders.dokument'), 'Modul-Route im Test-Harness nicht registriert');
+})->skip(fn () => ! Route::has('foodalchemist.orders.dokument'), 'Modul-Route im Test-Harness nicht registriert');
+
+it('S3: gebündeltes Versandprotokoll enthält alle ausgewählten Lieferantenbelege', function () {
+    $this->actingAs($this->makeUser($this->rootTeam));
+    $this->svc->addNeedFromTarget($this->rootTeam, $this->ziel, 'recipe:kuchen@protokoll');
+    $orders = FoodAlchemistOrder::where('status', 'draft')->get();
+    foreach ($orders as $order) {
+        $order->forceFill(['status' => OrderStatus::Sent, 'sent_at' => now()])->save();
+    }
+
+    $this->get(route('foodalchemist.orders.versandprotokoll', ['ids' => $orders->pluck('id')->implode(',')]))
+        ->assertOk()
+        ->assertSee('Versandprotokoll')
+        ->assertSee('Chefs')
+        ->assertSee('Hanos')
+        ->assertSee('Gebündelt drucken');
+})->skip(fn () => ! Route::has('foodalchemist.orders.versandprotokoll'), 'Modul-Route im Test-Harness nicht registriert');
 
 it('removeLine + leere Quelle: Zeile verschwindet, total_net rechnet nach', function () {
     $this->svc->addNeedFromTarget($this->rootTeam, $this->ziel, 'recipe:kuchen@100');
@@ -1153,7 +1215,7 @@ it('E1: updateHeader-Guard — versendeter Beleg ist eingefroren', function () {
     $this->svc->setStatus($this->rootTeam, $chefs->id, OrderStatus::Sent);
 
     expect(fn () => $this->svc->updateHeader($this->rootTeam, $chefs->id, ['reference' => 'zu spät']))
-        ->toThrow(\RuntimeException::class);
+        ->toThrow(RuntimeException::class);
 });
 
 it('E1: Bedarf-Anzeige — kg-Artikel zeigt kg, Stück-Artikel zeigt Stk (nie mehr fälschlich „kg")', function () {
@@ -1335,8 +1397,8 @@ it('E1: UI — 3-Panel-Cockpit, Lieferant-Filter + Kopf speichern + Zeilen-Notiz
 
     // Lieferant-Filter: nur die Chefs-Schiene in der Liste (Hanos-Zeile verschwindet).
     $comp->set('supplierFilter', $chefs->supplier_id)
-        ->assertSee('ord-' . $chefs->id)
-        ->assertDontSee('ord-' . $hanos->id);
+        ->assertSee('ord-'.$chefs->id)
+        ->assertDontSee('ord-'.$hanos->id);
 
     // Editor: Kopf-Form geladen; speichern persistiert + Zeilen-Notiz.
     $ed = Livewire::test(OrdersEditor::class)->call('oeffnenBearbeiten', $chefs->id)
@@ -1432,7 +1494,7 @@ it('E2: createDraft — findOrCreate je Lieferant + optionale Kopf-Felder', func
 
     // Unbekannter/nicht sichtbarer Lieferant → Fehler.
     expect(fn () => $this->svc->createDraft($this->rootTeam, 999999))
-        ->toThrow(\RuntimeException::class);
+        ->toThrow(RuntimeException::class);
 });
 
 it('E2: MCP im Lockstep — orders.CREATE + orders.ADD_LINE registriert + End-to-End', function () {
@@ -1495,6 +1557,25 @@ it('E2 UI: „Neue Bestellung" öffnet den neutralen Start ohne Lieferanten-Schi
     expect(FoodAlchemistOrder::count())->toBe(0);
 });
 
+it('E2 UI: Bestellzeile befüllt die Detailspalte und öffnet von dort den Editor', function () {
+    $this->actingAs($this->makeUser($this->rootTeam));
+    $chefs = FoodAlchemistSupplier::where('name', 'Chefs')->firstOrFail();
+    $order = $this->svc->createDraft($this->rootTeam, $chefs->id, ['reference' => 'Detailtest'], null);
+
+    Livewire::test(OrdersIndex::class)
+        ->call('oeffnen', $order->id)
+        ->assertSet('selectedOrderId', $order->id)
+        ->assertSee('Detailtest');
+
+    Livewire::test(OrdersDetailPanel::class)
+        ->dispatch('order-selected', id: $order->id)
+        ->assertSet('orderId', $order->id)
+        ->assertSee('Chefs')
+        ->assertSee('Detailtest')
+        ->call('bearbeiten')
+        ->assertDispatched('orders-editor.bearbeiten', id: $order->id);
+});
+
 it('E2 UI: neutraler Start zeigt Artikel- und Bedarfswege', function () {
     $this->actingAs($this->makeUser($this->rootTeam));
 
@@ -1526,9 +1607,56 @@ it('Cockpit UI: Quelle einfügen, Vorschau sehen und Drafts speichern', function
         ->assertSet('cockpitPreview', fn ($v) => is_array($v) && ($v['totals']['groups'] ?? 0) === 2)
         ->call('cockpitSpeichern')
         ->assertSet('hinweis', fn ($v) => str_contains((string) $v, 'Bestellschiene'))
-        ->assertSet('orderId', fn ($v) => $v !== null);
+        ->assertSet('orderId', null)
+        ->assertSet('roundId', fn ($v) => $v !== null);
 
     expect(FoodAlchemistOrder::where('status', 'draft')->count())->toBe(2);
+});
+
+it('Cockpit UI: stabile UIDs verhindern stale Zeilen nach dem Entfernen', function () {
+    $this->actingAs($this->makeUser($this->rootTeam));
+
+    $component = Livewire::test(OrdersEditor::class)
+        ->call('oeffnenNeu', '2026-08-13')
+        ->call('cockpitRezeptEinfuegen', $this->kuchen->id)
+        ->call('cockpitGpEinfuegen', $this->mehl->id);
+
+    $sources = $component->get('cockpitSources');
+    expect($sources[0]['uid'])->not->toBe($sources[1]['uid']);
+
+    $component->call('cockpitQuelleEntfernen', $sources[0]['uid'])
+        ->assertSet('cockpitSources', fn ($value) => count($value) === 1 && $value[0]['uid'] === $sources[1]['uid']);
+});
+
+it('Bestellrunde verknüpft wiederverwendete Drafts idempotent per M:N', function () {
+    $sources = [[
+        'type' => 'recipe', 'id' => $this->kuchen->id, 'qty' => 100,
+        'unit' => 'portions', 'delivery_date' => '2026-08-13',
+    ]];
+
+    $first = $this->svc->generateDraftsFromSources($this->rootTeam, $sources, null, null, [], ['label' => 'Woche 33']);
+    $second = $this->svc->generateDraftsFromSources($this->rootTeam, $sources, null, null, [], [
+        'id' => $first['round']['id'], 'label' => 'Woche 33',
+    ]);
+
+    expect($second['round']['id'])->toBe($first['round']['id'])
+        ->and($second['round']['order_count'])->toBe(2)
+        ->and(FoodAlchemistOrderRound::count())->toBe(1)
+        ->and(FoodAlchemistOrder::where('status', 'draft')->count())->toBe(2);
+});
+
+it('Bestellrunde erhält ohne Referenz automatisch Datum und Uhrzeit als Namen', function () {
+    Carbon::setTestNow('2026-08-18 16:17:00');
+    try {
+        $result = $this->svc->generateDraftsFromSources($this->rootTeam, [[
+            'type' => 'recipe', 'id' => $this->kuchen->id, 'qty' => 100,
+            'unit' => 'portions', 'delivery_date' => '2026-08-20',
+        ]]);
+
+        expect($result['round']['label'])->toBe('Bestellrunde 18.08.2026 · 16:17');
+    } finally {
+        Carbon::setTestNow();
+    }
 });
 
 it('E2 UI: „＋ Artikel"-Livesearch findet Artikel + hängt manuelle Zeile an dessen Schiene', function () {
@@ -1593,21 +1721,210 @@ it('E2 UI: Bedarf-Schnellerfassung Basisrezept in kg → amount_kg-Ziel', functi
     expect(FoodAlchemistOrder::where('status', 'draft')->count())->toBe(2);
 });
 
-it('E2 UI: Produktions-Handover erscheint in Bestellungen als Produktionskontext', function () {
+it('E2 UI: freigegebener Produktionsbedarf erscheint im Bestellwesen', function () {
     $this->actingAs($this->makeUser($this->rootTeam));
-    $produktion = app(\Platform\FoodAlchemist\Services\ProductionOrderService::class);
+    $produktion = app(ProductionOrderService::class);
     $po = $produktion->saveNew($this->rootTeam, '2026-08-08', 'Bankett', [
         ['recipe_id' => $this->kuchen->id, 'portions' => 100, 'source_ref' => 'recipe:kuchen@100'],
     ]);
 
-    $produktion->anBestellungUebergeben($this->rootTeam, $po->id, $this->svc);
+    $produktion->materialbedarfFreigeben($this->rootTeam, $po->id);
 
     Livewire::test(OrdersIndex::class)
-        ->set('productionFilter', $po->id)
+        ->set('sicht', 'bedarfe')
         ->assertSee('Bankett')
-        ->assertSee('Chefs')
-        ->assertSee('Hanos')
-        ->assertSeeHtml('data-orders-zeile');
+        ->assertSee('offen')
+        ->assertSee('Planen')
+        ->call('bedarfPlanen', $po->id)
+        ->assertDispatched('orders-editor.production', id: $po->id);
+
+    Livewire::test(OrdersEditor::class)
+        ->call('oeffnenNeu', null, null, $po->id)
+        ->assertSet('cockpitSources', fn ($sources) => count($sources) === 1 && $sources[0]['type'] === 'production');
+});
+
+it('E2 UI: mehrere freigegebene Produktionsbedarfe werden gemeinsam geplant', function () {
+    $this->actingAs($this->makeUser($this->rootTeam));
+    $produktion = app(ProductionOrderService::class);
+    $first = $produktion->saveNew($this->rootTeam, '2026-08-20', 'Mittag', [
+        ['recipe_id' => $this->kuchen->id, 'portions' => 100, 'source_ref' => 'recipe:kuchen@mittag'],
+    ]);
+    $second = $produktion->saveNew($this->rootTeam, '2026-08-20', 'Abend', [
+        ['recipe_id' => $this->kuchen->id, 'portions' => 50, 'source_ref' => 'recipe:kuchen@abend'],
+    ]);
+    $produktion->materialbedarfFreigeben($this->rootTeam, $first->id);
+    $produktion->materialbedarfFreigeben($this->rootTeam, $second->id);
+
+    Livewire::test(OrdersIndex::class)
+        ->set('selectedDemandIds', [$first->id, $second->id])
+        ->call('ausgewaehlteBedarfePlanen')
+        ->assertDispatched('orders-editor.productions', ids: [$first->id, $second->id]);
+
+    Livewire::test(OrdersEditor::class)
+        ->call('oeffnenProduktionen', [$first->id, $second->id])
+        ->assertSet('cockpitSources', fn ($sources) => count($sources) === 2
+            && collect($sources)->pluck('id')->sort()->values()->all() === collect([$first->id, $second->id])->sort()->values()->all())
+        ->assertSet('cockpitPreview', fn ($preview) => ($preview['totals']['sources'] ?? 0) === 2);
+});
+
+it('E2 UI: Datums- und Suchfilter gelten auch für freigegebene Materialbedarfe', function () {
+    $this->actingAs($this->makeUser($this->rootTeam));
+    $produktion = app(ProductionOrderService::class);
+    $juli = $produktion->saveNew($this->rootTeam, '2026-07-22', 'Sommerfest', [
+        ['recipe_id' => $this->kuchen->id, 'portions' => 100, 'source_ref' => 'recipe:kuchen@juli'],
+    ]);
+    $august = $produktion->saveNew($this->rootTeam, '2026-08-28', 'Tagung', [
+        ['recipe_id' => $this->kuchen->id, 'portions' => 100, 'source_ref' => 'recipe:kuchen@august'],
+    ]);
+    $produktion->materialbedarfFreigeben($this->rootTeam, $juli->id);
+    $produktion->materialbedarfFreigeben($this->rootTeam, $august->id);
+
+    Livewire::test(OrdersIndex::class)
+        ->set('sicht', 'bedarfe')
+        ->set('von', '2026-08-27')
+        ->set('bis', '2026-08-30')
+        ->assertSee('Tagung')
+        ->assertDontSee('Sommerfest')
+        ->set('suche', 'sommer')
+        ->assertDontSee('Tagung')
+        ->assertDontSee('Sommerfest');
+});
+
+it('E2 UI: erneutes Planen ersetzt den offenen Bedarf in derselben Runde ohne neue Belegladung', function () {
+    $this->actingAs($this->makeUser($this->rootTeam));
+    $produktion = app(ProductionOrderService::class);
+    $po = $produktion->saveNew($this->rootTeam, '2026-08-20', 'Änderungsrunde', [
+        ['recipe_id' => $this->kuchen->id, 'portions' => 100, 'source_ref' => 'recipe:kuchen'],
+    ]);
+    $produktion->materialbedarfFreigeben($this->rootTeam, $po->id);
+    $first = $this->svc->generateDraftsFromSources($this->rootTeam, [
+        ['type' => 'production', 'id' => $po->id],
+    ]);
+
+    expect(FoodAlchemistOrder::where('status', 'draft')->count())->toBe(2);
+
+    $produktion->updateHeader($this->rootTeam, $po->id, [
+        'production_date' => '2026-08-21',
+        'targets' => [['recipe_id' => $this->kuchen->id, 'portions' => 50, 'source_ref' => 'recipe:kuchen']],
+    ]);
+    $produktion->materialbedarfFreigeben($this->rootTeam, $po->id);
+    $second = $this->svc->generateDraftsFromSources(
+        $this->rootTeam,
+        [['type' => 'production', 'id' => $po->id]],
+        null,
+        null,
+        [],
+        ['id' => $first['round']['id']],
+    );
+
+    expect($second['round']['id'])->toBe($first['round']['id'])
+        ->and($second['round']['order_count'])->toBe(2)
+        ->and(FoodAlchemistOrder::where('status', 'draft')->count())->toBe(2)
+        ->and(FoodAlchemistOrder::whereDate('desired_delivery_date', '2026-08-21')->count())->toBe(2)
+        ->and(FoodAlchemistOrder::whereDate('desired_delivery_date', '2026-08-20')->count())->toBe(0);
+
+    Livewire::test(OrdersEditor::class)
+        ->call('oeffnenProduktion', $po->id, $first['round']['id'])
+        ->assertSet('roundId', $first['round']['id'])
+        ->assertSet('cockpitSources', fn ($sources) => count($sources) === 1 && $sources[0]['id'] === $po->id);
+
+    $triggered = FoodAlchemistOrder::where('status', 'draft')->firstOrFail();
+    $triggered->forceFill(['status' => OrderStatus::Sent, 'sent_at' => now()])->save();
+    $produktion->updateHeader($this->rootTeam, $po->id, [
+        'targets' => [['recipe_id' => $this->kuchen->id, 'portions' => 25, 'source_ref' => 'recipe:kuchen']],
+    ]);
+    $produktion->materialbedarfFreigeben($this->rootTeam, $po->id);
+
+    expect(fn () => $this->svc->generateDraftsFromSources($this->rootTeam, [
+        ['type' => 'production', 'id' => $po->id],
+    ]))->toThrow(RuntimeException::class, 'bereits ausgelöst')
+        ->and($this->svc->productionDemandsForTeam($this->rootTeam)->firstWhere('id', $po->id)['status'])->toBe('ausgelöst');
+});
+
+it('E2 UI: eine offene Bestellrunde lässt sich wieder als gemeinsame Planung öffnen', function () {
+    $this->actingAs($this->makeUser($this->rootTeam));
+    $produktion = app(ProductionOrderService::class);
+    $po = $produktion->saveNew($this->rootTeam, '2026-08-24', 'Bankett Montag', [
+        ['recipe_id' => $this->kuchen->id, 'portions' => 100, 'source_ref' => 'recipe:kuchen'],
+    ]);
+    $produktion->materialbedarfFreigeben($this->rootTeam, $po->id);
+    $result = $this->svc->generateDraftsFromSources(
+        $this->rootTeam,
+        [['type' => 'production', 'id' => $po->id]],
+        LeadLaStrategie::GuenstigsterPreis,
+        null,
+        [],
+        ['label' => 'Montagsrunde', 'desired_delivery_date' => '2026-08-24'],
+    );
+
+    Livewire::test(OrdersIndex::class)
+        ->set('sicht', 'runden')
+        ->call('rundeWaehlen', $result['round']['id'])
+        ->assertSee('Runde bearbeiten')
+        ->call('rundeBearbeiten')
+        ->assertDispatched('orders-editor.round');
+
+    Livewire::test(OrdersEditor::class)
+        ->call('oeffnenRunde', $result['round']['id'])
+        ->assertSet('roundId', $result['round']['id'])
+        ->assertSet('formReference', 'Montagsrunde')
+        ->assertSet('formDeliveryDate', '2026-08-24')
+        ->assertSet('cockpitStrategy', LeadLaStrategie::GuenstigsterPreis->value)
+        ->assertSet('cockpitSources', fn ($sources) => count($sources) === 1 && (int) $sources[0]['id'] === (int) $po->id);
+});
+
+it('E2 Storno: eine stornierte Produktion räumt ihre offenen Bestellentwürfe und den Bedarf auf', function () {
+    $produktion = app(ProductionOrderService::class);
+    $po = $produktion->saveNew($this->rootTeam, '2026-08-25', 'Abgesagtes Bankett', [
+        ['recipe_id' => $this->kuchen->id, 'portions' => 100, 'source_ref' => 'recipe:kuchen'],
+    ]);
+    $produktion->materialbedarfFreigeben($this->rootTeam, $po->id);
+    $this->svc->generateDraftsFromSources($this->rootTeam, [['type' => 'production', 'id' => $po->id]]);
+
+    expect(FoodAlchemistOrder::where('status', OrderStatus::Draft->value)->count())->toBe(2);
+
+    $produktion->setStatus($this->rootTeam, $po->id, ProductionOrderStatus::Cancelled);
+
+    expect(FoodAlchemistOrder::where('status', OrderStatus::Draft->value)->count())->toBe(0)
+        ->and($this->svc->productionDemandsForTeam($this->rootTeam)->contains('id', $po->id))->toBeFalse()
+        ->and($produktion->detail($this->rootTeam, $po->id)['procurement_cancel_warning'])->toBeFalse();
+});
+
+it('E2 Storno: ausgelöster Lieferantenbeleg bleibt erhalten und erhält eine Storno-Mail', function () {
+    FoodAlchemistSupplier::where('name', 'Chefs')->update(['email_order' => 'einkauf@chefs.test']);
+    $produktion = app(ProductionOrderService::class);
+    $po = $produktion->saveNew($this->rootTeam, '2026-08-26', 'Kurzfristige Absage', [
+        ['recipe_id' => $this->kuchen->id, 'portions' => 100, 'source_ref' => 'recipe:kuchen'],
+    ]);
+    $produktion->materialbedarfFreigeben($this->rootTeam, $po->id);
+    $this->svc->generateDraftsFromSources($this->rootTeam, [['type' => 'production', 'id' => $po->id]]);
+    $sent = FoodAlchemistOrder::whereHas('supplier', fn ($query) => $query->where('name', 'Chefs'))->firstOrFail();
+    $sent->forceFill(['status' => OrderStatus::Sent, 'sent_at' => now()])->save();
+
+    $produktion->setStatus($this->rootTeam, $po->id, ProductionOrderStatus::Cancelled);
+    $mail = $this->svc->cancellationMailtoData($this->rootTeam, $sent->id);
+    $productionMail = $this->svc->productionCancellationMailtoData($this->rootTeam, $sent->id, $po->id);
+
+    expect($sent->refresh()->status)->toBe(OrderStatus::Sent)
+        ->and($mail['to'])->toBe('einkauf@chefs.test')
+        ->and($mail['subject'])->toContain('Stornierung')
+        ->and($productionMail['kind'])->toBe('full')
+        ->and($productionMail['subject'])->toContain('Stornierung')
+        ->and($produktion->detail($this->rootTeam, $po->id)['procurement_cancel_warning'])->toBeTrue();
+
+    $sharedLine = $sent->lines()->firstOrFail();
+    $sharedLine->source_contributions = array_merge($sharedLine->source_contributions, ['produktion:999:recipe:shared' => 100]);
+    $sharedLine->save();
+    $partialMail = $this->svc->productionCancellationMailtoData($this->rootTeam, $sent->id, $po->id);
+    expect($partialMail['kind'])->toBe('partial')
+        ->and($partialMail['subject'])->toContain('Änderung')
+        ->and($partialMail['body'])->toContain('entfallender Bedarfsanteil');
+
+    $this->actingAs($this->makeUser($this->rootTeam));
+    Livewire::test(OrdersEditor::class)
+        ->call('oeffnenBearbeiten', $sent->id)
+        ->assertSee('Storno an Lieferant')
+        ->assertSee('Storno bestätigt');
 });
 
 it('E2 UI: Bedarf-Schnellerfassung ohne Menge → Fehler, keine Schiene', function () {
@@ -1634,7 +1951,7 @@ describe('E3 · Preisstrategie-Switch + Neu quellen', function () {
         $mkLa = function ($supplier, float $preis) {
             $la = FoodAlchemistSupplierItem::create([
                 'team_id' => $this->rootTeam->id, 'supplier_id' => $supplier->id,
-                'designation' => 'Oel 1kg ' . $supplier->name, 'article_number' => 'OEL-' . strtoupper(substr($supplier->name, 0, 3)),
+                'designation' => 'Oel 1kg '.$supplier->name, 'article_number' => 'OEL-'.strtoupper(substr($supplier->name, 0, 3)),
                 'qty' => 1.0, 'unit_code' => 'kg', 'packaging_unit' => 'Kanister',
             ]);
             FoodAlchemistSupplierItemStructure::create(['team_id' => $this->rootTeam->id, 'supplier_item_id' => $la->id, 'gp_id' => $this->oel->id]);
@@ -1754,7 +2071,7 @@ describe('E3 · Preisstrategie-Switch + Neu quellen', function () {
         $this->svc->setStatus($this->rootTeam, $chefs->id, OrderStatus::Sent);
 
         expect(fn () => $this->svc->resourceOrder($this->rootTeam, $chefs->id, LeadLaStrategie::GuenstigsterPreis))
-            ->toThrow(\RuntimeException::class);
+            ->toThrow(RuntimeException::class);
     });
 
     it('MCP orders.RESOURCE: preview zeigt Wechsel ohne Persistenz, apply verschiebt', function () {
@@ -1858,7 +2175,7 @@ describe('E3 · Preisstrategie-Switch + Neu quellen', function () {
             'designation' => 'Salz 1kg', 'article_number' => 'SAL-1', 'qty' => 1.0, 'unit_code' => 'kg', 'packaging_unit' => 'Sack',
         ]);
         expect(fn () => $this->svc->switchLineArticle($this->rootTeam, $line->id, $fremd->id))
-            ->toThrow(\RuntimeException::class);
+            ->toThrow(RuntimeException::class);
     });
 
     it('E3b UI: Preisstrategie-Select + Neu quellen (Vorschau → Anwenden) verschiebt die Schiene', function () {

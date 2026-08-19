@@ -9,7 +9,6 @@
         </div>
     @else
         @php($zieleCount = count($detail['targets']))
-        @php($uebergebenCount = collect($detail['targets'])->filter(fn ($t) => ! empty($zielUebergaben[$t['source_ref'] ?? '']))->count())
         @php($warnCount = count($detail['warnungen']) + count($kapazitaetsWarnungen))
         @php($postenBelegt = collect($postenSummen)->filter(fn ($p) => $p['station_id'] !== null)->count())
         @php($status = \Platform\FoodAlchemist\Enums\ProductionOrderStatus::from($detail['status']))
@@ -59,7 +58,7 @@
                     <button type="button" wire:click="setStatus('{{ $z->value }}')"
                         class="{{ in_array($z->value, ['in_progress', 'done'], true) ? $btnPrimary : $btnGhost }}"
                         @if($z->value === 'cancelled')
-                            onclick="return confirm('Produktion stornieren?')"
+                            onclick="return confirm('Produktion stornieren? Offene Einkaufsentwürfe werden neu berechnet; bereits ausgelöste Bestellungen bleiben als Klärfall bestehen.')"
                         @elseif($z->value === 'done' && $detail['fortschritt']['offen'] + $detail['fortschritt']['in_arbeit'] > 0)
                             onclick="return confirm('{{ $detail['fortschritt']['offen'] + $detail['fortschritt']['in_arbeit'] }} Zeile(n) sind noch nicht abgehakt. Trotzdem fertig melden?')"
                             data-produktion-done-offen="{{ $detail['fortschritt']['offen'] + $detail['fortschritt']['in_arbeit'] }}"
@@ -70,15 +69,20 @@
         @endif
 
         <div class="rounded-lg bg-[var(--ui-surface)] border border-[var(--ui-border)] divide-y divide-[var(--ui-border)] text-[13px]" data-panel-glance>
-            <div class="flex items-center justify-between gap-2 px-3 py-2" data-einkauf-deckung="{{ $uebergebenCount }}/{{ $zieleCount }}">
+            <div class="flex items-center justify-between gap-2 px-3 py-2">
                 <span class="text-gray-500">@svg('heroicon-o-flag', 'w-3.5 h-3.5 inline-block align-[-2px] mr-1') Ziele</span>
-                <span class="text-gray-900 tabular-nums">{{ $zieleCount }} · übergeben {{ $uebergebenCount }}/{{ $zieleCount }}</span>
+                <span class="text-gray-900 tabular-nums">{{ $zieleCount }}</span>
             </div>
             <div class="flex items-center justify-between gap-2 px-3 py-2">
-                <span class="text-gray-500">@svg('heroicon-o-shopping-cart', 'w-3.5 h-3.5 inline-block align-[-2px] mr-1') Einkauf</span>
+                <span class="text-gray-500">@svg('heroicon-o-archive-box-arrow-down', 'w-3.5 h-3.5 inline-block align-[-2px] mr-1') Materialbedarf</span>
                 <span class="flex items-center gap-1.5">
-                    @if(! empty($detail['einkauf_veraltet']))<span class="{{ $pill }} {{ $variantPill['warning'] }}" data-einkauf-veraltet="1">veraltet</span>@endif
-                    <span class="text-gray-900 tabular-nums">{{ $verknuepfteOrders->count() }} Bestellungen</span>
+                    @if(! empty($detail['procurement_stale']))
+                        <span class="{{ $pill }} {{ $variantPill['warning'] }}" data-materialbedarf-status="geaendert">geändert</span>
+                    @elseif(! empty($detail['procurement_released_at']))
+                        <span class="{{ $pill }} {{ $variantPill['success'] }}" data-materialbedarf-status="freigegeben">freigegeben</span>
+                    @else
+                        <span class="{{ $pill }} {{ $variantPill['secondary'] }}" data-materialbedarf-status="entwurf">Entwurf</span>
+                    @endif
                 </span>
             </div>
             <div class="flex items-center justify-between gap-2 px-3 py-2">
@@ -102,9 +106,27 @@
             </div>
         @endif
 
+        @if(! empty($detail['procurement_cancel_warning']))
+            <div class="space-y-2" data-produktion-storno-einkauf>
+                <x-foodalchemist::alert tone="warning">Produktion storniert, aber mindestens eine Bestellung wurde bereits ausgelöst. Bitte die Lieferanten informieren und die Belege anschließend als storniert bestätigen.</x-foodalchemist::alert>
+                <div class="flex flex-wrap gap-1.5">
+                    @foreach(collect($detail['verknuepfte_orders'])->whereIn('status', ['sent', 'confirmed']) as $linkedOrder)
+                        @if($linkedOrder['cancellation_mailto'])
+                            <a href="{{ $linkedOrder['cancellation_mailto'] }}" class="{{ $btnGhostXs }} text-rose-500">@svg('heroicon-o-envelope', 'w-3.5 h-3.5') {{ $linkedOrder['cancellation_kind'] === 'partial' ? 'Änderung' : 'Storno' }} an {{ $linkedOrder['supplier'] }}</a>
+                        @else
+                            <span class="{{ $btnGhostXs }} opacity-40 cursor-not-allowed" title="Beim Lieferanten fehlt die Bestell-E-Mail">@svg('heroicon-o-envelope', 'w-3.5 h-3.5') {{ $linkedOrder['supplier'] }}</span>
+                        @endif
+                    @endforeach
+                </div>
+            </div>
+        @endif
+
         <div class="flex flex-wrap gap-2 pt-2 border-t border-[var(--ui-border)]">
             @if($detail['is_owned'] && in_array($detail['status'], ['planned', 'in_progress'], true))
-                <button type="button" wire:click="anBestellungUebergeben" class="{{ $btnGhost }}" data-produktion-uebergeben>→ An Bestellung übergeben</button>
+                <button type="button" wire:click="materialbedarfFreigeben" class="{{ $btnGhost }}" data-materialbedarf-freigeben>@svg('heroicon-o-check-circle', 'w-3.5 h-3.5') {{ $detail['procurement_released_at'] ? 'Bedarf erneut freigeben' : 'Materialbedarf freigeben' }}</button>
+            @endif
+            @if($detail['procurement_released_at'])
+                <a href="{{ route('foodalchemist.orders.index', ['sicht' => 'bedarfe', 'p' => $detail['id']]) }}" class="{{ $btnGhost }}">Im Einkauf öffnen</a>
             @endif
             @if(\Illuminate\Support\Facades\Route::has('foodalchemist.produktion.auftraege.dokument'))
                 <a href="{{ route('foodalchemist.produktion.auftraege.dokument', ['order' => $detail['id'], 'profil' => 'produktion']) }}" target="_blank" class="{{ $btnGhost }}" title="Produktionsdokument zusammenstellen" data-produktion-panel-dokument>@svg('heroicon-o-document-text', 'w-3.5 h-3.5 inline-block align-middle') Dokument</a>

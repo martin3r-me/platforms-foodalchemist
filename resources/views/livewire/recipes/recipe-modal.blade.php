@@ -16,7 +16,7 @@
                     class="{{ $btnGhostXs }} text-rose-600" data-rezept-loeschen>Löschen</button>
             <span class="text-gray-300">|</span>
             <button type="button" wire:click="allesAnreichern" class="{{ $btnAi }}"
-                    title="Voll-Coverage: Text-Lücken füllen und abhängige Detail-Bausteine wie Eigenschaften, Equipment, Posten, Steps, Prozessanker und Sensorik neu synchronisieren" data-alles-anreichern>@svg('heroicon-o-sparkles', 'w-3.5 h-3.5') Alles anreichern</button>
+                    title="Text, Eigenschaften, Produktionsrouting, Equipment, Schritte, Aromaanker, Pairings, Eignung und Sensorik synchronisieren. KI-Fotos laufen separat; Ersatz bleibt eine bewusste manuelle Verknüpfung." data-alles-anreichern>@svg('heroicon-o-sparkles', 'w-3.5 h-3.5') Alles anreichern</button>
             {{-- R6: Template-Markierung (Basis für «Aus Template» im Browser) --}}
             <button type="button" wire:click="templateToggle" class="{{ $btnGhostXs }} {{ $istTemplate ? '!text-orange-600 !bg-orange-500/10 !border-orange-500/20' : '' }}"
                     title="Template = Vorlage für neue Rezepte (Browser: «Aus Template»)" data-template-toggle>

@@ -12,7 +12,7 @@
                         @foreach($erlaubteStatus as $z)
                             <button type="button" wire:click="setStatus('{{ $z->value }}')"
                                 class="{{ in_array($z->value, ['in_progress', 'done'], true) ? $btnPrimary : $btnGhost }}"
-                                @if($z->value === 'cancelled') onclick="return confirm('Produktion stornieren?')" @endif
+                                @if($z->value === 'cancelled') onclick="return confirm('Produktion stornieren? Offene Einkaufsentwürfe werden neu berechnet; bereits ausgelöste Bestellungen bleiben als Klärfall bestehen.')" @endif
                                 data-produktion-status="{{ $z->value }}">{{ $statusAktion[$z->value] ?? $z->label() }}</button>
                         @endforeach
 
@@ -26,25 +26,35 @@
                 </x-foodalchemist::modal-section>
             @endif
 
-            @php($zieleCount = count($ops['targets']))
-            @php($uebergebenCount = collect($ops['targets'])->filter(fn ($t) => ! empty($zielUebergaben[$t['source_ref'] ?? '']))->count())
-            <x-foodalchemist::modal-section title="Einkauf & Deckung">
+            <x-foodalchemist::modal-section title="Materialbedarf">
                 <x-slot:actions>
                     @if($ops['is_owned'] && in_array($ops['status'], ['planned', 'in_progress'], true))
-                        <button type="button" wire:click="anBestellungUebergeben" class="{{ $btnGhostXs }}" data-produktion-uebergeben>→ An Bestellung übergeben</button>
+                        <button type="button" wire:click="materialbedarfFreigeben" class="{{ $btnGhostXs }}" data-materialbedarf-freigeben>{{ $ops['procurement_released_at'] ? 'Erneut freigeben' : 'Freigeben' }}</button>
                     @endif
-                    <a href="{{ route('foodalchemist.orders.index', ['p' => $ops['id']]) }}" class="{{ $btnGhostXs }}" data-produktion-bestellungen-kontext>Bestellungen öffnen</a>
+                    @if($ops['procurement_released_at'])
+                        <a href="{{ route('foodalchemist.orders.index', ['sicht' => 'bedarfe', 'p' => $ops['id']]) }}" class="{{ $btnGhostXs }}">Im Einkauf öffnen</a>
+                    @endif
                     @if(\Illuminate\Support\Facades\Route::has('foodalchemist.produktion.auftraege.dokument'))
                         <a href="{{ route('foodalchemist.produktion.auftraege.dokument', ['order' => $ops['id']]) }}" target="_blank" class="{{ $btnGhostXs }}" title="Produktionsschein + Einkauf">@svg('heroicon-o-printer', 'w-3.5 h-3.5') Doku</a>
                     @endif
                 </x-slot:actions>
-                @if(! empty($ops['einkauf_veraltet']))
-                    <div class="mb-2" data-einkauf-veraltet="1"><x-foodalchemist::alert tone="warning">Bestellung veraltet — Ziele seit der letzten Übergabe geändert. Erneut übergeben.</x-foodalchemist::alert></div>
+                @if(! empty($ops['procurement_stale']))
+                    <x-foodalchemist::alert tone="warning">Ziele wurden seit der Freigabe geändert. Der Einkauf verwendet den alten Stand, bis der Bedarf erneut freigegeben wird.</x-foodalchemist::alert>
+                @elseif(! empty($ops['procurement_released_at']))
+                    <x-foodalchemist::alert tone="success">Materialbedarf ist für das Bestellwesen freigegeben.</x-foodalchemist::alert>
+                @else
+                    <p class="text-[12px] text-gray-500">Die Produktion plant Mengen und Termine. Lieferanten, Gebinde und Bestellungen werden erst nach der Freigabe im Bestellwesen festgelegt.</p>
                 @endif
-                @if($zieleCount > 0)
-                    <div class="flex items-center justify-between gap-2 text-[12px] mb-2" data-einkauf-deckung="{{ $uebergebenCount }}/{{ $zieleCount }}">
-                        <span class="text-gray-500">Deckungsgrad</span>
-                        <span class="{{ $pill }} font-medium {{ $uebergebenCount === 0 ? $variantPill['secondary'] : ($uebergebenCount >= $zieleCount ? $variantPill['success'] : $variantPill['warning']) }}">{{ $uebergebenCount }}/{{ $zieleCount }} Ziele übergeben</span>
+                @if(! empty($ops['procurement_cancel_warning']))
+                    <x-foodalchemist::alert tone="warning">Mindestens eine Bestellung wurde bereits ausgelöst. Bitte die Lieferanten informieren und die Belege anschließend als storniert bestätigen.</x-foodalchemist::alert>
+                    <div class="flex flex-wrap gap-1.5">
+                        @foreach(collect($ops['verknuepfte_orders'])->whereIn('status', ['sent', 'confirmed']) as $linkedOrder)
+                            @if($linkedOrder['cancellation_mailto'])
+                                <a href="{{ $linkedOrder['cancellation_mailto'] }}" class="{{ $btnGhostXs }} text-rose-500">@svg('heroicon-o-envelope', 'w-3.5 h-3.5') {{ $linkedOrder['cancellation_kind'] === 'partial' ? 'Änderung' : 'Storno' }} an {{ $linkedOrder['supplier'] }}</a>
+                            @else
+                                <span class="{{ $btnGhostXs }} opacity-40 cursor-not-allowed" title="Beim Lieferanten fehlt die Bestell-E-Mail">@svg('heroicon-o-envelope', 'w-3.5 h-3.5') {{ $linkedOrder['supplier'] }}</span>
+                            @endif
+                        @endforeach
                     </div>
                 @endif
                 @if($verknuepfteOrders->isNotEmpty())
@@ -57,7 +67,7 @@
                         @endforeach
                     </div>
                 @else
-                    <p class="text-[12px] text-gray-500">Noch keine Bestellung — „→ An Bestellung übergeben" oben.</p>
+                    @if($ops['procurement_released_at'])<p class="text-[12px] text-gray-500 mt-2">Im Bestellwesen noch nicht verplant.</p>@endif
                 @endif
             </x-foodalchemist::modal-section>
         @endif

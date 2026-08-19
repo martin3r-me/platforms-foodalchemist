@@ -206,11 +206,15 @@ Bearbeitung bleibt im Editor; dessen Tabs liegen nun in getrennten Partials. Der
 keine massenhafte Küchen-Notiz-Eingabe mehr, weil diese weiterhin gezielt je Produktionszeile im
 Zeilen-Tab gepflegt wird.
 
-Das Produktionsdokument hat eine einzige Einstiegstaste und vier Profile (`Kurzblatt`,
-`Produktion`, `Einkauf`, `Komplett`). Inhaltsfilter werden in den PDF-Link übernommen. Das
-Einkaufsprofil springt ohne vorgeschaltete Rezeptseiten direkt zur Lieferantenübersicht. Ein
-Postenfilter zeigt nur die tatsächlich am Auftrag vorkommenden Posten sowie „Nicht zugeteilt";
-er filtert die Produktionszeilen, nicht den auftragsweiten Einkaufsbedarf.
+Das Produktionsdokument hat eine einzige Einstiegstaste und zwei Profile (`Kurzblatt`,
+`Produktion`). Inhaltsfilter werden in den PDF-Link übernommen. Ein Postenfilter zeigt nur die
+tatsächlich am Auftrag vorkommenden Posten sowie „Nicht zugeteilt". Lieferanten-, Gebinde- und
+EK-Angaben gehören ausschließlich in Dokumente des Bestellwesens.
+
+**Zuständigkeitsgrenze 2026-08-18:** Produktion plant was, wann und auf welchem Posten hergestellt
+wird und gibt daraus einen versionierten Materialbedarfs-Snapshot frei. Einkauf übernimmt diesen
+Snapshot im Bedarfs-Eingang, löst ihn nach Lieferant und Liefertag auf und speichert persistente
+Bestellrunden. Produktion erzeugt keine Bestellentwürfe mehr.
 
 **MCP im Lockstep:** `production_orders.LINE_OVERRIDE` · `LINE_ASSIGN` · `LINE_STATUS` · `DELETE`
 neu; `buffer_pct` in `UPDATE` ergänzt; der Docblock von `UPDATE_LINE` behauptete wörtlich, Ansätze

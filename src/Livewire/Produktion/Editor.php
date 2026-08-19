@@ -17,7 +17,6 @@ use Platform\FoodAlchemist\Models\FoodAlchemistProductionOrderLine;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Services\AngebotService;
 use Platform\FoodAlchemist\Services\ConcepterAggregateService;
-use Platform\FoodAlchemist\Services\OrderService;
 use Platform\FoodAlchemist\Services\PlanungsblattService;
 use Platform\FoodAlchemist\Services\ProductionOrderService;
 use Platform\FoodAlchemist\Support\Suche;
@@ -636,14 +635,9 @@ class Editor extends Component
         }, 'Unverplante Zeilen zugeteilt.');
     }
 
-    /** Einbahn-Übergabe: Bedarf aller Ziele an die Bestellschienen (Service-zentral inkl. Stale-Marker). */
-    public function anBestellungUebergeben(ProductionOrderService $prod, OrderService $orders): void
+    public function materialbedarfFreigeben(ProductionOrderService $prod): void
     {
-        $this->fuehreAus(function ($team) use ($prod, $orders) {
-            $res = $prod->anBestellungUebergeben($team, $this->orderId, $orders, Auth::id());
-            $touched = count($res['orders']);
-            $this->hinweis = $touched > 0 ? "{$touched} Bestellschiene(n) aktualisiert." : 'Kein bestellbarer Bedarf.';
-        }, null);
+        $this->fuehreAus(fn ($team) => $prod->materialbedarfFreigeben($team, $this->orderId, Auth::id()), 'Materialbedarf für den Einkauf freigegeben.');
         $this->dispatch('produktion-status-geaendert');
     }
 

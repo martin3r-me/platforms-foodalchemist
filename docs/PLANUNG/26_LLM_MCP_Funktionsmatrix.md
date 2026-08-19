@@ -218,7 +218,7 @@ Betroffene MCP-Reads sind insbesondere `artikel.SEARCH`, `gps.SEARCH`,
 | Foodbook/Leitstelle | 14 | Buch, Kapitel, Blöcke, Ideen, Freigabe, Zielgruppen | FB-01–17 |
 | Speisekarte | 9 | Karte, Rubriken, Positionen, Duplikat, Suche, Leitstelle | noch ohne Business-IDs |
 | Kalkulation/Assemblierung | 8 | Kalkulation, Simulation, Benchmark, Proportion, Solver | WI-01–13 |
-| Produktion/Bestellung | 34 | Bedarf, Aufträge, Zeilen (Override/Zuteilung/Abhaken/Blockieren), Start/Finish, Status, Löschen, Dokumente, Handover, Einkaufs-Auswertungen, Rückvergütung | PR-01–04, OR-01–06 |
+| Produktion/Bestellung | 34 | Bedarf, Aufträge, Zeilen (Override/Zuteilung/Abhaken/Blockieren), Start/Finish, Status, Löschen, Dokumente, Bedarfsfreigabe, Einkaufs-Auswertungen, Rückvergütung | PR-01–04, OR-01–06 |
 | Wissen/Pairing/R&D | 22 | Wissen, Kategorien, Routings, Aktiv-Schalten, Bindings, Pairing, Substitution, Lab Notes | KN-01–06, PA-01–06 |
 | Qualität/Signale/Runs | 15 | Listen, Ursachen, Policy, Fix, Trend, Qualitätsläufe | QL-01–05 |
 | Controlling/Verkaufs-Ist | 5 | Verkaufsjournal lesen, CSV-Import (Trockenlauf-Default), Menu-Engineering, Portfolio-Steuerung, Promotion-Umsatz | CT-08–12, PF-01–02 |
@@ -326,7 +326,7 @@ foodalchemist.production_orders.ADD_TARGET
 foodalchemist.production_orders.DELETE
 foodalchemist.production_orders.FINISH
 foodalchemist.production_orders.GET
-foodalchemist.production_orders.HANDOVER
+foodalchemist.production_orders.RELEASE_DEMAND
 foodalchemist.production_orders.LINE_ASSIGN
 foodalchemist.production_orders.LINE_BLOCK
 foodalchemist.production_orders.LINE_OVERRIDE

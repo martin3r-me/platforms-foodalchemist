@@ -6,7 +6,6 @@ use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\On;
 use Livewire\Component;
 use Platform\FoodAlchemist\Enums\ProductionOrderStatus;
-use Platform\FoodAlchemist\Services\OrderService;
 use Platform\FoodAlchemist\Services\ProductionOrderService;
 
 /**
@@ -53,14 +52,9 @@ class DetailPanel extends Component
         $this->fuehreAus(fn ($team) => $svc->updateLine($team, $lineId, ['note' => $note]), 'Notiz gespeichert.');
     }
 
-    /** Einbahn-Übergabe: Bedarf aller Ziele dieses Auftrags an die Bestellschienen (P4: Service-zentral inkl. Stale-Marker). */
-    public function anBestellungUebergeben(ProductionOrderService $prod, OrderService $orders): void
+    public function materialbedarfFreigeben(ProductionOrderService $prod): void
     {
-        $this->fuehreAus(function ($team) use ($prod, $orders) {
-            $res = $prod->anBestellungUebergeben($team, $this->orderId, $orders, Auth::id());
-            $touched = count($res['orders']);
-            $this->hinweis = $touched > 0 ? "{$touched} Bestellschiene(n) aktualisiert." : 'Kein bestellbarer Bedarf.';
-        }, null);
+        $this->fuehreAus(fn ($team) => $prod->materialbedarfFreigeben($team, $this->orderId, Auth::id()), 'Materialbedarf für den Einkauf freigegeben.');
         $this->dispatch('produktion-status-geaendert');
     }
 

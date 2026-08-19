@@ -258,23 +258,30 @@ it('Voll anreichern synchronisiert operative Detail-Felder: Equipment, Posten un
         'name' => 'Warme Küche',
         'batch_max_kg' => 8,
     ]);
-    foreach (['roestaromen', 'karamell', 'rauch', 'ferment'] as $slug) {
+    foreach (['roestaromen', 'karamell', 'rauch', 'ferment', 'basilikum'] as $slug) {
         DB::table('foodalchemist_vocab_pairing_anchors')->updateOrInsert(
             ['slug' => $slug],
             [
                 'uuid' => (string) \Symfony\Component\Uid\UuidV7::generate(),
-                'label' => $slug,
+                'display_de' => ucfirst($slug),
                 'created_at' => now(),
                 'updated_at' => now(),
             ],
         );
     }
+    $roest = DB::table('foodalchemist_vocab_pairing_anchors')->where('slug', 'roestaromen')->value('id');
+    $basilikum = DB::table('foodalchemist_vocab_pairing_anchors')->where('slug', 'basilikum')->value('id');
+    DB::table('foodalchemist_pairing_anchor_edges')->insert([
+        'uuid' => (string) \Symfony\Component\Uid\UuidV7::generate(),
+        'anchor_a_id' => $roest, 'anchor_b_id' => $basilikum, 'type' => 'aroma',
+        'evidence' => 'Test-Grounding', 'created_at' => now(), 'updated_at' => now(),
+    ]);
 
     $this->mock(AiGatewayService::class, function ($mock) {
         $mock->shouldReceive('propose')->once()->with('recipe.production_depth', \Mockery::any(), \Mockery::any())
             ->andReturn(new AiProposal(['production_depth' => 'from_scratch'], 0.75, 'Mock', [], 'fertigung-op'));
         $mock->shouldReceive('propose')->once()->with('recipe.eigenschaften', \Mockery::any(), \Mockery::any())
-            ->andReturn(new AiProposal(['work_time_min' => 90, 'temperature' => 'warm', 'function' => 'Warme Küche Ansatz'], 0.78, 'Mock', [], 'eigenschaften-op'));
+            ->andReturn(new AiProposal(['work_time_min' => 90, 'setup_time_min' => 12, 'max_vorlauf_tage' => 3, 'temperature' => 'warm', 'function' => 'Warme Küche Ansatz'], 0.78, 'Mock', [], 'eigenschaften-op'));
         $mock->shouldReceive('propose')->once()->with('recipe.equipment', \Mockery::any(), \Mockery::any())
             ->andReturn(new AiProposal(['equipment_slugs' => ['kombi']], 0.72, 'Mock', [], 'equipment-op'));
         $mock->shouldReceive('propose')->once()->with('recipe.steps', \Mockery::any(), \Mockery::any())
@@ -286,6 +293,14 @@ it('Voll anreichern synchronisiert operative Detail-Felder: Equipment, Posten un
                 'geschmack' => array_merge(array_fill_keys(SensorikService::DIMS, 0.0), ['umami' => 0.6]),
                 'texturen' => ['weich'],
             ], 0.82, 'Mock', [], 'sensorik-op'));
+        $mock->shouldReceive('propose')->once()->with('recipe.anker', \Mockery::any(), \Mockery::any())
+            ->andReturn(new AiProposal(['anker_slugs' => ['roestaromen']], 0.86, 'Mock', [], 'anker-op'));
+        $mock->shouldReceive('propose')->once()->with('recipe.pairing', \Mockery::any(), \Mockery::any())
+            ->andReturn(new AiProposal(['pairings' => [['slug' => 'basilikum', 'typ' => 'aroma', 'konfidenz' => 'hoch']]], 0.84, 'Mock', [], 'pairing-op'));
+        $mock->shouldReceive('propose')->once()->with('recipe.sektor', \Mockery::any(), \Mockery::any())
+            ->andReturn(new AiProposal(['sektoren' => ['restaurant' => ['eignung' => 'geeignet', 'grund' => 'Produktionsstabil.'], 'care' => ['eignung' => 'ungeeignet']]], 0.8, 'Mock', [], 'sektor-op'));
+        $mock->shouldReceive('propose')->once()->with('recipe.level', \Mockery::any(), \Mockery::any())
+            ->andReturn(new AiProposal(['niveaus' => ['klassisch' => ['eignung' => 'geeignet', 'grund' => 'Klassische Technik.']]], 0.8, 'Mock', [], 'level-op'));
     });
 
     $r = $this->makeRecipe($this->rootTeam, 'Brauner Fond', [
@@ -304,10 +319,19 @@ it('Voll anreichern synchronisiert operative Detail-Felder: Equipment, Posten un
     expect($erg['coverage']['equipment']['status'])->toBe('aktualisiert')
         ->and($erg['coverage']['posten']['status'])->toBe('aktualisiert')
         ->and($erg['coverage']['prozessanker']['matched'])->toContain('roestaromen')
+        ->and($erg['coverage']['aromaanker']['n_anker'])->toBe(1)
+        ->and($erg['coverage']['pairings']['n_pairings'])->toBe(1)
+        ->and($erg['coverage']['eignung']['n_level'])->toBe(1)
+        ->and($erg['coverage']['eignung']['n_sektor'])->toBe(1)
         ->and($frisch->equipment()->pluck('slug')->all())->toBe(['kombi'])
         ->and((int) $frisch->default_station_id)->toBe((int) $posten->id)
         ->and((float) $frisch->batch_max_kg)->toBe(8.0)
-        ->and($frisch->work_time_min)->toBe(90);
+        ->and($frisch->work_time_min)->toBe(90)
+        ->and($frisch->setup_time_min)->toBe(12)
+        ->and($frisch->max_vorlauf_tage)->toBe(3)
+        ->and(DB::table('foodalchemist_recipe_pairings')->where('recipe_id', $r->id)->whereNull('deleted_at')->value('created_via'))->toBe('ai_gateway')
+        ->and(DB::table('foodalchemist_recipe_sector_suitability')->where('recipe_id', $r->id)->whereNull('deleted_at')->value('sector_slug'))->toBe('restaurant')
+        ->and(DB::table('foodalchemist_recipe_level_suitability')->where('recipe_id', $r->id)->whereNull('deleted_at')->value('level_slug'))->toBe('klassisch');
 });
 
 it('L7a: die Ebene entscheidet das is_sales_recipe-Flag — ein Gericht bekommt die VK-Schrittfolge', function () {

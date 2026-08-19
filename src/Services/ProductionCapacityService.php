@@ -6,6 +6,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Platform\Core\Models\Team;
+use Platform\FoodAlchemist\Models\FoodAlchemistItemAllergen;
 use Platform\FoodAlchemist\Models\FoodAlchemistProductionStation;
 
 /**
@@ -152,6 +153,11 @@ class ProductionCapacityService
                 'o.updated_at as auftrag_updated_at',
                 's.name as station',
                 'r.name as rezept',
+                'r.allergens_confidence',
+                'r.spec_is_vegan', 'r.spec_is_vegetarian', 'r.spec_is_halal',
+                'r.spec_contains_pork', 'r.spec_contains_beef',
+                'r.spec_is_gluten_free', 'r.spec_is_lactose_free',
+                ...array_map(fn (string $a) => "r.allergen_{$a}", array_keys(FoodAlchemistItemAllergen::ALLERGENE)),
                 'o.id as order_id', 'o.name as auftrag', 'o.production_date as liefertag',
             ], $mitAnleitung ? ['l.zutaten', 'l.steps_snapshot', 'l.zubereitung'] : []))->get();
 
@@ -169,6 +175,18 @@ class ProductionCapacityService
 
         return $zeilen->map(function ($z) use ($equipmentNachRezept, $mitAnleitung) {
                 $z->name = $z->rezept ?? $z->titel ?? '—';
+                $teile = collect(explode('|', (string) $z->name))
+                    ->map(fn ($teil) => trim($teil))
+                    ->filter(fn ($teil) => $teil !== '')
+                    ->values();
+                $z->arbeit_typ = (bool) $z->is_basisrezept ? 'Basisrezept' : 'Gericht';
+                $z->gericht_label = $teile->count() > 1
+                    ? $teile->first()
+                    : ((bool) $z->is_basisrezept ? null : $z->name);
+                $z->rezept_label = $teile->count() > 1
+                    ? $teile->slice(1)->implode(' | ')
+                    : ((bool) $z->is_basisrezept ? $z->name : null);
+                $z->sicherheit = $this->sicherheit($z);
                 $z->ansaetze_effektiv = $z->is_manual_ansaetze && $z->manual_ansaetze !== null
                     ? (float) $z->manual_ansaetze : (float) $z->ansaetze;
                 if (property_exists($z, 'steps_snapshot')) {
@@ -176,6 +194,10 @@ class ProductionCapacityService
                         ? (json_decode($z->steps_snapshot, true) ?: []) : ($z->steps_snapshot ?? []);
                     $z->zutaten = is_string($z->zutaten)
                         ? (json_decode($z->zutaten, true) ?: []) : ($z->zutaten ?? []);
+                    if ($mitAnleitung && $z->schritte === [] && trim((string) ($z->zubereitung ?? '')) === '') {
+                        $z->sicherheit['warnungen'][] = 'Ohne Anleitung';
+                        $z->sicherheit['warnungen'] = array_values(array_unique($z->sicherheit['warnungen']));
+                    }
                 }
                 if ($mitAnleitung) {
                     $z->equipment = $z->recipe_id
@@ -187,6 +209,66 @@ class ProductionCapacityService
 
                 return $z;
             });
+    }
+
+    private function sicherheit(object $z): array
+    {
+        $allergene = collect(FoodAlchemistItemAllergen::ALLERGENE)
+            ->map(function (string $label, string $key) use ($z) {
+                $wert = $z->{"allergen_{$key}"} ?? 'unbekannt';
+
+                return in_array($wert, ['enthalten', 'spuren'], true)
+                    ? ['key' => $key, 'label' => $this->kurzAllergen($label), 'wert' => $wert]
+                    : null;
+            })
+            ->filter()
+            ->values()
+            ->all();
+
+        $diaet = collect([
+            ['label' => 'vegan', 'ok' => $this->wahr($z->spec_is_vegan ?? false)],
+            ['label' => 'vegetarisch', 'ok' => $this->wahr($z->spec_is_vegetarian ?? false)],
+            ['label' => 'halal', 'ok' => $this->wahr($z->spec_is_halal ?? false)],
+            ['label' => 'glutenfrei', 'ok' => $this->wahr($z->spec_is_gluten_free ?? false)],
+            ['label' => 'laktosefrei', 'ok' => $this->wahr($z->spec_is_lactose_free ?? false)],
+        ])->filter(fn ($d) => $d['ok'])->pluck('label')->values()->all();
+
+        $warnungen = collect();
+        if (in_array((string) ($z->allergens_confidence ?? 'unknown'), ['low', 'unknown', ''], true)) {
+            $warnungen->push('Allergene unsicher');
+        }
+        if ($this->wahr($z->spec_contains_pork ?? false)) {
+            $warnungen->push('Schwein');
+        }
+        if ($this->wahr($z->spec_contains_beef ?? false)) {
+            $warnungen->push('Rind');
+        }
+        if ($z->arbeitszeit_min === null) {
+            $warnungen->push('Ohne Arbeitszeit');
+        }
+
+        return [
+            'allergene' => $allergene,
+            'diaet' => $diaet,
+            'warnungen' => $warnungen->values()->all(),
+            'konfidenz' => (string) ($z->allergens_confidence ?? 'unknown'),
+        ];
+    }
+
+    private function kurzAllergen(string $label): string
+    {
+        return str_replace([
+            'Glutenhaltiges Getreide',
+            'Schwefeldioxid & Sulfite',
+        ], [
+            'Gluten',
+            'Sulfite',
+        ], $label);
+    }
+
+    private function wahr(mixed $wert): bool
+    {
+        return in_array($wert, [true, 1, '1'], true);
     }
 
     /** @return Collection<int, object> */

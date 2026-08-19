@@ -396,7 +396,6 @@ it('S3: Produktionsdokument-Profile und Filter steuern HTML und PDF-Inhalte iden
         'zutaten' => true,
         'anleitung' => true,
         'bilder' => true,
-        'einkauf' => false,
     ]);
 
     $html = view('foodalchemist::dokumente.produktionsauftrag', [
@@ -410,19 +409,10 @@ it('S3: Produktionsdokument-Profile und Filter steuern HTML und PDF-Inhalte iden
         ->toContain('Zutaten')
         ->not->toContain('Einkauf / Bestellvorschlag');
 
-    $einkauf = $this->svc->dokumentOptionen(['profil' => 'einkauf']);
-    expect($einkauf['rezepte'])->toBeFalse();
-    $einkaufHtml = view('foodalchemist::dokumente.produktionsauftrag', [
-        'dok' => $dok,
-        'istPdf' => true,
-        'optionen' => $einkauf,
-    ])->render();
-    expect($einkaufHtml)->toContain('Einkauf / Bestellvorschlag')
-        ->not->toContain('class="rezept"')
-        ->not->toContain('<th>Zutat</th>');
+    expect($this->svc->dokumentOptionen(['profil' => 'einkauf'])['profil'])->toBe('produktion');
 
     expect($this->svc->dokumentOptionen(['profil' => 'kurz', 'zutaten' => '1', 'fotos' => '0']))
-        ->toMatchArray(['zutaten' => true, 'bilder' => false, 'einkauf' => false]);
+        ->toMatchArray(['zutaten' => true, 'bilder' => false]);
 });
 
 it('S3: Postenfilter zeigt nur zugeteilte Produktionszeilen und bleibt im PDF erhalten', function () {
@@ -436,7 +426,7 @@ it('S3: Postenfilter zeigt nur zugeteilte Produktionszeilen und bleibt im PDF er
     ]);
     $order->lines()->where('recipe_id', $this->kuchen->id)->update(['station_id' => $posten->id]);
 
-    $dok = $this->svc->dokument($this->rootTeam, $order->id, false);
+    $dok = $this->svc->dokument($this->rootTeam, $order->id);
     $optionen = $this->svc->dokumentOptionen(['profil' => 'produktion', 'posten' => (string) $posten->id]);
     $html = view('foodalchemist::dokumente.produktionsauftrag', [
         'dok' => $dok,
@@ -452,25 +442,16 @@ it('S3: Postenfilter zeigt nur zugeteilte Produktionszeilen und bleibt im PDF er
     expect($this->svc->dokumentOptionen(['posten' => 'fremd'])['posten'])->toBe('');
 });
 
-it('S3-Bundle: dokument() enthält die Einkaufs-Sektion (Lieferant + EK); ?einkauf=0 lässt sie weg', function () {
+it('S3-Bundle: Produktionsdokument enthält keine Lieferanten- oder EK-Planung', function () {
     $order = $this->svc->saveNew($this->rootTeam, '2026-08-01', 'Sommer-Buffet', [
         ['recipe_id' => $this->kuchen->id, 'portions' => 100, 'source_ref' => 'recipe:kuchen@100'],
     ]);
 
-    // Default: gebündelt — Einkauf nach Lieferant + Gesamt-EK dabei.
     $dok = $this->svc->dokument($this->rootTeam, $order->id);
-    expect($dok['einkauf'])->not->toBeNull()
-        ->and(collect($dok['einkauf']['lieferanten'])->pluck('lieferant')->sort()->values()->all())->toBe(['Chefs', 'Hanos'])
-        ->and($dok['einkauf']['ek_gesamt'])->toBe(33.0); // Chefs 21 (Mehl 20 + Zucker 1) + Hanos 12 (Butter)
+    expect($dok)->not->toHaveKey('einkauf');
 
     $html = view('foodalchemist::dokumente.produktionsauftrag', ['dok' => $dok, 'istPdf' => true])->render();
-    expect($html)->toContain('Einkauf / Bestellvorschlag')->toContain('Chefs')->toContain('Wareneinsatz gesamt');
-
-    // Opt-out: nur Produktionsschein, keine EK/Lieferant-Daten.
-    $dokOhne = $this->svc->dokument($this->rootTeam, $order->id, false);
-    expect($dokOhne['einkauf'])->toBeNull();
-    $htmlOhne = view('foodalchemist::dokumente.produktionsauftrag', ['dok' => $dokOhne, 'istPdf' => true])->render();
-    expect($htmlOhne)->not->toContain('Einkauf / Bestellvorschlag');
+    expect($html)->not->toContain('Einkauf / Bestellvorschlag')->not->toContain('Wareneinsatz gesamt');
 });
 
 it('V1: saveNew legt IMMER einen neuen Auftrag an — zwei benannte Aufträge am selben Tag koexistieren', function () {
@@ -670,7 +651,7 @@ it('P3: zielUebergaben markiert nur das tatsächlich übergebene Ziel', function
     expect($ueb)->toHaveKey('recipe:kuchen@100')->and($ueb)->not->toHaveKey('recipe:tarte@50');
 });
 
-it('P3 UI: Browser zeigt Ziel-Labels, KPI und Einkaufs-Indikator „keine"', function () {
+it('P3 UI: Browser zeigt Ziel-Labels, KPI und Materialbedarfsstatus', function () {
     $this->actingAs($this->makeUser($this->rootTeam));
     $this->svc->saveNew($this->rootTeam, '2026-08-01', 'Sommer-Buffet', [
         ['recipe_id' => $this->kuchen->id, 'portions' => 100, 'source_ref' => 'recipe:kuchen@100'],
@@ -678,13 +659,12 @@ it('P3 UI: Browser zeigt Ziel-Labels, KPI und Einkaufs-Indikator „keine"', fun
 
     Livewire::test(ProduktionBrowser::class)
         ->assertSee('Sommer-Buffet')
-        ->assertSee('DES: Kuchen')                          // Ziel-Kurzlabel in der Ziele-Spalte
-        ->assertSeeHtml('data-einkauf-indikator="keine"');  // noch nichts übergeben
+        ->assertSee('DES: Kuchen')
+        ->assertSeeHtml('data-materialbedarf-indikator="entwurf"');
 });
 
-it('P3 UI: DetailPanel zeigt Ziele-Sektion + Einkauf-Deckungsgrad (0/2 → 1/2)', function () {
+it('P3 UI: DetailPanel gibt Materialbedarf frei ohne Bestellungen anzulegen', function () {
     $this->actingAs($this->makeUser($this->rootTeam));
-    $orders = app(OrderService::class);
     $po = $this->svc->saveNew($this->rootTeam, '2026-08-01', 'Fest', [
         ['recipe_id' => $this->kuchen->id, 'portions' => 100, 'source_ref' => 'recipe:kuchen@100'],
         ['recipe_id' => $this->tarte->id, 'portions' => 50, 'source_ref' => 'recipe:tarte@50'],
@@ -692,13 +672,11 @@ it('P3 UI: DetailPanel zeigt Ziele-Sektion + Einkauf-Deckungsgrad (0/2 → 1/2)'
 
     Livewire::test(ProduktionDetailPanel::class, ['orderId' => $po->id])
         ->assertSee('Ziele')
-        ->assertSeeHtml('data-einkauf-deckung="0/2"');
+        ->assertSeeHtml('data-materialbedarf-status="entwurf"')
+        ->call('materialbedarfFreigeben')
+        ->assertSeeHtml('data-materialbedarf-status="freigegeben"');
 
-    $orders->addNeedFromTarget($this->rootTeam, ['recipe_id' => $this->kuchen->id, 'portions' => 100], 'produktion:' . $po->id . ':recipe:kuchen@100');
-
-    Livewire::test(ProduktionDetailPanel::class, ['orderId' => $po->id])
-        ->assertSeeHtml('data-einkauf-deckung="1/2"')
-        ->assertSee('übergeben 1/2');
+    expect(\Platform\FoodAlchemist\Models\FoodAlchemistOrder::count())->toBe(0);
 });
 
 // ── P4 · Einkaufs-Verdrahtung härten ────────────────────────────────────────
@@ -710,35 +688,27 @@ it('P4: source_ref-Helper zentralisiert Präfix + vollen Quell-Key', function ()
     expect(ProductionOrderService::sourceRefPrefix(1))->not->toBe(substr(ProductionOrderService::sourceRefPrefix(10), 0, strlen(ProductionOrderService::sourceRefPrefix(1))));
 });
 
-it('P4: anBestellungUebergeben setzt den Stale-Marker + verdrahtet die Schienen (Service-zentral)', function () {
-    $orders = app(OrderService::class);
+it('P4: Materialbedarfs-Freigabe persistiert einen versionierten Snapshot', function () {
     $po = $this->svc->saveNew($this->rootTeam, '2026-08-05', 'Fest', [
         ['recipe_id' => $this->kuchen->id, 'portions' => 100, 'source_ref' => 'recipe:kuchen@100'],
     ]);
-    expect($po->last_handover_at)->toBeNull();
+    expect($po->procurement_released_at)->toBeNull();
 
-    $res = $this->svc->anBestellungUebergeben($this->rootTeam, $po->id, $orders);
-    expect($res['orders'])->not->toBeEmpty();
-
-    $po->refresh();
-    expect($po->last_handover_at)->not->toBeNull()
-        ->and($po->handover_targets_hash)->toBe(ProductionOrderService::targetsHash($po->targets));
-    // Verknüpfung steht über den Präfix
-    expect($this->svc->verknuepfteOrders($this->rootTeam, $po->id))->not->toBeEmpty();
+    $released = $this->svc->materialbedarfFreigeben($this->rootTeam, $po->id);
+    expect($released->procurement_released_at)->not->toBeNull()
+        ->and($released->procurement_targets_hash)->toBe(ProductionOrderService::targetsHash($po->targets))
+        ->and($released->procurement_targets_snapshot)->toBe($po->targets)
+        ->and(\Platform\FoodAlchemist\Models\FoodAlchemistOrder::count())->toBe(0);
 });
 
-it('P4: Stale-Marker — Ziel nach Übergabe geändert ⇒ einkauf_veraltet=true, erneut übergeben löscht es', function () {
+it('P4: geänderte Ziele markieren den freigegebenen Bedarf als veraltet', function () {
     $this->actingAs($this->makeUser($this->rootTeam));
-    $orders = app(OrderService::class);
     $po = $this->svc->saveNew($this->rootTeam, '2026-08-06', 'Fest', [
         ['recipe_id' => $this->kuchen->id, 'portions' => 100, 'source_ref' => 'recipe:kuchen@100'],
     ]);
 
-    // vor Übergabe: nicht veraltet (nie übergeben)
-    expect($this->svc->detail($this->rootTeam, $po->id)['einkauf_veraltet'])->toBeFalse();
-
-    $this->svc->anBestellungUebergeben($this->rootTeam, $po->id, $orders);
-    expect($this->svc->detail($this->rootTeam, $po->id)['einkauf_veraltet'])->toBeFalse();
+    $this->svc->materialbedarfFreigeben($this->rootTeam, $po->id);
+    expect($this->svc->detail($this->rootTeam, $po->id)['procurement_stale'])->toBeFalse();
 
     // Ziel ändern → veraltet
     $this->svc->replaceTargets($this->rootTeam, $po->id, [
@@ -746,37 +716,39 @@ it('P4: Stale-Marker — Ziel nach Übergabe geändert ⇒ einkauf_veraltet=true
         ['recipe_id' => $this->tarte->id, 'portions' => 50, 'source_ref' => 'recipe:tarte@50'],
     ]);
     $detail = $this->svc->detail($this->rootTeam, $po->id);
-    expect($detail['einkauf_veraltet'])->toBeTrue();
+    expect($detail['procurement_stale'])->toBeTrue();
 
     // DetailPanel zeigt den Hinweis
     Livewire::test(ProduktionDetailPanel::class, ['orderId' => $po->id])
-        ->assertSeeHtml('data-einkauf-veraltet="1"');
+        ->assertSeeHtml('data-materialbedarf-status="geaendert"');
 
-    // erneut übergeben → wieder aktuell
-    $this->svc->anBestellungUebergeben($this->rootTeam, $po->id, $orders);
-    expect($this->svc->detail($this->rootTeam, $po->id)['einkauf_veraltet'])->toBeFalse();
+    $this->svc->materialbedarfFreigeben($this->rootTeam, $po->id);
+    expect($this->svc->detail($this->rootTeam, $po->id)['procurement_stale'])->toBeFalse();
 });
 
-it('P4: detail() liefert verknuepfte_orders (kompakt) fürs UI/MCP', function () {
+it('P4: Einkauf plant ausschließlich den freigegebenen Snapshot', function () {
     $orders = app(OrderService::class);
     $po = $this->svc->saveNew($this->rootTeam, '2026-08-07', 'Fest', [
         ['recipe_id' => $this->kuchen->id, 'portions' => 100, 'source_ref' => 'recipe:kuchen@100'],
     ]);
-    expect($this->svc->detail($this->rootTeam, $po->id)['verknuepfte_orders'])->toBe([]);
+    $preview = $orders->previewFromSources($this->rootTeam, [['type' => 'production', 'id' => $po->id]]);
+    expect($preview['unresolved'])->toHaveCount(1)
+        ->and($preview['unresolved'][0]['message'])->toContain('noch nicht freigegeben');
 
-    $this->svc->anBestellungUebergeben($this->rootTeam, $po->id, $orders);
+    $this->svc->materialbedarfFreigeben($this->rootTeam, $po->id);
+    $orders->generateDraftsFromSources($this->rootTeam, [['type' => 'production', 'id' => $po->id]]);
     $vk = $this->svc->detail($this->rootTeam, $po->id)['verknuepfte_orders'];
     expect($vk)->not->toBeEmpty()
         ->and($vk[0])->toHaveKeys(['id', 'supplier', 'status', 'total_net']);
 });
 
-it('P4 MCP: production_orders.HANDOVER registriert (write, idempotent) + GET trägt verknuepfte_orders/einkauf_veraltet', function () {
+it('P4 MCP: RELEASE_DEMAND gibt Bedarf frei und erzeugt keine Bestellung', function () {
     $user = $this->makeUser($this->rootTeam);
     $this->actingAs($user);
     $registry = app(\Platform\Core\Tools\ToolRegistry::class);
     $kontext = new \Platform\Core\Contracts\ToolContext($user, $this->rootTeam);
 
-    $tool = $registry->get('foodalchemist.production_orders.HANDOVER');
+    $tool = $registry->get('foodalchemist.production_orders.RELEASE_DEMAND');
     expect($tool)->not->toBeNull()
         ->and($tool->getMetadata()['read_only'])->toBeFalse()
         ->and($tool->getMetadata()['idempotent'])->toBeTrue();
@@ -785,19 +757,8 @@ it('P4 MCP: production_orders.HANDOVER registriert (write, idempotent) + GET tr�
         ->execute(['production_date' => '2026-08-08', 'name' => 'Fest', 'recipe_id' => $this->kuchen->id, 'portions' => 100, 'source_ref' => 'recipe:kuchen@100'], $kontext);
     $orderId = $add->data['order_id'];
 
-    // vor Handover: keine verknüpften Schienen, nicht veraltet
-    $d0 = $registry->get('foodalchemist.production_orders.GET')->execute(['order_id' => $orderId], $kontext);
-    expect($d0->data['verknuepfte_orders'])->toBe([])->and($d0->data['einkauf_veraltet'])->toBeFalse();
-
-    // HANDOVER
-    $h = $tool->execute(['order_id' => $orderId], $kontext);
-    expect($h->success)->toBeTrue()->and($h->data['orders_count'])->toBeGreaterThan(0);
-
-    // erneutes HANDOVER dupliziert nicht (idempotent über source_ref)
-    $h2 = $tool->execute(['order_id' => $orderId], $kontext);
-    expect($h2->success)->toBeTrue();
-
-    $d1 = $registry->get('foodalchemist.production_orders.GET')->execute(['order_id' => $orderId], $kontext);
-    expect($d1->data['verknuepfte_orders'])->not->toBeEmpty()
-        ->and($d1->data['last_handover_at'])->not->toBeNull();
+    $released = $tool->execute(['order_id' => $orderId], $kontext);
+    expect($released->success)->toBeTrue()
+        ->and($released->data['targets_count'])->toBe(1)
+        ->and(\Platform\FoodAlchemist\Models\FoodAlchemistOrder::count())->toBe(0);
 });

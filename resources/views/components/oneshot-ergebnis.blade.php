@@ -58,6 +58,9 @@
                     'equipment' => 'Equipment',
                     'posten' => 'Posten',
                     'prozessanker' => 'Prozessanker',
+                    'aromaanker' => 'Aromaanker',
+                    'pairings' => 'Pairings',
+                    'eignung' => 'Eignung',
                 ] as $key => $label)
                     @if(($cov[$key] ?? null) !== null)
                         @php($status = $cov[$key]['status'] ?? 'offen')

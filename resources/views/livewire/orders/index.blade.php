@@ -15,8 +15,116 @@
         ]" />
     </x-slot>
 
+    <x-slot name="sidebar">
+        <x-ui-page-sidebar title="Filter" width="w-72">
+            <div class="p-3 space-y-3">
+                <input type="search" wire:model.live.debounce.300ms="suche" placeholder="{{ $sicht === 'bedarfe' ? 'Produktion suchen …' : 'Beleg, Artikel, Produktion …' }}" class="{{ $input }}" />
+                @if($sicht !== 'bedarfe')
+                    <div class="inline-flex rounded-lg bg-black/[0.03] p-0.5 text-xs w-full">
+                        <button type="button" wire:click="$set('datumsbasis','liefertag')" class="flex-1 px-2 py-1 rounded-md {{ $datumsbasis === 'liefertag' ? 'bg-white shadow-sm text-violet-600' : 'text-gray-600' }}">Liefertag</button>
+                        <button type="button" wire:click="$set('datumsbasis','bestelldatum')" class="flex-1 px-2 py-1 rounded-md {{ $datumsbasis === 'bestelldatum' ? 'bg-white shadow-sm text-violet-600' : 'text-gray-600' }}">Bestelldatum</button>
+                    </div>
+                    <div>
+                        <span class="{{ $label }}">Status</span>
+                        <div class="mt-1 space-y-0.5">
+                            <x-foodalchemist::filter-row wire:click="$set('statusFilter','')" :active="$statusFilter === ''"><span>Alle Status</span></x-foodalchemist::filter-row>
+                            @foreach(['draft','sent','confirmed','delivered','cancelled'] as $s)
+                                <x-foodalchemist::filter-row wire:key="order-status-{{ $s }}" wire:click="$set('statusFilter','{{ $s }}')" :active="$statusFilter === $s">{{ $statusLabels[$s] }}</x-foodalchemist::filter-row>
+                            @endforeach
+                        </div>
+                    </div>
+                @endif
+                <div>
+                    <span class="{{ $label }}">Zeitraum</span>
+                    <div class="flex flex-wrap gap-1 mt-1">
+                        @foreach($zeitraeume as $key => $lbl)<button type="button" wire:click="waehleZeitraum('{{ $key }}')" class="{{ $pill }} {{ $zeitraum === $key ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $lbl }}</button>@endforeach
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <input type="date" wire:model.live="von" class="{{ $input }}" title="Von" />
+                    <input type="date" wire:model.live="bis" class="{{ $input }}" title="Bis" />
+                </div>
+                @if($sicht !== 'bedarfe')
+                    <select wire:model.live="supplierFilter" class="{{ $input }}">
+                        <option value="">alle Lieferanten</option>
+                        @foreach($lieferanten as $l)<option value="{{ $l['id'] }}">{{ $l['name'] }}</option>@endforeach
+                    </select>
+                    <label class="flex items-center gap-2 text-[12px] text-gray-600"><input type="checkbox" wire:model.live="nurMitPositionen" /> nur mit Positionen</label>
+                    <label class="flex items-center gap-2 text-[12px] text-gray-600"><input type="checkbox" wire:model.live="nurMitKlaerung" /> nur mit Klärung</label>
+                    <button type="button" wire:click="leereEntwuerfeLoeschen" onclick="return confirm('Alle leeren Entwürfe ohne Positionen löschen?')" class="{{ $btnGhostXs }}">Leere Entwürfe löschen</button>
+                @endif
+            </div>
+        </x-ui-page-sidebar>
+    </x-slot>
+
+    <x-slot name="activity">
+        <x-foodalchemist::detail-sidebar title="Bestellung" width="w-96" :maxWidth="760" scope="activity_orders" side="right">
+            <livewire:foodalchemist.orders.detail-panel :order-id="$selectedOrderId" :key="'order-detail-'.($selectedOrderId ?? 'empty')" />
+        </x-foodalchemist::detail-sidebar>
+    </x-slot>
+
     {{-- Fullscreen-Editor (pro Bestellung), geöffnet per orders-editor.bearbeiten --}}
-    <livewire:foodalchemist.orders.editor />
+    <livewire:foodalchemist.orders.editor key="orders-editor-shell" />
+
+    <x-foodalchemist::modal name="orders-batch" title="Bestellungen auslösen">
+        <div class="space-y-4 p-1" data-orders-batch>
+            @if($batchResult)
+                <div class="rounded-lg border border-emerald-500/20 bg-emerald-500/[0.07] p-4">
+                    <div class="flex items-start gap-3">
+                        @svg('heroicon-o-check-circle', 'w-5 h-5 text-emerald-600 shrink-0')
+                        <div>
+                            <h3 class="text-[14px] font-semibold text-gray-900">{{ $batchResult['sent'] }} Bestellung(en) ausgelöst</h3>
+                            <p class="text-[11px] text-gray-500 mt-0.5">Versandzeitpunkt {{ $batchResult['sent_at'] }}</p>
+                        </div>
+                    </div>
+                </div>
+                @if(!empty($batchResult['sent_ids']))
+                    <div class="flex flex-wrap gap-2">
+                        <a href="{{ route('foodalchemist.orders.versandprotokoll', ['ids' => implode(',', $batchResult['sent_ids'])]) }}" target="_blank" class="{{ $btnPrimary }}">@svg('heroicon-o-printer', 'w-3.5 h-3.5') Versandprotokoll drucken</a>
+                        <a href="{{ route('foodalchemist.orders.versandprotokoll', ['ids' => implode(',', $batchResult['sent_ids']), 'pdf' => 1]) }}" class="{{ $btnGhost }}">PDF</a>
+                    </div>
+                @endif
+                @if($batchResult['blocked'] > 0)
+                    <x-foodalchemist::alert tone="warning">{{ $batchResult['blocked'] }} Beleg(e) blieben wegen Klärpunkten offen.</x-foodalchemist::alert>
+                @endif
+            @elseif($batchPreview)
+                <div class="grid grid-cols-3 gap-2">
+                    <div class="rounded-lg border border-black/5 p-3"><div class="{{ $label }}">Auswahl</div><div class="text-lg font-semibold">{{ $batchPreview['selected'] }}</div></div>
+                    <div class="rounded-lg border border-emerald-500/20 bg-emerald-500/[0.05] p-3"><div class="{{ $label }}">Versandfähig</div><div class="text-lg font-semibold text-emerald-700">{{ $batchPreview['ready'] }}</div></div>
+                    <div class="rounded-lg border border-amber-500/20 bg-amber-500/[0.05] p-3"><div class="{{ $label }}">Klärung</div><div class="text-lg font-semibold text-amber-700">{{ $batchPreview['blocked'] }}</div></div>
+                </div>
+                <div class="max-h-[44vh] overflow-auto divide-y divide-black/5 border-y border-black/5">
+                    @foreach($batchPreview['orders'] as $order)
+                        <div class="py-2.5 flex items-start justify-between gap-4">
+                            <div class="min-w-0">
+                                <div class="text-[13px] font-medium text-gray-900">{{ $order['supplier'] }} · ord-{{ $order['id'] }}</div>
+                                <div class="text-[11px] text-gray-500">
+                                    {{ $order['positions'] }} Positionen
+                                    @if($order['desired_delivery_date'])
+                                        · {{ \Carbon\Carbon::parse($order['desired_delivery_date'])->format('d.m.Y') }}
+                                    @endif
+                                </div>
+                                @if(!$order['sendable'])<div class="text-[11px] text-amber-700 mt-1">{{ implode(' · ', $order['blockers']) }}</div>@endif
+                            </div>
+                            <div class="text-right shrink-0">
+                                <div class="text-[13px] font-semibold tabular-nums">{{ number_format($order['total_net'], 2, ',', '.') }} €</div>
+                                <span class="{{ $pill }} {{ $order['sendable'] ? $variantPill['success'] : $variantPill['warning'] }}">{{ $order['sendable'] ? 'bereit' : 'Klärung' }}</span>
+                            </div>
+                        </div>
+                    @endforeach
+                </div>
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                    <div class="text-[12px] text-gray-600">Versandfähige Summe <strong>{{ number_format($batchPreview['total_net'], 2, ',', '.') }} €</strong></div>
+                    <div class="flex gap-2">
+                        <button type="button" wire:click="auswahlStornieren" onclick="return confirm('Ausgewählte Entwürfe wirklich stornieren?')" class="{{ $btnGhost }}">Stornieren</button>
+                        <button type="button" wire:click="auswahlAusloesen" onclick="return confirm('{{ $batchPreview['ready'] }} versandfähige Bestellungen jetzt auslösen?')" class="{{ $btnPrimary }}" @disabled($batchPreview['ready'] === 0)>{{ $batchPreview['ready'] }} auslösen</button>
+                    </div>
+                </div>
+            @else
+                <p class="text-[12px] text-gray-500">Keine Entwürfe ausgewählt.</p>
+            @endif
+        </div>
+    </x-foodalchemist::modal>
 
     <x-ui-page-container padding="px-6 pt-4 pb-6" spacing="space-y-4">
 
@@ -40,6 +148,15 @@
                 <p class="text-[11px] text-gray-500 mt-1">Eine Runde erzeugt beim Speichern die passenden Lieferanten-Belege je Lieferant + Liefertag.</p>
             </div>
             <div class="flex flex-wrap items-center gap-2 pb-0.5">
+                @if($sicht === 'bestellungen')
+                    <button type="button" wire:click="alleVersandfaehigenWaehlen" class="{{ $btnGhostXs }}" @disabled($kpis['ready'] === 0)>Alle versandfähigen</button>
+                    @if(count($selectedOrderIds) > 0)
+                        <button type="button" wire:click="auswahlLeeren" class="{{ $btnGhostXs }}" title="Auswahl aufheben">@svg('heroicon-o-x-mark', 'w-3.5 h-3.5')</button>
+                    @endif
+                    <button type="button" wire:click="sammelversandPruefen" class="{{ $btnPrimary }}" @disabled(count($selectedOrderIds) === 0)>
+                        @svg('heroicon-o-paper-airplane', 'w-3.5 h-3.5') Auswahl prüfen{{ count($selectedOrderIds) > 0 ? ' (' . count($selectedOrderIds) . ')' : '' }}
+                    </button>
+                @endif
                 <a href="{{ route('foodalchemist.einstellungen', ['sektion' => 'einkauf']) }}#lagerorte"
                    class="{{ $btnGhostXs }}">Lagerorte</a>
             </div>
@@ -54,79 +171,8 @@
             ['kpi' => 'clarifications', 'label' => 'Klärpunkte', 'tone' => $kpis['clarifications'] > 0 ? 'warn' : 'good', 'value' => number_format($kpis['clarifications'], 0, ',', '.')],
         ]" />
 
-        {{-- Filter: Datumsachse · Zeitraum · Fenster · Status · Suche · Lieferant (sekundär) --}}
-        <div class="flex flex-wrap items-end gap-x-4 gap-y-2">
-            <div>
-                <span class="{{ $label }} block mb-1">Datumsachse</span>
-                <div class="inline-flex rounded-lg bg-black/[0.03] p-0.5 text-xs">
-                    <button type="button" wire:click="$set('datumsbasis','liefertag')" class="px-2.5 py-1 rounded-md {{ $datumsbasis === 'liefertag' ? 'bg-white shadow-sm text-violet-600' : 'text-gray-600' }}">Liefertag</button>
-                    <button type="button" wire:click="$set('datumsbasis','bestelldatum')" class="px-2.5 py-1 rounded-md {{ $datumsbasis === 'bestelldatum' ? 'bg-white shadow-sm text-violet-600' : 'text-gray-600' }}">Bestelldatum</button>
-                </div>
-            </div>
-            <div>
-                <span class="{{ $label }} block mb-1">Zeitraum</span>
-                <div class="inline-flex flex-wrap rounded-lg bg-black/[0.03] p-0.5 text-xs">
-                    @foreach($zeitraeume as $key => $lbl)
-                        <button type="button" wire:click="waehleZeitraum('{{ $key }}')" class="px-2.5 py-1 rounded-md {{ $zeitraum === $key ? 'bg-white shadow-sm text-violet-600' : 'text-gray-600' }}">{{ $lbl }}</button>
-                    @endforeach
-                </div>
-            </div>
-            <div>
-                <span class="{{ $label }} block mb-1">von</span>
-                <input type="date" wire:model.live="von" class="{{ $input }}" />
-            </div>
-            <div>
-                <span class="{{ $label }} block mb-1">bis</span>
-                <input type="date" wire:model.live="bis" class="{{ $input }}" />
-            </div>
-            <div>
-                <span class="{{ $label }} block mb-1">Status</span>
-                <div class="inline-flex flex-wrap rounded-lg bg-black/[0.03] p-0.5 text-xs">
-                    <button type="button" wire:click="$set('statusFilter','')" class="px-2.5 py-1 rounded-md {{ $statusFilter === '' ? 'bg-white shadow-sm text-violet-600' : 'text-gray-600' }}">alle</button>
-                    @foreach(['draft','sent','confirmed','delivered','cancelled'] as $s)
-                        <button type="button" wire:click="$set('statusFilter','{{ $s }}')" class="px-2.5 py-1 rounded-md {{ $statusFilter === $s ? 'bg-white shadow-sm text-violet-600' : 'text-gray-600' }}">{{ $statusLabels[$s] }}</button>
-                    @endforeach
-                </div>
-            </div>
-            <div>
-                <span class="{{ $label }} block mb-1">Suche</span>
-                <input type="search" wire:model.live.debounce.300ms="suche" placeholder="Beleg / Referenz / Artikel / Produktion…" class="{{ $input }}" />
-            </div>
-            <div>
-                <span class="{{ $label }} block mb-1">Lieferant</span>
-                <select wire:model.live="supplierFilter" class="{{ $input }}">
-                    <option value="">alle Lieferanten</option>
-                    @foreach($lieferanten as $l)
-                        <option value="{{ $l['id'] }}">{{ $l['name'] }}</option>
-                    @endforeach
-                </select>
-            </div>
-            @if($produktionen->isNotEmpty())
-                <div>
-                    <span class="{{ $label }} block mb-1">Produktion</span>
-                    <select wire:model.live="productionFilter" class="{{ $input }}">
-                        <option value="">alle Produktionen</option>
-                        @foreach($produktionen as $p)
-                            <option value="{{ $p['id'] }}">{{ $p['label'] }}</option>
-                        @endforeach
-                    </select>
-                </div>
-            @endif
-            <label class="inline-flex items-center gap-2 pb-2 text-[12px] text-gray-600">
-                <input type="checkbox" wire:model.live="nurMitPositionen" class="rounded border-gray-300 text-violet-600 focus:ring-violet-500" />
-                nur mit Positionen
-            </label>
-            <label class="inline-flex items-center gap-2 pb-2 text-[12px] text-gray-600">
-                <input type="checkbox" wire:model.live="nurMitKlaerung" class="rounded border-gray-300 text-violet-600 focus:ring-violet-500" />
-                nur mit Klärung
-            </label>
-            <button type="button" wire:click="leereEntwuerfeLoeschen"
-                onclick="return confirm('Alle leeren Entwürfe ohne Positionen löschen?')"
-                class="{{ $btnGhostXs }} mb-1">Leere Entwürfe löschen</button>
-        </div>
-
         <div class="flex flex-wrap gap-2 text-[12px]">
-            @foreach(['bestellungen' => 'Bestellungen', 'liefertage' => 'Liefertage', 'lieferanten' => 'Lieferanten'] as $key => $lbl)
+            @foreach(['bestellungen' => 'Bestellungen', 'liefertage' => 'Liefertage', 'lieferanten' => 'Lieferanten', 'runden' => 'Runden', 'bedarfe' => 'Bedarfe'] as $key => $lbl)
                 <button type="button" wire:click="$set('sicht','{{ $key }}')"
                     class="px-3 py-1.5 rounded-md font-medium {{ $sicht === $key ? 'bg-violet-600 text-white shadow-sm' : 'bg-black/[0.04] text-gray-600 hover:bg-black/[0.07]' }}">
                     {{ $lbl }}
@@ -139,15 +185,94 @@
             <div class="{{ $cardAccent }}"></div>
             <div class="px-5 pt-4 pb-2 flex items-baseline justify-between">
                 <div>
-                    <h3 class="font-medium tracking-tight text-gray-900">{{ ['bestellungen' => 'Bestellungen finden', 'liefertage' => 'Nach Liefertag planen', 'lieferanten' => 'Nach Lieferant bündeln'][$sicht] ?? 'Bestellungen' }}</h3>
+                    <h3 class="font-medium tracking-tight text-gray-900">{{ ['bestellungen' => 'Bestellungen finden', 'liefertage' => 'Nach Liefertag planen', 'lieferanten' => 'Nach Lieferant bündeln', 'runden' => 'Bestellrunden', 'bedarfe' => 'Freigegebene Materialbedarfe'][$sicht] ?? 'Bestellungen' }}</h3>
                     @if($sicht === 'bestellungen')
                         <p class="text-[11px] text-gray-500 mt-0.5">Zeilen sind Lieferanten-Belege einer Bestellrunde; Suche geht über Beleg, Referenz, Artikel, Produktion und Lieferant.</p>
                     @endif
                 </div>
-                <span class="{{ $label }}">{{ number_format($liste->count(), 0, ',', '.') }} Treffer</span>
+                <span class="{{ $label }}">{{ number_format($sicht === 'runden' ? $runden->count() : ($sicht === 'bedarfe' ? $bedarfe->count() : $liste->count()), 0, ',', '.') }} Treffer</span>
             </div>
             <div class="max-h-[70vh] overflow-auto">
-                @if($sicht === 'liefertage')
+                @if($sicht === 'runden')
+                    <div class="grid min-h-[420px] lg:grid-cols-[minmax(0,1fr)_340px]">
+                        <div class="divide-y divide-black/5">
+                            @forelse($runden as $runde)
+                                <button type="button" wire:click="rundeWaehlen({{ $runde['id'] }})" wire:key="round-{{ $runde['id'] }}"
+                                    class="w-full px-5 py-3 text-left hover:bg-black/[0.025] {{ $selectedRoundId === $runde['id'] ? 'bg-violet-500/[0.06]' : '' }}">
+                                    <div class="flex items-start justify-between gap-3">
+                                        <div class="min-w-0">
+                                            <div class="text-[13px] font-semibold text-gray-900 truncate">{{ $runde['label'] }}</div>
+                                            <div class="text-[11px] text-gray-500 mt-0.5">{{ $runde['supplier_count'] }} Lieferanten · {{ $runde['order_count'] }} Belege · {{ $runde['position_count'] }} Positionen</div>
+                                        </div>
+                                        <div class="text-right shrink-0">
+                                            <div class="text-[13px] font-semibold tabular-nums text-gray-900">{{ number_format($runde['total_net'], 2, ',', '.') }} €</div>
+                                            <span class="{{ $pill }} {{ $runde['sendable'] ? $variantPill['success'] : $variantPill['secondary'] }}">{{ $runde['draft_count'] }} offen</span>
+                                        </div>
+                                    </div>
+                                </button>
+                            @empty
+                                <div class="px-5 py-10 text-center text-gray-500">Noch keine gespeicherte Bestellrunde.</div>
+                            @endforelse
+                        </div>
+                        <aside class="border-l border-black/5 bg-black/[0.015] p-4">
+                            @if($selectedRound)
+                                <div class="flex items-start justify-between gap-2 mb-3">
+                                    <div>
+                                        <h4 class="text-[14px] font-semibold text-gray-900">{{ $selectedRound['label'] }}</h4>
+                                        <p class="text-[11px] text-gray-500">{{ $selectedRound['supplier_count'] }} Lieferanten · {{ $selectedRound['position_count'] }} Positionen</p>
+                                    </div>
+                                    <span class="text-[13px] font-semibold tabular-nums">{{ number_format($selectedRound['total_net'], 2, ',', '.') }} €</span>
+                                </div>
+                                <div class="divide-y divide-black/5 border-y border-black/5">
+                                    @foreach($selectedRound['orders'] as $order)
+                                        <button type="button" wire:click="oeffnen({{ $order['id'] }})" class="w-full py-2 text-left flex items-center justify-between gap-2">
+                                            <span class="text-[12px] text-gray-900">{{ $order['supplier'] }}</span>
+                                            <span class="text-[11px] text-gray-500">{{ $order['positions'] }} Pos. · {{ number_format($order['total_net'], 2, ',', '.') }} €</span>
+                                        </button>
+                                    @endforeach
+                                </div>
+                                @if(!empty($selectedRound['blockers']))
+                                    <div class="mt-3 text-[11px] text-amber-700">{{ implode(' · ', $selectedRound['blockers']) }}</div>
+                                @endif
+                                <div class="mt-3 grid grid-cols-2 gap-2">
+                                    <button type="button" wire:click="rundeBearbeiten" class="{{ $btnGhost }}" @disabled(!$selectedRound['editable']) data-orders-round-edit>Runde bearbeiten</button>
+                                    <button type="button" wire:click="rundeVersenden" class="{{ $btnPrimary }}" @disabled(!$selectedRound['sendable'])>Runde versenden</button>
+                                </div>
+                                @if(!$selectedRound['editable'])
+                                    <p class="mt-2 text-[11px] text-gray-500">Ausgelöste Runden sind eingefroren. Änderungen erfolgen als Korrektur über die einzelnen Belege.</p>
+                                @endif
+                            @else
+                                <div class="py-12 text-center text-[12px] text-gray-500">Bestellrunde auswählen.</div>
+                            @endif
+                        </aside>
+                    </div>
+                @elseif($sicht === 'bedarfe')
+                    @if(count($selectedDemandIds) > 0)
+                        <div class="px-5 py-2.5 border-b border-black/5 bg-violet-500/[0.04] flex items-center justify-between gap-3">
+                            <span class="text-[12px] font-medium text-gray-700">{{ count($selectedDemandIds) }} Produktionen ausgewählt</span>
+                            <button type="button" wire:click="ausgewaehlteBedarfePlanen" class="{{ $btnPrimary }}">Gemeinsam planen</button>
+                        </div>
+                    @endif
+                    <div class="divide-y divide-black/5">
+                        @forelse($bedarfe as $bedarf)
+                            <div class="px-5 py-3 flex items-center justify-between gap-4" wire:key="demand-{{ $bedarf['id'] }}">
+                                <div class="min-w-0 flex items-start gap-3">
+                                    <input type="checkbox" wire:model.live="selectedDemandIds" value="{{ $bedarf['id'] }}" class="mt-1" @disabled($bedarf['stale'] || $bedarf['triggered']) aria-label="{{ $bedarf['name'] }} auswählen" />
+                                    <div class="min-w-0">
+                                    <div class="text-[13px] font-semibold text-gray-900 truncate">{{ $bedarf['name'] }}</div>
+                                    <div class="text-[11px] text-gray-500 mt-0.5">{{ $bedarf['production_date'] ? \Carbon\Carbon::parse($bedarf['production_date'])->format('d.m.Y') : 'ohne Datum' }} · {{ $bedarf['targets'] }} Ziele · {{ $bedarf['orders'] }} Bestellungen</div>
+                                    </div>
+                                </div>
+                                <div class="flex items-center gap-2 shrink-0">
+                                    <span class="{{ $pill }} {{ $bedarf['stale'] ? $variantPill['warning'] : ($bedarf['status'] === 'geplant' ? $variantPill['success'] : $variantPill['info']) }}">{{ $bedarf['status'] }}</span>
+                                    <button type="button" wire:click="$dispatch('orders-editor.production', { id: {{ $bedarf['id'] }}, roundId: {{ $bedarf['round_id'] ?? 'null' }} })" class="{{ $btnPrimary }}" @disabled($bedarf['stale'] || $bedarf['triggered'])>{{ $bedarf['triggered'] ? 'Ausgelöst' : ($bedarf['round_id'] ? 'Planung öffnen' : 'Planen') }}</button>
+                                </div>
+                            </div>
+                        @empty
+                            <div class="px-5 py-10 text-center text-gray-500">Keine freigegebenen Materialbedarfe.</div>
+                        @endforelse
+                    </div>
+                @elseif($sicht === 'liefertage')
                     <div class="divide-y divide-black/5">
                         @forelse($liefertagGruppen as $gruppe)
                             <div class="px-5 py-3">
@@ -268,6 +393,7 @@
                 @else
                 <table class="{{ $table }}">
                     <thead><tr class="text-left">
+                        <th class="{{ $th }} w-10 sticky top-0 z-20 bg-white/95 backdrop-blur-xl"><span class="sr-only">Auswahl</span></th>
                         <th class="{{ $th }} whitespace-nowrap sticky top-0 z-20 bg-white/95 backdrop-blur-xl">Beleg</th>
                         <th class="{{ $th }} whitespace-nowrap sticky top-0 z-20 bg-white/95 backdrop-blur-xl">Liefertag</th>
                         <th class="{{ $th }} sticky top-0 z-20 bg-white/95 backdrop-blur-xl">Lieferant</th>
@@ -280,12 +406,12 @@
                     </tr></thead>
                     <tbody>
                         @if($liste->isEmpty())
-                            <tr><td colspan="9" class="px-5 py-10 text-center text-gray-500">Keine Bestellungen. „Neue Bestellrunde" oben oder Bedarf aus der Produktion übergeben.</td></tr>
+                            <tr><td colspan="10" class="px-5 py-10 text-center text-gray-500">Keine Bestellungen. „Neue Bestellrunde" oben oder Bedarf aus der Produktion übergeben.</td></tr>
                         @else
                             @foreach($gruppen as $tag => $zeilen)
                                 @if($gruppiert)
                                     <tr class="bg-black/[0.02]">
-                                        <td colspan="9" class="px-5 py-1.5 text-[11px] font-medium uppercase tracking-wide text-gray-500">
+                                        <td colspan="10" class="px-5 py-1.5 text-[11px] font-medium uppercase tracking-wide text-gray-500">
                                             {{ $tag === '' ? 'Ohne Liefertag' : \Carbon\Carbon::parse($tag)->locale('de')->isoFormat('dddd, DD.MM.YYYY') }}
                                             <span class="text-gray-400">· {{ $zeilen->count() }}</span>
                                         </td>
@@ -293,6 +419,9 @@
                                 @endif
                                 @foreach($zeilen as $o)
                                     <x-foodalchemist::table-row wire:key="ord-{{ $o['id'] }}" wire:click="oeffnen({{ $o['id'] }})" data-orders-zeile="{{ $o['id'] }}">
+                                        <td class="{{ $td }}" onclick="event.stopPropagation()">
+                                            <input type="checkbox" wire:model.live="selectedOrderIds" value="{{ $o['id'] }}" @disabled($o['status'] !== \Platform\FoodAlchemist\Enums\OrderStatus::Draft) aria-label="ord-{{ $o['id'] }} auswählen" />
+                                        </td>
                                         <td class="{{ $td }} text-gray-600 whitespace-nowrap">
                                             <div class="font-medium text-gray-900">{{ $o['order_label'] }}</div>
                                             @if($o['supplier_order_number'])<div class="text-[10px] text-gray-400">AB {{ $o['supplier_order_number'] }}</div>@endif

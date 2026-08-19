@@ -546,14 +546,14 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\OrdersAddLineTool::class,
                     // Spec 20 · E3: „Neu quellen" (Preisstrategie-Switch je Schiene)
                     \Platform\FoodAlchemist\Tools\OrdersResourceTool::class,
-                    // Spec 18: Produktionsaufträge (Datum, Status, → Bestellung übergeben) — MCP im Lockstep
+                    // Produktionsaufträge geben Bedarf frei; Bestellungen entstehen im Bestellwesen.
                     \Platform\FoodAlchemist\Tools\ProductionOrdersGetTool::class,
                     \Platform\FoodAlchemist\Tools\ProductionOrdersAddTargetTool::class,
                     \Platform\FoodAlchemist\Tools\ProductionOrdersRemoveTargetTool::class,
                     \Platform\FoodAlchemist\Tools\ProductionOrdersUpdateTool::class,
                     \Platform\FoodAlchemist\Tools\ProductionOrdersSetStatusTool::class,
                     \Platform\FoodAlchemist\Tools\ProductionOrdersUpdateLineTool::class,
-                    \Platform\FoodAlchemist\Tools\ProductionOrdersHandoverTool::class,
+                    \Platform\FoodAlchemist\Tools\ProductionOrdersReleaseDemandTool::class,
                     // Spec 30: Zeilen-Eingriff, Zuteilung, Abarbeiten, Löschen — MCP im Lockstep
                     \Platform\FoodAlchemist\Tools\ProductionOrdersLineOverrideTool::class,
                     \Platform\FoodAlchemist\Tools\ProductionOrdersLineAssignTool::class,

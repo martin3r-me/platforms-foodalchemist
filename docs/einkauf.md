@@ -16,8 +16,9 @@ Zwei Tätigkeiten, zwei Orte.
 Eine Bestellung entsteht nicht als Formular, sondern als offener Entwurf je **Lieferant und
 Liefertag**, in den Bedarf hineinläuft, bis du ihn absendest. Der **Liefertag** trennt die
 Bestellungen: derselbe Lieferant kann für Montag und für Donnerstag je eine eigene offene
-Bestellung haben. Bedarf, der aus der Produktion kommt, landet automatisch in der Bestellung des
-passenden Liefertags (= Produktions-/Einsatztag des Auftrags).
+Bestellung haben. Produktion gibt ausschließlich einen versionierten **Materialbedarf** frei.
+Er erscheint im Eingang „Bedarfe“; erst dort wählt der Einkauf Strategie, Lieferanten und
+Liefertage und speichert daraus eine Bestellrunde.
 
 Bedarf kommt aus mehreren Richtungen:
 
@@ -68,6 +69,8 @@ Produktion, Freitext, „nur mit Positionen" und „nur mit Klärung".
 | **Bestellungen** | Einzelne Drafts schnell finden und öffnen; zeigt Liefertag, Lieferant, Produktion/Anlass, Positionen, Netto, Status, Strategie und Hinweise. |
 | **Liefertage** | Einkauf nach Datum planen; gruppiert zuerst nach Liefertag, darunter Lieferanten-Drafts. |
 | **Lieferanten** | Versand-/Bestellsicht; gruppiert zuerst nach Lieferant, darunter offene Liefertage. |
+| **Runden** | Persistente Klammer um die beteiligten Lieferantenbelege, mit Summen, Klärpunkten und Sammelversand. |
+| **Bedarfe** | Freigegebene Produktionsbedarfe planen; nachträglich geänderte Freigaben bleiben bis zur erneuten Freigabe gesperrt. |
 
 Hinweise wie **leer**, **Klärung**, **Mindestwert**, **Bestellschluss verpasst** und
 **Liefertag nicht beliefert** bleiben in allen Sichten sichtbar. Die Suche findet neben

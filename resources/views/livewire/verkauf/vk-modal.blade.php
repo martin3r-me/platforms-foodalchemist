@@ -18,7 +18,7 @@
             <span class="text-gray-300">|</span>
             {{-- Spec 03 L1b: ✨ Alles anreichern — VK-Schrittfolge + operative OneShot-Coverage --}}
             <button type="button" wire:click="allesAnreichern" class="{{ $btnAi }}"
-                    title="Voll-Coverage: VK-Text-Lücken füllen und abhängige Detail-Bausteine wie Eigenschaften, Equipment, Posten, Steps, Prozessanker, Sensorik, Wirtschaftlichkeit und Kohärenz neu synchronisieren"
+                    title="VK-Text, Eigenschaften, Produktionsrouting, Equipment, Schritte, Aromaanker, Pairings, Eignung, Sensorik, Wirtschaftlichkeit und Kohärenz synchronisieren. KI-Fotos laufen separat; Ersatz bleibt manuell."
                     data-vk-alles-anreichern>@svg('heroicon-o-sparkles', 'w-3.5 h-3.5')Alles anreichern</button>
         </x-slot:actions>
     @endif

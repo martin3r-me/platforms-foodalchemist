@@ -2,7 +2,11 @@
 
 namespace Platform\FoodAlchemist\Services;
 
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -37,8 +41,7 @@ class ProductionOrderService
     public function __construct(
         private PlanungsblattService $planung,
         private ProductionEventService $events,
-    ) {
-    }
+    ) {}
 
     /**
      * Spec 30 — was an einer BERECHNETEN Zeile dem Menschen gehört und deshalb jeden
@@ -77,13 +80,13 @@ class ProductionOrderService
     /** Per-Auftrag-Präfix `produktion:{id}:` (trailing-Doppelpunkt disambiguiert #1 gegen #10). */
     public static function sourceRefPrefix(int $productionOrderId): string
     {
-        return self::SOURCE_REF_BASE . $productionOrderId . ':';
+        return self::SOURCE_REF_BASE.$productionOrderId.':';
     }
 
     /** Voller Quell-Key `produktion:{id}:{ref}` für die Bedarfs-Übergabe. */
     public static function sourceRefFor(int $productionOrderId, string $ref): string
     {
-        return self::sourceRefPrefix($productionOrderId) . $ref;
+        return self::sourceRefPrefix($productionOrderId).$ref;
     }
 
     /** Stabiler Hash der Ziel-Liste (Stale-Marker P4). */
@@ -160,7 +163,7 @@ class ProductionOrderService
     {
         $name = trim((string) $name);
 
-        return $name !== '' ? $name : 'Produktion ' . \Illuminate\Support\Carbon::parse($productionDate)->format('d.m.Y');
+        return $name !== '' ? $name : 'Produktion '.Carbon::parse($productionDate)->format('d.m.Y');
     }
 
     /** Vom Editor beim Bearbeiten eines bestehenden, noch offenen Auftrags genutzt. */
@@ -670,6 +673,7 @@ class ProductionOrderService
                 'line_id' => (int) $line->id, 'from_state' => $from->value, 'to_state' => $ziel->value,
                 'reason_code' => $line->skipped_reason, 'note' => $options['note'] ?? null,
             ]);
+
             return $line->refresh();
         });
     }
@@ -686,6 +690,7 @@ class ProductionOrderService
                 $line->blocked_reason ? 'line_blocked' : 'line_unblocked', [
                     'line_id' => (int) $line->id, 'reason_code' => $line->blocked_reason, 'note' => $line->blocked_note,
                 ]);
+
             return $line->refresh();
         });
     }
@@ -757,51 +762,57 @@ class ProductionOrderService
     public function setStatus(Team $team, int $orderId, ProductionOrderStatus $ziel, array $options = []): FoodAlchemistProductionOrder
     {
         return DB::transaction(function () use ($team, $orderId, $ziel, $options) {
-        $order = $this->ownedOrder($team, $orderId);
-        $this->assertExpectedVersion($order, $options['expected_updated_at'] ?? null);
-        $aktuell = $order->status instanceof ProductionOrderStatus ? $order->status : ProductionOrderStatus::from((string) $order->status);
-        if ($aktuell === $ziel) {
+            $order = $this->ownedOrder($team, $orderId);
+            $procurementCancellation = null;
+            $this->assertExpectedVersion($order, $options['expected_updated_at'] ?? null);
+            $aktuell = $order->status instanceof ProductionOrderStatus ? $order->status : ProductionOrderStatus::from((string) $order->status);
+            if ($aktuell === $ziel) {
+                return $order;
+            }
+            if (! $aktuell->darfWechselnZu($ziel)) {
+                throw new \RuntimeException("Status {$aktuell->value} → {$ziel->value} nicht erlaubt.");
+            }
+            // Beim Start: letzten planned-Stand rechnen = Snapshot einfrieren, dann Status setzen.
+            if ($ziel === ProductionOrderStatus::InProgress) {
+                if (! empty($options['readiness_blockers'])) {
+                    throw new \RuntimeException('Produktionsstart hat noch Blocker.');
+                }
+                if (! empty($options['readiness_warnings']) && trim((string) ($options['override_reason'] ?? '')) === '') {
+                    throw new \RuntimeException('Produktionsstart mit Warnungen braucht einen Override-Grund.');
+                }
+                $this->recomputeOrder($team, $order);
+                $order->started_at = now();
+            } elseif ($ziel === ProductionOrderStatus::Done) {
+                $offene = $order->lines()->where('is_struck', false)
+                    ->whereNotIn('line_status', [ProductionLineStatus::Done->value, ProductionLineStatus::Skipped->value])->count();
+                $blockiert = $order->lines()->where('is_struck', false)->whereNotNull('blocked_reason')->count();
+                if (($offene > 0 || $blockiert > 0) && trim((string) ($options['finish_note'] ?? '')) === '') {
+                    throw new \RuntimeException('Fertigmelden mit offenen oder blockierten Zeilen braucht eine Abschlussnotiz.');
+                }
+                $order->finished_at = now();
+            } elseif ($ziel === ProductionOrderStatus::Cancelled) {
+                $order->cancelled_at = now();
+            }
+            $order->status = $ziel;
+            $order->save();
+
+            if ($ziel === ProductionOrderStatus::Cancelled) {
+                $procurementCancellation = app(OrderService::class)->withdrawProductionDemand($team, (int) $order->id);
+            }
+
+            $this->events->record((int) $team->id, (int) $order->id, 'order_status_changed', [
+                'from_state' => $aktuell->value, 'to_state' => $ziel->value,
+                'reason_code' => $options['override_reason'] ?? null,
+                'note' => $options['finish_note'] ?? ($options['note'] ?? null),
+                'payload' => array_filter([
+                    'readiness_warnings' => $options['readiness_warnings'] ?? null,
+                    'finish_open_lines' => $offene ?? null,
+                    'finish_blocked_lines' => $blockiert ?? null,
+                    'procurement_cancellation' => $procurementCancellation,
+                ], fn ($v) => $v !== null && $v !== []),
+            ]);
+
             return $order;
-        }
-        if (! $aktuell->darfWechselnZu($ziel)) {
-            throw new \RuntimeException("Status {$aktuell->value} → {$ziel->value} nicht erlaubt.");
-        }
-        // Beim Start: letzten planned-Stand rechnen = Snapshot einfrieren, dann Status setzen.
-        if ($ziel === ProductionOrderStatus::InProgress) {
-            if (! empty($options['readiness_blockers'])) {
-                throw new \RuntimeException('Produktionsstart hat noch Blocker.');
-            }
-            if (! empty($options['readiness_warnings']) && trim((string) ($options['override_reason'] ?? '')) === '') {
-                throw new \RuntimeException('Produktionsstart mit Warnungen braucht einen Override-Grund.');
-            }
-            $this->recomputeOrder($team, $order);
-            $order->started_at = now();
-        } elseif ($ziel === ProductionOrderStatus::Done) {
-            $offene = $order->lines()->where('is_struck', false)
-                ->whereNotIn('line_status', [ProductionLineStatus::Done->value, ProductionLineStatus::Skipped->value])->count();
-            $blockiert = $order->lines()->where('is_struck', false)->whereNotNull('blocked_reason')->count();
-            if (($offene > 0 || $blockiert > 0) && trim((string) ($options['finish_note'] ?? '')) === '') {
-                throw new \RuntimeException('Fertigmelden mit offenen oder blockierten Zeilen braucht eine Abschlussnotiz.');
-            }
-            $order->finished_at = now();
-        } elseif ($ziel === ProductionOrderStatus::Cancelled) {
-            $order->cancelled_at = now();
-        }
-        $order->status = $ziel;
-        $order->save();
-
-        $this->events->record((int) $team->id, (int) $order->id, 'order_status_changed', [
-            'from_state' => $aktuell->value, 'to_state' => $ziel->value,
-            'reason_code' => $options['override_reason'] ?? null,
-            'note' => $options['finish_note'] ?? ($options['note'] ?? null),
-            'payload' => array_filter([
-                'readiness_warnings' => $options['readiness_warnings'] ?? null,
-                'finish_open_lines' => $offene ?? null,
-                'finish_blocked_lines' => $blockiert ?? null,
-            ], fn ($v) => $v !== null && $v !== []),
-        ]);
-
-        return $order;
         });
     }
 
@@ -831,7 +842,7 @@ class ProductionOrderService
      *
      * @param  array{status?: string, von?: ?string, bis?: ?string, suche?: string}  $filters
      */
-    public function paginateBrowser(Team $team, array $filters, int $perPage = 50): \Illuminate\Contracts\Pagination\LengthAwarePaginator
+    public function paginateBrowser(Team $team, array $filters, int $perPage = 50): LengthAwarePaginator
     {
         return $this->browserQuery($team, $filters)
             // Offene zuerst, dann nach Produktionsdatum — dieselbe Leserichtung wie listForTeam().
@@ -854,7 +865,7 @@ class ProductionOrderService
     }
 
     /** @param  array{status?: string, von?: ?string, bis?: ?string, suche?: string}  $filters */
-    private function browserQuery(Team $team, array $filters): \Illuminate\Database\Eloquent\Builder
+    private function browserQuery(Team $team, array $filters): Builder
     {
         $suche = trim((string) ($filters['suche'] ?? ''));
 
@@ -865,8 +876,8 @@ class ProductionOrderService
             ->when(! empty($filters['von']), fn ($q) => $q->whereDate('production_date', '>=', $filters['von']))
             ->when(! empty($filters['bis']), fn ($q) => $q->whereDate('production_date', '<=', $filters['bis']))
             ->when($suche !== '', fn ($q) => $q->where(fn ($w) => $w
-                ->where('name', 'like', '%' . $suche . '%')
-                ->orWhere('reference', 'like', '%' . $suche . '%')));
+                ->where('name', 'like', '%'.$suche.'%')
+                ->orWhere('reference', 'like', '%'.$suche.'%')));
     }
 
     /** Detail-Aggregat für UI/MCP. */
@@ -876,13 +887,32 @@ class ProductionOrderService
         $status = $order->status instanceof ProductionOrderStatus ? $order->status : ProductionOrderStatus::from((string) $order->status);
 
         // P4: verknüpfte Bestellschienen (kompakt fürs UI/MCP) + Stale-Marker.
-        $verknuepft = $this->verknuepfteOrders($team, $orderId)->map(fn ($o) => [
-            'id' => (int) $o->id,
-            'supplier' => $o->supplier?->name,
-            'status' => $o->status instanceof OrderStatus ? $o->status->value : (string) $o->status,
-            'total_net' => (float) $o->total_net,
-            'reference' => $o->reference,
-        ])->values()->all();
+        $verknuepft = $this->verknuepfteOrders($team, $orderId)->map(function ($o) use ($team, $orderId) {
+            $orderStatus = $o->status instanceof OrderStatus ? $o->status : OrderStatus::from((string) $o->status);
+            $cancellationMail = null;
+            if (in_array($orderStatus, [OrderStatus::Sent, OrderStatus::Confirmed], true)) {
+                $mail = app(OrderService::class)->productionCancellationMailtoData($team, (int) $o->id, $orderId);
+                if ($mail['to'] !== '') {
+                    $cancellationMail = 'mailto:'.$mail['to'].'?subject='.rawurlencode($mail['subject']).'&body='.rawurlencode($mail['body']);
+                }
+            }
+
+            return [
+                'id' => (int) $o->id,
+                'supplier' => $o->supplier?->name,
+                'status' => $orderStatus->value,
+                'total_net' => (float) $o->total_net,
+                'reference' => $o->reference,
+                'cancellation_mailto' => $cancellationMail,
+                'cancellation_kind' => $mail['kind'] ?? null,
+            ];
+        })->values()->all();
+        $procurementCancelWarning = $status === ProductionOrderStatus::Cancelled
+            && collect($verknuepft)->contains(fn (array $linked) => in_array($linked['status'], [
+                OrderStatus::Sent->value,
+                OrderStatus::Confirmed->value,
+                OrderStatus::Delivered->value,
+            ], true));
 
         // Spec 30: gestrichene Zeilen bleiben SICHTBAR (durchgestrichen), zählen aber nirgends mit.
         $aktive = $order->lines->reject(fn ($l) => (bool) $l->is_struck);
@@ -900,8 +930,11 @@ class ProductionOrderService
             'is_owned' => $order->isOwnedBy($team),
             'editierbar' => $status->istOffen() && $order->isOwnedBy($team),
             'verknuepfte_orders' => $verknuepft,
+            'procurement_cancel_warning' => $procurementCancelWarning,
             'last_handover_at' => $order->last_handover_at?->toIso8601String(),
             'einkauf_veraltet' => $this->einkaufVeraltet($order),
+            'procurement_released_at' => $order->procurement_released_at?->toIso8601String(),
+            'procurement_stale' => $this->materialbedarfVeraltet($order),
             'warnungen' => $order->warnungen ?? [],
             // Spec 30: Summen zählen NUR das, was wirklich produziert wird — gestrichene Zeilen
             // fallen raus, Overrides zählen mit ihrem effektiven Wert.
@@ -948,7 +981,7 @@ class ProductionOrderService
      * Findet die Bestellschienen, die aus diesem Produktionsauftrag heraus per
      * „An Bestellung übergeben" entstanden sind — es gibt keine FK, die Verknüpfung
      * läuft über den `source_ref`-Präfix `produktion:{orderId}:` in den
-     * `source_contributions`-Keys der Bestellzeilen (siehe DetailPanel::anBestellungUebergeben()).
+     * `source_contributions`-Keys der im Bestellwesen erzeugten Bestellzeilen.
      *
      * @return Collection<int, FoodAlchemistOrder>
      */
@@ -960,14 +993,16 @@ class ProductionOrderService
         $prefix = self::sourceRefPrefix($productionOrderId);
         $orderIds = FoodAlchemistOrderLine::query()
             ->whereHas('order', fn ($q) => $q->visibleToTeam($team))
-            ->where('source_contributions', 'like', '%' . $prefix . '%')
+            ->where('source_contributions', 'like', '%'.$prefix.'%')
             ->distinct()->pluck('order_id');
 
         if ($orderIds->isEmpty()) {
             return collect();
         }
 
-        return FoodAlchemistOrder::visibleToTeam($team)->with('supplier:id,name')->whereIn('id', $orderIds)->get();
+        return FoodAlchemistOrder::visibleToTeam($team)
+            ->with(['supplier:id,name', 'rounds:id,label,created_at'])
+            ->whereIn('id', $orderIds)->get();
     }
 
     /**
@@ -989,7 +1024,7 @@ class ProductionOrderService
 
         $lines = FoodAlchemistOrderLine::query()
             ->whereHas('order', fn ($q) => $q->visibleToTeam($team))
-            ->where('source_contributions', 'like', '%' . self::SOURCE_REF_BASE . '%')
+            ->where('source_contributions', 'like', '%'.self::SOURCE_REF_BASE.'%')
             ->with('order:id,status')
             ->get(['id', 'order_id', 'source_contributions']);
 
@@ -1004,7 +1039,7 @@ class ProductionOrderService
             }
             $versendet = in_array($ostat, [OrderStatus::Sent, OrderStatus::Confirmed, OrderStatus::Delivered], true);
             foreach (array_keys((array) $line->source_contributions) as $key) {
-                if (! preg_match('/^' . preg_quote(self::SOURCE_REF_BASE, '/') . '(\d+):/', (string) $key, $m)) {
+                if (! preg_match('/^'.preg_quote(self::SOURCE_REF_BASE, '/').'(\d+):/', (string) $key, $m)) {
                     continue;
                 }
                 $pid = (int) $m[1];
@@ -1029,14 +1064,14 @@ class ProductionOrderService
      * Mengen-Deckung (Teil-Mengen-Abgleich ist bewusst Nicht-Ziel von v2, es gibt kein
      * Bestand/Netting). Grundlage für „übergeben ✓/–" + den Deckungsgrad k/N.
      *
-     * @return array<string, true>  source_ref (ohne Präfix) => übergeben
+     * @return array<string, true> source_ref (ohne Präfix) => übergeben
      */
     public function zielUebergaben(Team $team, int $orderId): array
     {
         $prefix = self::sourceRefPrefix($orderId);
         $lines = FoodAlchemistOrderLine::query()
             ->whereHas('order', fn ($q) => $q->visibleToTeam($team))
-            ->where('source_contributions', 'like', '%' . $prefix . '%')
+            ->where('source_contributions', 'like', '%'.$prefix.'%')
             ->get(['id', 'source_contributions']);
 
         $refs = [];
@@ -1062,67 +1097,49 @@ class ProductionOrderService
             && $order->handover_targets_hash !== self::targetsHash($order->targets);
     }
 
-    /**
-     * P4: Einbahn-Übergabe des Bedarfs ALLER Ziele dieses Auftrags an die Bestellschienen —
-     * der eine Ort, der die Ziel-Herkunft (`source_ref`-Präfix) baut UND den Stale-Marker
-     * (`last_handover_at` + Ziel-Hash) setzt. Von DetailPanel und dem MCP-HANDOVER-Tool
-     * gemeinsam genutzt (Lockstep). Kein Auto-Sync, kein Rückkanal.
-     *
-     * @return array{orders:list<int>, skipped_ohne_la:list<string>, warnungen:list<string>}
-     */
-    public function anBestellungUebergeben(Team $team, int $orderId, OrderService $orders, ?int $userId = null): array
+    public function materialbedarfFreigeben(Team $team, int $orderId, ?int $userId = null): FoodAlchemistProductionOrder
     {
         $order = FoodAlchemistProductionOrder::visibleToTeam($team)->findOrFail($orderId);
-        // Liefertag der Bestellung(en) = Produktions-/Einsatztag des Auftrags (Y-m-d oder null).
-        $liefertag = $order->production_date?->toDateString();
-
-        $touched = [];
-        $skipped = [];
-        $warnungen = [];
-        foreach (($order->targets ?? []) as $ziel) {
-            $sourceRef = self::sourceRefFor($orderId, (string) ($ziel['source_ref'] ?? ''));
-            $res = $orders->addNeedFromTarget($team, Arr::except($ziel, ['source_ref', 'label']), $sourceRef, $userId, null, $liefertag);
-            $touched = array_merge($touched, $res['orders']);
-            $skipped = array_merge($skipped, $res['skipped_ohne_la']);
-            $warnungen = array_merge($warnungen, $res['warnungen']);
+        if (! $order->isOwnedBy($team)) {
+            throw new \RuntimeException('Produktionsauftrag nicht im Schreibzugriff (D1).');
         }
 
-        // Stale-Marker aktualisieren: ab jetzt ist der Einkauf auf dem aktuellen Ziel-Stand.
-        $order->last_handover_at = now();
-        $order->handover_targets_hash = self::targetsHash($order->targets);
+        $targets = array_values($order->targets ?? []);
+        if ($targets === []) {
+            throw new \RuntimeException('Materialbedarf kann ohne Ziele nicht freigegeben werden.');
+        }
+
+        $order->procurement_released_at = now();
+        $order->procurement_released_by = $userId;
+        $order->procurement_targets_hash = self::targetsHash($targets);
+        $order->procurement_targets_snapshot = $targets;
         $order->save();
 
-        return [
-            'orders' => array_values(array_unique($touched)),
-            'skipped_ohne_la' => array_values(array_unique($skipped)),
-            'warnungen' => array_values(array_unique($warnungen)),
-        ];
+        return $order->refresh();
     }
 
-    /** @return array{profil:string,rezepte:bool,zutaten:bool,anleitung:bool,bilder:bool,darreichung:bool,notizen:bool,einkauf:bool,posten:string} */
+    public function materialbedarfVeraltet(FoodAlchemistProductionOrder $order): bool
+    {
+        return $order->procurement_released_at !== null
+            && $order->procurement_targets_hash !== self::targetsHash($order->targets);
+    }
+
+    /** @return array{profil:string,rezepte:bool,zutaten:bool,anleitung:bool,bilder:bool,darreichung:bool,notizen:bool,posten:string} */
     public function dokumentOptionen(array $query): array
     {
         $profil = (string) ($query['profil'] ?? 'produktion');
-        if (! in_array($profil, ['kurz', 'produktion', 'einkauf', 'voll'], true)) {
+        if (! in_array($profil, ['kurz', 'produktion'], true)) {
             $profil = 'produktion';
         }
 
         $optionen = match ($profil) {
             'kurz' => [
                 'rezepte' => true, 'zutaten' => false, 'anleitung' => false, 'bilder' => false,
-                'darreichung' => false, 'notizen' => false, 'einkauf' => false,
-            ],
-            'einkauf' => [
-                'rezepte' => false, 'zutaten' => false, 'anleitung' => false, 'bilder' => false,
-                'darreichung' => false, 'notizen' => false, 'einkauf' => true,
-            ],
-            'voll' => [
-                'rezepte' => true, 'zutaten' => true, 'anleitung' => true, 'bilder' => true,
-                'darreichung' => true, 'notizen' => true, 'einkauf' => true,
+                'darreichung' => false, 'notizen' => false,
             ],
             default => [
                 'rezepte' => true, 'zutaten' => true, 'anleitung' => true, 'bilder' => true,
-                'darreichung' => true, 'notizen' => true, 'einkauf' => false,
+                'darreichung' => true, 'notizen' => true,
             ],
         };
 
@@ -1153,27 +1170,12 @@ class ProductionOrderService
      * wie der alte Planungsblatt-Bundle). INTERNE Ops-Doku: enthält Lieferanten + EK-Preise,
      * NICHT zum Aushändigen an den Kunden gedacht.
      */
-    public function dokument(Team $team, int $orderId, bool $mitEinkauf = true): array
+    public function dokument(Team $team, int $orderId): array
     {
         $order = FoodAlchemistProductionOrder::visibleToTeam($team)
             ->with(['lines.recipe:id,name', 'lines.station:id,name'])
             ->findOrFail($orderId);
         $status = $order->status instanceof ProductionOrderStatus ? $order->status : ProductionOrderStatus::from((string) $order->status);
-
-        $einkauf = null;
-        if ($mitEinkauf) {
-            $ziele = collect($order->targets ?? [])
-                ->map(fn ($t) => Arr::except($t, ['source_ref', 'label']))
-                ->values()->all();
-            if ($ziele !== []) {
-                $liste = $this->planung->einkaufsliste($team, $ziele);
-                $einkauf = [
-                    'lieferanten' => $liste['lieferanten'],
-                    'ek_gesamt' => collect($liste['lieferanten'])->sum('ek_summe'),
-                    'warnungen' => $liste['warnungen'],
-                ];
-            }
-        }
 
         return [
             'id' => (int) $order->id,
@@ -1202,7 +1204,6 @@ class ProductionOrderService
                 'darreichung' => $l->darreichung,
                 'zutaten' => $l->zutaten,
             ])->values()->all(),
-            'einkauf' => $einkauf,
         ];
     }
 
@@ -1225,13 +1226,13 @@ class ProductionOrderService
             $chapter = FoodAlchemistFoodbookKapitel::visibleToTeam($team)->find((int) $ziel['chapter_id']);
             $wert = $ziel['persons'] ?? null;
 
-            return $chapter !== null ? $chapter->title . ($wert !== null ? " ({$wert} P.)" : '') : null;
+            return $chapter !== null ? $chapter->title.($wert !== null ? " ({$wert} P.)" : '') : null;
         }
         if (! empty($ziel['concept_id'])) {
             $name = FoodAlchemistConcept::visibleToTeam($team)->find((int) $ziel['concept_id'])?->name;
             $wert = $ziel['persons'] ?? null;
 
-            return $name !== null ? $name . ($wert !== null ? " ({$wert} P.)" : '') : null;
+            return $name !== null ? $name.($wert !== null ? " ({$wert} P.)" : '') : null;
         }
         if (! empty($ziel['recipe_id'])) {
             $recipe = FoodAlchemistRecipe::visibleToTeam($team)->find((int) $ziel['recipe_id']);
@@ -1240,13 +1241,13 @@ class ProductionOrderService
             }
             // Basisrezept mit kg-Ziel (P1): in Kilogramm ausgewiesen, nicht in Ansätzen.
             if (! (bool) $recipe->is_sales_recipe && isset($ziel['amount_kg']) && (float) $ziel['amount_kg'] > 0) {
-                return $recipe->name . ' (' . $this->zahl((float) $ziel['amount_kg']) . ' kg)';
+                return $recipe->name.' ('.$this->zahl((float) $ziel['amount_kg']).' kg)';
             }
             $wert = $ziel['portions'] ?? $ziel['persons'] ?? null;
             // Basisrezept solo wird in ganzen Ansätzen gemessen, nicht in Portionen.
             $einheit = (bool) $recipe->is_sales_recipe ? 'Port.' : 'Ansätze';
 
-            return $recipe->name . ($wert !== null ? " ({$this->zahl((float) $wert)} {$einheit})" : '');
+            return $recipe->name.($wert !== null ? " ({$this->zahl((float) $wert)} {$einheit})" : '');
         }
 
         return null;
@@ -1258,7 +1259,7 @@ class ProductionOrderService
         return rtrim(rtrim(number_format($n, 2, ',', '.'), '0'), ',');
     }
 
-    private function assertExpectedVersion(\Illuminate\Database\Eloquent\Model $model, ?string $expected): void
+    private function assertExpectedVersion(Model $model, ?string $expected): void
     {
         if ($expected === null || $expected === '') {
             return;
