@@ -272,7 +272,7 @@ class Tagesplan extends Component
     private function zeileSetzenMitWallStart($team, FoodAlchemistProductionOrderLine $zeile, ProductionLineStatus $ziel, ProductionOrderService $svc): int
     {
         $lineId = (int) $zeile->id;
-        if ($this->display === 'wall' && $ziel === ProductionLineStatus::Done) {
+        if ($this->display === 'wall' && in_array($ziel, [ProductionLineStatus::InProgress, ProductionLineStatus::Done], true)) {
             $order = $zeile->productionOrder;
             $status = $order?->status instanceof ProductionOrderStatus
                 ? $order->status
@@ -313,6 +313,21 @@ class Tagesplan extends Component
     public function anleitungSchliessen(): void
     {
         $this->anleitungLineId = null;
+    }
+
+    public function anleitungStarten(ProductionOrderService $svc): void
+    {
+        $this->fehler = null;
+        try {
+            if ($this->anleitungLineId === null) {
+                return;
+            }
+
+            $team = Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
+            $this->anleitungLineId = $this->zeileSetzenMitWallStart($team, FoodAlchemistProductionOrderLine::findOrFail($this->anleitungLineId), ProductionLineStatus::InProgress, $svc);
+        } catch (\Throwable $e) {
+            $this->fehler = $e->getMessage();
+        }
     }
 
     public function anleitungStepUmschalten(int $index, ProductionOrderService $svc, ProductionCapacityService $kap): void
@@ -572,8 +587,14 @@ class Tagesplan extends Component
             'name' => $treffer->name,
             'auftrag' => $treffer->auftrag,
             'line_status' => $treffer->line_status,
-            'ansaetze' => (float) $treffer->ansaetze_effektiv,
             'gesamt_kg' => $treffer->gesamt_kg,
+            'arbeitszeit_min' => $treffer->arbeitszeit_min !== null ? (int) $treffer->arbeitszeit_min : null,
+            'started_at' => $treffer->started_at ? Carbon::parse($treffer->started_at)->toIso8601String() : null,
+            'equipment' => collect($treffer->equipment ?? [])->map(fn ($e) => [
+                'name' => $e->name,
+                'gruppe' => $e->group_name,
+                'notiz' => $e->note,
+            ])->values()->all(),
             'schritte' => $treffer->schritte ?? ($line?->steps_snapshot ?? []),
             'zubereitung' => $treffer->zubereitung ?? $line?->zubereitung,
             'zutaten' => $treffer->zutaten ?? ($line?->zutaten ?? []),

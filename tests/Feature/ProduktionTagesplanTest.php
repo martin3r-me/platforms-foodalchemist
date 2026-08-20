@@ -7,6 +7,7 @@ use Platform\FoodAlchemist\Livewire\Produktion\Tagesplan;
 use Platform\FoodAlchemist\Models\FoodAlchemistProductionOrderLine as Line;
 use Platform\FoodAlchemist\Models\FoodAlchemistProductionStation as Posten;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
+use Platform\FoodAlchemist\Models\FoodAlchemistVocabKochequipment;
 use Platform\FoodAlchemist\Services\ProductionOrderService;
 use Platform\FoodAlchemist\Tests\Support\SeedsTeamHierarchy;
 use Platform\FoodAlchemist\Tests\TestCase;
@@ -343,6 +344,44 @@ it('zeigt in der Wandmonitor-Anleitung die Gesamtmenge kompakt an', function () 
         ->call('oeffneAnleitung', $lineId)
         ->assertSeeHtml('data-tagesplan-wall-gesamtmenge')
         ->assertSee('2,75 kg');
+});
+
+it('zeigt in der Wandmonitor-Anleitung Equipment und keinen Ansätze-Block', function () {
+    $lineId = Line::where('production_order_id', $this->a1->id)->value('id');
+    Line::whereKey($lineId)->update(['zubereitung' => '1. Ansetzen.']);
+    $equipment = FoodAlchemistVocabKochequipment::create([
+        'team_id' => $this->rootTeam->id,
+        'slug' => 'kipper-test',
+        'name' => 'Kipper',
+        'group_name' => 'Geräte',
+    ]);
+    $this->fond->equipment()->attach($equipment->id, ['note' => 'sauber bereitstellen']);
+
+    Livewire::test(Tagesplan::class, ['von' => '2026-08-20', 'display' => 'wall'])
+        ->set('modus', 'editor')
+        ->call('oeffneAnleitung', $lineId)
+        ->assertSeeHtml('data-tagesplan-wall-equipment')
+        ->assertSeeHtml('data-tagesplan-wall-equipment-item')
+        ->assertSee('Kipper')
+        ->assertSee('sauber bereitstellen')
+        ->assertDontSee('Ansätze');
+});
+
+it('startet in der Wandmonitor-Anleitung die Rezeptzeit', function () {
+    $lineId = Line::where('production_order_id', $this->a1->id)->value('id');
+    Line::whereKey($lineId)->update(['zubereitung' => '1. Ansetzen.', 'arbeitszeit_min' => 45]);
+
+    Livewire::test(Tagesplan::class, ['von' => '2026-08-20', 'display' => 'wall'])
+        ->set('modus', 'editor')
+        ->call('oeffneAnleitung', $lineId)
+        ->assertSeeHtml('data-tagesplan-wall-start')
+        ->assertSee('45 min')
+        ->call('anleitungStarten')
+        ->assertSet('fehler', null);
+
+    $line = Line::where('production_order_id', $this->a1->id)->where('recipe_id', $this->fond->id)->firstOrFail();
+    expect($line->line_status)->toBe(ProductionLineStatus::InProgress)
+        ->and($line->started_at)->not->toBeNull();
 });
 
 it('hakt in der Wandmonitor-Anleitung einzelne Schritte ab und setzt die Zeile nach allen Schritten erledigt', function () {

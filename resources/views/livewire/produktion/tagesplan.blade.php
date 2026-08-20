@@ -120,7 +120,7 @@
                                             <p class="text-xl font-bold leading-tight {{ $miseFertig ? 'line-through' : '' }}">{{ $m->name }}</p>
                                             @if($m->ist_basisrezept)<span class="rounded-full bg-white/10 px-2 py-1 text-xs text-slate-300">Basis</span>@endif
                                         </div>
-                                        <p class="mt-3 text-sm text-slate-300">{{ $m->anzahl }}× · {{ $m->erledigt }}/{{ $m->gesamt }} erledigt · {{ rtrim(rtrim(number_format($m->ansaetze, 2, ',', '.'), '0'), ',') }} Ans. · {{ $m->minuten }} min</p>
+                                        <p class="mt-3 text-sm text-slate-300">{{ $m->anzahl }}× · {{ $m->erledigt }}/{{ $m->gesamt }} erledigt · {{ $m->minuten }} min</p>
                                         <p class="mt-1 truncate text-sm text-slate-400">für {{ $m->auftraege->implode(', ') }}</p>
                                         @if($m->stationen->isNotEmpty())<p class="mt-1 text-sm text-slate-400">Posten: {{ $m->stationen->implode(', ') }}</p>@endif
                                         @if(collect($m->sicherheit['allergene'] ?? [])->isNotEmpty() || collect($m->sicherheit['warnungen'] ?? [])->isNotEmpty() || collect($m->sicherheit['diaet'] ?? [])->isNotEmpty())
@@ -248,7 +248,9 @@
                                                                     </div>
                                                                     @if($z->is_basisrezept)<span class="shrink-0 rounded-full bg-emerald-400/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-100">Basis</span>@endif
                                                                 </div>
-                                                                <p class="mt-2 text-sm text-slate-400">{{ rtrim(rtrim(number_format($z->ansaetze_effektiv, 2, ',', '.'), '0'), ',') }} Ans. · {{ $z->arbeitszeit_min !== null ? $z->arbeitszeit_min . ' min' : '—' }}</p>
+                                                                <p class="mt-2 text-sm text-slate-400">
+                                                                    @if($z->gesamt_kg !== null){{ rtrim(rtrim(number_format((float) $z->gesamt_kg, 3, ',', '.'), '0'), ',') }} kg · @endif{{ $z->arbeitszeit_min !== null ? $z->arbeitszeit_min . ' min' : 'ohne Zeit' }}
+                                                                </p>
                                                                 @if(collect($z->sicherheit['allergene'] ?? [])->isNotEmpty() || collect($z->sicherheit['warnungen'] ?? [])->isNotEmpty() || collect($z->sicherheit['diaet'] ?? [])->isNotEmpty())
                                                                     <div class="mt-2 flex flex-wrap gap-1.5" data-tagesplan-wall-sicherheit>
                                                                         @foreach(collect($z->sicherheit['warnungen'] ?? [])->take(3) as $warnung)
@@ -294,10 +296,13 @@
                     $wallErledigteSteps = collect($anleitung['step_erledigt'] ?? [])->map(fn ($i) => (int) $i)->intersect($wallStepKeys);
                     $wallAlleStepsErledigt = $wallStepKeys !== [] && $wallErledigteSteps->count() === count($wallStepKeys);
                     $wallLineErledigt = ($anleitung['line_status'] ?? null) === 'done';
+                    $wallLineLaeuft = ($anleitung['line_status'] ?? null) === 'in_progress';
                     $wallGesamtKg = $anleitung['gesamt_kg'] ?? null;
                     $wallGesamtKgText = $wallGesamtKg !== null
                         ? rtrim(rtrim(number_format((float) $wallGesamtKg, 3, ',', '.'), '0'), ',') . ' kg'
                         : null;
+                    $wallArbeitszeit = $anleitung['arbeitszeit_min'] ?? null;
+                    $wallStartedAt = $anleitung['started_at'] ?? null;
                 @endphp
                 <div class="grid gap-3 xl:grid-cols-[minmax(18rem,24rem)_1fr]" data-tagesplan-wall-anleitung>
                     <aside class="space-y-3 xl:sticky xl:top-0 xl:self-start">
@@ -306,19 +311,39 @@
                             <p class="mt-1 text-sm text-slate-200">für {{ $anleitung['auftrag'] }}</p>
                         </div>
 
-                        <section class="rounded-xl border border-white/10 bg-white/5 px-3 py-2">
+                        <section class="rounded-xl border border-white/10 bg-white/5 px-3 py-2" data-tagesplan-wall-timer>
                             <div class="grid grid-cols-2 gap-2 text-sm">
-                                <div>
-                                    <p class="text-[11px] font-bold uppercase tracking-wide text-slate-400">Ansätze</p>
-                                    <p class="mt-0.5 font-semibold tabular-nums text-slate-100">{{ rtrim(rtrim(number_format((float) ($anleitung['ansaetze'] ?? 0), 2, ',', '.'), '0'), ',') }}</p>
-                                </div>
                                 @if($wallGesamtKgText !== null)
                                     <div data-tagesplan-wall-gesamtmenge>
                                         <p class="text-[11px] font-bold uppercase tracking-wide text-slate-400">Gesamt</p>
                                         <p class="mt-0.5 font-semibold tabular-nums text-slate-100">{{ $wallGesamtKgText }}</p>
                                     </div>
                                 @endif
+                                <div>
+                                    <p class="text-[11px] font-bold uppercase tracking-wide text-slate-400">Zeit</p>
+                                    <p class="mt-0.5 font-semibold tabular-nums text-slate-100">{{ $wallArbeitszeit !== null ? $wallArbeitszeit . ' min' : 'offen' }}</p>
+                                </div>
                             </div>
+                            @if($wallLineLaeuft && $wallStartedAt !== null)
+                                <div class="mt-2 rounded-xl border border-sky-300/30 bg-sky-400/10 px-3 py-2"
+                                     x-data="{ started: Date.parse(@js($wallStartedAt)), total: {{ (int) ($wallArbeitszeit ?? 0) }}, now: Date.now(), tick: null, init(){ this.tick = setInterval(() => this.now = Date.now(), 1000) }, elapsed(){ return Math.max(0, Math.floor((this.now - this.started) / 60000)) }, remaining(){ return this.total > 0 ? Math.max(0, this.total - this.elapsed()) : null } }"
+                                     data-tagesplan-wall-laufzeit>
+                                    <p class="text-[11px] font-bold uppercase tracking-wide text-sky-100">läuft</p>
+                                    <p class="mt-0.5 text-sm font-semibold tabular-nums text-slate-100">
+                                        <span x-text="elapsed()"></span> min gelaufen
+                                        <template x-if="remaining() !== null"><span> · <span x-text="remaining()"></span> min Rest</span></template>
+                                    </p>
+                                </div>
+                            @elseif(! $wallLineErledigt)
+                                <button type="button" wire:click="anleitungStarten"
+                                        class="mt-2 flex w-full items-center justify-between rounded-xl border border-sky-300/40 bg-sky-400/15 px-3 py-2 text-left text-sm font-bold text-sky-100 hover:bg-sky-400/25"
+                                        data-tagesplan-wall-start>
+                                    <span>Start</span>
+                                    <span class="grid h-8 w-8 place-items-center rounded-lg bg-white/10 text-white">▶</span>
+                                </button>
+                            @else
+                                <div class="mt-2 rounded-xl border border-emerald-400/40 bg-emerald-500/15 px-3 py-2 text-sm font-bold text-emerald-100">Erledigt</div>
+                            @endif
                             @if($wallStepKeys !== [])
                                 <button type="button" wire:click="anleitungAlleStepsUmschalten"
                                         class="mt-2 flex w-full items-center justify-between rounded-xl border px-3 py-2 text-left text-sm font-bold {{ $wallAlleStepsErledigt || $wallLineErledigt ? 'border-emerald-400/40 bg-emerald-500/20 text-emerald-100' : 'border-violet-300/40 bg-violet-500/15 text-violet-100 hover:bg-violet-500/25' }}"
@@ -342,6 +367,23 @@
                                     @endforeach
                                     @foreach(collect($anleitung['sicherheit']['diaet'] ?? []) as $d)
                                         <span class="rounded-full bg-emerald-400/15 px-2 py-1 text-[11px] font-bold uppercase tracking-wide text-emerald-100" data-tagesplan-wall-diaet>{{ $d }}</span>
+                                    @endforeach
+                                </div>
+                            </section>
+                        @endif
+
+                        @if(!empty($anleitung['equipment']))
+                            <section class="rounded-xl border border-white/10 bg-white/5 px-3 py-2" data-tagesplan-wall-equipment>
+                                <h3 class="text-base font-bold">Equipment</h3>
+                                <div class="mt-1.5 divide-y divide-white/10">
+                                    @foreach($anleitung['equipment'] as $eq)
+                                        <div class="py-1.5 text-sm" data-tagesplan-wall-equipment-item>
+                                            <div class="flex items-start justify-between gap-3">
+                                                <span class="min-w-0 whitespace-normal leading-snug text-slate-100">{{ $eq['name'] ?? 'Equipment' }}</span>
+                                                @if($eq['gruppe'] ?? null)<span class="shrink-0 text-right text-xs text-slate-400">{{ $eq['gruppe'] }}</span>@endif
+                                            </div>
+                                            @if($eq['notiz'] ?? null)<p class="mt-0.5 text-xs text-slate-400">{{ $eq['notiz'] }}</p>@endif
+                                        </div>
                                     @endforeach
                                 </div>
                             </section>
