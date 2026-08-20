@@ -74,6 +74,8 @@
                 @endif
             @endif
             @if(in_array($st->status, ['done', 'failed'], true) && in_array($st->kind, ['rezept', 'gericht', 'concept'], true))
+                {{-- A2: Feedback zu genau dieser Position → dann gezielt neu generieren (nur diese Position). --}}
+                <button wire:click="toggleKommentar({{ $st->id }})" class="{{ in_array($st->id, $kommentarOffen ?? [], true) ? 'text-emerald-300' : 'text-gray-400 hover:text-gray-200' }}" title="Feedback geben & gezielt neu generieren">@svg('heroicon-o-pencil-square', 'w-4 h-4')</button>
                 <button wire:click="neuGenerieren({{ $st->id }})" class="text-amber-300 hover:text-amber-200" title="Neu generieren (verwirft den aktuellen Entwurf)">@svg('heroicon-o-arrow-path', 'w-4 h-4')</button>
             @endif
             @if($st->status === 'done')
@@ -88,6 +90,22 @@
             @endif
         </span>
     </div>
+    {{-- A2 (per-Speise-Feedback): Kommentar zu GENAU dieser Position, dann gezielt neu generieren —
+         nur dieser eine Entwurf wird nach dem Feedback neu gebaut, die Nachbar-Positionen bleiben. --}}
+    @if(in_array($st->id, $kommentarOffen ?? [], true) && in_array($st->status, ['done', 'failed'], true))
+        <div class="mt-1 pl-1" data-speise-kommentar="{{ $st->id }}" wire:key="kommentar-{{ $st->id }}">
+            <textarea wire:model="speiseKommentar.{{ $st->id }}" rows="2"
+                      placeholder="Was an dieser Position ändern? (z. B. „vegetarisch statt Rind", „leichter, weniger Sahne", „mehr Säure") …"
+                      class="w-full text-[11px] bg-white/5 border border-white/10 rounded px-2 py-1 text-gray-200 placeholder-gray-500"></textarea>
+            <div class="mt-1 flex items-center gap-3">
+                <button wire:click="neuGenerieren({{ $st->id }})"
+                        class="text-[11px] text-emerald-300 hover:text-emerald-200 inline-flex items-center gap-1">
+                    @svg('heroicon-o-arrow-path', 'w-3.5 h-3.5') mit Feedback neu generieren
+                </button>
+                <button wire:click="toggleKommentar({{ $st->id }})" class="text-[11px] text-gray-500 hover:text-gray-300">abbrechen</button>
+            </div>
+        </div>
+    @endif
     {{-- Etappe 6: EK/VK/Marge je Stufe — schon am Draft sichtbar (Kalkulation aus SalesRecipeService::cockpit,
          gebündelt in Index::render). Nur Rezept/Gericht-Steps; Concept trägt keine Rezept-Marge.
          Ampel färbt Marge %/Wareneinsatz % (grün=auf/unter Ziel · gelb=drüber · rot=>50% drüber · grau=unbekannt). --}}

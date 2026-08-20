@@ -661,6 +661,22 @@ it('Inline-Plan: planVorschau liefert Name + geplante Menü-Positionen (die Spei
         ->and($pv['speisen'][0]['rolle'])->toBe('Hauptgang'); // Stub-Gerüst: 1 Gang „Hauptgang"
 });
 
+it('A2: neuGenerieren reicht speiseKommentar an die Regeneration weiter und leert ihn danach', function () {
+    $recipe = $this->makeRecipe($this->rootTeam, 'Rinderfilet', ['status' => 'draft']);
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'gericht', 'status' => 'review', 'staged' => true, 'brief' => 'Warmer Hauptgang.']);
+    $step = FoodAlchemistCascadeRunStep::create([
+        'team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht', 'status' => 'done',
+        'ref_type' => 'recipe', 'ref_id' => $recipe->id, 'label' => 'Rinderfilet',
+    ]);
+
+    Livewire::test(PlanungIndex::class)
+        ->set('speiseKommentar.' . $step->id, 'vegetarisch statt Rind')
+        ->call('neuGenerieren', (int) $step->id)
+        ->assertSet('speiseKommentar.' . $step->id, null);   // Einweg-Feedback → nach dem Anstoß geleert
+
+    Queue::assertPushed(GenerateRecipeJob::class, fn ($job) => str_contains($job->description, 'vegetarisch statt Rind'));
+});
+
 it('KI-Kopf: leeres Concept-Briefing wird gesagt (kein Draft, keine Öffnung)', function () {
     $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Leer']);
 

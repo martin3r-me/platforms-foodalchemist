@@ -1364,6 +1364,34 @@ it('neuGenerieren (regeneriereStep): verwirft das Draft und dispatcht die Generi
     Queue::assertPushed(GenerateRecipeJob::class);
 });
 
+it('A2: regeneriereStep mit Kommentar haengt das Feedback an den Brief (gezielt, nur diese Position)', function () {
+    $recipe = $this->makeRecipe($this->rootTeam, 'Rinderfilet', ['status' => 'draft']);
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'gericht', 'status' => 'review', 'staged' => true, 'brief' => 'Warmer Hauptgang, Rind.']);
+    $step = FoodAlchemistCascadeRunStep::create([
+        'team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht', 'status' => 'done',
+        'ref_type' => 'recipe', 'ref_id' => $recipe->id, 'label' => 'Rinderfilet',
+    ]);
+
+    app(PlanningCascadeService::class)->regeneriereStep($this->rootTeam, (int) $step->id, 'vegetarisch statt Rind');
+
+    // Der Brief traegt Basis + Feedback → die KI baut nur diesen Entwurf nach der Anpassung neu.
+    Queue::assertPushed(GenerateRecipeJob::class, fn ($job) => str_contains($job->description, 'Warmer Hauptgang, Rind.')
+        && str_contains($job->description, 'vegetarisch statt Rind'));
+});
+
+it('A2: regeneriereStep ohne Kommentar laesst den Brief unveraendert (Byte-Stabilitaet)', function () {
+    $recipe = $this->makeRecipe($this->rootTeam, 'Rind', ['status' => 'draft']);
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'gericht', 'status' => 'review', 'staged' => true, 'brief' => 'Nur Brief.']);
+    $step = FoodAlchemistCascadeRunStep::create([
+        'team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht', 'status' => 'done',
+        'ref_type' => 'recipe', 'ref_id' => $recipe->id, 'label' => 'Rind',
+    ]);
+
+    app(PlanningCascadeService::class)->regeneriereStep($this->rootTeam, (int) $step->id);
+
+    Queue::assertPushed(GenerateRecipeJob::class, fn ($job) => $job->description === 'Nur Brief.');
+});
+
 it('goKaskade (concept): persistiert Leitplanken inkl. ki_bilder in generation_params', function () {
     $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Concept-Test', 'brief' => 'Sommer-Buffet.']);
 
