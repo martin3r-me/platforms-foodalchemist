@@ -149,13 +149,15 @@ Jede Etappe ist eine eigene, shippbare Bau-Runde mit eigener Verifikation. Diese
 **Code/Vault/demo:** reiner Code (PR) + MCP-Lockstep prüfen (Angebot-Tools). Pest: Angebots-Vollkaskade legt Session+Run mit `source_owner_type='offer'` an, Konzepte tragen `offer_id`.
 **Risiko:** Angebots-Menüsubstanz sind offer-lokale Concepts/Pakete — Slot-Mapping muss die Pivot `foodalchemist_offer_concept` respektieren.
 
-### E3 — Rückkopplung 1: Ergebnis → Wissen/Trend (höchster Hebel) · Status: offen
+### E3 — Rückkopplung 1: Ergebnis → Wissen/Trend (höchster Hebel) · Status: 🚫 BLOCKIERT (2026-08-20) — RAG-Voraussetzung fehlt
+> **Blocker:** setzt den RAG-Branch `feat/rag-autoindex-recall` (Auto-Index + semantisches Finden) in main voraus — der existiert im aktuellen Repo nicht (weder lokal noch origin/main). Bis RAG gelandet ist, NICHT baubar. Danach: Rückkanal freigegebener Konzepte/Gerichte in den Wissens-/Trend-Recall (als Recall/Inspiration, nie finaler Ranker, nie Pairing-Zwang).
 **Ziel:** Den Kreis schließen — die KI lernt aus dem, was tatsächlich gebaut + freigegeben wurde, nicht nur aus dem statischen Wissenskorpus.
 **IST:** Der einzige echte automatische Loop ist Pool-Embedding-Reuse (`ConceptEmbeddingObserver`, `RecipeEmbeddingObserver` → `GenerationContextService`). Wissen/Trend → Planung ist strikt einbahnig.
 **Bausteine (Richtung, Detail bei Baubeginn):** Rückkanal von freigegebenen Konzepten/Gerichten in den Wissens-/Trend-Recall (Brücke, nicht Anker). **Rollen-Invariante wahren:** als Recall/Inspiration, nie als finaler Ranker, nie als Pairing-Zwang. **Kopplung:** baut auf dem RAG-Branch `feat/rag-autoindex-recall` auf (Auto-Index + semantisches Finden) — zuerst RAG landen lassen.
 **Verifikation:** ein freigegebenes Konzept taucht bei semantisch verwandtem Folge-Brief als Reuse-/Inspirations-Kandidat auf; Anti-Marker-Schutz greift; die Matcher-Goldens kippen nicht.
 
-### E4 — Rückkopplung 2: Lücken-Signal aus dem Cockpit + Favoriten-Vorschlag · Status: offen
+### E4 — Rückkopplung 2: Lücken-Signal aus dem Cockpit + Favoriten-Vorschlag · Status: ✅ gebaut + Sandbox-verifiziert 2026-08-20 (Branch `feat/spec40-umsetzung`, nicht deployt)
+> **Umsetzung:** `PlanningCascadeService::meldeSourcingLuecken(Team,stepId)` — GPs eines erzeugten Rezept-Steps OHNE beschaffbaren Lead-LA (`FavoriteGpService::verfuegbarkeit`-Bucket `luecke`) je als `SignalTyp::SortimentsLuecke` melden (`meldeLuecke`, idempotent). `favoritKandidatenFuerStep(Team,stepId)` — noch nicht gepinnte GPs des Steps als Vorschlag. Livewire `sourcingLueckenMelden` / `favoritVorschlaegeLaden` (on-demand, kein Render-Query) / `favoritPinnen` (mensch-gated, nur team-eigene GPs) + Buttons/Chips in `step-zeile.blade`. Pest: 3 neue (Lücke→Signal, Favoriten-Filter, Cross-Tenant) — PlanningCascadeTest 122/122, Render-Gate 132/132.
 **Ziel:** Sichtbare, schnelle Feedback-Kanäle direkt aus der Leitstelle.
 **Bausteine:**
 - **Lücken-Signal:** `PairingInspirationService::meldeLuecke` → `SignalTyp::SortimentsLuecke` (:142) wird heute **nur** aus `Foodbooks/Index:309` gerufen. In der Leitstelle eine „Lücke melden"-Aktion verdrahten, wenn die Kaskade eine Sortiments-/Beschaffungslücke trifft (Nordstern „Lücke ist Signal, kein Fehler").

@@ -879,6 +879,73 @@ class PlanningCascadeService
     }
 
     /**
+     * E4 (Spec 40): Sourcing-Lücken eines erzeugten Rezept-Steps ins Signale-Cockpit melden — die im Step
+     * verwendeten GPs OHNE beschaffbaren Lead-LA (verfuegbarkeit-Bucket `luecke`) je als Sortiments-Lücke
+     * ({@see PairingInspirationService::meldeLuecke}, idempotent je GP-Name). Nordstern „Lücke ist Signal,
+     * kein Fehler". Team-scoped ({@see ownedStep}). Gibt die gemeldeten GP-Namen zurück.
+     *
+     * @return list<string>
+     */
+    public function meldeSourcingLuecken(Team $team, int $stepId): array
+    {
+        $step = $this->ownedStep($team, $stepId);
+        if ($step->ref_type !== 'recipe' || $step->ref_id === null) {
+            return [];
+        }
+        $gpIds = FoodAlchemistRecipeIngredient::where('recipe_id', (int) $step->ref_id)
+            ->whereNotNull('gp_id')->pluck('gp_id')->map(fn ($v) => (int) $v)->unique()->values()->all();
+        if ($gpIds === []) {
+            return [];
+        }
+        $verf = app(FavoriteGpService::class)->verfuegbarkeit($team, $gpIds);
+        $luecken = array_keys(array_filter($verf, fn ($v) => ($v['bucket'] ?? null) === 'luecke'));
+        if ($luecken === []) {
+            return [];
+        }
+        $namen = \Platform\FoodAlchemist\Models\FoodAlchemistGp::visibleToTeam($team)->whereIn('id', $luecken)->pluck('name', 'id');
+        $inspiration = app(PairingInspirationService::class);
+        $gemeldet = [];
+        foreach ($namen as $gpId => $name) {
+            if (trim((string) $name) === '') {
+                continue;
+            }
+            $inspiration->meldeLuecke($team, (string) $name, [
+                'gp_id' => (int) $gpId,
+                'quelle_step_id' => (int) $step->id,
+                'quelle' => 'kaskade_step',
+            ]);
+            $gemeldet[] = (string) $name;
+        }
+
+        return $gemeldet;
+    }
+
+    /**
+     * E4 (Spec 40): Favoriten-Kandidaten aus einem erzeugten Rezept-Step — die verwendeten GPs, die NOCH
+     * NICHT als Favorit gepinnt sind. Reiner Vorschlag: das Pinnen bleibt mensch-gated (eigene Aktion,
+     * {@see FavoriteGpService::pin}). Team-scoped.
+     *
+     * @return list<array{id:int, name:string}>
+     */
+    public function favoritKandidatenFuerStep(Team $team, int $stepId): array
+    {
+        $step = $this->ownedStep($team, $stepId);
+        if ($step->ref_type !== 'recipe' || $step->ref_id === null) {
+            return [];
+        }
+        $gpIds = FoodAlchemistRecipeIngredient::where('recipe_id', (int) $step->ref_id)
+            ->whereNotNull('gp_id')->pluck('gp_id')->map(fn ($v) => (int) $v)->unique()->values()->all();
+        if ($gpIds === []) {
+            return [];
+        }
+
+        return \Platform\FoodAlchemist\Models\FoodAlchemistGp::visibleToTeam($team)->whereIn('id', $gpIds)
+            ->where('is_favorite', false)
+            ->orderBy('name')->get(['id', 'name'])
+            ->map(fn ($g) => ['id' => (int) $g->id, 'name' => (string) $g->name])->all();
+    }
+
+    /**
      * Idempotenz/Resume (Etappe 8) — eine abgebrochene Kaskade sauber fortsetzbar machen.
      *
      * Stirbt ein Generator-Job hart (OOM/Timeout/Worker-Kill), ohne seinen `failed()`-Haken zu feuern,

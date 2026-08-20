@@ -245,6 +245,9 @@ class Index extends Component
      */
     public array $zutatenOffen = [];
 
+    /** E4 (Spec 40): on-demand geladene Favoriten-Kandidaten je Step (step_id → [{id,name}]). */
+    public array $favoritVorschlaege = [];
+
     /**
      * Pill-Gruppen fürs Cockpit-View (Parität zu GeneratorModal::RICHTUNGEN). Inline
      * gehalten statt aus dem Modal referenziert — die Leitstelle ist der neue Ort der
@@ -1960,6 +1963,65 @@ class Index extends Component
             $this->fehler = 'Nachträgliches Einhängen fehlgeschlagen: ' . $e->getMessage();
         }
         $this->refreshLaeuft($cascade);
+    }
+
+    /**
+     * E4 (Spec 40) — Rückkopplung: die Sourcing-Lücken eines erzeugten Rezept-Steps (GPs ohne beschaffbaren
+     * Lead-LA) ins Signale-Cockpit melden. „Lücke ist Signal, kein Fehler."
+     */
+    public function sourcingLueckenMelden(int $stepId, PlanningCascadeService $cascade): void
+    {
+        $team = $this->team();
+        if ($team === null) {
+            return;
+        }
+        try {
+            $gemeldet = $cascade->meldeSourcingLuecken($team, $stepId);
+            $this->fehler = null;
+            $this->meldung = $gemeldet === []
+                ? 'Keine Sourcing-Lücke — alle GPs dieses Entwurfs sind beschaffbar.'
+                : count($gemeldet) . ' Sortiments-Lücke(n) gemeldet: ' . implode(', ', $gemeldet) . ' — im Signale-Cockpit sichtbar.';
+        } catch (\Throwable $e) {
+            $this->fehler = 'Lücken-Meldung fehlgeschlagen: ' . $e->getMessage();
+        }
+    }
+
+    /**
+     * E4 (Spec 40) — Rückkopplung: die noch nicht gepinnten GPs eines erzeugten Rezept-Steps als
+     * Favoriten-Kandidaten laden (on-demand, kein Render-Query). Das Pinnen bleibt mensch-gated.
+     */
+    public function favoritVorschlaegeLaden(int $stepId, PlanningCascadeService $cascade): void
+    {
+        $team = $this->team();
+        if ($team === null) {
+            return;
+        }
+        try {
+            $this->favoritVorschlaege[$stepId] = $cascade->favoritKandidatenFuerStep($team, $stepId);
+        } catch (\Throwable $e) {
+            $this->fehler = 'Favoriten-Vorschläge konnten nicht geladen werden: ' . $e->getMessage();
+        }
+    }
+
+    /** E4 (Spec 40): einen vorgeschlagenen GP als Favorit pinnen (mensch-gated). Nur team-eigene GPs. */
+    public function favoritPinnen(int $gpId, \Platform\FoodAlchemist\Services\FavoriteGpService $fav): void
+    {
+        $team = $this->team();
+        if ($team === null) {
+            return;
+        }
+        $gp = \Platform\FoodAlchemist\Models\FoodAlchemistGp::visibleToTeam($team)->find($gpId);
+        if ($gp === null || ! $gp->isOwnedBy($team)) {
+            $this->fehler = 'GP nicht editierbar (global/Master ist read-only) — nicht gepinnt.';
+
+            return;
+        }
+        $fav->pin($gp);
+        $this->meldung = 'GP „' . $gp->name . '" als Favorit gepinnt.';
+        // aus allen geladenen Vorschlagslisten entfernen (ist jetzt Favorit)
+        foreach ($this->favoritVorschlaege as $sid => $liste) {
+            $this->favoritVorschlaege[$sid] = array_values(array_filter($liste, fn ($k) => (int) ($k['id'] ?? 0) !== $gpId));
+        }
     }
 
     /**

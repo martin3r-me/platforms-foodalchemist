@@ -495,6 +495,58 @@ it('E2 ownerKontext: Angebot-Lauf → Owner-Name + Rück-Route (sel)', function 
         ->and($k['route_param'])->toBe(['sel' => (int) $offer->id]);
 });
 
+// ── E4 (Spec 40): Rückkopplung — Sourcing-Lücke melden + Favoriten-Vorschlag ──────────────────
+
+it('E4 meldeSourcingLuecken: GP ohne beschaffbaren Lead-LA → Sortiments-Lücke im Signale-Cockpit', function () {
+    $svc = app(PlanningCascadeService::class);
+    $recipe = $this->makeRecipe($this->rootTeam, 'Basis mit Lücke');
+    $gpLuecke = $this->makeGp($this->rootTeam, 'Trüffelöl');          // kein Lead-LA/Preis → bucket=luecke
+    $this->makeIngredient($recipe, 'Trüffelöl', $gpLuecke);
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'gericht', 'status' => 'running']);
+    $step = FoodAlchemistCascadeRunStep::create([
+        'team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'rezept',
+        'status' => 'done', 'ref_type' => 'recipe', 'ref_id' => $recipe->id,
+    ]);
+
+    $gemeldet = $svc->meldeSourcingLuecken($this->rootTeam, (int) $step->id);
+
+    expect($gemeldet)->toBe(['Trüffelöl'])
+        ->and(\Platform\FoodAlchemist\Models\FoodAlchemistSignal::where('team_id', $this->rootTeam->id)
+            ->where('type', 'sortiments_luecke')->count())->toBe(1);
+});
+
+it('E4 favoritKandidatenFuerStep: nur noch nicht gepinnte GPs, gepinnte fallen raus', function () {
+    $svc = app(PlanningCascadeService::class);
+    $recipe = $this->makeRecipe($this->rootTeam, 'Basis mit GPs');
+    $frei = $this->makeGp($this->rootTeam, 'Kürbiskernöl');
+    $fav = $this->makeGp($this->rootTeam, 'Olivenöl');
+    $fav->forceFill(['is_favorite' => true])->save();
+    $this->makeIngredient($recipe, 'Kürbiskernöl', $frei, '50', 1);
+    $this->makeIngredient($recipe, 'Olivenöl', $fav, '50', 2);
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'gericht', 'status' => 'running']);
+    $step = FoodAlchemistCascadeRunStep::create([
+        'team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'rezept',
+        'status' => 'done', 'ref_type' => 'recipe', 'ref_id' => $recipe->id,
+    ]);
+
+    $kand = $svc->favoritKandidatenFuerStep($this->rootTeam, (int) $step->id);
+
+    expect(collect($kand)->pluck('name')->all())->toBe(['Kürbiskernöl']);   // Olivenöl (Favorit) fällt raus
+});
+
+it('E4 Rückkopplung: Cross-Team kappt (Tenancy)', function () {
+    $svc = app(PlanningCascadeService::class);
+    $recipe = $this->makeRecipe($this->rootTeam, 'Basis');
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'gericht', 'status' => 'running']);
+    $step = FoodAlchemistCascadeRunStep::create([
+        'team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'rezept',
+        'status' => 'done', 'ref_type' => 'recipe', 'ref_id' => $recipe->id,
+    ]);
+
+    expect(fn () => $svc->meldeSourcingLuecken($this->childA, (int) $step->id))->toThrow(RuntimeException::class);
+    expect(fn () => $svc->favoritKandidatenFuerStep($this->childA, (int) $step->id))->toThrow(RuntimeException::class);
+});
+
 it('Job-Hook: failed() meldet an den Step zurück, wenn cascade_step_id gesetzt ist', function () {
     $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Geschmortes Rind', 'brief' => 'Schmorgericht mit Wurzelgemuese.']);
     $run = app(PlanningCascadeService::class)->starteKaskade($this->rootTeam, 'gericht', $session, 'voll_kreativ');
