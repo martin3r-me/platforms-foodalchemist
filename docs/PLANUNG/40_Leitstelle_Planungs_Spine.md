@@ -121,12 +121,13 @@ Jede Etappe ist eine eigene, shippbare Bau-Runde mit eigener Verifikation. Diese
 **Code/Vault/demo:** reiner Code (PR). demo-Smoke off-peak (je Klick 1 OpenAI-Call).
 **Bewusst NICHT:** kein RAG-Bestands-Grounding (nur Prompt-Hinweis), kein „Go"-Umbau, `kiDivergenz`/`kiDivergenzConcept` unangetastet.
 
-### E1 — Vertrag festschreiben · Status: dieses Doc
+### E1 — Vertrag festschreiben · Status: ✅ erledigt (dieses Doc, committet) — §4-Grundsatzfragen s.u. (autonom nach Empfehlung entschieden)
 **Ziel:** Den Round-Trip als verbindlichen Vertrag dokumentieren, damit künftige Arbeit nicht wieder Silo-artig auseinanderläuft.
 **Bausteine:** dieses Spec-Doc; Composer-Rolle klarstellen (bleibt Pairing); die zwei erlaubten Wege (KI vs. Bestand) je Modul explizit machen; Verlinkung mit Spec 38 (Zielarchitektur) + Spec 19 (Foodbook-Leitstelle) + Spec 31 (Speiseplan-GV).
 **Verifikation:** Doc geschrieben + verlinkt; §4-Entscheidungen mit Dominique getroffen und hier vermerkt.
 
-### E1b — Sprung sichtbar machen: Owner-Kontext + Rückweg + Speisen-Tab (UX §2.1-Befund 2+3) · Status: offen
+### E1b — Sprung sichtbar machen: Owner-Kontext + Rückweg + Speisen-Tab (UX §2.1-Befund 2+3) · Status: ✅ gebaut + Sandbox-verifiziert 2026-08-20 (Branch `feat/spec40-umsetzung`, nicht deployt)
+> **Umsetzung:** `PlanningCascadeService::ownerKontext(Team,sessionId)` löst über den jüngsten Lauf mit `source_owner_type/_id` den Ausgabe-Owner auf (Foodbook=`label`/Speisekarte=`name`/Speiseplan=`name`) + Rück-Route mit Deep-Link-Param (`fb`/`sk`/`sp`, aus den `#[Url(as:…)]`-Properties der Index-Komponenten); `null` bei freier Cockpit-Planung. `Planung/Index::render` reicht `ownerKontext` durch → **Owner-Banner** oben im Editor („Planung für Foodbook ‚Adler'" + Zurück-Link, beide Richtungen sichtbar). **Speisen-Tab entzerrt:** Foodbook-Inhalt-Empty-State weist auf den KI-Weg (Voll-Kaskade) hin. Pest: 3 neue (ownerKontext Foodbook/kein-Owner/jüngster-Owner-Lauf-gewinnt) — PlanningCascadeTest 116/116, Render-Gate PlanungLeitstelleTest 132/132 + FoodbookUiTest grün.
 **Ziel:** Aus dem Einbahn-Teleport einen **sichtbaren Round-Trip** machen — man weiß in der Leitstelle, WOFÜR man plant, und findet zurück. (Attach-Bug ausgelagert → E-P0.)
 **Mechanik-Kontext:** `vollKaskadeStarten` legt eine owner-lose `PlanningSession` an und springt per `redirect()->route('foodalchemist.planung.index', ['session'=>…])`. Der Owner steckt NICHT auf der Session, sondern auf dem Lauf (`FoodAlchemistCascadeRun.source_owner_type/_id`, aufgelöst über `planning_session_id`).
 **Bausteine:**

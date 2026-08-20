@@ -388,6 +388,53 @@ it('E-P0 haengeKonzeptNach: fremdes Team kommt an den Step nicht ran (Cross-Tena
     expect($kapitel->blocks()->count())->toBe(0);
 });
 
+// ── E1b (Spec 40): Owner-Kontext der Session (Banner + Zurück-Link) ──────────
+
+it('E1b ownerKontext: Foodbook-Lauf → Owner-Name + Rück-Route mit Deep-Link', function () {
+    $svc = app(PlanningCascadeService::class);
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'FB-Planung', 'brief' => 'x']);
+    $fb = $this->makeFoodbook($this->rootTeam, 'Adler');
+    FoodAlchemistCascadeRun::create([
+        'team_id' => $this->rootTeam->id, 'planning_session_id' => $session->id, 'scope' => 'vollkaskade',
+        'status' => 'running', 'source_owner_type' => 'foodbook', 'source_owner_id' => $fb->id,
+    ]);
+
+    $k = $svc->ownerKontext($this->rootTeam, (int) $session->id);
+    expect($k)->not->toBeNull()
+        ->and($k['owner_type'])->toBe('foodbook')
+        ->and($k['typ_label'])->toBe('Foodbook')
+        ->and($k['name'])->toBe('Adler')
+        ->and($k['route'])->toBe('foodalchemist.foodbooks.index')
+        ->and($k['route_param'])->toBe(['fb' => (int) $fb->id]);
+});
+
+it('E1b ownerKontext: Session ohne Ausgabe-Owner → null (freie Cockpit-Planung, kein Banner)', function () {
+    $svc = app(PlanningCascadeService::class);
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Frei', 'brief' => 'y']);
+    FoodAlchemistCascadeRun::create([
+        'team_id' => $this->rootTeam->id, 'planning_session_id' => $session->id, 'scope' => 'gericht', 'status' => 'running',
+    ]);
+
+    expect($svc->ownerKontext($this->rootTeam, (int) $session->id))->toBeNull();
+});
+
+it('E1b ownerKontext: jüngster Owner-Lauf gewinnt, auch wenn ein Cockpit-Lauf neuer ist', function () {
+    $svc = app(PlanningCascadeService::class);
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Misch', 'brief' => 'z']);
+    $fb = $this->makeFoodbook($this->rootTeam, 'Krone');
+    FoodAlchemistCascadeRun::create([
+        'team_id' => $this->rootTeam->id, 'planning_session_id' => $session->id, 'scope' => 'vollkaskade',
+        'status' => 'running', 'source_owner_type' => 'foodbook', 'source_owner_id' => $fb->id,
+    ]);
+    // Ein NEUERER Cockpit-Lauf ohne Owner darf den Banner nicht abschalten.
+    FoodAlchemistCascadeRun::create([
+        'team_id' => $this->rootTeam->id, 'planning_session_id' => $session->id, 'scope' => 'gericht', 'status' => 'running',
+    ]);
+
+    $k = $svc->ownerKontext($this->rootTeam, (int) $session->id);
+    expect($k)->not->toBeNull()->and($k['name'])->toBe('Krone');
+});
+
 it('Job-Hook: failed() meldet an den Step zurück, wenn cascade_step_id gesetzt ist', function () {
     $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Geschmortes Rind', 'brief' => 'Schmorgericht mit Wurzelgemuese.']);
     $run = app(PlanningCascadeService::class)->starteKaskade($this->rootTeam, 'gericht', $session, 'voll_kreativ');

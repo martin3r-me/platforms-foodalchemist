@@ -2658,10 +2658,17 @@ class Index extends Component
             ? null
             : 'Kein Hintergrund-Worker aktiv — ein Go bleibt in der Warteschlange liegen, bis der Worker (queue:work) läuft.';
 
+        // E1b (Spec 40): Owner-Kontext der offenen Session — für Banner „Planung für Foodbook ‚Adler'"
+        // + Zurück-Link. null bei freier Cockpit-Planung ohne Ausgabe-Owner (dann kein Banner).
+        $ownerKontext = ($team !== null && $active !== null)
+            ? app(PlanningCascadeService::class)->ownerKontext($team, (int) $active->id)
+            : null;
+
         return view('foodalchemist::livewire.planung.index', [
             'sessions' => $sessions,
             'baum' => $baum,
             'kaskaden' => $kaskaden,
+            'ownerKontext' => $ownerKontext,
             'workerState' => $workerState,
             'workerWarnung' => $workerWarnung,
             'active' => $active,

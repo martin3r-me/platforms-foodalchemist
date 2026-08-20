@@ -1530,6 +1530,47 @@ class PlanningCascadeService
             ->first();
     }
 
+    /**
+     * E1b (Spec 40): Owner-Kontext der Session für die Leitstelle — macht den Einbahn-Sprung zum
+     * sichtbaren Round-Trip: WOFÜR wird hier geplant (Ausgabe-Modul + Name) + der Rückweg dorthin.
+     * Liest den jüngsten Lauf der Session MIT Ausgabe-Owner (`source_owner_type`/`_id` — die sitzen
+     * auf dem Lauf, nicht der Session) und löst Anzeige-Name + Rück-Route inkl. Deep-Link-Param auf.
+     * `null`, wenn die Session keinen Ausgabe-Owner trägt (freie Cockpit-Planung) → dann kein Banner.
+     *
+     * @return array{owner_type:string, owner_id:int, typ_label:string, name:string, route:string, route_param:array<string,int>}|null
+     */
+    public function ownerKontext(Team $team, int $sessionId): ?array
+    {
+        $run = FoodAlchemistCascadeRun::visibleToTeam($team)
+            ->where('planning_session_id', $sessionId)
+            ->whereNotNull('source_owner_type')
+            ->whereNotNull('source_owner_id')
+            ->orderByDesc('id')->first();
+        if ($run === null) {
+            return null;
+        }
+        $type = (string) $run->source_owner_type;
+        $id = (int) $run->source_owner_id;
+        [$typLabel, $name, $route, $param] = match ($type) {
+            'foodbook' => ['Foodbook', \Platform\FoodAlchemist\Models\FoodAlchemistFoodbook::visibleToTeam($team)->whereKey($id)->value('label'), 'foodalchemist.foodbooks.index', 'fb'],
+            'speisekarte' => ['Speisekarte', \Platform\FoodAlchemist\Models\FoodAlchemistSpeisekarte::visibleToTeam($team)->whereKey($id)->value('name'), 'foodalchemist.speisekarte.index', 'sk'],
+            'speiseplan' => ['Speiseplan', FoodAlchemistSpeiseplan::visibleToTeam($team)->whereKey($id)->value('name'), 'foodalchemist.speiseplan.index', 'sp'],
+            default => [null, null, null, null],   // 'offer' folgt in E2
+        };
+        if ($route === null) {
+            return null;
+        }
+
+        return [
+            'owner_type' => $type,
+            'owner_id' => $id,
+            'typ_label' => $typLabel,
+            'name' => (string) ($name !== null && $name !== '' ? $name : $typLabel . ' #' . $id),
+            'route' => $route,
+            'route_param' => [$param => $id],
+        ];
+    }
+
     /** Ein team-sichtbarer Lauf inkl. Steps (oder null). */
     public function lauf(Team $team, int $runId): ?FoodAlchemistCascadeRun
     {

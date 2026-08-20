@@ -323,6 +323,20 @@
         </x-slot:tabs>
 
         @if($active)
+            @if(($ownerKontext ?? null))
+                {{-- E1b (Spec 40): Owner-Kontext-Banner — macht den Einbahn-Sprung zum sichtbaren Round-Trip:
+                     WOFÜR wird hier geplant + Rückweg ins Ausgabe-Modul (Deep-Link auf die Ausgabe). --}}
+                <div class="mb-3 flex items-center justify-between gap-2 rounded-lg border border-violet-500/30 bg-violet-500/10 px-3 py-2">
+                    <p class="text-[11px] text-violet-200">
+                        @svg('heroicon-o-link', 'w-3.5 h-3.5 inline align-text-bottom')
+                        Planung für {{ $ownerKontext['typ_label'] }} „{{ $ownerKontext['name'] }}" — die hier erstellten Konzepte landen automatisch dort.
+                    </p>
+                    <a href="{{ route($ownerKontext['route'], $ownerKontext['route_param']) }}"
+                       class="shrink-0 inline-flex items-center gap-1 text-[11px] text-violet-300 hover:text-violet-100">
+                        @svg('heroicon-o-arrow-left', 'w-3.5 h-3.5') zurück zum {{ $ownerKontext['typ_label'] }}
+                    </a>
+                </div>
+            @endif
             {{-- ANALYSE --}}
             <div wire:key="planung-tab-analyse" x-show="tab==='analyse'" class="space-y-4">
                 <x-foodalchemist::modal-section title="Analyse / Ausgangslage">
