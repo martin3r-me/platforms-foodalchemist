@@ -128,10 +128,14 @@
                                             class="grid h-16 w-16 shrink-0 place-items-center rounded-2xl border text-3xl font-bold {{ $miseFertig ? 'border-emerald-400 bg-emerald-500 text-white' : 'border-dashed border-violet-300/70 bg-violet-500/10 text-violet-100 hover:bg-violet-500/20' }}"
                                             title="{{ $miseFertig ? 'Mise-en-Place zurücknehmen' : 'Mise-en-Place erledigt abhaken' }}"
                                             data-tagesplan-mise-abhaken>{{ $miseFertig ? '✓' : '' }}</button>
-                                    <button type="button" wire:click="oeffneAnleitung({{ $m->erste_line_id }})" class="min-w-0 flex-1 text-left" data-tagesplan-mise-anleitung>
+                                    <button type="button" wire:click="{{ $m->ist_gericht ? 'oeffneGericht(' . \Illuminate\Support\Js::from($m->gericht_key) . ')' : 'oeffneAnleitung(' . (int) $m->erste_line_id . ')' }}" class="min-w-0 flex-1 text-left" data-tagesplan-mise-anleitung @if($m->ist_gericht) data-tagesplan-mise-gericht @endif>
                                         <div class="flex items-start justify-between gap-2">
                                             <p class="text-xl font-bold leading-tight {{ $miseFertig ? 'line-through' : '' }}">{{ $m->name }}</p>
-                                            @if($m->ist_basisrezept)<span class="rounded-full bg-white/10 px-2 py-1 text-xs text-slate-300">Basis</span>@endif
+                                            @if($m->ist_gericht)
+                                                <span class="rounded-full bg-violet-400/15 px-2 py-1 text-xs font-semibold text-violet-100">Gericht</span>
+                                            @elseif($m->ist_basisrezept)
+                                                <span class="rounded-full bg-white/10 px-2 py-1 text-xs text-slate-300">Basis</span>
+                                            @endif
                                         </div>
                                         <p class="mt-3 text-sm text-slate-300">{{ $m->anzahl }}× · {{ $m->erledigt }}/{{ $m->gesamt }} erledigt · {{ $m->minuten }} min</p>
                                         <p class="mt-1 truncate text-sm text-slate-400">für {{ $m->auftraege->implode(', ') }}</p>
@@ -199,7 +203,7 @@
                                 @php
                                     $tone = ['ueberlast' => 'border-rose-400/50', 'eng' => 'border-amber-300/50', 'ok' => 'border-emerald-300/40'][$b['stufe']] ?? 'border-white/10';
                                 @endphp
-                                <section class="flex min-h-0 flex-col overflow-hidden rounded-3xl border {{ $tone }} bg-slate-900/90 shadow-2xl" data-tagesplan-lane="{{ $schluessel }}">
+                                <section class="flex h-full min-h-0 flex-col overflow-hidden rounded-3xl border {{ $tone }} bg-slate-900/90 shadow-2xl" data-tagesplan-lane="{{ $schluessel }}">
                                     <div class="shrink-0 border-b border-white/10 px-5 py-4">
                                         <div class="flex items-start justify-between gap-3">
                                             <div class="min-w-0">
@@ -367,7 +371,62 @@
                         @endif
                     </header>
 
-                    <div class="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4" data-tagesplan-wall-gericht-rezepte>
+                    @if($wallGericht->anrichten || collect($wallGericht->darreichung ?? [])->isNotEmpty())
+                        <section class="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1.4fr)_minmax(18rem,0.6fr)]" data-tagesplan-wall-gericht-service>
+                            @if($wallGericht->anrichten)
+                                <article class="rounded-2xl border border-white/10 bg-white/5 p-4" data-tagesplan-wall-gericht-anrichten>
+                                    <p class="text-xs font-bold uppercase tracking-wide text-slate-400">Anrichten</p>
+                                    <p class="mt-2 whitespace-pre-line text-lg font-semibold leading-snug text-slate-100">{{ $wallGericht->anrichten }}</p>
+                                </article>
+                            @endif
+                            @if(collect($wallGericht->darreichung ?? [])->isNotEmpty())
+                                <article class="rounded-2xl border border-white/10 bg-white/5 p-4" data-tagesplan-wall-gericht-geschirr>
+                                    <p class="text-xs font-bold uppercase tracking-wide text-slate-400">Geschirr & Ausgabe</p>
+                                    <div class="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-1">
+                                        @foreach($wallGericht->darreichung as $info)
+                                            <div class="rounded-xl bg-slate-950/45 px-3 py-2">
+                                                <p class="text-[11px] font-bold uppercase tracking-wide text-slate-500">{{ $info['label'] }}</p>
+                                                <p class="mt-0.5 text-base font-semibold text-slate-100">{{ $info['wert'] }}</p>
+                                            </div>
+                                        @endforeach
+                                    </div>
+                                </article>
+                            @endif
+                        </section>
+                    @endif
+
+                    <section class="rounded-2xl border border-white/10 bg-white/5 p-4" data-tagesplan-wall-gericht-uebersicht>
+                        <div class="flex flex-wrap items-end justify-between gap-3">
+                            <div>
+                                <p class="text-xs font-bold uppercase tracking-wide text-slate-400">Rezeptübersicht</p>
+                                <h3 class="mt-1 text-xl font-bold text-slate-100">Was für dieses Gericht erledigt werden muss</h3>
+                            </div>
+                            <p class="text-sm font-semibold text-slate-400">{{ $wallGericht->erledigt }}/{{ $wallGericht->gesamt }} erledigt</p>
+                        </div>
+                        <div class="mt-3 divide-y divide-white/10 rounded-2xl border border-white/10 bg-slate-950/35" data-tagesplan-wall-gericht-uebersicht-liste>
+                            @foreach($wallGericht->rezept_uebersicht as $eintrag)
+                                <div class="flex items-center gap-3 px-3 py-2.5 {{ $eintrag['erledigt'] ? 'opacity-60' : '' }}"
+                                     data-tagesplan-wall-gericht-uebersicht-zeile>
+                                    <span class="grid h-7 w-7 shrink-0 place-items-center rounded-lg border text-sm font-bold {{ $eintrag['erledigt'] ? 'border-emerald-400 bg-emerald-500 text-white' : 'border-white/10 bg-white/5 text-slate-500' }}">{{ $eintrag['erledigt'] ? '✓' : '' }}</span>
+                                    <div class="min-w-0 flex-1">
+                                        <p class="whitespace-normal break-words text-base font-semibold leading-snug {{ $eintrag['erledigt'] ? 'line-through' : '' }}">{{ $eintrag['name'] }}</p>
+                                        <p class="mt-0.5 text-xs font-bold uppercase tracking-wide {{ $eintrag['typ'] === 'Basisrezept' ? 'text-emerald-200' : 'text-violet-200' }}">{{ $eintrag['typ'] }}</p>
+                                    </div>
+                                    <p class="shrink-0 text-right text-sm font-semibold text-slate-400">{{ collect([$eintrag['menge'], $eintrag['zeit']])->filter()->implode(' · ') }}</p>
+                                </div>
+                            @endforeach
+                        </div>
+                    </section>
+
+                    <section class="min-h-0" data-tagesplan-wall-gericht-arbeitslane>
+                        <div class="mb-3 flex items-end justify-between gap-3">
+                            <div>
+                                <p class="text-xs font-bold uppercase tracking-wide text-slate-400">Abarbeiten</p>
+                                <h3 class="mt-1 text-xl font-bold text-slate-100">Rezept-Kacheln</h3>
+                            </div>
+                            <p class="text-sm text-slate-400">Kachel öffnet Anleitung, Haken erledigt direkt.</p>
+                        </div>
+                    <div class="max-h-[46vh] overflow-y-auto overscroll-contain pr-2 [touch-action:pan-y] grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4" data-tagesplan-wall-gericht-rezepte>
                         @foreach($wallGericht->zeilen as $z)
                             @php
                                 $erledigt = $z->line_status === 'done';
@@ -387,7 +446,7 @@
                                     <div class="flex items-start justify-between gap-2">
                                         <div class="min-w-0">
                                             <p class="text-[11px] font-bold uppercase tracking-wide text-violet-200">{{ $z->is_basisrezept ? 'Basisrezept' : 'Produkt/Rezept' }}</p>
-                                            <p class="mt-0.5 whitespace-normal break-words text-xl font-bold leading-tight {{ $erledigt ? 'line-through' : '' }}">{{ $rezeptTitel }}</p>
+                                            <p class="mt-0.5 whitespace-normal break-words text-xl font-bold leading-tight {{ $erledigt ? 'line-through' : '' }}" data-tagesplan-wall-gericht-detail-card-title>{{ $rezeptTitel }}</p>
                                         </div>
                                         @if($z->is_basisrezept)<span class="shrink-0 rounded-full bg-emerald-400/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-100">Basis</span>@endif
                                     </div>
@@ -412,6 +471,7 @@
                             </article>
                         @endforeach
                     </div>
+                    </section>
                 </div>
             @else
                 <div class="grid min-h-[60vh] place-items-center text-center" data-tagesplan-wall-gericht-leer>
@@ -525,6 +585,36 @@
                                             </div>
                                             @if($eq['notiz'] ?? null)<p class="mt-0.5 text-xs text-slate-400">{{ $eq['notiz'] }}</p>@endif
                                         </div>
+                                    @endforeach
+                                </div>
+                            </section>
+                        @endif
+
+                        @if(!empty($anleitung['sub_rezepte']))
+                            <section class="rounded-xl border border-white/10 bg-white/5 px-3 py-2" data-tagesplan-wall-subrezepte>
+                                <h3 class="text-base font-bold">Enthaltene Rezepte</h3>
+                                <div class="mt-2 space-y-2">
+                                    @foreach($anleitung['sub_rezepte'] as $sub)
+                                        @if($sub['line_id'] !== null)
+                                            <button type="button" wire:click="oeffneAnleitung({{ $sub['line_id'] }})"
+                                                    class="flex w-full items-start gap-3 rounded-xl border border-white/10 bg-slate-950/45 px-3 py-2 text-left transition hover:border-violet-300/70"
+                                                    data-tagesplan-wall-subrezept>
+                                                <span class="grid h-9 w-9 shrink-0 place-items-center rounded-lg border text-base font-bold {{ $sub['erledigt'] ? 'border-emerald-400 bg-emerald-500 text-slate-950' : 'border-white/10 bg-white/5 text-slate-500' }}">{{ $sub['erledigt'] ? '✓' : '›' }}</span>
+                                                <span class="min-w-0 flex-1">
+                                                    <span class="block whitespace-normal break-words text-sm font-bold leading-snug text-slate-100">{{ $sub['name'] }}</span>
+                                                    <span class="mt-0.5 block text-[11px] font-bold uppercase tracking-wide text-emerald-200">{{ $sub['typ'] }}</span>
+                                                </span>
+                                                <span class="shrink-0 text-right text-xs font-semibold text-slate-400">{{ collect([$sub['menge'], $sub['zeit']])->filter()->implode(' · ') }}</span>
+                                            </button>
+                                        @else
+                                            <div class="flex items-start gap-3 rounded-xl border border-dashed border-white/10 bg-slate-950/25 px-3 py-2" data-tagesplan-wall-subrezept-fehlt>
+                                                <span class="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-amber-300/30 bg-amber-400/10 text-amber-100">!</span>
+                                                <span class="min-w-0 flex-1">
+                                                    <span class="block whitespace-normal break-words text-sm font-bold leading-snug text-slate-100">{{ $sub['name'] }}</span>
+                                                    <span class="mt-0.5 block text-xs text-amber-100">Keine Produktionszeile im Tagesfenster gefunden.</span>
+                                                </span>
+                                            </div>
+                                        @endif
                                     @endforeach
                                 </div>
                             </section>

@@ -246,7 +246,6 @@ it('gruppiert im Wandmonitor Gericht und Basisrezepte als Küchen-Arbeitsblock',
         ->assertSeeHtml('data-tagesplan-wall-karte')
         ->assertSee('Probe Küche')
         ->assertSeeInOrder(['Gericht', '[VOR] Tomate-Burrata'])
-        ->assertDontSee('Anrichten')
         ->assertDontSee('Basilikum-Schaum')
         ->call('wallGruppenFilterSetzen', 'gerichte')
         ->assertSet('wallGruppenFilter', 'gerichte')
@@ -264,7 +263,6 @@ it('gruppiert im Wandmonitor Gericht und Basisrezepte als Küchen-Arbeitsblock',
         ->call('oeffneGericht', $key)
         ->assertSeeHtml('data-tagesplan-wall-gericht-detail')
         ->assertSeeHtml('data-tagesplan-wall-gericht-detail-card')
-        ->assertSee('Anrichten')
         ->assertSee('Basilikum-Schaum');
 });
 
@@ -272,6 +270,7 @@ it('öffnet im Wandmonitor ein Gericht als Arbeitsblock mit tatsächlichen Rezep
     $haupt = FoodAlchemistRecipe::create([
         'team_id' => $this->rootTeam->id, 'recipe_key' => 'krautsalat', 'name' => '[SAL] Krautsalat | Fertigstellen',
         'status' => 'approved', 'is_sales_recipe' => true, 'yield_kg' => 1.0, 'work_time_min' => 20,
+        'plating_text' => 'Krautsalat mittig setzen, Kresse frisch obenauf geben.',
     ]);
     $basis = FoodAlchemistRecipe::create([
         'team_id' => $this->rootTeam->id, 'recipe_key' => 'krautsalat-basis', 'name' => '[SAL] Krautsalat | Krautsalat schneiden',
@@ -281,15 +280,28 @@ it('öffnet im Wandmonitor ein Gericht als Arbeitsblock mit tatsächlichen Rezep
         'team_id' => $this->rootTeam->id, 'recipe_key' => 'kresse', 'name' => '[SAL] Krautsalat | Kresse',
         'status' => 'approved', 'is_sales_recipe' => false, 'yield_kg' => 0.1, 'work_time_min' => 5,
     ]);
+    $unterbasis = FoodAlchemistRecipe::create([
+        'team_id' => $this->rootTeam->id, 'recipe_key' => 'salat-dressing', 'name' => '[SAL] Krautsalat | Dressing-Ansatz',
+        'status' => 'approved', 'is_sales_recipe' => false, 'yield_kg' => 0.5, 'work_time_min' => 10,
+    ]);
 
     $auftrag = $this->svc->saveNew($this->rootTeam, '2026-08-20', 'Crew Catering', [
         ['source_ref' => 'r:krautsalat', 'recipe_id' => $haupt->id, 'amount_kg' => 1.0],
         ['source_ref' => 'r:krautsalat-basis', 'recipe_id' => $basis->id, 'amount_kg' => 1.0],
         ['source_ref' => 'r:kresse', 'recipe_id' => $deko->id, 'amount_kg' => 0.1],
+        ['source_ref' => 'r:salat-dressing', 'recipe_id' => $unterbasis->id, 'amount_kg' => 0.5],
     ]);
     Line::where('production_order_id', $auftrag->id)
-        ->whereIn('recipe_id', [$basis->id, $deko->id])
+        ->whereIn('recipe_id', [$basis->id, $deko->id, $unterbasis->id])
         ->update(['is_basisrezept' => true]);
+    Line::where('production_order_id', $auftrag->id)
+        ->where('recipe_id', $basis->id)
+        ->firstOrFail()
+        ->forceFill(['zutaten' => [['typ' => 'sub', 'name' => 'Dressing-Ansatz', 'ref_recipe_id' => $unterbasis->id, 'menge' => 0.5, 'einheit' => 'kg']]])
+        ->save();
+    Line::where('production_order_id', $auftrag->id)
+        ->where('recipe_id', $haupt->id)
+        ->update(['darreichung' => ['geschirr' => 'Tiefe Schale', 'vehikel' => 'Tellerservice']]);
 
     $key = implode('|', [$auftrag->id, '[SAL] Krautsalat', '2026-08-20']);
     $basisLineId = Line::where('production_order_id', $auftrag->id)->where('recipe_id', $basis->id)->value('id');
@@ -300,25 +312,42 @@ it('öffnet im Wandmonitor ein Gericht als Arbeitsblock mit tatsächlichen Rezep
         ->call('oeffneGericht', $key)
         ->assertSet('wallGerichtKey', $key)
         ->assertSeeHtml('data-tagesplan-wall-gericht-detail')
+        ->assertSeeHtml('data-tagesplan-wall-gericht-service')
+        ->assertSeeHtml('data-tagesplan-wall-gericht-anrichten')
+        ->assertSeeHtml('data-tagesplan-wall-gericht-geschirr')
+        ->assertSeeHtml('data-tagesplan-wall-gericht-uebersicht')
+        ->assertSeeHtml('data-tagesplan-wall-gericht-uebersicht-liste')
+        ->assertSeeHtml('data-tagesplan-wall-gericht-uebersicht-zeile')
         ->assertSeeHtml('data-tagesplan-wall-gericht-detail-card')
         ->assertSeeHtml('data-tagesplan-wall-gericht-abhaken')
         ->assertSeeHtml('data-tagesplan-wall-gericht-anleitung')
         ->assertSee('Crew Catering')
-        ->assertSee('Fertigstellen')
+        ->assertSee('Krautsalat mittig setzen')
+        ->assertSee('Tiefe Schale')
+        ->assertSee('Tellerservice')
         ->assertSee('Krautsalat schneiden')
         ->assertSee('Kresse')
+        ->assertSee('Dressing-Ansatz')
         ->call('abhaken', $dekoLineId)
         ->assertSet('fehler', null);
 
     expect(Line::where('production_order_id', $auftrag->id)->where('recipe_id', $deko->id)->firstOrFail()->line_status)
         ->toBe(ProductionLineStatus::Done);
 
+    $basisLineId = Line::where('production_order_id', $auftrag->id)->where('recipe_id', $basis->id)->value('id');
+    Line::findOrFail($basisLineId)
+        ->forceFill(['zutaten' => [['typ' => 'sub', 'name' => 'Dressing-Ansatz', 'ref_recipe_id' => $unterbasis->id, 'menge' => 0.5, 'einheit' => 'kg']]])
+        ->save();
+
     Livewire::test(Tagesplan::class, ['von' => '2026-08-20', 'display' => 'wall'])
         ->set('modus', 'editor')
         ->call('oeffneGericht', $key)
         ->call('oeffneAnleitung', $basisLineId)
         ->assertSet('anleitungLineId', $basisLineId)
-        ->assertSeeHtml('data-tagesplan-wall-anleitung');
+        ->assertSeeHtml('data-tagesplan-wall-anleitung')
+        ->assertSeeHtml('data-tagesplan-wall-subrezepte')
+        ->assertSeeHtml('data-tagesplan-wall-subrezept')
+        ->assertSee('Dressing-Ansatz');
 });
 
 it('zeigt im Wandmonitor Allergen-, Diät- und Datenqualitätswarnungen', function () {
@@ -528,6 +557,39 @@ it('fasst gleiche Komponenten über Gerichte zusammen (Mise en Place)', function
         ->assertSeeHtml('data-tagesplan-mise')
         ->assertSee('Brauner Fond')
         ->assertSee('2×');
+});
+
+it('öffnet Verkaufsgerichte in Mise en Place als Gericht statt als Basis-Anleitung', function () {
+    $gericht = FoodAlchemistRecipe::create([
+        'team_id' => $this->rootTeam->id,
+        'recipe_key' => 'spitzkohl-risotto',
+        'name' => '[HG] Spitzkohl | Perlgraupen-Risotto | Apfel-Balsamico-Reduktion | Bergkäse-Espuma',
+        'status' => 'approved',
+        'is_sales_recipe' => true,
+        'yield_kg' => 1.0,
+        'work_time_min' => 30,
+    ]);
+
+    $auftrag = $this->svc->saveNew($this->rootTeam, '2026-08-20', 'Probe Bankett', [
+        ['source_ref' => 'r:spitzkohl-risotto', 'recipe_id' => $gericht->id, 'amount_kg' => 12.1],
+    ]);
+    Line::where('production_order_id', $auftrag->id)
+        ->where('recipe_id', $gericht->id)
+        ->update(['is_basisrezept' => true]);
+
+    $key = implode('|', [$auftrag->id, '[HG] Spitzkohl', '2026-08-20']);
+
+    Livewire::test(Tagesplan::class, ['von' => '2026-08-20', 'display' => 'wall'])
+        ->set('modus', 'editor')
+        ->call('wallAnsichtSetzen', 'mise')
+        ->assertSeeHtml('data-tagesplan-mise-gericht')
+        ->assertSee('Gericht')
+        ->assertSee('[HG] Spitzkohl | Perlgraupen-Risotto')
+        ->call('oeffneGericht', $key)
+        ->assertSet('wallGerichtKey', $key)
+        ->assertSeeHtml('data-tagesplan-wall-gericht-detail')
+        ->assertSee('[HG] Spitzkohl')
+        ->assertSee('Perlgraupen-Risotto | Apfel-Balsamico-Reduktion | Bergkäse-Espuma');
 });
 
 it('hakt im Wandmodus eine Mise-en-Place-Gruppe gesammelt ab und nimmt sie wieder zurück', function () {

@@ -154,13 +154,15 @@ class ProductionCapacityService
                 'o.updated_at as auftrag_updated_at',
                 's.name as station',
                 'r.name as rezept',
+                'r.is_sales_recipe as recipe_is_sales_recipe',
+                'r.plating_text',
                 'r.allergens_confidence',
                 'r.spec_is_vegan', 'r.spec_is_vegetarian', 'r.spec_is_halal',
                 'r.spec_contains_pork', 'r.spec_contains_beef',
                 'r.spec_is_gluten_free', 'r.spec_is_lactose_free',
                 ...array_map(fn (string $a) => "r.allergen_{$a}", array_keys(FoodAlchemistItemAllergen::ALLERGENE)),
                 'o.id as order_id', 'o.name as auftrag', 'o.production_date as liefertag',
-            ], $mitAnleitung ? ['l.zutaten', 'l.steps_snapshot', 'l.zubereitung'] : []))->get();
+            ], $mitAnleitung ? ['l.zutaten', 'l.steps_snapshot', 'l.zubereitung', 'l.darreichung'] : []))->get();
 
         $equipmentNachRezept = collect();
         if ($mitAnleitung) {
@@ -180,6 +182,9 @@ class ProductionCapacityService
                     ->map(fn ($teil) => trim($teil))
                     ->filter(fn ($teil) => $teil !== '')
                     ->values();
+                $istVerkaufsrezept = (bool) ($z->recipe_is_sales_recipe ?? false);
+                $z->is_basisrezept = (bool) $z->is_basisrezept && ! $istVerkaufsrezept;
+                $z->ist_verkaufsrezept = $istVerkaufsrezept;
                 $z->arbeit_typ = (bool) $z->is_basisrezept ? 'Basisrezept' : 'Gericht';
                 $z->gericht_label = $teile->count() > 1
                     ? $teile->first()
@@ -198,6 +203,8 @@ class ProductionCapacityService
                         ? (json_decode($z->steps_snapshot, true) ?: []) : ($z->steps_snapshot ?? []);
                     $z->zutaten = is_string($z->zutaten)
                         ? (json_decode($z->zutaten, true) ?: []) : ($z->zutaten ?? []);
+                    $z->darreichung = property_exists($z, 'darreichung') && is_string($z->darreichung)
+                        ? (json_decode($z->darreichung, true) ?: []) : ($z->darreichung ?? []);
                     if ($mitAnleitung && $z->schritte === [] && trim((string) ($z->zubereitung ?? '')) === '') {
                         $z->sicherheit['warnungen'][] = 'Ohne Anleitung';
                         $z->sicherheit['warnungen'] = array_values(array_unique($z->sicherheit['warnungen']));
