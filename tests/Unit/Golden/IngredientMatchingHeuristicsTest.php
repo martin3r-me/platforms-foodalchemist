@@ -208,6 +208,14 @@ it('nebenprodukt_derivat trennt Mutter von Form + respektiert Anti-Pattern', fun
     expect($this->h->nebenproduktDerivat('Knochen'))->toBeNull();
 });
 
+// D4 2026-08-18: bare Wasser → Leitungswasser-Basis-GP (Flaschen-/Mineralwasser nur mit Zusatz-Token).
+it('default_gp_alias: bare Wasser → Leitungswasser, Mineral-/Flaschenwasser nicht', function () {
+    expect($this->h->defaultGpAlias(($this->ts)('Wasser'), false))->toBe('Wasser: Leitung')
+        ->and($this->h->defaultGpAlias(($this->ts)('Leitungswasser'), false))->toBe('Wasser: Leitung')
+        ->and($this->h->defaultGpAlias(($this->ts)('Mineralwasser'), false))->toBeNull()
+        ->and($this->h->defaultGpAlias(($this->ts)('Wasser still'), false))->toBeNull();
+});
+
 // Roadmap Etappe 1: gemachte Saucen/Reduktionen als Halbfabrikat (SUB_SAUCEN_MARKER)
 it('halbfabrikat_gate_erkennt_gemachte_saucen', function () {
     foreach (['Steinpilz-Rahmsauce', 'Rotwein Jus', 'Kalbs-Sud',
