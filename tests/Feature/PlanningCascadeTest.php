@@ -1718,7 +1718,7 @@ it('L1 Reuse-Gate (hybrid): existierendes Basisrezept wird gebunden statt neu er
         ->and((int) $kinder->first()->ref_id)->toBe($bestand->id);
 });
 
-it('L1 nur_bestand ohne Treffer: KEIN neues Rezept, Zeile bleibt offen (Hard-Stop)', function () {
+it('B3 nur_bestand ohne Treffer: KEIN neues Rezept, aber eine SICHTBARE Hardstop-Zeile (staged, aber liefern)', function () {
     $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'gericht', 'status' => 'running']);
     $step = FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht', 'status' => 'running', 'sort' => 1]);
     $gericht = $this->makeRecipe($this->rootTeam, 'Gericht ohne Bestand', ['status' => 'draft']);
@@ -1730,9 +1730,20 @@ it('L1 nur_bestand ohne Treffer: KEIN neues Rezept, Zeile bleibt offen (Hard-Sto
         ['auto_dependencies' => true, 'bestand' => 'nur_bestand'],
     );
 
+    // Kein Erzeugungs-Job (nur_bestand baut nichts neu) — aber NICHT mehr still fallen gelassen:
+    // eine sichtbare Hardstop-Zeile (skipped, kein ref_id, deferred.hardstop) + Dependency für die
+    // spätere menschliche Bestand-Auswahl. Die Eltern-Zutat bleibt offen (referenced_recipe_id null).
     Queue::assertNotPushed(GenerateRecipeJob::class);
-    expect(FoodAlchemistCascadeRunStep::where('cascade_run_id', $run->id)->where('depth', 1)->count())->toBe(0)
-        ->and($zutat->refresh()->referenced_recipe_id)->toBeNull();   // offen, kein Neu-Rezept
+    $kinder = FoodAlchemistCascadeRunStep::where('cascade_run_id', $run->id)->where('depth', 1)->get();
+    expect($kinder)->toHaveCount(1);
+    $hard = $kinder->first();
+    expect($hard->status)->toBe('skipped')
+        ->and($hard->kind)->toBe('rezept')
+        ->and($hard->ref_id)->toBeNull()
+        ->and($hard->deferred['hardstop']['reason'] ?? null)->toBe('nur_bestand_kein_treffer')
+        ->and($hard->deferred['hardstop']['text'] ?? null)->toBe('Exotische Spezialpaste');
+    expect(\Platform\FoodAlchemist\Models\FoodAlchemistCascadeRecipeDependency::where('cascade_run_id', $run->id)->count())->toBe(1)
+        ->and($zutat->refresh()->referenced_recipe_id)->toBeNull();
 });
 
 it('L1 komplett_neu: Reuse-Gate übersprungen — trotz Bestand wird neu geplant/erzeugt', function () {

@@ -31,10 +31,12 @@
          @garverluste-vorschlagen.window="garverluste()">
         {{-- R18: Drei-Spalten-Layout — Browsen (links GPs, rechts Basisrezepte) und Editieren
              (Mitte) konkurrieren nicht mehr um denselben Platz; Spalten scrollen intern. --}}
-        <div class="flex gap-3 items-start">
+        {{-- 2026-08-20: flex-wrap + w-full<xl statt hidden xl:flex — sonst ist der Picker in der
+             schmalen Worker-Spalte (eingebettet) komplett unsichtbar (Trefferliste + [+] fehlen). --}}
+        <div class="flex flex-wrap gap-3 items-start">
         {{-- R19 (Dominique): Seitenspalten als ECHTE Panels — farblich abgehoben, stehen fest
              (sticky), nur die Mitte scrollt; die Trefferlisten scrollen intern. --}}
-        <aside class="w-72 shrink-0 hidden xl:flex flex-col rounded-xl bg-gray-500/[0.07] border border-black/5 p-2.5 sticky top-0 self-start max-h-[70vh]" data-browser-gps>
+        <aside class="w-full xl:w-72 shrink-0 flex flex-col rounded-xl bg-gray-500/[0.07] border border-black/5 p-2.5 xl:sticky xl:top-0 self-start max-h-[70vh]" data-browser-gps>
             <p class="{{ $dt }} mb-1">Produkte (<span x-text="gpTotal"></span>)</p>
             <div class="space-y-1 mb-1.5">
                 <select x-model="gpFilter.wg" @change="gpFilter.sub = ''; browse()" class="{{ $input }} !py-0.5 !text-[11px]" data-gp-filter-wg>
@@ -82,11 +84,14 @@
                                 title="übernehmen → Menge eingeben">+</button>
                     </div>
                 </template>
-                <p x-show="gpListe.length === 0" class="text-[10px] text-gray-500 px-1">— keine Treffer —</p>
+                {{-- Erst wenn wirklich gesucht wurde „keine Treffer" — sonst neutraler Hinweis
+                     (sonst liest sich der ungeladene Zustand wie ein kaputter Filter, 2026-08-20). --}}
+                <p x-show="!browserGeladen" class="text-[10px] text-gray-500 px-1">Tippe oben zum Suchen oder wähle einen Filter …</p>
+                <p x-show="browserGeladen && gpListe.length === 0" class="text-[10px] text-gray-500 px-1">— keine Treffer —</p>
                 <p x-show="gpTotal > 200" x-cloak class="text-[10px] text-gray-500 px-1" x-text="'… ' + (gpTotal - 200) + ' weitere — Filter verengen'"></p>
             </div>
         </aside>
-        <div class="flex-1 min-w-0">
+        <div class="w-full xl:flex-1 min-w-0 order-first xl:order-none">
         {{-- Such-/Park-Zeile FIX oben (sticky) — filtert beide Seitenspalten; die Tabelle scrollt darunter --}}
         <div class="sticky top-0 z-10 mb-3 rounded-lg bg-white/90 backdrop-blur border border-black/5 px-3 py-2" data-add-zeile>
             <div x-show="tauschIdx !== null" x-cloak class="flex items-center gap-2 mb-2 rounded-md bg-amber-500/10 border border-amber-500/30 px-2 py-1 text-[11px] text-amber-700" data-tausch-banner>
@@ -293,7 +298,7 @@
             </div>
         @endif
         </div>{{-- /Mitte --}}
-        <aside class="w-72 shrink-0 hidden xl:flex flex-col rounded-xl bg-gray-500/[0.07] border border-black/5 p-2.5 sticky top-0 self-start max-h-[70vh]" data-browser-rezepte>
+        <aside class="w-full xl:w-72 shrink-0 flex flex-col rounded-xl bg-gray-500/[0.07] border border-black/5 p-2.5 xl:sticky xl:top-0 self-start max-h-[70vh]" data-browser-rezepte>
             <p class="{{ $dt }} mb-1">Basisrezepte (<span x-text="rezTotal"></span>)</p>
             <div class="space-y-1 mb-1.5">
                 <select x-model="rezFilter.hg" @change="rezFilter.kat = ''; browse()" class="{{ $input }} !py-0.5 !text-[11px]" data-rez-filter-hg>
@@ -331,7 +336,8 @@
                                 title="übernehmen → Menge eingeben">+</button>
                     </div>
                 </template>
-                <p x-show="rezListe.length === 0" class="text-[10px] text-gray-500 px-1">— keine Treffer —</p>
+                <p x-show="!browserGeladen" class="text-[10px] text-gray-500 px-1">Tippe oben zum Suchen oder wähle einen Filter …</p>
+                <p x-show="browserGeladen && rezListe.length === 0" class="text-[10px] text-gray-500 px-1">— keine Treffer —</p>
                 <p x-show="rezTotal > 200" x-cloak class="text-[10px] text-gray-500 px-1" x-text="'… ' + (rezTotal - 200) + ' weitere — Filter verengen'"></p>
             </div>
         </aside>

@@ -114,6 +114,7 @@ class RecipeGenerationContextService
             $team, $erdungsText, $vkModus,
             (bool) ($parameter['use_favorites_list'] ?? false),
             (bool) ($parameter['favorites_convenience_only'] ?? false),
+            isset($parameter['bestand']) ? (string) $parameter['bestand'] : null,
         ) as $key => $value) {
             $prompt[$key] = $value;
         }

@@ -6,12 +6,19 @@
     $indent = $indent ?? false;
     $snap = is_array($st->context_snapshot) ? $st->context_snapshot : [];
     $wissenFiles = (array) ($snap['knowledge_files'] ?? []);
+    // B3 (2026-08-20): Hardstop-Zeile aus dem »Nur Bestand«-Fanout (kein DB-Treffer). status ist
+    // technisch `skipped`, darf aber NICHT als „übernommen" gelesen werden — eigener Warnhinweis.
+    $hardstop = (is_array($st->deferred) && is_array($st->deferred['hardstop'] ?? null)) ? $st->deferred['hardstop'] : null;
 @endphp
 <div wire:key="step-{{ $st->id }}" class="{{ $indent ? 'ml-1 pl-3 border-l border-white/10' : '' }}">
     <div class="flex items-center justify-between gap-3 text-xs">
         <span class="truncate text-gray-200">{{ $indent ? '↳ ' : '' }}{{ $st->label ?: ucfirst($st->kind) }}</span>
         <span class="shrink-0 flex items-center gap-2">
-            <span class="{{ $stepColor[$st->status] ?? 'text-gray-400' }}">{{ $stepLabel[$st->status] ?? $st->status }}</span>
+            @if($hardstop)
+                <span class="text-amber-300" title="Die Datenbank hat dafür kein passendes Grundprodukt/Basisrezept. Zutat am Gericht per Picker binden oder den Kreativ-Modus wechseln.">⚠ kein Bestand — wählen</span>
+            @else
+                <span class="{{ $stepColor[$st->status] ?? 'text-gray-400' }}">{{ $stepLabel[$st->status] ?? $st->status }}</span>
+            @endif
             {{-- `skipped` = übernommenes Bestands-Rezept (Reuse): ansehen ja, bearbeiten/freigeben nein
                  (es ist fremdes, lebendes Artefakt — kein Draft dieses Laufs). --}}
             @if($st->ref_id && in_array($st->status, ['done', 'freigegeben', 'skipped'], true))

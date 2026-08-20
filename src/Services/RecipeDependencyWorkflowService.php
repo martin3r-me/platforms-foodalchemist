@@ -226,9 +226,36 @@ class RecipeDependencyWorkflowService
                 }
             }
             if ($bestand === 'nur_bestand') {
-                // »Nur Bestand« (Kreativ-Modus = Datenbank) + kein Treffer: NICHT neu anlegen. Die Zeile
-                // bleibt offen als sichtbarer Hard-Stop — der Mensch wählt ein Bestandsrezept oder wechselt
-                // den Modus. So ist „Nur Bestand" strukturell erfüllbar (statt still ein neues Rezept zu bauen).
+                // »Nur Bestand« (Kreativ-Modus = Datenbank) + kein Treffer: NICHT neu anlegen — aber
+                // B3 (2026-08-20, „staged, aber liefern"): NICHT mehr still fallen lassen (das war der
+                // Regressionskern — leere Basisrezepte-Stufe). Stattdessen eine SICHTBARE Hardstop-Zeile
+                // in die Stufe setzen (status=skipped, kein ref_id, deferred.hardstop-Marker), damit der
+                // Mensch sieht: „die DB hat dafür nichts — Bestandsrezept wählen oder Modus wechseln".
+                // Dependency registrieren, damit die menschliche Auswahl später an die Eltern-Zutat bindet.
+                $hardstopStep = FoodAlchemistCascadeRunStep::firstOrCreate([
+                    'cascade_run_id' => $step->cascade_run_id,
+                    'dedupe_key' => 'hardstop:' . mb_strtolower($text),
+                ], [
+                    'team_id' => $team->id,
+                    'parent_step_id' => $step->id,
+                    'depth' => ((int) $step->depth) + 1,
+                    'kind' => 'rezept',
+                    'label' => Str::limit($text, 120),
+                    'status' => 'skipped',
+                    'deferred' => ['hardstop' => [
+                        'reason' => 'nur_bestand_kein_treffer',
+                        'text' => $text,
+                        'ingredient_id' => (int) $ingredient->id,
+                    ]],
+                    'sort' => (int) $ingredient->position,
+                ]);
+                FoodAlchemistCascadeRecipeDependency::firstOrCreate([
+                    'team_id' => $team->id,
+                    'cascade_run_id' => $step->cascade_run_id,
+                    'parent_step_id' => $step->id,
+                    'ingredient_id' => $ingredient->id,
+                ], ['child_step_id' => $hardstopStep->id]);
+
                 continue;
             }
             $dedupe = hash('sha256', mb_strtolower($text) . '|' . json_encode([

@@ -268,53 +268,92 @@ class RecipeGeneratorService
                 // Frische-Block macht die Zeile NICHT zum Basisrezept (der richtige Weg ist LA/GP im Zustand).
                 $istBasisrezept = $strongSub || $rolleWillSub || (! $direktArtikel && ($llmSub ?? $this->heuristik->istSubRezeptKandidat($text)));
 
-                if ($istGpTreffer && ! $gpBlockiert) {
+                // ── B0 Grounding-Read-back (2026-08-20) ────────────────────────────────────────
+                // Von der KI vorgeschlagene gp_id/sub_rezept_id GEWINNT vor dem Fuzzy-Text-Match —
+                // aber nur validiert (visibleToTeam + §-Status + kein Platzhalter / Zyklus-Guard) und
+                // OHNE die L2-Zerlegungs-/Frische-Entscheidung zu übersteuern (Reihenfolge NACH
+                // $gpBlockiert/$istBasisrezept). Halluzinierte/fremde id ⇒ null ⇒ Fuzzy-Fallback.
+                $proposedSubId = $this->validiereProposedSub($team, (int) $recipe->id, $z['sub_rezept_id'] ?? null);
+                $proposedGpId = $proposedSubId === null ? $this->validiereProposedGp($team, $z['gp_id'] ?? null) : null;
+                $verdrahtet = false;
+                if ($proposedSubId !== null && ($istBasisrezept || ! $gpBlockiert)) {
+                    $zeile['referenced_recipe_id'] = $proposedSubId;
+                    $zeile['match_method'] = 'recipe_ref';
+                    $statistik['bestand_sub']++;
+                    $verdrahtet = true;
+                } elseif ($proposedGpId !== null && ! $gpBlockiert) {
+                    $zeile['gp_id'] = $proposedGpId;
+                    $zeile['match_method'] = 'gemini_proposed';
+                    $zeile['match_confidence'] = 1.0;
+                    $statistik['bestand_gp']++;
+                    $verdrahtet = true;
+                }
+
+                if (! $verdrahtet && $istGpTreffer && ! $gpBlockiert) {
                     $zeile['gp_id'] = $treffer['gp_id'];
                     $zeile['match_method'] = 'gemini_proposed';
                     $zeile['match_confidence'] = round($treffer['score'], 3);
                     $statistik['bestand_gp']++;
-                } elseif ($verdrahtbar && $treffer['target'] === 'sub_recipe') {
+                } elseif (! $verdrahtet && $verdrahtbar && $treffer['target'] === 'sub_recipe') {
                     $zeile['referenced_recipe_id'] = $treffer['recipe_id'];
                     $zeile['match_method'] = 'recipe_ref';
                     $statistik['bestand_sub']++;
-                } else {
-                    // Keine automatische Anlage: Basisrezept-Stub bzw. LA→GP werden
-                    // erst nach menschlicher Auswahl in getrennten Schritten angelegt.
-                    // $istBasisrezept / $strongSub / $rolleWillSub sind oben (Zerlegungs-Vorrang L2)
-                    // bereits berechnet — hier nur noch verwenden (§4 »jus«, LLM-Flag, Convenience-Rolle).
-                    $zeile['match_method'] = 'unmatched';
-                    $statistik['offen']++;
-                    $laKandidaten = $istBasisrezept ? [] : app(LaCandidateFinder::class)
-                        ->find($team, $text, $this->wgHint($z['commodity_group'] ?? $z['warengruppe'] ?? null), 3)
-                        ->map(fn ($la) => [
-                            'id' => (int) $la->id,
-                            'designation' => (string) $la->designation,
-                            'supplier' => (string) ($la->supplier?->name ?? ''),
-                            'score' => (float) ($la->score ?? 0),
-                            'gp_id' => $la->structure?->gp_id !== null ? (int) $la->structure->gp_id : null,
-                            'gp_name' => $la->structure?->gp?->name,
-                        ])->all();
-                    $offene[] = [
-                        'index' => $i,
-                        'text' => $text,
-                        // $istBasisrezept (oben, Zerlegungs-Vorrang L2) enthält bereits: §4-Name /
-                        // LLM-Flag / Convenience-gesteuerte Rolle + den istSubRezeptKandidat-Fallback.
-                        'primaer' => $istBasisrezept ? 'basisrezept_anlegen' : 'lieferantenartikel_waehlen',
-                        'shortlist' => $this->matcher->candidatesFor($team, $text, $z['slug'] ?? null, 5),
-                        'la_kandidaten' => $laKandidaten,
-                        'lieferantenstrategie' => $istBasisrezept ? null : app(TeamSettingsService::class)
-                            ->leadLaStrategie($team, $this->wgHint($z['commodity_group'] ?? $z['warengruppe'] ?? null))->value,
-                        // Band-Gate-Transparenz: der abgewiesene FuzzyLow-Kandidat bleibt
-                        // für die Review-Fläche sichtbar (Mensch bestätigt oder verwirft).
-                        'schwacher_treffer' => $treffer['target'] !== 'none' ? [
-                            'target' => $treffer['target'],
-                            // id, damit die Review-Fläche „Meintest du?" auch VERKNÜPFEN kann
-                            // (hardstopVerknuepfen bindet als Override — der Mensch übersteuert das Band-Gate).
-                            'id' => (int) ($treffer['target'] === 'gp' ? $treffer['gp_id'] : $treffer['recipe_id']),
-                            'name' => $treffer['gp_name'] ?? $treffer['recipe_name'],
-                            'score' => round((float) $treffer['score'], 3),
-                        ] : null,
-                    ];
+                } elseif (! $verdrahtet) {
+                    // ── B2 Post-Match-Draw (2026-08-20, Erdungs-Stärke) ────────────────────────
+                    // In datenbank/hybrid erst aus der (semantisch-inklusiven) Shortlist schöpfen,
+                    // bevor die Zeile offen bleibt. Nur origin ∈ {both, semantic} über Mode-Floor —
+                    // lexical-only ist bereits durch das Band-Gate der Matcher-Entscheidung gelaufen
+                    // (unter Gate = zu schwach → bleibt offen). komplett_neu zieht NIE.
+                    $shortlist = $this->matcher->candidatesFor($team, $text, $z['slug'] ?? null, 5);
+                    $gezogen = $this->ziehtAusBestand($team, (int) $recipe->id, $shortlist, $istBasisrezept, (string) ($parameter['bestand'] ?? 'hybrid'));
+                    if ($gezogen !== null && $gezogen['target'] === 'gp') {
+                        $zeile['gp_id'] = $gezogen['id'];
+                        $zeile['match_method'] = 'gemini_proposed';
+                        $zeile['match_confidence'] = round($gezogen['score'], 3);
+                        $statistik['bestand_gp']++;
+                    } elseif ($gezogen !== null) {
+                        $zeile['referenced_recipe_id'] = $gezogen['id'];
+                        $zeile['match_method'] = 'recipe_ref';
+                        $statistik['bestand_sub']++;
+                    } else {
+                        // Keine automatische Anlage: Basisrezept-Stub bzw. LA→GP werden
+                        // erst nach menschlicher Auswahl in getrennten Schritten angelegt.
+                        // $istBasisrezept / $strongSub / $rolleWillSub sind oben (Zerlegungs-Vorrang L2)
+                        // bereits berechnet — hier nur noch verwenden (§4 »jus«, LLM-Flag, Convenience-Rolle).
+                        $zeile['match_method'] = 'unmatched';
+                        $statistik['offen']++;
+                        $laKandidaten = $istBasisrezept ? [] : app(LaCandidateFinder::class)
+                            ->find($team, $text, $this->wgHint($z['commodity_group'] ?? $z['warengruppe'] ?? null), 3)
+                            ->map(fn ($la) => [
+                                'id' => (int) $la->id,
+                                'designation' => (string) $la->designation,
+                                'supplier' => (string) ($la->supplier?->name ?? ''),
+                                'score' => (float) ($la->score ?? 0),
+                                'gp_id' => $la->structure?->gp_id !== null ? (int) $la->structure->gp_id : null,
+                                'gp_name' => $la->structure?->gp?->name,
+                            ])->all();
+                        $offene[] = [
+                            'index' => $i,
+                            'text' => $text,
+                            // $istBasisrezept (oben, Zerlegungs-Vorrang L2) enthält bereits: §4-Name /
+                            // LLM-Flag / Convenience-gesteuerte Rolle + den istSubRezeptKandidat-Fallback.
+                            'primaer' => $istBasisrezept ? 'basisrezept_anlegen' : 'lieferantenartikel_waehlen',
+                            'shortlist' => $shortlist,
+                            'la_kandidaten' => $laKandidaten,
+                            'lieferantenstrategie' => $istBasisrezept ? null : app(TeamSettingsService::class)
+                                ->leadLaStrategie($team, $this->wgHint($z['commodity_group'] ?? $z['warengruppe'] ?? null))->value,
+                            // Band-Gate-Transparenz: der abgewiesene FuzzyLow-Kandidat bleibt
+                            // für die Review-Fläche sichtbar (Mensch bestätigt oder verwirft).
+                            'schwacher_treffer' => $treffer['target'] !== 'none' ? [
+                                'target' => $treffer['target'],
+                                // id, damit die Review-Fläche „Meintest du?" auch VERKNÜPFEN kann
+                                // (hardstopVerknuepfen bindet als Override — der Mensch übersteuert das Band-Gate).
+                                'id' => (int) ($treffer['target'] === 'gp' ? $treffer['gp_id'] : $treffer['recipe_id']),
+                                'name' => $treffer['gp_name'] ?? $treffer['recipe_name'],
+                                'score' => round((float) $treffer['score'], 3),
+                            ] : null,
+                        ];
+                    }
                 }
                 $zeilen[] = $zeile;
             }
@@ -639,6 +678,93 @@ class RecipeGeneratorService
         }
 
         return (string) $gp->getAttribute("allergen_{$field}") === 'enthalten';
+    }
+
+    /**
+     * B0 (2026-08-20): validiert eine von der KI vorgeschlagene GP-id gegen dieselben
+     * Eligibilitäts-Filter wie der Matcher (visibleToTeam + §-Status approved/tentative +
+     * kein Platzhalter). Ungültig/fremd/halluziniert ⇒ null (Fuzzy-Fallback greift).
+     */
+    private function validiereProposedGp(Team $team, mixed $id): ?int
+    {
+        $id = is_numeric($id) ? (int) $id : 0;
+        if ($id <= 0) {
+            return null;
+        }
+
+        return FoodAlchemistGp::query()->visibleToTeam($team)
+            ->whereIn('status', ['approved', 'tentative'])
+            ->where('is_platzhalter', false)
+            ->whereKey($id)->exists() ? $id : null;
+    }
+
+    /**
+     * B0 (2026-08-20): validiert eine vorgeschlagene Sub-Rezept-id (visibleToTeam + basis()
+     * + §-Status) UND den Zyklus-/Selbstreferenz-Guard (GL-02 §3.5). Ohne diese Prüfung würde
+     * {@see RecipeService::syncIngredients} später die GANZE Generierung mit einer Exception
+     * kippen. Ungültig/zyklisch ⇒ null (Fuzzy-Fallback greift).
+     */
+    private function validiereProposedSub(Team $team, int $parentRecipeId, mixed $id): ?int
+    {
+        $id = is_numeric($id) ? (int) $id : 0;
+        if ($id <= 0 || $id === $parentRecipeId) {
+            return null;
+        }
+        $exists = FoodAlchemistRecipe::query()->visibleToTeam($team)->basis()
+            ->whereIn('status', ['stub', 'draft', 'review', 'approved'])
+            ->whereKey($id)->exists();
+        if (! $exists) {
+            return null;
+        }
+
+        return app(RecipeRecomputeService::class)->pruefeVerknuepfung($parentRecipeId, $id)['erlaubt'] ? $id : null;
+    }
+
+    /**
+     * B2 (2026-08-20, Erdungs-Stärke): zieht in datenbank/hybrid den besten Bestands-Treffer
+     * aus der (semantisch-inklusiven) Shortlist, statt die Zeile offen zu lassen. Nur origin ∈
+     * {both, semantic} über Mode-Floor — lexical-only trägt einen ×0.5-Score und ist bereits
+     * durch das Band-Gate der Matcher-Entscheidung gelaufen (unter Gate = zu schwach → offen
+     * lassen). komplett_neu (Voll kreativ) zieht NIE. Sub braucht den Zyklus-Guard. Shortlist
+     * ist score-absteigend sortiert → der erste passende Kandidat ist der beste.
+     *
+     * @param  list<array{kind?:string,id?:int,name?:string,score?:float,origin?:string}>  $shortlist
+     * @return array{target: string, id: int, score: float}|null
+     */
+    private function ziehtAusBestand(Team $team, int $parentRecipeId, array $shortlist, bool $istBasisrezept, string $bestand): ?array
+    {
+        if (! in_array($bestand, ['nur_bestand', 'hybrid'], true)) {
+            return null;
+        }
+        $floor = $bestand === 'nur_bestand' ? 0.55 : 0.70;
+        $wantKind = $istBasisrezept ? 'sub' : 'gp';
+        foreach ($shortlist as $c) {
+            if (($c['kind'] ?? null) !== $wantKind) {
+                continue;
+            }
+            if (! in_array($c['origin'] ?? 'lexical', ['both', 'semantic'], true)) {
+                continue;
+            }
+            if ((float) ($c['score'] ?? 0) < $floor) {
+                break;   // desc-sortiert: der beste passende liegt schon unter dem Floor
+            }
+            $id = (int) ($c['id'] ?? 0);
+            if ($id <= 0) {
+                continue;
+            }
+            if ($wantKind === 'gp') {
+                if ($this->validiereProposedGp($team, $id) !== null) {
+                    return ['target' => 'gp', 'id' => $id, 'score' => (float) $c['score']];
+                }
+
+                continue;
+            }
+            if ($this->validiereProposedSub($team, $parentRecipeId, $id) !== null) {
+                return ['target' => 'sub', 'id' => $id, 'score' => (float) $c['score']];
+            }
+        }
+
+        return null;
     }
 
     /**

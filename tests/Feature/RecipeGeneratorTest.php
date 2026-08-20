@@ -506,3 +506,79 @@ it('L5 Namens-Normalisierung: Zeilenumbrüche/Mehrfach-Whitespace werden geglät
 
     expect($resultat['recipe']->name)->toBe('Zeile eins Zeile zwei drei');
 });
+
+// ── B0 — KI-vorgeschlagene gp_id / sub_rezept_id (Read-back, proposed-first) ──────────────────
+
+it('B0: valide vorgeschlagene gp_id wird direkt verdrahtet (proposed-first, confidence 1.0)', function () {
+    $gp = ($this->mkGpMitPreis)('Rinderfilet: frisch', 'rinderfilet', 25.00);
+
+    $resultat = $this->svc->generiere($this->rootTeam, 'Kurzgebratenes', [], kiRezeptOverride: [
+        'name' => 'Basis: Filet',
+        'zutaten' => [['text' => 'Filet vom Rind', 'gp_id' => $gp->id, 'quantity' => 200, 'unit' => 'g']],
+    ]);
+
+    $zeile = $resultat['recipe']->ingredients()->first();
+    // Die vorgeschlagene GP-id ist verdrahtet (das ist der B0-Kern) + zählt als Bestand.
+    // Hinweis: syncIngredients normalisiert die Provenienz generator-verdrahteter GP-Zeilen auf
+    // MatchMethod::Manual (Bestandsverhalten) — die Erdung zeigt sich an gp_id + Statistik.
+    expect($zeile->gp_id)->toBe($gp->id)
+        ->and($resultat['statistik']['bestand_gp'])->toBe(1);
+});
+
+it('B0: fremde/nicht existierende gp_id wird verworfen — Zeile fällt aufs Text-Matching zurück (offen)', function () {
+    $resultat = $this->svc->generiere($this->rootTeam, 'Etwas', [], kiRezeptOverride: [
+        'name' => 'Basis: X',
+        'zutaten' => [['text' => 'Phantom-Zutat', 'gp_id' => 999999, 'quantity' => 100, 'unit' => 'g']],
+    ]);
+
+    $zeile = $resultat['recipe']->ingredients()->first();
+    expect($zeile->gp_id)->toBeNull()
+        ->and($resultat['statistik']['bestand_gp'])->toBe(0)
+        ->and($resultat['statistik']['offen'])->toBe(1);
+});
+
+it('B0: valide vorgeschlagene sub_rezept_id wird als Basisrezept-Referenz verdrahtet', function () {
+    $sub = $this->makeRecipe($this->rootTeam, 'Basis: Rotweinjus');
+
+    $resultat = $this->svc->generiere($this->rootTeam, 'Teller mit Jus', [], kiRezeptOverride: [
+        'name' => 'Gericht: Jus-Teller',
+        'zutaten' => [['text' => 'Rotweinjus', 'sub_rezept_id' => $sub->id, 'quantity' => 60, 'unit' => 'ml', 'role' => 'aroma_treiber']],
+    ], vkModus: true);
+
+    $zeile = $resultat['recipe']->ingredients()->first();
+    expect((int) $zeile->referenced_recipe_id)->toBe($sub->id)
+        ->and($zeile->match_method->value)->toBe('recipe_ref')
+        ->and($resultat['statistik']['bestand_sub'])->toBe(1);
+});
+
+it('B0: proposed gp_id, die das Diät-Ziel verletzt, wird trotzdem vom L3-Gate entdrahtet (kein Bypass)', function () {
+    $gp = ($this->mkGpMitPreis)('Butter', 'butter', 5.00);
+    $gp->update(['tag_is_vegan' => false]);
+
+    $resultat = $this->svc->generiere($this->rootTeam, 'Etwas mit Butter', [
+        'diaet_hart' => ['vegan'],
+    ], kiRezeptOverride: [
+        'name' => 'Basis: Buttertest proposed',
+        'zutaten' => [['text' => 'Butter', 'gp_id' => $gp->id, 'quantity' => 50, 'unit' => 'g']],
+    ]);
+
+    // Direkt verdrahtet (B0), aber das Diät-Gate greift NACH der Transaktion und entdrahtet.
+    expect($resultat['statistik']['diaet']['entdrahtet'])->toBe(1)
+        ->and($resultat['recipe']->ingredients()->first()->gp_id)->toBeNull();
+});
+
+// ── B1 — bestand-abhängige Kandidaten-Hinweise ───────────────────────────────────────────────
+
+it('B1: der GP-Kandidaten-Hinweis unterscheidet nur_bestand (hart) von hybrid (weich)', function () {
+    ($this->mkGpMitPreis)('Rinderfilet: frisch', 'rinderfilet', 25.00);
+    $ctx = app(\Platform\FoodAlchemist\Services\RecipeGenerationContextService::class);
+
+    $strikt = $ctx->build($this->rootTeam, 'Rinderfilet Hauptgang', ['bestand' => 'nur_bestand'], true);
+    $weich = $ctx->build($this->rootTeam, 'Rinderfilet Hauptgang', ['bestand' => 'hybrid'], true);
+
+    $hStrikt = $strikt['prompt']['gp_kandidaten']['hinweis'] ?? '';
+    $hWeich = $weich['prompt']['gp_kandidaten']['hinweis'] ?? '';
+    expect($hStrikt)->toContain('DATENBANK-Modus')
+        ->and($hWeich)->not->toContain('DATENBANK-Modus')
+        ->and($hStrikt)->not->toBe($hWeich);
+});

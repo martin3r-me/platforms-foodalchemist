@@ -466,6 +466,14 @@ return [
                 . '{name (§1-Syntax <Typ>: <Bezeichnung>), description (§8-Stil), taste_direction (grobe Menue-Richtung, NUR EIN Wort: suess|herzhaft|neutral — das Aroma-Profil gehoert in description), '
                 . 'preparation (Markdown-Schritte), zutaten: [{text, quantity, unit (g|ml|kg|l|el|tl|stk), '
                 . 'slug (hauptzutat), commodity_group, note, '
+                // Grounding (2026-08-20): explizite Rückbindung an den Bestand. gp_id/sub_rezept_id
+                // sind die id EINES unter gp_kandidaten/rezept_kandidaten gelisteten Eintrags, wenn die
+                // Zutat exakt diesem entspricht — sonst weglassen (NIE raten; eine falsche/fremde id
+                // wird verworfen und fällt aufs Text-Matching zurück).
+                . 'gp_id (OPTIONAL: numerische id EINES unter gp_kandidaten gelisteten Grundprodukts, '
+                . 'wenn diese Zutat EXAKT diesem GP entspricht — sonst Feld weglassen, NIE raten), '
+                . 'sub_rezept_id (OPTIONAL: numerische id EINES unter rezept_kandidaten gelisteten '
+                . 'Basisrezepts, wenn diese Zutat EXAKT diesem Rezept entspricht — sonst weglassen), '
                 // Etappe 1 (2026-08-14): benannter Sub-Komponenten-Slot. Ein enthaltenes
                 // HALBFABRIKAT (Fond/Jus/Reduktion/Fischfond o. Ä., das selbst gekocht wird)
                 // gehört als EINE benannte Komponente in die Liste — NICHT als seine
@@ -557,6 +565,11 @@ return [
                 // Spec 37: role/fit-Parität zum Basis-Prompt — dieselbe Zutaten-Selbstbegründung
                 // (senkt plausibel klingende Fremdkörper VOR dem Kritiker-Pass, sobald das VK-Gate scharf wird).
                 . 'NICHT die Produktion), zutaten: [{text, quantity, unit (g|ml|kg|l|el|tl|stk), slug, note, '
+                // Grounding (2026-08-20): explizite Rückbindung an den Bestand (s. recipe.generator).
+                . 'gp_id (OPTIONAL: numerische id EINES unter gp_kandidaten gelisteten Grundprodukts, '
+                . 'wenn diese Zutat EXAKT diesem GP entspricht — sonst weglassen, NIE raten), '
+                . 'sub_rezept_id (OPTIONAL: numerische id EINES unter rezept_kandidaten gelisteten '
+                . 'Basisrezepts, wenn diese Zutat EXAKT diesem Rezept entspricht — sonst weglassen), '
                 // Etappe 1 (2026-08-14): benannter Sub-Komponenten-Slot. Ein GERICHT wird aus
                 // BASISREZEPTEN gebaut — Saucen/Jus/Pürees/Fonds/Reduktionen gehören als EINE
                 // benannte Komponente (sub_rezept:true) in die Liste, NICHT flach als ihre

@@ -34,7 +34,7 @@
             // ── R18: Drei-Spalten-Browser — Filter-States + Listen (serverseitig gefiltert) ──
             vokabular,
             gpFilter: { wg: '', sub: '', condition: '', bio: false, regional: false, nur_favoriten: false, mehr: false },
-            rezFilter: { hg: '', kat: '', niveau: '', mehr: false },
+            rezFilter: { hg: '', kat: '', level: '', mehr: false },
             browseQ: '',                                             // zentrales Suchfeld → filtert BEIDE Listen
             gpListe: [], gpTotal: 0, rezListe: [], rezTotal: 0,
             browserGeladen: false,
@@ -45,7 +45,7 @@
                 this.browserGeladen = true;
                 const r = await this.$wire.browseKatalog(
                     { wg: this.gpFilter.wg, sub: this.gpFilter.sub, condition: this.gpFilter.condition, bio: this.gpFilter.bio, regional: this.gpFilter.regional, nur_favoriten: this.gpFilter.nur_favoriten },
-                    { hg: this.rezFilter.hg, kat: this.rezFilter.kat, niveau: this.rezFilter.level },
+                    { hg: this.rezFilter.hg, kat: this.rezFilter.kat, level: this.rezFilter.level },
                     this.browseQ
                 );
                 this.gpListe = r.gps.items; this.gpTotal = r.gps.total;

@@ -58,8 +58,16 @@ class GenerationContextService
      *
      * @return array{gp_kandidaten?: list<array>, rezept_kandidaten?: list<array>, pairing?: array, favorites?: array}
      */
-    public function forGeneration(Team $team, string $description, bool $vkModus = false, bool $useFavoritesList = false, bool $favoritesConvenienceOnly = false): array
+    public function forGeneration(Team $team, string $description, bool $vkModus = false, bool $useFavoritesList = false, bool $favoritesConvenienceOnly = false, ?string $bestand = null): array
     {
+        // B1 (2026-08-20, Erdungs-Stärke): im strikten Datenbank-Modus (nur_bestand) breiter erden —
+        // mehr Kandidaten je Token + größerer semantischer Topf, damit ein loses Brief-Leitwort
+        // („mach mal ein HG mit Rinderfilet") den realen GP sicher an die Oberfläche zieht. Andere
+        // Modi bleiben beim schlanken Prompt-Budget (byte-nahes Alt-Verhalten).
+        $strikt = $bestand === 'nur_bestand';
+        $candPerToken = $strikt ? self::CAND_PER_TOKEN + 2 : self::CAND_PER_TOKEN;
+        $gpCandMax = $strikt ? self::GP_CAND_MAX + 12 : self::GP_CAND_MAX;
+
         $tokens = $this->leitTokens($description);
         if ($tokens === []) {
             // Auch ohne Leit-Tokens soll der opt-in-Modus die Haus-Liste einspielen.
@@ -71,7 +79,7 @@ class GenerationContextService
         $pairing = [];
         foreach ($tokens as $token) {
             // Kandidaten (kind=gp|recipe, score) — dieselbe Retrieval-Logik wie der Resolver.
-            foreach ($this->matcher->candidatesFor($team, $token, null, self::CAND_PER_TOKEN) as $c) {
+            foreach ($this->matcher->candidatesFor($team, $token, null, $candPerToken) as $c) {
                 $kind = $c['kind'] ?? null;
                 $id = $c['id'] ?? null;
                 if ($id === null) {
@@ -100,7 +108,7 @@ class GenerationContextService
         $sem = app(Ai\SemanticRetrievalService::class)->candidates(
             $team, $description,
             [Ai\PoolEmbeddingService::ENTITY_TYPE_GP, Ai\PoolEmbeddingService::ENTITY_TYPE_RECIPE],
-            self::GP_CAND_MAX,
+            $gpCandMax,
         );
         if ($sem !== []) {
             $semGp = [];       // id => score (noch nicht per Lexik erfasst)
@@ -138,13 +146,20 @@ class GenerationContextService
         $out = [];
         if ($gp !== []) {
             $out['gp_kandidaten'] = [
-                'hinweis' => 'Benenne Zutaten wenn möglich exakt auf diese EXISTIERENDEN Grundprodukte (gp_id nutzen) statt neue zu erfinden.',
-                'treffer' => array_slice(array_values($gp), 0, self::GP_CAND_MAX),
+                // B1 (2026-08-20): im Datenbank-Modus HART erden (jede fachlich passende Zutat exakt
+                // benennen + gp_id angeben), sonst weich (Angebot). Der Fit-Guard im recipe/vk.generator
+                // bleibt die Bremse — kein Rückfall in „gehorche der Liste" (Rahmeis-Fehler 2026-08-06).
+                'hinweis' => $strikt
+                    ? 'DATENBANK-Modus: benenne JEDE Zutat, für die hier ein Kandidat FACHLICH passt, EXAKT auf diesen und gib seine gp_id an. Erfinde nur, wo die Liste fachlich nichts hergibt.'
+                    : 'Benenne Zutaten wenn möglich exakt auf diese EXISTIERENDEN Grundprodukte (gp_id nutzen) statt neue zu erfinden.',
+                'treffer' => array_slice(array_values($gp), 0, $gpCandMax),
             ];
         }
         if ($rezepte !== []) {
             $out['rezept_kandidaten'] = [
-                'hinweis' => 'Vorhandene Rezepte als Komponente wiederverwenden (referenced_recipe_id) statt nachzubauen.',
+                'hinweis' => $strikt
+                    ? 'DATENBANK-Modus: nutze für jede Komponente, die hier fachlich passt, das vorhandene Rezept (sub_rezept_id angeben) statt es nachzubauen.'
+                    : 'Vorhandene Rezepte als Komponente wiederverwenden (sub_rezept_id nutzen) statt nachzubauen.',
                 'treffer' => array_slice(array_values($rezepte), 0, self::REZEPT_CAND_MAX),
             ];
         }
