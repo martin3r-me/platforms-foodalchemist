@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Attributes\Url;
 use Livewire\Component;
+use Platform\Core\Models\ContextFile;
 use Platform\FoodAlchemist\Enums\ProductionLineStatus;
 use Platform\FoodAlchemist\Enums\ProductionOrderStatus;
 use Platform\FoodAlchemist\Models\FoodAlchemistProductionOrderLine;
@@ -824,13 +825,30 @@ class Tagesplan extends Component
             return $src !== '' ? $src : null;
         }
 
+        $path = parse_url($src, PHP_URL_PATH);
+
+        // Snapshot-Fotos frieren eine KURZLEBIGE signierte ContextFile-URL ein
+        // (core: 60-Min-TTL). Nach Ablauf → 403/404 → Broken Image im Wandmodus.
+        // Deshalb den Datei-Token aus dem Pfad zurück auf die ContextFile auflösen
+        // und deren FRISCH signierte URL ausgeben — überlebt beliebig alte Snapshots
+        // und ist Disk-agnostisch (local wie hetzner/S3).
+        $basename = is_string($path) ? basename($path) : '';
+        if ($basename !== '' && $basename !== '/') {
+            $file = ContextFile::query()
+                ->where('path', $basename)
+                ->orWhere('token', pathinfo($basename, PATHINFO_FILENAME))
+                ->first();
+            if ($file !== null) {
+                return $file->url;
+            }
+        }
+
+        // Fallback ohne ContextFile-Treffer: Legacy-public-Disk-Rewrites beibehalten.
         if (str_starts_with($src, 'storage/')) {
             return Storage::disk('public')->url(substr($src, strlen('storage/')));
         }
 
-        $path = parse_url($src, PHP_URL_PATH);
         $host = parse_url($src, PHP_URL_HOST);
-
         if (is_string($path) && str_starts_with($path, '/storage/')
             && in_array($host, ['localhost', '127.0.0.1'], true)) {
             return Storage::disk('public')->url(substr($path, strlen('/storage/')));

@@ -454,6 +454,46 @@ it('normalisiert lokale Foto-URLs aus Produktions-Snapshots zurück auf die konf
         ->assertDontSeeHtml('src="http://localhost/storage/ki-schritt-1.webp"');
 });
 
+it('erneuert abgelaufene signierte Foto-URLs im Wandmodus über die ContextFile', function () {
+    // Regression: der steps_snapshot friert eine KURZLEBIGE signierte ContextFile-URL ein
+    // (core: 60-Min-TTL). Nach Ablauf → 403/404 → Broken Image. Der Wandmodus muss den
+    // Datei-Token zurück auf die ContextFile auflösen und deren FRISCH signierte URL zeigen.
+    $token = 'wallfototest0123456789abcdefghij';
+    \Platform\Core\Models\ContextFile::create([
+        'token' => $token,
+        'team_id' => $this->rootTeam->id,
+        'user_id' => auth()->id(),
+        'context_type' => 'test',
+        'context_id' => 1,
+        'disk' => 'local',
+        'path' => $token . '.webp',
+        'file_name' => $token . '.webp',
+        'original_name' => 'schritt-1.webp',
+        'mime_type' => 'image/webp',
+        'file_size' => 1,
+    ]);
+
+    $lineId = Line::where('production_order_id', $this->a1->id)->value('id');
+    Line::whereKey($lineId)->update(['steps_snapshot' => [[
+        'nr' => 1,
+        'phase' => 'Mise en Place',
+        'text' => 'Tomaten vorbereiten.',
+        'fotos' => [[
+            // eingefrorene, längst abgelaufene signierte URL auf genau diese Datei
+            'url' => 'https://demo.bhgdigital.de/storage/' . $token . '.webp?expires=1&signature=deadbeefexpired',
+            'caption' => 'KI-Foto: Schritt 1',
+        ]],
+    ]]]);
+
+    Livewire::test(Tagesplan::class, ['von' => '2026-08-20', 'display' => 'wall'])
+        ->set('modus', 'editor')
+        ->call('oeffneAnleitung', $lineId)
+        ->assertSeeHtml('data-tagesplan-wall-bilder')
+        ->assertSee($token . '.webp')   // dieselbe Datei wird weiter referenziert …
+        ->assertSee('signature=')       // … aber frisch signiert
+        ->assertDontSee('deadbeefexpired');   // die eingefrorene, abgelaufene Signatur ist weg
+});
+
 it('zeigt Zutaten in der Wandmonitor-Anleitung immer untereinander', function () {
     $lineId = Line::where('production_order_id', $this->a1->id)->value('id');
     Line::whereKey($lineId)->update(['zutaten' => [
