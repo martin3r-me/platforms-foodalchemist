@@ -1912,6 +1912,26 @@ class Index extends Component
     }
 
     /**
+     * E-P0 (Spec 40): einen fehlgeschlagenen Attach nachholen — das erzeugte Konzept eines Steps ans
+     * gemerkte Ausgabe-Kapitel/die Rubrik hängen. Scheitert es erneut, wird der Fehler sichtbar gemeldet
+     * (das Signal am Step bleibt bis zum Erfolg stehen).
+     */
+    public function haengeKonzeptNach(int $stepId, PlanningCascadeService $cascade): void
+    {
+        $team = $this->team();
+        if ($team === null) {
+            return;
+        }
+        try {
+            $cascade->haengeKonzeptNach($team, $stepId);
+            $this->meldung = 'Konzept nachträglich ans Ausgabe-Kapitel/die Rubrik gehängt.';
+        } catch (\Throwable $e) {
+            $this->fehler = 'Nachträgliches Einhängen fehlgeschlagen: ' . $e->getMessage();
+        }
+        $this->refreshLaeuft($cascade);
+    }
+
+    /**
      * Ganze Stufe freigeben (Stufen-Knopf im Cockpit): gibt alle offenen Entwürfe einer `kind` frei —
      * das startet die nächste Stufe (siehe PlanningCascadeService::gibStufeFrei/gibStepFrei).
      */

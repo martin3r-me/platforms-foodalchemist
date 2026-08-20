@@ -202,6 +202,19 @@
         {{-- #124: Fan-out crashte, aber das Concept ist freigegeben — amber (Teil-Problem), nicht rot. --}}
         <p class="text-[10px] text-amber-400/80 pl-1">Auto-Gericht-Erfindung fehlgeschlagen: {{ \Illuminate\Support\Str::limit($fanoutErr, 140) }} — das Concept selbst ist freigegeben.</p>
     @endif
+    @php $attachErr = is_array($st->deferred) ? ($st->deferred['attach_error'] ?? null) : null; @endphp
+    @if($attachErr)
+        {{-- E-P0 (Spec 40): Attach ans Ausgabe-Kapitel/die Rubrik schlug fehl — das Konzept ist erzeugt, hängt
+             aber nicht am Dokument. Amber (Teil-Problem, kein Datenverlust mehr), mit Nachhol-Aktion. --}}
+        <div class="pl-1 mt-0.5">
+            <p class="text-[10px] text-amber-400/80">Nicht ans Ausgabe-Kapitel/die Rubrik gehängt: {{ \Illuminate\Support\Str::limit($attachErr, 120) }} — das Konzept ist erzeugt.</p>
+            <button type="button" wire:click="haengeKonzeptNach({{ $st->id }})"
+                    wire:loading.attr="disabled" wire:target="haengeKonzeptNach"
+                    class="mt-0.5 text-[10px] text-amber-300/90 hover:text-amber-200 inline-flex items-center gap-1 select-none disabled:opacity-50">
+                @svg('heroicon-o-link', 'w-3 h-3') nachträglich einhängen
+            </button>
+        </div>
+    @endif
     @if($st->status === 'geplant')
         <p class="text-[10px] text-violet-300/60 pl-1">wird erzeugt, sobald die Stufe darüber freigegeben ist</p>
     @endif

@@ -809,6 +809,62 @@ class PlanningCascadeService
     }
 
     /**
+     * E-P0 (Spec 40): Der Attach des erzeugten Konzepts ans Ausgabe-Kapitel/die Rubrik ist fehlgeschlagen —
+     * aber das Konzept IST erzeugt (der Concept-Step wird gleich regulär `done`, {@see markStepDone} läuft
+     * NACH diesem Aufruf und lässt `deferred` unangetastet). Kein „Konzept kaputt": den Fehler + die Ziel-Info
+     * separat in `deferred` festhalten (analog {@see markFanoutFailed}, #124), damit das Cockpit ein sichtbares,
+     * behebbares Amber-Signal zeigt und die Recovery-Aktion {@see haengeKonzeptNach} den Attach nachholen kann.
+     * Der Step-Status bleibt bewusst unberührt (das Konzept ist gültig). Wirft nie (Rückkanal aus dem Job).
+     */
+    public function markAttachFailed(int $stepId, string $ownerType, int $containerId, int $conceptId, string $error): void
+    {
+        $step = FoodAlchemistCascadeRunStep::find($stepId);
+        if ($step === null) {
+            return;
+        }
+        $deferred = is_array($step->deferred) ? $step->deferred : [];
+        $deferred['attach_error'] = Str::limit($error, 500, '');
+        $deferred['pending_attach'] = [
+            'owner_type' => $ownerType,
+            'container_id' => $containerId,
+            'concept_id' => $conceptId,
+        ];
+        $step->update(['deferred' => $deferred]);
+    }
+
+    /**
+     * E-P0-Recovery (Spec 40): einen zuvor fehlgeschlagenen Attach nachholen — das (existierende) Konzept
+     * ans in `deferred.pending_attach` gemerkte Ausgabe-Kapitel/die Rubrik hängen (reuse {@see FoodbookService::addBlock}
+     * bzw. {@see SpeisekarteService::addPosition}). Gelingt es, wird das Signal (`attach_error`/`pending_attach`)
+     * gelöscht. Scheitert es erneut, propagiert der Fehler an den Aufrufer (Livewire zeigt ihn als Toast) und das
+     * Signal bleibt stehen. Team-scoped ({@see ownedStep}).
+     */
+    public function haengeKonzeptNach(Team $team, int $stepId): void
+    {
+        $step = $this->ownedStep($team, $stepId);
+        $deferred = is_array($step->deferred) ? $step->deferred : [];
+        $pending = is_array($deferred['pending_attach'] ?? null) ? $deferred['pending_attach'] : null;
+        if ($pending === null) {
+            return;   // nichts nachzuholen
+        }
+        $ownerType = (string) ($pending['owner_type'] ?? '');
+        $containerId = (int) ($pending['container_id'] ?? 0);
+        $conceptId = (int) ($pending['concept_id'] ?? 0);
+        if ($containerId <= 0 || $conceptId <= 0) {
+            return;
+        }
+        if ($ownerType === 'foodbook') {
+            app(FoodbookService::class)->addBlock($team, $containerId, ['type' => 'concept_ref', 'concept_id' => $conceptId]);
+        } elseif ($ownerType === 'speisekarte') {
+            app(SpeisekarteService::class)->addPosition($team, $containerId, ['type' => 'menue_ref', 'concept_id' => $conceptId]);
+        } else {
+            return;
+        }
+        unset($deferred['attach_error'], $deferred['pending_attach']);
+        $step->update(['deferred' => $deferred]);
+    }
+
+    /**
      * Idempotenz/Resume (Etappe 8) — eine abgebrochene Kaskade sauber fortsetzbar machen.
      *
      * Stirbt ein Generator-Job hart (OOM/Timeout/Worker-Kill), ohne seinen `failed()`-Haken zu feuern,
@@ -1516,6 +1572,9 @@ class PlanningCascadeService
                 'anreicherung' => $deferred['enrich']['status'] ?? null,
                 'bilder' => $deferred['bilder']['status'] ?? null,
                 'fehler' => $s->error,
+                // E-P0 (Spec 40): Attach-Fehler auch headless sichtbar — das Konzept ist erzeugt, hängt aber
+                // nicht am Ausgabe-Kapitel/der Rubrik (behebbar per haengeKonzeptNach). Nur gesetzt, wenn offen.
+                'attach_fehler' => $deferred['attach_error'] ?? null,
             ], static fn ($v): bool => $v !== null && $v !== '');
         })->all();
 

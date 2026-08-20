@@ -293,6 +293,101 @@ it('#124 markFanoutFailed: NICHT-freigegebener Step → echter Step-Fehler (Fall
     expect($step->refresh()->status)->toBe('failed');                          // war nie freigegeben → echter Fehler
 });
 
+// ── E-P0 (Spec 40) — Attach-Fehler nicht mehr still schlucken + Recovery ─────────────────────────
+// Der Voll-Kaskaden-Job hängt sein Konzept ans Ausgabe-Kapitel/die Rubrik. Schlug das fehl, verschwand
+// es früher spurlos (leerer catch → Konzept frei, aber NICHT im Dokument, kein Signal). Jetzt: Log +
+// behebbares Signal am Step (deferred.attach_error/pending_attach), Step-Status bleibt erfolgreich, und
+// haengeKonzeptNach holt den Attach nach.
+
+it('E-P0 markAttachFailed: hält Fehler + Ziel in deferred fest, lässt den Concept-Step unberührt', function () {
+    $svc = app(PlanningCascadeService::class);
+    $concept = FoodAlchemistConcept::create(['team_id' => $this->rootTeam->id, 'name' => 'Herbstmenü', 'status' => 'active']);
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'vollkaskade', 'status' => 'running']);
+    $step = FoodAlchemistCascadeRunStep::create([
+        'team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'concept',
+        'status' => 'done', 'ref_type' => 'concept', 'ref_id' => $concept->id,
+    ]);
+
+    $svc->markAttachFailed((int) $step->id, 'foodbook', 4242, (int) $concept->id, 'Kapitel nicht gefunden');
+
+    $step->refresh();
+    expect($step->status)->toBe('done')                                        // Konzept ist erzeugt — kein „kaputt"
+        ->and($step->deferred['attach_error'] ?? null)->toContain('Kapitel nicht gefunden')
+        ->and($step->deferred['pending_attach']['owner_type'] ?? null)->toBe('foodbook')
+        ->and((int) ($step->deferred['pending_attach']['container_id'] ?? 0))->toBe(4242)
+        ->and((int) ($step->deferred['pending_attach']['concept_id'] ?? 0))->toBe((int) $concept->id);
+
+    // Headless sichtbar (MCP planung_kaskade.GET): der Attach-Fehler taucht in der Step-Projektion auf.
+    $status = $svc->laufStatus($this->rootTeam, (int) $run->id);
+    $schritt = collect($status['schritte'])->firstWhere('id', (int) $step->id);
+    expect($schritt['attach_fehler'] ?? null)->toContain('Kapitel nicht gefunden');
+});
+
+it('E-P0 Job-catch: fehlgeschlagener Attach schluckt nicht mehr — kein Block, aber Signal am Step', function () {
+    $concept = FoodAlchemistConcept::create(['team_id' => $this->rootTeam->id, 'name' => 'Wintermenü', 'status' => 'active']);
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'vollkaskade', 'status' => 'running']);
+    $step = FoodAlchemistCascadeRunStep::create([
+        'team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'concept', 'status' => 'done',
+    ]);
+
+    // Ungültige containerId (kein Kapitel) → addBlock wirft → Retry → Recording. Der Job wirft NICHT.
+    $job = new GenerateConceptJob(
+        runId: 'ep0-run', teamId: $this->rootTeam->id, userId: (int) auth()->id(), brief: 'brief',
+        cascadeStepId: (int) $step->id, attachOwnerType: 'foodbook', attachContainerId: 999999,
+    );
+    $m = new ReflectionMethod($job, 'attachToOutput');
+    $m->setAccessible(true);
+    $m->invoke($job, $this->rootTeam, (int) $concept->id);   // wirft nicht
+
+    $step->refresh();
+    expect(\Platform\FoodAlchemist\Models\FoodAlchemistFoodbookBlock::where('concept_id', $concept->id)->count())->toBe(0)  // kein Block angelegt
+        ->and($step->deferred['attach_error'] ?? null)->not->toBeNull()
+        ->and((int) ($step->deferred['pending_attach']['concept_id'] ?? 0))->toBe((int) $concept->id);
+});
+
+it('E-P0 haengeKonzeptNach: holt den Attach nach (Block am Kapitel) und löscht das Signal', function () {
+    $svc = app(PlanningCascadeService::class);
+    $concept = $this->makeConcept($this->rootTeam, 'Frühlingsmenü');
+    $fb = $this->makeFoodbook($this->rootTeam, 'Adler');
+    $kapitel = $this->makeChapter($fb);
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'vollkaskade', 'status' => 'running']);
+    $step = FoodAlchemistCascadeRunStep::create([
+        'team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'concept',
+        'status' => 'done', 'ref_type' => 'concept', 'ref_id' => $concept->id,
+        'deferred' => ['attach_error' => 'Kapitel nicht gefunden', 'pending_attach' => [
+            'owner_type' => 'foodbook', 'container_id' => (int) $kapitel->id, 'concept_id' => (int) $concept->id,
+        ]],
+    ]);
+
+    $svc->haengeKonzeptNach($this->rootTeam, (int) $step->id);
+
+    $step->refresh();
+    expect($kapitel->blocks()->where('type', 'concept_ref')->where('concept_id', $concept->id)->exists())->toBeTrue()
+        ->and(isset($step->deferred['attach_error']))->toBeFalse()             // Signal gelöscht
+        ->and(isset($step->deferred['pending_attach']))->toBeFalse();
+});
+
+it('E-P0 haengeKonzeptNach: fremdes Team kommt an den Step nicht ran (Cross-Tenant)', function () {
+    $svc = app(PlanningCascadeService::class);
+    $concept = $this->makeConcept($this->rootTeam, 'Sommermenü');
+    $fb = $this->makeFoodbook($this->rootTeam, 'Adler');
+    $kapitel = $this->makeChapter($fb);
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'vollkaskade', 'status' => 'running']);
+    $step = FoodAlchemistCascadeRunStep::create([
+        'team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'concept',
+        'status' => 'done', 'ref_type' => 'concept', 'ref_id' => $concept->id,
+        'deferred' => ['pending_attach' => [
+            'owner_type' => 'foodbook', 'container_id' => (int) $kapitel->id, 'concept_id' => (int) $concept->id,
+        ]],
+    ]);
+    $fremd = \Platform\Core\Models\Team::create(['name' => 'Fremd-Betrieb', 'user_id' => 1, 'personal_team' => false]);
+
+    expect(fn () => $svc->haengeKonzeptNach($fremd, (int) $step->id))
+        ->toThrow(\Illuminate\Database\Eloquent\ModelNotFoundException::class);
+    // Kein Attach durch das fremde Team — das Kapitel bleibt leer.
+    expect($kapitel->blocks()->count())->toBe(0);
+});
+
 it('Job-Hook: failed() meldet an den Step zurück, wenn cascade_step_id gesetzt ist', function () {
     $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Geschmortes Rind', 'brief' => 'Schmorgericht mit Wurzelgemuese.']);
     $run = app(PlanningCascadeService::class)->starteKaskade($this->rootTeam, 'gericht', $session, 'voll_kreativ');

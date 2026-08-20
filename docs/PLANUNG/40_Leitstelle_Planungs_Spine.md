@@ -82,16 +82,19 @@ Damit ist Dominiques zweite Lesart die verbindliche: **Foodbook wird im Foodbook
 
 Jede Etappe ist eine eigene, shippbare Bau-Runde mit eigener Verifikation. Dieses Doc ist die Landkarte; die Etappen E2–E5 bekommen bei Baubeginn je einen Detail-Abschnitt. **Reihenfolge: E-P0 zuerst** (latenter Datenverlust-Bug, sofort), danach E0/E1 usw.
 
-### E-P0 — Attach-Fehler nicht mehr still schlucken (SOFORT · latenter Datenverlust) · Status: offen, höchste Priorität
+### E-P0 — Attach-Fehler nicht mehr still schlucken (SOFORT · latenter Datenverlust) · Status: ✅ gebaut + Sandbox-verifiziert 2026-08-20 (Branch `feat/spec40-umsetzung`, nicht deployt)
 **Anlass:** `GenerateConceptJob::attachToOutput` (:104 / :158–163) steckt in try/catch (:165–167) — schlägt das Zurückschreiben ins Kapitel/die Rubrik fehl, existiert das Konzept frei, aber NICHT im Modul-Inhalt, **ohne jedes UI-Signal**. Kann schon heute in der demo zuschlagen (Foodbook + Speisekarte betroffen; Speiseplan nutzt den Job nicht). Der einzige echte Bug der ganzen Analyse — kein Konzept, sondern ein Datenverlust-Pfad.
 **Bausteine:**
 - Fehler im catch **loggen + als Nutzer-Signal/Meldung** sichtbar machen (nicht schlucken).
 - **„Nachträglich einhängen"-Recovery:** ein attach-loses Konzept per Aktion ins Zielkapitel/die Rubrik hängen (reuse `FoodbookService::addBlock` / `SpeisekarteService::addPosition`).
 - optional: einmaliger Retry vor dem Aufgeben.
 **Verifikation:** simulierter Attach-Fail (z.B. ungültige containerId) erzeugt Log + Signal, das Konzept bleibt auffindbar + einhängbar; Pest-Test für den catch-Pfad; kein stiller Verlust mehr.
+**Umsetzung 2026-08-20 (Branch `feat/spec40-umsetzung`):** `GenerateConceptJob::attachToOutput` — 1× Retry, dann `Log::warning` + `PlanningCascadeService::markAttachFailed` statt leerem catch (spiegelt `markFanoutFailed` #124: Konzept-Step bleibt `done`, Fehler + `pending_attach` in `deferred`). Recovery: `PlanningCascadeService::haengeKonzeptNach(Team,stepId)` (team-scoped via `ownedStep`, reuse addBlock/addPosition, löscht das Signal bei Erfolg) + Livewire-Aktion `Planung/Index::haengeKonzeptNach` + Amber-Signal & „nachträglich einhängen"-Button in `step-zeile.blade.php`. Headless: `attach_fehler` in `laufStatus`-Step-Projektion (MCP `planung_kaskade.GET`). Pest: 4 neue Tests (Catch-Pfad, `markAttachFailed`, Recovery-Erfolg, Cross-Tenant) — PlanningCascadeTest 113/113 grün.
 
-### E-K — Kaskaden-Härtung: Zwei-Achsen-Entflechtung + Defekt-Cluster · Status: offen, hohe Priorität (VOR den Architektur-Etappen)
+### E-K — Kaskaden-Härtung: Zwei-Achsen-Entflechtung + Defekt-Cluster · Status: ✅ abgeschlossen + auf demo (verifiziert 2026-08-20)
 > Live-Testfahrt 2026-08-18 fand 5 reale Kaskaden-Defekte (D1–D5), die den Kern-Wert untergraben. **Interaktiv bauen** (Kern-Entscheidungslogik + 84 GL-04-Goldens) — NICHT von der autonomen Routine blind.
+>
+> **Erledigt (git-verifiziert 2026-08-20):** D1 (`cfafddc`), D5 (`38ff806`), D4 (`b0d6dce`), D3 (`6281fac`) via Merge `80e7604`; D4-Wasser (`742c9fb`); D2c stiller Binde-Fehler (`a88f325`) — **alle in origin/main** (Tip `67f0512`) UND **auf demo** (`3b30f75`, via Kitchen-Wall-Deploy nachgezogen). An E-K ist nichts mehr zu bauen.
 
 **Verbindlicher Zwei-Achsen-Vertrag (ENTSCHEIDUNG Dominique 2026-08-18 — löst D5):**
 - **`creative_mode` = Datenbank-Treue (reuse ↔ invent).** Datenbank = bestehende Gerichte/Rezepte/GPs maximal wiederverwenden; Voll kreativ = frei neu erfinden; Hybrid = Bestand bevorzugt, erfindet wo nötig. Steuert `recipe_ref` (bestehendes Rezept referenzieren) vs. `basisrezept_anlegen` (neu). **Steuert NICHT GP-vs-Rezept.**
