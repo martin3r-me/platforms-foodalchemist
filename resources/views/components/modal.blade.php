@@ -90,9 +90,21 @@
                     <h2 class="text-lg font-semibold tracking-tight text-gray-900 truncate flex items-center gap-2 min-w-0">
                         <span class="shrink-0">{{ $title }}</span>
                         <span class="min-w-0 truncate px-2.5 py-0.5 rounded-lg" data-modal-title-name>{{ $titleName }}</span>
+                        @isset($titleExtra)
+                            <span class="min-w-0 shrink flex flex-wrap items-center gap-1.5" data-modal-zone="title-extra">
+                                {{ $titleExtra }}
+                            </span>
+                        @endisset
                     </h2>
                 @else
-                    <h2 class="text-lg font-semibold tracking-tight text-gray-900 truncate">{{ $title }}</h2>
+                    <h2 class="text-lg font-semibold tracking-tight text-gray-900 truncate flex items-center gap-2 min-w-0">
+                        <span class="min-w-0 truncate">{{ $title }}</span>
+                        @isset($titleExtra)
+                            <span class="min-w-0 shrink flex flex-wrap items-center gap-1.5" data-modal-zone="title-extra">
+                                {{ $titleExtra }}
+                            </span>
+                        @endisset
+                    </h2>
                 @endif
                 <button type="button" @click="closeWithState()"
                         class="p-1.5 rounded-md text-gray-500 hover:text-violet-600 hover:bg-black/5 transition-colors duration-150"

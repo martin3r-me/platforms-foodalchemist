@@ -54,6 +54,20 @@ it('legt das Küchenleiter-Dashboard auf die Tagesplanung und verlinkt den Edito
         ->assertSeeHtml('data-tagesplan-editor');
 });
 
+it('schließt den Editor per navigate-Redirect zurück aufs Dashboard', function () {
+    // Regression: editorSchliessen() rief früher den globalen redirect()-Helper mit
+    // navigate: true auf → "Unknown named parameter $navigate". Muss $this->redirect() sein.
+    Livewire::test(Tagesplan::class, ['von' => '2026-08-15'])
+        ->set('modus', 'editor')
+        ->call('editorSchliessen')
+        ->assertRedirect(route('foodalchemist.produktion.tagesplan', [
+            'von' => '2026-08-15',
+            'bis' => '2026-08-28',
+            'tage' => 14,
+            'ansicht' => 'posten',
+        ]));
+});
+
 it('führt Zeilen mehrerer Aufträge an einem Tag zusammen — mit Auftrag und Liefertag als Kontext', function () {
     $l1 = Line::where('production_order_id', $this->a1->id)->firstOrFail();
     $l2 = Line::where('production_order_id', $this->a2->id)->firstOrFail();
@@ -373,7 +387,9 @@ it('zeigt im Wandmonitor Allergen-, Diät- und Datenqualitätswarnungen', functi
         ->assertSee('vegetarisch')
         ->call('oeffneAnleitung', $lineId)
         ->assertSeeHtml('data-tagesplan-wall-sicherheitsblock')
-        ->assertSee('Sicherheit');
+        ->assertSeeHtml('data-modal-zone="title-extra"')
+        ->assertSee('Milch')
+        ->assertDontSee('<h3 class="text-base font-bold">Sicherheit</h3>', false);
 });
 
 it('fokussiert im Wandmonitor einen Posten und bietet den Reset auf alle Stationen an', function () {
@@ -413,6 +429,30 @@ it('öffnet im Wandmodus die touchfreundliche Anleitung mit Medienbereich', func
         ->assertSeeHtml('data-tagesplan-wall-fallback-schritte')
         ->assertSee('Schritte')
         ->assertSee('Medien');
+});
+
+it('normalisiert Foto-URLs aus Produktions-Snapshots auf den aktuellen Wandmonitor-Host', function () {
+    \Illuminate\Support\Facades\URL::forceRootUrl('http://localhost:8000');
+
+    $lineId = Line::where('production_order_id', $this->a1->id)->value('id');
+    Line::whereKey($lineId)->update(['steps_snapshot' => [[
+        'nr' => 1,
+        'phase' => 'Mise en Place',
+        'text' => 'Tomaten vorbereiten.',
+        'fotos' => [[
+            'url' => 'http://localhost/storage/ki-schritt-1.webp',
+            'caption' => 'KI-Foto: Schritt 1',
+        ]],
+    ]]]);
+
+    Livewire::test(Tagesplan::class, ['von' => '2026-08-20', 'display' => 'wall'])
+        ->set('modus', 'editor')
+        ->call('oeffneAnleitung', $lineId)
+        ->assertSeeHtml('data-tagesplan-wall-bilder')
+        ->assertSeeHtml('src="http://localhost:8000/storage/ki-schritt-1.webp"')
+        ->assertDontSeeHtml('src="http://localhost/storage/ki-schritt-1.webp"');
+
+    \Illuminate\Support\Facades\URL::forceRootUrl(null);
 });
 
 it('zeigt Zutaten in der Wandmonitor-Anleitung immer untereinander', function () {

@@ -172,7 +172,7 @@ class Tagesplan extends Component
     /** Schließt den Fullscreen-Editor und räumt den Deep-Link zurück aufs Dashboard. */
     public function editorSchliessen()
     {
-        return redirect(route('foodalchemist.produktion.tagesplan', array_filter([
+        return $this->redirect(route('foodalchemist.produktion.tagesplan', array_filter([
             'von' => $this->von,
             'bis' => $this->bis,
             'tage' => $this->tage,
@@ -775,7 +775,7 @@ class Tagesplan extends Component
                 'gruppe' => $e->group_name,
                 'notiz' => $e->note,
             ])->values()->all(),
-            'schritte' => $treffer->schritte ?? ($line?->steps_snapshot ?? []),
+            'schritte' => $this->normalisierteAnleitungsSchritte($treffer->schritte ?? ($line?->steps_snapshot ?? [])),
             'zubereitung' => $treffer->zubereitung ?? $line?->zubereitung,
             'zutaten' => $zutaten,
             'sub_rezepte' => $this->anleitungSubRezepte($treffer, (array) $zutaten, $zeilen),
@@ -783,6 +783,56 @@ class Tagesplan extends Component
             'arbeitsschritte' => $this->arbeitsschritte($treffer->schritte ?? ($line?->steps_snapshot ?? []), $treffer->zubereitung ?? $line?->zubereitung),
             'step_erledigt' => collect($this->anleitungStepStatus[(int) $treffer->id] ?? [])->map(fn ($i) => (int) $i)->unique()->values()->all(),
         ];
+    }
+
+    private function normalisierteAnleitungsSchritte(array $schritte): array
+    {
+        return collect($schritte)
+            ->map(function (array $schritt) {
+                foreach (['fotos', 'photos', 'medien', 'media'] as $feld) {
+                    if (! is_array($schritt[$feld] ?? null)) {
+                        continue;
+                    }
+
+                    $schritt[$feld] = collect($schritt[$feld])
+                        ->map(function (array $medium) {
+                            $src = $medium['src'] ?? $medium['url'] ?? null;
+                            $normalisiert = $this->normalisierteMedienUrl($src);
+
+                            if ($normalisiert !== null) {
+                                $medium['src'] = $normalisiert;
+                                $medium['url'] = $normalisiert;
+                            }
+
+                            return $medium;
+                        })
+                        ->values()
+                        ->all();
+                }
+
+                return $schritt;
+            })
+            ->values()
+            ->all();
+    }
+
+    private function normalisierteMedienUrl(?string $src): ?string
+    {
+        $src = trim((string) $src);
+        if ($src === '' || str_starts_with($src, 'data:')) {
+            return $src !== '' ? $src : null;
+        }
+
+        $path = parse_url($src, PHP_URL_PATH);
+        if (is_string($path) && str_starts_with($path, '/storage/')) {
+            return url($path);
+        }
+
+        if (str_starts_with($src, 'storage/')) {
+            return url('/' . $src);
+        }
+
+        return $src;
     }
 
     private function anleitungSubRezepte(object $zeile, array $zutaten, $zeilen): array

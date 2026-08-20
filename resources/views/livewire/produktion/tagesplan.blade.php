@@ -484,6 +484,21 @@
         </x-foodalchemist::modal>
 
         <x-foodalchemist::modal name="wall-anleitung" fullscreen dark-canvas title="Anleitung" :title-name="$anleitung['name'] ?? null" :close-via="'anleitungSchliessen'">
+            @if($anleitung && (collect($anleitung['sicherheit']['allergene'] ?? [])->isNotEmpty() || collect($anleitung['sicherheit']['warnungen'] ?? [])->isNotEmpty() || collect($anleitung['sicherheit']['diaet'] ?? [])->isNotEmpty()))
+                <x-slot:titleExtra>
+                    <span class="flex min-w-0 flex-wrap items-center gap-1.5" data-tagesplan-wall-sicherheitsblock>
+                        @foreach(collect($anleitung['sicherheit']['warnungen'] ?? [])->take(2) as $warnung)
+                            <span class="rounded-full bg-amber-400/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-100" data-tagesplan-wall-warnung>{{ $warnung }}</span>
+                        @endforeach
+                        @foreach(collect($anleitung['sicherheit']['allergene'] ?? [])->take(5) as $a)
+                            <span class="rounded-full bg-rose-400/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-rose-100" data-tagesplan-wall-allergen>{{ $a['label'] }}{{ ($a['wert'] ?? '') === 'spuren' ? ' · Spuren' : '' }}</span>
+                        @endforeach
+                        @foreach(collect($anleitung['sicherheit']['diaet'] ?? [])->take(3) as $d)
+                            <span class="rounded-full bg-emerald-400/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-100" data-tagesplan-wall-diaet>{{ $d }}</span>
+                        @endforeach
+                    </span>
+                </x-slot:titleExtra>
+            @endif
             <x-slot:actions>
                 <button type="button" x-data @click="$wire.anleitungSchliessen(); close()"
                         class="inline-flex h-10 items-center gap-2 rounded-xl border border-white/10 bg-white/10 px-4 text-xs font-bold uppercase tracking-wide text-white hover:bg-white/15"
@@ -556,40 +571,6 @@
                             @endif
                         </section>
 
-                        @if(collect($anleitung['sicherheit']['allergene'] ?? [])->isNotEmpty() || collect($anleitung['sicherheit']['warnungen'] ?? [])->isNotEmpty() || collect($anleitung['sicherheit']['diaet'] ?? [])->isNotEmpty())
-                            <section class="rounded-xl border border-white/10 bg-white/5 px-3 py-2" data-tagesplan-wall-sicherheitsblock>
-                                <h3 class="text-base font-bold">Sicherheit</h3>
-                                <div class="mt-2 flex flex-wrap gap-1.5">
-                                    @foreach(collect($anleitung['sicherheit']['warnungen'] ?? []) as $warnung)
-                                        <span class="rounded-full bg-amber-400/15 px-2 py-1 text-[11px] font-bold uppercase tracking-wide text-amber-100" data-tagesplan-wall-warnung>{{ $warnung }}</span>
-                                    @endforeach
-                                    @foreach(collect($anleitung['sicherheit']['allergene'] ?? []) as $a)
-                                        <span class="rounded-full bg-rose-400/15 px-2 py-1 text-[11px] font-bold uppercase tracking-wide text-rose-100" data-tagesplan-wall-allergen>{{ $a['label'] }}{{ ($a['wert'] ?? '') === 'spuren' ? ' · Spuren' : '' }}</span>
-                                    @endforeach
-                                    @foreach(collect($anleitung['sicherheit']['diaet'] ?? []) as $d)
-                                        <span class="rounded-full bg-emerald-400/15 px-2 py-1 text-[11px] font-bold uppercase tracking-wide text-emerald-100" data-tagesplan-wall-diaet>{{ $d }}</span>
-                                    @endforeach
-                                </div>
-                            </section>
-                        @endif
-
-                        @if(!empty($anleitung['equipment']))
-                            <section class="rounded-xl border border-white/10 bg-white/5 px-3 py-2" data-tagesplan-wall-equipment>
-                                <h3 class="text-base font-bold">Equipment</h3>
-                                <div class="mt-1.5 divide-y divide-white/10">
-                                    @foreach($anleitung['equipment'] as $eq)
-                                        <div class="py-1.5 text-sm" data-tagesplan-wall-equipment-item>
-                                            <div class="flex items-start justify-between gap-3">
-                                                <span class="min-w-0 whitespace-normal leading-snug text-slate-100">{{ $eq['name'] ?? 'Equipment' }}</span>
-                                                @if($eq['gruppe'] ?? null)<span class="shrink-0 text-right text-xs text-slate-400">{{ $eq['gruppe'] }}</span>@endif
-                                            </div>
-                                            @if($eq['notiz'] ?? null)<p class="mt-0.5 text-xs text-slate-400">{{ $eq['notiz'] }}</p>@endif
-                                        </div>
-                                    @endforeach
-                                </div>
-                            </section>
-                        @endif
-
                         @if(!empty($anleitung['sub_rezepte']))
                             <section class="rounded-xl border border-white/10 bg-white/5 px-3 py-2" data-tagesplan-wall-subrezepte>
                                 <h3 class="text-base font-bold">Enthaltene Rezepte</h3>
@@ -633,6 +614,24 @@
                                 </div>
                             </section>
                         @endif
+
+                        @if(!empty($anleitung['equipment']))
+                            <section class="rounded-xl border border-white/10 bg-white/5 px-3 py-2" data-tagesplan-wall-equipment>
+                                <h3 class="text-base font-bold">Equipment</h3>
+                                <div class="mt-1.5 divide-y divide-white/10">
+                                    @foreach($anleitung['equipment'] as $eq)
+                                        <div class="py-1.5 text-sm" data-tagesplan-wall-equipment-item>
+                                            <div class="flex items-start justify-between gap-3">
+                                                <span class="min-w-0 whitespace-normal leading-snug text-slate-100">{{ $eq['name'] ?? 'Equipment' }}</span>
+                                                @if($eq['gruppe'] ?? null)<span class="shrink-0 text-right text-xs text-slate-400">{{ $eq['gruppe'] }}</span>@endif
+                                            </div>
+                                            @if($eq['notiz'] ?? null)<p class="mt-0.5 text-xs text-slate-400">{{ $eq['notiz'] }}</p>@endif
+                                        </div>
+                                    @endforeach
+                                </div>
+                            </section>
+                        @endif
+
                     </aside>
 
                     <section class="rounded-xl border border-white/10 bg-white/5 p-3" data-tagesplan-wall-media>
