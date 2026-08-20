@@ -1415,6 +1415,10 @@ class PlanningCascadeService
                     ], ['child_step_id' => (int) $step->id]);
                 } catch (\Throwable $e) {
                     \Illuminate\Support\Facades\Log::warning('[Planung] manuelles Sub-Rezept ohne Rückbindung angelegt (Zutat/Dependency übersprungen)', ['error' => $e->getMessage()]);
+                    // D2 2026-08-18: nicht mehr NUR ins Log — sichtbar am Step markieren, damit der Mensch
+                    // die fehlende Rückbindung sieht (sonst hängt das Sub-Rezept unbemerkt lose am Lauf,
+                    // referenced_recipe_id bleibt NULL). Spiegelt den E-P0-Härtungsgrundsatz „nichts still schlucken".
+                    $step->update(['error' => 'Nicht automatisch ans Gericht gebunden — Zutat + Menge am Elterngericht bitte manuell ergänzen.']);
                 }
             }
         }
