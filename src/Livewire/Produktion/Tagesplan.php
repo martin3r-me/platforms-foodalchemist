@@ -65,8 +65,17 @@ class Tagesplan extends Component
     /** Wandmonitor (Spec 35): Ansicht der Wand — 'lanes' (nach Posten) | 'mise' (zusammengefasst). */
     public string $wallAnsicht = 'lanes';
 
+    /** Wandmonitor: Filter innerhalb der Posten-Lanes — alle | gerichte | basis. */
+    public string $wallGruppenFilter = 'alle';
+
     /** Wandmonitor: Zeile, deren Anleitung gerade im Overlay offen ist (null = zu). */
     public ?int $anleitungLineId = null;
+
+    /** Wandmonitor: Gericht-/Arbeitsblock, dessen enthaltene Rezepte gerade offen sind. */
+    public ?string $wallGerichtKey = null;
+
+    /** Wandmonitor: flüchtige Step-Checks je geöffneter Anleitungszeile. Dauerhaft ist die Zeile selbst. */
+    public array $anleitungStepStatus = [];
 
     private const DASHBOARD_FENSTER = [3, 7, 14, 30];
 
@@ -266,10 +275,10 @@ class Tagesplan extends Component
         }
     }
 
-    private function zeileSetzenMitWallStart($team, FoodAlchemistProductionOrderLine $zeile, ProductionLineStatus $ziel, ProductionOrderService $svc): void
+    private function zeileSetzenMitWallStart($team, FoodAlchemistProductionOrderLine $zeile, ProductionLineStatus $ziel, ProductionOrderService $svc): int
     {
         $lineId = (int) $zeile->id;
-        if ($this->display === 'wall' && $ziel === ProductionLineStatus::Done) {
+        if ($this->display === 'wall' && in_array($ziel, [ProductionLineStatus::InProgress, ProductionLineStatus::Done], true)) {
             $order = $zeile->productionOrder;
             $status = $order?->status instanceof ProductionOrderStatus
                 ? $order->status
@@ -280,8 +289,9 @@ class Tagesplan extends Component
 
                 $neu = FoodAlchemistProductionOrderLine::query()
                     ->where('production_order_id', $order->id)
-                    ->when($zeile->origin === 'computed', fn ($q) => $q->where('origin', 'computed')->where('recipe_id', $zeile->recipe_id))
-                    ->when($zeile->origin !== 'computed', fn ($q) => $q->whereKey($lineId))
+                    ->when($zeile->recipe_id !== null, fn ($q) => $q->where('recipe_id', $zeile->recipe_id))
+                    ->when($zeile->recipe_id === null, fn ($q) => $q->whereKey($lineId))
+                    ->orderBy('position')
                     ->first();
 
                 $lineId = (int) ($neu?->id ?? $lineId);
@@ -289,12 +299,19 @@ class Tagesplan extends Component
         }
 
         $svc->setLineStatus($team, $lineId, $ziel);
+
+        return $lineId;
     }
 
     /** Wandmonitor (Spec 35): zwischen Posten-Lanes und zusammengefasster Mise-en-Place umschalten. */
     public function wallAnsichtSetzen(string $a): void
     {
         $this->wallAnsicht = in_array($a, ['lanes', 'mise'], true) ? $a : 'lanes';
+    }
+
+    public function wallGruppenFilterSetzen(string $filter): void
+    {
+        $this->wallGruppenFilter = in_array($filter, ['alle', 'gerichte', 'basis'], true) ? $filter : 'alle';
     }
 
     /** Wandmonitor: Anleitung (Schritte + Zutaten) einer Zeile im Overlay öffnen. */
@@ -307,6 +324,113 @@ class Tagesplan extends Component
     public function anleitungSchliessen(): void
     {
         $this->anleitungLineId = null;
+    }
+
+    public function oeffneGericht(string $key): void
+    {
+        $this->wallGerichtKey = $key;
+        $this->dispatch('modal.open', name: 'wall-gericht');
+    }
+
+    public function gerichtSchliessen(): void
+    {
+        $this->wallGerichtKey = null;
+    }
+
+    public function anleitungStarten(ProductionOrderService $svc): void
+    {
+        $this->fehler = null;
+        try {
+            if ($this->anleitungLineId === null) {
+                return;
+            }
+
+            $team = Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
+            $this->anleitungLineId = $this->zeileSetzenMitWallStart($team, FoodAlchemistProductionOrderLine::findOrFail($this->anleitungLineId), ProductionLineStatus::InProgress, $svc);
+        } catch (\Throwable $e) {
+            $this->fehler = $e->getMessage();
+        }
+    }
+
+    public function anleitungStepUmschalten(int $index, ProductionOrderService $svc, ProductionCapacityService $kap): void
+    {
+        $this->fehler = null;
+        try {
+            $anleitung = $this->aktuelleAnleitung($kap);
+            if ($anleitung === null || ! array_key_exists($index, $anleitung['arbeitsschritte'])) {
+                return;
+            }
+
+            $lineId = (int) $anleitung['line_id'];
+            $schritte = collect($this->anleitungStepStatus[$lineId] ?? [])->map(fn ($i) => (int) $i);
+            $schritte = $schritte->contains($index)
+                ? $schritte->reject(fn ($i) => $i === $index)
+                : $schritte->push($index);
+
+            $this->anleitungStepStatus[$lineId] = $schritte->unique()->sort()->values()->all();
+            $this->anleitungAlsErledigtWennVollstaendig($anleitung, $svc);
+        } catch (\Throwable $e) {
+            $this->fehler = $e->getMessage();
+        }
+    }
+
+    public function anleitungAlleStepsUmschalten(ProductionOrderService $svc, ProductionCapacityService $kap): void
+    {
+        $this->fehler = null;
+        try {
+            $anleitung = $this->aktuelleAnleitung($kap);
+            if ($anleitung === null) {
+                return;
+            }
+
+            $lineId = (int) $anleitung['line_id'];
+            $alle = array_keys($anleitung['arbeitsschritte']);
+            $erledigt = collect($this->anleitungStepStatus[$lineId] ?? [])->intersect($alle)->count();
+            if ($alle !== [] && $erledigt === count($alle)) {
+                $this->anleitungStepStatus[$lineId] = [];
+                if (($anleitung['line_status'] ?? null) === ProductionLineStatus::Done->value) {
+                    $team = Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
+                    $this->anleitungLineId = $this->zeileSetzenMitWallStart($team, FoodAlchemistProductionOrderLine::findOrFail($lineId), ProductionLineStatus::Open, $svc);
+                }
+
+                return;
+            }
+
+            $this->anleitungStepStatus[$lineId] = $alle;
+            $this->anleitungAlsErledigtWennVollstaendig($anleitung, $svc);
+        } catch (\Throwable $e) {
+            $this->fehler = $e->getMessage();
+        }
+    }
+
+    private function anleitungAlsErledigtWennVollstaendig(array $anleitung, ProductionOrderService $svc): void
+    {
+        $lineId = (int) $anleitung['line_id'];
+        $alle = array_keys($anleitung['arbeitsschritte']);
+        if ($alle === []) {
+            return;
+        }
+
+        $erledigt = collect($this->anleitungStepStatus[$lineId] ?? [])->intersect($alle)->count();
+        if ($erledigt !== count($alle) || ($anleitung['line_status'] ?? null) === ProductionLineStatus::Done->value) {
+            return;
+        }
+
+        $team = Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
+        $this->anleitungLineId = $this->zeileSetzenMitWallStart($team, FoodAlchemistProductionOrderLine::findOrFail($lineId), ProductionLineStatus::Done, $svc);
+    }
+
+    private function aktuelleAnleitung(ProductionCapacityService $kap): ?array
+    {
+        if ($this->anleitungLineId === null) {
+            return null;
+        }
+
+        $team = Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
+        [$von, $bis] = $this->zeitraum();
+        $zeilen = $kap->tagesplanZeilen($team, $von, $bis, true);
+
+        return $this->anleitungAufloesen($zeilen);
     }
 
     public function render(ProductionCapacityService $kap)
@@ -330,6 +454,7 @@ class Tagesplan extends Component
         $miseEnPlace = $istWall ? $this->miseEnPlace($zeilen) : collect();
         $wallPostenGruppen = $istWall ? $this->wallPostenGruppen($zeilen) : collect();
         $anleitung = $istWall ? $this->anleitungAufloesen($zeilen) : null;
+        $wallGericht = $istWall ? $this->wallGerichtAufloesen($wallPostenGruppen) : null;
 
         $zeilenNachTag = $zeilen->groupBy(fn ($z) => Carbon::parse($z->plan_date)->toDateString());
         $tagDetail = $this->tagDetail($zeilenNachTag, $auslastung, $von, $bis);
@@ -346,6 +471,7 @@ class Tagesplan extends Component
             'readiness' => $readiness,
             'miseEnPlace' => $miseEnPlace,
             'wallPostenGruppen' => $wallPostenGruppen,
+            'wallGericht' => $wallGericht,
             'anleitung' => $anleitung,
             'postenListe' => $team !== null
                 ? FoodAlchemistProductionStation::visibleToTeam($team)->where('is_inactive', false)
@@ -368,9 +494,9 @@ class Tagesplan extends Component
                 ->groupBy(fn ($z) => implode('|', [
                     (int) ($z->order_id ?? 0),
                     (string) ($z->gericht_label ?: ((bool) ($z->is_basisrezept ?? false) ? 'Basisrezepte ohne Gericht' : $z->name)),
-                    (string) ($z->liefertag ?? ''),
+                    $z->liefertag !== null ? Carbon::parse($z->liefertag)->toDateString() : '',
                 ]))
-                ->map(function ($gruppe) {
+                ->map(function ($gruppe, $key) use ($postenZeilen) {
                     $first = $gruppe->first();
                     $teile = $gruppe
                         ->sortBy(fn ($z) => [
@@ -379,22 +505,27 @@ class Tagesplan extends Component
                             (int) ($z->id ?? 0),
                         ])
                         ->values();
+                    $arbeitsZeilen = $this->wallGerichtArbeitsZeilen($teile, $postenZeilen);
 
                     return (object) [
+                        'key' => (string) $key,
                         'auftrag' => $first->auftrag,
                         'liefertag' => $first->liefertag,
                         'gericht' => $first->gericht_label ?: ((bool) ($first->is_basisrezept ?? false) ? 'Basisrezepte ohne Gericht' : $first->name),
                         'hat_gericht' => $first->gericht_label !== null,
-                        'minuten' => (int) $gruppe->sum('arbeitszeit_min'),
-                        'gesamt' => $gruppe->count(),
-                        'offen' => $gruppe->reject(fn ($z) => in_array($z->line_status, ['done', 'skipped'], true))->count(),
-                        'erledigt' => $gruppe->filter(fn ($z) => $z->line_status === 'done')->count(),
+                        'minuten' => (int) $arbeitsZeilen->sum('arbeitszeit_min'),
+                        'gesamt' => $arbeitsZeilen->count(),
+                        'offen' => $arbeitsZeilen->reject(fn ($z) => in_array($z->line_status, ['done', 'skipped'], true))->count(),
+                        'erledigt' => $arbeitsZeilen->filter(fn ($z) => $z->line_status === 'done')->count(),
                         'sicherheit' => [
-                            'allergene' => $gruppe->flatMap(fn ($z) => $z->sicherheit['allergene'] ?? [])->unique('key')->values(),
-                            'diaet' => $gruppe->flatMap(fn ($z) => $z->sicherheit['diaet'] ?? [])->unique()->values(),
-                            'warnungen' => $gruppe->flatMap(fn ($z) => $z->sicherheit['warnungen'] ?? [])->unique()->values(),
+                            'allergene' => $arbeitsZeilen->flatMap(fn ($z) => $z->sicherheit['allergene'] ?? [])->unique('key')->values(),
+                            'diaet' => $arbeitsZeilen->flatMap(fn ($z) => $z->sicherheit['diaet'] ?? [])->unique()->values(),
+                            'warnungen' => $arbeitsZeilen->flatMap(fn ($z) => $z->sicherheit['warnungen'] ?? [])->unique()->values(),
                         ],
-                        'zeilen' => $teile,
+                        'anrichten' => $this->wallGerichtAnrichten($teile),
+                        'darreichung' => $this->wallGerichtDarreichung($teile),
+                        'rezept_uebersicht' => $this->wallGerichtRezeptUebersicht($arbeitsZeilen),
+                        'zeilen' => $arbeitsZeilen,
                     ];
                 })
                 ->sortBy(fn ($gruppe) => [
@@ -403,6 +534,147 @@ class Tagesplan extends Component
                     (string) $gruppe->gericht,
                 ])
                 ->values());
+    }
+
+    private function wallGerichtArbeitsZeilen(\Illuminate\Support\Collection $gruppe, \Illuminate\Support\Collection $postenZeilen): \Illuminate\Support\Collection
+    {
+        $orderIds = $gruppe->pluck('order_id')->filter()->map(fn ($id) => (int) $id)->unique()->values();
+        $hatUnterzeilen = $gruppe->contains(fn ($z) => (int) ($z->tiefe ?? 0) > 0);
+        $minTiefe = (int) $gruppe->min(fn ($z) => (int) ($z->tiefe ?? 0));
+        $arbeitsZeilen = $gruppe
+            ->reject(fn ($z) => (bool) ($z->ist_verkaufsrezept ?? false)
+                || ($hatUnterzeilen
+                    && ! (bool) ($z->is_basisrezept ?? false)
+                    && (int) ($z->tiefe ?? 0) === $minTiefe))
+            ->values();
+        $bekannteLineIds = $arbeitsZeilen->pluck('id')->map(fn ($id) => (int) $id)->all();
+        $referenzQuellen = $gruppe->values();
+
+        for ($i = 0; $i < 6; $i++) {
+            $refRecipeIds = $arbeitsZeilen
+                ->concat($referenzQuellen)
+                ->flatMap(fn ($z) => collect((array) ($z->zutaten ?? []))
+                    ->filter(fn ($zu) => ($zu['typ'] ?? null) === 'sub' && ! empty($zu['ref_recipe_id']))
+                    ->pluck('ref_recipe_id'))
+                ->map(fn ($id) => (int) $id)
+                ->unique()
+                ->values();
+
+            if ($refRecipeIds->isEmpty()) {
+                break;
+            }
+
+            $referenzen = $postenZeilen
+                ->filter(fn ($z) => $orderIds->contains((int) ($z->order_id ?? 0))
+                    && $refRecipeIds->contains((int) ($z->recipe_id ?? 0))
+                    && ! in_array((int) ($z->id ?? 0), $bekannteLineIds, true))
+                ->values();
+
+            if ($referenzen->isEmpty()) {
+                break;
+            }
+
+            $arbeitsZeilen = $arbeitsZeilen->concat($referenzen)->values();
+            $bekannteLineIds = $arbeitsZeilen->pluck('id')->map(fn ($id) => (int) $id)->all();
+            $referenzQuellen = $referenzen;
+        }
+
+        if ($arbeitsZeilen->isEmpty()) {
+            $arbeitsZeilen = $gruppe->values();
+        }
+
+        return $arbeitsZeilen
+            ->unique(fn ($z) => (int) ($z->id ?? 0))
+            ->sortBy(fn ($z) => [
+                (bool) ($z->ist_verkaufsrezept ?? false) ? 0 : 1,
+                (int) ($z->position ?? 0),
+                (int) ($z->id ?? 0),
+            ])
+            ->values();
+    }
+
+    private function wallGerichtAnrichten(\Illuminate\Support\Collection $zeilen): ?string
+    {
+        $vk = $zeilen->first(fn ($z) => (bool) ($z->ist_verkaufsrezept ?? false));
+        $text = trim((string) ($vk->plating_text ?? ''));
+        if ($text !== '') {
+            return $text;
+        }
+
+        $fallback = trim((string) ($vk->zubereitung ?? ''));
+
+        return $fallback !== '' ? $fallback : null;
+    }
+
+    private function wallGerichtDarreichung(\Illuminate\Support\Collection $zeilen): array
+    {
+        $darreichung = $zeilen
+            ->map(fn ($z) => (array) ($z->darreichung ?? []))
+            ->first(fn (array $d) => $d !== []);
+
+        if (! is_array($darreichung)) {
+            return [];
+        }
+
+        $labels = [
+            'geschirr' => 'Geschirr',
+            'vehikel' => 'Servierform',
+            'behaelter_warm' => 'Behälter warm',
+            'behaelter_kalt' => 'Behälter kalt',
+            'geraet' => 'Regeneration',
+            'regeneration_temp_c' => 'Temperatur',
+            'regeneration_duration_min' => 'Zeit',
+            'regeneration_core_temp_c' => 'Kerntemperatur',
+        ];
+
+        return collect($labels)
+            ->map(function (string $label, string $key) use ($darreichung) {
+                $wert = $darreichung[$key] ?? null;
+                if ($wert === null || $wert === '') {
+                    return null;
+                }
+
+                $suffix = match ($key) {
+                    'regeneration_temp_c', 'regeneration_core_temp_c' => ' °C',
+                    'regeneration_duration_min' => ' min',
+                    default => '',
+                };
+
+                return ['label' => $label, 'wert' => (string) $wert . $suffix];
+            })
+            ->filter()
+            ->values()
+            ->all();
+    }
+
+    private function wallGerichtRezeptUebersicht(\Illuminate\Support\Collection $zeilen): array
+    {
+        return $zeilen
+            ->map(function ($z) {
+                return [
+                    'line_id' => (int) $z->id,
+                    'typ' => (bool) ($z->is_basisrezept ?? false) ? 'Basisrezept' : 'Produkt/Rezept',
+                    'name' => (string) ($z->rezept_label ?: $z->name),
+                    'erledigt' => $z->line_status === 'done',
+                    'menge' => $z->gesamt_kg !== null
+                        ? rtrim(rtrim(number_format((float) $z->gesamt_kg, 3, ',', '.'), '0'), ',') . ' kg'
+                        : null,
+                    'zeit' => $z->arbeitszeit_min !== null ? $z->arbeitszeit_min . ' min' : 'ohne Zeit',
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
+    private function wallGerichtAufloesen(\Illuminate\Support\Collection $postenGruppen): ?object
+    {
+        if ($this->wallGerichtKey === null) {
+            return null;
+        }
+
+        return $postenGruppen
+            ->flatten(1)
+            ->first(fn ($gruppe) => (string) ($gruppe->key ?? '') === (string) $this->wallGerichtKey);
     }
 
     private function tagDetail($zeilenNachTag, array $auslastung, string $von, string $bis): ?array
@@ -445,10 +717,19 @@ class Tagesplan extends Component
         return $zeilen->groupBy(fn ($z) => $z->recipe_id !== null ? 'r:' . $z->recipe_id : 't:' . $z->name)
             ->map(function ($grp) {
                 $first = $grp->first();
+                $gerichtKey = $first->gericht_label !== null
+                    ? implode('|', [
+                        (int) ($first->order_id ?? 0),
+                        (string) $first->gericht_label,
+                        $first->liefertag !== null ? Carbon::parse($first->liefertag)->toDateString() : '',
+                    ])
+                    : null;
 
                 return (object) [
                     'name' => $first->name,
                     'ist_basisrezept' => (bool) ($first->is_basisrezept ?? false),
+                    'ist_gericht' => $gerichtKey !== null,
+                    'gericht_key' => $gerichtKey,
                     'auftraege' => $grp->pluck('auftrag')->filter()->unique()->values(),
                     'anzahl' => $grp->count(),
                     'ansaetze' => (float) $grp->sum('ansaetze_effektiv'),
@@ -479,15 +760,77 @@ class Tagesplan extends Component
             return null;   // nicht im aktuellen (team-strikten) Fenster → nichts zeigen
         }
         $line = FoodAlchemistProductionOrderLine::find($this->anleitungLineId);
+        $zutaten = $treffer->zutaten ?? ($line?->zutaten ?? []);
 
         return [
+            'line_id' => (int) $treffer->id,
             'name' => $treffer->name,
             'auftrag' => $treffer->auftrag,
+            'line_status' => $treffer->line_status,
+            'gesamt_kg' => $treffer->gesamt_kg,
+            'arbeitszeit_min' => $treffer->arbeitszeit_min !== null ? (int) $treffer->arbeitszeit_min : null,
+            'started_at' => $treffer->started_at ? Carbon::parse($treffer->started_at)->toIso8601String() : null,
+            'equipment' => collect($treffer->equipment ?? [])->map(fn ($e) => [
+                'name' => $e->name,
+                'gruppe' => $e->group_name,
+                'notiz' => $e->note,
+            ])->values()->all(),
             'schritte' => $treffer->schritte ?? ($line?->steps_snapshot ?? []),
             'zubereitung' => $treffer->zubereitung ?? $line?->zubereitung,
-            'zutaten' => $treffer->zutaten ?? ($line?->zutaten ?? []),
+            'zutaten' => $zutaten,
+            'sub_rezepte' => $this->anleitungSubRezepte($treffer, (array) $zutaten, $zeilen),
             'sicherheit' => $treffer->sicherheit ?? ['allergene' => [], 'diaet' => [], 'warnungen' => [], 'konfidenz' => 'unknown'],
+            'arbeitsschritte' => $this->arbeitsschritte($treffer->schritte ?? ($line?->steps_snapshot ?? []), $treffer->zubereitung ?? $line?->zubereitung),
+            'step_erledigt' => collect($this->anleitungStepStatus[(int) $treffer->id] ?? [])->map(fn ($i) => (int) $i)->unique()->values()->all(),
         ];
+    }
+
+    private function anleitungSubRezepte(object $zeile, array $zutaten, $zeilen): array
+    {
+        return collect($zutaten)
+            ->filter(fn ($z) => ($z['typ'] ?? null) === 'sub' && ! empty($z['ref_recipe_id']))
+            ->map(function ($z) use ($zeile, $zeilen) {
+                $refId = (int) $z['ref_recipe_id'];
+                $line = $zeilen->first(fn ($kandidat) => (int) ($kandidat->order_id ?? 0) === (int) ($zeile->order_id ?? 0)
+                    && (int) ($kandidat->recipe_id ?? 0) === $refId);
+
+                return [
+                    'line_id' => $line !== null ? (int) $line->id : null,
+                    'name' => (string) ($line?->rezept_label ?: ($line?->name ?? ($z['name'] ?? 'Basisrezept'))),
+                    'typ' => $line !== null && ! (bool) ($line->is_basisrezept ?? false) ? 'Produkt/Rezept' : 'Basisrezept',
+                    'erledigt' => $line !== null && $line->line_status === 'done',
+                    'menge' => $line?->gesamt_kg !== null
+                        ? rtrim(rtrim(number_format((float) $line->gesamt_kg, 3, ',', '.'), '0'), ',') . ' kg'
+                        : (isset($z['menge']) ? rtrim(rtrim(number_format((float) $z['menge'], 3, ',', '.'), '0'), ',') . ' ' . ($z['einheit'] ?? '') : null),
+                    'zeit' => $line?->arbeitszeit_min !== null ? $line->arbeitszeit_min . ' min' : null,
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
+    private function arbeitsschritte(array $schritte, ?string $zubereitung): array
+    {
+        if ($schritte !== []) {
+            return collect($schritte)
+                ->values()
+                ->map(fn ($s, $i) => ['index' => (int) $i, 'text' => (string) ($s['text'] ?? ''), 'heading' => false])
+                ->filter(fn ($s) => trim($s['text']) !== '')
+                ->values()
+                ->mapWithKeys(fn ($s) => [$s['index'] => $s])
+                ->all();
+        }
+
+        return collect(preg_split('/\R+/', (string) $zubereitung))
+            ->map(fn ($line) => trim($line))
+            ->filter()
+            ->values()
+            ->reject(fn ($line) => str_starts_with($line, '##'))
+            ->map(fn ($line) => trim(preg_replace('/^#+\s*/', '', $line)))
+            ->filter()
+            ->values()
+            ->mapWithKeys(fn ($line, $i) => [(int) $i => ['index' => (int) $i, 'text' => $line, 'heading' => false]])
+            ->all();
     }
 
     /** @return array<string, mixed> */
