@@ -10,6 +10,9 @@
         <span class="flex-1"></span>
         <button type="button" wire:click="pickerOeffnen({{ $rubrik->id }}, 'gericht')" class="{{ $btnGhostXs }}">+ Gericht</button>
         <button type="button" wire:click="pickerOeffnen({{ $rubrik->id }}, 'menue')" class="{{ $btnGhostXs }}">+ Menü</button>
+        {{-- Werkstrang M Phase C: Rubrik in ihrer Ebene hoch/runter. --}}
+        <button type="button" wire:click="rubrikHochRunter({{ $rubrik->id }}, 'hoch')" class="{{ $btnGhostXs }}" title="Rubrik hoch">▲</button>
+        <button type="button" wire:click="rubrikHochRunter({{ $rubrik->id }}, 'runter')" class="{{ $btnGhostXs }}" title="Rubrik runter">▼</button>
         <button type="button" wire:click="rubrikLoeschen({{ $rubrik->id }})" wire:confirm="Rubrik „{{ $rubrik->title }}“ löschen?" class="{{ $btnGhostXs }} text-red-600">✕</button>
     </div>
 
@@ -37,6 +40,9 @@
                     <span class="text-gray-300">—</span>
                 @endif
             </span>
+            {{-- Werkstrang M Phase C: Position in ihrer Rubrik hoch/runter. --}}
+            <button type="button" wire:click="positionHochRunter({{ $pos->id }}, 'hoch')" class="{{ $btnGhostXs }}" title="hoch">▲</button>
+            <button type="button" wire:click="positionHochRunter({{ $pos->id }}, 'runter')" class="{{ $btnGhostXs }}" title="runter">▼</button>
             @if(in_array($pos->type, ['gericht_ref', 'menue_ref']))
                 <button type="button" wire:click="positionBearbeiten({{ $pos->id }})" class="{{ $btnGhostXs }}">✎</button>
             @endif
@@ -66,6 +72,18 @@
                     </div>
                     @if($editPriceMode === 'manuell')
                         <input type="text" wire:model="editPriceValue" placeholder="€ netto" class="{{ $input }} w-24" />
+                    @endif
+                    @if($karte->sections->where('id', '!=', $rubrik->id)->isNotEmpty())
+                        {{-- Werkstrang M Phase C: Position in eine andere Rubrik derselben Karte verschieben. --}}
+                        <div>
+                            <div class="{{ $label }} mb-1">In Rubrik verschieben</div>
+                            <select class="{{ $input }} w-40" @change="if ($event.target.value) $wire.positionInRubrik({{ $pos->id }}, $event.target.value)">
+                                <option value="">— wählen —</option>
+                                @foreach($karte->sections->where('id', '!=', $rubrik->id) as $ziel)
+                                    <option value="{{ $ziel->id }}">{{ $ziel->consumer_title ?: $ziel->title }}</option>
+                                @endforeach
+                            </select>
+                        </div>
                     @endif
                     <span class="flex-1"></span>
                     <button type="button" wire:click="positionSpeichern" class="{{ $btnGhostXs }}">Übernehmen</button>

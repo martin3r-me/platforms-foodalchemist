@@ -116,3 +116,45 @@ it('Phase B: Gericht-Picker filtert per Facette + bleibt nach dem Einfügen offe
         ->assertSet('pickerDishClass', $klFleisch->id);
     expect($rubrik->items()->count())->toBe(1);
 });
+
+// ── Werkstrang M Phase C (Spec 40 §6): Umsortieren + Verschieben ──────────────
+
+it('Phase C: Position hoch/runter, in andere Rubrik verschieben, Rubrik hoch/runter', function () {
+    $svc = app(\Platform\FoodAlchemist\Services\SpeisekarteService::class);
+    $karte = $svc->create($this->rootTeam, ['name' => 'Karte C']);
+    $rA = $svc->addRubrik($this->rootTeam, $karte->id, ['title' => 'Rubrik A']);
+    $rB = $svc->addRubrik($this->rootTeam, $karte->id, ['title' => 'Rubrik B']);
+    $p1 = $svc->addPosition($this->rootTeam, $rA->id, ['type' => 'header', 'label' => 'P1']);
+    $p2 = $svc->addPosition($this->rootTeam, $rA->id, ['type' => 'header', 'label' => 'P2']);
+
+    $comp = Livewire::test(SpeisekarteIndex::class)->call('waehle', $karte->id);
+
+    // Position hoch: P2 nach oben → Reihenfolge P2, P1
+    $comp->call('positionHochRunter', $p2->id, 'hoch');
+    $order = \Platform\FoodAlchemist\Models\FoodAlchemistSpeisekartePosition::where('section_id', $rA->id)
+        ->orderBy('position')->pluck('id')->all();
+    expect($order)->toBe([$p2->id, $p1->id]);
+
+    // Position verschieben: P1 → Rubrik B (ans Ende)
+    $comp->call('positionInRubrik', $p1->id, $rB->id);
+    expect($p1->refresh()->section_id)->toBe($rB->id);
+
+    // Rubrik hoch: B nach oben → B, A
+    $comp->call('rubrikHochRunter', $rB->id, 'hoch');
+    $rubOrder = \Platform\FoodAlchemist\Models\FoodAlchemistSpeisekarteRubrik::where('menu_card_id', $karte->id)
+        ->whereNull('parent_id')->orderBy('position')->pluck('id')->all();
+    expect($rubOrder)->toBe([$rB->id, $rA->id]);
+});
+
+it('Phase C: movePosition über Karten-Grenze wirft (kein Cross-Card-Move)', function () {
+    $svc = app(\Platform\FoodAlchemist\Services\SpeisekarteService::class);
+    $k1 = $svc->create($this->rootTeam, ['name' => 'K1']);
+    $k2 = $svc->create($this->rootTeam, ['name' => 'K2']);
+    $r1 = $svc->addRubrik($this->rootTeam, $k1->id, ['title' => 'R1']);
+    $r2 = $svc->addRubrik($this->rootTeam, $k2->id, ['title' => 'R2']);
+    $p = $svc->addPosition($this->rootTeam, $r1->id, ['type' => 'header', 'label' => 'P']);
+
+    expect(fn () => $svc->movePosition($this->rootTeam, $p->id, $r2->id))
+        ->toThrow(RuntimeException::class, 'anderen Karte');
+    expect($p->refresh()->section_id)->toBe($r1->id);
+});

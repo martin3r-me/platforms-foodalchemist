@@ -328,6 +328,61 @@ class Index extends Component
         }
     }
 
+    // ── Werkstrang M Phase C (Spec 40 §6): Umsortieren + Verschieben ──────────
+
+    /** Position innerhalb ihrer Rubrik hoch/runter (dir ∈ hoch|runter). Reihenfolge-Swap mit dem Nachbarn. */
+    public function positionHochRunter(int $positionId, string $dir, SpeisekarteService $svc): void
+    {
+        $team = $this->team();
+        $pos = \Platform\FoodAlchemist\Models\FoodAlchemistSpeisekartePosition::visibleToTeam($team)->find($positionId);
+        if ($pos === null) {
+            return;
+        }
+        $ids = \Platform\FoodAlchemist\Models\FoodAlchemistSpeisekartePosition::where('section_id', $pos->section_id)
+            ->orderBy('position')->orderBy('id')->pluck('id')->map(fn ($v) => (int) $v)->all();
+        $svc->reorderPositionen($team, (int) $pos->section_id, $this->swapNachbar($ids, $positionId, $dir));
+    }
+
+    /** Rubrik innerhalb ihrer Ebene (gleiche Karte + gleicher parent) hoch/runter. */
+    public function rubrikHochRunter(int $rubrikId, string $dir, SpeisekarteService $svc): void
+    {
+        $team = $this->team();
+        $rubrik = \Platform\FoodAlchemist\Models\FoodAlchemistSpeisekarteRubrik::visibleToTeam($team)->find($rubrikId);
+        if ($rubrik === null) {
+            return;
+        }
+        $ids = \Platform\FoodAlchemist\Models\FoodAlchemistSpeisekarteRubrik::where('menu_card_id', $rubrik->menu_card_id)
+            ->where('parent_id', $rubrik->parent_id)
+            ->orderBy('position')->orderBy('id')->pluck('id')->map(fn ($v) => (int) $v)->all();
+        $svc->reorderRubriken($team, (int) $rubrik->menu_card_id, $rubrik->parent_id !== null ? (int) $rubrik->parent_id : null, $this->swapNachbar($ids, $rubrikId, $dir));
+    }
+
+    /** Eine Position in eine andere Rubrik derselben Karte verschieben (Phase-C-„echter Neubau"). */
+    public function positionInRubrik(int $positionId, int $newSectionId, SpeisekarteService $svc): void
+    {
+        try {
+            $svc->movePosition($this->team(), $positionId, $newSectionId);
+        } catch (\Throwable $e) {
+            $this->errorToast($e->getMessage());
+        }
+    }
+
+    /** Tauscht $id mit seinem oberen/unteren Nachbarn in der ID-Liste (dir ∈ hoch|runter). */
+    private function swapNachbar(array $ids, int $id, string $dir): array
+    {
+        $i = array_search($id, $ids, true);
+        if ($i === false) {
+            return $ids;
+        }
+        $j = $dir === 'hoch' ? $i - 1 : $i + 1;
+        if ($j < 0 || $j >= count($ids)) {
+            return $ids;   // schon oben/unten
+        }
+        [$ids[$i], $ids[$j]] = [$ids[$j], $ids[$i]];
+
+        return $ids;
+    }
+
     // ── Positions-Bearbeitung (Wording-Override + manueller Preis) ─────────────
 
     public function positionBearbeiten(int $positionId): void
