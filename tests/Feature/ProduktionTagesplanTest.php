@@ -234,6 +234,9 @@ it('gruppiert im Wandmonitor Gericht und Basisrezepte als Küchen-Arbeitsblock',
         ->set('modus', 'editor')
         ->assertSeeHtml('data-tagesplan-wall-gericht-gruppe')
         ->assertSeeHtml('data-tagesplan-wall-gericht-open')
+        ->assertSeeHtml('data-tagesplan-wall-gruppenfilter')
+        ->assertSeeHtml('data-tagesplan-wall-filter-gerichte')
+        ->assertSeeHtml('data-tagesplan-wall-filter-basis')
         ->assertSeeHtml('data-tagesplan-wall-rezepte')
         ->assertSeeHtml('data-tagesplan-wall-rezept')
         ->assertSeeHtml('data-tagesplan-abhaken')
@@ -245,7 +248,15 @@ it('gruppiert im Wandmonitor Gericht und Basisrezepte als Küchen-Arbeitsblock',
             'Anrichten',
             'Basisrezept',
             'Basilikum-Schaum',
-        ]);
+        ])
+        ->call('wallGruppenFilterSetzen', 'gerichte')
+        ->assertSet('wallGruppenFilter', 'gerichte')
+        ->assertSee('Probe Küche')
+        ->assertDontSee('Basisrezepte ohne Gericht')
+        ->call('wallGruppenFilterSetzen', 'basis')
+        ->assertSet('wallGruppenFilter', 'basis')
+        ->assertSee('Basisrezepte ohne Gericht')
+        ->assertDontSee('Probe Küche');
 });
 
 it('öffnet im Wandmonitor ein Gericht als Arbeitsblock mit tatsächlichen Rezepten und Produkten', function () {

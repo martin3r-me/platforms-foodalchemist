@@ -65,6 +65,9 @@ class Tagesplan extends Component
     /** Wandmonitor (Spec 35): Ansicht der Wand — 'lanes' (nach Posten) | 'mise' (zusammengefasst). */
     public string $wallAnsicht = 'lanes';
 
+    /** Wandmonitor: Filter innerhalb der Posten-Lanes — alle | gerichte | basis. */
+    public string $wallGruppenFilter = 'alle';
+
     /** Wandmonitor: Zeile, deren Anleitung gerade im Overlay offen ist (null = zu). */
     public ?int $anleitungLineId = null;
 
@@ -304,6 +307,11 @@ class Tagesplan extends Component
     public function wallAnsichtSetzen(string $a): void
     {
         $this->wallAnsicht = in_array($a, ['lanes', 'mise'], true) ? $a : 'lanes';
+    }
+
+    public function wallGruppenFilterSetzen(string $filter): void
+    {
+        $this->wallGruppenFilter = in_array($filter, ['alle', 'gerichte', 'basis'], true) ? $filter : 'alle';
     }
 
     /** Wandmonitor: Anleitung (Schritte + Zutaten) einer Zeile im Overlay öffnen. */

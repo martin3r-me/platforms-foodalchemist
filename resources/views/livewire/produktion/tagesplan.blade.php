@@ -81,6 +81,19 @@
                         <button type="button" wire:click="wallAnsichtSetzen('lanes')" class="rounded-xl px-5 py-2 text-sm font-semibold {{ $wallAnsicht === 'lanes' ? 'bg-violet-500 text-white' : 'text-slate-300' }}">Posten-Lanes</button>
                         <button type="button" wire:click="wallAnsichtSetzen('mise')" class="rounded-xl px-5 py-2 text-sm font-semibold {{ $wallAnsicht === 'mise' ? 'bg-violet-500 text-white' : 'text-slate-300' }}" data-tagesplan-wall-mise>Mise en Place</button>
                     </div>
+                    @if($wallAnsicht === 'lanes')
+                        @php
+                            $wallFilterGruppen = $wallPostenGruppen->flatten(1);
+                            $wallFilterAlle = $wallFilterGruppen->count();
+                            $wallFilterGerichte = $wallFilterGruppen->filter(fn ($gruppe) => (bool) ($gruppe->hat_gericht ?? false))->count();
+                            $wallFilterBasis = $wallFilterAlle - $wallFilterGerichte;
+                        @endphp
+                        <div class="inline-flex rounded-2xl border border-white/10 bg-white/5 p-1" data-tagesplan-wall-gruppenfilter>
+                            <button type="button" wire:click="wallGruppenFilterSetzen('alle')" class="rounded-xl px-4 py-2 text-sm font-semibold {{ $wallGruppenFilter === 'alle' ? 'bg-violet-500 text-white' : 'text-slate-300' }}" data-tagesplan-wall-filter-alle>Alle <span class="ml-1 text-xs opacity-75">{{ $wallFilterAlle }}</span></button>
+                            <button type="button" wire:click="wallGruppenFilterSetzen('gerichte')" class="rounded-xl px-4 py-2 text-sm font-semibold {{ $wallGruppenFilter === 'gerichte' ? 'bg-violet-500 text-white' : 'text-slate-300' }}" data-tagesplan-wall-filter-gerichte>Gerichte <span class="ml-1 text-xs opacity-75">{{ $wallFilterGerichte }}</span></button>
+                            <button type="button" wire:click="wallGruppenFilterSetzen('basis')" class="rounded-xl px-4 py-2 text-sm font-semibold {{ $wallGruppenFilter === 'basis' ? 'bg-violet-500 text-white' : 'text-slate-300' }}" data-tagesplan-wall-filter-basis>Basisrezepte <span class="ml-1 text-xs opacity-75">{{ $wallFilterBasis }}</span></button>
+                        </div>
+                    @endif
                     @if($postenFilter !== null)
                         <button type="button" wire:click="postenWaehlen({{ $postenFilter }})"
                                 class="inline-flex items-center gap-2 rounded-full border border-violet-300 bg-violet-500/20 px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-violet-100"
@@ -145,7 +158,13 @@
                     </section>
                 @else
                     @php
-                        $nachPosten = $wallPostenGruppen;
+                        $nachPosten = $wallPostenGruppen
+                            ->map(fn ($gruppen) => $gruppen
+                                ->filter(fn ($gruppe) => $wallGruppenFilter === 'alle'
+                                    || ($wallGruppenFilter === 'gerichte' && (bool) ($gruppe->hat_gericht ?? false))
+                                    || ($wallGruppenFilter === 'basis' && ! (bool) ($gruppe->hat_gericht ?? false)))
+                                ->values())
+                            ->filter(fn ($gruppen) => $gruppen->isNotEmpty());
                     @endphp
                     @php
                         $sichtbareBuckets = $wallBuckets->filter(fn ($b) => ($nachPosten[$b['station_id'] === null ? '_none' : (int) $b['station_id']] ?? collect())->isNotEmpty())->values();
@@ -153,10 +172,10 @@
                     @php
                         $einzelLane = $sichtbareBuckets->count() <= 1;
                     @endphp
-                    @if($wallZeilen->isEmpty())
+                    @if($wallZeilen->isEmpty() || $sichtbareBuckets->isEmpty())
                         <div class="grid h-full place-items-center rounded-3xl border border-white/10 bg-white/5 text-center" data-tagesplan-leer>
                             <div>
-                                <p class="text-4xl font-bold">Heute steht nichts an.</p>
+                                <p class="text-4xl font-bold">{{ $wallGruppenFilter === 'gerichte' ? 'Keine Gerichte im Fenster.' : ($wallGruppenFilter === 'basis' ? 'Keine Basisrezepte ohne Gericht.' : 'Heute steht nichts an.') }}</p>
                                 <p class="mt-2 text-lg text-slate-400">Der Küchenmonitor aktualisiert sich automatisch.</p>
                             </div>
                         </div>
@@ -173,6 +192,11 @@
                                     $laneZeilenAnzahl = $laneGruppen->sum(fn ($gruppe) => $gruppe->gesamt);
                                 @endphp
                                 @php
+                                    $laneGruppenLabel = $wallGruppenFilter === 'gerichte'
+                                        ? ($laneGruppen->count() === 1 ? 'Gericht' : 'Gerichte')
+                                        : ($laneGruppen->count() === 1 ? 'Arbeitsblock' : 'Arbeitsblöcke');
+                                @endphp
+                                @php
                                     $tone = ['ueberlast' => 'border-rose-400/50', 'eng' => 'border-amber-300/50', 'ok' => 'border-emerald-300/40'][$b['stufe']] ?? 'border-white/10';
                                 @endphp
                                 <section class="flex min-h-0 flex-col overflow-hidden rounded-3xl border {{ $tone }} bg-slate-900/90 shadow-2xl" data-tagesplan-lane="{{ $schluessel }}">
@@ -180,7 +204,7 @@
                                         <div class="flex items-start justify-between gap-3">
                                             <div class="min-w-0">
                                                 <h2 class="truncate text-2xl font-bold">{{ $b['station'] }}</h2>
-                                                <p class="text-sm text-slate-400">{{ $laneGruppen->count() }} Gerichte · {{ $laneZeilenAnzahl }} Jobs · {{ $b['geplant_min'] }}@if($b['kapazitaet_min'] !== null)/{{ $b['kapazitaet_min'] }}@endif min</p>
+                                                <p class="text-sm text-slate-400">{{ $laneGruppen->count() }} {{ $laneGruppenLabel }} · {{ $laneZeilenAnzahl }} Jobs · {{ $b['geplant_min'] }}@if($b['kapazitaet_min'] !== null)/{{ $b['kapazitaet_min'] }}@endif min</p>
                                             </div>
                                             @if($b['stufe'] === 'ueberlast')
                                                 <span class="rounded-full bg-rose-500/20 px-3 py-1 text-xs font-bold uppercase tracking-wide text-rose-100">Überlast</span>
