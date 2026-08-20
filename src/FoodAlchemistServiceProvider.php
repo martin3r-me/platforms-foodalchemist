@@ -597,6 +597,7 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\SpeiseplanEintraegePostTool::class,
                     // Speisekarte (Gastro-à-la-carte) — MCP-Lockstep
                     \Platform\FoodAlchemist\Tools\SpeisekartenPostTool::class,
+                    \Platform\FoodAlchemist\Tools\SpeisekartenPutTool::class,
                     \Platform\FoodAlchemist\Tools\SpeisekarteRubrikPostTool::class,
                     \Platform\FoodAlchemist\Tools\SpeisekarteRubrikPutTool::class,
                     \Platform\FoodAlchemist\Tools\SpeisekartePositionenPostTool::class,

@@ -95,16 +95,63 @@
                 {{-- Voll-Umbau 2026-08-03: sticky Tab-Leiste über den Baustein editor-tabs (Parität
                      Rezept/Gericht). „Aufbau" (Rubriken/Positionen) zuerst — wird am häufigsten
                      geändert. Panels bleiben im DOM (x-show); leitstelle-rail nicht neu mounten. --}}
-                <x-foodalchemist::editor-tabs marker="sk" wire-key="sk-tabs-{{ $karte->id }}" :init="'aufbau'"
+                {{-- Werkstrang M Phase A (Spec 40 §6): Top-down-Fluss „vom Groben zum Kleinen" — Kontext zuerst
+                     (Zielgruppe/Niveau als Leitplanken), dann Aufbau. Der Struktur/Positionen-Split bleibt
+                     bewusst offen: die Positionen sind heute je Rubrik im rubrik-Partial eingebettet, ein Split
+                     wäre eine Umstrukturierung (kein Surfacing) → späterer Ausbau. --}}
+                <x-foodalchemist::editor-tabs marker="sk" wire-key="sk-tabs-{{ $karte->id }}" :init="'kontext'"
                     :tabs="[
+                        'kontext' => 'Kontext',
                         'aufbau' => 'Aufbau',
-                        'stammdaten' => 'Stammdaten',
                         'branding' => 'Branding / CI',
                         'leitstelle' => 'Leitstelle',
                     ]">
 
-                {{-- ── Tab: STAMMDATEN ─────────────────────────────────────────── --}}
-                <div x-show="tab === 'stammdaten'" x-cloak class="pt-4 space-y-4">
+                {{-- ── Tab: KONTEXT (Werkstrang M Phase A) ─────────────────────── --}}
+                <div x-show="tab === 'kontext'" x-cloak class="pt-4 space-y-4">
+            {{-- Kontext / Leitplanken — Zielgruppe/Niveau/Convenience/Schreibstil. Defaults nach unten:
+                 kiWordingVorschlag/kiKartenText lesen default_niveau/kundentyp als Leitplanken. --}}
+            <div class="relative overflow-hidden {{ $card }} p-4" wire:key="sk-kontext-{{ $karte->id }}">
+                <div class="{{ $cardAccent }}"></div>
+                <div class="flex items-center gap-2 mb-3">
+                    <span class="font-semibold text-gray-900 text-sm">Kontext / Leitplanken</span>
+                    <span class="{{ $pill }} {{ $variantPill['secondary'] }}">wirkt als Default nach unten</span>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                        <div class="{{ $label }} mb-1">Kundentyp</div>
+                        <input type="text" wire:model="kundentyp" placeholder="z. B. Business-Lunch, Fine-Dining-Gäste …" class="{{ $input }}" />
+                    </div>
+                    <div>
+                        <div class="{{ $label }} mb-1">Schreibstil</div>
+                        <select wire:model="writingStyleId" class="{{ $input }}">
+                            <option value="">— keiner —</option>
+                            @foreach($schreibstile as $st)
+                                <option value="{{ $st->id }}">{{ $st->name }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div>
+                        <div class="{{ $label }} mb-1">Niveau</div>
+                        <select wire:model="niveau" class="{{ $input }}">
+                            <option value="">— offen —</option>
+                            <option value="buergerlich">bürgerlich</option>
+                            <option value="gehoben">gehoben</option>
+                            <option value="fine_dining">Fine Dining</option>
+                        </select>
+                    </div>
+                    <div>
+                        <div class="{{ $label }} mb-1">Convenience-Tiefe</div>
+                        <select wire:model="convenience" class="{{ $input }}">
+                            <option value="">— offen —</option>
+                            <option value="from_scratch">from scratch</option>
+                            <option value="teil_convenience">teil-convenience</option>
+                            <option value="voll_convenience">voll-convenience</option>
+                        </select>
+                    </div>
+                </div>
+                <p class="mt-2 text-[10px] text-gray-500">Oben „Speichern" übernimmt die Leitplanken — sie fließen als Defaults in KI-Wording &amp; Karten-Text.</p>
+            </div>
             {{-- Karten-Kopf / Meta --}}
             <div class="relative overflow-hidden {{ $card }} p-4" wire:key="sk-head-{{ $karte->id }}">
                 <div class="{{ $cardAccent }}"></div>
@@ -147,7 +194,7 @@
                 @endif
                 @error('kiKartenVorschau')<div class="mt-2 text-[11px] text-red-500">{{ $message }}</div>@enderror
             </div>
-                </div>{{-- /Tab STAMMDATEN --}}
+                </div>{{-- /Tab KONTEXT --}}
 
                 {{-- ── Tab: LEITSTELLE (Cockpit, Stufe E) ──────────────────────── --}}
                 <div x-show="tab === 'leitstelle'" x-cloak class="pt-4 space-y-4">

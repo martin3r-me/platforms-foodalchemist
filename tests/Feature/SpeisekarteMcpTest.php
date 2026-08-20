@@ -58,3 +58,33 @@ it('Stufe A MCP: gericht_ref ohne sales_recipe_id → VALIDATION_ERROR', functio
     ], $this->kontext);
     expect($pos->success)->toBeFalse();
 });
+
+// ── Werkstrang M Phase A (Spec 40 §6): speisekarten.PUT (Kopf-Update, Lockstep-Luecke) ────────
+
+it('Phase A MCP: speisekarten.PUT aktualisiert die Kontext-Leitplanken', function () {
+    $karte = $this->registry->get('foodalchemist.speisekarten.POST')->execute(['name' => 'Abendkarte'], $this->kontext);
+    $karteId = $karte->data['speisekarte']['id'];
+
+    $put = $this->registry->get('foodalchemist.speisekarten.PUT')->execute([
+        'id' => $karteId, 'kundentyp' => 'Fine-Dining-Gäste', 'default_niveau' => 'fine_dining',
+        'default_convenience' => 'from_scratch',
+    ], $this->kontext);
+
+    expect($put->success)->toBeTrue()
+        ->and($put->data['speisekarte']['default_niveau'])->toBe('fine_dining')
+        ->and($put->data['speisekarte']['kundentyp'])->toBe('Fine-Dining-Gäste');
+    expect(\Platform\FoodAlchemist\Models\FoodAlchemistSpeisekarte::find($karteId)->default_convenience)->toBe('from_scratch');
+});
+
+it('Phase A MCP: speisekarten.PUT ist team-scoped (fremdes Team → Fehler, kein Write)', function () {
+    $karte = $this->registry->get('foodalchemist.speisekarten.POST')->execute(['name' => 'Root-Karte'], $this->kontext);
+    $karteId = $karte->data['speisekarte']['id'];
+
+    $fremdKontext = new ToolContext($this->makeUser($this->childB), $this->childB);
+    $put = $this->registry->get('foodalchemist.speisekarten.PUT')->execute([
+        'id' => $karteId, 'default_niveau' => 'gehoben',
+    ], $fremdKontext);
+
+    expect($put->success)->toBeFalse();
+    expect(\Platform\FoodAlchemist\Models\FoodAlchemistSpeisekarte::find($karteId)->default_niveau)->toBeNull();
+});

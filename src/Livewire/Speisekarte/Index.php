@@ -39,6 +39,14 @@ class Index extends Component
     public ?string $gueltigBis = null;
     // Spec 33 P2/P5: Betriebsachse optional; Kunde ist CRM-only.
     public ?int $outletId = null;
+
+    // Werkstrang M Phase A (Spec 40 §6): Kontext-Leitplanken der Karte — wirken als Defaults nach unten
+    // (kiWordingVorschlag/kiKartenText lesen default_niveau/kundentyp bereits als Leitplanken).
+    public ?string $kundentyp = null;
+    public ?string $niveau = null;          // → default_niveau (buergerlich|gehoben|fine_dining)
+    public ?string $convenience = null;     // → default_convenience (from_scratch|teil_convenience|voll_convenience)
+    public ?int $writingStyleId = null;     // → writing_style_id
+
     public string $firmaSuche = '';
     public string $kontaktSuche = '';
 
@@ -91,6 +99,11 @@ class Index extends Component
         $this->gueltigVon = $karte->gueltig_von?->format('Y-m-d');
         $this->gueltigBis = $karte->gueltig_bis?->format('Y-m-d');
         $this->outletId = $karte->outlet_id;
+        // Werkstrang M Phase A: Kontext-Leitplanken hydrieren.
+        $this->kundentyp = $karte->kundentyp;
+        $this->niveau = $karte->default_niveau;
+        $this->convenience = $karte->default_convenience;
+        $this->writingStyleId = $karte->writing_style_id !== null ? (int) $karte->writing_style_id : null;
         $this->editPosId = null;
         $this->brandColor = $karte->brand_color ?: '#6d28d9';
         $this->bandColor = $karte->band_color;
@@ -120,6 +133,11 @@ class Index extends Component
             'gueltig_von' => $this->gueltigVon ?: null,
             'gueltig_bis' => $this->gueltigBis ?: null,
             'outlet_id' => $this->outletId ?: null,
+            // Werkstrang M Phase A: Kontext-Leitplanken mitschreiben.
+            'kundentyp' => $this->kundentyp ?: null,
+            'default_niveau' => $this->niveau ?: null,
+            'default_convenience' => $this->convenience ?: null,
+            'writing_style_id' => $this->writingStyleId ?: null,
         ]);
         $this->dispatch('gespeichert');
         $this->savedToast('Speisekarte gespeichert');
@@ -416,6 +434,9 @@ class Index extends Component
             'crmVerfuegbar' => $svc->crmVerfuegbar(),
             'firmen' => $svc->sucheFirmen($this->firmaSuche),
             'kontakte' => $svc->sucheKontakte($this->kontaktSuche),
+            // Werkstrang M Phase A: Schreibstil-Auswahl fürs Kontext-Panel (nur aktive, team-sichtbar).
+            'schreibstile' => \Platform\FoodAlchemist\Models\FoodAlchemistWritingStyle::visibleToTeam($team)
+                ->where('is_inactive', false)->orderBy('sort_order')->orderBy('name')->get(['id', 'name']),
         ])->layout('platform::layouts.app');
     }
 

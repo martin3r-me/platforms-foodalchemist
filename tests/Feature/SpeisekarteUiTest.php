@@ -54,3 +54,35 @@ it('Speisekarte-Editor: anlegen, Rubrik, Gericht-Position über Picker', functio
     expect($rubrik->items()->count())->toBe(1);
     expect($karte->refresh()->name)->toBe('Abendkarte');
 });
+
+// ── Werkstrang M Phase A (Spec 40 §6): Kontext-Leitplanken ────────────────────
+
+it('Phase A: Kontext-Leitplanken werden gesetzt + persistiert (waehle hydriert, speichern schreibt)', function () {
+    $ws = \Platform\FoodAlchemist\Models\FoodAlchemistWritingStyle::create([
+        'team_id' => $this->rootTeam->id, 'slug' => 'nuechtern', 'name' => 'Nüchtern', 'sprach_duktus' => 'sachlich',
+    ]);
+    Livewire::test(SpeisekarteIndex::class)->call('neu');
+    $karte = FoodAlchemistSpeisekarte::first();
+
+    Livewire::test(SpeisekarteIndex::class)
+        ->call('waehle', $karte->id)
+        ->set('kundentyp', 'Business-Lunch')
+        ->set('niveau', 'gehoben')
+        ->set('convenience', 'teil_convenience')
+        ->set('writingStyleId', $ws->id)
+        ->call('speichern')
+        ->assertOk();
+
+    $karte->refresh();
+    expect($karte->kundentyp)->toBe('Business-Lunch')
+        ->and($karte->default_niveau)->toBe('gehoben')
+        ->and($karte->default_convenience)->toBe('teil_convenience')
+        ->and((int) $karte->writing_style_id)->toBe((int) $ws->id);
+
+    // Rück-Hydration: waehle lädt die Leitplanken wieder in die Properties.
+    Livewire::test(SpeisekarteIndex::class)
+        ->call('waehle', $karte->id)
+        ->assertSet('kundentyp', 'Business-Lunch')
+        ->assertSet('niveau', 'gehoben')
+        ->assertSet('writingStyleId', $ws->id);
+});
