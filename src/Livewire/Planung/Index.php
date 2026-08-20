@@ -2518,6 +2518,22 @@ class Index extends Component
                         ];
                     }
                 }
+                // E5 (Spec 40): „daraus entstanden" — den materialisierten Artefakt-Namen je Lauf mitführen
+                // (ein Batch-Query über die Steps der schon gesammelten Läufe, KEIN zusätzlicher Round-Trip
+                // je Karte). Der Step-Label trägt nach markStepDone den echten Rezept-/Concept-Namen.
+                $runIds = collect($skizzenLauf)->pluck('run_id')->map(fn ($v) => (int) $v)->unique()->values()->all();
+                if ($runIds !== []) {
+                    $ergebnisse = \Platform\FoodAlchemist\Models\FoodAlchemistCascadeRunStep::whereIn('cascade_run_id', $runIds)
+                        ->whereNotNull('ref_id')->whereNotNull('label')
+                        ->orderBy('id')->get(['cascade_run_id', 'label'])
+                        ->groupBy('cascade_run_id');
+                    foreach ($skizzenLauf as $oid => $l) {
+                        $steps = $ergebnisse[(int) $l['run_id']] ?? null;
+                        if ($steps !== null && $steps->isNotEmpty()) {
+                            $skizzenLauf[$oid]['ergebnis'] = (string) $steps->first()->label;
+                        }
+                    }
+                }
             }
         }
 

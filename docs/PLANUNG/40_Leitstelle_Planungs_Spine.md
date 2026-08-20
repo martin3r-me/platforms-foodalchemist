@@ -164,7 +164,8 @@ Jede Etappe ist eine eigene, shippbare Bau-Runde mit eigener Verifikation. Diese
 - **Favoriten-Vorschlag:** `FavoriteGpService` rankt schon aus Nutzung, aber Pinnen ist manuell. Freigegebene Läufe schlagen Favoriten-Kandidaten vor (mensch-gated bleibt).
 **Verifikation:** Kaskaden-Lücke erzeugt ein Signal im Signale-Cockpit; Favoriten-Vorschlag erscheint nach Freigabe, Pin bleibt manuell.
 
-### E5 — Rückkopplung 3: Skizzen-/Analyse-Lernen (optional) · Status: offen
+### E5 — Rückkopplung 3: Skizzen-/Analyse-Lernen (optional) · Status: ✅ gebaut + Sandbox-verifiziert 2026-08-20 (Branch `feat/spec40-umsetzung`, nicht deployt)
+> **Umsetzung (leichtgewichtig):** die Skizzen-Karte zeigt jetzt „daraus entstanden: ‹Artefakt-Name›" — `render()` führt je Skizzen-Lauf (`origin_dish_idea_id`) den materialisierten Step-Label mit (ein Batch-Query über die schon gesammelten Läufe, kein zusätzlicher Round-Trip je Karte); `$skizzeLaufBadge` hängt es ans Status-Badge. Über das reine Status-Badge hinaus ein sichtbares Lern-/Rückblick-Signal. Render-Gate PlanungLeitstelleTest grün.
 **Ziel:** Die Divergenz-Ebene lernt aus Ergebnissen.
 **Bausteine:** `origin_dish_idea_id` über das Status-Badge hinaus als Lern-Signal (aus dieser Skizze wurde X, mit welchem Erfolg); Analyse-Tab-Rückblick „daraus entstanden".
 **Verifikation:** Skizzen-Karte zeigt den materialisierten Bezug; Analyse-Rückblick listet erzeugte Konzepte.

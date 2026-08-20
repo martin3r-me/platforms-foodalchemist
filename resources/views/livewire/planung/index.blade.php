@@ -28,7 +28,12 @@
             return '';
         }
         [$lbl, $cls] = $laufStatus[$l['status']] ?? [$l['status'], 'bg-black/[0.04] text-gray-600'];
-        return $chip('▸ ' . $lbl, $cls);
+        $html = $chip('▸ ' . $lbl, $cls);
+        // E5 (Spec 40): „daraus entstanden" — der materialisierte Artefakt-Name (Lern-/Rückblick-Signal).
+        if (trim((string) ($l['ergebnis'] ?? '')) !== '') {
+            $html .= ' <span class="text-[10px] text-gray-500" title="daraus entstanden">→ ' . e($l['ergebnis']) . '</span>';
+        }
+        return $html;
     };
     // Finale Etappe (Hauptseite): Kaskaden-Status-Badge je Session aus $kaskaden (jüngster Lauf).
     // Kein Lauf → „Entwurf" (verwaister Entwurf, sichtbar). Farben spiegeln $laufStatus.
