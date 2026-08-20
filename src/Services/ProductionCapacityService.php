@@ -147,6 +147,7 @@ class ProductionCapacityService
                 'l.id', 'l.plan_date', 'l.station_id', 'l.assignee', 'l.arbeitszeit_min',
                 'l.ansaetze', 'l.manual_ansaetze', 'l.is_manual_ansaetze', 'l.titel', 'l.vorlauf_tage',
                 'l.recipe_id', 'l.tiefe', 'l.position', 'l.is_basisrezept',
+                'l.benoetigt_ansaetze', 'l.basis_yield_kg', 'l.produzierte_menge_kg',
                 'l.blocked_reason', 'l.blocked_note', 'l.skipped_reason', 'l.started_at', 'l.updated_at',
                 'l.line_status',                       // Spec 30 E6: Küchen-Checkliste
                 'o.status as auftrag_status',          // abgehakt wird nur im laufenden Auftrag
@@ -189,6 +190,9 @@ class ProductionCapacityService
                 $z->sicherheit = $this->sicherheit($z);
                 $z->ansaetze_effektiv = $z->is_manual_ansaetze && $z->manual_ansaetze !== null
                     ? (float) $z->manual_ansaetze : (float) $z->ansaetze;
+                $z->gesamt_kg = $z->produzierte_menge_kg !== null
+                    ? (float) $z->produzierte_menge_kg
+                    : ($z->basis_yield_kg !== null ? (float) $z->basis_yield_kg * (float) $z->ansaetze_effektiv : null);
                 if (property_exists($z, 'steps_snapshot')) {
                     $z->schritte = is_string($z->steps_snapshot)
                         ? (json_decode($z->steps_snapshot, true) ?: []) : ($z->steps_snapshot ?? []);

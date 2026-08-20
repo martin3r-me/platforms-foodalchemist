@@ -1,6 +1,7 @@
 <?php
 
 use Livewire\Livewire;
+use Platform\FoodAlchemist\Enums\ProductionLineStatus;
 use Platform\FoodAlchemist\Enums\ProductionOrderStatus;
 use Platform\FoodAlchemist\Livewire\Produktion\Tagesplan;
 use Platform\FoodAlchemist\Models\FoodAlchemistProductionOrderLine as Line;
@@ -328,6 +329,66 @@ it('zeigt Zutaten in der Wandmonitor-Anleitung immer untereinander', function ()
         ->assertSee('Hummus Mango')
         ->assertSee('Salat: Quinoa Mango Peppadew')
         ->assertSee('Deko: Sesam');
+});
+
+it('zeigt in der Wandmonitor-Anleitung die Gesamtmenge kompakt an', function () {
+    $lineId = Line::where('production_order_id', $this->a1->id)->value('id');
+    Line::whereKey($lineId)->update([
+        'zubereitung' => "1. Ansetzen.",
+        'produzierte_menge_kg' => 2.75,
+    ]);
+
+    Livewire::test(Tagesplan::class, ['von' => '2026-08-20', 'display' => 'wall'])
+        ->set('modus', 'editor')
+        ->call('oeffneAnleitung', $lineId)
+        ->assertSeeHtml('data-tagesplan-wall-gesamtmenge')
+        ->assertSee('2,75 kg');
+});
+
+it('hakt in der Wandmonitor-Anleitung einzelne Schritte ab und setzt die Zeile nach allen Schritten erledigt', function () {
+    $lineId = Line::where('production_order_id', $this->a1->id)->value('id');
+    Line::whereKey($lineId)->update([
+        'zubereitung' => "## Mise en Place\n1. Fonds erhitzen.\n2. Abschmecken und bereitstellen.",
+    ]);
+
+    Livewire::test(Tagesplan::class, ['von' => '2026-08-20', 'display' => 'wall'])
+        ->set('modus', 'editor')
+        ->call('oeffneAnleitung', $lineId)
+        ->assertSeeHtml('data-tagesplan-wall-step-abhaken')
+        ->assertSeeHtml('data-tagesplan-wall-anleitung-alle-steps')
+        ->assertSeeHtml('data-tagesplan-wall-step-fortschritt')
+        ->call('anleitungStepUmschalten', 0)
+        ->assertSet('fehler', null);
+
+    expect(Line::where('production_order_id', $this->a1->id)->where('recipe_id', $this->fond->id)->firstOrFail()->line_status)
+        ->not->toBe(ProductionLineStatus::Done);
+
+    Livewire::test(Tagesplan::class, ['von' => '2026-08-20', 'display' => 'wall'])
+        ->set('modus', 'editor')
+        ->call('oeffneAnleitung', $lineId)
+        ->call('anleitungStepUmschalten', 0)
+        ->call('anleitungStepUmschalten', 1)
+        ->assertSet('fehler', null);
+
+    expect(Line::where('production_order_id', $this->a1->id)->where('recipe_id', $this->fond->id)->firstOrFail()->line_status)
+        ->toBe(ProductionLineStatus::Done);
+});
+
+it('hakt in der Wandmonitor-Anleitung alle Schritte mit einem großen Haken ab', function () {
+    $lineId = Line::where('production_order_id', $this->a1->id)->value('id');
+    Line::whereKey($lineId)->update([
+        'zubereitung' => "1. Bereitstellen.\n2. Fertigstellen.",
+    ]);
+
+    Livewire::test(Tagesplan::class, ['von' => '2026-08-20', 'display' => 'wall'])
+        ->set('modus', 'editor')
+        ->call('oeffneAnleitung', $lineId)
+        ->assertSeeHtml('data-tagesplan-wall-anleitung-alle-steps')
+        ->call('anleitungAlleStepsUmschalten')
+        ->assertSet('fehler', null);
+
+    expect(Line::where('production_order_id', $this->a1->id)->where('recipe_id', $this->fond->id)->firstOrFail()->line_status)
+        ->toBe(ProductionLineStatus::Done);
 });
 
 it('zeigt im Wandmodus einen klaren Leerzustand statt leerer Anleitung', function () {

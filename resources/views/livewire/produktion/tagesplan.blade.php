@@ -1,18 +1,34 @@
 {{-- Spec 30/35 — Tagesplanung: Dashboard als Leitstand, Editor als separater Koch-Arbeitsplatz
      im FA-Dark-Editor-Duktus (.fa-editor-panel · kpi-tiles · frosted Sections, wie andere Editoren). --}}
-@php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
-@php($istWall = $display === 'wall')
+@php
+    extract(\Platform\FoodAlchemist\Support\Ui::maps());
+    $istWall = $display === 'wall';
+@endphp
 
 <div class="{{ $istWall ? '' : 'h-full min-h-0' }}">
 @if($istWall)
     @include('foodalchemist::partials.editor-dark')
-    @php($wallTag = \Illuminate\Support\Carbon::parse($von)->toDateString())
-    @php($wallZeilen = $zeilenNachTag->get($wallTag, collect()))
-    @php($wallBuckets = collect($auslastung[$wallTag] ?? []))
-    @php($offen = $wallZeilen->reject(fn ($z) => in_array($z->line_status, ['done', 'skipped'], true))->count())
-    @php($fertig = $wallZeilen->filter(fn ($z) => $z->line_status === 'done')->count())
-    @php($krit = $wallBuckets->where('stufe', 'ueberlast')->count())
-    @php($gesamtMin = (int) $wallZeilen->sum('arbeitszeit_min'))
+    @php
+        $wallTag = \Illuminate\Support\Carbon::parse($von)->toDateString();
+    @endphp
+    @php
+        $wallZeilen = $zeilenNachTag->get($wallTag, collect());
+    @endphp
+    @php
+        $wallBuckets = collect($auslastung[$wallTag] ?? []);
+    @endphp
+    @php
+        $offen = $wallZeilen->reject(fn ($z) => in_array($z->line_status, ['done', 'skipped'], true))->count();
+    @endphp
+    @php
+        $fertig = $wallZeilen->filter(fn ($z) => $z->line_status === 'done')->count();
+    @endphp
+    @php
+        $krit = $wallBuckets->where('stufe', 'ueberlast')->count();
+    @endphp
+    @php
+        $gesamtMin = (int) $wallZeilen->sum('arbeitszeit_min');
+    @endphp
 
     <div class="h-screen w-screen overflow-hidden bg-slate-950 text-white"
          data-tagesplan-wall data-tagesplan-wall-kiosk wire:poll.30s>
@@ -71,7 +87,9 @@
                                 data-tagesplan-wall-station-reset>Alle Stationen</button>
                     @endif
                     @foreach($wallBuckets as $b)
-                        @php($dot = ['ueberlast' => 'bg-rose-400', 'eng' => 'bg-amber-300', 'ok' => 'bg-emerald-300'][$b['stufe']] ?? 'bg-slate-400')
+                        @php
+                            $dot = ['ueberlast' => 'bg-rose-400', 'eng' => 'bg-amber-300', 'ok' => 'bg-emerald-300'][$b['stufe']] ?? 'bg-slate-400';
+                        @endphp
                         <button type="button" wire:click="postenWaehlen({{ $b['station_id'] === null ? 'null' : (int) $b['station_id'] }})"
                                 class="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs text-slate-200 {{ $postenFilter === $b['station_id'] ? 'border-violet-300 bg-violet-500/20' : 'border-white/10 bg-white/5' }}"
                                 data-tagesplan-ampeln data-tagesplan-wall-station-filter>
@@ -89,7 +107,9 @@
                     <section class="h-full min-h-0 overflow-y-auto rounded-3xl border border-white/10 bg-white/5 p-4" data-tagesplan-mise>
                         <div class="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
                             @forelse($miseEnPlace as $m)
-                                @php($miseFertig = $m->gesamt > 0 && $m->erledigt === $m->gesamt)
+                                @php
+                                    $miseFertig = $m->gesamt > 0 && $m->erledigt === $m->gesamt;
+                                @endphp
                                 <article class="flex min-h-40 gap-3 rounded-2xl border border-white/10 bg-slate-900/80 p-4 text-left shadow-xl transition hover:border-violet-300/70 {{ $miseFertig ? 'opacity-60' : '' }}" data-tagesplan-mise-karte>
                                     <button type="button" wire:click="abhakenMise({{ $m->erste_line_id }})"
                                             class="grid h-16 w-16 shrink-0 place-items-center rounded-2xl border text-3xl font-bold {{ $miseFertig ? 'border-emerald-400 bg-emerald-500 text-white' : 'border-dashed border-violet-300/70 bg-violet-500/10 text-violet-100 hover:bg-violet-500/20' }}"
@@ -124,9 +144,15 @@
                         </div>
                     </section>
                 @else
-                    @php($nachPosten = $wallPostenGruppen)
-                    @php($sichtbareBuckets = $wallBuckets->filter(fn ($b) => ($nachPosten[$b['station_id'] === null ? '_none' : (int) $b['station_id']] ?? collect())->isNotEmpty())->values())
-                    @php($einzelLane = $sichtbareBuckets->count() <= 1)
+                    @php
+                        $nachPosten = $wallPostenGruppen;
+                    @endphp
+                    @php
+                        $sichtbareBuckets = $wallBuckets->filter(fn ($b) => ($nachPosten[$b['station_id'] === null ? '_none' : (int) $b['station_id']] ?? collect())->isNotEmpty())->values();
+                    @endphp
+                    @php
+                        $einzelLane = $sichtbareBuckets->count() <= 1;
+                    @endphp
                     @if($wallZeilen->isEmpty())
                         <div class="grid h-full place-items-center rounded-3xl border border-white/10 bg-white/5 text-center" data-tagesplan-leer>
                             <div>
@@ -137,10 +163,18 @@
                     @else
                         <div class="{{ $einzelLane ? 'h-full min-h-0' : 'grid h-full min-h-0 grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4' }}" data-tagesplan-lanes @if($einzelLane) data-tagesplan-wall-single-lane @endif>
                             @foreach($sichtbareBuckets as $b)
-                                @php($schluessel = $b['station_id'] === null ? '_none' : (int) $b['station_id'])
-                                @php($laneGruppen = $nachPosten[$schluessel] ?? collect())
-                                @php($laneZeilenAnzahl = $laneGruppen->sum(fn ($gruppe) => $gruppe->gesamt))
-                                @php($tone = ['ueberlast' => 'border-rose-400/50', 'eng' => 'border-amber-300/50', 'ok' => 'border-emerald-300/40'][$b['stufe']] ?? 'border-white/10')
+                                @php
+                                    $schluessel = $b['station_id'] === null ? '_none' : (int) $b['station_id'];
+                                @endphp
+                                @php
+                                    $laneGruppen = $nachPosten[$schluessel] ?? collect();
+                                @endphp
+                                @php
+                                    $laneZeilenAnzahl = $laneGruppen->sum(fn ($gruppe) => $gruppe->gesamt);
+                                @endphp
+                                @php
+                                    $tone = ['ueberlast' => 'border-rose-400/50', 'eng' => 'border-amber-300/50', 'ok' => 'border-emerald-300/40'][$b['stufe']] ?? 'border-white/10';
+                                @endphp
                                 <section class="flex min-h-0 flex-col overflow-hidden rounded-3xl border {{ $tone }} bg-slate-900/90 shadow-2xl" data-tagesplan-lane="{{ $schluessel }}">
                                     <div class="shrink-0 border-b border-white/10 px-5 py-4">
                                         <div class="flex items-start justify-between gap-3">
@@ -160,7 +194,9 @@
                                     <div class="min-h-0 flex-1 overflow-y-auto p-4">
                                         <div class="{{ $einzelLane ? 'grid auto-rows-max grid-cols-1 gap-4 xl:grid-cols-2' : 'space-y-4' }}" data-tagesplan-wall-lane-jobs>
                                         @foreach($laneGruppen as $gruppe)
-                                            @php($gruppeFertig = $gruppe->gesamt > 0 && $gruppe->erledigt === $gruppe->gesamt)
+                                            @php
+                                                $gruppeFertig = $gruppe->gesamt > 0 && $gruppe->erledigt === $gruppe->gesamt;
+                                            @endphp
                                             <article class="overflow-hidden rounded-3xl border border-white/10 bg-slate-950/45 {{ $gruppeFertig ? 'opacity-60' : '' }}" data-tagesplan-wall-gericht-gruppe>
                                                 <div class="border-b border-white/10 bg-white/[0.04] px-4 py-3" data-tagesplan-wall-gericht>
                                                     <div class="flex items-start justify-between gap-3">
@@ -190,9 +226,15 @@
                                                 </div>
                                                 <div class="space-y-2 p-3" data-tagesplan-wall-rezepte>
                                                     @foreach($gruppe->zeilen as $z)
-                                                        @php($erledigt = $z->line_status === 'done')
-                                                        @php($laeuft = $z->auftrag_status === 'in_progress')
-                                                        @php($rezeptTitel = $z->rezept_label ?: $z->name)
+                                                        @php
+                                                            $erledigt = $z->line_status === 'done';
+                                                        @endphp
+                                                        @php
+                                                            $laeuft = $z->auftrag_status === 'in_progress';
+                                                        @endphp
+                                                        @php
+                                                            $rezeptTitel = $z->rezept_label ?: $z->name;
+                                                        @endphp
                                                         <div class="flex min-h-28 gap-3 rounded-2xl border border-white/10 bg-white/[0.06] p-3 {{ $erledigt ? 'opacity-55' : '' }}" wire:key="wk-{{ $z->id }}" data-tagesplan-zeile="{{ $z->id }}" data-tagesplan-wall-rezept>
                                                             <button type="button" wire:click="abhaken({{ $z->id }})"
                                                                     class="grid h-16 w-16 shrink-0 place-items-center rounded-2xl border text-3xl font-bold {{ $erledigt ? 'border-emerald-400 bg-emerald-500 text-white' : ($laeuft ? 'border-white/25 bg-slate-950/60 text-white hover:border-violet-300' : 'border-dashed border-violet-300/70 bg-violet-500/10 text-violet-100 hover:bg-violet-500/20') }}"
@@ -247,12 +289,46 @@
                 </button>
             </x-slot:actions>
             @if($anleitung)
+                @php
+                    $wallStepKeys = array_keys($anleitung['arbeitsschritte'] ?? []);
+                    $wallErledigteSteps = collect($anleitung['step_erledigt'] ?? [])->map(fn ($i) => (int) $i)->intersect($wallStepKeys);
+                    $wallAlleStepsErledigt = $wallStepKeys !== [] && $wallErledigteSteps->count() === count($wallStepKeys);
+                    $wallLineErledigt = ($anleitung['line_status'] ?? null) === 'done';
+                    $wallGesamtKg = $anleitung['gesamt_kg'] ?? null;
+                    $wallGesamtKgText = $wallGesamtKg !== null
+                        ? rtrim(rtrim(number_format((float) $wallGesamtKg, 3, ',', '.'), '0'), ',') . ' kg'
+                        : null;
+                @endphp
                 <div class="grid gap-3 xl:grid-cols-[minmax(18rem,24rem)_1fr]" data-tagesplan-wall-anleitung>
                     <aside class="space-y-3 xl:sticky xl:top-0 xl:self-start">
                         <div class="rounded-xl border border-white/10 bg-white/5 px-3 py-2">
                             <p class="text-xs font-bold uppercase tracking-wide text-slate-400">Auftrag</p>
                             <p class="mt-1 text-sm text-slate-200">für {{ $anleitung['auftrag'] }}</p>
                         </div>
+
+                        <section class="rounded-xl border border-white/10 bg-white/5 px-3 py-2">
+                            <div class="grid grid-cols-2 gap-2 text-sm">
+                                <div>
+                                    <p class="text-[11px] font-bold uppercase tracking-wide text-slate-400">Ansätze</p>
+                                    <p class="mt-0.5 font-semibold tabular-nums text-slate-100">{{ rtrim(rtrim(number_format((float) ($anleitung['ansaetze'] ?? 0), 2, ',', '.'), '0'), ',') }}</p>
+                                </div>
+                                @if($wallGesamtKgText !== null)
+                                    <div data-tagesplan-wall-gesamtmenge>
+                                        <p class="text-[11px] font-bold uppercase tracking-wide text-slate-400">Gesamt</p>
+                                        <p class="mt-0.5 font-semibold tabular-nums text-slate-100">{{ $wallGesamtKgText }}</p>
+                                    </div>
+                                @endif
+                            </div>
+                            @if($wallStepKeys !== [])
+                                <button type="button" wire:click="anleitungAlleStepsUmschalten"
+                                        class="mt-2 flex w-full items-center justify-between rounded-xl border px-3 py-2 text-left text-sm font-bold {{ $wallAlleStepsErledigt || $wallLineErledigt ? 'border-emerald-400/40 bg-emerald-500/20 text-emerald-100' : 'border-violet-300/40 bg-violet-500/15 text-violet-100 hover:bg-violet-500/25' }}"
+                                        data-tagesplan-wall-anleitung-alle-steps>
+                                    <span>{{ $wallAlleStepsErledigt || $wallLineErledigt ? 'Alle Schritte erledigt' : 'Alle Schritte abhaken' }}</span>
+                                    <span class="grid h-8 w-8 place-items-center rounded-lg {{ $wallAlleStepsErledigt || $wallLineErledigt ? 'bg-emerald-400 text-slate-950' : 'bg-white/10 text-white' }}">{{ $wallAlleStepsErledigt || $wallLineErledigt ? '✓' : '' }}</span>
+                                </button>
+                                <p class="mt-1 text-xs text-slate-400" data-tagesplan-wall-step-fortschritt>{{ $wallErledigteSteps->count() }}/{{ count($wallStepKeys) }} Schritte</p>
+                            @endif
+                        </section>
 
                         @if(collect($anleitung['sicherheit']['allergene'] ?? [])->isNotEmpty() || collect($anleitung['sicherheit']['warnungen'] ?? [])->isNotEmpty() || collect($anleitung['sicherheit']['diaet'] ?? [])->isNotEmpty())
                             <section class="rounded-xl border border-white/10 bg-white/5 px-3 py-2" data-tagesplan-wall-sicherheitsblock>
@@ -291,20 +367,35 @@
                         @if(!empty($anleitung['schritte']))
                             <div class="mt-3 space-y-2">
                                 @foreach($anleitung['schritte'] as $s)
-                                    @php($fotos = collect($s['fotos'] ?? $s['photos'] ?? [])->filter(fn ($f) => ($f['url'] ?? $f['src'] ?? null)))
-                                    @php($medien = collect($s['medien'] ?? $s['media'] ?? [])->filter(fn ($m) => ($m['url'] ?? $m['src'] ?? null)))
-                                    <article class="rounded-xl border border-white/10 bg-slate-950/45 px-3 py-2.5" data-tagesplan-wall-schritt>
+                                    @php
+                                        $stepIndex = (int) $loop->index;
+                                    @endphp
+                                    @php
+                                        $stepErledigt = in_array($stepIndex, $anleitung['step_erledigt'] ?? [], true) || $wallLineErledigt;
+                                    @endphp
+                                    @php
+                                        $fotos = collect($s['fotos'] ?? $s['photos'] ?? [])->filter(fn ($f) => ($f['url'] ?? $f['src'] ?? null));
+                                    @endphp
+                                    @php
+                                        $medien = collect($s['medien'] ?? $s['media'] ?? [])->filter(fn ($m) => ($m['url'] ?? $m['src'] ?? null));
+                                    @endphp
+                                    <article class="rounded-xl border border-white/10 bg-slate-950/45 px-3 py-2.5 {{ $stepErledigt ? 'opacity-70' : '' }}" data-tagesplan-wall-schritt>
                                         <div class="flex gap-3">
-                                            <span class="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-violet-500 text-base font-bold">{{ $s['nr'] ?? $loop->iteration }}</span>
+                                            <button type="button" wire:click="anleitungStepUmschalten({{ $stepIndex }})"
+                                                    class="grid h-12 w-12 shrink-0 place-items-center rounded-xl border text-xl font-bold {{ $stepErledigt ? 'border-emerald-400 bg-emerald-500 text-slate-950' : 'border-dashed border-violet-300/70 bg-violet-500/10 text-violet-100 hover:bg-violet-500/20' }}"
+                                                    title="{{ $stepErledigt ? 'Schritt zurücknehmen' : 'Schritt erledigt abhaken' }}"
+                                                    data-tagesplan-wall-step-abhaken>{{ $stepErledigt ? '✓' : ($s['nr'] ?? $loop->iteration) }}</button>
                                             <div class="min-w-0 flex-1">
                                                 @if($s['phase'] ?? null)<p class="text-[11px] font-bold uppercase tracking-wide text-violet-200">{{ $s['phase'] }}</p>@endif
-                                                <p class="text-lg leading-snug">{{ $s['text'] ?? '' }}</p>
+                                                <p class="text-lg leading-snug {{ $stepErledigt ? 'line-through decoration-emerald-300/70' : '' }}">{{ $s['text'] ?? '' }}</p>
                                             </div>
                                         </div>
                                         @if($fotos->isNotEmpty())
                                             <div class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3" data-tagesplan-wall-bilder>
                                                 @foreach($fotos as $f)
-                                                    @php($src = $f['url'] ?? $f['src'] ?? null)
+                                                    @php
+                                                        $src = $f['url'] ?? $f['src'] ?? null;
+                                                    @endphp
                                                     <figure class="overflow-hidden rounded-2xl border border-white/10 bg-black/30">
                                                         <img src="{{ $src }}" alt="{{ $f['caption'] ?? ('Schritt ' . ($s['nr'] ?? $loop->parent->iteration)) }}" class="h-64 w-full object-cover" loading="lazy" />
                                                         @if($f['caption'] ?? null)<figcaption class="px-3 py-2 text-sm text-slate-300">{{ $f['caption'] }}</figcaption>@endif
@@ -317,8 +408,12 @@
                                                 @if($s['video'] ?? null)<video src="{{ $s['video'] }}" controls playsinline class="max-h-[60vh] w-full rounded-2xl bg-black"></video>@endif
                                                 @if($s['audio'] ?? null)<audio src="{{ $s['audio'] }}" controls class="w-full"></audio>@endif
                                                 @foreach($medien as $m)
-                                                    @php($src = $m['url'] ?? $m['src'] ?? null)
-                                                    @php($typ = $m['type'] ?? $m['typ'] ?? '')
+                                                    @php
+                                                        $src = $m['url'] ?? $m['src'] ?? null;
+                                                    @endphp
+                                                    @php
+                                                        $typ = $m['type'] ?? $m['typ'] ?? '';
+                                                    @endphp
                                                     @if(str_contains((string) $typ, 'video'))
                                                         <video src="{{ $src }}" controls playsinline class="max-h-[60vh] w-full rounded-2xl bg-black"></video>
                                                     @elseif(str_contains((string) $typ, 'audio'))
@@ -333,19 +428,38 @@
                                 @endforeach
                             </div>
                         @elseif(!empty($anleitung['zubereitung']))
-                            @php($fallbackZeilen = collect(preg_split('/\R+/', (string) $anleitung['zubereitung']))
-                                ->map(fn ($line) => trim($line))
-                                ->filter()
-                                ->values())
+                            @php
+                                $fallbackZeilen = collect(preg_split('/\R+/', (string) $anleitung['zubereitung']))
+                                    ->map(fn ($line) => trim($line))
+                                    ->filter()
+                                    ->values();
+                            @endphp
                             <div class="mt-3 space-y-2" data-tagesplan-wall-fallback-schritte>
+                                @php
+                                    $fallbackStepIndex = -1;
+                                @endphp
                                 @foreach($fallbackZeilen as $line)
-                                    @php($istHeading = str_starts_with($line, '##'))
-                                    @php($text = trim(preg_replace('/^#+\s*/', '', $line)))
+                                    @php
+                                        $istHeading = str_starts_with($line, '##');
+                                    @endphp
+                                    @php
+                                        $text = trim(preg_replace('/^#+\s*/', '', $line));
+                                    @endphp
                                     @if($istHeading)
                                         <h4 class="pt-1 text-lg font-bold text-violet-100">{{ $text }}</h4>
                                     @else
-                                        <div class="rounded-xl border border-white/10 bg-slate-950/45 px-3 py-2 text-lg leading-snug text-slate-100" data-tagesplan-wall-fallback-zeile>
-                                            {{ $text }}
+                                        @php
+                                            $fallbackStepIndex++;
+                                        @endphp
+                                        @php
+                                            $stepErledigt = in_array($fallbackStepIndex, $anleitung['step_erledigt'] ?? [], true) || $wallLineErledigt;
+                                        @endphp
+                                        <div class="flex gap-3 rounded-xl border border-white/10 bg-slate-950/45 px-3 py-2 text-lg leading-snug text-slate-100 {{ $stepErledigt ? 'opacity-70' : '' }}" data-tagesplan-wall-fallback-zeile>
+                                            <button type="button" wire:click="anleitungStepUmschalten({{ $fallbackStepIndex }})"
+                                                    class="grid h-11 w-11 shrink-0 place-items-center rounded-xl border text-xl font-bold {{ $stepErledigt ? 'border-emerald-400 bg-emerald-500 text-slate-950' : 'border-dashed border-violet-300/70 bg-violet-500/10 text-violet-100 hover:bg-violet-500/20' }}"
+                                                    title="{{ $stepErledigt ? 'Schritt zurücknehmen' : 'Schritt erledigt abhaken' }}"
+                                                    data-tagesplan-wall-step-abhaken>{{ $stepErledigt ? '✓' : $fallbackStepIndex + 1 }}</button>
+                                            <span class="min-w-0 flex-1 {{ $stepErledigt ? 'line-through decoration-emerald-300/70' : '' }}">{{ $text }}</span>
                                         </div>
                                     @endif
                                 @endforeach
@@ -460,15 +574,21 @@
                         </div>
 
                         @foreach($tagDetail['auslastung'] as $b)
-                            @php($schluessel = $b['station_id'] === null ? '_none' : (int) $b['station_id'])
-                            @php($postenZeilen = $tagDetail['posten']->get($schluessel, collect()))
+                            @php
+                                $schluessel = $b['station_id'] === null ? '_none' : (int) $b['station_id'];
+                            @endphp
+                            @php
+                                $postenZeilen = $tagDetail['posten']->get($schluessel, collect());
+                            @endphp
                             @continue($postenZeilen->isEmpty())
-                            @php($tone = match($b['stufe'] ?? 'leer') {
-                                'ueberlast' => 'border-rose-200 bg-rose-50/80',
-                                'eng' => 'border-amber-200 bg-amber-50/80',
-                                'ok' => 'border-emerald-200 bg-emerald-50/70',
-                                default => 'border-sky-200 bg-sky-50/70',
-                            })
+                            @php
+                                $tone = match($b['stufe'] ?? 'leer') {
+                                    'ueberlast' => 'border-rose-200 bg-rose-50/80',
+                                    'eng' => 'border-amber-200 bg-amber-50/80',
+                                    'ok' => 'border-emerald-200 bg-emerald-50/70',
+                                    default => 'border-sky-200 bg-sky-50/70',
+                                };
+                            @endphp
                             <section class="rounded-2xl border {{ $tone }} p-3" data-tagesplanung-tagdetail-posten>
                                 <div class="flex items-start justify-between gap-2">
                                     <div>
@@ -512,8 +632,12 @@
                             <h3 class="font-medium tracking-tight text-gray-900">Performance & Engpässe</h3>
                             <div class="mt-3 space-y-2">
                                 @forelse($dashboard['performance']->take(8) as $p)
-                                    @php($breite = $p['prozent'] !== null ? min(100, max(4, $p['prozent'])) : 12)
-                                    @php($bar = ($p['kritisch'] ?? 0) > 0 ? 'bg-rose-500' : (($p['eng'] ?? 0) > 0 ? 'bg-amber-500' : 'bg-sky-600'))
+                                    @php
+                                        $breite = $p['prozent'] !== null ? min(100, max(4, $p['prozent'])) : 12;
+                                    @endphp
+                                    @php
+                                        $bar = ($p['kritisch'] ?? 0) > 0 ? 'bg-rose-500' : (($p['eng'] ?? 0) > 0 ? 'bg-amber-500' : 'bg-sky-600');
+                                    @endphp
                                     <div>
                                         <div class="flex items-center justify-between gap-2 text-[11px]">
                                             <span class="font-medium text-gray-700 truncate">{{ $p['station'] }}</span>
@@ -588,8 +712,12 @@
 
                     <main class="max-h-[70vh] overflow-auto p-4 space-y-4">
                         @forelse($zeilenNachTag as $tag => $zeilen)
-                            @php($tagC = \Illuminate\Support\Carbon::parse($tag))
-                            @php($nachPosten = $zeilen->groupBy(fn ($z) => $z->station_id === null ? '_none' : (int) $z->station_id))
+                            @php
+                                $tagC = \Illuminate\Support\Carbon::parse($tag);
+                            @endphp
+                            @php
+                                $nachPosten = $zeilen->groupBy(fn ($z) => $z->station_id === null ? '_none' : (int) $z->station_id);
+                            @endphp
                             <section data-modal-zone="section" class="rounded-2xl border border-white/10 overflow-hidden" data-tagesplan-tag="{{ $tag }}">
                                 <div class="flex items-baseline gap-2 border-b border-white/10 px-4 py-3">
                                     <h3 class="font-semibold text-gray-900">{{ $tagC->locale('de')->isoFormat('dd DD.MM.') }}</h3>
@@ -597,8 +725,12 @@
                                     <span class="text-xs text-gray-500">{{ $zeilen->count() }} Positionen</span>
                                 </div>
                                 @foreach($auslastung[$tag] ?? [] as $b)
-                                    @php($schluessel = $b['station_id'] === null ? '_none' : (int) $b['station_id'])
-                                    @php($blockZeilen = $nachPosten[$schluessel] ?? collect())
+                                    @php
+                                        $schluessel = $b['station_id'] === null ? '_none' : (int) $b['station_id'];
+                                    @endphp
+                                    @php
+                                        $blockZeilen = $nachPosten[$schluessel] ?? collect();
+                                    @endphp
                                     @continue($blockZeilen->isEmpty())
                                     <div class="px-4 py-3" data-tagesplan-auslastung>
                                         <div class="mb-2 flex items-center gap-2">
@@ -606,7 +738,9 @@
                                             <span class="w-28 shrink-0 text-xs tabular-nums text-gray-500">{{ $b['geplant_min'] }}@if($b['kapazitaet_min'] !== null) / {{ $b['kapazitaet_min'] }}@endif min</span>
                                             <span class="h-1.5 flex-1 overflow-hidden rounded-full bg-white/10">
                                                 @if($b['kapazitaet_min'] !== null)
-                                                    @php($bar = $b['stufe'] === 'ueberlast' ? 'bg-rose-500' : ($b['stufe'] === 'eng' ? 'bg-amber-500' : 'bg-emerald-500'))
+                                                    @php
+                                                        $bar = $b['stufe'] === 'ueberlast' ? 'bg-rose-500' : ($b['stufe'] === 'eng' ? 'bg-amber-500' : 'bg-emerald-500');
+                                                    @endphp
                                                     <span class="block h-full {{ $bar }}" style="width: {{ min(100, (int) ($b['prozent'] ?? 0)) }}%"></span>
                                                 @endif
                                             </span>
@@ -620,8 +754,12 @@
                                         <table class="{{ $table }}">
                                             <tbody>
                                                 @foreach($blockZeilen as $z)
-                                                    @php($erledigt = $z->line_status === 'done')
-                                                    @php($laeuft = $z->auftrag_status === 'in_progress')
+                                                    @php
+                                                        $erledigt = $z->line_status === 'done';
+                                                    @endphp
+                                                    @php
+                                                        $laeuft = $z->auftrag_status === 'in_progress';
+                                                    @endphp
                                                     <tr class="{{ $tr }} {{ $erledigt ? 'opacity-60' : '' }}" wire:key="tpz-modal-{{ $z->id }}" data-tagesplan-zeile="{{ $z->id }}">
                                                         <td class="{{ $td }} w-px">
                                                             @if($laeuft)
@@ -731,7 +869,9 @@
                             </div>
                             <div class="mt-3 flex items-end gap-2 min-h-36">
                                 @foreach($dashboard['manntage'] as $tag)
-                                    @php($hoehe = max(8, (int) round(($tag['wert'] / $dashboard['maxManntage']) * 112)))
+                                    @php
+                                        $hoehe = max(8, (int) round(($tag['wert'] / $dashboard['maxManntage']) * 112));
+                                    @endphp
                                     <div class="flex-1 min-w-10 text-center">
                                         <div class="mx-auto rounded-t-xl bg-gradient-to-t from-sky-700 to-sky-300 shadow-sm" style="height: {{ $hoehe }}px"></div>
                                         <p class="mt-1 text-[10px] font-medium text-gray-700">{{ \Illuminate\Support\Carbon::parse($tag['tag'])->format('d.m.') }}</p>
@@ -770,11 +910,21 @@
                         </div>
                         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
                             @foreach($dashboard['tage'] as $tag)
-                                @php($tagZeilen = $dashboard['zeilenNachTag']->get($tag, collect()))
-                                @php($tagBuckets = collect($dashboard['auslastung'][$tag] ?? []))
-                                @php($tagUeberlast = $tagBuckets->where('stufe', 'ueberlast')->count())
-                                @php($tagEng = $tagBuckets->where('stufe', 'eng')->count())
-                                @php($tone = $tagUeberlast > 0 ? 'border-rose-200 bg-rose-50/70' : ($tagEng > 0 ? 'border-amber-200 bg-amber-50/70' : ($tagZeilen->isNotEmpty() ? 'border-emerald-200 bg-emerald-50/60' : 'border-black/5 bg-gray-50/80')))
+                                @php
+                                    $tagZeilen = $dashboard['zeilenNachTag']->get($tag, collect());
+                                @endphp
+                                @php
+                                    $tagBuckets = collect($dashboard['auslastung'][$tag] ?? []);
+                                @endphp
+                                @php
+                                    $tagUeberlast = $tagBuckets->where('stufe', 'ueberlast')->count();
+                                @endphp
+                                @php
+                                    $tagEng = $tagBuckets->where('stufe', 'eng')->count();
+                                @endphp
+                                @php
+                                    $tone = $tagUeberlast > 0 ? 'border-rose-200 bg-rose-50/70' : ($tagEng > 0 ? 'border-amber-200 bg-amber-50/70' : ($tagZeilen->isNotEmpty() ? 'border-emerald-200 bg-emerald-50/60' : 'border-black/5 bg-gray-50/80'));
+                                @endphp
                                 <article wire:click="waehleTag('{{ $tag }}')" x-data x-on:click="$store.ui?.mSet('activity_tagesplan', 'open', true)"
                                          class="rounded-2xl border {{ $tone }} {{ $selectedDay === $tag ? 'ring-2 ring-violet-500 border-violet-300' : '' }} p-4 min-h-44 cursor-pointer transition hover:-translate-y-0.5 hover:shadow-md"
                                          data-tagesplanung-dashboard-tag="{{ $tag }}" data-tagesplanung-dashboard-tag-klickbar>
@@ -838,14 +988,18 @@
                                             <tr>
                                                 <td class="px-3 py-2 font-medium text-gray-900 whitespace-nowrap sticky left-0 bg-white z-10">{{ $station }}</td>
                                                 @foreach($dashboard['tage'] as $tag)
-                                                    @php($bucket = $zellen[$tag] ?? null)
-                                                    @php($tone = match($bucket['stufe'] ?? 'leer') {
-                                                        'ueberlast' => 'bg-rose-50 text-rose-700 ring-rose-200',
-                                                        'eng' => 'bg-amber-50 text-amber-700 ring-amber-200',
-                                                        'ok' => 'bg-emerald-50 text-emerald-700 ring-emerald-200',
-                                                        'ohne_kapazitaet' => 'bg-sky-50 text-sky-700 ring-sky-200',
-                                                        default => 'bg-gray-50 text-gray-400 ring-gray-100',
-                                                    })
+                                                    @php
+                                                        $bucket = $zellen[$tag] ?? null;
+                                                    @endphp
+                                                    @php
+                                                        $tone = match($bucket['stufe'] ?? 'leer') {
+                                                            'ueberlast' => 'bg-rose-50 text-rose-700 ring-rose-200',
+                                                            'eng' => 'bg-amber-50 text-amber-700 ring-amber-200',
+                                                            'ok' => 'bg-emerald-50 text-emerald-700 ring-emerald-200',
+                                                            'ohne_kapazitaet' => 'bg-sky-50 text-sky-700 ring-sky-200',
+                                                            default => 'bg-gray-50 text-gray-400 ring-gray-100',
+                                                        };
+                                                    @endphp
                                                     <td class="px-3 py-2 min-w-32">
                                                         <div class="rounded-xl px-3 py-2 ring-1 {{ $tone }}">
                                                             @if($bucket)

@@ -68,6 +68,9 @@ class Tagesplan extends Component
     /** Wandmonitor: Zeile, deren Anleitung gerade im Overlay offen ist (null = zu). */
     public ?int $anleitungLineId = null;
 
+    /** Wandmonitor: flüchtige Step-Checks je geöffneter Anleitungszeile. Dauerhaft ist die Zeile selbst. */
+    public array $anleitungStepStatus = [];
+
     private const DASHBOARD_FENSTER = [3, 7, 14, 30];
 
     public function mount(): void
@@ -266,7 +269,7 @@ class Tagesplan extends Component
         }
     }
 
-    private function zeileSetzenMitWallStart($team, FoodAlchemistProductionOrderLine $zeile, ProductionLineStatus $ziel, ProductionOrderService $svc): void
+    private function zeileSetzenMitWallStart($team, FoodAlchemistProductionOrderLine $zeile, ProductionLineStatus $ziel, ProductionOrderService $svc): int
     {
         $lineId = (int) $zeile->id;
         if ($this->display === 'wall' && $ziel === ProductionLineStatus::Done) {
@@ -280,8 +283,9 @@ class Tagesplan extends Component
 
                 $neu = FoodAlchemistProductionOrderLine::query()
                     ->where('production_order_id', $order->id)
-                    ->when($zeile->origin === 'computed', fn ($q) => $q->where('origin', 'computed')->where('recipe_id', $zeile->recipe_id))
-                    ->when($zeile->origin !== 'computed', fn ($q) => $q->whereKey($lineId))
+                    ->when($zeile->recipe_id !== null, fn ($q) => $q->where('recipe_id', $zeile->recipe_id))
+                    ->when($zeile->recipe_id === null, fn ($q) => $q->whereKey($lineId))
+                    ->orderBy('position')
                     ->first();
 
                 $lineId = (int) ($neu?->id ?? $lineId);
@@ -289,6 +293,8 @@ class Tagesplan extends Component
         }
 
         $svc->setLineStatus($team, $lineId, $ziel);
+
+        return $lineId;
     }
 
     /** Wandmonitor (Spec 35): zwischen Posten-Lanes und zusammengefasster Mise-en-Place umschalten. */
@@ -307,6 +313,87 @@ class Tagesplan extends Component
     public function anleitungSchliessen(): void
     {
         $this->anleitungLineId = null;
+    }
+
+    public function anleitungStepUmschalten(int $index, ProductionOrderService $svc, ProductionCapacityService $kap): void
+    {
+        $this->fehler = null;
+        try {
+            $anleitung = $this->aktuelleAnleitung($kap);
+            if ($anleitung === null || ! array_key_exists($index, $anleitung['arbeitsschritte'])) {
+                return;
+            }
+
+            $lineId = (int) $anleitung['line_id'];
+            $schritte = collect($this->anleitungStepStatus[$lineId] ?? [])->map(fn ($i) => (int) $i);
+            $schritte = $schritte->contains($index)
+                ? $schritte->reject(fn ($i) => $i === $index)
+                : $schritte->push($index);
+
+            $this->anleitungStepStatus[$lineId] = $schritte->unique()->sort()->values()->all();
+            $this->anleitungAlsErledigtWennVollstaendig($anleitung, $svc);
+        } catch (\Throwable $e) {
+            $this->fehler = $e->getMessage();
+        }
+    }
+
+    public function anleitungAlleStepsUmschalten(ProductionOrderService $svc, ProductionCapacityService $kap): void
+    {
+        $this->fehler = null;
+        try {
+            $anleitung = $this->aktuelleAnleitung($kap);
+            if ($anleitung === null) {
+                return;
+            }
+
+            $lineId = (int) $anleitung['line_id'];
+            $alle = array_keys($anleitung['arbeitsschritte']);
+            $erledigt = collect($this->anleitungStepStatus[$lineId] ?? [])->intersect($alle)->count();
+            if ($alle !== [] && $erledigt === count($alle)) {
+                $this->anleitungStepStatus[$lineId] = [];
+                if (($anleitung['line_status'] ?? null) === ProductionLineStatus::Done->value) {
+                    $team = Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
+                    $this->anleitungLineId = $this->zeileSetzenMitWallStart($team, FoodAlchemistProductionOrderLine::findOrFail($lineId), ProductionLineStatus::Open, $svc);
+                }
+
+                return;
+            }
+
+            $this->anleitungStepStatus[$lineId] = $alle;
+            $this->anleitungAlsErledigtWennVollstaendig($anleitung, $svc);
+        } catch (\Throwable $e) {
+            $this->fehler = $e->getMessage();
+        }
+    }
+
+    private function anleitungAlsErledigtWennVollstaendig(array $anleitung, ProductionOrderService $svc): void
+    {
+        $lineId = (int) $anleitung['line_id'];
+        $alle = array_keys($anleitung['arbeitsschritte']);
+        if ($alle === []) {
+            return;
+        }
+
+        $erledigt = collect($this->anleitungStepStatus[$lineId] ?? [])->intersect($alle)->count();
+        if ($erledigt !== count($alle) || ($anleitung['line_status'] ?? null) === ProductionLineStatus::Done->value) {
+            return;
+        }
+
+        $team = Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
+        $this->anleitungLineId = $this->zeileSetzenMitWallStart($team, FoodAlchemistProductionOrderLine::findOrFail($lineId), ProductionLineStatus::Done, $svc);
+    }
+
+    private function aktuelleAnleitung(ProductionCapacityService $kap): ?array
+    {
+        if ($this->anleitungLineId === null) {
+            return null;
+        }
+
+        $team = Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
+        [$von, $bis] = $this->zeitraum();
+        $zeilen = $kap->tagesplanZeilen($team, $von, $bis, true);
+
+        return $this->anleitungAufloesen($zeilen);
     }
 
     public function render(ProductionCapacityService $kap)
@@ -481,13 +568,43 @@ class Tagesplan extends Component
         $line = FoodAlchemistProductionOrderLine::find($this->anleitungLineId);
 
         return [
+            'line_id' => (int) $treffer->id,
             'name' => $treffer->name,
             'auftrag' => $treffer->auftrag,
+            'line_status' => $treffer->line_status,
+            'ansaetze' => (float) $treffer->ansaetze_effektiv,
+            'gesamt_kg' => $treffer->gesamt_kg,
             'schritte' => $treffer->schritte ?? ($line?->steps_snapshot ?? []),
             'zubereitung' => $treffer->zubereitung ?? $line?->zubereitung,
             'zutaten' => $treffer->zutaten ?? ($line?->zutaten ?? []),
             'sicherheit' => $treffer->sicherheit ?? ['allergene' => [], 'diaet' => [], 'warnungen' => [], 'konfidenz' => 'unknown'],
+            'arbeitsschritte' => $this->arbeitsschritte($treffer->schritte ?? ($line?->steps_snapshot ?? []), $treffer->zubereitung ?? $line?->zubereitung),
+            'step_erledigt' => collect($this->anleitungStepStatus[(int) $treffer->id] ?? [])->map(fn ($i) => (int) $i)->unique()->values()->all(),
         ];
+    }
+
+    private function arbeitsschritte(array $schritte, ?string $zubereitung): array
+    {
+        if ($schritte !== []) {
+            return collect($schritte)
+                ->values()
+                ->map(fn ($s, $i) => ['index' => (int) $i, 'text' => (string) ($s['text'] ?? ''), 'heading' => false])
+                ->filter(fn ($s) => trim($s['text']) !== '')
+                ->values()
+                ->mapWithKeys(fn ($s) => [$s['index'] => $s])
+                ->all();
+        }
+
+        return collect(preg_split('/\R+/', (string) $zubereitung))
+            ->map(fn ($line) => trim($line))
+            ->filter()
+            ->values()
+            ->reject(fn ($line) => str_starts_with($line, '##'))
+            ->map(fn ($line) => trim(preg_replace('/^#+\s*/', '', $line)))
+            ->filter()
+            ->values()
+            ->mapWithKeys(fn ($line, $i) => [(int) $i => ['index' => (int) $i, 'text' => $line, 'heading' => false]])
+            ->all();
     }
 
     /** @return array<string, mixed> */
