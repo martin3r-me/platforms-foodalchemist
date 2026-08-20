@@ -549,6 +549,7 @@ class OrderService
                 return [
                     'id' => (int) $order->id,
                     'supplier' => $order->supplier?->name ?? '—',
+                    'created_at' => $order->created_at?->toDateString(),
                     'desired_delivery_date' => $order->desired_delivery_date?->toDateString(),
                     'positions' => $order->lines->count(),
                     'total_net' => (float) $order->total_net,

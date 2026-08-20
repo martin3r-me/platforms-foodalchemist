@@ -72,6 +72,9 @@ class Index extends Component
 
     public ?array $batchPreview = null;
 
+    /** Ursprüngliche Belege im Auslösen-Dialog; bleibt beim Abwählen stabil. */
+    public ?array $batchCandidates = null;
+
     public ?array $batchResult = null;
 
     #[Url(as: 'klaer')]
@@ -211,6 +214,19 @@ class Index extends Component
         $team = Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
         $this->selectedOrderIds = $orders->readyDraftIds($team);
         $this->batchPreview = null;
+        $this->batchCandidates = null;
+        $this->batchResult = null;
+    }
+
+    public function versandfaehigeAuswahlUmschalten(OrderService $orders): void
+    {
+        $team = Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
+        $readyIds = $orders->readyDraftIds($team);
+        $selectedIds = $this->normalisierteBestellIds($this->selectedOrderIds);
+
+        $this->selectedOrderIds = array_diff($readyIds, $selectedIds) === [] ? [] : $readyIds;
+        $this->batchPreview = null;
+        $this->batchCandidates = null;
         $this->batchResult = null;
     }
 
@@ -218,21 +234,64 @@ class Index extends Component
     {
         $this->selectedOrderIds = [];
         $this->batchPreview = null;
+        $this->batchCandidates = null;
         $this->batchResult = null;
     }
 
     public function updatedSelectedOrderIds(): void
     {
         $this->batchPreview = null;
+        $this->batchCandidates = null;
         $this->batchResult = null;
     }
 
     public function sammelversandPruefen(OrderService $orders): void
     {
         $team = Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
+        $this->selectedOrderIds = $this->normalisierteBestellIds($this->selectedOrderIds);
+        $this->batchCandidates = $orders->selectedDraftPreview($team, $this->selectedOrderIds);
         $this->batchPreview = $orders->selectedDraftPreview($team, $this->selectedOrderIds);
         $this->batchResult = null;
         $this->dispatch('modal.open', name: 'orders-batch');
+    }
+
+    public function batchBestellungUmschalten(int $orderId, OrderService $orders): void
+    {
+        $candidateIds = collect($this->batchCandidates['orders'] ?? [])->pluck('id')->map(fn ($id) => (int) $id)->all();
+        if (! in_array($orderId, $candidateIds, true)) {
+            return;
+        }
+
+        $selectedIds = $this->normalisierteBestellIds($this->selectedOrderIds);
+        $this->selectedOrderIds = in_array($orderId, $selectedIds, true)
+            ? array_values(array_diff($selectedIds, [$orderId]))
+            : array_values([...$selectedIds, $orderId]);
+        $this->aktualisiereBatchPreview($orders);
+    }
+
+    public function batchAlleWaehlen(OrderService $orders): void
+    {
+        $this->selectedOrderIds = collect($this->batchCandidates['orders'] ?? [])->pluck('id')->map(fn ($id) => (int) $id)->all();
+        $this->aktualisiereBatchPreview($orders);
+    }
+
+    public function batchAuswahlLeeren(OrderService $orders): void
+    {
+        $this->selectedOrderIds = [];
+        $this->aktualisiereBatchPreview($orders);
+    }
+
+    private function aktualisiereBatchPreview(OrderService $orders): void
+    {
+        $team = Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
+        $this->batchPreview = $orders->selectedDraftPreview($team, $this->selectedOrderIds);
+        $this->batchResult = null;
+    }
+
+    /** @return list<int> */
+    private function normalisierteBestellIds(array $ids): array
+    {
+        return array_values(array_unique(array_filter(array_map('intval', $ids))));
     }
 
     public function auswahlAusloesen(OrderService $orders): void
@@ -243,6 +302,7 @@ class Index extends Component
             $this->hinweis = $this->batchResult['sent'].' Bestellung(en) ausgelöst.';
             $this->fehler = null;
             $this->selectedOrderIds = [];
+            $this->batchCandidates = null;
         } catch (\Throwable $e) {
             $this->fehler = $e->getMessage();
         }
@@ -257,6 +317,7 @@ class Index extends Component
             $this->fehler = null;
             $this->selectedOrderIds = [];
             $this->batchPreview = null;
+            $this->batchCandidates = null;
             $this->batchResult = null;
             $this->dispatch('modal.close', name: 'orders-batch');
         } catch (\Throwable $e) {
@@ -378,6 +439,7 @@ class Index extends Component
                 return [
                     'id' => (int) $o->id,
                     'order_label' => 'ord-'.(int) $o->id,
+                    'bestelldatum' => $o->created_at?->toDateString(),
                     'supplier_order_number' => $o->supplier_order_number,
                     'invoice_number' => $o->invoice_number,
                     'invoice_date' => $o->invoice_date?->toDateString(),

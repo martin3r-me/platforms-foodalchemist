@@ -38,6 +38,7 @@
             <div>
                 <h1>Bestellung an {{ $dok['lieferant']['name'] ?? '—' }}</h1>
                 <div class="muted">Beleg ord-{{ $dok['id'] }}@if($dok['reference']) · {{ $dok['reference'] }}@endif</div>
+                @if($dok['created_at'])<div>Bestelldatum: <strong>{{ $dok['created_at'] }}</strong></div>@endif
                 @if($dok['desired_delivery_date'])<div>Wunsch-Liefertermin: <strong>{{ \Carbon\Carbon::parse($dok['desired_delivery_date'])->format('d.m.Y') }}</strong></div>@endif
             </div>
             <div class="status">

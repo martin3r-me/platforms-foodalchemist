@@ -93,18 +93,36 @@
                     <div class="rounded-lg border border-emerald-500/20 bg-emerald-500/[0.05] p-3"><div class="{{ $label }}">Versandfähig</div><div class="text-lg font-semibold text-emerald-700">{{ $batchPreview['ready'] }}</div></div>
                     <div class="rounded-lg border border-amber-500/20 bg-amber-500/[0.05] p-3"><div class="{{ $label }}">Klärung</div><div class="text-lg font-semibold text-amber-700">{{ $batchPreview['blocked'] }}</div></div>
                 </div>
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                    <div class="flex items-center gap-2">
+                        <button type="button" wire:click="batchAlleWaehlen" class="{{ $btnGhostXs }}">Alle auswählen</button>
+                        <button type="button" wire:click="batchAuswahlLeeren" class="{{ $btnGhostXs }}">Keine</button>
+                    </div>
+                    @if(count($selectedOrderIds) > 0)
+                        <div class="flex items-center gap-2">
+                            <a href="{{ route('foodalchemist.orders.versandprotokoll', ['ids' => implode(',', $selectedOrderIds)]) }}" target="_blank" class="{{ $btnGhostXs }}" title="Auswahl gebündelt drucken">@svg('heroicon-o-printer', 'w-3.5 h-3.5') Drucken</a>
+                            <a href="{{ route('foodalchemist.orders.versandprotokoll', ['ids' => implode(',', $selectedOrderIds), 'pdf' => 1]) }}" class="{{ $btnGhostXs }}" title="Auswahl als PDF herunterladen">PDF</a>
+                        </div>
+                    @endif
+                </div>
                 <div class="max-h-[44vh] overflow-auto divide-y divide-black/5 border-y border-black/5">
-                    @foreach($batchPreview['orders'] as $order)
-                        <div class="py-2.5 flex items-start justify-between gap-4">
-                            <div class="min-w-0">
+                    @foreach(($batchCandidates['orders'] ?? []) as $order)
+                        <div class="py-2.5 flex items-start justify-between gap-4" data-orders-batch-row="{{ $order['id'] }}">
+                            <div class="min-w-0 flex items-start gap-3">
+                                <input type="checkbox"
+                                       class="mt-0.5"
+                                       wire:click="batchBestellungUmschalten({{ $order['id'] }})"
+                                       @checked(in_array((int) $order['id'], array_map('intval', $selectedOrderIds), true))
+                                       aria-label="Bestellung ord-{{ $order['id'] }} von {{ $order['supplier'] }} auswählen" />
+                                <div class="min-w-0">
                                 <div class="text-[13px] font-medium text-gray-900">{{ $order['supplier'] }} · ord-{{ $order['id'] }}</div>
-                                <div class="text-[11px] text-gray-500">
-                                    {{ $order['positions'] }} Positionen
-                                    @if($order['desired_delivery_date'])
-                                        · {{ \Carbon\Carbon::parse($order['desired_delivery_date'])->format('d.m.Y') }}
-                                    @endif
+                                <div class="text-[11px] text-gray-500 flex flex-wrap gap-x-3">
+                                    <span>{{ $order['positions'] }} Positionen</span>
+                                    <span>Bestelldatum: {{ $order['created_at'] ? \Carbon\Carbon::parse($order['created_at'])->format('d.m.Y') : '—' }}</span>
+                                    <span>Liefertag: {{ $order['desired_delivery_date'] ? \Carbon\Carbon::parse($order['desired_delivery_date'])->format('d.m.Y') : '—' }}</span>
                                 </div>
                                 @if(!$order['sendable'])<div class="text-[11px] text-amber-700 mt-1">{{ implode(' · ', $order['blockers']) }}</div>@endif
+                                </div>
                             </div>
                             <div class="text-right shrink-0">
                                 <div class="text-[13px] font-semibold tabular-nums">{{ number_format($order['total_net'], 2, ',', '.') }} €</div>
@@ -152,6 +170,8 @@
                     <button type="button" wire:click="alleVersandfaehigenWaehlen" class="{{ $btnGhostXs }}" @disabled($kpis['ready'] === 0)>Alle versandfähigen</button>
                     @if(count($selectedOrderIds) > 0)
                         <button type="button" wire:click="auswahlLeeren" class="{{ $btnGhostXs }}" title="Auswahl aufheben">@svg('heroicon-o-x-mark', 'w-3.5 h-3.5')</button>
+                        <a href="{{ route('foodalchemist.orders.versandprotokoll', ['ids' => implode(',', $selectedOrderIds)]) }}" target="_blank" class="{{ $btnGhostXs }}" title="Ausgewählte Bestellungen gebündelt drucken">@svg('heroicon-o-printer', 'w-3.5 h-3.5') Drucken</a>
+                        <a href="{{ route('foodalchemist.orders.versandprotokoll', ['ids' => implode(',', $selectedOrderIds), 'pdf' => 1]) }}" class="{{ $btnGhostXs }}" title="Ausgewählte Bestellungen als PDF herunterladen">PDF</a>
                     @endif
                     <button type="button" wire:click="sammelversandPruefen" class="{{ $btnPrimary }}" @disabled(count($selectedOrderIds) === 0)>
                         @svg('heroicon-o-paper-airplane', 'w-3.5 h-3.5') Auswahl prüfen{{ count($selectedOrderIds) > 0 ? ' (' . count($selectedOrderIds) . ')' : '' }}
@@ -393,8 +413,11 @@
                 @else
                 <table class="{{ $table }}">
                     <thead><tr class="text-left">
-                        <th class="{{ $th }} w-10 sticky top-0 z-20 bg-white/95 backdrop-blur-xl"><span class="sr-only">Auswahl</span></th>
+                        <th class="{{ $th }} w-10 sticky top-0 z-20 bg-white/95 backdrop-blur-xl">
+                            <input type="checkbox" wire:click="versandfaehigeAuswahlUmschalten" @checked($kpis['ready'] > 0 && count($selectedOrderIds) === $kpis['ready']) @disabled($kpis['ready'] === 0) aria-label="Alle versandfähigen Bestellungen auswählen" />
+                        </th>
                         <th class="{{ $th }} whitespace-nowrap sticky top-0 z-20 bg-white/95 backdrop-blur-xl">Beleg</th>
+                        <th class="{{ $th }} whitespace-nowrap sticky top-0 z-20 bg-white/95 backdrop-blur-xl">Bestelldatum</th>
                         <th class="{{ $th }} whitespace-nowrap sticky top-0 z-20 bg-white/95 backdrop-blur-xl">Liefertag</th>
                         <th class="{{ $th }} sticky top-0 z-20 bg-white/95 backdrop-blur-xl">Lieferant</th>
                         <th class="{{ $th }} w-full sticky top-0 z-20 bg-white/95 backdrop-blur-xl">Produktion / Anlass</th>
@@ -406,12 +429,12 @@
                     </tr></thead>
                     <tbody>
                         @if($liste->isEmpty())
-                            <tr><td colspan="10" class="px-5 py-10 text-center text-gray-500">Keine Bestellungen. „Neue Bestellrunde" oben oder Bedarf aus der Produktion übergeben.</td></tr>
+                            <tr><td colspan="11" class="px-5 py-10 text-center text-gray-500">Keine Bestellungen. „Neue Bestellrunde" oben oder Bedarf aus der Produktion übergeben.</td></tr>
                         @else
                             @foreach($gruppen as $tag => $zeilen)
                                 @if($gruppiert)
                                     <tr class="bg-black/[0.02]">
-                                        <td colspan="10" class="px-5 py-1.5 text-[11px] font-medium uppercase tracking-wide text-gray-500">
+                                        <td colspan="11" class="px-5 py-1.5 text-[11px] font-medium uppercase tracking-wide text-gray-500">
                                             {{ $tag === '' ? 'Ohne Liefertag' : \Carbon\Carbon::parse($tag)->locale('de')->isoFormat('dddd, DD.MM.YYYY') }}
                                             <span class="text-gray-400">· {{ $zeilen->count() }}</span>
                                         </td>
@@ -430,6 +453,7 @@
                                             @if(($o['payment']['status'] ?? null))<div class="text-[10px] {{ ($o['payment']['state'] ?? '') === 'paid' ? 'text-emerald-600' : ((($o['payment']['state'] ?? '') === 'overdue') ? 'text-amber-600' : 'text-gray-400') }}">OP {{ $o['payment']['label'] }}</div>@endif
                                             @if(($o['approval']['status'] ?? null))<div class="text-[10px] {{ ($o['approval']['state'] ?? '') === 'approved' ? 'text-emerald-600' : ((($o['approval']['state'] ?? '') === 'rejected') ? 'text-rose-600' : 'text-amber-600') }}">Freigabe {{ $o['approval']['label'] }}</div>@endif
                                         </td>
+                                        <td class="{{ $td }} whitespace-nowrap tabular-nums text-gray-700">{{ $o['bestelldatum'] ? \Carbon\Carbon::parse($o['bestelldatum'])->format('d.m.Y') : '—' }}</td>
                                         <td class="{{ $td }} whitespace-nowrap tabular-nums text-gray-700">{{ $o['liefertag'] ? \Carbon\Carbon::parse($o['liefertag'])->format('d.m.Y') : '—' }}</td>
                                         <td class="{{ $td }} font-medium text-gray-900 whitespace-nowrap">{{ $o['supplier'] }}</td>
                                         <td class="{{ $td }} text-gray-600">

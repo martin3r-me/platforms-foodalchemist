@@ -695,6 +695,7 @@ it('WaWi: Sammelversand löst versandfähige Entwürfe aus und lässt Klärfäll
 it('WaWi: Auswahl wird vor Versand geprüft, bestätigt und kann gesammelt storniert werden', function () {
     $this->actingAs($this->makeUser($this->rootTeam));
     $ready = $this->svc->addManualLine($this->rootTeam, $this->laOf['Mehl']->id, 2)->order;
+    $ready->forceFill(['desired_delivery_date' => '2026-08-24'])->save();
     $blocked = $this->svc->createDraft(
         $this->rootTeam,
         FoodAlchemistSupplier::where('name', 'Hanos')->firstOrFail()->id,
@@ -707,6 +708,18 @@ it('WaWi: Auswahl wird vor Versand geprüft, bestätigt und kann gesammelt storn
         ->call('sammelversandPruefen')
         ->assertSet('batchPreview.ready', 1)
         ->assertSet('batchPreview.blocked', 1)
+        ->assertSet('batchCandidates.selected', 2)
+        ->assertSee('Bestelldatum:')
+        ->assertSee('Liefertag:')
+        ->assertSee('24.08.2026')
+        ->assertSee('Drucken')
+        ->assertSee('PDF')
+        ->call('batchBestellungUmschalten', $ready->id)
+        ->assertSet('batchCandidates.selected', 2)
+        ->assertSet('batchPreview.ready', 0)
+        ->assertSet('batchPreview.blocked', 1)
+        ->call('batchBestellungUmschalten', $ready->id)
+        ->assertSet('batchPreview.ready', 1)
         ->call('auswahlAusloesen')
         ->assertSet('batchResult.sent', 1)
         ->assertSet('batchResult.blocked', 1);
@@ -720,6 +733,21 @@ it('WaWi: Auswahl wird vor Versand geprüft, bestätigt und kann gesammelt storn
         ->call('auswahlStornieren');
 
     expect($blocked->refresh()->status)->toBe(OrderStatus::Cancelled);
+});
+
+it('WaWi: Hauptliste bietet Sammelauswahl, Bestell- und Liefertag sowie PDF vor Versand', function () {
+    $this->actingAs($this->makeUser($this->rootTeam));
+    $order = $this->svc->addManualLine($this->rootTeam, $this->laOf['Mehl']->id, 2)->order;
+    $order->forceFill(['desired_delivery_date' => '2026-08-25'])->save();
+
+    Livewire::test(OrdersIndex::class)
+        ->assertSee('Bestelldatum')
+        ->assertSee('Liefertag')
+        ->assertSee('25.08.2026')
+        ->assertSeeHtml('aria-label="Alle versandfähigen Bestellungen auswählen"')
+        ->set('selectedOrderIds', [$order->id])
+        ->assertSee('Drucken')
+        ->assertSee('PDF');
 });
 
 it('WaWi: Bestellschluss und Liefertage erzeugen operative Hinweise und Versandsperren', function () {
