@@ -93,6 +93,12 @@
             <x-foodalchemist::modal-section title="Menü (angebots-lokal)">
                 <x-slot:actions>
                     <button type="button" wire:click="neuesMenue" class="{{ $btnGhostXs }}" data-angebot-neu-menue>+ Menü</button>
+                    {{-- E2 (Spec 40): Voll-Kaskade — je Slot ein Menü-Konzept, ans Angebot referenziert; Prüfung in der Leitstelle. --}}
+                    <button type="button" wire:click="vollKaskadeStarten" wire:loading.attr="disabled" wire:target="vollKaskadeStarten"
+                            class="{{ $btnGhostXs }} text-violet-600" data-angebot-vollkaskade>
+                        <span wire:loading.remove wire:target="vollKaskadeStarten">@svg('heroicon-o-bolt', 'w-3.5 h-3.5 inline align-text-bottom') Voll-Kaskade (KI)</span>
+                        <span wire:loading wire:target="vollKaskadeStarten">Starte …</span>
+                    </button>
                 </x-slot:actions>
                 <div class="space-y-1.5">
                     @forelse($angebot->concepts as $c)

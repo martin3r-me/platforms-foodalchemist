@@ -200,6 +200,11 @@ class GenerateConceptJob implements ShouldQueue
         } elseif ($this->attachOwnerType === 'speisekarte') {
             app(\Platform\FoodAlchemist\Services\SpeisekarteService::class)
                 ->addPosition($team, $this->attachContainerId, ['type' => 'menue_ref', 'concept_id' => $conceptId]);
+        } elseif ($this->attachOwnerType === 'offer') {
+            // E2 (Spec 40): das erzeugte (standalone) Konzept ans Angebot referenzieren — Pivot
+            // foodalchemist_offer_concept. attachContainerId ist die Angebots-ID (kein Zwischen-Container).
+            app(\Platform\FoodAlchemist\Services\AngebotService::class)
+                ->referenziereConcept($team, $this->attachContainerId, $conceptId);
         }
     }
 

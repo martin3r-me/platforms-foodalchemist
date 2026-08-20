@@ -216,6 +216,61 @@ class Editor extends Component
         $this->dispatch('angebot-gespeichert');
     }
 
+    /**
+     * E2 (Spec 40): Voll-Kaskade fürs Angebot — je Frame-Slot ein Konzept, ans Angebot referenziert
+     * (spiegelt Foodbook/Speisekarte, Rückweg via {@see AngebotService::referenziereConcept}). Da Angebote
+     * (noch) keine eigene Gerüst-Review-UI haben, wird bei fehlendem Gerüst EINMAL aus dem Angebots-Kopf
+     * (Anlass/Gäste) auto-strukturiert; die Prüfung passiert danach an den erzeugten Menüs in der Leitstelle
+     * (Sammel-Review). Springt in die Leitstelle — Owner-Banner + Zurück-Link (E1b) zeigen den Round-Trip.
+     */
+    public function vollKaskadeStarten(
+        \Platform\FoodAlchemist\Services\PlanningSessionService $sessions,
+        \Platform\FoodAlchemist\Services\PlanningCascadeService $cascade,
+        \Platform\FoodAlchemist\Services\ConceptGeneratorService $gen,
+    ) {
+        $team = $this->team();
+        if ($this->selectedId === null) {
+            return null;
+        }
+        $angebot = \Platform\FoodAlchemist\Models\FoodAlchemistAngebot::visibleToTeam($team)->find($this->selectedId);
+        if ($angebot === null) {
+            return null;
+        }
+        try {
+            $frame = app(\Platform\FoodAlchemist\Services\PlanningFrameService::class)->find('offer', (int) $this->selectedId);
+            if ($frame === null || $frame->slots()->count() === 0) {
+                $gen->geruestAusBriefFuerOwner($team, 'offer', (int) $this->selectedId, $this->angebotBrief($angebot));
+            }
+            $session = $sessions->create($team, [
+                'title' => 'Voll-Kaskade: ' . ($angebot->name ?: ('Angebot #' . $this->selectedId)),
+                'created_via' => 'angebot_vollkaskade',
+            ]);
+            $cascade->starteKaskade($team, 'vollkaskade', $session, 'voll_kreativ', [
+                'owner_type' => 'offer', 'owner_id' => (int) $this->selectedId, 'created_via' => 'angebot_vollkaskade',
+            ]);
+
+            return redirect()->route('foodalchemist.planung.index', ['session' => $session->id, 'open' => 1]);
+        } catch (\Throwable $e) {
+            $this->errorToast($e->getMessage());
+
+            return null;
+        }
+    }
+
+    /** Minimaler Brief fürs Auto-Gerüst aus den Angebots-Kopf-Feldern (Anlass/Gäste). */
+    private function angebotBrief(\Platform\FoodAlchemist\Models\FoodAlchemistAngebot $a): string
+    {
+        $teile = [];
+        if (trim((string) $a->occasion) !== '') {
+            $teile[] = 'Anlass: ' . trim((string) $a->occasion);
+        }
+        if ((int) $a->personen > 0) {
+            $teile[] = 'Gäste: ' . (int) $a->personen . ' Personen';
+        }
+
+        return implode(' — ', $teile);
+    }
+
     /** Concepter-Editor hat einen angebots-lokalen Entwurf geändert → Auto-Preis + Detail neu. */
     #[On('concepter-gespeichert')]
     public function nachConcepterEdit(AngebotService $svc): void

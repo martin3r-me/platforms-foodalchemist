@@ -435,6 +435,66 @@ it('E1b ownerKontext: jüngster Owner-Lauf gewinnt, auch wenn ein Cockpit-Lauf n
     expect($k)->not->toBeNull()->and($k['name'])->toBe('Krone');
 });
 
+// ── E2 (Spec 40): Angebot andocken — Voll-Kaskade + Rückweg (referenziereConcept) ─────────────
+
+it('E2 Voll-Kaskade Angebot: Frame-Slots → Concept-Steps + Job mit attach owner=offer', function () {
+    $offer = app(\Platform\FoodAlchemist\Services\AngebotService::class)
+        ->create($this->rootTeam, ['name' => 'Sommerfest', 'occasion' => 'Firmenfeier', 'personen' => 50]);
+    $frames = app(PlanningFrameService::class);
+    $frame = $frames->frameFor($this->rootTeam, 'offer', (int) $offer->id);
+    $frames->addSlot($this->rootTeam, $frame, ['label' => 'Vorspeise']);
+    $frames->addSlot($this->rootTeam, $frame, ['label' => 'Hauptgang']);
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Angebot-Kaskade', 'brief' => 'x']);
+
+    $run = app(PlanningCascadeService::class)->starteKaskade($this->rootTeam, 'vollkaskade', $session, 'voll_kreativ', [
+        'owner_type' => 'offer', 'owner_id' => (int) $offer->id,
+    ]);
+
+    expect($run->scope)->toBe('vollkaskade')
+        ->and($run->source_owner_type)->toBe('offer')
+        ->and((int) $run->source_owner_id)->toBe((int) $offer->id)
+        ->and($run->steps()->where('kind', 'concept')->count())->toBe(2);
+
+    Queue::assertPushed(GenerateConceptJob::class, 2);
+    Queue::assertPushed(GenerateConceptJob::class, fn ($job) => $job->attachOwnerType === 'offer' && $job->attachContainerId === (int) $offer->id);
+});
+
+it('E2 haengeKonzeptNach: Angebot-Recovery referenziert das Konzept ans Angebot (Pivot)', function () {
+    $svc = app(PlanningCascadeService::class);
+    $offer = app(\Platform\FoodAlchemist\Services\AngebotService::class)->create($this->rootTeam, ['name' => 'Gala']);
+    $concept = $this->makeConcept($this->rootTeam, 'Menü A');   // standalone (offer_id NULL) → referenzierbar
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'vollkaskade', 'status' => 'running']);
+    $step = FoodAlchemistCascadeRunStep::create([
+        'team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'concept', 'status' => 'done',
+        'ref_type' => 'concept', 'ref_id' => $concept->id,
+        'deferred' => ['attach_error' => 'boom', 'pending_attach' => [
+            'owner_type' => 'offer', 'container_id' => (int) $offer->id, 'concept_id' => (int) $concept->id,
+        ]],
+    ]);
+
+    $svc->haengeKonzeptNach($this->rootTeam, (int) $step->id);
+
+    expect(DB::table('foodalchemist_offer_concept')->where('offer_id', $offer->id)->where('concept_id', $concept->id)->exists())->toBeTrue()
+        ->and(isset($step->refresh()->deferred['attach_error']))->toBeFalse();
+});
+
+it('E2 ownerKontext: Angebot-Lauf → Owner-Name + Rück-Route (sel)', function () {
+    $svc = app(PlanningCascadeService::class);
+    $offer = app(\Platform\FoodAlchemist\Services\AngebotService::class)->create($this->rootTeam, ['name' => 'Weihnachtsfeier']);
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Ang', 'brief' => 'q']);
+    FoodAlchemistCascadeRun::create([
+        'team_id' => $this->rootTeam->id, 'planning_session_id' => $session->id, 'scope' => 'vollkaskade',
+        'status' => 'running', 'source_owner_type' => 'offer', 'source_owner_id' => $offer->id,
+    ]);
+
+    $k = $svc->ownerKontext($this->rootTeam, (int) $session->id);
+    expect($k)->not->toBeNull()
+        ->and($k['typ_label'])->toBe('Angebot')
+        ->and($k['name'])->toBe('Weihnachtsfeier')
+        ->and($k['route'])->toBe('foodalchemist.angebote.index')
+        ->and($k['route_param'])->toBe(['sel' => (int) $offer->id]);
+});
+
 it('Job-Hook: failed() meldet an den Step zurück, wenn cascade_step_id gesetzt ist', function () {
     $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Geschmortes Rind', 'brief' => 'Schmorgericht mit Wurzelgemuese.']);
     $run = app(PlanningCascadeService::class)->starteKaskade($this->rootTeam, 'gericht', $session, 'voll_kreativ');

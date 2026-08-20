@@ -274,9 +274,10 @@ class PlanningCascadeService
     {
         $ownerType = (string) ($optionen['owner_type'] ?? '');
         $ownerId = (int) ($optionen['owner_id'] ?? 0);
-        // P3 foodbook, P4 speisekarte (je 1 Concept/Slot). Der Speiseplan (P5) läuft über einen eigenen Zell-Pfad.
-        if (! in_array($ownerType, ['foodbook', 'speisekarte'], true) || $ownerId <= 0) {
-            throw new RuntimeException('Voll-Kaskade braucht owner_type=foodbook|speisekarte + owner_id.');
+        // P3 foodbook, P4 speisekarte (je 1 Concept/Slot). E2 (Spec 40): offer — je Slot ein Concept, ans
+        // Angebot referenziert (Pivot). Der Speiseplan (P5) läuft über einen eigenen Zell-Pfad.
+        if (! in_array($ownerType, ['foodbook', 'speisekarte', 'offer'], true) || $ownerId <= 0) {
+            throw new RuntimeException('Voll-Kaskade braucht owner_type=foodbook|speisekarte|offer + owner_id.');
         }
 
         $frame = app(PlanningFrameService::class)->find($ownerType, $ownerId);
@@ -358,6 +359,17 @@ class PlanningCascadeService
             $frame->load('slots');
             foreach ($frame->slots as $slot) {
                 $out[] = [$slot, $svc->rubrikFuerSlot($team, $ownerId, (string) ($slot->label ?: 'Rubrik'))];
+            }
+
+            return $out;
+        }
+        if ($ownerType === 'offer') {
+            // E2 (Spec 40): der „Container" IST das Angebot selbst — jedes erzeugte Konzept wird ans Angebot
+            // referenziert (Pivot foodalchemist_offer_concept, {@see AngebotService::referenziereConcept}); es gibt
+            // keinen Zwischen-Container wie Kapitel/Rubrik. Darum ist die containerId überall die Angebots-ID.
+            $frame->load('slots');
+            foreach ($frame->slots as $slot) {
+                $out[] = [$slot, $ownerId];
             }
 
             return $out;
@@ -857,6 +869,8 @@ class PlanningCascadeService
             app(FoodbookService::class)->addBlock($team, $containerId, ['type' => 'concept_ref', 'concept_id' => $conceptId]);
         } elseif ($ownerType === 'speisekarte') {
             app(SpeisekarteService::class)->addPosition($team, $containerId, ['type' => 'menue_ref', 'concept_id' => $conceptId]);
+        } elseif ($ownerType === 'offer') {
+            app(AngebotService::class)->referenziereConcept($team, $containerId, $conceptId);   // E2: containerId = Angebots-ID
         } else {
             return;
         }
@@ -1555,7 +1569,8 @@ class PlanningCascadeService
             'foodbook' => ['Foodbook', \Platform\FoodAlchemist\Models\FoodAlchemistFoodbook::visibleToTeam($team)->whereKey($id)->value('label'), 'foodalchemist.foodbooks.index', 'fb'],
             'speisekarte' => ['Speisekarte', \Platform\FoodAlchemist\Models\FoodAlchemistSpeisekarte::visibleToTeam($team)->whereKey($id)->value('name'), 'foodalchemist.speisekarte.index', 'sk'],
             'speiseplan' => ['Speiseplan', FoodAlchemistSpeiseplan::visibleToTeam($team)->whereKey($id)->value('name'), 'foodalchemist.speiseplan.index', 'sp'],
-            default => [null, null, null, null],   // 'offer' folgt in E2
+            'offer' => ['Angebot', \Platform\FoodAlchemist\Models\FoodAlchemistAngebot::visibleToTeam($team)->whereKey($id)->value('name'), 'foodalchemist.angebote.index', 'sel'],
+            default => [null, null, null, null],
         };
         if ($route === null) {
             return null;
