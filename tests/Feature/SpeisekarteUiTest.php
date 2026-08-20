@@ -86,3 +86,33 @@ it('Phase A: Kontext-Leitplanken werden gesetzt + persistiert (waehle hydriert, 
         ->assertSet('niveau', 'gehoben')
         ->assertSet('writingStyleId', $ws->id);
 });
+
+// ── Werkstrang M Phase B (Spec 40 §6): reicher Gericht-Picker (Facetten + offen bleiben) ──────
+
+it('Phase B: Gericht-Picker filtert per Facette + bleibt nach dem Einfügen offen', function () {
+    $hg = \Platform\FoodAlchemist\Models\FoodAlchemistDishMainGroup::create(['team_id' => $this->rootTeam->id, 'code' => 'HG', 'label' => 'Hauptgericht']);
+    $klFleisch = \Platform\FoodAlchemist\Models\FoodAlchemistDishClass::create(['team_id' => $this->rootTeam->id, 'dish_main_group_id' => $hg->id, 'code' => 'HG_F', 'label' => 'Fleisch', 'diet_form' => 'fleisch']);
+    $klVeg = \Platform\FoodAlchemist\Models\FoodAlchemistDishClass::create(['team_id' => $this->rootTeam->id, 'dish_main_group_id' => $hg->id, 'code' => 'HG_V', 'label' => 'Vegetarisch', 'diet_form' => 'vegetarisch']);
+    $rind = FoodAlchemistRecipe::create(['team_id' => $this->rootTeam->id, 'recipe_key' => 'pb1', 'name' => 'Rinderbraten', 'status' => 'approved', 'is_sales_recipe' => true, 'sales_net' => 22.00, 'dish_main_group_id' => $hg->id, 'dish_class_id' => $klFleisch->id]);
+    FoodAlchemistRecipe::create(['team_id' => $this->rootTeam->id, 'recipe_key' => 'pb2', 'name' => 'Gemüsestrudel', 'status' => 'approved', 'is_sales_recipe' => true, 'sales_net' => 16.00, 'dish_main_group_id' => $hg->id, 'dish_class_id' => $klVeg->id]);
+
+    Livewire::test(SpeisekarteIndex::class)->call('neu');
+    $karte = FoodAlchemistSpeisekarte::first();
+    $comp = Livewire::test(SpeisekarteIndex::class)
+        ->call('waehle', $karte->id)
+        ->set('neueRubrik', 'Hauptgänge')->call('rubrikNeu');
+    $rubrik = $karte->sections()->first();
+
+    $comp->call('pickerOeffnen', $rubrik->id, 'gericht')
+        ->assertSee('Rinderbraten')->assertSee('Gemüsestrudel')        // ohne Facette: beide
+        ->call('pickerWaehleHg', $hg->id)
+        ->call('pickerWaehleKlasse', $klFleisch->id)
+        ->assertSet('pickerDishClass', $klFleisch->id)
+        ->assertSee('Rinderbraten')->assertDontSee('Gemüsestrudel');   // Fleisch-Facette filtert
+
+    // „+ bleibt offen": nach dem Einfügen ist der Picker + die Facette noch aktiv.
+    $comp->call('positionAusGericht', $rubrik->id, $rind->id)
+        ->assertSet('pickerRubrikId', $rubrik->id)
+        ->assertSet('pickerDishClass', $klFleisch->id);
+    expect($rubrik->items()->count())->toBe(1);
+});

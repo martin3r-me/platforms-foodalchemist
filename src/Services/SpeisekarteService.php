@@ -469,7 +469,10 @@ class SpeisekarteService
             ->when($suche !== '', fn ($q) => \Platform\FoodAlchemist\Support\Suche::like($q, 'name', $suche))
             ->when($hauptgruppe !== null, fn ($q) => $q->where('dish_main_group_id', $hauptgruppe))
             ->when($dishClassId !== null, fn ($q) => $q->where('dish_class_id', $dishClassId))
-            ->orderBy('name')->limit($limit)->get(['id', 'name', 'sales_net']);
+            // Werkstrang M Phase B: dish_class_id + diet_form additiv mitgeben (Picker-Diät-Label);
+            // andere Aufrufer lesen weiter nur id/name/sales_net.
+            ->with(['dishClass:id,diet_form'])
+            ->orderBy('name')->limit($limit)->get(['id', 'name', 'sales_net', 'dish_class_id']);
     }
 
     /** Concepts (Fix-Menüs) für den menue_ref-Picker. */

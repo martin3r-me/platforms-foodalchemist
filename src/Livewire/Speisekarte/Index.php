@@ -57,6 +57,9 @@ class Index extends Component
     public string $pickerSuche = '';
     public ?int $pickerRubrikId = null;
     public string $pickerModus = 'gericht'; // gericht | menue
+    // Werkstrang M Phase B: Facetten-Filter im Gericht-Picker (Hauptgruppe → Unterklasse).
+    public ?int $pickerHauptgruppe = null;
+    public ?int $pickerDishClass = null;
 
     // Positions-Bearbeitung (inline)
     public ?int $editPosId = null;
@@ -114,6 +117,8 @@ class Index extends Component
         $this->coverUpload = null;
         $this->pickerRubrikId = null;
         $this->pickerSuche = '';
+        $this->pickerHauptgruppe = null;
+        $this->pickerDishClass = null;
     }
 
     public function schliessen(): void
@@ -282,6 +287,22 @@ class Index extends Component
             $this->pickerModus = in_array($modus, ['gericht', 'menue'], true) ? $modus : 'gericht';
         }
         $this->pickerSuche = '';
+        // Werkstrang M Phase B: Facetten beim (Neu-)Öffnen zurücksetzen.
+        $this->pickerHauptgruppe = null;
+        $this->pickerDishClass = null;
+    }
+
+    /** Werkstrang M Phase B: Hauptgruppen-Facette setzen/löschen — Unterklasse fällt dabei weg. */
+    public function pickerWaehleHg(?int $hauptgruppe): void
+    {
+        $this->pickerHauptgruppe = ($hauptgruppe !== null && $this->pickerHauptgruppe === $hauptgruppe) ? null : $hauptgruppe;
+        $this->pickerDishClass = null;
+    }
+
+    /** Werkstrang M Phase B: Unterklassen-Facette setzen/löschen (Toggle). */
+    public function pickerWaehleKlasse(?int $dishClassId): void
+    {
+        $this->pickerDishClass = ($dishClassId !== null && $this->pickerDishClass === $dishClassId) ? null : $dishClassId;
     }
 
     public function positionAusGericht(SpeisekarteService $svc, int $rubrikId, int $recipeId): void
@@ -289,7 +310,7 @@ class Index extends Component
         $svc->addPosition($this->team(), $rubrikId, [
             'type' => 'gericht_ref', 'sales_recipe_id' => $recipeId,
         ]);
-        $this->pickerSuche = '';
+        // Werkstrang M Phase B: Picker + Suche + Facetten bleiben offen → mehrere Gerichte hintereinander.
     }
 
     public function positionAusMenue(SpeisekarteService $svc, int $rubrikId, int $conceptId): void
@@ -297,7 +318,6 @@ class Index extends Component
         $svc->addPosition($this->team(), $rubrikId, [
             'type' => 'menue_ref', 'concept_id' => $conceptId,
         ]);
-        $this->pickerSuche = '';
     }
 
     public function positionLoeschen(SpeisekarteService $svc, int $positionId): void
@@ -410,11 +430,22 @@ class Index extends Component
             $vorschau = $svc->dokumentDaten($team, $karte);
         }
 
+        // Werkstrang M Phase B: reicher Gericht-Picker — Facetten (Hauptgruppe/Unterklasse) + Limit 50.
         $pickerErgebnisse = collect();
+        $pickerHauptgruppen = collect();
+        $pickerUntergruppen = collect();
         if ($this->pickerRubrikId !== null) {
             $pickerErgebnisse = $this->pickerModus === 'menue'
-                ? $svc->conceptKandidaten($team, $this->pickerSuche, 15)
-                : $svc->gerichtKandidaten($team, $this->pickerSuche, 15);
+                ? $svc->conceptKandidaten($team, $this->pickerSuche, 50)
+                : $svc->gerichtKandidaten($team, $this->pickerSuche, 50, $this->pickerHauptgruppe, $this->pickerDishClass);
+            if ($this->pickerModus === 'gericht') {
+                $pickerHauptgruppen = app(\Platform\FoodAlchemist\Services\SalesRecipeService::class)->dishMainGroups($team);
+                if ($this->pickerHauptgruppe !== null) {
+                    $pickerUntergruppen = \Platform\FoodAlchemist\Models\FoodAlchemistDishClass::visibleToTeam($team)
+                        ->where('dish_main_group_id', $this->pickerHauptgruppe)
+                        ->orderBy('label')->get(['id', 'label']);
+                }
+            }
         }
 
         return view('foodalchemist::livewire.speisekarte.index', [
@@ -424,6 +455,8 @@ class Index extends Component
             'preise' => $preise,
             'vorschau' => $vorschau,
             'pickerErgebnisse' => $pickerErgebnisse,
+            'pickerHauptgruppen' => $pickerHauptgruppen,
+            'pickerUntergruppen' => $pickerUntergruppen,
             // Spec 33 P5: Auswahl fürs Status-/Zuordnungs-Bauteil (nur aktive Betriebe).
             'betriebe' => \Platform\FoodAlchemist\Models\FoodAlchemistOutlet::where('team_id', $team->id)
                 ->where('is_inactive', false)->orderBy('sort_order')->orderBy('name')->get(['id', 'name']),
