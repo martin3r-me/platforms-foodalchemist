@@ -202,13 +202,18 @@ it('startet im Wandmodus geplante Aufträge beim Abhaken und setzt die Zeile erl
 it('trennt im Wandmonitor zusammengesetzte Gerichts- und Rezeptnamen untereinander', function () {
     $this->fond->update(['name' => '[FIN] Curry-Hummus | Quinoa-Minz-Salat']);
 
+    $key = implode('|', [$this->a1->id, '[FIN] Curry-Hummus', '2026-08-20']);
+
     Livewire::test(Tagesplan::class, ['von' => '2026-08-20', 'display' => 'wall'])
         ->set('modus', 'editor')
         ->assertSeeHtml('data-tagesplan-wall-gericht')
-        ->assertSeeHtml('data-tagesplan-wall-rezept')
+        ->assertSeeHtml('data-tagesplan-wall-gericht-open')
         ->assertSee('Gericht')
-        ->assertSee('Basisrezept')
         ->assertSee('[FIN] Curry-Hummus')
+        ->assertDontSee('Quinoa-Minz-Salat')
+        ->call('oeffneGericht', $key)
+        ->assertSeeHtml('data-tagesplan-wall-gericht-detail')
+        ->assertSee('Basisrezept')
         ->assertSee('Quinoa-Minz-Salat');
 });
 
@@ -237,18 +242,12 @@ it('gruppiert im Wandmonitor Gericht und Basisrezepte als Küchen-Arbeitsblock',
         ->assertSeeHtml('data-tagesplan-wall-gruppenfilter')
         ->assertSeeHtml('data-tagesplan-wall-filter-gerichte')
         ->assertSeeHtml('data-tagesplan-wall-filter-basis')
-        ->assertSeeHtml('data-tagesplan-wall-rezepte')
-        ->assertSeeHtml('data-tagesplan-wall-rezept')
         ->assertSeeHtml('data-tagesplan-abhaken')
         ->assertSeeHtml('data-tagesplan-wall-karte')
         ->assertSee('Probe Küche')
-        ->assertSeeInOrder([
-            'Gericht',
-            '[VOR] Tomate-Burrata',
-            'Anrichten',
-            'Basisrezept',
-            'Basilikum-Schaum',
-        ])
+        ->assertSeeInOrder(['Gericht', '[VOR] Tomate-Burrata'])
+        ->assertDontSee('Anrichten')
+        ->assertDontSee('Basilikum-Schaum')
         ->call('wallGruppenFilterSetzen', 'gerichte')
         ->assertSet('wallGruppenFilter', 'gerichte')
         ->assertSee('Probe Küche')
@@ -257,6 +256,16 @@ it('gruppiert im Wandmonitor Gericht und Basisrezepte als Küchen-Arbeitsblock',
         ->assertSet('wallGruppenFilter', 'basis')
         ->assertSee('Basisrezepte ohne Gericht')
         ->assertDontSee('Probe Küche');
+
+    $key = implode('|', [$auftrag->id, '[VOR] Tomate-Burrata', '2026-08-20']);
+
+    Livewire::test(Tagesplan::class, ['von' => '2026-08-20', 'display' => 'wall'])
+        ->set('modus', 'editor')
+        ->call('oeffneGericht', $key)
+        ->assertSeeHtml('data-tagesplan-wall-gericht-detail')
+        ->assertSeeHtml('data-tagesplan-wall-gericht-detail-card')
+        ->assertSee('Anrichten')
+        ->assertSee('Basilikum-Schaum');
 });
 
 it('öffnet im Wandmonitor ein Gericht als Arbeitsblock mit tatsächlichen Rezepten und Produkten', function () {

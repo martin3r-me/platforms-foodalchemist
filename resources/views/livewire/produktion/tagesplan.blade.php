@@ -265,6 +265,7 @@
                                                         </div>
                                                     @endif
                                                 </div>
+                                                @if(! $gruppe->hat_gericht)
                                                 <div class="space-y-2 p-3" data-tagesplan-wall-rezepte>
                                                     @foreach($gruppe->zeilen as $z)
                                                         @php
@@ -311,6 +312,7 @@
                                                         </div>
                                                     @endforeach
                                                 </div>
+                                                @endif
                                             </article>
                                         @endforeach
                                         </div>
