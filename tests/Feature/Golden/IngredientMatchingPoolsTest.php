@@ -125,6 +125,14 @@ it('tiebreaker: FreshFirst/FrozenFirst/PreservedFirst/Neutral über Karotten-Var
         ->and(($this->match)('Salz', 'salz', 'gp_first', 'fresh_first')['gp_name'])->toBe('Speisesalz: jodiert');
 });
 
+// D4 2026-08-18: bare »Wasser« → Leitungswasser-Basis-GP statt der Flaschen-/Bio-Variante (Default-Alias vor Pool-Scan).
+it('default-alias: bare Wasser gewinnt das Leitungswasser-GP, nicht die Flasche', function () {
+    ($this->mkGp)('Wasser: still, 0,5 l, Bio', 'wasser');
+    ($this->mkGp)('Wasser: Leitung', 'wasser');
+
+    expect(($this->match)('Wasser', 'wasser')['gp_name'])->toBe('Wasser: Leitung');
+});
+
 it('tiebreaker: Drei-Zustand-Pool (konserviert/TK/frisch) diskriminiert alle Pole', function () {
     ($this->mkGp)('Tomaten: konserviert, geschaelt', 'tomaten');
     ($this->mkGp)('Tomaten: TK', 'tomaten');

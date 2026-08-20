@@ -520,6 +520,13 @@ class MatchHeuristics
         if ($has('salz') && $n === 1) {
             return 'Salz / Kochsalz: trocken, unjodiert, Raffinade';
         }
+        // D4 2026-08-18: bare »Wasser«/»Leitungswasser« → Leitungswasser-Basis-GP (normales GP, requires_la=0,
+        // gratis) statt der nächsten Flaschen-/Bio-Variante (Live-Bug: »Wasser« matchte »Wasser: still, 0,5 l,
+        // Bio«). NUR n===1 → »Mineralwasser«/»Wasser still«/»Sprudel« bleiben bewusst die gekaufte Ware.
+        // Inert, solange das »Wasser: Leitung«-GP nicht existiert (resolveGpByName → null → Pool-Scan wie bisher).
+        if (($has('wasser') || $has('leitungswasser')) && $n === 1) {
+            return 'Wasser: Leitung';
+        }
         if ($n === 1 && ($has('zucker') || $has('feinzucker') || $has('kristallzucker')
             || $has('streuzucker') || $has('raffinadezucker') || $has('haushaltszucker') || $has('weisszucker'))) {
             return 'Zucker Raffinade: trocken, weiss';
