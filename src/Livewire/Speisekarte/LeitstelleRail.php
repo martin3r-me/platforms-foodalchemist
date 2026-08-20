@@ -31,6 +31,10 @@ class LeitstelleRail extends Component
     {
         return view('foodalchemist::livewire.speisekarte.leitstelle-rail', [
             'stand' => $svc->checkliste($this->team(), $this->karteId),
+            // Werkstrang M Phase E: Soll/Ist-Coverage gegen das Planungs-Gerüst — nur wenn ein Gerüst
+            // existiert (hat_geruest=false → das Blade blendet das Panel aus, kein Frame-Zwang).
+            'coverage' => app(\Platform\FoodAlchemist\Services\CoverageService::class)
+                ->coverage($this->team(), 'speisekarte', $this->karteId),
         ]);
     }
 

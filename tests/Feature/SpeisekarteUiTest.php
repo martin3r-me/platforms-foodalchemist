@@ -187,3 +187,25 @@ it('Phase D: Layout-Block einfügen + Wahl-Gruppe setzen + dokumentDaten trägt 
     $gerichtPos = collect($posDaten)->firstWhere('typ', 'gericht_ref');
     expect($gerichtPos['variant_group_id'] ?? null)->toBe(3);
 });
+
+// ── Werkstrang M Phase E (Spec 40 §6): Planungshilfe „was fehlt" ──────────────
+
+it('Phase E: Leitstelle zeigt Checkliste immer, Coverage nur bei Planungs-Gerüst', function () {
+    $svc = app(\Platform\FoodAlchemist\Services\SpeisekarteService::class);
+    $karte = $svc->create($this->rootTeam, ['name' => 'Karte E']);
+
+    // Ohne Gerüst: Checkliste ja, Coverage-Panel nein (kein Frame-Zwang).
+    Livewire::test(\Platform\FoodAlchemist\Livewire\Speisekarte\LeitstelleRail::class, ['karteId' => $karte->id])
+        ->assertOk()
+        ->assertSee('Was fehlt der Karte noch?')
+        ->assertDontSee('Soll/Ist-Coverage');
+
+    // Mit Gerüst (Frame + Slot): Coverage-Panel erscheint.
+    $frames = app(\Platform\FoodAlchemist\Services\PlanningFrameService::class);
+    $frame = $frames->frameFor($this->rootTeam, 'speisekarte', $karte->id);
+    $frames->addSlot($this->rootTeam, $frame, ['label' => 'Vorspeisen']);
+
+    Livewire::test(\Platform\FoodAlchemist\Livewire\Speisekarte\LeitstelleRail::class, ['karteId' => $karte->id])
+        ->assertOk()
+        ->assertSee('Soll/Ist-Coverage');
+});

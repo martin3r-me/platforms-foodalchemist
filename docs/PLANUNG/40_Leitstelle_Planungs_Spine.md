@@ -244,7 +244,8 @@ Schema/Service tragen: `type ∈ header|text|spacer`, `variant_group_id`, `heigh
 - `rubrik.blade.php`: Rubrik-Kopf (:11) Buttons `+ Überschrift / + Text / + Abstand`; Wahlgruppen-Feld im Edit-Panel.
 - **Ehrlich:** Dokument/Vorschau gruppiert `variant_group_id` heute NICHT (`dokumentDaten`-Render ~:542 fehlt es). Der „A oder B"-Effekt ist ein separater Renderer-Schritt — mitbauen oder als „Editor-only vorerst" kommunizieren (sonst legt der User Wahlgruppen an, die im Druck nicht erscheinen).
 
-### Phase E — Planungshilfe „was fehlt der Karte noch" (billig, read-only, schlank)
+### Phase E — Planungshilfe „was fehlt der Karte noch" (billig, read-only, schlank) · Status: ✅ gebaut 2026-08-20 (Branch `feat/spec40-umsetzung`)
+> **Umsetzung:** die bestehende Checkliste (`SpeisekarteLeitstelleService::checkliste`, im `LeitstelleRail`) breiter überschrieben („Was fehlt der Karte noch?"); `LeitstelleRail::render` reicht zusätzlich `CoverageService::coverage($team,'speisekarte',$karteId)` durch, das owner-neutrale Partial `planning/partials/coverage-panel` wird **nur bei `hat_geruest=true`** gerendert (kein Frame-Zwang). Bewusst DRAUSSEN: gerankte KI-Vorschläge/Marge-Solver. Pest: SpeisekarteUiTest (Checkliste immer, Coverage nur mit Frame+Slot) 7/7.
 - Default: vorhandene Checkliste breiter zeigen — `SpeisekarteLeitstelleService::checkliste()` (:27), Rubriken/Positionen/Preise/Allergene/Branding, braucht keinen PlanningFrame.
 - Coverage-Panel nur wenn Frame existiert: `CoverageService::coverage($team,'speisekarte',$karteId)` (:236) ist speisekarte-fähig, Partial owner-neutral (`planning/partials/coverage-panel.blade.php`) — ohne Frame `hat_geruest=false`, darum nur bei vorhandenem Frame zeigen.
 - Bewusst DRAUSSEN: gerankte KI-Gericht-Vorschläge je Rubrik (`slotVorschlaege` braucht Frame+Slot), Marge-Solver, Frame-Zwang. „Vorschlag" = der Facetten-Picker (Phase B), vorgefiltert auf `art`/`dish_class` der Rubrik — Vorschlag durch Vorfilterung, ohne KI/Frame.
@@ -267,10 +268,11 @@ Getränke/Wein-Detail: Darreichungs-Picker (Glas/Flasche/Portion via `presentati
 4. MCP-Gegenprobe (demo-Team): neue Tools Read+Write; Tenancy-Guard bei fremdem Team.
 5. demo-Deploy (self-service) nach grüner Sandbox; migrationsfrei → kein Backup-Lauf nötig.
 
-### Vor dem Bau final zu bestätigen (Werkstrang M)
-- `kundentyp` Freitext-String, oder kuratierte Vokabelquelle?
-- Phase D: Wahlgruppen-Renderer in Dokument/Vorschau mitbauen oder „Editor-only vorerst"?
-- Phase E: „Checkliste als Default, Coverage nur bei Frame" bestätigen.
+### Vor dem Bau final zu bestätigen (Werkstrang M) — ✅ autonom entschieden 2026-08-20 (nach Spec-Empfehlung)
+- `kundentyp` Freitext-String, oder kuratierte Vokabelquelle? → **Freitext-String** (Phase A, „billig"); Vokabel-Härtung späterer Ausbau.
+- Phase D: Wahlgruppen-Renderer in Dokument/Vorschau mitbauen oder „Editor-only vorerst"? → **Editor-only vorerst** + `variant_group_id` daten-fertig in `dokumentDaten` + ehrlicher Editor-Hinweis (statt stiller Falle); Grouping-Renderer bleibt Folge-Schritt.
+- Phase E: „Checkliste als Default, Coverage nur bei Frame" bestätigen. → **bestätigt + so gebaut.**
+- Zusätzlich bewusst offen: der `struktur|positionen`-Tab-Split (Phase A) = Umstrukturierung statt Surfacing (Positionen sind je Rubrik eingebettet); D&D-Reorder (Phase C) = hoch/runter-Buttons + Move-Select gewählt (rekursives D&D vermieden). Beide = optionale UX-Folgeausbauten.
 
 ---
 
