@@ -199,17 +199,34 @@
                                             @endphp
                                             <article class="overflow-hidden rounded-3xl border border-white/10 bg-slate-950/45 {{ $gruppeFertig ? 'opacity-60' : '' }}" data-tagesplan-wall-gericht-gruppe>
                                                 <div class="border-b border-white/10 bg-white/[0.04] px-4 py-3" data-tagesplan-wall-gericht>
-                                                    <div class="flex items-start justify-between gap-3">
-                                                        <div class="min-w-0">
-                                                            <p class="text-[11px] font-bold uppercase tracking-wide text-slate-400">{{ $gruppe->hat_gericht ? 'Gericht' : 'Arbeitsblock' }}</p>
-                                                            <h3 class="mt-1 whitespace-normal break-words text-2xl font-bold leading-tight">{{ $gruppe->gericht }}</h3>
-                                                            <p class="mt-2 text-sm text-slate-400">{{ $gruppe->auftrag }} · für {{ \Illuminate\Support\Carbon::parse($gruppe->liefertag)->format('d.m.') }}</p>
+                                                    @if($gruppe->hat_gericht)
+                                                        <button type="button" wire:click="oeffneGericht(@js($gruppe->key))"
+                                                                class="flex w-full items-start justify-between gap-3 text-left"
+                                                                data-tagesplan-wall-gericht-open>
+                                                            <div class="min-w-0">
+                                                                <p class="text-[11px] font-bold uppercase tracking-wide text-slate-400">Gericht</p>
+                                                                <h3 class="mt-1 whitespace-normal break-words text-2xl font-bold leading-tight">{{ $gruppe->gericht }}</h3>
+                                                                <p class="mt-2 text-sm text-slate-400">{{ $gruppe->auftrag }} · für {{ \Illuminate\Support\Carbon::parse($gruppe->liefertag)->format('d.m.') }}</p>
+                                                            </div>
+                                                            <div class="shrink-0 text-right">
+                                                                <p class="text-xl font-bold tabular-nums">{{ $gruppe->erledigt }}/{{ $gruppe->gesamt }}</p>
+                                                                <p class="text-[11px] uppercase tracking-wide text-slate-400">erledigt</p>
+                                                                <p class="mt-2 rounded-full bg-violet-500/15 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-violet-100">öffnen</p>
+                                                            </div>
+                                                        </button>
+                                                    @else
+                                                        <div class="flex w-full items-start justify-between gap-3">
+                                                            <div class="min-w-0">
+                                                                <p class="text-[11px] font-bold uppercase tracking-wide text-slate-400">Arbeitsblock</p>
+                                                                <h3 class="mt-1 whitespace-normal break-words text-2xl font-bold leading-tight">{{ $gruppe->gericht }}</h3>
+                                                                <p class="mt-2 text-sm text-slate-400">{{ $gruppe->auftrag }} · für {{ \Illuminate\Support\Carbon::parse($gruppe->liefertag)->format('d.m.') }}</p>
+                                                            </div>
+                                                            <div class="shrink-0 text-right">
+                                                                <p class="text-xl font-bold tabular-nums">{{ $gruppe->erledigt }}/{{ $gruppe->gesamt }}</p>
+                                                                <p class="text-[11px] uppercase tracking-wide text-slate-400">erledigt</p>
+                                                            </div>
                                                         </div>
-                                                        <div class="shrink-0 text-right">
-                                                            <p class="text-xl font-bold tabular-nums">{{ $gruppe->erledigt }}/{{ $gruppe->gesamt }}</p>
-                                                            <p class="text-[11px] uppercase tracking-wide text-slate-400">erledigt</p>
-                                                        </div>
-                                                    </div>
+                                                    @endif
                                                     @if(collect($gruppe->sicherheit['allergene'] ?? [])->isNotEmpty() || collect($gruppe->sicherheit['warnungen'] ?? [])->isNotEmpty() || collect($gruppe->sicherheit['diaet'] ?? [])->isNotEmpty())
                                                         <div class="mt-3 flex flex-wrap gap-1.5" data-tagesplan-wall-sicherheit>
                                                             @foreach(collect($gruppe->sicherheit['warnungen'] ?? [])->take(3) as $warnung)
@@ -281,6 +298,104 @@
                 @endif
             </main>
         </div>
+
+        <x-foodalchemist::modal name="wall-gericht" fullscreen dark-canvas title="Gericht" :title-name="$wallGericht->gericht ?? null" :close-via="'gerichtSchliessen'">
+            <x-slot:actions>
+                <button type="button" x-data @click="$wire.gerichtSchliessen(); close()"
+                        class="inline-flex h-10 items-center gap-2 rounded-xl border border-white/10 bg-white/10 px-4 text-xs font-bold uppercase tracking-wide text-white hover:bg-white/15"
+                        data-tagesplan-wall-gericht-zurueck>
+                    <span class="text-lg leading-none">‹</span>Zurück zum Monitor
+                </button>
+            </x-slot:actions>
+            @if($wallGericht)
+                <div class="space-y-4" data-tagesplan-wall-gericht-detail>
+                    <header class="rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
+                        <div class="flex flex-wrap items-start justify-between gap-4">
+                            <div class="min-w-0">
+                                <p class="text-xs font-bold uppercase tracking-wide text-violet-200">{{ $wallGericht->auftrag }} · für {{ \Illuminate\Support\Carbon::parse($wallGericht->liefertag)->format('d.m.') }}</p>
+                                <h2 class="mt-1 whitespace-normal break-words text-3xl font-bold leading-tight">{{ $wallGericht->gericht }}</h2>
+                            </div>
+                            <div class="grid min-w-48 grid-cols-2 gap-2 text-center">
+                                <div class="rounded-xl border border-white/10 bg-slate-950/45 px-3 py-2">
+                                    <p class="text-2xl font-bold tabular-nums">{{ $wallGericht->erledigt }}/{{ $wallGericht->gesamt }}</p>
+                                    <p class="text-[11px] uppercase tracking-wide text-slate-400">erledigt</p>
+                                </div>
+                                <div class="rounded-xl border border-white/10 bg-slate-950/45 px-3 py-2">
+                                    <p class="text-2xl font-bold tabular-nums">{{ $wallGericht->minuten }}</p>
+                                    <p class="text-[11px] uppercase tracking-wide text-slate-400">Minuten</p>
+                                </div>
+                            </div>
+                        </div>
+                        @if(collect($wallGericht->sicherheit['allergene'] ?? [])->isNotEmpty() || collect($wallGericht->sicherheit['warnungen'] ?? [])->isNotEmpty() || collect($wallGericht->sicherheit['diaet'] ?? [])->isNotEmpty())
+                            <div class="mt-3 flex flex-wrap gap-1.5" data-tagesplan-wall-sicherheit>
+                                @foreach(collect($wallGericht->sicherheit['warnungen'] ?? [])->take(4) as $warnung)
+                                    <span class="rounded-full bg-amber-400/15 px-2 py-1 text-[11px] font-bold uppercase tracking-wide text-amber-100" data-tagesplan-wall-warnung>{{ $warnung }}</span>
+                                @endforeach
+                                @foreach(collect($wallGericht->sicherheit['allergene'] ?? [])->take(6) as $a)
+                                    <span class="rounded-full bg-rose-400/15 px-2 py-1 text-[11px] font-bold uppercase tracking-wide text-rose-100" data-tagesplan-wall-allergen>{{ $a['label'] }}</span>
+                                @endforeach
+                                @foreach(collect($wallGericht->sicherheit['diaet'] ?? [])->take(4) as $d)
+                                    <span class="rounded-full bg-emerald-400/15 px-2 py-1 text-[11px] font-bold uppercase tracking-wide text-emerald-100" data-tagesplan-wall-diaet>{{ $d }}</span>
+                                @endforeach
+                            </div>
+                        @endif
+                    </header>
+
+                    <div class="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4" data-tagesplan-wall-gericht-rezepte>
+                        @foreach($wallGericht->zeilen as $z)
+                            @php
+                                $erledigt = $z->line_status === 'done';
+                            @endphp
+                            @php
+                                $laeuft = $z->auftrag_status === 'in_progress';
+                            @endphp
+                            @php
+                                $rezeptTitel = $z->rezept_label ?: $z->name;
+                            @endphp
+                            <article class="flex min-h-44 gap-3 rounded-2xl border border-white/10 bg-slate-900/80 p-4 text-left shadow-xl transition hover:border-violet-300/70 {{ $erledigt ? 'opacity-60' : '' }}" data-tagesplan-wall-gericht-detail-card>
+                                <button type="button" wire:click="abhaken({{ $z->id }})"
+                                        class="grid h-16 w-16 shrink-0 place-items-center rounded-2xl border text-3xl font-bold {{ $erledigt ? 'border-emerald-400 bg-emerald-500 text-white' : ($laeuft ? 'border-white/25 bg-slate-950/60 text-white hover:border-violet-300' : 'border-dashed border-violet-300/70 bg-violet-500/10 text-violet-100 hover:bg-violet-500/20') }}"
+                                        title="{{ $erledigt ? 'Haken zurücknehmen' : ($laeuft ? 'Als erledigt abhaken' : 'Auftrag starten und erledigt abhaken') }}"
+                                        data-tagesplan-wall-gericht-abhaken>{{ $erledigt ? '✓' : '' }}</button>
+                                <button type="button" wire:click="oeffneAnleitung({{ $z->id }})" class="min-w-0 flex-1 text-left" data-tagesplan-wall-gericht-anleitung>
+                                    <div class="flex items-start justify-between gap-2">
+                                        <div class="min-w-0">
+                                            <p class="text-[11px] font-bold uppercase tracking-wide text-violet-200">{{ $z->is_basisrezept ? 'Basisrezept' : 'Produkt/Rezept' }}</p>
+                                            <p class="mt-0.5 whitespace-normal break-words text-xl font-bold leading-tight {{ $erledigt ? 'line-through' : '' }}">{{ $rezeptTitel }}</p>
+                                        </div>
+                                        @if($z->is_basisrezept)<span class="shrink-0 rounded-full bg-emerald-400/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-100">Basis</span>@endif
+                                    </div>
+                                    <p class="mt-3 text-sm text-slate-300">
+                                        @if($z->gesamt_kg !== null){{ rtrim(rtrim(number_format((float) $z->gesamt_kg, 3, ',', '.'), '0'), ',') }} kg · @endif{{ $z->arbeitszeit_min !== null ? $z->arbeitszeit_min . ' min' : 'ohne Zeit' }}
+                                    </p>
+                                    <p class="mt-1 text-sm text-slate-400">für {{ $z->auftrag }}</p>
+                                    @if(collect($z->sicherheit['allergene'] ?? [])->isNotEmpty() || collect($z->sicherheit['warnungen'] ?? [])->isNotEmpty() || collect($z->sicherheit['diaet'] ?? [])->isNotEmpty())
+                                        <div class="mt-3 flex flex-wrap gap-1.5" data-tagesplan-wall-sicherheit>
+                                            @foreach(collect($z->sicherheit['warnungen'] ?? [])->take(3) as $warnung)
+                                                <span class="rounded-full bg-amber-400/15 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-amber-100" data-tagesplan-wall-warnung>{{ $warnung }}</span>
+                                            @endforeach
+                                            @foreach(collect($z->sicherheit['allergene'] ?? [])->take(4) as $a)
+                                                <span class="rounded-full bg-rose-400/15 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-rose-100" data-tagesplan-wall-allergen>{{ $a['label'] }}</span>
+                                            @endforeach
+                                            @foreach(collect($z->sicherheit['diaet'] ?? [])->take(3) as $d)
+                                                <span class="rounded-full bg-emerald-400/15 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-emerald-100" data-tagesplan-wall-diaet>{{ $d }}</span>
+                                            @endforeach
+                                        </div>
+                                    @endif
+                                </button>
+                            </article>
+                        @endforeach
+                    </div>
+                </div>
+            @else
+                <div class="grid min-h-[60vh] place-items-center text-center" data-tagesplan-wall-gericht-leer>
+                    <div>
+                        <p class="text-3xl font-bold text-slate-100">Gericht nicht gefunden.</p>
+                        <p class="mt-2 text-lg text-slate-400">Der Arbeitsblock ist nicht mehr im aktuellen Tagesfenster.</p>
+                    </div>
+                </div>
+            @endif
+        </x-foodalchemist::modal>
 
         <x-foodalchemist::modal name="wall-anleitung" fullscreen dark-canvas title="Anleitung" :title-name="$anleitung['name'] ?? null" :close-via="'anleitungSchliessen'">
             <x-slot:actions>

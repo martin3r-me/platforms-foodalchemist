@@ -233,6 +233,7 @@ it('gruppiert im Wandmonitor Gericht und Basisrezepte als Küchen-Arbeitsblock',
     Livewire::test(Tagesplan::class, ['von' => '2026-08-20', 'display' => 'wall'])
         ->set('modus', 'editor')
         ->assertSeeHtml('data-tagesplan-wall-gericht-gruppe')
+        ->assertSeeHtml('data-tagesplan-wall-gericht-open')
         ->assertSeeHtml('data-tagesplan-wall-rezepte')
         ->assertSeeHtml('data-tagesplan-wall-rezept')
         ->assertSeeHtml('data-tagesplan-abhaken')
@@ -245,6 +246,59 @@ it('gruppiert im Wandmonitor Gericht und Basisrezepte als Küchen-Arbeitsblock',
             'Basisrezept',
             'Basilikum-Schaum',
         ]);
+});
+
+it('öffnet im Wandmonitor ein Gericht als Arbeitsblock mit tatsächlichen Rezepten und Produkten', function () {
+    $haupt = FoodAlchemistRecipe::create([
+        'team_id' => $this->rootTeam->id, 'recipe_key' => 'krautsalat', 'name' => '[SAL] Krautsalat | Fertigstellen',
+        'status' => 'approved', 'is_sales_recipe' => true, 'yield_kg' => 1.0, 'work_time_min' => 20,
+    ]);
+    $basis = FoodAlchemistRecipe::create([
+        'team_id' => $this->rootTeam->id, 'recipe_key' => 'krautsalat-basis', 'name' => '[SAL] Krautsalat | Krautsalat schneiden',
+        'status' => 'approved', 'is_sales_recipe' => false, 'yield_kg' => 1.0, 'work_time_min' => 35,
+    ]);
+    $deko = FoodAlchemistRecipe::create([
+        'team_id' => $this->rootTeam->id, 'recipe_key' => 'kresse', 'name' => '[SAL] Krautsalat | Kresse',
+        'status' => 'approved', 'is_sales_recipe' => false, 'yield_kg' => 0.1, 'work_time_min' => 5,
+    ]);
+
+    $auftrag = $this->svc->saveNew($this->rootTeam, '2026-08-20', 'Crew Catering', [
+        ['source_ref' => 'r:krautsalat', 'recipe_id' => $haupt->id, 'amount_kg' => 1.0],
+        ['source_ref' => 'r:krautsalat-basis', 'recipe_id' => $basis->id, 'amount_kg' => 1.0],
+        ['source_ref' => 'r:kresse', 'recipe_id' => $deko->id, 'amount_kg' => 0.1],
+    ]);
+    Line::where('production_order_id', $auftrag->id)
+        ->whereIn('recipe_id', [$basis->id, $deko->id])
+        ->update(['is_basisrezept' => true]);
+
+    $key = implode('|', [$auftrag->id, '[SAL] Krautsalat', '2026-08-20']);
+    $basisLineId = Line::where('production_order_id', $auftrag->id)->where('recipe_id', $basis->id)->value('id');
+    $dekoLineId = Line::where('production_order_id', $auftrag->id)->where('recipe_id', $deko->id)->value('id');
+
+    Livewire::test(Tagesplan::class, ['von' => '2026-08-20', 'display' => 'wall'])
+        ->set('modus', 'editor')
+        ->call('oeffneGericht', $key)
+        ->assertSet('wallGerichtKey', $key)
+        ->assertSeeHtml('data-tagesplan-wall-gericht-detail')
+        ->assertSeeHtml('data-tagesplan-wall-gericht-detail-card')
+        ->assertSeeHtml('data-tagesplan-wall-gericht-abhaken')
+        ->assertSeeHtml('data-tagesplan-wall-gericht-anleitung')
+        ->assertSee('Crew Catering')
+        ->assertSee('Fertigstellen')
+        ->assertSee('Krautsalat schneiden')
+        ->assertSee('Kresse')
+        ->call('abhaken', $dekoLineId)
+        ->assertSet('fehler', null);
+
+    expect(Line::where('production_order_id', $auftrag->id)->where('recipe_id', $deko->id)->firstOrFail()->line_status)
+        ->toBe(ProductionLineStatus::Done);
+
+    Livewire::test(Tagesplan::class, ['von' => '2026-08-20', 'display' => 'wall'])
+        ->set('modus', 'editor')
+        ->call('oeffneGericht', $key)
+        ->call('oeffneAnleitung', $basisLineId)
+        ->assertSet('anleitungLineId', $basisLineId)
+        ->assertSeeHtml('data-tagesplan-wall-anleitung');
 });
 
 it('zeigt im Wandmonitor Allergen-, Diät- und Datenqualitätswarnungen', function () {

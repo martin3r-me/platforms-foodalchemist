@@ -68,6 +68,9 @@ class Tagesplan extends Component
     /** Wandmonitor: Zeile, deren Anleitung gerade im Overlay offen ist (null = zu). */
     public ?int $anleitungLineId = null;
 
+    /** Wandmonitor: Gericht-/Arbeitsblock, dessen enthaltene Rezepte gerade offen sind. */
+    public ?string $wallGerichtKey = null;
+
     /** Wandmonitor: flüchtige Step-Checks je geöffneter Anleitungszeile. Dauerhaft ist die Zeile selbst. */
     public array $anleitungStepStatus = [];
 
@@ -315,6 +318,17 @@ class Tagesplan extends Component
         $this->anleitungLineId = null;
     }
 
+    public function oeffneGericht(string $key): void
+    {
+        $this->wallGerichtKey = $key;
+        $this->dispatch('modal.open', name: 'wall-gericht');
+    }
+
+    public function gerichtSchliessen(): void
+    {
+        $this->wallGerichtKey = null;
+    }
+
     public function anleitungStarten(ProductionOrderService $svc): void
     {
         $this->fehler = null;
@@ -432,6 +446,7 @@ class Tagesplan extends Component
         $miseEnPlace = $istWall ? $this->miseEnPlace($zeilen) : collect();
         $wallPostenGruppen = $istWall ? $this->wallPostenGruppen($zeilen) : collect();
         $anleitung = $istWall ? $this->anleitungAufloesen($zeilen) : null;
+        $wallGericht = $istWall ? $this->wallGerichtAufloesen($wallPostenGruppen) : null;
 
         $zeilenNachTag = $zeilen->groupBy(fn ($z) => Carbon::parse($z->plan_date)->toDateString());
         $tagDetail = $this->tagDetail($zeilenNachTag, $auslastung, $von, $bis);
@@ -448,6 +463,7 @@ class Tagesplan extends Component
             'readiness' => $readiness,
             'miseEnPlace' => $miseEnPlace,
             'wallPostenGruppen' => $wallPostenGruppen,
+            'wallGericht' => $wallGericht,
             'anleitung' => $anleitung,
             'postenListe' => $team !== null
                 ? FoodAlchemistProductionStation::visibleToTeam($team)->where('is_inactive', false)
@@ -470,9 +486,9 @@ class Tagesplan extends Component
                 ->groupBy(fn ($z) => implode('|', [
                     (int) ($z->order_id ?? 0),
                     (string) ($z->gericht_label ?: ((bool) ($z->is_basisrezept ?? false) ? 'Basisrezepte ohne Gericht' : $z->name)),
-                    (string) ($z->liefertag ?? ''),
+                    $z->liefertag !== null ? Carbon::parse($z->liefertag)->toDateString() : '',
                 ]))
-                ->map(function ($gruppe) {
+                ->map(function ($gruppe, $key) {
                     $first = $gruppe->first();
                     $teile = $gruppe
                         ->sortBy(fn ($z) => [
@@ -483,6 +499,7 @@ class Tagesplan extends Component
                         ->values();
 
                     return (object) [
+                        'key' => (string) $key,
                         'auftrag' => $first->auftrag,
                         'liefertag' => $first->liefertag,
                         'gericht' => $first->gericht_label ?: ((bool) ($first->is_basisrezept ?? false) ? 'Basisrezepte ohne Gericht' : $first->name),
@@ -505,6 +522,17 @@ class Tagesplan extends Component
                     (string) $gruppe->gericht,
                 ])
                 ->values());
+    }
+
+    private function wallGerichtAufloesen(\Illuminate\Support\Collection $postenGruppen): ?object
+    {
+        if ($this->wallGerichtKey === null) {
+            return null;
+        }
+
+        return $postenGruppen
+            ->flatten(1)
+            ->first(fn ($gruppe) => (string) ($gruppe->key ?? '') === (string) $this->wallGerichtKey);
     }
 
     private function tagDetail($zeilenNachTag, array $auslastung, string $von, string $bis): ?array
