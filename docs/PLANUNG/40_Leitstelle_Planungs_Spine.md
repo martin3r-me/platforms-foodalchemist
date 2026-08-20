@@ -2,7 +2,7 @@
 
 > **Tracking:** Office Dev-Package 23, Features-Board (Board 53). Architektur-/Vertrags-Spec + gestufte Bau-Runden (E0–E5). Erweitert die Zielarchitektur aus [Spec 38 — Roadmap Planung-Leitstelle](38_Roadmap_Planung_Leitstelle.md) (dort bereits als „Ausgabe-Module = Quelle UND Ziel" skizziert) um den **verbindlichen Vertrag**, die **Angebot-Symmetrie** und die heute fehlende **Rückkopplung**.
 
-**Status:** Konzept 2026-08-18 (mit Dominique erarbeitet, Doc-first). **Kein Code in dieser Runde** — E0 (Analyse→Skizzen) ist separat detailliert und unabhängig baubar. Statuswerte (aus [README](../README.md)): `gebaut` · `getestet` (Sandbox) · `demo-geprüft` · `abgenommen`. „gebaut" ≠ „abgenommen".
+**Status:** Konzept 2026-08-18 (mit Dominique erarbeitet, Doc-first). **✅ Umsetzung 2026-08-20 (autonom): ganze Liste `getestet` auf Branch `feat/spec40-umsetzung` — Spine (E-P0, E0, E1, E1b, E2, E4, E5) + Werkstrang M (Phase A–E), 11 Commits.** E3 blockiert (RAG-Branch fehlt in main). **Noch NICHT gepusht/deployt** (Dominiques Schritt) → Statuswert `getestet`, nicht `demo-geprüft`/`abgenommen`. Finaler Regressions-Gate: volle FA-Suite **2773 Tests, 2725 grün, 17 rot = exakt die vorbestehenden (0 neue Regressionen)**. Statuswerte (aus [README](../README.md)): `gebaut` · `getestet` (Sandbox) · `demo-geprüft` · `abgenommen`. „gebaut" ≠ „abgenommen".
 
 Alle Codepfade relativ zu `platforms-foodalchemist/` (canonical Clone). Zeilennummern = Stand 2026-08-18, als Wegweiser (vor dem Edit verifizieren).
 
@@ -280,9 +280,22 @@ Getränke/Wein-Detail: Darreichungs-Picker (Glas/Flasche/Portion via `presentati
 
 > Die Routine arbeitet die Etappen **ein Teilschritt pro Lauf** ab, Reihenfolge **E-P0 → E0 → E1 (=Doc, skip) → E1b → E2 → E3 → E4 → E5 → §6 A–E**. Jeder Lauf trägt zuerst eine „läuft"-Startzeile ein (Überlappungs-Guard: ein neuer Lauf bricht ab, wenn hier ein „läuft" < 60 Min alt ohne Abschluss steht) und schließt sie am Ende ab. Lokal + Push auf `feat/spec40-umsetzung` erlaubt; **kein Deploy** (Dominiques Schritt).
 
-| Datum/Zeit | Etappe | Status | Ergebnis / Commit-SHA | Blocker |
-|---|---|---|---|---|
-| — | — | (noch kein Lauf) | — | — |
+> **Hinweis:** die Umsetzung 2026-08-20 lief NICHT über die autonome Routine, sondern **interaktiv-autonom in einer Session** (User: „ganze Spec-Liste voll autonom") — je Etappe verifiziert→gebaut→Sandbox-Pest→committet. Reihenfolge wie geplant, E1 (Doc, skip), E3 blockiert.
+
+| Datum | Etappe | Status | Commit-SHA |
+|---|---|---|---|
+| 2026-08-20 | E-P0 Attach-Fehler + Recovery | getestet | `a27c3aa` |
+| 2026-08-20 | E0 Analyse→Skizzen-Divergenz | getestet | `d1e24f2` |
+| 2026-08-20 | E1b Owner-Banner + Zurück-Link | getestet | `bdb0b2e` |
+| 2026-08-20 | E2 Angebot andocken | getestet | `dc40d51` |
+| 2026-08-20 | E3 Ergebnis→Wissen/Trend | 🚫 blockiert (RAG) | — |
+| 2026-08-20 | E4 Lücken-Signal + Favoriten | getestet | `221a570` |
+| 2026-08-20 | E5 Skizzen-Lernen | getestet | `62ec05e` |
+| 2026-08-20 | §6 M Phase A Kontext-Tab + PUT | getestet | `b6a76cc` |
+| 2026-08-20 | §6 M Phase B Facetten-Picker | getestet | `b8b27a3` |
+| 2026-08-20 | §6 M Phase C Reorder + movePosition | getestet | `aabd4ff` |
+| 2026-08-20 | §6 M Phase D Layout-Blöcke + Wahl-Gruppen | getestet | `559adbc` |
+| 2026-08-20 | §6 M Phase E Coverage-Panel + Checkliste | getestet | `679947a` |
 
 **Bekannte Gates (nicht autonom baubar, bis entschieden — Routine stoppt hier und meldet):**
 - **§4-Grundsatzfragen** (Round-Trip verbindlich? · Tür im Modul lassen? · Rückkopplungs-Priorität) — betreffen v.a. E3–E5.
