@@ -158,3 +158,32 @@ it('Phase C: movePosition über Karten-Grenze wirft (kein Cross-Card-Move)', fun
         ->toThrow(RuntimeException::class, 'anderen Karte');
     expect($p->refresh()->section_id)->toBe($r1->id);
 });
+
+// ── Werkstrang M Phase D (Spec 40 §6): Layout-Blöcke + Wahl-Gruppen ───────────
+
+it('Phase D: Layout-Block einfügen + Wahl-Gruppe setzen + dokumentDaten trägt variant_group_id', function () {
+    $svc = app(\Platform\FoodAlchemist\Services\SpeisekarteService::class);
+    $karte = $svc->create($this->rootTeam, ['name' => 'Karte D']);
+    $r = $svc->addRubrik($this->rootTeam, $karte->id, ['title' => 'Rubrik']);
+    $comp = Livewire::test(SpeisekarteIndex::class)->call('waehle', $karte->id);
+
+    // Layout-Blöcke einfügen (header + spacer)
+    $comp->call('layoutBlockNeu', $r->id, 'header')
+        ->call('layoutBlockNeu', $r->id, 'spacer');
+    $typen = \Platform\FoodAlchemist\Models\FoodAlchemistSpeisekartePosition::where('section_id', $r->id)
+        ->orderBy('position')->pluck('type')->all();
+    expect($typen)->toBe(['header', 'spacer']);
+
+    // Wahl-Gruppe auf ein Gericht setzen
+    $p = $svc->addPosition($this->rootTeam, $r->id, ['type' => 'gericht_ref', 'sales_recipe_id' => $this->gericht->id]);
+    $comp->call('positionBearbeiten', $p->id)
+        ->set('editVariantGroupId', 3)
+        ->call('positionSpeichern');
+    expect((int) $p->refresh()->variant_group_id)->toBe(3);
+
+    // dokumentDaten trägt variant_group_id (daten-fertig für den Renderer)
+    $doc = $svc->dokumentDaten($this->rootTeam, $karte->refresh());
+    $posDaten = collect($doc['rubriken'])->firstWhere('id', $r->id)['positionen'] ?? [];
+    $gerichtPos = collect($posDaten)->firstWhere('typ', 'gericht_ref');
+    expect($gerichtPos['variant_group_id'] ?? null)->toBe(3);
+});

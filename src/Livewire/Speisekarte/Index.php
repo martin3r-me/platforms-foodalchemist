@@ -67,6 +67,9 @@ class Index extends Component
     public ?string $editConsumerText = null;
     public string $editPriceMode = 'auto';
     public ?string $editPriceValue = null;
+    // Werkstrang M Phase D: Layout-Blöcke + Wahl-Gruppen.
+    public ?string $editLabel = null;        // Überschrift-Text (type=header)
+    public ?int $editVariantGroupId = null;  // Wahl-Gruppe „A|B|C" (gericht_ref/menue_ref)
 
     // Branding (Stufe C)
     public string $brandColor = '#6d28d9';
@@ -396,6 +399,9 @@ class Index extends Component
         $this->editConsumerText = $pos->consumer_text;
         $this->editPriceMode = $pos->price_mode ?: 'auto';
         $this->editPriceValue = $pos->price_value !== null ? (string) $pos->price_value : null;
+        // Werkstrang M Phase D
+        $this->editLabel = $pos->label;
+        $this->editVariantGroupId = $pos->variant_group_id !== null ? (int) $pos->variant_group_id : null;
     }
 
     public function positionSpeichern(SpeisekarteService $svc): void
@@ -408,8 +414,35 @@ class Index extends Component
             'consumer_text' => $this->editConsumerText ?: null,
             'price_mode' => $this->editPriceMode,
             'price_value' => $this->editPriceMode === 'manuell' ? ($this->editPriceValue !== null && $this->editPriceValue !== '' ? (float) str_replace(',', '.', $this->editPriceValue) : null) : null,
+            // Werkstrang M Phase D: Überschrift-Text + Wahl-Gruppe.
+            'label' => $this->editLabel ?: null,
+            'variant_group_id' => $this->editVariantGroupId ?: null,
         ]);
         $this->editPosId = null;
+    }
+
+    /**
+     * Werkstrang M Phase D (Spec 40 §6): Layout-Block (Überschrift/Text/Abstand) in eine Rubrik einfügen.
+     * type ∈ header|text|spacer. Reused addPosition; sinnvolle Defaults, danach per ✎ editierbar.
+     */
+    public function layoutBlockNeu(int $rubrikId, string $type, SpeisekarteService $svc): void
+    {
+        if (! in_array($type, ['header', 'text', 'spacer'], true)) {
+            return;
+        }
+        $daten = ['type' => $type];
+        if ($type === 'header') {
+            $daten['label'] = 'Überschrift';
+        } elseif ($type === 'text') {
+            $daten['consumer_text'] = 'Text …';
+        }
+        $svc->addPosition($this->team(), $rubrikId, $daten);
+    }
+
+    /** Werkstrang M Phase D: nächste freie Wahl-Gruppen-ID der Rubrik als Vorschlag ins Edit-Feld. */
+    public function variantGruppeVorschlag(int $rubrikId, SpeisekarteService $svc): void
+    {
+        $this->editVariantGroupId = $svc->nextVariantGroupId($this->team(), $rubrikId);
     }
 
     public function positionAbbrechen(): void

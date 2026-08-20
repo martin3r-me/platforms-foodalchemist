@@ -10,6 +10,10 @@
         <span class="flex-1"></span>
         <button type="button" wire:click="pickerOeffnen({{ $rubrik->id }}, 'gericht')" class="{{ $btnGhostXs }}">+ Gericht</button>
         <button type="button" wire:click="pickerOeffnen({{ $rubrik->id }}, 'menue')" class="{{ $btnGhostXs }}">+ Menü</button>
+        {{-- Werkstrang M Phase D: Layout-Blöcke. --}}
+        <button type="button" wire:click="layoutBlockNeu({{ $rubrik->id }}, 'header')" class="{{ $btnGhostXs }}" title="Überschrift einfügen">+ Ü</button>
+        <button type="button" wire:click="layoutBlockNeu({{ $rubrik->id }}, 'text')" class="{{ $btnGhostXs }}" title="Text-Block einfügen">+ Text</button>
+        <button type="button" wire:click="layoutBlockNeu({{ $rubrik->id }}, 'spacer')" class="{{ $btnGhostXs }}" title="Abstand einfügen">+ ␣</button>
         {{-- Werkstrang M Phase C: Rubrik in ihrer Ebene hoch/runter. --}}
         <button type="button" wire:click="rubrikHochRunter({{ $rubrik->id }}, 'hoch')" class="{{ $btnGhostXs }}" title="Rubrik hoch">▲</button>
         <button type="button" wire:click="rubrikHochRunter({{ $rubrik->id }}, 'runter')" class="{{ $btnGhostXs }}" title="Rubrik runter">▼</button>
@@ -43,35 +47,56 @@
             {{-- Werkstrang M Phase C: Position in ihrer Rubrik hoch/runter. --}}
             <button type="button" wire:click="positionHochRunter({{ $pos->id }}, 'hoch')" class="{{ $btnGhostXs }}" title="hoch">▲</button>
             <button type="button" wire:click="positionHochRunter({{ $pos->id }}, 'runter')" class="{{ $btnGhostXs }}" title="runter">▼</button>
-            @if(in_array($pos->type, ['gericht_ref', 'menue_ref']))
+            @if(in_array($pos->type, ['gericht_ref', 'menue_ref', 'header', 'text']))
                 <button type="button" wire:click="positionBearbeiten({{ $pos->id }})" class="{{ $btnGhostXs }}">✎</button>
             @endif
             <button type="button" wire:click="positionLoeschen({{ $pos->id }})" class="{{ $btnGhostXs }} text-red-600">✕</button>
         </div>
         @if($editPosId === $pos->id)
             <div wire:key="sk-edit-{{ $pos->id }}" class="ml-2 mb-2 p-2 rounded-lg bg-violet-500/[0.04] space-y-2">
-                <div>
-                    <div class="{{ $label }} mb-1 flex items-center gap-2">
-                        <span>Anzeige-Name (Wording-Override)</span>
-                        <button type="button" wire:click="kiWording" class="{{ $btnAi }} !py-0.5">✨ KI</button>
-                    </div>
-                    <input type="text" wire:model="editWording" placeholder="leer = Standard-Wording" class="{{ $input }}" />
-                    @error('editWording')<div class="text-[11px] text-red-500 mt-1">{{ $message }}</div>@enderror
-                </div>
-                <div>
-                    <div class="{{ $label }} mb-1">Beschreibung</div>
-                    <input type="text" wire:model="editConsumerText" class="{{ $input }}" />
-                </div>
-                <div class="flex items-end gap-2">
+                @if(in_array($pos->type, ['gericht_ref', 'menue_ref']))
                     <div>
-                        <div class="{{ $label }} mb-1">Preis</div>
-                        <select wire:model.live="editPriceMode" class="{{ $input }} w-28">
-                            <option value="auto">Automatik</option>
-                            <option value="manuell">Manuell</option>
-                        </select>
+                        <div class="{{ $label }} mb-1 flex items-center gap-2">
+                            <span>Anzeige-Name (Wording-Override)</span>
+                            <button type="button" wire:click="kiWording" class="{{ $btnAi }} !py-0.5">✨ KI</button>
+                        </div>
+                        <input type="text" wire:model="editWording" placeholder="leer = Standard-Wording" class="{{ $input }}" />
+                        @error('editWording')<div class="text-[11px] text-red-500 mt-1">{{ $message }}</div>@enderror
                     </div>
-                    @if($editPriceMode === 'manuell')
-                        <input type="text" wire:model="editPriceValue" placeholder="€ netto" class="{{ $input }} w-24" />
+                @endif
+                @if($pos->type === 'header')
+                    {{-- Werkstrang M Phase D: Überschrift-Block bearbeiten. --}}
+                    <div>
+                        <div class="{{ $label }} mb-1">Überschrift-Text</div>
+                        <input type="text" wire:model="editLabel" class="{{ $input }}" />
+                    </div>
+                @endif
+                @if($pos->type !== 'header' && $pos->type !== 'spacer')
+                    <div>
+                        <div class="{{ $label }} mb-1">Beschreibung</div>
+                        <input type="text" wire:model="editConsumerText" class="{{ $input }}" />
+                    </div>
+                @endif
+                <div class="flex items-end gap-2 flex-wrap">
+                    @if(in_array($pos->type, ['gericht_ref', 'menue_ref']))
+                        <div>
+                            <div class="{{ $label }} mb-1">Preis</div>
+                            <select wire:model.live="editPriceMode" class="{{ $input }} w-28">
+                                <option value="auto">Automatik</option>
+                                <option value="manuell">Manuell</option>
+                            </select>
+                        </div>
+                        @if($editPriceMode === 'manuell')
+                            <input type="text" wire:model="editPriceValue" placeholder="€ netto" class="{{ $input }} w-24" />
+                        @endif
+                        {{-- Werkstrang M Phase D: Wahl-Gruppe (gleiche Nr. = „A oder B"). --}}
+                        <div>
+                            <div class="{{ $label }} mb-1 flex items-center gap-1">
+                                <span>Wahl-Gruppe</span>
+                                <button type="button" wire:click="variantGruppeVorschlag({{ $rubrik->id }})" class="{{ $btnGhostXs }} !py-0" title="nächste freie Gruppe">+</button>
+                            </div>
+                            <input type="number" wire:model="editVariantGroupId" placeholder="A|B = gleiche Nr." class="{{ $input }} w-28" min="1" />
+                        </div>
                     @endif
                     @if($karte->sections->where('id', '!=', $rubrik->id)->isNotEmpty())
                         {{-- Werkstrang M Phase C: Position in eine andere Rubrik derselben Karte verschieben. --}}
@@ -89,6 +114,10 @@
                     <button type="button" wire:click="positionSpeichern" class="{{ $btnGhostXs }}">Übernehmen</button>
                     <button type="button" wire:click="positionAbbrechen" class="{{ $btnGhostXs }}">Abbrechen</button>
                 </div>
+                @if($editVariantGroupId)
+                    {{-- Werkstrang M Phase D: ehrlicher Hinweis — die Gruppierungs-Optik ist noch Editor-only. --}}
+                    <p class="text-[10px] text-amber-600/80">Wahl-Gruppe {{ $editVariantGroupId }} gesetzt — die „A oder B"-Gruppierung erscheint noch NICHT im Druck (Editor-only vorerst; Renderer folgt).</p>
+                @endif
             </div>
         @endif
     @empty

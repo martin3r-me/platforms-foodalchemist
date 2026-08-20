@@ -577,6 +577,8 @@ class SpeisekarteService
                         'typ' => $pos->type,
                         'name' => $this->positionName($pos),
                         'consumer_text' => $pos->consumer_text,
+                        // Werkstrang M Phase D: Wahl-Gruppe daten-fertig mitgeben (Grouping-Optik im Renderer folgt).
+                        'variant_group_id' => $pos->variant_group_id !== null ? (int) $pos->variant_group_id : null,
                         'codes' => in_array($pos->type, ['gericht_ref', 'menue_ref'], true) ? $codesFuer($pos) : [],
                         'vk_netto' => $preis['vk'],
                         'vk_brutto' => $einheit['vk_brutto_pro_einheit'] ?? null,
