@@ -1207,7 +1207,7 @@ class PlanningCascadeService
      * Generierung dieses Steps erneut an (Brief = Step-Label, Params/Session/Staged vom Lauf). Nur
      * rezept|gericht|concept. Der Step geht zurück auf `running`; die Fläche pollt wie beim Go.
      */
-    public function regeneriereStep(Team $team, int $stepId): void
+    public function regeneriereStep(Team $team, int $stepId, ?string $kommentar = null): void
     {
         $step = $this->ownedStep($team, $stepId);
         if (! in_array($step->kind, ['rezept', 'gericht', 'concept'], true)) {
@@ -1251,6 +1251,13 @@ class PlanningCascadeService
         $brief = $step->parent_step_id === null && trim((string) ($run?->brief ?? '')) !== ''
             ? (string) $run->brief
             : (string) ($step->label ?? '');
+        // A2 (per-Speise-Feedback): ein gezielter Nutzer-Kommentar zu GENAU dieser Position wird als
+        // Zusatz-Direktive an den Brief gehängt — die Regeneration baut nur diesen einen Entwurf nach
+        // dem Feedback neu (die Nachbar-Positionen bleiben unberührt, weil regeneriereStep step-lokal ist).
+        $kommentar = trim((string) $kommentar);
+        if ($kommentar !== '') {
+            $brief = rtrim($brief) . "\n\nGezielte Anpassung (Nutzer-Feedback zu dieser Position): " . $kommentar;
+        }
         $params = is_array($run?->params) ? $run->params : [];
         $sessionId = $run?->planning_session_id !== null ? (int) $run->planning_session_id : null;
         $staged = (bool) ($run?->staged ?? false);

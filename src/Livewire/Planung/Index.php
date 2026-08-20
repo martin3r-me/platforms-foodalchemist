@@ -246,6 +246,19 @@ class Index extends Component
     public array $zutatenOffen = [];
 
     /**
+     * A2 (per-Speise-Feedback): welche Worker-Steps ihr Kommentar-Feld offen haben (step_id-Liste) +
+     * der getippte Feedback-Text je Step (step_id → Text). Ein Kommentar zu genau dieser Position geht
+     * beim „neu generieren" als gezielte Anpassung an die Regeneration (nur diese Position), danach
+     * geleert (Einweg-Feedback). {@see toggleKommentar}, {@see neuGenerieren}.
+     *
+     * @var array<int,int>
+     */
+    public array $kommentarOffen = [];
+
+    /** @var array<int,string> */
+    public array $speiseKommentar = [];
+
+    /**
      * Pill-Gruppen fürs Cockpit-View (Parität zu GeneratorModal::RICHTUNGEN). Inline
      * gehalten statt aus dem Modal referenziert — die Leitstelle ist der neue Ort der
      * Steuerung; die Modal-Knöpfe der Browser-Seiten entfallen.
@@ -2007,17 +2020,35 @@ class Index extends Component
         return sprintf('%s: %s — VK prüfen (Marge unter Klassen-Vorgabe).', $kopf, implode(', ', $namen));
     }
 
-    /** Per-Step-KI: einen Entwurf neu generieren (altes Draft wird verworfen). */
+    /** A2: Kommentar-Feld eines Worker-Steps auf-/zuklappen (per-Speise-Feedback). */
+    public function toggleKommentar(int $stepId): void
+    {
+        if (in_array($stepId, $this->kommentarOffen, true)) {
+            $this->kommentarOffen = array_values(array_diff($this->kommentarOffen, [$stepId]));
+        } else {
+            $this->kommentarOffen[] = $stepId;
+        }
+    }
+
+    /**
+     * Per-Step-KI: einen Entwurf neu generieren (altes Draft wird verworfen). A2: liegt für DIESEN Step
+     * ein Feedback-Kommentar vor ({@see $speiseKommentar}), geht er als gezielte Anpassung an genau diese
+     * Position mit — die Nachbar-Positionen bleiben unberührt. Kommentar wird nach dem Anstoß geleert
+     * (Einweg-Feedback: ein Klick = eine gezielte Änderung).
+     */
     public function neuGenerieren(int $stepId, PlanningCascadeService $cascade): void
     {
         $team = $this->team();
         if ($team === null) {
             return;
         }
+        $kommentar = trim((string) ($this->speiseKommentar[$stepId] ?? ''));
         try {
-            $cascade->regeneriereStep($team, $stepId);
-            $this->meldung = 'Wird neu generiert …';
+            $cascade->regeneriereStep($team, $stepId, $kommentar !== '' ? $kommentar : null);
+            $this->meldung = $kommentar !== '' ? 'Wird mit deinem Feedback neu generiert …' : 'Wird neu generiert …';
             $this->fehler = null;
+            unset($this->speiseKommentar[$stepId]);
+            $this->kommentarOffen = array_values(array_diff($this->kommentarOffen, [$stepId]));
         } catch (\Throwable $e) {
             $this->fehler = $e->getMessage();
         }
