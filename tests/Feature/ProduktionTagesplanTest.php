@@ -431,8 +431,9 @@ it('öffnet im Wandmodus die touchfreundliche Anleitung mit Medienbereich', func
         ->assertSee('Medien');
 });
 
-it('normalisiert Foto-URLs aus Produktions-Snapshots auf den aktuellen Wandmonitor-Host', function () {
-    \Illuminate\Support\Facades\URL::forceRootUrl('http://localhost:8000');
+it('normalisiert lokale Foto-URLs aus Produktions-Snapshots zurück auf die konfigurierte Storage-URL', function () {
+    config(['filesystems.disks.public.url' => 'https://s3.example.test/foodalchemist']);
+    \Illuminate\Support\Facades\Storage::forgetDisk('public');
 
     $lineId = Line::where('production_order_id', $this->a1->id)->value('id');
     Line::whereKey($lineId)->update(['steps_snapshot' => [[
@@ -449,10 +450,8 @@ it('normalisiert Foto-URLs aus Produktions-Snapshots auf den aktuellen Wandmonit
         ->set('modus', 'editor')
         ->call('oeffneAnleitung', $lineId)
         ->assertSeeHtml('data-tagesplan-wall-bilder')
-        ->assertSeeHtml('src="http://localhost:8000/storage/ki-schritt-1.webp"')
+        ->assertSeeHtml('src="https://s3.example.test/foodalchemist/ki-schritt-1.webp"')
         ->assertDontSeeHtml('src="http://localhost/storage/ki-schritt-1.webp"');
-
-    \Illuminate\Support\Facades\URL::forceRootUrl(null);
 });
 
 it('zeigt Zutaten in der Wandmonitor-Anleitung immer untereinander', function () {

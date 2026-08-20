@@ -4,6 +4,7 @@ namespace Platform\FoodAlchemist\Livewire\Produktion;
 
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Storage;
 use Livewire\Attributes\Url;
 use Livewire\Component;
 use Platform\FoodAlchemist\Enums\ProductionLineStatus;
@@ -823,13 +824,16 @@ class Tagesplan extends Component
             return $src !== '' ? $src : null;
         }
 
-        $path = parse_url($src, PHP_URL_PATH);
-        if (is_string($path) && str_starts_with($path, '/storage/')) {
-            return url($path);
+        if (str_starts_with($src, 'storage/')) {
+            return Storage::disk('public')->url(substr($src, strlen('storage/')));
         }
 
-        if (str_starts_with($src, 'storage/')) {
-            return url('/' . $src);
+        $path = parse_url($src, PHP_URL_PATH);
+        $host = parse_url($src, PHP_URL_HOST);
+
+        if (is_string($path) && str_starts_with($path, '/storage/')
+            && in_array($host, ['localhost', '127.0.0.1'], true)) {
+            return Storage::disk('public')->url(substr($path, strlen('/storage/')));
         }
 
         return $src;
