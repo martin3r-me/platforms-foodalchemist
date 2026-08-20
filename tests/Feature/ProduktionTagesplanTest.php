@@ -324,6 +324,7 @@ it('zeigt Zutaten in der Wandmonitor-Anleitung immer untereinander', function ()
         ->assertSeeHtml('data-tagesplan-wall-zutatenliste')
         ->assertSeeHtml('data-tagesplan-wall-zutat')
         ->assertDontSeeHtml('mt-3 grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3')
+        ->assertDontSeeHtml('rounded-xl bg-slate-950/50 px-4 py-3 text-base')
         ->assertSee('Hummus Mango')
         ->assertSee('Salat: Quinoa Mango Peppadew')
         ->assertSee('Deko: Sesam');
