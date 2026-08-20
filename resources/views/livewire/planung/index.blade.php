@@ -329,6 +329,16 @@
                     <p class="{{ $label ?? 'text-[11px] text-gray-500' }} mb-1">Trend-Inhalt bzw. deine Analyse — die Grundlage für Skizzen und „Go".</p>
                     <textarea wire:model="form.analysis" rows="14" class="{{ $input }} font-mono text-[12px] leading-relaxed"
                               placeholder="Was ist der Trend? Was ist die Idee? Constraints, Anlass, Richtung …"></textarea>
+                    {{-- Spec 40 E0: Analyse → Skizzen (KI-Divergenz auf Session-Ebene). Sprung auf den Skizzen-Tab beim Klick. --}}
+                    <div class="mt-2 flex items-center gap-2 flex-wrap">
+                        <button type="button" wire:click="skizzenAusAnalyse" @click="tab='skizzen'"
+                                wire:loading.attr="disabled" wire:target="skizzenAusAnalyse"
+                                class="{{ $btnGhost }} disabled:opacity-40">
+                            <span wire:loading.remove wire:target="skizzenAusAnalyse">@svg('heroicon-o-sparkles', 'w-4 h-4') Skizzen aus Analyse ableiten</span>
+                            <span wire:loading wire:target="skizzenAusAnalyse">Skizzen werden abgeleitet …</span>
+                        </button>
+                        <span class="text-[10px] text-gray-500">KI leitet Gericht-Skizzen ab — sie landen im Skizzen-Tab (kein „Go", keine Erdung).</span>
+                    </div>
                 </x-foodalchemist::modal-section>
             </div>
 

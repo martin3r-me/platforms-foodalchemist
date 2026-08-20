@@ -719,6 +719,37 @@ class Index extends Component
     }
 
     /**
+     * Spec 40 E0: Analyse-Tab → aus dem Analyse-Text mehrere Gericht-Skizzen ableiten (KI-Divergenz auf
+     * Session-Ebene, {@see IdeenService::kiDivergenzSession}). Kein „Go", keine Erdung — reine Ideen fürs
+     * Divergenz-Board (Skizzen-Tab). `creative_mode` fließt als Kontext-Hinweis mit. Graceful ohne Provider
+     * (Sandbox): der Fehler wird gemeldet, der Editor bleibt stehen.
+     */
+    public function skizzenAusAnalyse(IdeenService $svc): void
+    {
+        $team = $this->team();
+        $session = $this->aktiveSession();
+        if ($team === null || $session === null) {
+            return;
+        }
+        $analyse = trim((string) ($this->form['analysis'] ?? ''));
+        if ($analyse === '') {
+            $this->fehler = 'Bitte zuerst eine Analyse/Ausgangslage eintragen — daraus leite ich die Skizzen ab.';
+
+            return;
+        }
+        try {
+            $r = $svc->kiDivergenzSession($team, (int) $session->id, $analyse, 5, (string) ($this->form['creative_mode'] ?? 'voll_kreativ'));
+            $n = count($r['angelegt'] ?? []);
+            $this->fehler = null;
+            $this->meldung = $n > 0
+                ? "{$n} Skizzen aus der Analyse abgeleitet — prüfe/ergänze sie im Skizzen-Tab, dann Go."
+                : 'Kein verwertbarer Vorschlag — Analyse konkreter fassen und erneut versuchen.';
+        } catch (\Throwable $e) {
+            $this->fehler = 'Skizzen-Ableitung fehlgeschlagen (kein KI-Provider?) — ' . $e->getMessage();
+        }
+    }
+
+    /**
      * Skizzen-Integration (Etappe 4) — Skizze als Kaskaden-EINGANG (erster Teilschritt): statt die
      * Skizze (wie der Foodbook-Pfad {@see MaterializeIdeaJob}) direkt zu materialisieren, überträgt
      * diese Aktion sie in den Gericht-Tab (Titel → Titel, Beschreibung → Brief). Der Mensch prüft
