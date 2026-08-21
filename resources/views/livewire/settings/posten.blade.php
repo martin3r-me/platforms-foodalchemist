@@ -12,6 +12,30 @@
         Zwei Kombidämpfer trägst du als einen Posten mit doppelter Kapazität ein.
     </p>
 
+    {{-- Standard-Topf-Deckel: Fallback für die Produktionszeit, wenn Rezept/Posten keinen eigenen Deckel haben. --}}
+    <div class="mb-4 rounded-lg border border-black/10 p-3" data-posten-standarddeckel>
+        <p class="text-xs font-semibold mb-1">Standard-Topf-Deckel</p>
+        <p class="text-[11px] text-gray-500 mb-2">
+            Größte Charge je <strong>Koch-Vorgang</strong>, solange ein Rezept oder Posten keinen eigenen
+            Deckel hat. Verhindert, dass große Mengen als viele Einzel-Ansätze gezählt werden (sonst würde
+            ein Kessel Sauce fälschlich als zehn kleine Töpfe die Arbeitszeit ver-10-fachen). Leer =
+            System-Standard (20&nbsp;kg / 200&nbsp;Stück). Rezept- und Posten-Deckel gehen immer vor — der kleinere gilt.
+        </p>
+        <div class="flex flex-wrap items-end gap-3">
+            <label class="text-[11px] text-gray-500">
+                <span class="block mb-0.5">kg je Koch-Vorgang</span>
+                <input type="text" inputmode="decimal" wire:model="standardTopfKg" placeholder="20"
+                       class="{{ $input }} !w-28 tabular-nums" data-posten-standard-kg />
+            </label>
+            <label class="text-[11px] text-gray-500">
+                <span class="block mb-0.5">Stück je Koch-Vorgang</span>
+                <input type="text" inputmode="decimal" wire:model="standardTopfStueck" placeholder="200"
+                       class="{{ $input }} !w-28 tabular-nums" data-posten-standard-stueck />
+            </label>
+            <button type="button" wire:click="standardDeckelSpeichern" class="{{ $btnPrimary }}" data-posten-standard-speichern>Speichern</button>
+        </div>
+    </div>
+
     <table class="{{ $table }}">
         <thead>
             <tr>

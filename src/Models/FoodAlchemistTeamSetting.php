@@ -55,5 +55,8 @@ class FoodAlchemistTeamSetting extends Model
         'calculation_reference_bases' => 'array',
         // Phase 5: pro-Typ-Farben (GP / Basisrezept / Gericht), teamweit
         'type_colors' => 'array',
+        // Standard-Topf-Deckel je Koch-Vorgang (Fallback für die Produktionszeit-Rechnung)
+        'default_batch_max_kg' => 'decimal:3',
+        'default_batch_max_pieces' => 'decimal:2',
     ];
 }

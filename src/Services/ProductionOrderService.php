@@ -277,6 +277,7 @@ class ProductionOrderService
                 'basis_yield_kg' => $r['basis_yield_kg'],
                 'produzierte_menge_kg' => $r['produzierte_menge_kg'],
                 'arbeitszeit_min' => $r['arbeitszeit_min'],
+                'standzeit_min' => $r['standzeit_min'] ?? null,
                 'zubereitung' => $r['zubereitung'],
                 'steps_snapshot' => $r['schritte'] ?? null,   // Spec 27: Schrittfolge mit einfrieren
                 'darreichung' => $r['darreichung'],
@@ -386,7 +387,10 @@ class ProductionOrderService
         }
 
         $rohBatches = (float) ($line->benoetigt_ansaetze ?? $line->ansaetze ?? 0);
-        $neu = $recipe->arbeitszeitMin($rohBatches, (bool) $recipe->is_sales_recipe, $deckel, $stueck);
+        // Fallback-Deckel (Team-Default) greift nur, wenn weder Rezept- noch Posten-Deckel gesetzt ist.
+        $team = Team::find($line->productionOrder?->team_id);
+        $fallback = $team !== null ? app(TeamSettingsService::class)->topfDeckelFuer($team, $recipe, $stueck) : null;
+        $neu = $recipe->arbeitszeitMin($rohBatches, (bool) $recipe->is_sales_recipe, $deckel, $stueck, $fallback);
 
         if ((int) $line->arbeitszeit_min !== (int) $neu) {
             $line->forceFill(['arbeitszeit_min' => $neu])->save();

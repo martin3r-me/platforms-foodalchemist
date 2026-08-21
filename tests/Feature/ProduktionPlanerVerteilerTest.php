@@ -8,6 +8,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Services\ProductionOrderService;
 use Platform\FoodAlchemist\Services\ProductionPlanService;
 use Platform\FoodAlchemist\Services\RecipeService;
+use Platform\FoodAlchemist\Services\TeamSettingsService;
 use Platform\FoodAlchemist\Tests\Support\SeedsTeamHierarchy;
 use Platform\FoodAlchemist\Tests\TestCase;
 
@@ -124,15 +125,34 @@ it('speichert die Planer-Rezeptfelder über den Editor-Service (Whitelist erweit
 });
 
 it('rechnet die Arbeitszeit mit dem Posten-Topf-Deckel neu (min Rezept/Posten)', function () {
-    $kessel = Station::create(['team_id' => $this->rootTeam->id, 'slug' => 'kessel', 'name' => 'Großer Kessel', 'batch_max_kg' => 8.0]);
+    $kessel = Station::create(['team_id' => $this->rootTeam->id, 'slug' => 'kessel', 'name' => 'Großer Kessel', 'batch_max_kg' => 40.0]);
     $auftrag = $this->svc->saveNew($this->rootTeam, '2026-08-20', 'Fond groß', [
-        ['source_ref' => 'r:fond', 'recipe_id' => $this->fond->id, 'amount_kg' => 8.0],   // 2 Ertrags-Ansätze
+        ['source_ref' => 'r:fond', 'recipe_id' => $this->fond->id, 'amount_kg' => 24.0],   // 24 kg Bedarf
     ]);
     $line = Line::where('production_order_id', $auftrag->id)->where('recipe_id', $this->fond->id)->firstOrFail();
-    expect((int) $line->arbeitszeit_min)->toBe(600);        // ohne Posten: 2 Koch-Vorgänge × 300
+    // Ohne Posten greift der globale Default-Kessel (20 kg): 24 kg = 2 Koch-Vorgänge × 300.
+    expect((int) $line->arbeitszeit_min)->toBe(600);
 
+    // Der 40-kg-Posten-Kessel ist großzügiger als der Default → 24 kg passen in EINEN Vorgang.
     $this->svc->assignLine($this->rootTeam, $line->id, ['station_id' => $kessel->id]);
-    expect((int) $line->fresh()->arbeitszeit_min)->toBe(300);   // 8 kg in EINEN 8-kg-Kessel → 1 Koch-Vorgang
+    expect((int) $line->fresh()->arbeitszeit_min)->toBe(300);
+});
+
+it('nutzt den Team-Standard-Topf-Deckel als Fallback, wenn Rezept und Posten keinen haben', function () {
+    // Ohne Team-Setting greift die Code-Konstante (20 kg): 24 kg = 2 Koch-Vorgänge × 300 = 600.
+    $ohne = $this->svc->saveNew($this->rootTeam, '2026-08-20', 'Fond A', [
+        ['source_ref' => 'r:fond', 'recipe_id' => $this->fond->id, 'amount_kg' => 24.0],
+    ]);
+    $lineOhne = Line::where('production_order_id', $ohne->id)->where('recipe_id', $this->fond->id)->firstOrFail();
+    expect((int) $lineOhne->arbeitszeit_min)->toBe(600);
+
+    // Team pflegt einen 40-kg-Standardkessel → 24 kg passen in EINEN Vorgang → 300.
+    app(TeamSettingsService::class)->update($this->rootTeam, ['default_batch_max_kg' => 40.0]);
+    $mit = $this->svc->saveNew($this->rootTeam, '2026-08-21', 'Fond B', [
+        ['source_ref' => 'r:fond', 'recipe_id' => $this->fond->id, 'amount_kg' => 24.0],
+    ]);
+    $lineMit = Line::where('production_order_id', $mit->id)->where('recipe_id', $this->fond->id)->firstOrFail();
+    expect((int) $lineMit->arbeitszeit_min)->toBe(300);
 });
 
 it('speichert die Planer-Felder auch beim NEUANLEGEN (Create-Parität)', function () {

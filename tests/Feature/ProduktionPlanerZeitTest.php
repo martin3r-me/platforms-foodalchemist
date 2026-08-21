@@ -7,8 +7,13 @@ use Platform\FoodAlchemist\Tests\TestCase;
 uses(TestCase::class);
 
 /**
- * Stufe 3 P3.2 — nicht-lineare Arbeitszeit (Rüst + Marginal + Topf-Deckel) und P3.1 —
- * Kapazität aus der Rollen-Besetzung. Reine Modell-Logik, ohne DB-Schreiben.
+ * Stufe 3 P3.2 — nicht-lineare AKTIVE Belegzeit (Rüst + Marginal je Koch-Vorgang unter Topf-Deckel)
+ * + passive Standzeit/Durchlaufzeit + P3.1 Kapazität aus der Rollen-Besetzung. Reine Modell-Logik,
+ * ohne DB-Schreiben.
+ *
+ * 2026-08-21: Die frühere „1 Ertrags-Ansatz = 1 Koch-Vorgang"-Annahme (ceil der Ansätze) zählte
+ * z. B. 4,69 kg als zehn 469-g-Töpfe und ver-10-fachte so die Arbeitszeit (200 statt ~20 min).
+ * Ersetzt durch den globalen Default-Kessel (Recipe::DEFAULT_BATCH_MAX_KG) — physisch, nicht erfunden.
  */
 
 function recipe(array $attrs): Recipe
@@ -19,29 +24,33 @@ function recipe(array $attrs): Recipe
     return $r;
 }
 
-it('reproduziert das heutige lineare Verhalten (Defaults: setup=0, kein Deckel)', function () {
+it('faltet Mengen unter dem globalen Default-Kessel in EINEN Koch-Vorgang (kein „1 Ansatz = 1 Topf" mehr)', function () {
+    // yield 4 kg/Ansatz, Default-Kessel 20 kg, kein eigener Deckel:
+    // roh 2 = 8 kg → 1 Vorgang; roh 5 = 20 kg → 1 Vorgang (voll, aber ein Topf).
     $r = recipe(['work_time_min' => 30, 'yield_kg' => 4.0]);
 
-    // roh 1.0 → 1 Koch-Batch → 30; roh 2.0 → 2 → 60; roh 1.2 → ceil = 2 → 60 (wie ceil-Ansätze heute)
-    expect($r->arbeitszeitMin(1.0, false))->toBe(30)
-        ->and($r->arbeitszeitMin(2.0, false))->toBe(60)
-        ->and($r->arbeitszeitMin(1.2, false))->toBe(60);
+    expect($r->kochBatches(2.0))->toBe(1)
+        ->and($r->kochBatches(5.0))->toBe(1)
+        ->and($r->arbeitszeitMin(2.0, false))->toBe(30)   // früher 60 (2× ceil-Ansätze) — das war der 200-min-Bug
+        ->and($r->arbeitszeitMin(5.0, false))->toBe(30);
 });
 
-it('zählt die Rüstzeit nur EINMAL je Lauf — 2× Menge ≠ 2× Zeit', function () {
-    $r = recipe(['work_time_min' => 30, 'setup_time_min' => 20, 'yield_kg' => 4.0]);
+it('erzwingt weitere Koch-Vorgänge erst über dem Default-Kessel (stufig, nicht ceil-linear)', function () {
+    $r = recipe(['work_time_min' => 30, 'yield_kg' => 4.0]);   // Default 20 kg
 
-    // roh 1 → 20 + 30 = 50; roh 2 → 20 + 60 = 80 (nicht 100). Sub-linear: das ist der Kern.
-    expect($r->arbeitszeitMin(1.0, false))->toBe(50)
-        ->and($r->arbeitszeitMin(2.0, false))->toBe(80);
+    // roh 6 = 24 kg → 2 Vorgänge; roh 11 = 44 kg → 3 Vorgänge.
+    expect($r->kochBatches(6.0))->toBe(2)
+        ->and($r->kochBatches(11.0))->toBe(3)
+        ->and($r->arbeitszeitMin(6.0, false))->toBe(60)
+        ->and($r->arbeitszeitMin(11.0, false))->toBe(90);
 });
 
-it('fasst mit größerem Topf-Deckel mehr Menge in EINEN Koch-Vorgang', function () {
-    // yield 4 kg/Ansatz, aber 8-kg-Topf: 8 kg Bedarf = 1 Koch-Vorgang statt 2.
+it('zählt die Rüstzeit nur EINMAL je Lauf — mehr Töpfe ≠ proportional mehr Zeit', function () {
+    // Expliziter 8-kg-Deckel (Default-unabhängig): yield 4 → roh 1 = 1 Topf, roh 3 = 12 kg = 2 Töpfe.
     $r = recipe(['work_time_min' => 30, 'setup_time_min' => 20, 'yield_kg' => 4.0, 'batch_max_kg' => 8.0]);
 
-    expect($r->kochBatches(2.0))->toBe(1)                 // 2 Ertrags-Ansätze, aber 1 Topf
-        ->and($r->arbeitszeitMin(2.0, false))->toBe(50);  // 20 + 30 (nur ein Koch-Vorgang)
+    expect($r->arbeitszeitMin(1.0, false))->toBe(50)       // 20 + 30×1
+        ->and($r->arbeitszeitMin(3.0, false))->toBe(80);   // 20 + 30×2 (nicht 20+90) — sub-linear
 });
 
 it('nimmt den kleineren Deckel aus Rezept und Posten (Minimum gilt)', function () {
@@ -52,8 +61,33 @@ it('nimmt den kleineren Deckel aus Rezept und Posten (Minimum gilt)', function (
         ->and($r->kochBatches(2.0, stationDeckel: 20.0))->toBe(1);  // Posten größer → Rezept-8 gilt
 });
 
+it('bleibt bei VK-Gerichten linear-fraktional (kein Topf-Deckel, kein Kessel-Konzept)', function () {
+    $r = recipe(['work_time_min' => 30, 'yield_kg' => 4.0, 'is_sales_recipe' => true]);
+
+    // VK: kochBatches wird nicht angewandt — Zeit = work × roh (fraktional), Default-Kessel greift NICHT.
+    expect($r->arbeitszeitMin(2.0, true))->toBe(60)
+        ->and($r->arbeitszeitMin(0.5, true))->toBe(15);
+});
+
+it('gibt die passive Standzeit mengenunabhängig zurück (1× je Lauf)', function () {
+    expect(recipe(['standzeit_min' => 45])->standzeitMin())->toBe(45)
+        ->and(recipe(['standzeit_min' => 0])->standzeitMin())->toBeNull()
+        ->and(recipe(['standzeit_min' => null])->standzeitMin())->toBeNull();
+});
+
+it('summiert Durchlaufzeit = aktive Belegzeit + Standzeit (Standzeit NICHT in der Belegzeit)', function () {
+    // yield 4, Default-Kessel: roh 2 = 8 kg = 1 Vorgang → aktiv 30; + 45 Standzeit = 75.
+    $r = recipe(['work_time_min' => 30, 'standzeit_min' => 45, 'yield_kg' => 4.0]);
+
+    expect($r->durchlaufzeitMin(2.0, false))->toBe(75)
+        ->and($r->arbeitszeitMin(2.0, false))->toBe(30);
+});
+
 it('gibt null, wenn gar keine Zeit hinterlegt ist', function () {
-    expect(recipe(['work_time_min' => null, 'setup_time_min' => null])->arbeitszeitMin(3.0, false))->toBeNull();
+    $leer = ['work_time_min' => null, 'setup_time_min' => null, 'standzeit_min' => null];
+
+    expect(recipe($leer)->arbeitszeitMin(3.0, false))->toBeNull()
+        ->and(recipe($leer)->durchlaufzeitMin(3.0, false))->toBeNull();
 });
 
 it('leitet die Posten-Kapazität aus Köpfen × Schicht ab, Besetzung gewinnt', function () {

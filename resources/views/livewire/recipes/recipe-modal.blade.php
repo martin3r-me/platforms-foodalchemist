@@ -336,16 +336,20 @@
         </x-slot:actions>
         <div class="grid grid-cols-2 gap-3">
             <div>
-                <label class="block {{ $label }} mb-1">Arbeitszeit (min) <span class="normal-case text-gray-500">je Ansatz</span></label>
+                <label class="block {{ $label }} mb-1">Arbeitszeit (min) <span class="normal-case text-gray-500">aktiv, je Koch-Vorgang</span></label>
                 <input type="number" wire:model="form.work_time_min" min="0" class="{{ $input }}" />
             </div>
             <div>
+                <label class="block {{ $label }} mb-1">Gar-/Standzeit (min) <span class="normal-case text-gray-500">passiv: Köcheln/Ziehen (Durchlaufzeit)</span></label>
+                <input type="number" wire:model="form.standzeit_min" min="0" class="{{ $input }}" placeholder="0" data-recipe-standzeit />
+            </div>
+            <div>
                 <label class="block {{ $label }} mb-1">Topf-Deckel (kg) <span class="normal-case text-gray-500">max je Koch-Vorgang</span></label>
-                <input type="text" inputmode="decimal" wire:model="form.batch_max_kg" class="{{ $input }}" placeholder="—" data-recipe-topf />
+                <input type="text" inputmode="decimal" wire:model="form.batch_max_kg" class="{{ $input }}" placeholder="20 (Default-Kessel)" data-recipe-topf />
             </div>
             <div>
                 <label class="block {{ $label }} mb-1">Topf-Deckel (Stück) <span class="normal-case text-gray-500">für Stück-Rezepte</span></label>
-                <input type="text" inputmode="decimal" wire:model="form.batch_max_pieces" class="{{ $input }}" placeholder="—" data-recipe-topf-stueck />
+                <input type="text" inputmode="decimal" wire:model="form.batch_max_pieces" class="{{ $input }}" placeholder="200 (Default)" data-recipe-topf-stueck />
             </div>
             <div>
                 <label class="block {{ $label }} mb-1">Temperatur</label>

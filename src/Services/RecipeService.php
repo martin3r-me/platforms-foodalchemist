@@ -193,6 +193,7 @@ class RecipeService
             'work_time_min' => $in['work_time_min'] ?? null,
             // Stufe 3 — Planer-Felder (Create-Parität mit update(), sonst still verworfen bei Anlage).
             'setup_time_min' => $in['setup_time_min'] ?? null,
+            'standzeit_min' => $in['standzeit_min'] ?? null,
             'max_vorlauf_tage' => $in['max_vorlauf_tage'] ?? null,
             'batch_max_kg' => $in['batch_max_kg'] ?? null,
             'batch_max_pieces' => $in['batch_max_pieces'] ?? null,
@@ -246,6 +247,7 @@ class RecipeService
             'work_time_min' => array_key_exists('work_time_min', $in) ? $in['work_time_min'] : $recipe->work_time_min,
             // Stufe 3 — Auto-Produktionsplaner: Default-Posten, Vorproduzierbarkeit, Rüstzeit, Topf-Deckel.
             'setup_time_min' => array_key_exists('setup_time_min', $in) ? $in['setup_time_min'] : $recipe->setup_time_min,
+            'standzeit_min' => array_key_exists('standzeit_min', $in) ? $in['standzeit_min'] : $recipe->standzeit_min,
             'max_vorlauf_tage' => array_key_exists('max_vorlauf_tage', $in) ? $in['max_vorlauf_tage'] : $recipe->max_vorlauf_tage,
             'batch_max_kg' => array_key_exists('batch_max_kg', $in) ? $in['batch_max_kg'] : $recipe->batch_max_kg,
             'batch_max_pieces' => array_key_exists('batch_max_pieces', $in) ? $in['batch_max_pieces'] : $recipe->batch_max_pieces,

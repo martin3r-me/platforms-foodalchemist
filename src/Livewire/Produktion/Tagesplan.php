@@ -771,6 +771,10 @@ class Tagesplan extends Component
             'line_status' => $treffer->line_status,
             'gesamt_kg' => $treffer->gesamt_kg,
             'arbeitszeit_min' => $treffer->arbeitszeit_min !== null ? (int) $treffer->arbeitszeit_min : null,
+            'standzeit_min' => ($line?->standzeit_min ?? null) !== null ? (int) $line->standzeit_min : null,
+            'durchlaufzeit_min' => ($treffer->arbeitszeit_min === null && ($line?->standzeit_min ?? null) === null)
+                ? null
+                : (int) ((int) ($treffer->arbeitszeit_min ?? 0) + (int) ($line?->standzeit_min ?? 0)),
             'started_at' => $treffer->started_at ? Carbon::parse($treffer->started_at)->toIso8601String() : null,
             'equipment' => collect($treffer->equipment ?? [])->map(fn ($e) => [
                 'name' => $e->name,

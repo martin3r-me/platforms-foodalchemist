@@ -41,7 +41,13 @@ class RecipesPutTool extends FoodAlchemistTool implements ToolContract, ToolMeta
                 'description' => ['type' => 'string'],
                 'preparation' => ['type' => 'string'],
                 'taste_direction' => ['type' => 'string'],
-                'work_time_min' => ['type' => 'integer'],
+                'work_time_min' => ['type' => 'integer', 'description' => 'Aktive Arbeitszeit (min) je Koch-Vorgang'],
+                'setup_time_min' => ['type' => 'integer', 'description' => 'Rüstzeit (min), einmal je Produktionslauf'],
+                'standzeit_min' => ['type' => 'integer', 'description' => 'Passive Gar-/Standzeit (min) je Lauf — Durchlaufzeit, bindet keinen Posten'],
+                'batch_max_kg' => ['type' => 'number', 'description' => 'Topf-Deckel: max kg je Koch-Vorgang'],
+                'batch_max_pieces' => ['type' => 'number', 'description' => 'Topf-Deckel: max Stück je Koch-Vorgang'],
+                'max_vorlauf_tage' => ['type' => 'integer', 'description' => 'Vorproduzierbarkeit in Tagen (0 = nur am Produktionstag)'],
+                'default_station_id' => ['type' => 'integer', 'description' => 'Default-Posten fürs Planer-Routing'],
                 'yield_kg_manual' => ['type' => 'number'],
                 'category_id' => ['type' => 'integer'],
                 'status' => ['type' => 'string', 'enum' => ['review'], 'description' => 'Nur draft→review erlaubt'],
@@ -66,7 +72,8 @@ class RecipesPutTool extends FoodAlchemistTool implements ToolContract, ToolMeta
 
         $in = array_intersect_key($arguments, array_flip([
             'name', 'description', 'preparation', 'taste_direction',
-            'work_time_min', 'yield_kg_manual', 'category_id',
+            'work_time_min', 'setup_time_min', 'standzeit_min', 'batch_max_kg', 'batch_max_pieces',
+            'max_vorlauf_tage', 'default_station_id', 'yield_kg_manual', 'category_id',
         ]));
         if (($arguments['status'] ?? null) === 'review') {
             $in['status'] = 'review';

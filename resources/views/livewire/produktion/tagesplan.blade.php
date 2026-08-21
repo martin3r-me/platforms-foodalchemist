@@ -518,6 +518,8 @@
                         ? rtrim(rtrim(number_format((float) $wallGesamtKg, 3, ',', '.'), '0'), ',') . ' kg'
                         : null;
                     $wallArbeitszeit = $anleitung['arbeitszeit_min'] ?? null;
+                    $wallStandzeit = $anleitung['standzeit_min'] ?? null;
+                    $wallDurchlaufzeit = $anleitung['durchlaufzeit_min'] ?? $wallArbeitszeit;
                     $wallStartedAt = $anleitung['started_at'] ?? null;
                 @endphp
                 <div class="grid gap-3 xl:grid-cols-[minmax(18rem,24rem)_1fr]" data-tagesplan-wall-anleitung>
@@ -537,12 +539,17 @@
                                 @endif
                                 <div>
                                     <p class="text-[11px] font-bold uppercase tracking-wide text-slate-400">Zeit</p>
-                                    <p class="mt-0.5 font-semibold tabular-nums text-slate-100">{{ $wallArbeitszeit !== null ? $wallArbeitszeit . ' min' : 'offen' }}</p>
+                                    @if($wallArbeitszeit !== null || $wallStandzeit !== null)
+                                        <p class="mt-0.5 font-semibold tabular-nums text-slate-100">{{ $wallDurchlaufzeit }} min<span class="text-[11px] font-normal text-slate-400"> gesamt</span></p>
+                                        <p class="text-[10px] tabular-nums text-slate-400">{{ (int) ($wallArbeitszeit ?? 0) }} aktiv @if($wallStandzeit)· {{ $wallStandzeit }} Garzeit @endif</p>
+                                    @else
+                                        <p class="mt-0.5 font-semibold tabular-nums text-slate-100">offen</p>
+                                    @endif
                                 </div>
                             </div>
                             @if($wallLineLaeuft && $wallStartedAt !== null)
                                 <div class="mt-2 rounded-xl border border-sky-300/30 bg-sky-400/10 px-3 py-2"
-                                     x-data="{ started: Date.parse(@js($wallStartedAt)), total: {{ (int) ($wallArbeitszeit ?? 0) }}, now: Date.now(), tick: null, init(){ this.tick = setInterval(() => this.now = Date.now(), 1000) }, elapsed(){ return Math.max(0, Math.floor((this.now - this.started) / 60000)) }, remaining(){ return this.total > 0 ? Math.max(0, this.total - this.elapsed()) : null } }"
+                                     x-data="{ started: Date.parse(@js($wallStartedAt)), total: {{ (int) ($wallDurchlaufzeit ?? 0) }}, now: Date.now(), tick: null, init(){ this.tick = setInterval(() => this.now = Date.now(), 1000) }, elapsed(){ return Math.max(0, Math.floor((this.now - this.started) / 60000)) }, remaining(){ return this.total > 0 ? Math.max(0, this.total - this.elapsed()) : null } }"
                                      data-tagesplan-wall-laufzeit>
                                     <p class="text-[11px] font-bold uppercase tracking-wide text-sky-100">läuft</p>
                                     <p class="mt-0.5 text-sm font-semibold tabular-nums text-slate-100">

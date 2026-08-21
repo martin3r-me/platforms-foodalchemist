@@ -29,6 +29,9 @@ beforeEach(function () {
     $this->rezept = FoodAlchemistRecipe::create([
         'team_id' => $this->rootTeam->id, 'recipe_key' => 'fond', 'name' => 'Brauner Fond',
         'status' => 'approved', 'is_sales_recipe' => false, 'yield_kg' => 2.0, 'work_time_min' => 120,
+        // Expliziter Topf-Deckel = 1 Ansatz/Topf: hält diese Kapazitäts-Fixture stabil bei 2 Koch-Vorgängen
+        // (240 min), unabhängig vom globalen Default-Kessel. Die Zeit-Faltung selbst prüft ProduktionPlanerZeitTest.
+        'batch_max_kg' => 2.0,
     ]);
 
     $this->posten = fn (string $name, ?int $kap = null, array $wtag = []) => Posten::create([
@@ -36,7 +39,7 @@ beforeEach(function () {
         'kapazitaet_min_pro_tag' => $kap, 'kapazitaet_wochentag' => $wtag ?: null,
     ]);
 
-    // Liefertag Do 2026-08-20; 3 kg Bedarf bei 2 kg Ansatz ⇒ 2 Ansätze × 120 min = 240 min
+    // Liefertag Do 2026-08-20; 3 kg Bedarf bei 2 kg Ansatz + 2-kg-Deckel ⇒ 2 Koch-Vorgänge × 120 min = 240 min
     $this->order = $this->svc->saveNew($this->rootTeam, '2026-08-20', 'Kapazitätstest', [
         ['source_ref' => 'r:fond', 'recipe_id' => $this->rezept->id, 'amount_kg' => 3.0],
     ]);

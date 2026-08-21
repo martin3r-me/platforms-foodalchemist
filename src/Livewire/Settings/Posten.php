@@ -7,6 +7,7 @@ use Illuminate\Support\Str;
 use Livewire\Component;
 use Platform\FoodAlchemist\Models\FoodAlchemistKitchenRole;
 use Platform\FoodAlchemist\Models\FoodAlchemistProductionStation;
+use Platform\FoodAlchemist\Services\TeamSettingsService;
 
 /**
  * Spec 30 E3 — Posten (Küchen-Arbeitsplätze) pflegen.
@@ -30,6 +31,42 @@ class Posten extends Component
     public ?string $fehler = null;
 
     public ?string $meldung = null;
+
+    /** Team-Standard-Topf-Deckel (Fallback für die Produktionszeit) — leer = System-Standard. */
+    public string $standardTopfKg = '';
+
+    public string $standardTopfStueck = '';
+
+    public function mount(): void
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team === null) {
+            return;
+        }
+        $s = app(TeamSettingsService::class)->for($team);
+        $this->standardTopfKg = $s->default_batch_max_kg !== null ? (string) (float) $s->default_batch_max_kg : '';
+        $this->standardTopfStueck = $s->default_batch_max_pieces !== null ? (string) (float) $s->default_batch_max_pieces : '';
+    }
+
+    /** Team-Standard-Topf-Deckel speichern — greift als Fallback, wenn Rezept/Posten keinen Deckel haben. */
+    public function standardDeckelSpeichern(): void
+    {
+        $this->fehler = null;
+        $this->meldung = null;
+
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team === null) {
+            $this->fehler = 'Kein Team im Zugriff.';
+
+            return;
+        }
+
+        app(TeamSettingsService::class)->update($team, [
+            'default_batch_max_kg' => $this->zahl($this->standardTopfKg),
+            'default_batch_max_pieces' => $this->zahl($this->standardTopfStueck),
+        ]);
+        $this->meldung = 'Standard-Topf-Deckel gespeichert.';
+    }
 
     public function create(): void
     {

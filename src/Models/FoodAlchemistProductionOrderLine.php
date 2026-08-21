@@ -44,6 +44,7 @@ class FoodAlchemistProductionOrderLine extends Model
         'basis_yield_kg' => 'decimal:3',
         'produzierte_menge_kg' => 'decimal:3',
         'arbeitszeit_min' => 'integer',
+        'standzeit_min' => 'integer',   // passive Gar-/Standzeit (Durchlaufzeit, bindet keinen Posten)
         'darreichung' => 'array',
         'zutaten' => 'array',
         'steps_snapshot' => 'array',   // Spec 27: eingefrorene Schrittfolge (NULL = Alt-Auftrag)

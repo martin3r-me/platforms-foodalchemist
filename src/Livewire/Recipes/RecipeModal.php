@@ -28,7 +28,7 @@ class RecipeModal extends Component
         'notes_manual' => '', 'equipment_ids' => [], 'is_sales_recipe' => false,
         // Stufe 3 — Auto-Produktionsplaner
         'default_station_id' => null, 'max_vorlauf_tage' => null, 'setup_time_min' => null,
-        'batch_max_kg' => null, 'batch_max_pieces' => null,
+        'batch_max_kg' => null, 'batch_max_pieces' => null, 'standzeit_min' => null,
     ];
 
     public ?int $recipeId = null;
@@ -123,6 +123,7 @@ class RecipeModal extends Component
                     'default_station_id' => $r->default_station_id,
                     'max_vorlauf_tage' => $r->max_vorlauf_tage,
                     'setup_time_min' => $r->setup_time_min,
+                    'standzeit_min' => $r->standzeit_min,
                     'batch_max_kg' => $r->batch_max_kg,
                     'batch_max_pieces' => $r->batch_max_pieces,
                     'temperature' => $r->temperature ?? '',
@@ -186,6 +187,7 @@ class RecipeModal extends Component
                 'default_station_id' => $this->form['default_station_id'] ?: null,
                 'max_vorlauf_tage' => $ganz($this->form['max_vorlauf_tage']),
                 'setup_time_min' => $ganz($this->form['setup_time_min']),
+                'standzeit_min' => $ganz($this->form['standzeit_min'] ?? null),
                 'batch_max_kg' => ($b = trim(str_replace(',', '.', (string) ($this->form['batch_max_kg'] ?? '')))) !== '' ? (float) $b : null,
                 'batch_max_pieces' => ($bp = trim(str_replace(',', '.', (string) ($this->form['batch_max_pieces'] ?? '')))) !== '' ? (float) $bp : null,
             ];

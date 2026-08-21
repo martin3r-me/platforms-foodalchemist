@@ -638,6 +638,11 @@ class PlanungsblattService
 
         // 3. Von oben nach unten: Batches finalisieren, GP-Bedarf sammeln, Sub-Bedarf weiterreichen.
         $produktion = [];
+        // Team-Fallback-Topf-Deckel EINMAL laden (greift nur bei Rezepten ohne eigenen Deckel; ein
+        // Posten ist bei der Explosion noch unbekannt). kg/Stück-Achse wird je Rezept gewählt.
+        $teamSettings = app(TeamSettingsService::class);
+        $fallbackDeckelKg = $teamSettings->defaultTopfDeckelKg($team);
+        $fallbackDeckelStueck = $teamSettings->defaultTopfDeckelStueck($team);
         /** @var array<int, array{grams:float}> $gpGram */
         $gpGram = [];
         foreach (array_keys($tiefe) as $rid) {
@@ -719,7 +724,8 @@ class PlanungsblattService
                 'produzierte_menge_kg' => $basisYieldKg !== null ? round($basisYieldKg * $batches, 3) : null,
                 // Stufe 3 P3.2: nicht-lineare Zeit (Rüst + Marginal je Koch-Batch unter Topf-Deckel).
                 // Posten unbekannt bei der Explosion → nur Rezept-Deckel; Defaults = heutiges Verhalten.
-                'arbeitszeit_min' => $recipe->arbeitszeitMin($roh, $istVk),
+                'arbeitszeit_min' => $recipe->arbeitszeitMin($roh, $istVk, null, null, $recipe->istStueckErtrag() ? $fallbackDeckelStueck : $fallbackDeckelKg),
+                'standzeit_min' => $recipe->standzeitMin(),   // passive Gar-/Standzeit (Durchlaufzeit, kein Posten)
                 'zubereitung' => $recipe->preparation ?: null,        // Spiegel-Freitext (Fallback für Rezepte ohne Schritte)
                 'schritte' => $this->schritteFuer($recipe),           // Spec 27: die eigentliche Anleitung (Nummer + Text + Fotos)
                 'darreichung' => $istVk ? $this->darreichungsInfo($recipe) : null, // Regeneration/Behälter/Vehikel der Standard-Form

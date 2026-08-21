@@ -4,6 +4,7 @@ namespace Platform\FoodAlchemist\Services;
 
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Enums\LeadLaStrategie;
+use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Models\FoodAlchemistTeamSetting;
 
 /**
@@ -404,6 +405,39 @@ class TeamSettingsService
         $v = $this->for($team)->margin_pct;
 
         return $v !== null ? (float) $v : self::MARGE_DEFAULT;
+    }
+
+    // ── Standard-Topf-Deckel (Produktionszeit-Fallback, Spec „realistische Zeit") ────────────
+
+    /**
+     * Standard-Topf-Deckel je Koch-Vorgang (kg) — Fallback für die Arbeitszeit-Rechnung, wenn WEDER
+     * Rezept noch Posten einen eigenen Deckel pflegen. Code-Konstante als letzter Fallback.
+     */
+    public function defaultTopfDeckelKg(Team $team): float
+    {
+        $v = $this->for($team)->default_batch_max_kg;
+
+        return $v !== null && (float) $v > 0 ? (float) $v : FoodAlchemistRecipe::DEFAULT_BATCH_MAX_KG;
+    }
+
+    /** Standard-Topf-Deckel je Koch-Vorgang (Stück) — Fallback, Code-Konstante als letzter Fallback. */
+    public function defaultTopfDeckelStueck(Team $team): float
+    {
+        $v = $this->for($team)->default_batch_max_pieces;
+
+        return $v !== null && (float) $v > 0 ? (float) $v : FoodAlchemistRecipe::DEFAULT_BATCH_MAX_PIECES;
+    }
+
+    /**
+     * Fallback-Topf-Deckel für EIN Rezept auf der passenden Achse (kg oder Stück). Greift nur, wenn
+     * weder Rezept- noch Posten-Deckel gesetzt ist. (Ein Warengruppen-Override wird hier später
+     * vorgeschaltet — dann: Warengruppe ?? Team-Default ?? Code-Konstante.)
+     */
+    public function topfDeckelFuer(Team $team, FoodAlchemistRecipe $recipe, ?bool $stueck = null): float
+    {
+        $stueck ??= $recipe->istStueckErtrag();
+
+        return $stueck ? $this->defaultTopfDeckelStueck($team) : $this->defaultTopfDeckelKg($team);
     }
 
     /** #379+: Ziel-Wareneinsatzquote (Food-Cost-%) — Controlling-Ziel + Break-even-Treiber. */

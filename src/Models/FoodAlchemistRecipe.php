@@ -43,6 +43,7 @@ class FoodAlchemistRecipe extends Model
         'default_station_id' => 'integer',
         'max_vorlauf_tage' => 'integer',
         'setup_time_min' => 'integer',
+        'standzeit_min' => 'integer',   // passive Gar-/Standzeit (Durchlaufzeit, bindet keinen Posten)
         'batch_max_kg' => 'decimal:3',
         'batch_max_pieces' => 'decimal:2',
         'ek_total_eur' => 'decimal:4',
@@ -65,6 +66,17 @@ class FoodAlchemistRecipe extends Model
         'spec_is_lactose_free' => 'boolean',
         'context_hooks_json' => 'array',
     ];
+
+    /**
+     * Globaler Default-Topf-Deckel für die Koch-Vorgangs-Rechnung, wenn WEDER Rezept noch Posten
+     * einen eigenen Deckel pflegen. Ersetzt die frühere „1 Ertrags-Ansatz = 1 Koch-Vorgang"-Annahme
+     * (die z. B. 4,69 kg als zehn 469-g-Töpfe zählte und so die Arbeitszeit ver-10-fachte). Physisch
+     * begründet — „wie viel passt in einen großen Gastro-Kessel", KEIN erfundener Zeit-Parameter.
+     * Bis zur Promotion auf ein Team-Setting eine erklärbare Konstante.
+     */
+    public const DEFAULT_BATCH_MAX_KG = 20.0;
+
+    public const DEFAULT_BATCH_MAX_PIECES = 200.0;
 
     // ── D-5/D-6-Sichten (Services erzwingen ihren Scope in JEDER Query) ──
 
@@ -99,8 +111,10 @@ class FoodAlchemistRecipe extends Model
 
     /**
      * Stufe 3 — Koch-Vorgänge (Batches) für eine Bedarfsmenge unter dem Topf-Deckel.
-     * Deckel = kleinster aus Rezept- und (optional) Posten-Deckel; ohne Deckel = 1 Ertrag je Batch
-     * (dann Koch-Batches = Ertrags-Ansätze, heutiges Verhalten). Rechnet in kg oder Stück.
+     * Deckel = kleinster aus Rezept- und (optional) Posten-Deckel; ohne gepflegten Deckel greift der
+     * globale Default-Kessel (DEFAULT_BATCH_MAX_*) statt „1 Ertrags-Ansatz = 1 Koch-Vorgang". Rechnet
+     * in kg oder Stück; ohne Yield fällt es auf 1 Vorgang je Ansatz zurück.
+     * Wirkt NUR auf die Zeit (arbeitszeitMin) — die Ansätze/Zutatenmengen kommen aus $batches (Explosion).
      */
     /** Stück-Ertrag statt kg: wenn kein kg-Yield, aber ein Stück-Yield gepflegt ist (z. B. Törtchen). */
     public function istStueckErtrag(): bool
@@ -108,20 +122,31 @@ class FoodAlchemistRecipe extends Model
         return ($this->yield_kg_manual ?? $this->yield_kg) === null && (float) ($this->yield_pieces ?? 0) > 0;
     }
 
-    public function kochBatches(float $rohBatches, ?float $stationDeckel = null, ?bool $stueck = null): int
+    public function kochBatches(float $rohBatches, ?float $stationDeckel = null, ?bool $stueck = null, ?float $fallbackDeckel = null): int
     {
         $stueck ??= $this->istStueckErtrag();
         $yield = $stueck
             ? (float) ($this->yield_pieces ?? 0)
             : (float) ($this->yield_kg_manual ?? $this->yield_kg ?? 0);
 
+        // Ohne Yield lässt sich die Menge nicht in Topf-Vorgänge umrechnen: 1 Ansatz = 1 Koch-Vorgang.
+        if ($yield <= 0) {
+            return (int) max(1, ceil($rohBatches - 1e-9));
+        }
+
+        // Harte Deckel (Rezept/Posten) — der kleinere gewinnt.
         $rezeptDeckel = $stueck ? $this->batch_max_pieces : $this->batch_max_kg;
         $deckel = collect([$rezeptDeckel, $stationDeckel])
             ->filter(fn ($v) => $v !== null && (float) $v > 0)
             ->map(fn ($v) => (float) $v)->min();
 
-        // Ohne echten Deckel ist 1 Koch-Batch = 1 Ertrags-Ansatz.
-        if ($deckel === null || $deckel <= 0 || $yield <= 0) {
+        // Kein harter Deckel ⇒ Team-Fallback (Warengruppe/Team-Default, vom Service gereicht),
+        // sonst der globale physische Default-Kessel (statt „1 Ansatz = 1 Topf").
+        if ($deckel === null && $fallbackDeckel !== null && $fallbackDeckel > 0) {
+            $deckel = (float) $fallbackDeckel;
+        }
+        $deckel ??= ($stueck ? self::DEFAULT_BATCH_MAX_PIECES : self::DEFAULT_BATCH_MAX_KG);
+        if ($deckel <= 0) {
             return (int) max(1, ceil($rohBatches - 1e-9));
         }
 
@@ -129,19 +154,49 @@ class FoodAlchemistRecipe extends Model
     }
 
     /**
-     * Stufe 3 — nicht-lineare Arbeitszeit: Rüstzeit (einmal je Lauf) + Marginal je Koch-Batch.
-     * Defaults (setup=0, kein Deckel) reproduzieren das heutige lineare `work_time_min × Ansätze`.
-     * VK-Gerichte bleiben linear-fraktional (kein Topf). `null`, wenn gar keine Zeit hinterlegt ist.
+     * Stufe 3 — nicht-lineare AKTIVE Belegzeit: Rüstzeit (einmal je Lauf) + Marginal je Koch-Vorgang.
+     * Koch-Vorgänge über den Topf-Deckel (Rezept/Posten/globaler Default) — 4,69 kg in einem Kessel
+     * sind EIN Vorgang, nicht zehn 469-g-Ansätze. Bindet Posten/Kapazität. Passive Standzeit steckt
+     * NICHT hier drin (→ standzeitMin/durchlaufzeitMin). VK-Gerichte bleiben linear-fraktional (kein
+     * Topf). `null`, wenn gar keine Zeit hinterlegt ist.
      */
-    public function arbeitszeitMin(float $rohBatches, bool $istVk, ?float $stationDeckel = null, ?bool $stueck = null): ?int
+    public function arbeitszeitMin(float $rohBatches, bool $istVk, ?float $stationDeckel = null, ?bool $stueck = null, ?float $fallbackDeckel = null): ?int
     {
         if ($this->work_time_min === null && (int) ($this->setup_time_min ?? 0) === 0) {
             return null;
         }
 
-        $kochBatches = $istVk ? $rohBatches : (float) $this->kochBatches($rohBatches, $stationDeckel, $stueck);
+        $kochBatches = $istVk ? $rohBatches : (float) $this->kochBatches($rohBatches, $stationDeckel, $stueck, $fallbackDeckel);
 
         return (int) round((int) ($this->setup_time_min ?? 0) + (float) ($this->work_time_min ?? 0) * $kochBatches);
+    }
+
+    /**
+     * Passive Gar-/Standzeit (Köcheln, Ziehen, Kühlen) — Teil der Durchlaufzeit, bindet aber KEINEN
+     * Posten und geht NICHT in die Kapazität. Bewusst mengenunabhängig (1× je Lauf): mehrere Töpfe
+     * köcheln unbeaufsichtigt/überlappend, das vervielfacht die Standzeit nicht. `null` = keine.
+     */
+    public function standzeitMin(): ?int
+    {
+        $s = (int) ($this->standzeit_min ?? 0);
+
+        return $s > 0 ? $s : null;
+    }
+
+    /**
+     * Durchlaufzeit = aktive Belegzeit (setup + Marginal × Koch-Vorgänge) + passive Standzeit.
+     * „Wann ist es fertig", im Gegensatz zur reinen Posten-Belegzeit. `null` nur, wenn beide fehlen.
+     */
+    public function durchlaufzeitMin(float $rohBatches, bool $istVk, ?float $stationDeckel = null, ?bool $stueck = null, ?float $fallbackDeckel = null): ?int
+    {
+        $aktiv = $this->arbeitszeitMin($rohBatches, $istVk, $stationDeckel, $stueck, $fallbackDeckel);
+        $stand = $this->standzeitMin();
+
+        if ($aktiv === null && $stand === null) {
+            return null;
+        }
+
+        return (int) (($aktiv ?? 0) + ($stand ?? 0));
     }
 
     /** Alle Fotos des Rezepts (Media-Pool) — verlinkt an Schritte oder „allgemein". */
