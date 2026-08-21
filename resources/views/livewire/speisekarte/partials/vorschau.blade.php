@@ -24,7 +24,12 @@
                 <h3 class="text-[13px] font-semibold uppercase tracking-wide border-b pb-1 mb-2" style="color: {{ $brand }}; border-color: {{ $brand }}2b;">{{ $rubrik['title'] }}</h3>
                 @if($rubrik['claim'])<p class="text-xs italic text-gray-500 mb-2">{{ $rubrik['claim'] }}</p>@endif
 
+                @php($prevVg = null)
                 @foreach($rubrik['positionen'] as $pos)
+                    {{-- Werkstrang M Phase D-Renderer: Wahl-Gruppe „A oder B" — „oder" zwischen aufeinanderfolgenden Positionen derselben variant_group_id. --}}
+                    @if(($pos['variant_group_id'] ?? null) !== null && ($pos['variant_group_id'] ?? null) === $prevVg)
+                        <div class="text-[11px] italic text-gray-400 text-center py-0.5">oder</div>
+                    @endif
                     @if($pos['typ'] === 'header')
                         <div class="font-medium text-[11px] uppercase tracking-wide text-gray-500 mt-3">{{ $pos['name'] }}</div>
                     @elseif($pos['typ'] === 'text')
@@ -48,6 +53,7 @@
                             <div class="text-[11px] text-gray-500" style="padding-left: {{ (($gang['einrueckung'] ?? 0) + 1) * 0.5 }}rem">{{ $gang['type'] === 'header' ? '— ' . $gang['text'] . ' —' : $gang['text'] }}</div>
                         @endforeach
                     @endif
+                    @php($prevVg = $pos['variant_group_id'] ?? null)
                 @endforeach
             </div>
         @empty

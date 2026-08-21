@@ -115,8 +115,8 @@
                     <button type="button" wire:click="positionAbbrechen" class="{{ $btnGhostXs }}">Abbrechen</button>
                 </div>
                 @if($editVariantGroupId)
-                    {{-- Werkstrang M Phase D: ehrlicher Hinweis — die Gruppierungs-Optik ist noch Editor-only. --}}
-                    <p class="text-[10px] text-amber-600/80">Wahl-Gruppe {{ $editVariantGroupId }} gesetzt — die „A oder B"-Gruppierung erscheint noch NICHT im Druck (Editor-only vorerst; Renderer folgt).</p>
+                    {{-- Werkstrang M Phase D: Wahl-Gruppe wird jetzt auch im Druck/Vorschau als „A oder B" gerendert. --}}
+                    <p class="text-[10px] text-gray-500">Wahl-Gruppe {{ $editVariantGroupId }} — Positionen mit derselben Nummer erscheinen als „… oder …" (im Editor benachbart platzieren).</p>
                 @endif
             </div>
         @endif
