@@ -132,8 +132,11 @@ class Preisvergleich extends Component
                 ->get();
 
             $gekappt = $gps->count() > self::MAX;
-            foreach ($gps->take(self::MAX) as $gp) {
-                $kette = $lead->rangliste($gp, $team);
+            // #6.3 N+1: EIN Batch statt je GP ein rangliste()-Aufruf (~3 Queries/GP → ~180 bei 60 GPs).
+            $anzeigeGps = $gps->take(self::MAX)->values();
+            $ketten = $lead->ranglisteBulk($anzeigeGps, $team);
+            foreach ($anzeigeGps as $gp) {
+                $kette = $ketten[(int) $gp->id] ?? collect();
                 if ($this->mitRabatt) {
                     $rebate->enrichRangliste($team, $kette, $gp->commodity_group_code);
                 }

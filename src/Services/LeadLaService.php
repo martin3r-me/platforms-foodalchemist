@@ -60,6 +60,62 @@ class LeadLaService
         $overlay = FoodAlchemistGpLaPreference::where('team_id', $team->id)->where('gp_id', $gp->id)
             ->get()->keyBy('supplier_item_id');
 
+        return $this->sortiere($kandidaten, $strategie, $prioritaeten, $stammIds, $overlay);
+    }
+
+    /**
+     * #6.3 N+1: Ranglisten fuer VIELE GPs mit vorgeladenen Daten (Controlling-Preisvergleich, bis 60
+     * GPs). Vorher rief das Panel {@see rangliste()} je GP → ~3 Queries pro GP (Kandidaten + Overlay
+     * + Stamm). Hier: Kandidaten UND Overlay je in EINEM whereIn, Strategie/Stamm je DISTINCT WG
+     * gecacht; die Sortierung ist bit-identisch zu rangliste() (geteilte {@see sortiere()}).
+     *
+     * @param  Collection<int, FoodAlchemistGp>  $gps
+     * @return array<int, Collection<int, FoodAlchemistSupplierItem>>  gp_id ⇒ Rangliste
+     */
+    public function ranglisteBulk(Collection $gps, Team $team): array
+    {
+        $gpIds = $gps->map(fn ($g) => (int) $g->id)->values()->all();
+        if ($gpIds === []) {
+            return [];
+        }
+
+        $kandidatenByGp = $this->kandidatenBulk($gpIds);
+        $overlayByGp = FoodAlchemistGpLaPreference::where('team_id', $team->id)->whereIn('gp_id', $gpIds)
+            ->get()->groupBy('gp_id');
+        $prioritaeten = array_map('intval', $this->settings->leadLaPrioritaeten($team));
+        $strategieByWg = [];
+        $stammByWg = [];
+
+        $out = [];
+        foreach ($gps as $gp) {
+            $wg = (string) $gp->commodity_group_code;
+            $strategieByWg[$wg] ??= $this->settings->leadLaStrategie($team, $wg);
+            $stammByWg[$wg] ??= array_map('intval', $this->stamm->stammSupplierIdsFor($team, $wg));
+            $kandidaten = $kandidatenByGp[(int) $gp->id] ?? collect();
+            if ($kandidaten->isEmpty()) {
+                $out[(int) $gp->id] = $kandidaten;
+                continue;
+            }
+            $overlay = ($overlayByGp[$gp->id] ?? collect())->keyBy('supplier_item_id');
+            $out[(int) $gp->id] = $this->sortiere($kandidaten, $strategieByWg[$wg], $prioritaeten, $stammByWg[$wg], $overlay);
+        }
+
+        return $out;
+    }
+
+    /**
+     * Geteilte Sortier-Logik (V-27-Kette) — aus rangliste() extrahiert, damit Einzel- und Bulk-Pfad
+     * bit-identisch sortieren. Setzt ist_stamm/locked/gepinnt aus dem Overlay, sortiert nach den
+     * Stufen 0–5.
+     *
+     * @param  Collection<int, FoodAlchemistSupplierItem>  $kandidaten
+     * @param  array<int, int>  $prioritaeten
+     * @param  array<int, int>  $stammIds
+     * @param  Collection  $overlay  supplier_item_id ⇒ Preference
+     * @return Collection<int, FoodAlchemistSupplierItem>
+     */
+    private function sortiere(Collection $kandidaten, LeadLaStrategie $strategie, array $prioritaeten, array $stammIds, Collection $overlay): Collection
+    {
         return $kandidaten
             ->each(function ($la) use ($overlay, $stammIds) {
                 $pref = $overlay->get($la->id);
@@ -383,6 +439,35 @@ class LeadLaService
             $la->setAttribute('vergleichspreis', $vp);
             $la->setAttribute('vergleichspreis_wert', $vp['value'] ?? null);   // qty NULL ⇒ NULL ⇒ ans Ende (A-2)
         });
+    }
+
+    /**
+     * #6.3: Kandidaten fuer VIELE GPs in EINEM Query (whereIn s.gp_id), gruppiert je gp_id. Spiegelt
+     * {@see kandidaten()} inkl. Preis-Annotation. Eine LA an mehreren GPs erscheint je Struktur-Zeile
+     * (eigenes _gp_id) — genau wie der Einzel-Pfad je GP.
+     *
+     * @param  list<int>  $gpIds
+     * @return array<int, Collection<int, FoodAlchemistSupplierItem>>
+     */
+    private function kandidatenBulk(array $gpIds): array
+    {
+        $las = FoodAlchemistSupplierItem::query()
+            ->join('foodalchemist_supplier_item_structures AS s', 's.supplier_item_id', '=', 'foodalchemist_supplier_items.id')
+            ->leftJoin('foodalchemist_suppliers AS sup', 'sup.id', '=', 'foodalchemist_supplier_items.supplier_id')
+            ->whereIn('s.gp_id', $gpIds)
+            ->whereNull('s.deleted_at')
+            ->select('foodalchemist_supplier_items.*', 'sup.name AS supplier_name', 's.gp_id AS _gp_id')
+            ->selectSub($this->preise->activePriceSubquery()->toBase(), 'aktiver_preis')
+            ->get();
+
+        $las->each(function ($la) {
+            $la->setAttribute('hat_aktiven_preis', $la->aktiver_preis !== null);
+            $vp = $la->aktiver_preis !== null ? $this->preise->vergleichspreis($la, (float) $la->aktiver_preis) : null;
+            $la->setAttribute('vergleichspreis', $vp);
+            $la->setAttribute('vergleichspreis_wert', $vp['value'] ?? null);
+        });
+
+        return $las->groupBy(fn ($la) => (int) $la->_gp_id)->map(fn ($grp) => $grp->values())->all();
     }
 
     private function gehoertZuGp(FoodAlchemistGp $gp, int $laId): bool
