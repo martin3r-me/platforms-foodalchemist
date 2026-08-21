@@ -55,6 +55,18 @@
         $stufen = $kaskaden[(int) $sessionId]['stufen'] ?? [];
         return collect($stufen)->map(fn ($st) => $st['label'] . ' ' . $st['fertig'] . '/' . $st['total'])->implode(' · ');
     };
+    // UX: Auto-Anzeige-Titel — Ergebnis-Name (Kaskaden-Artefakt) → Analyse-Anfang → gespeicherter Titel.
+    $anzeigeTitel = function ($s) use ($kaskaden) {
+        $t = $kaskaden[(int) $s->id]['titel'] ?? null;
+        if (is_string($t) && trim($t) !== '') {
+            return trim($t);
+        }
+        $ana = trim((string) ($s->analysis ?? ''));
+        return $ana !== '' ? \Illuminate\Support\Str::limit($ana, 42) : $s->title;
+    };
+    // UX: Typ-Icon je Session (aus dem jüngsten Lauf-Scope).
+    $typIconMap = ['concept' => 'heroicon-o-squares-2x2', 'gericht' => 'heroicon-o-cake', 'rezept' => 'heroicon-o-beaker', 'vollkaskade' => 'heroicon-o-bolt'];
+    $typIcon = fn ($s) => $typIconMap[$kaskaden[(int) $s->id]['scope'] ?? ''] ?? 'heroicon-o-light-bulb';
 @endphp
 
 <x-ui-page>
@@ -115,10 +127,16 @@
                                          class="group flex items-center gap-1 rounded-md {{ $active && $active->id === $s->id ? 'bg-violet-500/10' : 'hover:bg-black/[0.04]' }}">
                                         <button type="button" wire:click="waehle({{ $s->id }})"
                                                 class="flex-1 min-w-0 flex items-center justify-between gap-2 text-left px-2 py-1 text-xs {{ $active && $active->id === $s->id ? 'text-violet-700' : 'text-gray-700' }}">
-                                            <span class="truncate">{{ $s->title }}</span>
-                                            <span class="shrink-0 flex items-center gap-1" data-planung-status="{{ $kaskaden[$s->id]['status'] ?? 'entwurf' }}">
-                                                @if($kaskadeLaeuft($s->id))<span class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" title="läuft" data-planung-puls></span>@endif
-                                                {!! $kaskadeBadge($s->id) !!}
+                                            {{-- UX: Typ-Icon + Auto-Anzeige-Titel (Ergebnis-Name → Analyse → Titel). --}}
+                                            <span class="flex items-center gap-1.5 min-w-0">
+                                                @svg($typIcon($s), 'w-3.5 h-3.5 shrink-0 text-gray-400')
+                                                <span class="truncate">{{ $anzeigeTitel($s) }}</span>
+                                            </span>
+                                            @php $stat = $kaskaden[$s->id]['status'] ?? 'entwurf'; @endphp
+                                            {{-- UX: deutlicheres Status-Badge (farbige Pille statt kleiner chip). --}}
+                                            <span class="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold {{ $kaskadeStatusStil[$stat] ?? $kaskadeStatusStil['entwurf'] }}" data-planung-status="{{ $stat }}">
+                                                @if($kaskadeLaeuft($s->id))<span class="w-1.5 h-1.5 rounded-full bg-current opacity-70 animate-pulse" data-planung-puls></span>@endif
+                                                {{ \Illuminate\Support\Str::ucfirst($stat) }}
                                             </span>
                                         </button>
                                         <button type="button" wire:click="planungVerwerfen({{ $s->id }})"
@@ -151,10 +169,10 @@
         <div class="{{ $card }} p-4">
             <div class="flex flex-wrap items-center gap-2">
                 <span class="text-sm font-semibold text-gray-800 mr-1">Neu erstellen</span>
-                <button wire:click="schnellErstellen('rezept')" class="{{ $btnGhost }}" data-frei-rezept>
+                <button wire:click="schnellErstellen('rezept')" class="{{ $btnPrimary }}" data-frei-rezept>
                     @svg('heroicon-o-beaker', 'w-4 h-4') Basisrezept
                 </button>
-                <button wire:click="schnellErstellen('gericht')" class="{{ $btnGhost }}" data-frei-gericht>
+                <button wire:click="schnellErstellen('gericht')" class="{{ $btnPrimary }}" data-frei-gericht>
                     @svg('heroicon-o-cake', 'w-4 h-4') Gericht
                 </button>
                 <button wire:click="schnellErstellen('concept')" class="{{ $btnPrimary }}" data-frei-concept>
@@ -196,8 +214,23 @@
                     Ein Trend ist EIN möglicher Input (im Trendradar „In Planung öffnen"), nicht der Rahmen.
                 </p>
             </div>
-            <div>
-                <h3 class="text-sm font-semibold text-gray-700 mb-2">Zuletzt</h3>
+            {{-- UX: Landing-Umschalter [Zuletzt | Zu prüfen (N)] — die zu prüfenden Läufe quer gebündelt. --}}
+            <div x-data="{ landView: 'zuletzt' }">
+                @php $pruefen = $sessions->filter(fn ($s) => ($kaskaden[$s->id]['status'] ?? 'entwurf') === 'prüfen')->values(); @endphp
+                <div class="flex items-center gap-2 mb-3" data-planung-landing-tabs>
+                    <button type="button" @click="landView='zuletzt'" data-planung-landtab="zuletzt"
+                            :class="landView==='zuletzt' ? 'bg-violet-500/15 text-violet-700' : 'text-gray-500 hover:text-gray-700'"
+                            class="px-3 py-1 rounded-md text-sm font-semibold">Zuletzt</button>
+                    <button type="button" @click="landView='pruefen'" data-planung-landtab="pruefen"
+                            :class="landView==='pruefen' ? 'bg-violet-500/15 text-violet-700' : 'text-gray-500 hover:text-gray-700'"
+                            class="px-3 py-1 rounded-md text-sm font-semibold inline-flex items-center gap-1.5">
+                        Zu prüfen
+                        @if($pruefen->count() > 0)<span class="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1 rounded-full bg-violet-600 text-white text-[11px] font-bold" data-planung-pruef-count>{{ $pruefen->count() }}</span>@endif
+                    </button>
+                </div>
+
+                {{-- Ansicht: Zuletzt --}}
+                <div x-show="landView==='zuletzt'">
                 @if($sessions->count() === 0)
                     <div class="{{ $card }} p-4 text-xs text-gray-500">Noch keine Planungen.</div>
                 @else
@@ -206,7 +239,7 @@
                             <div wire:key="dash-{{ $s->id }}" class="{{ $card }} p-3" data-planung-karte="{{ $s->id }}">
                                 <button type="button" wire:click="waehle({{ $s->id }})" class="w-full text-left hover:opacity-80 transition-opacity">
                                     <div class="flex items-start justify-between gap-2">
-                                        <span class="text-xs font-semibold text-gray-800 truncate">{{ $s->title }}</span>
+                                        <span class="text-xs font-semibold text-gray-800 truncate flex items-center gap-1.5">@svg($typIcon($s), 'w-3.5 h-3.5 shrink-0 text-gray-400'){{ $anzeigeTitel($s) }}</span>
                                         @if($kaskadeLaeuft($s->id))<span class="shrink-0 w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse mt-1" title="läuft"></span>@endif
                                     </div>
                                     <div class="mt-2 flex flex-wrap gap-1">
@@ -233,7 +266,28 @@
                         @endforeach
                     </div>
                 @endif
-            </div>
+                </div>{{-- /Ansicht Zuletzt --}}
+
+                {{-- UX: Ansicht „Zu prüfen" — alle Läufe im Status prüfen quer gebündelt (Worker/Status auf einen Blick). --}}
+                <div x-show="landView==='pruefen'" x-cloak class="space-y-2" data-planung-pruef-liste>
+                    @forelse($pruefen as $s)
+                        <div wire:key="pruef-{{ $s->id }}" class="{{ $card }} p-3 flex items-center gap-3" data-planung-pruef-karte="{{ $s->id }}">
+                            @svg($typIcon($s), 'w-5 h-5 shrink-0 text-violet-500')
+                            <div class="flex-1 min-w-0">
+                                <p class="text-sm font-semibold text-gray-800 truncate">{{ $anzeigeTitel($s) }}</p>
+                                @php $fort = $kaskadeFortschritt($s->id); @endphp
+                                <p class="text-[11px] text-gray-500 truncate">{{ $fort !== '' ? $fort : 'wartet auf Freigabe' }}@if($s->category) · {{ $s->category }}@endif</p>
+                            </div>
+                            <span class="shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold {{ $kaskadeStatusStil['prüfen'] }}">Prüfen</span>
+                            <button type="button" wire:click="oeffne({{ $s->id }})" class="{{ $btnPrimary }} shrink-0" title="Im Editor öffnen + prüfen">
+                                @svg('heroicon-o-pencil-square', 'w-4 h-4') Öffnen
+                            </button>
+                        </div>
+                    @empty
+                        <div class="{{ $card }} p-4 text-xs text-gray-500">Nichts zu prüfen — alle Läufe sind Entwurf, laufen noch oder sind fertig/freigegeben.</div>
+                    @endforelse
+                </div>
+            </div>{{-- /x-data landView --}}
         @endif
     </x-ui-page-container>
 

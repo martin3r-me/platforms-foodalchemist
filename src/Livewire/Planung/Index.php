@@ -2216,7 +2216,7 @@ class Index extends Component
         // Steps aller jüngsten Läufe in EINEM Pass holen → je Lauf gruppieren (kein N+1).
         $runIds = array_map(fn ($r) => (int) $r->id, array_values($latest));
         $stepsByRun = \Platform\FoodAlchemist\Models\FoodAlchemistCascadeRunStep::whereIn('cascade_run_id', $runIds)
-            ->get(['cascade_run_id', 'kind', 'status'])
+            ->get(['cascade_run_id', 'kind', 'status', 'label', 'ref_id'])
             ->groupBy('cascade_run_id');
 
         $badge = ['running' => 'läuft', 'review' => 'prüfen', 'done' => 'fertig', 'failed' => 'fehlgeschlagen'];
@@ -2229,10 +2229,30 @@ class Index extends Component
                 'run_id' => (int) $r->id,
                 'scope' => (string) $r->scope,
                 'stufen' => $this->stufenAusSteps($steps),
+                // Auto-Titel-Baustein: Name des erzeugten Artefakts (Concept/Gericht/Rezept) dieses Laufs.
+                'titel' => $this->artefaktTitel($steps, (string) $r->scope),
             ];
         }
 
         return $out;
+    }
+
+    /**
+     * Auto-Titel: Name des erzeugten Artefakts eines Laufs — bevorzugt die Run-Ebene
+     * (concept > gericht > rezept), sonst irgendein benanntes Step-Artefakt. Der Step-`label`
+     * trägt nach markStepDone den echten Rezept-/Concept-Namen.
+     */
+    private function artefaktTitel($steps, string $scope): ?string
+    {
+        foreach (array_values(array_unique([$scope, 'concept', 'gericht', 'rezept'])) as $kind) {
+            $s = $steps->first(fn ($x) => $x->kind === $kind && $x->ref_id !== null && trim((string) $x->label) !== '');
+            if ($s !== null) {
+                return trim((string) $s->label);
+            }
+        }
+        $any = $steps->first(fn ($x) => $x->ref_id !== null && trim((string) $x->label) !== '');
+
+        return $any !== null ? trim((string) $any->label) : null;
     }
 
     /** Test-/Direkteinstieg: Stufen des aktiven Laufs (lädt den Run selbst). */
@@ -2452,7 +2472,7 @@ class Index extends Component
                 ->whereNull('s.deleted_at'),
             's.team_id', $team
         )->orderByDesc('s.updated_at')
-            ->get(['s.id', 's.title', 's.status', 's.source_knowledge_document_id', 's.updated_at', 'm.category', 'm.trend_class']);
+            ->get(['s.id', 's.title', 's.analysis', 's.status', 's.source_knowledge_document_id', 's.updated_at', 'm.category', 'm.trend_class']);
 
         // Finale Etappe (Hauptseite): Kaskaden-Status je Session (Badge + Stufen-Fortschritt) — ein
         // Query-Pass über die VOLLE Liste (vor dem Filter, damit der Status-Filter greifen kann).
@@ -2481,10 +2501,12 @@ class Index extends Component
         }
 
         // Baum: Kategorie → Sessions (Frei-Bucket für ohne-Trend). Auf der gefilterten Liste.
+        // UX: „prüfen" je Kategorie zuerst (offene Freigaben oben), sonst die bestehende updated_at-Reihenfolge
+        // (sortBy ist stabil).
         $baum = $sessions->groupBy(fn ($s) => $s->category ?: '__frei')
             ->map(fn ($grp, $cat) => [
                 'category' => $cat === '__frei' ? 'Frei / ohne Kategorie' : $cat,
-                'sessions' => $grp->values(),
+                'sessions' => $grp->sortBy(fn ($s) => ($kaskaden[(int) $s->id]['status'] ?? 'entwurf') === 'prüfen' ? 0 : 1)->values(),
             ])->values();
 
         $active = $this->aktiveSession();
