@@ -55,6 +55,14 @@ class RecipesGetTool extends FoodAlchemistTool implements ToolContract, ToolMeta
             'ek_price_basis' => $r->ek_price_basis?->value,
             'ek_price_basis_label' => $r->ek_price_basis?->label(),
             'allergens_confidence' => $r->allergens_confidence,
+            // MCP-Lockstep zum Produktionszeit-Feature: aktive Belegzeit (work/setup) + passive
+            // Standzeit (= Durchlaufzeit) + Topf-Deckel je Koch-Vorgang. NULL = nicht gepflegt
+            // (Deckel fällt dann auf Posten-/Team-/Code-Default zurück).
+            'work_time_min' => $r->work_time_min,
+            'setup_time_min' => $r->setup_time_min,
+            'standzeit_min' => $r->standzeit_min,
+            'batch_max_kg' => $r->batch_max_kg,
+            'batch_max_pieces' => $r->batch_max_pieces,
             'zutaten' => $r->ingredients->map(fn ($z) => [
                 'quantity' => $z->quantity, 'unit' => $z->unit?->slug,
                 'name' => $z->referencedRecipe?->name ?? $z->gp?->name ?? $z->display_name,

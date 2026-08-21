@@ -59,3 +59,29 @@ it('recipes.PUT aktualisiert die Produktionszeit-Felder am Entwurf', function ()
         ->and((float) $r->batch_max_kg)->toBe(15.0)
         ->and((int) $r->setup_time_min)->toBe(10);
 });
+
+// MCP-Lockstep Read-Seite: recipes.GET EXPONIERT die Produktionszeit-/Deckel-Felder (nicht nur Write).
+it('recipes.GET liefert die Produktionszeit-/Topf-Deckel-Felder zurück', function () {
+    $post = $this->registry->get('foodalchemist.recipes.POST')->execute([
+        'name' => 'Fond: Standzeit-Probe', 'standzeit_min' => 240, 'batch_max_kg' => 25, 'work_time_min' => 30,
+    ], $this->kontext);
+    $id = $post->data['recipe']['id'];
+
+    $get = $this->registry->get('foodalchemist.recipes.GET')->execute(['id' => $id], $this->kontext);
+
+    expect($get->success)->toBeTrue()
+        ->and((int) $get->data['standzeit_min'])->toBe(240)
+        ->and((float) $get->data['batch_max_kg'])->toBe(25.0)
+        ->and((int) $get->data['work_time_min'])->toBe(30)
+        ->and($get->data)->toHaveKeys(['setup_time_min', 'batch_max_pieces']);
+});
+
+// MCP-Lockstep: settings.GET exponiert den team-weiten Standard-Topf-Deckel (Fallback der Zeitrechnung).
+it('settings.GET liefert den Standard-Topf-Deckel (Team-Default)', function () {
+    $get = $this->registry->get('foodalchemist.settings.GET')->execute([], $this->kontext);
+
+    expect($get->success)->toBeTrue()
+        ->and($get->data)->toHaveKeys(['default_topf_deckel_kg', 'default_topf_deckel_stueck'])
+        // Team unpflegt → effektiver Code-Default (nie null)
+        ->and((float) $get->data['default_topf_deckel_kg'])->toBeGreaterThan(0.0);
+});
