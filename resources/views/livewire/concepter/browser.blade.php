@@ -162,7 +162,7 @@
                             @if($tab === 'pakete')
                                 <td class="{{ $td }} text-gray-600">{{ $it->role ?: '—' }}</td>
                                 <td class="{{ $td }} text-gray-600">{{ $it->class ?: '—' }}</td>
-                                <td class="{{ $td }} text-right tabular-nums text-gray-600">{{ $it->gerichte_count }}</td>
+                                <td class="{{ $td }} text-right tabular-nums text-gray-600">{{ $it->dishes_count }}</td>
                                 <td class="{{ $td }} text-right tabular-nums">{{ $it->price_per_person !== null ? number_format((float) $it->price_per_person, 2, ',', '.') . ' €' : '—' }}</td>
                                 <td class="{{ $td }} text-right tabular-nums text-gray-600">{{ $it->food_cost_percent !== null ? number_format((float) $it->food_cost_percent, 1, ',', '.') . ' %' : '—' }}</td>
                             @else
