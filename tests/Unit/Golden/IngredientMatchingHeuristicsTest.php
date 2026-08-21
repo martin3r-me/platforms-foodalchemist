@@ -216,6 +216,37 @@ it('default_gp_alias: bare Wasser → Leitungswasser, Mineral-/Flaschenwasser ni
         ->and($this->h->defaultGpAlias(($this->ts)('Wasser still'), false))->toBeNull();
 });
 
+// Spec 41 FIX-1 (RC-1 / D1–D3): Basis-Gemüse erdet unter From Scratch (preferRaw) auf »frisch, ganz«.
+it('default_gp_alias: Basis-Gemüse → frisch/ganz nur unter prefer_raw, n===1, Sellerie ausgenommen', function () {
+    expect($this->h->defaultGpAlias(($this->ts)('Tomaten'), true))->toBe('Tomaten: frisch, ganz')
+        ->and($this->h->defaultGpAlias(($this->ts)('Zwiebeln'), true))->toBe('Zwiebeln: frisch, ganz')
+        ->and($this->h->defaultGpAlias(($this->ts)('Karotten'), true))->toBe('Karotten: frisch, ganz')
+        ->and($this->h->defaultGpAlias(($this->ts)('Möhren'), true))->toBe('Karotten: frisch, ganz')
+        // Frische-/Convenience-Achse frei, wenn NICHT From Scratch → kein Hard-Alias
+        ->and($this->h->defaultGpAlias(($this->ts)('Tomaten'), false))->toBeNull()
+        // n≠1: eine spezifischere Sorte/Angabe wird NICHT auf die Basis gezwungen
+        ->and($this->h->defaultGpAlias(($this->ts)('Cherry Tomaten'), true))->toBeNull()
+        // Sellerie bewusst NICHT (Knollen-/Stauden-Ambiguität)
+        ->and($this->h->defaultGpAlias(($this->ts)('Sellerie'), true))->toBeNull();
+});
+
+// Spec 41 FIX-2 (RC-1 / D1–D3): geachtelt/mini/gemischt zählen als Über-Spezifikation → unter
+// prefer_raw penalisiert (vorher blieb der From-Scratch-Pfad ungestraft).
+it('cut_form: geachtelt/mini/gemischt zählen als Über-Spezifikation', function () {
+    expect($this->h->hasCutForm(($this->ts)('Zwiebeln: frisch, geachtelt')))->toBeTrue()
+        ->and($this->h->hasCutForm(($this->ts)('Karotten: frisch, mini, gemischt')))->toBeTrue()
+        ->and($this->h->hasCutForm(($this->ts)('Tomaten: frisch, ganz')))->toBeFalse()
+        // kein Substring-Fehltreffer: »Schachtel« ⊉ Schnittform
+        ->and($this->h->hasCutForm(($this->ts)('Pralinenschachtel')))->toBeFalse();
+});
+
+it('cut_form_penalty: unter prefer_raw gewinnt ganz gegen geachtelt/mini', function () {
+    expect($this->h->variantRankResolved('Zwiebeln: frisch, ganz', 'fresh_first', true))
+        ->toBeGreaterThan($this->h->variantRankResolved('Zwiebeln: frisch, geachtelt', 'fresh_first', true));
+    expect($this->h->variantRankResolved('Karotten: frisch, ganz', 'fresh_first', true))
+        ->toBeGreaterThan($this->h->variantRankResolved('Karotten: frisch, mini, gemischt', 'fresh_first', true));
+});
+
 // Roadmap Etappe 1: gemachte Saucen/Reduktionen als Halbfabrikat (SUB_SAUCEN_MARKER)
 it('halbfabrikat_gate_erkennt_gemachte_saucen', function () {
     foreach (['Steinpilz-Rahmsauce', 'Rotwein Jus', 'Kalbs-Sud',

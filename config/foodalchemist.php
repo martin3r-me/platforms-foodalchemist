@@ -455,6 +455,9 @@ return [
                 . 'Suppe — dekonstruiere oder erweitere NICHT (kein Gel/Schaum/Öl/Wasser-Zerlegen), außer '
                 . 'die Beschreibung fordert es ausdrücklich. Benenne Zutaten NÜCHTERN und matchbar (die '
                 . 'reine Ware ohne Marketing-Adjektive: «Tomaten», nicht «reife aromatische Tomaten»). '
+                // Spec 41 FIX-5 (E4 »Adji Kresse«): keine erfundenen Sorten-/Garnitur-Namen.
+                . 'Erfinde KEINE Zutat-/Garnitur-/Sorten-Namen ohne reale Entsprechung — nutze real '
+                . 'existierende, benannte Sorten (z. B. Gartenkresse / Affilla-Kresse, nicht «Adji Kresse»). '
                 . 'Erzeuge das Basisrezept aus der Beschreibung unter Beachtung der Richtungs-'
                 // L3: Diät/Allergen sind VERBINDLICH — sie werden nach der Erzeugung deterministisch geprüft
                 // (verletzende Zutaten werden gelöst). Verwende von vornherein KEINE Zutat, die eine gesetzte
@@ -555,6 +558,9 @@ return [
                 . 'darf hier die volle Komplexität (mehrere abgestimmte Komponenten, Textur-Spiel) '
                 . 'entfalten. Bleib dennoch nah an der angefragten Gericht-Identität und benenne Zutaten '
                 . 'NÜCHTERN und matchbar (reine Ware ohne Marketing-Adjektive). '
+                // Spec 41 FIX-5 (E4 »Adji Kresse«): keine erfundenen Sorten-/Garnitur-Namen.
+                . 'Erfinde KEINE Zutat-/Garnitur-/Sorten-Namen ohne reale Entsprechung — nutze real '
+                . 'existierende, benannte Sorten (z. B. Gartenkresse / Affilla-Kresse, nicht «Adji Kresse»). '
                 . 'Erzeuge das VERKAUFSREZEPT (Teller/Speise mit VK-Preis) aus der Beschreibung '
                 // L3: Diät/Allergen sind VERBINDLICH — nach der Erzeugung deterministisch geprüft (verletzende
                 // Zutaten werden gelöst). Verwende KEINE Zutat, die eine gesetzte diaet_hart-Form verletzt oder

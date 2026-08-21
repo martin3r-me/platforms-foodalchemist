@@ -350,9 +350,21 @@ class MatchHeuristics
         };
     }
 
+    /**
+     * Spec 41 FIX-2 (RC-1 / Fälle D1–D3): Über-Spezifikations-Token (Schnitt/Größe/Mix), die unter
+     * prefer_raw (From Scratch) auf die Roh-Grundform reduziert werden sollen — EXAKT, kein Substring
+     * (sonst »Schachtel« ⊃ »achtel«). Spiegelt die Basis-Form-Tiebreak-Liste (variantRankResolved),
+     * damit dieselben über-spezifischen Varianten auch im From-Scratch-Pfad verlieren (dort greift der
+     * neutrale baseForm-Tiebreak bewusst nicht → vorher blieb »geachtelt/mini« ungestraft).
+     */
+    private const OVERSPEC_FORM_TOKENS = ['geachtelt', 'achtel', 'mini', 'baby', 'gemischt'];
+
     public function hasCutForm(array $tokens): bool
     {
         foreach ($tokens as $t) {
+            if (in_array($t, self::OVERSPEC_FORM_TOKENS, true)) {
+                return true;   // FIX-2: geachtelt/mini/gemischt zählen als Schnitt-/Größen-Überspezifikation
+            }
             foreach (TokenEngine::CUT_FORM_MARKERS as $m) {
                 if (str_contains($t, $m)) {
                     return true;
@@ -566,6 +578,23 @@ class MatchHeuristics
         }
         if ($has('petersilie') && $n === 1) {
             return 'Petersilie glatt: frisch, gehackt';
+        }
+        // Spec 41 FIX-1 (RC-1 / Fälle D1–D3): Basis-Gemüse erdet unter From Scratch (preferRaw) auf die
+        // neutrale Grundform »frisch, ganz« statt auf über-spezifische Schnitt-/Größen-Varianten
+        // (»geachtelt« / »mini, gemischt«). NUR preferRaw + n===1 → die Frische-/Convenience-Achse
+        // bleibt sonst frei (konserviert/TK via Variant-Ranking). Inert, solange das Basis-GP fehlt
+        // (resolveGpByName → null → Pool-Scan). Sellerie bewusst NICHT (Knollen-/Stauden-Ambiguität).
+        if ($preferRaw && $n === 1) {
+            if ($has('tomate') || $has('tomaten')) {
+                return 'Tomaten: frisch, ganz';
+            }
+            if ($has('zwiebel') || $has('zwiebeln')) {
+                return 'Zwiebeln: frisch, ganz';
+            }
+            if ($has('karotte') || $has('karotten') || $has('moehre') || $has('moehren')
+                || $has('mohrruebe') || $has('mohrrueben')) {
+                return 'Karotten: frisch, ganz';
+            }
         }
         if ($has('pfeffer')) {
             if ($hasPre('weiss')) {
