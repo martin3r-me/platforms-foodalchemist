@@ -41,3 +41,26 @@ it('legt nichts an, wenn das Angebot keine Concepts hat', function () {
 
     expect(app(AngebotService::class)->anProduktion($this->rootTeam, $angebot->id)['order_id'])->toBeNull();
 });
+
+// ── Werkstrang M UX-Ausbau: Angebot-Gerüst-Review (Slots vor der Voll-Kaskade) ────────────────
+
+it('UX Angebot-Gerüst-Review: Slots am Angebot-Frame hinzufügen + löschen', function () {
+    $angebot = FoodAlchemistAngebot::create([
+        'team_id' => $this->rootTeam->id, 'name' => 'Gala', 'status' => 'anfrage', 'personen' => 60,
+    ]);
+
+    $comp = \Livewire\Livewire::test(\Platform\FoodAlchemist\Livewire\Angebote\Editor::class)
+        ->call('oeffnen', $angebot->id)
+        ->set('neuerSlot', 'Vorspeise')->call('geruestSlotNeu')
+        ->set('neuerSlot', 'Hauptgang')->call('geruestSlotNeu')
+        ->assertOk();
+
+    $frame = app(\Platform\FoodAlchemist\Services\PlanningFrameService::class)->find('offer', (int) $angebot->id);
+    expect($frame)->not->toBeNull()
+        ->and($frame->slots()->orderBy('id')->pluck('label')->all())->toBe(['Vorspeise', 'Hauptgang']);
+
+    // ersten Slot löschen → nur „Hauptgang" bleibt
+    $slotId = (int) $frame->slots()->orderBy('id')->first()->id;
+    $comp->call('geruestSlotLoeschen', $slotId);
+    expect($frame->slots()->orderBy('id')->pluck('label')->all())->toBe(['Hauptgang']);
+});
