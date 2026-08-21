@@ -86,10 +86,16 @@ class RecipeOneShotService
      *
      * @return array{run_id: ?int, schritte: list<string>, uebersprungen: list<string>, uebernommen: int, offen: int, fehler: ?string, kohaerenz_urteil: ?array{score: ?int, label: ?string, schwachstelle: ?string, fehler: ?string}, wirtschaftlichkeit: ?array, coverage?: array}
      */
-    public function anreichern(Team $team, FoodAlchemistRecipe $recipe, ?float $zielVk = null, bool $completeCoverage = false): array
+    public function anreichern(Team $team, FoodAlchemistRecipe $recipe, ?float $zielVk = null, bool $completeCoverage = false, bool $refresh = false): array
     {
         $alle = $recipe->is_sales_recipe ? BulkEnrichService::SCHRITTE_VK : BulkEnrichService::SCHRITTE;
-        $schritte = $this->bulk->luecken($recipe, $alle);
+        // #4: `refresh` = bewusster „Alles anreichern"-Klick im Editor → auch gefüllte, nicht-manuelle
+        // Textfelder neu erzeugen (nach Zutatenänderung). Der Auto-Pfad (Generierung / Kaskaden-Job)
+        // lässt es weg und füllt nur echte Lücken — sonst würden frisch generierte Felder sofort
+        // redundant neu bemüht (KI-Kosten). Manuelle Felder schützt `uebernehmen()` in beiden Fällen.
+        $schritte = $refresh
+            ? $this->bulk->zuAktualisieren($recipe, $alle)
+            : $this->bulk->luecken($recipe, $alle);
 
         $ergebnis = [
             'run_id' => null,
@@ -201,6 +207,41 @@ class RecipeOneShotService
         } catch (\Throwable $e) {
             return ['status' => 'fehler', 'minted' => 0, 'ohne_la' => 0, 'fehler' => mb_strimwidth($e->getMessage(), 0, 200)];
         }
+    }
+
+    /**
+     * #4 (Kaskaden-Anreicherung): alle Sub-Basisrezepte UNTERHALB eines Rezepts, transitiv.
+     * Kanten sind `referenced_recipe_id`-Zutaten; ein Visited-Set bricht Zyklen, `$maxTiefe`
+     * deckelt (Regelwerk §4: Sub-Rezepte max. 3 Ebenen). Der „Alles anreichern"-Klick reichert das
+     * Top-Rezept synchron an und schiebt diese Nachkommen als Hintergrund-Jobs nach (sonst würde die
+     * Voll-Anreicherung eines mehrgliedrigen Gerichts synchron in einen Timeout laufen).
+     *
+     * @return list<int> Rezept-IDs der Nachkommen (ohne die Wurzel), deduped
+     */
+    public function subRezeptIds(int $recipeId, int $maxTiefe = 3): array
+    {
+        $besucht = [$recipeId => true];
+        $ergebnis = [];
+        $ebene = [$recipeId];
+
+        for ($tiefe = 0; $tiefe < $maxTiefe && $ebene !== []; $tiefe++) {
+            $kinder = \Platform\FoodAlchemist\Models\FoodAlchemistRecipeIngredient::query()
+                ->whereIn('recipe_id', $ebene)
+                ->whereNotNull('referenced_recipe_id')
+                ->whereNull('deleted_at')
+                ->distinct()->pluck('referenced_recipe_id')
+                ->map(fn ($v) => (int) $v)
+                ->reject(fn ($id) => isset($besucht[$id]))
+                ->values()->all();
+
+            foreach ($kinder as $id) {
+                $besucht[$id] = true;
+                $ergebnis[] = $id;
+            }
+            $ebene = $kinder;
+        }
+
+        return $ergebnis;
     }
 
     /**

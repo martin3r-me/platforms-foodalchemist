@@ -6,7 +6,13 @@
 <x-foodalchemist::modal name="recipe-modal" :title="$neu ? 'Basisrezept anlegen' : 'Rezept bearbeiten'" :title-name="$neu ? null : $form['name']" size="max-w-3xl" :fullscreen="! $neu" :dark-canvas="! $neu" :close-via="'schliessenOderZurueck'">
     {{-- Aktionsleiste (D-5 §4.2.1) --}}
     <x-slot:actions>
-        <button type="button" wire:click="speichern" x-on:click="$dispatch('zutaten-speichern', { recipeId: @js($recipeId) })" class="{{ $btnPrimary }}" data-rezept-speichern>{{ $neu ? 'Anlegen' : 'Speichern' }}</button>
+        {{-- #1b: EIN Speichern-Weg, sequenziert. Erst Stammdaten (`speichern`), dann — nur bei
+             Erfolg und nur im Bestand (Anlage hat noch keine Zutaten) — adressiert das Zutaten-
+             Speichern anstoßen (MVP-046). Der eingebettete Editor meldet `zutaten-persistiert`
+             zurück → beiZutatenPersistiert schließt. Kein paralleler Race, kein Früh-Schließen. --}}
+        <button type="button"
+                x-on:click="const warBestand = $wire.recipeId !== null; $wire.speichern().then(() => { if (warBestand && ! $wire.fehler && $wire.recipeId) $dispatch('zutaten-speichern', { recipeId: $wire.recipeId }) })"
+                class="{{ $btnPrimary }}" data-rezept-speichern>{{ $neu ? 'Anlegen' : 'Speichern' }}</button>
         @if(!$neu)
             <a href="{{ route('foodalchemist.rezepte.dokument', ['id' => $recipeId, 'profil' => 'produktion']) }}" target="_blank"
                class="{{ $btnGhostXs }}" title="Druck-/PDF-Report mit Profilen und Filtern" data-rezept-druck>
@@ -509,7 +515,8 @@
     </x-foodalchemist::editor-tabs>
 
     <x-slot:footer>
+        {{-- #1b: Footer-„Speichern" entfernt — es gibt nur noch den EINEN Speichern-Knopf oben in
+             der Aktionsleiste (data-rezept-speichern). Hier bleibt bewusst nur „Abbrechen". --}}
         <button type="button" wire:click="$dispatch('modal.close', { name: 'recipe-modal' })" class="{{ $btnGhost }}">Abbrechen</button>
-        <button type="button" wire:click="speichern" x-on:click="$dispatch('zutaten-speichern', { recipeId: @js($recipeId) })" class="{{ $btnPrimary }}" data-rezept-speichern-footer>{{ $neu ? 'Anlegen' : 'Speichern' }}</button>
     </x-slot:footer>
 </x-foodalchemist::modal>

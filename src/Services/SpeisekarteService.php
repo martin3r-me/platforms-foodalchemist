@@ -518,7 +518,12 @@ class SpeisekarteService
      * Codes: Allergene = Buchstaben in EU-Reihenfolge, Zusatzstoffe = Nummern, `*` = Spuren.
      * Preis: Brutto = Netto × (1 + MwSt) — Gastro-Default regulärer Satz (In-Haus-Verzehr).
      */
-    public function dokumentDaten(Team $team, FoodAlchemistSpeisekarte $karte): array
+    /**
+     * @param  list<int>  $rubrikFilter  #3: leer = alle Rubriken; sonst nur diese (rausgefilterte
+     *                                    Eltern werden hochgezogen). $mitKaskade hängt den Produktions-
+     *                                    Baum je Gericht an (EK nur bei $intern).
+     */
+    public function dokumentDaten(Team $team, FoodAlchemistSpeisekarte $karte, bool $intern = false, array $rubrikFilter = [], bool $mitKaskade = false): array
     {
         $agg = app(ConcepterAggregateService::class);
         $marge = app(MargeService::class);
@@ -564,7 +569,15 @@ class SpeisekarteService
 
         // Rubrik-Baum in Pre-Order; je Position Name (Wording) + Codes + Preis.
         $sections = $karte->relationLoaded('sections') ? $karte->sections : $karte->sections()->with(['items.dish', 'items.concept'])->get();
-        $byParent = $sections->groupBy(fn ($r) => $r->parent_id ?? 0);
+        // #3: Rubrik-Filter — nur ausgewählte Rubriken rendern; rausgefilterte Eltern hochziehen.
+        if ($rubrikFilter !== []) {
+            $erlaubt = array_flip(array_map('intval', $rubrikFilter));
+            $sections = $sections->filter(fn ($r) => isset($erlaubt[(int) $r->id]))->values();
+            $vorhanden = array_flip($sections->pluck('id')->map(fn ($v) => (int) $v)->all());
+            $byParent = $sections->groupBy(fn ($r) => ($r->parent_id !== null && isset($vorhanden[(int) $r->parent_id])) ? (int) $r->parent_id : 0);
+        } else {
+            $byParent = $sections->groupBy(fn ($r) => $r->parent_id ?? 0);
+        }
 
         $rubriken = [];
         $walk = function ($parentId, int $depth) use (&$walk, $byParent, &$rubriken, $codesFuer, $marge, $mwstSatz) {
@@ -616,6 +629,38 @@ class SpeisekarteService
             }
         }
 
+        // #3: optionaler Produktions-Kaskaden-Anhang. Gericht-Rezepte je Position via positionGerichte
+        // (gericht_ref = Gericht, menue_ref = Menü-Gerichte). Je Gericht der rekursive Baum aus
+        // ReportExportService (report-recipe-node). EK/preise/lieferanten an $intern → Kundensicht ohne Kosten.
+        $kaskaden = [];
+        if ($mitKaskade) {
+            $gerichtIds = [];
+            foreach ($sections as $rubrik) {
+                foreach ($rubrik->items->where('visible', true) as $pos) {
+                    foreach ($this->positionGerichte($pos) as $g) {
+                        if ($g !== null) {
+                            $gerichtIds[] = (int) $g->id;
+                        }
+                    }
+                }
+            }
+            $kOpt = [
+                'stammdaten' => true, 'zutaten' => true, 'kaskade' => true,
+                'steps' => false, 'sensorik' => false, 'produktion' => false, 'bilder' => false,
+                'deklaration' => false, 'naehrwerte' => false, 'notizen' => false,
+                'preise' => $intern, 'lieferanten' => $intern, 'ek' => $intern, 'intern' => $intern,
+            ];
+            $report = app(\Platform\FoodAlchemist\Services\ReportExportService::class);
+            foreach (array_values(array_unique($gerichtIds)) as $gid) {
+                try {
+                    $d = $report->rezeptDaten($team, $gid, $kOpt);
+                    $kaskaden[] = ['name' => $d['name'], 'recipe' => $d['recipe'], 'optionen' => $kOpt];
+                } catch (\Throwable) {
+                    // fail-soft
+                }
+            }
+        }
+
         return [
             'karte' => $karte,
             'rubriken' => $rubriken,
@@ -624,6 +669,11 @@ class SpeisekarteService
             'mwstSatz' => $mwstSatz,
             'branding' => $this->brandingDaten($karte),
             'erzeugt' => now()->format('d.m.Y'),
+            // #3: Kaskaden-Anhang + Rubrik-Picker-Daten + interne Sicht.
+            'intern' => $intern,
+            'kaskaden' => $kaskaden,
+            'alle_rubriken' => $sections->map(fn ($r) => ['id' => (int) $r->id, 'title' => $r->consumer_title ?: $r->title])->values()->all(),
+            'aktive_rubriken' => array_map('intval', $rubrikFilter),
         ];
     }
 

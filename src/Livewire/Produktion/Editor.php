@@ -173,8 +173,7 @@ class Editor extends Component
             return;
         }
 
-        $sourceRef = ($this->zielTyp === 'concept' ? 'concept:' . $this->auswahlConceptId : 'recipe:' . $this->auswahlRecipeId) . '@' . uniqid();
-        $this->targets[] = array_merge($ziel, ['source_ref' => $sourceRef, 'label' => $this->labelFuer($ziel)]);
+        $this->zielAblegen($ziel);   // #2: identitäts-dedupliziert — Re-Add ersetzt, statt zu duplizieren
         $this->auswahlConceptId = null;
         $this->auswahlRecipeId = null;
         $this->suche = '';
@@ -302,8 +301,7 @@ class Editor extends Component
             $ziel = ['recipe_id' => $id, 'portions' => $menge];
         }
 
-        $sourceRef = ($typ === 'concept' ? 'concept:' . $id : 'recipe:' . $id) . '@' . uniqid();
-        $this->targets[] = array_merge($ziel, ['source_ref' => $sourceRef, 'label' => $this->labelFuer($ziel)]);
+        $this->zielAblegen($ziel);   // #2: identitäts-dedupliziert — Re-Add ersetzt, statt zu duplizieren
         $this->basisEinheit = 'ansaetze';
         $this->berechneVorschau();
     }
@@ -416,6 +414,32 @@ class Editor extends Component
             }
         }
         $this->zielEntfernen($sourceRef);
+    }
+
+    /**
+     * Ein Einzel-Ziel in die Liste legen — IDENTITÄTS-dedupliziert. Umsetzung des dokumentierten
+     * „Re-Add ersetzt es" (siehe {@see zielBearbeiten}): ein erneutes Hinzufügen desselben
+     * Rezepts/Concepts ÜBERSCHREIBT das bestehende Einzel-Ziel, statt es zu duplizieren.
+     *
+     * Vorher trug jedes Hinzufügen einen `@uniqid()`-Suffix im source_ref → die Dedup (die auf
+     * exakten source_ref matcht) griff nie, dasselbe Gericht landete doppelt und `recomputeOrder`
+     * verdoppelte die Menge. Jetzt ist der source_ref identitäts-stabil (`recipe:<id>` /
+     * `concept:<id>`) → genau EIN Einzel-Ziel je Rezept/Concept. Kapitel-/Angebots-Teilziele
+     * (source_ref „…:c<idx>") sind eingefroren und bleiben unangetastet.
+     */
+    private function zielAblegen(array $ziel): void
+    {
+        $rid = isset($ziel['recipe_id']) ? (int) $ziel['recipe_id'] : null;
+        $cid = isset($ziel['concept_id']) ? (int) $ziel['concept_id'] : null;
+        $sourceRef = $cid !== null ? 'concept:' . $cid : 'recipe:' . $rid;
+
+        $this->targets = collect($this->targets)
+            ->reject(fn ($t) => ! str_contains((string) ($t['source_ref'] ?? ''), ':c')
+                && (($rid !== null && (int) ($t['recipe_id'] ?? 0) === $rid)
+                    || ($cid !== null && (int) ($t['concept_id'] ?? 0) === $cid)))
+            ->values()->all();
+
+        $this->targets[] = array_merge($ziel, ['source_ref' => $sourceRef, 'label' => $this->labelFuer($ziel)]);
     }
 
     private function labelFuer(array $ziel): string
