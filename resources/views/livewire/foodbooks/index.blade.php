@@ -982,7 +982,12 @@
                                 @endif
                             </div>
                         @empty
-                            <p class="text-xs text-gray-500 py-4 text-center">Noch kein Inhalt. Oben „+ Concept einfügen", „+ Gericht einfügen" oder Header/Text/Preis-Block hinzufügen.</p>
+                            {{-- E1b (Spec 40): Speisen-Tab entzerren — der KI-Weg (Voll-Kaskade) ist NICHT tot, nur woanders.
+                                 Empty-State macht ihn sichtbar, statt gefühlter Sackgasse. Tiefen-Ausbau → Werkstrang M. --}}
+                            <div class="py-4 text-center space-y-1">
+                                <p class="text-xs text-gray-500">Noch kein Inhalt. Oben „+ Concept einfügen", „+ Gericht einfügen" oder Header/Text/Preis-Block hinzufügen.</p>
+                                <p class="text-[11px] text-violet-600/80">Oder KI-befüllen: die <span class="font-medium">Voll-Kaskade</span> (Planung) erzeugt je Kapitel automatisch ein Konzept — es landet direkt hier im Inhalt.</p>
+                            </div>
                         @endforelse
                     </div>
 

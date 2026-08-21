@@ -148,6 +148,12 @@ class GenerateConceptJob implements ShouldQueue
     /**
      * Voll-Kaskade-Attach: hängt das erzeugte Konzept an sein Ausgabe-Kapitel (Foodbook, concept_ref-Block)
      * bzw. seine Rubrik (Speisekarte, menue_ref-Position). No-op ohne attach-Info (Standalone/Depth-1). Wirft nie.
+     *
+     * **E-P0 (Spec 40):** Ein Attach-Fehler darf das erzeugte Konzept nicht kippen — aber er wird auch NICHT
+     * mehr still geschluckt (sonst existierte das Konzept frei, aber NICHT im Kapitel/der Rubrik, ohne jedes
+     * Signal → latenter Datenverlust). Ein einmaliger Retry fängt transiente Fehler (Lock/Deadlock); scheitert
+     * es endgültig, wird der Fehler geloggt + als behebbares Signal am Step festgehalten
+     * ({@see PlanningCascadeService::markAttachFailed} → Cockpit zeigt es, {@see …::haengeKonzeptNach} holt nach).
      */
     private function attachToOutput(\Platform\Core\Models\Team $team, int $conceptId): void
     {
@@ -155,15 +161,50 @@ class GenerateConceptJob implements ShouldQueue
             return;
         }
         try {
-            if ($this->attachOwnerType === 'foodbook') {
-                app(\Platform\FoodAlchemist\Services\FoodbookService::class)
-                    ->addBlock($team, $this->attachContainerId, ['type' => 'concept_ref', 'concept_id' => $conceptId]);
-            } elseif ($this->attachOwnerType === 'speisekarte') {
-                app(\Platform\FoodAlchemist\Services\SpeisekarteService::class)
-                    ->addPosition($team, $this->attachContainerId, ['type' => 'menue_ref', 'concept_id' => $conceptId]);
+            $this->attachEinmal($team, $conceptId);
+        } catch (\Throwable $e) {
+            // Einmaliger Retry — ein transienter Fehler (DB-Lock/Deadlock) darf nicht gleich zum Signal werden.
+            // Sicher gegen Doppel-Anhängen: addBlock/addPosition legen erst nach erfolgreicher Validierung an;
+            // wirft der erste Versuch, wurde nichts persistiert.
+            try {
+                $this->attachEinmal($team, $conceptId);
+
+                return;
+            } catch (\Throwable $e2) {
+                $e = $e2;
             }
-        } catch (\Throwable) {
-            // Attach-Fehler darf das erzeugte Konzept nicht kippen.
+            \Illuminate\Support\Facades\Log::warning('[GenerateConceptJob] Attach ans Ausgabe-Kapitel/die Rubrik fehlgeschlagen', [
+                'concept' => $conceptId,
+                'owner_type' => $this->attachOwnerType,
+                'container_id' => $this->attachContainerId,
+                'step' => $this->cascadeStepId,
+                'error' => $e->getMessage(),
+            ]);
+            if ($this->cascadeStepId !== null) {
+                try {
+                    app(\Platform\FoodAlchemist\Services\PlanningCascadeService::class)
+                        ->markAttachFailed($this->cascadeStepId, (string) $this->attachOwnerType, (int) $this->attachContainerId, $conceptId, $e->getMessage());
+                } catch (\Throwable) {
+                    // Rückkanal-Fehler dürfen den Job-Erfolg nicht kippen — der Log oben steht bereits.
+                }
+            }
+        }
+    }
+
+    /** Ein Attach-Versuch (Foodbook-Block bzw. Speisekarte-Position). Wirft bei Fehler — Retry/Recording liegt beim Aufrufer. */
+    private function attachEinmal(\Platform\Core\Models\Team $team, int $conceptId): void
+    {
+        if ($this->attachOwnerType === 'foodbook') {
+            app(\Platform\FoodAlchemist\Services\FoodbookService::class)
+                ->addBlock($team, $this->attachContainerId, ['type' => 'concept_ref', 'concept_id' => $conceptId]);
+        } elseif ($this->attachOwnerType === 'speisekarte') {
+            app(\Platform\FoodAlchemist\Services\SpeisekarteService::class)
+                ->addPosition($team, $this->attachContainerId, ['type' => 'menue_ref', 'concept_id' => $conceptId]);
+        } elseif ($this->attachOwnerType === 'offer') {
+            // E2 (Spec 40): das erzeugte (standalone) Konzept ans Angebot referenzieren — Pivot
+            // foodalchemist_offer_concept. attachContainerId ist die Angebots-ID (kein Zwischen-Container).
+            app(\Platform\FoodAlchemist\Services\AngebotService::class)
+                ->referenziereConcept($team, $this->attachContainerId, $conceptId);
         }
     }
 

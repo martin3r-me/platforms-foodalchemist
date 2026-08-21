@@ -220,6 +220,19 @@
         {{-- #124: Fan-out crashte, aber das Concept ist freigegeben — amber (Teil-Problem), nicht rot. --}}
         <p class="text-[10px] text-amber-400/80 pl-1">Auto-Gericht-Erfindung fehlgeschlagen: {{ \Illuminate\Support\Str::limit($fanoutErr, 140) }} — das Concept selbst ist freigegeben.</p>
     @endif
+    @php $attachErr = is_array($st->deferred) ? ($st->deferred['attach_error'] ?? null) : null; @endphp
+    @if($attachErr)
+        {{-- E-P0 (Spec 40): Attach ans Ausgabe-Kapitel/die Rubrik schlug fehl — das Konzept ist erzeugt, hängt
+             aber nicht am Dokument. Amber (Teil-Problem, kein Datenverlust mehr), mit Nachhol-Aktion. --}}
+        <div class="pl-1 mt-0.5">
+            <p class="text-[10px] text-amber-400/80">Nicht ans Ausgabe-Kapitel/die Rubrik gehängt: {{ \Illuminate\Support\Str::limit($attachErr, 120) }} — das Konzept ist erzeugt.</p>
+            <button type="button" wire:click="haengeKonzeptNach({{ $st->id }})"
+                    wire:loading.attr="disabled" wire:target="haengeKonzeptNach"
+                    class="mt-0.5 text-[10px] text-amber-300/90 hover:text-amber-200 inline-flex items-center gap-1 select-none disabled:opacity-50">
+                @svg('heroicon-o-link', 'w-3 h-3') nachträglich einhängen
+            </button>
+        </div>
+    @endif
     @if($st->status === 'geplant')
         <p class="text-[10px] text-violet-300/60 pl-1">wird erzeugt, sobald die Stufe darüber freigegeben ist</p>
     @endif
@@ -240,6 +253,37 @@
                 </div>
             @endif
         </div>
+        {{-- E4 (Spec 40) — Rückkopplung aus dem Cockpit: Sourcing-Lücke melden (Nordstern „Lücke ist Signal")
+             + noch nicht gepinnte GPs als Favoriten-Kandidaten vorschlagen (Pinnen bleibt mensch-gated). --}}
+        <div class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 pl-1">
+            <button type="button" wire:click="sourcingLueckenMelden({{ $st->id }})"
+                    wire:loading.attr="disabled" wire:target="sourcingLueckenMelden"
+                    class="text-[10px] text-amber-300/80 hover:text-amber-200 inline-flex items-center gap-1 select-none">
+                @svg('heroicon-o-exclamation-triangle', 'w-3 h-3') Sourcing-Lücke melden
+            </button>
+            <button type="button" wire:click="favoritVorschlaegeLaden({{ $st->id }})"
+                    wire:loading.attr="disabled" wire:target="favoritVorschlaegeLaden"
+                    class="text-[10px] text-sky-300/80 hover:text-sky-200 inline-flex items-center gap-1 select-none">
+                @svg('heroicon-o-bookmark', 'w-3 h-3') Favoriten-Vorschlag
+            </button>
+        </div>
+        @php $fv = $favoritVorschlaege[$st->id] ?? null; @endphp
+        @if(is_array($fv))
+            <div class="mt-1 pl-1">
+                @if($fv === [])
+                    <p class="text-[10px] text-gray-500">Alle GPs dieses Entwurfs sind bereits Favorit.</p>
+                @else
+                    <div class="flex flex-wrap gap-1">
+                        @foreach($fv as $k)
+                            <button type="button" wire:click="favoritPinnen({{ (int) $k['id'] }})"
+                                    class="px-1.5 py-0.5 rounded bg-sky-500/10 border border-sky-500/25 text-[10px] text-sky-200/90 hover:bg-sky-500/20 inline-flex items-center gap-1">
+                                @svg('heroicon-o-plus', 'w-2.5 h-2.5') {{ $k['name'] }}
+                            </button>
+                        @endforeach
+                    </div>
+                @endif
+            </div>
+        @endif
     @endif
     @if($wissenFiles !== [])
         <details class="mt-0.5">

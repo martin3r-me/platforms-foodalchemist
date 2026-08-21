@@ -274,9 +274,10 @@ class PlanningCascadeService
     {
         $ownerType = (string) ($optionen['owner_type'] ?? '');
         $ownerId = (int) ($optionen['owner_id'] ?? 0);
-        // P3 foodbook, P4 speisekarte (je 1 Concept/Slot). Der Speiseplan (P5) läuft über einen eigenen Zell-Pfad.
-        if (! in_array($ownerType, ['foodbook', 'speisekarte'], true) || $ownerId <= 0) {
-            throw new RuntimeException('Voll-Kaskade braucht owner_type=foodbook|speisekarte + owner_id.');
+        // P3 foodbook, P4 speisekarte (je 1 Concept/Slot). E2 (Spec 40): offer — je Slot ein Concept, ans
+        // Angebot referenziert (Pivot). Der Speiseplan (P5) läuft über einen eigenen Zell-Pfad.
+        if (! in_array($ownerType, ['foodbook', 'speisekarte', 'offer'], true) || $ownerId <= 0) {
+            throw new RuntimeException('Voll-Kaskade braucht owner_type=foodbook|speisekarte|offer + owner_id.');
         }
 
         $frame = app(PlanningFrameService::class)->find($ownerType, $ownerId);
@@ -358,6 +359,17 @@ class PlanningCascadeService
             $frame->load('slots');
             foreach ($frame->slots as $slot) {
                 $out[] = [$slot, $svc->rubrikFuerSlot($team, $ownerId, (string) ($slot->label ?: 'Rubrik'))];
+            }
+
+            return $out;
+        }
+        if ($ownerType === 'offer') {
+            // E2 (Spec 40): der „Container" IST das Angebot selbst — jedes erzeugte Konzept wird ans Angebot
+            // referenziert (Pivot foodalchemist_offer_concept, {@see AngebotService::referenziereConcept}); es gibt
+            // keinen Zwischen-Container wie Kapitel/Rubrik. Darum ist die containerId überall die Angebots-ID.
+            $frame->load('slots');
+            foreach ($frame->slots as $slot) {
+                $out[] = [$slot, $ownerId];
             }
 
             return $out;
@@ -806,6 +818,131 @@ class PlanningCascadeService
         $step->update(['deferred' => $deferred]);
         $this->recomputeRunStatus((int) $step->cascade_run_id);
         $this->scoreConceptCohesionIfComplete($step);
+    }
+
+    /**
+     * E-P0 (Spec 40): Der Attach des erzeugten Konzepts ans Ausgabe-Kapitel/die Rubrik ist fehlgeschlagen —
+     * aber das Konzept IST erzeugt (der Concept-Step wird gleich regulär `done`, {@see markStepDone} läuft
+     * NACH diesem Aufruf und lässt `deferred` unangetastet). Kein „Konzept kaputt": den Fehler + die Ziel-Info
+     * separat in `deferred` festhalten (analog {@see markFanoutFailed}, #124), damit das Cockpit ein sichtbares,
+     * behebbares Amber-Signal zeigt und die Recovery-Aktion {@see haengeKonzeptNach} den Attach nachholen kann.
+     * Der Step-Status bleibt bewusst unberührt (das Konzept ist gültig). Wirft nie (Rückkanal aus dem Job).
+     */
+    public function markAttachFailed(int $stepId, string $ownerType, int $containerId, int $conceptId, string $error): void
+    {
+        $step = FoodAlchemistCascadeRunStep::find($stepId);
+        if ($step === null) {
+            return;
+        }
+        $deferred = is_array($step->deferred) ? $step->deferred : [];
+        $deferred['attach_error'] = Str::limit($error, 500, '');
+        $deferred['pending_attach'] = [
+            'owner_type' => $ownerType,
+            'container_id' => $containerId,
+            'concept_id' => $conceptId,
+        ];
+        $step->update(['deferred' => $deferred]);
+    }
+
+    /**
+     * E-P0-Recovery (Spec 40): einen zuvor fehlgeschlagenen Attach nachholen — das (existierende) Konzept
+     * ans in `deferred.pending_attach` gemerkte Ausgabe-Kapitel/die Rubrik hängen (reuse {@see FoodbookService::addBlock}
+     * bzw. {@see SpeisekarteService::addPosition}). Gelingt es, wird das Signal (`attach_error`/`pending_attach`)
+     * gelöscht. Scheitert es erneut, propagiert der Fehler an den Aufrufer (Livewire zeigt ihn als Toast) und das
+     * Signal bleibt stehen. Team-scoped ({@see ownedStep}).
+     */
+    public function haengeKonzeptNach(Team $team, int $stepId): void
+    {
+        $step = $this->ownedStep($team, $stepId);
+        $deferred = is_array($step->deferred) ? $step->deferred : [];
+        $pending = is_array($deferred['pending_attach'] ?? null) ? $deferred['pending_attach'] : null;
+        if ($pending === null) {
+            return;   // nichts nachzuholen
+        }
+        $ownerType = (string) ($pending['owner_type'] ?? '');
+        $containerId = (int) ($pending['container_id'] ?? 0);
+        $conceptId = (int) ($pending['concept_id'] ?? 0);
+        if ($containerId <= 0 || $conceptId <= 0) {
+            return;
+        }
+        if ($ownerType === 'foodbook') {
+            app(FoodbookService::class)->addBlock($team, $containerId, ['type' => 'concept_ref', 'concept_id' => $conceptId]);
+        } elseif ($ownerType === 'speisekarte') {
+            app(SpeisekarteService::class)->addPosition($team, $containerId, ['type' => 'menue_ref', 'concept_id' => $conceptId]);
+        } elseif ($ownerType === 'offer') {
+            app(AngebotService::class)->referenziereConcept($team, $containerId, $conceptId);   // E2: containerId = Angebots-ID
+        } else {
+            return;
+        }
+        unset($deferred['attach_error'], $deferred['pending_attach']);
+        $step->update(['deferred' => $deferred]);
+    }
+
+    /**
+     * E4 (Spec 40): Sourcing-Lücken eines erzeugten Rezept-Steps ins Signale-Cockpit melden — die im Step
+     * verwendeten GPs OHNE beschaffbaren Lead-LA (verfuegbarkeit-Bucket `luecke`) je als Sortiments-Lücke
+     * ({@see PairingInspirationService::meldeLuecke}, idempotent je GP-Name). Nordstern „Lücke ist Signal,
+     * kein Fehler". Team-scoped ({@see ownedStep}). Gibt die gemeldeten GP-Namen zurück.
+     *
+     * @return list<string>
+     */
+    public function meldeSourcingLuecken(Team $team, int $stepId): array
+    {
+        $step = $this->ownedStep($team, $stepId);
+        if ($step->ref_type !== 'recipe' || $step->ref_id === null) {
+            return [];
+        }
+        $gpIds = FoodAlchemistRecipeIngredient::where('recipe_id', (int) $step->ref_id)
+            ->whereNotNull('gp_id')->pluck('gp_id')->map(fn ($v) => (int) $v)->unique()->values()->all();
+        if ($gpIds === []) {
+            return [];
+        }
+        $verf = app(FavoriteGpService::class)->verfuegbarkeit($team, $gpIds);
+        $luecken = array_keys(array_filter($verf, fn ($v) => ($v['bucket'] ?? null) === 'luecke'));
+        if ($luecken === []) {
+            return [];
+        }
+        $namen = \Platform\FoodAlchemist\Models\FoodAlchemistGp::visibleToTeam($team)->whereIn('id', $luecken)->pluck('name', 'id');
+        $inspiration = app(PairingInspirationService::class);
+        $gemeldet = [];
+        foreach ($namen as $gpId => $name) {
+            if (trim((string) $name) === '') {
+                continue;
+            }
+            $inspiration->meldeLuecke($team, (string) $name, [
+                'gp_id' => (int) $gpId,
+                'quelle_step_id' => (int) $step->id,
+                'quelle' => 'kaskade_step',
+            ]);
+            $gemeldet[] = (string) $name;
+        }
+
+        return $gemeldet;
+    }
+
+    /**
+     * E4 (Spec 40): Favoriten-Kandidaten aus einem erzeugten Rezept-Step — die verwendeten GPs, die NOCH
+     * NICHT als Favorit gepinnt sind. Reiner Vorschlag: das Pinnen bleibt mensch-gated (eigene Aktion,
+     * {@see FavoriteGpService::pin}). Team-scoped.
+     *
+     * @return list<array{id:int, name:string}>
+     */
+    public function favoritKandidatenFuerStep(Team $team, int $stepId): array
+    {
+        $step = $this->ownedStep($team, $stepId);
+        if ($step->ref_type !== 'recipe' || $step->ref_id === null) {
+            return [];
+        }
+        $gpIds = FoodAlchemistRecipeIngredient::where('recipe_id', (int) $step->ref_id)
+            ->whereNotNull('gp_id')->pluck('gp_id')->map(fn ($v) => (int) $v)->unique()->values()->all();
+        if ($gpIds === []) {
+            return [];
+        }
+
+        return \Platform\FoodAlchemist\Models\FoodAlchemistGp::visibleToTeam($team)->whereIn('id', $gpIds)
+            ->where('is_favorite', false)
+            ->orderBy('name')->get(['id', 'name'])
+            ->map(fn ($g) => ['id' => (int) $g->id, 'name' => (string) $g->name])->all();
     }
 
     /**
@@ -1481,6 +1618,48 @@ class PlanningCascadeService
             ->first();
     }
 
+    /**
+     * E1b (Spec 40): Owner-Kontext der Session für die Leitstelle — macht den Einbahn-Sprung zum
+     * sichtbaren Round-Trip: WOFÜR wird hier geplant (Ausgabe-Modul + Name) + der Rückweg dorthin.
+     * Liest den jüngsten Lauf der Session MIT Ausgabe-Owner (`source_owner_type`/`_id` — die sitzen
+     * auf dem Lauf, nicht der Session) und löst Anzeige-Name + Rück-Route inkl. Deep-Link-Param auf.
+     * `null`, wenn die Session keinen Ausgabe-Owner trägt (freie Cockpit-Planung) → dann kein Banner.
+     *
+     * @return array{owner_type:string, owner_id:int, typ_label:string, name:string, route:string, route_param:array<string,int>}|null
+     */
+    public function ownerKontext(Team $team, int $sessionId): ?array
+    {
+        $run = FoodAlchemistCascadeRun::visibleToTeam($team)
+            ->where('planning_session_id', $sessionId)
+            ->whereNotNull('source_owner_type')
+            ->whereNotNull('source_owner_id')
+            ->orderByDesc('id')->first();
+        if ($run === null) {
+            return null;
+        }
+        $type = (string) $run->source_owner_type;
+        $id = (int) $run->source_owner_id;
+        [$typLabel, $name, $route, $param] = match ($type) {
+            'foodbook' => ['Foodbook', \Platform\FoodAlchemist\Models\FoodAlchemistFoodbook::visibleToTeam($team)->whereKey($id)->value('label'), 'foodalchemist.foodbooks.index', 'fb'],
+            'speisekarte' => ['Speisekarte', \Platform\FoodAlchemist\Models\FoodAlchemistSpeisekarte::visibleToTeam($team)->whereKey($id)->value('name'), 'foodalchemist.speisekarte.index', 'sk'],
+            'speiseplan' => ['Speiseplan', FoodAlchemistSpeiseplan::visibleToTeam($team)->whereKey($id)->value('name'), 'foodalchemist.speiseplan.index', 'sp'],
+            'offer' => ['Angebot', \Platform\FoodAlchemist\Models\FoodAlchemistAngebot::visibleToTeam($team)->whereKey($id)->value('name'), 'foodalchemist.angebote.index', 'sel'],
+            default => [null, null, null, null],
+        };
+        if ($route === null) {
+            return null;
+        }
+
+        return [
+            'owner_type' => $type,
+            'owner_id' => $id,
+            'typ_label' => $typLabel,
+            'name' => (string) ($name !== null && $name !== '' ? $name : $typLabel . ' #' . $id),
+            'route' => $route,
+            'route_param' => [$param => $id],
+        ];
+    }
+
     /** Ein team-sichtbarer Lauf inkl. Steps (oder null). */
     public function lauf(Team $team, int $runId): ?FoodAlchemistCascadeRun
     {
@@ -1523,6 +1702,9 @@ class PlanningCascadeService
                 'anreicherung' => $deferred['enrich']['status'] ?? null,
                 'bilder' => $deferred['bilder']['status'] ?? null,
                 'fehler' => $s->error,
+                // E-P0 (Spec 40): Attach-Fehler auch headless sichtbar — das Konzept ist erzeugt, hängt aber
+                // nicht am Ausgabe-Kapitel/der Rubrik (behebbar per haengeKonzeptNach). Nur gesetzt, wenn offen.
+                'attach_fehler' => $deferred['attach_error'] ?? null,
             ], static fn ($v): bool => $v !== null && $v !== '');
         })->all();
 

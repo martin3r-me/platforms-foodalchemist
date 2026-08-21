@@ -245,6 +245,9 @@ class Index extends Component
      */
     public array $zutatenOffen = [];
 
+    /** E4 (Spec 40): on-demand geladene Favoriten-Kandidaten je Step (step_id → [{id,name}]). */
+    public array $favoritVorschlaege = [];
+
     /**
      * A2 (per-Speise-Feedback): welche Worker-Steps ihr Kommentar-Feld offen haben (step_id-Liste) +
      * der getippte Feedback-Text je Step (step_id → Text). Ein Kommentar zu genau dieser Position geht
@@ -728,6 +731,37 @@ class Index extends Component
             $this->paketName = '';
         } catch (\Throwable $e) {
             $this->fehler = $e->getMessage();
+        }
+    }
+
+    /**
+     * Spec 40 E0: Analyse-Tab → aus dem Analyse-Text mehrere Gericht-Skizzen ableiten (KI-Divergenz auf
+     * Session-Ebene, {@see IdeenService::kiDivergenzSession}). Kein „Go", keine Erdung — reine Ideen fürs
+     * Divergenz-Board (Skizzen-Tab). `creative_mode` fließt als Kontext-Hinweis mit. Graceful ohne Provider
+     * (Sandbox): der Fehler wird gemeldet, der Editor bleibt stehen.
+     */
+    public function skizzenAusAnalyse(IdeenService $svc): void
+    {
+        $team = $this->team();
+        $session = $this->aktiveSession();
+        if ($team === null || $session === null) {
+            return;
+        }
+        $analyse = trim((string) ($this->form['analysis'] ?? ''));
+        if ($analyse === '') {
+            $this->fehler = 'Bitte zuerst eine Analyse/Ausgangslage eintragen — daraus leite ich die Skizzen ab.';
+
+            return;
+        }
+        try {
+            $r = $svc->kiDivergenzSession($team, (int) $session->id, $analyse, 5, (string) ($this->form['creative_mode'] ?? 'voll_kreativ'));
+            $n = count($r['angelegt'] ?? []);
+            $this->fehler = null;
+            $this->meldung = $n > 0
+                ? "{$n} Skizzen aus der Analyse abgeleitet — prüfe/ergänze sie im Skizzen-Tab, dann Go."
+                : 'Kein verwertbarer Vorschlag — Analyse konkreter fassen und erneut versuchen.';
+        } catch (\Throwable $e) {
+            $this->fehler = 'Skizzen-Ableitung fehlgeschlagen (kein KI-Provider?) — ' . $e->getMessage();
         }
     }
 
@@ -1925,6 +1959,85 @@ class Index extends Component
     }
 
     /**
+     * E-P0 (Spec 40): einen fehlgeschlagenen Attach nachholen — das erzeugte Konzept eines Steps ans
+     * gemerkte Ausgabe-Kapitel/die Rubrik hängen. Scheitert es erneut, wird der Fehler sichtbar gemeldet
+     * (das Signal am Step bleibt bis zum Erfolg stehen).
+     */
+    public function haengeKonzeptNach(int $stepId, PlanningCascadeService $cascade): void
+    {
+        $team = $this->team();
+        if ($team === null) {
+            return;
+        }
+        try {
+            $cascade->haengeKonzeptNach($team, $stepId);
+            $this->meldung = 'Konzept nachträglich ans Ausgabe-Kapitel/die Rubrik gehängt.';
+        } catch (\Throwable $e) {
+            $this->fehler = 'Nachträgliches Einhängen fehlgeschlagen: ' . $e->getMessage();
+        }
+        $this->refreshLaeuft($cascade);
+    }
+
+    /**
+     * E4 (Spec 40) — Rückkopplung: die Sourcing-Lücken eines erzeugten Rezept-Steps (GPs ohne beschaffbaren
+     * Lead-LA) ins Signale-Cockpit melden. „Lücke ist Signal, kein Fehler."
+     */
+    public function sourcingLueckenMelden(int $stepId, PlanningCascadeService $cascade): void
+    {
+        $team = $this->team();
+        if ($team === null) {
+            return;
+        }
+        try {
+            $gemeldet = $cascade->meldeSourcingLuecken($team, $stepId);
+            $this->fehler = null;
+            $this->meldung = $gemeldet === []
+                ? 'Keine Sourcing-Lücke — alle GPs dieses Entwurfs sind beschaffbar.'
+                : count($gemeldet) . ' Sortiments-Lücke(n) gemeldet: ' . implode(', ', $gemeldet) . ' — im Signale-Cockpit sichtbar.';
+        } catch (\Throwable $e) {
+            $this->fehler = 'Lücken-Meldung fehlgeschlagen: ' . $e->getMessage();
+        }
+    }
+
+    /**
+     * E4 (Spec 40) — Rückkopplung: die noch nicht gepinnten GPs eines erzeugten Rezept-Steps als
+     * Favoriten-Kandidaten laden (on-demand, kein Render-Query). Das Pinnen bleibt mensch-gated.
+     */
+    public function favoritVorschlaegeLaden(int $stepId, PlanningCascadeService $cascade): void
+    {
+        $team = $this->team();
+        if ($team === null) {
+            return;
+        }
+        try {
+            $this->favoritVorschlaege[$stepId] = $cascade->favoritKandidatenFuerStep($team, $stepId);
+        } catch (\Throwable $e) {
+            $this->fehler = 'Favoriten-Vorschläge konnten nicht geladen werden: ' . $e->getMessage();
+        }
+    }
+
+    /** E4 (Spec 40): einen vorgeschlagenen GP als Favorit pinnen (mensch-gated). Nur team-eigene GPs. */
+    public function favoritPinnen(int $gpId, \Platform\FoodAlchemist\Services\FavoriteGpService $fav): void
+    {
+        $team = $this->team();
+        if ($team === null) {
+            return;
+        }
+        $gp = \Platform\FoodAlchemist\Models\FoodAlchemistGp::visibleToTeam($team)->find($gpId);
+        if ($gp === null || ! $gp->isOwnedBy($team)) {
+            $this->fehler = 'GP nicht editierbar (global/Master ist read-only) — nicht gepinnt.';
+
+            return;
+        }
+        $fav->pin($gp);
+        $this->meldung = 'GP „' . $gp->name . '" als Favorit gepinnt.';
+        // aus allen geladenen Vorschlagslisten entfernen (ist jetzt Favorit)
+        foreach ($this->favoritVorschlaege as $sid => $liste) {
+            $this->favoritVorschlaege[$sid] = array_values(array_filter($liste, fn ($k) => (int) ($k['id'] ?? 0) !== $gpId));
+        }
+    }
+
+    /**
      * Ganze Stufe freigeben (Stufen-Knopf im Cockpit): gibt alle offenen Entwürfe einer `kind` frei —
      * das startet die nächste Stufe (siehe PlanningCascadeService::gibStufeFrei/gibStepFrei).
      */
@@ -2134,7 +2247,7 @@ class Index extends Component
         // Steps aller jüngsten Läufe in EINEM Pass holen → je Lauf gruppieren (kein N+1).
         $runIds = array_map(fn ($r) => (int) $r->id, array_values($latest));
         $stepsByRun = \Platform\FoodAlchemist\Models\FoodAlchemistCascadeRunStep::whereIn('cascade_run_id', $runIds)
-            ->get(['cascade_run_id', 'kind', 'status'])
+            ->get(['cascade_run_id', 'kind', 'status', 'label', 'ref_id'])
             ->groupBy('cascade_run_id');
 
         $badge = ['running' => 'läuft', 'review' => 'prüfen', 'done' => 'fertig', 'failed' => 'fehlgeschlagen'];
@@ -2147,10 +2260,30 @@ class Index extends Component
                 'run_id' => (int) $r->id,
                 'scope' => (string) $r->scope,
                 'stufen' => $this->stufenAusSteps($steps),
+                // Auto-Titel-Baustein: Name des erzeugten Artefakts (Concept/Gericht/Rezept) dieses Laufs.
+                'titel' => $this->artefaktTitel($steps, (string) $r->scope),
             ];
         }
 
         return $out;
+    }
+
+    /**
+     * Auto-Titel: Name des erzeugten Artefakts eines Laufs — bevorzugt die Run-Ebene
+     * (concept > gericht > rezept), sonst irgendein benanntes Step-Artefakt. Der Step-`label`
+     * trägt nach markStepDone den echten Rezept-/Concept-Namen.
+     */
+    private function artefaktTitel($steps, string $scope): ?string
+    {
+        foreach (array_values(array_unique([$scope, 'concept', 'gericht', 'rezept'])) as $kind) {
+            $s = $steps->first(fn ($x) => $x->kind === $kind && $x->ref_id !== null && trim((string) $x->label) !== '');
+            if ($s !== null) {
+                return trim((string) $s->label);
+            }
+        }
+        $any = $steps->first(fn ($x) => $x->ref_id !== null && trim((string) $x->label) !== '');
+
+        return $any !== null ? trim((string) $any->label) : null;
     }
 
     /** Test-/Direkteinstieg: Stufen des aktiven Laufs (lädt den Run selbst). */
@@ -2370,7 +2503,7 @@ class Index extends Component
                 ->whereNull('s.deleted_at'),
             's.team_id', $team
         )->orderByDesc('s.updated_at')
-            ->get(['s.id', 's.title', 's.status', 's.source_knowledge_document_id', 's.updated_at', 'm.category', 'm.trend_class']);
+            ->get(['s.id', 's.title', 's.analysis', 's.status', 's.source_knowledge_document_id', 's.updated_at', 'm.category', 'm.trend_class']);
 
         // Finale Etappe (Hauptseite): Kaskaden-Status je Session (Badge + Stufen-Fortschritt) — ein
         // Query-Pass über die VOLLE Liste (vor dem Filter, damit der Status-Filter greifen kann).
@@ -2399,10 +2532,12 @@ class Index extends Component
         }
 
         // Baum: Kategorie → Sessions (Frei-Bucket für ohne-Trend). Auf der gefilterten Liste.
+        // UX: „prüfen" je Kategorie zuerst (offene Freigaben oben), sonst die bestehende updated_at-Reihenfolge
+        // (sortBy ist stabil).
         $baum = $sessions->groupBy(fn ($s) => $s->category ?: '__frei')
             ->map(fn ($grp, $cat) => [
                 'category' => $cat === '__frei' ? 'Frei / ohne Kategorie' : $cat,
-                'sessions' => $grp->values(),
+                'sessions' => $grp->sortBy(fn ($s) => ($kaskaden[(int) $s->id]['status'] ?? 'entwurf') === 'prüfen' ? 0 : 1)->values(),
             ])->values();
 
         $active = $this->aktiveSession();
@@ -2434,6 +2569,22 @@ class Index extends Component
                             'status' => (string) $r->status,
                             'scope' => (string) $r->scope,
                         ];
+                    }
+                }
+                // E5 (Spec 40): „daraus entstanden" — den materialisierten Artefakt-Namen je Lauf mitführen
+                // (ein Batch-Query über die Steps der schon gesammelten Läufe, KEIN zusätzlicher Round-Trip
+                // je Karte). Der Step-Label trägt nach markStepDone den echten Rezept-/Concept-Namen.
+                $runIds = collect($skizzenLauf)->pluck('run_id')->map(fn ($v) => (int) $v)->unique()->values()->all();
+                if ($runIds !== []) {
+                    $ergebnisse = \Platform\FoodAlchemist\Models\FoodAlchemistCascadeRunStep::whereIn('cascade_run_id', $runIds)
+                        ->whereNotNull('ref_id')->whereNotNull('label')
+                        ->orderBy('id')->get(['cascade_run_id', 'label'])
+                        ->groupBy('cascade_run_id');
+                    foreach ($skizzenLauf as $oid => $l) {
+                        $steps = $ergebnisse[(int) $l['run_id']] ?? null;
+                        if ($steps !== null && $steps->isNotEmpty()) {
+                            $skizzenLauf[$oid]['ergebnis'] = (string) $steps->first()->label;
+                        }
                     }
                 }
             }
@@ -2638,10 +2789,17 @@ class Index extends Component
             ? null
             : 'Kein Hintergrund-Worker aktiv — ein Go bleibt in der Warteschlange liegen, bis der Worker (queue:work) läuft.';
 
+        // E1b (Spec 40): Owner-Kontext der offenen Session — für Banner „Planung für Foodbook ‚Adler'"
+        // + Zurück-Link. null bei freier Cockpit-Planung ohne Ausgabe-Owner (dann kein Banner).
+        $ownerKontext = ($team !== null && $active !== null)
+            ? app(PlanningCascadeService::class)->ownerKontext($team, (int) $active->id)
+            : null;
+
         return view('foodalchemist::livewire.planung.index', [
             'sessions' => $sessions,
             'baum' => $baum,
             'kaskaden' => $kaskaden,
+            'ownerKontext' => $ownerKontext,
             'workerState' => $workerState,
             'workerWarnung' => $workerWarnung,
             'active' => $active,

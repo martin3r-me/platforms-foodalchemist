@@ -39,6 +39,14 @@ class Index extends Component
     public ?string $gueltigBis = null;
     // Spec 33 P2/P5: Betriebsachse optional; Kunde ist CRM-only.
     public ?int $outletId = null;
+
+    // Werkstrang M Phase A (Spec 40 §6): Kontext-Leitplanken der Karte — wirken als Defaults nach unten
+    // (kiWordingVorschlag/kiKartenText lesen default_niveau/kundentyp bereits als Leitplanken).
+    public ?string $kundentyp = null;
+    public ?string $niveau = null;          // → default_niveau (buergerlich|gehoben|fine_dining)
+    public ?string $convenience = null;     // → default_convenience (from_scratch|teil_convenience|voll_convenience)
+    public ?int $writingStyleId = null;     // → writing_style_id
+
     public string $firmaSuche = '';
     public string $kontaktSuche = '';
 
@@ -49,6 +57,9 @@ class Index extends Component
     public string $pickerSuche = '';
     public ?int $pickerRubrikId = null;
     public string $pickerModus = 'gericht'; // gericht | menue
+    // Werkstrang M Phase B: Facetten-Filter im Gericht-Picker (Hauptgruppe → Unterklasse).
+    public ?int $pickerHauptgruppe = null;
+    public ?int $pickerDishClass = null;
 
     // Positions-Bearbeitung (inline)
     public ?int $editPosId = null;
@@ -56,6 +67,9 @@ class Index extends Component
     public ?string $editConsumerText = null;
     public string $editPriceMode = 'auto';
     public ?string $editPriceValue = null;
+    // Werkstrang M Phase D: Layout-Blöcke + Wahl-Gruppen.
+    public ?string $editLabel = null;        // Überschrift-Text (type=header)
+    public ?int $editVariantGroupId = null;  // Wahl-Gruppe „A|B|C" (gericht_ref/menue_ref)
 
     // Branding (Stufe C)
     public string $brandColor = '#6d28d9';
@@ -91,6 +105,11 @@ class Index extends Component
         $this->gueltigVon = $karte->gueltig_von?->format('Y-m-d');
         $this->gueltigBis = $karte->gueltig_bis?->format('Y-m-d');
         $this->outletId = $karte->outlet_id;
+        // Werkstrang M Phase A: Kontext-Leitplanken hydrieren.
+        $this->kundentyp = $karte->kundentyp;
+        $this->niveau = $karte->default_niveau;
+        $this->convenience = $karte->default_convenience;
+        $this->writingStyleId = $karte->writing_style_id !== null ? (int) $karte->writing_style_id : null;
         $this->editPosId = null;
         $this->brandColor = $karte->brand_color ?: '#6d28d9';
         $this->bandColor = $karte->band_color;
@@ -101,6 +120,8 @@ class Index extends Component
         $this->coverUpload = null;
         $this->pickerRubrikId = null;
         $this->pickerSuche = '';
+        $this->pickerHauptgruppe = null;
+        $this->pickerDishClass = null;
     }
 
     public function schliessen(): void
@@ -120,6 +141,11 @@ class Index extends Component
             'gueltig_von' => $this->gueltigVon ?: null,
             'gueltig_bis' => $this->gueltigBis ?: null,
             'outlet_id' => $this->outletId ?: null,
+            // Werkstrang M Phase A: Kontext-Leitplanken mitschreiben.
+            'kundentyp' => $this->kundentyp ?: null,
+            'default_niveau' => $this->niveau ?: null,
+            'default_convenience' => $this->convenience ?: null,
+            'writing_style_id' => $this->writingStyleId ?: null,
         ]);
         $this->dispatch('gespeichert');
         $this->savedToast('Speisekarte gespeichert');
@@ -264,6 +290,22 @@ class Index extends Component
             $this->pickerModus = in_array($modus, ['gericht', 'menue'], true) ? $modus : 'gericht';
         }
         $this->pickerSuche = '';
+        // Werkstrang M Phase B: Facetten beim (Neu-)Öffnen zurücksetzen.
+        $this->pickerHauptgruppe = null;
+        $this->pickerDishClass = null;
+    }
+
+    /** Werkstrang M Phase B: Hauptgruppen-Facette setzen/löschen — Unterklasse fällt dabei weg. */
+    public function pickerWaehleHg(?int $hauptgruppe): void
+    {
+        $this->pickerHauptgruppe = ($hauptgruppe !== null && $this->pickerHauptgruppe === $hauptgruppe) ? null : $hauptgruppe;
+        $this->pickerDishClass = null;
+    }
+
+    /** Werkstrang M Phase B: Unterklassen-Facette setzen/löschen (Toggle). */
+    public function pickerWaehleKlasse(?int $dishClassId): void
+    {
+        $this->pickerDishClass = ($dishClassId !== null && $this->pickerDishClass === $dishClassId) ? null : $dishClassId;
     }
 
     public function positionAusGericht(SpeisekarteService $svc, int $rubrikId, int $recipeId): void
@@ -271,7 +313,7 @@ class Index extends Component
         $svc->addPosition($this->team(), $rubrikId, [
             'type' => 'gericht_ref', 'sales_recipe_id' => $recipeId,
         ]);
-        $this->pickerSuche = '';
+        // Werkstrang M Phase B: Picker + Suche + Facetten bleiben offen → mehrere Gerichte hintereinander.
     }
 
     public function positionAusMenue(SpeisekarteService $svc, int $rubrikId, int $conceptId): void
@@ -279,7 +321,6 @@ class Index extends Component
         $svc->addPosition($this->team(), $rubrikId, [
             'type' => 'menue_ref', 'concept_id' => $conceptId,
         ]);
-        $this->pickerSuche = '';
     }
 
     public function positionLoeschen(SpeisekarteService $svc, int $positionId): void
@@ -288,6 +329,132 @@ class Index extends Component
         if ($this->editPosId === $positionId) {
             $this->editPosId = null;
         }
+    }
+
+    // ── Werkstrang M Phase C (Spec 40 §6): Umsortieren + Verschieben ──────────
+
+    /** Position innerhalb ihrer Rubrik hoch/runter (dir ∈ hoch|runter). Reihenfolge-Swap mit dem Nachbarn. */
+    public function positionHochRunter(int $positionId, string $dir, SpeisekarteService $svc): void
+    {
+        $team = $this->team();
+        $pos = \Platform\FoodAlchemist\Models\FoodAlchemistSpeisekartePosition::visibleToTeam($team)->find($positionId);
+        if ($pos === null) {
+            return;
+        }
+        $ids = \Platform\FoodAlchemist\Models\FoodAlchemistSpeisekartePosition::where('section_id', $pos->section_id)
+            ->orderBy('position')->orderBy('id')->pluck('id')->map(fn ($v) => (int) $v)->all();
+        $svc->reorderPositionen($team, (int) $pos->section_id, $this->swapNachbar($ids, $positionId, $dir));
+    }
+
+    /** Rubrik innerhalb ihrer Ebene (gleiche Karte + gleicher parent) hoch/runter. */
+    public function rubrikHochRunter(int $rubrikId, string $dir, SpeisekarteService $svc): void
+    {
+        $team = $this->team();
+        $rubrik = \Platform\FoodAlchemist\Models\FoodAlchemistSpeisekarteRubrik::visibleToTeam($team)->find($rubrikId);
+        if ($rubrik === null) {
+            return;
+        }
+        $ids = \Platform\FoodAlchemist\Models\FoodAlchemistSpeisekarteRubrik::where('menu_card_id', $rubrik->menu_card_id)
+            ->where('parent_id', $rubrik->parent_id)
+            ->orderBy('position')->orderBy('id')->pluck('id')->map(fn ($v) => (int) $v)->all();
+        $svc->reorderRubriken($team, (int) $rubrik->menu_card_id, $rubrik->parent_id !== null ? (int) $rubrik->parent_id : null, $this->swapNachbar($ids, $rubrikId, $dir));
+    }
+
+    /** Eine Position in eine andere Rubrik derselben Karte verschieben (Phase-C-„echter Neubau"). */
+    public function positionInRubrik(int $positionId, int $newSectionId, SpeisekarteService $svc): void
+    {
+        try {
+            $svc->movePosition($this->team(), $positionId, $newSectionId);
+        } catch (\Throwable $e) {
+            $this->errorToast($e->getMessage());
+        }
+    }
+
+    /** Tauscht $id mit seinem oberen/unteren Nachbarn in der ID-Liste (dir ∈ hoch|runter). */
+    private function swapNachbar(array $ids, int $id, string $dir): array
+    {
+        $i = array_search($id, $ids, true);
+        if ($i === false) {
+            return $ids;
+        }
+        $j = $dir === 'hoch' ? $i - 1 : $i + 1;
+        if ($j < 0 || $j >= count($ids)) {
+            return $ids;   // schon oben/unten
+        }
+        [$ids[$i], $ids[$j]] = [$ids[$j], $ids[$i]];
+
+        return $ids;
+    }
+
+    // ── Drag & Drop (additiv zu hoch/runter) ──────────────────────────────────
+
+    /**
+     * Werkstrang M (UX-Ausbau): Position per D&D ablegen — auf eine Ziel-Position. Gleiche Rubrik →
+     * reorder (dragged VOR target); andere Rubrik derselben Karte → erst movePosition, dann reorder
+     * (dragged VOR target). Team-scoped über die Service-Methoden.
+     */
+    public function positionAblegen(int $draggedId, int $targetId, SpeisekarteService $svc): void
+    {
+        if ($draggedId === $targetId) {
+            return;
+        }
+        $team = $this->team();
+        $dragged = \Platform\FoodAlchemist\Models\FoodAlchemistSpeisekartePosition::visibleToTeam($team)->find($draggedId);
+        $target = \Platform\FoodAlchemist\Models\FoodAlchemistSpeisekartePosition::visibleToTeam($team)->find($targetId);
+        if ($dragged === null || $target === null) {
+            return;
+        }
+        try {
+            if ((int) $dragged->section_id !== (int) $target->section_id) {
+                $svc->movePosition($team, $draggedId, (int) $target->section_id);
+            }
+            $ids = \Platform\FoodAlchemist\Models\FoodAlchemistSpeisekartePosition::where('section_id', $target->section_id)
+                ->orderBy('position')->orderBy('id')->pluck('id')->map(fn ($v) => (int) $v)->all();
+            $svc->reorderPositionen($team, (int) $target->section_id, $this->einfuegenVor($ids, $draggedId, $targetId));
+        } catch (\Throwable $e) {
+            $this->errorToast($e->getMessage());
+        }
+    }
+
+    /** Werkstrang M (UX-Ausbau): Rubrik per D&D ablegen — nur innerhalb derselben Ebene (Karte + parent). */
+    public function rubrikAblegen(int $draggedId, int $targetId, SpeisekarteService $svc): void
+    {
+        if ($draggedId === $targetId) {
+            return;
+        }
+        $team = $this->team();
+        $d = \Platform\FoodAlchemist\Models\FoodAlchemistSpeisekarteRubrik::visibleToTeam($team)->find($draggedId);
+        $t = \Platform\FoodAlchemist\Models\FoodAlchemistSpeisekarteRubrik::visibleToTeam($team)->find($targetId);
+        if ($d === null || $t === null) {
+            return;
+        }
+        // Nur gleiche Ebene sortieren (Verschachtelung ändern bleibt bewusst außen vor).
+        if ((int) $d->menu_card_id !== (int) $t->menu_card_id || $d->parent_id !== $t->parent_id) {
+            return;
+        }
+        try {
+            $ids = \Platform\FoodAlchemist\Models\FoodAlchemistSpeisekarteRubrik::where('menu_card_id', $t->menu_card_id)
+                ->where('parent_id', $t->parent_id)
+                ->orderBy('position')->orderBy('id')->pluck('id')->map(fn ($v) => (int) $v)->all();
+            $svc->reorderRubriken($team, (int) $t->menu_card_id, $t->parent_id !== null ? (int) $t->parent_id : null, $this->einfuegenVor($ids, $draggedId, $targetId));
+        } catch (\Throwable $e) {
+            $this->errorToast($e->getMessage());
+        }
+    }
+
+    /** Entfernt $moveId aus der Liste und fügt es VOR $beforeId wieder ein (D&D-Ablage). */
+    private function einfuegenVor(array $ids, int $moveId, int $beforeId): array
+    {
+        $ids = array_values(array_filter($ids, fn ($x) => (int) $x !== $moveId));
+        $pos = array_search($beforeId, $ids, true);
+        if ($pos === false) {
+            $ids[] = $moveId;
+
+            return $ids;
+        }
+        array_splice($ids, $pos, 0, [$moveId]);
+
+        return $ids;
     }
 
     // ── Positions-Bearbeitung (Wording-Override + manueller Preis) ─────────────
@@ -303,6 +470,9 @@ class Index extends Component
         $this->editConsumerText = $pos->consumer_text;
         $this->editPriceMode = $pos->price_mode ?: 'auto';
         $this->editPriceValue = $pos->price_value !== null ? (string) $pos->price_value : null;
+        // Werkstrang M Phase D
+        $this->editLabel = $pos->label;
+        $this->editVariantGroupId = $pos->variant_group_id !== null ? (int) $pos->variant_group_id : null;
     }
 
     public function positionSpeichern(SpeisekarteService $svc): void
@@ -315,8 +485,35 @@ class Index extends Component
             'consumer_text' => $this->editConsumerText ?: null,
             'price_mode' => $this->editPriceMode,
             'price_value' => $this->editPriceMode === 'manuell' ? ($this->editPriceValue !== null && $this->editPriceValue !== '' ? (float) str_replace(',', '.', $this->editPriceValue) : null) : null,
+            // Werkstrang M Phase D: Überschrift-Text + Wahl-Gruppe.
+            'label' => $this->editLabel ?: null,
+            'variant_group_id' => $this->editVariantGroupId ?: null,
         ]);
         $this->editPosId = null;
+    }
+
+    /**
+     * Werkstrang M Phase D (Spec 40 §6): Layout-Block (Überschrift/Text/Abstand) in eine Rubrik einfügen.
+     * type ∈ header|text|spacer. Reused addPosition; sinnvolle Defaults, danach per ✎ editierbar.
+     */
+    public function layoutBlockNeu(int $rubrikId, string $type, SpeisekarteService $svc): void
+    {
+        if (! in_array($type, ['header', 'text', 'spacer'], true)) {
+            return;
+        }
+        $daten = ['type' => $type];
+        if ($type === 'header') {
+            $daten['label'] = 'Überschrift';
+        } elseif ($type === 'text') {
+            $daten['consumer_text'] = 'Text …';
+        }
+        $svc->addPosition($this->team(), $rubrikId, $daten);
+    }
+
+    /** Werkstrang M Phase D: nächste freie Wahl-Gruppen-ID der Rubrik als Vorschlag ins Edit-Feld. */
+    public function variantGruppeVorschlag(int $rubrikId, SpeisekarteService $svc): void
+    {
+        $this->editVariantGroupId = $svc->nextVariantGroupId($this->team(), $rubrikId);
     }
 
     public function positionAbbrechen(): void
@@ -392,11 +589,22 @@ class Index extends Component
             $vorschau = $svc->dokumentDaten($team, $karte);
         }
 
+        // Werkstrang M Phase B: reicher Gericht-Picker — Facetten (Hauptgruppe/Unterklasse) + Limit 50.
         $pickerErgebnisse = collect();
+        $pickerHauptgruppen = collect();
+        $pickerUntergruppen = collect();
         if ($this->pickerRubrikId !== null) {
             $pickerErgebnisse = $this->pickerModus === 'menue'
-                ? $svc->conceptKandidaten($team, $this->pickerSuche, 15)
-                : $svc->gerichtKandidaten($team, $this->pickerSuche, 15);
+                ? $svc->conceptKandidaten($team, $this->pickerSuche, 50)
+                : $svc->gerichtKandidaten($team, $this->pickerSuche, 50, $this->pickerHauptgruppe, $this->pickerDishClass);
+            if ($this->pickerModus === 'gericht') {
+                $pickerHauptgruppen = app(\Platform\FoodAlchemist\Services\SalesRecipeService::class)->dishMainGroups($team);
+                if ($this->pickerHauptgruppe !== null) {
+                    $pickerUntergruppen = \Platform\FoodAlchemist\Models\FoodAlchemistDishClass::visibleToTeam($team)
+                        ->where('dish_main_group_id', $this->pickerHauptgruppe)
+                        ->orderBy('label')->get(['id', 'label']);
+                }
+            }
         }
 
         return view('foodalchemist::livewire.speisekarte.index', [
@@ -406,6 +614,8 @@ class Index extends Component
             'preise' => $preise,
             'vorschau' => $vorschau,
             'pickerErgebnisse' => $pickerErgebnisse,
+            'pickerHauptgruppen' => $pickerHauptgruppen,
+            'pickerUntergruppen' => $pickerUntergruppen,
             // Spec 33 P5: Auswahl fürs Status-/Zuordnungs-Bauteil (nur aktive Betriebe).
             'betriebe' => \Platform\FoodAlchemist\Models\FoodAlchemistOutlet::where('team_id', $team->id)
                 ->where('is_inactive', false)->orderBy('sort_order')->orderBy('name')->get(['id', 'name']),
@@ -416,6 +626,9 @@ class Index extends Component
             'crmVerfuegbar' => $svc->crmVerfuegbar(),
             'firmen' => $svc->sucheFirmen($this->firmaSuche),
             'kontakte' => $svc->sucheKontakte($this->kontaktSuche),
+            // Werkstrang M Phase A: Schreibstil-Auswahl fürs Kontext-Panel (nur aktive, team-sichtbar).
+            'schreibstile' => \Platform\FoodAlchemist\Models\FoodAlchemistWritingStyle::visibleToTeam($team)
+                ->where('is_inactive', false)->orderBy('sort_order')->orderBy('name')->get(['id', 'name']),
         ])->layout('platform::layouts.app');
     }
 

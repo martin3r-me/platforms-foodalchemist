@@ -40,7 +40,7 @@
         <p class="pt-4 text-[12px] text-gray-500">Kein Angebot geladen.</p>
     @else
     <x-foodalchemist::editor-tabs marker="angebot" wire-key="angebot-tabs-{{ $angebot->id }}" :init="'anfrage'"
-        :tabs="['anfrage' => 'Anfrage', 'menue' => 'Menü & Kalkulation', 'kunde' => 'Kunde & Business-Case']">
+        :tabs="['anfrage' => 'Anfrage', 'menue' => 'Menü & Kalkulation', 'geruest' => 'Gerüst', 'kunde' => 'Kunde & Business-Case']">
 
         {{-- ═══ Tab: ANFRAGE ═══ --}}
         <div x-show="tab === 'anfrage'" x-cloak class="pt-4">
@@ -93,6 +93,12 @@
             <x-foodalchemist::modal-section title="Menü (angebots-lokal)">
                 <x-slot:actions>
                     <button type="button" wire:click="neuesMenue" class="{{ $btnGhostXs }}" data-angebot-neu-menue>+ Menü</button>
+                    {{-- E2 (Spec 40): Voll-Kaskade — je Slot ein Menü-Konzept, ans Angebot referenziert; Prüfung in der Leitstelle. --}}
+                    <button type="button" wire:click="vollKaskadeStarten" wire:loading.attr="disabled" wire:target="vollKaskadeStarten"
+                            class="{{ $btnGhostXs }} text-violet-600" data-angebot-vollkaskade>
+                        <span wire:loading.remove wire:target="vollKaskadeStarten">@svg('heroicon-o-bolt', 'w-3.5 h-3.5 inline align-text-bottom') Voll-Kaskade (KI)</span>
+                        <span wire:loading wire:target="vollKaskadeStarten">Starte …</span>
+                    </button>
                 </x-slot:actions>
                 <div class="space-y-1.5">
                     @forelse($angebot->concepts as $c)
@@ -205,6 +211,33 @@
                 </div>
             </x-foodalchemist::modal-section>
             @endif
+        </div>
+
+        {{-- ═══ Tab: GERÜST (UX-Ausbau: Slots VOR der Voll-Kaskade prüfen/bauen) ═══ --}}
+        <div x-show="tab === 'geruest'" x-cloak class="pt-4 space-y-4">
+            <x-foodalchemist::modal-section title="Planungs-Gerüst (Slots für die Voll-Kaskade)">
+                <p class="text-[11px] text-gray-500 mb-2">Lege die Slots fest (z. B. Vorspeise · Hauptgang · Dessert) — die Voll-Kaskade erzeugt je Slot ein Menü-Konzept und referenziert es ans Angebot. Ohne Gerüst strukturiert die Voll-Kaskade automatisch aus Anlass/Gäste.</p>
+                <div class="flex gap-2 mb-2">
+                    <input type="text" wire:model="neuerSlot" wire:keydown.enter="geruestSlotNeu" placeholder="Slot-Label (z. B. Hauptgang) …" class="{{ $input }}" data-angebot-slot-input />
+                    <button type="button" wire:click="geruestSlotNeu" class="{{ $btnGhostXs }} shrink-0" data-angebot-slot-neu>+ Slot</button>
+                    <button type="button" wire:click="geruestKickoff" wire:loading.attr="disabled" wire:target="geruestKickoff" class="{{ $btnGhostXs }} shrink-0 text-violet-600" data-angebot-geruest-kickoff>
+                        <span wire:loading.remove wire:target="geruestKickoff">@svg('heroicon-o-sparkles', 'w-3.5 h-3.5 inline align-text-bottom') KI-Vorschlag</span>
+                        <span wire:loading wire:target="geruestKickoff">…</span>
+                    </button>
+                </div>
+                <div class="space-y-1.5">
+                    @forelse($geruestSlots as $slot)
+                        <div wire:key="ang-slot-{{ $slot->id }}" class="flex items-center gap-2 px-2 py-1 rounded-lg bg-black/[0.05] text-xs">
+                            <span class="flex-1 truncate text-gray-800">{{ $slot->label }}</span>
+                            @if($slot->target_count)<span class="text-gray-500">×{{ $slot->target_count }}</span>@endif
+                            @if($slot->price_anchor !== null)<span class="text-gray-500 tabular-nums">{{ number_format((float) $slot->price_anchor, 2, ',', '.') }} €</span>@endif
+                            <button type="button" wire:click="geruestSlotLoeschen({{ $slot->id }})" class="text-gray-500 hover:text-red-500 shrink-0" title="Slot löschen">✕</button>
+                        </div>
+                    @empty
+                        <p class="text-[11px] text-gray-500">Noch keine Slots. „+ Slot" oder „KI-Vorschlag" anlegen — dann Voll-Kaskade (Menü-Tab).</p>
+                    @endforelse
+                </div>
+            </x-foodalchemist::modal-section>
         </div>
 
         {{-- ═══ Tab: KUNDE & BUSINESS-CASE ═══ --}}

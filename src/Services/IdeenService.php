@@ -454,6 +454,85 @@ class IdeenService
         return ['angelegt' => $angelegt, 'roh' => count($rohe), 'confidence' => $proposal->confidence, 'call_log_id' => $proposal->callLogId];
     }
 
+    /**
+     * Session-Divergenz (Spec 40 E0): KI leitet aus dem Analyse-Text der Planungs-Session mehrere freie
+     * Gericht-Skizzen ab — der Analyse→Skizzen-Übergang der Leitstelle SELBST. Spiegelt {@see kiDivergenz}
+     * (Kapitel) / {@see kiDivergenzConcept} (Konzept), aber owner=planning_session: es gibt (bewusst) KEIN
+     * Ausgabe-Gerüst und KEINE Bestands-Erdung (das erdet erst der Go). Seed = der Analyse-Text (produkt-
+     * blindes Prompt-Feld `kapitel_beschreibung`); `creative_mode` fließt als Kontext-Hinweis in den Prompt
+     * (der Gateway hängt den JSON-Kontext an), ohne die geteilte Registry-Zeile `foodbook.kapitel_ideen`
+     * anzufassen. Legt bis zu `$anzahl` Entwurf-Skizzen mit `planning_session_id` an
+     * (`source_meta.quelle='ki_divergenz_session'`).
+     *
+     * Ohne LLM-Provider wirft `propose()` typisiert — der Aufrufer (Leitstelle) fängt das graceful ab.
+     *
+     * @return array{angelegt: list<FoodAlchemistDishIdea>, roh: int, confidence: ?float, call_log_id: ?int}
+     */
+    public function kiDivergenzSession(Team $team, int $sessionId, ?string $analyse, int $anzahl = 5, ?string $creativeMode = null): array
+    {
+        $anzahl = max(1, min(12, $anzahl));
+
+        $session = FoodAlchemistPlanningSession::visibleToTeam($team)->findOrFail($sessionId);
+        if (! $session->isOwnedBy($team)) {
+            throw new \RuntimeException('Geerbte Planungs-Session — KI-Divergenz nur durchs Besitzer-Team (D1).');
+        }
+        $seed = trim((string) $analyse);
+        if ($seed === '') {
+            throw new \RuntimeException('KI-Divergenz braucht einen Analyse-Text als Ausgangslage.');
+        }
+
+        $wissen = app(KnowledgeContextService::class)->contextFor('foodbook.plan', $seed);
+
+        $kontext = array_filter([
+            'kapitel' => (string) ($session->title ?: 'Planung'),   // produkt-blindes Prompt-Feld — hier trägt es die Session
+            'kapitel_beschreibung' => $seed,
+            'anzahl' => $anzahl,
+            // Spec 40 E0: creative_mode (datenbank|hybrid|voll_kreativ) als Kontext-Hinweis — der json_encode
+            // im Gateway hängt ihn an den Prompt, ohne die geteilte Registry-Zeile `foodbook.kapitel_ideen`
+            // anzufassen (macht den bisher toten Parameter auf der Session-Ebene wirksam).
+            'creative_mode' => $creativeMode !== null && $creativeMode !== '' ? $creativeMode : null,
+        ], fn ($v) => $v !== null);
+
+        $proposal = app(AiGatewayService::class)->propose('foodbook.kapitel_ideen', $kontext, array_filter([
+            'knowledge' => ($wissen['block'] ?? '') !== '' ? $wissen['block'] : null,
+            'knowledge_used' => $wissen['files_used'] ?? null,
+        ], fn ($v) => $v !== null));
+
+        $rohe = is_array($proposal->werte['ideen'] ?? null) ? $proposal->werte['ideen'] : [];
+        $owner = ['chapter_id' => null, 'concept_id' => null, 'planning_session_id' => $sessionId];
+        $angelegt = [];
+        foreach ($rohe as $i) {
+            if (! is_array($i)) {
+                continue;
+            }
+            $titel = trim((string) ($i['titel'] ?? $i['title'] ?? ''));
+            if ($titel === '') {
+                continue;                                            // leere KI-Zeile überspringen (kein Insert)
+            }
+            $angelegt[] = FoodAlchemistDishIdea::create([
+                'team_id' => $team->id,
+                'chapter_id' => null,
+                'concept_id' => null,
+                'planning_session_id' => $sessionId,
+                'position' => $this->naechstePosition($team, $owner, FoodAlchemistDishIdea::class),
+                'title' => $titel,
+                'description' => $this->clean($i['beschreibung'] ?? $i['description'] ?? null),
+                'sales_recipe_id' => null,
+                'target_form' => 'einzel',
+                'group_id' => null,
+                'status' => 'entwurf',
+                'created_via' => 'ai_gateway',
+                'source_meta' => [
+                    'quelle' => 'ki_divergenz_session',
+                    'confidence' => $proposal->confidence,
+                    'call_log_id' => $proposal->callLogId,
+                ],
+            ]);
+        }
+
+        return ['angelegt' => $angelegt, 'roh' => count($rohe), 'confidence' => $proposal->confidence, 'call_log_id' => $proposal->callLogId];
+    }
+
     // ── Helpers ──────────────────────────────────────────────────────────────
 
     /**

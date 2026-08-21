@@ -33,6 +33,9 @@ class Editor extends Component
 
     public string $conceptSuche = '';
 
+    /** UX-Ausbau: Eingabe fürs neue Gerüst-Slot-Label (Angebot-Gerüst-Review-Tab). */
+    public string $neuerSlot = '';
+
     /** @var array{eventtyp:?int, servierform:?int, einsatzmoment:?int, season:?int} */
     public array $conceptFacetten = ['eventtyp' => null, 'servierform' => null, 'einsatzmoment' => null, 'season' => null];
 
@@ -216,6 +219,107 @@ class Editor extends Component
         $this->dispatch('angebot-gespeichert');
     }
 
+    /**
+     * E2 (Spec 40): Voll-Kaskade fürs Angebot — je Frame-Slot ein Konzept, ans Angebot referenziert
+     * (spiegelt Foodbook/Speisekarte, Rückweg via {@see AngebotService::referenziereConcept}). Slots kann der
+     * Mensch VOR der Kaskade im Gerüst-Tab prüfen/bauen ({@see geruestSlotNeu}/{@see geruestKickoff}); ist noch
+     * KEIN Gerüst da, wird als Fallback EINMAL aus dem Angebots-Kopf (Anlass/Gäste) auto-strukturiert. Springt in
+     * die Leitstelle — Owner-Banner + Zurück-Link (E1b) zeigen den Round-Trip.
+     */
+    public function vollKaskadeStarten(
+        \Platform\FoodAlchemist\Services\PlanningSessionService $sessions,
+        \Platform\FoodAlchemist\Services\PlanningCascadeService $cascade,
+        \Platform\FoodAlchemist\Services\ConceptGeneratorService $gen,
+    ) {
+        $team = $this->team();
+        if ($this->selectedId === null) {
+            return null;
+        }
+        $angebot = \Platform\FoodAlchemist\Models\FoodAlchemistAngebot::visibleToTeam($team)->find($this->selectedId);
+        if ($angebot === null) {
+            return null;
+        }
+        try {
+            $frame = app(\Platform\FoodAlchemist\Services\PlanningFrameService::class)->find('offer', (int) $this->selectedId);
+            if ($frame === null || $frame->slots()->count() === 0) {
+                $gen->geruestAusBriefFuerOwner($team, 'offer', (int) $this->selectedId, $this->angebotBrief($angebot));
+            }
+            $session = $sessions->create($team, [
+                'title' => 'Voll-Kaskade: ' . ($angebot->name ?: ('Angebot #' . $this->selectedId)),
+                'created_via' => 'angebot_vollkaskade',
+            ]);
+            $cascade->starteKaskade($team, 'vollkaskade', $session, 'voll_kreativ', [
+                'owner_type' => 'offer', 'owner_id' => (int) $this->selectedId, 'created_via' => 'angebot_vollkaskade',
+            ]);
+
+            return redirect()->route('foodalchemist.planung.index', ['session' => $session->id, 'open' => 1]);
+        } catch (\Throwable $e) {
+            $this->errorToast($e->getMessage());
+
+            return null;
+        }
+    }
+
+    /** Minimaler Brief fürs Auto-Gerüst aus den Angebots-Kopf-Feldern (Anlass/Gäste). */
+    private function angebotBrief(\Platform\FoodAlchemist\Models\FoodAlchemistAngebot $a): string
+    {
+        $teile = [];
+        if (trim((string) $a->occasion) !== '') {
+            $teile[] = 'Anlass: ' . trim((string) $a->occasion);
+        }
+        if ((int) $a->personen > 0) {
+            $teile[] = 'Gäste: ' . (int) $a->personen . ' Personen';
+        }
+
+        return implode(' — ', $teile);
+    }
+
+    // ── UX-Ausbau: Angebot-Gerüst-Review (Slots VOR der Kaskade prüfen/bauen) ──
+
+    /** Slot ans Angebots-Gerüst anhängen (frameFor legt das Gerüst bei Bedarf an). */
+    public function geruestSlotNeu(\Platform\FoodAlchemist\Services\PlanningFrameService $frames): void
+    {
+        if ($this->selectedId === null || trim($this->neuerSlot) === '') {
+            return;
+        }
+        try {
+            $frame = $frames->frameFor($this->team(), 'offer', (int) $this->selectedId);
+            $frames->addSlot($this->team(), $frame, ['label' => trim($this->neuerSlot)]);
+            $this->neuerSlot = '';
+        } catch (\Throwable $e) {
+            $this->errorToast($e->getMessage());
+        }
+    }
+
+    /** Einen Gerüst-Slot löschen. */
+    public function geruestSlotLoeschen(int $slotId, \Platform\FoodAlchemist\Services\PlanningFrameService $frames): void
+    {
+        try {
+            $frames->removeSlot($this->team(), $slotId);
+        } catch (\Throwable $e) {
+            $this->errorToast($e->getMessage());
+        }
+    }
+
+    /** KI-Kickoff: Slots aus dem Angebots-Brief (Anlass/Gäste) vorschlagen — graceful ohne Provider. */
+    public function geruestKickoff(\Platform\FoodAlchemist\Services\ConceptGeneratorService $gen): void
+    {
+        $team = $this->team();
+        if ($this->selectedId === null) {
+            return;
+        }
+        $angebot = \Platform\FoodAlchemist\Models\FoodAlchemistAngebot::visibleToTeam($team)->find($this->selectedId);
+        if ($angebot === null) {
+            return;
+        }
+        try {
+            $gen->geruestAusBriefFuerOwner($team, 'offer', (int) $this->selectedId, $this->angebotBrief($angebot));
+            $this->savedToast('Gerüst-Vorschlag erstellt — prüfe/ergänze die Slots, dann Voll-Kaskade.');
+        } catch (\Throwable $e) {
+            $this->errorToast($e->getMessage());
+        }
+    }
+
     /** Concepter-Editor hat einen angebots-lokalen Entwurf geändert → Auto-Preis + Detail neu. */
     #[On('concepter-gespeichert')]
     public function nachConcepterEdit(AngebotService $svc): void
@@ -237,8 +341,17 @@ class Editor extends Component
             $this->canvasInit('angebot', 'angebot', $angebot->id);
         }
 
+        // UX-Ausbau: Angebot-Gerüst-Slots (read-only) für den Review-Tab — kein Create beim Rendern.
+        $offerFrame = $this->selectedId !== null
+            ? app(\Platform\FoodAlchemist\Services\PlanningFrameService::class)->find('offer', (int) $this->selectedId)
+            : null;
+        $geruestSlots = $offerFrame !== null
+            ? $offerFrame->slots()->orderBy('position')->orderBy('id')->get(['id', 'label', 'target_count', 'price_anchor'])
+            : collect();
+
         return view('foodalchemist::livewire.angebote.editor', [
             'angebot' => $angebot,
+            'geruestSlots' => $geruestSlots,
             'kalkulation' => $angebot ? $svc->kalkulation($this->team(), $angebot) : null,
             'statusWerte' => $svc->statusWerte(),
             'firmen' => $svc->sucheFirmen($this->firmaSuche),

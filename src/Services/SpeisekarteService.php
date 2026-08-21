@@ -411,6 +411,31 @@ class SpeisekarteService
         });
     }
 
+    /**
+     * Werkstrang M Phase C (Spec 40 §6): eine Position in eine ANDERE Rubrik derselben Karte schieben.
+     * `section_id` steht bewusst NICHT in POSITION_FELDER (Update-Whitelist) — darum diese eigene Methode:
+     * team-scoped, beide Rubriken zur selben `menu_card_id`, `section_id` setzen + `position = max+1` der
+     * Ziel-Rubrik (ans Ende), transaktional. No-op wenn Ziel = aktuelle Rubrik.
+     */
+    public function movePosition(Team $team, int $positionId, int $newSectionId): void
+    {
+        $pos = $this->ownedPosition($team, $positionId);
+        $ziel = $this->ownedRubrik($team, $newSectionId);
+        $quelle = $this->ownedRubrik($team, (int) $pos->section_id);
+        if ((int) $ziel->menu_card_id !== (int) $quelle->menu_card_id) {
+            throw new \RuntimeException('Ziel-Rubrik gehört zu einer anderen Karte.');
+        }
+        if ((int) $pos->section_id === (int) $newSectionId) {
+            return;   // schon dort
+        }
+        DB::transaction(function () use ($pos, $newSectionId) {
+            $maxPos = (int) (FoodAlchemistSpeisekartePosition::where('section_id', $newSectionId)->max('position') ?? -1) + 1;
+            $pos->section_id = $newSectionId;
+            $pos->position = $maxPos;
+            $pos->save();
+        });
+    }
+
     /** Wahl-Gruppe „A|B|C": nächste freie Gruppen-ID in der Rubrik. */
     public function nextVariantGroupId(Team $team, int $rubrikId): int
     {
@@ -469,7 +494,10 @@ class SpeisekarteService
             ->when($suche !== '', fn ($q) => \Platform\FoodAlchemist\Support\Suche::like($q, 'name', $suche))
             ->when($hauptgruppe !== null, fn ($q) => $q->where('dish_main_group_id', $hauptgruppe))
             ->when($dishClassId !== null, fn ($q) => $q->where('dish_class_id', $dishClassId))
-            ->orderBy('name')->limit($limit)->get(['id', 'name', 'sales_net']);
+            // Werkstrang M Phase B: dish_class_id + diet_form additiv mitgeben (Picker-Diät-Label);
+            // andere Aufrufer lesen weiter nur id/name/sales_net.
+            ->with(['dishClass:id,diet_form'])
+            ->orderBy('name')->limit($limit)->get(['id', 'name', 'sales_net', 'dish_class_id']);
     }
 
     /** Concepts (Fix-Menüs) für den menue_ref-Picker. */
@@ -549,6 +577,8 @@ class SpeisekarteService
                         'typ' => $pos->type,
                         'name' => $this->positionName($pos),
                         'consumer_text' => $pos->consumer_text,
+                        // Werkstrang M Phase D: Wahl-Gruppe daten-fertig mitgeben (Grouping-Optik im Renderer folgt).
+                        'variant_group_id' => $pos->variant_group_id !== null ? (int) $pos->variant_group_id : null,
                         'codes' => in_array($pos->type, ['gericht_ref', 'menue_ref'], true) ? $codesFuer($pos) : [],
                         'vk_netto' => $preis['vk'],
                         'vk_brutto' => $einheit['vk_brutto_pro_einheit'] ?? null,

@@ -2443,3 +2443,23 @@ it('L6 Menge&Ziel: gültige Zahl-Achsen + Saison reisen in die Job-Params, ungü
             && ! array_key_exists('ziel_we_pct', $job->parameter);   // 999 verworfen
     });
 });
+
+// ── UX (2026-08-20): Auto-Titel aus Kontext + Status in der landingKaskadenMap ────────────────
+
+it('UX: landingKaskadenMap liefert Auto-Titel (Artefakt-Name) + prüfen-Status', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Freies Gericht']);
+    $run = FoodAlchemistCascadeRun::create([
+        'team_id' => $this->rootTeam->id, 'planning_session_id' => $session->id, 'scope' => 'gericht', 'status' => 'review',
+    ]);
+    FoodAlchemistCascadeRunStep::create([
+        'team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht',
+        'status' => 'done', 'ref_type' => 'recipe', 'ref_id' => 999, 'label' => 'Kürbis-Risotto mit Salbei',
+    ]);
+
+    $map = Livewire::test(PlanungIndex::class)->instance()->landingKaskadenMap($this->rootTeam, [(int) $session->id]);
+
+    // Auto-Titel = Name des erzeugten Artefakts (statt „Freies Gericht"); review → prüfen.
+    expect($map[$session->id]['titel'])->toBe('Kürbis-Risotto mit Salbei')
+        ->and($map[$session->id]['status'])->toBe('prüfen')
+        ->and($map[$session->id]['scope'])->toBe('gericht');
+});

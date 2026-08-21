@@ -108,7 +108,12 @@
             @if($rubrik['claim'])<div class="claim">{{ $rubrik['claim'] }}</div>@endif
 
             <table class="pos">
+                @php($prevVg = null)
                 @foreach($rubrik['positionen'] as $pos)
+                    {{-- Werkstrang M Phase D-Renderer: Wahl-Gruppe „A oder B" — „oder" zwischen aufeinanderfolgenden Positionen derselben variant_group_id. --}}
+                    @if(($pos['variant_group_id'] ?? null) !== null && ($pos['variant_group_id'] ?? null) === $prevVg)
+                        <tr><td colspan="2" style="text-align:center;font-style:italic;font-size:0.82em;color:#777;padding:1px 0">oder</td></tr>
+                    @endif
                     @if($pos['typ'] === 'header')
                         <tr><td colspan="2" class="pos-header">{{ $pos['name'] }}</td></tr>
                     @elseif($pos['typ'] === 'text')
@@ -131,6 +136,7 @@
                             </td>
                         </tr>
                     @endif
+                    @php($prevVg = $pos['variant_group_id'] ?? null)
                 @endforeach
             </table>
         </div>
