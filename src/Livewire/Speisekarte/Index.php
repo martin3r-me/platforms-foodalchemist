@@ -386,6 +386,77 @@ class Index extends Component
         return $ids;
     }
 
+    // ── Drag & Drop (additiv zu hoch/runter) ──────────────────────────────────
+
+    /**
+     * Werkstrang M (UX-Ausbau): Position per D&D ablegen — auf eine Ziel-Position. Gleiche Rubrik →
+     * reorder (dragged VOR target); andere Rubrik derselben Karte → erst movePosition, dann reorder
+     * (dragged VOR target). Team-scoped über die Service-Methoden.
+     */
+    public function positionAblegen(int $draggedId, int $targetId, SpeisekarteService $svc): void
+    {
+        if ($draggedId === $targetId) {
+            return;
+        }
+        $team = $this->team();
+        $dragged = \Platform\FoodAlchemist\Models\FoodAlchemistSpeisekartePosition::visibleToTeam($team)->find($draggedId);
+        $target = \Platform\FoodAlchemist\Models\FoodAlchemistSpeisekartePosition::visibleToTeam($team)->find($targetId);
+        if ($dragged === null || $target === null) {
+            return;
+        }
+        try {
+            if ((int) $dragged->section_id !== (int) $target->section_id) {
+                $svc->movePosition($team, $draggedId, (int) $target->section_id);
+            }
+            $ids = \Platform\FoodAlchemist\Models\FoodAlchemistSpeisekartePosition::where('section_id', $target->section_id)
+                ->orderBy('position')->orderBy('id')->pluck('id')->map(fn ($v) => (int) $v)->all();
+            $svc->reorderPositionen($team, (int) $target->section_id, $this->einfuegenVor($ids, $draggedId, $targetId));
+        } catch (\Throwable $e) {
+            $this->errorToast($e->getMessage());
+        }
+    }
+
+    /** Werkstrang M (UX-Ausbau): Rubrik per D&D ablegen — nur innerhalb derselben Ebene (Karte + parent). */
+    public function rubrikAblegen(int $draggedId, int $targetId, SpeisekarteService $svc): void
+    {
+        if ($draggedId === $targetId) {
+            return;
+        }
+        $team = $this->team();
+        $d = \Platform\FoodAlchemist\Models\FoodAlchemistSpeisekarteRubrik::visibleToTeam($team)->find($draggedId);
+        $t = \Platform\FoodAlchemist\Models\FoodAlchemistSpeisekarteRubrik::visibleToTeam($team)->find($targetId);
+        if ($d === null || $t === null) {
+            return;
+        }
+        // Nur gleiche Ebene sortieren (Verschachtelung ändern bleibt bewusst außen vor).
+        if ((int) $d->menu_card_id !== (int) $t->menu_card_id || $d->parent_id !== $t->parent_id) {
+            return;
+        }
+        try {
+            $ids = \Platform\FoodAlchemist\Models\FoodAlchemistSpeisekarteRubrik::where('menu_card_id', $t->menu_card_id)
+                ->where('parent_id', $t->parent_id)
+                ->orderBy('position')->orderBy('id')->pluck('id')->map(fn ($v) => (int) $v)->all();
+            $svc->reorderRubriken($team, (int) $t->menu_card_id, $t->parent_id !== null ? (int) $t->parent_id : null, $this->einfuegenVor($ids, $draggedId, $targetId));
+        } catch (\Throwable $e) {
+            $this->errorToast($e->getMessage());
+        }
+    }
+
+    /** Entfernt $moveId aus der Liste und fügt es VOR $beforeId wieder ein (D&D-Ablage). */
+    private function einfuegenVor(array $ids, int $moveId, int $beforeId): array
+    {
+        $ids = array_values(array_filter($ids, fn ($x) => (int) $x !== $moveId));
+        $pos = array_search($beforeId, $ids, true);
+        if ($pos === false) {
+            $ids[] = $moveId;
+
+            return $ids;
+        }
+        array_splice($ids, $pos, 0, [$moveId]);
+
+        return $ids;
+    }
+
     // ── Positions-Bearbeitung (Wording-Override + manueller Preis) ─────────────
 
     public function positionBearbeiten(int $positionId): void

@@ -261,7 +261,10 @@
                 {{-- ── Tab: AUFBAU — Rubriken + Positionen ─────────────────────── --}}
                 <div x-show="tab === 'aufbau'" x-cloak class="pt-4 space-y-4">
             {{-- Rubriken + Positionen --}}
-            <div class="relative overflow-hidden {{ $card }} p-4" wire:key="sk-body-{{ $karte->id }}">
+            {{-- Werkstrang M (UX-Ausbau): gemeinsame D&D-Scope für ALLE (auch verschachtelten) Rubriken —
+                 ein x-data am Container statt pro Rubrik (vermeidet die rekursive Scope-Falle). --}}
+            <div class="relative overflow-hidden {{ $card }} p-4" wire:key="sk-body-{{ $karte->id }}"
+                 x-data="{ dragPosId: null, dragRubrikId: null }">
                 <div class="{{ $cardAccent }}"></div>
 
                 <div class="flex items-center gap-2 mb-3">

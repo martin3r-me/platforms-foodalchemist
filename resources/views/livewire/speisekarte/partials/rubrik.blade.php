@@ -4,7 +4,13 @@
 @php($artLabel = ['speisen' => 'Speisen', 'getraenke' => 'Getränke', 'menue' => 'Menü', 'dessert' => 'Dessert', 'sonstiges' => 'Sonstiges'])
 
 <div wire:key="sk-rubrik-{{ $rubrik->id }}" class="mb-3" style="margin-left: {{ $depth * 1.25 }}rem">
-    <div class="flex items-center gap-2 border-b border-black/10 pb-1 mb-2">
+    {{-- Werkstrang M (UX-Ausbau): Rubrik-Header = Drag-Handle (Rubrik umsortieren) + Drop-Ziel
+         (Rubrik ablegen ODER eine gezogene Position in diese Rubrik verschieben). --}}
+    <div class="flex items-center gap-2 border-b border-black/10 pb-1 mb-2"
+         x-on:dragover.prevent
+         x-on:drop="if (dragPosId) { $wire.positionInRubrik(dragPosId, {{ $rubrik->id }}); dragPosId = null } else if (dragRubrikId && dragRubrikId !== {{ $rubrik->id }}) { $wire.rubrikAblegen(dragRubrikId, {{ $rubrik->id }}); dragRubrikId = null }">
+        <span class="cursor-move select-none text-gray-300 hover:text-gray-500 shrink-0" title="Ziehen zum Umsortieren"
+              draggable="true" x-on:dragstart="dragRubrikId = {{ $rubrik->id }}" x-on:dragend="dragRubrikId = null">⠿</span>
         <span class="font-semibold text-gray-900 text-sm">{{ $rubrik->consumer_title ?: $rubrik->title }}</span>
         <span class="{{ $pill }} {{ $variantPill['secondary'] }}">{{ $artLabel[$rubrik->art] ?? $rubrik->art }}</span>
         <span class="flex-1"></span>
@@ -22,7 +28,14 @@
 
     {{-- Positionen --}}
     @forelse($rubrik->items as $pos)
-        <div wire:key="sk-pos-{{ $pos->id }}" class="flex items-center gap-2 py-0.5 text-sm">
+        {{-- Werkstrang M (UX-Ausbau): Position draggable + Drop-Ziel (ablegen VOR dieser Position). --}}
+        <div wire:key="sk-pos-{{ $pos->id }}" class="flex items-center gap-2 py-0.5 text-sm"
+             draggable="true"
+             x-on:dragstart="dragPosId = {{ $pos->id }}" x-on:dragend="dragPosId = null"
+             x-on:dragover.prevent
+             x-on:drop="if (dragPosId && dragPosId !== {{ $pos->id }}) { $wire.positionAblegen(dragPosId, {{ $pos->id }}); dragPosId = null }"
+             x-bind:class="dragPosId === {{ $pos->id }} ? 'opacity-40' : ''">
+            <span class="cursor-move select-none text-gray-300 shrink-0" title="Ziehen">⠿</span>
             <span class="flex-1 text-gray-800">
                 @if($pos->type === 'gericht_ref')
                     {{ $pos->wording ?: ($pos->dish?->name ?? $pos->label ?? '— Gericht —') }}

@@ -209,3 +209,42 @@ it('Phase E: Leitstelle zeigt Checkliste immer, Coverage nur bei Planungs-Gerüs
         ->assertOk()
         ->assertSee('Soll/Ist-Coverage');
 });
+
+// ── Werkstrang M UX-Ausbau: Drag & Drop (positionAblegen / rubrikAblegen) ─────
+
+it('UX D&D: positionAblegen sortiert in der Rubrik + verschiebt zwischen Rubriken', function () {
+    $svc = app(\Platform\FoodAlchemist\Services\SpeisekarteService::class);
+    $karte = $svc->create($this->rootTeam, ['name' => 'DnD']);
+    $rA = $svc->addRubrik($this->rootTeam, $karte->id, ['title' => 'A']);
+    $rB = $svc->addRubrik($this->rootTeam, $karte->id, ['title' => 'B']);
+    $p1 = $svc->addPosition($this->rootTeam, $rA->id, ['type' => 'header', 'label' => 'P1']);
+    $p2 = $svc->addPosition($this->rootTeam, $rA->id, ['type' => 'header', 'label' => 'P2']);
+    $p3 = $svc->addPosition($this->rootTeam, $rA->id, ['type' => 'header', 'label' => 'P3']);
+    $comp = Livewire::test(SpeisekarteIndex::class)->call('waehle', $karte->id);
+
+    // p3 VOR p1 ablegen → [p3, p1, p2]
+    $comp->call('positionAblegen', $p3->id, $p1->id);
+    expect(\Platform\FoodAlchemist\Models\FoodAlchemistSpeisekartePosition::where('section_id', $rA->id)
+        ->orderBy('position')->pluck('id')->all())->toBe([$p3->id, $p1->id, $p2->id]);
+
+    // p1 aus rA auf eine Position in rB ablegen → p1 wandert nach rB, VOR pB
+    $pB = $svc->addPosition($this->rootTeam, $rB->id, ['type' => 'header', 'label' => 'PB']);
+    $comp->call('positionAblegen', $p1->id, $pB->id);
+    expect($p1->refresh()->section_id)->toBe($rB->id);
+    expect(\Platform\FoodAlchemist\Models\FoodAlchemistSpeisekartePosition::where('section_id', $rB->id)
+        ->orderBy('position')->pluck('id')->all())->toBe([$p1->id, $pB->id]);
+});
+
+it('UX D&D: rubrikAblegen sortiert Rubriken derselben Ebene', function () {
+    $svc = app(\Platform\FoodAlchemist\Services\SpeisekarteService::class);
+    $karte = $svc->create($this->rootTeam, ['name' => 'DnDR']);
+    $rA = $svc->addRubrik($this->rootTeam, $karte->id, ['title' => 'A']);
+    $rB = $svc->addRubrik($this->rootTeam, $karte->id, ['title' => 'B']);
+    $rC = $svc->addRubrik($this->rootTeam, $karte->id, ['title' => 'C']);
+
+    Livewire::test(SpeisekarteIndex::class)->call('waehle', $karte->id)
+        ->call('rubrikAblegen', $rC->id, $rA->id);   // rC VOR rA → [rC, rA, rB]
+
+    expect(\Platform\FoodAlchemist\Models\FoodAlchemistSpeisekarteRubrik::where('menu_card_id', $karte->id)
+        ->whereNull('parent_id')->orderBy('position')->pluck('id')->all())->toBe([$rC->id, $rA->id, $rB->id]);
+});

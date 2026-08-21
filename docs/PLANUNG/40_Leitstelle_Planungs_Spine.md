@@ -273,7 +273,7 @@ Getränke/Wein-Detail: Darreichungs-Picker (Glas/Flasche/Portion via `presentati
 - `kundentyp` Freitext-String, oder kuratierte Vokabelquelle? → **Freitext-String** (Phase A, „billig"); Vokabel-Härtung späterer Ausbau.
 - Phase D: Wahlgruppen-Renderer in Dokument/Vorschau mitbauen oder „Editor-only vorerst"? → zuerst Editor-only; **dann auf User-Entscheidung 2026-08-20 der Druck-Renderer NACHGEBAUT** („oder"-Trenner in Dokument + Vorschau). ✅ komplett.
 - Phase E: „Checkliste als Default, Coverage nur bei Frame" bestätigen. → **bestätigt + so gebaut.**
-- Zusätzlich bewusst offen: der `struktur|positionen`-Tab-Split (Phase A) = Umstrukturierung statt Surfacing (Positionen sind je Rubrik eingebettet); D&D-Reorder (Phase C) = hoch/runter-Buttons + Move-Select gewählt (rekursives D&D vermieden). Beide = optionale UX-Folgeausbauten.
+- Zusätzlich offen gewesen (UX-Folgeausbauten): (a) `struktur|positionen`-Tab-Split (Phase A) = Umstrukturierung statt Surfacing → **weiter offen (User-Entscheid: nicht bauen)**; (b) echtes D&D-Reorder → **auf User-Entscheidung NACHGEBAUT 2026-08-20** (additiv zu hoch/runter: gemeinsame Alpine-Drag-Scope am Container statt rekursiver Scopes; `positionAblegen`/`rubrikAblegen` + Position-in-Rubrik-Drop; SpeisekarteUiTest 9/9); (c) Angebot-Gerüst-Review-UI → **in Arbeit (User-Entscheid: bauen)**.
 
 ---
 
