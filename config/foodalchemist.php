@@ -489,6 +489,11 @@ return [
                 // die Rate plausibel klingender Fremdkörper VOR dem Kritiker-Pass).
                 . 'role (V-21: aroma_treiber|komponente|beilage|garnitur), '
                 . 'fit (EIN kurzer Halbsatz: warum gehört diese Zutat FACHLICH in DIESES Gericht)}]}. '
+                // Spec 41 B2 (§12 Regelwerk Basisrezepte): die Zutaten-Reihenfolge ist die KOCH-
+                // Reihenfolge, NICHT die Menge. Das war der reproduzierbare Fehler (Anteil-%-Sort, Fall D4).
+                . 'Ordne die zutaten-Liste in logischer KOCH-/VERWENDUNGS-Reihenfolge '
+                . '(Mise-en-place → Fett/Basis → Aromaten → Hauptmasse → Flüssigkeit/Fond → Bindung → '
+                . 'Würze/Säure/Finish; Garnitur & Abschmecken ZULETZT), NICHT nach Menge/Anteil. '
                 . 'Diät-harte Vorgaben sind VERBINDLICH. '
                 // Spec 37: Niveau typ-relativ — am Baustein hebt es Technik/Qualität, nicht die Zahl der Teile.
                 . 'Das Niveau hebt bei einem Basisrezept die TECHNIK und ZUTATENQUALITÄT dieser EINEN '
@@ -581,6 +586,11 @@ return [
                 . 'ist statt es in Rohzutaten aufzulösen; false bei einer Rohzutat/Ware), '
                 . 'role (V-21: aroma_treiber|komponente|beilage|garnitur), '
                 . 'fit (EIN kurzer Halbsatz: warum gehört diese Zutat FACHLICH in DIESES Gericht)}] '
+                // Spec 41 B2 (§12): Komponenten-Reihenfolge = AUFBAU-/PLATING-Reihenfolge über `role`,
+                // NICHT nach Menge/Anteil (Fall E1). Sauce/Basis am Boden, Garnitur/Finish zuletzt.
+                . 'Ordne die zutaten-Liste in AUFBAU-/PLATING-Reihenfolge nach role '
+                . '(aroma_treiber/Basis-Sauce → komponente/Hauptkomponente → beilage → garnitur → Finishing), '
+                . 'NICHT nach Menge/Anteil. '
                 // Fit-Guard (2026-08-06): "vorhandene zuerst" war Reuse-Druck ohne Passt-Prüfung —
                 // das Inventar ist ein Angebot, die fachliche Passung entscheidet.
                 . '(Komponenten bevorzugt als Basisrezepte; wenn bestands_inventar mitgegeben ist: nutze '
@@ -855,14 +865,21 @@ return [
             'tier' => 'A',
             'max_tokens' => 8000,                                     // volles Slot-/Regel-Gerüst — Reasoning-Headroom
             'system' => 'Du uebersetzt Kunden-Briefs in ein strukturiertes Planungs-Geruest (R4.1). '
-                . 'Du erfindest NICHTS: nur, was der Brief hergibt — fehlende Angaben bleiben weg (Felder null/weglassen). '
+                . 'Du erfindest keine konkreten Gerichte, Preise oder Fakten, die der Brief nicht hergibt (fehlende Angaben bleiben weg, Felder null/weglassen). '
+                // Spec 41 B3 (§3 Regelwerk Concept, gegen RC-4/C1): das strukturelle SEKTIONIEREN ist kein Erfinden.
+                . 'Das strukturelle SEKTIONIEREN eines Containers ist ausdruecklich ERLAUBT und PFLICHT: ein «Menue»/«Buffet»/«Lunchbuffet» '
+                . 'ist NIE eine einzige Position, sondern IMMER ein Geruest aus MEHREREN Gang-/Stations-Slots mit Platzhaltern. '
                 . 'Diaet-Werte NUR aus diaet_vokabular, Allergen-Keys NUR aus allergen_keys.',
             'task' => 'Uebersetze den Brief in ein Planungs-Geruest: werte = {name, target_price_pp, price_min_pp, price_max_pp, '
                 . 'slots: [{label, slot_type (gang|station|kapitel), target_count, price_anchor, price_min, price_max, is_pflicht, '
                 . 'rules: [{rule_type: diet_quota, ref_key, operator (min|max|exact), value_num, unit (count|percent)}]}], '
                 . 'rules: [{rule_type: nogo_ingredient, value_text, severity (hart|weich)} | '
                 . '{rule_type: nogo_allergen, ref_key} | {rule_type: allergen_line, value_text}]}. '
-                . 'Preise netto p. P.; Gaenge/Stationen aus dem Anlass ableiten (Menü→gang, Buffet→station).',
+                . 'Preise netto p. P.; Gaenge/Stationen aus dem Anlass ableiten (Menü→gang, Buffet→station). '
+                // Spec 41 B3: Container IMMER in mehrere Sektions-Slots aufloesen, NIE ein einziger «Buffet»/«Menue»-Slot.
+                . 'Ein BUFFET erzeugt IMMER MEHRERE station-Slots (z.B. Kalte Vorspeisen/Salate; Suppe optional; '
+                . 'Warme Hauptkomponente(n) inkl. Carving bei > 50 Pax; Saettigungsbeilagen Staerke+Gemuese; Dessert/Sweet-Table; Getraenke). '
+                . 'Ein MENUE erzeugt IMMER MEHRERE gang-Slots (3/5/7/9 Gaenge). NIE ein einziger Container-Slot.',
         ],
         // Et.2b »Kreativ-Kopf«: Kunden-Brief → kreative Concept-Canvas (die IDEE, nicht das
         // Struktur-Geruest). Schwester von concept.brief_geruest — GERUEST erzeugt Slots/Preise/

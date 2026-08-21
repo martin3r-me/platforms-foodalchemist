@@ -50,7 +50,17 @@ it('seedet die regelwerk-Routing-Zeile für den Rezept-Generator', function () {
     expect($zeile)->not->toBeNull()
         ->and($zeile->mode)->toBe('always')
         ->and((int) $zeile->max_docs)->toBe(1)
-        ->and((int) $zeile->max_chars_per_doc)->toBe(7000);
+        // Spec 41 B1: 7000 → 9500 angehoben, damit §2–§4 UND §12 ins Budget passen.
+        ->and((int) $zeile->max_chars_per_doc)->toBe(9500);
+});
+
+it('routet das Concept-Regelwerk in den Gerüst-Generator (Spec 41 B1)', function () {
+    $zeile = DB::table('foodalchemist_knowledge_routings')
+        ->where('feature', 'concept.brief_geruest')->where('category', 'regelwerk')->first();
+
+    expect($zeile)->not->toBeNull()
+        ->and($zeile->mode)->toBe('always')
+        ->and((int) $zeile->max_chars_per_doc)->toBe(9000);
 });
 
 it('hängt das Regelwerk-Basisrezepte an den Rezept-Generator — mit §2–§4, vor dem Food-Wissen', function () {
@@ -118,4 +128,34 @@ it('ignoriert inaktive regelwerk-Docs', function () {
     $ctx = $this->svc->contextFor('ai_generate_recipe', 'Brief');
 
     expect($ctx['block'])->not->toContain('# REGELWERK BASISREZEPTE');
+});
+
+it('nimmt die §12-Reihenfolge-Region mit, wenn vorhanden (Spec 41 B1)', function () {
+    $md = $this->regelwerkMd
+        . "\n## §11 Derivate\nDerivat-Regeln.\n\n"
+        . "## §12 Zutaten-/Komponenten-Reihenfolge\nLogische Koch-Reihenfolge, NICHT nach Menge.\n\n"
+        . "### §12.1 Basisrezept\nFett → Aromaten → Hauptmasse.\n\n"
+        . "## Roadmap / Offene Ideen\n### §13 Grundrezepte\nBacklog.\n";
+    ($this->mkDoc)('regelwerk.regelwerk_basisrezepte', 'regelwerk', $md);
+
+    $ctx = $this->svc->contextFor('ai_generate_recipe', 'Tomatencremesuppe');
+
+    expect($ctx['block'])->toContain('## §12 Zutaten-/Komponenten-Reihenfolge')
+        ->and($ctx['block'])->toContain('Fett → Aromaten → Hauptmasse.')
+        // §2–§4 weiterhin dabei, Roadmap/§13 aber NICHT (Region endet an nächster Level-2-Überschrift)
+        ->and($ctx['block'])->toContain('## §2 Verarbeitungs-Reduktion')
+        ->and($ctx['block'])->not->toContain('### §13 Grundrezepte');
+});
+
+it('bindet fürs Concept-Gerüst das Concept-Regelwerk, nicht Basisrezepte (Spec 41 B1)', function () {
+    ($this->mkDoc)('regelwerk.regelwerk_basisrezepte', 'regelwerk', $this->regelwerkMd);
+    ($this->mkDoc)('regelwerk.regelwerk_concept', 'regelwerk',
+        "# Regelwerk Concept\n\n## §3 Gerüst-Regel\nEin Container ist NIE eine atomare Position.\n");
+
+    $ctx = $this->svc->contextFor('concept.brief_geruest', 'Lunchbuffet für eine Tagung');
+
+    expect($ctx['block'])->toContain('# REGELWERK CONCEPT')
+        ->and($ctx['block'])->toContain('Ein Container ist NIE eine atomare Position.')
+        ->and($ctx['block'])->not->toContain('# REGELWERK BASISREZEPTE')
+        ->and($ctx['files_used'])->toContain('regelwerk.regelwerk_concept@v1');
 });

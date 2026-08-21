@@ -683,8 +683,11 @@ it('Kreativ-Kopf planAusBrief: fail-soft — scheiternder concept.plan lässt Co
     );
     $this->actingAs($this->makeUser($this->rootTeam));
 
-    // Eigener Name gesetzt → KI-Name greift nicht.
-    $e = $this->svc->planAusBrief($this->rootTeam, 'Buffet, 30 Gäste', [], 'Mein Konzept');
+    // Eigener Name gesetzt → KI-Name greift nicht. Brief bewusst OHNE Container-Schlagwort
+    // (kein »Buffet«/»Menü«), damit der B3-Struktur-Guard (Spec 41) hier nicht das kollabierte
+    // Stub-Gerüst expandiert — dieser Test prüft NUR den Plan-Fail-Soft, das Gerüst-Verhalten
+    // deckt ConceptGeruestGuardTest ab.
+    $e = $this->svc->planAusBrief($this->rootTeam, 'Sommerkonzept, 30 Gäste', [], 'Mein Konzept');
     $concept = $e['concept'];
 
     expect($concept->status)->toBe('draft')

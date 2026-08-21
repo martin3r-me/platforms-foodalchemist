@@ -104,14 +104,14 @@ class KnowledgeContextService
             $snap('trend', $before);
         }
 
-        // ── 0c. REGELWERK BASISREZEPTE (Etappe 1 »Mise en Place«: Gericht = Basisrezepte) ──
-        // Verbindliche Bau-Regel (§2–§4) VOR dem Food-Wissen: sie sagt, WIE ein Gericht aus
-        // Sub-Basisrezepten gebaut wird (Sauce/Jus/Püree = eigenes Sub-Rezept), bevor die
-        // Zutaten-Ebene darunter greift. `always` + dediziert (NICHT die generische discovery —
-        // Regelwerk ist Handwerk, kein Produkt; s. regelwerkBlock). Leere Kategorie ⇒ kein Block.
+        // ── 0c. REGELWERK (Etappe 1 »Mise en Place« + Spec 41 B1: pro Feature das RICHTIGE Regelwerk) ──
+        // Verbindliche Bau-/Gerüst-Regel VOR dem Food-Wissen. `always` + dediziert (NICHT die
+        // generische discovery — Regelwerk ist Handwerk, kein Produkt; s. regelwerkBlock). Welches
+        // Regelwerk kommt, entscheidet das FEATURE (ai_generate_recipe → Basisrezepte inkl. §12;
+        // concept.brief_geruest → Concept). Leere/fehlende Kategorie ⇒ kein Block (Invariante 6).
         if (($r = $routing->get('regelwerk:always')) !== null) {
             $before = count($filesUsed);
-            $regelwerk = $this->regelwerkBlock((int) ($r->max_chars_per_doc ?: self::REGELWERK_TRUNCATE_CHARS), $filesUsed);
+            $regelwerk = $this->regelwerkBlock($feature, (int) ($r->max_chars_per_doc ?: self::REGELWERK_TRUNCATE_CHARS), $filesUsed);
             if ($regelwerk !== null) {
                 $parts[] = $regelwerk;
             }
@@ -407,57 +407,96 @@ class KnowledgeContextService
     }
 
     /**
-     * Etappe 1 (Roadmap »Mise en Place« 2026-08-14): das REGELWERK BASISREZEPTE
-     * (§2 Verarbeitungs-Reduktion · §3 Pürees/Marks/Coulis · §4 Sub-Rezept-Hierarchie) als
-     * verbindliche Bau-Regel in den Rezept-Generator. Bewusst `always` + dediziert statt der
+     * Etappe 1 (Roadmap »Mise en Place« 2026-08-14) + Spec 41 B1 (2026-08-21): das verbindliche
+     * REGELWERK als Bau-/Gerüst-Regel in den Generator — bewusst `always` + dediziert statt der
      * generischen discovery: Regelwerk ist HANDWERK, kein Produkt-Dossier — eine
-     * Beschreibungs-Discovery (Slug-Token gegen die Zutaten) würde es bei realen Rezept-Briefs
-     * NIE treffen (kein Overlap »Steinpilz« ↔ »basisrezepte«). Deterministisch: der
-     * Basisrezepte-Slug wird gezielt gewählt und daraus die §2–§4-Region extrahiert (nicht der
-     * ganze ~53k-Text — §2 beginnt erst bei ~17k, ein blinder Head-Truncate verfehlt sie).
-     * Fehlt der Doc ⇒ null (Invariante 6); fehlen die §-Marker ⇒ Head-Ausschnitt als Fallback.
+     * Beschreibungs-Discovery (Slug-Token gegen die Zutaten) würde es bei realen Briefs
+     * NIE treffen (kein Overlap »Steinpilz« ↔ »basisrezepte«).
+     *
+     * PRO FEATURE das RICHTIGE Regelwerk (Spec 41 B1, RC-2/RC-4): `ai_generate_recipe` →
+     * Basisrezepte (§2–§4 Bau + §12 Reihenfolge), `concept.brief_geruest` → Concept (Volltext,
+     * kompakt). Deterministisch über den Slug gewählt; unbekanntes Feature ⇒ Basisrezepte
+     * (Bestand). Extrahiert wird nur die tragende Region (nicht der ganze ~50k-Text — §2 beginnt
+     * erst bei ~17k, ein blinder Head-Truncate verfehlt sie). Fehlt der Doc ⇒ null (Invariante 6);
+     * fehlen die §-Marker ⇒ ganzer Text (Aufrufer Head-Truncatet).
      *
      * @param  list<string>  $filesUsed  by-ref-Audit
      */
-    private function regelwerkBlock(int $maxChars, array &$filesUsed): ?string
+    private function regelwerkBlock(string $feature, int $maxChars, array &$filesUsed): ?string
     {
+        $map = [
+            'concept.brief_geruest' => [
+                'slug_like' => '%concept%',
+                'extract' => 'concept',
+                'header' => "# REGELWERK CONCEPT (verbindliche Gerüst-Regel — §2 Archetypen · §3 Container nie atomar · §4 Vokabular · §5 Preislogik)\n\n"
+                    . "Ein Concept ist eine ZUSAMMENSTELLUNG (Menü / Buffet / Paket), NIE eine atomare "
+                    . "Position: erzeuge IMMER ein Sektions-/Gänge-Gerüst mit Kapitel-Überschriften + "
+                    . "Platzhalter-Slots (Menü → Gänge, Buffet → Stationen). Das strukturelle Sektionieren "
+                    . "eines Containers ist erlaubt und Pflicht (kein Gericht/Preis/Fakt erfinden). Halte dich an diese Regeln:\n\n",
+            ],
+            'ai_generate_recipe' => [
+                'slug_like' => '%basisrezept%',
+                'extract' => 'basisrezept',
+                'header' => "# REGELWERK BASISREZEPTE (verbindliche Bau-Regel — §2 Verarbeitungs-Reduktion · §3 Pürees · §4 Sub-Rezept-Hierarchie · §12 Zutaten-/Komponenten-Reihenfolge)\n\n"
+                    . "Baue das Gericht AUS BASISREZEPTEN: Sauce/Jus/Fond/Sud/Püree/Espuma sind eigene "
+                    . "Sub-Basisrezepte, keine flachen Rohzutaten (kein «Steinpilz-Rahmsauce» aus "
+                    . "Steinpilzen + Sahne). Ordne Zutaten/Komponenten in logischer Koch-/Verwendungs-Reihenfolge "
+                    . "(§12: Fett/Aromaten → Hauptmasse → Flüssigkeit → Bindung → Würze/Finish; Gericht: "
+                    . "Sauce/Basis → Hauptkomponente → Beilage → Garnitur), NICHT nach Menge/Anteil. Halte dich an diese Regeln:\n\n",
+            ],
+        ];
+        $cfg = $map[$feature] ?? $map['ai_generate_recipe'];    // Bestand-Fallback
+
         $doc = DB::table('foodalchemist_knowledge_documents')
             ->where('category', 'regelwerk')->where('active', 1)->whereNull('deleted_at')
-            ->where('slug', 'like', '%basisrezept%')
+            ->where('slug', 'like', $cfg['slug_like'])
             ->orderBy('slug')->first(['slug', 'content_md', 'version']);
         if ($doc === null) {
             return null;                                             // Invariante 6: fehlende Quelle = leerer Kontext
         }
 
-        $kern = trim($this->extrahiereRegelwerkKern((string) $doc->content_md));
+        $kern = trim($this->extrahiereRegelwerkKern((string) $doc->content_md, $cfg['extract']));
         if ($kern === '') {
             return null;
         }
         $filesUsed[] = "{$doc->slug}@v{$doc->version}";
 
-        return "# REGELWERK BASISREZEPTE (verbindliche Bau-Regel — §2 Verarbeitungs-Reduktion · §3 Pürees · §4 Sub-Rezept-Hierarchie)\n\n"
-            . "Baue das Gericht AUS BASISREZEPTEN: Sauce/Jus/Fond/Sud/Püree/Espuma sind eigene "
-            . "Sub-Basisrezepte, keine flachen Rohzutaten (kein «Steinpilz-Rahmsauce» aus "
-            . "Steinpilzen + Sahne). Halte dich an diese Regeln:\n\n"
-            . $this->truncate($kern, $maxChars);
+        return $cfg['header'] . $this->truncate($kern, $maxChars);
     }
 
     /**
-     * Schneidet aus dem Basisrezepte-Regelwerk die für die Rezept-Erzeugung tragende Region
-     * §2–§4 (»## §2 …« bis exkl. »## §5 …«). Ohne Start-Marker ⇒ ganzer Text (der Aufrufer
-     * Head-Truncatet dann); ohne End-Marker ⇒ ab §2 bis Doc-Ende. Rein string-basiert, keine
-     * DB — robust gegen künftige Umnummerierung (nie Fehler, Invariante 6).
+     * Schneidet aus einem Regelwerk-Doc die für die Erzeugung tragende Region.
+     * - `concept`: ganzer Text (Concept-Regelwerk ist kompakt ~8,7k, der Aufrufer truncatet).
+     * - `basisrezept` (Default): §2–§4-Bauregion (»## §2 …« bis exkl. »## §5 …«) PLUS die
+     *   §12-Reihenfolge-Region (»## §12 …« bis zur nächsten Level-2-Überschrift). Fehlt §12
+     *   (Doc-Stand vor Spec 41) ⇒ nur §2–§4 (golden-safe). Ohne §2-Marker ⇒ ganzer Text.
+     * Rein string-basiert, keine DB — robust gegen künftige Umnummerierung (nie Fehler, Invariante 6).
      */
-    private function extrahiereRegelwerkKern(string $md): string
+    private function extrahiereRegelwerkKern(string $md, string $mode = 'basisrezept'): string
     {
-        $start = mb_strpos($md, '## §2');
-        if ($start === false) {
+        if ($mode === 'concept') {
             return $md;
         }
-        $rest = mb_substr($md, $start);
-        $end = mb_strpos($rest, '## §5');
 
-        return $end === false ? $rest : mb_substr($rest, 0, $end);
+        $regionen = [];
+
+        // §2–§4-Bauregion (bis exkl. §5)
+        $start = mb_strpos($md, '## §2');
+        if ($start !== false) {
+            $rest = mb_substr($md, $start);
+            $end = mb_strpos($rest, '## §5');
+            $regionen[] = $end === false ? $rest : mb_substr($rest, 0, $end);
+        }
+
+        // §12-Reihenfolge-Region (bis zur nächsten Level-2-Überschrift; robust ggü. §13-Nummerierung)
+        $s12 = mb_strpos($md, '## §12');
+        if ($s12 !== false) {
+            $rest12 = mb_substr($md, $s12);
+            $next = mb_strpos($rest12, "\n## ", 5);
+            $regionen[] = $next === false ? $rest12 : mb_substr($rest12, 0, $next);
+        }
+
+        return $regionen === [] ? $md : implode("\n\n", $regionen);
     }
 
     /**

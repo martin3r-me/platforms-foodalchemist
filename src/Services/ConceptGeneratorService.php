@@ -265,6 +265,9 @@ class ConceptGeneratorService
         if ($sichereSlots === []) {
             throw new RuntimeException('KI-Gerüst enthielt keine gültigen Slots — Brief präzisieren.');
         }
+        // Spec 41 B3: Container-Struktur-Guard — ein Buffet/Menü darf nie auf 1 Position kollabieren
+        // (RC-4/C1). Degeneriertes Gerüst → kanonisches Sektions-/Gänge-Gerüst; gute Gerüste unangetastet.
+        $sichereSlots = $this->expandiereContainerGeruest($sichereSlots, $brief, $menueAchsen);
         // Menü-Leitplanke »Anzahl Gänge« (Concept-Tab) begrenzt das Gerüst autoritativ auf N gang-Slots
         // (Nordstern: die Leitplanken des Start-Tabs propagieren). Nur ein Deckel — überzählige Gänge
         // fallen weg, fehlt die Achse bleibt alles wie gehabt.
@@ -529,6 +532,8 @@ class ConceptGeneratorService
         if ($sichereSlots === []) {
             throw new RuntimeException('KI-Gerüst enthielt keine gültigen Slots — Brief präzisieren.');
         }
+        // Spec 41 B3: Container-Struktur-Guard (s. generiereAusBrief) — Buffet/Menü nie auf 1 Position kollabieren.
+        $sichereSlots = $this->expandiereContainerGeruest($sichereSlots, $brief, $menueAchsen);
         // Gänge/Stationen-Cap (typ-abhängig) + Diät-Quoten autoritativ ins Gerüst (No-op bei leeren Achsen).
         $sichereSlots = $this->menueGaengeCap($sichereSlots, $menueAchsen);
         $sichereRules = $this->menueDiaetQuotenMerge($sichereRules, $menueAchsen);
@@ -605,6 +610,144 @@ class ConceptGeneratorService
         }
 
         return array_values($out);
+    }
+
+    /**
+     * Spec 41 B3 (§3 Regelwerk Concept, gegen RC-4 / Fall 003 »Lunchbuffet«): deterministischer
+     * Struktur-Guard. Ein Container-Brief (Buffet/Menü) MUSS ein Mehr-Sektions-Gerüst ergeben, NIE
+     * eine atomare Position (»1. Lunchbuffet«). Kollabiert das KI-Gerüst für den erkannten Archetyp
+     * (< 2 archetyp-eigene Slots), wird es durch das kanonische Sektions-/Gänge-Gerüst ERSETZT
+     * (Regelwerk_Concept §4). Ist kein Container-Archetyp erkennbar ODER ist das Gerüst bereits
+     * mehrgliedrig, bleibt es UNANGETASTET (golden-safe — gute KI-Gerüste werden nicht gestört).
+     * Läuft VOR {@see menueGaengeCap} (dessen Deckel trimmt das erzwungene Gerüst danach ggf. wieder
+     * auf die »Anzahl Gänge«-Leitplanke).
+     *
+     * @param  list<array<string,mixed>>  $slots  sanitisierte Slots
+     * @param  array<string,mixed>  $achsen
+     * @return list<array<string,mixed>>
+     */
+    private function expandiereContainerGeruest(array $slots, string $brief, array $achsen): array
+    {
+        $archetyp = $this->erkenneContainerArchetyp($brief, $achsen);
+        if ($archetyp === null) {
+            return $slots;   // kein Container-Archetyp → nichts erzwingen
+        }
+
+        $eigenTyp = $archetyp === 'buffet' ? 'station' : 'gang';
+        $vorhanden = 0;
+        foreach ($slots as $s) {
+            if (($s['slot_type'] ?? null) === $eigenTyp) {
+                $vorhanden++;
+            }
+        }
+        if ($vorhanden >= 2) {
+            return $slots;   // bereits echtes Mehr-Sektions-/Gänge-Gerüst → unangetastet
+        }
+
+        return $archetyp === 'buffet'
+            ? $this->buffetSektionsGeruest()
+            : $this->menueGangGeruest($achsen);
+    }
+
+    /**
+     * Container-Archetyp aus Concept-Achsen + Brief: `buffet` (Sektionen) | `menue` (Gänge) | null
+     * (kein Container erkennbar → kein Eingriff). `menue_typ='buffet'` ist autoritativ; sonst
+     * Brief-Schlagworte. Rein lesend, nie Fehler.
+     *
+     * @param  array<string,mixed>  $achsen
+     */
+    private function erkenneContainerArchetyp(string $brief, array $achsen): ?string
+    {
+        $typ = $achsen['menue_typ'] ?? null;
+        if ($typ === 'buffet') {
+            return 'buffet';
+        }
+        if (in_array($typ, ['menu', 'menue', 'menü'], true)) {
+            return 'menue';
+        }
+        $b = ' ' . mb_strtolower($brief) . ' ';
+        // Buffet: »buffet« ist distinktiv genug als Teilstring (deckt lunchbuffet/flying buffet).
+        if (preg_match('/(buffet|brunch)/u', $b)) {
+            return 'buffet';
+        }
+        // Menü: whitespace-verankert (NICHT \b — unter /u ist \b bei Umlauten ASCII-tückisch, sonst
+        // triggert »menüteller« fälschlich). Nur eigenständige Menü-/Gänge-Wörter zählen.
+        if (preg_match('/(^|\s)(men[üu]e?s?|mehrg[äa]nge?|\d+[- ]?g[äa]nge|g[äa]nge[- ]?men[üu]e?)(\s|$)/u', $b)) {
+            return 'menue';
+        }
+
+        return null;
+    }
+
+    /**
+     * Kanonisches Buffet-Sektions-Gerüst (Regelwerk_Concept §4.2 / [[Menue_Architektur]] + [[Anlass_Serviceformen]]).
+     * Carving-Pflicht > 50 Pax + Breite 8–15 Positionen trägt das Regelwerk im Prompt; hier steht das
+     * belastbare Sektions-Skelett mit Platzhalter-`target_count`.
+     *
+     * @return list<array<string,mixed>>
+     */
+    private function buffetSektionsGeruest(): array
+    {
+        $mk = fn (string $label, int $count, bool $pflicht): array => [
+            'label' => $label, 'slot_type' => 'station', 'target_count' => $count,
+            'price_anchor' => null, 'price_min' => null, 'price_max' => null,
+            'is_pflicht' => $pflicht, 'rules' => [],
+        ];
+
+        return [
+            $mk('Kalte Vorspeisen / Salate', 3, true),
+            $mk('Suppe', 1, false),
+            $mk('Warme Hauptkomponente', 2, true),
+            $mk('Sättigungsbeilagen (Stärke + Gemüse)', 2, true),
+            $mk('Dessert / Sweet-Table', 2, true),
+            $mk('Getränke', 1, false),
+        ];
+    }
+
+    /**
+     * Kanonisches Menü-Gänge-Gerüst ([[Menue_Architektur]]). Gang-Zahl = »Anzahl Gänge«-Leitplanke
+     * (menue_gaenge), sonst 3; auf 3–9 geklemmt. Dramaturgie endet immer mit dem Dessert.
+     *
+     * @param  array<string,mixed>  $achsen
+     * @return list<array<string,mixed>>
+     */
+    private function menueGangGeruest(array $achsen): array
+    {
+        $n = $achsen['menue_gaenge'] ?? null;
+        $n = (is_numeric($n) && (int) $n >= 1) ? (int) $n : 3;
+        $n = max(3, min(9, $n));
+
+        $out = [];
+        foreach ($this->menueGangLeiter($n) as $label) {
+            $out[] = [
+                'label' => $label, 'slot_type' => 'gang', 'target_count' => 1,
+                'price_anchor' => null, 'price_min' => null, 'price_max' => null,
+                'is_pflicht' => true, 'rules' => [],
+            ];
+        }
+
+        return $out;
+    }
+
+    /**
+     * Dramaturgische Gang-Leiter (3–9) nach [[Menue_Architektur]] — Spannungsbogen aufsteigend,
+     * Hauptgang als Höhepunkt, Dessert zuletzt.
+     *
+     * @return list<string>
+     */
+    private function menueGangLeiter(int $n): array
+    {
+        $leiter = [
+            3 => ['Vorspeise', 'Hauptgang', 'Dessert'],
+            4 => ['Vorspeise', 'Zwischengang', 'Hauptgang', 'Dessert'],
+            5 => ['Gruß aus der Küche', 'Vorspeise', 'Zwischengang', 'Hauptgang', 'Dessert'],
+            6 => ['Gruß aus der Küche', 'Vorspeise', 'Suppe', 'Zwischengang', 'Hauptgang', 'Dessert'],
+            7 => ['Gruß aus der Küche', 'Kalte Vorspeise', 'Suppe', 'Zwischengang (Fisch)', 'Hauptgang', 'Käsegang', 'Dessert'],
+            8 => ['Gruß aus der Küche', 'Kalte Vorspeise', 'Suppe', 'Warme Vorspeise', 'Zwischengang (Fisch)', 'Hauptgang', 'Käsegang', 'Dessert'],
+            9 => ['Gruß aus der Küche', 'Amuse-Bouche', 'Kalte Vorspeise', 'Suppe', 'Zwischengang (Fisch)', 'Warme Vorspeise', 'Hauptgang', 'Käsegang', 'Dessert'],
+        ];
+
+        return $leiter[$n] ?? $leiter[3];
     }
 
     /**

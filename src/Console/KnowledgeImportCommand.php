@@ -252,12 +252,17 @@ class KnowledgeImportCommand extends Command
             ['ai_generate_recipe', 'niveau', 'discovery', 1, 3000],
             ['ai_generate_recipe', 'kueche', 'discovery', 3, 3000],
             ['ai_generate_recipe', 'kreativ_input', 'discovery', 3, 2000],
-            // Etappe 1 (»Mise en Place« 2026-08-14): das Regelwerk Basisrezepte (§2 Verarbeitungs-
-            // Reduktion · §3 Pürees · §4 Sub-Rezept-Hierarchie) als verbindliche Bau-Regel in den
-            // Rezept-Generator. `always` + dediziert (regelwerkBlock) statt discovery: Regelwerk ist
-            // Handwerk, kein Produkt — eine Zutaten-Discovery würde es nie treffen. Spiegel von
-            // Migration 2026_08_14_000010. Deckel: 1 Doc (Basisrezepte), §2–§4-Region ~7k.
-            ['ai_generate_recipe', 'regelwerk', 'always', 1, 7000],
+            // Etappe 1 (»Mise en Place« 2026-08-14) + Spec 41 B1 (2026-08-21): das Regelwerk
+            // Basisrezepte (§2 Verarbeitungs-Reduktion · §3 Pürees · §4 Sub-Rezept-Hierarchie
+            // + §12 Zutaten-/Komponenten-Reihenfolge) als verbindliche Bau-Regel in den
+            // Rezept-Generator. `always` + dediziert (regelwerkBlock, pro-Feature) statt discovery.
+            // Deckel 9500 Chars, damit §2–§4 (~6,5k) UND §12 (~2,2k) ins Budget passen.
+            // Spiegel von Migration 2026_08_14_000010 (Bestand) + 2026_08_21_000010 (§12 + Concept).
+            ['ai_generate_recipe', 'regelwerk', 'always', 1, 9500],
+            // Spec 41 B1: das Regelwerk Concept (Archetypen/Gerüst-Regel/Vokabular/Preislogik) hart
+            // in den Concept-Gerüst-Generator — verhindert den 1-Position-Kollaps (RC-4/C1). Concept-
+            // Doc ist kompakt (~8,7k) → Volltext, Deckel 9000. Spiegel von Migration 2026_08_21_000010.
+            ['concept.brief_geruest', 'regelwerk', 'always', 1, 9000],
             // Step-by-Step nutzt Technik-/Domain-Wissen, aber keine kreative Rezept-Ideen-Ebene.
             // Spiegel von Migration 2026_08_11_000003.
             ['recipe.steps', 'cross_cutting', 'always', null, null],
