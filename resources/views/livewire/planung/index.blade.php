@@ -542,11 +542,14 @@
                 {{-- KI-Kopf (Etappe 2b, geplanter Pfad): arbeitet den Plan-Entwurf vorab aus (Leitidee/USP/
                      Inszenierung/Geschmackswelten + Gänge-Gerüst) und öffnet ihn im Conceptor zur Prüfung —
                      NOCH ohne Gerichte. Danach der Go „aus geprüftem Plan". Neben dem direkten „Go" unten. --}}
-                <x-foodalchemist::modal-section title="KI-Kopf — Plan vorab ausarbeiten (optional)">
-                    <p class="{{ $label ?? 'text-[11px] text-gray-500' }} mb-2">Die KI arbeitet aus dem Briefing einen vollständigen Konzept-Entwurf aus (Leitidee, USP, Inszenierung, Geschmackswelten, Gänge-Gerüst) und öffnet ihn zur Prüfung/Korrektur im Conceptor — <b>noch ohne</b> Gerichte zu erzeugen.</p>
+                {{-- DF-2 (Spec 41, Entscheid 2026-08-21): KI-Kopf ist der EMPFOHLENE Weg fürs Concepting
+                     (reicheres Ergebnis: ausgearbeiteter, prüfbarer Plan vor der Erzeugung). Primär-Button;
+                     der direkte Go unten ist der Schnellweg (sekundär). --}}
+                <x-foodalchemist::modal-section title="KI-Kopf — Plan ausarbeiten (empfohlen)">
+                    <p class="{{ $label ?? 'text-[11px] text-gray-500' }} mb-2">Empfohlener Weg: Die KI arbeitet aus dem Briefing einen vollständigen Konzept-Entwurf aus (Leitidee, USP, Inszenierung, Geschmackswelten, Gänge-Gerüst) und öffnet ihn zur Prüfung/Korrektur — <b>noch ohne</b> Gerichte zu erzeugen. Danach der Go „aus geprüftem Plan".</p>
                     <button type="button" wire:click="kiKopf" @disabled($laeuft)
                             wire:loading.attr="disabled" wire:target="kiKopf"
-                            class="{{ $btnGhost }} disabled:opacity-40" data-planung-kikopf>
+                            class="{{ $btnPrimary }} disabled:opacity-40" data-planung-kikopf>
                         <span wire:loading.remove wire:target="kiKopf">@svg('heroicon-o-sparkles', 'w-4 h-4') KI-Kopf: Plan ausarbeiten</span>
                         <span wire:loading wire:target="kiKopf">Plan wird ausgearbeitet …</span>
                     </button>
@@ -573,9 +576,11 @@
                             @svg('heroicon-o-squares-2x2', 'w-4 h-4') Go aus geprüftem Plan
                         </button>
                     @else
-                        <p class="{{ $label ?? 'text-[11px] text-gray-500' }} mb-2">Die LLM baut aus dem Briefing die Zusammenstellung (Pakete/Buffet) nach den Leitplanken; die Gerichte kommen nach der Freigabe. Fortschritt im <b>Worker</b>-Tab.</p>
-                        <button wire:click="goKaskade('concept')" @click="tab='worker'" @disabled($laeuft) class="{{ $btnPrimary }} disabled:opacity-40">
-                            @svg('heroicon-o-squares-2x2', 'w-4 h-4') Concept erzeugen
+                        {{-- DF-2: Schnellweg (sekundär) — ohne Vorab-Plan direkt erzeugen. Empfohlen ist der
+                             KI-Kopf oben (ausgearbeiteter, prüfbarer Plan). --}}
+                        <p class="{{ $label ?? 'text-[11px] text-gray-500' }} mb-2">Schnellweg (ohne Vorab-Plan): Die LLM baut aus dem Briefing direkt die Zusammenstellung (Pakete/Buffet) nach den Leitplanken; die Gerichte kommen nach der Freigabe. Für ein ausgearbeitetes Konzept den <b>KI-Kopf</b> oben nutzen. Fortschritt im <b>Worker</b>-Tab.</p>
+                        <button wire:click="goKaskade('concept')" @click="tab='worker'" @disabled($laeuft) class="{{ $btnGhost }} disabled:opacity-40">
+                            @svg('heroicon-o-squares-2x2', 'w-4 h-4') Direkt erzeugen (Schnellweg)
                         </button>
                     @endif
                 </x-foodalchemist::modal-section>
