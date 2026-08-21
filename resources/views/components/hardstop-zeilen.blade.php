@@ -21,7 +21,20 @@
     <div class="mt-3 space-y-2" data-{{ $prefix }}generator-offene>
         <p class="{{ $label }}">Hard-Stops (Bestand-Lücken ohne Halbfabrikat-Marker):</p>
         @foreach($offene as $offen)
-            @php($idx = (int) $offen['index'])
+            @php($idx = (int) ($offen['index'] ?? -1))
+            {{-- Spec 41 FIX-4-(A): Dedup-Kollision (rezept-/gericht-weit) als eigene Info-Karte —
+                 flaggt „existiert bereits als X" (nie stilles Duplizieren, DF-1). Bewusst OHNE
+                 Ingredient-Hard-Stop-Buttons (keine Bestand-Lücke); der Mensch entscheidet manuell. --}}
+            @if(!empty($offen['dedup_kollision']))
+                @php($dk = $offen['dedup_kollision'])
+                <div class="rounded border border-amber-300 bg-amber-50 px-2 py-1.5" data-{{ $prefix }}dedup="{{ (int) ($dk['existing_id'] ?? 0) }}">
+                    <p class="text-[11px] text-amber-800 inline-flex items-center gap-1.5">
+                        @svg('heroicon-o-document-duplicate', 'w-3.5 h-3.5 inline-block align-middle')
+                        «{{ $offen['text'] }}» — {{ $dk['hinweis'] ?? 'existiert bereits im Bestand' }}
+                    </p>
+                </div>
+                @continue
+            @endif
             <div class="rounded border border-gray-200 px-2 py-1.5" data-{{ $prefix }}hardstop="{{ $idx }}">
                 <p class="text-[11px] text-gray-700 inline-flex items-center gap-1.5"><span class="inline-block w-1.5 h-1.5 rounded-full bg-rose-500 align-middle"></span> {{ $offen['text'] }}</p>
                 {{-- Kohärenz-Gate: WARUM diese Zeile entdrahtet wurde (Regel = süß-in-herzhaft, KI = Kritiker-Urteil). --}}
@@ -31,6 +44,13 @@
                         @svg('heroicon-o-exclamation-triangle', 'w-3.5 h-3.5 inline-block align-middle')
                         {{ ($k['quelle'] ?? '') === 'regel' ? 'Regel' : 'Kritiker' }}: «{{ $k['name'] }}» passt fachlich nicht — {{ $k['grund'] }}
                         <span class="text-gray-400">· {{ round((float) ($k['konfidenz'] ?? 0) * 100) }} %</span>
+                    </p>
+                @endif
+                {{-- Spec 41 FIX-5 (leichter Marker): Garnitur ohne GP-Match → Name prüfen (evtl. erfunden, vgl. »Adji Kresse«). --}}
+                @if(!empty($offen['namens_warnung']))
+                    <p class="text-[10px] mt-0.5 text-amber-700" data-{{ $prefix }}namenswarnung="{{ $idx }}">
+                        @svg('heroicon-o-exclamation-triangle', 'w-3.5 h-3.5 inline-block align-middle')
+                        Name nicht im GP-Katalog — bitte prüfen (evtl. erfundene Bezeichnung).
                     </p>
                 @endif
                 <div class="flex flex-wrap items-center gap-1.5 mt-1">

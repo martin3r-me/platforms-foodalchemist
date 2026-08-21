@@ -352,6 +352,11 @@ class RecipeGeneratorService
                                 'name' => $treffer['gp_name'] ?? $treffer['recipe_name'],
                                 'score' => round((float) $treffer['score'], 3),
                             ] : null,
+                            // Spec 41 FIX-5 (leichter Marker, E4 »Adji Kresse«): eine GARNITUR ohne GP-Match ist
+                            // der Erfindungs-Hotspot (halluzinierte Sorten-/Garnitur-Namen). Als „Name prüfen"
+                            // markieren — bewusst NUR garnitur (Hauptzutaten ohne GP sind meist legitime Katalog-
+                            // Lücken, kein Erfindungsverdacht). Additive Warnung, keine Sperre.
+                            'namens_warnung' => (($z['role'] ?? null) === 'garnitur'),
                         ];
                     }
                 }
