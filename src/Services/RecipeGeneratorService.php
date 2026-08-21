@@ -390,6 +390,13 @@ class RecipeGeneratorService
         // (keine harte Sperre). NULL/unbewertet blockt NIE (Doktrin: unbekannt ≠ Verstoß).
         $result = $this->diaetGate($team, $result, $parameter);
 
+        // Dedup-Guard (Spec 41 P3 / FIX-4, DF-1): modus-orthogonaler Immer-an-Check — nie STILL
+        // duplizieren. Findet ein bestehendes gleichnamiges Rezept (Token-Set, gleicher Typ) und
+        // FLAGGT die Kollision (statistik['dedup'] + offene[]). Der Modus (bestand) steuert nur die
+        // empfohlene Aktion: nur_bestand/hybrid → Bestand übernehmen; komplett_neu → als Variante
+        // behalten. Read-only Post-Check (kein Mint-Eingriff), fail-open.
+        $result = $this->dedupGate($team, $result, $parameter);
+
         $result['kontext'] = $kontextAudit;   // Kontext-Inspektor fürs UI (null im Override-Pfad)
 
         return $result;
@@ -614,6 +621,90 @@ class RecipeGeneratorService
             }
         } catch (\Throwable $e) {
             $statistik['diaet'] = ['geprueft' => false, 'uebersprungen' => false, 'entdrahtet' => 0, 'befunde' => [], 'fehler' => true];
+        }
+
+        $result['statistik'] = $statistik;
+        $result['offene'] = $offene;
+
+        return $result;
+    }
+
+    /**
+     * Dedup-Guard (Spec 41 P3 / FIX-4, Entscheid DF-1) — modus-**orthogonaler** Immer-an-Check gegen
+     * stilles Duplizieren (Qualitäts-Log E2/E3: »Voll kreativ« mintete Kürbispüree/Rinderjus frisch,
+     * obwohl im Bestand). Read-only Post-Check NACH der Anlage: findet ein bestehendes Rezept GLEICHEN
+     * TYPS (is_sales_recipe) mit identischem Namens-Token-Set (wie {@see RecipeService::findByTokenSet},
+     * self ausgeschlossen) und FLAGGT die Kollision über den etablierten Kanal (statistik['dedup'] +
+     * offene[]) — nie stilles `_2`. Der Kreativ-Modus (`bestand`) steuert NUR die empfohlene Aktion:
+     * nur_bestand/hybrid → Bestand übernehmen (`primaer=bestand_uebernehmen`), komplett_neu → als
+     * Variante behalten (`primaer=dedup_kollision`). Fail-open (Diagnose, kein Blocker).
+     *
+     * @param  array{recipe: FoodAlchemistRecipe, statistik: array, offene: array}  $result
+     * @param  array<string,mixed>  $parameter
+     * @return array{recipe: FoodAlchemistRecipe, statistik: array, offene: array}
+     */
+    private function dedupGate(Team $team, array $result, array $parameter): array
+    {
+        /** @var FoodAlchemistRecipe $recipe */
+        $recipe = $result['recipe'];
+        $statistik = $result['statistik'];
+        $offene = $result['offene'] ?? [];
+        $bestand = (string) ($parameter['bestand'] ?? 'hybrid');
+        $statistik['dedup'] = ['geprueft' => false, 'kollision' => false];
+
+        try {
+            $engine = app(\Platform\FoodAlchemist\Services\Matching\TokenEngine::class);
+            $ziel = $engine->tokenize((string) $recipe->name);
+            sort($ziel);
+            if ($ziel === []) {
+                $result['statistik'] = $statistik;
+
+                return $result;
+            }
+
+            $existing = null;
+            foreach (\Platform\FoodAlchemist\Models\FoodAlchemistRecipe::visibleToTeam($team)
+                ->where('is_sales_recipe', (bool) $recipe->is_sales_recipe)
+                ->where('id', '!=', (int) $recipe->id)
+                ->whereNull('deleted_at')
+                ->orderBy('id')->cursor() as $r) {
+                $tokens = $engine->tokenize((string) $r->name);
+                sort($tokens);
+                if ($tokens === $ziel) {
+                    $existing = $r;
+
+                    break;   // ältestes gleichnamiges Rezept = der Bestands-Kandidat
+                }
+            }
+
+            $statistik['dedup']['geprueft'] = true;
+            if ($existing !== null) {
+                // nur_bestand/hybrid = Bestand bevorzugen; komplett_neu = bewusste Variante.
+                $reuseModus = in_array($bestand, ['nur_bestand', 'hybrid'], true);
+                $statistik['dedup']['kollision'] = true;
+                $statistik['dedup']['existing_id'] = (int) $existing->id;
+                $statistik['dedup']['existing_name'] = (string) $existing->name;
+                $statistik['dedup']['modus'] = $bestand;
+
+                $offene[] = [
+                    'index' => -1,   // rezept-/gericht-weit, nicht an eine Zutaten-Zeile gebunden
+                    'text' => (string) $recipe->name,
+                    'primaer' => $reuseModus ? 'bestand_uebernehmen' : 'dedup_kollision',
+                    'shortlist' => [],
+                    'la_kandidaten' => [],
+                    'lieferantenstrategie' => null,
+                    'schwacher_treffer' => null,
+                    'dedup_kollision' => [
+                        'existing_id' => (int) $existing->id,
+                        'existing_name' => (string) $existing->name,
+                        'modus' => $bestand,
+                        'hinweis' => 'existiert bereits als «' . $existing->name . '» (#' . $existing->id . ') — '
+                            . ($reuseModus ? 'Bestand übernehmen oder als Variante behalten?' : 'als Variante behalten oder übernehmen?'),
+                    ],
+                ];
+            }
+        } catch (\Throwable $e) {
+            $statistik['dedup'] = ['geprueft' => false, 'kollision' => false, 'fehler' => true];
         }
 
         $result['statistik'] = $statistik;
