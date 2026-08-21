@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="de">
 @php($pdf = $istPdf ?? false)
+@php($istIntern = $intern ?? false)
 {{-- Marken-Tokens (pro Karte) mit Defaults; DomPDF: kein var(), Farben per Blade-Echo, Bilder base64 --}}
 @php($b = ($branding ?? []) + ['color' => '#6d28d9', 'band' => '#6d28d9', 'logo' => null, 'cover' => null, 'footer' => null])
 @php($brand = $b['color'] ?: '#6d28d9')
@@ -68,6 +69,22 @@
         .btn { display: inline-block; padding: 6px 12px; background: {{ $brand }}; color: #fff; text-decoration: none; border-radius: 6px; margin-right: 6px; }
         .btn.ghost { background: #eee; color: #374151; }
         @media print { .actions { display: none; } }
+        /* #3: Produktions-Kaskaden-Anhang — self-contained, gescopet. */
+        .kaskade-anhang { margin-top: 24px; page-break-before: always; }
+        .kaskade-anhang .kaskade-titel { font-size: 15px; color: {{ $brand }}; border-bottom: 2px solid {{ $band }}; padding-bottom: 4px; margin: 0 0 12px; }
+        .kaskade-anhang .recipe-node { margin: 0 0 10px; }
+        .kaskade-anhang .recipe-node.depth-1 { margin-left: 10px; }
+        .kaskade-anhang .recipe-node.depth-2, .kaskade-anhang .recipe-node.depth-3, .kaskade-anhang .recipe-node.depth-4 { margin-left: 20px; }
+        .kaskade-anhang h2, .kaskade-anhang h3 { font-size: 12px; font-weight: bold; color: #111827; margin: 10px 0 4px; }
+        .kaskade-anhang .muted { color: #9ca3af; font-weight: normal; font-size: 10px; }
+        .kaskade-anhang .grid.meta { margin: 2px 0 6px; font-size: 10px; color: #374151; }
+        .kaskade-anhang .grid.meta > div { display: inline-block; margin-right: 12px; }
+        .kaskade-anhang .grid.meta > div > span { color: #9ca3af; margin-right: 3px; }
+        .kaskade-anhang .copy { color: #374151; font-size: 10px; margin: 2px 0 6px; white-space: pre-line; }
+        .kaskade-anhang .warn { color: #b45309; font-size: 10px; }
+        .kaskade-anhang table { width: 100%; border-collapse: collapse; font-size: 10px; margin: 2px 0 6px; }
+        .kaskade-anhang th, .kaskade-anhang td { text-align: left; padding: 2px 4px; border-bottom: 1px solid #eee; }
+        .kaskade-anhang th { color: #6b7280; font-weight: normal; }
     </style>
 </head>
 <body>
@@ -84,9 +101,33 @@
 
     @unless($pdf)
         <div class="actions">
-            <a class="btn" href="?pdf=1">Als PDF laden</a>
+            <a class="btn" href="{{ request()->fullUrlWithQuery(['pdf' => 1]) }}">Als PDF laden</a>
             <a class="btn ghost" href="javascript:window.print()">Drucken</a>
+            @if($istIntern)
+                <a class="btn ghost" href="{{ request()->fullUrlWithQuery(['intern' => null, 'pdf' => null]) }}">→ Kundensicht</a>
+            @else
+                <a class="btn ghost" href="{{ request()->fullUrlWithQuery(['intern' => 1, 'pdf' => null]) }}">→ Interne Sicht (EK)</a>
+            @endif
+            {{-- #3: Produktions-Kaskaden-Anhang an/aus --}}
+            @if(!empty($kaskaden))
+                <a class="btn ghost" href="{{ request()->fullUrlWithQuery(['kaskade' => null, 'pdf' => null]) }}">→ ohne Kaskade</a>
+            @else
+                <a class="btn ghost" href="{{ request()->fullUrlWithQuery(['kaskade' => 1, 'pdf' => null]) }}">→ mit Produktions-Kaskade</a>
+            @endif
         </div>
+        {{-- #3: Rubrik-Filter — nur ausgewählte Rubriken drucken (GET, erhält intern/kaskade). --}}
+        @if(count($alle_rubriken ?? []) > 1)
+            <form method="GET" style="margin: -8px 0 18px; font-size: 11px; color: #4b5563;">
+                @if($istIntern)<input type="hidden" name="intern" value="1">@endif
+                @if(!empty($kaskaden))<input type="hidden" name="kaskade" value="1">@endif
+                <strong>Rubriken drucken:</strong>
+                @foreach($alle_rubriken as $ar)
+                    <label style="margin-right: 8px; white-space: nowrap;"><input type="checkbox" name="rubrik[]" value="{{ $ar['id'] }}" {{ in_array($ar['id'], $aktive_rubriken ?? [], true) ? 'checked' : '' }}> {{ $ar['title'] }}</label>
+                @endforeach
+                <button type="submit" class="btn ghost" style="padding: 3px 8px;">Filtern</button>
+                @if(!empty($aktive_rubriken))<a class="btn ghost" style="padding: 3px 8px;" href="{{ request()->fullUrlWithQuery(['rubrik' => null, 'pdf' => null]) }}">alle</a>@endif
+            </form>
+        @endif
     @endunless
 
     <div class="kicker">{{ $typLabel[$karte->karten_typ] ?? 'Speisekarte' }}</div>
@@ -169,6 +210,15 @@
         </div>
     @endif
 
+{{-- #3: Produktions-Kaskaden-Anhang (nur wenn ?kaskade=1). Wiederverwendet report-recipe-node. --}}
+@if(!empty($kaskaden))
+    <div class="kaskade-anhang">
+        <div class="kaskade-titel">Produktions-Kaskade{{ $istIntern ? ' · intern (mit EK)' : '' }}</div>
+        @foreach($kaskaden as $kas)
+            @include('foodalchemist::dokumente.partials.report-recipe-node', ['node' => $kas['recipe'], 'optionen' => $kas['optionen']])
+        @endforeach
+    </div>
+@endif
 </div>
 </body>
 </html>

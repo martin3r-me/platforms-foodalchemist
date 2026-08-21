@@ -244,28 +244,11 @@
             </x-foodalchemist::section>
         @endif
 
-        {{-- Pairings — prominent (Basisrezept-Ebene): Chips + Typ + Verknüpfen --}}
-        <x-foodalchemist::section title="Pairings" icon="heroicon-o-arrows-right-left" :meta="$pairings?->count()" data-pairing-sektion>
-            @if($pairings !== null && $pairings->isNotEmpty())
-                <div class="flex flex-wrap gap-1 mb-1.5" data-pairing-chips>
-                    @foreach($pairings as $p)
-                        <span wire:key="pp-{{ $p->id }}-{{ $p->type }}" class="{{ $pill }} group {{ ['erprobt' => $variantPill['success'], 'aroma' => $variantPill['success'], 'verbund' => $variantPill['info'], 'trinitas' => $variantPill['primary'], 'kontrast' => $variantPill['warning']][$p->type] ?? $variantPill['secondary'] }}" title="{{ $p->type }} · {{ $p->confidence }}{{ $p->created_via === 'manual' ? ' · manuell' : '' }}">{{ $p->display_de }}@if($p->created_via === 'manual')<span class="opacity-60"> @svg('heroicon-o-pencil', 'w-3.5 h-3.5 inline-block align-middle')</span>@endif
-                            <button type="button" wire:click="pairingLoesen({{ $p->id }}, '{{ $p->type }}')" class="hidden group-hover:inline text-rose-400 ml-0.5" title="lösen">✕</button>
-                        </span>
-                    @endforeach
-                </div>
-            @endif
-            <div class="flex items-center gap-1" data-pairing-add>
-                <select wire:model="pairingTyp" class="{{ $input }} !py-0.5 !text-[11px] !w-24 shrink-0">
-                    <option value="aroma">aroma</option>
-                    <option value="kontrast">kontrast</option>
-                </select>
-                <input type="search" wire:model.live.debounce.300ms="pairingSuche" placeholder="Pairing verknüpfen …" class="{{ $input }} !py-1 flex-1" data-pairing-suche />
-            </div>
-            @foreach($pairingKandidaten as $kandidat)
-                <button type="button" wire:key="pk-{{ $kandidat->id }}" wire:click="pairingVerknuepfen({{ $kandidat->id }})" class="block w-full text-left px-2 py-1 rounded text-xs text-gray-700 hover:bg-emerald-500/10" data-pairing-kandidat="{{ $kandidat->id }}">{{ $kandidat->display_de }} <span class="text-gray-500">{{ $kandidat->slug }}</span></button>
-            @endforeach
-        </x-foodalchemist::section>
+        {{-- #5 (2026-08): manuelle Pairings-Sektion (aroma/kontrast) im Editor AUSGEBLENDET.
+             Das echte Pairing kommt aus dem Anker-Graph (Pairing-Netz oben), nicht aus manuellen
+             aroma/kontrast-Links. Service + Daten bleiben (setRecipePairing/recipePairings/
+             removeRecipePairing, Tabelle recipe_pairings) + ManuellePairingTest — reaktivierbar,
+             indem dieser Block wieder eingesetzt wird. --}}
 
         {{-- Allergene & Diät — volle Deklaration --}}
         <x-foodalchemist::section title="Allergene & Diät" icon="heroicon-o-beaker" :meta="'Konf. ' . strtoupper($rezept->allergens_confidence)">

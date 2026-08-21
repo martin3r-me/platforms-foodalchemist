@@ -7,7 +7,12 @@
     :title-name="$rezept?->name" size="max-w-3xl" :fullscreen="$rezept !== null" :dark-canvas="$rezept !== null">
     @if($rezept !== null)
         <x-slot:actions>
-            <button type="button" wire:click="speichern" class="{{ $btnPrimary }}" data-vk-speichern>Speichern</button>
+            {{-- #1b: EIN Speichern-Weg, sequenziert — erst VK-Stammdaten (`speichern`), dann bei
+                 Erfolg adressiert das Zutaten-Speichern der eingebetteten Komponenten (MVP-046).
+                 Der Editor meldet `zutaten-persistiert` zurück → beiZutatenPersistiert schließt. --}}
+            <button type="button"
+                    x-on:click="$wire.speichern().then(() => { if (! $wire.fehler && $wire.recipeId) $dispatch('zutaten-speichern', { recipeId: $wire.recipeId }) })"
+                    class="{{ $btnPrimary }}" data-vk-speichern>Speichern</button>
             <a href="{{ route('foodalchemist.rezepte.dokument', ['id' => $rezept->id, 'profil' => 'produktion']) }}" target="_blank"
                class="{{ $btnGhostXs }}" title="Druck-/PDF-Report mit Profilen und Filtern" data-vk-druck>
                 @svg('heroicon-o-printer', 'w-3.5 h-3.5') Druck

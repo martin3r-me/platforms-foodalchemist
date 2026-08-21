@@ -376,7 +376,8 @@ class Index extends Component
             return [(int) $o->id => $orders->herkunftAggregat($refs)];
         });
 
-        $herkunftByOrder = $herkunftByOrder->map(fn ($items) => $orders->herkunftMitProduktionsnamen($team, $items));
+        // #6 N+1: EIN whereIn ueber alle Bestellungen statt je Order ein ProductionOrder-Query.
+        $herkunftByOrder = collect($orders->herkunftMitProduktionsnamenBulk($team, $herkunftByOrder->all()));
 
         $produktionen = $herkunftByOrder
             ->flatten(1)

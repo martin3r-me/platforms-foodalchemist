@@ -159,7 +159,7 @@
                                 <td class="{{ $td }} font-medium w-full max-w-0 min-w-44 truncate text-gray-900">{{ $b->name }}</td>
                                 <td class="{{ $td }} text-gray-600 whitespace-nowrap">{{ $b->role ?? '—' }}</td>
                                 <td class="{{ $td }} text-gray-600 whitespace-nowrap">{{ $b->level ?? '—' }}</td>
-                                <td class="{{ $td }} text-gray-600 text-right tabular-nums">{{ $b->gerichte_count }}</td>
+                                <td class="{{ $td }} text-gray-600 text-right tabular-nums">{{ $b->dishes_count }}</td>
                                 <td class="{{ $td }} text-gray-900 text-right tabular-nums whitespace-nowrap">{{ $b->price_per_person !== null ? number_format((float) $b->price_per_person, 2, ',', '.') . ' €' : '—' }}</td>
                                 <td class="{{ $td }} text-gray-600 text-right tabular-nums">{{ $b->food_cost_percent !== null ? number_format((float) $b->food_cost_percent, 1, ',', '.') . ' %' : '—' }}</td>
                                 <td class="{{ $td }}"><span class="{{ $pill }} {{ $b->price_mode === 'auto' ? $variantPill['info'] : $variantPill['secondary'] }}">{{ $b->price_mode }}</span></td>
