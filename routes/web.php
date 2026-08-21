@@ -275,7 +275,14 @@ Route::get('/foodbooks/{id}/dokument', function (int $id, \Platform\FoodAlchemis
     $fb = $svc->detail($team, $id) ?? abort(404);
     // ?intern=1 → interne Projektion (EK/VK/W% pro Person, Projektleitung/Vertrieb). Default = Kundensicht (ohne EK).
     $intern = request()->boolean('intern');
-    $data = $svc->dokumentDaten($team, $fb, $intern);
+    // #3: ?kaskade=1 → Produktions-Kaskaden-Anhang je Gericht · ?kapitel=… → nur diese Kapitel.
+    // kapitel akzeptiert Checkbox-Array (kapitel[]=1&kapitel[]=2) UND CSV (kapitel=1,2).
+    $mitKaskade = request()->boolean('kaskade');
+    $kapRaw = request()->query('kapitel', '');
+    $kapitelFilter = is_array($kapRaw)
+        ? array_values(array_filter(array_map('intval', $kapRaw)))
+        : array_values(array_filter(array_map('intval', explode(',', (string) $kapRaw))));
+    $data = $svc->dokumentDaten($team, $fb, $intern, $kapitelFilter, $mitKaskade);
 
     if (request()->boolean('pdf')) {
         // Härten: kein stiller HTML-Fallback mehr — wenn PDF verlangt, aber die Engine fehlt,
@@ -374,7 +381,8 @@ Route::get('/speiseplan', \Platform\FoodAlchemist\Livewire\Speiseplan\Index::cla
 Route::get('/speiseplan/{id}/dokument', function (int $id, \Platform\FoodAlchemist\Services\SpeiseplanService $svc) {
     $team = \Illuminate\Support\Facades\Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
     $plan = $svc->detail($team, $id) ?? abort(404);
-    $data = $svc->dokumentDaten($team, $plan, (string) request()->query('mahlzeit', 'mittag'), request()->query('montag'));
+    // #3: ?intern=1 (EK-Kaskade) · ?kaskade=1 (Produktions-Baum je Gericht der Woche).
+    $data = $svc->dokumentDaten($team, $plan, (string) request()->query('mahlzeit', 'mittag'), request()->query('montag'), request()->boolean('intern'), request()->boolean('kaskade'));
 
     if (request()->boolean('pdf')) {
         if (! class_exists(\Barryvdh\DomPDF\Facade\Pdf::class)) {
@@ -403,7 +411,14 @@ Route::get('/speisekarten', \Platform\FoodAlchemist\Livewire\Speisekarte\Index::
 Route::get('/speisekarten/{id}/dokument', function (int $id, \Platform\FoodAlchemist\Services\SpeisekarteService $svc) {
     $team = \Illuminate\Support\Facades\Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
     $karte = $svc->detail($team, $id) ?? abort(404);
-    $data = $svc->dokumentDaten($team, $karte);
+    // #3: ?intern=1 (EK-Kaskade) · ?kaskade=1 (Produktions-Baum je Gericht) · ?rubrik=… (nur diese Rubriken; Array|CSV).
+    $intern = request()->boolean('intern');
+    $mitKaskade = request()->boolean('kaskade');
+    $rubRaw = request()->query('rubrik', '');
+    $rubrikFilter = is_array($rubRaw)
+        ? array_values(array_filter(array_map('intval', $rubRaw)))
+        : array_values(array_filter(array_map('intval', explode(',', (string) $rubRaw))));
+    $data = $svc->dokumentDaten($team, $karte, $intern, $rubrikFilter, $mitKaskade);
 
     if (request()->boolean('pdf')) {
         if (! class_exists(\Barryvdh\DomPDF\Facade\Pdf::class)) {

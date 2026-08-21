@@ -290,13 +290,11 @@
 
         {{-- Such-/Park-Zeile ist jetzt sticky am Anfang der Mittelspalte (oben). --}}
 
-        {{-- R4-Fix: dieser Block saß IM Picker-Dropdown (x-show) — der Button war praktisch nie sichtbar --}}
-        @if($eingebettet)
-            <div class="mt-3 flex items-center justify-end gap-2" data-zutaten-eingebettet-aktionen>
-                <span class="text-[10px] text-gray-500">Zutaten speichern synct + rechnet GL-02 neu (eigener Schritt, P-8)</span>
-                <button type="button" @click="$wire.speichern(payload())" class="{{ $btnPrimary }}" data-zutaten-speichern-inline>Zutaten speichern</button>
-            </div>
-        @endif
+        {{-- Konsolidierung 2026-08 (#1b): der frühere eingebettete „Zutaten speichern"-Knopf ist
+             entfallen. Der Zutaten-Save wird jetzt vom JEWEILIGEN Host getriggert (adressiert per
+             `zutaten-speichern`-Event, MVP-046): Rezept-/Gericht-Editor über ihren Haupt-„Speichern"
+             (sequenziert nach den Stammdaten), das Planungs-Cockpit über den Per-Step-Knopf in
+             step-zeile.blade. So gibt es pro Editor nur EINEN Speichern-Weg. --}}
         </div>{{-- /Mitte --}}
         <aside class="w-full xl:w-72 shrink-0 flex flex-col rounded-xl bg-gray-500/[0.07] border border-black/5 p-2.5 xl:sticky xl:top-0 self-start max-h-[70vh]" data-browser-rezepte>
             <p class="{{ $dt }} mb-1">Basisrezepte (<span x-text="rezTotal"></span>)</p>

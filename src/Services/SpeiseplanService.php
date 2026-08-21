@@ -489,7 +489,7 @@ class SpeiseplanService
      *               legende:array{allergene:list<array{code:string,label:string}>, zusatzstoffe:list<array{code:string,label:string}>},
      *               kostformen:list, erzeugt:string}
      */
-    public function dokumentDaten(Team $team, FoodAlchemistSpeiseplan $plan, string $mahlzeit = 'mittag', ?string $montag = null): array
+    public function dokumentDaten(Team $team, FoodAlchemistSpeiseplan $plan, string $mahlzeit = 'mittag', ?string $montag = null, bool $intern = false, bool $mitKaskade = false): array
     {
         $mahlzeit = array_key_exists($mahlzeit, self::MAHLZEITEN) ? $mahlzeit : 'mittag';
         $mo = ($montag !== null ? Carbon::parse($montag) : ($plan->start_date ?? Carbon::now()))->startOfWeek(Carbon::MONDAY);
@@ -569,6 +569,40 @@ class SpeiseplanService
             }
         }
 
+        // #3: optionaler Produktions-Kaskaden-Anhang. Gericht-Rezepte je Wochen-Eintrag via
+        // eintragGerichte (über alle Linien × Tage der gewählten Mahlzeit/Woche). Je Gericht der
+        // rekursive Baum aus ReportExportService (report-recipe-node). EK nur bei $intern.
+        $kaskaden = [];
+        if ($mitKaskade) {
+            $gerichtIds = [];
+            foreach ($raster as $proLinie) {
+                foreach ($proLinie as $eintraege) {
+                    foreach ($eintraege as $e) {
+                        foreach ($this->eintragGerichte($e) as $g) {
+                            if ($g !== null) {
+                                $gerichtIds[] = (int) $g->id;
+                            }
+                        }
+                    }
+                }
+            }
+            $kOpt = [
+                'stammdaten' => true, 'zutaten' => true, 'kaskade' => true,
+                'steps' => false, 'sensorik' => false, 'produktion' => false, 'bilder' => false,
+                'deklaration' => false, 'naehrwerte' => false, 'notizen' => false,
+                'preise' => $intern, 'lieferanten' => $intern, 'ek' => $intern, 'intern' => $intern,
+            ];
+            $report = app(\Platform\FoodAlchemist\Services\ReportExportService::class);
+            foreach (array_values(array_unique($gerichtIds)) as $gid) {
+                try {
+                    $d = $report->rezeptDaten($team, $gid, $kOpt);
+                    $kaskaden[] = ['name' => $d['name'], 'recipe' => $d['recipe'], 'optionen' => $kOpt];
+                } catch (\Throwable) {
+                    // fail-soft
+                }
+            }
+        }
+
         return [
             'plan' => $plan,
             'mahlzeitLabel' => self::MAHLZEITEN[$mahlzeit],
@@ -579,6 +613,9 @@ class SpeiseplanService
             'kostformen' => $this->kostformAbdeckung($plan, $mahlzeit, $mo),
             'naehrwerte' => $this->wochenNaehrwerte($plan, $mahlzeit, $mo),
             'erzeugt' => Carbon::now()->format('d.m.Y'),
+            // #3: Kaskaden-Anhang + interne Sicht.
+            'intern' => $intern,
+            'kaskaden' => $kaskaden,
         ];
     }
 

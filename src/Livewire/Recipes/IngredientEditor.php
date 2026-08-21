@@ -105,13 +105,18 @@ class IngredientEditor extends Component
             }
             $this->dispatch('recipe-gespeichert');
             $this->dispatch('recipe-selected', id: $this->recipeId);
-            $this->savedToast('Zutaten gespeichert');
+            $this->savedToast('Gespeichert');   // #1b: neutral — der Save deckt jetzt je Host Stammdaten+Zutaten ab
             // #511: das fehlende Glied im Live-Refresh. syncIngredients hat Kind +
             // transitive Eltern server-seitig bereits neu gerechnet (recomputeAndPropagate);
             // dieses Signal zieht die kosten-abhängigen Panels (Kalkulation, Eltern-Cockpits)
             // gezielt nach — statt sich allein aufs generische Re-Render zu verlassen.
             $betroffen = app(RecipeRecomputeService::class)->betroffeneRezepte($this->recipeId);
             $this->dispatch('kosten-aktualisiert', recipe_id: $this->recipeId, ids: $betroffen);
+            // #1b (Konsolidierung): adressierte Host-Rückmeldung. Der einbettende Editor
+            // (Rezept-/Gericht-Modal) schließt erst NACH erfolgreichem Zutaten-Save auf dieses
+            // Signal hin — so bleibt ein Zutaten-Fehler im offenen Modal sichtbar, statt dass es
+            // vorher zuklappt. Cockpit ignoriert es (kein Modal). recipeId adressiert wie MVP-046.
+            $this->dispatch('zutaten-persistiert', recipeId: $this->recipeId);
         } catch (\RuntimeException $e) {
             $this->fehler = $e->getMessage();
         }

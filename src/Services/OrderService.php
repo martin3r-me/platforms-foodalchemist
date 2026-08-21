@@ -2127,24 +2127,58 @@ class OrderService
      */
     public function herkunftMitProduktionsnamen(Team $team, array $herkunft): array
     {
-        $ids = collect($herkunft)
-            ->pluck('production_order_id')
-            ->filter()
-            ->map(fn ($id) => (int) $id)
-            ->unique()
-            ->values();
-
+        $ids = collect($herkunft)->pluck('production_order_id')->filter()->map(fn ($id) => (int) $id)->unique()->values();
         if ($ids->isEmpty()) {
             return $herkunft;
         }
 
-        $namen = FoodAlchemistProductionOrder::visibleToTeam($team)
+        return $this->beschrifteHerkunft($herkunft, $this->produktionsNamen($team, $ids));
+    }
+
+    /**
+     * #6 N+1: wie {@see herkunftMitProduktionsnamen()}, aber fuer VIELE Bestellungen in EINEM Query.
+     * Vorher wurde die Einzel-Methode je Order aufgerufen (Orders/Index) → 1 ProductionOrder-Query
+     * pro Zeile. Hier gehen ALLE Produktions-IDs ueber alle Orders in ein whereIn; danach wird jede
+     * Order in-memory beschriftet.
+     *
+     * @param  array<int, list<array{key:string, type:string, label:string, production_order_id:?int}>>  $herkunftProOrder
+     * @return array<int, list<array{key:string, type:string, label:string, production_order_id:?int}>>
+     */
+    public function herkunftMitProduktionsnamenBulk(Team $team, array $herkunftProOrder): array
+    {
+        $ids = collect($herkunftProOrder)
+            ->flatMap(fn ($herkunft) => collect($herkunft)->pluck('production_order_id')->all())
+            ->filter()->map(fn ($id) => (int) $id)->unique()->values();
+        if ($ids->isEmpty()) {
+            return $herkunftProOrder;
+        }
+
+        $namen = $this->produktionsNamen($team, $ids);
+        $out = [];
+        foreach ($herkunftProOrder as $orderId => $herkunft) {
+            $out[$orderId] = $this->beschrifteHerkunft($herkunft, $namen);
+        }
+
+        return $out;
+    }
+
+    /** @return \Illuminate\Support\Collection<int, string> production_order_id ⇒ Label (ein Query) */
+    private function produktionsNamen(Team $team, \Illuminate\Support\Collection $ids): \Illuminate\Support\Collection
+    {
+        return FoodAlchemistProductionOrder::visibleToTeam($team)
             ->whereIn('id', $ids)
             ->get(['id', 'name', 'production_date'])
             ->mapWithKeys(fn ($p) => [
                 (int) $p->id => trim(($p->name ?: 'Produktion #'.$p->id).($p->production_date ? ' · '.$p->production_date->format('d.m.Y') : '')),
             ]);
+    }
 
+    /**
+     * @param  list<array{key:string, type:string, label:string, production_order_id:?int}>  $herkunft
+     * @return list<array{key:string, type:string, label:string, production_order_id:?int}>
+     */
+    private function beschrifteHerkunft(array $herkunft, \Illuminate\Support\Collection $namen): array
+    {
         return collect($herkunft)->map(function ($h) use ($namen) {
             if (($h['production_order_id'] ?? null) !== null) {
                 $h['label'] = $namen[(int) $h['production_order_id']] ?? $h['label'];

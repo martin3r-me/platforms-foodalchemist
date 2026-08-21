@@ -202,20 +202,39 @@ class RecipeModal extends Component
             // Beim ANLEGEN getippter Freitext wird in Schritte geparst — das macht
             // RecipeService::create zentral (gilt so für jeden Schreibweg, Spec 27).
 
-            // #509 Create-Parität (VkModal::anlegen-Muster): nach dem Anlegen NICHT
-            // schließen, sondern nahtlos in den Edit-Modus springen — Zutaten/Deklaration/
-            // Darreichungen (allesamt @if($recipeId !== null)) werden sofort befüllbar,
-            // statt dass der Nutzer das frische Rezept erst wieder heraussuchen muss.
             if ($warNeu) {
+                // #509 Create-Parität: nach dem Anlegen nahtlos in den Edit-Modus (Zutaten/
+                // Deklaration/Darreichungen sind erst @if($recipeId !== null) befüllbar). Es gibt
+                // noch keine Zutaten → kein Zutaten-Save, das Modal bleibt bewusst offen.
                 $this->ladeRezept($recipe->id);
+                $this->dispatch('recipe-gespeichert');
+                $this->dispatch('recipe-selected', id: $recipe->id);
+                $this->savedToast('Rezept angelegt');
             } else {
-                $this->dispatch('modal.close', name: 'recipe-modal');
+                // #1b: Stammdaten sind gespeichert. Schließen + finaler Toast passieren erst,
+                // wenn der eingebettete Zutaten-Editor erfolgreich gespeichert hat (er meldet
+                // `zutaten-persistiert` → beiZutatenPersistiert). Das Anstoßen des Zutaten-Saves
+                // macht der Speichern-Button client-seitig, sequenziert NACH diesem Promise.
+                // Hier NICHT schließen — sonst wäre ein Zutaten-Fehler unsichtbar (Race-Fix).
+                $this->dispatch('recipe-selected', id: $recipe->id);
             }
-            $this->dispatch('recipe-gespeichert');
-            $this->dispatch('recipe-selected', id: $recipe->id);
-            $this->savedToast($warNeu ? 'Rezept angelegt' : 'Rezept gespeichert');
         } catch (\RuntimeException $e) {
             $this->fehler = $e->getMessage();
+        }
+    }
+
+    /**
+     * #1b: Der eingebettete Zutaten-Editor hat erfolgreich gespeichert → JETZT erst schließen
+     * (der Stammdaten-Save lief davor, der Button sequenziert beides). Adressiert wie MVP-046:
+     * nur schließen, wenn genau dieses offene Rezept gemeint ist — sonst zöge ein Zutaten-Save
+     * aus dem Cockpit/Gericht-Editor das Rezept-Modal mit zu. Der Erfolgs-Toast kommt vom
+     * Zutaten-Editor selbst (ein Toast, kein Doppel).
+     */
+    #[On('zutaten-persistiert')]
+    public function beiZutatenPersistiert(?int $recipeId = null): void
+    {
+        if ($this->istOffen && $recipeId !== null && $this->recipeId === $recipeId) {
+            $this->dispatch('modal.close', name: 'recipe-modal');
         }
     }
 
@@ -652,10 +671,21 @@ class RecipeModal extends Component
                 return;
             }
             $anreicherung = app(\Platform\FoodAlchemist\Services\RecipeOneShotService::class)
-                ->anreichern($team, $recipe, completeCoverage: true);
+                ->anreichern($team, $recipe, completeCoverage: true, refresh: true);   // #4: expliziter Klick = Refresh auch gefüllter, nicht-manueller Felder
             $this->bulkRunId = null;
             $this->oeffnen($this->recipeId);
             $this->anreicherung = $anreicherung;
+            // #4 Kaskade: Sub-Basisrezepte im Hintergrund mit-anreichern (async via EnrichRecipeJob,
+            // refresh=true; synchron würde ein mehrgliedriges Gericht in einen Timeout laufen).
+            $subIds = app(\Platform\FoodAlchemist\Services\RecipeOneShotService::class)->subRezeptIds((int) $recipe->id);
+            foreach ($subIds as $subId) {
+                \Platform\FoodAlchemist\Jobs\EnrichRecipeJob::dispatch(
+                    $team->id, (int) (Auth::id() ?? 0), $subId, null, false, null, false, true,
+                );
+            }
+            if ($subIds !== []) {
+                $this->savedToast(count($subIds) . ' Komponente(n) werden im Hintergrund angereichert …');
+            }
             $this->dispatch('recipe-gespeichert');
         } catch (\Throwable $e) {
             $this->fehler = $e->getMessage();                          // Provider-/Coverage-Fehler → graceful im Editor

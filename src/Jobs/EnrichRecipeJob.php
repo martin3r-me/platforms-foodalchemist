@@ -53,6 +53,7 @@ class EnrichRecipeJob implements ShouldQueue
         public bool $kiBilder = false,
         public ?int $stepId = null,
         public bool $nurBilder = false,
+        public bool $refresh = false,   // #4: Kaskaden-Anreicherung aus dem Editor → auch gefüllte, nicht-manuelle Felder auffrischen
     ) {}
 
     public function handle(RecipeOneShotService $oneShot): void
@@ -76,7 +77,7 @@ class EnrichRecipeJob implements ShouldQueue
         if (! $this->nurBilder) {
             $this->markEnrich('running');
             try {
-                $oneShot->anreichern($team, $recipe, $this->zielVk, completeCoverage: true);
+                $oneShot->anreichern($team, $recipe, $this->zielVk, completeCoverage: true, refresh: $this->refresh);
                 $this->markEnrich('done');
             } catch (\Throwable $e) {
                 // Rezept bleibt live (fail-soft) — aber der Fehler wird sichtbar (Status + Log), nicht geschluckt.

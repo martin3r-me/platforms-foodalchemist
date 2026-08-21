@@ -1639,7 +1639,13 @@ class FoodbookService
      *
      * @return array{fb:FoodAlchemistFoodbook, kapitel:list<array>, gesamt:array, kunde:?string}
      */
-    public function dokumentDaten(Team $team, FoodAlchemistFoodbook $fb, bool $intern = false): array
+    /**
+     * @param  list<int>  $kapitelFilter  #3: leer = alle Kapitel; sonst nur diese Kapitel-IDs. Ein
+     *                                     selektiertes Kapitel, dessen Eltern rausgefiltert wurde,
+     *                                     wird auf die oberste Ebene gehoben (sonst nie erreicht).
+     * @param  bool  $mitKaskade  #3: zusätzlich den Produktions-Baum je Gericht anhängen (EK nur intern).
+     */
+    public function dokumentDaten(Team $team, FoodAlchemistFoodbook $fb, bool $intern = false, array $kapitelFilter = [], bool $mitKaskade = false): array
     {
         $fb->loadMissing([
             'chapters' => fn ($q) => $q->orderBy('position'),
@@ -1652,7 +1658,17 @@ class FoodbookService
             'crmCompany', 'crmContact',
         ]);
         $pax = $fb->personen;
-        $byParent = $fb->chapters->groupBy(fn ($k) => $k->parent_id ?? 0);
+
+        // #3: Kapitel-Filter — nur ausgewählte Kapitel rendern; rausgefilterte Eltern hochziehen.
+        $chapters = $fb->chapters;
+        if ($kapitelFilter !== []) {
+            $erlaubt = array_flip(array_map('intval', $kapitelFilter));
+            $chapters = $chapters->filter(fn ($k) => isset($erlaubt[(int) $k->id]))->values();
+            $vorhanden = array_flip($chapters->pluck('id')->map(fn ($v) => (int) $v)->all());
+            $byParent = $chapters->groupBy(fn ($k) => ($k->parent_id !== null && isset($vorhanden[(int) $k->parent_id])) ? (int) $k->parent_id : 0);
+        } else {
+            $byParent = $chapters->groupBy(fn ($k) => $k->parent_id ?? 0);
+        }
         $wording = app(WordingResolver::class);
 
         $rows = [];
@@ -1709,6 +1725,48 @@ class FoodbookService
         };
         $walk(0, 0);
 
+        // #3: optionaler Produktions-Kaskaden-Anhang. Gericht-IDs aus den (gefilterten) Kapitel-
+        // Blöcken: recipe_ref = direktes Gericht, concept_ref = Slot-/Paket-Gerichte. Je Gericht der
+        // rekursive Baum aus ReportExportService (wiederverwendet report-recipe-node). EK nur intern
+        // (ek/preise/lieferanten an $intern gebunden) → Kundensicht zeigt Struktur+Mengen ohne Kosten.
+        $kaskaden = [];
+        if ($mitKaskade) {
+            $gerichtIds = [];
+            foreach ($chapters as $k) {
+                foreach ($k->blocks as $b) {
+                    if ($b->type === 'recipe_ref' && $b->dish !== null) {
+                        $gerichtIds[] = (int) $b->dish->id;
+                    } elseif ($b->type === 'concept_ref' && $b->concept !== null) {
+                        foreach ($b->concept->slots as $slot) {
+                            if ($slot->dish !== null) {
+                                $gerichtIds[] = (int) $slot->dish->id;
+                            }
+                            foreach ($slot->package?->dishes ?? [] as $pg) {
+                                if ($pg->dish !== null) {
+                                    $gerichtIds[] = (int) $pg->dish->id;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            $kOpt = [
+                'stammdaten' => true, 'zutaten' => true, 'kaskade' => true,
+                'steps' => false, 'sensorik' => false, 'produktion' => false, 'bilder' => false,
+                'deklaration' => false, 'naehrwerte' => false, 'notizen' => false,
+                'preise' => $intern, 'lieferanten' => $intern, 'ek' => $intern, 'intern' => $intern,
+            ];
+            $report = app(\Platform\FoodAlchemist\Services\ReportExportService::class);
+            foreach (array_values(array_unique($gerichtIds)) as $gid) {
+                try {
+                    $d = $report->rezeptDaten($team, $gid, $kOpt);
+                    $kaskaden[] = ['name' => $d['name'], 'recipe' => $d['recipe'], 'optionen' => $kOpt];
+                } catch (\Throwable) {
+                    // fail-soft: ein nicht ladbares Gericht kippt den Druck nicht
+                }
+            }
+        }
+
         return [
             'fb' => $fb,
             'intern' => $intern,
@@ -1722,6 +1780,11 @@ class FoodbookService
             'stand' => $fb->updated_at,
             // PDF-Redesign: pro-Foodbook-Marke (Farbe/Band/Logo/Cover/Footer), DomPDF-taugliche base64-Bilder.
             'branding' => $this->brandingDaten($fb),
+            // #3: Produktions-Kaskaden-Anhang (leer, wenn nicht angefordert).
+            'kaskaden' => $kaskaden,
+            // #3: volle Kapitel-Liste (ungefiltert) + aktiver Filter — für den Kapitel-Picker im Dokument.
+            'alle_kapitel' => $fb->chapters->map(fn ($k) => ['id' => (int) $k->id, 'title' => $k->consumer_title ?: $k->title])->values()->all(),
+            'aktive_kapitel' => array_map('intval', $kapitelFilter),
         ];
     }
 

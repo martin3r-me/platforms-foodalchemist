@@ -92,6 +92,30 @@ class BulkEnrichService
     }
 
     /**
+     * #4: wie {@see luecken()}, aber für den BEWUSSTEN „Alles anreichern"-Refresh: nimmt auch
+     * bereits GEFÜLLTE Felder mit — sofern sie nicht manuell gepflegt sind (`*_source === 'manual'`).
+     * So werden die abgeleiteten Textfelder (Beschreibung/Geschmack/Wording/…) nach Zutaten-/
+     * Rezeptänderungen neu erzeugt statt stehenzubleiben; manuelle Pflege bleibt geschützt
+     * (Override-First — `uebernehmen()` zieht dieselbe Grenze zusätzlich hart). Felder ohne
+     * `source`-Spalte (z.B. Geschmack) tragen keinen Manual-Schutz und werden mit-aufgefrischt.
+     */
+    public function zuAktualisieren(FoodAlchemistRecipe $r, array $schritte): array
+    {
+        return array_values(array_filter($schritte, function (string $s) use ($r) {
+            $ziel = self::ZIELFELDER[$s] ?? null;
+            if ($ziel === null) {
+                return true;
+            }
+            $wert = $r->getAttribute($ziel['feld']);
+            if ($wert === null || $wert === '') {
+                return true;                                        // leer → immer
+            }
+            $sourceFeld = $ziel['source'] ?? null;                 // gefüllt: nur auffrischen, wenn nicht manuell
+            return $sourceFeld === null || (string) $r->getAttribute($sourceFeld) !== 'manual';
+        }));
+    }
+
+    /**
      * Lauf-Zeile anlegen (Fortschritts-Anker für Polling + Review-Queue).
      * Herausgezogen für Spec 03 L7: die One-Shot-Kaskade läuft synchron im ohnehin
      * asynchronen Generier-Job und darf deshalb keinen zweiten Job dispatchen —

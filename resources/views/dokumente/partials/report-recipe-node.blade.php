@@ -25,11 +25,17 @@
         @if($opt['stammdaten'] ?? true)
             <div class="grid meta">
                 <div><span>Yield</span>{{ $node['yield_kg'] !== null ? $num($node['yield_kg'], 3, ' kg') : ($node['yield_pieces'] !== null ? $num($node['yield_pieces'], 2, ' Stk.') : '—') }}</div>
-                <div><span>EK gesamt</span>{{ $money($node['ek_total_eur'], 2) }}</div>
-                <div><span>EK/kg</span>{{ $node['ek_per_kg_eur'] !== null ? $money($node['ek_per_kg_eur'], 2) . '/kg' : '—' }}</div>
+                {{-- #3: Kosten (EK / Food Cost) hinter `ek`-Flag. Default true → bestehende Rezept-Reports
+                     unverändert; die Foodbook-/Speisekarte-KUNDENsicht setzt ek=false (nur intern EK). --}}
+                @if($opt['ek'] ?? true)
+                    <div><span>EK gesamt</span>{{ $money($node['ek_total_eur'], 2) }}</div>
+                    <div><span>EK/kg</span>{{ $node['ek_per_kg_eur'] !== null ? $money($node['ek_per_kg_eur'], 2) . '/kg' : '—' }}</div>
+                @endif
                 @if($node['is_sales_recipe'] ?? false)
                     <div><span>VK netto</span>{{ $money($node['sales_net'], 2) }}</div>
-                    <div><span>Food Cost</span>{{ $node['food_cost_percent'] !== null ? $num($node['food_cost_percent'], 1, ' %') : '—' }}</div>
+                    @if($opt['ek'] ?? true)
+                        <div><span>Food Cost</span>{{ $node['food_cost_percent'] !== null ? $num($node['food_cost_percent'], 1, ' %') : '—' }}</div>
+                    @endif
                     <div><span>VK-Einheit</span>{{ $node['sales_unit'] ?? '—' }}</div>
                 @endif
                 <div><span>Kategorie</span>{{ $node['category'] ?? $node['dish_main_group'] ?? '—' }}</div>

@@ -274,8 +274,23 @@ class VkModal extends Component
             return;
         }
         $this->dispatch('recipe-gespeichert');
-        $this->dispatch('modal.close', name: 'vk-modal');
-        $this->savedToast('Gericht gespeichert');
+        // #1b: Schließen + finaler Toast erst NACH erfolgreichem Zutaten-Save. Der Button stößt
+        // den Zutaten-Save sequenziert nach diesem Promise an (adressiert, MVP-046); der Editor
+        // meldet `zutaten-persistiert` → beiZutatenPersistiert schließt. Hier NICHT schließen —
+        // sonst wäre ein Zutaten-Fehler unsichtbar (Race-Fix, Parität zum Rezept-Editor).
+    }
+
+    /**
+     * #1b: eingebettete Komponenten erfolgreich gespeichert → jetzt erst das Gericht-Modal
+     * schließen (adressiert, damit ein Zutaten-Save aus Cockpit/Rezept-Editor nicht hier zieht).
+     * Der Erfolgs-Toast kommt vom Zutaten-Editor (ein Toast, kein Doppel).
+     */
+    #[On('zutaten-persistiert')]
+    public function beiZutatenPersistiert(?int $recipeId = null): void
+    {
+        if ($this->recipeId !== null && $this->recipeId === $recipeId) {
+            $this->dispatch('modal.close', name: 'vk-modal');
+        }
     }
 
     /** VK-Layer lösen (D-6): löscht NUR das Gericht — Basisrezepte + GP-Verknüpfungen bleiben. */
@@ -726,10 +741,21 @@ class VkModal extends Component
                 return;
             }
             $anreicherung = app(\Platform\FoodAlchemist\Services\RecipeOneShotService::class)
-                ->anreichern($team, $recipe, completeCoverage: true);
+                ->anreichern($team, $recipe, completeCoverage: true, refresh: true);   // #4: expliziter Klick = Refresh auch gefüllter, nicht-manueller Felder
             $this->bulkRunId = null;
             $this->oeffnen($this->recipeId);
             $this->anreicherung = $anreicherung;
+            // #4 Kaskade: die Basisrezept-Komponenten des Gerichts im Hintergrund mit-anreichern
+            // (async via EnrichRecipeJob, refresh=true) — sonst Timeout bei mehrgliedrigen Gerichten.
+            $subIds = app(\Platform\FoodAlchemist\Services\RecipeOneShotService::class)->subRezeptIds((int) $recipe->id);
+            foreach ($subIds as $subId) {
+                \Platform\FoodAlchemist\Jobs\EnrichRecipeJob::dispatch(
+                    $team->id, (int) (Auth::id() ?? 0), $subId, null, false, null, false, true,
+                );
+            }
+            if ($subIds !== []) {
+                $this->savedToast(count($subIds) . ' Komponente(n) werden im Hintergrund angereichert …');
+            }
             $this->dispatch('vk-recipe-gespeichert');
         } catch (\Throwable $e) {
             $this->fehler = $e->getMessage();                          // Provider-/Coverage-Fehler → graceful im Editor

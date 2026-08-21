@@ -250,6 +250,16 @@
                 <div class="mt-2 rounded-lg bg-white/[0.03] p-2" wire:key="zutaten-wrap-{{ $st->id }}">
                     <p class="text-[10px] text-gray-400 mb-1.5">Entwurf — tauschen / entfernen / ergänzen, dann freigeben:</p>
                     <livewire:foodalchemist.recipes.ingredient-editor :recipe-id="(int) $st->ref_id" :eingebettet="true" wire:key="worker-zutaten-{{ $st->id }}-{{ (int) $st->ref_id }}" />
+                    {{-- #1b: Per-Step-Zutaten-Save. Der frühere geteilte Inline-Knopf (zutaten-kern)
+                         ist entfallen; hier stößt das Cockpit den Save adressiert an GENAU diese
+                         Stufe an (MVP-046) — trifft nur den eigenen Editor, andere offene Stufen
+                         bleiben unangetastet. Der Editor toastet selbst + rechnet GL-02 neu. --}}
+                    <div class="mt-2 flex justify-end" x-data>
+                        <button type="button"
+                                @click="$dispatch('zutaten-speichern', { recipeId: {{ (int) $st->ref_id }} })"
+                                class="text-[10px] px-2.5 py-1 rounded-md bg-emerald-500/80 hover:bg-emerald-400 text-white font-medium"
+                                data-step-zutaten-speichern>Zutaten speichern</button>
+                    </div>
                 </div>
             @endif
         </div>

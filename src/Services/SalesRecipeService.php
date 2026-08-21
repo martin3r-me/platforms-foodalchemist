@@ -26,7 +26,10 @@ class SalesRecipeService
     public function paginateBrowser(array $filters, Team $team, int $perPage = 100): LengthAwarePaginator
     {
         return $this->browserQuery($team, $filters)
-            ->with(['speisenKlasse:id,label,diet_form', 'speisenHauptgruppe:id,code,label'])
+            // #6 N+1-Fix: kanonische Relation-Namen — die Browser-Blade liest `dishClass`/`dishMainGroup`.
+            // Vorher lief das Eager-Load unter den deprecated Aliassen `speisenKlasse`/`speisenHauptgruppe`,
+            // sodass `relationLoaded('dishClass')` false war → 1 Lazy-Query pro Zeile (bei perPage bis 500).
+            ->with(['dishClass:id,label,diet_form', 'dishMainGroup:id,code,label'])
             ->orderBy('name')
             ->paginate($perPage);
     }

@@ -30,7 +30,7 @@
                         <button type="button" wire:key="fb-{{ $f->id }}" wire:click="waehle({{ $f->id }})"
                                 class="w-full text-left px-2 py-1 rounded-lg text-xs {{ $selectedId === $f->id ? $aktiv : $hover }}">
                             <span class="truncate block">{{ $f->label }}</span>
-                            <span class="text-[10px] text-gray-500">{{ $f->crmCompany?->display_name ?? 'ohne Kunde' }} · {{ $f->kapitel_count }} Kapitel · <span class="text-violet-500/80">{{ \Platform\FoodAlchemist\Services\PhaseService::LABELS[$f->phase] ?? $f->phase }}</span></span>
+                            <span class="text-[10px] text-gray-500">{{ $f->crmCompany?->display_name ?? 'ohne Kunde' }} · {{ $f->chapters_count }} Kapitel · <span class="text-violet-500/80">{{ \Platform\FoodAlchemist\Services\PhaseService::LABELS[$f->phase] ?? $f->phase }}</span></span>
                         </button>
                     @empty
                         <p class="px-2 py-3 text-[11px] text-gray-500">Noch keine Foodbooks.</p>
