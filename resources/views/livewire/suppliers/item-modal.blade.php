@@ -299,7 +299,7 @@
                                     <td class="{{ $td }} !px-2"><span class="{{ $pill }} {{ $p->category->istAktiv() ? $variantPill['success'] : $variantPill['secondary'] }}">{{ $p->category->label() }}</span></td>
                                     <td class="{{ $td }} !px-2 text-right">
                                         <span class="text-gray-900 font-medium tabular-nums">{{ $p->price !== null ? number_format((float) $p->price, 2, ',', '.') . ' €' : '—' }}</span>
-                                        @if($p->price !== null && $item->qty !== null && in_array($item->unit_code, ['kg', 'l', 'Stk'], true))
+                                        @if($p->price !== null && (float) $item->qty > 0 && in_array($item->unit_code, ['kg', 'l', 'Stk'], true))
                                             <span class="block text-[11px] text-gray-500">= {{ number_format((float) $p->price / (float) $item->qty, 2, ',', '.') }} €/{{ $item->unit_code }}</span>
                                         @endif
                                     </td>

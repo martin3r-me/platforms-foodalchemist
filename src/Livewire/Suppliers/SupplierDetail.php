@@ -92,9 +92,9 @@ class SupplierDetail extends Component
     }
 
     #[On('modal.closed')]
-    public function geschlossen(array $payload = []): void
+    public function geschlossen(string $name): void
     {
-        if (($payload['name'] ?? null) === 'supplier-detail') {
+        if ($name === 'supplier-detail') {
             $this->resetState();
             $this->supplierId = null;
         }

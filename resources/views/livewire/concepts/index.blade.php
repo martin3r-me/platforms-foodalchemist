@@ -252,7 +252,7 @@
                                 </span>
                                 <input type="text" wire:model.blur="slotForm.{{ $slot->id }}.role" wire:change="slotSpeichern({{ $slot->id }})"
                                        class="{{ $input }} w-40" placeholder="Rolle" />
-                                <input type="text" wire:model.blur="slotForm.{{ $slot->id }}.titel" wire:change="slotSpeichern({{ $slot->id }})"
+                                <input type="text" wire:model.blur="slotForm.{{ $slot->id }}.title" wire:change="slotSpeichern({{ $slot->id }})"
                                        class="{{ $input }} flex-1" placeholder="Titel (optional)" />
                                 <button type="button" wire:click="slotRaus({{ $slot->id }})" class="text-gray-500 hover:text-red-500 px-2" title="Slot entfernen">✕</button>
                             </div>

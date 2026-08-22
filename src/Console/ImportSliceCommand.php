@@ -797,7 +797,7 @@ class ImportSliceCommand extends Command
             $rows[] = ['supplier_id' => $supplierMap[(int) $r['supplier_id']], 'commodity_group_code' => null];
         }
         foreach ($pdo->query('SELECT supplier_id, warengruppe FROM stamm_lieferant_wg ORDER BY supplier_id, warengruppe') as $r) {
-            $code = preg_match('/^(\d{2})/', (string) $r['commodity_group'], $m) ? $m[1] : null;
+            $code = preg_match('/^(\d{2})/', (string) $r['warengruppe'], $m) ? $m[1] : null;
             if ($code === null || ! isset($supplierMap[(int) $r['supplier_id']])) {
                 $skipped++;
 
@@ -816,8 +816,8 @@ class ImportSliceCommand extends Command
             ], $rows)
         ));
 
-        $zielGlobal = DB::table('foodalchemist_preferred_suppliers')->where('team_id', $this->teamId)->whereNull('warengruppe_code')->count();
-        $zielWg = DB::table('foodalchemist_preferred_suppliers')->where('team_id', $this->teamId)->whereNotNull('warengruppe_code')->count();
+        $zielGlobal = DB::table('foodalchemist_preferred_suppliers')->where('team_id', $this->teamId)->whereNull('commodity_group_code')->count();
+        $zielWg = DB::table('foodalchemist_preferred_suppliers')->where('team_id', $this->teamId)->whereNotNull('commodity_group_code')->count();
         $this->line(($zielGlobal === $totalGlobal ? '✅' : '❌ BLOCKER') . " stamm_lieferant: Quelle {$totalGlobal} ↔ Ziel {$zielGlobal}");
         $this->line(($zielWg === $totalWg ? '✅' : '❌ BLOCKER') . " stamm_lieferant_wg: Quelle {$totalWg} ↔ Ziel {$zielWg}");
 
@@ -1233,7 +1233,7 @@ class ImportSliceCommand extends Command
                     'main_ingredient_display' => self::nullIfBlank($row['hauptzutat_display']),
                     'processing' => self::nullIfBlank($row['verarbeitung']),
                     'form' => self::nullIfBlank($row['form']),
-                    'commodity_group_code' => self::warengruppeCode($row['commodity_group']),
+                    'commodity_group_code' => self::warengruppeCode($row['warengruppe']),
                     'sub_category' => self::nullIfBlank($row['sub_kategorie']),
                     'condition' => self::nullIfBlank($row['zustand']),
                     'bio' => self::nullIfBlank($row['bio']),
