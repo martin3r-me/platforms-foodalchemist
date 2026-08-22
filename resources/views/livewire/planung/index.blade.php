@@ -378,6 +378,9 @@
                 <button type="button" @click="tab='composer'"
                         :class="tab==='composer' ? 'bg-violet-500/25 text-white' : 'text-gray-300 hover:text-white'"
                         class="px-3 py-1.5 rounded-t-md text-xs font-medium">Composer</button>
+                <button type="button" @click="tab='import'"
+                        :class="tab==='import' ? 'bg-violet-500/25 text-white' : 'text-gray-300 hover:text-white'"
+                        class="px-3 py-1.5 rounded-t-md text-xs font-medium">Import</button>
             </div>
         </x-slot:tabs>
 
@@ -396,6 +399,103 @@
                     </a>
                 </div>
             @endif
+            {{-- IMPORT — bestehende Rezeptur (Text/Web-Copy/Text-PDF) TREU übernehmen + GEERDET anlegen.
+                 Getrennt vom Generator (der veredelt): hier 1:1 extrahieren, dann am Resolver an GPs binden.
+                 Foto/Bild NICHT hier (Vision noch nicht in der Plattform-LLM) — Foto gibst du dem Assistenten im Chat. --}}
+            <div wire:key="planung-tab-import" x-show="tab==='import'" class="space-y-4">
+                @if($importStep === 'eingabe')
+                    <x-foodalchemist::modal-section title="Rezeptur importieren">
+                        <p class="text-[11px] text-slate-400 mb-2">
+                            Bestehendes Rezept einfügen oder als Text-PDF hochladen — wird TREU übernommen
+                            (nichts erfunden) und im System <strong>geerdet</strong> (Zutaten an Grundprodukte
+                            gebunden). Verschachtelte Rezepte (Gericht mit Sauce/Püree) werden als verknüpfte
+                            Sub-Rezepte angelegt.
+                        </p>
+                        <div class="flex items-center gap-2 mb-2">
+                            <label class="text-[11px] text-slate-400">Anlegen als</label>
+                            <select wire:model="importTyp" class="{{ $input }} sm:w-48">
+                                <option value="basisrezept">Basisrezept</option>
+                                <option value="gericht">Gericht (Verkauf)</option>
+                            </select>
+                            <span class="text-[10px] text-slate-500">(Vorschlag wird nach dem Lesen gesetzt)</span>
+                        </div>
+                        <textarea wire:model="importText" rows="10" class="{{ $input }} w-full font-mono text-[12px]"
+                                  placeholder="Rezept-Text hier einfügen (Zutaten + Zubereitung; Sektionen wie »Für die Sauce: …« werden als Komponenten erkannt) …"></textarea>
+                        <div class="flex items-center gap-3 mt-2">
+                            <input type="file" wire:model="importPdf" accept="application/pdf" class="text-[11px] text-slate-300" />
+                            <span wire:loading wire:target="importPdf" class="text-[10px] text-amber-300">lädt …</span>
+                        </div>
+                        @error('importPdf') <p class="text-[10px] text-rose-400 mt-1">{{ $message }}</p> @enderror
+                        <div class="mt-3">
+                            <button type="button" wire:click="importExtrahieren" wire:loading.attr="disabled"
+                                    wire:target="importExtrahieren,importPdf" class="{{ $btnPrimary }} disabled:opacity-40">
+                                <span wire:loading.remove wire:target="importExtrahieren">Lesen &amp; strukturieren</span>
+                                <span wire:loading wire:target="importExtrahieren">liest … (kann ~15 s dauern)</span>
+                            </button>
+                        </div>
+                        @if($importMeldung) <p class="text-[11px] text-rose-400 mt-2">{{ $importMeldung }}</p> @endif
+                    </x-foodalchemist::modal-section>
+                @elseif($importStep === 'vorschau')
+                    <x-foodalchemist::modal-section title="Vorschau — prüfen &amp; anlegen">
+                        <div class="flex items-center gap-2 mb-2">
+                            <input type="text" wire:model="importVorschau.name" class="{{ $input }} flex-1" placeholder="Name" />
+                            <select wire:model="importTyp" class="{{ $input }} w-40">
+                                <option value="basisrezept">Basisrezept</option>
+                                <option value="gericht">Gericht</option>
+                            </select>
+                        </div>
+                        <p class="text-[11px] text-slate-400 mb-1">Zutaten (Menge · Einheit · Bezeichnung)</p>
+                        <div class="space-y-1 mb-2">
+                            @foreach(($importVorschau['zutaten'] ?? []) as $zi => $z)
+                                <div class="flex items-center gap-1" wire:key="izut-{{ $zi }}">
+                                    <input type="text" wire:model="importVorschau.zutaten.{{ $zi }}.quantity" class="{{ $input }} w-16" />
+                                    <input type="text" wire:model="importVorschau.zutaten.{{ $zi }}.unit" class="{{ $input }} w-16" />
+                                    <input type="text" wire:model="importVorschau.zutaten.{{ $zi }}.text" class="{{ $input }} flex-1" />
+                                </div>
+                            @endforeach
+                        </div>
+                        @if(!empty($importVorschau['komponenten']))
+                            <p class="text-[11px] text-slate-400 mb-1">Erkannte Komponenten (werden als Sub-Rezepte angelegt)</p>
+                            <div class="space-y-1 mb-2">
+                                @foreach($importVorschau['komponenten'] as $ki => $k)
+                                    <div class="rounded border border-white/10 px-2 py-1 text-[11px] text-slate-300" wire:key="ikomp-{{ $ki }}">
+                                        <strong>{{ $k['name'] ?? '—' }}</strong> · {{ count($k['zutaten'] ?? []) }} Zutaten
+                                    </div>
+                                @endforeach
+                            </div>
+                        @endif
+                        <p class="text-[11px] text-slate-400 mb-1">Zubereitung</p>
+                        <textarea wire:model="importVorschau.preparation" rows="6" class="{{ $input }} w-full text-[12px] mb-2"></textarea>
+                        <div class="flex gap-2">
+                            <button type="button" wire:click="importAnlegen" wire:loading.attr="disabled" wire:target="importAnlegen"
+                                    class="{{ $btnPrimary }} disabled:opacity-40">
+                                <span wire:loading.remove wire:target="importAnlegen">Geerdet anlegen</span>
+                                <span wire:loading wire:target="importAnlegen">erdet …</span>
+                            </button>
+                            <button type="button" wire:click="importReset" class="{{ $btnGhost }}">Verwerfen</button>
+                        </div>
+                        @if($importMeldung) <p class="text-[11px] text-rose-400 mt-2">{{ $importMeldung }}</p> @endif
+                    </x-foodalchemist::modal-section>
+                @elseif($importStep === 'fertig' && $importErgebnis)
+                    <x-foodalchemist::modal-section title="Importiert (Entwurf)">
+                        <p class="text-[12px] text-slate-200 mb-1">
+                            „{{ $importErgebnis['name'] }}" als Entwurf angelegt
+                            @if(!empty($importErgebnis['sub_recipes'])) · {{ count($importErgebnis['sub_recipes']) }} Sub-Rezept(e) @endif
+                        </p>
+                        @if(($importErgebnis['offen'] ?? 0) > 0)
+                            <p class="text-[11px] text-amber-300 mb-2">⚠ {{ $importErgebnis['offen'] }} Zutat(en) ohne GP-Treffer — noch nicht geerdet.</p>
+                            <button type="button" wire:click="importGpsMinten" wire:loading.attr="disabled" wire:target="importGpsMinten" class="{{ $btnGhost }} mb-2">
+                                <span wire:loading.remove wire:target="importGpsMinten">Fehlende GPs anlegen</span>
+                                <span wire:loading wire:target="importGpsMinten">legt an …</span>
+                            </button>
+                        @else
+                            <p class="text-[11px] text-emerald-300 mb-2">✓ Alle Zutaten geerdet.</p>
+                        @endif
+                        <button type="button" wire:click="importReset" class="{{ $btnGhost }}">Weiteres importieren</button>
+                    </x-foodalchemist::modal-section>
+                @endif
+            </div>
+
             {{-- ANALYSE --}}
             <div wire:key="planung-tab-analyse" x-show="tab==='analyse'" class="space-y-4">
                 <x-foodalchemist::modal-section title="Analyse / Ausgangslage">

@@ -93,6 +93,22 @@ class Index extends Component
      */
     protected array $composerSeed = [];
 
+    // ── Import-Tab (Rezept-Import: Rohtext/Text-PDF → TREU extrahieren → GEERDET anlegen) ──
+    /** Freitext-/Web-Copy-Eingabe. */
+    public string $importText = '';
+    /** Optionaler Text-PDF-Upload (WithFileUploads). */
+    public $importPdf = null;
+    /** Ziel-Typ (aus dem Extrakt vorgeschlagen, per Toggle überschreibbar). */
+    public string $importTyp = 'basisrezept';
+    /** Schritt: eingabe → vorschau → fertig. */
+    public string $importStep = 'eingabe';
+    /** Editierbare Extrakt-Vorschau {typ,name,zutaten[],preparation,komponenten[]}. */
+    public ?array $importVorschau = null;
+    /** Ergebnis nach Anlage {recipe_id,name,offen,sub_recipes}. */
+    public ?array $importErgebnis = null;
+    /** Fehler-/Statusmeldung im Import-Tab. */
+    public string $importMeldung = '';
+
     // ── Leitstelle: PER-TAB Eingabe + Leitplanken (jeder Scope eigener Zustand) ──
     /**
      * Eingabe je Creation-Tab (rezept|gericht|concept): Titel/Beschreibung/Kreativ-Modus.
@@ -2529,6 +2545,154 @@ class Index extends Component
         } finally {
             $this->composerSeed = [];
         }
+    }
+
+    // ── Import-Tab (Rezept-Import: TREU extrahieren → GEERDET anlegen) ────────────
+    /**
+     * Schritt 1: Rohtext (Textarea oder Text-PDF) TREU extrahieren → editierbare Vorschau.
+     * Bewusst synchron (EIN LLM-Call; das teure Erzeugen läuft weiterhin async über die Kaskade).
+     */
+    public function importExtrahieren(\Platform\FoodAlchemist\Services\RecipeExtractService $svc): void
+    {
+        $this->importMeldung = '';
+        $team = $this->team();
+        if ($team === null) {
+            return;
+        }
+        try {
+            if ($this->importPdf !== null) {
+                $this->validate(['importPdf' => 'file|mimes:pdf|max:20480']);
+                $rohText = $svc->pdfText($this->importPdf->getRealPath());
+            } else {
+                $rohText = trim($this->importText);
+            }
+            if ($rohText === '') {
+                $this->importMeldung = 'Bitte Text einfügen oder ein Text-PDF hochladen.';
+
+                return;
+            }
+            $extrakt = $svc->extrahiere($team, $rohText);
+        } catch (\Platform\FoodAlchemist\Exceptions\KiDeaktiviertException) {
+            $this->importMeldung = 'KI ist für dieses Team deaktiviert — die Extraktion braucht sie.';
+
+            return;
+        } catch (\Throwable $e) {
+            $this->importMeldung = $e->getMessage();
+
+            return;
+        }
+        $this->importTyp = ($extrakt['typ'] ?? null) === 'gericht' ? 'gericht' : 'basisrezept';
+        $this->importVorschau = [
+            'name' => (string) ($extrakt['name'] ?? ''),
+            'preparation' => (string) ($extrakt['preparation'] ?? ''),
+            'zutaten' => array_values(array_map(fn ($z) => [
+                'text' => (string) ($z['text'] ?? $z['name'] ?? ''),
+                'quantity' => (string) ($z['quantity'] ?? ''),
+                'unit' => (string) ($z['unit'] ?? ''),
+                'sub_rezept' => (bool) ($z['sub_rezept'] ?? false),
+            ], array_values(array_filter((array) ($extrakt['zutaten'] ?? []), 'is_array')))),
+            'komponenten' => array_values(array_map(fn ($k) => [
+                'name' => (string) ($k['name'] ?? ''),
+                'preparation' => (string) ($k['preparation'] ?? ''),
+                'zutaten' => array_values(array_map(fn ($z) => [
+                    'text' => (string) ($z['text'] ?? $z['name'] ?? ''),
+                    'quantity' => (string) ($z['quantity'] ?? ''),
+                    'unit' => (string) ($z['unit'] ?? ''),
+                ], array_values(array_filter((array) ($k['zutaten'] ?? []), 'is_array')))),
+            ], array_values(array_filter((array) ($extrakt['komponenten'] ?? []), 'is_array')))),
+        ];
+        $this->importStep = 'vorschau';
+    }
+
+    /** Schritt 2: die (evtl. editierte) Vorschau GEERDET anlegen (rekursiv, Sub-Rezepte verknüpft). */
+    public function importAnlegen(\Platform\FoodAlchemist\Services\RecipeExtractService $svc): void
+    {
+        $this->importMeldung = '';
+        $team = $this->team();
+        if ($team === null || $this->importVorschau === null) {
+            return;
+        }
+        $extrakt = [
+            'typ' => $this->importTyp,
+            'name' => (string) ($this->importVorschau['name'] ?? ''),
+            'preparation' => (string) ($this->importVorschau['preparation'] ?? ''),
+            'zutaten' => $this->importZutatenRein($this->importVorschau['zutaten'] ?? []),
+            'komponenten' => array_values(array_map(fn ($k) => [
+                'name' => (string) ($k['name'] ?? ''),
+                'preparation' => (string) ($k['preparation'] ?? ''),
+                'zutaten' => $this->importZutatenRein($k['zutaten'] ?? []),
+            ], (array) ($this->importVorschau['komponenten'] ?? []))),
+        ];
+        try {
+            $res = $svc->legeAn($team, $extrakt, $this->importTyp === 'gericht');
+        } catch (\Throwable $e) {
+            $this->importMeldung = $e->getMessage();
+
+            return;
+        }
+        $recipe = $res['recipe'];
+        $this->importErgebnis = [
+            'recipe_id' => (int) $recipe->id,
+            'name' => (string) $recipe->name,
+            'offen' => (int) ($recipe->n_ingredients_unmapped ?? 0),
+            'sub_recipes' => $res['sub_recipes'] ?? [],
+        ];
+        $this->importStep = 'fertig';
+        $this->dispatch('recipe-gespeichert');
+    }
+
+    /** Erdungs-Nachzug: für die noch offenen Zutaten des importierten Drafts GPs anlegen (LA-First-Mint). */
+    public function importGpsMinten(\Platform\FoodAlchemist\Services\RecipeOneShotService $one): void
+    {
+        $team = $this->team();
+        if ($team === null || $this->importErgebnis === null) {
+            return;
+        }
+        $recipe = \Platform\FoodAlchemist\Models\FoodAlchemistRecipe::visibleToTeam($team)->find($this->importErgebnis['recipe_id']);
+        if ($recipe === null) {
+            return;
+        }
+        try {
+            $one->minteFehlendeGps($team, $recipe);
+            $recipe = $recipe->fresh() ?? $recipe;
+            $this->importErgebnis['offen'] = (int) ($recipe->n_ingredients_unmapped ?? 0);
+        } catch (\Throwable $e) {
+            $this->importMeldung = $e->getMessage();
+        }
+    }
+
+    public function importReset(): void
+    {
+        $this->reset(['importText', 'importPdf', 'importVorschau', 'importErgebnis', 'importMeldung']);
+        $this->importStep = 'eingabe';
+        $this->importTyp = 'basisrezept';
+    }
+
+    /** Rohe Vorschau-Zeilen → saubere Zutaten-Struktur (leere raus; Menge nur wenn numerisch). */
+    private function importZutatenRein(array $rows): array
+    {
+        $out = [];
+        foreach ($rows as $z) {
+            $text = trim((string) ($z['text'] ?? ''));
+            if ($text === '') {
+                continue;
+            }
+            $zeile = ['text' => $text];
+            $q = trim((string) ($z['quantity'] ?? ''));
+            if ($q !== '' && is_numeric(str_replace(',', '.', $q))) {
+                $zeile['quantity'] = (float) str_replace(',', '.', $q);
+            }
+            $u = trim((string) ($z['unit'] ?? ''));
+            if ($u !== '') {
+                $zeile['unit'] = $u;
+            }
+            if (! empty($z['sub_rezept'])) {
+                $zeile['sub_rezept'] = true;
+            }
+            $out[] = $zeile;
+        }
+
+        return $out;
     }
 
     // ── Datenbeschaffung ───────────────────────────────────────────────

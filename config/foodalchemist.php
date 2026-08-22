@@ -852,10 +852,26 @@ return [
                 . 'werte = {description, preparation, zutaten: [{id, text, quantity, einheit_slug}], aenderungs_notiz}.',
         ],
         'recipe.extract' => [
-            'tier' => 'C',                                            // Vision — blockiert auf Martin-Frage (Offene Entscheide)
-            'task' => 'Extrahiere das Rezept TREU aus dem Anhang (Foto/PDF/Text) — NICHTS '
-                . 'anreichern oder erfinden (GL-13 Inv. 7, Wissenskontext bewusst leer): '
-                . 'werte = {name, zutaten: [{text, quantity, unit}], preparation}.',
+            'tier' => 'C',                                            // Tier C: unset ⇒ Plattform-Default-Modell (Text ok); Vision (Bild) erst nach Core-Fix
+            'max_tokens' => 8000,                                     // ganzes (evtl. verschachteltes) Rezept-JSON — Reasoning-Headroom
+            // Rezept-IMPORT (2026-08-22): TREUE Extraktion aus roh_text — NICHTS anreichern/erfinden
+            // (GL-13 Inv. 7, Wissenskontext bewusst leer). Die Erdung (GP-Bindung) macht der Persistenz-
+            // Resolver danach, NICHT dieser Call. WICHTIG: verschachtelt — eigenständige Komponenten
+            // (Sauce/Fond/Jus/Püree/Reduktion/Creme/Dressing …), die der Quelltext MIT ihren Zutaten
+            // führt, gehören als `komponenten` (eigene Sub-Rezepte), NICHT flach in die Rohzutaten
+            // aufgelöst. Kommt eine Komponente nur als Name vor (ohne eigene Zutaten), setze in der
+            // Zutatenzeile `sub_rezept: true` (sie wird später als Stub angelegt).
+            'task' => 'Extrahiere das Rezept TREU aus dem Rohtext (roh_text) — übernimm NUR, was dort '
+                . 'steht; NICHTS anreichern, erfinden, umbenennen oder umsortieren. Erkenne den Typ aus '
+                . 'dem Quelltext: `gericht` (angerichteter Teller / mehrere Komponenten) oder '
+                . '`basisrezept` (EINE Komponente: Sauce, Fond, Teig, Beilage …). Verschachtelung: '
+                . 'führt der Text eigenständige Komponenten MIT eigenen Zutaten (z. B. »Für die Sauce: …«, '
+                . '»Für das Püree: …«), gib sie als `komponenten` aus (je ein Sub-Rezept), NICHT flach '
+                . 'aufgelöst; eine nur namentlich genannte Komponente ohne eigene Zutaten markierst du in '
+                . 'der Zutatenzeile mit `sub_rezept: true`. Übernimm Mengen/Einheiten wörtlich (unbekannt '
+                . '⇒ weglassen, NICHT schätzen). werte = {typ (gericht|basisrezept), name, '
+                . 'zutaten: [{text, quantity, unit, sub_rezept (bool, default false)}], preparation, '
+                . 'komponenten: [{name, zutaten: [{text, quantity, unit}], preparation}] (leer, wenn keine)}.',
         ],
         'vk.plating' => [
             'tier' => 'A',                                            // V-02
