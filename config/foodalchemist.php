@@ -154,6 +154,12 @@ return [
                     'route' => 'foodalchemist.concepter.index',
                     'icon'  => 'heroicon-o-square-3-stack-3d',
                 ],
+                [
+                    // Format = Marken-/Themen-Container über den Concepts (bündelt Editionen + Marketing-Bildwelt).
+                    'label' => 'Formate',
+                    'route' => 'foodalchemist.formate.index',
+                    'icon'  => 'heroicon-o-rectangle-group',
+                ],
             ],
         ],
         [

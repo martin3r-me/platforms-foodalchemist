@@ -152,6 +152,10 @@ Route::get('/concepts', \Platform\FoodAlchemist\Livewire\Concepts\Index::class)
 Route::get('/pakete', \Platform\FoodAlchemist\Livewire\Pakete\Index::class)
     ->name('foodalchemist.pakete.index');
 
+// Format-Modul: Marken-/Themen-Container über den Concepts (bündelt Editionen + Marketing-Bildwelt).
+Route::get('/formate', \Platform\FoodAlchemist\Livewire\Formate\Browser::class)
+    ->name('foodalchemist.formate.index');
+
 /**
  * Rezept-/Gericht-/Concept-Reports — Druck-HTML mit Profilen; ?pdf=1 rendert DomPDF.
  * Profile: kurz | produktion | kalkulation | voll. Filter als Query-Booleans:
