@@ -217,9 +217,13 @@ class RecipeRecomputeService
         $inDegree = array_fill_keys($ids, 0);
         $parentsVon = [];                                          // sub → [parents]
         foreach ($kanten as $k) {
-            if (isset($inDegree[$k->recipe_id])) {
-                $inDegree[$k->recipe_id]++;                        // Eltern: je referenziertem DISTINCT Sub +1
+            // Elter-Rezept nicht im Set (z.B. soft-deleted, aber Zutat-Kante noch live) → Kante
+            // KOMPLETT ignorieren. Sonst landet der verwaiste Parent nur in $parentsVon und die
+            // Kahn-Schleife unten crasht mit „Undefined array key" (--$inDegree[$parent]).
+            if (! isset($inDegree[$k->recipe_id])) {
+                continue;
             }
+            $inDegree[$k->recipe_id]++;                            // Eltern: je referenziertem DISTINCT Sub +1
             $parentsVon[$k->referenced_recipe_id][] = $k->recipe_id;
         }
 
