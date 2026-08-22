@@ -146,7 +146,7 @@
                 <button type="button" wire:click="$dispatch('pairing-netz.oeffnen', { recipeId: {{ $rezept->id }} })"
                         class="{{ $btnGhostXs }}" title="Voller Graph: verwandte Rezepte + Vorschläge" data-vk-pairing-netz>Netz öffnen @svg('heroicon-o-arrow-up-right', 'w-3.5 h-3.5')</button>
             </x-slot:actions>
-            <x-foodalchemist::pairing-netz :recipe-id="$rezept->id" />
+            <x-foodalchemist::pairing-netz :recipe-id="$rezept->id" :netz="$netz" />
             <div class="flex flex-wrap gap-1 mt-2">
                 @foreach($kernAnker as $anker)
                     <span wire:key="vka-{{ $anker->id }}" class="{{ $pill }} {{ $variantPill['primary'] }} group" title="{{ $anker->source }}{{ $anker->ai_confidence !== null ? ' ' . round($anker->ai_confidence * 100) . '%' : '' }}">

@@ -129,4 +129,16 @@ class MargeService
 
         return ['sales_net' => $vorschlag['sales_net'] ?? null, 'source' => $vorschlag !== null ? 'class' : 'leer', 'vorschlag' => $vorschlag];
     }
+
+    /**
+     * Break-even-Umsatz/Monat = Σ Fixkosten / Deckungsbeitragsquote (= 1 - Zielwareneinsatz).
+     * Gastro-Standardformel, Planungs-Näherung - die EINE Stelle für diese Zahl: Cockpit-KPI-Kopf
+     * und Kennzahlen-Tab rufen sie beide hier ab, damit nicht zwei Break-even-Zahlen umlaufen.
+     */
+    public function breakEven(float $fixkostenMonat, float $zielWareneinsatzPct): float
+    {
+        $dbQuote = max(0.01, 1 - $zielWareneinsatzPct / 100);
+
+        return $fixkostenMonat > 0 ? $fixkostenMonat / $dbQuote : 0.0;
+    }
 }

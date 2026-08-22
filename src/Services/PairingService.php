@@ -487,7 +487,7 @@ class PairingService
         // Dimension, nicht nur die Rohzutat. Bisher flossen nur Prozess-Anker von
         // SUB-Rezepten (oben via referenced_recipe_id). Dedupe gegen bereits als kern
         // aufgelöste Anker, damit keine Selbst-Paare entstehen.
-        $vorhandeneKerne = array_filter(array_map(fn ($k) => $k['kern'], $out));
+        $vorhandeneKerne = array_map('intval', array_filter(array_map(fn ($k) => $k['kern'], $out)));
         foreach ($eigenerZustand as $pa) {
             if (in_array((int) $pa->anchor_id, $vorhandeneKerne, true)) {
                 continue;
@@ -527,7 +527,7 @@ class PairingService
                 $typ = null;
                 foreach (array_merge($aufgeloest[$i]['kern'] !== null ? [$aufgeloest[$i]['kern']] : [], $aufgeloest[$i]['prozess']) as $ka) {
                     foreach (array_merge($aufgeloest[$j]['kern'] !== null ? [$aufgeloest[$j]['kern']] : [], $aufgeloest[$j]['prozess']) as $kb) {
-                        if ($ka === $kb) {
+                        if ((int) $ka === (int) $kb) {
                             [$w, $typ] = [1.0, 'gleich'];
                         } elseif (isset($kanten[$ka][$kb]) && ($w === null || $kanten[$ka][$kb][0] > $w)) {
                             [$w, $typ] = $kanten[$ka][$kb];

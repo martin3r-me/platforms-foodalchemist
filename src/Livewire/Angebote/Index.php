@@ -12,7 +12,7 @@ use Platform\FoodAlchemist\Services\AngebotService;
 /**
  * #380 — Angebote-Browser, am Concepter orientiert (3-Panel: Filter links · Tabelle
  * mitte · Detail rechts). Listet kundengebundene Angebote/Anfragen; Auswahl/Filter
- * in der URL (V-17). Der Detail-/Edit-Teil lebt im Angebote\DetailPanel; der
+ * in der URL (V-17). Der Detail-/Edit-Teil lebt im Angebote\Editor (Fullscreen-Modal); der
  * Menü-Composer (Concepter-Slots am Angebot) folgt als nächste Stufe.
  */
 class Index extends Component

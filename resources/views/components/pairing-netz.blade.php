@@ -5,13 +5,8 @@
     PairingService::pairingNetz (deterministisch) — D3 zeichnet nur. Voller Filter
     (kontrast, Basisrezepte) im „Netz öffnen"-Overlay. Schwarzer Grund (kein dark:).
 --}}
-@props(['recipeId'])
+@props(['recipeId', 'netz' => ['nodes' => [], 'edges' => [], 'meta' => []]])
 @php
-    $team = \Illuminate\Support\Facades\Auth::user()?->currentTeamRelation;
-    $netz = ($team !== null && $recipeId !== null)
-        ? app(\Platform\FoodAlchemist\Services\PairingService::class)->pairingNetz($team, $recipeId)
-        : ['nodes' => [], 'edges' => [], 'meta' => []];
-
     $zentrumNode = collect($netz['nodes'])->firstWhere('kind', 'zentrum');
     $ankerNodes = collect($netz['nodes'])->where('kind', 'anker')->values();
 

@@ -76,7 +76,7 @@
     </x-ui-page-container>
 
     {{-- #380: Concepter-Editor wiederverwendet — bearbeitet angebots-lokale Menü-Entwürfe
-         (öffnet via concepter-editor.oeffnen aus dem Angebote-Detail-Panel). Gleiche
+         (öffnet via concepter-editor.oeffnen aus dem Angebote-Editor). Gleiche
          Einbettung wie im Concepter-Browser, damit die Slot-Engine identisch läuft. --}}
     <livewire:foodalchemist.concepter.editor />
     <livewire:foodalchemist.recipes.recipe-modal />

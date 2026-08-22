@@ -492,6 +492,13 @@ class GpModal extends Component
         $leadLa = $gp?->leadLa;
         $leadPreis = $leadLa !== null ? $preise->activeFor($leadLa->id) : null;
 
+        // Layer: Mutter-GP-Name fürs Derivat-Feld team-gescopet im Component laden
+        // (Blade zeigt nur die Variable, statt selbst ::find() ungescopet auszuführen).
+        $derivatVonId = $this->builder['derivat_von_gp_id'] ?? null;
+        $derivatMutterName = $derivatVonId !== null && $team !== null
+            ? FoodAlchemistGp::visibleToTeam($team)->whereKey($derivatVonId)->value('name')
+            : null;
+
         return view('foodalchemist::livewire.gps.gp-modal', [
             'gp' => $gp,
             'neu' => $this->gpId === null,
@@ -517,6 +524,7 @@ class GpModal extends Component
             'derivatKandidaten' => $this->derivatSuche !== '' && $team !== null
                 ? \Platform\FoodAlchemist\Support\Suche::like(FoodAlchemistGp::visibleToTeam($team), 'name', $this->derivatSuche)->orderBy('name')->limit(6)->get()
                 : collect(),
+            'derivatMutterName' => $derivatMutterName,
             'sensorik' => $this->gpId !== null ? app(\Platform\FoodAlchemist\Services\SensorikService::class)->fuerGp($this->gpId) : null,
             'pairing' => $this->gpId !== null ? app(\Platform\FoodAlchemist\Services\PairingService::class)->panelGp($this->gpId) : null,
         ]);

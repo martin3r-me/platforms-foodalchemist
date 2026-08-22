@@ -349,6 +349,8 @@ class Editor extends Component
             ? $offerFrame->slots()->orderBy('position')->orderBy('id')->get(['id', 'label', 'target_count', 'price_anchor'])
             : collect();
 
+        $facetten = $svc->facetten($this->team());
+
         return view('foodalchemist::livewire.angebote.editor', [
             'angebot' => $angebot,
             'geruestSlots' => $geruestSlots,
@@ -360,10 +362,10 @@ class Editor extends Component
             'katalogTreffer' => $this->selectedId !== null
                 ? $svc->katalogConcepts($this->team(), $this->conceptSuche, 50, $this->conceptFacetten)
                 : collect(),
-            'facetteEventtypen' => \Platform\FoodAlchemist\Models\FoodAlchemistEventtyp::visibleToTeam($this->team())->where('is_inactive', false)->orderBy('sort_order')->get(['id', 'name']),
-            'facetteServierformen' => \Platform\FoodAlchemist\Models\FoodAlchemistServierform::where('is_inactive', false)->orderBy('sort_order')->get(['id', 'label']),
-            'facetteMomente' => \Platform\FoodAlchemist\Models\FoodAlchemistEinsatzmoment::visibleToTeam($this->team())->where('is_inactive', false)->orderBy('sort_order')->get(['id', 'name']),
-            'facetteSaisons' => \Platform\FoodAlchemist\Models\FoodAlchemistSaison::visibleToTeam($this->team())->where('is_inactive', false)->orderBy('sort_order')->get(['id', 'name']),
+            'facetteEventtypen' => $facetten['eventtypen'],
+            'facetteServierformen' => $facetten['servierformen'],
+            'facetteMomente' => $facetten['momente'],
+            'facetteSaisons' => $facetten['saisons'],
         ]);
     }
 

@@ -119,4 +119,16 @@ trait ManagesCanvas
 
         return $tpl;
     }
+
+    /**
+     * Aktive Schreibstile des Teams für das `ref_schreibstil`-Feld des Board-Partials.
+     * Die Query lebt im Concern (nicht im Blade) — die View ruft nur den Accessor.
+     */
+    public function canvasSchreibstile()
+    {
+        return \Platform\FoodAlchemist\Models\FoodAlchemistWritingStyle::visibleToTeam($this->canvasTeam())
+            ->where('is_inactive', false)
+            ->orderBy('name')
+            ->get(['id', 'name']);
+    }
 }

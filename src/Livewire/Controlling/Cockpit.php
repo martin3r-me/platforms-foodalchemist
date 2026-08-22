@@ -177,7 +177,6 @@ class Cockpit extends Component
         // Gastro-Standardformel, Planungs-Näherung — dieselbe Rechnung wie bisher auf `/kalkulation`
         // (jetzt Kennzahlen-Tab), damit nicht zwei Break-even-Zahlen im Umlauf sind.
         $fixMonat = array_sum($fix->summeJeBlock($team));
-        $dbQuote = max(0.01, 1 - $zielWe / 100);
 
         $offeneNachTyp = $signale->offeneNachTyp($team);
         $jeTyp = [];
@@ -197,7 +196,7 @@ class Cockpit extends Component
             'n_dishes' => $eigen['n_dishes'],
             'spend_30d' => $journal->spend($team, null, now()->subDays(30)->toDateString()),
             'fixkosten_monat' => $fixMonat,
-            'break_even' => $fixMonat > 0 ? $fixMonat / $dbQuote : 0.0,
+            'break_even' => $marge->breakEven($fixMonat, $zielWe),
             'geld_signale' => $geldSignale,
             'geld_signale_je_typ' => $jeTyp,
         ];

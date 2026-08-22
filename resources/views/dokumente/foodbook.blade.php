@@ -300,7 +300,7 @@
             @if($istIntern)
                 <tr><td style="color:#9333ea">Wareneinsatz pro Person</td><td class="right" style="color:#9333ea">{{ number_format($gesamt['ek_per_person'], 2, ',', '.') }} €</td></tr>
                 @if($gesamt['vk_pro_person'] > 0)
-                    <tr><td style="color:#059669">Wareneinsatz %</td><td class="right" style="color:#059669">{{ number_format($gesamt['ek_per_person'] / $gesamt['vk_pro_person'] * 100, 1, ',', '.') }} %</td></tr>
+                    <tr><td style="color:#059669">Wareneinsatz %</td><td class="right" style="color:#059669">{{ number_format($gesamt['food_cost_percent'], 1, ',', '.') }} %</td></tr>
                 @endif
             @endif
             @if($gesamt['personen'])<tr><td>Personen</td><td class="right">{{ $gesamt['personen'] }}</td></tr>@endif

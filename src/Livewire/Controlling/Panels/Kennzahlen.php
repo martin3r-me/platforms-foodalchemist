@@ -7,6 +7,7 @@ use Livewire\Attributes\On;
 use Livewire\Component;
 use Platform\FoodAlchemist\Services\FixkostenService;
 use Platform\FoodAlchemist\Services\KalkulationService;
+use Platform\FoodAlchemist\Services\MargeService;
 use Platform\FoodAlchemist\Services\TeamSettingsService;
 
 /**
@@ -86,7 +87,7 @@ class Kennzahlen extends Component
         $this->dispatch('kosten-aktualisiert');
     }
 
-    public function render(KalkulationService $kalk, FixkostenService $fix, TeamSettingsService $settings)
+    public function render(KalkulationService $kalk, FixkostenService $fix, TeamSettingsService $settings, MargeService $marge)
     {
         $team = Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
 
@@ -95,7 +96,6 @@ class Kennzahlen extends Component
         // gastro-Standardformel, Planungs-Näherung (Ø-DB über das Food-Cost-Ziel).
         $fixMonat = array_sum($fix->summeJeBlock($team));
         $zielWe = $settings->zielWareneinsatzPct($team);
-        $dbQuote = max(0.01, 1 - $zielWe / 100);
 
         return view('foodalchemist::livewire.controlling.panels.kennzahlen', [
             'zuschlag' => $kalk->hk2($team, 100) - 100, // effektiver HK2-Zuschlag in % (auf 100 € Wareneinsatz)
@@ -106,7 +106,7 @@ class Kennzahlen extends Component
             ],
             'fixkostenMonat' => $fixMonat,
             'zielWe' => $zielWe,
-            'breakEven' => $fixMonat > 0 ? $fixMonat / $dbQuote : 0.0,
+            'breakEven' => $marge->breakEven($fixMonat, $zielWe),
             'mwst' => $settings->mwst($team),
         ]);
     }
