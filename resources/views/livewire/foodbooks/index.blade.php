@@ -145,6 +145,25 @@
                         <input type="text" wire:model="neuesKapitelTitel" wire:keydown.enter="kapitelNeu" placeholder="Neues Kapitel …" class="{{ $input }} py-0.5" />
                         <button type="button" wire:click="kapitelNeu" class="{{ $btnGhostXs }}" title="Top-Kapitel">+</button>
                     </div>
+
+                    {{-- Format-Modul (Phase C): ein Standard-Format als LIVE-Kapitel einfügen --}}
+                    <div class="pt-1" x-data="{ open: false }">
+                        <button type="button" @click="open = !open" class="{{ $btnGhostXs }} w-full justify-center"
+                                title="Wiederverwendbares Format (Marken-Container) als Live-Kapitel einfügen">+ Format-Kapitel</button>
+                        <div x-show="open" x-cloak class="mt-1 p-2 rounded-lg bg-black/[0.03] space-y-1">
+                            <input type="search" wire:model.live.debounce.300ms="formatSuche" placeholder="Format suchen …" class="{{ $input }} py-0.5 text-xs" />
+                            @error('formatKapitel')<p class="text-[11px] text-rose-500 px-1">{{ $message }}</p>@enderror
+                            @forelse($formatKandidaten as $fk)
+                                <button type="button" wire:key="fmtk-{{ $fk->id }}" wire:click="formatKapitelEinfuegen({{ $fk->id }})" @click="open = false"
+                                        class="block w-full text-left truncate text-xs px-2 py-0.5 rounded hover:bg-violet-500/10"
+                                        title="{{ $fk->consumer_name ?: $fk->name }}">
+                                    {{ $fk->name }}@if($fk->origin === 'kunde') 🔒@endif
+                                </button>
+                            @empty
+                                <p class="text-[11px] text-gray-400 px-1">Keine Formate vorhanden.</p>
+                            @endforelse
+                        </div>
+                    </div>
                     @foreach($kapitelTree as $kt)
                         <div wire:key="ktm-{{ $kt['id'] }}" class="group flex items-center gap-1" style="padding-left: {{ $kt['depth'] * 12 }}px">
                             <button type="button" wire:click="kapitelWaehle({{ $kt['id'] }})"

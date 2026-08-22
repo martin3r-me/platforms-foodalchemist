@@ -205,9 +205,14 @@
     {{-- ── INHALT ── --}}
     @forelse($kapitel as $k)
         @php($hTag = 'h' . min(5, 3 + (int) ($k['depth'] ?? 0)))
+        @php($istFormat = $k['ist_format'] ?? false)
         <div class="kapitel" style="margin-left: {{ $k['depth'] * 14 }}px">
             <{{ $hTag }} id="{{ $k['anker'] }}">
-                @if($k['vk_pro_person'] > 0)
+                @if($istFormat && ($k['preis_range']['min'] ?? null) !== null)
+                    <span class="kpreis">{{ $k['preis_range']['min'] == $k['preis_range']['max']
+                        ? number_format($k['preis_range']['min'], 2, ',', '.') . ' €/P'
+                        : number_format($k['preis_range']['min'], 2, ',', '.') . '–' . number_format($k['preis_range']['max'], 2, ',', '.') . ' €/P' }}</span>
+                @elseif(! $istFormat && $k['vk_pro_person'] > 0)
                     <span class="kpreis">
                         {{ number_format($k['vk_pro_person'], 2, ',', '.') }} €/P
                         @if($istIntern && ($k['ek_pro_person'] ?? null) !== null)
@@ -218,6 +223,9 @@
                 @endif
                 <span class="pipe">|</span> {{ $istIntern ? ($k['title_intern'] ?: $k['title']) : $k['title'] }}
             </{{ $hTag }}>
+            @if($istFormat && ($k['claim'] ?? null))
+                <div class="kaptext"><em>„{{ $k['claim'] }}“</em></div>
+            @endif
 
             {{-- Spec 03 · L2b: Hinführung des Kapitels (gepflegt im Kapitel-Kopf, ✨ KI-Text).
                  Gleiche Darstellung wie die Buch-Einleitung oben — Fließtext, nl2br, escaped. --}}
@@ -225,6 +233,33 @@
                 <div class="kaptext">{!! nl2br(e($k['text'])) !!}</div>
             @endif
 
+            @if($istFormat)
+                {{-- Format-Kapitel (Phase C): Marken-Hero + Editionen als Showcase (Alternativen) --}}
+                @if($k['hero'] ?? null)
+                    <img src="{{ $k['hero'] }}" style="width:100%; max-height:260px; object-fit:cover; border-radius:8px; margin:6px 0;" />
+                @endif
+                @forelse($k['editionen'] as $ed)
+                    <table class="cblock">
+                        <tr>
+                            <td class="cprice">
+                                @if($ed['preis_pp'] !== null)<div class="val">{{ number_format($ed['preis_pp'], 2, ',', '.') }} €</div><div class="basis">pro Gast</div>@endif
+                            </td>
+                            <td class="cbody">
+                                <div class="cname">{{ $ed['name'] }}</div>
+                                @foreach($ed['gerichte'] as $g)
+                                    @if(($g['type'] ?? '') === 'paket' || ($g['type'] ?? '') === 'header')
+                                        <div class="dish paket" style="margin-left: {{ ($g['einrueckung'] ?? 0) * 12 }}px">{{ $g['text'] }}</div>
+                                    @else
+                                        <div class="dish" style="margin-left: {{ ($g['einrueckung'] ?? 0) * 12 }}px"><span class="pipe">|</span>{{ $g['text'] }}</div>
+                                    @endif
+                                @endforeach
+                            </td>
+                        </tr>
+                    </table>
+                @empty
+                    <div class="pos leer">Noch keine Editionen im Format.</div>
+                @endforelse
+            @else
             @forelse($k['bloecke'] as $blk)
                 @php($istHeader = $blk['ist_header'] ?? false)
                 @php($istText = ($blk['type'] ?? '') === 'text')
@@ -266,6 +301,7 @@
             @empty
                 <div class="pos leer">—</div>
             @endforelse
+            @endif
         </div>
     @empty
         <p class="leer">Noch keine Kapitel angelegt.</p>

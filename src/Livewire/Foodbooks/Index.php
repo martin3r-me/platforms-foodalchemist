@@ -545,6 +545,9 @@ class Index extends Component
 
     public string $conceptSuche = '';
 
+    /** Format-Modul (Phase C): Suche im „Format-Kapitel einfügen"-Picker. */
+    public string $formatSuche = '';
+
     /**
      * UX 2026-07-25 (Dominique): Concept-Picker filtert auf die Concepter-DIMENSIONEN
      * (Eventtyp/Servierform/Einsatzmoment/Saison) — Konzept-Taxonomie (Kategorie/Klasse) ausgemustert.
@@ -870,6 +873,27 @@ class Index extends Component
         $this->neuesKapitelTitel = '';
         $this->selectedKapitelId = $k->id;
         $this->ladeKapitelForm($svc);
+    }
+
+    /**
+     * Format-Modul (Phase C): ein Standard-Format als LIVE Format-Kapitel einfügen. Erscheint
+     * im Kapitelbaum; Editionen/Bilder rendern live aus dem Format (kein Block-Editing). Fail-soft:
+     * Kunden-IP-/Status-Guard meldet sich als Fehler, kippt den Editor nicht.
+     */
+    public function formatKapitelEinfuegen(int $formatId): void
+    {
+        if ($this->selectedId === null) {
+            return;
+        }
+        $svc = app(FoodbookService::class);
+        try {
+            $svc->insertFormatChapter($this->team(), $this->selectedId, $formatId);
+        } catch (\Throwable $e) {
+            $this->addError('formatKapitel', $e->getMessage());
+
+            return;
+        }
+        $this->formatSuche = '';
     }
 
     /**
@@ -1346,6 +1370,8 @@ class Index extends Component
             'menueSnapshotAt' => $fb?->preview_snapshot_at,
             'feedbackAgg' => $feedbackAgg,
             'kapitelTree' => $fb !== null ? $svc->kapitelTree($team, $fb->id) : [],
+            // Format-Modul (Phase C): Kandidaten für „Format-Kapitel einfügen" (Kunden-IP-gefiltert).
+            'formatKandidaten' => $fb !== null ? $svc->formatKandidaten($team, $fb, $this->formatSuche, 50) : collect(),
             'kapitel' => $kapitel,
             // E5.3: Portfolio/Kapitel-Aggregat + WE ziehen jetzt in die Leitstelle-Rail (Nested-Livewire) um.
             'headerPresets' => FoodbookService::headerPresets(),
