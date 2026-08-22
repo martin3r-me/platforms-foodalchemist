@@ -388,19 +388,30 @@ class DetailPanel extends Component
         // R9 (Dominique: «Anzeige komplett Bug»): Sektionen IMMER sichtbar — die
         // Lazy-Klapperei der Ist-Abnahme versteckte alle Inhalte und Aktionen.
         // Aggregate sind DB-MAX/Ø-Queries über die LAs (M8-04: Panels 2–16 ms).
-        $kette = $gp !== null ? $leads->rangliste($gp, $team) : null;
-        $effektiverLeadId = $gp !== null ? $leads->effektiverLead($gp, $team)?->id : null;
+        // N+1-Gating (2026-08): Das GP-Modal bettet 5 detail-panel-Instanzen mit je EINER
+        // fixen $section ein (alle gleichzeitig via x-show im DOM) — ohne Gating berechnet
+        // jede Instanz ALLE Aggregate = 5x Last. Flags entscheiden nur, OB die (teure)
+        // Berechnung laeuft; die @if($section)-Guards im Blade steuern weiter die Sichtbarkeit.
+        // null (Sidebar-Vollmodus) => alle Flags true => laedt ALLES wie bisher (Verhalten 1:1).
+        $vollmodus = $this->section === null;
+        $brauchtLas = $vollmodus || $this->section === 'las';                 // kette, effektiverLead, leadSteuerung, preisBand, preisTrend, verknuepfbare, verwendungen
+        $brauchtAllergene = $vollmodus || $this->section === 'allergene';     // allergene, allergenKonfidenz (auch null-Cockpit)
+        $brauchtZusatz = $vollmodus || $this->section === 'zusatzstoffe';     // zusatzstoffe
+        $brauchtNaehr = $vollmodus || $this->section === 'naehrwerte';        // naehrwerte
+        $brauchtErsatz = $vollmodus || $this->section === 'ersatz';           // ersatz, ersatzKandidaten
+        $kette = ($gp !== null && $brauchtLas) ? $leads->rangliste($gp, $team) : null;
+        $effektiverLeadId = ($gp !== null && $brauchtLas) ? $leads->effektiverLead($gp, $team)?->id : null;
         // R9.2 (E5): Lead-Steuerungs-Sicht (gesetzter vs. effektiver Lead, Vorschlag, Override-Begründung, Ausweichquellen).
-        $leadSteuerung = $gp !== null ? $leads->leadSteuerung($gp, $team) : null;
+        $leadSteuerung = ($gp !== null && $brauchtLas) ? $leads->leadSteuerung($gp, $team) : null;
 
         return view('foodalchemist::livewire.gps.detail-panel', [
             'gp' => $gp,
             'team' => $team,
             'kannKuratieren' => $gp !== null && Curate::canCurate(Auth::user(), $gp),
-            'allergene' => $gp !== null ? $aggregate->allergene($gp) : null,
-            'allergenKonfidenz' => $gp !== null ? $aggregate->allergenKonfidenz($gp) : null,
-            'zusatzstoffe' => $gp !== null ? $aggregate->zusatzstoffe($gp) : null,
-            'naehrwerte' => $gp !== null ? $aggregate->naehrwerte($gp, mitKiFallback: true) : null,
+            'allergene' => ($gp !== null && $brauchtAllergene) ? $aggregate->allergene($gp) : null,
+            'allergenKonfidenz' => ($gp !== null && $brauchtAllergene) ? $aggregate->allergenKonfidenz($gp) : null,
+            'zusatzstoffe' => ($gp !== null && $brauchtZusatz) ? $aggregate->zusatzstoffe($gp) : null,
+            'naehrwerte' => ($gp !== null && $brauchtNaehr) ? $aggregate->naehrwerte($gp, mitKiFallback: true) : null,
             'kette' => $kette,
             'effektiverLeadId' => $effektiverLeadId,
             'leadSteuerung' => $leadSteuerung,
@@ -409,7 +420,7 @@ class DetailPanel extends Component
                 ? app(\Platform\FoodAlchemist\Services\PriceService::class)->preisTrendBulk($kette->pluck('id')->all())
                 : [],
             // Ersatz-Logik: Äquivalenzen dieses GP + Such-Kandidaten fürs Verknüpfen
-            'ersatz' => $gp !== null && $team !== null
+            'ersatz' => $gp !== null && $team !== null && $brauchtErsatz
                 ? app(\Platform\FoodAlchemist\Services\ComponentEquivalentService::class)->fuer($team, 'gp', $gp->id)
                 : collect(),
             'ersatzKandidaten' => $gp !== null && $team !== null && $this->ersatzSuche !== ''
@@ -417,7 +428,7 @@ class DetailPanel extends Component
                 : collect(),
             'verknuepfbare' => $gp !== null && $this->laSuche !== '' ? $leads->sucheVerknuepfbare($team, $this->laSuche) : collect(),
             // Verwaltung (2026-07-02): Referenz-Zähler fürs Lösch-Gate + Kandidaten für den Rezept-Tausch
-            'referenzen' => $gp !== null ? app(\Platform\FoodAlchemist\Services\GpService::class)->referenzen($gp) : null,
+            'referenzen' => ($gp !== null && $vollmodus) ? app(\Platform\FoodAlchemist\Services\GpService::class)->referenzen($gp) : null,
             'tauschKandidaten' => $gp !== null && $team !== null && $this->tauschSuche !== ''
                 ? \Platform\FoodAlchemist\Support\Suche::like(
                     FoodAlchemistGp::visibleToTeam($team), 'name', $this->tauschSuche)
@@ -427,7 +438,7 @@ class DetailPanel extends Component
                     ->orderBy('name')->limit(8)->get(['id', 'name', 'status'])
                 : collect(),
             // M9-05 (GP-Blickwinkel): in welchen Rezepten eingesetzt — klickbar
-            'verwendungen' => $gp !== null
+            'verwendungen' => ($gp !== null && $brauchtLas)
                 ? \Illuminate\Support\Facades\DB::table('foodalchemist_recipe_ingredients AS ri')
                     ->join('foodalchemist_recipes AS r', 'r.id', '=', 'ri.recipe_id')
                     ->where('ri.gp_id', $gp->id)->whereNull('ri.deleted_at')->whereNull('r.deleted_at')
