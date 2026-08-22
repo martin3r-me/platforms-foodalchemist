@@ -154,17 +154,45 @@
                                             <input type="search" wire:model.live.debounce.300ms="pickerSuche" placeholder="{{ ['gericht' => 'Gericht', 'concept' => 'Concept', 'paket' => 'Paket'][$pickerTyp] }} suchen …" class="{{ $input }} w-56" />
                                             <button type="button" wire:click="cellSchliessen" class="{{ $btnGhostXs }}">schließen</button>
                                         </div>
+
+                                        {{-- Spec 42: Facetten (Hauptgruppe → Unterklasse) nur für Gerichte — wie Speisekarte/Verkauf-Browser --}}
+                                        @if($pickerTyp === 'gericht' && $pickerHauptgruppen->isNotEmpty())
+                                            <div class="flex items-center gap-1 flex-wrap" data-sp-picker-facetten>
+                                                <button type="button" wire:click="pickerWaehleHg(null)" class="{{ $pill }} {{ $pickerHauptgruppe === null ? $variantPill['primary'] : $variantPill['secondary'] }}">Alle</button>
+                                                @foreach($pickerHauptgruppen as $hg)
+                                                    <button type="button" wire:click="pickerWaehleHg({{ $hg->id }})" class="{{ $pill }} {{ (int) $pickerHauptgruppe === (int) $hg->id ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $hg->label }}</button>
+                                                @endforeach
+                                            </div>
+                                            @if($pickerUntergruppen->isNotEmpty())
+                                                <div class="flex items-center gap-1 flex-wrap pl-3" data-sp-picker-unterklassen>
+                                                    @foreach($pickerUntergruppen as $uk)
+                                                        <button type="button" wire:click="pickerWaehleKlasse({{ $uk->id }})" class="{{ $pill }} {{ (int) $pickerDishClass === (int) $uk->id ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $uk->label }}</button>
+                                                    @endforeach
+                                                </div>
+                                            @endif
+                                        @endif
+
                                         @if($kandidaten->isNotEmpty())
-                                            <div class="grid grid-cols-1 md:grid-cols-3 gap-1">
+                                            <div class="grid grid-cols-1 md:grid-cols-3 gap-1 max-h-56 overflow-y-auto">
                                                 @foreach($kandidaten as $k)
                                                     <button type="button" wire:key="kand-{{ $pickerTyp }}-{{ $k->id }}" wire:click="inhaltHinzu('{{ $pickerTyp }}', {{ $k->id }})"
                                                             class="flex items-center justify-between gap-2 px-2 py-1 rounded-lg text-xs hover:bg-violet-500/15 text-left text-gray-200">
                                                         <span class="truncate">{{ $k->name }}</span>
-                                                        <span class="text-violet-300 shrink-0">+</span>
+                                                        <span class="flex items-center gap-1 shrink-0">
+                                                            @if($pickerTyp === 'gericht' && ($k->dishClass?->diet_form))
+                                                                <span class="text-[10px] px-1 rounded bg-white/10 text-gray-300">{{ $k->dishClass->diet_form }}</span>
+                                                            @endif
+                                                            @if($pickerTyp === 'gericht' && $k->sales_net)
+                                                                <span class="text-[10px] text-gray-400">{{ number_format((float) $k->sales_net, 2, ',', '.') }} €</span>
+                                                            @elseif($pickerTyp === 'concept' && ($k->price_per_person_cache ?? null))
+                                                                <span class="text-[10px] text-gray-400">{{ number_format((float) $k->price_per_person_cache, 2, ',', '.') }} €/P</span>
+                                                            @endif
+                                                            <span class="text-violet-300">+</span>
+                                                        </span>
                                                     </button>
                                                 @endforeach
                                             </div>
-                                        @elseif($pickerSuche !== '')
+                                        @else
                                             <p class="text-[11px] text-gray-400">Keine Treffer.</p>
                                         @endif
                                     </div>

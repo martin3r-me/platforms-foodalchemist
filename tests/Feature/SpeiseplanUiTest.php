@@ -58,3 +58,37 @@ it('Editor: Zelle (Datum × Mittag) mit Gericht belegen — Eintrag erscheint', 
         ->and($e->meal)->toBe('mittag')
         ->and($e->sales_recipe_id)->toBe($this->gericht->id);
 });
+
+it('gerichtKandidaten (Spec 42): browst ohne Suche, filtert Hauptgruppe, schließt Varianten aus', function () {
+    $svc = app(\Platform\FoodAlchemist\Services\SpeiseplanService::class);
+    $a = FoodAlchemistRecipe::create(['team_id' => $this->rootTeam->id, 'recipe_key' => 'sa', 'name' => 'Alpha-Gericht', 'status' => 'approved', 'is_sales_recipe' => true, 'sales_net' => 5, 'ek_total_eur' => 1, 'dish_main_group_id' => 11]);
+    FoodAlchemistRecipe::create(['team_id' => $this->rootTeam->id, 'recipe_key' => 'sb', 'name' => 'Beta-Gericht', 'status' => 'approved', 'is_sales_recipe' => true, 'sales_net' => 5, 'ek_total_eur' => 1, 'dish_main_group_id' => 22]);
+    $variant = FoodAlchemistRecipe::create(['team_id' => $this->rootTeam->id, 'recipe_key' => 'sv', 'name' => 'Alpha-Variante', 'status' => 'approved', 'is_sales_recipe' => true, 'sales_net' => 5, 'ek_total_eur' => 1, 'variant_source_recipe_id' => $a->id]);
+
+    $alle = $svc->gerichtKandidaten($this->rootTeam, '', 50)->pluck('name')->all();
+    expect($alle)->toContain('Alpha-Gericht');
+    expect($alle)->toContain('Beta-Gericht');
+    expect($svc->gerichtKandidaten($this->rootTeam, '', 50)->pluck('id')->all())->not->toContain($variant->id);
+
+    $nur11 = $svc->gerichtKandidaten($this->rootTeam, '', 50, 11)->pluck('name')->all();
+    expect($nur11)->toContain('Alpha-Gericht');
+    expect($nur11)->not->toContain('Beta-Gericht');
+});
+
+it('Editor-Picker (Spec 42): browst Gerichte OHNE Suchbegriff + Facetten-Toggle', function () {
+    Livewire::test(SpeiseplanIndex::class)->call('neu');
+    $sp = FoodAlchemistSpeiseplan::first();
+    $montag = now()->startOfWeek()->format('Y-m-d');
+
+    Livewire::test(SpeiseplanEditor::class)
+        ->call('oeffnenBearbeiten', $sp->id)
+        ->call('zelleOeffnen', $montag, null)
+        ->set('pickerTyp', 'gericht')
+        ->assertSee('Tagessuppe Kürbis')          // Browse ohne Suche (nicht „erst tippen")
+        ->call('pickerWaehleHg', 777)              // Facette ohne Treffer (Kürbis hat keine HG)
+        ->assertSet('pickerHauptgruppe', 777)
+        ->assertDontSee('Tagessuppe Kürbis')
+        ->call('pickerWaehleHg', 777)              // erneut klicken = Facette löschen
+        ->assertSet('pickerHauptgruppe', null)
+        ->assertSee('Tagessuppe Kürbis');
+});
