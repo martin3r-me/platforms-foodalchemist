@@ -49,6 +49,12 @@ class FoodAlchemistSpeisekarteRubrik extends Model
         return $this->belongsTo(self::class, 'parent_id');
     }
 
+    /** Spec 42: eine Rubrik kann ein Format als Live-Container tragen (rendert Editionen live). */
+    public function format(): BelongsTo
+    {
+        return $this->belongsTo(FoodAlchemistFormat::class, 'format_id');
+    }
+
     public function children(): HasMany
     {
         return $this->hasMany(self::class, 'parent_id')->orderBy('position');

@@ -614,6 +614,7 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\SpeisekarteRubrikPostTool::class,
                     \Platform\FoodAlchemist\Tools\SpeisekarteRubrikPutTool::class,
                     \Platform\FoodAlchemist\Tools\SpeisekartePositionenPostTool::class,
+                    \Platform\FoodAlchemist\Tools\SpeisekarteInsertFormatTool::class,  // Spec 42: Format als Live-Rubrik
                     \Platform\FoodAlchemist\Tools\SpeisekartePositionenDeleteTool::class,
                     \Platform\FoodAlchemist\Tools\SpeisekartePositionenMoveTool::class,
                     \Platform\FoodAlchemist\Tools\SpeisekartePositionenReorderTool::class,

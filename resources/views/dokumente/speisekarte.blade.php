@@ -150,6 +150,17 @@
 
             <table class="pos">
                 @php($prevVg = null)
+                {{-- Spec 42: Format-Rubrik — Editionen live aus dem Format (statt eigener Positionen). --}}
+                @if($rubrik['ist_format'] ?? false)
+                    @forelse($rubrik['editionen'] as $ed)
+                        <tr>
+                            <td class="pname">{{ $ed['name'] }}</td>
+                            <td class="pprice">@if($ed['preis_pp'] !== null){{ number_format((float) $ed['preis_pp'], 2, ',', '.') }} &euro; p.P.@endif</td>
+                        </tr>
+                    @empty
+                        <tr><td colspan="2" class="pos-text">Format ohne Editionen.</td></tr>
+                    @endforelse
+                @endif
                 @foreach($rubrik['positionen'] as $pos)
                     {{-- Werkstrang M Phase D-Renderer: Wahl-Gruppe „A oder B" — „oder" zwischen aufeinanderfolgenden Positionen derselben variant_group_id. --}}
                     @if(($pos['variant_group_id'] ?? null) !== null && ($pos['variant_group_id'] ?? null) === $prevVg)

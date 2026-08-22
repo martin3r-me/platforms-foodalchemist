@@ -270,12 +270,39 @@
                 <div class="flex items-center gap-2 mb-3">
                     <input type="text" wire:model="neueRubrik" wire:keydown.enter="rubrikNeu" placeholder="Neue Rubrik (z. B. Vorspeisen) …" class="{{ $input }} max-w-xs" />
                     <button type="button" wire:click="rubrikNeu" class="{{ $btnGhost }}">+ Rubrik</button>
+                    {{-- Spec 42: Format als Live-Rubrik einfügen (eigener Weg, NICHT der Positions-Picker) — gleiche Logik wie Foodbook-Format-Kapitel. --}}
+                    <button type="button" wire:click="formatPickerToggle" class="{{ $btnGhost }}" data-sk-format-toggle
+                            @class(['ring-2 ring-violet-400' => $formatPickerOffen])>@svg('heroicon-o-squares-plus', 'w-4 h-4') Format</button>
                     {{-- P4: Voll-Kaskade — je Rubrik ein Konzept + Gerichte erfinden, Review im Planung-Editor. --}}
                     <button type="button" wire:click="vollKaskadeStarten" class="{{ $btnPrimary }}" wire:loading.attr="disabled" data-sk-voll-kaskade>
                         <span wire:loading.remove wire:target="vollKaskadeStarten">@svg('heroicon-o-bolt', 'w-4 h-4') Voll-Kaskade</span>
                         <span wire:loading wire:target="vollKaskadeStarten">Starte …</span>
                     </button>
                 </div>
+
+                {{-- Spec 42: Format-Picker (Live-Rubrik). Eigener Weg, nicht der Gericht/Concept-Positions-Picker. --}}
+                @if($formatPickerOffen)
+                    <div class="mb-3 rounded-lg border border-violet-500/30 bg-violet-500/5 p-2.5 space-y-2" data-sk-format-picker>
+                        <div class="flex items-center gap-2">
+                            <input type="search" wire:model.live.debounce.300ms="formatSuche" placeholder="Format suchen …" class="{{ $input }} max-w-xs" data-sk-format-suche />
+                            <span class="text-[11px] text-gray-500">Fügt das Format als Live-Rubrik ein (rendert Editionen automatisch).</span>
+                        </div>
+                        @if($formatKandidaten->isNotEmpty())
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-1">
+                                @foreach($formatKandidaten as $fk)
+                                    <button type="button" wire:key="skfmt-{{ $fk->id }}" wire:click="formatRubrikEinfuegen({{ $fk->id }})"
+                                            class="flex items-center justify-between gap-2 px-2 py-1 rounded-lg text-xs hover:bg-violet-500/15 text-left" data-sk-format-kand>
+                                        <span class="truncate">{{ $fk->consumer_name ?: $fk->name }}</span>
+                                        <span class="text-violet-500 shrink-0">+</span>
+                                    </button>
+                                @endforeach
+                            </div>
+                        @else
+                            <p class="text-[11px] text-gray-400">Keine Formate {{ trim($formatSuche) !== '' ? 'gefunden' : 'vorhanden' }}.</p>
+                        @endif
+                    </div>
+                @endif
+
                 @if($kaskadeMeldung !== null)
                     <div class="mb-3 rounded-lg bg-amber-500/10 border border-amber-500/30 px-2.5 py-1.5 text-[11px] text-amber-700">{{ $kaskadeMeldung }}</div>
                 @endif

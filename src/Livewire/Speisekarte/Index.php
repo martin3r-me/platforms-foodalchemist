@@ -57,6 +57,11 @@ class Index extends Component
     public string $pickerSuche = '';
     public ?int $pickerRubrikId = null;
     public string $pickerModus = 'gericht'; // gericht | menue
+
+    // Spec 42: Format als Live-Rubrik einfügen (eigener Weg, NICHT der Gericht/Concept-Positions-Picker).
+    public bool $formatPickerOffen = false;
+
+    public string $formatSuche = '';
     // Werkstrang M Phase B: Facetten-Filter im Gericht-Picker (Hauptgruppe → Unterklasse).
     public ?int $pickerHauptgruppe = null;
     public ?int $pickerDishClass = null;
@@ -278,6 +283,23 @@ class Index extends Component
     public function rubrikLoeschen(SpeisekarteService $svc, int $rubrikId): void
     {
         $svc->deleteRubrik($this->team(), $rubrikId);
+    }
+
+    /** Spec 42: Format-Picker auf/zu (eigener Weg, nicht der Positions-Picker). */
+    public function formatPickerToggle(): void
+    {
+        $this->formatPickerOffen = ! $this->formatPickerOffen;
+        $this->formatSuche = '';
+    }
+
+    /** Spec 42: ein Format als Live-Rubrik in die Karte einfügen. */
+    public function formatRubrikEinfuegen(SpeisekarteService $svc, int $formatId): void
+    {
+        if (! $this->karteId) {
+            return;
+        }
+        $svc->insertFormatRubrik($this->team(), $this->karteId, $formatId);
+        $this->formatSuche = '';
     }
 
     /** Gericht-/Menü-Picker für eine Rubrik öffnen/schließen. */
@@ -616,6 +638,8 @@ class Index extends Component
             'pickerErgebnisse' => $pickerErgebnisse,
             'pickerHauptgruppen' => $pickerHauptgruppen,
             'pickerUntergruppen' => $pickerUntergruppen,
+            // Spec 42: Format-Kandidaten für den „+ Format"-Picker (nur wenn offen).
+            'formatKandidaten' => ($karte !== null && $this->formatPickerOffen) ? $svc->formatKandidaten($team, $this->formatSuche) : collect(),
             // Spec 33 P5: Auswahl fürs Status-/Zuordnungs-Bauteil (nur aktive Betriebe).
             'betriebe' => \Platform\FoodAlchemist\Models\FoodAlchemistOutlet::where('team_id', $team->id)
                 ->where('is_inactive', false)->orderBy('sort_order')->orderBy('name')->get(['id', 'name']),
