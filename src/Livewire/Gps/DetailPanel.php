@@ -381,7 +381,7 @@ class DetailPanel extends Component
         $gp = null;
         if ($this->gpId !== null && $team !== null) {
             $gp = FoodAlchemistGp::visibleToTeam($team)
-                ->with(['commodity_group', 'preferredCountUnit', 'leadLa', 'derivatVon'])
+                ->with(['commodity_group', 'preferredCountUnit', 'leadLa', 'derivedFrom'])
                 ->find($this->gpId);
         }
 

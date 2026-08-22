@@ -174,9 +174,9 @@ class DarreichungService
     }
 
     /** EK/VK einer Darreichung neu rechnen (Stufe 1 + Stufe-2-Deltas). */
-    public function recomputePreise(FoodAlchemistRecipeDarreichung $darreichung): void
+    public function recomputePreise(FoodAlchemistRecipeDarreichung $darreichung, ?FoodAlchemistRecipe $recipe = null): void
     {
-        $recipe = $darreichung->recipe()->with('ingredients.unit', 'ingredients.gp', 'ingredients.referencedRecipe')->first();
+        $recipe ??= $darreichung->recipe()->with('ingredients.unit', 'ingredients.gp', 'ingredients.referencedRecipe')->first();
         $deltas = $darreichung->deltas()->get();
 
         if ($deltas->isEmpty()) {
@@ -238,8 +238,14 @@ class DarreichungService
     /** Alle Darreichungen eines Gerichts neu rechnen (nach Zutaten-/EK-Änderung). */
     public function recomputeFuerRezept(int $recipeId): void
     {
-        foreach (FoodAlchemistRecipeDarreichung::where('recipe_id', $recipeId)->get() as $d) {
-            $this->recomputePreise($d);
+        $darreichungen = FoodAlchemistRecipeDarreichung::where('recipe_id', $recipeId)->get();
+        if ($darreichungen->isEmpty()) {
+            return;
+        }
+        // Rezept + Zutaten-Relationen EINMAL laden statt je Darreichung neu (N+1).
+        $recipe = FoodAlchemistRecipe::with('ingredients.unit', 'ingredients.gp', 'ingredients.referencedRecipe')->find($recipeId);
+        foreach ($darreichungen as $d) {
+            $this->recomputePreise($d, $recipe);
         }
     }
 

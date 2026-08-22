@@ -980,19 +980,26 @@ class PairingService
             ->whereNull('deleted_at')->selectRaw('recipe_id, COUNT(DISTINCT anchor_id) AS n')->groupBy('recipe_id')->pluck('n', 'recipe_id');
         $rezepte = FoodAlchemistRecipe::visibleToTeam($team)->whereIn('id', $treffer->pluck('recipe_id'))->pluck('name', 'id');
 
+        // Erst filtern/sortieren/deckeln — shared_slugs NUR fuer die finalen Top-N nachladen
+        // (vorher: eine slug-Query je Treffer VOR ->take(), N+1 ueber alle Treffer).
         return $treffer->filter(fn ($t) => $rezepte->has($t->recipe_id))
             ->map(fn ($t) => [
                 'recipe_id' => $t->recipe_id,
                 'name' => $rezepte[$t->recipe_id],
                 'shared' => (int) $t->shared,
                 'eigene_gesamt' => (int) ($gesamt[$t->recipe_id] ?? 0),
-                'shared_slugs' => DB::table('foodalchemist_recipe_pairings AS rp')
-                    ->join('foodalchemist_vocab_pairing_anchors AS a', 'a.id', '=', 'rp.anchor_id')
-                    ->where('rp.recipe_id', $t->recipe_id)->whereIn('rp.anchor_id', $eigene)->whereNull('rp.deleted_at')
-                    ->distinct()->limit(5)->pluck('a.slug')->all(),
             ])
             ->sortBy([fn ($a, $b) => [$b['shared'], $a['eigene_gesamt'], $a['recipe_id']] <=> [$a['shared'], $b['eigene_gesamt'], $b['recipe_id']]])
-            ->take($limit)->values();
+            ->take($limit)
+            ->map(function (array $row) use ($eigene) {
+                $row['shared_slugs'] = DB::table('foodalchemist_recipe_pairings AS rp')
+                    ->join('foodalchemist_vocab_pairing_anchors AS a', 'a.id', '=', 'rp.anchor_id')
+                    ->where('rp.recipe_id', $row['recipe_id'])->whereIn('rp.anchor_id', $eigene)->whereNull('rp.deleted_at')
+                    ->distinct()->limit(5)->pluck('a.slug')->all();
+
+                return $row;
+            })
+            ->values();
     }
 
     public function ankerNeighbors(string $slug, ?string $typ = null, int $limit = 30): Collection
