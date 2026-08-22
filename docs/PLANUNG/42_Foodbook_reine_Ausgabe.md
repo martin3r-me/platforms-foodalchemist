@@ -1,4 +1,4 @@
-# Spec 41 — Foodbook wird reine Ausgabe-Form; Planung zieht zentral in die Leitstelle
+# Spec 42 — Foodbook wird reine Ausgabe-Form; Planung zieht zentral in die Leitstelle
 
 > **Tracking:** Office Dev-Package 23, Features-Board (Board 53). Architektur-/Vertrags-Spec +
 > gestufte Bau-Runden. **Revidiert bewusst [Spec 40 §1](40_Leitstelle_Planungs_Spine.md) Phase A**
@@ -42,16 +42,16 @@ ausgeräumt. Diese Spec holt das nach — und geht einen Schritt weiter als Spec
 **Spec 40 §1 sagte:** Rahmen (Phase A) im Modul · Erstellung (Phase B) in der Leitstelle ·
 Zusammenbau (Phase C) im Modul.
 
-**Spec 41 revidiert Phase A:** Auch die **Rahmen-Planung zieht in die Leitstelle** (Entscheidung
+**Spec 42 revidiert Phase A:** Auch die **Rahmen-Planung zieht in die Leitstelle** (Entscheidung
 Dominique 2026-08-22, „radikal"). Die Ausgabe-Module planen nichts mehr — sie **kuratieren und geben aus**.
 
-| Phase | Zuständig (Spec 41) | Was passiert | Artefakt |
+| Phase | Zuständig (Spec 42) | Was passiert | Artefakt |
 |---|---|---|---|
 | **A · Rahmen** | **Leitstelle** | Brief → Gerüst/Kapitel-Struktur + Leitplanken planen | `FoodAlchemistPlanningFrame` + Struktur |
 | **B · Erstellung** | **Leitstelle** | je Slot Konzept/Gericht generieren, gestuft freigeben, Kaskade bis GP/LA | `CascadeRun`, `Concept`, `Recipe` |
 | **C · Zusammenbau/Ausgabe** | **Ausgabe-Modul** | Kuratieren + Deliverable bauen: Foodbook-PDF, Karte, Aushang | Modul-Dokument |
 
-**Der Vertragssatz (Spec 41):** *Geplant und erzeugt wird immer in der Leitstelle. Die Ausgabe-Module
+**Der Vertragssatz (Spec 42):** *Geplant und erzeugt wird immer in der Leitstelle. Die Ausgabe-Module
 (Foodbook/Speisekarte/Speiseplan) kuratieren das Ergebnis und bauen das Deliverable — sie sind die
 handliche Ausgabe, kein Planungsort.*
 
@@ -75,17 +75,23 @@ oder Bestands-/Manuell-Pfad (Alltags-Weg, Bestands-Picker im Modul). Beide nutze
 
 ---
 
-## ⚠️ Vorbedingung (Sequencing)
+## ⚠️ Vorbedingung (Sequencing) — Stand 2026-08-22 korrigiert
 
-`origin/main` (Stand 2026-08-22 `5c35763`) trägt **weder `feat/spec40-umsetzung` noch
-`feat/format-modul`** — beide Branches editieren `Foodbooks/Index.php`. Ein radikaler Strip *vor* deren
-Merge kollidiert an derselben ~1450-Zeilen-Datei mit zwei fremden Branches.
+**Spec 40 ist bereits in `origin/main`** (`5c35763`; via PR #35/#36 gemergt — Owner-Banner/Zurück-Link
+E1b `bdb0b2e`, Attach-Härtung E-P0 `a27c3aa`, Werkstrang M `movePosition` alle Ancestors von main).
+Der frühere „nicht gemergt"-Befund war ein Ref-False-Negative (der Branch `feat/spec40-umsetzung`
+existiert nach dem Merge nicht mehr auf origin).
 
-**Reihenfolge (Dominiques Entscheidung, vor dem Code-Strip):**
-1. **Spec 40 mergen** → main + demo. Liefert Owner-Banner + Zurück-Link (E1b) + Attach-Härtung (E-P0) —
-   die Bausteine, die der Round-Trip nach dem Strip braucht.
-2. **Format-Modul mergen** → main + demo (oder bewusst zurückstellen).
-3. **Erst dann** diesen Umbau auf frischem `origin/main` (Branch `feat/foodbook-ausgabe`, Worktree).
+**Einzige offene Kollision = `feat/format-modul`** (noch nicht in main; Format als Live-Kapitel im
+Foodbook). Es editiert `Foodbooks/Index.php` (+26) + `FoodbookService.php` (+96) + Foodbook-Models,
+aber **NICHT `Planung/Index.php`**.
+
+**Reihenfolge:**
+1. **F1 (Leitstelle „Foodbook aus Brief") ist kollisionsfrei** (nur `Planung/Index.php` + Services) und
+   kann sofort auf `origin/main` gebaut werden (Branch `feat/foodbook-ausgabe`, Worktree) — Spec-40-
+   Bausteine (`ownerKontext`) liegen bereits vor.
+2. **F2/F3 (Foodbook-Strip + DNA-Umzug) warten auf den Format-Modul-Merge** (sonst Konflikt an
+   `Foodbooks/Index.php`). Format-Merge = Dominiques Entscheidung.
 
 ---
 
