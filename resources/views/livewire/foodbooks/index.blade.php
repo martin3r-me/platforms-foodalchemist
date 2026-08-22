@@ -223,6 +223,39 @@
                 <x-foodalchemist::crm-kunde-picker
                     :ausgabe="$fb" :crm-verfuegbar="$crmVerfuegbar" :firmen="$firmen" :kontakte="$kontakte" />
 
+                {{-- Spec 42: schlanke Ausgabe-Defaults (Schreibstil · Kundentyp · Niveau). Der Schreibstil
+                     steuert den Kundentext; alle drei reiten beim Start in die Leitstelle als Leitplanken
+                     mit. Die volle Planung/Regler-Fläche lebt in der Leitstelle. --}}
+                <div class="{{ $card }} p-4 grid grid-cols-1 md:grid-cols-3 gap-3" wire:key="fbkontext-{{ $fb->id }}">
+                    <div>
+                        <label class="{{ $label }}">Schreibstil / Ton</label>
+                        <select wire:change="tonalitaetSetzen($event.target.value)" class="{{ $input }}" data-fb-schreibstil>
+                            <option value="">— erben —</option>
+                            @foreach($schreibstile as $s)
+                                <option value="{{ $s->id }}" @selected((int) ($fb->writing_style_id ?? 0) === (int) $s->id)>{{ $s->name }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div>
+                        <label class="{{ $label }}">Kundentyp</label>
+                        <select wire:change="leitplankeSetzen('kundentyp', $event.target.value)" class="{{ $input }}" data-fb-kundentyp>
+                            <option value="">— erben —</option>
+                            @foreach($kundentypen as $wert => $lbl)
+                                <option value="{{ $wert }}" @selected(($fb->kundentyp ?? '') === $wert)>{{ $lbl }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div>
+                        <label class="{{ $label }}">Niveau</label>
+                        <select wire:change="leitplankeSetzen('default_niveau', $event.target.value)" class="{{ $input }}" data-fb-niveau>
+                            <option value="">— erben (Segment) —</option>
+                            @foreach($niveauLabels as $wert => $lbl)
+                                <option value="{{ $wert }}" @selected(($fb->default_niveau ?? '') === $wert)>{{ $lbl }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                </div>
+
                 <div>
                     <div class="flex items-center justify-between">
                         <label class="{{ $label }}">Briefing / Einleitung (Kundentext)</label>
