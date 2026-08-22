@@ -107,7 +107,7 @@
                 </div>
                 <div class="max-h-[44vh] overflow-auto divide-y divide-black/5 border-y border-black/5">
                     @foreach(($batchCandidates['orders'] ?? []) as $order)
-                        <div class="py-2.5 flex items-start justify-between gap-4" data-orders-batch-row="{{ $order['id'] }}">
+                        <div wire:key="batch-order-{{ $order['id'] }}" class="py-2.5 flex items-start justify-between gap-4" data-orders-batch-row="{{ $order['id'] }}">
                             <div class="min-w-0 flex items-start gap-3">
                                 <input type="checkbox"
                                        class="mt-0.5"

@@ -147,13 +147,6 @@ class RecipeModal extends Component
         $this->dispatch('modal.open', name: 'recipe-modal');
     }
 
-    public function tabLaden(string $tab): void
-    {
-        if (in_array($tab, ['aufbau', 'eigenschaften', 'preparation', 'details', 'sensorik', 'feedback', 'notes'], true)) {
-            $this->geladeneTabs[$tab] = true;
-        }
-    }
-
     public function speichern(RecipeService $recipes): void
     {
         $this->fehler = null;

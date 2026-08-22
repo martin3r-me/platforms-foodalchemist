@@ -27,7 +27,7 @@
                  Ingredient-Hard-Stop-Buttons (keine Bestand-Lücke); der Mensch entscheidet manuell. --}}
             @if(!empty($offen['dedup_kollision']))
                 @php($dk = $offen['dedup_kollision'])
-                <div class="rounded border border-amber-300 bg-amber-50 px-2 py-1.5" data-{{ $prefix }}dedup="{{ (int) ($dk['existing_id'] ?? 0) }}">
+                <div wire:key="{{ $prefix }}dedup-{{ $idx }}" class="rounded border border-amber-300 bg-amber-50 px-2 py-1.5" data-{{ $prefix }}dedup="{{ (int) ($dk['existing_id'] ?? 0) }}">
                     <p class="text-[11px] text-amber-800 inline-flex items-center gap-1.5">
                         @svg('heroicon-o-document-duplicate', 'w-3.5 h-3.5 inline-block align-middle')
                         «{{ $offen['text'] }}» — {{ $dk['hinweis'] ?? 'existiert bereits im Bestand' }}
@@ -35,7 +35,7 @@
                 </div>
                 @continue
             @endif
-            <div class="rounded border border-gray-200 px-2 py-1.5" data-{{ $prefix }}hardstop="{{ $idx }}">
+            <div wire:key="{{ $prefix }}hardstop-{{ $idx }}" class="rounded border border-gray-200 px-2 py-1.5" data-{{ $prefix }}hardstop="{{ $idx }}">
                 <p class="text-[11px] text-gray-700 inline-flex items-center gap-1.5"><span class="inline-block w-1.5 h-1.5 rounded-full bg-rose-500 align-middle"></span> {{ $offen['text'] }}</p>
                 {{-- Kohärenz-Gate: WARUM diese Zeile entdrahtet wurde (Regel = süß-in-herzhaft, KI = Kritiker-Urteil). --}}
                 @if(!empty($offen['kritiker']))

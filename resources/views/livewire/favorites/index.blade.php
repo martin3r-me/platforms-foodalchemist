@@ -50,7 +50,7 @@
                         </thead>
                         <tbody>
                             @forelse($items as $r)
-                                <tr class="{{ $tr }}">
+                                <tr wire:key="fav-{{ $r['gp_id'] }}" class="{{ $tr }}">
                                     <td class="{{ $td }}">
                                         @if($r['is_favorite'])<span class="text-amber-500" title="gepinnt">★</span> @endif
                                         <a href="{{ route('foodalchemist.gps.index', ['gp' => $r['gp_id'], 'edit' => 1]) }}" wire:navigate

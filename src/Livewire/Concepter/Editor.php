@@ -1148,7 +1148,6 @@ class Editor extends Component
         $istStammdaten = $this->tab === 'stammdaten';
         $istKonzeptTab = $this->tab === 'konzept';
         $istGeschirrTab = $this->tab === 'geschirr';
-        $istSensorikTab = $this->tab === 'sensorik';
 
         // Gericht-Baum (geteilt von beiden Pickern): aktiv, sobald ein Filter ODER Suchtext gesetzt ist.
         $pickFilter = ['hauptgruppe' => $this->pickHg, 'class' => $this->pickKlasse, 'geschmack' => $this->pickGeschmack, 'diet_form' => $this->pickDiaet];
@@ -1345,9 +1344,6 @@ class Editor extends Component
                     $team, $this->geschirrSuche, 12, $this->geschirrVehikelBevorzugt($concept))
                 : collect(),
             // Sensorik-Tab: Geschmacks-Balance + Textur über die Concept-Gerichte (nur wenn Tab aktiv).
-            'sensorik' => ($istSensorikTab && $concept !== null)
-                ? app(\Platform\FoodAlchemist\Services\SensorikService::class)->fuerConcept($concept)
-                : null,
         ]);
     }
 
