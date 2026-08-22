@@ -260,6 +260,7 @@ class AiGatewayService
         $finalText = null;
         $runde = 0;
         $kontext = $team !== null && Auth::user() !== null ? new \Platform\Core\Contracts\ToolContext(Auth::user(), $team) : null;
+        try {
         while ($runde < $maxRuns) {
             $runde++;
             $antwort = $this->chatMitBackoff($messages, [
@@ -289,6 +290,14 @@ class AiGatewayService
                 continue;
             }
             $messages[] = ['role' => 'user', 'content' => 'Unbekannte action oder Tool nicht erlaubt — Protokoll beachten.'];
+        }
+        } catch (\Throwable $e) {
+            // Audit-Vollständigkeit: auch der Fehlerpfad des Tool-Loops schreibt EINE ai_call_log-Zeile (wie propose()).
+            $elapsedMs = (int) ((hrtime(true) - $start) / 1_000_000);
+            $this->schreibeCallLog('voice.command', 'D', $auftrag, ['model' => config('foodalchemist.ai.tiers', [])['D'] ?? 'default'], null, $e, $elapsedMs,
+                ['knowledge_used' => null, 'target_table' => null, 'target_id' => null, 'layers_used' => null]);
+
+            throw $e;
         }
         $elapsedMs = (int) ((hrtime(true) - $start) / 1_000_000);
 

@@ -73,7 +73,7 @@
                 <div class="space-y-0.5">
                     @foreach($eltern as $parent)
                         <button type="button" wire:key="el-{{ $parent->id }}"
-                                @if($parent->is_sales_recipe) wire:click="$dispatch('vk-modal.oeffnen', { id: {{ $parent->id }} })" @else wire:click="zeige({{ $parent->id }})" @endif
+                                @if($parent->is_sales_recipe) wire:click="$dispatch('vk-modal.oeffnen', { id: {{ $parent->id }} })" @else wire:click="$dispatch('recipe-modal.oeffnen', { id: {{ $parent->id }} })" @endif
                                 class="block w-full text-left text-[11px] text-sky-600 hover:underline truncate" data-eltern-link>@if($parent->is_sales_recipe)@svg('heroicon-o-banknotes', 'w-3.5 h-3.5 inline-block align-middle')@else @svg('heroicon-o-arrow-up', 'w-3.5 h-3.5 inline-block align-middle')@endif {{ $parent->name }}</button>
                     @endforeach
                 </div>

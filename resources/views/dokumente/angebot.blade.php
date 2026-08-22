@@ -67,7 +67,7 @@
         <p style="color:#9ca3af">Noch kein Menü zusammengestellt.</p>
     @endforelse
 
-    <div class="price">
+    <div class="preis">
         <table>
             <tr><td>Preis pro Person</td><td class="right">{{ number_format($kalk['vk_pro_person'], 2, ',', '.') }} €</td></tr>
             <tr><td>Personen</td><td class="right">{{ $kalk['pax'] ?: '—' }}</td></tr>
