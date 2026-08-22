@@ -230,6 +230,38 @@ class SpeiseplanService
 
     // ── Einträge (echtes Datum × Linie × Mahlzeit) ───────────────────────
 
+    /**
+     * Spec 42: Zell-Picker-Kandidaten mit Facetten — spiegelt SpeisekarteService::gerichtKandidaten
+     * (Filter-Vertrag Hauptgruppe/dish_class wie der Verkauf-Browser). Ohne Suche = Browse (kein
+     * „erst tippen"). Varianten-Guard `variant_source_recipe_id` wie in der Speisekarte.
+     */
+    public function gerichtKandidaten(Team $team, string $suche, int $limit = 50, ?int $hauptgruppe = null, ?int $dishClassId = null): Collection
+    {
+        return FoodAlchemistRecipe::visibleToTeam($team)->verkauf()
+            ->whereNull('variant_source_recipe_id')
+            ->when($suche !== '', fn ($q) => \Platform\FoodAlchemist\Support\Suche::like($q, 'name', $suche))
+            ->when($hauptgruppe !== null, fn ($q) => $q->where('dish_main_group_id', $hauptgruppe))
+            ->when($dishClassId !== null, fn ($q) => $q->where('dish_class_id', $dishClassId))
+            ->with(['dishClass:id,diet_form'])
+            ->orderBy('name')->limit($limit)->get(['id', 'name', 'sales_net', 'dish_class_id']);
+    }
+
+    /** Concepts (Fix-Menüs) für den Zell-Picker. */
+    public function conceptKandidaten(Team $team, string $suche, int $limit = 50): Collection
+    {
+        return FoodAlchemistConcept::visibleToTeam($team)->echte()
+            ->when($suche !== '', fn ($q) => \Platform\FoodAlchemist\Support\Suche::like($q, 'name', $suche))
+            ->orderBy('name')->limit($limit)->get(['id', 'name', 'price_per_person_cache']);
+    }
+
+    /** Pakete für den Zell-Picker. */
+    public function paketKandidaten(Team $team, string $suche, int $limit = 50): Collection
+    {
+        return FoodAlchemistPaket::visibleToTeam($team)
+            ->when($suche !== '', fn ($q) => \Platform\FoodAlchemist\Support\Suche::like($q, 'name', $suche))
+            ->orderBy('name')->limit($limit)->get(['id', 'name']);
+    }
+
     public function addEintrag(Team $team, int $planId, array $in): FoodAlchemistSpeiseplanEintrag
     {
         $plan = FoodAlchemistSpeiseplan::visibleToTeam($team)->findOrFail($planId);

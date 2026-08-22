@@ -289,41 +289,20 @@ it('ideeVerwerfen + ideeReaktivieren schalten den Skizzen-Status (entwurf ↔ ve
  * (Frame → Concept-Step je Slot + GenerateConceptJob-Attach) ist in PlanningCascadeTest gepinnt;
  * hier fehlte die Livewire-Trigger-Deckung (Session-Anlage, Redirect, Fehlerpfad).
  */
-it('vollKaskadeStarten (Leitstelle P3): legt eine Review-Session an, startet die Voll-Kaskade (Concept-Step je Slot) und leitet in den Planung-Editor', function () {
+it('vollKaskadeStarten (Spec 42 F2): öffnet die Leitstelle im Owner-Kontext, plant NICHT mehr im Modul', function () {
     Queue::fake();
 
     Livewire::test(FoodbooksIndex::class)
         ->call('waehle', $this->fb->id)
         ->call('vollKaskadeStarten')
-        ->assertRedirect()
+        ->assertRedirect(route('foodalchemist.planung.index', ['fb_owner' => $this->fb->id]))
         ->assertSet('kaskadeMeldung', null);
 
-    // Ausgabe-Modul = Quelle: die Review-Wurzel wird als Planungs-Session mit foodbook-Herkunft angelegt.
-    $session = FoodAlchemistPlanningSession::where('team_id', $this->rootTeam->id)
-        ->where('created_via', 'foodbook_vollkaskade')->latest('id')->first();
-    expect($session)->not->toBeNull();
-
-    // Genau ein Voll-Kaskaden-Lauf am Foodbook + ein Concept-Step (der eine Slot mit chapter_id) + Job ans Kapitel.
-    $run = FoodAlchemistCascadeRun::where('source_owner_type', 'foodbook')
-        ->where('source_owner_id', $this->fb->id)->latest('id')->first();
-    expect($run)->not->toBeNull()
-        ->and($run->scope)->toBe('vollkaskade')
-        ->and($run->status)->toBe('running')
-        ->and($run->planning_session_id)->toBe($session->id)
-        ->and($run->steps()->where('kind', 'concept')->count())->toBe(1);
-    Queue::assertPushed(GenerateConceptJob::class, fn ($job) => $job->attachOwnerType === 'foodbook' && (int) $job->attachContainerId > 0);
-});
-
-it('vollKaskadeStarten ohne Gerüst/Slots meldet ehrlich (kaskadeMeldung) — kein Lauf, kein Redirect', function () {
-    Queue::fake();
-    $leer = $this->fbSvc->create($this->rootTeam, ['label' => 'FB ohne Gerüst']);
-
-    Livewire::test(FoodbooksIndex::class)
-        ->call('waehle', $leer->id)
-        ->call('vollKaskadeStarten')
-        ->assertNoRedirect()
-        ->assertSet('kaskadeMeldung', fn ($v) => is_string($v) && $v !== '');
-
-    expect(FoodAlchemistCascadeRun::where('source_owner_type', 'foodbook')->where('source_owner_id', $leer->id)->count())->toBe(0);
+    // Spec 42: Planung zieht in die Leitstelle — das Modul legt weder Session noch Lauf an und
+    // dispatcht keinen Job. Rahmen/Inhalte entstehen erst in der Leitstelle (foodbookAusBrief).
+    expect(FoodAlchemistPlanningSession::where('team_id', $this->rootTeam->id)
+        ->where('created_via', 'foodbook_vollkaskade')->count())->toBe(0);
+    expect(FoodAlchemistCascadeRun::where('source_owner_type', 'foodbook')
+        ->where('source_owner_id', $this->fb->id)->count())->toBe(0);
     Queue::assertNotPushed(GenerateConceptJob::class);
 });

@@ -1392,20 +1392,19 @@ it('vollkaskade mit falschem Owner (nicht foodbook) wirft ehrlich', function () 
     Queue::assertNothingPushed();
 });
 
-it('Foodbook-Leitstelle: Voll-Kaskade-Go startet die Kaskade + leitet in den Planung-Editor', function () {
+it('Foodbook-Leitstelle (Spec 42): Voll-Kaskade-Knopf öffnet die Leitstelle im Owner-Kontext (plant nicht mehr im Modul)', function () {
     $fb = $this->makeFoodbook($this->rootTeam, 'Sommer-Foodbook', ['status' => 'draft']);
-    $frameSvc = app(PlanningFrameService::class);
-    $frame = $frameSvc->frameFor($this->rootTeam, 'foodbook', (int) $fb->id);
-    $frameSvc->addSlot($this->rootTeam, $frame, ['label' => 'Vorspeisen', 'slot_type' => 'kapitel', 'target_count' => 2]);
     Queue::fake();
 
+    // Spec 42: die Planung (Brief → Gerüst → Kaskade) zieht in die Leitstelle; das Modul redirectet
+    // nur noch dorthin (Owner-Kontext ?fb_owner=). Kein Modul-Gerüst-Bau, kein Modul-Lauf, kein Job.
     Livewire::test(\Platform\FoodAlchemist\Livewire\Foodbooks\Index::class)
         ->call('waehle', $fb->id)
         ->call('vollKaskadeStarten')
-        ->assertRedirect();   // → Planung-Editor (Review-Session)
+        ->assertRedirect(route('foodalchemist.planung.index', ['fb_owner' => $fb->id]));
 
-    Queue::assertPushed(GenerateConceptJob::class);
-    expect(FoodAlchemistCascadeRun::where('source_owner_type', 'foodbook')->where('source_owner_id', $fb->id)->count())->toBe(1);
+    Queue::assertNotPushed(GenerateConceptJob::class);
+    expect(FoodAlchemistCascadeRun::where('source_owner_type', 'foodbook')->where('source_owner_id', $fb->id)->count())->toBe(0);
 });
 
 // ── P4: Voll-Kaskade aus der Speisekarte ────────────────────────────────────

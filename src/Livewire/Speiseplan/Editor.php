@@ -63,6 +63,11 @@ class Editor extends Component
 
     public string $pickerSuche = '';
 
+    // Spec 42: Facetten im Zell-Picker (gericht-Typ) — wie Speisekarte/Verkauf-Browser.
+    public ?int $pickerHauptgruppe = null;
+
+    public ?int $pickerDishClass = null;
+
     // Ausrollen
     public ?string $ausrollenBis = null;
 
@@ -253,6 +258,8 @@ class Editor extends Component
         $this->cellDatum = $datum;
         $this->cellLinie = $linieId;
         $this->pickerSuche = '';
+        $this->pickerHauptgruppe = null;
+        $this->pickerDishClass = null;
     }
 
     public function cellSchliessen(): void
@@ -260,6 +267,21 @@ class Editor extends Component
         $this->cellDatum = null;
         $this->cellLinie = null;
         $this->pickerSuche = '';
+        $this->pickerHauptgruppe = null;
+        $this->pickerDishClass = null;
+    }
+
+    /** Spec 42: Hauptgruppen-Facette umschalten (klick-erneut = löschen); Unterklasse zurücksetzen. */
+    public function pickerWaehleHg(?int $hauptgruppe): void
+    {
+        $this->pickerHauptgruppe = ($this->pickerHauptgruppe === $hauptgruppe) ? null : $hauptgruppe;
+        $this->pickerDishClass = null;
+    }
+
+    /** Spec 42: Unterklassen-Facette (dish_class) umschalten. */
+    public function pickerWaehleKlasse(?int $dishClassId): void
+    {
+        $this->pickerDishClass = ($this->pickerDishClass === $dishClassId) ? null : $dishClassId;
     }
 
     public function inhaltHinzu(string $typ, int $id, SpeiseplanService $svc): void
@@ -373,14 +395,24 @@ class Editor extends Component
         }
         $monatStart = Carbon::parse($this->monatStr ?? 'now')->startOfMonth();
 
+        // Spec 42: reicher Zell-Picker (wie Speisekarte/Verkauf-Browser) — Browse ohne Tippzwang,
+        // Facetten (Hauptgruppe → Unterklasse) für den gericht-Typ, Kandidaten über den Service.
         $kandidaten = collect();
-        if ($sp !== null && $this->cellDatum !== null && $this->pickerSuche !== '') {
-            $s = '%' . mb_strtolower($this->pickerSuche) . '%';
+        $pickerHauptgruppen = collect();
+        $pickerUntergruppen = collect();
+        if ($sp !== null && $this->cellDatum !== null) {
             $kandidaten = match ($this->pickerTyp) {
-                'paket' => FoodAlchemistPaket::visibleToTeam($team)->whereRaw('LOWER(name) LIKE ?', [$s])->orderBy('name')->limit(15)->get(['id', 'name']),
-                'concept' => FoodAlchemistConcept::visibleToTeam($team)->echte()->whereRaw('LOWER(name) LIKE ?', [$s])->orderBy('name')->limit(15)->get(['id', 'name']),
-                default => FoodAlchemistRecipe::visibleToTeam($team)->verkauf()->whereRaw('LOWER(name) LIKE ?', [$s])->orderBy('name')->limit(15)->get(['id', 'name']),
+                'paket' => $svc->paketKandidaten($team, $this->pickerSuche, 50),
+                'concept' => $svc->conceptKandidaten($team, $this->pickerSuche, 50),
+                default => $svc->gerichtKandidaten($team, $this->pickerSuche, 50, $this->pickerHauptgruppe, $this->pickerDishClass),
             };
+            if ($this->pickerTyp === 'gericht') {
+                $pickerHauptgruppen = app(\Platform\FoodAlchemist\Services\SalesRecipeService::class)->dishMainGroups($team);
+                if ($this->pickerHauptgruppe !== null) {
+                    $pickerUntergruppen = \Platform\FoodAlchemist\Models\FoodAlchemistDishClass::visibleToTeam($team)
+                        ->where('dish_main_group_id', $this->pickerHauptgruppe)->orderBy('label')->get(['id', 'label']);
+                }
+            }
         }
 
         return view('foodalchemist::livewire.speiseplan.editor', [
@@ -420,6 +452,8 @@ class Editor extends Component
             'wiederholungen' => $sp !== null ? collect($svc->wiederholungen($sp))->where('konflikt', true)->values()->all() : [],
             'mahlzeiten' => SpeiseplanService::MAHLZEITEN,
             'kandidaten' => $kandidaten,
+            'pickerHauptgruppen' => $pickerHauptgruppen,
+            'pickerUntergruppen' => $pickerUntergruppen,
         ]);
     }
 

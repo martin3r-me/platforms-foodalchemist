@@ -235,31 +235,20 @@ class Index extends Component
      * je Concept der Gericht-Fan-out. Legt eine Planungs-Session als Review-Wurzel an und leitet in den
      * Planung-Editor (Live-Fortschritt + Freigabe). Ohne Gerüst → Meldung.
      */
-    public function vollKaskadeStarten(
-        \Platform\FoodAlchemist\Services\PlanningCascadeService $cascade,
-        \Platform\FoodAlchemist\Services\PlanningSessionService $sessions
-    ) {
+    /**
+     * Spec 42 (F2) — Handoff in die Leitstelle. Die Planung (Brief → Gerüst → Kaskade) zieht in die
+     * Leitstelle; das Foodbook ist reine Ausgabe. Dieser Knopf baut KEIN Gerüst mehr im Modul, sondern
+     * öffnet die Leitstelle im Owner-Kontext dieses Foodbooks (`fb_owner`) — dort entstehen Struktur +
+     * Inhalte und docken via attachToOutput automatisch zurück.
+     */
+    public function vollKaskadeStarten()
+    {
         $this->kaskadeMeldung = null;
-        $team = $this->team();
-        if ($team === null || $this->selectedId === null) {
+        if ($this->selectedId === null) {
             return null;
         }
-        $fb = \Platform\FoodAlchemist\Models\FoodAlchemistFoodbook::visibleToTeam($team)->find($this->selectedId);
-        try {
-            $session = $sessions->create($team, [
-                'title' => 'Voll-Kaskade: ' . ($fb?->label ?? ('Foodbook #' . $this->selectedId)),
-                'created_via' => 'foodbook_vollkaskade',
-            ]);
-            $cascade->starteKaskade($team, 'vollkaskade', $session, 'voll_kreativ', [
-                'owner_type' => 'foodbook', 'owner_id' => (int) $this->selectedId, 'created_via' => 'foodbook_vollkaskade',
-            ]);
 
-            return redirect()->route('foodalchemist.planung.index', ['session' => $session->id, 'open' => 1]);
-        } catch (\Throwable $e) {
-            $this->kaskadeMeldung = $e->getMessage();
-
-            return null;
-        }
+        return redirect()->route('foodalchemist.planung.index', ['fb_owner' => (int) $this->selectedId]);
     }
 
     // ── Spec 19 E6.3: Kreativ-Skizzenfläche (IdeenService) ──────────────────────

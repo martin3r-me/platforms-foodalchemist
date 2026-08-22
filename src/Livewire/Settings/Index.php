@@ -38,6 +38,8 @@ class Index extends Component
         'kueche' => ['label' => 'Küchen-Profil', 'hint' => 'Mandanten-Tendenz für den Generator (M7-07, Hooks gewinnen)'],
         // Ebene 1 der DNA-Kette (Umzug 2026-07-21): Team-Food-DNA wohnt bei den Einstellungen, nicht als Top-Level-Nav
         'food-dna' => ['label' => 'Food DNA (Identität)', 'hint' => 'Leitbild · Signature-Stil · Aromatik · No-Gos · Schreibstil — stehende KI-Referenz (Ebene 1)'],
+        // Spec 42 F3: Kunde-DNA (Ebene 2) zog aus dem Foodbook hierher — Marken-DNA gehört zum Kunden, nicht pro Foodbook.
+        'kunde-dna' => ['label' => 'Kunde-DNA (pro Kunde)', 'hint' => 'Marken-Positionierung · Ton · No-Gos · Schreibstil je CRM-Kunde — Ebene 2 der DNA-Kette'],
         'ki' => ['label' => 'KI', 'hint' => 'Provider · Tiering (V-01) · Nutzung · Kill-Switch (M7-08)'],
         'vk-taxonomie' => ['label' => 'VK-Taxonomie', 'hint' => 'Speisen-Hauptgruppen → Klassen mit Rezept-Zählern (D-6 §4.6)'],
         // R5 (Dominique): eigene Seiten statt Sammel-Sektion — mit Anlegen/Bearbeiten

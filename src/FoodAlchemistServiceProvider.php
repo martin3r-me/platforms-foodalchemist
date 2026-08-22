@@ -516,6 +516,7 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     // Kaskaden-Trigger via MCP ist bewusst freigegeben (Entscheidung 2026-08-17); Schutz =
                     // Tenancy (Start isOwnedBy Session, Freigabe ownedStep). Nicht mehr human-only.
                     \Platform\FoodAlchemist\Tools\PlanungKaskadeStartPostTool::class,
+                    \Platform\FoodAlchemist\Tools\FoodbookPlanFromBriefTool::class,  // Spec 42 F5: Foodbook aus Brief (vollkaskade owner=foodbook)
                     \Platform\FoodAlchemist\Tools\PlanungKaskadeFreigabePostTool::class,
                     // Spec 19 E7.6: Kapitel-Go „Anlegen" — READ-ONLY (Stempel-Vorschau + Trockenlauf + Anlage-Stand; Go selbst human-only, kein MCP-Trigger)
                     \Platform\FoodAlchemist\Tools\KapitelFreigabeGetTool::class,
