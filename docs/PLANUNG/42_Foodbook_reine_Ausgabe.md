@@ -5,7 +5,7 @@
 > („der Rahmen wird im Ausgabe-Modul geplant") und setzt die Zielarchitektur aus
 > [Spec 38](38_Roadmap_Planung_Leitstelle.md) („Ausgabe-Module = Quelle und Ziel") konsequent um.
 
-**Status:** Konzept 2026-08-22 (mit Dominique, Doc-first). Umsetzung noch nicht begonnen.
+**Status:** `getestet` (Sandbox) 2026-08-22/23 — F0–F5 gebaut auf Branch `feat/foodbook-ausgabe`, 0 neue Regressionen (baseline-verifiziert gegen clean origin/main). Noch nicht nach main gemergt/deployt (Dominiques Schritt).
 Statuswerte (aus [README](../README.md)): `gebaut` · `getestet` (Sandbox) · `demo-geprüft` · `abgenommen`.
 
 Alle Codepfade relativ zu `platforms-foodalchemist/` (canonical Clone). Zeilennummern sind Wegweiser —
@@ -100,7 +100,7 @@ aber **NICHT `Planung/Index.php`**.
 ### F0 — Diese Spec (doc-first) · Status: gebaut (dieses Dokument)
 Vertrag revidieren, Invariante festschreiben, Sequencing dokumentieren.
 
-### F1 — Leitstelle: Foodbook-Lifecycle von vorn (Phase A zieht rein)
+### F1 — Leitstelle: Foodbook-Lifecycle von vorn (Phase A zieht rein) · Status: ✅ getestet (`5606f25` neu + `1477801` bestehend-Owner-Handoff)
 Die Leitstelle bekommt den Einstieg, ein **ganzes Foodbook aus einem Brief** zu planen — Surfacing
 bestehender Logik, die heute im Foodbook hängt.
 - Einstieg „Foodbook aus Brief" in `Planung/Index`: Brief + Leitplanken → `FoodbookService::create`
@@ -112,7 +112,7 @@ bestehender Logik, die heute im Foodbook hängt.
 - `starteVollkaskade` + `attachToOutput` (foodbook → `addBlock('concept_ref')`) unverändert — nur der
   *Auslöser* wandert.
 
-### F2 — `Foodbooks/Index` auf Ausgabe/Kuratieren abspecken
+### F2 — `Foodbooks/Index` auf Ausgabe/Kuratieren abspecken · Status: ✅ getestet (`1477801` Handoff + `3bd5c9f` Strip −385 Zeilen; PHP-Dead-Code der Ex-Tabs bewusst deferred)
 Aus dem 7–8-Tab-Cockpit eine schlanke Ausgabe-Form machen (Muster: Speisekarte/Speiseplan-Editor).
 
 **Bleibt (Ausgabe/Kuratieren):** Kapitelbaum kuratieren (`kapitel*`, `reorderKapitel`, `moveKapitel`,
@@ -132,17 +132,17 @@ Zugehörige Props/Blade-Tabs entfernen; `ManagesCanvas`/`ManagesPlanningFrame`/`
 **Blade:** Tab-Leiste auf **Kontext(schlank) · Struktur · Speisen · Branding · Preise**. Vorschau/Export
 bleiben auf Seiten-Ebene (Spec 29 S1). `wire:key`/Alpine-Fallen beachten, Kompilat linten.
 
-### F3 — Kunde-DNA-Board → Kunden-/Einstellungen-Ebene
+### F3 — Kunde-DNA-Board → Kunden-/Einstellungen-Ebene · Status: ✅ getestet (`77f973c` Settings/KundeDna + `1236839` Slim-Selektor im Kontext-Tab)
 `Foodbooks/KundeDnaPanel` aus dem Foodbook lösen und auf die Kunden-Kontext-/Einstellungen-Ebene heben
 (Marken-DNA ist kunden-, nicht foodbook-scoped; Team-DNA liegt dort schon). Am Foodbook bleibt der
 schlanke Selektor (`writing_style_id`/`kundentyp`/`default_niveau`) als Kopf-Default.
 `CanvasService::cascadeKontext` bleibt intakt (die Leitstelle liest die DNA-Kaskade beim Erzeugen weiter).
 
-### F4 — Speisekarte/Speiseplan harmonisieren
+### F4 — Speisekarte/Speiseplan harmonisieren · Status: ✅ getestet (`33655fe` — reicher Speiseplan-Zell-Picker mit Facetten; Handoff/Owner-Banner beider Formen schon aus Spec 40 vorhanden)
 Beide sind schon Ausgabe-Formen. Minimal: „Voll-Kaskade"-Knopf-Wording + Owner-Banner/Zurück-Link-
 Parität. Speisekarte-KI-Wording bleibt (Ausgabe-Politur, dieselbe Grenzfall-Regel).
 
-### F5 — MCP + Tests + Docs
+### F5 — MCP + Tests + Docs · Status: ✅ getestet (`2799e81` MCP-Tool `foodbook.PLAN_FROM_BRIEF` + `1236839` Handbuch; Office-Package-23-Board-Sync separat)
 MCP-Lockstep (Leitstellen-Einstieg „Foodbook aus Brief" spiegeln; Foodbook-Tools auf Kuratier-/Ausgabe-
 Writes reduzieren) · Tests (`FoodbookUiTest` auf reduziertes Tab-Set; neuer `LeitstelleFoodbookLifecycleTest`;
 Cross-Tenant je neuer Action; Baseline-Regressionen per `git stash` gegenprüfen) · Docs (`foodbook.md`

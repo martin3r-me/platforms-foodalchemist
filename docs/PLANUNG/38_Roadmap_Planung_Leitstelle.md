@@ -23,7 +23,7 @@ Ein Nutzer startet mit **einem Satz Absicht** und einem Satz Leitplanken und erh
 3. **Fachlich korrekt gebaut:** ein Gericht besteht aus **Basisrezepten** (Sauce/Jus/Püree = eigenes Sub-Rezept), nicht aus flachen Zutaten — geerdet auf das [Regelwerk Basisrezepte].
 4. **Kosten sichtbar mitgeführt:** EK/VK/Marge je Stufe, Zielpreis-Korridor propagiert.
 5. **Ehrlicher Durchlauf:** man sieht jederzeit, ob es arbeitet, hängt, fertig ist — und ob die Anreicherung wirklich lief.
-6. **Ausgabe-fähig:** das Ergebnis fließt in Foodbook / Speisekarte / Speiseplan.
+6. **Ausgabe-fähig:** das Ergebnis fließt in Foodbook / Speisekarte / Speiseplan. → **[Spec 42](42_Foodbook_reine_Ausgabe.md)** (2026-08-23, `getestet`): die drei Ausgabe-Module sind reine Ausgabe/Kuratieren; ALLE Planung (inkl. Rahmen/Brief) läuft in der Leitstelle. Foodbook auf 4 Tabs abgespeckt, „Foodbook aus Brief" (UI + MCP), reicher Speiseplan-Picker, Kunde-DNA → Einstellungen.
 
 ---
 
