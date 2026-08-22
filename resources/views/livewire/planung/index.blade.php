@@ -166,7 +166,7 @@
         {{-- Leitstelle: freie 1-Klick-Erstellung — die eine KI-Erstell-Fläche (de-trend). Legt eine
              leichte „Freie Erstellung"-Session (cockpit_frei) an und öffnet den Editor auf dem
              Planung-Tab mit den Regler-Leitplanken. Trend bleibt EIN Input, nicht der Rahmen. --}}
-        <div class="{{ $card }} p-4">
+        <div class="{{ $card }} p-4" x-data="{ fbOpen: false }">
             <div class="flex flex-wrap items-center gap-2">
                 <span class="text-sm font-semibold text-gray-800 mr-1">Neu erstellen</span>
                 <button wire:click="schnellErstellen('rezept')" class="{{ $btnPrimary }}" data-frei-rezept>
@@ -178,7 +178,33 @@
                 <button wire:click="schnellErstellen('concept')" class="{{ $btnPrimary }}" data-frei-concept>
                     @svg('heroicon-o-squares-2x2', 'w-4 h-4') Concept
                 </button>
+                <button type="button" @click="fbOpen = !fbOpen" class="{{ $btnPrimary }}" data-frei-foodbook
+                        :class="fbOpen ? 'ring-2 ring-violet-400' : ''">
+                    @svg('heroicon-o-book-open', 'w-4 h-4') Foodbook aus Brief
+                </button>
                 <span class="text-[11px] text-gray-500 ml-1">— mit KI, direkt mit Regler-Leitplanken.</span>
+            </div>
+
+            {{-- Spec 42 F1: Ein ganzes Foodbook aus einem Brief planen — Rahmen (Gerüst/Struktur) +
+                 Inhalte entstehen HIER in der Leitstelle; das Foodbook ist reine Ausgabe. --}}
+            <div x-show="fbOpen" x-cloak class="mt-3 border-t border-gray-200 pt-3 space-y-2" data-foodbook-brief-panel>
+                <input type="text" wire:model="fbTitel" data-fb-titel
+                       placeholder="Foodbook-Name (optional)"
+                       class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-violet-400 focus:ring-1 focus:ring-violet-400">
+                <textarea wire:model="fbBrief" rows="3" data-fb-brief
+                          placeholder="Brief: Anlass, Gäste, Saison, Niveau, Budget …"
+                          class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-violet-400 focus:ring-1 focus:ring-violet-400"></textarea>
+                @if($fbMeldung)
+                    <p class="text-xs text-rose-600" data-fb-meldung>{{ $fbMeldung }}</p>
+                @endif
+                <div class="flex flex-wrap items-center gap-2">
+                    <button wire:click="foodbookAusBrief" wire:loading.attr="disabled" wire:target="foodbookAusBrief"
+                            class="{{ $btnPrimary }}" data-fb-erzeugen>
+                        <span wire:loading.remove wire:target="foodbookAusBrief">@svg('heroicon-o-sparkles', 'w-4 h-4') Foodbook erzeugen (KI)</span>
+                        <span wire:loading wire:target="foodbookAusBrief">Erzeuge …</span>
+                    </button>
+                    <span class="text-[11px] text-gray-500">— Struktur + Inhalte laufen in der Leitstelle und docken automatisch ins Foodbook.</span>
+                </div>
             </div>
         </div>
 

@@ -17,12 +17,14 @@ use Platform\FoodAlchemist\Models\FoodAlchemistRecipeStepPhoto;
 use Platform\FoodAlchemist\Services\CanvasService;
 use Platform\FoodAlchemist\Services\ConceptGeneratorService;
 use Platform\FoodAlchemist\Services\ConceptService;
+use Platform\FoodAlchemist\Services\FoodbookService;
 use Platform\FoodAlchemist\Services\IdeenService;
 use Platform\FoodAlchemist\Services\PairingService;
 use Platform\FoodAlchemist\Services\PlanningCascadeService;
 use Platform\FoodAlchemist\Services\PlanningSessionService;
 use Platform\FoodAlchemist\Services\RecipeImageService;
 use Platform\FoodAlchemist\Services\SalesRecipeService;
+use Platform\FoodAlchemist\Services\TeamSettingsService;
 use Platform\FoodAlchemist\Services\TitelVorschlagService;
 use Platform\FoodAlchemist\Services\WorkerHealthService;
 use Platform\FoodAlchemist\Support\TeamScope;
@@ -487,6 +489,82 @@ class Index extends Component
         // Basisrezept-Tab (nicht den Gericht-Tab). scope 'rezept' → Tab-Key 'basisrezept'; sonst = scope-Key.
         $startTab = $scope === 'rezept' ? 'basisrezept' : $scope;
         $this->oeffne($session->id, $startTab);
+    }
+
+    /** Foodbook-aus-Brief-Eingabe (Spec 42 F1): Rahmen wird in der Leitstelle geplant, nicht im Modul. */
+    public string $fbTitel = '';
+
+    public string $fbBrief = '';
+
+    public ?string $fbMeldung = null;
+
+    /**
+     * F1 (Spec 42) — „Foodbook aus Brief" IN der Leitstelle: Shell anlegen → Gerüst aus Brief →
+     * Struktur anwenden → Session + Voll-Kaskade (owner_type=foodbook). Spiegelt den bisherigen
+     * Foodbook-Kickoff (`Foodbooks/Index::frameAusBriefVorschlagen` + `strukturAnwenden` +
+     * `vollKaskadeStarten`), aber der Rahmen entsteht jetzt hier — das Foodbook wird zur reinen
+     * Ausgabe. Ergebnis dockt via `attachToOutput` automatisch ins Foodbook zurück; der Owner-Banner
+     * (Spec 40 E1b) leuchtet, sobald der Lauf `source_owner_type='foodbook'` trägt.
+     */
+    public function foodbookAusBrief(
+        FoodbookService $foodbooks,
+        ConceptGeneratorService $concepts,
+        PlanningCascadeService $cascade,
+        PlanningSessionService $sessions,
+        TeamSettingsService $settings,
+        CanvasService $canvas,
+    ): void {
+        $this->fbMeldung = null;
+        $team = $this->team();
+        if ($team === null) {
+            $this->fbMeldung = 'Kein Team zugeordnet — Erstellung nicht möglich.';
+
+            return;
+        }
+        $brief = trim($this->fbBrief);
+        if ($brief === '') {
+            $this->fbMeldung = 'Bitte einen Brief eingeben (Anlass, Gäste, Saison, Niveau, Budget …).';
+
+            return;
+        }
+
+        try {
+            // 1. Foodbook-Hülle (reine Ausgabe — nur der Name; alles Weitere plant die Leitstelle).
+            $label = trim($this->fbTitel) !== '' ? trim($this->fbTitel) : 'Foodbook aus Brief';
+            $fb = $foodbooks->create($team, ['label' => $label]);
+
+            // 2. Gerüst aus dem Brief (owner-neutral, wie der bisherige Foodbook-Kickoff).
+            $concepts->geruestAusBriefFuerOwner($team, 'foodbook', $fb->id, $brief, [
+                'segment' => $settings->segment($team),
+                'leitplanken' => $foodbooks->leitplanken($team, $fb),
+                'marken_kontext' => $canvas->cascadeKontext($team, null, $fb->id, null, $fb->crm_company_id)['marken_kontext'] ?? null,
+            ]);
+
+            // 3. Struktur anwenden: Gerüst-Slots → Kapitel (idempotent).
+            $foodbooks->strukturAusGeruest($team, $fb->id);
+
+            // 4. Review-Session + Voll-Kaskade (Inhalte je Slot, gestufte Freigabe).
+            $session = $sessions->create($team, [
+                'title' => 'Foodbook aus Brief: ' . $label,
+                'brief' => $brief,
+                'created_via' => 'leitstelle_foodbook_brief',
+            ]);
+            $cascade->starteKaskade($team, 'vollkaskade', $session, 'voll_kreativ', [
+                'owner_type' => 'foodbook',
+                'owner_id' => $fb->id,
+                'created_via' => 'leitstelle_foodbook_brief',
+            ]);
+
+            // 5. Eingabe leeren + Worker-Cockpit öffnen (Owner-Banner + Round-Trip greifen automatisch).
+            $this->fbTitel = '';
+            $this->fbBrief = '';
+            $this->oeffne($session->id, 'worker');
+        } catch (\Throwable $e) {
+            // LLM nicht verfügbar/deaktiviert, leerer Brief o.ä. → Meldung statt 500. Eine ggf. schon
+            // angelegte leere Foodbook-Hülle bleibt in der Liste (verwerfbar) — bewusst kein Rollback,
+            // da die Kaskaden-Jobs nicht transaktional sind.
+            $this->fbMeldung = $e->getMessage();
+        }
     }
 
     public function oeffne(int $id, ?string $startTab = null): void
