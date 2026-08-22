@@ -217,9 +217,13 @@ class RecipeRecomputeService
         $inDegree = array_fill_keys($ids, 0);
         $parentsVon = [];                                          // sub → [parents]
         foreach ($kanten as $k) {
-            if (isset($inDegree[$k->recipe_id])) {
-                $inDegree[$k->recipe_id]++;                        // Eltern: je referenziertem DISTINCT Sub +1
+            // Elter-Rezept nicht im Set (z.B. soft-deleted, aber Zutat-Kante noch live) → Kante
+            // KOMPLETT ignorieren. Sonst landet der verwaiste Parent nur in $parentsVon und die
+            // Kahn-Schleife unten crasht mit „Undefined array key" (--$inDegree[$parent]).
+            if (! isset($inDegree[$k->recipe_id])) {
+                continue;
             }
+            $inDegree[$k->recipe_id]++;                            // Eltern: je referenziertem DISTINCT Sub +1
             $parentsVon[$k->referenced_recipe_id][] = $k->recipe_id;
         }
 
@@ -408,7 +412,7 @@ class RecipeRecomputeService
         //   (c) Sub-Rezept-Allergen-Konfidenz (§7 rekursiv, schwächstes Glied).
         $mappingRang = match (true) {
             $nTotal === 0 => 0,
-            $nUngemappt > 0 => 1,
+            $this->hatUngemappteRelevante($zutaten) => 1,      // F7.1 (verfeinert): nur nicht-optionale ungemappte
             default => 3,
         };
         $recipe->allergens_confidence = self::RANG_KONF[min(
@@ -470,7 +474,7 @@ class RecipeRecomputeService
     {
         $felder = FoodAlchemistGp::ALLERGEN_FIELDS;
 
-        if ($recipe->n_ingredients_unmapped > 0                       // F7.1-Guard: Totalreset
+        if ($this->hatUngemappteRelevante($zutaten)                   // F7.1-Guard (verfeinert): nur nicht-optionale ungemappte
             || $this->subKonfidenzRang($zutaten, 'allergens_confidence') <= self::KONF_RANG['low']) { // §7 rekursiv: unsicheres Sub → unbekannt
             foreach ($felder as $f) {
                 $recipe->{"allergen_{$f}"} = 'unbekannt';
@@ -520,7 +524,7 @@ class RecipeRecomputeService
     {
         $stoffe = array_keys(FoodAlchemistItemDeclaration::STOFFE);
 
-        if ($recipe->n_ingredients_unmapped > 0                       // F7.1-Guard: alle 18 NULL
+        if ($this->hatUngemappteRelevante($zutaten)                   // F7.1-Guard (verfeinert): nur nicht-optionale ungemappte → alle 18 NULL
             || $this->subKonfidenzRang($zutaten, 'allergens_confidence') <= self::KONF_RANG['low']) { // §7 rekursiv: unsicheres Sub → unbekannt
             foreach ($stoffe as $s) {
                 $recipe->{"additive_{$s}"} = null;
@@ -876,6 +880,19 @@ class RecipeRecomputeService
     private function aggregationsZutaten(Collection $zutaten): Collection
     {
         return $zutaten->filter(fn ($z) => ! $z->is_optional && $this->istGemappt($z));
+    }
+
+    /**
+     * F7.1 (verfeinert 2026-08-22, User-Entscheid): löst der Allergen-/Zusatzstoff-
+     * „unbekannt"-Guard aus? NUR nicht-optionale ungemappte Zutaten zählen — optionale
+     * sind aus der ALL-MAXIMAL-Aggregation (aggregationsZutaten) ohnehin ausgeschlossen,
+     * also darf eine ungemappte optionale Garnitur das bekannte Profil der Pflicht-
+     * Zutaten nicht auf „unbekannt" verwerfen. n_ingredients_unmapped bleibt der
+     * Gesamt-Zähler (Anzeige); dieser Guard ist der Aggregations-Scope-Spiegel.
+     */
+    private function hatUngemappteRelevante(Collection $zutaten): bool
+    {
+        return $zutaten->contains(fn ($z) => ! $z->is_optional && ! $this->istGemappt($z));
     }
 
     /** I5: gemini_proposed zählt nur mit confidence ≥ 0.85 als gemappt. */

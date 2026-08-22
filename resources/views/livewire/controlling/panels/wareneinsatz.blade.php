@@ -41,7 +41,7 @@
                 <p class="{{ $label }} mb-2">Lieferant ausklammern (Was-wäre-wenn)</p>
                 <div class="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-1">
                     @foreach($lieferanten as $l)
-                        <label class="inline-flex items-center gap-2 text-xs text-gray-700">
+                        <label wire:key="we-excl-{{ $l->id }}" class="inline-flex items-center gap-2 text-xs text-gray-700">
                             <input type="checkbox" wire:model.live="excludeSupplierIds" value="{{ $l->id }}" />
                             <span class="truncate" title="{{ $l->name }}">{{ $l->name }}</span>
                         </label>

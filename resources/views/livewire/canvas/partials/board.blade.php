@@ -44,7 +44,7 @@
                             </div>
                         </div>
                     @elseif(($f['type'] ?? '') === 'ref_schreibstil')
-                        @php($schreibstile = \Platform\FoodAlchemist\Models\FoodAlchemistWritingStyle::visibleToTeam(auth()->user()->currentTeamRelation)->where('is_inactive', false)->orderBy('name')->get(['id', 'name']))
+                        @php($schreibstile = $this->canvasSchreibstile())
                         <div>
                             <label class="block {{ $label }} mb-1">{{ $f['label'] }}</label>
                             <select wire:model="canvasForm.{{ $f['key'] }}" class="{{ $input }}">

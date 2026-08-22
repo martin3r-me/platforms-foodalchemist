@@ -1604,7 +1604,7 @@ class FoodbookService
      * Foodbook-Gesamt: (Σ Top-Kapitel Per-Person × Pax) + Pauschal-Anteile. Erst HIER
      * wird die Gästezahl bindend (F-12, D-CON-5).
      *
-     * @return array{vk_pro_person: float, ek_pro_person: float, pauschal: float, personen: ?int, gesamt_vk: ?float, gesamt_ek: ?float}
+     * @return array{vk_pro_person: float, ek_pro_person: float, pauschal: float, personen: ?int, gesamt_vk: ?float, gesamt_ek: ?float, food_cost_percent: ?float}
      */
     public function gesamt(Team $team, FoodAlchemistFoodbook $fb): array
     {
@@ -1619,13 +1619,19 @@ class FoodbookService
             $pauschal += $agg['pauschal'];
         }
 
+        $vkPp = round($vk, 2);
+        $ekPp = round($ek, 2);
+
         return [
-            'vk_pro_person' => round($vk, 2),
-            'ek_per_person' => round($ek, 2),
+            'vk_pro_person' => $vkPp,
+            'ek_per_person' => $ekPp,
             'pauschal' => round($pauschal, 2),
             'personen' => $pax,
             'gesamt_vk' => $pax !== null ? round($vk * $pax + $pauschal, 2) : null,
             'gesamt_ek' => $pax !== null ? round($ek * $pax, 2) : null,
+            // Wareneinsatz % auf denselben gerundeten Per-Person-Werten wie die Anzeige (F-12),
+            // damit die Zahl exakt der bisherigen Blade-Rechnung ek_pp / vk_pp * 100 entspricht.
+            'food_cost_percent' => $vkPp > 0 ? round($ekPp / $vkPp * 100, 1) : null,
         ];
     }
 

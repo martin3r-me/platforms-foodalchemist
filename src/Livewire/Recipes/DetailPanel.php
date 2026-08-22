@@ -261,6 +261,10 @@ class DetailPanel extends Component
                 ? app(\Platform\FoodAlchemist\Services\PairingService::class)->recipeCohesion($rezept) : null,
             'pairings' => $rezept !== null && ! $this->embedded && $this->section === null
                 ? app(\Platform\FoodAlchemist\Services\PairingService::class)->recipePairings($rezept->id) : null,
+            // Layer: Pairing-Netz-Daten hier laden statt in der anonymen x-Komponente (gleiche Guard wie kohaesion/pairings = nur Standalone-Panel).
+            'netz' => $rezept !== null && ! $this->embedded && $this->section === null
+                ? app(\Platform\FoodAlchemist\Services\PairingService::class)->pairingNetz($team, $rezept->id)
+                : ['nodes' => [], 'edges' => [], 'meta' => []],
             'ankerKandidaten' => $this->ankerSuche !== ''
                 ? TeamScope::applyVisible(\Illuminate\Support\Facades\DB::table('foodalchemist_vocab_pairing_anchors')
                     ->whereRaw('LOWER(slug) LIKE ?', ['%' . mb_strtolower($this->ankerSuche) . '%'])

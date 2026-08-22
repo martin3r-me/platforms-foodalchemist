@@ -791,8 +791,63 @@ class Tagesplan extends Component
         ];
     }
 
+    /** @var array<string,ContextFile> Memo path→ContextFile (N+1-Vermeidung im Wandmonitor-Poll). */
+    private array $ctxFileByPath = [];
+
+    /** @var array<string,ContextFile> Memo token→ContextFile. */
+    private array $ctxFileByToken = [];
+
+    /** Alle ContextFiles der Anleitungs-Medien EINMAL vorladen statt je Medium (N+1). */
+    private function preloadContextFiles(array $schritte): void
+    {
+        $this->ctxFileByPath = [];
+        $this->ctxFileByToken = [];
+        $paths = [];
+        $tokens = [];
+        foreach ($schritte as $schritt) {
+            foreach (['fotos', 'photos', 'medien', 'media'] as $feld) {
+                if (! is_array($schritt[$feld] ?? null)) {
+                    continue;
+                }
+                foreach ($schritt[$feld] as $medium) {
+                    $src = trim((string) ($medium['src'] ?? $medium['url'] ?? ''));
+                    if ($src === '' || str_starts_with($src, 'data:')) {
+                        continue;
+                    }
+                    $path = parse_url($src, PHP_URL_PATH);
+                    $basename = is_string($path) ? basename($path) : '';
+                    if ($basename === '' || $basename === '/') {
+                        continue;
+                    }
+                    $paths[] = $basename;
+                    $tokens[] = pathinfo($basename, PATHINFO_FILENAME);
+                }
+            }
+        }
+        if ($paths === [] && $tokens === []) {
+            return;
+        }
+        $files = ContextFile::query()
+            ->where(function ($q) use ($paths, $tokens) {
+                $q->whereIn('path', array_values(array_unique($paths)))
+                    ->orWhereIn('token', array_values(array_unique($tokens)));
+            })
+            ->orderBy('id')
+            ->get();
+        foreach ($files as $file) {
+            if (! isset($this->ctxFileByPath[$file->path])) {
+                $this->ctxFileByPath[$file->path] = $file;
+            }
+            if ($file->token !== null && ! isset($this->ctxFileByToken[$file->token])) {
+                $this->ctxFileByToken[$file->token] = $file;
+            }
+        }
+    }
+
     private function normalisierteAnleitungsSchritte(array $schritte): array
     {
+        $this->preloadContextFiles($schritte);
+
         return collect($schritte)
             ->map(function (array $schritt) {
                 foreach (['fotos', 'photos', 'medien', 'media'] as $feld) {
@@ -838,10 +893,8 @@ class Tagesplan extends Component
         // und ist Disk-agnostisch (local wie hetzner/S3).
         $basename = is_string($path) ? basename($path) : '';
         if ($basename !== '' && $basename !== '/') {
-            $file = ContextFile::query()
-                ->where('path', $basename)
-                ->orWhere('token', pathinfo($basename, PATHINFO_FILENAME))
-                ->first();
+            $file = $this->ctxFileByPath[$basename]
+                ?? ($this->ctxFileByToken[pathinfo($basename, PATHINFO_FILENAME)] ?? null);
             if ($file !== null) {
                 return $file->url;
             }

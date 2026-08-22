@@ -73,7 +73,7 @@
                 <div class="space-y-0.5">
                     @foreach($eltern as $parent)
                         <button type="button" wire:key="el-{{ $parent->id }}"
-                                @if($parent->is_sales_recipe) wire:click="$dispatch('vk-modal.oeffnen', { id: {{ $parent->id }} })" @else wire:click="zeige({{ $parent->id }})" @endif
+                                @if($parent->is_sales_recipe) wire:click="$dispatch('vk-modal.oeffnen', { id: {{ $parent->id }} })" @else wire:click="$dispatch('recipe-modal.oeffnen', { id: {{ $parent->id }} })" @endif
                                 class="block w-full text-left text-[11px] text-sky-600 hover:underline truncate" data-eltern-link>@if($parent->is_sales_recipe)@svg('heroicon-o-banknotes', 'w-3.5 h-3.5 inline-block align-middle')@else @svg('heroicon-o-arrow-up', 'w-3.5 h-3.5 inline-block align-middle')@endif {{ $parent->name }}</button>
                     @endforeach
                 </div>
@@ -148,7 +148,7 @@
             <x-slot:actions>
                 <button type="button" wire:click="$dispatch('pairing-netz.oeffnen', { recipeId: {{ $rezept->id }} })" class="{{ $btnGhostXs }}" title="Voller Graph: verwandte Rezepte + Vorschläge" data-pairing-netz-btn>Netz öffnen @svg('heroicon-o-arrow-up-right', 'w-3.5 h-3.5')</button>
             </x-slot:actions>
-            <x-foodalchemist::pairing-netz :recipe-id="$rezept->id" />
+            <x-foodalchemist::pairing-netz :recipe-id="$rezept->id" :netz="$netz" />
             <div class="flex flex-wrap gap-1 mt-2">
                 @foreach($kernAnker as $anker)
                     <span wire:key="ka-{{ $anker->id }}" class="{{ $pill }} {{ $variantPill['primary'] }} group" title="{{ $anker->source }}{{ $anker->ai_confidence !== null ? ' ' . round($anker->ai_confidence * 100) . '%' : '' }}">

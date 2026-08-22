@@ -502,7 +502,7 @@
                             @if($d->deltas->count() > 0)
                                 <span class="tabular-nums text-gray-600" title="Ergibt sich automatisch aus der Komponenten-Summe">{{ $d->quantity_per_unit_g !== null ? number_format($d->quantity_per_unit_g, 0, ',', '.') : '—' }} <span class="text-[10px] text-gray-500">Σ</span></span>
                             @else
-                                <input type="text" wire:model.blur="darForm.{{ $d->id }}.quantity_pro_unit_g"
+                                <input type="text" wire:model.blur="darForm.{{ $d->id }}.quantity_per_unit_g"
                                        wire:change="darreichungSpeichern({{ $d->id }})" class="{{ $input }} !py-0.5 !w-16 text-right" />
                             @endif
                         </td>
@@ -518,7 +518,7 @@
                             </select>
                         </td>
                         <td class="py-1.5 pr-2">
-                            <select wire:model="darForm.{{ $d->id }}.preis_modus"
+                            <select wire:model="darForm.{{ $d->id }}.price_mode"
                                     wire:change="darreichungSpeichern({{ $d->id }})" class="{{ $input }} !py-0.5 !w-20">
                                 <option value="auto">auto</option>
                                 <option value="manuell">manuell</option>

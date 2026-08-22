@@ -477,15 +477,15 @@
                                     <td class="{{ $td }} !px-2" colspan="7">
                                         @if($slot->type === 'spacer')
                                             <span class="{{ $pill }} {{ $variantPill['secondary'] }}">Leerzeile</span>
-                                            <select wire:model="blockForm.{{ $slot->id }}.hoehe" wire:change="blockSpeichern({{ $slot->id }})" class="{{ $input }} w-32 ml-1">
+                                            <select wire:model="blockForm.{{ $slot->id }}.height" wire:change="blockSpeichern({{ $slot->id }})" class="{{ $input }} w-32 ml-1">
                                                 @foreach(['klein', 'mittel', 'gross'] as $h)<option value="{{ $h }}">{{ $h }}</option>@endforeach
                                             </select>
                                         @elseif($slot->type === 'text')
                                             <span class="{{ $pill }} {{ $variantPill['secondary'] }}">Text</span>
-                                            <input type="text" wire:model.blur="blockForm.{{ $slot->id }}.text_inhalt" wire:change="blockSpeichern({{ $slot->id }})" class="{{ $input }} w-full mt-1" placeholder="Freitext …" />
+                                            <input type="text" wire:model.blur="blockForm.{{ $slot->id }}.text_content" wire:change="blockSpeichern({{ $slot->id }})" class="{{ $input }} w-full mt-1" placeholder="Freitext …" />
                                         @else
                                             <span class="{{ $pill }} {{ $variantPill['info'] }}">{{ $slot->type === 'header_preis' ? 'Header + Preis' : 'Header' }}</span>
-                                            <input type="text" wire:model.blur="blockForm.{{ $slot->id }}.titel" wire:change="blockSpeichern({{ $slot->id }})" class="{{ $input }} w-full mt-1 font-medium" placeholder="Überschrift …" />
+                                            <input type="text" wire:model.blur="blockForm.{{ $slot->id }}.title" wire:change="blockSpeichern({{ $slot->id }})" class="{{ $input }} w-full mt-1 font-medium" placeholder="Überschrift …" />
                                             @php($ss = $sektionSumme['h' . $slot->id] ?? null)
                                             @if($ss && $ss['n'] > 0)
                                                 <div class="mt-1 text-[11px] text-violet-600 tabular-nums">{{ $ss['n'] }} {{ $ss['n'] === 1 ? 'Position' : 'Positionen' }} · Σ EK {{ number_format($ss['ek'], 2, ',', '.') }} € · {{ number_format($ss['vk'], 2, ',', '.') }} €/P</div>
@@ -493,7 +493,7 @@
                                             @if($slot->type === 'header_preis')
                                                 <span class="inline-flex items-center gap-1 mt-1">
                                                     <input type="number" step="0.01" min="0" wire:model.blur="blockForm.{{ $slot->id }}.price_value" wire:change="blockSpeichern({{ $slot->id }})" class="{{ $input }} w-24 text-right tabular-nums" placeholder="€" />
-                                                    <select wire:model="blockForm.{{ $slot->id }}.preis_basis" wire:change="blockSpeichern({{ $slot->id }})" class="{{ $input }} w-28">
+                                                    <select wire:model="blockForm.{{ $slot->id }}.price_basis" wire:change="blockSpeichern({{ $slot->id }})" class="{{ $input }} w-28">
                                                         @foreach(['person' => '/Person', 'pauschal' => 'pauschal', 'staffel' => 'Staffel'] as $v => $l)<option value="{{ $v }}">{{ $l }}</option>@endforeach
                                                     </select>
                                                 </span>

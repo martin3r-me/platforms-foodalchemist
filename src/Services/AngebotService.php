@@ -371,6 +371,17 @@ class AngebotService
             ->orderBy('name')->limit($limit)->get(['id', 'name', 'price_per_person_cache', 'event_type_id', 'serving_form_id']);
     }
 
+    /** Concept-Katalog-Facetten (Eventtypen · Servierformen · Momente · Saisons) für die Angebot-Editor-Filterleiste. */
+    public function facetten(Team $team): array
+    {
+        return [
+            'eventtypen' => \Platform\FoodAlchemist\Models\FoodAlchemistEventtyp::visibleToTeam($team)->where('is_inactive', false)->orderBy('sort_order')->get(['id', 'name']),
+            'servierformen' => \Platform\FoodAlchemist\Models\FoodAlchemistServierform::where('is_inactive', false)->orderBy('sort_order')->get(['id', 'label']),
+            'momente' => \Platform\FoodAlchemist\Models\FoodAlchemistEinsatzmoment::visibleToTeam($team)->where('is_inactive', false)->orderBy('sort_order')->get(['id', 'name']),
+            'saisons' => \Platform\FoodAlchemist\Models\FoodAlchemistSaison::visibleToTeam($team)->where('is_inactive', false)->orderBy('sort_order')->get(['id', 'name']),
+        ];
+    }
+
     // ── CRM-Lese-Picker (MVP) — class_exists-geschützt (Modul läuft ohne crm) ──
 
     public function crmVerfuegbar(): bool

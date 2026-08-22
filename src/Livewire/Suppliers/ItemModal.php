@@ -59,9 +59,9 @@ class ItemModal extends Component
     }
 
     #[On('modal.closed')]
-    public function geschlossen(array $payload = []): void
+    public function geschlossen(string $name): void
     {
-        if (($payload['name'] ?? null) === 'item-modal') {
+        if ($name === 'item-modal') {
             $this->reset(); // P-2: kein State-Leak
         }
     }

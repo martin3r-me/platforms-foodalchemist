@@ -202,6 +202,19 @@ trait ManagesPlanningFrame
         ];
     }
 
+    /** @var array<int,string>|null Memo: Saison id→name (vermeidet find() je Regel im Board-Loop, N+1). */
+    private ?array $frameSaisonNamenMemo = null;
+
+    /** Saison id→name einmal je Request laden (global wie das bisherige find()). */
+    private function frameSaisonNamen(): array
+    {
+        if ($this->frameSaisonNamenMemo === null) {
+            $this->frameSaisonNamenMemo = FoodAlchemistSaison::pluck('name', 'id')->all();
+        }
+
+        return $this->frameSaisonNamenMemo;
+    }
+
     /** Lesbare Kurzform einer Regel (Chips im Board). */
     public function frameRegelLabel(array $r): string
     {
@@ -212,7 +225,7 @@ trait ManagesPlanningFrame
 
         return match ($r['rule_type']) {
             'diet_quota' => trim("{$op} {$menge} " . ($r['ref_key'] ?? '')),
-            'season_coverage' => 'Saison: ' . (FoodAlchemistSaison::find($r['ref_id'])?->name ?? ('#' . $r['ref_id'])),
+            'season_coverage' => 'Saison: ' . ($this->frameSaisonNamen()[$r['ref_id']] ?? ('#' . $r['ref_id'])),
             'nogo_ingredient' => 'No-Go: ' . ($r['value_text'] ?? ''),
             'nogo_allergen' => 'No-Go-Allergen: ' . ($r['ref_key'] ?? ''),
             'allergen_line' => 'Linie: ' . ($r['value_text'] ?? ''),

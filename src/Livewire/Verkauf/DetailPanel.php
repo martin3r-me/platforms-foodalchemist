@@ -292,6 +292,8 @@ class DetailPanel extends Component
             // v3-Redesign: Sektionen nicht mehr ausklappbar → direkt laden (nicht lazy).
             // Pairings-Sektion entfernt (2026-07-21, Dominique: überschneidet sich mit Pairing-Netz).
             'kohaesion' => $rezept !== null ? $pairing->recipeCohesion($rezept) : null,
+            // Layer: Pairing-Netz-Daten hier laden statt in der anonymen x-Komponente (gleiche Guard wie im Blade: $rezept !== null).
+            'netz' => $rezept !== null ? $pairing->pairingNetz($team, $rezept->id) : ['nodes' => [], 'edges' => [], 'meta' => []],
             'ankerKandidaten' => $this->ankerSuche !== ''
                 ? TeamScope::applyVisible(\Illuminate\Support\Facades\DB::table('foodalchemist_vocab_pairing_anchors')
                     ->whereRaw('LOWER(slug) LIKE ?', ['%' . mb_strtolower($this->ankerSuche) . '%'])

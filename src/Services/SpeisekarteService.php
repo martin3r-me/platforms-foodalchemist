@@ -677,6 +677,22 @@ class SpeisekarteService
         ];
     }
 
+    /** @var array<int,?FoodAlchemistConcept> Memo: Concept inkl. slots je concept_id (Doppel-/Dreifach-Laden im Speisekarten-Dokument vermeiden). */
+    private array $speisekarteConceptCache = [];
+
+    /** Concept inkl. slots einmal je concept_id laden (positionGerichte + menueGaenge teilen sich das). */
+    private function speisekarteConcept(?int $conceptId): ?FoodAlchemistConcept
+    {
+        if ($conceptId === null) {
+            return null;
+        }
+        if (! array_key_exists($conceptId, $this->speisekarteConceptCache)) {
+            $this->speisekarteConceptCache[$conceptId] = FoodAlchemistConcept::with(['slots.package.dishes.gericht', 'slots.dish'])->find($conceptId);
+        }
+
+        return $this->speisekarteConceptCache[$conceptId];
+    }
+
     /**
      * Gerichte einer Position für die Allergen-/Zusatzstoff-Aggregation:
      * gericht_ref → das eine Gericht/Getränk; menue_ref → alle Gänge des Concepts.
@@ -689,7 +705,7 @@ class SpeisekarteService
             return $dish ? collect([$dish]) : collect();
         }
         if ($pos->type === 'menue_ref') {
-            $concept = FoodAlchemistConcept::with(['slots.package.dishes.gericht', 'slots.dish'])->find($pos->concept_id);
+            $concept = $this->speisekarteConcept($pos->concept_id);
             if ($concept === null) {
                 return collect();
             }
@@ -720,7 +736,7 @@ class SpeisekarteService
         if ($pos->type !== 'menue_ref' || $pos->concept_id === null) {
             return [];
         }
-        $concept = FoodAlchemistConcept::with(['slots.package.dishes.gericht', 'slots.dish'])->find($pos->concept_id);
+        $concept = $this->speisekarteConcept($pos->concept_id);
         if ($concept === null) {
             return [];
         }

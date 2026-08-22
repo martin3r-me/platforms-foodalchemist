@@ -386,7 +386,7 @@ class OrderService
     public function roundsForTeam(Team $team): Collection
     {
         return FoodAlchemistOrderRound::visibleToTeam($team)
-            ->with(['orders.supplier', 'orders.lines'])
+            ->with(['orders.supplier', 'orders.lines.supplierItem'])
             ->latest('id')
             ->get()
             ->map(fn (FoodAlchemistOrderRound $round) => $this->roundSummary($round));

@@ -37,7 +37,7 @@
 
             <div class="flex flex-wrap items-center gap-2 mt-1.5" data-vokabular-anlegen="{{ $key }}">
                 <input type="text" wire:model="neu.{{ $key }}.name" placeholder="Neu: Name" class="{{ $input }} !py-1 w-44" />
-                <input type="text" wire:model="neu.{{ $key }}.gruppe" placeholder="Gruppe (optional)" class="{{ $input }} !py-1 w-36" />
+                <input type="text" wire:model="neu.{{ $key }}.group_name" placeholder="Gruppe (optional)" class="{{ $input }} !py-1 w-36" />
                 @if($vokabular['kapazitaet'])
                     <input type="text" wire:model="neu.{{ $key }}.kapazitaet_kg" placeholder="kg (optional)" class="{{ $input }} !py-1 w-24 text-right" />
                 @endif

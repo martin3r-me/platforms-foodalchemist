@@ -259,7 +259,7 @@
                         <label class="block {{ $label }} mb-1">Mutter-GP</label>
                         @if($builder['derivat_von_gp_id'])
                             <p class="text-xs text-gray-900">
-                                {{ \Platform\FoodAlchemist\Models\FoodAlchemistGp::find($builder['derivat_von_gp_id'])?->name ?? '—' }}
+                                {{ $derivatMutterName ?? '—' }}
                                 <button type="button" wire:click="$set('builder.derivat_von_gp_id', null)" class="{{ $btnGhostXs }} ml-1">ändern</button>
                             </p>
                         @else

@@ -7,6 +7,15 @@
 @php($coverageFillRoute = $coverageFillRoute ?? null)
 @php($ampelDot = ['erfuellt' => 'bg-emerald-500', 'teilerfuellt' => 'bg-amber-500', 'verletzt' => 'bg-rose-500', 'info' => 'bg-gray-400'])
 @php($z = $coverage['zusammenfassung'])
+{{-- N+1-Fix: diet_form→class_id EINMAL vorladen statt je Befund-Zeile (vorher DB-Query im @forelse). --}}
+@php($coverageFillTeam = ($coverageFillRoute !== null && $coverageFillAction === null) ? auth()->user()?->currentTeamRelation : null)
+@php($covFillKlassen = [])
+@php($covDietForms = collect($coverage['befunde'])->pluck('fill_filter.diet_form')->filter()->unique()->values())
+@if($coverageFillTeam !== null && $covDietForms->isNotEmpty())
+    @foreach(\Platform\FoodAlchemist\Models\FoodAlchemistDishClass::visibleToTeam($coverageFillTeam)->whereIn('diet_form', $covDietForms->all())->orderBy('id')->get(['id', 'diet_form']) as $dc)
+        @php($covFillKlassen[$dc->diet_form] = $covFillKlassen[$dc->diet_form] ?? $dc->id)
+    @endforeach
+@endif
 
 <div class="relative overflow-hidden {{ $card }}" data-coverage-panel data-coverage-gesamt="{{ $coverage['ampel_gesamt'] }}">
     <div class="{{ $cardAccent }}"></div>
@@ -37,9 +46,7 @@
                             → füllen
                         </button>
                     @elseif($b['fill_filter'] !== null && $coverageFillRoute !== null)
-                        @php($fillKlasse = ($b['fill_filter']['diet_form'] ?? null) !== null
-                            ? \Platform\FoodAlchemist\Models\FoodAlchemistDishClass::visibleToTeam(auth()->user()->currentTeamRelation)->where('diet_form', $b['fill_filter']['diet_form'])->value('id')
-                            : null)
+                        @php($fillKlasse = $covFillKlassen[$b['fill_filter']['diet_form'] ?? ''] ?? null)
                         <a href="{{ $coverageFillRoute }}{{ $fillKlasse !== null ? '?class=' . $fillKlasse : '' }}" target="_blank"
                            class="{{ $btnGhostXs }} text-violet-600 shrink-0" title="Gefilterte Gericht-Suche im VK-Browser" data-coverage-fuellen>
                             → suchen
