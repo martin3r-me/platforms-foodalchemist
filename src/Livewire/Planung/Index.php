@@ -435,6 +435,12 @@ class Index extends Component
             $this->ladeForm();
             $this->dispatch('modal.open', name: 'planung-editor');
         }
+        // Spec 42 F2 — Handoff aus dem Foodbook: Leitstelle im Owner-Kontext öffnen, „Foodbook aus
+        // Brief"-Panel für DIESES bestehende Foodbook vorgeklappt (kein neues Foodbook anlegen).
+        if (request()->filled('fb_owner')) {
+            $this->fbOwnerId = (int) request('fb_owner');
+            $this->fbPanelAuf = true;
+        }
     }
 
     private function team(): ?Team
@@ -498,6 +504,12 @@ class Index extends Component
 
     public ?string $fbMeldung = null;
 
+    /** Gesetzt beim Handoff aus einem bestehenden Foodbook (Spec 42 F2): dann kein neues Foodbook anlegen. */
+    public ?int $fbOwnerId = null;
+
+    /** Panel im Landing sofort aufklappen (Handoff aus dem Modul). */
+    public bool $fbPanelAuf = false;
+
     /**
      * F1 (Spec 42) — „Foodbook aus Brief" IN der Leitstelle: Shell anlegen → Gerüst aus Brief →
      * Struktur anwenden → Session + Voll-Kaskade (owner_type=foodbook). Spiegelt den bisherigen
@@ -529,9 +541,19 @@ class Index extends Component
         }
 
         try {
-            // 1. Foodbook-Hülle (reine Ausgabe — nur der Name; alles Weitere plant die Leitstelle).
-            $label = trim($this->fbTitel) !== '' ? trim($this->fbTitel) : 'Foodbook aus Brief';
-            $fb = $foodbooks->create($team, ['label' => $label]);
+            // 1. Foodbook: bestehendes (Handoff aus dem Modul, $fbOwnerId) ODER neue Hülle (Direktstart
+            //    in der Leitstelle). Reine Ausgabe — alles Weitere plant die Leitstelle.
+            if ($this->fbOwnerId !== null) {
+                $fb = \Platform\FoodAlchemist\Models\FoodAlchemistFoodbook::visibleToTeam($team)->find($this->fbOwnerId);
+                if ($fb === null) {
+                    $this->fbMeldung = 'Foodbook nicht gefunden oder kein Zugriff.';
+
+                    return;
+                }
+            } else {
+                $label = trim($this->fbTitel) !== '' ? trim($this->fbTitel) : 'Foodbook aus Brief';
+                $fb = $foodbooks->create($team, ['label' => $label]);
+            }
 
             // 2. Gerüst aus dem Brief (owner-neutral, wie der bisherige Foodbook-Kickoff).
             $concepts->geruestAusBriefFuerOwner($team, 'foodbook', $fb->id, $brief, [
@@ -545,7 +567,7 @@ class Index extends Component
 
             // 4. Review-Session + Voll-Kaskade (Inhalte je Slot, gestufte Freigabe).
             $session = $sessions->create($team, [
-                'title' => 'Foodbook aus Brief: ' . $label,
+                'title' => 'Foodbook aus Brief: ' . $fb->label,
                 'brief' => $brief,
                 'created_via' => 'leitstelle_foodbook_brief',
             ]);
@@ -558,6 +580,8 @@ class Index extends Component
             // 5. Eingabe leeren + Worker-Cockpit öffnen (Owner-Banner + Round-Trip greifen automatisch).
             $this->fbTitel = '';
             $this->fbBrief = '';
+            $this->fbOwnerId = null;
+            $this->fbPanelAuf = false;
             $this->oeffne($session->id, 'worker');
         } catch (\Throwable $e) {
             // LLM nicht verfügbar/deaktiviert, leerer Brief o.ä. → Meldung statt 500. Eine ggf. schon

@@ -8,6 +8,7 @@ use Platform\FoodAlchemist\Livewire\Planung\Index as PlanungIndex;
 use Platform\FoodAlchemist\Models\FoodAlchemistCascadeRun;
 use Platform\FoodAlchemist\Models\FoodAlchemistFoodbook;
 use Platform\FoodAlchemist\Models\FoodAlchemistPlanningSession;
+use Platform\FoodAlchemist\Services\FoodbookService;
 use Platform\FoodAlchemist\Tests\Support\SeedsTeamHierarchy;
 use Platform\FoodAlchemist\Tests\TestCase;
 
@@ -99,6 +100,29 @@ it('foodbookAusBrief: plant Rahmen + Inhalte in der Leitstelle und dockt ans neu
 
     // 5. Je Slot ein Concept-Job, der ins Foodbook zurückdockt.
     Queue::assertPushed(GenerateConceptJob::class, fn ($job) => $job->attachOwnerType === 'foodbook' && (int) $job->attachContainerId > 0);
+});
+
+it('foodbookAusBrief mit fbOwnerId (Handoff aus dem Modul): plant für ein bestehendes Foodbook, legt kein neues an', function () {
+    Queue::fake();
+    bindeF1GeruestStub([
+        'name' => 'Bestehend',
+        'slots' => [['label' => 'Gang 1', 'slot_type' => 'gang', 'target_count' => 2]],
+    ]);
+    $fb = app(FoodbookService::class)->create($this->rootTeam, ['label' => 'Bestehendes FB']);
+    $vorher = FoodAlchemistFoodbook::where('team_id', $this->rootTeam->id)->count();
+
+    Livewire::test(PlanungIndex::class)
+        ->set('fbOwnerId', $fb->id)
+        ->set('fbBrief', 'Brief für ein bestehendes Foodbook.')
+        ->call('foodbookAusBrief')
+        ->assertSet('fbMeldung', null);
+
+    // Kein neues Foodbook — der bestehende Owner wird bebrieft.
+    expect(FoodAlchemistFoodbook::where('team_id', $this->rootTeam->id)->count())->toBe($vorher);
+    // Voll-Kaskade hängt am bestehenden Foodbook.
+    $run = FoodAlchemistCascadeRun::where('source_owner_type', 'foodbook')
+        ->where('source_owner_id', $fb->id)->latest('id')->first();
+    expect($run)->not->toBeNull()->and($run->scope)->toBe('vollkaskade');
 });
 
 it('foodbookAusBrief: leerer Brief → Meldung, nichts angelegt', function () {

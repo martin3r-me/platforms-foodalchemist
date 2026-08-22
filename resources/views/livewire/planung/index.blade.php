@@ -166,7 +166,7 @@
         {{-- Leitstelle: freie 1-Klick-Erstellung — die eine KI-Erstell-Fläche (de-trend). Legt eine
              leichte „Freie Erstellung"-Session (cockpit_frei) an und öffnet den Editor auf dem
              Planung-Tab mit den Regler-Leitplanken. Trend bleibt EIN Input, nicht der Rahmen. --}}
-        <div class="{{ $card }} p-4" x-data="{ fbOpen: false }">
+        <div class="{{ $card }} p-4" x-data="{ fbOpen: @js($fbPanelAuf) }">
             <div class="flex flex-wrap items-center gap-2">
                 <span class="text-sm font-semibold text-gray-800 mr-1">Neu erstellen</span>
                 <button wire:click="schnellErstellen('rezept')" class="{{ $btnPrimary }}" data-frei-rezept>
@@ -188,9 +188,15 @@
             {{-- Spec 42 F1: Ein ganzes Foodbook aus einem Brief planen — Rahmen (Gerüst/Struktur) +
                  Inhalte entstehen HIER in der Leitstelle; das Foodbook ist reine Ausgabe. --}}
             <div x-show="fbOpen" x-cloak class="mt-3 border-t border-gray-200 pt-3 space-y-2" data-foodbook-brief-panel>
-                <input type="text" wire:model="fbTitel" data-fb-titel
-                       placeholder="Foodbook-Name (optional)"
-                       class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-violet-400 focus:ring-1 focus:ring-violet-400">
+                @if($fbOwnerId)
+                    <p class="text-[11px] text-violet-700 bg-violet-500/10 rounded px-2 py-1" data-fb-owner-hinweis>
+                        Planung für ein bestehendes Foodbook — Brief eingeben, Struktur + Inhalte entstehen hier und docken zurück.
+                    </p>
+                @else
+                    <input type="text" wire:model="fbTitel" data-fb-titel
+                           placeholder="Foodbook-Name (optional)"
+                           class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-violet-400 focus:ring-1 focus:ring-violet-400">
+                @endif
                 <textarea wire:model="fbBrief" rows="3" data-fb-brief
                           placeholder="Brief: Anlass, Gäste, Saison, Niveau, Budget …"
                           class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-violet-400 focus:ring-1 focus:ring-violet-400"></textarea>
