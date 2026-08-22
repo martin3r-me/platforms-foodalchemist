@@ -847,18 +847,26 @@ class KnowledgeContextService
             if ($res['anker'] === null) {
                 continue;
             }
-            $namen = [];                                             // display_de → true (Typ-Prio-sortiert: erprobt vor aroma vor kontrast)
+            $namen = [];                                             // display_de → Stärke-Symbol (Typ-Prio- + Level-sortiert)
             foreach ($res['partner'] as $p) {
                 if (! isset($typSet[$p->type])) {
                     continue;
                 }
-                $namen[$p->display_de ?: $p->slug] = true;
+                // C-b (2026-08-22): Harmonie-Stärke aus axis/level rahmen — ●●● = beste (L3),
+                // ●● = gute (L2), ● = schwächer/ohne Level. Kontrast liegt live NICHT im Graph
+                // (Inspire = reine Harmonie-Matrix) → keine ⚡-Annotation; Kontrast kommt aus dem
+                // Pairing-Prinzip + Kochwissen (siehe Header + Regelwerk/Wissens-Doc).
+                $namen[$p->display_de ?: $p->slug] = $this->harmonieStaerke($p);
                 if (count($namen) >= self::MAX_PARTNERS) {
                     break;
                 }
             }
             if ($namen !== []) {
-                $zeilen[] = "- {$stem}: " . implode(' · ', array_keys($namen));
+                $partnerText = implode(' · ', array_map(
+                    fn ($name, $sym) => $name . $sym,
+                    array_keys($namen), array_values($namen),
+                ));
+                $zeilen[] = "- {$stem}: {$partnerText}";
                 $filesUsed[] = "graph:{$res['anker']['slug']}";
             }
         }
@@ -866,9 +874,31 @@ class KnowledgeContextService
             return null;
         }
 
-        return "# FLAVOR-PAIRING (verifizierte Kombinationen aus dem Anker-Graphen{$stilHint}"
-            . " — bevorzuge diese fuer Komponenten + Garnitur; erfinde KEINE unbelegten Paarungen):\n"
+        return "# FLAVOR-PAIRING (gemessene Harmonie aus dem Anker-Graphen{$stilHint}"
+            . " — ●●● = beste, ●● = gute Harmonie (geteilte Aromastoffe); bevorzuge diese fuer"
+            . " Komponenten + Garnitur, erfinde KEINE unbelegten Paarungen. Kontrast (bewusstes"
+            . " Gegeneinander von Saeure/Fett/Textur) leite aus dem Pairing-Prinzip + Kochwissen"
+            . " ab, NICHT aus dieser Harmonie-Liste):\n"
             . implode("\n", $zeilen);
+    }
+
+    /**
+     * C-b: Harmonie-Stärke eines Graph-Partners als Symbol. Inspire kennt nur die Achse
+     * `harmony` mit Level 3 (best, ●●●) / 2 (good, ●●). Level 1 oder fehlend → ● (schwach).
+     * Nicht-Harmonie-Achsen bekommen kein Symbol (Kontrast liegt live nicht im Graph).
+     */
+    private function harmonieStaerke(object $p): string
+    {
+        if (($p->axis ?? null) !== 'harmony') {
+            return '';
+        }
+        $level = $p->level ?? null;
+
+        return match (true) {
+            $level >= 3 => ' ●●●',
+            $level >= 2 => ' ●●',
+            default => ' ●',
+        };
     }
 
     /**

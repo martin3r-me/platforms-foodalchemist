@@ -619,7 +619,8 @@
             </div>
 
             {{-- COMPOSER — Foodpairing-Fläche: Anker zusammenstellen, Netz zeigt live was passt (★★★/★★).
-                 Graph-only (keine Generierung — separates Thema). Klick auf Kandidat nimmt ihn auf. --}}
+                 Gezielte Kreation: aus den gewählten Ankern ein Basisrezept/Gericht erzeugen
+                 (Anker = verbindliche Leit-Aromen). Klick auf Kandidat nimmt ihn auf. --}}
             <div wire:key="planung-tab-composer" x-show="tab==='composer'">
                 <div class="grid grid-cols-1 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] gap-4 items-start">
                 {{-- LINKE SPALTE: Picker + Kohäsion --}}
@@ -679,6 +680,30 @@
                             <p class="px-2.5 py-2 text-[12px] text-slate-500">Keine Anker — Filter/Suche anpassen.</p>
                         @endforelse
                     </div>
+                </x-foodalchemist::modal-section>
+
+                {{-- Foodpairing-Composer B1: gezielte Kreation aus den gewählten Ankern. Die Anker reisen
+                     als verbindliche Leit-Aromen (seed_anker) in den bestehenden Generator → Draft-Entwurf. --}}
+                <x-foodalchemist::modal-section title="Aus diesen Pairings erzeugen">
+                    <p class="text-[11px] text-slate-400 mb-2">
+                        Erzeugt einen <strong>Entwurf</strong> gezielt aus den gewählten Ankern
+                        (verbindliche Leit-Aromen + ihre Harmonie-Palette). Danach unten im Ergebnis prüfen.
+                    </p>
+                    <div class="flex flex-wrap gap-2">
+                        <button type="button" wire:click="composerGeneriere('rezept')" @click="tab='worker'"
+                                @disabled($laeuft || empty($composerAnker))
+                                class="{{ $btnPrimary }} disabled:opacity-40" data-composer-go-rezept>
+                            Als Basisrezept erzeugen
+                        </button>
+                        <button type="button" wire:click="composerGeneriere('gericht')" @click="tab='worker'"
+                                @disabled($laeuft || empty($composerAnker))
+                                class="{{ $btnGhost }} disabled:opacity-40" data-composer-go-gericht>
+                            Als Gericht erzeugen
+                        </button>
+                    </div>
+                    @if(empty($composerAnker))
+                        <p class="text-[10px] text-slate-500 mt-1">Erst Anker wählen.</p>
+                    @endif
                 </x-foodalchemist::modal-section>
 
                 {{-- „Passt das zusammen?" — geerdet auf GETEILTE Partner (Brücken), nicht auf die

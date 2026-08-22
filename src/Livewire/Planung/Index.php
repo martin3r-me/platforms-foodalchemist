@@ -85,6 +85,14 @@ class Index extends Component
     /** Composer-Fokus: aktiv fokussierter Anker (Klick im Netz) — Netz dimmt auf ihn, Picker rankt relativ zu ihm. */
     public ?int $composerFocus = null;
 
+    /**
+     * Foodpairing-Composer B1: Seed-Anker-Slugs für den GERADE laufenden Go. Bewusst `protected`
+     * (Livewire serialisiert es NICHT → strikt transient, nur innerhalb des composerGeneriere-Requests
+     * gesetzt) und wird in goKaskade NUR in die Lauf-Params gehängt, nie in die persistierten
+     * generation_params → Fan-out-Kinder erben die Anker nicht.
+     */
+    protected array $composerSeed = [];
+
     // ── Leitstelle: PER-TAB Eingabe + Leitplanken (jeder Scope eigener Zustand) ──
     /**
      * Eingabe je Creation-Tab (rezept|gericht|concept): Titel/Beschreibung/Kreativ-Modus.
@@ -1681,6 +1689,11 @@ class Index extends Component
         if ($titelVorgabe !== '' && $scope !== 'concept') {   // concept: Name kommt aus dem KI-Kopf (name_claim)
             $laufParams['titel_vorgabe'] = $titelVorgabe;
         }
+        // Foodpairing-Composer B1: gezielte Seed-Anker NUR in die Lauf-Params (Depth-1-lokal, exakt wie
+        // titel_vorgabe) — NIE in setGenerationParams, sonst erbte jedes Fan-out-Kind die Anker.
+        if ($this->composerSeed !== [] && $scope !== 'concept') {
+            $laufParams['seed_anker'] = array_values($this->composerSeed);
+        }
         $optionen = [
             'created_via' => 'plan_go',
             'brief' => $this->effektiverBrief($scope),
@@ -2477,6 +2490,44 @@ class Index extends Component
         }
         if (in_array($id, array_map('intval', array_column($this->composerAnker, 'id')), true)) {
             $this->composerFocus = $id;
+        }
+    }
+
+    /**
+     * Foodpairing-Composer B1 (2026-08-22): aus den gewählten Anker-Pairings ein Basisrezept
+     * ($scope='rezept') oder Gericht ($scope='gericht') erzeugen — die Anker reisen als
+     * VERBINDLICHER seed_anker-Key (gezielte Foodpairing-Kreation) in den bestehenden Generator.
+     * Concept ist bewusst ausgeschlossen (eigener Generator-Pfad ohne pairing-Routing).
+     */
+    public function composerGeneriere(string $scope, PlanningCascadeService $cascade, PlanningSessionService $svc): void
+    {
+        if (! in_array($scope, ['rezept', 'gericht'], true)) {
+            return;
+        }
+        $slugs = array_values(array_filter(array_map(
+            fn ($a) => trim((string) ($a['slug'] ?? '')),
+            $this->composerAnker,
+        )));
+        if ($slugs === []) {
+            $this->fehler = 'Bitte zuerst Anker im Composer wählen.';
+
+            return;
+        }
+        // Hat der Ziel-Tab noch keinen Brief, aus den Ankern einen sprechenden Brief bauen (die Anker
+        // SIND die kreative Vorgabe; sie reisen zusätzlich als verbindlicher seed_anker-Key). Einen
+        // bereits getippten Brief NICHT überschreiben.
+        if (trim((string) ($this->eingabe[$scope]['brief'] ?? '')) === '') {
+            $labels = array_values(array_filter(array_map(
+                fn ($a) => trim((string) ($a['label'] ?? $a['slug'] ?? '')),
+                $this->composerAnker,
+            )));
+            $this->eingabe[$scope]['brief'] = 'Foodpairing-Kreation auf Basis von: ' . implode(', ', $labels) . '.';
+        }
+        $this->composerSeed = $slugs;
+        try {
+            $this->goKaskade($scope, $cascade, $svc);
+        } finally {
+            $this->composerSeed = [];
         }
     }
 

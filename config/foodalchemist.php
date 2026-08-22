@@ -516,7 +516,20 @@ return [
                 . '01 Gemüse/Blattsalat · 02 Obst · 03 Kräuter · 04 Fleisch/Geflügel/Wild · '
                 . '05 Fisch/Meeresfrüchte · 06 Molkerei/Eier · 07 Getreide/Hülsenfrüchte · 08 Teigwaren · '
                 . '09 Backwaren/Süßwaren · 10 Gewürze/Würzmittel · 11 Essig/Öl · 12 Trockenprodukte · '
-                . '13 Convenience/Komponenten · 14 Vegane Ersatzprodukte · 15 Getränke.',
+                . '13 Convenience/Komponenten · 14 Vegane Ersatzprodukte · 15 Getränke. '
+                // Spec Foodpairing-Composer C-c (2026-08-22): Kontrast ist ein eigenständiges,
+                // gleichwertiges Pairing-Prinzip neben der Harmonie (geteilte Aromastoffe). Der
+                // Live-Graph liefert nur Harmonie — Kontrast leitet die KI aus Prinzip + Kochwissen ab.
+                . 'FLAVOR-PAIRING-PRINZIP: Harmonie entsteht über geteilte Aroma-/Duftstoffe (die '
+                . 'Harmonie-Liste im Wissen zeigt sie, ●●●=beste/●●=gute). Kontrast ist gleichwertig: '
+                . 'setze bewusst Gegensätze (Säure↔Fett, Schärfe↔Süße, knusprig↔cremig, warm↔kalt) ein, '
+                . 'wo sie die EINE Komponente schärfen — abgeleitet aus Kochwissen/Lebensmittelkunde, '
+                . 'NICHT als erfundene Aromapaarung. '
+                // Spec Foodpairing-Composer B3 (2026-08-22): verbindliche Leit-Aromen aus dem Composer.
+                . 'Ist `pairing_vorgabe` mitgegeben (gezielte Foodpairing-Kreation): JEDES dort genannte '
+                . 'Leit-Aroma MUSS als Zutat/Komponente vorkommen (nüchtern + matchbar benannt); die je '
+                . 'Leit-Aroma gelistete Palette ist die bevorzugte Auswahl zum Abrunden; erfinde nichts '
+                . 'Unbelegtes; bindet ein Leit-Aroma an einen `gp_kandidaten`, gib dessen gp_id an.',
         ],
         'recipe.description' => [
             'tier' => 'C',
@@ -621,7 +634,19 @@ return [
                 . 'Wareneinsatz zu diesem Preis passt (kleines Ziel => guenstigere Schnitte/'
                 . 'Saisonware/mehr Saettigungsbeilage; grosses Ziel => hochwertigere Komponenten '
                 . 'und mehr Aufwand). GIB KEINEN PREIS AUS — der VK wird gerechnet, nicht gesetzt. '
-                . 'Diät-harte Vorgaben sind VERBINDLICH.',
+                . 'Diät-harte Vorgaben sind VERBINDLICH. '
+                // Spec Foodpairing-Composer C-c (2026-08-22): Kontrast gleichwertig neben Harmonie.
+                . 'FLAVOR-PAIRING-PRINZIP: Harmonie entsteht über geteilte Aroma-/Duftstoffe (Harmonie-'
+                . 'Liste im Wissen, ●●●=beste/●●=gute). Kontrast ist gleichwertig: setze bewusst '
+                . 'Gegensätze (Säure↔Fett, Schärfe↔Süße, knusprig↔cremig, warm↔kalt) ein, um den Teller '
+                . 'spannend + ausgewogen zu bauen — aus Kochwissen/Lebensmittelkunde, NICHT als erfundene '
+                . 'Aromapaarung. '
+                // Spec Foodpairing-Composer B3 (2026-08-22): verbindliche Leit-Aromen aus dem Composer.
+                . 'Ist `pairing_vorgabe` mitgegeben (gezielte Foodpairing-Kreation): JEDES dort genannte '
+                . 'Leit-Aroma MUSS als Komponente/Zutat des Tellers vorkommen (nüchtern + matchbar); die je '
+                . 'Leit-Aroma gelistete Palette ist die bevorzugte Auswahl für Begleiter/Garnitur; setze '
+                . 'zusätzlich bewusste Kontraste (s.o.); erfinde nichts Unbelegtes; bindet ein Leit-Aroma '
+                . 'an einen `gp_kandidaten`, gib dessen gp_id an.',
         ],
         'vk.speisen_klasse' => [
             'tier' => 'B',

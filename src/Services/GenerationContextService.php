@@ -94,7 +94,19 @@ class GenerationContextService
             // Anker-Graph: Pairing-Partner der Hauptzutat.
             $nb = $this->pairing->neighborsForName($token, null, self::PAIRING_PER_TOKEN);
             $partner = collect($nb['partner'] ?? [])
-                ->map(fn ($p) => is_array($p) ? ($p['display_de'] ?? $p['slug'] ?? null) : ($p->display_de ?? $p->slug ?? null))
+                ->map(function ($p) {
+                    $name = is_array($p) ? ($p['display_de'] ?? $p['slug'] ?? null) : ($p->display_de ?? $p->slug ?? null);
+                    if ($name === null) {
+                        return null;
+                    }
+                    // C-b (2026-08-22): Harmonie-Stärke annotieren (●●● best / ●● gut), konsistent
+                    // zum Wissens-Textblock (pairingBlock). Nur Achse `harmony`; Kontrast liegt live nicht vor.
+                    $axis = is_array($p) ? ($p['axis'] ?? null) : ($p->axis ?? null);
+                    $level = is_array($p) ? ($p['level'] ?? null) : ($p->level ?? null);
+                    $sym = $axis === 'harmony' ? ($level >= 3 ? ' ●●●' : ($level >= 2 ? ' ●●' : ' ●')) : '';
+
+                    return $name . $sym;
+                })
                 ->filter()->values()->all();
             if ($partner !== []) {
                 $pairing[$token] = $partner;

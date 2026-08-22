@@ -1013,8 +1013,14 @@ class PairingService
             ->where('e.anchor_a_id', $ankerId)
             ->when($typ !== null, fn ($q) => $q->where('e.type', $typ))
             ->orderByRaw("CASE e.type WHEN 'klassisch' THEN 1 WHEN 'erprobt' THEN 1 WHEN 'verbund' THEN 2 WHEN 'modern' THEN 2 WHEN 'aroma' THEN 3 WHEN 'trinitas' THEN 3 WHEN 'kontrast' THEN 4 ELSE 5 END")
+            // Harmonie-Stärke sekundär: L3 ●●● (best) vor L2 ●● (good) vor Rest. Live sind fast alle
+            // Kanten type='aroma' (Inspire) → der Typ-CASE ist dort neutral, `level` ist der echte
+            // Differenzierer. NULLS-last portabel via CASE (sqlite/mysql).
+            ->orderByRaw('CASE WHEN e.level IS NULL THEN 1 ELSE 0 END, e.level DESC')
             ->orderBy('a.slug')->limit($limit)
-            ->get(['a.id', 'a.slug', 'a.display_de', 'e.type', 'e.evidence']);
+            // C-b (2026-08-22): axis/level/weight additiv — Konsumenten (pairingBlock, forGeneration,
+            // neighborsForName) rahmen damit die Harmonie-Stärke; Altfelder bleiben unverändert.
+            ->get(['a.id', 'a.slug', 'a.display_de', 'e.type', 'e.evidence', 'e.axis', 'e.level', 'e.weight']);
     }
 
     // ── Schreibpfade (Inv. 1/3) ──────────────────────────────────────────

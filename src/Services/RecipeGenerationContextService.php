@@ -107,9 +107,17 @@ class RecipeGenerationContextService
                     . 'die per-Zutat-Pairing-Erdung bleibt die präzisere Quelle an der Hauptzutat.',
             ];
         }
-        // Erdungs-Query: Beschreibung + Aroma-Freitext + Küche-Anker → der Anker-Graph erdet jetzt auch
-        // an der Aroma-Vorgabe (nicht mehr nur an der Beschreibung).
-        $erdungsText = trim($description . ' ' . $aromaFrei . ' ' . ($kuecheAnker['anker'] ?? ''));
+        // Foodpairing-Composer B (2026-08-22): gezielte Seed-Anker aus dem Composer (Slug-Liste).
+        // Sie sind der VERBINDLICHE kreative Kern — reisen als eigener Pflicht-Key (unten) UND als
+        // Erdungs-Signal in die GP-Kandidaten-Suche (damit die Leit-Aromen echte GPs bekommen).
+        $seedAnker = array_values(array_filter(array_map(
+            fn ($s) => trim((string) $s),
+            (array) ($parameter['seed_anker'] ?? []),
+        )));
+        // Erdungs-Query: Beschreibung + Aroma-Freitext + Küche-Anker (+ Seed-Anker) → der Anker-Graph
+        // erdet jetzt auch an der Aroma-Vorgabe (nicht mehr nur an der Beschreibung).
+        $seedErdung = $seedAnker === [] ? '' : ' ' . str_replace('_', ' ', implode(' ', $seedAnker));
+        $erdungsText = trim($description . ' ' . $aromaFrei . ' ' . ($kuecheAnker['anker'] ?? '') . $seedErdung);
         foreach ($this->generation->forGeneration(
             $team, $erdungsText, $vkModus,
             (bool) ($parameter['use_favorites_list'] ?? false),
@@ -117,6 +125,50 @@ class RecipeGenerationContextService
             isset($parameter['bestand']) ? (string) $parameter['bestand'] : null,
         ) as $key => $value) {
             $prompt[$key] = $value;
+        }
+
+        // Foodpairing-Composer B2 (2026-08-22): verbindlicher Leit-Aromen-Block aus den Seed-Ankern —
+        // GETRENNT vom weichen `pairing`-Angebot (GenerationContextService). Der normale Generator
+        // (ohne Seeds) bekommt diesen Key NIE → nur die Composer-Kreation ist gezielt-verbindlich.
+        if ($seedAnker !== []) {
+            $pairing = app(\Platform\FoodAlchemist\Services\PairingService::class);
+            $leitAromen = [];
+            foreach ($seedAnker as $slug) {
+                $res = $pairing->neighborsForName($slug, null, 12);
+                if (($res['anker'] ?? null) === null) {
+                    continue;
+                }
+                $palette = [];
+                foreach ($res['partner'] as $p) {
+                    $name = is_array($p) ? ($p['display_de'] ?? $p['slug'] ?? null) : ($p->display_de ?? $p->slug ?? null);
+                    if ($name === null) {
+                        continue;
+                    }
+                    // Harmonie-Stärke wie im Wissens-Textblock (●●● best / ●● gut).
+                    $axis = is_array($p) ? ($p['axis'] ?? null) : ($p->axis ?? null);
+                    $level = is_array($p) ? ($p['level'] ?? null) : ($p->level ?? null);
+                    $sym = $axis === 'harmony' ? ($level >= 3 ? ' ●●●' : ($level >= 2 ? ' ●●' : ' ●')) : '';
+                    $palette[] = $name . $sym;
+                    if (count($palette) >= 10) {
+                        break;
+                    }
+                }
+                $leitAromen[] = [
+                    'aroma' => $res['anker']['display_de'] ?: $res['anker']['slug'],
+                    'palette' => $palette,
+                ];
+            }
+            if ($leitAromen !== []) {
+                $prompt['pairing_vorgabe'] = [
+                    'rolle' => 'verbindliche_leit_aromen',
+                    'hinweis' => 'Diese Leit-Aromen prägen das Rezept BEWUSST (gezielte Foodpairing-Kreation). '
+                        . 'Sie MÜSSEN als Zutaten/Komponenten vorkommen; ihre Harmonie-Palette (●●●/●●) ist die '
+                        . 'bevorzugte Auswahl zum Abrunden. Setze zusätzlich bewusste Kontraste (Säure/Fett/Textur) '
+                        . 'aus Kochwissen + Pairing-Prinzip. Erfinde keine unbelegten Paarungen; Grounding '
+                        . '(gp_kandidaten) hat Vorrang bei der Benennung. Baue EIN kohärentes Rezept.',
+                    'leit_aromen' => $leitAromen,
+                ];
+            }
         }
 
         $descriptionTokens = $this->tokens->tokenize($description);
@@ -145,6 +197,11 @@ class RecipeGenerationContextService
             'templates' => array_values(array_map(
                 fn ($t) => ['id' => $t['id'], 'name' => $t['name']],
                 array_filter($templateContext, fn ($t) => ($t['score'] ?? 0) > 0),
+            )),
+            // Foodpairing-Composer B2: UI-Audit „Generator nutzt Vorgabe-Anker: …" (leer im Normalfall).
+            'pairing_vorgabe' => array_values(array_map(
+                fn ($x) => (string) ($x['aroma'] ?? ''),
+                $prompt['pairing_vorgabe']['leit_aromen'] ?? [],
             )),
         ];
 
