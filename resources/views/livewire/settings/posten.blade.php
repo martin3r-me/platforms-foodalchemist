@@ -36,6 +36,28 @@
         </div>
     </div>
 
+    {{-- Warengruppen-Topf-Deckel: feinere Ebene je Recipe-Hauptgruppe (greift vor dem Team-Default). --}}
+    @if($hauptgruppen->isNotEmpty())
+        <div class="mb-4 rounded-lg border border-black/10 p-3" data-posten-warengruppendeckel>
+            <p class="text-xs font-semibold mb-1">Topf-Deckel je Warengruppe (optional)</p>
+            <p class="text-[11px] text-gray-500 mb-2">
+                Feiner als der Standard: typische Charge je <strong>Koch-Vorgang</strong> pro Hauptgruppe
+                (z. B. Fonds/Suppen groß, Saucen klein). Nur kg, nur relevante Gruppen füllen — leer =
+                Standard-Topf-Deckel oben. Greift vor dem Standard; Rezept- und Posten-Deckel gehen weiter vor.
+            </p>
+            <div class="grid grid-cols-2 gap-x-6 gap-y-1 md:grid-cols-3">
+                @foreach($hauptgruppen as $hg)
+                    <label class="flex items-center justify-between gap-2 text-[11px] text-gray-600">
+                        <span class="truncate" title="{{ $hg->label }}">{{ $hg->label }}</span>
+                        <input type="text" inputmode="decimal" wire:model="warengruppenDeckel.{{ $hg->id }}"
+                               placeholder="—" class="{{ $input }} !w-20 tabular-nums text-right" data-posten-wg-deckel="{{ $hg->id }}" />
+                    </label>
+                @endforeach
+            </div>
+            <button type="button" wire:click="warengruppenDeckelSpeichern" class="{{ $btnPrimary }} mt-3" data-posten-wg-speichern>Warengruppen speichern</button>
+        </div>
+    @endif
+
     <table class="{{ $table }}">
         <thead>
             <tr>

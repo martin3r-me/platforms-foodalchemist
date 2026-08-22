@@ -430,14 +430,32 @@ class TeamSettingsService
 
     /**
      * Fallback-Topf-Deckel für EIN Rezept auf der passenden Achse (kg oder Stück). Greift nur, wenn
-     * weder Rezept- noch Posten-Deckel gesetzt ist. (Ein Warengruppen-Override wird hier später
-     * vorgeschaltet — dann: Warengruppe ?? Team-Default ?? Code-Konstante.)
+     * weder Rezept- noch Posten-Deckel gesetzt ist. Reihenfolge: Warengruppen-Override (Recipe-
+     * Hauptgruppe, nur kg) → Team-Default → Code-Konstante.
      */
     public function topfDeckelFuer(Team $team, FoodAlchemistRecipe $recipe, ?bool $stueck = null): float
     {
         $stueck ??= $recipe->istStueckErtrag();
 
+        // Warengruppen-Override (Recipe-Hauptgruppe via Kategorie) — nur kg; Basisrezepte tragen diese
+        // Achse (dish_main_group ist VK-only). Greift vor dem Team-Default.
+        if (! $stueck) {
+            $mgId = $recipe->category?->main_group_id;
+            $wert = $mgId !== null ? ($this->warengruppeBatchMaxKg($team)[$mgId] ?? null) : null;
+            if ($wert !== null && (float) $wert > 0) {
+                return (float) $wert;
+            }
+        }
+
         return $stueck ? $this->defaultTopfDeckelStueck($team) : $this->defaultTopfDeckelKg($team);
+    }
+
+    /** Warengruppen-Topf-Deckel (kg) je Recipe-Hauptgruppe: [main_group_id => kg]. Leer = keiner. */
+    public function warengruppeBatchMaxKg(Team $team): array
+    {
+        $v = $this->for($team)->warengruppe_batch_max_kg;
+
+        return is_array($v) ? $v : [];
     }
 
     /** #379+: Ziel-Wareneinsatzquote (Food-Cost-%) — Controlling-Ziel + Break-even-Treiber. */

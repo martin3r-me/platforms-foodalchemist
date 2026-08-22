@@ -7,6 +7,7 @@ use Illuminate\Support\Str;
 use Livewire\Component;
 use Platform\FoodAlchemist\Models\FoodAlchemistKitchenRole;
 use Platform\FoodAlchemist\Models\FoodAlchemistProductionStation;
+use Platform\FoodAlchemist\Services\RecipeService;
 use Platform\FoodAlchemist\Services\TeamSettingsService;
 
 /**
@@ -37,6 +38,9 @@ class Posten extends Component
 
     public string $standardTopfStueck = '';
 
+    /** Warengruppen-Topf-Deckel (kg) je Recipe-Hauptgruppe: [main_group_id => kg-string]. */
+    public array $warengruppenDeckel = [];
+
     public function mount(): void
     {
         $team = Auth::user()?->currentTeamRelation;
@@ -46,6 +50,10 @@ class Posten extends Component
         $s = app(TeamSettingsService::class)->for($team);
         $this->standardTopfKg = $s->default_batch_max_kg !== null ? (string) (float) $s->default_batch_max_kg : '';
         $this->standardTopfStueck = $s->default_batch_max_pieces !== null ? (string) (float) $s->default_batch_max_pieces : '';
+        $matrix = $s->warengruppe_batch_max_kg;
+        $this->warengruppenDeckel = is_array($matrix)
+            ? array_map(fn ($v) => (string) (float) $v, $matrix)
+            : [];
     }
 
     /** Team-Standard-Topf-Deckel speichern — greift als Fallback, wenn Rezept/Posten keinen Deckel haben. */
@@ -66,6 +74,32 @@ class Posten extends Component
             'default_batch_max_pieces' => $this->zahl($this->standardTopfStueck),
         ]);
         $this->meldung = 'Standard-Topf-Deckel gespeichert.';
+    }
+
+    /** Warengruppen-Topf-Deckel (kg je Recipe-Hauptgruppe) speichern — nur Werte > 0; Rest = Team-Default. */
+    public function warengruppenDeckelSpeichern(): void
+    {
+        $this->fehler = null;
+        $this->meldung = null;
+
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team === null) {
+            $this->fehler = 'Kein Team im Zugriff.';
+
+            return;
+        }
+
+        $matrix = [];
+        foreach ($this->warengruppenDeckel as $mgId => $wert) {
+            $kg = $this->zahl((string) $wert);
+            if ($kg !== null && $kg > 0) {
+                $matrix[(int) $mgId] = $kg;
+            }
+        }
+        app(TeamSettingsService::class)->update($team, [
+            'warengruppe_batch_max_kg' => $matrix === [] ? null : $matrix,
+        ]);
+        $this->meldung = 'Warengruppen-Topf-Deckel gespeichert.';
     }
 
     public function create(): void
@@ -227,6 +261,9 @@ class Posten extends Component
             'rollen' => $team !== null
                 ? FoodAlchemistKitchenRole::visibleToTeam($team)->where('is_inactive', false)
                     ->orderBy('sort_order')->orderBy('name')->get()
+                : collect(),
+            'hauptgruppen' => $team !== null
+                ? app(RecipeService::class)->mainGroups($team)
                 : collect(),
             'eigenesTeamId' => $team?->id,
         ]);

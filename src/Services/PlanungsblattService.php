@@ -643,6 +643,19 @@ class PlanungsblattService
         $teamSettings = app(TeamSettingsService::class);
         $fallbackDeckelKg = $teamSettings->defaultTopfDeckelKg($team);
         $fallbackDeckelStueck = $teamSettings->defaultTopfDeckelStueck($team);
+        $wgDeckelKg = $teamSettings->warengruppeBatchMaxKg($team);   // [recipe-main_group_id => kg]
+        // Fallback-Deckel je Rezept: Warengruppen-Override (Recipe-Hauptgruppe, nur kg) vor Team-Default.
+        $fallbackFuer = function (FoodAlchemistRecipe $r) use ($fallbackDeckelKg, $fallbackDeckelStueck, $wgDeckelKg): float {
+            if ($r->istStueckErtrag()) {
+                return $fallbackDeckelStueck;
+            }
+            $mgId = $r->category?->main_group_id;
+            if ($mgId !== null && ($wgDeckelKg[$mgId] ?? 0) > 0) {
+                return (float) $wgDeckelKg[$mgId];
+            }
+
+            return $fallbackDeckelKg;
+        };
         /** @var array<int, array{grams:float}> $gpGram */
         $gpGram = [];
         foreach (array_keys($tiefe) as $rid) {
@@ -724,7 +737,7 @@ class PlanungsblattService
                 'produzierte_menge_kg' => $basisYieldKg !== null ? round($basisYieldKg * $batches, 3) : null,
                 // Stufe 3 P3.2: nicht-lineare Zeit (Rüst + Marginal je Koch-Batch unter Topf-Deckel).
                 // Posten unbekannt bei der Explosion → nur Rezept-Deckel; Defaults = heutiges Verhalten.
-                'arbeitszeit_min' => $recipe->arbeitszeitMin($roh, $istVk, null, null, $recipe->istStueckErtrag() ? $fallbackDeckelStueck : $fallbackDeckelKg),
+                'arbeitszeit_min' => $recipe->arbeitszeitMin($roh, $istVk, null, null, $fallbackFuer($recipe)),
                 'standzeit_min' => $recipe->standzeitMin(),   // passive Gar-/Standzeit (Durchlaufzeit, kein Posten)
                 'zubereitung' => $recipe->preparation ?: null,        // Spiegel-Freitext (Fallback für Rezepte ohne Schritte)
                 'schritte' => $this->schritteFuer($recipe),           // Spec 27: die eigentliche Anleitung (Nummer + Text + Fotos)
