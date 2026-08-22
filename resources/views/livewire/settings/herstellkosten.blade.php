@@ -36,10 +36,10 @@
                     <tr wire:key="kblock-{{ $b['key'] }}" class="{{ $tr }}">
                         <td class="{{ $td }} font-medium text-gray-900">{{ $b['label'] }}</td>
                         <td class="{{ $td }}"><span class="{{ $pill }} {{ $basisPill[$b['type']] ?? $variantPill['secondary'] }}">{{ $basisLabel[$b['type']] ?? $b['type'] }}</span></td>
-                        <td class="{{ $td }} text-center"><input type="checkbox" wire:model="schema.{{ $i }}.aktiv" class="rounded border-gray-300 text-violet-500 focus:ring-violet-500/30" /></td>
+                        <td class="{{ $td }} text-center"><input type="checkbox" wire:model="schema.{{ $i }}.active" class="rounded border-gray-300 text-violet-500 focus:ring-violet-500/30" /></td>
                         <td class="{{ $td }}">
                             @if($istGk)
-                                <select wire:model.live="schema.{{ $i }}.modus" class="{{ $input }} !w-36 !py-1">
+                                <select wire:model.live="schema.{{ $i }}.mode" class="{{ $input }} !w-36 !py-1">
                                     <option value="abgeleitet">automatisch</option>
                                     <option value="manuell">manuell (%)</option>
                                 </select>
@@ -62,7 +62,7 @@
                                     <span class="block text-[10px] text-gray-500">noch keine Fixkosten</span>
                                 @endif
                             @else
-                                <input type="text" wire:model="schema.{{ $i }}.wert" class="{{ $input }} !w-24 text-right tabular-nums" placeholder="0" />
+                                <input type="text" wire:model="schema.{{ $i }}.value" class="{{ $input }} !w-24 text-right tabular-nums" placeholder="0" />
                                 <span class="text-[10px] text-gray-500">{{ $b['type'] === 'eur_pro_portion' ? '€' : ($b['type'] === 'arbeitszeit' ? '€/h' : '%') }}</span>
                             @endif
                         </td>

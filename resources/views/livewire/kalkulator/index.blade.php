@@ -51,7 +51,7 @@
                         <div class="flex flex-wrap items-end gap-3">
                             <div class="flex-1 min-w-48">
                                 <label class="{{ $label }}">Titel</label>
-                                <input type="text" wire:model="title" class="{{ $input }}" placeholder="Kalkulation …" />
+                                <input type="text" wire:model="titel" class="{{ $input }}" placeholder="Kalkulation …" />
                             </div>
                             <div class="w-28">
                                 <label class="{{ $label }}">Marge-Override (%)</label>
