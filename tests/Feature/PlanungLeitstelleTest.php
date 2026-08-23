@@ -14,6 +14,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistDishIdea;
 use Platform\FoodAlchemist\Models\FoodAlchemistMarkupClass;
 use Platform\FoodAlchemist\Models\FoodAlchemistPlanningSession;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipeStepPhoto;
+use Platform\FoodAlchemist\Services\FoodbookService;
 use Platform\FoodAlchemist\Services\PlanningCascadeService;
 use Platform\FoodAlchemist\Services\PlanningSessionService;
 use Platform\FoodAlchemist\Services\RecipeDependencyWorkflowService;
@@ -2462,4 +2463,88 @@ it('UX: landingKaskadenMap liefert Auto-Titel (Artefakt-Name) + prüfen-Status',
     expect($map[$session->id]['titel'])->toBe('Kürbis-Risotto mit Salbei')
         ->and($map[$session->id]['status'])->toBe('prüfen')
         ->and($map[$session->id]['scope'])->toBe('gericht');
+});
+
+// ── Board (2026-08-23): Hauptseite = Status-Kanban + Worker-Kopf + Ausgabe-Ziel-Chip ──────────────
+// Dominiques Umbau: die Landing zeigt jetzt ein Board (Übersicht/Fortschritt/Worker), statt der flachen
+// Zuletzt/Prüfen-Ansicht. Beweisziele: Board rendert (leer + gefüllt), Worker-Kopf-Ampel, Poll-Gate,
+// Owner-Chip aus source_owner, und die neuen Erstell-Wege (Import/Composer) öffnen den richtigen Tab.
+
+it('Board: Landing rendert das Status-Kanban mit allen fünf Status-Spalten + Worker-Kopf', function () {
+    app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Board-Session', 'brief' => 'x']);
+
+    Livewire::test(PlanungIndex::class)
+        ->assertSeeHtml('data-planung-board')
+        ->assertSeeHtml('data-planung-worker-kopf')
+        ->assertSeeHtml('data-planung-worker-ampel')
+        ->assertSeeHtml('data-planung-board-spalten')
+        ->assertSeeHtml('data-planung-spalte="entwurf"')
+        ->assertSeeHtml('data-planung-spalte="läuft"')
+        ->assertSeeHtml('data-planung-spalte="prüfen"')
+        ->assertSeeHtml('data-planung-spalte="fertig"')
+        ->assertSeeHtml('data-planung-spalte="fehlgeschlagen"')
+        ->assertSee('Board-Session');
+});
+
+it('Board: leerer Zustand zeigt den Empty-State (kein Spalten-Grid)', function () {
+    Livewire::test(PlanungIndex::class)
+        ->assertSeeHtml('data-planung-board')
+        ->assertSeeHtml('data-planung-board-leer')
+        ->assertDontSeeHtml('data-planung-board-spalten');
+});
+
+it('Board: ein laufender Lauf schaltet das Poll-Gate scharf + zeigt den Worker-Fortschrittsbalken', function () {
+    // Nichts läuft → kein Dauer-Poll (Poll-Gate gated auf $irgendeinLaeuft).
+    Livewire::test(PlanungIndex::class)->assertDontSeeHtml('wire:poll.3s');
+
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Läuft-Board', 'brief' => 'x']);
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'planning_session_id' => $session->id, 'scope' => 'gericht', 'status' => 'running']);
+    FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht', 'status' => 'running', 'label' => 'Teller']);
+
+    Livewire::test(PlanungIndex::class)
+        ->assertSeeHtml('wire:poll.3s')                       // Poll nur, weil etwas läuft
+        ->assertSeeHtml('data-planung-worker-laeufe')          // Fortschritt-je-Lauf-Sektion
+        ->assertSeeHtml('data-planung-worker-lauf="' . $session->id . '"');
+});
+
+it('Board: Ausgabe-Ziel-Chip nennt das Owner-Foodbook; freie Session zeigt „Frei"', function () {
+    // Vollkaskade mit Ausgabe-Ziel Foodbook „Adler" → Chip trägt den Foodbook-Namen.
+    $fb = app(FoodbookService::class)->create($this->rootTeam, ['label' => 'Adler']);
+    $mitZiel = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Mit-Ziel']);
+    $run = FoodAlchemistCascadeRun::create([
+        'team_id' => $this->rootTeam->id, 'planning_session_id' => $mitZiel->id, 'scope' => 'vollkaskade', 'status' => 'done',
+        'source_owner_type' => 'foodbook', 'source_owner_id' => $fb->id,
+    ]);
+    FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht', 'status' => 'done', 'label' => 'Gang']);
+
+    // Map trägt Owner-Typ + aufgelösten Namen (batch, kein N+1).
+    $map = Livewire::test(PlanungIndex::class)->instance()->landingKaskadenMap($this->rootTeam, [(int) $mitZiel->id]);
+    expect($map[$mitZiel->id]['owner_type'])->toBe('foodbook')
+        ->and($map[$mitZiel->id]['owner_name'])->toBe('Adler');
+
+    // Freie Session (kein Owner) + gerenderter Chip.
+    app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Frei-Session']);
+    Livewire::test(PlanungIndex::class)
+        ->assertSee('Adler')       // Owner-Chip der Ziel-Session
+        ->assertSee('Frei');       // Chip der freien Session
+});
+
+it('Board: schnellImport legt eine cockpit_import-Session an + öffnet den Import-Tab', function () {
+    Livewire::test(PlanungIndex::class)
+        ->call('schnellImport')
+        ->assertDispatched('modal.open', name: 'planung-editor', tab: 'import');
+
+    $session = FoodAlchemistPlanningSession::where('team_id', $this->rootTeam->id)->latest('id')->first();
+    expect($session)->not->toBeNull()
+        ->and($session->created_via)->toBe('cockpit_import');
+});
+
+it('Board: schnellComposer legt eine cockpit_composer-Session an + öffnet den Composer-Tab', function () {
+    Livewire::test(PlanungIndex::class)
+        ->call('schnellComposer')
+        ->assertDispatched('modal.open', name: 'planung-editor', tab: 'composer');
+
+    $session = FoodAlchemistPlanningSession::where('team_id', $this->rootTeam->id)->latest('id')->first();
+    expect($session)->not->toBeNull()
+        ->and($session->created_via)->toBe('cockpit_composer');
 });

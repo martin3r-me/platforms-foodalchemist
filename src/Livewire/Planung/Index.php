@@ -497,6 +497,34 @@ class Index extends Component
         $this->oeffne($session->id, $startTab);
     }
 
+    /** Board-Einstieg: leere Session anlegen + Editor direkt auf dem Import-Tab öffnen (bestehende Rezeptur einfügen). */
+    public function schnellImport(PlanningSessionService $svc): void
+    {
+        $team = $this->team();
+        if ($team === null) {
+            $this->fehler = 'Kein Team zugeordnet — Erstellung nicht möglich.';
+
+            return;
+        }
+        $session = $svc->create($team, ['title' => 'Rezept-Import', 'created_via' => 'cockpit_import']);
+        $this->fehler = null;
+        $this->oeffne($session->id, 'import');
+    }
+
+    /** Board-Einstieg: leere Session anlegen + Editor direkt auf dem Composer-Tab öffnen (Foodpairing). */
+    public function schnellComposer(PlanningSessionService $svc): void
+    {
+        $team = $this->team();
+        if ($team === null) {
+            $this->fehler = 'Kein Team zugeordnet — Erstellung nicht möglich.';
+
+            return;
+        }
+        $session = $svc->create($team, ['title' => 'Composer', 'created_via' => 'cockpit_composer']);
+        $this->fehler = null;
+        $this->oeffne($session->id, 'composer');
+    }
+
     /** Foodbook-aus-Brief-Eingabe (Spec 42 F1): Rahmen wird in der Leitstelle geplant, nicht im Modul. */
     public string $fbTitel = '';
 
@@ -2364,7 +2392,7 @@ class Index extends Component
         $laeufe = FoodAlchemistCascadeRun::visibleToTeam($team)
             ->whereIn('planning_session_id', $sessionIds)
             ->orderByDesc('id')
-            ->get(['id', 'planning_session_id', 'scope', 'status']);
+            ->get(['id', 'planning_session_id', 'scope', 'status', 'source_owner_type', 'source_owner_id']);
         $latest = [];
         foreach ($laeufe as $r) {
             $sid = (int) $r->planning_session_id;
@@ -2381,10 +2409,31 @@ class Index extends Component
             ->get(['cascade_run_id', 'kind', 'status', 'label', 'ref_id'])
             ->groupBy('cascade_run_id');
 
+        // Spec 42 / Board: Ausgabe-Ziel (Owner) je Lauf — Namen batch-auflösen (ein Query je Owner-Typ,
+        // kein N+1). foodbook=label, speisekarte/speiseplan=name, offer=Angebots-Referenz (id-only).
+        $ownerIds = [];
+        foreach ($latest as $r) {
+            if ($r->source_owner_type !== null && $r->source_owner_id !== null) {
+                $ownerIds[(string) $r->source_owner_type][] = (int) $r->source_owner_id;
+            }
+        }
+        $ownerNamen = ['foodbook' => [], 'speisekarte' => [], 'speiseplan' => []];
+        if (! empty($ownerIds['foodbook'])) {
+            $ownerNamen['foodbook'] = \Platform\FoodAlchemist\Models\FoodAlchemistFoodbook::whereIn('id', array_unique($ownerIds['foodbook']))->pluck('label', 'id')->all();
+        }
+        if (! empty($ownerIds['speisekarte'])) {
+            $ownerNamen['speisekarte'] = \Platform\FoodAlchemist\Models\FoodAlchemistSpeisekarte::whereIn('id', array_unique($ownerIds['speisekarte']))->pluck('name', 'id')->all();
+        }
+        if (! empty($ownerIds['speiseplan'])) {
+            $ownerNamen['speiseplan'] = \Platform\FoodAlchemist\Models\FoodAlchemistSpeiseplan::whereIn('id', array_unique($ownerIds['speiseplan']))->pluck('name', 'id')->all();
+        }
+
         $badge = ['running' => 'läuft', 'review' => 'prüfen', 'done' => 'fertig', 'failed' => 'fehlgeschlagen'];
         $out = [];
         foreach ($latest as $sid => $r) {
             $steps = $stepsByRun->get((int) $r->id) ?? collect();
+            $ot = $r->source_owner_type !== null ? (string) $r->source_owner_type : null;
+            $oid = $r->source_owner_id !== null ? (int) $r->source_owner_id : null;
             $out[$sid] = [
                 'status' => $badge[$r->status] ?? (string) $r->status,
                 'running' => $r->status === 'running',
@@ -2393,6 +2442,9 @@ class Index extends Component
                 'stufen' => $this->stufenAusSteps($steps),
                 // Auto-Titel-Baustein: Name des erzeugten Artefakts (Concept/Gericht/Rezept) dieses Laufs.
                 'titel' => $this->artefaktTitel($steps, (string) $r->scope),
+                // Board: Ausgabe-Ziel (Owner-Typ + Name, falls auflösbar).
+                'owner_type' => $ot,
+                'owner_name' => ($ot !== null && $oid !== null) ? ($ownerNamen[$ot][$oid] ?? null) : null,
             ];
         }
 
@@ -3101,10 +3153,14 @@ class Index extends Component
         // Laufs anschlägt). Ist kein lebender `queue:work` da (`still`/`unbekannt`), bleibt jeder Go in
         // der Queue liegen → der Nutzer sieht nur einen Spinner. Rein lesend/fail-soft; `gesund` = keine
         // Warnung (Prompt/Fläche byte-unverändert wie bisher).
-        $workerState = app(WorkerHealthService::class)->status()['state'];
+        $workerStatus = app(WorkerHealthService::class)->status();
+        $workerState = $workerStatus['state'];
+        $workerAlter = $workerStatus['alter_sek'] ?? null;
         $workerWarnung = $workerState === 'gesund'
             ? null
             : 'Kein Hintergrund-Worker aktiv — ein Go bleibt in der Warteschlange liegen, bis der Worker (queue:work) läuft.';
+        // Board-Poll-Gate: nur pollen, wenn irgendein Lauf tatsächlich läuft (kein Dauer-Poll im Ruhezustand).
+        $irgendeinLaeuft = collect($kaskaden)->contains(fn ($k) => (bool) ($k['running'] ?? false));
 
         // E1b (Spec 40): Owner-Kontext der offenen Session — für Banner „Planung für Foodbook ‚Adler'"
         // + Zurück-Link. null bei freier Cockpit-Planung ohne Ausgabe-Owner (dann kein Banner).
@@ -3118,7 +3174,9 @@ class Index extends Component
             'kaskaden' => $kaskaden,
             'ownerKontext' => $ownerKontext,
             'workerState' => $workerState,
+            'workerAlter' => $workerAlter,
             'workerWarnung' => $workerWarnung,
+            'irgendeinLaeuft' => $irgendeinLaeuft,
             'active' => $active,
             'skizzen' => $skizzen,
             'skizzenLauf' => $skizzenLauf,

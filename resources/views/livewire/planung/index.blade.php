@@ -67,6 +67,17 @@
     // UX: Typ-Icon je Session (aus dem jüngsten Lauf-Scope).
     $typIconMap = ['concept' => 'heroicon-o-squares-2x2', 'gericht' => 'heroicon-o-cake', 'rezept' => 'heroicon-o-beaker', 'vollkaskade' => 'heroicon-o-bolt'];
     $typIcon = fn ($s) => $typIconMap[$kaskaden[(int) $s->id]['scope'] ?? ''] ?? 'heroicon-o-light-bulb';
+    // Board: Ausgabe-Ziel-Chip (Owner). Kein Owner → „Frei". Text-Chip, keine Emojis.
+    $ausgabeZielLabel = ['foodbook' => 'Foodbook', 'speisekarte' => 'Speisekarte', 'speiseplan' => 'Speiseplan', 'offer' => 'Angebot', 'concept' => 'Concept'];
+    $ausgabeChip = function ($sessionId) use ($kaskaden, $ausgabeZielLabel, $chip) {
+        $ot = $kaskaden[(int) $sessionId]['owner_type'] ?? null;
+        if ($ot === null) {
+            return $chip('Frei', 'bg-black/[0.04] text-gray-500');
+        }
+        $name = trim((string) ($kaskaden[(int) $sessionId]['owner_name'] ?? ''));
+        $lbl = ($ausgabeZielLabel[$ot] ?? \Illuminate\Support\Str::ucfirst($ot)) . ($name !== '' ? ' · ' . $name : '');
+        return $chip($lbl, 'bg-sky-500/10 text-sky-700');
+    };
 @endphp
 
 <x-ui-page>
@@ -178,6 +189,13 @@
                 <button wire:click="schnellErstellen('concept')" class="{{ $btnPrimary }}" data-frei-concept>
                     @svg('heroicon-o-squares-2x2', 'w-4 h-4') Concept
                 </button>
+                {{-- Board: die neuen Erstell-Wege auch von der Startseite (bisher nur Editor-Tabs). --}}
+                <button wire:click="schnellImport" class="{{ $btnPrimary }}" data-frei-import>
+                    @svg('heroicon-o-document-arrow-down', 'w-4 h-4') Rezept importieren
+                </button>
+                <button wire:click="schnellComposer" class="{{ $btnPrimary }}" data-frei-composer>
+                    @svg('heroicon-o-sparkles', 'w-4 h-4') Composer
+                </button>
                 <button type="button" @click="fbOpen = !fbOpen" class="{{ $btnPrimary }}" data-frei-foodbook
                         :class="fbOpen ? 'ring-2 ring-violet-400' : ''">
                     @svg('heroicon-o-book-open', 'w-4 h-4') Foodbook aus Brief
@@ -214,113 +232,42 @@
             </div>
         </div>
 
-        @if($active)
-            <div class="{{ $card }} p-5 space-y-3">
-                <div class="flex items-start justify-between gap-4">
-                    <div class="min-w-0">
-                        <h2 class="text-lg font-semibold text-gray-800">{{ $active->title }}</h2>
-                        <div class="mt-1 flex flex-wrap gap-1">
-                            {!! $kaskadeBadge($active->id) !!}
-                            {!! $chip($statusLabel[$active->status] ?? $active->status, 'bg-violet-500/10 text-violet-700') !!}
-                            {!! $chip($active->source_knowledge_document_id ? 'aus Trend' : 'Freier Brief', 'bg-sky-500/10 text-sky-700') !!}
-                            {!! $chip($skizzenAnzahl . ' Skizzen') !!}
-                        </div>
-                    </div>
-                    <button wire:click="oeffne({{ $active->id }})" class="{{ $btnPrimary }} shrink-0">
-                        @svg('heroicon-o-pencil-square', 'w-4 h-4')
-                        Öffnen
-                    </button>
-                </div>
-                @if($active->brief)
-                    <p class="text-sm text-gray-600">{{ $active->brief }}</p>
-                @endif
-                @if($active->analysis)
-                    <p class="text-xs text-gray-500 line-clamp-3">{{ \Illuminate\Support\Str::limit($active->analysis, 320) }}</p>
-                @endif
-            </div>
-        @else
-            <div class="{{ $card }} p-5">
-                <h2 class="text-base font-semibold text-gray-800">Planung — KI-Leitstelle</h2>
-                <p class="text-sm text-gray-600 mt-1">
-                    Erstelle direkt ein Basisrezept, Gericht oder Concept — mit KI und Regler-Leitplanken (oben „Neu erstellen").
-                    Ein Trend ist EIN möglicher Input (im Trendradar „In Planung öffnen"), nicht der Rahmen.
-                </p>
-            </div>
-            {{-- UX: Landing-Umschalter [Zuletzt | Zu prüfen (N)] — die zu prüfenden Läufe quer gebündelt. --}}
-            <div x-data="{ landView: 'zuletzt' }">
-                @php $pruefen = $sessions->filter(fn ($s) => ($kaskaden[$s->id]['status'] ?? 'entwurf') === 'prüfen')->values(); @endphp
-                <div class="flex items-center gap-2 mb-3" data-planung-landing-tabs>
-                    <button type="button" @click="landView='zuletzt'" data-planung-landtab="zuletzt"
-                            :class="landView==='zuletzt' ? 'bg-violet-500/15 text-violet-700' : 'text-gray-500 hover:text-gray-700'"
-                            class="px-3 py-1 rounded-md text-sm font-semibold">Zuletzt</button>
-                    <button type="button" @click="landView='pruefen'" data-planung-landtab="pruefen"
-                            :class="landView==='pruefen' ? 'bg-violet-500/15 text-violet-700' : 'text-gray-500 hover:text-gray-700'"
-                            class="px-3 py-1 rounded-md text-sm font-semibold inline-flex items-center gap-1.5">
-                        Zu prüfen
-                        @if($pruefen->count() > 0)<span class="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1 rounded-full bg-violet-600 text-white text-[11px] font-bold" data-planung-pruef-count>{{ $pruefen->count() }}</span>@endif
-                    </button>
-                </div>
+            {{-- Board (Leitstelle-Dashboard) — ersetzt die frühere Zuletzt/Prüfen-Ansicht. Immer sichtbar,
+                 auch bei gewählter Session (Karte-Klick füllt NUR die rechte Details-Sidebar + markiert die
+                 Karte — das Board bleibt als Überblick stehen). Der linke Filter grenzt ein: dieselbe
+                 gefilterte $sessions-Menge landet in den Status-Spalten. „Öffnen" = Editor. Poll nur, wenn
+                 tatsächlich etwas läuft (kein Dauer-Poll). --}}
+            <div data-planung-board {{ $irgendeinLaeuft ? 'wire:poll.3s' : '' }}>
+                @include('foodalchemist::livewire.planung.partials.board-worker-kopf')
 
-                {{-- Ansicht: Zuletzt --}}
-                <div x-show="landView==='zuletzt'">
+                @php
+                    $spalten = ['entwurf' => 'Entwurf', 'läuft' => 'Läuft', 'prüfen' => 'Zu prüfen', 'fertig' => 'Fertig', 'fehlgeschlagen' => 'Fehlgeschlagen'];
+                    $nachStatus = $sessions->groupBy(fn ($s) => $kaskaden[(int) $s->id]['status'] ?? 'entwurf');
+                @endphp
+
                 @if($sessions->count() === 0)
-                    <div class="{{ $card }} p-4 text-xs text-gray-500">Noch keine Planungen.</div>
+                    <div class="{{ $card }} p-4 text-xs text-gray-500" data-planung-board-leer>Noch keine Planungen — oben „Neu erstellen".</div>
                 @else
-                    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-                        @foreach($sessions->take(9) as $s)
-                            <div wire:key="dash-{{ $s->id }}" class="{{ $card }} p-3" data-planung-karte="{{ $s->id }}">
-                                <button type="button" wire:click="waehle({{ $s->id }})" class="w-full text-left hover:opacity-80 transition-opacity">
-                                    <div class="flex items-start justify-between gap-2">
-                                        <span class="text-xs font-semibold text-gray-800 truncate flex items-center gap-1.5">@svg($typIcon($s), 'w-3.5 h-3.5 shrink-0 text-gray-400'){{ $anzeigeTitel($s) }}</span>
-                                        @if($kaskadeLaeuft($s->id))<span class="shrink-0 w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse mt-1" title="läuft"></span>@endif
-                                    </div>
-                                    <div class="mt-2 flex flex-wrap gap-1">
-                                        {!! $kaskadeBadge($s->id) !!}
-                                        @if($s->category)  {!! $chip($s->category, 'bg-sky-500/10 text-sky-700') !!} @endif
-                                    </div>
-                                    @php $fort = $kaskadeFortschritt($s->id); @endphp
-                                    @if($fort !== '')<p class="mt-1.5 text-[10px] text-gray-500 truncate" data-planung-fortschritt>{{ $fort }}</p>@endif
-                                </button>
-                                {{-- Direkt-Aktionen (finale Etappe #17): Öffnen · Duplizieren · Verwerfen (Soft-Delete).
-                                     Freigabe bleibt bewusst per-Step im Editor (kein Karten-Bulk-Freigeben). --}}
-                                <div class="mt-2 flex items-center gap-1 border-t border-black/5 pt-2" data-planung-karten-aktionen>
-                                    <button type="button" wire:click="oeffne({{ $s->id }})" class="{{ $btnGhostXs }}" title="Im Editor öffnen" data-planung-karte-oeffnen>
-                                        @svg('heroicon-o-pencil-square', 'w-3.5 h-3.5')
-                                    </button>
-                                    <button type="button" wire:click="planungDuplizieren({{ $s->id }})" class="{{ $btnGhostXs }}" title="Duplizieren" data-planung-karte-duplizieren>
-                                        @svg('heroicon-o-document-duplicate', 'w-3.5 h-3.5')
-                                    </button>
-                                    <button type="button" wire:click="planungVerwerfen({{ $s->id }})" wire:confirm="Diese Planung verwerfen? (reversibel — Soft-Delete)" class="{{ $btnGhostXs }} !text-rose-600" title="Verwerfen" data-planung-karte-verwerfen>
-                                        @svg('heroicon-o-trash', 'w-3.5 h-3.5')
-                                    </button>
+                    <div class="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-5 gap-3 items-start" data-planung-board-spalten>
+                        @foreach($spalten as $key => $label)
+                            @php $spaltenSessions = ($nachStatus[$key] ?? collect())->values(); @endphp
+                            <div class="min-w-0" data-planung-spalte="{{ $key }}">
+                                <div class="flex items-center gap-1.5 mb-2 px-0.5">
+                                    <span class="text-[11px] font-semibold uppercase tracking-wide text-gray-500">{{ $label }}</span>
+                                    <span class="inline-flex items-center justify-center min-w-[1.25rem] h-4 px-1 rounded-full text-[10px] font-bold {{ $kaskadeStatusStil[$key] ?? 'bg-black/[0.04] text-gray-500' }}" data-planung-spalte-count>{{ $spaltenSessions->count() }}</span>
+                                </div>
+                                <div class="space-y-2">
+                                    @forelse($spaltenSessions as $s)
+                                        @include('foodalchemist::livewire.planung.partials.board-karte', ['s' => $s])
+                                    @empty
+                                        <div class="text-[10px] text-gray-300 px-1 py-1.5">—</div>
+                                    @endforelse
                                 </div>
                             </div>
                         @endforeach
                     </div>
                 @endif
-                </div>{{-- /Ansicht Zuletzt --}}
-
-                {{-- UX: Ansicht „Zu prüfen" — alle Läufe im Status prüfen quer gebündelt (Worker/Status auf einen Blick). --}}
-                <div x-show="landView==='pruefen'" x-cloak class="space-y-2" data-planung-pruef-liste>
-                    @forelse($pruefen as $s)
-                        <div wire:key="pruef-{{ $s->id }}" class="{{ $card }} p-3 flex items-center gap-3" data-planung-pruef-karte="{{ $s->id }}">
-                            @svg($typIcon($s), 'w-5 h-5 shrink-0 text-violet-500')
-                            <div class="flex-1 min-w-0">
-                                <p class="text-sm font-semibold text-gray-800 truncate">{{ $anzeigeTitel($s) }}</p>
-                                @php $fort = $kaskadeFortschritt($s->id); @endphp
-                                <p class="text-[11px] text-gray-500 truncate">{{ $fort !== '' ? $fort : 'wartet auf Freigabe' }}@if($s->category) · {{ $s->category }}@endif</p>
-                            </div>
-                            <span class="shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold {{ $kaskadeStatusStil['prüfen'] }}">Prüfen</span>
-                            <button type="button" wire:click="oeffne({{ $s->id }})" class="{{ $btnPrimary }} shrink-0" title="Im Editor öffnen + prüfen">
-                                @svg('heroicon-o-pencil-square', 'w-4 h-4') Öffnen
-                            </button>
-                        </div>
-                    @empty
-                        <div class="{{ $card }} p-4 text-xs text-gray-500">Nichts zu prüfen — alle Läufe sind Entwurf, laufen noch oder sind fertig/freigegeben.</div>
-                    @endforelse
-                </div>
-            </div>{{-- /x-data landView --}}
-        @endif
+            </div>{{-- /board --}}
     </x-ui-page-container>
 
     {{-- RECHTS: Detail --}}
