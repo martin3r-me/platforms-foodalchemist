@@ -397,36 +397,57 @@
                  ganze Ausgabeform (owner-getaggte Voll-Kaskade), die Inhalte docken automatisch zurück.
                  Foodbook + Speisekarte live; Speiseplan folgt (andere Struktur: Linien+Zyklus statt Gänge). --}}
             <div wire:key="planung-tab-foodbook" x-show="tab==='foodbook'" x-cloak class="space-y-4">
-                <x-foodalchemist::modal-section title="Foodbook aus Brief">
-                    <p class="text-[11px] text-slate-400 mb-2">
-                        Ein ganzes Foodbook aus einem Brief planen — Struktur (Kapitel) + Inhalte entstehen hier
-                        in der Leitstelle und docken automatisch ins Foodbook (reine Ausgabe).
+                {{-- Stage 2 (Dominique): ein BESTEHENDES Foodbook wählen → Gerüst planen → Kaskaden je Kapitel
+                     durchgehen. Oder leer lassen = neues Foodbook aus Brief. --}}
+                <x-foodalchemist::modal-section title="Foodbook planen">
+                    <label class="block text-[11px] text-slate-400 mb-1">Bestehendes Foodbook wählen</label>
+                    <select wire:model.live="fbOwnerId" class="{{ $input }} w-full" data-tab-fb-auswahl>
+                        <option value="">— neues Foodbook aus Brief —</option>
+                        @foreach($fbAuswahl as $fbo)<option value="{{ $fbo->id }}">{{ $fbo->label }}</option>@endforeach
+                    </select>
+                    <p class="text-[11px] text-slate-400 mt-2">
+                        Wählen: Gerüst planen + Kaskaden durchgehen (Buch-Ebene + Kapitel-Steuerung erscheinen unten).
+                        Leer: ein neues Foodbook aus einem Brief.
                     </p>
-                    <input type="text" wire:model="fbTitel" class="{{ $input }} w-full mb-2" placeholder="Foodbook-Name (optional)" data-tab-fb-titel>
+                </x-foodalchemist::modal-section>
+
+                <x-foodalchemist::modal-section :title="$fbOwnerId ? 'Gerüst aus Brief (füllt das gewählte Foodbook)' : 'Neues Foodbook aus Brief'">
+                    <p class="text-[11px] text-slate-400 mb-2">
+                        Struktur (Kapitel) + Inhalte entstehen hier in der Leitstelle und docken automatisch ins Foodbook (reine Ausgabe).
+                    </p>
+                    @unless($fbOwnerId)
+                        <input type="text" wire:model="fbTitel" class="{{ $input }} w-full mb-2" placeholder="Foodbook-Name (optional)" data-tab-fb-titel>
+                    @endunless
                     <textarea wire:model="fbBrief" rows="4" class="{{ $input }} w-full" placeholder="Brief: Anlass, Gäste, Saison, Niveau, Budget …" data-tab-fb-brief></textarea>
                     @if($fbMeldung) <p class="text-[11px] text-rose-400 mt-2" data-tab-fb-meldung>{{ $fbMeldung }}</p> @endif
                     <div class="mt-3">
                         <button type="button" wire:click="foodbookAusBrief" wire:loading.attr="disabled" wire:target="foodbookAusBrief" class="{{ $btnPrimary }} disabled:opacity-40" data-tab-fb-erzeugen>
-                            <span wire:loading.remove wire:target="foodbookAusBrief">Foodbook erzeugen (KI)</span>
+                            <span wire:loading.remove wire:target="foodbookAusBrief">{{ $fbOwnerId ? 'Gerüst planen + Kaskade (KI)' : 'Foodbook erzeugen (KI)' }}</span>
                             <span wire:loading wire:target="foodbookAusBrief">erzeuge …</span>
                         </button>
                     </div>
                 </x-foodalchemist::modal-section>
 
-                {{-- S3a: sobald ein Owner-Foodbook feststeht, hier die Kapitel-Ebenen-Steuerung (M3-Ziele je
-                     Kapitel + „Kapitel erzeugen" über die Kaskade) — die Planung, die früher im Foodbook-Modul
-                     saß und am Motor vorbeilief. --}}
-                @if(($ownerKontext['owner_type'] ?? null) === 'foodbook')
+                {{-- Buch-Ebene + Kapitel-Steuerung (die aus dem Foodbook-Modul verschobene Planung): sobald ein
+                     Foodbook GEWÄHLT ist (fbOwnerId) ODER die aktive Session ein Foodbook ist. Die Rails brauchen
+                     nur die foodbook-id; „Kapitel erzeugen" verlangt ein Gerüst (sonst Hinweis in der Rail). --}}
+                @php
+                    $fbAktiv = $fbOwnerId;
+                    if ($fbAktiv === null && ($ownerKontext['owner_type'] ?? null) === 'foodbook') {
+                        $fbAktiv = (int) $ownerKontext['owner_id'];
+                    }
+                @endphp
+                @if($fbAktiv !== null)
                     <x-foodalchemist::modal-section title="Buch-Ebene (Leitplanken · Briefing · Leitidee)">
                         <livewire:foodalchemist.planung.foodbook-kontext-rail
-                            :foodbook-id="$ownerKontext['owner_id']"
-                            :key="'fbkontext-'.$ownerKontext['owner_id']" />
+                            :foodbook-id="$fbAktiv"
+                            :key="'fbkontext-'.$fbAktiv" />
                     </x-foodalchemist::modal-section>
                     <x-foodalchemist::modal-section title="Kapitel-Steuerung">
                         <livewire:foodalchemist.planung.kapitel-rail
-                            :foodbook-id="$ownerKontext['owner_id']"
+                            :foodbook-id="$fbAktiv"
                             :session-id="$sessionId"
-                            :key="'kaprail-'.$ownerKontext['owner_id']" />
+                            :key="'kaprail-'.$fbAktiv" />
                     </x-foodalchemist::modal-section>
                 @endif
             </div>

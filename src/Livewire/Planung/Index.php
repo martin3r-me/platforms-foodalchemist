@@ -565,6 +565,33 @@ class Index extends Component
     public bool $spPanelAuf = false;
 
     /**
+     * Stage 2 (Leitstelle-Auswähler, 2026-08-23): ein BESTEHENDES Foodbook zum Planen wählen. Setzt den
+     * Owner-Kontext (fbOwnerId) → Buch-Ebene + Kapitel-Steuerung erscheinen; die jüngste Planungs-Session
+     * dieses Foodbooks wird reaktiviert (Owner-Banner + Kaskaden-Cockpit). „Gerüst planen" (Brief) und
+     * „Kapitel erzeugen" laufen danach wie gehabt. Deselect (leer) nimmt nur die Auswahl zurück.
+     */
+    public function updatedFbOwnerId(): void
+    {
+        $team = $this->team();
+        if ($team === null || $this->fbOwnerId === null) {
+            return;
+        }
+        $fb = \Platform\FoodAlchemist\Models\FoodAlchemistFoodbook::visibleToTeam($team)->find($this->fbOwnerId);
+        if ($fb === null) {
+            $this->fbOwnerId = null;
+
+            return;
+        }
+        $run = FoodAlchemistCascadeRun::visibleToTeam($team)
+            ->where('source_owner_type', 'foodbook')->where('source_owner_id', $this->fbOwnerId)
+            ->whereNotNull('planning_session_id')
+            ->orderByDesc('id')->first();
+        if ($run !== null) {
+            $this->sessionId = (int) $run->planning_session_id;
+        }
+    }
+
+    /**
      * F1 (Spec 42) — „Foodbook aus Brief" IN der Leitstelle: Shell anlegen → Gerüst aus Brief →
      * Struktur anwenden → Session + Voll-Kaskade (owner_type=foodbook). Spiegelt den bisherigen
      * Foodbook-Kickoff (`Foodbooks/Index::frameAusBriefVorschlagen` + `strukturAnwenden` +
@@ -3348,7 +3375,14 @@ class Index extends Component
             ? app(PlanningCascadeService::class)->ownerKontext($team, (int) $active->id)
             : null;
 
+        // Stage 2: Auswahl-Listen bestehender Ausgabe-Objekte je Tab (Foodbook zuerst; SK/SP folgen).
+        $fbAuswahl = $team !== null
+            ? \Platform\FoodAlchemist\Models\FoodAlchemistFoodbook::visibleToTeam($team)
+                ->orderByDesc('id')->get(['id', 'label'])
+            : collect();
+
         return view('foodalchemist::livewire.planung.index', [
+            'fbAuswahl' => $fbAuswahl,
             'sessions' => $sessions,
             'baum' => $baum,
             'kaskaden' => $kaskaden,

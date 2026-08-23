@@ -88,6 +88,9 @@
             <x-foodalchemist::modal name="foodbook-editor" fullscreen dark-canvas title="Foodbook bearbeiten" :title-name="$fb->label">
                 <x-slot:actions>
                     <button type="button" wire:click="speichern" class="{{ $btnPrimary }}" data-fb-speichern>Speichern</button>
+                    {{-- Entry in die Leitstelle-Planung (Stage 2): öffnet die Leitstelle im Owner-Kontext dieses
+                         Foodbooks (fb_owner) — Gerüst planen + Kaskaden je Kapitel. Die Planung lebt dort, nicht mehr hier. --}}
+                    <button type="button" wire:click="vollKaskadeStarten" class="{{ $btnGhostXs }} text-violet-600" data-fb-in-leitstelle>In der Leitstelle planen</button>
                     <button type="button" wire:click="loeschen({{ $fb->id }})" wire:confirm="Foodbook löschen?" class="{{ $btnGhostXs }} text-red-600" data-fb-loeschen>Löschen</button>
                 </x-slot:actions>
 

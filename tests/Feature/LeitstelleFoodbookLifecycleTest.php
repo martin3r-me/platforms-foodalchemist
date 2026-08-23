@@ -136,3 +136,34 @@ it('foodbookAusBrief: leerer Brief → Meldung, nichts angelegt', function () {
     expect(FoodAlchemistFoodbook::where('team_id', $this->rootTeam->id)->count())->toBe(0);
     Queue::assertNotPushed(GenerateConceptJob::class);
 });
+
+/**
+ * Stage 2 (Dominique 2026-08-23) — Foodbook-Auswähler in der Leitstelle: ein BESTEHENDES Foodbook wählen
+ * aktiviert dessen jüngste Planungs-Session (Owner-Kontext) — Kernlogik updatedFbOwnerId. So ist die aus
+ * dem Foodbook-Modul verschobene Planung wieder erreichbar, nicht nur „aus Brief". (Modal-HTML = layout-blind,
+ * hier State-geprüft; die Sichtbarkeit der Rails prüft die demo-Abnahme.)
+ */
+it('Foodbook-Auswähler aktiviert die jüngste Owner-Session (updatedFbOwnerId)', function () {
+    $fb = app(FoodbookService::class)->create($this->rootTeam, ['label' => 'Adler Portfolio']);
+    $session = app(\Platform\FoodAlchemist\Services\PlanningSessionService::class)
+        ->create($this->rootTeam, ['title' => 'Adler-Planung']);
+    FoodAlchemistCascadeRun::create([
+        'team_id' => $this->rootTeam->id, 'planning_session_id' => $session->id, 'scope' => 'vollkaskade',
+        'creative_mode' => 'voll_kreativ', 'brief' => 'x', 'status' => 'done', 'staged' => false,
+        'source_owner_type' => 'foodbook', 'source_owner_id' => $fb->id, 'created_via' => 'test',
+    ]);
+
+    Livewire::test(PlanungIndex::class)
+        ->set('fbOwnerId', $fb->id)                        // Auswahl → updatedFbOwnerId
+        ->assertSet('fbOwnerId', $fb->id)
+        ->assertSet('sessionId', $session->id);            // jüngste Owner-Session aktiviert
+});
+
+it('Foodbook-Auswähler ohne Vor-Session setzt nur den Owner (keine Session-Aktivierung)', function () {
+    $fb = app(FoodbookService::class)->create($this->rootTeam, ['label' => 'Leeres Buch']);
+
+    Livewire::test(PlanungIndex::class)
+        ->set('fbOwnerId', $fb->id)
+        ->assertSet('fbOwnerId', $fb->id)
+        ->assertSet('sessionId', null);                    // kein Owner-Run → keine Aktivierung, aber Auswahl steht
+});
