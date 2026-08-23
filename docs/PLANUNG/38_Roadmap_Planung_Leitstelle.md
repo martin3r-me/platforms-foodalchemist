@@ -336,3 +336,14 @@ FA `main` = `eb85e3c`, demo deployt + Migration `[180] Ran`. Nachweis: `Planning
 **Gesamt**
 - [ ] Design-/Flow-Parität zum Editor-Cockpit (gleiche Sektionen/Farben/Abstände) — *visuelle Feinarbeit, Real-Abnahme*
 - [~] Verifikation: Sandbox-Render + kompiliertes-Blade-Lint ✅ (Render-Tests grün); **Real-Abnahme auf demo durch Dominique offen**
+
+### 🟢 Board-Redesign (2026-08-23) — `1f8abb4`, demo LIVE
+
+Die flache Zuletzt/Prüfen-Landing zog die neuen Features (Spec 42 Ausgabe-Ziele, Import, Composer) nicht nach — kein Status-Überblick, kein Fortschritt, keine Worker-Sicht. Ersetzt durch ein **Status-Kanban-Board** in der Mitte (3-Panel bleibt, linker Filter + rechte Details unangetastet):
+- [x] **Worker-Kopf** (persistent, live): globale Ampel (`WorkerHealthService::status()`) + Status-Zähler + Fortschrittsbalken je laufendem Lauf. `wire:poll.3s` **gated** auf `$irgendeinLaeuft` (kein Dauer-Poll im Ruhezustand). Neues Partial `partials/board-worker-kopf.blade.php`.
+- [x] **5 Status-Spalten** (Entwurf/Läuft/Zu prüfen/Fertig/Fehlgeschlagen), gefüttert aus der bereits links gefilterten `$sessions`-Menge → der Filter grenzt das Board mit ein (Synergie, kein zweiter Filter). Karte immer sichtbar (Klick = `waehle` → Details rechts + Aktiv-Ring; „Öffnen" = Editor). Neues Partial `partials/board-karte.blade.php`.
+- [x] **Ausgabe-Ziel-Chip** je Karte (Owner Foodbook/Speisekarte/Speiseplan, batch-aufgelöst in `landingKaskadenMap` über `source_owner_type/_id`, kein N+1; kein Owner → „Frei").
+- [x] **Neue Erstell-Wege** von der Startseite: `schnellImport` (`cockpit_import` → Import-Tab) + `schnellComposer` (`cockpit_composer` → Composer-Tab).
+- Emoji-frei (Heroicons/Text). +6 Tests; volle FA-Suite grün (2893/2896, 3 Skips). Deploy per Lock-Pin (reiner Code, keine Migration).
+- **Zwei libxml-Root-Check-Fallen dokumentiert** (im Partial-Kopf): (a) klickbarer Titelbereich = `<div wire:click>`, KEIN `<button>` (button + Block-Inhalt bricht die Verschachtelung → „multiple root elements"); (b) heroicons in den Aktions-Buttons **inline** lassen (nicht auf eigene Zeile umbrechen). Zusatz-Merker: `@svg` **nie in einen Blade-Kommentar** schreiben (blade-icons kompiliert es dort → Syntaxfehler).
+- [ ] Real-Abnahme auf demo durch Dominique offen (Board zeigt Spalten/Fortschritt/Worker; Karte→Details; Import/Composer öffnen richtigen Tab).
