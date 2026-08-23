@@ -727,6 +727,16 @@ class Index extends Component
     }
 
     /**
+     * S3a: die Kapitel-Steuerung (KapitelRail) hat einen per-Kapitel-Kaskaden-Teil-Lauf gestartet →
+     * jüngsten Lauf neu laden, damit der Worker-Tab ihn zeigt.
+     */
+    #[\Livewire\Attributes\On('kaskade-gestartet')]
+    public function kaskadeGestartet(): void
+    {
+        $this->ladeLetztenLauf();
+    }
+
+    /**
      * Zuletzt-Karte: Planung verwerfen (Soft-Delete, reversibel; finale Etappe #17). Team-owned (D1)
      * über den Service. War die verworfene Session gerade aktiv, wird der Editor-/Lauf-Kontext gelöst.
      */

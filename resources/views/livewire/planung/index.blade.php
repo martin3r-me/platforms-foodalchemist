@@ -412,6 +412,18 @@
                         </button>
                     </div>
                 </x-foodalchemist::modal-section>
+
+                {{-- S3a: sobald ein Owner-Foodbook feststeht, hier die Kapitel-Ebenen-Steuerung (M3-Ziele je
+                     Kapitel + „Kapitel erzeugen" über die Kaskade) — die Planung, die früher im Foodbook-Modul
+                     saß und am Motor vorbeilief. --}}
+                @if(($ownerKontext['owner_type'] ?? null) === 'foodbook')
+                    <x-foodalchemist::modal-section title="Kapitel-Steuerung">
+                        <livewire:foodalchemist.planung.kapitel-rail
+                            :foodbook-id="$ownerKontext['owner_id']"
+                            :session-id="$sessionId"
+                            :key="'kaprail-'.$ownerKontext['owner_id']" />
+                    </x-foodalchemist::modal-section>
+                @endif
             </div>
 
             <div wire:key="planung-tab-speisekarte" x-show="tab==='speisekarte'" x-cloak class="space-y-4">

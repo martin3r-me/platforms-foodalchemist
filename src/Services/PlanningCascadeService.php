@@ -193,8 +193,14 @@ class PlanningCascadeService
         GenerateRecipeJob::dispatch($runId, $team->id, (int) (\Illuminate\Support\Facades\Auth::id() ?? 0), $brief, $jobParams, $vkModus, $vorFreigabeAnreichern);
     }
 
-    /** Dispatch der Konzept-Generierung für einen Step (Reuse-Assembler; im Erfinden-Modus fächert der Job auf). */
-    private function dispatchConceptStep(Team $team, FoodAlchemistCascadeRunStep $step, string $brief, ?int $planningSessionId, string $creativeMode, array $params = []): void
+    /**
+     * Dispatch der Konzept-Generierung für einen Step (Reuse-Assembler; im Erfinden-Modus fächert der Job auf).
+     *
+     * `$attachOwnerType`/`$attachContainerId` (Spec-42-Vollzug S3a): das erzeugte Konzept dockt an einen
+     * Ausgabe-Container (foodbook→Kapitel). Bei Cockpit-Concepts (frei) bleiben beide null. Wichtig, damit
+     * ein NEU-Generieren eines Kapitel-Concepts ({@see regeneriereStep}) den Kapitel-Attach nicht verliert.
+     */
+    private function dispatchConceptStep(Team $team, FoodAlchemistCascadeRunStep $step, string $brief, ?int $planningSessionId, string $creativeMode, array $params = [], ?string $attachOwnerType = null, ?int $attachContainerId = null): void
     {
         $runId = (string) Str::uuid();
         $step->update(['generator_run_id' => $runId]);
@@ -205,7 +211,7 @@ class PlanningCascadeService
         $menueAchsen = array_filter($params, fn ($k) => str_starts_with((string) $k, 'menue_'), ARRAY_FILTER_USE_KEY);
         GenerateConceptJob::dispatch(
             $runId, $team->id, (int) (\Illuminate\Support\Facades\Auth::id() ?? 0), $brief,
-            null, $planningSessionId, $step->id, $creativeMode, false, false, null, null, $menueAchsen
+            null, $planningSessionId, $step->id, $creativeMode, false, false, $attachOwnerType, $attachContainerId, $menueAchsen
         );
     }
 
@@ -307,23 +313,7 @@ class PlanningCascadeService
         $slots = $this->vollkaskadeSlots($team, $ownerType, $ownerId, $frame);
         $idx = 0;
         foreach ($slots as [$slot, $containerId]) {
-            $step = FoodAlchemistCascadeRunStep::create([
-                'team_id' => $team->id,
-                'cascade_run_id' => $run->id,
-                'parent_step_id' => null,
-                'kind' => 'concept',
-                'label' => Str::limit((string) ($slot->label ?: 'Konzept'), 120),
-                'status' => 'running',
-                'sort' => $idx,
-            ]);
-            $runId = (string) Str::uuid();
-            $step->update(['generator_run_id' => $runId]);
-            Cache::put(GenerateConceptJob::cacheKey($runId), ['status' => 'pending'], now()->addMinutes(self::RESULT_TTL_MIN));
-            GenerateConceptJob::dispatch(
-                $runId, $team->id, (int) (\Illuminate\Support\Facades\Auth::id() ?? 0),
-                $this->slotBrief($ownerType, $ownerId, $slot), (string) ($slot->label ?: null),
-                $session?->id, $step->id, $creativeMode, false, false, $ownerType, $containerId
-            );
+            $this->dispatchSlotConcept($team, $run, $slot, $ownerType, (int) $containerId, $idx, $creativeMode, $session?->id);
             $idx++;
         }
         if ($idx === 0) {
@@ -331,6 +321,90 @@ class PlanningCascadeService
         }
 
         return $run;
+    }
+
+    /**
+     * Spec-42-Vollzug S3a — gezielter Teil-Lauf für GENAU EIN Foodbook-Kapitel (statt der ganzen
+     * Voll-Kaskade). Nutzt denselben Attach-je-Kapitel-Pfad wie {@see starteVollkaskade} (ein
+     * {@see GenerateConceptJob} mit `attachOwnerType='foodbook'` + `attachContainerId=chapter_id`), nur
+     * für das eine gekoppelte Slot↔Kapitel-Paar. Das „Kapitel-Go" der Leitstelle ersetzt damit den alten
+     * kaskaden-fremden `FoodbookService::kapitelFreigeben`-Bypass — jede Erzeugung läuft über den Motor.
+     *
+     * Jeder Aufruf = ein NEUER Run mit einem Step (kein Anhängen an fremde Runs → keine Race). Nicht
+     * idempotent — Doppel-Klick-Schutz macht die UI (Button-Disable am jüngsten „läuft"-Step des Kapitels).
+     */
+    public function starteKapitelKaskade(Team $team, ?FoodAlchemistPlanningSession $session, string $creativeMode, int $foodbookId, int $chapterId, array $optionen = []): FoodAlchemistCascadeRun
+    {
+        if (! in_array($creativeMode, FoodAlchemistPlanningSession::CREATIVE_MODES, true)) {
+            $creativeMode = 'voll_kreativ';
+        }
+        $frame = app(PlanningFrameService::class)->find('foodbook', $foodbookId);
+        if ($frame === null || $frame->slots()->count() === 0) {
+            throw new RuntimeException('Foodbook hat noch kein Planungs-Gerüst — erst Kickoff/Struktur anlegen.');
+        }
+        // Genau das gekoppelte Slot↔Kapitel-Paar suchen (vollkaskadeSlots stellt strukturAusGeruest-Idempotenz sicher).
+        $treffer = null;
+        foreach ($this->vollkaskadeSlots($team, 'foodbook', $foodbookId, $frame) as [$slot, $containerId]) {
+            if ((int) $containerId === $chapterId) {
+                $treffer = [$slot, (int) $containerId];
+                break;
+            }
+        }
+        if ($treffer === null) {
+            throw new RuntimeException('Kapitel hat keinen gekoppelten Gerüst-Slot — nur gerüst-basierte Kapitel sind erzeugbar.');
+        }
+
+        $run = FoodAlchemistCascadeRun::create([
+            'team_id' => $team->id,
+            'planning_session_id' => $session?->id,
+            'scope' => 'vollkaskade',   // gleiche Scope-Semantik wie die Voll-Kaskade (nur 1 Slot)
+            'creative_mode' => $creativeMode,
+            'brief' => 'Kapitel-Kaskade foodbook #' . $foodbookId . ' — Kapitel #' . $chapterId,
+            'status' => 'running',
+            'staged' => false,
+            'source_owner_type' => 'foodbook',
+            'source_owner_id' => $foodbookId,
+            'created_via' => (string) ($optionen['created_via'] ?? 'leitstelle_kapitel_go'),
+        ]);
+        [$slot, $containerId] = $treffer;
+        $this->dispatchSlotConcept($team, $run, $slot, 'foodbook', $containerId, 0, $creativeMode, $session?->id);
+
+        return $run;
+    }
+
+    /**
+     * Ein Slot → ein Concept-Step + {@see GenerateConceptJob} (Attach an den Owner-Container). Der EINE
+     * Ort, an dem `chapter_id`/`slot_id` am Step gesetzt werden — genutzt von {@see starteVollkaskade}
+     * (Schleife) UND {@see starteKapitelKaskade} (einmal). Für foodbook trägt der Brief die editierten
+     * Kapitel-Ziele ({@see kapitelBrief}, Kapitel schlägt Slot), sonst der reine {@see slotBrief}.
+     */
+    private function dispatchSlotConcept(Team $team, FoodAlchemistCascadeRun $run, $slot, string $ownerType, int $containerId, int $idx, string $creativeMode, ?int $sessionId): FoodAlchemistCascadeRunStep
+    {
+        $chapterId = $ownerType === 'foodbook' ? $containerId : null;
+        $step = FoodAlchemistCascadeRunStep::create([
+            'team_id' => $team->id,
+            'cascade_run_id' => $run->id,
+            'parent_step_id' => null,
+            'kind' => 'concept',
+            'label' => Str::limit((string) ($slot->label ?: 'Konzept'), 120),
+            'status' => 'running',
+            'sort' => $idx,
+            'chapter_id' => $chapterId,
+            'slot_id' => (int) $slot->id,
+        ]);
+        $brief = $chapterId !== null
+            ? $this->kapitelBrief($chapterId, $slot)
+            : $this->slotBrief($ownerType, (int) $run->source_owner_id, $slot);
+        $runId = (string) Str::uuid();
+        $step->update(['generator_run_id' => $runId]);
+        Cache::put(GenerateConceptJob::cacheKey($runId), ['status' => 'pending'], now()->addMinutes(self::RESULT_TTL_MIN));
+        GenerateConceptJob::dispatch(
+            $runId, $team->id, (int) (\Illuminate\Support\Facades\Auth::id() ?? 0),
+            $brief, (string) ($slot->label ?: null),
+            $sessionId, $step->id, $creativeMode, false, false, $ownerType, $containerId
+        );
+
+        return $step;
     }
 
     /**
@@ -387,6 +461,33 @@ class PlanningCascadeService
         }
         if ($slot->price_anchor !== null) {
             $teile[] = 'Preis-Anker p.P.: ' . $slot->price_anchor . ' €';
+        }
+        if ($slot->note !== null && trim((string) $slot->note) !== '') {
+            $teile[] = trim((string) $slot->note);
+        }
+
+        return 'Konzept für die Rolle ' . implode(' — ', $teile) . '.';
+    }
+
+    /**
+     * Wie {@see slotBrief}, aber die editierten M3-Kapitel-Ziele schlagen den Slot (Spec-42-Vollzug S3a):
+     * Zielanzahl + Preis-Anker kommen aus dem Kapitel, wenn dort gesetzt; das Kapitel-Niveau kommt additiv
+     * dazu. So wirkt die Kapitel-Steuerung der Leitstelle tatsächlich auf die frische Generierung.
+     */
+    private function kapitelBrief(int $chapterId, $slot): string
+    {
+        $kap = \Platform\FoodAlchemist\Models\FoodAlchemistFoodbookKapitel::find($chapterId);
+        $teile = ['[' . ($slot->label ?: ($kap?->title ?: 'Gang')) . ']'];
+        $targetCount = ($kap && $kap->target_count !== null) ? (int) $kap->target_count : (int) $slot->target_count;
+        if ($targetCount > 0) {
+            $teile[] = 'Zielanzahl Gerichte: ' . $targetCount;
+        }
+        $priceAnchor = ($kap && $kap->price_anchor !== null) ? $kap->price_anchor : $slot->price_anchor;
+        if ($priceAnchor !== null) {
+            $teile[] = 'Preis-Anker p.P.: ' . $priceAnchor . ' €';
+        }
+        if ($kap && $kap->niveau !== null && trim((string) $kap->niveau) !== '') {
+            $teile[] = 'Niveau: ' . $kap->niveau;
         }
         if ($slot->note !== null && trim((string) $slot->note) !== '') {
             $teile[] = trim((string) $slot->note);
@@ -1402,7 +1503,11 @@ class PlanningCascadeService
             // $params durchreichen — sonst verliert das „neu generieren" eines Concept-Steps SÄMTLICHE
             // Menü-Leitplanken (Gänge/Preis-Korridor/Quoten/Balance/Buffet), weil dispatchConceptStep
             // die menue_*-Teilmenge aus den Run-Params filtert (Default [] = kein Leitplanken-Erbe).
-            $this->dispatchConceptStep($team, $step, $brief, $sessionId, (string) ($run?->creative_mode ?? 'voll_kreativ'), $params);
+            // S3a: Attach-Args mitgeben, sonst dockt ein neu generiertes Kapitel-Concept NICHT mehr ans
+            // Kapitel (stiller Datenverlust) — der Kapitel-Bezug steckt am Step (chapter_id).
+            $attachOwnerType = ($step->chapter_id !== null && $run?->source_owner_type === 'foodbook') ? 'foodbook' : null;
+            $attachContainerId = $attachOwnerType !== null ? (int) $step->chapter_id : null;
+            $this->dispatchConceptStep($team, $step, $brief, $sessionId, (string) ($run?->creative_mode ?? 'voll_kreativ'), $params, $attachOwnerType, $attachContainerId);
         } else {
             $this->dispatchRezeptStep($team, $step, $brief, $params, $step->kind === 'gericht', false, $sessionId, $staged);
         }
