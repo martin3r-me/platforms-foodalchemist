@@ -137,3 +137,31 @@ it('speisekarteAusBrief: leerer Brief → Meldung, nichts angelegt', function ()
     expect(FoodAlchemistSpeisekarte::where('team_id', $this->rootTeam->id)->count())->toBe(0);
     Queue::assertNotPushed(GenerateConceptJob::class);
 });
+
+/**
+ * Stage 2 (SK/SP-Parität, Dominique 2026-08-24) — Speisekarte-Auswähler in der Leitstelle: eine BESTEHENDE
+ * Speisekarte wählen setzt den Owner + reaktiviert deren jüngste Planungs-Session (updatedSkOwnerId).
+ */
+it('Speisekarte-Auswähler aktiviert die jüngste Owner-Session', function () {
+    $karte = app(SpeisekarteService::class)->create($this->rootTeam, ['name' => 'Abendkarte']);
+    $session = app(\Platform\FoodAlchemist\Services\PlanningSessionService::class)
+        ->create($this->rootTeam, ['title' => 'SK-Planung']);
+    FoodAlchemistCascadeRun::create([
+        'team_id' => $this->rootTeam->id, 'planning_session_id' => $session->id, 'scope' => 'vollkaskade',
+        'creative_mode' => 'voll_kreativ', 'brief' => 'x', 'status' => 'done', 'staged' => false,
+        'source_owner_type' => 'speisekarte', 'source_owner_id' => $karte->id, 'created_via' => 'test',
+    ]);
+
+    Livewire::test(PlanungIndex::class)
+        ->set('skOwnerId', $karte->id)
+        ->assertSet('skOwnerId', $karte->id)
+        ->assertSet('sessionId', $session->id);
+});
+
+it('Speisekarte-Auswähler ohne Vor-Session setzt nur den Owner', function () {
+    $karte = app(SpeisekarteService::class)->create($this->rootTeam, ['name' => 'Leere Karte']);
+    Livewire::test(PlanungIndex::class)
+        ->set('skOwnerId', $karte->id)
+        ->assertSet('skOwnerId', $karte->id)
+        ->assertSet('sessionId', null);
+});

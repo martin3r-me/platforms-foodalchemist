@@ -582,8 +582,50 @@ class Index extends Component
 
             return;
         }
+        $this->aktiviereOwnerSession('foodbook', $this->fbOwnerId);
+    }
+
+    /** Speisekarte-Auswähler (Stage 2, SK/SP-Parität): bestehende Speisekarte wählen → Owner + jüngste Session. */
+    public function updatedSkOwnerId(): void
+    {
+        $team = $this->team();
+        if ($team === null || $this->skOwnerId === null) {
+            return;
+        }
+        $karte = \Platform\FoodAlchemist\Models\FoodAlchemistSpeisekarte::visibleToTeam($team)->find($this->skOwnerId);
+        if ($karte === null) {
+            $this->skOwnerId = null;
+
+            return;
+        }
+        $this->aktiviereOwnerSession('speisekarte', $this->skOwnerId);
+    }
+
+    /** Speiseplan-Auswähler (Stage 2, SK/SP-Parität): bestehenden Speiseplan wählen → Owner + jüngste Session. */
+    public function updatedSpOwnerId(): void
+    {
+        $team = $this->team();
+        if ($team === null || $this->spOwnerId === null) {
+            return;
+        }
+        $plan = \Platform\FoodAlchemist\Models\FoodAlchemistSpeiseplan::visibleToTeam($team)->find($this->spOwnerId);
+        if ($plan === null) {
+            $this->spOwnerId = null;
+
+            return;
+        }
+        $this->aktiviereOwnerSession('speiseplan', $this->spOwnerId);
+    }
+
+    /** Reaktiviert die jüngste Planungs-Session eines Ausgabe-Owners (Banner/Kaskaden-Cockpit). */
+    private function aktiviereOwnerSession(string $ownerType, int $ownerId): void
+    {
+        $team = $this->team();
+        if ($team === null) {
+            return;
+        }
         $run = FoodAlchemistCascadeRun::visibleToTeam($team)
-            ->where('source_owner_type', 'foodbook')->where('source_owner_id', $this->fbOwnerId)
+            ->where('source_owner_type', $ownerType)->where('source_owner_id', $ownerId)
             ->whereNotNull('planning_session_id')
             ->orderByDesc('id')->first();
         if ($run !== null) {
@@ -3379,14 +3421,24 @@ class Index extends Component
             ? app(PlanningCascadeService::class)->ownerKontext($team, (int) $active->id)
             : null;
 
-        // Stage 2: Auswahl-Listen bestehender Ausgabe-Objekte je Tab (Foodbook zuerst; SK/SP folgen).
+        // Stage 2: Auswahl-Listen bestehender Ausgabe-Objekte je Tab (Foodbook · Speisekarte · Speiseplan).
         $fbAuswahl = $team !== null
             ? \Platform\FoodAlchemist\Models\FoodAlchemistFoodbook::visibleToTeam($team)
                 ->orderByDesc('id')->get(['id', 'label'])
             : collect();
+        $skAuswahl = $team !== null
+            ? \Platform\FoodAlchemist\Models\FoodAlchemistSpeisekarte::visibleToTeam($team)
+                ->orderByDesc('id')->get(['id', 'name'])
+            : collect();
+        $spAuswahl = $team !== null
+            ? \Platform\FoodAlchemist\Models\FoodAlchemistSpeiseplan::visibleToTeam($team)
+                ->orderByDesc('id')->get(['id', 'name'])
+            : collect();
 
         return view('foodalchemist::livewire.planung.index', [
             'fbAuswahl' => $fbAuswahl,
+            'skAuswahl' => $skAuswahl,
+            'spAuswahl' => $spAuswahl,
             'sessions' => $sessions,
             'baum' => $baum,
             'kaskaden' => $kaskaden,

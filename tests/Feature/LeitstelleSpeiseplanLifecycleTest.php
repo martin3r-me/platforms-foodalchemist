@@ -73,3 +73,31 @@ it('speiseplanAusBrief: leerer Brief → Meldung, nichts angelegt', function () 
     expect(FoodAlchemistSpeiseplan::where('team_id', $this->rootTeam->id)->count())->toBe(0);
     Queue::assertNotPushed(MaterializeSpeiseplanCellJob::class);
 });
+
+/**
+ * Stage 2 (SK/SP-Parität, Dominique 2026-08-24) — Speiseplan-Auswähler in der Leitstelle: einen BESTEHENDEN
+ * Speiseplan wählen setzt den Owner + reaktiviert dessen jüngste Planungs-Session (updatedSpOwnerId).
+ */
+it('Speiseplan-Auswähler aktiviert die jüngste Owner-Session', function () {
+    $plan = app(\Platform\FoodAlchemist\Services\SpeiseplanService::class)->create($this->rootTeam, ['name' => 'GV-Woche']);
+    $session = app(\Platform\FoodAlchemist\Services\PlanningSessionService::class)
+        ->create($this->rootTeam, ['title' => 'SP-Planung']);
+    FoodAlchemistCascadeRun::create([
+        'team_id' => $this->rootTeam->id, 'planning_session_id' => $session->id, 'scope' => 'vollkaskade',
+        'creative_mode' => 'voll_kreativ', 'brief' => 'x', 'status' => 'done', 'staged' => false,
+        'source_owner_type' => 'speiseplan', 'source_owner_id' => $plan->id, 'created_via' => 'test',
+    ]);
+
+    Livewire::test(PlanungIndex::class)
+        ->set('spOwnerId', $plan->id)
+        ->assertSet('spOwnerId', $plan->id)
+        ->assertSet('sessionId', $session->id);
+});
+
+it('Speiseplan-Auswähler ohne Vor-Session setzt nur den Owner', function () {
+    $plan = app(\Platform\FoodAlchemist\Services\SpeiseplanService::class)->create($this->rootTeam, ['name' => 'Leerer Plan']);
+    Livewire::test(PlanungIndex::class)
+        ->set('spOwnerId', $plan->id)
+        ->assertSet('spOwnerId', $plan->id)
+        ->assertSet('sessionId', null);
+});

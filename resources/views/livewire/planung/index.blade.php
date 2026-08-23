@@ -445,17 +445,30 @@
             </div>
 
             <div wire:key="planung-tab-speisekarte" x-show="tab==='speisekarte'" x-cloak class="space-y-4">
-                <x-foodalchemist::modal-section title="Speisekarte aus Brief">
-                    <p class="text-[11px] text-slate-400 mb-2">
-                        Eine à-la-carte-Speisekarte aus einem Brief planen — je Gang/Kategorie entsteht eine
-                        Rubrik, die Inhalte docken automatisch als Positionen in die Karte.
+                {{-- Stage 2 (SK/SP-Parität): bestehende Speisekarte wählen ODER neu aus Brief. --}}
+                <x-foodalchemist::modal-section title="Speisekarte planen">
+                    <label class="block text-[11px] text-slate-400 mb-1">Bestehende Speisekarte wählen</label>
+                    <select wire:model.live="skOwnerId" class="{{ $input }} w-full" data-tab-sk-auswahl>
+                        <option value="">— neue Speisekarte aus Brief —</option>
+                        @foreach($skAuswahl as $sko)<option value="{{ $sko->id }}">{{ $sko->name }}</option>@endforeach
+                    </select>
+                    <p class="text-[11px] text-slate-400 mt-2">
+                        Wählen: Struktur (Rubriken) + Inhalte werden für die gewählte Karte geplant. Leer: eine neue Speisekarte.
                     </p>
-                    <input type="text" wire:model="skTitel" class="{{ $input }} w-full mb-2" placeholder="Speisekarten-Name (optional)" data-tab-sk-titel>
+                </x-foodalchemist::modal-section>
+
+                <x-foodalchemist::modal-section :title="$skOwnerId ? 'Aus Brief planen (füllt die gewählte Speisekarte)' : 'Neue Speisekarte aus Brief'">
+                    <p class="text-[11px] text-slate-400 mb-2">
+                        Je Gang/Kategorie entsteht eine Rubrik, die Inhalte docken automatisch als Positionen in die Karte.
+                    </p>
+                    @unless($skOwnerId)
+                        <input type="text" wire:model="skTitel" class="{{ $input }} w-full mb-2" placeholder="Speisekarten-Name (optional)" data-tab-sk-titel>
+                    @endunless
                     <textarea wire:model="skBrief" rows="4" class="{{ $input }} w-full" placeholder="Brief: Anlass, Küchenstil, Saison, Niveau, Preis-Korridor …" data-tab-sk-brief></textarea>
                     @if($skMeldung) <p class="text-[11px] text-rose-400 mt-2" data-tab-sk-meldung>{{ $skMeldung }}</p> @endif
                     <div class="mt-3">
                         <button type="button" wire:click="speisekarteAusBrief" wire:loading.attr="disabled" wire:target="speisekarteAusBrief" class="{{ $btnPrimary }} disabled:opacity-40" data-tab-sk-erzeugen>
-                            <span wire:loading.remove wire:target="speisekarteAusBrief">Speisekarte erzeugen (KI)</span>
+                            <span wire:loading.remove wire:target="speisekarteAusBrief">{{ $skOwnerId ? 'Planen + Kaskade (KI)' : 'Speisekarte erzeugen (KI)' }}</span>
                             <span wire:loading wire:target="speisekarteAusBrief">erzeuge …</span>
                         </button>
                     </div>
@@ -463,18 +476,31 @@
             </div>
 
             <div wire:key="planung-tab-speiseplan" x-show="tab==='speiseplan'" x-cloak class="space-y-4">
-                <x-foodalchemist::modal-section title="Speiseplan aus Brief">
-                    <p class="text-[11px] text-slate-400 mb-2">
-                        Einen GV-Speiseplan aus einem Brief planen — Menü-Linien (Menü 1 / Vegetarisch /
-                        Dessert) + Zyklus entstehen als GV-Standard (Linien im Speiseplan-Editor frei
-                        änderbar); die Kaskade füllt jede Zelle (Tag × Mahlzeit × Linie) brief-gesteuert.
+                {{-- Stage 2 (SK/SP-Parität): bestehenden Speiseplan wählen ODER neu aus Brief. --}}
+                <x-foodalchemist::modal-section title="Speiseplan planen">
+                    <label class="block text-[11px] text-slate-400 mb-1">Bestehenden Speiseplan wählen</label>
+                    <select wire:model.live="spOwnerId" class="{{ $input }} w-full" data-tab-sp-auswahl>
+                        <option value="">— neuer Speiseplan aus Brief —</option>
+                        @foreach($spAuswahl as $spo)<option value="{{ $spo->id }}">{{ $spo->name }}</option>@endforeach
+                    </select>
+                    <p class="text-[11px] text-slate-400 mt-2">
+                        Wählen: die Zellen (Tag × Mahlzeit × Linie) werden für den gewählten Plan gefüllt. Leer: ein neuer Speiseplan.
                     </p>
-                    <input type="text" wire:model="spTitel" class="{{ $input }} w-full mb-2" placeholder="Speiseplan-Name (optional)" data-tab-sp-titel>
+                </x-foodalchemist::modal-section>
+
+                <x-foodalchemist::modal-section :title="$spOwnerId ? 'Aus Brief planen (füllt den gewählten Speiseplan)' : 'Neuer Speiseplan aus Brief'">
+                    <p class="text-[11px] text-slate-400 mb-2">
+                        @unless($spOwnerId)Menü-Linien (Menü 1 / Vegetarisch / Dessert) + Zyklus entstehen als GV-Standard (im Speiseplan-Editor frei änderbar); @endunless
+                        die Kaskade füllt jede Zelle (Tag × Mahlzeit × Linie) brief-gesteuert.
+                    </p>
+                    @unless($spOwnerId)
+                        <input type="text" wire:model="spTitel" class="{{ $input }} w-full mb-2" placeholder="Speiseplan-Name (optional)" data-tab-sp-titel>
+                    @endunless
                     <textarea wire:model="spBrief" rows="4" class="{{ $input }} w-full" placeholder="Brief: Anlass, Saison, Küchenstil, Zyklus (z. B. „4 Wochen"), Diät-Fokus …" data-tab-sp-brief></textarea>
                     @if($spMeldung) <p class="text-[11px] text-rose-400 mt-2" data-tab-sp-meldung>{{ $spMeldung }}</p> @endif
                     <div class="mt-3">
                         <button type="button" wire:click="speiseplanAusBrief" wire:loading.attr="disabled" wire:target="speiseplanAusBrief" class="{{ $btnPrimary }} disabled:opacity-40" data-tab-sp-erzeugen>
-                            <span wire:loading.remove wire:target="speiseplanAusBrief">Speiseplan erzeugen (KI)</span>
+                            <span wire:loading.remove wire:target="speiseplanAusBrief">{{ $spOwnerId ? 'Planen + Kaskade (KI)' : 'Speiseplan erzeugen (KI)' }}</span>
                             <span wire:loading wire:target="speiseplanAusBrief">erzeuge …</span>
                         </button>
                     </div>
