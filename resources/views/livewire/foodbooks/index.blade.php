@@ -194,11 +194,9 @@
                 <div x-effect="$dispatch('fb-cockpit-tab', { tab })"
                      @fb-goto.window="let d=$event.detail; if(d.tab && $root.querySelector(`[data-fb-tab='${d.tab}']`)) tab=d.tab; $nextTick(()=>{ if(d.anker){ let el=$root.querySelector(`[data-fb-anker='${d.anker}']`); if(el) el.scrollIntoView({behavior:'smooth',block:'start'}); } });"></div>
 
-                {{-- E5.2: Leitstellen-Leiste auf Tab-Ebene (aus allen Tabs sichtbar) — der abgeleitete
-                     7-Schritt-Fortschritt (Bedarf→Preise, klickbar) + der Phasen-Stepper (Versand-Status).
-                     Der Stepper wanderte hierher aus der Briefing-Karte (vorher ~:131). --}}
+                {{-- Phasen-Stepper (Versand-/Freigabe-Status = Ausgabe) bleibt. Die 7-Schritt-Planungs-
+                     Checkliste ist mit S3b entfallen (Planung lebt in der Leitstelle). --}}
                 <div class="flex flex-col gap-3 pt-4 pb-4 border-b border-black/5" data-fb-leitstelle>
-                    @include('foodalchemist::livewire.foodbooks.partials.leitstelle-checkliste', ['checkliste' => $checkliste])
                     @include('foodalchemist::livewire.planning.partials.phase-stepper', ['phaseAktuell' => $fb->phase ?? 'kontext'])
                 </div>
 
@@ -242,71 +240,12 @@
                 <x-foodalchemist::crm-kunde-picker
                     :ausgabe="$fb" :crm-verfuegbar="$crmVerfuegbar" :firmen="$firmen" :kontakte="$kontakte" />
 
-                {{-- Spec 42: schlanke Ausgabe-Defaults (Schreibstil · Kundentyp · Niveau). Der Schreibstil
-                     steuert den Kundentext; alle drei reiten beim Start in die Leitstelle als Leitplanken
-                     mit. Die volle Planung/Regler-Fläche lebt in der Leitstelle. --}}
-                <div class="{{ $card }} p-4 grid grid-cols-1 md:grid-cols-3 gap-3" wire:key="fbkontext-{{ $fb->id }}">
-                    <div>
-                        <label class="{{ $label }}">Schreibstil / Ton</label>
-                        <select wire:change="tonalitaetSetzen($event.target.value)" class="{{ $input }}" data-fb-schreibstil>
-                            <option value="">— erben —</option>
-                            @foreach($schreibstile as $s)
-                                <option value="{{ $s->id }}" @selected((int) ($fb->writing_style_id ?? 0) === (int) $s->id)>{{ $s->name }}</option>
-                            @endforeach
-                        </select>
-                    </div>
-                    <div>
-                        <label class="{{ $label }}">Kundentyp</label>
-                        <select wire:change="leitplankeSetzen('kundentyp', $event.target.value)" class="{{ $input }}" data-fb-kundentyp>
-                            <option value="">— erben —</option>
-                            @foreach($kundentypen as $wert => $lbl)
-                                <option value="{{ $wert }}" @selected(($fb->kundentyp ?? '') === $wert)>{{ $lbl }}</option>
-                            @endforeach
-                        </select>
-                    </div>
-                    <div>
-                        <label class="{{ $label }}">Niveau</label>
-                        <select wire:change="leitplankeSetzen('default_niveau', $event.target.value)" class="{{ $input }}" data-fb-niveau>
-                            <option value="">— erben (Segment) —</option>
-                            @foreach($niveauLabels as $wert => $lbl)
-                                <option value="{{ $wert }}" @selected(($fb->default_niveau ?? '') === $wert)>{{ $lbl }}</option>
-                            @endforeach
-                        </select>
-                    </div>
-                </div>
-
-                <div>
-                    <div class="flex items-center justify-between">
-                        <label class="{{ $label }}">Briefing / Einleitung (Kundentext)</label>
-                        {{-- Spec 03 · L2: scharf. Der Vorschlag landet in der Vorschau darunter, nie direkt im Feld. --}}
-                        <button type="button" wire:click="kiEinleitung" wire:loading.attr="disabled" wire:target="kiEinleitung"
-                                title="foodbook.kundentext: Einleitungstext aus Kunde, Briefing, Gliederung (Wording-Kette) und Marken-Stimme" data-fb-ki-einleitung
-                                class="{{ $btnAi }}">
-                            <span wire:loading.remove wire:target="kiEinleitung">@svg('heroicon-o-sparkles', 'w-3.5 h-3.5') KI-Text</span>
-                            <span wire:loading wire:target="kiEinleitung">schreibt …</span>
-                        </button>
-                    </div>
-                    <textarea wire:model="form.description" rows="3"
-                              x-data
-                              x-effect="$wire.form; $el.style.height='auto'; $el.style.height=$el.scrollHeight+'px'"
-                              @input="$el.style.height='auto'; $el.style.height=$el.scrollHeight+'px'"
-                              class="{{ $input }} resize-none overflow-hidden min-h-[4.5rem]" placeholder="Briefing / Einleitungstext fürs Angebot — „KI-Text" formt daraus den Kundentext"></textarea>
-
-                    @include('foodalchemist::livewire.foodbooks.partials.ki-text-vorschau', [
-                        'ziel' => 'foodbook',
-                        'vorhanden' => trim((string) ($form['description'] ?? '')) !== '',
-                    ])
-                </div>
+                {{-- Spec-42-Vollzug S3b: Planung raus aus dem Foodbook. Leitplanken (Schreibstil/Kundentyp/
+                     Niveau), Briefing/Einleitung + KI-Text leben jetzt in der Leitstelle (Planung\FoodbookKontextRail).
+                     Das Foodbook ist reine Ausgabe — hier nur Stammdaten/Status/Kunde. --}}
             </div>
 
-                {{-- Bedarf-Card → in den Planung-Tab verschoben (Spec 29 / S7 — Briefing entlastet) --}}
-
-                {{-- Foodbook-Leitidee (Canvas) — inline statt Modal (Dominique 2026-07-21) --}}
-                <div class="relative overflow-hidden {{ $card }} p-5" wire:key="fbcanvas-{{ $fb->id }}">
-                    <div class="{{ $cardAccent }}"></div>
-                    <p class="{{ $label }} mb-2">Leitidee-Canvas — was muss rein · welche Konzepte · was es erfüllen muss</p>
-                    @include('foodalchemist::livewire.canvas.partials.board')
-                </div>
+                {{-- Leitidee-Canvas → Leitstelle (Planung\FoodbookKontextRail). --}}
                 </div>{{-- /Briefing --}}
 
 

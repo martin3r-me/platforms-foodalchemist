@@ -99,29 +99,12 @@ it('Foodbook-Editor: Header-Preis-Block (person) erscheint mit €/Person im Coc
     expect((float) $block->refresh()->price_value)->toBe(38.0);
 });
 
-// Spec 19 E5.2: Leitstellen-Checkliste auf Tab-Leisten-Ebene (7 Chips) + Phasen-Stepper daneben.
-// Der Stepper wanderte aus der Briefing-Karte hierher; die Checkliste hängt am LeitstelleService.
-it('Foodbook-Editor: Leitstellen-Checkliste rendert 7 klickbare Schritte auf Tab-Ebene', function () {
-    Livewire::test(FoodbooksIndex::class)->call('neu');
-    $fb = FoodAlchemistFoodbook::first();
+// Spec-42-Vollzug S3b: die 7-Schritt-Planungs-Checkliste ist entfallen (Planung → Leitstelle); der
+// Phasen-Stepper (Versand-Status) bleibt. Der frühere Checklisten-Render-Test ist damit gegenstandslos.
 
-    $html = Livewire::test(FoodbooksIndex::class)
-        ->call('waehle', $fb->id)
-        ->assertSee('data-leitstelle-checkliste', false)              // Leiste da
-        ->assertSee('data-fb-leitstelle', false)                     // Container auf Tab-Ebene
-        ->assertSee('fb-goto', false)                                // Sprung-Event-Bus verdrahtet
-        ->assertSee('data-checkliste-schritt="bedarf"', false)       // erster Schritt
-        ->assertSee('data-checkliste-schritt="preise"', false)       // letzter Schritt
-        ->assertSee('Bedarf')->assertSee('Preise')
-        ->html();
+// ── Spec 19 E5.3 / S3b: Leitstelle-Rail (Nested-Livewire) — Kopf-Modus (nur Kuration) ──
 
-    // Genau 7 Schritte, alle mit Status-Attribut
-    expect(substr_count($html, 'data-checkliste-schritt="'))->toBe(7);
-});
-
-// ── Spec 19 E5.3: Leitstelle-Rail (Nested-Livewire) — Kopf- vs. Kapitel-Modus ──
-
-it('Leitstelle-Rail Kopf-Modus: 3-Panel-Umschalter + Checkliste + Kapitel-Matrix', function () {
+it('Leitstelle-Rail Kopf-Modus: 3-Panel-Umschalter + Kapitel-Matrix', function () {
     $svc = app(FoodbookService::class);
     $fb = $svc->create($this->rootTeam, ['label' => 'Rail-FB']);
     $svc->addKapitel($this->rootTeam, $fb->id, ['title' => 'Vorspeisen']);
@@ -134,7 +117,6 @@ it('Leitstelle-Rail Kopf-Modus: 3-Panel-Umschalter + Checkliste + Kapitel-Matrix
         ->assertSee('data-rail-panel-btn="kalkulation"', false)
         ->assertSee('data-rail-matrix', false)
         ->assertSee('fb-cockpit-tab', false)                 // Auto-Default-Event-Listener verdrahtet
-        ->assertSee('data-rail-progress', false)             // kompakter Fortschritts-Zähler
         ->assertSee('Vorspeisen')
         ->html();
 
@@ -142,73 +124,6 @@ it('Leitstelle-Rail Kopf-Modus: 3-Panel-Umschalter + Checkliste + Kapitel-Matrix
     expect($html)->not->toContain('data-rail-kapitel');
 });
 
-it('Leitstelle-Rail Kapitel-Modus: Ziele-Editing speichert M3-Spalten + meldet an den Eltern', function () {
-    $svc = app(FoodbookService::class);
-    $fb = $svc->create($this->rootTeam, ['label' => 'Rail-FB']);
-    $k = $svc->addKapitel($this->rootTeam, $fb->id, ['title' => 'Hauptgänge']);
-    $zg = FoodAlchemistTargetGroup::create(['team_id' => $this->rootTeam->id, 'name' => 'Bankett', 'sort_order' => 1]);
-
-    $comp = Livewire::test(LeitstelleRail::class, ['foodbookId' => $fb->id, 'kapitelId' => $k->id])
-        ->assertOk()
-        ->assertSee('data-rail-kapitel', false)
-        ->assertSee('data-rail-ziele', false)
-        ->assertSee('Bankett');
-
-    // M3-Ziele setzen → updateKapitel persistiert; Event ans Eltern-Cockpit.
-    $comp->set('ziel.target_count', 3)
-        ->set('ziel.niveau', 'gehoben')
-        ->set('ziel.price_anchor', 24.50)
-        ->call('zieleSpeichern')
-        ->assertDispatched('leitstelle-kapitel-geaendert');
-
-    $k->refresh();
-    expect((int) $k->target_count)->toBe(3)
-        ->and($k->niveau)->toBe('gehoben')
-        ->and((float) $k->price_anchor)->toBe(24.50);
-
-    // Zielgruppen-Chip toggeln → chapter_target_groups-Sync + Event.
-    $comp->call('zielgruppeToggle', $zg->id)
-        ->assertDispatched('leitstelle-kapitel-geaendert');
-    expect($k->targetGroups()->count())->toBe(1);
-
-    // Nochmals toggeln entfernt wieder.
-    $comp->call('zielgruppeToggle', $zg->id);
-    expect($k->targetGroups()->count())->toBe(0);
-});
-
-// ── Spec 19 E7.5: Anlage-Modal (Kapitel-Go) + „Anlage zurückziehen" über die Rail ──
-
-it('Leitstelle-Rail: „Kapitel anlegen" materialisiert und „zurückziehen" macht es rückgängig', function () {
-    $svc = app(FoodbookService::class);
-    $fb = $svc->create($this->rootTeam, ['label' => 'Anlage-Rail']);
-    $k = $svc->addKapitel($this->rootTeam, $fb->id, ['title' => 'Buffet']);
-
-    // Ein echtes VK-Gericht als Einzel-Skizze im Kapitel.
-    $hg = FoodAlchemistDishMainGroup::create(['team_id' => $this->rootTeam->id, 'code' => 'HG', 'label' => 'Hauptgericht']);
-    $klasse = FoodAlchemistDishClass::create(['team_id' => $this->rootTeam->id, 'dish_main_group_id' => $hg->id, 'code' => 'HG_N', 'label' => 'Neutral', 'diet_form' => 'neutral']);
-    $dish = FoodAlchemistRecipe::create(['team_id' => $this->rootTeam->id, 'recipe_key' => 'rX', 'name' => 'HG: Sellerie-Steak', 'status' => 'approved', 'is_sales_recipe' => true, 'sales_net' => 14.0, 'dish_class_id' => $klasse->id]);
-    app(IdeenService::class)->uebernehmeBestand($this->rootTeam, ['chapter_id' => $k->id, 'sales_recipe_id' => $dish->id]);
-
-    // Modal-Trigger + ☑-Liste sichtbar, solange nicht angelegt.
-    $comp = Livewire::test(LeitstelleRail::class, ['foodbookId' => $fb->id, 'kapitelId' => $k->id])
-        ->assertOk()
-        ->assertSee('data-rail-go', false)
-        ->assertSee('data-anlage-bestaetigen', false)
-        ->assertSee('HG: Sellerie-Steak');
-
-    // „Jetzt anlegen" → recipe_ref-Block entsteht, Event ans Cockpit.
-    $comp->set('anlageNote', 'go')
-        ->call('kapitelAnlegen')
-        ->assertDispatched('leitstelle-kapitel-geaendert');
-    expect($k->refresh()->released_at)->not->toBeNull()
-        ->and($k->blocks()->where('type', 'recipe_ref')->count())->toBe(1);
-
-    // Nach Anlage: Undo-Button sichtbar (draft, kein Snapshot) → zurückziehen.
-    $comp = Livewire::test(LeitstelleRail::class, ['foodbookId' => $fb->id, 'kapitelId' => $k->id])
-        ->assertSee('data-rail-undo', false)
-        ->assertSee('data-rail-released', false);
-    $comp->call('anlageZuruckziehen')
-        ->assertDispatched('leitstelle-kapitel-geaendert');
-    expect($k->refresh()->released_at)->toBeNull()
-        ->and($k->blocks()->count())->toBe(0);
-});
+// S3b: Die Rail-Kapitel-Planung (M3-Ziele-Editor + Kapitel-Go „Anlegen"/Undo) ist in die Leitstelle
+// gewandert und dort abgedeckt (LeitstelleKapitelKaskadeTest: starteKapitelKaskade + KapitelRail-Setter).
+// Der Kapitel-Modus der Rail zeigt jetzt nur noch Kuration/QC (Coverage + Kalkulation).

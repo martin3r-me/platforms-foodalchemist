@@ -24,71 +24,8 @@
             <p class="text-sm font-medium text-gray-900 truncate">{{ $stand['titel'] ?? '—' }}</p>
         </div>
 
-        {{-- Zielgruppen-Chips (Stempel; Kapitel schlägt Foodbook-Default in der Kaskade) --}}
-        <div class="space-y-1.5">
-            <span class="{{ $label }}">Zielgruppen</span>
-            <div class="flex flex-wrap gap-1" data-rail-zielgruppen>
-                @forelse($zielgruppenVokab as $z)
-                    @php($an = in_array($z->id, $zielgruppenIds, true))
-                    <button type="button" wire:click="zielgruppeToggle({{ $z->id }})" wire:key="rzg-{{ $z->id }}"
-                            class="inline-flex px-2 py-0.5 rounded-full text-[11px] border transition-colors {{ $an ? 'bg-violet-500/10 border-violet-500/30 text-violet-700' : 'bg-black/[0.03] border-black/10 text-gray-500 hover:bg-black/[0.06]' }}"
-                            data-an="{{ $an ? '1' : '0' }}">{{ $z->name }}</button>
-                @empty
-                    <span class="text-[11px] text-gray-400">Kein Zielgruppen-Vokabular — in den Einstellungen pflegen.</span>
-                @endforelse
-            </div>
-        </div>
-
-        {{-- Ziele-Editing (M3-Spalten) --}}
-        <div class="space-y-2" data-rail-ziele>
-            <div class="grid grid-cols-2 gap-2">
-                <div>
-                    <label class="{{ $label }}">Niveau</label>
-                    <select wire:model="ziel.niveau" class="{{ $input }}">
-                        <option value="">— erben —</option>
-                        @foreach($niveauLabels as $v => $l)<option value="{{ $v }}">{{ $l }}</option>@endforeach
-                    </select>
-                </div>
-                <div>
-                    <label class="{{ $label }}">Preis-Modus</label>
-                    <select wire:model="ziel.pricing_mode" class="{{ $input }}">
-                        <option value="">— offen —</option>
-                        @foreach($pricingModes as $pm)<option value="{{ $pm }}">{{ ucfirst($pm) }}</option>@endforeach
-                    </select>
-                </div>
-                <div>
-                    <label class="{{ $label }}">Einsatzmoment</label>
-                    <select wire:model="ziel.service_moment_id" class="{{ $input }}">
-                        <option value="">— erben —</option>
-                        @foreach($einsatzmomente as $e)<option value="{{ $e->id }}">{{ $e->name }}</option>@endforeach
-                    </select>
-                </div>
-                <div>
-                    <label class="{{ $label }}">Servierform</label>
-                    <select wire:model="ziel.serving_form_id" class="{{ $input }}">
-                        <option value="">— erben —</option>
-                        @foreach($servierformen as $s)<option value="{{ $s->id }}">{{ $s->label }}</option>@endforeach
-                    </select>
-                </div>
-                <div>
-                    <label class="{{ $label }}">Mengenziel (Positionen)</label>
-                    <input type="number" min="0" step="1" wire:model="ziel.target_count" class="{{ $input }}" placeholder="—" />
-                </div>
-                <div>
-                    <label class="{{ $label }}">WE-Ziel %</label>
-                    <input type="number" min="0" step="0.1" wire:model="ziel.target_food_cost_pct" class="{{ $input }}" placeholder="—" />
-                </div>
-                <div>
-                    <label class="{{ $label }}">Preis-Anker €</label>
-                    <input type="number" min="0" step="0.01" wire:model="ziel.price_anchor" class="{{ $input }}" placeholder="—" />
-                </div>
-                <div class="grid grid-cols-2 gap-1">
-                    <div><label class="{{ $label }}">min €</label><input type="number" min="0" step="0.01" wire:model="ziel.price_min" class="{{ $input }}" placeholder="—" /></div>
-                    <div><label class="{{ $label }}">max €</label><input type="number" min="0" step="0.01" wire:model="ziel.price_max" class="{{ $input }}" placeholder="—" /></div>
-                </div>
-            </div>
-            <button type="button" wire:click="zieleSpeichern" class="{{ $btnPrimary }} w-full justify-center" data-rail-ziele-speichern>Ziele speichern</button>
-        </div>
+        {{-- S3b: Zielgruppen-Stempel + M3-Ziele-Editor → Leitstelle (Planung\KapitelRail). Hier bleibt nur
+             Kuration/QC (Kalkulation + Coverage). --}}
 
         {{-- Kapitel-Kalkulation --}}
         @if($stand)
@@ -123,97 +60,8 @@
             </div>
         @endif
 
-        {{-- Ideen-Stand + Anlegen-Shortcut (Kapitel-Go „Anlegen", E7.5) --}}
-        @if($stand)
-            @php($paketAnzahl = count($ideenListe['gruppen']))
-            @php($einzelAnzahl = count($ideenListe['einzel']))
-            @php($ideenAnzahl = $paketAnzahl + $einzelAnzahl)
-            <div class="pt-3 border-t border-black/5 space-y-2" data-rail-ideen>
-                <div class="flex items-center justify-between text-xs">
-                    <span class="{{ $label }} !mb-0">Inhalt / Ideen</span>
-                    <span class="text-gray-500">{{ $stand['inhalt']['pakete'] }} Paket · {{ $stand['inhalt']['einzel'] }} Einzel · {{ $stand['inhalt']['ideen'] }} Ideen</span>
-                </div>
-                @if($stand['released'])
-                    <p class="text-[11px] text-emerald-600" data-rail-released>✓ Kapitel angelegt.</p>
-                    @if($undoMoeglich)
-                        <button type="button" @click="$dispatch('modal.open', { name: 'kapitel-zurueckziehen' })"
-                                class="{{ $btnGhostXs }} w-full justify-center" data-rail-undo>Anlage zurückziehen</button>
-                    @else
-                        <p class="text-[10px] text-gray-400" data-rail-undo-gesperrt>Versendet/eingefroren — Anlage fixiert.</p>
-                    @endif
-                @elseif($ideenAnzahl > 0)
-                    <button type="button" @click="$dispatch('modal.open', { name: 'kapitel-anlegen' })"
-                            class="{{ $btnGhostXs }} w-full justify-center" data-rail-go>Kapitel anlegen …</button>
-                @else
-                    <button type="button" disabled title="Keine Skizzen/Ideen zum Anlegen — erst im Kreativ-Tab Ideen sammeln" class="{{ $btnGhostXs }} w-full justify-center opacity-50 cursor-not-allowed" data-rail-go-leer>Kapitel anlegen …</button>
-                @endif
-            </div>
-        @endif
-
-        {{-- ── Anlage-Modal „Kapitel anlegen" (E7.5) — Zusammenfassung beider Wege + ☑-Liste ── --}}
-        <x-foodalchemist::modal name="kapitel-anlegen" title="Kapitel anlegen" size="max-w-2xl">
-            @if($stand)
-                <p class="text-xs text-gray-600">
-                    Alle Entwurf-Skizzen dieses Kapitels werden angelegt: <strong>Pakete</strong> → je ein Konzept
-                    (€/Gast), <strong>Einzel-Ideen</strong> → Gericht-Block (€/Position), <strong>Freitext</strong> →
-                    KI-Warteschlange. Bereits Angelegtes wird übersprungen (idempotent).
-                </p>
-                <div class="flex flex-wrap gap-3 text-[11px] text-gray-500 mt-2">
-                    <span>Niveau: <strong class="text-gray-700">{{ $niveauLabels[$stand['ziele']['niveau'] ?? ''] ?? ($stand['ziele']['niveau'] ?? '—') }}</strong></span>
-                    <span>Zielgruppen: <strong class="text-gray-700">{{ count($stand['zielgruppen']) ? collect($stand['zielgruppen'])->pluck('name')->implode(', ') : '—' }}</strong></span>
-                </div>
-
-                <x-foodalchemist::modal-section title="Pakete → Konzepte">
-                    @forelse($ideenListe['gruppen'] as $g)
-                        <div class="flex items-start gap-2 text-xs py-1" wire:key="anl-g-{{ $g['gruppe']->id }}">
-                            <span class="text-emerald-500 shrink-0">☑</span>
-                            <div>
-                                <span class="font-medium text-gray-800">{{ $g['gruppe']->name ?: 'Paket' }}</span>
-                                <span class="text-gray-400">· {{ count($g['ideen']) }} Position(en)@if($g['gruppe']->target_price_pp) · Ziel {{ number_format($g['gruppe']->target_price_pp, 2, ',', '.') }} €/Gast @endif</span>
-                            </div>
-                        </div>
-                    @empty
-                        <p class="text-[11px] text-gray-400">Keine Paket-Gruppen.</p>
-                    @endforelse
-                </x-foodalchemist::modal-section>
-
-                <x-foodalchemist::modal-section title="Einzel-Ideen → Gericht/Queue">
-                    @forelse($ideenListe['einzel'] as $idee)
-                        <div class="flex items-start gap-2 text-xs py-1" wire:key="anl-e-{{ $idee->id }}">
-                            <span class="text-emerald-500 shrink-0">☑</span>
-                            <div>
-                                <span class="font-medium text-gray-800">{{ $idee->title }}</span>
-                                <span class="text-gray-400">· {{ $idee->sales_recipe_id ? 'Bestand → Gericht-Block' : 'Freitext → KI-Queue' }}</span>
-                            </div>
-                        </div>
-                    @empty
-                        <p class="text-[11px] text-gray-400">Keine Einzel-Ideen.</p>
-                    @endforelse
-                </x-foodalchemist::modal-section>
-
-                <div class="mt-2">
-                    <label class="{{ $label }}">Notiz (optional)</label>
-                    <input type="text" wire:model="anlageNote" placeholder="z. B. Freigabe-Kontext …" class="{{ $input }}" data-anlage-note />
-                </div>
-            @endif
-            <x-slot:footer>
-                <button type="button" @click="$dispatch('modal.close', { name: 'kapitel-anlegen' })" class="{{ $btnGhost }}">Abbrechen</button>
-                <button type="button" wire:click="kapitelAnlegen" class="{{ $btnPrimary }}" data-anlage-bestaetigen>Jetzt anlegen</button>
-            </x-slot:footer>
-        </x-foodalchemist::modal>
-
-        {{-- ── Undo-Modal „Anlage zurückziehen" (E7.5) ── --}}
-        <x-foodalchemist::modal name="kapitel-zurueckziehen" title="Anlage zurückziehen" size="max-w-lg">
-            <p class="text-xs text-gray-600">
-                Die von der Anlage erzeugten Konzepte, Gericht-Blöcke und Slots werden entfernt und die Skizzen
-                kehren in den Entwurf-Zustand zurück. Bereits bearbeitete/aktivierte Konzepte bleiben erhalten.
-                KI-generierte Rezepte bleiben als Entwurf bestehen (kein Datenverlust).
-            </p>
-            <x-slot:footer>
-                <button type="button" @click="$dispatch('modal.close', { name: 'kapitel-zurueckziehen' })" class="{{ $btnGhost }}">Abbrechen</button>
-                <button type="button" wire:click="anlageZuruckziehen" class="{{ $btnGhost }} !text-red-600" data-undo-bestaetigen>Zurückziehen</button>
-            </x-slot:footer>
-        </x-foodalchemist::modal>
+        {{-- S3b: Ideen-Stand + Kapitel-Go „Anlegen" (kapitelFreigeben-Bypass) + Anlage/Undo-Modals ENTFERNT.
+             Die Erzeugung läuft jetzt über die Leitstelle-Kaskade (Planung\KapitelRail → starteKapitelKaskade). --}}
     </div>
 
 @else
@@ -224,7 +72,7 @@
          x-data="{
             pin: localStorage.getItem('fbRailPin') || null,
             panel: 'fortschritt',
-            tabMap: { briefing:'fortschritt', planung:'fortschritt', kreativ:'speisen', speisen:'speisen', dna:'fortschritt', preise:'kalkulation', trend:'fortschritt', branding:'fortschritt' },
+            tabMap: { briefing:'fortschritt', speisen:'speisen', preise:'kalkulation', branding:'fortschritt' },
             init() { this.panel = this.pin || 'fortschritt'; },
             setPanel(p) { this.panel = p; this.pin = p; localStorage.setItem('fbRailPin', p); },
             loesePin() { this.pin = null; localStorage.removeItem('fbRailPin'); },
@@ -245,20 +93,9 @@
         {{-- ── Panel: FORTSCHRITT ── --}}
         {{-- Der volle 7-Chip-Strip lebt in der Tab-Leiste (E5.2, aus allen Tabs sichtbar) —
              hier nur ein kompakter Zähler, um Doppel-Darstellung zu vermeiden. --}}
-        @php($erledigt = collect($checkliste)->where('status', 'erledigt')->count())
-        @php($teil = collect($checkliste)->where('status', 'teil')->count())
+        {{-- S3b: Fortschritt-Zähler (Checkliste) + Komplex-Hinweis entfallen (Planung → Leitstelle).
+             Die Kapitel-Matrix (Kuration/Status-Übersicht) bleibt. --}}
         <div x-show="panel === 'fortschritt'" x-cloak class="space-y-3" data-rail-fortschritt>
-            <div class="flex items-center justify-between text-[11px]" data-rail-progress>
-                <span class="{{ $label }} !mb-0">Fortschritt</span>
-                <span class="text-gray-600">{{ $erledigt }}/{{ count($checkliste) }} erledigt @if($teil) · {{ $teil }} teil @endif</span>
-            </div>
-
-            @if($komplex)
-                <p class="text-[11px] text-amber-600 bg-amber-500/5 rounded-lg px-2 py-1" data-rail-komplex>
-                    @svg('heroicon-o-exclamation-triangle', 'w-3.5 h-3.5 inline-block align-middle') Komplex: {{ $kapitelAnzahl }} Kapitel · {{ $positionenGesamt }} Positionen — Struktur prüfen (Bündeln/Unterkapitel).
-                </p>
-            @endif
-
             <div class="space-y-1" data-rail-matrix>
                 <span class="{{ $label }}">Kapitel-Matrix</span>
                 @forelse($matrix as $m)
