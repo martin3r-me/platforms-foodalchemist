@@ -177,30 +177,23 @@
         {{-- Leitstelle: freie 1-Klick-Erstellung — die eine KI-Erstell-Fläche (de-trend). Legt eine
              leichte „Freie Erstellung"-Session (cockpit_frei) an und öffnet den Editor auf dem
              Planung-Tab mit den Regler-Leitplanken. Trend bleibt EIN Input, nicht der Rahmen. --}}
-        <div class="{{ $card }} p-4" x-data="{ fbOpen: @js($fbPanelAuf) }">
+        <div class="{{ $card }} p-4" x-data="{ fbOpen: @js($fbPanelAuf), neuMenu: false }">
             <div class="flex flex-wrap items-center gap-2">
-                <span class="text-sm font-semibold text-gray-800 mr-1">Neu erstellen</span>
-                <button wire:click="schnellErstellen('rezept')" class="{{ $btnPrimary }}" data-frei-rezept>
-                    @svg('heroicon-o-beaker', 'w-4 h-4') Basisrezept
-                </button>
-                <button wire:click="schnellErstellen('gericht')" class="{{ $btnPrimary }}" data-frei-gericht>
-                    @svg('heroicon-o-cake', 'w-4 h-4') Gericht
-                </button>
-                <button wire:click="schnellErstellen('concept')" class="{{ $btnPrimary }}" data-frei-concept>
-                    @svg('heroicon-o-squares-2x2', 'w-4 h-4') Concept
-                </button>
-                {{-- Board: die neuen Erstell-Wege auch von der Startseite (bisher nur Editor-Tabs). --}}
-                <button wire:click="schnellImport" class="{{ $btnPrimary }}" data-frei-import>
-                    @svg('heroicon-o-document-arrow-down', 'w-4 h-4') Rezept importieren
-                </button>
-                <button wire:click="schnellComposer" class="{{ $btnPrimary }}" data-frei-composer>
-                    @svg('heroicon-o-sparkles', 'w-4 h-4') Composer
-                </button>
-                <button type="button" @click="fbOpen = !fbOpen" class="{{ $btnPrimary }}" data-frei-foodbook
-                        :class="fbOpen ? 'ring-2 ring-violet-400' : ''">
-                    @svg('heroicon-o-book-open', 'w-4 h-4') Foodbook aus Brief
-                </button>
-                <span class="text-[11px] text-gray-500 ml-1">— mit KI, direkt mit Regler-Leitplanken.</span>
+                {{-- Ein „Neu erstellen"-Knopf (Dominique 2026-08-23) statt sechs Buttons — Dropdown-Menü. --}}
+                <div class="relative" @click.outside="neuMenu = false">
+                    <button type="button" @click="neuMenu = !neuMenu" class="{{ $btnPrimary }}" data-frei-neu :class="neuMenu ? 'ring-2 ring-violet-400' : ''">
+                        @svg('heroicon-o-plus', 'w-4 h-4') Neu erstellen @svg('heroicon-o-chevron-down', 'w-3.5 h-3.5')
+                    </button>
+                    <div x-show="neuMenu" x-cloak x-transition class="absolute left-0 mt-1 z-30 w-60 rounded-xl border border-black/10 bg-white shadow-lg p-1 space-y-0.5" data-frei-menu>
+                        <button wire:click="schnellErstellen('rezept')" @click="neuMenu=false" class="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm text-gray-800 hover:bg-violet-500/10 text-left" data-frei-rezept>@svg('heroicon-o-beaker', 'w-4 h-4 text-violet-500') Basisrezept</button>
+                        <button wire:click="schnellErstellen('gericht')" @click="neuMenu=false" class="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm text-gray-800 hover:bg-violet-500/10 text-left" data-frei-gericht>@svg('heroicon-o-cake', 'w-4 h-4 text-violet-500') Gericht</button>
+                        <button wire:click="schnellErstellen('concept')" @click="neuMenu=false" class="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm text-gray-800 hover:bg-violet-500/10 text-left" data-frei-concept>@svg('heroicon-o-squares-2x2', 'w-4 h-4 text-violet-500') Concept</button>
+                        <button wire:click="schnellImport" @click="neuMenu=false" class="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm text-gray-800 hover:bg-violet-500/10 text-left" data-frei-import>@svg('heroicon-o-document-arrow-down', 'w-4 h-4 text-violet-500') Rezept importieren</button>
+                        <button wire:click="schnellComposer" @click="neuMenu=false" class="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm text-gray-800 hover:bg-violet-500/10 text-left" data-frei-composer>@svg('heroicon-o-sparkles', 'w-4 h-4 text-violet-500') Composer</button>
+                        <button type="button" @click="fbOpen = true; neuMenu=false" class="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm text-gray-800 hover:bg-violet-500/10 text-left" data-frei-foodbook>@svg('heroicon-o-book-open', 'w-4 h-4 text-violet-500') Foodbook aus Brief</button>
+                    </div>
+                </div>
+                <span class="text-[11px] text-gray-500 ml-1">— Basisrezept · Gericht · Concept · Import · Composer · Foodbook (KI, mit Regler-Leitplanken).</span>
             </div>
 
             {{-- Spec 42 F1: Ein ganzes Foodbook aus einem Brief planen — Rahmen (Gerüst/Struktur) +

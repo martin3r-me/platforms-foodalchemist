@@ -145,7 +145,7 @@
                       im editor-tabs-Scope) bubbelt hierher und trägt den aktiven Tab. --}}
                  x-data="{ ftab: 'briefing' }" @fb-cockpit-tab="ftab = $event.detail.tab">
                 {{-- LINKS: Navigation (Foodbook-Kopf + Kapitelbaum, gespiegelt aus der Seiten-Sidebar) --}}
-                <div class="w-56 shrink-0 pl-6 space-y-1" data-fb-nav>
+                <div class="w-64 shrink-0 pl-6 space-y-1" data-fb-nav>
                     <button type="button" wire:click="kopfAnzeigen"
                             class="w-full text-left text-xs px-2 py-1 rounded-lg {{ $selectedKapitelId === null ? $aktiv : $hover }}"
                             data-fb-kopf-modal>@svg('heroicon-o-clipboard-document-list', 'w-3.5 h-3.5 inline-block align-middle') Foodbook-Kopf</button>
@@ -175,7 +175,7 @@
                     @foreach($kapitelTree as $kt)
                         <div wire:key="ktm-{{ $kt['id'] }}" class="group flex items-center gap-1" style="padding-left: {{ $kt['depth'] * 12 }}px">
                             <button type="button" wire:click="kapitelWaehle({{ $kt['id'] }})"
-                                    class="flex-1 min-w-0 text-left truncate text-xs px-2 py-0.5 rounded-lg {{ $selectedKapitelId === $kt['id'] ? $aktiv : $hover }}">{{ $kt['title'] }}</button>
+                                    class="flex-1 min-w-0 text-left break-words leading-tight text-xs px-2 py-0.5 rounded-lg {{ $selectedKapitelId === $kt['id'] ? $aktiv : $hover }}">{{ $kt['title'] }}</button>
                             <button type="button" wire:click="kapitelHoch({{ $kt['id'] }})" class="shrink-0 opacity-0 group-hover:opacity-100 text-gray-400 hover:text-violet-400 text-[10px]" title="hoch">▲</button>
                             <button type="button" wire:click="kapitelRunter({{ $kt['id'] }})" class="shrink-0 opacity-0 group-hover:opacity-100 text-gray-400 hover:text-violet-400 text-[10px]" title="runter">▼</button>
                             <button type="button" wire:click="kapitelNeu({{ $kt['id'] }})" class="shrink-0 text-violet-400 hover:text-violet-500 text-xs px-1 leading-none" title="Unterkapitel">＋</button>
@@ -193,6 +193,9 @@
                     :tabs="[
                         'briefing' => 'Kontext',
                         'speisen' => $selectedKapitelId ? 'Speisen' : null,
+                        'uebersicht' => 'Übersicht',
+                        'fortschritt' => 'Fortschritt',
+                        'kalkulation' => 'Kalkulation',
                         'branding' => 'Branding/CI',
                         'preise' => 'Preise',
                     ]">
@@ -202,10 +205,138 @@
                 <div x-effect="$dispatch('fb-cockpit-tab', { tab })"
                      @fb-goto.window="let d=$event.detail; if(d.tab && $root.querySelector(`[data-fb-tab='${d.tab}']`)) tab=d.tab; $nextTick(()=>{ if(d.anker){ let el=$root.querySelector(`[data-fb-anker='${d.anker}']`); if(el) el.scrollIntoView({behavior:'smooth',block:'start'}); } });"></div>
 
-                {{-- Phasen-Stepper (Versand-/Freigabe-Status = Ausgabe) bleibt. Die 7-Schritt-Planungs-
-                     Checkliste ist mit S3b entfallen (Planung lebt in der Leitstelle). --}}
-                <div class="flex flex-col gap-3 pt-4 pb-4 border-b border-black/5" data-fb-leitstelle>
-                    @include('foodalchemist::livewire.planning.partials.phase-stepper', ['phaseAktuell' => $fb->phase ?? 'kontext'])
+                {{-- Phasen-Stepper (Kontext→…→Freigabe) entfernt (Dominique 2026-08-23): die Phase ist ein
+                     Planung-/Leitstelle-Konzept, nicht Sache des reinen Ausgabe-Editors. --}}
+
+                {{-- ═══ Tab: ÜBERSICHT (Speisen-Baum read-only — aus dem aufgelösten rechten Panel) ═══ --}}
+                <div x-show="tab === 'uebersicht'" x-cloak class="space-y-3" data-fb-panel="uebersicht">
+                    @php($statusBadge = ['bepreist' => $variantPill['success'], 'angelegt' => $variantPill['primary'], 'entwurf' => $variantPill['secondary'], 'ki_queue' => $variantPill['info']])
+                    <div class="{{ $card }} p-5 space-y-2">
+                        <p class="text-xs text-gray-500 uppercase tracking-wider mb-1">Speisen-Übersicht</p>
+                        @forelse($uebersichtBaum as $k)
+                            <div wire:key="ueb-{{ $k['kapitel_id'] }}" style="padding-left: {{ ($k['depth'] - 1) * 16 }}px">
+                                <div class="flex items-center gap-1.5 text-sm font-medium text-gray-800">
+                                    <span class="min-w-0 break-words">{{ $k['titel'] }}</span>
+                                    @if($k['released'])<span class="text-emerald-500 text-xs shrink-0">✓</span>@endif
+                                </div>
+                                @foreach($k['positionen'] as $p)
+                                    <div class="flex items-center gap-2 text-xs pl-3 py-0.5">
+                                        <span class="{{ $pill }} {{ $statusBadge[$p['status']] ?? $variantPill['secondary'] }} shrink-0">{{ ['paket' => 'Paket', 'einzel' => 'Einzel', 'idee' => 'Idee'][$p['art']] ?? $p['art'] }}</span>
+                                        <span class="flex-1 min-w-0 break-words text-gray-600">{{ $p['label'] }}</span>
+                                        @if($p['preis'] !== null)<span class="shrink-0 tabular-nums text-gray-500">{{ number_format($p['preis'], 2, ',', '.') }} €{{ $p['preis_einheit'] === 'gast' ? '/G' : '/Pos' }}</span>@endif
+                                    </div>
+                                @endforeach
+                                @if(empty($k['positionen']))<p class="text-[11px] text-gray-400 pl-3">leer</p>@endif
+                            </div>
+                        @empty
+                            <p class="text-sm text-gray-400">Noch keine Kapitel.</p>
+                        @endforelse
+                    </div>
+                </div>
+
+                {{-- ═══ Tab: FORTSCHRITT (Kapitel-Matrix + selektiertes Kapitel Stand/Befunde — aus dem
+                     aufgelösten rechten Panel; voll-breit, Kapitelnamen voll sichtbar) ═══ --}}
+                <div x-show="tab === 'fortschritt'" x-cloak class="space-y-4" data-fb-panel="fortschritt">
+                    @php($weStil = ['gruen' => 'text-emerald-600', 'gelb' => 'text-amber-600', 'rot' => 'text-red-600', 'unbekannt' => 'text-gray-400'])
+                    @php($wePunkt = ['gruen' => 'bg-emerald-500', 'gelb' => 'bg-amber-500', 'rot' => 'bg-red-500', 'unbekannt' => 'bg-gray-300'])
+                    <div class="{{ $card }} p-5 space-y-1">
+                        <p class="text-xs text-gray-500 uppercase tracking-wider mb-1">Kapitel-Matrix</p>
+                        @forelse($weMatrix as $m)
+                            @php($we = $m['wareneinsatz'])
+                            <div class="flex items-center gap-2 text-sm py-1" wire:key="fbm-{{ $m['kapitel_id'] }}" style="padding-left: {{ ($m['depth'] - 1) * 16 }}px">
+                                <span class="w-2 h-2 rounded-full shrink-0 {{ $wePunkt[$we['status']] ?? 'bg-gray-300' }}" title="Wareneinsatz {{ $we['status'] }}"></span>
+                                <span class="flex-1 min-w-0 break-words text-gray-700">{{ $m['titel'] }}</span>
+                                <span class="shrink-0 flex items-center gap-1">
+                                    <span class="{{ $pill }} {{ $m['hat_ziele'] ? $variantPill['primary'] : $variantPill['secondary'] }}" title="Ziele/Dimensionen">{{ $m['hat_ziele'] ? 'Z' : '·' }}</span>
+                                    <span class="{{ $pill }} {{ $m['positionen'] > 0 ? $variantPill['info'] : $variantPill['secondary'] }}" title="Positionen">{{ $m['positionen'] }}</span>
+                                    <span class="{{ $pill }} {{ $m['bepreist'] ? $variantPill['success'] : ($m['hat_inhalt'] ? $variantPill['warning'] : $variantPill['secondary']) }}" title="{{ $m['bepreist'] ? 'bepreist' : ($m['hat_inhalt'] ? 'angelegt/ohne Preis' : 'leer') }}">€</span>
+                                </span>
+                                @if($m['released'])
+                                    <span class="text-emerald-500 text-xs shrink-0" title="angelegt">✓</span>
+                                @else
+                                    <button type="button" wire:click="kapitelWaehle({{ $m['kapitel_id'] }})" title="Kapitel öffnen" class="text-violet-500 hover:text-violet-700 text-xs shrink-0" data-fb-matrix-go>Go</button>
+                                @endif
+                            </div>
+                        @empty
+                            <p class="text-sm text-gray-400">Noch keine Kapitel.</p>
+                        @endforelse
+                    </div>
+                    @if($kapitelStandFb !== null)
+                        <div class="{{ $card }} p-5 space-y-2">
+                            <p class="text-xs text-gray-500 uppercase tracking-wider">Kapitel: {{ $kapitelStandFb['titel'] ?? '—' }}</p>
+                            @php($kwe = $kapitelStandFb['wareneinsatz'])
+                            <div class="flex flex-wrap gap-6 text-sm">
+                                <span class="text-gray-600">€/Person <span class="tabular-nums font-medium text-gray-900">{{ number_format($kapitelStandFb['aggregat']['vk_pro_person'], 2, ',', '.') }} €</span></span>
+                                <span class="text-gray-600">EK/Person <span class="tabular-nums font-medium text-gray-900">{{ number_format($kapitelStandFb['aggregat']['ek_per_person'], 2, ',', '.') }} €</span></span>
+                                <span class="inline-flex items-center gap-1.5 {{ $weStil[$kwe['status']] ?? '' }}">Wareneinsatz <span class="w-2 h-2 rounded-full {{ $wePunkt[$kwe['status']] ?? 'bg-gray-300' }}"></span><span class="tabular-nums">{{ $kwe['ist_pct'] !== null ? number_format($kwe['ist_pct'], 1, ',', '.') . ' %' : '—' }}</span> <span class="text-gray-400">/ Ziel {{ number_format($kwe['ziel_pct'], 1, ',', '.') }} %</span></span>
+                            </div>
+                            @if(! empty($kapitelBefundeFb))
+                                <div class="space-y-1 pt-2 border-t border-black/5">
+                                    <p class="text-xs text-gray-500 uppercase tracking-wider">Coverage</p>
+                                    @foreach($kapitelBefundeFb as $b)
+                                        @php($amp = ['erfuellt' => $variantPill['success'], 'teilerfuellt' => $variantPill['warning'], 'verletzt' => $variantPill['danger'], 'info' => $variantPill['info']][$b['ampel']] ?? $variantPill['secondary'])
+                                        <div class="flex items-start justify-between gap-2 text-xs">
+                                            <span class="text-gray-600">{{ $b['label'] }}</span>
+                                            <span class="{{ $pill }} {{ $amp }} shrink-0">{{ $b['ist'] }}</span>
+                                        </div>
+                                    @endforeach
+                                </div>
+                            @endif
+                        </div>
+                    @else
+                        <p class="text-[11px] text-gray-400 px-1">Ein Kapitel wählen (Speisen-Tab oder „Go") für Stand + Coverage.</p>
+                    @endif
+                </div>
+
+                {{-- ═══ Tab: KALKULATION (Wareneinsatz je Kapitel — voll-breit, aus der engen rechten Rail
+                     gezogen; Dominique 2026-08-23: Kapitelnamen voll sichtbar) ═══ --}}
+                <div x-show="tab === 'kalkulation'" x-cloak class="space-y-4" data-fb-panel="kalkulation">
+                    @php($weStil = ['gruen' => 'text-emerald-600', 'gelb' => 'text-amber-600', 'rot' => 'text-red-600', 'unbekannt' => 'text-gray-400'])
+                    @php($wePunkt = ['gruen' => 'bg-emerald-500', 'gelb' => 'bg-amber-500', 'rot' => 'bg-red-500', 'unbekannt' => 'bg-gray-300'])
+                    @if($gesamtFb === null)
+                        <div class="{{ $card }} p-6 text-center text-sm text-gray-500">Noch keine Kalkulation.</div>
+                    @else
+                        <div class="{{ $card }} p-5 space-y-4">
+                            <div class="flex flex-wrap items-end gap-6">
+                                <div>
+                                    <div class="text-3xl font-semibold text-gray-900 tabular-nums">{{ number_format($gesamtFb['vk_pro_person'], 2, ',', '.') }} €</div>
+                                    <div class="text-xs text-gray-500 uppercase tracking-wider">pro Person · EK {{ number_format($gesamtFb['ek_per_person'], 2, ',', '.') }} €</div>
+                                    @if($gesamtFb['gesamt_vk'] !== null)
+                                        <div class="text-[11px] text-gray-500 mt-0.5">{{ $gesamtFb['personen'] }} Gäste · gesamt {{ number_format($gesamtFb['gesamt_vk'], 2, ',', '.') }} €</div>
+                                    @else
+                                        <div class="text-[11px] text-gray-400 mt-0.5">Pax + Gesamtpreis liegen im Angebot.</div>
+                                    @endif
+                                </div>
+                                @if($weGesamtFb)
+                                    <div class="flex items-center gap-2 rounded-lg bg-black/[0.02] px-3 py-2">
+                                        <span class="text-xs text-gray-500 uppercase tracking-wider">Wareneinsatz gesamt</span>
+                                        <span class="inline-flex items-center gap-1.5 text-sm font-medium {{ $weStil[$weGesamtFb['status']] ?? '' }}">
+                                            <span class="w-2 h-2 rounded-full {{ $wePunkt[$weGesamtFb['status']] ?? 'bg-gray-300' }}"></span>
+                                            <span class="tabular-nums">{{ $weGesamtFb['ist_pct'] !== null ? number_format($weGesamtFb['ist_pct'], 1, ',', '.') . '%' : '—' }}</span>
+                                            <span class="text-[11px] text-gray-400">/ {{ number_format($weGesamtFb['ziel_pct'], 0, ',', '.') }}%</span>
+                                        </span>
+                                    </div>
+                                @endif
+                            </div>
+                            <div>
+                                <p class="text-xs text-gray-500 uppercase tracking-wider mb-1">Wareneinsatz je Kapitel</p>
+                                <div class="divide-y divide-black/5">
+                                    @forelse($weMatrix as $m)
+                                        @php($we = $m['wareneinsatz'])
+                                        <div class="flex items-center gap-3 py-1.5 text-sm" wire:key="fbwe-{{ $m['kapitel_id'] }}" style="padding-left: {{ ($m['depth'] - 1) * 16 }}px">
+                                            <span class="flex-1 min-w-0 break-words leading-tight text-gray-700">{{ $m['titel'] }}</span>
+                                            <span class="inline-flex items-center gap-1.5 shrink-0 {{ $weStil[$we['status']] ?? '' }}">
+                                                <span class="w-2 h-2 rounded-full {{ $wePunkt[$we['status']] ?? 'bg-gray-300' }}"></span>
+                                                <span class="tabular-nums">{{ $we['ist_pct'] !== null ? number_format($we['ist_pct'], 1, ',', '.') . '%' : '—' }}</span>
+                                            </span>
+                                        </div>
+                                    @empty
+                                        <p class="text-sm text-gray-400 py-2">Noch keine Kapitel.</p>
+                                    @endforelse
+                                </div>
+                            </div>
+                        </div>
+                    @endif
                 </div>
 
                 {{-- ═══ Tab: BRIEFING (Stammdaten · Kunde · Leitidee) ═══ --}}
@@ -682,17 +813,10 @@
             </div>{{-- /fbcockpit --}}
                 </div>{{-- /Mitte --}}
 
-                {{-- RECHTS: Leitstelle-Rail — aus dem Seiten-activity-Slot hierher (Spec 29 / S8).
-                     Re-Mount bei Selektionswechsel via key; meldet Ziel-Edits per Event an Index zurück.
-                     Picker-Umbau: im Speisen-Tab ausgeblendet (x-show, bleibt im DOM → kein Remount), damit
-                     der Katalog die äußerste rechte Spalte wird. --}}
-                <div class="w-72 shrink-0 pr-6" data-fb-rail x-show="ftab !== 'speisen'" x-cloak>
-                    <livewire:foodalchemist.foodbooks.leitstelle-rail
-                        :foodbook-id="$fb->id"
-                        :kapitel-id="$selectedKapitelId"
-                        :key="'leitstelle-'.$fb->id.'-'.($selectedKapitelId ?? 'kopf')" />
-                </div>
-            </div>{{-- /3-Spalten-Cockpit (Spec 29 / S8) --}}
+                {{-- Rechtes Overview-Panel (Leitstelle-Rail) ENTFERNT (Dominique 2026-08-23): seine drei Views
+                     (Fortschritt · Übersicht · Kalkulation) sind jetzt eigene Haupt-Tabs → alles voll-breit,
+                     Kapitelnamen voll sichtbar. Die Rail-Komponente bleibt (ungemountet) für evtl. Wiederverwendung. --}}
+            </div>{{-- /2-Spalten-Cockpit (nav + mitte; Overview-Panel aufgelöst) --}}
             </x-foodalchemist::modal>{{-- /Editor-Modal (Spec 29) --}}
         @else
             <div class="{{ $card }} p-10 text-center text-sm text-gray-500">

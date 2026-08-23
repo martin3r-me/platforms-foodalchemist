@@ -972,7 +972,22 @@ class Index extends Component
             $coverage = app(\Platform\FoodAlchemist\Services\CoverageService::class)->coverage($team, 'foodbook', $fb->id);
         }
 
+        // Fortschritt-Tab: Stand/Befunde des selektierten Kapitels (aus dem aufgelösten rechten Panel).
+        $kapitelStandFb = null;
+        $kapitelBefundeFb = [];
+        if ($fb !== null && $this->selectedKapitelId !== null) {
+            $selKap = FoodAlchemistFoodbookKapitel::where('foodbook_id', $fb->id)->find($this->selectedKapitelId);
+            if ($selKap !== null) {
+                $kapitelStandFb = app(\Platform\FoodAlchemist\Services\LeitstelleService::class)->kapitelStand($team, $selKap);
+                $kapitelBefundeFb = collect($coverage['befunde'] ?? [])->where('chapter_id', $this->selectedKapitelId)->values()->all();
+            }
+        }
+
         return view('foodalchemist::livewire.foodbooks.index', [
+            'uebersichtBaum' => $fb !== null
+                ? app(\Platform\FoodAlchemist\Services\LeitstelleService::class)->speisenBaum($team, $fb) : [],
+            'kapitelStandFb' => $kapitelStandFb,
+            'kapitelBefundeFb' => $kapitelBefundeFb,
             'coverage' => $coverage,
             // Spec 19 E5.2: abgeleitete 7-Schritt-Leitstellen-Checkliste (offen/teil/erledigt + Sprungziel)
             'checkliste' => $fb !== null
@@ -980,6 +995,11 @@ class Index extends Component
             // Spec 19 E8.1: Preise-Tab — Kapitel-Baum mit EK/VK/WE-% + WE-Ampel + Duality-Positionen (VK-Deep-Links)
             'preiseBaum' => $fb !== null
                 ? app(\Platform\FoodAlchemist\Services\LeitstelleService::class)->preiseBaum($team, $fb) : [],
+            // Kalkulation-Tab (Dominique 2026-08-23): Wareneinsatz je Kapitel voll-breit (aus der engen Rail gezogen).
+            'weMatrix' => $fb !== null
+                ? app(\Platform\FoodAlchemist\Services\LeitstelleService::class)->kapitelMatrix($team, $fb) : [],
+            'weGesamtFb' => $fb !== null ? $svc->foodbookWareneinsatzAmpel($team, $fb) : null,
+            'gesamtFb' => $fb !== null ? $svc->gesamt($team, $fb) : null,
             'foodbooks' => $svc->paginateBrowser(['search' => $this->search, 'phase' => $this->phaseFilter], $team),
             'fb' => $fb,
             // Spec 33 P5: Auswahl für das geteilte Status-/Zuordnungs-Bauteil. Nur aktive
