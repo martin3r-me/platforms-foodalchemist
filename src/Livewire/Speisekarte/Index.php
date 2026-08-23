@@ -317,6 +317,16 @@ class Index extends Component
         $this->pickerDishClass = null;
     }
 
+    /** Persistenter Katalog (Picker-Umbau): Modus umschalten (gericht|menue|format); Ziel-Rubrik bleibt. */
+    public function katalogModus(string $modus): void
+    {
+        $this->pickerModus = in_array($modus, ['gericht', 'menue', 'format'], true) ? $modus : 'gericht';
+        $this->pickerSuche = '';
+        $this->pickerHauptgruppe = null;
+        $this->pickerDishClass = null;
+        $this->formatSuche = '';
+    }
+
     /** Werkstrang M Phase B: Hauptgruppen-Facette setzen/löschen — Unterklasse fällt dabei weg. */
     public function pickerWaehleHg(?int $hauptgruppe): void
     {
@@ -611,11 +621,12 @@ class Index extends Component
             $vorschau = $svc->dokumentDaten($team, $karte);
         }
 
-        // Werkstrang M Phase B: reicher Gericht-Picker — Facetten (Hauptgruppe/Unterklasse) + Limit 50.
+        // Picker-Umbau: persistenter Katalog — Kandidaten je Modus browsebar (unabhängig von der Ziel-Rubrik;
+        // die „+"-Aktion braucht die Ziel-Rubrik, das Blättern nicht). Format = eigener Katalog-Modus.
         $pickerErgebnisse = collect();
         $pickerHauptgruppen = collect();
         $pickerUntergruppen = collect();
-        if ($this->pickerRubrikId !== null) {
+        if ($karte !== null && $this->pickerModus !== 'format') {
             $pickerErgebnisse = $this->pickerModus === 'menue'
                 ? $svc->conceptKandidaten($team, $this->pickerSuche, 50)
                 : $svc->gerichtKandidaten($team, $this->pickerSuche, 50, $this->pickerHauptgruppe, $this->pickerDishClass);
@@ -628,6 +639,10 @@ class Index extends Component
                 }
             }
         }
+        // Ziel-Rubrik-Titel für den Katalog-Kopf.
+        $pickerRubrikTitel = ($karte !== null && $this->pickerRubrikId !== null)
+            ? optional(\Platform\FoodAlchemist\Models\FoodAlchemistSpeisekarteRubrik::where('menu_card_id', $karte->id)->find($this->pickerRubrikId))->title
+            : null;
 
         return view('foodalchemist::livewire.speisekarte.index', [
             'karten' => $svc->paginateBrowser(['search' => $this->search], $team),
@@ -638,8 +653,9 @@ class Index extends Component
             'pickerErgebnisse' => $pickerErgebnisse,
             'pickerHauptgruppen' => $pickerHauptgruppen,
             'pickerUntergruppen' => $pickerUntergruppen,
-            // Spec 42: Format-Kandidaten für den „+ Format"-Picker (nur wenn offen).
-            'formatKandidaten' => ($karte !== null && $this->formatPickerOffen) ? $svc->formatKandidaten($team, $this->formatSuche) : collect(),
+            // Spec 42 / Picker-Umbau: Format-Kandidaten im Katalog-Format-Modus.
+            'formatKandidaten' => ($karte !== null && $this->pickerModus === 'format') ? $svc->formatKandidaten($team, $this->formatSuche) : collect(),
+            'pickerRubrikTitel' => $pickerRubrikTitel,
             // Spec 33 P5: Auswahl fürs Status-/Zuordnungs-Bauteil (nur aktive Betriebe).
             'betriebe' => \Platform\FoodAlchemist\Models\FoodAlchemistOutlet::where('team_id', $team->id)
                 ->where('is_inactive', false)->orderBy('sort_order')->orderBy('name')->get(['id', 'name']),

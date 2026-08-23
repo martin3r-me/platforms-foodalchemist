@@ -248,3 +248,30 @@ it('UX D&D: rubrikAblegen sortiert Rubriken derselben Ebene', function () {
     expect(\Platform\FoodAlchemist\Models\FoodAlchemistSpeisekarteRubrik::where('menu_card_id', $karte->id)
         ->whereNull('parent_id')->orderBy('position')->pluck('id')->all())->toBe([$rC->id, $rA->id, $rB->id]);
 });
+
+// Picker-Umbau: permanenter Katalog (Gericht · Menü · Format) rechts + Ziel-Rubrik über das per-Rubrik-„+".
+it('Speisekarte-Editor: permanenter Katalog mit 3 Modi + Ziel-Rubrik', function () {
+    Livewire::test(SpeisekarteIndex::class)->call('neu');
+    $karte = FoodAlchemistSpeisekarte::first();
+    $comp = Livewire::test(SpeisekarteIndex::class)
+        ->call('waehle', $karte->id)
+        ->set('neueRubrik', 'Vorspeisen')->call('rubrikNeu');
+    $rubrik = $karte->sections()->first();
+
+    // Katalog + 3 Modi rendern; Default-Modus Gericht.
+    $comp->assertOk()
+        ->assertSeeHtml('data-sk-katalog')
+        ->assertSeeHtml('data-sk-kat="gericht"')
+        ->assertSeeHtml('data-sk-kat="menue"')
+        ->assertSeeHtml('data-sk-kat="format"')
+        ->assertSet('pickerModus', 'gericht');
+
+    // Modus-Umschalter (Livewire).
+    $comp->call('katalogModus', 'format')->assertSet('pickerModus', 'format')
+        ->call('katalogModus', 'menue')->assertSet('pickerModus', 'menue');
+
+    // „+ Gericht" an der Rubrik setzt die Ziel-Rubrik → Katalog nennt sie.
+    $comp->call('pickerOeffnen', $rubrik->id, 'gericht')
+        ->assertSet('pickerRubrikId', $rubrik->id)
+        ->assertSee('Ziel-Rubrik: Vorspeisen');
+});

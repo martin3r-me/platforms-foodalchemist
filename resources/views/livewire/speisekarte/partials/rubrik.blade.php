@@ -137,55 +137,8 @@
         <div class="text-[11px] text-gray-400 py-1">Keine Positionen.</div>
     @endforelse
 
-    {{-- Gericht-/Menü-Picker (nur für die geöffnete Rubrik) --}}
-    @if($pickerRubrikId === $rubrik->id)
-        <div class="mt-2 p-2 rounded-lg bg-black/[0.03]">
-            <input type="search" wire:model.live.debounce.300ms="pickerSuche" placeholder="{{ $pickerModus === 'menue' ? 'Fix-Menü (Concept) suchen …' : 'Gericht/Getränk suchen …' }}" class="{{ $input }} mb-2" autofocus />
-            {{-- Werkstrang M Phase B: Facetten (Hauptgruppe → Unterklasse) — nur Gericht-Modus. --}}
-            @if($pickerModus === 'gericht' && ($pickerHauptgruppen ?? collect())->isNotEmpty())
-                <div class="flex flex-wrap gap-1 mb-2">
-                    @foreach($pickerHauptgruppen as $hg)
-                        <button type="button" wire:key="sk-pf-hg-{{ $rubrik->id }}-{{ $hg->id }}"
-                            wire:click="pickerWaehleHg({{ $hg->id }})"
-                            class="px-1.5 py-0.5 rounded text-[10px] {{ $pickerHauptgruppe === $hg->id ? 'bg-violet-500/20 text-violet-700 border border-violet-500/40' : 'bg-black/[0.04] text-gray-600 hover:bg-black/[0.07]' }}">
-                            {{ $hg->label ?? $hg->code }}
-                        </button>
-                    @endforeach
-                </div>
-                @if(($pickerUntergruppen ?? collect())->isNotEmpty())
-                    <div class="flex flex-wrap gap-1 mb-2 pl-2 border-l-2 border-violet-500/20">
-                        @foreach($pickerUntergruppen as $kl)
-                            <button type="button" wire:key="sk-pf-kl-{{ $rubrik->id }}-{{ $kl->id }}"
-                                wire:click="pickerWaehleKlasse({{ $kl->id }})"
-                                class="px-1.5 py-0.5 rounded text-[10px] {{ $pickerDishClass === $kl->id ? 'bg-violet-500/20 text-violet-700 border border-violet-500/40' : 'bg-black/[0.04] text-gray-600 hover:bg-black/[0.07]' }}">
-                                {{ $kl->label }}
-                            </button>
-                        @endforeach
-                    </div>
-                @endif
-            @endif
-            <div class="max-h-56 overflow-auto space-y-0.5">
-                @forelse($pickerErgebnisse as $g)
-                    <button type="button" wire:key="sk-pick-{{ $rubrik->id }}-{{ $g->id }}"
-                        wire:click="{{ $pickerModus === 'menue' ? 'positionAusMenue' : 'positionAusGericht' }}({{ $rubrik->id }}, {{ $g->id }})"
-                        class="w-full flex items-center gap-2 px-2 py-1 rounded-md text-xs hover:bg-white/80 text-left">
-                        <span class="flex-1 text-gray-800">{{ $g->name }}</span>
-                        @if($pickerModus === 'gericht' && ($g->dishClass?->diet_form))
-                            {{-- Werkstrang M Phase B: Diät-Form-Label je Treffer (aus dish_class). --}}
-                            <span class="px-1 rounded bg-black/[0.05] text-[9px] text-gray-500">{{ $g->dishClass->diet_form }}</span>
-                        @endif
-                        @if($pickerModus === 'menue')
-                            <span class="tabular-nums text-gray-500">{{ $g->price_per_person_cache !== null ? number_format((float) $g->price_per_person_cache, 2, ',', '.') . ' €' : '—' }}</span>
-                        @else
-                            <span class="tabular-nums text-gray-500">{{ $g->sales_net !== null ? number_format((float) $g->sales_net, 2, ',', '.') . ' €' : '—' }}</span>
-                        @endif
-                    </button>
-                @empty
-                    <div class="px-2 py-3 text-[11px] text-gray-500 text-center">Kein Treffer.</div>
-                @endforelse
-            </div>
-        </div>
-    @endif
+    {{-- Picker-Umbau: der Gericht/Menü-Picker lebt jetzt im permanenten Katalog rechts. Die „+ Gericht"/
+         „+ Menü"-Buttons oben setzen diese Rubrik als Ziel (pickerOeffnen → pickerRubrikId). --}}
 
     {{-- Unter-Rubriken (rekursiv) --}}
     @foreach($karte->sections->where('parent_id', $rubrik->id) as $kind)

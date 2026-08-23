@@ -270,9 +270,7 @@
                 <div class="flex items-center gap-2 mb-3">
                     <input type="text" wire:model="neueRubrik" wire:keydown.enter="rubrikNeu" placeholder="Neue Rubrik (z. B. Vorspeisen) …" class="{{ $input }} max-w-xs" />
                     <button type="button" wire:click="rubrikNeu" class="{{ $btnGhost }}">+ Rubrik</button>
-                    {{-- Spec 42: Format als Live-Rubrik einfügen (eigener Weg, NICHT der Positions-Picker) — gleiche Logik wie Foodbook-Format-Kapitel. --}}
-                    <button type="button" wire:click="formatPickerToggle" class="{{ $btnGhost }}" data-sk-format-toggle
-                            @class(['ring-2 ring-violet-400' => $formatPickerOffen])>@svg('heroicon-o-squares-plus', 'w-4 h-4') Format</button>
+                    {{-- Picker-Umbau: Format wandert in den permanenten Katalog rechts (Modus „Format"). --}}
                     {{-- P4: Voll-Kaskade — je Rubrik ein Konzept + Gerichte erfinden, Review im Planung-Editor. --}}
                     <button type="button" wire:click="vollKaskadeStarten" class="{{ $btnPrimary }}" wire:loading.attr="disabled" data-sk-voll-kaskade>
                         <span wire:loading.remove wire:target="vollKaskadeStarten">@svg('heroicon-o-bolt', 'w-4 h-4') Voll-Kaskade</span>
@@ -280,39 +278,63 @@
                     </button>
                 </div>
 
-                {{-- Spec 42: Format-Picker (Live-Rubrik). Eigener Weg, nicht der Gericht/Concept-Positions-Picker. --}}
-                @if($formatPickerOffen)
-                    <div class="mb-3 rounded-lg border border-violet-500/30 bg-violet-500/5 p-2.5 space-y-2" data-sk-format-picker>
-                        <div class="flex items-center gap-2">
-                            <input type="search" wire:model.live.debounce.300ms="formatSuche" placeholder="Format suchen …" class="{{ $input }} max-w-xs" data-sk-format-suche />
-                            <span class="text-[11px] text-gray-500">Fügt das Format als Live-Rubrik ein (rendert Editionen automatisch).</span>
-                        </div>
-                        @if($formatKandidaten->isNotEmpty())
-                            <div class="grid grid-cols-1 md:grid-cols-3 gap-1">
-                                @foreach($formatKandidaten as $fk)
-                                    <button type="button" wire:key="skfmt-{{ $fk->id }}" wire:click="formatRubrikEinfuegen({{ $fk->id }})"
-                                            class="flex items-center justify-between gap-2 px-2 py-1 rounded-lg text-xs hover:bg-violet-500/15 text-left" data-sk-format-kand>
-                                        <span class="truncate">{{ $fk->consumer_name ?: $fk->name }}</span>
-                                        <span class="text-violet-500 shrink-0">+</span>
-                                    </button>
-                                @endforeach
-                            </div>
-                        @else
-                            <p class="text-[11px] text-gray-400">Keine Formate {{ trim($formatSuche) !== '' ? 'gefunden' : 'vorhanden' }}.</p>
-                        @endif
-                    </div>
-                @endif
-
                 @if($kaskadeMeldung !== null)
                     <div class="mb-3 rounded-lg bg-amber-500/10 border border-amber-500/30 px-2.5 py-1.5 text-[11px] text-amber-700">{{ $kaskadeMeldung }}</div>
                 @endif
 
-                @forelse($karte->sections->whereNull('parent_id') as $rubrik)
-                    @include('foodalchemist::livewire.speisekarte.partials.rubrik', ['rubrik' => $rubrik, 'depth' => 0])
-                @empty
-                    <div class="px-2 py-8 text-center text-[11px] text-gray-500">Noch keine Rubriken. Oben eine anlegen.</div>
-                @endforelse
-            </div>
+                {{-- Picker-Umbau: 2-Spalten — Rubriken links, permanenter Katalog rechts (Produktions-Muster). --}}
+                <div class="flex gap-4 items-start" data-sk-2col>
+                    <div class="flex-1 min-w-0" data-sk-rubriken>
+                        @forelse($karte->sections->whereNull('parent_id') as $rubrik)
+                            @include('foodalchemist::livewire.speisekarte.partials.rubrik', ['rubrik' => $rubrik, 'depth' => 0])
+                        @empty
+                            <div class="px-2 py-8 text-center text-[11px] text-gray-500">Noch keine Rubriken. Oben eine anlegen.</div>
+                        @endforelse
+                    </div>
+
+                    {{-- Persistenter Katalog: Gericht · Menü · Format. Gericht/Menü fügen in die Ziel-Rubrik
+                         (per „+" an einer Rubrik gewählt); Format fügt eine Live-Rubrik ein. --}}
+                    <aside class="w-80 shrink-0 sticky top-4 rounded-xl border border-black/10 bg-white/60 p-3 space-y-2" data-sk-katalog>
+                        <div class="flex items-center gap-1 text-[11px] font-semibold">
+                            <button type="button" wire:click="katalogModus('gericht')" class="flex-1 px-2 py-1 rounded-md {{ $pickerModus === 'gericht' ? 'bg-violet-500/20 text-violet-700' : 'text-gray-500 hover:bg-black/[0.03]' }}" data-sk-kat="gericht">Gericht</button>
+                            <button type="button" wire:click="katalogModus('menue')" class="flex-1 px-2 py-1 rounded-md {{ $pickerModus === 'menue' ? 'bg-violet-500/20 text-violet-700' : 'text-gray-500 hover:bg-black/[0.03]' }}" data-sk-kat="menue">Menü</button>
+                            <button type="button" wire:click="katalogModus('format')" class="flex-1 px-2 py-1 rounded-md {{ $pickerModus === 'format' ? 'bg-violet-500/20 text-violet-700' : 'text-gray-500 hover:bg-black/[0.03]' }}" data-sk-kat="format">Format</button>
+                        </div>
+
+                        @if($pickerModus === 'format')
+                            <input type="search" wire:model.live.debounce.300ms="formatSuche" placeholder="Format suchen …" class="{{ $input }} w-full" data-sk-format-suche />
+                            <p class="text-[10px] text-gray-500">Fügt ein Format als Live-Rubrik ein.</p>
+                            <div class="overflow-y-auto space-y-0.5 max-h-[24rem]">
+                                @forelse($formatKandidaten as $fk)
+                                    <button type="button" wire:key="skfmt-{{ $fk->id }}" wire:click="formatRubrikEinfuegen({{ $fk->id }})" class="w-full text-left truncate text-xs px-2 py-1.5 rounded-lg hover:bg-violet-500/15 text-gray-900" data-sk-format-kand title="{{ $fk->consumer_name ?: $fk->name }}">+ {{ $fk->consumer_name ?: $fk->name }}</button>
+                                @empty
+                                    <p class="text-[11px] text-gray-400 px-2 py-2">Keine Formate {{ trim($formatSuche) !== '' ? 'gefunden' : 'vorhanden' }}.</p>
+                                @endforelse
+                            </div>
+                        @else
+                            <p class="text-[11px] {{ $pickerRubrikTitel !== null ? 'text-violet-700' : 'text-amber-600' }}" data-sk-ziel>{{ $pickerRubrikTitel !== null ? 'Ziel-Rubrik: ' . $pickerRubrikTitel : 'Ziel-Rubrik: links per „+" an einer Rubrik wählen.' }}</p>
+                            <input type="search" wire:model.live.debounce.300ms="pickerSuche" placeholder="{{ $pickerModus === 'menue' ? 'Menü/Concept suchen …' : 'Gericht suchen …' }}" class="{{ $input }} w-full" data-sk-picker-suche />
+                            @if($pickerModus === 'gericht')
+                                <div class="flex flex-wrap gap-1">
+                                    <button type="button" wire:click="pickerWaehleHg(null)" class="{{ $pill }} {{ $pickerHauptgruppe === null ? $variantPill['primary'] : $variantPill['secondary'] }}">Alle</button>
+                                    @foreach($pickerHauptgruppen as $hg)<button type="button" wire:key="skg-hg-{{ $hg->id }}" wire:click="pickerWaehleHg({{ $hg->id }})" class="{{ $pill }} {{ $pickerHauptgruppe === $hg->id && $pickerDishClass === null ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $hg->label }}</button>@endforeach
+                                    @if($pickerUntergruppen->isNotEmpty())@foreach($pickerUntergruppen as $ug)<button type="button" wire:key="skg-ug-{{ $ug->id }}" wire:click="pickerWaehleKlasse({{ $ug->id }})" class="{{ $pill }} {{ $pickerDishClass === $ug->id ? $variantPill['primary'] : $variantPill['secondary'] }}">— {{ $ug->label }}</button>@endforeach @endif
+                                </div>
+                            @endif
+                            <div class="overflow-y-auto space-y-0.5 max-h-[22rem]">
+                                @forelse($pickerErgebnisse as $g)
+                                    <button type="button" wire:key="skpk-{{ $g->id }}" @disabled($pickerRubrikTitel === null) wire:click="{{ $pickerModus === 'menue' ? 'positionAusMenue' : 'positionAusGericht' }}({{ (int) ($pickerRubrikId ?? 0) }}, {{ $g->id }})" class="w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg text-xs text-left {{ $pickerRubrikTitel !== null ? 'hover:bg-violet-500/10 text-gray-900' : 'opacity-40 cursor-not-allowed text-gray-500' }}">
+                                        <span class="truncate">+ {{ $g->name }}</span>
+                                        <span class="text-gray-500 tabular-nums shrink-0">{{ isset($g->sales_net) && $g->sales_net !== null ? number_format((float) $g->sales_net, 2, ',', '.') . ' €' : '' }}</span>
+                                    </button>
+                                @empty
+                                    <p class="text-[11px] text-gray-400 px-2 py-2">{{ trim($pickerSuche) !== '' ? 'Nichts gefunden.' : ($pickerModus === 'menue' ? 'Keine Menüs/Concepts.' : 'Keine Gerichte.') }}</p>
+                                @endforelse
+                            </div>
+                        @endif
+                    </aside>
+                </div>{{-- /2col --}}
+            </div>{{-- /sk-body --}}
                 </div>{{-- /Tab AUFBAU --}}
                 </x-foodalchemist::editor-tabs>
             </x-foodalchemist::modal>
