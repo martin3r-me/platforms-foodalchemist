@@ -184,6 +184,9 @@ class Index extends Component
 
     public string $conceptSuche = '';
 
+    /** Picker-Baustein (2026-08-23): aktiver Katalog-Modus (Server-Modus, wie Speisekarte) — concept|gericht|format. */
+    public string $katalogModus = 'concept';
+
     /** Format-Modul (Phase C): Suche im „Format-Kapitel einfügen"-Picker. */
     public string $formatSuche = '';
 
@@ -669,6 +672,14 @@ class Index extends Component
     }
 
     // ── Blöcke ────────────────────────────────────────────────────────────
+
+    /** Picker-Baustein: Katalog-Modus umschalten (concept|gericht|format). Spiegelt Speisekarte::katalogModus. */
+    public function katalogModus(string $modus): void
+    {
+        if (in_array($modus, ['concept', 'gericht', 'format'], true)) {
+            $this->katalogModus = $modus;
+        }
+    }
 
     public function conceptHinzu(int $conceptId, FoodbookService $svc): void
     {

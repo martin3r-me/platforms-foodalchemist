@@ -601,77 +601,57 @@
 
                 </div>{{-- /Inhalt (linke Spalte) --}}
 
-                {{-- Persistenter Katalog (rechte Spalte, Produktions-Muster): Concept · Gericht · Format.
-                     Suche + Facetten + „+" fügt ins gewählte Kapitel (Format = Struktur-Kapitel). --}}
-                <aside class="w-80 shrink-0 sticky top-4 {{ $card }} p-3 space-y-2" x-data="{ kat: 'concept' }" data-fb-katalog>
-                    <div class="flex items-center gap-1 text-[11px] font-semibold">
-                        <button type="button" @click="kat='concept'" :class="kat==='concept' ? 'bg-violet-500/20 text-violet-700' : 'text-gray-500 hover:bg-black/[0.03]'" class="flex-1 px-2 py-1 rounded-md" data-fb-kat="concept">Concept</button>
-                        <button type="button" @click="kat='gericht'" :class="kat==='gericht' ? 'bg-violet-500/20 text-violet-700' : 'text-gray-500 hover:bg-black/[0.03]'" class="flex-1 px-2 py-1 rounded-md" data-fb-kat="gericht">Gericht</button>
-                        <button type="button" @click="kat='format'" :class="kat==='format' ? 'bg-violet-500/20 text-violet-700' : 'text-gray-500 hover:bg-black/[0.03]'" class="flex-1 px-2 py-1 rounded-md" data-fb-kat="format">Format</button>
-                    </div>
-
-                    {{-- CONCEPT-Modus --}}
-                    <div x-show="kat==='concept'" data-fb-katalog-concept>
-                        <input type="search" wire:model.live.debounce.300ms="conceptSuche" placeholder="Concept suchen …" class="{{ $input }} w-full mb-2" />
+                {{-- Persistenter Katalog (geteilter Baustein katalog-picker/-row): Concept · Gericht · Format.
+                     Suche + Facetten; „+" fügt ins gewählte Kapitel (Format = Struktur-Kapitel). Server-Modus. --}}
+                <x-foodalchemist::katalog-picker marker="fb" switch="katalogModus" :modes="[
+                    ['key' => 'concept', 'label' => 'Concept', 'active' => $katalogModus === 'concept'],
+                    ['key' => 'gericht', 'label' => 'Gericht', 'active' => $katalogModus === 'gericht'],
+                    ['key' => 'format', 'label' => 'Format', 'active' => $katalogModus === 'format'],
+                ]">
+                    @if($katalogModus === 'concept')
+                        <input type="search" wire:model.live.debounce.300ms="conceptSuche" placeholder="Concept suchen …" class="{{ $input }} w-full mb-2 shrink-0" data-fb-katalog-concept />
                         @php($facettenAktiv = collect($conceptFacetten)->filter(fn ($v) => $v !== null)->isNotEmpty())
-                        <div class="flex flex-wrap gap-1 mb-2">
+                        <div class="flex flex-wrap gap-1 mb-2 shrink-0">
                             <button type="button" wire:click="resetConceptFacetten" class="{{ $pill }} {{ ! $facettenAktiv ? $variantPill['primary'] : $variantPill['secondary'] }}">Alle</button>
                             @foreach($facetteEventtypen as $et)<button type="button" wire:key="kc-ev-{{ $et->id }}" wire:click="toggleConceptFacet('eventtyp', {{ $et->id }})" class="{{ $pill }} {{ $conceptFacetten['eventtyp'] === $et->id ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $et->name }}</button>@endforeach
                             @foreach($facetteServierformen as $sf)<button type="button" wire:key="kc-sf-{{ $sf->id }}" wire:click="toggleConceptFacet('servierform', {{ $sf->id }})" class="{{ $pill }} {{ $conceptFacetten['servierform'] === $sf->id ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $sf->label }}</button>@endforeach
                             @foreach($facetteMomente as $em)<button type="button" wire:key="kc-em-{{ $em->id }}" wire:click="toggleConceptFacet('einsatzmoment', {{ $em->id }})" class="{{ $pill }} {{ $conceptFacetten['einsatzmoment'] === $em->id ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $em->name }}</button>@endforeach
                             @foreach($facetteSaisons as $sa)<button type="button" wire:key="kc-sa-{{ $sa->id }}" wire:click="toggleConceptFacet('season', {{ $sa->id }})" class="{{ $pill }} {{ $conceptFacetten['season'] === $sa->id ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $sa->name }}</button>@endforeach
                         </div>
-                        <div class="overflow-y-auto space-y-0.5 max-h-[24rem]">
+                        <div class="flex-1 overflow-y-auto space-y-0.5">
                             @forelse($conceptKandidaten as $ck)
-                                <button type="button" wire:key="kck-{{ $ck->id }}" wire:click="conceptHinzu({{ $ck->id }})" class="group w-full flex items-start gap-1.5 px-2 py-1.5 rounded-lg text-xs hover:bg-violet-500/10 text-left">
-                                    <span class="shrink-0 text-violet-500 font-semibold leading-snug">+</span>
-                                    <span class="min-w-0 flex-1 break-words leading-snug text-gray-800" title="{{ $ck->name }}">{{ $ck->name }}</span>
-                                    <span class="text-gray-500 tabular-nums shrink-0 leading-snug">{{ $ck->price_per_person_cache !== null ? number_format((float) $ck->price_per_person_cache, 2, ',', '.') . ' €' : '' }}</span>
-                                </button>
+                                <x-foodalchemist::katalog-row wire:key="kck-{{ $ck->id }}" wire:click="conceptHinzu({{ $ck->id }})" :title="$ck->name" :price="$ck->price_per_person_cache !== null ? number_format((float) $ck->price_per_person_cache, 2, ',', '.') . ' €' : null">{{ $ck->name }}</x-foodalchemist::katalog-row>
                             @empty
                                 <p class="text-[11px] text-gray-500 px-2 py-2">{{ $conceptSuche !== '' || $facettenAktiv ? 'Keine Concepts für diese Auswahl.' : 'Noch keine Concepts angelegt.' }}</p>
                             @endforelse
                         </div>
-                    </div>
-
-                    {{-- GERICHT-Modus --}}
-                    <div x-show="kat==='gericht'" x-cloak data-fb-katalog-gericht>
-                        <input type="search" wire:model.live.debounce.300ms="gerichtSuche" placeholder="Gericht suchen …" class="{{ $input }} w-full mb-2" />
-                        <div class="flex flex-wrap gap-1 mb-2">
+                    @elseif($katalogModus === 'gericht')
+                        <input type="search" wire:model.live.debounce.300ms="gerichtSuche" placeholder="Gericht suchen …" class="{{ $input }} w-full mb-2 shrink-0" data-fb-katalog-gericht />
+                        <div class="flex flex-wrap gap-1 mb-2 shrink-0">
                             <button type="button" wire:click="waehleGerichtHg(null)" class="{{ $pill }} {{ $gerichtHauptgruppe === null ? $variantPill['primary'] : $variantPill['secondary'] }}">Alle</button>
                             @foreach($gerichtHauptgruppen as $hg)<button type="button" wire:key="kg-hg-{{ $hg->id }}" wire:click="waehleGerichtHg({{ $hg->id }})" class="{{ $pill }} {{ $gerichtHauptgruppe === $hg->id && $gerichtDishClass === null ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $hg->label }}</button>@endforeach
                             @if($gerichtUntergruppen->isNotEmpty())@foreach($gerichtUntergruppen as $ug)<button type="button" wire:key="kg-ug-{{ $ug->id }}" wire:click="waehleGerichtKlasse({{ $ug->id }})" class="{{ $pill }} {{ $gerichtDishClass === $ug->id ? $variantPill['primary'] : $variantPill['secondary'] }}">— {{ $ug->label }}</button>@endforeach @endif
                         </div>
-                        <div class="overflow-y-auto space-y-0.5 max-h-[24rem]">
+                        <div class="flex-1 overflow-y-auto space-y-0.5">
                             @forelse($gerichtKandidaten as $gk)
-                                <button type="button" wire:key="kgk-{{ $gk->id }}" wire:click="gerichtHinzu({{ $gk->id }})" class="group w-full flex items-start gap-1.5 px-2 py-1.5 rounded-lg text-xs hover:bg-violet-500/10 text-left">
-                                    <span class="shrink-0 text-violet-500 font-semibold leading-snug">+</span>
-                                    <span class="min-w-0 flex-1 break-words leading-snug text-gray-800" title="{{ $gk->name }}">{{ $gk->name }}</span>
-                                    <span class="text-gray-500 tabular-nums shrink-0 leading-snug">{{ $gk->sales_net !== null ? number_format((float) $gk->sales_net, 2, ',', '.') . ' €' : '' }}</span>
-                                </button>
+                                <x-foodalchemist::katalog-row wire:key="kgk-{{ $gk->id }}" wire:click="gerichtHinzu({{ $gk->id }})" :title="$gk->name" :price="$gk->sales_net !== null ? number_format((float) $gk->sales_net, 2, ',', '.') . ' €' : null">{{ $gk->name }}</x-foodalchemist::katalog-row>
                             @empty
                                 <p class="text-[11px] text-gray-500 px-2 py-2">{{ $gerichtSuche !== '' || $gerichtHauptgruppe !== null ? 'Keine VK-Gerichte für diese Auswahl.' : 'Noch keine VK-Gerichte vorhanden.' }}</p>
                             @endforelse
                         </div>
-                    </div>
-
-                    {{-- FORMAT-Modus (Struktur: fügt ein wiederverwendbares Format als Live-Kapitel ein) --}}
-                    <div x-show="kat==='format'" x-cloak data-fb-katalog-format>
-                        <input type="search" wire:model.live.debounce.300ms="formatSuche" placeholder="Format suchen …" class="{{ $input }} w-full mb-2" />
-                        @error('formatKapitel')<p class="text-[11px] text-rose-500 px-1 mb-1">{{ $message }}</p>@enderror
-                        <p class="text-[10px] text-gray-500 mb-1">Fügt ein Format als Live-Kapitel ein (Struktur).</p>
-                        <div class="overflow-y-auto space-y-0.5 max-h-[24rem]">
+                    @else
+                        <input type="search" wire:model.live.debounce.300ms="formatSuche" placeholder="Format suchen …" class="{{ $input }} w-full mb-2 shrink-0" data-fb-katalog-format />
+                        @error('formatKapitel')<p class="text-[11px] text-rose-500 px-1 mb-1 shrink-0">{{ $message }}</p>@enderror
+                        <p class="text-[10px] text-gray-500 mb-1 shrink-0">Fügt ein Format als Live-Kapitel ein (Struktur).</p>
+                        <div class="flex-1 overflow-y-auto space-y-0.5">
                             @forelse($formatKandidaten as $fk)
-                                <button type="button" wire:key="kfmt-{{ $fk->id }}" wire:click="formatKapitelEinfuegen({{ $fk->id }})" class="group w-full flex items-start gap-1.5 text-left text-xs px-2 py-1.5 rounded-lg hover:bg-violet-500/10" title="{{ $fk->consumer_name ?: $fk->name }}">
-                                    <span class="shrink-0 text-violet-500 font-semibold leading-snug">+</span>
-                                    <span class="min-w-0 flex-1 break-words leading-snug text-gray-800">{{ $fk->name }}@if($fk->origin === 'kunde')<span class="text-[9px] text-gray-400 ml-1">(Kunde-IP)</span>@endif</span>
-                                </button>
+                                <x-foodalchemist::katalog-row wire:key="kfmt-{{ $fk->id }}" wire:click="formatKapitelEinfuegen({{ $fk->id }})" :title="$fk->consumer_name ?: $fk->name">{{ $fk->name }}@if($fk->origin === 'kunde')<span class="text-[9px] text-gray-400 ml-1">(Kunde-IP)</span>@endif</x-foodalchemist::katalog-row>
                             @empty
                                 <p class="text-[11px] text-gray-500 px-2 py-2">Keine Formate vorhanden.</p>
                             @endforelse
                         </div>
-                    </div>
-                </aside>
+                    @endif
+                </x-foodalchemist::katalog-picker>
             </div>{{-- /2col Speisen --}}
             @else
                 <div class="{{ $card }} p-8 text-center text-sm text-gray-500">Links im Kapitelbaum ein Kapitel wählen, um seine Speisen zu bearbeiten.</div>

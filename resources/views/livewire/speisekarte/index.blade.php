@@ -292,51 +292,42 @@
                         @endforelse
                     </div>
 
-                    {{-- Persistenter Katalog: Gericht · Menü · Format. Gericht/Menü fügen in die Ziel-Rubrik
-                         (per „+" an einer Rubrik gewählt); Format fügt eine Live-Rubrik ein. --}}
-                    <aside class="w-80 shrink-0 sticky top-4 rounded-xl border border-black/10 bg-white/60 p-3 space-y-2" data-sk-katalog>
-                        <div class="flex items-center gap-1 text-[11px] font-semibold">
-                            <button type="button" wire:click="katalogModus('gericht')" class="flex-1 px-2 py-1 rounded-md {{ $pickerModus === 'gericht' ? 'bg-violet-500/20 text-violet-700' : 'text-gray-500 hover:bg-black/[0.03]' }}" data-sk-kat="gericht">Gericht</button>
-                            <button type="button" wire:click="katalogModus('menue')" class="flex-1 px-2 py-1 rounded-md {{ $pickerModus === 'menue' ? 'bg-violet-500/20 text-violet-700' : 'text-gray-500 hover:bg-black/[0.03]' }}" data-sk-kat="menue">Menü</button>
-                            <button type="button" wire:click="katalogModus('format')" class="flex-1 px-2 py-1 rounded-md {{ $pickerModus === 'format' ? 'bg-violet-500/20 text-violet-700' : 'text-gray-500 hover:bg-black/[0.03]' }}" data-sk-kat="format">Format</button>
-                        </div>
-
+                    {{-- Persistenter Katalog (geteilter Baustein): Gericht · Menü · Format. Gericht/Menü fügen
+                         in die Ziel-Rubrik (per „+" an einer Rubrik gewählt); Format fügt eine Live-Rubrik ein. --}}
+                    <x-foodalchemist::katalog-picker marker="sk" switch="katalogModus" :modes="[
+                        ['key' => 'gericht', 'label' => 'Gericht', 'active' => $pickerModus === 'gericht'],
+                        ['key' => 'menue', 'label' => 'Menü', 'active' => $pickerModus === 'menue'],
+                        ['key' => 'format', 'label' => 'Format', 'active' => $pickerModus === 'format'],
+                    ]">
                         @if($pickerModus === 'format')
-                            <input type="search" wire:model.live.debounce.300ms="formatSuche" placeholder="Format suchen …" class="{{ $input }} w-full" data-sk-format-suche />
-                            <p class="text-[10px] text-gray-500">Fügt ein Format als Live-Rubrik ein.</p>
-                            <div class="overflow-y-auto space-y-0.5 max-h-[24rem]">
+                            <input type="search" wire:model.live.debounce.300ms="formatSuche" placeholder="Format suchen …" class="{{ $input }} w-full mb-2 shrink-0" data-sk-format-suche />
+                            <p class="text-[10px] text-gray-500 mb-1 shrink-0">Fügt ein Format als Live-Rubrik ein.</p>
+                            <div class="flex-1 overflow-y-auto space-y-0.5">
                                 @forelse($formatKandidaten as $fk)
-                                    <button type="button" wire:key="skfmt-{{ $fk->id }}" wire:click="formatRubrikEinfuegen({{ $fk->id }})" class="group w-full flex items-start gap-1.5 text-left text-xs px-2 py-1.5 rounded-lg hover:bg-violet-500/15" data-sk-format-kand title="{{ $fk->consumer_name ?: $fk->name }}">
-                                        <span class="shrink-0 text-violet-500 font-semibold leading-snug">+</span>
-                                        <span class="min-w-0 flex-1 break-words leading-snug text-gray-800">{{ $fk->consumer_name ?: $fk->name }}</span>
-                                    </button>
+                                    <x-foodalchemist::katalog-row wire:key="skfmt-{{ $fk->id }}" wire:click="formatRubrikEinfuegen({{ $fk->id }})" data-sk-format-kand :title="$fk->consumer_name ?: $fk->name">{{ $fk->consumer_name ?: $fk->name }}</x-foodalchemist::katalog-row>
                                 @empty
                                     <p class="text-[11px] text-gray-400 px-2 py-2">Keine Formate {{ trim($formatSuche) !== '' ? 'gefunden' : 'vorhanden' }}.</p>
                                 @endforelse
                             </div>
                         @else
-                            <p class="text-[11px] {{ $pickerRubrikTitel !== null ? 'text-violet-700' : 'text-amber-600' }}" data-sk-ziel>{{ $pickerRubrikTitel !== null ? 'Ziel-Rubrik: ' . $pickerRubrikTitel : 'Ziel-Rubrik: links per „+" an einer Rubrik wählen.' }}</p>
-                            <input type="search" wire:model.live.debounce.300ms="pickerSuche" placeholder="{{ $pickerModus === 'menue' ? 'Menü/Concept suchen …' : 'Gericht suchen …' }}" class="{{ $input }} w-full" data-sk-picker-suche />
+                            <p class="text-[11px] mb-2 shrink-0 {{ $pickerRubrikTitel !== null ? 'text-violet-700' : 'text-amber-600' }}" data-sk-ziel>{{ $pickerRubrikTitel !== null ? 'Ziel-Rubrik: ' . $pickerRubrikTitel : 'Ziel-Rubrik: links per „+" an einer Rubrik wählen.' }}</p>
+                            <input type="search" wire:model.live.debounce.300ms="pickerSuche" placeholder="{{ $pickerModus === 'menue' ? 'Menü/Concept suchen …' : 'Gericht suchen …' }}" class="{{ $input }} w-full mb-2 shrink-0" data-sk-picker-suche />
                             @if($pickerModus === 'gericht')
-                                <div class="flex flex-wrap gap-1">
+                                <div class="flex flex-wrap gap-1 mb-2 shrink-0">
                                     <button type="button" wire:click="pickerWaehleHg(null)" class="{{ $pill }} {{ $pickerHauptgruppe === null ? $variantPill['primary'] : $variantPill['secondary'] }}">Alle</button>
                                     @foreach($pickerHauptgruppen as $hg)<button type="button" wire:key="skg-hg-{{ $hg->id }}" wire:click="pickerWaehleHg({{ $hg->id }})" class="{{ $pill }} {{ $pickerHauptgruppe === $hg->id && $pickerDishClass === null ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $hg->label }}</button>@endforeach
                                     @if($pickerUntergruppen->isNotEmpty())@foreach($pickerUntergruppen as $ug)<button type="button" wire:key="skg-ug-{{ $ug->id }}" wire:click="pickerWaehleKlasse({{ $ug->id }})" class="{{ $pill }} {{ $pickerDishClass === $ug->id ? $variantPill['primary'] : $variantPill['secondary'] }}">— {{ $ug->label }}</button>@endforeach @endif
                                 </div>
                             @endif
-                            <div class="overflow-y-auto space-y-0.5 max-h-[22rem]">
+                            <div class="flex-1 overflow-y-auto space-y-0.5">
                                 @forelse($pickerErgebnisse as $g)
-                                    <button type="button" wire:key="skpk-{{ $g->id }}" @disabled($pickerRubrikTitel === null) wire:click="{{ $pickerModus === 'menue' ? 'positionAusMenue' : 'positionAusGericht' }}({{ (int) ($pickerRubrikId ?? 0) }}, {{ $g->id }})" class="group w-full flex items-start gap-1.5 px-2 py-1.5 rounded-lg text-xs text-left {{ $pickerRubrikTitel !== null ? 'hover:bg-violet-500/10' : 'opacity-40 cursor-not-allowed' }}">
-                                        <span class="shrink-0 font-semibold leading-snug {{ $pickerRubrikTitel !== null ? 'text-violet-500' : 'text-gray-400' }}">+</span>
-                                        <span class="min-w-0 flex-1 break-words leading-snug {{ $pickerRubrikTitel !== null ? 'text-gray-800' : 'text-gray-500' }}" title="{{ $g->name }}">{{ $g->name }}</span>
-                                        <span class="text-gray-500 tabular-nums shrink-0 leading-snug">{{ isset($g->sales_net) && $g->sales_net !== null ? number_format((float) $g->sales_net, 2, ',', '.') . ' €' : '' }}</span>
-                                    </button>
+                                    <x-foodalchemist::katalog-row wire:key="skpk-{{ $g->id }}" :disabled="$pickerRubrikTitel === null" wire:click="{{ $pickerModus === 'menue' ? 'positionAusMenue' : 'positionAusGericht' }}({{ (int) ($pickerRubrikId ?? 0) }}, {{ $g->id }})" :title="$g->name" :price="isset($g->sales_net) && $g->sales_net !== null ? number_format((float) $g->sales_net, 2, ',', '.') . ' €' : null">{{ $g->name }}</x-foodalchemist::katalog-row>
                                 @empty
                                     <p class="text-[11px] text-gray-400 px-2 py-2">{{ trim($pickerSuche) !== '' ? 'Nichts gefunden.' : ($pickerModus === 'menue' ? 'Keine Menüs/Concepts.' : 'Keine Gerichte.') }}</p>
                                 @endforelse
                             </div>
                         @endif
-                    </aside>
+                    </x-foodalchemist::katalog-picker>
                 </div>{{-- /2col --}}
             </div>{{-- /sk-body --}}
                 </div>{{-- /Tab AUFBAU --}}
