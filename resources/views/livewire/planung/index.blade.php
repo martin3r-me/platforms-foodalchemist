@@ -122,6 +122,9 @@
                             <option value="rezept">Basisrezept</option>
                             <option value="gericht">Gericht</option>
                             <option value="concept">Concept</option>
+                            <option value="foodbook">Foodbook</option>
+                            <option value="speisekarte">Speisekarte</option>
+                            <option value="speiseplan">Speiseplan</option>
                         </select>
                     </div>
                 </div>
@@ -177,14 +180,14 @@
         {{-- Leitstelle: freie 1-Klick-Erstellung — die eine KI-Erstell-Fläche (de-trend). Legt eine
              leichte „Freie Erstellung"-Session (cockpit_frei) an und öffnet den Editor auf dem
              Planung-Tab mit den Regler-Leitplanken. Trend bleibt EIN Input, nicht der Rahmen. --}}
-        <div class="{{ $card }} p-4" x-data="{ fbOpen: @js($fbPanelAuf), neuMenu: false }">
+        <div class="{{ $card }} p-4 relative z-40" x-data="{ fbOpen: @js($fbPanelAuf), neuMenu: false }">
             <div class="flex flex-wrap items-center gap-2">
                 {{-- Ein „Neu erstellen"-Knopf (Dominique 2026-08-23) statt sechs Buttons — Dropdown-Menü. --}}
                 <div class="relative" @click.outside="neuMenu = false">
                     <button type="button" @click="neuMenu = !neuMenu" class="{{ $btnPrimary }}" data-frei-neu :class="neuMenu ? 'ring-2 ring-violet-400' : ''">
                         @svg('heroicon-o-plus', 'w-4 h-4') Neu erstellen @svg('heroicon-o-chevron-down', 'w-3.5 h-3.5')
                     </button>
-                    <div x-show="neuMenu" x-cloak x-transition class="absolute left-0 mt-1 z-30 w-60 rounded-xl border border-black/10 bg-white shadow-lg p-1 space-y-0.5" data-frei-menu>
+                    <div x-show="neuMenu" x-cloak x-transition class="absolute left-0 mt-1 z-50 w-60 rounded-xl border border-black/10 bg-white shadow-xl p-1 space-y-0.5" data-frei-menu>
                         <button wire:click="schnellErstellen('rezept')" @click="neuMenu=false" class="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm text-gray-800 hover:bg-violet-500/10 text-left" data-frei-rezept>@svg('heroicon-o-beaker', 'w-4 h-4 text-violet-500') Basisrezept</button>
                         <button wire:click="schnellErstellen('gericht')" @click="neuMenu=false" class="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm text-gray-800 hover:bg-violet-500/10 text-left" data-frei-gericht>@svg('heroicon-o-cake', 'w-4 h-4 text-violet-500') Gericht</button>
                         <button wire:click="schnellErstellen('concept')" @click="neuMenu=false" class="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm text-gray-800 hover:bg-violet-500/10 text-left" data-frei-concept>@svg('heroicon-o-squares-2x2', 'w-4 h-4 text-violet-500') Concept</button>

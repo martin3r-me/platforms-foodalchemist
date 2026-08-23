@@ -127,3 +127,17 @@ it('Leitstelle-Rail Kopf-Modus: 3-Panel-Umschalter + Kapitel-Matrix', function (
 // S3b: Die Rail-Kapitel-Planung (M3-Ziele-Editor + Kapitel-Go „Anlegen"/Undo) ist in die Leitstelle
 // gewandert und dort abgedeckt (LeitstelleKapitelKaskadeTest: starteKapitelKaskade + KapitelRail-Setter).
 // Der Kapitel-Modus der Rail zeigt jetzt nur noch Kuration/QC (Coverage + Kalkulation).
+
+// Bug (Dominique 2026-08-23): im Foodbook-Katalog liess sich Gericht/Format nicht wählen.
+// Verdacht: Property $katalogModus + Methode katalogModus() gleich benannt (Speisekarte: pickerModus).
+it('Foodbook-Katalog: Modus-Wechsel concept->gericht->format schaltet (Server-Modus)', function () {
+    Livewire::test(FoodbooksIndex::class)->call('neu');
+    $fb = FoodAlchemistFoodbook::first();
+    Livewire::test(FoodbooksIndex::class)
+        ->call('waehle', $fb->id)
+        ->assertSet('pickerModus', 'concept')
+        ->call('katalogModus', 'gericht')
+        ->assertSet('pickerModus', 'gericht')
+        ->call('katalogModus', 'format')
+        ->assertSet('pickerModus', 'format');
+});

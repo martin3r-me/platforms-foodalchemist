@@ -184,8 +184,10 @@ class Index extends Component
 
     public string $conceptSuche = '';
 
-    /** Picker-Baustein (2026-08-23): aktiver Katalog-Modus (Server-Modus, wie Speisekarte) — concept|gericht|format. */
-    public string $katalogModus = 'concept';
+    /** Picker-Baustein (2026-08-23): aktiver Katalog-Modus (Server-Modus, wie Speisekarte) — concept|gericht|format.
+     *  Property heisst bewusst NICHT wie die Methode katalogModus() — gleicher Name = Livewire-Footgun (client
+     *  wire:click misfired, Server-`->call()` nicht → layout-blind); daher pickerModus wie in der Speisekarte. */
+    public string $pickerModus = 'concept';
 
     /** Format-Modul (Phase C): Suche im „Format-Kapitel einfügen"-Picker. */
     public string $formatSuche = '';
@@ -677,7 +679,7 @@ class Index extends Component
     public function katalogModus(string $modus): void
     {
         if (in_array($modus, ['concept', 'gericht', 'format'], true)) {
-            $this->katalogModus = $modus;
+            $this->pickerModus = $modus;
         }
     }
 
@@ -995,11 +997,9 @@ class Index extends Component
             // Spec 19 E8.1: Preise-Tab — Kapitel-Baum mit EK/VK/WE-% + WE-Ampel + Duality-Positionen (VK-Deep-Links)
             'preiseBaum' => $fb !== null
                 ? app(\Platform\FoodAlchemist\Services\LeitstelleService::class)->preiseBaum($team, $fb) : [],
-            // Kalkulation-Tab (Dominique 2026-08-23): Wareneinsatz je Kapitel voll-breit (aus der engen Rail gezogen).
+            // Fortschritt-Tab: Kapitel-Matrix (Status/Wareneinsatz je Kapitel), voll-breit.
             'weMatrix' => $fb !== null
                 ? app(\Platform\FoodAlchemist\Services\LeitstelleService::class)->kapitelMatrix($team, $fb) : [],
-            'weGesamtFb' => $fb !== null ? $svc->foodbookWareneinsatzAmpel($team, $fb) : null,
-            'gesamtFb' => $fb !== null ? $svc->gesamt($team, $fb) : null,
             'foodbooks' => $svc->paginateBrowser(['search' => $this->search, 'phase' => $this->phaseFilter], $team),
             'fb' => $fb,
             // Spec 33 P5: Auswahl für das geteilte Status-/Zuordnungs-Bauteil. Nur aktive

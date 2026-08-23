@@ -3098,9 +3098,13 @@ class Index extends Component
                 if ($filterStatus !== '' && ($kaskaden[(int) $s->id]['status'] ?? 'entwurf') !== $filterStatus) {
                     return false;
                 }
-                // Typ = Scope des jüngsten Laufs; Sessions ohne Lauf (kein Scope) fallen bei gesetztem Typ raus.
-                if ($filterTyp !== '' && ($kaskaden[(int) $s->id]['scope'] ?? null) !== $filterTyp) {
-                    return false;
+                // Typ = Scope (rezept/gericht/concept) ODER Ausgabe-Ziel (foodbook/speisekarte/speiseplan) des
+                // jüngsten Laufs. Sessions ohne Lauf (kein Scope/Owner) fallen bei gesetztem Typ raus.
+                if ($filterTyp !== '') {
+                    $kk = $kaskaden[(int) $s->id] ?? [];
+                    if (($kk['scope'] ?? null) !== $filterTyp && ($kk['owner_type'] ?? null) !== $filterTyp) {
+                        return false;
+                    }
                 }
 
                 return true;

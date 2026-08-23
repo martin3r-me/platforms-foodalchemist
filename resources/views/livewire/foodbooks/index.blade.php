@@ -195,7 +195,6 @@
                         'speisen' => $selectedKapitelId ? 'Speisen' : null,
                         'uebersicht' => 'Übersicht',
                         'fortschritt' => 'Fortschritt',
-                        'kalkulation' => 'Kalkulation',
                         'branding' => 'Branding/CI',
                         'preise' => 'Preise',
                     ]">
@@ -285,57 +284,6 @@
                         </div>
                     @else
                         <p class="text-[11px] text-gray-400 px-1">Ein Kapitel wählen (Speisen-Tab oder „Go") für Stand + Coverage.</p>
-                    @endif
-                </div>
-
-                {{-- ═══ Tab: KALKULATION (Wareneinsatz je Kapitel — voll-breit, aus der engen rechten Rail
-                     gezogen; Dominique 2026-08-23: Kapitelnamen voll sichtbar) ═══ --}}
-                <div x-show="tab === 'kalkulation'" x-cloak class="space-y-4" data-fb-panel="kalkulation">
-                    @php($weStil = ['gruen' => 'text-emerald-600', 'gelb' => 'text-amber-600', 'rot' => 'text-red-600', 'unbekannt' => 'text-gray-400'])
-                    @php($wePunkt = ['gruen' => 'bg-emerald-500', 'gelb' => 'bg-amber-500', 'rot' => 'bg-red-500', 'unbekannt' => 'bg-gray-300'])
-                    @if($gesamtFb === null)
-                        <div class="{{ $card }} p-6 text-center text-sm text-gray-500">Noch keine Kalkulation.</div>
-                    @else
-                        <div class="{{ $card }} p-5 space-y-4">
-                            <div class="flex flex-wrap items-end gap-6">
-                                <div>
-                                    <div class="text-3xl font-semibold text-gray-900 tabular-nums">{{ number_format($gesamtFb['vk_pro_person'], 2, ',', '.') }} €</div>
-                                    <div class="text-xs text-gray-500 uppercase tracking-wider">pro Person · EK {{ number_format($gesamtFb['ek_per_person'], 2, ',', '.') }} €</div>
-                                    @if($gesamtFb['gesamt_vk'] !== null)
-                                        <div class="text-[11px] text-gray-500 mt-0.5">{{ $gesamtFb['personen'] }} Gäste · gesamt {{ number_format($gesamtFb['gesamt_vk'], 2, ',', '.') }} €</div>
-                                    @else
-                                        <div class="text-[11px] text-gray-400 mt-0.5">Pax + Gesamtpreis liegen im Angebot.</div>
-                                    @endif
-                                </div>
-                                @if($weGesamtFb)
-                                    <div class="flex items-center gap-2 rounded-lg bg-black/[0.02] px-3 py-2">
-                                        <span class="text-xs text-gray-500 uppercase tracking-wider">Wareneinsatz gesamt</span>
-                                        <span class="inline-flex items-center gap-1.5 text-sm font-medium {{ $weStil[$weGesamtFb['status']] ?? '' }}">
-                                            <span class="w-2 h-2 rounded-full {{ $wePunkt[$weGesamtFb['status']] ?? 'bg-gray-300' }}"></span>
-                                            <span class="tabular-nums">{{ $weGesamtFb['ist_pct'] !== null ? number_format($weGesamtFb['ist_pct'], 1, ',', '.') . '%' : '—' }}</span>
-                                            <span class="text-[11px] text-gray-400">/ {{ number_format($weGesamtFb['ziel_pct'], 0, ',', '.') }}%</span>
-                                        </span>
-                                    </div>
-                                @endif
-                            </div>
-                            <div>
-                                <p class="text-xs text-gray-500 uppercase tracking-wider mb-1">Wareneinsatz je Kapitel</p>
-                                <div class="divide-y divide-black/5">
-                                    @forelse($weMatrix as $m)
-                                        @php($we = $m['wareneinsatz'])
-                                        <div class="flex items-center gap-3 py-1.5 text-sm" wire:key="fbwe-{{ $m['kapitel_id'] }}" style="padding-left: {{ ($m['depth'] - 1) * 16 }}px">
-                                            <span class="flex-1 min-w-0 break-words leading-tight text-gray-700">{{ $m['titel'] }}</span>
-                                            <span class="inline-flex items-center gap-1.5 shrink-0 {{ $weStil[$we['status']] ?? '' }}">
-                                                <span class="w-2 h-2 rounded-full {{ $wePunkt[$we['status']] ?? 'bg-gray-300' }}"></span>
-                                                <span class="tabular-nums">{{ $we['ist_pct'] !== null ? number_format($we['ist_pct'], 1, ',', '.') . '%' : '—' }}</span>
-                                            </span>
-                                        </div>
-                                    @empty
-                                        <p class="text-sm text-gray-400 py-2">Noch keine Kapitel.</p>
-                                    @endforelse
-                                </div>
-                            </div>
-                        </div>
                     @endif
                 </div>
 
@@ -562,6 +510,10 @@
                      das andere Panels betrifft. --}}
                 <div x-show="tab === 'speisen'" x-cloak class="pt-3 space-y-3" data-fb-panel="speisen">
             @if($kapitel)
+                {{-- Picker-Umbau: 2-Spalten — links [Kapitel-Kopf + Inhalt], rechts der Katalog. Der Kopf liegt
+                     in der linken Spalte, damit der Katalog rechts oben bündig startet (Dominique 2026-08-23). --}}
+                <div class="flex gap-4 items-start" data-fb-speisen-2col>
+                <div class="flex-1 min-w-0 space-y-3" data-fb-speisen-links>
                 {{-- Kapitel-Kopf --}}
                 <div class="relative overflow-hidden {{ $card }} p-5 space-y-3" wire:key="kaphdr-{{ $kapitel->id }}">
                     <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
@@ -595,10 +547,8 @@
                     </div>
                 </div>
 
-                {{-- S3b/Picker-Umbau: 2-Spalten — Inhalt links, permanenter Katalog rechts (Produktions-Muster). --}}
-                <div class="flex gap-4 items-start" data-fb-speisen-2col>
-                {{-- Block-Liste (linke Spalte) --}}
-                <div class="relative overflow-hidden flex-1 min-w-0 {{ $card }} p-5 space-y-3" data-fb-inhalt>
+                {{-- Block-Liste (in der linken Spalte, unter dem Kapitel-Kopf) --}}
+                <div class="relative overflow-hidden {{ $card }} p-5 space-y-3" data-fb-inhalt>
                     <div class="flex items-center justify-between flex-wrap gap-2">
                         <h3 class="font-medium tracking-tight text-gray-900">Inhalt <span class="text-gray-500 text-xs">({{ $kapitel->blocks->count() }})</span></h3>
                         <div class="flex items-center gap-2" x-data="{ presets: false }">
@@ -733,16 +683,17 @@
                         @endforelse
                     </div>
 
-                </div>{{-- /Inhalt (linke Spalte) --}}
+                </div>{{-- /Inhalt --}}
+                </div>{{-- /linke Spalte (Kopf + Inhalt) --}}
 
                 {{-- Persistenter Katalog (geteilter Baustein katalog-picker/-row): Concept · Gericht · Format.
                      Suche + Facetten; „+" fügt ins gewählte Kapitel (Format = Struktur-Kapitel). Server-Modus. --}}
                 <x-foodalchemist::katalog-picker marker="fb" switch="katalogModus" :modes="[
-                    ['key' => 'concept', 'label' => 'Concept', 'active' => $katalogModus === 'concept'],
-                    ['key' => 'gericht', 'label' => 'Gericht', 'active' => $katalogModus === 'gericht'],
-                    ['key' => 'format', 'label' => 'Format', 'active' => $katalogModus === 'format'],
+                    ['key' => 'concept', 'label' => 'Concept', 'active' => $pickerModus === 'concept'],
+                    ['key' => 'gericht', 'label' => 'Gericht', 'active' => $pickerModus === 'gericht'],
+                    ['key' => 'format', 'label' => 'Format', 'active' => $pickerModus === 'format'],
                 ]">
-                    @if($katalogModus === 'concept')
+                    @if($pickerModus === 'concept')
                         <input type="search" wire:model.live.debounce.300ms="conceptSuche" placeholder="Concept suchen …" class="{{ $input }} w-full mb-2 shrink-0" data-fb-katalog-concept />
                         @php($facettenAktiv = collect($conceptFacetten)->filter(fn ($v) => $v !== null)->isNotEmpty())
                         {{-- Facetten als Dropdowns (Produktions-Muster) statt Pill-Wand — Concepter-Dimensionen. --}}
@@ -771,7 +722,7 @@
                                 <p class="text-[11px] text-gray-500 px-2 py-2">{{ $conceptSuche !== '' || $facettenAktiv ? 'Keine Concepts für diese Auswahl.' : 'Noch keine Concepts angelegt.' }}</p>
                             @endforelse
                         </div>
-                    @elseif($katalogModus === 'gericht')
+                    @elseif($pickerModus === 'gericht')
                         <input type="search" wire:model.live.debounce.300ms="gerichtSuche" placeholder="Gericht suchen …" class="{{ $input }} w-full mb-2 shrink-0" data-fb-katalog-gericht />
                         {{-- Facetten als Dropdowns (Produktions-Muster): Warengruppe → Unterklasse. --}}
                         <div class="grid grid-cols-2 gap-1 mb-2 shrink-0" data-fb-gericht-facetten>
