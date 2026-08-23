@@ -417,6 +417,11 @@
                      Kapitel + „Kapitel erzeugen" über die Kaskade) — die Planung, die früher im Foodbook-Modul
                      saß und am Motor vorbeilief. --}}
                 @if(($ownerKontext['owner_type'] ?? null) === 'foodbook')
+                    <x-foodalchemist::modal-section title="Buch-Ebene (Leitplanken · Briefing · Leitidee)">
+                        <livewire:foodalchemist.planung.foodbook-kontext-rail
+                            :foodbook-id="$ownerKontext['owner_id']"
+                            :key="'fbkontext-'.$ownerKontext['owner_id']" />
+                    </x-foodalchemist::modal-section>
                     <x-foodalchemist::modal-section title="Kapitel-Steuerung">
                         <livewire:foodalchemist.planung.kapitel-rail
                             :foodbook-id="$ownerKontext['owner_id']"

@@ -5,6 +5,7 @@ use Livewire\Livewire;
 use Platform\Core\Contracts\LLMProviderContract;
 use Platform\FoodAlchemist\Jobs\GenerateConceptJob;
 use Platform\FoodAlchemist\Livewire\Planung\Index as PlanungIndex;
+use Platform\FoodAlchemist\Livewire\Planung\FoodbookKontextRail;
 use Platform\FoodAlchemist\Livewire\Planung\KapitelRail;
 use Platform\FoodAlchemist\Models\FoodAlchemistCascadeRun;
 use Platform\FoodAlchemist\Models\FoodAlchemistCascadeRunStep;
@@ -166,6 +167,21 @@ it('regeneriereStep behält den Kapitel-Attach (kein stiller Datenverlust)', fun
     app(PlanningCascadeService::class)->regeneriereStep($this->rootTeam, (int) $step->id);
 
     Queue::assertPushed(GenerateConceptJob::class, fn ($j) => $j->attachOwnerType === 'foodbook' && (int) $j->attachContainerId === $kap);
+});
+
+it('FoodbookKontextRail: rendert (inkl. Leitidee-Canvas) + Leitplanken/Briefing persistieren', function () {
+    Queue::fake();
+    $fb = macheFoodbookMitKapiteln($this->rootTeam);
+
+    $comp = Livewire::test(FoodbookKontextRail::class, ['foodbookId' => (int) $fb->id])
+        ->assertSeeHtml('data-fbkontext-leitplanken')
+        ->assertSeeHtml('data-fbkontext-canvas')          // Canvas-Board kompiliert + rendert
+        ->call('leitplankeSetzen', 'default_niveau', 'gehoben')
+        ->set('beschreibung', 'Einleitung fürs Angebot.');   // blur-sync feuert updatedBeschreibung
+
+    $fb->refresh();
+    expect($fb->default_niveau)->toBe('gehoben')
+        ->and(trim((string) $fb->description))->toBe('Einleitung fürs Angebot.');
 });
 
 it('Guard: fremdes Team kann das Kapitel nicht über die Kaskade erzeugen', function () {
