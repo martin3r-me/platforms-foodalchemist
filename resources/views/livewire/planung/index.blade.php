@@ -279,7 +279,6 @@
                     </div>
                     <dl class="text-[11px] text-gray-500 space-y-1">
                         <div class="flex justify-between"><dt>Herkunft</dt><dd>{{ $active->source_knowledge_document_id ? 'Trend #' . $active->source_knowledge_document_id : 'Freier Brief' }}</dd></div>
-                        <div class="flex justify-between"><dt>Skizzen</dt><dd>{{ $skizzenAnzahl }}</dd></div>
                     </dl>
                     {{-- Kaskaden-Kurzstatus je Stufe — ohne den Editor zu öffnen (finale Etappe). --}}
                     @php $aktStufen = $kaskaden[$active->id]['stufen'] ?? []; @endphp
@@ -313,7 +312,7 @@
 
     {{-- FULLSCREEN-DARK-EDITOR --}}
     <x-foodalchemist::modal name="planung-editor" fullscreen dark-canvas title="Planung"
-                            :title-name="$active?->title" tab-init="analyse">
+                            :title-name="$active?->title" tab-init="gericht">
         <x-slot:actions>
             <button wire:click="speichern" class="{{ $btnPrimary }}">
                 @svg('heroicon-o-check', 'w-4 h-4')
@@ -332,12 +331,9 @@
 
         <x-slot:tabs>
             <div class="flex gap-1">
-                <button type="button" @click="tab='analyse'"
-                        :class="tab==='analyse' ? 'bg-violet-500/25 text-white' : 'text-gray-300 hover:text-white'"
-                        class="px-3 py-1.5 rounded-t-md text-xs font-medium">Analyse</button>
-                <button type="button" @click="tab='skizzen'"
-                        :class="tab==='skizzen' ? 'bg-violet-500/25 text-white' : 'text-gray-300 hover:text-white'"
-                        class="px-3 py-1.5 rounded-t-md text-xs font-medium">Skizzen</button>
+                {{-- Analyse + Skizzen (Spec-40-E0-Ideations-Einstieg) retired (Dominique 2026-08-23):
+                     ungeerdeter Brainstorm-Umweg, abgelöst durch Composer (geerdet) + Brief-Kaskaden.
+                     DishIdea/IdeenService bleibt intern (Materialisierung, Kapitel-Ideen-MCP). --}}
                 <button type="button" @click="tab='basisrezept'"
                         :class="tab==='basisrezept' ? 'bg-violet-500/25 text-white' : 'text-gray-300 hover:text-white'"
                         class="px-3 py-1.5 rounded-t-md text-xs font-medium">Basisrezept</button>
@@ -580,120 +576,6 @@
             </div>
 
             {{-- ANALYSE --}}
-            <div wire:key="planung-tab-analyse" x-show="tab==='analyse'" class="space-y-4">
-                <x-foodalchemist::modal-section title="Analyse / Ausgangslage">
-                    <p class="{{ $label ?? 'text-[11px] text-gray-500' }} mb-1">Trend-Inhalt bzw. deine Analyse — die Grundlage für Skizzen und „Go".</p>
-                    <textarea wire:model="form.analysis" rows="14" class="{{ $input }} font-mono text-[12px] leading-relaxed"
-                              placeholder="Was ist der Trend? Was ist die Idee? Constraints, Anlass, Richtung …"></textarea>
-                    {{-- Spec 40 E0: Analyse → Skizzen (KI-Divergenz auf Session-Ebene). Sprung auf den Skizzen-Tab beim Klick. --}}
-                    <div class="mt-2 flex items-center gap-2 flex-wrap">
-                        <button type="button" wire:click="skizzenAusAnalyse" @click="tab='skizzen'"
-                                wire:loading.attr="disabled" wire:target="skizzenAusAnalyse"
-                                class="{{ $btnGhost }} disabled:opacity-40">
-                            <span wire:loading.remove wire:target="skizzenAusAnalyse">@svg('heroicon-o-sparkles', 'w-4 h-4') Skizzen aus Analyse ableiten</span>
-                            <span wire:loading wire:target="skizzenAusAnalyse">Skizzen werden abgeleitet …</span>
-                        </button>
-                        <span class="text-[10px] text-gray-500">KI leitet Gericht-Skizzen ab — sie landen im Skizzen-Tab (kein „Go", keine Erdung).</span>
-                    </div>
-                </x-foodalchemist::modal-section>
-            </div>
-
-            {{-- SKIZZEN (Divergenz-Board) --}}
-            <div wire:key="planung-tab-skizzen" x-show="tab==='skizzen'" class="space-y-4">
-                <x-foodalchemist::modal-section title="Skizze hinzufügen">
-                    <div class="flex gap-2">
-                        <input type="text" wire:model="ideeTitel" wire:keydown.enter="ideeHinzu"
-                               placeholder="Gericht-Skizze (Titel) …" class="{{ $input }}" />
-                        <button wire:click="ideeHinzu" class="{{ $btnPrimary }} shrink-0">Skizze</button>
-                    </div>
-                    <div class="flex gap-2 mt-2">
-                        <input type="text" wire:model="paketName" wire:keydown.enter="paketBilden"
-                               placeholder="Paket/Gruppe (Name) …" class="{{ $input }}" />
-                        <button wire:click="paketBilden" class="{{ $btnGhost }} shrink-0">Paket</button>
-                    </div>
-                </x-foodalchemist::modal-section>
-
-                {{-- Batch-Kaskaden-Eingang (Etappe 4, Teil 3): Skizzen als gestufte Gericht-Läufe starten.
-                     Ohne Häkchen = alle bearbeitbaren; mit Häkchen (Teil 3b) = nur die gewählten. Stand je
-                     Karte (Teil 2b), Freigabe je Stück. --}}
-                @if($skizzenAnzahl > 0)
-                    @php $auswahlN = count($skizzenAuswahl); @endphp
-                    <div class="flex items-center justify-between gap-2">
-                        <p class="text-[11px] text-gray-500">
-                            @if($auswahlN > 0)
-                                {{ $auswahlN }} Skizze{{ $auswahlN === 1 ? '' : 'n' }} gewählt — als gestufte Gericht-Läufe starten (Stand je Karte, Freigabe je Stück).
-                            @else
-                                Skizzen als gestufte Gericht-Läufe starten — anhaken für gezielte Auswahl, sonst alle. Stand je Karte, Freigabe je Stück.
-                            @endif
-                        </p>
-                        <div class="flex items-center gap-2 shrink-0">
-                            @if($auswahlN > 0)
-                                <button wire:click="skizzenAuswahlLeeren" class="text-[10px] text-gray-500 hover:text-gray-700">Auswahl leeren</button>
-                            @endif
-                            <button wire:click="skizzenBatchAlsGerichte" wire:loading.attr="disabled"
-                                    class="{{ $btnGhost }} shrink-0">{{ $auswahlN > 0 ? 'Auswahl als Gerichte' : 'Alle als Gerichte' }}</button>
-                        </div>
-                    </div>
-                @endif
-
-                {{-- Live-Poll der Karten-Badges (Etappe 4, Teil 3b-b): solange ein aus einer Skizze
-                     gestarteter Lauf noch läuft (running), refresht sich das Board selbst — bare
-                     wire:poll → $refresh, render() liest $skizzenLauf frisch → die Badges kippen live
-                     von „läuft" auf „prüfen"/„fertig". Kein Einzel-Cockpit-Hijack ($laufId/$laeuft
-                     unangetastet). Sobald kein verknüpfter Lauf mehr running ist, entfällt das Element
-                     → Polling stoppt. --}}
-                @if($skizzenLaufAktiv)
-                    <div wire:poll.2500ms data-skizzen-poll class="flex items-center gap-1.5 text-[11px] text-amber-600">
-                        @svg('heroicon-o-arrow-path', 'w-3.5 h-3.5 animate-spin')
-                        <span>Stand der Skizzen-Läufe aktualisiert automatisch …</span>
-                    </div>
-                @endif
-
-                <x-foodalchemist::modal-section title="Skizzen ({{ $skizzenAnzahl }})">
-                    @if($skizzen)
-                        @forelse($skizzen['gruppen'] as $g)
-                            <div wire:key="grp-{{ $g['gruppe']->id }}" class="mb-3">
-                                <p class="text-xs font-semibold text-gray-800">📦 {{ $g['gruppe']->name }}</p>
-                                <div class="pl-3 space-y-1 mt-1">
-                                    @foreach($g['ideen'] as $i)
-                                        <div wire:key="gi-{{ $i->id }}" class="flex items-center justify-between text-xs text-gray-700">
-                                            <label class="flex items-center gap-1.5 min-w-0">
-                                                <input type="checkbox" wire:model.live="skizzenAuswahl" value="{{ $i->id }}"
-                                                       class="shrink-0 rounded border-gray-300 text-violet-600 focus:ring-violet-500" />
-                                                <span class="truncate">{{ $i->title }}</span>
-                                            </label>
-                                            <div class="flex items-center gap-2 shrink-0">
-                                                {!! $skizzeLaufBadge($i->id) !!}
-                                                <button wire:click="skizzeAlsGericht({{ $i->id }})" @click="tab='gericht'" class="text-[10px] text-violet-600 hover:text-violet-700">als Gericht</button>
-                                                <button wire:click="ideeVerwerfen({{ $i->id }})" class="text-[10px] text-rose-500 hover:text-rose-600">verwerfen</button>
-                                            </div>
-                                        </div>
-                                    @endforeach
-                                </div>
-                            </div>
-                        @empty
-                        @endforelse
-
-                        @forelse($skizzen['einzel'] as $i)
-                            <div wire:key="ei-{{ $i->id }}" class="flex items-center justify-between text-xs text-gray-700 py-0.5">
-                                <label class="flex items-center gap-1.5 min-w-0">
-                                    <input type="checkbox" wire:model.live="skizzenAuswahl" value="{{ $i->id }}"
-                                           class="shrink-0 rounded border-gray-300 text-violet-600 focus:ring-violet-500" />
-                                    <span class="truncate">{{ $i->title }}</span>
-                                </label>
-                                <div class="flex items-center gap-2 shrink-0">
-                                    {!! $skizzeLaufBadge($i->id) !!}
-                                    <button wire:click="skizzeAlsGericht({{ $i->id }})" @click="tab='gericht'" class="text-[10px] text-violet-600 hover:text-violet-700">als Gericht</button>
-                                    <button wire:click="ideeVerwerfen({{ $i->id }})" class="text-[10px] text-rose-500 hover:text-rose-600">verwerfen</button>
-                                </div>
-                            </div>
-                        @empty
-                            <p class="text-xs text-gray-500">Noch keine Skizzen — oben eine anlegen.</p>
-                        @endforelse
-                    @endif
-                </x-foodalchemist::modal-section>
-            </div>
-
             {{-- BASISREZEPT — eigener Tab mit seinen Leitplanken --}}
             <div wire:key="planung-tab-basisrezept" x-show="tab==='basisrezept'">
                 @include('foodalchemist::livewire.planung.partials.erstellen-tab', ['scope' => 'rezept', 'vk' => false, 'goLabel' => 'Basisrezept', 'goIcon' => 'heroicon-o-beaker'])

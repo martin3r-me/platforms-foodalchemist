@@ -824,7 +824,7 @@ class Index extends Component
         $this->ladeForm();
         $this->ladeLetztenLauf();
         // Scope-Treue: ein „Freies Basisrezept"-Start öffnet direkt auf dem Basisrezept-Tab (Ebene ≠ Gericht).
-        // Ohne $startTab bleibt der Editor-Default (tabInit='analyse') — z.B. beim Öffnen aus der Liste.
+        // Ohne $startTab bleibt der Editor-Default (tabInit='gericht') — z.B. beim Öffnen aus der Liste.
         $this->dispatch('modal.open', name: 'planung-editor', tab: $startTab);
     }
 
