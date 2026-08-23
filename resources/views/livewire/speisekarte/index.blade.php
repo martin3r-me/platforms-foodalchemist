@@ -306,7 +306,10 @@
                             <p class="text-[10px] text-gray-500">Fügt ein Format als Live-Rubrik ein.</p>
                             <div class="overflow-y-auto space-y-0.5 max-h-[24rem]">
                                 @forelse($formatKandidaten as $fk)
-                                    <button type="button" wire:key="skfmt-{{ $fk->id }}" wire:click="formatRubrikEinfuegen({{ $fk->id }})" class="w-full text-left truncate text-xs px-2 py-1.5 rounded-lg hover:bg-violet-500/15 text-gray-900" data-sk-format-kand title="{{ $fk->consumer_name ?: $fk->name }}">+ {{ $fk->consumer_name ?: $fk->name }}</button>
+                                    <button type="button" wire:key="skfmt-{{ $fk->id }}" wire:click="formatRubrikEinfuegen({{ $fk->id }})" class="group w-full flex items-start gap-1.5 text-left text-xs px-2 py-1.5 rounded-lg hover:bg-violet-500/15" data-sk-format-kand title="{{ $fk->consumer_name ?: $fk->name }}">
+                                        <span class="shrink-0 text-violet-500 font-semibold leading-snug">+</span>
+                                        <span class="min-w-0 flex-1 break-words leading-snug text-gray-800">{{ $fk->consumer_name ?: $fk->name }}</span>
+                                    </button>
                                 @empty
                                     <p class="text-[11px] text-gray-400 px-2 py-2">Keine Formate {{ trim($formatSuche) !== '' ? 'gefunden' : 'vorhanden' }}.</p>
                                 @endforelse
@@ -323,9 +326,10 @@
                             @endif
                             <div class="overflow-y-auto space-y-0.5 max-h-[22rem]">
                                 @forelse($pickerErgebnisse as $g)
-                                    <button type="button" wire:key="skpk-{{ $g->id }}" @disabled($pickerRubrikTitel === null) wire:click="{{ $pickerModus === 'menue' ? 'positionAusMenue' : 'positionAusGericht' }}({{ (int) ($pickerRubrikId ?? 0) }}, {{ $g->id }})" class="w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg text-xs text-left {{ $pickerRubrikTitel !== null ? 'hover:bg-violet-500/10 text-gray-900' : 'opacity-40 cursor-not-allowed text-gray-500' }}">
-                                        <span class="truncate">+ {{ $g->name }}</span>
-                                        <span class="text-gray-500 tabular-nums shrink-0">{{ isset($g->sales_net) && $g->sales_net !== null ? number_format((float) $g->sales_net, 2, ',', '.') . ' €' : '' }}</span>
+                                    <button type="button" wire:key="skpk-{{ $g->id }}" @disabled($pickerRubrikTitel === null) wire:click="{{ $pickerModus === 'menue' ? 'positionAusMenue' : 'positionAusGericht' }}({{ (int) ($pickerRubrikId ?? 0) }}, {{ $g->id }})" class="group w-full flex items-start gap-1.5 px-2 py-1.5 rounded-lg text-xs text-left {{ $pickerRubrikTitel !== null ? 'hover:bg-violet-500/10' : 'opacity-40 cursor-not-allowed' }}">
+                                        <span class="shrink-0 font-semibold leading-snug {{ $pickerRubrikTitel !== null ? 'text-violet-500' : 'text-gray-400' }}">+</span>
+                                        <span class="min-w-0 flex-1 break-words leading-snug {{ $pickerRubrikTitel !== null ? 'text-gray-800' : 'text-gray-500' }}" title="{{ $g->name }}">{{ $g->name }}</span>
+                                        <span class="text-gray-500 tabular-nums shrink-0 leading-snug">{{ isset($g->sales_net) && $g->sales_net !== null ? number_format((float) $g->sales_net, 2, ',', '.') . ' €' : '' }}</span>
                                     </button>
                                 @empty
                                     <p class="text-[11px] text-gray-400 px-2 py-2">{{ trim($pickerSuche) !== '' ? 'Nichts gefunden.' : ($pickerModus === 'menue' ? 'Keine Menüs/Concepts.' : 'Keine Gerichte.') }}</p>

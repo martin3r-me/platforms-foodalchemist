@@ -135,7 +135,12 @@
                  erreichbar, obwohl das Vollbild-Modal die Seiten-Sidebar verdeckt.
                  `-mx-6` hebt das px-6 des Modal-Bodys auf (Spalten randbündig); die Mitte bekommt px-6
                  zurück, damit die sticky editor-tabs-Leiste (-mx-6) wieder auf Spaltenbreite spannt. --}}
-            <div class="flex gap-4 -mx-6 items-start">
+            <div class="flex gap-4 -mx-6 items-start"
+                 {{-- Picker-Umbau: die rechte Spalte wechselt je Tab. Im Speisen-Tab wird der Katalog die
+                      äußerste rechte Spalte (Leitstelle-Rail ausgeblendet, Mitte füllt auf → Katalog ganz rechts);
+                      in den Kurier-/Ausgabe-Tabs zeigt sich die Leitstelle-Rail. `fb-cockpit-tab` (Z. 194,
+                      im editor-tabs-Scope) bubbelt hierher und trägt den aktiven Tab. --}}
+                 x-data="{ ftab: 'briefing' }" @fb-cockpit-tab="ftab = $event.detail.tab">
                 {{-- LINKS: Navigation (Foodbook-Kopf + Kapitelbaum, gespiegelt aus der Seiten-Sidebar) --}}
                 <div class="w-56 shrink-0 pl-6 space-y-1" data-fb-nav>
                     <button type="button" wire:click="kopfAnzeigen"
@@ -157,7 +162,7 @@
                                 <button type="button" wire:key="fmtk-{{ $fk->id }}" wire:click="formatKapitelEinfuegen({{ $fk->id }})" @click="open = false"
                                         class="block w-full text-left truncate text-xs px-2 py-0.5 rounded hover:bg-violet-500/10"
                                         title="{{ $fk->consumer_name ?: $fk->name }}">
-                                    {{ $fk->name }}@if($fk->origin === 'kunde') 🔒@endif
+                                    {{ $fk->name }}@if($fk->origin === 'kunde')<span class="text-[9px] text-gray-400 ml-1">(Kunde-IP)</span>@endif
                                 </button>
                             @empty
                                 <p class="text-[11px] text-gray-400 px-1">Keine Formate vorhanden.</p>
@@ -618,9 +623,10 @@
                         </div>
                         <div class="overflow-y-auto space-y-0.5 max-h-[24rem]">
                             @forelse($conceptKandidaten as $ck)
-                                <button type="button" wire:key="kck-{{ $ck->id }}" wire:click="conceptHinzu({{ $ck->id }})" class="w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg text-xs hover:bg-violet-500/10 text-left">
-                                    <span class="truncate text-gray-900">+ {{ $ck->name }}</span>
-                                    <span class="text-gray-500 tabular-nums shrink-0">{{ $ck->price_per_person_cache !== null ? number_format((float) $ck->price_per_person_cache, 2, ',', '.') . ' €' : '' }}</span>
+                                <button type="button" wire:key="kck-{{ $ck->id }}" wire:click="conceptHinzu({{ $ck->id }})" class="group w-full flex items-start gap-1.5 px-2 py-1.5 rounded-lg text-xs hover:bg-violet-500/10 text-left">
+                                    <span class="shrink-0 text-violet-500 font-semibold leading-snug">+</span>
+                                    <span class="min-w-0 flex-1 break-words leading-snug text-gray-800" title="{{ $ck->name }}">{{ $ck->name }}</span>
+                                    <span class="text-gray-500 tabular-nums shrink-0 leading-snug">{{ $ck->price_per_person_cache !== null ? number_format((float) $ck->price_per_person_cache, 2, ',', '.') . ' €' : '' }}</span>
                                 </button>
                             @empty
                                 <p class="text-[11px] text-gray-500 px-2 py-2">{{ $conceptSuche !== '' || $facettenAktiv ? 'Keine Concepts für diese Auswahl.' : 'Noch keine Concepts angelegt.' }}</p>
@@ -638,9 +644,10 @@
                         </div>
                         <div class="overflow-y-auto space-y-0.5 max-h-[24rem]">
                             @forelse($gerichtKandidaten as $gk)
-                                <button type="button" wire:key="kgk-{{ $gk->id }}" wire:click="gerichtHinzu({{ $gk->id }})" class="w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg text-xs hover:bg-violet-500/10 text-left">
-                                    <span class="truncate text-gray-900">+ {{ $gk->name }}</span>
-                                    <span class="text-gray-500 tabular-nums shrink-0">{{ $gk->sales_net !== null ? number_format((float) $gk->sales_net, 2, ',', '.') . ' €' : '' }}</span>
+                                <button type="button" wire:key="kgk-{{ $gk->id }}" wire:click="gerichtHinzu({{ $gk->id }})" class="group w-full flex items-start gap-1.5 px-2 py-1.5 rounded-lg text-xs hover:bg-violet-500/10 text-left">
+                                    <span class="shrink-0 text-violet-500 font-semibold leading-snug">+</span>
+                                    <span class="min-w-0 flex-1 break-words leading-snug text-gray-800" title="{{ $gk->name }}">{{ $gk->name }}</span>
+                                    <span class="text-gray-500 tabular-nums shrink-0 leading-snug">{{ $gk->sales_net !== null ? number_format((float) $gk->sales_net, 2, ',', '.') . ' €' : '' }}</span>
                                 </button>
                             @empty
                                 <p class="text-[11px] text-gray-500 px-2 py-2">{{ $gerichtSuche !== '' || $gerichtHauptgruppe !== null ? 'Keine VK-Gerichte für diese Auswahl.' : 'Noch keine VK-Gerichte vorhanden.' }}</p>
@@ -655,7 +662,10 @@
                         <p class="text-[10px] text-gray-500 mb-1">Fügt ein Format als Live-Kapitel ein (Struktur).</p>
                         <div class="overflow-y-auto space-y-0.5 max-h-[24rem]">
                             @forelse($formatKandidaten as $fk)
-                                <button type="button" wire:key="kfmt-{{ $fk->id }}" wire:click="formatKapitelEinfuegen({{ $fk->id }})" class="w-full text-left truncate text-xs px-2 py-1.5 rounded-lg hover:bg-violet-500/10 text-gray-900" title="{{ $fk->consumer_name ?: $fk->name }}">+ {{ $fk->name }}@if($fk->origin === 'kunde')<span class="text-[9px] text-gray-400 ml-1">(Kunde-IP)</span>@endif</button>
+                                <button type="button" wire:key="kfmt-{{ $fk->id }}" wire:click="formatKapitelEinfuegen({{ $fk->id }})" class="group w-full flex items-start gap-1.5 text-left text-xs px-2 py-1.5 rounded-lg hover:bg-violet-500/10" title="{{ $fk->consumer_name ?: $fk->name }}">
+                                    <span class="shrink-0 text-violet-500 font-semibold leading-snug">+</span>
+                                    <span class="min-w-0 flex-1 break-words leading-snug text-gray-800">{{ $fk->name }}@if($fk->origin === 'kunde')<span class="text-[9px] text-gray-400 ml-1">(Kunde-IP)</span>@endif</span>
+                                </button>
                             @empty
                                 <p class="text-[11px] text-gray-500 px-2 py-2">Keine Formate vorhanden.</p>
                             @endforelse
@@ -672,8 +682,10 @@
                 </div>{{-- /Mitte --}}
 
                 {{-- RECHTS: Leitstelle-Rail — aus dem Seiten-activity-Slot hierher (Spec 29 / S8).
-                     Re-Mount bei Selektionswechsel via key; meldet Ziel-Edits per Event an Index zurück. --}}
-                <div class="w-72 shrink-0 pr-6" data-fb-rail>
+                     Re-Mount bei Selektionswechsel via key; meldet Ziel-Edits per Event an Index zurück.
+                     Picker-Umbau: im Speisen-Tab ausgeblendet (x-show, bleibt im DOM → kein Remount), damit
+                     der Katalog die äußerste rechte Spalte wird. --}}
+                <div class="w-72 shrink-0 pr-6" data-fb-rail x-show="ftab !== 'speisen'" x-cloak>
                     <livewire:foodalchemist.foodbooks.leitstelle-rail
                         :foodbook-id="$fb->id"
                         :kapitel-id="$selectedKapitelId"
