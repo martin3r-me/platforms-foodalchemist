@@ -115,126 +115,13 @@ class Index extends Component
     // Ersetzt den alten Monolith „Konzept aus Gerüst" (ein Gerüst → ein Konzept war die
     // falsche Abstraktion, Dominique 2026-07-21). Jetzt schlägt die Engine je Slot vor,
     // der Mensch stimmt ab, Übernehmen landet im Slot-Kapitel-Konzept.
-    /** slotId → Liste vorgeschlagener Gerichte {id,name,diet_form,sales_net}. */
-    public array $slotVorschlaege = [];
-
-    public function vorschlaegeFuerSlot(int $slotId): void
-    {
-        if ($this->selectedId === null || $this->frameId === null) {
-            return;
-        }
-        $frame = \Platform\FoodAlchemist\Models\FoodAlchemistPlanningFrame::find($this->frameId);
-        $slot = \Platform\FoodAlchemist\Models\FoodAlchemistPlanningFrameSlot::find($slotId);
-        if ($frame === null || $slot === null) {
-            return;
-        }
-        // Kreative Leitplanken: das aufgelöste Niveau (Foodbook-Default → Segment) rankt die
-        // Vorschläge (Rezepte mit passender Niveau-Eignung höher). Die Kapitel-Stufe (concept.level)
-        // greift erst, wenn das Kapitel-Konzept existiert — beim ersten Vorschlag gilt der Default.
-        $svc = app(FoodbookService::class);
-        $fb = $svc->detail($this->team(), $this->selectedId);
-        $lp = $fb !== null ? $svc->leitplanken($this->team(), $fb) : ['niveau' => null, 'convenience' => null];
-        $this->slotVorschlaege[$slotId] = app(\Platform\FoodAlchemist\Services\ConceptGeneratorService::class)
-            ->slotVorschlaege($this->team(), $frame, $slot, 6, $lp['niveau'], $lp['convenience']);
-    }
-
-    /** Weg B: Gericht in den Slot übernehmen (Slot-Kapitel-Konzept) + aus der Vorschlagsliste nehmen. */
-    public function uebernehmeGericht(int $slotId, int $recipeId, FoodbookService $svc): void
-    {
-        if ($this->selectedId === null) {
-            return;
-        }
-        $svc->uebernehmeVorschlag($this->team(), $this->selectedId, $slotId, $recipeId);
-        $this->entferneVorschlag($slotId, $recipeId);
-    }
-
-    public function verwerfeGericht(int $slotId, int $recipeId): void
-    {
-        $this->entferneVorschlag($slotId, $recipeId);
-    }
-
-    private function entferneVorschlag(int $slotId, int $recipeId): void
-    {
-        if (isset($this->slotVorschlaege[$slotId])) {
-            $this->slotVorschlaege[$slotId] = array_values(array_filter(
-                $this->slotVorschlaege[$slotId],
-                fn ($v) => (int) $v['id'] !== $recipeId,
-            ));
-        }
-    }
-
-    /** slotId → kurze Rückmeldung nach „Konzept füllen" (Leitstelle-Kaskade). */
-    public array $slotFuellStatus = [];
-
-    /**
-     * Leitstelle-Kaskade (schritt-für-schritt, pro Slot): erzeugt/füllt das Slot-Konzept mit
-     * passenden Gerichten. Das Foodbook ist die Leitstelle — das Konzept erbt die Leitplanken
-     * (uebernehmeVorschlag stempelt concept.level), die Gericht-Auswahl folgt Niveau + Convenience.
-     * $quelle = 'bestand' (deterministisch, gerankt) | 'neu' (KI-Neu-Erstellung, braucht Provider, #512).
-     */
-    public function slotFuellen(int $slotId, string $quelle, FoodbookService $svc): void
-    {
-        $this->slotFuellStatus[$slotId] = null;
-        if ($this->selectedId === null || $this->frameId === null) {
-            return;
-        }
-        $frame = \Platform\FoodAlchemist\Models\FoodAlchemistPlanningFrame::find($this->frameId);
-        $slot = \Platform\FoodAlchemist\Models\FoodAlchemistPlanningFrameSlot::find($slotId);
-        if ($frame === null || $slot === null) {
-            return;
-        }
-        if ($slot->chapter_id === null) {
-            $this->slotFuellStatus[$slotId] = 'Erst „Struktur anwenden" — der Slot braucht ein Kapitel.';
-            return;
-        }
-        if ($quelle === 'neu') {
-            // KI-Neu-Erstellung eines Gerichts zum Niveau/Convenience/Kundentyp — braucht einen
-            // gebundenen LLM-Provider (auf demo, #512). Solange deterministisch aus Bestand füllen.
-            $this->slotFuellStatus[$slotId] = 'KI-Neu-Erstellung braucht einen gebundenen Provider (demo, #512) — solange „aus Bestand" nutzen.';
-            return;
-        }
-
-        // Bestand: Top-target_count gerankt (Niveau + Convenience aus den Leitplanken) → ins Slot-Konzept.
-        $lp = $svc->leitplanken($this->team(), $svc->detail($this->team(), $this->selectedId));
-        $anzahl = max(1, (int) ($slot->target_count ?: 3));
-        $vorschlaege = app(\Platform\FoodAlchemist\Services\ConceptGeneratorService::class)
-            ->slotVorschlaege($this->team(), $frame, $slot, $anzahl, $lp['niveau'], $lp['convenience']);
-        $n = 0;
-        foreach ($vorschlaege as $v) {
-            $res = $svc->uebernehmeVorschlag($this->team(), $this->selectedId, $slotId, (int) $v['id']);
-            if (! ($res['schon_drin'] ?? false)) {
-                $n++;
-            }
-        }
-        unset($this->slotVorschlaege[$slotId]);
-        $this->frameLaden();
-        $this->slotFuellStatus[$slotId] = $n > 0
-            ? "Konzept gefüllt: {$n} Gericht(e) aus dem Bestand (Niveau/Convenience-gerankt)."
-            : 'Kein passendes Gericht im Bestand — Leitplanken/Filter prüfen oder „neu erstellen".';
-    }
-
-    // ── Phase 3a: „Struktur anwenden" — Gerüst-Slots als Kapitel materialisieren (Slot = Kapitel) ──
-    public ?array $strukturErgebnis = null;
+    // S3b: Slot-Vorschlags-/Füll-/Übernehme-/Struktur-Methoden entfernt (alte Foodbook-Planung →
+    // Leitstelle-Kaskade). Die Service-Ebene (FoodbookService::uebernehmeVorschlag/strukturAusGeruest)
+    // bleibt; sie wird jetzt vom Kaskaden-Motor genutzt.
 
     /** Fehlermeldung des Voll-Kaskade-Go (P3), wenn kein Gerüst da ist. */
     public ?string $kaskadeMeldung = null;
 
-    public function strukturAnwenden(FoodbookService $svc): void
-    {
-        $this->strukturErgebnis = null;
-        if ($this->selectedId === null) {
-            return;
-        }
-        $this->strukturErgebnis = $svc->strukturAusGeruest($this->team(), $this->selectedId);
-        // Gerüst neu laden, damit $frameSlots die frisch gesetzten chapter_id trägt.
-        $this->frameLaden();
-    }
-
-    /**
-     * Voll-Kaskade (P3): aus dem Foodbook-Gerüst je Slot ein Concept erzeugen (an sein Kapitel gehängt) +
-     * je Concept der Gericht-Fan-out. Legt eine Planungs-Session als Review-Wurzel an und leitet in den
-     * Planung-Editor (Live-Fortschritt + Freigabe). Ohne Gerüst → Meldung.
-     */
     /**
      * Spec 42 (F2) — Handoff in die Leitstelle. Die Planung (Brief → Gerüst → Kaskade) zieht in die
      * Leitstelle; das Foodbook ist reine Ausgabe. Dieser Knopf baut KEIN Gerüst mehr im Modul, sondern
@@ -251,246 +138,9 @@ class Index extends Component
         return redirect()->route('foodalchemist.planung.index', ['fb_owner' => (int) $this->selectedId]);
     }
 
-    // ── Spec 19 E6.3: Kreativ-Skizzenfläche (IdeenService) ──────────────────────
-    // Divergenz-Ebene: freie oder aus Bestand übernommene Skizzen PRO Kapitel, Paket-Bündelung
-    // per Mehrfachauswahl. Erdet NICHTS (Invariante M4) — erst das Kapitel-Go (E7.3)
-    // materialisiert Skizzen zu Konzepten/Blöcken. Deshalb hier nur entwurf|verworfen.
-    public string $ideeTitel = '';
-
-    public string $skizzeGerichtSuche = '';
-
-    /** Markierte Idee-IDs für „zu Paket bündeln" (nur freie Einzel-Skizzen). */
-    public array $ideeAuswahl = [];
-
-    public string $paketName = '';
-
-    public bool $ideenPapierkorb = false;
-
-    public ?string $ideenFehler = null;
-
-    /** Spec 19 E9.4: Kreativ-Modus-Umschalter + Pairing-Inspiration (Pull-not-Push). */
-    public string $kreativSeed = '';
-
-    public ?string $kreativHinweis = null;
-
-    /** Modus pro Kapitel setzen (voll_kreativ|hybrid|datenbank) — erbt sonst vom Foodbook. */
-    public function kreativModusSetzen(string $modus): void
-    {
-        if ($this->selectedKapitelId === null
-            || ! in_array($modus, FoodAlchemistFoodbookKapitel::CREATIVE_MODES, true)) {
-            return;
-        }
-        app(FoodbookService::class)->updateKapitel($this->team(), $this->selectedKapitelId, ['creative_mode' => $modus]);
-        $this->kreativHinweis = null;
-    }
-
-    /** „erden?"-Pull pro Idee: Idee-Titel als Inspirations-Seed (kein Dauer-Einblenden des Bestands). */
-    public function erdenPull(string $term): void
-    {
-        $this->kreativSeed = trim($term);
-        $this->kreativHinweis = null;
-    }
-
-    /** Bewusstes Melden einer Sortiments-Lücke ins Signale-Cockpit (E9.3). */
-    public function luckeMelden(string $slug): void
-    {
-        app(\Platform\FoodAlchemist\Services\PairingInspirationService::class)
-            ->meldeLuecke($this->team(), $slug, ['kapitel_id' => $this->selectedKapitelId]);
-        $this->kreativHinweis = 'Sortiments-Lücke gemeldet: ' . $slug;
-    }
-
-    /** Freie Skizze anlegen (Titel Pflicht) — Owner = gewähltes Kapitel. */
-    public function ideeHinzu(): void
-    {
-        $this->ideenFehler = null;
-        if ($this->selectedKapitelId === null) {
-            return;
-        }
-        try {
-            app(IdeenService::class)->add($this->team(), [
-                'chapter_id' => $this->selectedKapitelId,
-                'title' => $this->ideeTitel,
-            ]);
-            $this->ideeTitel = '';
-        } catch (\RuntimeException $e) {
-            $this->ideenFehler = $e->getMessage();
-        }
-    }
-
-    /** Bestands-Gericht als Skizze übernehmen (loser sales_recipe_id-Zeiger, dedupliziert NICHTS). */
-    public function skizzeAusBestand(int $recipeId): void
-    {
-        $this->ideenFehler = null;
-        if ($this->selectedKapitelId === null) {
-            return;
-        }
-        try {
-            app(IdeenService::class)->uebernehmeBestand($this->team(), [
-                'chapter_id' => $this->selectedKapitelId,
-                'sales_recipe_id' => $recipeId,
-            ]);
-            $this->skizzeGerichtSuche = '';
-        } catch (\RuntimeException $e) {
-            $this->ideenFehler = $e->getMessage();
-        }
-    }
-
-    public function ideeVerwerfen(int $id): void
-    {
-        $this->ideeStatus($id, 'verworfen');
-    }
-
-    public function ideeReaktivieren(int $id): void
-    {
-        $this->ideeStatus($id, 'entwurf');
-    }
-
-    private function ideeStatus(int $id, string $status): void
-    {
-        $this->ideenFehler = null;
-        try {
-            app(IdeenService::class)->setStatus($this->team(), $id, $status);
-        } catch (\RuntimeException $e) {
-            $this->ideenFehler = $e->getMessage();
-        }
-        // Eine verworfene Skizze fällt aus der Bündel-Auswahl.
-        $this->ideeAuswahl = array_values(array_filter($this->ideeAuswahl, fn ($v) => (int) $v !== $id));
-    }
-
-    /** Mehrfachauswahl → neue Paket-Gruppe + Zuordnung (Muster markiere()/wahlGruppeBilden()). */
-    public function paketBilden(): void
-    {
-        $this->ideenFehler = null;
-        if ($this->selectedKapitelId === null || $this->ideeAuswahl === []) {
-            return;
-        }
-        try {
-            $svc = app(IdeenService::class);
-            $gruppe = $svc->addGruppe($this->team(), [
-                'chapter_id' => $this->selectedKapitelId,
-                'name' => trim($this->paketName) !== '' ? trim($this->paketName) : 'Paket',
-            ]);
-            foreach ($this->ideeAuswahl as $iid) {
-                $svc->update($this->team(), (int) $iid, ['group_id' => $gruppe->id]);
-            }
-            $this->ideeAuswahl = [];
-            $this->paketName = '';
-        } catch (\RuntimeException $e) {
-            $this->ideenFehler = $e->getMessage();
-        }
-    }
-
-    /** Einzelne Skizze aus ihrem Paket lösen (→ Einzel; target_form muss mitgezogen werden, sonst greift der Paket-Guard). */
-    public function ausPaketLoesen(int $ideaId): void
-    {
-        $this->ideenFehler = null;
-        try {
-            app(IdeenService::class)->update($this->team(), $ideaId, ['group_id' => 0, 'target_form' => 'einzel']);
-        } catch (\RuntimeException $e) {
-            $this->ideenFehler = $e->getMessage();
-        }
-    }
-
-    /** Ganzes Paket auflösen: Mitglieder lösen + leere Gruppe entfernen. */
-    public function paketAufloesen(int $groupId): void
-    {
-        $this->ideenFehler = null;
-        try {
-            app(IdeenService::class)->loescheGruppe($this->team(), $groupId);
-        } catch (\RuntimeException $e) {
-            $this->ideenFehler = $e->getMessage();
-        }
-    }
-
-    // ── Phase 5: Kickoff-Wizard „Neues Foodbook für Kunde X" (Brief → KI-Gerüst-Vorschlag) ──
-    // Minimale Rückfrage (Anlass/Gäste/Saison/Service-Form/Budget) + Auto-Kontext (Segment +
-    // DNA-Kaskade Team→Kunde→Foodbook) → LLM schlägt das Gerüst vor. Doktrin: Vorschlag, nicht
-    // Zwang — das Gerüst landet im Planung-Tab, der User prüft und ruft dann „Struktur anwenden".
-    // Der LLM-Call läuft über den Core-Contract (AiGatewayService); ohne gebundenen Provider
-    // wirft er typisiert und wird hier als UI-Fehler abgefangen (kein 500).
-    public array $kickoff = ['anlass' => '', 'personen' => null, 'saison' => '', 'service_form' => '', 'budget' => null];
-
-    public ?array $kickoffErgebnis = null;
-
-    public ?string $kickoffFehler = null;
-
-    public function frameAusBriefVorschlagen(): void
-    {
-        $this->kickoffFehler = null;
-        $this->kickoffErgebnis = null;
-        if ($this->selectedId === null) {
-            return;
-        }
-        $team = $this->team();
-        $fb = app(FoodbookService::class)->detail($team, $this->selectedId);
-        if ($fb === null) {
-            return;
-        }
-
-        $brief = $this->kickoffBriefText($fb);
-        if (trim($brief) === '') {
-            $this->kickoffFehler = 'Bitte mindestens Anlass oder Gäste-Zahl angeben.';
-            return;
-        }
-
-        // Auto-Kontext: Segment (Bespielung) + kreative Leitplanken (Kundentyp/Niveau/Convenience)
-        // + Marken-Kontext aus der DNA-Kaskade — alles als Vorgabe an die KI-Gerüst-Erstellung.
-        $seg = app(\Platform\FoodAlchemist\Services\TeamSettingsService::class)->segment($team);
-        $lp = app(FoodbookService::class)->leitplanken($team, $fb);
-        $kaskade = app(\Platform\FoodAlchemist\Services\CanvasService::class)
-            ->cascadeKontext($team, null, $fb->id, null, $fb->crm_company_id);
-
-        try {
-            $res = app(\Platform\FoodAlchemist\Services\ConceptGeneratorService::class)->geruestAusBriefFuerOwner(
-                $team,
-                'foodbook',
-                $fb->id,
-                $brief,
-                [
-                    'segment' => $seg,
-                    'leitplanken' => $lp,
-                    'marken_kontext' => $kaskade['marken_kontext'] ?? null,
-                ],
-            );
-            // Frame-Objekt NICHT in den Livewire-State (nicht serialisierbar) — nur die Kennzahlen.
-            $this->kickoffErgebnis = ['slots' => $res['slots'], 'confidence' => $res['confidence'], 'name' => $res['name']];
-            $this->frameLaden();   // frisches Gerüst → Planung-Tab zeigt die vorgeschlagenen Slots
-        } catch (\Platform\FoodAlchemist\Exceptions\KiDeaktiviertException $e) {
-            $this->kickoffFehler = 'KI ist für dieses Team deaktiviert (Einstellungen → Food DNA / KI).';
-        } catch (\Platform\FoodAlchemist\Exceptions\KiNichtVerfuegbarException $e) {
-            $this->kickoffFehler = 'Kein KI-Provider gebunden — der Kickoff-Vorschlag braucht ein aktives Modell (demo). Gerüst manuell im Planung-Tab anlegen.';
-        } catch (\RuntimeException $e) {
-            $this->kickoffFehler = $e->getMessage();
-        }
-    }
-
-    /** Baut den minimalen Freitext-Brief aus den Kickoff-Feldern + Foodbook-Kontext. */
-    private function kickoffBriefText($fb): string
-    {
-        $teile = [];
-        if (trim((string) $this->kickoff['anlass']) !== '') {
-            $teile[] = 'Anlass: ' . trim((string) $this->kickoff['anlass']);
-        }
-        $pers = $this->kickoff['personen'] ?: $fb->personen;
-        if ($pers) {
-            $teile[] = 'Gäste: ' . (int) $pers . ' Personen';
-        }
-        if (trim((string) $this->kickoff['saison']) !== '') {
-            $teile[] = 'Saison: ' . trim((string) $this->kickoff['saison']);
-        }
-        if (trim((string) $this->kickoff['service_form']) !== '') {
-            $teile[] = 'Service-Form: ' . trim((string) $this->kickoff['service_form']);
-        }
-        if ($this->kickoff['budget'] !== null && $this->kickoff['budget'] !== '') {
-            $teile[] = 'Budget: ' . (float) $this->kickoff['budget'] . ' € pro Person';
-        }
-        if (trim((string) ($fb->description ?? '')) !== '') {
-            $teile[] = 'Kontext: ' . trim((string) $fb->description);
-        }
-
-        return implode("\n", $teile);
-    }
-
+    // ── Spec-42-Vollzug S3b: Kreativ-Skizzen (IdeenService), Paket-Bündelung, Kreativ-Modus,
+    // Pairing-Pull/Lücke-Melden und der Kickoff-Brief→Gerüst-Vorschlag sind entfernt — die
+    // ganze Planung lebt in der Leitstelle (Planung\Index + KapitelRail/FoodbookKontextRail).
     #[Url(as: 'q')]
     public string $search = '';
 
@@ -775,40 +425,8 @@ class Index extends Component
         ]);
     }
 
-    // ── Spec 19 E3.3: Bedarf-Sektion (Briefing-Tab) — Foodbook-Default-Dimensionen ──
-
-    /**
-     * Einen skalaren Bedarf-Default setzen (Eventtyp / Servierform per FK-Id, Wareneinsatz-Ziel + Toleranz
-     * als %). Leer = zurück auf Erben (Team-/Segment-Default). Kaskadiert als Foodbook-Boden nach unten.
-     */
-    public function bedarfSetzen(string $feld, $wert, FoodbookService $svc): void
-    {
-        if ($this->selectedId === null
-            || ! in_array($feld, ['default_event_type_id', 'default_serving_form_id', 'target_food_cost_pct', 'food_cost_tolerance_pp'], true)) {
-            return;
-        }
-        $leer = $wert === '' || $wert === null;
-        $wert = $leer ? null : (in_array($feld, ['default_event_type_id', 'default_serving_form_id'], true) ? (int) $wert : (float) $wert);
-        $svc->update($this->team(), $this->selectedId, [$feld => $wert]);
-    }
-
-    /** Einsatzmoment-Pill (Tagesablauf, 1–n) am Foodbook an/abwählen. */
-    public function toggleFbEinsatzmoment(int $id, FoodbookService $svc): void
-    {
-        if ($this->selectedId === null) {
-            return;
-        }
-        $svc->toggleEinsatzmoment($this->team(), $this->selectedId, $id);
-    }
-
-    /** Zielgruppen-Pill (Default, 1–n) am Foodbook an/abwählen. */
-    public function toggleFbZielgruppe(int $id, FoodbookService $svc): void
-    {
-        if ($this->selectedId === null) {
-            return;
-        }
-        $svc->toggleZielgruppe($this->team(), $this->selectedId, $id);
-    }
+    // S3b: Bedarf-Sektion (bedarfSetzen + toggleFbEinsatzmoment/Zielgruppe) entfernt — die Foodbook-
+    // Default-Dimensionen werden als Planung in der Leitstelle gesetzt (Kapitel-Ziele / Buch-Ebene).
 
     // ── #369: CRM-Kunde-Link (MVP, nur verlinken) ──────────────────────────────
 
@@ -1308,15 +926,8 @@ class Index extends Component
             $this->brandingLoadedId = $fb->id;
         }
 
-        // Spec 19 E9.4: Kreativ-Modus (Kaskade Kapitel→Foodbook→hybrid) + Pairing-Inspiration.
-        // Inspiration ist GATED auf $kreativSeed (Pull-not-Push) — kein Auto-Einblenden des Bestands.
-        $kreativModus = $kapitel !== null ? $svc->kreativModus($team, $kapitel) : null;
-        $kreativInspiration = null;
-        if ($kreativModus !== null && $this->kreativSeed !== '') {
-            $inspSvc = app(\Platform\FoodAlchemist\Services\PairingInspirationService::class);
-            $seeds = $inspSvc->sucheAnker($this->kreativSeed, 5)->pluck('slug')->all();
-            $kreativInspiration = $inspSvc->inspiration($team, $seeds, $kreativModus['modus']);
-        }
+        // S3b: Kreativ-Modus/Pairing-Inspiration + Skizzen-Render-Daten entfallen (Kreativ-Fläche →
+        // Leitstelle). Die zugehörigen Props (kreativSeed/ideenPapierkorb/skizzeGerichtSuche) sind weg.
 
         $menue = $fb !== null ? $svc->vorschauSnapshot($fb) : null;
 
@@ -1393,16 +1004,7 @@ class Index extends Component
                     ->where('dish_main_group_id', $this->gerichtHauptgruppe)
                     ->orderBy('id')->get(['id', 'label', 'diet_form'])
                 : collect(),
-            // Spec 19 E9.4: Kreativ-Modus (führt/erbt) + Pairing-Inspiration (gated, Pull-not-Push)
-            'kreativModus' => $kreativModus,
-            'kreativInspiration' => $kreativInspiration,
-            // Spec 19 E6.3: Kreativ-Skizzenfläche — Skizzen des gewählten Kapitels (Pakete + freie Einzel)
-            'ideenListe' => $this->selectedKapitelId !== null
-                ? app(IdeenService::class)->liste($team, $this->selectedKapitelId, null, $this->ideenPapierkorb)
-                : ['gruppen' => [], 'einzel' => collect()],
-            // „aus Bestand"-Quelle der Skizzenfläche (Reuse des VK-Gericht-Pickers)
-            'skizzeKandidaten' => $this->skizzeGerichtSuche !== '' && $this->selectedKapitelId !== null
-                ? $svc->gerichtKandidaten($team, $this->skizzeGerichtSuche, 50) : collect(),
+            // S3b: kreativModus/kreativInspiration/ideenListe/skizzeKandidaten entfallen (Kreativ-Fläche → Leitstelle).
             // „bereits angelegt"-Zustand (Bestands-Foodbooks): Kapitel trägt schon Inhalt, aber keine Skizzen
             'kapitelHatInhalt' => $this->selectedKapitelId !== null
                 && \Platform\FoodAlchemist\Models\FoodAlchemistFoodbookBlock::where('chapter_id', $this->selectedKapitelId)
