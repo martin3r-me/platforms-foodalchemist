@@ -347,3 +347,13 @@ Die flache Zuletzt/Prüfen-Landing zog die neuen Features (Spec 42 Ausgabe-Ziele
 - Emoji-frei (Heroicons/Text). +6 Tests; volle FA-Suite grün (2893/2896, 3 Skips). Deploy per Lock-Pin (reiner Code, keine Migration).
 - **Zwei libxml-Root-Check-Fallen dokumentiert** (im Partial-Kopf): (a) klickbarer Titelbereich = `<div wire:click>`, KEIN `<button>` (button + Block-Inhalt bricht die Verschachtelung → „multiple root elements"); (b) heroicons in den Aktions-Buttons **inline** lassen (nicht auf eigene Zeile umbrechen). Zusatz-Merker: `@svg` **nie in einen Blade-Kommentar** schreiben (blade-icons kompiliert es dort → Syntaxfehler).
 - [ ] Real-Abnahme auf demo durch Dominique offen (Board zeigt Spalten/Fortschritt/Worker; Karte→Details; Import/Composer öffnen richtigen Tab).
+
+### 🟢 Spec-42-Vollzug (2026-08-23) — Planung KOMPLETT in die Leitstelle, DEPLOYT demo (`27f0d2d`)
+
+Der zweite, nie fertig gebaute Halbschritt von Spec 42. Alles auf `feat/spec42-vollzug` (9 Commits über origin/main), volle Suite 2896/2899 (3 Skips), 0 Regressionen. Detail + Fundstellen → Memory `project_fa_spec42_planung_vollzug`; Office-Package-23-Issue #813.
+- [x] **S1** Speisekarte-aus-Brief (owner-generische Kaskade, `speisekarteAusBrief`, kein `strukturAusGeruest`). **S2** drei Ausgabe-Kickoff-Tabs im Editor (Foodbook/Speisekarte/Speiseplan) + Landing-Einstiege Import/Composer.
+- [x] **S3** Foodbook-Planung → Leitstelle: `PlanningCascadeService::starteKapitelKaskade` (per-Kapitel-Teil-Lauf über den Motor, ersetzt den `kapitelFreigeben`-Bypass) + `chapter_id`/`slot_id` am Step (Migration `2026_08_23_000001`) + `regeneriereStep`-Attach-Fix; `Planung\KapitelRail` (M3-Ziele je Kapitel + „erzeugen") + `Planung\FoodbookKontextRail` (Leitplanken/Briefing/KI-Text/Leitidee-Canvas).
+- [x] **S3b** Foodbook-Editor auf reine Ausgabe abgespeckt (Kontext-Tab-Planung + Checkliste + Rail-Kapitel-Planung raus; Kuration bleibt) + ~19 tote Methoden/Render-Daten entfernt. Deferred (verhaltensneutral): kiText/leitplanken/Traits/`LeitstelleService::checkliste`.
+- [x] **S4** Speiseplan-aus-Brief (`speiseplanAusBrief` — GV-Linien+Zyklus via `create`, Brief steuert die Zell-Generierung via Session-Brief-Präfix in `starteSpeiseplanVollkaskade`).
+- [x] **Picker-Umbau** beide Editoren: permanente Katalog-Spalte rechts (2-Spalten, Produktions-Muster) — Foodbook Concept/Gericht/**Format**, Speisekarte Gericht/Menü/**Format** (Ziel-Rubrik via per-Rubrik-„+" → `pickerRubrikId`, neue `katalogModus`). Emoji-frei.
+- [ ] Real-Abnahme demo durch Dominique + Rest-Hygiene-Nachzug offen.
