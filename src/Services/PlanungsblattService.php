@@ -887,7 +887,7 @@ class PlanungsblattService
             'behaelter_kalt' => $this->vocabName('foodalchemist_vocab_containers', $dar->container_cold_vocab_id),
             'vehikel' => $this->vocabName('foodalchemist_vocab_serving_vehicles', $dar->serving_vehicle_vocab_id),
             'geschirr' => $dar->tableware_item_id !== null
-                ? DB::table('foodalchemist_tableware_items')->whereKey($dar->tableware_item_id)->value('label')
+                ? DB::table('foodalchemist_tableware_items')->where('id', $dar->tableware_item_id)->value('label')
                 : null,
             'arbeitszeit_zuschlag_min' => $dar->work_time_surcharge_min,
         ], fn ($v) => $v !== null && $v !== '');
