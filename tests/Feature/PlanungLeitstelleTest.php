@@ -2548,3 +2548,19 @@ it('Board: schnellComposer legt eine cockpit_composer-Session an + öffnet den C
     expect($session)->not->toBeNull()
         ->and($session->created_via)->toBe('cockpit_composer');
 });
+
+// ── Spec-42-Vollzug Stufe 2: die 3 Ausgabe-Tabs (Foodbook/Speisekarte/Speiseplan) im Editor ──────
+it('Ausgabe-Tabs: Editor rendert die 3 Ausgabe-Kickoff-Tabs + Panels (Foodbook/Speisekarte live, Speiseplan Platzhalter)', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'X', 'brief' => 'y']);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        // Tab-Buttons (immer im Tab-Slot)
+        ->assertSee('Foodbook')
+        ->assertSee('Speisekarte')
+        ->assertSee('Speiseplan')
+        // Panels (im @if($active)-Block)
+        ->assertSeeHtml('data-tab-fb-erzeugen')       // Foodbook aus Brief — live (foodbookAusBrief)
+        ->assertSeeHtml('data-tab-sk-erzeugen')       // Speisekarte aus Brief — live (speisekarteAusBrief)
+        ->assertSeeHtml('data-tab-sp-platzhalter');   // Speiseplan — ehrlicher Platzhalter bis Stufe 4
+});

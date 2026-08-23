@@ -24,6 +24,7 @@ use Platform\FoodAlchemist\Services\PlanningCascadeService;
 use Platform\FoodAlchemist\Services\PlanningSessionService;
 use Platform\FoodAlchemist\Services\RecipeImageService;
 use Platform\FoodAlchemist\Services\SalesRecipeService;
+use Platform\FoodAlchemist\Services\SpeisekarteService;
 use Platform\FoodAlchemist\Services\TeamSettingsService;
 use Platform\FoodAlchemist\Services\TitelVorschlagService;
 use Platform\FoodAlchemist\Services\WorkerHealthService;
@@ -538,6 +539,18 @@ class Index extends Component
     /** Panel im Landing sofort aufklappen (Handoff aus dem Modul). */
     public bool $fbPanelAuf = false;
 
+    /** Speisekarte-aus-Brief-Eingabe (Spec-42-Vollzug Stufe 1) — spiegelt fb*, owner_type=speisekarte. */
+    public string $skTitel = '';
+
+    public string $skBrief = '';
+
+    public ?string $skMeldung = null;
+
+    /** Handoff aus einer bestehenden Speisekarte: dann keine neue Karte anlegen. */
+    public ?int $skOwnerId = null;
+
+    public bool $skPanelAuf = false;
+
     /**
      * F1 (Spec 42) — „Foodbook aus Brief" IN der Leitstelle: Shell anlegen → Gerüst aus Brief →
      * Struktur anwenden → Session + Voll-Kaskade (owner_type=foodbook). Spiegelt den bisherigen
@@ -616,6 +629,82 @@ class Index extends Component
             // angelegte leere Foodbook-Hülle bleibt in der Liste (verwerfbar) — bewusst kein Rollback,
             // da die Kaskaden-Jobs nicht transaktional sind.
             $this->fbMeldung = $e->getMessage();
+        }
+    }
+
+    /**
+     * Spec-42-Vollzug Stufe 1 — „Speisekarte aus Brief" IN der Leitstelle. Spiegelt {@see foodbookAusBrief},
+     * aber owner_type=speisekarte: die „aus Brief"-Kette ist owner-generisch (der Gerüst-Prompt ist
+     * owner-neutral), und der Container wird pro Slot als Rubrik angelegt — DAHER KEIN `strukturAusGeruest`:
+     * `PlanningCascadeService::vollkaskadeSlots` ruft `SpeisekarteService::rubrikFuerSlot` inline im Fan-out.
+     * Ergebnis dockt via `GenerateConceptJob::attachEinmal` (speisekarte→`addPosition(menue_ref)`) zurück.
+     */
+    public function speisekarteAusBrief(
+        SpeisekarteService $speisekarten,
+        ConceptGeneratorService $concepts,
+        PlanningCascadeService $cascade,
+        PlanningSessionService $sessions,
+        TeamSettingsService $settings,
+        CanvasService $canvas,
+    ): void {
+        $this->skMeldung = null;
+        $team = $this->team();
+        if ($team === null) {
+            $this->skMeldung = 'Kein Team zugeordnet — Erstellung nicht möglich.';
+
+            return;
+        }
+        $brief = trim($this->skBrief);
+        if ($brief === '') {
+            $this->skMeldung = 'Bitte einen Brief eingeben (Anlass, Gäste, Saison, Niveau, Budget …).';
+
+            return;
+        }
+
+        try {
+            // 1. Speisekarte: bestehende (Handoff, $skOwnerId) ODER neue Hülle (Direktstart in der Leitstelle).
+            if ($this->skOwnerId !== null) {
+                $karte = \Platform\FoodAlchemist\Models\FoodAlchemistSpeisekarte::visibleToTeam($team)->find($this->skOwnerId);
+                if ($karte === null) {
+                    $this->skMeldung = 'Speisekarte nicht gefunden oder kein Zugriff.';
+
+                    return;
+                }
+            } else {
+                $name = trim($this->skTitel) !== '' ? trim($this->skTitel) : 'Speisekarte aus Brief';
+                $karte = $speisekarten->create($team, ['name' => $name]);
+            }
+
+            // 2. Gerüst aus dem Brief (owner-neutral, wie Foodbook). marken_kontext aus dem CRM-Kunden.
+            $concepts->geruestAusBriefFuerOwner($team, 'speisekarte', $karte->id, $brief, [
+                'segment' => $settings->segment($team),
+                'marken_kontext' => $canvas->cascadeKontext($team, null, null, null, $karte->crm_company_id)['marken_kontext'] ?? null,
+            ]);
+
+            // 3. KEIN strukturAusGeruest — die Rubriken entstehen pro Slot im Fan-out (rubrikFuerSlot).
+
+            // 4. Review-Session + Voll-Kaskade (1 Concept je Slot → Rubrik, gestufte Freigabe).
+            $session = $sessions->create($team, [
+                'title' => 'Speisekarte aus Brief: ' . $karte->name,
+                'brief' => $brief,
+                'created_via' => 'leitstelle_speisekarte_brief',
+            ]);
+            $cascade->starteKaskade($team, 'vollkaskade', $session, 'voll_kreativ', [
+                'owner_type' => 'speisekarte',
+                'owner_id' => $karte->id,
+                'created_via' => 'leitstelle_speisekarte_brief',
+            ]);
+
+            // 5. Eingabe leeren + Worker-Cockpit öffnen (Owner-Banner + Round-Trip greifen automatisch).
+            $this->skTitel = '';
+            $this->skBrief = '';
+            $this->skOwnerId = null;
+            $this->skPanelAuf = false;
+            $this->oeffne($session->id, 'worker');
+        } catch (\Throwable $e) {
+            // LLM nicht verfügbar/deaktiviert, leerer Brief o.ä. → Meldung statt 500. Eine ggf. schon
+            // angelegte leere Karten-Hülle bleibt in der Liste (verwerfbar) — bewusst kein Rollback.
+            $this->skMeldung = $e->getMessage();
         }
     }
 

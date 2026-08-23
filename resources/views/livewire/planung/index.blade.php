@@ -360,6 +360,18 @@
                 <button type="button" @click="tab='import'"
                         :class="tab==='import' ? 'bg-violet-500/25 text-white' : 'text-gray-300 hover:text-white'"
                         class="px-3 py-1.5 rounded-t-md text-xs font-medium">Import</button>
+                {{-- Ausgabe-Formen (Spec-42-Vollzug): eigene Kickoff-Tabs — die ganze Planung lebt in der
+                     Leitstelle, die Module kuratieren nur. Optisch abgesetzt (Trennstrich). --}}
+                <span class="mx-1 self-center h-4 w-px bg-white/15"></span>
+                <button type="button" @click="tab='foodbook'"
+                        :class="tab==='foodbook' ? 'bg-violet-500/25 text-white' : 'text-gray-300 hover:text-white'"
+                        class="px-3 py-1.5 rounded-t-md text-xs font-medium">Foodbook</button>
+                <button type="button" @click="tab='speisekarte'"
+                        :class="tab==='speisekarte' ? 'bg-violet-500/25 text-white' : 'text-gray-300 hover:text-white'"
+                        class="px-3 py-1.5 rounded-t-md text-xs font-medium">Speisekarte</button>
+                <button type="button" @click="tab='speiseplan'"
+                        :class="tab==='speiseplan' ? 'bg-violet-500/25 text-white' : 'text-gray-300 hover:text-white'"
+                        class="px-3 py-1.5 rounded-t-md text-xs font-medium">Speiseplan</button>
             </div>
         </x-slot:tabs>
 
@@ -381,6 +393,56 @@
             {{-- IMPORT — bestehende Rezeptur (Text/Web-Copy/Text-PDF) TREU übernehmen + GEERDET anlegen.
                  Getrennt vom Generator (der veredelt): hier 1:1 extrahieren, dann am Resolver an GPs binden.
                  Foto/Bild NICHT hier (Vision noch nicht in der Plattform-LLM) — Foto gibst du dem Assistenten im Chat. --}}
+            {{-- AUSGABE-FORMEN (Spec-42-Vollzug) — Kickoff-Tabs: aus einem Brief plant die Leitstelle die
+                 ganze Ausgabeform (owner-getaggte Voll-Kaskade), die Inhalte docken automatisch zurück.
+                 Foodbook + Speisekarte live; Speiseplan folgt (andere Struktur: Linien+Zyklus statt Gänge). --}}
+            <div wire:key="planung-tab-foodbook" x-show="tab==='foodbook'" x-cloak class="space-y-4">
+                <x-foodalchemist::modal-section title="Foodbook aus Brief">
+                    <p class="text-[11px] text-slate-400 mb-2">
+                        Ein ganzes Foodbook aus einem Brief planen — Struktur (Kapitel) + Inhalte entstehen hier
+                        in der Leitstelle und docken automatisch ins Foodbook (reine Ausgabe).
+                    </p>
+                    <input type="text" wire:model="fbTitel" class="{{ $input }} w-full mb-2" placeholder="Foodbook-Name (optional)" data-tab-fb-titel>
+                    <textarea wire:model="fbBrief" rows="4" class="{{ $input }} w-full" placeholder="Brief: Anlass, Gäste, Saison, Niveau, Budget …" data-tab-fb-brief></textarea>
+                    @if($fbMeldung) <p class="text-[11px] text-rose-400 mt-2" data-tab-fb-meldung>{{ $fbMeldung }}</p> @endif
+                    <div class="mt-3">
+                        <button type="button" wire:click="foodbookAusBrief" wire:loading.attr="disabled" wire:target="foodbookAusBrief" class="{{ $btnPrimary }} disabled:opacity-40" data-tab-fb-erzeugen>
+                            <span wire:loading.remove wire:target="foodbookAusBrief">Foodbook erzeugen (KI)</span>
+                            <span wire:loading wire:target="foodbookAusBrief">erzeuge …</span>
+                        </button>
+                    </div>
+                </x-foodalchemist::modal-section>
+            </div>
+
+            <div wire:key="planung-tab-speisekarte" x-show="tab==='speisekarte'" x-cloak class="space-y-4">
+                <x-foodalchemist::modal-section title="Speisekarte aus Brief">
+                    <p class="text-[11px] text-slate-400 mb-2">
+                        Eine à-la-carte-Speisekarte aus einem Brief planen — je Gang/Kategorie entsteht eine
+                        Rubrik, die Inhalte docken automatisch als Positionen in die Karte.
+                    </p>
+                    <input type="text" wire:model="skTitel" class="{{ $input }} w-full mb-2" placeholder="Speisekarten-Name (optional)" data-tab-sk-titel>
+                    <textarea wire:model="skBrief" rows="4" class="{{ $input }} w-full" placeholder="Brief: Anlass, Küchenstil, Saison, Niveau, Preis-Korridor …" data-tab-sk-brief></textarea>
+                    @if($skMeldung) <p class="text-[11px] text-rose-400 mt-2" data-tab-sk-meldung>{{ $skMeldung }}</p> @endif
+                    <div class="mt-3">
+                        <button type="button" wire:click="speisekarteAusBrief" wire:loading.attr="disabled" wire:target="speisekarteAusBrief" class="{{ $btnPrimary }} disabled:opacity-40" data-tab-sk-erzeugen>
+                            <span wire:loading.remove wire:target="speisekarteAusBrief">Speisekarte erzeugen (KI)</span>
+                            <span wire:loading wire:target="speisekarteAusBrief">erzeuge …</span>
+                        </button>
+                    </div>
+                </x-foodalchemist::modal-section>
+            </div>
+
+            <div wire:key="planung-tab-speiseplan" x-show="tab==='speiseplan'" x-cloak class="space-y-4">
+                <x-foodalchemist::modal-section title="Speiseplan aus Brief">
+                    <p class="text-[11px] text-slate-400" data-tab-sp-platzhalter>
+                        „Speiseplan aus Brief" wird als nächstes scharfgeschaltet. Der Speiseplan braucht eine
+                        andere Struktur als Foodbook/Speisekarte — Menü-<strong>Linien</strong> über einen
+                        <strong>Zyklus</strong> (Tag × Mahlzeit-Grid) statt Gänge-Slots. Bis dahin planst du
+                        den Speiseplan über den Speiseplan-Editor (reicher Zell-Picker).
+                    </p>
+                </x-foodalchemist::modal-section>
+            </div>
+
             <div wire:key="planung-tab-import" x-show="tab==='import'" class="space-y-4">
                 @if($importStep === 'eingabe')
                     <x-foodalchemist::modal-section title="Rezeptur importieren">
