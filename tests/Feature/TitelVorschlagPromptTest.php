@@ -40,12 +40,12 @@ it('recipe.titel_vorschlag fordert §1-Syntax + name-Feld, nüchtern (keine Mark
         ->and($task)->toContain('Brief');
 });
 
-it('vk.titel_vorschlag fordert §4.4-Pipe-Syntax + name-Feld, nüchtern (keine Marketing-Adjektive)', function () {
+it('vk.titel_vorschlag fordert Komponenten-Pipe-Syntax + name-Feld, nüchtern (keine Marketing-Adjektive)', function () {
     $task = config('foodalchemist.prompts', [])['vk.titel_vorschlag']['task'] ?? '';
 
-    // §4.4-Gericht-Pipe-Syntax + Ausgabe-Feld
-    expect($task)->toContain('§4.4')
-        ->and($task)->toContain('HG-Code')
+    // #75: Gericht-Titel als Komponenten-Pipe (OHNE HG-Code/§4.4-Präfix) + Ausgabe-Feld
+    expect($task)->toContain('Komponenten-Pipe')
+        ->and($task)->toContain('Hauptkomponente')
         ->and($task)->toContain('werte = {name}');
     // Nüchtern + keine Erfindung
     expect($task)->toContain('keine Marketing-Adjektive')

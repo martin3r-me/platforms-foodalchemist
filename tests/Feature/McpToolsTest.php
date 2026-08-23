@@ -66,7 +66,9 @@ it('M11-11: foodbook.GET liefert Kopf + Kapitel/Blöcke + aggregierten Angebotsp
     $slot = $concepts->addSlot($this->rootTeam, $concept->id, ['role' => 'Vorspeise']);
     $concepts->fillSlot($this->rootTeam, $slot->id, ['package_id' => $paket->id]);
 
-    $fb = $foodbooks->create($this->rootTeam, ['label' => 'Angebot Adler', 'customer' => 'Hotel Adler', 'personen' => 100]);
+    // CRM-only (b08c5c2): Kundenname kommt aus der verknüpften CRM-Firma, nicht mehr als Freitext.
+    $kunde = \Platform\Crm\Models\CrmCompany::create(['team_id' => $this->rootTeam->id, 'name' => 'Hotel Adler', 'is_active' => true]);
+    $fb = $foodbooks->create($this->rootTeam, ['label' => 'Angebot Adler', 'crm_company_id' => $kunde->id, 'personen' => 100]);
     $kap = $foodbooks->addKapitel($this->rootTeam, $fb->id, ['title' => 'Menü']);
     $foodbooks->addBlock($this->rootTeam, $kap->id, ['type' => 'concept_ref', 'concept_id' => $concept->id]);
 

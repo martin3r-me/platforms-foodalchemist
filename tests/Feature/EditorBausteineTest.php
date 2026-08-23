@@ -139,9 +139,9 @@ it('E6: der Concepter legt Feldleiste, Coverage und Kohäsion in eigene Tabs', f
         ->call('oeffnen', 'concepts', $konzept->id);
 
     // Neue Lasche + umbenannte Sammel-Laschen
+    // „Sensorik & Pairing"-Tab wurde 2026-08-13 aus dem Concepter-Editor entfernt (Menü-Kohäsion/Sensorik raus).
     expect($c->html())->toContain('data-konzept-tab="stammdaten"')
-        ->toContain('Konzept &amp; Planung')
-        ->toContain('Sensorik &amp; Pairing');
+        ->toContain('Konzept &amp; Planung');
 
     // Aufbau: keine Feldleiste mehr (die klebte vorher dauerhaft über den Tabs)
     expect($c->html())->not->toContain('data-konzept-schreibstil');

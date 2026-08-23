@@ -101,6 +101,12 @@ it('Trait-Vertrag: ALLE Models tragen LogsActivity + BelongsToTeamHierarchy + Ha
             // kein Soft-Delete. Ein Ereignis wird geschrieben, nie geändert.
             continue;
         }
+        if (class_basename($klasse) === 'FoodAlchemistCascadeRecipeDependency') {
+            // Technische Kaskaden-interne Join-Tabelle (parent_step→child_step→ingredient). Team-scoped
+            // über team_id + den Eltern-Cascade-Run; kein eigener Lebenszyklus (lebt/stirbt mit dem Run),
+            // kein uuid/deleted_at, kein Audit — bewusst ohne die vier Standard-Traits (wie ProductionEvent).
+            continue;
+        }
         $traits = collect(class_uses_recursive($klasse))->keys()->map(fn ($t) => class_basename($t));
         $ohneHierarchie = array_merge($satelliten, $messreihen);
         $pflichten = in_array(class_basename($klasse), $ohneHierarchie, true)

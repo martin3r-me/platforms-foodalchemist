@@ -91,7 +91,9 @@ class RecipeGenerationContextService
             'parameter' => $this->promptParameter($parameter),
         ];
         if (($typ = $this->settings->kuechenTyp($team)) !== null) {
-            $prompt = ['kuechen_profil' => 'Mandanten-Profil (Soft-Default): ' . TeamSettingsService::KUECHEN_TYPEN[$typ]] + $prompt;
+            // Soft-Default-Schicht: das Mandanten-Profil ist eine Tendenz, explizite Richtungs-Parameter
+            // (Hooks/Regler) haben VORRANG — der Hinweis steht im Block (DoD KuechenProfilTest).
+            $prompt = ['kuechen_profil' => 'Mandanten-Profil (Soft-Default — explizite Richtungs-Parameter haben VORRANG): ' . TeamSettingsService::KUECHEN_TYPEN[$typ]] + $prompt;
         }
         // Aroma-Küche (L1.5, Achse 4): gewählte Küche trägt ihren Würz-Anker als Prompt-Direktive
         // (verbindliches Regelwerk). Zusätzlich fließen Küche-Anker + Aroma-Freitext in die Erdungs-

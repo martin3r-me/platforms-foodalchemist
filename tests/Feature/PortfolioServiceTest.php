@@ -76,11 +76,12 @@ it('zählt eine abgelaufene Karte nicht als Konflikt', function () {
     expect($this->svc->konflikte($this->rootTeam, '2026-08-15'))->toBe([]);
 });
 
-it('findet denselben Kunden auch bei unterschiedlicher Schreibweise', function () {
-    // Kunden sind kein gepflegtes Vokabular — ohne Normalisierung wären „Klinikum West" und
-    // „klinikum west " zwei verschiedene Kunden und der Konflikt bliebe unentdeckt.
-    ($this->karte)(['name' => 'A', 'status' => 'aktiv', 'customer' => 'Klinikum West']);
-    ($this->karte)(['name' => 'B', 'status' => 'aktiv', 'customer' => '  klinikum west ']);
+it('gruppiert Ausgaben desselben CRM-Kunden als eine Kunden-Achse', function () {
+    // CRM-only (b08c5c2): die Kundenachse kommt aus der verknüpften CRM-Firma (nicht mehr aus Freitext).
+    // Zwei Ausgaben mit derselben crm_company_id gehören zu EINEM Kunden.
+    $kunde = \Platform\Crm\Models\CrmCompany::create(['team_id' => $this->rootTeam->id, 'name' => 'Klinikum West', 'is_active' => true]);
+    ($this->karte)(['name' => 'A', 'status' => 'aktiv', 'crm_company_id' => $kunde->id]);
+    ($this->karte)(['name' => 'B', 'status' => 'aktiv', 'crm_company_id' => $kunde->id]);
 
     $k = collect($this->svc->konflikte($this->rootTeam))->where('brille', 'kunde')->values();
 

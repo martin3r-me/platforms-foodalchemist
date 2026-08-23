@@ -34,8 +34,9 @@ function bindTitelStub(): void
         public function chat(array $messages, array $options = []): array
         {
             $prompt = collect($messages)->pluck('content')->filter()->implode("\n");
-            // §4.4 vor §1 prüfen (der §4.4-Task nennt beide Marker nicht, aber HG-Code ist eindeutig)
-            $name = str_contains($prompt, '§4.4') || str_contains($prompt, 'HG-Code')
+            // Gericht (vk.titel_vorschlag) vs. Basisrezept (recipe.titel_vorschlag) am Prompt-Text unterscheiden.
+            // #75: der Gericht-Task nennt keinen HG-Code mehr, aber die Komponenten-Pipe ist eindeutig.
+            $name = str_contains($prompt, 'Komponenten-Pipe') || str_contains($prompt, 'Hauptkomponente')
                 ? 'SUP: Tomate | Basilikum'          // Gericht (Pipe-Syntax)
                 : 'Suppe: Tomate';                     // Basisrezept (§1-Syntax)
 

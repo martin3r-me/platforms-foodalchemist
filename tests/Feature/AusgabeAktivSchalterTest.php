@@ -68,18 +68,20 @@ it('hebt einen Entwurf direkt auf aktiv', function () {
 });
 
 it('speichert beide Zuordnungsachsen aus dem Editor', function () {
+    // CRM-only (b08c5c2): die Kundenachse ist eine CRM-Verknüpfung (verknuepfeFirma), kein Freitext mehr.
     $betrieb = FoodAlchemistOutlet::create(['team_id' => $this->rootTeam->id, 'name' => 'Kantine Nord']);
+    $kunde = \Platform\Crm\Models\CrmCompany::create(['team_id' => $this->rootTeam->id, 'name' => 'Klinikum West', 'is_active' => true]);
     $karte = app(SpeisekarteService::class)->create($this->rootTeam, ['name' => 'K']);
 
     Livewire::test(SpeisekarteEditor::class)
         ->call('waehle', $karte->id)
         ->set('outletId', $betrieb->id)
-        ->set('kunde', 'Klinikum West')
-        ->call('speichern');
+        ->call('speichern')
+        ->call('verknuepfeFirma', $kunde->id);
 
     $karte->refresh();
     expect((int) $karte->outlet_id)->toBe((int) $betrieb->id)
-        ->and($karte->customer)->toBe('Klinikum West');
+        ->and((int) $karte->crm_company_id)->toBe((int) $kunde->id);
 });
 
 it('fasst keine fremde Ausgabe an', function () {

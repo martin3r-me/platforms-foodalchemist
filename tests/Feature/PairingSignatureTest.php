@@ -104,8 +104,8 @@ it('Basisrezept: KEINE Teller-Blöcke, stattdessen Graph-Nachbarn', function () 
     $erd = ($this->mkAnker)('erdbeere');
     $van = ($this->mkAnker)('vanille');
     $salz = ($this->mkAnker)('salz');
-    ($this->mkKante)($erd, $van);
-    ($this->mkKante)($erd, $salz);
+    ($this->mkKante)($erd, $van, 'aroma');   // ankerNeighbors filtert auf type=aroma (erprobt wird gewipt)
+    ($this->mkKante)($erd, $salz, 'aroma');
 
     $basis = FoodAlchemistRecipe::create([
         'team_id' => $this->rootTeam->id, 'recipe_key' => 'basis-sauce',

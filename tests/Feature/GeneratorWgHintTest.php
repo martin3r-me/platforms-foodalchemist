@@ -23,7 +23,7 @@ beforeEach(function () {
     FoodAlchemistVocabEinheit::create(['team_id' => $this->rootTeam->id, 'slug' => 'g', 'display_de' => 'Gramm', 'dimension' => 'mass', 'default_in_g' => 1]);
 });
 
-it('mintet über den WG-Lead, wenn das KI-Rezept eine commodity_group mitliefert', function () {
+it('liefert WG-gescopte LA-Kandidaten (WG-Lead zuerst), wenn das KI-Rezept eine commodity_group mitliefert', function () {
     Queue::fake();   // S4-Klassifikation nicht inline
     $lead = FoodAlchemistSupplier::create(['team_id' => $this->rootTeam->id, 'name' => 'Gemüse-Lead']);
     $fremd = FoodAlchemistSupplier::create(['team_id' => $this->rootTeam->id, 'name' => 'Nicht-Lead']);
@@ -38,12 +38,14 @@ it('mintet über den WG-Lead, wenn das KI-Rezept eine commodity_group mitliefert
         ],
     );
 
-    expect($resultat['statistik']['gp_neu_aus_la'])->toBe(1);
-
-    // Der WG-Lead-LA wurde verknüpft (bekam die Struktur mit gp_id), der Fremd-LA nicht.
-    $leadStruktur = FoodAlchemistSupplierItemStructure::where('supplier_item_id', $leadLa->id)->first();
-    $fremdStruktur = FoodAlchemistSupplierItemStructure::where('supplier_item_id', $fremdLa->id)->first();
-    expect($leadStruktur)->not->toBeNull()
-        ->and($leadStruktur->gp_id)->not->toBeNull()
-        ->and($fremdStruktur?->gp_id)->toBeNull();
+    // Auto-Mint wanderte in den menschlichen Hardstop (LaFirstGpService::mintFromLa) — generiere()
+    // legt NICHT mehr automatisch an, sondern liefert die WG-gescopten LA-Kandidaten zur Auswahl.
+    // Beweis der Kette KI-Feld commodity_group → wgHint-Normalisierung → Finder-Scope: der WG-Lead
+    // (Stamm-Lieferant WG '01') rankt vor dem Fremd-Lieferanten.
+    $offen = collect($resultat['offene'])->firstWhere('text', 'Spinat frisch');
+    expect($offen)->not->toBeNull();
+    expect($offen['la_kandidaten'])->not->toBeEmpty();
+    // WG-Lead zuerst (wgHint-Scope wirkt) — der Fremd-Lieferant rankt dahinter.
+    expect((int) $offen['la_kandidaten'][0]['id'])->toBe($leadLa->id);
+    expect($offen['la_kandidaten'][0]['supplier'])->toBe('Gemüse-Lead');
 });

@@ -2836,7 +2836,8 @@ class OrderService
                 if ($dueDate->isPast() && ! $dueDate->isSameDay($today)) {
                     $state = 'overdue';
                     $label = 'überfällig';
-                    $overdueDays = $dueDate->diffInDays($today);
+                    // Carbon 3: diffInDays() liefert float — der dokumentierte Vertrag (overdue_days:int) braucht den Cast.
+                    $overdueDays = (int) $dueDate->diffInDays($today);
                 } elseif ($dueDate->isSameDay($today)) {
                     $state = 'due_today';
                     $label = 'heute fällig';

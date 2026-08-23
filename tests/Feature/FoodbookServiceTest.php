@@ -333,7 +333,9 @@ it('M11-09: Block-Notiz (interne_bemerkung) persistiert via updateBlock — auch
 });
 
 it('M11-08: kiAndockKontext assembliert Kunde + Briefing + Concept-Liste (kein LLM-Call)', function () {
-    $fb = $this->foodbooks->create($this->rootTeam, ['label' => 'FB', 'customer' => 'Hotel Adler', 'description' => 'Sommerliches Gartenfest', 'personen' => 80]);
+    // CRM-only (b08c5c2): Kundenname aus verknüpfter CRM-Firma (nicht mehr Freitext-customer).
+    $kunde = \Platform\Crm\Models\CrmCompany::create(['team_id' => $this->rootTeam->id, 'name' => 'Hotel Adler', 'is_active' => true]);
+    $fb = $this->foodbooks->create($this->rootTeam, ['label' => 'FB', 'crm_company_id' => $kunde->id, 'description' => 'Sommerliches Gartenfest', 'personen' => 80]);
     $kap = $this->foodbooks->addKapitel($this->rootTeam, $fb->id, ['title' => 'Menü']);
     $this->foodbooks->addBlock($this->rootTeam, $kap->id, ['type' => 'concept_ref', 'concept_id' => $this->concept->id]);
 

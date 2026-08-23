@@ -184,6 +184,13 @@ it('GT-13-11: Grounding koriander → beide Sorten-Dokus per Präfix, je 1.400 Z
     ($this->mkRouting)('ai_infer_ankers', 'pairing', 'grounding', 3, 1400);
     ($this->mkDoc)('pairing.koriander_blatt', 'pairing', str_repeat('B', 2000));
     ($this->mkDoc)('pairing.koriander_saat', 'pairing', str_repeat('S', 2000));
+    // Seit 2026-08-07 zieht groundingBlock die Stems aus dem Anker-Vokabular, nicht aus knowledge_documents.
+    foreach (['koriander_blatt', 'koriander_saat'] as $s) {
+        DB::table('foodalchemist_vocab_pairing_anchors')->insert([
+            'uuid' => (string) UuidV7::generate(), 'slug' => $s, 'display_de' => $s,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+    }
 
     $ctx = $this->svc->contextFor('ai_infer_ankers', '', null, ['koriander', 'koriander']);  // Dupe-Input
 

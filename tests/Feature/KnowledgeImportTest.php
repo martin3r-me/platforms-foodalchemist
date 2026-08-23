@@ -36,11 +36,13 @@ it('importiert Klasse A, ist idempotent und zählt version bei Inhalts-Änderung
     $this->artisan('foodalchemist:knowledge-import', ['--vault' => $this->vault, '--rust-src' => $this->rustSrc])
         ->assertSuccessful();
 
-    expect(DB::table('foodalchemist_knowledge_documents')->count())->toBe(3)
+    // Nur die importierten Vault-Kategorien zählen — workflow.*-Docs werden von einer Migration
+    // (2026_08_04) ins frische :memory: geseedet, gehören nicht zum Import.
+    expect(DB::table('foodalchemist_knowledge_documents')->whereIn('category', ['cross_cutting', 'domain', 'pairing'])->count())->toBe(3)
         ->and(DB::table('foodalchemist_knowledge_documents')->where('slug', 'pairing.salbei')->value('category'))->toBe('pairing')
         ->and(DB::table('foodalchemist_knowledge_aliases')->count())->toBe(2)
-        // Generator-/Planungs-Routings + Step-by-Step-Discovery.
-        ->and(DB::table('foodalchemist_knowledge_routings')->count())->toBe(20);
+        // Generator-/Planungs-Routings + Step-by-Step-Discovery (Katalog seit #… auf 25 gewachsen).
+        ->and(DB::table('foodalchemist_knowledge_routings')->count())->toBe(25);
 
     // 2. Lauf: nichts ändert sich (idempotent)
     $this->artisan('foodalchemist:knowledge-import', ['--vault' => $this->vault, '--rust-src' => $this->rustSrc])->assertSuccessful();

@@ -78,7 +78,9 @@ function bindKundentextStub(?string $text): void
 function fbMitInhalt(Team $team, string $briefing = ''): FoodAlchemistFoodbook
 {
     $svc = app(FoodbookService::class);
-    $fb = $svc->create($team, ['label' => 'Angebot Adler', 'customer' => 'Hotel Adler', 'personen' => 80]);
+    // CRM-only (b08c5c2): Kundenname aus verknüpfter CRM-Firma (nicht mehr Freitext-customer).
+    $kunde = \Platform\Crm\Models\CrmCompany::create(['team_id' => $team->id, 'name' => 'Hotel Adler', 'is_active' => true]);
+    $fb = $svc->create($team, ['label' => 'Angebot Adler', 'crm_company_id' => $kunde->id, 'personen' => 80]);
     if ($briefing !== '') {
         $svc->update($team, $fb->id, ['description' => $briefing]);
     }

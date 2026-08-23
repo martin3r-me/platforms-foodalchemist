@@ -44,6 +44,30 @@ trait SeedsTeamHierarchy
             });
         }
 
+        // crm_companies: Stub (Allowlist-Lücke, wie core_ai_models). Die echte CRM-Migration zöge vier
+        // Lookup-FKs (industries/legal_forms/contact_statuses[required]/countries) + Seeds nach — hier
+        // muss die Tabelle nur existieren (display_name liest trading_name/legal_name/name). Genutzt von
+        // ControllingPortfolioTab, PortfolioService, Foodbook-Kunde (CRM-only seit b08c5c2). FK-Spalten
+        // bewusst ohne Constraints (SQLite-FK-Validierung + MySQL-only-ALTERs vermeiden).
+        if (! \Illuminate\Support\Facades\Schema::hasTable('crm_companies')) {
+            \Illuminate\Support\Facades\Schema::create('crm_companies', function ($table) {
+                $table->id();
+                $table->uuid('uuid')->nullable();
+                $table->string('name');
+                $table->string('legal_name')->nullable();
+                $table->string('trading_name')->nullable();
+                $table->unsignedBigInteger('industry_id')->nullable();
+                $table->unsignedBigInteger('legal_form_id')->nullable();
+                $table->unsignedBigInteger('contact_status_id')->nullable();
+                $table->unsignedBigInteger('country_id')->nullable();
+                $table->unsignedBigInteger('created_by_user_id')->nullable();
+                $table->unsignedBigInteger('owned_by_user_id')->nullable();
+                $table->unsignedBigInteger('team_id')->nullable();
+                $table->boolean('is_active')->default(true);
+                $table->timestamps();
+            });
+        }
+
         $this->artisan('migrate', [
             '--realpath' => true,
             '--path' => [

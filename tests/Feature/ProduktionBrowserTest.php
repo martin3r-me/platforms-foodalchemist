@@ -102,8 +102,8 @@ it('Spalten-Ansichten schalten die Spalten um, Kopf und Zellen bleiben synchron'
     $standard = Livewire::test(Browser::class)->viewData('spalten');
     $kueche = Livewire::test(Browser::class)->call('waehleAnsicht', 'kueche')->viewData('spalten');
 
-    expect($standard)->toContain('einkauf')->not->toContain('posten')
-        ->and($kueche)->toContain('posten')->toContain('zeit')->not->toContain('einkauf')
+    expect($standard)->toContain('bedarf')->not->toContain('posten')
+        ->and($kueche)->toContain('posten')->toContain('zeit')->not->toContain('bedarf')
         // Reihenfolge folgt IMMER dem Katalog, sonst versetzt sich die Tabelle
         ->and($kueche)->toBe(array_values(array_filter(
             array_keys(Browser::SPALTEN), fn ($k) => in_array($k, $kueche, true)
