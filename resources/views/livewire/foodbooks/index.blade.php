@@ -456,18 +456,17 @@
                     </div>
                 </div>
 
-                {{-- Block-Liste --}}
-                <div class="relative overflow-hidden {{ $card }} p-5 space-y-3" x-data="{ einf: null }" data-fb-inhalt>
+                {{-- S3b/Picker-Umbau: 2-Spalten — Inhalt links, permanenter Katalog rechts (Produktions-Muster). --}}
+                <div class="flex gap-4 items-start" data-fb-speisen-2col>
+                {{-- Block-Liste (linke Spalte) --}}
+                <div class="relative overflow-hidden flex-1 min-w-0 {{ $card }} p-5 space-y-3" data-fb-inhalt>
                     <div class="flex items-center justify-between flex-wrap gap-2">
                         <h3 class="font-medium tracking-tight text-gray-900">Inhalt <span class="text-gray-500 text-xs">({{ $kapitel->blocks->count() }})</span></h3>
                         <div class="flex items-center gap-2" x-data="{ presets: false }">
                             @if(count($markiert) >= 2)
                                 <button type="button" wire:click="wahlGruppeBilden" class="{{ $btnGhostXs }} text-amber-600">Wahl-Gruppe ({{ count($markiert) }})</button>
                             @endif
-                            <button type="button" @click="einf = (einf === 'concept' ? null : 'concept')"
-                                    class="{{ $btnGhost }}" :class="einf === 'concept' ? '!bg-violet-500/20 !text-violet-700 !border-violet-500/40' : ''" data-fb-einf-concept>+ Concept einfügen</button>
-                            <button type="button" @click="einf = (einf === 'gericht' ? null : 'gericht')"
-                                    class="{{ $btnGhost }}" :class="einf === 'gericht' ? '!bg-violet-500/20 !text-violet-700 !border-violet-500/40' : ''" data-fb-einf-gericht>+ Gericht einfügen</button>
+                            {{-- Concept/Gericht/Format einfügen → jetzt im permanenten Katalog rechts. --}}
                             <button type="button" wire:click="blockBasis('text')" class="{{ $btnGhostXs }}">+ Text</button>
                             <button type="button" wire:click="blockBasis('spacer')" class="{{ $btnGhostXs }}">+ Leerzeile</button>
                             <div class="relative">
@@ -595,120 +594,75 @@
                         @endforelse
                     </div>
 
-                    {{-- Spec 29 / S6.1: Concept-Einfügen INLINE (Concepter-Muster statt Modal) —
-                         Suche + Dimensions-Filter + Kandidatenliste; „+" fügt direkt ein und bleibt offen.
-                         Liegt unter `.fa-editor-panel` → dunkel-lesbar ohne eigenes dark-canvas. --}}
-                    <div x-show="einf === 'concept'" x-cloak class="border-t border-white/10 pt-3 mt-1" data-fb-einfuegen="concept">
-                        <input type="search" wire:model.live.debounce.300ms="conceptSuche" placeholder="Concept suchen …" class="{{ $input }} w-full mb-3" />
-                        @php($facettenAktiv = collect($conceptFacetten)->filter(fn ($v) => $v !== null)->isNotEmpty())
-                        <div class="flex gap-3 min-h-[20rem]">
-                            {{-- UX 2026-07-25: Filter auf die Concepter-Dimensionen (Eventtyp/Servierform/Einsatzmoment/Saison) --}}
-                            <div class="w-56 shrink-0 overflow-y-auto border-r border-black/5 pr-2 space-y-2 max-h-[26rem]">
-                                <button type="button" wire:click="resetConceptFacetten"
-                                        class="w-full text-left text-[11px] px-2 py-1 rounded-lg {{ ! $facettenAktiv ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10 text-violet-700' : 'text-gray-500 hover:bg-black/[0.03]' }}">Alle Dimensionen</button>
-                                @if($facetteEventtypen->isNotEmpty())
-                                    <div class="space-y-1"><span class="{{ $label }}">Eventtyp</span>
-                                        <div class="flex flex-wrap gap-1">
-                                            @foreach($facetteEventtypen as $et)
-                                                <button type="button" wire:key="fc-ev-{{ $et->id }}" wire:click="toggleConceptFacet('eventtyp', {{ $et->id }})"
-                                                        class="{{ $pill }} {{ $conceptFacetten['eventtyp'] === $et->id ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $et->name }}</button>
-                                            @endforeach
-                                        </div>
-                                    </div>
-                                @endif
-                                @if($facetteServierformen->isNotEmpty())
-                                    <div class="space-y-1"><span class="{{ $label }}">Servierform</span>
-                                        <div class="flex flex-wrap gap-1">
-                                            @foreach($facetteServierformen as $sf)
-                                                <button type="button" wire:key="fc-sf-{{ $sf->id }}" wire:click="toggleConceptFacet('servierform', {{ $sf->id }})"
-                                                        class="{{ $pill }} {{ $conceptFacetten['servierform'] === $sf->id ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $sf->label }}</button>
-                                            @endforeach
-                                        </div>
-                                    </div>
-                                @endif
-                                @if($facetteMomente->isNotEmpty())
-                                    <div class="space-y-1"><span class="{{ $label }}">Einsatzmoment</span>
-                                        <div class="flex flex-wrap gap-1">
-                                            @foreach($facetteMomente as $em)
-                                                <button type="button" wire:key="fc-em-{{ $em->id }}" wire:click="toggleConceptFacet('einsatzmoment', {{ $em->id }})"
-                                                        class="{{ $pill }} {{ $conceptFacetten['einsatzmoment'] === $em->id ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $em->name }}</button>
-                                            @endforeach
-                                        </div>
-                                    </div>
-                                @endif
-                                @if($facetteSaisons->isNotEmpty())
-                                    <div class="space-y-1"><span class="{{ $label }}">Saison</span>
-                                        <div class="flex flex-wrap gap-1">
-                                            @foreach($facetteSaisons as $sa)
-                                                <button type="button" wire:key="fc-sa-{{ $sa->id }}" wire:click="toggleConceptFacet('season', {{ $sa->id }})"
-                                                        class="{{ $pill }} {{ $conceptFacetten['season'] === $sa->id ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $sa->name }}</button>
-                                            @endforeach
-                                        </div>
-                                    </div>
-                                @endif
-                            </div>
-                            {{-- Concept-Liste --}}
-                            <div class="flex-1 min-w-0 overflow-y-auto space-y-0.5 max-h-[26rem]">
-                                @if($conceptKandidaten->isNotEmpty())
-                                    @foreach($conceptKandidaten as $ck)
-                                        <button type="button" wire:key="dck-{{ $ck->id }}" wire:click="conceptHinzu({{ $ck->id }})"
-                                                class="w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg text-xs hover:bg-violet-500/10 text-left">
-                                            <span class="truncate text-gray-900">+ {{ $ck->name }}</span>
-                                            <span class="text-gray-500 tabular-nums shrink-0">{{ $ck->price_per_person_cache !== null ? number_format((float) $ck->price_per_person_cache, 2, ',', '.') . ' €' : '' }}</span>
-                                        </button>
-                                    @endforeach
-                                @elseif($conceptSuche !== '' || $facettenAktiv)
-                                    <p class="text-[11px] text-gray-500 px-2 py-2">Keine Concepts für diese Auswahl.</p>
-                                @else
-                                    <p class="text-[11px] text-gray-500 px-2 py-2">Noch keine Concepts angelegt.</p>
-                                @endif
-                            </div>
-                        </div>
-                        <p class="text-[10px] text-gray-500 mt-2">Eingefügte Concepts erscheinen oben im Inhalt. Bleibt offen für mehrere.</p>
-                    </div>{{-- /Concept-Einfügen inline --}}
+                </div>{{-- /Inhalt (linke Spalte) --}}
 
-                    {{-- Spec 29 / S6.1: Gericht-Einfügen INLINE (Concepter-Muster). Spiegelt Concept-Einfügen,
-                         Klassen-Filter statt Dimensionen; `gerichtKandidaten` = echte VK-Gerichte. --}}
-                    <div x-show="einf === 'gericht'" x-cloak class="border-t border-white/10 pt-3 mt-1" data-fb-einfuegen="gericht">
-                        <input type="search" wire:model.live.debounce.300ms="gerichtSuche" placeholder="Gericht (VK-Rezept) suchen …" class="{{ $input }} w-full mb-3" />
-                        <div class="flex gap-3 min-h-[20rem]">
-                            {{-- UX 2026-07-24: Klassen-Filter mit Untergruppen — Hauptgruppe (Modell A) + Drill-down
-                                 auf die dish_classes der aktiven HG (z. B. „… Vegan"). Browsen, wenn der Name unbekannt ist. --}}
-                            <div class="w-52 shrink-0 overflow-y-auto border-r border-black/5 pr-2 space-y-0.5 max-h-[26rem]">
-                                <button type="button" wire:click="waehleGerichtHg(null)"
-                                        class="w-full text-left text-xs px-2 py-1 rounded-lg {{ $gerichtHauptgruppe === null ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10 text-violet-700' : 'text-gray-600 hover:bg-black/[0.03]' }}">Alle Klassen</button>
-                                @foreach($gerichtHauptgruppen as $hg)
-                                    <button type="button" wire:key="fbg-hg-{{ $hg->id }}" wire:click="waehleGerichtHg({{ $hg->id }})"
-                                            class="w-full text-left text-xs px-2 py-1 rounded-lg truncate {{ $gerichtHauptgruppe === $hg->id && $gerichtDishClass === null ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10 text-violet-700' : 'text-gray-600 hover:bg-black/[0.03]' }}">{{ $hg->label }}</button>
-                                    {{-- Untergruppen der aktiven HG, eingerückt --}}
-                                    @if($gerichtHauptgruppe === $hg->id && $gerichtUntergruppen->isNotEmpty())
-                                        @foreach($gerichtUntergruppen as $ug)
-                                            <button type="button" wire:key="fbg-ug-{{ $ug->id }}" wire:click="waehleGerichtKlasse({{ $ug->id }})"
-                                                    class="w-full text-left text-[11px] pl-5 pr-2 py-0.5 rounded-lg truncate {{ $gerichtDishClass === $ug->id ? 'bg-violet-500/10 text-violet-700' : 'text-gray-500 hover:bg-black/[0.03]' }}">— {{ $ug->label }}</button>
-                                        @endforeach
-                                    @endif
-                                @endforeach
-                            </div>
-                            {{-- Gericht-Liste --}}
-                            <div class="flex-1 min-w-0 overflow-y-auto space-y-0.5 max-h-[26rem]">
-                                @if($gerichtKandidaten->isNotEmpty())
-                                    @foreach($gerichtKandidaten as $gk)
-                                        <button type="button" wire:key="dgk-{{ $gk->id }}" wire:click="gerichtHinzu({{ $gk->id }})"
-                                                class="w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg text-xs hover:bg-violet-500/10 text-left">
-                                            <span class="truncate text-gray-900">+ {{ $gk->name }}</span>
-                                            <span class="text-gray-500 tabular-nums shrink-0">{{ $gk->sales_net !== null ? number_format((float) $gk->sales_net, 2, ',', '.') . ' €' : '' }}</span>
-                                        </button>
-                                    @endforeach
-                                @elseif($gerichtSuche !== '' || $gerichtHauptgruppe !== null)
-                                    <p class="text-[11px] text-gray-500 px-2 py-2">Keine VK-Gerichte für diese Auswahl.</p>
-                                @else
-                                    <p class="text-[11px] text-gray-500 px-2 py-2">Noch keine VK-Gerichte vorhanden.</p>
-                                @endif
-                            </div>
+                {{-- Persistenter Katalog (rechte Spalte, Produktions-Muster): Concept · Gericht · Format.
+                     Suche + Facetten + „+" fügt ins gewählte Kapitel (Format = Struktur-Kapitel). --}}
+                <aside class="w-80 shrink-0 sticky top-4 {{ $card }} p-3 space-y-2" x-data="{ kat: 'concept' }" data-fb-katalog>
+                    <div class="flex items-center gap-1 text-[11px] font-semibold">
+                        <button type="button" @click="kat='concept'" :class="kat==='concept' ? 'bg-violet-500/20 text-violet-700' : 'text-gray-500 hover:bg-black/[0.03]'" class="flex-1 px-2 py-1 rounded-md" data-fb-kat="concept">Concept</button>
+                        <button type="button" @click="kat='gericht'" :class="kat==='gericht' ? 'bg-violet-500/20 text-violet-700' : 'text-gray-500 hover:bg-black/[0.03]'" class="flex-1 px-2 py-1 rounded-md" data-fb-kat="gericht">Gericht</button>
+                        <button type="button" @click="kat='format'" :class="kat==='format' ? 'bg-violet-500/20 text-violet-700' : 'text-gray-500 hover:bg-black/[0.03]'" class="flex-1 px-2 py-1 rounded-md" data-fb-kat="format">Format</button>
+                    </div>
+
+                    {{-- CONCEPT-Modus --}}
+                    <div x-show="kat==='concept'" data-fb-katalog-concept>
+                        <input type="search" wire:model.live.debounce.300ms="conceptSuche" placeholder="Concept suchen …" class="{{ $input }} w-full mb-2" />
+                        @php($facettenAktiv = collect($conceptFacetten)->filter(fn ($v) => $v !== null)->isNotEmpty())
+                        <div class="flex flex-wrap gap-1 mb-2">
+                            <button type="button" wire:click="resetConceptFacetten" class="{{ $pill }} {{ ! $facettenAktiv ? $variantPill['primary'] : $variantPill['secondary'] }}">Alle</button>
+                            @foreach($facetteEventtypen as $et)<button type="button" wire:key="kc-ev-{{ $et->id }}" wire:click="toggleConceptFacet('eventtyp', {{ $et->id }})" class="{{ $pill }} {{ $conceptFacetten['eventtyp'] === $et->id ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $et->name }}</button>@endforeach
+                            @foreach($facetteServierformen as $sf)<button type="button" wire:key="kc-sf-{{ $sf->id }}" wire:click="toggleConceptFacet('servierform', {{ $sf->id }})" class="{{ $pill }} {{ $conceptFacetten['servierform'] === $sf->id ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $sf->label }}</button>@endforeach
+                            @foreach($facetteMomente as $em)<button type="button" wire:key="kc-em-{{ $em->id }}" wire:click="toggleConceptFacet('einsatzmoment', {{ $em->id }})" class="{{ $pill }} {{ $conceptFacetten['einsatzmoment'] === $em->id ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $em->name }}</button>@endforeach
+                            @foreach($facetteSaisons as $sa)<button type="button" wire:key="kc-sa-{{ $sa->id }}" wire:click="toggleConceptFacet('season', {{ $sa->id }})" class="{{ $pill }} {{ $conceptFacetten['season'] === $sa->id ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $sa->name }}</button>@endforeach
                         </div>
-                        <p class="text-[10px] text-gray-500 mt-2">Einzel-Gerichte erscheinen als [Gericht]-Block (€/Position). Bleibt offen für mehrere.</p>
-                    </div>{{-- /Gericht-Einfügen inline --}}
-                </div>
+                        <div class="overflow-y-auto space-y-0.5 max-h-[24rem]">
+                            @forelse($conceptKandidaten as $ck)
+                                <button type="button" wire:key="kck-{{ $ck->id }}" wire:click="conceptHinzu({{ $ck->id }})" class="w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg text-xs hover:bg-violet-500/10 text-left">
+                                    <span class="truncate text-gray-900">+ {{ $ck->name }}</span>
+                                    <span class="text-gray-500 tabular-nums shrink-0">{{ $ck->price_per_person_cache !== null ? number_format((float) $ck->price_per_person_cache, 2, ',', '.') . ' €' : '' }}</span>
+                                </button>
+                            @empty
+                                <p class="text-[11px] text-gray-500 px-2 py-2">{{ $conceptSuche !== '' || $facettenAktiv ? 'Keine Concepts für diese Auswahl.' : 'Noch keine Concepts angelegt.' }}</p>
+                            @endforelse
+                        </div>
+                    </div>
+
+                    {{-- GERICHT-Modus --}}
+                    <div x-show="kat==='gericht'" x-cloak data-fb-katalog-gericht>
+                        <input type="search" wire:model.live.debounce.300ms="gerichtSuche" placeholder="Gericht suchen …" class="{{ $input }} w-full mb-2" />
+                        <div class="flex flex-wrap gap-1 mb-2">
+                            <button type="button" wire:click="waehleGerichtHg(null)" class="{{ $pill }} {{ $gerichtHauptgruppe === null ? $variantPill['primary'] : $variantPill['secondary'] }}">Alle</button>
+                            @foreach($gerichtHauptgruppen as $hg)<button type="button" wire:key="kg-hg-{{ $hg->id }}" wire:click="waehleGerichtHg({{ $hg->id }})" class="{{ $pill }} {{ $gerichtHauptgruppe === $hg->id && $gerichtDishClass === null ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $hg->label }}</button>@endforeach
+                            @if($gerichtUntergruppen->isNotEmpty())@foreach($gerichtUntergruppen as $ug)<button type="button" wire:key="kg-ug-{{ $ug->id }}" wire:click="waehleGerichtKlasse({{ $ug->id }})" class="{{ $pill }} {{ $gerichtDishClass === $ug->id ? $variantPill['primary'] : $variantPill['secondary'] }}">— {{ $ug->label }}</button>@endforeach @endif
+                        </div>
+                        <div class="overflow-y-auto space-y-0.5 max-h-[24rem]">
+                            @forelse($gerichtKandidaten as $gk)
+                                <button type="button" wire:key="kgk-{{ $gk->id }}" wire:click="gerichtHinzu({{ $gk->id }})" class="w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg text-xs hover:bg-violet-500/10 text-left">
+                                    <span class="truncate text-gray-900">+ {{ $gk->name }}</span>
+                                    <span class="text-gray-500 tabular-nums shrink-0">{{ $gk->sales_net !== null ? number_format((float) $gk->sales_net, 2, ',', '.') . ' €' : '' }}</span>
+                                </button>
+                            @empty
+                                <p class="text-[11px] text-gray-500 px-2 py-2">{{ $gerichtSuche !== '' || $gerichtHauptgruppe !== null ? 'Keine VK-Gerichte für diese Auswahl.' : 'Noch keine VK-Gerichte vorhanden.' }}</p>
+                            @endforelse
+                        </div>
+                    </div>
+
+                    {{-- FORMAT-Modus (Struktur: fügt ein wiederverwendbares Format als Live-Kapitel ein) --}}
+                    <div x-show="kat==='format'" x-cloak data-fb-katalog-format>
+                        <input type="search" wire:model.live.debounce.300ms="formatSuche" placeholder="Format suchen …" class="{{ $input }} w-full mb-2" />
+                        @error('formatKapitel')<p class="text-[11px] text-rose-500 px-1 mb-1">{{ $message }}</p>@enderror
+                        <p class="text-[10px] text-gray-500 mb-1">Fügt ein Format als Live-Kapitel ein (Struktur).</p>
+                        <div class="overflow-y-auto space-y-0.5 max-h-[24rem]">
+                            @forelse($formatKandidaten as $fk)
+                                <button type="button" wire:key="kfmt-{{ $fk->id }}" wire:click="formatKapitelEinfuegen({{ $fk->id }})" class="w-full text-left truncate text-xs px-2 py-1.5 rounded-lg hover:bg-violet-500/10 text-gray-900" title="{{ $fk->consumer_name ?: $fk->name }}">+ {{ $fk->name }}@if($fk->origin === 'kunde')<span class="text-[9px] text-gray-400 ml-1">(Kunde-IP)</span>@endif</button>
+                            @empty
+                                <p class="text-[11px] text-gray-500 px-2 py-2">Keine Formate vorhanden.</p>
+                            @endforelse
+                        </div>
+                    </div>
+                </aside>
+            </div>{{-- /2col Speisen --}}
             @else
                 <div class="{{ $card }} p-8 text-center text-sm text-gray-500">Links im Kapitelbaum ein Kapitel wählen, um seine Speisen zu bearbeiten.</div>
             @endif{{-- /Kapitel-Editor --}}
