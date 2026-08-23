@@ -25,6 +25,7 @@ use Platform\FoodAlchemist\Services\PlanningSessionService;
 use Platform\FoodAlchemist\Services\RecipeImageService;
 use Platform\FoodAlchemist\Services\SalesRecipeService;
 use Platform\FoodAlchemist\Services\SpeisekarteService;
+use Platform\FoodAlchemist\Services\SpeiseplanService;
 use Platform\FoodAlchemist\Services\TeamSettingsService;
 use Platform\FoodAlchemist\Services\TitelVorschlagService;
 use Platform\FoodAlchemist\Services\WorkerHealthService;
@@ -551,6 +552,18 @@ class Index extends Component
 
     public bool $skPanelAuf = false;
 
+    /** Speiseplan-aus-Brief-Eingabe (Spec-42-Vollzug Stufe 4) — spiegelt sk*, owner_type=speiseplan. */
+    public string $spTitel = '';
+
+    public string $spBrief = '';
+
+    public ?string $spMeldung = null;
+
+    /** Handoff aus einem bestehenden Speiseplan: dann keinen neuen anlegen. */
+    public ?int $spOwnerId = null;
+
+    public bool $spPanelAuf = false;
+
     /**
      * F1 (Spec 42) — „Foodbook aus Brief" IN der Leitstelle: Shell anlegen → Gerüst aus Brief →
      * Struktur anwenden → Session + Voll-Kaskade (owner_type=foodbook). Spiegelt den bisherigen
@@ -705,6 +718,74 @@ class Index extends Component
             // LLM nicht verfügbar/deaktiviert, leerer Brief o.ä. → Meldung statt 500. Eine ggf. schon
             // angelegte leere Karten-Hülle bleibt in der Liste (verwerfbar) — bewusst kein Rollback.
             $this->skMeldung = $e->getMessage();
+        }
+    }
+
+    /**
+     * Spec-42-Vollzug Stufe 4 — „Speiseplan aus Brief" IN der Leitstelle. Anders als Foodbook/Speisekarte
+     * braucht der Speiseplan kein Gänge-Gerüst: {@see SpeiseplanService::create} legt die GV-Standard-Linien
+     * (Menü 1 / Vegetarisch / Dessert) + Zyklus (cycle_weeks) + Start-Montag an. Der Zyklus wird — falls im
+     * Brief genannt („4 Wochen") — übernommen. Danach startet die Grid-Voll-Kaskade
+     * ({@see PlanningCascadeService::starteSpeiseplanVollkaskade}): je leerer Zelle (Tag × Mahlzeit × Linie)
+     * ein Gericht, das den Brief-Kontext der Session erbt. Linien bleiben im Speiseplan-Editor frei änderbar.
+     */
+    public function speiseplanAusBrief(
+        SpeiseplanService $speiseplaene,
+        PlanningCascadeService $cascade,
+        PlanningSessionService $sessions,
+    ): void {
+        $this->spMeldung = null;
+        $team = $this->team();
+        if ($team === null) {
+            $this->spMeldung = 'Kein Team zugeordnet — Erstellung nicht möglich.';
+
+            return;
+        }
+        $brief = trim($this->spBrief);
+        if ($brief === '') {
+            $this->spMeldung = 'Bitte einen Brief eingeben (Anlass, Saison, Linien, Zyklus …).';
+
+            return;
+        }
+
+        try {
+            // 1. Speiseplan: bestehender (Handoff) ODER neue Hülle (Direktstart). create() legt GV-Standard-
+            //    Linien + Zyklus + Start-Montag an — Speiseplan braucht kein Gänge-Gerüst.
+            if ($this->spOwnerId !== null) {
+                $plan = \Platform\FoodAlchemist\Models\FoodAlchemistSpeiseplan::visibleToTeam($team)->find($this->spOwnerId);
+                if ($plan === null) {
+                    $this->spMeldung = 'Speiseplan nicht gefunden oder kein Zugriff.';
+
+                    return;
+                }
+            } else {
+                $in = ['name' => trim($this->spTitel) !== '' ? trim($this->spTitel) : 'Speiseplan aus Brief'];
+                // Zyklus aus dem Brief ableiten (z. B. „4 Wochen"); sonst GV-Default aus create().
+                if (preg_match('/(\d+)\s*[- ]?woche/iu', $brief, $m)) {
+                    $in['cycle_weeks'] = max(1, (int) $m[1]);
+                }
+                $plan = $speiseplaene->create($team, $in);
+            }
+
+            // 2. Review-Session (trägt den Brief → fließt als Kontext in jede Zell-Generierung) + Grid-Kaskade.
+            $session = $sessions->create($team, [
+                'title' => 'Speiseplan aus Brief: ' . $plan->name,
+                'brief' => $brief,
+                'created_via' => 'leitstelle_speiseplan_brief',
+            ]);
+            $cascade->starteKaskade($team, 'vollkaskade', $session, 'voll_kreativ', [
+                'owner_type' => 'speiseplan',
+                'owner_id' => $plan->id,
+                'created_via' => 'leitstelle_speiseplan_brief',
+            ]);
+
+            $this->spTitel = '';
+            $this->spBrief = '';
+            $this->spOwnerId = null;
+            $this->spPanelAuf = false;
+            $this->oeffne($session->id, 'worker');
+        } catch (\Throwable $e) {
+            $this->spMeldung = $e->getMessage();
         }
     }
 

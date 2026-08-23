@@ -2562,5 +2562,5 @@ it('Ausgabe-Tabs: Editor rendert die 3 Ausgabe-Kickoff-Tabs + Panels (Foodbook/S
         // Panels (im @if($active)-Block)
         ->assertSeeHtml('data-tab-fb-erzeugen')       // Foodbook aus Brief — live (foodbookAusBrief)
         ->assertSeeHtml('data-tab-sk-erzeugen')       // Speisekarte aus Brief — live (speisekarteAusBrief)
-        ->assertSeeHtml('data-tab-sp-platzhalter');   // Speiseplan — ehrlicher Platzhalter bis Stufe 4
+        ->assertSeeHtml('data-tab-sp-erzeugen');      // Speiseplan aus Brief — live (speiseplanAusBrief, Stufe 4)
 });

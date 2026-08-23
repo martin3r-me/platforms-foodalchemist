@@ -541,6 +541,9 @@ class PlanningCascadeService
             }
         }
 
+        // Spec-42-Vollzug S4: der Session-Brief (Anlass/Saison/Richtung) steuert jede Zell-Generierung mit
+        // („Speiseplan aus Brief"). Leer = unverändertes Alt-Verhalten (nur Linien-Brief).
+        $planKontext = trim((string) ($session?->brief ?? ''));
         $idx = 0;
         $offen = 0;
         foreach (range(1, $weeks) as $week) {
@@ -554,7 +557,8 @@ class PlanningCascadeService
                         $offen++;
                         continue;
                     }
-                    $brief = 'Mittagsgericht für die Linie „' . $linie->name . '“' . ($linie->is_vegetarian ? ' (vegetarisch)' : '') . '.';
+                    $brief = ($planKontext !== '' ? 'Rahmen: ' . $planKontext . ' — ' : '')
+                        . 'Mittagsgericht für die Linie „' . $linie->name . '“' . ($linie->is_vegetarian ? ' (vegetarisch)' : '') . '.';
                     $step = FoodAlchemistCascadeRunStep::create([
                         'team_id' => $team->id,
                         'cascade_run_id' => $run->id,

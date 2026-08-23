@@ -451,12 +451,20 @@
 
             <div wire:key="planung-tab-speiseplan" x-show="tab==='speiseplan'" x-cloak class="space-y-4">
                 <x-foodalchemist::modal-section title="Speiseplan aus Brief">
-                    <p class="text-[11px] text-slate-400" data-tab-sp-platzhalter>
-                        „Speiseplan aus Brief" wird als nächstes scharfgeschaltet. Der Speiseplan braucht eine
-                        andere Struktur als Foodbook/Speisekarte — Menü-<strong>Linien</strong> über einen
-                        <strong>Zyklus</strong> (Tag × Mahlzeit-Grid) statt Gänge-Slots. Bis dahin planst du
-                        den Speiseplan über den Speiseplan-Editor (reicher Zell-Picker).
+                    <p class="text-[11px] text-slate-400 mb-2">
+                        Einen GV-Speiseplan aus einem Brief planen — Menü-Linien (Menü 1 / Vegetarisch /
+                        Dessert) + Zyklus entstehen als GV-Standard (Linien im Speiseplan-Editor frei
+                        änderbar); die Kaskade füllt jede Zelle (Tag × Mahlzeit × Linie) brief-gesteuert.
                     </p>
+                    <input type="text" wire:model="spTitel" class="{{ $input }} w-full mb-2" placeholder="Speiseplan-Name (optional)" data-tab-sp-titel>
+                    <textarea wire:model="spBrief" rows="4" class="{{ $input }} w-full" placeholder="Brief: Anlass, Saison, Küchenstil, Zyklus (z. B. „4 Wochen"), Diät-Fokus …" data-tab-sp-brief></textarea>
+                    @if($spMeldung) <p class="text-[11px] text-rose-400 mt-2" data-tab-sp-meldung>{{ $spMeldung }}</p> @endif
+                    <div class="mt-3">
+                        <button type="button" wire:click="speiseplanAusBrief" wire:loading.attr="disabled" wire:target="speiseplanAusBrief" class="{{ $btnPrimary }} disabled:opacity-40" data-tab-sp-erzeugen>
+                            <span wire:loading.remove wire:target="speiseplanAusBrief">Speiseplan erzeugen (KI)</span>
+                            <span wire:loading wire:target="speiseplanAusBrief">erzeuge …</span>
+                        </button>
+                    </div>
                 </x-foodalchemist::modal-section>
             </div>
 
