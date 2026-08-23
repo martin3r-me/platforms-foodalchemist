@@ -611,12 +611,24 @@
                     @if($katalogModus === 'concept')
                         <input type="search" wire:model.live.debounce.300ms="conceptSuche" placeholder="Concept suchen …" class="{{ $input }} w-full mb-2 shrink-0" data-fb-katalog-concept />
                         @php($facettenAktiv = collect($conceptFacetten)->filter(fn ($v) => $v !== null)->isNotEmpty())
-                        <div class="flex flex-wrap gap-1 mb-2 shrink-0">
-                            <button type="button" wire:click="resetConceptFacetten" class="{{ $pill }} {{ ! $facettenAktiv ? $variantPill['primary'] : $variantPill['secondary'] }}">Alle</button>
-                            @foreach($facetteEventtypen as $et)<button type="button" wire:key="kc-ev-{{ $et->id }}" wire:click="toggleConceptFacet('eventtyp', {{ $et->id }})" class="{{ $pill }} {{ $conceptFacetten['eventtyp'] === $et->id ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $et->name }}</button>@endforeach
-                            @foreach($facetteServierformen as $sf)<button type="button" wire:key="kc-sf-{{ $sf->id }}" wire:click="toggleConceptFacet('servierform', {{ $sf->id }})" class="{{ $pill }} {{ $conceptFacetten['servierform'] === $sf->id ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $sf->label }}</button>@endforeach
-                            @foreach($facetteMomente as $em)<button type="button" wire:key="kc-em-{{ $em->id }}" wire:click="toggleConceptFacet('einsatzmoment', {{ $em->id }})" class="{{ $pill }} {{ $conceptFacetten['einsatzmoment'] === $em->id ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $em->name }}</button>@endforeach
-                            @foreach($facetteSaisons as $sa)<button type="button" wire:key="kc-sa-{{ $sa->id }}" wire:click="toggleConceptFacet('season', {{ $sa->id }})" class="{{ $pill }} {{ $conceptFacetten['season'] === $sa->id ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $sa->name }}</button>@endforeach
+                        {{-- Facetten als Dropdowns (Produktions-Muster) statt Pill-Wand — Concepter-Dimensionen. --}}
+                        <div class="grid grid-cols-2 gap-1 mb-2 shrink-0" data-fb-concept-facetten>
+                            <select wire:model.live="conceptFacetten.eventtyp" class="{{ $input }} !py-0.5 !text-[11px]" data-fb-facet-eventtyp>
+                                <option value="">Alle Eventtypen</option>
+                                @foreach($facetteEventtypen as $et)<option value="{{ $et->id }}">{{ $et->name }}</option>@endforeach
+                            </select>
+                            <select wire:model.live="conceptFacetten.servierform" class="{{ $input }} !py-0.5 !text-[11px]" data-fb-facet-servierform>
+                                <option value="">Alle Servierformen</option>
+                                @foreach($facetteServierformen as $sf)<option value="{{ $sf->id }}">{{ $sf->label }}</option>@endforeach
+                            </select>
+                            <select wire:model.live="conceptFacetten.einsatzmoment" class="{{ $input }} !py-0.5 !text-[11px]" data-fb-facet-einsatzmoment>
+                                <option value="">Alle Einsatzmomente</option>
+                                @foreach($facetteMomente as $em)<option value="{{ $em->id }}">{{ $em->name }}</option>@endforeach
+                            </select>
+                            <select wire:model.live="conceptFacetten.season" class="{{ $input }} !py-0.5 !text-[11px]" data-fb-facet-season>
+                                <option value="">Alle Saisons</option>
+                                @foreach($facetteSaisons as $sa)<option value="{{ $sa->id }}">{{ $sa->name }}</option>@endforeach
+                            </select>
                         </div>
                         <div class="flex-1 overflow-y-auto space-y-0.5">
                             @forelse($conceptKandidaten as $ck)
@@ -627,10 +639,16 @@
                         </div>
                     @elseif($katalogModus === 'gericht')
                         <input type="search" wire:model.live.debounce.300ms="gerichtSuche" placeholder="Gericht suchen …" class="{{ $input }} w-full mb-2 shrink-0" data-fb-katalog-gericht />
-                        <div class="flex flex-wrap gap-1 mb-2 shrink-0">
-                            <button type="button" wire:click="waehleGerichtHg(null)" class="{{ $pill }} {{ $gerichtHauptgruppe === null ? $variantPill['primary'] : $variantPill['secondary'] }}">Alle</button>
-                            @foreach($gerichtHauptgruppen as $hg)<button type="button" wire:key="kg-hg-{{ $hg->id }}" wire:click="waehleGerichtHg({{ $hg->id }})" class="{{ $pill }} {{ $gerichtHauptgruppe === $hg->id && $gerichtDishClass === null ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $hg->label }}</button>@endforeach
-                            @if($gerichtUntergruppen->isNotEmpty())@foreach($gerichtUntergruppen as $ug)<button type="button" wire:key="kg-ug-{{ $ug->id }}" wire:click="waehleGerichtKlasse({{ $ug->id }})" class="{{ $pill }} {{ $gerichtDishClass === $ug->id ? $variantPill['primary'] : $variantPill['secondary'] }}">— {{ $ug->label }}</button>@endforeach @endif
+                        {{-- Facetten als Dropdowns (Produktions-Muster): Warengruppe → Unterklasse. --}}
+                        <div class="grid grid-cols-2 gap-1 mb-2 shrink-0" data-fb-gericht-facetten>
+                            <select wire:model.live="gerichtHauptgruppe" class="{{ $input }} !py-0.5 !text-[11px]" data-fb-facet-hg>
+                                <option value="">Alle Warengruppen</option>
+                                @foreach($gerichtHauptgruppen as $hg)<option value="{{ $hg->id }}">{{ $hg->label }}</option>@endforeach
+                            </select>
+                            <select wire:model.live="gerichtDishClass" class="{{ $input }} !py-0.5 !text-[11px]" @disabled($gerichtUntergruppen->isEmpty()) data-fb-facet-klasse>
+                                <option value="">Alle Klassen</option>
+                                @foreach($gerichtUntergruppen as $ug)<option value="{{ $ug->id }}">{{ $ug->label }}</option>@endforeach
+                            </select>
                         </div>
                         <div class="flex-1 overflow-y-auto space-y-0.5">
                             @forelse($gerichtKandidaten as $gk)

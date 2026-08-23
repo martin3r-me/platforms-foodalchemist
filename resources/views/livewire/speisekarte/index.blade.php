@@ -313,10 +313,16 @@
                             <p class="text-[11px] mb-2 shrink-0 {{ $pickerRubrikTitel !== null ? 'text-violet-700' : 'text-amber-600' }}" data-sk-ziel>{{ $pickerRubrikTitel !== null ? 'Ziel-Rubrik: ' . $pickerRubrikTitel : 'Ziel-Rubrik: links per „+" an einer Rubrik wählen.' }}</p>
                             <input type="search" wire:model.live.debounce.300ms="pickerSuche" placeholder="{{ $pickerModus === 'menue' ? 'Menü/Concept suchen …' : 'Gericht suchen …' }}" class="{{ $input }} w-full mb-2 shrink-0" data-sk-picker-suche />
                             @if($pickerModus === 'gericht')
-                                <div class="flex flex-wrap gap-1 mb-2 shrink-0">
-                                    <button type="button" wire:click="pickerWaehleHg(null)" class="{{ $pill }} {{ $pickerHauptgruppe === null ? $variantPill['primary'] : $variantPill['secondary'] }}">Alle</button>
-                                    @foreach($pickerHauptgruppen as $hg)<button type="button" wire:key="skg-hg-{{ $hg->id }}" wire:click="pickerWaehleHg({{ $hg->id }})" class="{{ $pill }} {{ $pickerHauptgruppe === $hg->id && $pickerDishClass === null ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $hg->label }}</button>@endforeach
-                                    @if($pickerUntergruppen->isNotEmpty())@foreach($pickerUntergruppen as $ug)<button type="button" wire:key="skg-ug-{{ $ug->id }}" wire:click="pickerWaehleKlasse({{ $ug->id }})" class="{{ $pill }} {{ $pickerDishClass === $ug->id ? $variantPill['primary'] : $variantPill['secondary'] }}">— {{ $ug->label }}</button>@endforeach @endif
+                                {{-- Facetten als Dropdowns (Produktions-Muster): Warengruppe → Unterklasse. --}}
+                                <div class="grid grid-cols-2 gap-1 mb-2 shrink-0" data-sk-gericht-facetten>
+                                    <select wire:model.live="pickerHauptgruppe" class="{{ $input }} !py-0.5 !text-[11px]" data-sk-facet-hg>
+                                        <option value="">Alle Warengruppen</option>
+                                        @foreach($pickerHauptgruppen as $hg)<option value="{{ $hg->id }}">{{ $hg->label }}</option>@endforeach
+                                    </select>
+                                    <select wire:model.live="pickerDishClass" class="{{ $input }} !py-0.5 !text-[11px]" @disabled($pickerUntergruppen->isEmpty()) data-sk-facet-klasse>
+                                        <option value="">Alle Klassen</option>
+                                        @foreach($pickerUntergruppen as $ug)<option value="{{ $ug->id }}">{{ $ug->label }}</option>@endforeach
+                                    </select>
                                 </div>
                             @endif
                             <div class="flex-1 overflow-y-auto space-y-0.5">

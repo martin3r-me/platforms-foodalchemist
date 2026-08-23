@@ -340,6 +340,12 @@ class Index extends Component
         $this->pickerDishClass = ($dishClassId !== null && $this->pickerDishClass === $dishClassId) ? null : $dishClassId;
     }
 
+    /** Dropdown-Bindung (Filter als <select> statt Pill-Wand): HG-Wechsel setzt die Unterklasse zurück. */
+    public function updatedPickerHauptgruppe(): void
+    {
+        $this->pickerDishClass = null;
+    }
+
     public function positionAusGericht(SpeisekarteService $svc, int $rubrikId, int $recipeId): void
     {
         $svc->addPosition($this->team(), $rubrikId, [

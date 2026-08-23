@@ -732,6 +732,21 @@ class Index extends Component
         $this->conceptFacetten = ['eventtyp' => null, 'servierform' => null, 'einsatzmoment' => null, 'season' => null];
     }
 
+    /**
+     * Dropdown-Bindung (Filter als <select> statt Pill-Wand, Produktions-Muster): Concept-Facetten
+     * '' → null + int-Coercion (das Array ist typlos; der Service vergleicht strikt gegen int-IDs).
+     */
+    public function updatedConceptFacetten($value, $key): void
+    {
+        $this->conceptFacetten[$key] = ($value === '' || $value === null) ? null : (int) $value;
+    }
+
+    /** Dropdown-Bindung: HG-Wechsel setzt die Unterklasse zurück (wie waehleGerichtHg). */
+    public function updatedGerichtHauptgruppe(): void
+    {
+        $this->gerichtDishClass = null;
+    }
+
     public function presetHinzu(string $type, ?string $slug, ?string $label, ?string $preisBasis, bool $sichtbar, FoodbookService $svc): void
     {
         if ($this->selectedKapitelId === null) {
