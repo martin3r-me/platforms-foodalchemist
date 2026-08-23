@@ -29,6 +29,13 @@ class FoodbookKontextRail extends Component
     /** Briefing/Einleitung (Kundentext) — blur-persistiert. */
     public string $beschreibung = '';
 
+    /** KI-Kundentext-Vorschau (noch nicht übernommen) — schreibt nie direkt ins Feld. */
+    public ?string $kiVorschau = null;
+
+    public ?float $kiConfidence = null;
+
+    public ?string $kiHinweis = null;
+
     public function mount(): void
     {
         $this->canvasInit('foodbook', 'foodbook', $this->foodbookId);
@@ -62,6 +69,46 @@ class FoodbookKontextRail extends Component
         app(FoodbookService::class)->update($this->team(), $this->foodbookId, [
             'description' => trim($this->beschreibung) !== '' ? $this->beschreibung : null,
         ]);
+    }
+
+    /**
+     * KI-Kundentext-Vorschlag holen (Spec 03 · L2) — landet NUR in der Vorschau, nie direkt im Feld.
+     * Typisierte KI-Ausfälle werden zu genau einer Hinweis-Zeile (wie im Foodbook-Modul).
+     */
+    public function kiEinleitung(FoodbookService $svc): void
+    {
+        $this->kiVorschau = null;
+        $this->kiConfidence = null;
+        $this->kiHinweis = null;
+        try {
+            $r = $svc->kiKundentextVorschlag($this->team(), $this->foodbookId);
+            $this->kiVorschau = $r['text'];
+            $this->kiConfidence = $r['confidence'] ?? null;
+        } catch (\Platform\FoodAlchemist\Exceptions\KiDeaktiviertException $e) {
+            $this->kiHinweis = 'KI ist für dieses Team deaktiviert (Einstellungen → Food DNA / KI).';
+        } catch (\Platform\FoodAlchemist\Exceptions\KiNichtVerfuegbarException $e) {
+            $this->kiHinweis = 'Kein KI-Provider gebunden — der Kundentext braucht ein aktives Modell (demo).';
+        } catch (\RuntimeException $e) {
+            $this->kiHinweis = $e->getMessage();
+        }
+    }
+
+    /** Vorschlag übernehmen: ins Feld + persistieren, Vorschau leeren. */
+    public function kiUebernehmen(FoodbookService $svc): void
+    {
+        if ($this->kiVorschau === null) {
+            return;
+        }
+        $this->beschreibung = $this->kiVorschau;
+        $svc->update($this->team(), $this->foodbookId, ['description' => $this->beschreibung]);
+        $this->kiVerwerfen();
+    }
+
+    public function kiVerwerfen(): void
+    {
+        $this->kiVorschau = null;
+        $this->kiConfidence = null;
+        $this->kiHinweis = null;
     }
 
     public function render()

@@ -184,6 +184,25 @@ it('FoodbookKontextRail: rendert (inkl. Leitidee-Canvas) + Leitplanken/Briefing 
         ->and(trim((string) $fb->description))->toBe('Einleitung fürs Angebot.');
 });
 
+it('FoodbookKontextRail: KI-Übernehmen schreibt die Vorschau ins Feld + persistiert; KI-Ausfall bleibt graceful', function () {
+    Queue::fake();
+    $fb = macheFoodbookMitKapiteln($this->rootTeam);
+
+    // KI-Ausfall (kein Kundentext-Provider gebunden) → Hinweis statt Crash, keine Vorschau.
+    $comp = Livewire::test(FoodbookKontextRail::class, ['foodbookId' => (int) $fb->id])
+        ->call('kiEinleitung')
+        ->assertSet('kiVorschau', null)
+        ->assertNotSet('kiHinweis', null);
+
+    // Übernehmen: Vorschau manuell setzen (KI-Ergebnis simulieren) → ins Feld + persistiert.
+    $comp->set('kiVorschau', 'Ein einladender Einleitungstext.')
+        ->call('kiUebernehmen')
+        ->assertSet('kiVorschau', null)
+        ->assertSet('beschreibung', 'Ein einladender Einleitungstext.');
+
+    expect(trim((string) $fb->refresh()->description))->toBe('Ein einladender Einleitungstext.');
+});
+
 it('Guard: fremdes Team kann das Kapitel nicht über die Kaskade erzeugen', function () {
     Queue::fake();
     $fb = macheFoodbookMitKapiteln($this->rootTeam);

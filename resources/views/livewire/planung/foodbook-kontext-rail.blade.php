@@ -39,12 +39,30 @@
             </div>
         </div>
 
-        {{-- Briefing / Einleitung (Kundentext) — blur-persistiert. --}}
+        {{-- Briefing / Einleitung (Kundentext) — blur-persistiert; KI-Vorschlag landet in der Vorschau. --}}
         <div class="mt-3" data-fbkontext-briefing>
-            <label class="{{ $label }}">Briefing / Einleitung (Kundentext)</label>
+            <div class="flex items-center justify-between">
+                <label class="{{ $label }}">Briefing / Einleitung (Kundentext)</label>
+                <button type="button" wire:click="kiEinleitung" wire:loading.attr="disabled" wire:target="kiEinleitung" class="{{ $btnAi }}" data-fbkontext-ki>
+                    <span wire:loading.remove wire:target="kiEinleitung">@svg('heroicon-o-sparkles', 'w-3.5 h-3.5') KI-Text</span>
+                    <span wire:loading wire:target="kiEinleitung">schreibt …</span>
+                </button>
+            </div>
             <textarea wire:model.blur="beschreibung" rows="3"
                       class="{{ $input }} w-full resize-none min-h-[4.5rem]"
                       placeholder="Briefing / Einleitungstext fürs Angebot"></textarea>
+
+            @if($kiVorschau !== null)
+                <div class="mt-2 rounded-md border border-violet-500/20 bg-violet-500/[0.04] p-2" data-fbkontext-ki-vorschau>
+                    <p class="{{ $label }} !mb-0">KI-Vorschlag — noch nicht übernommen{{ $kiConfidence !== null ? ' · Konfidenz '.number_format($kiConfidence * 100, 0).' %' : '' }}</p>
+                    <p class="text-xs text-gray-700 whitespace-pre-line mt-1">{{ $kiVorschau }}</p>
+                    <div class="flex items-center gap-2 mt-2">
+                        <button type="button" wire:click="kiUebernehmen" class="{{ $btnPrimary }}" data-fbkontext-ki-uebernehmen>{{ trim($beschreibung) !== '' ? 'Ersetzen' : 'Übernehmen' }}</button>
+                        <button type="button" wire:click="kiVerwerfen" class="{{ $btnGhost }}">Verwerfen</button>
+                    </div>
+                </div>
+            @endif
+            @if($kiHinweis !== null)<p class="text-[11px] text-amber-600 mt-1" data-fbkontext-ki-hinweis>{{ $kiHinweis }}</p>@endif
         </div>
 
         {{-- Foodbook-Leitidee (Canvas) — inline, owner=foodbook (ManagesCanvas). --}}
