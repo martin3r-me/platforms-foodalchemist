@@ -345,6 +345,7 @@ class PaketService
     {
         return FoodAlchemistRecipe::visibleToTeam($team)->verkauf()
             ->whereNull('variant_source_recipe_id') // R4.4: Slot-Varianten sind konzept-lokal, nicht pickbar
+            ->whereNotIn('status', ['stub', 'draft', 'deprecated', 'archived']) // Picker zeigt keine Entwürfe/Stubs/verworfenen (Status berücksichtigt)
             ->when($suche !== '', fn ($q) => \Platform\FoodAlchemist\Support\Suche::like($q, 'name', $suche))
             // Modell A: HG = eigene Achse (recipes.dish_main_group_id) — DIREKT filtern, exakt wie
             // SalesRecipeService::browserQuery/hauptgruppenCounts (Count-Quelle des Chips). Vorher lief
@@ -379,6 +380,7 @@ class PaketService
     public function basisKandidaten(Team $team, string $suche, array $filter = [], int $limit = 60): Collection
     {
         return FoodAlchemistRecipe::visibleToTeam($team)->basis()
+            ->whereNotIn('status', ['stub', 'draft', 'deprecated', 'archived']) // Picker zeigt keine Entwürfe/Stubs/verworfenen (Status berücksichtigt)
             ->when($suche !== '', fn ($q) => \Platform\FoodAlchemist\Support\Suche::like($q, 'name', $suche))
             ->when(($filter['hauptgruppe'] ?? null), fn ($q, $hg) => $q->whereHas('category', fn ($k) => $k->where('main_group_id', (int) $hg)))
             ->when(($filter['category'] ?? null), fn ($q, $kat) => $q->where('category_id', (int) $kat))

@@ -122,11 +122,11 @@ it('B4: bildePaketAusPositionen — markierte Gerichte → 1 wiederverwendbares 
     $neu = $this->concepts->bildePaketAusPositionen($this->rootTeam, $concept->id, [$s1->id, $s2->id], 'Grill-HG', 'HG');
 
     expect($neu->type)->toBe('paket')
-        ->and($neu->paket->gerichte()->count())->toBe(2)
+        ->and($neu->embeddedConcept->slots()->count())->toBe(2)                                     // Kaskade: eingebettetes kind=paket-Concept mit 2 Gericht-Slots
         ->and($concept->refresh()->slots()->count())->toBe(2)                                       // 2 Gerichte → 1 Paket, + Dessert
         ->and($this->concepts->preisCockpit($concept->refresh())['price_per_person'])->toBe(10.50); // Summe unverändert
 
-    expect(\Platform\FoodAlchemist\Models\FoodAlchemistPaket::where('name', 'Grill-HG')->where('role', 'HG')->exists())->toBeTrue();
+    expect(\Platform\FoodAlchemist\Models\FoodAlchemistConcept::pakete()->where('name', 'Grill-HG')->exists())->toBeTrue();
 });
 
 it('B5: setSlotMengeEinheit skaliert Preis/EK der Position (Zeilen-Editor)', function () {
@@ -172,23 +172,24 @@ it('M10-04: Concept-Preis = Σ gespeicherte Paket-Preise + feste Gerichte', func
 });
 
 it('M10-04: Paket-Tausch ändert nur die Differenz (kein Kaskaden-Recompute)', function () {
-    $billig = $this->pakete->create($this->rootTeam, ['name' => 'Vorspeise A', 'role' => 'Vorspeise', 'price_mode' => 'manuell']);
-    $teuer = $this->pakete->create($this->rootTeam, ['name' => 'Vorspeise B', 'role' => 'Vorspeise', 'price_mode' => 'manuell']);
-    $this->pakete->update($this->rootTeam, $billig->id, ['price_per_person' => 4.50]);
-    $this->pakete->update($this->rootTeam, $teuer->id, ['price_per_person' => 6.00]);
+    // Kaskade: Pakete = kind=paket-Concepts (manueller Paketpreis), Einbau via embedded_concept_id.
+    $billig = $this->concepts->createPaket($this->rootTeam, ['name' => 'Vorspeise A', 'price_mode' => 'manuell']);
+    $teuer = $this->concepts->createPaket($this->rootTeam, ['name' => 'Vorspeise B', 'price_mode' => 'manuell']);
+    $this->concepts->update($this->rootTeam, $billig->id, ['price_per_person_manual' => 4.50]);
+    $this->concepts->update($this->rootTeam, $teuer->id, ['price_per_person_manual' => 6.00]);
 
     $concept = $this->concepts->create($this->rootTeam, ['name' => 'Grill-Buffet']);
     $slot = $this->concepts->addSlot($this->rootTeam, $concept->id, ['role' => 'Vorspeise']);
     $sDess = $this->concepts->addSlot($this->rootTeam, $concept->id, ['role' => 'Dessert']);
-    $this->concepts->fillSlot($this->rootTeam, $slot->id, ['package_id' => $billig->id]);
+    $this->concepts->fillSlot($this->rootTeam, $slot->id, ['embedded_concept_id' => $billig->id]);
     $this->concepts->fillSlot($this->rootTeam, $sDess->id, ['sales_recipe_id' => $this->dessert->id]);
     expect($this->concepts->preisCockpit($concept->refresh())['price_per_person'])->toBe(10.00);
 
-    // Tauschbare Pakete = gleiche Rolle
+    // Tauschbare Pakete = jedes aktive Paket (Rolle rollen-agnostisch, 2026-08-24)
     expect($this->concepts->tauschbarePakete($this->rootTeam, $slot->refresh())->pluck('name')->all())
         ->toBe(['Vorspeise A', 'Vorspeise B']);
 
-    $this->concepts->fillSlot($this->rootTeam, $slot->id, ['package_id' => $teuer->id]);
+    $this->concepts->fillSlot($this->rootTeam, $slot->id, ['embedded_concept_id' => $teuer->id]);
     expect($this->concepts->preisCockpit($concept->refresh())['price_per_person'])->toBe(11.50); // 6,00 + 5,50
 });
 

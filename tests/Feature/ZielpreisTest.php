@@ -12,27 +12,27 @@ uses(TestCase::class, SeedsTeamHierarchy::class);
  * Ziel-€/Person am nächsten zu kommen; feste Gerichte = Fixkosten.
  */
 beforeEach(function () {
-    $this->pakete = app(PaketService::class);
     $this->concepts = app(ConceptService::class);
     $this->seedTeamHierarchy();
 
-    $mk = function (string $name, string $rolle, float $preis) {
-        $p = $this->pakete->create($this->rootTeam, ['name' => $name, 'role' => $rolle, 'price_mode' => 'manuell']);
-        $this->pakete->update($this->rootTeam, $p->id, ['price_per_person' => $preis]);
+    // Kaskade: Pakete = kind=paket-Concepts (manueller Preis), Einbau via embedded_concept_id.
+    $mk = function (string $name, float $preis) {
+        $p = $this->concepts->createPaket($this->rootTeam, ['name' => $name, 'price_mode' => 'manuell']);
+        $this->concepts->update($this->rootTeam, $p->id, ['price_per_person_manual' => $preis]);
 
         return $p;
     };
-    $this->v4 = $mk('Vorspeise günstig', 'Vorspeise', 4.00);
-    $this->v6 = $mk('Vorspeise mittel', 'Vorspeise', 6.00);
-    $this->v10 = $mk('Vorspeise premium', 'Vorspeise', 10.00);
-    $this->h20 = $mk('Hauptgang günstig', 'Hauptgang', 20.00);
-    $this->h30 = $mk('Hauptgang premium', 'Hauptgang', 30.00);
+    $this->v4 = $mk('Vorspeise günstig', 4.00);
+    $this->v6 = $mk('Vorspeise mittel', 6.00);
+    $this->v10 = $mk('Vorspeise premium', 10.00);
+    $this->h20 = $mk('Hauptgang günstig', 20.00);
+    $this->h30 = $mk('Hauptgang premium', 30.00);
 
     $this->concept = $this->concepts->create($this->rootTeam, ['name' => 'Grill-Buffet']);
     $this->sVor = $this->concepts->addSlot($this->rootTeam, $this->concept->id, ['role' => 'Vorspeise']);
     $this->sHg = $this->concepts->addSlot($this->rootTeam, $this->concept->id, ['role' => 'Hauptgang']);
-    $this->concepts->fillSlot($this->rootTeam, $this->sVor->id, ['package_id' => $this->v4->id]);
-    $this->concepts->fillSlot($this->rootTeam, $this->sHg->id, ['package_id' => $this->h20->id]);
+    $this->concepts->fillSlot($this->rootTeam, $this->sVor->id, ['embedded_concept_id' => $this->v4->id]);
+    $this->concepts->fillSlot($this->rootTeam, $this->sHg->id, ['embedded_concept_id' => $this->h20->id]);
 });
 
 it('M13: Zielpreis-Solver trifft die nächstbeste Paket-Kombination (greift nur Paket-Slots)', function () {
@@ -41,7 +41,8 @@ it('M13: Zielpreis-Solver trifft die nächstbeste Paket-Kombination (greift nur 
 
     expect($v['aktuell'])->toBe(24.00)
         ->and($v['price'])->toBe(36.00)                              // exakt erreichbar
-        ->and($v['min'])->toBe(24.00)->and($v['max'])->toBe(40.00)   // Spanne
+        // Spanne rollen-agnostisch (2026-08-24): jeder Slot darf jedes Paket → min 4+4, max 30+30
+        ->and($v['min'])->toBe(8.00)->and($v['max'])->toBe(60.00)
         ->and($v['aenderungen'])->toBe(2)
         ->and($v['vorschlag'][$this->sVor->id])->toBe($this->v6->id)
         ->and($v['vorschlag'][$this->sHg->id])->toBe($this->h30->id);

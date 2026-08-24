@@ -53,6 +53,18 @@
                     </div>
                 @endif
 
+                {{-- Status-Filter (geteilte Dimension, 2026-08-24): draft|active|archiviert, gilt für beide Reiter --}}
+                <div class="space-y-0.5 pt-2 border-t border-black/5">
+                    <span class="{{ $label }}">Status</span>
+                    <div class="flex flex-wrap gap-1">
+                        <button type="button" wire:click="waehleStatus('')" class="{{ $pill }} {{ $statusFilter === '' ? $variantPill['primary'] : $variantPill['secondary'] }}">Alle</button>
+                        @foreach(['draft' => 'Entwurf', 'active' => 'Aktiv', 'archiviert' => 'Archiv'] as $val => $lbl)
+                            <button type="button" wire:key="stf-{{ $val }}" wire:click="waehleStatus('{{ $val }}')"
+                                    class="{{ $pill }} {{ $statusFilter === $val ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $lbl }}</button>
+                        @endforeach
+                    </div>
+                </div>
+
                 @if($tab === 'pakete' && ! empty($rollen))
                     {{-- Rollen-Filter (Pakete) --}}
                     <div class="space-y-0.5 pt-2 border-t border-black/5">
@@ -67,8 +79,9 @@
                     </div>
                 @endif
 
-                @if($tab === 'concepts')
-                    {{-- Facetten-Filter (Umbau-Spec Phase 4b): Eventtyp · Servierform · Einsatzmoment · Saison --}}
+                @if(in_array($tab, ['concepts', 'pakete'], true))
+                    {{-- Facetten-Filter (Umbau-Spec Phase 4b + Kaskade 2026-08-24): Eventtyp · Servierform ·
+                         Einsatzmoment · Saison — geteilte Concept-Dimensionen, gelten auch für Pakete (kind=paket). --}}
                     <div class="space-y-0.5 pt-2 border-t border-black/5">
                         <span class="{{ $label }}">Eventtyp</span>
                         <div class="flex flex-wrap gap-1">
@@ -136,6 +149,7 @@
                         <th class="{{ $th }} w-full text-left sticky top-0 z-20 bg-white/95 backdrop-blur-xl">Name</th>
                         @if($tab === 'pakete')
                             <th class="{{ $th }} text-left sticky top-0 z-20 bg-white/95 backdrop-blur-xl">Klasse</th>
+                            <th class="{{ $th }} text-left sticky top-0 z-20 bg-white/95 backdrop-blur-xl">Eventtyp · Servierform</th>
                             <th class="{{ $th }} text-right sticky top-0 z-20 bg-white/95 backdrop-blur-xl">Posten</th>
                             <th class="{{ $th }} text-right sticky top-0 z-20 bg-white/95 backdrop-blur-xl">€/Person</th>
                             <th class="{{ $th }} text-right sticky top-0 z-20 bg-white/95 backdrop-blur-xl">W%</th>
@@ -160,6 +174,7 @@
                             </td>
                             @if($tab === 'pakete')
                                 <td class="{{ $td }} text-gray-600">{{ $it->class ?: '—' }}</td>
+                                <td class="{{ $td }} text-gray-600">{{ collect([$it->eventType?->name, $it->servingForm?->label])->filter()->join(' · ') ?: '—' }}</td>
                                 <td class="{{ $td }} text-right tabular-nums text-gray-600">{{ $it->slots_count }}</td>
                                 <td class="{{ $td }} text-right tabular-nums">{{ $it->price_per_person_cache !== null ? number_format((float) $it->price_per_person_cache, 2, ',', '.') . ' €' : '—' }}</td>
                                 @php($wpPk = ($it->price_per_person_cache > 0 && $it->ek_per_person_cache !== null) ? (float) $it->ek_per_person_cache / (float) $it->price_per_person_cache * 100 : null)

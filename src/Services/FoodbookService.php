@@ -1894,6 +1894,7 @@ class FoodbookService
     public function conceptKandidaten(Team $team, string $suche, int $limit = 20, array $facetten = []): Collection
     {
         return FoodAlchemistConcept::visibleToTeam($team)->echte()
+            ->where('status', 'active') // Picker zeigt nur aktive (keine Entwürfe/archivierten; Status berücksichtigt)
             ->when($suche !== '', fn ($q) => \Platform\FoodAlchemist\Support\Suche::like($q, 'name', $suche))
             ->when(! empty($facetten['eventtyp']), fn ($q) => $q->where('event_type_id', (int) $facetten['eventtyp']))
             ->when(! empty($facetten['servierform']), fn ($q) => $q->where('serving_form_id', (int) $facetten['servierform']))

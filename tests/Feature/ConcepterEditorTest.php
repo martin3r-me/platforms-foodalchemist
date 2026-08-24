@@ -3,10 +3,8 @@
 use Livewire\Livewire;
 use Platform\FoodAlchemist\Livewire\Concepter\Editor;
 use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
-use Platform\FoodAlchemist\Models\FoodAlchemistPaket;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Services\ConceptService;
-use Platform\FoodAlchemist\Services\PaketService;
 use Platform\FoodAlchemist\Tests\Support\SeedsTeamHierarchy;
 use Platform\FoodAlchemist\Tests\TestCase;
 
@@ -19,15 +17,18 @@ uses(TestCase::class, SeedsTeamHierarchy::class);
 beforeEach(function () {
     $this->seedTeamHierarchy();
     $this->actingAs($this->makeUser($this->rootTeam));
-    $this->pakete = app(PaketService::class);
     $this->concepts = app(ConceptService::class);
 
     $this->green = FoodAlchemistRecipe::create([
         'team_id' => $this->rootTeam->id, 'recipe_key' => 'g', 'name' => 'Green Power',
         'status' => 'approved', 'is_sales_recipe' => true, 'sales_net' => 2.00, 'ek_total_eur' => 0.60,
     ]);
-    $this->paket = $this->pakete->create($this->rootTeam, ['name' => 'Salad Wall', 'role' => 'Vorspeise']);
-    $this->pakete->update($this->rootTeam, $this->paket->id, ['price_per_person' => 4.50]);
+    // Kaskade: Paket „Salad Wall" = kind=paket-Concept (manueller Paketpreis) + 1 Gericht.
+    $this->paket = $this->concepts->createPaket($this->rootTeam, ['name' => 'Salad Wall']);
+    $this->concepts->update($this->rootTeam, $this->paket->id, ['price_mode' => 'manuell', 'price_per_person_manual' => 4.50]);
+    $ps = $this->concepts->addSlot($this->rootTeam, $this->paket->id, ['role' => 'Vorspeise']);
+    $this->concepts->fillSlot($this->rootTeam, $ps->id, ['sales_recipe_id' => $this->green->id]);
+
     $this->concept = $this->concepts->create($this->rootTeam, ['name' => 'Grill-Buffet']);
 });
 
@@ -85,20 +86,12 @@ it('Aufbau: Position anlegen + mit Paket füllen', function () {
     expect($slot)->not->toBeNull();
 
     $comp->call('fuellePaket', $slot->id, $this->paket->id);
-    expect($slot->refresh()->package_id)->toBe($this->paket->id);
+    expect($slot->refresh()->embedded_concept_id)->toBe($this->paket->id);   // Kaskade: eingebettetes kind=paket-Concept
 });
 
-it('öffnet ein Paket und schnürt Gerichte (hinzufügen/entfernen)', function () {
-    $comp = Livewire::test(Editor::class)
-        ->call('oeffnen', 'pakete', $this->paket->id)
-        ->assertSet('form.name', 'Salad Wall')
-        ->call('gerichtHinzu', $this->green->id);
-
-    expect($this->paket->gerichte()->count())->toBe(1);
-
-    $comp->call('gerichtRaus', $this->green->id);
-    expect($this->paket->gerichte()->count())->toBe(0);
-});
+// „Paket schnüren via Alt-Editor" entfällt — ein Paket wird als kind=paket-Concept
+// bearbeitet (oeffnen 'concepts' + positionEinfuegen), abgedeckt durch die Concept-
+// Positionstests + ConcepterPaketKindTest.
 
 it('kohaesionPruefen führt das Kohärenz-Gate mit (warnung-Feld gesetzt, hier zu wenig Gerichte)', function () {
     Livewire::test(Editor::class)
@@ -119,16 +112,16 @@ it('Tab-Wechsel funktioniert', function () {
 
 it('M10R-4: inline neues Paket im Slot schnüren öffnet das Paket im selben Modal', function () {
     $slot = $this->concepts->addSlot($this->rootTeam, $this->concept->id, ['role' => 'Vorspeise']);
-    $vorher = FoodAlchemistPaket::count();
+    $vorher = FoodAlchemistConcept::pakete()->count();
 
     Livewire::test(Editor::class)
         ->call('oeffnen', 'concepts', $this->concept->id)
         ->call('neuesPaketImSlot', $slot->id)
-        ->assertSet('type', 'pakete')                                 // Editor zeigt jetzt das neue Paket
+        ->assertSet('type', 'concepts')                               // Kaskade: neues Paket = kind=paket-Concept, im selben Concept-Editor
         ->assertSet('id', fn ($v) => $v !== null);
 
-    expect(FoodAlchemistPaket::count())->toBe($vorher + 1)
-        ->and($slot->refresh()->package_id)->not->toBeNull();
+    expect(FoodAlchemistConcept::pakete()->count())->toBe($vorher + 1)
+        ->and($slot->refresh()->embedded_concept_id)->not->toBeNull();
 });
 
 it('C-02: Pflicht/optional-Toggle je Slot speichert is_pflicht', function () {
@@ -203,9 +196,9 @@ it('Build C: Einfügeziel + Drop sortieren neue Positionen an die gewählte Stel
 });
 
 it('Paket = Abschnitt: die Gerichte des Pakets stehen immer als eingerückte Zeilen darunter', function () {
-    $this->pakete->syncGerichte($this->rootTeam, $this->paket->id, [['sales_recipe_id' => $this->green->id, 'quantity' => 1]]);
+    // $this->paket (kind=paket-Concept) trägt „Green Power" bereits aus dem beforeEach.
     $slot = $this->concepts->addSlot($this->rootTeam, $this->concept->id, ['role' => 'Vorspeise']);
-    $this->concepts->fillSlot($this->rootTeam, $slot->id, ['package_id' => $this->paket->id]);
+    $this->concepts->fillSlot($this->rootTeam, $slot->id, ['embedded_concept_id' => $this->paket->id]);
 
     // Ohne Toggle: Paket-Header (Name) + sein Gericht direkt sichtbar.
     Livewire::test(Editor::class)->call('oeffnen', 'concepts', $this->concept->id)
@@ -220,7 +213,7 @@ it('Q2: positionEinfuegen(paket) legt eine Paket-Position an (linke Liste, Umsch
     $comp->call('positionEinfuegen', 'paket', $this->paket->id);
 
     $slot = $this->concept->slots()->orderBy('position')->first();
-    expect($slot->package_id)->toBe($this->paket->id)
+    expect($slot->embedded_concept_id)->toBe($this->paket->id)   // Kaskade: eingebettetes kind=paket-Concept
         ->and($slot->type)->toBe('paket');
 });
 
@@ -250,11 +243,11 @@ it('+ Paket: legt Paket-Position an, öffnet den Paket-Editor und springt zurüc
     $comp = Livewire::test(Editor::class)->call('oeffnen', 'concepts', $this->concept->id);
 
     $comp->call('neuesPaketAlsPosition')
-        ->assertSet('type', 'pakete')
+        ->assertSet('type', 'concepts')                          // Kaskade: neues Paket = kind=paket-Concept im Concept-Editor
         ->assertSet('rueckSprungConceptId', $this->concept->id);
 
-    // Eine Paket-Position ist im Concept entstanden.
-    expect($this->concept->slots()->whereNotNull('package_id')->count())->toBe(1);
+    // Eine Paket-Position ist im Concept entstanden (eingebettetes kind=paket-Concept).
+    expect($this->concept->slots()->whereNotNull('embedded_concept_id')->count())->toBe(1);
 
     // Zurück ins Concept.
     $comp->call('zurueckZumConcept')
@@ -286,7 +279,7 @@ it('Reinspringen: paketOeffnen öffnet das Paket und merkt den Rückweg ins Conc
     $comp = Livewire::test(Editor::class)->call('oeffnen', 'concepts', $this->concept->id);
 
     $comp->call('paketOeffnen', $this->paket->id)
-        ->assertSet('type', 'pakete')
+        ->assertSet('type', 'concepts')                          // Kaskade: Paket = kind=paket-Concept, öffnet im Concept-Editor
         ->assertSet('id', $this->paket->id)
         ->assertSet('rueckSprungConceptId', $this->concept->id);
 });
@@ -343,30 +336,17 @@ it('Freitext-Block erscheint als Beschreibung in der Menü-Ansicht (Gäste-Sicht
 });
 
 it('Paket-Tausch bietet jedes aktive Paket — Rollen-Filter entfernt (2026-08-24)', function () {
-    $svc = app(ConceptService::class);
-    $this->pakete->create($this->rootTeam, ['name' => 'Buffet ohne Rolle']);               // role null
-    $this->pakete->create($this->rootTeam, ['name' => 'Grill B', 'role' => 'Hauptgang']);  // abweichende Rolle
-    $slot = $svc->addSlot($this->rootTeam, $this->concept->id, ['role' => 'Vorspeise']);    // abweichende Slot-Rolle
+    // Kaskade: Pakete = kind=paket-Concepts (rollen-agnostisch, keine Paket-Rolle mehr).
+    $this->concepts->createPaket($this->rootTeam, ['name' => 'Buffet ohne Rolle']);
+    $this->concepts->createPaket($this->rootTeam, ['name' => 'Grill B']);
+    $slot = $this->concepts->addSlot($this->rootTeam, $this->concept->id, ['role' => 'Vorspeise']);  // abweichende Slot-Rolle
 
-    $namen = $svc->tauschbarePakete($this->rootTeam, $slot->refresh())->pluck('name')->all();
+    $namen = $this->concepts->tauschbarePakete($this->rootTeam, $slot->refresh())->pluck('name')->all();
 
     // Vor dem Fix hätte der Rollen-Filter (slot.role='Vorspeise') beide ausgeschlossen.
     expect($namen)->toContain('Buffet ohne Rolle')
         ->and($namen)->toContain('Grill B');
 });
 
-it('Paket-Geschirr: Haupt-Geschirr je Posten setzen + entfernen (spiegelt Concept-Geschirr, 2026-08-24)', function () {
-    $geschirr = \Platform\FoodAlchemist\Models\FoodAlchemistGeschirrItem::create([
-        'team_id' => $this->rootTeam->id, 'label' => 'Schüssel klein', 'category' => 'Schüssel',
-    ]);
-    $this->pakete->syncGerichte($this->rootTeam, $this->paket->id, [['sales_recipe_id' => $this->green->id, 'quantity' => 1]]);
-    $row = $this->paket->dishes()->first();
-
-    $comp = Livewire::test(Editor::class)->call('oeffnen', 'pakete', $this->paket->id);
-    // Im Paket-Modus ist die ID eine package_dish-ID → geschirrWaehle geht auf PaketService
-    $comp->call('geschirrWaehle', $row->id, 'haupt', $geschirr->id);
-    expect((int) $row->refresh()->tableware_item_id)->toBe($geschirr->id);
-
-    $comp->call('geschirrEntfernen', $row->id, 'haupt');
-    expect($row->refresh()->tableware_item_id)->toBeNull();
-});
+// „Paket-Geschirr via Alt-Editor" entfällt — Paket-Geschirr = Concept-Slot-Geschirr
+// (kind=paket-Concept, geschirrWaehle auf dem Slot); abgedeckt durch die Concept-Geschirr-Pfade.

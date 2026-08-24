@@ -4,7 +4,6 @@ use Livewire\Livewire;
 use Platform\FoodAlchemist\Livewire\Concepter\Browser;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Services\ConceptService;
-use Platform\FoodAlchemist\Services\PaketService;
 use Platform\FoodAlchemist\Tests\Support\SeedsTeamHierarchy;
 use Platform\FoodAlchemist\Tests\TestCase;
 
@@ -30,14 +29,14 @@ it('Concepter erscheint genau einmal in der Sidebar (Pakete-Eintrag entfällt)',
 it('End-to-End: Concept + Paket im einen Screen sichtbar, Tab-Wechsel zeigt beide', function () {
     $this->seedTeamHierarchy();
     $this->actingAs($this->makeUser($this->rootTeam));
-    $pakete = app(PaketService::class);
     $concepts = app(ConceptService::class);
 
     FoodAlchemistRecipe::create([
         'team_id' => $this->rootTeam->id, 'recipe_key' => 'g', 'name' => 'Green Power',
         'status' => 'approved', 'is_sales_recipe' => true, 'sales_net' => 2.00, 'ek_total_eur' => 0.60,
     ]);
-    $pakete->create($this->rootTeam, ['name' => 'Salad Wall', 'role' => 'Vorspeise', 'class' => 'Buffet']);
+    // Kaskade: Paket = kind=paket-Concept.
+    $concepts->createPaket($this->rootTeam, ['name' => 'Salad Wall', 'class' => 'Buffet']);
     $concepts->create($this->rootTeam, ['name' => 'Grill-Buffet', 'class' => 'Buffet']);
 
     Livewire::test(Browser::class)

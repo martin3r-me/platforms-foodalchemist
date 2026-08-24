@@ -99,9 +99,18 @@ class ConceptService
             ->pakete()
             ->standardisiert()
             ->echte()
+            ->with(['eventType:id,name', 'servingForm:id,label']) // Kaskade: Facetten-Spalte wie im Concepts-Reiter
             ->withCount('slots')
             ->when(($filters['search'] ?? '') !== '', fn ($q) => \Platform\FoodAlchemist\Support\Suche::likeAny($q, ['name'], $filters['search']))
             ->when(($filters['class'] ?? '') !== '', fn ($q) => $q->where('class', $filters['class']))
+            ->when(($filters['status'] ?? '') !== '', fn ($q) => $q->where('status', $filters['status']))
+            // Facetten-Filter (Kaskade: Paket = kind=paket-Concept → gleiche Dimensionen wie Concept, Umbau-Spec Phase 4b)
+            ->when(is_numeric($filters['servierform'] ?? null), fn ($q) => $q->where('serving_form_id', (int) $filters['servierform']))
+            ->when(is_numeric($filters['eventtyp'] ?? null), fn ($q) => $q->where('event_type_id', (int) $filters['eventtyp']))
+            ->when(is_numeric($filters['einsatzmoment'] ?? null), fn ($q) => $q
+                ->whereHas('serviceMoments', fn ($w) => $w->where('foodalchemist_service_moments.id', (int) $filters['einsatzmoment'])))
+            ->when(is_numeric($filters['season'] ?? null), fn ($q) => $q
+                ->whereHas('seasons', fn ($w) => $w->where('foodalchemist_seasons.id', (int) $filters['season'])))
             ->orderBy('name')
             ->paginate($perPage);
     }
@@ -496,6 +505,21 @@ class ConceptService
             ->get(['id', 'label', 'jahr', 'customer', 'status']);
     }
 
+    /**
+     * Kaskade (2026-08-24): „Wo verwendet?" für ein Paket (kind=paket-Concept) — in welchen Concepts
+     * es als Position eingebettet ist (embedded_concept_id). Spiegelt PaketService::verwendetInConcepts
+     * auf den neuen Embed-Pfad.
+     */
+    public function eingebettetInConcepts(Team $team, int $paketConceptId): \Illuminate\Support\Collection
+    {
+        $conceptIds = FoodAlchemistConceptSlot::where('embedded_concept_id', $paketConceptId)
+            ->whereNull('deleted_at')->distinct()->pluck('concept_id');
+
+        return FoodAlchemistConcept::visibleToTeam($team)
+            ->whereIn('id', $conceptIds)->orderBy('name')
+            ->get(['id', 'name', 'status', 'is_template']);
+    }
+
     /** Austauschbare Pakete für einen Slot = gleiche Rolle (M13-Vorstufe). */
     /**
      * B4: Aus markierten Gericht-/Basisrezept-Positionen ein wiederverwendbares Paket bilden —
@@ -548,6 +572,7 @@ class ConceptService
     {
         return FoodAlchemistConcept::visibleToTeam($team)
             ->pakete()->standardisiert()->echte()
+            ->where('status', 'active') // Picker zeigt nur aktive Pakete (keine Entwürfe/archivierten; Status berücksichtigt)
             ->when($suche !== '', fn ($q) => \Platform\FoodAlchemist\Support\Suche::likeAny($q, ['name'], $suche))
             ->when(($filters['class'] ?? '') !== '', fn ($q) => $q->where('class', $filters['class']))
             ->orderBy('name')
@@ -768,25 +793,34 @@ class ConceptService
     /** C-13: Concept duplizieren (Stamm + Slots, eigenständig, „(Kopie)"). */
     public function duplicate(Team $team, int $id): FoodAlchemistConcept
     {
-        $orig = FoodAlchemistConcept::visibleToTeam($team)->with('slots')->findOrFail($id);
+        $orig = FoodAlchemistConcept::visibleToTeam($team)
+            ->with(['slots', 'serviceMoments:id', 'seasons:id', 'targetGroups:id'])->findOrFail($id);
 
         return DB::transaction(function () use ($team, $orig) {
             $felder = array_intersect_key($orig->attributesToArray(), array_flip([
-                'consumer_name', 'occasion', 'level', 'class', 'taste_direction', 'writing_style_id',
+                // Kaskade: kind erhalten, damit ein Paket-Duplikat ein Paket bleibt (nicht zum Concept wird).
+                'kind', 'consumer_name', 'occasion', 'level', 'class', 'taste_direction', 'writing_style_id',
                 'category_id', 'description', 'additional_text', 'brief', 'diet_requirement', 'structure_requirement',
                 'season', 'target_group', 'target_price_per_person', 'is_template',
+                // Facetten + Preis-Metadaten mitnehmen (sonst verliert das Duplikat Servierform/Eventtyp/Paketpreis)
+                'serving_form_id', 'event_type_id', 'price_mode', 'price_per_person_manual',
             ]));
             $neu = FoodAlchemistConcept::create($felder + [
                 'team_id' => $team->id, 'name' => $orig->name . ' (Kopie)', 'status' => 'draft',
             ]);
             foreach ($orig->slots as $slot) {
                 $neu->slots()->create([
-                    'team_id' => $team->id, 'role' => $slot->role, 'title' => $slot->title,
+                    'team_id' => $team->id, 'type' => $slot->type, 'role' => $slot->role, 'title' => $slot->title,
                     'position' => $slot->position, 'is_pflicht' => $slot->is_pflicht,
-                    'package_id' => $slot->package_id, 'sales_recipe_id' => $slot->sales_recipe_id,
+                    'package_id' => $slot->package_id, 'embedded_concept_id' => $slot->embedded_concept_id,
+                    'sales_recipe_id' => $slot->sales_recipe_id,
                     'quantity' => $slot->quantity, 'unit_vocab_id' => $slot->unit_vocab_id,
                 ]);
             }
+            // Facetten-Pivots (Einsatzmomente/Saisons/Zielgruppen) mitkopieren
+            $neu->serviceMoments()->sync($orig->serviceMoments->pluck('id')->all());
+            $neu->seasons()->sync($orig->seasons->pluck('id')->all());
+            $neu->targetGroups()->sync($orig->targetGroups->pluck('id')->all());
             $this->refreshCache($neu);
 
             return $neu->refresh();

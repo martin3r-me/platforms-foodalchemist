@@ -1171,17 +1171,33 @@
                     <p class="text-[11px] text-gray-500 mb-2">Das kreative Foodkonzept (Leitidee, Inszenierung, Geschmackswelten) — fließt als Kontext in alle KI-Texte dieses Konzepts. Stil/Geschmack erbt es aus der Team-Food-DNA.</p>
                     @include('foodalchemist::livewire.canvas.partials.board', ['hideSave' => true])
 
-                    {{-- R4.1: Planungs-Gerüst — messbarer Soll-Rahmen neben dem Freitext-Canvas --}}
-                    <p class="text-[11px] text-gray-500 mt-4 mb-2">Planungs-Gerüst — das messbare SOLL (Mengen, Preisrahmen, Diät-Quoten, Saison, No-Gos, Dramaturgie). Messlatte für Coverage (R4.2) und KI-Konzepte (R6).</p>
-                    @include('foodalchemist::livewire.planning.partials.frame-board', ['hideSave' => true])
+                    {{-- R4.1 + Progressive Disclosure (2026-08-24): Planungs-Gerüst = messbarer Soll-Rahmen.
+                         Nur nötig, wenn man gegen ein SOLL plant oder KI-Konzepte erzeugt — darum beim
+                         Handaufbau NICHT als große leere Maske aufdrängen. Kein Gerüst → ruhige CTA-Zeile;
+                         Gerüst vorhanden (via KI-Planung ODER manuellem „+Slot") → voll (SOLL + Coverage).
+                         Der Frame ist owner=concept: Planung-Leitstelle und dieser Tab bearbeiten dasselbe. --}}
+                    @php($hatGeruest = $coverage !== null && $coverage['hat_geruest'])
+                    <div x-data="{ offen: @js($hatGeruest) }" class="mt-4">
+                        {{-- Zu (kein Gerüst): ruhige Einladung statt leerer SOLL-Maske --}}
+                        <div x-show="!offen" @if($hatGeruest) style="display:none" @endif
+                             class="flex items-center justify-between gap-3 rounded-lg border border-dashed border-black/10 px-3 py-2">
+                            <span class="text-[11px] text-gray-500">Kein Planungs-Gerüst — der messbare SOLL-Rahmen (Mengen, Preis, Diät-Quoten, Saison, Dramaturgie). Nur nötig, wenn du gegen ein SOLL planst oder KI-Konzepte erzeugst; die Planung-Leitstelle füllt es aus einem Brief.</span>
+                            <button type="button" x-on:click="offen = true" class="{{ $btnGhostXs }} shrink-0">+ Gerüst anlegen</button>
+                        </div>
 
-                    {{-- Spec 28 / E6: die IST-Messung gegen genau dieses Gerüst — vorher im Aufbau-Tab,
-                         also getrennt von seiner Messlatte. SOLL und IST stehen jetzt untereinander.
-                         Lücken-Klick filtert weiterhin den Picker im Aufbau-Tab (R4.2). --}}
-                    @if($coverage !== null && $coverage['hat_geruest'])
-                        <p class="text-[11px] text-gray-500 mt-4 mb-2">Soll/Ist-Coverage — was das Gerüst verlangt und was im Aufbau steht. Klick auf eine Lücke filtert den Picker im Tab «Aufbau».</p>
-                        @include('foodalchemist::livewire.planning.partials.coverage-panel', ['coverageFillAction' => 'coverageFuellen'])
-                    @endif
+                        {{-- Offen (Gerüst vorhanden ODER manuell aufgeklappt): volle SOLL-Maske + Coverage --}}
+                        <div x-show="offen" @unless($hatGeruest) style="display:none" @endunless>
+                            <p class="text-[11px] text-gray-500 mb-2">Planungs-Gerüst — das messbare SOLL (Mengen, Preisrahmen, Diät-Quoten, Saison, No-Gos, Dramaturgie). Messlatte für Coverage (R4.2) und KI-Konzepte (R6).</p>
+                            @include('foodalchemist::livewire.planning.partials.frame-board', ['hideSave' => true])
+
+                            {{-- Spec 28 / E6: die IST-Messung gegen genau dieses Gerüst — SOLL und IST untereinander.
+                                 Lücken-Klick filtert weiterhin den Picker im Aufbau-Tab (R4.2). --}}
+                            @if($hatGeruest)
+                                <p class="text-[11px] text-gray-500 mt-4 mb-2">Soll/Ist-Coverage — was das Gerüst verlangt und was im Aufbau steht. Klick auf eine Lücke filtert den Picker im Tab «Aufbau».</p>
+                                @include('foodalchemist::livewire.planning.partials.coverage-panel', ['coverageFillAction' => 'coverageFuellen'])
+                            @endif
+                        </div>
+                    </div>
                 @endif
             @endif
 

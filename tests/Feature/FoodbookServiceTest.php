@@ -259,8 +259,8 @@ it('GT-FB-7: Concept-Picker filtert nach Concepter-Dimension (Eventtyp, FB-1)', 
     $et = \Platform\FoodAlchemist\Models\FoodAlchemistEventtyp::create([
         'team_id' => $this->rootTeam->id, 'name' => 'Gala/Bankett', 'is_inactive' => false, 'sort_order' => 1,
     ]);
-    $this->concept->forceFill(['event_type_id' => $et->id])->save();                  // Grill-Buffet → „Gala/Bankett"
-    $this->concepts->create($this->rootTeam, ['name' => 'Fingerfood-Konzept']);       // ohne Dimension
+    $this->concept->forceFill(['event_type_id' => $et->id, 'status' => 'active'])->save();  // Grill-Buffet → „Gala/Bankett", aktiv (Picker zeigt nur aktive)
+    $this->concepts->create($this->rootTeam, ['name' => 'Fingerfood-Konzept', 'status' => 'active']); // ohne Dimension
 
     $inDim = $this->foodbooks->conceptKandidaten($this->rootTeam, '', 50, ['eventtyp' => $et->id]);
     expect($inDim->pluck('name')->all())
@@ -311,8 +311,9 @@ it('GT-FB-9: Concept-Picker filtert nach Concepter-Dimension (Einsatzmoment-Pivo
     $moment = \Platform\FoodAlchemist\Models\FoodAlchemistEinsatzmoment::create([
         'team_id' => $this->rootTeam->id, 'name' => 'Apéro/Empfang', 'is_inactive' => false, 'sort_order' => 1,
     ]);
-    // Setup-Concept „Grill-Buffet" ohne Moment; ein Concept mit Einsatzmoment-Pivot.
-    $apero = $this->concepts->create($this->rootTeam, ['name' => 'Apéro-Häppchen']);
+    // Setup-Concept „Grill-Buffet" ohne Moment; ein Concept mit Einsatzmoment-Pivot. Beide aktiv (Picker zeigt nur aktive).
+    $this->concept->forceFill(['status' => 'active'])->save();
+    $apero = $this->concepts->create($this->rootTeam, ['name' => 'Apéro-Häppchen', 'status' => 'active']);
     $apero->serviceMoments()->attach($moment->id);
 
     $imMoment = $this->foodbooks->conceptKandidaten($this->rootTeam, '', 50, ['einsatzmoment' => $moment->id]);

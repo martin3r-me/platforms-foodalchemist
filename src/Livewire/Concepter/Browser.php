@@ -47,6 +47,10 @@ class Browser extends Component
     #[Url(as: 'role')]
     public string $rolleFilter = '';
 
+    /** Geteilter Status-Filter (draft|active|archiviert) — gilt für beide Reiter. */
+    #[Url(as: 'st')]
+    public string $statusFilter = '';
+
     /** Concepts: Facetten-Filter (Umbau-Spec Phase 4b) — '' alle · ID. */
     #[Url(as: 'form')]
     public string $servierformFilter = '';
@@ -88,6 +92,7 @@ class Browser extends Component
         $this->klasse = '';
         $this->categoryFilter = '';
         $this->rolleFilter = '';
+        $this->statusFilter = '';
         $this->servierformFilter = '';
         $this->eventtypFilter = '';
         $this->momentFilter = '';
@@ -131,6 +136,13 @@ class Browser extends Component
     public function waehleRolle(string $wert): void
     {
         $this->rolleFilter = $this->rolleFilter === $wert ? '' : $wert;
+        $this->resetPage();
+    }
+
+    /** Status-Filter togglen (draft|active|archiviert) — gilt für beide Reiter. */
+    public function waehleStatus(string $wert): void
+    {
+        $this->statusFilter = $this->statusFilter === $wert ? '' : $wert;
         $this->resetPage();
     }
 
@@ -200,10 +212,15 @@ class Browser extends Component
         $team = $this->team();
 
         if ($this->tab === 'pakete') {
-            // Kaskade: Pakete = kind=paket-Concepts (Rolle entfällt).
+            // Kaskade: Pakete = kind=paket-Concepts (Rolle entfällt) → gleiche Facetten-Dimensionen wie Concepts.
             $items = $concepts->paginatePakete([
                 'search' => $this->search,
                 'class' => $this->klasse,
+                'status' => $this->statusFilter !== '' ? $this->statusFilter : null,
+                'servierform' => $this->servierformFilter !== '' ? $this->servierformFilter : null,
+                'eventtyp' => $this->eventtypFilter !== '' ? $this->eventtypFilter : null,
+                'einsatzmoment' => $this->momentFilter !== '' ? $this->momentFilter : null,
+                'season' => $this->saisonFilter !== '' ? $this->saisonFilter : null,
             ], $team);
             $klassen = $concepts->klassenPakete($team);
             $rollen = [];
@@ -212,6 +229,7 @@ class Browser extends Component
             $items = $concepts->paginateBrowser([
                 'search' => $this->search,
                 'class' => $this->klasse,
+                'status' => $this->statusFilter !== '' ? $this->statusFilter : null,
                 'vorlagen' => $this->showVorlagen,
                 'category' => $this->categoryFilter !== '' ? $this->categoryFilter : null,
                 'servierform' => $this->servierformFilter !== '' ? $this->servierformFilter : null,
@@ -228,7 +246,7 @@ class Browser extends Component
             'items' => $items,
             'klassen' => $klassen,
             'rollen' => $rollen,
-            // Facetten-Vokabulare (nur Concepts-Tab relevant)
+            // Facetten-Vokabulare (geteilte Dimension: Concepts- UND Pakete-Reiter)
             'facetteServierformen' => \Platform\FoodAlchemist\Models\FoodAlchemistServierform::where('is_inactive', false)
                 ->orderBy('sort_order')->get(['id', 'code', 'label']),
             'facetteEventtypen' => \Platform\FoodAlchemist\Models\FoodAlchemistEventtyp::visibleToTeam($team)

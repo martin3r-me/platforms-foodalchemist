@@ -8,7 +8,6 @@ use Livewire\Component;
 use Platform\FoodAlchemist\Services\ConceptService;
 use Platform\FoodAlchemist\Services\ConcepterAggregateService;
 use Platform\FoodAlchemist\Services\ConcepterBewertungService;
-use Platform\FoodAlchemist\Services\PaketService;
 
 /**
  * M10R-2/3 / Doc 15 §10.4: kontext-adaptives Detail-Panel im VK-Stil. Zeigt für
@@ -58,61 +57,55 @@ class DetailPanel extends Component
         $this->dispatch('concepter-editor.oeffnen', type: 'concepts', id: $fork->id);
     }
 
-    /** C-13/B-10: Duplizieren (typ-adaptiv) + Kopie auswählen. */
-    public function dupliziere(ConceptService $concepts, PaketService $pakete): void
+    /** C-13/B-10: Duplizieren + Kopie auswählen. Kaskade: Paket = kind=paket-Concept → ConceptService::duplicate erhält kind. */
+    public function dupliziere(ConceptService $concepts): void
     {
         if ($this->selectedId === null) {
             return;
         }
-        $neu = $this->type === 'pakete'
-            ? $pakete->duplicate($this->team(), $this->selectedId)
-            : $concepts->duplicate($this->team(), $this->selectedId);
+        $neu = $concepts->duplicate($this->team(), $this->selectedId);
         $this->selectedId = $neu->id;
         $this->dispatch('concepter-gespeichert');
         $this->dispatch('concepter-selected', type: $this->type, id: $neu->id);
     }
 
-    public function loeschen(ConceptService $concepts, PaketService $pakete): void
+    /** Löschen — Kaskade: beide Reiter sind Concepts (kind concept|paket), also immer ConceptService. */
+    public function loeschen(ConceptService $concepts): void
     {
         if ($this->selectedId === null) {
             return;
         }
         $id = $this->selectedId;
-        if ($this->type === 'pakete') {
-            $pakete->delete($this->team(), $id);
-        } else {
-            $concepts->delete($this->team(), $id);
-        }
+        $concepts->delete($this->team(), $id);
         $this->selectedId = null;
         $this->dispatch('concepter-geloescht', id: $id);
     }
 
-    public function render(ConceptService $concepts, PaketService $pakete, ConcepterAggregateService $agg, ConcepterBewertungService $bewertung)
+    public function render(ConceptService $concepts, ConcepterAggregateService $agg, ConcepterBewertungService $bewertung)
     {
         $team = $this->team();
         $concept = null;
-        $paket = null;
         $cockpit = null;
         $aggregat = null;
         $bewertet = null;
+        $istPaket = false;
 
         $verwendung = collect();
 
-        if ($this->selectedId !== null && $this->type === 'concepts') {
+        // Kaskade (2026-08-24): beide Reiter sind Concepts (kind concept|paket) → ein Ladepfad.
+        // Das Paket ist ein kind=paket-Concept mit eigenem Preis; nur die Anzeige (VK/Bewertung)
+        // unterscheidet sich (→ $istPaket).
+        if ($this->selectedId !== null) {
             $concept = $concepts->detail($team, $this->selectedId);
             if ($concept !== null) {
+                $istPaket = $concept->kind === 'paket';
                 $cockpit = $concepts->preisCockpit($concept);
                 $aggregat = $agg->conceptAggregat($concept);
-                $bewertet = $bewertung->bewerten($concept, $cockpit, $aggregat);
-                $verwendung = $concepts->verwendetInFoodbooks($team, $concept->id);
-            } else {
-                $this->selectedId = null;
-            }
-        } elseif ($this->selectedId !== null && $this->type === 'pakete') {
-            $paket = $pakete->detail($team, $this->selectedId);
-            if ($paket !== null) {
-                $aggregat = $agg->paketAggregat($paket);
-                $verwendung = $pakete->verwendetInConcepts($team, $paket->id);
+                // Menü-Bewertung (Gang-Dramaturgie etc.) nur für echte Concepts, nicht fürs Bündel.
+                $bewertet = $istPaket ? null : $bewertung->bewerten($concept, $cockpit, $aggregat);
+                $verwendung = $istPaket
+                    ? $concepts->eingebettetInConcepts($team, $concept->id)
+                    : $concepts->verwendetInFoodbooks($team, $concept->id);
             } else {
                 $this->selectedId = null;
             }
@@ -120,7 +113,7 @@ class DetailPanel extends Component
 
         return view('foodalchemist::livewire.concepter.detail-panel', [
             'concept' => $concept,
-            'paket' => $paket,
+            'istPaket' => $istPaket,
             'cockpit' => $cockpit,
             'aggregat' => $aggregat,
             'bewertung' => $bewertet,

@@ -4,10 +4,8 @@ use Livewire\Livewire;
 use Platform\FoodAlchemist\Livewire\Concepter\Browser;
 use Platform\FoodAlchemist\Livewire\Concepter\DetailPanel;
 use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
-use Platform\FoodAlchemist\Models\FoodAlchemistPaket;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Services\ConceptService;
-use Platform\FoodAlchemist\Services\PaketService;
 use Platform\FoodAlchemist\Tests\Support\SeedsTeamHierarchy;
 use Platform\FoodAlchemist\Tests\TestCase;
 
@@ -20,7 +18,6 @@ uses(TestCase::class, SeedsTeamHierarchy::class);
 beforeEach(function () {
     $this->seedTeamHierarchy();
     $this->actingAs($this->makeUser($this->rootTeam));
-    $this->pakete = app(PaketService::class);
     $this->concepts = app(ConceptService::class);
 
     $this->green = FoodAlchemistRecipe::create([
@@ -30,14 +27,16 @@ beforeEach(function () {
         'spec_is_vegan' => true, 'spec_is_vegetarian' => true, 'allergens_confidence' => 'high',
     ]);
 
-    // Paket „Salad Wall" (Klasse Buffet, manueller Preis) + Concept „Grill-Buffet".
-    $this->paket = $this->pakete->create($this->rootTeam, ['name' => 'Salad Wall', 'role' => 'Vorspeise', 'class' => 'Buffet']);
-    $this->pakete->update($this->rootTeam, $this->paket->id, ['price_per_person' => 4.50]);
-    $this->pakete->syncGerichte($this->rootTeam, $this->paket->id, [['sales_recipe_id' => $this->green->id]]);
+    // Kaskade: Paket „Salad Wall" = kind=paket-Concept (manueller Paketpreis) + 1 Gericht;
+    // Concept „Grill-Buffet" bettet das Paket via embedded_concept_id ein.
+    $this->paket = $this->concepts->createPaket($this->rootTeam, ['name' => 'Salad Wall', 'class' => 'Buffet']);
+    $this->concepts->update($this->rootTeam, $this->paket->id, ['price_mode' => 'manuell', 'price_per_person_manual' => 4.50]);
+    $ps = $this->concepts->addSlot($this->rootTeam, $this->paket->id, ['role' => 'Vorspeise']);
+    $this->concepts->fillSlot($this->rootTeam, $ps->id, ['sales_recipe_id' => $this->green->id]);
 
     $this->concept = $this->concepts->create($this->rootTeam, ['name' => 'Grill-Buffet', 'class' => 'Buffet']);
     $slot = $this->concepts->addSlot($this->rootTeam, $this->concept->id, ['role' => 'Vorspeise']);
-    $this->concepts->fillSlot($this->rootTeam, $slot->id, ['package_id' => $this->paket->id]);
+    $this->concepts->fillSlot($this->rootTeam, $slot->id, ['embedded_concept_id' => $this->paket->id]);
 });
 
 it('Browser rendert (Voll-Page) und zeigt Concepts im Default-Tab', function () {
@@ -75,14 +74,14 @@ it('Auswahl dispatcht concepter-selected mit Typ + ID', function () {
 });
 
 it('„Neu" legt im Pakete-Tab ein Paket an und wählt es aus', function () {
-    $vorher = FoodAlchemistPaket::count();
+    $vorher = FoodAlchemistConcept::pakete()->count();
 
     Livewire::test(Browser::class)
         ->set('tab', 'pakete')
         ->call('neu')
         ->assertSet('selectedId', fn ($v) => $v !== null);
 
-    expect(FoodAlchemistPaket::count())->toBe($vorher + 1);
+    expect(FoodAlchemistConcept::pakete()->count())->toBe($vorher + 1);
 });
 
 it('DetailPanel zeigt Concept-KPIs (€/Person) + Aufbau', function () {
@@ -134,5 +133,5 @@ it('DetailPanel löscht und meldet concepter-geloescht', function () {
         ->assertSet('selectedId', null)
         ->assertDispatched('concepter-geloescht');
 
-    expect(FoodAlchemistPaket::find($this->paket->id))->toBeNull();   // soft-deleted
+    expect(FoodAlchemistConcept::find($this->paket->id))->toBeNull();   // Kaskade: kind=paket-Concept soft-deleted
 });

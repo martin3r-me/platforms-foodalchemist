@@ -126,13 +126,14 @@ it('M10c-B: Kategorie anlegen + Concept filtern (UI)', function () {
 });
 
 it('M13: Zielpreis-Modus — Vorschlag berechnen + übernehmen (UI)', function () {
-    $v4 = app(PaketService::class)->create($this->rootTeam, ['name' => 'Vorspeise A', 'role' => 'Vorspeise', 'price_mode' => 'manuell']);
-    $v6 = app(PaketService::class)->create($this->rootTeam, ['name' => 'Vorspeise B', 'role' => 'Vorspeise', 'price_mode' => 'manuell']);
-    app(PaketService::class)->update($this->rootTeam, $v4->id, ['price_per_person' => 4.00]);
-    app(PaketService::class)->update($this->rootTeam, $v6->id, ['price_per_person' => 6.00]);
+    // Kaskade: Pakete = kind=paket-Concepts (manueller Preis), Einbau via embedded_concept_id.
+    $v4 = app(ConceptService::class)->createPaket($this->rootTeam, ['name' => 'Vorspeise A', 'price_mode' => 'manuell']);
+    $v6 = app(ConceptService::class)->createPaket($this->rootTeam, ['name' => 'Vorspeise B', 'price_mode' => 'manuell']);
+    app(ConceptService::class)->update($this->rootTeam, $v4->id, ['price_per_person_manual' => 4.00]);
+    app(ConceptService::class)->update($this->rootTeam, $v6->id, ['price_per_person_manual' => 6.00]);
     $c = app(ConceptService::class)->create($this->rootTeam, ['name' => 'Grill-Buffet']);
     $slot = app(ConceptService::class)->addSlot($this->rootTeam, $c->id, ['role' => 'Vorspeise']);
-    app(ConceptService::class)->fillSlot($this->rootTeam, $slot->id, ['package_id' => $v4->id]);
+    app(ConceptService::class)->fillSlot($this->rootTeam, $slot->id, ['embedded_concept_id' => $v4->id]);
 
     Livewire::test(ConceptsIndex::class)
         ->call('waehle', $c->id)
@@ -144,7 +145,7 @@ it('M13: Zielpreis-Modus — Vorschlag berechnen + übernehmen (UI)', function (
         ->call('zielpreisUebernehmen');
 
     expect((float) $c->refresh()->price_per_person_cache)->toBe(6.00)
-        ->and($slot->refresh()->package_id)->toBe($v6->id);
+        ->and($slot->refresh()->embedded_concept_id)->toBe($v6->id);
 });
 
 it('M10p: Paket-Gericht Menge/Person setzen + ▲▼-Reorder', function () {
