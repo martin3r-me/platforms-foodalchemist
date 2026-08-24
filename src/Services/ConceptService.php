@@ -32,6 +32,7 @@ class ConceptService
     public function paginateBrowser(array $filters, Team $team, int $perPage = 100): LengthAwarePaginator
     {
         return FoodAlchemistConcept::visibleToTeam($team)
+            ->konzepte()         // Kaskade: Pakete (kind=paket) gehören in den Pakete-Reiter, nicht hier
             ->standardisiert()   // #380: angebots-lokale Entwürfe gehören nicht in den Katalog
             ->with(['eventtyp:id,name', 'servierform:id,label']) // 4c: Facetten-Spalte im Browser
             ->withCount('slots')
@@ -83,6 +84,46 @@ class ConceptService
             'status' => $in['status'] ?? 'draft',
             'is_template' => (bool) ($in['is_template'] ?? false),
         ]);
+    }
+
+    /**
+     * Kaskade (2026-08-24): Pakete-Reiter im Concepter — kind=paket-Concepts (wiederverwendbare
+     * Bündel mit eigenem Preis). Gleiche Modell-Basis wie Konzepte, nur kind-gefiltert.
+     */
+    public function paginatePakete(array $filters, Team $team, int $perPage = 100): LengthAwarePaginator
+    {
+        return FoodAlchemistConcept::visibleToTeam($team)
+            ->pakete()
+            ->standardisiert()
+            ->echte()
+            ->withCount('slots')
+            ->when(($filters['search'] ?? '') !== '', fn ($q) => \Platform\FoodAlchemist\Support\Suche::likeAny($q, ['name'], $filters['search']))
+            ->when(($filters['class'] ?? '') !== '', fn ($q) => $q->where('class', $filters['class']))
+            ->orderBy('name')
+            ->paginate($perPage);
+    }
+
+    /** Neues Paket = kind=paket-Concept anlegen. */
+    public function createPaket(Team $team, array $in): FoodAlchemistConcept
+    {
+        return FoodAlchemistConcept::create([
+            'team_id' => $team->id,
+            'kind' => 'paket',
+            'name' => trim((string) ($in['name'] ?? 'Neues Paket')) ?: 'Neues Paket',
+            'class' => $this->norm($in['class'] ?? null),
+            'level' => $in['level'] ?? null,
+            'status' => $in['status'] ?? 'active',
+            'price_mode' => in_array(($in['price_mode'] ?? 'manuell'), ['auto', 'manuell'], true) ? ($in['price_mode'] ?? 'manuell') : 'manuell',
+            'is_template' => false,
+        ]);
+    }
+
+    /** Distinct-Klassen der Pakete (Filter im Pakete-Reiter). */
+    public function klassenPakete(Team $team): array
+    {
+        return FoodAlchemistConcept::visibleToTeam($team)->pakete()
+            ->whereNotNull('class')->where('class', '!=', '')
+            ->distinct()->orderBy('class')->pluck('class')->all();
     }
 
     /** Concept-Status setzen (draft|active|archiviert) — Inline-Pflege aus dem Browser. */

@@ -135,9 +135,8 @@
                     <tr>
                         <th class="{{ $th }} w-full text-left sticky top-0 z-20 bg-white/95 backdrop-blur-xl">Name</th>
                         @if($tab === 'pakete')
-                            <th class="{{ $th }} text-left sticky top-0 z-20 bg-white/95 backdrop-blur-xl">Rolle</th>
                             <th class="{{ $th }} text-left sticky top-0 z-20 bg-white/95 backdrop-blur-xl">Klasse</th>
-                            <th class="{{ $th }} text-right sticky top-0 z-20 bg-white/95 backdrop-blur-xl">Gerichte</th>
+                            <th class="{{ $th }} text-right sticky top-0 z-20 bg-white/95 backdrop-blur-xl">Posten</th>
                             <th class="{{ $th }} text-right sticky top-0 z-20 bg-white/95 backdrop-blur-xl">€/Person</th>
                             <th class="{{ $th }} text-right sticky top-0 z-20 bg-white/95 backdrop-blur-xl">W%</th>
                         @else
@@ -160,11 +159,11 @@
                                 @if($tab === 'concepts' && $it->is_template)<span class="{{ $pill }} {{ $variantPill['secondary'] }} ml-1">Vorlage</span>@endif
                             </td>
                             @if($tab === 'pakete')
-                                <td class="{{ $td }} text-gray-600">{{ $it->role ?: '—' }}</td>
                                 <td class="{{ $td }} text-gray-600">{{ $it->class ?: '—' }}</td>
-                                <td class="{{ $td }} text-right tabular-nums text-gray-600">{{ $it->dishes_count }}</td>
-                                <td class="{{ $td }} text-right tabular-nums">{{ $it->price_per_person !== null ? number_format((float) $it->price_per_person, 2, ',', '.') . ' €' : '—' }}</td>
-                                <td class="{{ $td }} text-right tabular-nums text-gray-600">{{ $it->food_cost_percent !== null ? number_format((float) $it->food_cost_percent, 1, ',', '.') . ' %' : '—' }}</td>
+                                <td class="{{ $td }} text-right tabular-nums text-gray-600">{{ $it->slots_count }}</td>
+                                <td class="{{ $td }} text-right tabular-nums">{{ $it->price_per_person_cache !== null ? number_format((float) $it->price_per_person_cache, 2, ',', '.') . ' €' : '—' }}</td>
+                                @php($wpPk = ($it->price_per_person_cache > 0 && $it->ek_per_person_cache !== null) ? (float) $it->ek_per_person_cache / (float) $it->price_per_person_cache * 100 : null)
+                                <td class="{{ $td }} text-right tabular-nums text-gray-600">{{ $wpPk !== null ? number_format($wpPk, 1, ',', '.') . ' %' : '—' }}</td>
                             @else
                                 <td class="{{ $td }} text-gray-600">{{ $it->class ?: '—' }}</td>
                                 <td class="{{ $td }} text-gray-600">{{ collect([$it->eventType?->name, $it->servingForm?->label])->filter()->join(' · ') ?: '—' }}</td>

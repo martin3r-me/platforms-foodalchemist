@@ -1,6 +1,8 @@
 {{-- M10R-3 / Doc 15 §10.4: Voll-Editor-Modal (VK-Stil) — Kopf + Tabs (Aufbau/Nährwerte/Allergene/Kalkulation/Notizen) --}}
 @php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
 @php($item = $concept ?? $paket)
+{{-- Kaskade (2026-08-24): ein kind=paket-Concept öffnet im selben Editor wie ein Konzept. --}}
+@php($istPaket = ($concept?->kind ?? null) === 'paket')
 @php($titel = $item?->name ?? 'Editor')
 {{-- $tabAktiv/$tabIdle sind mit Spec 28 / E2.2 entfallen — die Tab-Klassen leben im Baustein. --}}
 @php($konfPill = ['high' => $variantPill['success'], 'medium' => $variantPill['warning'], 'low' => $variantPill['danger'], 'unknown' => $variantPill['secondary']])
@@ -10,7 +12,7 @@
 <div>
     {{-- Spec 28 / E1-2: Titel sagt WAS bearbeitet wird, der Name ist der Akzent-Chip.
          Concept und Paket teilen diesen Editor — der Titel benennt, welches von beiden. --}}
-    <x-foodalchemist::modal name="concepter-editor" :title="$paket ? 'Paket bearbeiten' : 'Konzept bearbeiten'"
+    <x-foodalchemist::modal name="concepter-editor" :title="($paket || $istPaket) ? 'Paket bearbeiten' : 'Konzept bearbeiten'"
         :title-name="$item?->name" fullscreen dark-canvas>
         <x-slot:actions>
             @if($paket && $rueckSprungConceptId)
@@ -85,7 +87,7 @@
             <x-foodalchemist::editor-tabs marker="konzept" action="setTab" :active="$tab" :tabs="[
                 'aufbau' => 'Aufbau',
                 'stammdaten' => 'Stammdaten',
-                'konzept' => $concept ? 'Konzept & Planung' : null,
+                'konzept' => ($concept && ! $istPaket) ? 'Konzept & Planung' : null,
                 'allergene' => 'Deklaration',
                 'kalkulation' => 'Kalkulation',
                 'geschirr' => ($concept || $paket) ? 'Geschirr' : null,
@@ -232,7 +234,7 @@
                     {{-- Umschalter: Gerichte ⇄ Pakete ⇄ Basisrezepte --}}
                     <div class="flex gap-1 mb-1.5" data-linke-liste-umschalter>
                         <button type="button" wire:click="$set('linkeListe', 'gericht')" class="{{ $pill }} {{ $linkeListe === 'gericht' ? $variantPill['primary'] : $variantPill['secondary'] }}">Gerichte</button>
-                        <button type="button" wire:click="$set('linkeListe', 'paket')" class="{{ $pill }} {{ $linkeListe === 'paket' ? $variantPill['primary'] : $variantPill['secondary'] }}">Pakete</button>
+                        @unless($istPaket)<button type="button" wire:click="$set('linkeListe', 'paket')" class="{{ $pill }} {{ $linkeListe === 'paket' ? $variantPill['primary'] : $variantPill['secondary'] }}">Pakete</button>@endunless{{-- kein Paket-in-Paket --}}
                         <button type="button" wire:click="$set('linkeListe', 'basisrezept')" class="{{ $pill }} {{ $linkeListe === 'basisrezept' ? $variantPill['primary'] : $variantPill['secondary'] }}">Basisrezepte</button>
                     </div>
                     @if($linkeListe === 'gericht')
@@ -457,7 +459,7 @@
                     {{-- B3: Struktur-Blöcke (freie Gliederung OHNE Paket) + „+ Paket" (= bepreister Abschnitt) --}}
                     <div class="flex flex-wrap items-center gap-1.5">
                         <span class="{{ $label }} mr-1">Struktur:</span>
-                        <button type="button" wire:click="neuesPaketAlsPosition" class="{{ $btnGhostXs }} !text-violet-600 !border-violet-500/30" title="Neues Paket als Abschnitt anlegen, einfügen und direkt öffnen">+ Paket erstellen</button>
+                        @unless($istPaket)<button type="button" wire:click="neuesPaketAlsPosition" class="{{ $btnGhostXs }} !text-violet-600 !border-violet-500/30" title="Neues Paket als Abschnitt anlegen, einfügen und direkt öffnen">+ Paket erstellen</button>@endunless{{-- kein Paket-in-Paket --}}
                         <button type="button" wire:click="blockHinzu('header')" class="{{ $btnGhostXs }}">+ Header</button>
                         <button type="button" wire:click="blockHinzu('text')" class="{{ $btnGhostXs }}">+ Text</button>
                         <button type="button" wire:click="blockHinzu('spacer')" class="{{ $btnGhostXs }}">+ Leerzeile</button>

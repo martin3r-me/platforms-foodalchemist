@@ -40,18 +40,10 @@ class FoodAlchemistConcept extends Model
         'nutrition_cache' => 'array',
     ];
 
-    /**
-     * Kaskade (2026-08-24): Standard-Sicht = nur kind='concept'. Damit sehen ALLE Bestands-Queries
-     * (Browser, Format-Editionen, Generator, Foodbook, Angebot, MCP …) weiterhin nur Konzepte —
-     * kind='paket' ist per Global Scope ausgeblendet. Paket-bewusster Code opted gezielt aus:
-     * FoodAlchemistConcept::withoutGlobalScope('kind_concept')->pakete().
-     */
-    protected static function booted(): void
-    {
-        static::addGlobalScope('kind_concept', function (Builder $q) {
-            $q->where($q->getModel()->getTable() . '.kind', 'concept');
-        });
-    }
+    // Kaskade (2026-08-24): KEIN Global Scope auf kind — der würde auch Relationen
+    // (slot->concept, Format-Editionen …) filtern und für kind=paket null liefern.
+    // Stattdessen filtern die LISTEN-Flächen explizit über scopeKonzepte()/scopePakete();
+    // By-id-Zugriffe + Relationen sehen beide kinds (korrekt).
 
     public function scopeVorlagen(Builder $q): Builder
     {

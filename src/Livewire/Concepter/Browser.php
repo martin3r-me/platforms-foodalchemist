@@ -160,9 +160,10 @@ class Browser extends Component
     {
         $team = $this->team();
         if ($this->tab === 'pakete') {
-            $p = $pakete->create($team, ['name' => 'Neues Paket']);
+            // Kaskade: Paket = kind=paket-Concept → im selben Editor wie Konzepte öffnen.
+            $p = $concepts->createPaket($team, ['name' => 'Neues Paket']);
             $this->waehle($p->id);
-            $this->dispatch('concepter-editor.oeffnen', type: 'pakete', id: $p->id);
+            $this->dispatch('concepter-editor.oeffnen', type: 'concepts', id: $p->id);
 
             return;
         }
@@ -175,7 +176,8 @@ class Browser extends Component
     public function bearbeite(int $id): void
     {
         $this->waehle($id);
-        $this->dispatch('concepter-editor.oeffnen', type: $this->tab, id: $id);
+        // Kaskade: beide Reiter sind Concepts (kind concept|paket) → immer im Concept-Editor öffnen.
+        $this->dispatch('concepter-editor.oeffnen', type: 'concepts', id: $id);
     }
 
     #[On('concepter-gespeichert')]
@@ -198,13 +200,13 @@ class Browser extends Component
         $team = $this->team();
 
         if ($this->tab === 'pakete') {
-            $items = $pakete->paginateBrowser([
+            // Kaskade: Pakete = kind=paket-Concepts (Rolle entfällt).
+            $items = $concepts->paginatePakete([
                 'search' => $this->search,
                 'class' => $this->klasse,
-                'role' => $this->rolleFilter,
             ], $team);
-            $klassen = $pakete->klassen($team);
-            $rollen = $pakete->rollen($team);
+            $klassen = $concepts->klassenPakete($team);
+            $rollen = [];
 
         } else {
             $items = $concepts->paginateBrowser([
