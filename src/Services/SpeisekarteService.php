@@ -266,45 +266,9 @@ class SpeisekarteService
         ]);
     }
 
-    /**
-     * Spec 42 (Folge) — ein Format als Live-Rubrik einfügen (gleiche Logik wie das Foodbook-
-     * Format-Kapitel: die Rubrik trägt `format_id` und rendert live aus dem Format/den Editionen).
-     * Eigener Weg, NICHT der Gericht/Concept-Positions-Picker. Spiegelt FoodbookService::insertFormatChapter.
-     */
-    public function insertFormatRubrik(Team $team, int $karteId, int $formatId, ?int $parentId = null): FoodAlchemistSpeisekarteRubrik
-    {
-        $karte = FoodAlchemistSpeisekarte::visibleToTeam($team)->findOrFail($karteId);
-        $this->guard($karte, $team);
-        if ($karte->status === 'archiviert') {
-            throw new \RuntimeException('Speisekarte ist archiviert — keine Rubrik mehr einfügbar.');
-        }
-        if ($parentId !== null && ! FoodAlchemistSpeisekarteRubrik::where('menu_card_id', $karte->id)->whereKey($parentId)->exists()) {
-            throw new \RuntimeException('parent_id gehört nicht zu dieser Speisekarte.');
-        }
-        $format = \Platform\FoodAlchemist\Models\FoodAlchemistFormat::visibleToTeam($team)->findOrFail($formatId);
-
-        return FoodAlchemistSpeisekarteRubrik::create([
-            'team_id' => $karte->team_id,
-            'menu_card_id' => $karte->id,
-            'parent_id' => $parentId ?: null,
-            'format_id' => $format->id,
-            'title' => $format->name,
-            'consumer_title' => $format->consumer_name,
-            'art' => 'menue',
-            'position' => (int) FoodAlchemistSpeisekarteRubrik::where('menu_card_id', $karte->id)
-                ->when($parentId, fn ($q, $p) => $q->where('parent_id', $p), fn ($q) => $q->whereNull('parent_id'))
-                ->max('position') + 1,
-        ]);
-    }
-
-    /** Formate (Marken-Container) für den „+ Format"-Picker (team-sichtbar, nicht archiviert). */
-    public function formatKandidaten(Team $team, string $suche, int $limit = 50): Collection
-    {
-        return \Platform\FoodAlchemist\Models\FoodAlchemistFormat::visibleToTeam($team)
-            ->where('status', '!=', 'archiviert')
-            ->when($suche !== '', fn ($q) => \Platform\FoodAlchemist\Support\Suche::like($q, 'name', $suche))
-            ->orderBy('name')->limit($limit)->get(['id', 'name', 'consumer_name', 'status']);
-    }
+    // Kaskade 2026-08-24: insertFormatRubrik + formatKandidaten entfernt — die spezielle
+    // Format-Rubrik-Mechanik entfällt. Ein Format wird künftig WIE EIN CONCEPT gebucht
+    // (live-referenziert, Kaskade bleibt live); Re-Integration folgt in F5.
 
     private const RUBRIK_FELDER = ['title', 'consumer_title', 'claim', 'description', 'art', 'preis_anzeige', 'status'];
 
@@ -610,7 +574,7 @@ class SpeisekarteService
         };
 
         // Rubrik-Baum in Pre-Order; je Position Name (Wording) + Codes + Preis.
-        $sections = $karte->relationLoaded('sections') ? $karte->sections : $karte->sections()->with(['items.dish', 'items.concept', 'format', 'format.editions', 'format.images'])->get();
+        $sections = $karte->relationLoaded('sections') ? $karte->sections : $karte->sections()->with(['items.dish', 'items.concept'])->get();
         // #3: Rubrik-Filter — nur ausgewählte Rubriken rendern; rausgefilterte Eltern hochziehen.
         if ($rubrikFilter !== []) {
             $erlaubt = array_flip(array_map('intval', $rubrikFilter));
@@ -624,34 +588,8 @@ class SpeisekarteService
         $rubriken = [];
         $walk = function ($parentId, int $depth) use (&$walk, $byParent, &$rubriken, $codesFuer, $marge, $mwstSatz) {
             foreach ($byParent[$parentId] ?? [] as $rubrik) {
-                // Spec 42: Format-Rubrik rendert live aus dem Format (Editionen), nicht aus eigenen
-                // Positionen — spiegelt das Foodbook-Format-Kapitel (ist_format).
-                if ($rubrik->format_id !== null && $rubrik->format !== null) {
-                    $format = $rubrik->format;
-                    $editionen = [];
-                    foreach ($format->editions as $ed) {
-                        $editionen[] = [
-                            'name' => $ed->name,
-                            'preis_pp' => $ed->price_per_person_cache !== null ? (float) $ed->price_per_person_cache : null,
-                        ];
-                    }
-                    $edPreise = array_values(array_filter(array_map(fn ($e) => $e['preis_pp'], $editionen), fn ($p) => $p !== null));
-                    $rubriken[] = [
-                        'id' => (int) $rubrik->id,
-                        'title' => $rubrik->consumer_title ?: ($format->consumer_name ?: $format->name),
-                        'claim' => $format->claim,
-                        'art' => $rubrik->art,
-                        'preis_anzeige' => $rubrik->preis_anzeige,
-                        'depth' => $depth,
-                        'ist_format' => true,
-                        'editionen' => $editionen,
-                        'preis_range' => $edPreise !== [] ? ['min' => min($edPreise), 'max' => max($edPreise)] : null,
-                        'positionen' => [],
-                    ];
-                    $walk((int) $rubrik->id, $depth + 1);
-
-                    continue;
-                }
+                // Kaskade 2026-08-24: spezielle ist_format-Live-Rubrik entfernt — ein Format wird
+                // künftig wie ein Concept gebucht (live-referenziert, Kaskade bleibt live); F5.
                 $positionen = [];
                 foreach ($rubrik->items->where('visible', true)->sortBy('position') as $pos) {
                     $preis = $this->positionPreis($pos);

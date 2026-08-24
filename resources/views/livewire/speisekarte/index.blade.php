@@ -292,24 +292,12 @@
                         @endforelse
                     </div>
 
-                    {{-- Persistenter Katalog (geteilter Baustein): Gericht · Menü · Format. Gericht/Menü fügen
-                         in die Ziel-Rubrik (per „+" an einer Rubrik gewählt); Format fügt eine Live-Rubrik ein. --}}
+                    {{-- Persistenter Katalog (geteilter Baustein): Gericht · Menü. Gericht/Menü fügen
+                         in die Ziel-Rubrik (per „+" an einer Rubrik gewählt). --}}
                     <x-foodalchemist::katalog-picker marker="sk" switch="katalogModus" :modes="[
                         ['key' => 'gericht', 'label' => 'Gericht', 'active' => $pickerModus === 'gericht'],
                         ['key' => 'menue', 'label' => 'Menü', 'active' => $pickerModus === 'menue'],
-                        ['key' => 'format', 'label' => 'Format', 'active' => $pickerModus === 'format'],
                     ]">
-                        @if($pickerModus === 'format')
-                            <input type="search" wire:model.live.debounce.300ms="formatSuche" placeholder="Format suchen …" class="{{ $input }} w-full mb-2 shrink-0" data-sk-format-suche />
-                            <p class="text-[10px] text-gray-500 mb-1 shrink-0">Fügt ein Format als Live-Rubrik ein.</p>
-                            <div class="flex-1 overflow-y-auto space-y-0.5">
-                                @forelse($formatKandidaten as $fk)
-                                    <x-foodalchemist::katalog-row wire:key="skfmt-{{ $fk->id }}" wire:click="formatRubrikEinfuegen({{ $fk->id }})" data-sk-format-kand :title="$fk->consumer_name ?: $fk->name">{{ $fk->consumer_name ?: $fk->name }}</x-foodalchemist::katalog-row>
-                                @empty
-                                    <p class="text-[11px] text-gray-400 px-2 py-2">Keine Formate {{ trim($formatSuche) !== '' ? 'gefunden' : 'vorhanden' }}.</p>
-                                @endforelse
-                            </div>
-                        @else
                             <p class="text-[11px] mb-2 shrink-0 {{ $pickerRubrikTitel !== null ? 'text-violet-700' : 'text-amber-600' }}" data-sk-ziel>{{ $pickerRubrikTitel !== null ? 'Ziel-Rubrik: ' . $pickerRubrikTitel : 'Ziel-Rubrik: links per „+" an einer Rubrik wählen.' }}</p>
                             <input type="search" wire:model.live.debounce.300ms="pickerSuche" placeholder="{{ $pickerModus === 'menue' ? 'Menü/Concept suchen …' : 'Gericht suchen …' }}" class="{{ $input }} w-full mb-2 shrink-0" data-sk-picker-suche />
                             @if($pickerModus === 'gericht')
@@ -332,7 +320,6 @@
                                     <p class="text-[11px] text-gray-400 px-2 py-2">{{ trim($pickerSuche) !== '' ? 'Nichts gefunden.' : ($pickerModus === 'menue' ? 'Keine Menüs/Concepts.' : 'Keine Gerichte.') }}</p>
                                 @endforelse
                             </div>
-                        @endif
                     </x-foodalchemist::katalog-picker>
                 </div>{{-- /2col --}}
             </div>{{-- /sk-body --}}

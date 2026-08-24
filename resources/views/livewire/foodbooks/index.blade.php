@@ -154,24 +154,6 @@
                         <button type="button" wire:click="kapitelNeu" class="{{ $btnGhostXs }}" title="Top-Kapitel">+</button>
                     </div>
 
-                    {{-- Format-Modul (Phase C): ein Standard-Format als LIVE-Kapitel einfügen --}}
-                    <div class="pt-1" x-data="{ open: false }">
-                        <button type="button" @click="open = !open" class="{{ $btnGhostXs }} w-full justify-center"
-                                title="Wiederverwendbares Format (Marken-Container) als Live-Kapitel einfügen">+ Format-Kapitel</button>
-                        <div x-show="open" x-cloak class="mt-1 p-2 rounded-lg bg-black/[0.03] space-y-1">
-                            <input type="search" wire:model.live.debounce.300ms="formatSuche" placeholder="Format suchen …" class="{{ $input }} py-0.5 text-xs" />
-                            @error('formatKapitel')<p class="text-[11px] text-rose-500 px-1">{{ $message }}</p>@enderror
-                            @forelse($formatKandidaten as $fk)
-                                <button type="button" wire:key="fmtk-{{ $fk->id }}" wire:click="formatKapitelEinfuegen({{ $fk->id }})" @click="open = false"
-                                        class="block w-full text-left truncate text-xs px-2 py-0.5 rounded hover:bg-violet-500/10"
-                                        title="{{ $fk->consumer_name ?: $fk->name }}">
-                                    {{ $fk->name }}@if($fk->origin === 'kunde')<span class="text-[9px] text-gray-400 ml-1">(Kunde-IP)</span>@endif
-                                </button>
-                            @empty
-                                <p class="text-[11px] text-gray-400 px-1">Keine Formate vorhanden.</p>
-                            @endforelse
-                        </div>
-                    </div>
                     @foreach($kapitelTree as $kt)
                         <div wire:key="ktm-{{ $kt['id'] }}" class="group flex items-center gap-1" style="padding-left: {{ $kt['depth'] * 12 }}px">
                             <button type="button" wire:click="kapitelWaehle({{ $kt['id'] }})"
@@ -555,7 +537,7 @@
                             @if(count($markiert) >= 2)
                                 <button type="button" wire:click="wahlGruppeBilden" class="{{ $btnGhostXs }} text-amber-600">Wahl-Gruppe ({{ count($markiert) }})</button>
                             @endif
-                            {{-- Concept/Gericht/Format einfügen → jetzt im permanenten Katalog rechts. --}}
+                            {{-- Concept/Gericht einfügen → jetzt im permanenten Katalog rechts. --}}
                             <button type="button" wire:click="blockBasis('text')" class="{{ $btnGhostXs }}">+ Text</button>
                             <button type="button" wire:click="blockBasis('spacer')" class="{{ $btnGhostXs }}">+ Leerzeile</button>
                             <div class="relative">
@@ -686,12 +668,11 @@
                 </div>{{-- /Inhalt --}}
                 </div>{{-- /linke Spalte (Kopf + Inhalt) --}}
 
-                {{-- Persistenter Katalog (geteilter Baustein katalog-picker/-row): Concept · Gericht · Format.
-                     Suche + Facetten; „+" fügt ins gewählte Kapitel (Format = Struktur-Kapitel). Server-Modus. --}}
+                {{-- Persistenter Katalog (geteilter Baustein katalog-picker/-row): Concept · Gericht.
+                     Suche + Facetten; „+" fügt ins gewählte Kapitel. Server-Modus. --}}
                 <x-foodalchemist::katalog-picker marker="fb" switch="katalogModus" :modes="[
                     ['key' => 'concept', 'label' => 'Concept', 'active' => $pickerModus === 'concept'],
                     ['key' => 'gericht', 'label' => 'Gericht', 'active' => $pickerModus === 'gericht'],
-                    ['key' => 'format', 'label' => 'Format', 'active' => $pickerModus === 'format'],
                 ]">
                     @if($pickerModus === 'concept')
                         <input type="search" wire:model.live.debounce.300ms="conceptSuche" placeholder="Concept suchen …" class="{{ $input }} w-full mb-2 shrink-0" data-fb-katalog-concept />
@@ -740,17 +721,6 @@
                                 <x-foodalchemist::katalog-row wire:key="kgk-{{ $gk->id }}" wire:click="gerichtHinzu({{ $gk->id }})" :title="$gk->name" :price="$gk->sales_net !== null ? number_format((float) $gk->sales_net, 2, ',', '.') . ' €' : null">{{ $gk->name }}</x-foodalchemist::katalog-row>
                             @empty
                                 <p class="text-[11px] text-gray-500 px-2 py-2">{{ $gerichtSuche !== '' || $gerichtHauptgruppe !== null ? 'Keine VK-Gerichte für diese Auswahl.' : 'Noch keine VK-Gerichte vorhanden.' }}</p>
-                            @endforelse
-                        </div>
-                    @else
-                        <input type="search" wire:model.live.debounce.300ms="formatSuche" placeholder="Format suchen …" class="{{ $input }} w-full mb-2 shrink-0" data-fb-katalog-format />
-                        @error('formatKapitel')<p class="text-[11px] text-rose-500 px-1 mb-1 shrink-0">{{ $message }}</p>@enderror
-                        <p class="text-[10px] text-gray-500 mb-1 shrink-0">Fügt ein Format als Live-Kapitel ein (Struktur).</p>
-                        <div class="flex-1 overflow-y-auto space-y-0.5">
-                            @forelse($formatKandidaten as $fk)
-                                <x-foodalchemist::katalog-row wire:key="kfmt-{{ $fk->id }}" wire:click="formatKapitelEinfuegen({{ $fk->id }})" :title="$fk->consumer_name ?: $fk->name">{{ $fk->name }}@if($fk->origin === 'kunde')<span class="text-[9px] text-gray-400 ml-1">(Kunde-IP)</span>@endif</x-foodalchemist::katalog-row>
-                            @empty
-                                <p class="text-[11px] text-gray-500 px-2 py-2">Keine Formate vorhanden.</p>
                             @endforelse
                         </div>
                     @endif

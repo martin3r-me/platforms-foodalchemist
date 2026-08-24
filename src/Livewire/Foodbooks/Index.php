@@ -184,13 +184,10 @@ class Index extends Component
 
     public string $conceptSuche = '';
 
-    /** Picker-Baustein (2026-08-23): aktiver Katalog-Modus (Server-Modus, wie Speisekarte) — concept|gericht|format.
+    /** Picker-Baustein (2026-08-23): aktiver Katalog-Modus (Server-Modus, wie Speisekarte) — concept|gericht.
      *  Property heisst bewusst NICHT wie die Methode katalogModus() — gleicher Name = Livewire-Footgun (client
      *  wire:click misfired, Server-`->call()` nicht → layout-blind); daher pickerModus wie in der Speisekarte. */
     public string $pickerModus = 'concept';
-
-    /** Format-Modul (Phase C): Suche im „Format-Kapitel einfügen"-Picker. */
-    public string $formatSuche = '';
 
     /**
      * UX 2026-07-25 (Dominique): Concept-Picker filtert auf die Concepter-DIMENSIONEN
@@ -488,27 +485,6 @@ class Index extends Component
     }
 
     /**
-     * Format-Modul (Phase C): ein Standard-Format als LIVE Format-Kapitel einfügen. Erscheint
-     * im Kapitelbaum; Editionen/Bilder rendern live aus dem Format (kein Block-Editing). Fail-soft:
-     * Kunden-IP-/Status-Guard meldet sich als Fehler, kippt den Editor nicht.
-     */
-    public function formatKapitelEinfuegen(int $formatId): void
-    {
-        if ($this->selectedId === null) {
-            return;
-        }
-        $svc = app(FoodbookService::class);
-        try {
-            $svc->insertFormatChapter($this->team(), $this->selectedId, $formatId);
-        } catch (\Throwable $e) {
-            $this->addError('formatKapitel', $e->getMessage());
-
-            return;
-        }
-        $this->formatSuche = '';
-    }
-
-    /**
      * MVP-027 (P0): Ein Kapitel nur laden, wenn es dem Team gehört. Vorher prefillte eine
      * manipulierte fremde ID Titel/Kundentext/Preise in public Properties (Leseleck). Die
      * nachgelagerten Writes waren via FoodbookService::ownedKapitel geschützt — das Prefill nicht.
@@ -675,10 +651,10 @@ class Index extends Component
 
     // ── Blöcke ────────────────────────────────────────────────────────────
 
-    /** Picker-Baustein: Katalog-Modus umschalten (concept|gericht|format). Spiegelt Speisekarte::katalogModus. */
+    /** Picker-Baustein: Katalog-Modus umschalten (concept|gericht). Spiegelt Speisekarte::katalogModus. */
     public function katalogModus(string $modus): void
     {
-        if (in_array($modus, ['concept', 'gericht', 'format'], true)) {
+        if (in_array($modus, ['concept', 'gericht'], true)) {
             $this->pickerModus = $modus;
         }
     }
@@ -1016,8 +992,6 @@ class Index extends Component
             'menueSnapshotAt' => $fb?->preview_snapshot_at,
             'feedbackAgg' => $feedbackAgg,
             'kapitelTree' => $fb !== null ? $svc->kapitelTree($team, $fb->id) : [],
-            // Format-Modul (Phase C): Kandidaten für „Format-Kapitel einfügen" (Kunden-IP-gefiltert).
-            'formatKandidaten' => $fb !== null ? $svc->formatKandidaten($team, $fb, $this->formatSuche, 50) : collect(),
             'kapitel' => $kapitel,
             // E5.3: Portfolio/Kapitel-Aggregat + WE ziehen jetzt in die Leitstelle-Rail (Nested-Livewire) um.
             'headerPresets' => FoodbookService::headerPresets(),

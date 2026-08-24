@@ -14,7 +14,7 @@ uses(TestCase::class, SeedsTeamHierarchy::class);
 /**
  * Format-Modul (Phase D, Concepter 2.0) — Format-Editor als Oberkapitel→Unterkapitel-Baum:
  * Editionen inline anlegen (mit Auto-Sektions-Gerüst), Wording pro Edition (Titel/Claim/
- * Hinführung, Foodbook-Kapitel-Parität) + Fluss ins Foodbook-Render.
+ * Hinführung, Foodbook-Kapitel-Parität).
  */
 beforeEach(function () {
     $this->seedTeamHierarchy();
@@ -69,27 +69,4 @@ it('Editor: neue Edition inline anlegen + Wording pro Unterkapitel speichern', f
     $t->call('editionWordingSpeichern', $ed->id, 'claim', 'Natur pur auf dem Teller')
         ->assertDispatched('formate-gespeichert');
     expect(FoodAlchemistConcept::find($ed->id)->claim)->toBe('Natur pur auf dem Teller');
-});
-
-it('Foodbook-Render trägt das Unterkapitel-Wording (Claim + Hinführung) der Editionen', function () {
-    $f = $this->fsvc->create($this->rootTeam, ['name' => 'CHEFS.CORNER']);
-    $ed = $this->fsvc->createEdition($this->rootTeam, $f->id, 'FUTURE FLAVORS', false);
-    $this->fsvc->updateEditionWording($this->rootTeam, $f->id, $ed->id, [
-        'consumer_name' => 'Future Flavors', 'claim' => 'Die neue Küche der Welt', 'description' => 'Molecular, live.',
-    ]);
-    FoodAlchemistConcept::where('id', $ed->id)->update(['price_per_person_cache' => 47.50]);
-
-    $fb = FoodAlchemistFoodbook::create([
-        'team_id' => $this->rootTeam->id, 'code' => 'FB-D1', 'label' => 'Test', 'jahr' => 2027,
-        'personen' => 100, 'status' => 'draft',
-    ]);
-    $this->fbsvc->insertFormatChapter($this->rootTeam, $fb->id, $f->id);
-
-    $doc = $this->fbsvc->dokumentDaten($this->rootTeam, $fb->fresh(), false);
-    $row = collect($doc['kapitel'])->firstWhere('ist_format', true);
-    $edition = $row['editionen'][0];
-
-    expect($edition['name'])->toBe('Future Flavors')
-        ->and($edition['claim'])->toBe('Die neue Küche der Welt')
-        ->and($edition['text'])->toBe('Molecular, live.');
 });

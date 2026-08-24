@@ -249,8 +249,9 @@ it('UX D&D: rubrikAblegen sortiert Rubriken derselben Ebene', function () {
         ->whereNull('parent_id')->orderBy('position')->pluck('id')->all())->toBe([$rC->id, $rA->id, $rB->id]);
 });
 
-// Picker-Umbau: permanenter Katalog (Gericht · Menü · Format) rechts + Ziel-Rubrik über das per-Rubrik-„+".
-it('Speisekarte-Editor: permanenter Katalog mit 3 Modi + Ziel-Rubrik', function () {
+// Picker-Umbau: permanenter Katalog (Gericht · Menü) rechts + Ziel-Rubrik über das per-Rubrik-„+".
+// 2026-08-24: Live-Format-Modus entfernt (Speisekarte ist Snapshot, kein Live-Fenster aufs Format).
+it('Speisekarte-Editor: permanenter Katalog mit 2 Modi + Ziel-Rubrik', function () {
     Livewire::test(SpeisekarteIndex::class)->call('neu');
     $karte = FoodAlchemistSpeisekarte::first();
     $comp = Livewire::test(SpeisekarteIndex::class)
@@ -258,16 +259,16 @@ it('Speisekarte-Editor: permanenter Katalog mit 3 Modi + Ziel-Rubrik', function 
         ->set('neueRubrik', 'Vorspeisen')->call('rubrikNeu');
     $rubrik = $karte->sections()->first();
 
-    // Katalog + 3 Modi rendern; Default-Modus Gericht.
+    // Katalog + 2 Modi rendern; Default-Modus Gericht (kein Format-Modus mehr).
     $comp->assertOk()
         ->assertSeeHtml('data-sk-katalog')
         ->assertSeeHtml('data-sk-kat="gericht"')
         ->assertSeeHtml('data-sk-kat="menue"')
-        ->assertSeeHtml('data-sk-kat="format"')
+        ->assertDontSeeHtml('data-sk-kat="format"')
         ->assertSet('pickerModus', 'gericht');
 
-    // Modus-Umschalter (Livewire).
-    $comp->call('katalogModus', 'format')->assertSet('pickerModus', 'format')
+    // Modus-Umschalter (Livewire); 'format' wird abgelehnt (bleibt auf gericht).
+    $comp->call('katalogModus', 'format')->assertSet('pickerModus', 'gericht')
         ->call('katalogModus', 'menue')->assertSet('pickerModus', 'menue');
 
     // „+ Gericht" an der Rubrik setzt die Ziel-Rubrik → Katalog nennt sie.

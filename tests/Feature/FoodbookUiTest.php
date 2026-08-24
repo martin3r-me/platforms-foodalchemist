@@ -128,9 +128,11 @@ it('Leitstelle-Rail Kopf-Modus: 3-Panel-Umschalter + Kapitel-Matrix', function (
 // gewandert und dort abgedeckt (LeitstelleKapitelKaskadeTest: starteKapitelKaskade + KapitelRail-Setter).
 // Der Kapitel-Modus der Rail zeigt jetzt nur noch Kuration/QC (Coverage + Kalkulation).
 
-// Bug (Dominique 2026-08-23): im Foodbook-Katalog liess sich Gericht/Format nicht wählen.
+// Bug (Dominique 2026-08-23): im Foodbook-Katalog liess sich Gericht nicht wählen.
 // Verdacht: Property $katalogModus + Methode katalogModus() gleich benannt (Speisekarte: pickerModus).
-it('Foodbook-Katalog: Modus-Wechsel concept->gericht->format schaltet (Server-Modus)', function () {
+// 2026-08-24: Live-Format-Modus entfernt (Foodbook ist Snapshot, kein Live-Fenster aufs Format) —
+// katalogModus('format') muss ins Leere laufen und auf dem letzten gültigen Modus bleiben.
+it('Foodbook-Katalog: Modus-Wechsel concept->gericht schaltet (Server-Modus), format wird abgelehnt', function () {
     Livewire::test(FoodbooksIndex::class)->call('neu');
     $fb = FoodAlchemistFoodbook::first();
     Livewire::test(FoodbooksIndex::class)
@@ -139,5 +141,5 @@ it('Foodbook-Katalog: Modus-Wechsel concept->gericht->format schaltet (Server-Mo
         ->call('katalogModus', 'gericht')
         ->assertSet('pickerModus', 'gericht')
         ->call('katalogModus', 'format')
-        ->assertSet('pickerModus', 'format');
+        ->assertSet('pickerModus', 'gericht');
 });

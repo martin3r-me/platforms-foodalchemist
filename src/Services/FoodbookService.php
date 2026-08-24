@@ -1661,11 +1661,6 @@ class FoodbookService
             'chapters.blocks.concept.slots.package.dishes.dish:id,name,sales_wording_standard',
             // E8.3: recipe_ref braucht sales_net/ek_total_eur für die €/Position-Preisspalte (blockPreis) — sonst rendert der Preis leer.
             'chapters.blocks.dish:id,name,sales_wording_standard,sales_net,ek_total_eur',
-            // Format-Kapitel (Phase C): Identität + Bildwelt + Editionen live aus dem Format.
-            'chapters.format', 'chapters.format.images',
-            'chapters.format.editions' => fn ($q) => $q->orderBy('format_position'),
-            'chapters.format.editions.slots.dish:id,name,sales_wording_standard',
-            'chapters.format.editions.slots.package.dishes.dish:id,name,sales_wording_standard',
             'crmCompany', 'crmContact',
         ]);
         $pax = $fb->personen;
@@ -1685,41 +1680,10 @@ class FoodbookService
         $rows = [];
         $walk = function ($parentId, int $depth) use (&$walk, $byParent, &$rows, $team, $pax, $wording, $intern) {
             foreach ($byParent[$parentId] ?? [] as $k) {
-                // Format-Kapitel (Phase C): LIVE aus dem Format rendern (Identität + Editionen als
-                // Showcase). Keine manuellen Blöcke, vk_pro_person=null → NICHT additiv im Total
-                // (Editionen sind Alternativen → Preis-Range, kein Summand). Kinder werden normal
-                // weitergelaufen (Bespoke-Unterkapitel bleiben möglich).
-                if ($k->format_id !== null && $k->format !== null) {
-                    $format = $k->format;
-                    $editionen = [];
-                    foreach ($format->editions as $ed) {
-                        $editionen[] = [
-                            'name' => $ed->consumer_name ?: $ed->name,
-                            'claim' => $ed->claim ?: null,                                 // Unterkapitel-Claim (Phase D)
-                            'text' => trim((string) $ed->description) ?: null,             // Unterkapitel-Hinführung (Phase D)
-                            'preis_pp' => $ed->price_per_person_cache !== null ? (float) $ed->price_per_person_cache : null,
-                            'gerichte' => $wording->gerichtZeilen($ed),
-                        ];
-                    }
-                    $hero = $format->images->firstWhere('is_hero', true);
-                    $rows[] = [
-                        'title' => $k->consumer_title ?: ($format->consumer_name ?: $format->name),
-                        'title_intern' => $k->title ?: $format->name,
-                        'text' => trim((string) ($k->description ?: $format->story)) ?: null,
-                        'anker' => 'k' . $k->id,
-                        'depth' => $depth,
-                        'ist_format' => true,
-                        'claim' => $format->claim,
-                        'hero' => $hero?->dataUri(),          // base64 — funktioniert Screen + PDF (send-stabil)
-                        'preis_range' => $format->priceRange(),
-                        'editionen' => $editionen,
-                        'bloecke' => [],
-                        'vk_pro_person' => null,
-                    ];
-                    $walk((int) $k->id, $depth + 1);
-
-                    continue;
-                }
+                // Kaskade 2026-08-24: die spezielle ist_format-Live-Kapitel-Mechanik entfernt. Die
+                // Kaskade bleibt LIVE (Concept-/Basisrezept-Edits wirken durch bis ins Foodbook); ein
+                // Format wird künftig WIE EIN CONCEPT gebucht (live-referenzierter Inhalt, F5), nicht als
+                // eigener Format-Kapitel-Codepfad. „Snapshot" = erst beim Versand (snapshot_json).
                 $bloecke = [];
                 foreach ($k->blocks as $b) {
                     $label = $this->dokBlockLabel($b);
@@ -1917,63 +1881,9 @@ class FoodbookService
             ->orderBy('name')->limit($limit)->get(['id', 'name', 'sales_net']);
     }
 
-    /**
-     * Format-Modul (Phase C): Formate für den „Format-Kapitel einfügen"-Picker.
-     * Kunden-IP-Guard: ein fremdes Kunden-Format (origin=kunde, anderer Kunde als das
-     * Foodbook) wird ausgeblendet, sobald der Foodbook-Kunde bekannt ist.
-     */
-    public function formatKandidaten(Team $team, FoodAlchemistFoodbook $fb, string $suche, int $limit = 20): Collection
-    {
-        $fbKunde = mb_strtolower(trim((string) ($fb->customer ?? '')));
-
-        return \Platform\FoodAlchemist\Models\FoodAlchemistFormat::visibleToTeam($team)
-            ->where('status', '!=', 'archiviert')
-            ->when($suche !== '', fn ($q) => \Platform\FoodAlchemist\Support\Suche::like($q, 'name', $suche))
-            ->orderBy('name')->limit(50)
-            ->get(['id', 'name', 'consumer_name', 'origin', 'customer', 'status'])
-            ->reject(fn ($f) => $f->origin === 'kunde' && trim((string) $f->customer) !== ''
-                && $fbKunde !== '' && mb_strtolower(trim((string) $f->customer)) !== $fbKunde)
-            ->take($limit)->values();
-    }
-
-    /**
-     * Format-Modul (Phase C): ein Format als LIVE Format-Kapitel ins Foodbook einfügen.
-     * Legt ein Kapitel mit `format_id` an (Identität aus dem Format geseedet); Editionen +
-     * Bildwelt rendern live über {@see dokumentDaten}. KEIN Recompute (Showcase, nicht additiv).
-     * Kunden-IP-Guard + Status-Guard (versendete/archivierte Bücher sind zu).
-     */
-    public function insertFormatChapter(Team $team, int $foodbookId, int $formatId, ?int $parentId = null): FoodAlchemistFoodbookKapitel
-    {
-        $fb = FoodAlchemistFoodbook::visibleToTeam($team)->findOrFail($foodbookId);
-        $this->guard($fb, $team);
-        if (in_array($fb->status, ['versendet', 'archiviert'], true)) {
-            throw new \RuntimeException('Foodbook ist ' . $fb->status . ' — kein Kapitel mehr einfügbar.');
-        }
-        if ($parentId !== null && ! FoodAlchemistFoodbookKapitel::where('foodbook_id', $fb->id)->whereKey($parentId)->exists()) {
-            throw new \RuntimeException('parent_id gehört nicht zu diesem Foodbook.');
-        }
-        $format = \Platform\FoodAlchemist\Models\FoodAlchemistFormat::visibleToTeam($team)->findOrFail($formatId);
-
-        // Kunden-IP: ein Kunden-Format nie in ein Buch eines ANDEREN Kunden (CLAUDE.md).
-        if ($format->origin === 'kunde' && trim((string) $format->customer) !== '') {
-            $fbKunde = trim((string) ($fb->customer ?? ''));
-            if ($fbKunde !== '' && mb_strtolower($fbKunde) !== mb_strtolower(trim((string) $format->customer))) {
-                throw new \RuntimeException('Kunden-IP: Format „' . $format->name . '" gehört ' . $format->customer
-                    . ' — nicht in ein Buch von ' . $fbKunde . ' einfügbar.');
-            }
-        }
-
-        return FoodAlchemistFoodbookKapitel::create([
-            'team_id' => $fb->team_id, 'foodbook_id' => $fb->id, 'parent_id' => $parentId ?: null,
-            'format_id' => $format->id,
-            'title' => $format->name,
-            'consumer_title' => $format->consumer_name,
-            'price_mode' => 'auto',
-            'position' => (int) FoodAlchemistFoodbookKapitel::where('foodbook_id', $fb->id)
-                ->when($parentId, fn ($q, $p) => $q->where('parent_id', $p), fn ($q) => $q->whereNull('parent_id'))
-                ->max('position') + 1,
-        ]);
-    }
+    // Kaskade 2026-08-24: formatKandidaten + insertFormatChapter entfernt — die spezielle
+    // Format-Kapitel-Mechanik entfällt. Ein Format wird künftig WIE EIN CONCEPT gebucht
+    // (live-referenziert, Kaskade bleibt live); Re-Integration folgt in F5.
 
     /**
      * M11-08: Andock-Kontext für die spätere KI-Text-Generierung (Einleitung/Kapitel) —

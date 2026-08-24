@@ -23,42 +23,14 @@
     @else
     @forelse($menue['kapitel'] ?? [] as $k)
         <section style="margin-left: {{ $k['depth'] * 16 }}px">
-            @php($istFormat = $k['ist_format'] ?? false)
             <div class="flex items-baseline gap-2 border-b border-black/5 pb-1 mb-2">
                 <h3 class="text-sm font-semibold text-violet-700">{{ $k['title'] }}</h3>
-                @if($istFormat && ($k['preis_range']['min'] ?? null) !== null)
-                    <span class="ml-auto text-[11px] text-gray-500 tabular-nums">{{ $k['preis_range']['min'] == $k['preis_range']['max']
-                        ? number_format($k['preis_range']['min'], 2, ',', '.') . ' €/P'
-                        : number_format($k['preis_range']['min'], 2, ',', '.') . '–' . number_format($k['preis_range']['max'], 2, ',', '.') . ' €/P' }}</span>
-                @elseif(! $istFormat && $k['vk_pro_person'] > 0)
+                @if($k['vk_pro_person'] > 0)
                     <span class="ml-auto text-[11px] text-gray-500 tabular-nums">{{ number_format((float) $k['vk_pro_person'], 2, ',', '.') }} €/P</span>
                 @endif
             </div>
-            @if($istFormat && ($k['claim'] ?? null))<p class="text-[11px] italic text-violet-600 mb-1">„{{ $k['claim'] }}“</p>@endif
             @if(! empty($k['text']))<p class="text-xs text-gray-600 mb-2 whitespace-pre-line">{{ $k['text'] }}</p>@endif
 
-            @if($istFormat)
-                {{-- Format-Kapitel (Phase C/D): Editionen als Showcase — spiegelt Präsentation/PDF, damit die Inline-Vorschau nicht leer bleibt. --}}
-                @forelse($k['editionen'] ?? [] as $ed)
-                    <div class="py-0.5">
-                        <div class="flex items-baseline gap-2">
-                            <p class="text-sm font-semibold text-gray-900 mt-1">{{ $ed['name'] }}</p>
-                            @if($ed['preis_pp'] !== null)<span class="ml-auto text-[11px] text-violet-600 tabular-nums">{{ number_format((float) $ed['preis_pp'], 2, ',', '.') }} € p. P.</span>@endif
-                        </div>
-                        @if($ed['claim'] ?? null)<p class="text-[11px] italic text-violet-600">„{{ $ed['claim'] }}“</p>@endif
-                        @if($ed['text'] ?? null)<p class="text-xs text-gray-600">{{ $ed['text'] }}</p>@endif
-                        @foreach($ed['gerichte'] ?? [] as $g)
-                            @if($g['type'] === 'paket' || $g['type'] === 'header')
-                                <p class="text-xs font-semibold text-gray-600 ml-3 mt-1">{{ $g['text'] }}</p>
-                            @else
-                                <p class="text-xs text-gray-600" style="margin-left:{{ 12 + ($g['einrueckung'] ?? 0) * 12 }}px">{{ $g['text'] }}</p>
-                            @endif
-                        @endforeach
-                    </div>
-                @empty
-                    <p class="text-xs text-gray-500">Noch keine Editionen im Format.</p>
-                @endforelse
-            @else
             @forelse($k['bloecke'] as $b)
                 @php($istKonzept = in_array($b['type'], ['concept_ref', 'recipe_ref'], true))
                 <div class="py-0.5">
@@ -76,7 +48,6 @@
             @empty
                 <p class="text-xs text-gray-500">—</p>
             @endforelse
-            @endif
         </section>
     @empty
         <p class="text-xs text-gray-500 py-6 text-center">Noch keine Kapitel — im Editor anlegen und Concepts einfügen.</p>

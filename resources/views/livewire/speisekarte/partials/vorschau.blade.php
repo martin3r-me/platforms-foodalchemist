@@ -24,19 +24,6 @@
                 <h3 class="text-[13px] font-semibold uppercase tracking-wide border-b pb-1 mb-2" style="color: {{ $brand }}; border-color: {{ $brand }}2b;">{{ $rubrik['title'] }}</h3>
                 @if($rubrik['claim'])<p class="text-xs italic text-gray-500 mb-2">{{ $rubrik['claim'] }}</p>@endif
 
-                {{-- Spec 42: Format-Rubrik — Editionen live aus dem Format (statt eigener Positionen). --}}
-                @if($rubrik['ist_format'] ?? false)
-                    @forelse($rubrik['editionen'] as $ed)
-                        <div class="flex items-baseline gap-2 py-1">
-                            <span class="text-gray-900">{{ $ed['name'] }}</span>
-                            <span class="flex-1 border-b border-dotted border-gray-300 translate-y-[-2px]"></span>
-                            <span class="tabular-nums text-gray-900 whitespace-nowrap">@if($ed['preis_pp'] !== null){{ number_format((float) $ed['preis_pp'], 2, ',', '.') }} € p.P.@endif</span>
-                        </div>
-                    @empty
-                        <p class="text-xs text-gray-400 italic">Format ohne Editionen.</p>
-                    @endforelse
-                @endif
-
                 @php($prevVg = null)
                 @foreach($rubrik['positionen'] as $pos)
                     {{-- Werkstrang M Phase D-Renderer: Wahl-Gruppe „A oder B" — „oder" zwischen aufeinanderfolgenden Positionen derselben variant_group_id. --}}
