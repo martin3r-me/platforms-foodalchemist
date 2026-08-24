@@ -363,10 +363,10 @@
                                     @elseif($g['title'])
                                         <span class="{{ $pill }} {{ $variantPill['info'] }} shrink-0">Sektion</span>
                                         <h4 class="text-sm font-semibold text-gray-900">{{ $g['title'] }}</h4>
-                                        <span class="ml-auto text-[11px] text-gray-500 tabular-nums shrink-0">{{ count($g['slots']) }} {{ count($g['slots']) === 1 ? 'Position' : 'Positionen' }}{{ $slotVks->isNotEmpty() ? ' · ' . number_format($slotVks->sum(), 2, ',', '.') . ' €/P' : '' }}{{ $slotEks->isNotEmpty() ? ' · Σ EK ' . number_format($slotEks->sum(), 2, ',', '.') . ' €' : '' }}</span>
+                                        <span class="ml-auto text-[11px] text-gray-500 tabular-nums shrink-0">{{ count($g['slots']) }} {{ count($g['slots']) === 1 ? 'Position' : 'Positionen' }}{{ (! $istPaket && $slotVks->isNotEmpty()) ? ' · ' . number_format($slotVks->sum(), 2, ',', '.') . ' €/P' : '' }}{{ $slotEks->isNotEmpty() ? ' · Σ EK ' . number_format($slotEks->sum(), 2, ',', '.') . ' €' : '' }}</span>
                                     @else
                                         <h4 class="text-[11px] font-medium uppercase tracking-wider text-gray-500">Gerichte</h4>
-                                        <span class="ml-auto text-[11px] text-gray-500 tabular-nums shrink-0">{{ count($g['slots']) }} {{ count($g['slots']) === 1 ? 'Position' : 'Positionen' }}{{ $slotVks->isNotEmpty() ? ' · ' . number_format($slotVks->sum(), 2, ',', '.') . ' €/P' : '' }}</span>
+                                        <span class="ml-auto text-[11px] text-gray-500 tabular-nums shrink-0">{{ count($g['slots']) }} {{ count($g['slots']) === 1 ? 'Position' : 'Positionen' }}{{ (! $istPaket && $slotVks->isNotEmpty()) ? ' · ' . number_format($slotVks->sum(), 2, ',', '.') . ' €/P' : '' }}</span>
                                     @endif
                                 </div>
                                 @if(! empty($g['texte'] ?? []))
@@ -429,9 +429,10 @@
                                                     @if($w['source'] === 'name')<button type="button" @click="bauModus = true" class="{{ $pill }} {{ $variantPill['warning'] }}" title="In der Bearbeiten-Ansicht Wording ergänzen">@svg('heroicon-o-pencil', 'w-3.5 h-3.5 inline-block align-middle') Wording ergänzen</button>@endif
                                                 </div>
                                                 <div class="flex gap-3 mt-2.5 pt-2 border-t border-black/5 tabular-nums">
-                                                    <span class="flex flex-col"><span class="text-[9px] font-semibold uppercase tracking-wider text-gray-500">VK/P</span><span class="text-xs font-semibold text-emerald-600">{{ $vkz !== null ? number_format((float) $vkz, 2, ',', '.') . ' €' : '—' }}</span></span>
+                                                    {{-- Im Paket ist der Einzel-VK je Speise irreführend (ein Paketpreis) → nur EK zeigen. --}}
+                                                    @unless($istPaket)<span class="flex flex-col"><span class="text-[9px] font-semibold uppercase tracking-wider text-gray-500">VK/P</span><span class="text-xs font-semibold text-emerald-600">{{ $vkz !== null ? number_format((float) $vkz, 2, ',', '.') . ' €' : '—' }}</span></span>@endunless
                                                     <span class="flex flex-col"><span class="text-[9px] font-semibold uppercase tracking-wider text-gray-500">EK</span><span class="text-xs font-semibold text-gray-700">{{ $ekz !== null ? number_format((float) $ekz, 2, ',', '.') . ' €' : '—' }}</span></span>
-                                                    <span class="flex flex-col"><span class="text-[9px] font-semibold uppercase tracking-wider text-gray-500">W%</span><span class="text-xs font-semibold {{ $wpct !== null && $wpct > 35 ? 'text-rose-500' : 'text-gray-700' }}">{{ $wpct !== null ? number_format($wpct, 1, ',', '.') . '%' : '—' }}</span></span>
+                                                    @unless($istPaket)<span class="flex flex-col"><span class="text-[9px] font-semibold uppercase tracking-wider text-gray-500">W%</span><span class="text-xs font-semibold {{ $wpct !== null && $wpct > 35 ? 'text-rose-500' : 'text-gray-700' }}">{{ $wpct !== null ? number_format($wpct, 1, ',', '.') . '%' : '—' }}</span></span>@endunless
                                                 </div>
                                             </article>
                                         @endforeach
@@ -517,7 +518,7 @@
                                             <input type="text" wire:model.blur="blockForm.{{ $slot->id }}.title" wire:change="blockSpeichern({{ $slot->id }})" class="{{ $input }} w-full mt-1 font-medium" placeholder="Überschrift …" />
                                             @php($ss = $sektionSumme['h' . $slot->id] ?? null)
                                             @if($ss && $ss['n'] > 0)
-                                                <div class="mt-1 text-[11px] text-violet-600 tabular-nums">{{ $ss['n'] }} {{ $ss['n'] === 1 ? 'Position' : 'Positionen' }} · Σ EK {{ number_format($ss['ek'], 2, ',', '.') }} € · {{ number_format($ss['vk'], 2, ',', '.') }} €/P</div>
+                                                <div class="mt-1 text-[11px] text-violet-600 tabular-nums">{{ $ss['n'] }} {{ $ss['n'] === 1 ? 'Position' : 'Positionen' }} · Σ EK {{ number_format($ss['ek'], 2, ',', '.') }} €{{ $istPaket ? '' : ' · ' . number_format($ss['vk'], 2, ',', '.') . ' €/P' }}</div>
                                             @endif
                                             @if($slot->type === 'header_preis')
                                                 <span class="inline-flex items-center gap-1 mt-1">
@@ -600,9 +601,10 @@
                                         @endif
                                     </td>
                                     <td class="{{ $td }} !px-2 align-top"><input type="text" wire:model.blur="slotForm.{{ $slot->id }}.role" wire:change="slotSpeichern({{ $slot->id }})" class="{{ $input }} !w-20" placeholder="Rolle" /></td>
-                                    <td class="{{ $td }} !px-2 text-right tabular-nums whitespace-nowrap align-top">{{ $vkz !== null ? number_format((float) $vkz, 2, ',', '.') . ' €' : '—' }}</td>
+                                    {{-- Im Paket kein Einzel-VK/W% je Position (ein Paketpreis); EK bleibt als Kostenbasis. --}}
+                                    <td class="{{ $td }} !px-2 text-right tabular-nums whitespace-nowrap align-top">{{ $istPaket ? '' : ($vkz !== null ? number_format((float) $vkz, 2, ',', '.') . ' €' : '—') }}</td>
                                     <td class="{{ $td }} !px-2 text-right tabular-nums whitespace-nowrap align-top">{{ $ekz !== null ? number_format((float) $ekz, 2, ',', '.') . ' €' : '—' }}</td>
-                                    <td class="{{ $td }} !px-2 text-right tabular-nums whitespace-nowrap align-top text-gray-500">{{ $wpct !== null ? number_format($wpct, 1, ',', '.') . '%' : '—' }}</td>
+                                    <td class="{{ $td }} !px-2 text-right tabular-nums whitespace-nowrap align-top text-gray-500">{{ $istPaket ? '' : ($wpct !== null ? number_format($wpct, 1, ',', '.') . '%' : '—') }}</td>
                                 @endif
                                 <td class="{{ $td }} !px-2 text-right whitespace-nowrap align-top">
                                     @if(! $istStruktur)
