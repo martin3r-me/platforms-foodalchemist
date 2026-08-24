@@ -340,6 +340,12 @@ class Editor extends Component
         foreach ($concept->slots as $slot) {
             if ($slot->dish) {
                 $dishes[$slot->dish->id] = $slot->dish;
+            } elseif ($slot->embeddedConcept) {   // Kaskade: eingebettetes Paket = kind=paket-Concept
+                foreach ($slot->embeddedConcept->slots as $eps) {
+                    if ($eps->dish) {
+                        $dishes[$eps->dish->id] = $eps->dish;
+                    }
+                }
             } elseif ($slot->package) {
                 foreach ($slot->package->dishes as $pg) {
                     if ($pg->dish) {
@@ -573,7 +579,8 @@ class Editor extends Component
 
     public function fuellePaket(int $slotId, int $paketId): void
     {
-        app(ConceptService::class)->fillSlot($this->team(), $slotId, ['package_id' => $paketId]);
+        // Kaskade: $paketId ist ein kind=paket-Concept → einbetten via embedded_concept_id.
+        app(ConceptService::class)->fillSlot($this->team(), $slotId, ['embedded_concept_id' => $paketId]);
         $this->dispatch('concepter-gespeichert', id: $this->id);
     }
 
@@ -744,6 +751,12 @@ class Editor extends Component
             }
             if ($s->sales_recipe_id !== null) {
                 $ids[(int) $s->sales_recipe_id] = true;
+            } elseif ($s->embeddedConcept !== null) {   // Kaskade: eingebettetes Paket = kind=paket-Concept
+                foreach ($s->embeddedConcept->slots as $eps) {
+                    if ($eps->sales_recipe_id !== null) {
+                        $ids[(int) $eps->sales_recipe_id] = true;
+                    }
+                }
             } elseif ($s->package !== null) {
                 foreach ($s->package->dishes as $pg) {
                     if ($pg->sales_recipe_id !== null) {
@@ -840,12 +853,13 @@ class Editor extends Component
             $this->positionNach($svc, $slot->id, $this->einfuegenNachId);
             $this->einfuegenNachId = $slot->id;
         }
-        $paket = app(PaketService::class)->create($team, ['name' => 'Neues Paket']);
-        $svc->fillSlot($team, $slot->id, ['package_id' => $paket->id]);
+        // Kaskade: neues Paket = kind=paket-Concept, einbetten via embedded_concept_id, als Concept öffnen.
+        $paket = $svc->createPaket($team, ['name' => 'Neues Paket']);
+        $svc->fillSlot($team, $slot->id, ['embedded_concept_id' => $paket->id]);
         $conceptId = $this->id;
         $this->dispatch('concepter-gespeichert', id: $conceptId);
-        // direkt das neue Paket im selben Modal öffnen (Gerichte schnüren) …
-        $this->oeffnen('pakete', $paket->id);
+        // direkt das neue Paket im selben Modal öffnen (Posten schnüren) …
+        $this->oeffnen('concepts', $paket->id);
         // … und den Rückweg merken (oeffnen hat zurückgesetzt → danach setzen).
         $this->rueckSprungConceptId = $conceptId;
     }
@@ -857,7 +871,7 @@ class Editor extends Component
             return;
         }
         $conceptId = $this->id;
-        $this->oeffnen('pakete', $paketId);
+        $this->oeffnen('concepts', $paketId);   // Kaskade: Paket = kind=paket-Concept
         $this->rueckSprungConceptId = $conceptId;
     }
 
@@ -895,7 +909,8 @@ class Editor extends Component
         $svc = app(ConceptService::class);
         $slot = $svc->addSlot($this->team(), $this->id, []);
         if ($typ === 'paket') {
-            $svc->fillSlot($this->team(), $slot->id, ['package_id' => $id]);
+            // Kaskade: $id ist ein kind=paket-Concept → einbetten via embedded_concept_id.
+            $svc->fillSlot($this->team(), $slot->id, ['embedded_concept_id' => $id]);
         } else {
             $svc->fillSlot($this->team(), $slot->id, [
                 'sales_recipe_id' => $id, 'quantity' => 1, 'unit_vocab_id' => $this->portionEinheitId(),
@@ -942,15 +957,11 @@ class Editor extends Component
         if ($slot === null) {
             return;
         }
-        $role = $slot->role ?: null;
-        $paket = app(PaketService::class)->create($team, [
-            'name' => trim(($role ? $role . '-' : '') . 'Paket'),
-            'role' => $role,
-        ]);
-        $svc->fillSlot($team, $slotId, ['package_id' => $paket->id]);
+        // Kaskade: neues Paket = kind=paket-Concept, einbetten via embedded_concept_id, als Concept öffnen.
+        $paket = $svc->createPaket($team, ['name' => trim(($slot->role ? $slot->role . '-' : '') . 'Paket')]);
+        $svc->fillSlot($team, $slotId, ['embedded_concept_id' => $paket->id]);
         $this->dispatch('concepter-gespeichert', id: $this->id);
-        // direkt das neue Paket im selben Modal öffnen (Gerichte schnüren)
-        $this->oeffnen('pakete', $paket->id);
+        $this->oeffnen('concepts', $paket->id);
     }
 
     // ── Vorlage (M10R-4 · D-CON-7) ───────────────────────────────────────────
@@ -1237,7 +1248,7 @@ class Editor extends Component
                         ])
                         : collect();
                     $paketListe = $this->linkeListe === 'paket'
-                        ? $pakete->paketKandidaten($team, $linkeSuche, ['class' => $this->paketKlasse])
+                        ? $concepts->paketKandidaten($team, $linkeSuche, ['class' => $this->paketKlasse])   // Kaskade: kind=paket-Concepts
                         : collect();
                     $gerichtListe = $this->linkeListe === 'gericht'
                         ? $pakete->gerichtKandidaten($team, $rechteSuche, $pickFilter)

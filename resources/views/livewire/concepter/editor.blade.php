@@ -266,7 +266,7 @@
                                 <div wire:key="kpk-{{ $pk->id }}" draggable="true" @dragstart="dragTyp = 'paket'; dragId = {{ $pk->id }}; $event.dataTransfer.effectAllowed = 'copy'" @dragend="dragTyp = null; dragId = null" class="group flex items-center gap-1 px-1 py-0.5 rounded hover:bg-violet-500/5 text-[11px] cursor-grab active:cursor-grabbing">
                                     <span class="shrink-0 px-1 rounded text-[9px] font-medium uppercase tracking-wider {{ $variantPill['info'] }}">PK</span>
                                     <span class="min-w-0 flex-1 break-words leading-snug text-gray-700" title="{{ $pk->name }}">{{ $pk->name }}</span>
-                                    <span class="shrink-0 text-[10px] text-gray-500 tabular-nums">{{ $pk->price_per_person !== null ? number_format((float) $pk->price_per_person, 2, ',', '.') . ' €' : '' }}</span>
+                                    <span class="shrink-0 text-[10px] text-gray-500 tabular-nums">{{ $pk->price_per_person_cache !== null ? number_format((float) $pk->price_per_person_cache, 2, ',', '.') . ' €' : '' }}</span>
                                     <button type="button" wire:click="positionEinfuegen('paket', {{ $pk->id }})" class="shrink-0 px-1 rounded font-medium text-violet-500 hover:bg-violet-500/15 leading-none" title="als Position einfügen">+</button>
                                 </div>
                             @empty
@@ -332,9 +332,12 @@
                             @if(in_array($s->type, ['header', 'header_preis'], true))
                                 @php($menueGruppen[] = $aktuelleGruppe)
                                 @php($aktuelleGruppe = ['type' => 'header', 'title' => $s->title ?: '(Überschrift)', 'headerSlotId' => $s->id, 'slots' => [], 'texte' => []])
-                            @elseif($s->package_id && $s->package)
+                            @elseif(($s->embedded_concept_id && $s->embeddedConcept) || ($s->package_id && $s->package))
                                 @php($menueGruppen[] = $aktuelleGruppe)
-                                @php($menueGruppen[] = ['type' => 'paket', 'title' => $s->package->name, 'price' => $s->package->price_per_person, 'headerSlotId' => null, 'slots' => [], 'texte' => [], 'paket' => $s->package])
+                                @php($_ref = $s->embeddedConcept ?? $s->package)
+                                @php($_dishes = $s->embeddedConcept ? $s->embeddedConcept->slots->filter(fn ($e) => $e->sales_recipe_id !== null)->values() : $s->package->dishes)
+                                @php($_preis = $s->embeddedConcept ? $s->embeddedConcept->price_per_person_cache : $s->package->price_per_person)
+                                @php($menueGruppen[] = ['type' => 'paket', 'title' => $_ref->name, 'price' => $_preis, 'headerSlotId' => null, 'slots' => [], 'texte' => [], 'paket' => $_ref, 'dishes' => $_dishes])
                                 @php($aktuelleGruppe = ['type' => 'sektion', 'title' => null, 'headerSlotId' => null, 'slots' => [], 'texte' => []])
                             @elseif($s->sales_recipe_id && $s->dish)
                                 @php($aktuelleGruppe['slots'][] = $s)
@@ -345,7 +348,7 @@
                         @endforeach
                         @php($menueGruppen[] = $aktuelleGruppe)
                         {{-- Gäste-Sicht: leere Gruppen unsichtbar — aber reine Text-Sektionen (Beschreibung ohne Gericht) bleiben sichtbar --}}
-                        @php($menueGruppen = collect($menueGruppen)->filter(fn ($g) => $g['type'] === 'paket' ? $g['paket']->dishes->isNotEmpty() : (count($g['slots']) > 0 || count($g['texte'] ?? []) > 0))->values())
+                        @php($menueGruppen = collect($menueGruppen)->filter(fn ($g) => $g['type'] === 'paket' ? ($g['dishes'] ?? collect())->isNotEmpty() : (count($g['slots']) > 0 || count($g['texte'] ?? []) > 0))->values())
 
                         @php($quelleBadge = ['konzept' => ['Konzept-Wording', 'text-violet-600', 'bg-violet-500'], 'standard' => ['VK-Wording (Standard)', 'text-gray-500', 'bg-gray-400'], 'name' => ['Wording fehlt — interner Name', 'text-amber-600', 'bg-amber-500']])
                         @php($wres = app(\Platform\FoodAlchemist\Services\WordingResolver::class))
@@ -359,7 +362,7 @@
                                     @if($g['type'] === 'paket')
                                         <span class="{{ $pill }} {{ $variantPill['primary'] }} shrink-0">@svg('heroicon-o-archive-box', 'w-3.5 h-3.5 inline-block align-middle') Paket</span>
                                         <h4 class="text-sm font-semibold text-gray-900">{{ $g['title'] }}</h4>
-                                        <span class="ml-auto text-[11px] text-gray-500 tabular-nums shrink-0">{{ $g['paket']->dishes->count() }} {{ $g['paket']->dishes->count() === 1 ? 'Gericht' : 'Gerichte' }}{{ $g['price'] !== null ? ' · ' . number_format((float) $g['price'], 2, ',', '.') . ' €/P fix' : '' }}</span>
+                                        <span class="ml-auto text-[11px] text-gray-500 tabular-nums shrink-0">{{ $g['dishes']->count() }} {{ $g['dishes']->count() === 1 ? 'Posten' : 'Posten' }}{{ $g['price'] !== null ? ' · ' . number_format((float) $g['price'], 2, ',', '.') . ' €/P' : '' }}</span>
                                     @elseif($g['title'])
                                         <span class="{{ $pill }} {{ $variantPill['info'] }} shrink-0">Sektion</span>
                                         <h4 class="text-sm font-semibold text-gray-900">{{ $g['title'] }}</h4>
@@ -379,7 +382,7 @@
                                 @endif
                                 <div class="grid gap-2.5" style="grid-template-columns:repeat(auto-fill,minmax(270px,1fr))">
                                     @if($g['type'] === 'paket')
-                                        @foreach($g['paket']->dishes as $pg)
+                                        @foreach($g['dishes'] as $pg)
                                             @php($pgG = $pg->dish)
                                             @php($pw = $wres->fuerGericht($pgG))
                                             @php($qb = $quelleBadge[$pw['source']] ?? $quelleBadge['name'])
@@ -490,7 +493,7 @@
                             <tr wire:key="erow-{{ $slot->id }}"
                                 @dragover.prevent
                                 @drop.prevent="if (dragId) { $wire.positionDrop(dragTyp, dragId, {{ $slot->id }}); } else if (dragSlotId && dragSlotId !== {{ $slot->id }}) { $wire.positionVerschieben(dragSlotId, {{ $slot->id }}); } dragTyp = null; dragId = null; dragSlotId = null"
-                                class="{{ $tr }} {{ $istStruktur ? 'bg-violet-500/[0.03]' : '' }} {{ $slot->package_id ? 'bg-violet-500/[0.06] border-t-2 !border-t-violet-500/30' : '' }} {{ $einfuegenNachId === $slot->id ? 'border-b-2 !border-b-violet-400' : '' }}">
+                                class="{{ $tr }} {{ $istStruktur ? 'bg-violet-500/[0.03]' : '' }} {{ ($slot->package_id || $slot->embedded_concept_id) ? 'bg-violet-500/[0.06] border-t-2 !border-t-violet-500/30' : '' }} {{ $einfuegenNachId === $slot->id ? 'border-b-2 !border-b-violet-400' : '' }}">
                                 <td class="{{ $td }} !px-1.5 !py-0.5 whitespace-nowrap align-top">
                                     {{-- Ziehgriff: Position per Drag umsortieren (▲▼ bleibt als zuverlässige Alternative) --}}
                                     <span class="inline-block cursor-grab active:cursor-grabbing text-gray-500 hover:text-violet-500 select-none align-middle mr-0.5" draggable="true"
@@ -545,13 +548,16 @@
                                         @else<span class="text-gray-300">—</span>@endif
                                     </td>
                                     <td class="{{ $td }} !px-2 align-top">
-                                        @if($slot->package_id && $slot->package)
-                                            {{-- Paket = Abschnitts-Header (Gerichte stehen als eingerückte Zeilen darunter) --}}
+                                        @php($epk = $slot->embeddedConcept ?? $slot->package)
+                                        @php($epkOpenId = $slot->embedded_concept_id ?? $slot->package_id)
+                                        @php($epkPreis = $slot->embeddedConcept ? $slot->embeddedConcept->price_per_person_cache : ($slot->package?->price_per_person))
+                                        @if($epk)
+                                            {{-- Paket = Abschnitts-Header (kind=paket-Concept oder Alt-Package; Gerichte eingerückt darunter) --}}
                                             <span class="{{ $pill }} {{ $variantPill['info'] }}">@svg('heroicon-o-archive-box', 'w-3.5 h-3.5 inline-block align-middle') Paket</span>
-                                            <span class="text-sm font-semibold text-gray-900 break-words">{{ $slot->package->name }}</span>
-                                            <button type="button" wire:click="paketOeffnen({{ $slot->package_id }})" class="text-gray-500 hover:text-violet-500 align-middle" title="Paket öffnen / bearbeiten">@svg('heroicon-o-archive-box', 'w-3.5 h-3.5 inline-block align-middle')</button>
-                                            @if($slot->package->class)<span class="{{ $pill }} {{ $variantPill['secondary'] }}">{{ $slot->package->class }}</span>@endif
-                                            <span class="text-gray-500 text-[11px] tabular-nums">{{ $slot->package->price_per_person !== null ? number_format((float) $slot->package->price_per_person, 2, ',', '.') . ' €/P' : '' }}</span>
+                                            <span class="text-sm font-semibold text-gray-900 break-words">{{ $epk->name }}</span>
+                                            <button type="button" wire:click="paketOeffnen({{ $epkOpenId }})" class="text-gray-500 hover:text-violet-500 align-middle" title="Paket öffnen / bearbeiten">@svg('heroicon-o-archive-box', 'w-3.5 h-3.5 inline-block align-middle')</button>
+                                            @if($epk->class ?? null)<span class="{{ $pill }} {{ $variantPill['secondary'] }}">{{ $epk->class }}</span>@endif
+                                            <span class="text-gray-500 text-[11px] tabular-nums">{{ $epkPreis !== null ? number_format((float) $epkPreis, 2, ',', '.') . ' €/P' : '' }}</span>
                                         @elseif($slot->sales_recipe_id && $slot->dish)
                                             @php($g = $slot->dish)
                                             @php($enthaelt = collect(['Schwein' => $g->spec_contains_pork, 'Rind' => $g->spec_contains_beef])->filter()->keys()->all())
@@ -618,11 +624,25 @@
                                 </td>
                             </tr>
                             {{-- Paket-Position = Abschnitt: seine Gerichte stehen immer read-only als eingerückte Zeilen darunter --}}
-                            @if($slot->package_id && $slot->package)
+                            @if($slot->embeddedConcept || ($slot->package_id && $slot->package))
                                 <tr wire:key="epaket-{{ $slot->id }}">
                                     <td></td>
                                     <td colspan="8" class="!px-2 !pb-2 align-top">
                                         <div class="ml-2 rounded-lg border border-gray-900/15 bg-black/[0.02] divide-y divide-black/5">
+                                            @if($slot->embeddedConcept)
+                                                {{-- Kaskade: eingebettetes Paket = kind=paket-Concept → seine Posten-Slots --}}
+                                                @forelse($slot->embeddedConcept->slots->filter(fn ($e) => $e->sales_recipe_id !== null) as $eps)
+                                                    <div wire:key="epaketc-{{ $slot->id }}-{{ $eps->id }}" class="flex items-center gap-2 px-3 py-1 text-[11px]">
+                                                        <span class="shrink-0 px-1 rounded text-[9px] font-medium uppercase tracking-wider" style="{{ $typStyle($eps->type === 'basisrezept' ? 'basisrezept' : 'gericht') }}">{{ $eps->type === 'basisrezept' ? 'BR' : 'G' }}</span>
+                                                        <span class="flex-1 min-w-0 break-words leading-snug text-gray-700">{{ $eps->dish?->name ?? '—' }}</span>
+                                                        <span class="shrink-0 text-gray-500 tabular-nums">{{ $eps->quantity !== null ? rtrim(rtrim(number_format((float) $eps->quantity, 2, ',', '.'), '0'), ',') . '×' : '' }}</span>
+                                                        <span class="shrink-0 text-gray-500 tabular-nums w-16 text-right">{{ $eps->dish?->sales_net !== null ? number_format((float) $eps->dish->sales_net, 2, ',', '.') . ' €' : '' }}</span>
+                                                        @if($eps->sales_recipe_id)<button type="button" @click="Livewire.dispatch('vk-modal.oeffnen', { id: {{ $eps->sales_recipe_id }} })" class="shrink-0 text-gray-300 hover:text-violet-500" title="Gericht einsehen">@svg('heroicon-o-banknotes', 'w-3.5 h-3.5 inline-block align-middle')️</button>@endif
+                                                    </div>
+                                                @empty
+                                                    <p class="px-3 py-1.5 text-[11px] text-gray-500">Paket ohne Posten — im Paket-Editor pflegen.</p>
+                                                @endforelse
+                                            @else
                                             @forelse($slot->package->dishes as $pg)
                                                 <div wire:key="epaketg-{{ $slot->id }}-{{ $pg->id }}" class="flex items-center gap-2 px-3 py-1 text-[11px]">
                                                     <span class="shrink-0 px-1 rounded text-[9px] font-medium uppercase tracking-wider" style="{{ $typStyle('gericht') }}">G</span>
@@ -634,6 +654,7 @@
                                             @empty
                                                 <p class="px-3 py-1.5 text-[11px] text-gray-500">Paket ohne Gerichte — im Paket-Editor pflegen.</p>
                                             @endforelse
+                                            @endif
                                         </div>
                                     </td>
                                 </tr>
@@ -668,7 +689,7 @@
                                     </td>
                                 </tr>
                             @endif
-                            @if(! $istStruktur && ($fillOpenId === $slot->id || (! $slot->package_id && ! $slot->sales_recipe_id)))
+                            @if(! $istStruktur && ($fillOpenId === $slot->id || (! $slot->package_id && ! $slot->embedded_concept_id && ! $slot->sales_recipe_id)))
                                 <tr wire:key="efill-{{ $slot->id }}">
                                     <td></td>
                                     <td colspan="8" class="!px-2 !pb-2 bg-black/[0.02]">
@@ -676,12 +697,12 @@
                                             <select x-on:change="$wire.fuellePaket({{ $slot->id }}, $event.target.value); $event.target.value=''" class="{{ $input }} w-56">
                                                 <option value="">↹ Paket tauschen …</option>
                                                 @foreach(($tauschbar[$slot->id] ?? []) as $b)
-                                                    <option value="{{ $b->id }}">{{ $b->name }}{{ $b->price_per_person !== null ? ' (' . number_format((float) $b->price_per_person, 2, ',', '.') . ' €)' : '' }}</option>
+                                                    <option value="{{ $b->id }}">{{ $b->name }}{{ $b->price_per_person_cache !== null ? ' (' . number_format((float) $b->price_per_person_cache, 2, ',', '.') . ' €)' : '' }}</option>
                                                 @endforeach
                                             </select>
                                             <button type="button" wire:click="gerichtPicker({{ $slot->id }})" class="{{ $btnGhostXs }}">Gericht / Basisrezept …</button>
                                             <button type="button" wire:click="neuesPaketImSlot({{ $slot->id }})" class="{{ $btnAi }}" title="Inline ein neues Paket schnüren">+ neues Paket</button>
-                                            @if($slot->package_id || $slot->sales_recipe_id)
+                                            @if($slot->package_id || $slot->embedded_concept_id || $slot->sales_recipe_id)
                                                 <button type="button" wire:click="slotLeeren({{ $slot->id }})" class="text-[11px] text-gray-500 hover:text-red-500">leeren</button>
                                             @else
                                                 {{-- L4: deterministischer Vorschlag aus dem Bestand (kein LLM) --}}
