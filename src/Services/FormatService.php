@@ -24,16 +24,29 @@ class FormatService
     /** Herkunft (Kunden-IP-Guard): kunde = nie fremd wiederverwenden. */
     public const ORIGINS = ['eigen', 'gruppe', 'kunde'];
 
-    private const FELDER = ['name', 'consumer_name', 'claim', 'story', 'origin', 'customer', 'status', 'note'];
+    // F1: serving_form_id/event_type_id sind Format-Dimensionen (Facetten), spiegeln Concept.
+    private const FELDER = ['name', 'consumer_name', 'claim', 'story', 'origin', 'customer', 'status', 'note',
+        'serving_form_id', 'event_type_id'];
+
+    /** Leer („"/0) → NULL (optionale FK). */
+    private const FELDER_NULLBAR = ['serving_form_id', 'event_type_id'];
 
     public function paginateBrowser(array $filters, Team $team, int $perPage = 100): LengthAwarePaginator
     {
         return FoodAlchemistFormat::visibleToTeam($team)
+            ->with(['eventType:id,name', 'servingForm:id,label']) // F1: Facetten-Spalte im Browser
             ->withCount('editions')
             ->when(($filters['search'] ?? '') !== '', fn ($q) => \Platform\FoodAlchemist\Support\Suche::likeAny(
                 $q, ['name', "COALESCE(consumer_name, '')", "COALESCE(claim, '')"], $filters['search']))
             ->when(($filters['status'] ?? '') !== '', fn ($q) => $q->where('status', $filters['status']))
             ->when(($filters['origin'] ?? '') !== '', fn ($q) => $q->where('origin', $filters['origin']))
+            // F1-Facetten-Filter (spiegelt ConceptService::paginateBrowser)
+            ->when(is_numeric($filters['servierform'] ?? null), fn ($q) => $q->where('serving_form_id', (int) $filters['servierform']))
+            ->when(is_numeric($filters['eventtyp'] ?? null), fn ($q) => $q->where('event_type_id', (int) $filters['eventtyp']))
+            ->when(is_numeric($filters['einsatzmoment'] ?? null), fn ($q) => $q
+                ->whereHas('serviceMoments', fn ($w) => $w->where('foodalchemist_service_moments.id', (int) $filters['einsatzmoment'])))
+            ->when(is_numeric($filters['season'] ?? null), fn ($q) => $q
+                ->whereHas('seasons', fn ($w) => $w->where('foodalchemist_seasons.id', (int) $filters['season'])))
             ->orderBy('name')
             ->paginate($perPage);
     }
@@ -44,13 +57,15 @@ class FormatService
             ->with([
                 'editions:id,name,consumer_name,claim,description,status,format_id,format_position,price_per_person_cache',
                 'images' => fn ($q) => $q->orderBy('sort_order'),
+                // F1: Facetten fürs Detail/Editor
+                'servingForm:id,label', 'eventType:id,name', 'serviceMoments:id', 'seasons:id', 'targetGroups:id',
             ])
             ->find($id);
     }
 
     public function create(Team $team, array $in): FoodAlchemistFormat
     {
-        return FoodAlchemistFormat::create([
+        $format = FoodAlchemistFormat::create([
             'team_id' => $team->id,
             'name' => trim((string) ($in['name'] ?? 'Neues Format')) ?: 'Neues Format',
             'consumer_name' => $this->norm($in['consumer_name'] ?? null),
@@ -60,7 +75,12 @@ class FormatService
             'customer' => $this->norm($in['customer'] ?? null),
             'status' => $in['status'] ?? 'draft',
             'note' => $this->norm($in['note'] ?? null),
+            'serving_form_id' => $this->nullbareId($in['serving_form_id'] ?? null),
+            'event_type_id' => $this->nullbareId($in['event_type_id'] ?? null),
         ]);
+        $this->syncFacetten($team, $format, $in);
+
+        return $format;
     }
 
     public function update(Team $team, int $id, array $in): FoodAlchemistFormat
@@ -74,6 +94,11 @@ class FormatService
                 $update[$feld] = $this->norm($update[$feld]);
             }
         }
+        foreach (self::FELDER_NULLBAR as $feld) {
+            if (array_key_exists($feld, $update)) {
+                $update[$feld] = $this->nullbareId($update[$feld]);
+            }
+        }
         if (array_key_exists('origin', $update)) {
             $update['origin'] = $this->normOrigin($update['origin']);
         }
@@ -81,8 +106,37 @@ class FormatService
             $update['name'] = trim((string) $update['name']) ?: $format->name;
         }
         $format->update($update);
+        $this->syncFacetten($team, $format, $in);
 
         return $format->refresh();
+    }
+
+    /**
+     * F1: Facetten-Pivots (Einsatzmomente/Saisons/Zielgruppen) synchronisieren — nur wenn der
+     * jeweilige *_ids-Key im Input steht. IDs werden auf team-sichtbares Vokabular gefiltert
+     * (kein Cross-Team-Attach). Spiegelt die Concept-Facetten-Pflege.
+     */
+    private function syncFacetten(Team $team, FoodAlchemistFormat $format, array $in): void
+    {
+        $map = [
+            'einsatzmoment_ids' => [\Platform\FoodAlchemist\Models\FoodAlchemistEinsatzmoment::class, 'serviceMoments'],
+            'saison_ids' => [\Platform\FoodAlchemist\Models\FoodAlchemistSaison::class, 'seasons'],
+            'target_group_ids' => [\Platform\FoodAlchemist\Models\FoodAlchemistTargetGroup::class, 'targetGroups'],
+        ];
+        foreach ($map as $key => [$modell, $relation]) {
+            if (! array_key_exists($key, $in)) {
+                continue;
+            }
+            $ids = array_values(array_unique(array_map('intval', (array) $in[$key])));
+            $sichtbar = $ids === [] ? [] : $modell::visibleToTeam($team)->whereIn('id', $ids)->pluck('id')->all();
+            $format->{$relation}()->sync($sichtbar);
+        }
+    }
+
+    /** Leere/0-FK → NULL (optionale Facetten-FK). */
+    private function nullbareId($wert): ?int
+    {
+        return ($wert === null || $wert === '' || (int) $wert === 0) ? null : (int) $wert;
     }
 
     /** Status setzen (draft|active|archiviert) — Inline-Pflege aus dem Browser. */

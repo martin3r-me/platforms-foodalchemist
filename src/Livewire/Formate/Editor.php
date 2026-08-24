@@ -63,6 +63,12 @@ class Editor extends Component
             'customer' => $f->customer ?? '',
             'status' => $f->status,
             'note' => $f->note ?? '',
+            // F1: Concept-Dimensionen (Facetten) am Format
+            'serving_form_id' => $f->serving_form_id ?? '',
+            'event_type_id' => $f->event_type_id ?? '',
+            'einsatzmoment_ids' => $f->serviceMoments->pluck('id')->all(),
+            'saison_ids' => $f->seasons->pluck('id')->all(),
+            'target_group_ids' => $f->targetGroups->pluck('id')->all(),
         ];
         $this->dispatch('modal.open', name: 'formate-editor');
     }
@@ -71,6 +77,22 @@ class Editor extends Component
     {
         if (in_array($tab, self::TABS, true)) {
             $this->tab = $tab;
+        }
+    }
+
+    /** F1: Mehrfach-Facette (Einsatzmoment/Saison/Zielgruppe) am Format togglen. */
+    public function toggleFacette(string $feld, int $id): void
+    {
+        if (! in_array($feld, ['einsatzmoment_ids', 'saison_ids', 'target_group_ids'], true)) {
+            return;
+        }
+        $liste = array_map('intval', (array) ($this->form[$feld] ?? []));
+        $this->form[$feld] = in_array($id, $liste, true)
+            ? array_values(array_diff($liste, [$id]))
+            : array_values(array_merge($liste, [$id]));
+
+        if ($this->id !== null) {
+            app(FormatService::class)->update($this->team(), $this->id, [$feld => $this->form[$feld]]);
         }
     }
 
@@ -272,10 +294,28 @@ class Editor extends Component
             }
         }
 
+        // F1: Facetten-Vokabular (aus den Einstellungen gepflegt, geteilt mit den Concepts).
+        $team = $this->team();
+        $servierformen = \Platform\FoodAlchemist\Models\FoodAlchemistServierform::where('is_inactive', false)
+            ->orderBy('sort_order')->get(['id', 'code', 'label']);
+        $eventtypen = \Platform\FoodAlchemist\Models\FoodAlchemistEventtyp::visibleToTeam($team)
+            ->where('is_inactive', false)->orderBy('sort_order')->get(['id', 'name']);
+        $einsatzmomente = \Platform\FoodAlchemist\Models\FoodAlchemistEinsatzmoment::visibleToTeam($team)
+            ->where('is_inactive', false)->orderBy('sort_order')->get(['id', 'name']);
+        $saisons = \Platform\FoodAlchemist\Models\FoodAlchemistSaison::visibleToTeam($team)
+            ->where('is_inactive', false)->orderBy('sort_order')->get(['id', 'name']);
+        $zielgruppen = \Platform\FoodAlchemist\Models\FoodAlchemistTargetGroup::visibleToTeam($team)
+            ->orderBy('name')->get(['id', 'name']);
+
         return view('foodalchemist::livewire.formate.editor', [
             'format' => $format,
             'kandidaten' => $kandidaten,
             'editionMenus' => $editionMenus,
+            'servierformen' => $servierformen,
+            'eventtypen' => $eventtypen,
+            'einsatzmomente' => $einsatzmomente,
+            'saisons' => $saisons,
+            'zielgruppen' => $zielgruppen,
         ]);
     }
 

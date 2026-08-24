@@ -28,6 +28,19 @@ class Browser extends Component
     #[Url(as: 'origin')]
     public string $originFilter = '';
 
+    // F1: geteilte Concept-Dimensionen als Filter (spiegelt Concepter-Browser).
+    #[Url(as: 'form')]
+    public string $servierformFilter = '';
+
+    #[Url(as: 'event')]
+    public string $eventtypFilter = '';
+
+    #[Url(as: 'moment')]
+    public string $momentFilter = '';
+
+    #[Url(as: 'season')]
+    public string $saisonFilter = '';
+
     #[Url(as: 'sel')]
     public ?int $selectedId = null;
 
@@ -53,6 +66,16 @@ class Browser extends Component
     public function waehleOrigin(string $wert): void
     {
         $this->originFilter = $this->originFilter === $wert ? '' : $wert;
+        $this->resetPage();
+    }
+
+    /** F1: Facetten-Filter togglen (servierformFilter|eventtypFilter|momentFilter|saisonFilter). */
+    public function waehleFacette(string $feld, string $wert): void
+    {
+        if (! in_array($feld, ['servierformFilter', 'eventtypFilter', 'momentFilter', 'saisonFilter'], true)) {
+            return;
+        }
+        $this->{$feld} = $this->{$feld} === $wert ? '' : $wert;
         $this->resetPage();
     }
 
@@ -100,14 +123,28 @@ class Browser extends Component
 
     public function render(FormatService $formats)
     {
+        $team = $this->team();
         $items = $formats->paginateBrowser([
             'search' => $this->search,
             'status' => $this->statusFilter,
             'origin' => $this->originFilter,
-        ], $this->team());
+            'servierform' => $this->servierformFilter !== '' ? $this->servierformFilter : null,
+            'eventtyp' => $this->eventtypFilter !== '' ? $this->eventtypFilter : null,
+            'einsatzmoment' => $this->momentFilter !== '' ? $this->momentFilter : null,
+            'season' => $this->saisonFilter !== '' ? $this->saisonFilter : null,
+        ], $team);
 
         return view('foodalchemist::livewire.formate.browser', [
             'items' => $items,
+            // F1: Facetten-Vokabular für die Filter (geteilt mit den Concepts, aus den Einstellungen).
+            'facetteServierformen' => \Platform\FoodAlchemist\Models\FoodAlchemistServierform::where('is_inactive', false)
+                ->orderBy('sort_order')->get(['id', 'code', 'label']),
+            'facetteEventtypen' => \Platform\FoodAlchemist\Models\FoodAlchemistEventtyp::visibleToTeam($team)
+                ->where('is_inactive', false)->orderBy('sort_order')->get(['id', 'name']),
+            'facetteMomente' => \Platform\FoodAlchemist\Models\FoodAlchemistEinsatzmoment::visibleToTeam($team)
+                ->where('is_inactive', false)->orderBy('sort_order')->get(['id', 'name']),
+            'facetteSaisons' => \Platform\FoodAlchemist\Models\FoodAlchemistSaison::visibleToTeam($team)
+                ->where('is_inactive', false)->orderBy('sort_order')->get(['id', 'name']),
         ])->layout('platform::layouts.app');
     }
 

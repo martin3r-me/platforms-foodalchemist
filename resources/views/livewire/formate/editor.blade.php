@@ -58,6 +58,51 @@
                     </div>
                 </div>
 
+                {{-- F1: Dimensionen (Facetten) — dieselben wie am Concept, aus den Einstellungen gepflegt. --}}
+                <h4 class="{{ $sekHead }} mt-4 pt-3 border-t border-black/5">Dimensionen</h4>
+                <p class="text-[11px] text-gray-500 mb-2">Dieselben Concept-Dimensionen (in den Einstellungen gepflegt) — für Filter + Einordnung des Formats.</p>
+                <div class="grid grid-cols-2 md:grid-cols-6 gap-3">
+                    <div class="md:col-span-3">
+                        <label class="{{ $label }}">Servierform</label>
+                        <select wire:model="form.serving_form_id" wire:change="speichern" class="{{ $input }}">
+                            <option value="">—</option>
+                            @foreach($servierformen as $sf)<option value="{{ $sf->id }}">{{ $sf->label }}</option>@endforeach
+                        </select>
+                    </div>
+                    <div class="md:col-span-3">
+                        <label class="{{ $label }}">Eventtyp</label>
+                        <select wire:model="form.event_type_id" wire:change="speichern" class="{{ $input }}">
+                            <option value="">—</option>
+                            @foreach($eventtypen as $et)<option value="{{ $et->id }}">{{ $et->name }}</option>@endforeach
+                        </select>
+                    </div>
+                </div>
+                <div class="flex flex-wrap items-start gap-x-4 gap-y-2 mt-2">
+                    <div class="flex flex-wrap items-center gap-1.5">
+                        <span class="{{ $label }} !mb-0 mr-1">Einsatzmoment</span>
+                        @foreach($einsatzmomente as $em)
+                            <button type="button" wire:click="toggleFacette('einsatzmoment_ids', {{ $em->id }})"
+                                class="{{ $pill }} {{ in_array($em->id, $form['einsatzmoment_ids'] ?? []) ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $em->name }}</button>
+                        @endforeach
+                    </div>
+                    <div class="flex flex-wrap items-center gap-1.5">
+                        <span class="{{ $label }} !mb-0 mr-1">Saison</span>
+                        @foreach($saisons as $sa)
+                            <button type="button" wire:click="toggleFacette('saison_ids', {{ $sa->id }})"
+                                class="{{ $pill }} {{ in_array($sa->id, $form['saison_ids'] ?? []) ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $sa->name }}</button>
+                        @endforeach
+                    </div>
+                    @if($zielgruppen->isNotEmpty())
+                        <div class="flex flex-wrap items-center gap-1.5">
+                            <span class="{{ $label }} !mb-0 mr-1">Zielgruppe</span>
+                            @foreach($zielgruppen as $zg)
+                                <button type="button" wire:click="toggleFacette('target_group_ids', {{ $zg->id }})"
+                                    class="{{ $pill }} {{ in_array($zg->id, $form['target_group_ids'] ?? []) ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $zg->name }}</button>
+                            @endforeach
+                        </div>
+                    @endif
+                </div>
+
                 <h4 class="{{ $sekHead }} mt-4 pt-3 border-t border-black/5">Marken-Story</h4>
                 <textarea wire:model="form.story" rows="6" class="{{ $input }}" placeholder="Die Marketing-Story des Formats (Kunden-/Präsentationstext)…"></textarea>
             @endif

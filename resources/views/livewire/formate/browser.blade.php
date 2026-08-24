@@ -43,6 +43,45 @@
                     </div>
                 </div>
 
+                {{-- F1: geteilte Concept-Dimensionen als Filter (aus den Einstellungen gepflegt) --}}
+                <div class="space-y-0.5 pt-2 border-t border-black/5">
+                    <span class="{{ $label }}">Eventtyp</span>
+                    <div class="flex flex-wrap gap-1">
+                        <button type="button" wire:click="waehleFacette('eventtypFilter', '')" class="{{ $pill }} {{ $eventtypFilter === '' ? $variantPill['primary'] : $variantPill['secondary'] }}">Alle</button>
+                        @foreach($facetteEventtypen as $et)
+                            <button type="button" wire:key="ffev-{{ $et->id }}" wire:click="waehleFacette('eventtypFilter', '{{ $et->id }}')"
+                                    class="{{ $pill }} {{ $eventtypFilter === (string) $et->id ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $et->name }}</button>
+                        @endforeach
+                    </div>
+                </div>
+                <div class="space-y-0.5 pt-2 border-t border-black/5">
+                    <span class="{{ $label }}">Servierform</span>
+                    <div class="flex flex-wrap gap-1">
+                        @foreach($facetteServierformen as $sf)
+                            <button type="button" wire:key="ffsf-{{ $sf->id }}" wire:click="waehleFacette('servierformFilter', '{{ $sf->id }}')"
+                                    class="{{ $pill }} {{ $servierformFilter === (string) $sf->id ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $sf->label }}</button>
+                        @endforeach
+                    </div>
+                </div>
+                <div class="space-y-0.5 pt-2 border-t border-black/5">
+                    <span class="{{ $label }}">Einsatzmoment</span>
+                    <div class="flex flex-wrap gap-1">
+                        @foreach($facetteMomente as $em)
+                            <button type="button" wire:key="ffem-{{ $em->id }}" wire:click="waehleFacette('momentFilter', '{{ $em->id }}')"
+                                    class="{{ $pill }} {{ $momentFilter === (string) $em->id ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $em->name }}</button>
+                        @endforeach
+                    </div>
+                </div>
+                <div class="space-y-0.5 pt-2 border-t border-black/5">
+                    <span class="{{ $label }}">Saison</span>
+                    <div class="flex flex-wrap gap-1">
+                        @foreach($facetteSaisons as $sa)
+                            <button type="button" wire:key="ffsa-{{ $sa->id }}" wire:click="waehleFacette('saisonFilter', '{{ $sa->id }}')"
+                                    class="{{ $pill }} {{ $saisonFilter === (string) $sa->id ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $sa->name }}</button>
+                        @endforeach
+                    </div>
+                </div>
+
                 <button type="button" wire:click="neu" class="{{ $btnPrimary }} w-full justify-center">+ Neues Format</button>
             </div>
         </x-ui-page-sidebar>
@@ -63,6 +102,7 @@
                     <tr>
                         <th class="{{ $th }} w-full text-left sticky top-0 z-20 bg-white/95 backdrop-blur-xl">Name</th>
                         <th class="{{ $th }} text-left sticky top-0 z-20 bg-white/95 backdrop-blur-xl">Konsumentenbez.</th>
+                        <th class="{{ $th }} text-left sticky top-0 z-20 bg-white/95 backdrop-blur-xl">Eventtyp · Servierform</th>
                         <th class="{{ $th }} text-left sticky top-0 z-20 bg-white/95 backdrop-blur-xl">Herkunft</th>
                         <th class="{{ $th }} text-left sticky top-0 z-20 bg-white/95 backdrop-blur-xl">Status</th>
                         <th class="{{ $th }} text-right sticky top-0 z-20 bg-white/95 backdrop-blur-xl">Editionen</th>
@@ -76,6 +116,7 @@
                                 {{ $it->name }}
                             </td>
                             <td class="{{ $td }} text-gray-600">{{ $it->consumer_name ?: '—' }}</td>
+                            <td class="{{ $td }} text-gray-600">{{ collect([$it->eventType?->name, $it->servingForm?->label])->filter()->join(' · ') ?: '—' }}</td>
                             <td class="{{ $td }}">
                                 @if($it->origin === 'kunde')
                                     <span class="{{ $pill }} {{ $variantPill['warning'] }}" title="Kunden-IP — nicht für andere adaptieren">Kunde 🔒</span>
@@ -96,7 +137,7 @@
                             <td class="{{ $td }} text-right tabular-nums text-gray-600">{{ $it->editions_count }}</td>
                         </x-foodalchemist::table-row>
                     @empty
-                        <tr><td colspan="5" class="px-3 py-10 text-center text-sm text-gray-500">Keine Formate. Oben „+ Neues Format".</td></tr>
+                        <tr><td colspan="6" class="px-3 py-10 text-center text-sm text-gray-500">Keine Formate. Oben „+ Neues Format".</td></tr>
                     @endforelse
                 </tbody>
             </table>

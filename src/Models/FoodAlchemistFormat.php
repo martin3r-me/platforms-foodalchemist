@@ -2,6 +2,8 @@
 
 namespace Platform\FoodAlchemist\Models;
 
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Model;
@@ -35,6 +37,47 @@ class FoodAlchemistFormat extends Model
     public function editions(): HasMany
     {
         return $this->hasMany(FoodAlchemistConcept::class, 'format_id')->orderBy('format_position');
+    }
+
+    // Format-Umbau F1: Concept-Dimensionen (Facetten) am Format — spiegelt FoodAlchemistConcept.
+    public function servingForm(): BelongsTo
+    {
+        return $this->belongsTo(FoodAlchemistServierform::class, 'serving_form_id');
+    }
+
+    public function eventType(): BelongsTo
+    {
+        return $this->belongsTo(FoodAlchemistEventtyp::class, 'event_type_id');
+    }
+
+    public function serviceMoments(): BelongsToMany
+    {
+        return $this->belongsToMany(
+            FoodAlchemistEinsatzmoment::class,
+            'foodalchemist_format_service_moments',
+            'format_id',
+            'service_moment_id'
+        );
+    }
+
+    public function seasons(): BelongsToMany
+    {
+        return $this->belongsToMany(
+            FoodAlchemistSaison::class,
+            'foodalchemist_format_seasons',
+            'format_id',
+            'season_id'
+        );
+    }
+
+    public function targetGroups(): BelongsToMany
+    {
+        return $this->belongsToMany(
+            FoodAlchemistTargetGroup::class,
+            'foodalchemist_format_target_groups',
+            'format_id',
+            'target_group_id'
+        );
     }
 
     /** Marketing-Bildwelt (Galerie), in Reihenfolge. */
