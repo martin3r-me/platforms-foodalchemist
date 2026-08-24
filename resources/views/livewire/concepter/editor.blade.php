@@ -881,7 +881,7 @@
                 @if($concept)
                     <div class="rounded-xl border border-black/5 p-3 space-y-2" data-concept-vk>
                         <div class="flex items-center justify-between">
-                            <span class="{{ $label }}">VK-Preis / Person</span>
+                            <span class="{{ $label }}">{{ $istPaket ? 'Paketpreis / Person' : 'VK-Preis / Person' }}</span>
                             <div class="flex gap-1">
                                 <button type="button" wire:click="setPreisModus('auto')" class="{{ $pill }} {{ ($form['price_mode'] ?? 'auto') === 'auto' ? $variantPill['primary'] : $variantPill['secondary'] }}">automatisch (Summe)</button>
                                 <button type="button" wire:click="setPreisModus('manuell')" class="{{ $pill }} {{ ($form['price_mode'] ?? 'auto') === 'manuell' ? $variantPill['primary'] : $variantPill['secondary'] }}">manuell</button>
@@ -893,7 +893,7 @@
                         </div>
                         @if(($form['price_mode'] ?? 'auto') === 'manuell')
                             <div class="flex items-center gap-2">
-                                <label class="{{ $label }}">Fixer VK / Person</label>
+                                <label class="{{ $label }}">{{ $istPaket ? 'Paketpreis (Gesamt) / Person' : 'Fixer VK / Person' }}</label>
                                 <input type="number" step="0.01" min="0" wire:model.blur="form.price_per_person_manual" wire:change="speichern" class="{{ $input }} w-32 text-right tabular-nums" placeholder="z. B. 24,90" />
                                 <span class="text-[11px] text-gray-500">überschreibt die Summe — EK bleibt als Basis sichtbar</span>
                             </div>
