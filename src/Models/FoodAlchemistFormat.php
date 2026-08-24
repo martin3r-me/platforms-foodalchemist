@@ -109,16 +109,25 @@ class FoodAlchemistFormat extends Model
     }
 
     /**
-     * Read-only Preis-Range (€/Person) über die Editionen — reine Reduktion der
-     * gespeicherten Caches, KEINE eigene Formel, KEIN Recompute. Editionen sind
-     * Alternativen (Showcase), daher Range statt Summe.
+     * Read-only Preis-Range (€/Person) über die referenzierten Concepts — reine
+     * Reduktion der gespeicherten Caches, KEINE eigene Formel, KEIN Recompute.
+     * Editionen (Concept-Referenzen) sind Alternativen (Showcase), daher Range statt Summe.
+     *
+     * F2-Cutover: primär über die type=concept-Slots (Referenz-Modell); solange ein
+     * Format nur Alt-Editionen (`format_id`) hat, fällt die Range darauf zurück (Back-Compat,
+     * F2e entfernt den Fallback). Union-frei — es zählt genau EINE Quelle je Format.
      *
      * @return array{min: ?float, max: ?float}
      */
     public function priceRange(): array
     {
-        $werte = $this->editions
-            ->map(fn ($e) => $e->price_per_person_cache !== null ? (float) $e->price_per_person_cache : null)
+        $conceptSlots = $this->slots->where('type', 'concept');
+        $caches = $conceptSlots->isNotEmpty()
+            ? $conceptSlots->map(fn ($s) => $s->concept?->price_per_person_cache)
+            : $this->editions->map(fn ($e) => $e->price_per_person_cache);
+
+        $werte = $caches
+            ->map(fn ($v) => $v !== null ? (float) $v : null)
             ->filter(fn ($v) => $v !== null && $v > 0)
             ->values();
 

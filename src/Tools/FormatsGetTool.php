@@ -44,6 +44,10 @@ class FormatsGetTool extends FoodAlchemistTool implements ToolContract, ToolMeta
             return ToolResult::error('Format nicht sichtbar/vorhanden.', 'NOT_FOUND');
         }
 
+        // F2-Cutover: der Aufbau liegt in den Slots (Concept-Referenzen + Struktur-Blöcke).
+        // `editions` = die referenzierten Concepts (Contract-stabil), `slots` = der volle Aufbau.
+        $conceptSlots = $f->slots->where('type', 'concept');
+
         return ToolResult::success([
             'format' => [
                 'id' => $f->id, 'name' => $f->name, 'consumer_name' => $f->consumer_name,
@@ -51,12 +55,18 @@ class FormatsGetTool extends FoodAlchemistTool implements ToolContract, ToolMeta
                 'customer' => $f->customer, 'status' => $f->status,
                 'price_range' => $f->priceRange(),
             ],
-            'editions' => $f->editions->map(fn ($e) => [
-                'concept_id' => $e->id, 'name' => $e->name, 'consumer_name' => $e->consumer_name,
-                // Phase D: Unterkapitel-Wording (Foodbook-Kapitel-Parität)
-                'claim' => $e->claim, 'description' => $e->description,
-                'status' => $e->status, 'position' => (int) $e->format_position,
-                'price_per_person' => $e->price_per_person_cache !== null ? (float) $e->price_per_person_cache : null,
+            'editions' => $conceptSlots->values()->map(fn ($s) => [
+                'slot_id' => $s->id,
+                'concept_id' => $s->concept_id, 'name' => $s->concept?->name, 'consumer_name' => $s->concept?->consumer_name,
+                // Unterkapitel-Wording (Foodbook-Kapitel-Parität) — geteiltes Concept-Wording
+                'claim' => $s->concept?->claim, 'description' => $s->concept?->description,
+                'status' => $s->concept?->status, 'position' => (int) $s->position,
+                'price_per_person' => $s->concept?->price_per_person_cache !== null ? (float) $s->concept->price_per_person_cache : null,
+            ])->all(),
+            'slots' => $f->slots->map(fn ($s) => [
+                'slot_id' => $s->id, 'type' => $s->type, 'position' => (int) $s->position,
+                'concept_id' => $s->concept_id,
+                'title' => $s->title, 'text_content' => $s->text_content, 'height' => $s->height,
             ])->all(),
             'images' => $f->images->map(fn ($i) => [
                 'id' => $i->id, 'caption' => $i->caption, 'is_hero' => (bool) $i->is_hero,

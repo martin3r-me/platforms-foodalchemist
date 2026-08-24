@@ -7,6 +7,7 @@ use Livewire\Attributes\On;
 use Livewire\Component;
 use Livewire\WithFileUploads;
 use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
+use Platform\FoodAlchemist\Services\ConceptService;
 use Platform\FoodAlchemist\Services\FormatService;
 use Platform\FoodAlchemist\Services\WordingResolver;
 
@@ -34,6 +35,13 @@ class Editor extends Component
     /** Phase D: Name der inline neu anzulegenden Edition (Concepter 2.0). */
     public string $neueEditionName = '';
 
+    /**
+     * F2 (Aufbau-Tab, „Conceptor eine Ebene höher"): Ziel-Position fürs gezielte Einfügen —
+     * die nächste neue Position (Concept-Ref oder Struktur-Block) landet direkt HINTER diesem
+     * Slot (null = ans Ende). Spiegelt Concepter::$einfuegenNachId.
+     */
+    public ?int $einfuegenNachId = null;
+
     /** @var \Livewire\Features\SupportFileUploads\TemporaryUploadedFile|null */
     public $bildUpload = null;
 
@@ -42,7 +50,7 @@ class Editor extends Component
     #[On('formate-editor.oeffnen')]
     public function oeffnen(?int $id): void
     {
-        $this->reset(['form', 'editionSuche', 'bildUpload', 'fehler']);
+        $this->reset(['form', 'editionSuche', 'neueEditionName', 'einfuegenNachId', 'bildUpload', 'fehler']);
         $this->id = $id;
         $this->tab = 'identitaet';
         if ($id === null) {
@@ -100,7 +108,7 @@ class Editor extends Component
     public function beimSchliessen(?string $name = null): void
     {
         if ($name === 'formate-editor') {
-            $this->reset(['form', 'editionSuche', 'bildUpload', 'fehler']);
+            $this->reset(['form', 'editionSuche', 'neueEditionName', 'einfuegenNachId', 'bildUpload', 'fehler']);
             $this->id = null;
         }
     }
@@ -121,15 +129,66 @@ class Editor extends Component
         $this->dispatch('formate-gespeichert');
     }
 
-    // ── Editionen ────────────────────────────────────────────────────────────
+    // ── Aufbau / Slots (F2: „Conceptor eine Ebene höher") ─────────────────────
+    // Ein Format-Slot referenziert ein ganzes Concept (type=concept) ODER ist ein
+    // Struktur-Block (header/text/spacer). Alle Struktur-Edits persistieren sofort
+    // über den FormatService (Slot-API). Spiegelt Concepter::positionEinfuegen/blockHinzu.
 
-    public function editionZuordnen(int $conceptId, FormatService $formats): void
+    /** Ziel-Position fürs Einfügen setzen/abwählen — die nächste neue Position landet darunter. */
+    public function einfuegenZiel(?int $slotId): void
+    {
+        $this->einfuegenNachId = ($slotId !== null && $this->einfuegenNachId === $slotId) ? null : $slotId;
+    }
+
+    /** Bestehendes Concept als Aufbau-Position (Referenz) einfügen. */
+    public function conceptEinfuegen(int $conceptId, FormatService $formats): void
     {
         if ($this->id === null) {
             return;
         }
         try {
-            $formats->attachEdition($this->team(), $this->id, $conceptId);
+            $slot = $formats->slotConceptEinfuegen($this->team(), $this->id, $conceptId, $this->einfuegenNachId);
+        } catch (\Throwable $e) {
+            $this->fehler = $e->getMessage();
+
+            return;
+        }
+        // Folge-Einfügungen ans selbe Ziel stapeln in natürlicher Reihenfolge (Concepter-UX).
+        if ($this->einfuegenNachId !== null) {
+            $this->einfuegenNachId = $slot->id;
+        }
+        $this->fehler = null;
+        $this->dispatch('formate-gespeichert');
+    }
+
+    /** Struktur-Block (header|text|spacer) einfügen. */
+    public function blockHinzu(string $type, FormatService $formats): void
+    {
+        if ($this->id === null) {
+            return;
+        }
+        try {
+            $slot = $formats->slotBlockEinfuegen($this->team(), $this->id, $type, [], $this->einfuegenNachId);
+        } catch (\Throwable $e) {
+            $this->fehler = $e->getMessage();
+
+            return;
+        }
+        if ($this->einfuegenNachId !== null) {
+            $this->einfuegenNachId = $slot->id;
+        }
+        $this->fehler = null;
+        $this->dispatch('formate-gespeichert');
+    }
+
+    /** Struktur-Block-Feld (title|text_content|height) inline speichern. */
+    public function blockSpeichern(int $slotId, string $feld, $wert, FormatService $formats): void
+    {
+        if (! in_array($feld, ['title', 'text_content', 'height'], true)) {
+            return;
+        }
+        try {
+            $formats->slotBlockSpeichern($this->team(), $slotId, [$feld => $wert]);
         } catch (\Throwable $e) {
             $this->fehler = $e->getMessage();
 
@@ -138,10 +197,14 @@ class Editor extends Component
         $this->dispatch('formate-gespeichert');
     }
 
-    public function editionLoesen(int $conceptId, FormatService $formats): void
+    /** Aufbau-Position (Concept-Ref oder Block) entfernen. */
+    public function slotEntfernen(int $slotId, FormatService $formats): void
     {
+        if ($this->einfuegenNachId === $slotId) {
+            $this->einfuegenNachId = null;
+        }
         try {
-            $formats->detachEdition($this->team(), $conceptId);
+            $formats->slotEntfernen($this->team(), $slotId);
         } catch (\Throwable $e) {
             $this->fehler = $e->getMessage();
 
@@ -150,15 +213,29 @@ class Editor extends Component
         $this->dispatch('formate-gespeichert');
     }
 
-    /** Edition eine Position nach oben/unten (dir = -1|1). */
-    public function editionVerschieben(int $conceptId, int $dir, FormatService $formats): void
+    /** Slot direkt hinter einen anderen ziehen (null = an den Anfang). */
+    public function slotVerschieben(int $slotId, ?int $afterSlotId, FormatService $formats): void
+    {
+        try {
+            $formats->slotVerschieben($this->team(), $slotId, $afterSlotId);
+        } catch (\Throwable $e) {
+            $this->fehler = $e->getMessage();
+
+            return;
+        }
+        $this->dispatch('formate-gespeichert');
+    }
+
+    /** Aufbau-Position eine Stelle nach oben/unten (dir = -1|1) — ↑/↓-Buttons. */
+    public function slotHochRunter(int $slotId, int $dir, FormatService $formats): void
     {
         if ($this->id === null) {
             return;
         }
-        $ids = FoodAlchemistConcept::where('format_id', $this->id)
-            ->orderBy('format_position')->orderBy('name')->pluck('id')->all();
-        $pos = array_search($conceptId, $ids, true);
+        $ids = $this->team() && ($f = $formats->detail($this->team(), $this->id)) !== null
+            ? $f->slots->pluck('id')->map(fn ($v) => (int) $v)->all()
+            : [];
+        $pos = array_search($slotId, $ids, true);
         if ($pos === false) {
             return;
         }
@@ -167,40 +244,62 @@ class Editor extends Component
             return;
         }
         [$ids[$pos], $ids[$neu]] = [$ids[$neu], $ids[$pos]];
-        $formats->reorderEditions($this->team(), $this->id, $ids);
+        $formats->slotsNeuOrdnen($this->team(), $this->id, $ids);
         $this->dispatch('formate-gespeichert');
     }
 
-    /** Phase D: Kunden-Wording einer Edition (Unterkapitel) pflegen — Titel/Claim/Hinführung. */
-    public function editionWordingSpeichern(int $conceptId, string $field, ?string $value, FormatService $formats): void
+    /**
+     * Kunden-Wording eines referenzierten Concepts (Titel/Claim/Hinführung) pflegen. Unter dem
+     * Referenz-Modell ist das Wording geteilt — der Concept-Slot editiert das Concept SELBST
+     * (ConceptService::update), nicht eine format-lokale Kopie.
+     */
+    public function conceptWordingSpeichern(int $conceptId, string $feld, ?string $wert): void
     {
-        if ($this->id === null || ! in_array($field, ['consumer_name', 'claim', 'description'], true)) {
+        if ($this->id === null || ! in_array($feld, ['consumer_name', 'claim', 'description'], true)) {
             return;
         }
         try {
-            $formats->updateEditionWording($this->team(), $this->id, $conceptId, [$field => $value]);
+            app(ConceptService::class)->update($this->team(), $conceptId, [$feld => $wert]);
         } catch (\Throwable $e) {
             $this->fehler = $e->getMessage();
 
             return;
         }
+        $this->fehler = null;
         $this->dispatch('formate-gespeichert');
     }
 
-    /** Phase D: eine neue Edition inline anlegen (mit Auto-Sektions-Gerüst). */
+    /**
+     * Eine NEUE Edition (Concept, aktiv) anlegen, ihr Standard-Sektions-Gerüst seeden und als
+     * Aufbau-Position (Referenz) einfügen. Ersetzt den alten createEdition/attachEdition-Pfad
+     * (kein `format_id`-Besitz mehr — reine Slot-Referenz).
+     */
     public function neueEdition(FormatService $formats): void
     {
         if ($this->id === null) {
             return;
         }
         try {
-            $formats->createEdition($this->team(), $this->id, $this->neueEditionName, true);
+            $concepts = app(ConceptService::class);
+            $concept = $concepts->create($this->team(), [
+                'name' => trim($this->neueEditionName) !== '' ? trim($this->neueEditionName) : 'Neue Edition',
+                'status' => 'active',
+            ]);
+            // Auto-Sektions-Gerüst (Header-Blöcke am Concept selbst) — „automatisch"-Grundgerüst.
+            foreach (FormatService::SEKTIONS_GERUEST as $sektion) {
+                $concepts->addBlock($this->team(), $concept->id, 'header', ['title' => $sektion]);
+            }
+            $slot = $formats->slotConceptEinfuegen($this->team(), $this->id, $concept->id, $this->einfuegenNachId);
+            if ($this->einfuegenNachId !== null) {
+                $this->einfuegenNachId = $slot->id;
+            }
         } catch (\Throwable $e) {
             $this->fehler = $e->getMessage();
 
             return;
         }
         $this->neueEditionName = '';
+        $this->fehler = null;
         $this->dispatch('formate-gespeichert');
     }
 
@@ -265,32 +364,32 @@ class Editor extends Component
     {
         $format = $this->id !== null ? $formats->detail($this->team(), $this->id) : null;
 
-        // Editionen-Picker: team-eigene, standardisierte Concepts, die noch keinem
-        // ANDEREN Format zugeordnet sind (frei ODER schon in diesem Format).
+        // F2: Aufbau-Positionen (Slots) in Reihenfolge — Concept-Referenzen + Struktur-Blöcke.
+        $slots = collect();
+        // Concept-Picker: team-eigene, aktive Konzepte (unter Referenz kann ein Concept in
+        // mehreren Formaten stehen — daher KEIN `format_id`-Filter mehr, sondern der Service-Kandidat).
         $kandidaten = collect();
-        if ($this->id !== null && $this->tab === 'editionen') {
-            $team = $this->team();
-            $kandidaten = FoodAlchemistConcept::visibleToTeam($team)
-                ->konzepte()   // Kaskade: Editionen sind Konzepte, keine Pakete
-                ->where('team_id', $team->id)
-                ->standardisiert()
-                ->whereNull('format_id')   // nur freie Concepts; zugeordnete stehen in der Editionen-Liste
-                ->when($this->editionSuche !== '', fn ($q) => $q->where('name', 'like', '%' . $this->editionSuche . '%'))
-                ->orderBy('name')
-                ->limit(50)
-                ->get(['id', 'name', 'status', 'format_id', 'price_per_person_cache']);
-        }
-
-        // Phase D: Live-Vorschau je Edition (Sektionen + Gerichte via WordingResolver) —
-        // dieselbe Auflösung wie im Foodbook-Render, damit die Vorschau exakt dem Kunden-Dokument gleicht.
         $editionMenus = [];
         if ($this->id !== null && $this->tab === 'editionen' && $format !== null) {
-            $wording = app(WordingResolver::class);
-            $eds = FoodAlchemistConcept::where('format_id', $this->id)
-                ->with(['slots.dish:id,name,sales_wording_standard', 'slots.package.dishes.dish:id,name,sales_wording_standard'])
-                ->get();
-            foreach ($eds as $ed) {
-                $editionMenus[$ed->id] = $wording->gerichtZeilen($ed);
+            $slots = $format->slots()
+                ->with(['concept:id,name,consumer_name,claim,description,status,price_per_person_cache'])
+                ->orderBy('position')->get();
+
+            $kandidaten = $formats->conceptKandidaten($this->team(), $this->editionSuche);
+
+            // Live-Vorschau je Concept-Slot (Sektionen + Gerichte via WordingResolver) — dieselbe
+            // Auflösung wie im Foodbook-Render, gekeyed nach SLOT-ID (nicht Concept-ID).
+            $conceptSlots = $slots->where('type', 'concept');
+            $conceptIds = $conceptSlots->pluck('concept_id')->filter()->unique()->all();
+            if ($conceptIds !== []) {
+                $wording = app(WordingResolver::class);
+                $geladen = FoodAlchemistConcept::whereIn('id', $conceptIds)
+                    ->with(['slots.dish:id,name,sales_wording_standard', 'slots.package.dishes.dish:id,name,sales_wording_standard'])
+                    ->get()->keyBy('id');
+                foreach ($conceptSlots as $slot) {
+                    $c = $geladen->get($slot->concept_id);
+                    $editionMenus[$slot->id] = $c !== null ? $wording->gerichtZeilen($c) : [];
+                }
             }
         }
 
@@ -309,6 +408,7 @@ class Editor extends Component
 
         return view('foodalchemist::livewire.formate.editor', [
             'format' => $format,
+            'aufbauSlots' => $slots,
             'kandidaten' => $kandidaten,
             'editionMenus' => $editionMenus,
             'servierformen' => $servierformen,

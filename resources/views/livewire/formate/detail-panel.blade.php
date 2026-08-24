@@ -47,12 +47,15 @@
                 </div>
             @endif
 
-            {{-- Editionen --}}
+            {{-- Editionen (F2: referenzierte Concepts der type=concept-Slots) --}}
+            @php($conceptSlots = $format->slots->where('type', 'concept'))
             <div>
-                <span class="{{ $label }}">Editionen ({{ $format->editions->count() }})</span>
+                <span class="{{ $label }}">Editionen ({{ $conceptSlots->count() }})</span>
                 <div class="mt-1 space-y-1">
-                    @forelse($format->editions as $e)
-                        <div wire:key="fed-{{ $e->id }}" class="flex items-center justify-between gap-2 text-sm px-2 py-1 rounded-lg bg-black/[0.03]">
+                    @forelse($conceptSlots as $s)
+                        @php($e = $s->concept)
+                        @continue($e === null)
+                        <div wire:key="fed-{{ $s->id }}" class="flex items-center justify-between gap-2 text-sm px-2 py-1 rounded-lg bg-black/[0.03]">
                             <span class="truncate text-gray-800">{{ $e->consumer_name ?: $e->name }}</span>
                             <span class="tabular-nums text-gray-500 shrink-0">{{ $e->price_per_person_cache !== null ? number_format((float) $e->price_per_person_cache, 2, ',', '.') . ' €' : '—' }}</span>
                         </div>

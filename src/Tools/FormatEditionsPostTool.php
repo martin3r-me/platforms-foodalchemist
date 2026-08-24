@@ -18,8 +18,9 @@ class FormatEditionsPostTool extends FoodAlchemistTool implements ToolContract, 
 
     public function getDescription(): string
     {
-        return 'Ordnet ein bestehendes Konzept (Zusammenstellung) als Edition einem Format zu. '
-            . 'Guardet BEIDE Seiten (Format UND Konzept müssen team-eigen sein). Kein Recompute.';
+        return 'Fügt ein bestehendes Konzept (Zusammenstellung) als Aufbau-Position (Referenz) in ein Format ein. '
+            . 'F2-Referenz-Modell: ein Konzept kann in mehreren Formaten stehen (kein format_id-Besitz mehr). '
+            . 'Optional direkt hinter einer Ziel-Position (after_slot_id). Guardet das Format (team-eigen). Kein Recompute.';
     }
 
     public function getSchema(): array
@@ -29,7 +30,7 @@ class FormatEditionsPostTool extends FoodAlchemistTool implements ToolContract, 
             'properties' => [
                 'format_id' => ['type' => 'integer'],
                 'concept_id' => ['type' => 'integer'],
-                'position' => ['type' => 'integer', 'description' => 'optionale Reihenfolge-Position'],
+                'after_slot_id' => ['type' => 'integer', 'description' => 'optional: neue Position direkt hinter diesem Slot einsortieren (sonst ans Ende)'],
             ],
             'required' => ['format_id', 'concept_id'],
         ];
@@ -43,11 +44,11 @@ class FormatEditionsPostTool extends FoodAlchemistTool implements ToolContract, 
         }
 
         try {
-            $c = app(FormatService::class)->attachEdition(
+            $slot = app(FormatService::class)->slotConceptEinfuegen(
                 $team,
                 (int) $arguments['format_id'],
                 (int) $arguments['concept_id'],
-                isset($arguments['position']) ? (int) $arguments['position'] : null,
+                isset($arguments['after_slot_id']) ? (int) $arguments['after_slot_id'] : null,
             );
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
             return ToolResult::error('Format oder Konzept nicht sichtbar/vorhanden.', 'NOT_FOUND');
@@ -56,7 +57,10 @@ class FormatEditionsPostTool extends FoodAlchemistTool implements ToolContract, 
         }
 
         return ToolResult::success([
-            'edition' => ['concept_id' => $c->id, 'name' => $c->name, 'format_id' => $c->format_id, 'position' => (int) $c->format_position],
+            'edition' => [
+                'slot_id' => $slot->id, 'concept_id' => (int) $slot->concept_id,
+                'format_id' => (int) $slot->format_id, 'position' => (int) $slot->position,
+            ],
         ]);
     }
 

@@ -54,7 +54,7 @@ it('updateEditionWording lehnt ein Concept ab, das nicht zu DIESEM Format gehör
         ->toThrow(Illuminate\Database\Eloquent\ModelNotFoundException::class);
 });
 
-it('Editor: neue Edition inline anlegen + Wording pro Unterkapitel speichern', function () {
+it('Editor: neue Edition inline anlegen (als Concept-Slot) + Wording des Concepts speichern', function () {
     $this->actingAs($this->makeUser($this->rootTeam));
     $f = $this->fsvc->create($this->rootTeam, ['name' => 'CHEFS.CORNER']);
 
@@ -62,11 +62,41 @@ it('Editor: neue Edition inline anlegen + Wording pro Unterkapitel speichern', f
         ->set('neueEditionName', 'FARM TO TABLE')->call('neueEdition')
         ->assertDispatched('formate-gespeichert');
 
-    $ed = FoodAlchemistConcept::where('format_id', $f->id)->firstOrFail();
+    // F2: die Edition ist eine Concept-Referenz (Slot), kein format_id-Besitz.
+    $slot = $f->slots()->where('type', 'concept')->firstOrFail();
+    $ed = $slot->concept;
     expect($ed->name)->toBe('FARM TO TABLE')
+        ->and($ed->status)->toBe('active')
+        ->and($ed->format_id)->toBeNull()
         ->and($ed->slots()->where('type', 'header')->count())->toBe(count(FormatService::SEKTIONS_GERUEST));
 
-    $t->call('editionWordingSpeichern', $ed->id, 'claim', 'Natur pur auf dem Teller')
+    $t->call('conceptWordingSpeichern', $ed->id, 'claim', 'Natur pur auf dem Teller')
         ->assertDispatched('formate-gespeichert');
     expect(FoodAlchemistConcept::find($ed->id)->claim)->toBe('Natur pur auf dem Teller');
+});
+
+it('Editor: Konzept einfügen · Struktur-Block · Reihenfolge · entfernen (Aufbau auf Slots)', function () {
+    $this->actingAs($this->makeUser($this->rootTeam));
+    $f = $this->fsvc->create($this->rootTeam, ['name' => 'CHEFS.CORNER']);
+    $c = FoodAlchemistConcept::create(['team_id' => $this->rootTeam->id, 'name' => 'FUTURE FLAVORS', 'status' => 'active']);
+
+    $t = Livewire::test(Editor::class)->call('oeffnen', $f->id)->call('setTab', 'editionen');
+    // Konzept als Position + einen Header-Block einfügen.
+    $t->call('conceptEinfuegen', $c->id)->assertDispatched('formate-gespeichert');
+    $t->call('blockHinzu', 'header')->assertDispatched('formate-gespeichert');
+
+    $slots = $f->slots()->orderBy('position')->get();
+    expect($slots)->toHaveCount(2)
+        ->and($slots[0]->type)->toBe('concept')
+        ->and($slots[1]->type)->toBe('header');
+
+    // Reihenfolge tauschen: Header nach oben.
+    $t->call('slotHochRunter', $slots[1]->id, -1)->assertDispatched('formate-gespeichert');
+    expect($f->slots()->orderBy('position')->pluck('type')->all())->toBe(['header', 'concept']);
+
+    // Concept-Slot entfernen — Konzept bleibt bestehen.
+    $conceptSlot = $f->slots()->where('type', 'concept')->firstOrFail();
+    $t->call('slotEntfernen', $conceptSlot->id)->assertDispatched('formate-gespeichert');
+    expect($f->slots()->count())->toBe(1)
+        ->and(FoodAlchemistConcept::find($c->id))->not->toBeNull();
 });

@@ -52,17 +52,22 @@ it('Editor: lädt Identität, speichert, öffnet das Modal', function () {
     expect(FoodAlchemistFormat::find($f->id)->claim)->toBe('WORLD ON A PLATE');
 });
 
-it('Editor: ordnet eine freie Edition zu und löst sie wieder', function () {
+it('Editor: fügt ein Konzept als Aufbau-Position ein und entfernt es wieder', function () {
     $f = $this->svc->create($this->rootTeam, ['name' => 'CHEFS.CORNER']);
-    $c = FoodAlchemistConcept::create(['team_id' => $this->rootTeam->id, 'name' => 'FUTURE FLAVORS']);
+    // F2: der Picker zeigt aktive Konzepte (Referenz — kein format_id-Filter mehr).
+    $c = FoodAlchemistConcept::create(['team_id' => $this->rootTeam->id, 'name' => 'FUTURE FLAVORS', 'status' => 'active']);
 
     $t = Livewire::test(Editor::class)->call('oeffnen', $f->id)->call('setTab', 'editionen');
-    $t->assertSee('FUTURE FLAVORS');   // im Picker (freie Konzepte)
-    $t->call('editionZuordnen', $c->id)->assertDispatched('formate-gespeichert');
-    expect((int) FoodAlchemistConcept::find($c->id)->format_id)->toBe($f->id);
-
-    $t->call('editionLoesen', $c->id)->assertDispatched('formate-gespeichert');
+    $t->assertSee('FUTURE FLAVORS');   // im Picker (aktive Konzepte)
+    $t->call('conceptEinfuegen', $c->id)->assertDispatched('formate-gespeichert');
+    $slot = $f->slots()->where('type', 'concept')->firstOrFail();
+    expect((int) $slot->concept_id)->toBe($c->id);
+    // Referenz-Modell: das Konzept selbst bleibt frei (kein format_id).
     expect(FoodAlchemistConcept::find($c->id)->format_id)->toBeNull();
+
+    $t->call('slotEntfernen', $slot->id)->assertDispatched('formate-gespeichert');
+    expect($f->slots()->count())->toBe(0);
+    expect(FoodAlchemistConcept::find($c->id))->not->toBeNull();   // Konzept bleibt bestehen
 });
 
 it('DetailPanel: zeigt das gewählte Format und löscht es', function () {

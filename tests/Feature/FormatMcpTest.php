@@ -4,6 +4,8 @@ use Platform\Core\Contracts\ToolContext;
 use Platform\Core\Tools\ToolRegistry;
 use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
 use Platform\FoodAlchemist\Models\FoodAlchemistFormat;
+use Platform\FoodAlchemist\Models\FoodAlchemistFormatSlot;
+use Platform\FoodAlchemist\Services\FormatService;
 use Platform\FoodAlchemist\Tests\Support\SeedsTeamHierarchy;
 use Platform\FoodAlchemist\Tests\TestCase;
 
@@ -29,26 +31,44 @@ it('formats.POST: legt Format als Entwurf an (draft-on-create)', function () {
         ->and($res->data['format']['origin'])->toBe('eigen');
 });
 
-it('formats.GET: liefert Editionen + Preis-Range', function () {
+it('formats.GET: liefert Editionen (Concept-Slots) + Preis-Range', function () {
+    // F2: Editionen sind Concept-Referenz-Slots (kein format_id-Besitz mehr).
     $f = FoodAlchemistFormat::create(['team_id' => $this->rootTeam->id, 'name' => 'CHEFS.CORNER']);
-    FoodAlchemistConcept::create(['team_id' => $this->rootTeam->id, 'name' => 'FUTURE FLAVORS', 'format_id' => $f->id, 'format_position' => 0, 'price_per_person_cache' => 47.50]);
-    FoodAlchemistConcept::create(['team_id' => $this->rootTeam->id, 'name' => 'FARM TO TABLE', 'format_id' => $f->id, 'format_position' => 1, 'price_per_person_cache' => 49.50]);
+    $c1 = FoodAlchemistConcept::create(['team_id' => $this->rootTeam->id, 'name' => 'FUTURE FLAVORS', 'status' => 'active', 'price_per_person_cache' => 47.50]);
+    $c2 = FoodAlchemistConcept::create(['team_id' => $this->rootTeam->id, 'name' => 'FARM TO TABLE', 'status' => 'active', 'price_per_person_cache' => 49.50]);
+    app(FormatService::class)->slotConceptEinfuegen($this->rootTeam, $f->id, $c1->id);
+    app(FormatService::class)->slotConceptEinfuegen($this->rootTeam, $f->id, $c2->id);
 
     $res = ($this->tool)('foodalchemist.formats.GET', ['format_id' => $f->id]);
     expect($res->success)->toBeTrue()
         ->and($res->data['editions'])->toHaveCount(2)
         ->and($res->data['editions'][0]['name'])->toBe('FUTURE FLAVORS')
+        ->and($res->data['slots'])->toHaveCount(2)
         ->and($res->data['format']['price_range'])->toBe(['min' => 47.50, 'max' => 49.50]);
 });
 
-it('format_editions.POST: ordnet ein Konzept als Edition zu', function () {
+it('format_editions.POST: fügt ein Konzept als Aufbau-Position (Slot) ein', function () {
     $f = FoodAlchemistFormat::create(['team_id' => $this->rootTeam->id, 'name' => 'CHEFS.CORNER']);
-    $c = FoodAlchemistConcept::create(['team_id' => $this->rootTeam->id, 'name' => 'URBAN & FLAVOUR']);
+    $c = FoodAlchemistConcept::create(['team_id' => $this->rootTeam->id, 'name' => 'URBAN & FLAVOUR', 'status' => 'active']);
 
     $res = ($this->tool)('foodalchemist.format_editions.POST', ['format_id' => $f->id, 'concept_id' => $c->id]);
     expect($res->success)->toBeTrue()
-        ->and((int) $res->data['edition']['format_id'])->toBe($f->id);
-    expect((int) FoodAlchemistConcept::find($c->id)->format_id)->toBe($f->id);
+        ->and((int) $res->data['edition']['format_id'])->toBe($f->id)
+        ->and((int) $res->data['edition']['concept_id'])->toBe($c->id);
+    // Referenz-Modell: es entsteht ein Concept-Slot, das Konzept selbst bleibt frei (kein format_id).
+    expect(FoodAlchemistFormatSlot::where('format_id', $f->id)->where('type', 'concept')->where('concept_id', $c->id)->exists())->toBeTrue()
+        ->and(FoodAlchemistConcept::find($c->id)->format_id)->toBeNull();
+});
+
+it('format_editions.DELETE: entfernt die Aufbau-Position per slot_id (Konzept bleibt)', function () {
+    $f = FoodAlchemistFormat::create(['team_id' => $this->rootTeam->id, 'name' => 'CHEFS.CORNER']);
+    $c = FoodAlchemistConcept::create(['team_id' => $this->rootTeam->id, 'name' => 'URBAN & FLAVOUR', 'status' => 'active']);
+    $slot = app(FormatService::class)->slotConceptEinfuegen($this->rootTeam, $f->id, $c->id);
+
+    $res = ($this->tool)('foodalchemist.format_editions.DELETE', ['slot_id' => $slot->id]);
+    expect($res->success)->toBeTrue()
+        ->and(FoodAlchemistFormatSlot::find($slot->id))->toBeNull()
+        ->and(FoodAlchemistConcept::find($c->id))->not->toBeNull();   // Referenz gelöst, Konzept bleibt
 });
 
 it('Tenancy: PUT auf ein fremdes (Kind-)Format ist NOT_FOUND aus Root-Kontext', function () {

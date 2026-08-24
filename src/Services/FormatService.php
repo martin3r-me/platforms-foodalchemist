@@ -36,7 +36,8 @@ class FormatService
     {
         return FoodAlchemistFormat::visibleToTeam($team)
             ->with(['eventType:id,name', 'servingForm:id,label']) // F1: Facetten-Spalte im Browser
-            ->withCount('editions')
+            // F2-Cutover: Editionen-Spalte zählt die Concept-Referenz-Slots (nicht mehr format_id).
+            ->withCount(['slots as editions_count' => fn ($q) => $q->where('type', 'concept')])
             ->when(($filters['search'] ?? '') !== '', fn ($q) => \Platform\FoodAlchemist\Support\Suche::likeAny(
                 $q, ['name', "COALESCE(consumer_name, '')", "COALESCE(claim, '')"], $filters['search']))
             ->when(($filters['status'] ?? '') !== '', fn ($q) => $q->where('status', $filters['status']))
@@ -56,6 +57,9 @@ class FormatService
     {
         return FoodAlchemistFormat::visibleToTeam($team)
             ->with([
+                // F2-Cutover: der Editor/Detail liest den Aufbau aus den Slots (Concept-Referenzen +
+                // Struktur-Blöcke). `editions` bleibt eager-geladen (Back-Compat + priceRange-Fallback).
+                'slots.concept:id,name,consumer_name,claim,description,status,price_per_person_cache',
                 'editions:id,name,consumer_name,claim,description,status,format_id,format_position,price_per_person_cache',
                 'images' => fn ($q) => $q->orderBy('sort_order'),
                 // F1: Facetten fürs Detail/Editor
@@ -466,7 +470,10 @@ class FormatService
     /** @return array{min: ?float, max: ?float} */
     public function priceRange(Team $team, int $id): array
     {
-        $format = FoodAlchemistFormat::visibleToTeam($team)->with('editions:id,format_id,price_per_person_cache')->findOrFail($id);
+        // F2-Cutover: primär über die Concept-Referenz-Slots; editions als Back-Compat-Fallback.
+        $format = FoodAlchemistFormat::visibleToTeam($team)
+            ->with(['slots.concept:id,price_per_person_cache', 'editions:id,format_id,price_per_person_cache'])
+            ->findOrFail($id);
 
         return $format->priceRange();
     }
