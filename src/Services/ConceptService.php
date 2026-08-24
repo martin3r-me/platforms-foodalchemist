@@ -186,6 +186,12 @@ class ConceptService
         }
         $concept->update($update);
 
+        // Preis-Änderung (Modus/manueller VK) muss den Cache nachziehen — sonst zeigen Browser-
+        // Liste, Einbettungen und Foodbook einen veralteten Preis (galt für Concepts UND Pakete).
+        if (array_intersect(['price_mode', 'price_per_person_manual'], array_keys($update)) !== []) {
+            $this->refreshCache($concept);
+        }
+
         return $concept->refresh();
     }
 
