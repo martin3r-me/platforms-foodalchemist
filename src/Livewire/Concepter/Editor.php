@@ -226,14 +226,23 @@ class Editor extends Component
 
     public function geschirrWaehle(int $slotId, string $role, int $itemId): void
     {
-        app(ConceptService::class)->setSlotGeschirr($this->team(), $slotId, $role, $itemId);
+        // Paket spiegelt den Conceptor: dort ist $slotId eine package_dish-ID → PaketService.
+        if ($this->type === 'pakete') {
+            app(PaketService::class)->setGerichtGeschirr($this->team(), $slotId, $role, $itemId);
+        } else {
+            app(ConceptService::class)->setSlotGeschirr($this->team(), $slotId, $role, $itemId);
+        }
         $this->geschirrPickSlotId = null;
         $this->geschirrSuche = '';
     }
 
     public function geschirrEntfernen(int $slotId, string $role): void
     {
-        app(ConceptService::class)->setSlotGeschirr($this->team(), $slotId, $role, null);
+        if ($this->type === 'pakete') {
+            app(PaketService::class)->setGerichtGeschirr($this->team(), $slotId, $role, null);
+        } else {
+            app(ConceptService::class)->setSlotGeschirr($this->team(), $slotId, $role, null);
+        }
     }
 
     public function speichern(): void

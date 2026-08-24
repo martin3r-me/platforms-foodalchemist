@@ -74,7 +74,10 @@ class PaketService
         return FoodAlchemistPaket::visibleToTeam($team)
             ->with(['dishes' => fn ($q) => $q->orderBy('position'),
                 'dishes.dish:id,name,sales_net,sales_gross,ek_total_eur,vat_rate,is_sales_recipe,yield_kg',
-                'dishes.unit:id,slug,display_de'])
+                'dishes.unit:id,slug,display_de',
+                // Geschirr-Tab (2026-08-24): Haupt + Alternative je Posten
+                'dishes.dishwareItem:id,label,rental_price,unit',
+                'dishes.dishwareAltItem:id,label,rental_price,unit'])
             ->find($id);
     }
 
@@ -199,6 +202,23 @@ class PaketService
         // M10R-1: Mengen-Faktor fließt in Nährwert-/Kosten-Rollup → EK + Cache neu.
         $this->recomputePrice($paket->refresh());
         app(ConcepterAggregateService::class)->cachePaket($paket->refresh());
+    }
+
+    /**
+     * Geschirr je Paket-Posten setzen (2026-08-24, spiegelt ConceptService::setSlotGeschirr).
+     * $role ∈ haupt|alt; $itemId=null = entfernen. Reine Zuordnung — kein Preis-Recompute
+     * (Leihpreis/Logistik hängen am Geschirr-Artikel, nicht am Paket-Wareneinsatz).
+     */
+    public function setGerichtGeschirr(Team $team, int $gerichtRowId, string $role, ?int $itemId): void
+    {
+        $row = \Platform\FoodAlchemist\Models\FoodAlchemistPaketGericht::findOrFail($gerichtRowId);
+        $paket = FoodAlchemistPaket::visibleToTeam($team)->findOrFail($row->package_id);
+        $this->guardOwner($paket, $team);   // Schreiben nur auf eigene Pakete
+        if ($itemId !== null && ! \Platform\FoodAlchemist\Models\FoodAlchemistGeschirrItem::visibleToTeam($team)->whereKey($itemId)->exists()) {
+            throw new \RuntimeException('Geschirr-Artikel nicht sichtbar.');
+        }
+        $spalte = $role === 'alt' ? 'tableware_alt_item_id' : 'tableware_item_id';
+        $row->update([$spalte => $itemId]);
     }
 
     /** @param list<int> $ids neue Reihenfolge der paket_gerichte-IDs */

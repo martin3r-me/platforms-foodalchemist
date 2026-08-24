@@ -66,4 +66,16 @@ class FoodAlchemistPaketGericht extends Model
     {
         return $this->presentation();
     }
+
+    /** Geschirr je Paket-Posten (2026-08-24, spiegelt concept_slots): Haupt-Geschirr. */
+    public function dishwareItem(): BelongsTo
+    {
+        return $this->belongsTo(FoodAlchemistGeschirrItem::class, 'tableware_item_id');
+    }
+
+    /** Geschirr je Paket-Posten: Alternative (z. B. anderer Leih-Caterer). */
+    public function dishwareAltItem(): BelongsTo
+    {
+        return $this->belongsTo(FoodAlchemistGeschirrItem::class, 'tableware_alt_item_id');
+    }
 }

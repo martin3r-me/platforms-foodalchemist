@@ -88,7 +88,7 @@
                 'konzept' => $concept ? 'Konzept & Planung' : null,
                 'allergene' => 'Deklaration',
                 'kalkulation' => 'Kalkulation',
-                'geschirr' => $concept ? 'Geschirr' : null,
+                'geschirr' => ($concept || $paket) ? 'Geschirr' : null,
                 'notes' => 'Notizen',
             ]" />
 
@@ -1214,6 +1214,54 @@
                         </div>
                     @empty
                         <p class="text-xs text-gray-500 py-6 text-center">Noch keine Gerichte im Konzept — erst im Aufbau-Tab Gerichte/Basisrezepte einfügen.</p>
+                    @endforelse
+                @elseif($paket)
+                    {{-- Geschirr je Paket-Posten (2026-08-24, spiegelt den Concept-Geschirr-Tab) --}}
+                    <p class="text-[11px] text-gray-500 mb-2">Pro Posten ein Haupt-Geschirr + optional eine Alternative. Pflege den Geschirr-Katalog unter <span class="font-medium">Stammdaten → Geschirr</span>.</p>
+                    @forelse($paket->dishes as $pg)
+                        <div wire:key="paket-geschirr-{{ $pg->id }}" class="rounded-lg border border-black/5 px-3 py-2 mb-2">
+                            <p class="text-xs font-medium text-gray-900 mb-1.5 truncate">{{ $pg->dish?->name ?: 'Posten' }}</p>
+                            <div class="grid grid-cols-2 gap-3">
+                                @foreach(['haupt' => 'Haupt-Geschirr', 'alt' => 'Alternative'] as $role => $rolleLabel)
+                                    @php($item = $role === 'haupt' ? $pg->dishwareItem : $pg->dishwareAltItem)
+                                    <div>
+                                        <label class="{{ $label }} block mb-0.5">{{ $rolleLabel }}</label>
+                                        @if($item)
+                                            <div class="flex items-center gap-2">
+                                                <span class="text-xs text-gray-800 truncate" title="{{ $item->label }}">{{ $item->label }}</span>
+                                                @if($item->rental_price !== null)<span class="{{ $pill }} {{ $variantPill['secondary'] }} shrink-0">{{ number_format((float) $item->rental_price, 2, ',', '.') }} €</span>@endif
+                                            </div>
+                                            <div class="flex items-center gap-2 mt-0.5">
+                                                <button type="button" wire:click="geschirrPicker({{ $pg->id }}, '{{ $role }}')" class="{{ $btnAi }}">ändern</button>
+                                                <button type="button" wire:click="geschirrEntfernen({{ $pg->id }}, '{{ $role }}')" class="{{ $btnGhostXs }} text-rose-500">entfernen</button>
+                                            </div>
+                                        @else
+                                            <button type="button" wire:click="geschirrPicker({{ $pg->id }}, '{{ $role }}')" class="{{ $btnAi }}">+ Geschirr wählen</button>
+                                        @endif
+
+                                        @if($geschirrPickSlotId === $pg->id && $geschirrPickRolle === $role)
+                                            <div class="mt-1.5 rounded-lg border border-violet-500/30 bg-violet-500/[0.04] p-2" wire:key="paket-geschirr-pick-{{ $pg->id }}-{{ $role }}">
+                                                <input type="search" wire:model.live.debounce.300ms="geschirrSuche" placeholder="Geschirr suchen …" class="{{ $input }} !py-1 mb-1" autofocus />
+                                                <div class="space-y-0.5 max-h-48 overflow-y-auto">
+                                                    @forelse($geschirrKandidaten as $kandidat)
+                                                        <button type="button" wire:key="pgk-{{ $pg->id }}-{{ $role }}-{{ $kandidat->id }}"
+                                                                wire:click="geschirrWaehle({{ $pg->id }}, '{{ $role }}', {{ $kandidat->id }})"
+                                                                class="block w-full text-left px-2 py-1 rounded text-[11px] text-gray-700 hover:bg-violet-500/10 transition-colors">
+                                                            {{ $kandidat->label }}
+                                                            <span class="text-gray-500">· {{ $kandidat->supplier?->name }}{{ $kandidat->rental_price !== null ? ' · ' . number_format((float) $kandidat->rental_price, 2, ',', '.') . ' €' : '' }}</span>
+                                                        </button>
+                                                    @empty
+                                                        <p class="text-[11px] text-gray-500 px-2 py-1">{{ trim($geschirrSuche) === '' ? 'Tippen zum Suchen …' : 'Kein Geschirr gefunden.' }}</p>
+                                                    @endforelse
+                                                </div>
+                                            </div>
+                                        @endif
+                                    </div>
+                                @endforeach
+                            </div>
+                        </div>
+                    @empty
+                        <p class="text-xs text-gray-500 py-6 text-center">Noch keine Posten im Paket — erst im Aufbau-Tab hinzufügen.</p>
                     @endforelse
                 @endif
             @endif

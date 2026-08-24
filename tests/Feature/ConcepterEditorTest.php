@@ -354,3 +354,19 @@ it('Paket-Tausch bietet jedes aktive Paket — Rollen-Filter entfernt (2026-08-2
     expect($namen)->toContain('Buffet ohne Rolle')
         ->and($namen)->toContain('Grill B');
 });
+
+it('Paket-Geschirr: Haupt-Geschirr je Posten setzen + entfernen (spiegelt Concept-Geschirr, 2026-08-24)', function () {
+    $geschirr = \Platform\FoodAlchemist\Models\FoodAlchemistGeschirrItem::create([
+        'team_id' => $this->rootTeam->id, 'label' => 'Schüssel klein', 'category' => 'Schüssel',
+    ]);
+    $this->pakete->syncGerichte($this->rootTeam, $this->paket->id, [['sales_recipe_id' => $this->green->id, 'quantity' => 1]]);
+    $row = $this->paket->dishes()->first();
+
+    $comp = Livewire::test(Editor::class)->call('oeffnen', 'pakete', $this->paket->id);
+    // Im Paket-Modus ist die ID eine package_dish-ID → geschirrWaehle geht auf PaketService
+    $comp->call('geschirrWaehle', $row->id, 'haupt', $geschirr->id);
+    expect((int) $row->refresh()->tableware_item_id)->toBe($geschirr->id);
+
+    $comp->call('geschirrEntfernen', $row->id, 'haupt');
+    expect($row->refresh()->tableware_item_id)->toBeNull();
+});
