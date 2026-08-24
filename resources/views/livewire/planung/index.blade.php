@@ -180,7 +180,7 @@
         {{-- Leitstelle: freie 1-Klick-Erstellung — die eine KI-Erstell-Fläche (de-trend). Legt eine
              leichte „Freie Erstellung"-Session (cockpit_frei) an und öffnet den Editor auf dem
              Planung-Tab mit den Regler-Leitplanken. Trend bleibt EIN Input, nicht der Rahmen. --}}
-        <div class="{{ $card }} p-4 relative z-40" x-data="{ fbOpen: @js($fbPanelAuf), neuMenu: false }">
+        <div class="{{ $card }} p-4 relative z-40" x-data="{ fbOpen: @js($fbPanelAuf), skOpen: false, spOpen: false, neuMenu: false }">
             <div class="flex flex-wrap items-center gap-2">
                 {{-- Ein „Neu erstellen"-Knopf (Dominique 2026-08-23) statt sechs Buttons — Dropdown-Menü. --}}
                 <div class="relative" @click.outside="neuMenu = false">
@@ -193,10 +193,12 @@
                         <button wire:click="schnellErstellen('concept')" @click="neuMenu=false" class="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm text-gray-800 hover:bg-violet-500/10 text-left" data-frei-concept>@svg('heroicon-o-squares-2x2', 'w-4 h-4 text-violet-500') Concept</button>
                         <button wire:click="schnellImport" @click="neuMenu=false" class="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm text-gray-800 hover:bg-violet-500/10 text-left" data-frei-import>@svg('heroicon-o-document-arrow-down', 'w-4 h-4 text-violet-500') Rezept importieren</button>
                         <button wire:click="schnellComposer" @click="neuMenu=false" class="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm text-gray-800 hover:bg-violet-500/10 text-left" data-frei-composer>@svg('heroicon-o-sparkles', 'w-4 h-4 text-violet-500') Composer</button>
-                        <button type="button" @click="fbOpen = true; neuMenu=false" class="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm text-gray-800 hover:bg-violet-500/10 text-left" data-frei-foodbook>@svg('heroicon-o-book-open', 'w-4 h-4 text-violet-500') Foodbook aus Brief</button>
+                        <button type="button" @click="fbOpen = true; skOpen=false; spOpen=false; neuMenu=false" class="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm text-gray-800 hover:bg-violet-500/10 text-left" data-frei-foodbook>@svg('heroicon-o-book-open', 'w-4 h-4 text-violet-500') Foodbook aus Brief</button>
+                        <button type="button" @click="skOpen = true; fbOpen=false; spOpen=false; neuMenu=false" class="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm text-gray-800 hover:bg-violet-500/10 text-left" data-frei-speisekarte>@svg('heroicon-o-clipboard-document-list', 'w-4 h-4 text-violet-500') Speisekarte aus Brief</button>
+                        <button type="button" @click="spOpen = true; fbOpen=false; skOpen=false; neuMenu=false" class="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm text-gray-800 hover:bg-violet-500/10 text-left" data-frei-speiseplan>@svg('heroicon-o-calendar-days', 'w-4 h-4 text-violet-500') Speiseplan aus Brief</button>
                     </div>
                 </div>
-                <span class="text-[11px] text-gray-500 ml-1">— Basisrezept · Gericht · Concept · Import · Composer · Foodbook (KI, mit Regler-Leitplanken).</span>
+                <span class="text-[11px] text-gray-500 ml-1">— Basisrezept · Gericht · Concept · Import · Composer · Foodbook · Speisekarte · Speiseplan (KI, mit Regler-Leitplanken).</span>
             </div>
 
             {{-- Spec 42 F1: Ein ganzes Foodbook aus einem Brief planen — Rahmen (Gerüst/Struktur) +
@@ -224,6 +226,38 @@
                         <span wire:loading wire:target="foodbookAusBrief">Erzeuge …</span>
                     </button>
                     <span class="text-[11px] text-gray-500">— Struktur + Inhalte laufen in der Leitstelle und docken automatisch ins Foodbook.</span>
+                </div>
+            </div>
+
+            {{-- Speisekarte aus Brief (Landing-Panel, gespiegelt von Foodbook) --}}
+            <div x-show="skOpen" x-cloak class="mt-3 border-t border-gray-200 pt-3 space-y-2" data-speisekarte-brief-panel>
+                <input type="text" wire:model="skTitel" placeholder="Speisekarten-Name (optional)"
+                       class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-violet-400 focus:ring-1 focus:ring-violet-400" data-landing-sk-titel>
+                <textarea wire:model="skBrief" rows="3" placeholder="Brief: Anlass, Küchenstil, Saison, Niveau, Preis-Korridor …"
+                          class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-violet-400 focus:ring-1 focus:ring-violet-400" data-landing-sk-brief></textarea>
+                @if($skMeldung)<p class="text-xs text-rose-600" data-landing-sk-meldung>{{ $skMeldung }}</p>@endif
+                <div class="flex flex-wrap items-center gap-2">
+                    <button wire:click="speisekarteAusBrief" wire:loading.attr="disabled" wire:target="speisekarteAusBrief" class="{{ $btnPrimary }}" data-landing-sk-erzeugen>
+                        <span wire:loading.remove wire:target="speisekarteAusBrief">@svg('heroicon-o-sparkles', 'w-4 h-4') Speisekarte erzeugen (KI)</span>
+                        <span wire:loading wire:target="speisekarteAusBrief">Erzeuge …</span>
+                    </button>
+                    <span class="text-[11px] text-gray-500">— je Gang/Kategorie eine Rubrik; Inhalte docken automatisch in die Karte.</span>
+                </div>
+            </div>
+
+            {{-- Speiseplan aus Brief (Landing-Panel, gespiegelt von Foodbook) --}}
+            <div x-show="spOpen" x-cloak class="mt-3 border-t border-gray-200 pt-3 space-y-2" data-speiseplan-brief-panel>
+                <input type="text" wire:model="spTitel" placeholder="Speiseplan-Name (optional)"
+                       class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-violet-400 focus:ring-1 focus:ring-violet-400" data-landing-sp-titel>
+                <textarea wire:model="spBrief" rows="3" placeholder="Brief: Anlass, Saison, Küchenstil, Zyklus (z. B. „4 Wochen“), Diät-Fokus …"
+                          class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-violet-400 focus:ring-1 focus:ring-violet-400" data-landing-sp-brief></textarea>
+                @if($spMeldung)<p class="text-xs text-rose-600" data-landing-sp-meldung>{{ $spMeldung }}</p>@endif
+                <div class="flex flex-wrap items-center gap-2">
+                    <button wire:click="speiseplanAusBrief" wire:loading.attr="disabled" wire:target="speiseplanAusBrief" class="{{ $btnPrimary }}" data-landing-sp-erzeugen>
+                        <span wire:loading.remove wire:target="speiseplanAusBrief">@svg('heroicon-o-sparkles', 'w-4 h-4') Speiseplan erzeugen (KI)</span>
+                        <span wire:loading wire:target="speiseplanAusBrief">Erzeuge …</span>
+                    </button>
+                    <span class="text-[11px] text-gray-500">— GV-Linien + Zyklus als Standard; die Kaskade füllt die Zellen brief-gesteuert.</span>
                 </div>
             </div>
         </div>
@@ -343,9 +377,6 @@
                 <button type="button" @click="tab='concept'"
                         :class="tab==='concept' ? 'bg-violet-500/25 text-white' : 'text-gray-300 hover:text-white'"
                         class="px-3 py-1.5 rounded-t-md text-xs font-medium">Concept</button>
-                <button type="button" @click="tab='worker'"
-                        :class="tab==='worker' ? 'bg-violet-500/25 text-white' : 'text-gray-300 hover:text-white'"
-                        class="px-3 py-1.5 rounded-t-md text-xs font-medium inline-flex items-center gap-1">Worker @if($laeuft)<span class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span>@endif</button>
                 <button type="button" @click="tab='composer'"
                         :class="tab==='composer' ? 'bg-violet-500/25 text-white' : 'text-gray-300 hover:text-white'"
                         class="px-3 py-1.5 rounded-t-md text-xs font-medium">Composer</button>
@@ -364,6 +395,12 @@
                 <button type="button" @click="tab='speiseplan'"
                         :class="tab==='speiseplan' ? 'bg-violet-500/25 text-white' : 'text-gray-300 hover:text-white'"
                         class="px-3 py-1.5 rounded-t-md text-xs font-medium">Speiseplan</button>
+                {{-- Worker (Ausführung/Status) bewusst ganz am Ende (Dominique 2026-08-24): erst erstellen/
+                     planen, dann die Kaskade beobachten. --}}
+                <span class="mx-1 self-center h-4 w-px bg-white/15"></span>
+                <button type="button" @click="tab='worker'"
+                        :class="tab==='worker' ? 'bg-violet-500/25 text-white' : 'text-gray-300 hover:text-white'"
+                        class="px-3 py-1.5 rounded-t-md text-xs font-medium inline-flex items-center gap-1">Worker @if($laeuft)<span class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span>@endif</button>
             </div>
         </x-slot:tabs>
 
