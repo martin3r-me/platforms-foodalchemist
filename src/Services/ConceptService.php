@@ -63,6 +63,9 @@ class ConceptService
                 'slots.package:id,name,role,class,price_per_person,ek_per_person,food_cost_percent,price_mode,price_stale',
                 // Menü-Ansicht: Paket-Gerichte mit Wording-Feldern (Wording-Kette)
                 'slots.package.dishes.dish:id,name,sales_wording_standard',
+                // Kaskade: eingebettetes Paket = kind=paket-Concept (Preis + Posten für Anzeige)
+                'slots.embeddedConcept:id,name,kind,price_per_person_cache,ek_per_person_cache',
+                'slots.embeddedConcept.slots.dish:id,name,sales_wording_standard',
                 'slots.dish:id,name,sales_wording_standard,sales_net,ek_total_eur,dish_class_id,spec_is_vegan,spec_is_vegetarian,spec_is_gluten_free,spec_is_lactose_free,spec_is_halal,spec_contains_pork,spec_contains_beef,allergens_confidence',
                 'slots.dish.dishClass:id,label',
                 'slots.unit:id,slug,display_de',
@@ -544,6 +547,7 @@ class ConceptService
         $concept->loadMissing(['slots' => fn ($q) => $q->orderBy('position'),
             'slots.unit:id,slug,dimension,default_in_g',
             'slots.package:id,name,price_per_person,ek_per_person,price_stale',
+            'slots.embeddedConcept:id,name,price_per_person_cache,ek_per_person_cache',   // Kaskade: eingebettetes Paket
             'slots.dish:id,name,sales_net,ek_total_eur,sales_unit_count,sales_quantity_per_unit_g,yield_kg,yield_pieces']);
 
         $zeilen = [];
@@ -557,7 +561,14 @@ class ConceptService
             if (in_array($slot->type, self::STRUKTUR_TYPEN, true)) {
                 continue; // Struktur-Blöcke (Text/Leerzeile/Header) sind keine Preis-Positionen
             }
-            if ($slot->package_id !== null && $slot->package) {
+            if ($slot->embedded_concept_id !== null && $slot->embeddedConcept) {
+                // Kaskade: eingebettetes Paket = kind=paket-Concept → lebender Preis/EK (spiegelt Edits).
+                $ep = $slot->embeddedConcept;
+                $vk = (float) ($ep->price_per_person_cache ?? 0);
+                $ek = (float) ($ep->ek_per_person_cache ?? 0);
+                $zeilen[] = ['slot_id' => $slot->id, 'type' => 'paket', 'role' => $slot->role, 'wording' => $slot->wording,
+                    'label' => $ep->name, 'price' => $vk, 'ek' => round($ek, 2), 'ek_fehlt' => false, 'stale' => false];
+            } elseif ($slot->package_id !== null && $slot->package) {
                 $vk = (float) ($slot->package->price_per_person ?? 0);
                 $ek = (float) ($slot->package->ek_per_person ?? 0);
                 $hatStale = $hatStale || (bool) $slot->package->price_stale;
