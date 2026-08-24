@@ -249,6 +249,7 @@ class Editor extends Component
         if ($this->id !== null && $this->tab === 'editionen') {
             $team = $this->team();
             $kandidaten = FoodAlchemistConcept::visibleToTeam($team)
+                ->konzepte()   // Kaskade: Editionen sind Konzepte, keine Pakete
                 ->where('team_id', $team->id)
                 ->standardisiert()
                 ->whereNull('format_id')   // nur freie Concepts; zugeordnete stehen in der Editionen-Liste

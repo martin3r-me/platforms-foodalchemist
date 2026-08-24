@@ -216,6 +216,7 @@ class Editor extends Component
 
         if ($typ === 'concept') {
             $query = FoodAlchemistConcept::visibleToTeam($team)
+                ->konzepte()   // Kaskade: Produktion aus Konzepten, nicht Paketen
                 ->when($suche !== '', fn ($w) => Suche::like($w, 'name', $suche));
             $total = (clone $query)->count();
 

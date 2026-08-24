@@ -62,7 +62,7 @@ class ConceptsSearchTool extends FoodAlchemistTool implements ToolContract, Tool
         // Spec 15 §5a: semantische Ergänzung — nur was die Lexik NICHT schon fand.
         $semScores = $this->semanticPoolIds($team, $q, PoolEmbeddingService::ENTITY_TYPE_CONCEPT, array_column($concepts, 'id'), $limit);
         if ($semScores !== []) {
-            $rows = FoodAlchemistConcept::visibleToTeam($team)->whereIn('id', array_keys($semScores))
+            $rows = FoodAlchemistConcept::visibleToTeam($team)->konzepte()->whereIn('id', array_keys($semScores))
                 ->get(['id', 'name', 'status', 'class', 'occasion', 'level'])->keyBy('id');
             arsort($semScores);
             foreach ($semScores as $id => $score) {

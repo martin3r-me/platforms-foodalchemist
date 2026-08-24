@@ -543,7 +543,7 @@ class SpeisekarteService
     /** Concepts (Fix-Menüs) für den menue_ref-Picker. */
     public function conceptKandidaten(Team $team, string $suche, int $limit = 20): Collection
     {
-        return FoodAlchemistConcept::visibleToTeam($team)->echte()
+        return FoodAlchemistConcept::visibleToTeam($team)->konzepte()->echte()
             ->when($suche !== '', fn ($q) => \Platform\FoodAlchemist\Support\Suche::like($q, 'name', $suche))
             ->orderBy('name')->limit($limit)->get(['id', 'name', 'price_per_person_cache']);
     }

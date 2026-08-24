@@ -803,6 +803,7 @@ class DataQualityService
     private function konzepteInGebrauch(Team $team): \Illuminate\Database\Eloquent\Builder
     {
         return FoodAlchemistConcept::visibleToTeam($team)
+            ->konzepte()   // Kaskade: Datenqualität prüft Konzepte, nicht Pakete
             ->where('is_template', false)
             ->where('status', '!=', 'archiviert')
             ->where(fn ($w) => $w

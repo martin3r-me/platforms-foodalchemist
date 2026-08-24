@@ -195,11 +195,11 @@ class KonzeptTaxonomie extends Component
     {
         $team = $this->team();
 
-        $katCounts = FoodAlchemistConcept::visibleToTeam($team)
+        $katCounts = FoodAlchemistConcept::visibleToTeam($team)->konzepte()
             ->whereNotNull('category_id')->selectRaw('category_id, COUNT(*) AS n')
             ->groupBy('category_id')->pluck('n', 'category_id');
 
-        $klasseCounts = FoodAlchemistConcept::visibleToTeam($team)
+        $klasseCounts = FoodAlchemistConcept::visibleToTeam($team)->konzepte()
             ->whereNotNull('class')->selectRaw('class, COUNT(*) AS n')
             ->groupBy('class')->pluck('n', 'class');
 
