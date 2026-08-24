@@ -70,7 +70,11 @@
                 <button type="button" wire:click="bearbeiten" class="{{ $btnPrimary }}">Bearbeiten</button>
                 <a href="{{ route('foodalchemist.formate.dokument', ['id' => $format->id]) }}" target="_blank"
                    class="{{ $btnGhost }}" title="Schöne Kunden-Ausgabe (Druck/PDF)" data-formate-panel-druck>
-                    @svg('heroicon-o-printer', 'w-4 h-4') Druck
+                    @svg('heroicon-o-printer', 'w-4 h-4') Druck/Karte
+                </a>
+                <a href="{{ route('foodalchemist.formate.report', ['id' => $format->id, 'profil' => 'voll']) }}" target="_blank"
+                   class="{{ $btnGhost }}" title="Technischer Report mit Profilen + Filtern (Editionen → volle Kaskade)" data-formate-panel-report>
+                    @svg('heroicon-o-document-text', 'w-4 h-4') Report
                 </a>
                 <button type="button" wire:click="loeschen" wire:confirm="Format wirklich löschen? Die Editionen werden wieder freistehend."
                         class="{{ $btnGhost }} text-rose-600">Löschen</button>

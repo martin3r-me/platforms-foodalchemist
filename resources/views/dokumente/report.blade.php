@@ -262,43 +262,45 @@
             </section>
         @endif
     @elseif($concept)
+        @include('foodalchemist::dokumente.partials.report-concept-body', ['concept' => $concept, 'optionen' => $opt])
+    @elseif($format ?? null)
+        {{-- F3b: Technischer Format-Report — Format-Übersicht + Editionen (jede über den
+             GETEILTEN Concept-Körper, damit die Filter LITERAL dieselben sind) + Struktur. --}}
         <section>
-            <h2>Concept-Übersicht</h2>
+            <h2>Format-Übersicht</h2>
             <div class="grid meta">
-                <div><span>Status</span>{{ $concept['status'] ?? '—' }}</div>
-                <div><span>Anlass</span>{{ $concept['occasion'] ?? '—' }}</div>
-                <div><span>Niveau</span>{{ $concept['level'] ?? '—' }}</div>
-                <div><span>Kategorie</span>{{ $concept['category'] ?? '—' }}</div>
-                <div><span>Preis/Person</span>{{ $money($concept['price_per_person_cache'] ?? null) }}</div>
-                <div><span>EK/Person</span>{{ $money($concept['ek_per_person_cache'] ?? null) }}</div>
-                <div><span>Arbeitszeit</span>{{ ($concept['work_time_min_cache'] ?? null) !== null ? $concept['work_time_min_cache'] . ' min' : '—' }}</div>
-                <div><span>Servierform</span>{{ $concept['serving_form'] ?? '—' }}</div>
+                <div><span>Status</span>{{ $format['status'] ?? '—' }}</div>
+                <div><span>Herkunft</span>{{ $format['origin'] ?? '—' }}</div>
+                <div><span>Servierform</span>{{ $format['serving_form'] ?? '—' }}</div>
+                <div><span>Eventtyp</span>{{ $format['event_type'] ?? '—' }}</div>
+                @php($pr = $format['price_range'] ?? ['min' => null, 'max' => null])
+                <div><span>Preisspanne p. P.</span>{{ ($pr['min'] ?? null) === null ? '—' : ($pr['min'] === $pr['max'] ? $money($pr['min']) : $money($pr['min']) . ' – ' . $money($pr['max'])) }}</div>
+                <div class="wide"><span>Konsumentenbezeichnung</span>{{ $format['consumer_name'] ?? '—' }}</div>
+                <div class="wide"><span>Claim</span>{{ $format['claim'] ?? '—' }}</div>
             </div>
-            @if($concept['description'] ?? null)<p class="intro">{{ $concept['description'] }}</p>@endif
-            @if(count($concept['moments'] ?? []) || count($concept['seasons'] ?? []))
-                <p class="muted">Einsatzmomente: {{ implode(', ', $concept['moments'] ?? []) ?: '—' }} · Saison: {{ implode(', ', $concept['seasons'] ?? []) ?: '—' }}</p>
+            @if($format['story'] ?? null)<p class="intro">{{ $format['story'] }}</p>@endif
+            @if(count($format['moments'] ?? []) || count($format['seasons'] ?? []))
+                <p class="muted">Einsatzmomente: {{ implode(', ', $format['moments'] ?? []) ?: '—' }} · Saison: {{ implode(', ', $format['seasons'] ?? []) ?: '—' }}</p>
+            @endif
+            @if(($opt['bilder'] ?? false) && ($format['hero'] ?? null))
+                <div class="step-photos"><span class="step-photo"><img src="{{ $format['hero'] }}" alt="{{ $format['name'] ?? '' }}"></span></div>
             @endif
         </section>
 
-        <section>
-            <h2>Slots</h2>
-            @forelse($concept['slots'] as $slot)
-                <div class="slot">
-                    <h3>{{ $slot['role'] ?: 'Slot' }} @if($slot['title'])<span class="muted">· {{ $slot['title'] }}</span>@endif <span class="badge">{{ $slot['type'] }}</span></h3>
-                    @if($slot['package'])
-                        <p class="muted">Paket: {{ $slot['package']['name'] }} · Preis {{ $money($slot['package']['price_per_person']) }} p. P. · EK {{ $money($slot['package']['ek_per_person'], 2) }} p. P.</p>
-                    @endif
-                    @forelse($slot['gerichte'] as $g)
-                        @if($g['paket'] ?? null)<p class="muted">Aus Paket {{ $g['paket'] }}{{ $g['menge'] ? ' · ' . $g['menge'] : '' }}</p>@endif
-                        @include('foodalchemist::dokumente.partials.report-recipe-node', ['node' => $g['recipe'], 'optionen' => $opt])
-                    @empty
-                        <p class="muted">Leer.</p>
-                    @endforelse
-                </div>
-            @empty
-                <p class="muted">Keine Slots.</p>
-            @endforelse
-        </section>
+        @forelse($format['positionen'] as $pos)
+            @if($pos['kind'] === 'edition')
+                <h2>Edition · {{ $pos['concept']['name'] }}@if($pos['concept']['consumer_name'] ?? null)<span class="muted"> · {{ $pos['concept']['consumer_name'] }}</span>@endif</h2>
+                @include('foodalchemist::dokumente.partials.report-concept-body', ['concept' => $pos['concept'], 'optionen' => $opt])
+            @elseif($pos['kind'] === 'header')
+                <h2>{{ $pos['text'] }}</h2>
+            @elseif($pos['kind'] === 'text')
+                <p class="intro">{{ $pos['text'] }}</p>
+            @elseif($pos['kind'] === 'spacer')
+                <div style="height: {{ ['klein' => 8, 'mittel' => 16, 'gross' => 28][$pos['height'] ?? 'mittel'] ?? 16 }}px"></div>
+            @endif
+        @empty
+            <p class="muted">Noch kein Aufbau — im Format-Editor Editionen einfügen.</p>
+        @endforelse
     @elseif($recipe)
         @include('foodalchemist::dokumente.partials.report-recipe-node', ['node' => $recipe, 'optionen' => $opt])
     @endif

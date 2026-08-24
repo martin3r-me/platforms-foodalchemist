@@ -185,6 +185,30 @@ Route::get('/formate/{id}/dokument', function (int $id, \Platform\FoodAlchemist\
 })->whereNumber('id')->name('foodalchemist.formate.dokument');
 
 /**
+ * F3b: Format-Report — der TECHNISCHE Report mit Profilen + Filtern (Kurzblatt … Volle Kaskade;
+ * Preise/Lieferanten/Anleitung/Bilder/Deklaration/Nährwerte/Sensorik/Produktion/Notizen/Kaskade).
+ * ZWEITE Ausgabe NEBEN der schönen `formate.dokument`-Karte — spiegelt `concepts.dokument`:
+ * jede Edition drillt filter-identisch wie ein Concept-Report. ?pdf=1 = PDF (DomPDF, guarded).
+ */
+Route::get('/formate/{id}/report', function (int $id, \Platform\FoodAlchemist\Services\ReportExportService $svc) {
+    $team = \Illuminate\Support\Facades\Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
+    $optionen = $svc->optionen(request()->query(), 'format');
+    $data = $svc->formatDaten($team, $id, $optionen);
+
+    if (request()->boolean('pdf')) {
+        if (! class_exists(\Barryvdh\DomPDF\Facade\Pdf::class)) {
+            \Illuminate\Support\Facades\Log::warning('Format-Report-PDF angefordert, aber DomPDF ist nicht installiert.', ['format_id' => $id]);
+            abort(500, 'PDF-Export nicht verfügbar: DomPDF ist auf diesem Server nicht installiert.');
+        }
+
+        return \Barryvdh\DomPDF\Facade\Pdf::loadView('foodalchemist::dokumente.report', $data + ['istPdf' => true])
+            ->download('Format-Report-' . $id . '.pdf');
+    }
+
+    return view('foodalchemist::dokumente.report', $data + ['istPdf' => false]);
+})->whereNumber('id')->name('foodalchemist.formate.report');
+
+/**
  * Rezept-/Gericht-/Concept-Reports — Druck-HTML mit Profilen; ?pdf=1 rendert DomPDF.
  * Profile: kurz | produktion | kalkulation | voll. Filter als Query-Booleans:
  * preise, lieferanten, steps, sensorik, produktion, notizen, kaskade.

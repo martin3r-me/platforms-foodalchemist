@@ -6,6 +6,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Storage;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
+use Platform\FoodAlchemist\Models\FoodAlchemistFormat;
 use Platform\FoodAlchemist\Models\FoodAlchemistGeschirrSupplier;
 use Platform\FoodAlchemist\Models\FoodAlchemistGp;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
@@ -51,7 +52,9 @@ class ReportExportService
             ],
         };
 
-        if ($scope === 'concept' && $profil === 'produktion') {
+        // Format = symmetrisch zum Concept (jede Edition IST ein Concept): gleiche Profile,
+        // gleicher Filter-Satz, gleicher Preis-Default im Produktions-Profil.
+        if (in_array($scope, ['concept', 'format'], true) && $profil === 'produktion') {
             $defaults['preise'] = true;
         }
 
@@ -164,6 +167,90 @@ class ReportExportService
                 'moments' => $concept->serviceMoments->pluck('name')->values()->all(),
                 'seasons' => $concept->seasons->pluck('name')->values()->all(),
                 'slots' => $slots->all(),
+            ],
+        ];
+    }
+
+    /**
+     * F3b: Technischer Format-Report — spiegelt {@see conceptDaten}, aber eine Ebene höher.
+     * Ein Format hat keine eigene Gericht-Produktion; jede type=concept-Position IST eine
+     * Edition (= ein Concept) und wird über die IDENTISCHE Concept-Report-Auflösung gebaut,
+     * damit derselbe Filter-Satz (Preise/Lieferanten/Anleitung/Bilder/Deklaration/Nährwerte/
+     * Sensorik/Produktion/Notizen/Kaskade) je Edition greift. header/text/spacer bleiben als
+     * Struktur in Reihenfolge erhalten. Der Diskriminator `format` schaltet den Report-Zweig.
+     *
+     * @return array<string, mixed>
+     */
+    public function formatDaten(Team $team, int $formatId, array $optionen): array
+    {
+        $format = FoodAlchemistFormat::visibleToTeam($team)
+            ->with([
+                'slots' => fn ($q) => $q->orderBy('position'),
+                'slots.concept:id,name,consumer_name,claim,description,status,price_per_person_cache',
+                'heroImage',
+                // priceRange liest slots.concept primär, editions als Back-Compat-Fallback.
+                'editions:id,format_id,price_per_person_cache',
+                'servingForm:id,label',
+                'eventType:id,name',
+                'serviceMoments:id,name',
+                'seasons:id,name',
+            ])
+            ->findOrFail($formatId);
+
+        $positionen = [];
+        foreach ($format->slots as $slot) {
+            if ($slot->type === 'concept') {
+                $concept = $slot->concept;
+                if ($concept === null) {
+                    continue; // referenziertes Concept nicht mehr sichtbar → Position auslassen
+                }
+                try {
+                    // Volle, filter-identische Concept-Report-Auflösung je Edition wiederverwenden.
+                    $positionen[] = [
+                        'kind' => 'edition',
+                        'concept' => $this->conceptDaten($team, (int) $concept->id, $optionen)['concept'],
+                    ];
+                } catch (\Illuminate\Database\Eloquent\ModelNotFoundException) {
+                    continue; // Edition nicht (mehr) team-sichtbar → auslassen
+                }
+            } elseif ($slot->type === 'header') {
+                $text = trim((string) $slot->title);
+                if ($text !== '') {
+                    $positionen[] = ['kind' => 'header', 'text' => $text];
+                }
+            } elseif ($slot->type === 'text') {
+                $text = trim((string) $slot->text_content);
+                if ($text !== '') {
+                    $positionen[] = ['kind' => 'text', 'text' => $text];
+                }
+            } elseif ($slot->type === 'spacer') {
+                $positionen[] = ['kind' => 'spacer', 'height' => $slot->height ?: 'mittel'];
+            }
+        }
+
+        return [
+            'typ' => 'format',
+            'titel' => 'Format',
+            'name' => (string) $format->name,
+            'optionen' => $optionen,
+            'recipe' => null,
+            'concept' => null,
+            'format' => [
+                'id' => (int) $format->id,
+                'name' => (string) $format->name,
+                'consumer_name' => $format->consumer_name,
+                'claim' => $format->claim,
+                'story' => $format->story,
+                'origin' => $format->origin,
+                'status' => $format->status,
+                'price_range' => $format->priceRange(),
+                'serving_form' => $format->servingForm?->label,
+                'event_type' => $format->eventType?->name,
+                'moments' => $format->serviceMoments->pluck('name')->values()->all(),
+                'seasons' => $format->seasons->pluck('name')->values()->all(),
+                // Hero nur wenn Bilder-Filter an — spiegelt die Bilder-Gate-Logik der Rezept-Nodes.
+                'hero' => ($optionen['bilder'] ?? false) ? $format->heroImage?->dataUri() : null,
+                'positionen' => $positionen,
             ],
         ];
     }

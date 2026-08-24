@@ -8,7 +8,9 @@
             <button type="button" wire:click="speichern" class="{{ $btnPrimary }}">Speichern</button>
             @if($format)
                 <a href="{{ route('foodalchemist.formate.dokument', ['id' => $format->id]) }}" target="_blank"
-                   class="{{ $btnGhost }}" title="Schöne Kunden-Ausgabe (Druck/PDF)">@svg('heroicon-o-printer', 'w-4 h-4') Druck</a>
+                   class="{{ $btnGhost }}" title="Schöne Kunden-Ausgabe (Druck/PDF)">@svg('heroicon-o-printer', 'w-4 h-4') Druck/Karte</a>
+                <a href="{{ route('foodalchemist.formate.report', ['id' => $format->id, 'profil' => 'voll']) }}" target="_blank"
+                   class="{{ $btnGhost }}" title="Technischer Report mit Profilen + Filtern (Editionen → Gericht→Basisrezept→GP→LA-Kaskade)">@svg('heroicon-o-document-text', 'w-4 h-4') Report</a>
             @endif
             @if($fehler)<span class="{{ $pill }} {{ $variantPill['danger'] }}">{{ $fehler }}</span>@endif
         </x-slot:actions>
