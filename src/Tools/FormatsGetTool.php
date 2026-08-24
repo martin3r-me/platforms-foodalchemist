@@ -53,6 +53,8 @@ class FormatsGetTool extends FoodAlchemistTool implements ToolContract, ToolMeta
             ],
             'editions' => $f->editions->map(fn ($e) => [
                 'concept_id' => $e->id, 'name' => $e->name, 'consumer_name' => $e->consumer_name,
+                // Phase D: Unterkapitel-Wording (Foodbook-Kapitel-Parität)
+                'claim' => $e->claim, 'description' => $e->description,
                 'status' => $e->status, 'position' => (int) $e->format_position,
                 'price_per_person' => $e->price_per_person_cache !== null ? (float) $e->price_per_person_cache : null,
             ])->all(),

@@ -75,6 +75,8 @@
                                 <p class="font-semibold text-gray-900">{{ $ed['name'] }}</p>
                                 @if($ed['preis_pp'] !== null)<span class="text-sm font-medium text-violet-600 shrink-0">{{ number_format($ed['preis_pp'], 2, ',', '.') }} € p. P.</span>@endif
                             </div>
+                            @if($ed['claim'] ?? null)<p class="text-xs italic text-violet-600">„{{ $ed['claim'] }}“</p>@endif
+                            @if($ed['text'] ?? null)<p class="text-sm text-gray-600 whitespace-pre-line mt-0.5 mb-1">{{ $ed['text'] }}</p>@endif
                             @foreach($ed['gerichte'] as $g)
                                 @if($g['type'] === 'paket' || $g['type'] === 'header')
                                     <p class="text-sm font-medium text-gray-700 mt-1" style="margin-left: 8px">{{ $g['text'] }}</p>

@@ -8,6 +8,7 @@ use Livewire\Component;
 use Livewire\WithFileUploads;
 use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
 use Platform\FoodAlchemist\Services\FormatService;
+use Platform\FoodAlchemist\Services\WordingResolver;
 
 /**
  * Format-Modul (Phase B): Voll-Editor-Modal (Concepter-Stil, Fullscreen-Dark).
@@ -29,6 +30,9 @@ class Editor extends Component
     public array $form = [];
 
     public string $editionSuche = '';
+
+    /** Phase D: Name der inline neu anzulegenden Edition (Concepter 2.0). */
+    public string $neueEditionName = '';
 
     /** @var \Livewire\Features\SupportFileUploads\TemporaryUploadedFile|null */
     public $bildUpload = null;
@@ -145,6 +149,39 @@ class Editor extends Component
         $this->dispatch('formate-gespeichert');
     }
 
+    /** Phase D: Kunden-Wording einer Edition (Unterkapitel) pflegen — Titel/Claim/Hinführung. */
+    public function editionWordingSpeichern(int $conceptId, string $field, ?string $value, FormatService $formats): void
+    {
+        if ($this->id === null || ! in_array($field, ['consumer_name', 'claim', 'description'], true)) {
+            return;
+        }
+        try {
+            $formats->updateEditionWording($this->team(), $this->id, $conceptId, [$field => $value]);
+        } catch (\Throwable $e) {
+            $this->fehler = $e->getMessage();
+
+            return;
+        }
+        $this->dispatch('formate-gespeichert');
+    }
+
+    /** Phase D: eine neue Edition inline anlegen (mit Auto-Sektions-Gerüst). */
+    public function neueEdition(FormatService $formats): void
+    {
+        if ($this->id === null) {
+            return;
+        }
+        try {
+            $formats->createEdition($this->team(), $this->id, $this->neueEditionName, true);
+        } catch (\Throwable $e) {
+            $this->fehler = $e->getMessage();
+
+            return;
+        }
+        $this->neueEditionName = '';
+        $this->dispatch('formate-gespeichert');
+    }
+
     // ── Marketing-Bilder ──────────────────────────────────────────────────────
 
     public function updatedBildUpload(FormatService $formats): void
@@ -221,9 +258,23 @@ class Editor extends Component
                 ->get(['id', 'name', 'status', 'format_id', 'price_per_person_cache']);
         }
 
+        // Phase D: Live-Vorschau je Edition (Sektionen + Gerichte via WordingResolver) —
+        // dieselbe Auflösung wie im Foodbook-Render, damit die Vorschau exakt dem Kunden-Dokument gleicht.
+        $editionMenus = [];
+        if ($this->id !== null && $this->tab === 'editionen' && $format !== null) {
+            $wording = app(WordingResolver::class);
+            $eds = FoodAlchemistConcept::where('format_id', $this->id)
+                ->with(['slots.dish:id,name,sales_wording_standard', 'slots.package.dishes.dish:id,name,sales_wording_standard'])
+                ->get();
+            foreach ($eds as $ed) {
+                $editionMenus[$ed->id] = $wording->gerichtZeilen($ed);
+            }
+        }
+
         return view('foodalchemist::livewire.formate.editor', [
             'format' => $format,
             'kandidaten' => $kandidaten,
+            'editionMenus' => $editionMenus,
         ]);
     }
 
