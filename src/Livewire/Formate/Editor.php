@@ -25,7 +25,7 @@ class Editor extends Component
 
     public string $tab = 'identitaet';
 
-    public const TABS = ['identitaet', 'editionen', 'bilder', 'notizen'];
+    public const TABS = ['identitaet', 'editionen', 'kalkulation', 'bilder', 'notizen'];
 
     /** @var array<string, mixed> */
     public array $form = [];
@@ -393,6 +393,36 @@ class Editor extends Component
             }
         }
 
+        // F4: Kalkulations-Tab — wie performen die Editionen (Concepts)? Read-only aus den
+        // Concept-Caches (kein Recompute): €/Person, EK/Person, W% je Edition + Format-Rollup.
+        $kalkZeilen = collect();
+        $kalkSumme = ['n' => 0, 'min' => null, 'max' => null, 'avg' => null, 'avg_w' => null];
+        if ($this->id !== null && $this->tab === 'kalkulation' && $format !== null) {
+            $kalkZeilen = $format->slots()->where('type', 'concept')
+                ->with(['concept:id,name,consumer_name,price_per_person_cache,ek_per_person_cache'])
+                ->orderBy('position')->get()
+                ->map(function ($s) {
+                    $c = $s->concept;
+                    $vk = $c?->price_per_person_cache !== null ? (float) $c->price_per_person_cache : null;
+                    $ek = $c?->ek_per_person_cache !== null ? (float) $c->ek_per_person_cache : null;
+                    return [
+                        'name' => $c?->consumer_name ?: ($c?->name ?? '— (entfernt)'),
+                        'vk' => $vk,
+                        'ek' => $ek,
+                        'w' => ($vk !== null && $vk > 0 && $ek !== null) ? round($ek / $vk * 100, 1) : null,
+                    ];
+                })->values();
+            $vks = $kalkZeilen->pluck('vk')->filter(fn ($v) => $v !== null && $v > 0)->values();
+            $ws = $kalkZeilen->pluck('w')->filter(fn ($v) => $v !== null)->values();
+            $kalkSumme = [
+                'n' => $kalkZeilen->count(),
+                'min' => $vks->isEmpty() ? null : round((float) $vks->min(), 2),
+                'max' => $vks->isEmpty() ? null : round((float) $vks->max(), 2),
+                'avg' => $vks->isEmpty() ? null : round((float) $vks->avg(), 2),
+                'avg_w' => $ws->isEmpty() ? null : round((float) $ws->avg(), 1),
+            ];
+        }
+
         // F1: Facetten-Vokabular (aus den Einstellungen gepflegt, geteilt mit den Concepts).
         $team = $this->team();
         $servierformen = \Platform\FoodAlchemist\Models\FoodAlchemistServierform::where('is_inactive', false)
@@ -411,6 +441,8 @@ class Editor extends Component
             'aufbauSlots' => $slots,
             'kandidaten' => $kandidaten,
             'editionMenus' => $editionMenus,
+            'kalkZeilen' => $kalkZeilen,
+            'kalkSumme' => $kalkSumme,
             'servierformen' => $servierformen,
             'eventtypen' => $eventtypen,
             'einsatzmomente' => $einsatzmomente,

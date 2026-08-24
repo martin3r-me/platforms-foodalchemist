@@ -15,6 +15,7 @@
             <x-foodalchemist::editor-tabs marker="format" action="setTab" :active="$tab" :tabs="[
                 'identitaet' => 'Identität',
                 'editionen' => 'Aufbau',
+                'kalkulation' => 'Kalkulation',
                 'bilder' => 'Marketing-Bilder',
                 'notizen' => 'Notizen',
             ]" />
@@ -254,6 +255,50 @@
                         <p class="text-xs text-gray-400">Keine aktiven Konzepte gefunden.</p>
                     @endforelse
                 </div>
+            @endif
+
+            {{-- ── Tab: KALKULATION (F4 — wie performen die Editionen?) ── --}}
+            @if($tab === 'kalkulation')
+                <p class="text-[11px] text-gray-500 mb-2">Wie performen die Editionen (Concepts)? Read-only aus den Concept-Kalkulationen — €/Person, Wareneinsatz, W%. Preise pflegst du im jeweiligen Concept.</p>
+
+                {{-- Format-Rollup --}}
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+                    @php($rollup = [
+                        ['Editionen', $kalkSumme['n']],
+                        ['Preisspanne €/P', ($kalkSumme['min'] !== null ? number_format($kalkSumme['min'], 2, ',', '.') . '–' . number_format($kalkSumme['max'], 2, ',', '.') . ' €' : '—')],
+                        ['Ø €/P', ($kalkSumme['avg'] !== null ? number_format($kalkSumme['avg'], 2, ',', '.') . ' €' : '—')],
+                        ['Ø W%', ($kalkSumme['avg_w'] !== null ? number_format($kalkSumme['avg_w'], 1, ',', '.') . ' %' : '—')],
+                    ])
+                    @foreach($rollup as [$lbl, $val])
+                        <div class="rounded-xl bg-white/5 border border-white/10 px-3 py-2">
+                            <p class="text-[10px] uppercase tracking-wider text-gray-500">{{ $lbl }}</p>
+                            <p class="text-lg font-semibold text-gray-100 tabular-nums">{{ $val }}</p>
+                        </div>
+                    @endforeach
+                </div>
+
+                <table class="{{ $table ?? 'w-full text-sm' }}">
+                    <thead>
+                        <tr class="text-left text-[11px] uppercase tracking-wider text-gray-500 border-b border-white/10">
+                            <th class="py-1.5 pr-2 w-full">Edition</th>
+                            <th class="py-1.5 px-2 text-right whitespace-nowrap">€/Person</th>
+                            <th class="py-1.5 px-2 text-right whitespace-nowrap">EK/Person</th>
+                            <th class="py-1.5 pl-2 text-right whitespace-nowrap">W%</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @forelse($kalkZeilen as $z)
+                            <tr class="border-b border-white/5">
+                                <td class="py-1.5 pr-2 text-gray-200 truncate">{{ $z['name'] }}</td>
+                                <td class="py-1.5 px-2 text-right tabular-nums text-emerald-300">{{ $z['vk'] !== null ? number_format($z['vk'], 2, ',', '.') . ' €' : '—' }}</td>
+                                <td class="py-1.5 px-2 text-right tabular-nums text-gray-400">{{ $z['ek'] !== null ? number_format($z['ek'], 2, ',', '.') . ' €' : '—' }}</td>
+                                <td class="py-1.5 pl-2 text-right tabular-nums {{ ($z['w'] !== null && $z['w'] > 35) ? 'text-rose-400' : 'text-gray-300' }}">{{ $z['w'] !== null ? number_format($z['w'], 1, ',', '.') . ' %' : '—' }}</td>
+                            </tr>
+                        @empty
+                            <tr><td colspan="4" class="py-6 text-center text-xs text-gray-500">Noch keine Editionen — im Aufbau-Tab Konzepte einfügen.</td></tr>
+                        @endforelse
+                    </tbody>
+                </table>
             @endif
 
             {{-- ── Tab: MARKETING-BILDER ───────────────────────────── --}}

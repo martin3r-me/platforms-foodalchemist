@@ -101,3 +101,19 @@ it('Browser-Facetten-Filter grenzt die Formatliste ein', function () {
         ->assertSee('Gala-Format')
         ->assertDontSee('Freies-Format');
 });
+
+it('F4: Kalkulations-Tab zeigt €/P, EK und W% je Edition', function () {
+    $concepts = app(\Platform\FoodAlchemist\Services\ConceptService::class);
+    $c = $concepts->create($this->rootTeam, ['name' => 'Sommer-Menü']);
+    $c->update(['status' => 'active', 'price_per_person_cache' => 20.00, 'ek_per_person_cache' => 5.00]);
+    $format = $this->svc->create($this->rootTeam, ['name' => 'CHEFS.CORNER']);
+    $this->svc->slotConceptEinfuegen($this->rootTeam, $format->id, $c->id);
+
+    Livewire::test(Editor::class)
+        ->call('oeffnen', $format->id)
+        ->call('setTab', 'kalkulation')
+        ->assertSee('Sommer-Menü')
+        ->assertSee('20,00')   // €/Person
+        ->assertSee('5,00')    // EK/Person
+        ->assertSee('25,0');   // W% = 5/20*100
+});
