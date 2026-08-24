@@ -143,13 +143,8 @@
                                 @foreach(['suess' => 'süß', 'herzhaft' => 'herzhaft', 'neutral' => 'neutral'] as $v => $l)<option value="{{ $v }}">{{ $l }}</option>@endforeach
                             </select>
                         </div>
-                    @else
-                        <div>
-                            <label class="{{ $label }}">Rolle</label>
-                            <input type="text" wire:model="form.role" list="concepter-rollen" class="{{ $input }}" placeholder="z. B. Vorspeise" />
-                            <datalist id="concepter-rollen">@foreach($rollen as $r)<option value="{{ $r }}"></option>@endforeach</datalist>
-                        </div>
                     @endif
+                    {{-- Paket-Rolle 2026-08-24 entfernt: Paket = wiederverwendbares Bündel mit eigenem Preis, keine Gang-Rolle nötig --}}
                 </div>
 
                 @if($concept)
@@ -259,7 +254,7 @@
                         </div>
                     @elseif($linkeListe === 'paket')
                         <p class="{{ $dt }} mb-1">Pakete ({{ $paketListe->count() }})</p>
-                        <input type="search" wire:model.live.debounce.300ms="basisSuche" placeholder="Paket suchen (Name/Rolle) …" class="{{ $input }} !py-0.5 !text-[11px] mb-1" />
+                        <input type="search" wire:model.live.debounce.300ms="basisSuche" placeholder="Paket suchen (Name) …" class="{{ $input }} !py-0.5 !text-[11px] mb-1" />
                         <select wire:model.live="paketKlasse" class="{{ $input }} !py-0.5 !text-[11px] mb-1.5" data-paket-filter-klasse>
                             <option value="">Alle Klassen</option>
                             @foreach($paketKlassenListe as $kl)<option value="{{ $kl }}">{{ $kl }}</option>@endforeach
@@ -268,7 +263,7 @@
                             @forelse($paketListe as $pk)
                                 <div wire:key="kpk-{{ $pk->id }}" draggable="true" @dragstart="dragTyp = 'paket'; dragId = {{ $pk->id }}; $event.dataTransfer.effectAllowed = 'copy'" @dragend="dragTyp = null; dragId = null" class="group flex items-center gap-1 px-1 py-0.5 rounded hover:bg-violet-500/5 text-[11px] cursor-grab active:cursor-grabbing">
                                     <span class="shrink-0 px-1 rounded text-[9px] font-medium uppercase tracking-wider {{ $variantPill['info'] }}">PK</span>
-                                    <span class="min-w-0 flex-1 break-words leading-snug text-gray-700" title="{{ $pk->name }}{{ $pk->role ? ' · ' . $pk->role : '' }}">{{ $pk->name }}</span>
+                                    <span class="min-w-0 flex-1 break-words leading-snug text-gray-700" title="{{ $pk->name }}">{{ $pk->name }}</span>
                                     <span class="shrink-0 text-[10px] text-gray-500 tabular-nums">{{ $pk->price_per_person !== null ? number_format((float) $pk->price_per_person, 2, ',', '.') . ' €' : '' }}</span>
                                     <button type="button" wire:click="positionEinfuegen('paket', {{ $pk->id }})" class="shrink-0 px-1 rounded font-medium text-violet-500 hover:bg-violet-500/15 leading-none" title="als Position einfügen">+</button>
                                 </div>
@@ -675,7 +670,7 @@
                                     <td colspan="8" class="!px-2 !pb-2 bg-black/[0.02]">
                                         <div class="flex flex-wrap items-center gap-2 pt-1">
                                             <select x-on:change="$wire.fuellePaket({{ $slot->id }}, $event.target.value); $event.target.value=''" class="{{ $input }} w-56">
-                                                <option value="">↹ Paket (Rolle {{ $slot->role ?: '–' }}) …</option>
+                                                <option value="">↹ Paket tauschen …</option>
                                                 @foreach(($tauschbar[$slot->id] ?? []) as $b)
                                                     <option value="{{ $b->id }}">{{ $b->name }}{{ $b->price_per_person !== null ? ' (' . number_format((float) $b->price_per_person, 2, ',', '.') . ' €)' : '' }}</option>
                                                 @endforeach
@@ -1037,7 +1032,7 @@
                                     <input type="number" step="0.01" min="0" wire:model="zielPreis" wire:keydown.enter="zielpreisBerechnen" class="{{ $input }} w-32 text-right tabular-nums" placeholder="z. B. 36,00" />
                                 </div>
                                 <button type="button" wire:click="zielpreisBerechnen" class="{{ $btnPrimary }}">Vorschlag</button>
-                                <span class="text-[11px] text-gray-500">Tauscht Pakete derselben Rolle; feste Gerichte = Fixkosten.</span>
+                                <span class="text-[11px] text-gray-500">Tauscht Pakete gegeneinander; feste Gerichte = Fixkosten.</span>
                             </div>
                             @if($zielVorschlag)
                                 <div class="text-xs space-y-1 pt-1 border-t border-violet-500/20">

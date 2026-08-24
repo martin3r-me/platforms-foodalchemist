@@ -341,3 +341,16 @@ it('Freitext-Block erscheint als Beschreibung in der Menü-Ansicht (Gäste-Sicht
         ->call('blockSpeichern', $textId)
         ->assertSee('Italienische Flair');   // vorher: Text-Blöcke wurden in der Menü-Ansicht verschluckt
 });
+
+it('Paket-Tausch bietet jedes aktive Paket — Rollen-Filter entfernt (2026-08-24)', function () {
+    $svc = app(ConceptService::class);
+    $this->pakete->create($this->rootTeam, ['name' => 'Buffet ohne Rolle']);               // role null
+    $this->pakete->create($this->rootTeam, ['name' => 'Grill B', 'role' => 'Hauptgang']);  // abweichende Rolle
+    $slot = $svc->addSlot($this->rootTeam, $this->concept->id, ['role' => 'Vorspeise']);    // abweichende Slot-Rolle
+
+    $namen = $svc->tauschbarePakete($this->rootTeam, $slot->refresh())->pluck('name')->all();
+
+    // Vor dem Fix hätte der Rollen-Filter (slot.role='Vorspeise') beide ausgeschlossen.
+    expect($namen)->toContain('Buffet ohne Rolle')
+        ->and($namen)->toContain('Grill B');
+});

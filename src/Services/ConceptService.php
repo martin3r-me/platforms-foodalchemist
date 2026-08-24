@@ -476,9 +476,9 @@ class ConceptService
 
     public function tauschbarePakete(Team $team, FoodAlchemistConceptSlot $slot): Collection
     {
+        // Paket-Rolle 2026-08-24 entfernt: jedes aktive Paket ist überall tauschbar (kein Rollen-Filter mehr).
         return FoodAlchemistPaket::visibleToTeam($team)
             ->where('is_inactive', false)
-            ->when($slot->role, fn ($q, $role) => $q->where('role', $role))
             ->orderBy('name')
             ->get(['id', 'name', 'role', 'price_per_person']);
     }
