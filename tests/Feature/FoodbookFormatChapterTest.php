@@ -122,3 +122,20 @@ it('graceful: gelöschtes Format lässt dokumentDaten nicht crashen (Kapitel fä
     expect(collect($doc['kapitel'])->firstWhere('ist_format', true))->toBeNull()
         ->and($doc['kapitel'])->toHaveCount(1);
 });
+
+it('Inline-Vorschau-Snapshot enthält das Format-Kapitel mit Editionen (nicht leer)', function () {
+    // Bug 2026-08-24: PDF (live) rendert Editionen, Inline (Snapshot) blieb „—".
+    // Der Snapshot MUSS die Format-Projektion tragen; die Inline-Blade rendert sie dann.
+    $f = $this->fsvc->create($this->rootTeam, ['name' => 'CHEFS.CORNER']);
+    ($this->makeEdition)($f->id, 'FUTURE FLAVORS', 47.50, 'Sous-Vide Prime');
+    $fb = ($this->makeFoodbook)();
+    $this->svc->insertFormatChapter($this->rootTeam, $fb->id, $f->id);
+
+    $this->svc->vorschauSnapshotAktualisieren($this->rootTeam, $fb->id);
+    $snap = $this->svc->vorschauSnapshot($fb->fresh());
+    $row = collect($snap['kapitel'] ?? [])->firstWhere('ist_format', true);
+
+    expect($row)->not->toBeNull()
+        ->and($row['editionen'])->toHaveCount(1)
+        ->and(collect($row['editionen'][0]['gerichte'])->pluck('text'))->toContain('Sous-Vide Prime');
+});
