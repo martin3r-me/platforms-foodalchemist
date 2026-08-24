@@ -86,6 +86,19 @@ class LaFirstGpService
                 // LA schon woanders gemappt o. ä. — GP bleibt trotzdem nutzbar.
             }
 
+            // Allergen-Konfidenz SOFORT aus den LA-Daten setzen (statt null zu lassen). Sonst schlägt ein
+            // frisch gemintetes GP im Rezept-Recompute als „unbewertet = low" durch und feuert den §7-Guard
+            // (RecipeRecomputeService::allergene), der die ohnehin LA-abgeleiteten Allergen-WERTE des ganzen
+            // Gerichts spurios auf „unbekannt" nullt. backfillAllergenKonfidenz rechnet la_union (leeres
+            // LA-Profil → none/low, kein false-high) und respektiert manual/ki-Provenienz (skip).
+            // Best-effort: ein Backfill-Fehler darf den Mint NIE scheitern lassen (Doktrin: jede Fehlerquelle
+            // bricht höchstens die Konfidenz, nicht den Mint).
+            try {
+                app(GpAggregateService::class)->backfillAllergenKonfidenz($gp, apply: true);
+            } catch (\Throwable $e) {
+                // Konfidenz bleibt null (low); Werte-Vererbung ist davon unberührt.
+            }
+
             // Spec 16·S4: getroffenen LA on-demand nachklassifizieren — ASYNC, nie inline.
             // Der Job blockiert den Mint nie und ist idempotent (klassifiziert → skip).
             if ($struktur === null || $struktur->classified_at === null) {
