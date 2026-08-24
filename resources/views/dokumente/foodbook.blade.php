@@ -246,6 +246,8 @@
                             </td>
                             <td class="cbody">
                                 <div class="cname">{{ $ed['name'] }}</div>
+                                @if($ed['claim'] ?? null)<div class="ctag"><em>„{{ $ed['claim'] }}“</em></div>@endif
+                                @if($ed['text'] ?? null)<div class="kaptext">{!! nl2br(e($ed['text'])) !!}</div>@endif
                                 @foreach($ed['gerichte'] as $g)
                                     @if(($g['type'] ?? '') === 'paket' || ($g['type'] ?? '') === 'header')
                                         <div class="dish paket" style="margin-left: {{ ($g['einrueckung'] ?? 0) * 12 }}px">{{ $g['text'] }}</div>

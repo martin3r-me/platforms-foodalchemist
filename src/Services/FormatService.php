@@ -42,7 +42,7 @@ class FormatService
     {
         return FoodAlchemistFormat::visibleToTeam($team)
             ->with([
-                'editions:id,name,consumer_name,status,format_id,format_position,price_per_person_cache',
+                'editions:id,name,consumer_name,claim,description,status,format_id,format_position,price_per_person_cache',
                 'images' => fn ($q) => $q->orderBy('sort_order'),
             ])
             ->find($id);
@@ -160,6 +160,51 @@ class FormatService
                     ->update(['format_position' => $i]);
             }
         });
+    }
+
+    /** Phase D: Standard-Sektions-Gerüst einer neu angelegten Edition (Concepter 2.0). */
+    public const SEKTIONS_GERUEST = ['Amuse', 'Vorspeise', 'Hauptgang', 'Dessert'];
+
+    /**
+     * Phase D (Concepter 2.0): Kunden-Wording einer Edition (= Unterkapitel) pflegen —
+     * Foodbook-Kapitel-Parität: consumer_name (Titel), claim, description (Hinführung).
+     * Guardet, dass die Edition zu DIESEM Format gehört + team-eigen ist.
+     */
+    public function updateEditionWording(Team $team, int $formatId, int $conceptId, array $wording): FoodAlchemistConcept
+    {
+        $format = FoodAlchemistFormat::visibleToTeam($team)->findOrFail($formatId);
+        $this->guardOwner($format, $team);
+        $concept = FoodAlchemistConcept::visibleToTeam($team)->where('format_id', $formatId)->findOrFail($conceptId);
+        if (! $concept->isOwnedBy($team)) {
+            throw new \RuntimeException('Geerbte Edition — Pflege nur durchs Besitzer-Team (D1).');
+        }
+
+        $felder = array_intersect_key($wording, array_flip(['consumer_name', 'claim', 'description']));
+
+        return app(ConceptService::class)->update($team, $conceptId, $felder);
+    }
+
+    /**
+     * Phase D (Concepter 2.0): eine NEUE Edition (Concept) im Format-Kontext anlegen und
+     * zuordnen. `$withSkeleton` seedet automatisch das Sektions-Gerüst (AMUSE/Vorspeise/
+     * Hauptgang/Dessert als Header-Slots) — das „automatisch"-Grundgerüst.
+     */
+    public function createEdition(Team $team, int $formatId, string $name, bool $withSkeleton = true): FoodAlchemistConcept
+    {
+        $format = FoodAlchemistFormat::visibleToTeam($team)->findOrFail($formatId);
+        $this->guardOwner($format, $team);
+
+        $concepts = app(ConceptService::class);
+        $concept = $concepts->create($team, ['name' => trim($name) !== '' ? trim($name) : 'Neue Edition', 'status' => 'draft']);
+        $this->attachEdition($team, $formatId, $concept->id);
+
+        if ($withSkeleton) {
+            foreach (self::SEKTIONS_GERUEST as $sektion) {
+                $concepts->addBlock($team, $concept->id, 'header', ['title' => $sektion]);
+            }
+        }
+
+        return $concept->refresh();
     }
 
     // ── Marketing-Bilder ─────────────────────────────────────────────────────

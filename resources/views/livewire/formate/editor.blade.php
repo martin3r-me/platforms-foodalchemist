@@ -62,30 +62,85 @@
                 <textarea wire:model="form.story" rows="6" class="{{ $input }}" placeholder="Die Marketing-Story des Formats (Kunden-/Präsentationstext)…"></textarea>
             @endif
 
-            {{-- ── Tab: EDITIONEN ──────────────────────────────────── --}}
+            {{-- ── Tab: EDITIONEN (Concepter 2.0: Oberkapitel → Unterkapitel) ────── --}}
             @if($tab === 'editionen')
-                <h4 class="{{ $sekHead }}">Zugeordnete Editionen ({{ $format->editions->count() }})</h4>
-                <div class="space-y-1">
-                    @forelse($format->editions as $i => $e)
-                        <div wire:key="ed-{{ $e->id }}" class="flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-white/5 border border-white/10">
-                            <div class="min-w-0">
-                                <span class="text-sm font-medium text-gray-100 truncate">{{ $e->consumer_name ?: $e->name }}</span>
-                                <span class="text-xs text-gray-400 ml-2 tabular-nums">{{ $e->price_per_person_cache !== null ? number_format((float) $e->price_per_person_cache, 2, ',', '.') . ' €' : '—' }}</span>
+                {{-- Oberkapitel = das Format (automatisch) --}}
+                <div class="mb-3 px-3 py-2 rounded-lg bg-violet-500/10 border border-violet-400/20">
+                    <span class="text-[11px] uppercase tracking-wider text-violet-300">Oberkapitel (automatisch)</span>
+                    <p class="text-sm font-semibold text-gray-100">{{ $format->consumer_name ?: $format->name }}</p>
+                    @if($format->claim)<p class="text-xs italic text-violet-200">„{{ $format->claim }}“</p>@endif
+                </div>
+
+                <h4 class="{{ $sekHead }}">Unterkapitel · Editionen ({{ $format->editions->count() }})</h4>
+                <div class="space-y-3">
+                    @forelse($format->editions as $e)
+                        <div wire:key="ed-{{ $e->id }}" class="rounded-xl bg-white/5 border border-white/10 p-3">
+                            <div class="flex items-center justify-between gap-2 mb-2">
+                                <span class="text-[11px] uppercase tracking-wider text-gray-400">Unterkapitel {{ $loop->iteration }} · {{ $e->name }}</span>
+                                <div class="flex items-center gap-1 shrink-0">
+                                    <a href="{{ route('foodalchemist.concepter.index', ['sel' => $e->id]) }}" target="_blank"
+                                       class="{{ $btnGhostXs ?? $btnGhost }}" title="Gerichte/Sektionen im Concepter bearbeiten">Im Concepter ↗</a>
+                                    <button type="button" wire:click="editionVerschieben({{ $e->id }}, -1)" @disabled($loop->first) class="{{ $btnGhostXs ?? $btnGhost }} disabled:opacity-30" title="nach oben">↑</button>
+                                    <button type="button" wire:click="editionVerschieben({{ $e->id }}, 1)" @disabled($loop->last) class="{{ $btnGhostXs ?? $btnGhost }} disabled:opacity-30" title="nach unten">↓</button>
+                                    <button type="button" wire:click="editionLoesen({{ $e->id }})" class="{{ $btnGhostXs ?? $btnGhost }} text-rose-400" title="lösen">✕</button>
+                                </div>
                             </div>
-                            <div class="flex items-center gap-1 shrink-0">
-                                <button type="button" wire:click="editionVerschieben({{ $e->id }}, -1)" @disabled($loop->first) class="{{ $btnGhostXs ?? $btnGhost }} disabled:opacity-30" title="nach oben">↑</button>
-                                <button type="button" wire:click="editionVerschieben({{ $e->id }}, 1)" @disabled($loop->last) class="{{ $btnGhostXs ?? $btnGhost }} disabled:opacity-30" title="nach unten">↓</button>
-                                <button type="button" wire:click="editionLoesen({{ $e->id }})" class="{{ $btnGhostXs ?? $btnGhost }} text-rose-400" title="lösen">✕</button>
+
+                            {{-- Wording pro Unterkapitel (Foodbook-Kapitel-Parität) --}}
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-2 mb-2">
+                                <div>
+                                    <label class="{{ $label }}">Konsumenten-Titel</label>
+                                    <input type="text" value="{{ $e->consumer_name }}" placeholder="{{ $e->name }}"
+                                           wire:change="editionWordingSpeichern({{ $e->id }}, 'consumer_name', $event.target.value)" class="{{ $input }}" />
+                                </div>
+                                <div>
+                                    <label class="{{ $label }}">Claim</label>
+                                    <input type="text" value="{{ $e->claim }}" placeholder="z. B. „Die neue Küche der Welt“"
+                                           wire:change="editionWordingSpeichern({{ $e->id }}, 'claim', $event.target.value)" class="{{ $input }}" />
+                                </div>
+                            </div>
+                            <div class="mb-2">
+                                <label class="{{ $label }}">Hinführung</label>
+                                <textarea rows="2" placeholder="Kunden-Hinführung zu dieser Edition …"
+                                          wire:change="editionWordingSpeichern({{ $e->id }}, 'description', $event.target.value)" class="{{ $input }}">{{ $e->description }}</textarea>
+                            </div>
+
+                            {{-- Live-Vorschau: Sektionen + Gerichte (aus dem Concept, gleiche Auflösung wie im Foodbook) --}}
+                            <div class="rounded-lg bg-black/20 p-2">
+                                <div class="flex items-center justify-between">
+                                    <span class="text-[10px] uppercase tracking-wider text-gray-500">Menü-Vorschau</span>
+                                    @if($e->price_per_person_cache !== null)<span class="text-[11px] text-gray-400 tabular-nums">{{ number_format((float) $e->price_per_person_cache, 2, ',', '.') }} € p. P.</span>@endif
+                                </div>
+                                @forelse($editionMenus[$e->id] ?? [] as $g)
+                                    @if($g['type'] === 'header')
+                                        <p class="text-xs font-semibold text-gray-200 mt-1">{{ $g['text'] }}</p>
+                                    @elseif($g['type'] === 'paket')
+                                        <p class="text-xs font-medium text-gray-300 mt-1" style="margin-left:8px">{{ $g['text'] }}</p>
+                                    @else
+                                        <p class="text-xs text-gray-400" style="margin-left:{{ 8 + ($g['einrueckung'] ?? 0) * 12 }}px">· {{ $g['text'] }}</p>
+                                    @endif
+                                @empty
+                                    <p class="text-[11px] text-gray-500 mt-1">Noch keine Gerichte — „Im Concepter ↗" füllen.</p>
+                                @endforelse
                             </div>
                         </div>
                     @empty
-                        <p class="text-xs text-gray-400">Noch keine Editionen. Unten ein bestehendes Konzept zuordnen.</p>
+                        <p class="text-xs text-gray-400">Noch keine Editionen. Unten neu anlegen oder ein bestehendes Konzept zuordnen.</p>
                     @endforelse
                 </div>
 
-                <h4 class="{{ $sekHead }} mt-4 pt-3 border-t border-white/10">Konzept zuordnen (frei stehende Zusammenstellungen)</h4>
+                {{-- Neue Edition inline (mit Auto-Sektions-Gerüst) --}}
+                <h4 class="{{ $sekHead }} mt-4 pt-3 border-t border-white/10">Neue Edition anlegen</h4>
+                <div class="flex items-center gap-2">
+                    <input type="text" wire:model="neueEditionName" wire:keydown.enter="neueEdition" placeholder="Name der Edition (z. B. FUTURE FLAVORS) …" class="{{ $input }}" />
+                    <button type="button" wire:click="neueEdition" class="{{ $btnPrimary }} shrink-0">+ Edition (mit Gerüst)</button>
+                </div>
+                <p class="text-[11px] text-gray-500 mt-1">Legt automatisch die Sektionen {{ implode(' · ', \Platform\FoodAlchemist\Services\FormatService::SEKTIONS_GERUEST) }} an.</p>
+
+                {{-- Bestehendes Konzept zuordnen --}}
+                <h4 class="{{ $sekHead }} mt-4 pt-3 border-t border-white/10">Bestehendes Konzept zuordnen</h4>
                 <input type="search" wire:model.live.debounce.300ms="editionSuche" placeholder="Konzept suchen …" class="{{ $input }} mb-2" />
-                <div class="space-y-1 max-h-72 overflow-auto">
+                <div class="space-y-1 max-h-60 overflow-auto">
                     @forelse($kandidaten as $k)
                         <div wire:key="kand-{{ $k->id }}" class="flex items-center justify-between gap-2 px-3 py-1.5 rounded-lg bg-white/[0.03] hover:bg-white/[0.06]">
                             <span class="text-sm text-gray-200 truncate">{{ $k->name }}</span>

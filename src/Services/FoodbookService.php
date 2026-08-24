@@ -1695,6 +1695,8 @@ class FoodbookService
                     foreach ($format->editions as $ed) {
                         $editionen[] = [
                             'name' => $ed->consumer_name ?: $ed->name,
+                            'claim' => $ed->claim ?: null,                                 // Unterkapitel-Claim (Phase D)
+                            'text' => trim((string) $ed->description) ?: null,             // Unterkapitel-Hinführung (Phase D)
                             'preis_pp' => $ed->price_per_person_cache !== null ? (float) $ed->price_per_person_cache : null,
                             'gerichte' => $wording->gerichtZeilen($ed),
                         ];
