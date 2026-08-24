@@ -810,23 +810,24 @@
                     </div>
                 </x-foodalchemist::modal-section>
 
-                {{-- Foodpairing-Composer B1: gezielte Kreation aus den gewählten Ankern. Die Anker reisen
-                     als verbindliche Leit-Aromen (seed_anker) in den bestehenden Generator → Draft-Entwurf. --}}
-                <x-foodalchemist::modal-section title="Aus diesen Pairings erzeugen">
+                {{-- Foodpairing-Composer: aus den gewählten Ankern in den Erstellen-Tab springen. Der Brief
+                     wird aus den Ankern vorbefüllt, die Anker reisen als verbindliche Leit-Aromen
+                     (seed_anker) mit — im Erstellen-Tab setzt du die Leitplanken (voller Regler) und startest. --}}
+                <x-foodalchemist::modal-section title="Aus diesen Pairings weiterbauen">
                     <p class="text-[11px] text-slate-400 mb-2">
-                        Erzeugt einen <strong>Entwurf</strong> gezielt aus den gewählten Ankern
-                        (verbindliche Leit-Aromen + ihre Harmonie-Palette). Danach unten im Ergebnis prüfen.
+                        Übernimmt die Anker als <strong>verbindliche Leit-Aromen</strong> und springt in den
+                        Erstellen-Tab: Brief ist vorbefüllt, dort die <strong>Leitplanken</strong> setzen und starten.
                     </p>
                     <div class="flex flex-wrap gap-2">
-                        <button type="button" wire:click="composerGeneriere('rezept')" @click="tab='worker'"
-                                @disabled($laeuft || empty($composerAnker))
+                        <button type="button" wire:click="composerUebernehmen('rezept')" @click="tab='basisrezept'"
+                                @disabled(empty($composerAnker))
                                 class="{{ $btnPrimary }} disabled:opacity-40" data-composer-go-rezept>
-                            Als Basisrezept erzeugen
+                            Als Basisrezept vorbereiten →
                         </button>
-                        <button type="button" wire:click="composerGeneriere('gericht')" @click="tab='worker'"
-                                @disabled($laeuft || empty($composerAnker))
+                        <button type="button" wire:click="composerUebernehmen('gericht')" @click="tab='gericht'"
+                                @disabled(empty($composerAnker))
                                 class="{{ $btnGhost }} disabled:opacity-40" data-composer-go-gericht>
-                            Als Gericht erzeugen
+                            Als Gericht vorbereiten →
                         </button>
                     </div>
                     @if(empty($composerAnker))
