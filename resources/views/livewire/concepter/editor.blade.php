@@ -204,7 +204,7 @@
                          Stil fürs ganze Konzept + ✨ erzeugt je Position Brand-Voice-Wording (WordingResolver-Kette). --}}
                     <div class="flex items-center gap-1.5 mt-2" data-konzept-schreibstil>
                         <span class="{{ $label }} !mb-0 mr-1">Schreibstil</span>
-                        <select wire:model="form.writing_style_id" class="{{ $input }} !w-auto !py-0.5 !text-[11px]" title="Tonalität fürs Wording des ganzen Konzepts — Foodbook kann je Kunde überschreiben">
+                        <select wire:model="form.writing_style_id" wire:change="speichern" class="{{ $input }} !w-auto !py-0.5 !text-[11px]" title="Tonalität fürs Wording — wird sofort gespeichert; ✨ Wording erzeugt daraus die Texte (kein Auto-Erzeugen, LLM-Kosten)">
                             <option value="">— neutral —</option>
                             @foreach($schreibstile as $s)<option value="{{ $s->id }}">{{ $s->name }}</option>@endforeach
                         </select>
@@ -230,13 +230,34 @@
                      bewusst per Toggle gewählt (Dominique 2026-08-13). --}}
                 <div class="flex gap-3 items-start w-full" x-data="{ dragTyp: null, dragId: null, dragSlotId: null, bauModus: false }">
                 {{-- Phase 3: linke Spalte — Basisrezepte als Position einfügen (sticky Panel wie zutaten-kern) --}}
-                <aside x-show="bauModus" x-cloak class="w-56 shrink-0 hidden xl:flex flex-col rounded-xl bg-gray-500/[0.07] border border-black/5 p-2.5 sticky top-0 self-start max-h-[70vh]" data-konzept-basisliste>
-                    {{-- Umschalter: Basisrezept ⇄ Paket (Pakete bei 300+ über Such-/Filter-Liste einfügen) --}}
+                {{-- EIN Quellen-Picker (2026-08-24): die frühere linke [Basisrezept/Paket] + rechte [VK-Gerichte]
+                     Seitenleiste sind hier zu einem breiteren Tab-Picker zusammengelegt — Gerichte / Pakete /
+                     Basisrezepte. Breiter (w-80), damit die langen Gericht-Namen lesbar bleiben. --}}
+                <aside x-show="bauModus" x-cloak class="w-80 shrink-0 hidden xl:flex flex-col rounded-xl bg-gray-500/[0.07] border border-black/5 p-2.5 sticky top-0 self-start max-h-[70vh]" data-konzept-quelle-picker data-konzept-basisliste>
+                    {{-- Umschalter: Gerichte ⇄ Pakete ⇄ Basisrezepte --}}
                     <div class="flex gap-1 mb-1.5" data-linke-liste-umschalter>
-                        <button type="button" wire:click="$set('linkeListe', 'basisrezept')" class="{{ $pill }} {{ $linkeListe === 'basisrezept' ? $variantPill['primary'] : $variantPill['secondary'] }}">Basisrezept</button>
-                        <button type="button" wire:click="$set('linkeListe', 'paket')" class="{{ $pill }} {{ $linkeListe === 'paket' ? $variantPill['primary'] : $variantPill['secondary'] }}">Paket</button>
+                        <button type="button" wire:click="$set('linkeListe', 'gericht')" class="{{ $pill }} {{ $linkeListe === 'gericht' ? $variantPill['primary'] : $variantPill['secondary'] }}">Gerichte</button>
+                        <button type="button" wire:click="$set('linkeListe', 'paket')" class="{{ $pill }} {{ $linkeListe === 'paket' ? $variantPill['primary'] : $variantPill['secondary'] }}">Pakete</button>
+                        <button type="button" wire:click="$set('linkeListe', 'basisrezept')" class="{{ $pill }} {{ $linkeListe === 'basisrezept' ? $variantPill['primary'] : $variantPill['secondary'] }}">Basisrezepte</button>
                     </div>
-                    @if($linkeListe === 'paket')
+                    @if($linkeListe === 'gericht')
+                        {{-- VK-Gerichte (2026-08-24 aus der früheren rechten Spalte hierher) --}}
+                        <p class="{{ $dt }} mb-1">VK-Gerichte ({{ $gerichtListe->count() }})</p>
+                        @include('foodalchemist::livewire.concepter.partials.gericht-baum', ['sucheModel' => 'gerichtSuche'])
+                        <div class="space-y-px flex-1 min-h-0 overflow-y-auto -mx-1 px-1 mt-1.5" data-konzept-gerichtliste>
+                            @forelse($gerichtListe as $gr)
+                                <div wire:key="kgr-{{ $gr->id }}" draggable="true" @dragstart="dragTyp = 'gericht'; dragId = {{ $gr->id }}; $event.dataTransfer.effectAllowed = 'copy'" @dragend="dragTyp = null; dragId = null" class="group flex items-center gap-1 px-1 py-0.5 rounded hover:bg-violet-500/5 text-[11px] cursor-grab active:cursor-grabbing">
+                                    <span class="shrink-0 px-1 rounded text-[9px] font-medium uppercase tracking-wider" style="{{ $typStyle('gericht') }}">G</span>
+                                    <span class="min-w-0 flex-1 break-words leading-snug text-gray-700" title="{{ $gr->name }}">{{ $gr->name }}</span>
+                                    <span class="shrink-0 text-[10px] text-gray-500 tabular-nums">{{ $gr->sales_net !== null ? number_format((float) $gr->sales_net, 2, ',', '.') . ' €' : '' }}</span>
+                                    <button type="button" @click="Livewire.dispatch('vk-modal.oeffnen', { id: {{ $gr->id }} })" class="shrink-0 text-gray-300 hover:text-violet-500 leading-none" title="Gericht einsehen">@svg('heroicon-o-banknotes', 'w-3.5 h-3.5 inline-block align-middle')</button>
+                                    <button type="button" wire:click="positionEinfuegen('gericht', {{ $gr->id }})" class="shrink-0 px-1 rounded font-medium text-violet-500 hover:bg-violet-500/15 leading-none" title="als Position einfügen">+</button>
+                                </div>
+                            @empty
+                                <p class="text-[10px] text-gray-500 px-1">— keine Treffer —</p>
+                            @endforelse
+                        </div>
+                    @elseif($linkeListe === 'paket')
                         <p class="{{ $dt }} mb-1">Pakete ({{ $paketListe->count() }})</p>
                         <input type="search" wire:model.live.debounce.300ms="basisSuche" placeholder="Paket suchen (Name/Rolle) …" class="{{ $input }} !py-0.5 !text-[11px] mb-1" />
                         <select wire:model.live="paketKlasse" class="{{ $input }} !py-0.5 !text-[11px] mb-1.5" data-paket-filter-klasse>
@@ -563,7 +584,7 @@
                                             {{-- Concept-Wording: Brand-Voice-Anzeigename je Position (leer = Standardname; ✨ oben füllt alle) --}}
                                             <input type="text" wire:model.blur="slotForm.{{ $slot->id }}.wording" wire:change="wordingSpeichern({{ $slot->id }})" class="{{ $input }} !py-0.5 !text-[11px] italic mt-1 w-full" placeholder="Anzeigename im Konzept-Wording … (leer = „{{ $g->name }}“)" data-slot-wording />
                                         @else
-                                            <span class="text-xs text-gray-500">leer — links/rechts aus den Listen einfügen</span>
+                                            <span class="text-xs text-gray-500">leer — links aus dem Quellen-Picker einfügen</span>
                                             @if($slot->note)
                                                 {{-- R6.1: Generator-Begründung, warum der Slot bewusst leer blieb --}}
                                                 <div class="text-[11px] text-amber-600 mt-0.5" data-slot-leer-begruendung>@svg('heroicon-o-exclamation-triangle', 'w-3.5 h-3.5 inline-block align-middle') {{ $slot->note }}</div>
@@ -715,32 +736,15 @@
                                 </tr>
                             @endif
                         @empty
-                            <tr><td colspan="9" class="text-xs text-gray-500 py-4 text-center">Noch keine Positionen — links/rechts aus den Listen mit „+" einfügen (oder ziehen), Abschnitte über „+ Paket".</td></tr>
+                            <tr><td colspan="9" class="text-xs text-gray-500 py-4 text-center">Noch keine Positionen — links aus dem Quellen-Picker (Gerichte / Pakete / Basisrezepte) mit „+" einfügen (oder ziehen), Abschnitte über „+ Paket".</td></tr>
                         @endforelse
                         </tbody>
                     </table>
                     </div>
                     </div>{{-- /BEARBEITEN-ANSICHT (x-show bauModus) --}}
                 </div>{{-- /mittlere Spalte --}}
-                {{-- Phase 3: rechte Spalte — VK-Gerichte als Position einfügen (VK-Baum-Filter + Liste) --}}
-                <aside x-show="bauModus" x-cloak class="w-56 shrink-0 hidden xl:flex flex-col rounded-xl bg-gray-500/[0.07] border border-black/5 p-2.5 sticky top-0 self-start max-h-[70vh]" data-konzept-gerichtliste>
-                    <p class="{{ $dt }} mb-1">VK-Gerichte ({{ $gerichtListe->count() }})</p>
-                    @include('foodalchemist::livewire.concepter.partials.gericht-baum', ['sucheModel' => 'gerichtSuche'])
-                    <div class="space-y-px flex-1 min-h-0 overflow-y-auto -mx-1 px-1 mt-1.5">
-                        @forelse($gerichtListe as $gr)
-                            <div wire:key="kgr-{{ $gr->id }}" draggable="true" @dragstart="dragTyp = 'gericht'; dragId = {{ $gr->id }}; $event.dataTransfer.effectAllowed = 'copy'" @dragend="dragTyp = null; dragId = null" class="group flex items-center gap-1 px-1 py-0.5 rounded hover:bg-violet-500/5 text-[11px] cursor-grab active:cursor-grabbing">
-                                <span class="shrink-0 px-1 rounded text-[9px] font-medium uppercase tracking-wider" style="{{ $typStyle('gericht') }}">G</span>
-                                <span class="min-w-0 flex-1 break-words leading-snug text-gray-700" title="{{ $gr->name }}">{{ $gr->name }}</span>
-                                <span class="shrink-0 text-[10px] text-gray-500 tabular-nums">{{ $gr->sales_net !== null ? number_format((float) $gr->sales_net, 2, ',', '.') . ' €' : '' }}</span>
-                                <button type="button" @click="Livewire.dispatch('vk-modal.oeffnen', { id: {{ $gr->id }} })" class="shrink-0 text-gray-300 hover:text-violet-500 leading-none" title="Gericht einsehen">@svg('heroicon-o-banknotes', 'w-3.5 h-3.5 inline-block align-middle')️</button>
-                                <button type="button" wire:click="positionEinfuegen('gericht', {{ $gr->id }})" class="shrink-0 px-1 rounded font-medium text-violet-500 hover:bg-violet-500/15 leading-none" title="als Position einfügen">+</button>
-                            </div>
-                        @empty
-                            <p class="text-[10px] text-gray-500 px-1">— keine Treffer —</p>
-                        @endforelse
-                    </div>
-                </aside>
-                </div>{{-- /3-Spalten-Flex --}}
+                {{-- rechte VK-Gerichte-Spalte 2026-08-24 in den linken Quellen-Picker (Tab „Gerichte") verschoben --}}
+                </div>{{-- /Picker + Positionen (2-Spalten-Flex) --}}
                 @else
                     {{-- Paket: Gerichte schnüren — Mitte (Inhalt) + rechte VK-Gerichte-Filter-Spalte (wie Concept-Aufbau, Dominique 2026-06-17) --}}
                     <div class="flex gap-3 items-start">

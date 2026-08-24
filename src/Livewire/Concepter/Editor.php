@@ -80,8 +80,9 @@ class Editor extends Component
     // Kombi-Suche (wie Gerichte-Editor): filtert BEIDE Seiten-Listen gleichzeitig.
     public string $kombiSuche = '';
 
-    // Linke Seiten-Liste: umschaltbar Basisrezept ⇄ Paket (Pakete bei 300+ über Such-/Filter-Liste einfügen)
-    public string $linkeListe = 'basisrezept';   // basisrezept | paket
+    // Quellen-Picker (2026-08-24: die zwei Seitenleisten [links Basisrezept/Paket, rechts VK-Gerichte]
+    // sind zu EINEM Tab-Picker zusammengelegt) — Default = Gerichte (häufigster Fall).
+    public string $linkeListe = 'gericht';   // gericht | paket | basisrezept
 
     public string $paketKlasse = '';
 
@@ -1222,7 +1223,9 @@ class Editor extends Component
                     $paketListe = $this->linkeListe === 'paket'
                         ? $pakete->paketKandidaten($team, $linkeSuche, ['class' => $this->paketKlasse])
                         : collect();
-                    $gerichtListe = $pakete->gerichtKandidaten($team, $rechteSuche, $pickFilter);
+                    $gerichtListe = $this->linkeListe === 'gericht'
+                        ? $pakete->gerichtKandidaten($team, $rechteSuche, $pickFilter)
+                        : collect();
                     if ($this->fillSlotId !== null) {
                         if ($this->pickTyp === 'basisrezept') {
                             $kandidaten = $this->gerichtSuche !== '' ? $pakete->basisKandidaten($team, $this->gerichtSuche) : collect();
