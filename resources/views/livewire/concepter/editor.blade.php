@@ -757,8 +757,54 @@
                 {{-- rechte VK-Gerichte-Spalte 2026-08-24 in den linken Quellen-Picker (Tab „Gerichte") verschoben --}}
                 </div>{{-- /Picker + Positionen (2-Spalten-Flex) --}}
                 @else
-                    {{-- Paket: Gerichte schnüren — Mitte (Inhalt) + rechte VK-Gerichte-Filter-Spalte (wie Concept-Aufbau, Dominique 2026-06-17) --}}
+                    {{-- Paket: Posten schnüren — LINKER Quellen-Picker (spiegelt den Concept-Aufbau, 2026-08-24) + Posten-Liste --}}
                     <div class="flex gap-3 items-start">
+                    {{-- Linker Quellen-Picker: Tabs Gerichte / Basisrezepte, gleiche Filter wie im Concept; Park-Flow (Menge/g-Person) bleibt Paket-Anpassung --}}
+                    <aside class="w-80 shrink-0 hidden lg:flex flex-col rounded-xl bg-gray-500/[0.07] border border-black/5 p-2.5 sticky top-0 self-start max-h-[70vh]" data-paket-quelle-picker data-paket-gerichtliste
+                           x-data="{
+                                geparkt: null, quantity: '', flash: false,
+                                park(id, name) { this.geparkt = { id, name }; this.quantity = ''; this.$nextTick(() => this.$refs.quantity && this.$refs.quantity.focus()); },
+                                einfuegen() { if (!this.geparkt) return; this.$wire.gerichtHinzu(this.geparkt.id, this.quantity); this.geparkt = null; this.quantity = ''; this.flash = true; setTimeout(() => { this.flash = false; }, 1400); },
+                             }">
+                        {{-- Umschalter: Gerichte ⇄ Basisrezepte (Pakete enthalten keine Pakete → kein Paket-Tab) --}}
+                        <div class="flex gap-1 mb-1.5" data-paket-quelle-umschalter>
+                            <button type="button" wire:click="$set('paketQuelle', 'gericht')" class="{{ $pill }} {{ $paketQuelle !== 'basisrezept' ? $variantPill['primary'] : $variantPill['secondary'] }}">Gerichte</button>
+                            <button type="button" wire:click="$set('paketQuelle', 'basisrezept')" class="{{ $pill }} {{ $paketQuelle === 'basisrezept' ? $variantPill['primary'] : $variantPill['secondary'] }}">Basisrezepte</button>
+                        </div>
+                        <p class="{{ $dt }} mb-1">Posten hinzufügen · {{ $paketQuelle === 'basisrezept' ? 'Basisrezepte' : 'VK-Gerichte' }}</p>
+                        <div class="space-y-1 flex-1 min-h-0 overflow-y-auto">
+                            <div x-show="geparkt === null">
+                                @if($paketQuelle === 'basisrezept')
+                                    <input type="search" wire:model.live.debounce.300ms="paketGerichtSuche" placeholder="Basisrezept suchen …" class="{{ $input }} w-full" />
+                                @else
+                                    @include('foodalchemist::livewire.concepter.partials.gericht-baum', ['sucheModel' => 'paketGerichtSuche'])
+                                @endif
+                                <p class="text-[10px] text-gray-500 mt-0.5">Treffer: <span class="text-violet-500 font-bold">+</span> parken → {{ $paketQuelle === 'basisrezept' ? 'g/Person' : 'Menge/Person' }} → Enter.</p>
+                                @if($paketKandidaten->isNotEmpty())
+                                    <div class="space-y-px mt-1 -mx-1 px-1">
+                                        @foreach($paketKandidaten as $kand)
+                                            <div wire:key="epk-{{ $paketQuelle }}-{{ $kand->id }}" class="group flex items-center gap-1 px-1 py-0.5 rounded hover:bg-violet-500/5 text-[11px]">
+                                                <span class="shrink-0 px-1 rounded text-[9px] font-medium uppercase tracking-wider" style="{{ $typStyle($paketQuelle === 'basisrezept' ? 'basisrezept' : 'gericht') }}">{{ $paketQuelle === 'basisrezept' ? 'BR' : 'G' }}</span>
+                                                <span class="min-w-0 flex-1 break-words leading-snug text-gray-700" title="{{ $kand->name }}">{{ $kand->name }}</span>
+                                                <span class="shrink-0 text-[10px] text-gray-500 tabular-nums">@if($paketQuelle === 'basisrezept'){{ $kand->ek_total_eur !== null ? 'EK ' . number_format((float) $kand->ek_total_eur, 2, ',', '.') . ' €' : '' }}@else{{ $kand->sales_net !== null ? number_format((float) $kand->sales_net, 2, ',', '.') . ' €' : '' }}@endif</span>
+                                                <button type="button" @click="park({{ $kand->id }}, @js($kand->name))" class="shrink-0 px-1 rounded font-medium text-violet-500 hover:bg-violet-500/15 leading-none" title="parken">+</button>
+                                            </div>
+                                        @endforeach
+                                    </div>
+                                @elseif($paketGerichtSuche !== '' || $pickHg !== null || $pickKlasse !== null || $pickGeschmack !== '' || $pickDiaet !== '')
+                                    <p class="text-[11px] text-gray-500 px-2 py-1 mt-1">Keine Treffer für diese Auswahl.</p>
+                                @endif
+                            </div>
+                            <div x-show="geparkt !== null" x-cloak class="flex items-center gap-2 flex-wrap" data-park-zeile>
+                                <span class="{{ $pill }} {{ $variantPill['info'] }}">{{ $paketQuelle === 'basisrezept' ? 'Basisrezept' : 'Gericht' }}</span>
+                                <span class="flex-1 min-w-0 truncate text-sm" x-text="geparkt?.name"></span>
+                                <input type="number" step="0.01" min="0" x-ref="quantity" x-model="quantity" @keydown.enter.prevent="einfuegen()" placeholder="{{ $paketQuelle === 'basisrezept' ? 'g/Person' : 'Menge/Person' }}" class="{{ $input }} w-28 text-right tabular-nums" />
+                                <button type="button" @click="einfuegen()" class="{{ $btnGhostXs }} text-emerald-600">Einfügen ⏎</button>
+                                <button type="button" @click="geparkt = null" class="{{ $btnGhostXs }}">✕</button>
+                            </div>
+                            <p x-show="flash" x-cloak class="text-[11px] text-emerald-600">✓ hinzugefügt</p>
+                        </div>
+                    </aside>{{-- /linker Paket-Quellen-Picker --}}
                     <div class="flex-1 min-w-0 space-y-2">
                     <div class="flex items-center justify-between">
                         <h3 class="font-medium text-gray-900">Posten im Paket</h3>
@@ -781,56 +827,10 @@
                                 <button type="button" wire:click="gerichtRaus({{ $pg->sales_recipe_id }})" class="text-gray-500 hover:text-red-500 px-1" title="entfernen">✕</button>
                             </div>
                         @empty
-                            <p class="text-xs text-gray-500 py-4 text-center">Noch keine Posten. Rechts Gericht oder Basisrezept suchen und hinzufügen.</p>
+                            <p class="text-xs text-gray-500 py-4 text-center">Noch keine Posten. Links Gericht oder Basisrezept suchen und hinzufügen.</p>
                         @endforelse
                     </div>
                     </div>{{-- /Mitte Paket-Inhalt --}}
-                    {{-- rechte Spalte: roomy VK-Gerichte-Filter + Liste (wie Concept-Aufbau) --}}
-                    <aside class="w-60 shrink-0 hidden lg:flex flex-col rounded-xl bg-gray-500/[0.07] border border-black/5 p-2.5 sticky top-0 self-start max-h-[70vh]" data-paket-gerichtliste>
-                    <p class="{{ $dt }} mb-1">Posten hinzufügen</p>
-                    <div class="flex items-center gap-1 mb-1.5">
-                        <button type="button" wire:click="$set('paketQuelle', 'gericht')" class="{{ $pill }} {{ $paketQuelle !== 'basisrezept' ? $variantPill['primary'] : $variantPill['secondary'] }}">Gericht</button>
-                        <button type="button" wire:click="$set('paketQuelle', 'basisrezept')" class="{{ $pill }} {{ $paketQuelle === 'basisrezept' ? $variantPill['primary'] : $variantPill['secondary'] }}">Basisrezept</button>
-                    </div>
-                    {{-- Park-Flow (Politur): suchen → [+] parken → Menge bzw. g/Person → Enter → ✓-Flash --}}
-                    <div class="space-y-1 flex-1 min-h-0 overflow-y-auto" x-data="{
-                            geparkt: null, quantity: '', flash: false,
-                            park(id, name) { this.geparkt = { id, name }; this.quantity = ''; this.$nextTick(() => this.$refs.quantity && this.$refs.quantity.focus()); },
-                            einfuegen() { if (!this.geparkt) return; this.$wire.gerichtHinzu(this.geparkt.id, this.quantity); this.geparkt = null; this.quantity = ''; this.flash = true; setTimeout(() => { this.flash = false; }, 1400); },
-                         }">
-                        <div x-show="geparkt === null">
-                            @if($paketQuelle === 'basisrezept')
-                                <input type="search" wire:model.live.debounce.300ms="paketGerichtSuche" placeholder="Basisrezept suchen …" class="{{ $input }} w-full" />
-                            @else
-                                @include('foodalchemist::livewire.concepter.partials.gericht-baum', ['sucheModel' => 'paketGerichtSuche'])
-                            @endif
-                            <p class="text-[10px] text-gray-500 mt-0.5">Treffer: <span class="text-violet-500 font-bold">+</span> parken → {{ $paketQuelle === 'basisrezept' ? 'g/Person' : 'Menge/Person' }} → Enter.</p>
-                            @if($paketKandidaten->isNotEmpty())
-                                <div class="space-y-0.5 max-h-56 overflow-y-auto mt-1">
-                                    @foreach($paketKandidaten as $kand)
-                                        <div wire:key="epk-{{ $paketQuelle }}-{{ $kand->id }}" class="flex items-center justify-between gap-2 px-2 py-1 rounded-lg text-xs hover:bg-violet-500/10">
-                                            <span class="truncate">{{ $kand->name }}</span>
-                                            <span class="flex items-center gap-2 shrink-0">
-                                                <span class="text-gray-500 tabular-nums">@if($paketQuelle === 'basisrezept'){{ $kand->ek_total_eur !== null ? 'EK ' . number_format((float) $kand->ek_total_eur, 2, ',', '.') . ' €' : '' }}@else{{ $kand->sales_net !== null ? number_format((float) $kand->sales_net, 2, ',', '.') . ' €' : '' }}@endif</span>
-                                                <button type="button" @click="park({{ $kand->id }}, @js($kand->name))" class="text-violet-500 font-bold px-1" title="parken">+</button>
-                                            </span>
-                                        </div>
-                                    @endforeach
-                                </div>
-                            @elseif($paketGerichtSuche !== '' || $pickHg !== null || $pickKlasse !== null || $pickGeschmack !== '' || $pickDiaet !== '')
-                                <p class="text-[11px] text-gray-500 px-2 py-1 mt-1">Keine Treffer für diese Auswahl.</p>
-                            @endif
-                        </div>
-                        <div x-show="geparkt !== null" x-cloak class="flex items-center gap-2" data-park-zeile>
-                            <span class="{{ $pill }} {{ $variantPill['info'] }}">{{ $paketQuelle === 'basisrezept' ? 'Basisrezept' : 'Gericht' }}</span>
-                            <span class="flex-1 truncate text-sm" x-text="geparkt?.name"></span>
-                            <input type="number" step="0.01" min="0" x-ref="quantity" x-model="quantity" @keydown.enter.prevent="einfuegen()" placeholder="{{ $paketQuelle === 'basisrezept' ? 'g/Person' : 'Menge/Person' }}" class="{{ $input }} w-32 text-right tabular-nums" />
-                            <button type="button" @click="einfuegen()" class="{{ $btnGhostXs }} text-emerald-600">Einfügen ⏎</button>
-                            <button type="button" @click="geparkt = null" class="{{ $btnGhostXs }}">✕</button>
-                        </div>
-                        <p x-show="flash" x-cloak class="text-[11px] text-emerald-600">✓ hinzugefügt</p>
-                    </div>
-                    </aside>{{-- /rechte VK-Gerichte-Spalte --}}
                     </div>{{-- /Paket-Flex --}}
                 @endif
             @endif
