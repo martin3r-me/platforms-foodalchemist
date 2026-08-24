@@ -82,6 +82,13 @@ return [
                     'icon'  => 'heroicon-o-home',
                 ],
                 [
+                    // Planung-Leitstelle direkt unter Dashboard (Dominique 2026-08-24) — der zentrale
+                    // Einstieg, an dem die ganze Planung (alle Ausgabeformen) über eine Kaskade läuft.
+                    'label' => 'Planung',
+                    'route' => 'foodalchemist.planung.index',
+                    'icon'  => 'heroicon-o-light-bulb',
+                ],
+                [
                     // Spec 32: Controlling-Zentrum — Werkbank, an der Befund und Hebel nebeneinander
                     // liegen (Preise · Wareneinsatz · Simulation · Erfolg · Geld-Signale · Kennzahlen).
                     // Der Klick springt direkt in den Voll-Editor; die Seite darunter ist das Lagebild.
@@ -132,12 +139,6 @@ return [
             // Absatzkanäle (Foodbook/Speisekarte/Speiseplan) liegen zusammen unter „Ausgabe".
             'group' => 'Rezepte & Konzepte',
             'items' => [
-                [
-                    // Doppel-Diamant: Trend/Brief → Analyse/Skizzen → Go auf Basisrezept/Gericht/Concept.
-                    'label' => 'Planung',
-                    'route' => 'foodalchemist.planung.index',
-                    'icon'  => 'heroicon-o-light-bulb',
-                ],
                 [
                     'label' => 'Basisrezepte',
                     'route' => 'foodalchemist.recipes.index',
