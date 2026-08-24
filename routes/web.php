@@ -157,6 +157,34 @@ Route::get('/formate', \Platform\FoodAlchemist\Livewire\Formate\Browser::class)
     ->name('foodalchemist.formate.index');
 
 /**
+ * F3: Format-Druck — schöne Kunden-Ausgabe (Foodbook-styled, NICHT der technische Report).
+ * Druck-HTML; ?pdf=1 = PDF (DomPDF, guarded). Spiegelt die Foodbook-Dokument-Closure.
+ */
+Route::get('/formate/{id}/dokument', function (int $id, \Platform\FoodAlchemist\Services\FormatService $svc) {
+    $team = \Illuminate\Support\Facades\Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
+    // ?intern=1 → interne Projektion (Parität zum Foodbook-Dokument); Default = Kundensicht.
+    $intern = request()->boolean('intern');
+    try {
+        $data = $svc->dokumentDaten($team, $id, $intern);
+    } catch (\Illuminate\Database\Eloquent\ModelNotFoundException) {
+        abort(404);
+    }
+
+    if (request()->boolean('pdf')) {
+        if (! class_exists(\Barryvdh\DomPDF\Facade\Pdf::class)) {
+            \Illuminate\Support\Facades\Log::warning('Format-PDF angefordert, aber DomPDF ist nicht installiert.', ['format_id' => $id]);
+            abort(500, 'PDF-Export nicht verfügbar: DomPDF ist auf diesem Server nicht installiert.');
+        }
+
+        return \Barryvdh\DomPDF\Facade\Pdf::loadView('foodalchemist::dokumente.format', $data + ['istPdf' => true])
+            ->setOption('isPhpEnabled', true)
+            ->download('Format-' . $id . '.pdf');
+    }
+
+    return view('foodalchemist::dokumente.format', $data + ['istPdf' => false]);
+})->whereNumber('id')->name('foodalchemist.formate.dokument');
+
+/**
  * Rezept-/Gericht-/Concept-Reports — Druck-HTML mit Profilen; ?pdf=1 rendert DomPDF.
  * Profile: kurz | produktion | kalkulation | voll. Filter als Query-Booleans:
  * preise, lieferanten, steps, sensorik, produktion, notizen, kaskade.
@@ -196,6 +224,33 @@ Route::get('/concepts/{id}/dokument', function (int $id, \Platform\FoodAlchemist
 
     return view('foodalchemist::dokumente.report', $data + ['istPdf' => false]);
 })->whereNumber('id')->name('foodalchemist.concepts.dokument');
+
+/**
+ * F3: Concept-„Karte" — die schöne Einzel-Concept-Ausgabe (Foodbook-styled). ZWEITE
+ * Ausgabe NEBEN dem technischen Report (foodalchemist.concepts.dokument bleibt unangetastet).
+ * Druck-HTML; ?pdf=1 = PDF (DomPDF, guarded). Spiegelt die Foodbook-Dokument-Closure.
+ */
+Route::get('/concepts/{id}/karte', function (int $id, \Platform\FoodAlchemist\Services\FoodbookService $svc) {
+    $team = \Illuminate\Support\Facades\Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
+    try {
+        $data = $svc->conceptKarteDaten($team, $id);
+    } catch (\Illuminate\Database\Eloquent\ModelNotFoundException) {
+        abort(404);
+    }
+
+    if (request()->boolean('pdf')) {
+        if (! class_exists(\Barryvdh\DomPDF\Facade\Pdf::class)) {
+            \Illuminate\Support\Facades\Log::warning('Concept-Karte-PDF angefordert, aber DomPDF ist nicht installiert.', ['concept_id' => $id]);
+            abort(500, 'PDF-Export nicht verfügbar: DomPDF ist auf diesem Server nicht installiert.');
+        }
+
+        return \Barryvdh\DomPDF\Facade\Pdf::loadView('foodalchemist::dokumente.concept-karte', $data + ['istPdf' => true])
+            ->setOption('isPhpEnabled', true)
+            ->download('Karte-' . $id . '.pdf');
+    }
+
+    return view('foodalchemist::dokumente.concept-karte', $data + ['istPdf' => false]);
+})->whereNumber('id')->name('foodalchemist.concepts.karte');
 
 Route::get('/gps/{id}/dokument', function (int $id, \Platform\FoodAlchemist\Services\ReportExportService $svc) {
     $team = \Illuminate\Support\Facades\Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');

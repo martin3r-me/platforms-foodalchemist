@@ -478,6 +478,89 @@ class FormatService
         return $format->priceRange();
     }
 
+    // ── Druck-Dokument (F3) ────────────────────────────────────────────────
+
+    /**
+     * F3: Druck-/PDF-Daten des Formats — die schöne Kunden-Ausgabe (kein technischer
+     * Report). Spiegelt {@see FoodbookService::dokumentDaten}: das Format ist das
+     * Oberkapitel (Marken-Identität + Hero), die Aufbau-Slots (in Position-Reihenfolge)
+     * liefern die Positionen — Concept-Slots als „Editionen" (Kapitel-Parität: Titel,
+     * Claim, Hinführung, €/Gast + die Menü-Zeilen über {@see WordingResolver::gerichtZeilen}),
+     * header/text/spacer als Struktur. LIVE aus den referenzierten Concepts (kein Snapshot).
+     * PDF-safe: Hero als base64-dataUri (kein externer Asset).
+     *
+     * @return array{
+     *     format: FoodAlchemistFormat, intern: bool, name: string, consumer_name: ?string,
+     *     claim: ?string, story: ?string, hero: ?string, range: array{min: ?float, max: ?float},
+     *     positionen: list<array<string, mixed>>, mwst: ?array, stand: mixed
+     * }
+     */
+    public function dokumentDaten(Team $team, int $formatId, bool $intern = false): array
+    {
+        $format = FoodAlchemistFormat::visibleToTeam($team)
+            ->with([
+                'slots' => fn ($q) => $q->orderBy('position'),
+                // Edition-Identität (Kapitel-Parität) + Preis-Cache.
+                'slots.concept:id,name,consumer_name,claim,description,status,price_per_person_cache',
+                // Menü-Zeilen der Edition (gleiche Wording-Auflösung wie Foodbook/Editor-Vorschau).
+                'slots.concept.slots' => fn ($q) => $q->orderBy('position'),
+                'slots.concept.slots.dish:id,name,sales_wording_standard',
+                'slots.concept.slots.package.dishes.dish:id,name,sales_wording_standard',
+                'heroImage',
+                // priceRange-Fallback (Alt-Editionen ohne Slots).
+                'editions:id,format_id,price_per_person_cache',
+            ])
+            ->findOrFail($formatId);
+
+        $wording = app(WordingResolver::class);
+
+        $positionen = [];
+        foreach ($format->slots as $slot) {
+            if ($slot->type === 'concept') {
+                $concept = $slot->concept;
+                if ($concept === null) {
+                    continue; // referenziertes Concept nicht mehr sichtbar → Position auslassen
+                }
+                $positionen[] = [
+                    'kind' => 'edition',
+                    'title' => $concept->consumer_name ?: $concept->name,
+                    'claim' => $concept->claim,
+                    'text' => trim((string) $concept->description) ?: null,
+                    'preis_pp' => $concept->price_per_person_cache !== null ? (float) $concept->price_per_person_cache : null,
+                    'gerichte' => $wording->gerichtZeilen($concept),
+                ];
+            } elseif ($slot->type === 'header') {
+                $text = trim((string) $slot->title);
+                if ($text === '') {
+                    continue;
+                }
+                $positionen[] = ['kind' => 'header', 'text' => $text];
+            } elseif ($slot->type === 'text') {
+                $text = trim((string) $slot->text_content);
+                if ($text === '') {
+                    continue;
+                }
+                $positionen[] = ['kind' => 'text', 'text' => $text];
+            } elseif ($slot->type === 'spacer') {
+                $positionen[] = ['kind' => 'spacer', 'height' => $slot->height ?: 'mittel'];
+            }
+        }
+
+        return [
+            'format' => $format,
+            'intern' => $intern,
+            'name' => (string) $format->name,
+            'consumer_name' => $format->consumer_name,
+            'claim' => $format->claim,
+            'story' => $format->story,
+            'hero' => $format->heroImage?->dataUri(),
+            'range' => $format->priceRange(),
+            'positionen' => $positionen,
+            'mwst' => app(TeamSettingsService::class)->mwst($team),
+            'stand' => $format->updated_at,
+        ];
+    }
+
     // ── Helpers ────────────────────────────────────────────────────────────
 
     private function ownedImage(Team $team, int $imageId): FoodAlchemistFormatImage

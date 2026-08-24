@@ -35,6 +35,12 @@
                     @svg('heroicon-o-printer', 'w-3.5 h-3.5') Druck
                 </a>
                 @unless($istPaket)
+                    <a href="{{ route('foodalchemist.concepts.karte', ['id' => $concept->id]) }}" target="_blank"
+                       class="{{ $btnGhostXs }}" title="Schöne Menü-Karte (Kunden-Ausgabe · Druck/PDF)" data-concepter-panel-karte>
+                        @svg('heroicon-o-document-text', 'w-3.5 h-3.5') Karte
+                    </a>
+                @endunless
+                @unless($istPaket)
                     @if($concept->is_template)
                         <button type="button" wire:click="ausVorlage" class="{{ $btnGhostXs }} text-violet-600">↧ Als Concept nutzen</button>
                     @else

@@ -6,6 +6,10 @@
     <x-foodalchemist::modal name="formate-editor" title="Format bearbeiten" :title-name="$format?->name" fullscreen dark-canvas>
         <x-slot:actions>
             <button type="button" wire:click="speichern" class="{{ $btnPrimary }}">Speichern</button>
+            @if($format)
+                <a href="{{ route('foodalchemist.formate.dokument', ['id' => $format->id]) }}" target="_blank"
+                   class="{{ $btnGhost }}" title="Schöne Kunden-Ausgabe (Druck/PDF)">@svg('heroicon-o-printer', 'w-4 h-4') Druck</a>
+            @endif
             @if($fehler)<span class="{{ $pill }} {{ $variantPill['danger'] }}">{{ $fehler }}</span>@endif
         </x-slot:actions>
 

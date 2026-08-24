@@ -1798,6 +1798,42 @@ class FoodbookService
         ];
     }
 
+    /**
+     * F3: schöne Einzel-Concept-„Karte" (Druck/PDF) — die fehlende hübsche Einzel-Ausgabe
+     * des Concepters (bisher gab es dort nur den technischen Report). Foodbook-styled:
+     * Konsumenten-Titel + Claim + Hinführung + die aufgelösten Menü-Zeilen (gleiche
+     * Wording-Kette wie Foodbook/Format) + €/Gast. Klein gehalten: reine Menü-Sicht
+     * (kein EK/Marge — das ist die Kunden-Ausgabe). Team-scoped über visibleToTeam.
+     *
+     * @return array{
+     *     concept: FoodAlchemistConcept, titel: string, claim: ?string, text: ?string,
+     *     preis_pp: ?float, gerichte: list<array<string, mixed>>, mwst: ?array, stand: mixed
+     * }
+     */
+    public function conceptKarteDaten(Team $team, int $conceptId): array
+    {
+        $concept = FoodAlchemistConcept::visibleToTeam($team)
+            ->with([
+                'slots' => fn ($q) => $q->orderBy('position'),
+                'slots.dish:id,name,sales_wording_standard',
+                'slots.package.dishes.dish:id,name,sales_wording_standard',
+            ])
+            ->findOrFail($conceptId);
+
+        $wording = app(WordingResolver::class);
+
+        return [
+            'concept' => $concept,
+            'titel' => $concept->consumer_name ?: $concept->name,
+            'claim' => $concept->claim,
+            'text' => trim((string) $concept->description) ?: null,
+            'preis_pp' => $concept->price_per_person_cache !== null ? (float) $concept->price_per_person_cache : null,
+            'gerichte' => $wording->gerichtZeilen($concept),
+            'mwst' => app(TeamSettingsService::class)->mwst($team),
+            'stand' => $concept->updated_at,
+        ];
+    }
+
     public function vorschauSnapshot(FoodAlchemistFoodbook $fb): ?array
     {
         $snapshot = $fb->preview_snapshot_json;

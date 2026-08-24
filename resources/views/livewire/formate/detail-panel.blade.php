@@ -68,6 +68,10 @@
             {{-- Aktionen --}}
             <div class="flex flex-wrap gap-2 pt-2 border-t border-black/5">
                 <button type="button" wire:click="bearbeiten" class="{{ $btnPrimary }}">Bearbeiten</button>
+                <a href="{{ route('foodalchemist.formate.dokument', ['id' => $format->id]) }}" target="_blank"
+                   class="{{ $btnGhost }}" title="Schöne Kunden-Ausgabe (Druck/PDF)" data-formate-panel-druck>
+                    @svg('heroicon-o-printer', 'w-4 h-4') Druck
+                </a>
                 <button type="button" wire:click="loeschen" wire:confirm="Format wirklich löschen? Die Editionen werden wieder freistehend."
                         class="{{ $btnGhost }} text-rose-600">Löschen</button>
             </div>
