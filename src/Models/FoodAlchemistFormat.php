@@ -33,10 +33,16 @@ class FoodAlchemistFormat extends Model
         'uuid' => 'string',
     ];
 
-    /** Editionen (Concepts) dieses Formats, in Reihenfolge. */
+    /** Editionen (Concepts) dieses Formats, in Reihenfolge. @deprecated F2 → slots() (Referenz statt Besitz). */
     public function editions(): HasMany
     {
         return $this->hasMany(FoodAlchemistConcept::class, 'format_id')->orderBy('format_position');
+    }
+
+    /** F2: Aufbau des Formats — Concept-Referenzen + Struktur-Blöcke (header/text/spacer), sortiert. */
+    public function slots(): HasMany
+    {
+        return $this->hasMany(FoodAlchemistFormatSlot::class, 'format_id')->orderBy('position');
     }
 
     // Format-Umbau F1: Concept-Dimensionen (Facetten) am Format — spiegelt FoodAlchemistConcept.

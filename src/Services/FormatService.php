@@ -9,6 +9,7 @@ use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
 use Platform\FoodAlchemist\Models\FoodAlchemistFormat;
 use Platform\FoodAlchemist\Models\FoodAlchemistFormatImage;
+use Platform\FoodAlchemist\Models\FoodAlchemistFormatSlot;
 
 /**
  * Format-Modul (Phase A): Format = Marken-/Themen-Container EINE Ebene über dem
@@ -212,6 +213,135 @@ class FormatService
             foreach (array_values($conceptIds) as $i => $id) {
                 FoodAlchemistConcept::where('id', (int) $id)->where('format_id', $formatId)
                     ->update(['format_position' => $i]);
+            }
+        });
+    }
+
+    // ── F2: Aufbau / Slots (Referenz-Concepts + Struktur-Blöcke) ────────────────
+    // „Conceptor eine Ebene höher": ein Format-Slot referenziert ein ganzes Concept
+    // (type=concept, in mehreren Formaten nutzbar) ODER ist ein Struktur-Block
+    // (header/text/spacer). Spiegelt ConceptService::fillSlot/addBlock/reorder.
+
+    /** Concept-Kandidaten für den Format-Picker (aktive Konzepte, keine Pakete). */
+    public function conceptKandidaten(Team $team, string $suche = '', int $limit = 50): \Illuminate\Support\Collection
+    {
+        return FoodAlchemistConcept::visibleToTeam($team)
+            ->konzepte()->standardisiert()->echte()
+            ->where('status', 'active')   // Picker zeigt nur aktive (Status berücksichtigt)
+            ->when($suche !== '', fn ($q) => \Platform\FoodAlchemist\Support\Suche::like($q, 'name', $suche))
+            ->orderBy('name')->limit($limit)
+            ->get(['id', 'name', 'consumer_name', 'class', 'price_per_person_cache']);
+    }
+
+    /** Concept als Aufbau-Position (Referenz) einfügen; optional direkt hinter $afterSlotId. */
+    public function slotConceptEinfuegen(Team $team, int $formatId, int $conceptId, ?int $afterSlotId = null): FoodAlchemistFormatSlot
+    {
+        $format = FoodAlchemistFormat::visibleToTeam($team)->findOrFail($formatId);
+        $this->guardOwner($format, $team);
+        $concept = FoodAlchemistConcept::visibleToTeam($team)->konzepte()->findOrFail($conceptId);
+
+        $slot = $format->slots()->create([
+            'team_id' => $format->team_id,
+            'type' => 'concept',
+            'concept_id' => $concept->id,
+            'position' => $this->naechsteSlotPosition($format),
+        ]);
+        if ($afterSlotId !== null) {
+            $this->slotEinfuegenNach($format, $slot->id, $afterSlotId);
+        }
+
+        return $slot->refresh();
+    }
+
+    /** Struktur-Block (header/text/spacer) einfügen; optional direkt hinter $afterSlotId. */
+    public function slotBlockEinfuegen(Team $team, int $formatId, string $type, array $in = [], ?int $afterSlotId = null): FoodAlchemistFormatSlot
+    {
+        if (! in_array($type, FoodAlchemistFormatSlot::STRUKTUR_TYPEN, true)) {
+            throw new \RuntimeException("Unbekannter Block-Typ [{$type}] — erlaubt: " . implode('|', FoodAlchemistFormatSlot::STRUKTUR_TYPEN) . '.');
+        }
+        $format = FoodAlchemistFormat::visibleToTeam($team)->findOrFail($formatId);
+        $this->guardOwner($format, $team);
+
+        $slot = $format->slots()->create([
+            'team_id' => $format->team_id,
+            'type' => $type,
+            'title' => $this->norm($in['title'] ?? null),
+            'text_content' => $this->norm($in['text_content'] ?? null),
+            'height' => $type === 'spacer' ? ($in['height'] ?? 'mittel') : null,
+            'position' => $this->naechsteSlotPosition($format),
+        ]);
+        if ($afterSlotId !== null) {
+            $this->slotEinfuegenNach($format, $slot->id, $afterSlotId);
+        }
+
+        return $slot->refresh();
+    }
+
+    /** Struktur-Block-Felder (title/text_content/height) pflegen. */
+    public function slotBlockSpeichern(Team $team, int $slotId, array $in): FoodAlchemistFormatSlot
+    {
+        $slot = FoodAlchemistFormatSlot::with('format')->findOrFail($slotId);
+        $this->guardOwner($slot->format, $team);
+        $upd = [];
+        foreach (['title', 'text_content'] as $f) {
+            if (array_key_exists($f, $in)) {
+                $upd[$f] = $this->norm($in[$f]);
+            }
+        }
+        if (array_key_exists('height', $in)) {
+            $upd['height'] = $in['height'] ?: null;
+        }
+        $slot->update($upd);
+
+        return $slot->refresh();
+    }
+
+    /** Aufbau-Position entfernen (Concept-Ref oder Block). */
+    public function slotEntfernen(Team $team, int $slotId): void
+    {
+        $slot = FoodAlchemistFormatSlot::with('format')->findOrFail($slotId);
+        $this->guardOwner($slot->format, $team);
+        $slot->delete();
+    }
+
+    /** @param list<int> $orderedIds neue Reihenfolge der Slots (nur zu diesem Format). */
+    public function slotsNeuOrdnen(Team $team, int $formatId, array $orderedIds): void
+    {
+        $format = FoodAlchemistFormat::visibleToTeam($team)->findOrFail($formatId);
+        $this->guardOwner($format, $team);
+        DB::transaction(function () use ($format, $orderedIds) {
+            $pos = 1;
+            foreach (array_values($orderedIds) as $id) {
+                $format->slots()->whereKey((int) $id)->update(['position' => $pos++]);
+            }
+        });
+    }
+
+    /** Slot hinter einen anderen ziehen (Einfüge-Ziel / Drag) — renummeriert das Format. */
+    public function slotVerschieben(Team $team, int $slotId, ?int $afterSlotId): void
+    {
+        $slot = FoodAlchemistFormatSlot::with('format')->findOrFail($slotId);
+        $this->guardOwner($slot->format, $team);
+        $this->slotEinfuegenNach($slot->format, $slotId, $afterSlotId);
+    }
+
+    private function naechsteSlotPosition(FoodAlchemistFormat $format): int
+    {
+        return (int) ($format->slots()->max('position') ?? 0) + 1;
+    }
+
+    /** $slotId direkt hinter $afterSlotId einsortieren (null = an den Anfang); renummeriert 1..n. */
+    private function slotEinfuegenNach(FoodAlchemistFormat $format, int $slotId, ?int $afterSlotId): void
+    {
+        DB::transaction(function () use ($format, $slotId, $afterSlotId) {
+            $ids = $format->slots()->orderBy('position')->pluck('id')->map(fn ($v) => (int) $v)->all();
+            $ids = array_values(array_filter($ids, fn ($id) => $id !== $slotId));
+            $ziel = $afterSlotId !== null ? array_search((int) $afterSlotId, $ids, true) : false;
+            $einfuege = $ziel === false ? 0 : $ziel + 1;
+            array_splice($ids, $einfuege, 0, [$slotId]);
+            $pos = 1;
+            foreach ($ids as $id) {
+                $format->slots()->whereKey($id)->update(['position' => $pos++]);
             }
         });
     }
