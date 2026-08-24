@@ -999,7 +999,14 @@ class Editor extends Component
         if ($this->type !== 'concepts' || $this->id === null) {
             return;
         }
-        app(ConceptService::class)->addBlock($this->team(), $this->id, $type);
+        $svc = app(ConceptService::class);
+        $slot = $svc->addBlock($this->team(), $this->id, $type);
+        // „Hier einfügen": Struktur-Block direkt hinter die markierte Zeile sortieren (wie Speisen/Paket),
+        // sonst landet er immer am Ende. Folge-Blöcke stapeln hinter dem zuletzt eingefügten.
+        if ($this->einfuegenNachId !== null) {
+            $this->positionNach($svc, $slot->id, $this->einfuegenNachId);
+            $this->einfuegenNachId = $slot->id;
+        }
         $this->reloadSlotForm();
         $this->dispatch('concepter-gespeichert', id: $this->id);
     }

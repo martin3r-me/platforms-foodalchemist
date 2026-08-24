@@ -313,3 +313,31 @@ it('Concept-VK: auto = Summe der Positionen, manuell überschreibt sie (EK bleib
         ->and($manuell['price_mode'])->toBe('manuell')
         ->and((float) $manuell['ek_per_person'])->toBe(0.6);          // EK weiter aus den Positionen
 });
+
+it('blockHinzu respektiert das Einfüge-Ziel — Struktur-Block landet unter der markierten Zeile, nicht am Ende', function () {
+    $comp = Livewire::test(Editor::class)->call('oeffnen', 'concepts', $this->concept->id);
+    $comp->call('positionEinfuegen', 'gericht', $this->green->id);   // Slot A (ans Ende)
+    $comp->call('positionEinfuegen', 'gericht', $this->green->id);   // Slot B (ans Ende) → [A, B]
+
+    $ids = $this->concept->slots()->orderBy('position')->pluck('id')->all();
+    [$aId, $bId] = [$ids[0], $ids[1]];
+
+    // Ziel = A → nächster Block landet UNTER A: erwartet [A, Text, B] (vorher: am Ende → [A, B, Text])
+    $comp->set('einfuegenNachId', $aId)->call('blockHinzu', 'text');
+
+    $reihen = $this->concept->slots()->orderBy('position')->pluck('id')->all();
+    $textId = $this->concept->slots()->where('type', 'text')->value('id');
+
+    expect($reihen)->toBe([$aId, $textId, $bId]);
+});
+
+it('Freitext-Block erscheint als Beschreibung in der Menü-Ansicht (Gäste-Sicht)', function () {
+    $comp = Livewire::test(Editor::class)->call('oeffnen', 'concepts', $this->concept->id);
+    $comp->call('positionEinfuegen', 'gericht', $this->green->id);   // Speise → Sektion sichtbar
+    $comp->call('blockHinzu', 'text');
+    $textId = $this->concept->slots()->where('type', 'text')->value('id');
+
+    $comp->set("blockForm.{$textId}.text_content", 'Italienische Flair')
+        ->call('blockSpeichern', $textId)
+        ->assertSee('Italienische Flair');   // vorher: Text-Blöcke wurden in der Menü-Ansicht verschluckt
+});

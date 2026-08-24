@@ -330,22 +330,25 @@
                     {{-- ═══ MENÜ-ANSICHT (Gäste-Perspektive, read-only) — UX-Umbau 2026-07-03 ═══ --}}
                     <div x-show="!bauModus" x-cloak class="space-y-3" data-konzept-menue>
                         @php($menueGruppen = [])
-                        @php($aktuelleGruppe = ['type' => 'sektion', 'title' => null, 'headerSlotId' => null, 'slots' => []])
+                        @php($aktuelleGruppe = ['type' => 'sektion', 'title' => null, 'headerSlotId' => null, 'slots' => [], 'texte' => []])
                         @foreach($concept->slots as $s)
                             @if(in_array($s->type, ['header', 'header_preis'], true))
                                 @php($menueGruppen[] = $aktuelleGruppe)
-                                @php($aktuelleGruppe = ['type' => 'header', 'title' => $s->title ?: '(Überschrift)', 'headerSlotId' => $s->id, 'slots' => []])
+                                @php($aktuelleGruppe = ['type' => 'header', 'title' => $s->title ?: '(Überschrift)', 'headerSlotId' => $s->id, 'slots' => [], 'texte' => []])
                             @elseif($s->package_id && $s->package)
                                 @php($menueGruppen[] = $aktuelleGruppe)
-                                @php($menueGruppen[] = ['type' => 'paket', 'title' => $s->package->name, 'price' => $s->package->price_per_person, 'headerSlotId' => null, 'slots' => [], 'paket' => $s->package])
-                                @php($aktuelleGruppe = ['type' => 'sektion', 'title' => null, 'headerSlotId' => null, 'slots' => []])
+                                @php($menueGruppen[] = ['type' => 'paket', 'title' => $s->package->name, 'price' => $s->package->price_per_person, 'headerSlotId' => null, 'slots' => [], 'texte' => [], 'paket' => $s->package])
+                                @php($aktuelleGruppe = ['type' => 'sektion', 'title' => null, 'headerSlotId' => null, 'slots' => [], 'texte' => []])
                             @elseif($s->sales_recipe_id && $s->dish)
                                 @php($aktuelleGruppe['slots'][] = $s)
+                            @elseif($s->type === 'text' && trim((string) $s->text_content) !== '')
+                                {{-- Freitext-Block erscheint als Sektions-Beschreibung in der Gäste-Sicht (Bug-Fix 2026-08-24) --}}
+                                @php($aktuelleGruppe['texte'][] = $s->text_content)
                             @endif
                         @endforeach
                         @php($menueGruppen[] = $aktuelleGruppe)
-                        {{-- Gäste-Sicht: leere Gruppen (Paket ohne Gerichte, Header ohne Positionen) sind unsichtbar --}}
-                        @php($menueGruppen = collect($menueGruppen)->filter(fn ($g) => $g['type'] === 'paket' ? $g['paket']->dishes->isNotEmpty() : count($g['slots']) > 0)->values())
+                        {{-- Gäste-Sicht: leere Gruppen unsichtbar — aber reine Text-Sektionen (Beschreibung ohne Gericht) bleiben sichtbar --}}
+                        @php($menueGruppen = collect($menueGruppen)->filter(fn ($g) => $g['type'] === 'paket' ? $g['paket']->dishes->isNotEmpty() : (count($g['slots']) > 0 || count($g['texte'] ?? []) > 0))->values())
 
                         @php($quelleBadge = ['konzept' => ['Konzept-Wording', 'text-violet-600', 'bg-violet-500'], 'standard' => ['VK-Wording (Standard)', 'text-gray-500', 'bg-gray-400'], 'name' => ['Wording fehlt — interner Name', 'text-amber-600', 'bg-amber-500']])
                         @php($wres = app(\Platform\FoodAlchemist\Services\WordingResolver::class))
@@ -369,6 +372,14 @@
                                         <span class="ml-auto text-[11px] text-gray-500 tabular-nums shrink-0">{{ count($g['slots']) }} {{ count($g['slots']) === 1 ? 'Position' : 'Positionen' }}{{ $slotVks->isNotEmpty() ? ' · ' . number_format($slotVks->sum(), 2, ',', '.') . ' €/P' : '' }}</span>
                                     @endif
                                 </div>
+                                @if(! empty($g['texte'] ?? []))
+                                    {{-- Freitext-Blöcke der Sektion als Beschreibung (Gäste-Sicht) --}}
+                                    <div class="space-y-1 pb-2.5 -mt-1" data-konzept-menue-text>
+                                        @foreach($g['texte'] as $tx)
+                                            <p class="text-[13px] text-gray-600 italic leading-snug">{{ $tx }}</p>
+                                        @endforeach
+                                    </div>
+                                @endif
                                 <div class="grid gap-2.5" style="grid-template-columns:repeat(auto-fill,minmax(270px,1fr))">
                                     @if($g['type'] === 'paket')
                                         @foreach($g['paket']->dishes as $pg)
@@ -451,7 +462,7 @@
                     {{-- B3: Struktur-Blöcke (freie Gliederung OHNE Paket) + „+ Paket" (= bepreister Abschnitt) --}}
                     <div class="flex flex-wrap items-center gap-1.5">
                         <span class="{{ $label }} mr-1">Struktur:</span>
-                        <button type="button" wire:click="neuesPaketAlsPosition" class="{{ $btnGhostXs }} !text-violet-600 !border-violet-500/30" title="Neues Paket als Abschnitt anlegen, einfügen und öffnen">+ Paket</button>
+                        <button type="button" wire:click="neuesPaketAlsPosition" class="{{ $btnGhostXs }} !text-violet-600 !border-violet-500/30" title="Neues Paket als Abschnitt anlegen, einfügen und direkt öffnen">+ Paket erstellen</button>
                         <button type="button" wire:click="blockHinzu('header')" class="{{ $btnGhostXs }}">+ Header</button>
                         <button type="button" wire:click="blockHinzu('text')" class="{{ $btnGhostXs }}">+ Text</button>
                         <button type="button" wire:click="blockHinzu('spacer')" class="{{ $btnGhostXs }}">+ Leerzeile</button>
