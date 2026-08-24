@@ -249,7 +249,8 @@ class SpeiseplanService
     /** Concepts (Fix-Menüs) für den Zell-Picker. */
     public function conceptKandidaten(Team $team, string $suche, int $limit = 50): Collection
     {
-        return FoodAlchemistConcept::visibleToTeam($team)->konzepte()->echte()
+        // Kaskade: Ausgabe-Form → Konzepte UND Pakete buchbar (Paket = kind=paket-Concept).
+        return FoodAlchemistConcept::visibleToTeam($team)->echte()
             ->when($suche !== '', fn ($q) => \Platform\FoodAlchemist\Support\Suche::like($q, 'name', $suche))
             ->orderBy('name')->limit($limit)->get(['id', 'name', 'price_per_person_cache']);
     }

@@ -362,7 +362,8 @@ class AngebotService
      */
     public function katalogConcepts(Team $team, string $suche, int $limit = 50, array $facetten = []): Collection
     {
-        return FoodAlchemistConcept::visibleToTeam($team)->konzepte()->standardisiert()->echte()
+        // Kaskade: Ausgabe-Form → Konzepte UND Pakete buchbar (Paket = kind=paket-Concept).
+        return FoodAlchemistConcept::visibleToTeam($team)->standardisiert()->echte()
             ->when(trim($suche) !== '', fn ($q) => \Platform\FoodAlchemist\Support\Suche::like($q, 'name', $suche))
             ->when(! empty($facetten['eventtyp']), fn ($q) => $q->where('event_type_id', (int) $facetten['eventtyp']))
             ->when(! empty($facetten['servierform']), fn ($q) => $q->where('serving_form_id', (int) $facetten['servierform']))
