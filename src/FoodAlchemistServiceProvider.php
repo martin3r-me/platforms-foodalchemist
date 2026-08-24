@@ -92,6 +92,7 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                 \Platform\FoodAlchemist\Console\TrendClusterCommand::class,
                 \Platform\FoodAlchemist\Console\TrendKonzepteCommand::class,
                 \Platform\FoodAlchemist\Console\AnchorsTranslateCsvCommand::class,
+                \Platform\FoodAlchemist\Console\PaketeToConceptsCommand::class,
             ]);
 
             $this->planeLaeufe();

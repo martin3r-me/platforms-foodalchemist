@@ -40,6 +40,19 @@ class FoodAlchemistConcept extends Model
         'nutrition_cache' => 'array',
     ];
 
+    /**
+     * Kaskade (2026-08-24): Standard-Sicht = nur kind='concept'. Damit sehen ALLE Bestands-Queries
+     * (Browser, Format-Editionen, Generator, Foodbook, Angebot, MCP …) weiterhin nur Konzepte —
+     * kind='paket' ist per Global Scope ausgeblendet. Paket-bewusster Code opted gezielt aus:
+     * FoodAlchemistConcept::withoutGlobalScope('kind_concept')->pakete().
+     */
+    protected static function booted(): void
+    {
+        static::addGlobalScope('kind_concept', function (Builder $q) {
+            $q->where($q->getModel()->getTable() . '.kind', 'concept');
+        });
+    }
+
     public function scopeVorlagen(Builder $q): Builder
     {
         return $q->where('is_template', true);
@@ -48,6 +61,18 @@ class FoodAlchemistConcept extends Model
     public function scopeEchte(Builder $q): Builder
     {
         return $q->where('is_template', false);
+    }
+
+    /** Kaskade-Ebene (2026-08-24): nur Konzepte (kind=concept, Default). Concepts-Browser filtert hierauf. */
+    public function scopeKonzepte(Builder $q): Builder
+    {
+        return $q->where('kind', 'concept');
+    }
+
+    /** Kaskade-Ebene: nur Pakete (kind=paket) — wiederverwendbares Bündel mit eigenem Preis im selben Modell. */
+    public function scopePakete(Builder $q): Builder
+    {
+        return $q->where('kind', 'paket');
     }
 
     /**

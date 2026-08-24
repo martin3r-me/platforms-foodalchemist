@@ -49,6 +49,12 @@ class FoodAlchemistConceptSlot extends Model
         return $this->package();
     }
 
+    /** Kaskade (2026-08-24): eingebettetes Paket als kind=paket-Concept (ersetzt schrittweise package_id). */
+    public function embeddedConcept(): BelongsTo
+    {
+        return $this->belongsTo(FoodAlchemistConcept::class, 'embedded_concept_id');
+    }
+
     /** Befüllung B: fest gesetztes Gericht (VK-Rezept). */
     public function dish(): BelongsTo
     {
