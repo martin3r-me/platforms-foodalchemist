@@ -129,6 +129,30 @@ it('B1: composerGeneriere dispatcht GenerateRecipeJob mit seed_anker — NICHT i
     expect($gp)->not->toHaveKey('seed_anker');
 });
 
+it('composerUebernehmen pinnt seed_anker + Brief OHNE zu dispatchen; goKaskade nimmt sie mit + leert das Pin', function () {
+    Queue::fake();
+    $tomate = ($this->mkAnker)('tomate');
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Composer', 'brief' => '']);
+
+    $comp = Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->set('composerAnker', [['id' => $tomate, 'slug' => 'tomate', 'label' => 'Tomate']])
+        ->call('composerUebernehmen', 'rezept');
+
+    // Übernehmen ist der Zwischenschritt: KEIN Dispatch, aber Pin + vorbefüllter Brief.
+    Queue::assertNotPushed(GenerateRecipeJob::class);
+    $comp->assertSet('composerSeedPin.scope', 'rezept')
+        ->assertSet('composerSeedPin.slugs', ['tomate'])
+        ->assertSet('eingabe.rezept.brief', 'Foodpairing-Kreation auf Basis von: Tomate.');
+
+    // Der reguläre Go im Erstellen-Tab nimmt die gepinnten Anker als seed_anker mit …
+    $comp->call('goKaskade', 'rezept');
+    Queue::assertPushed(GenerateRecipeJob::class, fn ($job) => ($job->parameter['seed_anker'] ?? null) === ['tomate']);
+
+    // … und der Pin ist danach geleert (kein Re-Seed bei einem späteren, unabhängigen Go).
+    $comp->assertSet('composerSeedPin', []);
+});
+
 it('Grounding: seed_anker + nur_bestand baut den Kontext ohne Wurf', function () {
     ($this->mkAnker)('tomate');
 

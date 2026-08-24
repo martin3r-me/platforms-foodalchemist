@@ -489,10 +489,12 @@ return [
                 // gehört als EINE benannte Komponente in die Liste — NICHT als seine
                 // aufgelösten Rohzutaten (§4 Sub-Rezept-Hierarchie). Das Flag ist der spätere
                 // LLM-Komponenten-Marker (löst die reine Namens-Heuristik ab).
-                . 'sub_rezept (true, wenn diese Zeile ein eigenständiges Halbfabrikat / '
-                . 'Sub-Basisrezept ist — Sauce, Jus, Fond, Sud, Essenz, Reduktion, Püree, '
-                . 'Creme, Dressing, Vinaigrette, Espuma, Duxelles, Farce —, das als EIGENES Basisrezept anzulegen '
-                . 'ist statt es in Rohzutaten aufzulösen; false bei einer Rohzutat/Ware), '
+                . 'sub_rezept (true, wenn diese Zeile eine gebaute/gekochte Komponente ist, die sich einer der '
+                . 'mitgegebenen recipe_hauptgruppen zuordnen lässt [die Rezept-Taxonomie-Liste im Kontext ist '
+                . 'VERBINDLICH] — z.B. gehört eine Konfitüre/Marmelade zu »Süße Konservierung«, ein Crunch/Krokant '
+                . 'zu »Knusprige Komponenten«, ein Chutney zu »Konservierung herzhaft«, ein Jus/Fond zu »Fonds & '
+                . 'Reduktionen«, ein Püree zu »Pürees« —, das als EIGENES Basisrezept anzulegen ist statt es in '
+                . 'Rohzutaten aufzulösen; false bei einer Rohzutat/Ware), '
                 // Kohärenz-Gate (2026-08-07): role füllt das V-21-Rollenfeld (Schicht 1) im
                 // selben Call; fit ZWINGT zur Selbst-Begründung — eine Zutat, die sich nicht in
                 // einem Halbsatz fachlich rechtfertigen lässt, gehört nicht ins Gericht (senkt
@@ -536,7 +538,10 @@ return [
                 . 'Ist `pairing_vorgabe` mitgegeben (gezielte Foodpairing-Kreation): JEDES dort genannte '
                 . 'Leit-Aroma MUSS als Zutat/Komponente vorkommen (nüchtern + matchbar benannt); die je '
                 . 'Leit-Aroma gelistete Palette ist die bevorzugte Auswahl zum Abrunden; erfinde nichts '
-                . 'Unbelegtes; bindet ein Leit-Aroma an einen `gp_kandidaten`, gib dessen gp_id an.',
+                . 'Unbelegtes. Benennt ein Leit-Aroma eine ZUBEREITUNG, die zu einer recipe_hauptgruppe gehört '
+                . '(z.B. eine Konfitüre, ein Crunch/Krokant, ein Gel, ein Chutney, ein Püree), lege es als '
+                . 'gebaute Komponente mit sub_rezept:true an, statt es 1:1 an ein Convenience-GP zu binden; nur '
+                . 'echte Rohware-Anker binden an einen `gp_kandidaten` (dann dessen gp_id angeben).',
         ],
         'recipe.description' => [
             'tier' => 'C',
@@ -606,10 +611,12 @@ return [
                 // benannte Komponente (sub_rezept:true) in die Liste, NICHT flach als ihre
                 // Rohzutaten (kein «Steinpilz-Rahmsauce» aus Steinpilzen + Sahne, sondern eine
                 // Komponente «Rahmsauce» mit sub_rezept:true). Späterer LLM-Komponenten-Marker.
-                . 'sub_rezept (true, wenn diese Zeile ein eigenständiges Halbfabrikat / '
-                . 'Sub-Basisrezept ist — Sauce, Jus, Fond, Sud, Essenz, Reduktion, Püree, '
-                . 'Creme, Dressing, Vinaigrette, Espuma, Duxelles, Farce —, das als EIGENES Basisrezept anzulegen '
-                . 'ist statt es in Rohzutaten aufzulösen; false bei einer Rohzutat/Ware), '
+                . 'sub_rezept (true, wenn diese Zeile eine gebaute/gekochte Komponente ist, die sich einer der '
+                . 'mitgegebenen recipe_hauptgruppen zuordnen lässt [die Rezept-Taxonomie-Liste im Kontext ist '
+                . 'VERBINDLICH] — z.B. gehört eine Konfitüre/Marmelade zu »Süße Konservierung«, ein Crunch/Krokant '
+                . 'zu »Knusprige Komponenten«, ein Chutney zu »Konservierung herzhaft«, ein Jus/Fond zu »Fonds & '
+                . 'Reduktionen«, ein Püree zu »Pürees« —, das als EIGENES Basisrezept anzulegen ist statt es in '
+                . 'Rohzutaten aufzulösen; false bei einer Rohzutat/Ware), '
                 . 'role (V-21: aroma_treiber|komponente|beilage|garnitur), '
                 . 'fit (EIN kurzer Halbsatz: warum gehört diese Zutat FACHLICH in DIESES Gericht)}] '
                 // Spec 41 B2 (§12): Komponenten-Reihenfolge = AUFBAU-/PLATING-Reihenfolge über `role`,
@@ -652,8 +659,11 @@ return [
                 . 'Ist `pairing_vorgabe` mitgegeben (gezielte Foodpairing-Kreation): JEDES dort genannte '
                 . 'Leit-Aroma MUSS als Komponente/Zutat des Tellers vorkommen (nüchtern + matchbar); die je '
                 . 'Leit-Aroma gelistete Palette ist die bevorzugte Auswahl für Begleiter/Garnitur; setze '
-                . 'zusätzlich bewusste Kontraste (s.o.); erfinde nichts Unbelegtes; bindet ein Leit-Aroma '
-                . 'an einen `gp_kandidaten`, gib dessen gp_id an.',
+                . 'zusätzlich bewusste Kontraste (s.o.); erfinde nichts Unbelegtes. Benennt ein Leit-Aroma '
+                . 'eine ZUBEREITUNG, die zu einer recipe_hauptgruppe gehört (z.B. eine Konfitüre, ein '
+                . 'Crunch/Krokant, ein Gel, ein Chutney, ein Püree), lege es als gebaute Komponente mit '
+                . 'sub_rezept:true an, statt es 1:1 an ein Convenience-GP zu binden; nur echte Rohware-Anker '
+                . 'binden an einen `gp_kandidaten` (dann dessen gp_id angeben).',
         ],
         'vk.speisen_klasse' => [
             'tier' => 'B',

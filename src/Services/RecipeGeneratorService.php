@@ -88,6 +88,12 @@ class RecipeGeneratorService
                 $kontext['aufschlagsklassen'] = \Platform\FoodAlchemist\Models\FoodAlchemistMarkupClass::where('is_inactive', false)
                     ->orderBy('code')->pluck('label', 'code')->all();
             }
+            // Sub-Rezept-Erkennung an die Rezept-Taxonomie binden (statt hartcodierter Prompt-Wortliste):
+            // die real konfigurierten Basisrezept-Hauptgruppen mitgeben, damit die KI »sub_rezept:true«
+            // an den Einstellungen ausrichtet (fügt der User z.B. »Knusprige Komponenten«/»Konfitüren«
+            // hinzu, folgt der Generator automatisch). Bewusst UNgated: beide Prompts (recipe + vk) nutzen sie.
+            $kontext['recipe_hauptgruppen'] = \Platform\FoodAlchemist\Models\FoodAlchemistRecipeMainGroup::visibleToTeam($team)
+                ->orderBy('sort_order')->pluck('label')->values()->all();
             $melde('KI schreibt das Rezept …');
             $vorschlag = $this->ki->propose($vkModus ? 'vk.generator' : 'recipe.generator', $kontext, [
                 'knowledge' => $wissen['block'],
