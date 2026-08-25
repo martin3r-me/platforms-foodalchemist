@@ -76,3 +76,37 @@ it('Tenancy: PUT auf ein fremdes (Kind-)Format ist NOT_FOUND aus Root-Kontext', 
     $res = ($this->tool)('foodalchemist.formats.PUT', ['format_id' => $fremd->id, 'claim' => 'hack']);
     expect($res->success)->toBeFalse()->and($res->errorCode)->toBe('NOT_FOUND');
 });
+
+// ── Format-Umbau F5: Format als Kapitel/Rubrik buchen (live, kein Sonderweg) ──────────
+
+it('foodbook_format_chapters.POST: bucht ein Format als Kapitel (live concept_ref-Blöcke)', function () {
+    $f = FoodAlchemistFormat::create(['team_id' => $this->rootTeam->id, 'name' => 'CHEFS.CORNER', 'consumer_name' => 'Chefs Corner']);
+    $c = FoodAlchemistConcept::create(['team_id' => $this->rootTeam->id, 'name' => 'URBAN & FLAVOUR', 'status' => 'active']);
+    app(FormatService::class)->slotConceptEinfuegen($this->rootTeam, $f->id, $c->id);
+    $buch = \Platform\FoodAlchemist\Models\FoodAlchemistFoodbook::create(['team_id' => $this->rootTeam->id, 'label' => 'Katalog 2027', 'status' => 'aktiv']);
+
+    $res = ($this->tool)('foodalchemist.foodbook_format_chapters.POST', ['foodbook_id' => $buch->id, 'format_id' => $f->id]);
+    expect($res->success)->toBeTrue()
+        ->and($res->data['chapter']['title'])->toBe('CHEFS.CORNER');
+
+    $kapitel = \Platform\FoodAlchemist\Models\FoodAlchemistFoodbookKapitel::find($res->data['chapter']['id']);
+    expect($kapitel)->not->toBeNull()
+        ->and($kapitel->format_id)->toBeNull()   // kein Live-Format-Sonderweg
+        ->and($kapitel->blocks()->where('type', 'concept_ref')->where('concept_id', $c->id)->exists())->toBeTrue();
+});
+
+it('speisekarte_format_rubriken.POST: bucht ein Format als Rubrik (live menue_ref-Positionen)', function () {
+    $f = FoodAlchemistFormat::create(['team_id' => $this->rootTeam->id, 'name' => 'CHEFS.CORNER', 'consumer_name' => 'Chefs Corner']);
+    $c = FoodAlchemistConcept::create(['team_id' => $this->rootTeam->id, 'name' => 'URBAN & FLAVOUR', 'status' => 'active', 'is_template' => false]);
+    app(FormatService::class)->slotConceptEinfuegen($this->rootTeam, $f->id, $c->id);
+    $karte = app(\Platform\FoodAlchemist\Services\SpeisekarteService::class)->create($this->rootTeam, ['name' => 'Abendkarte']);
+
+    $res = ($this->tool)('foodalchemist.speisekarte_format_rubriken.POST', ['speisekarte_id' => $karte->id, 'format_id' => $f->id]);
+    expect($res->success)->toBeTrue()
+        ->and($res->data['rubrik']['title'])->toBe('CHEFS.CORNER');
+
+    $rubrik = \Platform\FoodAlchemist\Models\FoodAlchemistSpeisekarteRubrik::find($res->data['rubrik']['id']);
+    expect($rubrik)->not->toBeNull()
+        ->and($rubrik->format_id)->toBeNull()   // kein Live-Format-Sonderweg
+        ->and($rubrik->items()->where('type', 'menue_ref')->where('concept_id', $c->id)->exists())->toBeTrue();
+});

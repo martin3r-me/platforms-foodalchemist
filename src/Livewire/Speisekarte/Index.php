@@ -56,7 +56,10 @@ class Index extends Component
     // Gericht-/Menü-Picker
     public string $pickerSuche = '';
     public ?int $pickerRubrikId = null;
-    public string $pickerModus = 'gericht'; // gericht | menue
+    public string $pickerModus = 'gericht'; // gericht | menue | format
+
+    // Format-Umbau F5: Suche im „Format einfügen"-Katalog-Modus (bucht ein Format als eigene Rubrik).
+    public string $formatSuche = '';
 
     // Werkstrang M Phase B: Facetten-Filter im Gericht-Picker (Hauptgruppe → Unterklasse).
     public ?int $pickerHauptgruppe = null;
@@ -296,13 +299,14 @@ class Index extends Component
         $this->pickerDishClass = null;
     }
 
-    /** Persistenter Katalog (Picker-Umbau): Modus umschalten (gericht|menue); Ziel-Rubrik bleibt. */
+    /** Persistenter Katalog (Picker-Umbau): Modus umschalten (gericht|menue|format); Ziel-Rubrik bleibt. */
     public function katalogModus(string $modus): void
     {
-        $this->pickerModus = in_array($modus, ['gericht', 'menue'], true) ? $modus : 'gericht';
+        $this->pickerModus = in_array($modus, ['gericht', 'menue', 'format'], true) ? $modus : 'gericht';
         $this->pickerSuche = '';
         $this->pickerHauptgruppe = null;
         $this->pickerDishClass = null;
+        $this->formatSuche = '';
     }
 
     /** Werkstrang M Phase B: Hauptgruppen-Facette setzen/löschen — Unterklasse fällt dabei weg. */
@@ -337,6 +341,26 @@ class Index extends Component
         $svc->addPosition($this->team(), $rubrikId, [
             'type' => 'menue_ref', 'concept_id' => $conceptId,
         ]);
+    }
+
+    /**
+     * Format-Umbau F5: ein Format in die Karte buchen — WIE EIN CONCEPT. Legt eine eigene Rubrik
+     * an, deren Positionen die Editionen als live menue_ref + die Struktur-Blöcke des Formats sind
+     * (kein Live-Format-Sonderweg). Fail-soft: Status-Guard meldet sich als Fehler, kippt die Karte nicht.
+     */
+    public function formatEinfuegen(SpeisekarteService $svc, int $formatId): void
+    {
+        if (! $this->karteId) {
+            return;
+        }
+        try {
+            $svc->insertFormatAlsRubrik($this->team(), $this->karteId, $formatId);
+        } catch (\Throwable $e) {
+            $this->addError('formatRubrik', $e->getMessage());
+
+            return;
+        }
+        $this->formatSuche = '';
     }
 
     public function positionLoeschen(SpeisekarteService $svc, int $positionId): void
@@ -610,7 +634,7 @@ class Index extends Component
         $pickerErgebnisse = collect();
         $pickerHauptgruppen = collect();
         $pickerUntergruppen = collect();
-        if ($karte !== null) {
+        if ($karte !== null && $this->pickerModus !== 'format') {
             $pickerErgebnisse = $this->pickerModus === 'menue'
                 ? $svc->conceptKandidaten($team, $this->pickerSuche, 50)
                 : $svc->gerichtKandidaten($team, $this->pickerSuche, 50, $this->pickerHauptgruppe, $this->pickerDishClass);
@@ -637,6 +661,8 @@ class Index extends Component
             'pickerErgebnisse' => $pickerErgebnisse,
             'pickerHauptgruppen' => $pickerHauptgruppen,
             'pickerUntergruppen' => $pickerUntergruppen,
+            // Format-Umbau F5: Format-Kandidaten im Katalog-Format-Modus (Format wird zur eigenen Rubrik).
+            'formatKandidaten' => ($karte !== null && $this->pickerModus === 'format') ? $svc->formatKandidaten($team, $this->formatSuche) : collect(),
             'pickerRubrikTitel' => $pickerRubrikTitel,
             // Spec 33 P5: Auswahl fürs Status-/Zuordnungs-Bauteil (nur aktive Betriebe).
             'betriebe' => \Platform\FoodAlchemist\Models\FoodAlchemistOutlet::where('team_id', $team->id)

@@ -1917,9 +1917,89 @@ class FoodbookService
             ->orderBy('name')->limit($limit)->get(['id', 'name', 'sales_net']);
     }
 
-    // Kaskade 2026-08-24: formatKandidaten + insertFormatChapter entfernt — die spezielle
-    // Format-Kapitel-Mechanik entfällt. Ein Format wird künftig WIE EIN CONCEPT gebucht
-    // (live-referenziert, Kaskade bleibt live); Re-Integration folgt in F5.
+    // ── Format buchen (F5) — WIE EIN CONCEPT, kein Live-Format-Sonderweg ──────────
+
+    /**
+     * Format-Umbau F5: Formate für den „Format einfügen"-Picker (Kunden-IP-gefiltert).
+     * Kunden-IP-Guard: ein fremdes Kunden-Format (origin=kunde, anderer Kunde als das
+     * Foodbook) wird ausgeblendet, sobald der Foodbook-Kunde bekannt ist.
+     */
+    public function formatKandidaten(Team $team, FoodAlchemistFoodbook $fb, string $suche, int $limit = 20): Collection
+    {
+        $fbKunde = mb_strtolower(trim((string) ($fb->customer ?? '')));
+
+        return \Platform\FoodAlchemist\Models\FoodAlchemistFormat::visibleToTeam($team)
+            ->where('status', '!=', 'archiviert')
+            ->when($suche !== '', fn ($q) => \Platform\FoodAlchemist\Support\Suche::like($q, 'name', $suche))
+            ->orderBy('name')->limit(50)
+            ->get(['id', 'name', 'consumer_name', 'origin', 'customer', 'status'])
+            ->reject(fn ($f) => $f->origin === 'kunde' && trim((string) $f->customer) !== ''
+                && $fbKunde !== '' && mb_strtolower(trim((string) $f->customer)) !== $fbKunde)
+            ->take($limit)->values();
+    }
+
+    /**
+     * Format-Umbau F5: ein Format ins Foodbook buchen — WIE EIN CONCEPT, NICHT über den
+     * entfernten Live-Format-Sonderweg (kein `format_id` am Kapitel, kein ist_format-Renderzweig).
+     * Das Format wird sein EIGENES Kapitel (Titel/Kundentitel/Hinführung aus dem Format); seine
+     * Aufbau-Slots werden zu ganz normalen, LIVE-referenzierten Blöcken:
+     *  - concept-Slot  → concept_ref-Block (concept_id) → Editionen rendern live über die Kaskade
+     *  - header-Slot   → header_frei-Block (Titel)
+     *  - text-Slot     → text-Block (Fließtext)
+     *  - spacer-Slot   → spacer-Block (Höhe)
+     * „Snapshot" passiert erst beim Kunden-Versand (snapshot_json), nichts wird hier eingefroren.
+     * Kunden-IP-Guard + Status-Guard (versendete/archivierte Bücher sind zu). Kein Recompute nötig
+     * (die Kapitel-Aggregation läuft wie bei jedem anderen Kapitel über die Blöcke).
+     */
+    public function insertFormatAlsKapitel(Team $team, int $foodbookId, int $formatId, ?int $parentId = null): FoodAlchemistFoodbookKapitel
+    {
+        $fb = FoodAlchemistFoodbook::visibleToTeam($team)->findOrFail($foodbookId);
+        $this->guard($fb, $team);
+        // Status ist auf AusgabeStatus gecastet → über statusWert()->value vergleichen ('versendet'
+        // normalisiert auf 'aktiv', bleibt der Vollständigkeit halber gelistet).
+        if (in_array($fb->statusWert()->value, ['versendet', 'archiviert'], true)) {
+            throw new \RuntimeException('Foodbook ist ' . $fb->statusWert()->value . ' — kein Kapitel mehr einfügbar.');
+        }
+        if ($parentId !== null && ! FoodAlchemistFoodbookKapitel::where('foodbook_id', $fb->id)->whereKey($parentId)->exists()) {
+            throw new \RuntimeException('parent_id gehört nicht zu diesem Foodbook.');
+        }
+        $format = \Platform\FoodAlchemist\Models\FoodAlchemistFormat::visibleToTeam($team)
+            ->with(['slots' => fn ($q) => $q->orderBy('position')])
+            ->findOrFail($formatId);
+
+        // Kunden-IP: ein Kunden-Format nie in ein Buch eines ANDEREN Kunden (CLAUDE.md).
+        if ($format->origin === 'kunde' && trim((string) $format->customer) !== '') {
+            $fbKunde = trim((string) ($fb->customer ?? ''));
+            if ($fbKunde !== '' && mb_strtolower($fbKunde) !== mb_strtolower(trim((string) $format->customer))) {
+                throw new \RuntimeException('Kunden-IP: Format „' . $format->name . '" gehört ' . $format->customer
+                    . ' — nicht in ein Buch von ' . $fbKunde . ' einfügbar.');
+            }
+        }
+
+        return DB::transaction(function () use ($team, $fb, $format, $parentId) {
+            // Eigenes Kapitel mit der Format-Identität (kein format_id — reines Standard-Kapitel).
+            $kapitel = $this->addKapitel($team, $fb->id, ['title' => $format->name], $parentId);
+            $kapitel->update([
+                'consumer_title' => $format->consumer_name,   // Marketing-Titel (PDF)
+                'description' => $format->story,               // Kapitel-Hinführung (Story)
+            ]);
+
+            // Aufbau-Slots → normale LIVE-Blöcke (Snapshot-wie-Concepten, keine Format-Interna).
+            foreach ($format->slots as $slot) {
+                match ($slot->type) {
+                    'concept' => $slot->concept_id !== null
+                        ? $this->addBlock($team, $kapitel->id, ['type' => 'concept_ref', 'concept_id' => $slot->concept_id])
+                        : null,
+                    'header' => $this->addBlock($team, $kapitel->id, ['type' => 'header_frei', 'label' => $slot->title, 'customer_text' => $slot->title]),
+                    'text' => $this->addBlock($team, $kapitel->id, ['type' => 'text', 'customer_text' => $slot->text_content]),
+                    'spacer' => $this->addBlock($team, $kapitel->id, ['type' => 'spacer', 'height' => $slot->height ?: 'mittel']),
+                    default => null,
+                };
+            }
+
+            return $kapitel->refresh();
+        });
+    }
 
     /**
      * M11-08: Andock-Kontext für die spätere KI-Text-Generierung (Einleitung/Kapitel) —

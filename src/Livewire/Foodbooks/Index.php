@@ -184,7 +184,10 @@ class Index extends Component
 
     public string $conceptSuche = '';
 
-    /** Picker-Baustein (2026-08-23): aktiver Katalog-Modus (Server-Modus, wie Speisekarte) — concept|gericht.
+    /** Format-Umbau F5: Suche im „Format einfügen"-Picker (Katalog-Modus 'format'). */
+    public string $formatSuche = '';
+
+    /** Picker-Baustein (2026-08-23): aktiver Katalog-Modus (Server-Modus, wie Speisekarte) — concept|gericht|format.
      *  Property heisst bewusst NICHT wie die Methode katalogModus() — gleicher Name = Livewire-Footgun (client
      *  wire:click misfired, Server-`->call()` nicht → layout-blind); daher pickerModus wie in der Speisekarte. */
     public string $pickerModus = 'concept';
@@ -654,7 +657,7 @@ class Index extends Component
     /** Picker-Baustein: Katalog-Modus umschalten (concept|gericht). Spiegelt Speisekarte::katalogModus. */
     public function katalogModus(string $modus): void
     {
-        if (in_array($modus, ['concept', 'gericht'], true)) {
+        if (in_array($modus, ['concept', 'gericht', 'format'], true)) {
             $this->pickerModus = $modus;
         }
     }
@@ -666,6 +669,27 @@ class Index extends Component
         }
         $svc->addBlock($this->team(), $this->selectedKapitelId, ['type' => 'concept_ref', 'concept_id' => $conceptId]);
         $this->conceptSuche = '';
+    }
+
+    /**
+     * Format-Umbau F5: ein Format ins Foodbook buchen — WIE EIN CONCEPT. Legt ein eigenes
+     * Kapitel an, dessen Inhalt die Editionen als live concept_ref-Blöcke + die Struktur-Blöcke
+     * des Formats sind (kein Live-Format-Sonderweg). Fail-soft: Kunden-IP-/Status-Guard meldet
+     * sich als Fehler, kippt den Editor nicht. Braucht das gewählte Foodbook, kein Ziel-Kapitel.
+     */
+    public function formatEinfuegen(int $formatId, FoodbookService $svc): void
+    {
+        if ($this->selectedId === null) {
+            return;
+        }
+        try {
+            $svc->insertFormatAlsKapitel($this->team(), $this->selectedId, $formatId);
+        } catch (\Throwable $e) {
+            $this->addError('formatKapitel', $e->getMessage());
+
+            return;
+        }
+        $this->formatSuche = '';
     }
 
     /**
@@ -1014,6 +1038,9 @@ class Index extends Component
             // E1.3: Einzel-Gericht-Picker (recipe_ref) — sofort Liste, Suche + Klasse (HG) + Untergruppe filtern nur
             'gerichtKandidaten' => $this->selectedKapitelId !== null
                 ? $svc->gerichtKandidaten($team, $this->gerichtSuche, 50, $this->gerichtHauptgruppe, $this->gerichtDishClass) : collect(),
+            // Format-Umbau F5: Format-Kandidaten für den „Format einfügen"-Picker (Kunden-IP-gefiltert).
+            // Braucht nur das Foodbook (Format wird zum eigenen Kapitel), nicht die Kapitel-Auswahl.
+            'formatKandidaten' => $fb !== null ? $svc->formatKandidaten($team, $fb, $this->formatSuche, 50) : collect(),
             // UX 2026-07-24: Klassen-Spalte im Gericht-Picker (Modell A: aktive VK-Hauptgruppen)
             'gerichtHauptgruppen' => $this->selectedKapitelId !== null
                 ? app(\Platform\FoodAlchemist\Services\SalesRecipeService::class)->dishMainGroups($team)

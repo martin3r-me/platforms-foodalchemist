@@ -250,8 +250,9 @@ it('UX D&D: rubrikAblegen sortiert Rubriken derselben Ebene', function () {
 });
 
 // Picker-Umbau: permanenter Katalog (Gericht · Menü) rechts + Ziel-Rubrik über das per-Rubrik-„+".
-// 2026-08-24: Live-Format-Modus entfernt (Speisekarte ist Snapshot, kein Live-Fenster aufs Format).
-it('Speisekarte-Editor: permanenter Katalog mit 2 Modi + Ziel-Rubrik', function () {
+// F5: der Katalog kennt wieder drei Modi (gericht|menue|format) — ein Format wird WIE EIN CONCEPT
+// gebucht (eigene Rubrik aus live menue_ref-Positionen), daher gültiger Modus.
+it('Speisekarte-Editor: permanenter Katalog mit 3 Modi + Ziel-Rubrik', function () {
     Livewire::test(SpeisekarteIndex::class)->call('neu');
     $karte = FoodAlchemistSpeisekarte::first();
     $comp = Livewire::test(SpeisekarteIndex::class)
@@ -259,16 +260,17 @@ it('Speisekarte-Editor: permanenter Katalog mit 2 Modi + Ziel-Rubrik', function 
         ->set('neueRubrik', 'Vorspeisen')->call('rubrikNeu');
     $rubrik = $karte->sections()->first();
 
-    // Katalog + 2 Modi rendern; Default-Modus Gericht (kein Format-Modus mehr).
+    // Katalog + 3 Modi rendern; Default-Modus Gericht.
     $comp->assertOk()
         ->assertSeeHtml('data-sk-katalog')
         ->assertSeeHtml('data-sk-kat="gericht"')
         ->assertSeeHtml('data-sk-kat="menue"')
-        ->assertDontSeeHtml('data-sk-kat="format"')
+        ->assertSeeHtml('data-sk-kat="format"')
         ->assertSet('pickerModus', 'gericht');
 
-    // Modus-Umschalter (Livewire); 'format' wird abgelehnt (bleibt auf gericht).
-    $comp->call('katalogModus', 'format')->assertSet('pickerModus', 'gericht')
+    // Modus-Umschalter (Livewire); 'format' ist gültig, Unfug bleibt auf gericht.
+    $comp->call('katalogModus', 'format')->assertSet('pickerModus', 'format')
+        ->call('katalogModus', 'quatsch')->assertSet('pickerModus', 'gericht')
         ->call('katalogModus', 'menue')->assertSet('pickerModus', 'menue');
 
     // „+ Gericht" an der Rubrik setzt die Ziel-Rubrik → Katalog nennt sie.

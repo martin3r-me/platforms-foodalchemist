@@ -497,6 +497,8 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\FoodbookKapitelPutTool::class,
                     \Platform\FoodAlchemist\Tools\FoodbookBlocksPostTool::class,
                     \Platform\FoodAlchemist\Tools\FoodbookBlocksDeleteTool::class,
+                    // Format-Umbau F5: Format als Kapitel buchen (live concept_ref-Blöcke, kein Sonderweg)
+                    \Platform\FoodAlchemist\Tools\FoodbookInsertFormatTool::class,
                     // Spec 19 E3.5: Zielgruppen-Vokabular (Leitstelle-Leseflaeche + Anlage)
                     \Platform\FoodAlchemist\Tools\ZielgruppenGetTool::class,
                     \Platform\FoodAlchemist\Tools\ZielgruppenPostTool::class,
@@ -614,6 +616,7 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\SpeisekarteRubrikPostTool::class,
                     \Platform\FoodAlchemist\Tools\SpeisekarteRubrikPutTool::class,
                     \Platform\FoodAlchemist\Tools\SpeisekartePositionenPostTool::class,
+                    \Platform\FoodAlchemist\Tools\SpeisekarteInsertFormatTool::class,  // Format-Umbau F5: Format als Rubrik (live menue_ref)
                     \Platform\FoodAlchemist\Tools\SpeisekartePositionenDeleteTool::class,
                     \Platform\FoodAlchemist\Tools\SpeisekartePositionenMoveTool::class,
                     \Platform\FoodAlchemist\Tools\SpeisekartePositionenReorderTool::class,

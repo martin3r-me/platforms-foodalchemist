@@ -266,9 +266,72 @@ class SpeisekarteService
         ]);
     }
 
-    // Kaskade 2026-08-24: insertFormatRubrik + formatKandidaten entfernt — die spezielle
-    // Format-Rubrik-Mechanik entfällt. Ein Format wird künftig WIE EIN CONCEPT gebucht
-    // (live-referenziert, Kaskade bleibt live); Re-Integration folgt in F5.
+    // ── Format buchen (F5) — WIE EIN CONCEPT, kein Live-Format-Sonderweg ──────────
+
+    /** Format-Umbau F5: Formate (Marken-Container) für den „+ Format"-Picker (team-sichtbar, nicht archiviert). */
+    public function formatKandidaten(Team $team, string $suche, int $limit = 50): Collection
+    {
+        return \Platform\FoodAlchemist\Models\FoodAlchemistFormat::visibleToTeam($team)
+            ->where('status', '!=', 'archiviert')
+            ->when($suche !== '', fn ($q) => \Platform\FoodAlchemist\Support\Suche::like($q, 'name', $suche))
+            ->orderBy('name')->limit($limit)->get(['id', 'name', 'consumer_name', 'status']);
+    }
+
+    /**
+     * Format-Umbau F5: ein Format in eine Speisekarte buchen — WIE EIN CONCEPT, NICHT über den
+     * entfernten Live-Format-Sonderweg (kein `format_id` an der Rubrik, kein ist_format-Renderzweig).
+     * Das Format wird seine EIGENE Rubrik (Titel/Kundentitel/Claim/Hinführung aus dem Format); seine
+     * Aufbau-Slots werden zu ganz normalen, LIVE-referenzierten Positionen:
+     *  - concept-Slot  → menue_ref-Position (concept_id) → das Menü rendert live über die Kaskade
+     *  - header-Slot   → header-Position (Titel)
+     *  - text-Slot     → text-Position (Fließtext in consumer_text)
+     *  - spacer-Slot   → spacer-Position (Höhe)
+     * Die Format-Story wandert in die Rubrik-`description`. Status-Guard (archivierte Karten sind zu).
+     */
+    public function insertFormatAlsRubrik(Team $team, int $karteId, int $formatId, ?int $parentId = null): FoodAlchemistSpeisekarteRubrik
+    {
+        $karte = FoodAlchemistSpeisekarte::visibleToTeam($team)->findOrFail($karteId);
+        $this->guard($karte, $team);
+        // Status ist auf AusgabeStatus gecastet → über statusWert() vergleichen.
+        if ($karte->statusWert() === AusgabeStatus::Archiviert) {
+            throw new \RuntimeException('Speisekarte ist archiviert — keine Rubrik mehr einfügbar.');
+        }
+        if ($parentId !== null && ! FoodAlchemistSpeisekarteRubrik::where('menu_card_id', $karte->id)->whereKey($parentId)->exists()) {
+            throw new \RuntimeException('parent_id gehört nicht zu dieser Speisekarte.');
+        }
+        $format = \Platform\FoodAlchemist\Models\FoodAlchemistFormat::visibleToTeam($team)
+            ->with(['slots' => fn ($q) => $q->orderBy('position')])
+            ->findOrFail($formatId);
+
+        return DB::transaction(function () use ($team, $karte, $format, $parentId) {
+            // Eigene Rubrik mit der Format-Identität (kein format_id — reine Standard-Rubrik).
+            $rubrik = $this->addRubrik($team, $karte->id, [
+                'title' => $format->name,
+                'consumer_title' => $format->consumer_name,
+                'art' => 'menue',
+            ], $parentId);
+            $rubrik->update([
+                'claim' => $format->claim,
+                'description' => $format->story,   // Format-Story → Rubrik-Hinführung
+            ]);
+
+            // Aufbau-Slots → normale LIVE-Positionen (menue_ref + header/text/spacer sind
+            // native Positions-Typen; das Menü rendert live über die Kaskade).
+            foreach ($format->slots as $slot) {
+                match ($slot->type) {
+                    'concept' => $slot->concept_id !== null
+                        ? $this->addPosition($team, $rubrik->id, ['type' => 'menue_ref', 'concept_id' => $slot->concept_id])
+                        : null,
+                    'header' => $this->addPosition($team, $rubrik->id, ['type' => 'header', 'label' => $slot->title]),
+                    'text' => $this->addPosition($team, $rubrik->id, ['type' => 'text', 'label' => $slot->text_content, 'consumer_text' => $slot->text_content]),
+                    'spacer' => $this->addPosition($team, $rubrik->id, ['type' => 'spacer', 'height' => $slot->height ?: 'mittel']),
+                    default => null,
+                };
+            }
+
+            return $rubrik->refresh();
+        });
+    }
 
     private const RUBRIK_FELDER = ['title', 'consumer_title', 'claim', 'description', 'art', 'preis_anzeige', 'status'];
 
