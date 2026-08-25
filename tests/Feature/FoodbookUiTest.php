@@ -203,6 +203,38 @@ it('#7/#1: Block-Vorschau löst ein eingebettetes Paket auf (Gerichte + Paket-Pr
         ->assertSee('Green Power');     // Gericht des Pakets, eingerückt (#7)
 });
 
+it('C1: Gericht-Zeile inline editieren schreibt den foodbook-lokalen Override + Vorschau zeigt ihn', function () {
+    $concepts = app(ConceptService::class);
+    $green = FoodAlchemistRecipe::create([
+        'team_id' => $this->rootTeam->id, 'recipe_key' => 'c1g', 'name' => 'Salat: Green Power',
+        'status' => 'approved', 'is_sales_recipe' => true, 'sales_net' => 2.00,
+    ]);
+    $concept = $concepts->create($this->rootTeam, ['name' => 'Menü', 'status' => 'active']);
+    $slot = $concepts->addSlot($this->rootTeam, $concept->id, ['role' => 'Vorspeise']);
+    $concepts->fillSlot($this->rootTeam, $slot->id, ['sales_recipe_id' => $green->id]);
+
+    Livewire::test(FoodbooksIndex::class)->call('neu');
+    $fb = FoodAlchemistFoodbook::first();
+    $comp = Livewire::test(FoodbooksIndex::class)->call('waehle', $fb->id)
+        ->set('neuesKapitelTitel', 'Kap')->call('kapitelNeu');
+    $kap = $fb->kapitel()->first();
+    $comp->call('conceptHinzu', $concept->id);
+    $block = $kap->blocks()->where('type', 'concept_ref')->firstOrFail();
+
+    // Inline-Edit dieser Gericht-Zeile → foodbook-lokaler Override, Concept-Slot bleibt unberührt.
+    $comp->call('slotWordingBearbeiten', $block->id, $slot->id, '')
+        ->set('editSlotWording', 'Mein Kunden-Salat')
+        ->call('slotWordingSpeichern');
+
+    $payload = $block->fresh()->payload_json ?? [];
+    expect($payload['wording_overrides'][(string) $slot->id] ?? null)->toBe('Mein Kunden-Salat')
+        ->and($slot->fresh()->wording)->toBeNull();   // Concept unangetastet
+
+    // Vorschau zeigt jetzt den Override (nicht mehr den Standard-Namen).
+    Livewire::test(FoodbooksIndex::class)->call('waehle', $fb->id)->call('kapitelWaehle', $kap->id)
+        ->assertSee('Mein Kunden-Salat');
+});
+
 it('#4: kapitelVerschiebenAuf sortiert ein Kapitel per Drag vor das Ziel', function () {
     Livewire::test(FoodbooksIndex::class)->call('neu');
     $fb = FoodAlchemistFoodbook::first();

@@ -226,6 +226,11 @@ class Index extends Component
 
     public array $blockForm = [];
 
+    /** C1: inline-editierte Gericht-Zeile in der Block-Vorschau — Key "blockId:slotId" + Text. */
+    public ?string $editSlotKey = null;
+
+    public string $editSlotWording = '';
+
     /** markierte concept_ref-Blöcke für die Wahl-Gruppe. */
     public array $markiert = [];
 
@@ -928,6 +933,46 @@ class Index extends Component
     public function blockRaus(int $id, FoodbookService $svc): void
     {
         $svc->deleteBlock($this->team(), $id);
+    }
+
+    /**
+     * C1: eine einzelne Gericht-Zeile der Block-Vorschau inline bearbeiten (manuelles Wording,
+     * wenn das KI-Ergebnis nicht passt). Öffnet den Inline-Editor mit dem aktuellen Text.
+     */
+    public function slotWordingBearbeiten(int $blockId, int $slotId, ?string $aktuell = null): void
+    {
+        $this->editSlotKey = $blockId . ':' . $slotId;
+        $this->editSlotWording = (string) $aktuell;
+    }
+
+    /**
+     * C1: den inline bearbeiteten Anzeigenamen speichern — als foodbook-lokaler Block-Override
+     * (payload_json['wording_overrides'][slotId], oberste Stufe der Wording-Kette). Leer = zurück
+     * auf die Kette (Konzept-Wording → Standard → Name). Das Concept bleibt unangetastet.
+     */
+    public function slotWordingSpeichern(FoodbookService $svc): void
+    {
+        if ($this->editSlotKey === null || ! str_contains($this->editSlotKey, ':')) {
+            return;
+        }
+        [$blockId, $slotId] = array_map('intval', explode(':', $this->editSlotKey, 2));
+        try {
+            $svc->setBlockSlotWording($this->team(), $blockId, $slotId, $this->editSlotWording);
+        } catch (\Throwable $e) {
+            $this->addError('slotWording', $e->getMessage());
+
+            return;
+        }
+        $this->editSlotKey = null;
+        $this->editSlotWording = '';
+        $svc->vorschauSnapshotAktualisieren($this->team(), $this->selectedId);
+        $this->dispatch('foodbook-gespeichert');
+    }
+
+    public function slotWordingAbbrechen(): void
+    {
+        $this->editSlotKey = null;
+        $this->editSlotWording = '';
     }
 
     public function blockSichtbar(int $id, FoodbookService $svc): void

@@ -650,20 +650,40 @@
                                     <button type="button" wire:click="blockRaus({{ $block->id }})" class="shrink-0 text-gray-500 hover:text-red-500" title="entfernen">✕</button>
                                 </div>
 
-                                {{-- #7: Live-Menü-Vorschau (aufgelöste gerichtZeilen) für Concept/Paket-Blöcke —
-                                     wie im Format-Editor: eingebettete Pakete aufgelöst (#1) + Paket-Preis, Einrückung. --}}
+                                {{-- #7/C2: Live-Menü-Vorschau (aufgelöste gerichtZeilen) — Panel statt nackter Zeilen;
+                                     eingebettete Pakete aufgelöst (#1) + Paket-Preis, Einrückung.
+                                     C1: direkte Gericht-Zeilen (slot_id, oberste Ebene) inline editierbar (Bleistift),
+                                     schreibt den foodbook-lokalen Override. Eingebettete Paket-Zeilen sind read-only. --}}
                                 @if($block->type === 'concept_ref' && ! empty($blockMenus[$block->id]))
-                                    <div class="mt-1 ml-6 pl-2 border-l border-black/5 space-y-px" data-fb-block-vorschau>
+                                    <div class="mt-1.5 ml-6 rounded-lg bg-violet-500/[0.035] border border-black/5 px-3 py-2 space-y-1" data-fb-block-vorschau>
                                         @foreach($blockMenus[$block->id] as $g)
+                                            @php($istEditierbar = isset($g['slot_id']) && (int) ($g['einrueckung'] ?? 0) === 0)
+                                            @php($slotKey = $istEditierbar ? $block->id . ':' . $g['slot_id'] : null)
                                             @if(($g['type'] ?? '') === 'header')
-                                                <p class="text-[11px] font-semibold text-gray-600 mt-1 first:mt-0" style="margin-left:{{ ($g['einrueckung'] ?? 0) * 12 }}px">{{ $g['text'] }}</p>
+                                                <p class="text-[10px] font-semibold uppercase tracking-wider text-gray-500 mt-1.5 first:mt-0" style="margin-left:{{ ($g['einrueckung'] ?? 0) * 12 }}px">{{ $g['text'] }}</p>
                                             @elseif(($g['type'] ?? '') === 'paket')
-                                                <p class="text-[11px] font-medium text-violet-600 mt-1 flex items-center gap-1" style="margin-left:{{ ($g['einrueckung'] ?? 0) * 12 }}px">
-                                                    <span class="{{ $pill }} {{ $variantPill['info'] }} normal-case">Paket</span>{{ $g['text'] }}
-                                                    @if(($g['preis'] ?? null) !== null)<span class="ml-auto text-gray-500 tabular-nums">{{ number_format((float) $g['preis'], 2, ',', '.') }} €/P</span>@endif
-                                                </p>
+                                                <div class="flex items-center gap-1.5 mt-1" style="margin-left:{{ ($g['einrueckung'] ?? 0) * 12 }}px">
+                                                    <span class="{{ $pill }} {{ $variantPill['info'] }} normal-case shrink-0">Paket</span>
+                                                    <span class="text-[11px] font-medium text-violet-700 break-words">{{ $g['text'] }}</span>
+                                                    @if(($g['preis'] ?? null) !== null)<span class="ml-auto text-[10px] text-gray-500 tabular-nums shrink-0">{{ number_format((float) $g['preis'], 2, ',', '.') }} €/P</span>@endif
+                                                </div>
+                                            @elseif($slotKey !== null && $editSlotKey === $slotKey)
+                                                <div class="flex items-center gap-1" style="margin-left:{{ 8 + ($g['einrueckung'] ?? 0) * 12 }}px" data-fb-slot-editor>
+                                                    <input type="text" wire:model="editSlotWording" wire:keydown.enter="slotWordingSpeichern" wire:keydown.escape="slotWordingAbbrechen"
+                                                           class="{{ $input }} !py-0.5 !text-[11px] flex-1" placeholder="Anzeigename (Kunde) — leer = Wording-Kette" data-fb-slot-input />
+                                                    <button type="button" wire:click="slotWordingSpeichern" class="{{ $pill }} {{ $variantPill['primary'] }} shrink-0" title="Speichern">OK</button>
+                                                    <button type="button" wire:click="slotWordingAbbrechen" class="text-gray-400 hover:text-gray-600 shrink-0 text-xs px-1" title="Abbrechen">×</button>
+                                                </div>
                                             @else
-                                                <p class="text-[11px] text-gray-500 {{ ($g['source'] ?? null) === 'name' ? 'italic text-amber-600' : '' }}" style="margin-left:{{ 8 + ($g['einrueckung'] ?? 0) * 12 }}px">· {{ $g['text'] }}@if(($g['source'] ?? null) === 'name')<span class="ml-1 text-[9px]">Wording fehlt</span>@endif</p>
+                                                <div class="group/dish flex items-center gap-1 text-[11px] {{ ($g['source'] ?? null) === 'name' ? 'text-amber-600 italic' : 'text-gray-600' }}" style="margin-left:{{ 8 + ($g['einrueckung'] ?? 0) * 12 }}px">
+                                                    <span class="text-gray-300 shrink-0">·</span>
+                                                    <span class="break-words">{{ $g['text'] }}</span>
+                                                    @if(($g['source'] ?? null) === 'name')<span class="text-[9px] text-amber-500 shrink-0">Wording fehlt</span>@endif
+                                                    @if($istEditierbar)
+                                                        <button type="button" wire:click="slotWordingBearbeiten({{ $block->id }}, {{ $g['slot_id'] }}, @js(($g['source'] ?? null) === 'name' ? '' : $g['text']))"
+                                                                class="ml-1 shrink-0 text-gray-300 hover:text-violet-500 opacity-0 group-hover/dish:opacity-100 transition-opacity" title="Anzeigename bearbeiten" data-fb-slot-edit>@svg('heroicon-o-pencil', 'w-3 h-3 inline-block align-middle')</button>
+                                                    @endif
+                                                </div>
                                             @endif
                                         @endforeach
                                     </div>
