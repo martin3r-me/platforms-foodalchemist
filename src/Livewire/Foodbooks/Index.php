@@ -157,7 +157,7 @@ class Index extends Component
     public array $form = ['label' => '', 'jahr' => null, 'personen' => null, 'status' => 'draft', 'description' => ''];
 
     /** `description` = Kapitel-Kundentext (Spec 03 · L2b) — im Editor vorher gar nicht erreichbar. */
-    public array $kapitelForm = ['title' => '', 'consumer_title' => '', 'description' => '', 'price_mode' => 'auto', 'price_per_person' => null];
+    public array $kapitelForm = ['title' => '', 'consumer_title' => '', 'description' => '', 'price_mode' => 'auto', 'price_per_person' => null, 'writing_style_id' => null];
 
     /**
      * Spec 03 · L2: KI-Kundentext — VORSCHAU-Zustand. Der Vorschlag landet hier und
@@ -557,6 +557,7 @@ class Index extends Component
                 'title' => $k->title, 'consumer_title' => $k->consumer_title ?? '',
                 'description' => $k->description ?? '',
                 'price_mode' => $k->price_mode, 'price_per_person' => $k->price_per_person,
+                'writing_style_id' => $k->writing_style_id,   // #2: Kapitel-Schreibstil-Override
             ];
         }
     }
@@ -570,6 +571,37 @@ class Index extends Component
                 $this->kiTextHinweis = null;
             }
         }
+    }
+
+    /**
+     * #2: Kapitel-Wording im gewählten Kapitel-Schreibstil neu erzeugen (Snapshot, LLM-Kosten →
+     * nur auf Knopfdruck). Speichert zuerst den Stil-Override, dann betextet der Service die
+     * concept_ref-Blöcke des Kapitels foodbook-lokal. Kein Stil gesetzt = Hinweis, kein Call.
+     */
+    public function kapitelWordingGenerieren(FoodbookService $svc): void
+    {
+        if ($this->selectedKapitelId === null) {
+            return;
+        }
+        $this->resetErrorBag('kapitelWording');
+        // Stil-Override zuerst persistieren (der Regler + evtl. andere Feld-Edits).
+        $svc->updateKapitel($this->team(), $this->selectedKapitelId, $this->kapitelForm);
+        $stilId = $this->kapitelForm['writing_style_id'] ?? null;
+        if ($stilId === null || $stilId === '') {
+            $this->addError('kapitelWording', 'Kein Kapitel-Schreibstil gewählt — es gibt nichts zu überschreiben (Standard erbt live aus den Concepten).');
+
+            return;
+        }
+        try {
+            $n = $svc->kapitelWordingRegenerieren($this->team(), $this->selectedKapitelId);
+        } catch (\Throwable $e) {
+            $this->addError('kapitelWording', $e->getMessage());
+
+            return;
+        }
+        $svc->vorschauSnapshotAktualisieren($this->team(), $this->selectedId);
+        $this->dispatch('foodbook-gespeichert');
+        $this->dispatch('toast', text: $n > 0 ? "{$n} Konzept(e) im Kapitel-Stil neu betextet." : 'Keine Konzept-Blöcke im Kapitel.');
     }
 
     public function kapitelLoeschen(int $id, FoodbookService $svc): void

@@ -1162,14 +1162,90 @@ class FoodbookService
         'target_count', 'price_anchor', 'price_min', 'price_max', 'niveau',
         'service_moment_id', 'serving_form_id', 'pricing_mode', 'target_food_cost_pct',
         'creative_mode',   // Kreativ-Modus-Override (Spec 19, E9.1)
+        'writing_style_id',   // #2: Schreibstil-Override pro Kapitel (NULL = Concept-Standard erben)
     ];
 
     public function updateKapitel(Team $team, int $id, array $in): FoodAlchemistFoodbookKapitel
     {
         $k = $this->ownedKapitel($team, $id);
-        $k->update(array_intersect_key($in, array_flip(self::KAPITEL_FELDER)));
+        $felder = array_intersect_key($in, array_flip(self::KAPITEL_FELDER));
+        // #2: leere Dropdown-Auswahl ('' aus dem Blade) = kein Override → NULL (FK-safe).
+        if (array_key_exists('writing_style_id', $felder)) {
+            $felder['writing_style_id'] = ($felder['writing_style_id'] === '' || $felder['writing_style_id'] === null)
+                ? null : (int) $felder['writing_style_id'];
+        }
+        $k->update($felder);
 
         return $k->refresh();
+    }
+
+    /**
+     * #2: das WORDING aller concept_ref-Blöcke eines Kapitels im KAPITEL-Schreibstil neu betexten
+     * und foodbook-LOKAL als Block-Override (payload_json['wording_overrides']) speichern (Snapshot).
+     * Das Concept bleibt unangetastet — nur der Foodbook-Block trägt den Kapitel-Stil-Text.
+     *
+     * Der Stil = Kapitel-Override (`writing_style_id`); ist keiner gesetzt, gibt es nichts zu
+     * überschreiben (dann erbt das Kapitel den Concept-Standard live) → 0 zurück, kein LLM-Call.
+     * Nutzt denselben `concept.wording`-Prompt + `sprach_duktus`-Kontext wie der Concepter.
+     *
+     * @return int Anzahl neu betexteter concept_ref-Blöcke
+     */
+    public function kapitelWordingRegenerieren(Team $team, int $kapitelId): int
+    {
+        $k = $this->ownedKapitel($team, $kapitelId);
+        $k->loadMissing(['writingStyle', 'blocks.concept.slots.dish:id,name,sales_wording_standard']);
+        $stil = $k->writingStyle;
+        if ($stil === null) {
+            return 0; // kein Kapitel-Override → nichts zu snapshotten (Standard erbt live)
+        }
+
+        $gateway = app(\Platform\FoodAlchemist\Services\Ai\AiGatewayService::class);
+        $n = 0;
+        foreach ($k->blocks as $block) {
+            if ($block->type !== 'concept_ref' || $block->concept === null) {
+                continue;
+            }
+            $positionen = $block->concept->slots
+                ->filter(fn ($s) => $s->sales_recipe_id !== null && $s->dish)
+                ->map(fn ($s) => ['slot_id' => $s->id, 'name' => $s->dish->name, 'sales_wording_standard' => $s->dish->sales_wording_standard ?? null])
+                ->values()->all();
+            if ($positionen === []) {
+                continue;
+            }
+            $kontext = [
+                'concept' => $block->concept->name,
+                'occasion' => $block->concept->occasion,
+                'class' => $block->concept->class,
+                // #2 + Schreibstil-Fix: der KAPITEL-Stil steuert die Tonalität (sprach_duktus, nicht nur Name).
+                'schreibstil' => $stil->name,
+                'schreibstil_anweisung' => trim((string) $stil->sprach_duktus) ?: null,
+                'schreibstil_beispiele' => trim((string) $stil->beispiele_md) ?: null,
+                'positionen' => $positionen,
+            ];
+            try {
+                $vorschlag = $gateway->propose('concept.wording', $kontext, [
+                    'food_dna_foodbook_id' => $k->foodbook_id,
+                    'food_dna_concept_id' => $block->concept->id,
+                    'target_table' => 'foodalchemist_foodbook_blocks', 'target_id' => $block->id,
+                ]);
+            } catch (\Throwable) {
+                continue; // fail-soft: ein Block kippt nicht die ganze Runde
+            }
+            // Intro → Block-Beschreibung (kundensichtbar, foodbook-lokal).
+            $intro = $vorschlag->werte['intro'] ?? null;
+            if (is_string($intro) && trim($intro) !== '') {
+                $this->updateBlock($team, $block->id, ['customer_text' => trim($intro)]);
+            }
+            // Gericht-Wordings → foodbook-lokaler Override je Slot (Snapshot, überschreibt Concept-Kette).
+            foreach (($vorschlag->werte['slots'] ?? []) as $slotId => $text) {
+                if (is_string($text) && trim($text) !== '') {
+                    $this->setBlockSlotWording($team, $block->id, (int) $slotId, trim($text));
+                }
+            }
+            $n++;
+        }
+
+        return $n;
     }
 
     /** Verschieben mit Zyklus-Schutz (kein Knoten unter eigenen Nachfahren). */

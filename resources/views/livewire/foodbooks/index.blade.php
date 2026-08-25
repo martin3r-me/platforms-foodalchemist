@@ -535,6 +535,27 @@
                             'vorhanden' => trim((string) ($kapitelForm['description'] ?? '')) !== '',
                         ])
                     </div>
+
+                    {{-- #2: Schreibstil PRO KAPITEL — Standard (aus den Concepten) oder Override. Der ✨-Knopf
+                         betextet alle Konzepte dieses Kapitels im gewählten Stil neu und speichert das
+                         foodbook-LOKAL (Snapshot); das Concept selbst bleibt unangetastet. --}}
+                    <div class="flex items-end gap-2 pt-2 border-t border-black/5" data-fb-kapitel-stil>
+                        <div class="flex-1 max-w-xs">
+                            <label class="{{ $label }}">Schreibstil (Kapitel)</label>
+                            <select wire:model.live="kapitelForm.writing_style_id" wire:change="kapitelSpeichern" class="{{ $input }}" data-fb-kapitel-schreibstil>
+                                <option value="">Standard (aus den Concepten)</option>
+                                @foreach($schreibstile as $s)<option value="{{ $s->id }}">{{ $s->name }}</option>@endforeach
+                            </select>
+                        </div>
+                        <button type="button" wire:click="kapitelWordingGenerieren" wire:loading.attr="disabled" wire:target="kapitelWordingGenerieren"
+                                @disabled(($kapitelForm['writing_style_id'] ?? null) === null || ($kapitelForm['writing_style_id'] ?? '') === '')
+                                title="Betextet alle Konzepte dieses Kapitels im gewählten Schreibstil neu (foodbook-lokaler Snapshot; das Concept bleibt unangetastet)"
+                                class="{{ $btnAi }} shrink-0" data-fb-kapitel-wording>
+                            <span wire:loading.remove wire:target="kapitelWordingGenerieren">@svg('heroicon-o-sparkles', 'w-3.5 h-3.5') Kapitel-Wording</span>
+                            <span wire:loading wire:target="kapitelWordingGenerieren">betextet …</span>
+                        </button>
+                    </div>
+                    @error('kapitelWording')<p class="text-[11px] text-rose-500 mt-1" data-fb-kapitel-fehler>{{ $message }}</p>@enderror
                 </div>
 
                 {{-- Block-Liste (in der linken Spalte, unter dem Kapitel-Kopf) --}}

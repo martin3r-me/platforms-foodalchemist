@@ -84,6 +84,16 @@ class FoodAlchemistFoodbookKapitel extends Model
         return $this->belongsTo(FoodAlchemistEinsatzmoment::class, 'service_moment_id');
     }
 
+    /**
+     * Foodbook #2: Schreibstil-Override PRO KAPITEL. NULL = erbt den Standard aus den Concepten.
+     * Gesetzt = die Concept-Wordings dieses Kapitels werden in diesem Stil neu betextet und
+     * foodbook-lokal als Block-Override gespeichert (Snapshot; das Concept bleibt unangetastet).
+     */
+    public function writingStyle(): BelongsTo
+    {
+        return $this->belongsTo(FoodAlchemistWritingStyle::class, 'writing_style_id');
+    }
+
     public function children(): HasMany
     {
         return $this->hasMany(self::class, 'parent_id')->orderBy('position');

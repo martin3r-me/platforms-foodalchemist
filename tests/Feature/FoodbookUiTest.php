@@ -220,3 +220,60 @@ it('#4: kapitelVerschiebenAuf sortiert ein Kapitel per Drag vor das Ziel', funct
     $comp->call('kapitelVerschiebenAuf', $ids['C'], $ids['A']);
     expect($top())->toBe(['C', 'A', 'B']);
 });
+
+it('#2: Kapitel-Schreibstil betextet die Konzepte im Kapitel-Stil (sprach_duktus) + Snapshot als Block-Override', function () {
+    config(['foodalchemist.ai.provider' => 'fake', 'foodalchemist.ai.backoff' => []]);
+    $concepts = app(ConceptService::class);
+    $green = FoodAlchemistRecipe::create([
+        'team_id' => $this->rootTeam->id, 'recipe_key' => 'g2', 'name' => 'Green Power',
+        'status' => 'approved', 'is_sales_recipe' => true, 'sales_net' => 2.00,
+    ]);
+    $concept = $concepts->create($this->rootTeam, ['name' => 'Grill-Menü', 'status' => 'active']);
+    $slot = $concepts->addSlot($this->rootTeam, $concept->id, ['role' => 'Vorspeise']);
+    $concepts->fillSlot($this->rootTeam, $slot->id, ['sales_recipe_id' => $green->id]);
+
+    $stil = \Platform\FoodAlchemist\Models\FoodAlchemistWritingStyle::create([
+        'team_id' => $this->rootTeam->id, 'slug' => 'kap-duktus', 'name' => 'Verspielt',
+        'sprach_duktus' => 'KAPITEL-DUKTUS-MARKER: locker, mit Augenzwinkern.',
+    ]);
+
+    Livewire::test(FoodbooksIndex::class)->call('neu');
+    $fb = FoodAlchemistFoodbook::first();
+    $comp = Livewire::test(FoodbooksIndex::class)->call('waehle', $fb->id)
+        ->set('neuesKapitelTitel', 'Kap')->call('kapitelNeu');
+    $kap = $fb->kapitel()->first();
+    $comp->call('conceptHinzu', $concept->id);
+    $block = $kap->blocks()->where('type', 'concept_ref')->firstOrFail();
+
+    // Spy: liefert kontrolliertes Wording + fängt den Prompt ab (Kapitel-Duktus muss drin sein).
+    $spy = new class($slot->id) extends \Platform\FoodAlchemist\Services\Ai\FakeAiProvider
+    {
+        public array $letzteMessages = [];
+
+        public function __construct(public int $slotId) {}
+
+        public function chat(array $messages, array $options = []): array
+        {
+            $this->letzteMessages = $messages;
+
+            return ['content' => json_encode(['werte' => [
+                'intro' => 'Verspielte Grill-Reise.',
+                'slots' => [$this->slotId => 'Grünes Kraftpaket, augenzwinkernd'],
+            ], 'confidence' => 0.9]), 'usage' => ['input_tokens' => 0, 'output_tokens' => 0], 'model' => 'spy', 'tool_calls' => null];
+        }
+    };
+    app()->instance(\Platform\FoodAlchemist\Services\Ai\FakeAiProvider::class, $spy);
+
+    // Kapitel-Stil setzen + Wording erzeugen.
+    $comp->set('kapitelForm.writing_style_id', $stil->id)->call('kapitelWordingGenerieren');
+
+    // (a) Der Kapitel-Sprach-Duktus landet im KI-Prompt.
+    $prompt = collect($spy->letzteMessages)->pluck('content')->implode("\n");
+    expect($prompt)->toContain('KAPITEL-DUKTUS-MARKER');
+    // (b) Snapshot: das Gericht-Wording steht foodbook-lokal als Block-Override — Concept-Slot unberührt.
+    $payload = $block->fresh()->payload_json ?? [];
+    expect($payload['wording_overrides'][(string) $slot->id] ?? null)->toBe('Grünes Kraftpaket, augenzwinkernd')
+        ->and($slot->fresh()->wording)->toBeNull();   // Concept selbst unangetastet
+    // (c) Kapitel trägt den Stil-Override persistent.
+    expect((int) $kap->fresh()->writing_style_id)->toBe($stil->id);
+});
