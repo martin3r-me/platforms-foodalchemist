@@ -168,7 +168,8 @@
                                 @if(!empty($pos['wein']))<span class="sub">{{ implode(' · ', array_map('ucfirst', array_values($pos['wein']))) }}</span>@endif
                                 @if($pos['consumer_text'])<span class="sub">{{ $pos['consumer_text'] }}</span>@endif
                                 @foreach(($pos['gaenge'] ?? []) as $gang)
-                                    <span class="sub" style="padding-left: {{ ($gang['einrueckung'] ?? 0) * 8 }}px">{{ $gang['type'] === 'header' ? '— ' . $gang['text'] . ' —' : $gang['text'] }}</span>
+                                    {{-- Fix b: §-Codes PRO GANG (per Gericht), nicht aggregiert auf der Menü-Position. --}}
+                                    <span class="sub" style="padding-left: {{ ($gang['einrueckung'] ?? 0) * 8 }}px">{{ $gang['type'] === 'header' ? '— ' . $gang['text'] . ' —' : $gang['text'] }}@if(!empty($gang['codes']))<span class="codes">{{ implode(',', $gang['codes']) }}</span>@endif</span>
                                 @endforeach
                             </td>
                             <td class="pprice">

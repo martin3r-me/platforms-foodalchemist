@@ -60,6 +60,30 @@ it('Stufe B: Legende enthält nur tatsächlich vorkommende Codes', function () {
         ->and(count($dok['legende']['allergene']))->toBe(1); // NUR Gluten, nicht alle 14
 });
 
+it('Fix b: Menü-Position (menue_ref) trägt die Codes PRO GANG, nicht aggregiert auf die Position', function () {
+    $gluten = skGericht($this->rootTeam->id, 'skfb1', 'Pasta', ['allergen_gluten' => 'enthalten']);
+    $nuss = skGericht($this->rootTeam->id, 'skfb2', 'Nusstorte', ['allergen_tree_nuts' => 'enthalten']);
+    $concepts = app(\Platform\FoodAlchemist\Services\ConceptService::class);
+    $concept = $concepts->create($this->rootTeam, ['name' => 'Menü', 'status' => 'active']);
+    $s1 = $concepts->addSlot($this->rootTeam, $concept->id, ['role' => 'Vorspeise']);
+    $concepts->fillSlot($this->rootTeam, $s1->id, ['sales_recipe_id' => $gluten->id]);
+    $s2 = $concepts->addSlot($this->rootTeam, $concept->id, ['role' => 'Dessert']);
+    $concepts->fillSlot($this->rootTeam, $s2->id, ['sales_recipe_id' => $nuss->id]);
+
+    $karte = $this->karten->create($this->rootTeam, ['name' => 'K']);
+    $rubrik = $this->karten->addRubrik($this->rootTeam, $karte->id);
+    $this->karten->addPosition($this->rootTeam, $rubrik->id, ['type' => 'menue_ref', 'concept_id' => $concept->id]);
+
+    $pos = $this->karten->dokumentDaten($this->rootTeam, $karte->refresh())['rubriken'][0]['positionen'][0];
+
+    // Position-Codes leer (NICHT aggregiert), die Gänge tragen je eigene Codes.
+    expect($pos['codes'])->toBe([]);
+    $glutenGang = collect($pos['gaenge'])->firstWhere('recipe_id', $gluten->id);
+    $nussGang = collect($pos['gaenge'])->firstWhere('recipe_id', $nuss->id);
+    expect($glutenGang['codes'])->toContain('A')        // Gluten = A, am Pasta-Gang
+        ->and($nussGang['codes'])->not->toContain('A'); // der Nuss-Gang trägt NICHT das Gluten des Nachbarn
+});
+
 it('Stufe B: Brutto-Preis = Netto × (1 + MwSt)', function () {
     $g = skGericht($this->rootTeam->id, 'skb4', 'Filet'); // sales_net 24,00
     $karte = $this->karten->create($this->rootTeam, ['name' => 'K', 'preis_anzeige_brutto' => true]);

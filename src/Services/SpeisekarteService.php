@@ -636,6 +636,13 @@ class SpeisekarteService
             return $codes;
         };
 
+        // Fix b (Dominique „bei Speisekarte auch falsch"): Codes PRO GERICHT (nicht concept-aggregiert
+        // bei Menü-Positionen) — über den geteilten Helfer, dasselbe Code-Register + Legende-Tracking.
+        $katalog = ['allergene' => $allergenCode, 'zusatzstoffe' => $zusatzCode];
+        $codesFuerGericht = function (FoodAlchemistRecipe $dish) use ($agg, $katalog, &$usedAlg, &$usedZus): array {
+            return $agg->gerichtCodes($dish, $usedAlg, $usedZus, $katalog);
+        };
+
         // Rubrik-Baum in Pre-Order; je Position Name (Wording) + Codes + Preis.
         $sections = $karte->relationLoaded('sections') ? $karte->sections : $karte->sections()->with(['items.dish', 'items.concept'])->get();
         // #3: Rubrik-Filter — nur ausgewählte Rubriken rendern; rausgefilterte Eltern hochziehen.
@@ -649,7 +656,7 @@ class SpeisekarteService
         }
 
         $rubriken = [];
-        $walk = function ($parentId, int $depth) use (&$walk, $byParent, &$rubriken, $codesFuer, $marge, $mwstSatz) {
+        $walk = function ($parentId, int $depth) use (&$walk, $byParent, &$rubriken, $codesFuer, $codesFuerGericht, $marge, $mwstSatz) {
             foreach ($byParent[$parentId] ?? [] as $rubrik) {
                 // Kaskade 2026-08-24: spezielle ist_format-Live-Rubrik entfernt — ein Format wird
                 // künftig wie ein Concept gebucht (live-referenziert, Kaskade bleibt live); F5.
@@ -657,18 +664,29 @@ class SpeisekarteService
                 foreach ($rubrik->items->where('visible', true)->sortBy('position') as $pos) {
                     $preis = $this->positionPreis($pos);
                     $einheit = $marge->proEinheit($preis['vk'], 1, $mwstSatz);
+                    // Fix b: menue_ref trägt die Codes PRO GANG (per Gericht), nicht aggregiert auf der Position.
+                    $gaenge = [];
+                    if ($pos->type === 'menue_ref') {
+                        $dishById = $this->positionGerichte($pos)->keyBy('id');
+                        $gaenge = array_map(function ($g) use ($dishById, $codesFuerGericht) {
+                            $dish = ($g['recipe_id'] ?? null) !== null ? $dishById->get((int) $g['recipe_id']) : null;
+                            $g['codes'] = $dish !== null ? $codesFuerGericht($dish) : [];
+
+                            return $g;
+                        }, $this->menueGaenge($pos));
+                    }
                     $positionen[] = [
                         'typ' => $pos->type,
                         'name' => $this->positionName($pos),
                         'consumer_text' => $pos->consumer_text,
                         // Werkstrang M Phase D: Wahl-Gruppe daten-fertig mitgeben (Grouping-Optik im Renderer folgt).
                         'variant_group_id' => $pos->variant_group_id !== null ? (int) $pos->variant_group_id : null,
-                        'codes' => in_array($pos->type, ['gericht_ref', 'menue_ref'], true) ? $codesFuer($pos) : [],
+                        // Einzelgericht = per-Gericht (eine Position, ein Gericht); Menü = Codes je Gang (oben).
+                        'codes' => $pos->type === 'gericht_ref' ? $codesFuer($pos) : [],
                         'vk_netto' => $preis['vk'],
                         'vk_brutto' => $einheit['vk_brutto_pro_einheit'] ?? null,
                         'preis_quelle' => $preis['quelle'],
-                        // Fix-Menü: die Gänge zum Auflisten unter dem Menü-Titel.
-                        'gaenge' => $pos->type === 'menue_ref' ? $this->menueGaenge($pos) : [],
+                        'gaenge' => $gaenge,
                         // Getränke/Wein: Metadaten (Jahrgang/Region/Rebsorte) aus payload_json.
                         'wein' => $this->weinMeta($pos),
                     ];
@@ -813,7 +831,8 @@ class SpeisekarteService
         }
 
         return array_map(
-            fn ($z) => ['type' => $z['type'], 'text' => $z['text'], 'einrueckung' => $z['einrueckung'] ?? 0],
+            fn ($z) => ['type' => $z['type'], 'text' => $z['text'], 'einrueckung' => $z['einrueckung'] ?? 0,
+                'recipe_id' => $z['recipe_id'] ?? null],   // Fix b: per-Gang-Codes brauchen die Gericht-ID
             $this->wording->gerichtZeilen($concept),
         );
     }
