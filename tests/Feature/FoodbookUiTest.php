@@ -174,3 +174,31 @@ it('#3: Paket-Reiter listet kind=paket (consumer_name), Concept-Reiter nicht; pa
 
     expect($kap->blocks()->where('type', 'concept_ref')->where('concept_id', $paket->id)->count())->toBe(1);
 });
+
+it('#7/#1: Block-Vorschau löst ein eingebettetes Paket auf (Gerichte + Paket-Preis)', function () {
+    $concepts = app(ConceptService::class);
+    // Gericht + kind=paket-Concept mit manuellem Preis + einem Gericht
+    $green = FoodAlchemistRecipe::create([
+        'team_id' => $this->rootTeam->id, 'recipe_key' => 'gp7', 'name' => 'Salat: Green Power',
+        'status' => 'approved', 'is_sales_recipe' => true, 'sales_net' => 2.00, 'ek_total_eur' => 0.60,
+    ]);
+    $paket = $concepts->createPaket($this->rootTeam, ['name' => 'Salatwand']);
+    $concepts->update($this->rootTeam, $paket->id, ['status' => 'active', 'price_mode' => 'manuell', 'price_per_person_manual' => 7.90]);
+    $ps = $concepts->addSlot($this->rootTeam, $paket->id, ['role' => 'Vorspeise']);
+    $concepts->fillSlot($this->rootTeam, $ps->id, ['sales_recipe_id' => $green->id]);
+    // Concept, das das Paket einbettet
+    $concept = $concepts->create($this->rootTeam, ['name' => 'Grill-Menü', 'status' => 'active']);
+    $slot = $concepts->addSlot($this->rootTeam, $concept->id, ['role' => 'Vorspeise']);
+    $concepts->fillSlot($this->rootTeam, $slot->id, ['embedded_concept_id' => $paket->id]);
+
+    Livewire::test(FoodbooksIndex::class)->call('neu');
+    $fb = FoodAlchemistFoodbook::first();
+    $comp = Livewire::test(FoodbooksIndex::class)
+        ->call('waehle', $fb->id)
+        ->set('neuesKapitelTitel', 'Buffet')->call('kapitelNeu');
+    $kap = $fb->kapitel()->first();
+    $comp->call('conceptHinzu', $concept->id)
+        ->assertSee('Salatwand')        // eingebettetes Paket in der Block-Vorschau aufgelöst
+        ->assertSee('7,90')             // Paket-Preis (#1)
+        ->assertSee('Green Power');     // Gericht des Pakets, eingerückt (#7)
+});

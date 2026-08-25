@@ -961,6 +961,28 @@ class Index extends Component
         $kapitel = $fb !== null && $this->selectedKapitelId !== null
             ? $fb->chapters->firstWhere('id', $this->selectedKapitelId) : null;
 
+        // #7: Live-Menü-Vorschau je concept_ref-Block (aufgelöste gerichtZeilen — wie im Format-Editor).
+        // Löst eingebettete Pakete rekursiv auf (embeddedConcept) + trägt den Paket-Preis (#1). Key = Block-ID.
+        $blockMenus = [];
+        if ($kapitel !== null) {
+            $conceptBloecke = $kapitel->blocks->where('type', 'concept_ref')->filter(fn ($b) => $b->concept_id !== null);
+            if ($conceptBloecke->isNotEmpty()) {
+                $wording = app(\Platform\FoodAlchemist\Services\WordingResolver::class);
+                $geladen = \Platform\FoodAlchemist\Models\FoodAlchemistFoodbookBlock::whereIn('id', $conceptBloecke->pluck('id'))
+                    ->with([
+                        'concept.slots' => fn ($q) => $q->orderBy('position'),
+                        'concept.slots.dish:id,name,sales_wording_standard',
+                        'concept.slots.package.dishes.dish:id,name,sales_wording_standard',
+                        'concept.slots.embeddedConcept:id,name,consumer_name,price_per_person_cache',
+                        'concept.slots.embeddedConcept.slots.dish:id,name,sales_wording_standard',
+                        'concept.slots.embeddedConcept.slots.package.dishes.dish:id,name,sales_wording_standard',
+                    ])->get();
+                foreach ($geladen as $b) {
+                    $blockMenus[$b->id] = $b->concept !== null ? $wording->gerichtZeilen($b->concept, $b) : [];
+                }
+            }
+        }
+
         // #389/Canvas: Foodbook-Leitidee-Canvas nur bei Selektions-WECHSEL (re)laden — kein Edit-Verlust je Roundtrip.
         if ($fb !== null && $this->canvasOwnerId !== $fb->id) {
             $this->canvasInit('foodbook', 'foodbook', $fb->id);
@@ -1044,6 +1066,7 @@ class Index extends Component
             'feedbackAgg' => $feedbackAgg,
             'kapitelTree' => $fb !== null ? $svc->kapitelTree($team, $fb->id) : [],
             'kapitel' => $kapitel,
+            'blockMenus' => $blockMenus,   // #7: Live-Menü-Vorschau je concept_ref-Block
             // E5.3: Portfolio/Kapitel-Aggregat + WE ziehen jetzt in die Leitstelle-Rail (Nested-Livewire) um.
             'headerPresets' => FoodbookService::headerPresets(),
             // UX 2026-07-25 (Dominique): Concept-Picker filtert auf die Concepter-DIMENSIONEN

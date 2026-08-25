@@ -617,6 +617,25 @@
                                     <button type="button" wire:click="blockRaus({{ $block->id }})" class="shrink-0 text-gray-500 hover:text-red-500" title="entfernen">✕</button>
                                 </div>
 
+                                {{-- #7: Live-Menü-Vorschau (aufgelöste gerichtZeilen) für Concept/Paket-Blöcke —
+                                     wie im Format-Editor: eingebettete Pakete aufgelöst (#1) + Paket-Preis, Einrückung. --}}
+                                @if($block->type === 'concept_ref' && ! empty($blockMenus[$block->id]))
+                                    <div class="mt-1 ml-6 pl-2 border-l border-black/5 space-y-px" data-fb-block-vorschau>
+                                        @foreach($blockMenus[$block->id] as $g)
+                                            @if(($g['type'] ?? '') === 'header')
+                                                <p class="text-[11px] font-semibold text-gray-600 mt-1 first:mt-0" style="margin-left:{{ ($g['einrueckung'] ?? 0) * 12 }}px">{{ $g['text'] }}</p>
+                                            @elseif(($g['type'] ?? '') === 'paket')
+                                                <p class="text-[11px] font-medium text-violet-600 mt-1 flex items-center gap-1" style="margin-left:{{ ($g['einrueckung'] ?? 0) * 12 }}px">
+                                                    <span class="{{ $pill }} {{ $variantPill['info'] }} normal-case">Paket</span>{{ $g['text'] }}
+                                                    @if(($g['preis'] ?? null) !== null)<span class="ml-auto text-gray-500 tabular-nums">{{ number_format((float) $g['preis'], 2, ',', '.') }} €/P</span>@endif
+                                                </p>
+                                            @else
+                                                <p class="text-[11px] text-gray-500 {{ ($g['source'] ?? null) === 'name' ? 'italic text-amber-600' : '' }}" style="margin-left:{{ 8 + ($g['einrueckung'] ?? 0) * 12 }}px">· {{ $g['text'] }}@if(($g['source'] ?? null) === 'name')<span class="ml-1 text-[9px]">Wording fehlt</span>@endif</p>
+                                            @endif
+                                        @endforeach
+                                    </div>
+                                @endif
+
                                 @if($editBlockId === $block->id)
                                     <div class="mt-2 space-y-2 pl-6">
                                         @if(in_array($block->type, ['header_neutral', 'header_frei', 'header_frei_preis']))
