@@ -1802,6 +1802,9 @@ class FoodbookService
                         'gerichte' => $gerichte, 'ist_header' => str_starts_with((string) $b->type, 'header'),
                         'preis_pp' => (float) $bp['vk_pp'], 'pauschal' => (float) $bp['pauschal'],
                         'preis_einheit' => $preisEinheit,
+                        // Preisdarstellung (2026-08-25): einzel-Concept → Concept-Summenpreis ausblenden,
+                        // stattdessen zeigt jede Gericht-Zeile ihren eigenen Preis (aus gerichtZeilen).
+                        'einzelpreise' => $b->type === 'concept_ref' && $b->concept !== null && $b->concept->istEinzelpreis(),
                         // #5b: Einzelgericht-Block trägt seine Rezept-ID → per-Gericht-Codes am Block-Label.
                         'recipe_id' => $b->type === 'recipe_ref' ? ($b->sales_recipe_id !== null ? (int) $b->sales_recipe_id : null) : null,
                         'codes' => []];
@@ -1960,6 +1963,8 @@ class FoodbookService
             'claim' => $concept->claim,
             'text' => trim((string) $concept->description) ?: null,
             'preis_pp' => $concept->price_per_person_cache !== null ? (float) $concept->price_per_person_cache : null,
+            // Preisdarstellung (2026-08-25): einzel → Concept-Summenpreis ausblenden, Preise je Gericht-Zeile.
+            'einzelpreise' => $concept->istEinzelpreis(),
             'gerichte' => $wording->gerichtZeilen($concept),
             'mwst' => app(TeamSettingsService::class)->mwst($team),
             'stand' => $concept->updated_at,

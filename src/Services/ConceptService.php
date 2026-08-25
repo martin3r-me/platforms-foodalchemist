@@ -152,7 +152,7 @@ class ConceptService
         'name', 'consumer_name', 'claim', 'occasion', 'level', 'class', 'taste_direction',
         'writing_style_id', 'category_id', 'status', 'description', 'additional_text', 'note',
         'brief', 'target_price_per_person', 'diet_requirement', 'structure_requirement', 'season', 'target_group',
-        'price_mode', 'price_per_person_manual',
+        'price_mode', 'price_per_person_manual', 'price_display',
         'serving_form_id', 'event_type_id', // Facetten (Umbau-Spec Phase 4)
     ];
 

@@ -169,7 +169,8 @@
                                 @if($pos['consumer_text'])<span class="sub">{{ $pos['consumer_text'] }}</span>@endif
                                 @foreach(($pos['gaenge'] ?? []) as $gang)
                                     {{-- Fix b: §-Codes PRO GANG (per Gericht), nicht aggregiert auf der Menü-Position. --}}
-                                    <span class="sub" style="padding-left: {{ ($gang['einrueckung'] ?? 0) * 8 }}px">{{ $gang['type'] === 'header' ? '— ' . $gang['text'] . ' —' : $gang['text'] }}@if(!empty($gang['codes']))<span class="codes">{{ implode(',', $gang['codes']) }}</span>@endif</span>
+                                    <span class="sub" style="padding-left: {{ ($gang['einrueckung'] ?? 0) * 8 }}px">{{ $gang['type'] === 'header' ? '— ' . $gang['text'] . ' —' : $gang['text'] }}@if(!empty($gang['codes']))<span class="codes">{{ implode(',', $gang['codes']) }}</span>@endif
+                                        @if(($gang['preis'] ?? null) !== null && $gang['preis'] > 0) — {{ number_format($gang['preis'], 2, ',', '.') }} €@endif</span>
                                 @endforeach
                             </td>
                             <td class="pprice">

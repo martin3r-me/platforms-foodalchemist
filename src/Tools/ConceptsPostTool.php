@@ -38,6 +38,7 @@ class ConceptsPostTool extends FoodAlchemistTool implements ToolContract, ToolMe
                 'season' => ['type' => 'string', 'description' => 'Freitext-Saison als KI-Brief-Hinweis (NICHT die Saison-Facette)'],
                 'target_group' => ['type' => 'string'],
                 'diet_requirement' => ['type' => 'string'],
+                'price_display' => ['type' => 'string', 'enum' => ['gesamt', 'einzel'], 'description' => 'Preisdarstellung: gesamt (ein Summenpreis fürs Konzept, Default) | einzel (Preis je Gericht/eingebettetem Paket, kein Summenpreis — Auswahl à la carte)'],
                 // Umbau-Spec Phase 4: flache Facetten-Dimensionen (koppeln Slot-Darreichungs-Auflösung).
                 'serving_form' => ['type' => 'string', 'description' => 'Servierform-Code/Label (z. B. buffet, flying, teller) — steuert die Slot-Darreichung'],
                 'event_type' => ['type' => 'string', 'description' => 'Eventtyp-Name (Vokabular)'],
@@ -66,6 +67,7 @@ class ConceptsPostTool extends FoodAlchemistTool implements ToolContract, ToolMe
             ]);
             $extras = array_intersect_key($arguments, array_flip([
                 'description', 'brief', 'target_price_per_person', 'season', 'target_group', 'diet_requirement',
+                'price_display',
             ]));
             // Facetten (Phase 4): Slug/Name → id.
             if (($arguments['serving_form'] ?? '') !== '') {

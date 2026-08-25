@@ -236,26 +236,34 @@
                     <table class="cblock">
                         <tr>
                             <td class="cprice">
-                                {{-- E8.3: €/Gast (Konzept-Paket) vs. €/Position (Einzelgericht) konsistent zur Preise-Kalkulation --}}
+                                {{-- E8.3: €/Gast (Konzept-Paket) vs. €/Position (Einzelgericht) konsistent zur Preise-Kalkulation.
+                                     Preisdarstellung (2026-08-25): einzel-Concept → KEIN Summenpreis hier; die Preise stehen je Gericht-Zeile. --}}
                                 @php($einheit = $blk['preis_einheit'] ?? null)
-                                @if($preisPP > 0)
-                                    <div class="val">{{ number_format($preisPP, 2, ',', '.') }} €</div><div class="basis">{{ $einheit === 'position' ? 'pro Position' : 'pro Gast' }}</div>
-                                @elseif($pauschal > 0)
-                                    <div class="val">{{ number_format($pauschal, 2, ',', '.') }} €</div><div class="basis">pauschal</div>
-                                @endif
+                                @unless($blk['einzelpreise'] ?? false)
+                                    @if($preisPP > 0)
+                                        <div class="val">{{ number_format($preisPP, 2, ',', '.') }} €</div><div class="basis">{{ $einheit === 'position' ? 'pro Position' : 'pro Gast' }}</div>
+                                    @elseif($pauschal > 0)
+                                        <div class="val">{{ number_format($pauschal, 2, ',', '.') }} €</div><div class="basis">pauschal</div>
+                                    @endif
+                                @endunless
                             </td>
                             <td class="cbody">
                                 {{-- #5b: recipe_ref (Einzelgericht) trägt seine §-Codes am Label; concept_ref auf den Gericht-Zeilen. --}}
                                 <div class="cname">{{ $blk['label'] }}@if(($deklaration ?? true) && ! empty($blk['codes']))<span class="codes">{{ implode(',', $blk['codes']) }}</span>@endif</div>
                                 @if($blk['untertitel'] ?? null)<div class="ctag">{{ $blk['untertitel'] }}</div>@endif
                                 @foreach($blk['gerichte'] ?? [] as $g)
+                                    {{-- Interne Sicht (nur $istIntern): EK + Wareneinsatz-% je Gericht als Suffix-HTML (via {!! !!}),
+                                         damit keine Blade-Direktive an ein Wortzeichen klebt. Kundensicht: $ekSuffix leer → Zeile unverändert.
+                                         Kurzform-@php (kein Block-@php) — foodbook.blade nutzt oberhalb bereits @php(…)-Kurzformen. --}}
+                                    @php($ekSuffix = ($istIntern && ($g['ek'] ?? null) !== null) ? '<span class="kpreis" style="color:#9333ea">EK ' . number_format((float) $g['ek'], 2, ',', '.') . ' €</span>' . ((($g['preis'] ?? null) > 0) ? '<span class="kpreis" style="color:#059669">' . number_format((float) $g['ek'] / (float) $g['preis'] * 100, 1, ',', '.') . ' %</span>' : '') : '')
                                     @if(($g['type'] ?? '') === 'paket')
-                                        <div class="dish paket" style="margin-left: {{ ($g['einrueckung'] ?? 0) * 12 }}px">{{ $g['text'] }}@if(($g['preis'] ?? null) !== null && $g['preis'] > 0)<span class="kpreis">{{ number_format($g['preis'], 2, ',', '.') }} €/Gast</span>@endif</div>
+                                        <div class="dish paket" style="margin-left: {{ ($g['einrueckung'] ?? 0) * 12 }}px">{{ $g['text'] }}@if(($g['preis'] ?? null) !== null && $g['preis'] > 0)<span class="kpreis">{{ number_format($g['preis'], 2, ',', '.') }} €/Gast</span>@endif{!! $ekSuffix !!}</div>
                                     @elseif(($g['type'] ?? '') === 'header')
                                         <div class="dish paket" style="margin-left: {{ ($g['einrueckung'] ?? 0) * 12 }}px">{{ $g['text'] }}</div>
                                     @else
-                                        {{-- #5b: §-Codes PRO GERICHT (Allergene A–…, Zusatzstoffe 1–…, * = Spuren) — Legende ganz unten. --}}
-                                        <div class="dish" style="margin-left: {{ ($g['einrueckung'] ?? 0) * 12 }}px"><span class="pipe">|</span>{{ $g['text'] }}@if(($deklaration ?? true) && ! empty($g['codes']))<span class="codes">{{ implode(',', $g['codes']) }}</span>@endif</div>
+                                        {{-- #5b: §-Codes PRO GERICHT (Allergene A–…, Zusatzstoffe 1–…, * = Spuren) — Legende ganz unten.
+                                             Einzelpreis-Concept (2026-08-25): je Gericht sein eigener VK statt Concept-Summenpreis; EK/W% nur intern. --}}
+                                        <div class="dish" style="margin-left: {{ ($g['einrueckung'] ?? 0) * 12 }}px"><span class="pipe">|</span>{{ $g['text'] }}@if(($g['preis'] ?? null) !== null && $g['preis'] > 0)<span class="kpreis">{{ number_format($g['preis'], 2, ',', '.') }} €/Gast</span>@endif{!! $ekSuffix !!}@if(($deklaration ?? true) && ! empty($g['codes']))<span class="codes">{{ implode(',', $g['codes']) }}</span>@endif</div>
                                     @endif
                                 @endforeach
                             </td>

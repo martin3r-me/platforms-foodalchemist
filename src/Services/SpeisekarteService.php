@@ -832,7 +832,8 @@ class SpeisekarteService
 
         return array_map(
             fn ($z) => ['type' => $z['type'], 'text' => $z['text'], 'einrueckung' => $z['einrueckung'] ?? 0,
-                'recipe_id' => $z['recipe_id'] ?? null],   // Fix b: per-Gang-Codes brauchen die Gericht-ID
+                'recipe_id' => $z['recipe_id'] ?? null,   // Fix b: per-Gang-Codes brauchen die Gericht-ID
+                'preis' => $z['preis'] ?? null],          // Preisdarstellung: einzel-Concept → per-Gang-Preis (sonst null)
             $this->wording->gerichtZeilen($concept),
         );
     }

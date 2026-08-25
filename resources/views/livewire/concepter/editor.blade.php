@@ -933,6 +933,21 @@
                                 <button type="button" wire:click="setPreisModus('manuell')" class="{{ $pill }} {{ ($form['price_mode'] ?? 'auto') === 'manuell' ? $variantPill['primary'] : $variantPill['secondary'] }}">manuell</button>
                             </div>
                         </div>
+                        {{-- Preisdarstellung (2026-08-25, Dominique): Gesamtpreis (ein Preis fürs Konzept)
+                             vs. Einzelpreise (je Gericht/Paket, kein Summenpreis — Auswahl à la carte wie
+                             Kuchen/Fingerfood). Reine Concept-Eigenschaft; Pakete sind immer Gesamtpreis. --}}
+                        @unless($istPaket)
+                            <div class="flex items-center gap-2 pt-1 border-t border-black/5">
+                                <label class="{{ $label }} shrink-0">Preisdarstellung</label>
+                                <select wire:change="setPreisDisplay($event.target.value)" class="{{ $input }} text-xs">
+                                    <option value="gesamt" @selected(($form['price_display'] ?? 'gesamt') === 'gesamt')>Gesamtpreis — ein Preis fürs Konzept</option>
+                                    <option value="einzel" @selected(($form['price_display'] ?? 'gesamt') === 'einzel')>Einzelpreise — je Gericht / Paket</option>
+                                </select>
+                            </div>
+                            @if(($form['price_display'] ?? 'gesamt') === 'einzel')
+                                <p class="text-[11px] text-gray-500">Kein Summenpreis — jedes Gericht (bzw. eingebettetes Paket) zeigt seinen eigenen Preis. Wirkt in Foodbook, Format, Speisekarte &amp; interner Sicht.</p>
+                            @endif
+                        @endunless
                         <div class="flex flex-wrap items-center gap-x-6 gap-y-1 text-xs">
                             <span class="text-gray-600">Berechnete Summe: <span class="tabular-nums font-medium text-gray-900">{{ number_format((float) ($cockpit['summe_pro_person'] ?? 0), 2, ',', '.') }} €</span></span>
                             <span class="text-gray-600">Wareneinsatz: <span class="tabular-nums">{{ number_format((float) ($cockpit['ek_per_person'] ?? 0), 2, ',', '.') }} €</span></span>

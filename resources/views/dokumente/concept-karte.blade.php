@@ -85,14 +85,15 @@
             @elseif(($g['type'] ?? '') === 'paket')
                 <div class="dish paket" style="margin-left: {{ ($g['einrueckung'] ?? 0) * 12 }}px">{{ $g['text'] }}@if(($g['preis'] ?? null) !== null && $g['preis'] > 0)<span style="float: right; font-weight: normal; color: #6b7280;">{{ number_format($g['preis'], 2, ',', '.') }} €/Gast</span>@endif</div>
             @else
-                <div class="dish" style="margin-left: {{ ($g['einrueckung'] ?? 0) * 12 }}px"><span class="pipe">|</span>{{ $g['text'] }}</div>
+                <div class="dish" style="margin-left: {{ ($g['einrueckung'] ?? 0) * 12 }}px"><span class="pipe">|</span>{{ $g['text'] }}@if(($g['preis'] ?? null) !== null && $g['preis'] > 0)<span style="float: right; font-weight: normal; color: #6b7280;">{{ number_format($g['preis'], 2, ',', '.') }} €/Gast</span>@endif</div>
             @endif
         @empty
             <div class="dish leer">— noch keine Gerichte —</div>
         @endforelse
     </div>
 
-    @if(($preis_pp ?? null) !== null && $preis_pp > 0)
+    {{-- Preisdarstellung (2026-08-25): einzel → kein Summenpreis-Footer; die Preise stehen je Gericht-Zeile. --}}
+    @if(($preis_pp ?? null) !== null && $preis_pp > 0 && ! ($einzelpreise ?? false))
         <div class="price">
             <table>
                 <tr>

@@ -111,6 +111,27 @@ class WordingResolver
      */
     public function gerichtZeilen(FoodAlchemistConcept $concept, FoodAlchemistFoodbookBlock|FoodAlchemistFormatSlot|null $block = null): array
     {
+        // Preisdarstellung (2026-08-25): bei `einzel` trägt jede DIREKTE Gericht-/Package-Zeile ihren
+        // eigenen VK (kein Concept-Summenpreis). Die Preise kommen aus der EINEN Preis-Stelle
+        // (ConceptService::preisCockpit) — keine Dublette der Darreichungs-/Portions-Mathematik hier.
+        // Weil price_display PRO Concept gilt, bleiben Gerichte INNERHALB eingebetteter Pakete
+        // automatisch preislos (das Paket ist per Default `gesamt` → die Rekursion hängt nichts an).
+        $einzel = $concept->istEinzelpreis();
+        $preisMap = [];
+        if ($einzel) {
+            // Frische Instanz fürs Pricing: der Aufrufer hat `slots.dish` evtl. mit Spalten-Subset OHNE
+            // sales_net geladen (dokumentDaten lädt name/sales_wording_standard) — preisCockpit::loadMissing
+            // würde die bereits geladene Relation dann NICHT nachladen (Laravel-Subset-Falle) → Preis 0.
+            // Slot-IDs sind stabil, der Map-Lookup je $slot->id greift auf dieselben DB-Zeilen.
+            $priceConcept = $concept->fresh() ?? $concept;
+            foreach (app(ConceptService::class)->preisCockpit($priceConcept)['zeilen'] as $z) {
+                if (isset($z['slot_id']) && ($z['price'] ?? null) !== null) {
+                    // VK für die Kundensicht, EK für die interne Sicht (Blade rendert EK nur bei $istIntern).
+                    $preisMap[(int) $z['slot_id']] = ['vk' => (float) $z['price'], 'ek' => $z['ek'] ?? null];
+                }
+            }
+        }
+
         $zeilen = [];
         foreach ($concept->slots->sortBy('position') as $slot) {
             // Kaskade 2026-08-24: eingebettetes Paket = kind=paket-Concept (embedded_concept_id).
@@ -130,7 +151,9 @@ class WordingResolver
                 continue;
             }
             if ($slot->package_id !== null && $slot->package !== null) {
-                $zeilen[] = ['type' => 'paket', 'text' => (string) $slot->package->name, 'source' => null, 'einrueckung' => 0];
+                $zeilen[] = ['type' => 'paket', 'text' => (string) $slot->package->name, 'source' => null, 'einrueckung' => 0,
+                    'preis' => $einzel ? ($preisMap[$slot->id]['vk'] ?? null) : null,
+                    'ek' => $einzel ? ($preisMap[$slot->id]['ek'] ?? null) : null];
                 foreach ($slot->package->dishes as $pg) {
                     $r = $this->fuerGericht($pg->dish);
                     $zeilen[] = ['type' => 'gericht', 'text' => $r['text'], 'source' => $r['source'], 'einrueckung' => 1, 'recipe_id' => $pg->dish?->id];
@@ -147,7 +170,9 @@ class WordingResolver
                 continue; // spacer/text/leere Slots sind im Kundendokument unsichtbar
             }
             $r = $block !== null ? $this->fuerBlockSlot($block, $slot) : $this->fuerSlot($slot);
-            $zeilen[] = ['type' => 'gericht', 'text' => $r['text'], 'source' => $r['source'], 'einrueckung' => 0, 'slot_id' => $slot->id, 'recipe_id' => $slot->sales_recipe_id];
+            $zeilen[] = ['type' => 'gericht', 'text' => $r['text'], 'source' => $r['source'], 'einrueckung' => 0, 'slot_id' => $slot->id, 'recipe_id' => $slot->sales_recipe_id,
+                'preis' => $einzel ? ($preisMap[$slot->id]['vk'] ?? null) : null,
+                'ek' => $einzel ? ($preisMap[$slot->id]['ek'] ?? null) : null];
         }
 
         return $zeilen;

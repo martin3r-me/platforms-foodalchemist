@@ -127,7 +127,7 @@
         @if($pos['kind'] === 'edition')
             <div class="kapitel">
                 <h3>
-                    @if(($pos['preis_pp'] ?? null) !== null && $pos['preis_pp'] > 0)
+                    @if(($pos['preis_pp'] ?? null) !== null && $pos['preis_pp'] > 0 && ! ($pos['einzelpreise'] ?? false))
                         <span class="kpreis">{{ number_format($pos['preis_pp'], 2, ',', '.') }} €/Gast</span>
                     @endif
                     <span class="pipe">|</span> {{ $pos['title'] }}
@@ -138,7 +138,8 @@
                 <table class="cblock">
                     <tr>
                         <td class="cprice">
-                            @if(($pos['preis_pp'] ?? null) !== null && $pos['preis_pp'] > 0)
+                            {{-- Preisdarstellung (2026-08-25): einzel → kein Summenpreis, Preise stehen je Gericht-Zeile. --}}
+                            @if(($pos['preis_pp'] ?? null) !== null && $pos['preis_pp'] > 0 && ! ($pos['einzelpreise'] ?? false))
                                 <div class="val">{{ number_format($pos['preis_pp'], 2, ',', '.') }} €</div><div class="basis">pro Gast</div>
                             @endif
                         </td>
@@ -149,7 +150,7 @@
                                 @elseif(($g['type'] ?? '') === 'header')
                                     <div class="dish paket" style="margin-left: {{ ($g['einrueckung'] ?? 0) * 12 }}px">{{ $g['text'] }}</div>
                                 @else
-                                    <div class="dish" style="margin-left: {{ ($g['einrueckung'] ?? 0) * 12 }}px"><span class="pipe">|</span>{{ $g['text'] }}</div>
+                                    <div class="dish" style="margin-left: {{ ($g['einrueckung'] ?? 0) * 12 }}px"><span class="pipe">|</span>{{ $g['text'] }}@if(($g['preis'] ?? null) !== null && $g['preis'] > 0)<span class="kpreis">{{ number_format($g['preis'], 2, ',', '.') }} €/Gast</span>@endif</div>
                                 @endif
                             @empty
                                 <div class="dish leer">— noch keine Gerichte —</div>

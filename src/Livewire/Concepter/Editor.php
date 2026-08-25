@@ -191,6 +191,7 @@ class Editor extends Component
                 'structure_requirement' => $c->structure_requirement ?? '', 'season' => $c->season ?? '',
                 'target_group' => $c->target_group ?? '', 'target_price_per_person' => $c->target_price_per_person,
                 'price_mode' => $c->price_mode ?? 'auto', 'price_per_person_manual' => $c->price_per_person_manual,
+                'price_display' => $c->price_display ?? 'gesamt',
                 'note' => $c->note ?? '',
                 // Facetten (Umbau-Spec Phase 4b)
                 'serving_form_id' => $c->serving_form_id, 'event_type_id' => $c->event_type_id,
@@ -452,6 +453,20 @@ class Editor extends Component
             return;
         }
         $this->form['price_mode'] = in_array($modus, ['auto', 'manuell'], true) ? $modus : 'auto';
+        $this->speichern();
+    }
+
+    /**
+     * Preisdarstellung des Concepts umschalten: `gesamt` (ein Summenpreis) ⇄ `einzel`
+     * (jedes direkte Kind mit eigenem Preis, kein Summenpreis — Auswahl à la carte).
+     * Reine Concept-Eigenschaft; Foodbook/Format/Speisekarte geben sie nur durch.
+     */
+    public function setPreisDisplay(string $modus): void
+    {
+        if ($this->type !== 'concepts') {
+            return;
+        }
+        $this->form['price_display'] = in_array($modus, \Platform\FoodAlchemist\Models\FoodAlchemistConcept::PRICE_DISPLAYS, true) ? $modus : 'gesamt';
         $this->speichern();
     }
 

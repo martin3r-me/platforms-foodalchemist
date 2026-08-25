@@ -40,6 +40,20 @@ class FoodAlchemistConcept extends Model
         'nutrition_cache' => 'array',
     ];
 
+    /**
+     * Preisdarstellung (2026-08-25) — reine Concept-Eigenschaft, orthogonal zu `price_mode`
+     * (auto|manuell): `gesamt` = ein Summenpreis fürs Concept (heutiges Verhalten), `einzel` =
+     * jedes direkte Kind zeigt seinen Preis, KEIN Concept-Summenpreis (Auswahl à la carte —
+     * Kuchen/Fingerfood). Foodbook/Format/Speisekarte geben nur durch.
+     */
+    public const PRICE_DISPLAYS = ['gesamt', 'einzel'];
+
+    /** true = Einzelpreise je direktem Kind (Gericht-VK / eingebettetes Paket-Total), kein Summenpreis. */
+    public function istEinzelpreis(): bool
+    {
+        return ($this->price_display ?? 'gesamt') === 'einzel';
+    }
+
     // Kaskade (2026-08-24): KEIN Global Scope auf kind — der würde auch Relationen
     // (slot->concept, Format-Editionen …) filtern und für kind=paket null liefern.
     // Stattdessen filtern die LISTEN-Flächen explizit über scopeKonzepte()/scopePakete();

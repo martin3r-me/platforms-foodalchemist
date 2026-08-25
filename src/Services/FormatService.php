@@ -458,8 +458,8 @@ class FormatService
         $format = FoodAlchemistFormat::visibleToTeam($team)
             ->with([
                 'slots' => fn ($q) => $q->orderBy('position'),
-                // Edition-Identität (Kapitel-Parität) + Preis-Cache.
-                'slots.concept:id,name,consumer_name,claim,description,status,price_per_person_cache',
+                // Edition-Identität (Kapitel-Parität) + Preis-Cache + Preisdarstellung (gesamt|einzel).
+                'slots.concept:id,name,consumer_name,claim,description,status,price_per_person_cache,price_display',
                 // Menü-Zeilen der Edition (gleiche Wording-Auflösung wie Foodbook/Editor-Vorschau).
                 'slots.concept.slots' => fn ($q) => $q->orderBy('position'),
                 'slots.concept.slots.dish:id,name,sales_wording_standard',
@@ -485,6 +485,8 @@ class FormatService
                     'claim' => $concept->claim,
                     'text' => trim((string) $concept->description) ?: null,
                     'preis_pp' => $concept->price_per_person_cache !== null ? (float) $concept->price_per_person_cache : null,
+                    // Preisdarstellung (2026-08-25): einzel → Concept-Summenpreis ausblenden, Preise je Gericht-Zeile.
+                    'einzelpreise' => $concept->istEinzelpreis(),
                     // Format C1: den Format-Slot als Override-Kontext → format-lokale Wordings auch im Druck.
                     'gerichte' => $wording->gerichtZeilen($concept, $slot),
                 ];

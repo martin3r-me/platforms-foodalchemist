@@ -618,7 +618,8 @@
                                         @switch($block->type)
                                             @case('concept_ref')
                                                 <span class="{{ $pill }} {{ $variantPill['primary'] }} mr-1">Concept</span>{{ $block->concept?->name ?? '—' }}
-                                                <span class="text-gray-500 tabular-nums">{{ $block->concept?->price_per_person_cache !== null ? '· ' . number_format((float) $block->concept->price_per_person_cache, 2, ',', '.') . ' €/P' : '' }}</span>
+                                                {{-- Preisdarstellung: einzel-Concept zeigt keinen Summenpreis-Chip (die Preise stehen je Gericht in der Vorschau darunter). --}}
+                                                @if($block->concept?->price_per_person_cache !== null && ! $block->concept?->istEinzelpreis())<span class="text-gray-500 tabular-nums">· {{ number_format((float) $block->concept->price_per_person_cache, 2, ',', '.') }} €/P</span>@elseif($block->concept?->istEinzelpreis())<span class="text-gray-400 tabular-nums text-[10px]">· Einzelpreise</span>@endif
                                                 @if(trim((string) $block->wording) !== '')<span class="italic text-violet-600">· „{{ $block->wording }}“</span>@endif
                                                 @break
                                             @case('recipe_ref')
