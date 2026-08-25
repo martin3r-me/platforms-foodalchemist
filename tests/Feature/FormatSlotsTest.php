@@ -101,15 +101,6 @@ it('F6: ein Paket ist als Format-Slot buchbar (kind=paket-Concept über concept_
     expect($slot->type)->toBe('concept')->and((int) $slot->concept_id)->toBe($paket->id);
 });
 
-it('Datenmigration: format_id-Editionen → format_slots (idempotent)', function () {
-    // Alt-Welt: Concepts per Besitz-FK ans Format hängen (wie vor F2).
-    $this->c1->update(['format_id' => $this->format->id, 'format_position' => 0]);
-    $this->c2->update(['format_id' => $this->format->id, 'format_position' => 1]);
-
-    $this->artisan('foodalchemist:format-editions-to-slots --apply')->assertSuccessful();
-    expect(FoodAlchemistFormatSlot::where('format_id', $this->format->id)->where('type', 'concept')->count())->toBe(2);
-
-    // idempotent — zweiter Lauf legt nichts Neues an
-    $this->artisan('foodalchemist:format-editions-to-slots --apply')->assertSuccessful();
-    expect(FoodAlchemistFormatSlot::where('format_id', $this->format->id)->where('type', 'concept')->count())->toBe(2);
-});
+// F2e: der Test der Alt-Editionen→Slots-Datenmigration ist entfernt — `concepts.format_id`
+// ist gedroppt, die Test-DB kann den Pre-Drop-Zustand nicht mehr herstellen. Das Command
+// (foodalchemist:format-editions-to-slots) bleibt als Escape-Hatch für den Migrations-Guard.

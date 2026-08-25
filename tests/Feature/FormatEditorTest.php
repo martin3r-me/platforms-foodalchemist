@@ -22,38 +22,6 @@ beforeEach(function () {
     $this->fbsvc = app(FoodbookService::class);
 });
 
-it('createEdition legt ein Concept an, hängt es als Edition an und seedet das Sektions-Gerüst', function () {
-    $f = $this->fsvc->create($this->rootTeam, ['name' => 'CHEFS.CORNER']);
-
-    $ed = $this->fsvc->createEdition($this->rootTeam, $f->id, 'FUTURE FLAVORS', true);
-
-    expect((int) $ed->format_id)->toBe($f->id)
-        ->and($ed->name)->toBe('FUTURE FLAVORS')
-        ->and($ed->status)->toBe('draft')
-        ->and($ed->slots()->where('type', 'header')->count())->toBe(count(FormatService::SEKTIONS_GERUEST));
-});
-
-it('updateEditionWording pflegt Titel/Claim/Hinführung (claim neu speicherbar)', function () {
-    $f = $this->fsvc->create($this->rootTeam, ['name' => 'CHEFS.CORNER']);
-    $ed = $this->fsvc->createEdition($this->rootTeam, $f->id, 'FUTURE FLAVORS', false);
-
-    $ed = $this->fsvc->updateEditionWording($this->rootTeam, $f->id, $ed->id, [
-        'consumer_name' => 'Future Flavors', 'claim' => 'Die neue Küche der Welt', 'description' => 'Molecular, live angerichtet.',
-    ]);
-
-    expect($ed->consumer_name)->toBe('Future Flavors')
-        ->and($ed->claim)->toBe('Die neue Küche der Welt')
-        ->and($ed->description)->toBe('Molecular, live angerichtet.');
-});
-
-it('updateEditionWording lehnt ein Concept ab, das nicht zu DIESEM Format gehört', function () {
-    $f = $this->fsvc->create($this->rootTeam, ['name' => 'CHEFS.CORNER']);
-    $fremd = FoodAlchemistConcept::create(['team_id' => $this->rootTeam->id, 'name' => 'Standalone']); // kein format_id
-
-    expect(fn () => $this->fsvc->updateEditionWording($this->rootTeam, $f->id, $fremd->id, ['claim' => 'x']))
-        ->toThrow(Illuminate\Database\Eloquent\ModelNotFoundException::class);
-});
-
 it('Editor: neue Edition inline anlegen (als Concept-Slot) + Wording des Concepts speichern', function () {
     $this->actingAs($this->makeUser($this->rootTeam));
     $f = $this->fsvc->create($this->rootTeam, ['name' => 'CHEFS.CORNER']);
@@ -62,12 +30,11 @@ it('Editor: neue Edition inline anlegen (als Concept-Slot) + Wording des Concept
         ->set('neueEditionName', 'FARM TO TABLE')->call('neueEdition')
         ->assertDispatched('formate-gespeichert');
 
-    // F2: die Edition ist eine Concept-Referenz (Slot), kein format_id-Besitz.
+    // F2e: die Edition ist eine reine Concept-Referenz (Slot), kein Besitz.
     $slot = $f->slots()->where('type', 'concept')->firstOrFail();
     $ed = $slot->concept;
     expect($ed->name)->toBe('FARM TO TABLE')
         ->and($ed->status)->toBe('active')
-        ->and($ed->format_id)->toBeNull()
         ->and($ed->slots()->where('type', 'header')->count())->toBe(count(FormatService::SEKTIONS_GERUEST));
 
     $t->call('conceptWordingSpeichern', $ed->id, 'claim', 'Natur pur auf dem Teller')

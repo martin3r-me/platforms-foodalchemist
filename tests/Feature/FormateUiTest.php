@@ -61,9 +61,9 @@ it('Editor: fügt ein Konzept als Aufbau-Position ein und entfernt es wieder', f
     $t->assertSee('FUTURE FLAVORS');   // im Picker (aktive Konzepte)
     $t->call('conceptEinfuegen', $c->id)->assertDispatched('formate-gespeichert');
     $slot = $f->slots()->where('type', 'concept')->firstOrFail();
-    expect((int) $slot->concept_id)->toBe($c->id);
-    // Referenz-Modell: das Konzept selbst bleibt frei (kein format_id).
-    expect(FoodAlchemistConcept::find($c->id)->format_id)->toBeNull();
+    expect((int) $slot->concept_id)->toBe($c->id)
+        // F2e Referenz-Modell: das Konzept selbst bleibt eigenständig (nicht gelöscht/verändert).
+        ->and(FoodAlchemistConcept::find($c->id))->not->toBeNull();
 
     $t->call('slotEntfernen', $slot->id)->assertDispatched('formate-gespeichert');
     expect($f->slots()->count())->toBe(0);

@@ -188,8 +188,7 @@ class ReportExportService
                 'slots' => fn ($q) => $q->orderBy('position'),
                 'slots.concept:id,name,consumer_name,claim,description,status,price_per_person_cache',
                 'heroImage',
-                // priceRange liest slots.concept primär, editions als Back-Compat-Fallback.
-                'editions:id,format_id,price_per_person_cache',
+                // F2e: priceRange liest ausschließlich slots.concept (Alt-Editionen-Fallback entfernt).
                 'servingForm:id,label',
                 'eventType:id,name',
                 'serviceMoments:id,name',

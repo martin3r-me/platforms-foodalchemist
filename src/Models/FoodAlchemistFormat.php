@@ -33,12 +33,6 @@ class FoodAlchemistFormat extends Model
         'uuid' => 'string',
     ];
 
-    /** Editionen (Concepts) dieses Formats, in Reihenfolge. @deprecated F2 → slots() (Referenz statt Besitz). */
-    public function editions(): HasMany
-    {
-        return $this->hasMany(FoodAlchemistConcept::class, 'format_id')->orderBy('format_position');
-    }
-
     /** F2: Aufbau des Formats — Concept-Referenzen + Struktur-Blöcke (header/text/spacer), sortiert. */
     public function slots(): HasMany
     {
@@ -113,20 +107,15 @@ class FoodAlchemistFormat extends Model
      * Reduktion der gespeicherten Caches, KEINE eigene Formel, KEIN Recompute.
      * Editionen (Concept-Referenzen) sind Alternativen (Showcase), daher Range statt Summe.
      *
-     * F2-Cutover: primär über die type=concept-Slots (Referenz-Modell); solange ein
-     * Format nur Alt-Editionen (`format_id`) hat, fällt die Range darauf zurück (Back-Compat,
-     * F2e entfernt den Fallback). Union-frei — es zählt genau EINE Quelle je Format.
+     * F2e: ausschließlich über die type=concept-Slots (Referenz-Modell) — der Alt-Editionen-
+     * Fallback (`format_id`) ist mit dem Cutover entfernt.
      *
      * @return array{min: ?float, max: ?float}
      */
     public function priceRange(): array
     {
-        $conceptSlots = $this->slots->where('type', 'concept');
-        $caches = $conceptSlots->isNotEmpty()
-            ? $conceptSlots->map(fn ($s) => $s->concept?->price_per_person_cache)
-            : $this->editions->map(fn ($e) => $e->price_per_person_cache);
-
-        $werte = $caches
+        $werte = $this->slots->where('type', 'concept')
+            ->map(fn ($s) => $s->concept?->price_per_person_cache)
             ->map(fn ($v) => $v !== null ? (float) $v : null)
             ->filter(fn ($v) => $v !== null && $v > 0)
             ->values();

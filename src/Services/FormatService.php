@@ -57,11 +57,10 @@ class FormatService
     {
         return FoodAlchemistFormat::visibleToTeam($team)
             ->with([
-                // F2-Cutover: der Editor/Detail liest den Aufbau aus den Slots (Concept-Referenzen +
-                // Struktur-Blöcke). `editions` bleibt eager-geladen (Back-Compat + priceRange-Fallback).
+                // F2e: der Editor/Detail liest den Aufbau ausschließlich aus den Slots (Concept-Referenzen
+                // + Struktur-Blöcke) — der Alt-Editionen-Eager-Load ist mit dem Cutover entfernt.
                 // #3/F6: kind → „Paket"-Badge am Slot; ek_per_person_cache → Detail-Cockpit Ø/W-Kontext.
                 'slots.concept:id,name,consumer_name,claim,description,status,kind,price_per_person_cache,ek_per_person_cache',
-                'editions:id,name,consumer_name,claim,description,status,format_id,format_position,price_per_person_cache',
                 'images' => fn ($q) => $q->orderBy('sort_order'),
                 // F1: Facetten fürs Detail/Editor (Namen → Dimension-Chips im Detail-Panel, #3)
                 'servingForm:id,label', 'eventType:id,name', 'serviceMoments:id,name', 'seasons:id,name', 'targetGroups:id,name',
@@ -157,69 +156,16 @@ class FormatService
     }
 
     /**
-     * Format löschen. Editionen werden über nullOnDelete wieder freistehend (kein
-     * Datenverlust), Bildwelt cascadet. Kein Recompute nötig (Gruppierung trägt
-     * keinen Preis).
+     * Format löschen (Soft-Delete). F2e: die referenzierten Concepts sind unabhängig
+     * (reine Slot-Referenz, kein Besitz) und bleiben unangetastet; die Aufbau-Slots
+     * gehören zum Format und verschwinden mit ihm aus den Listen. Kein Recompute nötig
+     * (Gruppierung trägt keinen Preis).
      */
     public function delete(Team $team, int $id): void
     {
         $format = FoodAlchemistFormat::visibleToTeam($team)->findOrFail($id);
         $this->guardOwner($format, $team);
-        DB::transaction(function () use ($format) {
-            // Soft-Delete lässt den DB-seitigen nullOnDelete NICHT feuern (die Zeile bleibt
-            // bestehen) — Editionen daher explizit lösen, damit sie wieder freistehend sind.
-            // Bulk-Update, kein Recompute (Gruppierung trägt keinen Preis).
-            FoodAlchemistConcept::where('format_id', $format->id)->update(['format_id' => null, 'format_position' => 0]);
-            $format->delete();
-        });
-    }
-
-    // ── Editionen (Concept ↔ Format) ────────────────────────────────────────
-
-    /**
-     * Bestehendes Concept als Edition zuordnen. Guardet BEIDE Seiten (Format UND
-     * Concept müssen sichtbar + team-eigen sein). Kein Recompute — nur die FK +
-     * Reihenfolge werden gesetzt.
-     */
-    public function attachEdition(Team $team, int $formatId, int $conceptId, ?int $position = null): FoodAlchemistConcept
-    {
-        $format = FoodAlchemistFormat::visibleToTeam($team)->findOrFail($formatId);
-        $this->guardOwner($format, $team);
-
-        $concept = FoodAlchemistConcept::visibleToTeam($team)->findOrFail($conceptId);
-        if (! $concept->isOwnedBy($team)) {
-            throw new \RuntimeException('Geerbtes Concept — Zuordnung nur durchs Besitzer-Team (D1).');
-        }
-
-        $pos = $position ?? ((int) (FoodAlchemistConcept::where('format_id', $formatId)->max('format_position') ?? -1) + 1);
-        $concept->update(['format_id' => $formatId, 'format_position' => $pos]);
-
-        return $concept->refresh();
-    }
-
-    /** Edition aus ihrem Format lösen (Concept wird wieder freistehend). */
-    public function detachEdition(Team $team, int $conceptId): FoodAlchemistConcept
-    {
-        $concept = FoodAlchemistConcept::visibleToTeam($team)->findOrFail($conceptId);
-        if (! $concept->isOwnedBy($team)) {
-            throw new \RuntimeException('Geerbtes Concept — Zuordnung nur durchs Besitzer-Team (D1).');
-        }
-        $concept->update(['format_id' => null, 'format_position' => 0]);
-
-        return $concept->refresh();
-    }
-
-    /** @param list<int> $conceptIds neue Reihenfolge der Editionen */
-    public function reorderEditions(Team $team, int $formatId, array $conceptIds): void
-    {
-        $format = FoodAlchemistFormat::visibleToTeam($team)->findOrFail($formatId);
-        $this->guardOwner($format, $team);
-        DB::transaction(function () use ($formatId, $conceptIds) {
-            foreach (array_values($conceptIds) as $i => $id) {
-                FoodAlchemistConcept::where('id', (int) $id)->where('format_id', $formatId)
-                    ->update(['format_position' => $i]);
-            }
-        });
+        $format->delete();
     }
 
     // ── F2: Aufbau / Slots (Referenz-Concepts + Struktur-Blöcke) ────────────────
@@ -383,48 +329,6 @@ class FormatService
     /** Phase D: Standard-Sektions-Gerüst einer neu angelegten Edition (Concepter 2.0). */
     public const SEKTIONS_GERUEST = ['Amuse', 'Vorspeise', 'Hauptgang', 'Dessert'];
 
-    /**
-     * Phase D (Concepter 2.0): Kunden-Wording einer Edition (= Unterkapitel) pflegen —
-     * Foodbook-Kapitel-Parität: consumer_name (Titel), claim, description (Hinführung).
-     * Guardet, dass die Edition zu DIESEM Format gehört + team-eigen ist.
-     */
-    public function updateEditionWording(Team $team, int $formatId, int $conceptId, array $wording): FoodAlchemistConcept
-    {
-        $format = FoodAlchemistFormat::visibleToTeam($team)->findOrFail($formatId);
-        $this->guardOwner($format, $team);
-        $concept = FoodAlchemistConcept::visibleToTeam($team)->where('format_id', $formatId)->findOrFail($conceptId);
-        if (! $concept->isOwnedBy($team)) {
-            throw new \RuntimeException('Geerbte Edition — Pflege nur durchs Besitzer-Team (D1).');
-        }
-
-        $felder = array_intersect_key($wording, array_flip(['consumer_name', 'claim', 'description']));
-
-        return app(ConceptService::class)->update($team, $conceptId, $felder);
-    }
-
-    /**
-     * Phase D (Concepter 2.0): eine NEUE Edition (Concept) im Format-Kontext anlegen und
-     * zuordnen. `$withSkeleton` seedet automatisch das Sektions-Gerüst (AMUSE/Vorspeise/
-     * Hauptgang/Dessert als Header-Slots) — das „automatisch"-Grundgerüst.
-     */
-    public function createEdition(Team $team, int $formatId, string $name, bool $withSkeleton = true): FoodAlchemistConcept
-    {
-        $format = FoodAlchemistFormat::visibleToTeam($team)->findOrFail($formatId);
-        $this->guardOwner($format, $team);
-
-        $concepts = app(ConceptService::class);
-        $concept = $concepts->create($team, ['name' => trim($name) !== '' ? trim($name) : 'Neue Edition', 'status' => 'draft']);
-        $this->attachEdition($team, $formatId, $concept->id);
-
-        if ($withSkeleton) {
-            foreach (self::SEKTIONS_GERUEST as $sektion) {
-                $concepts->addBlock($team, $concept->id, 'header', ['title' => $sektion]);
-            }
-        }
-
-        return $concept->refresh();
-    }
-
     // ── Marketing-Bilder ─────────────────────────────────────────────────────
 
     public function storeImage(Team $team, int $formatId, UploadedFile $file, ?string $caption = null): FoodAlchemistFormatImage
@@ -500,9 +404,9 @@ class FormatService
     /** @return array{min: ?float, max: ?float} */
     public function priceRange(Team $team, int $id): array
     {
-        // F2-Cutover: primär über die Concept-Referenz-Slots; editions als Back-Compat-Fallback.
+        // F2e: ausschließlich über die Concept-Referenz-Slots (Alt-Editionen-Fallback entfernt).
         $format = FoodAlchemistFormat::visibleToTeam($team)
-            ->with(['slots.concept:id,price_per_person_cache', 'editions:id,format_id,price_per_person_cache'])
+            ->with(['slots.concept:id,price_per_person_cache'])
             ->findOrFail($id);
 
         return $format->priceRange();
@@ -536,9 +440,9 @@ class FormatService
                 'slots.concept.slots' => fn ($q) => $q->orderBy('position'),
                 'slots.concept.slots.dish:id,name,sales_wording_standard',
                 'slots.concept.slots.package.dishes.dish:id,name,sales_wording_standard',
+                'slots.concept.slots.embeddedConcept:id,name,consumer_name,price_per_person_cache',
+                'slots.concept.slots.embeddedConcept.slots.dish:id,name,sales_wording_standard',
                 'heroImage',
-                // priceRange-Fallback (Alt-Editionen ohne Slots).
-                'editions:id,format_id,price_per_person_cache',
             ])
             ->findOrFail($formatId);
 

@@ -112,12 +112,6 @@ class FoodAlchemistConcept extends Model
         return $this->templateSource();
     }
 
-    /** Format (Marken-/Themen-Container), dem dieses Concept als Edition zugeordnet ist (optional). */
-    public function format(): BelongsTo
-    {
-        return $this->belongsTo(FoodAlchemistFormat::class, 'format_id');
-    }
-
     /** Organisatorische Kategorie (M10c-B, Baum). */
     public function category(): BelongsTo
     {

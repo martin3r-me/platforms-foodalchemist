@@ -55,9 +55,9 @@ it('format_editions.POST: fügt ein Konzept als Aufbau-Position (Slot) ein', fun
     expect($res->success)->toBeTrue()
         ->and((int) $res->data['edition']['format_id'])->toBe($f->id)
         ->and((int) $res->data['edition']['concept_id'])->toBe($c->id);
-    // Referenz-Modell: es entsteht ein Concept-Slot, das Konzept selbst bleibt frei (kein format_id).
+    // F2e Referenz-Modell: es entsteht ein Concept-Slot, das Konzept selbst bleibt eigenständig.
     expect(FoodAlchemistFormatSlot::where('format_id', $f->id)->where('type', 'concept')->where('concept_id', $c->id)->exists())->toBeTrue()
-        ->and(FoodAlchemistConcept::find($c->id)->format_id)->toBeNull();
+        ->and(FoodAlchemistConcept::find($c->id))->not->toBeNull();
 });
 
 it('format_editions.DELETE: entfernt die Aufbau-Position per slot_id (Konzept bleibt)', function () {

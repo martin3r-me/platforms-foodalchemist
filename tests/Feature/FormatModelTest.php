@@ -3,8 +3,18 @@
 use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
 use Platform\FoodAlchemist\Models\FoodAlchemistFormat;
 use Platform\FoodAlchemist\Models\FoodAlchemistFormatImage;
+use Platform\FoodAlchemist\Models\FoodAlchemistFormatSlot;
 use Platform\FoodAlchemist\Tests\Support\SeedsTeamHierarchy;
 use Platform\FoodAlchemist\Tests\TestCase;
+
+/** F2e-Helfer: ein Concept als Format-Slot referenzieren (Referenz-Modell statt format_id-Besitz). */
+function slotConcept(FoodAlchemistFormat $f, FoodAlchemistConcept $c, int $position = 0): FoodAlchemistFormatSlot
+{
+    return FoodAlchemistFormatSlot::create([
+        'team_id' => $f->team_id, 'format_id' => $f->id, 'type' => 'concept',
+        'concept_id' => $c->id, 'position' => $position,
+    ]);
+}
 
 uses(TestCase::class, SeedsTeamHierarchy::class);
 
@@ -38,31 +48,20 @@ it('D1: isOwnedBy nur beim Besitzer-Team', function () {
         ->and($f->isOwnedBy($this->childA))->toBeFalse();
 });
 
-it('editions: Concepts mit format_id in format_position-Reihenfolge', function () {
+it('priceRange: read-only Min–Max über price_per_person_cache der Referenz-Concepts (0/null ignoriert)', function () {
     $f = FoodAlchemistFormat::create(['team_id' => $this->rootTeam->id, 'name' => 'CHEFS.CORNER']);
-    $c1 = FoodAlchemistConcept::create(['team_id' => $this->rootTeam->id, 'name' => 'FUTURE FLAVORS', 'format_id' => $f->id, 'format_position' => 1]);
-    $c0 = FoodAlchemistConcept::create(['team_id' => $this->rootTeam->id, 'name' => 'FARM TO TABLE', 'format_id' => $f->id, 'format_position' => 0]);
-    // freistehendes Concept ohne Format zählt nicht mit
-    FoodAlchemistConcept::create(['team_id' => $this->rootTeam->id, 'name' => 'Standalone']);
+    slotConcept($f, FoodAlchemistConcept::create(['team_id' => $this->rootTeam->id, 'name' => 'A', 'price_per_person_cache' => 42.50]), 0);
+    slotConcept($f, FoodAlchemistConcept::create(['team_id' => $this->rootTeam->id, 'name' => 'B', 'price_per_person_cache' => 49.50]), 1);
+    slotConcept($f, FoodAlchemistConcept::create(['team_id' => $this->rootTeam->id, 'name' => 'C', 'price_per_person_cache' => null]), 2);
+    slotConcept($f, FoodAlchemistConcept::create(['team_id' => $this->rootTeam->id, 'name' => 'D', 'price_per_person_cache' => 0]), 3);
 
-    $namen = $f->editions()->pluck('name')->all();
-    expect($namen)->toBe(['FARM TO TABLE', 'FUTURE FLAVORS']);
-});
-
-it('priceRange: read-only Min–Max über price_per_person_cache der Editionen (0/null ignoriert)', function () {
-    $f = FoodAlchemistFormat::create(['team_id' => $this->rootTeam->id, 'name' => 'CHEFS.CORNER']);
-    FoodAlchemistConcept::create(['team_id' => $this->rootTeam->id, 'name' => 'A', 'format_id' => $f->id, 'price_per_person_cache' => 42.50]);
-    FoodAlchemistConcept::create(['team_id' => $this->rootTeam->id, 'name' => 'B', 'format_id' => $f->id, 'price_per_person_cache' => 49.50]);
-    FoodAlchemistConcept::create(['team_id' => $this->rootTeam->id, 'name' => 'C', 'format_id' => $f->id, 'price_per_person_cache' => null]);
-    FoodAlchemistConcept::create(['team_id' => $this->rootTeam->id, 'name' => 'D', 'format_id' => $f->id, 'price_per_person_cache' => 0]);
-
-    $range = $f->load('editions')->priceRange();
+    $range = $f->load('slots.concept')->priceRange();
     expect($range['min'])->toBe(42.50)->and($range['max'])->toBe(49.50);
 });
 
-it('priceRange: leer wenn keine Editionen Preise haben', function () {
+it('priceRange: leer wenn keine Referenz-Concepts Preise haben', function () {
     $f = FoodAlchemistFormat::create(['team_id' => $this->rootTeam->id, 'name' => 'Leer']);
-    expect($f->load('editions')->priceRange())->toBe(['min' => null, 'max' => null]);
+    expect($f->load('slots.concept')->priceRange())->toBe(['min' => null, 'max' => null]);
 });
 
 it('images: Galerie sortiert + genau ein Hero über heroImage()', function () {
