@@ -116,7 +116,8 @@ class WordingResolver
             // Paketname (consumer_name bevorzugt) + seine Gerichte rekursiv, eingerückt.
             if ($slot->embedded_concept_id !== null && $slot->embeddedConcept !== null) {
                 $paket = $slot->embeddedConcept;
-                $zeilen[] = ['type' => 'paket', 'text' => (string) ($paket->consumer_name ?: $paket->name), 'source' => null, 'einrueckung' => 0];
+                $zeilen[] = ['type' => 'paket', 'text' => (string) ($paket->consumer_name ?: $paket->name), 'source' => null, 'einrueckung' => 0,
+                    'preis' => $paket->price_per_person_cache !== null ? (float) $paket->price_per_person_cache : null];
                 foreach ($this->gerichtZeilen($paket) as $z) {
                     $zeilen[] = ['type' => $z['type'], 'text' => $z['text'], 'source' => $z['source'] ?? null,
                         'einrueckung' => ($z['einrueckung'] ?? 0) + 1] + array_intersect_key($z, ['recipe_id' => true, 'slot_id' => true]);

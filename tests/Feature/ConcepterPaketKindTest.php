@@ -107,6 +107,20 @@ it('Picker (paketKandidaten) zeigt nur aktive Pakete — kein Entwurf', function
         ->and($namen)->not->toContain('Entwurf-Paket'); // draft ausgeblendet
 });
 
+it('F7b: paketKandidaten filtert nach Servierform (geteilter Facetten-Filter wie im Format-Picker)', function () {
+    $sf = \Platform\FoodAlchemist\Models\FoodAlchemistServierform::create([
+        'team_id' => $this->rootTeam->id, 'code' => 'buffet', 'label' => 'Buffet', 'sort_order' => 1, 'is_inactive' => false,
+    ]);
+    // Salad Wall (beforeEach) bekommt die Servierform; ein zweites Paket bleibt ohne.
+    $this->concepts->update($this->rootTeam, $this->paket->id, ['serving_form_id' => $sf->id]);
+    $ohne = $this->concepts->createPaket($this->rootTeam, ['name' => 'Ohne-Form', 'class' => 'Buffet']);
+    $this->concepts->update($this->rootTeam, $ohne->id, ['price_mode' => 'manuell', 'price_per_person_manual' => 3.0]);
+
+    $namen = $this->concepts->paketKandidaten($this->rootTeam, '', ['servierform' => $sf->id])->pluck('name')->all();
+    expect($namen)->toContain('Salad Wall')
+        ->and($namen)->not->toContain('Ohne-Form');
+});
+
 it('Picker (gerichtKandidaten) zeigt keine Entwurf-Gerichte, aber review/approved', function () {
     FoodAlchemistRecipe::create([
         'team_id' => $this->rootTeam->id, 'recipe_key' => 'dd', 'name' => 'Entwurf-Gericht',

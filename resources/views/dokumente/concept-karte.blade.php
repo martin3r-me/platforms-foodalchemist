@@ -81,9 +81,9 @@
     <div class="karte">
         @forelse($gerichte as $g)
             @if(($g['type'] ?? '') === 'header')
-                <div class="dish header">{{ $g['text'] }}</div>
+                <div class="dish header" style="margin-left: {{ ($g['einrueckung'] ?? 0) * 12 }}px">{{ $g['text'] }}</div>
             @elseif(($g['type'] ?? '') === 'paket')
-                <div class="dish paket" style="margin-left: {{ ($g['einrueckung'] ?? 0) * 12 }}px">{{ $g['text'] }}</div>
+                <div class="dish paket" style="margin-left: {{ ($g['einrueckung'] ?? 0) * 12 }}px">{{ $g['text'] }}@if(($g['preis'] ?? null) !== null && $g['preis'] > 0)<span style="float: right; font-weight: normal; color: #6b7280;">{{ number_format($g['preis'], 2, ',', '.') }} €/Gast</span>@endif</div>
             @else
                 <div class="dish" style="margin-left: {{ ($g['einrueckung'] ?? 0) * 12 }}px"><span class="pipe">|</span>{{ $g['text'] }}</div>
             @endif

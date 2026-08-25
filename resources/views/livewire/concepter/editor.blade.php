@@ -263,10 +263,29 @@
                     @elseif($linkeListe === 'paket')
                         <p class="{{ $dt }} mb-1">Pakete ({{ $paketListe->count() }})</p>
                         <input type="search" wire:model.live.debounce.300ms="basisSuche" placeholder="Paket suchen (Name) …" class="{{ $input }} !py-0.5 !text-[11px] mb-1" />
-                        <select wire:model.live="paketKlasse" class="{{ $input }} !py-0.5 !text-[11px] mb-1.5" data-paket-filter-klasse>
+                        <select wire:model.live="paketKlasse" class="{{ $input }} !py-0.5 !text-[11px] mb-1" data-paket-filter-klasse>
                             <option value="">Alle Klassen</option>
                             @foreach($paketKlassenListe as $kl)<option value="{{ $kl }}">{{ $kl }}</option>@endforeach
                         </select>
+                        {{-- F7b: Facetten-Filter als Dropdowns (identisch zum Format-Picker) --}}
+                        <div class="grid grid-cols-2 gap-1 mb-1.5">
+                            <select wire:model.live="paketServierform" class="{{ $input }} !py-0.5 !text-[11px]" data-paket-filter-servierform>
+                                <option value="">Servierform</option>
+                                @foreach($servierformen as $sf)<option value="{{ $sf->id }}">{{ $sf->label }}</option>@endforeach
+                            </select>
+                            <select wire:model.live="paketEventtyp" class="{{ $input }} !py-0.5 !text-[11px]" data-paket-filter-eventtyp>
+                                <option value="">Eventtyp</option>
+                                @foreach($eventtypen as $et)<option value="{{ $et->id }}">{{ $et->name }}</option>@endforeach
+                            </select>
+                            <select wire:model.live="paketMoment" class="{{ $input }} !py-0.5 !text-[11px]" data-paket-filter-moment>
+                                <option value="">Moment</option>
+                                @foreach($einsatzmomente as $em)<option value="{{ $em->id }}">{{ $em->name }}</option>@endforeach
+                            </select>
+                            <select wire:model.live="paketSaison" class="{{ $input }} !py-0.5 !text-[11px]" data-paket-filter-saison>
+                                <option value="">Saison</option>
+                                @foreach($saisons as $sa)<option value="{{ $sa->id }}">{{ $sa->name }}</option>@endforeach
+                            </select>
+                        </div>
                         <div class="space-y-px flex-1 min-h-0 overflow-y-auto -mx-1 px-1" data-konzept-paketliste>
                             @forelse($paketListe as $pk)
                                 <div wire:key="kpk-{{ $pk->id }}" draggable="true" @dragstart="dragTyp = 'paket'; dragId = {{ $pk->id }}; $event.dataTransfer.effectAllowed = 'copy'" @dragend="dragTyp = null; dragId = null" class="group flex items-center gap-1 px-1 py-0.5 rounded hover:bg-violet-500/5 text-[11px] cursor-grab active:cursor-grabbing">

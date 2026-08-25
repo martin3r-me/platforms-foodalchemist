@@ -76,8 +76,9 @@ it('manuelles Überschreiben des Slot-Wordings persistiert', function () {
 
 it('gerichtZeilen löst ein eingebettetes Paket in Paketname + seine Gerichte auf (Kaskade embedded_concept_id)', function () {
     $concepts = app(ConceptService::class);
-    // Paket = kind=paket-Concept mit einem Gericht
+    // Paket = kind=paket-Concept mit einem Gericht + manuellem Preis (fürs Karten-Rendering, F7d)
     $paket = $concepts->createPaket($this->rootTeam, ['name' => 'Salatwand']);
+    $concepts->update($this->rootTeam, $paket->id, ['price_mode' => 'manuell', 'price_per_person_manual' => 7.90]);
     $ps = $concepts->addSlot($this->rootTeam, $paket->id, ['role' => 'Vorspeise']);
     $concepts->fillSlot($this->rootTeam, $ps->id, ['sales_recipe_id' => $this->green->id]);
     // ins Concept einbetten
@@ -88,7 +89,8 @@ it('gerichtZeilen löst ein eingebettetes Paket in Paketname + seine Gerichte au
 
     $paketZeile = collect($zeilen)->firstWhere('type', 'paket');
     expect($paketZeile)->not->toBeNull()
-        ->and($paketZeile['text'])->toBe('Salatwand');
+        ->and($paketZeile['text'])->toBe('Salatwand')
+        ->and($paketZeile['preis'])->toBe(7.9);   // F7d: Paket-Preis reist mit der Zeile (Karte/Druck)
     // Das Gericht des Pakets erscheint eingerückt (einrueckung 1) — vorher fehlte es ganz.
     $gericht = collect($zeilen)->first(fn ($z) => $z['type'] === 'gericht' && ($z['einrueckung'] ?? 0) === 1);
     expect($gericht)->not->toBeNull()

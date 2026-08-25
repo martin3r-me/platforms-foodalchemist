@@ -144,7 +144,9 @@
                         </td>
                         <td class="cbody">
                             @forelse($pos['gerichte'] ?? [] as $g)
-                                @if(($g['type'] ?? '') === 'paket' || ($g['type'] ?? '') === 'header')
+                                @if(($g['type'] ?? '') === 'paket')
+                                    <div class="dish paket" style="margin-left: {{ ($g['einrueckung'] ?? 0) * 12 }}px">{{ $g['text'] }}@if(($g['preis'] ?? null) !== null && $g['preis'] > 0)<span class="kpreis">{{ number_format($g['preis'], 2, ',', '.') }} €/Gast</span>@endif</div>
+                                @elseif(($g['type'] ?? '') === 'header')
                                     <div class="dish paket" style="margin-left: {{ ($g['einrueckung'] ?? 0) * 12 }}px">{{ $g['text'] }}</div>
                                 @else
                                     <div class="dish" style="margin-left: {{ ($g['einrueckung'] ?? 0) * 12 }}px"><span class="pipe">|</span>{{ $g['text'] }}</div>

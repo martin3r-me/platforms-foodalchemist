@@ -575,8 +575,16 @@ class ConceptService
             ->where('status', 'active') // Picker zeigt nur aktive Pakete (keine Entwürfe/archivierten; Status berücksichtigt)
             ->when($suche !== '', fn ($q) => \Platform\FoodAlchemist\Support\Suche::likeAny($q, ['name'], $suche))
             ->when(($filters['class'] ?? '') !== '', fn ($q) => $q->where('class', $filters['class']))
+            // F7b: dieselben Facetten-Filter wie der Format-Picker (Servierform/Eventtyp/Moment/Saison) —
+            // Pakete = kind=paket-Concepts, tragen dieselben Dimensionen wie Concepts.
+            ->when(is_numeric($filters['servierform'] ?? null), fn ($q) => $q->where('serving_form_id', (int) $filters['servierform']))
+            ->when(is_numeric($filters['eventtyp'] ?? null), fn ($q) => $q->where('event_type_id', (int) $filters['eventtyp']))
+            ->when(is_numeric($filters['einsatzmoment'] ?? null), fn ($q) => $q
+                ->whereHas('serviceMoments', fn ($w) => $w->where('foodalchemist_service_moments.id', (int) $filters['einsatzmoment'])))
+            ->when(is_numeric($filters['season'] ?? null), fn ($q) => $q
+                ->whereHas('seasons', fn ($w) => $w->where('foodalchemist_seasons.id', (int) $filters['season'])))
             ->orderBy('name')
-            ->get(['id', 'name', 'class', 'price_per_person_cache']);
+            ->get(['id', 'name', 'class', 'serving_form_id', 'event_type_id', 'price_per_person_cache']);
     }
 
     // ── M10-04: Live-Output-Preis (Σ gespeicherte Paket-Preise) ─────────

@@ -193,13 +193,14 @@
                                                 <div class="mt-1 space-y-0.5">
                                                     @forelse($editionMenus[$s->id] ?? [] as $g)
                                                         @if($g['type'] === 'header')
-                                                            <p class="text-xs font-semibold text-gray-100 mt-1.5 first:mt-0">{{ $g['text'] }}</p>
+                                                            <p class="text-xs font-semibold text-gray-100 mt-1.5 first:mt-0" style="margin-left:{{ ($g['einrueckung'] ?? 0) * 14 }}px">{{ $g['text'] }}</p>
                                                         @elseif($g['type'] === 'paket')
-                                                            <p class="text-[11px] font-medium text-violet-200 mt-1" style="margin-left:10px">
-                                                                <span class="{{ $pill }} {{ $variantPill['info'] }} mr-1 normal-case">Paket</span>{{ $g['text'] }}
+                                                            <p class="text-[11px] font-medium text-violet-200 mt-1 flex items-center gap-1" style="margin-left:{{ ($g['einrueckung'] ?? 0) * 14 }}px">
+                                                                <span class="{{ $pill }} {{ $variantPill['info'] }} normal-case">Paket</span>{{ $g['text'] }}
+                                                                @if(($g['preis'] ?? null) !== null)<span class="ml-auto text-gray-400 tabular-nums">{{ number_format((float) $g['preis'], 2, ',', '.') }} €</span>@endif
                                                             </p>
                                                         @else
-                                                            <p class="text-xs text-gray-400/90 leading-snug" style="margin-left:{{ 14 + ($g['einrueckung'] ?? 0) * 12 }}px">· {{ $g['text'] }}</p>
+                                                            <p class="text-xs text-gray-400/90 leading-snug" style="margin-left:{{ 8 + ($g['einrueckung'] ?? 0) * 14 }}px">· {{ $g['text'] }}</p>
                                                         @endif
                                                     @empty
                                                         <p class="text-[11px] text-gray-500 mt-1">Noch keine Gerichte — „Im Concepter ↗" füllen.</p>
@@ -289,43 +290,31 @@
                                 </select>
                             @endif
 
-                            {{-- Facetten-Chips (geteilt je Reiter — Servierform/Eventtyp/Einsatzmoment/Saison) --}}
-                            <div class="space-y-1.5 mb-2" data-formate-picker-facetten>
+                            {{-- Facetten-Filter als Dropdowns (kompakt statt Chip-Wand — Dominique 2026-08-25) --}}
+                            <div class="grid grid-cols-2 gap-1.5 mb-2" data-formate-picker-facetten>
                                 @if($servierformen->isNotEmpty())
-                                    <div class="flex flex-wrap items-center gap-1">
-                                        <span class="{{ $label }} !mb-0 mr-0.5">Form</span>
-                                        @foreach($servierformen as $sf)
-                                            <button type="button" wire:click="pickerFilter('servierform', {{ $sf->id }})"
-                                                class="{{ $pill }} {{ (string) $pickerServierform === (string) $sf->id ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $sf->label }}</button>
-                                        @endforeach
-                                    </div>
+                                    <select wire:model.live="pickerServierform" class="{{ $input }} !text-xs" title="Servierform">
+                                        <option value="">Servierform</option>
+                                        @foreach($servierformen as $sf)<option value="{{ $sf->id }}">{{ $sf->label }}</option>@endforeach
+                                    </select>
                                 @endif
                                 @if($eventtypen->isNotEmpty())
-                                    <div class="flex flex-wrap items-center gap-1">
-                                        <span class="{{ $label }} !mb-0 mr-0.5">Event</span>
-                                        @foreach($eventtypen as $et)
-                                            <button type="button" wire:click="pickerFilter('eventtyp', {{ $et->id }})"
-                                                class="{{ $pill }} {{ (string) $pickerEventtyp === (string) $et->id ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $et->name }}</button>
-                                        @endforeach
-                                    </div>
+                                    <select wire:model.live="pickerEventtyp" class="{{ $input }} !text-xs" title="Eventtyp">
+                                        <option value="">Eventtyp</option>
+                                        @foreach($eventtypen as $et)<option value="{{ $et->id }}">{{ $et->name }}</option>@endforeach
+                                    </select>
                                 @endif
                                 @if($einsatzmomente->isNotEmpty())
-                                    <div class="flex flex-wrap items-center gap-1">
-                                        <span class="{{ $label }} !mb-0 mr-0.5">Moment</span>
-                                        @foreach($einsatzmomente as $em)
-                                            <button type="button" wire:click="pickerFilter('moment', {{ $em->id }})"
-                                                class="{{ $pill }} {{ (string) $pickerMoment === (string) $em->id ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $em->name }}</button>
-                                        @endforeach
-                                    </div>
+                                    <select wire:model.live="pickerMoment" class="{{ $input }} !text-xs" title="Einsatzmoment">
+                                        <option value="">Einsatzmoment</option>
+                                        @foreach($einsatzmomente as $em)<option value="{{ $em->id }}">{{ $em->name }}</option>@endforeach
+                                    </select>
                                 @endif
                                 @if($saisons->isNotEmpty())
-                                    <div class="flex flex-wrap items-center gap-1">
-                                        <span class="{{ $label }} !mb-0 mr-0.5">Saison</span>
-                                        @foreach($saisons as $sa)
-                                            <button type="button" wire:click="pickerFilter('saison', {{ $sa->id }})"
-                                                class="{{ $pill }} {{ (string) $pickerSaison === (string) $sa->id ? $variantPill['primary'] : $variantPill['secondary'] }}">{{ $sa->name }}</button>
-                                        @endforeach
-                                    </div>
+                                    <select wire:model.live="pickerSaison" class="{{ $input }} !text-xs" title="Saison">
+                                        <option value="">Saison</option>
+                                        @foreach($saisons as $sa)<option value="{{ $sa->id }}">{{ $sa->name }}</option>@endforeach
+                                    </select>
                                 @endif
                             </div>
 

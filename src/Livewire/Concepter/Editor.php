@@ -86,6 +86,15 @@ class Editor extends Component
 
     public string $paketKlasse = '';
 
+    // F7b: Facetten-Filter des Paket-Pickers (identisch zum Format-Picker) — Dropdowns.
+    public string $paketServierform = '';
+
+    public string $paketEventtyp = '';
+
+    public string $paketMoment = '';
+
+    public string $paketSaison = '';
+
     // Basisrezepte-Liste: Filter wie im Rezept-Browser (Hauptgruppe→Kategorie + Niveau)
     public ?int $basisHg = null;
 
@@ -142,7 +151,7 @@ class Editor extends Component
     #[On('concepter-editor.oeffnen')]
     public function oeffnen(string $type, ?int $id, ?string $startTab = null): void
     {
-        $this->reset(['form', 'slotForm', 'blockForm', 'auswahl', 'paketName', 'neuerSlotRolle', 'fillSlotId', 'fillOpenId', 'einfuegenNachId', 'linkeListe', 'paketKlasse', 'basisSuche', 'kombiSuche', 'basisHg', 'basisKat', 'basisNiveau', 'gerichtSuche', 'pickTyp',
+        $this->reset(['form', 'slotForm', 'blockForm', 'auswahl', 'paketName', 'neuerSlotRolle', 'fillSlotId', 'fillOpenId', 'einfuegenNachId', 'linkeListe', 'paketKlasse', 'paketServierform', 'paketEventtyp', 'paketMoment', 'paketSaison', 'basisSuche', 'kombiSuche', 'basisHg', 'basisKat', 'basisNiveau', 'gerichtSuche', 'pickTyp',
             'paketGerichtSuche', 'paketQuelle', 'pickHg', 'pickKlasse', 'pickGeschmack', 'pickDiaet', 'zutatenOffenSlotId', 'menueKohaesion', 'slotVorschlaege',
             'zielModus', 'zielPreis', 'zielVorschlag', 'rueckSprungConceptId', 'fehler']);
         $this->type = in_array($type, ['concepts', 'pakete'], true) ? $type : 'concepts';
@@ -1176,6 +1185,8 @@ class Editor extends Component
         $istStammdaten = $this->tab === 'stammdaten';
         $istKonzeptTab = $this->tab === 'konzept';
         $istGeschirrTab = $this->tab === 'geschirr';
+        // F7b: Facetten-Vokabular auch im Aufbau-Tab, wenn der Paket-Picker aktiv ist (Dropdown-Filter).
+        $paketPickerFacetten = $istAufbau && $this->type === 'concepts' && $this->linkeListe === 'paket';
 
         // Gericht-Baum (geteilt von beiden Pickern): aktiv, sobald ein Filter ODER Suchtext gesetzt ist.
         $pickFilter = ['hauptgruppe' => $this->pickHg, 'class' => $this->pickKlasse, 'geschmack' => $this->pickGeschmack, 'diet_form' => $this->pickDiaet];
@@ -1248,7 +1259,13 @@ class Editor extends Component
                         ])
                         : collect();
                     $paketListe = $this->linkeListe === 'paket'
-                        ? $concepts->paketKandidaten($team, $linkeSuche, ['class' => $this->paketKlasse])   // Kaskade: kind=paket-Concepts
+                        ? $concepts->paketKandidaten($team, $linkeSuche, [   // Kaskade: kind=paket-Concepts
+                            'class' => $this->paketKlasse,
+                            'servierform' => $this->paketServierform,
+                            'eventtyp' => $this->paketEventtyp,
+                            'einsatzmoment' => $this->paketMoment,
+                            'season' => $this->paketSaison,
+                        ])
                         : collect();
                     $gerichtListe = $this->linkeListe === 'gericht'
                         ? $pakete->gerichtKandidaten($team, $rechteSuche, $pickFilter)
@@ -1356,13 +1373,13 @@ class Editor extends Component
             // 4c: Kategorie-Feld abgelöst — kategorienFlat nicht mehr benötigt
             // Facetten-Vokabulare (Umbau-Spec Phase 4b)
             // MVP-025: teamgescopt wie die drei Facetten darunter — vorher als Einzelfall ungescopt.
-            'servierformen' => $istStammdaten ? \Platform\FoodAlchemist\Models\FoodAlchemistServierform::visibleToTeam($team)
+            'servierformen' => ($istStammdaten || $paketPickerFacetten) ? \Platform\FoodAlchemist\Models\FoodAlchemistServierform::visibleToTeam($team)
                 ->where('is_inactive', false)->orderBy('sort_order')->get(['id', 'code', 'label']) : collect(),
-            'eventtypen' => $istStammdaten ? \Platform\FoodAlchemist\Models\FoodAlchemistEventtyp::visibleToTeam($team)
+            'eventtypen' => ($istStammdaten || $paketPickerFacetten) ? \Platform\FoodAlchemist\Models\FoodAlchemistEventtyp::visibleToTeam($team)
                 ->where('is_inactive', false)->orderBy('sort_order')->get(['id', 'name']) : collect(),
-            'einsatzmomente' => $istStammdaten ? \Platform\FoodAlchemist\Models\FoodAlchemistEinsatzmoment::visibleToTeam($team)
+            'einsatzmomente' => ($istStammdaten || $paketPickerFacetten) ? \Platform\FoodAlchemist\Models\FoodAlchemistEinsatzmoment::visibleToTeam($team)
                 ->where('is_inactive', false)->orderBy('sort_order')->get(['id', 'name']) : collect(),
-            'saisons' => $istStammdaten ? \Platform\FoodAlchemist\Models\FoodAlchemistSaison::visibleToTeam($team)
+            'saisons' => ($istStammdaten || $paketPickerFacetten) ? \Platform\FoodAlchemist\Models\FoodAlchemistSaison::visibleToTeam($team)
                 ->where('is_inactive', false)->orderBy('sort_order')->get(['id', 'name']) : collect(),
             'klassen' => $istStammdaten ? ($this->type === 'pakete' ? $pakete->klassen($team) : $concepts->klassen($team)) : [],
             'rollen' => $istStammdaten ? $pakete->rollen($team) : [],
