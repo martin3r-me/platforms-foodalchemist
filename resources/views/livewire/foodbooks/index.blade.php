@@ -144,8 +144,9 @@
                       in den Kurier-/Ausgabe-Tabs zeigt sich die Leitstelle-Rail. `fb-cockpit-tab` (Z. 194,
                       im editor-tabs-Scope) bubbelt hierher und trägt den aktiven Tab. --}}
                  x-data="{ ftab: 'briefing' }" @fb-cockpit-tab="ftab = $event.detail.tab">
-                {{-- LINKS: Navigation (Foodbook-Kopf + Kapitelbaum, gespiegelt aus der Seiten-Sidebar) --}}
-                <div class="w-64 shrink-0 pl-6 space-y-1" data-fb-nav>
+                {{-- LINKS: Navigation (Foodbook-Kopf + Kapitelbaum, gespiegelt aus der Seiten-Sidebar).
+                     #4: x-data hält den Kapitel-Drag-Zustand (Ziehgriff ⠿ = umsortieren). --}}
+                <div class="w-64 shrink-0 pl-6 space-y-1" data-fb-nav x-data="{ dragKapId: null }">
                     <button type="button" wire:click="kopfAnzeigen"
                             class="w-full text-left text-xs px-2 py-1 rounded-lg {{ $selectedKapitelId === null ? $aktiv : $hover }}"
                             data-fb-kopf-modal>@svg('heroicon-o-clipboard-document-list', 'w-3.5 h-3.5 inline-block align-middle') Foodbook-Kopf</button>
@@ -155,7 +156,14 @@
                     </div>
 
                     @foreach($kapitelTree as $kt)
-                        <div wire:key="ktm-{{ $kt['id'] }}" class="group flex items-center gap-1" style="padding-left: {{ $kt['depth'] * 12 }}px">
+                        <div wire:key="ktm-{{ $kt['id'] }}"
+                             @dragover.prevent @drop.prevent="if (dragKapId && dragKapId !== {{ $kt['id'] }}) { $wire.kapitelVerschiebenAuf(dragKapId, {{ $kt['id'] }}); } dragKapId = null"
+                             :class="dragKapId === {{ $kt['id'] }} ? 'opacity-40' : (dragKapId ? 'ring-1 ring-violet-300/60 rounded-lg' : '')"
+                             class="group flex items-center gap-1" style="padding-left: {{ $kt['depth'] * 12 }}px">
+                            {{-- #4: Ziehgriff zum Umsortieren (setData ist Pflicht für Safari) --}}
+                            <span class="cursor-grab active:cursor-grabbing text-gray-400 hover:text-violet-500 select-none shrink-0 opacity-0 group-hover:opacity-100" draggable="true"
+                                  @dragstart="dragKapId = {{ $kt['id'] }}; $event.dataTransfer.setData('text/plain', String({{ $kt['id'] }})); $event.dataTransfer.effectAllowed = 'move'"
+                                  @dragend="dragKapId = null" title="ziehen zum Sortieren" data-kapitel-drag>⠿</span>
                             <button type="button" wire:click="kapitelWaehle({{ $kt['id'] }})"
                                     class="flex-1 min-w-0 text-left break-words leading-tight text-xs px-2 py-0.5 rounded-lg {{ $selectedKapitelId === $kt['id'] ? $aktiv : $hover }}">{{ $kt['title'] }}</button>
                             <button type="button" wire:click="kapitelHoch({{ $kt['id'] }})" class="shrink-0 opacity-0 group-hover:opacity-100 text-gray-400 hover:text-violet-400 text-[10px]" title="hoch">▲</button>

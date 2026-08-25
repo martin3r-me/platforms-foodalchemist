@@ -202,3 +202,21 @@ it('#7/#1: Block-Vorschau löst ein eingebettetes Paket auf (Gerichte + Paket-Pr
         ->assertSee('7,90')             // Paket-Preis (#1)
         ->assertSee('Green Power');     // Gericht des Pakets, eingerückt (#7)
 });
+
+it('#4: kapitelVerschiebenAuf sortiert ein Kapitel per Drag vor das Ziel', function () {
+    Livewire::test(FoodbooksIndex::class)->call('neu');
+    $fb = FoodAlchemistFoodbook::first();
+    $comp = Livewire::test(FoodbooksIndex::class)->call('waehle', $fb->id)
+        ->set('neuesKapitelTitel', 'A')->call('kapitelNeu')
+        ->set('neuesKapitelTitel', 'B')->call('kapitelNeu')
+        ->set('neuesKapitelTitel', 'C')->call('kapitelNeu');
+
+    $top = fn () => \Platform\FoodAlchemist\Models\FoodAlchemistFoodbookKapitel::where('foodbook_id', $fb->id)
+        ->whereNull('parent_id')->orderBy('position')->pluck('title')->all();
+    expect($top())->toBe(['A', 'B', 'C']);
+
+    // C auf A ziehen → C landet direkt VOR A
+    $ids = \Platform\FoodAlchemist\Models\FoodAlchemistFoodbookKapitel::where('foodbook_id', $fb->id)->whereNull('parent_id')->orderBy('position')->pluck('id', 'title')->all();
+    $comp->call('kapitelVerschiebenAuf', $ids['C'], $ids['A']);
+    expect($top())->toBe(['C', 'A', 'B']);
+});

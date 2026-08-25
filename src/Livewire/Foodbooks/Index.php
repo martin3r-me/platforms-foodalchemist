@@ -659,6 +659,37 @@ class Index extends Component
         $svc->reorderKapitel($this->team(), $this->selectedId, $neuerParent, $geschwister);
     }
 
+    /**
+     * #4: Kapitel per Drag&Drop umsortieren — das gezogene Kapitel landet unmittelbar VOR dem
+     * Ziel-Kapitel und übernimmt dessen Parent-Ebene (moveKapitel trägt den Zyklus-Schutz:
+     * ein Kapitel auf einen eigenen Nachfahren gezogen wird abgewiesen). Spiegelt die
+     * Block-Drop-Semantik (blockVerschiebenAuf).
+     */
+    public function kapitelVerschiebenAuf(int $dragId, int $zielId, FoodbookService $svc): void
+    {
+        if ($dragId === $zielId || $this->selectedId === null) {
+            return;
+        }
+        $ziel = \Platform\FoodAlchemist\Models\FoodAlchemistFoodbookKapitel::where('foodbook_id', $this->selectedId)->find($zielId);
+        if ($ziel === null) {
+            return;
+        }
+        try {
+            $svc->moveKapitel($this->team(), $dragId, $ziel->parent_id);   // auf die Ziel-Ebene (Zyklus-Schutz im Service)
+        } catch (\RuntimeException) {
+            return;
+        }
+        $geschwister = \Platform\FoodAlchemist\Models\FoodAlchemistFoodbookKapitel::where('foodbook_id', $this->selectedId)
+            ->where('parent_id', $ziel->parent_id)->where('id', '!=', $dragId)->orderBy('position')->pluck('id')->all();
+        $zielPos = array_search($zielId, $geschwister, true);
+        if ($zielPos === false) {
+            $geschwister[] = $dragId;
+        } else {
+            array_splice($geschwister, $zielPos, 0, [$dragId]);   // direkt VOR das Ziel
+        }
+        $svc->reorderKapitel($this->team(), $this->selectedId, $ziel->parent_id, $geschwister);
+    }
+
     // ── Blöcke ────────────────────────────────────────────────────────────
 
     /** Picker-Baustein: Katalog-Modus umschalten (#3: concept|paket|format — kein Gericht mehr). */
