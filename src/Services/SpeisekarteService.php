@@ -1000,11 +1000,32 @@ class SpeisekarteService
      *
      * @return array{text: string, confidence: ?float, call_log_id: ?int}
      */
+    /**
+     * Schreibstil der Karte als Prompt-Kontext (Bug-Fix 2026-08-25): der KI reichte bisher NUR
+     * niveau/kundentyp — der gewählte Schreibstil (sprach_duktus, GL-06) ging nie mit, daher
+     * wirkte das Speisekarte-Schreibstil-Dropdown nicht. Eine Stelle für alle Speisekarte-KI-Calls.
+     *
+     * @return array<string, string>
+     */
+    private function stilKontext(FoodAlchemistSpeisekarte $karte): array
+    {
+        $stil = $karte->writingStyle;
+        if ($stil === null) {
+            return [];
+        }
+
+        return array_filter([
+            'schreibstil' => $stil->name,
+            'schreibstil_anweisung' => trim((string) $stil->sprach_duktus) ?: null,
+            'schreibstil_beispiele' => trim((string) $stil->beispiele_md) ?: null,
+        ], fn ($v) => $v !== null);
+    }
+
     public function kiWordingVorschlag(Team $team, int $positionId): array
     {
         $pos = $this->ownedPosition($team, $positionId);
         $rubrik = $this->ownedRubrik($team, $pos->section_id);
-        $karte = FoodAlchemistSpeisekarte::visibleToTeam($team)->findOrFail($rubrik->menu_card_id);
+        $karte = FoodAlchemistSpeisekarte::visibleToTeam($team)->with('writingStyle')->findOrFail($rubrik->menu_card_id);
 
         $roh = $pos->type === 'gericht_ref'
             ? ($pos->dish?->name ?? $pos->label)
@@ -1023,7 +1044,7 @@ class SpeisekarteService
                     'kundentyp' => $karte->kundentyp,
                 ]),
                 'briefing_ist' => $pos->wording,
-            ],
+            ] + $this->stilKontext($karte),
             [
                 'target_table' => 'foodalchemist_menu_card_items',
                 'target_id' => (int) $pos->id,
@@ -1047,7 +1068,7 @@ class SpeisekarteService
     public function kiKartenText(Team $team, int $karteId): array
     {
         $karte = FoodAlchemistSpeisekarte::visibleToTeam($team)
-            ->with(['sections.items.dish:id,name'])
+            ->with(['sections.items.dish:id,name', 'writingStyle'])
             ->findOrFail($karteId);
         $this->guard($karte, $team);
 
@@ -1067,7 +1088,7 @@ class SpeisekarteService
                     'kundentyp' => $karte->kundentyp,
                 ]),
                 'briefing_ist' => $karte->description,
-            ],
+            ] + $this->stilKontext($karte),
             [
                 'target_table' => 'foodalchemist_menu_cards',
                 'target_id' => (int) $karte->id,
@@ -1080,6 +1101,41 @@ class SpeisekarteService
         }
 
         return ['text' => $text, 'confidence' => $proposal->confidence, 'call_log_id' => $proposal->callLogId];
+    }
+
+    /**
+     * A (2026-08-25): das Wording der GANZEN Speisekarte im gewählten Schreibstil neu erzeugen —
+     * jede Gericht-/Menü-Position bekommt einen Brand-Voice-Namen (kiWordingVorschlag trägt jetzt
+     * den `sprach_duktus` der Karte) und wird direkt in `position.wording` geschrieben.
+     * Ohne gewählten Schreibstil gibt es nichts zu betexten → 0, kein LLM-Call.
+     *
+     * @return int Anzahl neu betexteter Positionen
+     */
+    public function speisekarteWordingRegenerieren(Team $team, int $karteId): int
+    {
+        $karte = FoodAlchemistSpeisekarte::visibleToTeam($team)->with(['sections.items'])->findOrFail($karteId);
+        $this->guard($karte, $team);
+        if ($karte->writing_style_id === null) {
+            return 0;
+        }
+
+        $n = 0;
+        foreach ($karte->sections as $rubrik) {
+            foreach ($rubrik->items as $pos) {
+                if (! in_array($pos->type, ['gericht_ref', 'menue_ref'], true)) {
+                    continue; // header/text/spacer haben kein Gericht-Wording
+                }
+                try {
+                    $r = $this->kiWordingVorschlag($team, (int) $pos->id);
+                } catch (\Throwable) {
+                    continue; // fail-soft: eine Position kippt nicht die ganze Runde
+                }
+                $pos->update(['wording' => $r['text']]);
+                $n++;
+            }
+        }
+
+        return $n;
     }
 
     // ── Guards ───────────────────────────────────────────────────────────────

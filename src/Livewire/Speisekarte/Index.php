@@ -581,6 +581,34 @@ class Index extends Component
         }
     }
 
+    /**
+     * A (2026-08-25): das Wording der GANZEN Speisekarte im gewählten Schreibstil neu erzeugen.
+     * Speichert zuerst den Stil (+ Kontext-Leitplanken), betextet dann alle Positionen. LLM-Kosten
+     * → nur auf Knopfdruck. Kein Stil gewählt = Hinweis, kein Call.
+     */
+    public function speisekarteWordingGenerieren(SpeisekarteService $svc): void
+    {
+        if (! $this->karteId) {
+            return;
+        }
+        $this->resetErrorBag('speisekarteWording');
+        $this->speichern($svc);   // Stil-Override + Leitplanken persistieren
+        if (! $this->writingStyleId) {
+            $this->addError('speisekarteWording', 'Kein Schreibstil gewählt — nichts zu betexten (Wording bleibt Standard-Kette).');
+
+            return;
+        }
+        try {
+            $n = $svc->speisekarteWordingRegenerieren($this->team(), $this->karteId);
+        } catch (\Throwable $e) {
+            $this->addError('speisekarteWording', $e->getMessage());
+
+            return;
+        }
+        $this->dispatch('gespeichert');
+        $this->dispatch('toast', text: $n > 0 ? "{$n} Position(en) im Schreibstil neu betextet." : 'Keine Gericht-/Menü-Positionen zum Betexten.');
+    }
+
     /** KI-Einleitungstext für die Karte → Vorschau (Übernehmen speichert in description). */
     public function kiKartenText(SpeisekarteService $svc): void
     {

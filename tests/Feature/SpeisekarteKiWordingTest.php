@@ -98,3 +98,40 @@ it('Stufe E: KI-Kartentext nutzt die Gericht-Namen im Kontext', function () {
         ->and($karte->refresh()->description)->toBeNull();
     expect($GLOBALS['sk_ki_prompt'] ?? '')->toContain('Rinderfilet');
 });
+
+it('A/Bug-Fix: der Schreibstil-Sprach-Duktus der Karte landet im KI-Prompt', function () {
+    bindSpeisekarteKiStub('Zartes Rinderfilet.');
+    $stil = \Platform\FoodAlchemist\Models\FoodAlchemistWritingStyle::create([
+        'team_id' => $this->rootTeam->id, 'slug' => 'sk-duktus', 'name' => 'Edel',
+        'sprach_duktus' => 'SK-DUKTUS-MARKER: gehoben, französische Loanwords.',
+    ]);
+    $karte = $this->karten->create($this->rootTeam, ['name' => 'K']);
+    $this->karten->update($this->rootTeam, $karte->id, ['writing_style_id' => $stil->id]);
+    $rubrik = $this->karten->addRubrik($this->rootTeam, $karte->id, ['title' => 'Hauptgänge']);
+    $pos = $this->karten->addPosition($this->rootTeam, $rubrik->id, ['type' => 'gericht_ref', 'sales_recipe_id' => $this->gericht->id]);
+
+    $this->karten->kiWordingVorschlag($this->rootTeam, $pos->id);
+    expect($GLOBALS['sk_ki_prompt'] ?? '')->toContain('SK-DUKTUS-MARKER');   // war der Bug: Stil ging nie mit
+});
+
+it('A: speisekarteWordingRegenerieren betextet alle Positionen im Stil + schreibt sie', function () {
+    bindSpeisekarteKiStub('Edles Rinderfilet, sous-vide.');
+    $stil = \Platform\FoodAlchemist\Models\FoodAlchemistWritingStyle::create([
+        'team_id' => $this->rootTeam->id, 'slug' => 'sk-duktus2', 'name' => 'Edel',
+        'sprach_duktus' => 'gehoben.',
+    ]);
+    $karte = $this->karten->create($this->rootTeam, ['name' => 'K']);
+    $this->karten->update($this->rootTeam, $karte->id, ['writing_style_id' => $stil->id]);
+    $rubrik = $this->karten->addRubrik($this->rootTeam, $karte->id, ['title' => 'Hauptgänge']);
+    $pos = $this->karten->addPosition($this->rootTeam, $rubrik->id, ['type' => 'gericht_ref', 'sales_recipe_id' => $this->gericht->id]);
+
+    $n = $this->karten->speisekarteWordingRegenerieren($this->rootTeam, $karte->id);
+    expect($n)->toBe(1)
+        ->and($pos->refresh()->wording)->toBe('Edles Rinderfilet, sous-vide.');   // Bulk schreibt (anders als kiWordingVorschlag)
+
+    // Ohne Stil: nichts betextet, kein Call.
+    $karteOhne = $this->karten->create($this->rootTeam, ['name' => 'Ohne']);
+    $r2 = $this->karten->addRubrik($this->rootTeam, $karteOhne->id);
+    $this->karten->addPosition($this->rootTeam, $r2->id, ['type' => 'gericht_ref', 'sales_recipe_id' => $this->gericht->id]);
+    expect($this->karten->speisekarteWordingRegenerieren($this->rootTeam, $karteOhne->id))->toBe(0);
+});

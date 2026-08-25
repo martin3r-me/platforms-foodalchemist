@@ -124,12 +124,23 @@
                     </div>
                     <div>
                         <div class="{{ $label }} mb-1">Schreibstil</div>
-                        <select wire:model="writingStyleId" class="{{ $input }}">
-                            <option value="">— keiner —</option>
-                            @foreach($schreibstile as $st)
-                                <option value="{{ $st->id }}">{{ $st->name }}</option>
-                            @endforeach
-                        </select>
+                        <div class="flex items-center gap-1.5">
+                            <select wire:model="writingStyleId" class="{{ $input }} flex-1">
+                                <option value="">— keiner —</option>
+                                @foreach($schreibstile as $st)
+                                    <option value="{{ $st->id }}">{{ $st->name }}</option>
+                                @endforeach
+                            </select>
+                            {{-- A: betextet die GANZE Speisekarte im gewählten Stil neu (foodbook-lokal, nur auf Knopfdruck wegen LLM-Kosten). --}}
+                            <button type="button" wire:click="speisekarteWordingGenerieren" wire:loading.attr="disabled" wire:target="speisekarteWordingGenerieren"
+                                    @disabled(! $writingStyleId)
+                                    title="Alle Positionen der Speisekarte im gewählten Schreibstil neu betexten" data-sk-wording
+                                    class="{{ $btnAi }} shrink-0">
+                                <span wire:loading.remove wire:target="speisekarteWordingGenerieren">@svg('heroicon-o-sparkles', 'w-3.5 h-3.5') Wording</span>
+                                <span wire:loading wire:target="speisekarteWordingGenerieren">betextet …</span>
+                            </button>
+                        </div>
+                        @error('speisekarteWording')<p class="text-[11px] text-rose-500 mt-1" data-sk-wording-fehler>{{ $message }}</p>@enderror
                     </div>
                     <div>
                         <div class="{{ $label }} mb-1">Niveau</div>
