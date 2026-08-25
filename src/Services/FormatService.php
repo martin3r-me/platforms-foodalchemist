@@ -284,6 +284,30 @@ class FormatService
         $slot->delete();
     }
 
+    /**
+     * Format C1: Per-Gericht-Override eines Concept-Slots im Format — format-LOKAL
+     * (payload_json['wording_overrides'][concept-slot-id]), spiegelt
+     * FoodbookService::setBlockSlotWording. Leer = zurück auf die Wording-Kette (Konzept →
+     * Standard → Name). Das referenzierte Concept bleibt unangetastet.
+     */
+    public function setSlotWording(Team $team, int $formatSlotId, int $conceptSlotId, ?string $text): FoodAlchemistFormatSlot
+    {
+        $slot = FoodAlchemistFormatSlot::with('format')->findOrFail($formatSlotId);
+        $this->guardOwner($slot->format, $team);
+        $payload = $slot->payload_json ?? [];
+        $overrides = $payload['wording_overrides'] ?? [];
+        $text = trim((string) $text);
+        if ($text === '') {
+            unset($overrides[(string) $conceptSlotId], $overrides[$conceptSlotId]);
+        } else {
+            $overrides[(string) $conceptSlotId] = $text;
+        }
+        $payload['wording_overrides'] = $overrides;
+        $slot->update(['payload_json' => $payload]);
+
+        return $slot->refresh();
+    }
+
     /** @param list<int> $orderedIds neue Reihenfolge der Slots (nur zu diesem Format). */
     public function slotsNeuOrdnen(Team $team, int $formatId, array $orderedIds): void
     {
@@ -461,7 +485,8 @@ class FormatService
                     'claim' => $concept->claim,
                     'text' => trim((string) $concept->description) ?: null,
                     'preis_pp' => $concept->price_per_person_cache !== null ? (float) $concept->price_per_person_cache : null,
-                    'gerichte' => $wording->gerichtZeilen($concept),
+                    // Format C1: den Format-Slot als Override-Kontext → format-lokale Wordings auch im Druck.
+                    'gerichte' => $wording->gerichtZeilen($concept, $slot),
                 ];
             } elseif ($slot->type === 'header') {
                 $text = trim((string) $slot->title);

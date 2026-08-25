@@ -200,7 +200,25 @@
                                                                 @if(($g['preis'] ?? null) !== null)<span class="ml-auto text-gray-400 tabular-nums">{{ number_format((float) $g['preis'], 2, ',', '.') }} €</span>@endif
                                                             </p>
                                                         @else
-                                                            <p class="text-xs text-gray-400/90 leading-snug" style="margin-left:{{ 8 + ($g['einrueckung'] ?? 0) * 14 }}px">· {{ $g['text'] }}</p>
+                                                            {{-- Format C1: direkte Gericht-Zeile (slot_id) inline editierbar → format-lokaler Override. --}}
+                                                            @php($slotKey = isset($g['slot_id']) ? $s->id . ':' . $g['slot_id'] : null)
+                                                            @if($slotKey !== null && $editSlotKey === $slotKey)
+                                                                <div class="flex items-center gap-1" style="margin-left:{{ 8 + ($g['einrueckung'] ?? 0) * 14 }}px">
+                                                                    <input type="text" wire:model="editSlotWording" wire:keydown.enter="slotWordingSpeichern" wire:keydown.escape="slotWordingAbbrechen"
+                                                                           class="flex-1 bg-white/10 border border-white/20 rounded px-1.5 py-0.5 text-[11px] text-gray-100 placeholder-gray-500" placeholder="Anzeigename — leer = Wording-Kette" data-fmt-slot-input />
+                                                                    <button type="button" wire:click="slotWordingSpeichern" class="{{ $pill }} {{ $variantPill['primary'] }} shrink-0">OK</button>
+                                                                    <button type="button" wire:click="slotWordingAbbrechen" class="text-gray-500 hover:text-gray-300 shrink-0 text-xs px-1">×</button>
+                                                                </div>
+                                                            @else
+                                                                <p class="group/dish text-xs text-gray-400/90 leading-snug flex items-center gap-1" style="margin-left:{{ 8 + ($g['einrueckung'] ?? 0) * 14 }}px">
+                                                                    <span>· {{ $g['text'] }}</span>
+                                                                    @if(($g['source'] ?? null) === 'name')<span class="text-[9px] text-amber-400 shrink-0">Wording fehlt</span>@endif
+                                                                    @if(isset($g['slot_id']))
+                                                                        <button type="button" wire:click="slotWordingBearbeiten({{ $s->id }}, {{ $g['slot_id'] }}, @js(($g['source'] ?? null) === 'name' ? '' : $g['text']))"
+                                                                                class="shrink-0 text-gray-600 hover:text-violet-300 opacity-0 group-hover/dish:opacity-100 transition-opacity" title="Anzeigename bearbeiten" data-fmt-slot-edit>@svg('heroicon-o-pencil', 'w-3 h-3 inline-block align-middle')</button>
+                                                                    @endif
+                                                                </p>
+                                                            @endif
                                                         @endif
                                                     @empty
                                                         <p class="text-[11px] text-gray-500 mt-1">Noch keine Gerichte — „Im Concepter ↗" füllen.</p>

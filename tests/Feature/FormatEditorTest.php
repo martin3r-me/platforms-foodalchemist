@@ -67,3 +67,30 @@ it('Editor: Konzept einfügen · Struktur-Block · Reihenfolge · entfernen (Auf
     expect($f->slots()->count())->toBe(1)
         ->and(FoodAlchemistConcept::find($c->id))->not->toBeNull();
 });
+
+it('Format C1: eine Gericht-Zeile format-lokal überschreiben (Concept unangetastet)', function () {
+    $this->actingAs($this->makeUser($this->rootTeam));
+    $dish = $this->makeRecipe($this->rootTeam, 'Rinderfilet', ['is_sales_recipe' => true, 'sales_net' => 30.0]);
+    $concept = $this->makeConcept($this->rootTeam, 'Menü', ['kind' => 'concept', 'status' => 'active']);
+    $cslot = $this->makeConceptSlot($concept, ['sales_recipe_id' => $dish->id]);
+    $f = $this->fsvc->create($this->rootTeam, ['name' => 'CHEFS.CORNER']);
+    $fslot = $this->fsvc->slotConceptEinfuegen($this->rootTeam, $f->id, $concept->id);
+
+    Livewire::test(Editor::class)->call('oeffnen', $f->id)->call('setTab', 'editionen')
+        ->call('slotWordingBearbeiten', $fslot->id, $cslot->id, '')
+        ->set('editSlotWording', 'Rinderfilet Rossini (Format)')
+        ->call('slotWordingSpeichern')
+        ->assertDispatched('formate-gespeichert');
+
+    // Format-lokaler Override am format_slot; der Concept-Slot bleibt unangetastet (Format-Override
+    // leakt NICHT ins Concept).
+    $vorher = $cslot->wording;
+    $payload = $fslot->fresh()->payload_json ?? [];
+    expect($payload['wording_overrides'][(string) $cslot->id] ?? null)->toBe('Rinderfilet Rossini (Format)')
+        ->and($cslot->fresh()->wording)->toBe($vorher)
+        ->and($cslot->fresh()->wording)->not->toBe('Rinderfilet Rossini (Format)');
+
+    // WordingResolver wendet den Override mit dem Format-Slot als Kontext an (Vorschau + Druck).
+    $zeilen = app(\Platform\FoodAlchemist\Services\WordingResolver::class)->gerichtZeilen($concept->fresh(), $fslot->fresh());
+    expect(collect($zeilen)->firstWhere('type', 'gericht')['text'])->toBe('Rinderfilet Rossini (Format)');
+});

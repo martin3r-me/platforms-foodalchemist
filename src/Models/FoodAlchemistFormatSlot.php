@@ -26,6 +26,7 @@ class FoodAlchemistFormatSlot extends Model
     protected $casts = [
         'uuid' => 'string',
         'position' => 'integer',
+        'payload_json' => 'array',   // Format C1: ['wording_overrides' => [concept-slot-id => Text]]
     ];
 
     /** Struktur-Block-Typen (analog ConceptService::STRUKTUR_TYPEN, ohne header_preis). */

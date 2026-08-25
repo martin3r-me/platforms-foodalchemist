@@ -5,6 +5,7 @@ namespace Platform\FoodAlchemist\Services;
 use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
 use Platform\FoodAlchemist\Models\FoodAlchemistConceptSlot;
 use Platform\FoodAlchemist\Models\FoodAlchemistFoodbookBlock;
+use Platform\FoodAlchemist\Models\FoodAlchemistFormatSlot;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 
 /**
@@ -64,7 +65,7 @@ class WordingResolver
      *
      * @return array{text: string, source: string}
      */
-    public function fuerBlockSlot(FoodAlchemistFoodbookBlock $block, FoodAlchemistConceptSlot $slot): array
+    public function fuerBlockSlot(FoodAlchemistFoodbookBlock|FoodAlchemistFormatSlot $block, FoodAlchemistConceptSlot $slot): array
     {
         $override = trim((string) (($block->payload_json['wording_overrides'] ?? [])[(string) $slot->id]
             ?? ($block->payload_json['wording_overrides'] ?? [])[$slot->id] ?? ''));
@@ -108,7 +109,7 @@ class WordingResolver
      *
      * @return list<array{typ: string, text: string, source: ?string, einrueckung: int}>
      */
-    public function gerichtZeilen(FoodAlchemistConcept $concept, ?FoodAlchemistFoodbookBlock $block = null): array
+    public function gerichtZeilen(FoodAlchemistConcept $concept, FoodAlchemistFoodbookBlock|FoodAlchemistFormatSlot|null $block = null): array
     {
         $zeilen = [];
         foreach ($concept->slots->sortBy('position') as $slot) {

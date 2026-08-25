@@ -319,6 +319,48 @@ class Editor extends Component
         $this->dispatch('formate-gespeichert');
     }
 
+    /** Format C1: inline-editierte Gericht-Zeile in der editionMenus-Vorschau — "formatSlotId:conceptSlotId". */
+    public ?string $editSlotKey = null;
+
+    public string $editSlotWording = '';
+
+    /** Format C1: eine Gericht-Zeile der Vorschau inline bearbeiten (format-lokaler Anzeigename). */
+    public function slotWordingBearbeiten(int $formatSlotId, int $conceptSlotId, ?string $aktuell = null): void
+    {
+        $this->editSlotKey = $formatSlotId . ':' . $conceptSlotId;
+        $this->editSlotWording = (string) $aktuell;
+    }
+
+    /**
+     * Format C1: den inline bearbeiteten Anzeigenamen format-LOKAL speichern
+     * (format_slot.payload_json['wording_overrides'][concept-slot-id]). Leer = zurück auf die
+     * Wording-Kette; das referenzierte Concept bleibt unangetastet.
+     */
+    public function slotWordingSpeichern(FormatService $formats): void
+    {
+        if ($this->editSlotKey === null || ! str_contains($this->editSlotKey, ':')) {
+            return;
+        }
+        [$formatSlotId, $conceptSlotId] = array_map('intval', explode(':', $this->editSlotKey, 2));
+        try {
+            $formats->setSlotWording($this->team(), $formatSlotId, $conceptSlotId, $this->editSlotWording);
+        } catch (\Throwable $e) {
+            $this->fehler = $e->getMessage();
+
+            return;
+        }
+        $this->editSlotKey = null;
+        $this->editSlotWording = '';
+        $this->fehler = null;
+        $this->dispatch('formate-gespeichert');
+    }
+
+    public function slotWordingAbbrechen(): void
+    {
+        $this->editSlotKey = null;
+        $this->editSlotWording = '';
+    }
+
     /**
      * Eine NEUE Edition (Concept, aktiv) anlegen, ihr Standard-Sektions-Gerüst seeden und als
      * Aufbau-Position (Referenz) einfügen. Ersetzt den alten createEdition/attachEdition-Pfad
@@ -464,7 +506,9 @@ class Editor extends Component
                     ->get()->keyBy('id');
                 foreach ($conceptSlots as $slot) {
                     $c = $geladen->get($slot->concept_id);
-                    $editionMenus[$slot->id] = $c !== null ? $wording->gerichtZeilen($c) : [];
+                    // Format C1: den Format-Slot als Override-Kontext durchreichen → format-lokale
+                    // Wording-Overrides (payload_json) greifen in der Vorschau + im Druck.
+                    $editionMenus[$slot->id] = $c !== null ? $wording->gerichtZeilen($c, $slot) : [];
                 }
             }
         }
