@@ -384,7 +384,14 @@ class Editor extends Component
             if ($conceptIds !== []) {
                 $wording = app(WordingResolver::class);
                 $geladen = FoodAlchemistConcept::whereIn('id', $conceptIds)
-                    ->with(['slots.dish:id,name,sales_wording_standard', 'slots.package.dishes.dish:id,name,sales_wording_standard'])
+                    ->with([
+                        'slots.dish:id,name,sales_wording_standard',
+                        'slots.package.dishes.dish:id,name,sales_wording_standard',
+                        // eingebettetes Paket (kind=paket-Concept) + dessen Gerichte für die rekursive Vorschau
+                        'slots.embeddedConcept:id,name,consumer_name',
+                        'slots.embeddedConcept.slots.dish:id,name,sales_wording_standard',
+                        'slots.embeddedConcept.slots.package.dishes.dish:id,name,sales_wording_standard',
+                    ])
                     ->get()->keyBy('id');
                 foreach ($conceptSlots as $slot) {
                     $c = $geladen->get($slot->concept_id);

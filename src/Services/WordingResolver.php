@@ -112,6 +112,18 @@ class WordingResolver
     {
         $zeilen = [];
         foreach ($concept->slots->sortBy('position') as $slot) {
+            // Kaskade 2026-08-24: eingebettetes Paket = kind=paket-Concept (embedded_concept_id).
+            // Paketname (consumer_name bevorzugt) + seine Gerichte rekursiv, eingerückt.
+            if ($slot->embedded_concept_id !== null && $slot->embeddedConcept !== null) {
+                $paket = $slot->embeddedConcept;
+                $zeilen[] = ['type' => 'paket', 'text' => (string) ($paket->consumer_name ?: $paket->name), 'source' => null, 'einrueckung' => 0];
+                foreach ($this->gerichtZeilen($paket) as $z) {
+                    $zeilen[] = ['type' => $z['type'], 'text' => $z['text'], 'source' => $z['source'] ?? null,
+                        'einrueckung' => ($z['einrueckung'] ?? 0) + 1] + array_intersect_key($z, ['recipe_id' => true, 'slot_id' => true]);
+                }
+
+                continue;
+            }
             if ($slot->package_id !== null && $slot->package !== null) {
                 $zeilen[] = ['type' => 'paket', 'text' => (string) $slot->package->name, 'source' => null, 'einrueckung' => 0];
                 foreach ($slot->package->dishes as $pg) {

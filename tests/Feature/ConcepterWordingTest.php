@@ -73,3 +73,24 @@ it('manuelles Überschreiben des Slot-Wordings persistiert', function () {
     $comp->set("slotForm.{$slot->id}.wording", '')->call('wordingSpeichern', $slot->id);
     expect($slot->fresh()->wording)->toBeNull();
 });
+
+it('gerichtZeilen löst ein eingebettetes Paket in Paketname + seine Gerichte auf (Kaskade embedded_concept_id)', function () {
+    $concepts = app(ConceptService::class);
+    // Paket = kind=paket-Concept mit einem Gericht
+    $paket = $concepts->createPaket($this->rootTeam, ['name' => 'Salatwand']);
+    $ps = $concepts->addSlot($this->rootTeam, $paket->id, ['role' => 'Vorspeise']);
+    $concepts->fillSlot($this->rootTeam, $ps->id, ['sales_recipe_id' => $this->green->id]);
+    // ins Concept einbetten
+    $slot = $concepts->addSlot($this->rootTeam, $this->concept->id, ['role' => 'Vorspeise']);
+    $concepts->fillSlot($this->rootTeam, $slot->id, ['embedded_concept_id' => $paket->id]);
+
+    $zeilen = app(\Platform\FoodAlchemist\Services\WordingResolver::class)->gerichtZeilen($this->concept->fresh());
+
+    $paketZeile = collect($zeilen)->firstWhere('type', 'paket');
+    expect($paketZeile)->not->toBeNull()
+        ->and($paketZeile['text'])->toBe('Salatwand');
+    // Das Gericht des Pakets erscheint eingerückt (einrueckung 1) — vorher fehlte es ganz.
+    $gericht = collect($zeilen)->first(fn ($z) => $z['type'] === 'gericht' && ($z['einrueckung'] ?? 0) === 1);
+    expect($gericht)->not->toBeNull()
+        ->and($gericht['text'])->toContain('Green Power');
+});

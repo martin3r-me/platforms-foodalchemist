@@ -1659,6 +1659,10 @@ class FoodbookService
             // Wording-Kette: Slots (inkl. Paket-Gerichte) fürs Auflösen der Gericht-Zeilen
             'chapters.blocks.concept.slots.dish:id,name,sales_wording_standard',
             'chapters.blocks.concept.slots.package.dishes.dish:id,name,sales_wording_standard',
+            // eingebettetes Paket (kind=paket-Concept) + dessen Gerichte für die Menü-Auflösung
+            'chapters.blocks.concept.slots.embeddedConcept:id,name,consumer_name',
+            'chapters.blocks.concept.slots.embeddedConcept.slots.dish:id,name,sales_wording_standard',
+            'chapters.blocks.concept.slots.embeddedConcept.slots.package.dishes.dish:id,name,sales_wording_standard',
             // E8.3: recipe_ref braucht sales_net/ek_total_eur für die €/Position-Preisspalte (blockPreis) — sonst rendert der Preis leer.
             'chapters.blocks.dish:id,name,sales_wording_standard,sales_net,ek_total_eur',
             'crmCompany', 'crmContact',
