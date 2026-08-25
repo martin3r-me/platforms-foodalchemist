@@ -610,6 +610,10 @@
                                     @if($block->variant_group_id)<button type="button" wire:click="wahlGruppeAufheben({{ $block->id }})" class="{{ $pill }} {{ $variantPill['warning'] }} shrink-0" title="aus Wahl-Gruppe">Wahl #{{ $block->variant_group_id }}</button>@endif
                                     <button type="button" wire:click="blockEbene({{ $block->id }}, -1)" class="text-gray-500 hover:text-violet-500 shrink-0" title="ausrücken">←</button>
                                     <button type="button" wire:click="blockEbene({{ $block->id }}, 1)" class="text-gray-500 hover:text-violet-500 shrink-0" title="einrücken">→</button>
+                                    {{-- #6: Deep-Jump ins Concept/Paket — öffnet es direkt im Concepter-Editor (neuer Tab), um dort gezielt daran zu arbeiten. --}}
+                                    @if($block->type === 'concept_ref' && $block->concept_id)
+                                        <a href="{{ route('foodalchemist.concepter.index', ['edit' => $block->concept_id]) }}" target="_blank" class="shrink-0 text-gray-500 hover:text-violet-500" title="im Concepter öffnen ↗" data-fb-block-concepter>@svg('heroicon-o-arrow-top-right-on-square', 'w-3.5 h-3.5 inline-block align-middle')</a>
+                                    @endif
                                     <button type="button" wire:click="blockSichtbar({{ $block->id }})" class="shrink-0 text-[10px] {{ $block->visible ? 'text-gray-500' : 'text-amber-500' }}" title="sichtbar/intern">@if($block->visible)@svg('heroicon-o-eye', 'w-3.5 h-3.5 inline-block align-middle')@else intern @endif</button>
                                     @if($block->type !== 'spacer')
                                         <button type="button" wire:click="blockBearbeiten({{ $block->id }})" class="shrink-0 text-gray-500 hover:text-violet-500" title="bearbeiten / Notiz">@svg('heroicon-o-pencil', 'w-3.5 h-3.5 inline-block align-middle')</button>
