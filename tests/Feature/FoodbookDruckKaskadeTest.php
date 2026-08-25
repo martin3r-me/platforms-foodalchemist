@@ -52,6 +52,30 @@ it('#3: mitKaskade hängt den Produktions-Baum je Gericht an; EK nur intern', fu
     expect($ohne['kaskaden'])->toBe([]);
 });
 
+it('#5b: §-Codes PRO GERICHT + Legende (nur real vorkommende Allergene/Zusatzstoffe)', function () {
+    // Gericht mit Gluten (enthalten) + Milch (Spuren) — der Rest bleibt nicht_enthalten (makeRecipe-Default).
+    $gericht = $this->makeRecipe($this->rootTeam, 'Pasta Allergen', [
+        'is_sales_recipe' => true, 'allergen_gluten' => 'enthalten', 'allergen_milk' => 'spuren',
+    ]);
+    $fb = ($this->makeFb)();
+    $kap = $fb->kapitel()->create(['team_id' => $this->rootTeam->id, 'title' => 'Kap', 'position' => 0]);
+    $kap->blocks()->create(['team_id' => $this->rootTeam->id, 'type' => 'recipe_ref',
+        'sales_recipe_id' => $gericht->id, 'quantity' => 1, 'position' => 0, 'visible' => true]);
+
+    $data = $this->svc->dokumentDaten($this->rootTeam, $fb->fresh());
+    // Codes hängen am recipe_ref-Block (Einzelgericht = eigenes Gericht), nicht auf Konzept-Ebene.
+    $block = collect($data['kapitel'])->firstWhere('title', 'Kap')['bloecke'][0];
+    expect($block['codes'])->not->toBeEmpty()
+        ->and(collect($block['codes'])->contains(fn ($c) => str_contains($c, '*')))->toBeTrue();  // Milch = Spuren → *
+    // Legende führt genau die vorkommenden Allergene (Gluten + Milch), keine der nicht_enthaltenen.
+    $algLabels = collect($data['legende']['allergene'])->pluck('label')->all();
+    expect(count($algLabels))->toBe(2);
+
+    // HTML: Codes am Gericht + Legende-Block „Allergene" ganz unten.
+    $html = view('foodalchemist::dokumente.foodbook', $data + ['istPdf' => false])->render();
+    expect($html)->toContain('Pasta Allergen')->toContain('class="legende"')->toContain('Allergene');
+});
+
 it('#3: kapitelFilter beschränkt die gerenderten Kapitel', function () {
     $fb = ($this->makeFb)();
     $k1 = $fb->kapitel()->create(['team_id' => $this->rootTeam->id, 'title' => 'Vorspeisen', 'position' => 0]);

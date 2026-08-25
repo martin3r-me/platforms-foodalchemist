@@ -5,6 +5,7 @@ namespace Platform\FoodAlchemist\Services;
 use Illuminate\Support\Collection;
 use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
 use Platform\FoodAlchemist\Models\FoodAlchemistPaket;
+use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 
 /**
  * M10R-1 / Doc 15 §10.5 + §10.8: Voll-Aggregation Gericht → Paket → Concept.
@@ -465,6 +466,86 @@ class ConcepterAggregateService
             'allergene' => $allergene,
             'zusatzstoffe' => $zusatzstoffe,
         ];
+    }
+
+    // ── §-Kennzeichnung: Code-Katalog + PER-GERICHT-Codes + Legende ──────────────
+    // Eine Stelle für Speisekarte + Foodbook (kein Code-Drift). Codes sind GERICHT-bezogen
+    // (Dominique 2026-08-25: „pro Gericht, nicht pro Konzept"), Legende = nur real Vorkommendes.
+
+    /**
+     * §-Kennzeichnungs-Code-Katalog (LMIV/ZZulV): Allergene = Buchstaben in EU-Reihenfolge,
+     * Zusatzstoffe = Nummern.
+     *
+     * @return array{allergene: array<string,array{code:string,label:string}>, zusatzstoffe: array<string,array{code:string,label:string}>}
+     */
+    public function kennzeichnungKatalog(): array
+    {
+        $alg = [];
+        $i = 0;
+        foreach (\Platform\FoodAlchemist\Models\FoodAlchemistItemAllergen::ALLERGENE as $slug => $label) {
+            $alg[$slug] = ['code' => chr(65 + $i), 'label' => $label];
+            $i++;
+        }
+        $zus = [];
+        $j = 1;
+        foreach (\Platform\FoodAlchemist\Models\FoodAlchemistItemDeclaration::STOFFE as $slug => $label) {
+            $zus[$slug] = ['code' => (string) $j, 'label' => $label];
+            $j++;
+        }
+
+        return ['allergene' => $alg, 'zusatzstoffe' => $zus];
+    }
+
+    /**
+     * §-Codes GENAU EINES Gerichts (nicht aggregiert): Allergen-Buchstaben (+* bei Spuren) +
+     * Zusatzstoff-Nummern aus der Gericht-Deklaration. Sammelt die real vorkommenden Slugs in
+     * $usedAlg/$usedZus (by-ref) für die Legende.
+     *
+     * @return list<string>
+     */
+    public function gerichtCodes(FoodAlchemistRecipe $gericht, array &$usedAlg, array &$usedZus, ?array $katalog = null): array
+    {
+        $katalog ??= $this->kennzeichnungKatalog();
+        $k = $this->kennzeichnungFromGerichte(collect([$gericht]));
+        $codes = [];
+        foreach ($k['allergene'] as $a) {
+            if (in_array($a['status'], ['enthalten', 'spuren'], true)) {
+                $usedAlg[$a['slug']] = true;
+                $codes[] = $katalog['allergene'][$a['slug']]['code'] . ($a['status'] === 'spuren' ? '*' : '');
+            }
+        }
+        foreach ($k['zusatzstoffe'] as $z) {
+            if ($z['status'] === 'ja') {
+                $usedZus[$z['slug']] = true;
+                $codes[] = $katalog['zusatzstoffe'][$z['slug']]['code'];
+            }
+        }
+
+        return $codes;
+    }
+
+    /**
+     * Legende (nur real vorkommende Codes) aus den by-ref gesammelten Slugs.
+     *
+     * @return array{allergene: list<array{code:string,label:string}>, zusatzstoffe: list<array{code:string,label:string}>}
+     */
+    public function kennzeichnungLegende(array $usedAlg, array $usedZus, ?array $katalog = null): array
+    {
+        $katalog ??= $this->kennzeichnungKatalog();
+        $alg = [];
+        foreach ($katalog['allergene'] as $slug => $cl) {
+            if (! empty($usedAlg[$slug])) {
+                $alg[] = $cl;
+            }
+        }
+        $zus = [];
+        foreach ($katalog['zusatzstoffe'] as $slug => $cl) {
+            if (! empty($usedZus[$slug])) {
+                $zus[] = $cl;
+            }
+        }
+
+        return ['allergene' => $alg, 'zusatzstoffe' => $zus];
     }
 
     // ── Cache-Persistenz ─────────────────────────────────────────────────────

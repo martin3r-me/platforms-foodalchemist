@@ -75,6 +75,13 @@
         .kapitel .kpreis { float: right; color: #6b7280; font-size: 11px; font-weight: normal; }
         .kapitel .kpreis .ek { color: #9333ea; }
         .kapitel .kpreis .wpz { color: #059669; }
+        /* #5b: §-Codes je Gericht (hochgestellt) + Kennzeichnungs-Legende ganz unten (Vorbild Speisekarte). */
+        .dish .codes { color: #9ca3af; font-size: 9px; vertical-align: super; margin-left: 2px; }
+        .legende { margin-top: 20px; border-top: 1px solid #e5e7eb; padding-top: 10px; }
+        .legende h4 { font-size: 11px; font-weight: bold; letter-spacing: .06em; text-transform: uppercase; color: #374151; margin: 0 0 6px; }
+        .legende .grp { color: #4b5563; font-size: 10px; line-height: 1.7; }
+        .legende .code { color: {{ $brand }}; font-weight: bold; }
+        .legende .disclaimer { color: #9ca3af; font-size: 9px; margin-top: 8px; }
 
         /* Konzept-Block: Preis links, Inhalt rechts (Referenz-Layout).
            BEWUSST KEINE page-break:avoid-Regeln irgendwo — DomPDFs avoid-Handling (after/inside)
@@ -253,7 +260,8 @@
                                 @endif
                             </td>
                             <td class="cbody">
-                                <div class="cname">{{ $blk['label'] }}</div>
+                                {{-- #5b: recipe_ref (Einzelgericht) trägt seine §-Codes am Label; concept_ref auf den Gericht-Zeilen. --}}
+                                <div class="cname">{{ $blk['label'] }}@if(! empty($blk['codes']))<span class="codes">{{ implode(',', $blk['codes']) }}</span>@endif</div>
                                 @if($blk['untertitel'] ?? null)<div class="ctag">{{ $blk['untertitel'] }}</div>@endif
                                 @foreach($blk['gerichte'] ?? [] as $g)
                                     @if(($g['type'] ?? '') === 'paket')
@@ -261,7 +269,8 @@
                                     @elseif(($g['type'] ?? '') === 'header')
                                         <div class="dish paket" style="margin-left: {{ ($g['einrueckung'] ?? 0) * 12 }}px">{{ $g['text'] }}</div>
                                     @else
-                                        <div class="dish" style="margin-left: {{ ($g['einrueckung'] ?? 0) * 12 }}px"><span class="pipe">|</span>{{ $g['text'] }}</div>
+                                        {{-- #5b: §-Codes PRO GERICHT (Allergene A–…, Zusatzstoffe 1–…, * = Spuren) — Legende ganz unten. --}}
+                                        <div class="dish" style="margin-left: {{ ($g['einrueckung'] ?? 0) * 12 }}px"><span class="pipe">|</span>{{ $g['text'] }}@if(! empty($g['codes']))<span class="codes">{{ implode(',', $g['codes']) }}</span>@endif</div>
                                     @endif
                                 @endforeach
                             </td>
@@ -319,6 +328,25 @@
 
     @if($fb->description)
         <div style="margin-top:16px">{!! nl2br(e($fb->description)) !!}</div>
+    @endif
+
+    {{-- #5b: §-Kennzeichnungs-Legende (LMIV/ZZulV) — GERICHT-bezogen, nur real vorkommende Codes, ganz unten. --}}
+    @if(count($legende['allergene'] ?? []) || count($legende['zusatzstoffe'] ?? []))
+        <div class="legende">
+            @if(count($legende['allergene'] ?? []))
+                <h4>Allergene</h4>
+                <div class="grp">
+                    @foreach($legende['allergene'] as $a)<span class="code">{{ $a['code'] }}</span> {{ $a['label'] }}@if(!$loop->last) &nbsp;·&nbsp; @endif @endforeach
+                </div>
+            @endif
+            @if(count($legende['zusatzstoffe'] ?? []))
+                <h4 style="margin-top:8px">Zusatzstoffe</h4>
+                <div class="grp">
+                    @foreach($legende['zusatzstoffe'] as $z)<span class="code">{{ $z['code'] }}</span> {{ $z['label'] }}@if(!$loop->last) &nbsp;·&nbsp; @endif @endforeach
+                </div>
+            @endif
+            <div class="disclaimer">Kennzeichnung je Gericht nach LMIV (Allergene) und ZZulV (Zusatzstoffe); <span class="code">*</span> = Spuren möglich (Vorsorgeprinzip).</div>
+        </div>
     @endif
 
 </div>

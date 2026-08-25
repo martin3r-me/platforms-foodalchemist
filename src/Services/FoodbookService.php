@@ -1713,7 +1713,10 @@ class FoodbookService
                     $bloecke[] = ['type' => $b->type, 'label' => $label, 'untertitel' => $untertitel,
                         'gerichte' => $gerichte, 'ist_header' => str_starts_with((string) $b->type, 'header'),
                         'preis_pp' => (float) $bp['vk_pp'], 'pauschal' => (float) $bp['pauschal'],
-                        'preis_einheit' => $preisEinheit];
+                        'preis_einheit' => $preisEinheit,
+                        // #5b: Einzelgericht-Block trägt seine Rezept-ID → per-Gericht-Codes am Block-Label.
+                        'recipe_id' => $b->type === 'recipe_ref' ? ($b->sales_recipe_id !== null ? (int) $b->sales_recipe_id : null) : null,
+                        'codes' => []];
                 }
                 $agg = $this->kapitelAggregat($team, $k, $pax);
                 $row = [
@@ -1738,6 +1741,38 @@ class FoodbookService
             }
         };
         $walk(0, 0);
+
+        // #5b: §-Kennzeichnung PRO GERICHT (Dominique 2026-08-25: nicht pro Konzept) — jede
+        // Gericht-Zeile trägt ihre eigenen Allergen-/Zusatzstoff-Codes aus der Gericht-Deklaration;
+        // die Legende sammelt nur, was auf den Gerichten tatsächlich vorkommt (LMIV/ZZulV).
+        $kzAgg = app(\Platform\FoodAlchemist\Services\ConcepterAggregateService::class);
+        $katalog = $kzAgg->kennzeichnungKatalog();
+        // Alle Gericht-IDs: aus den concept_ref-Gericht-Zeilen UND den recipe_ref-Block-Labels.
+        $recipeIds = collect($rows)->flatMap(fn ($r) => collect($r['bloecke'])->flatMap(function ($b) {
+            return collect($b['gerichte'])->pluck('recipe_id')->push($b['recipe_id'] ?? null);
+        }))->filter()->map(fn ($v) => (int) $v)->unique()->values()->all();
+        $usedAlg = [];
+        $usedZus = [];
+        if ($recipeIds !== []) {
+            $dishes = FoodAlchemistRecipe::whereIn('id', $recipeIds)->get()->keyBy('id');
+            // Normale Closure (kein arrow fn) — $usedAlg/$usedZus MÜSSEN by-ref laufen, damit die
+            // Legende die real vorkommenden Codes sammelt (arrow fn würde sie by value kopieren).
+            $codesFuer = function (?int $rid) use ($dishes, $kzAgg, $katalog, &$usedAlg, &$usedZus): array {
+                return ($rid !== null && $dishes->get($rid) !== null)
+                    ? $kzAgg->gerichtCodes($dishes->get($rid), $usedAlg, $usedZus, $katalog) : [];
+            };
+            foreach ($rows as $ri => $row) {
+                foreach ($row['bloecke'] as $bi => $blk) {
+                    // recipe_ref: Codes am Block-Label (Einzelgericht ist selbst ein Gericht).
+                    $rows[$ri]['bloecke'][$bi]['codes'] = $codesFuer($blk['recipe_id'] ?? null);
+                    // concept_ref: Codes je Gericht-Zeile.
+                    foreach ($blk['gerichte'] as $gi => $g) {
+                        $rows[$ri]['bloecke'][$bi]['gerichte'][$gi]['codes'] = $codesFuer(isset($g['recipe_id']) ? (int) $g['recipe_id'] : null);
+                    }
+                }
+            }
+        }
+        $legende = $kzAgg->kennzeichnungLegende($usedAlg, $usedZus, $katalog);
 
         // #3: optionaler Produktions-Kaskaden-Anhang. Gericht-IDs aus den (gefilterten) Kapitel-
         // Blöcken: recipe_ref = direktes Gericht, concept_ref = Slot-/Paket-Gerichte. Je Gericht der
@@ -1786,6 +1821,8 @@ class FoodbookService
             'intern' => $intern,
             'kapitel' => $rows,
             'gesamt' => $this->gesamt($team, $fb),
+            // #5b: §-Kennzeichnungs-Legende (nur real vorkommende Allergene/Zusatzstoffe) — ganz unten im Dokument.
+            'legende' => $legende,
             // CRM-only: Kontaktperson separat.
             'customer' => $fb->crmCompany?->display_name,
             'kontakt' => $fb->crmContact?->display_name,
