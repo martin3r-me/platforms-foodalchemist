@@ -2305,6 +2305,16 @@ class FoodbookService
         $kapitelText = trim((string) $k->description);
         $rahmen = trim((string) $fb->description);
 
+        // Fix (a) / #2: der KAPITEL-Schreibstil-Override dominiert (falls gesetzt) — sonst hängt die
+        // Cascade in propose() den Foodbook-/Team-Default an. So folgt die Kapitel-Hinführung dem
+        // Kapitel-Stil, konsistent zum Kapitel-Wording. sprach_duktus, nicht nur der Name.
+        $stil = $k->writingStyle;
+        $stilKontext = $stil !== null ? array_filter([
+            'schreibstil' => $stil->name,
+            'schreibstil_anweisung' => trim((string) $stil->sprach_duktus) ?: null,
+            'schreibstil_beispiele' => trim((string) $stil->beispiele_md) ?: null,
+        ], fn ($v) => $v !== null) : [];
+
         return [
             'ebene' => 'kapitel',
             'titel' => trim((string) ($k->consumer_title ?: $k->title)),
@@ -2315,7 +2325,7 @@ class FoodbookService
             'rahmen_einleitung' => $rahmen !== '' ? $rahmen : null,
             'gliederung' => $gliederung,
             'leitplanken' => $this->leitplanken($team, $fb, null, $k),
-        ];
+        ] + $stilKontext;
     }
 
     /**

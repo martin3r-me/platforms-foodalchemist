@@ -13,7 +13,9 @@
                         <td class="{{ $td }}"><input type="text" wire:model="form.name" class="{{ $input }} !py-1" /></td>
                         <td class="{{ $td }}" colspan="2">
                             <textarea wire:model="form.sprach_duktus" rows="2" class="{{ $input }} !py-1 w-full" placeholder="Sprach-Duktus (Prompt-Material)"></textarea>
-                            <input type="text" wire:model="form.description" class="{{ $input }} !py-1 w-full mt-1" placeholder="Beschreibung (optional)" />
+                            {{-- Beispiel-Wordings gehen als schreibstil_beispiele mit in den KI-Prompt (anders als die Beschreibung). --}}
+                            <textarea wire:model="form.beispiele_md" rows="2" class="{{ $input }} !py-1 w-full mt-1" placeholder="Beispiel-Wordings (fließen in den KI-Prompt) — je Zeile ein Beispiel"></textarea>
+                            <input type="text" wire:model="form.description" class="{{ $input }} !py-1 w-full mt-1" placeholder="Beschreibung (nur interner Hinweis, NICHT für die KI)" />
                         </td>
                         <td class="{{ $td }}"><input type="text" wire:model="form.sort_order" class="{{ $input }} !py-1 !w-14 text-right" /></td>
                         <td class="{{ $td }} whitespace-nowrap">
@@ -42,7 +44,8 @@
         <div class="flex flex-wrap items-start gap-2">
             <input type="text" wire:model="neu.name" placeholder="Name (z. B. Rustikal)" class="{{ $input }} !py-1 w-44" data-stil-neu-name />
             <textarea wire:model="neu.sprach_duktus" rows="1" placeholder="Sprach-Duktus — wie soll die KI klingen?" class="{{ $input }} !py-1 flex-1 min-w-[16rem]"></textarea>
-            <input type="text" wire:model="neu.description" placeholder="Beschreibung (optional)" class="{{ $input }} !py-1 w-52" />
+            <textarea wire:model="neu.beispiele_md" rows="1" placeholder="Beispiel-Wordings (in den KI-Prompt)" class="{{ $input }} !py-1 flex-1 min-w-[14rem]"></textarea>
+            <input type="text" wire:model="neu.description" placeholder="Beschreibung (nur Hinweis)" class="{{ $input }} !py-1 w-44" />
             <button type="button" wire:click="create" class="{{ $btnPrimary }}" data-stil-neu-anlegen>+ Anlegen</button>
         </div>
     </div>

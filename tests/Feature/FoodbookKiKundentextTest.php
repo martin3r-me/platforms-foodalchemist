@@ -243,6 +243,20 @@ it('L2b: ein bestehender Kapitel-Text ist die Umformungs-Vorlage (briefing_ist)'
     expect($GLOBALS['ki_kundentext_user_prompt'] ?? '')->toContain('Stichworte: leicht, Fisch, Sommer.');
 });
 
+it('Fix(a)/#2: der KAPITEL-Schreibstil-Override (sprach_duktus) landet im Kundentext-Prompt', function () {
+    bindKundentextStub('Text.');
+    $fb = fbMitInhalt($this->rootTeam);
+    $kap = $fb->chapters()->first();
+    $stil = \Platform\FoodAlchemist\Models\FoodAlchemistWritingStyle::create([
+        'team_id' => $this->rootTeam->id, 'slug' => 'kap-kundentext-duktus', 'name' => 'Verspielt',
+        'sprach_duktus' => 'KAP-KUNDENTEXT-DUKTUS: locker, mit Augenzwinkern.',
+    ]);
+    $this->foodbooks->updateKapitel($this->rootTeam, $kap->id, ['writing_style_id' => $stil->id]);
+
+    $this->foodbooks->kiKapitelKundentextVorschlag($this->rootTeam, $kap->id);
+    expect($GLOBALS['ki_kundentext_user_prompt'] ?? '')->toContain('KAP-KUNDENTEXT-DUKTUS');
+});
+
 it('L2b: Vorschlag schreibt NICHTS an die Kapitel-description', function () {
     bindKundentextStub('Der Auftakt gehört dem Zander.');
     $fb = fbMitInhalt($this->rootTeam);
