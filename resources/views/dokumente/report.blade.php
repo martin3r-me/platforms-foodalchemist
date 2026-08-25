@@ -303,6 +303,37 @@
         @endforelse
     @elseif($recipe)
         @include('foodalchemist::dokumente.partials.report-recipe-node', ['node' => $recipe, 'optionen' => $opt])
+    @elseif($foodbook ?? null)
+        {{-- #5a: Technischer Foodbook-Report — Kapitel × Positionen, jede über den GETEILTEN Concept-/
+             Rezept-Körper (Filter LITERAL dieselben wie Concept/Format). Die Produktions-Kaskade lebt HIER. --}}
+        <section>
+            <h2>Foodbook-Übersicht</h2>
+            <div class="grid meta">
+                <div class="wide"><span>Name</span>{{ $foodbook['name'] ?? '—' }}</div>
+                <div><span>Kunde</span>{{ $foodbook['customer'] ?? '—' }}</div>
+                <div><span>Profil</span>{{ $opt['profil'] ?? '—' }}</div>
+            </div>
+        </section>
+        @forelse($foodbook['kapitel'] as $kap)
+            @php($hTag = 'h' . min(4, 2 + (int) ($kap['depth'] ?? 0)))
+            <{{ $hTag }} style="margin-left: {{ ($kap['depth'] ?? 0) * 12 }}px">{{ $kap['title'] }}</{{ $hTag }}>
+            @forelse($kap['positionen'] as $pos)
+                @if($pos['kind'] === 'concept')
+                    <h3 style="margin-left: {{ (($kap['depth'] ?? 0) + 1) * 12 }}px">{{ $pos['concept']['name'] ?? '—' }}@if($pos['concept']['consumer_name'] ?? null)<span class="muted"> · {{ $pos['concept']['consumer_name'] }}</span>@endif</h3>
+                    @include('foodalchemist::dokumente.partials.report-concept-body', ['concept' => $pos['concept'], 'optionen' => $opt])
+                @elseif($pos['kind'] === 'recipe')
+                    @include('foodalchemist::dokumente.partials.report-recipe-node', ['node' => $pos['recipe'], 'optionen' => $opt])
+                @elseif($pos['kind'] === 'header')
+                    <h4>{{ $pos['text'] }}</h4>
+                @elseif($pos['kind'] === 'text')
+                    <p class="intro">{{ $pos['text'] }}</p>
+                @endif
+            @empty
+                <p class="muted">— leer —</p>
+            @endforelse
+        @empty
+            <p class="muted">Noch keine Kapitel — im Foodbook-Editor anlegen.</p>
+        @endforelse
     @endif
 </main>
 </body>

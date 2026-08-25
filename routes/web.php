@@ -358,14 +358,15 @@ Route::get('/foodbooks/{id}/dokument', function (int $id, \Platform\FoodAlchemis
     $fb = $svc->detail($team, $id) ?? abort(404);
     // ?intern=1 → interne Projektion (EK/VK/W% pro Person, Projektleitung/Vertrieb). Default = Kundensicht (ohne EK).
     $intern = request()->boolean('intern');
-    // #3: ?kaskade=1 → Produktions-Kaskaden-Anhang je Gericht · ?kapitel=… → nur diese Kapitel.
-    // kapitel akzeptiert Checkbox-Array (kapitel[]=1&kapitel[]=2) UND CSV (kapitel=1,2).
-    $mitKaskade = request()->boolean('kaskade');
+    // #5a: die Produktions-Kaskade lebt im separaten Report (foodbooks.report), NICHT mehr im Dokument.
+    // Im Dokument stattdessen die Allergen-/Zusatzstoff-Ausweisung (?deklaration, default an).
+    $mitKaskade = false;
+    $deklaration = request()->boolean('deklaration', true);
     $kapRaw = request()->query('kapitel', '');
     $kapitelFilter = is_array($kapRaw)
         ? array_values(array_filter(array_map('intval', $kapRaw)))
         : array_values(array_filter(array_map('intval', explode(',', (string) $kapRaw))));
-    $data = $svc->dokumentDaten($team, $fb, $intern, $kapitelFilter, $mitKaskade);
+    $data = $svc->dokumentDaten($team, $fb, $intern, $kapitelFilter, $mitKaskade) + ['deklaration' => $deklaration];
 
     if (request()->boolean('pdf')) {
         // Härten: kein stiller HTML-Fallback mehr — wenn PDF verlangt, aber die Engine fehlt,
@@ -383,6 +384,33 @@ Route::get('/foodbooks/{id}/dokument', function (int $id, \Platform\FoodAlchemis
 
     return view('foodalchemist::dokumente.foodbook', $data + ['istPdf' => false]);
 })->whereNumber('id')->name('foodalchemist.foodbooks.dokument');
+
+/*
+ * #5a: Foodbook-Report — der TECHNISCHE Report mit Profilen + Filtern (wie Concept/Format), eine
+ * Ebene höher: pro Kapitel drillen die Positionen filter-identisch. Die Produktions-Kaskade lebt
+ * HIER (nicht mehr im schönen Dokument). ?kapitel[]=… filtert die Kapitel. ?pdf=1 = PDF (guarded).
+ */
+Route::get('/foodbooks/{id}/report', function (int $id, \Platform\FoodAlchemist\Services\ReportExportService $svc) {
+    $team = \Illuminate\Support\Facades\Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
+    $optionen = $svc->optionen(request()->query(), 'foodbook');
+    $kapRaw = request()->query('kapitel', '');
+    $kapitelFilter = is_array($kapRaw)
+        ? array_values(array_filter(array_map('intval', $kapRaw)))
+        : array_values(array_filter(array_map('intval', explode(',', (string) $kapRaw))));
+    $data = $svc->foodbookDaten($team, $id, $optionen, $kapitelFilter);
+
+    if (request()->boolean('pdf')) {
+        if (! class_exists(\Barryvdh\DomPDF\Facade\Pdf::class)) {
+            \Illuminate\Support\Facades\Log::warning('Foodbook-Report-PDF angefordert, aber DomPDF ist nicht installiert.', ['foodbook_id' => $id]);
+            abort(500, 'PDF-Export nicht verfügbar: DomPDF ist auf diesem Server nicht installiert.');
+        }
+
+        return \Barryvdh\DomPDF\Facade\Pdf::loadView('foodalchemist::dokumente.report', $data + ['istPdf' => true])
+            ->download('Foodbook-Report-' . $id . '.pdf');
+    }
+
+    return view('foodalchemist::dokumente.report', $data + ['istPdf' => false]);
+})->whereNumber('id')->name('foodalchemist.foodbooks.report');
 
 /**
  * R3.2 (Block C, layout-first): Externe Kunden-Präsentation als Web-Seite (auth-gated;

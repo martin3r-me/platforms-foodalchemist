@@ -116,22 +116,6 @@
         .btn { display: inline-block; padding: 6px 12px; background: {{ $brand }}; color: #fff; text-decoration: none; border-radius: 6px; margin-right: 6px; }
         .btn.ghost { background: #eee; color: #374151; }
         @media print { .actions { display: none; } }
-        /* #3: Produktions-Kaskaden-Anhang — self-contained, gescopet, damit es die Menü-Styles nicht stört. */
-        .kaskade-anhang { margin-top: 24px; page-break-before: always; }
-        .kaskade-anhang .kaskade-titel { font-size: 15px; color: {{ $brand }}; border-bottom: 2px solid {{ $band }}; padding-bottom: 4px; margin: 0 0 12px; }
-        .kaskade-anhang .recipe-node { margin: 0 0 10px; }
-        .kaskade-anhang .recipe-node.depth-1 { margin-left: 10px; }
-        .kaskade-anhang .recipe-node.depth-2, .kaskade-anhang .recipe-node.depth-3, .kaskade-anhang .recipe-node.depth-4 { margin-left: 20px; }
-        .kaskade-anhang h2, .kaskade-anhang h3 { font-size: 12px; font-weight: bold; color: #111827; margin: 10px 0 4px; }
-        .kaskade-anhang .muted { color: #9ca3af; font-weight: normal; font-size: 10px; }
-        .kaskade-anhang .grid.meta { margin: 2px 0 6px; font-size: 10px; color: #374151; }
-        .kaskade-anhang .grid.meta > div { display: inline-block; margin-right: 12px; }
-        .kaskade-anhang .grid.meta > div > span { color: #9ca3af; margin-right: 3px; }
-        .kaskade-anhang .copy { color: #374151; font-size: 10px; margin: 2px 0 6px; white-space: pre-line; }
-        .kaskade-anhang .warn { color: #b45309; font-size: 10px; }
-        .kaskade-anhang table { width: 100%; border-collapse: collapse; font-size: 10px; margin: 2px 0 6px; }
-        .kaskade-anhang th, .kaskade-anhang td { text-align: left; padding: 2px 4px; border-bottom: 1px solid #eee; }
-        .kaskade-anhang th { color: #6b7280; font-weight: normal; }
     </style>
 </head>
 <body>
@@ -158,18 +142,19 @@
             @else
                 <a class="btn ghost" href="{{ request()->fullUrlWithQuery(['intern' => 1, 'pdf' => null]) }}">→ Interne Sicht (Marge)</a>
             @endif
-            {{-- #3: Produktions-Kaskaden-Anhang an/aus --}}
-            @if(!empty($kaskaden))
-                <a class="btn ghost" href="{{ request()->fullUrlWithQuery(['kaskade' => null, 'pdf' => null]) }}">→ ohne Kaskade</a>
+            {{-- #5a: Allergene/Zusatzstoffe (§-Kennzeichnung je Gericht + Legende) an/aus.
+                 Die Produktions-Kaskade lebt jetzt im separaten Report (foodbooks.report), nicht mehr hier. --}}
+            @if($deklaration ?? true)
+                <a class="btn ghost" href="{{ request()->fullUrlWithQuery(['deklaration' => 0, 'pdf' => null]) }}">→ ohne Allergene</a>
             @else
-                <a class="btn ghost" href="{{ request()->fullUrlWithQuery(['kaskade' => 1, 'pdf' => null]) }}">→ mit Produktions-Kaskade</a>
+                <a class="btn ghost" href="{{ request()->fullUrlWithQuery(['deklaration' => null, 'pdf' => null]) }}">→ mit Allergenen/Zusatzstoffen</a>
             @endif
         </div>
-        {{-- #3: Kapitel-Filter — nur ausgewählte Kapitel drucken (GET, erhält intern/kaskade). --}}
+        {{-- #3/#5a: Kapitel-Filter — nur ausgewählte Kapitel drucken (GET, erhält intern + Deklarations-Schalter). --}}
         @if(count($alle_kapitel ?? []) > 1)
             <form method="GET" style="margin: -8px 0 18px; font-size: 11px; color: #4b5563;">
                 @if($istIntern)<input type="hidden" name="intern" value="1">@endif
-                @if(!empty($kaskaden))<input type="hidden" name="kaskade" value="1">@endif
+                @unless($deklaration ?? true)<input type="hidden" name="deklaration" value="0">@endunless
                 <strong>Kapitel drucken:</strong>
                 @foreach($alle_kapitel as $ak)
                     <label style="margin-right: 8px; white-space: nowrap;"><input type="checkbox" name="kapitel[]" value="{{ $ak['id'] }}" {{ in_array($ak['id'], $aktive_kapitel ?? [], true) ? 'checked' : '' }}> {{ $ak['title'] }}</label>
@@ -261,7 +246,7 @@
                             </td>
                             <td class="cbody">
                                 {{-- #5b: recipe_ref (Einzelgericht) trägt seine §-Codes am Label; concept_ref auf den Gericht-Zeilen. --}}
-                                <div class="cname">{{ $blk['label'] }}@if(! empty($blk['codes']))<span class="codes">{{ implode(',', $blk['codes']) }}</span>@endif</div>
+                                <div class="cname">{{ $blk['label'] }}@if(($deklaration ?? true) && ! empty($blk['codes']))<span class="codes">{{ implode(',', $blk['codes']) }}</span>@endif</div>
                                 @if($blk['untertitel'] ?? null)<div class="ctag">{{ $blk['untertitel'] }}</div>@endif
                                 @foreach($blk['gerichte'] ?? [] as $g)
                                     @if(($g['type'] ?? '') === 'paket')
@@ -270,7 +255,7 @@
                                         <div class="dish paket" style="margin-left: {{ ($g['einrueckung'] ?? 0) * 12 }}px">{{ $g['text'] }}</div>
                                     @else
                                         {{-- #5b: §-Codes PRO GERICHT (Allergene A–…, Zusatzstoffe 1–…, * = Spuren) — Legende ganz unten. --}}
-                                        <div class="dish" style="margin-left: {{ ($g['einrueckung'] ?? 0) * 12 }}px"><span class="pipe">|</span>{{ $g['text'] }}@if(! empty($g['codes']))<span class="codes">{{ implode(',', $g['codes']) }}</span>@endif</div>
+                                        <div class="dish" style="margin-left: {{ ($g['einrueckung'] ?? 0) * 12 }}px"><span class="pipe">|</span>{{ $g['text'] }}@if(($deklaration ?? true) && ! empty($g['codes']))<span class="codes">{{ implode(',', $g['codes']) }}</span>@endif</div>
                                     @endif
                                 @endforeach
                             </td>
@@ -332,8 +317,9 @@
         <div style="margin-top:16px">{!! nl2br(e($fb->description)) !!}</div>
     @endif
 
-    {{-- #5b: §-Kennzeichnungs-Legende (LMIV/ZZulV) — GERICHT-bezogen, nur real vorkommende Codes, ganz unten. --}}
-    @if(count($legende['allergene'] ?? []) || count($legende['zusatzstoffe'] ?? []))
+    {{-- #5b/#5a: §-Kennzeichnungs-Legende (LMIV/ZZulV) — GERICHT-bezogen, nur real vorkommende Codes, ganz
+         unten. An den Deklarations-Schalter gebunden (#5a: Allergene/Zusatzstoffe an/aus). --}}
+    @if(($deklaration ?? true) && (count($legende['allergene'] ?? []) || count($legende['zusatzstoffe'] ?? [])))
         <div class="legende">
             @if(count($legende['allergene'] ?? []))
                 <h4>Allergene</h4>
@@ -366,15 +352,7 @@
     </script>
 @endif
 
-{{-- #3: Produktions-Kaskaden-Anhang (nur wenn ?kaskade=1). Wiederverwendet report-recipe-node.
-     EK/Food-Cost je Knoten nur intern (opt.ek an $intern gebunden im Service). --}}
-@if(!empty($kaskaden))
-    <div class="kaskade-anhang">
-        <div class="kaskade-titel">Produktions-Kaskade{{ $istIntern ? ' · intern (mit EK)' : '' }}</div>
-        @foreach($kaskaden as $kas)
-            @include('foodalchemist::dokumente.partials.report-recipe-node', ['node' => $kas['recipe'], 'optionen' => $kas['optionen']])
-        @endforeach
-    </div>
-@endif
+{{-- #5a: der Produktions-Kaskaden-Anhang ist aus dem Dokument entfernt — die Kaskade lebt jetzt
+     im separaten technischen Report (foodalchemist.foodbooks.report). --}}
 </body>
 </html>

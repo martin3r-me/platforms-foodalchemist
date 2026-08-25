@@ -68,7 +68,9 @@
                 </div>
                 <div class="flex flex-wrap gap-2">
                     <button type="button" @click="$dispatch('modal.open', { name: 'foodbook-editor' })" class="{{ $btnPrimary }}" data-fb-bearbeiten>@svg('heroicon-o-pencil-square', 'w-4 h-4') Bearbeiten</button>
-                    <a href="{{ route('foodalchemist.foodbooks.dokument', $fb->id) }}" target="_blank" class="{{ $btnGhost }}" title="Dokument (Druck/PDF) — im Dokument zwischen Kunden- und interner Sicht (Marge) umschaltbar">Dokument</a>
+                    <a href="{{ route('foodalchemist.foodbooks.dokument', $fb->id) }}" target="_blank" class="{{ $btnGhost }}" title="Dokument (Druck/PDF) — schöne Kundenausgabe, Allergene/Zusatzstoffe an/aus, Kunden-/interne Sicht">Dokument</a>
+                    {{-- #5a: technischer Report (Profile + Conceptor-Filter + Produktions-Kaskade + Kapitel-Filter). --}}
+                    <a href="{{ route('foodalchemist.foodbooks.report', $fb->id) }}" target="_blank" class="{{ $btnGhost }}" title="Technischer Report — Profile (Kurzblatt … Volle Kaskade) + Filter (Preise/Lieferanten/Deklaration/Nährwerte/Kaskade …) + Kapitel-Filter, wie bei Concept/Format">Report</a>
                     <a href="{{ route('foodalchemist.foodbooks.praesentation', $fb->id) }}" target="_blank" class="{{ $btnGhost }}" title="Externe Kunden-Präsentation (Web-Seite, Preise pro Person, ohne Interna)">Präsentation</a>
                 </div>
             </div>

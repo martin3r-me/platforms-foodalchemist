@@ -6,6 +6,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Storage;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
+use Platform\FoodAlchemist\Models\FoodAlchemistFoodbook;
 use Platform\FoodAlchemist\Models\FoodAlchemistFormat;
 use Platform\FoodAlchemist\Models\FoodAlchemistGeschirrSupplier;
 use Platform\FoodAlchemist\Models\FoodAlchemistGp;
@@ -52,9 +53,9 @@ class ReportExportService
             ],
         };
 
-        // Format = symmetrisch zum Concept (jede Edition IST ein Concept): gleiche Profile,
-        // gleicher Filter-Satz, gleicher Preis-Default im Produktions-Profil.
-        if (in_array($scope, ['concept', 'format'], true) && $profil === 'produktion') {
+        // Format + Foodbook = symmetrisch zum Concept (jede Edition/jedes Kapitel-Concept IST ein
+        // Concept): gleiche Profile, gleicher Filter-Satz, gleicher Preis-Default im Produktions-Profil.
+        if (in_array($scope, ['concept', 'format', 'foodbook'], true) && $profil === 'produktion') {
             $defaults['preise'] = true;
         }
 
@@ -250,6 +251,88 @@ class ReportExportService
                 // Hero nur wenn Bilder-Filter an — spiegelt die Bilder-Gate-Logik der Rezept-Nodes.
                 'hero' => ($optionen['bilder'] ?? false) ? $format->heroImage?->dataUri() : null,
                 'positionen' => $positionen,
+            ],
+        ];
+    }
+
+    /**
+     * #5a: Foodbook-Report — der TECHNISCHE Report mit Profilen + Filtern (wie Concept/Format),
+     * nur eine Ebene höher: pro Kapitel drillen die concept_ref-/recipe_ref-Positionen filter-
+     * identisch wie ein Concept-/Rezept-Report (inkl. Produktions-Kaskade — die lebt jetzt HIER,
+     * nicht mehr im schönen Dokument). `?kapitel[]` filtert die Kapitel wie beim Dokument.
+     *
+     * @param  list<int>  $kapitelFilter
+     * @return array<string, mixed>
+     */
+    public function foodbookDaten(Team $team, int $foodbookId, array $optionen, array $kapitelFilter = []): array
+    {
+        $fb = FoodAlchemistFoodbook::visibleToTeam($team)
+            ->with([
+                'chapters' => fn ($q) => $q->orderBy('position'),
+                'chapters.blocks' => fn ($q) => $q->where('visible', true)->orderBy('position'),
+                'chapters.blocks.dish:id,name',
+                'crmCompany',
+            ])
+            ->findOrFail($foodbookId);
+
+        $chapters = $fb->chapters;
+        if ($kapitelFilter !== []) {
+            $erlaubt = array_flip(array_map('intval', $kapitelFilter));
+            $chapters = $chapters->filter(fn ($k) => isset($erlaubt[(int) $k->id]))->values();
+            $vorhanden = array_flip($chapters->pluck('id')->map(fn ($v) => (int) $v)->all());
+            $byParent = $chapters->groupBy(fn ($k) => ($k->parent_id !== null && isset($vorhanden[(int) $k->parent_id])) ? (int) $k->parent_id : 0);
+        } else {
+            $byParent = $chapters->groupBy(fn ($k) => $k->parent_id ?? 0);
+        }
+
+        $kapitelRows = [];
+        $walk = function ($parentId, int $depth) use (&$walk, $byParent, &$kapitelRows, $team, $optionen) {
+            foreach ($byParent[$parentId] ?? [] as $k) {
+                $positionen = [];
+                foreach ($k->blocks as $b) {
+                    if ($b->type === 'concept_ref' && $b->concept_id !== null) {
+                        try {
+                            $positionen[] = ['kind' => 'concept', 'concept' => $this->conceptDaten($team, (int) $b->concept_id, $optionen)['concept']];
+                        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException) {
+                            continue; // Concept nicht (mehr) sichtbar → auslassen
+                        }
+                    } elseif ($b->type === 'recipe_ref' && $b->sales_recipe_id !== null) {
+                        try {
+                            $positionen[] = ['kind' => 'recipe', 'name' => $b->dish?->name, 'recipe' => $this->rezeptDaten($team, (int) $b->sales_recipe_id, $optionen)['recipe']];
+                        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException) {
+                            continue;
+                        }
+                    } elseif (str_starts_with((string) $b->type, 'header')) {
+                        $t = trim((string) $b->label);
+                        if ($t !== '') {
+                            $positionen[] = ['kind' => 'header', 'text' => $t];
+                        }
+                    } elseif ($b->type === 'text') {
+                        $t = trim((string) $b->customer_text);
+                        if ($t !== '') {
+                            $positionen[] = ['kind' => 'text', 'text' => $t];
+                        }
+                    }
+                }
+                $kapitelRows[] = ['title' => trim((string) ($k->consumer_title ?: $k->title)), 'depth' => $depth, 'positionen' => $positionen];
+                $walk((int) $k->id, $depth + 1);
+            }
+        };
+        $walk(0, 0);
+
+        return [
+            'typ' => 'foodbook',
+            'titel' => 'Foodbook',
+            'name' => (string) $fb->label,
+            'optionen' => $optionen,
+            'recipe' => null,
+            'concept' => null,
+            'format' => null,
+            'foodbook' => [
+                'id' => (int) $fb->id,
+                'name' => (string) $fb->label,
+                'customer' => $fb->crmCompany?->display_name,
+                'kapitel' => $kapitelRows,
             ],
         ];
     }

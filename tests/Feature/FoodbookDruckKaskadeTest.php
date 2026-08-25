@@ -88,7 +88,7 @@ it('#3: kapitelFilter beschränkt die gerenderten Kapitel', function () {
     expect(collect($nur1['kapitel'])->pluck('title')->all())->toContain('Vorspeisen')->not->toContain('Hauptgang');
 });
 
-it('#3: das Foodbook-Dokument rendert den Kaskaden-Anhang (Blade kompiliert; EK nur intern)', function () {
+it('#5a: das Foodbook-Dokument rendert die Produktions-Kaskade NICHT mehr (die lebt im Report)', function () {
     $gericht = $this->makeRecipe($this->rootTeam, 'Gericht Render', ['status' => 'draft', 'is_sales_recipe' => true]);
     $this->makeIngredient($gericht, 'Salz', null, '5', 1);
 
@@ -97,15 +97,10 @@ it('#3: das Foodbook-Dokument rendert den Kaskaden-Anhang (Blade kompiliert; EK 
     $kap->blocks()->create(['team_id' => $this->rootTeam->id, 'type' => 'recipe_ref',
         'sales_recipe_id' => $gericht->id, 'quantity' => 1, 'position' => 0, 'visible' => true]);
 
-    // Kundensicht: Anhang rendert, aber KEIN EK
-    $data = $this->svc->dokumentDaten($this->rootTeam, $fb->fresh(), intern: false, kapitelFilter: [], mitKaskade: true);
+    // #5a: das Dokument zeigt das Gericht + den Allergen-Toggle, aber KEINE Produktions-Kaskade mehr.
+    $data = $this->svc->dokumentDaten($this->rootTeam, $fb->fresh()) + ['deklaration' => true];
     $html = view('foodalchemist::dokumente.foodbook', $data + ['istPdf' => false])->render();
-    expect($html)->toContain('Produktions-Kaskade')
-        ->toContain('Gericht Render')
-        ->not->toContain('EK gesamt');
-
-    // Interne Sicht: EK sichtbar
-    $dataI = $this->svc->dokumentDaten($this->rootTeam, $fb->fresh(), intern: true, kapitelFilter: [], mitKaskade: true);
-    $htmlI = view('foodalchemist::dokumente.foodbook', $dataI + ['istPdf' => false])->render();
-    expect($htmlI)->toContain('EK gesamt');
+    expect($html)->toContain('Gericht Render')
+        ->toContain('ohne Allergene')            // der neue Deklarations-Schalter
+        ->not->toContain('Produktions-Kaskade'); // Kaskade ist raus (jetzt im foodbooks.report)
 });
