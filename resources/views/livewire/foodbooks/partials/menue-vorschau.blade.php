@@ -11,7 +11,8 @@
             @if($menue['customer'] ?? null)<p class="text-xs text-gray-500">{{ $menue['customer'] }}@if(($menue['kontakt'] ?? null) && $menue['kontakt'] !== $menue['customer']) · {{ $menue['kontakt'] }}@endif</p>@endif
         </div>
         <div class="text-right">
-            @if(($menue['gesamt']['vk_pro_person'] ?? 0) > 0)<span class="block text-sm font-semibold text-emerald-600 tabular-nums">{{ number_format((float) $menue['gesamt']['vk_pro_person'], 2, ',', '.') }} €/P</span>@endif
+            {{-- #8: ein Foodbook hat KEINEN eigenen Preis (kein sinnvoller Gesamt-€/P über einen Katalog) —
+                 Preise leben ausschließlich auf Concept-/Paket-Ebene (die Blöcke unten). --}}
             @if($menueSnapshotAt)<span class="block text-[10px] text-gray-400">Stand {{ $menueSnapshotAt->format('d.m.Y H:i') }}</span>@endif
         </div>
     </div>
@@ -23,11 +24,9 @@
     @else
     @forelse($menue['kapitel'] ?? [] as $k)
         <section style="margin-left: {{ $k['depth'] * 16 }}px">
+            {{-- #8: ein Kapitel hat KEINEN eigenen Preis — nur die Concepts/Pakete darin (Block-Ebene). --}}
             <div class="flex items-baseline gap-2 border-b border-black/5 pb-1 mb-2">
                 <h3 class="text-sm font-semibold text-violet-700">{{ $k['title'] }}</h3>
-                @if($k['vk_pro_person'] > 0)
-                    <span class="ml-auto text-[11px] text-gray-500 tabular-nums">{{ number_format((float) $k['vk_pro_person'], 2, ',', '.') }} €/P</span>
-                @endif
             </div>
             @if(! empty($k['text']))<p class="text-xs text-gray-600 mb-2 whitespace-pre-line">{{ $k['text'] }}</p>@endif
 

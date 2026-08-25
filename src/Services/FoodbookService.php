@@ -1821,6 +1821,9 @@ class FoodbookService
                 'slots' => fn ($q) => $q->orderBy('position'),
                 'slots.dish:id,name,sales_wording_standard',
                 'slots.package.dishes.dish:id,name,sales_wording_standard',
+                'slots.embeddedConcept:id,name,consumer_name,price_per_person_cache',
+                'slots.embeddedConcept.slots.dish:id,name,sales_wording_standard',
+                'slots.embeddedConcept.slots.package.dishes.dish:id,name,sales_wording_standard',
             ])
             ->findOrFail($conceptId);
 

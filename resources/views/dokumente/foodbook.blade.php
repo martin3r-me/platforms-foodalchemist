@@ -195,7 +195,8 @@
             <div class="section-title">Inhaltsverzeichnis</div>
             @foreach($kapitel as $k)
                 <a href="#{{ $k['anker'] }}" style="padding-left: {{ $k['depth'] * 16 }}px">
-                    @if($k['vk_pro_person'] > 0)<span class="np">{{ number_format($k['vk_pro_person'], 2, ',', '.') }} €/P</span>@endif
+                    {{-- #8: Kapitel hat keinen Kunden-Preis — Roll-up nur im internen Kalkulations-Print. --}}
+                    @if($istIntern && $k['vk_pro_person'] > 0)<span class="np">{{ number_format($k['vk_pro_person'], 2, ',', '.') }} €/P</span>@endif
                     <span class="pipe">|</span> {{ $istIntern ? ($k['title_intern'] ?: $k['title']) : $k['title'] }}
                 </a>
             @endforeach
@@ -207,10 +208,12 @@
         @php($hTag = 'h' . min(5, 3 + (int) ($k['depth'] ?? 0)))
         <div class="kapitel" style="margin-left: {{ $k['depth'] * 14 }}px">
             <{{ $hTag }} id="{{ $k['anker'] }}">
-                @if($k['vk_pro_person'] > 0)
+                {{-- #8: ein Kapitel hat keinen eigenen Kunden-Preis. Der EK/VK/W%-Roll-up bleibt
+                     ausschließlich im internen Kalkulations-Print (Costing-Dokument). --}}
+                @if($istIntern && $k['vk_pro_person'] > 0)
                     <span class="kpreis">
                         {{ number_format($k['vk_pro_person'], 2, ',', '.') }} €/P
-                        @if($istIntern && ($k['ek_pro_person'] ?? null) !== null)
+                        @if(($k['ek_pro_person'] ?? null) !== null)
                             · <span class="ek">EK {{ number_format($k['ek_pro_person'], 2, ',', '.') }} €/P</span>
                             @if(($k['food_cost_percent'] ?? null) !== null) · <span class="wpz">W {{ number_format($k['food_cost_percent'], 1, ',', '.') }} %</span> @endif
                         @endif
@@ -253,7 +256,9 @@
                                 <div class="cname">{{ $blk['label'] }}</div>
                                 @if($blk['untertitel'] ?? null)<div class="ctag">{{ $blk['untertitel'] }}</div>@endif
                                 @foreach($blk['gerichte'] ?? [] as $g)
-                                    @if(($g['type'] ?? '') === 'paket' || ($g['type'] ?? '') === 'header')
+                                    @if(($g['type'] ?? '') === 'paket')
+                                        <div class="dish paket" style="margin-left: {{ ($g['einrueckung'] ?? 0) * 12 }}px">{{ $g['text'] }}@if(($g['preis'] ?? null) !== null && $g['preis'] > 0)<span class="kpreis">{{ number_format($g['preis'], 2, ',', '.') }} €/Gast</span>@endif</div>
+                                    @elseif(($g['type'] ?? '') === 'header')
                                         <div class="dish paket" style="margin-left: {{ ($g['einrueckung'] ?? 0) * 12 }}px">{{ $g['text'] }}</div>
                                     @else
                                         <div class="dish" style="margin-left: {{ ($g['einrueckung'] ?? 0) * 12 }}px"><span class="pipe">|</span>{{ $g['text'] }}</div>
