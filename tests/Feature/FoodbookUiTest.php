@@ -130,19 +130,47 @@ it('Leitstelle-Rail Kopf-Modus: 3-Panel-Umschalter + Kapitel-Matrix', function (
 
 // Bug (Dominique 2026-08-23): im Foodbook-Katalog liess sich Gericht nicht wählen.
 // Verdacht: Property $katalogModus + Methode katalogModus() gleich benannt (Speisekarte: pickerModus).
-// 2026-08-24: Live-Format-Modus entfernt (Foodbook ist Snapshot, kein Live-Fenster aufs Format) —
-// F5: der Katalog kennt wieder drei Modi (concept|gericht|format) — Format wird WIE EIN CONCEPT
-// gebucht (eigenes Kapitel), daher gültiger Modus. Ungültige Werte bleiben auf dem letzten Modus.
-it('Foodbook-Katalog: Modus-Wechsel concept->gericht->format schaltet (Server-Modus)', function () {
+// #3 (2026-08-25): der Picker enthält ausschließlich Concept · Paket · Format — der Gericht-Reiter
+// ist raus. Format/Paket werden WIE EIN CONCEPT gebucht. Ungültige Werte bleiben auf dem letzten Modus.
+it('Foodbook-Katalog: Modus-Wechsel concept->paket->format schaltet (Server-Modus)', function () {
     Livewire::test(FoodbooksIndex::class)->call('neu');
     $fb = FoodAlchemistFoodbook::first();
     Livewire::test(FoodbooksIndex::class)
         ->call('waehle', $fb->id)
         ->assertSet('pickerModus', 'concept')
-        ->call('katalogModus', 'gericht')
-        ->assertSet('pickerModus', 'gericht')
+        ->call('katalogModus', 'paket')
+        ->assertSet('pickerModus', 'paket')
         ->call('katalogModus', 'format')
+        ->assertSet('pickerModus', 'format')
+        ->call('katalogModus', 'gericht')          // #3: entfernter Modus wird ignoriert
         ->assertSet('pickerModus', 'format')
         ->call('katalogModus', 'quatsch')
         ->assertSet('pickerModus', 'format');
+});
+
+it('#3: Paket-Reiter listet kind=paket (consumer_name), Concept-Reiter nicht; paketHinzu bucht als concept_ref', function () {
+    $concepts = app(ConceptService::class);
+    // kind=paket-Concept mit Kundenname + aktivem Status
+    $paket = $concepts->createPaket($this->rootTeam, ['name' => 'Salatwand intern']);
+    $concepts->update($this->rootTeam, $paket->id, ['consumer_name' => 'Frische Salat-Auswahl', 'status' => 'active', 'price_mode' => 'manuell', 'price_per_person_manual' => 6.90]);
+
+    // Service-Ebene: Paket im Paket-Picker, NICHT im Concept-Picker; Concept umgekehrt.
+    $svc = app(FoodbookService::class);
+    expect($svc->paketKandidaten($this->rootTeam, '')->pluck('id')->all())->toContain($paket->id)
+        ->and($svc->paketKandidaten($this->rootTeam, '')->pluck('id')->all())->not->toContain($this->concept->id)
+        ->and($svc->conceptKandidaten($this->rootTeam, '')->pluck('id')->all())->not->toContain($paket->id);
+
+    // UI: Paket-Reiter zeigt den Kundennamen (nicht den internen), + einbuchen als concept_ref.
+    Livewire::test(FoodbooksIndex::class)->call('neu');
+    $fb = FoodAlchemistFoodbook::first();
+    $comp = Livewire::test(FoodbooksIndex::class)
+        ->call('waehle', $fb->id)
+        ->set('neuesKapitelTitel', 'Buffet')->call('kapitelNeu');
+    $kap = $fb->kapitel()->first();
+    $comp->call('katalogModus', 'paket')
+        ->assertSee('Frische Salat-Auswahl')
+        ->assertDontSee('Salatwand intern')
+        ->call('paketHinzu', $paket->id);
+
+    expect($kap->blocks()->where('type', 'concept_ref')->where('concept_id', $paket->id)->count())->toBe(1);
 });

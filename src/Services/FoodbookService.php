@@ -1900,7 +1900,8 @@ class FoodbookService
      */
     public function conceptKandidaten(Team $team, string $suche, int $limit = 20, array $facetten = []): Collection
     {
-        return FoodAlchemistConcept::visibleToTeam($team)->echte()
+        // #3: NUR Konzepte (kind=concept) — Pakete haben einen eigenen Picker-Reiter (paketKandidaten).
+        return FoodAlchemistConcept::visibleToTeam($team)->echte()->konzepte()
             ->where('status', 'active') // Picker zeigt nur aktive (keine Entwürfe/archivierten; Status berücksichtigt)
             ->when($suche !== '', fn ($q) => \Platform\FoodAlchemist\Support\Suche::like($q, 'name', $suche))
             ->when(! empty($facetten['eventtyp']), fn ($q) => $q->where('event_type_id', (int) $facetten['eventtyp']))
@@ -1908,6 +1909,24 @@ class FoodbookService
             ->when(! empty($facetten['einsatzmoment']), fn ($q) => $q->whereHas('serviceMoments', fn ($w) => $w->where('foodalchemist_service_moments.id', (int) $facetten['einsatzmoment'])))
             ->when(! empty($facetten['season']), fn ($q) => $q->whereHas('seasons', fn ($w) => $w->where('foodalchemist_seasons.id', (int) $facetten['season'])))
             ->orderBy('name')->limit($limit)->get(['id', 'name', 'price_per_person_cache', 'event_type_id', 'serving_form_id']);
+    }
+
+    /**
+     * #3: Paket-Kandidaten (kind=paket-Concepts) für den Foodbook-Picker — eigener Reiter neben
+     * Concept + Format. Dieselbe Filterkette wie {@see conceptKandidaten}; zeigt `consumer_name`
+     * (Kundenname) statt des internen Namens („Neues Paket"). Ein Paket wird wie ein Concept als
+     * concept_ref-Block gebucht (paket = kind=paket-Concept, concept_id trägt beide Arten).
+     */
+    public function paketKandidaten(Team $team, string $suche, int $limit = 20, array $facetten = []): Collection
+    {
+        return FoodAlchemistConcept::visibleToTeam($team)->echte()->pakete()
+            ->where('status', 'active')
+            ->when($suche !== '', fn ($q) => \Platform\FoodAlchemist\Support\Suche::likeAny($q, ['name', "COALESCE(consumer_name, '')"], $suche))
+            ->when(! empty($facetten['eventtyp']), fn ($q) => $q->where('event_type_id', (int) $facetten['eventtyp']))
+            ->when(! empty($facetten['servierform']), fn ($q) => $q->where('serving_form_id', (int) $facetten['servierform']))
+            ->when(! empty($facetten['einsatzmoment']), fn ($q) => $q->whereHas('serviceMoments', fn ($w) => $w->where('foodalchemist_service_moments.id', (int) $facetten['einsatzmoment'])))
+            ->when(! empty($facetten['season']), fn ($q) => $q->whereHas('seasons', fn ($w) => $w->where('foodalchemist_seasons.id', (int) $facetten['season'])))
+            ->orderBy('name')->limit($limit)->get(['id', 'name', 'consumer_name', 'price_per_person_cache', 'event_type_id', 'serving_form_id']);
     }
 
     /** Einzelne Gerichte (VK-Rezepte) für den recipe_ref-Picker. */

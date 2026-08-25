@@ -659,7 +659,7 @@
                             {{-- E1b (Spec 40): Speisen-Tab entzerren — der KI-Weg (Voll-Kaskade) ist NICHT tot, nur woanders.
                                  Empty-State macht ihn sichtbar, statt gefühlter Sackgasse. Tiefen-Ausbau → Werkstrang M. --}}
                             <div class="py-4 text-center space-y-1">
-                                <p class="text-xs text-gray-500">Noch kein Inhalt. Oben „+ Concept einfügen", „+ Gericht einfügen" oder Header/Text/Preis-Block hinzufügen.</p>
+                                <p class="text-xs text-gray-500">Noch kein Inhalt. Rechts im Katalog ein Concept, Paket oder Format einfügen — oder Header/Text/Preis-Block hinzufügen.</p>
                                 <p class="text-[11px] text-violet-600/80">Oder KI-befüllen: die <span class="font-medium">Voll-Kaskade</span> (Planung) erzeugt je Kapitel automatisch ein Konzept — es landet direkt hier im Inhalt.</p>
                             </div>
                         @endforelse
@@ -668,12 +668,12 @@
                 </div>{{-- /Inhalt --}}
                 </div>{{-- /linke Spalte (Kopf + Inhalt) --}}
 
-                {{-- Persistenter Katalog (geteilter Baustein katalog-picker/-row): Concept · Gericht · Format.
-                     Suche + Facetten; „+" fügt Concept/Gericht ins gewählte Kapitel, Format als eigenes
-                     Kapitel (F5: live concept_ref-Blöcke, kein Sonderweg). Server-Modus. --}}
+                {{-- #3: Persistenter Katalog — ausschließlich Concept · Paket · Format (kein Gericht-Reiter).
+                     Suche + Facetten; „+" bucht Concept/Paket als concept_ref ins gewählte Kapitel, Format
+                     als eigenes Kapitel (F5: live concept_ref-Blöcke, kein Sonderweg). Server-Modus. --}}
                 <x-foodalchemist::katalog-picker marker="fb" switch="katalogModus" :modes="[
                     ['key' => 'concept', 'label' => 'Concept', 'active' => $pickerModus === 'concept'],
-                    ['key' => 'gericht', 'label' => 'Gericht', 'active' => $pickerModus === 'gericht'],
+                    ['key' => 'paket', 'label' => 'Paket', 'active' => $pickerModus === 'paket'],
                     ['key' => 'format', 'label' => 'Format', 'active' => $pickerModus === 'format'],
                 ]">
                     @if($pickerModus === 'concept')
@@ -705,24 +705,34 @@
                                 <p class="text-[11px] text-gray-500 px-2 py-2">{{ $conceptSuche !== '' || $facettenAktiv ? 'Keine Concepts für diese Auswahl.' : 'Noch keine Concepts angelegt.' }}</p>
                             @endforelse
                         </div>
-                    @elseif($pickerModus === 'gericht')
-                        <input type="search" wire:model.live.debounce.300ms="gerichtSuche" placeholder="Gericht suchen …" class="{{ $input }} w-full mb-2 shrink-0" data-fb-katalog-gericht />
-                        {{-- Facetten als Dropdowns (Produktions-Muster): Warengruppe → Unterklasse. --}}
-                        <div class="grid grid-cols-2 gap-1 mb-2 shrink-0" data-fb-gericht-facetten>
-                            <select wire:model.live="gerichtHauptgruppe" class="{{ $input }} !py-0.5 !text-[11px]" data-fb-facet-hg>
-                                <option value="">Alle Warengruppen</option>
-                                @foreach($gerichtHauptgruppen as $hg)<option value="{{ $hg->id }}">{{ $hg->label }}</option>@endforeach
+                    @elseif($pickerModus === 'paket')
+                        {{-- #3: Paket-Reiter (kind=paket-Concepts) — dieselben Facetten-Dropdowns wie Concept,
+                             zeigt den Kundennamen (consumer_name). Buchung als concept_ref (paketHinzu). --}}
+                        <input type="search" wire:model.live.debounce.300ms="paketSuche" placeholder="Paket suchen …" class="{{ $input }} w-full mb-2 shrink-0" data-fb-katalog-paket />
+                        @php($paketFacettenAktiv = collect($paketFacetten)->filter(fn ($v) => $v !== null)->isNotEmpty())
+                        <div class="grid grid-cols-2 gap-1 mb-2 shrink-0" data-fb-paket-facetten>
+                            <select wire:model.live="paketFacetten.eventtyp" class="{{ $input }} !py-0.5 !text-[11px]" data-fb-paket-facet-eventtyp>
+                                <option value="">Alle Eventtypen</option>
+                                @foreach($facetteEventtypen as $et)<option value="{{ $et->id }}">{{ $et->name }}</option>@endforeach
                             </select>
-                            <select wire:model.live="gerichtDishClass" class="{{ $input }} !py-0.5 !text-[11px]" @disabled($gerichtUntergruppen->isEmpty()) data-fb-facet-klasse>
-                                <option value="">Alle Klassen</option>
-                                @foreach($gerichtUntergruppen as $ug)<option value="{{ $ug->id }}">{{ $ug->label }}</option>@endforeach
+                            <select wire:model.live="paketFacetten.servierform" class="{{ $input }} !py-0.5 !text-[11px]" data-fb-paket-facet-servierform>
+                                <option value="">Alle Servierformen</option>
+                                @foreach($facetteServierformen as $sf)<option value="{{ $sf->id }}">{{ $sf->label }}</option>@endforeach
+                            </select>
+                            <select wire:model.live="paketFacetten.einsatzmoment" class="{{ $input }} !py-0.5 !text-[11px]" data-fb-paket-facet-einsatzmoment>
+                                <option value="">Alle Einsatzmomente</option>
+                                @foreach($facetteMomente as $em)<option value="{{ $em->id }}">{{ $em->name }}</option>@endforeach
+                            </select>
+                            <select wire:model.live="paketFacetten.season" class="{{ $input }} !py-0.5 !text-[11px]" data-fb-paket-facet-season>
+                                <option value="">Alle Saisons</option>
+                                @foreach($facetteSaisons as $sa)<option value="{{ $sa->id }}">{{ $sa->name }}</option>@endforeach
                             </select>
                         </div>
                         <div class="flex-1 overflow-y-auto space-y-0.5">
-                            @forelse($gerichtKandidaten as $gk)
-                                <x-foodalchemist::katalog-row wire:key="kgk-{{ $gk->id }}" wire:click="gerichtHinzu({{ $gk->id }})" :title="$gk->name" :price="$gk->sales_net !== null ? number_format((float) $gk->sales_net, 2, ',', '.') . ' €' : null">{{ $gk->name }}</x-foodalchemist::katalog-row>
+                            @forelse($paketKandidaten as $pk)
+                                <x-foodalchemist::katalog-row wire:key="kpk-{{ $pk->id }}" wire:click="paketHinzu({{ $pk->id }})" :title="$pk->consumer_name ?: $pk->name" :price="$pk->price_per_person_cache !== null ? number_format((float) $pk->price_per_person_cache, 2, ',', '.') . ' €' : null">{{ $pk->consumer_name ?: $pk->name }}</x-foodalchemist::katalog-row>
                             @empty
-                                <p class="text-[11px] text-gray-500 px-2 py-2">{{ $gerichtSuche !== '' || $gerichtHauptgruppe !== null ? 'Keine VK-Gerichte für diese Auswahl.' : 'Noch keine VK-Gerichte vorhanden.' }}</p>
+                                <p class="text-[11px] text-gray-500 px-2 py-2">{{ $paketSuche !== '' || $paketFacettenAktiv ? 'Keine Pakete für diese Auswahl.' : 'Noch keine Pakete angelegt.' }}</p>
                             @endforelse
                         </div>
                     @else

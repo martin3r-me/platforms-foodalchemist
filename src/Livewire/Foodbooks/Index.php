@@ -184,12 +184,16 @@ class Index extends Component
 
     public string $conceptSuche = '';
 
+    /** #3: Suche im Paket-Picker-Reiter (kind=paket-Concepts). */
+    public string $paketSuche = '';
+
     /** Format-Umbau F5: Suche im „Format einfügen"-Picker (Katalog-Modus 'format'). */
     public string $formatSuche = '';
 
-    /** Picker-Baustein (2026-08-23): aktiver Katalog-Modus (Server-Modus, wie Speisekarte) — concept|gericht|format.
-     *  Property heisst bewusst NICHT wie die Methode katalogModus() — gleicher Name = Livewire-Footgun (client
-     *  wire:click misfired, Server-`->call()` nicht → layout-blind); daher pickerModus wie in der Speisekarte. */
+    /** Picker-Baustein (2026-08-23): aktiver Katalog-Modus (Server-Modus, wie Speisekarte).
+     *  #3: nur noch concept|paket|format — der Gericht-Reiter ist raus (Picker enthält ausschließlich
+     *  Concepte, Pakete, Formate). Property heisst bewusst NICHT wie die Methode katalogModus() —
+     *  gleicher Name = Livewire-Footgun (client wire:click misfired). */
     public string $pickerModus = 'concept';
 
     /**
@@ -199,6 +203,9 @@ class Index extends Component
      * @var array{eventtyp:?int, servierform:?int, einsatzmoment:?int, season:?int}
      */
     public array $conceptFacetten = ['eventtyp' => null, 'servierform' => null, 'einsatzmoment' => null, 'season' => null];
+
+    /** #3: Paket-Picker-Reiter teilt dieselbe Facetten-Filterkette wie der Concept-Reiter. */
+    public array $paketFacetten = ['eventtyp' => null, 'servierform' => null, 'einsatzmoment' => null, 'season' => null];
 
     /** E1.3: Freitext-Suche für den recipe_ref-Einzel-Gericht-Picker. */
     public string $gerichtSuche = '';
@@ -654,10 +661,10 @@ class Index extends Component
 
     // ── Blöcke ────────────────────────────────────────────────────────────
 
-    /** Picker-Baustein: Katalog-Modus umschalten (concept|gericht). Spiegelt Speisekarte::katalogModus. */
+    /** Picker-Baustein: Katalog-Modus umschalten (#3: concept|paket|format — kein Gericht mehr). */
     public function katalogModus(string $modus): void
     {
-        if (in_array($modus, ['concept', 'gericht', 'format'], true)) {
+        if (in_array($modus, ['concept', 'paket', 'format'], true)) {
             $this->pickerModus = $modus;
         }
     }
@@ -669,6 +676,20 @@ class Index extends Component
         }
         $svc->addBlock($this->team(), $this->selectedKapitelId, ['type' => 'concept_ref', 'concept_id' => $conceptId]);
         $this->conceptSuche = '';
+    }
+
+    /**
+     * #3: ein Paket (kind=paket-Concept) als concept_ref-Block ans Kapitel — dieselbe Buchung
+     * wie {@see conceptHinzu} (concept_id trägt Concept + Paket). Eigener Picker-Reiter, damit
+     * Pakete mit ihrem Kundennamen browsebar sind.
+     */
+    public function paketHinzu(int $paketId, FoodbookService $svc): void
+    {
+        if ($this->selectedKapitelId === null) {
+            return;
+        }
+        $svc->addBlock($this->team(), $this->selectedKapitelId, ['type' => 'concept_ref', 'concept_id' => $paketId]);
+        $this->paketSuche = '';
     }
 
     /**
@@ -741,6 +762,12 @@ class Index extends Component
     public function updatedConceptFacetten($value, $key): void
     {
         $this->conceptFacetten[$key] = ($value === '' || $value === null) ? null : (int) $value;
+    }
+
+    /** #3: Dropdown-Bindung der Paket-Picker-Facetten (analog updatedConceptFacetten). */
+    public function updatedPaketFacetten($value, $key): void
+    {
+        $this->paketFacetten[$key] = ($value === '' || $value === null) ? null : (int) $value;
     }
 
     /** Dropdown-Bindung: HG-Wechsel setzt die Unterklasse zurück (wie waehleGerichtHg). */
@@ -1035,6 +1062,9 @@ class Index extends Component
             // liefert bei leerer Suche längst alle (orderBy name, cap 50). Nur an Kapitel-Auswahl gebunden.
             'conceptKandidaten' => $this->selectedKapitelId !== null
                 ? $svc->conceptKandidaten($team, $this->conceptSuche, 50, $this->conceptFacetten) : collect(),
+            // #3: Paket-Reiter (kind=paket-Concepts) — dieselbe Filterkette, consumer_name statt intern.
+            'paketKandidaten' => $this->selectedKapitelId !== null
+                ? $svc->paketKandidaten($team, $this->paketSuche, 50, $this->paketFacetten) : collect(),
             // E1.3: Einzel-Gericht-Picker (recipe_ref) — sofort Liste, Suche + Klasse (HG) + Untergruppe filtern nur
             'gerichtKandidaten' => $this->selectedKapitelId !== null
                 ? $svc->gerichtKandidaten($team, $this->gerichtSuche, 50, $this->gerichtHauptgruppe, $this->gerichtDishClass) : collect(),
