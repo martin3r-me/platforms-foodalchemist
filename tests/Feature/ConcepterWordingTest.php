@@ -60,6 +60,41 @@ it('✨ erzeugt Konzept-Intro (in beschreibung) + Brand-Voice-Namen je Position'
         ->and($slot->fresh()->wording)->toBe('Knuspriger Hot-Dog-Traum');
 });
 
+it('Bug-Fix: der Schreibstil-Sprach-Duktus (nicht nur der Name) landet im KI-Prompt', function () {
+    $stil = \Platform\FoodAlchemist\Models\FoodAlchemistWritingStyle::create([
+        'team_id' => $this->rootTeam->id, 'slug' => 'test-duktus', 'name' => 'Verspielt',
+        'sprach_duktus' => 'DUKTUS-MARKER-XYZ: kurze Sätze, viele Wortspiele.',
+        'beispiele_md' => 'BEISPIEL-MARKER-QRS',
+    ]);
+    app(ConceptService::class)->update($this->rootTeam, $this->concept->id, ['writing_style_id' => $stil->id]);
+
+    $comp = Livewire::test(Editor::class)->call('oeffnen', 'concepts', $this->concept->id);
+    $comp->call('positionEinfuegen', 'gericht', $this->green->id);
+
+    // Spy fängt die Prompt-Messages ab, damit wir sehen was die KI wirklich bekommt.
+    $spy = new class extends FakeAiProvider
+    {
+        public array $letzteMessages = [];
+
+        public function chat(array $messages, array $options = []): array
+        {
+            $this->letzteMessages = $messages;
+
+            return [
+                'content' => json_encode(['werte' => ['intro' => 'x', 'slots' => []], 'confidence' => 0.9]),
+                'usage' => ['input_tokens' => 0, 'output_tokens' => 0], 'model' => 'spy', 'tool_calls' => null,
+            ];
+        }
+    };
+    app()->instance(FakeAiProvider::class, $spy);
+
+    $comp->call('wordingGenerieren')->assertSet('fehler', null);
+
+    $prompt = collect($spy->letzteMessages)->pluck('content')->implode("\n");
+    expect($prompt)->toContain('DUKTUS-MARKER-XYZ')     // Sprach-Duktus reist mit (war der Bug: nur der Name ging mit)
+        ->and($prompt)->toContain('BEISPIEL-MARKER-QRS'); // Beispiele auch
+});
+
 it('manuelles Überschreiben des Slot-Wordings persistiert', function () {
     $comp = Livewire::test(Editor::class)->call('oeffnen', 'concepts', $this->concept->id);
     $comp->call('positionEinfuegen', 'gericht', $this->green->id);

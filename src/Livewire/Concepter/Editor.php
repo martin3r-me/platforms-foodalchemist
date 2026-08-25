@@ -481,12 +481,18 @@ class Editor extends Component
         if ($concept === null) {
             return;
         }
-        $stil = $this->form['writing_style_id'] ?? null;
+        $stilId = $this->form['writing_style_id'] ?? null;
+        $stil = $stilId ? FoodAlchemistWritingStyle::find($stilId) : null;
         $kontext = [
             'concept' => $concept->name,
             'occasion' => $concept->occasion,
             'class' => $concept->class,
-            'schreibstil' => $stil ? optional(FoodAlchemistWritingStyle::find($stil))->name : null,
+            // Bug-Fix 2026-08-25 (Dominique „Regler verändert nichts"): der KI reichte bisher NUR der
+            // Stil-Name — das eigentliche Prompt-Material `sprach_duktus` (GL-06) ging nie mit, daher
+            // wirkte der Schreibstil nicht. Jetzt: Name + Sprach-Duktus (+ Beispiele) in den Kontext.
+            'schreibstil' => $stil?->name,
+            'schreibstil_anweisung' => $stil !== null ? (trim((string) $stil->sprach_duktus) ?: null) : null,
+            'schreibstil_beispiele' => $stil !== null ? (trim((string) $stil->beispiele_md) ?: null) : null,
             'positionen' => $concept->slots
                 ->filter(fn ($s) => $s->sales_recipe_id !== null && $s->dish)
                 ->map(fn ($s) => ['slot_id' => $s->id, 'name' => $s->dish->name, 'sales_wording_standard' => $s->dish->sales_wording_standard ?? null])

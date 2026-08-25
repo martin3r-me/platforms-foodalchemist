@@ -991,7 +991,10 @@ return [
         ],
         'concept.wording' => [
             'tier' => 'A',
-            'task' => 'Erzeuge im mitgegebenen Schreibstil ein stimmiges Konzept-Wording ueber ALLE Positionen: '
+            'task' => 'Erzeuge ein stimmiges Konzept-Wording ueber ALLE Positionen STRIKT im vorgegebenen Schreibstil: '
+                . 'richte Tonalitaet, Wortwahl und Satzbau eng an `schreibstil_anweisung` (Sprach-Duktus) aus — '
+                . 'orientiere dich an `schreibstil_beispiele`, falls vorhanden; faellt beides weg, an `schreibstil`. '
+                . 'Der Stil MUSS im Ergebnis klar erkennbar sein, ein anderer Stil muss deutlich anders klingen. '
                 . 'werte = {intro, slots}. intro = kurzer Einleitungs-/Praesentationstext fuer das ganze Konzept. '
                 . 'slots = Map slot_id -> Brand-Voice-Anzeigename je Position (Variante des neutralen sales_wording_standard, '
                 . 'ueber das gesamte Menue stimmig und wiedererkennbar).',
