@@ -235,6 +235,56 @@ it('C1: Gericht-Zeile inline editieren schreibt den foodbook-lokalen Override + 
         ->assertSee('Mein Kunden-Salat');
 });
 
+it('Paket-in-Kapitel-Wording: das Kapitel-Wording betextet AUCH die Gerichte eingebetteter Pakete', function () {
+    config(['foodalchemist.ai.provider' => 'fake', 'foodalchemist.ai.backoff' => []]);
+    $concepts = app(ConceptService::class);
+    $green = FoodAlchemistRecipe::create([
+        'team_id' => $this->rootTeam->id, 'recipe_key' => 'pk', 'name' => 'Salat',
+        'status' => 'approved', 'is_sales_recipe' => true, 'sales_net' => 2.00,
+    ]);
+    // Paket (kind=paket) mit einem Gericht, in ein Concept eingebettet.
+    $paket = $concepts->createPaket($this->rootTeam, ['name' => 'Salatwand']);
+    $concepts->update($this->rootTeam, $paket->id, ['status' => 'active']);
+    $pslot = $concepts->addSlot($this->rootTeam, $paket->id, ['role' => 'Vorspeise']);
+    $concepts->fillSlot($this->rootTeam, $pslot->id, ['sales_recipe_id' => $green->id]);
+    $concept = $concepts->create($this->rootTeam, ['name' => 'Menü', 'status' => 'active']);
+    $eslot = $concepts->addSlot($this->rootTeam, $concept->id, ['role' => 'Vorspeise']);
+    $concepts->fillSlot($this->rootTeam, $eslot->id, ['embedded_concept_id' => $paket->id]);
+
+    $stil = \Platform\FoodAlchemist\Models\FoodAlchemistWritingStyle::create([
+        'team_id' => $this->rootTeam->id, 'slug' => 'pk-stil', 'name' => 'Verspielt', 'sprach_duktus' => 'locker.',
+    ]);
+
+    Livewire::test(FoodbooksIndex::class)->call('neu');
+    $fb = FoodAlchemistFoodbook::first();
+    $comp = Livewire::test(FoodbooksIndex::class)->call('waehle', $fb->id)
+        ->set('neuesKapitelTitel', 'Kap')->call('kapitelNeu');
+    $kap = $fb->kapitel()->first();
+    $comp->call('conceptHinzu', $concept->id);
+    $block = $kap->blocks()->where('type', 'concept_ref')->firstOrFail();
+
+    // Spy betextet den PAKET-Slot (dessen Slot-ID muss in den Positionen ankommen).
+    $spy = new class($pslot->id) extends \Platform\FoodAlchemist\Services\Ai\FakeAiProvider
+    {
+        public function __construct(public int $paketSlotId) {}
+
+        public function chat(array $messages, array $options = []): array
+        {
+            return ['content' => json_encode(['werte' => [
+                'intro' => 'x', 'slots' => [$this->paketSlotId => 'Paket-Gericht betextet'],
+            ], 'confidence' => 0.9]), 'usage' => ['input_tokens' => 0, 'output_tokens' => 0], 'model' => 'spy', 'tool_calls' => null];
+        }
+    };
+    app()->instance(\Platform\FoodAlchemist\Services\Ai\FakeAiProvider::class, $spy);
+
+    $comp->set('kapitelForm.writing_style_id', $stil->id)->call('kapitelWordingGenerieren');
+
+    // Der Paket-Slot-Override liegt foodbook-lokal am Block (nicht am Paket-Concept).
+    $payload = $block->fresh()->payload_json ?? [];
+    expect($payload['wording_overrides'][(string) $pslot->id] ?? null)->toBe('Paket-Gericht betextet')
+        ->and($pslot->fresh()->wording)->toBeNull();   // Paket-Concept unangetastet
+});
+
 it('#4: kapitelVerschiebenAuf sortiert ein Kapitel per Drag vor das Ziel', function () {
     Livewire::test(FoodbooksIndex::class)->call('neu');
     $fb = FoodAlchemistFoodbook::first();

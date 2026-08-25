@@ -1193,7 +1193,9 @@ class FoodbookService
     public function kapitelWordingRegenerieren(Team $team, int $kapitelId): int
     {
         $k = $this->ownedKapitel($team, $kapitelId);
-        $k->loadMissing(['writingStyle', 'blocks.concept.slots.dish:id,name,sales_wording_standard']);
+        $k->loadMissing(['writingStyle', 'blocks.concept.slots.dish:id,name,sales_wording_standard',
+            // Paket-in-Kapitel-Wording: auch die Gerichte eingebetteter Pakete mit-betexten.
+            'blocks.concept.slots.embeddedConcept.slots.dish:id,name,sales_wording_standard']);
         $stil = $k->writingStyle;
         if ($stil === null) {
             return 0; // kein Kapitel-Override → nichts zu snapshotten (Standard erbt live)
@@ -1205,10 +1207,20 @@ class FoodbookService
             if ($block->type !== 'concept_ref' || $block->concept === null) {
                 continue;
             }
-            $positionen = $block->concept->slots
-                ->filter(fn ($s) => $s->sales_recipe_id !== null && $s->dish)
-                ->map(fn ($s) => ['slot_id' => $s->id, 'name' => $s->dish->name, 'sales_wording_standard' => $s->dish->sales_wording_standard ?? null])
-                ->values()->all();
+            // Positionen = direkte Gericht-Slots UND die Gerichte eingebetteter Pakete (deren Slot-IDs) —
+            // damit das Kapitel-Wording auch die Paket-Gerichte betextet (Dominique-Fund).
+            $positionen = [];
+            foreach ($block->concept->slots as $s) {
+                if ($s->sales_recipe_id !== null && $s->dish) {
+                    $positionen[] = ['slot_id' => $s->id, 'name' => $s->dish->name, 'sales_wording_standard' => $s->dish->sales_wording_standard ?? null];
+                } elseif ($s->embedded_concept_id !== null && $s->embeddedConcept) {
+                    foreach ($s->embeddedConcept->slots as $ps) {
+                        if ($ps->sales_recipe_id !== null && $ps->dish) {
+                            $positionen[] = ['slot_id' => $ps->id, 'name' => $ps->dish->name, 'sales_wording_standard' => $ps->dish->sales_wording_standard ?? null];
+                        }
+                    }
+                }
+            }
             if ($positionen === []) {
                 continue;
             }

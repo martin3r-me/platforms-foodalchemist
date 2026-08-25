@@ -659,7 +659,9 @@
                                 @if($block->type === 'concept_ref' && ! empty($blockMenus[$block->id]))
                                     <div class="mt-1.5 ml-6 rounded-lg bg-violet-500/[0.035] border border-black/5 px-3 py-2 space-y-1" data-fb-block-vorschau>
                                         @foreach($blockMenus[$block->id] as $g)
-                                            @php($istEditierbar = isset($g['slot_id']) && (int) ($g['einrueckung'] ?? 0) === 0)
+                                            {{-- editierbar = jede Gericht-Zeile mit slot_id (direkt ODER eingebettetes Paket —
+                                                 der Block wird in die Paket-Rekursion durchgereicht, Overrides greifen). --}}
+                                            @php($istEditierbar = isset($g['slot_id']))
                                             @php($slotKey = $istEditierbar ? $block->id . ':' . $g['slot_id'] : null)
                                             @if(($g['type'] ?? '') === 'header')
                                                 <p class="text-[10px] font-semibold uppercase tracking-wider text-gray-500 mt-1.5 first:mt-0" style="margin-left:{{ ($g['einrueckung'] ?? 0) * 12 }}px">{{ $g['text'] }}</p>

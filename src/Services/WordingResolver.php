@@ -118,7 +118,10 @@ class WordingResolver
                 $paket = $slot->embeddedConcept;
                 $zeilen[] = ['type' => 'paket', 'text' => (string) ($paket->consumer_name ?: $paket->name), 'source' => null, 'einrueckung' => 0,
                     'preis' => $paket->price_per_person_cache !== null ? (float) $paket->price_per_person_cache : null];
-                foreach ($this->gerichtZeilen($paket) as $z) {
+                // Wording-Kette gilt AUCH für die Gerichte des eingebetteten Pakets: der Block wird in die
+                // Rekursion durchgereicht, damit foodbook-lokale Overrides (payload_json['wording_overrides']
+                // je Paket-Slot-ID) greifen — sonst blieben Paket-Gerichte beim Kapitel-Wording „Wording fehlt".
+                foreach ($this->gerichtZeilen($paket, $block) as $z) {
                     $zeilen[] = ['type' => $z['type'], 'text' => $z['text'], 'source' => $z['source'] ?? null,
                         'einrueckung' => ($z['einrueckung'] ?? 0) + 1] + array_intersect_key($z, ['recipe_id' => true, 'slot_id' => true]);
                 }
