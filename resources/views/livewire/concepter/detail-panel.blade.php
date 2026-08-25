@@ -30,16 +30,16 @@
             </div>
             <div class="flex flex-wrap items-center gap-1.5 mt-2">
                 <button type="button" wire:click="$dispatch('concepter-editor.oeffnen', { type: 'concepts', id: {{ $concept->id }} })" class="{{ $btnGhostXs }}">@svg('heroicon-o-pencil-square', 'w-3.5 h-3.5') Bearbeiten</button>
-                <a href="{{ route('foodalchemist.concepts.dokument', ['id' => $concept->id, 'profil' => 'voll']) }}" target="_blank"
-                   class="{{ $btnGhostXs }}" title="Druck-/PDF-Report mit voller Kaskade" data-concepter-panel-druck>
-                    @svg('heroicon-o-printer', 'w-3.5 h-3.5') Druck
+                {{-- #6: einheitliche Labels — „Druck/Karte" (schöne Ausgabe) + „Report" (technisch).
+                     Karte gilt auch fürs Paket (concepts.karte nimmt eine Concept-ID). --}}
+                <a href="{{ route('foodalchemist.concepts.karte', ['id' => $concept->id]) }}" target="_blank"
+                   class="{{ $btnGhostXs }}" title="Schöne Menü-Karte (Kunden-Ausgabe · Druck/PDF)" data-concepter-panel-karte>
+                    @svg('heroicon-o-printer', 'w-3.5 h-3.5') Druck/Karte
                 </a>
-                @unless($istPaket)
-                    <a href="{{ route('foodalchemist.concepts.karte', ['id' => $concept->id]) }}" target="_blank"
-                       class="{{ $btnGhostXs }}" title="Schöne Menü-Karte (Kunden-Ausgabe · Druck/PDF)" data-concepter-panel-karte>
-                        @svg('heroicon-o-document-text', 'w-3.5 h-3.5') Karte
-                    </a>
-                @endunless
+                <a href="{{ route('foodalchemist.concepts.dokument', ['id' => $concept->id, 'profil' => 'voll']) }}" target="_blank"
+                   class="{{ $btnGhostXs }}" title="Technischer Report mit voller Kaskade" data-concepter-panel-druck>
+                    @svg('heroicon-o-document-text', 'w-3.5 h-3.5') Report
+                </a>
                 @unless($istPaket)
                     @if($concept->is_template)
                         <button type="button" wire:click="ausVorlage" class="{{ $btnGhostXs }} text-violet-600">↧ Als Concept nutzen</button>

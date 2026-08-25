@@ -57,9 +57,26 @@ class DetailPanel extends Component
             $this->selectedId = null;
         }
 
+        // #3: Cockpit — read-only Reduktion der Editions-Caches (Preisspanne + Ø €/P + Zählung),
+        // KEINE eigene Formel/Recompute (spiegelt priceRange). Editionen = Alternativen → Range statt Summe.
+        $conceptSlots = $format !== null ? $format->slots->where('type', 'concept') : collect();
+        $vks = $conceptSlots
+            ->map(fn ($s) => $s->concept?->price_per_person_cache)
+            ->map(fn ($v) => $v !== null ? (float) $v : null)
+            ->filter(fn ($v) => $v !== null && $v > 0)
+            ->values();
+        $cockpit = [
+            'n_editionen' => $conceptSlots->count(),
+            'n_struktur' => $format !== null ? $format->slots->whereIn('type', ['header', 'text', 'spacer'])->count() : 0,
+            'min' => $vks->isEmpty() ? null : round((float) $vks->min(), 2),
+            'max' => $vks->isEmpty() ? null : round((float) $vks->max(), 2),
+            'avg' => $vks->isEmpty() ? null : round((float) $vks->avg(), 2),
+        ];
+
         return view('foodalchemist::livewire.formate.detail-panel', [
             'format' => $format,
             'range' => $format?->priceRange() ?? ['min' => null, 'max' => null],
+            'cockpit' => $cockpit,
         ]);
     }
 

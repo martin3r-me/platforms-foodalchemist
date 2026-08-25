@@ -21,10 +21,16 @@
             {{-- #5 (2026-08-13): EIN Speichern pro Tab — auf «Konzept & Planung» sichert der Button
                  Stammdaten + Canvas + Rahmen zusammen (konzeptSpeichern), sonst nur die Stammdaten. --}}
             <button type="button" wire:click="{{ $tab === 'konzept' ? 'konzeptSpeichern' : 'speichern' }}" class="{{ $btnPrimary }}">Speichern</button>
+            {{-- #6 (F3c): Druck-Symmetrie zum Format-Editor — „Druck/Karte" (schöne Kunden-Ausgabe) +
+                 „Report" (technisch). Die Karte gilt auch fürs Paket (concepts.karte nimmt eine Concept-ID). --}}
             @if($concept)
+                <a href="{{ route('foodalchemist.concepts.karte', ['id' => $concept->id]) }}" target="_blank"
+                   class="{{ $btnGhost }}" title="Schöne Kunden-Ausgabe (Menü-Karte · Druck/PDF)" data-concepter-karte>
+                    @svg('heroicon-o-printer', 'w-3.5 h-3.5') Druck/Karte
+                </a>
                 <a href="{{ route('foodalchemist.concepts.dokument', ['id' => $concept->id, 'profil' => 'voll']) }}" target="_blank"
-                   class="{{ $btnGhost }}" title="Druck-/PDF-Report mit voller Gericht→Basisrezept→GP→LA-Kaskade" data-concepter-druck>
-                    @svg('heroicon-o-printer', 'w-3.5 h-3.5') Druck
+                   class="{{ $btnGhost }}" title="Technischer Report mit voller Gericht→Basisrezept→GP→LA-Kaskade" data-concepter-druck>
+                    @svg('heroicon-o-document-text', 'w-3.5 h-3.5') Report
                 </a>
             @endif
             @if($concept && ! $concept->is_template)

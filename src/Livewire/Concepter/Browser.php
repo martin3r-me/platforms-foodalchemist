@@ -67,11 +67,28 @@ class Browser extends Component
     #[Url(as: 'sel')]
     public ?int $selectedId = null;
 
+    /**
+     * #5: Direkt-Sprung „Im Concepter ↗" — ?edit=<id> wählt das Concept nicht nur aus, sondern
+     * ÖFFNET es im Editor-Modal (der Editor lauscht auf `concepter-editor.oeffnen`). Einmalig
+     * beim Mount (danach zurückgesetzt, damit die id nicht in der URL klebt).
+     */
+    #[Url(as: 'edit')]
+    public ?int $editId = null;
+
     public function mount(): void
     {
         $this->normalisiereTab();
+        // #5: ?edit=<id> → auf den Concepts-Reiter, Concept auswählen + Editor öffnen.
+        if ($this->editId !== null) {
+            $this->tab = 'concepts';
+            $this->selectedId = $this->editId;
+        }
         if ($this->selectedId !== null) {
             $this->dispatch('concepter-selected', type: $this->tab, id: $this->selectedId);
+        }
+        if ($this->editId !== null) {
+            $this->dispatch('concepter-editor.oeffnen', type: 'concepts', id: $this->editId);
+            $this->editId = null;
         }
     }
 

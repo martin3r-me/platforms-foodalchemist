@@ -32,6 +32,26 @@ class Editor extends Component
 
     public string $editionSuche = '';
 
+    /** F6/#2: Paket-Reiter-Suche im rechten Aufbau-Picker (Concepts nutzt $editionSuche). */
+    public string $paketSuche = '';
+
+    /**
+     * F6: rechter Aufbau-Picker im Conceptor-Stil — Reiter „Concepts" | „Pakete".
+     * Beide booken über conceptEinfuegen() (ein Paket ist ein kind=paket-Concept).
+     */
+    public string $pickerTab = 'concept';   // 'concept' | 'paket'
+
+    /** #2: Picker-Filter (geteilt je Reiter, spiegelt den Concepter-Browser: Klasse + Facetten). */
+    public string $pickerKlasse = '';
+
+    public string $pickerServierform = '';
+
+    public string $pickerEventtyp = '';
+
+    public string $pickerMoment = '';
+
+    public string $pickerSaison = '';
+
     /** Phase D: Name der inline neu anzulegenden Edition (Concepter 2.0). */
     public string $neueEditionName = '';
 
@@ -50,7 +70,8 @@ class Editor extends Component
     #[On('formate-editor.oeffnen')]
     public function oeffnen(?int $id): void
     {
-        $this->reset(['form', 'editionSuche', 'neueEditionName', 'einfuegenNachId', 'bildUpload', 'fehler']);
+        $this->reset(['form', 'editionSuche', 'paketSuche', 'pickerTab', 'pickerKlasse', 'pickerServierform',
+            'pickerEventtyp', 'pickerMoment', 'pickerSaison', 'neueEditionName', 'einfuegenNachId', 'bildUpload', 'fehler']);
         $this->id = $id;
         $this->tab = 'identitaet';
         if ($id === null) {
@@ -88,6 +109,34 @@ class Editor extends Component
         }
     }
 
+    /** F6: rechten Aufbau-Picker umschalten (Concepts ⇄ Pakete). */
+    public function setPickerTab(string $tab): void
+    {
+        if (in_array($tab, ['concept', 'paket'], true)) {
+            $this->pickerTab = $tab;
+        }
+    }
+
+    /**
+     * #2: Picker-Filter-Chip togglen (Klick auf aktiven Wert = abwählen). Ein Filtersatz
+     * gilt für beide Reiter — Klasse + die Facetten Servierform/Eventtyp/Einsatzmoment/Saison.
+     */
+    public function pickerFilter(string $feld, $wert): void
+    {
+        $map = [
+            'klasse' => 'pickerKlasse',
+            'servierform' => 'pickerServierform',
+            'eventtyp' => 'pickerEventtyp',
+            'moment' => 'pickerMoment',
+            'saison' => 'pickerSaison',
+        ];
+        if (! isset($map[$feld])) {
+            return;
+        }
+        $prop = $map[$feld];
+        $this->{$prop} = ((string) $this->{$prop}) === ((string) $wert) ? '' : (string) $wert;
+    }
+
     /** F1: Mehrfach-Facette (Einsatzmoment/Saison/Zielgruppe) am Format togglen. */
     public function toggleFacette(string $feld, int $id): void
     {
@@ -108,7 +157,8 @@ class Editor extends Component
     public function beimSchliessen(?string $name = null): void
     {
         if ($name === 'formate-editor') {
-            $this->reset(['form', 'editionSuche', 'neueEditionName', 'einfuegenNachId', 'bildUpload', 'fehler']);
+            $this->reset(['form', 'editionSuche', 'paketSuche', 'pickerTab', 'pickerKlasse', 'pickerServierform',
+            'pickerEventtyp', 'pickerMoment', 'pickerSaison', 'neueEditionName', 'einfuegenNachId', 'bildUpload', 'fehler']);
             $this->id = null;
         }
     }
@@ -366,16 +416,35 @@ class Editor extends Component
 
         // F2: Aufbau-Positionen (Slots) in Reihenfolge — Concept-Referenzen + Struktur-Blöcke.
         $slots = collect();
-        // Concept-Picker: team-eigene, aktive Konzepte (unter Referenz kann ein Concept in
-        // mehreren Formaten stehen — daher KEIN `format_id`-Filter mehr, sondern der Service-Kandidat).
+        // F6: rechter Picker-Rail — je Reiter eine Kandidatenliste (Concepts | Pakete),
+        // beide über conceptEinfuegen() buchbar (ein Paket ist ein kind=paket-Concept).
         $kandidaten = collect();
+        $paketKandidaten = collect();
+        $pickerKlassen = [];
+        $pickerPaketKlassen = [];
         $editionMenus = [];
         if ($this->id !== null && $this->tab === 'editionen' && $format !== null) {
             $slots = $format->slots()
-                ->with(['concept:id,name,consumer_name,claim,description,status,price_per_person_cache'])
+                // #3/F6: kind → „Paket"-Badge am Slot.
+                ->with(['concept:id,name,consumer_name,claim,description,status,kind,price_per_person_cache'])
                 ->orderBy('position')->get();
 
-            $kandidaten = $formats->conceptKandidaten($this->team(), $this->editionSuche);
+            // #2: geteilter Filtersatz (Klasse + Facetten) für beide Picker-Reiter.
+            $pickerFilters = [
+                'class' => $this->pickerKlasse,
+                'servierform' => $this->pickerServierform,
+                'eventtyp' => $this->pickerEventtyp,
+                'einsatzmoment' => $this->pickerMoment,
+                'season' => $this->pickerSaison,
+            ];
+            if ($this->pickerTab === 'paket') {
+                $paketKandidaten = $formats->paketKandidaten($this->team(), $this->paketSuche, $pickerFilters);
+            } else {
+                $kandidaten = $formats->conceptKandidaten($this->team(), $this->editionSuche, $pickerFilters);
+            }
+            $conceptSvc = app(ConceptService::class);
+            $pickerKlassen = $conceptSvc->klassen($this->team());
+            $pickerPaketKlassen = $conceptSvc->klassenPakete($this->team());
 
             // Live-Vorschau je Concept-Slot (Sektionen + Gerichte via WordingResolver) — dieselbe
             // Auflösung wie im Foodbook-Render, gekeyed nach SLOT-ID (nicht Concept-ID).
@@ -447,6 +516,9 @@ class Editor extends Component
             'format' => $format,
             'aufbauSlots' => $slots,
             'kandidaten' => $kandidaten,
+            'paketKandidaten' => $paketKandidaten,
+            'pickerKlassen' => $pickerKlassen,
+            'pickerPaketKlassen' => $pickerPaketKlassen,
             'editionMenus' => $editionMenus,
             'kalkZeilen' => $kalkZeilen,
             'kalkSumme' => $kalkSumme,

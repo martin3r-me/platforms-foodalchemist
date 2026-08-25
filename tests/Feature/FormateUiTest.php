@@ -70,6 +70,20 @@ it('Editor: fügt ein Konzept als Aufbau-Position ein und entfernt es wieder', f
     expect(FoodAlchemistConcept::find($c->id))->not->toBeNull();   // Konzept bleibt bestehen
 });
 
+it('#3: DetailPanel rendert Cockpit (Preisspanne) + Editionen-Liste', function () {
+    $f = $this->svc->create($this->rootTeam, ['name' => 'CHEFS.CORNER', 'status' => 'active']);
+    $c = FoodAlchemistConcept::create(['team_id' => $this->rootTeam->id, 'name' => 'FUTURE FLAVORS', 'status' => 'active']);
+    $c->update(['price_per_person_cache' => 42.00]);
+    $this->svc->slotConceptEinfuegen($this->rootTeam, $f->id, $c->id);
+
+    Livewire::test(DetailPanel::class)
+        ->call('zeige', $f->id)
+        ->assertSee('Preisspanne')
+        ->assertSee('Editionen')
+        ->assertSee('FUTURE FLAVORS')
+        ->assertSee('42,00');
+});
+
 it('DetailPanel: zeigt das gewählte Format und löscht es', function () {
     $f = $this->svc->create($this->rootTeam, ['name' => 'CHEFS.CORNER', 'claim' => 'WORLD ON A PLATE']);
 

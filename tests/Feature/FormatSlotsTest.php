@@ -74,6 +74,33 @@ it('conceptKandidaten liefert nur aktive Konzepte', function () {
     expect($namen)->toContain('Sommer-Menü')->not->toContain('Winter-Menü');
 });
 
+it('#2: paketKandidaten liefert nur kind=paket, conceptKandidaten nur Konzepte', function () {
+    $paket = $this->concepts->createPaket($this->rootTeam, ['name' => 'Grill-Paket']); // Default-Status active
+
+    $pakete = $this->svc->paketKandidaten($this->rootTeam);
+    $konzepte = $this->svc->conceptKandidaten($this->rootTeam);
+
+    expect($pakete->pluck('name')->all())->toContain('Grill-Paket')
+        ->and($pakete->every(fn ($p) => $p->kind === 'paket'))->toBeTrue()
+        ->and($pakete->pluck('name')->all())->not->toContain('Sommer-Menü')   // Konzepte gehören nicht in den Paket-Reiter
+        ->and($konzepte->pluck('name')->all())->toContain('Sommer-Menü')
+        ->and($konzepte->pluck('name')->all())->not->toContain('Grill-Paket'); // Pakete gehören nicht in den Concept-Reiter
+});
+
+it('#2: paketKandidaten + conceptKandidaten teilen den Klasse-Filter', function () {
+    $this->concepts->createPaket($this->rootTeam, ['name' => 'Flying-Paket', 'class' => 'Flying']);
+    $this->concepts->createPaket($this->rootTeam, ['name' => 'Buffet-Paket', 'class' => 'Buffet']);
+
+    $namen = $this->svc->paketKandidaten($this->rootTeam, '', ['class' => 'Flying'])->pluck('name')->all();
+    expect($namen)->toContain('Flying-Paket')->not->toContain('Buffet-Paket');
+});
+
+it('F6: ein Paket ist als Format-Slot buchbar (kind=paket-Concept über concept_id)', function () {
+    $paket = $this->concepts->createPaket($this->rootTeam, ['name' => 'Grill-Paket']);
+    $slot = $this->svc->slotConceptEinfuegen($this->rootTeam, $this->format->id, $paket->id);
+    expect($slot->type)->toBe('concept')->and((int) $slot->concept_id)->toBe($paket->id);
+});
+
 it('Datenmigration: format_id-Editionen → format_slots (idempotent)', function () {
     // Alt-Welt: Concepts per Besitz-FK ans Format hängen (wie vor F2).
     $this->c1->update(['format_id' => $this->format->id, 'format_position' => 0]);

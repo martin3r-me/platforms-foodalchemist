@@ -67,6 +67,14 @@ it('Klasse-Filter grenzt die Liste ein', function () {
         ->assertDontSee('Fingerfood-Linie');
 });
 
+it('#5: ?edit=<id> öffnet das Concept direkt im Editor (nicht nur auswählen)', function () {
+    Livewire::test(Browser::class, ['editId' => $this->concept->id])
+        ->assertSet('tab', 'concepts')
+        ->assertSet('selectedId', $this->concept->id)
+        ->assertDispatched('concepter-editor.oeffnen', type: 'concepts', id: $this->concept->id)
+        ->assertDispatched('concepter-selected', type: 'concepts', id: $this->concept->id);
+});
+
 it('Auswahl dispatcht concepter-selected mit Typ + ID', function () {
     Livewire::test(Browser::class)
         ->call('waehle', $this->concept->id)

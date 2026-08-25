@@ -59,11 +59,12 @@ class FormatService
             ->with([
                 // F2-Cutover: der Editor/Detail liest den Aufbau aus den Slots (Concept-Referenzen +
                 // Struktur-Blöcke). `editions` bleibt eager-geladen (Back-Compat + priceRange-Fallback).
-                'slots.concept:id,name,consumer_name,claim,description,status,price_per_person_cache',
+                // #3/F6: kind → „Paket"-Badge am Slot; ek_per_person_cache → Detail-Cockpit Ø/W-Kontext.
+                'slots.concept:id,name,consumer_name,claim,description,status,kind,price_per_person_cache,ek_per_person_cache',
                 'editions:id,name,consumer_name,claim,description,status,format_id,format_position,price_per_person_cache',
                 'images' => fn ($q) => $q->orderBy('sort_order'),
-                // F1: Facetten fürs Detail/Editor
-                'servingForm:id,label', 'eventType:id,name', 'serviceMoments:id', 'seasons:id', 'targetGroups:id',
+                // F1: Facetten fürs Detail/Editor (Namen → Dimension-Chips im Detail-Panel, #3)
+                'servingForm:id,label', 'eventType:id,name', 'serviceMoments:id,name', 'seasons:id,name', 'targetGroups:id,name',
             ])
             ->find($id);
     }
@@ -226,15 +227,42 @@ class FormatService
     // (type=concept, in mehreren Formaten nutzbar) ODER ist ein Struktur-Block
     // (header/text/spacer). Spiegelt ConceptService::fillSlot/addBlock/reorder.
 
-    /** Concept-Kandidaten für den Format-Picker (aktive Konzepte, keine Pakete). */
-    public function conceptKandidaten(Team $team, string $suche = '', int $limit = 50): \Illuminate\Support\Collection
+    /**
+     * Concept-Kandidaten für den Format-Picker (aktive Konzepte, keine Pakete).
+     * #2: dieselben Filter-Args wie {@see paketKandidaten} (Klasse + Facetten), damit
+     * die beiden Picker-Reiter dieselbe Filterkette teilen (spiegelt ConceptService::paginateBrowser).
+     */
+    public function conceptKandidaten(Team $team, string $suche = '', array $filters = [], int $limit = 50): \Illuminate\Support\Collection
     {
-        return FoodAlchemistConcept::visibleToTeam($team)
-            ->konzepte()->standardisiert()->echte()
+        return $this->kandidatenBasis(FoodAlchemistConcept::visibleToTeam($team)->konzepte(), $suche, $filters, $limit);
+    }
+
+    /**
+     * #2: Paket-Kandidaten (kind=paket-Concepts) für den Format-Picker — aktive, standardisierte
+     * Pakete mit denselben Filter-Args wie {@see conceptKandidaten}. Ein Paket passt als Format-Slot,
+     * weil es ein kind=paket-Concept ist (concept_id trägt beide Arten).
+     */
+    public function paketKandidaten(Team $team, string $suche = '', array $filters = [], int $limit = 50): \Illuminate\Support\Collection
+    {
+        return $this->kandidatenBasis(FoodAlchemistConcept::visibleToTeam($team)->pakete(), $suche, $filters, $limit);
+    }
+
+    /** Gemeinsame Filterkette für Concept-/Paket-Picker (Suche + Klasse + Facetten). */
+    private function kandidatenBasis($query, string $suche, array $filters, int $limit): \Illuminate\Support\Collection
+    {
+        return $query
+            ->standardisiert()->echte()
             ->where('status', 'active')   // Picker zeigt nur aktive (Status berücksichtigt)
             ->when($suche !== '', fn ($q) => \Platform\FoodAlchemist\Support\Suche::like($q, 'name', $suche))
+            ->when(($filters['class'] ?? '') !== '', fn ($q) => $q->where('class', $filters['class']))
+            ->when(is_numeric($filters['servierform'] ?? null), fn ($q) => $q->where('serving_form_id', (int) $filters['servierform']))
+            ->when(is_numeric($filters['eventtyp'] ?? null), fn ($q) => $q->where('event_type_id', (int) $filters['eventtyp']))
+            ->when(is_numeric($filters['einsatzmoment'] ?? null), fn ($q) => $q
+                ->whereHas('serviceMoments', fn ($w) => $w->where('foodalchemist_service_moments.id', (int) $filters['einsatzmoment'])))
+            ->when(is_numeric($filters['season'] ?? null), fn ($q) => $q
+                ->whereHas('seasons', fn ($w) => $w->where('foodalchemist_seasons.id', (int) $filters['season'])))
             ->orderBy('name')->limit($limit)
-            ->get(['id', 'name', 'consumer_name', 'class', 'price_per_person_cache']);
+            ->get(['id', 'name', 'consumer_name', 'kind', 'class', 'price_per_person_cache']);
     }
 
     /** Concept als Aufbau-Position (Referenz) einfügen; optional direkt hinter $afterSlotId. */
@@ -242,7 +270,9 @@ class FormatService
     {
         $format = FoodAlchemistFormat::visibleToTeam($team)->findOrFail($formatId);
         $this->guardOwner($format, $team);
-        $concept = FoodAlchemistConcept::visibleToTeam($team)->konzepte()->findOrFail($conceptId);
+        // #2/F6: sowohl Konzepte als auch Pakete (kind=paket-Concept) sind einfügbar — der Slot trägt beide
+        // über concept_id. Kein ->konzepte()-Filter mehr, sonst ließe sich kein Paket booken.
+        $concept = FoodAlchemistConcept::visibleToTeam($team)->findOrFail($conceptId);
 
         $slot = $format->slots()->create([
             'team_id' => $format->team_id,
