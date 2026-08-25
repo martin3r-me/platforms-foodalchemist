@@ -307,20 +307,22 @@
         </div>
     @endif
 
-    {{-- Preise gesamt --}}
+    {{-- #8: ein Foodbook hat KEINEN eigenen Kunden-Gesamtpreis (Pax & Gesamt liegen im Angebot) —
+         der Aggregat-Block bleibt ausschließlich in der internen Kalkulations-Sicht. Kundenseitig
+         tragen die Preise die Concept-/Paket-Blöcke selbst. Die MwSt-Zeile bleibt (gilt für diese). --}}
     <div class="price">
-        <table>
-            <tr><td>Preis pro Person</td><td class="right">{{ number_format($gesamt['vk_pro_person'], 2, ',', '.') }} €</td></tr>
-            @if($istIntern)
+        @if($istIntern)
+            <table>
+                <tr><td>Preis pro Person</td><td class="right">{{ number_format($gesamt['vk_pro_person'], 2, ',', '.') }} €</td></tr>
                 <tr><td style="color:#9333ea">Wareneinsatz pro Person</td><td class="right" style="color:#9333ea">{{ number_format($gesamt['ek_per_person'], 2, ',', '.') }} €</td></tr>
                 @if($gesamt['vk_pro_person'] > 0)
                     <tr><td style="color:#059669">Wareneinsatz %</td><td class="right" style="color:#059669">{{ number_format($gesamt['food_cost_percent'], 1, ',', '.') }} %</td></tr>
                 @endif
-            @endif
-            @if($gesamt['personen'])<tr><td>Personen</td><td class="right">{{ $gesamt['personen'] }}</td></tr>@endif
-            @if($gesamt['gesamt_vk'] !== null)<tr><td class="total">Gesamt</td><td class="right total">{{ number_format($gesamt['gesamt_vk'], 2, ',', '.') }} €</td></tr>@endif
-            @if($istIntern && ($gesamt['gesamt_ek'] ?? null) !== null)<tr><td style="color:#9333ea">Gesamt-Wareneinsatz</td><td class="right" style="color:#9333ea">{{ number_format($gesamt['gesamt_ek'], 2, ',', '.') }} €</td></tr>@endif
-        </table>
+                @if($gesamt['personen'])<tr><td>Personen</td><td class="right">{{ $gesamt['personen'] }}</td></tr>@endif
+                @if($gesamt['gesamt_vk'] !== null)<tr><td class="total">Gesamt</td><td class="right total">{{ number_format($gesamt['gesamt_vk'], 2, ',', '.') }} €</td></tr>@endif
+                @if(($gesamt['gesamt_ek'] ?? null) !== null)<tr><td style="color:#9333ea">Gesamt-Wareneinsatz</td><td class="right" style="color:#9333ea">{{ number_format($gesamt['gesamt_ek'], 2, ',', '.') }} €</td></tr>@endif
+            </table>
+        @endif
         @php($mwstSatz = ($mwst ?? null) ? (($mwst['default_satz'] ?? 'ermaessigt') === 'regulaer' ? ($mwst['regulaer'] ?? 19) : ($mwst['ermaessigt'] ?? 7)) : null)
         @php($mwstText = 'Alle Preise netto' . ($mwstSatz !== null ? ' zzgl. gesetzl. MwSt (' . rtrim(rtrim(number_format((float) $mwstSatz, 1, ',', '.'), '0'), ',') . ' %)' : '') . '.')
         <div style="color:#9ca3af; font-size:10px; margin-top:6px">{{ $mwstText }}</div>
