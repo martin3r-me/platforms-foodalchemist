@@ -344,6 +344,14 @@
                 <input type="number" wire:model="form.standzeit_min" min="0" class="{{ $input }}" placeholder="0" data-recipe-standzeit />
             </div>
             <div>
+                <label class="block {{ $label }} mb-1">Variable Personenminuten</label>
+                <input type="text" inputmode="decimal" wire:model="form.variable_work_time_min" class="{{ $input }}" placeholder="0" />
+            </div>
+            <div>
+                <label class="block {{ $label }} mb-1">Variable Zeit je</label>
+                <select wire:model="form.variable_work_time_basis" class="{{ $input }}"><option value="kg">kg</option><option value="piece">Stück</option><option value="portion">Portion</option></select>
+            </div>
+            <div>
                 <label class="block {{ $label }} mb-1">Topf-Deckel (kg) <span class="normal-case text-gray-500">max je Koch-Vorgang</span></label>
                 <input type="text" inputmode="decimal" wire:model="form.batch_max_kg" class="{{ $input }}" placeholder="20 (Default-Kessel)" data-recipe-topf />
             </div>

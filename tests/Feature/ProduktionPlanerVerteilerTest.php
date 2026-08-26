@@ -124,7 +124,7 @@ it('speichert die Planer-Rezeptfelder über den Editor-Service (Whitelist erweit
         ->and((float) $r->batch_max_kg)->toBe(12.5);
 });
 
-it('rechnet die Arbeitszeit mit dem Posten-Topf-Deckel neu (min Rezept/Posten)', function () {
+it('verwendet die kleinste Batchgrenze aus Rezept, Posten und Team-Standard', function () {
     $kessel = Station::create(['team_id' => $this->rootTeam->id, 'slug' => 'kessel', 'name' => 'Großer Kessel', 'batch_max_kg' => 40.0]);
     $auftrag = $this->svc->saveNew($this->rootTeam, '2026-08-20', 'Fond groß', [
         ['source_ref' => 'r:fond', 'recipe_id' => $this->fond->id, 'amount_kg' => 24.0],   // 24 kg Bedarf
@@ -133,9 +133,10 @@ it('rechnet die Arbeitszeit mit dem Posten-Topf-Deckel neu (min Rezept/Posten)',
     // Ohne Posten greift der globale Default-Kessel (20 kg): 24 kg = 2 Koch-Vorgänge × 300.
     expect((int) $line->arbeitszeit_min)->toBe(600);
 
-    // Der 40-kg-Posten-Kessel ist großzügiger als der Default → 24 kg passen in EINEN Vorgang.
+    // Der 40-kg-Posten ist großzügiger als der 20-kg-Team-Standard. Der kleinere
+    // Team-Wert bleibt wirksam, also werden weiterhin zwei Vorgänge benötigt.
     $this->svc->assignLine($this->rootTeam, $line->id, ['station_id' => $kessel->id]);
-    expect((int) $line->fresh()->arbeitszeit_min)->toBe(300);
+    expect((int) $line->fresh()->arbeitszeit_min)->toBe(600);
 });
 
 it('nutzt den Team-Standard-Topf-Deckel als Fallback, wenn Rezept und Posten keinen haben', function () {

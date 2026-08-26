@@ -38,8 +38,12 @@ class FoodAlchemistAngebot extends Model
         'personen' => 'integer',
         'budget' => 'decimal:2',
         'total_price' => 'decimal:2',
+        'calculated_total_price' => 'decimal:2',
         'event_date' => 'date',
         'valid_until' => 'date',
+        'price_calculated_at' => 'datetime',
+        'price_override_at' => 'datetime',
+        'price_override_expires_at' => 'datetime',
     ];
 
     /** Verknüpfte CRM-Firma (optional, MVP: nur verlinken — kein Rücksync). */

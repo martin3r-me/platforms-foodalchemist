@@ -72,8 +72,16 @@ Zwei Achsen dürfen nicht vermischt werden:
 
 1. **Zutatenklassifikation:** Warengruppe, Unterkategorie und Grundprodukt. Sie
    unterstützt Suche, Disposition, Matching und Deklaration.
-2. **Verkaufsklassifikation:** Hauptgruppe, Gerichtsklasse und Aufschlagsklasse. Sie
+2. **Verkaufsklassifikation:** Hauptgruppe, Gerichtsklasse und Preisklasse. Sie
    unterstützt Portfolio, Foodbook, Kalkulation und Preisbildung.
+
+### Preis- und Auftragsgrenze
+
+`CatalogPricingService` berechnet ausschließlich mengenunabhängige Preise aus Darreichungs-MEK,
+Unternehmens-Basissatz und relativem Klassenfaktor. Produktionszeit darf diesen Pfad nicht
+erreichen. `OrderCostingService` verwendet bei bekannten Pax dieselbe Bedarfsexplosion und
+`ProductionTimeService` wie die Produktionsplanung. Der konkrete Auftrag prüft den Katalogpreis,
+überschreibt ihn aber nicht automatisch.
 
 ## 3. Laufzeit- und Datenschichten
 

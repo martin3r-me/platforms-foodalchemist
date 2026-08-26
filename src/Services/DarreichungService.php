@@ -3,7 +3,9 @@
 namespace Platform\FoodAlchemist\Services;
 
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Auth;
 use Platform\Core\Models\Team;
+use Platform\FoodAlchemist\Models\FoodAlchemistPriceChangeAudit;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipeDarreichung;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipeDarreichungDelta;
@@ -22,13 +24,17 @@ use Platform\FoodAlchemist\Models\FoodAlchemistRecipeDarreichungDelta;
  *  - Stufe 1 (keine Deltas): ek_portion = EK/g des Rezepts × Grammatur × Anzahl
  *  - Stufe 2 (Deltas): Misch-Preis/g über Komponenten NACH Delta (omitted raus,
  *    Kosten skalieren linear mit der Masse), dann × Grammatur × Anzahl
- *  - preis_modus auto: sales_net = ek_portion × (1 + rohaufschlag/100); manuell bleibt
- *  - sales_gross in beiden Modi aus MwSt der Aufschlagsklasse
+ *  - auto: dynamischer Vorschlag aus Unternehmens-Basissatz × relativem Klassenfaktor
+ *  - fixed: Live-VK bleibt, der Vergleichsvorschlag rechnet weiter; Begründung ist Pflicht
+ *  - MwSt kommt als Profil-Schlüssel aus Darreichung → Preisklasse → Team
  *  - Standard-Darreichung spiegelt sales_net nach recipes.sales_net (Anzeige-Cache)
  */
 class DarreichungService
 {
-    public function __construct(private RecipeRecomputeService $recompute) {}
+    public function __construct(
+        private RecipeRecomputeService $recompute,
+        private CatalogPricingService $catalogPricing,
+    ) {}
 
     public function anlegen(Team $team, int $recipeId, int $servierformId, array $attrs = [], string $createdVia = 'fa_ui'): FoodAlchemistRecipeDarreichung
     {
@@ -84,15 +90,20 @@ class DarreichungService
             return null; // Varianten ohne Standard-Flag: nichts raten (wie syncStandardDarreichung)
         }
 
-        $unbestimmt = \Platform\FoodAlchemist\Models\FoodAlchemistServierform::where('code', 'unbestimmt')->value('id');
-        if ($unbestimmt === null) {
-            return null;
+        $unbestimmt = $this->unbestimmtId($team);
+
+        $quantityPerUnitG = $recipe->sales_quantity_per_unit_g;
+        if ($quantityPerUnitG === null && $recipe->yield_kg !== null && (int) $recipe->sales_unit_count > 0) {
+            $quantityPerUnitG = round((float) $recipe->yield_kg * 1000 / (int) $recipe->sales_unit_count, 1);
         }
 
-        return $this->anlegen($team, $recipe->id, (int) $unbestimmt, [
-            'quantity_per_unit_g' => $recipe->sales_quantity_per_unit_g,
+        return $this->anlegen($team, $recipe->id, $unbestimmt, [
+            'quantity_per_unit_g' => $quantityPerUnitG,
             'unit_vocab_id' => $recipe->sales_unit_vocab_id,
-            'unit_count' => $recipe->sales_unit_count,
+            // recipes.sales_unit_count ist die Ausbeute des Rezeptlaufs (Nenner für
+            // Yield/Anzahl), nicht die Zahl verkaufter Einheiten IN einer Darreichung.
+            // Der Standard repräsentiert genau eine Verkaufseinheit.
+            'unit_count' => 1,
             'markup_class_id' => $recipe->markup_class_id,
         ], $createdVia);
     }
@@ -100,6 +111,7 @@ class DarreichungService
     private const FELDER = [
         'quantity_per_unit_g', 'unit_vocab_id', 'unit_count',
         'markup_class_id', 'price_mode', 'sales_net',
+        'vat_profile_key', 'price_override_reason', 'price_override_expires_at',
         'container_warm_vocab_id', 'container_cold_vocab_id',
         'regeneration_temp_c', 'regeneration_duration_min', 'regeneration_core_temp_c',
         'regeneration_device_vocab_id', 'serving_vehicle_vocab_id',
@@ -115,6 +127,38 @@ class DarreichungService
             if ($v === '') {
                 $update[$k] = null;
             }
+        }
+        if (array_key_exists('vat_profile_key', $update) && $update['vat_profile_key'] !== null
+            && ! in_array($update['vat_profile_key'], ['regulaer', 'ermaessigt'], true)) {
+            throw new \RuntimeException('Unbekanntes MwSt-Profil.');
+        }
+        $legacyManual = ($update['price_mode'] ?? null) === 'manuell';
+        if (array_key_exists('price_mode', $update)) {
+            $update['price_mode'] = $legacyManual ? 'fixed' : $update['price_mode'];
+            if (! in_array($update['price_mode'], ['auto', 'fixed'], true)) {
+                throw new \RuntimeException('Unbekannter Preismodus.');
+            }
+        }
+        $wirdFixiert = ($update['price_mode'] ?? $darreichung->price_mode) === 'fixed';
+        if ($wirdFixiert) {
+            $reason = trim((string) ($update['price_override_reason'] ?? $darreichung->price_override_reason ?? ''));
+            if ($reason === '' && $legacyManual) {
+                $reason = 'Legacy-Übernahme aus Preismodus manuell';
+            }
+            $fixedPrice = $update['sales_net'] ?? $darreichung->sales_net;
+            if ($reason === '' || $fixedPrice === null) {
+                throw new \RuntimeException('Ein fixierter Preis benötigt einen VK und eine Begründung.');
+            }
+            $update['price_override_reason'] = $reason;
+            $update['price_override_user_id'] = Auth::id();
+            $update['price_override_at'] = now();
+        } elseif (($update['price_mode'] ?? null) === 'auto') {
+            $update += [
+                'price_override_reason' => null,
+                'price_override_user_id' => null,
+                'price_override_at' => null,
+                'price_override_expires_at' => null,
+            ];
         }
         $darreichung->update($update);
         $this->recomputePreise($darreichung);
@@ -217,18 +261,50 @@ class DarreichungService
                     : null);
         }
 
-        $klasse = $darreichung->markupClass;
-        $vkNetto = $darreichung->price_mode === 'manuell'
-            ? $darreichung->sales_net
-            : (($ekPortion !== null && $klasse !== null)
-                ? round($ekPortion * (1 + ((float) $klasse->raw_markup_pct) / 100), 2)
-                : null);
-        $vkBrutto = ($vkNetto !== null && $klasse !== null)
-            ? round((float) $vkNetto * (1 + ((float) $klasse->vat_rate) / 100), 2)
-            : null;
+        $oldCalculated = $darreichung->calculated_sales_net;
+        $oldEffective = $darreichung->sales_net;
+        $darreichung->forceFill(['quantity_per_unit_g' => $darreichung->quantity_per_unit_g, 'ek_portion' => $ekPortion]);
+        $team = Team::findOrFail($darreichung->team_id);
+        $price = $this->catalogPricing->catalogPrice($team, $darreichung);
+        $darreichung->update([
+            'quantity_per_unit_g' => $darreichung->quantity_per_unit_g,
+            'ek_portion' => $ekPortion,
+            'price_mode' => $price['price_mode'],
+            'calculated_sales_net' => $price['calculated_sales_net'],
+            'sales_net' => $price['sales_net'],
+            'sales_gross' => $price['sales_gross'],
+            'vat_profile_key' => $price['vat_profile_key'],
+            'price_calculation_source' => $price['base_source'],
+            'price_calculation_version' => $price['calculation_version'],
+            'price_calculated_at' => now(),
+            ...($price['override_expired'] ? [
+                'price_override_reason' => null,
+                'price_override_user_id' => null,
+                'price_override_at' => null,
+                'price_override_expires_at' => null,
+            ] : []),
+        ]);
 
-        $darreichung->update(['quantity_per_unit_g' => $darreichung->quantity_per_unit_g,
-            'ek_portion' => $ekPortion, 'sales_net' => $vkNetto, 'sales_gross' => $vkBrutto]);
+        if ($oldCalculated !== $darreichung->calculated_sales_net || $oldEffective !== $darreichung->sales_net) {
+            FoodAlchemistPriceChangeAudit::create([
+                'team_id' => $darreichung->team_id,
+                'entity_type' => 'presentation',
+                'entity_id' => $darreichung->id,
+                'old_calculated_net' => $oldCalculated,
+                'new_calculated_net' => $darreichung->calculated_sales_net,
+                'old_effective_net' => $oldEffective,
+                'new_effective_net' => $darreichung->sales_net,
+                'price_mode' => $darreichung->price_mode,
+                'source' => $price['base_source'],
+                'reason' => $darreichung->price_override_reason,
+                'user_id' => $darreichung->price_override_user_id,
+                'metadata' => [
+                    'base_factor' => $price['base_factor'],
+                    'class_factor_pct' => $price['class_factor_pct'],
+                    'calculation_version' => $price['calculation_version'],
+                ],
+            ]);
+        }
 
         if ($darreichung->is_standard) {
             $this->spiegleStandardVk($recipe);
@@ -282,9 +358,33 @@ class DarreichungService
     {
         $standard = $recipe->standardPresentation()->first();
         if ($standard !== null) {
+            $team = Team::find($recipe->team_id);
+            $vatDefaults = $team !== null ? app(TeamSettingsService::class)->mwst($team) : TeamSettingsService::MWST_DEFAULTS;
+            $vatKey = in_array($standard->vat_profile_key, ['regulaer', 'ermaessigt'], true)
+                ? $standard->vat_profile_key : $vatDefaults['default_satz'];
             DB::table('foodalchemist_recipes')->where('id', $recipe->id)
-                ->update(['sales_net' => $standard->sales_net]);
+                ->update([
+                    'sales_net' => $standard->sales_net,
+                    'sales_gross' => $standard->sales_gross,
+                    'vat_rate' => (float) ($vatDefaults[$vatKey] ?? 0),
+                ]);
         }
+    }
+
+    /** Technische Standardform für alte Gerichte ohne Darreichung selbstheilend bereitstellen. */
+    private function unbestimmtId(Team $team): int
+    {
+        $model = \Platform\FoodAlchemist\Models\FoodAlchemistServierform::visibleToTeam($team)
+            ->where('code', 'unbestimmt')->first();
+        if ($model === null) {
+            $model = \Platform\FoodAlchemist\Models\FoodAlchemistServierform::create([
+                'team_id' => $team->id,
+                'code' => 'unbestimmt',
+                'label' => 'Unbestimmt',
+            ]);
+        }
+
+        return (int) $model->id;
     }
 
     private function find(Team $team, int $darreichungId): FoodAlchemistRecipeDarreichung

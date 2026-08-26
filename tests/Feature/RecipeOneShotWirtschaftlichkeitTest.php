@@ -8,6 +8,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Models\FoodAlchemistServierform;
 use Platform\FoodAlchemist\Models\FoodAlchemistSignal;
 use Platform\FoodAlchemist\Services\RecipeOneShotService;
+use Platform\FoodAlchemist\Services\DarreichungService;
 use Platform\FoodAlchemist\Tests\Support\SeedsTeamHierarchy;
 use Platform\FoodAlchemist\Tests\TestCase;
 
@@ -36,7 +37,8 @@ beforeEach(function () {
     FoodAlchemistServierform::firstOrCreate(['code' => 'unbestimmt', 'team_id' => $this->rootTeam->id], ['label' => 'Unbestimmt']);
 
     $this->ak = FoodAlchemistMarkupClass::create([
-        'code' => 'ALC', 'label' => 'A la Carte', 'raw_markup_pct' => 300, 'vat_rate' => 19, 'formula_type' => 'aufschlag',
+        'code' => 'ALC', 'label' => 'A la Carte', 'class_factor_pct' => 100,
+        'vat_profile_key' => 'regulaer', 'raw_markup_pct' => 300, 'vat_rate' => 19, 'formula_type' => 'aufschlag',
     ]);
     $hg = FoodAlchemistDishMainGroup::create(['code' => 'TEL', 'label' => 'Tellergericht']);
     $this->klasse = FoodAlchemistDishClass::create([
@@ -68,11 +70,13 @@ it('L8a: der One-Shot-Roundtrip endet bepreist — Portion + AK + Standard-Darre
         ->and($w['aufschlagsklasse'])->toBe('ALC')
         ->and($w['luecken'])->toBe([]);
 
-    // VK = EK/Portion (12 €/kg × 200 g = 2,40 €) × (1 + 300 %) = 9,60 €
-    expect($w['sales_net'])->toBe(9.6)
+    // Ziel-WE-Fallback 30 % = Basissatz 3,333; 2,40 € MEK × Faktor = 8,00 €.
+    expect($w['sales_net'])->toBe(8.0)
+        ->and($w['calculated_sales_net'])->toBe(8.0)
+        ->and($w['price_mode'])->toBe('auto')
+        ->and($w['price_source'])->toBe('ziel_we_fallback')
         ->and($w['ek_pro_portion'])->toBe(2.4)
-        // W% = 2,40 / 9,60 = 25 % → unter dem 30 %-Default ⇒ grün, kein Signal
-        ->and($w['wareneinsatz_pct'])->toBe(25.0)
+        ->and($w['wareneinsatz_pct'])->toBe(30.0)
         ->and($w['ziel_pct'])->toBe(30.0)
         ->and($w['ampel'])->toBe('gruen')
         ->and($w['signal'])->toBeFalse()
@@ -82,48 +86,48 @@ it('L8a: der One-Shot-Roundtrip endet bepreist — Portion + AK + Standard-Darre
     // Preis-Wahrheit liegt an der Standard-Darreichung, nicht am Rezept-Feld …
     $std = $r->fresh()->standardPresentation()->first();
     expect($std)->not->toBeNull()
-        ->and((float) $std->sales_net)->toBe(9.6)
-        // … und bleibt überschreibbar: kein Auto-Publish, nur ein Auto-Vorschlag.
+        ->and((float) $std->sales_net)->toBe(8.0)
         ->and($std->price_mode)->toBe('auto')
-        ->and((float) $r->fresh()->sales_net)->toBe(9.6);
+        ->and((float) $r->fresh()->sales_net)->toBe(8.0);
 });
 
-it('L8a: ohne Portionsgröße gibt es keinen Auto-VK — sie wird benannt, nicht aus dem Yield geraten', function () {
-    // yield_kg + sales_unit_count wären „ableitbar" (2 kg / 10 = 200 g). Genau das
-    // passiert NICHT: die Darreichung multipliziert mit derselben Anzahl wieder hoch
-    // (V-041), der VK wäre der Chargenpreis statt des Portionspreises.
+it('L8a: eine fehlende Portionsgröße wird im Anreicherungs-Pass geschlossen und danach bepreist', function () {
     $r = ($this->gericht)(['sales_quantity_per_unit_g' => null, 'sales_unit_count' => 10]);
 
     $w = $this->svc->anreichern($this->rootTeam, $r)['wirtschaftlichkeit'];
 
-    expect($w['portion_g'])->toBeNull()
-        ->and($w['luecken'])->toBe(['portion'])
-        ->and($w['sales_net'])->toBeNull()
-        ->and($w['ampel'])->toBe('unbekannt')
-        // Die Aufschlagsklasse steht trotzdem — die Lücke ist genau eine, nicht zwei.
+    expect($w['portion_g'])->toBe(200.0)
+        ->and($w['luecken'])->toBe([])
+        ->and($w['sales_net'])->toBe(8.0)
+        ->and($w['ampel'])->toBe('gruen')
         ->and($w['aufschlagsklasse'])->toBe('ALC');
 });
 
-it('L8a: fehlt auch die Aufschlagsklasse (keine Klasse, keine HG), wird sie benannt statt geraten', function () {
+it('L8a: ohne Preisklasse rechnet Auto neutral weiter und macht den Fallback sichtbar', function () {
     $r = ($this->gericht)(['dish_class_id' => null]);
 
     $w = $this->svc->anreichern($this->rootTeam, $r)['wirtschaftlichkeit'];
 
-    expect($w['luecken'])->toBe(['aufschlagsklasse'])
+    expect($w['luecken'])->toBe([])
         ->and($w['aufschlagsklasse'])->toBeNull()
-        ->and($w['portion_g'])->toBe(200.0)                        // Portion wurde trotzdem gesetzt
-        ->and($w['sales_net'])->toBeNull();                        // ohne Aufschlag kein Vorschlag
+        ->and($w['portion_g'])->toBe(200.0)
+        ->and($w['sales_net'])->toBe(8.0)
+        ->and($w['price_warnings'])->toContain('Keine Preisklasse gesetzt: neutraler Klassenfaktor 100 % verwendet.');
 });
 
 it('L8a: Wareneinsatz über Ziel → Ampel + genau EIN Signal aus der bestehenden R2.1-Regel', function () {
-    // Ein teurerer EK verschiebt die Quote NICHT (sie ist bei Cost-plus rein
-    // aufschlag-getrieben: 1 / (1 + 300 %) = 25 %). Der Ausreißer entsteht erst
-    // gegen ein engeres Team-Ziel — genau der reale Fall „Aufschlagsklasse passt
-    // nicht zum Food-Cost-Ziel".
+    // Auto würde bei 20 % Ziel-WE auf 12,00 € steigen. Ein bewusst fixierter
+    // Bestandspreis von 9,60 € bleibt stehen und löst deshalb die Warnung aus.
     app(\Platform\FoodAlchemist\Services\TeamSettingsService::class)
         ->update($this->rootTeam, ['target_food_cost_pct' => 20.0]);
 
     $r = ($this->gericht)();
+    $standard = app(DarreichungService::class)->ensureStandard($this->rootTeam, $r->id, 'test');
+    app(DarreichungService::class)->aktualisieren($this->rootTeam, $standard->id, [
+        'price_mode' => 'fixed',
+        'sales_net' => 9.60,
+        'price_override_reason' => 'Bewusster Testpreis unter Auto-Vorschlag',
+    ]);
 
     $w = $this->svc->anreichern($this->rootTeam, $r)['wirtschaftlichkeit'];
 
@@ -141,7 +145,8 @@ it('L8a: Wareneinsatz über Ziel → Ampel + genau EIN Signal aus der bestehende
 
 it('L8a: gepflegte Portion und gesetzte AK werden nicht überschrieben (GL-07)', function () {
     $eigene = FoodAlchemistMarkupClass::create([
-        'code' => 'BAN', 'label' => 'Bankett', 'raw_markup_pct' => 200, 'vat_rate' => 19, 'formula_type' => 'aufschlag',
+        'code' => 'BAN', 'label' => 'Bankett', 'class_factor_pct' => 120,
+        'vat_profile_key' => 'regulaer', 'raw_markup_pct' => 200, 'vat_rate' => 19, 'formula_type' => 'aufschlag',
     ]);
     $r = ($this->gericht)(['sales_quantity_per_unit_g' => 350, 'markup_class_id' => $eigene->id]);
 
@@ -150,8 +155,8 @@ it('L8a: gepflegte Portion und gesetzte AK werden nicht überschrieben (GL-07)',
     // BAN wird nicht durch den Klasse-Default ALC ersetzt, die 350 g bleiben stehen.
     expect($w['portion_g'])->toBe(350.0)
         ->and($w['aufschlagsklasse'])->toBe('BAN')
-        // 12 €/kg × 350 g = 4,20 € × (1 + 200 %) = 12,60 €
-        ->and($w['sales_net'])->toBe(12.6);
+        // 4,20 € MEK × 3,333 Basissatz × 120 % Klassenfaktor = 16,80 €.
+        ->and($w['sales_net'])->toBe(16.8);
 });
 
 it('L8a: teil-unbepreiste Zutaten machen den VK vorläufig', function () {
@@ -160,7 +165,7 @@ it('L8a: teil-unbepreiste Zutaten machen den VK vorläufig', function () {
     $w = $this->svc->anreichern($this->rootTeam, $r)['wirtschaftlichkeit'];
 
     expect($w['vorlaeufig'])->toBeTrue()
-        ->and($w['sales_net'])->toBe(9.6);                          // gerechnet wird trotzdem
+        ->and($w['sales_net'])->toBe(8.0);                          // gerechnet wird trotzdem
 });
 
 it('L8a: ein Basisrezept hat kein Wirtschaftlichkeits-Glied', function () {
@@ -185,16 +190,15 @@ it('L8a: ein Basisrezept hat kein Wirtschaftlichkeits-Glied', function () {
 
 // ── L8b: die dritte Vorbedingung wird auch benannt ──────────────────────────
 
-it('L8b: fehlt die Standard-Darreichung, ist auch DAS eine benannte Lücke (vorher stumm)', function () {
-    // `ensureStandard` darf ohne Servierform-Vokabular nichts anlegen → keine
-    // Preis-Zeile, kein VK. Ohne die Lücke zeigte die Generator-Fläche in diesem
-    // Fall weder Preis noch Grund.
+it('L8b: fehlendes Standard-Servierform-Vokabular heilt sich selbst und erzeugt die Preis-Wahrheit', function () {
     FoodAlchemistServierform::where('code', 'unbestimmt')->forceDelete();
 
-    $w = $this->svc->anreichern($this->rootTeam, ($this->gericht)())['wirtschaftlichkeit'];
+    $recipe = ($this->gericht)();
+    $w = $this->svc->anreichern($this->rootTeam, $recipe)['wirtschaftlichkeit'];
 
-    expect($w['luecken'])->toContain('darreichung')
-        ->and($w['sales_net'])->toBeNull()
+    expect($w['luecken'])->toBe([])
+        ->and($w['sales_net'])->toBe(8.0)
+        ->and($recipe->fresh()->standardPresentation()->exists())->toBeTrue()
         ->and($w['fehler'])->toBeNull();          // eine Lücke, kein Fehlschlag
 });
 
@@ -207,45 +211,41 @@ it('L8b-2: ohne Vorgabe bleibt der Ziel-Abgleich leer (Bestandspfad unverändert
         ->and($w['ziel_delta_eur'])->toBeNull()
         ->and($w['ziel_wareneinsatz_pct'])->toBeNull()
         ->and($w['ziel_ampel'])->toBe('unbekannt')
-        ->and($w['sales_net'])->toBe(9.6);        // der Rest rechnet wie bisher
+        ->and($w['sales_net'])->toBe(8.0);
 });
 
 it('L8b-2: ein zu niedriger Ziel-VK wird NICHT durchgesetzt — gezeigt wird, was er kosten würde', function () {
-    // Kalkuliert: 9,60 € bei 2,40 € EK je Portion (W 25 %). Vorgabe 6,00 € ⇒ das
-    // Gericht ist zum Wunschpreis nicht zu diesem Aufschlag machbar: der Wareneinsatz
-    // stiege auf 40 %. Genau das ist die Aussage — der Preis bleibt bei 9,60 €.
+    // Kalkuliert: 8,00 € bei 2,40 € MEK je Portion. Vorgabe 6,00 € würde 40 % WE bedeuten.
     $r = ($this->gericht)();
 
     $w = $this->svc->anreichern($this->rootTeam, $r, 6.0)['wirtschaftlichkeit'];
 
-    expect($w['sales_net'])->toBe(9.6)            // NICHT auf 6,00 gedrückt (kein Solver)
+    expect($w['sales_net'])->toBe(8.0)            // NICHT auf 6,00 gedrückt (kein Solver)
         ->and($w['ziel_vk'])->toBe(6.0)
-        ->and($w['ziel_delta_eur'])->toBe(3.6)    // Ist − Ziel, positiv = zu teuer
+        ->and($w['ziel_delta_eur'])->toBe(2.0)    // Ist − Ziel, positiv = zu teuer
         ->and($w['ziel_wareneinsatz_pct'])->toBe(40.0)
         ->and($w['ziel_ampel'])->toBe('gelb')     // > 30 % Ziel, ≤ 1,5 × ⇒ Warnung
         ->and($w['ampel'])->toBe('gruen');        // die Ist-Ampel bleibt davon unberührt
 
     // Und der Preis am Objekt hat sich nicht bewegt — die Vorgabe wird nirgends geschrieben.
-    expect((float) $r->fresh()->sales_net)->toBe(9.6);
+    expect((float) $r->fresh()->sales_net)->toBe(8.0);
 });
 
 it('L8b-2: liegt der kalkulierte VK unter dem Ziel, ist das Ziel tragfähig (negatives Delta)', function () {
     $w = $this->svc->anreichern($this->rootTeam, ($this->gericht)(), 12.0)['wirtschaftlichkeit'];
 
-    expect($w['ziel_delta_eur'])->toBe(-2.4)
+    expect($w['ziel_delta_eur'])->toBe(-4.0)
         ->and($w['ziel_wareneinsatz_pct'])->toBe(20.0)   // 2,40 / 12,00
         ->and($w['ziel_ampel'])->toBe('gruen');
 });
 
-it('L8b-2: ohne kalkulierten VK bleibt das Delta leer — die Vorgabe steht trotzdem', function () {
-    // Keine Aufschlagsklasse ⇒ kein Ist-Preis. Der Abgleich „was würde 8,50 € bedeuten"
-    // hängt nur am EK je Portion und ist deshalb gerade dann nützlich.
+it('L8b-2: auch ohne Preisklasse bleibt der neutrale Auto-Vorschlag mit Ziel vergleichbar', function () {
     $w = $this->svc->anreichern($this->rootTeam, ($this->gericht)(['dish_class_id' => null]), 8.5)['wirtschaftlichkeit'];
 
-    expect($w['sales_net'])->toBeNull()
+    expect($w['sales_net'])->toBe(8.0)
         ->and($w['ziel_vk'])->toBe(8.5)
-        ->and($w['ziel_delta_eur'])->toBeNull()
-        ->and($w['luecken'])->toBe(['aufschlagsklasse']);
+        ->and($w['ziel_delta_eur'])->toBe(-0.5)
+        ->and($w['luecken'])->toBe([]);
 });
 
 it('L8b-2: eine nicht-positive Vorgabe ist keine Vorgabe (Schutz im Nenner)', function () {

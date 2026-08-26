@@ -378,19 +378,16 @@ class ProductionOrderService
             return;
         }
 
-        $stueck = $recipe->istStueckErtrag();
-        $deckel = null;
+        $station = null;
         if ($line->station_id !== null) {
             $station = FoodAlchemistProductionStation::find($line->station_id);
-            $roh = $stueck ? $station?->batch_max_pieces : $station?->batch_max_kg;
-            $deckel = $roh !== null ? (float) $roh : null;
         }
 
         $rohBatches = (float) ($line->benoetigt_ansaetze ?? $line->ansaetze ?? 0);
-        // Fallback-Deckel (Team-Default) greift nur, wenn weder Rezept- noch Posten-Deckel gesetzt ist.
         $team = Team::find($line->productionOrder?->team_id);
-        $fallback = $team !== null ? app(TeamSettingsService::class)->topfDeckelFuer($team, $recipe, $stueck) : null;
-        $neu = $recipe->arbeitszeitMin($rohBatches, (bool) $recipe->is_sales_recipe, $deckel, $stueck, $fallback);
+        $neu = $team !== null
+            ? app(ProductionTimeService::class)->calculateForBatches($team, $recipe, $rohBatches, $station)['active_person_minutes']
+            : null;
 
         if ((int) $line->arbeitszeit_min !== (int) $neu) {
             $line->forceFill(['arbeitszeit_min' => $neu])->save();

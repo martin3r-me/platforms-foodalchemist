@@ -8,22 +8,19 @@ use Platform\ActivityLog\Traits\LogsActivity;
 use Platform\FoodAlchemist\Models\Concerns\BelongsToTeamHierarchy;
 use Platform\FoodAlchemist\Models\Concerns\HasUuidV7;
 
-/**
- * @ai.description Preisklasse: relative Abweichung vom dynamischen Unternehmens-Basissatz.
- * Die alten Rohaufschlagsfelder sind nur noch Migrationsquelle.
- */
-class FoodAlchemistMarkupClass extends Model
+class FoodAlchemistPriceChangeAudit extends Model
 {
     use HasUuidV7, LogsActivity, BelongsToTeamHierarchy, SoftDeletes;
 
-    protected $table = 'foodalchemist_markup_classes';
+    protected $table = 'foodalchemist_price_change_audits';
 
     protected $guarded = ['id'];
 
     protected $casts = [
-        'class_factor_pct' => 'decimal:3',
-        'rounding_decimals' => 'integer',
-        'pricing_v2_migrated_at' => 'datetime',
-        'is_inactive' => 'boolean',
+        'old_calculated_net' => 'decimal:2',
+        'new_calculated_net' => 'decimal:2',
+        'old_effective_net' => 'decimal:2',
+        'new_effective_net' => 'decimal:2',
+        'metadata' => 'array',
     ];
 }

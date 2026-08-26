@@ -930,7 +930,7 @@
                             <span class="{{ $label }}">{{ $istPaket ? 'Paketpreis / Person' : 'VK-Preis / Person' }}</span>
                             <div class="flex gap-1">
                                 <button type="button" wire:click="setPreisModus('auto')" class="{{ $pill }} {{ ($form['price_mode'] ?? 'auto') === 'auto' ? $variantPill['primary'] : $variantPill['secondary'] }}">automatisch (Summe)</button>
-                                <button type="button" wire:click="setPreisModus('manuell')" class="{{ $pill }} {{ ($form['price_mode'] ?? 'auto') === 'manuell' ? $variantPill['primary'] : $variantPill['secondary'] }}">manuell</button>
+                                <button type="button" wire:click="setPreisModus('fixed')" class="{{ $pill }} {{ in_array(($form['price_mode'] ?? 'auto'), ['fixed', 'manuell'], true) ? $variantPill['primary'] : $variantPill['secondary'] }}">fixiert</button>
                             </div>
                         </div>
                         {{-- Preisdarstellung (2026-08-25, Dominique): Gesamtpreis (ein Preis fürs Konzept)
@@ -952,20 +952,55 @@
                             <span class="text-gray-600">Berechnete Summe: <span class="tabular-nums font-medium text-gray-900">{{ number_format((float) ($cockpit['summe_pro_person'] ?? 0), 2, ',', '.') }} €</span></span>
                             <span class="text-gray-600">Wareneinsatz: <span class="tabular-nums">{{ number_format((float) ($cockpit['ek_per_person'] ?? 0), 2, ',', '.') }} €</span></span>
                         </div>
-                        @if(($form['price_mode'] ?? 'auto') === 'manuell')
-                            <div class="flex items-center gap-2">
+                        @if(in_array(($form['price_mode'] ?? 'auto'), ['fixed', 'manuell'], true))
+                            <div class="flex flex-wrap items-end gap-2">
                                 <label class="{{ $label }}">{{ $istPaket ? 'Paketpreis (Gesamt) / Person' : 'Fixer VK / Person' }}</label>
-                                <input type="number" step="0.01" min="0" wire:model.blur="form.price_per_person_manual" wire:change="speichern" class="{{ $input }} w-32 text-right tabular-nums" placeholder="z. B. 24,90" />
-                                <span class="text-[11px] text-gray-500">überschreibt die Summe — EK bleibt als Basis sichtbar</span>
+                                @if($istPaket)
+                                    <input type="number" step="0.01" min="0" wire:model="form.price_per_person" class="{{ $input }} w-32 text-right tabular-nums" placeholder="z. B. 24,90" />
+                                @else
+                                    <input type="number" step="0.01" min="0" wire:model="form.price_per_person_manual" class="{{ $input }} w-32 text-right tabular-nums" placeholder="z. B. 24,90" />
+                                @endif
+                                <input type="text" wire:model="form.price_override_reason" class="{{ $input }} min-w-56 flex-1" placeholder="Begründung der Preisabweichung" />
+                                <button type="button" wire:click="speichern" class="{{ $btnGhostXs }} text-violet-600">Fixpreis übernehmen</button>
                             </div>
                         @endif
                     </div>
                 @endif
-                {{-- M-K1/Doc 16: Herstellkosten-Wasserfall (WE → +Blöcke → HK2 → VK-Vorschlag) --}}
+                @if($concept)
+                    <div class="rounded-xl border border-black/5 p-3 space-y-2">
+                        <div class="flex flex-wrap items-end gap-3">
+                            <div>
+                                <label class="{{ $label }}">Auftrag simulieren (Pax)</label>
+                                <input type="number" min="0" step="1" wire:model.live.debounce.400ms="simulationPax"
+                                       class="{{ $input }} w-32 text-right tabular-nums" placeholder="z. B. 100" />
+                            </div>
+                            <p class="text-[11px] text-gray-500 pb-2">Die Vorschau prüft den Katalogpreis, ohne Stammdaten zu verändern.</p>
+                        </div>
+                        @if($auftragsSimulation)
+                            <div class="grid grid-cols-2 md:grid-cols-5 gap-2 text-xs">
+                                <div><span class="block text-[10px] text-gray-500">Katalog / Person</span><span class="font-medium tabular-nums">{{ number_format((float) $auftragsSimulation['catalog_price_per_person'], 2, ',', '.') }} €</span></div>
+                                <div><span class="block text-[10px] text-gray-500">HK2 / Person</span><span class="font-medium tabular-nums">{{ number_format((float) $auftragsSimulation['hk2'] / max(1, $auftragsSimulation['pax']), 2, ',', '.') }} €</span></div>
+                                <div><span class="block text-[10px] text-gray-500">Mindestpreis</span><span class="font-medium tabular-nums">{{ number_format((float) $auftragsSimulation['minimum_price'], 2, ',', '.') }} €</span></div>
+                                <div><span class="block text-[10px] text-gray-500">Zielpreis</span><span class="font-medium tabular-nums">{{ number_format((float) $auftragsSimulation['target_price'], 2, ',', '.') }} €</span></div>
+                                <div><span class="block text-[10px] text-gray-500">Aktive Personenzeit</span><span class="font-medium tabular-nums">{{ number_format((float) $auftragsSimulation['active_person_minutes'] / 60, 2, ',', '.') }} h</span></div>
+                            </div>
+                            @if($auftragsSimulation['unprofitable'])
+                                <div class="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                                    Der Katalogpreis liegt {{ number_format((float) $auftragsSimulation['target_gap'], 2, ',', '.') }} € unter dem Zielpreis. Der Katalogpreis wurde nicht verändert.
+                                </div>
+                            @endif
+                            @if(count($auftragsSimulation['warnings']))
+                                <p class="text-[10px] text-amber-700">{{ implode(' · ', $auftragsSimulation['warnings']) }}</p>
+                            @endif
+                        @endif
+                    </div>
+                @endif
+
+                {{-- Ohne Pax ist dies nur die mengenunabhängige Katalogsicht. --}}
                 @if($kalkulation)
                     <div class="rounded-xl border border-black/5 p-3 space-y-1">
                         <div class="flex items-center justify-between">
-                            <span class="{{ $label }}">Herstellkosten (HK2) — Aufschlüsselung / {{ $concept ? 'Person' : 'Person' }}</span>
+                            <span class="{{ $label }}">Katalog-Kostenindikator / Person</span>
                             <span class="text-[11px] text-gray-500">Marge {{ rtrim(rtrim(number_format((float) $kalkulation['marge_pct'], 2, ',', '.'), '0'), ',') }} %</span>
                         </div>
                         @foreach($kalkulation['bloecke'] as $blk)
@@ -975,10 +1010,10 @@
                             </div>
                         @endforeach
                         <div class="flex items-center justify-between text-xs py-1 border-t border-black/5 font-semibold text-gray-900">
-                            <span>= HK2</span><span class="tabular-nums">{{ number_format((float) $kalkulation['hk2_pro_person'] ?? $kalkulation['hk2_pro_portion'] ?? 0, 2, ',', '.') }} €</span>
+                            <span>= kalkulatorischer Vergleichswert</span><span class="tabular-nums">{{ number_format((float) $kalkulation['hk2_pro_person'] ?? $kalkulation['hk2_pro_portion'] ?? 0, 2, ',', '.') }} €</span>
                         </div>
                         <div class="flex items-center justify-between text-xs">
-                            <span class="text-gray-600">VK-Vorschlag (HK2 × Marge)</span>
+                            <span class="text-gray-600">Vergleichsvorschlag</span>
                             <span class="tabular-nums text-violet-700 font-medium">{{ number_format((float) $kalkulation['vk_vorschlag'], 2, ',', '.') }} €</span>
                         </div>
                         @if($kalkulation['db_eur'] !== null)
@@ -987,7 +1022,7 @@
                                 <span class="tabular-nums {{ $kalkulation['db_eur'] >= 0 ? 'text-emerald-600' : 'text-red-600' }}">{{ number_format((float) $kalkulation['db_eur'], 2, ',', '.') }} €{{ $kalkulation['db_pct'] !== null ? ' · ' . number_format((float) $kalkulation['db_pct'], 1, ',', '.') . ' %' : '' }}</span>
                             </div>
                         @endif
-                        <p class="text-[10px] text-gray-500 pt-0.5">Blöcke pflegst du in Einstellungen → Kalkulation.</p>
+                        <p class="text-[10px] text-gray-500 pt-0.5">Ein belastbarer Produktions-HK2 entsteht erst in der Pax-Simulation oder im Angebot.</p>
                     </div>
                 @endif
 
@@ -1118,14 +1153,14 @@
                     <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
                         <div>
                             <label class="{{ $label }}">Preis-Modus</label>
-                            <select wire:model.live="form.price_mode" class="{{ $input }}">
-                                <option value="manuell">manuell (Buffet)</option>
+                            <select wire:change="setPreisModus($event.target.value)" class="{{ $input }}">
                                 <option value="auto">auto (Σ Gerichte)</option>
+                                <option value="fixed" @selected(in_array(($form['price_mode'] ?? 'auto'), ['fixed', 'manuell'], true))>fixiert</option>
                             </select>
                         </div>
                         <div>
                             <label class="{{ $label }}">€/Person</label>
-                            <input type="number" step="0.01" min="0" wire:model="form.price_per_person" @disabled($form['price_mode'] === 'auto') class="{{ $input }} text-right tabular-nums" />
+                            <input type="number" step="0.01" min="0" wire:model="form.price_per_person" @disabled(($form['price_mode'] ?? 'auto') === 'auto') class="{{ $input }} text-right tabular-nums" />
                         </div>
                         <div>
                             <label class="{{ $label }}">EK/Person <span class="text-gray-500 normal-case">· aus Gerichten</span></label>
@@ -1136,9 +1171,15 @@
                             <input type="number" step="0.1" min="0" wire:model="form.food_cost_percent" disabled class="{{ $input }} text-right tabular-nums opacity-70" />
                         </div>
                     </div>
+                    @if(in_array(($form['price_mode'] ?? 'auto'), ['fixed', 'manuell'], true))
+                        <div class="flex items-end gap-2">
+                            <div class="flex-1"><label class="{{ $label }}">Begründung der Preisabweichung</label><input type="text" wire:model="form.price_override_reason" class="{{ $input }}" /></div>
+                            <button type="button" wire:click="speichern" class="{{ $btnGhostXs }} text-violet-600">Fixpreis übernehmen</button>
+                        </div>
+                    @endif
                     <div class="flex items-center gap-2">
                         <button type="button" wire:click="neuBerechnen" class="{{ $btnGhost }}">↻ EK aus Gerichten neu berechnen</button>
-                        <span class="text-[10px] text-gray-500">Kosten folgen den Gerichten; nur der €/Person ist im manuell-Modus (Buffet) frei.</span>
+                        <span class="text-[10px] text-gray-500">Kosten und Auto-Vorschlag folgen den Gerichten; ein Fixpreis benötigt eine Begründung.</span>
                     </div>
                 @endif
             @endif

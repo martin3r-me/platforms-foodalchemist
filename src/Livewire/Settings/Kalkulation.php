@@ -56,6 +56,7 @@ class Kalkulation extends Component
                 'mode' => in_array($this->rundung['mode'], ['kaufmaennisch', 'auf', 'ab'], true) ? $this->rundung['mode'] : 'kaufmaennisch',
             ],
         ]);
+        app(\Platform\FoodAlchemist\Services\PricingCascadeService::class)->recomputeTeam($this->team());
         $this->meldung = 'Gespeichert — Recompute & Cockpits nutzen diese Werte.';
     }
 

@@ -56,8 +56,8 @@
                     <div class="space-y-2 pt-2 border-t border-black/5">
                         <label class="{{ $label }}">Preis-Modus</label>
                         <select wire:model.live="form.price_mode" class="{{ $input }}">
-                            <option value="manuell">manuell (Per-Person-Preis setzen)</option>
                             <option value="auto">auto (Σ aus den Gerichten)</option>
+                            <option value="fixed">fixiert</option>
                         </select>
                         <div class="grid grid-cols-3 gap-2">
                             <div>
@@ -77,6 +77,12 @@
                             <div class="flex items-center justify-between">
                                 <span class="text-[11px] text-gray-500">Preis wird aus den Gerichten berechnet.</span>
                                 <button type="button" wire:click="neuBerechnen" class="{{ $btnGhostXs }}">↻ Neu berechnen</button>
+                            </div>
+                        @endif
+                        @if(in_array(($form['price_mode'] ?? 'auto'), ['fixed', 'manuell'], true))
+                            <div>
+                                <label class="{{ $label }}">Begründung der Preisabweichung</label>
+                                <input type="text" wire:model="form.price_override_reason" class="{{ $input }}" />
                             </div>
                         @endif
                         @if($selected->price_stale)

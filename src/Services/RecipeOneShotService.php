@@ -64,6 +64,7 @@ class RecipeOneShotService
         private CoherenceService $coherence,
         private SalesRecipeService $sales,
         private DarreichungService $darreichungen,
+        private CatalogPricingService $catalogPricing,
         private MargeService $marge,
         private TeamSettingsService $settings,
         private SignalDetektorService $detektor,
@@ -304,7 +305,7 @@ class RecipeOneShotService
         }
     }
 
-    /** @return array{status: string, work_time_min?: ?int, setup_time_min?: ?int, max_vorlauf_tage?: ?int, temperature?: ?string, function?: ?string, fehler?: string} */
+    /** @return array{status:string,work_time_min?:?int,setup_time_min?:?int,variable_work_time_min?:?float,variable_work_time_basis?:?string,standzeit_min?:?int,max_vorlauf_tage?:?int,temperature?:?string,function?:?string,fehler?:string} */
     private function eigenschaftenGlied(FoodAlchemistRecipe $recipe): array
     {
         try {
@@ -315,6 +316,9 @@ class RecipeOneShotService
                 'transportstabilitaet' => null,
                 'work_time_min' => $recipe->work_time_min,
                 'setup_time_min' => $recipe->setup_time_min,
+                'variable_work_time_min' => $recipe->variable_work_time_min,
+                'variable_work_time_basis' => $recipe->variable_work_time_basis,
+                'standzeit_min' => $recipe->standzeit_min,
                 'max_vorlauf_tage' => $recipe->max_vorlauf_tage,
                 'temperature' => $recipe->temperature,
                 'function' => $recipe->function,
@@ -331,6 +335,15 @@ class RecipeOneShotService
             }
             if (isset($vorschlag->werte['setup_time_min']) && is_numeric($vorschlag->werte['setup_time_min'])) {
                 $update['setup_time_min'] = max(0, (int) $vorschlag->werte['setup_time_min']);
+            }
+            if (isset($vorschlag->werte['variable_work_time_min']) && is_numeric($vorschlag->werte['variable_work_time_min'])) {
+                $update['variable_work_time_min'] = max(0, (float) $vorschlag->werte['variable_work_time_min']);
+            }
+            if (in_array($vorschlag->werte['variable_work_time_basis'] ?? null, ['kg', 'piece', 'portion'], true)) {
+                $update['variable_work_time_basis'] = $vorschlag->werte['variable_work_time_basis'];
+            }
+            if (isset($vorschlag->werte['standzeit_min']) && is_numeric($vorschlag->werte['standzeit_min'])) {
+                $update['standzeit_min'] = max(0, (int) $vorschlag->werte['standzeit_min']);
             }
             if (isset($vorschlag->werte['max_vorlauf_tage']) && is_numeric($vorschlag->werte['max_vorlauf_tage'])) {
                 $update['max_vorlauf_tage'] = max(0, min(14, (int) $vorschlag->werte['max_vorlauf_tage']));
@@ -352,6 +365,9 @@ class RecipeOneShotService
                 'status' => 'aktualisiert',
                 'work_time_min' => isset($update['work_time_min']) ? (int) $update['work_time_min'] : $recipe->work_time_min,
                 'setup_time_min' => isset($update['setup_time_min']) ? (int) $update['setup_time_min'] : $recipe->setup_time_min,
+                'variable_work_time_min' => isset($update['variable_work_time_min']) ? (float) $update['variable_work_time_min'] : $recipe->variable_work_time_min,
+                'variable_work_time_basis' => $update['variable_work_time_basis'] ?? $recipe->variable_work_time_basis,
+                'standzeit_min' => isset($update['standzeit_min']) ? (int) $update['standzeit_min'] : $recipe->standzeit_min,
                 'max_vorlauf_tage' => isset($update['max_vorlauf_tage']) ? (int) $update['max_vorlauf_tage'] : $recipe->max_vorlauf_tage,
                 'temperature' => $update['temperature'] ?? $recipe->temperature,
                 'function' => $update['function'] ?? $recipe->function,
@@ -399,14 +415,10 @@ class RecipeOneShotService
                 return ['status' => 'offen'];
             }
 
-            $update = ['default_station_id' => $station->id];
-            if ($recipe->batch_max_kg === null && $station->batch_max_kg !== null) {
-                $update['batch_max_kg'] = $station->batch_max_kg;
-            }
-            if ($recipe->batch_max_pieces === null && $station->batch_max_pieces !== null) {
-                $update['batch_max_pieces'] = $station->batch_max_pieces;
-            }
-            $recipe->forceFill($update)->save();
+            // Der Vorschlag ordnet nur den Posten zu. Dessen physische Grenze bleibt
+            // am Posten und wird vom ProductionTimeService aufgelöst; sie ist kein
+            // Rezept-Override und darf deshalb nicht hierhin kopiert werden.
+            $recipe->forceFill(['default_station_id' => $station->id])->save();
 
             return ['status' => 'aktualisiert', 'station_id' => (int) $station->id, 'station' => $station->name];
         } catch (\Throwable $e) {
@@ -839,7 +851,8 @@ class RecipeOneShotService
      * @return array{sales_net: ?float, ek_total_eur: ?float, ek_pro_portion: ?float,
      *               wareneinsatz_pct: ?float, ziel_pct: float, ampel: string, portion_g: ?float,
      *               aufschlagsklasse: ?string, vorlaeufig: bool, luecken: list<string>,
-     *               signal: bool, ziel_vk: ?float, ziel_delta_eur: ?float,
+     *               signal: bool, price_mode: string, calculated_sales_net: ?float,
+     *               price_source: ?string, price_warnings: list<string>, ziel_vk: ?float, ziel_delta_eur: ?float,
      *               ziel_wareneinsatz_pct: ?float, ziel_ampel: string, fehler: ?string}|null
      */
     private function wirtschaftlichkeitsGlied(Team $team, FoodAlchemistRecipe $recipe, ?float $zielVk = null): ?array
@@ -857,6 +870,8 @@ class RecipeOneShotService
             'wareneinsatz_pct' => null, 'ziel_pct' => $ziel, 'ampel' => 'unbekannt',
             'portion_g' => null, 'aufschlagsklasse' => null, 'vorlaeufig' => false,
             'luecken' => [], 'signal' => false, 'ziel_vk' => $zielVk,
+            'price_mode' => 'auto', 'calculated_sales_net' => null,
+            'price_source' => null, 'price_warnings' => [],
             'ziel_delta_eur' => null, 'ziel_wareneinsatz_pct' => null, 'ziel_ampel' => 'unbekannt',
             'fehler' => null,
         ];
@@ -864,7 +879,7 @@ class RecipeOneShotService
         try {
             $recipe = $recipe->fresh() ?? $recipe;                // Klasse/HG kommen aus dem Pass davor
 
-            // ── 1. Portion: gesetzt oder Lücke (nie geraten, s. Entscheidung 2) ──
+            // ── 1. Portion: Primärwert; ensureStandard kann zusätzlich aus Yield/Anzahl ableiten. ──
             $portion = $recipe->sales_quantity_per_unit_g !== null ? (float) $recipe->sales_quantity_per_unit_g : null;
 
             // ── 2. Aufschlagsklasse: gesetzt > Klasse-Default > HG-Default > Lücke ──
@@ -891,6 +906,10 @@ class RecipeOneShotService
             // ── 4. Zahlen + Ampel aus der Preis-Wahrheit: der Darreichung ──
             $recipe = $recipe->fresh() ?? $recipe;
             $standard = $standard?->refresh();
+            $portion = $standard?->quantity_per_unit_g !== null
+                ? (float) $standard->quantity_per_unit_g
+                : $portion;
+            $catalog = $standard !== null ? $this->catalogPricing->catalogPrice($team, $standard) : null;
             $vk = $standard?->sales_net !== null ? (float) $standard->sales_net : null;
             $ekPortion = $standard?->ek_portion !== null ? (float) $standard->ek_portion : null;
             $we = $this->marge->marge($vk, $ekPortion)['wareneinsatz_pct'] ?? null;
@@ -899,9 +918,8 @@ class RecipeOneShotService
             if ($portion === null) {
                 $luecken[] = 'portion';                           // ohne sie kein Auto-VK
             }
-            if ($ak === null) {
-                $luecken[] = 'aufschlagsklasse';
-            }
+            // Eine fehlende Preisklasse blockiert den Katalogpreis nicht: Der zentrale
+            // Dienst verwendet sichtbar den neutralen Klassenfaktor 100 %.
             // L8b: die dritte Vorbedingung war bis hierher stumm. `ensureStandard`
             // gibt bewusst `null` zurück, wenn es nichts raten darf (Varianten ohne
             // Standard-Flag) oder das Servierform-Vokabular `unbestimmt` fehlt —
@@ -941,6 +959,10 @@ class RecipeOneShotService
                 'vorlaeufig' => $gesamt > 0 && $bepreist < $gesamt,
                 'luecken' => $luecken,
                 'signal' => $signal,
+                'price_mode' => $catalog['price_mode'] ?? 'auto',
+                'calculated_sales_net' => $catalog['calculated_sales_net'] ?? null,
+                'price_source' => $catalog['base_source'] ?? null,
+                'price_warnings' => $catalog['warnings'] ?? [],
                 // L8b-2: Vorgabe, Abstand und Folge — drei Zahlen, keine Wertung
                 // darüber hinaus. `ziel_delta_eur` ist Ist − Ziel: positiv = das
                 // Gericht ist zum Zielpreis (noch) nicht kalkulierbar.

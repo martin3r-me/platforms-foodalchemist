@@ -61,12 +61,13 @@ it('nimmt den kleineren Deckel aus Rezept und Posten (Minimum gilt)', function (
         ->and($r->kochBatches(2.0, stationDeckel: 20.0))->toBe(1);  // Posten größer → Rezept-8 gilt
 });
 
-it('bleibt bei VK-Gerichten linear-fraktional (kein Topf-Deckel, kein Kessel-Konzept)', function () {
+it('verwendet für VK- und Basisrezepte dieselbe physische Batchlogik', function () {
     $r = recipe(['work_time_min' => 30, 'yield_kg' => 4.0, 'is_sales_recipe' => true]);
 
-    // VK: kochBatches wird nicht angewandt — Zeit = work × roh (fraktional), Default-Kessel greift NICHT.
-    expect($r->arbeitszeitMin(2.0, true))->toBe(60)
-        ->and($r->arbeitszeitMin(0.5, true))->toBe(15);
+    // Die Rezeptart ändert den Produktionsprozess nicht: 8 kg und 2 kg passen jeweils
+    // in einen Vorgang unter dem 20-kg-Team-/System-Standard.
+    expect($r->arbeitszeitMin(2.0, true))->toBe(30)
+        ->and($r->arbeitszeitMin(0.5, true))->toBe(30);
 });
 
 it('gibt die passive Standzeit mengenunabhängig zurück (1× je Lauf)', function () {

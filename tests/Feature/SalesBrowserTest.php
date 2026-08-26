@@ -8,6 +8,8 @@ use Platform\FoodAlchemist\Models\FoodAlchemistDishClass;
 use Platform\FoodAlchemist\Models\FoodAlchemistDishMainGroup;
 use Platform\FoodAlchemist\Models\FoodAlchemistMarkupClass;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
+use Platform\FoodAlchemist\Models\FoodAlchemistServierform;
+use Platform\FoodAlchemist\Services\DarreichungService;
 use Platform\FoodAlchemist\Services\SalesRecipeService;
 use Platform\FoodAlchemist\Tests\Support\SeedsTeamHierarchy;
 use Platform\FoodAlchemist\Tests\TestCase;
@@ -25,7 +27,11 @@ beforeEach(function () {
 
     $hg = FoodAlchemistDishMainGroup::create(['code' => 'HG', 'label' => 'Hauptgang']);
     $this->class = FoodAlchemistDishClass::create(['dish_main_group_id' => $hg->id, 'code' => 'HG_FLEISCH', 'label' => 'Fleisch', 'diet_form' => 'fleisch']);
-    $this->alc = FoodAlchemistMarkupClass::create(['code' => 'ALC', 'label' => 'A la Carte', 'raw_markup_pct' => 420, 'vat_rate' => 19, 'formula_type' => 'aufschlag']);
+    $this->alc = FoodAlchemistMarkupClass::create([
+        'code' => 'ALC', 'label' => 'A la Carte', 'raw_markup_pct' => 420,
+        'class_factor_pct' => 100, 'vat_profile_key' => 'ermaessigt',
+        'vat_rate' => 19, 'formula_type' => 'aufschlag',
+    ]);
 
     $this->vk = FoodAlchemistRecipe::create([
         'team_id' => $this->rootTeam->id, 'recipe_key' => 'vk1', 'name' => 'HG: Filet | Jus', 'status' => 'draft',
@@ -35,6 +41,10 @@ beforeEach(function () {
     $this->basis = FoodAlchemistRecipe::create([
         'team_id' => $this->rootTeam->id, 'recipe_key' => 'b1', 'name' => 'Sauce: Jus', 'status' => 'draft',
     ]);
+    FoodAlchemistServierform::create([
+        'team_id' => $this->rootTeam->id, 'code' => 'unbestimmt', 'label' => 'Unbestimmt',
+    ]);
+    app(DarreichungService::class)->ensureStandard($this->rootTeam, $this->vk->id);
 });
 
 it('Scope-Härte: VK-Liste liefert nie Basisrezepte, Basis-Liste nie VK, Detail kreuzweise null', function () {
@@ -55,15 +65,18 @@ it('GL-04-Pool-Filter: VK-Rezept ist nicht als Sub-Rezept verknüpfbar', functio
         ->and($treffer->where('type', 'sub'))->toBeEmpty();            // einziger Namens-Treffer wäre das VK-Rezept
 });
 
-it('Cockpit: g/Einheit aus Yield/Anzahl abgeleitet, VK-Vorschlag aus Klasse, Wareneinsatz konsistent', function () {
-    $cockpit = app(SalesRecipeService::class)->cockpit(app(SalesRecipeService::class)->detail($this->rootTeam, $this->vk->id));
+it('Cockpit: g/Einheit aus Yield/Anzahl und dynamischer Auto-Vorschlag', function () {
+    $cockpit = app(SalesRecipeService::class)->cockpit(
+        app(SalesRecipeService::class)->detail($this->rootTeam, $this->vk->id),
+        $this->rootTeam,
+    );
 
     expect($cockpit['verkauft_als']['g_pro_einheit'])->toBe(250.0)   // 0,5 kg / 2 Einheiten
-        ->and($cockpit['vk']['source'])->toBe('class')
-        ->and($cockpit['vk']['sales_net'])->toBe(6.76)                // GT-8: 5,20 €/kg × 250 g × 5,2
-        ->and($cockpit['sales_gross'])->toBe(8.04)
+        ->and($cockpit['vk']['source'])->toBe('auto')
+        ->and($cockpit['vk']['sales_net'])->toBe(4.33)                // 1,30 € MEK je Einheit × Faktor 3,333
+        ->and($cockpit['sales_gross'])->toBe(4.63)
         ->and($cockpit['marge']['wareneinsatz_pct'] + $cockpit['marge']['marge_pct'])->toBe(100.0)
-        ->and($cockpit['pro_einheit']['vk_netto_pro_einheit'])->toBe(3.38);
+        ->and($cockpit['pro_einheit']['vk_netto_pro_einheit'])->toBe(4.33);
 });
 
 it('Browser listet VK-Zeile; Klick wählt Rezept (URL-Kontext); HG-Baum live-verprobt', function () {
@@ -78,7 +91,7 @@ it('Browser listet VK-Zeile; Klick wählt Rezept (URL-Kontext); HG-Baum live-ver
         ->assertSet('recipeId', $this->vk->id);
 });
 
-it('Panel zeigt VERKAUFT-ALS + KPI-Karten; W-1-Klasse kennzeichnet statt crasht', function () {
+it('Panel zeigt VERKAUFT-ALS, KPI und die dynamische Formel unabhängig von Alt-Formeltypen', function () {
     $this->actingAs($this->user);
 
     Livewire::test(DetailPanel::class, ['recipeId' => $this->vk->id])
@@ -91,6 +104,6 @@ it('Panel zeigt VERKAUFT-ALS + KPI-Karten; W-1-Klasse kennzeichnet statt crasht'
     ])->id]);
 
     Livewire::test(DetailPanel::class, ['recipeId' => $this->vk->id])
-        ->assertSeeHtml('data-formel-fehlt')                          // W-1: Hinweis statt Exception im UI
-        ->assertSee('W-1');
+        ->assertDontSeeHtml('data-formel-fehlt')
+        ->assertSeeHtml('data-formel-klartext');
 });

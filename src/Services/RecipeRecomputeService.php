@@ -57,7 +57,7 @@ class RecipeRecomputeService
     }
 
     /** Pipeline für EIN Rezept — idempotent (I4), eine Transaktion (V-07). */
-    public function recomputePipeline(int $recipeId): void
+    public function recomputePipeline(int $recipeId, bool $cascadePrices = true): void
     {
         $this->laCache = [];                                       // Preis-Memo nie über Edits hinweg tragen
         DB::transaction(function () use ($recipeId) {
@@ -81,6 +81,13 @@ class RecipeRecomputeService
         // Umbau-Spec Phase 5: Darreichungspreise folgen dem frischen EK (lazy resolved,
         // kein Konstruktor-Zyklus — DarreichungService hängt seinerseits an diesem Service).
         app(DarreichungService::class)->recomputeFuerRezept($recipeId);
+        if ($cascadePrices) {
+            try {
+                app(PricingCascadeService::class)->recomputeRecipes([$recipeId]);
+            } catch (\Throwable $e) {
+                Log::warning("Preis-Kaskade für Rezept {$recipeId} fehlgeschlagen: {$e->getMessage()}");
+            }
+        }
     }
 
     /**
@@ -128,7 +135,7 @@ class RecipeRecomputeService
         //    stehen EINMAL in der Ordnung, nicht einmal je Start.
         foreach ($this->topoOrder($betroffen) as $id) {
             try {
-                $this->recomputePipeline($id);
+                $this->recomputePipeline($id, false);
             } catch (\Throwable $e) {
                 Log::warning("Recompute-Propagation: Rezept {$id} fehlgeschlagen — {$e->getMessage()} (I8: Edit nicht geblockt)");
             }
@@ -144,6 +151,12 @@ class RecipeRecomputeService
             }
         } catch (\Throwable $e) {
             Log::warning("K-07 markStaleForRecipe fehlgeschlagen: {$e->getMessage()}");
+        }
+
+        try {
+            app(PricingCascadeService::class)->recomputeRecipes($betroffen);
+        } catch (\Throwable $e) {
+            Log::warning("Preis-Kaskade nach Bulk-Recompute fehlgeschlagen: {$e->getMessage()}");
         }
 
         return $betroffen;
@@ -244,8 +257,15 @@ class RecipeRecomputeService
         }
 
         foreach ($order as $id) {
-            $this->recomputePipeline($id);
+            $this->recomputePipeline($id, false);
         }
+
+        FoodAlchemistRecipe::whereIn('id', $order)->pluck('team_id')->filter()->unique()
+            ->each(function ($teamId) {
+                if (($team = Team::find($teamId)) !== null) {
+                    app(PricingCascadeService::class)->recomputeTeam($team);
+                }
+            });
 
         return ['berechnet' => count($order), 'reihenfolge_ok' => true];
     }

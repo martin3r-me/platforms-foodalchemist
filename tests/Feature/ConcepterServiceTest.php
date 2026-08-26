@@ -45,13 +45,14 @@ it('PaketService manuell: gesetzter Per-Person-Preis bleibt trotz Gerichten', fu
     expect((float) $b->refresh()->price_per_person)->toBe(4.50);  // NICHT auf 5,00 überschrieben
 });
 
-it('K-07: recomputeAndPropagate markiert Auto-Pakete mit dem Gericht als stale', function () {
+it('K-07: recomputeAndPropagate berechnet betroffene Auto-Pakete sofort neu', function () {
     $auto = $this->pakete->create($this->rootTeam, ['name' => 'Auto', 'role' => 'Vorspeise', 'price_mode' => 'auto']);
     $this->pakete->syncGerichte($this->rootTeam, $auto->id, [['sales_recipe_id' => $this->green->id]]);
     expect($auto->refresh()->price_stale)->toBeFalse();             // syncGerichte hat gerade gerechnet
 
     app(\Platform\FoodAlchemist\Services\RecipeRecomputeService::class)->recomputeAndPropagate($this->green->id);
-    expect($auto->refresh()->price_stale)->toBeTrue();              // Preis-Basis neu → Paket veraltet
+    expect($auto->refresh()->price_stale)->toBeFalse()              // Live-Kaskade hat den Preis bereits erneuert
+        ->and($auto->refresh()->price_calculation_version)->toBe(\Platform\FoodAlchemist\Services\CatalogPricingService::VERSION);
 });
 
 it('markStaleForRecipe markiert nur Auto-Pakete mit dem Gericht', function () {

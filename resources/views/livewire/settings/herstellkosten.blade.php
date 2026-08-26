@@ -100,13 +100,23 @@
             <span class="w-40 text-xs text-gray-600">Lohnnebenkosten-Zuschlag</span>
             <input type="text" wire:model="lnk" class="{{ $input }} !w-24 text-right tabular-nums" placeholder="0" /> <span class="text-[11px] text-gray-500">% AG-/Sozialabgaben auf den Produktionslohn — rechnet den <strong>echten</strong> Personalkostensatz (statt nur Brutto-Lohn) in HK2</span>
         </div>
+        <div class="flex items-center gap-3">
+            <span class="w-40 text-xs text-gray-600">Lohnquelle im Auftrag</span>
+            <select wire:model="laborSource" class="{{ $input }} !w-52"><option value="team_flat">Team-Stundensatz</option><option value="station_roles">Rollen des Postens</option></select>
+            <span class="text-[11px] text-gray-500">Fehlende Posten- oder Rollendaten fallen sichtbar auf den Team-Satz zurück.</span>
+        </div>
     </div>
 
     {{-- M-K6/Doc 16 §10.2: Fixkosten + Bezugsbasen → abgeleitete Gemeinkosten-Sätze --}}
     <div class="{{ $card }} p-5 space-y-3" data-hk-fixkosten>
-        <div>
-            <h3 class="font-medium tracking-tight text-gray-900">Fixkosten (Gemeinkosten) → abgeleitete Sätze</h3>
-            <p class="text-[11px] text-gray-500 mt-0.5">Nicht-produktbezogene Kosten (Logistik, Spüle, Lager, Verwaltung …). <strong>Zuschlag-% = Σ Fixkosten/Monat ÷ Bezugsbasis × 100</strong> für jeden Block im Modus „aus Fixkosten".</p>
+        <div class="flex items-start justify-between gap-3 flex-wrap">
+            <div>
+                <h3 class="font-medium tracking-tight text-gray-900">Fixkosten (Gemeinkosten) → abgeleitete Sätze</h3>
+                <p class="text-[11px] text-gray-500 mt-0.5">Nicht-produktbezogene Kosten (Logistik, Spüle, Lager, Verwaltung …). <strong>Zuschlag-% = Σ Fixkosten/Monat ÷ Bezugsbasis × 100</strong> für jeden Block im Modus „aus Fixkosten".</p>
+            </div>
+            @if(count($fixListe) === 0)
+                <button type="button" wire:click="cateringBeispielwerte" class="{{ $btnGhostXs }} text-violet-600" title="Setzt gekennzeichnete, editierbare Beispielwerte samt Monatsbasen ein und berechnet die Kaskade.">@svg('heroicon-o-calculator', 'w-3.5 h-3.5 inline-block align-middle') Catering-Beispiel rechnen</button>
+            @endif
         </div>
 
         {{-- Bezugsbasen (monatlich) — mit Erklärung (Phase 4: war vorher undokumentiert) --}}

@@ -41,7 +41,7 @@
                 <input type="text" wire:model="neuHg" wire:keydown.enter="createHg" placeholder="Neue Hauptgruppe …" class="{{ $input }} flex-1" />
                 <button type="button" wire:click="createHg" class="{{ $btnGhostXs }}">+ HG</button>
             </div>
-            <p class="text-[10px] text-gray-500 px-2 pt-2 leading-snug">Kategorie = Hauptgruppe (trägt den Aufschlag). Klasse = Diätform (4, global). Zähler = Gerichte je HG. Aufschlagsklassen, Schreibstile, Behälter: eigene Seiten (R5).</p>
+            <p class="text-[10px] text-gray-500 px-2 pt-2 leading-snug">Kategorie = Hauptgruppe. Klasse = Diätform (4, global). Zähler = Gerichte je HG. Preisklassen, Schreibstile und Behälter: eigene Seiten.</p>
         </div>
 
         {{-- Klassen der gewählten HG rechts --}}

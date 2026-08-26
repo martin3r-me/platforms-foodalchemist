@@ -1,5 +1,8 @@
 <?php
 
+use Livewire\Livewire;
+use Platform\FoodAlchemist\Livewire\Settings\Herstellkosten;
+use Platform\FoodAlchemist\Services\CatalogPricingService;
 use Platform\FoodAlchemist\Services\FixkostenService;
 use Platform\FoodAlchemist\Services\KalkulationService;
 use Platform\FoodAlchemist\Services\TeamSettingsService;
@@ -66,4 +69,29 @@ it('ohne Bezugsbasis bleibt der abgeleitete Satz 0 (keine Division durch 0)', fu
 
     expect($schema['gemeinkosten']['value'])->toBe(0.0)
         ->and($schema['logistik']['value'])->toBe(0.0);
+});
+
+it('setzt den gekennzeichneten Catering-Beispielsatz nur in einen leeren Bestand ein', function () {
+    $team = $this->rootTeam;
+    $this->fix->liste($team)->each(fn ($row) => $this->fix->delete($team, $row->id));
+
+    $this->fix->cateringBeispielwerte($team);
+
+    expect($this->fix->liste($team))->toHaveCount(count(FixkostenService::CATERING_EXAMPLE_COSTS))
+        ->and($this->fix->liste($team)->sum(fn ($row) => $row->monatsbetrag()))->toBe(15000.0)
+        ->and(fn () => $this->fix->cateringBeispielwerte($team))->toThrow(RuntimeException::class);
+});
+
+it('rechnet den Catering-Beispielsatz in der Einstellungsseite sofort bis zum Basissatz durch', function () {
+    $team = $this->rootTeam;
+    $this->fix->liste($team)->each(fn ($row) => $this->fix->delete($team, $row->id));
+    $this->actingAs($this->makeUser($team));
+
+    Livewire::test(Herstellkosten::class)
+        ->call('cateringBeispielwerte')
+        ->assertSet('fehler', null)
+        ->assertSet('meldung', 'Catering-Beispielwerte berechnet. Bitte anschließend auf den eigenen Betrieb anpassen.');
+
+    expect($this->settings->bezugsbasen($team))->toEqual(FixkostenService::CATERING_EXAMPLE_BASES)
+        ->and(app(CatalogPricingService::class)->enterpriseBaseRate($team)['source'])->toBe('kostenstruktur');
 });

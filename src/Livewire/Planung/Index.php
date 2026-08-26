@@ -364,7 +364,7 @@ class Index extends Component
 
     /**
      * Etappe 6 Margen-Gate: Warnung, wenn bei einer Stufen-Freigabe Positionen UNTER ihrer
-     * Aufschlagsklasse freigegeben wurden (manueller VK < Klassen-Vorschlag). Reine Rückkopplung,
+     * Preisklasse freigegeben wurden (fixierter VK < dynamischer Auto-Vorschlag). Reine Rückkopplung,
      * keine harte Sperre — der Mensch entscheidet (Nordstern). Wird je Freigabe frisch gesetzt.
      */
     public ?string $margenWarnung = null;
@@ -2492,11 +2492,11 @@ class Index extends Component
 
     /**
      * Etappe 6 Margen-Gate — welche der bei der Freigabe der Stufe $kind anstehenden Rezept-Drafts
-     * würden UNTER ihrer Aufschlagsklasse freigegeben? „unter Aufschlagsklasse" = ein MANUELLER VK,
-     * der den Klassen-Vorschlag unterschreitet (source=`manuell` und sales_net < vorschlag.sales_net).
+     * würden UNTER ihrem Auto-Vorschlag freigegeben? Das ist ein FIXIERTER VK,
+     * der den dynamischen Katalogvorschlag unterschreitet (source=`fixed`).
      *
      * Reuse `SalesRecipeService::cockpit` (die EINE Kalkulations-Wahrheit, GL-02 I9) — keine neue
-     * Rechenlogik. Ein Auto-VK (source=`class`) trifft die Klasse exakt → nie drunter; ohne Vorschlag
+     * Rechenlogik. Ein Auto-VK (source=`auto`) folgt dem Vorschlag exakt → nie drunter; ohne Vorschlag
      * (kein EK / keine Portionierung / Formel fehlt) gibt es keine Klassen-Schwelle → keine Aussage,
      * nicht geraten. Bewusst am Klassen-Vorschlag statt an der Food-Cost-Ampel (Team-Ziel-Wareneinsatz
      * ist oft nicht gepflegt → Ampel `unbekannt`, s. Backlog #87); die Klassen-Schwelle trägt das
@@ -2534,7 +2534,7 @@ class Index extends Component
             $c = $sales->cockpit($rz, $team);
             $vk = is_array($c['vk'] ?? null) ? $c['vk'] : [];
             $vorschlag = is_array($vk['vorschlag'] ?? null) ? $vk['vorschlag'] : null;
-            if (($vk['source'] ?? null) === 'manuell'
+            if (($vk['source'] ?? null) === 'fixed'
                 && isset($vk['sales_net'], $vorschlag['sales_net'])
                 && (float) $vk['sales_net'] < (float) $vorschlag['sales_net']) {
                 $unter[] = (string) ($rz->name ?? ('#'.$rz->id));
@@ -2556,9 +2556,9 @@ class Index extends Component
             return null;
         }
         $anzahl = count($namen);
-        $kopf = $anzahl === 1 ? '1 Position unter Aufschlagsklasse freigegeben' : $anzahl.' Positionen unter Aufschlagsklasse freigegeben';
+        $kopf = $anzahl === 1 ? '1 Position unter Auto-Vorschlag freigegeben' : $anzahl.' Positionen unter Auto-Vorschlag freigegeben';
 
-        return sprintf('%s: %s — VK prüfen (Marge unter Klassen-Vorgabe).', $kopf, implode(', ', $namen));
+        return sprintf('%s: %s — fixierten VK gegen den dynamischen Vorschlag prüfen.', $kopf, implode(', ', $namen));
     }
 
     /** A2: Kommentar-Feld eines Worker-Steps auf-/zuklappen (per-Speise-Feedback). */

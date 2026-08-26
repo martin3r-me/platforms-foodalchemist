@@ -3,39 +3,82 @@ title: Kalkulation
 order: 6
 ---
 
-# 🧮 Kalkulation
+# Kalkulation
 
-Die Kalkulation beantwortet zwei Fragen: **Was kostet es uns?** und **Was muss es bringen?** Sie baut auf dem Wareneinsatz auf, der sich aus den [Stammdaten](stammdaten) und [Rezepten](rezepte) von selbst ergibt.
+Die Kalkulation besitzt zwei getrennte Rechenkreisläufe. Ein Katalogpreis ist mengenunabhängig;
+ein belastbarer Produktions-HK2 entsteht erst mit einer konkreten Personenzahl.
 
----
+## Katalogpreis ohne Pax
 
-## Von HK1 zu HK2
+```text
+MEK je Darreichung
+→ dynamischer Unternehmens-Basissatz
+→ relativer Klassenfaktor
+→ Auto-Vorschlag
+→ gültiger Katalog-VK
+```
 
-Die Rechnung läuft in Stufen:
+Der Basissatz normalisiert die bestätigten Monatswerte `MEK`, `FEK` und `HK` auf einen Euro
+Wareneinsatz. Aktive Gemeinkostenblöcke auf MEK, FEK und HK sowie der Gewinnaufschlag auf HK2
+fließen in den Faktor ein. Fehlen belastbare Monatsbasen, verwendet das System sichtbar den
+Fallback `100 / Ziel-Wareneinsatzquote`.
 
-| Stufe | Was drinsteckt |
-|-------|----------------|
-| **HK1 — Wareneinsatz** | Die reinen Materialkosten: was die Zutaten laut Lead-LA-Preisen kosten. |
-| **HK2 — Vollkosten** | HK1 **plus** Gemeinkosten (Fertigung, Verwaltung) — die echten Selbstkosten. |
-| **Verkaufspreis & Deckungsbeitrag** | Was übrig bleibt, wenn der Verkaufspreis die Vollkosten deckt. |
+```text
+Auto-VK netto = Darreichungs-MEK × Basissatz × Klassenfaktor / 100
+```
 
-Dahinter steht eine **mehrstufige Zuschlagskalkulation**: Einzelkosten (Material, Fertigung) und Gemeinkosten-Zuschläge (Material-, Fertigungs-, Verwaltungs-GK) werden getrennt geführt. Die Zuschlagssätze leiten sich aus den hinterlegten **Fixkosten** ab — gepflegt in den [Einstellungen](einstellungen).
+Preisklassen sind relative Produktabweichungen. `100 %` übernimmt den Unternehmenssatz
+unverändert; sie sind kein harter Gesamtaufschlag mehr. Der Katalogpreis verwendet weder
+Produktionszeit noch eine angenommene Auftragsgröße.
 
-Die Übersicht **Kalkulation (HK2)** zeigt diese Rechnung für deine Gerichte und Concepts.
+## Preiszustände
 
----
+- `auto`: Vergleichspreis und gültiger VK werden neu berechnet.
+- `fixed`: Der Vergleichspreis läuft weiter, der freigegebene VK bleibt stehen.
+- `manuell`: nur als lesbarer Legacy-Zustand; neue Fixierungen verwenden `fixed`.
 
-## Der Kalkulator
+Eine neue Fixierung benötigt Preis und Begründung. Benutzer, Zeitpunkt und optionales Ablaufdatum
+werden protokolliert. Abgelaufene Fixierungen fallen auf `auto` zurück. Preisänderungen werden in
+`foodalchemist_price_change_audits` mit altem und neuem Vergleichs- und Effektivpreis festgehalten.
 
-Der **Kalkulator** (`/kalkulator`) ist ein eigenständiger Baukasten — bewusst **entkoppelt** von den fertigen Gerichten, ideal zum Durchrechnen und Prüfen. Du stellst frei **Positionen** zusammen:
+MwSt wird als Schlüssel `regulaer` oder `ermaessigt` gespeichert. Der aktuelle Prozentsatz kommt
+aus den zentralen Einstellungen; ein freies Prozentfeld an der Darreichung existiert nicht mehr.
 
-- ein fertiges **Gericht**
-- ein **Basisrezept**
-- ein einzelnes **Grundprodukt**
-- oder eine **freie** Position
+## Auftrag mit Pax
 
-…und bekommst sofort HK1, HK2 und einen Verkaufspreis-Vorschlag — Position für Position aufgeschlüsselt.
+```text
+Concept-Menge pro Person × Pax
+→ rekursiver, konsolidierter Rezeptbedarf
+→ Produktionsvorgänge, Rüst- und variable Zeit
+→ MEK + FEK + direkte Kosten + Gemeinkosten
+→ auftragsspezifischer HK2
+→ Mindestpreis und Zielpreis
+```
 
----
+Ein Angebot zeigt Katalogpreis, tatsächlichen Auftrags-HK2, Deckungsbeitrag, Mindestpreis,
+Zielpreis und aktive Personenzeit. Liegt der Katalog- oder Angebotspreis unter dem Zielpreis,
+erscheint eine Warnung. Der Preis wird nicht still erhöht.
 
-> **Wann was?** Die **Kalkulation (HK2)** ist die feste Sicht auf das, was du gebaut hast. Der **Kalkulator** ist der Notizblock zum Ausprobieren: „Was würde dieses Menü kosten?" — ohne etwas am echten Bestand zu ändern.
+## Fixkosten und Bezugsbasen
+
+Abgeleitete Sätze berechnen sich je Block aus `Fixkosten pro Monat / Bezugsbasis × 100`.
+Positive Fixkosten mit Basis `0` ergeben weiterhin `0 %` und eine Warnung. Die Einstellungen bieten
+einen ausdrücklich gekennzeichneten, editierbaren Catering-Beispielsatz mit typischen Kostenarten
+und Monatsbasen. Diese Werte sind Rechenbeispiele, keine Branchen-Norm.
+
+## Rechenverantwortung
+
+- `CatalogPricingService`: mengenunabhängiger Darreichungs- und Katalogpreis.
+- `ProductionTimeService`: Vorgänge, aktive Personenzeit und passive Standzeit.
+- `OrderCostingService`: Bedarfsexplosion und auftragsspezifischer HK2.
+- `PricingCascadeService`: Darreichung → Paket → Concept → offenes Angebot.
+
+Die Datenumstellung läuft trocken oder schreibend:
+
+```bash
+php artisan foodalchemist:pricing-v2
+php artisan foodalchemist:pricing-v2 --apply --chunk=200
+```
+
+Der Lauf ist fortsetzbar und wert-idempotent. Aktive Preise werden auf `auto` neu gesetzt;
+versendete, angenommene und abgelehnte Angebote bleiben historische Snapshots.

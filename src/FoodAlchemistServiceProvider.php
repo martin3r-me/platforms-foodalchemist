@@ -94,6 +94,7 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                 \Platform\FoodAlchemist\Console\AnchorsTranslateCsvCommand::class,
                 \Platform\FoodAlchemist\Console\PaketeToConceptsCommand::class,
                 \Platform\FoodAlchemist\Console\FormatEditionsToSlotsCommand::class,
+                \Platform\FoodAlchemist\Console\DynamicPricingMigrationCommand::class,
             ]);
 
             $this->planeLaeufe();

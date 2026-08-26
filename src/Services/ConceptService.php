@@ -4,6 +4,7 @@ namespace Platform\FoodAlchemist\Services;
 
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Models\FoodAlchemistPaket;
@@ -125,7 +126,7 @@ class ConceptService
             'class' => $this->norm($in['class'] ?? null),
             'level' => $in['level'] ?? null,
             'status' => $in['status'] ?? 'active',
-            'price_mode' => in_array(($in['price_mode'] ?? 'manuell'), ['auto', 'manuell'], true) ? ($in['price_mode'] ?? 'manuell') : 'manuell',
+            'price_mode' => in_array(($in['price_mode'] ?? 'auto'), ['auto', 'fixed', 'manuell'], true) ? ($in['price_mode'] ?? 'auto') : 'auto',
             'is_template' => false,
         ]);
     }
@@ -153,6 +154,7 @@ class ConceptService
         'writing_style_id', 'category_id', 'status', 'description', 'additional_text', 'note',
         'brief', 'target_price_per_person', 'diet_requirement', 'structure_requirement', 'season', 'target_group',
         'price_mode', 'price_per_person_manual', 'price_display',
+        'price_override_reason', 'price_override_expires_at',
         'serving_form_id', 'event_type_id', // Facetten (Umbau-Spec Phase 4)
     ];
 
@@ -195,6 +197,20 @@ class ConceptService
         }
         if (array_key_exists('class', $update)) {
             $update['class'] = $this->norm($update['class']);
+        }
+        $mode = $update['price_mode'] ?? $concept->price_mode;
+        if ($mode === 'fixed') {
+            $effective = $update['price_per_person_manual'] ?? $concept->price_per_person_manual;
+            $reason = trim((string) ($update['price_override_reason'] ?? $concept->price_override_reason));
+            if (! is_numeric($effective) || $reason === '') {
+                throw new \RuntimeException('Ein fixierter Concept-Preis benötigt Preis und Begründung.');
+            }
+            $update['price_override_reason'] = $reason;
+            $update['price_override_user_id'] = Auth::id();
+            $update['price_override_at'] = now();
+        } elseif ($mode === 'auto') {
+            $update += ['price_per_person_manual' => null, 'price_override_reason' => null,
+                'price_override_user_id' => null, 'price_override_at' => null, 'price_override_expires_at' => null];
         }
         $concept->update($update);
 
@@ -668,14 +684,16 @@ class ConceptService
 
         $summe = round($vkTotal, 2);
         // Manueller Concept-VK (z. B. Lunchbuffet, Preis auf EK-Basis) überschreibt die Summe; EK bleibt aus den Positionen.
-        $manuell = ($concept->price_mode ?? 'auto') === 'manuell' && $concept->price_per_person_manual !== null;
+        $expired = $concept->price_override_expires_at?->isPast() ?? false;
+        $manuell = in_array(($concept->price_mode ?? 'auto'), ['fixed', 'manuell'], true)
+            && ! $expired && $concept->price_per_person_manual !== null;
         $preis = $manuell ? round((float) $concept->price_per_person_manual, 2) : $summe;
 
         return [
             'zeilen' => $zeilen,
             'price_per_person' => $preis,
             'summe_pro_person' => $summe,        // berechnete Summe der Positionen (auch im manuellen Modus, zur Anzeige)
-            'price_mode' => $manuell ? 'manuell' : 'auto',
+            'price_mode' => $manuell ? ($concept->price_mode === 'fixed' ? 'fixed' : 'manuell') : 'auto',
             'ek_per_person' => round($ekTotal, 2),
             'hat_stale' => $hatStale,
             'hat_leer' => $hatLeer,
@@ -762,12 +780,37 @@ class ConceptService
     {
         // M10R-1: Preis-Cache + Voll-Aggregat-Caches (Nährwerte/Person, Arbeitszeit, EK).
         $agg = app(ConcepterAggregateService::class)->conceptAggregat($concept);
+        $oldCalculated = $concept->calculated_price_per_person !== null ? (float) $concept->calculated_price_per_person : null;
+        $oldEffective = $concept->price_per_person_cache !== null ? (float) $concept->price_per_person_cache : null;
+        $cockpit = $this->preisCockpit($concept);
+        $expired = $concept->price_override_expires_at?->isPast() ?? false;
         $concept->update([
-            'price_per_person_cache' => $this->preisCockpit($concept)['price_per_person'],
+            'price_mode' => $expired ? 'auto' : ($concept->price_mode ?: 'auto'),
+            'price_per_person_manual' => $expired ? null : $concept->price_per_person_manual,
+            'calculated_price_per_person' => $cockpit['summe_pro_person'],
+            'price_per_person_cache' => $cockpit['price_per_person'],
+            'price_calculation_source' => 'children_sum',
+            'price_calculation_version' => CatalogPricingService::VERSION,
+            'price_calculated_at' => now(),
+            ...($expired ? ['price_override_reason' => null, 'price_override_user_id' => null,
+                'price_override_at' => null, 'price_override_expires_at' => null] : []),
             'nutrition_cache' => $agg['naehrwerte'],
             'work_time_min_cache' => $agg['work_time_min'],
             'ek_per_person_cache' => $agg['ek_per_person'],
         ]);
+        app(PriceAuditService::class)->record(
+            $concept, 'concept', $oldCalculated, (float) $cockpit['summe_pro_person'],
+            $oldEffective, (float) $cockpit['price_per_person'], 'children_sum',
+            ['calculation_version' => CatalogPricingService::VERSION],
+        );
+    }
+
+    /** Öffentlicher Kaskaden-Einstieg; Formeln bleiben in preisCockpit/ConcepterAggregateService. */
+    public function recomputeCache(FoodAlchemistConcept $concept): FoodAlchemistConcept
+    {
+        $this->refreshCache($concept);
+
+        return $concept->refresh();
     }
 
     // ── M10-05: Vorlage = Fork ─────────────────────────────────────────────

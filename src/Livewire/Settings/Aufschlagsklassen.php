@@ -6,14 +6,13 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
 use Platform\FoodAlchemist\Models\FoodAlchemistMarkupClass;
+use Platform\FoodAlchemist\Services\CatalogPricingService;
+use Platform\FoodAlchemist\Services\PricingCascadeService;
 use Platform\FoodAlchemist\Support\TeamScope;
 
 /**
- * R5 (Dominique): Aufschlagsklassen als EIGENE Settings-Seite, jetzt
- * EDITIERBAR (vorher Lese-Tabelle in der VK-Taxonomie) — Rohaufschlag/
- * Bedienung/Profit/MwSt fließen direkt in den MargeService (GT-8).
- * `formula_type` bleibt auf aufschlag|deckungsbeitrag begrenzt (W-1-Gate:
- * deckungsbeitrag wirft im MargeService, bis die Formel entschieden ist).
+ * Preisklassen als relative Abweichung vom dynamischen Unternehmens-Basissatz.
+ * Legacy-Rohaufschläge bleiben nur als Migrationsquelle in der Datenbank.
  */
 class Aufschlagsklassen extends Component
 {
@@ -21,11 +20,9 @@ class Aufschlagsklassen extends Component
 
     public array $form = [];
 
-    public array $neu = ['code' => '', 'label' => '', 'raw_markup_pct' => '', 'service_pct' => '0', 'profit_pct' => '0', 'vat_rate' => '19', 'formula_type' => 'aufschlag', 'note' => ''];
+    public array $neu = ['code' => '', 'label' => '', 'class_factor_pct' => '100', 'vat_profile_key' => '', 'rounding_decimals' => '', 'rounding_mode' => '', 'note' => ''];
 
     public ?string $fehler = null;
-
-    private const PROZENT_FELDER = ['raw_markup_pct', 'service_pct', 'profit_pct', 'vat_rate'];
 
     /**
      * MVP-039 (P0): eine Klasse ist mutierbar nur fürs Besitzer-Team. Sichtbar (global +
@@ -63,11 +60,10 @@ class Aufschlagsklassen extends Component
         $this->fehler = null;
         $this->form = [
             'label' => $ak->label,
-            'raw_markup_pct' => (string) $ak->raw_markup_pct,
-            'service_pct' => (string) $ak->service_pct,
-            'profit_pct' => (string) $ak->profit_pct,
-            'vat_rate' => (string) $ak->vat_rate,
-            'formula_type' => $ak->formula_type,
+            'class_factor_pct' => (string) ($ak->class_factor_pct ?? 100),
+            'vat_profile_key' => (string) ($ak->vat_profile_key ?? ''),
+            'rounding_decimals' => $ak->rounding_decimals !== null ? (string) $ak->rounding_decimals : '',
+            'rounding_mode' => (string) ($ak->rounding_mode ?? ''),
             'note' => $ak->note,
         ];
     }
@@ -90,6 +86,7 @@ class Aufschlagsklassen extends Component
             return;
         }
         $ak->update($werte);
+        app(PricingCascadeService::class)->recomputeTeam(Auth::user()->currentTeamRelation);
         $this->cancel();
         $this->dispatch('recipe-gespeichert');                        // Marge-Anzeigen (Cockpit) neu rechnen
     }
@@ -118,6 +115,7 @@ class Aufschlagsklassen extends Component
             'code' => $code,
             'team_id' => Auth::user()?->currentTeamRelation?->id,
         ]);
+        app(PricingCascadeService::class)->recomputeTeam(Auth::user()->currentTeamRelation);
         $this->reset('neu', 'fehler');
     }
 
@@ -151,7 +149,7 @@ class Aufschlagsklassen extends Component
         $this->fehler = null;
     }
 
-    /** Prozente kommasicher parsen + formula_type-Whitelist; null = Fehler gesetzt. */
+    /** Relative Klasse, MwSt-Profil und optionale Rundungsabweichung validieren. */
     private function validiert(array $eingabe): ?array
     {
         $werte = ['label' => trim($eingabe['label'] ?? ''), 'note' => ($eingabe['note'] ?? '') ?: null];
@@ -160,17 +158,19 @@ class Aufschlagsklassen extends Component
 
             return null;
         }
-        foreach (self::PROZENT_FELDER as $feld) {
-            $wert = str_replace(',', '.', trim((string) ($eingabe[$feld] ?? '')));
-            if (! is_numeric($wert) || (float) $wert < 0) {
-                $this->fehler = "«{$feld}» braucht eine Zahl ≥ 0.";
+        $factor = str_replace(',', '.', trim((string) ($eingabe['class_factor_pct'] ?? '')));
+        if (! is_numeric($factor) || (float) $factor <= 0) {
+            $this->fehler = 'Der Klassenfaktor muss größer als 0 sein.';
 
-                return null;
-            }
-            $werte[$feld] = (float) $wert;
+            return null;
         }
-        $werte['formula_type'] = in_array($eingabe['formula_type'] ?? '', ['aufschlag', 'deckungsbeitrag'], true)
-            ? $eingabe['formula_type'] : 'aufschlag';
+        $werte['class_factor_pct'] = (float) $factor;
+        $werte['vat_profile_key'] = in_array($eingabe['vat_profile_key'] ?? '', ['regulaer', 'ermaessigt'], true)
+            ? $eingabe['vat_profile_key'] : null;
+        $decimals = trim((string) ($eingabe['rounding_decimals'] ?? ''));
+        $werte['rounding_decimals'] = $decimals === '' ? null : max(0, min(4, (int) $decimals));
+        $werte['rounding_mode'] = in_array($eingabe['rounding_mode'] ?? '', ['kaufmaennisch', 'auf', 'ab'], true)
+            ? $eingabe['rounding_mode'] : null;
 
         return $werte;
     }
@@ -179,9 +179,11 @@ class Aufschlagsklassen extends Component
     {
         // Mandanten-Sichtbarkeit (D1): globaler Seed (team_id NULL) + eigenes Team/Master-Kette.
         $team = Auth::user()?->currentTeamRelation;
+        $base = $team !== null ? app(CatalogPricingService::class)->enterpriseBaseRate($team) : null;
 
         return view('foodalchemist::livewire.settings.aufschlagsklassen', [
             'team' => $team,
+            'base' => $base,
             'klassen' => TeamScope::applyVisible(FoodAlchemistMarkupClass::query(), 'team_id', $team)->orderBy('code')->get(),
             // MVP-040: nur sichtbare Gerichte zählen — der Zähler verriet sonst fremde Team-Nutzung.
             'zaehler' => TeamScope::applyVisible(DB::table('foodalchemist_recipes'), 'team_id', $team)

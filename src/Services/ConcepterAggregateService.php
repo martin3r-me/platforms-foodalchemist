@@ -176,7 +176,6 @@ class ConcepterAggregateService
         $ek = 0.0;
         $vk = 0.0;
         $zeit = 0;
-        $zeitProPortion = 0.0;
         $ekPositionen = 0;
         $ekBeitragend = 0;
         $gewicht = 0.0;                 // Σ Effektiv-Gramm/Person
@@ -201,7 +200,6 @@ class ConcepterAggregateService
                 $bruch = $mengeG / $yieldG;
                 $ekBeitragend++;
                 $ek += (float) ($r['gericht']->ek_total_eur ?? 0) * $bruch;
-                $zeitProPortion += (float) ($r['gericht']->work_time_min ?? 0) * $bruch;
                 $gewicht += $mengeG;
 
                 continue;
@@ -231,8 +229,6 @@ class ConcepterAggregateService
                 $ek += (float) ($r['gericht']->ek_total_eur ?? 0) / $anzahl * $pae;
             }
             $vk += (float) ($dar?->sales_net ?? $r['gericht']->sales_net ?? 0) * $pae;
-            // M-K2: Arbeitszeit/Person = Rezept-Arbeitszeit ÷ Teiler × Portions-Äquivalent.
-            $zeitProPortion += (float) ($r['gericht']->work_time_min ?? 0) / $anzahl * $pae;
             // Gewicht/Person = Portions-Äquivalent × Gramm je Einheit. Stück-Modus: yield_g / yield_pieces;
             // sonst Portionsgramm. Fehlt die Basis → Gewicht unvollständig (ehrlich).
             if ($stueck) {
@@ -266,7 +262,9 @@ class ConcepterAggregateService
             'gewicht_pro_person_g' => round($gewicht),        // Σ Effektiv-Gramm/Person
             'gewicht_vollstaendig' => $gewichtVollstaendig,   // false → ≥1 Position ohne Portionsgewicht (Gewicht unvollständig)
             'work_time_min' => $zeit,                       // Σ roher Rezept-Arbeitszeit (Planungsproxy)
-            'arbeitszeit_min_pro_portion' => round($zeitProPortion, 2), // Σ je Person (M-K2 Lohn-Block)
+            // Ohne Pax gibt es keinen belastbaren Produktionslauf. Zeit/HK2 kommen ausschließlich
+            // aus OrderCostingService und werden hier bewusst nicht auf Portionen heruntergeraten.
+            'arbeitszeit_min_pro_portion' => null,
         ];
     }
 

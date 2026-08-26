@@ -28,7 +28,7 @@ class AngebotService
     private const FELDER = [
         'name', 'status', 'occasion', 'personen', 'budget', 'event_date', 'location',
         'diet_requirement', 'brief', 'total_price', 'valid_until', 'description', 'note',
-        'crm_company_id', 'crm_contact_id', 'price_mode',
+        'crm_company_id', 'crm_contact_id', 'price_mode', 'price_override_reason', 'price_override_expires_at',
     ];
 
     /** Leer („" / null) → NULL (optionale Zahlen/Daten/FKs). */
@@ -77,6 +77,20 @@ class AngebotService
             if (array_key_exists($feld, $update) && ($update[$feld] === '' || $update[$feld] === null)) {
                 $update[$feld] = null;
             }
+        }
+        $mode = $update['price_mode'] ?? $angebot->price_mode;
+        if ($mode === 'fixed') {
+            $effective = $update['total_price'] ?? $angebot->total_price;
+            $reason = trim((string) ($update['price_override_reason'] ?? $angebot->price_override_reason));
+            if (! is_numeric($effective) || $reason === '') {
+                throw new \RuntimeException('Ein fixierter Angebotspreis benötigt Preis und Begründung.');
+            }
+            $update['price_override_reason'] = $reason;
+            $update['price_override_user_id'] = Auth::id();
+            $update['price_override_at'] = now();
+        } elseif ($mode === 'auto') {
+            $update += ['price_override_reason' => null, 'price_override_user_id' => null,
+                'price_override_at' => null, 'price_override_expires_at' => null];
         }
         $angebot->update($update);
         $this->aktualisiereAutoPreis($team, $angebot);
@@ -190,6 +204,7 @@ class AngebotService
     public function kalkulation(Team $team, FoodAlchemistAngebot $angebot): array
     {
         $kalk = app(KalkulationService::class);
+        $orderCosting = app(OrderCostingService::class);
         $conceptSvc = app(ConceptService::class);
         $pax = max(0, (int) ($angebot->personen ?? 0));
         $concepts = $this->menueConcepts($angebot);
@@ -199,16 +214,25 @@ class AngebotService
         $hk2Pp = 0.0;
         $menue = [];
         $mengen = [];
+        $aktiveMinuten = 0.0;
+        $zielGesamt = 0.0;
+        $warnungen = [];
         foreach ($concepts as $c) {
             $hk = $kalk->conceptHk($team, $c);
+            $orderCost = $pax > 0 ? $orderCosting->costConcept($team, $c, $pax) : null;
             $vkPp += (float) $hk['vk_pro_person'];
-            $ekPp += (float) $hk['hk1_pro_person'];
-            $hk2Pp += (float) $hk['hk2_pro_person'];
+            $ekPp += $orderCost !== null ? (float) $orderCost['mek'] / $pax : (float) $hk['hk1_pro_person'];
+            $hk2Pp += $orderCost !== null ? (float) $orderCost['hk2'] / $pax : 0.0;
+            $aktiveMinuten += (float) ($orderCost['active_person_minutes'] ?? 0);
+            $zielGesamt += (float) ($orderCost['target_price'] ?? 0);
+            $warnungen = array_merge($warnungen, $orderCost['warnings'] ?? []);
             $menue[] = [
                 'id' => $c->id,
                 'name' => $c->name,
                 'vk_pro_person' => round((float) $hk['vk_pro_person'], 2),
-                'hk2_pro_person' => round((float) $hk['hk2_pro_person'], 2),
+                'hk2_pro_person' => $orderCost !== null ? round((float) $orderCost['hk2'] / $pax, 2) : null,
+                'zielpreis_pro_person' => $orderCost['target_price_per_person'] ?? null,
+                'unwirtschaftlich' => (bool) ($orderCost['unprofitable'] ?? false),
             ];
             foreach ($conceptSvc->mengenHochrechnung($c, $pax > 0 ? $pax : null) as $z) {
                 $mengen[] = $z + ['menue' => $c->name];
@@ -216,12 +240,14 @@ class AngebotService
         }
 
         $autoGesamt = round($vkPp * $pax, 2);
-        $manuell = ($angebot->price_mode ?? 'auto') === 'manuell' && $angebot->total_price !== null;
+        $expired = $angebot->price_override_expires_at?->isPast() ?? false;
+        $manuell = in_array(($angebot->price_mode ?? 'auto'), ['fixed', 'manuell'], true)
+            && ! $expired && $angebot->total_price !== null;
         $gesamt = $manuell ? round((float) $angebot->total_price, 2) : $autoGesamt;
 
         return [
             'pax' => $pax,
-            'price_mode' => $manuell ? 'manuell' : 'auto',
+            'price_mode' => $manuell ? ($angebot->price_mode === 'fixed' ? 'fixed' : 'manuell') : 'auto',
             'leer' => $concepts->isEmpty(),
             'vk_pro_person' => round($vkPp, 2),
             'ek_per_person' => round($ekPp, 2),
@@ -233,6 +259,13 @@ class AngebotService
             'gesamt_ek' => round($ekPp * $pax, 2),
             'gesamt_hk2' => round($hk2Pp * $pax, 2),
             'gesamt_db' => round($gesamt - $hk2Pp * $pax, 2),
+            'mindestpreis' => round($hk2Pp * $pax, 2),
+            'zielpreis' => round($zielGesamt, 2),
+            'zielpreis_pro_person' => $pax > 0 ? round($zielGesamt / $pax, 2) : null,
+            'zielabweichung' => round($zielGesamt - $gesamt, 2),
+            'unwirtschaftlich' => $pax > 0 && $gesamt + 0.005 < $zielGesamt,
+            'aktive_personenminuten' => round($aktiveMinuten, 2),
+            'warnungen' => array_values(array_unique($warnungen)),
             'menue' => $menue,
             'mengen' => $mengen,
         ];
@@ -241,13 +274,27 @@ class AngebotService
     /** auto-Modus: schreibt den berechneten Gesamtpreis zurück (Liste + Persistenz konsistent). */
     public function aktualisiereAutoPreis(Team $team, FoodAlchemistAngebot $angebot): void
     {
-        if (($angebot->price_mode ?? 'auto') !== 'auto') {
-            return;
-        }
         $auto = $this->kalkulation($team, $angebot)['auto_gesamt'];
-        if (round((float) ($angebot->total_price ?? -1), 2) !== $auto) {
-            $angebot->update(['total_price' => $auto]);
+        $oldCalculated = $angebot->calculated_total_price !== null ? (float) $angebot->calculated_total_price : null;
+        $oldEffective = $angebot->total_price !== null ? (float) $angebot->total_price : null;
+        $expired = $angebot->price_override_expires_at?->isPast() ?? false;
+        $autoMode = ($angebot->price_mode ?? 'auto') === 'auto' || $expired;
+        $update = [
+            'calculated_total_price' => $auto,
+            'price_calculation_source' => 'concept_catalog_sum',
+            'price_calculation_version' => CatalogPricingService::VERSION,
+            'price_calculated_at' => now(),
+        ];
+        if ($autoMode) {
+            $update += ['price_mode' => 'auto', 'total_price' => $auto, 'price_override_reason' => null,
+                'price_override_user_id' => null, 'price_override_at' => null, 'price_override_expires_at' => null];
         }
+        $angebot->update($update);
+        app(PriceAuditService::class)->record(
+            $angebot, 'offer', $oldCalculated, $auto, $oldEffective,
+            $angebot->total_price !== null ? (float) $angebot->total_price : null,
+            'concept_catalog_sum', ['calculation_version' => CatalogPricingService::VERSION],
+        );
     }
 
     /**

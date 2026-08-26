@@ -28,6 +28,7 @@ class RecipeModal extends Component
         'notes_manual' => '', 'equipment_ids' => [], 'is_sales_recipe' => false,
         // Stufe 3 — Auto-Produktionsplaner
         'default_station_id' => null, 'max_vorlauf_tage' => null, 'setup_time_min' => null,
+        'variable_work_time_min' => null, 'variable_work_time_basis' => 'kg',
         'batch_max_kg' => null, 'batch_max_pieces' => null, 'standzeit_min' => null,
     ];
 
@@ -123,6 +124,8 @@ class RecipeModal extends Component
                     'default_station_id' => $r->default_station_id,
                     'max_vorlauf_tage' => $r->max_vorlauf_tage,
                     'setup_time_min' => $r->setup_time_min,
+                    'variable_work_time_min' => $r->variable_work_time_min,
+                    'variable_work_time_basis' => $r->variable_work_time_basis ?: 'kg',
                     'standzeit_min' => $r->standzeit_min,
                     'batch_max_kg' => $r->batch_max_kg,
                     'batch_max_pieces' => $r->batch_max_pieces,
@@ -180,6 +183,8 @@ class RecipeModal extends Component
                 'default_station_id' => $this->form['default_station_id'] ?: null,
                 'max_vorlauf_tage' => $ganz($this->form['max_vorlauf_tage']),
                 'setup_time_min' => $ganz($this->form['setup_time_min']),
+                'variable_work_time_min' => ($vw = trim(str_replace(',', '.', (string) ($this->form['variable_work_time_min'] ?? '')))) !== '' ? max(0, (float) $vw) : null,
+                'variable_work_time_basis' => in_array($this->form['variable_work_time_basis'] ?? '', ['kg', 'piece', 'portion'], true) ? $this->form['variable_work_time_basis'] : null,
                 'standzeit_min' => $ganz($this->form['standzeit_min'] ?? null),
                 'batch_max_kg' => ($b = trim(str_replace(',', '.', (string) ($this->form['batch_max_kg'] ?? '')))) !== '' ? (float) $b : null,
                 'batch_max_pieces' => ($bp = trim(str_replace(',', '.', (string) ($this->form['batch_max_pieces'] ?? '')))) !== '' ? (float) $bp : null,
@@ -587,11 +592,20 @@ class RecipeModal extends Component
             $eigenschaften = $ki->propose('recipe.eigenschaften', [
                 'name' => $this->form['name'],
                 'haltbarkeit_tage' => null, 'regenerierbarkeit' => null, 'transportstabilitaet' => null,
-                'work_time_min' => $this->form['work_time_min'], 'temperature' => $this->form['temperature'] ?: null,
+                'work_time_min' => $this->form['work_time_min'],
+                'setup_time_min' => $this->form['setup_time_min'],
+                'variable_work_time_min' => $this->form['variable_work_time_min'],
+                'variable_work_time_basis' => $this->form['variable_work_time_basis'],
+                'standzeit_min' => $this->form['standzeit_min'],
+                'max_vorlauf_tage' => $this->form['max_vorlauf_tage'],
+                'temperature' => $this->form['temperature'] ?: null,
                 'function' => $this->form['function'] ?: null, 'zutaten' => $zutaten,
             ]);
-            foreach (['work_time_min', 'temperature', 'function'] as $feld) {
-                if (! empty($eigenschaften->werte[$feld])) {
+            foreach (['work_time_min', 'setup_time_min', 'standzeit_min', 'variable_work_time_min',
+                'variable_work_time_basis', 'max_vorlauf_tage', 'temperature', 'function'] as $feld) {
+                if (array_key_exists($feld, $eigenschaften->werte)
+                    && $eigenschaften->werte[$feld] !== null
+                    && $eigenschaften->werte[$feld] !== '') {
                     $this->form[$feld] = $eigenschaften->werte[$feld];
                 }
             }

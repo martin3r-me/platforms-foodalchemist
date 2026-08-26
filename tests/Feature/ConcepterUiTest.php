@@ -56,7 +56,10 @@ it('Paket-Browser: anlegen, Gerichte hinzufügen, speichern (Voll-Page-Render)',
 
 it('Concept-Editor: Slot anlegen, mit Paket füllen, Live-Preis im Cockpit', function () {
     $b = app(PaketService::class)->create($this->rootTeam, ['name' => 'Salad Wall', 'role' => 'Vorspeise']);
-    app(PaketService::class)->update($this->rootTeam, $b->id, ['price_per_person' => 4.50]);
+    app(PaketService::class)->update($this->rootTeam, $b->id, [
+        'price_mode' => 'fixed', 'price_per_person' => 4.50,
+        'price_override_reason' => 'UI-Testpreis',
+    ]);
 
     Livewire::test(ConceptsIndex::class)->call('neu');
     $c = FoodAlchemistConcept::echte()->first();
@@ -92,7 +95,10 @@ it('Vorlage-Fork über die UI erzeugt ein eigenständiges Concept (M10-05)', fun
 
 it('M10c: Concept-Editor zeigt €/Person (kein Pax), Slot-Reorder über die UI', function () {
     $b = app(PaketService::class)->create($this->rootTeam, ['name' => 'Salad Wall', 'role' => 'Vorspeise']);
-    app(PaketService::class)->update($this->rootTeam, $b->id, ['price_per_person' => 4.50]);
+    app(PaketService::class)->update($this->rootTeam, $b->id, [
+        'price_mode' => 'fixed', 'price_per_person' => 4.50,
+        'price_override_reason' => 'UI-Testpreis',
+    ]);
     $c = app(ConceptService::class)->create($this->rootTeam, ['name' => 'Grill-Buffet']);
 
     $comp = Livewire::test(ConceptsIndex::class)

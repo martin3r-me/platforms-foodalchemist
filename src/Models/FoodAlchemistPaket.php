@@ -16,7 +16,7 @@ use Platform\FoodAlchemist\Models\Concerns\HasUuidV7;
  * das eine Rolle füllt (Baukasten für den Verkäufer; z. B. „Salad Wall"). Trägt
  * einen GESPEICHERTEN Per-Person-Preis (preis_pro_person) + EK + W%, damit ein
  * Tausch im Concept nur die Differenz rechnet — kein Kaskaden-Recompute. Preis
- * kommt auto aus den Gerichten (MargeService/GL-11) oder manuell; preis_stale
+ * kommt auto aus den aufgelösten Darreichungen oder wird begründet fixiert; preis_stale
  * markiert eine nötige Neuberechnung (GP-Preis-Änderung, GL-02-Muster).
  * team-eigen (BelongsToTeamHierarchy: sichtbar Kette aufwärts, editierbar = Besitzer).
  */
@@ -31,9 +31,12 @@ class FoodAlchemistPaket extends Model
     protected $casts = [
         'uuid' => 'string',
         'price_per_person' => 'decimal:2',
+        'calculated_price_per_person' => 'decimal:2',
         'ek_per_person' => 'decimal:4',
         'food_cost_percent' => 'decimal:2',
         'price_calculated_at' => 'datetime',
+        'price_override_at' => 'datetime',
+        'price_override_expires_at' => 'datetime',
         'price_stale' => 'boolean',
         'is_inactive' => 'boolean',
         // M10R-1: Aggregat-Caches (Nährwerte/Person, Arbeitszeit)

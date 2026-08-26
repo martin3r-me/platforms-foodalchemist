@@ -60,7 +60,7 @@ it('berechne ohne Arbeitszeit + 0 Gemeinkosten = HK2 ist WE (childA)', function 
     expect($this->kalk->hk2($this->childA, 5.0))->toBe(5.0);
 });
 
-it('recipeHk: Lohn aus arbeitszeit_min/Portion fließt in HK2', function () {
+it('recipeHk: Katalog-HK bleibt ohne Pax frei von fingiertem Produktionslohn', function () {
     $r = FoodAlchemistRecipe::create([
         'team_id' => $this->rootTeam->id, 'recipe_key' => 'g', 'name' => 'HG', 'status' => 'approved',
         'is_sales_recipe' => true, 'ek_total_eur' => 10.00, 'sales_unit_count' => 1,
@@ -68,12 +68,12 @@ it('recipeHk: Lohn aus arbeitszeit_min/Portion fließt in HK2', function () {
     ]);
 
     $hk = $this->kalk->recipeHk($this->rootTeam, $r);
-    expect($hk['hk2_pro_portion'])->toBe(17.0)                        // MEK 10 + FEK 5 + Material-GK 2
-        ->and(block($hk, 'lohn'))->toBe(5.0)
-        ->and($hk['db_eur'])->toBe(8.0);                              // 25 − 17
+    expect($hk['hk2_pro_portion'])->toBe(12.0)                        // MEK 10 + Material-GK 2
+        ->and(block($hk, 'lohn'))->toBe(0.0)                           // FEK entsteht erst im Auftrag mit Menge/Pax
+        ->and($hk['db_eur'])->toBe(13.0);                              // 25 - 12
 });
 
-it('conceptHk: Lohn aus dem Arbeitszeit-Rollup pro Person (M-K2)', function () {
+it('conceptHk: Katalog-Rollup bleibt ohne Pax frei von Produktionslohn', function () {
     $g = FoodAlchemistRecipe::create([
         'team_id' => $this->rootTeam->id, 'recipe_key' => 'd', 'name' => 'Dish', 'status' => 'approved',
         'is_sales_recipe' => true, 'sales_net' => 6.00, 'ek_total_eur' => 2.00,
@@ -86,10 +86,10 @@ it('conceptHk: Lohn aus dem Arbeitszeit-Rollup pro Person (M-K2)', function () {
     app(ConceptService::class)->fillSlot($this->rootTeam, $slot->id, ['package_id' => $paket->id]);
 
     $hk = $this->kalk->conceptHk($this->rootTeam, $concept->refresh());
-    // WE/Person = 2,00 (auto-Paket = Σ ek); Lohn = 10 min @ 30 = 5,00 (FEK);
-    // Material-GK 20 % × MEK(2) = 0,40. HK2 = 2 + 5 + 0,40 = 7,40.
-    expect(block($hk, 'lohn'))->toBe(5.0)
-        ->and($hk['hk2_pro_person'])->toBe(7.4);
+    // WE/Person = 2,00; ohne Auftragsmenge gibt es keine belastbare FEK.
+    // Material-GK 20 % x MEK(2) = 0,40. Katalog-HK2 = 2 + 0,40 = 2,40.
+    expect(block($hk, 'lohn'))->toBe(0.0)
+        ->and($hk['hk2_pro_person'])->toBe(2.4);
 });
 
 it('Settings/Herstellkosten: Block-Schema + Marge über die UI speichern', function () {

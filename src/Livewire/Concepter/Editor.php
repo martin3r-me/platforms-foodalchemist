@@ -141,6 +141,9 @@ class Editor extends Component
 
     public ?array $zielVorschlag = null;
 
+    /** Optionale Auftragsvorschau; verändert weder Concept noch Katalogpreis. */
+    public int $simulationPax = 0;
+
     public string $neuerSektor = '';
 
     /** Beim Öffnen eines Pakets aus „+ Paket" gemerkt → „zurück zum Concept" springt dorthin. */
@@ -153,7 +156,7 @@ class Editor extends Component
     {
         $this->reset(['form', 'slotForm', 'blockForm', 'auswahl', 'paketName', 'neuerSlotRolle', 'fillSlotId', 'fillOpenId', 'einfuegenNachId', 'linkeListe', 'paketKlasse', 'paketServierform', 'paketEventtyp', 'paketMoment', 'paketSaison', 'basisSuche', 'kombiSuche', 'basisHg', 'basisKat', 'basisNiveau', 'gerichtSuche', 'pickTyp',
             'paketGerichtSuche', 'paketQuelle', 'pickHg', 'pickKlasse', 'pickGeschmack', 'pickDiaet', 'zutatenOffenSlotId', 'menueKohaesion', 'slotVorschlaege',
-            'zielModus', 'zielPreis', 'zielVorschlag', 'rueckSprungConceptId', 'fehler']);
+            'zielModus', 'zielPreis', 'zielVorschlag', 'simulationPax', 'rueckSprungConceptId', 'fehler']);
         $this->type = in_array($type, ['concepts', 'pakete'], true) ? $type : 'concepts';
         $this->id = $id;
         // Start-Tab: der KI-Kopf/Planung-Flow öffnet direkt auf „Konzept & Planung" ('konzept') zur
@@ -173,6 +176,7 @@ class Editor extends Component
                 'name' => $p->name, 'consumer_name' => $p->consumer_name ?? '',
                 'role' => $p->role ?? '', 'class' => $p->class ?? '', 'level' => $p->level ?? '',
                 'price_mode' => $p->price_mode, 'price_per_person' => $p->price_per_person,
+                'price_override_reason' => $p->price_override_reason ?? '',
                 'ek_per_person' => $p->ek_per_person, 'food_cost_percent' => $p->food_cost_percent,
                 'description' => $p->description ?? '', 'note' => $p->note ?? '',
             ];
@@ -191,6 +195,7 @@ class Editor extends Component
                 'structure_requirement' => $c->structure_requirement ?? '', 'season' => $c->season ?? '',
                 'target_group' => $c->target_group ?? '', 'target_price_per_person' => $c->target_price_per_person,
                 'price_mode' => $c->price_mode ?? 'auto', 'price_per_person_manual' => $c->price_per_person_manual,
+                'price_override_reason' => $c->price_override_reason ?? '',
                 'price_display' => $c->price_display ?? 'gesamt',
                 'note' => $c->note ?? '',
                 // Facetten (Umbau-Spec Phase 4b)
@@ -446,14 +451,16 @@ class Editor extends Component
         $this->speichern();
     }
 
-    /** Concept-VK auto ⇄ manuell umschalten (und sofort sichern, damit Cockpit/KPI folgen). */
+    /** Auto wird sofort freigegeben; Fixierung erst zusammen mit Preis und Begründung. */
     public function setPreisModus(string $modus): void
     {
-        if ($this->type !== 'concepts') {
+        if (! in_array($this->type, ['concepts', 'pakete'], true)) {
             return;
         }
-        $this->form['price_mode'] = in_array($modus, ['auto', 'manuell'], true) ? $modus : 'auto';
-        $this->speichern();
+        $this->form['price_mode'] = in_array($modus, ['auto', 'fixed', 'manuell'], true) ? $modus : 'auto';
+        if ($this->form['price_mode'] === 'auto') {
+            $this->speichern();
+        }
     }
 
     /**
@@ -1194,6 +1201,7 @@ class Editor extends Component
         $aggregat = null;
         $bewertet = null;
         $kalkulation = null;
+        $auftragsSimulation = null;
         $tauschbar = [];
         $varianteFehlt = [];
         $darreichungInfo = [];
@@ -1221,6 +1229,10 @@ class Editor extends Component
                 $aggregat = $agg->conceptAggregat($concept);
                 $bewertet = $bewertung->bewerten($concept, $cockpit, $aggregat);
                 $kalkulation = $kalk->conceptHk($team, $concept);
+                if ($this->tab === 'kalkulation' && $this->simulationPax > 0) {
+                    $auftragsSimulation = app(OrderCostingService::class)
+                        ->costConcept($team, $concept, $this->simulationPax);
+                }
                 if ($istAufbau) {
                     foreach ($concept->slots as $slot) {
                         $tauschbar[$slot->id] = $concepts->tauschbarePakete($team, $slot);
@@ -1372,6 +1384,7 @@ class Editor extends Component
             'aggregat' => $aggregat,
             'bewertung' => $bewertet,
             'kalkulation' => $kalkulation,
+            'auftragsSimulation' => $auftragsSimulation,
             'tauschbar' => $tauschbar,
             'varianteFehlt' => $varianteFehlt,
             'darreichungInfo' => $darreichungInfo,

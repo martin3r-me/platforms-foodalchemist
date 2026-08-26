@@ -31,12 +31,16 @@ class FoodAlchemistConcept extends Model
         'uuid' => 'string',
         'is_template' => 'boolean',
         'price_per_person_cache' => 'decimal:2',
+        'calculated_price_per_person' => 'decimal:2',
         'price_per_person_manual' => 'decimal:2',   // manueller Concept-VK (preis_modus=manuell)
         // M10R-1: VK-Parität + KI-Brief + Aggregat-Caches
         'target_price_per_person' => 'decimal:2',
         'ek_per_person_cache' => 'decimal:4',
         'work_time_min_cache' => 'integer',
         'ai_confidence' => 'decimal:3',
+        'price_calculated_at' => 'datetime',
+        'price_override_at' => 'datetime',
+        'price_override_expires_at' => 'datetime',
         'nutrition_cache' => 'array',
     ];
 

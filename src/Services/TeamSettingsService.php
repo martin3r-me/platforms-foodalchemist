@@ -399,6 +399,14 @@ class TeamSettingsService
         return $v !== null && (float) $v > 0 ? (float) $v : self::STUNDENSATZ_DEFAULT;
     }
 
+    /** Lohnquelle für Aufträge: flacher Team-Satz oder gewichtete Rollen des Postens. */
+    public function laborCostSource(Team $team): string
+    {
+        $value = (string) ($this->for($team)->labor_cost_source ?? 'team_flat');
+
+        return in_array($value, ['team_flat', 'station_roles'], true) ? $value : 'team_flat';
+    }
+
     /** Marge % auf die HK → VK-Vorschlag (Doc 16). */
     public function margePct(Team $team): float
     {

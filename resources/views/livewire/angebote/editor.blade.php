@@ -73,17 +73,38 @@
                         <div class="{{ $row }}"><span class="{{ $dt }}">HK2/P</span><span class="{{ $dd }} tabular-nums">{{ number_format($kalkulation['hk2_pro_person'],2,',','.') }} €</span></div>
                     </div>
                     <div class="flex items-center justify-between rounded-lg bg-violet-500/10 px-3 py-2 mt-2">
-                        <span class="text-xs text-gray-600">Gesamt · {{ $kalkulation['price_mode']==='auto' ? 'auto' : 'manuell' }}</span>
+                        <span class="text-xs text-gray-600">Gesamt · {{ $kalkulation['price_mode']==='auto' ? 'auto' : 'fixiert' }}</span>
                         <span class="text-sm font-semibold tabular-nums text-gray-900">{{ number_format($kalkulation['gesamt_vk'],2,',','.') }} €</span>
                     </div>
                     <div class="text-[11px] text-gray-500 text-right mt-1">Deckungsbeitrag {{ number_format($kalkulation['gesamt_db'],2,',','.') }} € · EK {{ number_format($kalkulation['gesamt_ek'],2,',','.') }} €</div>
+                    @if($kalkulation['pax'] > 0)
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-2 mt-3 text-xs">
+                            <div><span class="block text-[10px] text-gray-500">Mindestpreis</span><span class="font-medium tabular-nums">{{ number_format($kalkulation['mindestpreis'],2,',','.') }} €</span></div>
+                            <div><span class="block text-[10px] text-gray-500">Zielpreis</span><span class="font-medium tabular-nums">{{ number_format($kalkulation['zielpreis'],2,',','.') }} €</span></div>
+                            <div><span class="block text-[10px] text-gray-500">Zielpreis / Person</span><span class="font-medium tabular-nums">{{ number_format($kalkulation['zielpreis_pro_person'],2,',','.') }} €</span></div>
+                            <div><span class="block text-[10px] text-gray-500">Aktive Personenzeit</span><span class="font-medium tabular-nums">{{ number_format($kalkulation['aktive_personenminuten'] / 60,2,',','.') }} h</span></div>
+                        </div>
+                        @if($kalkulation['unwirtschaftlich'])
+                            <div class="mt-3 rounded-lg border border-amber-400/50 bg-amber-500/10 px-3 py-2 text-xs text-amber-700">
+                                Der Angebotspreis liegt {{ number_format($kalkulation['zielabweichung'],2,',','.') }} € unter dem Zielpreis. Der Preis wurde nicht automatisch erhöht.
+                            </div>
+                        @endif
+                        @if(count($kalkulation['warnungen']))
+                            <p class="mt-2 text-[10px] text-amber-700">{{ implode(' · ', $kalkulation['warnungen']) }}</p>
+                        @endif
+                    @endif
                 @endif
                 <div class="grid grid-cols-2 gap-2 mt-3">
                     <div><label class="{{ $label }}">Preis-Modus</label>
-                        <select wire:model="form.price_mode" wire:change="speichern" class="{{ $input }}"><option value="auto">Auto (Pax × Menü)</option><option value="manuell">Manuell</option></select></div>
-                    @if($kalkulation['price_mode']==='manuell')
+                        <select wire:model="form.price_mode" class="{{ $input }}"><option value="auto">Auto (Pax × Menü)</option><option value="fixed">Fixiert</option></select></div>
+                    @if(in_array($form['price_mode'] ?? 'auto', ['fixed', 'manuell'], true))
                         <div><label class="{{ $label }}">Gesamtpreis € (manuell)</label>
-                            <input type="number" step="0.01" wire:model="form.total_price" wire:change="speichern" class="{{ $input }} text-right tabular-nums" /></div>
+                            <input type="number" step="0.01" wire:model="form.total_price" class="{{ $input }} text-right tabular-nums" /></div>
+                        <div class="col-span-2"><label class="{{ $label }}">Begründung</label>
+                            <div class="flex gap-2"><input type="text" wire:model="form.price_override_reason" class="{{ $input }}" placeholder="Warum weicht der Angebotspreis ab?" />
+                            <button type="button" wire:click="speichern" class="{{ $btnGhostXs }} text-violet-600 shrink-0">Fixpreis übernehmen</button></div></div>
+                    @else
+                        <div class="flex items-end"><button type="button" wire:click="speichern" class="{{ $btnGhostXs }} text-violet-600">Auto-Preis übernehmen</button></div>
                     @endif
                 </div>
             </x-foodalchemist::modal-section>

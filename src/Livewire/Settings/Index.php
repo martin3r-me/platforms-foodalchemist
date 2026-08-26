@@ -43,7 +43,7 @@ class Index extends Component
         'ki' => ['label' => 'KI', 'hint' => 'Provider · Tiering (V-01) · Nutzung · Kill-Switch (M7-08)'],
         'vk-taxonomie' => ['label' => 'VK-Taxonomie', 'hint' => 'Speisen-Hauptgruppen → Klassen mit Rezept-Zählern (D-6 §4.6)'],
         // R5 (Dominique): eigene Seiten statt Sammel-Sektion — mit Anlegen/Bearbeiten
-        'aufschlagsklassen' => ['label' => 'Aufschlagsklassen', 'hint' => 'Rohaufschlag/MwSt editierbar (GT-8) · W-1-Kennzeichnung'],
+        'aufschlagsklassen' => ['label' => 'Preisklassen', 'hint' => 'Relative Faktoren auf den dynamischen Unternehmens-Basissatz'],
         'schreibstile' => ['label' => 'Schreibstile', 'hint' => 'Sprach-Duktus = Prompt-Material (GL-06) · anlegen + bearbeiten'],
         'behaelter' => ['label' => 'Behälter & Geräte', 'hint' => 'Behälter · Regen-Geräte · Servier-Vehikel · Koch-Equipment'],
         // Spec 30 E3: Arbeitsplätze mit optionaler Tageskapazität — bewusst getrennt vom

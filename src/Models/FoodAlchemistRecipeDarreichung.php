@@ -30,7 +30,11 @@ class FoodAlchemistRecipeDarreichung extends Model
         'unit_count' => 'float',
         'ek_portion' => 'float',
         'sales_net' => 'float',
+        'calculated_sales_net' => 'float',
         'sales_gross' => 'float',
+        'price_calculated_at' => 'datetime',
+        'price_override_at' => 'datetime',
+        'price_override_expires_at' => 'datetime',
     ];
 
     public function recipe()
@@ -58,6 +62,12 @@ class FoodAlchemistRecipeDarreichung extends Model
     public function aufschlagsklasse()
     {
         return $this->markupClass();
+    }
+
+    public function priceAudits()
+    {
+        return $this->hasMany(FoodAlchemistPriceChangeAudit::class, 'entity_id')
+            ->where('entity_type', 'presentation')->latest();
     }
 
     public function unit()

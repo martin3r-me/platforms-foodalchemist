@@ -130,7 +130,8 @@ class KalkulationService
         $anzahl = max(1, (int) ($recipe->sales_unit_count ?? 1));
         $hk1Total = (float) ($recipe->ek_total_eur ?? 0);
         $nebenTotal = (float) ($recipe->additional_costs_eur ?? 0);
-        $azTotal = (float) ($recipe->work_time_min ?? 0);
+        // Katalogsicht ohne Produktionslauf: keine fingierte Zeit pro Portion.
+        $azTotal = 0.0;
 
         // Pro Portion rechnen (Wasserfall), dann auf Total skalieren.
         $r = $this->berechne($team, $hk1Total / $anzahl, $azTotal / $anzahl, $nebenTotal / $anzahl);
@@ -170,8 +171,7 @@ class KalkulationService
     {
         $cockpit = $this->concepts->preisCockpit($concept);
         $hk1 = (float) $cockpit['ek_per_person'];
-        $az = (float) ($this->aggregat->conceptAggregat($concept)['arbeitszeit_min_pro_portion'] ?? 0);
-        $r = $this->berechne($team, $hk1, $az, 0.0);
+        $r = $this->berechne($team, $hk1, 0.0, 0.0);
         $vk = (float) $cockpit['price_per_person'];
 
         return [
@@ -197,8 +197,7 @@ class KalkulationService
     {
         $agg = $this->aggregat->paketAggregat($paket);
         $hk1 = $paket->ek_per_person !== null ? (float) $paket->ek_per_person : (float) $agg['ek_per_person'];
-        $az = (float) ($agg['arbeitszeit_min_pro_portion'] ?? 0);
-        $r = $this->berechne($team, $hk1, $az, 0.0);
+        $r = $this->berechne($team, $hk1, 0.0, 0.0);
         $vk = $paket->price_per_person !== null ? (float) $paket->price_per_person : null;
 
         return [

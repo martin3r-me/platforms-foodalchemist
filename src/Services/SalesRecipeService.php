@@ -19,7 +19,10 @@ use Platform\FoodAlchemist\Support\TeamScope;
  */
 class SalesRecipeService
 {
-    public function __construct(private MargeService $marge)
+    public function __construct(
+        private MargeService $marge,
+        private CatalogPricingService $catalogPricing,
+    )
     {
     }
 
@@ -166,13 +169,16 @@ class SalesRecipeService
 
     /** Erlaubte VK-Feldgruppen (V-12: Policy-Grenze mitten durchs geteilte Modell). */
     private const VK_FELDER = [
-        'name', 'sales_wording_standard', 'dish_class_id', 'markup_class_id', 'vat_rate',
+        'name', 'sales_wording_standard', 'dish_class_id', 'markup_class_id',
         // MVP-049: Modell A — die Hauptgruppe ist eine EIGENE Achse am Gericht und musste
         // persistierbar werden. Vorher leitete der Editor sie aus `dishClass.dish_main_group_id`
         // ab (immer NULL, seit die Klassen die vier flachen Diätformen sind) und konnte sie nicht
         // speichern: der Klassifikations-Block war damit funktionslos.
         'dish_main_group_id',
-        'sales_net', 'sales_unit_vocab_id', 'sales_unit_count', 'sales_quantity_per_unit_g',
+        'sales_unit_vocab_id', 'sales_unit_count', 'sales_quantity_per_unit_g',
+        // Rückwärtskompatibler API-Eingang; die Preis-Wahrheit wird unten auf die
+        // Standard-Darreichung umgeleitet und anschließend nur zurückgespiegelt.
+        'sales_net', 'price_mode', 'price_override_reason',
         'container_warm_vocab_id', 'container_warm_count', 'container_cold_vocab_id', 'container_cold_count',
         'serving_vehicle_vocab_id', 'taste_direction',
         // M9-01: Voll-Editor-Parität — Eigenschaften, Texte, Plating, Notizen
@@ -181,7 +187,8 @@ class SalesRecipeService
         'additional_costs_eur',                                            // M12: Energie/Nebenkosten je Charge (HK2)
         // Auto-Produktionsplaner (2026-08-03): Parität zum Basisrezept-Editor — sonst verwirft
         // die Whitelist die Werte still und der Planer routet Gericht-Zeilen nie.
-        'default_station_id', 'setup_time_min', 'max_vorlauf_tage',
+        'default_station_id', 'setup_time_min', 'variable_work_time_min',
+        'variable_work_time_basis', 'standzeit_min', 'batch_max_kg', 'batch_max_pieces', 'max_vorlauf_tage',
     ];
 
     public function updateVk(Team $team, int $id, array $in): FoodAlchemistRecipe
@@ -209,16 +216,9 @@ class SalesRecipeService
                     $update["{$praefix}_ai_confidence"] = null;
                 }
             }
-            // brutto konsistent halten, wenn netto/mwst manuell gesetzt werden (User-Hoheit, I9)
-            $netto = array_key_exists('sales_net', $update) ? $update['sales_net'] : $recipe->sales_net;
-            $mwst = array_key_exists('vat_rate', $update) ? $update['vat_rate'] : $recipe->vat_rate;
-            if ($netto !== null && $mwst !== null) {
-                $update['sales_gross'] = round((float) $netto * (1 + (float) $mwst / 100), 2);
-            } elseif ($netto === null) {
-                $update['sales_gross'] = null;
-            }
-            $update['last_modified_by'] = 'vk_editor';
-            $recipe->update($update);
+            $recipeUpdate = array_diff_key($update, array_flip(['price_mode', 'price_override_reason']));
+            $recipeUpdate['last_modified_by'] = 'vk_editor';
+            $recipe->update($recipeUpdate);
 
             // Umbau-Spec Phase 5: Standard-Darreichung synchron halten — Preis-Wahrheit
             // liegt an der Darreichung, die Legacy-Spalten sind Anzeige-/Kompat-Schicht.
@@ -236,22 +236,14 @@ class SalesRecipeService
             return; // Varianten ohne Standard-Flag: nichts raten
         }
         if ($standard === null) {
-            // Selbstheilung: VK-Gericht ohne Darreichung (z. B. createFromBasis-Altbestand)
-            $unbestimmt = \Platform\FoodAlchemist\Models\FoodAlchemistServierform::where('code', 'unbestimmt')->value('id');
-            if ($unbestimmt === null) {
+            $standard = app(DarreichungService::class)->ensureStandard($team, $recipe->id, 'fa_ui');
+            if ($standard === null) {
                 return;
             }
-            $standard = app(DarreichungService::class)->anlegen($team, $recipe->id, (int) $unbestimmt, [
-                'quantity_per_unit_g' => $update['sales_quantity_per_unit_g'] ?? $recipe->sales_quantity_per_unit_g,
-                'unit_vocab_id' => $update['sales_unit_vocab_id'] ?? $recipe->sales_unit_vocab_id,
-                'unit_count' => $update['sales_unit_count'] ?? $recipe->sales_unit_count,
-                'markup_class_id' => $update['markup_class_id'] ?? $recipe->markup_class_id,
-            ], 'fa_ui');
         }
         $map = [
             'sales_quantity_per_unit_g' => 'quantity_per_unit_g',
             'sales_unit_vocab_id' => 'unit_vocab_id',
-            'sales_unit_count' => 'unit_count',
             'markup_class_id' => 'markup_class_id',
             'container_warm_vocab_id' => 'container_warm_vocab_id',
             'container_cold_vocab_id' => 'container_cold_vocab_id',
@@ -263,9 +255,24 @@ class SalesRecipeService
                 $dUpdate[$nach] = $update[$von];
             }
         }
+        if (! array_key_exists('sales_quantity_per_unit_g', $update)
+            && (array_key_exists('sales_unit_count', $update) || $standard->quantity_per_unit_g === null)
+            && $recipe->yield_kg !== null && (int) $recipe->sales_unit_count > 0) {
+            $dUpdate['quantity_per_unit_g'] = round(
+                (float) $recipe->yield_kg * 1000 / (int) $recipe->sales_unit_count,
+                1,
+            );
+            $dUpdate['unit_count'] = 1;
+        }
         if (array_key_exists('sales_net', $update)) {
-            $dUpdate['sales_net'] = $update['sales_net'];
-            $dUpdate['price_mode'] = $update['sales_net'] !== null ? 'manuell' : 'auto';
+            if ($update['sales_net'] === null || $update['sales_net'] === '') {
+                $dUpdate['price_mode'] = 'auto';
+            } else {
+                $dUpdate['price_mode'] = 'fixed';
+                $dUpdate['sales_net'] = (float) $update['sales_net'];
+                $dUpdate['price_override_reason'] = trim((string) ($update['price_override_reason'] ?? ''))
+                    ?: 'Legacy-Übernahme aus Gericht-API';
+            }
         }
         if ($dUpdate !== []) {
             app(DarreichungService::class)->aktualisieren($team, $standard->id, $dUpdate);
@@ -454,24 +461,29 @@ class SalesRecipeService
         ] : null;
 
         $formelFehlt = false;
-        $vk = ['sales_net' => null, 'source' => 'leer', 'vorschlag' => null];
-        try {
-            $vk = $this->marge->effektiverVk(
-                $r->sales_net !== null ? (float) $r->sales_net : null,
-                $r->ek_per_kg_eur !== null ? (float) $r->ek_per_kg_eur : null,
-                $mengeProEinheitG,
-                $r->markupClass,
-                $r->vat_rate !== null ? (float) $r->vat_rate : null,
-            );
-        } catch (\Platform\FoodAlchemist\Exceptions\FormelNichtDefiniertException) {
-            $formelFehlt = true;                                     // W-1: UI kennzeichnet, kein Crash
-            if ($r->sales_net !== null) {
-                $vk = ['sales_net' => (float) $r->sales_net, 'source' => 'manuell', 'vorschlag' => null];
-            }
+        $vk = ['sales_net' => $r->sales_net !== null ? (float) $r->sales_net : null, 'source' => 'leer', 'vorschlag' => null];
+        $mwst = $team !== null ? (float) app(TeamSettingsService::class)->mwst($team)['ermaessigt'] : 0.0;
+        $standard = $r->standardPresentation()->first();
+        if ($team !== null && $standard !== null) {
+            $catalog = $this->catalogPricing->catalogPrice($team, $standard);
+            $vk = [
+                'sales_net' => $catalog['sales_net'],
+                'source' => $catalog['price_mode'],
+                'vorschlag' => $catalog['calculated_sales_net'] !== null ? [
+                    'sales_net' => $catalog['calculated_sales_net'],
+                    'sales_gross' => $catalog['calculated_sales_net'] * (1 + $catalog['vat_rate'] / 100),
+                    'vat_rate' => $catalog['vat_rate'],
+                    'formel' => sprintf('MEK × Basissatz %.3f × Klassenfaktor %.1f%%',
+                        $catalog['base_factor'], $catalog['class_factor_pct']),
+                    'source' => $catalog['base_source'],
+                ] : null,
+            ];
+            $mwst = (float) $catalog['vat_rate'];
         }
-
-        $mwst = $r->vat_rate !== null ? (float) $r->vat_rate : (float) ($r->markupClass->vat_rate ?? 19);
-        $marge = $this->marge->marge($vk['sales_net'], $r->ek_total_eur !== null ? (float) $r->ek_total_eur : null);
+        $ekBasis = $standard?->ek_portion !== null
+            ? (float) $standard->ek_portion
+            : ($r->ek_total_eur !== null ? (float) $r->ek_total_eur : null);
+        $marge = $this->marge->marge($vk['sales_net'], $ekBasis);
 
         // Spec 28 §6.1: Food-Cost-Ampel mitliefern, damit die VK-Editor-Kachel den Wareneinsatz
         // gegen ETWAS messen kann. Ohne Team gibt es keine Ziel-Quote → `unbekannt` statt geraten
@@ -485,7 +497,11 @@ class SalesRecipeService
             'sales_gross' => $vk['sales_net'] !== null ? round($vk['sales_net'] * (1 + $mwst / 100), 2) : null,
             'vat_rate' => $mwst,
             'marge' => $marge,
-            'pro_einheit' => $this->marge->proEinheit($vk['sales_net'], $anzahl, $mwst),
+            'pro_einheit' => $this->marge->proEinheit(
+                $vk['sales_net'],
+                $standard !== null ? max(1, (int) ($standard->unit_count ?: 1)) : null,
+                $mwst,
+            ),
             'formel_fehlt' => $formelFehlt,
             'ziel_pct' => $zielPct,
             'ampel' => $this->marge->weAmpel($wePct !== null ? (float) $wePct : null, (float) ($zielPct ?? 0)),

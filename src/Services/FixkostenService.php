@@ -17,6 +17,19 @@ use Platform\FoodAlchemist\Models\FoodAlchemistFixkosten;
  */
 class FixkostenService
 {
+    /** Editierbare Catering-Beispielwerte, ausdrücklich keine Branchen-Norm. */
+    public const CATERING_EXAMPLE_COSTS = [
+        ['label' => 'Beispiel: Produktionsmiete und Nebenkosten', 'amount' => 6000, 'block_key' => 'fertigungs_gk'],
+        ['label' => 'Beispiel: Energie, Wasser und Spüle', 'amount' => 1800, 'block_key' => 'fertigungs_gk'],
+        ['label' => 'Beispiel: Reinigung und Entsorgung', 'amount' => 900, 'block_key' => 'fertigungs_gk'],
+        ['label' => 'Beispiel: Einkauf, Lager und Warenannahme', 'amount' => 1200, 'block_key' => 'gemeinkosten'],
+        ['label' => 'Beispiel: Verwaltung, Software und Versicherungen', 'amount' => 1800, 'block_key' => 'verwaltung'],
+        ['label' => 'Beispiel: Vertrieb und Marketing', 'amount' => 1500, 'block_key' => 'verwaltung'],
+        ['label' => 'Beispiel: Fahrzeuge und Logistik', 'amount' => 1800, 'block_key' => 'logistik'],
+    ];
+
+    public const CATERING_EXAMPLE_BASES = ['mek' => 30000, 'fek' => 24000, 'hk' => 60000];
+
     public function __construct(private TeamSettingsService $settings)
     {
     }
@@ -36,6 +49,17 @@ class FixkostenService
             'periode' => in_array($p = $in['periode'] ?? 'monatlich', ['monatlich', 'jaehrlich'], true) ? $p : 'monatlich',
             'block_key' => (string) ($in['block_key'] ?? 'gemeinkosten'),
         ]);
+    }
+
+    /** Legt einen einmaligen, sofort editierbaren Beispielsatz zum Durchrechnen an. */
+    public function cateringBeispielwerte(Team $team): void
+    {
+        if ($this->liste($team)->isNotEmpty()) {
+            throw new \RuntimeException('Es sind bereits Fixkosten erfasst. Beispielwerte werden nicht dazugemischt.');
+        }
+        foreach (self::CATERING_EXAMPLE_COSTS as $row) {
+            $this->create($team, $row + ['periode' => 'monatlich']);
+        }
     }
 
     public function update(Team $team, int $id, array $in): void

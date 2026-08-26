@@ -15,6 +15,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistMarkupClass;
 use Platform\FoodAlchemist\Models\FoodAlchemistPlanningSession;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipeStepPhoto;
 use Platform\FoodAlchemist\Services\FoodbookService;
+use Platform\FoodAlchemist\Services\SalesRecipeService;
 use Platform\FoodAlchemist\Services\PlanningCascadeService;
 use Platform\FoodAlchemist\Services\PlanningSessionService;
 use Platform\FoodAlchemist\Services\RecipeDependencyWorkflowService;
@@ -1743,9 +1744,9 @@ it('Cockpit Bild-Status: deferred.bilder=queued zeigt Spinner »erzeugt Fotos �
 
 /*
 |--------------------------------------------------------------------------
-| Etappe 6 — Margen-Gate: Warnung bei Freigabe unter Aufschlagsklasse
+| Etappe 6 — Margen-Gate: Warnung bei Freigabe unter Auto-Vorschlag
 |--------------------------------------------------------------------------
-| „unter Aufschlagsklasse" = ein MANUELLER VK, der den Klassen-Vorschlag
+| „unter Auto-Vorschlag" = ein FIXIERTER VK, der den dynamischen Vorschlag
 | unterschreitet. Reine Rückkopplung (Warnung), keine harte Sperre — der
 | Mensch entscheidet (Nordstern). Reuse SalesRecipeService::cockpit.
 */
@@ -1763,17 +1764,27 @@ $margenRun = function ($team, array $recipes) {
     return $run;
 };
 
-it('Margen-Gate: Freigabe mit VK unter Klassen-Vorschlag setzt eine sichtbare Warnung (nur die Unter-Position)', function () use ($margenRun) {
-    // Klasse ALC 300 % → Vorschlag = ek_basis × 4. ek_per_kg 10 €/kg × 250 g = 2,50 € basis → 10,00 € Vorschlag.
-    $alc = FoodAlchemistMarkupClass::create(['code' => 'ALC', 'label' => 'A la Carte', 'raw_markup_pct' => 300, 'vat_rate' => 19, 'formula_type' => 'aufschlag']);
+$fixiereRezeptpreis = function ($team, $recipe, float $price): void {
+    app(SalesRecipeService::class)->updateVk($team, $recipe->id, [
+        'sales_net' => $price,
+        'price_mode' => 'fixed',
+        'price_override_reason' => 'Bewusster Preis für Margen-Gate-Test',
+    ]);
+};
+
+it('Margen-Gate: fixierter VK unter Auto-Vorschlag setzt eine sichtbare Warnung (nur die Unter-Position)', function () use ($margenRun, $fixiereRezeptpreis) {
+    // Ziel-WE-Fallback 30 %: 2,50 € MEK × 3,333 = 8,33 € Auto-Vorschlag.
+    $alc = FoodAlchemistMarkupClass::create(['code' => 'ALC', 'label' => 'A la Carte', 'class_factor_pct' => 100, 'vat_profile_key' => 'regulaer']);
     $unter = $this->makeRecipe($this->rootTeam, 'Unter-Gericht', [
-        'status' => 'draft', 'markup_class_id' => $alc->id, 'ek_per_kg_eur' => 10, 'ek_total_eur' => 4.0,
-        'sales_quantity_per_unit_g' => 250, 'sales_net' => 6.00,   // manuell 6,00 < Vorschlag 10,00 → drunter
+        'status' => 'draft', 'is_sales_recipe' => true, 'markup_class_id' => $alc->id, 'ek_per_kg_eur' => 10, 'ek_total_eur' => 4.0,
+        'sales_quantity_per_unit_g' => 250,
     ]);
     $sauber = $this->makeRecipe($this->rootTeam, 'Sauber-Gericht', [
-        'status' => 'draft', 'markup_class_id' => $alc->id, 'ek_per_kg_eur' => 10, 'ek_total_eur' => 4.0,
-        'sales_quantity_per_unit_g' => 250, 'sales_net' => 14.00,  // manuell 14,00 > Vorschlag 10,00 → sauber
+        'status' => 'draft', 'is_sales_recipe' => true, 'markup_class_id' => $alc->id, 'ek_per_kg_eur' => 10, 'ek_total_eur' => 4.0,
+        'sales_quantity_per_unit_g' => 250,
     ]);
+    $fixiereRezeptpreis($this->rootTeam, $unter, 6.00);
+    $fixiereRezeptpreis($this->rootTeam, $sauber, 14.00);
     $run = $margenRun($this->rootTeam, [$unter, $sauber]);
 
     $comp = Livewire::test(PlanungIndex::class)
@@ -1783,21 +1794,23 @@ it('Margen-Gate: Freigabe mit VK unter Klassen-Vorschlag setzt eine sichtbare Wa
 
     $w = $comp->get('margenWarnung');
     expect($w)->not->toBeNull()
-        ->and($w)->toContain('1 Position unter Aufschlagsklasse')
+        ->and($w)->toContain('1 Position unter Auto-Vorschlag')
         ->and($w)->toContain('Unter-Gericht')
         ->and($w)->not->toContain('Sauber-Gericht');   // die saubere Position taucht in der Warnung nicht auf
 });
 
-it('Margen-Gate: saubere Freigabe (alle auf/über Klasse) → keine Warnung', function () use ($margenRun) {
-    $alc = FoodAlchemistMarkupClass::create(['code' => 'ALC', 'label' => 'A la Carte', 'raw_markup_pct' => 300, 'vat_rate' => 19, 'formula_type' => 'aufschlag']);
+it('Margen-Gate: saubere Freigabe (alle auf/über Auto-Vorschlag) → keine Warnung', function () use ($margenRun, $fixiereRezeptpreis) {
+    $alc = FoodAlchemistMarkupClass::create(['code' => 'ALC', 'label' => 'A la Carte', 'class_factor_pct' => 100, 'vat_profile_key' => 'regulaer']);
     $a = $this->makeRecipe($this->rootTeam, 'Klar-A', [
-        'status' => 'draft', 'markup_class_id' => $alc->id, 'ek_per_kg_eur' => 10, 'ek_total_eur' => 4.0,
-        'sales_quantity_per_unit_g' => 250, 'sales_net' => 12.00,  // > Vorschlag 10,00
+        'status' => 'draft', 'is_sales_recipe' => true, 'markup_class_id' => $alc->id, 'ek_per_kg_eur' => 10, 'ek_total_eur' => 4.0,
+        'sales_quantity_per_unit_g' => 250,
     ]);
     $b = $this->makeRecipe($this->rootTeam, 'Klar-B', [
-        'status' => 'draft', 'markup_class_id' => $alc->id, 'ek_per_kg_eur' => 10, 'ek_total_eur' => 4.0,
-        'sales_quantity_per_unit_g' => 250, 'sales_net' => 10.00,  // exakt auf Vorschlag → nicht drunter
+        'status' => 'draft', 'is_sales_recipe' => true, 'markup_class_id' => $alc->id, 'ek_per_kg_eur' => 10, 'ek_total_eur' => 4.0,
+        'sales_quantity_per_unit_g' => 250,
     ]);
+    $fixiereRezeptpreis($this->rootTeam, $a, 12.00);
+    $fixiereRezeptpreis($this->rootTeam, $b, 8.33);
     $run = $margenRun($this->rootTeam, [$a, $b]);
 
     Livewire::test(PlanungIndex::class)
@@ -1807,18 +1820,20 @@ it('Margen-Gate: saubere Freigabe (alle auf/über Klasse) → keine Warnung', fu
         ->assertDontSeeHtml('data-margen-warnung');
 });
 
-it('Margen-Gate: Auto-VK (source=class) und fehlender Vorschlag lösen KEINE Warnung aus (nicht geraten)', function () use ($margenRun) {
-    $alc = FoodAlchemistMarkupClass::create(['code' => 'ALC', 'label' => 'A la Carte', 'raw_markup_pct' => 300, 'vat_rate' => 19, 'formula_type' => 'aufschlag']);
-    // (1) Auto-VK: kein manueller sales_net → source=class → trifft die Klasse exakt, nie drunter.
+it('Margen-Gate: Auto-VK und fixierter Preis ohne Vorschlag lösen KEINE Warnung aus', function () use ($margenRun, $fixiereRezeptpreis) {
+    $alc = FoodAlchemistMarkupClass::create(['code' => 'ALC', 'label' => 'A la Carte', 'class_factor_pct' => 100, 'vat_profile_key' => 'regulaer']);
+    // (1) Auto-VK folgt dem Vorschlag exakt und liegt nie darunter.
     $auto = $this->makeRecipe($this->rootTeam, 'Auto-Gericht', [
-        'status' => 'draft', 'markup_class_id' => $alc->id, 'ek_per_kg_eur' => 10, 'ek_total_eur' => 4.0,
-        'sales_quantity_per_unit_g' => 250, 'sales_net' => null,
+        'status' => 'draft', 'is_sales_recipe' => true, 'markup_class_id' => $alc->id, 'ek_per_kg_eur' => 10, 'ek_total_eur' => 4.0,
+        'sales_quantity_per_unit_g' => 250,
     ]);
     // (2) Kein EK/keine Portionierung → kein Klassen-Vorschlag → keine Schwelle, trotz niedrigem manuellem VK.
     $ohneSchwelle = $this->makeRecipe($this->rootTeam, 'Ohne-Schwelle', [
-        'status' => 'draft', 'markup_class_id' => $alc->id, 'ek_per_kg_eur' => null,
-        'sales_quantity_per_unit_g' => null, 'sales_net' => 1.00,
+        'status' => 'draft', 'is_sales_recipe' => true, 'markup_class_id' => $alc->id, 'ek_per_kg_eur' => null,
+        'sales_quantity_per_unit_g' => null,
     ]);
+    app(SalesRecipeService::class)->updateVk($this->rootTeam, $auto->id, ['price_mode' => 'auto']);
+    $fixiereRezeptpreis($this->rootTeam, $ohneSchwelle, 1.00);
     $run = $margenRun($this->rootTeam, [$auto, $ohneSchwelle]);
 
     Livewire::test(PlanungIndex::class)

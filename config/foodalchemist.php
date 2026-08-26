@@ -785,11 +785,13 @@ return [
         'recipe.eigenschaften' => [
             'tier' => 'B',
             'task' => 'Schaetze die operativen Rezept-Eigenschaften: Arbeitszeit je Kochvorgang '
-                . '(work_time_min), einmalige Ruestzeit je Produktionslauf (setup_time_min), maximal '
-                . 'sinnvoll vorproduzierbare Tage (max_vorlauf_tage, 0-14), Serviertemperatur und '
+                . '(work_time_min), einmalige Ruestzeit je Produktionslauf (setup_time_min), variable aktive '
+                . 'Personenminuten je kg, Stueck oder Portion (variable_work_time_min, variable_work_time_basis), '
+                . 'passive Standzeit (standzeit_min), maximal sinnvoll vorproduzierbare Tage (max_vorlauf_tage, 0-14), Serviertemperatur und '
                 . 'kulinarische Funktion. Mengen und vorhandene Zubereitung beachten; keine Zeiten '
                 . 'oder Haltbarkeit vortaeuschen, wenn sie nicht belastbar ableitbar sind: werte = '
-                . '{work_time_min, setup_time_min, max_vorlauf_tage, temperature, function}.',
+                . '{work_time_min, setup_time_min, variable_work_time_min, variable_work_time_basis, standzeit_min, max_vorlauf_tage, temperature, function}. '
+                . 'Keine Topf-, Geraete- oder Postengrenzen vorschlagen.',
         ],
         'recipe.geschmack' => [
             'tier' => 'B',                                            // Auto-Apply-Ausnahme (GL-07 §4.3)

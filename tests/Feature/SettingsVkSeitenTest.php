@@ -63,7 +63,7 @@ it('Behälter & Geräte: anlegen je Vokabular (inkl. Komma-Kapazität + Equipmen
         ->assertSet('fehler', fn ($f) => $f !== null);
 });
 
-it('Aufschlagsklassen: Edit mit Komma-Prozenten + formel_typ-Whitelist; Code-Dublette blockt; Validierung greift', function () {
+it('Preisklassen: relativer Faktor, MwSt-Profil, Dubletten-Schutz und Validierung', function () {
     $ak = FoodAlchemistMarkupClass::create([
         'team_id' => $this->rootTeam->id, 'code' => 'TST', 'label' => 'Test',
         'raw_markup_pct' => 100, 'vat_rate' => 19,
@@ -71,26 +71,27 @@ it('Aufschlagsklassen: Edit mit Komma-Prozenten + formel_typ-Whitelist; Code-Dub
 
     Livewire::test(Aufschlagsklassen::class)
         ->call('edit', $ak->id)
-        ->set('form.raw_markup_pct', '312,5')
-        ->set('form.formula_type', 'quatsch')                           // Whitelist-Fallback
+        ->set('form.class_factor_pct', '112,5')
+        ->set('form.vat_profile_key', 'ermaessigt')
         ->call('save')->assertSet('fehler', null);
     $ak->refresh();
-    expect((float) $ak->raw_markup_pct)->toBe(312.5)
-        ->and($ak->formula_type)->toBe('aufschlag');
+    expect((float) $ak->class_factor_pct)->toBe(112.5)
+        ->and($ak->vat_profile_key)->toBe('ermaessigt')
+        ->and((float) $ak->raw_markup_pct)->toBe(100.0);
 
     // Nicht-numerisch ⇒ Fehler, kein Write
     Livewire::test(Aufschlagsklassen::class)
-        ->call('edit', $ak->id)->set('form.vat_rate', 'abc')->call('save')
-        ->assertSet('fehler', fn ($f) => str_contains((string) $f, 'Zahl'));
-    expect((float) $ak->fresh()->vat_rate)->toBe(19.0);
+        ->call('edit', $ak->id)->set('form.class_factor_pct', 'abc')->call('save')
+        ->assertSet('fehler', fn ($f) => str_contains((string) $f, 'Klassenfaktor'));
+    expect((float) $ak->fresh()->class_factor_pct)->toBe(112.5);
 
     // Anlegen + Code-Dublette
     Livewire::test(Aufschlagsklassen::class)
-        ->set('neu.code', 'tst')->set('neu.label', 'Dublette')->set('neu.raw_markup_pct', '50')
+        ->set('neu.code', 'tst')->set('neu.label', 'Dublette')->set('neu.class_factor_pct', '95')
         ->call('create')
         ->assertSet('fehler', fn ($f) => str_contains((string) $f, 'vergeben'));
     Livewire::test(Aufschlagsklassen::class)
-        ->set('neu.code', 'NEU1')->set('neu.label', 'Neue Klasse')->set('neu.raw_markup_pct', '250')
+        ->set('neu.code', 'NEU1')->set('neu.label', 'Neue Klasse')->set('neu.class_factor_pct', '125')
         ->call('create')->assertSet('fehler', null);
-    expect(FoodAlchemistMarkupClass::where('code', 'NEU1')->first()->raw_markup_pct)->not->toBeNull();
+    expect((float) FoodAlchemistMarkupClass::where('code', 'NEU1')->first()->class_factor_pct)->toBe(125.0);
 });

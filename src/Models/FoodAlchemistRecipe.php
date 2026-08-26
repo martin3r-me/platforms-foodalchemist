@@ -43,6 +43,7 @@ class FoodAlchemistRecipe extends Model
         'default_station_id' => 'integer',
         'max_vorlauf_tage' => 'integer',
         'setup_time_min' => 'integer',
+        'variable_work_time_min' => 'decimal:3',
         'standzeit_min' => 'integer',   // passive Gar-/Standzeit (Durchlaufzeit, bindet keinen Posten)
         'batch_max_kg' => 'decimal:3',
         'batch_max_pieces' => 'decimal:2',
@@ -157,18 +158,27 @@ class FoodAlchemistRecipe extends Model
      * Stufe 3 — nicht-lineare AKTIVE Belegzeit: Rüstzeit (einmal je Lauf) + Marginal je Koch-Vorgang.
      * Koch-Vorgänge über den Topf-Deckel (Rezept/Posten/globaler Default) — 4,69 kg in einem Kessel
      * sind EIN Vorgang, nicht zehn 469-g-Ansätze. Bindet Posten/Kapazität. Passive Standzeit steckt
-     * NICHT hier drin (→ standzeitMin/durchlaufzeitMin). VK-Gerichte bleiben linear-fraktional (kein
-     * Topf). `null`, wenn gar keine Zeit hinterlegt ist.
+     * NICHT hier drin (→ standzeitMin/durchlaufzeitMin). Die Rezeptart entscheidet nicht mehr über
+     * lineare oder batchweise Skalierung. `null`, wenn gar keine Zeit hinterlegt ist.
      */
     public function arbeitszeitMin(float $rohBatches, bool $istVk, ?float $stationDeckel = null, ?bool $stueck = null, ?float $fallbackDeckel = null): ?int
     {
-        if ($this->work_time_min === null && (int) ($this->setup_time_min ?? 0) === 0) {
+        if ($this->work_time_min === null && (int) ($this->setup_time_min ?? 0) === 0
+            && (float) ($this->variable_work_time_min ?? 0) <= 0) {
             return null;
         }
 
-        $kochBatches = $istVk ? $rohBatches : (float) $this->kochBatches($rohBatches, $stationDeckel, $stueck, $fallbackDeckel);
+        $stueck ??= $this->istStueckErtrag();
+        $kochBatches = (float) $this->kochBatches($rohBatches, $stationDeckel, $stueck, $fallbackDeckel);
+        $menge = $rohBatches * ($stueck
+            ? (float) ($this->yield_pieces ?? 0)
+            : (float) ($this->yield_kg_manual ?? $this->yield_kg ?? 0));
 
-        return (int) round((int) ($this->setup_time_min ?? 0) + (float) ($this->work_time_min ?? 0) * $kochBatches);
+        return (int) round(
+            (int) ($this->setup_time_min ?? 0)
+            + (float) ($this->work_time_min ?? 0) * $kochBatches
+            + (float) ($this->variable_work_time_min ?? 0) * $menge
+        );
     }
 
     /**

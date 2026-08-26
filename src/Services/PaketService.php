@@ -4,6 +4,7 @@ namespace Platform\FoodAlchemist\Services;
 
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
@@ -83,7 +84,10 @@ class PaketService
 
     public function create(Team $team, array $in): FoodAlchemistPaket
     {
-        $modus = $in['price_mode'] ?? 'manuell';
+        $modus = $in['price_mode'] ?? 'auto';
+        if ($modus === 'fixed' && (trim((string) ($in['price_override_reason'] ?? '')) === '' || ! is_numeric($in['price_per_person'] ?? null))) {
+            throw new \RuntimeException('Ein fixierter Paketpreis benötigt Preis und Begründung.');
+        }
 
         return FoodAlchemistPaket::create([
             'team_id' => $team->id,
@@ -91,7 +95,11 @@ class PaketService
             'role' => $this->normalizeRolle($in['role'] ?? null),
             'class' => $this->normalizeRolle($in['class'] ?? null),
             'level' => $in['level'] ?? null,
-            'price_mode' => in_array($modus, ['auto', 'manuell'], true) ? $modus : 'manuell',
+            'price_mode' => in_array($modus, ['auto', 'fixed', 'manuell'], true) ? $modus : 'auto',
+            'price_per_person' => isset($in['price_per_person']) ? (float) $in['price_per_person'] : null,
+            'price_override_reason' => $modus === 'fixed' ? trim((string) $in['price_override_reason']) : null,
+            'price_override_user_id' => $modus === 'fixed' ? Auth::id() : null,
+            'price_override_at' => $modus === 'fixed' ? now() : null,
         ]);
     }
 
@@ -99,6 +107,7 @@ class PaketService
     private const FELDER = [
         'name', 'consumer_name', 'role', 'class', 'level', 'price_mode', 'price_per_person',
         'ek_per_person', 'food_cost_percent', 'description', 'note', 'is_inactive',
+        'price_override_reason', 'price_override_expires_at',
     ];
 
     public function update(Team $team, int $id, array $in): FoodAlchemistPaket
@@ -112,6 +121,20 @@ class PaketService
         }
         if (array_key_exists('class', $update)) {
             $update['class'] = $this->normalizeRolle($update['class']);
+        }
+        $mode = $update['price_mode'] ?? $paket->price_mode;
+        if ($mode === 'fixed') {
+            $effective = $update['price_per_person'] ?? $paket->price_per_person;
+            $reason = trim((string) ($update['price_override_reason'] ?? $paket->price_override_reason));
+            if (! is_numeric($effective) || $reason === '') {
+                throw new \RuntimeException('Ein fixierter Paketpreis benötigt Preis und Begründung.');
+            }
+            $update['price_override_reason'] = $reason;
+            $update['price_override_user_id'] = Auth::id();
+            $update['price_override_at'] = now();
+        } elseif ($mode === 'auto') {
+            $update += ['price_override_reason' => null, 'price_override_user_id' => null,
+                'price_override_at' => null, 'price_override_expires_at' => null];
         }
         $paket->update($update);
 
@@ -247,7 +270,8 @@ class PaketService
      */
     public function recomputePrice(FoodAlchemistPaket $paket): FoodAlchemistPaket
     {
-        $auto = $paket->price_mode === 'auto';
+        $expired = $paket->price_override_expires_at?->isPast() ?? false;
+        $auto = $paket->price_mode === 'auto' || $expired;
         $gerichte = $paket->dishes()->with([
             'gericht:id,sales_net,ek_total_eur,sales_unit_count,sales_quantity_per_unit_g,is_sales_recipe,yield_kg',
             'unit:id,slug,dimension,default_in_g',
@@ -291,15 +315,32 @@ class PaketService
             : ($paket->price_per_person !== null ? (float) $paket->price_per_person : null);
         $marge = $this->marge->marge($vkBezug, $ekSum);
 
-        $update = ['price_calculated_at' => now(), 'price_stale' => false];
+        $oldCalculated = $paket->calculated_price_per_person !== null ? (float) $paket->calculated_price_per_person : null;
+        $oldEffective = $paket->price_per_person !== null ? (float) $paket->price_per_person : null;
+        $calculated = $vkSum > 0 ? round($vkSum, 2) : null;
+        $update = [
+            'calculated_price_per_person' => $calculated,
+            'price_calculation_source' => 'presentations_sum',
+            'price_calculation_version' => CatalogPricingService::VERSION,
+            'price_calculated_at' => now(),
+            'price_stale' => false,
+        ];
         if ($gerichte->isNotEmpty()) {
             $update['ek_per_person'] = $ekSum > 0 ? round($ekSum, 4) : null;
             $update['food_cost_percent'] = $marge['wareneinsatz_pct'] ?? null;
         }
         if ($auto) {
-            $update['price_per_person'] = $vkSum > 0 ? round($vkSum, 2) : null;
+            $update['price_mode'] = 'auto';
+            $update['price_per_person'] = $calculated;
+            $update += ['price_override_reason' => null, 'price_override_user_id' => null,
+                'price_override_at' => null, 'price_override_expires_at' => null];
         }
         $paket->update($update);
+        app(PriceAuditService::class)->record(
+            $paket, 'package', $oldCalculated, $calculated, $oldEffective,
+            $paket->price_per_person !== null ? (float) $paket->price_per_person : null,
+            'presentations_sum', ['calculation_version' => CatalogPricingService::VERSION],
+        );
 
         return $paket->refresh();
     }

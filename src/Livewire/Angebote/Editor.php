@@ -25,6 +25,7 @@ class Editor extends Component
         'name' => '', 'status' => 'anfrage', 'occasion' => '', 'personen' => null,
         'budget' => null, 'event_date' => null, 'location' => '', 'diet_requirement' => '',
         'brief' => '', 'total_price' => null, 'valid_until' => null, 'price_mode' => 'auto',
+        'price_override_reason' => '',
     ];
 
     public string $firmaSuche = '';
@@ -91,6 +92,7 @@ class Editor extends Component
             'total_price' => $a->total_price,
             'valid_until' => $a->valid_until?->format('Y-m-d'),
             'price_mode' => $a->price_mode ?? 'auto',
+            'price_override_reason' => $a->price_override_reason ?? '',
         ];
     }
 

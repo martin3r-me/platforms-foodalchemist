@@ -84,6 +84,42 @@ it('M4-11 (DoD 3/3): garverlust — Vorschlag geclampt, Save schreibt quelle=ki'
         ->and($zutat->cooking_loss_source)->toBe('ki');
 });
 
+it('Eigenschaften-Assistent füllt alle Zeitfelder nur in die Vorschau und keine Batchgrenze', function () {
+    $modal = Livewire::test(RecipeModal::class)
+        ->call('oeffnen', $this->rezept->id)
+        ->set('form.work_time_min', 25)
+        ->set('form.setup_time_min', 10)
+        ->set('form.variable_work_time_min', 1.5)
+        ->set('form.variable_work_time_basis', 'kg')
+        ->set('form.standzeit_min', 90)
+        ->set('form.max_vorlauf_tage', 2)
+        ->set('form.temperature', 'gekühlt')
+        ->set('form.function', 'Saucenbasis')
+        ->call('kiEigenschaften')
+        ->assertSet('form.work_time_min', 25)
+        ->assertSet('form.setup_time_min', 10)
+        ->assertSet('form.variable_work_time_min', 1.5)
+        ->assertSet('form.variable_work_time_basis', 'kg')
+        ->assertSet('form.standzeit_min', 90)
+        ->assertSet('form.max_vorlauf_tage', 2);
+
+    $this->rezept->refresh();
+    expect($this->rezept->work_time_min)->toBeNull()
+        ->and($this->rezept->setup_time_min)->toBeNull()
+        ->and($this->rezept->variable_work_time_min)->toBeNull()
+        ->and($this->rezept->standzeit_min)->toBeNull()
+        ->and($this->rezept->batch_max_kg)->toBeNull()
+        ->and($this->rezept->batch_max_pieces)->toBeNull();
+
+    $modal->call('speichern')->assertSet('fehler', null);
+    $this->rezept->refresh();
+    expect($this->rezept->work_time_min)->toBe(25)
+        ->and($this->rezept->setup_time_min)->toBe(10)
+        ->and((float) $this->rezept->variable_work_time_min)->toBe(1.5)
+        ->and($this->rezept->standzeit_min)->toBe(90)
+        ->and($this->rezept->batch_max_kg)->toBeNull();
+});
+
 it('M4-12: Template-Toggle, Status-Workflow und Bulk-Status (D1: nur eigene)', function () {
     $zweites = $this->svc->create($this->rootTeam, ['name' => 'Fond: Zwei']);
     $fremd = \Platform\FoodAlchemist\Models\FoodAlchemistRecipe::create([

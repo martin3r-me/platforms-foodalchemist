@@ -325,7 +325,7 @@ it('Voll anreichern synchronisiert operative Detail-Felder: Equipment, Posten un
         ->and($erg['coverage']['eignung']['n_sektor'])->toBe(1)
         ->and($frisch->equipment()->pluck('slug')->all())->toBe(['kombi'])
         ->and((int) $frisch->default_station_id)->toBe((int) $posten->id)
-        ->and((float) $frisch->batch_max_kg)->toBe(8.0)
+        ->and($frisch->batch_max_kg)->toBeNull()
         ->and($frisch->work_time_min)->toBe(90)
         ->and($frisch->setup_time_min)->toBe(12)
         ->and($frisch->max_vorlauf_tage)->toBe(3)

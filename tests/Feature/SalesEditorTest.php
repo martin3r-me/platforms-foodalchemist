@@ -50,8 +50,10 @@ it('updateVk: nur VK-Feldgruppen (V-12), brutto konsistent, Wording-Edit setzt L
         'ek_total_eur' => 0.01,                                       // Aggregat → ignoriert (I9-Geist)
     ]);
 
-    expect((float) $nach->sales_net)->toBe(9.90)
-        ->and((float) $nach->sales_gross)->toBe(11.78)                  // 9,90 × 1,19
+    $standard = $nach->standardPresentation()->firstOrFail();
+    expect((float) $standard->sales_gross)->toBe(10.59)
+        ->and((float) $nach->sales_net)->toBe(9.90)
+        ->and((float) $nach->sales_gross)->toBe(10.59)                  // zentrale Speisen-MwSt 7 %
         ->and($nach->sales_wording_standard)->toBe('Honey Dog')
         ->and($nach->sales_wording_source)->toBe('manual')
         ->and($nach->sales_wording_ai_confidence)->toBeNull()
@@ -104,9 +106,9 @@ it('Cockpit nach Pflege: Vorschlag aus Klasse, g/Einheit aus Yield/Anzahl (E2E-S
     $vk = $this->svc->createFromBasis($this->rootTeam, $this->basis->id, 'FIN: Dog | BBQ');
     $this->svc->updateVk($this->rootTeam, $vk->id, ['markup_class_id' => $alc->id, 'sales_unit_count' => 4]);
 
-    $cockpit = $this->svc->cockpit($this->svc->detail($this->rootTeam, $vk->id));
+    $cockpit = $this->svc->cockpit($this->svc->detail($this->rootTeam, $vk->id), $this->rootTeam);
 
     expect($cockpit['verkauft_als']['g_pro_einheit'])->toBe(265.0)    // 1,06 kg / 4
-        ->and($cockpit['vk']['source'])->toBe('class')
+        ->and($cockpit['vk']['source'])->toBe('auto')
         ->and($cockpit['vk']['sales_net'])->toBeGreaterThan(0);
 });

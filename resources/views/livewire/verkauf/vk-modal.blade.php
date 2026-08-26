@@ -206,7 +206,7 @@
              „nicht zugeteilt". Als eigene, klar benannte Sektion (nicht in „Eigenschaften"
              vergraben), damit die Zuweisung auffindbar ist. --}}
         <x-foodalchemist::modal-section title="Produktion (Auto-Planer)">
-            <div class="grid grid-cols-3 gap-3" data-vk-produktion>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-3" data-vk-produktion>
                 <div>
                     <label class="block {{ $label }} mb-1">Default-Posten <span class="normal-case text-gray-500">(Planer-Routing)</span></label>
                     <select wire:model="form.default_station_id" class="{{ $input }}" data-vk-default-station>
@@ -221,6 +221,22 @@
                 <div>
                     <label class="block {{ $label }} mb-1">Vorproduzierbar (Tage) <span class="normal-case text-gray-500">0 = nur am Tag</span></label>
                     <input type="number" wire:model="form.max_vorlauf_tage" min="0" max="14" class="{{ $input }}" placeholder="—" data-vk-vorlauf />
+                </div>
+                <div>
+                    <label class="block {{ $label }} mb-1">Variable Personenminuten</label>
+                    <input type="text" inputmode="decimal" wire:model="form.variable_work_time_min" class="{{ $input }}" placeholder="0" />
+                </div>
+                <div>
+                    <label class="block {{ $label }} mb-1">Variable Zeit je</label>
+                    <select wire:model="form.variable_work_time_basis" class="{{ $input }}"><option value="kg">kg</option><option value="piece">Stück</option><option value="portion">Portion</option></select>
+                </div>
+                <div>
+                    <label class="block {{ $label }} mb-1">Batchgrenze kg</label>
+                    <input type="text" inputmode="decimal" wire:model="form.batch_max_kg" class="{{ $input }}" placeholder="Team-Default" />
+                </div>
+                <div>
+                    <label class="block {{ $label }} mb-1">Batchgrenze Stück</label>
+                    <input type="text" inputmode="decimal" wire:model="form.batch_max_pieces" class="{{ $input }}" placeholder="Team-Default" />
                 </div>
             </div>
             @if($posten->isEmpty())
@@ -442,26 +458,25 @@
         <x-foodalchemist::modal-section title="Verkaufs-Block (Live-Marge)">
             <div class="grid grid-cols-3 gap-3" data-vk-verkaufsblock>
                 <div>
-                    <label class="block {{ $label }} mb-1">Aufschlagsklasse</label>
+                    <label class="block {{ $label }} mb-1">Preisklasse</label>
                     <select wire:model="form.markup_class_id" class="{{ $input }}" data-vk-ak>
                         <option value="">—</option>
                         @foreach($aufschlagsklassen as $ak)
-                            <option value="{{ $ak->id }}">{{ $ak->code }} ({{ rtrim(rtrim(number_format((float) $ak->raw_markup_pct, 1, '.', ''), '0'), '.') }} %){{ $ak->formula_type === 'deckungsbeitrag' ? ' — Formel nicht definiert (W-1)' : '' }}</option>
+                            <option value="{{ $ak->id }}">{{ $ak->code }} ({{ number_format((float) ($ak->class_factor_pct ?? 100), 1, ',', '.') }} % relativ)</option>
                         @endforeach
                     </select>
                 </div>
                 <div>
-                    <label class="block {{ $label }} mb-1">MwSt-Satz %</label>
-                    <input type="number" step="0.1" min="0" wire:model="form.vat_rate" class="{{ $input }}" data-vk-mwst />
+                    <label class="block {{ $label }} mb-1">MwSt</label>
+                    <div class="{{ $input }} text-gray-500" data-vk-mwst>Wird je Darreichung als Profil gewählt</div>
                 </div>
                 <div>
-                    <label class="block {{ $label }} mb-1">VK netto manuell € (leer = aus Klasse)</label>
-                    <input type="number" step="0.01" min="0" wire:model="form.sales_net" class="{{ $input }}"
-                           placeholder="{{ $cockpit['vk']['vorschlag']['sales_net'] ?? '' }}" data-vk-netto-manuell />
+                    <label class="block {{ $label }} mb-1">Katalog-VK netto</label>
+                    <div class="{{ $input }} tabular-nums" data-vk-netto-manuell>{{ $cockpit['vk']['sales_net'] !== null ? number_format($cockpit['vk']['sales_net'], 2, ',', '.') . ' €' : '—' }}</div>
                 </div>
             </div>
             @if($cockpit !== null && $cockpit['vk']['vorschlag'] !== null)
-                <p class="text-[11px] text-gray-500 mt-2" data-vk-vorschau>Vorschlag aus Klasse: {{ number_format($cockpit['vk']['vorschlag']['sales_net'], 2, ',', '.') }} € netto · {{ $cockpit['vk']['vorschlag']['formel'] }}</p>
+                <p class="text-[11px] text-gray-500 mt-2" data-vk-vorschau>Auto-Vorschlag: {{ number_format($cockpit['vk']['vorschlag']['sales_net'], 2, ',', '.') }} € netto · {{ $cockpit['vk']['vorschlag']['formel'] }}</p>
             @endif
         </x-foodalchemist::modal-section>
         </div>{{-- /Tab KALKULATION --}}
@@ -477,8 +492,9 @@
                         <th class="py-1 pr-2 font-medium text-center">Standard</th>
                         <th class="py-1 pr-2 font-medium text-right">g/Einheit</th>
                         <th class="py-1 pr-2 font-medium text-right">Anzahl</th>
-                        <th class="py-1 pr-2 font-medium">Aufschlagsklasse</th>
+                        <th class="py-1 pr-2 font-medium">Preisklasse</th>
                         <th class="py-1 pr-2 font-medium">Preis</th>
+                        <th class="py-1 pr-2 font-medium">MwSt</th>
                         <th class="py-1 pr-2 font-medium">Geschirr</th>
                         <th class="py-1 pr-2 font-medium text-right">EK/Portion</th>
                         <th class="py-1 pr-2 font-medium text-right">VK netto</th>
@@ -518,10 +534,21 @@
                             </select>
                         </td>
                         <td class="py-1.5 pr-2">
-                            <select wire:model="darForm.{{ $d->id }}.price_mode"
-                                    wire:change="darreichungSpeichern({{ $d->id }})" class="{{ $input }} !py-0.5 !w-20">
-                                <option value="auto">auto</option>
-                                <option value="manuell">manuell</option>
+                            <div class="flex items-center gap-1">
+                                <select wire:model="darForm.{{ $d->id }}.price_mode" class="{{ $input }} !py-0.5 !w-20">
+                                    <option value="auto">auto</option>
+                                    <option value="fixed">fixiert</option>
+                                </select>
+                                <button type="button" wire:click="darreichungSpeichern({{ $d->id }})"
+                                        class="text-gray-500 hover:text-violet-600" title="Preismodus speichern">@svg('heroicon-o-check', 'w-4 h-4')</button>
+                            </div>
+                        </td>
+                        <td class="py-1.5 pr-2">
+                            <select wire:model="darForm.{{ $d->id }}.vat_profile_key"
+                                    wire:change="darreichungSpeichern({{ $d->id }})" class="{{ $input }} !py-0.5 !w-24">
+                                <option value="">aus Klasse</option>
+                                <option value="ermaessigt">ermäßigt</option>
+                                <option value="regulaer">regulär</option>
                             </select>
                         </td>
                         <td class="py-1.5 pr-2">
@@ -536,14 +563,19 @@
                             {{ $d->ek_portion !== null ? number_format($d->ek_portion, 2, ',', '.') . ' €' : '—' }}
                         </td>
                         <td class="py-1.5 pr-2 text-right tabular-nums">
-                            @if(($darForm[$d->id]['price_mode'] ?? 'auto') === 'manuell')
+                            @if(in_array(($darForm[$d->id]['price_mode'] ?? 'auto'), ['fixed', 'manuell'], true))
                                 <input type="text" wire:model.blur="darForm.{{ $d->id }}.sales_net"
-                                       wire:change="darreichungSpeichern({{ $d->id }})" class="{{ $input }} !py-0.5 !w-16 text-right" />
+                                       class="{{ $input }} !py-0.5 !w-16 text-right" />
+                                <input type="text" wire:model.blur="darForm.{{ $d->id }}.price_override_reason"
+                                       placeholder="Begründung" class="{{ $input }} !py-0.5 !w-28 mt-1" />
+                                <button type="button" wire:click="darreichungSpeichern({{ $d->id }})"
+                                        class="mt-1 text-[10px] text-violet-600 hover:text-violet-800">Fixpreis übernehmen</button>
                             @else
                                 <span class="text-emerald-600">{{ $d->sales_net !== null ? number_format($d->sales_net, 2, ',', '.') . ' €' : '—' }}</span>
+                                @if($d->calculated_sales_net !== null)<span class="block text-[10px] text-gray-500">{{ $d->price_calculation_source }}</span>@endif
                             @endif
                         </td>
-                        @php($darVkNetto = ($darForm[$d->id]['price_mode'] ?? 'auto') === 'manuell'
+                        @php($darVkNetto = in_array(($darForm[$d->id]['price_mode'] ?? 'auto'), ['fixed', 'manuell'], true)
                             ? (is_numeric(str_replace(',', '.', (string) ($darForm[$d->id]['sales_net'] ?? ''))) ? (float) str_replace(',', '.', (string) $darForm[$d->id]['sales_net']) : null)
                             : $d->sales_net)
                         @php($darWpct = ($d->ek_portion !== null && $darVkNetto !== null && $darVkNetto > 0) ? 100 * $d->ek_portion / $darVkNetto : null)
@@ -564,7 +596,7 @@
                     </tr>
                     @if($darDeltaOffen === $d->id && $rezept !== null)
                         <tr wire:key="dar-delta-{{ $d->id }}">
-                            <td colspan="12" class="pb-2">
+                            <td colspan="13" class="pb-2">
                                 <div class="rounded-lg bg-violet-500/[0.04] border border-violet-500/10 p-2 mt-1" data-dar-delta="{{ $d->id }}">
                                     <p class="text-[11px] text-gray-500 mb-1.5">Komponenten in dieser Form — echte Gramm <strong>je Einheit</strong> eintragen oder weglassen (leer = Standard). g/Einheit der Form ergibt sich automatisch aus der Summe. Neue Zutaten sind bewusst nicht möglich.</p>
                                     @php($deltaMap = $d->deltas->keyBy('recipe_ingredient_id'))
@@ -715,6 +747,10 @@
                 <div>
                     <label class="block {{ $label }} mb-1">Arbeitszeit (min)</label>
                     <input type="number" min="0" wire:model="form.work_time_min" class="{{ $input }}" />
+                </div>
+                <div>
+                    <label class="block {{ $label }} mb-1">Passive Standzeit (min)</label>
+                    <input type="number" min="0" wire:model="form.standzeit_min" class="{{ $input }}" />
                 </div>
                 <div>
                     <label class="block {{ $label }} mb-1" title="M-K8: direkte Einzelkosten je Portion (Energie, Verpackung …) — fließen als Block in HK2">Nebenkosten (€/Portion)</label>

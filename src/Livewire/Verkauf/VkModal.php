@@ -85,7 +85,6 @@ class VkModal extends Component
                 'taste_direction' => $r->taste_direction,
                 'dish_class_id' => $r->dish_class_id,
                 'markup_class_id' => $r->markup_class_id,
-                'vat_rate' => $r->vat_rate,
                 'sales_net' => $r->sales_net,
                 'sales_unit_vocab_id' => $r->sales_unit_vocab_id,
                 'sales_unit_count' => $r->sales_unit_count,
@@ -104,6 +103,11 @@ class VkModal extends Component
                 // Rüstzeit + Vorproduzierbarkeit. Ohne diese landeten Gericht-Zeilen im Planer immer
                 // „nicht zugeteilt" (ProductionPlanService routet über recipe.default_station_id).
                 'setup_time_min' => $r->setup_time_min,
+                'variable_work_time_min' => $r->variable_work_time_min,
+                'variable_work_time_basis' => $r->variable_work_time_basis ?: 'portion',
+                'standzeit_min' => $r->standzeit_min,
+                'batch_max_kg' => $r->batch_max_kg,
+                'batch_max_pieces' => $r->batch_max_pieces,
                 'default_station_id' => $r->default_station_id,
                 'max_vorlauf_tage' => $r->max_vorlauf_tage,
                 'additional_costs_eur' => $r->additional_costs_eur,             // M-K8: direkte Einzelkosten → HK2 (#379)
@@ -144,6 +148,9 @@ class VkModal extends Component
                 'markup_class_id' => $d->markup_class_id,
                 'price_mode' => $d->price_mode,
                 'sales_net' => $d->sales_net,
+                'vat_profile_key' => $d->vat_profile_key,
+                'price_override_reason' => $d->price_override_reason,
+                'price_override_expires_at' => $d->price_override_expires_at?->format('Y-m-d'),
                 'tableware_item_id' => $d->tableware_item_id,
             ];
         }
@@ -377,10 +384,15 @@ class VkModal extends Component
     {
         $v = $ki->propose('recipe.eigenschaften', $kontext + [
             'work_time_min' => $this->form['work_time_min'] ?? null,
+            'setup_time_min' => $this->form['setup_time_min'] ?? null,
+            'standzeit_min' => $this->form['standzeit_min'] ?? null,
+            'variable_work_time_min' => $this->form['variable_work_time_min'] ?? null,
+            'variable_work_time_basis' => $this->form['variable_work_time_basis'] ?? null,
             'temperature' => $this->form['temperature'] ?? null,
             'function' => $this->form['function'] ?? null,
         ]);
-        foreach (['work_time_min', 'temperature', 'function'] as $feld) {
+        foreach (['work_time_min', 'setup_time_min', 'standzeit_min', 'variable_work_time_min',
+            'variable_work_time_basis', 'max_vorlauf_tage', 'temperature', 'function'] as $feld) {
             if (! empty($v->werte[$feld])) {
                 $this->form[$feld] = $v->werte[$feld];
             }
@@ -839,7 +851,7 @@ class VkModal extends Component
             'klassen' => FoodAlchemistDishClass::visibleToTeam($team)
                 ->whereNull('dish_main_group_id')->orderBy('id')->get(['id', 'label', 'diet_form']),
             'aufschlagsklassen' => FoodAlchemistMarkupClass::visibleToTeam($team)
-                ->where('is_inactive', false)->orderBy('code')->get(['id', 'code', 'label', 'raw_markup_pct', 'formula_type']),
+                ->where('is_inactive', false)->orderBy('code')->get(['id', 'code', 'label', 'class_factor_pct']),
             'einheiten' => $team !== null ? FoodAlchemistVocabEinheit::visibleToTeam($team)->where('is_inactive', false)->orderBy('slug')->get(['id', 'slug', 'display_de']) : collect(),
             'behaelter' => TeamScope::applyVisible(DB::table('foodalchemist_vocab_containers')->whereNull('deleted_at'), 'team_id', $team)->orderBy('group_name')->orderBy('sort_order')->get(['id', 'name', 'group_name', 'is_inactive']),
             'geraete' => TeamScope::applyVisible(DB::table('foodalchemist_vocab_regeneration_devices')->whereNull('deleted_at'), 'team_id', $team)->orderBy('sort_order')->get(['id', 'name', 'is_inactive']),

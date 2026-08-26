@@ -30,6 +30,29 @@ Bedarf werden **ganze Ansätze** — eine halbe Ansatzmenge Fond kocht niemand.
 > ganze Rechnung neu aufstellen. Was du an den Zeilen von Hand gepflegt hast, überlebt das
 > trotzdem — siehe unten.
 
+## Produktionszeit
+
+Arbeitszeit ist immer aktive Personenzeit und setzt sich unabhängig von der Rezeptart zusammen:
+
+```text
+aktive Personenminuten
+= Rüstzeit je Produktionslauf
++ Vorgangszeit × Produktionsvorgänge
++ variable Zeit × Gesamtmenge
+```
+
+Die variable Zeit bezieht sich auf `kg`, `piece` oder `portion`. Durch Nullwerte entstehen reine
+Batch-, lineare, hybride oder rüstlastige Modelle. Passive Standzeit ist nur Durchlaufzeit: Sie
+erzeugt keine Lohnkosten und belastet keine Personalkapazität.
+
+Die Zahl der Vorgänge folgt der kleinsten positiven physischen Grenze aus Rezept, Posten und
+Team-Standard. Der System-Fallback beträgt 20 kg beziehungsweise 200 Stück. Diese Grenze wirkt
+nur in Produktion und Auftrag, nie im Katalogpreis. Ein Produktionslauf entspricht einer Zeile
+an einem Datum und Posten; beim Aufteilen fällt die Rüstzeit je Teilzeile erneut an.
+
+Der Eigenschaften-Assistent darf Zeitwerte vorschlagen. Topf-, Geräte- und Postengrenzen werden
+nicht durch KI geraten. Im Editor werden Vorschläge vor dem Speichern sichtbar übernommen.
+
 Im **Ziele**-Tab stehen Katalog und Ziel-Korb nebeneinander. Du kannst zwischen Konzept, Gericht,
 Basisrezept, Kapitel und Angebot wechseln. Gerichte und Basisrezepte lassen sich nach Hauptgruppe,
 Kategorie und Niveau filtern. Mit `+` parkst du einen Treffer, trägst die Menge ein und übernimmst
@@ -73,7 +96,7 @@ welchem Posten ansteht — nach Posten filterbar, mit Auslastungsbalken je Tag.
 > gepflegt ist, zeigt der Balken bis 85 % grün, bis 100 % eng, darüber Überlast — als Hinweis, nicht
 > als Sperre.
 
-> **Die Zahlen sind nur so gut wie die Arbeitszeit an den Rezepten.** Fehlt sie, sagt das Modul das
+> **Die Zahlen sind nur so gut wie die Zeitbestandteile an den Rezepten.** Fehlen sie, sagt das Modul das
 > dazu („340 min · 6 Zeilen ohne Arbeitszeit") statt eine halbe Datenlage als Wahrheit zu verkaufen.
 > Unverplante Arbeit erscheint als eigener Block „Nicht zugeteilt" — sie zählt gegen keine Kapazität,
 > verschwindet aber auch nicht.

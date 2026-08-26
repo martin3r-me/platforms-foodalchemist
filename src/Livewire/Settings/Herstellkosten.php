@@ -28,6 +28,8 @@ class Herstellkosten extends Component
     /** #379+: Lohnnebenkosten-Zuschlag % (AG-Anteil auf den Produktionslohn). */
     public string $lnk = '0';
 
+    public string $laborSource = 'team_flat';
+
     /** Alle Kostenblöcke: [{key,label,typ,aktiv,modus,wert}]. */
     public array $schema = [];
 
@@ -51,6 +53,7 @@ class Herstellkosten extends Component
         $this->marge = $this->fmt($svc->margePct($this->team()));
         $this->zielWe = $this->fmt($svc->zielWareneinsatzPct($this->team()));
         $this->lnk = $this->fmt($svc->lohnnebenkostenPct($this->team()));
+        $this->laborSource = $svc->laborCostSource($this->team());
 
         $stundensatz = $svc->stundensatz($this->team());
         foreach ($svc->kalkulationSchema($this->team()) as $b) {
@@ -148,6 +151,23 @@ class Herstellkosten extends Component
         $this->dispatch('kosten-aktualisiert');   // #379+: Werkstatt-Cockpit live nachziehen
     }
 
+    public function cateringBeispielwerte(): void
+    {
+        try {
+            app(FixkostenService::class)->cateringBeispielwerte($this->team());
+        } catch (\RuntimeException $e) {
+            $this->fehler = $e->getMessage();
+
+            return;
+        }
+        $this->bezugsbasen = array_map(fn ($value) => $this->fmt((float) $value), FixkostenService::CATERING_EXAMPLE_BASES);
+        $this->alleAutomatisch();
+        $this->speichern();
+        $this->ladeFix();
+        $this->meldung = 'Catering-Beispielwerte berechnet. Bitte anschließend auf den eigenen Betrieb anpassen.';
+        $this->fehler = null;
+    }
+
     public function speichern(): void
     {
         $svc = app(TeamSettingsService::class);
@@ -168,6 +188,7 @@ class Herstellkosten extends Component
             'margin_pct' => $this->num($this->marge),
             'target_food_cost_pct' => $this->num($this->zielWe),
             'labor_overhead_pct' => $this->num($this->lnk),
+            'labor_cost_source' => in_array($this->laborSource, ['team_flat', 'station_roles'], true) ? $this->laborSource : 'team_flat',
             'calculation_schema' => $this->baueSchema(),
             'calculation_reference_bases' => [
                 'mek' => $this->num((string) $this->bezugsbasen['mek']),
@@ -175,6 +196,7 @@ class Herstellkosten extends Component
                 'hk' => $this->num((string) $this->bezugsbasen['hk']),
             ],
         ]);
+        app(\Platform\FoodAlchemist\Services\PricingCascadeService::class)->recomputeTeam($this->team());
         $this->meldung = 'Gespeichert — Kalkulation & Cockpits nutzen diese Werte.';
         $this->dispatch('kosten-aktualisiert');   // #379+: Werkstatt-Cockpit live nachziehen
     }

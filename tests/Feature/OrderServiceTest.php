@@ -699,6 +699,7 @@ it('WaWi: Sammelversand löst versandfähige Entwürfe aus und lässt Klärfäll
 });
 
 it('WaWi: Auswahl wird vor Versand geprüft, bestätigt und kann gesammelt storniert werden', function () {
+    Carbon::setTestNow(Carbon::parse('2026-08-20 10:00'));
     $this->actingAs($this->makeUser($this->rootTeam));
     $ready = $this->svc->addManualLine($this->rootTeam, $this->laOf['Mehl']->id, 2)->order;
     $ready->forceFill(['desired_delivery_date' => '2026-08-24'])->save();
