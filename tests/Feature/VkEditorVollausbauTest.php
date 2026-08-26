@@ -83,6 +83,9 @@ it('VK-Editor rendert die neuen Sektionen (Deklaration, Nährwerte, Spezifikatio
     foreach (['data-deklaration', 'data-vk-naehrwerte-leer', 'data-vk-spezifikation', 'data-vk-plating-text', 'data-vk-editor-kpis', 'data-md-toolbar', 'data-ki-wording', 'data-ki-behaelter', 'data-ki-regeneration'] as $marker) {
         expect($html)->toContain($marker);
     }
+    expect($html)->toContain('Rohertragsquote')
+        ->and($html)->toContain('Rohertragsquote = (VK netto − MEK) ÷ VK netto')
+        ->and($html)->toContain('Verkaufs-Block (Live-Rohertrag)');
 });
 
 it('speichert den Wechsel einer Darreichung auf auto unmittelbar', function () {

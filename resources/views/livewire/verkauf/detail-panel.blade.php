@@ -1,6 +1,6 @@
-{{-- M6-03: VK-DetailPanel — Verkaufs-/Marge-Linse. Redesign v3 2026-07-21 (Dominique):
+{{-- M6-03: VK-DetailPanel — Verkaufs-/Rohertrags-Linse. Redesign v3 2026-07-21 (Dominique):
      NICHT ausklappbar (alles direkt sichtbar), größere Typo, neu angeordnet;
-     Glance = Cockpit (Preis/Marge) + Sicherheit; Pairing-Netz als Inline-Graph;
+     Glance = Cockpit (Preis/Rohertrag) + Sicherheit; Pairing-Netz als Inline-Graph;
      analytische KI-Blöcke kompakt am Fuß. --}}
 @php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
 
@@ -8,7 +8,7 @@
     @if($rezept === null)
         <div class="text-center text-xs text-gray-500 py-12">
             <div class="text-2xl mb-2">€</div>
-            Gericht in der Tabelle anklicken —<br>Marge-Cockpit erscheint hier.
+            Gericht in der Tabelle anklicken —<br>Preis- und Rohertrags-Cockpit erscheint hier.
         </div>
     @else
         {{-- Kopf: Name + Aktionen + Status/Klasse/Diät --}}
@@ -86,7 +86,7 @@
             </div>
         @endif
 
-        {{-- GLANCE 1 — Preis & Marge: Cockpit-Card --}}
+        {{-- GLANCE 1 — Preis & Rohertrag: Cockpit-Card --}}
         @php($we = $cockpit['marge']['wareneinsatz_pct'] ?? null)
         @php($weTone = $we === null ? 'neutral' : ($we > 35 ? 'danger' : ($we > 30 ? 'warning' : 'success')))
         @php($weBadge = [

@@ -93,7 +93,7 @@
                 <button type="button" wire:click="$dispatch('vk-modal.oeffnen')" class="{{ $btnPrimary }}" data-vk-anlegen>+ Neues Gericht</button>
                 {{-- KI-Erstellung ist in die Planung-Leitstelle konsolidiert (2026-08): der KI-Rezept-Knopf lebt jetzt dort mit den Regler-Leitplanken. --}}
             </div>
-            <p class="text-[11px] text-gray-500">Speisen mit VK-Preis. Zutaten = Grundprodukte und/oder Basisrezepte. Live-Marge aus EK × Aufschlagsklasse.</p>
+            <p class="text-[11px] text-gray-500">Speisen mit VK-Preis. Auto-VK aus Darreichungs-MEK × Unternehmens-Basissatz × relativem Klassenfaktor.</p>
         </div>
         <div class="relative overflow-hidden {{ $card }}" data-vk-tabelle>
             <div class="{{ $cardAccent }}"></div>

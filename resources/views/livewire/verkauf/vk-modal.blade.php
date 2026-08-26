@@ -33,11 +33,11 @@
         <x-slot:kpiHeader>
             {{-- Spec 28 / E2.1: Kacheln über den Baustein `kpi-tiles` (Palette hell + dunkel dort).
                  Reihe 1 = Kosten-Seite (Basisrezept-Parität), Reihe 2 = VK-Seite aus
-                 SalesRecipeService::cockpit() (MargeService) — „—" wenn Aufschlagsklasse oder
+                 SalesRecipeService::cockpit() (MargeService) — „—" wenn Preisklasse oder
                  Portionsgröße fehlt.
 
                  Tönung nach E1-Regel 6 (genau EIN accent):
-                 · Marge % = Leitwert des Gericht-Editors → accent.
+                 · Rohertragsquote = Leitwert des Gericht-Editors → accent.
                  · „Mit Preis" + Allergen-Konf. tragen echte Messgrößen → good/warn/bad.
                  · Wareneinsatz ampelt seit Spec 28 §6.1 gegen die Ziel-Quote des Teams:
                    `cockpit()` liefert `ziel_pct` + `ampel`, die Leiter liegt im MargeService
@@ -69,7 +69,8 @@
                     ? 'Ziel des Teams: ' . number_format((float) $cockpit['ziel_pct'], 1, ',', '.') . ' % — grün bis Ziel, rot ab Ziel × 1,5 (Einstellungen → Herstellkosten).'
                     : 'Keine Ziel-Wareneinsatzquote ermittelbar — ohne Vorgabe wird nicht geampelt.',
                  'value' => ($cockpit['marge']['wareneinsatz_pct'] ?? null) !== null ? number_format((float) $cockpit['marge']['wareneinsatz_pct'], 1, ',', '.') . ' %' : '—'],
-                ['kpi' => 'marge', 'label' => 'Marge', 'tone' => 'accent',
+                ['kpi' => 'marge', 'label' => 'Rohertragsquote', 'tone' => 'accent',
+                 'title' => 'Rohertragsquote = (VK netto − MEK) ÷ VK netto. Sie berücksichtigt noch keine auftragsspezifischen Lohn- und Gemeinkosten.',
                  'value' => ($cockpit['marge']['marge_pct'] ?? null) !== null ? number_format((float) $cockpit['marge']['marge_pct'], 1, ',', '.') . ' %' : '—'],
             ]" />
         </x-slot:kpiHeader>
@@ -455,7 +456,7 @@
             </div>
         </x-foodalchemist::modal-section>
 
-        <x-foodalchemist::modal-section title="Verkaufs-Block (Live-Marge)">
+        <x-foodalchemist::modal-section title="Verkaufs-Block (Live-Rohertrag)">
             <div class="grid grid-cols-3 gap-3" data-vk-verkaufsblock>
                 <div>
                     <label class="block {{ $label }} mb-1">Preisklasse</label>
