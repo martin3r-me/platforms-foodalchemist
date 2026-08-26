@@ -110,6 +110,29 @@ it('akzeptiert deutsche Dezimalkommas beim Fixpreis einer Darreichung', function
         ->and((float) $this->recipe->fresh()->sales_net)->toBe(1.5);
 });
 
+it('berechnet die Standard-Darreichung bei leerer Grammatur aus dem Rezept-Yield', function () {
+    $this->settings->update($this->rootTeam, ['target_food_cost_pct' => 25]);
+    $this->recipe->update([
+        'yield_kg' => 0.020,
+        'sales_unit_count' => null,
+        'sales_quantity_per_unit_g' => null,
+    ]);
+    $presentation = FoodAlchemistRecipeDarreichung::create([
+        'team_id' => $this->rootTeam->id, 'recipe_id' => $this->recipe->id,
+        'serving_form_id' => $this->form->id, 'is_standard' => true,
+        'quantity_per_unit_g' => null, 'unit_count' => 1, 'price_mode' => 'auto',
+    ]);
+
+    app(DarreichungService::class)->recomputePreise($presentation);
+    $presentation->refresh();
+
+    expect($presentation->quantity_per_unit_g)->toBeNull()
+        ->and((float) $presentation->ek_portion)->toBe(2.0)
+        ->and((float) $presentation->calculated_sales_net)->toBe(8.0)
+        ->and((float) $presentation->sales_net)->toBe(8.0)
+        ->and($presentation->price_mode)->toBe('auto');
+});
+
 it('erzeugt ohne MEK keinen stillen Nullpreis', function () {
     $presentation = FoodAlchemistRecipeDarreichung::create([
         'team_id' => $this->rootTeam->id, 'recipe_id' => $this->recipe->id,

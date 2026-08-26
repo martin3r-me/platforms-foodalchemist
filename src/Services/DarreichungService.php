@@ -242,8 +242,18 @@ class DarreichungService
         if ($deltas->isEmpty()) {
             // Stufe 1: proportional — EK/g des Rezepts × Grammatur × Anzahl
             $ekProG = $recipe->ek_per_kg_eur !== null ? (float) $recipe->ek_per_kg_eur / 1000.0 : null;
-            $ekPortion = ($ekProG !== null && (float) $darreichung->quantity_per_unit_g > 0)
-                ? round($ekProG * (float) $darreichung->quantity_per_unit_g
+            $grammatur = (float) ($darreichung->quantity_per_unit_g ?? 0);
+            if ($grammatur <= 0 && $darreichung->is_standard) {
+                $legacyGrammatur = (float) ($recipe->sales_quantity_per_unit_g ?? 0);
+                $rezeptEinheiten = max(1, (int) ($recipe->sales_unit_count ?? 0));
+                $grammatur = $legacyGrammatur > 0
+                    ? $legacyGrammatur
+                    : (($recipe->yield_kg !== null && (float) $recipe->yield_kg > 0)
+                        ? (float) $recipe->yield_kg * 1000 / $rezeptEinheiten
+                        : 0.0);
+            }
+            $ekPortion = ($ekProG !== null && $grammatur > 0)
+                ? round($ekProG * $grammatur
                     * (float) ($darreichung->unit_count ?: 1), 4)
                 : null;
         } else {
