@@ -69,6 +69,48 @@ it('berechnet Auto-VK aus MEK, dynamischem Basissatz und relativem Klassenfaktor
         ->and($price['sales_gross'])->toBe(10.27);
 });
 
+it('verwendet die Team-Standard-Preisklasse bei leerer Zuordnung', function () {
+    $class = FoodAlchemistMarkupClass::create([
+        'team_id' => $this->rootTeam->id, 'code' => 'STD', 'label' => 'Standard',
+        'class_factor_pct' => 125, 'vat_profile_key' => 'ermaessigt',
+    ]);
+    $this->settings->update($this->rootTeam, [
+        'target_food_cost_pct' => 25,
+        'default_markup_class_id' => $class->id,
+    ]);
+    $presentation = FoodAlchemistRecipeDarreichung::create([
+        'team_id' => $this->rootTeam->id, 'recipe_id' => $this->recipe->id,
+        'serving_form_id' => $this->form->id, 'is_standard' => true,
+        'ek_portion' => 2, 'price_mode' => 'auto',
+    ]);
+
+    $price = $this->pricing->catalogPrice($this->rootTeam, $presentation);
+
+    expect($price['class_id'])->toBe($class->id)
+        ->and($price['class_source'])->toBe('team_standard')
+        ->and($price['class_factor_pct'])->toBe(125.0)
+        ->and($price['calculated_sales_net'])->toBe(10.0);
+});
+
+it('belegt neue Darreichungen mit der Team-Standard-Preisklasse vor', function () {
+    $class = FoodAlchemistMarkupClass::create([
+        'team_id' => $this->rootTeam->id, 'code' => 'STD', 'label' => 'Standard',
+        'class_factor_pct' => 100,
+    ]);
+    $this->settings->update($this->rootTeam, [
+        'target_food_cost_pct' => 25,
+        'default_markup_class_id' => $class->id,
+    ]);
+
+    $presentation = app(DarreichungService::class)->anlegen(
+        $this->rootTeam,
+        $this->recipe->id,
+        $this->form->id,
+    );
+
+    expect($presentation->markup_class_id)->toBe($class->id);
+});
+
 it('aktualisiert im Fixmodus nur den Vergleichspreis und verlangt eine Begründung', function () {
     $this->settings->update($this->rootTeam, ['target_food_cost_pct' => 25]);
     $presentation = FoodAlchemistRecipeDarreichung::create([

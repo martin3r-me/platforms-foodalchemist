@@ -290,7 +290,11 @@ class SalesRecipeService
         $recipes = app(RecipeService::class);
 
         return DB::transaction(function () use ($team, $basis, $name, $recipes) {
-            $vk = $recipes->create($team, ['name' => $name, 'is_sales_recipe' => true]);
+            $vk = $recipes->create($team, [
+                'name' => $name,
+                'is_sales_recipe' => true,
+                'markup_class_id' => app(TeamSettingsService::class)->defaultMarkupClassId($team),
+            ]);
             $gramm = $basis->yield_kg !== null ? round((float) $basis->yield_kg * 1000, 1) : 1000.0;
             $einheitG = \Platform\FoodAlchemist\Models\FoodAlchemistVocabEinheit::visibleToTeam($team)->where('slug', 'g')->value('id');
 
@@ -308,7 +312,11 @@ class SalesRecipeService
     /** Leeres Verkaufsrezept (Gericht) ohne erste Komponente — Komponenten/Stück-Basisrezepte kommen im Editor dazu. */
     public function createLeer(Team $team, string $name): FoodAlchemistRecipe
     {
-        return app(RecipeService::class)->create($team, ['name' => $name, 'is_sales_recipe' => true]);
+        return app(RecipeService::class)->create($team, [
+            'name' => $name,
+            'is_sales_recipe' => true,
+            'markup_class_id' => app(TeamSettingsService::class)->defaultMarkupClassId($team),
+        ]);
     }
 
     // V-19: Regen-Programme (zeilenbasiert)

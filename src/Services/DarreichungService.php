@@ -34,6 +34,7 @@ class DarreichungService
     public function __construct(
         private RecipeRecomputeService $recompute,
         private CatalogPricingService $catalogPricing,
+        private TeamSettingsService $settings,
     ) {}
 
     public function anlegen(Team $team, int $recipeId, int $servierformId, array $attrs = [], string $createdVia = 'fa_ui'): FoodAlchemistRecipeDarreichung
@@ -60,7 +61,8 @@ class DarreichungService
             'quantity_per_unit_g' => $attrs['quantity_per_unit_g'] ?? $standard?->quantity_per_unit_g,
             'unit_vocab_id' => $attrs['unit_vocab_id'] ?? $standard?->unit_vocab_id,
             'unit_count' => $attrs['unit_count'] ?? $standard?->unit_count,
-            'markup_class_id' => $attrs['markup_class_id'] ?? $standard?->markup_class_id,
+            'markup_class_id' => $attrs['markup_class_id'] ?? $standard?->markup_class_id
+                ?? $recipe->markup_class_id ?? $this->settings->defaultMarkupClassId($team),
             'price_mode' => $attrs['price_mode'] ?? 'auto',
             'sales_net' => $attrs['sales_net'] ?? null,
             'note' => $attrs['note'] ?? null,

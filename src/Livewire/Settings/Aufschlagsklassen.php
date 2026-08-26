@@ -8,6 +8,7 @@ use Livewire\Component;
 use Platform\FoodAlchemist\Models\FoodAlchemistMarkupClass;
 use Platform\FoodAlchemist\Services\CatalogPricingService;
 use Platform\FoodAlchemist\Services\PricingCascadeService;
+use Platform\FoodAlchemist\Services\TeamSettingsService;
 use Platform\FoodAlchemist\Support\TeamScope;
 
 /**
@@ -122,7 +123,34 @@ class Aufschlagsklassen extends Component
     public function toggleInactive(int $id): void
     {
         $ak = $this->eigeneKlasse($id);                               // MVP-039
+        $team = Auth::user()?->currentTeamRelation;
+        if ($ak !== null && ! $ak->is_inactive && $team !== null
+            && app(TeamSettingsService::class)->defaultMarkupClassId($team) === $ak->id) {
+            $this->fehler = 'Die Standard-Preisklasse kann nicht deaktiviert werden. Bitte zuerst einen anderen Standard wählen.';
+
+            return;
+        }
         $ak?->update(['is_inactive' => ! $ak->is_inactive]);
+    }
+
+    public function setDefault(int $id): void
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team === null) {
+            return;
+        }
+        $ak = FoodAlchemistMarkupClass::visibleToTeam($team)
+            ->whereKey($id)->where('is_inactive', false)->first();
+        if ($ak === null) {
+            $this->fehler = 'Die Preisklasse ist nicht verfügbar oder deaktiviert.';
+
+            return;
+        }
+
+        app(TeamSettingsService::class)->update($team, ['default_markup_class_id' => $ak->id]);
+        app(PricingCascadeService::class)->recomputeTeam($team);
+        $this->fehler = null;
+        $this->dispatch('recipe-gespeichert');
     }
 
     /** Phase 5: hart löschen, wenn unbenutzt (sonst locked → deaktivieren). */
@@ -184,6 +212,7 @@ class Aufschlagsklassen extends Component
         return view('foodalchemist::livewire.settings.aufschlagsklassen', [
             'team' => $team,
             'base' => $base,
+            'standardId' => $team !== null ? app(TeamSettingsService::class)->defaultMarkupClassId($team) : null,
             'klassen' => TeamScope::applyVisible(FoodAlchemistMarkupClass::query(), 'team_id', $team)->orderBy('code')->get(),
             // MVP-040: nur sichtbare Gerichte zählen — der Zähler verriet sonst fremde Team-Nutzung.
             'zaehler' => TeamScope::applyVisible(DB::table('foodalchemist_recipes'), 'team_id', $team)

@@ -79,12 +79,14 @@ class VkModal extends Component
             if ($r === null) {
                 return;
             }
+            $defaultMarkupClassId = app(\Platform\FoodAlchemist\Services\TeamSettingsService::class)
+                ->defaultMarkupClassId($team);
             $this->form = [
                 'name' => $r->name,
                 'sales_wording_standard' => $r->sales_wording_standard,
                 'taste_direction' => $r->taste_direction,
                 'dish_class_id' => $r->dish_class_id,
-                'markup_class_id' => $r->markup_class_id,
+                'markup_class_id' => $r->markup_class_id ?? $defaultMarkupClassId,
                 'sales_unit_vocab_id' => $r->sales_unit_vocab_id,
                 'sales_unit_count' => $r->sales_unit_count,
                 'sales_quantity_per_unit_g' => $r->sales_quantity_per_unit_g,
@@ -139,12 +141,16 @@ class VkModal extends Component
         if ($this->recipeId === null) {
             return;
         }
-        foreach (\Platform\FoodAlchemist\Models\FoodAlchemistRecipeDarreichung::where('recipe_id', $this->recipeId)->get() as $d) {
+        $team = Auth::user()?->currentTeamRelation;
+        $defaultMarkupClassId = $team !== null
+            ? app(\Platform\FoodAlchemist\Services\TeamSettingsService::class)->defaultMarkupClassId($team)
+            : null;
+        foreach (\Platform\FoodAlchemist\Models\FoodAlchemistRecipeDarreichung::with('recipe')->where('recipe_id', $this->recipeId)->get() as $d) {
             $this->darForm[$d->id] = [
                 'quantity_per_unit_g' => $d->quantity_per_unit_g,
                 'unit_count' => $d->unit_count,
                 'unit_vocab_id' => $d->unit_vocab_id,
-                'markup_class_id' => $d->markup_class_id,
+                'markup_class_id' => $d->markup_class_id ?? $d->recipe?->markup_class_id ?? $defaultMarkupClassId,
                 'price_mode' => $d->price_mode,
                 'sales_net' => $d->sales_net,
                 'vat_profile_key' => $d->vat_profile_key,

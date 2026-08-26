@@ -58,5 +58,6 @@ class FoodAlchemistTeamSetting extends Model
         // Standard-Topf-Deckel je Koch-Vorgang (Fallback für die Produktionszeit-Rechnung)
         'default_batch_max_kg' => 'decimal:3',
         'default_batch_max_pieces' => 'decimal:2',
+        'default_markup_class_id' => 'integer',
     ];
 }

@@ -5,6 +5,7 @@ namespace Platform\FoodAlchemist\Services;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Enums\LeadLaStrategie;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
+use Platform\FoodAlchemist\Models\FoodAlchemistMarkupClass;
 use Platform\FoodAlchemist\Models\FoodAlchemistTeamSetting;
 
 /**
@@ -237,6 +238,18 @@ class TeamSettingsService
         $settings->fill($attributes)->save();
 
         return $settings;
+    }
+
+    /** Team-lokale Standard-Preisklasse; geerbte und globale Klassen duerfen referenziert werden. */
+    public function defaultMarkupClassId(Team $team): ?int
+    {
+        $id = (int) ($this->for($team)->default_markup_class_id ?? 0);
+        if ($id <= 0) {
+            return null;
+        }
+
+        return FoodAlchemistMarkupClass::visibleToTeam($team)
+            ->whereKey($id)->where('is_inactive', false)->exists() ? $id : null;
     }
 
     /**

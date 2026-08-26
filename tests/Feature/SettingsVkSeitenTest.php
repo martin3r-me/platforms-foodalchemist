@@ -95,3 +95,23 @@ it('Preisklassen: relativer Faktor, MwSt-Profil, Dubletten-Schutz und Validierun
         ->call('create')->assertSet('fehler', null);
     expect((float) FoodAlchemistMarkupClass::where('code', 'NEU1')->first()->class_factor_pct)->toBe(125.0);
 });
+
+it('Preisklassen: eine sichtbare aktive Klasse kann als Team-Standard gesetzt werden', function () {
+    $standard = FoodAlchemistMarkupClass::create([
+        'team_id' => $this->rootTeam->id, 'code' => 'STD', 'label' => 'Standard',
+        'class_factor_pct' => 100,
+    ]);
+
+    $component = Livewire::test(Aufschlagsklassen::class)
+        ->assertSeeHtml('data-standard-preisklasse="' . $standard->id . '"')
+        ->call('setDefault', $standard->id)
+        ->assertSet('fehler', null);
+
+    expect((int) DB::table('foodalchemist_team_settings')
+        ->where('team_id', $this->rootTeam->id)->value('default_markup_class_id'))
+        ->toBe($standard->id);
+
+    $component->call('toggleInactive', $standard->id)
+        ->assertSet('fehler', fn ($fehler) => str_contains((string) $fehler, 'Standard-Preisklasse'));
+    expect($standard->fresh()->is_inactive)->toBeFalse();
+});

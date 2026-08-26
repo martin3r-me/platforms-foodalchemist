@@ -16,12 +16,13 @@
 
     <table class="{{ $table }}" data-ak-tabelle>
         <thead><tr class="text-left">
-            @foreach(['Code', 'Preisklasse', 'Klassenfaktor', 'Gesamtfaktor', 'MwSt-Profil', 'Rundung', 'Rezepte', ''] as $h)<th class="{{ $th }} !px-2">{{ $h }}</th>@endforeach
+            @foreach(['Standard', 'Code', 'Preisklasse', 'Klassenfaktor', 'Gesamtfaktor', 'MwSt-Profil', 'Rundung', 'Rezepte', ''] as $h)<th class="{{ $th }} !px-2">{{ $h }}</th>@endforeach
         </tr></thead>
         <tbody>
             @foreach($klassen as $ak)
                 <tr class="{{ $tr }} {{ $ak->is_inactive ? 'opacity-50' : '' }}" wire:key="ak-{{ $ak->id }}">
                     @if($editId === $ak->id)
+                        <td class="{{ $td }} !px-2 text-center"><input type="radio" name="standard-preisklasse" @checked($standardId === $ak->id) wire:click="setDefault({{ $ak->id }})" title="Als Standard-Preisklasse verwenden" data-standard-preisklasse="{{ $ak->id }}" /></td>
                         <td class="{{ $td }} !px-2 font-mono text-[11px]">{{ $ak->code }}</td>
                         <td class="{{ $td }} !px-2"><input type="text" wire:model="form.label" class="{{ $input }} !py-1" /></td>
                         <td class="{{ $td }} !px-2"><input type="text" wire:model="form.class_factor_pct" class="{{ $input }} !py-1 !w-20 text-right" /></td>
@@ -39,6 +40,7 @@
                         <td class="{{ $td }} !px-2 whitespace-nowrap"><button type="button" wire:click="save" class="{{ $btnPrimary }}">Speichern</button><button type="button" wire:click="cancel" class="{{ $btnGhostXs }}">Abbrechen</button></td>
                     @else
                         @php($factor = (float) ($ak->class_factor_pct ?? 100))
+                        <td class="{{ $td }} !px-2 text-center"><input type="radio" name="standard-preisklasse" @checked($standardId === $ak->id) @disabled($ak->is_inactive) wire:click="setDefault({{ $ak->id }})" title="Als Standard-Preisklasse verwenden" data-standard-preisklasse="{{ $ak->id }}" /></td>
                         <td class="{{ $td }} !px-2 font-mono text-[11px]">{{ $ak->code }}</td>
                         <td class="{{ $td }} !px-2">{{ $ak->label }}</td>
                         <td class="{{ $td }} !px-2 text-right tabular-nums">{{ number_format($factor, 1, ',', '.') }} %</td>

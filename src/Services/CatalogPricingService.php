@@ -3,12 +3,13 @@
 namespace Platform\FoodAlchemist\Services;
 
 use Platform\Core\Models\Team;
+use Platform\FoodAlchemist\Models\FoodAlchemistMarkupClass;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipeDarreichung;
 
 /** Mengenunabhängige Preisfindung für eine Darreichung. Produktionszeiten sind hier verboten. */
 class CatalogPricingService
 {
-    public const VERSION = 'catalog-v2.1';
+    public const VERSION = 'catalog-v2.2';
 
     public function __construct(
         private TeamSettingsService $settings,
@@ -78,14 +79,24 @@ class CatalogPricingService
     /** @return array<string,mixed> */
     public function catalogPrice(Team $team, FoodAlchemistRecipeDarreichung $presentation): array
     {
-        $presentation->loadMissing('markupClass');
+        $presentation->loadMissing('markupClass', 'recipe.markupClass');
         $base = $this->enterpriseBaseRate($team);
         $class = $presentation->markupClass;
+        $classSource = $class !== null ? 'darreichung' : null;
+        if ($class === null && $presentation->recipe?->markupClass !== null) {
+            $class = $presentation->recipe->markupClass;
+            $classSource = 'gericht';
+        }
+        if ($class === null && ($defaultId = $this->settings->defaultMarkupClassId($team)) !== null) {
+            $class = FoodAlchemistMarkupClass::visibleToTeam($team)
+                ->whereKey($defaultId)->where('is_inactive', false)->first();
+            $classSource = $class !== null ? 'team_standard' : null;
+        }
         $classFactor = $class !== null ? (float) ($class->class_factor_pct ?? 100) : 100.0;
         $mek = $presentation->ek_portion !== null ? (float) $presentation->ek_portion : null;
         $warnings = $base['warnings'];
         if ($class === null) {
-            $warnings[] = 'Keine Preisklasse gesetzt: neutraler Klassenfaktor 100 % verwendet.';
+            $warnings[] = 'Keine Preisklasse und kein Team-Standard gesetzt: neutraler Klassenfaktor 100 % verwendet.';
         }
         if ($mek === null || $mek <= 0) {
             $warnings[] = 'Darreichungs-MEK fehlt; es wird kein Nullpreis erzeugt.';
@@ -119,6 +130,7 @@ class CatalogPricingService
             'base_source' => $base['source'],
             'base_components' => $base['components'],
             'class_id' => $class?->id,
+            'class_source' => $classSource ?? 'neutral',
             'class_factor_pct' => $classFactor,
             'calculated_sales_net_unrounded' => $unrounded !== null ? round($unrounded, 6) : null,
             'calculated_sales_net' => $calculated,
