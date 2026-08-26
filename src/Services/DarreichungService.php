@@ -119,6 +119,12 @@ class DarreichungService
         'tableware_item_id', // Default-Geschirr der Form (Concepter-Vorschlag)
     ];
 
+    private const DEZIMAL_FELDER = [
+        'quantity_per_unit_g' => 'Grammatur',
+        'unit_count' => 'Anzahl',
+        'sales_net' => 'VK netto',
+    ];
+
     public function aktualisieren(Team $team, int $darreichungId, array $attrs): FoodAlchemistRecipeDarreichung
     {
         $darreichung = $this->find($team, $darreichungId);
@@ -127,6 +133,16 @@ class DarreichungService
             if ($v === '') {
                 $update[$k] = null;
             }
+        }
+        foreach (self::DEZIMAL_FELDER as $feld => $bezeichnung) {
+            if (! array_key_exists($feld, $update) || $update[$feld] === null) {
+                continue;
+            }
+            $wert = str_replace(',', '.', trim((string) $update[$feld]));
+            if (! is_numeric($wert)) {
+                throw new \RuntimeException($bezeichnung . ' muss eine gültige Zahl sein.');
+            }
+            $update[$feld] = (float) $wert;
         }
         if (array_key_exists('vat_profile_key', $update) && $update['vat_profile_key'] !== null
             && ! in_array($update['vat_profile_key'], ['regulaer', 'ermaessigt'], true)) {

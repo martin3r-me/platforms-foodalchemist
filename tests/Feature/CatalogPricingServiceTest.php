@@ -93,6 +93,23 @@ it('aktualisiert im Fixmodus nur den Vergleichspreis und verlangt eine Begründu
         ->and($presentation->price_override_reason)->toBe('Freigegebener Marktpreis');
 });
 
+it('akzeptiert deutsche Dezimalkommas beim Fixpreis einer Darreichung', function () {
+    $presentation = FoodAlchemistRecipeDarreichung::create([
+        'team_id' => $this->rootTeam->id, 'recipe_id' => $this->recipe->id,
+        'serving_form_id' => $this->form->id, 'is_standard' => true,
+        'quantity_per_unit_g' => 20, 'ek_portion' => 2, 'price_mode' => 'auto',
+    ]);
+
+    app(DarreichungService::class)->aktualisieren($this->rootTeam, $presentation->id, [
+        'price_mode' => 'fixed',
+        'sales_net' => '1,50',
+        'price_override_reason' => 'Freigegebener Marktpreis',
+    ]);
+
+    expect((float) $presentation->fresh()->sales_net)->toBe(1.5)
+        ->and((float) $this->recipe->fresh()->sales_net)->toBe(1.5);
+});
+
 it('erzeugt ohne MEK keinen stillen Nullpreis', function () {
     $presentation = FoodAlchemistRecipeDarreichung::create([
         'team_id' => $this->rootTeam->id, 'recipe_id' => $this->recipe->id,
