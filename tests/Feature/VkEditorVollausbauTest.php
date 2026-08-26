@@ -99,7 +99,7 @@ it('speichert den Wechsel einer Darreichung auf auto unmittelbar', function () {
         'price_override_reason' => 'Testpreis',
     ]);
 
-    Livewire::test(VkModal::class)
+    $component = Livewire::test(VkModal::class)
         ->call('oeffnen', $this->vk->id)
         ->call('darreichungPreisModusGeaendert', $darreichung->id, 'auto')
         ->assertSet("darForm.{$darreichung->id}.price_mode", 'auto')
@@ -109,6 +109,11 @@ it('speichert den Wechsel einer Darreichung auf auto unmittelbar', function () {
     $darreichung = $darreichung->fresh();
     expect($darreichung->price_mode)->toBe('auto')
         ->and($darreichung->price_override_reason)->toBeNull();
+
+    // Der allgemeine Rezept-Speicherweg darf den angezeigten Legacy-VK nicht wieder
+    // als manuellen Preis in die Standard-Darreichung zurückspiegeln.
+    $component->call('speichern')->assertSet('fehler', null);
+    expect($darreichung->fresh()->price_mode)->toBe('auto');
 });
 
 it('✨-Fake-Pfade sind ehrlich (kein gültiger Wert ⇒ kiFehler, Form unverändert)', function () {

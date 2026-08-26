@@ -85,7 +85,6 @@ class VkModal extends Component
                 'taste_direction' => $r->taste_direction,
                 'dish_class_id' => $r->dish_class_id,
                 'markup_class_id' => $r->markup_class_id,
-                'sales_net' => $r->sales_net,
                 'sales_unit_vocab_id' => $r->sales_unit_vocab_id,
                 'sales_unit_count' => $r->sales_unit_count,
                 'sales_quantity_per_unit_g' => $r->sales_quantity_per_unit_g,
@@ -190,6 +189,9 @@ class VkModal extends Component
         $this->darForm[$id]['price_mode'] = $modus;
         if ($modus === 'auto') {
             $this->darreichungSpeichern($id);
+            if ($this->fehler === null) {
+                $this->savedToast('Auto-Preis aktiviert');
+            }
         }
     }
 
@@ -284,9 +286,13 @@ class VkModal extends Component
             return;
         }
         try {
-            app(SalesRecipeService::class)->updateVk($team, $this->recipeId, array_map(
+            $update = array_map(
                 fn ($v) => $v === '' ? null : $v, $this->form,
-            ));
+            );
+            // Preis-Wahrheit liegt an der Darreichung. Ein im Rezeptkopf angezeigter
+            // Legacy-VK darf beim allgemeinen Speichern keinen Auto-Preis fixieren.
+            unset($update['sales_net'], $update['price_override_reason']);
+            app(SalesRecipeService::class)->updateVk($team, $this->recipeId, $update);
         } catch (\Throwable $e) {
             $this->fehler = $e->getMessage();
 

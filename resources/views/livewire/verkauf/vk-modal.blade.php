@@ -534,12 +534,12 @@
                             </select>
                         </td>
                         <td class="py-1.5 pr-2">
-                            <select wire:model="darForm.{{ $d->id }}.price_mode"
-                                    wire:change="darreichungPreisModusGeaendert({{ $d->id }}, $event.target.value)"
-                                    class="{{ $input }} !py-0.5 !w-20">
-                                <option value="auto">auto</option>
-                                <option value="fixed">fixiert</option>
-                            </select>
+                            <div class="inline-flex overflow-hidden rounded border border-black/10">
+                                <button type="button" wire:click="darreichungPreisModusGeaendert({{ $d->id }}, 'auto')"
+                                        class="px-2 py-1 {{ ($darForm[$d->id]['price_mode'] ?? 'auto') === 'auto' ? 'bg-violet-600 text-white' : 'bg-transparent text-gray-500' }}">auto</button>
+                                <button type="button" wire:click="darreichungPreisModusGeaendert({{ $d->id }}, 'fixed')"
+                                        class="px-2 py-1 {{ in_array(($darForm[$d->id]['price_mode'] ?? 'auto'), ['fixed', 'manuell'], true) ? 'bg-violet-600 text-white' : 'bg-transparent text-gray-500' }}">fixiert</button>
+                            </div>
                         </td>
                         <td class="py-1.5 pr-2">
                             <select wire:model="darForm.{{ $d->id }}.vat_profile_key"
