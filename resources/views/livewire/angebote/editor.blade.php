@@ -23,6 +23,7 @@
         <x-slot:kpiHeader>
             @php($k = $kalkulation)
             @php($voll = $k && ! $k['leer'])
+            @php($weTone = match($wareneinsatzAmpel ?? 'unbekannt') { 'gruen' => 'good', 'gelb' => 'warn', 'rot' => 'bad', default => null })
             <x-foodalchemist::kpi-tiles marker="angebot-kpis" :tiles="[
                 ['kpi' => 'vkpp', 'label' => '€ / Person', 'tone' => 'accent',
                  'value' => $voll ? number_format((float) $k['vk_pro_person'], 2, ',', '.') . ' €' : '—'],
@@ -30,6 +31,8 @@
                 ['kpi' => 'gesamt', 'label' => 'Gesamt VK',
                  'value' => $voll ? number_format((float) $k['gesamt_vk'], 2, ',', '.') . ' €' : '—'],
                 ['kpi' => 'we', 'label' => 'Wareneinsatz',
+                 'tone' => $weTone,
+                 'title' => ($voll && $k['wareneinsatz_pct'] !== null) ? 'Ziel des Teams: ' . number_format((float) $zielWareneinsatzPct, 1, ',', '.') . ' %' : null,
                  'value' => ($voll && $k['wareneinsatz_pct'] !== null) ? number_format((float) $k['wareneinsatz_pct'], 1, ',', '.') . ' %' : '—'],
                 ['kpi' => 'status', 'label' => 'Status', 'value' => $angebot->status->label()],
             ]" />

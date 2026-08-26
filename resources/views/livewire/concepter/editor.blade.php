@@ -49,11 +49,12 @@
                 @php($stripVk = $concept ? ($cockpit['price_per_person'] ?? 0) : ($paket?->price_per_person !== null ? (float) $paket->price_per_person : null))
                 @php($stripEk = (float) ($kalkulation['hk1_pro_person'] ?? 0))
                 @php($stripWpct = ($stripVk !== null && $stripVk > 0) ? $stripEk / $stripVk * 100 : null)
+                @php($stripWeTone = match($wareneinsatzAmpel ?? 'unbekannt') { 'gruen' => 'good', 'gelb' => 'warn', 'rot' => 'bad', default => null })
                 {{-- Spec 28 / E2.2: Kacheln über den Baustein `kpi-tiles`.
                      Leitwert = VK €/Person (accent, war hier schon violett — jetzt aus derselben
                      Palette wie Rezept- und Gericht-Editor). Deckungsbeitrag trägt eine echte
-                     Messgröße (negativ = Missstand) → bad/good. Wareneinsatz %/€ und HK2 bleiben
-                     neutral: ohne angebundene Ziel-Quote gibt es hier nichts zu ampeln.
+                     Messgröße (negativ = Missstand) → bad/good. Wareneinsatz % folgt derselben
+                     Team-Ziel-Ampel wie Gericht und Angebot; Wareneinsatz €/Person und HK2 bleiben neutral.
                      Das „~" beim Gewicht ist jetzt ein hint-Feld statt rohem HTML im Wert. --}}
                 <x-foodalchemist::kpi-tiles :cols="7" marker="konzept-kpis" :tiles="array_values(array_filter([
                     ['kpi' => 'vk-person', 'label' => 'VK €/Person', 'tone' => 'accent',
@@ -61,6 +62,8 @@
                     ['kpi' => 'we-person', 'label' => 'Wareneinsatz/Pers.',
                      'value' => number_format($stripEk, 2, ',', '.') . ' €'],
                     ['kpi' => 'we-pct', 'label' => 'Wareneinsatz %',
+                     'tone' => $stripWeTone,
+                     'title' => $stripWpct !== null ? 'Ziel des Teams: ' . number_format((float) $zielWareneinsatzPct, 1, ',', '.') . ' %' : null,
                      'value' => $stripWpct !== null ? number_format($stripWpct, 1, ',', '.') . ' %' : '—'],
                     ['kpi' => 'hk2', 'label' => 'HK2 (Vollkosten)',
                      'value' => number_format((float) ($kalkulation['hk2_pro_person'] ?? 0), 2, ',', '.') . ' €'],

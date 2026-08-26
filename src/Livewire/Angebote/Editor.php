@@ -352,11 +352,18 @@ class Editor extends Component
             : collect();
 
         $facetten = $svc->facetten($this->team());
+        $kalkulation = $angebot ? $svc->kalkulation($this->team(), $angebot) : null;
+        $zielWareneinsatzPct = app(\Platform\FoodAlchemist\Services\TeamSettingsService::class)
+            ->zielWareneinsatzPct($this->team());
+        $wareneinsatzAmpel = app(\Platform\FoodAlchemist\Services\MargeService::class)
+            ->weAmpel($kalkulation['wareneinsatz_pct'] ?? null, $zielWareneinsatzPct);
 
         return view('foodalchemist::livewire.angebote.editor', [
             'angebot' => $angebot,
             'geruestSlots' => $geruestSlots,
-            'kalkulation' => $angebot ? $svc->kalkulation($this->team(), $angebot) : null,
+            'kalkulation' => $kalkulation,
+            'wareneinsatzAmpel' => $wareneinsatzAmpel,
+            'zielWareneinsatzPct' => $zielWareneinsatzPct,
             'statusWerte' => $svc->statusWerte(),
             'firmen' => $svc->sucheFirmen($this->firmaSuche),
             'kontakte' => $svc->sucheKontakte($this->kontaktSuche),

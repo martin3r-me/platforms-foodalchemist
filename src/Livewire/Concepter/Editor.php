@@ -1209,6 +1209,9 @@ class Editor extends Component
         $darreichungOptionen = [];
         $geschirrVorschlag = [];
         $sektionSumme = [];
+        $wareneinsatzAmpel = 'unbekannt';
+        $zielWareneinsatzPct = app(\Platform\FoodAlchemist\Services\TeamSettingsService::class)
+            ->zielWareneinsatzPct($team);
         $kandidaten = collect();
         $paketKandidaten = collect();
         $istAufbau = $this->tab === 'aufbau';
@@ -1230,6 +1233,12 @@ class Editor extends Component
                 $aggregat = $agg->conceptAggregat($concept);
                 $bewertet = $bewertung->bewerten($concept, $cockpit, $aggregat);
                 $kalkulation = $kalk->conceptHk($team, $concept);
+                $conceptVk = (float) ($cockpit['price_per_person'] ?? 0);
+                $conceptWePct = $conceptVk > 0
+                    ? (float) $kalkulation['hk1_pro_person'] / $conceptVk * 100
+                    : null;
+                $wareneinsatzAmpel = app(\Platform\FoodAlchemist\Services\MargeService::class)
+                    ->weAmpel($conceptWePct, $zielWareneinsatzPct);
                 if ($this->tab === 'kalkulation' && $this->simulationPax > 0) {
                     $auftragsSimulation = app(OrderCostingService::class)
                         ->costConcept($team, $concept, $this->simulationPax);
@@ -1385,6 +1394,8 @@ class Editor extends Component
             'aggregat' => $aggregat,
             'bewertung' => $bewertet,
             'kalkulation' => $kalkulation,
+            'wareneinsatzAmpel' => $wareneinsatzAmpel,
+            'zielWareneinsatzPct' => $zielWareneinsatzPct,
             'auftragsSimulation' => $auftragsSimulation,
             'tauschbar' => $tauschbar,
             'varianteFehlt' => $varianteFehlt,

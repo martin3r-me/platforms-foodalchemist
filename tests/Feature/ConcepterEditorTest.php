@@ -5,6 +5,7 @@ use Platform\FoodAlchemist\Livewire\Concepter\Editor;
 use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Services\ConceptService;
+use Platform\FoodAlchemist\Services\TeamSettingsService;
 use Platform\FoodAlchemist\Tests\Support\SeedsTeamHierarchy;
 use Platform\FoodAlchemist\Tests\TestCase;
 
@@ -56,6 +57,22 @@ it('rendert die Auftrags-Hochrechnung im Kalkulations-Tab', function () {
         ->set('simulationPax', 100)
         ->assertSee('Katalog / Person')
         ->assertSee('Aktive Personenzeit');
+});
+
+it('ampelt einen Wareneinsatz auf oder unter Team-Ziel grün', function () {
+    app(TeamSettingsService::class)->update($this->rootTeam, ['target_food_cost_pct' => 30]);
+    $slot = $this->concepts->addSlot($this->rootTeam, $this->concept->id, ['role' => 'Vorspeise']);
+    $this->concepts->fillSlot($this->rootTeam, $slot->id, ['sales_recipe_id' => $this->green->id]);
+
+    $html = Livewire::test(Editor::class)
+        ->call('oeffnen', 'concepts', $this->concept->id, 'kalkulation')
+        ->html();
+
+    $start = strpos($html, 'data-kpi="we-pct"');
+    expect($start)->not->toBeFalse();
+    $kachel = substr($html, max(0, $start - 220), 300);
+    expect($kachel)->toContain('kpi-good')
+        ->and($html)->toContain('Ziel des Teams: 30,0 %');
 });
 
 it('ungültiger/fehlender Start-Tab fällt auf den Aufbau-Default zurück (Öffnen aus der Step-Zeile)', function () {
