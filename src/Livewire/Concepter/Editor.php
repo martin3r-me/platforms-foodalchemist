@@ -16,6 +16,7 @@ use Platform\FoodAlchemist\Services\ConceptService;
 use Platform\FoodAlchemist\Services\ConcepterAggregateService;
 use Platform\FoodAlchemist\Services\ConcepterBewertungService;
 use Platform\FoodAlchemist\Services\KalkulationService;
+use Platform\FoodAlchemist\Services\OrderCostingService;
 use Platform\FoodAlchemist\Services\PaketService;
 use Platform\FoodAlchemist\Services\SalesRecipeService;
 

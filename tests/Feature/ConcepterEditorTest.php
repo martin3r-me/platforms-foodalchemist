@@ -50,6 +50,14 @@ it('öffnet mit optionalem Start-Tab direkt auf „Konzept & Planung" (konzept) 
         ->assertDispatched('modal.open');
 });
 
+it('rendert die Auftrags-Hochrechnung im Kalkulations-Tab', function () {
+    Livewire::test(Editor::class)
+        ->call('oeffnen', 'concepts', $this->concept->id, 'kalkulation')
+        ->set('simulationPax', 100)
+        ->assertSee('Katalog / Person')
+        ->assertSee('Aktive Personenzeit');
+});
+
 it('ungültiger/fehlender Start-Tab fällt auf den Aufbau-Default zurück (Öffnen aus der Step-Zeile)', function () {
     // Fremd-Tab → Default 'aufbau' (kein stiller Wechsel auf einen Nicht-Tab).
     Livewire::test(Editor::class)
