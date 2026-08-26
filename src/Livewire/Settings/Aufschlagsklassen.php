@@ -197,7 +197,7 @@ class Aufschlagsklassen extends Component
             ? $eingabe['vat_profile_key'] : null;
         $decimals = trim((string) ($eingabe['rounding_decimals'] ?? ''));
         $werte['rounding_decimals'] = $decimals === '' ? null : max(0, min(4, (int) $decimals));
-        $werte['rounding_mode'] = in_array($eingabe['rounding_mode'] ?? '', ['kaufmaennisch', 'auf', 'ab'], true)
+        $werte['rounding_mode'] = in_array($eingabe['rounding_mode'] ?? '', CatalogPricingService::ROUNDING_MODES, true)
             ? $eingabe['rounding_mode'] : null;
 
         return $werte;

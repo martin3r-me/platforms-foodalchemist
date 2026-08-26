@@ -34,7 +34,7 @@
                         </td>
                         <td class="{{ $td }} !px-2 whitespace-nowrap">
                             <input type="number" min="0" max="4" wire:model="form.rounding_decimals" placeholder="Team" class="{{ $input }} !py-1 !w-16" />
-                            <select wire:model="form.rounding_mode" class="{{ $input }} !py-1 !w-28"><option value="">Team</option><option value="kaufmaennisch">kaufmännisch</option><option value="auf">auf</option><option value="ab">ab</option></select>
+                            <select wire:model="form.rounding_mode" class="{{ $input }} !py-1 !w-44"><option value="">Team</option><option value="kaufmaennisch">kaufmännisch</option><option value="auf">immer auf</option><option value="ab">immer ab</option><option value="next_050">nächster 0,50-Preis</option><option value="next_090">nächster x,90-Preis</option></select>
                         </td>
                         <td class="{{ $td }} !px-2">{{ $zaehler[$ak->id] ?? 0 }}</td>
                         <td class="{{ $td }} !px-2 whitespace-nowrap"><button type="button" wire:click="save" class="{{ $btnPrimary }}">Speichern</button><button type="button" wire:click="cancel" class="{{ $btnGhostXs }}">Abbrechen</button></td>
@@ -46,7 +46,8 @@
                         <td class="{{ $td }} !px-2 text-right tabular-nums">{{ number_format($factor, 1, ',', '.') }} %</td>
                         <td class="{{ $td }} !px-2 text-right tabular-nums">{{ $base['factor'] !== null ? number_format($base['factor'] * $factor / 100, 3, ',', '.') : '—' }}</td>
                         <td class="{{ $td }} !px-2">{{ $ak->vat_profile_key ?: 'Team-Default' }}</td>
-                        <td class="{{ $td }} !px-2 text-[11px] text-gray-500">{{ $ak->rounding_decimals !== null ? $ak->rounding_decimals . ' Stellen' : 'Team' }}{{ $ak->rounding_mode ? ' · ' . $ak->rounding_mode : '' }}</td>
+                        @php($roundingLabels = ['kaufmaennisch' => 'kaufmännisch', 'auf' => 'immer auf', 'ab' => 'immer ab', 'next_050' => 'nächster 0,50-Preis', 'next_090' => 'nächster x,90-Preis'])
+                        <td class="{{ $td }} !px-2 text-[11px] text-gray-500">{{ $ak->rounding_decimals !== null ? $ak->rounding_decimals . ' Stellen' : 'Team' }}{{ $ak->rounding_mode ? ' · ' . ($roundingLabels[$ak->rounding_mode] ?? $ak->rounding_mode) : '' }}</td>
                         <td class="{{ $td }} !px-2">{{ $zaehler[$ak->id] ?? 0 }}</td>
                         <td class="{{ $td }} !px-2 whitespace-nowrap">
                             @if(\Platform\FoodAlchemist\Support\TeamScope::owns($ak->team_id, $team))

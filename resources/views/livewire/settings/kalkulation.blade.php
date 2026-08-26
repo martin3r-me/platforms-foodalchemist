@@ -68,7 +68,10 @@
                     <option value="kaufmaennisch">kaufmännisch</option>
                     <option value="auf">immer aufrunden</option>
                     <option value="ab">immer abrunden</option>
+                    <option value="next_050">auf nächsten 0,50-Preis</option>
+                    <option value="next_090">auf nächsten x,90-Preis</option>
                 </select></div>
+            <p class="text-[11px] text-gray-500">Kaufmännisch bei 2 Stellen: 8,164 → 8,16 und 8,165 → 8,17. Preisendungen runden immer nach oben: 8,16 → 8,50 beziehungsweise 8,90; ein exakter Treffer bleibt stehen.</p>
             <p class="text-[11px] text-gray-500">Achtung GL-02 I7: Die Rundungs-REIHENFOLGE (Nenner = gerundetes yield_kg) ist fix — hier nur Stellen/Modus.</p>
         </div>
     </div>

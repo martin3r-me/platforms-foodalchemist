@@ -187,3 +187,45 @@ it('erzeugt ohne MEK keinen stillen Nullpreis', function () {
         ->and($price['sales_net'])->toBeNull()
         ->and($price['complete'])->toBeFalse();
 });
+
+it('rundet Auto-Preise auf den nächsten 0,50-Preis', function (float $unrounded, float $expected) {
+    $this->settings->update($this->rootTeam, [
+        'target_food_cost_pct' => 100,
+        'rundungsregeln' => ['nachkommastellen' => 2, 'mode' => 'next_050'],
+    ]);
+    $presentation = FoodAlchemistRecipeDarreichung::create([
+        'team_id' => $this->rootTeam->id, 'recipe_id' => $this->recipe->id,
+        'serving_form_id' => $this->form->id, 'is_standard' => true,
+        'ek_portion' => $unrounded, 'price_mode' => 'auto',
+    ]);
+
+    $price = $this->pricing->catalogPrice($this->rootTeam, $presentation);
+
+    expect($price['calculated_sales_net'])->toBe($expected)
+        ->and($price['rounding']['mode'])->toBe('next_050');
+})->with([
+    'zwischen zwei Schritten' => [8.16, 8.50],
+    'exakter Treffer' => [8.50, 8.50],
+    'oberhalb eines Treffers' => [8.51, 9.00],
+]);
+
+it('rundet Auto-Preise auf die nächste 90-Cent-Endung', function (float $unrounded, float $expected) {
+    $this->settings->update($this->rootTeam, [
+        'target_food_cost_pct' => 100,
+        'rundungsregeln' => ['nachkommastellen' => 2, 'mode' => 'next_090'],
+    ]);
+    $presentation = FoodAlchemistRecipeDarreichung::create([
+        'team_id' => $this->rootTeam->id, 'recipe_id' => $this->recipe->id,
+        'serving_form_id' => $this->form->id, 'is_standard' => true,
+        'ek_portion' => $unrounded, 'price_mode' => 'auto',
+    ]);
+
+    $price = $this->pricing->catalogPrice($this->rootTeam, $presentation);
+
+    expect($price['calculated_sales_net'])->toBe($expected)
+        ->and($price['rounding']['mode'])->toBe('next_090');
+})->with([
+    'unterhalb der Endung' => [8.16, 8.90],
+    'exakter Treffer' => [8.90, 8.90],
+    'oberhalb der Endung' => [8.93, 9.90],
+]);

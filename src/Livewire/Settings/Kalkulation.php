@@ -53,7 +53,8 @@ class Kalkulation extends Component
             ],
             'rundungsregeln' => [
                 'nachkommastellen' => max(0, min(4, (int) $this->rundung['nachkommastellen'])),
-                'mode' => in_array($this->rundung['mode'], ['kaufmaennisch', 'auf', 'ab'], true) ? $this->rundung['mode'] : 'kaufmaennisch',
+                'mode' => in_array($this->rundung['mode'], \Platform\FoodAlchemist\Services\CatalogPricingService::ROUNDING_MODES, true)
+                    ? $this->rundung['mode'] : 'kaufmaennisch',
             ],
         ]);
         app(\Platform\FoodAlchemist\Services\PricingCascadeService::class)->recomputeTeam($this->team());

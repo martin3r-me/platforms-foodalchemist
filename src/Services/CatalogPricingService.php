@@ -9,7 +9,9 @@ use Platform\FoodAlchemist\Models\FoodAlchemistRecipeDarreichung;
 /** Mengenunabhängige Preisfindung für eine Darreichung. Produktionszeiten sind hier verboten. */
 class CatalogPricingService
 {
-    public const VERSION = 'catalog-v2.2';
+    public const VERSION = 'catalog-v2.3';
+
+    public const ROUNDING_MODES = ['kaufmaennisch', 'auf', 'ab', 'next_050', 'next_090'];
 
     public function __construct(
         private TeamSettingsService $settings,
@@ -154,7 +156,18 @@ class CatalogPricingService
         return match ($mode) {
             'auf' => ceil($value * $factor - 1e-9) / $factor,
             'ab' => floor($value * $factor + 1e-9) / $factor,
+            'next_050' => round(ceil(($value - 1e-9) * 2) / 2, 2),
+            'next_090' => $this->roundUpToNinetyEnding($value),
             default => round($value, $decimals, PHP_ROUND_HALF_UP),
         };
+    }
+
+    /** Nächster Preis mit 90-Cent-Endung; ein exakter x,90-Preis bleibt unverändert. */
+    private function roundUpToNinetyEnding(float $value): float
+    {
+        $whole = floor($value);
+        $candidate = $whole + 0.90;
+
+        return round($value <= $candidate + 1e-9 ? $candidate : $candidate + 1, 2);
     }
 }

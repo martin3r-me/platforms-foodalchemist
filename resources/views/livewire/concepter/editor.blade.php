@@ -955,6 +955,9 @@
                             <span class="text-gray-600">Berechnete Summe: <span class="tabular-nums font-medium text-gray-900">{{ number_format((float) ($cockpit['summe_pro_person'] ?? 0), 2, ',', '.') }} €</span></span>
                             <span class="text-gray-600">Wareneinsatz: <span class="tabular-nums">{{ number_format((float) ($cockpit['ek_per_person'] ?? 0), 2, ',', '.') }} €</span></span>
                         </div>
+                        @if(($form['price_mode'] ?? 'auto') === 'auto')
+                            <p class="text-[11px] text-gray-500">Automatisch addiert die gültigen Katalogpreise der Positionen. Je Gericht gilt die Preisklasse der Darreichung, sonst die Gerichtsklasse, dann die Team-Standardklasse; Pakete liefern ihren bereits aggregierten Katalogpreis.</p>
+                        @endif
                         @if(in_array(($form['price_mode'] ?? 'auto'), ['fixed', 'manuell'], true))
                             <div class="flex flex-wrap items-end gap-2">
                                 <label class="{{ $label }}">{{ $istPaket ? 'Paketpreis (Gesamt) / Person' : 'Fixer VK / Person' }}</label>
