@@ -85,6 +85,32 @@ it('VK-Editor rendert die neuen Sektionen (Deklaration, Nährwerte, Spezifikatio
     }
 });
 
+it('speichert den Wechsel einer Darreichung auf auto unmittelbar', function () {
+    $form = \Platform\FoodAlchemist\Models\FoodAlchemistServierform::create([
+        'team_id' => $this->rootTeam->id, 'code' => 'portion', 'label' => 'Portion',
+    ]);
+    $darreichung = \Platform\FoodAlchemist\Models\FoodAlchemistRecipeDarreichung::create([
+        'team_id' => $this->rootTeam->id,
+        'recipe_id' => $this->vk->id,
+        'serving_form_id' => $form->id,
+        'is_standard' => true,
+        'price_mode' => 'fixed',
+        'sales_net' => 1.50,
+        'price_override_reason' => 'Testpreis',
+    ]);
+
+    Livewire::test(VkModal::class)
+        ->call('oeffnen', $this->vk->id)
+        ->call('darreichungPreisModusGeaendert', $darreichung->id, 'auto')
+        ->assertSet("darForm.{$darreichung->id}.price_mode", 'auto')
+        ->assertSet('recipeId', $this->vk->id)
+        ->assertNotDispatched('modal.close');
+
+    $darreichung = $darreichung->fresh();
+    expect($darreichung->price_mode)->toBe('auto')
+        ->and($darreichung->price_override_reason)->toBeNull();
+});
+
 it('✨-Fake-Pfade sind ehrlich (kein gültiger Wert ⇒ kiFehler, Form unverändert)', function () {
     Livewire::test(VkModal::class)
         ->call('oeffnen', $this->vk->id)

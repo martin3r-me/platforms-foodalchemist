@@ -534,14 +534,12 @@
                             </select>
                         </td>
                         <td class="py-1.5 pr-2">
-                            <div class="flex items-center gap-1">
-                                <select wire:model="darForm.{{ $d->id }}.price_mode" class="{{ $input }} !py-0.5 !w-20">
-                                    <option value="auto">auto</option>
-                                    <option value="fixed">fixiert</option>
-                                </select>
-                                <button type="button" wire:click="darreichungSpeichern({{ $d->id }})"
-                                        class="text-gray-500 hover:text-violet-600" title="Preismodus speichern">@svg('heroicon-o-check', 'w-4 h-4')</button>
-                            </div>
+                            <select wire:model="darForm.{{ $d->id }}.price_mode"
+                                    wire:change="darreichungPreisModusGeaendert({{ $d->id }}, $event.target.value)"
+                                    class="{{ $input }} !py-0.5 !w-20">
+                                <option value="auto">auto</option>
+                                <option value="fixed">fixiert</option>
+                            </select>
                         </td>
                         <td class="py-1.5 pr-2">
                             <select wire:model="darForm.{{ $d->id }}.vat_profile_key"

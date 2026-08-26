@@ -181,6 +181,18 @@ class VkModal extends Component
         $this->darServiceCall(fn ($svc, $team) => $svc->aktualisieren($team, $id, $this->darForm[$id] ?? []));
     }
 
+    public function darreichungPreisModusGeaendert(int $id, string $modus): void
+    {
+        if (! isset($this->darForm[$id]) || ! in_array($modus, ['auto', 'fixed'], true)) {
+            return;
+        }
+
+        $this->darForm[$id]['price_mode'] = $modus;
+        if ($modus === 'auto') {
+            $this->darreichungSpeichern($id);
+        }
+    }
+
     public function darreichungNeu(): void
     {
         if ($this->recipeId === null || ! ctype_digit($this->darNeueForm)) {

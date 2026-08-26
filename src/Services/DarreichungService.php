@@ -169,12 +169,12 @@ class DarreichungService
             $update['price_override_user_id'] = Auth::id();
             $update['price_override_at'] = now();
         } elseif (($update['price_mode'] ?? null) === 'auto') {
-            $update += [
+            $update = array_merge($update, [
                 'price_override_reason' => null,
                 'price_override_user_id' => null,
                 'price_override_at' => null,
                 'price_override_expires_at' => null,
-            ];
+            ]);
         }
         $darreichung->update($update);
         $this->recomputePreise($darreichung);
