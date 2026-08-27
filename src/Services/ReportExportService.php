@@ -34,22 +34,22 @@ class ReportExportService
             'kurz' => [
                 'stammdaten' => true, 'zutaten' => true, 'steps' => false, 'sensorik' => false,
                 'produktion' => false, 'preise' => false, 'lieferanten' => false, 'kaskade' => false,
-                'bilder' => false, 'deklaration' => false, 'naehrwerte' => false, 'notizen' => false, 'intern' => false,
+                'bilder' => false, 'deklaration' => false, 'naehrwerte' => false, 'notizen' => false, 'intern' => false, 'simulation' => false,
             ],
             'kalkulation' => [
                 'stammdaten' => true, 'zutaten' => true, 'steps' => false, 'sensorik' => false,
                 'produktion' => false, 'preise' => true, 'lieferanten' => true, 'kaskade' => true,
-                'bilder' => false, 'deklaration' => false, 'naehrwerte' => true, 'notizen' => false, 'intern' => true,
+                'bilder' => false, 'deklaration' => false, 'naehrwerte' => true, 'notizen' => false, 'intern' => true, 'simulation' => false,
             ],
             'voll' => [
                 'stammdaten' => true, 'zutaten' => true, 'steps' => true, 'sensorik' => true,
                 'produktion' => true, 'preise' => true, 'lieferanten' => true, 'kaskade' => true,
-                'bilder' => false, 'deklaration' => true, 'naehrwerte' => true, 'notizen' => true, 'intern' => true,
+                'bilder' => false, 'deklaration' => true, 'naehrwerte' => true, 'notizen' => true, 'intern' => true, 'simulation' => false,
             ],
             default => [
                 'stammdaten' => true, 'zutaten' => true, 'steps' => true, 'sensorik' => false,
                 'produktion' => true, 'preise' => false, 'lieferanten' => false, 'kaskade' => true,
-                'bilder' => false, 'deklaration' => false, 'naehrwerte' => false, 'notizen' => false, 'intern' => false,
+                'bilder' => false, 'deklaration' => false, 'naehrwerte' => false, 'notizen' => false, 'intern' => false, 'simulation' => false,
             ],
         };
 
@@ -65,7 +65,12 @@ class ReportExportService
             }
         }
 
-        return ['profil' => $profil, ...$defaults];
+        $optionen = ['profil' => $profil, ...$defaults];
+        if ($scope === 'concept') {
+            $optionen['pax'] = min(1_000_000, max(0, (int) ($query['pax'] ?? 0)));
+        }
+
+        return $optionen;
     }
 
     /** @return array<string, mixed> */
@@ -145,6 +150,12 @@ class ReportExportService
             ];
         })->values();
 
+        $auftragsSimulation = null;
+        $pax = (int) ($optionen['pax'] ?? 0);
+        if ($pax > 0 && ($optionen['simulation'] ?? false)) {
+            $auftragsSimulation = app(OrderCostingService::class)->costConcept($team, $concept, $pax);
+        }
+
         return [
             'typ' => 'concept',
             'titel' => 'Concept',
@@ -168,6 +179,7 @@ class ReportExportService
                 'moments' => $concept->serviceMoments->pluck('name')->values()->all(),
                 'seasons' => $concept->seasons->pluck('name')->values()->all(),
                 'slots' => $slots->all(),
+                'order_simulation' => $auftragsSimulation,
             ],
         ];
     }

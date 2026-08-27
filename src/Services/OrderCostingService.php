@@ -103,16 +103,50 @@ class OrderCostingService
         // Arbeitgeberanteile genau einmal auf die aufgelösten Rollen-/Teamsätze anwenden.
         $fek *= 1 + $this->settings->lohnnebenkostenPct($team) / 100;
         $schema = array_values(array_filter($this->fixkosten->aufgeloestesSchema($team), fn ($b) => $b['active']));
+        $costBreakdown = [
+            ['key' => 'mek', 'label' => 'Wareneinsatz (MEK)', 'amount' => $mek, 'stage' => 'cost'],
+            ['key' => 'fek', 'label' => 'Lohn / Produktion (FEK)', 'amount' => $fek, 'stage' => 'cost'],
+        ];
+        if ($direct > 0.0) {
+            $costBreakdown[] = ['key' => 'direct', 'label' => 'Weitere direkte Kosten', 'amount' => $direct, 'stage' => 'cost'];
+        }
         foreach ($schema as $block) {
+            $amount = match ($block['type']) {
+                'eur_pro_portion' => (float) $block['value'] * $pax,
+                'pct_mek' => $mek * (float) $block['value'] / 100,
+                'pct_fek' => $fek * (float) $block['value'] / 100,
+                default => 0.0,
+            };
             if ($block['type'] === 'eur_pro_portion') {
-                $direct += (float) $block['value'] * $pax;
+                $direct += $amount;
+            }
+            if (in_array($block['type'], ['eur_pro_portion', 'pct_mek', 'pct_fek'], true)) {
+                $costBreakdown[] = [
+                    'key' => (string) $block['key'],
+                    'label' => (string) $block['label'],
+                    'amount' => $amount,
+                    'stage' => 'surcharge',
+                ];
             }
         }
         $mgk = array_sum(array_map(fn ($b) => $b['type'] === 'pct_mek' ? $mek * (float) $b['value'] / 100 : 0.0, $schema));
         $fgk = array_sum(array_map(fn ($b) => $b['type'] === 'pct_fek' ? $fek * (float) $b['value'] / 100 : 0.0, $schema));
         $hk = $mek + $fek + $direct + $mgk + $fgk;
+        $costBreakdown[] = ['key' => 'hk', 'label' => 'Herstellkosten (HK)', 'amount' => $hk, 'stage' => 'subtotal'];
         $hkSurcharges = array_sum(array_map(fn ($b) => $b['type'] === 'pct_hk' ? $hk * (float) $b['value'] / 100 : 0.0, $schema));
+        foreach ($schema as $block) {
+            if ($block['type'] !== 'pct_hk') {
+                continue;
+            }
+            $costBreakdown[] = [
+                'key' => (string) $block['key'],
+                'label' => (string) $block['label'],
+                'amount' => $hk * (float) $block['value'] / 100,
+                'stage' => 'surcharge',
+            ];
+        }
         $hk2 = $hk + $hkSurcharges;
+        $costBreakdown[] = ['key' => 'hk2', 'label' => 'HK2 (Vollkosten)', 'amount' => $hk2, 'stage' => 'total'];
         $target = $hk2 * (1 + $this->settings->margePct($team) / 100);
         $catalogPp = (float) ($catalogCockpit['price_per_person'] ?? 0);
         $catalogTotal = $catalogPp * $pax;
@@ -147,6 +181,11 @@ class OrderCostingService
             'target_gap' => round($target - $catalogTotal, 2),
             'unprofitable' => $catalogTotal + 0.005 < $target,
             'active_person_minutes' => round($activeMinutes, 2),
+            'cost_breakdown' => array_map(function (array $row) {
+                $row['amount'] = round((float) $row['amount'], 4);
+
+                return $row;
+            }, $costBreakdown),
             'time_breakdown' => $timeBreakdown,
             'station_load' => array_values(array_map(function (array $row) {
                 $row['active_person_minutes'] = round($row['active_person_minutes'], 2);

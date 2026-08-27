@@ -88,7 +88,9 @@ it('hält den Katalogpreis pax-unabhängig und skaliert den realen Auftrags-HK2'
         ->and($large['active_person_minutes'])->toBeGreaterThan($small['active_person_minutes'])
         ->and($large['hk2'])->toBeGreaterThan($small['hk2'])
         ->and($small['target_price'])->toBeGreaterThanOrEqual($small['minimum_price'])
-        ->and($large['target_price'])->toBeGreaterThanOrEqual($large['minimum_price']);
+        ->and($large['target_price'])->toBeGreaterThanOrEqual($large['minimum_price'])
+        ->and(collect($small['cost_breakdown'])->pluck('key')->all())->toContain('mek', 'fek', 'hk', 'hk2')
+        ->and(collect($small['cost_breakdown'])->firstWhere('key', 'hk2')['amount'])->toBe($small['hk2']);
 });
 
 it('weist Rüstzeit je Auftrag nur einmal und Batchzeit nach physischer Grenze aus', function () {

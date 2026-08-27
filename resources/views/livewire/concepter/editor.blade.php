@@ -28,7 +28,7 @@
                    class="{{ $btnGhost }}" title="Schöne Kunden-Ausgabe (Menü-Karte · Druck/PDF)" data-concepter-karte>
                     @svg('heroicon-o-printer', 'w-3.5 h-3.5') Druck/Karte
                 </a>
-                <a href="{{ route('foodalchemist.concepts.dokument', ['id' => $concept->id, 'profil' => 'voll']) }}" target="_blank"
+                <a href="{{ route('foodalchemist.concepts.dokument', array_filter(['id' => $concept->id, 'profil' => 'voll', 'simulation' => $simulationPax > 0 ? 1 : null, 'pax' => $simulationPax > 0 ? $simulationPax : null], fn ($value) => $value !== null)) }}" target="_blank"
                    class="{{ $btnGhost }}" title="Technischer Report mit voller Gericht→Basisrezept→GP→LA-Kaskade" data-concepter-druck>
                     @svg('heroicon-o-document-text', 'w-3.5 h-3.5') Report
                 </a>
@@ -1004,6 +1004,31 @@
                             @endunless
                             @if(count($auftragsSimulation['warnings']))
                                 <p class="text-[10px] text-amber-700">{{ implode(' · ', $auftragsSimulation['warnings']) }}</p>
+                            @endif
+                            @if(count($auftragsSimulation['cost_breakdown'] ?? []))
+                                <div class="border-t border-black/5 pt-2" data-auftragskosten-wasserfall>
+                                    <div class="grid grid-cols-[minmax(0,1fr)_7rem_8rem] gap-2 pb-1 text-[10px] uppercase tracking-wider text-gray-500">
+                                        <span>Auftragskosten</span><span class="text-right">je Person</span><span class="text-right">gesamt</span>
+                                    </div>
+                                    @foreach($auftragsSimulation['cost_breakdown'] as $kosten)
+                                        @php($kostenStufe = $kosten['stage'] ?? 'cost')
+                                        <div class="grid grid-cols-[minmax(0,1fr)_7rem_8rem] gap-2 py-0.5 text-xs {{ in_array($kostenStufe, ['subtotal', 'total'], true) ? 'mt-1 border-t border-black/5 pt-1 font-semibold text-gray-900' : 'text-gray-600' }} {{ $kostenStufe === 'total' ? 'text-violet-700' : '' }}">
+                                            <span>{{ in_array($kostenStufe, ['surcharge'], true) ? '+ ' : '' }}{{ $kosten['label'] }}</span>
+                                            <span class="text-right tabular-nums">{{ number_format((float) $kosten['amount'] / $simPax, 2, ',', '.') }} €</span>
+                                            <span class="text-right tabular-nums">{{ number_format((float) $kosten['amount'], 2, ',', '.') }} €</span>
+                                        </div>
+                                    @endforeach
+                                    <div class="grid grid-cols-[minmax(0,1fr)_7rem_8rem] gap-2 mt-1 border-t border-black/5 pt-1 text-xs font-semibold text-violet-700">
+                                        <span>Preisempfehlung</span>
+                                        <span class="text-right tabular-nums">{{ number_format($simZielPp, 2, ',', '.') }} €</span>
+                                        <span class="text-right tabular-nums">{{ number_format((float) $auftragsSimulation['target_price'], 2, ',', '.') }} €</span>
+                                    </div>
+                                    <div class="grid grid-cols-[minmax(0,1fr)_7rem_8rem] gap-2 py-0.5 text-xs {{ $auftragsSimulation['contribution_margin'] < 0 ? 'text-rose-500' : 'text-emerald-600' }}">
+                                        <span>Deckungsbeitrag beim Katalog-VK</span>
+                                        <span class="text-right tabular-nums">{{ number_format($simDbPp, 2, ',', '.') }} €</span>
+                                        <span class="text-right tabular-nums">{{ number_format((float) $auftragsSimulation['contribution_margin'], 2, ',', '.') }} €</span>
+                                    </div>
+                                </div>
                             @endif
                             @if(count($auftragsSimulation['time_breakdown'] ?? []))
                                 <details class="pt-1" data-zeitaufschluesselung>

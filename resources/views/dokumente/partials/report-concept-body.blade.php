@@ -22,6 +22,12 @@
     @endif
 </section>
 
+@if(($opt['simulation'] ?? false) && ($concept['order_simulation'] ?? null))
+    @include('foodalchemist::dokumente.partials.report-order-simulation', [
+        'simulation' => $concept['order_simulation'],
+    ])
+@endif
+
 <section>
     <h2>Slots</h2>
     @forelse($concept['slots'] as $slot)

@@ -71,6 +71,10 @@
         .sensorik-radar-chart { display: table-cell; width: 44%; vertical-align: top; text-align: center; border: 1px solid #e5e7eb; padding: 8px; }
         .sensorik-radar-values { display: table-cell; width: 56%; vertical-align: top; padding-left: 10px; }
         .sensorik-radar-values table { margin-top: 0; }
+        .order-simulation { page-break-before: auto; }
+        .order-simulation .sum-row td { border-top: 2px solid #d1d5db; font-weight: 700; }
+        .order-simulation .accent-row td { color: {{ $brand }}; }
+        .order-simulation table { font-size: 9px; }
         @media print { .actions { display: none; } body { background: #fff; } .doc { padding: 0; } }
     </style>
 </head>
@@ -94,7 +98,8 @@
             </div>
             <div class="secondary" style="margin-top:6px">
                 <strong>Filter:</strong>
-                @foreach(['preise' => 'Preise', 'lieferanten' => 'Lieferanten', 'steps' => 'Anleitung', 'bilder' => 'Bilder', 'deklaration' => 'Deklaration', 'naehrwerte' => 'Nährwerte', 'sensorik' => 'Sensorik', 'produktion' => 'Produktion', 'notizen' => 'Notizen', 'kaskade' => 'Kaskade'] as $key => $label)
+                @foreach(['preise' => 'Preise', 'lieferanten' => 'Lieferanten', 'steps' => 'Anleitung', 'bilder' => 'Bilder', 'deklaration' => 'Deklaration', 'naehrwerte' => 'Nährwerte', 'sensorik' => 'Sensorik', 'produktion' => 'Produktion', 'notizen' => 'Notizen', 'kaskade' => 'Kaskade', 'simulation' => 'Simulation'] as $key => $label)
+                    @if($key === 'simulation' && ! ($concept ?? null)) @continue @endif
                     <a href="{{ request()->fullUrlWithQuery([$key => ($opt[$key] ?? false) ? 0 : 1, 'pdf' => null]) }}" class="{{ ($opt[$key] ?? false) ? 'active' : '' }}">{{ $label }}</a>
                 @endforeach
             </div>

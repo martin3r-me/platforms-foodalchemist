@@ -52,7 +52,7 @@ it('öffnet mit optionalem Start-Tab direkt auf „Konzept & Planung" (konzept) 
 });
 
 it('rendert die Auftrags-Hochrechnung im Kalkulations-Tab', function () {
-    Livewire::test(Editor::class)
+    $html = Livewire::test(Editor::class)
         ->call('oeffnen', 'concepts', $this->concept->id, 'kalkulation')
         ->set('simulationPax', 100)
         ->assertSee('Katalog / Person')
@@ -64,9 +64,16 @@ it('rendert die Auftrags-Hochrechnung im Kalkulations-Tab', function () {
         ->assertDontSee('HK2 ohne Pax')
         ->assertDontSee('Katalog-Kostenindikator')
         ->assertSee('Deckungsbeitrag Auftrag')
+        ->assertSee('Auftragskosten')
+        ->assertSee('HK2 (Vollkosten)')
+        ->assertSee('Deckungsbeitrag beim Katalog-VK')
         ->assertDontSee('Vergleich ohne Pax')
         ->assertDontSee('DB Katalogsicht')
-        ->assertSee('Aktive Personenzeit');
+        ->assertSee('Aktive Personenzeit')
+        ->html();
+
+    expect($html)->toContain('simulation=1')
+        ->and($html)->toContain('pax=100');
 });
 
 it('ampelt einen Wareneinsatz auf oder unter Team-Ziel grün', function () {
