@@ -63,6 +63,12 @@ class GpModal extends Component
 
     public string $derivatSuche = '';
 
+    /** #8 (2026-08-27): „GP in allen Rezepten tauschen" — aus dem Detail-Panel in den Editor gezogen. */
+    public string $tauschSuche = '';
+
+    /** Erfolgs-Hinweis (z.B. nach GP-Tausch) — transient, wie $fehler. */
+    public ?string $hinweis = null;
+
     /** Namensvorschlag aus der Lead-LA (Override-First: erst Vorschlag, dann Übernehmen). */
     public ?string $nameVorschlag = null;
 
@@ -178,6 +184,43 @@ class GpModal extends Component
         } catch (\RuntimeException $e) {
             $this->fehler = $e->getMessage();
         }
+    }
+
+    /**
+     * #8 (Dominique 2026-08-27): „GP in allen Rezepten tauschen" — aus dem Detail-Panel in den Editor
+     * gezogen. Hängt ALLE Rezept-Zeilen dieses GP auf $zielId um (Vorstufe zum Löschen), Rezepte werden
+     * neu berechnet. Globale Katalog-Aktion → nur fürs Besitzer-Team (Curate-Gate).
+     */
+    public function gpErsetzen(int $zielId): void
+    {
+        $this->fehler = null;
+        $this->hinweis = null;
+        $gp = $this->gp();
+        if ($gp === null) {
+            return;
+        }
+        if (! Curate::canCurate(Auth::user(), $gp)) {
+            $this->fehler = 'GP-Tausch ist Katalog-Pflege — nur fürs Besitzer-Team (D1).';
+
+            return;
+        }
+        $team = Auth::user()?->currentTeamRelation;
+        $ziel = $team !== null ? FoodAlchemistGp::visibleToTeam($team)->find($zielId) : null;
+        if ($ziel === null) {
+            $this->fehler = 'Ziel-GP nicht gefunden.';
+
+            return;
+        }
+        try {
+            $ergebnis = app(GpService::class)->ersetzeInRezepten($gp, $ziel);
+        } catch (\RuntimeException $e) {
+            $this->fehler = $e->getMessage();
+
+            return;
+        }
+        $this->tauschSuche = '';
+        $this->hinweis = "{$ergebnis['zeilen']} Zeile(n) in {$ergebnis['rezepte']} Rezept(en) auf „{$ziel->name}“ umgehängt — Rezepte neu berechnet.";
+        $this->dispatch('gp-gespeichert');
     }
 
     // ── 06·H4b: Favorit direkt am GP pinnen (zweiter Andockpunkt neben dem
@@ -525,6 +568,12 @@ class GpModal extends Component
                 ? \Platform\FoodAlchemist\Support\Suche::like(FoodAlchemistGp::visibleToTeam($team), 'name', $this->derivatSuche)->orderBy('name')->limit(6)->get()
                 : collect(),
             'derivatMutterName' => $derivatMutterName,
+            // #8: Tausch-Ziele („GP in allen Rezepten tauschen") — Namensfilter, keine merged/rejected/Platzhalter, nicht der GP selbst.
+            'tauschKandidaten' => $gp !== null && $team !== null && $this->tauschSuche !== ''
+                ? \Platform\FoodAlchemist\Support\Suche::like(FoodAlchemistGp::visibleToTeam($team), 'name', $this->tauschSuche)
+                    ->whereNotIn('status', ['merged', 'rejected'])->where('id', '!=', $gp->id)->where('is_platzhalter', false)
+                    ->orderBy('name')->limit(8)->get(['id', 'name', 'status'])
+                : collect(),
             'sensorik' => $this->gpId !== null ? app(\Platform\FoodAlchemist\Services\SensorikService::class)->fuerGp($this->gpId) : null,
             'pairing' => $this->gpId !== null ? app(\Platform\FoodAlchemist\Services\PairingService::class)->panelGp($this->gpId) : null,
         ]);

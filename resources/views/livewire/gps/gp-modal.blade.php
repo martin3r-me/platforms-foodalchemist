@@ -381,6 +381,28 @@
                         </div>
                     </div>
                 </x-foodalchemist::modal-section>
+
+                {{-- #8 (2026-08-27): „GP in allen Rezepten tauschen" — aus dem Detail-Panel in den Editor gezogen. --}}
+                <x-foodalchemist::modal-section title="Verwaltung — GP tauschen">
+                    <p class="{{ $label }} mb-1 normal-case">GP in ALLEN Rezepten durch einen anderen ersetzen (Vorstufe zum Löschen). Alle Rezept-Zeilen werden umgehängt + neu berechnet.</p>
+                    @if($hinweis)<div class="mb-2 rounded-lg bg-emerald-500/10 border border-emerald-500/30 px-2.5 py-1.5 text-[11px] text-emerald-700" data-gp-tausch-hinweis>{{ $hinweis }}</div>@endif
+                    <input type="search" wire:model.live.debounce.300ms="tauschSuche" placeholder="Ziel-GP suchen …" class="{{ $input }}" data-gp-tausch-suche />
+                    @if($tauschKandidaten->isNotEmpty())
+                        <div class="mt-1 space-y-0.5">
+                            @foreach($tauschKandidaten as $k)
+                                <button type="button" wire:key="tausch-{{ $k->id }}" wire:click="gpErsetzen({{ $k->id }})"
+                                        wire:confirm="Diesen GP in ALLEN Rezepten durch „{{ $k->name }}“ ersetzen?"
+                                        class="w-full text-left px-2 py-1 rounded hover:bg-black/[0.05] text-sm flex items-center justify-between gap-2" data-gp-tausch-kandidat>
+                                    <span class="min-w-0 truncate">{{ $k->name }}</span>
+                                    <span class="{{ $pill }} {{ $variantPill['secondary'] }} shrink-0">{{ $k->status }}</span>
+                                </button>
+                            @endforeach
+                        </div>
+                    @elseif(trim($tauschSuche) !== '')
+                        <p class="text-[11px] text-gray-400 mt-1">Kein passender Ziel-GP.</p>
+                    @endif
+                    @error('tauschSuche')<div class="mt-1 text-[11px] text-red-500">{{ $message }}</div>@enderror
+                </x-foodalchemist::modal-section>
             </div>{{-- /Tab KALKULATION --}}
         @endif
     </x-foodalchemist::editor-tabs>
