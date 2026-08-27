@@ -68,3 +68,32 @@ it('Tools: knowledge_routings.GET/PUT sind registriert und editieren zur Laufzei
         ->and($del->data['deleted'])->toBe(1)
         ->and($get->execute(['feature' => 'ai_test_feature'], $this->kontext)->data['routings'])->toBe([]);
 });
+
+/**
+ * #2-A (Dominique 2026-08-27): generischer always-Loader für Referenz-Kategorien. Das Produktions-
+ * Zeitkennwerte-Dossier (Kategorie produktion_kapazitat) gilt rezept-unabhängig — discovery würde es
+ * per Slug-Jaccard verfehlen. `always`-Routing lädt es unbedingt, aber NUR fürs geroutete Feature.
+ */
+it('always-Loader: produktion_kapazitat-Referenz landet für recipe.eigenschaften, nicht für ai_generate_recipe', function () {
+    $inhalt = 'RUESTZEIT-KENNWERT: 12 Minuten je Lauf.';
+    \Illuminate\Support\Facades\DB::table('foodalchemist_knowledge_documents')->insert([
+        'uuid' => (string) \Illuminate\Support\Str::uuid(), 'team_id' => null,
+        'slug' => 'produktions-zeitkennwerte-kalibrier-set', 'title' => 'Produktions-Zeitkennwerte',
+        'category' => 'produktion_kapazitat', 'content_md' => $inhalt,
+        'content_hash' => hash('sha256', $inhalt), 'char_count' => mb_strlen($inhalt),
+        'version' => 1, 'active' => 1, 'created_at' => now(), 'updated_at' => now(),
+    ]);
+    app(KnowledgeRoutingService::class)->set('recipe.eigenschaften', 'produktion_kapazitat', 'always', 3, 7000);
+
+    $svc = app(\Platform\FoodAlchemist\Services\Ai\KnowledgeContextService::class);
+
+    // Query mit 0 Slug-Overlap zum Dossier → discovery würde nichts finden; always lädt es trotzdem.
+    $eig = $svc->contextFor('recipe.eigenschaften', 'Schaumsauce Beurre Blanc Butter Wein');
+    expect($eig['block'])->toContain('RUESTZEIT-KENNWERT: 12 Minuten je Lauf.')
+        ->and($eig['block'])->toContain('REFERENZ-WISSEN (produktion_kapazitat)')
+        ->and($eig['files_used'])->toContain('produktions-zeitkennwerte-kalibrier-set@v1');
+
+    // Routing-gated: ein Feature OHNE das produktion_kapazitat-Routing bekommt die Referenz NICHT.
+    $gen = $svc->contextFor('ai_generate_recipe', 'Schaumsauce Beurre Blanc Butter Wein');
+    expect($gen['block'])->not->toContain('RUESTZEIT-KENNWERT');
+});

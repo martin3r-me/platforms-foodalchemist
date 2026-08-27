@@ -290,6 +290,12 @@ class KnowledgeImportCommand extends Command
             ['ai_extract_recipe', 'cross_cutting', 'none', null, null],     // bewusst leer
             ['ai_suggest_pairings', 'pairing', 'grounding', 5, 1200],
             ['ai_infer_ankers', 'pairing', 'grounding', 3, 1400],
+            // #2-A (2026-08-27): die Eigenschaften-KI (recipe.eigenschaften) bekommt das Produktions-
+            // Zeitkennwerte-Dossier (Kategorie produktion_kapazitat, `always` via alwaysCategoryBlock —
+            // rezept-unabhängige Referenz, discovery verfehlt sie per Slug-Jaccard) + das Basisrezepte-
+            // Regelwerk. Spiegel von Migration 2026_08_27_140000.
+            ['recipe.eigenschaften', 'produktion_kapazitat', 'always', 3, 7000],
+            ['recipe.eigenschaften', 'regelwerk', 'always', 1, 6000],
         ];
         if ($dryRun) {
             return ['source' => count($routings), 'neu' => 0, 'geaendert' => 0, 'skip' => count($routings)];

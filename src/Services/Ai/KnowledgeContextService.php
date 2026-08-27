@@ -204,6 +204,27 @@ class KnowledgeContextService
             $snap((string) $r->category, $before);
         }
 
+        // ── 4b. GENERISCHE always-Kategorien (2026-08-27, Dominique): Referenz-Dossiers, die
+        // rezept-UNABHÄNGIG immer gelten (z.B. produktion_kapazitat = Produktions-Zeitkennwerte),
+        // lassen sich NICHT per discovery holen — ihr Slug überlappt die Rezept-Beschreibung nicht
+        // (Jaccard=0). Darum: als `always` geroutete Kategorien OHNE dedizierten always-Handler
+        // (concept/regelwerk/cross_cutting feuern oben) hier UNBEDINGT laden (alle aktiven Docs der
+        // Kategorie, slug-sortiert deterministisch, gedeckelt). Golden-safe: greift nur bei Routing-Zeile.
+        $alwaysSpezial = ['concept', 'regelwerk', 'cross_cutting'];
+        foreach ($routing as $r) {
+            if ($r->mode !== 'always' || in_array($r->category, $alwaysSpezial, true)) {
+                continue;
+            }
+            $before = count($filesUsed);
+            $immer = $this->alwaysCategoryBlock(
+                (string) $r->category, (int) ($r->max_docs ?: 2), (int) ($r->max_chars_per_doc ?: 4000), $filesUsed
+            );
+            if ($immer !== null) {
+                $parts[] = $immer;
+            }
+            $snap((string) $r->category, $before);
+        }
+
         // (#469-Bindungs-Injektion passiert jetzt zentral im AiGatewayService::propose für ALLE Prompts.)
 
         $block = implode("\n\n", $parts);
@@ -563,6 +584,34 @@ class KnowledgeContextService
             ->get(['slug', 'content_md', 'version'])->keyBy('slug');
 
         return array_values(array_filter(array_map(fn ($slug) => $docs->get($slug), self::ALWAYS_LOAD_CROSS_CUTTING)));
+    }
+
+    /**
+     * 2026-08-27 (Dominique): UNBEDINGTER Kategorie-Load für Referenz-Dossiers (z.B.
+     * produktion_kapazitat = Produktions-Zeitkennwerte), die rezept-unabhängig immer gelten.
+     * Lädt ALLE aktiven Docs der Kategorie (slug-sortiert = deterministisch), gedeckelt auf
+     * $maxDocs + je Doc $maxChars. Ergänzt {@see discoverGenericBlock} (das per Slug-Jaccard
+     * rankt und eine General-Referenz mit Score 0 verfehlen würde) — hier zählt die Kategorie-
+     * Zugehörigkeit, nicht der Rezept-Bezug.
+     */
+    private function alwaysCategoryBlock(string $category, int $maxDocs, int $maxChars, array &$filesUsed): ?string
+    {
+        if ($maxDocs <= 0) {
+            return null;
+        }
+        $docs = DB::table('foodalchemist_knowledge_documents')
+            ->where('category', $category)->where('active', 1)->whereNull('deleted_at')
+            ->orderBy('slug')->limit($maxDocs)->get(['slug', 'content_md', 'version']);
+        if ($docs->isEmpty()) {
+            return null;
+        }
+        $blocks = [];
+        foreach ($docs as $doc) {
+            $blocks[] = '## ' . mb_strtoupper($category) . ": {$doc->slug}\n\n" . $this->truncate((string) $doc->content_md, $maxChars);
+            $filesUsed[] = "{$doc->slug}@v{$doc->version}";
+        }
+
+        return "# REFERENZ-WISSEN ({$category})\n\n" . implode("\n\n---\n\n", $blocks);
     }
 
     /**
