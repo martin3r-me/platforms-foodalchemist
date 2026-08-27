@@ -112,7 +112,8 @@ class AiGatewayService
                 ->get(['d.slug', 'd.version', 'd.content_md']);
             $bBlocks = [];
             foreach ($bound as $doc) {
-                $bBlocks[] = "## GEBUNDEN: {$doc->slug}\n\n" . mb_substr((string) $doc->content_md, 0, 2000);
+                $c = (string) $doc->content_md;   // 2026-08-27: BIND-Cap 2000→8000 + Kürzungs-Marker (war blinder Head-Truncate ohne Hinweis → gebundene Dossiers wurden still halbiert)
+                $bBlocks[] = "## GEBUNDEN: {$doc->slug}\n\n" . (mb_strlen($c) > 8000 ? mb_substr($c, 0, 8000) . "\n\n[…gekürzt für KI-Kontext…]" : $c);
                 $boundSlugs[] = "{$doc->slug}@v{$doc->version}";
             }
             if ($bBlocks !== []) {
