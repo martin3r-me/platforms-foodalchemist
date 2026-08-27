@@ -990,8 +990,9 @@
                             @php($simZielPp = (float) ($auftragsSimulation['target_price_per_person'] ?? 0))
                             @php($simAbweichungPp = (float) $auftragsSimulation['catalog_price_per_person'] - $simZielPp)
                             @php($simDbPp = (float) $auftragsSimulation['contribution_margin'] / $simPax)
-                            <div class="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-2 text-xs" data-auftrag-preisempfehlung>
+                            <div class="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-9 gap-2 text-xs" data-auftrag-preisempfehlung>
                                 <div><span class="block text-[10px] text-gray-500">Katalog / Person</span><span class="font-medium tabular-nums">{{ number_format((float) $auftragsSimulation['catalog_price_per_person'], 2, ',', '.') }} €</span></div>
+                                <div><span class="block text-[10px] text-gray-500">MEK Auftrag / Person</span><span class="font-medium tabular-nums">{{ number_format((float) $auftragsSimulation['mek'] / $simPax, 2, ',', '.') }} €</span></div>
                                 <div><span class="block text-[10px] text-gray-500">HK2 / Person</span><span class="font-medium tabular-nums">{{ number_format((float) $auftragsSimulation['hk2'] / $simPax, 2, ',', '.') }} €</span></div>
                                 <div class="rounded-md bg-violet-500/10 px-2 py-1.5"><span class="block text-[10px] text-violet-500">Preisempfehlung / Person</span><span class="font-semibold text-violet-700 tabular-nums">{{ number_format($simZielPp, 2, ',', '.') }} €</span></div>
                                 <div><span class="block text-[10px] text-gray-500" title="Katalogpreis pro Person minus Preisempfehlung pro Person">Abweichung Katalog − Ziel</span><span class="font-medium tabular-nums {{ $simAbweichungPp < 0 ? 'text-amber-600' : 'text-emerald-600' }}">{{ $simAbweichungPp > 0 ? '+' : '' }}{{ number_format($simAbweichungPp, 2, ',', '.') }} €/P</span></div>
@@ -1005,6 +1006,11 @@
                                     Der Katalogpreis liegt {{ number_format((float) $auftragsSimulation['target_gap'], 2, ',', '.') }} € unter dem Zielpreis. Der Katalogpreis wurde nicht verändert.
                                 </div>
                             @endif
+                            @unless($auftragsSimulation['complete'])
+                                <div class="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
+                                    Preisempfehlung nicht belastbar: Die Auftragsdaten sind noch unvollständig. Für die Berechnung wird mindestens der ausgewiesene Katalog-MEK verwendet.
+                                </div>
+                            @endunless
                             @if(count($auftragsSimulation['warnings']))
                                 <p class="text-[10px] text-amber-700">{{ implode(' · ', $auftragsSimulation['warnings']) }}</p>
                             @endif

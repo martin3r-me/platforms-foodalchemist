@@ -56,6 +56,7 @@ it('rendert die Auftrags-Hochrechnung im Kalkulations-Tab', function () {
         ->call('oeffnen', 'concepts', $this->concept->id, 'kalkulation')
         ->set('simulationPax', 100)
         ->assertSee('Katalog / Person')
+        ->assertSee('MEK Auftrag / Person')
         ->assertSee('Preisempfehlung / Person')
         ->assertSee('Abweichung Katalog − Ziel')
         ->assertSee('Zielpreis gesamt')

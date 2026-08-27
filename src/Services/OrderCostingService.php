@@ -30,13 +30,31 @@ class OrderCostingService
         $stationIds = $recipes->pluck('default_station_id')->filter()->unique()->all();
         $stations = FoodAlchemistProductionStation::whereIn('id', $stationIds)->get()->keyBy('id');
 
-        $mek = collect($sheet['gp_bedarf'])->sum(fn (array $gp) => (float) ($gp['ek_eur'] ?? 0));
+        $explodedMek = collect($sheet['gp_bedarf'])->sum(fn (array $gp) => (float) ($gp['ek_eur'] ?? 0));
         $mekComplete = collect($sheet['gp_bedarf'])->every(fn (array $gp) => (bool) ($gp['ek_bekannt'] ?? false));
         $activeMinutes = 0.0;
         $fek = 0.0;
         $direct = 0.0;
         $stationLoad = [];
         $warnings = $sheet['warnungen'];
+
+        // Katalog und Auftrag müssen dieselbe Positionsbasis enthalten. Ganze Ansätze
+        // können den realen Bedarf erhöhen, aber niemals unter den bereits je
+        // Darreichung ausgewiesenen Katalog-MEK drücken. Der Floor verhindert, dass
+        // eine unvollständige Explosion eine scheinbar profitable Empfehlung erzeugt.
+        $catalogCockpit = $this->concepts->preisCockpit($concept);
+        $catalogMekPerPerson = (float) ($catalogCockpit['ek_per_person'] ?? 0);
+        $catalogMekTotal = $catalogMekPerPerson * $pax;
+        $mek = max($explodedMek, $catalogMekTotal);
+        $catalogMekGap = max(0.0, $catalogMekTotal - $explodedMek);
+        $catalogMekMismatch = $catalogMekGap > max(0.01, $catalogMekTotal * 0.005);
+        if ($catalogMekMismatch) {
+            $warnings[] = sprintf(
+                'Auftragsexplosion unvollständig: %.2f € Materialbedarf liegen unter %.2f € Katalog-MEK. Für HK2 wurde der Katalog-MEK angesetzt.',
+                $explodedMek,
+                $catalogMekTotal,
+            );
+        }
 
         foreach ($sheet['rezepte'] as $line) {
             $recipe = $recipes->get((int) $line['recipe_id']);
@@ -79,13 +97,16 @@ class OrderCostingService
         $hkSurcharges = array_sum(array_map(fn ($b) => $b['type'] === 'pct_hk' ? $hk * (float) $b['value'] / 100 : 0.0, $schema));
         $hk2 = $hk + $hkSurcharges;
         $target = $hk2 * (1 + $this->settings->margePct($team) / 100);
-        $catalogPp = (float) ($this->concepts->preisCockpit($concept)['price_per_person'] ?? 0);
+        $catalogPp = (float) ($catalogCockpit['price_per_person'] ?? 0);
         $catalogTotal = $catalogPp * $pax;
 
         return [
             'pax' => $pax,
             'catalog_price_per_person' => round($catalogPp, 2),
             'catalog_price_total' => round($catalogTotal, 2),
+            'catalog_mek_per_person' => round($catalogMekPerPerson, 4),
+            'catalog_mek_total' => round($catalogMekTotal, 4),
+            'exploded_mek' => round($explodedMek, 4),
             'mek' => round($mek, 4),
             'fek' => round($fek, 4),
             'direct_costs' => round($direct, 4),
@@ -107,7 +128,7 @@ class OrderCostingService
             }, $stationLoad)),
             'requirements' => $sheet['rezepte'],
             'warnings' => array_values(array_unique($warnings)),
-            'complete' => $mekComplete && $pax > 0,
+            'complete' => $mekComplete && ! $catalogMekMismatch && $pax > 0,
         ];
     }
 }

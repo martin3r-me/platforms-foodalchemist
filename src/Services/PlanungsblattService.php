@@ -209,11 +209,19 @@ class PlanungsblattService
     }
 
     /** Konzept-Slots (Pakete + feste Gerichte) → Top-Produktionen für N Personen. */
-    private function konzeptTops(FoodAlchemistConcept $concept, int $personen, array &$warnungen): array
+    private function konzeptTops(FoodAlchemistConcept $concept, int $personen, array &$warnungen, array $conceptPath = []): array
     {
+        if (in_array((int) $concept->id, $conceptPath, true)) {
+            $warnungen[] = "Konzept „{$concept->name}“: zyklisch eingebettetes Paket — nicht erneut aufgelöst.";
+
+            return [];
+        }
+        $conceptPath[] = (int) $concept->id;
+
         $concept->load([
             'slots' => fn ($q) => $q->orderBy('position'),
             'slots.unit:id,slug,dimension,default_in_g',
+            'slots.embeddedConcept:id,name,kind',
             'slots.package.dishes' => fn ($q) => $q->orderBy('position'),
             'slots.package.dishes.unit:id,slug,dimension,default_in_g',
             'slots.package.dishes.dish:id,name,is_sales_recipe,sales_unit_count,sales_quantity_per_unit_g,yield_kg,yield_pieces',
@@ -223,7 +231,11 @@ class PlanungsblattService
         $tops = [];
         foreach ($concept->slots as $slot) {
             $slot->setRelation('concept', $concept);
-            if ($slot->package) {
+            if ($slot->embeddedConcept) {
+                foreach ($this->konzeptTops($slot->embeddedConcept, $personen, $warnungen, $conceptPath) as $top) {
+                    $tops[] = $top;
+                }
+            } elseif ($slot->package) {
                 foreach ($slot->package->dishes as $pg) {
                     if ($pg->dish) {
                         $dar = $this->darreichungen->fuerPaketGericht($pg);

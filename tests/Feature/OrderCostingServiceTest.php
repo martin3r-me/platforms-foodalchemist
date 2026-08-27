@@ -102,3 +102,28 @@ it('weist Rüstzeit je Auftrag nur einmal und Batchzeit nach physischer Grenze a
         // 5.000 Pax = 500 kg: 30 Rüst + 25 × 60 Vorgang + 500 variabel.
         ->and($large['active_person_minutes'])->toBe(2030.0);
 });
+
+it('löst eingebettete Paket-Concepts in den Auftragsbedarf auf', function () {
+    $concepts = app(ConceptService::class);
+    $package = $concepts->createPaket($this->rootTeam, ['name' => 'Kartoffel-Paket']);
+    $packageSlot = $concepts->addSlot($this->rootTeam, $package->id, ['role' => 'Hauptgang']);
+    $concepts->fillSlot($this->rootTeam, $packageSlot->id, [
+        'sales_recipe_id' => $this->recipe->id,
+        'quantity' => 1,
+    ]);
+    $packageSlot->update(['unit_vocab_id' => FoodAlchemistVocabEinheit::where('slug', 'portion')->value('id')]);
+    $concepts->recomputeCache($package->refresh());
+
+    $concept = $concepts->create($this->rootTeam, ['name' => 'Menü mit Paket']);
+    $slot = $concepts->addSlot($this->rootTeam, $concept->id, ['role' => 'Paket']);
+    $concepts->fillSlot($this->rootTeam, $slot->id, ['embedded_concept_id' => $package->id]);
+    $concepts->recomputeCache($concept->refresh());
+
+    $result = app(OrderCostingService::class)->costConcept($this->rootTeam, $concept->refresh(), 100);
+
+    expect($result['requirements'])->not->toBeEmpty()
+        ->and($result['exploded_mek'])->toBe(20.0)
+        ->and($result['mek'])->toBeGreaterThanOrEqual($result['catalog_mek_total'])
+        ->and($result['hk2'])->toBeGreaterThanOrEqual($result['mek'])
+        ->and($result['complete'])->toBeTrue();
+});
