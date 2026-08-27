@@ -966,7 +966,7 @@
                     </div>
                 @endif
                 @if($concept)
-                    <div class="rounded-xl border border-black/5 p-3 space-y-3">
+                    <div class="rounded-xl border border-black/5 p-3 space-y-2">
                         <div class="flex flex-wrap items-end gap-3">
                             <div>
                                 <label class="{{ $label }}">Auftrag simulieren (Pax)</label>
@@ -980,8 +980,7 @@
                             @php($simZielPp = (float) ($auftragsSimulation['target_price_per_person'] ?? 0))
                             @php($simAbweichungPp = (float) $auftragsSimulation['catalog_price_per_person'] - $simZielPp)
                             @php($simDbPp = (float) $auftragsSimulation['contribution_margin'] / $simPax)
-                            <div class="max-w-5xl" data-auftrag-report>
-                            <div class="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-2 border-y border-black/5 py-2 text-xs" data-auftrag-preisempfehlung>
+                            <div class="grid grid-cols-2 md:grid-cols-5 xl:grid-cols-10 gap-2 text-xs" data-auftrag-preisempfehlung>
                                 <div><span class="block text-[10px] text-gray-500">Katalog / Person</span><span class="font-medium tabular-nums">{{ number_format((float) $auftragsSimulation['catalog_price_per_person'], 2, ',', '.') }} €</span></div>
                                 <div><span class="block text-[10px] text-gray-500">MEK Auftrag / Person</span><span class="font-medium tabular-nums">{{ number_format((float) $auftragsSimulation['mek'] / $simPax, 2, ',', '.') }} €</span></div>
                                 <div><span class="block text-[10px] text-gray-500">FEK Auftrag / Person</span><span class="font-medium tabular-nums">{{ number_format((float) $auftragsSimulation['fek'] / $simPax, 2, ',', '.') }} €</span></div>
@@ -991,7 +990,7 @@
                                 <div><span class="block text-[10px] text-gray-500">Mindestpreis gesamt</span><span class="font-medium tabular-nums">{{ number_format((float) $auftragsSimulation['minimum_price'], 2, ',', '.') }} €</span></div>
                                 <div><span class="block text-[10px] text-gray-500">Zielpreis gesamt</span><span class="font-medium tabular-nums">{{ number_format((float) $auftragsSimulation['target_price'], 2, ',', '.') }} €</span></div>
                                 <div><span class="block text-[10px] text-gray-500">Deckungsbeitrag Auftrag</span><span class="font-medium tabular-nums {{ $auftragsSimulation['contribution_margin'] < 0 ? 'text-rose-500' : 'text-emerald-600' }}">{{ number_format($simDbPp, 2, ',', '.') }} €/P <span class="block text-[9px]">{{ number_format((float) $auftragsSimulation['contribution_margin'], 2, ',', '.') }} € · {{ $auftragsSimulation['contribution_margin_pct'] !== null ? number_format((float) $auftragsSimulation['contribution_margin_pct'], 1, ',', '.') . ' %' : '—' }}</span></span></div>
-                                <div><span class="block text-[10px] text-gray-500">Aktive Produktionszeit</span><span class="font-medium tabular-nums">{{ number_format((float) $auftragsSimulation['active_person_minutes'] / 60, 2, ',', '.') }} Personenstunden</span></div>
+                                <div><span class="block text-[10px] text-gray-500">Aktive Personenzeit</span><span class="font-medium tabular-nums">{{ number_format((float) $auftragsSimulation['active_person_minutes'] / 60, 2, ',', '.') }} h</span></div>
                             </div>
                             @if($auftragsSimulation['unprofitable'])
                                 <div class="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
@@ -1007,38 +1006,33 @@
                                 <p class="text-[10px] text-amber-700">{{ implode(' · ', $auftragsSimulation['warnings']) }}</p>
                             @endif
                             @if(count($auftragsSimulation['cost_breakdown'] ?? []))
-                                <div class="pt-1" data-auftragskosten-wasserfall>
-                                    <table class="w-full table-fixed text-xs">
-                                        <colgroup><col><col class="w-28"><col class="w-32"></colgroup>
-                                        <thead><tr class="border-b border-black/5 text-[10px] uppercase tracking-wider text-gray-500">
-                                            <th class="py-1 text-left font-medium">Auftragskosten</th><th class="text-right font-medium">je Person</th><th class="text-right font-medium">gesamt</th>
-                                        </tr></thead>
-                                        <tbody>
+                                <div class="border-t border-black/5 pt-2" data-auftragskosten-wasserfall>
+                                    <div class="grid grid-cols-[minmax(0,1fr)_7rem_8rem] gap-2 pb-1 text-[10px] uppercase tracking-wider text-gray-500">
+                                        <span>Auftragskosten</span><span class="text-right">je Person</span><span class="text-right">gesamt</span>
+                                    </div>
                                     @foreach($auftragsSimulation['cost_breakdown'] as $kosten)
                                         @php($kostenStufe = $kosten['stage'] ?? 'cost')
-                                        <tr class="{{ in_array($kostenStufe, ['subtotal', 'total'], true) ? 'border-t border-black/10 font-semibold text-gray-900' : 'text-gray-600' }} {{ $kostenStufe === 'total' ? 'text-violet-700' : '' }}">
-                                            <td class="py-1 pr-3">{{ $kostenStufe === 'surcharge' ? '+ ' : '' }}{{ $kosten['label'] }}</td>
-                                            <td class="text-right tabular-nums">{{ number_format((float) $kosten['amount'] / $simPax, 2, ',', '.') }} €</td>
-                                            <td class="text-right tabular-nums">{{ number_format((float) $kosten['amount'], 2, ',', '.') }} €</td>
-                                        </tr>
+                                        <div class="grid grid-cols-[minmax(0,1fr)_7rem_8rem] gap-2 py-0.5 text-xs {{ in_array($kostenStufe, ['subtotal', 'total'], true) ? 'mt-1 border-t border-black/5 pt-1 font-semibold text-gray-900' : 'text-gray-600' }} {{ $kostenStufe === 'total' ? 'text-violet-700' : '' }}">
+                                            <span>{{ in_array($kostenStufe, ['surcharge'], true) ? '+ ' : '' }}{{ $kosten['label'] }}</span>
+                                            <span class="text-right tabular-nums">{{ number_format((float) $kosten['amount'] / $simPax, 2, ',', '.') }} €</span>
+                                            <span class="text-right tabular-nums">{{ number_format((float) $kosten['amount'], 2, ',', '.') }} €</span>
+                                        </div>
                                     @endforeach
-                                        <tr class="border-t border-black/10 font-semibold text-violet-700">
-                                            <td class="py-1 pr-3">Preisempfehlung</td>
-                                            <td class="text-right tabular-nums">{{ number_format($simZielPp, 2, ',', '.') }} €</td>
-                                            <td class="text-right tabular-nums">{{ number_format((float) $auftragsSimulation['target_price'], 2, ',', '.') }} €</td>
-                                        </tr>
-                                        <tr class="{{ $auftragsSimulation['contribution_margin'] < 0 ? 'text-rose-500' : 'text-emerald-600' }}">
-                                            <td class="py-1 pr-3">Deckungsbeitrag beim Katalog-VK</td>
-                                            <td class="text-right tabular-nums">{{ number_format($simDbPp, 2, ',', '.') }} €</td>
-                                            <td class="text-right tabular-nums">{{ number_format((float) $auftragsSimulation['contribution_margin'], 2, ',', '.') }} €</td>
-                                        </tr>
-                                        </tbody>
-                                    </table>
+                                    <div class="grid grid-cols-[minmax(0,1fr)_7rem_8rem] gap-2 mt-1 border-t border-black/5 pt-1 text-xs font-semibold text-violet-700">
+                                        <span>Preisempfehlung</span>
+                                        <span class="text-right tabular-nums">{{ number_format($simZielPp, 2, ',', '.') }} €</span>
+                                        <span class="text-right tabular-nums">{{ number_format((float) $auftragsSimulation['target_price'], 2, ',', '.') }} €</span>
+                                    </div>
+                                    <div class="grid grid-cols-[minmax(0,1fr)_7rem_8rem] gap-2 py-0.5 text-xs {{ $auftragsSimulation['contribution_margin'] < 0 ? 'text-rose-500' : 'text-emerald-600' }}">
+                                        <span>Deckungsbeitrag beim Katalog-VK</span>
+                                        <span class="text-right tabular-nums">{{ number_format($simDbPp, 2, ',', '.') }} €</span>
+                                        <span class="text-right tabular-nums">{{ number_format((float) $auftragsSimulation['contribution_margin'], 2, ',', '.') }} €</span>
+                                    </div>
                                 </div>
                             @endif
                             @if(count($auftragsSimulation['time_breakdown'] ?? []))
                                 <details class="pt-1" data-zeitaufschluesselung>
-                                    <summary class="cursor-pointer text-[11px] font-medium text-gray-600">Aktive Produktionszeit: {{ number_format((float) $auftragsSimulation['active_person_minutes'], 1, ',', '.') }} Personenminuten</summary>
+                                    <summary class="cursor-pointer text-[11px] font-medium text-gray-600">Zeitaufschlüsselung: {{ number_format((float) $auftragsSimulation['active_person_minutes'] / 60, 2, ',', '.') }} Personenstunden <span class="font-normal text-gray-500">({{ number_format((float) $auftragsSimulation['active_person_minutes'], 1, ',', '.') }} Personenminuten)</span></summary>
                                     <div class="overflow-x-auto pt-2">
                                         <table class="w-full min-w-[760px] text-[11px]">
                                             <thead><tr class="text-gray-500">
@@ -1061,7 +1055,6 @@
                                     </div>
                                 </details>
                             @endif
-                            </div>
                         @endif
                     </div>
                 @endif

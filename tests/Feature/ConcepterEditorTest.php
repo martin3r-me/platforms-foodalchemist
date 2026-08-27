@@ -69,13 +69,16 @@ it('rendert die Auftrags-Hochrechnung im Kalkulations-Tab', function () {
         ->assertSee('Deckungsbeitrag beim Katalog-VK')
         ->assertDontSee('Vergleich ohne Pax')
         ->assertDontSee('DB Katalogsicht')
-        ->assertSee('Aktive Produktionszeit')
+        ->assertSee('Aktive Personenzeit')
         ->html();
 
     expect($html)->toContain('simulation=1')
         ->and($html)->toContain('pax=100')
-        ->and($html)->toContain('data-auftrag-report')
-        ->and($html)->toContain('max-w-5xl');
+        ->and($html)->toContain('xl:grid-cols-10');
+
+    $template = file_get_contents(dirname(__DIR__, 2).'/resources/views/livewire/concepter/editor.blade.php');
+    expect($template)->toContain('Personenstunden')
+        ->and($template)->toContain('Personenminuten');
 });
 
 it('ampelt einen Wareneinsatz auf oder unter Team-Ziel grün', function () {
