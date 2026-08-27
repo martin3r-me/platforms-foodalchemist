@@ -308,4 +308,30 @@
             </div>
         </details>
     @endif
+    {{-- Schicht 3: Konformitäts-Hinweise (§-genau gegen die Regelwerke, hart=rot/weich=gelb) +
+         on-demand Re-Check. Nur an Rezept-/Gericht-Steps mit erzeugtem Artefakt. --}}
+    @php
+        $konf = ($st->ref_type === 'recipe' && $st->ref_id) ? (($konformitaet ?? [])[(int) $st->ref_id] ?? []) : [];
+        $konfHart = collect($konf)->contains(fn ($k) => ($k['schweregrad'] ?? '') === 'hart');
+    @endphp
+    @if($st->ref_type === 'recipe' && $st->ref_id && in_array($st->status, ['done', 'freigegeben', 'skipped'], true))
+        <div class="mt-0.5 flex items-start gap-2">
+            @if($konf !== [])
+                <details class="flex-1">
+                    <summary class="text-[10px] cursor-pointer {{ $konfHart ? 'text-rose-300' : 'text-amber-300' }} hover:opacity-80">⚠ Konformität ({{ count($konf) }}{{ $konfHart ? ', davon hart' : '' }})</summary>
+                    <div class="mt-1 space-y-1">
+                        @foreach($konf as $k)
+                            <div class="text-[10px] text-gray-400 leading-snug">
+                                <span class="{{ ($k['schweregrad'] ?? '') === 'hart' ? 'text-rose-300' : 'text-amber-300' }}">{{ $k['paragraph'] ?: '§?' }}</span>
+                                {{ $k['reason'] }}@if(($k['feld'] ?? '') !== '') · <span class="text-gray-500">{{ $k['feld'] }}</span>@endif @if(($k['vorschlag'] ?? '') !== '')<span class="text-emerald-400/70">→ {{ $k['vorschlag'] }}</span>@endif
+                            </div>
+                        @endforeach
+                    </div>
+                </details>
+            @else
+                <span class="flex-1"></span>
+            @endif
+            <button type="button" wire:click="konformitaetPruefen({{ (int) $st->ref_id }})" wire:loading.attr="disabled" class="shrink-0 text-[10px] text-gray-500 hover:text-gray-300" title="Konformität gegen die Regelwerke prüfen">🔍 prüfen</button>
+        </div>
+    @endif
 </div>

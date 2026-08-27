@@ -50,6 +50,15 @@ class EnrichGeneratedRecipeJob implements ShouldQueue
                 'status' => 'done',
                 'anreicherung' => $oneShot->anreichern($team, $recipe, $this->zielVk, completeCoverage: true),
             ]);
+            // Schicht 3: nach der Anreicherung (Rezept jetzt final) den Konformitäts-Critic
+            // anstoßen — best-effort, ein Dispatch-Fehler kippt das fertige Rezept nicht.
+            try {
+                ConformanceCheckJob::dispatch(
+                    $this->teamId, $this->userId, $recipe->is_sales_recipe ? 'gericht' : 'basisrezept', (int) $recipe->id,
+                );
+            } catch (\Throwable $e) {
+                // schlucken — Konformität ist nachgelagert, nie ein Grund für einen Enrich-Fehler.
+            }
         } catch (\Throwable $e) {
             $this->fertigMitFehler($e->getMessage());
         }

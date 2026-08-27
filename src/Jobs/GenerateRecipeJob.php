@@ -115,6 +115,7 @@ class GenerateRecipeJob implements ShouldQueue
             $this->meldeKaskade(true, (int) $r['recipe']->id, null);
             if (! $this->vollAnreichern) {
                 $this->schreibe(['status' => 'done', ...$payload]);
+                $this->pruefeKonformitaet((int) $r['recipe']->id);   // Schicht 3: Critic auto nach Generierung (Rezept final)
 
                 return;
             }
@@ -213,5 +214,17 @@ class GenerateRecipeJob implements ShouldQueue
     private function schreibe(array $data): void
     {
         Cache::put(self::cacheKey($this->runId), $data, now()->addMinutes(15));
+    }
+
+    /** Schicht 3: den Konformitäts-Critic async anstoßen — best-effort, nie die fertige Generierung kippen. */
+    private function pruefeKonformitaet(int $recipeId): void
+    {
+        try {
+            ConformanceCheckJob::dispatch(
+                $this->teamId, $this->userId, $this->vkModus ? 'gericht' : 'basisrezept', $recipeId,
+            );
+        } catch (\Throwable $e) {
+            // Dispatch-Fehler (Queue down o. ä.) darf das fertige Rezept nicht zum Fehler machen.
+        }
     }
 }

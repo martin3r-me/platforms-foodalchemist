@@ -39,6 +39,8 @@ const REGISTRY_SOLL = [
     'concept.plan' => 'B',                                            // Et.2b Kreativ-Kopf: Kunden-Brief → kreative Concept-Canvas (Leitidee/USP/Inszenierung/Geschmackswelten)
     'foodbook.kapitel_ideen' => 'B',                                  // Spec 19 E6.4: produkt-blinde Kreativ-Divergenz je Kapitel (nur Skizzen)
     'foodbook.kundentext' => 'A',                                     // Spec 03 L2: kundensichtbarer Einleitungstext, BEIDE Ebenen (ebene: foodbook|kapitel)
+    // Schicht 3: generischer Konformitäts-Critic (artefakt-agnostisch, EIN Prompt für Rezept/VK/GP/LA)
+    'conformance.check' => 'B',
     // Sonstiges
     'price.plausi' => 'B', 'chat.message' => 'A',
     // Signale-Cockpit: KI-Fixer + Assistenzen hinter „KI erledigen lassen" (2026-07-21)

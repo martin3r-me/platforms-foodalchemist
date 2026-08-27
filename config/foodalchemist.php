@@ -846,6 +846,25 @@ return [
                 . 'ein falscher). Konfidenz 0..1: werte = {einstufung: "gericht"|"komponente", '
                 . 'konfidenz, begruendung}.',
         ],
+        // Schicht 3 (2026-08-27) — GENERISCHER Konformitaets-Critic. EIN Prompt fuer
+        // ALLE Artefakt-Typen (Rezept/VK/GP/LA); der Adapter waehlt Kontext + Regelwerke,
+        // die als knowledge-Option (voller §-Text, ungekappt) mitkommen. Auto-Pass nach
+        // Generierung → Tier B (kostenbewusst); auf A bumpen, falls §-Recall zu schwach.
+        'conformance.check' => [
+            'tier' => 'B',
+            'max_tokens' => 4000,                                    // §-Befund-Liste + Reasoning-Headroom
+            'task' => 'Pruefe das mitgegebene ARTEFAKT (Kontext) §-genau gegen die REGELWERKE im '
+                . 'Wissensblock. Melde NUR belastbare Regelverstoesse — im Zweifel KEIN Befund. Je '
+                . 'Verstoss: paragraph (die §-Referenz AUS dem Regelwerk, z. B. "§6.1"; nie erfinden), '
+                . 'schweregrad (hart = nicht-verhandelbare Struktur-/Naming-/Pflicht-Regel | weich = '
+                . 'Stil/Empfehlung), feld (betroffenes Artefakt-Element, z. B. "name" | '
+                . '"zutat:Sauce Hollandaise" | "kategorie"), begruendung (WAS gegen WELCHE Regel '
+                . 'verstoesst — knapp, konkret, benenne die Regel), vorschlag (die konforme Fassung, '
+                . 'wenn eindeutig ableitbar — sonst leer). Beurteile AUSSCHLIESSLICH gegen die '
+                . 'beigefuegten Regeln; erfinde keine Regel, die nicht im Wissensblock steht. Sauberes '
+                . 'Artefakt ⇒ leere Liste (Normalfall). Konfidenz 0..1: werte = {befunde: [{paragraph, '
+                . 'schweregrad, feld, begruendung, vorschlag, konfidenz}], gesamturteil}.',
+        ],
         'recipe.pairing' => [
             'tier' => 'A',                                            // groesster Ist-Kostenblock — Qualitaet zaehlt
             'task' => 'Schlage 12-25 BELEGTE Flavor-Pairing-Partner aus dem mitgegebenen '

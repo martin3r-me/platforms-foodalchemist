@@ -13,7 +13,7 @@
     $offeneEntwuerfe = $lauf->steps->where('status', 'done')->count();
     $stufen = $this->stufenAusSteps($lauf->steps);
     $zustandPill = ['läuft' => 'bg-amber-500/15 text-amber-300', 'prüfen' => 'bg-emerald-500/15 text-emerald-300', 'geplant' => 'bg-violet-500/15 text-violet-300', 'erledigt' => 'bg-white/10 text-gray-400'];
-    $stepArgs = fn ($s, $indent) => ['st' => $s, 'stepLabel' => $stepLabel, 'stepColor' => $stepColor, 'refRoute' => $refRoute, 'indent' => $indent, 'kalkulation' => $kalkulation ?? [], 'bildCalls' => $bildCalls ?? [], 'bilderAngefordert' => $bilderAngefordert ?? false, 'fotoCounts' => $fotoCounts ?? [], 'fotoPickerStep' => $fotoPickerStep ?? null, 'fotoPickerKandidaten' => $fotoPickerKandidaten ?? []];
+    $stepArgs = fn ($s, $indent) => ['st' => $s, 'stepLabel' => $stepLabel, 'stepColor' => $stepColor, 'refRoute' => $refRoute, 'indent' => $indent, 'kalkulation' => $kalkulation ?? [], 'bildCalls' => $bildCalls ?? [], 'bilderAngefordert' => $bilderAngefordert ?? false, 'fotoCounts' => $fotoCounts ?? [], 'fotoPickerStep' => $fotoPickerStep ?? null, 'fotoPickerKandidaten' => $fotoPickerKandidaten ?? [], 'konformitaet' => $konformitaet ?? []];
     // Anreicherungs-Bilanz über die freigegebenen Rezept-/Gericht-Steps (deferred.enrich) — damit der
     // Abschluss ehrlich meldet: freigegeben + angereichert, oder Anreicherung läuft/fehlgeschlagen.
     $freigegebenGesamt = $lauf->steps->where('status', 'freigegeben')->count();

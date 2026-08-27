@@ -3165,6 +3165,26 @@ class Index extends Component
         return FoodAlchemistPlanningSession::visibleToTeam($team)->find($this->sessionId);
     }
 
+    /**
+     * Schicht 3: on-demand Konformitäts-Prüfung eines Rezept-/Gericht-Drafts. Stößt den
+     * Async-Critic an (best-effort — der Job heilt + legt Hinweise ab); die Hinweise
+     * erscheinen beim nächsten Render/Poll. Kein Sync-LLM im Web-Request (kein Timeout-Risiko).
+     */
+    public function konformitaetPruefen(int $recipeId): void
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team === null || $recipeId <= 0) {
+            return;
+        }
+        $recipe = FoodAlchemistRecipe::visibleToTeam($team)->find($recipeId);
+        if ($recipe === null) {
+            return;
+        }
+        \Platform\FoodAlchemist\Jobs\ConformanceCheckJob::dispatch(
+            $team->id, (int) Auth::id(), $recipe->is_sales_recipe ? 'gericht' : 'basisrezept', $recipeId,
+        );
+    }
+
     public function render()
     {
         $team = $this->team();
@@ -3305,6 +3325,9 @@ class Index extends Component
         // Status-Badge (erzeugt / angefordert-aber-leer), analog zum Anreicherungs-Badge.
         $bilderAngefordert = $lauf !== null && (bool) (is_array($lauf->params ?? null) ? ($lauf->params['ki_bilder'] ?? false) : false);
         $fotoCounts = [];
+        // Schicht 3: offene Konformitäts-Hinweise je Rezept-/Gericht-Draft ins Cockpit heben
+        // (Map recipe_id → Hinweise, hart vor weich) — gefüllt unten aus denselben ref-ids.
+        $konformitaet = [];
         if ($lauf !== null && $team !== null) {
             $rezeptRefIds = $lauf->steps
                 ->whereIn('kind', ['rezept', 'gericht'])
@@ -3316,6 +3339,9 @@ class Index extends Component
                 ->unique()
                 ->values()
                 ->all();
+            // Schicht 3: die offenen Hinweise für alle Draft-Rezepte in EINER Abfrage.
+            $konformitaet = app(\Platform\FoodAlchemist\Services\ConformanceService::class)
+                ->offeneFuerViele($team, 'recipe', $rezeptRefIds);
             if ($rezeptRefIds !== []) {
                 $sales = app(SalesRecipeService::class);
                 $rezepte = FoodAlchemistRecipe::visibleToTeam($team)->whereIn('id', $rezeptRefIds)->get();
@@ -3511,6 +3537,7 @@ class Index extends Component
             'bildCalls' => $bildCalls,
             'bilderAngefordert' => $bilderAngefordert,
             'fotoCounts' => $fotoCounts,
+            'konformitaet' => $konformitaet,
             'fotoPickerStep' => $this->fotoPickerStep,
             'fotoPickerKandidaten' => $fotoPickerKandidaten,
             'composerNetz' => $composerNetz,
