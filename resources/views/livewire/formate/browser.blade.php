@@ -21,6 +21,9 @@
             <div class="p-3 space-y-3">
                 <input type="search" wire:model.live.debounce.300ms="search" placeholder="Format suchen …" class="{{ $input }}" />
 
+                {{-- Primär-Aktion OBEN (Dominique 2026-08-27): „+ Neu" wie bei Gerichten/Basisrezepten über die Filter, nicht darunter. --}}
+                <button type="button" wire:click="neu" class="{{ $btnPrimary }} w-full justify-center">+ Neues Format</button>
+
                 <div class="space-y-0.5 pt-2 border-t border-black/5">
                     <span class="{{ $label }}">Status</span>
                     <div class="flex flex-wrap gap-1">
@@ -81,8 +84,6 @@
                         @endforeach
                     </div>
                 </div>
-
-                <button type="button" wire:click="neu" class="{{ $btnPrimary }} w-full justify-center">+ Neues Format</button>
             </div>
         </x-ui-page-sidebar>
     </x-slot>

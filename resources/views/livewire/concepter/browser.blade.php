@@ -30,6 +30,11 @@
                 <input type="search" wire:model.live.debounce.300ms="search"
                        placeholder="{{ $tab === 'pakete' ? 'Paket suchen …' : 'Concept suchen …' }}" class="{{ $input }}" />
 
+                {{-- Primär-Aktion OBEN (Dominique 2026-08-27): „+ Neu" wie bei Gerichten/Basisrezepten über die Filter, nicht darunter. --}}
+                <button type="button" wire:click="neu" class="{{ $btnPrimary }} w-full justify-center">
+                    + {{ $tab === 'pakete' ? 'Neues Paket' : ($showVorlagen ? 'Neue Vorlage' : 'Neues Concept') }}
+                </button>
+
                 @if($tab === 'concepts')
                     <div class="flex gap-1.5">
                         <button type="button" wire:click="$set('showVorlagen', false)"
@@ -124,10 +129,6 @@
                          Einsatzmoment/Saison-Facetten übernehmen die Filter-Achse. Daten + Settings-Pflege
                          (konzept-taxonomie) bleiben; Foodbook-Picker unberührt. --}}
                 @endif
-
-                <button type="button" wire:click="neu" class="{{ $btnPrimary }} w-full justify-center">
-                    + {{ $tab === 'pakete' ? 'Neues Paket' : ($showVorlagen ? 'Neue Vorlage' : 'Neues Concept') }}
-                </button>
             </div>
         </x-ui-page-sidebar>
     </x-slot>

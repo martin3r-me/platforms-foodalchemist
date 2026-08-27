@@ -4,7 +4,7 @@
 {{-- R5 (Dominique): VK-Editor nimmt wie der Basis-Editor den ganzen Bildschirm --}}
 {{-- Spec 28 / E1-2: Titel bleibt generisch, der Gerichtname ist der Akzent-Chip. --}}
 <x-foodalchemist::modal name="vk-modal" title="{{ $rezept !== null ? 'Gericht bearbeiten' : 'Neues Gericht' }}"
-    :title-name="$rezept?->name" size="max-w-3xl" :fullscreen="$rezept !== null" :dark-canvas="$rezept !== null">
+    :title-name="$rezept?->name" size="max-w-3xl" :fullscreen="$rezept !== null" :dark-canvas="true">
     @if($rezept !== null)
         <x-slot:actions>
             {{-- #1b: EIN Speichern-Weg, sequenziert — erst VK-Stammdaten (`speichern`), dann bei

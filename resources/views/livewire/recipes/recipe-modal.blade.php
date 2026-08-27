@@ -3,7 +3,7 @@
 @php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
 
 {{-- R4 (Dominique): Voll-Editor nimmt den ganzen Bildschirm — 19-Zutaten-Rezepte brauchen die Fläche --}}
-<x-foodalchemist::modal name="recipe-modal" :title="$neu ? 'Basisrezept anlegen' : 'Rezept bearbeiten'" :title-name="$neu ? null : $form['name']" size="max-w-3xl" :fullscreen="! $neu" :dark-canvas="! $neu" :close-via="'schliessenOderZurueck'">
+<x-foodalchemist::modal name="recipe-modal" :title="$neu ? 'Basisrezept anlegen' : 'Rezept bearbeiten'" :title-name="$neu ? null : $form['name']" size="max-w-3xl" :fullscreen="! $neu" :dark-canvas="true" :close-via="'schliessenOderZurueck'">
     {{-- Aktionsleiste (D-5 §4.2.1) --}}
     <x-slot:actions>
         {{-- #1b: EIN Speichern-Weg, sequenziert. Erst Stammdaten (`speichern`), dann — nur bei

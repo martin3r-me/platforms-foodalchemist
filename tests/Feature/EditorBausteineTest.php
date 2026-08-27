@@ -191,13 +191,16 @@ it('der GP-Editor trägt den KPI-Kopf des GP-Cockpits und eine sticky Leiste', f
     expect($html)->toContain('fa-editor-panel');
 });
 
-it('die GP-Neuanlage bleibt hell, schmal und ohne Ein-Laschen-Navigation', function () {
+it('die GP-Neuanlage ist dark, aber schmal und ohne Ein-Laschen-Navigation', function () {
+    // Dominique 2026-08-27: die Neuanlage-Modals (GP/Basisrezept/Gericht) sollen auch dark sein
+    // (dark-canvas jetzt immer an). Größe/Tabs bleiben unverändert — schmal + keine Tab-Leiste + kein KPI-Kopf.
     $html = Livewire::test(\Platform\FoodAlchemist\Livewire\Gps\GpModal::class)
         ->call('oeffnen', null)
         ->html();
 
-    // Kein Voll-Editor, kein KPI-Kopf — die Neuanlage hat nichts zu zeigen
-    expect($html)->not->toContain('fa-editor-panel');
+    // Dark-Editor-Hülle jetzt auch bei der Neuanlage …
+    expect($html)->toContain('fa-editor-panel');
+    // … aber weiterhin schmal, kein KPI-Kopf (die Neuanlage hat nichts zu zeigen)
     expect($html)->not->toContain('data-gp-editor-kpis');
 
     // Eine einzige Lasche ist keine Navigation → Baustein zeichnet keine Leiste

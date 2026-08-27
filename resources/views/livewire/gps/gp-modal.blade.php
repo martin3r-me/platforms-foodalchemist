@@ -7,7 +7,7 @@
      (Neuanlage bleibt hell und schmal — sie hat nur „Allgemein"). --}}
 <x-foodalchemist::modal name="gp-modal" :title="$neu ? 'Grundprodukt anlegen' : 'Grundprodukt bearbeiten'"
     :title-name="$neu ? null : $gp?->name" size="max-w-4xl"
-    :fullscreen="! $neu && $gp !== null" :dark-canvas="! $neu && $gp !== null">
+    :fullscreen="! $neu && $gp !== null" :dark-canvas="true">
 
     {{-- Aktionsleiste (E1-4/5): Speichern zuerst, dann Status-Regler, dann KI-Chips.
          Status und „Alles anreichern" lagen vorher IM Body und scrollten weg. --}}
