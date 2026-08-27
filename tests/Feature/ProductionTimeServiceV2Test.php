@@ -80,3 +80,19 @@ it('meldet eine nicht umrechenbare variable Bezugsart sichtbar', function () {
     expect($result['variable_minutes'])->toBe(0.0)
         ->and($result['warnings'])->toHaveCount(1);
 });
+
+it('rechnet variable Portionszeit aus Ansätzen und Portionen je Ansatz um', function () {
+    $recipe = FoodAlchemistRecipe::create([
+        'team_id' => $this->rootTeam->id, 'recipe_key' => 'portion-time', 'name' => 'Portionszeit',
+        'status' => 'approved', 'is_sales_recipe' => true,
+        'yield_kg' => 2, 'sales_unit_count' => 20,
+        'variable_work_time_min' => 0.5, 'variable_work_time_basis' => 'portion',
+    ]);
+
+    $result = $this->times->calculateForBatches($this->rootTeam, $recipe, 3);
+
+    expect($result['variable_quantity'])->toBe(60.0)
+        ->and($result['variable_quantity_basis'])->toBe('portion')
+        ->and($result['variable_minutes'])->toBe(30.0)
+        ->and($result['warnings'])->toBeEmpty();
+});

@@ -19,12 +19,28 @@ class ProductionTimeService
         ?FoodAlchemistProductionStation $station = null,
     ): array {
         $isPieces = $recipe->istStueckErtrag();
-        $yield = $isPieces
-            ? (float) ($recipe->yield_pieces ?? 0)
-            : (float) ($recipe->yield_kg_manual ?? $recipe->yield_kg ?? 0);
-        $quantity = max(0.0, $rawBatches) * $yield;
+        $batches = max(0.0, $rawBatches);
+        $yieldKg = (float) ($recipe->yield_kg_manual ?? $recipe->yield_kg ?? 0);
+        $yieldPieces = (float) ($recipe->yield_pieces ?? 0);
+        $portionsPerBatch = (float) ($recipe->sales_unit_count ?? 0);
+        $quantities = [
+            'kg' => $yieldKg > 0 ? $batches * $yieldKg : null,
+            'piece' => $yieldPieces > 0 ? $batches * $yieldPieces : null,
+            'portion' => $portionsPerBatch > 0 ? $batches * $portionsPerBatch : null,
+        ];
+        $basis = $isPieces ? 'piece' : 'kg';
+        $quantity = (float) ($quantities[$basis] ?? 0);
+        $variableBasis = $recipe->variable_work_time_basis ?: $basis;
 
-        return $this->calculate($team, $recipe, $quantity, $isPieces ? 'piece' : 'kg', $station, $rawBatches);
+        return $this->calculate(
+            $team,
+            $recipe,
+            $quantity,
+            $basis,
+            $station,
+            $rawBatches,
+            $quantities[$variableBasis] ?? null,
+        );
     }
 
     /** @return array<string,mixed> */
@@ -35,6 +51,7 @@ class ProductionTimeService
         string $quantityBasis,
         ?FoodAlchemistProductionStation $station = null,
         ?float $rawBatches = null,
+        ?float $variableQuantityOverride = null,
     ): array {
         $basis = in_array($quantityBasis, ['kg', 'piece', 'portion'], true) ? $quantityBasis : 'kg';
         $isPieces = $basis === 'piece';
@@ -56,9 +73,13 @@ class ProductionTimeService
         }
 
         $variableBasis = $recipe->variable_work_time_basis ?: $basis;
-        $variableQuantity = $variableBasis === $basis ? max(0.0, $totalQuantity) : 0.0;
+        $variableQuantity = $variableBasis === $basis
+            ? max(0.0, $totalQuantity)
+            : max(0.0, (float) ($variableQuantityOverride ?? 0));
         $warnings = [];
-        if ((float) ($recipe->variable_work_time_min ?? 0) > 0 && $variableBasis !== $basis) {
+        if ((float) ($recipe->variable_work_time_min ?? 0) > 0
+            && $variableBasis !== $basis
+            && $variableQuantityOverride === null) {
             $warnings[] = "Variable Zeit auf {$variableBasis} kann aus {$basis} ohne Umrechnung nicht belastbar berechnet werden.";
         }
 
@@ -77,6 +98,8 @@ class ProductionTimeService
             'setup_minutes' => round($setup, 3),
             'batch_minutes' => round($batch, 3),
             'variable_minutes' => round($variable, 3),
+            'variable_quantity' => round($variableQuantity, 3),
+            'variable_quantity_basis' => $variableBasis,
             'active_person_minutes' => round($active, 3),
             'passive_minutes' => round($passive, 3),
             'elapsed_minutes' => round($active + $passive, 3),

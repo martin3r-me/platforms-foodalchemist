@@ -47,7 +47,7 @@
         @if($kalkulation)
             <x-slot:kpiHeader>
                 @php($stripVk = $concept ? ($cockpit['price_per_person'] ?? 0) : ($paket?->price_per_person !== null ? (float) $paket->price_per_person : null))
-                @php($stripEk = (float) ($kalkulation['hk1_pro_person'] ?? 0))
+                @php($stripEk = $concept ? (float) ($cockpit['ek_per_person'] ?? 0) : (float) ($kalkulation['hk1_pro_person'] ?? 0))
                 @php($stripWpct = ($stripVk !== null && $stripVk > 0) ? $stripEk / $stripVk * 100 : null)
                 @php($stripWeTone = match($wareneinsatzAmpel ?? 'unbekannt') { 'gruen' => 'good', 'gelb' => 'warn', 'rot' => 'bad', default => null })
                 {{-- Spec 28 / E2.2: Kacheln über den Baustein `kpi-tiles`.
@@ -56,7 +56,7 @@
                      Messgröße (negativ = Missstand) → bad/good. Wareneinsatz % folgt derselben
                      Team-Ziel-Ampel wie Gericht und Angebot; Wareneinsatz €/Person und HK2 bleiben neutral.
                      Das „~" beim Gewicht ist jetzt ein hint-Feld statt rohem HTML im Wert. --}}
-                <x-foodalchemist::kpi-tiles :cols="7" marker="konzept-kpis" :tiles="array_values(array_filter([
+                <x-foodalchemist::kpi-tiles :cols="4" marker="konzept-kpis" :tiles="array_values(array_filter([
                     ['kpi' => 'vk-person', 'label' => 'VK €/Person', 'tone' => 'accent',
                      'value' => $stripVk !== null ? number_format((float) $stripVk, 2, ',', '.') . ' €' : '—'],
                     ['kpi' => 'we-person', 'label' => 'Wareneinsatz/Pers.',
@@ -65,16 +65,6 @@
                      'tone' => $stripWeTone,
                      'title' => $stripWpct !== null ? 'Ziel des Teams: ' . number_format((float) $zielWareneinsatzPct, 1, ',', '.') . ' %' : null,
                      'value' => $stripWpct !== null ? number_format($stripWpct, 1, ',', '.') . ' %' : '—'],
-                    ['kpi' => 'hk2', 'label' => 'HK2 ohne Pax',
-                     'title' => 'Katalog-Kostenindikator ohne auftragsspezifische Produktionsmengen und Batches',
-                     'value' => number_format((float) ($kalkulation['hk2_pro_person'] ?? 0), 2, ',', '.') . ' €'],
-                    ['kpi' => 'vk-vorschlag', 'label' => 'Vergleich ohne Pax',
-                     'title' => 'Kalkulatorischer Vergleich aus HK2 ohne Pax plus Gewinnaufschlag; keine Auftragspreisempfehlung',
-                     'value' => number_format((float) ($kalkulation['vk_vorschlag'] ?? 0), 2, ',', '.') . ' €'],
-                    ['kpi' => 'db', 'label' => 'DB Katalogsicht',
-                     'title' => 'Katalogpreis minus kalkulatorischer HK2 ohne Pax',
-                     'tone' => ($kalkulation['db_eur'] ?? 0) < 0 ? 'bad' : 'good',
-                     'value' => $kalkulation['db_eur'] !== null ? number_format((float) $kalkulation['db_eur'], 2, ',', '.') . ' €' : '—'],
                     isset($aggregat['gewicht_pro_person_g']) ? [
                         'kpi' => 'gewicht', 'label' => 'Gewicht/P',
                         'value' => number_format((float) $aggregat['gewicht_pro_person_g'], 0, ',', '.') . ' g',
@@ -990,9 +980,10 @@
                             @php($simZielPp = (float) ($auftragsSimulation['target_price_per_person'] ?? 0))
                             @php($simAbweichungPp = (float) $auftragsSimulation['catalog_price_per_person'] - $simZielPp)
                             @php($simDbPp = (float) $auftragsSimulation['contribution_margin'] / $simPax)
-                            <div class="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-9 gap-2 text-xs" data-auftrag-preisempfehlung>
+                            <div class="grid grid-cols-2 md:grid-cols-5 xl:grid-cols-10 gap-2 text-xs" data-auftrag-preisempfehlung>
                                 <div><span class="block text-[10px] text-gray-500">Katalog / Person</span><span class="font-medium tabular-nums">{{ number_format((float) $auftragsSimulation['catalog_price_per_person'], 2, ',', '.') }} €</span></div>
                                 <div><span class="block text-[10px] text-gray-500">MEK Auftrag / Person</span><span class="font-medium tabular-nums">{{ number_format((float) $auftragsSimulation['mek'] / $simPax, 2, ',', '.') }} €</span></div>
+                                <div><span class="block text-[10px] text-gray-500">FEK Auftrag / Person</span><span class="font-medium tabular-nums">{{ number_format((float) $auftragsSimulation['fek'] / $simPax, 2, ',', '.') }} €</span></div>
                                 <div><span class="block text-[10px] text-gray-500">HK2 / Person</span><span class="font-medium tabular-nums">{{ number_format((float) $auftragsSimulation['hk2'] / $simPax, 2, ',', '.') }} €</span></div>
                                 <div class="rounded-md bg-violet-500/10 px-2 py-1.5"><span class="block text-[10px] text-violet-500">Preisempfehlung / Person</span><span class="font-semibold text-violet-700 tabular-nums">{{ number_format($simZielPp, 2, ',', '.') }} €</span></div>
                                 <div><span class="block text-[10px] text-gray-500" title="Katalogpreis pro Person minus Preisempfehlung pro Person">Abweichung Katalog − Ziel</span><span class="font-medium tabular-nums {{ $simAbweichungPp < 0 ? 'text-amber-600' : 'text-emerald-600' }}">{{ $simAbweichungPp > 0 ? '+' : '' }}{{ number_format($simAbweichungPp, 2, ',', '.') }} €/P</span></div>
@@ -1014,37 +1005,32 @@
                             @if(count($auftragsSimulation['warnings']))
                                 <p class="text-[10px] text-amber-700">{{ implode(' · ', $auftragsSimulation['warnings']) }}</p>
                             @endif
+                            @if(count($auftragsSimulation['time_breakdown'] ?? []))
+                                <details class="pt-1" data-zeitaufschluesselung>
+                                    <summary class="cursor-pointer text-[11px] font-medium text-gray-600">Zeitaufschlüsselung: {{ number_format((float) $auftragsSimulation['active_person_minutes'], 1, ',', '.') }} aktive Personenminuten</summary>
+                                    <div class="overflow-x-auto pt-2">
+                                        <table class="w-full min-w-[760px] text-[11px]">
+                                            <thead><tr class="text-gray-500">
+                                                <th class="py-1 text-left font-medium">Rezept</th><th class="text-right font-medium">Ansätze</th><th class="text-right font-medium">Vorgänge</th><th class="text-right font-medium">Rüsten</th><th class="text-right font-medium">Vorgangszeit</th><th class="text-right font-medium">Variabel</th><th class="text-right font-medium">Aktiv gesamt</th>
+                                            </tr></thead>
+                                            <tbody>
+                                            @foreach($auftragsSimulation['time_breakdown'] as $zeit)
+                                                <tr class="border-t border-black/5">
+                                                    <td class="py-1 pr-3">{{ $zeit['recipe'] }}</td>
+                                                    <td class="text-right tabular-nums">{{ number_format((float) $zeit['production_batches'], 2, ',', '.') }}</td>
+                                                    <td class="text-right tabular-nums">{{ $zeit['operations'] }}</td>
+                                                    <td class="text-right tabular-nums">{{ number_format((float) $zeit['setup_minutes'], 1, ',', '.') }} min</td>
+                                                    <td class="text-right tabular-nums">{{ number_format((float) $zeit['batch_minutes'], 1, ',', '.') }} min</td>
+                                                    <td class="text-right tabular-nums">{{ number_format((float) $zeit['variable_minutes'], 1, ',', '.') }} min</td>
+                                                    <td class="text-right font-medium tabular-nums">{{ number_format((float) $zeit['active_person_minutes'], 1, ',', '.') }} min</td>
+                                                </tr>
+                                            @endforeach
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </details>
+                            @endif
                         @endif
-                    </div>
-                @endif
-
-                {{-- Ohne Pax ist dies nur die mengenunabhängige Katalogsicht. --}}
-                @if($kalkulation)
-                    <div class="rounded-xl border border-black/5 p-3 space-y-1">
-                        <div class="flex items-center justify-between">
-                            <span class="{{ $label }}">Katalog-Kostenindikator / Person</span>
-                            <span class="text-[11px] text-gray-500">Marge {{ rtrim(rtrim(number_format((float) $kalkulation['marge_pct'], 2, ',', '.'), '0'), ',') }} %</span>
-                        </div>
-                        @foreach($kalkulation['bloecke'] as $blk)
-                            <div class="flex items-center justify-between text-xs py-0.5 {{ $blk['key'] === 'we' ? 'font-medium text-gray-900' : 'text-gray-600' }}">
-                                <span>{{ $blk['key'] === 'we' ? '' : '+ ' }}{{ $blk['label'] }}</span>
-                                <span class="tabular-nums">{{ number_format((float) $blk['betrag'], 2, ',', '.') }} €</span>
-                            </div>
-                        @endforeach
-                        <div class="flex items-center justify-between text-xs py-1 border-t border-black/5 font-semibold text-gray-900">
-                            <span>= kalkulatorischer Vergleichswert</span><span class="tabular-nums">{{ number_format((float) $kalkulation['hk2_pro_person'] ?? $kalkulation['hk2_pro_portion'] ?? 0, 2, ',', '.') }} €</span>
-                        </div>
-                        <div class="flex items-center justify-between text-xs">
-                            <span class="text-gray-600">Vergleichsvorschlag</span>
-                            <span class="tabular-nums text-violet-700 font-medium">{{ number_format((float) $kalkulation['vk_vorschlag'], 2, ',', '.') }} €</span>
-                        </div>
-                        @if($kalkulation['db_eur'] !== null)
-                            <div class="flex items-center justify-between text-xs">
-                                <span class="text-gray-600">Deckungsbeitrag (gesetzter VK − HK2)</span>
-                                <span class="tabular-nums {{ $kalkulation['db_eur'] >= 0 ? 'text-emerald-600' : 'text-red-600' }}">{{ number_format((float) $kalkulation['db_eur'], 2, ',', '.') }} €{{ $kalkulation['db_pct'] !== null ? ' · ' . number_format((float) $kalkulation['db_pct'], 1, ',', '.') . ' %' : '' }}</span>
-                            </div>
-                        @endif
-                        <p class="text-[10px] text-gray-500 pt-0.5">Ein belastbarer Produktions-HK2 entsteht erst in der Pax-Simulation oder im Angebot.</p>
                     </div>
                 @endif
 
@@ -1121,22 +1107,18 @@
                 @endif
 
                 @if($concept && $cockpit)
-                    <div class="grid grid-cols-2 md:grid-cols-5 gap-2">
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
                         <div class="rounded-lg bg-violet-500/10 border border-violet-500/30 px-3 py-2">
                             <span class="text-[10px] uppercase tracking-wider text-violet-600">€/Person</span>
                             <p class="text-base font-bold text-violet-700 tabular-nums">{{ number_format($cockpit['price_per_person'], 2, ',', '.') }} €</p>
                         </div>
                         <div class="rounded-lg bg-black/[0.03] px-3 py-2">
                             <span class="{{ $dt }}">Wareneinsatz/Pers.</span>
-                            <p class="text-xs font-semibold tabular-nums">{{ $kalkulation !== null ? number_format((float) $kalkulation['hk1_pro_person'], 2, ',', '.') . ' €' : '—' }}</p>
+                            <p class="text-xs font-semibold tabular-nums">{{ number_format((float) ($cockpit['ek_per_person'] ?? 0), 2, ',', '.') }} €</p>
                         </div>
                         <div class="rounded-lg bg-black/[0.03] px-3 py-2">
                             <span class="{{ $dt }}">Wareneinsatz %</span>
-                            <p class="text-xs font-semibold tabular-nums">{{ ($kalkulation !== null && $cockpit['price_per_person'] > 0) ? number_format($kalkulation['hk1_pro_person'] / $cockpit['price_per_person'] * 100, 1, ',', '.') . ' %' : '—' }}</p>
-                        </div>
-                        <div class="rounded-lg bg-black/[0.03] px-3 py-2">
-                            <span class="{{ $dt }}">Arbeitszeit</span>
-                            <p class="text-xs font-semibold tabular-nums">{{ $aggregat !== null ? $aggregat['work_time_min'] . ' min' : '—' }}</p>
+                            <p class="text-xs font-semibold tabular-nums">{{ ($cockpit['price_per_person'] > 0) ? number_format((float) ($cockpit['ek_per_person'] ?? 0) / $cockpit['price_per_person'] * 100, 1, ',', '.') . ' %' : '—' }}</p>
                         </div>
                         <div>
                             <label class="{{ $label }}">Zielpreis €/Person</label>

@@ -37,6 +37,8 @@ class OrderCostingService
         $direct = 0.0;
         $stationLoad = [];
         $warnings = $sheet['warnungen'];
+        $recipesWithoutActiveTime = [];
+        $timeBreakdown = [];
 
         // Katalog und Auftrag müssen dieselbe Positionsbasis enthalten. Ganze Ansätze
         // können den realen Bedarf erhöhen, aber niemals unter den bereits je
@@ -69,6 +71,21 @@ class OrderCostingService
             $time = $this->times->calculateForBatches($team, $recipe, $productionBatches, $station);
             $rate = $this->laborRates->rate($team, $station);
             $minutes = (float) $time['active_person_minutes'];
+            if ($minutes <= 0.0) {
+                $recipesWithoutActiveTime[] = (string) $recipe->name;
+            }
+            $timeBreakdown[] = [
+                'recipe_id' => (int) $recipe->id,
+                'recipe' => (string) $recipe->name,
+                'production_batches' => round($productionBatches, 3),
+                'operations' => (int) $time['operations'],
+                'setup_minutes' => (float) $time['setup_minutes'],
+                'batch_minutes' => (float) $time['batch_minutes'],
+                'variable_minutes' => (float) $time['variable_minutes'],
+                'active_person_minutes' => $minutes,
+                'batch_limit' => $time['batch_limit'],
+                'batch_limit_source' => $time['batch_limit_source'],
+            ];
             $activeMinutes += $minutes;
             $fek += $minutes / 60 * $rate['hourly_rate'];
             $direct += max(0.0, (float) ($recipe->additional_costs_eur ?? 0)) * max(0.0, $productionBatches);
@@ -99,6 +116,14 @@ class OrderCostingService
         $target = $hk2 * (1 + $this->settings->margePct($team) / 100);
         $catalogPp = (float) ($catalogCockpit['price_per_person'] ?? 0);
         $catalogTotal = $catalogPp * $pax;
+        if ($recipesWithoutActiveTime !== []) {
+            $warnings[] = sprintf(
+                'Produktionszeit fehlt für %d benötigte(s) Rezept(e): %s.',
+                count(array_unique($recipesWithoutActiveTime)),
+                implode(', ', array_slice(array_unique($recipesWithoutActiveTime), 0, 5)),
+            );
+        }
+        $timeComplete = $sheet['rezepte'] !== [] && $recipesWithoutActiveTime === [];
 
         return [
             'pax' => $pax,
@@ -122,13 +147,14 @@ class OrderCostingService
             'target_gap' => round($target - $catalogTotal, 2),
             'unprofitable' => $catalogTotal + 0.005 < $target,
             'active_person_minutes' => round($activeMinutes, 2),
+            'time_breakdown' => $timeBreakdown,
             'station_load' => array_values(array_map(function (array $row) {
                 $row['active_person_minutes'] = round($row['active_person_minutes'], 2);
                 return $row;
             }, $stationLoad)),
             'requirements' => $sheet['rezepte'],
             'warnings' => array_values(array_unique($warnings)),
-            'complete' => $mekComplete && ! $catalogMekMismatch && $pax > 0,
+            'complete' => $mekComplete && ! $catalogMekMismatch && $timeComplete && $pax > 0,
         ];
     }
 }

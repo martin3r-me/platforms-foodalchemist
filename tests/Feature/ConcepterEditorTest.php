@@ -57,12 +57,15 @@ it('rendert die Auftrags-Hochrechnung im Kalkulations-Tab', function () {
         ->set('simulationPax', 100)
         ->assertSee('Katalog / Person')
         ->assertSee('MEK Auftrag / Person')
+        ->assertSee('FEK Auftrag / Person')
         ->assertSee('Preisempfehlung / Person')
         ->assertSee('Abweichung Katalog − Ziel')
         ->assertSee('Zielpreis gesamt')
+        ->assertDontSee('HK2 ohne Pax')
+        ->assertDontSee('Katalog-Kostenindikator')
         ->assertSee('Deckungsbeitrag Auftrag')
-        ->assertSee('Vergleich ohne Pax')
-        ->assertSee('DB Katalogsicht')
+        ->assertDontSee('Vergleich ohne Pax')
+        ->assertDontSee('DB Katalogsicht')
         ->assertSee('Aktive Personenzeit');
 });
 

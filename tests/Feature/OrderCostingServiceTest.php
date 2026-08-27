@@ -103,6 +103,25 @@ it('weist Rüstzeit je Auftrag nur einmal und Batchzeit nach physischer Grenze a
         ->and($large['active_person_minutes'])->toBe(2030.0);
 });
 
+it('weist den Fertigungslohn aus und markiert fehlende Produktionszeiten als unvollständig', function () {
+    $service = app(OrderCostingService::class);
+
+    $result = $service->costConcept($this->rootTeam, $this->concept->refresh(), 100);
+    expect($result['fek'])->toBeGreaterThan(0)
+        ->and($result['complete'])->toBeTrue();
+
+    $this->recipe->update([
+        'setup_time_min' => 0,
+        'work_time_min' => 0,
+        'variable_work_time_min' => 0,
+    ]);
+    $withoutTime = $service->costConcept($this->rootTeam, $this->concept->refresh(), 100);
+
+    expect($withoutTime['fek'])->toBe(0.0)
+        ->and($withoutTime['complete'])->toBeFalse()
+        ->and(implode(' ', $withoutTime['warnings']))->toContain('Produktionszeit fehlt');
+});
+
 it('löst eingebettete Paket-Concepts in den Auftragsbedarf auf', function () {
     $concepts = app(ConceptService::class);
     $package = $concepts->createPaket($this->rootTeam, ['name' => 'Kartoffel-Paket']);

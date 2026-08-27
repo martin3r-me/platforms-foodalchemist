@@ -1234,8 +1234,9 @@ class Editor extends Component
                 $bewertet = $bewertung->bewerten($concept, $cockpit, $aggregat);
                 $kalkulation = $kalk->conceptHk($team, $concept);
                 $conceptVk = (float) ($cockpit['price_per_person'] ?? 0);
+                $conceptMek = (float) ($cockpit['ek_per_person'] ?? 0);
                 $conceptWePct = $conceptVk > 0
-                    ? (float) $kalkulation['hk1_pro_person'] / $conceptVk * 100
+                    ? $conceptMek / $conceptVk * 100
                     : null;
                 $wareneinsatzAmpel = app(\Platform\FoodAlchemist\Services\MargeService::class)
                     ->weAmpel($conceptWePct, $zielWareneinsatzPct);

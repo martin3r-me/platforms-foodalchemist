@@ -96,6 +96,7 @@ it('Eigenschaften-Assistent füllt alle Zeitfelder nur in die Vorschau und keine
         ->set('form.temperature', 'gekühlt')
         ->set('form.function', 'Saucenbasis')
         ->call('kiEigenschaften')
+        ->assertViewIs('foodalchemist::livewire.recipes.recipe-modal')
         ->assertSet('form.work_time_min', 25)
         ->assertSet('form.setup_time_min', 10)
         ->assertSet('form.variable_work_time_min', 1.5)
