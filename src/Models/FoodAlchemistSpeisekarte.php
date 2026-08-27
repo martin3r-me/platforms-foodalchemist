@@ -29,6 +29,9 @@ class FoodAlchemistSpeisekarte extends Model
     /** Karten-Typen (steuern das Druck-Layout). */
     public const KARTEN_TYPEN = ['alacarte', 'tageskarte', 'saisonkarte', 'getraenkekarte', 'weinkarte'];
 
+    /** #7 (2026-08-27): Brutto-Rundungs-Modi der Ausgabe. keine = auf den Cent. */
+    public const RUNDUNGEN = ['keine', 'auf_10', 'auf_50', 'auf_90'];
+
     protected $casts = [
         'uuid' => 'string',
         'gueltig_von' => 'date',

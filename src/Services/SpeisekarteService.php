@@ -43,7 +43,7 @@ class SpeisekarteService
 
     private const FELDER = [
         'code', 'name', 'status', 'outlet_id', 'karten_typ', 'gueltig_von', 'gueltig_bis',
-        'preis_anzeige_brutto', 'description', 'note', 'kundentyp', 'default_niveau',
+        'preis_anzeige_brutto', 'preis_rundung', 'description', 'note', 'kundentyp', 'default_niveau',
         'default_convenience', 'writing_style_id',
         'crm_company_id', 'crm_contact_id',
     ];
@@ -116,7 +116,35 @@ class SpeisekarteService
             }
         }
 
+        // #7: Rundungs-Modus auf das Vokabular klemmen (Fremd-Werte → keine).
+        if (array_key_exists('preis_rundung', $update)) {
+            $update['preis_rundung'] = in_array($update['preis_rundung'], FoodAlchemistSpeisekarte::RUNDUNGEN, true)
+                ? $update['preis_rundung'] : 'keine';
+        }
+
         return $update;
+    }
+
+    /**
+     * #7 (2026-08-27): Brutto-Rundung für die Anzeige. Wirkt NUR auf den Ausgabe-Preis, nie auf die
+     * gespeicherten Netto-Werte. auf_90 rundet immer AUF die nächste X,90 (Gastro-Psychologie).
+     */
+    public function rundeBrutto(?float $brutto, ?string $modus): ?float
+    {
+        if ($brutto === null) {
+            return null;
+        }
+
+        return match ($modus) {
+            'auf_10' => round($brutto * 10) / 10,
+            'auf_50' => round($brutto * 2) / 2,
+            'auf_90' => (static function (float $x): float {
+                $c = floor($x) + 0.90;
+
+                return $c < $x - 0.001 ? $c + 1.0 : $c;   // immer >= x → aufgerundet auf X,90
+            })($brutto),
+            default => round($brutto, 2),
+        };
     }
 
     public function update(Team $team, int $id, array $in): FoodAlchemistSpeisekarte
@@ -753,7 +781,10 @@ class SpeisekarteService
         }
 
         $rubriken = [];
-        $walk = function ($parentId, int $depth) use (&$walk, $byParent, &$rubriken, $codesFuer, $codesFuerGericht, $marge, $mwstSatz) {
+        // #7: Brutto-Rundung der Karte als gebundene Closure in den Walk reichen (nur Anzeige).
+        $rundung = $karte->preis_rundung ?? 'keine';
+        $runde = fn (?float $b) => $this->rundeBrutto($b, $rundung);
+        $walk = function ($parentId, int $depth) use (&$walk, $byParent, &$rubriken, $codesFuer, $codesFuerGericht, $marge, $mwstSatz, $runde) {
             foreach ($byParent[$parentId] ?? [] as $rubrik) {
                 // Kaskade 2026-08-24: spezielle ist_format-Live-Rubrik entfernt — ein Format wird
                 // künftig wie ein Concept gebucht (live-referenziert, Kaskade bleibt live); F5.
@@ -781,7 +812,7 @@ class SpeisekarteService
                         // Einzelgericht = per-Gericht (eine Position, ein Gericht); Menü = Codes je Gang (oben).
                         'codes' => $pos->type === 'gericht_ref' ? $codesFuer($pos) : [],
                         'vk_netto' => $preis['vk'],
-                        'vk_brutto' => $einheit['vk_brutto_pro_einheit'] ?? null,
+                        'vk_brutto' => $runde($einheit['vk_brutto_pro_einheit'] ?? null),
                         'preis_quelle' => $preis['quelle'],
                         'gaenge' => $gaenge,
                         // Getränke/Wein: Metadaten (Jahrgang/Region/Rebsorte) aus payload_json.

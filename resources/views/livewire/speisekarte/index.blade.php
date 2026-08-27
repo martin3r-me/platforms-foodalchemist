@@ -207,6 +207,32 @@
                 @endif
                 @error('kiKartenVorschau')<div class="mt-2 text-[11px] text-red-500">{{ $message }}</div>@enderror
             </div>
+            {{-- #7 (2026-08-27): Preisanzeige — netto/brutto-Umschalter + Brutto-Rundung. Wirkt NUR auf die
+                 ausgegebene Karte (Dokument/Präsentation), nie auf die gespeicherten Netto-Preise. --}}
+            <div class="relative overflow-hidden {{ $card }} p-4" wire:key="sk-preis-{{ $karte->id }}" data-sk-preisanzeige>
+                <div class="{{ $cardAccent }}"></div>
+                <span class="font-semibold text-gray-900 text-sm">Preisanzeige</span>
+                <p class="mt-1 text-[10px] text-gray-500">Nur für die ausgegebene Karte — die gespeicherten Netto-Preise bleiben unberührt.</p>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3 items-end mt-3">
+                    <div>
+                        <div class="{{ $label }} mb-1">Preise anzeigen als</div>
+                        <select wire:model.live="preisAnzeigeBrutto" class="{{ $input }}" data-sk-brutto>
+                            <option value="1">Brutto (inkl. MwSt.)</option>
+                            <option value="0">Netto</option>
+                        </select>
+                    </div>
+                    <div>
+                        <div class="{{ $label }} mb-1">Brutto-Rundung</div>
+                        <select wire:model="preisRundung" class="{{ $input }}" @disabled(! $preisAnzeigeBrutto) data-sk-rundung>
+                            <option value="keine">Keine (auf den Cent)</option>
+                            <option value="auf_10">Auf 0,10 €</option>
+                            <option value="auf_50">Auf 0,50 €</option>
+                            <option value="auf_90">Aufgerundet auf X,90</option>
+                        </select>
+                    </div>
+                </div>
+                <button type="button" wire:click="speichern" class="{{ $btnGhost }} mt-3" data-sk-preis-speichern>Preisanzeige speichern</button>
+            </div>
                 </div>{{-- /Tab KONTEXT --}}
 
                 {{-- ── Tab: LEITSTELLE (Cockpit, Stufe E) ──────────────────────── --}}

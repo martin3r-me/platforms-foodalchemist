@@ -47,6 +47,11 @@ class Index extends Component
     public ?string $convenience = null;     // → default_convenience (from_scratch|teil_convenience|voll_convenience)
     public ?int $writingStyleId = null;     // → writing_style_id
 
+    // #7 (2026-08-27): Preisanzeige — netto/brutto + Brutto-Rundung (nur Ausgabe, nie die Netto-Werte).
+    public bool $preisAnzeigeBrutto = true;
+
+    public string $preisRundung = 'keine';
+
     public string $firmaSuche = '';
     public string $kontaktSuche = '';
 
@@ -114,6 +119,8 @@ class Index extends Component
         $this->niveau = $karte->default_niveau;
         $this->convenience = $karte->default_convenience;
         $this->writingStyleId = $karte->writing_style_id !== null ? (int) $karte->writing_style_id : null;
+        $this->preisAnzeigeBrutto = (bool) $karte->preis_anzeige_brutto;
+        $this->preisRundung = $karte->preis_rundung ?: 'keine';
         $this->editPosId = null;
         $this->brandColor = $karte->brand_color ?: '#6d28d9';
         $this->bandColor = $karte->band_color;
@@ -150,6 +157,8 @@ class Index extends Component
             'default_niveau' => $this->niveau ?: null,
             'default_convenience' => $this->convenience ?: null,
             'writing_style_id' => $this->writingStyleId ?: null,
+            'preis_anzeige_brutto' => $this->preisAnzeigeBrutto,
+            'preis_rundung' => $this->preisRundung,
         ]);
         $this->dispatch('gespeichert');
         $this->savedToast('Speisekarte gespeichert');
