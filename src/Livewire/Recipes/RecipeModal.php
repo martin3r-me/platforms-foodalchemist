@@ -588,13 +588,20 @@ class RecipeModal extends Component
         $this->fehler = null;
         $r = $this->rezept();
         $zutaten = $r?->ingredients?->pluck('raw_text')->take(30)->all() ?? [];
-        // Dominique 2026-08-27: der Prompt fordert „vorhandene Zubereitung beachten", die wurde
-        // aber nie mitgeschickt → die KI schätzte blind aus Name+Zutaten. Zubereitung + Portionen
-        // als Basis mitgeben; leer/neu bleibt bewusst dünn (Prompt-Guardrail „nicht vortäuschen").
+        $zubereitung = trim((string) ($r?->preparation ?? ''));
+        // C (Dominique 2026-08-27): NUR mit Basisdaten schätzen (Guardrail „nicht erfinden"). Ohne
+        // Zutaten UND ohne Zubereitung fehlt die belastbare Grundlage → ehrliche Meldung statt still
+        // nichts, damit klar ist WARUM der Knopf nichts füllt.
+        if ($zutaten === [] && $zubereitung === '') {
+            $this->fehler = 'Die KI schätzt die Eigenschaften nur auf Basis von Zutaten oder Zubereitung — bitte erst welche erfassen, dann greift der Assistent.';
+
+            return;
+        }
+        // Der Prompt fordert „vorhandene Zubereitung beachten" — Zubereitung + Portionen als Basis mitgeben.
         try {
             $eigenschaften = $ki->propose('recipe.eigenschaften', [
                 'name' => $this->form['name'],
-                'zubereitung' => $r?->preparation ?: null,
+                'zubereitung' => $zubereitung ?: null,
                 'portionen' => $r?->yield_pieces,
                 'haltbarkeit_tage' => null, 'regenerierbarkeit' => null, 'transportstabilitaet' => null,
                 'work_time_min' => $this->form['work_time_min'],
@@ -606,12 +613,14 @@ class RecipeModal extends Component
                 'temperature' => $this->form['temperature'] ?: null,
                 'function' => $this->form['function'] ?: null, 'zutaten' => $zutaten,
             ]);
+            $gefuellt = 0;
             foreach (['work_time_min', 'setup_time_min', 'standzeit_min', 'variable_work_time_min',
                 'variable_work_time_basis', 'max_vorlauf_tage', 'temperature', 'function'] as $feld) {
                 if (array_key_exists($feld, $eigenschaften->werte)
                     && $eigenschaften->werte[$feld] !== null
                     && $eigenschaften->werte[$feld] !== '') {
                     $this->form[$feld] = $eigenschaften->werte[$feld];
+                    $gefuellt++;
                 }
             }
             $geschmack = $ki->propose('recipe.geschmack', [
@@ -624,6 +633,11 @@ class RecipeModal extends Component
         }
         if (in_array($geschmack->werte['taste_direction'] ?? null, ['suess', 'herzhaft', 'neutral'], true)) {
             $this->form['taste_direction'] = $geschmack->werte['taste_direction'];
+            $gefuellt++;
+        }
+        // Basis war da, aber die KI hat konservativ nichts Belastbares abgeleitet → ehrlicher Hinweis.
+        if ($gefuellt === 0) {
+            $this->fehler = 'Die KI konnte aus den vorhandenen Daten keine belastbaren Eigenschaften ableiten — mehr Zutaten/Zubereitung erfassen und erneut versuchen.';
         }
     }
 

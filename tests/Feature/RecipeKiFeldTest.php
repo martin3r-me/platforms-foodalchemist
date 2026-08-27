@@ -85,6 +85,8 @@ it('M4-11 (DoD 3/3): garverlust — Vorschlag geclampt, Save schreibt quelle=ki'
 });
 
 it('Eigenschaften-Assistent füllt alle Zeitfelder nur in die Vorschau und keine Batchgrenze', function () {
+    // Basis für den Assistenten (sonst greift die Guardrail „nur mit Basisdaten").
+    $this->rezept->update(['preparation' => 'Reduzieren, abschmecken, montieren.']);
     $modal = Livewire::test(RecipeModal::class)
         ->call('oeffnen', $this->rezept->id)
         ->set('form.work_time_min', 25)
@@ -145,6 +147,15 @@ it('Eigenschaften-Assistent schickt die vorhandene Zubereitung + Portionen als K
         ->assertSet('fehler', null)
         ->assertSet('form.work_time_min', 15)
         ->assertSet('form.taste_direction', 'herzhaft');
+});
+
+it('Eigenschaften-Assistent meldet ehrlich, wenn keine Basis (Zutaten/Zubereitung) da ist', function () {
+    // Dominique 2026-08-27 (C): nur mit Basisdaten schätzen. „Fond: Test" hat weder Zutaten noch
+    // Zubereitung → Guardrail greift, kein KI-Call, ehrliche Meldung statt still nichts.
+    Livewire::test(RecipeModal::class)
+        ->call('oeffnen', $this->rezept->id)
+        ->call('kiEigenschaften')
+        ->assertSet('fehler', fn ($f) => is_string($f) && str_contains($f, 'nur auf Basis'));
 });
 
 it('M4-12: Template-Toggle, Status-Workflow und Bulk-Status (D1: nur eigene)', function () {
