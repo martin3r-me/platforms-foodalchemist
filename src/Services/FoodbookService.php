@@ -2098,12 +2098,12 @@ class FoodbookService
     /**
      * Format-Umbau F5: ein Format ins Foodbook buchen — WIE EIN CONCEPT, NICHT über den
      * entfernten Live-Format-Sonderweg (kein `format_id` am Kapitel, kein ist_format-Renderzweig).
-     * Das Format wird sein EIGENES Kapitel (Titel/Kundentitel/Hinführung aus dem Format); seine
-     * Aufbau-Slots werden zu ganz normalen, LIVE-referenzierten Blöcken:
-     *  - concept-Slot  → concept_ref-Block (concept_id) → Editionen rendern live über die Kaskade
-     *  - header-Slot   → header_frei-Block (Titel)
-     *  - text-Slot     → text-Block (Fließtext)
-     *  - spacer-Slot   → spacer-Block (Höhe)
+     * Das Format wird eine SEKTION (Struktur-Kapitel, is_struktur — Titel/Kundentitel/Hinführung aus
+     * dem Format, kein eigenes Food); JE KONZEPT entsteht ein Unterkapitel (Dominique 2026-08-27):
+     *  - concept-Slot  → eigenes Unterkapitel (Titel = Konzept-Name) mit einem LIVE concept_ref-Block
+     *  - header-Slot   → header_frei-Block auf der Sektion (Rahmentext)
+     *  - text-Slot     → text-Block auf der Sektion
+     *  - spacer-Slot   → spacer-Block auf der Sektion
      * „Snapshot" passiert erst beim Kunden-Versand (snapshot_json), nichts wird hier eingefroren.
      * Kunden-IP-Guard + Status-Guard (versendete/archivierte Bücher sind zu). Kein Recompute nötig
      * (die Kapitel-Aggregation läuft wie bei jedem anderen Kapitel über die Blöcke).
@@ -2121,7 +2121,7 @@ class FoodbookService
             throw new \RuntimeException('parent_id gehört nicht zu diesem Foodbook.');
         }
         $format = \Platform\FoodAlchemist\Models\FoodAlchemistFormat::visibleToTeam($team)
-            ->with(['slots' => fn ($q) => $q->orderBy('position')])
+            ->with(['slots' => fn ($q) => $q->orderBy('position'), 'slots.concept:id,name,consumer_name'])
             ->findOrFail($formatId);
 
         // Kunden-IP: ein Kunden-Format nie in ein Buch eines ANDEREN Kunden (CLAUDE.md).
@@ -2134,27 +2134,37 @@ class FoodbookService
         }
 
         return DB::transaction(function () use ($team, $fb, $format, $parentId) {
-            // Eigenes Kapitel mit der Format-Identität (kein format_id — reines Standard-Kapitel).
-            $kapitel = $this->addKapitel($team, $fb->id, ['title' => $format->name], $parentId);
-            $kapitel->update([
+            // C (Dominique 2026-08-27): Format = SEKTION (Struktur-Kapitel, kein eigenes Food) + JE KONZEPT
+            // ein Unterkapitel. Vorher wurde EIN Kapitel mit den Konzepten als Blöcken angelegt — jetzt wird
+            // die Format-Identität die Sektion und jede Edition ihr eigenes Kapitel (mit einem concept_ref-Block).
+            $sektion = $this->addKapitel($team, $fb->id, ['title' => $format->name], $parentId);
+            $sektion->update([
                 'consumer_title' => $format->consumer_name,   // Marketing-Titel (PDF)
-                'description' => $format->story,               // Kapitel-Hinführung (Story)
+                'description' => $format->story,               // Sektions-Hinführung (Story)
+                'is_struktur' => true,                         // Sektion: kein eigenes Food, gruppiert die Konzept-Kapitel
             ]);
 
-            // Aufbau-Slots → normale LIVE-Blöcke (Snapshot-wie-Concepten, keine Format-Interna).
+            // concept-Slot → eigenes Unterkapitel (Titel = Konzept-Name) mit einem LIVE concept_ref-Block.
+            // header/text/spacer → Struktur-Blöcke auf der SEKTION (Format-Rahmentext bleibt erhalten).
             foreach ($format->slots as $slot) {
-                match ($slot->type) {
-                    'concept' => $slot->concept_id !== null
-                        ? $this->addBlock($team, $kapitel->id, ['type' => 'concept_ref', 'concept_id' => $slot->concept_id])
-                        : null,
-                    'header' => $this->addBlock($team, $kapitel->id, ['type' => 'header_frei', 'label' => $slot->title, 'customer_text' => $slot->title]),
-                    'text' => $this->addBlock($team, $kapitel->id, ['type' => 'text', 'customer_text' => $slot->text_content]),
-                    'spacer' => $this->addBlock($team, $kapitel->id, ['type' => 'spacer', 'height' => $slot->height ?: 'mittel']),
-                    default => null,
-                };
+                if ($slot->type === 'concept' && $slot->concept_id !== null) {
+                    $c = $slot->concept;
+                    $unter = $this->addKapitel($team, $fb->id, ['title' => $c?->name ?: 'Konzept'], $sektion->id);
+                    if ($c !== null && trim((string) $c->consumer_name) !== '') {
+                        $unter->update(['consumer_title' => $c->consumer_name]);
+                    }
+                    $this->addBlock($team, $unter->id, ['type' => 'concept_ref', 'concept_id' => $slot->concept_id]);
+                } else {
+                    match ($slot->type) {
+                        'header' => $this->addBlock($team, $sektion->id, ['type' => 'header_frei', 'label' => $slot->title, 'customer_text' => $slot->title]),
+                        'text' => $this->addBlock($team, $sektion->id, ['type' => 'text', 'customer_text' => $slot->text_content]),
+                        'spacer' => $this->addBlock($team, $sektion->id, ['type' => 'spacer', 'height' => $slot->height ?: 'mittel']),
+                        default => null,
+                    };
+                }
             }
 
-            return $kapitel->refresh();
+            return $sektion->refresh();
         });
     }
 
