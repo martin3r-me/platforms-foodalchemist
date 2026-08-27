@@ -83,6 +83,24 @@ class RecipeGenerationContextService
         // — Gürtel & Hosenträger zur Prompt-Einleitung (Basisrezept = Baustein, Gericht = Teller).
         $rezeptTyp = $vkModus ? 'gericht' : 'basisrezept';
         $wissen = $this->knowledge->contextFor('ai_generate_recipe', $description, $parameter['kompositions_stil'] ?? null, [], $parameter + ['rezept_typ' => $rezeptTyp]);
+        // Transparenz (Aufbau-Phase): der Gateway injiziert die an recipe.generator/vk.generator GEBUNDENEN
+        // Always-Core-Dossiers in den Prompt (AiGatewayService #469, binding_type=layer), sie stehen aber
+        // NICHT in contextFor()->files_used → hier für den „Verwendetes Wissen"-Chip nachziehen, damit die
+        // Anzeige zeigt, was wirklich im Prompt landet. Spiegelt die Injektions-Query 1:1.
+        if (\Illuminate\Support\Facades\Schema::hasTable('foodalchemist_knowledge_bindings')) {
+            $genKey = $vkModus ? 'vk.generator' : 'recipe.generator';
+            $genBereich = $vkModus ? 'vk' : 'recipe';
+            $boundFiles = \Illuminate\Support\Facades\DB::table('foodalchemist_knowledge_bindings as b')
+                ->join('foodalchemist_knowledge_documents as d', 'd.id', '=', 'b.knowledge_document_id')
+                ->whereNull('b.deleted_at')->where('b.active', 1)
+                ->where('b.binding_type', 'layer')->whereIn('b.target_key', array_unique([$genKey, $genBereich]))
+                ->where('d.active', 1)->whereNull('d.deleted_at')
+                ->get(['d.slug', 'd.version'])
+                ->map(fn ($r) => "{$r->slug}@v{$r->version}")->all();
+            if ($boundFiles !== []) {
+                $wissen['files_used'] = array_values(array_unique(array_merge($wissen['files_used'] ?? [], $boundFiles)));
+            }
+        }
         $prompt = [
             'rezept_typ' => $vkModus
                 ? 'GERICHT (essfertig angerichteter Verkaufsteller — Komposition erlaubt)'
