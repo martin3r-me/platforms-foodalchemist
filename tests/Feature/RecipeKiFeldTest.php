@@ -121,6 +121,32 @@ it('Eigenschaften-Assistent füllt alle Zeitfelder nur in die Vorschau und keine
         ->and($this->rezept->batch_max_kg)->toBeNull();
 });
 
+it('Eigenschaften-Assistent schickt die vorhandene Zubereitung + Portionen als KI-Kontext mit', function () {
+    // Dominique 2026-08-27: der Prompt fordert „vorhandene Zubereitung beachten", die wurde aber nie
+    // mitgeschickt. Fix: Zubereitung (preparation) + Portionen wandern in den propose-Kontext.
+    $this->rezept->update(['preparation' => 'Butter aufschäumen, Wein reduzieren, montieren.', 'yield_pieces' => 4]);
+
+    $this->mock(\Platform\FoodAlchemist\Services\Ai\AiGatewayService::class, function ($mock) {
+        $mock->shouldReceive('propose')
+            ->with('recipe.eigenschaften', \Mockery::on(function (array $payload) {
+                return ($payload['zubereitung'] ?? null) === 'Butter aufschäumen, Wein reduzieren, montieren.'
+                    && (int) ($payload['portionen'] ?? 0) === 4;
+            }))
+            ->once()
+            ->andReturn(new \Platform\FoodAlchemist\Services\Ai\AiProposal(['work_time_min' => 15], 0.9, null, [], 'mock'));
+        $mock->shouldReceive('propose')
+            ->with('recipe.geschmack', \Mockery::any())
+            ->andReturn(new \Platform\FoodAlchemist\Services\Ai\AiProposal(['taste_direction' => 'herzhaft'], 0.9, null, [], 'mock'));
+    });
+
+    Livewire::test(RecipeModal::class)
+        ->call('oeffnen', $this->rezept->id)
+        ->call('kiEigenschaften')
+        ->assertSet('fehler', null)
+        ->assertSet('form.work_time_min', 15)
+        ->assertSet('form.taste_direction', 'herzhaft');
+});
+
 it('M4-12: Template-Toggle, Status-Workflow und Bulk-Status (D1: nur eigene)', function () {
     $zweites = $this->svc->create($this->rootTeam, ['name' => 'Fond: Zwei']);
     $fremd = \Platform\FoodAlchemist\Models\FoodAlchemistRecipe::create([

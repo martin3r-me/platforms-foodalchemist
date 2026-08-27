@@ -588,9 +588,14 @@ class RecipeModal extends Component
         $this->fehler = null;
         $r = $this->rezept();
         $zutaten = $r?->ingredients?->pluck('raw_text')->take(30)->all() ?? [];
+        // Dominique 2026-08-27: der Prompt fordert „vorhandene Zubereitung beachten", die wurde
+        // aber nie mitgeschickt → die KI schätzte blind aus Name+Zutaten. Zubereitung + Portionen
+        // als Basis mitgeben; leer/neu bleibt bewusst dünn (Prompt-Guardrail „nicht vortäuschen").
         try {
             $eigenschaften = $ki->propose('recipe.eigenschaften', [
                 'name' => $this->form['name'],
+                'zubereitung' => $r?->preparation ?: null,
+                'portionen' => $r?->yield_pieces,
                 'haltbarkeit_tage' => null, 'regenerierbarkeit' => null, 'transportstabilitaet' => null,
                 'work_time_min' => $this->form['work_time_min'],
                 'setup_time_min' => $this->form['setup_time_min'],
