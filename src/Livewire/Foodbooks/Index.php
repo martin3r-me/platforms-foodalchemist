@@ -157,7 +157,7 @@ class Index extends Component
     public array $form = ['label' => '', 'jahr' => null, 'personen' => null, 'status' => 'draft', 'description' => ''];
 
     /** `description` = Kapitel-Kundentext (Spec 03 · L2b) — im Editor vorher gar nicht erreichbar. */
-    public array $kapitelForm = ['title' => '', 'consumer_title' => '', 'description' => '', 'price_mode' => 'auto', 'price_per_person' => null, 'writing_style_id' => null];
+    public array $kapitelForm = ['title' => '', 'consumer_title' => '', 'description' => '', 'price_mode' => 'auto', 'price_per_person' => null, 'writing_style_id' => null, 'is_struktur' => false];
 
     /**
      * Spec 03 · L2: KI-Kundentext — VORSCHAU-Zustand. Der Vorschlag landet hier und
@@ -576,6 +576,7 @@ class Index extends Component
                 'description' => $k->description ?? '',
                 'price_mode' => $k->price_mode, 'price_per_person' => $k->price_per_person,
                 'writing_style_id' => $k->writing_style_id,   // #2: Kapitel-Schreibstil-Override
+                'is_struktur' => (bool) $k->is_struktur,   // Textkapitel/Sektion
             ];
         }
     }

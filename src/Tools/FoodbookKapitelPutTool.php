@@ -63,6 +63,7 @@ class FoodbookKapitelPutTool extends FoodAlchemistTool implements ToolContract, 
                 'target_food_cost_pct' => ['type' => 'number', 'description' => 'Ziel-Wareneinsatz in % (WE-Ampel-SOLL)'],
                 'creative_mode' => ['type' => 'string', 'enum' => FoodAlchemistFoodbookKapitel::CREATIVE_MODES, 'description' => 'Kreativ-Modus voll_kreativ | hybrid | datenbank (NULL/weg ⇒ erbt Foodbook-Default)'],
                 'fortschritt' => ['type' => 'string', 'enum' => FoodAlchemistFoodbookKapitel::FORTSCHRITT_STUFEN, 'description' => 'Bearbeitungs-Fortschritt offen | in_arbeit | fertig (treibt Board-Punkt + KPI „Fertig X/Y")'],
+                'is_struktur' => ['type' => 'boolean', 'description' => 'Textkapitel/Sektion — kein eigenes Food (Intro, Überschrift, Format-Sektion); zeigt nur Text + Σ der Unterkapitel'],
                 'zielgruppen' => [
                     'type' => 'array',
                     'items' => ['type' => 'integer'],
@@ -124,7 +125,7 @@ class FoodbookKapitelPutTool extends FoodAlchemistTool implements ToolContract, 
         $felder = array_intersect_key($arguments, array_flip([
             'title', 'consumer_title', 'claim', 'description',
             'target_count', 'price_anchor', 'price_min', 'price_max', 'niveau',
-            'serving_form_id', 'service_moment_id', 'pricing_mode', 'target_food_cost_pct', 'creative_mode', 'fortschritt',
+            'serving_form_id', 'service_moment_id', 'pricing_mode', 'target_food_cost_pct', 'creative_mode', 'fortschritt', 'is_struktur',
         ]));
 
         $svc = app(FoodbookService::class);
@@ -155,6 +156,7 @@ class FoodbookKapitelPutTool extends FoodAlchemistTool implements ToolContract, 
             'service_moment_id' => $kap->service_moment_id !== null ? (int) $kap->service_moment_id : null,
             'pricing_mode' => $kap->pricing_mode,
             'fortschritt' => $kap->fortschritt,
+            'is_struktur' => (bool) $kap->is_struktur,
             'target_food_cost_pct' => $kap->target_food_cost_pct,
             'creative_mode' => $kap->creative_mode,
             'zielgruppen_ids' => $kap->targetGroups()->pluck('foodalchemist_target_groups.id')->map(fn ($v) => (int) $v)->all(),

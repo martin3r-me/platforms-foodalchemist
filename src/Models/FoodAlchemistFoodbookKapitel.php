@@ -55,6 +55,7 @@ class FoodAlchemistFoodbookKapitel extends Model
         'price_max' => 'decimal:2',
         'target_food_cost_pct' => 'decimal:2',
         // Anlage-Stand (Kapitel-Go, E7.3)
+        'is_struktur' => 'boolean',
         'released_at' => 'datetime',
         'release_result' => 'array',
     ];

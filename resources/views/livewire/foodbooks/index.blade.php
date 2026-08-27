@@ -240,12 +240,15 @@
                                 <div class="flex items-center gap-1.5 py-1 px-3 cursor-pointer hover:bg-violet-500/[0.04]" @click="auf = {...auf, {{ $kap['kapitel_id'] }}: !auf[{{ $kap['kapitel_id'] }}]}" style="padding-left: {{ 12 + ($kap['depth'] - 1) * 16 }}px">
                                     <i class="ti ti-chevron-right text-gray-400 shrink-0 transition-transform" :class="auf[{{ $kap['kapitel_id'] }}] && 'rotate-90'" style="font-size:15px"></i>
                                     <span class="w-2 h-2 rounded-full shrink-0 {{ $fortDot[$kap['fortschritt']] ?? 'bg-gray-300' }}" title="Fortschritt: {{ $fortLabel[$kap['fortschritt']] ?? 'Offen' }}"></span>
-                                    <span class="text-sm font-medium text-gray-800 min-w-0 break-words">{{ $kap['titel'] }}</span>
-                                    @if($kap['pricing_mode'])<span class="text-[10px] uppercase tracking-wide text-gray-400 shrink-0">{{ $kap['pricing_mode'] }}</span>@endif
+                                    <span class="text-sm font-medium {{ $kap['is_struktur'] ? 'text-gray-500' : 'text-gray-800' }} min-w-0 break-words">{{ $kap['titel'] }}</span>
+                                    {{-- Textkapitel/Sektion: „Sektion"-Tag statt Preis-Modus, Food-Pills unten ausgeblendet. --}}
+                                    @if($kap['is_struktur'])<span class="text-[10px] uppercase tracking-wide text-violet-400/80 border border-violet-400/30 rounded px-1.5 shrink-0">Sektion</span>@elseif($kap['pricing_mode'])<span class="text-[10px] uppercase tracking-wide text-gray-400 shrink-0">{{ $kap['pricing_mode'] }}</span>@endif
                                     <div class="ml-auto flex items-center gap-2.5 text-[11px] tabular-nums shrink-0" @click.stop>
+                                        @unless($kap['is_struktur'])
                                         <span class="{{ $pill }} {{ $kap['hat_ziele'] ? $variantPill['primary'] : $variantPill['secondary'] }}" title="Ziele/Dimensionen gesetzt">Z</span>
                                         <span class="{{ $pill }} {{ $kap['positionen_count'] > 0 ? $variantPill['info'] : $variantPill['secondary'] }}" title="Positionen">{{ $kap['positionen_count'] }}</span>
                                         <span class="{{ $pill }} {{ $kap['bepreist'] ? $variantPill['success'] : ($kap['hat_inhalt'] ? $variantPill['warning'] : $variantPill['secondary']) }}" title="{{ $kap['bepreist'] ? 'bepreist' : ($kap['hat_inhalt'] ? 'angelegt/ohne Preis' : 'leer') }}">€</span>
+                                        @endunless
                                         @php($istRollup = count($kap['positionen']) === 0 && ($agg['vk_pro_person'] > 0 || $agg['pauschal'] > 0))
                                         @if($agg['ek_per_person'] > 0)<span class="text-gray-400" title="Wareneinsatz €/Gast">EK {{ number_format((float) $agg['ek_per_person'], 2, ',', '.') }}</span>@endif
                                         @if($agg['vk_pro_person'] > 0)<span class="font-semibold text-gray-800" title="{{ $istRollup ? 'VK = Summe der Unterkapitel' : 'VK €/Gast' }}">@if($istRollup)<span class="text-gray-400 font-normal" title="Summe der Unterkapitel">Σ&nbsp;</span>@endif{{ number_format((float) $agg['vk_pro_person'], 2, ',', '.') }} €/G</span>@endif
@@ -462,6 +465,13 @@
                             <select wire:model.live="kapitelForm.price_mode" wire:change="kapitelSpeichern" class="{{ $input }}"><option value="auto">auto (Σ Inhalt)</option><option value="manuell">manuell</option></select>
                         </div>
                     </div>
+                    {{-- Textkapitel/Sektion (Dominique 2026-08-27): reine Überschrift/Text ohne eigenes Food (Intro,
+                         Organisation, Format-Sektion). „Kommt im Food nicht mit" — im Board ohne Food-Chrome; den
+                         Σ-Preis der Food-Unterkapitel zeigt es weiter. --}}
+                    <label class="flex items-start gap-2 text-xs text-gray-500 cursor-pointer">
+                        <input type="checkbox" wire:model.live="kapitelForm.is_struktur" wire:change="kapitelSpeichern" class="mt-0.5 accent-violet-500" />
+                        <span>Textkapitel / Sektion — <span class="text-gray-400">kein eigenes Food (Intro, Überschrift, Format-Sektion). Food-Kennzahlen kommen nur aus Unterkapiteln.</span></span>
+                    </label>
 
                     {{-- Spec 03 · L2b: der Kapitel-Kundentext. Bis hierher existierte das Feld nur in
                          der DB (`foodbook_chapters.description`) — nicht im Editor UND in keiner

@@ -126,6 +126,21 @@ it('Kapitel-Fortschritt: Default offen · Setter persistiert · Enum-Guard', fun
     expect(\Platform\FoodAlchemist\Models\FoodAlchemistFoodbookKapitel::find($kap->id)->fortschritt)->toBe('fertig');
 });
 
+it('Textkapitel: is_struktur Default false · im Board · via updateKapitel persistiert', function () {
+    $fb = FoodAlchemistFoodbook::create(['team_id' => $this->rootTeam->id, 'code' => 'FB-STR', 'label' => 'Str',
+        'jahr' => 2027, 'personen' => 10, 'status' => 'draft']);
+    $kap = $fb->kapitel()->create(['team_id' => $this->rootTeam->id, 'title' => 'Intro', 'position' => 0]);
+
+    $board = app(LeitstelleService::class)->kapitelBoard($this->rootTeam, $fb->fresh());
+    expect($board[0]['is_struktur'])->toBeFalse();
+
+    app(FoodbookService::class)->updateKapitel($this->rootTeam, $kap->id, ['is_struktur' => true]);
+    expect(\Platform\FoodAlchemist\Models\FoodAlchemistFoodbookKapitel::find($kap->id)->is_struktur)->toBeTrue();
+
+    $board2 = app(LeitstelleService::class)->kapitelBoard($this->rootTeam, $fb->fresh());
+    expect($board2[0]['is_struktur'])->toBeTrue();
+});
+
 it('Concepter-Editor: setPreisDisplay persistiert die Preisdarstellung', function () {
     $c = $this->makeConcept($this->rootTeam, 'Auswahl', ['kind' => 'concept', 'status' => 'active']);
 

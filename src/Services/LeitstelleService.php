@@ -430,6 +430,7 @@ class LeitstelleService
                 'depth' => $this->kapitelTiefe($k, $fb->chapters),
                 'released' => $k->released_at !== null,
                 'fortschritt' => in_array((string) $k->fortschritt, FoodAlchemistFoodbookKapitel::FORTSCHRITT_STUFEN, true) ? (string) $k->fortschritt : 'offen',
+                'is_struktur' => (bool) $k->is_struktur,
                 'pricing_mode' => $k->pricing_mode !== null ? (string) $k->pricing_mode : null,
                 'aggregat' => $agg,
                 'wareneinsatz' => $we,

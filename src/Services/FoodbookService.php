@@ -1163,6 +1163,7 @@ class FoodbookService
         'service_moment_id', 'serving_form_id', 'pricing_mode', 'target_food_cost_pct',
         'creative_mode',   // Kreativ-Modus-Override (Spec 19, E9.1)
         'writing_style_id',   // #2: Schreibstil-Override pro Kapitel (NULL = Concept-Standard erben)
+        'is_struktur',   // Textkapitel/Sektion (kein eigenes Food) — Dominique 2026-08-27
     ];
 
     public function updateKapitel(Team $team, int $id, array $in): FoodAlchemistFoodbookKapitel
