@@ -32,11 +32,19 @@ return new class extends Migration
         }
         $now = now()->toDateTimeString();
         foreach (self::ROWS as [$feature, $category, $mode, $maxDocs, $maxChars]) {
-            DB::table('foodalchemist_knowledge_routings')->insertOrIgnore([
-                'feature' => $feature, 'category' => $category, 'mode' => $mode,
-                'max_docs' => $maxDocs, 'max_chars_per_doc' => $maxChars,
-                'created_at' => $now, 'updated_at' => $now,
-            ]);
+            // update-then-insert statt insertOrIgnore: eine bestehende Zeile (z.B. produktion_kapazitat
+            // war zwischenzeitlich als `discovery` angelegt — discovery zieht das General-Dossier nicht)
+            // wird auf `always` GEZWUNGEN; sonst frisch eingefügt. created_at bleibt bei Update erhalten.
+            $affected = DB::table('foodalchemist_knowledge_routings')
+                ->where('feature', $feature)->where('category', $category)
+                ->update(['mode' => $mode, 'max_docs' => $maxDocs, 'max_chars_per_doc' => $maxChars, 'updated_at' => $now]);
+            if ($affected === 0) {
+                DB::table('foodalchemist_knowledge_routings')->insert([
+                    'feature' => $feature, 'category' => $category, 'mode' => $mode,
+                    'max_docs' => $maxDocs, 'max_chars_per_doc' => $maxChars,
+                    'created_at' => $now, 'updated_at' => $now,
+                ]);
+            }
         }
     }
 
