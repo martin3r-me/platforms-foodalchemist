@@ -451,6 +451,14 @@ class Index extends Component
             $this->fbOwnerId = (int) request('fb_owner');
             $this->fbPanelAuf = true;
         }
+        // Spec 42 (Speisekarte-Parität) — Handoff aus dem Speisekarte-Modul: Leitstelle im Owner-Kontext
+        // öffnen, „Speisekarte aus Brief"-Panel vorgeklappt + jüngste Session dieser Karte reaktivieren
+        // (weiterplanen statt neu). Der Aufruf ist no-op, wenn es noch keinen Lauf zur Karte gibt.
+        if (request()->filled('sk_owner')) {
+            $this->skOwnerId = (int) request('sk_owner');
+            $this->skPanelAuf = true;
+            $this->aktiviereOwnerSession('speisekarte', $this->skOwnerId);
+        }
     }
 
     private function team(): ?Team

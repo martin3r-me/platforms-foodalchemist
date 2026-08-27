@@ -8,6 +8,7 @@ use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
 use Platform\FoodAlchemist\Models\FoodAlchemistFoodbook;
 use Platform\FoodAlchemist\Models\FoodAlchemistFormat;
+use Platform\FoodAlchemist\Models\FoodAlchemistSpeisekarte;
 use Platform\FoodAlchemist\Models\FoodAlchemistGeschirrSupplier;
 use Platform\FoodAlchemist\Models\FoodAlchemistGp;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
@@ -55,7 +56,7 @@ class ReportExportService
 
         // Format + Foodbook = symmetrisch zum Concept (jede Edition/jedes Kapitel-Concept IST ein
         // Concept): gleiche Profile, gleicher Filter-Satz, gleicher Preis-Default im Produktions-Profil.
-        if (in_array($scope, ['concept', 'format', 'foodbook'], true) && $profil === 'produktion') {
+        if (in_array($scope, ['concept', 'format', 'foodbook', 'speisekarte'], true) && $profil === 'produktion') {
             $defaults['preise'] = true;
         }
 
@@ -345,6 +346,88 @@ class ReportExportService
                 'name' => (string) $fb->label,
                 'customer' => $fb->crmCompany?->display_name,
                 'kapitel' => $kapitelRows,
+            ],
+        ];
+    }
+
+    /**
+     * Technischer Speisekarte-Report (Dominique 2026-08-27, Parität zum Foodbook-Report): Rubrik-Baum ×
+     * Positionen, jede über den GETEILTEN Concept-/Rezept-Körper (Filter LITERAL dieselben wie Concept/
+     * Format/Foodbook). menue_ref (Konzept ODER Paket) läuft über die Concept-Auflösung, gericht_ref über
+     * den Rezept-Körper; header/text bleiben als Struktur in Reihenfolge. Die Produktions-Kaskade lebt HIER.
+     *
+     * @return array<string, mixed>
+     */
+    public function speisekarteDaten(Team $team, int $karteId, array $optionen, array $rubrikFilter = []): array
+    {
+        $karte = FoodAlchemistSpeisekarte::visibleToTeam($team)
+            ->with([
+                'sections' => fn ($q) => $q->orderBy('position'),
+                'sections.items' => fn ($q) => $q->orderBy('position'),
+                'sections.items.dish:id,name',
+                'crmCompany',
+            ])
+            ->findOrFail($karteId);
+
+        $sections = $karte->sections;
+        if ($rubrikFilter !== []) {
+            $erlaubt = array_flip(array_map('intval', $rubrikFilter));
+            $sections = $sections->filter(fn ($r) => isset($erlaubt[(int) $r->id]))->values();
+            $vorhanden = array_flip($sections->pluck('id')->map(fn ($v) => (int) $v)->all());
+            $byParent = $sections->groupBy(fn ($r) => ($r->parent_id !== null && isset($vorhanden[(int) $r->parent_id])) ? (int) $r->parent_id : 0);
+        } else {
+            $byParent = $sections->groupBy(fn ($r) => $r->parent_id ?? 0);
+        }
+
+        $rubrikRows = [];
+        $walk = function ($parentId, int $depth) use (&$walk, $byParent, &$rubrikRows, $team, $optionen) {
+            foreach ($byParent[$parentId] ?? [] as $r) {
+                $positionen = [];
+                foreach ($r->items as $pos) {
+                    if ($pos->type === 'menue_ref' && $pos->concept_id !== null) {
+                        try {
+                            $positionen[] = ['kind' => 'concept', 'concept' => $this->conceptDaten($team, (int) $pos->concept_id, $optionen)['concept']];
+                        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException) {
+                            continue; // Concept nicht (mehr) sichtbar → auslassen
+                        }
+                    } elseif ($pos->type === 'gericht_ref' && $pos->sales_recipe_id !== null) {
+                        try {
+                            $positionen[] = ['kind' => 'recipe', 'name' => $pos->dish?->name, 'recipe' => $this->rezeptDaten($team, (int) $pos->sales_recipe_id, $optionen)['recipe']];
+                        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException) {
+                            continue;
+                        }
+                    } elseif ($pos->type === 'header') {
+                        $t = trim((string) $pos->label);
+                        if ($t !== '') {
+                            $positionen[] = ['kind' => 'header', 'text' => $t];
+                        }
+                    } elseif ($pos->type === 'text') {
+                        $t = trim((string) $pos->consumer_text);
+                        if ($t !== '') {
+                            $positionen[] = ['kind' => 'text', 'text' => $t];
+                        }
+                    }
+                }
+                $rubrikRows[] = ['title' => trim((string) ($r->consumer_title ?: $r->title)), 'depth' => $depth, 'positionen' => $positionen];
+                $walk((int) $r->id, $depth + 1);
+            }
+        };
+        $walk(0, 0);
+
+        return [
+            'typ' => 'speisekarte',
+            'titel' => 'Speisekarte',
+            'name' => (string) $karte->name,
+            'optionen' => $optionen,
+            'recipe' => null,
+            'concept' => null,
+            'format' => null,
+            'foodbook' => null,
+            'speisekarte' => [
+                'id' => (int) $karte->id,
+                'name' => (string) $karte->name,
+                'customer' => $karte->crmCompany?->display_name,
+                'rubriken' => $rubrikRows,
             ],
         ];
     }

@@ -291,7 +291,7 @@ class Index extends Component
             $this->pickerRubrikId = null;
         } else {
             $this->pickerRubrikId = $rubrikId;
-            $this->pickerModus = in_array($modus, ['gericht', 'menue'], true) ? $modus : 'gericht';
+            $this->pickerModus = in_array($modus, ['gericht', 'konzept', 'paket'], true) ? $modus : 'gericht';
         }
         $this->pickerSuche = '';
         // Werkstrang M Phase B: Facetten beim (Neu-)Öffnen zurücksetzen.
@@ -299,10 +299,10 @@ class Index extends Component
         $this->pickerDishClass = null;
     }
 
-    /** Persistenter Katalog (Picker-Umbau): Modus umschalten (gericht|menue|format); Ziel-Rubrik bleibt. */
+    /** Persistenter Katalog (Picker-Umbau): Modus umschalten (gericht|konzept|paket|format); Ziel-Rubrik bleibt. */
     public function katalogModus(string $modus): void
     {
-        $this->pickerModus = in_array($modus, ['gericht', 'menue', 'format'], true) ? $modus : 'gericht';
+        $this->pickerModus = in_array($modus, ['gericht', 'konzept', 'paket', 'format'], true) ? $modus : 'gericht';
         $this->pickerSuche = '';
         $this->pickerHauptgruppe = null;
         $this->pickerDishClass = null;
@@ -643,17 +643,20 @@ class Index extends Component
         $team = $this->team();
         $karte = $this->karteId ? $svc->detail($team, $this->karteId) : null;
 
-        // Preis-Map je Position (netto) für die Editor-Live-Anzeige + Kunden-Vorschau (Wording aufgelöst).
+        // Board-Sicht (intern): je Position VK/EK/WE + je Rubrik der Σ-Rollup für die Kosten-/Margen-Spalten
+        // im Aufbau-Baum (Dominique 2026-08-27). Ein Aufruf statt N Einzelpreise. $alleRubrikIds treibt
+        // „Alle auf/zu".
         $preise = [];
+        $rubrikAgg = [];
+        $alleRubrikIds = [];
         $baum = [];
         $vorschau = null;
         if ($karte) {
             $baum = $svc->rubrikTree($team, $karte->id);
-            foreach ($karte->sections as $rubrik) {
-                foreach ($rubrik->items as $pos) {
-                    $preise[$pos->id] = $svc->positionPreis($pos);
-                }
-            }
+            $board = $svc->boardDaten($team, $karte);
+            $preise = $board['positionen'];
+            $rubrikAgg = $board['rubriken'];
+            $alleRubrikIds = $karte->sections->pluck('id')->map(fn ($v) => (int) $v)->all();
             $vorschau = $svc->dokumentDaten($team, $karte);
         }
 
@@ -663,9 +666,12 @@ class Index extends Component
         $pickerHauptgruppen = collect();
         $pickerUntergruppen = collect();
         if ($karte !== null && $this->pickerModus !== 'format') {
-            $pickerErgebnisse = $this->pickerModus === 'menue'
-                ? $svc->conceptKandidaten($team, $this->pickerSuche, 50)
-                : $svc->gerichtKandidaten($team, $this->pickerSuche, 50, $this->pickerHauptgruppe, $this->pickerDishClass);
+            $pickerErgebnisse = match ($this->pickerModus) {
+                // Menü ist ein Konzept; Paket = kind=paket-Concept (eigener Katalog-Reiter).
+                'konzept' => $svc->conceptKandidaten($team, $this->pickerSuche, 50, 'concept'),
+                'paket' => $svc->conceptKandidaten($team, $this->pickerSuche, 50, 'paket'),
+                default => $svc->gerichtKandidaten($team, $this->pickerSuche, 50, $this->pickerHauptgruppe, $this->pickerDishClass),
+            };
             if ($this->pickerModus === 'gericht') {
                 $pickerHauptgruppen = app(\Platform\FoodAlchemist\Services\SalesRecipeService::class)->dishMainGroups($team);
                 if ($this->pickerHauptgruppe !== null) {
@@ -685,6 +691,8 @@ class Index extends Component
             'karte' => $karte,
             'baum' => $baum,
             'preise' => $preise,
+            'rubrikAgg' => $rubrikAgg,
+            'alleRubrikIds' => $alleRubrikIds,
             'vorschau' => $vorschau,
             'pickerErgebnisse' => $pickerErgebnisse,
             'pickerHauptgruppen' => $pickerHauptgruppen,
@@ -709,50 +717,19 @@ class Index extends Component
     }
 
     /**
-     * Voll-Kaskade (P4): leitet den Rahmen aus den Rubriken der Karte ab (falls keiner existiert — Rubriken =
-     * Struktur), erzeugt je Rubrik ein Konzept (an die Rubrik gehängt) + Gericht-Fan-out. Legt eine Planungs-
-     * Session als Review-Wurzel an und leitet in den Planung-Editor (Fortschritt + Freigabe).
+     * Spec 42 (Speisekarte-Parität zu Foodbook-F2) — Handoff in die Leitstelle. Die Planung (Brief →
+     * Gerüst → Kaskade) lebt in der Leitstelle; die Speisekarte ist reine Ausgabe. Dieser Knopf baut
+     * KEIN Gerüst mehr im Modul, sondern öffnet die Leitstelle im Owner-Kontext dieser Karte
+     * (`sk_owner`) — dort entstehen Struktur + Inhalte und docken via attachToOutput automatisch zurück.
      */
-    public function vollKaskadeStarten(
-        \Platform\FoodAlchemist\Services\PlanningCascadeService $cascade,
-        \Platform\FoodAlchemist\Services\PlanningSessionService $sessions,
-        \Platform\FoodAlchemist\Services\PlanningFrameService $frames
-    ) {
+    public function vollKaskadeStarten()
+    {
         $this->kaskadeMeldung = null;
-        $team = $this->team();
-        if ($team === null || $this->karteId === null) {
+        if ($this->karteId === null) {
             return null;
         }
-        $karte = FoodAlchemistSpeisekarte::visibleToTeam($team)->with('sections')->find($this->karteId);
-        if ($karte === null) {
-            return null;
-        }
-        try {
-            $frame = $frames->frameFor($team, 'speisekarte', (int) $this->karteId, 'speisekarte_vollkaskade');
-            if ($frame->slots()->count() === 0) {
-                foreach ($karte->sections as $rubrik) {
-                    $frames->addSlot($team, $frame, ['label' => (string) $rubrik->title, 'slot_type' => 'station', 'target_count' => 3]);
-                }
-            }
-            if ($frame->slots()->count() === 0) {
-                $this->kaskadeMeldung = 'Erst Rubriken anlegen — daraus entsteht der Kaskaden-Rahmen.';
 
-                return null;
-            }
-            $session = $sessions->create($team, [
-                'title' => 'Voll-Kaskade: ' . ($karte->name ?: ('Speisekarte #' . $this->karteId)),
-                'created_via' => 'speisekarte_vollkaskade',
-            ]);
-            $cascade->starteKaskade($team, 'vollkaskade', $session, 'voll_kreativ', [
-                'owner_type' => 'speisekarte', 'owner_id' => (int) $this->karteId, 'created_via' => 'speisekarte_vollkaskade',
-            ]);
-
-            return redirect()->route('foodalchemist.planung.index', ['session' => $session->id, 'open' => 1]);
-        } catch (\Throwable $e) {
-            $this->kaskadeMeldung = $e->getMessage();
-
-            return null;
-        }
+        return redirect()->route('foodalchemist.planung.index', ['sk_owner' => (int) $this->karteId]);
     }
 
     private function team()

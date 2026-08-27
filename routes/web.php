@@ -552,6 +552,33 @@ Route::get('/speisekarten/{id}/praesentation', \Platform\FoodAlchemist\Livewire\
     ->whereNumber('id')->name('foodalchemist.speisekarte.praesentation');
 
 /**
+ * Technischer Speisekarte-Report (Dominique 2026-08-27, Parität zum Foodbook-Report): Profile
+ * (Kurzblatt … Volle Kaskade) + Filter (Preise/Lieferanten/Deklaration/Nährwerte/Kaskade) + Rubrik-Filter,
+ * über den geteilten `dokumente.report`-View. Rubrik-Baum × Positionen über den geteilten Concept-/Rezept-Körper.
+ */
+Route::get('/speisekarten/{id}/report', function (int $id, \Platform\FoodAlchemist\Services\ReportExportService $svc) {
+    $team = \Illuminate\Support\Facades\Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
+    $optionen = $svc->optionen(request()->query(), 'speisekarte');
+    $rubRaw = request()->query('rubrik', '');
+    $rubrikFilter = is_array($rubRaw)
+        ? array_values(array_filter(array_map('intval', $rubRaw)))
+        : array_values(array_filter(array_map('intval', explode(',', (string) $rubRaw))));
+    $data = $svc->speisekarteDaten($team, $id, $optionen, $rubrikFilter);
+
+    if (request()->boolean('pdf')) {
+        if (! class_exists(\Barryvdh\DomPDF\Facade\Pdf::class)) {
+            \Illuminate\Support\Facades\Log::warning('Speisekarte-Report-PDF angefordert, aber DomPDF ist nicht installiert.', ['speisekarte_id' => $id]);
+            abort(500, 'PDF-Export nicht verfügbar: DomPDF ist auf diesem Server nicht installiert.');
+        }
+
+        return \Barryvdh\DomPDF\Facade\Pdf::loadView('foodalchemist::dokumente.report', $data + ['istPdf' => true])
+            ->download('Speisekarte-Report-' . $id . '.pdf');
+    }
+
+    return view('foodalchemist::dokumente.report', $data + ['istPdf' => false]);
+})->whereNumber('id')->name('foodalchemist.speisekarte.report');
+
+/**
  * Spec 18: Produktion — absorbiert die bisherigen Planungs-Blätter (Vorschau im
  * Editor, unverändert per PlanungsblattService) + persistierte Produktionsaufträge
  * (Datum, Status, → Bestellung übergeben). /blaetter bleibt als Redirect (keine

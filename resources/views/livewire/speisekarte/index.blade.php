@@ -68,6 +68,8 @@
                     <button type="button" @click="$dispatch('modal.open', { name: 'speisekarte-editor' })" class="{{ $btnPrimary }}" data-sk-bearbeiten>@svg('heroicon-o-pencil-square', 'w-4 h-4') Bearbeiten</button>
                     <a href="{{ route('foodalchemist.speisekarte.dokument', $karte->id) }}" target="_blank" class="{{ $btnGhost }}">Dokument</a>
                     <a href="{{ route('foodalchemist.speisekarte.praesentation', $karte->id) }}" target="_blank" class="{{ $btnGhost }}">Präsentation</a>
+                    {{-- Technischer Report (Parität Foodbook): Profile + Filter (Preise/Lieferanten/Deklaration/Nährwerte/Kaskade) + Rubrik-Filter. --}}
+                    <a href="{{ route('foodalchemist.speisekarte.report', $karte->id) }}" target="_blank" class="{{ $btnGhost }}" title="Technischer Report — Profile (Kurzblatt … Volle Kaskade) + Filter, wie bei Concept/Format/Foodbook">Report</a>
                     <button type="button" wire:click="duplizieren" class="{{ $btnGhost }}">Duplizieren</button>
                 </div>
             </div>
@@ -274,18 +276,27 @@
             {{-- Rubriken + Positionen --}}
             {{-- Werkstrang M (UX-Ausbau): gemeinsame D&D-Scope für ALLE (auch verschachtelten) Rubriken —
                  ein x-data am Container statt pro Rubrik (vermeidet die rekursive Scope-Falle). --}}
+            {{-- Board-Integration (Dominique 2026-08-27): Rubriken pro Knoten auf/zu (zu[id]) → sauberes
+                 Umsortieren ohne die Speisen-Lücken; „Alle auf/zu" über alleIds. --}}
             <div class="relative overflow-hidden {{ $card }} p-4" wire:key="sk-body-{{ $karte->id }}"
-                 x-data="{ dragPosId: null, dragRubrikId: null }">
+                 x-data="{ dragPosId: null, dragRubrikId: null, zu: {}, alleIds: @js($alleRubrikIds) }">
                 <div class="{{ $cardAccent }}"></div>
 
                 <div class="flex items-center gap-2 mb-3">
                     <input type="text" wire:model="neueRubrik" wire:keydown.enter="rubrikNeu" placeholder="Neue Rubrik (z. B. Vorspeisen) …" class="{{ $input }} max-w-xs" />
                     <button type="button" wire:click="rubrikNeu" class="{{ $btnGhost }}">+ Rubrik</button>
+                    @if(count($alleRubrikIds) > 0)
+                        <button type="button" @click="zu = {}" class="{{ $btnGhostXs }}" title="Alle Rubriken aufklappen" data-sk-alle-auf>Alle auf</button>
+                        <button type="button" @click="zu = Object.fromEntries(alleIds.map(i => [i, true]))" class="{{ $btnGhostXs }}" title="Alle Rubriken zuklappen (zum Umsortieren)" data-sk-alle-zu>Alle zu</button>
+                    @endif
+                    <span class="flex-1"></span>
                     {{-- Picker-Umbau: Format wandert in den permanenten Katalog rechts (Modus „Format"). --}}
-                    {{-- P4: Voll-Kaskade — je Rubrik ein Konzept + Gerichte erfinden, Review im Planung-Editor. --}}
-                    <button type="button" wire:click="vollKaskadeStarten" class="{{ $btnPrimary }}" wire:loading.attr="disabled" data-sk-voll-kaskade>
-                        <span wire:loading.remove wire:target="vollKaskadeStarten">@svg('heroicon-o-bolt', 'w-4 h-4') Voll-Kaskade</span>
-                        <span wire:loading wire:target="vollKaskadeStarten">Starte …</span>
+                    {{-- Spec 42 (Speisekarte-Parität): Planung (Brief → Gerüst → Kaskade) lebt in der Leitstelle,
+                         die Karte ist reine Ausgabe. Kein Inline-Kaskade-Go mehr — der Knopf springt in die
+                         Leitstelle im Owner-Kontext dieser Karte (weiterplanen). --}}
+                    <button type="button" wire:click="vollKaskadeStarten" class="{{ $btnPrimary }}" wire:loading.attr="disabled" data-sk-leitstelle>
+                        <span wire:loading.remove wire:target="vollKaskadeStarten">@svg('heroicon-o-bolt', 'w-4 h-4') In der Leitstelle planen</span>
+                        <span wire:loading wire:target="vollKaskadeStarten">Öffne …</span>
                     </button>
                 </div>
 
@@ -308,7 +319,8 @@
                          (F5: live menue_ref-Positionen, kein Sonderweg). --}}
                     <x-foodalchemist::katalog-picker marker="sk" switch="katalogModus" :modes="[
                         ['key' => 'gericht', 'label' => 'Gericht', 'active' => $pickerModus === 'gericht'],
-                        ['key' => 'menue', 'label' => 'Menü', 'active' => $pickerModus === 'menue'],
+                        ['key' => 'konzept', 'label' => 'Konzept', 'active' => $pickerModus === 'konzept'],
+                        ['key' => 'paket', 'label' => 'Paket', 'active' => $pickerModus === 'paket'],
                         ['key' => 'format', 'label' => 'Format', 'active' => $pickerModus === 'format'],
                     ]">
                         @if($pickerModus === 'format')
@@ -323,8 +335,9 @@
                                 @endforelse
                             </div>
                         @else
+                            @php($istMenuePicker = in_array($pickerModus, ['konzept', 'paket'], true))
                             <p class="text-[11px] mb-2 shrink-0 {{ $pickerRubrikTitel !== null ? 'text-violet-700' : 'text-amber-600' }}" data-sk-ziel>{{ $pickerRubrikTitel !== null ? 'Ziel-Rubrik: ' . $pickerRubrikTitel : 'Ziel-Rubrik: links per „+" an einer Rubrik wählen.' }}</p>
-                            <input type="search" wire:model.live.debounce.300ms="pickerSuche" placeholder="{{ $pickerModus === 'menue' ? 'Menü/Concept suchen …' : 'Gericht suchen …' }}" class="{{ $input }} w-full mb-2 shrink-0" data-sk-picker-suche />
+                            <input type="search" wire:model.live.debounce.300ms="pickerSuche" placeholder="{{ $pickerModus === 'konzept' ? 'Konzept suchen …' : ($pickerModus === 'paket' ? 'Paket suchen …' : 'Gericht suchen …') }}" class="{{ $input }} w-full mb-2 shrink-0" data-sk-picker-suche />
                             @if($pickerModus === 'gericht')
                                 {{-- Facetten als Dropdowns (Produktions-Muster): Warengruppe → Unterklasse. --}}
                                 <div class="grid grid-cols-2 gap-1 mb-2 shrink-0" data-sk-gericht-facetten>
@@ -340,9 +353,9 @@
                             @endif
                             <div class="flex-1 overflow-y-auto space-y-0.5">
                                 @forelse($pickerErgebnisse as $g)
-                                    <x-foodalchemist::katalog-row wire:key="skpk-{{ $g->id }}" :disabled="$pickerRubrikTitel === null" wire:click="{{ $pickerModus === 'menue' ? 'positionAusMenue' : 'positionAusGericht' }}({{ (int) ($pickerRubrikId ?? 0) }}, {{ $g->id }})" :title="$g->name" :price="isset($g->sales_net) && $g->sales_net !== null ? number_format((float) $g->sales_net, 2, ',', '.') . ' €' : null">{{ $g->name }}</x-foodalchemist::katalog-row>
+                                    <x-foodalchemist::katalog-row wire:key="skpk-{{ $g->id }}" :disabled="$pickerRubrikTitel === null" wire:click="{{ $istMenuePicker ? 'positionAusMenue' : 'positionAusGericht' }}({{ (int) ($pickerRubrikId ?? 0) }}, {{ $g->id }})" :title="$g->name" :price="isset($g->sales_net) && $g->sales_net !== null ? number_format((float) $g->sales_net, 2, ',', '.') . ' €' : null">{{ $g->name }}</x-foodalchemist::katalog-row>
                                 @empty
-                                    <p class="text-[11px] text-gray-400 px-2 py-2">{{ trim($pickerSuche) !== '' ? 'Nichts gefunden.' : ($pickerModus === 'menue' ? 'Keine Menüs/Concepts.' : 'Keine Gerichte.') }}</p>
+                                    <p class="text-[11px] text-gray-400 px-2 py-2">{{ trim($pickerSuche) !== '' ? 'Nichts gefunden.' : ($pickerModus === 'konzept' ? 'Keine Konzepte.' : ($pickerModus === 'paket' ? 'Keine Pakete.' : 'Keine Gerichte.')) }}</p>
                                 @endforelse
                             </div>
                         @endif

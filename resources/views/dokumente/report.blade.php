@@ -358,6 +358,37 @@
         @empty
             <p class="muted">Noch keine Kapitel — im Foodbook-Editor anlegen.</p>
         @endforelse
+    @elseif($speisekarte ?? null)
+        {{-- Technischer Speisekarte-Report — Rubriken × Positionen über den GETEILTEN Concept-/Rezept-Körper
+             (Filter LITERAL dieselben wie Concept/Format/Foodbook). Die Produktions-Kaskade lebt HIER. --}}
+        <section>
+            <h2>Speisekarte-Übersicht</h2>
+            <div class="grid meta">
+                <div class="wide"><span>Name</span>{{ $speisekarte['name'] ?? '—' }}</div>
+                <div><span>Kunde</span>{{ $speisekarte['customer'] ?? '—' }}</div>
+                <div><span>Profil</span>{{ $opt['profil'] ?? '—' }}</div>
+            </div>
+        </section>
+        @forelse($speisekarte['rubriken'] as $rub)
+            @php($hTag = 'h' . min(4, 2 + (int) ($rub['depth'] ?? 0)))
+            <{{ $hTag }} style="margin-left: {{ ($rub['depth'] ?? 0) * 12 }}px">{{ $rub['title'] }}</{{ $hTag }}>
+            @forelse($rub['positionen'] as $pos)
+                @if($pos['kind'] === 'concept')
+                    <h3 style="margin-left: {{ (($rub['depth'] ?? 0) + 1) * 12 }}px">{{ $pos['concept']['name'] ?? '—' }}@if($pos['concept']['consumer_name'] ?? null)<span class="muted"> · {{ $pos['concept']['consumer_name'] }}</span>@endif</h3>
+                    @include('foodalchemist::dokumente.partials.report-concept-body', ['concept' => $pos['concept'], 'optionen' => $opt])
+                @elseif($pos['kind'] === 'recipe')
+                    @include('foodalchemist::dokumente.partials.report-recipe-node', ['node' => $pos['recipe'], 'optionen' => $opt])
+                @elseif($pos['kind'] === 'header')
+                    <h4>{{ $pos['text'] }}</h4>
+                @elseif($pos['kind'] === 'text')
+                    <p class="intro">{{ $pos['text'] }}</p>
+                @endif
+            @empty
+                <p class="muted">— leer —</p>
+            @endforelse
+        @empty
+            <p class="muted">Noch keine Rubriken — im Speisekarte-Editor anlegen.</p>
+        @endforelse
     @endif
 </main>
 </body>

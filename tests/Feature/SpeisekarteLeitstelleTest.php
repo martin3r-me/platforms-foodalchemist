@@ -69,13 +69,12 @@ it('Stufe E: unbekannte Allergen-Konfidenz → allergene offen, nicht bereit', f
 });
 
 /**
- * Etappe 5 P4 — Speisekarte als Leitstelle-Trigger: aus den Rubriken der Karte eine Voll-Kaskade
- * starten (Ausgabe-Modul = Quelle → je Rubrik 1 Concept + Gericht-Fan-out) und in den Planung-Editor
- * zur Sammel-Review leiten. Der Service-Pfad (Frame → Concept-Step je Slot + GenerateConceptJob-Attach
- * an die Rubrik) ist in PlanningCascadeTest gepinnt; hier fehlte die Livewire-Trigger-Deckung
- * (Session-Anlage, Redirect, Fehlerpfad) — 1:1 analog zu FoodbookLeitstelleTest.
+ * Spec 42 (Speisekarte-Parität zu Foodbook-F2, Dominique 2026-08-27): Die Planung (Brief → Gerüst →
+ * Kaskade) zieht in die Leitstelle; die Speisekarte ist reine Ausgabe. Der „In der Leitstelle planen"-
+ * Knopf baut KEIN Gerüst mehr im Modul, sondern springt in die Leitstelle im Owner-Kontext der Karte
+ * (`sk_owner`) — 1:1 analog zum Foodbook. Kein Session-/Lauf-/Job-Nebeneffekt im Modul.
  */
-it('vollKaskadeStarten (Leitstelle P4): legt eine Review-Session an, startet die Voll-Kaskade (Concept-Step je Rubrik) und leitet in den Planung-Editor', function () {
+it('vollKaskadeStarten (Spec 42): öffnet die Leitstelle im Owner-Kontext (sk_owner), plant NICHT mehr im Modul', function () {
     Queue::fake();
     $this->actingAs($this->makeUser($this->rootTeam));
 
@@ -85,37 +84,23 @@ it('vollKaskadeStarten (Leitstelle P4): legt eine Review-Session an, startet die
     Livewire::test(SpeisekarteIndex::class)
         ->call('waehle', $karte->id)
         ->call('vollKaskadeStarten')
-        ->assertRedirect()
+        ->assertRedirect(route('foodalchemist.planung.index', ['sk_owner' => $karte->id]))
         ->assertSet('kaskadeMeldung', null);
 
-    // Ausgabe-Modul = Quelle: die Review-Wurzel wird als Planungs-Session mit speisekarte-Herkunft angelegt.
-    $session = FoodAlchemistPlanningSession::where('team_id', $this->rootTeam->id)
-        ->where('created_via', 'speisekarte_vollkaskade')->latest('id')->first();
-    expect($session)->not->toBeNull();
-
-    // Genau ein Voll-Kaskaden-Lauf an der Karte + ein Concept-Step (die eine Rubrik) + Job an die Rubrik.
-    $run = FoodAlchemistCascadeRun::where('source_owner_type', 'speisekarte')
-        ->where('source_owner_id', $karte->id)->latest('id')->first();
-    expect($run)->not->toBeNull()
-        ->and($run->scope)->toBe('vollkaskade')
-        ->and($run->status)->toBe('running')
-        ->and($run->planning_session_id)->toBe($session->id)
-        ->and($run->steps()->where('kind', 'concept')->count())->toBe(1);
-    Queue::assertPushed(GenerateConceptJob::class, fn ($job) => $job->attachOwnerType === 'speisekarte' && (int) $job->attachContainerId > 0);
+    // Spec 42: das Modul legt weder Session noch Lauf an und dispatcht keinen Job — Rahmen/Inhalte
+    // entstehen erst in der Leitstelle (speisekarteAusBrief).
+    expect(FoodAlchemistPlanningSession::where('team_id', $this->rootTeam->id)
+        ->where('created_via', 'speisekarte_vollkaskade')->count())->toBe(0);
+    expect(FoodAlchemistCascadeRun::where('source_owner_type', 'speisekarte')
+        ->where('source_owner_id', $karte->id)->count())->toBe(0);
+    Queue::assertNotPushed(GenerateConceptJob::class);
 });
 
-it('vollKaskadeStarten ohne Rubriken meldet ehrlich (kaskadeMeldung) — kein Lauf, kein Redirect', function () {
-    Queue::fake();
+it('vollKaskadeStarten ohne gewählte Karte tut nichts (kein Redirect)', function () {
     $this->actingAs($this->makeUser($this->rootTeam));
 
-    $leer = $this->karten->create($this->rootTeam, ['name' => 'Karte ohne Rubriken']);
-
     Livewire::test(SpeisekarteIndex::class)
-        ->call('waehle', $leer->id)
         ->call('vollKaskadeStarten')
         ->assertNoRedirect()
-        ->assertSet('kaskadeMeldung', fn ($v) => is_string($v) && $v !== '');
-
-    expect(FoodAlchemistCascadeRun::where('source_owner_type', 'speisekarte')->where('source_owner_id', $leer->id)->count())->toBe(0);
-    Queue::assertNotPushed(GenerateConceptJob::class);
+        ->assertSet('kaskadeMeldung', null);
 });

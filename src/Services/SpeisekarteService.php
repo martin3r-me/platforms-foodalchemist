@@ -551,6 +551,98 @@ class SpeisekarteService
         return ['vk' => null, 'quelle' => 'keine'];
     }
 
+    /**
+     * Board-Sicht (intern, Dominique 2026-08-27): VK + EK + Wareneinsatz-% je Position. VK spiegelt
+     * {@see positionPreis}; EK kommt gericht_ref aus ek_total_eur (Portion), menue_ref aus dem Concept-
+     * Cockpit (ek_per_person). Manueller VK → EK unbekannt (kein Rezept-Bezug). WE = EK/VK×100. Rein
+     * editor-intern — die Kundensicht (dokumentDaten) bleibt unberührt; die bestehende positionPreis-
+     * Signatur (Praesentation/Tools/Leitstelle) ändert sich nicht.
+     *
+     * @return array{vk: float|null, ek: float|null, we: float|null, quelle: string}
+     */
+    public function positionEkVk(FoodAlchemistSpeisekartePosition $pos): array
+    {
+        $vkArr = $this->positionPreis($pos);
+        $vk = $vkArr['vk'];
+        $ek = null;
+
+        if ($pos->type === 'gericht_ref') {
+            $dish = $pos->relationLoaded('dish') ? $pos->dish : $pos->dish()->first();
+            if ($dish?->ek_total_eur !== null) {
+                $ek = (float) $dish->ek_total_eur;
+            }
+        } elseif ($pos->type === 'menue_ref') {
+            $concept = $pos->relationLoaded('concept') ? $pos->concept : $pos->concept()->first();
+            if ($concept) {
+                $ek = (float) $this->concepts->preisCockpit($concept)['ek_per_person'];
+            }
+        }
+
+        $we = ($vk !== null && $vk > 0 && $ek !== null) ? round($ek / $vk * 100, 1) : null;
+
+        return ['vk' => $vk, 'ek' => $ek, 'we' => $we, 'quelle' => $vkArr['quelle']];
+    }
+
+    /**
+     * Board-Aggregat der ganzen Karte (Aufbau-Editor, intern): je Position VK/EK/WE + je Rubrik der
+     * Σ-Rollup (eigene Gericht-/Menü-Positionen + ALLE Unter-Rubriken) → Kosten-/Margen-Spalten direkt
+     * im Baum. Layout-Blöcke (header/text/spacer) zählen nicht in den Σ. Ein Aufruf statt N Einzel-
+     * Aufrufe im Blade.
+     *
+     * @return array{positionen: array<int, array{vk: float|null, ek: float|null, we: float|null, quelle: string}>, rubriken: array<int, array{vk: float, ek: float, n: int, we: float|null}>}
+     */
+    public function boardDaten(Team $team, FoodAlchemistSpeisekarte $karte): array
+    {
+        $sections = $karte->relationLoaded('sections') ? $karte->sections
+            : $karte->sections()->with(['items.dish', 'items.concept'])->get();
+
+        $positionen = [];
+        $eigen = [];       // rubrikId → ['vk','ek','n'] (nur eigene Positionen)
+        $byParent = [];
+        foreach ($sections as $r) {
+            $byParent[$r->parent_id ?? 0][] = $r;
+            $vk = 0.0;
+            $ek = 0.0;
+            $n = 0;
+            foreach ($r->items as $pos) {
+                $ekvk = $this->positionEkVk($pos);
+                $positionen[(int) $pos->id] = $ekvk;
+                if (! in_array($pos->type, ['gericht_ref', 'menue_ref'], true)) {
+                    continue;
+                }
+                $n++;
+                if ($ekvk['vk'] !== null) {
+                    $vk += $ekvk['vk'];
+                }
+                if ($ekvk['ek'] !== null) {
+                    $ek += $ekvk['ek'];
+                }
+            }
+            $eigen[(int) $r->id] = ['vk' => $vk, 'ek' => $ek, 'n' => $n];
+        }
+
+        $roll = function ($rid) use (&$roll, $byParent, $eigen) {
+            $acc = $eigen[$rid] ?? ['vk' => 0.0, 'ek' => 0.0, 'n' => 0];
+            foreach ($byParent[$rid] ?? [] as $kind) {
+                $c = $roll((int) $kind->id);
+                $acc['vk'] += $c['vk'];
+                $acc['ek'] += $c['ek'];
+                $acc['n'] += $c['n'];
+            }
+
+            return $acc;
+        };
+
+        $rubriken = [];
+        foreach ($sections as $r) {
+            $a = $roll((int) $r->id);
+            $a['we'] = ($a['vk'] > 0 && $a['ek'] > 0) ? round($a['ek'] / $a['vk'] * 100, 1) : null;
+            $rubriken[(int) $r->id] = $a;
+        }
+
+        return ['positionen' => $positionen, 'rubriken' => $rubriken];
+    }
+
     // ── Picker-Kandidaten ────────────────────────────────────────────────────
 
     /** Einzelne Gerichte/Getränke (VK-Rezepte) für den gericht_ref-Picker. */
@@ -567,12 +659,17 @@ class SpeisekarteService
             ->orderBy('name')->limit($limit)->get(['id', 'name', 'sales_net', 'dish_class_id']);
     }
 
-    /** Concepts (Fix-Menüs) für den menue_ref-Picker. */
-    public function conceptKandidaten(Team $team, string $suche, int $limit = 20): Collection
+    /**
+     * Concepts für den menue_ref-Picker, nach Ebene getrennt: `$kind='concept'` (Menü/Konzept) ODER
+     * `'paket'` (kind=paket-Concept). Der Katalog zeigt Konzept + Paket als eigene Reiter — beide werden
+     * als menue_ref gebucht, aber getrennt gebrowst (Dominique 2026-08-27: „Menü ist eigentlich Concept,
+     * Paket fehlt noch"). Picker zeigt nur aktive (keine Entwürfe/archivierten).
+     */
+    public function conceptKandidaten(Team $team, string $suche, int $limit = 20, string $kind = 'concept'): Collection
     {
-        // Kaskade: Ausgabe-Form → Konzepte UND Pakete buchbar (Paket = kind=paket-Concept).
         return FoodAlchemistConcept::visibleToTeam($team)->echte()
-            ->where('status', 'active') // Picker zeigt nur aktive (keine Entwürfe/archivierten; Status berücksichtigt)
+            ->where('kind', $kind === 'paket' ? 'paket' : 'concept')
+            ->where('status', 'active')
             ->when($suche !== '', fn ($q) => \Platform\FoodAlchemist\Support\Suche::like($q, 'name', $suche))
             ->orderBy('name')->limit($limit)->get(['id', 'name', 'price_per_person_cache']);
     }

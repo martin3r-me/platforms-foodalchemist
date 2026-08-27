@@ -2,20 +2,30 @@
      Erwartet: $rubrik, $depth, $karte, $preise, $pickerRubrikId, $pickerErgebnisse (+ Ui-Maps). --}}
 @php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
 @php($artLabel = ['speisen' => 'Speisen', 'getraenke' => 'Getränke', 'menue' => 'Menü', 'dessert' => 'Dessert', 'sonstiges' => 'Sonstiges'])
+{{-- Board-Integration (Dominique 2026-08-27): Σ-Rollup (EK/VK/WE) je Rubrik + Collapse-Chevron.
+     WE-Ampel wie im Cockpit (≤30 grün · ≤38 amber · >38 rot). $rubrikAgg erbt aus der Render-Scope. --}}
+@php($agg = ($rubrikAgg ?? [])[$rubrik->id] ?? null)
+@php($weTon = fn ($we) => $we === null ? 'text-gray-400' : ($we <= 30 ? 'text-emerald-600' : ($we <= 38 ? 'text-amber-600' : 'text-rose-600')))
 
-<div wire:key="sk-rubrik-{{ $rubrik->id }}" class="mb-3" style="margin-left: {{ $depth * 1.25 }}rem">
+<div wire:key="sk-rubrik-{{ $rubrik->id }}" class="mb-2" style="margin-left: {{ $depth * 1.25 }}rem">
     {{-- Werkstrang M (UX-Ausbau): Rubrik-Header = Drag-Handle (Rubrik umsortieren) + Drop-Ziel
          (Rubrik ablegen ODER eine gezogene Position in diese Rubrik verschieben). --}}
-    <div class="flex items-center gap-2 border-b border-black/10 pb-1 mb-2"
+    <div class="flex items-center gap-2 border-b border-black/10 pb-1 mb-1.5"
          x-on:dragover.prevent
          x-on:drop="if (dragPosId) { $wire.positionInRubrik(dragPosId, {{ $rubrik->id }}); dragPosId = null } else if (dragRubrikId && dragRubrikId !== {{ $rubrik->id }}) { $wire.rubrikAblegen(dragRubrikId, {{ $rubrik->id }}); dragRubrikId = null }">
+        <button type="button" class="shrink-0 w-4 text-center text-gray-400 hover:text-gray-700" title="Rubrik auf/zu"
+                @click="zu = {...zu, {{ $rubrik->id }}: !zu[{{ $rubrik->id }}]}" x-text="zu[{{ $rubrik->id }}] ? '▸' : '▾'">▾</button>
         <span class="cursor-move select-none text-gray-300 hover:text-gray-500 shrink-0" title="Ziehen zum Umsortieren"
               draggable="true" x-on:dragstart="dragRubrikId = {{ $rubrik->id }}" x-on:dragend="dragRubrikId = null">⠿</span>
         <span class="font-semibold text-gray-900 text-sm">{{ $rubrik->consumer_title ?: $rubrik->title }}</span>
         <span class="{{ $pill }} {{ $variantPill['secondary'] }}">{{ $artLabel[$rubrik->art] ?? $rubrik->art }}</span>
+        @if($agg && $agg['n'] > 0)
+            <span class="text-[10px] text-gray-400 tabular-nums whitespace-nowrap" title="Σ VK · Σ EK · Ø Wareneinsatz (inkl. Unter-Rubriken)" data-sk-rubrik-agg>Σ {{ number_format($agg['vk'], 2, ',', '.') }} € · EK {{ number_format($agg['ek'], 2, ',', '.') }} € · <span class="{{ $weTon($agg['we']) }}">WE {{ $agg['we'] !== null ? number_format($agg['we'], 0, ',', '.') . '%' : '—' }}</span></span>
+        @endif
         <span class="flex-1"></span>
         <button type="button" wire:click="pickerOeffnen({{ $rubrik->id }}, 'gericht')" class="{{ $btnGhostXs }}">+ Gericht</button>
-        <button type="button" wire:click="pickerOeffnen({{ $rubrik->id }}, 'menue')" class="{{ $btnGhostXs }}">+ Menü</button>
+        <button type="button" wire:click="pickerOeffnen({{ $rubrik->id }}, 'konzept')" class="{{ $btnGhostXs }}">+ Konzept</button>
+        <button type="button" wire:click="pickerOeffnen({{ $rubrik->id }}, 'paket')" class="{{ $btnGhostXs }}">+ Paket</button>
         {{-- Werkstrang M Phase D: Layout-Blöcke. --}}
         <button type="button" wire:click="layoutBlockNeu({{ $rubrik->id }}, 'header')" class="{{ $btnGhostXs }}" title="Überschrift einfügen">+ Ü</button>
         <button type="button" wire:click="layoutBlockNeu({{ $rubrik->id }}, 'text')" class="{{ $btnGhostXs }}" title="Text-Block einfügen">+ Text</button>
@@ -26,10 +36,12 @@
         <button type="button" wire:click="rubrikLoeschen({{ $rubrik->id }})" wire:confirm="Rubrik „{{ $rubrik->title }}“ löschen?" class="{{ $btnGhostXs }} text-red-600">✕</button>
     </div>
 
+    {{-- Board: Positionen + Unter-Rubriken zusammen kollabierbar (zu[id]) — der Rubrik-Kopf mit Σ bleibt sichtbar. --}}
+    <div x-show="!zu[{{ $rubrik->id }}]" x-cloak>
     {{-- Positionen --}}
     @forelse($rubrik->items as $pos)
         {{-- Werkstrang M (UX-Ausbau): Position draggable + Drop-Ziel (ablegen VOR dieser Position). --}}
-        <div wire:key="sk-pos-{{ $pos->id }}" class="flex items-center gap-2 py-0.5 text-sm"
+        <div wire:key="sk-pos-{{ $pos->id }}" class="flex items-center gap-2 py-0.5 px-1 rounded text-sm {{ $loop->odd ? 'bg-black/[0.02]' : '' }}"
              draggable="true"
              x-on:dragstart="dragPosId = {{ $pos->id }}" x-on:dragend="dragPosId = null"
              x-on:dragover.prevent
@@ -48,7 +60,12 @@
                 @endif
             </span>
             @php($p = $preise[$pos->id] ?? null)
-            <span class="tabular-nums text-gray-700 w-24 text-right">
+            {{-- Board (intern): WE-Ampel + EK je Gericht/Menü-Position; Layout-Blöcke (header/text/spacer) ohne Preis. --}}
+            @if($p && in_array($pos->type, ['gericht_ref', 'menue_ref']))
+                <span class="tabular-nums text-[10px] {{ $weTon($p['we'] ?? null) }} w-9 text-right shrink-0" title="Wareneinsatz">{{ ($p['we'] ?? null) !== null ? number_format($p['we'], 0, ',', '.') . '%' : '—' }}</span>
+                <span class="tabular-nums text-[11px] text-gray-400 w-16 text-right shrink-0" title="EK netto">{{ ($p['ek'] ?? null) !== null ? number_format($p['ek'], 2, ',', '.') . ' €' : '—' }}</span>
+            @endif
+            <span class="tabular-nums text-gray-700 w-24 text-right shrink-0">
                 @if($p && $p['vk'] !== null)
                     {{ number_format($p['vk'], 2, ',', '.') }} €
                     @if($p['quelle'] === 'manuell')<span class="text-violet-400" title="manueller Preis">✎</span>@endif
@@ -144,4 +161,5 @@
     @foreach($karte->sections->where('parent_id', $rubrik->id) as $kind)
         @include('foodalchemist::livewire.speisekarte.partials.rubrik', ['rubrik' => $kind, 'depth' => $depth + 1])
     @endforeach
+    </div>{{-- /kollabierbarer Body --}}
 </div>

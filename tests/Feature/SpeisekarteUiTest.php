@@ -249,10 +249,10 @@ it('UX D&D: rubrikAblegen sortiert Rubriken derselben Ebene', function () {
         ->whereNull('parent_id')->orderBy('position')->pluck('id')->all())->toBe([$rC->id, $rA->id, $rB->id]);
 });
 
-// Picker-Umbau: permanenter Katalog (Gericht · Menü) rechts + Ziel-Rubrik über das per-Rubrik-„+".
-// F5: der Katalog kennt wieder drei Modi (gericht|menue|format) — ein Format wird WIE EIN CONCEPT
-// gebucht (eigene Rubrik aus live menue_ref-Positionen), daher gültiger Modus.
-it('Speisekarte-Editor: permanenter Katalog mit 3 Modi + Ziel-Rubrik', function () {
+// Picker-Umbau + Konzept/Paket-Split (Dominique 2026-08-27): permanenter Katalog rechts mit VIER Modi
+// (gericht|konzept|paket|format) — „Menü ist eigentlich Concept, Paket fehlt noch". Konzept + Paket
+// buchen beide als menue_ref, werden aber getrennt gebrowst; Format wird WIE EIN CONCEPT gebucht.
+it('Speisekarte-Editor: permanenter Katalog mit 4 Modi (Gericht·Konzept·Paket·Format) + Ziel-Rubrik', function () {
     Livewire::test(SpeisekarteIndex::class)->call('neu');
     $karte = FoodAlchemistSpeisekarte::first();
     $comp = Livewire::test(SpeisekarteIndex::class)
@@ -260,18 +260,20 @@ it('Speisekarte-Editor: permanenter Katalog mit 3 Modi + Ziel-Rubrik', function 
         ->set('neueRubrik', 'Vorspeisen')->call('rubrikNeu');
     $rubrik = $karte->sections()->first();
 
-    // Katalog + 3 Modi rendern; Default-Modus Gericht.
+    // Katalog + 4 Modi rendern; Default-Modus Gericht.
     $comp->assertOk()
         ->assertSeeHtml('data-sk-katalog')
         ->assertSeeHtml('data-sk-kat="gericht"')
-        ->assertSeeHtml('data-sk-kat="menue"')
+        ->assertSeeHtml('data-sk-kat="konzept"')
+        ->assertSeeHtml('data-sk-kat="paket"')
         ->assertSeeHtml('data-sk-kat="format"')
         ->assertSet('pickerModus', 'gericht');
 
-    // Modus-Umschalter (Livewire); 'format' ist gültig, Unfug bleibt auf gericht.
+    // Modus-Umschalter (Livewire); konzept/paket/format sind gültig, Unfug fällt auf gericht.
     $comp->call('katalogModus', 'format')->assertSet('pickerModus', 'format')
         ->call('katalogModus', 'quatsch')->assertSet('pickerModus', 'gericht')
-        ->call('katalogModus', 'menue')->assertSet('pickerModus', 'menue');
+        ->call('katalogModus', 'konzept')->assertSet('pickerModus', 'konzept')
+        ->call('katalogModus', 'paket')->assertSet('pickerModus', 'paket');
 
     // „+ Gericht" an der Rubrik setzt die Ziel-Rubrik → Katalog nennt sie.
     $comp->call('pickerOeffnen', $rubrik->id, 'gericht')

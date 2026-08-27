@@ -1437,7 +1437,7 @@ it('CoverageService kennt die Speisekarte (istSpeisekarte, kein Fehl-Read als Co
         ->and($cov)->toHaveKey('befunde');
 });
 
-it('Speisekarte-Leitstelle: Voll-Kaskade-Go leitet Rahmen aus Rubriken ab + startet + redirected', function () {
+it('Speisekarte-Leitstelle (Spec 42): Voll-Kaskade-Go springt in die Leitstelle (sk_owner), plant NICHT mehr im Modul', function () {
     $svc = app(\Platform\FoodAlchemist\Services\SpeisekarteService::class);
     $karte = $svc->create($this->rootTeam, ['name' => 'Sommerkarte']);
     $svc->addRubrik($this->rootTeam, (int) $karte->id, ['title' => 'Vorspeisen']);
@@ -1447,10 +1447,11 @@ it('Speisekarte-Leitstelle: Voll-Kaskade-Go leitet Rahmen aus Rubriken ab + star
     Livewire::test(\Platform\FoodAlchemist\Livewire\Speisekarte\Index::class)
         ->call('waehle', $karte->id)
         ->call('vollKaskadeStarten')
-        ->assertRedirect();   // → Planung-Editor
+        ->assertRedirect(route('foodalchemist.planung.index', ['sk_owner' => $karte->id]));
 
-    expect(FoodAlchemistCascadeRun::where('source_owner_type', 'speisekarte')->where('source_owner_id', $karte->id)->count())->toBe(1);
-    Queue::assertPushed(GenerateConceptJob::class, 2);   // 2 Rubriken → 2 Slots → 2 Konzepte
+    // Parität zum Foodbook (F2): kein Modul-Lauf, kein Job — Rahmen/Inhalte entstehen erst in der Leitstelle.
+    expect(FoodAlchemistCascadeRun::where('source_owner_type', 'speisekarte')->where('source_owner_id', $karte->id)->count())->toBe(0);
+    Queue::assertNotPushed(GenerateConceptJob::class);
 });
 
 // ── P5: Speiseplan-Voll-Kaskade (Zell-Fan-out) ──────────────────────────────
