@@ -224,9 +224,9 @@
                         @forelse($kapitelBoard as $kap)
                             @php($we = $kap['wareneinsatz'])
                             @php($agg = $kap['aggregat'])
-                            <div wire:key="board-{{ $kap['kapitel_id'] }}" x-data="{ open: false }">
+                            <div wire:key="board-{{ $kap['kapitel_id'] }}" x-data="{ open: false }" class="even:bg-black/[0.015]">
                                 {{-- Kopfzeile: klick = auf/zu; Aktions-Cluster rechts stoppt die Propagation --}}
-                                <div class="flex items-center gap-2 py-2 px-3 cursor-pointer hover:bg-violet-500/[0.03]" @click="open = !open" style="padding-left: {{ 12 + ($kap['depth'] - 1) * 16 }}px">
+                                <div class="flex items-center gap-1.5 py-1 px-3 cursor-pointer hover:bg-violet-500/[0.04]" @click="open = !open" style="padding-left: {{ 12 + ($kap['depth'] - 1) * 16 }}px">
                                     <i class="ti ti-chevron-right text-gray-400 shrink-0 transition-transform" :class="open && 'rotate-90'" style="font-size:15px"></i>
                                     <span class="w-2 h-2 rounded-full shrink-0 {{ $ampelDot[$we['status']] ?? 'bg-gray-300' }}" title="Wareneinsatz {{ $we['status'] }}"></span>
                                     <span class="text-sm font-medium text-gray-800 min-w-0 break-words">{{ $kap['titel'] }}</span>
@@ -236,8 +236,9 @@
                                         <span class="{{ $pill }} {{ $kap['hat_ziele'] ? $variantPill['primary'] : $variantPill['secondary'] }}" title="Ziele/Dimensionen gesetzt">Z</span>
                                         <span class="{{ $pill }} {{ $kap['positionen_count'] > 0 ? $variantPill['info'] : $variantPill['secondary'] }}" title="Positionen">{{ $kap['positionen_count'] }}</span>
                                         <span class="{{ $pill }} {{ $kap['bepreist'] ? $variantPill['success'] : ($kap['hat_inhalt'] ? $variantPill['warning'] : $variantPill['secondary']) }}" title="{{ $kap['bepreist'] ? 'bepreist' : ($kap['hat_inhalt'] ? 'angelegt/ohne Preis' : 'leer') }}">€</span>
+                                        @php($istRollup = count($kap['positionen']) === 0 && ($agg['vk_pro_person'] > 0 || $agg['pauschal'] > 0))
                                         @if($agg['ek_per_person'] > 0)<span class="text-gray-400" title="Wareneinsatz €/Gast">EK {{ number_format((float) $agg['ek_per_person'], 2, ',', '.') }}</span>@endif
-                                        @if($agg['vk_pro_person'] > 0)<span class="font-semibold text-gray-800" title="VK €/Gast">{{ number_format((float) $agg['vk_pro_person'], 2, ',', '.') }} €/G</span>@endif
+                                        @if($agg['vk_pro_person'] > 0)<span class="font-semibold text-gray-800" title="{{ $istRollup ? 'VK = Summe der Unterkapitel' : 'VK €/Gast' }}">@if($istRollup)<span class="text-gray-400 font-normal" title="Summe der Unterkapitel">Σ&nbsp;</span>@endif{{ number_format((float) $agg['vk_pro_person'], 2, ',', '.') }} €/G</span>@endif
                                         <span class="inline-flex items-center gap-1 {{ $ampelText[$we['status']] ?? 'text-gray-400' }}" title="WE {{ $we['ist_pct'] !== null ? number_format((float) $we['ist_pct'], 1, ',', '.') . ' %' : 'unbekannt' }} · Ziel {{ number_format((float) $we['ziel_pct'], 1, ',', '.') }} %">
                                             <span class="inline-block h-2 w-2 rounded-full {{ $ampelDot[$we['status']] ?? 'bg-gray-300' }}"></span>{{ $we['ist_pct'] !== null ? number_format((float) $we['ist_pct'], 1, ',', '.') . ' %' : '—' }}
                                         </span>
@@ -261,7 +262,11 @@
                                             </div>
                                         </div>
                                     @empty
-                                        <p class="text-[11px] text-gray-400 py-0.5">Noch keine bepreisten Positionen — im Speisen-Tab / in der Leitstelle anlegen.</p>
+                                        @if(($agg['vk_pro_person'] ?? 0) > 0 || ($agg['pauschal'] ?? 0) > 0)
+                                            <p class="text-[11px] text-gray-400 py-0.5">Keine eigenen Positionen — der Preis ist die <span class="text-gray-500">Summe der Unterkapitel</span>.</p>
+                                        @else
+                                            <p class="text-[11px] text-gray-400 py-0.5">Noch keine bepreisten Positionen — im Speisen-Tab / in der Leitstelle anlegen.</p>
+                                        @endif
                                     @endforelse
                                     @if(! empty($boardCoverage[$kap['kapitel_id']] ?? []))
                                         <div class="flex flex-wrap gap-x-4 gap-y-1 pt-2 mt-1 border-t border-black/5">

@@ -440,7 +440,34 @@ class LeitstelleService
             ];
         }
 
-        return $board;
+        // Baum-Reihenfolge (depth-first): jedes Kind DIREKT unter seinem echten Eltern —
+        // $fb->chapters ist nur nach `position` (flach) sortiert, was Kinder optisch unter den
+        // falschen Eltern rutschen lässt. Innerhalb einer Ebene bleibt die position-Reihenfolge.
+        $byParent = [];
+        foreach ($board as $e) {
+            $byParent[$e['parent_id'] ?? 0][] = $e;
+        }
+        $ordered = [];
+        $emitted = [];
+        $walk = function ($pid) use (&$walk, &$byParent, &$ordered, &$emitted) {
+            foreach ($byParent[$pid] ?? [] as $e) {
+                if (isset($emitted[$e['kapitel_id']])) {
+                    continue; // Zyklus-Schutz
+                }
+                $emitted[$e['kapitel_id']] = true;
+                $ordered[] = $e;
+                $walk($e['kapitel_id']);
+            }
+        };
+        $walk(0);
+        // Waisen (Eltern nicht im Buch) hinten anhängen, Original-Reihenfolge.
+        foreach ($board as $e) {
+            if (! isset($emitted[$e['kapitel_id']])) {
+                $ordered[] = $e;
+            }
+        }
+
+        return $ordered;
     }
 
     // ── intern ──────────────────────────────────────────────────────────────

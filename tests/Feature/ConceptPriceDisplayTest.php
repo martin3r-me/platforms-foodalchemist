@@ -5,6 +5,7 @@ use Platform\FoodAlchemist\Livewire\Concepter\Editor;
 use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
 use Platform\FoodAlchemist\Models\FoodAlchemistFoodbook;
 use Platform\FoodAlchemist\Services\FoodbookService;
+use Platform\FoodAlchemist\Services\LeitstelleService;
 use Platform\FoodAlchemist\Services\WordingResolver;
 use Platform\FoodAlchemist\Tests\Support\SeedsTeamHierarchy;
 use Platform\FoodAlchemist\Tests\TestCase;
@@ -89,6 +90,20 @@ it('Foodbook-Editor: detail() lädt price_display → istEinzelpreis am Block-Co
     $geladen = $this->fbsvc->detail($this->rootTeam, $fb->id);
     $block = $geladen->chapters->first()->blocks->first();
     expect($block->concept->istEinzelpreis())->toBeTrue();
+});
+
+it('Kapitel-Board: depth-first Baum-Reihenfolge — Kind direkt unter Eltern trotz position-Drift', function () {
+    $fb = FoodAlchemistFoodbook::create(['team_id' => $this->rootTeam->id, 'code' => 'FB-TREE', 'label' => 'Tree',
+        'jahr' => 2027, 'personen' => 10, 'status' => 'draft']);
+    // Flache position-Reihenfolge (A, B, A-Kind, B-Kind) folgt NICHT der Baumstruktur —
+    // das Board muss depth-first umsortieren: A, A-Kind, B, B-Kind.
+    $a = $fb->kapitel()->create(['team_id' => $this->rootTeam->id, 'title' => 'A', 'position' => 0]);
+    $b = $fb->kapitel()->create(['team_id' => $this->rootTeam->id, 'title' => 'B', 'position' => 1]);
+    $fb->kapitel()->create(['team_id' => $this->rootTeam->id, 'title' => 'A-Kind', 'parent_id' => $a->id, 'position' => 2]);
+    $fb->kapitel()->create(['team_id' => $this->rootTeam->id, 'title' => 'B-Kind', 'parent_id' => $b->id, 'position' => 5]);
+
+    $board = app(LeitstelleService::class)->kapitelBoard($this->rootTeam, $fb->fresh());
+    expect(collect($board)->pluck('titel')->all())->toBe(['A', 'A-Kind', 'B', 'B-Kind']);
 });
 
 it('Concepter-Editor: setPreisDisplay persistiert die Preisdarstellung', function () {
