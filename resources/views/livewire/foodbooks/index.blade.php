@@ -84,7 +84,10 @@
                  sonst grau-auf-grau. Geöffnet per 》Bearbeiten《 (modal.open). --}}
             @php($fbKapitelN = $fb->chapters->count())
             @php($fbSpeisenN = collect($menue['kapitel'] ?? [])->sum(fn ($k) => collect($k['bloecke'] ?? [])->sum(fn ($b) => collect($b['gerichte'] ?? [])->reject(fn ($g) => in_array($g['type'] ?? '', ['paket', 'header'], true))->count())))
-            @php($fbVkPp = (float) ($menue['gesamt']['vk_pro_person'] ?? 0))
+            {{-- Ø Wareneinsatz-% statt buch-weiter „VK/Person" (Dominique 2026-08-27): letzterer war die SUMME
+                 aller Kapitel-Preise (kein Pro-Person-Wert). Die WE-Quote ist ein Verhältnis (ΣEK/ΣVK) → robust,
+                 aussagekräftig als Margen-Gesundheit. Echte Preise stehen je Kapitel im Board. --}}
+            @php($fbWePct = ($menue['gesamt']['food_cost_percent'] ?? null))
             @php($fbErledigt = collect($checkliste)->where('status', 'erledigt')->count())
             @php($fbSchritte = count($checkliste))
             <x-foodalchemist::modal name="foodbook-editor" fullscreen dark-canvas title="Foodbook bearbeiten" :title-name="$fb->label">
@@ -102,8 +105,8 @@
                     <x-foodalchemist::kpi-tiles marker="fb-kpis" :tiles="[
                         ['kpi' => 'kapitel', 'label' => 'Kapitel', 'value' => (string) $fbKapitelN],
                         ['kpi' => 'speisen', 'label' => 'Speisen', 'value' => (string) $fbSpeisenN],
-                        ['kpi' => 'vkpp', 'label' => 'VK / Person', 'tone' => 'accent',
-                         'value' => $fbVkPp > 0 ? number_format($fbVkPp, 2, ',', '.') . ' €' : '—'],
+                        ['kpi' => 'we', 'label' => 'Ø Wareneinsatz', 'tone' => 'accent',
+                         'value' => $fbWePct !== null ? number_format((float) $fbWePct, 1, ',', '.') . ' %' : '—'],
                         ['kpi' => 'fortschritt', 'label' => 'Fortschritt',
                          'tone' => ($fbSchritte > 0 && $fbErledigt >= $fbSchritte) ? 'good' : 'neutral',
                          'value' => $fbErledigt . '/' . $fbSchritte],
@@ -208,17 +211,9 @@
                     @php($ampelDot = ['gruen' => 'bg-emerald-500', 'gelb' => 'bg-amber-400', 'rot' => 'bg-rose-500', 'unbekannt' => 'bg-gray-300'])
                     @php($ampelText = ['gruen' => 'text-emerald-700', 'gelb' => 'text-amber-700', 'rot' => 'text-rose-700', 'unbekannt' => 'text-gray-400'])
                     @php($befundAmpel = ['erfuellt' => 'text-emerald-600', 'teilerfuellt' => 'text-amber-600', 'verletzt' => 'text-rose-600', 'info' => 'text-sky-600'])
-                    @php($angelegtN = collect($kapitelBoard)->where('released', true)->count())
-                    @php($ges = $menue['gesamt'] ?? [])
 
-                    {{-- Summen-Leiste --}}
-                    <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
-                        <div class="{{ $card }} p-3"><p class="text-[11px] text-gray-500 uppercase tracking-wider">Ø VK / Person</p><p class="text-lg font-semibold tabular-nums text-gray-900">{{ ($ges['vk_pro_person'] ?? 0) > 0 ? number_format((float) $ges['vk_pro_person'], 2, ',', '.') . ' €' : '—' }}</p></div>
-                        <div class="{{ $card }} p-3"><p class="text-[11px] text-gray-500 uppercase tracking-wider">Ø Wareneinsatz</p><p class="text-lg font-semibold tabular-nums text-gray-900">{{ ($ges['ek_per_person'] ?? 0) > 0 ? number_format((float) $ges['ek_per_person'], 2, ',', '.') . ' €' : '—' }}</p></div>
-                        <div class="{{ $card }} p-3"><p class="text-[11px] text-gray-500 uppercase tracking-wider">WE-Quote</p><p class="text-lg font-semibold tabular-nums {{ ($ges['food_cost_percent'] ?? null) !== null ? 'text-amber-600' : 'text-gray-400' }}">{{ ($ges['food_cost_percent'] ?? null) !== null ? number_format((float) $ges['food_cost_percent'], 1, ',', '.') . ' %' : '—' }}</p></div>
-                        <div class="{{ $card }} p-3"><p class="text-[11px] text-gray-500 uppercase tracking-wider">Kapitel angelegt</p><p class="text-lg font-semibold tabular-nums text-gray-900">{{ $angelegtN }} / {{ count($kapitelBoard) }}</p></div>
-                    </div>
-
+                    {{-- Kennzahlen liegen im KPI-Streifen oben (Kapitel/Speisen/…) — hier keine zweite Summen-Leiste
+                         (Overlap + „Ø"-Fehllabel; die 318 € waren die Summe aller Kapitel, kein Pro-Person-Wert). --}}
                     {{-- Kapitel-Liste (der EINE Baum) --}}
                     <div class="{{ $card }} divide-y divide-black/5 overflow-hidden">
                         @forelse($kapitelBoard as $kap)
@@ -289,9 +284,10 @@
                 <div class="relative overflow-hidden {{ $card }} p-5 space-y-3" wire:key="fbhdr-{{ $fb->id }}">
                 <div class="{{ $cardAccent }}"></div>
                 <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    {{-- „Personen" entfernt (Dominique 2026-08-27): das Foodbook ist ein person-unabhängiges
+                         Portfolio — Pax liegt im Angebot. DB-Spalte/Default bleiben, nur das UI-Feld ist weg. --}}
                     <div class="md:col-span-2"><label class="{{ $label }}">Bezeichnung</label><input type="text" wire:model="form.label" class="{{ $input }}" /></div>
                     <div><label class="{{ $label }}">Jahr</label><input type="number" wire:model="form.jahr" class="{{ $input }}" /></div>
-                    <div><label class="{{ $label }}">Personen</label><input type="number" wire:model="form.personen" class="{{ $input }}" /></div>
                 </div>
 
                 {{-- Spec 33 P5: Status, Gültigkeitsfenster und beide Zuordnungsachsen kommen aus
