@@ -133,7 +133,7 @@ it('Eigenschaften-Assistent schickt die vorhandene Zubereitung + Portionen als K
             ->with('recipe.eigenschaften', \Mockery::on(function (array $payload) {
                 return ($payload['zubereitung'] ?? null) === 'Butter aufschäumen, Wein reduzieren, montieren.'
                     && (int) ($payload['portionen'] ?? 0) === 4;
-            }))
+            }), \Mockery::any())
             ->once()
             ->andReturn(new \Platform\FoodAlchemist\Services\Ai\AiProposal(['work_time_min' => 15], 0.9, null, [], 'mock'));
         $mock->shouldReceive('propose')

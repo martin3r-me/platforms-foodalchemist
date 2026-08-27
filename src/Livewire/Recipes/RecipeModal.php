@@ -583,7 +583,7 @@ class RecipeModal extends Component
     }
 
     /** ✨ Eigenschaften: Arbeitszeit/Temperatur/Funktion + Geschmack in die Form (Ist-App-Pendant). */
-    public function kiEigenschaften(AiGatewayService $ki): void
+    public function kiEigenschaften(AiGatewayService $ki, \Platform\FoodAlchemist\Services\Ai\KnowledgeContextService $wissen): void
     {
         $this->fehler = null;
         $r = $this->rezept();
@@ -597,6 +597,13 @@ class RecipeModal extends Component
 
             return;
         }
+        // A (Dominique 2026-08-27): gezielter Wissens-Pull — die Eigenschaften-KI bekommt jetzt das
+        // Regelwerk (recipe.eigenschaften-Routing; regelwerkBlock fällt für dieses Feature auf das
+        // Basisrezepte-Regelwerk zurück). Leeres Routing = leerer Block (no-op), also fail-soft.
+        $wissenBlock = $wissen->contextFor('recipe.eigenschaften', trim(($this->form['name'] ?? '') . ' ' . implode(' · ', $zutaten)));
+        $wissenOpts = ($wissenBlock['block'] ?? '') !== ''
+            ? ['knowledge' => $wissenBlock['block'], 'knowledge_used' => $wissenBlock['files_used'] ?? []]
+            : [];
         // Der Prompt fordert „vorhandene Zubereitung beachten" — Zubereitung + Portionen als Basis mitgeben.
         try {
             $eigenschaften = $ki->propose('recipe.eigenschaften', [
@@ -612,7 +619,7 @@ class RecipeModal extends Component
                 'max_vorlauf_tage' => $this->form['max_vorlauf_tage'],
                 'temperature' => $this->form['temperature'] ?: null,
                 'function' => $this->form['function'] ?: null, 'zutaten' => $zutaten,
-            ]);
+            ], $wissenOpts);
             $gefuellt = 0;
             foreach (['work_time_min', 'setup_time_min', 'standzeit_min', 'variable_work_time_min',
                 'variable_work_time_basis', 'max_vorlauf_tage', 'temperature', 'function'] as $feld) {
