@@ -75,6 +75,22 @@ it('Foodbook-Dokument: einzel-Block trägt das einzelpreise-Flag + Preise je Ger
         ->and(collect($block['gerichte'])->where('type', 'gericht')->pluck('preis')->filter()->count())->toBe(2);
 });
 
+it('Foodbook-Editor: detail() lädt price_display → istEinzelpreis am Block-Concept greift (Regression detail-Subset-Falle)', function () {
+    // detail() lud das Concept mit Spalten-Subset OHNE price_display → der Editor-Chip las
+    // istEinzelpreis() auf einer Instanz ohne die Spalte → immer gesamt. Diese Regression fixiert,
+    // dass price_display im Editor-Load enthalten ist.
+    $einzel = ($this->einzelSetup)('einzel');
+    $fb = FoodAlchemistFoodbook::create(['team_id' => $this->rootTeam->id, 'code' => 'FB-DET', 'label' => 'Det',
+        'jahr' => 2027, 'personen' => 10, 'status' => 'draft']);
+    $kap = $fb->kapitel()->create(['team_id' => $this->rootTeam->id, 'title' => 'K', 'position' => 0]);
+    $kap->blocks()->create(['team_id' => $this->rootTeam->id, 'type' => 'concept_ref',
+        'concept_id' => $einzel->id, 'position' => 0, 'visible' => true]);
+
+    $geladen = $this->fbsvc->detail($this->rootTeam, $fb->id);
+    $block = $geladen->chapters->first()->blocks->first();
+    expect($block->concept->istEinzelpreis())->toBeTrue();
+});
+
 it('Concepter-Editor: setPreisDisplay persistiert die Preisdarstellung', function () {
     $c = $this->makeConcept($this->rootTeam, 'Auswahl', ['kind' => 'concept', 'status' => 'active']);
 
