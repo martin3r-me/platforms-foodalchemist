@@ -56,6 +56,12 @@ it('rendert die Auftrags-Hochrechnung im Kalkulations-Tab', function () {
         ->call('oeffnen', 'concepts', $this->concept->id, 'kalkulation')
         ->set('simulationPax', 100)
         ->assertSee('Katalog / Person')
+        ->assertSee('Preisempfehlung / Person')
+        ->assertSee('Abweichung Katalog − Ziel')
+        ->assertSee('Zielpreis gesamt')
+        ->assertSee('Deckungsbeitrag Auftrag')
+        ->assertSee('Vergleich ohne Pax')
+        ->assertSee('DB Katalogsicht')
         ->assertSee('Aktive Personenzeit');
 });
 

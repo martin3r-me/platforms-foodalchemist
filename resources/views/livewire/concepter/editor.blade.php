@@ -65,11 +65,14 @@
                      'tone' => $stripWeTone,
                      'title' => $stripWpct !== null ? 'Ziel des Teams: ' . number_format((float) $zielWareneinsatzPct, 1, ',', '.') . ' %' : null,
                      'value' => $stripWpct !== null ? number_format($stripWpct, 1, ',', '.') . ' %' : '—'],
-                    ['kpi' => 'hk2', 'label' => 'HK2 (Vollkosten)',
+                    ['kpi' => 'hk2', 'label' => 'HK2 ohne Pax',
+                     'title' => 'Katalog-Kostenindikator ohne auftragsspezifische Produktionsmengen und Batches',
                      'value' => number_format((float) ($kalkulation['hk2_pro_person'] ?? 0), 2, ',', '.') . ' €'],
-                    ['kpi' => 'vk-vorschlag', 'label' => 'VK-Vorschlag',
+                    ['kpi' => 'vk-vorschlag', 'label' => 'Vergleich ohne Pax',
+                     'title' => 'Kalkulatorischer Vergleich aus HK2 ohne Pax plus Gewinnaufschlag; keine Auftragspreisempfehlung',
                      'value' => number_format((float) ($kalkulation['vk_vorschlag'] ?? 0), 2, ',', '.') . ' €'],
-                    ['kpi' => 'db', 'label' => 'Deckungsbeitrag',
+                    ['kpi' => 'db', 'label' => 'DB Katalogsicht',
+                     'title' => 'Katalogpreis minus kalkulatorischer HK2 ohne Pax',
                      'tone' => ($kalkulation['db_eur'] ?? 0) < 0 ? 'bad' : 'good',
                      'value' => $kalkulation['db_eur'] !== null ? number_format((float) $kalkulation['db_eur'], 2, ',', '.') . ' €' : '—'],
                     isset($aggregat['gewicht_pro_person_g']) ? [
@@ -983,11 +986,18 @@
                             <p class="text-[11px] text-gray-500 pb-2">Die Vorschau prüft den Katalogpreis, ohne Stammdaten zu verändern.</p>
                         </div>
                         @if($auftragsSimulation)
-                            <div class="grid grid-cols-2 md:grid-cols-5 gap-2 text-xs">
+                            @php($simPax = max(1, (int) $auftragsSimulation['pax']))
+                            @php($simZielPp = (float) ($auftragsSimulation['target_price_per_person'] ?? 0))
+                            @php($simAbweichungPp = (float) $auftragsSimulation['catalog_price_per_person'] - $simZielPp)
+                            @php($simDbPp = (float) $auftragsSimulation['contribution_margin'] / $simPax)
+                            <div class="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-2 text-xs" data-auftrag-preisempfehlung>
                                 <div><span class="block text-[10px] text-gray-500">Katalog / Person</span><span class="font-medium tabular-nums">{{ number_format((float) $auftragsSimulation['catalog_price_per_person'], 2, ',', '.') }} €</span></div>
-                                <div><span class="block text-[10px] text-gray-500">HK2 / Person</span><span class="font-medium tabular-nums">{{ number_format((float) $auftragsSimulation['hk2'] / max(1, $auftragsSimulation['pax']), 2, ',', '.') }} €</span></div>
-                                <div><span class="block text-[10px] text-gray-500">Mindestpreis</span><span class="font-medium tabular-nums">{{ number_format((float) $auftragsSimulation['minimum_price'], 2, ',', '.') }} €</span></div>
-                                <div><span class="block text-[10px] text-gray-500">Zielpreis</span><span class="font-medium tabular-nums">{{ number_format((float) $auftragsSimulation['target_price'], 2, ',', '.') }} €</span></div>
+                                <div><span class="block text-[10px] text-gray-500">HK2 / Person</span><span class="font-medium tabular-nums">{{ number_format((float) $auftragsSimulation['hk2'] / $simPax, 2, ',', '.') }} €</span></div>
+                                <div class="rounded-md bg-violet-500/10 px-2 py-1.5"><span class="block text-[10px] text-violet-500">Preisempfehlung / Person</span><span class="font-semibold text-violet-700 tabular-nums">{{ number_format($simZielPp, 2, ',', '.') }} €</span></div>
+                                <div><span class="block text-[10px] text-gray-500" title="Katalogpreis pro Person minus Preisempfehlung pro Person">Abweichung Katalog − Ziel</span><span class="font-medium tabular-nums {{ $simAbweichungPp < 0 ? 'text-amber-600' : 'text-emerald-600' }}">{{ $simAbweichungPp > 0 ? '+' : '' }}{{ number_format($simAbweichungPp, 2, ',', '.') }} €/P</span></div>
+                                <div><span class="block text-[10px] text-gray-500">Mindestpreis gesamt</span><span class="font-medium tabular-nums">{{ number_format((float) $auftragsSimulation['minimum_price'], 2, ',', '.') }} €</span></div>
+                                <div><span class="block text-[10px] text-gray-500">Zielpreis gesamt</span><span class="font-medium tabular-nums">{{ number_format((float) $auftragsSimulation['target_price'], 2, ',', '.') }} €</span></div>
+                                <div><span class="block text-[10px] text-gray-500">Deckungsbeitrag Auftrag</span><span class="font-medium tabular-nums {{ $auftragsSimulation['contribution_margin'] < 0 ? 'text-rose-500' : 'text-emerald-600' }}">{{ number_format($simDbPp, 2, ',', '.') }} €/P <span class="block text-[9px]">{{ number_format((float) $auftragsSimulation['contribution_margin'], 2, ',', '.') }} € · {{ $auftragsSimulation['contribution_margin_pct'] !== null ? number_format((float) $auftragsSimulation['contribution_margin_pct'], 1, ',', '.') . ' %' : '—' }}</span></span></div>
                                 <div><span class="block text-[10px] text-gray-500">Aktive Personenzeit</span><span class="font-medium tabular-nums">{{ number_format((float) $auftragsSimulation['active_person_minutes'] / 60, 2, ',', '.') }} h</span></div>
                             </div>
                             @if($auftragsSimulation['unprofitable'])
