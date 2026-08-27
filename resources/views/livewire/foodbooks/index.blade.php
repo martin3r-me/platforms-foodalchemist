@@ -217,22 +217,27 @@
 
                     {{-- Kennzahlen liegen im KPI-Streifen oben (Kapitel/Speisen/…) — hier keine zweite Summen-Leiste
                          (Overlap + „Ø"-Fehllabel; die 318 € waren die Summe aller Kapitel, kein Pro-Person-Wert). --}}
-                    {{-- Kapitel-Liste (der EINE Baum). alleEbenen-Schalter klappt auf die erste Ebene zu
-                         (Unterkapitel aus-/einblenden) — reines Alpine, kein Server-Roundtrip. --}}
-                    <div x-data="{ alleEbenen: true }">
-                        <div class="flex items-center justify-end pb-1.5">
-                            <button type="button" @click="alleEbenen = !alleEbenen" class="text-[11px] text-gray-500 hover:text-violet-600 inline-flex items-center gap-1" title="Baum auf die erste Ebene zuklappen">
-                                <i class="ti ti-chevron-down transition-transform" :class="!alleEbenen && '-rotate-90'" style="font-size:13px"></i><span x-text="alleEbenen ? 'Nur Oberkapitel' : 'Alle Ebenen'"></span>
-                            </button>
+                    {{-- Kapitel-Liste = echter Baum. auf{} = expandierte Kapitel-IDs (Default leer → nur Oberkapitel
+                         sichtbar). Caret je Kapitel klappt seinen Ast (Kinder + eigene Positionen) auf/zu; ein Kapitel
+                         ist nur sichtbar, wenn ALLE Vorfahren aufgeklappt sind. Reines Alpine, kein Server-Roundtrip. --}}
+                    @php($byId = collect($kapitelBoard)->keyBy('kapitel_id'))
+                    @php($hatKinder = collect($kapitelBoard)->pluck('parent_id')->filter()->mapWithKeys(fn ($pid) => [(int) $pid => true])->all())
+                    @php($ahnen = function ($kid) use ($byId) { $ids = []; $cur = data_get($byId->get($kid), 'parent_id'); $g = 0; while ($cur !== null && $g++ < 20) { $ids[] = (int) $cur; $cur = data_get($byId->get($cur), 'parent_id'); } return $ids; })
+                    @php($alleIds = collect($kapitelBoard)->pluck('kapitel_id')->map(fn ($i) => (int) $i)->all())
+                    <div x-data="{ auf: {} }">
+                        <div class="flex items-center justify-end gap-4 pb-1.5 text-[11px]">
+                            <button type="button" @click="auf = Object.fromEntries(@js($alleIds).map(i => [i, true]))" class="text-gray-500 hover:text-violet-600 inline-flex items-center gap-1" title="Alle Äste aufklappen"><i class="ti ti-chevrons-down" style="font-size:13px"></i>Alle auf</button>
+                            <button type="button" @click="auf = {}" class="text-gray-500 hover:text-violet-600 inline-flex items-center gap-1" title="Auf Oberkapitel zuklappen"><i class="ti ti-chevrons-up" style="font-size:13px"></i>Alle zu</button>
                         </div>
                     <div class="{{ $card }} divide-y divide-black/5 overflow-hidden">
                         @forelse($kapitelBoard as $kap)
                             @php($we = $kap['wareneinsatz'])
                             @php($agg = $kap['aggregat'])
-                            <div wire:key="board-{{ $kap['kapitel_id'] }}" x-data="{ open: false }" x-show="alleEbenen || {{ $kap['depth'] }} <= 1" x-cloak class="even:bg-black/[0.015]">
-                                {{-- Kopfzeile: klick = auf/zu; Aktions-Cluster rechts stoppt die Propagation --}}
-                                <div class="flex items-center gap-1.5 py-1 px-3 cursor-pointer hover:bg-violet-500/[0.04]" @click="open = !open" style="padding-left: {{ 12 + ($kap['depth'] - 1) * 16 }}px">
-                                    <i class="ti ti-chevron-right text-gray-400 shrink-0 transition-transform" :class="open && 'rotate-90'" style="font-size:15px"></i>
+                            @php($ahnenIds = $ahnen($kap['kapitel_id']))
+                            <div wire:key="board-{{ $kap['kapitel_id'] }}" x-show="{{ empty($ahnenIds) ? 'true' : '[' . implode(',', $ahnenIds) . '].every(a => auf[a])' }}" x-cloak class="even:bg-black/[0.015]">
+                                {{-- Kopfzeile: Klick = Ast auf/zu (auf[id]); Aktions-Cluster rechts stoppt die Propagation --}}
+                                <div class="flex items-center gap-1.5 py-1 px-3 cursor-pointer hover:bg-violet-500/[0.04]" @click="auf[{{ $kap['kapitel_id'] }}] = !auf[{{ $kap['kapitel_id'] }}]" style="padding-left: {{ 12 + ($kap['depth'] - 1) * 16 }}px">
+                                    <i class="ti ti-chevron-right text-gray-400 shrink-0 transition-transform" :class="auf[{{ $kap['kapitel_id'] }}] && 'rotate-90'" style="font-size:15px"></i>
                                     <span class="w-2 h-2 rounded-full shrink-0 {{ $fortDot[$kap['fortschritt']] ?? 'bg-gray-300' }}" title="Fortschritt: {{ $fortLabel[$kap['fortschritt']] ?? 'Offen' }}"></span>
                                     <span class="text-sm font-medium text-gray-800 min-w-0 break-words">{{ $kap['titel'] }}</span>
                                     @if($kap['pricing_mode'])<span class="text-[10px] uppercase tracking-wide text-gray-400 shrink-0">{{ $kap['pricing_mode'] }}</span>@endif
@@ -256,8 +261,8 @@
                                         <button type="button" wire:click="kapitelWaehle({{ $kap['kapitel_id'] }})" class="text-violet-500 hover:text-violet-700" title="Kapitel öffnen &amp; weiterplanen">Planen</button>
                                     </div>
                                 </div>
-                                {{-- Aufgeklappt: Positionen + Coverage inline --}}
-                                <div x-show="open" x-cloak class="pb-2 pr-3 space-y-0.5" style="padding-left: {{ 34 + ($kap['depth'] - 1) * 16 }}px">
+                                {{-- Aufgeklappt (auf[id]): eigene Positionen + Coverage inline (Kinder sind eigene Zeilen darunter) --}}
+                                <div x-show="auf[{{ $kap['kapitel_id'] }}]" x-cloak class="pb-2 pr-3 space-y-0.5" style="padding-left: {{ 34 + ($kap['depth'] - 1) * 16 }}px">
                                     @forelse($kap['positionen'] as $p)
                                         @php($vkLink = $p['ref_id'] === null ? null : ($p['ref_typ'] === 'concept'
                                             ? route('foodalchemist.concepter.index', ['tab' => 'concepts', 'sel' => $p['ref_id']])
@@ -292,7 +297,7 @@
                             <p class="text-sm text-gray-400 p-5">Noch keine Kapitel — links „Neues Kapitel …" anlegen oder in der Leitstelle planen.</p>
                         @endforelse
                     </div>
-                    </div>{{-- /alleEbenen-Wrapper --}}
+                    </div>{{-- /auf-Wrapper (Baum-Expand) --}}
                 </div>
 
                 {{-- ═══ Tab: BRIEFING (Stammdaten · Kunde · Leitidee) ═══ --}}
