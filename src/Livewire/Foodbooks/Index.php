@@ -1131,32 +1131,17 @@ class Index extends Component
             $coverage = app(\Platform\FoodAlchemist\Services\CoverageService::class)->coverage($team, 'foodbook', $fb->id);
         }
 
-        // Fortschritt-Tab: Stand/Befunde des selektierten Kapitels (aus dem aufgelösten rechten Panel).
-        $kapitelStandFb = null;
-        $kapitelBefundeFb = [];
-        if ($fb !== null && $this->selectedKapitelId !== null) {
-            $selKap = FoodAlchemistFoodbookKapitel::where('foodbook_id', $fb->id)->find($this->selectedKapitelId);
-            if ($selKap !== null) {
-                $kapitelStandFb = app(\Platform\FoodAlchemist\Services\LeitstelleService::class)->kapitelStand($team, $selKap);
-                $kapitelBefundeFb = collect($coverage['befunde'] ?? [])->where('chapter_id', $this->selectedKapitelId)->values()->all();
-            }
-        }
-
         return view('foodalchemist::livewire.foodbooks.index', [
-            'uebersichtBaum' => $fb !== null
-                ? app(\Platform\FoodAlchemist\Services\LeitstelleService::class)->speisenBaum($team, $fb) : [],
-            'kapitelStandFb' => $kapitelStandFb,
-            'kapitelBefundeFb' => $kapitelBefundeFb,
+            // Board (2026-08-27): EIN Baum statt Übersicht/Fortschritt/Preise — Status + Inhalt + Preis je Kapitel.
+            'kapitelBoard' => $fb !== null
+                ? app(\Platform\FoodAlchemist\Services\LeitstelleService::class)->kapitelBoard($team, $fb) : [],
+            // Coverage/Befunde je Kapitel (aus dem EINEN CoverageService-Call gruppiert) — inline beim Aufklappen.
+            'boardCoverage' => collect($coverage['befunde'] ?? [])
+                ->groupBy('chapter_id')->map(fn ($g) => $g->values()->all())->all(),
             'coverage' => $coverage,
             // Spec 19 E5.2: abgeleitete 7-Schritt-Leitstellen-Checkliste (offen/teil/erledigt + Sprungziel)
             'checkliste' => $fb !== null
                 ? app(\Platform\FoodAlchemist\Services\LeitstelleService::class)->checkliste($team, $fb) : [],
-            // Spec 19 E8.1: Preise-Tab — Kapitel-Baum mit EK/VK/WE-% + WE-Ampel + Duality-Positionen (VK-Deep-Links)
-            'preiseBaum' => $fb !== null
-                ? app(\Platform\FoodAlchemist\Services\LeitstelleService::class)->preiseBaum($team, $fb) : [],
-            // Fortschritt-Tab: Kapitel-Matrix (Status/Wareneinsatz je Kapitel), voll-breit.
-            'weMatrix' => $fb !== null
-                ? app(\Platform\FoodAlchemist\Services\LeitstelleService::class)->kapitelMatrix($team, $fb) : [],
             'foodbooks' => $svc->paginateBrowser(['search' => $this->search, 'phase' => $this->phaseFilter], $team),
             'fb' => $fb,
             // Spec 33 P5: Auswahl für das geteilte Status-/Zuordnungs-Bauteil. Nur aktive

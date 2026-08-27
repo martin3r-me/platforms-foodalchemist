@@ -364,6 +364,85 @@ class LeitstelleService
         return $baum;
     }
 
+    /**
+     * Kapitel-Board (Dominique 2026-08-27) — EINE Sicht statt der drei Tabs Übersicht/
+     * Fortschritt/Preise: pro Kapitel (Baum, depth) alle drei Linsen zusammengeführt —
+     * Status (WE-Ampel + Ziele/Positionen/bepreist) · Inhalt+Preis (Duality-Positionen mit
+     * EK/VK/WE-% + VK-Deep-Link + R2.5-Snapshot). Verschmilzt {@see preiseBaum} +
+     * {@see kapitelMatrix}: kapitelAggregat/wareneinsatzAmpel werden nur EINMAL je Kapitel
+     * gerechnet (die alten Tabs riefen sie doppelt). Coverage/Befunde je Kapitel liefert
+     * die Fläche separat (gruppierte CoverageService-Befunde), damit hier kein N×-Call anfällt.
+     *
+     * @return list<array{
+     *   kapitel_id:int, titel:string, parent_id:?int, depth:int, released:bool,
+     *   pricing_mode:?string, aggregat:array, wareneinsatz:array,
+     *   hat_ziele:bool, positionen_count:int, hat_inhalt:bool, bepreist:bool,
+     *   positionen:list<array<string, mixed>>
+     * }>
+     */
+    public function kapitelBoard(Team $team, FoodAlchemistFoodbook $fb): array
+    {
+        $fb = $this->ladeFoodbook($team, $fb);
+        $r2_5 = [];
+        foreach ($this->vkSnapshots->pending($team) as $p) {
+            $r2_5[$p['recipe_id']] = $p;
+        }
+        $board = [];
+        foreach ($fb->chapters as $k) {
+            $inhalt = $this->inhaltsBloecke($k);
+            $agg = $this->foodbooks->kapitelAggregat($team, $k);
+            $we = $this->foodbooks->wareneinsatzAmpel($team, $fb, $k);
+            $positionen = [];
+            foreach ($inhalt as $block) {
+                $preis = $this->foodbooks->blockPreis($block);
+                if ($block->type === 'concept_ref') {
+                    $vk = $preis['vk_pp'];
+                    $ek = $preis['ek_pp'];
+                    $positionen[] = [
+                        'art' => 'paket', 'label' => $block->concept?->name ?? ($block->label ?? 'Paket'),
+                        'vk' => $vk, 'ek' => $ek, 'preis_einheit' => 'gast',
+                        'we_pct' => ($vk > 0 && $ek > 0) ? round($ek / $vk * 100, 1) : null,
+                        'ref_typ' => 'concept', 'ref_id' => $block->concept !== null ? (int) $block->concept->id : null,
+                        'r2_5' => null,
+                    ];
+                } else {
+                    $vk = $preis['vk_pp'] > 0 ? $preis['vk_pp'] : $preis['pauschal'];
+                    $ek = $preis['ek_pp'];
+                    $recipeId = $block->sales_recipe_id !== null ? (int) $block->sales_recipe_id : null;
+                    $abw = ($recipeId !== null && isset($r2_5[$recipeId])) ? $r2_5[$recipeId] : null;
+                    $positionen[] = [
+                        'art' => 'einzel', 'label' => $block->dish?->name ?? ($block->label ?? 'Gericht'),
+                        'vk' => $vk, 'ek' => $ek, 'preis_einheit' => 'position',
+                        'we_pct' => ($vk > 0 && $ek > 0) ? round($ek / $vk * 100, 1) : null,
+                        'ref_typ' => 'recipe', 'ref_id' => $recipeId,
+                        'r2_5' => $abw === null ? null : [
+                            'delta_pct' => (float) $abw['delta_pct'], 'richtung' => (string) $abw['richtung'],
+                            'published_net' => (float) $abw['published_net'], 'live_net' => (float) $abw['live_net'],
+                        ],
+                    ];
+                }
+            }
+            $hatInhalt = $inhalt->count() > 0 || $k->released_at !== null;
+            $board[] = [
+                'kapitel_id' => (int) $k->id,
+                'titel' => (string) $k->title,
+                'parent_id' => $k->parent_id !== null ? (int) $k->parent_id : null,
+                'depth' => $this->kapitelTiefe($k, $fb->chapters),
+                'released' => $k->released_at !== null,
+                'pricing_mode' => $k->pricing_mode !== null ? (string) $k->pricing_mode : null,
+                'aggregat' => $agg,
+                'wareneinsatz' => $we,
+                'hat_ziele' => $this->kapitelHatZiele($k),
+                'positionen_count' => $inhalt->count() + $this->ideenAnzahl((int) $k->id),
+                'hat_inhalt' => $hatInhalt,
+                'bepreist' => $hatInhalt && ($agg['vk_pro_person'] > 0 || $agg['pauschal'] > 0),
+                'positionen' => $positionen,
+            ];
+        }
+
+        return $board;
+    }
+
     // ── intern ──────────────────────────────────────────────────────────────
 
     private function ladeFoodbook(Team $team, FoodAlchemistFoodbook $fb, bool $mitSlots = false): FoodAlchemistFoodbook

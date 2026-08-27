@@ -145,7 +145,7 @@
                       äußerste rechte Spalte (Leitstelle-Rail ausgeblendet, Mitte füllt auf → Katalog ganz rechts);
                       in den Kurier-/Ausgabe-Tabs zeigt sich die Leitstelle-Rail. `fb-cockpit-tab` (Z. 194,
                       im editor-tabs-Scope) bubbelt hierher und trägt den aktiven Tab. --}}
-                 x-data="{ ftab: 'briefing' }" @fb-cockpit-tab="ftab = $event.detail.tab">
+                 x-data="{ ftab: 'board' }" @fb-cockpit-tab="ftab = $event.detail.tab">
                 {{-- LINKS: Navigation (Foodbook-Kopf + Kapitelbaum, gespiegelt aus der Seiten-Sidebar).
                      #4: x-data hält den Kapitel-Drag-Zustand (Ziehgriff ⠿ = umsortieren). --}}
                 <div class="w-64 shrink-0 pl-6 space-y-1" data-fb-nav x-data="{ dragKapId: null }">
@@ -182,13 +182,13 @@
                 <x-foodalchemist::editor-tabs marker="fb" wire-key="fb-tabs-{{ $fb->id }}"
                     {{-- Spec 42: reine Ausgabe-Form — Planung/Kreativ/DNA/Trend sind in die Leitstelle
                          gezogen. Es bleiben die Kuratier-/Ausgabe-Tabs. --}}
+                    {{-- Board (2026-08-27, Dominique): Übersicht/Fortschritt/Preise zu EINER Seite fusioniert
+                         (Status + Inhalt + Preis je Kapitel, zugeklappt, Coverage inline). Board = Default-Reiter. --}}
                     :tabs="[
+                        'board' => 'Board',
                         'briefing' => 'Kontext',
                         'speisen' => $selectedKapitelId ? 'Speisen' : null,
-                        'uebersicht' => 'Übersicht',
-                        'fortschritt' => 'Fortschritt',
                         'branding' => 'Branding/CI',
-                        'preise' => 'Preise',
                     ]">
 
                 {{-- headless: Event-Bus im editor-tabs-Scope (kein sichtbares Element).
@@ -200,83 +200,82 @@
                      Planung-/Leitstelle-Konzept, nicht Sache des reinen Ausgabe-Editors. --}}
 
                 {{-- ═══ Tab: ÜBERSICHT (Speisen-Baum read-only — aus dem aufgelösten rechten Panel) ═══ --}}
-                <div x-show="tab === 'uebersicht'" x-cloak class="space-y-3" data-fb-panel="uebersicht">
-                    @php($statusBadge = ['bepreist' => $variantPill['success'], 'angelegt' => $variantPill['primary'], 'entwurf' => $variantPill['secondary'], 'ki_queue' => $variantPill['info']])
-                    <div class="{{ $card }} p-5 space-y-2">
-                        <p class="text-xs text-gray-500 uppercase tracking-wider mb-1">Speisen-Übersicht</p>
-                        @forelse($uebersichtBaum as $k)
-                            <div wire:key="ueb-{{ $k['kapitel_id'] }}" style="padding-left: {{ ($k['depth'] - 1) * 16 }}px">
-                                <div class="flex items-center gap-1.5 text-sm font-medium text-gray-800">
-                                    <span class="min-w-0 break-words">{{ $k['titel'] }}</span>
-                                    @if($k['released'])<span class="text-emerald-500 text-xs shrink-0">✓</span>@endif
-                                </div>
-                                @foreach($k['positionen'] as $p)
-                                    <div class="flex items-center gap-2 text-xs pl-3 py-0.5">
-                                        <span class="{{ $pill }} {{ $statusBadge[$p['status']] ?? $variantPill['secondary'] }} shrink-0">{{ ['paket' => 'Paket', 'einzel' => 'Einzel', 'idee' => 'Idee'][$p['art']] ?? $p['art'] }}</span>
-                                        <span class="flex-1 min-w-0 break-words text-gray-600">{{ $p['label'] }}</span>
-                                        @if($p['preis'] !== null)<span class="shrink-0 tabular-nums text-gray-500">{{ number_format($p['preis'], 2, ',', '.') }} €{{ $p['preis_einheit'] === 'gast' ? '/G' : '/Pos' }}</span>@endif
-                                    </div>
-                                @endforeach
-                                @if(empty($k['positionen']))<p class="text-[11px] text-gray-400 pl-3">leer</p>@endif
-                            </div>
-                        @empty
-                            <p class="text-sm text-gray-400">Noch keine Kapitel.</p>
-                        @endforelse
-                    </div>
-                </div>
+                {{-- ═══ Tab: BOARD — Übersicht + Fortschritt + Preise fusioniert (2026-08-27, Dominique) ═══
+                     Ein Kapitel-Baum, jedes Kapitel eine zugeklappte Zeile mit allen drei Linsen
+                     (WE-Ampel/Status · EK/VK/WE% · Pills), aufklappbar zu Positionen + Coverage inline.
+                     Deep-Links: „Planen" → Kapitel öffnen, „VK →" → VK-Editor. --}}
+                <div x-show="tab === 'board'" x-cloak class="space-y-3" data-fb-panel="board" data-fb-anker="board">
+                    @php($ampelDot = ['gruen' => 'bg-emerald-500', 'gelb' => 'bg-amber-400', 'rot' => 'bg-rose-500', 'unbekannt' => 'bg-gray-300'])
+                    @php($ampelText = ['gruen' => 'text-emerald-700', 'gelb' => 'text-amber-700', 'rot' => 'text-rose-700', 'unbekannt' => 'text-gray-400'])
+                    @php($befundAmpel = ['erfuellt' => 'text-emerald-600', 'teilerfuellt' => 'text-amber-600', 'verletzt' => 'text-rose-600', 'info' => 'text-sky-600'])
+                    @php($angelegtN = collect($kapitelBoard)->where('released', true)->count())
+                    @php($ges = $menue['gesamt'] ?? [])
 
-                {{-- ═══ Tab: FORTSCHRITT (Kapitel-Matrix + selektiertes Kapitel Stand/Befunde — aus dem
-                     aufgelösten rechten Panel; voll-breit, Kapitelnamen voll sichtbar) ═══ --}}
-                <div x-show="tab === 'fortschritt'" x-cloak class="space-y-4" data-fb-panel="fortschritt">
-                    @php($weStil = ['gruen' => 'text-emerald-600', 'gelb' => 'text-amber-600', 'rot' => 'text-red-600', 'unbekannt' => 'text-gray-400'])
-                    @php($wePunkt = ['gruen' => 'bg-emerald-500', 'gelb' => 'bg-amber-500', 'rot' => 'bg-red-500', 'unbekannt' => 'bg-gray-300'])
-                    <div class="{{ $card }} p-5 space-y-1">
-                        <p class="text-xs text-gray-500 uppercase tracking-wider mb-1">Kapitel-Matrix</p>
-                        @forelse($weMatrix as $m)
-                            @php($we = $m['wareneinsatz'])
-                            <div class="flex items-center gap-2 text-sm py-1" wire:key="fbm-{{ $m['kapitel_id'] }}" style="padding-left: {{ ($m['depth'] - 1) * 16 }}px">
-                                <span class="w-2 h-2 rounded-full shrink-0 {{ $wePunkt[$we['status']] ?? 'bg-gray-300' }}" title="Wareneinsatz {{ $we['status'] }}"></span>
-                                <span class="flex-1 min-w-0 break-words text-gray-700">{{ $m['titel'] }}</span>
-                                <span class="shrink-0 flex items-center gap-1">
-                                    <span class="{{ $pill }} {{ $m['hat_ziele'] ? $variantPill['primary'] : $variantPill['secondary'] }}" title="Ziele/Dimensionen">{{ $m['hat_ziele'] ? 'Z' : '·' }}</span>
-                                    <span class="{{ $pill }} {{ $m['positionen'] > 0 ? $variantPill['info'] : $variantPill['secondary'] }}" title="Positionen">{{ $m['positionen'] }}</span>
-                                    <span class="{{ $pill }} {{ $m['bepreist'] ? $variantPill['success'] : ($m['hat_inhalt'] ? $variantPill['warning'] : $variantPill['secondary']) }}" title="{{ $m['bepreist'] ? 'bepreist' : ($m['hat_inhalt'] ? 'angelegt/ohne Preis' : 'leer') }}">€</span>
-                                </span>
-                                @if($m['released'])
-                                    <span class="text-emerald-500 text-xs shrink-0" title="angelegt">✓</span>
-                                @else
-                                    <button type="button" wire:click="kapitelWaehle({{ $m['kapitel_id'] }})" title="Kapitel öffnen" class="text-violet-500 hover:text-violet-700 text-xs shrink-0" data-fb-matrix-go>Go</button>
-                                @endif
+                    {{-- Summen-Leiste --}}
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
+                        <div class="{{ $card }} p-3"><p class="text-[11px] text-gray-500 uppercase tracking-wider">Ø VK / Person</p><p class="text-lg font-semibold tabular-nums text-gray-900">{{ ($ges['vk_pro_person'] ?? 0) > 0 ? number_format((float) $ges['vk_pro_person'], 2, ',', '.') . ' €' : '—' }}</p></div>
+                        <div class="{{ $card }} p-3"><p class="text-[11px] text-gray-500 uppercase tracking-wider">Ø Wareneinsatz</p><p class="text-lg font-semibold tabular-nums text-gray-900">{{ ($ges['ek_per_person'] ?? 0) > 0 ? number_format((float) $ges['ek_per_person'], 2, ',', '.') . ' €' : '—' }}</p></div>
+                        <div class="{{ $card }} p-3"><p class="text-[11px] text-gray-500 uppercase tracking-wider">WE-Quote</p><p class="text-lg font-semibold tabular-nums {{ ($ges['food_cost_percent'] ?? null) !== null ? 'text-amber-600' : 'text-gray-400' }}">{{ ($ges['food_cost_percent'] ?? null) !== null ? number_format((float) $ges['food_cost_percent'], 1, ',', '.') . ' %' : '—' }}</p></div>
+                        <div class="{{ $card }} p-3"><p class="text-[11px] text-gray-500 uppercase tracking-wider">Kapitel angelegt</p><p class="text-lg font-semibold tabular-nums text-gray-900">{{ $angelegtN }} / {{ count($kapitelBoard) }}</p></div>
+                    </div>
+
+                    {{-- Kapitel-Liste (der EINE Baum) --}}
+                    <div class="{{ $card }} divide-y divide-black/5 overflow-hidden">
+                        @forelse($kapitelBoard as $kap)
+                            @php($we = $kap['wareneinsatz'])
+                            @php($agg = $kap['aggregat'])
+                            <div wire:key="board-{{ $kap['kapitel_id'] }}" x-data="{ open: false }">
+                                {{-- Kopfzeile: klick = auf/zu; Aktions-Cluster rechts stoppt die Propagation --}}
+                                <div class="flex items-center gap-2 py-2 px-3 cursor-pointer hover:bg-violet-500/[0.03]" @click="open = !open" style="padding-left: {{ 12 + ($kap['depth'] - 1) * 16 }}px">
+                                    <i class="ti ti-chevron-right text-gray-400 shrink-0 transition-transform" :class="open && 'rotate-90'" style="font-size:15px"></i>
+                                    <span class="w-2 h-2 rounded-full shrink-0 {{ $ampelDot[$we['status']] ?? 'bg-gray-300' }}" title="Wareneinsatz {{ $we['status'] }}"></span>
+                                    <span class="text-sm font-medium text-gray-800 min-w-0 break-words">{{ $kap['titel'] }}</span>
+                                    @if($kap['pricing_mode'])<span class="text-[10px] uppercase tracking-wide text-gray-400 shrink-0">{{ $kap['pricing_mode'] }}</span>@endif
+                                    @if($kap['released'])<span class="text-[10px] text-emerald-600 shrink-0" title="Kapitel angelegt">● angelegt</span>@endif
+                                    <div class="ml-auto flex items-center gap-2.5 text-[11px] tabular-nums shrink-0" @click.stop>
+                                        <span class="{{ $pill }} {{ $kap['hat_ziele'] ? $variantPill['primary'] : $variantPill['secondary'] }}" title="Ziele/Dimensionen gesetzt">Z</span>
+                                        <span class="{{ $pill }} {{ $kap['positionen_count'] > 0 ? $variantPill['info'] : $variantPill['secondary'] }}" title="Positionen">{{ $kap['positionen_count'] }}</span>
+                                        <span class="{{ $pill }} {{ $kap['bepreist'] ? $variantPill['success'] : ($kap['hat_inhalt'] ? $variantPill['warning'] : $variantPill['secondary']) }}" title="{{ $kap['bepreist'] ? 'bepreist' : ($kap['hat_inhalt'] ? 'angelegt/ohne Preis' : 'leer') }}">€</span>
+                                        @if($agg['ek_per_person'] > 0)<span class="text-gray-400" title="Wareneinsatz €/Gast">EK {{ number_format((float) $agg['ek_per_person'], 2, ',', '.') }}</span>@endif
+                                        @if($agg['vk_pro_person'] > 0)<span class="font-semibold text-gray-800" title="VK €/Gast">{{ number_format((float) $agg['vk_pro_person'], 2, ',', '.') }} €/G</span>@endif
+                                        <span class="inline-flex items-center gap-1 {{ $ampelText[$we['status']] ?? 'text-gray-400' }}" title="WE {{ $we['ist_pct'] !== null ? number_format((float) $we['ist_pct'], 1, ',', '.') . ' %' : 'unbekannt' }} · Ziel {{ number_format((float) $we['ziel_pct'], 1, ',', '.') }} %">
+                                            <span class="inline-block h-2 w-2 rounded-full {{ $ampelDot[$we['status']] ?? 'bg-gray-300' }}"></span>{{ $we['ist_pct'] !== null ? number_format((float) $we['ist_pct'], 1, ',', '.') . ' %' : '—' }}
+                                        </span>
+                                        @unless($kap['released'])<button type="button" wire:click="kapitelWaehle({{ $kap['kapitel_id'] }})" class="text-violet-500 hover:text-violet-700" title="Kapitel öffnen &amp; weiterplanen">Planen</button>@endunless
+                                    </div>
+                                </div>
+                                {{-- Aufgeklappt: Positionen + Coverage inline --}}
+                                <div x-show="open" x-cloak class="pb-2 pr-3 space-y-0.5" style="padding-left: {{ 34 + ($kap['depth'] - 1) * 16 }}px">
+                                    @forelse($kap['positionen'] as $p)
+                                        @php($vkLink = $p['ref_id'] === null ? null : ($p['ref_typ'] === 'concept'
+                                            ? route('foodalchemist.concepter.index', ['tab' => 'concepts', 'sel' => $p['ref_id']])
+                                            : route('foodalchemist.verkauf.index', ['rezept' => $p['ref_id']])))
+                                        <div class="flex items-center gap-2 py-0.5 text-xs">
+                                            <span class="shrink-0 rounded px-1.5 py-0.5 text-[9px] uppercase tracking-wide {{ $p['art'] === 'paket' ? 'bg-violet-500/10 text-violet-700' : 'bg-sky-500/10 text-sky-700' }}">{{ $p['art'] === 'paket' ? 'Paket' : 'Einzel' }}</span>
+                                            <span class="truncate text-gray-800">{{ $p['label'] }}</span>
+                                            <div class="ml-auto flex items-center gap-3 tabular-nums shrink-0">
+                                                @if($p['ek'] > 0)<span class="text-gray-400">EK {{ number_format((float) $p['ek'], 2, ',', '.') }}</span>@endif
+                                                @if($p['vk'] > 0)<span class="font-semibold text-gray-700">{{ number_format((float) $p['vk'], 2, ',', '.') }} {{ $p['preis_einheit'] === 'gast' ? '€/G' : '€/Pos' }}</span>@else<span class="text-amber-600">kein VK</span>@endif
+                                                @if($p['we_pct'] !== null)<span class="text-gray-400" title="Wareneinsatz dieser Position">{{ number_format((float) $p['we_pct'], 1, ',', '.') }} %</span>@endif
+                                                @if($vkLink)<a href="{{ $vkLink }}" target="_blank" class="text-violet-600 hover:underline" title="Im VK-Editor öffnen">VK →</a>@endif
+                                            </div>
+                                        </div>
+                                    @empty
+                                        <p class="text-[11px] text-gray-400 py-0.5">Noch keine bepreisten Positionen — im Speisen-Tab / in der Leitstelle anlegen.</p>
+                                    @endforelse
+                                    @if(! empty($boardCoverage[$kap['kapitel_id']] ?? []))
+                                        <div class="flex flex-wrap gap-x-4 gap-y-1 pt-2 mt-1 border-t border-black/5">
+                                            @foreach($boardCoverage[$kap['kapitel_id']] as $b)
+                                                <span class="text-[11px] {{ $befundAmpel[$b['ampel']] ?? 'text-gray-500' }}">{{ $b['label'] }}: {{ $b['ist'] }}</span>
+                                            @endforeach
+                                        </div>
+                                    @endif
+                                </div>
                             </div>
                         @empty
-                            <p class="text-sm text-gray-400">Noch keine Kapitel.</p>
+                            <p class="text-sm text-gray-400 p-5">Noch keine Kapitel — links „Neues Kapitel …" anlegen oder in der Leitstelle planen.</p>
                         @endforelse
                     </div>
-                    @if($kapitelStandFb !== null)
-                        <div class="{{ $card }} p-5 space-y-2">
-                            <p class="text-xs text-gray-500 uppercase tracking-wider">Kapitel: {{ $kapitelStandFb['titel'] ?? '—' }}</p>
-                            @php($kwe = $kapitelStandFb['wareneinsatz'])
-                            <div class="flex flex-wrap gap-6 text-sm">
-                                <span class="text-gray-600">€/Person <span class="tabular-nums font-medium text-gray-900">{{ number_format($kapitelStandFb['aggregat']['vk_pro_person'], 2, ',', '.') }} €</span></span>
-                                <span class="text-gray-600">EK/Person <span class="tabular-nums font-medium text-gray-900">{{ number_format($kapitelStandFb['aggregat']['ek_per_person'], 2, ',', '.') }} €</span></span>
-                                <span class="inline-flex items-center gap-1.5 {{ $weStil[$kwe['status']] ?? '' }}">Wareneinsatz <span class="w-2 h-2 rounded-full {{ $wePunkt[$kwe['status']] ?? 'bg-gray-300' }}"></span><span class="tabular-nums">{{ $kwe['ist_pct'] !== null ? number_format($kwe['ist_pct'], 1, ',', '.') . ' %' : '—' }}</span> <span class="text-gray-400">/ Ziel {{ number_format($kwe['ziel_pct'], 1, ',', '.') }} %</span></span>
-                            </div>
-                            @if(! empty($kapitelBefundeFb))
-                                <div class="space-y-1 pt-2 border-t border-black/5">
-                                    <p class="text-xs text-gray-500 uppercase tracking-wider">Coverage</p>
-                                    @foreach($kapitelBefundeFb as $b)
-                                        @php($amp = ['erfuellt' => $variantPill['success'], 'teilerfuellt' => $variantPill['warning'], 'verletzt' => $variantPill['danger'], 'info' => $variantPill['info']][$b['ampel']] ?? $variantPill['secondary'])
-                                        <div class="flex items-start justify-between gap-2 text-xs">
-                                            <span class="text-gray-600">{{ $b['label'] }}</span>
-                                            <span class="{{ $pill }} {{ $amp }} shrink-0">{{ $b['ist'] }}</span>
-                                        </div>
-                                    @endforeach
-                                </div>
-                            @endif
-                        </div>
-                    @else
-                        <p class="text-[11px] text-gray-400 px-1">Ein Kapitel wählen (Speisen-Tab oder „Go") für Stand + Coverage.</p>
-                    @endif
                 </div>
 
                 {{-- ═══ Tab: BRIEFING (Stammdaten · Kunde · Leitidee) ═══ --}}
@@ -417,82 +416,6 @@
                         </div>
                     </div>
                 </div>{{-- /Branding --}}
-
-                {{-- ═══ Tab: PREISE (Spec 19 E8.1) — Kalkulations-Sicht: Kapitel-Baum mit EK/VK/WE-% ═══
-                     Duality-Positionen (Paket €/Gast · Einzelgericht €/Pos), WE-Ampel je Kapitel,
-                     VK-Editor-Deep-Links (Konzept → Concepter, Gericht → Verkaufsrezepte).
-                     R2.5-Snapshot-Badges (E8.2) an Einzelgericht-Positionen, deren freigegebener
-                     VK-Snapshot über die Leitplanke vom Live-VK abweicht. --}}
-                <div x-show="tab === 'preise'" x-cloak class="space-y-3" data-fb-panel="preise" data-fb-anker="preise">
-                    <div class="relative overflow-hidden {{ $card }} p-5 space-y-4" data-fb-preise-baum>
-                        <div class="{{ $cardAccent }}"></div>
-                        <div class="flex items-baseline justify-between border-b border-black/5 pb-2">
-                            <div>
-                                <p class="{{ $label }}">Preise — Kapitel-Kalkulation</p>
-                                <p class="text-[11px] text-gray-500">EK · VK · Wareneinsatz je Kapitel; Paket = €/Gast, Einzelgericht = €/Position. Ampel: WE-% gegen Ziel + Toleranz.</p>
-                            </div>
-                            @if(($menue['gesamt']['vk_pro_person'] ?? 0) > 0)
-                                <span class="text-sm font-semibold text-emerald-600 tabular-nums shrink-0">Ø {{ number_format((float) $menue['gesamt']['vk_pro_person'], 2, ',', '.') }} €/P</span>
-                            @endif
-                        </div>
-
-                        @php($ampelDot = ['gruen' => 'bg-emerald-500', 'gelb' => 'bg-amber-400', 'rot' => 'bg-rose-500', 'unbekannt' => 'bg-gray-300'])
-                        @php($ampelText = ['gruen' => 'text-emerald-700', 'gelb' => 'text-amber-700', 'rot' => 'text-rose-700', 'unbekannt' => 'text-gray-400'])
-
-                        @forelse($preiseBaum as $kap)
-                            @php($we = $kap['wareneinsatz'])
-                            @php($agg = $kap['aggregat'])
-                            <section style="margin-left: {{ ($kap['depth'] - 1) * 16 }}px" data-fb-preise-kapitel="{{ $kap['kapitel_id'] }}">
-                                {{-- Kapitel-Kopfzeile: Titel + pricing_mode + Aggregat (EK/VK/WE% + Ampel) --}}
-                                <div class="flex items-center gap-2 border-b border-black/5 pb-1 mb-1">
-                                    <h3 class="text-sm font-semibold text-violet-700">{{ $kap['titel'] }}</h3>
-                                    @if($kap['pricing_mode'])<span class="text-[10px] uppercase tracking-wide text-gray-400">{{ $kap['pricing_mode'] }}</span>@endif
-                                    @if($kap['released'])<span class="text-[10px] text-emerald-600" title="Kapitel angelegt">● angelegt</span>@endif
-                                    <div class="ml-auto flex items-center gap-3 text-[11px] tabular-nums">
-                                        @if($agg['ek_per_person'] > 0)<span class="text-gray-500" title="Wareneinsatz €/Gast">EK {{ number_format((float) $agg['ek_per_person'], 2, ',', '.') }} €</span>@endif
-                                        @if($agg['vk_pro_person'] > 0)<span class="font-semibold text-gray-800" title="VK €/Gast">{{ number_format((float) $agg['vk_pro_person'], 2, ',', '.') }} €/G</span>@endif
-                                        @if($agg['pauschal'] > 0)<span class="font-semibold text-gray-800" title="Pauschal-Anteil">{{ number_format((float) $agg['pauschal'], 2, ',', '.') }} € pausch.</span>@endif
-                                        <span class="inline-flex items-center gap-1 {{ $ampelText[$we['status']] ?? 'text-gray-400' }}"
-                                              title="WE {{ $we['ist_pct'] !== null ? number_format((float) $we['ist_pct'], 1, ',', '.') . ' %' : 'unbekannt' }} · Ziel {{ number_format((float) $we['ziel_pct'], 1, ',', '.') }} % (±{{ number_format((float) $we['toleranz_pp'], 1, ',', '.') }} pp, {{ $we['quelle'] }}){{ $we['partiell'] ? ' · partiell (Pauschal-EK ungezählt)' : '' }}">
-                                            <span class="inline-block h-2 w-2 rounded-full {{ $ampelDot[$we['status']] ?? 'bg-gray-300' }}"></span>
-                                            {{ $we['ist_pct'] !== null ? number_format((float) $we['ist_pct'], 1, ',', '.') . ' %' : '—' }}@if($we['partiell'])<span class="text-[9px]" title="Pauschal-Anteil ohne EK → WE-% unterschätzt">*</span>@endif
-                                        </span>
-                                    </div>
-                                </div>
-                                {{-- Positionen: Paket / Einzelgericht mit VK-Editor-Deep-Link --}}
-                                @forelse($kap['positionen'] as $p)
-                                    @php($vkLink = $p['ref_id'] === null ? null : ($p['ref_typ'] === 'concept'
-                                        ? route('foodalchemist.concepter.index', ['tab' => 'concepts', 'sel' => $p['ref_id']])
-                                        : route('foodalchemist.verkauf.index', ['rezept' => $p['ref_id']])))
-                                    <div class="flex items-center gap-2 py-0.5 pl-3 text-xs" data-fb-preise-position="{{ $p['art'] }}">
-                                        <span class="shrink-0 rounded px-1.5 py-0.5 text-[9px] uppercase tracking-wide {{ $p['art'] === 'paket' ? 'bg-violet-500/10 text-violet-700' : 'bg-sky-500/10 text-sky-700' }}">{{ $p['art'] === 'paket' ? 'Paket' : 'Einzel' }}</span>
-                                        <span class="truncate text-gray-800">{{ $p['label'] }}</span>
-                                        <div class="ml-auto flex items-center gap-3 tabular-nums shrink-0">
-                                            @if($p['ek'] > 0)<span class="text-gray-400">EK {{ number_format((float) $p['ek'], 2, ',', '.') }} €</span>@endif
-                                            @if($p['vk'] > 0)
-                                                <span class="font-semibold text-gray-700">{{ number_format((float) $p['vk'], 2, ',', '.') }} {{ $p['preis_einheit'] === 'gast' ? '€/G' : '€/Pos' }}</span>
-                                            @else
-                                                <span class="text-amber-600">kein VK</span>
-                                            @endif
-                                            @if($p['we_pct'] !== null)<span class="text-gray-400" title="Wareneinsatz dieser Position">{{ number_format((float) $p['we_pct'], 1, ',', '.') }} %</span>@endif
-                                            @if(($p['r2_5'] ?? null) !== null)
-                                                <span class="inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[9px] font-medium bg-amber-500/15 text-amber-700"
-                                                      title="Freigegebener VK-Snapshot {{ number_format((float) $p['r2_5']['published_net'], 2, ',', '.') }} € weicht {{ number_format((float) $p['r2_5']['delta_pct'], 1, ',', '.') }} % vom Live-VK {{ number_format((float) $p['r2_5']['live_net'], 2, ',', '.') }} € ab — bewusst neu freigeben (R2.5).">
-                                                    {{ $p['r2_5']['richtung'] === 'erhoehen' ? '▲' : '▼' }} Snapshot Δ{{ number_format((float) $p['r2_5']['delta_pct'], 1, ',', '.') }} %
-                                                </span>
-                                            @endif
-                                            @if($vkLink)<a href="{{ $vkLink }}" target="_blank" class="text-violet-600 hover:underline" title="Im VK-Editor öffnen">VK →</a>@endif
-                                        </div>
-                                    </div>
-                                @empty
-                                    <p class="text-[11px] text-gray-400 pl-3 py-0.5">Noch keine bepreisten Positionen — im Kreativ-Tab skizzieren und über „Kapitel anlegen" materialisieren.</p>
-                                @endforelse
-                            </section>
-                        @empty
-                            <p class="text-xs text-gray-500 py-6 text-center">Noch keine Kapitel — erst im Planung-Tab strukturieren.</p>
-                        @endforelse
-                    </div>
-                </div>{{-- /Preise-Tab --}}
 
                 {{-- ═══ Tab: SPEISEN — der Kapitel/Block-Editor (Spec 29 / S6) ═══
                      Früher stapelte er UNTER dem Cockpit (Doppel-Editor). Jetzt eigener Tab, der nur
