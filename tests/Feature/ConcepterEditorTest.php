@@ -69,11 +69,13 @@ it('rendert die Auftrags-Hochrechnung im Kalkulations-Tab', function () {
         ->assertSee('Deckungsbeitrag beim Katalog-VK')
         ->assertDontSee('Vergleich ohne Pax')
         ->assertDontSee('DB Katalogsicht')
-        ->assertSee('Aktive Personenzeit')
+        ->assertSee('Aktive Produktionszeit')
         ->html();
 
     expect($html)->toContain('simulation=1')
-        ->and($html)->toContain('pax=100');
+        ->and($html)->toContain('pax=100')
+        ->and($html)->toContain('data-auftrag-report')
+        ->and($html)->toContain('max-w-5xl');
 });
 
 it('ampelt einen Wareneinsatz auf oder unter Team-Ziel grün', function () {

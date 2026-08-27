@@ -3,6 +3,7 @@
     // einmal je Edition im Format-Zweig — so ist der Filter-Satz (opt) LITERAL derselbe.
     $opt = $optionen ?? [];
     $money = fn ($v, $dec = 2) => $v !== null && $v !== '' ? number_format((float) $v, $dec, ',', '.') . ' €' : '—';
+    $simulationRequirements = collect($concept['order_simulation']['requirements'] ?? [])->keyBy('recipe_id')->all();
 @endphp
 <section>
     <h2>Concept-Übersicht</h2>
@@ -38,7 +39,7 @@
             @endif
             @forelse($slot['gerichte'] as $g)
                 @if($g['paket'] ?? null)<p class="muted">Aus Paket {{ $g['paket'] }}{{ $g['menge'] ? ' · ' . $g['menge'] : '' }}</p>@endif
-                @include('foodalchemist::dokumente.partials.report-recipe-node', ['node' => $g['recipe'], 'optionen' => $opt])
+                @include('foodalchemist::dokumente.partials.report-recipe-node', ['node' => $g['recipe'], 'optionen' => $opt, 'simulationRequirements' => $simulationRequirements])
             @empty
                 <p class="muted">Leer.</p>
             @endforelse

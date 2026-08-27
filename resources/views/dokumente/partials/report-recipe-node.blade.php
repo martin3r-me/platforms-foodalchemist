@@ -3,6 +3,8 @@
     $depth = (int) ($node['tiefe'] ?? 0);
     $money = fn ($v, $dec = 2) => $v !== null && $v !== '' ? number_format((float) $v, $dec, ',', '.') . ' €' : '—';
     $num = fn ($v, $dec = 2, $suffix = '') => $v !== null && $v !== '' ? rtrim(rtrim(number_format((float) $v, $dec, ',', '.'), '0'), ',') . $suffix : '—';
+    $simulationRequirements = $simulationRequirements ?? [];
+    $simulationRequirement = $simulationRequirements[(int) ($node['id'] ?? 0)] ?? null;
 @endphp
 
 <section class="recipe-node depth-{{ min($depth, 4) }}">
@@ -22,6 +24,14 @@
     @if($node['zyklus'] ?? false)
         <p class="warn">Zyklische Referenz erkannt — Kaskade hier gestoppt.</p>
     @else
+        @if($simulationRequirement)
+            <div class="grid meta" data-simulated-recipe-quantity>
+                <div><span>Auftragsbedarf</span>{{ $num($simulationRequirement['benoetigt_ansaetze'] ?? null, 3, ' Ansätze') }}</div>
+                <div><span>Produktion</span>{{ $num($simulationRequirement['ansaetze'] ?? null, 3, ' Ansätze') }}</div>
+                <div><span>Portionen</span>{{ ($simulationRequirement['portionen'] ?? null) !== null ? number_format((int) $simulationRequirement['portionen'], 0, ',', '.') : '—' }}</div>
+                <div><span>Produktionsmenge</span>{{ ($simulationRequirement['produzierte_menge_kg'] ?? null) !== null ? $num($simulationRequirement['produzierte_menge_kg'], 3, ' kg') : '—' }}</div>
+            </div>
+        @endif
         @if($opt['stammdaten'] ?? true)
             <div class="grid meta">
                 <div><span>Yield</span>{{ $node['yield_kg'] !== null ? $num($node['yield_kg'], 3, ' kg') : ($node['yield_pieces'] !== null ? $num($node['yield_pieces'], 2, ' Stk.') : '—') }}</div>
@@ -81,11 +91,19 @@
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach($node['ingredients'] as $z)
+                    @foreach($node['ingredients'] as $ingredientIndex => $z)
+                        @php($simulatedIngredient = $simulationRequirement['zutaten'][$ingredientIndex] ?? null)
                         <tr>
                             <td>{{ $z['position'] }}</td>
                             <td>{{ $z['name'] ?? '—' }}</td>
-                            <td>{{ $z['menge'] ?? '—' }}</td>
+                            <td>
+                                @if($simulatedIngredient)
+                                    <strong>{{ $num($simulatedIngredient['menge'] ?? null, 3, ($simulatedIngredient['einheit'] ?? null) ? ' ' . $simulatedIngredient['einheit'] : '') }}</strong>
+                                    <span class="muted">für Auftrag</span>
+                                @else
+                                    {{ $z['menge'] ?? '—' }}
+                                @endif
+                            </td>
                             <td>{{ $z['type'] ?? '—' }}</td>
                             @if($opt['preise'] ?? false)
                                 <td>
@@ -170,7 +188,7 @@
         @if(($opt['kaskade'] ?? false) && count($node['ingredients'] ?? []))
             @foreach($node['ingredients'] as $z)
                 @if($z['subrecipe'] ?? null)
-                    @include('foodalchemist::dokumente.partials.report-recipe-node', ['node' => $z['subrecipe'], 'optionen' => $opt])
+                    @include('foodalchemist::dokumente.partials.report-recipe-node', ['node' => $z['subrecipe'], 'optionen' => $opt, 'simulationRequirements' => $simulationRequirements])
                 @endif
             @endforeach
         @endif

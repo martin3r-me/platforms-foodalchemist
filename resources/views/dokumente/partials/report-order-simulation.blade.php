@@ -20,7 +20,7 @@
         <div><span>Preisempfehlung / Person</span><strong>{{ $money($targetPp) }}</strong></div>
         <div><span>Abweichung Katalog − Ziel</span>{{ $gapPp > 0 ? '+' : '' }}{{ $money($gapPp) }}</div>
         <div><span>Zielpreis gesamt</span>{{ $money($sim['target_price']) }}</div>
-        <div><span>Aktive Personenzeit</span>{{ number_format((float) $sim['active_person_minutes'] / 60, 2, ',', '.') }} h</div>
+        <div><span>Aktive Produktionszeit</span>{{ number_format((float) $sim['active_person_minutes'] / 60, 2, ',', '.') }} Personenstunden</div>
     </div>
 
     @if($sim['unprofitable'] ?? false)
@@ -57,7 +57,7 @@
     @endif
 
     @if(count($sim['time_breakdown'] ?? []))
-        <h3>Zeitaufschlüsselung</h3>
+        <h3>Aktive Produktionszeit je Rezept</h3>
         <p class="muted">{{ number_format((float) $sim['active_person_minutes'], 1, ',', '.') }} aktive Personenminuten insgesamt.</p>
         <table>
             <thead><tr><th>Rezept</th><th>Ansätze</th><th>Vorgänge</th><th>Rüsten</th><th>Vorgangszeit</th><th>Variabel</th><th>Aktiv gesamt</th></tr></thead>

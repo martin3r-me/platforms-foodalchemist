@@ -36,6 +36,10 @@
         .actions a { display: inline-block; color: #fff; text-decoration: none; border: 1px solid rgba(255,255,255,.25); border-radius: 999px; padding: 5px 10px; margin: 2px; font-size: 11px; }
         .actions a.active { background: {{ $brand }}; border-color: {{ $brand }}; }
         .actions .secondary a { color: #e5e7eb; }
+        .simulation-control { margin-bottom: 9px; padding-bottom: 9px; border-bottom: 1px solid rgba(255,255,255,.16); }
+        .simulation-control form { display: inline-block; margin-left: 6px; }
+        .simulation-control input { width: 90px; border: 1px solid rgba(255,255,255,.3); border-radius: 4px; background: #1f2937; color: #fff; padding: 5px 7px; font: inherit; }
+        .simulation-control button { border: 0; border-radius: 4px; background: {{ $brand }}; color: #fff; padding: 6px 10px; font: inherit; cursor: pointer; }
         header { margin-bottom: 14px; }
         .kicker { font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: #6b7280; }
         h1 { font-size: 26px; margin: 2px 0 4px; letter-spacing: -.02em; color: #111827; }
@@ -88,6 +92,22 @@
 <main class="doc">
     @unless($pdf)
         <div class="actions">
+            @if($concept ?? null)
+                <div class="simulation-control" data-report-simulation-control>
+                    <strong>Auftragssimulation:</strong>
+                    <form method="get" action="{{ request()->url() }}">
+                        @foreach(request()->except(['pax', 'simulation', 'pdf']) as $key => $value)
+                            @if(is_scalar($value))<input type="hidden" name="{{ $key }}" value="{{ $value }}">@endif
+                        @endforeach
+                        <input type="hidden" name="simulation" value="1">
+                        <input type="number" min="1" max="1000000" step="1" name="pax" value="{{ (int) ($opt['pax'] ?? 0) ?: '' }}" placeholder="Pax" aria-label="Pax für Auftragssimulation">
+                        <button type="submit">Simulieren</button>
+                    </form>
+                    @if(($opt['simulation'] ?? false) && (int) ($opt['pax'] ?? 0) > 0)
+                        <a class="active" href="{{ request()->fullUrlWithQuery(['simulation' => 0, 'pax' => null, 'pdf' => null]) }}">{{ number_format((int) $opt['pax'], 0, ',', '.') }} Pax aktiv ×</a>
+                    @endif
+                </div>
+            @endif
             <div>
                 <strong>Report-Profile:</strong>
                 @foreach($profile as $key => $label)
@@ -98,8 +118,7 @@
             </div>
             <div class="secondary" style="margin-top:6px">
                 <strong>Filter:</strong>
-                @foreach(['preise' => 'Preise', 'lieferanten' => 'Lieferanten', 'steps' => 'Anleitung', 'bilder' => 'Bilder', 'deklaration' => 'Deklaration', 'naehrwerte' => 'Nährwerte', 'sensorik' => 'Sensorik', 'produktion' => 'Produktion', 'notizen' => 'Notizen', 'kaskade' => 'Kaskade', 'simulation' => 'Simulation'] as $key => $label)
-                    @if($key === 'simulation' && ! ($concept ?? null)) @continue @endif
+                @foreach(['preise' => 'Preise', 'lieferanten' => 'Lieferanten', 'steps' => 'Anleitung', 'bilder' => 'Bilder', 'deklaration' => 'Deklaration', 'naehrwerte' => 'Nährwerte', 'sensorik' => 'Sensorik', 'produktion' => 'Produktion', 'notizen' => 'Notizen', 'kaskade' => 'Kaskade'] as $key => $label)
                     <a href="{{ request()->fullUrlWithQuery([$key => ($opt[$key] ?? false) ? 0 : 1, 'pdf' => null]) }}" class="{{ ($opt[$key] ?? false) ? 'active' : '' }}">{{ $label }}</a>
                 @endforeach
             </div>

@@ -19,6 +19,7 @@ beforeEach(function () {
         'setup_time_min' => 10,
         'work_time_min' => 5,
     ]);
+    $this->makeIngredient($this->dish, 'Testzutat', null, '25');
     $slot = $this->concepts->addSlot($this->rootTeam, $this->concept->id, ['role' => 'Hauptgang']);
     $this->concepts->fillSlot($this->rootTeam, $slot->id, ['sales_recipe_id' => $this->dish->id]);
     $this->concepts->recomputeCache($this->concept->refresh());
@@ -47,10 +48,32 @@ it('rendert Wasserfall vor Zeitschlüssel im druckbaren Concept-Report', functio
         ->assertSee('Simulation')
         ->assertSee('Auftragskosten')
         ->assertSee('HK2 (Vollkosten)')
-        ->assertSee('Zeitaufschlüsselung')
+        ->assertSee('Aktive Produktionszeit je Rezept')
+        ->assertSee('Auftragsbedarf')
+        ->assertSee('Produktion')
+        ->assertSee('2.500 g')
+        ->assertSee('für Auftrag')
         ->getContent();
 
-    expect(strpos($html, 'Auftragskosten'))->toBeLessThan(strpos($html, 'Zeitaufschlüsselung'));
+    expect(strpos($html, 'Auftragskosten'))->toBeLessThan(strpos($html, 'Aktive Produktionszeit je Rezept'));
+});
+
+it('setzt die Simulation vor Profile und Filter und bewahrt die Pax in deren Links', function () {
+    $this->actingAs($this->makeUser($this->rootTeam, 'Report User'));
+
+    $html = $this->get(route('foodalchemist.concepts.dokument', [
+        'id' => $this->concept->id,
+        'profil' => 'produktion',
+        'simulation' => 1,
+        'pax' => 100,
+    ]))->assertOk()
+        ->assertSee('Auftragssimulation:')
+        ->assertSee('100 Pax aktiv')
+        ->getContent();
+
+    expect(strpos($html, 'data-report-simulation-control'))->toBeLessThan(strpos($html, 'Report-Profile:'))
+        ->and($html)->toContain('simulation=1')
+        ->and($html)->toContain('pax=100');
 });
 
 it('zeigt ohne Pax keine fingierte Auftragssimulation', function () {
@@ -59,5 +82,5 @@ it('zeigt ohne Pax keine fingierte Auftragssimulation', function () {
     $this->get(route('foodalchemist.concepts.dokument', [
         'id' => $this->concept->id,
         'profil' => 'kalkulation',
-    ]))->assertOk()->assertDontSee('Auftragssimulation');
+    ]))->assertOk()->assertDontSee('Auftragssimulation ·');
 });
