@@ -81,12 +81,17 @@ class VkModal extends Component
             }
             $defaultMarkupClassId = app(\Platform\FoodAlchemist\Services\TeamSettingsService::class)
                 ->defaultMarkupClassId($team);
+            $standardPresentation = $r->standardPresentation()->first();
             $this->form = [
                 'name' => $r->name,
                 'sales_wording_standard' => $r->sales_wording_standard,
                 'taste_direction' => $r->taste_direction,
                 'dish_class_id' => $r->dish_class_id,
-                'markup_class_id' => $r->markup_class_id ?? $defaultMarkupClassId,
+                // Preis-Wahrheit ist die Standard-Darreichung. Der Rezeptwert bleibt nur
+                // Kompatibilitaets-Cache und darf im Kalkulations-Tab keine abweichende
+                // Preisklasse anzeigen.
+                'markup_class_id' => $standardPresentation?->markup_class_id
+                    ?? $r->markup_class_id ?? $defaultMarkupClassId,
                 'sales_unit_vocab_id' => $r->sales_unit_vocab_id,
                 'sales_unit_count' => $r->sales_unit_count,
                 'sales_quantity_per_unit_g' => $r->sales_quantity_per_unit_g,
@@ -199,6 +204,38 @@ class VkModal extends Component
                 $this->savedToast('Auto-Preis aktiviert');
             }
         }
+    }
+
+    /**
+     * Der Kalkulations-Tab ist eine Kurzbedienung der Standard-Darreichung. Ein
+     * Klassenwechsel wird deshalb sofort gespeichert und neu berechnet; andernfalls
+     * zeigten Kalkulation und Darreichungen bis zum allgemeinen Modal-Save zwei
+     * verschiedene Wahrheiten.
+     */
+    public function preisklasseGeaendert(string $wert): void
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team === null || $this->recipeId === null) {
+            return;
+        }
+
+        $markupClassId = ctype_digit($wert) && (int) $wert > 0 ? (int) $wert : null;
+
+        try {
+            app(SalesRecipeService::class)->updateVk($team, $this->recipeId, [
+                'markup_class_id' => $markupClassId,
+            ]);
+            $this->form['markup_class_id'] = $markupClassId;
+            $this->ladeDarreichungen();
+            $this->fehler = null;
+        } catch (\Throwable $e) {
+            $this->fehler = $e->getMessage();
+
+            return;
+        }
+
+        $this->dispatch('recipe-gespeichert');
+        $this->savedToast('Preisklasse und Auto-Preis aktualisiert');
     }
 
     public function darreichungNeu(): void

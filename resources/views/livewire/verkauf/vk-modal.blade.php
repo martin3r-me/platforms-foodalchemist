@@ -460,7 +460,9 @@
             <div class="grid grid-cols-3 gap-3" data-vk-verkaufsblock>
                 <div>
                     <label class="block {{ $label }} mb-1">Preisklasse</label>
-                    <select wire:model="form.markup_class_id" class="{{ $input }}" data-vk-ak>
+                    <select wire:model="form.markup_class_id"
+                            wire:change="preisklasseGeaendert($event.target.value)"
+                            class="{{ $input }}" data-vk-ak>
                         <option value="">—</option>
                         @foreach($aufschlagsklassen as $ak)
                             <option value="{{ $ak->id }}">{{ $ak->code }} ({{ number_format((float) ($ak->class_factor_pct ?? 100), 1, ',', '.') }} % relativ)</option>

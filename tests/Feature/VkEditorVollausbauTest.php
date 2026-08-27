@@ -4,7 +4,10 @@ use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
 use Platform\FoodAlchemist\Livewire\Recipes\IngredientEditor;
 use Platform\FoodAlchemist\Livewire\Verkauf\VkModal;
+use Platform\FoodAlchemist\Models\FoodAlchemistMarkupClass;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
+use Platform\FoodAlchemist\Models\FoodAlchemistRecipeDarreichung;
+use Platform\FoodAlchemist\Models\FoodAlchemistServierform;
 use Platform\FoodAlchemist\Services\SalesRecipeService;
 use Platform\FoodAlchemist\Tests\Support\SeedsTeamHierarchy;
 use Platform\FoodAlchemist\Tests\TestCase;
@@ -117,6 +120,100 @@ it('speichert den Wechsel einer Darreichung auf auto unmittelbar', function () {
     // als manuellen Preis in die Standard-Darreichung zurückspiegeln.
     $component->call('speichern')->assertSet('fehler', null);
     expect($darreichung->fresh()->price_mode)->toBe('auto');
+});
+
+it('synchronisiert die Preisklasse aus Kalkulation sofort mit der Standard-Darreichung', function () {
+    $klasseAlt = FoodAlchemistMarkupClass::create([
+        'team_id' => $this->rootTeam->id,
+        'code' => 'ALT',
+        'label' => 'Alt',
+        'class_factor_pct' => 100,
+        'raw_markup_pct' => 0,
+        'vat_rate' => 7,
+        'formula_type' => 'aufschlag',
+    ]);
+    $klasseNeu = FoodAlchemistMarkupClass::create([
+        'team_id' => $this->rootTeam->id,
+        'code' => 'NEU',
+        'label' => 'Neu',
+        'class_factor_pct' => 150,
+        'raw_markup_pct' => 0,
+        'vat_rate' => 7,
+        'formula_type' => 'aufschlag',
+    ]);
+    $servierform = FoodAlchemistServierform::create([
+        'team_id' => $this->rootTeam->id,
+        'code' => 'buffet',
+        'label' => 'Buffet',
+    ]);
+    $this->vk->update([
+        'markup_class_id' => $klasseAlt->id,
+        'yield_kg' => 0.05,
+        'ek_per_kg_eur' => 10,
+    ]);
+    $darreichung = FoodAlchemistRecipeDarreichung::create([
+        'team_id' => $this->rootTeam->id,
+        'recipe_id' => $this->vk->id,
+        'serving_form_id' => $servierform->id,
+        'is_standard' => true,
+        'quantity_per_unit_g' => 50,
+        'unit_count' => 1,
+        'markup_class_id' => $klasseAlt->id,
+        'price_mode' => 'auto',
+    ]);
+    app(\Platform\FoodAlchemist\Services\DarreichungService::class)->recomputePreise($darreichung);
+    $alterPreis = (float) $darreichung->fresh()->sales_net;
+
+    Livewire::test(VkModal::class)
+        ->call('oeffnen', $this->vk->id)
+        ->call('preisklasseGeaendert', (string) $klasseNeu->id)
+        ->assertSet('form.markup_class_id', $klasseNeu->id)
+        ->assertSet("darForm.{$darreichung->id}.markup_class_id", $klasseNeu->id)
+        ->assertSet('fehler', null)
+        ->assertNotDispatched('modal.close');
+
+    expect($this->vk->fresh()->markup_class_id)->toBe($klasseNeu->id)
+        ->and($darreichung->fresh()->markup_class_id)->toBe($klasseNeu->id)
+        ->and((float) $darreichung->fresh()->sales_net)->toBeGreaterThan($alterPreis);
+});
+
+it('zeigt im Kalkulations-Tab die Preisklasse der Standard-Darreichung als Wahrheit', function () {
+    $rezeptKlasse = FoodAlchemistMarkupClass::create([
+        'team_id' => $this->rootTeam->id,
+        'code' => 'REZ',
+        'label' => 'Rezept-Cache',
+        'class_factor_pct' => 100,
+        'raw_markup_pct' => 0,
+        'vat_rate' => 7,
+        'formula_type' => 'aufschlag',
+    ]);
+    $darreichungsKlasse = FoodAlchemistMarkupClass::create([
+        'team_id' => $this->rootTeam->id,
+        'code' => 'DAR',
+        'label' => 'Darreichung',
+        'class_factor_pct' => 120,
+        'raw_markup_pct' => 0,
+        'vat_rate' => 7,
+        'formula_type' => 'aufschlag',
+    ]);
+    $servierform = FoodAlchemistServierform::create([
+        'team_id' => $this->rootTeam->id,
+        'code' => 'portion',
+        'label' => 'Portion',
+    ]);
+    $this->vk->update(['markup_class_id' => $rezeptKlasse->id]);
+    FoodAlchemistRecipeDarreichung::create([
+        'team_id' => $this->rootTeam->id,
+        'recipe_id' => $this->vk->id,
+        'serving_form_id' => $servierform->id,
+        'is_standard' => true,
+        'markup_class_id' => $darreichungsKlasse->id,
+        'price_mode' => 'auto',
+    ]);
+
+    Livewire::test(VkModal::class)
+        ->call('oeffnen', $this->vk->id)
+        ->assertSet('form.markup_class_id', $darreichungsKlasse->id);
 });
 
 it('✨-Fake-Pfade sind ehrlich (kein gültiger Wert ⇒ kiFehler, Form unverändert)', function () {
