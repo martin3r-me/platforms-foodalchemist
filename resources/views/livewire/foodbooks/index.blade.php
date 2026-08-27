@@ -684,6 +684,8 @@
                                                     <span class="text-gray-300 shrink-0">·</span>
                                                     <span class="break-words">{{ $g['text'] }}</span>
                                                     @if(($g['source'] ?? null) === 'name')<span class="text-[9px] text-amber-500 shrink-0">Wording fehlt</span>@endif
+                                                    {{-- Einzelpreis-Concept: VK je direkter Gericht-Zeile auch in der Editor-Vorschau (nicht nur beim Paket). --}}
+                                                    @if(($g['preis'] ?? null) !== null)<span class="ml-auto text-[10px] text-gray-500 tabular-nums shrink-0">{{ number_format((float) $g['preis'], 2, ',', '.') }} €/P</span>@endif
                                                     @if($istEditierbar)
                                                         <button type="button" wire:click="slotWordingBearbeiten({{ $block->id }}, {{ $g['slot_id'] }}, @js(($g['source'] ?? null) === 'name' ? '' : $g['text']))"
                                                                 class="ml-1 shrink-0 text-gray-300 hover:text-violet-500 opacity-0 group-hover/dish:opacity-100 transition-opacity" title="Anzeigename bearbeiten" data-fb-slot-edit>@svg('heroicon-o-pencil', 'w-3 h-3 inline-block align-middle')</button>
