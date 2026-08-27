@@ -234,9 +234,10 @@
                             @php($we = $kap['wareneinsatz'])
                             @php($agg = $kap['aggregat'])
                             @php($ahnenIds = $ahnen($kap['kapitel_id']))
-                            <div wire:key="board-{{ $kap['kapitel_id'] }}" x-show="{{ empty($ahnenIds) ? 'true' : '[' . implode(',', $ahnenIds) . '].every(a => auf[a])' }}" x-cloak class="even:bg-black/[0.015]">
-                                {{-- Kopfzeile: Klick = Ast auf/zu (auf[id]); Aktions-Cluster rechts stoppt die Propagation --}}
-                                <div class="flex items-center gap-1.5 py-1 px-3 cursor-pointer hover:bg-violet-500/[0.04]" @click="auf[{{ $kap['kapitel_id'] }}] = !auf[{{ $kap['kapitel_id'] }}]" style="padding-left: {{ 12 + ($kap['depth'] - 1) * 16 }}px">
+                            <div wire:key="board-{{ $kap['kapitel_id'] }}" x-show="{{ empty($ahnenIds) ? 'true' : '[' . implode(',', $ahnenIds) . '].filter(a => auf[a]).length === ' . count($ahnenIds) }}" x-cloak class="even:bg-black/[0.015]">
+                                {{-- Kopfzeile: Klick = Ast auf/zu (Objekt-Reassignment → sichere Alpine-Reaktivität über alle Ebenen);
+                                     Aktions-Cluster rechts stoppt die Propagation --}}
+                                <div class="flex items-center gap-1.5 py-1 px-3 cursor-pointer hover:bg-violet-500/[0.04]" @click="auf = {...auf, {{ $kap['kapitel_id'] }}: !auf[{{ $kap['kapitel_id'] }}]}" style="padding-left: {{ 12 + ($kap['depth'] - 1) * 16 }}px">
                                     <i class="ti ti-chevron-right text-gray-400 shrink-0 transition-transform" :class="auf[{{ $kap['kapitel_id'] }}] && 'rotate-90'" style="font-size:15px"></i>
                                     <span class="w-2 h-2 rounded-full shrink-0 {{ $fortDot[$kap['fortschritt']] ?? 'bg-gray-300' }}" title="Fortschritt: {{ $fortLabel[$kap['fortschritt']] ?? 'Offen' }}"></span>
                                     <span class="text-sm font-medium text-gray-800 min-w-0 break-words">{{ $kap['titel'] }}</span>
