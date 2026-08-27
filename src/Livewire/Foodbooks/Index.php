@@ -504,6 +504,19 @@ class Index extends Component
      * manipulierte fremde ID Titel/Kundentext/Preise in public Properties (Leseleck). Die
      * nachgelagerten Writes waren via FoodbookService::ownedKapitel geschützt — das Prefill nicht.
      */
+    /**
+     * Board: manuellen Kapitel-Fortschritt setzen (offen|in_arbeit|fertig). Treibt den Punkt im Board
+     * + die KPI „Fertig X/Y". Direkt persistiert (kein Speichern-Roundtrip), team-gescoped via eigenesKapitel.
+     */
+    public function kapitelFortschritt(int $id, string $wert): void
+    {
+        $k = $this->eigenesKapitel($id);
+        if ($k === null || ! in_array($wert, \Platform\FoodAlchemist\Models\FoodAlchemistFoodbookKapitel::FORTSCHRITT_STUFEN, true)) {
+            return;
+        }
+        $k->update(['fortschritt' => $wert]);
+    }
+
     private function eigenesKapitel(int $id): ?\Platform\FoodAlchemist\Models\FoodAlchemistFoodbookKapitel
     {
         $team = Auth::user()?->currentTeamRelation;

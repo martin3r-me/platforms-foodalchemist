@@ -28,6 +28,13 @@ class FoodAlchemistFoodbookKapitel extends Model
     public const PRICING_MODES = ['paket', 'einzel', 'gemischt'];
 
     /**
+     * Manueller Bearbeitungs-Fortschritt (Dominique 2026-08-27) — je Kapitel per Board-Dropdown gesetzt.
+     * `offen` (grau) → `in_arbeit` (gelb) → `fertig` (grün). „fertig" treibt Board-Punkt + KPI „Fertig X/Y".
+     * Getrennt von released_at (materialisiert) und status (Versand).
+     */
+    public const FORTSCHRITT_STUFEN = ['offen', 'in_arbeit', 'fertig'];
+
+    /**
      * Kreativ-Modus (Spec 19, E9.1) — kanonisch, Vokabular-Pflicht (kein Freitext).
      * voll_kreativ = leere Leinwand · hybrid = Pairing + Verfügbarkeits-Marker · datenbank = vom Bestand.
      * NULL am Kapitel ⇒ erbt Foodbook-Default; nirgends gesetzt ⇒ CREATIVE_MODE_DEFAULT.

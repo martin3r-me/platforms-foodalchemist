@@ -62,6 +62,7 @@ class FoodbookKapitelPutTool extends FoodAlchemistTool implements ToolContract, 
                 'pricing_mode' => ['type' => 'string', 'enum' => FoodAlchemistFoodbookKapitel::PRICING_MODES, 'description' => 'paket | einzel | gemischt'],
                 'target_food_cost_pct' => ['type' => 'number', 'description' => 'Ziel-Wareneinsatz in % (WE-Ampel-SOLL)'],
                 'creative_mode' => ['type' => 'string', 'enum' => FoodAlchemistFoodbookKapitel::CREATIVE_MODES, 'description' => 'Kreativ-Modus voll_kreativ | hybrid | datenbank (NULL/weg ⇒ erbt Foodbook-Default)'],
+                'fortschritt' => ['type' => 'string', 'enum' => FoodAlchemistFoodbookKapitel::FORTSCHRITT_STUFEN, 'description' => 'Bearbeitungs-Fortschritt offen | in_arbeit | fertig (treibt Board-Punkt + KPI „Fertig X/Y")'],
                 'zielgruppen' => [
                     'type' => 'array',
                     'items' => ['type' => 'integer'],
@@ -101,6 +102,10 @@ class FoodbookKapitelPutTool extends FoodAlchemistTool implements ToolContract, 
             && ! in_array((string) $arguments['creative_mode'], FoodAlchemistFoodbookKapitel::CREATIVE_MODES, true)) {
             return ToolResult::error('creative_mode muss voll_kreativ|hybrid|datenbank sein.', 'VALIDATION_ERROR');
         }
+        if (isset($arguments['fortschritt'])
+            && ! in_array((string) $arguments['fortschritt'], FoodAlchemistFoodbookKapitel::FORTSCHRITT_STUFEN, true)) {
+            return ToolResult::error('fortschritt muss offen|in_arbeit|fertig sein.', 'VALIDATION_ERROR');
+        }
         if (isset($arguments['serving_form_id'])
             && ! FoodAlchemistServierform::visibleToTeam($team)->whereKey((int) $arguments['serving_form_id'])->exists()) {
             return ToolResult::error('serving_form_id nicht sichtbar/vorhanden.', 'NOT_FOUND');
@@ -119,7 +124,7 @@ class FoodbookKapitelPutTool extends FoodAlchemistTool implements ToolContract, 
         $felder = array_intersect_key($arguments, array_flip([
             'title', 'consumer_title', 'claim', 'description',
             'target_count', 'price_anchor', 'price_min', 'price_max', 'niveau',
-            'serving_form_id', 'service_moment_id', 'pricing_mode', 'target_food_cost_pct', 'creative_mode',
+            'serving_form_id', 'service_moment_id', 'pricing_mode', 'target_food_cost_pct', 'creative_mode', 'fortschritt',
         ]));
 
         $svc = app(FoodbookService::class);
@@ -149,6 +154,7 @@ class FoodbookKapitelPutTool extends FoodAlchemistTool implements ToolContract, 
             'serving_form_id' => $kap->serving_form_id !== null ? (int) $kap->serving_form_id : null,
             'service_moment_id' => $kap->service_moment_id !== null ? (int) $kap->service_moment_id : null,
             'pricing_mode' => $kap->pricing_mode,
+            'fortschritt' => $kap->fortschritt,
             'target_food_cost_pct' => $kap->target_food_cost_pct,
             'creative_mode' => $kap->creative_mode,
             'zielgruppen_ids' => $kap->targetGroups()->pluck('foodalchemist_target_groups.id')->map(fn ($v) => (int) $v)->all(),

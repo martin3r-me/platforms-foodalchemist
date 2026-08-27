@@ -429,6 +429,7 @@ class LeitstelleService
                 'parent_id' => $k->parent_id !== null ? (int) $k->parent_id : null,
                 'depth' => $this->kapitelTiefe($k, $fb->chapters),
                 'released' => $k->released_at !== null,
+                'fortschritt' => in_array((string) $k->fortschritt, FoodAlchemistFoodbookKapitel::FORTSCHRITT_STUFEN, true) ? (string) $k->fortschritt : 'offen',
                 'pricing_mode' => $k->pricing_mode !== null ? (string) $k->pricing_mode : null,
                 'aggregat' => $agg,
                 'wareneinsatz' => $we,

@@ -88,8 +88,9 @@
                  aller Kapitel-Preise (kein Pro-Person-Wert). Die WE-Quote ist ein Verhältnis (ΣEK/ΣVK) → robust,
                  aussagekräftig als Margen-Gesundheit. Echte Preise stehen je Kapitel im Board. --}}
             @php($fbWePct = ($menue['gesamt']['food_cost_percent'] ?? null))
-            @php($fbErledigt = collect($checkliste)->where('status', 'erledigt')->count())
-            @php($fbSchritte = count($checkliste))
+            {{-- „Fertig X/Y" (Dominique 2026-08-27): wie viele Kapitel der/die Planer:in per Board-Dropdown auf
+                 fortschritt=fertig gesetzt hat. Ersetzt die abstrakte 7-Schritt-Checkliste „Fortschritt 2/7". --}}
+            @php($fbFertig = collect($kapitelBoard)->where('fortschritt', 'fertig')->count())
             <x-foodalchemist::modal name="foodbook-editor" fullscreen dark-canvas title="Foodbook bearbeiten" :title-name="$fb->label">
                 <x-slot:actions>
                     <button type="button" wire:click="speichern" class="{{ $btnPrimary }}" data-fb-speichern>Speichern</button>
@@ -107,9 +108,9 @@
                         ['kpi' => 'speisen', 'label' => 'Speisen', 'value' => (string) $fbSpeisenN],
                         ['kpi' => 'we', 'label' => 'Ø Wareneinsatz', 'tone' => 'accent',
                          'value' => $fbWePct !== null ? number_format((float) $fbWePct, 1, ',', '.') . ' %' : '—'],
-                        ['kpi' => 'fortschritt', 'label' => 'Fortschritt',
-                         'tone' => ($fbSchritte > 0 && $fbErledigt >= $fbSchritte) ? 'good' : 'neutral',
-                         'value' => $fbErledigt . '/' . $fbSchritte],
+                        ['kpi' => 'fertig', 'label' => 'Fertig',
+                         'tone' => ($fbKapitelN > 0 && $fbFertig >= $fbKapitelN) ? 'good' : 'neutral',
+                         'value' => $fbFertig . '/' . $fbKapitelN],
                     ]" />
                 </x-slot:kpiHeader>
 
@@ -211,22 +212,30 @@
                     @php($ampelDot = ['gruen' => 'bg-emerald-500', 'gelb' => 'bg-amber-400', 'rot' => 'bg-rose-500', 'unbekannt' => 'bg-gray-300'])
                     @php($ampelText = ['gruen' => 'text-emerald-700', 'gelb' => 'text-amber-700', 'rot' => 'text-rose-700', 'unbekannt' => 'text-gray-400'])
                     @php($befundAmpel = ['erfuellt' => 'text-emerald-600', 'teilerfuellt' => 'text-amber-600', 'verletzt' => 'text-rose-600', 'info' => 'text-sky-600'])
+                    @php($fortDot = ['offen' => 'bg-gray-300', 'in_arbeit' => 'bg-amber-400', 'fertig' => 'bg-emerald-500'])
+                    @php($fortLabel = ['offen' => 'Offen', 'in_arbeit' => 'In Arbeit', 'fertig' => 'Fertig'])
 
                     {{-- Kennzahlen liegen im KPI-Streifen oben (Kapitel/Speisen/…) — hier keine zweite Summen-Leiste
                          (Overlap + „Ø"-Fehllabel; die 318 € waren die Summe aller Kapitel, kein Pro-Person-Wert). --}}
-                    {{-- Kapitel-Liste (der EINE Baum) --}}
+                    {{-- Kapitel-Liste (der EINE Baum). alleEbenen-Schalter klappt auf die erste Ebene zu
+                         (Unterkapitel aus-/einblenden) — reines Alpine, kein Server-Roundtrip. --}}
+                    <div x-data="{ alleEbenen: true }">
+                        <div class="flex items-center justify-end pb-1.5">
+                            <button type="button" @click="alleEbenen = !alleEbenen" class="text-[11px] text-gray-500 hover:text-violet-600 inline-flex items-center gap-1" title="Baum auf die erste Ebene zuklappen">
+                                <i class="ti ti-chevron-down transition-transform" :class="!alleEbenen && '-rotate-90'" style="font-size:13px"></i><span x-text="alleEbenen ? 'Nur Oberkapitel' : 'Alle Ebenen'"></span>
+                            </button>
+                        </div>
                     <div class="{{ $card }} divide-y divide-black/5 overflow-hidden">
                         @forelse($kapitelBoard as $kap)
                             @php($we = $kap['wareneinsatz'])
                             @php($agg = $kap['aggregat'])
-                            <div wire:key="board-{{ $kap['kapitel_id'] }}" x-data="{ open: false }" class="even:bg-black/[0.015]">
+                            <div wire:key="board-{{ $kap['kapitel_id'] }}" x-data="{ open: false }" x-show="alleEbenen || {{ $kap['depth'] }} <= 1" x-cloak class="even:bg-black/[0.015]">
                                 {{-- Kopfzeile: klick = auf/zu; Aktions-Cluster rechts stoppt die Propagation --}}
                                 <div class="flex items-center gap-1.5 py-1 px-3 cursor-pointer hover:bg-violet-500/[0.04]" @click="open = !open" style="padding-left: {{ 12 + ($kap['depth'] - 1) * 16 }}px">
                                     <i class="ti ti-chevron-right text-gray-400 shrink-0 transition-transform" :class="open && 'rotate-90'" style="font-size:15px"></i>
-                                    <span class="w-2 h-2 rounded-full shrink-0 {{ $ampelDot[$we['status']] ?? 'bg-gray-300' }}" title="Wareneinsatz {{ $we['status'] }}"></span>
+                                    <span class="w-2 h-2 rounded-full shrink-0 {{ $fortDot[$kap['fortschritt']] ?? 'bg-gray-300' }}" title="Fortschritt: {{ $fortLabel[$kap['fortschritt']] ?? 'Offen' }}"></span>
                                     <span class="text-sm font-medium text-gray-800 min-w-0 break-words">{{ $kap['titel'] }}</span>
                                     @if($kap['pricing_mode'])<span class="text-[10px] uppercase tracking-wide text-gray-400 shrink-0">{{ $kap['pricing_mode'] }}</span>@endif
-                                    @if($kap['released'])<span class="text-[10px] text-emerald-600 shrink-0" title="Kapitel angelegt">● angelegt</span>@endif
                                     <div class="ml-auto flex items-center gap-2.5 text-[11px] tabular-nums shrink-0" @click.stop>
                                         <span class="{{ $pill }} {{ $kap['hat_ziele'] ? $variantPill['primary'] : $variantPill['secondary'] }}" title="Ziele/Dimensionen gesetzt">Z</span>
                                         <span class="{{ $pill }} {{ $kap['positionen_count'] > 0 ? $variantPill['info'] : $variantPill['secondary'] }}" title="Positionen">{{ $kap['positionen_count'] }}</span>
@@ -237,7 +246,14 @@
                                         <span class="inline-flex items-center gap-1 {{ $ampelText[$we['status']] ?? 'text-gray-400' }}" title="WE {{ $we['ist_pct'] !== null ? number_format((float) $we['ist_pct'], 1, ',', '.') . ' %' : 'unbekannt' }} · Ziel {{ number_format((float) $we['ziel_pct'], 1, ',', '.') }} %">
                                             <span class="inline-block h-2 w-2 rounded-full {{ $ampelDot[$we['status']] ?? 'bg-gray-300' }}"></span>{{ $we['ist_pct'] !== null ? number_format((float) $we['ist_pct'], 1, ',', '.') . ' %' : '—' }}
                                         </span>
-                                        @unless($kap['released'])<button type="button" wire:click="kapitelWaehle({{ $kap['kapitel_id'] }})" class="text-violet-500 hover:text-violet-700" title="Kapitel öffnen &amp; weiterplanen">Planen</button>@endunless
+                                        {{-- Fortschritt manuell setzen (offen|in_arbeit|fertig) → treibt Punkt + KPI „Fertig X/Y". --}}
+                                        <select wire:change="kapitelFortschritt({{ $kap['kapitel_id'] }}, $event.target.value)" title="Fortschritt setzen"
+                                                class="text-[11px] rounded border border-black/10 bg-transparent py-0.5 pl-1.5 pr-5 text-gray-500 hover:border-violet-300 focus:outline-none cursor-pointer">
+                                            <option value="offen" @selected($kap['fortschritt'] === 'offen')>Offen</option>
+                                            <option value="in_arbeit" @selected($kap['fortschritt'] === 'in_arbeit')>In Arbeit</option>
+                                            <option value="fertig" @selected($kap['fortschritt'] === 'fertig')>Fertig</option>
+                                        </select>
+                                        <button type="button" wire:click="kapitelWaehle({{ $kap['kapitel_id'] }})" class="text-violet-500 hover:text-violet-700" title="Kapitel öffnen &amp; weiterplanen">Planen</button>
                                     </div>
                                 </div>
                                 {{-- Aufgeklappt: Positionen + Coverage inline --}}
@@ -276,6 +292,7 @@
                             <p class="text-sm text-gray-400 p-5">Noch keine Kapitel — links „Neues Kapitel …" anlegen oder in der Leitstelle planen.</p>
                         @endforelse
                     </div>
+                    </div>{{-- /alleEbenen-Wrapper --}}
                 </div>
 
                 {{-- ═══ Tab: BRIEFING (Stammdaten · Kunde · Leitidee) ═══ --}}

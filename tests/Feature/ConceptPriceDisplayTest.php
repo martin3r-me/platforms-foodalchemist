@@ -106,6 +106,26 @@ it('Kapitel-Board: depth-first Baum-Reihenfolge — Kind direkt unter Eltern tro
     expect(collect($board)->pluck('titel')->all())->toBe(['A', 'A-Kind', 'B', 'B-Kind']);
 });
 
+it('Kapitel-Fortschritt: Default offen · Setter persistiert · Enum-Guard', function () {
+    $fb = FoodAlchemistFoodbook::create(['team_id' => $this->rootTeam->id, 'code' => 'FB-FS', 'label' => 'FS',
+        'jahr' => 2027, 'personen' => 10, 'status' => 'draft']);
+    $kap = $fb->kapitel()->create(['team_id' => $this->rootTeam->id, 'title' => 'K', 'position' => 0]);
+
+    // Default = offen im Board.
+    $board = app(LeitstelleService::class)->kapitelBoard($this->rootTeam, $fb->fresh());
+    expect($board[0]['fortschritt'])->toBe('offen');
+
+    // Setter persistiert.
+    Livewire::test(\Platform\FoodAlchemist\Livewire\Foodbooks\Index::class)
+        ->call('kapitelFortschritt', $kap->id, 'fertig');
+    expect(\Platform\FoodAlchemist\Models\FoodAlchemistFoodbookKapitel::find($kap->id)->fortschritt)->toBe('fertig');
+
+    // Enum-Guard: ungültiger Wert wird ignoriert (bleibt beim letzten gültigen).
+    Livewire::test(\Platform\FoodAlchemist\Livewire\Foodbooks\Index::class)
+        ->call('kapitelFortschritt', $kap->id, 'quatsch');
+    expect(\Platform\FoodAlchemist\Models\FoodAlchemistFoodbookKapitel::find($kap->id)->fortschritt)->toBe('fertig');
+});
+
 it('Concepter-Editor: setPreisDisplay persistiert die Preisdarstellung', function () {
     $c = $this->makeConcept($this->rootTeam, 'Auswahl', ['kind' => 'concept', 'status' => 'active']);
 
