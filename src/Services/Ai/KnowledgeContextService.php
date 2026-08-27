@@ -184,7 +184,7 @@ class KnowledgeContextService
         // Werten (Niveau/Sektor) entdeckt und gedeckelt geladen. Damit skaliert die Wissensbasis:
         // eine neue Kategorie braucht nur eine Routing-Zeile, KEINEN Service-Code. Bestehende
         // Kategorien werden übersprungen → Verhalten für sie byte-identisch (golden-safe).
-        $spezial = ['domain', 'pairing', 'trend', 'concept', 'cross_cutting', 'niveau', 'regelwerk'];   // niveau (3b) + regelwerk (0c) haben eigene dedizierte Selektoren
+        $spezial = ['domain', 'pairing', 'trend', 'concept', 'niveau'];   // niveau (3b) hat eigenen dedizierten Selektor. cross_cutting + regelwerk ab 2026-08-27 über generische Discovery (Dossier-Split): die dedizierten Blöcke oben feuern nur bei mode=always und werden bei routing=discovery automatisch übersprungen, crossCuttingDocs()/regelwerkBlock() sind dann ungenutzt.
         $leitplankenQuery = trim($description . ' ' . implode(' ', array_filter([
             (string) ($params['niveau'] ?? $params['level'] ?? ''),
             (string) ($params['sektor'] ?? ''),
