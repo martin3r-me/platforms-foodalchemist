@@ -21,9 +21,10 @@ class PresentationDesignsPostTool extends FoodAlchemistTool implements ToolContr
 
     public function getDescription(): string
     {
-        return 'Legt ein Präsentations-Design an: geordnete Blockliste (layout_json) + Style-Tokens '
-            . '(tokens_json). base_slug editorial|menu|kiosk als Ausgangspunkt. Datengebundene Blöcke '
-            . '(cover, chapter_loop, dish_list, price_summary, legend, grid, text, heading, image, spacer, cta).';
+        return 'Legt ein Präsentations-Design an: Blockliste (layout_json) + Style-Tokens (tokens_json) '
+            . '+ optional freies sandboxed custom_css. base_slug editorial|menu|kiosk|navigator als Ausgangspunkt. '
+            . 'Damit steuerbar: Farben/Typo/Spacing, Navigation (Sprungmenü/Sidebar), Lightbox, Bild-Band (Raster/Rondell), '
+            . 'Speiseplan-Ausgabe (Tabelle/Liste), Cover-/Bild-Darstellung, Gericht-Fotos, Kapitel-Bilder — UND eigenes CSS.';
     }
 
     public function getSchema(): array
@@ -34,9 +35,9 @@ class PresentationDesignsPostTool extends FoodAlchemistTool implements ToolContr
                 'name' => ['type' => 'string'],
                 'base_slug' => ['type' => 'string', 'enum' => ['editorial', 'menu', 'kiosk', 'navigator']],
                 'output_types' => ['type' => 'array', 'items' => ['type' => 'string', 'enum' => ['foodbook', 'speisekarte', 'speiseplan']], 'description' => 'Für welche Ausgabeformen das Design im Picker erscheint (leer = alle).'],
-                'layout_json' => ['type' => 'array', 'items' => ['type' => 'object']],
-                'tokens_json' => ['type' => 'object'],
-                'custom_css' => ['type' => 'string', 'description' => 'Sandboxed CSS-only Layer (kein <, @import, expression) — überschreibt die Basis-Optik. Content bleibt datengebunden.'],
+                'layout_json' => ['type' => 'array', 'items' => ['type' => 'object'], 'description' => PresentationDesignService::layoutVocabDoc()],
+                'tokens_json' => ['type' => 'object', 'description' => PresentationDesignService::tokensVocabDoc()],
+                'custom_css' => ['type' => 'string', 'description' => PresentationDesignService::customCssDoc()],
             ],
             'required' => ['name'],
         ];

@@ -77,6 +77,26 @@ it('PUBLISH auf fremd-Team-Foodbook → NOT_FOUND', function () {
     expect($res->success)->toBeFalse()->and($res->errorCode)->toBe('NOT_FOUND');
 });
 
+it('presentation_designs: custom_css + tokens + layout Round-Trip (MCP kann CSS/Blöcke setzen)', function () {
+    $post = $this->registry->get('foodalchemist.presentation_designs.POST')->execute([
+        'name' => 'Broich',
+        'base_slug' => 'editorial',
+        'tokens_json' => ['palette' => ['accent' => '#b02530'], 'nav' => 'sidebar', 'lightbox' => true],
+        'layout_json' => [
+            ['block_type' => 'cover', 'style' => ['show_cover_image' => true]],
+            ['block_type' => 'chapter_loop', 'style' => ['show_dish_photos' => true, 'show_chapter_image' => false]],
+        ],
+        'custom_css' => '.pt-line-price { font-weight: 800; }',
+    ], $this->kontext);
+    expect($post->success)->toBeTrue();
+
+    $get = $this->registry->get('foodalchemist.presentation_designs.GET')->execute(['id' => $post->data['id']], $this->kontext);
+    expect($get->data['tokens_json']['palette']['accent'])->toBe('#b02530');
+    expect($get->data['tokens_json']['nav'])->toBe('sidebar');
+    expect(collect($get->data['layout_json'])->firstWhere('block_type', 'chapter_loop')['style']['show_dish_photos'])->toBeTrue();
+    expect($get->data['custom_css'])->toContain('font-weight: 800');
+});
+
 it('presentation_designs CRUD Round-Trip; fremd-Team-PUT → NOT_FOUND', function () {
     $post = $this->registry->get('foodalchemist.presentation_designs.POST')->execute([
         'name' => 'MCP-Design', 'base_slug' => 'kiosk',

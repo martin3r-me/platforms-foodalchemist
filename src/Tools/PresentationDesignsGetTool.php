@@ -20,7 +20,8 @@ class PresentationDesignsGetTool extends FoodAlchemistTool implements ToolContra
 
     public function getDescription(): string
     {
-        return 'Liefert ein Präsentations-Design (Name, base_slug, layout_json, tokens_json).';
+        return 'Liefert ein Präsentations-Design vollständig (name, base_slug, output_types, layout_json=Blöcke, '
+            . 'tokens_json=Einstellungen, custom_css). Round-trip-fähig mit PUT. ' . PresentationDesignService::tokensVocabDoc();
     }
 
     public function getSchema(): array
@@ -51,6 +52,7 @@ class PresentationDesignsGetTool extends FoodAlchemistTool implements ToolContra
             'owned' => $d->isOwnedBy($team),
             'layout_json' => $d->layout_json,
             'tokens_json' => $d->tokens_json,
+            'custom_css' => $d->custom_css,
         ]);
     }
 
