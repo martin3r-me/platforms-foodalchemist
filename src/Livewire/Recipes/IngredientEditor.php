@@ -272,6 +272,9 @@ class IngredientEditor extends Component
         $suche = mb_strtolower(trim($q));
 
         $gpQuery = \Platform\FoodAlchemist\Models\FoodAlchemistGp::visibleToTeam($team)
+            // #4 (Dominique 2026-08-27): im Zutaten-Picker nur verwendbare GPs — abgelehnte/gemergte raus
+            // (GP hat keinen Entwurf-Zustand; vorläufig + freigegeben bleiben). Wie tauschKandidaten.
+            ->whereNotIn('status', ['rejected', 'merged'])
             ->when($suche !== '', fn ($w) => \Platform\FoodAlchemist\Support\Suche::like($w, 'name', $suche))
             ->when(($gpFilter['wg'] ?? '') !== '', fn ($w) => $w->where('commodity_group_code', $gpFilter['wg']))
             ->when(($gpFilter['sub'] ?? '') !== '', fn ($w) => $w->where('sub_category', $gpFilter['sub']))
@@ -312,6 +315,9 @@ class IngredientEditor extends Component
             })->values()->all();
 
         $rezQuery = FoodAlchemistRecipe::visibleToTeam($team)->basis()
+            // #4 (Dominique 2026-08-27): im Sub-Rezept-Picker nur reife/freigegebene Basisrezepte —
+            // Entwurf/Stub (in Arbeit) + Veraltet raus. Review + Freigegeben bleiben.
+            ->whereNotIn('status', ['draft', 'stub', 'deprecated'])
             ->where('id', '!=', (int) $this->recipeId)
             ->when($suche !== '', fn ($w) => \Platform\FoodAlchemist\Support\Suche::like($w, 'foodalchemist_recipes.name', $suche))
             ->when(($rezFilter['hg'] ?? '') !== '', fn ($w) => $w->whereHas('category', fn ($k) => $k->where('main_group_id', (int) $rezFilter['hg'])))

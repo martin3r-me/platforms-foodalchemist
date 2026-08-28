@@ -26,8 +26,9 @@ beforeEach(function () {
     $this->gpBier = $this->makeGp($this->rootTeam, 'Veltins Bier: fluessig');
     $this->gpBier->update(['commodity_group_code' => '15', 'condition' => 'frisch']);
 
+    // #4 (2026-08-27): der Picker zeigt nur reife/freigegebene Basisrezepte → Sub muss review/approved sein.
     $this->sub = FoodAlchemistRecipe::create([
-        'team_id' => $this->rootTeam->id, 'recipe_key' => 'fond_tomate', 'name' => 'Fond: Tomate', 'status' => 'draft',
+        'team_id' => $this->rootTeam->id, 'recipe_key' => 'fond_tomate', 'name' => 'Fond: Tomate', 'status' => 'review',
     ]);
     app(\Platform\FoodAlchemist\Services\RecipeService::class)
         ->setzeEignung($this->rootTeam, $this->sub->id, 'level', 'gehoben');
@@ -70,6 +71,31 @@ it('q wirkt als Textfilter auf BEIDE Listen gleichzeitig', function () {
         ->and($r['gps']['items'][0]['name'])->toBe('Tomatenmark')
         ->and($r['rezepte']['total'])->toBe(1)
         ->and($r['rezepte']['items'][0]['name'])->toBe('↳ Fond: Tomate');
+});
+
+it('#4: Picker zeigt nur reife GPs + Basisrezepte — Entwurf/Stub/Veraltet + abgelehnt/merged raus', function () {
+    // Nicht-verwendbare GPs (abgelehnt/merged) — dürfen NICHT im Picker erscheinen.
+    $this->makeGp($this->rootTeam, 'Abgelehnt-GP')->update(['status' => 'rejected']);
+    $this->makeGp($this->rootTeam, 'Merged-GP')->update(['status' => 'merged']);
+    // Nicht-reife Rezepte — Entwurf/Stub/Veraltet raus, Freigegeben bleibt.
+    FoodAlchemistRecipe::create(['team_id' => $this->rootTeam->id, 'recipe_key' => 'draft_r', 'name' => 'Fond: Entwurf', 'status' => 'draft']);
+    FoodAlchemistRecipe::create(['team_id' => $this->rootTeam->id, 'recipe_key' => 'stub_r', 'name' => 'Fond: Stub', 'status' => 'stub']);
+    FoodAlchemistRecipe::create(['team_id' => $this->rootTeam->id, 'recipe_key' => 'depr_r', 'name' => 'Fond: Alt', 'status' => 'deprecated']);
+    FoodAlchemistRecipe::create(['team_id' => $this->rootTeam->id, 'recipe_key' => 'appr_r', 'name' => 'Fond: Freigegeben', 'status' => 'approved']);
+
+    $komponente = Livewire::test(IngredientEditor::class, ['recipeId' => $this->rezept->id, 'eingebettet' => true])->instance();
+    $alle = $komponente->browseKatalog();
+
+    $gpNamen = collect($alle['gps']['items'])->pluck('name');
+    expect($gpNamen)->not->toContain('Abgelehnt-GP')->not->toContain('Merged-GP')
+        ->and($gpNamen)->toContain('Tomatenmark');   // tentative bleibt sichtbar
+
+    $rezNamen = collect($alle['rezepte']['items'])->pluck('name')->map(fn ($n) => ltrim($n, '↳ '));
+    expect($rezNamen)->toContain('Fond: Tomate')          // review
+        ->toContain('Fond: Freigegeben')                  // approved
+        ->not->toContain('Fond: Entwurf')                 // draft
+        ->not->toContain('Fond: Stub')                    // stub
+        ->not->toContain('Fond: Alt');                    // deprecated
 });
 
 it('lädt den Drei-Spalten-Browser erst bei Fokus oder Filterinteraktion', function () {

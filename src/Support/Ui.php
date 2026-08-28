@@ -58,11 +58,20 @@ final class Ui
 
             // ── Pills
             'pill' => 'inline-flex px-1.5 py-px rounded-full text-[11px]',
+            // #4 (Dominique 2026-08-27): einheitliche Status-Ampel über GP + Rezept/Gericht.
+            // GP-Lebenszyklus: freigegeben=grün · vorläufig=orange · abgelehnt=rot · merged=grau.
+            // Rezept/Gericht (RecipeStatus teilt `approved`=freigegeben=grün): Entwurf=grau ·
+            // Review=orange · Veraltet=rot · Stub=grau. Vorher fehlten draft/review/… → Review fiel
+            // auf secondary/grau zurück (die „veraltete" Farbe). Additiv: GP-Keys byte-identisch.
             'statusPill' => [
-                'approved' => 'bg-emerald-500/10 text-emerald-600',
-                'tentative' => 'bg-amber-500/10 text-amber-600',
-                'rejected' => 'bg-red-500/10 text-red-600',
+                'approved' => 'bg-emerald-500/10 text-emerald-600',   // freigegeben — grün
+                'tentative' => 'bg-amber-500/10 text-amber-600',      // vorläufig — orange
+                'rejected' => 'bg-red-500/10 text-red-600',           // abgelehnt — rot
                 'merged' => 'bg-black/5 text-gray-600',
+                'draft' => 'bg-black/5 text-gray-600',                // Entwurf — grau
+                'review' => 'bg-amber-500/10 text-amber-600',         // Review — orange
+                'deprecated' => 'bg-red-500/10 text-red-600',         // Veraltet — rot
+                'stub' => 'bg-black/5 text-gray-500',                 // Stub — grau (dezent)
             ],
             'variantPill' => [
                 'danger' => 'bg-red-500/10 text-red-600',
