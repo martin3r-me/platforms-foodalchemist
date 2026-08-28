@@ -58,6 +58,7 @@
                         'kalender' => 'Kalender',
                         'linien' => 'Menü-Linien',
                         'stammdaten' => 'Stammdaten',
+                        'praesentation' => 'Branding & Präsentation',
                     ]">
 
                     {{-- ═══ Tab: KALENDER ═══ --}}
@@ -307,6 +308,87 @@
                                 <button type="button" wire:click="ausrollen" class="{{ $btnGhost }}" data-sp-ausrollen>⟳ Zyklus ausrollen</button>
                                 @if($ausrollenInfo)<span class="text-[11px] text-violet-300">{{ $ausrollenInfo }}</span>@endif
                             </div>
+                        </x-foodalchemist::modal-section>
+                    </div>
+
+                    {{-- ═══ Spec 43: Tab BRANDING & PRÄSENTATION (digitaler Aushang) ═══ --}}
+                    <div x-show="tab === 'praesentation'" x-cloak class="pt-4 space-y-4" data-sp-tab-praesentation>
+                        @if($brandingFehler)<div class="rounded-lg bg-rose-500/15 border border-rose-500/30 text-rose-200 text-xs px-3 py-2">{{ $brandingFehler }}</div>@endif
+
+                        <x-foodalchemist::modal-section title="Branding">
+                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                <label class="text-xs text-gray-300">Markenfarbe
+                                    <input type="color" wire:model="brandColor" class="block w-full h-8 rounded border border-white/10 bg-transparent">
+                                </label>
+                                <label class="text-xs text-gray-300">Bandfarbe (optional)
+                                    <input type="color" wire:model="bandColor" class="block w-full h-8 rounded border border-white/10 bg-transparent">
+                                </label>
+                                <label class="text-xs text-gray-300">Footer-Text
+                                    <input type="text" wire:model="footerText" class="{{ $input }} w-full" placeholder="z.B. Küche XY">
+                                </label>
+                            </div>
+                            <div class="flex flex-wrap items-center gap-3 mt-3">
+                                <button type="button" wire:click="brandingSpeichern" class="{{ $btnGhost }}" data-sp-branding-speichern>Branding speichern</button>
+                                <div class="text-xs text-gray-400">Logo
+                                    @if($brandingBilder['logo'])<img src="{{ $brandingBilder['logo'] }}" class="inline-block h-6 align-middle ml-1 rounded bg-white/10"> <button type="button" wire:click="brandingLogoEntfernen" class="text-rose-300 text-[11px]">entfernen</button>@endif
+                                    <input type="file" wire:model="logoUpload" accept="image/*" class="block text-[11px] mt-1">
+                                </div>
+                                <div class="text-xs text-gray-400">Coverbild
+                                    @if($brandingBilder['cover'])<img src="{{ $brandingBilder['cover'] }}" class="inline-block h-6 align-middle ml-1 rounded bg-white/10"> <button type="button" wire:click="brandingCoverEntfernen" class="text-rose-300 text-[11px]">entfernen</button>@endif
+                                    <input type="file" wire:model="coverUpload" accept="image/*" class="block text-[11px] mt-1">
+                                </div>
+                            </div>
+                        </x-foodalchemist::modal-section>
+
+                        <x-foodalchemist::modal-section title="Präsentation · digitaler Aushang">
+                            @if($presentationHinweis)<div class="rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-200 text-xs px-3 py-2 mb-2" data-sp-praes-hinweis>{{ $presentationHinweis }}</div>@endif
+                            @if($presentationFehler)<div class="rounded-lg bg-rose-500/15 border border-rose-500/30 text-rose-200 text-xs px-3 py-2 mb-2" data-sp-praes-fehler>{{ $presentationFehler }}</div>@endif
+
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <label class="text-xs text-gray-300">Design
+                                    <select wire:model="presentationDesign" class="{{ $input }} w-full" data-sp-praes-design>
+                                        @foreach($presentationDesignOptionen as $opt)
+                                            <option value="{{ $opt['value'] }}">{{ $opt['label'] }}</option>
+                                        @endforeach
+                                    </select>
+                                </label>
+                                <label class="text-xs text-gray-300">Gültig bis <span class="text-rose-400">*</span>
+                                    <input type="date" wire:model="presentationGueltigBis" class="{{ $input }} w-full" data-sp-praes-gueltig>
+                                </label>
+                            </div>
+                            <p class="text-[11px] text-gray-400 mt-2">GV-Aushang: preislos, LMIV-Kennzeichnung ist Pflicht und immer sichtbar.</p>
+
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
+                                <label class="text-xs text-gray-300">CTA-Text (optional)
+                                    <input type="text" wire:model="presentationCtaText" class="{{ $input }} w-full" placeholder="z.B. Mehr Infos">
+                                </label>
+                                <label class="text-xs text-gray-300">CTA-Link (optional)
+                                    <input type="url" wire:model="presentationCtaLink" class="{{ $input }} w-full" placeholder="https://…">
+                                </label>
+                            </div>
+
+                            <div class="flex flex-wrap items-center gap-2 mt-3">
+                                <a href="{{ route('foodalchemist.speiseplan.praesentation', ['id' => $sp->id, 'design' => $presentationDesign]) }}" target="_blank" class="{{ $btnGhost }}">Vorschau öffnen</a>
+                                <button type="button" wire:click="veroeffentlichen" wire:confirm="Diesen Aushang veröffentlichen? Der Snapshot wird eingefroren." class="{{ $btnPrimary }}" data-sp-praes-publish @disabled(! $presentationGueltigBis)>
+                                    {{ ($presentationInfo['enabled'] ?? false) ? 'Neu veröffentlichen' : 'Veröffentlichen' }}
+                                </button>
+                                @if($presentationInfo['enabled'] ?? false)
+                                    <button type="button" wire:click="zuruckziehen" wire:confirm="Veröffentlichung zurückziehen? Der Link liefert dann 404." class="{{ $btnGhost }}" data-sp-praes-withdraw>Zurückziehen</button>
+                                @endif
+                            </div>
+                            @unless($presentationGueltigBis)
+                                <p class="text-[11px] text-amber-300 mt-1">Zum Veröffentlichen ein „gültig bis"-Datum setzen (Pflicht).</p>
+                            @endunless
+
+                            @if($presentationLink)
+                                <div class="rounded-lg bg-white/5 border border-white/10 p-3 text-xs mt-3" x-data>
+                                    <div class="flex items-center gap-2">
+                                        <input type="text" readonly value="{{ $presentationLink }}" class="{{ $input }} flex-1" data-sp-praes-link>
+                                        <button type="button" class="{{ $btnGhost }}" x-on:click="navigator.clipboard.writeText('{{ $presentationLink }}'); $el.textContent='Kopiert ✓'">Link kopieren</button>
+                                    </div>
+                                    <p class="text-[11px] text-gray-400 mt-1">Freigegeben am {{ $presentationInfo['published_at'] ?? '—' }} · gültig bis {{ $presentationInfo['expires_at'] ?? '—' }} · {{ ($presentationInfo['live'] ?? false) ? 'aktiv' : 'inaktiv/abgelaufen' }}</p>
+                                </div>
+                            @endif
                         </x-foodalchemist::modal-section>
                     </div>
                 </x-foodalchemist::editor-tabs>

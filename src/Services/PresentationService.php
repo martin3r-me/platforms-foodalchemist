@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Models\FoodAlchemistFoodbook;
 use Platform\FoodAlchemist\Models\FoodAlchemistSpeisekarte;
+use Platform\FoodAlchemist\Models\FoodAlchemistSpeiseplan;
 
 /**
  * Spec 43 — Public-Präsentations-Layer (digitales Kundenbuch) für die Ausgabeformen.
@@ -147,18 +148,24 @@ class PresentationService
         if (isset($settings['tokens']) && is_array($settings['tokens'])) {
             $clean['tokens'] = $settings['tokens'];
         }
+        // Speiseplan: welche Mahlzeit/Woche der Aushang einfriert (zum Snapshot-Zeitpunkt bindend).
+        if ($type === self::TYPE_SPEISEPLAN) {
+            $clean['mahlzeit'] = (string) ($settings['mahlzeit'] ?? 'mittag');
+            $clean['montag'] = $settings['montag'] ?? null;
+        }
         $designSource = $this->cleanDesignSource($settings['design'] ?? ($entity->presentation_design ?? 'editorial'));
 
         $content = match ($type) {
             self::TYPE_FOODBOOK => $this->normalizeFoodbook($team, $entity, $clean),
             self::TYPE_SPEISEKARTE => $this->normalizeSpeisekarte($team, $entity, $clean),
+            self::TYPE_SPEISEPLAN => $this->normalizeSpeiseplan($team, $entity, $clean),
             default => throw new \InvalidArgumentException("Präsentations-Typ '{$type}' ist in dieser Phase noch nicht unterstützt."),
         };
 
         $branding = $this->brandingIdentifiers($entity);
         $resolvedDesign = [
             'source' => $designSource,
-            'layout' => $this->designs->resolveLayout($designSource, $team),
+            'layout' => $this->adaptLayoutForType($type, $this->designs->resolveLayout($designSource, $team)),
             'tokens' => $this->designs->resolveTokens($designSource, $team, $branding, $clean),
         ];
 
@@ -365,6 +372,98 @@ class PresentationService
         ];
     }
 
+    /**
+     * ALLOWLIST-Neubau der Speiseplan-Kundensicht (GV-Aushang, Wochen-Raster). LMIV-Kennzeichnung
+     * + Kostformen + DGE-Ø-Nährwerte sind customer-pflichtig; preislos. karte/kaskaden/intern raus.
+     *
+     * @return array{title:string, subtitle:?string, meta:array, body:array}
+     */
+    private function normalizeSpeiseplan(Team $team, FoodAlchemistSpeiseplan $plan, array $settings): array
+    {
+        $mahlzeit = (string) ($settings['mahlzeit'] ?? 'mittag');
+        $montag = $settings['montag'] ?? null;
+        $dok = app(SpeiseplanService::class)->dokumentDaten($team, $plan, $mahlzeit, $montag, false, false);
+
+        $tage = array_map(fn ($t) => ['key' => $t['ymd'] ?? '', 'label' => $t['label'] ?? ''], $dok['tage'] ?? []);
+        $lines = [];
+        foreach ($dok['zeilen'] ?? [] as $z) {
+            $cells = [];
+            foreach ($z['zellen'] ?? [] as $ymd => $eintraege) {
+                $cells[$ymd] = array_map(fn ($e) => [
+                    'label' => (string) ($e['name'] ?? ''),
+                    'codes' => array_values((array) ($e['codes'] ?? [])),
+                ], $eintraege);
+            }
+            $lines[] = ['name' => (string) ($z['linie'] ?? ''), 'color' => $z['color'] ?? null, 'cells' => $cells];
+        }
+
+        return [
+            'title' => (string) ($plan->name ?: 'Speiseplan'),
+            'subtitle' => trim((string) (($dok['kwLabel'] ?? '') . ' · ' . ($dok['mahlzeitLabel'] ?? ''))) ?: null,
+            'meta' => [
+                'customer' => null, 'kontakt' => null, 'jahr' => null, 'mwst' => null,
+                'stand' => $dok['erzeugt'] ?? null,
+            ],
+            'body' => [
+                'layout_kind' => 'grid',
+                'sections' => [],
+                'grid' => ['tage' => $tage, 'lines' => $lines],
+                'kostformen' => $dok['kostformen'] ?? null,
+                'naehrwerte' => $dok['naehrwerte'] ?? null,
+                // LMIV ist Pflicht (mergeSettings erzwingt declaration=true bei Speiseplan).
+                'legend' => $dok['legende'] ?? null,
+                'total' => null,
+            ],
+        ];
+    }
+
+    /**
+     * Passt eine (built-in oder eigene) Layout-Definition an den Ausgabetyp an. Für den
+     * Speiseplan werden die linearen Content-Blöcke (chapter_loop/dish_list/price_summary)
+     * durch einen `grid`-Block ersetzt → „Grid in die 3 Vorlagen" (Cover/Legende/Tokens bleiben).
+     *
+     * @param  list<array{block_type:string, style:array}>  $layout
+     * @return list<array{block_type:string, style:array}>
+     */
+    private function adaptLayoutForType(string $type, array $layout): array
+    {
+        if ($type !== self::TYPE_SPEISEPLAN) {
+            return $layout;
+        }
+        $out = [];
+        $gridGesetzt = false;
+        foreach ($layout as $block) {
+            $bt = $block['block_type'] ?? '';
+            if (in_array($bt, ['chapter_loop', 'dish_list', 'price_summary'], true)) {
+                if (! $gridGesetzt) {
+                    $out[] = ['block_type' => 'grid', 'style' => $block['style'] ?? []];
+                    $gridGesetzt = true;
+                }
+
+                continue; // weitere Content-Blöcke fallen weg (ein Grid genügt)
+            }
+            $out[] = $block;
+        }
+        if (! $gridGesetzt) {
+            // Kein Content-Block im Design → Grid vor die Legende (oder ans Ende) einschieben.
+            $legendIdx = null;
+            foreach ($out as $i => $b) {
+                if (($b['block_type'] ?? '') === 'legend') {
+                    $legendIdx = $i;
+                    break;
+                }
+            }
+            $grid = ['block_type' => 'grid', 'style' => []];
+            if ($legendIdx !== null) {
+                array_splice($out, $legendIdx, 0, [$grid]);
+            } else {
+                $out[] = $grid;
+            }
+        }
+
+        return $out;
+    }
+
     // ── Bilder: Identifier → frisch signierte URL ──────────────────────────
 
     /**
@@ -411,6 +510,7 @@ class PresentationService
         return match ($type) {
             self::TYPE_FOODBOOK => FoodAlchemistFoodbook::class,
             self::TYPE_SPEISEKARTE => FoodAlchemistSpeisekarte::class,
+            self::TYPE_SPEISEPLAN => FoodAlchemistSpeiseplan::class,
             default => throw new \InvalidArgumentException("Unbekannter Präsentations-Typ '{$type}'."),
         };
     }
@@ -495,6 +595,10 @@ class PresentationService
         $out = $this->mergeSettings($settings, $type);
         if (isset($settings['tokens']) && is_array($settings['tokens'])) {
             $out['tokens'] = $settings['tokens'];
+        }
+        if ($type === self::TYPE_SPEISEPLAN) {
+            $out['mahlzeit'] = (string) ($settings['mahlzeit'] ?? 'mittag');
+            $out['montag'] = $settings['montag'] ?? null;
         }
 
         return $out;

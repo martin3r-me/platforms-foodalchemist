@@ -1,6 +1,6 @@
 # Spec 43 — Präsentation als digitales, konfigurierbares Kundenbuch
 
-**Status:** Phase 1 (Foodbook-Pilot) gebaut + getestet · Phase 2 (Speisekarte) / Phase 3 (Speiseplan) offen.
+**Status:** ✅ Phase 1 (Foodbook) · Phase 2 (Speisekarte) · Phase 3 (Speiseplan) — alle gebaut + getestet (36 Spec-Tests grün, 0 Regressionen).
 
 ## Ziel
 
@@ -51,13 +51,19 @@ Stabilität, isOwnedBy) · `PresentationPublicTest` (ohne Login, 404-Matrix, Sna
 (Builder-CRUD, Reorder, Token-Präzedenz, eingefrorenes Design) · `PresentationEditorTabTest`
 (Publish/Withdraw-Wiring) · `PresentationMcpTest` (Round-Trips, Tenancy, Registry-Smoke).
 
-## Offen
+## Umgesetzt je Phase
 
-- **Phase 2 (Speisekarte):** `presentation_*` auf `foodalchemist_menu_cards`, Service-Pfad
-  (`normalizeSpeisekarte`), Route `/p/speisekarte/{token}`, Editor-Tab, MCP, interne Vorschau.
-- **Phase 3 (Speiseplan):** Branding-Neubau (fehlt ganz) + `presentation_*` auf
-  `foodalchemist_menu_plans` + `normalizeSpeiseplan` (Grid) + `grid`-Block-Feinschliff + neuer
-  Editor-Tab + Route + MCP. LMIV-Kennzeichnung customer-pflichtig, GV-Aushang preislos.
-- Cleanup: alte Livewire-Komponente `Foodbooks/Praesentation` (nur noch von `FoodbookServiceTest`
-  genutzt) entfernen + Test auf den neuen Renderer migrieren.
+- **Phase 2 (Speisekarte):** `presentation_*` auf `foodalchemist_menu_cards`, `normalizeSpeisekarte`
+  (à la carte, Menü-Gänge eingerückt), Route `/p/speisekarte/{token}`, Editor-Tab, 3 MCP-Tools, interne Vorschau.
+- **Phase 3 (Speiseplan):** Branding-Neubau (Spalten + `SpeiseplanService`-Methoden + Editor-Tab) +
+  `presentation_*` auf `foodalchemist_menu_plans` + `normalizeSpeiseplan` (Wochen-Grid) +
+  `adaptLayoutForType` (Grid in die 3 Vorlagen) + `grid`-Block (Raster + Kostformen + DGE-Ø) + Route +
+  3 MCP-Tools. LMIV-Kennzeichnung customer-pflichtig, GV-Aushang preislos.
+
+## Offen (Nachzug)
+
+- Cleanup: alte Livewire-Komponenten `Foodbooks/Praesentation` + `Speisekarte/Praesentation`
+  (Foodbooks noch von `FoodbookServiceTest` genutzt) entfernen + Test migrieren.
+- Speiseplan-Aushang: Mahlzeit/Woche-Auswahl beim Veröffentlichen (aktuell Default mittag / Plan-Start).
 - Bewusste Grenze: freie Canva-Leinwand bleibt späterer, additiver Aufsatz.
+- Deploy: FA-scoped migrate (4 neue Migrationen: foodbooks/menu_cards/designs/menu_plans).

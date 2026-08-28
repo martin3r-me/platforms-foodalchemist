@@ -37,6 +37,11 @@ class PresentationController extends Controller
         return $this->doPreview(PresentationService::TYPE_SPEISEKARTE, $id, $svc);
     }
 
+    public function previewSpeiseplan(int $id, PresentationService $svc): View
+    {
+        return $this->doPreview(PresentationService::TYPE_SPEISEPLAN, $id, $svc);
+    }
+
     private function doPreview(string $type, int $id, PresentationService $svc): View
     {
         $team = auth()->user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');

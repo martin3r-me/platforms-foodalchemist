@@ -20,3 +20,9 @@ Damit nicht jeden Dienstag dasselbe kommt, kennt der Plan eine **Wiederholungsre
 ---
 
 > **Gut zu wissen:** Weil der Speiseplan auf denselben Bausteinen steht wie der Rest des Moduls, kennt jeder Planungstag automatisch seinen Wareneinsatz und seine Kalkulation — Planung und Kosten bleiben verbunden.
+
+---
+
+## Präsentation — digitaler Aushang (Spec 43)
+
+Neuer Editor-Tab **„Branding & Präsentation"**: Branding (Farben/Logo/Cover/Footer — neu für den Speiseplan) + Veröffentlichen als login-freier Aushang-Link (Wochen-Raster + LMIV-Kennzeichnung + Kostformen + DGE-Ø-Nährwerte, **preislos**). Absoluter Snapshot, gültig-bis Pflicht. Details → `PLANUNG/43_Praesentation_Digitales_Kundenbuch.md`.

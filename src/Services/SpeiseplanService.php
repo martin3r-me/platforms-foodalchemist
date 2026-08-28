@@ -2,6 +2,7 @@
 
 namespace Platform\FoodAlchemist\Services;
 
+use Illuminate\Http\UploadedFile;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -994,5 +995,92 @@ class SpeiseplanService
         if (! $plan->isOwnedBy($team)) {
             throw new \RuntimeException('Geerbter Speiseplan — Pflege nur durchs Besitzer-Team (D1).');
         }
+    }
+
+    // ── Spec 43: Branding (neu für Speiseplan; gespiegelt aus FoodbookService) ──
+
+    public function setBranding(Team $team, int $planId, array $in): FoodAlchemistSpeiseplan
+    {
+        $plan = FoodAlchemistSpeiseplan::visibleToTeam($team)->findOrFail($planId);
+        $this->guard($plan, $team);
+
+        $daten = [];
+        if (array_key_exists('brand_color', $in)) {
+            $daten['brand_color'] = $this->normHexOderThrow($in['brand_color'], 'brand_color') ?? '#6d28d9';
+        }
+        if (array_key_exists('band_color', $in)) {
+            $daten['band_color'] = $this->normHexOderThrow($in['band_color'], 'band_color', true);
+        }
+        if (array_key_exists('footer_text', $in)) {
+            $t = trim((string) $in['footer_text']);
+            $daten['footer_text'] = $t !== '' ? $t : null;
+        }
+        if ($daten !== []) {
+            $plan->update($daten);
+        }
+
+        return $plan->refresh();
+    }
+
+    public function storeLogo(Team $team, int $planId, UploadedFile $file): string
+    {
+        return $this->speichereBrandingBild($team, $planId, $file, 'logo_path');
+    }
+
+    public function storeCover(Team $team, int $planId, UploadedFile $file): string
+    {
+        return $this->speichereBrandingBild($team, $planId, $file, 'cover_image_path');
+    }
+
+    public function clearLogo(Team $team, int $planId): FoodAlchemistSpeiseplan
+    {
+        return $this->loescheBrandingBild($team, $planId, 'logo_path');
+    }
+
+    public function clearCover(Team $team, int $planId): FoodAlchemistSpeiseplan
+    {
+        return $this->loescheBrandingBild($team, $planId, 'cover_image_path');
+    }
+
+    private function speichereBrandingBild(Team $team, int $planId, UploadedFile $file, string $spalte): string
+    {
+        $plan = FoodAlchemistSpeiseplan::visibleToTeam($team)->findOrFail($planId);
+        $this->guard($plan, $team);
+        $contextSpalte = $spalte === 'logo_path' ? 'logo_context_file_id' : 'cover_context_file_id';
+        app(FoodAlchemistMediaService::class)->delete($plan->{$contextSpalte}, (string) $plan->{$spalte}, $team);
+
+        $media = app(FoodAlchemistMediaService::class)->storeImage(
+            $file, $team, 'foodalchemist.speiseplan', $planId, "foodalchemist/branding/speiseplan/{$planId}",
+        );
+        $plan->update([$spalte => $media['path'], $contextSpalte => $media['context_file_id']]);
+
+        return $media['path'];
+    }
+
+    private function loescheBrandingBild(Team $team, int $planId, string $spalte): FoodAlchemistSpeiseplan
+    {
+        $plan = FoodAlchemistSpeiseplan::visibleToTeam($team)->findOrFail($planId);
+        $this->guard($plan, $team);
+        $contextSpalte = $spalte === 'logo_path' ? 'logo_context_file_id' : 'cover_context_file_id';
+        app(FoodAlchemistMediaService::class)->delete($plan->{$contextSpalte}, (string) $plan->{$spalte}, $team);
+        $plan->update([$spalte => null, $contextSpalte => null]);
+
+        return $plan->refresh();
+    }
+
+    private function normHexOderThrow($wert, string $feld, bool $erlaubeLeer = false): ?string
+    {
+        $wert = trim((string) $wert);
+        if ($wert === '') {
+            if ($erlaubeLeer) {
+                return null;
+            }
+            throw new \RuntimeException("{$feld}: Farbe fehlt.");
+        }
+        if (! preg_match('/^#[0-9a-fA-F]{6}$/', $wert)) {
+            throw new \RuntimeException("{$feld}: ungültiger Hex-Farbwert ({$wert}).");
+        }
+
+        return $wert;
     }
 }

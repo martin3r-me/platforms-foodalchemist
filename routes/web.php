@@ -511,6 +511,10 @@ Route::get('/speiseplan/{id}/dokument', function (int $id, \Platform\FoodAlchemi
     return view('foodalchemist::dokumente.speiseplan', $data + ['istPdf' => false]);
 })->whereNumber('id')->name('foodalchemist.speiseplan.dokument');
 
+// Spec 43: interne LIVE-Vorschau des Speiseplans (GV-Aushang) über denselben Renderer.
+Route::get('/speiseplan/{id}/praesentation', [\Platform\FoodAlchemist\Http\Controllers\PresentationController::class, 'previewSpeiseplan'])
+    ->whereNumber('id')->name('foodalchemist.speiseplan.praesentation');
+
 /**
  * Speisekarte — dritte Ausgabeform (Gastronomie-à-la-carte-Karte). Rubriken × Positionen.
  */

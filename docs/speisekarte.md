@@ -53,3 +53,9 @@ und meldet „bereit", sobald die harten Punkte stehen.
 > **Die Logik dahinter:** Foodbook verkauft ein Anlass-Angebot, der Speiseplan füllt die
 > Zeitachse — die Speisekarte ist das stehende Restaurant-Sortiment. Drei Ausgabeformen,
 > ein Rezept-/Gericht-Fundament.
+
+---
+
+## Präsentation — digitale Karte (Spec 43)
+
+Im Tab **„Branding & Präsentation"** wird die Speisekarte als login-freier Public-Link veröffentlicht (Design wählen · gültig-bis Pflicht · Veröffentlichen → absoluter Snapshot). à-la-carte-Preise (netto/brutto je Karten-Einstellung), interna-frei. Details → `PLANUNG/43_Praesentation_Digitales_Kundenbuch.md`.
