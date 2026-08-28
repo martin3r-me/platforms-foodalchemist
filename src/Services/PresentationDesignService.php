@@ -46,9 +46,9 @@ class PresentationDesignService
                     ['block_type' => 'legend', 'style' => []],
                 ],
                 'tokens' => [
-                    'palette' => ['primary' => '#6d28d9', 'accent' => '#6d28d9', 'bg' => '#ffffff', 'text' => '#111827', 'muted' => '#6b7280'],
-                    'typography' => ['heading' => 'serif', 'body' => 'sans', 'scale' => 1.0],
-                    'spacing' => 'comfortable',
+                    'palette' => ['primary' => '#6d28d9', 'accent' => '#b8874a', 'bg' => '#fbfaf8', 'surface' => 'rgba(26,23,18,0.04)', 'text' => '#1a1712', 'muted' => '#8a8178'],
+                    'typography' => ['heading' => 'display-serif', 'body' => 'sans', 'scale' => 1.0],
+                    'spacing' => 'roomy',
                 ],
             ],
             'menu' => [
@@ -60,9 +60,9 @@ class PresentationDesignService
                     ['block_type' => 'legend', 'style' => ['compact' => true]],
                 ],
                 'tokens' => [
-                    'palette' => ['primary' => '#111827', 'accent' => '#6d28d9', 'bg' => '#ffffff', 'text' => '#111827', 'muted' => '#6b7280'],
-                    'typography' => ['heading' => 'sans', 'body' => 'sans', 'scale' => 0.95],
-                    'spacing' => 'compact',
+                    'palette' => ['primary' => '#1a1712', 'accent' => '#b8874a', 'bg' => '#ffffff', 'surface' => 'rgba(0,0,0,0.03)', 'text' => '#1a1712', 'muted' => '#7a736a'],
+                    'typography' => ['heading' => 'display-serif', 'body' => 'sans', 'scale' => 0.98],
+                    'spacing' => 'comfortable',
                 ],
             ],
             'kiosk' => [
@@ -74,8 +74,8 @@ class PresentationDesignService
                     ['block_type' => 'legend', 'style' => []],
                 ],
                 'tokens' => [
-                    'palette' => ['primary' => '#6d28d9', 'accent' => '#f59e0b', 'bg' => '#0b1020', 'text' => '#f8fafc', 'muted' => '#94a3b8'],
-                    'typography' => ['heading' => 'sans', 'body' => 'sans', 'scale' => 1.4],
+                    'palette' => ['primary' => '#e8c07a', 'accent' => '#e8c07a', 'bg' => '#0b0a08', 'surface' => 'rgba(255,255,255,0.05)', 'text' => '#f6f2ea', 'muted' => '#b6ab99'],
+                    'typography' => ['heading' => 'display-serif', 'body' => 'sans', 'scale' => 1.45],
                     'spacing' => 'roomy',
                     'auto_advance' => true,
                 ],

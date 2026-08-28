@@ -1,2 +1,2 @@
-{{-- Abstandshalter (Struktur-Builder). --}}
-<div class="pt-spacer" style="height: {{ max(0, (int) ($style['height'] ?? 24)) }}px"></div>
+{{-- Abstand. --}}
+<div class="pt-spacer" @if(!empty($style['height'])) style="height: {{ (int) $style['height'] }}px" @endif></div>

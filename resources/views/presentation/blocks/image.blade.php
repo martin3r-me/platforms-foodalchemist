@@ -1,5 +1,4 @@
-{{-- Freies Bild (Struktur-Builder). URL wird zur Render-Zeit frisch signiert
-     (hydrateImages füllt style.url aus style.context_file_id/path). --}}
+{{-- Bild-Band (Struktur-Builder) — nur wenn eine (frisch signierte) URL vorliegt. --}}
 @if(!empty($style['url']))
-    <img class="pt-image" src="{{ $style['url'] }}" alt="{{ $style['alt'] ?? '' }}">
+    <div class="pt-image-band pt-reveal"><img src="{{ $style['url'] }}" alt=""></div>
 @endif
