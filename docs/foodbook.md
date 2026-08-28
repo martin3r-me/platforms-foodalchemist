@@ -33,3 +33,14 @@ Die schlanken Kontext-Defaults (Schreibstil steuert den Kundentext; Kundentyp/Ni
 ---
 
 > **Die Logik dahinter:** Concepter = das Kochen im Kopf (was passt zusammen, was kostet es). Foodbook = das Verkaufen (welches Concept biete ich wem, für wie viele, zu welchem Preis).
+
+---
+
+## Präsentation — digitales Kundenbuch (Spec 43)
+
+Im Tab **„Branding & Präsentation"** wird das Foodbook als teilbares, login-freies Kundenbuch
+veröffentlicht: Design wählen (3 Vorlagen oder eigenes, im Struktur-Builder unter *Einstellungen →
+Präsentations-Designs* gestaltete), **gültig bis** (Pflicht) setzen, **Veröffentlichen** → der
+Kundenlink ist aktiv. Veröffentlichen friert einen **absoluten Snapshot** ein: Weiterarbeiten am
+Foodbook ändert den Link erst beim erneuten Veröffentlichen. Zurückziehen/Ablauf → 404. Die
+Kundensicht ist beweisbar interna-frei (kein EK/Marge/W%/Lieferant). Details → `PLANUNG/43_Praesentation_Digitales_Kundenbuch.md`.

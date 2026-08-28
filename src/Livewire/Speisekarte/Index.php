@@ -9,6 +9,8 @@ use Livewire\WithFileUploads;
 use Livewire\WithPagination;
 use Platform\FoodAlchemist\Enums\AusgabeStatus;
 use Platform\FoodAlchemist\Models\FoodAlchemistSpeisekarte;
+use Platform\FoodAlchemist\Services\PresentationDesignService;
+use Platform\FoodAlchemist\Services\PresentationService;
 use Platform\FoodAlchemist\Services\SpeisekarteService;
 
 /**
@@ -30,6 +32,63 @@ class Index extends Component
 
     /** Meldung des Voll-Kaskade-Go (P4). */
     public ?string $kaskadeMeldung = null;
+
+    // ── Spec 43: Präsentation (digitales Kundenbuch) ──
+    public string $presentationDesign = 'menu';
+
+    public ?string $presentationGueltigBis = null;
+
+    public bool $presentationPreisAnzeige = true;
+
+    public bool $presentationDeklaration = true;
+
+    public ?string $presentationCtaText = null;
+
+    public ?string $presentationCtaLink = null;
+
+    public ?int $presentationLoadedId = null;
+
+    public ?string $presentationFehler = null;
+
+    public ?string $presentationHinweis = null;
+
+    public function veroeffentlichen(): void
+    {
+        $this->presentationFehler = null;
+        $this->presentationHinweis = null;
+        if ($this->karteId === null) {
+            return;
+        }
+        try {
+            app(PresentationService::class)->publish($this->team(), 'speisekarte', $this->karteId, [
+                'design' => $this->presentationDesign,
+                'expires_at' => $this->presentationGueltigBis,
+                'price_display' => $this->presentationPreisAnzeige,
+                'declaration' => $this->presentationDeklaration,
+                'cta' => ['text' => $this->presentationCtaText, 'link' => $this->presentationCtaLink],
+            ]);
+            $this->presentationLoadedId = null;
+            $this->presentationHinweis = 'Veröffentlicht — der Kundenlink ist aktiv.';
+        } catch (\Throwable $e) {
+            $this->presentationFehler = $e->getMessage();
+        }
+    }
+
+    public function zuruckziehen(): void
+    {
+        $this->presentationFehler = null;
+        $this->presentationHinweis = null;
+        if ($this->karteId === null) {
+            return;
+        }
+        try {
+            app(PresentationService::class)->withdraw($this->team(), 'speisekarte', $this->karteId);
+            $this->presentationLoadedId = null;
+            $this->presentationHinweis = 'Veröffentlichung zurückgezogen — der Link ist jetzt inaktiv (404).';
+        } catch (\Throwable $e) {
+            $this->presentationFehler = $e->getMessage();
+        }
+    }
 
     // Karten-Meta (Editor)
     public string $name = '';
@@ -652,6 +711,18 @@ class Index extends Component
         $team = $this->team();
         $karte = $this->karteId ? $svc->detail($team, $this->karteId) : null;
 
+        // Spec 43: Präsentations-Publish-Felder nur bei Selektions-WECHSEL laden (kein Edit-Verlust).
+        if ($karte !== null && $this->presentationLoadedId !== $karte->id) {
+            $s = $karte->presentationSettings();
+            $this->presentationDesign = $karte->presentation_design ?: 'menu';
+            $this->presentationGueltigBis = $karte->presentation_expires_at?->format('Y-m-d');
+            $this->presentationPreisAnzeige = (bool) ($s['price_display'] ?? true);
+            $this->presentationDeklaration = (bool) ($s['declaration'] ?? true);
+            $this->presentationCtaText = $s['cta']['text'] ?? null;
+            $this->presentationCtaLink = $s['cta']['link'] ?? null;
+            $this->presentationLoadedId = $karte->id;
+        }
+
         // Board-Sicht (intern): je Position VK/EK/WE + je Rubrik der Σ-Rollup für die Kosten-/Margen-Spalten
         // im Aufbau-Baum (Dominique 2026-08-27). Ein Aufruf statt N Einzelpreise. $alleRubrikIds treibt
         // „Alle auf/zu".
@@ -695,7 +766,31 @@ class Index extends Component
             ? optional(\Platform\FoodAlchemist\Models\FoodAlchemistSpeisekarteRubrik::where('menu_card_id', $karte->id)->find($this->pickerRubrikId))->title
             : null;
 
+        // Spec 43: Präsentations-Status + Link + Design-Auswahl fürs Branding-&-Präsentation-Tab.
+        $presentationInfo = null;
+        $presentationLink = null;
+        if ($karte !== null) {
+            $presentationInfo = [
+                'enabled' => (bool) $karte->presentation_enabled,
+                'live' => $karte->isPresentationLive(),
+                'published_at' => $karte->presentation_published_at?->format('d.m.Y H:i'),
+                'expires_at' => $karte->presentation_expires_at?->format('d.m.Y'),
+            ];
+            if ($karte->presentation_enabled && $karte->presentation_token) {
+                $presentationLink = url('/p/speisekarte/' . $karte->presentation_token);
+            }
+        }
+        $presentationDesignOptionen = collect(app(PresentationDesignService::class)->list($team))
+            ->map(fn ($d) => ['value' => 'design:' . $d->id, 'label' => $d->name])
+            ->prepend(['value' => 'kiosk', 'label' => 'Kiosk (Vorlage)'])
+            ->prepend(['value' => 'menu', 'label' => 'Speisekarte (Vorlage)'])
+            ->prepend(['value' => 'editorial', 'label' => 'Editorial (Vorlage)'])
+            ->values()->all();
+
         return view('foodalchemist::livewire.speisekarte.index', [
+            'presentationInfo' => $presentationInfo,
+            'presentationLink' => $presentationLink,
+            'presentationDesignOptionen' => $presentationDesignOptionen,
             'karten' => $svc->paginateBrowser(['search' => $this->search], $team),
             'karte' => $karte,
             'baum' => $baum,

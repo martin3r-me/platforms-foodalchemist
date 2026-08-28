@@ -6,11 +6,14 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\On;
 use Livewire\Component;
+use Livewire\WithFileUploads;
 use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
 use Platform\FoodAlchemist\Models\FoodAlchemistPaket;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Enums\AusgabeStatus;
 use Platform\FoodAlchemist\Models\FoodAlchemistSpeiseplan;
+use Platform\FoodAlchemist\Services\PresentationDesignService;
+use Platform\FoodAlchemist\Services\PresentationService;
 use Platform\FoodAlchemist\Services\SpeiseplanService;
 
 /**
@@ -24,9 +27,137 @@ use Platform\FoodAlchemist\Services\SpeiseplanService;
  */
 class Editor extends Component
 {
+    use WithFileUploads;
     use \Platform\FoodAlchemist\Livewire\Concerns\InteractsWithSavedToast;
 
     public ?int $planId = null;
+
+    // ── Spec 43: Branding (neu) + Präsentation (digitaler Aushang) ──
+    public string $brandColor = '#6d28d9';
+
+    public ?string $bandColor = null;
+
+    public ?string $footerText = null;
+
+    public $logoUpload = null;
+
+    public $coverUpload = null;
+
+    public ?int $brandingLoadedId = null;
+
+    public ?string $brandingFehler = null;
+
+    public string $presentationDesign = 'kiosk';
+
+    public ?string $presentationGueltigBis = null;
+
+    public bool $presentationPreisAnzeige = false;   // GV-Aushang ist preislos
+
+    public ?string $presentationCtaText = null;
+
+    public ?string $presentationCtaLink = null;
+
+    public ?int $presentationLoadedId = null;
+
+    public ?string $presentationFehler = null;
+
+    public ?string $presentationHinweis = null;
+
+    public function brandingSpeichern(SpeiseplanService $svc): void
+    {
+        $this->brandingFehler = null;
+        if ($this->planId === null) {
+            return;
+        }
+        try {
+            $svc->setBranding($this->team(), $this->planId, [
+                'brand_color' => $this->brandColor ?: '#6d28d9',
+                'band_color' => $this->bandColor ?? '',
+                'footer_text' => $this->footerText ?? '',
+            ]);
+        } catch (\RuntimeException $e) {
+            $this->brandingFehler = $e->getMessage();
+        }
+    }
+
+    public function updatedLogoUpload(): void
+    {
+        if ($this->planId === null || $this->logoUpload === null) {
+            return;
+        }
+        $this->validate(['logoUpload' => 'image|max:8192']);
+        try {
+            app(SpeiseplanService::class)->storeLogo($this->team(), $this->planId, $this->logoUpload);
+        } catch (\RuntimeException $e) {
+            $this->brandingFehler = $e->getMessage();
+        }
+        $this->reset('logoUpload');
+    }
+
+    public function updatedCoverUpload(): void
+    {
+        if ($this->planId === null || $this->coverUpload === null) {
+            return;
+        }
+        $this->validate(['coverUpload' => 'image|max:8192']);
+        try {
+            app(SpeiseplanService::class)->storeCover($this->team(), $this->planId, $this->coverUpload);
+        } catch (\RuntimeException $e) {
+            $this->brandingFehler = $e->getMessage();
+        }
+        $this->reset('coverUpload');
+    }
+
+    public function brandingLogoEntfernen(SpeiseplanService $svc): void
+    {
+        if ($this->planId !== null) {
+            $svc->clearLogo($this->team(), $this->planId);
+        }
+    }
+
+    public function brandingCoverEntfernen(SpeiseplanService $svc): void
+    {
+        if ($this->planId !== null) {
+            $svc->clearCover($this->team(), $this->planId);
+        }
+    }
+
+    public function veroeffentlichen(): void
+    {
+        $this->presentationFehler = null;
+        $this->presentationHinweis = null;
+        if ($this->planId === null) {
+            return;
+        }
+        try {
+            app(PresentationService::class)->publish($this->team(), 'speiseplan', $this->planId, [
+                'design' => $this->presentationDesign,
+                'expires_at' => $this->presentationGueltigBis,
+                'price_display' => $this->presentationPreisAnzeige,
+                'cta' => ['text' => $this->presentationCtaText, 'link' => $this->presentationCtaLink],
+            ]);
+            $this->presentationLoadedId = null;
+            $this->presentationHinweis = 'Veröffentlicht — der Aushang-Link ist aktiv.';
+        } catch (\Throwable $e) {
+            $this->presentationFehler = $e->getMessage();
+        }
+    }
+
+    public function zuruckziehen(): void
+    {
+        $this->presentationFehler = null;
+        $this->presentationHinweis = null;
+        if ($this->planId === null) {
+            return;
+        }
+        try {
+            app(PresentationService::class)->withdraw($this->team(), 'speiseplan', $this->planId);
+            $this->presentationLoadedId = null;
+            $this->presentationHinweis = 'Veröffentlichung zurückgezogen — der Link ist inaktiv (404).';
+        } catch (\Throwable $e) {
+            $this->presentationFehler = $e->getMessage();
+        }
+    }
 
     public array $form = ['name' => '', 'start_date' => null, 'cycle_weeks' => 4, 'min_abstand_tage' => 0, 'status' => 'draft', 'default_pax' => 100, 'budget_wareneinsatz' => null];
 
@@ -382,6 +513,22 @@ class Editor extends Component
         $team = $this->team();
         $sp = $this->planId !== null ? $svc->detail($team, $this->planId) : null;
 
+        // Spec 43: Branding + Präsentation nur bei Selektions-WECHSEL laden (kein Edit-Verlust).
+        if ($sp !== null && $this->brandingLoadedId !== $sp->id) {
+            $this->brandColor = $sp->brand_color ?: '#6d28d9';
+            $this->bandColor = $sp->band_color;
+            $this->footerText = $sp->footer_text;
+            $this->brandingLoadedId = $sp->id;
+        }
+        if ($sp !== null && $this->presentationLoadedId !== $sp->id) {
+            $s = $sp->presentationSettings();
+            $this->presentationDesign = $sp->presentation_design ?: 'kiosk';
+            $this->presentationGueltigBis = $sp->presentation_expires_at?->format('Y-m-d');
+            $this->presentationCtaText = $s['cta']['text'] ?? null;
+            $this->presentationCtaLink = $s['cta']['link'] ?? null;
+            $this->presentationLoadedId = $sp->id;
+        }
+
         if ($sp !== null && $this->montag === null) {
             $start = $sp->start_date ?? Carbon::now();
             $this->montag = $start->copy()->startOfWeek(Carbon::MONDAY)->format('Y-m-d');
@@ -415,7 +562,40 @@ class Editor extends Component
             }
         }
 
+        // Spec 43: Präsentations-Status + Link + Design-Auswahl + aktuelle Branding-Bilder.
+        $presentationInfo = null;
+        $presentationLink = null;
+        $brandingBilder = ['logo' => null, 'cover' => null];
+        if ($sp !== null) {
+            $presentationInfo = [
+                'enabled' => (bool) $sp->presentation_enabled,
+                'live' => $sp->isPresentationLive(),
+                'published_at' => $sp->presentation_published_at?->format('d.m.Y H:i'),
+                'expires_at' => $sp->presentation_expires_at?->format('d.m.Y'),
+            ];
+            if ($sp->presentation_enabled && $sp->presentation_token) {
+                $presentationLink = url('/p/speiseplan/' . $sp->presentation_token);
+            }
+            $media = app(\Platform\FoodAlchemist\Services\FoodAlchemistMediaService::class);
+            if ($sp->logo_context_file_id || $sp->logo_path) {
+                $brandingBilder['logo'] = $media->url($sp->logo_context_file_id, $sp->logo_path);
+            }
+            if ($sp->cover_context_file_id || $sp->cover_image_path) {
+                $brandingBilder['cover'] = $media->url($sp->cover_context_file_id, $sp->cover_image_path);
+            }
+        }
+        $presentationDesignOptionen = collect(app(PresentationDesignService::class)->list($team))
+            ->map(fn ($d) => ['value' => 'design:' . $d->id, 'label' => $d->name])
+            ->prepend(['value' => 'kiosk', 'label' => 'Kiosk (Vorlage)'])
+            ->prepend(['value' => 'menu', 'label' => 'Kompakt (Vorlage)'])
+            ->prepend(['value' => 'editorial', 'label' => 'Editorial (Vorlage)'])
+            ->values()->all();
+
         return view('foodalchemist::livewire.speiseplan.editor', [
+            'presentationInfo' => $presentationInfo,
+            'presentationLink' => $presentationLink,
+            'presentationDesignOptionen' => $presentationDesignOptionen,
+            'brandingBilder' => $brandingBilder,
             'sp' => $sp,
             // Spec 33 P5: das Bauteil erwartet die Ausgabe selbst; `sp` ist derselbe Datensatz,
             // nur unter dem Namen, den das Bauteil in allen drei Editoren benutzt.

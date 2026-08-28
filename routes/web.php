@@ -413,10 +413,12 @@ Route::get('/foodbooks/{id}/report', function (int $id, \Platform\FoodAlchemist\
 })->whereNumber('id')->name('foodalchemist.foodbooks.report');
 
 /**
- * R3.2 (Block C, layout-first): Externe Kunden-Präsentation als Web-Seite (auth-gated;
- * öffentlicher Share-Link = separater Core-Auth-Entscheid Martin). EK-frei (Kunden-Projektion).
+ * Spec 43: Interne LIVE-Vorschau des digitalen Kundenbuchs (auth + team-gescopt) — rendert
+ * dieselben token-/blockbasierten Templates wie der öffentliche Link, aus aktuellen Daten
+ * („Vorschau == Veröffentlicht"). Der teilbare Public-Link läuft über routes/public.php
+ * (/p/foodbook/{token}, ohne Login, aus dem eingefrorenen Snapshot).
  */
-Route::get('/foodbooks/{id}/praesentation', \Platform\FoodAlchemist\Livewire\Foodbooks\Praesentation::class)
+Route::get('/foodbooks/{id}/praesentation', [\Platform\FoodAlchemist\Http\Controllers\PresentationController::class, 'preview'])
     ->whereNumber('id')->name('foodalchemist.foodbooks.praesentation');
 
 /**
@@ -509,6 +511,10 @@ Route::get('/speiseplan/{id}/dokument', function (int $id, \Platform\FoodAlchemi
     return view('foodalchemist::dokumente.speiseplan', $data + ['istPdf' => false]);
 })->whereNumber('id')->name('foodalchemist.speiseplan.dokument');
 
+// Spec 43: interne LIVE-Vorschau des Speiseplans (GV-Aushang) über denselben Renderer.
+Route::get('/speiseplan/{id}/praesentation', [\Platform\FoodAlchemist\Http\Controllers\PresentationController::class, 'previewSpeiseplan'])
+    ->whereNumber('id')->name('foodalchemist.speiseplan.praesentation');
+
 /**
  * Speisekarte — dritte Ausgabeform (Gastronomie-à-la-carte-Karte). Rubriken × Positionen.
  */
@@ -548,7 +554,8 @@ Route::get('/speisekarten/{id}/dokument', function (int $id, \Platform\FoodAlche
 /**
  * Speisekarten-Präsentation (Web-Ansicht, auth-gated). Kundensicht ohne EK.
  */
-Route::get('/speisekarten/{id}/praesentation', \Platform\FoodAlchemist\Livewire\Speisekarte\Praesentation::class)
+// Spec 43: interne LIVE-Vorschau der Speisekarte (auth+team) über denselben Renderer.
+Route::get('/speisekarten/{id}/praesentation', [\Platform\FoodAlchemist\Http\Controllers\PresentationController::class, 'previewSpeisekarte'])
     ->whereNumber('id')->name('foodalchemist.speisekarte.praesentation');
 
 /**

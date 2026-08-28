@@ -105,7 +105,7 @@
                     :tabs="[
                         'kontext' => 'Kontext',
                         'aufbau' => 'Aufbau',
-                        'branding' => 'Branding / CI',
+                        'branding' => 'Branding & Präsentation',
                         'leitstelle' => 'Leitstelle',
                     ]">
 
@@ -294,6 +294,70 @@
                         </div>
                     </div>
                 </div>
+            </div>
+
+            {{-- ═══ Spec 43: Präsentation — digitale Speisekarte (Public-Link + Snapshot + Freigabe) ═══ --}}
+            <div class="{{ $card }} p-4 mt-4 space-y-3" data-sk-praesentation>
+                <div class="flex items-baseline justify-between">
+                    <h3 class="text-sm font-semibold text-gray-900">Präsentation · digitale Karte</h3>
+                    <a href="{{ route('foodalchemist.einstellungen', ['sektion' => 'praesentations-designs']) }}" target="_blank" class="text-[11px] text-violet-600 hover:underline">Designs gestalten →</a>
+                </div>
+
+                @if($presentationHinweis)<div class="rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs px-3 py-2" data-sk-praes-hinweis>{{ $presentationHinweis }}</div>@endif
+                @if($presentationFehler)<div class="rounded-lg bg-rose-50 border border-rose-200 text-rose-800 text-xs px-3 py-2" data-sk-praes-fehler>{{ $presentationFehler }}</div>@endif
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <label class="block text-xs text-gray-600">Design
+                        <select wire:model="presentationDesign" class="mt-1 block w-full text-sm border border-gray-300 rounded px-2 py-1" data-sk-praes-design>
+                            @foreach($presentationDesignOptionen as $opt)
+                                <option value="{{ $opt['value'] }}">{{ $opt['label'] }}</option>
+                            @endforeach
+                        </select>
+                    </label>
+                    <label class="block text-xs text-gray-600">Gültig bis <span class="text-rose-500">*</span>
+                        <input type="date" wire:model="presentationGueltigBis" class="mt-1 block w-full text-sm border border-gray-300 rounded px-2 py-1" data-sk-praes-gueltig>
+                    </label>
+                </div>
+
+                <div class="flex flex-wrap gap-4">
+                    <label class="flex items-center gap-2 text-xs text-gray-700"><input type="checkbox" wire:model="presentationPreisAnzeige"> Preise zeigen</label>
+                    <label class="flex items-center gap-2 text-xs text-gray-700"><input type="checkbox" wire:model="presentationDeklaration"> Allergen-Legende zeigen</label>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <label class="block text-xs text-gray-600">CTA-Text (optional)
+                        <input type="text" wire:model="presentationCtaText" placeholder="z.B. Tisch reservieren" class="mt-1 block w-full text-sm border border-gray-300 rounded px-2 py-1">
+                    </label>
+                    <label class="block text-xs text-gray-600">CTA-Link (optional)
+                        <input type="url" wire:model="presentationCtaLink" placeholder="https://…" class="mt-1 block w-full text-sm border border-gray-300 rounded px-2 py-1">
+                    </label>
+                </div>
+
+                <div class="flex flex-wrap items-center gap-2 pt-1">
+                    <a href="{{ route('foodalchemist.speisekarte.praesentation', ['id' => $karte->id, 'design' => $presentationDesign]) }}" target="_blank" class="{{ $btnGhost }}">Vorschau öffnen</a>
+                    <button type="button" wire:click="veroeffentlichen" wire:confirm="Diesen Stand als Karte veröffentlichen? Der Snapshot wird eingefroren." class="{{ $btnPrimary }}" data-sk-praes-publish @disabled(! $presentationGueltigBis)>
+                        {{ ($presentationInfo['enabled'] ?? false) ? 'Neu veröffentlichen' : 'Veröffentlichen' }}
+                    </button>
+                    @if($presentationInfo['enabled'] ?? false)
+                        <button type="button" wire:click="zuruckziehen" wire:confirm="Veröffentlichung zurückziehen? Der Link liefert dann 404." class="{{ $btnGhost }}" data-sk-praes-withdraw>Zurückziehen</button>
+                    @endif
+                </div>
+                @unless($presentationGueltigBis)
+                    <p class="text-[11px] text-amber-600">Zum Veröffentlichen ein „gültig bis"-Datum setzen (Pflicht).</p>
+                @endunless
+
+                @if($presentationLink)
+                    <div class="rounded-lg bg-gray-50 border border-gray-200 p-3 text-xs" x-data>
+                        <div class="flex items-center gap-2">
+                            <input type="text" readonly value="{{ $presentationLink }}" class="flex-1 bg-white border border-gray-200 rounded px-2 py-1 text-gray-700" data-sk-praes-link>
+                            <button type="button" class="{{ $btnGhost }}" x-on:click="navigator.clipboard.writeText('{{ $presentationLink }}'); $el.textContent='Kopiert ✓'">Link kopieren</button>
+                        </div>
+                        <p class="text-[11px] text-gray-500 mt-1">
+                            Freigegeben am {{ $presentationInfo['published_at'] ?? '—' }} · gültig bis {{ $presentationInfo['expires_at'] ?? '—' }} ·
+                            {{ ($presentationInfo['live'] ?? false) ? 'aktiv' : 'inaktiv/abgelaufen' }}
+                        </p>
+                    </div>
+                @endif
             </div>
                 </div>{{-- /Tab BRANDING --}}
 
