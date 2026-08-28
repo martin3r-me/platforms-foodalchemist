@@ -45,6 +45,8 @@ class Index extends Component
         // R5 (Dominique): eigene Seiten statt Sammel-Sektion — mit Anlegen/Bearbeiten
         'aufschlagsklassen' => ['label' => 'Preisklassen', 'hint' => 'Relative Faktoren auf den dynamischen Unternehmens-Basissatz'],
         'schreibstile' => ['label' => 'Schreibstile', 'hint' => 'Sprach-Duktus = Prompt-Material (GL-06) · anlegen + bearbeiten'],
+        // Spec 43: visueller Struktur-Builder für Präsentations-Designs (Block-Palette · Live-Vorschau · Tokens)
+        'praesentations-designs' => ['label' => 'Präsentations-Designs', 'hint' => 'Visueller Struktur-Builder fürs digitale Kundenbuch — Blöcke · Live-Vorschau · Farben/Typo (Spec 43)'],
         'behaelter' => ['label' => 'Behälter & Geräte', 'hint' => 'Behälter · Regen-Geräte · Servier-Vehikel · Koch-Equipment'],
         // Spec 30 E3: Arbeitsplätze mit optionaler Tageskapazität — bewusst getrennt vom
         // Koch-Equipment (das sagt „was braucht ein Rezept", der Posten „wo wird gearbeitet").

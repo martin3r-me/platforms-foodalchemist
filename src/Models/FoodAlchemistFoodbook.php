@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Platform\ActivityLog\Traits\LogsActivity;
 use Platform\FoodAlchemist\Models\Concerns\BelongsToTeamHierarchy;
+use Platform\FoodAlchemist\Models\Concerns\HasPresentation;
 use Platform\FoodAlchemist\Models\Concerns\HasUuidV7;
 use Platform\FoodAlchemist\Models\Concerns\HatAusgabeStatus;
 use Platform\FoodAlchemist\Models\Concerns\HatAusgabeZuordnung;
@@ -20,7 +21,7 @@ use Platform\FoodAlchemist\Models\Concerns\HatAusgabeZuordnung;
  */
 class FoodAlchemistFoodbook extends Model
 {
-    use HasUuidV7, HatAusgabeStatus, HatAusgabeZuordnung, LogsActivity, BelongsToTeamHierarchy, SoftDeletes;
+    use HasUuidV7, HatAusgabeStatus, HatAusgabeZuordnung, HasPresentation, LogsActivity, BelongsToTeamHierarchy, SoftDeletes;
 
     protected $table = 'foodalchemist_foodbooks';
 

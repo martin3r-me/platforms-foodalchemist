@@ -16,6 +16,8 @@ use Platform\FoodAlchemist\Enums\AusgabeStatus;
 use Platform\FoodAlchemist\Models\FoodAlchemistFoodbook;
 use Platform\FoodAlchemist\Services\FoodbookService;
 use Platform\FoodAlchemist\Services\IdeenService;
+use Platform\FoodAlchemist\Services\PresentationDesignService;
+use Platform\FoodAlchemist\Services\PresentationService;
 
 /**
  * M11-03 / Doc 15 §9.3: Foodbook-Editor — stellt fertige **Concepts** zu einem
@@ -39,6 +41,63 @@ class Index extends Component
     public ?string $brandingFehler = null;
 
     public bool $brandingGespeichert = false;
+
+    // ── Spec 43: Präsentation (digitales Kundenbuch) — Publish-Steuerung im Branding-Tab ──
+    public string $presentationDesign = 'editorial';
+
+    public ?string $presentationGueltigBis = null;   // Pflicht-Datum beim Veröffentlichen
+
+    public bool $presentationPreisAnzeige = true;
+
+    public bool $presentationDeklaration = true;
+
+    public ?string $presentationCtaText = null;
+
+    public ?string $presentationCtaLink = null;
+
+    public ?int $presentationLoadedId = null;
+
+    public ?string $presentationFehler = null;
+
+    public ?string $presentationHinweis = null;
+
+    public function veroeffentlichen(): void
+    {
+        $this->presentationFehler = null;
+        $this->presentationHinweis = null;
+        if ($this->selectedId === null) {
+            return;
+        }
+        try {
+            app(PresentationService::class)->publish($this->team(), 'foodbook', $this->selectedId, [
+                'design' => $this->presentationDesign,
+                'expires_at' => $this->presentationGueltigBis,
+                'price_display' => $this->presentationPreisAnzeige,
+                'declaration' => $this->presentationDeklaration,
+                'cta' => ['text' => $this->presentationCtaText, 'link' => $this->presentationCtaLink],
+            ]);
+            $this->presentationLoadedId = null; // erzwingt Neuladen des Status im render()
+            $this->presentationHinweis = 'Veröffentlicht — der Kundenlink ist aktiv.';
+        } catch (\Throwable $e) {
+            $this->presentationFehler = $e->getMessage();
+        }
+    }
+
+    public function zuruckziehen(): void
+    {
+        $this->presentationFehler = null;
+        $this->presentationHinweis = null;
+        if ($this->selectedId === null) {
+            return;
+        }
+        try {
+            app(PresentationService::class)->withdraw($this->team(), 'foodbook', $this->selectedId);
+            $this->presentationLoadedId = null;
+            $this->presentationHinweis = 'Veröffentlichung zurückgezogen — der Link ist jetzt inaktiv (404).';
+        } catch (\Throwable $e) {
+            $this->presentationFehler = $e->getMessage();
+        }
+    }
 
     public function brandingSpeichern(FoodbookService $svc): void
     {
@@ -1125,6 +1184,18 @@ class Index extends Component
             $this->brandingLoadedId = $fb->id;
         }
 
+        // Spec 43: Präsentations-Publish-Felder nur bei Selektions-WECHSEL laden (kein Edit-Verlust je Roundtrip).
+        if ($fb !== null && $this->presentationLoadedId !== $fb->id) {
+            $s = $fb->presentationSettings();
+            $this->presentationDesign = $fb->presentation_design ?: 'editorial';
+            $this->presentationGueltigBis = $fb->presentation_expires_at?->format('Y-m-d');
+            $this->presentationPreisAnzeige = (bool) ($s['price_display'] ?? true);
+            $this->presentationDeklaration = (bool) ($s['declaration'] ?? true);
+            $this->presentationCtaText = $s['cta']['text'] ?? null;
+            $this->presentationCtaLink = $s['cta']['link'] ?? null;
+            $this->presentationLoadedId = $fb->id;
+        }
+
         // S3b: Kreativ-Modus/Pairing-Inspiration + Skizzen-Render-Daten entfallen (Kreativ-Fläche →
         // Leitstelle). Die zugehörigen Props (kreativSeed/ideenPapierkorb/skizzeGerichtSuche) sind weg.
 
@@ -1145,7 +1216,31 @@ class Index extends Component
             $coverage = app(\Platform\FoodAlchemist\Services\CoverageService::class)->coverage($team, 'foodbook', $fb->id);
         }
 
+        // Spec 43: Präsentations-Status + Kunden-Link + Design-Auswahl fürs Branding-&-Präsentation-Tab.
+        $presentationInfo = null;
+        $presentationLink = null;
+        if ($fb !== null) {
+            $presentationInfo = [
+                'enabled' => (bool) $fb->presentation_enabled,
+                'live' => $fb->isPresentationLive(),
+                'published_at' => $fb->presentation_published_at?->format('d.m.Y H:i'),
+                'expires_at' => $fb->presentation_expires_at?->format('d.m.Y'),
+            ];
+            if ($fb->presentation_enabled && $fb->presentation_token) {
+                $presentationLink = url('/p/foodbook/' . $fb->presentation_token);
+            }
+        }
+        $presentationDesignOptionen = collect(app(PresentationDesignService::class)->list($team))
+            ->map(fn ($d) => ['value' => 'design:' . $d->id, 'label' => $d->name])
+            ->prepend(['value' => 'kiosk', 'label' => 'Kiosk (Vorlage)'])
+            ->prepend(['value' => 'menu', 'label' => 'Speisekarte (Vorlage)'])
+            ->prepend(['value' => 'editorial', 'label' => 'Editorial (Vorlage)'])
+            ->values()->all();
+
         return view('foodalchemist::livewire.foodbooks.index', [
+            'presentationInfo' => $presentationInfo,
+            'presentationLink' => $presentationLink,
+            'presentationDesignOptionen' => $presentationDesignOptionen,
             // Board (2026-08-27): EIN Baum statt Übersicht/Fortschritt/Preise — Status + Inhalt + Preis je Kapitel.
             'kapitelBoard' => $fb !== null
                 ? app(\Platform\FoodAlchemist\Services\LeitstelleService::class)->kapitelBoard($team, $fb) : [],

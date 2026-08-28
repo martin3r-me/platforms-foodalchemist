@@ -413,10 +413,12 @@ Route::get('/foodbooks/{id}/report', function (int $id, \Platform\FoodAlchemist\
 })->whereNumber('id')->name('foodalchemist.foodbooks.report');
 
 /**
- * R3.2 (Block C, layout-first): Externe Kunden-Präsentation als Web-Seite (auth-gated;
- * öffentlicher Share-Link = separater Core-Auth-Entscheid Martin). EK-frei (Kunden-Projektion).
+ * Spec 43: Interne LIVE-Vorschau des digitalen Kundenbuchs (auth + team-gescopt) — rendert
+ * dieselben token-/blockbasierten Templates wie der öffentliche Link, aus aktuellen Daten
+ * („Vorschau == Veröffentlicht"). Der teilbare Public-Link läuft über routes/public.php
+ * (/p/foodbook/{token}, ohne Login, aus dem eingefrorenen Snapshot).
  */
-Route::get('/foodbooks/{id}/praesentation', \Platform\FoodAlchemist\Livewire\Foodbooks\Praesentation::class)
+Route::get('/foodbooks/{id}/praesentation', [\Platform\FoodAlchemist\Http\Controllers\PresentationController::class, 'preview'])
     ->whereNumber('id')->name('foodalchemist.foodbooks.praesentation');
 
 /**
