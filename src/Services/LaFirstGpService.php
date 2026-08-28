@@ -4,6 +4,7 @@ namespace Platform\FoodAlchemist\Services;
 
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Jobs\ClassifyLaJob;
+use Platform\FoodAlchemist\Jobs\ConformanceCheckJob;
 use Platform\FoodAlchemist\Models\FoodAlchemistGp;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplierItemStructure;
 use Platform\FoodAlchemist\Services\Matching\MatchHeuristics;
@@ -75,9 +76,10 @@ class LaFirstGpService
             }
             // Dedup-first: existiert schon ein passendes GP (gp_key/Jaccard) → wiederverwenden.
             $guard = $naming->anlageGuard($team, $naming->buildGpKey($naming->slugify($hauptzutat), null, null), $hauptzutat);
-            $gp = ($guard['blockiert'] && $guard['vorhandenes_gp'] !== null)
-                ? $guard['vorhandenes_gp']
-                : $naming->createGp($team, ['hauptzutat' => $hauptzutat]);   // wirft bei §6-Verstoß → catch → null
+            $neuAngelegt = ! ($guard['blockiert'] && $guard['vorhandenes_gp'] !== null);
+            $gp = $neuAngelegt
+                ? $naming->createGp($team, ['hauptzutat' => $hauptzutat])     // wirft bei §6-Verstoß → catch → null
+                : $guard['vorhandenes_gp'];
 
             // LA verknüpfen (legt Struktur an, falls fehlend) → Anreicherung LA-abgeleitet.
             try {
@@ -103,6 +105,17 @@ class LaFirstGpService
             // Der Job blockiert den Mint nie und ist idempotent (klassifiziert → skip).
             if ($struktur === null || $struktur->classified_at === null) {
                 ClassifyLaJob::dispatch((int) $la->id, $team->id);
+            }
+
+            // Schicht 3 · Slice 4b: frisch geminteten (tentativen) GP async gegen das GP-Regelwerk
+            // prüfen — NUR bei Neu-Anlage (Bestandstreffer sind geprüft) und mit User-Kontext (der
+            // Critic braucht Auth für den KI-Call). Best-effort: kippt den Mint nie.
+            if ($neuAngelegt && $gp !== null && ($confUid = \Illuminate\Support\Facades\Auth::id()) !== null) {
+                try {
+                    ConformanceCheckJob::dispatch($team->id, (int) $confUid, 'gp', (int) $gp->id);
+                } catch (\Throwable $e) {
+                    // Dispatch-Fehler schlucken — der Mint steht.
+                }
             }
 
             return $gp;

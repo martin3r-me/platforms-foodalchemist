@@ -1,5 +1,6 @@
 <?php
 
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;
 use Livewire\Livewire;
 use Platform\FoodAlchemist\Jobs\ConformanceCheckJob;
@@ -52,4 +53,40 @@ it('Leitstelle: step-zeile rendert Konformitäts-Hinweise + on-demand prüfen am
         ->call('konformitaetPruefen', $recipe->id); // on-demand-Action läuft fehlerfrei
 
     Queue::assertPushed(ConformanceCheckJob::class, fn ($job) => $job->artifactId === $recipe->id);
+});
+
+it('Leitstelle: step-zeile zeigt die GP-Konformität der Zutaten-GPs eines Rezept-Steps (Slice 4c)', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'GP-Konf', 'brief' => 'x']);
+    $recipe = $this->makeRecipe($this->rootTeam, 'Suppe mit GP', ['status' => 'draft']);
+    $run = FoodAlchemistCascadeRun::create([
+        'team_id' => $this->rootTeam->id, 'planning_session_id' => $session->id, 'scope' => 'gericht', 'status' => 'review',
+    ]);
+    FoodAlchemistCascadeRunStep::create([
+        'team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht',
+        'status' => 'done', 'ref_type' => 'recipe', 'ref_id' => $recipe->id,
+    ]);
+
+    $gp = $this->makeGp($this->rootTeam, 'Tomaten');
+    $unit = \Platform\FoodAlchemist\Models\FoodAlchemistVocabEinheit::create([
+        'team_id' => $this->rootTeam->id, 'slug' => 'g', 'display_de' => 'Gramm', 'dimension' => 'mass', 'default_in_g' => 1,
+    ]);
+    DB::table('foodalchemist_recipe_ingredients')->insert([
+        'uuid' => (string) \Symfony\Component\Uid\UuidV7::generate(), 'team_id' => $this->rootTeam->id,
+        'recipe_id' => $recipe->id, 'gp_id' => $gp->id, 'raw_text' => 'Tomaten', 'display_name' => 'Tomaten',
+        'quantity' => 100, 'unit_vocab_id' => $unit->id, 'position' => 1, 'role' => 'komponente',
+        'created_at' => now(), 'updated_at' => now(),
+    ]);
+
+    FoodAlchemistConformanceFinding::create([
+        'team_id' => $this->rootTeam->id, 'artifact_type' => 'gp', 'artifact_id' => $gp->id,
+        'paragraph' => '§8.12', 'schweregrad' => 'weich', 'feld' => 'kartoffel_kochtyp',
+        'reason' => 'Pflichtangabe Kochtyp fehlt', 'confidence' => 0.8,
+        'status' => 'offen', 'fingerprint' => 'gp-fp-1', 'seen_count' => 1,
+    ]);
+
+    Livewire::test(PlanungIndex::class)
+        ->call('oeffne', $session->id)
+        ->assertSee('GP-Konformität')
+        ->assertSee('Tomaten')                        // der GP-Name im Hinweis
+        ->assertSee('Pflichtangabe Kochtyp fehlt');   // der GP-Befund
 });

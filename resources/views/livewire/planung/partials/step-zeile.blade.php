@@ -334,4 +334,21 @@
             <button type="button" wire:click="konformitaetPruefen({{ (int) $st->ref_id }})" wire:loading.attr="disabled" class="shrink-0 text-[10px] text-gray-500 hover:text-gray-300" title="Konformität gegen die Regelwerke prüfen">🔍 prüfen</button>
         </div>
     @endif
+    {{-- Slice 4c: GP-Konformität dieses Steps — die Zutaten-GPs (v.a. die im Lauf frisch geminteten
+         tentativen) tragen eigene §-Hinweise gegen das GP-Regelwerk. --}}
+    @php $gpKonf = ($st->ref_type === 'recipe' && $st->ref_id) ? (($gpKonformitaet ?? [])[(int) $st->ref_id] ?? []) : []; @endphp
+    @if($gpKonf !== [])
+        <details class="mt-0.5">
+            <summary class="text-[10px] cursor-pointer {{ collect($gpKonf)->contains(fn ($k) => ($k['schweregrad'] ?? '') === 'hart') ? 'text-rose-300' : 'text-amber-300' }} hover:opacity-80">⚠ GP-Konformität ({{ count($gpKonf) }})</summary>
+            <div class="mt-1 space-y-1">
+                @foreach($gpKonf as $k)
+                    <div class="text-[10px] text-gray-400 leading-snug">
+                        <span class="text-gray-300">{{ $k['gp'] }}</span> —
+                        <span class="{{ ($k['schweregrad'] ?? '') === 'hart' ? 'text-rose-300' : 'text-amber-300' }}">{{ $k['paragraph'] ?: '§?' }}</span>
+                        {{ $k['reason'] }}@if(($k['feld'] ?? '') !== '') · <span class="text-gray-500">{{ $k['feld'] }}</span>@endif
+                    </div>
+                @endforeach
+            </div>
+        </details>
+    @endif
 </div>

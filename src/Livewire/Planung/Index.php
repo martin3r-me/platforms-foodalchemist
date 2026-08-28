@@ -3437,6 +3437,9 @@ class Index extends Component
         // Schicht 3: offene Konformitäts-Hinweise je Rezept-/Gericht-Draft ins Cockpit heben
         // (Map recipe_id → Hinweise, hart vor weich) — gefüllt unten aus denselben ref-ids.
         $konformitaet = [];
+        // Slice 4c: GP-Konformität je Rezept-Step — die Zutaten-GPs (v.a. die im Lauf frisch
+        // geminteten tentativen) tragen ihre eigenen §-Hinweise; Map recipe_id → [gp+Hinweis].
+        $gpKonformitaet = [];
         if ($lauf !== null && $team !== null) {
             $rezeptRefIds = $lauf->steps
                 ->whereIn('kind', ['rezept', 'gericht'])
@@ -3449,8 +3452,32 @@ class Index extends Component
                 ->values()
                 ->all();
             // Schicht 3: die offenen Hinweise für alle Draft-Rezepte in EINER Abfrage.
-            $konformitaet = app(\Platform\FoodAlchemist\Services\ConformanceService::class)
-                ->offeneFuerViele($team, 'recipe', $rezeptRefIds);
+            $conformance = app(\Platform\FoodAlchemist\Services\ConformanceService::class);
+            $konformitaet = $conformance->offeneFuerViele($team, 'recipe', $rezeptRefIds);
+
+            // Slice 4c: GP-Konformität — Zutaten-GPs der Lauf-Rezepte laden, ihre offenen
+            // Hinweise ziehen (ein Query) und je Rezept dedupliziert zuordnen.
+            $ingrRows = DB::table('foodalchemist_recipe_ingredients')
+                ->whereIn('recipe_id', $rezeptRefIds)
+                ->whereNotNull('gp_id')
+                ->whereNull('deleted_at')
+                ->get(['recipe_id', 'gp_id']);
+            $gpIds = $ingrRows->pluck('gp_id')->map(fn ($v) => (int) $v)->unique()->values()->all();
+            if ($gpIds !== []) {
+                $gpFind = $conformance->offeneFuerViele($team, 'gp', $gpIds);
+                $gpNamen = DB::table('foodalchemist_gps')->whereIn('id', $gpIds)->pluck('name', 'id');
+                $recipeGps = [];
+                foreach ($ingrRows as $z) {
+                    $recipeGps[(int) $z->recipe_id][(int) $z->gp_id] = true;   // Set → GP je Rezept nur einmal
+                }
+                foreach ($recipeGps as $rid => $gset) {
+                    foreach (array_keys($gset) as $gid) {
+                        foreach ($gpFind[$gid] ?? [] as $f) {
+                            $gpKonformitaet[$rid][] = ['gp' => $gpNamen[$gid] ?? ('GP #' . $gid)] + $f;
+                        }
+                    }
+                }
+            }
             if ($rezeptRefIds !== []) {
                 $sales = app(SalesRecipeService::class);
                 $rezepte = FoodAlchemistRecipe::visibleToTeam($team)->whereIn('id', $rezeptRefIds)->get();
@@ -3647,6 +3674,7 @@ class Index extends Component
             'bilderAngefordert' => $bilderAngefordert,
             'fotoCounts' => $fotoCounts,
             'konformitaet' => $konformitaet,
+            'gpKonformitaet' => $gpKonformitaet,
             'fotoPickerStep' => $this->fotoPickerStep,
             'fotoPickerKandidaten' => $fotoPickerKandidaten,
             'composerNetz' => $composerNetz,
