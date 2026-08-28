@@ -28,6 +28,23 @@ it('führt jede registrierte Sektion in der Navigation', function () {
     }
 });
 
+it('trägt das clientseitige Filter-Feld über der Bereiche-Liste', function () {
+    // 23 Sektionen als flache Liste — statt strittiger Gruppen ein Live-Filter (Label + Hint).
+    $html = Livewire::test(Einstellungen::class)->html();
+
+    expect($html)->toContain('data-settings-filter')->toContain('x-model="q"');
+});
+
+it('stellt einheiten als erste Sektion voran (mount-Default steht oben)', function () {
+    // Nur der ANKER wird geprüft, nicht die volle 23er-Reihenfolge: die Kaskaden-Sortierung darf
+    // sich weiter feinjustieren, ohne dass dieser Test bei jedem Umstellen bricht.
+    expect(array_key_first(Einstellungen::SEKTIONEN))->toBe('einheiten');
+
+    $html = Livewire::test(Einstellungen::class)->html();
+    $ersterLink = strpos($html, 'data-settings-link="');
+    expect(substr($html, $ersterLink, 40))->toContain('data-settings-link="einheiten"');
+});
+
 it('markiert die aktive Sektion und zeigt ihren Kopf genau einmal', function () {
     $html = Livewire::test(Einstellungen::class, ['sektion' => 'herstellkosten'])->html();
 
