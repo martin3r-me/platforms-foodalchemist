@@ -164,6 +164,33 @@ class Index extends Component
         }
     }
 
+    // ── Spec 43 (Bild-Epic): Kapitel-Bild (überschreibt das Concept-Titelbild im Kapitel-Band) ──
+    public $kapitelImageUpload = null;
+
+    public ?string $kapitelImageFehler = null;
+
+    public function updatedKapitelImageUpload(): void
+    {
+        $this->kapitelImageFehler = null;
+        if ($this->selectedKapitelId === null || $this->kapitelImageUpload === null) {
+            return;
+        }
+        $this->validate(['kapitelImageUpload' => 'image|max:8192'], [], ['kapitelImageUpload' => 'Kapitel-Bild']);
+        try {
+            app(FoodbookService::class)->setKapitelImage($this->team(), $this->selectedKapitelId, $this->kapitelImageUpload);
+        } catch (\RuntimeException $e) {
+            $this->kapitelImageFehler = $e->getMessage();
+        }
+        $this->reset('kapitelImageUpload');
+    }
+
+    public function kapitelImageEntfernen(FoodbookService $svc): void
+    {
+        if ($this->selectedKapitelId !== null) {
+            $svc->clearKapitelImage($this->team(), $this->selectedKapitelId);
+        }
+    }
+
     /** R4.3: Owner für den Phasen-Stepper (Trait ManagesPhase). */
     protected function phaseOwner(): array
     {
@@ -1238,6 +1265,9 @@ class Index extends Component
             ->values()->all();
 
         return view('foodalchemist::livewire.foodbooks.index', [
+            'kapitelImageUrl' => ($kapitel !== null && ($kapitel->image_context_file_id || $kapitel->image_path))
+                ? app(\Platform\FoodAlchemist\Services\FoodAlchemistMediaService::class)->url($kapitel->image_context_file_id, $kapitel->image_path)
+                : null,
             'presentationInfo' => $presentationInfo,
             'presentationLink' => $presentationLink,
             'presentationDesignOptionen' => $presentationDesignOptionen,

@@ -5,6 +5,7 @@ namespace Platform\FoodAlchemist\Livewire\Concepter;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\On;
 use Livewire\Component;
+use Livewire\WithFileUploads;
 use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
 use Platform\FoodAlchemist\Models\FoodAlchemistDishClass;
 use Platform\FoodAlchemist\Models\FoodAlchemistWritingStyle;
@@ -32,7 +33,34 @@ use Platform\FoodAlchemist\Services\SalesRecipeService;
  */
 class Editor extends Component
 {
-    use ManagesCanvas, ManagesPlanningFrame, ManagesPhase, InteractsWithSavedToast;
+    use ManagesCanvas, ManagesPlanningFrame, ManagesPhase, InteractsWithSavedToast, WithFileUploads;
+
+    // ── Spec 43 (Bild-Epic): Concept-Titelbild ──
+    public $conceptImageUpload = null;
+
+    public ?string $conceptImageFehler = null;
+
+    public function updatedConceptImageUpload(): void
+    {
+        $this->conceptImageFehler = null;
+        if ($this->id === null || $this->conceptImageUpload === null) {
+            return;
+        }
+        $this->validate(['conceptImageUpload' => 'image|max:8192'], [], ['conceptImageUpload' => 'Bild']);
+        try {
+            app(ConceptService::class)->storeImage($this->team(), $this->id, $this->conceptImageUpload);
+        } catch (\RuntimeException $e) {
+            $this->conceptImageFehler = $e->getMessage();
+        }
+        $this->reset('conceptImageUpload');
+    }
+
+    public function conceptImageEntfernen(): void
+    {
+        if ($this->id !== null) {
+            app(ConceptService::class)->clearImage($this->team(), $this->id);
+        }
+    }
 
     /** R4.3: Owner für den Phasen-Stepper (nur Concepts — Pakete haben keine Phase). */
     protected function phaseOwner(): array
@@ -1371,6 +1399,9 @@ class Editor extends Component
         }
 
         return view('foodalchemist::livewire.concepter.editor', [
+            'conceptImageUrl' => ($concept !== null && ($concept->image_context_file_id || $concept->image_path))
+                ? app(\Platform\FoodAlchemist\Services\FoodAlchemistMediaService::class)->url($concept->image_context_file_id, $concept->image_path)
+                : null,
             'slotZutaten' => $slotZutaten,
             'coverage' => $coverage,
             'pickHauptgruppen' => $istAufbau ? $sales->dishMainGroups($team) : collect(),

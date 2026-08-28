@@ -539,6 +539,22 @@
                         <span>Textkapitel / Sektion — <span class="text-gray-400">kein eigenes Food (Intro, Überschrift, Format-Sektion). Food-Kennzahlen kommen nur aus Unterkapiteln.</span></span>
                     </label>
 
+                    {{-- Spec 43 (Bild-Epic): Kapitel-Bild — überschreibt das Concept-Titelbild im Präsentations-Band --}}
+                    <div data-fb-kapitel-image>
+                        <label class="{{ $label }}">Kapitel-Bild (Präsentation)</label>
+                        <div class="flex items-center gap-3 flex-wrap">
+                            @if($kapitelImageUrl)
+                                <img src="{{ $kapitelImageUrl }}" alt="" class="h-12 w-20 object-cover rounded border border-black/10">
+                                <button type="button" wire:click="kapitelImageEntfernen" class="text-rose-600 text-[11px] underline" data-fb-kapitel-image-remove>entfernen</button>
+                            @endif
+                            <input type="file" wire:model="kapitelImageUpload" accept="image/*" class="text-[11px]" data-fb-kapitel-image-upload>
+                            <div wire:loading wire:target="kapitelImageUpload" class="text-[11px] text-gray-400">lädt …</div>
+                        </div>
+                        @if($kapitelImageFehler)<div class="text-[11px] text-rose-600 mt-1">{{ $kapitelImageFehler }}</div>@endif
+                        @error('kapitelImageUpload')<div class="text-[11px] text-rose-600 mt-1">{{ $message }}</div>@enderror
+                        <p class="text-[11px] text-gray-400 mt-1">Ohne eigenes Bild nutzt das Kapitel-Band automatisch das Titelbild des Konzepts.</p>
+                    </div>
+
                     {{-- Spec 03 · L2b: der Kapitel-Kundentext. Bis hierher existierte das Feld nur in
                          der DB (`foodbook_chapters.description`) — nicht im Editor UND in keiner
                          Ausgabe; die Dokument-Projektion ist mit dieser Etappe nachgezogen. --}}

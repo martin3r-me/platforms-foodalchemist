@@ -198,6 +198,25 @@ class PresentationService
         $showPrice = (bool) $settings['price_display'];
         $showDecl = (bool) $settings['declaration'];
 
+        // Bild-Epic: Kapitel-Band-Bild je Kapitel-ID. Kapitel-Bild › Concept-Titelbild (erstes
+        // concept_ref-Konzept mit Bild). $fb->chapters wurde von dokumentDaten voll geladen.
+        $chapImg = [];
+        foreach ($fb->chapters as $c) {
+            $img = ($c->image_context_file_id || $c->image_path)
+                ? ['context_file_id' => $c->image_context_file_id, 'path' => $c->image_path]
+                : null;
+            if ($img === null) {
+                foreach ($c->blocks as $b) {
+                    if ($b->type === 'concept_ref' && $b->concept !== null
+                        && ($b->concept->image_context_file_id || $b->concept->image_path)) {
+                        $img = ['context_file_id' => $b->concept->image_context_file_id, 'path' => $b->concept->image_path];
+                        break;
+                    }
+                }
+            }
+            $chapImg[(int) $c->id] = $img;
+        }
+
         $sections = [];
         foreach ($dok['kapitel'] as $k) {
             $blocks = [];
@@ -230,6 +249,7 @@ class PresentationService
                     'items' => $items,
                 ];
             }
+            $ankerId = (int) str_replace('k', '', (string) ($k['anker'] ?? ''));
             $sections[] = [
                 // consumer_title bereits in dokumentDaten aufgelöst (title = consumer_title ?: title);
                 // title_intern wird bewusst NICHT übernommen.
@@ -237,6 +257,7 @@ class PresentationService
                 'text' => $k['text'] ?? null,
                 'depth' => (int) ($k['depth'] ?? 0),
                 'anker' => (string) ($k['anker'] ?? ''),
+                'image' => $chapImg[$ankerId] ?? null,
                 'blocks' => $blocks,
             ];
         }
@@ -482,6 +503,17 @@ class PresentationService
                 );
             } elseif (is_array($img)) {
                 $snapshot['branding'][$key]['url'] = null;
+            }
+        }
+
+        // Bild-Epic: Kapitel-Band-Bilder (Identifier → frisch signierte URL).
+        foreach ($snapshot['content']['sections'] ?? [] as $i => $sec) {
+            $img = $sec['image'] ?? null;
+            if (is_array($img) && (($img['context_file_id'] ?? null) || ($img['path'] ?? null))) {
+                $snapshot['content']['sections'][$i]['image']['url'] = $this->media->url(
+                    $img['context_file_id'] ?? null,
+                    $img['path'] ?? null
+                );
             }
         }
 

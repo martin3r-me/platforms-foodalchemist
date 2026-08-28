@@ -118,6 +118,22 @@
                     </div>
                 </div>
 
+                {{-- Spec 43 (Bild-Epic): Concept-Titelbild — Grundlage fürs Kapitel-Band in der Präsentation --}}
+                <div class="mt-3" data-concept-image>
+                    <label class="{{ $label }}">Titelbild (Präsentation)</label>
+                    <div class="flex items-center gap-3 flex-wrap">
+                        @if($conceptImageUrl)
+                            <img src="{{ $conceptImageUrl }}" alt="" class="h-12 w-20 object-cover rounded border border-black/10">
+                            <button type="button" wire:click="conceptImageEntfernen" class="text-rose-600 text-[11px] underline" data-concept-image-remove>entfernen</button>
+                        @endif
+                        <input type="file" wire:model="conceptImageUpload" accept="image/*" class="text-[11px]" data-concept-image-upload>
+                        <div wire:loading wire:target="conceptImageUpload" class="text-[11px] text-gray-400">lädt …</div>
+                    </div>
+                    @if($conceptImageFehler)<div class="text-[11px] text-rose-600 mt-1">{{ $conceptImageFehler }}</div>@endif
+                    @error('conceptImageUpload')<div class="text-[11px] text-rose-600 mt-1">{{ $message }}</div>@enderror
+                    <p class="text-[11px] text-gray-400 mt-1">Wird zur Grundlage fürs Kapitel-Band in der Präsentation (ein Kapitel-Bild überschreibt es).</p>
+                </div>
+
                 {{-- Sektion: Einordnung (Klasse/Niveau + Status/Geschmack bzw. Rolle) --}}
                 <h4 class="{{ $sekHead }} mt-4 pt-3 border-t border-black/5">Einordnung</h4>
                 <div class="grid grid-cols-2 md:grid-cols-6 gap-3">
