@@ -134,6 +134,40 @@ class PresentationDesignService
         return $tokens;
     }
 
+    /** Sandboxed Custom-CSS des Designs (Stufe 2 „Leinwand via Code"); built-ins tragen keins. */
+    public function resolveCss(?string $designSource, Team $team): ?string
+    {
+        $design = $this->findBySource($designSource, $team);
+
+        return $design !== null ? $this->sanitizeCss($design->custom_css) : null;
+    }
+
+    /**
+     * Härtet KI/User-CSS für die eigenständige, chrome-freie Präsentationsseite. CSS-ONLY:
+     * verbietet `<`/`>` (kein </style>-Breakout → kein HTML/JS), `@import` (externe Ressourcen),
+     * `expression(` (IE-Altlast) und `javascript:`. Rein optischer Layer auf die Blöcke.
+     */
+    public function sanitizeCss(?string $css): ?string
+    {
+        $css = trim((string) $css);
+        if ($css === '') {
+            return null;
+        }
+        // Kein Tag-Breakout.
+        $css = str_replace(['<', '>'], '', $css);
+        // Gefährliche/externe Konstrukte raus (case-insensitive).
+        $css = preg_replace('/@import\b[^;]*;?/i', '', $css);
+        $css = preg_replace('/expression\s*\(/i', '(', $css);
+        $css = preg_replace('/javascript\s*:/i', '', $css);
+        $css = preg_replace('/\bbehavior\s*:/i', '', $css);
+        // Länge deckeln (Missbrauch/DoS-Schutz).
+        if (strlen($css) > 60000) {
+            $css = substr($css, 0, 60000);
+        }
+
+        return trim($css) !== '' ? $css : null;
+    }
+
     // ── CRUD (team-gescopt) ────────────────────────────────────────────────
 
     /** @return Collection<int, FoodAlchemistPresentationDesign> */
@@ -166,6 +200,7 @@ class PresentationDesignService
             'base_slug' => $base,
             'layout_json' => $this->sanitizeLayout($data['layout_json'] ?? $this->builtins()[$base]['layout']),
             'tokens_json' => is_array($data['tokens_json'] ?? null) ? $data['tokens_json'] : $this->builtins()[$base]['tokens'],
+            'custom_css' => $this->sanitizeCss($data['custom_css'] ?? null),
             'is_default' => false,
         ]);
     }
@@ -189,6 +224,9 @@ class PresentationDesignService
         }
         if (array_key_exists('tokens_json', $data) && is_array($data['tokens_json'])) {
             $design->tokens_json = $data['tokens_json'];
+        }
+        if (array_key_exists('custom_css', $data)) {
+            $design->custom_css = $this->sanitizeCss($data['custom_css']);
         }
         $design->save();
 

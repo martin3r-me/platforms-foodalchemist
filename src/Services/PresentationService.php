@@ -167,6 +167,7 @@ class PresentationService
             'source' => $designSource,
             'layout' => $this->adaptLayoutForType($type, $this->designs->resolveLayout($designSource, $team)),
             'tokens' => $this->designs->resolveTokens($designSource, $team, $branding, $clean),
+            'custom_css' => $this->designs->resolveCss($designSource, $team),
         ];
 
         return [

@@ -136,6 +136,11 @@
             .pt-reveal { opacity: 1 !important; transform: none !important; }
         }
     </style>
+    @php $customCss = $snapshot['resolved_design']['custom_css'] ?? null; @endphp
+    @if(!empty($customCss))
+        {{-- Stufe 2: KI/User-Design-CSS (sanitisiert: kein <, @import, expression). Überschreibt die Basis. --}}
+        <style>{!! str_replace(['<', '>'], '', $customCss) !!}</style>
+    @endif
 </head>
 <body data-foodalchemist-presentation="{{ $snapshot['type'] ?? '' }}"@if($auto) data-kiosk-auto="1"@endif>
     <div class="pt-wrap">

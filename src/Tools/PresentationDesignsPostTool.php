@@ -35,6 +35,7 @@ class PresentationDesignsPostTool extends FoodAlchemistTool implements ToolContr
                 'base_slug' => ['type' => 'string', 'enum' => ['editorial', 'menu', 'kiosk']],
                 'layout_json' => ['type' => 'array', 'items' => ['type' => 'object']],
                 'tokens_json' => ['type' => 'object'],
+                'custom_css' => ['type' => 'string', 'description' => 'Sandboxed CSS-only Layer (kein <, @import, expression) — überschreibt die Basis-Optik. Content bleibt datengebunden.'],
             ],
             'required' => ['name'],
         ];
@@ -52,6 +53,7 @@ class PresentationDesignsPostTool extends FoodAlchemistTool implements ToolContr
                 'base_slug' => $arguments['base_slug'] ?? 'editorial',
                 'layout_json' => $arguments['layout_json'] ?? null,
                 'tokens_json' => $arguments['tokens_json'] ?? null,
+                'custom_css' => $arguments['custom_css'] ?? null,
             ]);
         } catch (\Throwable $e) {
             return ToolResult::error($e->getMessage(), 'VALIDATION_ERROR');
