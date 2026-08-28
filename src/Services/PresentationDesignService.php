@@ -26,7 +26,7 @@ class PresentationDesignService
         'text', 'heading', 'image', 'spacer', 'cta',
     ];
 
-    public const BUILTIN_SLUGS = ['editorial', 'menu', 'kiosk'];
+    public const BUILTIN_SLUGS = ['editorial', 'menu', 'kiosk', 'navigator'];
 
     /**
      * Die 3 Built-in-Starter als reine Layout-Definitionen (Code-Seeds, keine DB-Zeilen).
@@ -41,7 +41,7 @@ class PresentationDesignService
                 'base_slug' => 'editorial',
                 'layout' => [
                     ['block_type' => 'cover', 'style' => ['align' => 'center', 'show_cover_image' => true, 'show_logo' => true]],
-                    ['block_type' => 'chapter_loop', 'style' => ['show_price' => true, 'show_codes' => true, 'dish_columns' => 1, 'heading_rule' => true]],
+                    ['block_type' => 'chapter_loop', 'style' => ['show_price' => true, 'show_codes' => true, 'dish_columns' => 2, 'heading_rule' => true]],
                     ['block_type' => 'price_summary', 'style' => ['mode' => 'pro_person']],
                     ['block_type' => 'legend', 'style' => []],
                 ],
@@ -49,6 +49,8 @@ class PresentationDesignService
                     'palette' => ['primary' => '#6d28d9', 'accent' => '#b8874a', 'bg' => '#fbfaf8', 'surface' => 'rgba(26,23,18,0.04)', 'text' => '#1a1712', 'muted' => '#8a8178'],
                     'typography' => ['heading' => 'display-serif', 'body' => 'sans', 'scale' => 1.0],
                     'spacing' => 'roomy',
+                    'nav' => 'anchor',
+                    'lightbox' => true,
                 ],
             ],
             'menu' => [
@@ -63,6 +65,8 @@ class PresentationDesignService
                     'palette' => ['primary' => '#1a1712', 'accent' => '#b8874a', 'bg' => '#ffffff', 'surface' => 'rgba(0,0,0,0.03)', 'text' => '#1a1712', 'muted' => '#7a736a'],
                     'typography' => ['heading' => 'display-serif', 'body' => 'sans', 'scale' => 0.98],
                     'spacing' => 'comfortable',
+                    'nav' => 'anchor',
+                    'lightbox' => true,
                 ],
             ],
             'kiosk' => [
@@ -78,6 +82,25 @@ class PresentationDesignService
                     'typography' => ['heading' => 'display-serif', 'body' => 'sans', 'scale' => 1.45],
                     'spacing' => 'roomy',
                     'auto_advance' => true,
+                    'nav' => 'none',
+                    'lightbox' => false,
+                ],
+            ],
+            'navigator' => [
+                'name' => 'Navigator',
+                'base_slug' => 'navigator',
+                'layout' => [
+                    ['block_type' => 'cover', 'style' => ['align' => 'center', 'show_cover_image' => true, 'show_logo' => true]],
+                    ['block_type' => 'chapter_loop', 'style' => ['show_price' => true, 'show_codes' => true, 'dish_columns' => 2, 'heading_rule' => true]],
+                    ['block_type' => 'price_summary', 'style' => ['mode' => 'pro_person']],
+                    ['block_type' => 'legend', 'style' => []],
+                ],
+                'tokens' => [
+                    'palette' => ['primary' => '#0f766e', 'accent' => '#b8874a', 'bg' => '#faf9f6', 'surface' => 'rgba(15,23,20,0.04)', 'text' => '#141c19', 'muted' => '#71807a'],
+                    'typography' => ['heading' => 'display-serif', 'body' => 'sans', 'scale' => 1.0],
+                    'spacing' => 'roomy',
+                    'nav' => 'sidebar',
+                    'lightbox' => true,
                 ],
             ],
         ];

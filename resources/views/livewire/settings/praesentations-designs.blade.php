@@ -168,6 +168,17 @@
                         <option value="roomy">großzügig</option>
                     </select>
                 </label>
+                <label class="block text-sm">Navigation
+                    <select wire:model.live="tokens.nav" class="block w-full text-sm border border-gray-300 rounded px-2 py-1">
+                        <option value="none">keine</option>
+                        <option value="anchor">Sprungmenü (schwebend)</option>
+                        <option value="sidebar">Sidebar (fest, links)</option>
+                    </select>
+                </label>
+                <label class="flex items-center gap-2 text-sm mt-1">
+                    <input type="checkbox" wire:model.live="tokens.lightbox" class="rounded border-gray-300">
+                    Bilder klickbar vergrößern (Lightbox)
+                </label>
             </div>
 
             {{-- Stufe 2 „Leinwand via Code": eigenes, sandboxed CSS auf die Blöcke (kein HTML/JS/@import). --}}

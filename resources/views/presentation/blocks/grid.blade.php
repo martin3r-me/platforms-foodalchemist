@@ -2,7 +2,7 @@
 @php $grid = $content['grid'] ?? null; @endphp
 @if($grid && !empty($grid['lines']))
     <section class="pt-section pt-reveal">
-        <div class="pt-measure">
+        <div class="pt-wide">
             <div style="overflow-x:auto">
                 <table class="pt-grid">
                     <thead>
