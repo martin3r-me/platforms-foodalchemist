@@ -145,7 +145,7 @@
                                         title="Bild entfernen" data-gallery-remove>×</button>
                                 </div>
                             @endforeach
-                            <input type="file" wire:model="conceptGalleryUpload" accept="image/*" class="text-[11px]" data-concept-gallery-upload>
+                            <input type="file" wire:model="conceptGalleryUpload" accept="image/*" multiple class="text-[11px]" data-concept-gallery-upload>
                             <div wire:loading wire:target="conceptGalleryUpload" class="text-[11px] text-gray-400">lädt …</div>
                         </div>
                         @error('conceptGalleryUpload')<div class="text-[11px] text-rose-600 mt-1">{{ $message }}</div>@enderror
