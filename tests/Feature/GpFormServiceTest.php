@@ -49,6 +49,16 @@ it('removeForm stk leert auch piece_default_g', function () {
         ->and(FoodAlchemistGp::find($this->gp->id)->piece_default_g)->toBeNull();
 });
 
+it('setForm reaktiviert eine zuvor entfernte Form (SoftDeletes + unique-Slot)', function () {
+    $this->svc->setForm($this->rootTeam, $this->gp->id, 'wuerfel', 5);
+    $this->svc->removeForm($this->rootTeam, $this->gp->id, 'wuerfel');
+    // Wieder anlegen darf NICHT am unique(gp_id,form_slug) der trashed-Zeile scheitern.
+    $this->svc->setForm($this->rootTeam, $this->gp->id, 'wuerfel', 7);
+
+    expect(FoodAlchemistGpForm::where('gp_id', $this->gp->id)->where('form_slug', 'wuerfel')->count())->toBe(1)
+        ->and((float) FoodAlchemistGpForm::where('gp_id', $this->gp->id)->where('form_slug', 'wuerfel')->value('gramm'))->toBe(7.0);
+});
+
 it('GpModal (Livewire): Form hinzufügen + entfernen', function () {
     Livewire::test(GpModal::class)
         ->call('oeffnen', $this->gp->id)

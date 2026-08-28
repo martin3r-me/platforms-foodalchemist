@@ -1445,6 +1445,52 @@ class PlanningCascadeService
     }
 
     /**
+     * #6/Import (Dominique 2026-08-28): ein BEREITS bestehendes (importiertes) Rezept an den Worker
+     * übergeben — Voll-Anreicherung inkl. LA-First-GP-Mint der offenen Zutaten, async via {@see EnrichRecipeJob}.
+     * Das Artefakt existiert schon → Run+Step werden direkt als `done` angelegt (wie ein freigegebener Draft),
+     * der Enrich-Fortschritt läuft über `deferred.enrich` (queued→running→done), das die Planung schon pollt.
+     * So erscheint der Import als Worker-Lauf statt synchron im Request zu minten. Sub-Rezepte laufen im
+     * Hintergrund mit (stepId=null, refresh — wie {@see \Platform\FoodAlchemist\Livewire\Recipes\RecipeModal::allesAnreichern}).
+     */
+    public function enrichBestehendesRezept(Team $team, int $recipeId, bool $vkModus, ?int $planningSessionId = null): FoodAlchemistCascadeRun
+    {
+        $recipe = FoodAlchemistRecipe::visibleToTeam($team)->findOrFail($recipeId);
+        $kind = $vkModus ? 'gericht' : 'rezept';
+
+        $run = FoodAlchemistCascadeRun::create([
+            'team_id' => $team->id,
+            'planning_session_id' => $planningSessionId,
+            'scope' => $kind,
+            'creative_mode' => 'voll_kreativ',
+            'brief' => 'Import: ' . $recipe->name,
+            'status' => 'done',                       // Artefakt existiert bereits — kein Generierungs-Schritt
+            'staged' => false,
+            'created_via' => 'import',
+        ]);
+        $step = FoodAlchemistCascadeRunStep::create([
+            'team_id' => $team->id,
+            'cascade_run_id' => $run->id,
+            'parent_step_id' => null,
+            'kind' => $kind,
+            'ref_type' => 'recipe',
+            'ref_id' => $recipe->id,
+            'label' => Str::limit($recipe->name, 120),
+            'status' => 'done',
+            'sort' => 0,
+        ]);
+
+        $this->markEnrichQueued($step);
+        EnrichRecipeJob::dispatch($team->id, (int) (Auth::id() ?? 0), (int) $recipe->id, null, false, (int) $step->id);
+
+        // Sub-Rezepte im Hintergrund mit-anreichern (nicht am Worker-Step sichtbar, wie allesAnreichern).
+        foreach (app(\Platform\FoodAlchemist\Services\RecipeOneShotService::class)->subRezeptIds((int) $recipe->id) as $subId) {
+            EnrichRecipeJob::dispatch($team->id, (int) (Auth::id() ?? 0), (int) $subId, null, false, null, false, true);
+        }
+
+        return $run;
+    }
+
+    /**
      * „Neu generieren" (per-Step-KI im Cockpit): verwirft das aktuelle Draft-Artefakt und stößt die
      * Generierung dieses Steps erneut an (Brief = Step-Label, Params/Session/Staged vom Lauf). Nur
      * rezept|gericht|concept. Der Step geht zurück auf `running`; die Fläche pollt wie beim Go.

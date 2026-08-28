@@ -3148,7 +3148,12 @@ class Index extends Component
 
             return;
         }
-        $this->importTyp = ($extrakt['typ'] ?? null) === 'gericht' ? 'gericht' : 'basisrezept';
+        // #6 (Dominique 2026-08-28): die EXPLIZITE Vorauswahl des Users („Anlegen als …") gewinnt —
+        // der Extrakt-Typ überschreibt sie NICHT mehr (früher sprang Basisrezept → Gericht). Im Vorschau-
+        // Dropdown bleibt der Typ frei änderbar. Der KI-Vorschlag zählt nur, wenn der User nichts gewählt hat.
+        if (! in_array($this->importTyp, ['basisrezept', 'gericht'], true)) {
+            $this->importTyp = ($extrakt['typ'] ?? null) === 'gericht' ? 'gericht' : 'basisrezept';
+        }
         $this->importVorschau = [
             'name' => (string) ($extrakt['name'] ?? ''),
             'preparation' => (string) ($extrakt['preparation'] ?? ''),
@@ -3212,28 +3217,23 @@ class Index extends Component
             'offen' => (int) ($recipe->n_ingredients_unmapped ?? 0),
             'sub_recipes' => $res['sub_recipes'] ?? [],
         ];
+        // #6/Import (Dominique 2026-08-28): NICHT mehr synchron minten — die Aufgabe an den Worker
+        // übergeben. Voll-Anreicherung inkl. LA-First-GP-Mint der offenen Zutaten läuft async und wird
+        // als Lauf im Worker-Tab sichtbar (deferred.enrich-Polling). Der Handoff darf den erfolgreichen
+        // Import nicht kippen (fail-soft).
+        try {
+            app(PlanningCascadeService::class)->enrichBestehendesRezept(
+                $team, (int) $recipe->id, $this->importTyp === 'gericht', $this->sessionId
+            );
+            if ($this->sessionId !== null) {
+                $this->ladeLetztenLauf();   // laufId auf den neuen Import-Lauf → Worker-Tab zeigt ihn
+            }
+            $this->importMeldung = '„' . $recipe->name . '" angelegt und an den Worker übergeben — wird im Hintergrund angereichert (GPs, Beschreibung, Pairings).';
+        } catch (\Throwable $e) {
+            $this->importMeldung = 'Angelegt, aber Worker-Übergabe fehlgeschlagen: ' . $e->getMessage();
+        }
         $this->importStep = 'fertig';
         $this->dispatch('recipe-gespeichert');
-    }
-
-    /** Erdungs-Nachzug: für die noch offenen Zutaten des importierten Drafts GPs anlegen (LA-First-Mint). */
-    public function importGpsMinten(\Platform\FoodAlchemist\Services\RecipeOneShotService $one): void
-    {
-        $team = $this->team();
-        if ($team === null || $this->importErgebnis === null) {
-            return;
-        }
-        $recipe = \Platform\FoodAlchemist\Models\FoodAlchemistRecipe::visibleToTeam($team)->find($this->importErgebnis['recipe_id']);
-        if ($recipe === null) {
-            return;
-        }
-        try {
-            $one->minteFehlendeGps($team, $recipe);
-            $recipe = $recipe->fresh() ?? $recipe;
-            $this->importErgebnis['offen'] = (int) ($recipe->n_ingredients_unmapped ?? 0);
-        } catch (\Throwable $e) {
-            $this->importMeldung = $e->getMessage();
-        }
     }
 
     public function importReset(): void

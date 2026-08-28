@@ -112,7 +112,9 @@ it('L8a: ohne Preisklasse rechnet Auto neutral weiter und macht den Fallback sic
         ->and($w['aufschlagsklasse'])->toBeNull()
         ->and($w['portion_g'])->toBe(200.0)
         ->and($w['sales_net'])->toBe(8.0)
-        ->and($w['price_warnings'])->toContain('Keine Preisklasse gesetzt: neutraler Klassenfaktor 100 % verwendet.');
+        // Wording nachgezogen: der Klasse-Resolver fällt inzwischen zusätzlich auf den Team-Standard zurück
+        // (CatalogPricingService), die Warnung nennt daher beide fehlenden Quellen.
+        ->and($w['price_warnings'])->toContain('Keine Preisklasse und kein Team-Standard gesetzt: neutraler Klassenfaktor 100 % verwendet.');
 });
 
 it('L8a: Wareneinsatz über Ziel → Ampel + genau EIN Signal aus der bestehenden R2.1-Regel', function () {

@@ -602,9 +602,11 @@
                     </x-foodalchemist::modal-section>
                 @elseif($importStep === 'vorschau')
                     <x-foodalchemist::modal-section title="Vorschau — prüfen &amp; anlegen">
+                        {{-- #6: gleicher w-full-Konflikt wie bei den Zutaten-Zeilen — Name-Feld kollabierte,
+                             Typ-Dropdown fraß die Breite. Feste Inline-Breiten erzwingen. --}}
                         <div class="flex items-center gap-2 mb-2">
-                            <input type="text" wire:model="importVorschau.name" class="{{ $input }} flex-1" placeholder="Name" />
-                            <select wire:model="importTyp" class="{{ $input }} w-40">
+                            <input type="text" wire:model="importVorschau.name" class="{{ $input }}" style="flex:1 1 0;width:auto;min-width:0" placeholder="Name (Pflicht — Quelle ohne Titel)" data-import-name />
+                            <select wire:model="importTyp" class="{{ $input }}" style="flex:0 0 10rem;width:10rem" data-import-typ>
                                 <option value="basisrezept">Basisrezept</option>
                                 <option value="gericht">Gericht</option>
                             </select>
@@ -650,16 +652,12 @@
                             „{{ $importErgebnis['name'] }}" als Entwurf angelegt
                             @if(!empty($importErgebnis['sub_recipes'])) · {{ count($importErgebnis['sub_recipes']) }} Sub-Rezept(e) @endif
                         </p>
-                        @if(($importErgebnis['offen'] ?? 0) > 0)
-                            <p class="text-[11px] text-amber-300 mb-2">⚠ {{ $importErgebnis['offen'] }} Zutat(en) ohne GP-Treffer — noch nicht geerdet.</p>
-                            <button type="button" wire:click="importGpsMinten" wire:loading.attr="disabled" wire:target="importGpsMinten" class="{{ $btnGhost }} mb-2">
-                                <span wire:loading.remove wire:target="importGpsMinten">Fehlende GPs anlegen</span>
-                                <span wire:loading wire:target="importGpsMinten">legt an …</span>
-                            </button>
-                        @else
-                            <p class="text-[11px] text-emerald-300 mb-2">✓ Alle Zutaten geerdet.</p>
-                        @endif
-                        <button type="button" wire:click="importReset" class="{{ $btnGhost }}">Weiteres importieren</button>
+                        {{-- #6/Import: GP-Mint + Anreicherung laufen jetzt im Worker (nicht mehr synchron per Knopf). --}}
+                        <p class="text-[11px] text-sky-300 mb-2">→ An den Worker übergeben — GPs, Beschreibung &amp; Pairings werden im Hintergrund angereichert.</p>
+                        <div class="flex items-center gap-2">
+                            <button type="button" @click="tab='worker'" class="{{ $btnGhost }}" data-import-zum-worker>Zum Worker</button>
+                            <button type="button" wire:click="importReset" class="{{ $btnGhost }}">Weiteres importieren</button>
+                        </div>
                     </x-foodalchemist::modal-section>
                 @endif
             </div>

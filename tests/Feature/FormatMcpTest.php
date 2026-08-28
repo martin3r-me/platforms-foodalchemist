@@ -89,10 +89,17 @@ it('foodbook_format_chapters.POST: bucht ein Format als Kapitel (live concept_re
     expect($res->success)->toBeTrue()
         ->and($res->data['chapter']['title'])->toBe('CHEFS.CORNER');
 
-    $kapitel = \Platform\FoodAlchemist\Models\FoodAlchemistFoodbookKapitel::find($res->data['chapter']['id']);
-    expect($kapitel)->not->toBeNull()
-        ->and($kapitel->format_id)->toBeNull()   // kein Live-Format-Sonderweg
-        ->and($kapitel->blocks()->where('type', 'concept_ref')->where('concept_id', $c->id)->exists())->toBeTrue();
+    // C (Dominique 2026-08-27): Format = SEKTION (Struktur-Kapitel), JE KONZEPT ein Unterkapitel
+    // mit einem LIVE concept_ref-Block — nicht mehr ein flaches Kapitel mit Konzept-Blöcken.
+    $sektion = \Platform\FoodAlchemist\Models\FoodAlchemistFoodbookKapitel::find($res->data['chapter']['id']);
+    expect($sektion)->not->toBeNull()
+        ->and($sektion->format_id)->toBeNull()          // kein Live-Format-Sonderweg
+        ->and((bool) $sektion->is_struktur)->toBeTrue(); // Format = gruppierende Sektion
+
+    $unter = \Platform\FoodAlchemist\Models\FoodAlchemistFoodbookKapitel::where('foodbook_id', $buch->id)
+        ->where('parent_id', $sektion->id)->first();
+    expect($unter)->not->toBeNull()
+        ->and($unter->blocks()->where('type', 'concept_ref')->where('concept_id', $c->id)->exists())->toBeTrue();
 });
 
 it('speisekarte_format_rubriken.POST: bucht ein Format als Rubrik (live menue_ref-Positionen)', function () {
