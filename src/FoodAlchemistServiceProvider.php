@@ -95,6 +95,7 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                 \Platform\FoodAlchemist\Console\PaketeToConceptsCommand::class,
                 \Platform\FoodAlchemist\Console\FormatEditionsToSlotsCommand::class,
                 \Platform\FoodAlchemist\Console\DynamicPricingMigrationCommand::class,
+                \Platform\FoodAlchemist\Console\ConformanceBackfillCommand::class,
             ]);
 
             $this->planeLaeufe();

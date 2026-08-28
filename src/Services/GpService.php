@@ -212,6 +212,21 @@ class GpService
         }
         if ($gp->status !== $status) {
             $gp->update(['status' => $status]);
+
+            // Schicht 3 · Slice 6: Freigabe → EINMAL gegen das GP-Regelwerk prüfen. Bei approved
+            // ist der Critic detect-only (die Heilung guardt auf tentative) → ein Verstoß erscheint
+            // als Signal, das freigegebene GP wird nicht angetastet. Best-effort, mit User-Kontext
+            // (der KI-Call braucht Auth); ein Dispatch-Fehler darf die Freigabe nie kippen.
+            if ($status === GpStatus::Approved && $gp->team_id !== null
+                && ($confUid = \Illuminate\Support\Facades\Auth::id()) !== null) {
+                try {
+                    \Platform\FoodAlchemist\Jobs\ConformanceCheckJob::dispatch(
+                        (int) $gp->team_id, (int) $confUid, 'gp', (int) $gp->id,
+                    );
+                } catch (\Throwable $e) {
+                    // Dispatch-Fehler schlucken — die Freigabe steht.
+                }
+            }
         }
 
         return $gp;
