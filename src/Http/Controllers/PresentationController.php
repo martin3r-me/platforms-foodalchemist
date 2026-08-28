@@ -27,7 +27,17 @@ class PresentationController extends Controller
      * aktuellen Daten (nicht aus dem Snapshot) — „Vorschau == Veröffentlicht". Optionaler
      * ?design=-Override probiert ein anderes Design, ohne es zu speichern.
      */
-    public function preview(int $id, PresentationService $svc, string $type = PresentationService::TYPE_FOODBOOK): View
+    public function preview(int $id, PresentationService $svc): View
+    {
+        return $this->doPreview(PresentationService::TYPE_FOODBOOK, $id, $svc);
+    }
+
+    public function previewSpeisekarte(int $id, PresentationService $svc): View
+    {
+        return $this->doPreview(PresentationService::TYPE_SPEISEKARTE, $id, $svc);
+    }
+
+    private function doPreview(string $type, int $id, PresentationService $svc): View
     {
         $team = auth()->user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
         $snapshot = $svc->previewData($team, $type, $id, request()->query('design'));

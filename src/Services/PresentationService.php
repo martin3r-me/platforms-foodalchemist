@@ -5,6 +5,7 @@ namespace Platform\FoodAlchemist\Services;
 use Illuminate\Database\Eloquent\Model;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Models\FoodAlchemistFoodbook;
+use Platform\FoodAlchemist\Models\FoodAlchemistSpeisekarte;
 
 /**
  * Spec 43 — Public-Präsentations-Layer (digitales Kundenbuch) für die Ausgabeformen.
@@ -150,6 +151,7 @@ class PresentationService
 
         $content = match ($type) {
             self::TYPE_FOODBOOK => $this->normalizeFoodbook($team, $entity, $clean),
+            self::TYPE_SPEISEKARTE => $this->normalizeSpeisekarte($team, $entity, $clean),
             default => throw new \InvalidArgumentException("Präsentations-Typ '{$type}' ist in dieser Phase noch nicht unterstützt."),
         };
 
@@ -291,6 +293,78 @@ class PresentationService
         ]);
     }
 
+    /**
+     * ALLOWLIST-Neubau der Speisekarte-Kundensicht (à la carte). Rubrik → Section, Positionen
+     * → Zeilen (Menü-Gänge eingerückt). preis_quelle/karte/kaskaden/intern werden NICHT übernommen.
+     *
+     * @return array{title:string, subtitle:?string, meta:array, body:array}
+     */
+    private function normalizeSpeisekarte(Team $team, FoodAlchemistSpeisekarte $karte, array $settings): array
+    {
+        $dok = app(SpeisekarteService::class)->dokumentDaten($team, $karte, false, [], false);
+
+        $showPrice = (bool) $settings['price_display'];
+        $showDecl = (bool) $settings['declaration'];
+        $brutto = (bool) ($dok['brutto'] ?? true);
+
+        $sections = [];
+        foreach ($dok['rubriken'] as $r) {
+            $items = [];
+            foreach ($r['positionen'] as $p) {
+                $typ = (string) ($p['typ'] ?? '');
+                if ($typ === 'spacer') {
+                    continue;
+                }
+                $val = $brutto ? ($p['vk_brutto'] ?? null) : ($p['vk_netto'] ?? null);
+                $items[] = [
+                    'kind' => $typ,
+                    'label' => (string) ($p['name'] ?? ''),
+                    'subtitle' => $p['consumer_text'] ?? null,
+                    'indent' => 0,
+                    'price' => ($showPrice && $val !== null) ? (float) $val : null,
+                    'codes' => $showDecl ? array_values((array) ($p['codes'] ?? [])) : [],
+                ];
+                // Menü-Gänge als eingerückte, preislose Unterzeilen.
+                foreach ($p['gaenge'] ?? [] as $g) {
+                    $items[] = [
+                        'kind' => 'gang',
+                        'label' => (string) ($g['text'] ?? $g['name'] ?? ''),
+                        'subtitle' => null,
+                        'indent' => (int) ($g['einrueckung'] ?? 1) ?: 1,
+                        'price' => null,
+                        'codes' => $showDecl ? array_values((array) ($g['codes'] ?? [])) : [],
+                    ];
+                }
+            }
+            $sections[] = [
+                'title' => (string) ($r['title'] ?? ''),
+                'text' => $r['claim'] ?? null,
+                'depth' => (int) ($r['depth'] ?? 0),
+                'anker' => 'r' . ($r['id'] ?? ''),
+                'blocks' => [[
+                    'kind' => 'menu_rubrik', 'label' => '', 'subtitle' => null, 'is_header' => false,
+                    'per_item_price' => false, 'price' => null, 'codes' => [], 'items' => $items,
+                ]],
+            ];
+        }
+
+        return [
+            'title' => (string) ($karte->name ?: $karte->code ?: 'Speisekarte'),
+            'subtitle' => $karte->description ? (string) $karte->description : null,
+            'meta' => [
+                'customer' => null, 'kontakt' => null, 'jahr' => null,
+                'mwst' => ['regulaer' => $dok['mwstSatz'] ?? null],
+                'stand' => $dok['erzeugt'] ?? null,
+            ],
+            'body' => [
+                'layout_kind' => 'linear',
+                'sections' => $sections,
+                'legend' => $showDecl ? ($dok['legende'] ?? null) : null,
+                'total' => null,   // à la carte: kein Pro-Person-Total
+            ],
+        ];
+    }
+
     // ── Bilder: Identifier → frisch signierte URL ──────────────────────────
 
     /**
@@ -336,6 +410,7 @@ class PresentationService
     {
         return match ($type) {
             self::TYPE_FOODBOOK => FoodAlchemistFoodbook::class,
+            self::TYPE_SPEISEKARTE => FoodAlchemistSpeisekarte::class,
             default => throw new \InvalidArgumentException("Unbekannter Präsentations-Typ '{$type}'."),
         };
     }

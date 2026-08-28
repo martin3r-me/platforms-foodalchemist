@@ -550,7 +550,8 @@ Route::get('/speisekarten/{id}/dokument', function (int $id, \Platform\FoodAlche
 /**
  * Speisekarten-Präsentation (Web-Ansicht, auth-gated). Kundensicht ohne EK.
  */
-Route::get('/speisekarten/{id}/praesentation', \Platform\FoodAlchemist\Livewire\Speisekarte\Praesentation::class)
+// Spec 43: interne LIVE-Vorschau der Speisekarte (auth+team) über denselben Renderer.
+Route::get('/speisekarten/{id}/praesentation', [\Platform\FoodAlchemist\Http\Controllers\PresentationController::class, 'previewSpeisekarte'])
     ->whereNumber('id')->name('foodalchemist.speisekarte.praesentation');
 
 /**

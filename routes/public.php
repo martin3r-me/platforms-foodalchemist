@@ -9,7 +9,7 @@ use Platform\FoodAlchemist\Http\Controllers\PresentationController;
 // unten braucht ihren immutable-Cache). Type in Phase 1 auf foodbook beschränkt
 // (speisekarte/speiseplan folgen in Phase 2/3).
 Route::get('/p/{type}/{token}', [PresentationController::class, 'show'])
-    ->whereIn('type', ['foodbook'])
+    ->whereIn('type', ['foodbook', 'speisekarte'])
     ->where('token', '[A-Za-z0-9]+')
     ->middleware(NoCacheHeaders::class)
     ->name('foodalchemist.presentation.show');
