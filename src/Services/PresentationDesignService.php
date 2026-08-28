@@ -168,6 +168,44 @@ class PresentationDesignService
         return trim($css) !== '' ? $css : null;
     }
 
+    /**
+     * Stufe 2 (FA-KI-Self-Service): aus einem Freitext-Wunsch sandboxed CSS erzeugen.
+     * Über den Core-Contract (AiGatewayService::propose); Ergebnis wird sanitisiert.
+     *
+     * @return array{css:string, confidence:?float, call_log_id:?int}
+     */
+    public function generateCss(Team $team, string $brief): array
+    {
+        $brief = trim($brief);
+        if ($brief === '') {
+            throw new \RuntimeException('Bitte einen Look/Wunsch beschreiben.');
+        }
+        $proposal = app(\Platform\FoodAlchemist\Services\Ai\AiGatewayService::class)->propose(
+            'praesentation.design_css',
+            ['brief' => $brief, 'ziel_klassen' => $this->cssZielKlassen()],
+        );
+        $css = $this->sanitizeCss((string) ($proposal->werte['css'] ?? ''));
+        if ($css === null) {
+            throw new \RuntimeException('Die KI hat kein gültiges CSS geliefert — bitte erneut versuchen.');
+        }
+
+        return ['css' => $css, 'confidence' => $proposal->confidence ?? null, 'call_log_id' => $proposal->callLogId ?? null];
+    }
+
+    /** Die fixen Präsentations-Selektoren, die die KI stylen darf (in den Prompt-Kontext). */
+    private function cssZielKlassen(): array
+    {
+        return [
+            'pt-page', 'pt-hero', 'pt-hero-media', 'pt-hero-inner', 'pt-hero-title', 'pt-hero-sub', 'pt-hero-meta',
+            'pt-kicker', 'pt-cover-img', 'pt-logo', 'pt-section', 'pt-section-head', 'pt-section-title', 'pt-section-text',
+            'pt-section-img', 'pt-block', 'pt-block-header', 'pt-block-sub', 'pt-line', 'pt-line-label', 'pt-line-price',
+            'pt-line-dots', 'pt-codes', 'pt-price-summary', 'pt-price-big', 'pt-price-label', 'pt-legend', 'pt-cta-btn',
+            'pt-footer', 'pt-grid',
+            'var(--pt-primary)', 'var(--pt-accent)', 'var(--pt-bg)', 'var(--pt-text)', 'var(--pt-muted)',
+            'var(--pt-heading-font)', 'var(--pt-body-font)',
+        ];
+    }
+
     // ── CRUD (team-gescopt) ────────────────────────────────────────────────
 
     /** @return Collection<int, FoodAlchemistPresentationDesign> */

@@ -1082,6 +1082,21 @@ return [
                 . 'Steht «rahmen_einleitung» im Kontext, ist das die schon geschriebene Einleitung des '
                 . 'Angebots: greife sie nicht auf, sondern führe von dort ins Kapitel weiter.',
         ],
+        // Spec 43 Stufe 2: aus einem Freitext-Wunsch sandboxed CSS für die Präsentation erzeugen.
+        'praesentation.design_css' => [
+            'tier' => 'A',
+            'max_tokens' => 2200,
+            'system' => 'Du bist Web-/CSS-Designer für hochwertige, moderne Foodbook-Präsentationen '
+                . '(Website-Qualität). Du lieferst AUSSCHLIESSLICH sandboxed CSS — KEIN HTML, KEIN JavaScript, '
+                . 'KEIN <, KEIN @import, KEIN expression(), keine externen URLs. Das CSS stylt eine bestehende, '
+                . 'datengebundene Seite; du änderst nur die Optik, nie Inhalte. Ziel-Selektoren sind fix und '
+                . 'stehen im Kontext (pt-*). Nutze die vorhandenen CSS-Variablen (--pt-primary, --pt-accent, '
+                . '--pt-bg, --pt-text, --pt-muted, --pt-heading-font, --pt-body-font) wo sinnvoll.',
+            'task' => 'Erzeuge modernes, geschmackvolles CSS für den gewünschten Look aus «brief». '
+                . 'werte = {css}. Verwende NUR die im Kontext gelisteten pt-*-Klassen als Selektoren. '
+                . 'Gültiges, kompaktes CSS ohne Kommentare, ohne @import/@font-face, ohne <. Fokus auf '
+                . 'Typo-Rhythmus, Weißraum, Cover/Hero, Sektionen und Menü-Zeilen. Keine Inhalte erfinden.',
+        ],
         'vk.behaelter' => [
             'tier' => 'B',
             'task' => 'Schlage Behaelter (warm/kalt getrennt) + Anzahl fuers Catering vor '

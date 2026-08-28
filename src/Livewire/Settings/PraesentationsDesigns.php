@@ -32,6 +32,21 @@ class PraesentationsDesigns extends Component
     /** Stufe 2: sandboxed Custom-CSS des Designs (CSS-only). */
     public ?string $customCss = null;
 
+    /** FA-KI-Self-Service: Freitext-Wunsch → CSS. */
+    public string $cssBrief = '';
+
+    public function cssGenerieren(): void
+    {
+        $this->resetFeedback();
+        try {
+            $res = app(PresentationDesignService::class)->generateCss($this->team(), $this->cssBrief);
+            $this->customCss = $res['css'];
+            $this->status = 'CSS von der KI erzeugt — Live-Vorschau aktualisiert. Zum Sichern „Speichern".';
+        } catch (\Throwable $e) {
+            $this->fehler = $e->getMessage();
+        }
+    }
+
     public ?int $selectedBlockIndex = null;
 
     public ?int $previewFoodbookId = null;

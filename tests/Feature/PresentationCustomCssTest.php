@@ -86,6 +86,32 @@ it('Struktur-Builder speichert custom_css + Live-Vorschau wendet es an', functio
     expect($snap['resolved_design']['custom_css'])->toContain('letter-spacing:.09em');
 });
 
+it('generateCss: KI-Vorschlag wird sanitisiert zurückgegeben (Freitext → CSS)', function () {
+    // Fake-LLM: liefert werte.css inkl. Injektionsversuch.
+    config(['foodalchemist.ai.provider' => 'core']);
+    app()->bind(\Platform\Core\Contracts\LLMProviderContract::class, fn () => new class implements \Platform\Core\Contracts\LLMProviderContract
+    {
+        public function getName(): string { return 'stub'; }
+        public function chat(array $messages, array $options = []): array
+        {
+            return ['content' => json_encode(['werte' => ['css' => '.pt-hero-title{letter-spacing:.12em} </style><script>x</script> @import url(evil);'], 'confidence' => 0.7, 'reasoning' => 'stub']), 'usage' => [], 'model' => 'stub', 'tool_calls' => null];
+        }
+        public function streamChat(array $messages, callable $onDelta, array $options = []): void { $onDelta($this->chat($messages, $options)['content']); }
+        public function getAvailableModels(): array { return ['stub']; }
+        public function getDefaultModel(): string { return 'stub'; }
+        public function isAvailable(): bool { return true; }
+    });
+
+    $res = $this->designs->generateCss($this->rootTeam, 'modernes Catering-Design mit Website-Feeling');
+    expect($res['css'])->toContain('letter-spacing:.12em')
+        ->and($res['css'])->not->toContain('<')
+        ->and(strtolower($res['css']))->not->toContain('@import');
+});
+
+it('generateCss ohne Brief wirft', function () {
+    expect(fn () => $this->designs->generateCss($this->rootTeam, '  '))->toThrow(RuntimeException::class);
+});
+
 it('CSS-Edit nach Freigabe ändert den Public-Link nicht (Snapshot stabil)', function () {
     $team = $this->rootTeam;
     $design = $this->designs->create($team, ['name' => 'L', 'base_slug' => 'editorial', 'custom_css' => '.x{color:#111}']);
