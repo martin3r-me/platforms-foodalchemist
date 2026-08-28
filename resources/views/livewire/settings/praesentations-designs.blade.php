@@ -173,6 +173,27 @@
                         </div>
                         @error('blockImageUpload')<div class="text-[11px] text-rose-600 mt-1">{{ $message }}</div>@enderror
                         <p class="text-[11px] text-gray-400 mt-1">Freie Bildstrecke — unabhängig von Konzept/Kapitel.</p>
+                        <label class="block text-sm mt-2">Darstellung
+                            <select wire:model.live="layout.{{ $i }}.style.img_fit" class="block w-full text-sm border border-gray-300 rounded px-2 py-1">
+                                <option value="cover">Füllen (Ausschnitt)</option>
+                                <option value="contain">Ganz zeigen (kein Beschnitt)</option>
+                                <option value="auto">Natürliche Höhe</option>
+                            </select>
+                        </label>
+                        <label class="block text-sm">Höhe
+                            <select wire:model.live="layout.{{ $i }}.style.img_height" class="block w-full text-sm border border-gray-300 rounded px-2 py-1">
+                                <option value="klein">klein (Panorama)</option>
+                                <option value="mittel">mittel</option>
+                                <option value="gross">groß</option>
+                            </select>
+                        </label>
+                        <label class="block text-sm">Breite
+                            <select wire:model.live="layout.{{ $i }}.style.img_width" class="block w-full text-sm border border-gray-300 rounded px-2 py-1">
+                                <option value="voll">breit</option>
+                                <option value="schmal">schmal (Lesebreite)</option>
+                                <option value="bleed">randlos (volle Breite)</option>
+                            </select>
+                        </label>
                     @elseif($bt === 'spacer')
                         <label class="block text-[11px] text-gray-500">Höhe (px)</label>
                         <input type="number" min="0" wire:model.blur="layout.{{ $i }}.style.height" class="w-24 text-sm border border-gray-300 rounded px-2 py-1">
