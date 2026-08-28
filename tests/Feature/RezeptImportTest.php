@@ -115,6 +115,27 @@ it('recipes.EXTRACT (MCP): dry_run nur Struktur, sonst geerdeter Draft', functio
         ->and($r->status->value)->toBe('draft');
 });
 
+it('#6: Import mit leerem Namen (Quelle ohne Titel) → Nachfassen statt namenlosem Rezept; Bezeichnung kommt an', function () {
+    // Quelltext ohne Titel → recipe.extract liefert name="" (nichts erfinden). Die Zutat-Bezeichnung
+    // wird aber sehr wohl erfasst (belegt hier + im echten Call-Log 08-25).
+    ($this->mockExtract)([
+        'typ' => 'basisrezept', 'name' => '',
+        'zutaten' => [['text' => 'Rindergulasch', 'quantity' => 500, 'unit' => 'g']],
+        'preparation' => '', 'komponenten' => [],
+    ]);
+
+    Livewire::test(PlanungIndex::class)
+        ->set('importText', '500 g Rindergulasch')
+        ->call('importExtrahieren')
+        ->assertSet('importStep', 'vorschau')
+        ->assertSet('importVorschau.zutaten.0.text', 'Rindergulasch')   // Bezeichnung KOMMT in der Vorschau an
+        ->call('importAnlegen')
+        ->assertSet('importStep', 'vorschau')                          // Guard: NICHT „fertig"
+        ->assertSet('importMeldung', fn ($m) => is_string($m) && str_contains($m, 'Namen'));
+
+    expect(FoodAlchemistRecipe::where('team_id', $this->rootTeam->id)->where('created_via', 'import')->count())->toBe(0);
+});
+
 it('Import-Tab (Livewire): extrahieren → Vorschau, anlegen → Draft', function () {
     ($this->mockExtract)([
         'typ' => 'basisrezept', 'name' => 'Pesto',

@@ -3179,6 +3179,14 @@ class Index extends Component
         if ($team === null || $this->importVorschau === null) {
             return;
         }
+        // #6 (Dominique 2026-08-28): Quelltext ohne Titel → die Extraktion liefert (regelkonform:
+        // „nichts erfinden") einen leeren Namen. Statt still ein namenloses Rezept anzulegen ("nicht
+        // erfasst") hier ehrlich nachfassen — der Name ist oben im Vorschau-Feld editierbar.
+        if (trim((string) ($this->importVorschau['name'] ?? '')) === '') {
+            $this->importMeldung = 'Bitte oben einen Rezept-Namen vergeben — die Quelle enthielt keinen Titel (es wird nichts erfunden).';
+
+            return;
+        }
         $extrakt = [
             'typ' => $this->importTyp,
             'name' => (string) ($this->importVorschau['name'] ?? ''),
