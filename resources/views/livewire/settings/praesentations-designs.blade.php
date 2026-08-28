@@ -247,6 +247,12 @@
                     <input type="checkbox" wire:model.live="tokens.lightbox" class="rounded border-gray-300">
                     Bilder klickbar vergrößern (Lightbox)
                 </label>
+                <label class="block text-sm">Bild-Band
+                    <select wire:model.live="tokens.band_style" class="block w-full text-sm border border-gray-300 rounded px-2 py-1">
+                        <option value="grid">Raster (Standard)</option>
+                        <option value="rondell">Rondell (Karussell)</option>
+                    </select>
+                </label>
                 <label class="block text-sm">Speiseplan-Ausgabe
                     <select wire:model.live="tokens.speiseplan_layout" class="block w-full text-sm border border-gray-300 rounded px-2 py-1">
                         <option value="grid">Wochen-Tabelle (Standard)</option>

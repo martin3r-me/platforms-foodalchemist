@@ -115,6 +115,16 @@
         .pt-section-img { width: 100%; border-radius: 6px; margin: var(--pt-gap) 0 0; aspect-ratio: 16/7; object-fit: cover; }
         .pt-section-gallery { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: var(--pt-gap); margin: var(--pt-gap) 0 0; }
         .pt-section-img--multi { margin: 0; aspect-ratio: 4/3; }
+        /* Rondell / Karussell (Band-Anzeige-Variante) */
+        .pt-rondell { position: relative; margin: var(--pt-gap) 0 0; }
+        .pt-rondell-track { display: flex; gap: 14px; overflow-x: auto; scroll-snap-type: x mandatory; scroll-behavior: smooth; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+        .pt-rondell-track::-webkit-scrollbar { display: none; }
+        .pt-rondell-img { flex: 0 0 84%; max-width: 84%; scroll-snap-align: center; aspect-ratio: 16/10; object-fit: cover; border-radius: 6px; }
+        @media (min-width: 900px) { .pt-rondell-img { flex-basis: 58%; max-width: 58%; } }
+        .pt-rondell-btn { position: absolute; top: 50%; transform: translateY(-50%); width: 42px; height: 42px; border-radius: 999px; border: 0; background: rgba(0,0,0,.5); color: #fff; cursor: pointer; font-size: 22px; line-height: 1; z-index: 2; transition: background .15s ease; }
+        .pt-rondell-btn:hover { background: rgba(0,0,0,.72); }
+        .pt-rondell-prev { left: 8px; } .pt-rondell-next { right: 8px; }
+        @media (max-width: 640px) { .pt-rondell-img { flex-basis: 90%; max-width: 90%; } }
         .pt-section-aside { margin: 0; }
         .pt-section-aside .pt-section-img { margin: 0; aspect-ratio: 4/3; height: 100%; }
         /* Asymmetrischer Split: Kopf links, Bild rechts (nur breite Viewports) */
@@ -227,7 +237,9 @@
         @media (prefers-reduced-motion: reduce) { .pt-reveal { opacity: 1 !important; transform: none !important; transition: none; } }
 
         @media print {
-            .pt-cta, .pt-sidebar, .pt-burger, .pt-toc, .pt-scrim, .pt-lightbox { display: none !important; }
+            .pt-cta, .pt-sidebar, .pt-burger, .pt-toc, .pt-scrim, .pt-lightbox, .pt-rondell-btn { display: none !important; }
+            .pt-rondell-track { overflow: visible; flex-wrap: wrap; }
+            .pt-rondell-img { flex-basis: 46%; max-width: 46%; }
             .pt-nav-sidebar .pt-wrap { padding-left: 0; }
             .pt-hero { min-height: auto; }
             body { background: #fff; }
@@ -327,6 +339,17 @@
                 }, { rootMargin: '-45% 0px -50% 0px', threshold: 0 });
                 secs.forEach(function (s) { spy.observe(s); });
             }
+
+            // Rondell / Karussell: Prev/Next scrollt um ~eine Bildbreite
+            document.querySelectorAll('[data-pt-rondell]').forEach(function (r) {
+                var track = r.querySelector('.pt-rondell-track');
+                if (!track) { return; }
+                var step = function () { var img = track.querySelector('.pt-rondell-img'); return img ? img.getBoundingClientRect().width + 14 : track.clientWidth * 0.8; };
+                var prev = r.querySelector('[data-pt-rondell-prev]');
+                var next = r.querySelector('[data-pt-rondell-next]');
+                if (prev) { prev.addEventListener('click', function () { track.scrollBy({ left: -step(), behavior: 'smooth' }); }); }
+                if (next) { next.addEventListener('click', function () { track.scrollBy({ left: step(), behavior: 'smooth' }); }); }
+            });
 
             // Lightbox
             var lb = document.querySelector('[data-pt-lightbox]');
