@@ -483,6 +483,12 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\RecipeDarreichungDeleteTool::class,
                     \Platform\FoodAlchemist\Tools\RecipeDarreichungStandardTool::class,
                     \Platform\FoodAlchemist\Tools\RecipeDarreichungDeltaPutTool::class,
+                    // D3c: Regenerations-Programme + kundenspezifische Marketing-Namen je Gericht.
+                    \Platform\FoodAlchemist\Tools\RecipeRegenerationPutTool::class,
+                    \Platform\FoodAlchemist\Tools\RecipeRegenerationDeleteTool::class,
+                    \Platform\FoodAlchemist\Tools\RecipeRegenerationReorderTool::class,
+                    \Platform\FoodAlchemist\Tools\RecipeCustomerNamesPostTool::class,
+                    \Platform\FoodAlchemist\Tools\RecipeCustomerNamesDeleteTool::class,
                     // #513 Tier 1: Grammaturen-Rechner (Bäckerprozent/Extraprozent/Brining/Bloom)
                     \Platform\FoodAlchemist\Tools\ProportionCalcTool::class,
                     // #513: %→Gramm-Rückschreiben (Batch-Skalierung + Einzel-Zutat-Edit, write)

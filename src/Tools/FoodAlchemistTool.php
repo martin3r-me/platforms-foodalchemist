@@ -250,6 +250,23 @@ abstract class FoodAlchemistTool
     }
 
     /**
+     * Guard für Gericht-by-id-Tools (VK): existiert das Verkaufsrezept (is_sales_recipe) sichtbar und
+     * gehört es dem Team? Gibt bei Fehler das passende ToolResult (NOT_FOUND/ACCESS_DENIED), sonst null.
+     */
+    protected function guardVkRecipe(Team $team, int $recipeId): ?ToolResult
+    {
+        $r = FoodAlchemistRecipe::visibleToTeam($team)->where('is_sales_recipe', true)->whereKey($recipeId)->first();
+        if ($r === null) {
+            return ToolResult::error('Gericht nicht sichtbar/vorhanden.', 'NOT_FOUND');
+        }
+        if (! $r->isOwnedBy($team)) {
+            return ToolResult::error('Nur fürs Besitzer-Team des Gerichts.', 'ACCESS_DENIED');
+        }
+
+        return null;
+    }
+
+    /**
      * Guard für Darreichungs-by-id-Tools: existiert die Darreichung und gehört sie einem team-eigenen
      * Gericht? Gibt bei Fehler das passende ToolResult (NOT_FOUND/ACCESS_DENIED), sonst null.
      */
