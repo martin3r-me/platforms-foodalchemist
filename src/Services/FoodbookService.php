@@ -1202,6 +1202,29 @@ class FoodbookService
         return $k->refresh();
     }
 
+    // ── Spec 43 (Bild-Epic): Kapitel-Bild (überschreibt das Concept-Titelbild im Kapitel-Band) ──
+
+    public function setKapitelImage(Team $team, int $kapitelId, UploadedFile $file): string
+    {
+        $k = $this->ownedKapitel($team, $kapitelId);
+        app(FoodAlchemistMediaService::class)->delete($k->image_context_file_id, (string) $k->image_path, $team);
+        $media = app(FoodAlchemistMediaService::class)->storeImage(
+            $file, $team, 'foodalchemist.foodbook_chapter', $kapitelId, "foodalchemist/chapter/{$kapitelId}",
+        );
+        $k->update(['image_context_file_id' => $media['context_file_id'], 'image_path' => $media['path']]);
+
+        return $media['path'];
+    }
+
+    public function clearKapitelImage(Team $team, int $kapitelId): FoodAlchemistFoodbookKapitel
+    {
+        $k = $this->ownedKapitel($team, $kapitelId);
+        app(FoodAlchemistMediaService::class)->delete($k->image_context_file_id, (string) $k->image_path, $team);
+        $k->update(['image_context_file_id' => null, 'image_path' => null]);
+
+        return $k->refresh();
+    }
+
     /**
      * #2: das WORDING aller concept_ref-Blöcke eines Kapitels im KAPITEL-Schreibstil neu betexten
      * und foodbook-LOKAL als Block-Override (payload_json['wording_overrides']) speichern (Snapshot).

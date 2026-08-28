@@ -46,3 +46,15 @@ it('Conceptor-Editor: Upload verdrahtet storeImage', function () {
 
     expect($concept->refresh()->image_path)->not->toBeNull();
 });
+
+it('FoodbookService::setKapitelImage/clearKapitelImage setzt + löscht das Kapitel-Bild', function () {
+    $fb = $this->makeFoodbook($this->rootTeam, 'Katalog', ['personen' => 4]);
+    $kap = $this->makeChapter($fb, ['title' => 'Vorspeisen', 'position' => 1]);
+    $svc = app(\Platform\FoodAlchemist\Services\FoodbookService::class);
+
+    $svc->setKapitelImage($this->rootTeam, $kap->id, UploadedFile::fake()->image('k.jpg', 400, 200));
+    expect($kap->refresh()->image_path)->not->toBeNull();
+
+    $svc->clearKapitelImage($this->rootTeam, $kap->id);
+    expect($kap->refresh()->image_path)->toBeNull();
+});
