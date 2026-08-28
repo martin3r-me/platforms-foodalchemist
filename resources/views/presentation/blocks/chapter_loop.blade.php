@@ -8,7 +8,19 @@
                 <h2 class="pt-section-title">{{ $s['title'] ?? '' }}</h2>
                 @if(!empty($s['text']))<p class="pt-section-text">{{ $s['text'] }}</p>@endif
             </div>
-            @if(!empty($s['image']['url']))<img class="pt-section-img" src="{{ $s['image']['url'] }}" alt="">@endif
+            @php
+                $bandImgs = array_values(array_filter($s['images'] ?? [], fn ($gi) => !empty($gi['url'])));
+                if ($bandImgs === [] && !empty($s['image']['url'])) { $bandImgs = [$s['image']]; }
+            @endphp
+            @if(count($bandImgs) > 1)
+                <div class="pt-section-gallery">
+                    @foreach(array_slice($bandImgs, 0, 3) as $gi)
+                        <img class="pt-section-img pt-section-img--multi" src="{{ $gi['url'] }}" alt="">
+                    @endforeach
+                </div>
+            @elseif(count($bandImgs) === 1)
+                <img class="pt-section-img" src="{{ $bandImgs[0]['url'] }}" alt="">
+            @endif
             @foreach(($s['blocks'] ?? []) as $b)
                 @include('foodalchemist::presentation.blocks._block_body', ['b' => $b, 'style' => $style])
             @endforeach

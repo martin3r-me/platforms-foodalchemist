@@ -62,6 +62,29 @@ class Editor extends Component
         }
     }
 
+    // ── Spec 43 (Bild-Epic): kleine Galerie neben dem Titelbild ──
+    public $conceptGalleryUpload = null;
+
+    public function updatedConceptGalleryUpload(): void
+    {
+        $this->conceptImageFehler = null;
+        if ($this->id === null || $this->conceptGalleryUpload === null) {
+            return;
+        }
+        $this->validate(['conceptGalleryUpload' => 'image|max:8192'], [], ['conceptGalleryUpload' => 'Bild']);
+        try {
+            app(ConceptService::class)->addGalleryImage($this->team(), $this->id, $this->conceptGalleryUpload);
+        } catch (\RuntimeException $e) {
+            $this->conceptImageFehler = $e->getMessage();
+        }
+        $this->reset('conceptGalleryUpload');
+    }
+
+    public function galerieBildEntfernen(int $imageId): void
+    {
+        app(ConceptService::class)->removeGalleryImage($this->team(), $imageId);
+    }
+
     /** R4.3: Owner für den Phasen-Stepper (nur Concepts — Pakete haben keine Phase). */
     protected function phaseOwner(): array
     {
@@ -1402,6 +1425,12 @@ class Editor extends Component
             'conceptImageUrl' => ($concept !== null && ($concept->image_context_file_id || $concept->image_path))
                 ? app(\Platform\FoodAlchemist\Services\FoodAlchemistMediaService::class)->url($concept->image_context_file_id, $concept->image_path)
                 : null,
+            'conceptGallery' => $concept !== null
+                ? $concept->images->map(fn ($gi) => [
+                    'id' => $gi->id,
+                    'url' => app(\Platform\FoodAlchemist\Services\FoodAlchemistMediaService::class)->url($gi->context_file_id, $gi->path),
+                ])->all()
+                : [],
             'slotZutaten' => $slotZutaten,
             'coverage' => $coverage,
             'pickHauptgruppen' => $istAufbau ? $sales->dishMainGroups($team) : collect(),

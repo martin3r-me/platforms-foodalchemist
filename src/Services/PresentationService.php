@@ -198,23 +198,42 @@ class PresentationService
         $showPrice = (bool) $settings['price_display'];
         $showDecl = (bool) $settings['declaration'];
 
-        // Bild-Epic: Kapitel-Band-Bild je Kapitel-ID. Kapitel-Bild › Concept-Titelbild (erstes
-        // concept_ref-Konzept mit Bild). $fb->chapters wurde von dokumentDaten voll geladen.
-        $chapImg = [];
+        // Bild-Epic: Kapitel-Band-Bilder je Kapitel-ID. Primär = Kapitel-Bild › Concept-Titelbild;
+        // dazu die kleine Concept-Galerie (erstes concept_ref-Konzept). $fb->chapters kommt voll
+        // aus dokumentDaten; Galerie separat nachladen.
+        $fb->loadMissing(['chapters.blocks.concept.images']);
+        $chapImg = [];       // primär (Rückwärtskompat: section.image)
+        $chapImages = [];    // Liste (section.images): Primärbild + Galerie, gedeckelt
         foreach ($fb->chapters as $c) {
-            $img = ($c->image_context_file_id || $c->image_path)
+            $primary = ($c->image_context_file_id || $c->image_path)
                 ? ['context_file_id' => $c->image_context_file_id, 'path' => $c->image_path]
                 : null;
-            if ($img === null) {
-                foreach ($c->blocks as $b) {
-                    if ($b->type === 'concept_ref' && $b->concept !== null
-                        && ($b->concept->image_context_file_id || $b->concept->image_path)) {
-                        $img = ['context_file_id' => $b->concept->image_context_file_id, 'path' => $b->concept->image_path];
-                        break;
+            $gallery = [];
+            foreach ($c->blocks as $b) {
+                if ($b->type !== 'concept_ref' || $b->concept === null) {
+                    continue;
+                }
+                if ($primary === null && ($b->concept->image_context_file_id || $b->concept->image_path)) {
+                    $primary = ['context_file_id' => $b->concept->image_context_file_id, 'path' => $b->concept->image_path];
+                }
+                foreach ($b->concept->images ?? [] as $gi) {
+                    if ($gi->context_file_id || $gi->path) {
+                        $gallery[] = ['context_file_id' => $gi->context_file_id, 'path' => $gi->path];
                     }
                 }
+                if ($primary !== null || $gallery !== []) {
+                    break; // erstes Konzept mit Bildmaterial gewinnt
+                }
             }
-            $chapImg[(int) $c->id] = $img;
+            $liste = [];
+            if ($primary !== null) {
+                $liste[] = $primary;
+            }
+            foreach ($gallery as $g) {
+                $liste[] = $g;
+            }
+            $chapImg[(int) $c->id] = $primary;
+            $chapImages[(int) $c->id] = array_slice($liste, 0, 3);   // Band zeigt max. 3
         }
 
         $sections = [];
@@ -258,6 +277,7 @@ class PresentationService
                 'depth' => (int) ($k['depth'] ?? 0),
                 'anker' => (string) ($k['anker'] ?? ''),
                 'image' => $chapImg[$ankerId] ?? null,
+                'images' => $chapImages[$ankerId] ?? [],
                 'blocks' => $blocks,
             ];
         }
@@ -507,14 +527,16 @@ class PresentationService
             }
         }
 
-        // Bild-Epic: Kapitel-Band-Bilder (Identifier → frisch signierte URL).
+        // Bild-Epic: Kapitel-Band-Bilder (Identifier → frisch signierte URL) — Einzelbild + Liste.
         foreach ($snapshot['content']['sections'] ?? [] as $i => $sec) {
             $img = $sec['image'] ?? null;
             if (is_array($img) && (($img['context_file_id'] ?? null) || ($img['path'] ?? null))) {
-                $snapshot['content']['sections'][$i]['image']['url'] = $this->media->url(
-                    $img['context_file_id'] ?? null,
-                    $img['path'] ?? null
-                );
+                $snapshot['content']['sections'][$i]['image']['url'] = $this->media->url($img['context_file_id'] ?? null, $img['path'] ?? null);
+            }
+            foreach ($sec['images'] ?? [] as $j => $gi) {
+                if (is_array($gi) && (($gi['context_file_id'] ?? null) || ($gi['path'] ?? null))) {
+                    $snapshot['content']['sections'][$i]['images'][$j]['url'] = $this->media->url($gi['context_file_id'] ?? null, $gi['path'] ?? null);
+                }
             }
         }
 

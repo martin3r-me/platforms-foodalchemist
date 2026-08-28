@@ -85,6 +85,9 @@
         .pt-depth-2 .pt-section-title { font-size: clamp(1.2rem, 2.8vw, 1.5rem); }
         .pt-section-text { color: var(--pt-muted); font-size: 1.06rem; margin: 14px 0 0; max-width: 60ch; }
         .pt-section-img { width: 100%; border-radius: 4px; margin: var(--pt-gap) 0 0; aspect-ratio: 16/7; object-fit: cover; }
+        .pt-section-gallery { display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--pt-gap); margin: var(--pt-gap) 0 0; }
+        .pt-section-img--multi { margin: 0; aspect-ratio: 4/3; }
+        @media (max-width: 640px) { .pt-section-gallery { grid-template-columns: 1fr; } }
 
         /* Menü-Zeilen mit Punkt-Leadern (Magazin/Menü-Look) */
         .pt-block { margin-top: var(--pt-gap); }
