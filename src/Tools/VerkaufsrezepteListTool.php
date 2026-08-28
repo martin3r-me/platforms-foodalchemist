@@ -61,6 +61,7 @@ class VerkaufsrezepteListTool extends FoodAlchemistTool implements ToolContract,
                 'id' => $r->id, 'name' => $r->name, 'sales_net' => $r->sales_net,
                 'ek_total_eur' => $r->ek_total_eur,
                 'speisen_klasse' => $r->dishClass?->label,
+                'dish_main_group_id' => $r->dish_main_group_id !== null ? (int) $r->dish_main_group_id : null,   // Taxonomie-Neutralisierung
                 'presentations' => $this->darreichungenSummary($r),
             ])->all(),
         ]);

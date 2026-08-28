@@ -470,6 +470,19 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\RecipesInstantiateTool::class,
                     // D2c: grounded Freitext-Revision (recipe.ueberarbeiten; Draft-Quarantäne; Workstream W).
                     \Platform\FoodAlchemist\Tools\RecipesReviseTool::class,
+                    // D3a: Verkaufsrezepte (Gerichte) — Read-Detail + CRUD (VK-scoped, Owner-Guard,
+                    // Service filtert VK-Whitelist + re-autorisiert FKs; Delete confirm).
+                    \Platform\FoodAlchemist\Tools\VerkaufsrezepteGetTool::class,
+                    \Platform\FoodAlchemist\Tools\VerkaufsrezeptePostTool::class,
+                    \Platform\FoodAlchemist\Tools\VerkaufsrezeptePutTool::class,
+                    \Platform\FoodAlchemist\Tools\VerkaufsrezepteDeleteTool::class,
+                    \Platform\FoodAlchemist\Tools\VerkaufsrezepteStatusTool::class,
+                    // D3b: Darreichungen (Servierformen) je Gericht — anlegen/bearbeiten/löschen/standard + Mengen-Delta.
+                    \Platform\FoodAlchemist\Tools\RecipeDarreichungPostTool::class,
+                    \Platform\FoodAlchemist\Tools\RecipeDarreichungPutTool::class,
+                    \Platform\FoodAlchemist\Tools\RecipeDarreichungDeleteTool::class,
+                    \Platform\FoodAlchemist\Tools\RecipeDarreichungStandardTool::class,
+                    \Platform\FoodAlchemist\Tools\RecipeDarreichungDeltaPutTool::class,
                     // #513 Tier 1: Grammaturen-Rechner (Bäckerprozent/Extraprozent/Brining/Bloom)
                     \Platform\FoodAlchemist\Tools\ProportionCalcTool::class,
                     // #513: %→Gramm-Rückschreiben (Batch-Skalierung + Einzel-Zutat-Edit, write)

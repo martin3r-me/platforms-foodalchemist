@@ -4,7 +4,10 @@ namespace Platform\FoodAlchemist\Tools;
 
 use Illuminate\Support\Facades\DB;
 use Platform\Core\Contracts\ToolContext;
+use Platform\Core\Contracts\ToolResult;
 use Platform\Core\Models\Team;
+use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
+use Platform\FoodAlchemist\Models\FoodAlchemistRecipeDarreichung;
 use Platform\FoodAlchemist\Support\TeamScope;
 
 /**
@@ -244,6 +247,27 @@ abstract class FoodAlchemistTool
         return DB::table('foodalchemist_vocab_pairing_anchors')->where('id', $ankerId)->whereNull('deleted_at')
             ->where(fn ($q) => $q->whereNull('team_id')->orWhereIn('team_id', TeamScope::ancestryIds($team)))
             ->exists();
+    }
+
+    /**
+     * Guard für Darreichungs-by-id-Tools: existiert die Darreichung und gehört sie einem team-eigenen
+     * Gericht? Gibt bei Fehler das passende ToolResult (NOT_FOUND/ACCESS_DENIED), sonst null.
+     */
+    protected function guardDarreichungOwned(Team $team, int $darreichungId): ?ToolResult
+    {
+        $dar = FoodAlchemistRecipeDarreichung::whereKey($darreichungId)->first();
+        if ($dar === null) {
+            return ToolResult::error('Darreichung nicht vorhanden.', 'NOT_FOUND');
+        }
+        $recipe = FoodAlchemistRecipe::visibleToTeam($team)->whereKey($dar->recipe_id)->first();
+        if ($recipe === null) {
+            return ToolResult::error('Gericht nicht sichtbar/vorhanden.', 'NOT_FOUND');
+        }
+        if (! $recipe->isOwnedBy($team)) {
+            return ToolResult::error('Darreichungen nur fürs Besitzer-Team.', 'ACCESS_DENIED');
+        }
+
+        return null;
     }
 
     /** Phase A: Draft-Quarantäne-Guard — approved/review/archived sind für den MCP-Pfad locked. */
