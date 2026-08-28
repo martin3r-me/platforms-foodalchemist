@@ -3217,28 +3217,23 @@ class Index extends Component
             'offen' => (int) ($recipe->n_ingredients_unmapped ?? 0),
             'sub_recipes' => $res['sub_recipes'] ?? [],
         ];
+        // #6/Import (Dominique 2026-08-28): NICHT mehr synchron minten — die Aufgabe an den Worker
+        // übergeben. Voll-Anreicherung inkl. LA-First-GP-Mint der offenen Zutaten läuft async und wird
+        // als Lauf im Worker-Tab sichtbar (deferred.enrich-Polling). Der Handoff darf den erfolgreichen
+        // Import nicht kippen (fail-soft).
+        try {
+            app(PlanningCascadeService::class)->enrichBestehendesRezept(
+                $team, (int) $recipe->id, $this->importTyp === 'gericht', $this->sessionId
+            );
+            if ($this->sessionId !== null) {
+                $this->ladeLetztenLauf();   // laufId auf den neuen Import-Lauf → Worker-Tab zeigt ihn
+            }
+            $this->importMeldung = '„' . $recipe->name . '" angelegt und an den Worker übergeben — wird im Hintergrund angereichert (GPs, Beschreibung, Pairings).';
+        } catch (\Throwable $e) {
+            $this->importMeldung = 'Angelegt, aber Worker-Übergabe fehlgeschlagen: ' . $e->getMessage();
+        }
         $this->importStep = 'fertig';
         $this->dispatch('recipe-gespeichert');
-    }
-
-    /** Erdungs-Nachzug: für die noch offenen Zutaten des importierten Drafts GPs anlegen (LA-First-Mint). */
-    public function importGpsMinten(\Platform\FoodAlchemist\Services\RecipeOneShotService $one): void
-    {
-        $team = $this->team();
-        if ($team === null || $this->importErgebnis === null) {
-            return;
-        }
-        $recipe = \Platform\FoodAlchemist\Models\FoodAlchemistRecipe::visibleToTeam($team)->find($this->importErgebnis['recipe_id']);
-        if ($recipe === null) {
-            return;
-        }
-        try {
-            $one->minteFehlendeGps($team, $recipe);
-            $recipe = $recipe->fresh() ?? $recipe;
-            $this->importErgebnis['offen'] = (int) ($recipe->n_ingredients_unmapped ?? 0);
-        } catch (\Throwable $e) {
-            $this->importMeldung = $e->getMessage();
-        }
     }
 
     public function importReset(): void

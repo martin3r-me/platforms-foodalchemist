@@ -1,9 +1,12 @@
 <?php
 
+use Illuminate\Support\Facades\Queue;
 use Livewire\Livewire;
 use Platform\Core\Contracts\ToolContext;
 use Platform\Core\Tools\ToolRegistry;
+use Platform\FoodAlchemist\Jobs\EnrichRecipeJob;
 use Platform\FoodAlchemist\Livewire\Planung\Index as PlanungIndex;
+use Platform\FoodAlchemist\Models\FoodAlchemistCascadeRun;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Models\FoodAlchemistVocabEinheit;
 use Platform\FoodAlchemist\Services\Ai\AiGatewayService;
@@ -136,7 +139,8 @@ it('#6: Import mit leerem Namen (Quelle ohne Titel) → Nachfassen statt namenlo
     expect(FoodAlchemistRecipe::where('team_id', $this->rootTeam->id)->where('created_via', 'import')->count())->toBe(0);
 });
 
-it('Import-Tab (Livewire): extrahieren → Vorschau, anlegen → Draft', function () {
+it('Import-Tab (Livewire): extrahieren → Vorschau, anlegen → Draft + Worker-Übergabe', function () {
+    Queue::fake();   // #6/Import: importAnlegen übergibt jetzt an den Worker (EnrichRecipeJob), nicht synchron.
     ($this->mockExtract)([
         'typ' => 'basisrezept', 'name' => 'Pesto',
         'zutaten' => [['text' => 'Basilikum', 'quantity' => 50, 'unit' => 'g']],
@@ -149,6 +153,12 @@ it('Import-Tab (Livewire): extrahieren → Vorschau, anlegen → Draft', functio
         ->assertSet('importStep', 'vorschau')
         ->call('importAnlegen')
         ->assertSet('importStep', 'fertig');
+
+    // Der Import erdet nicht mehr synchron, sondern legt einen Import-Lauf an + dispatcht die Anreicherung.
+    $recipe = FoodAlchemistRecipe::where('team_id', $this->rootTeam->id)->where('created_via', 'import')->latest('id')->first();
+    expect($recipe)->not->toBeNull();
+    expect(FoodAlchemistCascadeRun::where('team_id', $this->rootTeam->id)->where('created_via', 'import')->count())->toBe(1);
+    Queue::assertPushed(EnrichRecipeJob::class, fn ($job) => $job->recipeId === (int) $recipe->id);
 });
 
 it('#6 Import-Vorschau rendert die Bezeichnungs-Spalte (Layout-Fix — vorher kollabiert)', function () {
