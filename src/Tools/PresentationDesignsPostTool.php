@@ -32,7 +32,8 @@ class PresentationDesignsPostTool extends FoodAlchemistTool implements ToolContr
             'type' => 'object',
             'properties' => [
                 'name' => ['type' => 'string'],
-                'base_slug' => ['type' => 'string', 'enum' => ['editorial', 'menu', 'kiosk']],
+                'base_slug' => ['type' => 'string', 'enum' => ['editorial', 'menu', 'kiosk', 'navigator']],
+                'output_types' => ['type' => 'array', 'items' => ['type' => 'string', 'enum' => ['foodbook', 'speisekarte', 'speiseplan']], 'description' => 'Für welche Ausgabeformen das Design im Picker erscheint (leer = alle).'],
                 'layout_json' => ['type' => 'array', 'items' => ['type' => 'object']],
                 'tokens_json' => ['type' => 'object'],
                 'custom_css' => ['type' => 'string', 'description' => 'Sandboxed CSS-only Layer (kein <, @import, expression) — überschreibt die Basis-Optik. Content bleibt datengebunden.'],
@@ -51,6 +52,7 @@ class PresentationDesignsPostTool extends FoodAlchemistTool implements ToolContr
             $d = app(PresentationDesignService::class)->create($team, [
                 'name' => (string) ($arguments['name'] ?? ''),
                 'base_slug' => $arguments['base_slug'] ?? 'editorial',
+                'output_types' => $arguments['output_types'] ?? null,
                 'layout_json' => $arguments['layout_json'] ?? null,
                 'tokens_json' => $arguments['tokens_json'] ?? null,
                 'custom_css' => $arguments['custom_css'] ?? null,

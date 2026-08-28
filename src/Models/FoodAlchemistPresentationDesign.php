@@ -27,6 +27,7 @@ class FoodAlchemistPresentationDesign extends Model
         'uuid' => 'string',
         'layout_json' => 'array',
         'tokens_json' => 'array',
+        'output_types' => 'array',
         'is_default' => 'boolean',
     ];
 }

@@ -35,6 +35,7 @@
         }
     }
     if (count($navItems) < 2) { $nav = 'none'; }
+    $navLabel = ($snapshot['type'] ?? 'foodbook') === 'speisekarte' ? 'Rubriken' : 'Kapitel';
 @endphp
 <!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
@@ -247,7 +248,7 @@
 
     @if($nav === 'anchor')
         <div class="pt-toc" data-pt-toc>
-            <button type="button" class="pt-toc-btn" data-pt-toc-btn>☰ Kapitel</button>
+            <button type="button" class="pt-toc-btn" data-pt-toc-btn>☰ {{ $navLabel }}</button>
             <div class="pt-toc-panel">
                 @foreach($navItems as $ni)
                     <a href="#{{ $ni['id'] }}" data-pt-navlink="{{ $ni['id'] }}" class="pt-d{{ $ni['depth'] }}">{{ $ni['title'] }}</a>

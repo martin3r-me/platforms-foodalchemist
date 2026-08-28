@@ -11,12 +11,16 @@
         $cols = min(max((int) ($style['dish_columns'] ?? 1), 1), 2);
         // Split-Kopf: genau ein Bild + Hauptkapitel → Kopf & Bild nebeneinander (asymmetrisch).
         $split = $depth === 0 && count($bandImgs) === 1;
+        // Kicker form-abhängig: Speisekarte = à la carte, kein „Kapitel"-Label. Speiseplan hat keine Sektionen.
+        $ptType = $snap['type'] ?? 'foodbook';
+        $showKicker = ($style['show_kicker'] ?? true) && $ptType !== 'speisekarte';
+        $kicker = $depth > 0 ? 'Abschnitt' : 'Kapitel';
     @endphp
     <section id="{{ $secId }}" class="pt-section pt-depth-{{ $depth }} pt-reveal" data-pt-section data-pt-title="{{ $s['title'] ?? '' }}">
         <div class="pt-wide">
             <div class="pt-section-grid {{ $split ? 'pt-section-grid--split' : '' }}">
                 <div class="pt-section-head">
-                    <div class="pt-kicker">{{ $depth > 0 ? 'Abschnitt' : 'Kapitel' }}</div>
+                    @if($showKicker)<div class="pt-kicker">{{ $kicker }}</div>@endif
                     <h2 class="pt-section-title">{{ $s['title'] ?? '' }}</h2>
                     @if(!empty($s['text']))<p class="pt-section-text">{{ $s['text'] }}</p>@endif
                 </div>

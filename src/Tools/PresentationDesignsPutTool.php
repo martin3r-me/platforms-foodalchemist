@@ -32,7 +32,8 @@ class PresentationDesignsPutTool extends FoodAlchemistTool implements ToolContra
             'properties' => [
                 'id' => ['type' => 'integer'],
                 'name' => ['type' => 'string'],
-                'base_slug' => ['type' => 'string', 'enum' => ['editorial', 'menu', 'kiosk']],
+                'base_slug' => ['type' => 'string', 'enum' => ['editorial', 'menu', 'kiosk', 'navigator']],
+                'output_types' => ['type' => 'array', 'items' => ['type' => 'string', 'enum' => ['foodbook', 'speisekarte', 'speiseplan']], 'description' => 'Für welche Ausgabeformen das Design im Picker erscheint (leer = alle).'],
                 'layout_json' => ['type' => 'array', 'items' => ['type' => 'object']],
                 'tokens_json' => ['type' => 'object'],
                 'custom_css' => ['type' => 'string', 'description' => 'Sandboxed CSS-only Layer (leerer String = löschen).'],
@@ -50,6 +51,7 @@ class PresentationDesignsPutTool extends FoodAlchemistTool implements ToolContra
         $data = array_filter([
             'name' => $arguments['name'] ?? null,
             'base_slug' => $arguments['base_slug'] ?? null,
+            'output_types' => $arguments['output_types'] ?? null,
             'layout_json' => $arguments['layout_json'] ?? null,
             'tokens_json' => $arguments['tokens_json'] ?? null,
             'custom_css' => $arguments['custom_css'] ?? null,

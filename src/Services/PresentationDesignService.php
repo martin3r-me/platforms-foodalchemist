@@ -56,8 +56,9 @@ class PresentationDesignService
             'menu' => [
                 'name' => 'Speisekarte',
                 'base_slug' => 'menu',
+                'output_types' => ['speisekarte'],
                 'layout' => [
-                    ['block_type' => 'cover', 'style' => ['align' => 'center', 'show_cover_image' => false, 'show_logo' => true, 'compact' => true]],
+                    ['block_type' => 'cover', 'style' => ['align' => 'center', 'show_cover_image' => true, 'show_logo' => true, 'compact' => true]],
                     ['block_type' => 'chapter_loop', 'style' => ['show_price' => true, 'show_codes' => true, 'dish_columns' => 1, 'compact' => true]],
                     ['block_type' => 'legend', 'style' => ['compact' => true]],
                 ],
@@ -72,6 +73,7 @@ class PresentationDesignService
             'kiosk' => [
                 'name' => 'Kiosk',
                 'base_slug' => 'kiosk',
+                'output_types' => ['speiseplan', 'speisekarte'],
                 'layout' => [
                     ['block_type' => 'cover', 'style' => ['align' => 'center', 'show_cover_image' => true, 'show_logo' => true]],
                     ['block_type' => 'chapter_loop', 'style' => ['show_price' => true, 'show_codes' => false, 'dish_columns' => 1]],
@@ -239,6 +241,49 @@ class PresentationDesignService
             ->get();
     }
 
+    /** Die drei Ausgabeformen, für die ein Design gelten kann. */
+    public const OUTPUT_TYPES = ['foodbook', 'speisekarte', 'speiseplan'];
+
+    /** Nur gültige Formen; leer/keine → null (= gilt für alle Formen). */
+    private function sanitizeOutputTypes(mixed $raw): ?array
+    {
+        if (! is_array($raw)) {
+            return null;
+        }
+        $clean = array_values(array_intersect(self::OUTPUT_TYPES, array_map('strval', $raw)));
+
+        return $clean === [] ? null : $clean;
+    }
+
+    /** true, wenn das Design für die Form gilt (leer/null = alle Formen). */
+    private function giltFuer(?array $outputTypes, ?string $type): bool
+    {
+        return $type === null || empty($outputTypes) || in_array($type, $outputTypes, true);
+    }
+
+    /**
+     * Design-Picker-Optionen einer Ausgabeform: die Built-in-Starter (immer verfügbar)
+     * + die team-sichtbaren, auf diese Form passenden DB-Designs.
+     *
+     * @return list<array{value:string, label:string}>
+     */
+    public function pickerOptions(Team $team, string $type): array
+    {
+        $optionen = [];
+        foreach ($this->builtins() as $slug => $b) {
+            if ($this->giltFuer($b['output_types'] ?? null, $type)) {
+                $optionen[] = ['value' => $slug, 'label' => $b['name'] . ' (Vorlage)'];
+            }
+        }
+        foreach ($this->list($team) as $d) {
+            if ($this->giltFuer($d->output_types, $type)) {
+                $optionen[] = ['value' => 'design:' . $d->id, 'label' => $d->name];
+            }
+        }
+
+        return $optionen;
+    }
+
     public function find(Team $team, int $id): ?FoodAlchemistPresentationDesign
     {
         return FoodAlchemistPresentationDesign::visibleToTeam($team)->find($id);
@@ -259,6 +304,7 @@ class PresentationDesignService
             'team_id' => $team->id,
             'name' => $name,
             'base_slug' => $base,
+            'output_types' => $this->sanitizeOutputTypes($data['output_types'] ?? null),
             'layout_json' => $this->sanitizeLayout($data['layout_json'] ?? $this->builtins()[$base]['layout']),
             'tokens_json' => is_array($data['tokens_json'] ?? null) ? $data['tokens_json'] : $this->builtins()[$base]['tokens'],
             'custom_css' => $this->sanitizeCss($data['custom_css'] ?? null),
@@ -279,6 +325,9 @@ class PresentationDesignService
         }
         if (array_key_exists('base_slug', $data)) {
             $design->base_slug = $this->baseSlug($data['base_slug']);
+        }
+        if (array_key_exists('output_types', $data)) {
+            $design->output_types = $this->sanitizeOutputTypes($data['output_types']);
         }
         if (array_key_exists('layout_json', $data) && is_array($data['layout_json'])) {
             $design->layout_json = $this->sanitizeLayout($data['layout_json']);

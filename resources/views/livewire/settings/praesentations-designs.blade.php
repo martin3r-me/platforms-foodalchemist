@@ -64,6 +64,17 @@
                 </button>
             </div>
 
+            {{-- Form-Scoping: für welche Ausgabeformen dieses Design im Picker auftaucht (leer = alle). --}}
+            <div class="flex flex-wrap items-center gap-3" data-fa-output-types>
+                <span class="text-[11px] text-gray-500">Gilt für</span>
+                @foreach(['foodbook' => 'Foodbook', 'speisekarte' => 'Speisekarte', 'speiseplan' => 'Speiseplan'] as $ot => $otLabel)
+                    <label class="flex items-center gap-1.5 text-sm">
+                        <input type="checkbox" value="{{ $ot }}" wire:model.live="outputTypes" class="rounded border-gray-300"> {{ $otLabel }}
+                    </label>
+                @endforeach
+                <span class="text-[11px] text-gray-400">(nichts angehakt = alle Formen)</span>
+            </div>
+
             <div class="flex items-center gap-2">
                 <label class="text-[11px] text-gray-500">Vorschau-Foodbook</label>
                 <select wire:model.live="previewFoodbookId" class="text-sm border border-gray-300 rounded px-2 py-1">
