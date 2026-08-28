@@ -349,7 +349,7 @@
                 @if($presentationLink)
                     <div class="rounded-lg bg-gray-50 border border-gray-200 p-3 text-xs" x-data>
                         <div class="flex items-center gap-2">
-                            <input type="text" readonly value="{{ $presentationLink }}" class="flex-1 bg-white border border-gray-200 rounded px-2 py-1 text-gray-700" data-sk-praes-link>
+                            <input type="text" readonly value="{{ $presentationLink }}" class="flex-1 bg-white border border-gray-300 rounded px-2 py-1 text-gray-900 font-mono text-[11px]" data-sk-praes-link>
                             <button type="button" class="{{ $btnGhost }}" x-on:click="navigator.clipboard.writeText('{{ $presentationLink }}'); $el.textContent='Kopiert ✓'">Link kopieren</button>
                         </div>
                         <p class="text-[11px] text-gray-500 mt-1">
