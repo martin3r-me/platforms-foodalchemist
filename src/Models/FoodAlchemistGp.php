@@ -120,6 +120,12 @@ class FoodAlchemistGp extends Model
         return $this->hasMany(FoodAlchemistRecipeIngredient::class, 'gp_id');
     }
 
+    /** #9 (2026-08-28): Naturaleinheit-Formen mit Gramm-Gewicht (Stück/Scheibe/Würfel …). */
+    public function forms(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(FoodAlchemistGpForm::class, 'gp_id');
+    }
+
     /** Kalkulationsführender Lieferantenartikel (GL-03; V-27-Kette folgt in D-2). */
     public function leadLa(): BelongsTo
     {

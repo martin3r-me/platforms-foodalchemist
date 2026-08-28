@@ -709,8 +709,16 @@ return [
         ],
         'gp.zaehl_einheiten' => [
             'tier' => 'B',
-            'task' => 'Liste die natuerlichen Zaehl-Einheiten des Grundprodukts mit '
-                . 'Durchschnittsgewichten: werte = {einheiten: [{unit, gewicht_g}]}.',
+            // #9 (2026-08-28): natuerliche Formen des GP mit Gramm-Gewicht je EINER Einheit. NUR
+            // anwendbare Formen (Fluessigkeit/Oel/Pulver ohne Stueck-Form => leere Liste). unit aus
+            // dem festen Slug-Set, damit die Form direkt als Rezept-Einheit taugt. Nichts erfinden:
+            // unsichere Form weglassen (GL-07/keine Halluzination).
+            'task' => 'Liste die natuerlichen Stueck-/Zaehl-FORMEN des Grundprodukts mit dem '
+                . 'Durchschnittsgewicht je EINER Einheit in Gramm — NUR real anwendbare Formen '
+                . '(z. B. Zwiebel: stk/wuerfel/scheibe/ring; Oel/Bruehe/Mehl: KEINE => leere Liste). '
+                . 'unit MUSS aus diesem Set stammen: stk, scheibe, wuerfel, streifen, blatt, ring, '
+                . 'zehe, bund, zweig. Unsichere Form weglassen (nicht schaetzen/erfinden): '
+                . 'werte = {einheiten: [{unit, gewicht_g}]}.',
         ],
         'gp.anker' => [
             'tier' => 'B',
