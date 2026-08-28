@@ -62,6 +62,54 @@ it('ohne Kapitel-Bilder greift der Concept-Fallback', function () {
     expect(collect($snap['content']['sections'][0]['images'])->pluck('path'))->toContain('foodalchemist/concept/titel.jpg');
 });
 
+it('Gericht-Foto: Identifier im Snapshot, gerendert nur mit Design-Toggle', function () {
+    $team = $this->rootTeam;
+    $concept = $this->makeConcept($team, 'Menü', ['kind' => 'concept', 'consumer_name' => 'Genuss']);
+    $dish = $this->makeRecipe($team, 'Lachs', ['is_sales_recipe' => true, 'sales_net' => 12.0]);
+    $dish->update(['image_path' => 'foodalchemist/recipe/lachs.jpg']);
+    $this->makeConceptSlot($concept, ['sales_recipe_id' => $dish->id, 'wording' => 'Lachs', 'position' => 1]);
+    $fb = $this->makeFoodbook($team, 'Katalog', ['personen' => 6]);
+    $kap = $this->makeChapter($fb, ['title' => 'Vorspeisen', 'consumer_title' => 'Vorspeisen', 'position' => 1]);
+    $this->makeFoodbookBlock($kap, ['type' => 'concept_ref', 'concept_id' => $concept->id, 'position' => 1]);
+
+    // Identifier ist IMMER im Snapshot (Anzeige entscheidet das Design).
+    $snap = $this->pres->buildSnapshot($team, $fb, 'foodbook', ['expires_at' => now()->addDays(30)->toDateString()]);
+    $itemImg = collect($snap['content']['sections'][0]['blocks'])->flatMap(fn ($b) => $b['items'] ?? [])->pluck('image.path')->filter();
+    expect($itemImg)->toContain('foodalchemist/recipe/lachs.jpg');
+
+    // Nach Hydrieren trägt das Item eine frische Foto-URL (Identifier → URL).
+    $hyd = $this->pres->hydrateImages($snap);
+    $urls = collect($hyd['content']['sections'][0]['blocks'])->flatMap(fn ($b) => $b['items'] ?? [])->pluck('image.url')->filter();
+    expect($urls)->not->toBeEmpty();
+
+    // Ohne Toggle: kein Foto-<img> im HTML (die CSS-Regel .pt-item-foto steht immer im <style>,
+    // deshalb auf das MARKUP prüfen, nicht auf den bloßen Klassennamen).
+    $ohne = $this->pres->publish($team, 'foodbook', $fb->id, ['expires_at' => now()->addDays(30)->toDateString()]);
+    $this->get('/p/foodbook/' . $ohne['token'])->assertOk()->assertDontSee('<img class="pt-item-foto', false);
+
+    // Mit Design-Toggle show_dish_photos: Foto sichtbar.
+    $design = app(\Platform\FoodAlchemist\Services\PresentationDesignService::class)->create($team, [
+        'name' => 'Mit Fotos',
+        'layout_json' => [
+            ['block_type' => 'cover', 'style' => []],
+            ['block_type' => 'chapter_loop', 'style' => ['show_dish_photos' => true]],
+        ],
+    ]);
+    // Design wird aufgelöst (chapter_loop mit show_dish_photos)?
+    $snapMit = $this->pres->buildSnapshot($team, $fb->refresh(), 'foodbook', ['design' => 'design:' . $design->id, 'expires_at' => now()->addDays(30)->toDateString()]);
+    $cl = collect($snapMit['resolved_design']['layout'])->firstWhere('block_type', 'chapter_loop');
+    expect($cl['style']['show_dish_photos'] ?? false)->toBeTrue();
+
+    $mit = $this->pres->publish($team, 'foodbook', $fb->id, ['design' => 'design:' . $design->id, 'expires_at' => now()->addDays(30)->toDateString()]);
+    $stored = $fb->refresh()->presentation_snapshot_json;
+    expect(collect($stored['resolved_design']['layout'])->pluck('block_type'))->not->toContain('price_summary'); // mein 2-Block-Design, nicht editorial
+    $storedCl = collect($stored['resolved_design']['layout'])->firstWhere('block_type', 'chapter_loop');
+    expect($storedCl['style']['show_dish_photos'] ?? false)->toBeTrue();
+
+    // Mit Toggle: Foto-<img> IST im HTML.
+    $this->get('/p/foodbook/' . $mit['token'])->assertOk()->assertSee('<img class="pt-item-foto', false);
+});
+
 it('Rondell-Band-Variante rendert das Karussell-Markup', function () {
     [$fb, $kap] = ($this->baue)($this->rootTeam);
     $kap->images()->create(['team_id' => $this->rootTeam->id, 'path' => 'foodalchemist/chapter/a.jpg', 'sort_order' => 1]);

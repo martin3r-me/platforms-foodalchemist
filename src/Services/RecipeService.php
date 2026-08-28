@@ -357,6 +357,26 @@ class RecipeService
         });
     }
 
+    /** Spec 43 (Bild-Epic): Gericht-Foto (Titelbild eines Rezepts) ablegen. Gibt den Pfad zurück. */
+    public function storeDishImage(Team $team, int $id, \Illuminate\Http\UploadedFile $file): string
+    {
+        $recipe = FoodAlchemistRecipe::visibleToTeam($team)->findOrFail($id);
+        app(\Platform\FoodAlchemist\Services\FoodAlchemistMediaService::class)->delete($recipe->image_context_file_id, (string) $recipe->image_path, $team);
+        $media = app(\Platform\FoodAlchemist\Services\FoodAlchemistMediaService::class)->storeImage(
+            $file, $team, 'foodalchemist.recipe', $id, "foodalchemist/recipe/{$id}",
+        );
+        $recipe->update(['image_context_file_id' => $media['context_file_id'], 'image_path' => $media['path']]);
+
+        return $media['path'];
+    }
+
+    public function clearDishImage(Team $team, int $id): void
+    {
+        $recipe = FoodAlchemistRecipe::visibleToTeam($team)->findOrFail($id);
+        app(\Platform\FoodAlchemist\Services\FoodAlchemistMediaService::class)->delete($recipe->image_context_file_id, (string) $recipe->image_path, $team);
+        $recipe->update(['image_context_file_id' => null, 'image_path' => null]);
+    }
+
     /** M4-12: Template-Flag togglen (Vorlagen für Instanziierung — D-5 §1). */
     public function setTemplate(Team $team, int $id, ?bool $istTemplate = null): FoodAlchemistRecipe
     {
