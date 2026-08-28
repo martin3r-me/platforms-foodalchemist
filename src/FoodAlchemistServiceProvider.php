@@ -489,6 +489,9 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\RecipeRegenerationReorderTool::class,
                     \Platform\FoodAlchemist\Tools\RecipeCustomerNamesPostTool::class,
                     \Platform\FoodAlchemist\Tools\RecipeCustomerNamesDeleteTool::class,
+                    // D3d: KI-Rollenverteilung (Vorschlag/accept) + kulinarische Kohärenz/Teller-Heber.
+                    \Platform\FoodAlchemist\Tools\RecipeRollenPostTool::class,
+                    \Platform\FoodAlchemist\Tools\RecipeCoherencePostTool::class,
                     // #513 Tier 1: Grammaturen-Rechner (Bäckerprozent/Extraprozent/Brining/Bloom)
                     \Platform\FoodAlchemist\Tools\ProportionCalcTool::class,
                     // #513: %→Gramm-Rückschreiben (Batch-Skalierung + Einzel-Zutat-Edit, write)
