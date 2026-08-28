@@ -7,6 +7,8 @@ order: 9
 
 In den Einstellungen legst du fest, nach welchen Regeln das Modul ordnet und rechnet. Drei Dinge wohnen hier:
 
+> **Bereiche-Navigation:** Die Liste links ist entlang der Arbeits-Kaskade sortiert — erst Stammdaten & Vokabulare, dann Einkauf/Kalkulation/Preise, dann KI & Kreativ-Steuerung, dann Wissen, Produktion und zuletzt Ausgabe & Betrieb. Bewusst **ohne** feste Gruppen (mehrere Bereiche gehören funktional in zwei Töpfe zugleich); ein **Filter** oben blendet die Liste live auf den gesuchten Bereich ein (matcht Name **und** Kurzbeschreibung).
+
 ---
 
 ## 🗂️ Taxonomien
