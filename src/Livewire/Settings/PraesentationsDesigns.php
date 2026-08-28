@@ -29,6 +29,9 @@ class PraesentationsDesigns extends Component
 
     public string $baseSlug = 'editorial';
 
+    /** Stufe 2: sandboxed Custom-CSS des Designs (CSS-only). */
+    public ?string $customCss = null;
+
     public ?int $selectedBlockIndex = null;
 
     public ?int $previewFoodbookId = null;
@@ -74,6 +77,7 @@ class PraesentationsDesigns extends Component
         $this->baseSlug = $b['base_slug'];
         $this->layout = app(PresentationDesignService::class)->normalizeLayout($b['layout']);
         $this->tokens = $b['tokens'];
+        $this->customCss = null;
         $this->selectedBlockIndex = null;
         $this->resetFeedback();
     }
@@ -90,6 +94,7 @@ class PraesentationsDesigns extends Component
         $this->baseSlug = (string) ($design->base_slug ?: 'editorial');
         $this->layout = app(PresentationDesignService::class)->normalizeLayout($design->layout_json ?? []);
         $this->tokens = is_array($design->tokens_json) ? $design->tokens_json : [];
+        $this->customCss = $design->custom_css;
         $this->selectedBlockIndex = null;
         $this->resetFeedback();
     }
@@ -110,7 +115,7 @@ class PraesentationsDesigns extends Component
     {
         $this->resetFeedback();
         $team = $this->team();
-        $data = ['name' => $this->name, 'base_slug' => $this->baseSlug, 'layout_json' => $this->layout, 'tokens_json' => $this->tokens];
+        $data = ['name' => $this->name, 'base_slug' => $this->baseSlug, 'layout_json' => $this->layout, 'tokens_json' => $this->tokens, 'custom_css' => $this->customCss];
         try {
             $design = $this->selectedId
                 ? app(PresentationDesignService::class)->update($team, $this->selectedId, $data)
@@ -273,7 +278,7 @@ class PraesentationsDesigns extends Component
             return null;
         }
         try {
-            $snap = app(PresentationService::class)->designPreview($team, $this->previewFoodbookId, $this->layout, $this->tokens);
+            $snap = app(PresentationService::class)->designPreview($team, $this->previewFoodbookId, $this->layout, $this->tokens, $this->customCss);
 
             return view('foodalchemist::presentation.show', ['snapshot' => $snap])->render();
         } catch (\Throwable) {

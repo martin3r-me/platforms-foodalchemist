@@ -66,6 +66,26 @@ it('Design-Custom-CSS wird eingefroren + im Public-Render angewandt, ohne Script
         ->assertDontSee('<script>alert(9)', false);
 });
 
+it('Struktur-Builder speichert custom_css + Live-Vorschau wendet es an', function () {
+    $team = $this->rootTeam;
+    $fb = ($this->baueFb)($team);
+
+    $c = Livewire\Livewire::test(\Platform\FoodAlchemist\Livewire\Settings\PraesentationsDesigns::class)
+        ->set('name', 'Builder-CSS')
+        ->set('baseSlug', 'editorial')
+        ->set('customCss', '.pt-hero-title{ letter-spacing:.09em }')
+        ->set('previewFoodbookId', $fb->id)
+        ->call('speichern');
+
+    $id = $c->get('selectedId');
+    $design = $this->designs->find($team, $id);
+    expect($design->custom_css)->toContain('letter-spacing:.09em');
+
+    // Live-Vorschau (designPreview) trägt das CSS.
+    $snap = $this->pres->designPreview($team, $fb->id, $design->layout_json, $design->tokens_json, $design->custom_css);
+    expect($snap['resolved_design']['custom_css'])->toContain('letter-spacing:.09em');
+});
+
 it('CSS-Edit nach Freigabe ändert den Public-Link nicht (Snapshot stabil)', function () {
     $team = $this->rootTeam;
     $design = $this->designs->create($team, ['name' => 'L', 'base_slug' => 'editorial', 'custom_css' => '.x{color:#111}']);
