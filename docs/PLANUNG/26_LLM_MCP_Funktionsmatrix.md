@@ -22,7 +22,7 @@ Capability. Sie beantwortet:
 | Capability | Anzahl | Aktuelle Aussage |
 |---|---:|---|
 | Prompt-Keys in `config/foodalchemist.php` | 64 | Registry vorhanden; 11 Keys ohne direkte statische Referenz in `src/` (die 5 seit 01.08. ergänzten Keys sind alle direkt referenziert) |
-| MCP-Toolklassen mit `foodalchemist.*`-Name | 220 | Provider registriert 220 (203 Bestand + 17 MCP-Steuerbarkeit D1/Phase 0, Stand 2026-08-28); §7-Register wird nachgezogen (Alt-Liste = 169) |
+| MCP-Toolklassen mit `foodalchemist.*`-Name | 232 | Provider registriert 232 (203 Bestand + 17 D1/Phase 0 + 12 D2 Basisrezepte, Stand 2026-08-28); §7-Register wird nachgezogen (Alt-Liste = 169) |
 | Embedding-Pools mit Observern | 6 | GP, Rezept, Lieferant, Konzept, Foodbook, Lab Note |
 | Wissens-/Retrieval-Schichten | 2 | deterministisch plus optional semantisch |
 | dokumentierte vollständige MCP-Tenant-Abnahme | 0 | einzelne Tests vorhanden, keine 157-Tool-Matrix |
@@ -424,6 +424,20 @@ foodalchemist.component_equivalents.DELETE
 foodalchemist.platzhalter.POST
 foodalchemist.platzhalter.PUT
 foodalchemist.platzhalter.DELETE
+
+# ── MCP-Steuerbarkeit D2 (Basisrezepte) 2026-08 ──
+foodalchemist.recipes.DELETE
+foodalchemist.recipes.STATUS
+foodalchemist.recipes.DUPLICATE
+foodalchemist.recipes.TEMPLATE_TOGGLE
+foodalchemist.recipes.RECOMPUTE
+foodalchemist.recipes.INSTANTIATE
+foodalchemist.recipe_eignung.PUT
+foodalchemist.recipe_anchors.PUT
+foodalchemist.recipe_pairings.PUT
+foodalchemist.recipe_sensorik.POST
+foodalchemist.recipe_feedback.DELETE
+foodalchemist.recipe_feedback.DEVELOP
 ```
 
 ## 8. MCP-Abnahmematrix

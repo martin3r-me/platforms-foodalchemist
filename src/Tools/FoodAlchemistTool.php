@@ -234,6 +234,18 @@ abstract class FoodAlchemistTool
         return $out;
     }
 
+    /** Pairing-Anker (foodalchemist_vocab_pairing_anchors) sichtbar fürs Team (global ∪ Ancestry, aktiv). */
+    protected function pairingAnkerSichtbar(Team $team, int $ankerId): bool
+    {
+        if ($ankerId <= 0) {
+            return false;
+        }
+
+        return DB::table('foodalchemist_vocab_pairing_anchors')->where('id', $ankerId)->whereNull('deleted_at')
+            ->where(fn ($q) => $q->whereNull('team_id')->orWhereIn('team_id', TeamScope::ancestryIds($team)))
+            ->exists();
+    }
+
     /** Phase A: Draft-Quarantäne-Guard — approved/review/archived sind für den MCP-Pfad locked. */
     protected function kiEditGesperrt(\Platform\FoodAlchemist\Models\FoodAlchemistRecipe $recipe): ?string
     {

@@ -451,6 +451,23 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\PlatzhalterPutTool::class,
                     \Platform\FoodAlchemist\Tools\PlatzhalterDeleteTool::class,
                     \Platform\FoodAlchemist\Tools\GpsReplaceTool::class,
+                    // D2a: Basisrezept-Lifecycle (base-scoped is_sales_recipe=false; delete confirm;
+                    // status single/bulk; duplicate visible→owned Kopie; template; recompute).
+                    \Platform\FoodAlchemist\Tools\RecipesDeleteTool::class,
+                    \Platform\FoodAlchemist\Tools\RecipesStatusTool::class,
+                    \Platform\FoodAlchemist\Tools\RecipesDuplicateTool::class,
+                    \Platform\FoodAlchemist\Tools\RecipesTemplateToggleTool::class,
+                    \Platform\FoodAlchemist\Tools\RecipesRecomputeTool::class,
+                    // D2b: Rezept-Assoziationen (Eignung owner; Anker/Pairing team-scoped auf sichtbares
+                    // Rezept), Sensorik (KI, owner), Feedback löschen/weiterentwickeln.
+                    \Platform\FoodAlchemist\Tools\RecipeEignungPutTool::class,
+                    \Platform\FoodAlchemist\Tools\RecipeAnchorsPutTool::class,
+                    \Platform\FoodAlchemist\Tools\RecipePairingsPutTool::class,
+                    \Platform\FoodAlchemist\Tools\RecipeSensorikPostTool::class,
+                    \Platform\FoodAlchemist\Tools\RecipeFeedbackDeleteTool::class,
+                    \Platform\FoodAlchemist\Tools\RecipeFeedbackDevelopTool::class,
+                    // D2c: Basisrezept aus Vorlage instanziieren (Platzhalter-Slot-Bindung).
+                    \Platform\FoodAlchemist\Tools\RecipesInstantiateTool::class,
                     // #513 Tier 1: Grammaturen-Rechner (Bäckerprozent/Extraprozent/Brining/Bloom)
                     \Platform\FoodAlchemist\Tools\ProportionCalcTool::class,
                     // #513: %→Gramm-Rückschreiben (Batch-Skalierung + Einzel-Zutat-Edit, write)
