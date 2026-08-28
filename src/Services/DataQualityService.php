@@ -224,10 +224,18 @@ class DataQualityService
         $gemappt = DB::table('foodalchemist_supplier_item_structures')->whereNotNull('gp_id')->count();
         $needsReview = DB::table('foodalchemist_supplier_item_structures')->where('needs_review', true)->count();
 
+        // Schicht 3 · Slice 4c-2: LAs mit offenem Konformitäts-Hinweis (Critic gegen das LA-Regelwerk).
+        $konfLa = DB::table('foodalchemist_conformance_findings')
+            ->where('team_id', $team->id)->where('artifact_type', 'la')
+            ->where('status', 'offen')->whereNull('deleted_at')
+            ->distinct()->count('artifact_id');
+
         return [
             $this->info('la_strukturiert', 'Strukturierte LAs (Arbeitsmenge)', $strukturiert),
             $this->info('la_gemappt', 'davon GP-gemappt', $gemappt),
             $this->gap('la_needs_review', 'LAs in Review-Queue', $needsReview),
+            $this->gap('la_konformitaet', 'LAs mit offenem Konformitäts-Hinweis (Regelwerk)', $konfLa, SignalTyp::KonformitaetLa, 'dq-la-konformitaet',
+                'Lieferantenartikel, deren gespiegelte Necta-Felder gegen das LA-Regelwerk verstoßen (offene §-Hinweise).'),
         ];
     }
 
@@ -264,6 +272,12 @@ class DataQualityService
         $tentativeGenutzt = FoodAlchemistGp::visibleToTeam($team)
             ->where('status', 'tentative')->whereExists($this->gpGenutzt())->count();
 
+        // Schicht 3 · Slice 4c-2: GPs mit offenem Konformitäts-Hinweis (Critic gegen das GP-Regelwerk).
+        $konfGp = DB::table('foodalchemist_conformance_findings')
+            ->where('team_id', $team->id)->where('artifact_type', 'gp')
+            ->where('status', 'offen')->whereNull('deleted_at')
+            ->distinct()->count('artifact_id');
+
         return [
             $this->info('gp_approved', 'GPs approved', $approved),
             $this->info('gp_tentative', 'GPs tentative (Review-Queue)', $tentative),
@@ -286,6 +300,8 @@ class DataQualityService
                 'Genutzte GPs ohne Anker-Mapping sind für den Pairing-Graph unsichtbar.'),
             $this->gap('gp_tentative_genutzt', 'tentative GPs in Rezepten genutzt', $tentativeGenutzt, SignalTyp::DatenqualitaetGpLa, 'dq-gp-tentative-genutzt',
                 'Tentative (unkuratierte) GPs sollten nicht in Rezepten hängen — approven oder ersetzen.'),
+            $this->gap('gp_konformitaet', 'GPs mit offenem Konformitäts-Hinweis (Regelwerk)', $konfGp, SignalTyp::KonformitaetGp, 'dq-gp-konformitaet',
+                'Grundprodukte, deren Felder gegen das GP-Regelwerk verstoßen (offene §-Hinweise aus dem Konformitäts-Critic).'),
         ];
     }
 

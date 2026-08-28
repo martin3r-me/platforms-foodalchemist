@@ -95,6 +95,11 @@ enum SignalTyp: string
     // erzeugt. Kein Datenmangel, sondern eine proaktive Anregung — Klasse „Info", landet in
     // derselben Inbox, damit der Vorschlag den User erreicht, auch wenn er nicht im Modul ist.
     case TrendKonzeptVorschlag = 'trend_konzept_vorschlag';
+    // Schicht 3 · Slice 4c-2: Konformitäts-Critic (§-genau gegen die Regelwerke). GP/LA-Konformität
+    // als System-Signal (aus foodalchemist_conformance_findings, status=offen). Rezept/VK-Konformität
+    // hat KEINEN eigenen Typ — sie zeigt in der Leitstelle und überlappt mit den rezept_*-Signalen.
+    case KonformitaetGp = 'konformitaet_gp';
+    case KonformitaetLa = 'konformitaet_la';
 
     public function label(): string
     {
@@ -139,6 +144,8 @@ enum SignalTyp: string
             self::FoodbookKapitelOhneText => 'Foodbook-Kapitel ohne Hinführung',
             self::QualitaetDrift => 'Qualität verschlechtert sich',
             self::TrendKonzeptVorschlag => 'Trend-Konzeptvorschläge',
+            self::KonformitaetGp => 'GP-Konformität (Regelwerk-Verstoß)',
+            self::KonformitaetLa => 'LA-Konformität (Regelwerk-Verstoß)',
         };
     }
 
@@ -186,6 +193,8 @@ enum SignalTyp: string
             self::FoodbookKapitelOhneText => 'heroicon-o-chat-bubble-left-ellipsis',
             self::QualitaetDrift => 'heroicon-o-arrow-trending-down',
             self::TrendKonzeptVorschlag => 'heroicon-o-sparkles',
+            self::KonformitaetGp => 'heroicon-o-clipboard-document-check',
+            self::KonformitaetLa => 'heroicon-o-clipboard-document-list',
         };
     }
 

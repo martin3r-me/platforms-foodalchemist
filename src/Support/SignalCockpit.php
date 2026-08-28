@@ -180,6 +180,11 @@ final class SignalCockpit
             . 'die Objekt-Liste öffnet das Rezept direkt mit den Befunden.',
         'rezept_gericht_vs_komponente' => 'Am Rezept entscheiden, ob es ein Gericht oder eine Komponente ist. Die '
             . 'Umstellung kippt Taxonomie und Verkaufs-Facetten mit — deshalb einzeln und von Hand.',
+        // Schicht 3 · Slice 4c-2: Konformitäts-Critic am GP. Aktionierbar (GP-Feld korrigieren),
+        // aber kein Auto-Fix — der §-Verstoß (Name §6, Pflichtangabe §8, Zustand §9) wird am GP entschieden.
+        'konformitaet_gp' => 'Das gemeldete Grundprodukt öffnen und das beanstandete Feld gemäß §-Hinweis '
+            . 'korrigieren (Name §6, Pflichtangabe §8, Zustand §9). Beim nächsten Konformitäts-Lauf schließt '
+            . 'sich das Signal.',
         // Tranche C — der Concepter ist der Ort, an dem ein Konzept überhaupt entsteht.
         'konzept_slot_luecke' => 'Den unbesetzten Pflicht-Slot im Concepter belegen — oder das Planungs-Gerüst '
             . 'anpassen, wenn der Slot so nicht mehr gemeint ist.',
@@ -225,6 +230,12 @@ final class SignalCockpit
             . 'weniger), als die Rezepturen für den verkauften Absatz hergeben. Ursache ist Verschnitt, Verderb, '
             . 'Überproduktion, Lageraufbau oder eine unrealistische Rezeptmenge — das klärt die Küche am Fall. '
             . 'Ohne Inventur ist der Wert zudem eine Perioden-Rechnung; über lange Zeiträume ist er belastbarer.',
+        // Schicht 3 · Slice 4c-2: Konformität am LA. Bewusst knopflos — der LA ist Necta-gespiegelt und
+        // der Sync ist EINBAHN (§9). Die Korrektur passiert beim Lieferanten/Import, im System ist nichts
+        // zu ändern; der Hinweis informiert GP-Naming und das LA↔GP-Mapping.
+        'konformitaet_la' => 'Der Lieferantenartikel ist Necta-gespiegelt (Sync EINBAHN, §9) — eine Korrektur '
+            . 'passiert beim Lieferanten bzw. im Katalog-Import, im System ist nichts zu ändern. Der Hinweis '
+            . 'informiert GP-Naming und das LA↔GP-Mapping.',
     ];
 
     private const PLAN_NAVIGATE_LABEL = 'Weg zum Fix';
