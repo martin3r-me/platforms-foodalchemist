@@ -69,6 +69,11 @@ class GpModal extends Component
     /** Erfolgs-Hinweis (z.B. nach GP-Tausch) — transient, wie $fehler. */
     public ?string $hinweis = null;
 
+    /** #9 (2026-08-28): Naturaleinheit-Formen — Eingabe für „Form hinzufügen". */
+    public string $formNeuSlug = 'stk';
+
+    public string $formNeuGramm = '';
+
     /** Namensvorschlag aus der Lead-LA (Override-First: erst Vorschlag, dann Übernehmen). */
     public ?string $nameVorschlag = null;
 
@@ -220,6 +225,67 @@ class GpModal extends Component
         }
         $this->tauschSuche = '';
         $this->hinweis = "{$ergebnis['zeilen']} Zeile(n) in {$ergebnis['rezepte']} Rezept(en) auf „{$ziel->name}“ umgehängt — Rezepte neu berechnet.";
+        $this->dispatch('gp-gespeichert');
+    }
+
+    // ── #9 (2026-08-28): Naturaleinheit-Formen (Gramm je Form) ─────────────────
+
+    /** Form aus den Eingabefeldern setzen/aktualisieren. */
+    public function formSetzen(\Platform\FoodAlchemist\Services\GpFormService $forms): void
+    {
+        $this->fehler = null;
+        $this->hinweis = null;
+        if ($this->gpId === null) {
+            return;
+        }
+        $gramm = (float) str_replace(',', '.', trim($this->formNeuGramm));
+        try {
+            $forms->setForm($this->team(), $this->gpId, $this->formNeuSlug, $gramm, 'manual');
+        } catch (\RuntimeException $e) {
+            $this->fehler = $e->getMessage();
+
+            return;
+        }
+        $this->formNeuGramm = '';
+        $this->dispatch('gp-gespeichert');
+    }
+
+    public function formEntfernen(\Platform\FoodAlchemist\Services\GpFormService $forms, string $slug): void
+    {
+        $this->fehler = null;
+        if ($this->gpId === null) {
+            return;
+        }
+        try {
+            $forms->removeForm($this->team(), $this->gpId, $slug);
+        } catch (\RuntimeException $e) {
+            $this->fehler = $e->getMessage();
+
+            return;
+        }
+        $this->dispatch('gp-gespeichert');
+    }
+
+    /** ✨ KI schätzt die anwendbaren Formen + Gramm (manuelle bleiben, Override-First). */
+    public function formenKiSchaetzen(\Platform\FoodAlchemist\Services\GpFormService $forms): void
+    {
+        $this->fehler = null;
+        $this->hinweis = null;
+        if ($this->gpId === null) {
+            return;
+        }
+        try {
+            $n = $forms->estimateKi($this->team(), $this->gpId);
+        } catch (\Platform\FoodAlchemist\Exceptions\KiNichtVerfuegbarException) {
+            $this->fehler = 'KI derzeit nicht verfügbar.';
+
+            return;
+        } catch (\Throwable $e) {
+            $this->fehler = $e->getMessage();
+
+            return;
+        }
+        $this->hinweis = $n > 0 ? "{$n} Form(en) per KI geschätzt." : 'Keine zusätzlichen Formen ableitbar (oder alles manuell gepflegt).';
         $this->dispatch('gp-gespeichert');
     }
 
@@ -574,9 +640,17 @@ class GpModal extends Component
                     ->whereNotIn('status', ['merged', 'rejected'])->where('id', '!=', $gp->id)->where('is_platzhalter', false)
                     ->orderBy('name')->limit(8)->get(['id', 'name', 'status'])
                 : collect(),
+            // #9: Naturaleinheit-Formen (Gramm je Form) + wählbare Form-Slugs für „Form hinzufügen".
+            'formen' => $gp !== null ? app(\Platform\FoodAlchemist\Services\GpFormService::class)->list($gp->id) : collect(),
+            'formSlugs' => \Platform\FoodAlchemist\Services\GpFormService::FORM_SLUGS,
             'sensorik' => $this->gpId !== null ? app(\Platform\FoodAlchemist\Services\SensorikService::class)->fuerGp($this->gpId) : null,
             'pairing' => $this->gpId !== null ? app(\Platform\FoodAlchemist\Services\PairingService::class)->panelGp($this->gpId) : null,
         ]);
+    }
+
+    private function team(): ?\Platform\Core\Models\Team
+    {
+        return Auth::user()?->currentTeamRelation;
     }
 
     private function gp(): ?FoodAlchemistGp

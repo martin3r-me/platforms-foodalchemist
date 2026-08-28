@@ -331,6 +331,41 @@
                 <x-foodalchemist::modal-section title="Einheit & Nährwerte">
                     <livewire:foodalchemist.gps.detail-panel :gp-id="$gpId" :embedded="true" section="naehrwerte" :key="'gpd-naehr-'.$gpId" />
                 </x-foodalchemist::modal-section>
+
+                {{-- #9 (2026-08-28): Naturaleinheit-Formen (Gramm je Form) — steuert Rezept-Einheiten-Dropdown + EK-Umrechnung. --}}
+                <x-foodalchemist::modal-section title="Naturaleinheit & Formen">
+                    <p class="{{ $label }} mb-2 normal-case">Gewicht je Form (Stück/Scheibe/Würfel …) — legt fest, welche Einheiten im Rezept-Dropdown erscheinen, und erdet die EK-Umrechnung. „stk" = Stück-Gewicht.</p>
+                    @if($hinweis)<div class="mb-2 rounded-lg bg-emerald-500/10 border border-emerald-500/30 px-2.5 py-1.5 text-[11px] text-emerald-700" data-gp-formen-hinweis>{{ $hinweis }}</div>@endif
+                    <div class="space-y-1 mb-2">
+                        @forelse($formen as $f)
+                            <div class="flex items-center gap-2 text-sm" wire:key="gpform-{{ $f->form_slug }}">
+                                <span class="w-24 font-medium">{{ $f->form_slug }}</span>
+                                <span class="tabular-nums">{{ number_format((float) $f->gramm, 0, ',', '.') }} g</span>
+                                <span class="{{ $pill }} {{ $variantPill['secondary'] }}">{{ $f->source }}</span>
+                                <span class="flex-1"></span>
+                                <button type="button" wire:click="formEntfernen('{{ $f->form_slug }}')" class="{{ $btnGhostXs }} text-red-600" data-gp-form-remove>✕</button>
+                            </div>
+                        @empty
+                            <p class="text-[11px] text-gray-400" data-gp-formen-leer>Noch keine Formen — per KI schätzen oder unten hinzufügen.</p>
+                        @endforelse
+                    </div>
+                    <div class="flex items-end gap-2 flex-wrap">
+                        <div>
+                            <div class="{{ $label }} mb-1">Form</div>
+                            <select wire:model="formNeuSlug" class="{{ $input }} w-28" data-gp-form-slug>
+                                @foreach($formSlugs as $slug)<option value="{{ $slug }}">{{ $slug }}</option>@endforeach
+                            </select>
+                        </div>
+                        <div>
+                            <div class="{{ $label }} mb-1">Gramm</div>
+                            <input type="text" inputmode="decimal" wire:model="formNeuGramm" placeholder="z. B. 150" class="{{ $input }} w-24" data-gp-form-gramm />
+                        </div>
+                        <button type="button" wire:click="formSetzen" class="{{ $btnGhostXs }}" data-gp-form-add>+ Form</button>
+                        <span class="flex-1"></span>
+                        <button type="button" wire:click="formenKiSchaetzen" class="{{ $btnAi }}" data-gp-formen-ki>✨ KI schätzen</button>
+                    </div>
+                    @error('formNeuGramm')<div class="mt-1 text-[11px] text-red-500">{{ $message }}</div>@enderror
+                </x-foodalchemist::modal-section>
             </div>{{-- /Tab EIGENSCHAFTEN --}}
 
             {{-- ── Tab: ALLERGENE (eingebettet, GL-01) — Panel bringt eigenen Header ── --}}

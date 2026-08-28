@@ -1,5 +1,7 @@
 <?php
 
+use Livewire\Livewire;
+use Platform\FoodAlchemist\Livewire\Gps\GpModal;
 use Platform\FoodAlchemist\Models\FoodAlchemistGp;
 use Platform\FoodAlchemist\Models\FoodAlchemistGpForm;
 use Platform\FoodAlchemist\Services\Ai\AiGatewayService;
@@ -45,6 +47,22 @@ it('removeForm stk leert auch piece_default_g', function () {
     $this->svc->removeForm($this->rootTeam, $this->gp->id, 'stk');
     expect(FoodAlchemistGpForm::where('gp_id', $this->gp->id)->count())->toBe(0)
         ->and(FoodAlchemistGp::find($this->gp->id)->piece_default_g)->toBeNull();
+});
+
+it('GpModal (Livewire): Form hinzufügen + entfernen', function () {
+    Livewire::test(GpModal::class)
+        ->call('oeffnen', $this->gp->id)
+        ->set('formNeuSlug', 'wuerfel')
+        ->set('formNeuGramm', '5')
+        ->call('formSetzen')
+        ->assertHasNoErrors();
+    expect(FoodAlchemistGpForm::where('gp_id', $this->gp->id)->where('form_slug', 'wuerfel')->exists())->toBeTrue();
+
+    Livewire::test(GpModal::class)
+        ->call('oeffnen', $this->gp->id)
+        ->call('formEntfernen', 'wuerfel')
+        ->assertHasNoErrors();
+    expect(FoodAlchemistGpForm::where('gp_id', $this->gp->id)->where('form_slug', 'wuerfel')->exists())->toBeFalse();
 });
 
 it('estimateKi: nur gültige Formen als ki, manuelle bleiben (Override-First)', function () {
