@@ -29,7 +29,7 @@ it('rendert den Branding/CI-Tab im Cockpit', function () {
     Livewire::test(FoodbooksIndex::class)
         ->call('waehle', $this->fb->id)
         ->assertOk()
-        ->assertSee('Branding/CI')
+        ->assertSee('Branding & Präsentation')
         ->assertSee('Marken-Farbe');
 });
 

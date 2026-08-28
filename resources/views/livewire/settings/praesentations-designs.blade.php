@@ -21,7 +21,7 @@
                             </button>
                             <button type="button" wire:click="duplizieren({{ $d['id'] }})" title="Duplizieren" class="text-gray-400 hover:text-gray-700 px-1">⧉</button>
                             @if($d['owned'])
-                                <button type="button" wire:click="loeschen({{ $d['id'] }})" wire:confirm="Design {{ $d['name'] }} löschen?" title="Löschen" class="text-gray-400 hover:text-red-600 px-1">🗑</button>
+                                <button type="button" wire:click="loeschen({{ $d['id'] }})" wire:confirm="Design {{ $d['name'] }} löschen?" title="Löschen" class="text-gray-400 hover:text-red-600 px-1 text-[11px]">Löschen</button>
                             @endif
                         </div>
                     @empty
@@ -101,9 +101,9 @@
                             <button type="button" wire:click="blockWaehlen({{ $i }})" class="flex-1 text-left" data-fa-block="{{ $b['block_type'] }}">
                                 {{ $blockLabels[$b['block_type']] ?? $b['block_type'] }}
                             </button>
-                            <button type="button" wire:click="blockVerschieben({{ $i }}, -1)" title="hoch" class="text-gray-400 hover:text-gray-700 px-1" @disabled($i === 0)>↑</button>
-                            <button type="button" wire:click="blockVerschieben({{ $i }}, 1)" title="runter" class="text-gray-400 hover:text-gray-700 px-1" @disabled($i === count($layout) - 1)>↓</button>
-                            <button type="button" wire:click="blockEntfernen({{ $i }})" title="entfernen" class="text-gray-400 hover:text-red-600 px-1">✕</button>
+                            <button type="button" wire:click="blockVerschieben({{ $i }}, -1)" title="hoch" class="text-gray-400 hover:text-gray-700 px-1" @disabled($i === 0)>▲</button>
+                            <button type="button" wire:click="blockVerschieben({{ $i }}, 1)" title="runter" class="text-gray-400 hover:text-gray-700 px-1" @disabled($i === count($layout) - 1)>▼</button>
+                            <button type="button" wire:click="blockEntfernen({{ $i }})" title="entfernen" class="text-gray-400 hover:text-red-600 px-1">×</button>
                         </div>
                     @empty
                         <p class="text-xs text-gray-400">Noch keine Blöcke — links hinzufügen.</p>
