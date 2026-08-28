@@ -62,18 +62,23 @@ class Editor extends Component
         }
     }
 
-    // ── Spec 43 (Bild-Epic): kleine Galerie neben dem Titelbild ──
-    public $conceptGalleryUpload = null;
+    // ── Spec 43 (Bild-Epic): kleine Galerie neben dem Titelbild (Mehrfach-Upload) ──
+    /** @var array<int, \Illuminate\Http\UploadedFile> */
+    public $conceptGalleryUpload = [];
 
     public function updatedConceptGalleryUpload(): void
     {
         $this->conceptImageFehler = null;
-        if ($this->id === null || $this->conceptGalleryUpload === null) {
+        $dateien = is_array($this->conceptGalleryUpload) ? $this->conceptGalleryUpload : [$this->conceptGalleryUpload];
+        $dateien = array_filter($dateien);
+        if ($this->id === null || $dateien === []) {
             return;
         }
-        $this->validate(['conceptGalleryUpload' => 'image|max:8192'], [], ['conceptGalleryUpload' => 'Bild']);
+        $this->validate(['conceptGalleryUpload.*' => 'image|max:8192'], [], ['conceptGalleryUpload.*' => 'Bild']);
         try {
-            app(ConceptService::class)->addGalleryImage($this->team(), $this->id, $this->conceptGalleryUpload);
+            foreach ($dateien as $datei) {
+                app(ConceptService::class)->addGalleryImage($this->team(), $this->id, $datei);
+            }
         } catch (\RuntimeException $e) {
             $this->conceptImageFehler = $e->getMessage();
         }

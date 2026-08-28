@@ -65,14 +65,17 @@ it('addGalleryImage auf fremdes Concept wirft (isOwnedBy)', function () {
         ->toThrow(RuntimeException::class);
 });
 
-it('Conceptor-Editor: Galerie-Upload verdrahtet addGalleryImage', function () {
+it('Conceptor-Editor: Galerie-Upload (Mehrfach) verdrahtet addGalleryImage', function () {
     $concept = $this->makeConcept($this->rootTeam, 'Menü', ['kind' => 'concept']);
 
     Livewire::test(Editor::class)
         ->set('id', $concept->id)
-        ->set('conceptGalleryUpload', UploadedFile::fake()->image('extra.jpg', 400, 300));
+        ->set('conceptGalleryUpload', [
+            UploadedFile::fake()->image('extra1.jpg', 400, 300),
+            UploadedFile::fake()->image('extra2.jpg', 400, 300),
+        ]);
 
-    expect($concept->images()->count())->toBe(1);
+    expect($concept->images()->count())->toBe(2);
 });
 
 it('FoodbookService::setKapitelImage/clearKapitelImage setzt + löscht das Kapitel-Bild', function () {
