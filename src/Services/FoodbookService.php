@@ -40,7 +40,10 @@ class FoodbookService
 
     public function paginateBrowser(array $filters, Team $team, int $perPage = 100): LengthAwarePaginator
     {
+        // Große JSON-Spalten (Snapshots/Settings) NICHT in die sortierte Listen-Query ziehen —
+        // sonst puffert MySQLs filesort die Blobs mit → „Out of sort memory" (Spec 43-Regression).
         return FoodAlchemistFoodbook::visibleToTeam($team)
+            ->select($this->browserSpalten('foodalchemist_foodbooks'))
             ->with('crmCompany')
             ->withCount('chapters')
             ->when(($filters['search'] ?? '') !== '', function ($q) use ($filters) {
@@ -54,6 +57,25 @@ class FoodbookService
             ->when(($filters['phase'] ?? '') !== '', fn ($q) => $q->where('phase', $filters['phase'])) // R4.3
             ->orderByDesc('jahr')->orderBy('label')
             ->paginate($perPage);
+    }
+
+    /**
+     * Spalten für sortierte Listen-Queries OHNE die großen JSON-Blobs (Snapshots/Settings) —
+     * verhindert MySQL-„Out of sort memory" beim filesort. Statisch gecacht je Tabelle.
+     *
+     * @return list<string>
+     */
+    private function browserSpalten(string $table): array
+    {
+        static $cache = [];
+        if (! isset($cache[$table])) {
+            $exclude = ['presentation_snapshot_json', 'presentation_settings_json', 'preview_snapshot_json'];
+            $all = \Illuminate\Support\Facades\Schema::getColumnListing($table);
+            $cols = array_values(array_diff($all, $exclude));
+            $cache[$table] = $cols !== [] ? array_map(fn ($c) => $table . '.' . $c, $cols) : [$table . '.*'];
+        }
+
+        return $cache[$table];
     }
 
     public function detail(Team $team, int $id): ?FoodAlchemistFoodbook

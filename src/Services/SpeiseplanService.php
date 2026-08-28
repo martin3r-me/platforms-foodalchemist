@@ -57,9 +57,24 @@ class SpeiseplanService
     public function paginateBrowser(array $filters, Team $team, int $perPage = 100): LengthAwarePaginator
     {
         return FoodAlchemistSpeiseplan::visibleToTeam($team)
+            ->select($this->browserSpalten('foodalchemist_menu_plans'))
             ->withCount('entries')
             ->when(($filters['search'] ?? '') !== '', fn ($q) => \Platform\FoodAlchemist\Support\Suche::like($q, 'name', $filters['search']))
             ->orderBy('name')->paginate($perPage);
+    }
+
+    /** Listen-Spalten OHNE große JSON-Blobs (Snapshots) → kein MySQL-„Out of sort memory". */
+    private function browserSpalten(string $table): array
+    {
+        static $cache = [];
+        if (! isset($cache[$table])) {
+            $exclude = ['presentation_snapshot_json', 'presentation_settings_json'];
+            $all = \Illuminate\Support\Facades\Schema::getColumnListing($table);
+            $cols = array_values(array_diff($all, $exclude));
+            $cache[$table] = $cols !== [] ? array_map(fn ($c) => $table . '.' . $c, $cols) : [$table . '.*'];
+        }
+
+        return $cache[$table];
     }
 
     public function detail(Team $team, int $id): ?FoodAlchemistSpeiseplan
