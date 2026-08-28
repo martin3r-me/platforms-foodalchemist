@@ -1,11 +1,18 @@
-{{-- Call-to-Action: Text + optionaler Link (nur http/https, extern, nofollow). --}}
-@php $cta = $settings['cta'] ?? []; $link = trim((string) ($cta['link'] ?? '')); $safe = \Illuminate\Support\Str::startsWith($link, ['http://', 'https://']); @endphp
-@if(!empty($cta['text']))
-    <div class="pt-cta">
-        @if($link !== '' && $safe)
-            <a class="pt-cta-btn" href="{{ $link }}" target="_blank" rel="noopener noreferrer nofollow">{{ $cta['text'] }}</a>
-        @else
-            <span class="pt-cta-btn">{{ $cta['text'] }}</span>
-        @endif
+{{-- Call-to-Action (Text + optionaler Link). Link nur bei http(s). --}}
+@php
+    $cta = $settings['cta'] ?? [];
+    $text = trim((string) ($cta['text'] ?? ''));
+    $link = trim((string) ($cta['link'] ?? ''));
+    $linkOk = $link !== '' && \Illuminate\Support\Str::startsWith($link, ['http://', 'https://']);
+@endphp
+@if($text !== '')
+    <div class="pt-measure">
+        <div class="pt-cta">
+            @if($linkOk)
+                <a class="pt-cta-btn" href="{{ $link }}" target="_blank" rel="noopener noreferrer nofollow">{{ $text }}</a>
+            @else
+                <span class="pt-cta-btn">{{ $text }}</span>
+            @endif
+        </div>
     </div>
 @endif
