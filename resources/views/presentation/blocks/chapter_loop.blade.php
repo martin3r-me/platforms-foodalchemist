@@ -8,6 +8,8 @@
         $secId = ! empty($s['anker']) ? $s['anker'] : 'pt-sec-' . $loop->index;
         $bandImgs = array_values(array_filter($s['images'] ?? [], fn ($gi) => ! empty($gi['url'])));
         if ($bandImgs === [] && ! empty($s['image']['url'])) { $bandImgs = [$s['image']]; }
+        // Kapitel-Band-Bilder abschaltbar (volle Kontrolle im Builder) — Default an.
+        if (! ($style['show_chapter_image'] ?? true)) { $bandImgs = []; }
         $cols = min(max((int) ($style['dish_columns'] ?? 1), 1), 2);
         // Split-Kopf: genau ein Bild + Hauptkapitel → Kopf & Bild nebeneinander (asymmetrisch).
         $split = $depth === 0 && count($bandImgs) === 1;

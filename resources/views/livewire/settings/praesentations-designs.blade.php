@@ -137,6 +137,7 @@
                         <label class="flex items-center gap-2 text-sm"><input type="checkbox" wire:model.live="layout.{{ $i }}.style.show_price"> Preise zeigen</label>
                         <label class="flex items-center gap-2 text-sm"><input type="checkbox" wire:model.live="layout.{{ $i }}.style.show_codes"> Allergen-Codes zeigen</label>
                         <label class="flex items-center gap-2 text-sm"><input type="checkbox" wire:model.live="layout.{{ $i }}.style.show_dish_photos"> Gericht-Fotos zeigen</label>
+                        <label class="flex items-center gap-2 text-sm"><input type="checkbox" wire:model.live="layout.{{ $i }}.style.show_chapter_image"> Kapitel-Bilder zeigen</label>
                         <label class="block text-sm">Gericht-Spalten
                             <select wire:model.live="layout.{{ $i }}.style.dish_columns" class="block w-full text-sm border border-gray-300 rounded px-2 py-1">
                                 <option value="1">1 Spalte (Standard)</option>

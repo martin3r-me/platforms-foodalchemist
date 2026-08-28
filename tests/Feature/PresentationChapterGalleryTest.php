@@ -128,6 +128,27 @@ it('Konzept-interne Header (AUMSE/STARTER) rendern fett als pt-subheader', funct
         ->assertSee('AUMSE – Avantgarde Bites', false);
 });
 
+it('Kapitel-Bilder abschaltbar: show_chapter_image=false → kein Band-Bild', function () {
+    $team = $this->rootTeam;
+    [$fb, $kap] = ($this->baue)($team);
+    $kap->images()->create(['team_id' => $team->id, 'path' => 'foodalchemist/chapter/x.jpg', 'sort_order' => 1]);
+
+    // Default (an): Band-Bild da.
+    $an = $this->pres->publish($team, 'foodbook', $fb->id, ['expires_at' => now()->addDays(30)->toDateString()]);
+    $this->get('/p/foodbook/' . $an['token'])->assertOk()->assertSee('foodalchemist/chapter/x.jpg', false);
+
+    // Toggle aus: kein Band-Bild.
+    $design = app(\Platform\FoodAlchemist\Services\PresentationDesignService::class)->create($team, [
+        'name' => 'Ohne Kapitelbild',
+        'layout_json' => [
+            ['block_type' => 'cover', 'style' => []],
+            ['block_type' => 'chapter_loop', 'style' => ['show_chapter_image' => false]],
+        ],
+    ]);
+    $aus = $this->pres->publish($team, 'foodbook', $fb->id, ['design' => 'design:' . $design->id, 'expires_at' => now()->addDays(30)->toDateString()]);
+    $this->get('/p/foodbook/' . $aus['token'])->assertOk()->assertDontSee('foodalchemist/chapter/x.jpg', false);
+});
+
 it('Rondell-Band-Variante rendert das Karussell-Markup', function () {
     [$fb, $kap] = ($this->baue)($this->rootTeam);
     $kap->images()->create(['team_id' => $this->rootTeam->id, 'path' => 'foodalchemist/chapter/a.jpg', 'sort_order' => 1]);
