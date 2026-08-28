@@ -11,6 +11,7 @@ use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Models\FoodAlchemistPaket;
 use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
 use Platform\FoodAlchemist\Models\FoodAlchemistConceptCategory;
+use Platform\FoodAlchemist\Models\FoodAlchemistConceptImage;
 use Platform\FoodAlchemist\Models\FoodAlchemistConceptSektorEignung;
 use Platform\FoodAlchemist\Models\FoodAlchemistConceptSlot;
 use Platform\FoodAlchemist\Models\FoodAlchemistFoodbook;
@@ -247,6 +248,33 @@ class ConceptService
         $concept->update(['image_context_file_id' => null, 'image_path' => null]);
 
         return $concept->refresh();
+    }
+
+    /** Weiteres Galeriebild (neben dem Titelbild) ans Concept hängen. */
+    public function addGalleryImage(Team $team, int $conceptId, UploadedFile $file): FoodAlchemistConceptImage
+    {
+        $concept = FoodAlchemistConcept::visibleToTeam($team)->findOrFail($conceptId);
+        $this->guardOwner($concept, $team);
+        $media = app(FoodAlchemistMediaService::class)->storeImage(
+            $file, $team, 'foodalchemist.concept', $conceptId, "foodalchemist/concept/{$conceptId}/gallery",
+        );
+
+        return FoodAlchemistConceptImage::create([
+            'team_id' => $concept->team_id,
+            'concept_id' => $conceptId,
+            'context_file_id' => $media['context_file_id'],
+            'path' => $media['path'],
+            'sort_order' => (int) $concept->images()->max('sort_order') + 1,
+        ]);
+    }
+
+    public function removeGalleryImage(Team $team, int $imageId): void
+    {
+        $img = FoodAlchemistConceptImage::findOrFail($imageId);
+        $concept = FoodAlchemistConcept::visibleToTeam($team)->findOrFail($img->concept_id);
+        $this->guardOwner($concept, $team);
+        app(FoodAlchemistMediaService::class)->delete($img->context_file_id, (string) $img->path, $team);
+        $img->delete();
     }
 
     // ── Facetten: Mehrfach-Dimensionen (Umbau-Spec Phase 4) ─────────────────

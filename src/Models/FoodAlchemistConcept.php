@@ -118,6 +118,12 @@ class FoodAlchemistConcept extends Model
         return $this->hasMany(FoodAlchemistConceptSlot::class, 'concept_id')->orderBy('position');
     }
 
+    /** Spec 43: zusätzliche Präsentations-Bilder (kleine Galerie neben dem Titelbild image_*). */
+    public function images(): HasMany
+    {
+        return $this->hasMany(FoodAlchemistConceptImage::class, 'concept_id')->orderBy('sort_order')->orderBy('id');
+    }
+
     /** Vorlage, aus der dieses Concept geforkt wurde (Lineage, optional). */
     public function templateSource(): BelongsTo
     {

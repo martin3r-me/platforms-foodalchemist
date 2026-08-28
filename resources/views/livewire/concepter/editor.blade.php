@@ -132,6 +132,24 @@
                     @if($conceptImageFehler)<div class="text-[11px] text-rose-600 mt-1">{{ $conceptImageFehler }}</div>@endif
                     @error('conceptImageUpload')<div class="text-[11px] text-rose-600 mt-1">{{ $message }}</div>@enderror
                     <p class="text-[11px] text-gray-400 mt-1">Wird zur Grundlage fürs Kapitel-Band in der Präsentation (ein Kapitel-Bild überschreibt es).</p>
+
+                    {{-- Kleine Galerie: weitere Bilder neben dem Titelbild (Kapitel-Band zeigt Titel + erstes Galeriebild) --}}
+                    <div class="mt-3" data-concept-gallery>
+                        <label class="{{ $label }}">Weitere Bilder (optional)</label>
+                        <div class="flex items-center gap-3 flex-wrap">
+                            @foreach($conceptGallery as $gi)
+                                <div class="relative">
+                                    <img src="{{ $gi['url'] }}" alt="" class="h-12 w-20 object-cover rounded border border-black/10">
+                                    <button type="button" wire:click="galerieBildEntfernen({{ $gi['id'] }})"
+                                        class="absolute -top-1.5 -right-1.5 h-4 w-4 rounded-full bg-rose-600 text-white text-[10px] leading-none flex items-center justify-center"
+                                        title="Bild entfernen" data-gallery-remove>×</button>
+                                </div>
+                            @endforeach
+                            <input type="file" wire:model="conceptGalleryUpload" accept="image/*" class="text-[11px]" data-concept-gallery-upload>
+                            <div wire:loading wire:target="conceptGalleryUpload" class="text-[11px] text-gray-400">lädt …</div>
+                        </div>
+                        @error('conceptGalleryUpload')<div class="text-[11px] text-rose-600 mt-1">{{ $message }}</div>@enderror
+                    </div>
                 </div>
 
                 {{-- Sektion: Einordnung (Klasse/Niveau + Status/Geschmack bzw. Rolle) --}}

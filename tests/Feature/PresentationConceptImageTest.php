@@ -47,6 +47,34 @@ it('Conceptor-Editor: Upload verdrahtet storeImage', function () {
     expect($concept->refresh()->image_path)->not->toBeNull();
 });
 
+it('ConceptService::addGalleryImage/removeGalleryImage pflegt die Galerie (team-gescopt)', function () {
+    $concept = $this->makeConcept($this->rootTeam, 'Menü', ['kind' => 'concept']);
+
+    $a = $this->concepts->addGalleryImage($this->rootTeam, $concept->id, UploadedFile::fake()->image('g1.jpg', 400, 300));
+    $b = $this->concepts->addGalleryImage($this->rootTeam, $concept->id, UploadedFile::fake()->image('g2.jpg', 400, 300));
+    expect($concept->images()->count())->toBe(2);
+    expect($b->sort_order)->toBeGreaterThan($a->sort_order);
+
+    $this->concepts->removeGalleryImage($this->rootTeam, $a->id);
+    expect($concept->images()->count())->toBe(1);
+});
+
+it('addGalleryImage auf fremdes Concept wirft (isOwnedBy)', function () {
+    $concept = $this->makeConcept($this->rootTeam, 'Menü', ['kind' => 'concept']);
+    expect(fn () => $this->concepts->addGalleryImage($this->childA, $concept->id, UploadedFile::fake()->image('g.jpg')))
+        ->toThrow(RuntimeException::class);
+});
+
+it('Conceptor-Editor: Galerie-Upload verdrahtet addGalleryImage', function () {
+    $concept = $this->makeConcept($this->rootTeam, 'Menü', ['kind' => 'concept']);
+
+    Livewire::test(Editor::class)
+        ->set('id', $concept->id)
+        ->set('conceptGalleryUpload', UploadedFile::fake()->image('extra.jpg', 400, 300));
+
+    expect($concept->images()->count())->toBe(1);
+});
+
 it('FoodbookService::setKapitelImage/clearKapitelImage setzt + löscht das Kapitel-Bild', function () {
     $fb = $this->makeFoodbook($this->rootTeam, 'Katalog', ['personen' => 4]);
     $kap = $this->makeChapter($fb, ['title' => 'Vorspeisen', 'position' => 1]);
