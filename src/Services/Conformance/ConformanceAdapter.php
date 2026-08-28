@@ -21,6 +21,14 @@ interface ConformanceAdapter
     public function artifactType(): string;
 
     /**
+     * Ob dieser Artefakt-Typ eine autonome Selbstheil-Runde beherrscht. true =
+     * {@see self::revise} korrigiert wirklich (Rezept/VK via recipe.ueberarbeiten);
+     * false = kein Freitext-Revise (GP/LA v1) → die Runde wird übersprungen, Verstöße
+     * gehen direkt als Hinweis in die Ablage (kein sinnloser zweiter Prüf-Call).
+     */
+    public function unterstuetztHeilung(): bool;
+
+    /**
      * Der Prüfauftrag für EIN Artefakt: was beschrieben und wogegen geprüft wird.
      *
      * @return array{

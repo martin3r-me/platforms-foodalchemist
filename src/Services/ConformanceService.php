@@ -7,6 +7,8 @@ use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Models\FoodAlchemistConformanceFinding;
 use Platform\FoodAlchemist\Services\Ai\AiGatewayService;
 use Platform\FoodAlchemist\Services\Conformance\ConformanceAdapter;
+use Platform\FoodAlchemist\Services\Conformance\GpConformanceAdapter;
+use Platform\FoodAlchemist\Services\Conformance\LaConformanceAdapter;
 use Platform\FoodAlchemist\Services\Conformance\RecipeConformanceAdapter;
 
 /**
@@ -46,7 +48,10 @@ class ConformanceService
         $vorher = $this->pruefeAdapter($team, $adapter, $id);
         $aktuell = $vorher;
 
-        if ($vorher['befunde'] !== []) {
+        // Selbstheil-Runde nur, wenn der Adapter sie beherrscht (Rezept/VK). GP/LA haben
+        // v1 keinen Freitext-Revise → kein sinnloser zweiter Prüf-Call; Verstöße gehen
+        // direkt als Hinweis in die Ablage.
+        if ($vorher['befunde'] !== [] && $adapter->unterstuetztHeilung()) {
             try {
                 $adapter->revise($team, $id, $this->heilDirektive($vorher['befunde']));
             } catch (\Throwable $e) {
@@ -137,6 +142,8 @@ class ConformanceService
     {
         return match ($typ) {
             'recipe', 'basisrezept', 'vk', 'gericht' => app(RecipeConformanceAdapter::class),
+            'gp', 'grundprodukt' => app(GpConformanceAdapter::class),
+            'la', 'lieferantenartikel' => app(LaConformanceAdapter::class),
             default => throw new \InvalidArgumentException("Kein Conformance-Adapter für Artefakt-Typ «{$typ}»."),
         };
     }

@@ -22,6 +22,11 @@ class RecipeConformanceAdapter implements ConformanceAdapter
         return 'recipe';                                              // Basisrezept UND VK — dieselbe Tabelle
     }
 
+    public function unterstuetztHeilung(): bool
+    {
+        return true;                                                 // Freitext-Revise via recipe.ueberarbeiten
+    }
+
     public function pruefauftrag(Team $team, int $id): array
     {
         $r = app(RecipeService::class)->detailAnySicht($team, $id);

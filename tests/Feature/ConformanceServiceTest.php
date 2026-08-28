@@ -85,6 +85,6 @@ it('Slice 1: ohne aktives Regelwerk-Dossier wirft die Prüfung (keine Blind-Prü
 });
 
 it('Slice 1: unbekannter Artefakt-Typ wirft', function () {
-    expect(fn () => app(ConformanceService::class)->pruefe($this->rootTeam, 'grundprodukt', 1))
+    expect(fn () => app(ConformanceService::class)->pruefe($this->rootTeam, 'foobar-unbekannt', 1))
         ->toThrow(InvalidArgumentException::class);
 });
