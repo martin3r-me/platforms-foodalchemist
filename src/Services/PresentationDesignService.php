@@ -30,6 +30,45 @@ class PresentationDesignService
 
     public const BUILTIN_SLUGS = ['editorial', 'menu', 'kiosk', 'navigator'];
 
+    // ── MCP-Vokabular (damit die MCP-Tools alle setzbaren Keys dokumentieren) ──
+
+    /** Doku für tokens_json (globale Style-Tokens) — in die MCP-Schemas eingespeist. */
+    public static function tokensVocabDoc(): string
+    {
+        return 'Globale Style-Tokens (Objekt). Keys: '
+            . 'palette{primary,accent,bg,surface,text,muted} = Hex-Farben (z.B. accent "#b02530"); '
+            . 'typography{heading:display-serif|serif|sans|mono, body:sans|serif|mono, scale:0.7–2.0}; '
+            . 'spacing:compact|comfortable|roomy; '
+            . 'nav:none|anchor|sidebar (Sprungmenü/Sidebar); '
+            . 'lightbox:bool (Bilder klickbar vergrößern); '
+            . 'band_style:grid|rondell (Kapitel-Bild-Band als Raster oder Karussell); '
+            . 'speiseplan_layout:grid|liste (nur Speiseplan: Wochen-Tabelle oder Tag-Liste); '
+            . 'auto_advance:bool (Kiosk-Autoplay).';
+    }
+
+    /** Doku für layout_json (geordnete Blockliste) — in die MCP-Schemas eingespeist. */
+    public static function layoutVocabDoc(): string
+    {
+        return 'Geordnete Blockliste: [{block_type, style{}}]. block_type ∈ '
+            . 'cover|chapter_loop|dish_list|price_summary|legend|grid|text|heading|image|spacer|cta. '
+            . 'style je Typ: '
+            . 'cover{align, show_cover_image:bool, show_logo:bool, cover_fit:cover|contain, cover_height:klein|mittel|gross, compact:bool}; '
+            . 'chapter_loop/dish_list{show_price:bool, show_codes:bool, show_dish_photos:bool, show_chapter_image:bool, dish_columns:1|2, show_kicker:bool}; '
+            . 'image{context_file_id, path, img_fit:cover|contain|auto, img_height:klein|mittel|gross, img_width:voll|schmal|bleed}; '
+            . 'text/heading{text}; spacer{height}; cta{text, link}; price_summary{mode:pro_person}; legend/grid{}. '
+            . 'Datengebunden & interna-frei — es gibt keinen EK-/Marge-Block.';
+    }
+
+    /** Doku für custom_css (Stufe-2-Leinwand) — in die MCP-Schemas eingespeist. */
+    public static function customCssDoc(): string
+    {
+        return 'JA, freies CSS ist möglich (sandboxed, CSS-only). Wirkt auf die festen Präsentations-Klassen '
+            . '(pt-hero, pt-hero-title, pt-section-title, pt-section-text, pt-block-header, pt-line, pt-line-label, '
+            . 'pt-line-price, pt-legend, pt-cta-btn, pt-footer, pt-grid …) + CSS-Variablen '
+            . '(var(--pt-primary), --pt-accent, --pt-bg, --pt-text, --pt-muted, --pt-heading-font, --pt-body-font). '
+            . 'Verboten/gestrippt: < >, @import, expression(), javascript:, behavior: (kein HTML/JS, keine externen Ressourcen).';
+    }
+
     /**
      * Die 3 Built-in-Starter als reine Layout-Definitionen (Code-Seeds, keine DB-Zeilen).
      *

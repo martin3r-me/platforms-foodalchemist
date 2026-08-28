@@ -22,7 +22,9 @@ class PresentationDesignsPutTool extends FoodAlchemistTool implements ToolContra
 
     public function getDescription(): string
     {
-        return 'Aktualisiert ein eigenes Präsentations-Design. Nur team-eigene Designs; geerbte/globale sind read-only.';
+        return 'Aktualisiert ein eigenes Präsentations-Design (Tokens/Layout/custom_css/output_types). '
+            . 'Nur team-eigene Designs; geerbte/globale sind read-only. Teilfelder: nur mitgeschickte Felder werden geändert. '
+            . 'Freies CSS via custom_css ist möglich (siehe Feld-Beschreibung).';
     }
 
     public function getSchema(): array
@@ -34,9 +36,9 @@ class PresentationDesignsPutTool extends FoodAlchemistTool implements ToolContra
                 'name' => ['type' => 'string'],
                 'base_slug' => ['type' => 'string', 'enum' => ['editorial', 'menu', 'kiosk', 'navigator']],
                 'output_types' => ['type' => 'array', 'items' => ['type' => 'string', 'enum' => ['foodbook', 'speisekarte', 'speiseplan']], 'description' => 'Für welche Ausgabeformen das Design im Picker erscheint (leer = alle).'],
-                'layout_json' => ['type' => 'array', 'items' => ['type' => 'object']],
-                'tokens_json' => ['type' => 'object'],
-                'custom_css' => ['type' => 'string', 'description' => 'Sandboxed CSS-only Layer (leerer String = löschen).'],
+                'layout_json' => ['type' => 'array', 'items' => ['type' => 'object'], 'description' => PresentationDesignService::layoutVocabDoc()],
+                'tokens_json' => ['type' => 'object', 'description' => PresentationDesignService::tokensVocabDoc()],
+                'custom_css' => ['type' => 'string', 'description' => PresentationDesignService::customCssDoc() . ' Leerer String = CSS löschen.'],
             ],
             'required' => ['id'],
         ];
