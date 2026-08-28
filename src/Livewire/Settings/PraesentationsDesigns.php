@@ -4,9 +4,11 @@ namespace Platform\FoodAlchemist\Livewire\Settings;
 
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
+use Livewire\WithFileUploads;
 use Platform\FoodAlchemist\Models\FoodAlchemistFoodbook;
 use Platform\FoodAlchemist\Models\FoodAlchemistSpeisekarte;
 use Platform\FoodAlchemist\Models\FoodAlchemistSpeiseplan;
+use Platform\FoodAlchemist\Services\FoodAlchemistMediaService;
 use Platform\FoodAlchemist\Services\PresentationDesignService;
 use Platform\FoodAlchemist\Services\PresentationService;
 
@@ -19,8 +21,37 @@ use Platform\FoodAlchemist\Services\PresentationService;
  */
 class PraesentationsDesigns extends Component
 {
+    use WithFileUploads;
+
     /** @var list<array{block_type:string, style:array}> */
     public array $layout = [];
+
+    /** Upload-Puffer für das Bild des gewählten Bild-Blocks. */
+    public $blockImageUpload = null;
+
+    public function updatedBlockImageUpload(): void
+    {
+        $i = $this->selectedBlockIndex;
+        if ($i === null || ! isset($this->layout[$i]) || ($this->layout[$i]['block_type'] ?? '') !== 'image' || $this->blockImageUpload === null) {
+            return;
+        }
+        $this->validate(['blockImageUpload' => 'image|max:8192'], [], ['blockImageUpload' => 'Bild']);
+        try {
+            $media = app(PresentationDesignService::class)->storeBlockImage($this->team(), $this->blockImageUpload);
+            $this->layout[$i]['style']['context_file_id'] = $media['context_file_id'];
+            $this->layout[$i]['style']['path'] = $media['path'];
+        } catch (\Throwable $e) {
+            $this->fehler = $e->getMessage();
+        }
+        $this->reset('blockImageUpload');
+    }
+
+    public function blockBildEntfernen(int $i): void
+    {
+        if (isset($this->layout[$i]) && ($this->layout[$i]['block_type'] ?? '') === 'image') {
+            unset($this->layout[$i]['style']['context_file_id'], $this->layout[$i]['style']['path'], $this->layout[$i]['style']['url']);
+        }
+    }
 
     /** @var array<string,mixed> */
     public array $tokens = [];
@@ -328,6 +359,21 @@ class PraesentationsDesigns extends Component
         }
     }
 
+    /** URL des Bildes im aktuell gewählten Bild-Block (für die Thumbnail-Anzeige). */
+    private function blockImageUrl(): ?string
+    {
+        $i = $this->selectedBlockIndex;
+        if ($i === null || ($this->layout[$i]['block_type'] ?? '') !== 'image') {
+            return null;
+        }
+        $st = $this->layout[$i]['style'] ?? [];
+        if (empty($st['context_file_id']) && empty($st['path'])) {
+            return null;
+        }
+
+        return app(FoodAlchemistMediaService::class)->url($st['context_file_id'] ?? null, $st['path'] ?? null);
+    }
+
     public function render()
     {
         return view('foodalchemist::livewire.settings.praesentations-designs', [
@@ -335,6 +381,7 @@ class PraesentationsDesigns extends Component
             'quellenOptionen' => $this->quellenOptionen(),
             'blockTypen' => PresentationDesignService::BLOCK_TYPES,
             'blockLabels' => self::BLOCK_LABELS,
+            'blockImageUrl' => $this->blockImageUrl(),
             'vorschauHtml' => $this->vorschauHtml(),
         ]);
     }

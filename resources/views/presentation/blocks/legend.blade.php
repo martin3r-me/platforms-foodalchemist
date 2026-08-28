@@ -1,7 +1,9 @@
-{{-- LMIV-Legende: nur real vorkommende Allergene/Zusatzstoffe. --}}
+{{-- LMIV-Legende: nur real vorkommende Allergene/Zusatzstoffe. Beim Speiseplan zusätzlich
+     Kostformen + DGE-Ø-Nährwerte (rendert in Tabelle UND Liste, da die Legende in beiden folgt). --}}
 @php $lg = $content['legend'] ?? null; @endphp
-@if($lg && ((count($lg['allergene'] ?? []) > 0) || (count($lg['zusatzstoffe'] ?? []) > 0)))
+@if(($lg && ((count($lg['allergene'] ?? []) > 0) || (count($lg['zusatzstoffe'] ?? []) > 0))) || !empty($content['kostformen']))
     <div class="pt-measure pt-reveal">
+        @include('foodalchemist::presentation.blocks._speiseplan_meta', ['content' => $content])
         <div class="pt-legend">
             @if(count($lg['allergene'] ?? []) > 0)
                 <div><strong>Allergene:</strong>

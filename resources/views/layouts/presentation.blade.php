@@ -83,8 +83,15 @@
 
         /* Cover / Hero */
         .pt-hero { position: relative; min-height: min(88vh, 820px); display: grid; place-items: center; text-align: center; overflow: hidden; }
+        .pt-hero--h-klein { min-height: min(46vh, 420px); }
+        .pt-hero--h-mittel { min-height: min(64vh, 600px); }
+        .pt-hero--h-gross { min-height: min(88vh, 820px); }
         .pt-hero-media { position: absolute; inset: 0; }
         .pt-hero-media img { width: 100%; height: 100%; object-fit: cover; }
+        /* Einpassen: ganzes Bild zeigen (kein Beschnitt), Rest bekommt eine dunkle Bühne. */
+        .pt-hero--fit-contain { background: #14100c; }
+        .pt-hero--fit-contain .pt-hero-media img { object-fit: contain; }
+        .pt-hero--fit-contain .pt-hero-media::after { background: linear-gradient(180deg, rgba(0,0,0,.15), rgba(0,0,0,.35)); }
         .pt-hero-media::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,.28), rgba(0,0,0,.55)); }
         .pt-hero-inner { position: relative; z-index: 1; padding: clamp(28px, 8vw, 80px); max-width: 900px; }
         .pt-hero.has-media, .pt-hero.has-media .pt-hero-title, .pt-hero.has-media .pt-hero-sub, .pt-hero.has-media .pt-kicker { color: #fff; }
@@ -106,7 +113,7 @@
         .pt-depth-2 .pt-section-title { font-size: clamp(1.2rem, 2.8vw, 1.5rem); }
         .pt-section-text { color: var(--pt-muted); font-size: 1.06rem; margin: 14px 0 0; max-width: 60ch; }
         .pt-section-img { width: 100%; border-radius: 6px; margin: var(--pt-gap) 0 0; aspect-ratio: 16/7; object-fit: cover; }
-        .pt-section-gallery { display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--pt-gap); margin: var(--pt-gap) 0 0; }
+        .pt-section-gallery { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: var(--pt-gap); margin: var(--pt-gap) 0 0; }
         .pt-section-img--multi { margin: 0; aspect-ratio: 4/3; }
         .pt-section-aside { margin: 0; }
         .pt-section-aside .pt-section-img { margin: 0; aspect-ratio: 4/3; height: 100%; }

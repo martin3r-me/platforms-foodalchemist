@@ -2,9 +2,11 @@
 
 namespace Platform\FoodAlchemist\Services;
 
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Models\FoodAlchemistPresentationDesign;
+use Platform\FoodAlchemist\Services\FoodAlchemistMediaService;
 
 /**
  * Spec 43 — Präsentations-Designs: wiederverwendbare, blockbasierte Layout-Definitionen
@@ -191,6 +193,21 @@ class PresentationDesignService
         }
 
         return trim($css) !== '' ? $css : null;
+    }
+
+    /**
+     * Bild für einen freien Bild-Block im Struktur-Builder ablegen (design-lokal, team-scoped).
+     * Gibt Identifier zurück, die in der Block-`style` gespeichert werden (URL erst zur Render-Zeit).
+     *
+     * @return array{context_file_id:?int, path:?string}
+     */
+    public function storeBlockImage(Team $team, UploadedFile $file): array
+    {
+        $media = app(FoodAlchemistMediaService::class)->storeImage(
+            $file, $team, 'foodalchemist.presentation_design', 0, 'foodalchemist/presentation_design',
+        );
+
+        return ['context_file_id' => $media['context_file_id'] ?? null, 'path' => $media['path'] ?? null];
     }
 
     /**

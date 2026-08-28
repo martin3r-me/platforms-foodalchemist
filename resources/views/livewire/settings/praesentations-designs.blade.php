@@ -145,9 +145,34 @@
                     @elseif($bt === 'cover')
                         <label class="flex items-center gap-2 text-sm"><input type="checkbox" wire:model.live="layout.{{ $i }}.style.show_cover_image"> Coverbild zeigen</label>
                         <label class="flex items-center gap-2 text-sm"><input type="checkbox" wire:model.live="layout.{{ $i }}.style.show_logo"> Logo zeigen</label>
+                        <label class="block text-sm">Coverbild-Darstellung
+                            <select wire:model.live="layout.{{ $i }}.style.cover_fit" class="block w-full text-sm border border-gray-300 rounded px-2 py-1">
+                                <option value="cover">Füllen (Ausschnitt)</option>
+                                <option value="contain">Ganz zeigen (kein Beschnitt)</option>
+                            </select>
+                        </label>
+                        <label class="block text-sm">Coverbild-Höhe
+                            <select wire:model.live="layout.{{ $i }}.style.cover_height" class="block w-full text-sm border border-gray-300 rounded px-2 py-1">
+                                <option value="klein">klein</option>
+                                <option value="mittel">mittel</option>
+                                <option value="gross">groß</option>
+                            </select>
+                        </label>
                     @elseif(in_array($bt, ['text', 'heading'], true))
                         <label class="block text-[11px] text-gray-500">Text</label>
                         <textarea wire:model.blur="layout.{{ $i }}.style.text" rows="3" class="w-full text-sm border border-gray-300 rounded px-2 py-1"></textarea>
+                    @elseif($bt === 'image')
+                        <label class="block text-[11px] text-gray-500">Bild</label>
+                        <div class="flex items-center gap-3 flex-wrap">
+                            @if($blockImageUrl)
+                                <img src="{{ $blockImageUrl }}" alt="" class="h-12 w-20 object-cover rounded border border-black/10">
+                                <button type="button" wire:click="blockBildEntfernen({{ $i }})" class="text-rose-600 text-[11px] underline">entfernen</button>
+                            @endif
+                            <input type="file" wire:model="blockImageUpload" accept="image/*" class="text-[11px]">
+                            <div wire:loading wire:target="blockImageUpload" class="text-[11px] text-gray-400">lädt …</div>
+                        </div>
+                        @error('blockImageUpload')<div class="text-[11px] text-rose-600 mt-1">{{ $message }}</div>@enderror
+                        <p class="text-[11px] text-gray-400 mt-1">Freie Bildstrecke — unabhängig von Konzept/Kapitel.</p>
                     @elseif($bt === 'spacer')
                         <label class="block text-[11px] text-gray-500">Höhe (px)</label>
                         <input type="number" min="0" wire:model.blur="layout.{{ $i }}.style.height" class="w-24 text-sm border border-gray-300 rounded px-2 py-1">
@@ -200,6 +225,13 @@
                 <label class="flex items-center gap-2 text-sm mt-1">
                     <input type="checkbox" wire:model.live="tokens.lightbox" class="rounded border-gray-300">
                     Bilder klickbar vergrößern (Lightbox)
+                </label>
+                <label class="block text-sm">Speiseplan-Ausgabe
+                    <select wire:model.live="tokens.speiseplan_layout" class="block w-full text-sm border border-gray-300 rounded px-2 py-1">
+                        <option value="grid">Wochen-Tabelle (Standard)</option>
+                        <option value="liste">Liste (Tag für Tag)</option>
+                    </select>
+                    <span class="block text-[11px] text-gray-400 mt-0.5">Nur für Speiseplan-Ausgaben wirksam.</span>
                 </label>
             </div>
 
