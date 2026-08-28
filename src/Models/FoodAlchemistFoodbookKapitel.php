@@ -112,6 +112,12 @@ class FoodAlchemistFoodbookKapitel extends Model
         return $this->hasMany(FoodAlchemistFoodbookBlock::class, 'chapter_id')->orderBy('position');
     }
 
+    /** Spec 43: zusätzliche Präsentations-Bilder (kleine Galerie neben dem Kapitel-Bild image_*). */
+    public function images(): HasMany
+    {
+        return $this->hasMany(FoodAlchemistFoodbookChapterImage::class, 'chapter_id')->orderBy('sort_order')->orderBy('id');
+    }
+
     /** Zielgruppen des Kapitels (Spec 19, M1) — 1–n, überschreiben Foodbook-Default in der Kaskade. */
     public function targetGroups(): BelongsToMany
     {

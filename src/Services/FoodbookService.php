@@ -1225,6 +1225,31 @@ class FoodbookService
         return $k->refresh();
     }
 
+    /** Weiteres Galeriebild (neben dem Kapitel-Bild) ans Foodbook-Kapitel hängen. */
+    public function addKapitelGalleryImage(Team $team, int $kapitelId, UploadedFile $file): \Platform\FoodAlchemist\Models\FoodAlchemistFoodbookChapterImage
+    {
+        $k = $this->ownedKapitel($team, $kapitelId);
+        $media = app(FoodAlchemistMediaService::class)->storeImage(
+            $file, $team, 'foodalchemist.foodbook_chapter', $kapitelId, "foodalchemist/chapter/{$kapitelId}/gallery",
+        );
+
+        return \Platform\FoodAlchemist\Models\FoodAlchemistFoodbookChapterImage::create([
+            'team_id' => $k->team_id,
+            'chapter_id' => $kapitelId,
+            'context_file_id' => $media['context_file_id'],
+            'path' => $media['path'],
+            'sort_order' => (int) $k->images()->max('sort_order') + 1,
+        ]);
+    }
+
+    public function removeKapitelGalleryImage(Team $team, int $imageId): void
+    {
+        $img = \Platform\FoodAlchemist\Models\FoodAlchemistFoodbookChapterImage::findOrFail($imageId);
+        $this->ownedKapitel($team, (int) $img->chapter_id); // Owner-Guard übers Kapitel
+        app(FoodAlchemistMediaService::class)->delete($img->context_file_id, (string) $img->path, $team);
+        $img->delete();
+    }
+
     /**
      * #2: das WORDING aller concept_ref-Blöcke eines Kapitels im KAPITEL-Schreibstil neu betexten
      * und foodbook-LOKAL als Block-Override (payload_json['wording_overrides']) speichern (Snapshot).

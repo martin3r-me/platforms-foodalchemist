@@ -200,41 +200,43 @@ class PresentationService
         $showPrice = (bool) $settings['price_display'];
         $showDecl = (bool) $settings['declaration'];
 
-        // Bild-Epic: Kapitel-Band-Bilder je Kapitel-ID. Primär = Kapitel-Bild › Concept-Titelbild;
-        // dazu die kleine Concept-Galerie (erstes concept_ref-Konzept). $fb->chapters kommt voll
-        // aus dokumentDaten; Galerie separat nachladen.
-        $fb->loadMissing(['chapters.blocks.concept.images']);
+        // Bild-Epic: Kapitel-Band-Bilder je Kapitel-ID. VORRANG: Kapitel-Bild + Kapitel-Galerie;
+        // ist am Kapitel NICHTS hinterlegt → Fallback aufs Concept (Titelbild + Concept-Galerie,
+        // erstes concept_ref-Konzept). $fb->chapters kommt voll aus dokumentDaten; Galerien nachladen.
+        $fb->loadMissing(['chapters.images', 'chapters.blocks.concept.images']);
         $chapImg = [];       // primär (Rückwärtskompat: section.image)
         $chapImages = [];    // Liste (section.images): Primärbild + Galerie, gedeckelt
         foreach ($fb->chapters as $c) {
-            $primary = ($c->image_context_file_id || $c->image_path)
-                ? ['context_file_id' => $c->image_context_file_id, 'path' => $c->image_path]
-                : null;
-            $gallery = [];
-            foreach ($c->blocks as $b) {
-                if ($b->type !== 'concept_ref' || $b->concept === null) {
-                    continue;
+            // 1) Kapitel-eigenes Bildmaterial (Einzel-Bild + Kapitel-Galerie)
+            $liste = [];
+            if ($c->image_context_file_id || $c->image_path) {
+                $liste[] = ['context_file_id' => $c->image_context_file_id, 'path' => $c->image_path];
+            }
+            foreach ($c->images ?? [] as $ci) {
+                if ($ci->context_file_id || $ci->path) {
+                    $liste[] = ['context_file_id' => $ci->context_file_id, 'path' => $ci->path];
                 }
-                if ($primary === null && ($b->concept->image_context_file_id || $b->concept->image_path)) {
-                    $primary = ['context_file_id' => $b->concept->image_context_file_id, 'path' => $b->concept->image_path];
-                }
-                foreach ($b->concept->images ?? [] as $gi) {
-                    if ($gi->context_file_id || $gi->path) {
-                        $gallery[] = ['context_file_id' => $gi->context_file_id, 'path' => $gi->path];
+            }
+            // 2) Fallback: erstes Konzept mit Bildmaterial (Titelbild + Concept-Galerie)
+            if ($liste === []) {
+                foreach ($c->blocks as $b) {
+                    if ($b->type !== 'concept_ref' || $b->concept === null) {
+                        continue;
+                    }
+                    if ($b->concept->image_context_file_id || $b->concept->image_path) {
+                        $liste[] = ['context_file_id' => $b->concept->image_context_file_id, 'path' => $b->concept->image_path];
+                    }
+                    foreach ($b->concept->images ?? [] as $gi) {
+                        if ($gi->context_file_id || $gi->path) {
+                            $liste[] = ['context_file_id' => $gi->context_file_id, 'path' => $gi->path];
+                        }
+                    }
+                    if ($liste !== []) {
+                        break; // erstes Konzept mit Bildmaterial gewinnt
                     }
                 }
-                if ($primary !== null || $gallery !== []) {
-                    break; // erstes Konzept mit Bildmaterial gewinnt
-                }
             }
-            $liste = [];
-            if ($primary !== null) {
-                $liste[] = $primary;
-            }
-            foreach ($gallery as $g) {
-                $liste[] = $g;
-            }
-            $chapImg[(int) $c->id] = $primary;
+            $chapImg[(int) $c->id] = $liste[0] ?? null;
             $chapImages[(int) $c->id] = array_slice($liste, 0, 6);   // Band zeigt max. 6
         }
 

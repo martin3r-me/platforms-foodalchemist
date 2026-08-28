@@ -191,6 +191,33 @@ class Index extends Component
         }
     }
 
+    // ── Spec 43 (Bild-Epic): Kapitel-Galerie (Mehrfach-Upload) ──
+    /** @var array<int, \Illuminate\Http\UploadedFile> */
+    public $kapitelGalleryUpload = [];
+
+    public function updatedKapitelGalleryUpload(): void
+    {
+        $this->kapitelImageFehler = null;
+        $dateien = array_filter(is_array($this->kapitelGalleryUpload) ? $this->kapitelGalleryUpload : [$this->kapitelGalleryUpload]);
+        if ($this->selectedKapitelId === null || $dateien === []) {
+            return;
+        }
+        $this->validate(['kapitelGalleryUpload.*' => 'image|max:8192'], [], ['kapitelGalleryUpload.*' => 'Bild']);
+        try {
+            foreach ($dateien as $datei) {
+                app(FoodbookService::class)->addKapitelGalleryImage($this->team(), $this->selectedKapitelId, $datei);
+            }
+        } catch (\RuntimeException $e) {
+            $this->kapitelImageFehler = $e->getMessage();
+        }
+        $this->reset('kapitelGalleryUpload');
+    }
+
+    public function kapitelGalerieBildEntfernen(int $imageId): void
+    {
+        app(FoodbookService::class)->removeKapitelGalleryImage($this->team(), $imageId);
+    }
+
     /** R4.3: Owner für den Phasen-Stepper (Trait ManagesPhase). */
     protected function phaseOwner(): array
     {
@@ -1263,6 +1290,12 @@ class Index extends Component
             'kapitelImageUrl' => ($kapitel !== null && ($kapitel->image_context_file_id || $kapitel->image_path))
                 ? app(\Platform\FoodAlchemist\Services\FoodAlchemistMediaService::class)->url($kapitel->image_context_file_id, $kapitel->image_path)
                 : null,
+            'kapitelGallery' => $kapitel !== null
+                ? $kapitel->images->map(fn ($gi) => [
+                    'id' => $gi->id,
+                    'url' => app(\Platform\FoodAlchemist\Services\FoodAlchemistMediaService::class)->url($gi->context_file_id, $gi->path),
+                ])->all()
+                : [],
             'presentationInfo' => $presentationInfo,
             'presentationLink' => $presentationLink,
             'presentationDesignOptionen' => $presentationDesignOptionen,

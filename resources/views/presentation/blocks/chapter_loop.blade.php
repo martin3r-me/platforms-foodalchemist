@@ -29,7 +29,18 @@
                 @endif
             </div>
 
-            @if(!$split && count($bandImgs) > 1)
+            @php $bandStyle = ($tokens['band_style'] ?? 'grid'); @endphp
+            @if(!$split && count($bandImgs) > 1 && $bandStyle === 'rondell')
+                <div class="pt-rondell" data-pt-rondell>
+                    <div class="pt-rondell-track">
+                        @foreach(array_slice($bandImgs, 0, 6) as $gi)
+                            <img class="pt-rondell-img pt-zoomable" src="{{ $gi['url'] }}" alt="">
+                        @endforeach
+                    </div>
+                    <button type="button" class="pt-rondell-btn pt-rondell-prev" data-pt-rondell-prev aria-label="zurück">‹</button>
+                    <button type="button" class="pt-rondell-btn pt-rondell-next" data-pt-rondell-next aria-label="weiter">›</button>
+                </div>
+            @elseif(!$split && count($bandImgs) > 1)
                 <div class="pt-section-gallery" data-count="{{ min(count($bandImgs), 6) }}">
                     @foreach(array_slice($bandImgs, 0, 6) as $gi)
                         <img class="pt-section-img pt-section-img--multi pt-zoomable" src="{{ $gi['url'] }}" alt="">

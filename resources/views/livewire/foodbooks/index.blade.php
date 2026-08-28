@@ -553,6 +553,25 @@
                         @if($kapitelImageFehler)<div class="text-[11px] text-rose-600 mt-1">{{ $kapitelImageFehler }}</div>@endif
                         @error('kapitelImageUpload')<div class="text-[11px] text-rose-600 mt-1">{{ $message }}</div>@enderror
                         <p class="text-[11px] text-gray-400 mt-1">Ohne eigenes Bild nutzt das Kapitel-Band automatisch das Titelbild des Konzepts.</p>
+
+                        {{-- Kapitel-Galerie: mehrere Bilder direkt am Kapitel (Vorrang vor den Concept-Bildern) --}}
+                        <div class="mt-3" data-fb-kapitel-gallery>
+                            <label class="{{ $label }}">Weitere Bilder (optional)</label>
+                            <div class="flex items-center gap-3 flex-wrap">
+                                @foreach($kapitelGallery as $gi)
+                                    <div class="relative">
+                                        <img src="{{ $gi['url'] }}" alt="" class="h-12 w-20 object-cover rounded border border-black/10">
+                                        <button type="button" wire:click="kapitelGalerieBildEntfernen({{ $gi['id'] }})"
+                                            class="absolute -top-1.5 -right-1.5 h-4 w-4 rounded-full bg-rose-600 text-white text-[10px] leading-none flex items-center justify-center"
+                                            title="Bild entfernen">×</button>
+                                    </div>
+                                @endforeach
+                                <input type="file" wire:model="kapitelGalleryUpload" accept="image/*" multiple class="text-[11px]" data-fb-kapitel-gallery-upload>
+                                <div wire:loading wire:target="kapitelGalleryUpload" class="text-[11px] text-gray-400">lädt …</div>
+                            </div>
+                            @error('kapitelGalleryUpload.*')<div class="text-[11px] text-rose-600 mt-1">{{ $message }}</div>@enderror
+                            <p class="text-[11px] text-gray-400 mt-1">Mehrere Bilder fürs Kapitel-Band — überschreibt die Concept-Bilder.</p>
+                        </div>
                     </div>
 
                     {{-- Spec 03 · L2b: der Kapitel-Kundentext. Bis hierher existierte das Feld nur in
