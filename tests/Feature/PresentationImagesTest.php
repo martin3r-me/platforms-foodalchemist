@@ -45,7 +45,7 @@ it('Concept-Titelbild wird zum Kapitel-Band-Bild (Grundlage) + im Public-Render 
     $this->get('/p/foodbook/' . $res['token'])
         ->assertOk()
         ->assertSee('foodalchemist/concept/genuss.jpg', false)   // frisch signierte <img>-URL
-        ->assertSee('<img class="pt-section-img"', false);
+        ->assertSee('class="pt-section-img', false);
 });
 
 it('Kapitel-Bild überschreibt das Concept-Titelbild', function () {
@@ -88,5 +88,5 @@ it('ohne Bilder bleibt das Kapitel-Band bildlos (kein Fehler)', function () {
 
     $snap = $fb->refresh()->presentation_snapshot_json;
     expect($snap['content']['sections'][0]['image'])->toBeNull();
-    $this->get('/p/foodbook/' . $res['token'])->assertOk()->assertDontSee('<img class="pt-section-img"', false);
+    $this->get('/p/foodbook/' . $res['token'])->assertOk()->assertDontSee('class="pt-section-img', false);
 });
