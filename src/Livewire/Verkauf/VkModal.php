@@ -28,6 +28,31 @@ class VkModal extends Component
 {
     use \Platform\FoodAlchemist\Livewire\Concerns\HatRezeptCopilot;   // Spec 03 L6b
     use \Platform\FoodAlchemist\Livewire\Concerns\InteractsWithSavedToast;
+    use \Livewire\WithFileUploads;
+
+    /** Spec 43 (Bild-Epic): Gericht-Foto — dasselbe Bild-Feld wie am Basisrezept (recipes.image_*). */
+    public $dishImageUpload = null;
+
+    public function updatedDishImageUpload(): void
+    {
+        if ($this->recipeId === null || $this->dishImageUpload === null) {
+            return;
+        }
+        $this->validate(['dishImageUpload' => 'image|max:8192'], [], ['dishImageUpload' => 'Gericht-Foto']);
+        try {
+            app(\Platform\FoodAlchemist\Services\RecipeService::class)->storeDishImage(Auth::user()?->currentTeamRelation, $this->recipeId, $this->dishImageUpload);
+        } catch (\Throwable $e) {
+            $this->fehler = $e->getMessage();
+        }
+        $this->reset('dishImageUpload');
+    }
+
+    public function dishImageEntfernen(): void
+    {
+        if ($this->recipeId !== null) {
+            app(\Platform\FoodAlchemist\Services\RecipeService::class)->clearDishImage(Auth::user()?->currentTeamRelation, $this->recipeId);
+        }
+    }
 
     public ?int $recipeId = null;                                    // null = Anlage-Modus
 
@@ -898,6 +923,9 @@ class VkModal extends Component
 
         return view('foodalchemist::livewire.verkauf.vk-modal', [
             'rezept' => $rezept,
+            'dishImageUrl' => ($rezept !== null && ($rezept->image_context_file_id || $rezept->image_path))
+                ? app(\Platform\FoodAlchemist\Services\FoodAlchemistMediaService::class)->url($rezept->image_context_file_id, $rezept->image_path)
+                : null,
             'bulkRun' => $bulkRun,
             'bulkOffen' => $bulkRun !== null
                 ? app(\Platform\FoodAlchemist\Services\BulkEnrichService::class)->offeneVorschlaege($team, $this->bulkRunId) : 0,

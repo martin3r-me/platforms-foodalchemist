@@ -147,6 +147,9 @@
         .pt-block { margin-top: var(--pt-gap); }
         .pt-block-header { font-family: var(--pt-heading-font); font-size: 1.18rem; margin: calc(var(--pt-gap) * .8) 0 6px; }
         .pt-block-sub { color: var(--pt-muted); font-size: .96rem; margin: 2px 0 10px; }
+        /* Konzept-interne Gang-Überschrift (type=header) — fett abgesetzt (wie im PDF). */
+        .pt-subheader { font-family: var(--pt-heading-font); font-weight: 700; font-size: 1.02rem; letter-spacing: .01em; margin: calc(var(--pt-gap) * .7) 0 4px; padding-top: 9px; border-top: 1px solid var(--pt-line); }
+        .pt-block > .pt-subheader:first-child { border-top: 0; padding-top: 0; margin-top: 6px; }
         .pt-line { display: flex; align-items: baseline; gap: 2px; padding: 9px 0; border-bottom: 1px solid var(--pt-line); }
         .pt-line:last-child { border-bottom: 0; }
         .pt-line-label { font-weight: 500; }
