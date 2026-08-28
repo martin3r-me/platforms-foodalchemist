@@ -40,10 +40,12 @@ class GpFormService
         }
         $source = in_array($source, ['manual', 'ki'], true) ? $source : 'manual';
 
-        $form = FoodAlchemistGpForm::updateOrCreate(
-            ['gp_id' => $gp->id, 'form_slug' => $formSlug],
-            ['gramm' => round($gramm, 2), 'source' => $source],
-        );
+        // withTrashed + restore: mit SoftDeletes würde ein zuvor entfernter Slug den unique(gp_id,form_slug)
+        // blockieren (updateOrCreate sieht die trashed-Zeile nicht → INSERT → Kollision). Re-Add = Reaktivierung.
+        $form = FoodAlchemistGpForm::withTrashed()->firstOrNew(['gp_id' => $gp->id, 'form_slug' => $formSlug]);
+        $form->fill(['gramm' => round($gramm, 2), 'source' => $source]);
+        $form->deleted_at = null;
+        $form->save();
 
         // „stk" ist gleichzeitig das Legacy-Stückgewicht — spiegeln, damit Picker/Pricing konsistent bleiben.
         if ($formSlug === 'stk') {

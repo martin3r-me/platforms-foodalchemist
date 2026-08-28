@@ -29,6 +29,11 @@ it('trägt die Jarvis-Skala (R14): Tabelle 12px, Zellen py-1/px-3, Header einzei
         ->and($maps['label'])->toContain('uppercase tracking-wider');
 });
 
-it('kennt alle vier GP-Status als Pills', function () {
-    expect(array_keys(Ui::maps()['statusPill']))->toBe(['approved', 'tentative', 'rejected', 'merged']);
+it('kennt GP- UND Rezept-/Gericht-Status als einheitliche Pills (#4)', function () {
+    // #4 (Dominique 2026-08-27): statusPill ist bewusst über GP + Rezept/Gericht vereinheitlicht —
+    // gleiche Farben je Rolle (grau in Arbeit · orange Review · grün freigegeben · rot abgelehnt/veraltet).
+    expect(array_keys(Ui::maps()['statusPill']))
+        ->toBe(['approved', 'tentative', 'rejected', 'merged', 'draft', 'review', 'deprecated', 'stub']);
+    // Review muss orange sein (der ursprüngliche Bug: Review erschien grau).
+    expect(Ui::maps()['statusPill']['review'])->toContain('amber');
 });

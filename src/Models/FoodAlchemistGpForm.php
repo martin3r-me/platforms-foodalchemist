@@ -4,14 +4,20 @@ namespace Platform\FoodAlchemist\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\SoftDeletes;
+use Platform\ActivityLog\Traits\LogsActivity;
+use Platform\FoodAlchemist\Models\Concerns\HasUuidV7;
 
 /**
  * #9 (Dominique 2026-08-28): eine „Form" eines GP mit Gramm-Gewicht (Stück/Scheibe/Würfel …).
  * form_slug ist ein Einheiten-Vokabular-Slug einer Zähl-Einheit → direkt als Rezept-Einheit +
- * für die EK-Umrechnung nutzbar. source=manual|ki (GL-07). Team-Sichtbarkeit läuft über das GP.
+ * für die EK-Umrechnung nutzbar. source=manual|ki (GL-07). Team-Sichtbarkeit läuft über das GP
+ * (Satellit — kein eigener Team-Scope, wie {@see FoodAlchemistGpCountUnitDefault}).
  */
 class FoodAlchemistGpForm extends Model
 {
+    use HasUuidV7, LogsActivity, SoftDeletes;
+
     protected $table = 'foodalchemist_gp_forms';
 
     protected $guarded = ['id'];

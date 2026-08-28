@@ -51,7 +51,7 @@ it('Trait-Vertrag: ALLE Models tragen LogsActivity + BelongsToTeamHierarchy + Ha
     // Satelliten scopen BEWUSST über ihr Eltern-Aggregat (Zugriff nur via
     // GP-/Rezept-Relation bzw. TeamSettingsService) — kein eigener Team-Scope
     $satelliten = [
-        'FoodAlchemistGpCountUnitDefault', 'FoodAlchemistGpLaPreference', 'FoodAlchemistMatchProposal',
+        'FoodAlchemistGpCountUnitDefault', 'FoodAlchemistGpForm', 'FoodAlchemistGpLaPreference', 'FoodAlchemistMatchProposal',
         'FoodAlchemistRecipeIngredient', 'FoodAlchemistRecipeNiveauEignung', 'FoodAlchemistRecipeSektorEignung',
         'FoodAlchemistConceptSektorEignung', 'FoodAlchemistTeamSetting',
         'FoodAlchemistCanvasEntry',                                    // Zugriff nur via Canvas-Aggregat (CanvasService)
