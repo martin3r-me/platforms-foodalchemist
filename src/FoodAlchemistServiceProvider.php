@@ -468,6 +468,8 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\RecipeFeedbackDevelopTool::class,
                     // D2c: Basisrezept aus Vorlage instanziieren (Platzhalter-Slot-Bindung).
                     \Platform\FoodAlchemist\Tools\RecipesInstantiateTool::class,
+                    // D2c: grounded Freitext-Revision (recipe.ueberarbeiten; Draft-Quarantäne; Workstream W).
+                    \Platform\FoodAlchemist\Tools\RecipesReviseTool::class,
                     // #513 Tier 1: Grammaturen-Rechner (Bäckerprozent/Extraprozent/Brining/Bloom)
                     \Platform\FoodAlchemist\Tools\ProportionCalcTool::class,
                     // #513: %→Gramm-Rückschreiben (Batch-Skalierung + Einzel-Zutat-Edit, write)

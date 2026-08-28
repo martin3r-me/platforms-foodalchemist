@@ -458,34 +458,26 @@ class RecipeModal extends Component
         }
 
         try {
-            $vorschlag = app(AiGatewayService::class)->propose('recipe.ueberarbeiten', [
-                'anweisung' => trim($this->anweisung),
-                'name' => $r->name,
-                'description' => $r->description,
-                'preparation' => $r->preparation,
-                'zutaten' => $r->ingredients->map(fn ($z) => [
-                    'id' => $z->id,
-                    'text' => $z->gp?->name ?? $z->referencedRecipe?->name ?? $z->display_name ?? $z->raw_text,
-                    'quantity' => (float) $z->quantity,
-                    'einheit_slug' => $z->unit?->slug,
-                ])->values()->all(),
-            ]);
+            // Spec 03 L1a + Workstream W: die grounded Freitext-Revision liegt im geteilten
+            // RecipeReviseService (Regelwerk-Erdung via contextFor) — Web + MCP fahren dieselbe Strecke.
+            $roh = app(\Platform\FoodAlchemist\Services\RecipeReviseService::class)->freitextVorschlag($team, $r, $this->anweisung);
         } catch (\RuntimeException $e) {
             $this->fehler = $e->getMessage();
 
             return;
         }
+        $werte = $roh['werte'];
 
-        if (empty($vorschlag->werte['zutaten']) && empty($vorschlag->werte['preparation']) && empty($vorschlag->werte['description'])) {
+        if (empty($werte['zutaten']) && empty($werte['preparation']) && empty($werte['description'])) {
             $this->fehler = 'KI lieferte keine verwertbare Überarbeitung — echter Provider nötig (FakeProvider-Grenze).';
 
             return;
         }
         $this->ueberarbeitung = [
-            'werte' => $vorschlag->werte,
-            'confidence' => max(0.0, min(1.0, $vorschlag->confidence)),
+            'werte' => $werte,
+            'confidence' => $roh['confidence'],
             // E3 (#508): Vorschau, wie das Grounding beim Übernehmen greift.
-            'match_vorschau' => $this->matchVorschau($team, $r, $vorschlag->werte['zutaten'] ?? []),
+            'match_vorschau' => $this->matchVorschau($team, $r, $werte['zutaten'] ?? []),
         ];
     }
 

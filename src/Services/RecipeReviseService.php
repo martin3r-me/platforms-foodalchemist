@@ -142,4 +142,35 @@ class RecipeReviseService
             'role' => $orig?->role,
         ];
     }
+
+    /**
+     * Workstream W (2026-08): grounded Freitext-Revision (`recipe.ueberarbeiten`). Baut den Rezept-Kontext,
+     * zieht das Wissens-Grounding (Regelwerk Basisrezepte + Cross-Cutting via KnowledgeContextService::contextFor)
+     * und ruft den LLM. Persistiert NICHTS (GL-07) — der Aufrufer übernimmt (Editor: ueberarbeitungUebernehmen;
+     * MCP: recipes.REVISE mit accept=true). Web + MCP fahren damit dieselbe geerdete Strecke.
+     *
+     * @return array{werte: array<string,mixed>, confidence: float}
+     */
+    public function freitextVorschlag(Team $team, FoodAlchemistRecipe $r, string $anweisung): array
+    {
+        $r->loadMissing(['ingredients.gp', 'ingredients.referencedRecipe', 'ingredients.unit']);
+
+        $wissen = app(\Platform\FoodAlchemist\Services\Ai\KnowledgeContextService::class)
+            ->contextFor('recipe.ueberarbeiten', (string) ($r->description ?: $r->name));
+
+        $vorschlag = app(\Platform\FoodAlchemist\Services\Ai\AiGatewayService::class)->propose('recipe.ueberarbeiten', [
+            'anweisung' => trim($anweisung),
+            'name' => $r->name,
+            'description' => $r->description,
+            'preparation' => $r->preparation,
+            'zutaten' => $r->ingredients->map(fn ($z) => [
+                'id' => $z->id,
+                'text' => $z->gp?->name ?? $z->referencedRecipe?->name ?? $z->display_name ?? $z->raw_text,
+                'quantity' => (float) $z->quantity,
+                'einheit_slug' => $z->unit?->slug,
+            ])->values()->all(),
+        ], ['knowledge' => $wissen['block'] ?? null, 'knowledge_used' => $wissen['files_used'] ?? null]);
+
+        return ['werte' => (array) $vorschlag->werte, 'confidence' => max(0.0, min(1.0, (float) $vorschlag->confidence))];
+    }
 }
