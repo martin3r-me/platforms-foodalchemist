@@ -250,6 +250,25 @@ abstract class FoodAlchemistTool
     }
 
     /**
+     * Generischer Owner-Guard für team-hierarchie-fähige Modelle (BelongsToTeamHierarchy): existiert der
+     * Datensatz sichtbar und gehört er dem Team? Gibt bei Fehler NOT_FOUND/ACCESS_DENIED, sonst null.
+     *
+     * @param  class-string  $modelClass
+     */
+    protected function guardOwned(Team $team, string $modelClass, int $id, string $label): ?ToolResult
+    {
+        $m = $modelClass::visibleToTeam($team)->whereKey($id)->first();
+        if ($m === null) {
+            return ToolResult::error("{$label} nicht sichtbar/vorhanden.", 'NOT_FOUND');
+        }
+        if (! $m->isOwnedBy($team)) {
+            return ToolResult::error("{$label}: nur fürs Besitzer-Team.", 'ACCESS_DENIED');
+        }
+
+        return null;
+    }
+
+    /**
      * Guard für Gericht-by-id-Tools (VK): existiert das Verkaufsrezept (is_sales_recipe) sichtbar und
      * gehört es dem Team? Gibt bei Fehler das passende ToolResult (NOT_FOUND/ACCESS_DENIED), sonst null.
      */

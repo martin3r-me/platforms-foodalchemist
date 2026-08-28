@@ -9,17 +9,17 @@ use Platform\Core\Contracts\ToolResult;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplier;
 use Platform\FoodAlchemist\Services\SupplierService;
 
-/** MCP-Steuerbarkeit · D4: Lieferanten-Stammdaten bearbeiten (team-eigen). */
-class SuppliersPutTool extends FoodAlchemistTool implements ToolContract, ToolMetadataContract
+/** MCP-Steuerbarkeit · D4: Konditionen/Bestell-Parameter eines team-eigenen Lieferanten pflegen. */
+class SupplierConditionsPutTool extends FoodAlchemistTool implements ToolContract, ToolMetadataContract
 {
     public function getName(): string
     {
-        return 'foodalchemist.suppliers.PUT';
+        return 'foodalchemist.supplier_conditions.PUT';
     }
 
     public function getDescription(): string
     {
-        return 'Bearbeitet die Stammdaten eines team-eigenen Lieferanten.';
+        return 'Pflegt die Konditionen/Bestell-Parameter eines team-eigenen Lieferanten (Liefertage, Mindestbestellwert, …).';
     }
 
     public function getSchema(): array
@@ -28,7 +28,7 @@ class SuppliersPutTool extends FoodAlchemistTool implements ToolContract, ToolMe
             'type' => 'object',
             'properties' => [
                 'id' => ['type' => 'integer', 'description' => 'Lieferanten-Id (team-eigen).'],
-                'input' => ['type' => 'object', 'description' => 'Zu schreibende Stammdaten.'],
+                'input' => ['type' => 'object', 'description' => 'Konditions-Felder.'],
             ],
             'required' => ['id', 'input'],
         ];
@@ -50,24 +50,24 @@ class SuppliersPutTool extends FoodAlchemistTool implements ToolContract, ToolMe
         }
 
         try {
-            $s = app(SupplierService::class)->update($team, $id, $input);
+            app(SupplierService::class)->updateConditions($team, $id, $input);
         } catch (\RuntimeException $e) {
             return ToolResult::error($e->getMessage(), 'VALIDATION_ERROR');
         }
 
-        return ToolResult::success(['id' => (int) $s->id, 'name' => $s->name]);
+        return ToolResult::success(['id' => $id, 'updated' => true]);
     }
 
     public function getMetadata(): array
     {
         return [
             'category' => 'action',
-            'tags' => ['foodalchemist', 'lieferant', 'bearbeiten', 'write'],
+            'tags' => ['foodalchemist', 'lieferant', 'konditionen', 'write'],
             'read_only' => false, 'idempotent' => true, 'risk_level' => 'write',
             'requires_auth' => true, 'requires_team' => true, 'cost_class' => 'local_db',
             'side_effects' => ['updates'],
-            'related_tools' => ['foodalchemist.suppliers.STATUS', 'foodalchemist.supplier_conditions.PUT'],
-            'examples' => ['Ändere die Adresse von Lieferant 12.'],
+            'related_tools' => ['foodalchemist.suppliers.PUT'],
+            'examples' => ['Setze die Liefertage von Lieferant 12.'],
         ];
     }
 }

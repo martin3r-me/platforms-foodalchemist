@@ -22,7 +22,7 @@ Capability. Sie beantwortet:
 | Capability | Anzahl | Aktuelle Aussage |
 |---|---:|---|
 | Prompt-Keys in `config/foodalchemist.php` | 64 | Registry vorhanden; 11 Keys ohne direkte statische Referenz in `src/` (die 5 seit 01.08. ergänzten Keys sind alle direkt referenziert) |
-| MCP-Toolklassen mit `foodalchemist.*`-Name | 251 | Provider registriert 251 (203 Bestand + 17 D1/Phase 0 + 13 D2 + 18 D3 VK KOMPLETT, Stand 2026-08-29); §7-Register wird nachgezogen (Alt-Liste = 169) |
+| MCP-Toolklassen mit `foodalchemist.*`-Name | 258 | Provider registriert 258 (203 Bestand + 17 D1/Phase 0 + 13 D2 + 18 D3 + 7 D4a Lieferanten, Stand 2026-08-29); §7-Register wird nachgezogen (Alt-Liste = 169) |
 | Embedding-Pools mit Observern | 6 | GP, Rezept, Lieferant, Konzept, Foodbook, Lab Note |
 | Wissens-/Retrieval-Schichten | 2 | deterministisch plus optional semantisch |
 | dokumentierte vollständige MCP-Tenant-Abnahme | 0 | einzelne Tests vorhanden, keine 157-Tool-Matrix |
@@ -459,6 +459,15 @@ foodalchemist.recipe_customer_names.DELETE
 foodalchemist.recipe_rollen.POST
 foodalchemist.recipe_coherence.POST
 foodalchemist.verkaufsrezepte.REVISE
+
+# ── MCP-Steuerbarkeit D4 (Lieferanten/Artikel/Geschirr) 2026-08 ──
+foodalchemist.suppliers.POST
+foodalchemist.suppliers.PUT
+foodalchemist.suppliers.STATUS
+foodalchemist.suppliers.DEACTIVATE
+foodalchemist.supplier_conditions.PUT
+foodalchemist.supplier_contacts.POST
+foodalchemist.supplier_documents.POST
 ```
 
 ## 8. MCP-Abnahmematrix

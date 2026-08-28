@@ -494,6 +494,14 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\RecipeCoherencePostTool::class,
                     // D3d: grounded VK-Freitext-Revision (vk.ueberarbeiten; Draft-Quarantäne; Workstream W).
                     \Platform\FoodAlchemist\Tools\VerkaufsrezepteReviseTool::class,
+                    // D4a: Lieferanten-Stammdaten CRUD (Service self-gatet; generischer guardOwned).
+                    \Platform\FoodAlchemist\Tools\SuppliersPostTool::class,
+                    \Platform\FoodAlchemist\Tools\SuppliersPutTool::class,
+                    \Platform\FoodAlchemist\Tools\SuppliersStatusTool::class,
+                    \Platform\FoodAlchemist\Tools\SuppliersDeactivateTool::class,
+                    \Platform\FoodAlchemist\Tools\SupplierConditionsPutTool::class,
+                    \Platform\FoodAlchemist\Tools\SupplierContactsPostTool::class,
+                    \Platform\FoodAlchemist\Tools\SupplierDocumentsPostTool::class,
                     // #513 Tier 1: Grammaturen-Rechner (Bäckerprozent/Extraprozent/Brining/Bloom)
                     \Platform\FoodAlchemist\Tools\ProportionCalcTool::class,
                     // #513: %→Gramm-Rückschreiben (Batch-Skalierung + Einzel-Zutat-Edit, write)
