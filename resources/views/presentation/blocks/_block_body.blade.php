@@ -3,7 +3,8 @@
     $showPrice = $style['show_price'] ?? true;
     $showCodes = $style['show_codes'] ?? true;
     $blockPrice = null;
-    if ($showPrice && ! empty($b['price'])) {
+    // Null-Preise ausblenden (unpreise Konzepte zeigen sonst „0,00 €").
+    if ($showPrice && ! empty($b['price']) && ((float) ($b['price']['pp'] ?? 0) > 0 || (float) ($b['price']['pauschal'] ?? 0) > 0)) {
         $blockPrice = number_format((float) ($b['price']['pp'] ?? 0), 2, ',', '.') . ' €' . (($b['price']['unit'] ?? null) === 'gast' ? ' /Pers.' : '');
     }
 @endphp

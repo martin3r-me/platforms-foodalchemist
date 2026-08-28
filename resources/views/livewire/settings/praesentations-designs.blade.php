@@ -173,10 +173,17 @@
             {{-- Stufe 2 „Leinwand via Code": eigenes, sandboxed CSS auf die Blöcke (kein HTML/JS/@import). --}}
             <div class="mt-4 rounded-xl border border-gray-200 p-4">
                 <h3 class="text-xs font-semibold uppercase tracking-wide text-gray-500">Eigenes CSS (fortgeschritten / KI)</h3>
-                <p class="text-[11px] text-gray-400 mt-1 mb-2">Feinschliff per CSS auf die Blöcke — z. B. <code class="bg-gray-100 px-1 rounded">.pt-hero-title{letter-spacing:.04em}</code>. Sandboxed (kein HTML/JS, kein @import). Wirkt in der Live-Vorschau (nach Verlassen des Felds) und wird beim Speichern eingefroren.</p>
+                <p class="text-[11px] text-gray-400 mt-1 mb-2">Beschreibe den Look — die KI erzeugt das CSS. Oder schreib/feile direkt am CSS. Sandboxed (kein HTML/JS, kein @import); wirkt in der Live-Vorschau (nach Verlassen des Felds), beim Speichern eingefroren.</p>
+                <div class="flex items-start gap-2 mb-2">
+                    <input type="text" wire:model="cssBrief" placeholder="z. B. modernes Catering-Design mit Website-Feeling" class="flex-1 text-sm text-gray-900 border border-gray-300 rounded px-2 py-1" data-fa-css-brief>
+                    <button type="button" wire:click="cssGenerieren" wire:loading.attr="disabled" wire:target="cssGenerieren" class="text-sm px-3 py-1.5 rounded-lg bg-violet-600 text-white font-medium hover:bg-violet-700 whitespace-nowrap" data-fa-css-generate>
+                        <span wire:loading.remove wire:target="cssGenerieren">Mit KI erzeugen</span>
+                        <span wire:loading wire:target="cssGenerieren">erzeuge …</span>
+                    </button>
+                </div>
                 <textarea wire:model.blur="customCss" rows="7" class="block w-full text-[12px] font-mono text-gray-900 border border-gray-300 rounded px-2 py-1" placeholder=".pt-hero-title { letter-spacing: .04em; }
 .pt-section-title { text-transform: uppercase; }" data-fa-design-css></textarea>
-                <p class="text-[11px] text-gray-400 mt-1">Tipp: die KI (Claude/MCP) kann dir hier ein komplettes Design-CSS erzeugen — dann passt du nur noch Farben/Tokens an.</p>
+                <p class="text-[11px] text-gray-400 mt-1">Danach kannst du das CSS von Hand feinjustieren und die Farben/Tokens oben anpassen.</p>
             </div>
         </aside>
     </div>
