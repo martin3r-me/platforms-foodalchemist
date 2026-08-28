@@ -383,7 +383,7 @@
                             @if($presentationLink)
                                 <div class="rounded-lg bg-white/5 border border-white/10 p-3 text-xs mt-3" x-data>
                                     <div class="flex items-center gap-2">
-                                        <input type="text" readonly value="{{ $presentationLink }}" class="flex-1 bg-white text-gray-900 font-mono text-[11px] rounded px-2 py-1 border border-white/20" data-sp-praes-link>
+                                        <div class="flex-1 rounded px-2 py-1 font-mono text-[11px] break-all select-all" style="background:#ffffff;color:#111827;border:1px solid #d1d5db;" data-sp-praes-link>{{ $presentationLink }}</div>
                                         <button type="button" class="{{ $btnGhost }}" x-on:click="navigator.clipboard.writeText('{{ $presentationLink }}'); $el.textContent='Kopiert ✓'">Link kopieren</button>
                                     </div>
                                     <p class="text-[11px] text-gray-400 mt-1">Freigegeben am {{ $presentationInfo['published_at'] ?? '—' }} · gültig bis {{ $presentationInfo['expires_at'] ?? '—' }} · {{ ($presentationInfo['live'] ?? false) ? 'aktiv' : 'inaktiv/abgelaufen' }}</p>

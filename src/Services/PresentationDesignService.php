@@ -41,7 +41,7 @@ class PresentationDesignService
                 'base_slug' => 'editorial',
                 'layout' => [
                     ['block_type' => 'cover', 'style' => ['align' => 'center', 'show_cover_image' => true, 'show_logo' => true]],
-                    ['block_type' => 'chapter_loop', 'style' => ['show_price' => true, 'show_codes' => true, 'dish_columns' => 2, 'heading_rule' => true]],
+                    ['block_type' => 'chapter_loop', 'style' => ['show_price' => true, 'show_codes' => true, 'dish_columns' => 1, 'heading_rule' => true]],
                     ['block_type' => 'price_summary', 'style' => ['mode' => 'pro_person']],
                     ['block_type' => 'legend', 'style' => []],
                 ],
@@ -93,7 +93,7 @@ class PresentationDesignService
                 'base_slug' => 'navigator',
                 'layout' => [
                     ['block_type' => 'cover', 'style' => ['align' => 'center', 'show_cover_image' => true, 'show_logo' => true]],
-                    ['block_type' => 'chapter_loop', 'style' => ['show_price' => true, 'show_codes' => true, 'dish_columns' => 2, 'heading_rule' => true]],
+                    ['block_type' => 'chapter_loop', 'style' => ['show_price' => true, 'show_codes' => true, 'dish_columns' => 1, 'heading_rule' => true]],
                     ['block_type' => 'price_summary', 'style' => ['mode' => 'pro_person']],
                     ['block_type' => 'legend', 'style' => []],
                 ],

@@ -75,11 +75,16 @@
                 <span class="text-[11px] text-gray-400">(nichts angehakt = alle Formen)</span>
             </div>
 
-            <div class="flex items-center gap-2">
-                <label class="text-[11px] text-gray-500">Vorschau-Foodbook</label>
-                <select wire:model.live="previewFoodbookId" class="text-sm border border-gray-300 rounded px-2 py-1">
-                    <option value="">— wählen —</option>
-                    @foreach($foodbookOptionen as $opt)
+            <div class="flex flex-wrap items-center gap-2">
+                <label class="text-[11px] text-gray-500">Vorschau</label>
+                <select wire:model.live="previewType" class="text-sm border border-gray-300 rounded px-2 py-1">
+                    <option value="foodbook">Foodbook</option>
+                    <option value="speisekarte">Speisekarte</option>
+                    <option value="speiseplan">Speiseplan</option>
+                </select>
+                <select wire:model.live="previewSourceId" class="text-sm border border-gray-300 rounded px-2 py-1">
+                    <option value="">— Quelle wählen —</option>
+                    @foreach($quellenOptionen as $opt)
                         <option value="{{ $opt['id'] }}">{{ $opt['label'] }}</option>
                     @endforeach
                 </select>
@@ -90,7 +95,7 @@
                     <iframe class="w-full" style="height: 640px; border: 0; background: #fff;" srcdoc="{{ $vorschauHtml }}" title="Live-Vorschau" data-fa-preview-frame></iframe>
                 @else
                     <div class="h-[640px] flex items-center justify-center text-sm text-gray-400 text-center px-6">
-                        Wähle ein Vorschau-Foodbook, um das Design live zu sehen.
+                        Wähle Form + Quelle, um das Design live zu sehen.
                     </div>
                 @endif
             </div>
@@ -131,6 +136,12 @@
                     @if(in_array($bt, ['chapter_loop', 'dish_list'], true))
                         <label class="flex items-center gap-2 text-sm"><input type="checkbox" wire:model.live="layout.{{ $i }}.style.show_price"> Preise zeigen</label>
                         <label class="flex items-center gap-2 text-sm"><input type="checkbox" wire:model.live="layout.{{ $i }}.style.show_codes"> Allergen-Codes zeigen</label>
+                        <label class="block text-sm">Gericht-Spalten
+                            <select wire:model.live="layout.{{ $i }}.style.dish_columns" class="block w-full text-sm border border-gray-300 rounded px-2 py-1">
+                                <option value="1">1 Spalte (Standard)</option>
+                                <option value="2">2 Spalten (Raster)</option>
+                            </select>
+                        </label>
                     @elseif($bt === 'cover')
                         <label class="flex items-center gap-2 text-sm"><input type="checkbox" wire:model.live="layout.{{ $i }}.style.show_cover_image"> Coverbild zeigen</label>
                         <label class="flex items-center gap-2 text-sm"><input type="checkbox" wire:model.live="layout.{{ $i }}.style.show_logo"> Logo zeigen</label>

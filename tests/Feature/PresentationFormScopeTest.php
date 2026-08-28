@@ -42,6 +42,29 @@ it('DB-Design mit output_types erscheint nur bei passender Form', function () {
     expect($sk)->not->toContain('design:' . $nurFoodbook->id)->toContain('design:' . $ueberall->id);
 });
 
+it('designPreview rendert auch Speisekarte (typ-generisch, nicht nur Foodbook)', function () {
+    $registry = app(ToolRegistry::class);
+    $kontext = new ToolContext($this->user, $this->rootTeam);
+    $pres = app(PresentationService::class);
+    $designs = $this->designs;
+
+    $gericht = $this->makeRecipe($this->rootTeam, 'HG Zander', ['is_sales_recipe' => true, 'sales_net' => 24.0]);
+    $karteId = $registry->get('foodalchemist.speisekarten.POST')->execute(['name' => 'Vorschaukarte'], $kontext)->data['speisekarte']['id'];
+    $rubrikId = $registry->get('foodalchemist.speisekarte_rubrik.POST')->execute([
+        'speisekarte_id' => $karteId, 'title' => 'Fisch', 'consumer_title' => 'Aus dem Wasser', 'art' => 'speisen',
+    ], $kontext)->data['rubrik']['id'];
+    $registry->get('foodalchemist.speisekarte_positionen.POST')->execute([
+        'rubrik_id' => $rubrikId, 'type' => 'gericht_ref', 'sales_recipe_id' => $gericht->id,
+    ], $kontext);
+
+    $b = $designs->builtins()['menu'];
+    $snap = $pres->designPreview($this->rootTeam, 'speisekarte', $karteId, $b['layout'], $b['tokens'], null);
+
+    expect($snap['type'])->toBe('speisekarte');
+    expect($snap['content']['sections'][0]['title'])->toBe('Aus dem Wasser');
+    expect($snap['resolved_design']['source'])->toBe('(builder)');
+});
+
 it('Speisekarte-Präsentation zeigt Rubriken OHNE Kapitel-Kicker, Foodbook MIT', function () {
     $registry = app(ToolRegistry::class);
     $kontext = new ToolContext($this->user, $this->rootTeam);

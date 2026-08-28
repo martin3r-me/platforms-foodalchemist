@@ -318,29 +318,20 @@ class PresentationService
      * @param  array<string,mixed>  $tokens
      * @return array<string,mixed>
      */
-    public function designPreview(Team $team, int $foodbookId, array $layout, array $tokens, ?string $customCss = null): array
+    public function designPreview(Team $team, string $type, int $id, array $layout, array $tokens, ?string $customCss = null): array
     {
-        $entity = $this->resolveEntity($team, self::TYPE_FOODBOOK, $foodbookId, forWrite: false);
-        $clean = $this->mergeSettings([], self::TYPE_FOODBOOK);
-        $content = $this->normalizeFoodbook($team, $entity, $clean);
+        $entity = $this->resolveEntity($team, $type, $id, forWrite: false);
+        // Content + Branding regulär bauen (typ-korrekte Normalisierung), dann das aufgelöste
+        // Design durch die LIVE-Builder-Werte ersetzen (Layout/Tokens/CSS aus der Bearbeitung).
+        $snapshot = $this->buildSnapshot($team, $entity, $type, ['design' => 'editorial']);
+        $snapshot['resolved_design'] = [
+            'source' => '(builder)',
+            'layout' => $this->adaptLayoutForType($type, $this->designs->normalizeLayout($layout)),
+            'tokens' => $tokens,
+            'custom_css' => $this->designs->sanitizeCss($customCss),
+        ];
 
-        return $this->hydrateImages([
-            'schema_version' => self::SCHEMA_VERSION,
-            'type' => self::TYPE_FOODBOOK,
-            'title' => $content['title'],
-            'subtitle' => $content['subtitle'],
-            'meta' => $content['meta'],
-            'freigabe' => null,
-            'settings' => $clean,
-            'branding' => $this->brandingIdentifiers($entity),
-            'content' => $content['body'],
-            'resolved_design' => [
-                'source' => '(builder)',
-                'layout' => $this->designs->normalizeLayout($layout),
-                'tokens' => $tokens,
-                'custom_css' => $this->designs->sanitizeCss($customCss),
-            ],
-        ]);
+        return $this->hydrateImages($snapshot);
     }
 
     /**
