@@ -298,7 +298,7 @@ class PresentationService
      * @param  array<string,mixed>  $tokens
      * @return array<string,mixed>
      */
-    public function designPreview(Team $team, int $foodbookId, array $layout, array $tokens): array
+    public function designPreview(Team $team, int $foodbookId, array $layout, array $tokens, ?string $customCss = null): array
     {
         $entity = $this->resolveEntity($team, self::TYPE_FOODBOOK, $foodbookId, forWrite: false);
         $clean = $this->mergeSettings([], self::TYPE_FOODBOOK);
@@ -318,6 +318,7 @@ class PresentationService
                 'source' => '(builder)',
                 'layout' => $this->designs->normalizeLayout($layout),
                 'tokens' => $tokens,
+                'custom_css' => $this->designs->sanitizeCss($customCss),
             ],
         ]);
     }
