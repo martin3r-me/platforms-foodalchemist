@@ -604,39 +604,30 @@ class VkModal extends Component
         }
 
         try {
-            $vorschlag = app(\Platform\FoodAlchemist\Services\Ai\AiGatewayService::class)->propose('vk.ueberarbeiten', [
-                'anweisung' => trim($this->anweisung),
-                'name' => $r->name,
-                'sales_wording_standard' => $r->sales_wording_standard,
-                'description' => $r->description,
-                'plating_text' => $r->plating_text,
-                'zutaten' => $r->ingredients->map(fn ($z) => [
-                    'id' => $z->id,
-                    'text' => $z->referencedRecipe?->name ?? $z->gp?->name ?? $z->display_name ?? $z->raw_text,
-                    'quantity' => (float) $z->quantity,
-                    'einheit_slug' => $z->unit?->slug,
-                ])->values()->all(),
-            ] + $this->facetten($r));
+            // Spec 03 L1a + Workstream W: grounded VK-Freitext-Revision im geteilten RecipeReviseService
+            // (Facetten + Regelwerk-Erdung via contextFor) — Web + MCP fahren dieselbe Strecke.
+            $roh = app(\Platform\FoodAlchemist\Services\RecipeReviseService::class)->vkFreitextVorschlag($team, $r, $this->anweisung);
         } catch (\RuntimeException $e) {
             $this->fehler = $e->getMessage();
 
             return;
         }
+        $werte = $roh['werte'];
 
         $hatText = false;
         foreach (array_keys(self::REVISE_TEXTE) as $feld) {
-            $hatText = $hatText || is_string($vorschlag->werte[$feld] ?? null) && trim($vorschlag->werte[$feld]) !== '';
+            $hatText = $hatText || is_string($werte[$feld] ?? null) && trim($werte[$feld]) !== '';
         }
-        if (empty($vorschlag->werte['zutaten']) && ! $hatText) {
+        if (empty($werte['zutaten']) && ! $hatText) {
             $this->fehler = 'KI lieferte keine verwertbare Überarbeitung — echter Provider nötig (FakeProvider-Grenze).';
 
             return;
         }
         $this->ueberarbeitung = [
-            'werte' => $vorschlag->werte,
-            'confidence' => max(0.0, min(1.0, $vorschlag->confidence)),
+            'werte' => $werte,
+            'confidence' => $roh['confidence'],
             'match_vorschau' => app(\Platform\FoodAlchemist\Services\RecipeReviseService::class)
-                ->vorschau($team, $r, $vorschlag->werte['zutaten'] ?? []),
+                ->vorschau($team, $r, $werte['zutaten'] ?? []),
         ];
     }
 

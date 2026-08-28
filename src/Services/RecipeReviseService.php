@@ -173,4 +173,47 @@ class RecipeReviseService
 
         return ['werte' => (array) $vorschlag->werte, 'confidence' => max(0.0, min(1.0, (float) $vorschlag->confidence))];
     }
+
+    /**
+     * Workstream W (2026-08): grounded Freitext-Revision für GERICHTE (`vk.ueberarbeiten`). Wie
+     * freitextVorschlag, aber mit VK-Kontext (Wording/Plating + Facetten) und dem vk-Regelwerk-Routing.
+     * Persistiert nichts (GL-07). Web (VkModal) + MCP (verkaufsrezepte.REVISE) fahren dieselbe Strecke.
+     *
+     * @return array{werte: array<string,mixed>, confidence: float}
+     */
+    public function vkFreitextVorschlag(Team $team, FoodAlchemistRecipe $r, string $anweisung): array
+    {
+        $r->loadMissing([
+            'ingredients.gp', 'ingredients.referencedRecipe', 'ingredients.unit',
+            'dishClass', 'darreichungen.servingForm', 'salesUnit', 'markupClass',
+        ]);
+
+        $facetten = [
+            'speisen_klasse' => $r->dishClass?->label,
+            'diaetform' => $r->dishClass?->diet_form,
+            'darreichungen' => $r->darreichungen->map(fn ($d) => $d->servingForm?->label)->filter()->values()->all(),
+            'verkaufseinheit' => trim(($r->sales_unit_count !== null ? $r->sales_unit_count . ' × ' : '') . ($r->salesUnit?->display_de ?? '')) ?: null,
+            'portion_g' => $r->sales_quantity_per_unit_g,
+            'aufschlagsklasse' => $r->markupClass?->code,
+        ];
+
+        $wissen = app(\Platform\FoodAlchemist\Services\Ai\KnowledgeContextService::class)
+            ->contextFor('vk.ueberarbeiten', (string) ($r->description ?: $r->name));
+
+        $vorschlag = app(\Platform\FoodAlchemist\Services\Ai\AiGatewayService::class)->propose('vk.ueberarbeiten', [
+            'anweisung' => trim($anweisung),
+            'name' => $r->name,
+            'sales_wording_standard' => $r->sales_wording_standard,
+            'description' => $r->description,
+            'plating_text' => $r->plating_text,
+            'zutaten' => $r->ingredients->map(fn ($z) => [
+                'id' => $z->id,
+                'text' => $z->referencedRecipe?->name ?? $z->gp?->name ?? $z->display_name ?? $z->raw_text,
+                'quantity' => (float) $z->quantity,
+                'einheit_slug' => $z->unit?->slug,
+            ])->values()->all(),
+        ] + $facetten, ['knowledge' => $wissen['block'] ?? null, 'knowledge_used' => $wissen['files_used'] ?? null]);
+
+        return ['werte' => (array) $vorschlag->werte, 'confidence' => max(0.0, min(1.0, (float) $vorschlag->confidence))];
+    }
 }

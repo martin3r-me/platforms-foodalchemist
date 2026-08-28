@@ -492,6 +492,8 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     // D3d: KI-Rollenverteilung (Vorschlag/accept) + kulinarische Kohärenz/Teller-Heber.
                     \Platform\FoodAlchemist\Tools\RecipeRollenPostTool::class,
                     \Platform\FoodAlchemist\Tools\RecipeCoherencePostTool::class,
+                    // D3d: grounded VK-Freitext-Revision (vk.ueberarbeiten; Draft-Quarantäne; Workstream W).
+                    \Platform\FoodAlchemist\Tools\VerkaufsrezepteReviseTool::class,
                     // #513 Tier 1: Grammaturen-Rechner (Bäckerprozent/Extraprozent/Brining/Bloom)
                     \Platform\FoodAlchemist\Tools\ProportionCalcTool::class,
                     // #513: %→Gramm-Rückschreiben (Batch-Skalierung + Einzel-Zutat-Edit, write)

@@ -269,10 +269,12 @@ class KnowledgeImportCommand extends Command
             ['recipe.steps', 'domain', 'discovery', null, null],
             ['recipe.steps', 'kueche', 'discovery', 3, 3000],
             ['recipe.steps', 'niveau', 'discovery', 1, 3000],
-            // Workstream W (MCP-Steuerbarkeit D2c, 2026-08-29): Freitext-Revision am Regelwerk
-            // Basisrezepte erden (Editor + MCP recipes.REVISE). Spiegel von Migration
-            // 2026_08_29_000001. regelwerkBlock wählt den Basisrezepte-Slug über den Feature-Fallback.
+            // Workstream W (MCP-Steuerbarkeit D2c/D3, 2026-08-29): Freitext-Revision am Regelwerk
+            // Basisrezepte erden (Editor + MCP recipes.REVISE / verkaufsrezepte.REVISE). Spiegel von
+            // Migrationen 2026_08_29_000001 (Rezept) + _000002 (Gericht). regelwerkBlock wählt den
+            // Basisrezepte-Slug über den Feature-Fallback.
             ['recipe.ueberarbeiten', 'regelwerk', 'always', 1, 7000],
+            ['vk.ueberarbeiten', 'regelwerk', 'always', 1, 7000],
             ['ai_plan_dishes', 'cross_cutting', 'always', null, null],
             ['ai_plan_dishes', 'domain', 'discovery', null, null],
             // Spec 19 E6.4 / Spec 08 P6: Kreativ-Divergenz am Kapitel (foodbook.plan) bzw.
