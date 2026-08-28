@@ -8,6 +8,7 @@ use Livewire\Attributes\Url;
 use Livewire\Component;
 use Livewire\WithFileUploads;
 use Platform\Core\Models\Team;
+use Platform\FoodAlchemist\Models\FoodAlchemistAngebot;
 use Platform\FoodAlchemist\Models\FoodAlchemistCascadeRun;
 use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
 use Platform\FoodAlchemist\Models\FoodAlchemistDishIdea;
@@ -15,6 +16,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistPlanningSession;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipeStepPhoto;
 use Platform\FoodAlchemist\Services\CanvasService;
+use Platform\FoodAlchemist\Services\AngebotService;
 use Platform\FoodAlchemist\Services\ConceptGeneratorService;
 use Platform\FoodAlchemist\Services\ConceptService;
 use Platform\FoodAlchemist\Services\FoodbookService;
@@ -459,6 +461,12 @@ class Index extends Component
             $this->skPanelAuf = true;
             $this->aktiviereOwnerSession('speisekarte', $this->skOwnerId);
         }
+        // #5 (2026-08-28) — Handoff aus dem Angebots-Modul (owner_type=offer).
+        if (request()->filled('offer_owner')) {
+            $this->offerOwnerId = (int) request('offer_owner');
+            $this->offerPanelAuf = true;
+            $this->aktiviereOwnerSession('offer', $this->offerOwnerId);
+        }
     }
 
     private function team(): ?Team
@@ -579,6 +587,34 @@ class Index extends Component
     public ?int $spOwnerId = null;
 
     public bool $spPanelAuf = false;
+
+    /** #5 (2026-08-28): Angebot-aus-Brief-Eingabe — spiegelt sk*, owner_type=offer (Andock + Kaskade existieren). */
+    public string $offerTitel = '';
+
+    public string $offerBrief = '';
+
+    public ?string $offerMeldung = null;
+
+    /** Handoff aus einem bestehenden Angebot: dann kein neues anlegen. */
+    public ?int $offerOwnerId = null;
+
+    public bool $offerPanelAuf = false;
+
+    /** #5: Angebot-Auswähler — bestehendes Angebot wählen → Owner + jüngste Session (spiegelt updatedSkOwnerId). */
+    public function updatedOfferOwnerId(): void
+    {
+        $team = $this->team();
+        if ($team === null || $this->offerOwnerId === null) {
+            return;
+        }
+        $angebot = FoodAlchemistAngebot::visibleToTeam($team)->find($this->offerOwnerId);
+        if ($angebot === null) {
+            $this->offerOwnerId = null;
+
+            return;
+        }
+        $this->aktiviereOwnerSession('offer', $this->offerOwnerId);
+    }
 
     /**
      * Stage 2 (Leitstelle-Auswähler, 2026-08-23): ein BESTEHENDES Foodbook zum Planen wählen. Setzt den
@@ -871,6 +907,79 @@ class Index extends Component
             $this->oeffne($session->id, 'worker');
         } catch (\Throwable $e) {
             $this->spMeldung = $e->getMessage();
+        }
+    }
+
+    /**
+     * #5 (Dominique 2026-08-28) — „Angebot aus Brief" IN der Leitstelle. Spiegelt {@see speisekarteAusBrief},
+     * owner_type=offer: der Gerüst-Prompt ist owner-neutral, die Voll-Kaskade erzeugt je Slot ein Konzept,
+     * das via `GenerateConceptJob`-Andock direkt ans Angebot referenziert wird (Pivot foodalchemist_offer_concept;
+     * KEIN Zwischen-Container wie Kapitel/Rubrik — containerId = Angebots-ID). Andock + Kaskade existieren bereits;
+     * hier fehlte nur der Leitstellen-Einstieg.
+     */
+    public function angebotAusBrief(
+        AngebotService $angebote,
+        ConceptGeneratorService $concepts,
+        PlanningCascadeService $cascade,
+        PlanningSessionService $sessions,
+        TeamSettingsService $settings,
+        CanvasService $canvas,
+    ): void {
+        $this->offerMeldung = null;
+        $team = $this->team();
+        if ($team === null) {
+            $this->offerMeldung = 'Kein Team zugeordnet — Erstellung nicht möglich.';
+
+            return;
+        }
+        $brief = trim($this->offerBrief);
+        if ($brief === '') {
+            $this->offerMeldung = 'Bitte einen Brief eingeben (Anlass, Gäste, Saison, Niveau, Budget …).';
+
+            return;
+        }
+
+        try {
+            // 1. Angebot: bestehendes (Handoff, $offerOwnerId) ODER neue Hülle (Direktstart in der Leitstelle).
+            if ($this->offerOwnerId !== null) {
+                $angebot = FoodAlchemistAngebot::visibleToTeam($team)->find($this->offerOwnerId);
+                if ($angebot === null) {
+                    $this->offerMeldung = 'Angebot nicht gefunden oder kein Zugriff.';
+
+                    return;
+                }
+            } else {
+                $name = trim($this->offerTitel) !== '' ? trim($this->offerTitel) : 'Angebot aus Brief';
+                $angebot = $angebote->create($team, ['name' => $name]);
+            }
+
+            // 2. Gerüst aus dem Brief (owner-neutral). marken_kontext aus dem CRM-Kunden, falls verknüpft.
+            $concepts->geruestAusBriefFuerOwner($team, 'offer', $angebot->id, $brief, [
+                'segment' => $settings->segment($team),
+                'marken_kontext' => $canvas->cascadeKontext($team, null, null, null, $angebot->crm_company_id ?? null)['marken_kontext'] ?? null,
+            ]);
+
+            // 3. Review-Session + Voll-Kaskade (1 Concept je Slot → ans Angebot referenziert).
+            $session = $sessions->create($team, [
+                'title' => 'Angebot aus Brief: ' . $angebot->name,
+                'brief' => $brief,
+                'created_via' => 'leitstelle_offer_brief',
+            ]);
+            $cascade->starteKaskade($team, 'vollkaskade', $session, 'voll_kreativ', [
+                'owner_type' => 'offer',
+                'owner_id' => $angebot->id,
+                'created_via' => 'leitstelle_offer_brief',
+            ]);
+
+            $this->offerTitel = '';
+            $this->offerBrief = '';
+            $this->offerOwnerId = null;
+            $this->offerPanelAuf = false;
+            $this->oeffne($session->id, 'worker');
+        } catch (\Throwable $e) {
+            // LLM nicht verfügbar/deaktiviert, leerer Brief o.ä. → Meldung statt 500. Eine ggf. schon
+            // angelegte leere Angebots-Hülle bleibt in der Liste (verwerfbar) — bewusst kein Rollback.
+            $this->offerMeldung = $e->getMessage();
         }
     }
 
