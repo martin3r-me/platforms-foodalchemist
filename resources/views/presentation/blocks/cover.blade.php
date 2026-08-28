@@ -3,8 +3,11 @@
     $coverUrl = ($style['show_cover_image'] ?? true) ? ($branding['cover']['url'] ?? null) : null;
     $logoUrl = ($style['show_logo'] ?? true) ? ($branding['logo']['url'] ?? null) : null;
     $kicker = $meta['kicker'] ?? 'Kulinarisches Angebot';
+    // Bild-Spielraum: Füll-Modus (füllen=cover / einpassen=contain, zeigt das ganze Bild) + Höhe.
+    $fitContain = ($style['cover_fit'] ?? 'cover') === 'contain';
+    $hoehe = in_array($style['cover_height'] ?? 'gross', ['klein', 'mittel', 'gross'], true) ? ($style['cover_height'] ?? 'gross') : 'gross';
 @endphp
-<header class="pt-hero {{ $coverUrl ? 'has-media' : 'no-media' }}">
+<header class="pt-hero pt-hero--h-{{ $hoehe }} {{ $fitContain ? 'pt-hero--fit-contain' : '' }} {{ $coverUrl ? 'has-media' : 'no-media' }}">
     @if($coverUrl)
         <div class="pt-hero-media"><img src="{{ $coverUrl }}" alt=""></div>
     @endif

@@ -163,10 +163,12 @@ class PresentationService
         };
 
         $branding = $this->brandingIdentifiers($entity);
+        $tokens = $this->designs->resolveTokens($designSource, $team, $branding, $clean);
+        $speiseplanLayout = ($tokens['speiseplan_layout'] ?? 'grid') === 'liste' ? 'liste' : 'grid';
         $resolvedDesign = [
             'source' => $designSource,
-            'layout' => $this->adaptLayoutForType($type, $this->designs->resolveLayout($designSource, $team)),
-            'tokens' => $this->designs->resolveTokens($designSource, $team, $branding, $clean),
+            'layout' => $this->adaptLayoutForType($type, $this->designs->resolveLayout($designSource, $team), $speiseplanLayout),
+            'tokens' => $tokens,
             'custom_css' => $this->designs->resolveCss($designSource, $team),
         ];
 
@@ -233,7 +235,7 @@ class PresentationService
                 $liste[] = $g;
             }
             $chapImg[(int) $c->id] = $primary;
-            $chapImages[(int) $c->id] = array_slice($liste, 0, 3);   // Band zeigt max. 3
+            $chapImages[(int) $c->id] = array_slice($liste, 0, 6);   // Band zeigt max. 6
         }
 
         $sections = [];
@@ -324,9 +326,10 @@ class PresentationService
         // Content + Branding regulär bauen (typ-korrekte Normalisierung), dann das aufgelöste
         // Design durch die LIVE-Builder-Werte ersetzen (Layout/Tokens/CSS aus der Bearbeitung).
         $snapshot = $this->buildSnapshot($team, $entity, $type, ['design' => 'editorial']);
+        $spMode = ($tokens['speiseplan_layout'] ?? 'grid') === 'liste' ? 'liste' : 'grid';
         $snapshot['resolved_design'] = [
             'source' => '(builder)',
-            'layout' => $this->adaptLayoutForType($type, $this->designs->normalizeLayout($layout)),
+            'layout' => $this->adaptLayoutForType($type, $this->designs->normalizeLayout($layout), $spMode),
             'tokens' => $tokens,
             'custom_css' => $this->designs->sanitizeCss($customCss),
         ];
@@ -431,6 +434,39 @@ class PresentationService
             $lines[] = ['name' => (string) ($z['linie'] ?? ''), 'color' => $z['color'] ?? null, 'cells' => $cells];
         }
 
+        // Listen-Variante (Speiseplan-Ausgabe „Liste" statt Tabelle): pro Tag eine Sektion,
+        // je Linie ein Block mit den Einträgen des Tages. Rendert über chapter_loop.
+        $sections = [];
+        foreach ($dok['tage'] ?? [] as $t) {
+            $ymd = $t['ymd'] ?? '';
+            $blocks = [];
+            foreach ($dok['zeilen'] ?? [] as $z) {
+                $eintraege = $z['zellen'][$ymd] ?? [];
+                if ($eintraege === []) {
+                    continue;
+                }
+                $blocks[] = [
+                    'kind' => 'speiseplan_line',
+                    'label' => (string) ($z['linie'] ?? ''),
+                    'is_header' => true,
+                    'codes' => [],
+                    'items' => array_map(fn ($e) => [
+                        'label' => (string) ($e['name'] ?? ''),
+                        'codes' => array_values((array) ($e['codes'] ?? [])),
+                        'indent' => 0,
+                    ], $eintraege),
+                ];
+            }
+            if ($blocks === []) {
+                continue;
+            }
+            $sections[] = [
+                'title' => (string) ($t['label'] ?? ''),
+                'text' => null, 'depth' => 0, 'anker' => 'tag-' . $ymd,
+                'image' => null, 'images' => [], 'blocks' => $blocks,
+            ];
+        }
+
         return [
             'title' => (string) ($plan->name ?: 'Speiseplan'),
             'subtitle' => trim((string) (($dok['kwLabel'] ?? '') . ' · ' . ($dok['mahlzeitLabel'] ?? ''))) ?: null,
@@ -440,7 +476,7 @@ class PresentationService
             ],
             'body' => [
                 'layout_kind' => 'grid',
-                'sections' => [],
+                'sections' => $sections,
                 'grid' => ['tage' => $tage, 'lines' => $lines],
                 'kostformen' => $dok['kostformen'] ?? null,
                 'naehrwerte' => $dok['naehrwerte'] ?? null,
@@ -459,27 +495,31 @@ class PresentationService
      * @param  list<array{block_type:string, style:array}>  $layout
      * @return list<array{block_type:string, style:array}>
      */
-    private function adaptLayoutForType(string $type, array $layout): array
+    private function adaptLayoutForType(string $type, array $layout, string $mode = 'grid'): array
     {
         if ($type !== self::TYPE_SPEISEPLAN) {
             return $layout;
         }
+        // Speiseplan-Ausgabe: „grid" = Wochenraster (Default), „liste" = Tag-für-Tag-Sektionen
+        // (rendert über chapter_loop). Genau EIN Content-Block; alle linearen/Grid-Blöcke
+        // werden auf den gewählten Ausgabe-Block reduziert.
+        $contentBlock = $mode === 'liste' ? 'chapter_loop' : 'grid';
         $out = [];
-        $gridGesetzt = false;
+        $gesetzt = false;
         foreach ($layout as $block) {
             $bt = $block['block_type'] ?? '';
-            if (in_array($bt, ['chapter_loop', 'dish_list', 'price_summary'], true)) {
-                if (! $gridGesetzt) {
-                    $out[] = ['block_type' => 'grid', 'style' => $block['style'] ?? []];
-                    $gridGesetzt = true;
+            if (in_array($bt, ['chapter_loop', 'dish_list', 'price_summary', 'grid'], true)) {
+                if (! $gesetzt) {
+                    $out[] = ['block_type' => $contentBlock, 'style' => $block['style'] ?? []];
+                    $gesetzt = true;
                 }
 
-                continue; // weitere Content-Blöcke fallen weg (ein Grid genügt)
+                continue;
             }
             $out[] = $block;
         }
-        if (! $gridGesetzt) {
-            // Kein Content-Block im Design → Grid vor die Legende (oder ans Ende) einschieben.
+        if (! $gesetzt) {
+            // Kein Content-Block im Design → Ausgabe-Block vor die Legende (oder ans Ende).
             $legendIdx = null;
             foreach ($out as $i => $b) {
                 if (($b['block_type'] ?? '') === 'legend') {
@@ -487,11 +527,11 @@ class PresentationService
                     break;
                 }
             }
-            $grid = ['block_type' => 'grid', 'style' => []];
+            $inject = ['block_type' => $contentBlock, 'style' => []];
             if ($legendIdx !== null) {
-                array_splice($out, $legendIdx, 0, [$grid]);
+                array_splice($out, $legendIdx, 0, [$inject]);
             } else {
-                $out[] = $grid;
+                $out[] = $inject;
             }
         }
 
@@ -528,6 +568,17 @@ class PresentationService
                 if (is_array($gi) && (($gi['context_file_id'] ?? null) || ($gi['path'] ?? null))) {
                     $snapshot['content']['sections'][$i]['images'][$j]['url'] = $this->media->url($gi['context_file_id'] ?? null, $gi['path'] ?? null);
                 }
+            }
+        }
+
+        // Freier Bild-Block (Struktur-Builder): Identifier in der Layout-Definition → frische URL.
+        foreach ($snapshot['resolved_design']['layout'] ?? [] as $i => $block) {
+            if (($block['block_type'] ?? '') !== 'image') {
+                continue;
+            }
+            $st = $block['style'] ?? [];
+            if (($st['context_file_id'] ?? null) || ($st['path'] ?? null)) {
+                $snapshot['resolved_design']['layout'][$i]['style']['url'] = $this->media->url($st['context_file_id'] ?? null, $st['path'] ?? null);
             }
         }
 
