@@ -153,6 +153,8 @@
         .pt-line-dots { flex: 1; margin: 0 8px; border-bottom: 1px dotted color-mix(in srgb, var(--pt-text) 32%, transparent); transform: translateY(-3px); min-width: 20px; }
         .pt-line-price { font-family: var(--pt-heading-font); color: var(--pt-primary); font-weight: 600; white-space: nowrap; }
         .pt-item .pt-line-label { color: var(--pt-text); font-weight: 400; }
+        .pt-item--foto { align-items: center; }
+        .pt-item-foto { width: 52px; height: 52px; object-fit: cover; border-radius: 6px; margin-right: 12px; flex: 0 0 auto; }
         .pt-item.pt-indent-1 { padding-left: 18px; }
         .pt-item.pt-indent-2 { padding-left: 36px; }
         .pt-codes { color: var(--pt-muted); font-size: .62em; font-weight: 600; letter-spacing: .06em; vertical-align: super; margin-left: 4px; }

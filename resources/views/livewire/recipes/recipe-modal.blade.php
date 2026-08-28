@@ -290,6 +290,22 @@
                 <input type="text" wire:model.live.debounce.300ms="form.name" placeholder="Schaumsauce: Beurre Blanc" class="{{ $input }}" data-rezept-name />
                 <p class="text-[10px] text-gray-500 mt-0.5">§1.2: <code>Typ: Bezeichnung (Variante)</code>, Title Case @if($keyVorschau !== '')· <span class="font-mono" data-key-vorschau>{{ $keyVorschau }}{{ $neu ? '' : ' (stabil)' }}</span>@endif</p>
             </div>
+            @if(!$neu)
+                {{-- Spec 43 (Bild-Epic): Gericht-Foto — optional in der Präsentation (Builder-Toggle „Gericht-Fotos") --}}
+                <div class="col-span-2" data-rezept-bild>
+                    <label class="block {{ $label }} mb-1">Gericht-Foto <span class="normal-case text-gray-400">(optional, für die Präsentation)</span></label>
+                    <div class="flex items-center gap-3 flex-wrap">
+                        @if($dishImageUrl)
+                            <img src="{{ $dishImageUrl }}" alt="" class="h-12 w-20 object-cover rounded border border-black/10">
+                            <button type="button" wire:click="dishImageEntfernen" class="text-rose-600 text-[11px] underline">entfernen</button>
+                        @endif
+                        <input type="file" wire:model="dishImageUpload" accept="image/*" class="text-[11px]" data-rezept-bild-upload>
+                        <div wire:loading wire:target="dishImageUpload" class="text-[11px] text-gray-400">lädt …</div>
+                    </div>
+                    @error('dishImageUpload')<div class="text-[11px] text-rose-600 mt-1">{{ $message }}</div>@enderror
+                    <p class="text-[10px] text-gray-500 mt-0.5">Wird nur gezeigt, wenn im Präsentations-Design „Gericht-Fotos" aktiv ist.</p>
+                </div>
+            @endif
             <div>
                 <label class="block {{ $label }} mb-1">Herkunft / Quelle <span class="normal-case text-gray-400">(nicht im Namen — §1.6)</span></label>
                 <input type="text" wire:model="form.origin_source" placeholder="z. B. Broich, nach Paul, nach Omas Art" class="{{ $input }}" />

@@ -200,6 +200,28 @@ class PresentationService
         $showPrice = (bool) $settings['price_display'];
         $showDecl = (bool) $settings['declaration'];
 
+        // Bild-Epic: Gericht-Fotos. recipe_id NICHT in den Snapshot (Interna) — nur den Bild-Identifier.
+        // Alle Rezept-IDs vorab sammeln → EIN Query → Map id ⇒ {context_file_id, path}.
+        $dishIds = [];
+        foreach ($dok['kapitel'] ?? [] as $k) {
+            foreach ($k['bloecke'] ?? [] as $b) {
+                foreach ($b['gerichte'] ?? [] as $g) {
+                    if (! empty($g['recipe_id'])) {
+                        $dishIds[(int) $g['recipe_id']] = true;
+                    }
+                }
+            }
+        }
+        $dishFotos = [];
+        if ($dishIds !== []) {
+            foreach (\Platform\FoodAlchemist\Models\FoodAlchemistRecipe::whereIn('id', array_keys($dishIds))
+                ->get(['id', 'image_context_file_id', 'image_path']) as $rec) {
+                if ($rec->image_context_file_id || $rec->image_path) {
+                    $dishFotos[(int) $rec->id] = ['context_file_id' => $rec->image_context_file_id, 'path' => $rec->image_path];
+                }
+            }
+        }
+
         // Bild-Epic: Kapitel-Band-Bilder je Kapitel-ID. VORRANG: Kapitel-Bild + Kapitel-Galerie;
         // ist am Kapitel NICHTS hinterlegt → Fallback aufs Concept (Titelbild + Concept-Galerie,
         // erstes concept_ref-Konzept). $fb->chapters kommt voll aus dokumentDaten; Galerien nachladen.
@@ -247,6 +269,7 @@ class PresentationService
                 $perItem = (bool) ($b['einzelpreise'] ?? false);
                 $items = [];
                 foreach ($b['gerichte'] as $g) {
+                    $rid = ! empty($g['recipe_id']) ? (int) $g['recipe_id'] : null;
                     $items[] = [
                         'kind' => (string) ($g['type'] ?? 'gericht'),
                         'label' => (string) ($g['text'] ?? ''),
@@ -254,6 +277,8 @@ class PresentationService
                         // NUR VK (Kunde) und nur wenn Preisanzeige an; EK/source/slot_id/recipe_id werden NICHT übernommen.
                         'price' => ($showPrice && ($g['preis'] ?? null) !== null) ? (float) $g['preis'] : null,
                         'codes' => $showDecl ? array_values((array) ($g['codes'] ?? [])) : [],
+                        // Gericht-Foto als Identifier (recipe_id selbst bleibt draußen); Anzeige per Design-Toggle.
+                        'image' => ($rid !== null && isset($dishFotos[$rid])) ? $dishFotos[$rid] : null,
                     ];
                 }
                 $blocks[] = [
@@ -569,6 +594,15 @@ class PresentationService
             foreach ($sec['images'] ?? [] as $j => $gi) {
                 if (is_array($gi) && (($gi['context_file_id'] ?? null) || ($gi['path'] ?? null))) {
                     $snapshot['content']['sections'][$i]['images'][$j]['url'] = $this->media->url($gi['context_file_id'] ?? null, $gi['path'] ?? null);
+                }
+            }
+            // Gericht-Fotos je Item (Identifier → frische URL).
+            foreach ($sec['blocks'] ?? [] as $bi => $blk) {
+                foreach ($blk['items'] ?? [] as $ii => $it) {
+                    $img = $it['image'] ?? null;
+                    if (is_array($img) && (($img['context_file_id'] ?? null) || ($img['path'] ?? null))) {
+                        $snapshot['content']['sections'][$i]['blocks'][$bi]['items'][$ii]['image']['url'] = $this->media->url($img['context_file_id'] ?? null, $img['path'] ?? null);
+                    }
                 }
             }
         }

@@ -2,6 +2,7 @@
 @php
     $showPrice = $style['show_price'] ?? true;
     $showCodes = $style['show_codes'] ?? true;
+    $showFotos = $style['show_dish_photos'] ?? false;   // Gericht-Fotos nur wenn im Design aktiviert
     $blockPrice = null;
     // Null-Preise ausblenden (unpreise Konzepte zeigen sonst „0,00 €").
     if ($showPrice && ! empty($b['price']) && ((float) ($b['price']['pp'] ?? 0) > 0 || (float) ($b['price']['pauschal'] ?? 0) > 0)) {
@@ -24,7 +25,10 @@
     @if(!empty($b['subtitle']))<p class="pt-block-sub">{{ $b['subtitle'] }}</p>@endif
 
     @foreach(($b['items'] ?? []) as $it)
-        <div class="pt-line pt-item pt-indent-{{ min((int) ($it['indent'] ?? 0), 2) }}">
+        <div class="pt-line pt-item pt-indent-{{ min((int) ($it['indent'] ?? 0), 2) }} @if($showFotos && !empty($it['image']['url'])) pt-item--foto @endif">
+            @if($showFotos && !empty($it['image']['url']))
+                <img class="pt-item-foto pt-zoomable" src="{{ $it['image']['url'] }}" alt="" loading="lazy">
+            @endif
             <span class="pt-line-label">{{ $it['label'] }}@if($showCodes && !empty($it['codes']))<span class="pt-codes">{{ implode(' ', array_map('strval', $it['codes'])) }}</span>@endif@if(!empty($it['subtitle']))<span style="color:var(--pt-muted); font-weight:400"> — {{ $it['subtitle'] }}</span>@endif</span>
             @if($showPrice && ($it['price'] ?? null) !== null)
                 <span class="pt-line-dots" aria-hidden="true"></span>

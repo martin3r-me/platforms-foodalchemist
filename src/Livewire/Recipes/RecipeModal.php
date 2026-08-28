@@ -5,6 +5,7 @@ namespace Platform\FoodAlchemist\Livewire\Recipes;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\On;
 use Livewire\Component;
+use Livewire\WithFileUploads;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipeCategory;
 use Platform\FoodAlchemist\Services\Ai\AiGatewayService;
@@ -19,6 +20,32 @@ class RecipeModal extends Component
 {
     use \Platform\FoodAlchemist\Livewire\Concerns\HatRezeptCopilot;   // Spec 03 L6b
     use \Platform\FoodAlchemist\Livewire\Concerns\InteractsWithSavedToast;
+    use WithFileUploads;
+
+    /** Spec 43 (Bild-Epic): Gericht-Foto (Stammdaten). */
+    public $dishImageUpload = null;
+
+    public function updatedDishImageUpload(): void
+    {
+        if ($this->recipeId === null || $this->dishImageUpload === null) {
+            return;
+        }
+        $team = Auth::user()?->currentTeamRelation;
+        $this->validate(['dishImageUpload' => 'image|max:8192'], [], ['dishImageUpload' => 'Gericht-Foto']);
+        try {
+            app(RecipeService::class)->storeDishImage($team, $this->recipeId, $this->dishImageUpload);
+        } catch (\Throwable $e) {
+            $this->fehler = $e->getMessage();
+        }
+        $this->reset('dishImageUpload');
+    }
+
+    public function dishImageEntfernen(): void
+    {
+        if ($this->recipeId !== null) {
+            app(RecipeService::class)->clearDishImage(Auth::user()?->currentTeamRelation, $this->recipeId);
+        }
+    }
 
     private const LEER = [
         'name' => '', 'origin_source' => '', 'category_id' => null, 'hauptgruppe_id' => null,
@@ -791,6 +818,9 @@ class RecipeModal extends Component
 
         return view('foodalchemist::livewire.recipes.recipe-modal', [
             'neu' => $this->recipeId === null,
+            'dishImageUrl' => ($r !== null && ($r->image_context_file_id || $r->image_path))
+                ? app(\Platform\FoodAlchemist\Services\FoodAlchemistMediaService::class)->url($r->image_context_file_id, $r->image_path)
+                : null,
             'istTemplate' => (bool) ($r?->is_template ?? false),
             'voll' => $voll,
             'bulkRun' => $bulkRun,
