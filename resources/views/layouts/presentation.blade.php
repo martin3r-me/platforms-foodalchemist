@@ -119,9 +119,11 @@
             .pt-section:nth-of-type(even) .pt-section-grid--split .pt-section-aside { order: 1; }
         }
         /* Gericht-Zeilen mehrspaltig (Masonry via CSS-columns) */
-        .pt-blocks.pt-cols-2 { columns: 2; column-gap: clamp(28px, 5vw, 56px); }
-        .pt-blocks.pt-cols-2 .pt-block { break-inside: avoid; -webkit-column-break-inside: avoid; }
-        @media (max-width: 720px) { .pt-blocks.pt-cols-2 { columns: 1; } }
+        /* Standard: eine ruhige Lesespalte (nicht über die ganze Breite gezogen). */
+        .pt-blocks { max-width: 760px; }
+        /* Opt-in-Variante: sauberes 2-Spalten-Raster (echtes Grid, keine Masonry). */
+        .pt-blocks.pt-cols-2 { max-width: none; display: grid; grid-template-columns: 1fr 1fr; column-gap: clamp(28px, 5vw, 52px); align-items: start; }
+        @media (max-width: 720px) { .pt-blocks.pt-cols-2 { grid-template-columns: 1fr; } }
         @media (max-width: 640px) { .pt-section-gallery { grid-template-columns: 1fr; } }
 
         /* Menü-Zeilen mit Punkt-Leadern (Magazin/Menü-Look) */
@@ -213,7 +215,7 @@
             .pt-hero { min-height: auto; }
             body { background: #fff; }
             .pt-reveal { opacity: 1 !important; transform: none !important; }
-            .pt-blocks.pt-cols-2 { columns: 2; }
+            .pt-blocks.pt-cols-2 { grid-template-columns: 1fr 1fr; }
         }
     </style>
     @php $customCss = $snapshot['resolved_design']['custom_css'] ?? null; @endphp

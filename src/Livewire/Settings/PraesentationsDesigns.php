@@ -5,6 +5,8 @@ namespace Platform\FoodAlchemist\Livewire\Settings;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
 use Platform\FoodAlchemist\Models\FoodAlchemistFoodbook;
+use Platform\FoodAlchemist\Models\FoodAlchemistSpeisekarte;
+use Platform\FoodAlchemist\Models\FoodAlchemistSpeiseplan;
 use Platform\FoodAlchemist\Services\PresentationDesignService;
 use Platform\FoodAlchemist\Services\PresentationService;
 
@@ -52,7 +54,10 @@ class PraesentationsDesigns extends Component
 
     public ?int $selectedBlockIndex = null;
 
-    public ?int $previewFoodbookId = null;
+    /** Vorschau: gegen welche Ausgabeform + welche konkrete Quelle live gerendert wird. */
+    public string $previewType = 'foodbook';
+
+    public ?int $previewSourceId = null;
 
     public ?string $status = null;
 
@@ -82,7 +87,13 @@ class PraesentationsDesigns extends Component
     public function mount(): void
     {
         $this->neuAusBuiltin('editorial');
-        $this->previewFoodbookId = $this->foodbookOptionen()[0]['id'] ?? null;
+        $this->previewSourceId = $this->quellenOptionen()[0]['id'] ?? null;
+    }
+
+    /** Vorschau-Form gewechselt → erste passende Quelle vorbelegen. */
+    public function updatedPreviewType(): void
+    {
+        $this->previewSourceId = $this->quellenOptionen()[0]['id'] ?? null;
     }
 
     // ── Design-Verwaltung ──────────────────────────────────────────────────
@@ -276,29 +287,40 @@ class PraesentationsDesigns extends Component
             ])->all();
     }
 
-    /** @return list<array{id:int, label:string}> */
-    private function foodbookOptionen(): array
+    /** Quellen der aktuellen Vorschau-Form (Foodbook/Speisekarte/Speiseplan). @return list<array{id:int, label:string}> */
+    private function quellenOptionen(): array
     {
         $team = Auth::user()?->currentTeamRelation;
         if ($team === null) {
             return [];
         }
+        [$model, $labelCols] = match ($this->previewType) {
+            'speisekarte' => [FoodAlchemistSpeisekarte::class, ['name', 'code']],
+            'speiseplan' => [FoodAlchemistSpeiseplan::class, ['name']],
+            default => [FoodAlchemistFoodbook::class, ['label', 'code']],
+        };
 
-        return FoodAlchemistFoodbook::visibleToTeam($team)
-            ->orderByDesc('id')->limit(50)
-            ->get(['id', 'label', 'code'])
-            ->map(fn ($f) => ['id' => (int) $f->id, 'label' => (string) ($f->label ?: $f->code ?: ('Foodbook #' . $f->id))])
-            ->all();
+        return $model::visibleToTeam($team)
+            ->orderByDesc('id')->limit(50)->get()
+            ->map(function ($e) use ($labelCols) {
+                foreach ($labelCols as $c) {
+                    if (! empty($e->{$c})) {
+                        return ['id' => (int) $e->id, 'label' => (string) $e->{$c}];
+                    }
+                }
+
+                return ['id' => (int) $e->id, 'label' => '#' . $e->id];
+            })->all();
     }
 
     private function vorschauHtml(): ?string
     {
         $team = Auth::user()?->currentTeamRelation;
-        if ($team === null || $this->previewFoodbookId === null) {
+        if ($team === null || $this->previewSourceId === null) {
             return null;
         }
         try {
-            $snap = app(PresentationService::class)->designPreview($team, $this->previewFoodbookId, $this->layout, $this->tokens, $this->customCss);
+            $snap = app(PresentationService::class)->designPreview($team, $this->previewType, $this->previewSourceId, $this->layout, $this->tokens, $this->customCss);
 
             return view('foodalchemist::presentation.show', ['snapshot' => $snap])->render();
         } catch (\Throwable) {
@@ -310,7 +332,7 @@ class PraesentationsDesigns extends Component
     {
         return view('foodalchemist::livewire.settings.praesentations-designs', [
             'designs' => $this->designListe(),
-            'foodbookOptionen' => $this->foodbookOptionen(),
+            'quellenOptionen' => $this->quellenOptionen(),
             'blockTypen' => PresentationDesignService::BLOCK_TYPES,
             'blockLabels' => self::BLOCK_LABELS,
             'vorschauHtml' => $this->vorschauHtml(),

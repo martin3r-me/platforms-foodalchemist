@@ -74,7 +74,8 @@ it('Struktur-Builder speichert custom_css + Live-Vorschau wendet es an', functio
         ->set('name', 'Builder-CSS')
         ->set('baseSlug', 'editorial')
         ->set('customCss', '.pt-hero-title{ letter-spacing:.09em }')
-        ->set('previewFoodbookId', $fb->id)
+        ->set('previewType', 'foodbook')
+        ->set('previewSourceId', $fb->id)
         ->call('speichern');
 
     $id = $c->get('selectedId');
@@ -82,7 +83,7 @@ it('Struktur-Builder speichert custom_css + Live-Vorschau wendet es an', functio
     expect($design->custom_css)->toContain('letter-spacing:.09em');
 
     // Live-Vorschau (designPreview) trägt das CSS.
-    $snap = $this->pres->designPreview($team, $fb->id, $design->layout_json, $design->tokens_json, $design->custom_css);
+    $snap = $this->pres->designPreview($team, 'foodbook', $fb->id, $design->layout_json, $design->tokens_json, $design->custom_css);
     expect($snap['resolved_design']['custom_css'])->toContain('letter-spacing:.09em');
 });
 
