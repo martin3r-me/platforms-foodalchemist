@@ -4,6 +4,7 @@ namespace Platform\FoodAlchemist\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Platform\ActivityLog\Traits\LogsActivity;
 use Platform\FoodAlchemist\Models\Concerns\HasUuidV7;
 
 /**
@@ -15,7 +16,7 @@ use Platform\FoodAlchemist\Models\Concerns\HasUuidV7;
  */
 class FoodAlchemistConformanceFinding extends Model
 {
-    use HasUuidV7, SoftDeletes;
+    use HasUuidV7, LogsActivity, SoftDeletes;
 
     /** offen = Hinweis-Kandidat; verworfen bleibt verworfen; verschwunden = zuletzt nicht mehr gemeldet. */
     public const STATUS = ['offen', 'verworfen', 'verschwunden'];

@@ -87,6 +87,9 @@ it('Trait-Vertrag: ALLE Models tragen LogsActivity + BelongsToTeamHierarchy + Ha
     $messreihen = [
         'FoodAlchemistSignalSnapshot', 'FoodAlchemistRecipeFinding', 'FoodAlchemistBulkRun',
         'FoodAlchemistBulkProposal', 'FoodAlchemistBulkGpProposal',
+        // Schicht-3-Konformitätsbefund: Urteil EINES Teams über ein Artefakt (wie RecipeFinding) —
+        // team_id vorhanden, aber NICHT vererbt (sonst mischte ein „verworfen" des Eltern-Teams in die Kind-Inbox).
+        'FoodAlchemistConformanceFinding',
     ];
     $modelDir = dirname((new ReflectionClass(FoodAlchemistRecipe::class))->getFileName());
     $fehlend = [];
