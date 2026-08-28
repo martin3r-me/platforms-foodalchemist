@@ -9,8 +9,10 @@ use Platform\Core\Contracts\ToolResult;
 use Platform\FoodAlchemist\Services\TeamSettingsService;
 
 /**
- * Phase C: Team-Einstellungen (READ-ONLY via MCP — Settings ändern nur
- * Menschen in der UI). Liefert die fürs LLM relevanten Rahmenparameter.
+ * Phase C: Team-Einstellungen lesen — die fürs LLM relevanten Rahmenparameter.
+ *
+ * Schreiben der Skalar-Config läuft über `team_settings.PUT` (MCP-Steuerbarkeit Phase 0).
+ * Vokabular/Taxonomie werden weiterhin nur von Menschen in der UI angelegt/gelöscht.
  */
 class SettingsGetTool extends FoodAlchemistTool implements ToolContract, ToolMetadataContract
 {
@@ -50,7 +52,7 @@ class SettingsGetTool extends FoodAlchemistTool implements ToolContract, ToolMet
             // Effektiver Wert inkl. Code-Default (nie null).
             'default_topf_deckel_kg' => $svc->defaultTopfDeckelKg($team),
             'default_topf_deckel_stueck' => $svc->defaultTopfDeckelStueck($team),
-            'note' => 'Read-only: Einstellungen ändern nur Menschen in der UI.',
+            'note' => 'Skalar-Config schreibbar via team_settings.PUT; Vokabular/Taxonomie ändern nur Menschen in der UI.',
         ]);
     }
 

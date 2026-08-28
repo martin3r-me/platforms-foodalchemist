@@ -22,7 +22,7 @@ Capability. Sie beantwortet:
 | Capability | Anzahl | Aktuelle Aussage |
 |---|---:|---|
 | Prompt-Keys in `config/foodalchemist.php` | 64 | Registry vorhanden; 11 Keys ohne direkte statische Referenz in `src/` (die 5 seit 01.08. ergänzten Keys sind alle direkt referenziert) |
-| MCP-Toolklassen mit `foodalchemist.*`-Name | 169 | alle 169 werden im Provider aufgeführt |
+| MCP-Toolklassen mit `foodalchemist.*`-Name | 220 | Provider registriert 220 (203 Bestand + 17 MCP-Steuerbarkeit D1/Phase 0, Stand 2026-08-28); §7-Register wird nachgezogen (Alt-Liste = 169) |
 | Embedding-Pools mit Observern | 6 | GP, Rezept, Lieferant, Konzept, Foodbook, Lab Note |
 | Wissens-/Retrieval-Schichten | 2 | deterministisch plus optional semantisch |
 | dokumentierte vollständige MCP-Tenant-Abnahme | 0 | einzelne Tests vorhanden, keine 157-Tool-Matrix |
@@ -404,6 +404,26 @@ foodalchemist.vk_snapshots.GET
 foodalchemist.vk_snapshots.RELEASE
 foodalchemist.zielgruppen.GET
 foodalchemist.zielgruppen.POST
+
+# ── MCP-Steuerbarkeit 2026-08 (Phase 0 + D1) — additiv zur Alt-Liste ──
+# (Programm: gesamter FA über MCP; Domäne für Domäne. Planungsebene ausgenommen.)
+foodalchemist.team_settings.PUT
+foodalchemist.gps.POST
+foodalchemist.gps.PUT
+foodalchemist.gps.STATUS
+foodalchemist.gps.DELETE
+foodalchemist.gps.REPLACE
+foodalchemist.gps.ENRICH
+foodalchemist.gp_enrich.RESOLVE
+foodalchemist.gp_forms.PUT
+foodalchemist.gp_forms.DELETE
+foodalchemist.gp_forms.ESTIMATE
+foodalchemist.gp_la.PUT
+foodalchemist.component_equivalents.POST
+foodalchemist.component_equivalents.DELETE
+foodalchemist.platzhalter.POST
+foodalchemist.platzhalter.PUT
+foodalchemist.platzhalter.DELETE
 ```
 
 ## 8. MCP-Abnahmematrix

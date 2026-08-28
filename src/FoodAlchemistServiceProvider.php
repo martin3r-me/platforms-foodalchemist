@@ -430,6 +430,27 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\GpProposalsPostTool::class,
                     // 07·M3: LA-First-GP-Mint als MCP-Tool (löst den Ruby-Fall FA-nativ)
                     \Platform\FoodAlchemist\Tools\GpsMintFromLaTool::class,
+                    // MCP-Steuerbarkeit D1: GP-Kern-CRUD (team-eigen; §6-Naming im Service,
+                    // isOwnedBy-Guard = Web-canCurate; DELETE destruktiv/confirm).
+                    \Platform\FoodAlchemist\Tools\GpsPostTool::class,
+                    \Platform\FoodAlchemist\Tools\GpsPutTool::class,
+                    \Platform\FoodAlchemist\Tools\GpsStatusTool::class,
+                    \Platform\FoodAlchemist\Tools\GpsDeleteTool::class,
+                    // D1b: Naturaleinheit-Formen (Katalog-Gate) + KI-Anreicherung (Vorschlag→RESOLVE, GL-07)
+                    \Platform\FoodAlchemist\Tools\GpFormsPutTool::class,
+                    \Platform\FoodAlchemist\Tools\GpFormsDeleteTool::class,
+                    \Platform\FoodAlchemist\Tools\GpFormsEstimateTool::class,
+                    \Platform\FoodAlchemist\Tools\GpsEnrichTool::class,
+                    \Platform\FoodAlchemist\Tools\GpEnrichResolveTool::class,
+                    // D1c: LA↔GP-Mapping (link/unlink owner, lock/pin team-overlay), Ersatz-Äquivalenzen,
+                    // Platzhalter-GPs, GP-Replace (destruktiv/confirm, team-übergreifender Recompute).
+                    \Platform\FoodAlchemist\Tools\GpLaPutTool::class,
+                    \Platform\FoodAlchemist\Tools\ComponentEquivalentsPostTool::class,
+                    \Platform\FoodAlchemist\Tools\ComponentEquivalentsDeleteTool::class,
+                    \Platform\FoodAlchemist\Tools\PlatzhalterPostTool::class,
+                    \Platform\FoodAlchemist\Tools\PlatzhalterPutTool::class,
+                    \Platform\FoodAlchemist\Tools\PlatzhalterDeleteTool::class,
+                    \Platform\FoodAlchemist\Tools\GpsReplaceTool::class,
                     // #513 Tier 1: Grammaturen-Rechner (Bäckerprozent/Extraprozent/Brining/Bloom)
                     \Platform\FoodAlchemist\Tools\ProportionCalcTool::class,
                     // #513: %→Gramm-Rückschreiben (Batch-Skalierung + Einzel-Zutat-Edit, write)
@@ -601,6 +622,9 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     // R2.7: Portfolio-Benchmark (BHG-intern, read-only)
                     \Platform\FoodAlchemist\Tools\BenchmarkGetTool::class,
                     \Platform\FoodAlchemist\Tools\SettingsGetTool::class,
+                    // MCP-Steuerbarkeit Phase 0: Team-Skalar-Config schreiben (sichere Config;
+                    // Allow-List, nur eigene Team-Zeile). Vokabular/Taxonomie bleiben eigene Tools/UI.
+                    \Platform\FoodAlchemist\Tools\TeamSettingsPutTool::class,
                     \Platform\FoodAlchemist\Tools\SignaleSearchTool::class,
                     \Platform\FoodAlchemist\Tools\SignaleListTool::class,
                     \Platform\FoodAlchemist\Tools\SignalePutTool::class,
