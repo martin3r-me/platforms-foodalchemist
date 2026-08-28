@@ -2,6 +2,7 @@
 
 namespace Platform\FoodAlchemist\Services;
 
+use Illuminate\Http\UploadedFile;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
@@ -219,6 +220,31 @@ class ConceptService
         if (array_intersect(['price_mode', 'price_per_person_manual'], array_keys($update)) !== []) {
             $this->refreshCache($concept);
         }
+
+        return $concept->refresh();
+    }
+
+    // ── Spec 43 (Bild-Epic): Concept-Titelbild als Grundlage für Präsentations-Kapitelbänder ──
+
+    public function storeImage(Team $team, int $id, UploadedFile $file): string
+    {
+        $concept = FoodAlchemistConcept::visibleToTeam($team)->findOrFail($id);
+        $this->guardOwner($concept, $team);
+        app(FoodAlchemistMediaService::class)->delete($concept->image_context_file_id, (string) $concept->image_path, $team);
+        $media = app(FoodAlchemistMediaService::class)->storeImage(
+            $file, $team, 'foodalchemist.concept', $id, "foodalchemist/concept/{$id}",
+        );
+        $concept->update(['image_context_file_id' => $media['context_file_id'], 'image_path' => $media['path']]);
+
+        return $media['path'];
+    }
+
+    public function clearImage(Team $team, int $id): FoodAlchemistConcept
+    {
+        $concept = FoodAlchemistConcept::visibleToTeam($team)->findOrFail($id);
+        $this->guardOwner($concept, $team);
+        app(FoodAlchemistMediaService::class)->delete($concept->image_context_file_id, (string) $concept->image_path, $team);
+        $concept->update(['image_context_file_id' => null, 'image_path' => null]);
 
         return $concept->refresh();
     }
