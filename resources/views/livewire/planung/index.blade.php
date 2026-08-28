@@ -612,10 +612,13 @@
                         <p class="text-[11px] text-slate-400 mb-1">Zutaten (Menge · Einheit · Bezeichnung)</p>
                         <div class="space-y-1 mb-2">
                             @foreach(($importVorschau['zutaten'] ?? []) as $zi => $z)
+                                {{-- #6 (Dominique 2026-08-28): das geteilte $input trägt w-full → kollidierte mit w-16/flex-1,
+                                     die breite Bezeichnungs-Spalte kollabierte (Namen unsichtbar, obwohl extrahiert). Feste
+                                     Breiten inline erzwingen (gewinnt gegen w-full, braucht keinen Asset-Rebuild). --}}
                                 <div class="flex items-center gap-1" wire:key="izut-{{ $zi }}">
-                                    <input type="text" wire:model="importVorschau.zutaten.{{ $zi }}.quantity" class="{{ $input }} w-16" />
-                                    <input type="text" wire:model="importVorschau.zutaten.{{ $zi }}.unit" class="{{ $input }} w-16" />
-                                    <input type="text" wire:model="importVorschau.zutaten.{{ $zi }}.text" class="{{ $input }} flex-1" />
+                                    <input type="text" wire:model="importVorschau.zutaten.{{ $zi }}.quantity" class="{{ $input }}" style="flex:0 0 4.5rem;width:4.5rem" placeholder="Menge" data-import-zutat-menge />
+                                    <input type="text" wire:model="importVorschau.zutaten.{{ $zi }}.unit" class="{{ $input }}" style="flex:0 0 5.5rem;width:5.5rem" placeholder="Einheit" data-import-zutat-einheit />
+                                    <input type="text" wire:model="importVorschau.zutaten.{{ $zi }}.text" class="{{ $input }}" style="flex:1 1 0;width:auto;min-width:0" placeholder="Bezeichnung" data-import-zutat-text />
                                 </div>
                             @endforeach
                         </div>

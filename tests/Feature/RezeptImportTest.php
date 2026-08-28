@@ -150,3 +150,25 @@ it('Import-Tab (Livewire): extrahieren → Vorschau, anlegen → Draft', functio
         ->call('importAnlegen')
         ->assertSet('importStep', 'fertig');
 });
+
+it('#6 Import-Vorschau rendert die Bezeichnungs-Spalte (Layout-Fix — vorher kollabiert)', function () {
+    // Die Tab-Region rendert nur mit aktiver Session (@if($active)); auf demo IST der User in einer.
+    $session = app(\Platform\FoodAlchemist\Services\PlanningSessionService::class)
+        ->create($this->rootTeam, ['title' => 'Import-Test', 'brief' => 'x']);
+
+    ($this->mockExtract)([
+        'typ' => 'basisrezept', 'name' => '',   // titellose Quelle → aber Zutat-Bezeichnung kommt
+        'zutaten' => [['text' => 'Rindfleisch aus der Keule', 'quantity' => 500, 'unit' => 'g']],
+        'preparation' => '', 'komponenten' => [],
+    ]);
+
+    Livewire::test(PlanungIndex::class)
+        ->set('sessionId', $session->id)
+        ->set('importText', '500 g Rindfleisch aus der Keule')
+        ->call('importExtrahieren')
+        ->assertSet('importStep', 'vorschau')
+        // Menge/Einheit fest schmal, Bezeichnung breit → alle drei Felder sind im DOM (vorher kollabierte die breite Spalte).
+        ->assertSeeHtml('data-import-zutat-menge')
+        ->assertSeeHtml('data-import-zutat-einheit')
+        ->assertSeeHtml('data-import-zutat-text');
+});
