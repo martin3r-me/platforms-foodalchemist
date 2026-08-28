@@ -13,7 +13,12 @@
     @else
         {{-- Kopf: Name + Aktionen + Status/Klasse/Diät --}}
         <div>
-            <h3 class="text-base font-semibold tracking-tight text-gray-900 leading-snug">{{ $rezept->name }}</h3>
+            <div class="flex items-start gap-2">
+                @if(!empty($rezeptBildUrl))
+                    <img src="{{ $rezeptBildUrl }}" alt="" class="h-10 w-10 object-cover rounded-md border border-black/10 shrink-0" data-vk-mini-bild>
+                @endif
+                <h3 class="text-base font-semibold tracking-tight text-gray-900 leading-snug">{{ $rezept->name }}</h3>
+            </div>
             @if($rezept->sales_wording_standard !== null)
                 <p class="text-xs italic text-gray-500 mt-0.5">{{ $rezept->sales_wording_standard }}</p>
             @endif

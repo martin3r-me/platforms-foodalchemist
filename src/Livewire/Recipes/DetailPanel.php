@@ -230,6 +230,10 @@ class DetailPanel extends Component
 
         return view('foodalchemist::livewire.recipes.detail-panel', [
             'rezept' => $rezept,
+            // Spec 43: Gericht-Foto als Mini-Bild im Detail-Panel (Basisrezepte + Gerichte).
+            'rezeptBildUrl' => ($rezept !== null && ($rezept->image_context_file_id || $rezept->image_path))
+                ? app(\Platform\FoodAlchemist\Services\FoodAlchemistMediaService::class)->url($rezept->image_context_file_id, $rezept->image_path)
+                : null,
             // Ersatz-Logik: Äquivalenzen dieses Rezepts + Such-Kandidaten fürs Verknüpfen
             'ersatz' => $rezept !== null && $team !== null ? $equivSvc->fuer($team, 'recipe', $rezept->id) : collect(),
             'ersatzKandidaten' => $rezept !== null && $team !== null && $this->ersatzSuche !== ''

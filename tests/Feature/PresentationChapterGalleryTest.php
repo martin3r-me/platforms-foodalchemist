@@ -110,6 +110,24 @@ it('Gericht-Foto: Identifier im Snapshot, gerendert nur mit Design-Toggle', func
     $this->get('/p/foodbook/' . $mit['token'])->assertOk()->assertSee('<img class="pt-item-foto', false);
 });
 
+it('Konzept-interne Header (AUMSE/STARTER) rendern fett als pt-subheader', function () {
+    $team = $this->rootTeam;
+    $concept = $this->makeConcept($team, 'Menü', ['kind' => 'concept', 'consumer_name' => 'Chefs Corner']);
+    $this->makeConceptSlot($concept, ['type' => 'header', 'title' => 'AUMSE – Avantgarde Bites', 'position' => 1, 'wording' => '']);
+    $dish = $this->makeRecipe($team, 'Curry-Hummus', ['is_sales_recipe' => true, 'sales_net' => 5.5]);
+    $this->makeConceptSlot($concept, ['sales_recipe_id' => $dish->id, 'wording' => 'Curry-Hummus', 'position' => 2]);
+
+    $fb = $this->makeFoodbook($team, 'Katalog', ['personen' => 6]);
+    $kap = $this->makeChapter($fb, ['title' => 'Vorspeisen', 'consumer_title' => 'Vorspeisen', 'position' => 1]);
+    $this->makeFoodbookBlock($kap, ['type' => 'concept_ref', 'concept_id' => $concept->id, 'position' => 1]);
+
+    $res = $this->pres->publish($team, 'foodbook', $fb->id, ['expires_at' => now()->addDays(30)->toDateString()]);
+    $this->get('/p/foodbook/' . $res['token'])
+        ->assertOk()
+        ->assertSee('<h4 class="pt-subheader', false)
+        ->assertSee('AUMSE – Avantgarde Bites', false);
+});
+
 it('Rondell-Band-Variante rendert das Karussell-Markup', function () {
     [$fb, $kap] = ($this->baue)($this->rootTeam);
     $kap->images()->create(['team_id' => $this->rootTeam->id, 'path' => 'foodalchemist/chapter/a.jpg', 'sort_order' => 1]);

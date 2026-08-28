@@ -92,7 +92,12 @@
         {{-- Kopf --}}
         <div>
             <div class="flex items-start justify-between gap-2">
-                <h3 class="text-base font-semibold tracking-tight text-gray-900 leading-snug">{{ $rezept->name }}</h3>
+                <div class="flex items-start gap-2 min-w-0">
+                    @if(!empty($rezeptBildUrl))
+                        <img src="{{ $rezeptBildUrl }}" alt="" class="h-10 w-10 object-cover rounded-md border border-black/10 shrink-0" data-rezept-mini-bild>
+                    @endif
+                    <h3 class="text-base font-semibold tracking-tight text-gray-900 leading-snug">{{ $rezept->name }}</h3>
+                </div>
                 <div class="flex items-center gap-1.5 shrink-0">
                     <button type="button" wire:click="$dispatch('recipe-modal.oeffnen', { id: {{ $rezept->id }} })" class="{{ $btnGhostXs }}" data-rezept-bearbeiten>@svg('heroicon-o-pencil-square', 'w-3.5 h-3.5') Bearbeiten</button>
                     <a href="{{ route('foodalchemist.rezepte.dokument', ['id' => $rezept->id, 'profil' => 'produktion']) }}" target="_blank"

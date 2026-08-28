@@ -25,15 +25,20 @@
     @if(!empty($b['subtitle']))<p class="pt-block-sub">{{ $b['subtitle'] }}</p>@endif
 
     @foreach(($b['items'] ?? []) as $it)
-        <div class="pt-line pt-item pt-indent-{{ min((int) ($it['indent'] ?? 0), 2) }} @if($showFotos && !empty($it['image']['url'])) pt-item--foto @endif">
-            @if($showFotos && !empty($it['image']['url']))
-                <img class="pt-item-foto pt-zoomable" src="{{ $it['image']['url'] }}" alt="" loading="lazy">
-            @endif
-            <span class="pt-line-label">{{ $it['label'] }}@if($showCodes && !empty($it['codes']))<span class="pt-codes">{{ implode(' ', array_map('strval', $it['codes'])) }}</span>@endif@if(!empty($it['subtitle']))<span style="color:var(--pt-muted); font-weight:400"> — {{ $it['subtitle'] }}</span>@endif</span>
-            @if($showPrice && ($it['price'] ?? null) !== null)
-                <span class="pt-line-dots" aria-hidden="true"></span>
-                <span class="pt-line-price">{{ number_format((float) $it['price'], 2, ',', '.') }} €</span>
-            @endif
-        </div>
+        @if(($it['kind'] ?? '') === 'header')
+            {{-- Konzept-interne Gang-Überschrift (AUMSE/STARTER/…) — fett abgesetzt, wie im PDF. --}}
+            <h4 class="pt-subheader pt-indent-{{ min((int) ($it['indent'] ?? 0), 2) }}">{{ $it['label'] }}@if($showCodes && !empty($it['codes']))<span class="pt-codes">{{ implode(' ', array_map('strval', $it['codes'])) }}</span>@endif</h4>
+        @else
+            <div class="pt-line pt-item pt-indent-{{ min((int) ($it['indent'] ?? 0), 2) }} @if($showFotos && !empty($it['image']['url'])) pt-item--foto @endif">
+                @if($showFotos && !empty($it['image']['url']))
+                    <img class="pt-item-foto pt-zoomable" src="{{ $it['image']['url'] }}" alt="" loading="lazy">
+                @endif
+                <span class="pt-line-label">{{ $it['label'] }}@if($showCodes && !empty($it['codes']))<span class="pt-codes">{{ implode(' ', array_map('strval', $it['codes'])) }}</span>@endif@if(!empty($it['subtitle']))<span style="color:var(--pt-muted); font-weight:400"> — {{ $it['subtitle'] }}</span>@endif</span>
+                @if($showPrice && ($it['price'] ?? null) !== null)
+                    <span class="pt-line-dots" aria-hidden="true"></span>
+                    <span class="pt-line-price">{{ number_format((float) $it['price'], 2, ',', '.') }} €</span>
+                @endif
+            </div>
+        @endif
     @endforeach
 </div>

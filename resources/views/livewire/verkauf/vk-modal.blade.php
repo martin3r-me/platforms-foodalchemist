@@ -157,6 +157,21 @@
                     <label class="block {{ $label }} mb-1">Name*</label>
                     <input type="text" wire:model="form.name" class="{{ $input }}" data-vk-name />
                 </div>
+                @if($rezept !== null)
+                    {{-- Spec 43 (Bild-Epic): Gericht-Foto — dasselbe Bild wie am Basisrezept (recipes.image_*). --}}
+                    <div class="col-span-2" data-vk-bild>
+                        <label class="block {{ $label }} mb-1">Gericht-Foto <span class="normal-case text-gray-400">(optional, für Präsentation & Detail)</span></label>
+                        <div class="flex items-center gap-3 flex-wrap">
+                            @if(!empty($dishImageUrl))
+                                <img src="{{ $dishImageUrl }}" alt="" class="h-12 w-20 object-cover rounded border border-black/10">
+                                <button type="button" wire:click="dishImageEntfernen" class="text-rose-600 text-[11px] underline">entfernen</button>
+                            @endif
+                            <input type="file" wire:model="dishImageUpload" accept="image/*" class="text-[11px]" data-vk-bild-upload>
+                            <div wire:loading wire:target="dishImageUpload" class="text-[11px] text-gray-400">lädt …</div>
+                        </div>
+                        @error('dishImageUpload')<div class="text-[11px] text-rose-600 mt-1">{{ $message }}</div>@enderror
+                    </div>
+                @endif
                 <div class="col-span-2">
                     <label class="block {{ $label }} mb-1">VK-Wording (neutraler Standard — Fallback für Concepter &amp; Foodbook)</label>
                     <input type="text" wire:model="form.sales_wording_standard" class="{{ $input }}" data-vk-wording />
