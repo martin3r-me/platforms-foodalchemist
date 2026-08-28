@@ -43,7 +43,7 @@ class PresentationDesignService
                 'base_slug' => 'editorial',
                 'layout' => [
                     ['block_type' => 'cover', 'style' => ['align' => 'center', 'show_cover_image' => true, 'show_logo' => true]],
-                    ['block_type' => 'chapter_loop', 'style' => ['show_price' => true, 'show_codes' => true, 'dish_columns' => 1, 'heading_rule' => true]],
+                    ['block_type' => 'chapter_loop', 'style' => ['show_price' => true, 'show_codes' => true, 'dish_columns' => 1, 'show_chapter_image' => true, 'heading_rule' => true]],
                     ['block_type' => 'price_summary', 'style' => ['mode' => 'pro_person']],
                     ['block_type' => 'legend', 'style' => []],
                 ],
@@ -61,7 +61,7 @@ class PresentationDesignService
                 'output_types' => ['speisekarte'],
                 'layout' => [
                     ['block_type' => 'cover', 'style' => ['align' => 'center', 'show_cover_image' => true, 'show_logo' => true, 'compact' => true]],
-                    ['block_type' => 'chapter_loop', 'style' => ['show_price' => true, 'show_codes' => true, 'dish_columns' => 1, 'compact' => true]],
+                    ['block_type' => 'chapter_loop', 'style' => ['show_price' => true, 'show_codes' => true, 'dish_columns' => 1, 'show_chapter_image' => true, 'compact' => true]],
                     ['block_type' => 'legend', 'style' => ['compact' => true]],
                 ],
                 'tokens' => [
@@ -78,7 +78,7 @@ class PresentationDesignService
                 'output_types' => ['speiseplan', 'speisekarte'],
                 'layout' => [
                     ['block_type' => 'cover', 'style' => ['align' => 'center', 'show_cover_image' => true, 'show_logo' => true]],
-                    ['block_type' => 'chapter_loop', 'style' => ['show_price' => true, 'show_codes' => false, 'dish_columns' => 1]],
+                    ['block_type' => 'chapter_loop', 'style' => ['show_price' => true, 'show_codes' => false, 'dish_columns' => 1, 'show_chapter_image' => true]],
                     ['block_type' => 'legend', 'style' => []],
                 ],
                 'tokens' => [
@@ -95,7 +95,7 @@ class PresentationDesignService
                 'base_slug' => 'navigator',
                 'layout' => [
                     ['block_type' => 'cover', 'style' => ['align' => 'center', 'show_cover_image' => true, 'show_logo' => true]],
-                    ['block_type' => 'chapter_loop', 'style' => ['show_price' => true, 'show_codes' => true, 'dish_columns' => 1, 'heading_rule' => true]],
+                    ['block_type' => 'chapter_loop', 'style' => ['show_price' => true, 'show_codes' => true, 'dish_columns' => 1, 'show_chapter_image' => true, 'heading_rule' => true]],
                     ['block_type' => 'price_summary', 'style' => ['mode' => 'pro_person']],
                     ['block_type' => 'legend', 'style' => []],
                 ],

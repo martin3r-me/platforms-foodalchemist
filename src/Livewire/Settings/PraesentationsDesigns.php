@@ -97,7 +97,7 @@ class PraesentationsDesigns extends Component
     /** Standard-Style je Block-Typ beim Hinzufügen. */
     private const BLOCK_DEFAULTS = [
         'cover' => ['align' => 'center', 'show_cover_image' => true, 'show_logo' => true],
-        'chapter_loop' => ['show_price' => true, 'show_codes' => true, 'dish_columns' => 1],
+        'chapter_loop' => ['show_price' => true, 'show_codes' => true, 'dish_columns' => 1, 'show_chapter_image' => true, 'show_dish_photos' => false],
         'dish_list' => ['show_price' => true, 'show_codes' => true],
         'price_summary' => ['mode' => 'pro_person'],
         'legend' => [],
