@@ -177,15 +177,18 @@ it('M-K8-Mathe: direkte Einzelkosten (nebenkosten_eur) fließen in HK2 — Pfleg
         ->and(round($hkMit['hk2_pro_portion'] - $hkOhne['hk2_pro_portion'], 2))->toBe(1.5);
 });
 
-it('Concepter-Editor: Kalkulation-Tab zeigt den HK2-Wasserfall', function () {
+it('Concepter-Editor: Kalkulation-Tab zeigt den HK2-Wasserfall (Auftrags-Simulation)', function () {
+    // Der HK2-Wasserfall + die Preisempfehlung (früher „VK-Vorschlag") erscheinen im Kalkulation-Tab
+    // unter der Auftrags-Simulation, sobald eine Pax-Zahl gesetzt ist (Concepter-Kalkulation-Umbau).
     $this->actingAs($this->makeUser($this->rootTeam));
     $concept = app(ConceptService::class)->create($this->rootTeam, ['name' => 'C']);
 
     Livewire::test(Editor::class)
         ->call('oeffnen', 'concepts', $concept->id)
         ->call('setTab', 'kalkulation')
+        ->set('simulationPax', 100)
         ->assertSee('HK2')
-        ->assertSee('VK-Vorschlag');
+        ->assertSee('Preisempfehlung');
 });
 
 it('Schema lässt sich speichern und wird normalisiert (sortiert, nur valide Typen)', function () {

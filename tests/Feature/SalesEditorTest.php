@@ -60,8 +60,12 @@ it('updateVk: nur VK-Feldgruppen (V-12), brutto konsistent, Wording-Edit setzt L
         ->and($nach->status->value)->toBe('draft')
         ->and((float) $nach->ek_total_eur)->toBe(6.66);
 
-    // netto zurück auf null ⇒ brutto folgt
-    expect($this->svc->updateVk($this->rootTeam, $vk->id, ['sales_net' => null])->sales_gross)->toBeNull();
+    // Netto zurück auf null ⇒ die Standard-Darreichung fällt auf AUTO (Darreichungen-Umbau) statt „kein
+    // Preis". Der wirksame Brutto folgt dann konsistent dem Auto-Netto (7 % Speisen-MwSt), nicht null.
+    $auto = $this->svc->updateVk($this->rootTeam, $vk->id, ['sales_net' => null]);
+    expect($auto->standardPresentation()->firstOrFail()->price_mode)->toBe('auto')
+        ->and((float) $auto->sales_net)->toBeGreaterThan(0.0)
+        ->and((float) $auto->sales_gross)->toBe(round((float) $auto->sales_net * 1.07, 2));
 });
 
 it('V-19: Regen-Zeilen CRUD + Reorder; Liste bleibt sortiert', function () {
