@@ -873,6 +873,19 @@ return [
                 . 'Artefakt ⇒ leere Liste (Normalfall). Konfidenz 0..1: werte = {befunde: [{paragraph, '
                 . 'schweregrad, feld, begruendung, vorschlag, konfidenz}], gesamturteil}.',
         ],
+        // Schicht 3 · Slice 5 (LA-First-Selbstheilung GP): leitet die konformen GP-Feld-Werte AUS
+        // dem Quell-LA ab, um die gemeldeten Verstoesse zu beheben. NIEMALS erfinden — was das LA
+        // nicht hergibt, bleibt null (Hinweis). Nur tentative GPs (der Adapter guardt den Status).
+        'gp.conformance_revise' => [
+            'tier' => 'B',
+            'max_tokens' => 1500,
+            'task' => 'Leite die KONFORMEN Werte fuer das Grundprodukt AUS dem beigefuegten Quell-Lieferantenartikel '
+                . '(quell_lieferantenartikel, LA-First) ab, um die gemeldeten Regelverstoesse (verstoesse) zu beheben. '
+                . 'HARTE REGEL: NUR aus dem LA + den vorhandenen GP-Daten ableiten — was das LA nicht belegt, gib als '
+                . 'null zurueck (NIEMALS raten/erfinden). Felder: name (§6-Schema, Singular §6.1), zustand (§9: '
+                . 'frisch|TK|trocken|konserviert), warengruppe (§3-Code), sub_kategorie. Ein Feld, das schon konform '
+                . 'oder nicht sicher aus dem LA ableitbar ist, bleibt null. werte = {name, zustand, warengruppe, sub_kategorie}.',
+        ],
         'recipe.pairing' => [
             'tier' => 'A',                                            // groesster Ist-Kostenblock — Qualitaet zaehlt
             'task' => 'Schlage 12-25 BELEGTE Flavor-Pairing-Partner aus dem mitgegebenen '

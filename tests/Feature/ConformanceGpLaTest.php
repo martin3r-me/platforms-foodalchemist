@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\DB;
 use Platform\FoodAlchemist\Models\FoodAlchemistConformanceFinding;
+use Platform\FoodAlchemist\Models\FoodAlchemistGp;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplier;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem;
 use Platform\FoodAlchemist\Services\ConformanceService;
@@ -47,18 +48,51 @@ it('GP: prüft gegen das GP-Regelwerk — Wissen im Prompt, Befund normalisiert'
     expect($erg['befunde'][0]['schweregrad'])->toBe('hart');
 });
 
-it('GP: pruefeUndHeile überspringt die Heil-Runde (kein Freitext-Revise) → Hinweis direkt persistiert', function () use ($seedDossier) {
+it('GP: pruefeUndHeile heilt einen tentativen GP AUS dem Quell-LA (re-derive, kein Erfinden) → sauber', function () use ($seedDossier) {
     $seedDossier($this->rootTeam, 'regelwerk-gp-61-singular-pflicht-produktnamen', 'GP §6.1', 'GP §6.1 Singular.');
-    $gp = $this->makeGp($this->rootTeam, 'Tomaten');
+    // Das Quell-LA trägt die Sorte „Roma" + Zustand → die Heilung DARF sie in den Namen ziehen.
+    $supplier = FoodAlchemistSupplier::create(['team_id' => $this->rootTeam->id, 'name' => 'Chefs Culinar']);
+    $la = FoodAlchemistSupplierItem::create([
+        'team_id' => $this->rootTeam->id, 'supplier_id' => $supplier->id, 'designation' => 'Roma Tomaten frisch 5kg',
+    ]);
+    $gp = FoodAlchemistGp::create([
+        'team_id' => $this->rootTeam->id, 'gp_key' => 'tomate|test|test', 'name' => 'Tomaten',
+        'status' => 'tentative', 'lead_la_supplier_item_id' => $la->id,
+    ]);
 
-    // NUR EIN conformance-Run gestellt: liefe die Heil-Runde, käme ein zweiter Prüf-Call (→ [])
-    // und es würde 0 persistiert. Da GP nicht heilt, bleibt es beim ersten Befund.
-    ConformanceHealStub::bind([[['paragraph' => '§6.1', 'schweregrad' => 'hart', 'feld' => 'name', 'begruendung' => 'Plural', 'konfidenz' => 0.9]]]);
+    // check#1: §6.1-Verstoß · gp.conformance_revise: volle §6-Form AUS dem LA (Sorte Roma + Zustand) · check#2: sauber
+    ConformanceHealStub::bind(
+        [[['paragraph' => '§6.1', 'schweregrad' => 'hart', 'feld' => 'name', 'begruendung' => 'Plural statt Singular', 'konfidenz' => 0.9]], []],
+        [],
+        ['name' => 'Tomate: Roma, frisch', 'zustand' => 'frisch'],
+    );
 
     $erg = app(ConformanceService::class)->pruefeUndHeile($this->rootTeam, 'gp', $gp->id);
 
-    expect($erg['geheilt'])->toBe(0);
+    expect($erg['geheilt'])->toBe(1);
+    expect($erg['ablage']['neu'])->toBe(0);
+    expect($gp->fresh()->name)->toBe('Tomate: Roma, frisch');   // Sorte + Zustand AUS dem LA gezogen, nicht erfunden
+    expect($gp->fresh()->condition)->toBe('frisch');
+});
+
+it('GP: approved GP wird NICHT autonom geheilt → Verstoß bleibt Hinweis', function () use ($seedDossier) {
+    $seedDossier($this->rootTeam, 'regelwerk-gp-61-singular-pflicht-produktnamen', 'GP §6.1', 'GP §6.1 Singular.');
+    $gp = FoodAlchemistGp::create([
+        'team_id' => $this->rootTeam->id, 'gp_key' => 'tomate2|test|test', 'name' => 'Tomaten',
+        'status' => 'approved',
+    ]);
+
+    // beide Prüf-Läufe melden den Verstoß; die Heilung ist ein No-Op (approved) → persistiert
+    ConformanceHealStub::bind(
+        [[['paragraph' => '§6.1', 'schweregrad' => 'hart', 'feld' => 'name', 'begruendung' => 'Plural', 'konfidenz' => 0.9]],
+            [['paragraph' => '§6.1', 'schweregrad' => 'hart', 'feld' => 'name', 'begruendung' => 'Plural', 'konfidenz' => 0.9]]],
+        [], ['name' => 'Tomate: frisch'],
+    );
+
+    $erg = app(ConformanceService::class)->pruefeUndHeile($this->rootTeam, 'gp', $gp->id);
+
     expect($erg['ablage']['neu'])->toBe(1);
+    expect($gp->fresh()->name)->toBe('Tomaten');           // unangetastet
     expect(FoodAlchemistConformanceFinding::where('artifact_type', 'gp')->where('artifact_id', $gp->id)->where('status', 'offen')->count())->toBe(1);
 });
 

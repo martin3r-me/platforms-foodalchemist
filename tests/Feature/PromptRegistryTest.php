@@ -41,6 +41,8 @@ const REGISTRY_SOLL = [
     'foodbook.kundentext' => 'A',                                     // Spec 03 L2: kundensichtbarer Einleitungstext, BEIDE Ebenen (ebene: foodbook|kapitel)
     // Schicht 3: generischer Konformitäts-Critic (artefakt-agnostisch, EIN Prompt für Rezept/VK/GP/LA)
     'conformance.check' => 'B',
+    // Schicht 3 · Slice 5: GP-Selbstheilung — leitet konforme Feld-Werte aus dem Quell-LA ab (LA-First)
+    'gp.conformance_revise' => 'B',
     // Sonstiges
     'price.plausi' => 'B', 'chat.message' => 'A',
     // Signale-Cockpit: KI-Fixer + Assistenzen hinter „KI erledigen lassen" (2026-07-21)

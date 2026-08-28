@@ -22,22 +22,24 @@ final class ConformanceHealStub
     /**
      * @param  array<int, array<int, array<string, mixed>>>  $conformanceRuns  Befunde je conformance.check-Call
      * @param  array<string, mixed>  $ueberarbeiten  werte für recipe.ueberarbeiten
+     * @param  array<string, mixed>  $gpRevise  werte für gp.conformance_revise (LA-First-Heilung)
      */
-    public static function bind(array $conformanceRuns, array $ueberarbeiten = []): void
+    public static function bind(array $conformanceRuns, array $ueberarbeiten = [], array $gpRevise = []): void
     {
         config(['foodalchemist.ai.provider' => 'core']);
         // singleton (NICHT bind): der Stub ist stateful (confCall-Zähler über beide
         // conformance.check-Calls des Loops) — bind gäbe pro Resolve eine frische Instanz
         // mit confCall=0, jeder Prüf-Call bekäme dann denselben ersten Run.
-        app()->singleton(LLMProviderContract::class, fn () => new class($conformanceRuns, $ueberarbeiten) implements LLMProviderContract
+        app()->singleton(LLMProviderContract::class, fn () => new class($conformanceRuns, $ueberarbeiten, $gpRevise) implements LLMProviderContract
         {
             private int $confCall = 0;
 
             /**
              * @param  array<int, array<int, array<string, mixed>>>  $confRuns
              * @param  array<string, mixed>  $ueber
+             * @param  array<string, mixed>  $gpRevise
              */
-            public function __construct(private array $confRuns, private array $ueber) {}
+            public function __construct(private array $confRuns, private array $ueber, private array $gpRevise) {}
 
             public function getName(): string
             {
@@ -50,6 +52,8 @@ final class ConformanceHealStub
 
                 if (str_contains($user, 'Ueberarbeite das Rezept')) {
                     $werte = $this->ueber;
+                } elseif (str_contains($user, 'Leite die KONFORMEN Werte')) {   // gp.conformance_revise
+                    $werte = $this->gpRevise;
                 } else {
                     $werte = ['befunde' => $this->confRuns[$this->confCall] ?? [], 'gesamturteil' => 'stub'];
                     $this->confCall++;
