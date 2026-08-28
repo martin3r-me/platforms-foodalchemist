@@ -64,6 +64,18 @@
                 for (const [id, e] of Object.entries(this.einheiten)) { if (e.slug === slug) return parseInt(id); }
                 return this.neu.unit_vocab_id;
             },
+            // #9c: Einheiten-Dropdown je Zeile auf die für das Produkt hinterlegten/umrechenbaren Einheiten
+            //      eingrenzen (z.einheiten = Slug-Liste vom Server). Ohne GP/Liste → alle (Fallback).
+            //      Die aktuell gewählte Einheit bleibt immer sichtbar, damit Altbestand nicht bricht.
+            erlaubteEinheiten(z) {
+                const alle = Object.entries(this.einheiten).map(([id, e]) => ({ id: parseInt(id), slug: e.slug }));
+                const erlaubt = z?.einheiten;
+                if (!Array.isArray(erlaubt) || erlaubt.length === 0) return alle;
+                const set = new Set(erlaubt);
+                const cur = z?.unit_vocab_id != null ? this.einheiten[z.unit_vocab_id]?.slug : null;
+                if (cur) set.add(cur);
+                return alle.filter(e => set.has(e.slug));
+            },
             niveauFarbe(n) {
                 return { haute_cuisine: 'bg-violet-500', gehoben: 'bg-amber-500', klassisch: 'bg-sky-400' }[n] ?? 'bg-gray-300';
             },
@@ -119,6 +131,7 @@
                 z.lineage = e.kind === 'recipe' ? 'recipe_ref' : 'manual';
                 z.ek_pro_g = null; z.ek_pro_g_min = null; z.ek_pro_g_avg = null;
                 z.g_pro_stueck = null;                               // Stück-Faktor kennt nur der Save-Recompute präzise
+                z.einheiten = null;                                  // #9c: Ersatz-Payload kennt keine Formen → Fallback alle (kein Lock-out)
                 z._peek = null;
                 z.ersatz = zurueck;
                 z._flash = true; setTimeout(() => { z._flash = false; }, 1600);
@@ -152,6 +165,12 @@
                 z.lineage = ziel.type === 'sub' ? 'recipe_ref' : 'manual';
                 z.ek_pro_g = ziel.ek_pro_g ?? null;
                 z.g_pro_stueck = ziel.g_pro_stueck ?? null;          // Stück-Sub: g/Stück fürs Live-Rechnen
+                z.einheiten = ziel.einheiten ?? null;                // #9c: erlaubte Einheiten des neuen Produkts
+                // aktuelle Einheit nicht mehr umrechenbar? → auf die Produkt-Default-Einheit umstellen (Preis greift wieder)
+                if (Array.isArray(z.einheiten) && z.einheiten.length) {
+                    const curSlug = this.einheiten[z.unit_vocab_id]?.slug;
+                    if (!curSlug || !z.einheiten.includes(curSlug)) z.unit_vocab_id = this.einheitIdFuerSlug(ziel.einheit_slug ?? 'g');
+                }
                 z.ek_pro_g_min = null; z.ek_pro_g_avg = null;        // alte Min/Ø verwerfen — Save rechnet präzise nach
                 z._peek = null;
                 z.ersatz = null; this.ladeErsatz(z);                 // ♻-Hinweis fürs neue Produkt nachladen
@@ -296,6 +315,7 @@
                     lineage: ziel.type === 'sub' ? 'recipe_ref' : 'manual',
                     ek_pro_g: ziel.ek_pro_g,
                     g_pro_stueck: ziel.g_pro_stueck ?? null,          // Stück-Sub: g/Stück fürs Live-Rechnen
+                    einheiten: ziel.einheiten ?? null,               // #9c: erlaubte Einheiten des Produkts
                     ersatz: null,
                 });
                 this.ladeErsatz(this.rows[this.rows.length - 1]);     // ♻-Hinweis leise nachladen

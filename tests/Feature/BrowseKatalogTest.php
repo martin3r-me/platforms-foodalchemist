@@ -98,6 +98,46 @@ it('#4: Picker zeigt nur reife GPs + Basisrezepte — Entwurf/Stub/Veraltet + ab
         ->not->toContain('Fond: Alt');                    // deprecated
 });
 
+it('#9c: browseKatalog liefert je GP nur Basis + hinterlegte Formen als erlaubte Einheiten', function () {
+    // Tomatenmark bekommt eine Form „wuerfel" → Dropdown = g/kg + wuerfel (KEIN Karton/EL/…).
+    app(\Platform\FoodAlchemist\Services\GpFormService::class)
+        ->setForm($this->rootTeam, $this->gpTomate->id, 'wuerfel', 5);
+
+    $komponente = Livewire::test(IngredientEditor::class, ['recipeId' => $this->rezept->id, 'eingebettet' => true])->instance();
+    $items = collect($komponente->browseKatalog()['gps']['items']);
+
+    // Fest (Tomatenmark): Masse-Basis + die eine Form.
+    expect($items->firstWhere('id', $this->gpTomate->id)['einheiten'])
+        ->toEqualCanonicalizing(['g', 'kg', 'wuerfel']);
+    // Flüssig (Bier): Volumen-Basis + Masse-Basis, keine Formen hinterlegt.
+    expect($items->firstWhere('id', $this->gpBier->id)['einheiten'])
+        ->toEqualCanonicalizing(['ml', 'l', 'g', 'kg']);
+
+    // Sub-Rezept ohne Stück-Ertrag → nur g/kg dosierbar.
+    expect(collect($komponente->browseKatalog()['rezepte']['items'])->firstWhere('id', $this->sub->id)['einheiten'])
+        ->toEqualCanonicalizing(['g', 'kg']);
+});
+
+it('#9c: Bestandszeile eines GP trägt die erlaubten Einheiten für den Dropdown-Filter', function () {
+    // GP mit Form ins Rezept legen → render()-Payload muss die Slug-Liste an der Zeile führen.
+    app(\Platform\FoodAlchemist\Services\GpFormService::class)
+        ->setForm($this->rootTeam, $this->gpTomate->id, 'wuerfel', 5);
+    $gVocab = \Platform\FoodAlchemist\Models\FoodAlchemistVocabEinheit::where('team_id', $this->rootTeam->id)->where('slug', 'g')->value('id')
+        ?? \Platform\FoodAlchemist\Models\FoodAlchemistVocabEinheit::create([
+            'team_id' => $this->rootTeam->id, 'slug' => 'g', 'display_de' => 'G', 'dimension' => 'mass', 'default_in_g' => 1,
+        ])->id;
+    $this->rezept->ingredients()->create([
+        'team_id' => $this->rootTeam->id, 'position' => 1,
+        'gp_id' => $this->gpTomate->id, 'raw_text' => '50 g Tomatenmark', 'display_name' => 'Tomatenmark',
+        'quantity' => 50, 'unit_vocab_id' => $gVocab,
+    ]);
+
+    $view = Livewire::test(IngredientEditor::class, ['recipeId' => $this->rezept->id, 'eingebettet' => true]);
+    $zeilen = collect($view->viewData('zeilenJson'));
+    $zeile = $zeilen->firstWhere('gp_id', $this->gpTomate->id);
+    expect($zeile['einheiten'])->toEqualCanonicalizing(['g', 'kg', 'wuerfel']);
+});
+
 it('lädt den Drei-Spalten-Browser erst bei Fokus oder Filterinteraktion', function () {
     $modulRoot = dirname((new ReflectionClass(\Platform\FoodAlchemist\FoodAlchemistServiceProvider::class))->getFileName(), 2);
     $editor = file_get_contents($modulRoot . '/resources/views/livewire/recipes/ingredient-editor.blade.php');

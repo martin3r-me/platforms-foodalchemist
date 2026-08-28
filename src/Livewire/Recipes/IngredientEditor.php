@@ -7,6 +7,7 @@ use Livewire\Attributes\On;
 use Livewire\Attributes\Renderless;
 use Livewire\Component;
 use Platform\FoodAlchemist\Livewire\Concerns\InteractsWithSavedToast;
+use Platform\FoodAlchemist\Models\FoodAlchemistGpForm;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Models\FoodAlchemistVocabEinheit;
 use Platform\FoodAlchemist\Services\RecipeRecomputeService;
@@ -261,6 +262,23 @@ class IngredientEditor extends Component
      * wirkt als Textfilter auf BEIDE Listen. Ein Roundtrip für beide Spalten.
      */
     #[Renderless]
+    /**
+     * #9c: die im Rezept sinnvoll dosierbaren Einheiten-Slugs eines GP — Basis (Masse bzw. Volumen)
+     * + händisch/KI hinterlegte Formen (Stück/Scheibe/Würfel …). Alles andere (Karton/Eimer/EL …)
+     * ist ohne hinterlegte Grammatur nicht umrechenbar → fliegt aus dem Dropdown. Der Client behält
+     * zusätzlich immer die aktuell gewählte Einheit sichtbar (Altbestand bricht nicht).
+     *
+     * @param  array<int, string>  $formSlugs
+     * @return array<int, string>
+     */
+    private function erlaubteSlugs(bool $istFluessig, array $formSlugs, bool $hatStueck): array
+    {
+        $base = $istFluessig ? ['ml', 'l', 'g', 'kg'] : ['g', 'kg'];
+        $slugs = array_merge($base, array_values($formSlugs), $hatStueck ? ['stk'] : []);
+
+        return array_values(array_unique($slugs));
+    }
+
     public function browseKatalog(array $gpFilter = [], array $rezFilter = [], string $q = ''): array
     {
         $team = Auth::user()?->currentTeamRelation;
@@ -301,16 +319,22 @@ class IngredientEditor extends Component
             ->filter(fn ($r) => $r->aktiver_preis !== null)
             ->groupBy('gp_id')
             ->map(fn ($g) => $g->avg(fn ($r) => ((float) $r->aktiver_preis) / (((float) $r->qty) * 1000)));
+        // #9c (Dominique 2026-08-28): je GP die im Rezept ERLAUBTEN Einheiten (Basis + hinterlegte Formen)
+        // — der Dropdown zeigt dann nur Umrechenbares, nicht alle 30 Einheiten („das verwirrt").
+        $formSlugsJeGp = FoodAlchemistGpForm::whereIn('gp_id', $gpModels->pluck('id'))
+            ->get(['gp_id', 'form_slug'])->groupBy('gp_id')->map(fn ($g) => $g->pluck('form_slug')->all());
         $gps = $gpModels
-            ->map(function ($gp) use ($ekJeGp) {
+            ->map(function ($gp) use ($ekJeGp, $formSlugsJeGp) {
                 $ek = $ekJeGp[$gp->id] ?? null;
+                $istFluessig = str_contains(mb_strtolower($gp->name . ' ' . ($gp->condition ?? '')), 'fluessig');
 
                 return [
                     'type' => 'gp', 'id' => $gp->id, 'name' => $gp->name,
                     'ek_pro_g' => $ek,
                     'preis_label' => $ek !== null ? number_format($ek * 1000, 2, ',', '.') . ' €/kg' : null,
                     // Spec: Einheit hängt am Produkt (Chilipulver→g, Bier→ml) — Override im Dropdown
-                    'einheit_slug' => str_contains(mb_strtolower($gp->name . ' ' . ($gp->condition ?? '')), 'fluessig') ? 'ml' : 'g',
+                    'einheit_slug' => $istFluessig ? 'ml' : 'g',
+                    'einheiten' => $this->erlaubteSlugs($istFluessig, $formSlugsJeGp[$gp->id] ?? [], $gp->piece_default_g !== null),
                 ];
             })->values()->all();
 
@@ -335,6 +359,8 @@ class IngredientEditor extends Component
                     'preis_label' => $r->ek_per_kg_eur !== null ? number_format((float) $r->ek_per_kg_eur, 2, ',', '.') . ' €/kg' : null,
                     // Stück-Ertrag → Einheit beim Einfügen auf „stk" vorbelegen + g/Stück fürs Live-Rechnen
                     'einheit_slug' => $hatStueck ? 'stk' : 'g',
+                    // #9c: Sub-Rezept dosiert man in g/kg (+ stk bei Stück-Ertrag) — nicht in Formen/Gebinden.
+                    'einheiten' => array_values(array_filter(['g', 'kg', $hatStueck ? 'stk' : null])),
                     'g_pro_stueck' => $hatStueck ? (float) $r->yield_kg * 1000 / (float) $r->yield_pieces : null,
                     'niveaus' => $r->levelSuitabilities->pluck('level_slug')->values()->all(),
                 ];
@@ -374,6 +400,12 @@ class IngredientEditor extends Component
 
         $zeilen = [];
         if ($rezept !== null) {
+            // #9c: erlaubte Einheiten je GP der Bestandszeilen (Basis + hinterlegte Formen) für den Dropdown-Filter.
+            $gpIds = $rezept->ingredients->pluck('gp_id')->filter()->unique()->all();
+            $formSlugsJeGp = $gpIds !== []
+                ? FoodAlchemistGpForm::whereIn('gp_id', $gpIds)->get(['gp_id', 'form_slug'])
+                    ->groupBy('gp_id')->map(fn ($g) => $g->pluck('form_slug')->all())
+                : collect();
             foreach ($rezept->ingredients as $z) {
                 $ekProG = null;
                 $varianten = ['min' => null, 'avg' => null];
@@ -397,6 +429,14 @@ class IngredientEditor extends Component
                     'quantity' => (float) $z->quantity,
                     'quantity_max' => $z->quantity_max !== null ? (float) $z->quantity_max : null,
                     'unit_vocab_id' => $z->unit_vocab_id,
+                    // #9c: erlaubte Einheiten dieser Zeile (nur GP-Zeilen; Sub/Frei → null = alle als Fallback)
+                    'einheiten' => $z->gp_id !== null
+                        ? $this->erlaubteSlugs(
+                            str_contains(mb_strtolower(($z->gp->name ?? '') . ' ' . ($z->gp->condition ?? '')), 'fluessig'),
+                            $formSlugsJeGp[$z->gp_id] ?? [],
+                            ($z->gp?->piece_default_g) !== null,
+                        )
+                        : null,
                     'cooking_loss_pct' => $z->cooking_loss_pct !== null ? (float) $z->cooking_loss_pct : null,
                     'trimming_loss_pct' => $z->trimming_loss_pct !== null ? (float) $z->trimming_loss_pct : null,
                     'is_optional' => (bool) $z->is_optional,

@@ -110,8 +110,9 @@
                 <span class="min-w-0 flex-1 truncate text-[11px] font-medium text-gray-900" x-text="geparkt?.name" data-park-name></span>
                 <input type="text" x-model="neu.quantity" @keydown.enter.prevent="einfuegen()" placeholder="Menge"
                        class="{{ $input }} !w-20 !py-1 text-right" data-park-quantity />
+                {{-- #9c: nur die für das geparkte Produkt hinterlegten/umrechenbaren Einheiten --}}
                 <select x-model.number="neu.unit_vocab_id" class="{{ $input }} !w-24 !py-0.5 !text-[11px]" data-park-unit>
-                    @foreach($einheiten as $e)<option value="{{ $e->id }}">{{ $e->slug }}</option>@endforeach
+                    <template x-for="e in erlaubteEinheiten(geparkt)" :key="e.id"><option :value="e.id" x-text="e.slug"></option></template>
                 </select>
                 <label class="inline-flex items-center gap-1 text-[11px] text-gray-500 shrink-0">
                     <input type="checkbox" x-model="neu.is_optional" class="rounded border-gray-300" /> optional
@@ -154,8 +155,9 @@
                         </td>
                         <td class="{{ $td }} !px-2 !py-0.5"><input type="text" x-model="zeile.quantity" class="{{ $input }} !w-20 !py-0.5 !text-[11px] text-right" data-quantity /></td>
                         <td class="{{ $td }} !px-2 !py-0.5">
+                            {{-- #9c: nur die für dieses Produkt hinterlegten/umrechenbaren Einheiten (Fallback: alle) --}}
                             <select x-model.number="zeile.unit_vocab_id" class="{{ $input }} !w-24 !py-0.5 !text-[11px]">
-                                @foreach($einheiten as $e)<option value="{{ $e->id }}">{{ $e->slug }}</option>@endforeach
+                                <template x-for="e in erlaubteEinheiten(zeile)" :key="e.id"><option :value="e.id" x-text="e.slug"></option></template>
                             </select>
                         </td>
                         {{-- R19: Hinweis-Spalte raus → Platz für die EINZEILIGE Zutat (note bleibt im Datensatz) --}}
