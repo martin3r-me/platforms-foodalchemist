@@ -602,9 +602,11 @@
                     </x-foodalchemist::modal-section>
                 @elseif($importStep === 'vorschau')
                     <x-foodalchemist::modal-section title="Vorschau — prüfen &amp; anlegen">
+                        {{-- #6: gleicher w-full-Konflikt wie bei den Zutaten-Zeilen — Name-Feld kollabierte,
+                             Typ-Dropdown fraß die Breite. Feste Inline-Breiten erzwingen. --}}
                         <div class="flex items-center gap-2 mb-2">
-                            <input type="text" wire:model="importVorschau.name" class="{{ $input }} flex-1" placeholder="Name" />
-                            <select wire:model="importTyp" class="{{ $input }} w-40">
+                            <input type="text" wire:model="importVorschau.name" class="{{ $input }}" style="flex:1 1 0;width:auto;min-width:0" placeholder="Name (Pflicht — Quelle ohne Titel)" data-import-name />
+                            <select wire:model="importTyp" class="{{ $input }}" style="flex:0 0 10rem;width:10rem" data-import-typ>
                                 <option value="basisrezept">Basisrezept</option>
                                 <option value="gericht">Gericht</option>
                             </select>

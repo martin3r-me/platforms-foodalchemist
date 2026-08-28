@@ -170,5 +170,24 @@ it('#6 Import-Vorschau rendert die Bezeichnungs-Spalte (Layout-Fix — vorher ko
         // Menge/Einheit fest schmal, Bezeichnung breit → alle drei Felder sind im DOM (vorher kollabierte die breite Spalte).
         ->assertSeeHtml('data-import-zutat-menge')
         ->assertSeeHtml('data-import-zutat-einheit')
-        ->assertSeeHtml('data-import-zutat-text');
+        ->assertSeeHtml('data-import-zutat-text')
+        // Name-Feld + Typ-Dropdown rendern (Name kollabierte vorher durch denselben w-full-Konflikt).
+        ->assertSeeHtml('data-import-name')
+        ->assertSeeHtml('data-import-typ');
+});
+
+it('#6: der Extrakt überschreibt NICHT die explizite Typ-Vorauswahl des Users', function () {
+    // User wählt „Basisrezept"; der Extrakt hält es für ein „gericht" → Vorauswahl muss gewinnen.
+    ($this->mockExtract)([
+        'typ' => 'gericht', 'name' => 'Rindergulasch',
+        'zutaten' => [['text' => 'Rindfleisch', 'quantity' => 500, 'unit' => 'g']],
+        'preparation' => 'Schmoren.', 'komponenten' => [],
+    ]);
+
+    Livewire::test(PlanungIndex::class)
+        ->set('importTyp', 'basisrezept')             // explizite Wahl im Eingabe-Schritt
+        ->set('importText', '500 g Rindfleisch')
+        ->call('importExtrahieren')
+        ->assertSet('importStep', 'vorschau')
+        ->assertSet('importTyp', 'basisrezept');       // bleibt — kein stiller Switch auf „gericht"
 });

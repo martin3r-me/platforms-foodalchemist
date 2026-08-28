@@ -3148,7 +3148,12 @@ class Index extends Component
 
             return;
         }
-        $this->importTyp = ($extrakt['typ'] ?? null) === 'gericht' ? 'gericht' : 'basisrezept';
+        // #6 (Dominique 2026-08-28): die EXPLIZITE Vorauswahl des Users („Anlegen als …") gewinnt —
+        // der Extrakt-Typ überschreibt sie NICHT mehr (früher sprang Basisrezept → Gericht). Im Vorschau-
+        // Dropdown bleibt der Typ frei änderbar. Der KI-Vorschlag zählt nur, wenn der User nichts gewählt hat.
+        if (! in_array($this->importTyp, ['basisrezept', 'gericht'], true)) {
+            $this->importTyp = ($extrakt['typ'] ?? null) === 'gericht' ? 'gericht' : 'basisrezept';
+        }
         $this->importVorschau = [
             'name' => (string) ($extrakt['name'] ?? ''),
             'preparation' => (string) ($extrakt['preparation'] ?? ''),
