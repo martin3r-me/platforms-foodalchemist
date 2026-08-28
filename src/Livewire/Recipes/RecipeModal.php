@@ -619,10 +619,15 @@ class RecipeModal extends Component
                 'max_vorlauf_tage' => $this->form['max_vorlauf_tage'],
                 'temperature' => $this->form['temperature'] ?: null,
                 'function' => $this->form['function'] ?: null, 'zutaten' => $zutaten,
+                // #11 (Dominique 2026-08-28): Batch/Chargengröße mitschätzen — Yield als Basis + aktuelle Werte.
+                'yield_kg' => $r?->yield_kg,
+                'batch_max_kg' => $this->form['batch_max_kg'] ?? null,
+                'batch_max_pieces' => $this->form['batch_max_pieces'] ?? null,
             ], $wissenOpts);
             $gefuellt = 0;
             foreach (['work_time_min', 'setup_time_min', 'standzeit_min', 'variable_work_time_min',
-                'variable_work_time_basis', 'max_vorlauf_tage', 'temperature', 'function'] as $feld) {
+                'variable_work_time_basis', 'max_vorlauf_tage', 'temperature', 'function',
+                'batch_max_kg', 'batch_max_pieces'] as $feld) {
                 if (array_key_exists($feld, $eigenschaften->werte)
                     && $eigenschaften->werte[$feld] !== null
                     && $eigenschaften->werte[$feld] !== '') {

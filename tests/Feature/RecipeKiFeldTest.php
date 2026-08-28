@@ -84,7 +84,32 @@ it('M4-11 (DoD 3/3): garverlust — Vorschlag geclampt, Save schreibt quelle=ki'
         ->and($zutat->cooking_loss_source)->toBe('ki');
 });
 
-it('Eigenschaften-Assistent füllt alle Zeitfelder nur in die Vorschau und keine Batchgrenze', function () {
+it('#11: Eigenschaften-Assistent schätzt die Chargengröße mit (batch_max_kg in die Vorschau)', function () {
+    // Dominique 2026-08-28: die KI darf batch_max jetzt vorschlagen (früher per Prompt verboten) —
+    // geerdet aufs Produktions-Kapazitäts-Dossier; die Zeile 802-Sperre ist raus.
+    $this->rezept->update(['preparation' => 'Öl mit Kräutern kalt ansetzen, ziehen lassen.']);
+
+    $this->mock(\Platform\FoodAlchemist\Services\Ai\AiGatewayService::class, function ($mock) {
+        $mock->shouldReceive('propose')
+            ->with('recipe.eigenschaften', \Mockery::any(), \Mockery::any())
+            ->once()
+            ->andReturn(new \Platform\FoodAlchemist\Services\Ai\AiProposal(
+                ['work_time_min' => 10, 'batch_max_kg' => 60], 0.9, null, [], 'mock'
+            ));
+        $mock->shouldReceive('propose')
+            ->with('recipe.geschmack', \Mockery::any())
+            ->andReturn(new \Platform\FoodAlchemist\Services\Ai\AiProposal(['taste_direction' => 'herzhaft'], 0.9, null, [], 'mock'));
+    });
+
+    Livewire::test(RecipeModal::class)
+        ->call('oeffnen', $this->rezept->id)
+        ->call('kiEigenschaften')
+        ->assertSet('fehler', null)
+        ->assertSet('form.work_time_min', 10)
+        ->assertSet('form.batch_max_kg', 60);   // kalt angesetztes Öl → große Charge, nicht Topf-Default 20
+});
+
+it('Eigenschaften-Assistent füllt Felder nur in die Vorschau (persistiert erst beim Speichern)', function () {
     // Basis für den Assistenten (sonst greift die Guardrail „nur mit Basisdaten").
     $this->rezept->update(['preparation' => 'Reduzieren, abschmecken, montieren.']);
     $modal = Livewire::test(RecipeModal::class)
