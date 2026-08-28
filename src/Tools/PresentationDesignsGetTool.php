@@ -47,6 +47,7 @@ class PresentationDesignsGetTool extends FoodAlchemistTool implements ToolContra
             'id' => (int) $d->id,
             'name' => $d->name,
             'base_slug' => $d->base_slug,
+            'output_types' => $d->output_types,
             'owned' => $d->isOwnedBy($team),
             'layout_json' => $d->layout_json,
             'tokens_json' => $d->tokens_json,

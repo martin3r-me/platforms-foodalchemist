@@ -584,12 +584,7 @@ class Editor extends Component
                 $brandingBilder['cover'] = $media->url($sp->cover_context_file_id, $sp->cover_image_path);
             }
         }
-        $presentationDesignOptionen = collect(app(PresentationDesignService::class)->list($team))
-            ->map(fn ($d) => ['value' => 'design:' . $d->id, 'label' => $d->name])
-            ->prepend(['value' => 'kiosk', 'label' => 'Kiosk (Vorlage)'])
-            ->prepend(['value' => 'menu', 'label' => 'Kompakt (Vorlage)'])
-            ->prepend(['value' => 'editorial', 'label' => 'Editorial (Vorlage)'])
-            ->values()->all();
+        $presentationDesignOptionen = app(PresentationDesignService::class)->pickerOptions($team, 'speiseplan');
 
         return view('foodalchemist::livewire.speiseplan.editor', [
             'presentationInfo' => $presentationInfo,

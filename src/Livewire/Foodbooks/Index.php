@@ -1257,12 +1257,7 @@ class Index extends Component
                 $presentationLink = url('/p/foodbook/' . $fb->presentation_token);
             }
         }
-        $presentationDesignOptionen = collect(app(PresentationDesignService::class)->list($team))
-            ->map(fn ($d) => ['value' => 'design:' . $d->id, 'label' => $d->name])
-            ->prepend(['value' => 'kiosk', 'label' => 'Kiosk (Vorlage)'])
-            ->prepend(['value' => 'menu', 'label' => 'Speisekarte (Vorlage)'])
-            ->prepend(['value' => 'editorial', 'label' => 'Editorial (Vorlage)'])
-            ->values()->all();
+        $presentationDesignOptionen = app(PresentationDesignService::class)->pickerOptions($team, 'foodbook');
 
         return view('foodalchemist::livewire.foodbooks.index', [
             'kapitelImageUrl' => ($kapitel !== null && ($kapitel->image_context_file_id || $kapitel->image_path))

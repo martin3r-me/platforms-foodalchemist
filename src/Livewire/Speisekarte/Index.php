@@ -780,12 +780,7 @@ class Index extends Component
                 $presentationLink = url('/p/speisekarte/' . $karte->presentation_token);
             }
         }
-        $presentationDesignOptionen = collect(app(PresentationDesignService::class)->list($team))
-            ->map(fn ($d) => ['value' => 'design:' . $d->id, 'label' => $d->name])
-            ->prepend(['value' => 'kiosk', 'label' => 'Kiosk (Vorlage)'])
-            ->prepend(['value' => 'menu', 'label' => 'Speisekarte (Vorlage)'])
-            ->prepend(['value' => 'editorial', 'label' => 'Editorial (Vorlage)'])
-            ->values()->all();
+        $presentationDesignOptionen = app(PresentationDesignService::class)->pickerOptions($team, 'speisekarte');
 
         return view('foodalchemist::livewire.speisekarte.index', [
             'presentationInfo' => $presentationInfo,

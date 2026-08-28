@@ -44,6 +44,7 @@ class PresentationDesignsSearchTool extends FoodAlchemistTool implements ToolCon
                 'id' => (int) $d->id,
                 'name' => $d->name,
                 'base_slug' => $d->base_slug,
+                'output_types' => $d->output_types,
                 'owned' => $d->isOwnedBy($team),
             ])->values()->all();
 

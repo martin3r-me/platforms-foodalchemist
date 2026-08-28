@@ -29,6 +29,9 @@ class PraesentationsDesigns extends Component
 
     public string $baseSlug = 'editorial';
 
+    /** Form-Scoping: für welche Ausgabeformen das Design im Picker erscheint (leer = alle). */
+    public array $outputTypes = [];
+
     /** Stufe 2: sandboxed Custom-CSS des Designs (CSS-only). */
     public ?string $customCss = null;
 
@@ -92,6 +95,7 @@ class PraesentationsDesigns extends Component
         $this->baseSlug = $b['base_slug'];
         $this->layout = app(PresentationDesignService::class)->normalizeLayout($b['layout']);
         $this->tokens = $b['tokens'];
+        $this->outputTypes = $b['output_types'] ?? [];
         $this->customCss = null;
         $this->selectedBlockIndex = null;
         $this->resetFeedback();
@@ -109,6 +113,7 @@ class PraesentationsDesigns extends Component
         $this->baseSlug = (string) ($design->base_slug ?: 'editorial');
         $this->layout = app(PresentationDesignService::class)->normalizeLayout($design->layout_json ?? []);
         $this->tokens = is_array($design->tokens_json) ? $design->tokens_json : [];
+        $this->outputTypes = is_array($design->output_types) ? $design->output_types : [];
         $this->customCss = $design->custom_css;
         $this->selectedBlockIndex = null;
         $this->resetFeedback();
@@ -130,7 +135,7 @@ class PraesentationsDesigns extends Component
     {
         $this->resetFeedback();
         $team = $this->team();
-        $data = ['name' => $this->name, 'base_slug' => $this->baseSlug, 'layout_json' => $this->layout, 'tokens_json' => $this->tokens, 'custom_css' => $this->customCss];
+        $data = ['name' => $this->name, 'base_slug' => $this->baseSlug, 'output_types' => $this->outputTypes, 'layout_json' => $this->layout, 'tokens_json' => $this->tokens, 'custom_css' => $this->customCss];
         try {
             $design = $this->selectedId
                 ? app(PresentationDesignService::class)->update($team, $this->selectedId, $data)
