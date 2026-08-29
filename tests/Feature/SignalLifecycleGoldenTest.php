@@ -137,3 +137,33 @@ it('Golden: der Dedup-Zweig schreibt genau vier Felder fort', function () {
         ->and($b->ref_id)->toBe(42)
         ->and($b->source)->toBe('detektor');
 });
+
+it('V-011 Detektor-Sweep: schließt offene Signale, deren Key nicht mehr emittiert wurde (Auto-Close)', function () {
+    $a = $this->signals->erzeuge($this->rootTeam, SignalTyp::MargeUnterZiel, SignalSeverity::Warnung, 'A', ['dedup_key' => 'marge-recipe-1', 'source' => 'detektor']);
+    $b = $this->signals->erzeuge($this->rootTeam, SignalTyp::MargeUnterZiel, SignalSeverity::Warnung, 'B', ['dedup_key' => 'marge-recipe-2', 'source' => 'detektor']);
+
+    // Nur Key 1 ist diesmal noch „live" → Gericht 2 (behoben) schließt sich, 1 bleibt offen.
+    $n = $this->signals->schliesseVerschwundene($this->rootTeam, SignalTyp::MargeUnterZiel, 'detektor', ['marge-recipe-1'], 'Marge wieder ≥ Ziel');
+    expect($n)->toBe(1)
+        ->and($a->refresh()->status->value)->toBe(SignalStatus::Offen->value)
+        ->and($b->refresh()->status->value)->toBe(SignalStatus::Erledigt->value)
+        ->and($b->payload['auto_geschlossen'] ?? null)->toBe('Marge wieder ≥ Ziel')
+        ->and($b->erledigt_at)->not->toBeNull();
+
+    // Leere liveKeys (Lauf fand NICHTS mehr) ⇒ alle restlichen offenen dieses Typs schließen.
+    $n2 = $this->signals->schliesseVerschwundene($this->rootTeam, SignalTyp::MargeUnterZiel, 'detektor', [], 'alles behoben');
+    expect($n2)->toBe(1)->and($a->refresh()->status->value)->toBe(SignalStatus::Erledigt->value);
+});
+
+it('V-011 Detektor-Sweep: greift NICHT über Typ/Quelle/Team hinweg', function () {
+    $anderTyp = $this->signals->erzeuge($this->rootTeam, SignalTyp::WareneinsatzUeberZiel, SignalSeverity::Warnung, 'X', ['dedup_key' => 'we-quote-recipe-1', 'source' => 'detektor']);
+    $andereQuelle = $this->signals->erzeuge($this->rootTeam, SignalTyp::MargeUnterZiel, SignalSeverity::Warnung, 'Y', ['dedup_key' => 'dq-y', 'source' => 'data-quality']);
+    $anderesTeam = $this->signals->erzeuge($this->childA, SignalTyp::MargeUnterZiel, SignalSeverity::Warnung, 'Z', ['dedup_key' => 'marge-recipe-9', 'source' => 'detektor']);
+
+    // Voll-Sweep über rootTeam/MargeUnterZiel/detektor mit leeren Keys darf nichts Fremdes greifen.
+    $this->signals->schliesseVerschwundene($this->rootTeam, SignalTyp::MargeUnterZiel, 'detektor', [], 'weg');
+
+    expect($anderTyp->refresh()->status->value)->toBe(SignalStatus::Offen->value)      // anderer Typ
+        ->and($andereQuelle->refresh()->status->value)->toBe(SignalStatus::Offen->value) // andere Quelle (Ampel)
+        ->and($anderesTeam->refresh()->status->value)->toBe(SignalStatus::Offen->value); // anderes Team
+});

@@ -572,6 +572,9 @@ class SignalDetektorService
             ->count();
 
         if ($anzahl === 0) {
+            // Auf 0 gemessen → das offene Sammel-Signal schließen (sonst bleibt es ewig stehen).
+            $this->signals->schliesseGemessen($team, SignalTyp::VeraltetePreise, 'veraltete-preise', 'detektor', 'Keine veralteten Preise mehr — automatisch geschlossen');
+
             return 0;
         }
 
@@ -613,9 +616,12 @@ class SignalDetektorService
 
         $treffer = 0;
         $verarbeitet = 0;
+        $keys = [];
+        $capHit = false;
         foreach ($rows->groupBy('gp_id') as $gpId => $items) {
             if ($verarbeitet >= $maxGps) {
                 \Illuminate\Support\Facades\Log::info("preisAnomalie: Cap {$maxGps} GPs erreicht — Rest übersprungen (team {$team->id}).");
+                $capHit = true;
                 break;
             }
             $verarbeitet++;
@@ -662,7 +668,13 @@ class SignalDetektorService
                     'payload' => ['ausreisser' => array_slice($ausreisser, 0, 10), 'max_abw_pct' => $maxAbw],
                 ]
             );
+            $keys[] = 'preis-anomalie-gp-' . $gpId;
             $treffer++;
+        }
+        // Bereinigte GPs (kein Ausreißer mehr) automatisch schließen — aber NUR bei vollständigem
+        // Lauf: wurde der Cap gerissen, blieben ungeprüfte GPs offen und dürfen nicht mit-abgeräumt werden.
+        if (! $capHit) {
+            $this->signals->schliesseVerschwundene($team, SignalTyp::PreisAnomalie, 'detektor', $keys, 'Keine Preis-Ausreißer mehr — automatisch geschlossen');
         }
 
         return $treffer;
@@ -693,6 +705,7 @@ class SignalDetektorService
             ->whereNotNull('sales_net')->where('sales_net', '>', 0)->get();
 
         $n = 0;
+        $keys = [];
         foreach ($gerichte as $r) {
             $hk = $kalk->recipeHk($team, $r);
             $db = $hk['db_pct'] ?? null;
@@ -713,8 +726,11 @@ class SignalDetektorService
                     'payload' => ['db_pct' => (float) $db, 'ziel_pct' => $ziel, 'sales_net' => (float) $r->sales_net],
                 ]
             );
+            $keys[] = 'marge-recipe-' . $r->id;
             $n++;
         }
+        // Behobene Gerichte (DB wieder ≥ Ziel) schließen sich selbst — sonst müllen sie das Postfach zu.
+        $this->signals->schliesseVerschwundene($team, SignalTyp::MargeUnterZiel, 'detektor', $keys, 'Marge wieder ≥ Ziel — automatisch geschlossen');
 
         return $n;
     }
@@ -735,9 +751,15 @@ class SignalDetektorService
             ->whereNotNull('sales_net')->where('sales_net', '>', 0)->get();
 
         $n = 0;
+        $keys = [];
         foreach ($gerichte as $r) {
-            $n += $this->wareneinsatzUeberZielFuer($team, $r, $ziel) ? 1 : 0;
+            if ($this->wareneinsatzUeberZielFuer($team, $r, $ziel)) {
+                $keys[] = 'we-quote-recipe-' . $r->id;
+                $n++;
+            }
         }
+        // Wieder unter Ziel gefallene Gerichte automatisch schließen (Gegenzweig zum Emittieren).
+        $this->signals->schliesseVerschwundene($team, SignalTyp::WareneinsatzUeberZiel, 'detektor', $keys, 'Wareneinsatz wieder ≤ Ziel — automatisch geschlossen');
 
         return $n;
     }
@@ -861,6 +883,7 @@ class SignalDetektorService
     {
         $mindest = app(TeamSettingsService::class)->mindestMarginPct($team);
         $n = 0;
+        $keys = [];
         foreach (app(VkSnapshotService::class)->pending($team) as $p) {
             $this->signals->erzeuge(
                 $team,
@@ -886,8 +909,11 @@ class SignalDetektorService
                     ],
                 ]
             );
+            $keys[] = 'vk-anpassung-presentation-' . $p['presentation_id'] . '-' . $p['live_net'];
             $n++;
         }
+        // Freigegebene/wieder deckungsgleiche Darreichungen schließen sich selbst (kein Dauer-Phantom).
+        $this->signals->schliesseVerschwundene($team, SignalTyp::VkAnpassungEmpfohlen, 'detektor', $keys, 'VK wieder innerhalb der Leitplanke — automatisch geschlossen');
 
         return $n;
     }

@@ -111,6 +111,44 @@ class SignalService
         return $offene->count();
     }
 
+    /**
+     * V-011 (Detektor-Seite): schließt alle OFFENEN Signale eines Typs aus derselben Quelle,
+     * deren dedup_key im aktuellen Lauf NICHT (mehr) emittiert wurde — der Gegenzweig für die
+     * per-Entität arbeitenden Geld-/Marge-Detektoren, die gesunde Fälle einfach nicht emittieren
+     * (also kein `wert=0` je Key liefern wie die Datenqualitäts-Ampel). Ohne diesen Sweep bliebe
+     * ein behobenes Geld-Signal („Marge unter Ziel" nach Preis-Fix) für immer offen im Postfach.
+     *
+     * Leere `$liveKeys` ⇒ es ist nichts mehr offen-würdig ⇒ alle offenen dieses Typs schließen.
+     * **Nur der Aufrufer eines VOLLSTÄNDIGEN Laufs darf das rufen** — bei gecapptem/Teil-Lauf
+     * würden fremde (nur nicht-geprüfte) Signale mit-abgeräumt.
+     *
+     * @param  list<string>  $liveKeys  die in diesem Lauf emittierten dedup_keys
+     * @return int  Anzahl geschlossener Signale
+     */
+    public function schliesseVerschwundene(Team $team, SignalTyp $typ, string $source, array $liveKeys, string $grund): int
+    {
+        $offene = FoodAlchemistSignal::where('team_id', $team->id)
+            ->where('type', $typ->value)
+            ->where('source', $source)
+            ->where('status', SignalStatus::Offen->value)
+            ->whereNotNull('dedup_key')
+            ->when($liveKeys !== [], fn ($q) => $q->whereNotIn('dedup_key', $liveKeys))
+            ->get();
+
+        foreach ($offene as $s) {
+            $s->update([
+                'status' => SignalStatus::Erledigt->value,
+                'erledigt_at' => now(),
+                'payload' => array_merge((array) ($s->payload ?? []), [
+                    'auto_geschlossen' => $grund,
+                    'auto_geschlossen_am' => now()->toIso8601String(),
+                ]),
+            ]);
+        }
+
+        return $offene->count();
+    }
+
     public function abschliessen(Team $team, int $id): void
     {
         $s = FoodAlchemistSignal::where('team_id', $team->id)->findOrFail($id);
