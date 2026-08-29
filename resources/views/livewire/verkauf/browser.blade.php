@@ -95,6 +95,12 @@
             </div>
             <p class="text-[11px] text-gray-500">Speisen mit VK-Preis. Auto-VK aus Darreichungs-MEK × Unternehmens-Basissatz × relativem Klassenfaktor.</p>
         </div>
+        @if($aktiverBetrieb !== null)
+            <div class="flex items-center gap-1.5 text-[11px] text-indigo-600 -mt-1" data-vk-brille-hinweis>
+                @svg('heroicon-o-building-storefront', 'w-3.5 h-3.5')
+                <span>VK/WE betriebsscharf für <span class="font-medium">{{ $aktiverBetrieb }}</span> (on-the-fly gegen dessen Kostenstruktur).</span>
+            </div>
+        @endif
         <div class="relative overflow-hidden {{ $card }}" data-vk-tabelle>
             <div class="{{ $cardAccent }}"></div>
             {{-- MVP-024: Statuswechsel-Fehler sichtbar statt still verschluckt --}}
@@ -147,8 +153,10 @@
                             @if(in_array('hauptgruppe', $spalten, true))<td class="{{ $td }} text-gray-600 whitespace-nowrap">{{ $r->dishMainGroup?->code ?? '—' }}</td>@endif
                             {{-- Inline-Status-Pflege wie bei GP (Kuratoren; Stub bleibt Badge) --}}
                             @if(in_array('ek', $spalten, true))<td class="{{ $td }} text-gray-600 whitespace-nowrap text-right tabular-nums">{{ $r->ek_total_eur !== null ? number_format((float) $r->ek_total_eur, 2, ',', '.') . ' €' : '—' }}</td>@endif
-                            @if(in_array('vk', $spalten, true))<td class="{{ $td }} text-gray-900 whitespace-nowrap text-right tabular-nums">{{ $r->sales_net !== null ? number_format((float) $r->sales_net, 2, ',', '.') . ' €' : '—' }}</td>@endif
-                            @if(in_array('we', $spalten, true))<td class="{{ $td }} whitespace-nowrap text-right tabular-nums" title="Wareneinsatz = EK / VK netto">{{ ($r->sales_net !== null && (float) $r->sales_net > 0 && $r->ek_total_eur !== null) ? number_format((float) $r->ek_total_eur / (float) $r->sales_net * 100, 1, ',', '.') : '—' }}</td>@endif
+                            {{-- Ebene 2: mit Betriebsbrille zeigt die VK-Spalte den betriebsscharfen VK ($vkDisplay), sonst die Baseline (sales_net); WE folgt demselben VK. --}}
+                            @php($vkR = ($vkDisplay[$r->id] ?? null) !== null ? (float) $vkDisplay[$r->id] : ($r->sales_net !== null ? (float) $r->sales_net : null))
+                            @if(in_array('vk', $spalten, true))<td class="{{ $td }} whitespace-nowrap text-right tabular-nums {{ isset($vkDisplay[$r->id]) ? 'text-indigo-700 font-medium' : 'text-gray-900' }}" @if(isset($vkDisplay[$r->id]))title="VK für {{ $aktiverBetrieb }}"@endif>{{ $vkR !== null ? number_format($vkR, 2, ',', '.') . ' €' : '—' }}</td>@endif
+                            @if(in_array('we', $spalten, true))<td class="{{ $td }} whitespace-nowrap text-right tabular-nums" title="Wareneinsatz = EK / VK netto">{{ ($vkR !== null && $vkR > 0 && $r->ek_total_eur !== null) ? number_format((float) $r->ek_total_eur / $vkR * 100, 1, ',', '.') : '—' }}</td>@endif
                             @if(in_array('zutaten', $spalten, true))<td class="{{ $td }} text-gray-600 text-right tabular-nums">{{ $r->n_ingredients_total }}</td>@endif
                             @if(in_array('allergen', $spalten, true))<td class="{{ $td }}">
                                 <span class="{{ $pill }} {{ ['high' => $variantPill['success'], 'medium' => $variantPill['warning'], 'low' => $variantPill['danger'], 'unknown' => $variantPill['secondary']][$r->allergens_confidence] ?? $variantPill['secondary'] }}">{{ \Platform\FoodAlchemist\Support\Labels::konfidenz($r->allergens_confidence) }}</span>

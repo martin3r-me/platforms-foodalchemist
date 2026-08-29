@@ -39,6 +39,42 @@ class SalesRecipeService
     }
 
     /**
+     * Ebene 2 — betriebsscharfe VK je Rezept für die Listen-Anzeige. Der Unternehmens-Basissatz
+     * wird EINMAL aufgelöst (enterpriseBaseRate) und als `preBase` je Zeile in salesNetFor
+     * gereicht — keine N× Basissatz-Rechnung über die Seite. Ohne Betrieb leer (die Liste fällt
+     * auf die Baseline `sales_net` zurück). Rezepte ohne Darreichung (kein on-the-fly-VK möglich)
+     * bleiben ausgespart und zeigen weiter die Baseline.
+     *
+     * @param  \Illuminate\Support\Collection<int, FoodAlchemistRecipe>  $recipes
+     * @return array<int, float>  recipe_id → VK netto im Betrieb
+     */
+    public function outletVkMap(Team $team, Collection $recipes, ?FoodAlchemistOutlet $outlet): array
+    {
+        if ($outlet === null || $recipes->isEmpty()) {
+            return [];
+        }
+        $ids = $recipes->pluck('id')->all();
+        $preBase = $this->catalogPricing->enterpriseBaseRate($team, $outlet);
+        // Standard-Darreichung zuerst, sonst die erste — spiegelt den Fallback des DarreichungResolvers.
+        $darr = \Platform\FoodAlchemist\Models\FoodAlchemistRecipeDarreichung::whereIn('recipe_id', $ids)
+            ->orderByDesc('is_standard')->orderBy('id')->get()->groupBy('recipe_id');
+
+        $map = [];
+        foreach ($recipes as $r) {
+            $d = $darr->get($r->id)?->first();
+            if ($d === null) {
+                continue;
+            }
+            $vk = $this->catalogPricing->salesNetFor($team, $d, $outlet, $preBase);
+            if ($vk !== null) {
+                $map[(int) $r->id] = round((float) $vk, 2);
+            }
+        }
+
+        return $map;
+    }
+
+    /**
      * DER Filtervertrag der VK-Sicht — eine Stelle für Tabelle UND Facetten (MVP-048).
      *
      * Vorher lebte der Filtersatz nur in `paginateBrowser()`; die Facetten-Zähler bauten ihre

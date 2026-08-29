@@ -194,11 +194,16 @@ class Browser extends Component
 
         $rezepte = $verkauf->paginateBrowser($filters, $team, in_array($this->perPage, [25, 50, 100, 250, 500], true) ? $this->perPage : 100);
 
+        // Ebene 2: betriebsscharfe VK je Zeile, wenn eine Brille aktiv ist (Basissatz einmal, dann je Zeile).
+        $outlet = app(\Platform\FoodAlchemist\Services\ActiveOutletContext::class)->current($team);
+
         return view('foodalchemist::livewire.verkauf.browser', [
             'spalten' => $this->spalten(),
             'spaltenKatalog' => self::SPALTEN,
             'ansichten' => self::ANSICHTEN,
             'rezepte' => $rezepte,
+            'vkDisplay' => $verkauf->outletVkMap($team, collect($rezepte->items()), $outlet),
+            'aktiverBetrieb' => $outlet?->name,
             'hauptgruppen' => $verkauf->dishMainGroups($team),
             'gesamtCount' => $verkauf->gesamtCount($team, $filters),
             'hgCounts' => $verkauf->hauptgruppenCounts($team, $filters),
