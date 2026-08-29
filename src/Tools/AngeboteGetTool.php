@@ -48,6 +48,17 @@ class AngeboteGetTool extends FoodAlchemistTool implements ToolContract, ToolMet
                 'id' => $a->id, 'name' => $a->name,
                 'status' => $a->status instanceof \BackedEnum ? $a->status->value : $a->status,
                 'occasion' => $a->occasion, 'personen' => $a->personen,
+                'event_date' => $a->event_date instanceof \DateTimeInterface ? $a->event_date->format('Y-m-d') : $a->event_date,
+                'valid_until' => $a->valid_until instanceof \DateTimeInterface ? $a->valid_until->format('Y-m-d') : $a->valid_until,
+                'price_mode' => $a->price_mode,
+                'total_price' => $a->total_price !== null ? (float) $a->total_price : null,
+                // Modernisierung (D10): CRM-Kunde + eingebettete Menü-Concepts + referenzierte Concepts
+                'crm_company_id' => $a->crm_company_id !== null ? (int) $a->crm_company_id : null,
+                'crm_contact_id' => $a->crm_contact_id !== null ? (int) $a->crm_contact_id : null,
+                'menue' => $svc->menueConcepts($a)->map(fn ($c) => [
+                    'concept_id' => (int) $c->id, 'name' => $c->name,
+                    'price_per_person' => $c->price_per_person_cache !== null ? (float) $c->price_per_person_cache : null,
+                ])->values()->all(),
             ],
             'kalkulation' => $svc->kalkulation($team, $a),
         ]);

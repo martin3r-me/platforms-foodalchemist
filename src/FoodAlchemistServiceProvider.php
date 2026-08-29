@@ -723,6 +723,18 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\AngeboteListTool::class,
                     \Platform\FoodAlchemist\Tools\AngeboteGetTool::class,
                     \Platform\FoodAlchemist\Tools\AngebotePostTool::class,
+                    // D10: Angebote-Vervollständigung (Put/Delete(confirm)/Status/Customer-Link/Recompute
+                    // + Menü-CRUD + Concept-Referenzen). angebote.DELETE bleibt (frühe Entwürfe).
+                    \Platform\FoodAlchemist\Tools\AngebotePutTool::class,
+                    \Platform\FoodAlchemist\Tools\AngeboteDeleteTool::class,
+                    \Platform\FoodAlchemist\Tools\AngeboteStatusTool::class,
+                    \Platform\FoodAlchemist\Tools\AngeboteCustomerLinkTool::class,
+                    \Platform\FoodAlchemist\Tools\AngeboteRecomputeTool::class,
+                    \Platform\FoodAlchemist\Tools\AngebotMenuePostTool::class,
+                    \Platform\FoodAlchemist\Tools\AngebotMenuePromoteTool::class,
+                    \Platform\FoodAlchemist\Tools\AngebotMenueDeleteTool::class,
+                    \Platform\FoodAlchemist\Tools\AngebotConceptRefPostTool::class,
+                    \Platform\FoodAlchemist\Tools\AngebotConceptRefDeleteTool::class,
                     \Platform\FoodAlchemist\Tools\KalkulationGetTool::class,
                     \Platform\FoodAlchemist\Tools\SimulationPostTool::class,
                     // R7.1: Operative Planungs-Blätter (read-only, rein rechnend)
