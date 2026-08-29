@@ -114,10 +114,35 @@
                 <h3 class="font-medium tracking-tight text-gray-900">Fixkosten (Gemeinkosten) → abgeleitete Sätze</h3>
                 <p class="text-[11px] text-gray-500 mt-0.5">Nicht-produktbezogene Kosten (Logistik, Spüle, Lager, Verwaltung …). <strong>Zuschlag-% = Σ Fixkosten/Monat ÷ Bezugsbasis × 100</strong> für jeden Block im Modus „aus Fixkosten".</p>
             </div>
-            @if(count($fixListe) === 0)
+            @if(count($fixListe) === 0 && $fixOutletId === null)
                 <button type="button" wire:click="cateringBeispielwerte" class="{{ $btnGhostXs }} text-violet-600" title="Setzt gekennzeichnete, editierbare Beispielwerte samt Monatsbasen ein und berechnet die Kaskade.">@svg('heroicon-o-calculator', 'w-3.5 h-3.5 inline-block align-middle') Catering-Beispiel rechnen</button>
             @endif
         </div>
+
+        {{-- Ebene 2: Fixkosten je Betrieb — Betriebs-Zeilen ersetzen pro Block die Team-Zeilen (Per-Block-Replace). --}}
+        @if(count($betriebeOptionen) > 0)
+            <div class="rounded-lg border p-3" style="border-color:#e9d5ff;background:#faf5ff;">
+                <div class="flex flex-wrap items-center gap-2">
+                    <span class="inline-block w-2 h-2 rounded-full" style="background:#9333ea;"></span>
+                    <label class="text-xs font-semibold" style="color:#6b21a8;">Fixkosten für</label>
+                    <select wire:model.live="fixOutletId" class="{{ $input }} !w-64 !py-1">
+                        <option value="">Team-Standard (gilt für alle Betriebe)</option>
+                        @foreach($betriebeOptionen as $o)
+                            <option value="{{ $o['id'] }}">Betrieb: {{ $o['name'] }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                @if($fixOutletName)
+                    <p class="text-[11px] text-purple-800 mt-1.5">
+                        Du erfasst die Fixkosten für <strong>{{ $fixOutletName }}</strong>. Sie ersetzen bei der VK-Berechnung dieses Betriebs
+                        <strong>pro Block</strong> die Team-Fixkosten; Blöcke ohne eigene Zeile <strong>erben</strong> automatisch das Team.
+                        Die Σ unten zeigt den effektiven Wert (eigen + geerbt). Marge/Ziel-WE/Bezugsbasen je Betrieb: <em>Einstellungen › Betriebe</em>.
+                    </p>
+                @else
+                    <p class="text-[11px] text-gray-500 mt-1.5">Team-Standard — gilt für jeden Betrieb, der keine eigenen Fixkosten hat. Betrieb wählen, um abweichende Fixkosten zu erfassen.</p>
+                @endif
+            </div>
+        @endif
 
         {{-- Bezugsbasen (monatlich) — mit Erklärung (Phase 4: war vorher undokumentiert) --}}
         <div class="rounded-lg bg-black/[0.03] p-3 space-y-2">
@@ -161,7 +186,7 @@
                         <td class="{{ $td }} text-right"><button type="button" wire:click="fixLoeschen({{ $f['id'] }})" wire:confirm="Fixkosten-Zeile löschen?" class="text-gray-500 hover:text-red-500">@svg('heroicon-o-trash', 'w-3.5 h-3.5 inline-block align-middle')</button></td>
                     </tr>
                 @empty
-                    <tr><td colspan="5" class="px-3 py-4 text-center text-[11px] text-gray-500">Noch keine Fixkosten erfasst.</td></tr>
+                    <tr><td colspan="5" class="px-3 py-4 text-center text-[11px] text-gray-500">@if($fixOutletName)Noch keine eigenen Fixkosten für „{{ $fixOutletName }}" — es gilt der Team-Standard. Unten eine eigene Zeile anlegen, um einen Block für diesen Betrieb zu überschreiben.@else Noch keine Fixkosten erfasst.@endif</td></tr>
                 @endforelse
                 {{-- Neue Zeile --}}
                 <tr class="border-t-2 border-black/5">

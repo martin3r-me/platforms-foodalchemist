@@ -5,6 +5,7 @@ namespace Platform\FoodAlchemist\Livewire\Settings;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
 use Livewire\Component;
+use Platform\FoodAlchemist\Models\FoodAlchemistOutlet;
 use Platform\FoodAlchemist\Services\FixkostenService;
 use Platform\FoodAlchemist\Services\TeamSettingsService;
 
@@ -37,6 +38,9 @@ class Herstellkosten extends Component
     public array $bezugsbasen = ['mek' => '0', 'fek' => '0', 'hk' => '0'];
 
     public array $fixListe = [];
+
+    /** Ebene 2: Betrieb-Scope der Fixkosten-Liste (null = Team-Standard). Betriebs-Zeilen ersetzen pro Block die Team-Zeilen. */
+    public ?int $fixOutletId = null;
 
     public array $neuFix = ['label' => '', 'amount' => '', 'periode' => 'monatlich', 'block_key' => ''];
 
@@ -71,11 +75,32 @@ class Herstellkosten extends Component
 
     private function ladeFix(): void
     {
-        $this->fixListe = app(FixkostenService::class)->liste($this->team())->map(fn ($f) => [
+        $svc = app(FixkostenService::class);
+        $outlet = $this->fixOutlet();
+        // Betrieb gewählt → NUR dessen eigene Zeilen (geerbte Team-Blöcke tauchen in der Σ auf, nicht in der Liste).
+        $rows = $outlet !== null ? $svc->listeFuerOutlet($this->team(), $outlet) : $svc->liste($this->team());
+        $this->fixListe = $rows->map(fn ($f) => [
             'id' => $f->id, 'label' => $f->label,
             'amount' => $this->fmt((float) $f->amount), 'periode' => $f->periode, 'block_key' => $f->block_key,
             'monatsbetrag' => round((float) $f->monatsbetrag(), 2),   // #379+: normalisiert (jährlich/12) für Σ-Anzeige
         ])->all();
+    }
+
+    /** Betrieb-Scope der Fixkosten (team-eigen, aktiv) oder null (Team-Standard). */
+    private function fixOutlet(): ?FoodAlchemistOutlet
+    {
+        if ($this->fixOutletId === null) {
+            return null;
+        }
+
+        return FoodAlchemistOutlet::where('team_id', $this->team()->id)
+            ->where('is_inactive', false)->find($this->fixOutletId);
+    }
+
+    /** Betrieb-Wechsel im Fixkosten-Kopf → Liste neu laden (Livewire-Hook). */
+    public function updatedFixOutletId(): void
+    {
+        $this->ladeFix();
     }
 
     private function fmt(float $v): string
@@ -138,7 +163,7 @@ class Herstellkosten extends Component
         if (trim((string) $this->neuFix['label']) === '' || ($this->neuFix['block_key'] ?? '') === '') {
             return;
         }
-        app(FixkostenService::class)->create($this->team(), $this->neuFix);
+        app(FixkostenService::class)->create($this->team(), $this->neuFix, $this->fixOutlet());
         $this->neuFix = ['label' => '', 'amount' => '', 'periode' => 'monatlich', 'block_key' => ''];
         $this->ladeFix();
         $this->dispatch('kosten-aktualisiert');   // #379+: Werkstatt-Cockpit live nachziehen
@@ -223,7 +248,10 @@ class Herstellkosten extends Component
     public function render(FixkostenService $fix)
     {
         $team = $this->team();
-        $summen = $fix->summeJeBlock($team);
+        $fixOutlet = $this->fixOutlet();
+        // Σ je Block im gewählten Scope: Betriebs-Zeilen ersetzen pro Block die Team-Zeilen (sonst geerbt) —
+        // spiegelt exakt, was CatalogPricingService::enterpriseBaseRate für diesen Betrieb rechnet.
+        $summen = $fix->summeJeBlock($team, $fixOutlet);
 
         // #379+: Abgeleitete %-Sätze aus den LIVE-Bezugsbasen rechnen (nicht aus dem DB-Stand),
         // damit der Satz beim Tippen der Basis sofort mitläuft — € rein → % automatisch.
@@ -242,11 +270,17 @@ class Herstellkosten extends Component
             ->filter(fn ($b) => in_array($b['type'], ['pct_mek', 'pct_fek', 'pct_hk'], true))
             ->map(fn ($b) => ['key' => $b['key'], 'label' => $b['label']])->values()->all();
 
+        $betriebeOptionen = FoodAlchemistOutlet::where('team_id', $team->id)
+            ->where('is_inactive', false)->orderBy('sort_order')->orderBy('name')
+            ->get(['id', 'name'])->map(fn ($o) => ['id' => (int) $o->id, 'name' => (string) $o->name])->all();
+
         return view('foodalchemist::livewire.settings.herstellkosten', [
             'abgeleitet' => $abgeleitet,
             'fixSummen' => $summen,
             'liveBasen' => $liveBasen,
             'gkBloecke' => $gkBloecke,
+            'betriebeOptionen' => $betriebeOptionen,
+            'fixOutletName' => $fixOutlet?->name,
         ]);
     }
 
