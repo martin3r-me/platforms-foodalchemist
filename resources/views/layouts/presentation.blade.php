@@ -52,6 +52,8 @@
         if ($ptImg && ! preg_match('#^(https?:)?//#', $ptImg)) { $ptImg = url($ptImg); }
         $ptDesc = $snapshot['subtitle']
             ?? trim(($snapshot['meta']['customer'] ?? '') . ' · ' . ($snapshot['meta']['kicker'] ?? 'Kulinarisches Angebot'), " ·\t");
+        // Vorschaubild: gerenderte Share-Card (Titel+Logo aufs Cover) auf dem Public-Pfad, sonst rohes Cover.
+        $ogImage = ($shareCardUrl ?? null) ?: $ptImg;
     @endphp
     <meta name="theme-color" content="{{ $pal['primary'] ?? '#6d28d9' }}">
     <meta name="color-scheme" content="light">
@@ -69,10 +71,16 @@
     <meta property="og:title" content="{{ $ptTitle }}">
     @if($ptDesc)<meta property="og:description" content="{{ $ptDesc }}">@endif
     @isset($publicUrl)<meta property="og:url" content="{{ $publicUrl }}">@endisset
-    @if($ptImg)
-        <meta property="og:image" content="{{ $ptImg }}">
+    @if($ogImage)
+        <meta property="og:image" content="{{ $ogImage }}">
+        @isset($shareCardUrl)
+            <meta property="og:image:width" content="1200">
+            <meta property="og:image:height" content="630">
+            <meta property="og:image:type" content="image/png">
+        @endisset
+        <meta property="og:image:alt" content="{{ $ptTitle }}">
         <meta name="twitter:card" content="summary_large_image">
-        <meta name="twitter:image" content="{{ $ptImg }}">
+        <meta name="twitter:image" content="{{ $ogImage }}">
     @else
         <meta name="twitter:card" content="summary">
     @endif

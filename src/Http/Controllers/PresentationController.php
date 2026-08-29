@@ -7,6 +7,8 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Str;
 use Platform\Core\Http\Controllers\Controller;
 use Platform\FoodAlchemist\Services\PresentationService;
+use Platform\FoodAlchemist\Services\PresentationShareCardService;
+use Symfony\Component\HttpFoundation\Response;
 
 /**
  * Spec 43 — Öffentlicher Renderer des digitalen Kundenbuchs. KEIN Login, KEIN Team-
@@ -27,7 +29,29 @@ class PresentationController extends Controller
             'snapshot' => $snapshot,
             'publicUrl' => route('foodalchemist.presentation.show', ['type' => $type, 'token' => $token]),
             'manifestUrl' => route('foodalchemist.presentation.manifest', ['type' => $type, 'token' => $token]),
+            'shareCardUrl' => route('foodalchemist.presentation.share_card', ['type' => $type, 'token' => $token]),
         ]);
+    }
+
+    /**
+     * Share-Card fürs Link-Vorschaubild (Open Graph): 1200×630-PNG aus dem Snapshot
+     * (Cover + Verlauf + Kunde/Jahr + Titel + Logo). Rein additiv; kein Login/Team.
+     * Fällt bei Render-Fehler auf das rohe Cover-Bild zurück, damit die Vorschau nie leer ist.
+     */
+    public function shareCard(string $type, string $token, PresentationShareCardService $cards): Response
+    {
+        $png = $cards->render($type, $token);
+        if ($png !== null) {
+            return response($png, 200, [
+                'Content-Type' => 'image/png',
+                'Cache-Control' => 'public, max-age=86400',
+            ]);
+        }
+        $fallback = $cards->fallbackImageUrl($type, $token);
+        if ($fallback !== null) {
+            return redirect()->away($fallback);
+        }
+        abort(404);
     }
 
     /**

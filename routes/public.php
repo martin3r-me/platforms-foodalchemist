@@ -16,6 +16,13 @@ Route::get('/p/{type}/{token}/app.webmanifest', [PresentationController::class, 
     ->middleware(NoCacheHeaders::class)
     ->name('foodalchemist.presentation.manifest');
 
+// Share-Card fürs Link-Vorschaubild (Open Graph 1200×630) — additiv, spezifischer 3-Segment-Pfad.
+Route::get('/p/{type}/{token}/share-card.png', [PresentationController::class, 'shareCard'])
+    ->whereIn('type', ['foodbook', 'speisekarte', 'speiseplan'])
+    ->where('token', '[A-Za-z0-9-]+')
+    ->middleware(NoCacheHeaders::class)
+    ->name('foodalchemist.presentation.share_card');
+
 Route::get('/p/{type}/{token}', [PresentationController::class, 'show'])
     ->whereIn('type', ['foodbook', 'speisekarte', 'speiseplan'])
     ->where('token', '[A-Za-z0-9-]+')
