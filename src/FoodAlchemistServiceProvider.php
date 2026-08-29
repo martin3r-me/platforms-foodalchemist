@@ -813,6 +813,9 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     // MCP-Steuerbarkeit Phase 0: Team-Skalar-Config schreiben (sichere Config;
                     // Allow-List, nur eigene Team-Zeile). Vokabular/Taxonomie bleiben eigene Tools/UI.
                     \Platform\FoodAlchemist\Tools\TeamSettingsPutTool::class,
+                    \Platform\FoodAlchemist\Tools\OutletsGetTool::class,
+                    \Platform\FoodAlchemist\Tools\OutletPostTool::class,
+                    \Platform\FoodAlchemist\Tools\OutletSettingsPutTool::class,
                     // D13: Vokabular/Taxonomie SAFE-additiv (POST/PUT/TOGGLE/REORDER, KEIN Delete;
                     // VocabularyService self-guardt globale/kanonische Zeilen read-only).
                     \Platform\FoodAlchemist\Tools\VocabEinheitenPostTool::class,

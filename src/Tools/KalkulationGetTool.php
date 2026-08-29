@@ -7,6 +7,7 @@ use Platform\Core\Contracts\ToolContext;
 use Platform\Core\Contracts\ToolMetadataContract;
 use Platform\Core\Contracts\ToolResult;
 use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
+use Platform\FoodAlchemist\Models\FoodAlchemistOutlet;
 use Platform\FoodAlchemist\Models\FoodAlchemistPaket;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Services\KalkulationService;
@@ -25,7 +26,8 @@ class KalkulationGetTool extends FoodAlchemistTool implements ToolContract, Tool
     public function getDescription(): string
     {
         return 'Rechnet die Kalkulation (HK1/HK2, Wareneinsatz, Arbeitszeit, Nebenkosten) nach den '
-            . 'Team-Parametern — GENAU EINES angeben: recipe_id, concept_id oder package_id. Read-only.';
+            . 'Team-Parametern — GENAU EINES angeben: recipe_id, concept_id oder package_id. '
+            . 'Optional outlet_id: rechnet gegen die Kostenstruktur EINES Betriebs (Ebene 2). Read-only.';
     }
 
     public function getSchema(): array
@@ -36,6 +38,7 @@ class KalkulationGetTool extends FoodAlchemistTool implements ToolContract, Tool
                 'recipe_id' => ['type' => 'integer'],
                 'concept_id' => ['type' => 'integer'],
                 'package_id' => ['type' => 'integer'],
+                'outlet_id' => ['type' => 'integer', 'description' => 'Optional: Betrieb/Standort — HK/VK gegen dessen Kostenstruktur (Marge/Ziel-WE/Stundensatz/Fixkosten). Fehlt = Team-Baseline. IDs via outlets.GET.'],
             ],
         ];
     }
@@ -52,14 +55,22 @@ class KalkulationGetTool extends FoodAlchemistTool implements ToolContract, Tool
         }
         $svc = app(KalkulationService::class);
 
+        $outlet = null;
+        if (! empty($arguments['outlet_id'])) {
+            $outlet = FoodAlchemistOutlet::where('team_id', $team->id)->find((int) $arguments['outlet_id']);
+            if ($outlet === null) {
+                return ToolResult::error('Betrieb nicht gefunden im Team.', 'NOT_FOUND');
+            }
+        }
+
         try {
             $ergebnis = match ($keys[0]) {
                 'recipe_id' => ($m = FoodAlchemistRecipe::visibleToTeam($team)->find((int) $arguments['recipe_id']))
-                    ? ['ziel' => ['type' => 'recipe', 'id' => $m->id, 'name' => $m->name], 'kalkulation' => $svc->recipeHk($team, $m)] : null,
+                    ? ['ziel' => ['type' => 'recipe', 'id' => $m->id, 'name' => $m->name], 'outlet_id' => $outlet?->id, 'kalkulation' => $svc->recipeHk($team, $m, $outlet)] : null,
                 'concept_id' => ($m = FoodAlchemistConcept::visibleToTeam($team)->find((int) $arguments['concept_id']))
-                    ? ['ziel' => ['type' => 'concept', 'id' => $m->id, 'name' => $m->name], 'kalkulation' => $svc->conceptHk($team, $m)] : null,
+                    ? ['ziel' => ['type' => 'concept', 'id' => $m->id, 'name' => $m->name], 'outlet_id' => $outlet?->id, 'kalkulation' => $svc->conceptHk($team, $m, $outlet)] : null,
                 'package_id' => ($m = FoodAlchemistPaket::visibleToTeam($team)->find((int) $arguments['package_id']))
-                    ? ['ziel' => ['type' => 'paket', 'id' => $m->id, 'name' => $m->name], 'kalkulation' => $svc->paketHk($team, $m)] : null,
+                    ? ['ziel' => ['type' => 'paket', 'id' => $m->id, 'name' => $m->name], 'outlet_id' => $outlet?->id, 'kalkulation' => $svc->paketHk($team, $m, $outlet)] : null,
             };
         } catch (\RuntimeException $e) {
             return ToolResult::error($e->getMessage(), 'EXECUTION_ERROR');
