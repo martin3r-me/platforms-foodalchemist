@@ -113,9 +113,9 @@ class KalkulationService
     }
 
     /** Kompatibilitäts-Helfer (M12): HK2 aus HK1 (+ optionale Nebenkosten), via Schema. */
-    public function hk2(Team $team, float $hk1, float $nebenkosten = 0.0): float
+    public function hk2(Team $team, float $hk1, float $nebenkosten = 0.0, ?FoodAlchemistOutlet $outlet = null): float
     {
-        return $this->berechne($team, $hk1, 0.0, $nebenkosten)['hk2'];
+        return $this->berechne($team, $hk1, 0.0, $nebenkosten, $outlet)['hk2'];
     }
 
     /**

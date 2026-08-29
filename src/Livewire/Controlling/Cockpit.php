@@ -7,6 +7,7 @@ use Livewire\Attributes\On;
 use Livewire\Attributes\Url;
 use Livewire\Component;
 use Platform\Core\Models\Team;
+use Platform\FoodAlchemist\Services\ActiveOutletContext;
 use Platform\FoodAlchemist\Services\BenchmarkService;
 use Platform\FoodAlchemist\Services\FixkostenService;
 use Platform\FoodAlchemist\Services\MargeService;
@@ -112,6 +113,13 @@ class Cockpit extends Component
         $this->dispatch('modal.open', name: 'controlling-editor');
     }
 
+    /** Ebene 2: Betrieb-Wechsel im Sidebar → KPI-Kopf + aktives Panel neu rechnen. */
+    #[On('aktiver-betrieb-geaendert')]
+    public function betriebGewechselt(): void
+    {
+        // no-op: löst nur das Re-Rendering aus; die kostenstruktur-KPIs lesen den aktiven Betrieb im render().
+    }
+
     #[On('modal.closed')]
     public function beiModalClosed(?string $name = null): void
     {
@@ -170,13 +178,17 @@ class Cockpit extends Component
             return ['leer' => true];
         }
 
+        // Ebene 2: die kostenstruktur-KPIs (Ziel-WE, Fixkosten, Break-even) folgen dem aktiven Betrieb;
+        // die gemessenen Ist-Werte (avg_w_pct/ek_coverage/spend/Signale) bleiben team-weit — per-Betrieb-Ist
+        // bräuchte materialisierte VK je Betrieb, das ist bewusst nicht der Weg (Strategie A, on-the-fly).
+        $outlet = app(ActiveOutletContext::class)->current($team);
         $eigen = $benchmark->kpisFuerTeam((int) $team->id);
-        $zielWe = $settings->zielWareneinsatzPct($team);
+        $zielWe = $settings->zielWareneinsatzPct($team, $outlet);
 
         // Break-even-Umsatz/Monat = Σ Fixkosten ÷ Deckungsbeitragsquote (= 1 − Zielwareneinsatz).
         // Gastro-Standardformel, Planungs-Näherung — dieselbe Rechnung wie bisher auf `/kalkulation`
         // (jetzt Kennzahlen-Tab), damit nicht zwei Break-even-Zahlen im Umlauf sind.
-        $fixMonat = array_sum($fix->summeJeBlock($team));
+        $fixMonat = array_sum($fix->summeJeBlock($team, $outlet));
 
         $offeneNachTyp = $signale->offeneNachTyp($team);
         $jeTyp = [];
@@ -189,6 +201,7 @@ class Cockpit extends Component
 
         return [
             'leer' => false,
+            'betrieb_name' => $outlet?->name,
             'avg_w_pct' => $eigen['avg_w_pct'],
             'ziel_we_pct' => $zielWe,
             'we_ampel' => $marge->weAmpel($eigen['avg_w_pct'], $zielWe),

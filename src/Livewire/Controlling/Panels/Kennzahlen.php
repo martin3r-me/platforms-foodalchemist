@@ -5,6 +5,7 @@ namespace Platform\FoodAlchemist\Livewire\Controlling\Panels;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\On;
 use Livewire\Component;
+use Platform\FoodAlchemist\Services\ActiveOutletContext;
 use Platform\FoodAlchemist\Services\FixkostenService;
 use Platform\FoodAlchemist\Services\KalkulationService;
 use Platform\FoodAlchemist\Services\MargeService;
@@ -49,9 +50,10 @@ class Kennzahlen extends Component
 
     /** Re-Render der Kennzahlen-Kacheln nach Regel-Änderung (Einstellungen). */
     #[On('kosten-aktualisiert')]
+    #[On('aktiver-betrieb-geaendert')]
     public function aktualisiert(): void
     {
-        // no-op: löst nur das Re-Rendering der Summary-Kacheln aus.
+        // no-op: löst nur das Re-Rendering der Summary-Kacheln aus (Regel- ODER Betrieb-Wechsel).
     }
 
     /**
@@ -90,19 +92,22 @@ class Kennzahlen extends Component
     public function render(KalkulationService $kalk, FixkostenService $fix, TeamSettingsService $settings, MargeService $marge)
     {
         $team = Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
+        // Ebene 2: die Kennzahlen folgen dem aktiven Betrieb (Fixkosten/Marge/Ziel-WE/Zuschlag/Break-even).
+        $outlet = app(ActiveOutletContext::class)->current($team);
 
         // #379+ Controlling-Kennzahlen: Σ Fixkosten/Monat + Food-Cost-Ziel → Break-even.
         // Break-even-Umsatz/Monat = Σ Fixkosten ÷ Deckungsbeitragsquote (= 1 − Wareneinsatzquote);
         // gastro-Standardformel, Planungs-Näherung (Ø-DB über das Food-Cost-Ziel).
-        $fixMonat = array_sum($fix->summeJeBlock($team));
-        $zielWe = $settings->zielWareneinsatzPct($team);
+        $fixMonat = array_sum($fix->summeJeBlock($team, $outlet));
+        $zielWe = $settings->zielWareneinsatzPct($team, $outlet);
 
         return view('foodalchemist::livewire.controlling.panels.kennzahlen', [
-            'zuschlag' => $kalk->hk2($team, 100) - 100, // effektiver HK2-Zuschlag in % (auf 100 € Wareneinsatz)
+            'betriebName' => $outlet?->name,
+            'zuschlag' => $kalk->hk2($team, 100, 0.0, $outlet) - 100, // effektiver HK2-Zuschlag in % (auf 100 € Wareneinsatz)
             'regeln' => [
-                'marge_pct' => $settings->margePct($team),
-                'stundensatz' => $settings->stundensatz($team),
-                'schema' => collect($fix->aufgeloestesSchema($team))->filter(fn ($b) => $b['active'] ?? true)->values()->all(),
+                'marge_pct' => $settings->margePct($team, $outlet),
+                'stundensatz' => $settings->stundensatz($team, $outlet),
+                'schema' => collect($fix->aufgeloestesSchema($team, $outlet))->filter(fn ($b) => $b['active'] ?? true)->values()->all(),
             ],
             'fixkostenMonat' => $fixMonat,
             'zielWe' => $zielWe,

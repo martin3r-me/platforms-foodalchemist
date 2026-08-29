@@ -13,6 +13,12 @@
                 <div>
                     <h3 class="font-medium tracking-tight text-gray-900">Kalkulations-Kennzahlen</h3>
                     <p class="text-[11px] text-gray-500 max-w-2xl">Die aktuellen, ausgerollten Kosten-Regeln — Grundlage jeder Kalkulation und dieser Simulation. Bearbeitet werden sie unter <strong>Einstellungen → Herstellkosten</strong>.</p>
+                    @if(!empty($betriebName))
+                        <span class="mt-1.5 inline-flex items-center gap-1.5 rounded-full border border-violet-400/30 bg-violet-500/15 px-2.5 py-0.5 text-[11px] text-violet-200" data-ctrl-kennzahlen-betrieb>
+                            <span class="w-1.5 h-1.5 rounded-full bg-violet-300"></span>
+                            Werte für Betrieb <strong>{{ $betriebName }}</strong> — Fixkosten/Marge/Ziel-WE/Zuschlag/Break-even dieses Betriebs
+                        </span>
+                    @endif
                 </div>
                 <a href="{{ route('foodalchemist.einstellungen', ['sektion' => 'herstellkosten']) }}" class="{{ $btnGhost }}" wire:navigate>Regeln in den Einstellungen pflegen →</a>
             </div>
@@ -30,6 +36,7 @@
                     <input type="text" wire:model="marge" class="{{ $input }} !w-24" data-ctrl-ziel-marge />
                 </div>
                 <button type="button" wire:click="zieleSpeichern" class="{{ $btnGhostXs }} text-violet-600" data-ctrl-ziele-speichern>Zielwerte speichern</button>
+                @if(!empty($betriebName))<span class="text-[11px] text-amber-300">Setzt die <strong>Team</strong>-Zielwerte · Betrieb-Overrides in Einstellungen › Betriebe</span>@endif
                 @if($meldung)<span class="text-[11px] text-emerald-700">{{ $meldung }}</span>@endif
                 @error('zielWe')<span class="text-[11px] text-rose-700">{{ $message }}</span>@enderror
                 @error('marge')<span class="text-[11px] text-rose-700">{{ $message }}</span>@enderror

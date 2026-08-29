@@ -34,6 +34,14 @@
                 <p class="text-sm text-gray-500">Kein Team zugeordnet — ohne Team gibt es keine Zahlen.</p>
             </div>
         @else
+            {{-- Ebene 2: welcher Betrieb treibt die kostenstruktur-KPIs (aktiver Betrieb aus dem Sidebar-Balken). --}}
+            @if(!empty($kpi['betrieb_name']))
+                <div class="mb-3 inline-flex items-center gap-2 rounded-full border border-violet-200 bg-violet-50 px-3 py-1 text-[11px] text-violet-700" data-ctrl-betrieb>
+                    <span class="w-1.5 h-1.5 rounded-full bg-violet-500"></span>
+                    Kostenstruktur-KPIs (Ziel-WE, Break-even) für Betrieb <strong>{{ $kpi['betrieb_name'] }}</strong> · Ist-Werte (Ø Wareneinsatz, EK-Abdeckung, Einkauf) team-weit
+                </div>
+            @endif
+
             {{-- Lagebild: dieselben sechs Werte wie im Editor-Kopf, hier als Sprungbrett.
                  Ein Klick öffnet die Werkbank direkt im zuständigen Tab. --}}
             <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3" data-ctrl-lagebild>
