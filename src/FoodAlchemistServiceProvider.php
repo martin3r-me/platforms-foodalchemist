@@ -526,6 +526,15 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\GeschirrItemsPostTool::class,
                     \Platform\FoodAlchemist\Tools\GeschirrItemsPutTool::class,
                     \Platform\FoodAlchemist\Tools\GeschirrItemsDeactivateTool::class,
+                    // D5a: Concepts-Lifecycle (Update/Status/Duplicate/Recompute/Zielpreis/Sektor/Vorlage).
+                    \Platform\FoodAlchemist\Tools\ConceptsPutTool::class,
+                    \Platform\FoodAlchemist\Tools\ConceptsStatusTool::class,
+                    \Platform\FoodAlchemist\Tools\ConceptsDuplicateTool::class,
+                    \Platform\FoodAlchemist\Tools\ConceptsRecomputeTool::class,
+                    \Platform\FoodAlchemist\Tools\ConceptsPriceTargetTool::class,
+                    \Platform\FoodAlchemist\Tools\ConceptsSektorTool::class,
+                    \Platform\FoodAlchemist\Tools\ConceptsTemplateSaveTool::class,
+                    \Platform\FoodAlchemist\Tools\ConceptsTemplateForkTool::class,
                     // #513 Tier 1: Grammaturen-Rechner (Bäckerprozent/Extraprozent/Brining/Bloom)
                     \Platform\FoodAlchemist\Tools\ProportionCalcTool::class,
                     // #513: %→Gramm-Rückschreiben (Batch-Skalierung + Einzel-Zutat-Edit, write)

@@ -51,6 +51,8 @@ class ConceptsGetTool extends FoodAlchemistTool implements ToolContract, ToolMet
                 'id' => $c->id, 'name' => $c->name, 'status' => $c->status, 'phase' => $c->phase, 'class' => $c->class,
                 'occasion' => $c->occasion, 'level' => $c->level, 'description' => $c->description,
                 'target_price_per_person' => $c->target_price_per_person, 'season' => $c->season,
+                // Preisdarstellung (seit 2026-08-25): gesamt|einzel + Preis-Modus — Read/Write-Lockstep zu concepts.PUT.
+                'price_display' => $c->price_display, 'price_mode' => $c->price_mode,
                 'target_group' => $c->target_group, 'sektor_eignung' => $svc->sektorEignungSlugs($c),
                 // Umbau-Spec Phase 4: Facetten (Servierform steuert die Slot-Darreichung).
                 'serving_form' => $c->servingForm?->code,
