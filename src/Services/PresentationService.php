@@ -5,6 +5,8 @@ namespace Platform\FoodAlchemist\Services;
 use Illuminate\Database\Eloquent\Model;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Models\FoodAlchemistFoodbook;
+use Platform\FoodAlchemist\Models\FoodAlchemistOutlet;
+use Platform\FoodAlchemist\Models\FoodAlchemistPresentation;
 use Platform\FoodAlchemist\Models\FoodAlchemistSpeisekarte;
 use Platform\FoodAlchemist\Models\FoodAlchemistSpeiseplan;
 
@@ -97,6 +99,134 @@ class PresentationService
         $entity->forceFill(['presentation_enabled' => false])->save();
     }
 
+    // ── Slice F: publish-per-Betrieb (zusätzliche Betriebs-Links) ──────────
+
+    /**
+     * Veröffentlicht ein Dokument FÜR einen Betrieb — eigener Link mit DESSEN Preisen +
+     * DESSEN Vorlage, eigene Freigabe. Additiv neben dem Standard-Link, idempotent je
+     * (Dokument, Betrieb). Pflicht-Ablauf wie beim Standard-Publish.
+     *
+     * @param  array<string,mixed>  $settings
+     * @return array{token:string, slug:?string, url:string, outlet_id:int, published_at:string, expires_at:string, design:string}
+     */
+    public function publishForOutlet(Team $team, string $type, int $id, int $outletId, array $settings): array
+    {
+        $expiresAt = $this->parseExpiry($settings['expires_at'] ?? null);
+        if ($expiresAt === null) {
+            throw new \RuntimeException('Ein gültig-bis-Datum ist Pflicht (kein Link ohne Ablauf).');
+        }
+        $entity = $this->resolveEntity($team, $type, $id, forWrite: true);
+        $outlet = FoodAlchemistOutlet::where('team_id', $team->id)->where('is_inactive', false)->findOrFail($outletId);
+
+        // Vorlage: explizit gesetzt > Betriebs-Vorlage > Dokument-Vorlage > Default.
+        $design = $this->cleanDesignSource(
+            $settings['design'] ?? $outlet->presentation_design ?? $entity->presentation_design ?? 'editorial'
+        );
+        $userId = auth()->id();
+
+        $pres = FoodAlchemistPresentation::firstOrNew([
+            'presentable_type' => $type, 'presentable_id' => $entity->getKey(), 'outlet_id' => $outlet->id,
+        ]);
+        $pres->team_id = $team->id;
+        $token = $pres->token ?: $this->ensureOutletToken();
+        $slug = array_key_exists('slug', $settings)
+            ? $this->normalizeOutletSlug($pres, $settings['slug'])
+            : ($pres->slug ?: null);
+
+        // Snapshot MIT den Betriebs-Preisen (outlet) + der Betriebs-Vorlage.
+        $snapshot = $this->buildSnapshot($team, $entity, $type, $settings + [
+            'design' => $design,
+            'outlet' => $outlet,
+            'freigabe' => ['at' => now()->toIso8601String(), 'by' => $userId, 'datum' => now()->format('d.m.Y')],
+        ]);
+
+        $pres->forceFill([
+            'enabled' => true,
+            'token' => $token,
+            'slug' => $slug,
+            'design' => $design,
+            'snapshot_json' => $snapshot,
+            'settings_json' => $this->cleanSettings($settings, $type) + ['design' => $design],
+            'published_at' => now(),
+            'published_by' => $userId,
+            'expires_at' => $expiresAt,
+        ])->save();
+
+        return [
+            'token' => $token,
+            'slug' => $slug,
+            'url' => $this->publicUrl($type, $slug ?: $token),
+            'outlet_id' => (int) $outlet->id,
+            'published_at' => $pres->published_at->toIso8601String(),
+            'expires_at' => $expiresAt->toIso8601String(),
+            'design' => $design,
+        ];
+    }
+
+    /** Nimmt einen Betriebs-Link vom Netz (Snapshot + Token bleiben — Wieder-Freigabe möglich). */
+    public function withdrawForOutlet(Team $team, string $type, int $id, int $outletId): void
+    {
+        $entity = $this->resolveEntity($team, $type, $id, forWrite: true);
+        FoodAlchemistPresentation::where('presentable_type', $type)
+            ->where('presentable_id', $entity->getKey())
+            ->where('outlet_id', $outletId)
+            ->where('team_id', $team->id)
+            ->update(['enabled' => false]);
+    }
+
+    /**
+     * Alle Betriebs-Links eines Dokuments (fürs Link-Panel).
+     *
+     * @return list<array{outlet_id:int, outlet_name:string, enabled:bool, url:string, expires_at:?string, design:string}>
+     */
+    public function outletPresentations(Team $team, string $type, int $id): array
+    {
+        $entity = $this->resolveEntity($team, $type, $id, forWrite: false);
+
+        return FoodAlchemistPresentation::query()
+            ->where('presentable_type', $type)->where('presentable_id', $entity->getKey())
+            ->where('team_id', $team->id)->orderBy('outlet_id')->get()
+            ->map(fn (FoodAlchemistPresentation $p) => [
+                'outlet_id' => (int) $p->outlet_id,
+                'outlet_name' => (string) (FoodAlchemistOutlet::find($p->outlet_id)?->name ?? ('#' . $p->outlet_id)),
+                'enabled' => (bool) $p->enabled,
+                'url' => $this->publicUrl($type, $p->slug ?: $p->token),
+                'expires_at' => $p->expires_at?->toIso8601String(),
+                'design' => (string) $p->design,
+            ])->all();
+    }
+
+    /** Frischer, global eindeutiger Token gegen die Betriebs-Präsentations-Tabelle. */
+    private function ensureOutletToken(): string
+    {
+        do {
+            $token = bin2hex(random_bytes(16));
+        } while (FoodAlchemistPresentation::where('token', $token)->exists());
+
+        return $token;
+    }
+
+    /** Slug für einen Betriebs-Link normalisieren + auf Eindeutigkeit (Betriebs-Tabelle) prüfen. */
+    private function normalizeOutletSlug(FoodAlchemistPresentation $pres, mixed $raw): ?string
+    {
+        $slug = \Illuminate\Support\Str::slug(trim((string) $raw));
+        if ($slug === '') {
+            return null;
+        }
+        if (strlen($slug) < 3) {
+            throw new \RuntimeException('Der Link-Name ist zu kurz (mindestens 3 Zeichen).');
+        }
+        $kollision = FoodAlchemistPresentation::query()
+            ->when($pres->exists, fn ($q) => $q->whereKeyNot($pres->getKey()))
+            ->where(fn ($q) => $q->where('slug', $slug)->orWhere('token', $slug))
+            ->exists();
+        if ($kollision) {
+            throw new \RuntimeException("Der Link-Name „{$slug}“ ist schon vergeben — bitte einen anderen wählen.");
+        }
+
+        return $slug;
+    }
+
     // ── Public-Auflösung (KEIN Team-Scope) ─────────────────────────────────
 
     /**
@@ -110,15 +240,22 @@ class PresentationService
         $class = $this->modelClass($type);
         /** @var (Model&\Platform\FoodAlchemist\Models\Concerns\HasPresentation)|null $entity */
         $entity = $class::query()->byPresentationRef($token)->first();
-        if ($entity === null || ! $entity->isPresentationLive()) {
-            return null;
-        }
-        $snap = $entity->presentation_snapshot_json;
-        if (! is_array($snap) || $snap === []) {
-            return null;
+        if ($entity !== null && $entity->isPresentationLive()
+            && is_array($entity->presentation_snapshot_json) && $entity->presentation_snapshot_json !== []) {
+            return $this->hydrateImages($entity->presentation_snapshot_json);
         }
 
-        return $this->hydrateImages($snap);
+        // Slice F: Betriebs-Link (eigene Präsentations-Zeile neben dem Dokument-Kopf).
+        $pres = FoodAlchemistPresentation::query()
+            ->where('presentable_type', $type)
+            ->where(fn ($q) => $q->where('token', $token)->orWhere('slug', $token))
+            ->first();
+        if ($pres !== null && $pres->istLive()
+            && is_array($pres->snapshot_json) && $pres->snapshot_json !== []) {
+            return $this->hydrateImages($pres->snapshot_json);
+        }
+
+        return null;
     }
 
     // ── Interne Live-Vorschau (team-gescopt, nicht persistiert) ────────────
@@ -162,9 +299,11 @@ class PresentationService
         }
         $designSource = $this->cleanDesignSource($settings['design'] ?? ($entity->presentation_design ?? 'editorial'));
 
+        // Slice F: optionaler Betrieb-Kontext friert dessen Preise in den Snapshot ein (nicht in $clean → kein Leak).
+        $outlet = ($settings['outlet'] ?? null) instanceof FoodAlchemistOutlet ? $settings['outlet'] : null;
         $content = match ($type) {
-            self::TYPE_FOODBOOK => $this->normalizeFoodbook($team, $entity, $clean),
-            self::TYPE_SPEISEKARTE => $this->normalizeSpeisekarte($team, $entity, $clean),
+            self::TYPE_FOODBOOK => $this->normalizeFoodbook($team, $entity, $clean, $outlet),
+            self::TYPE_SPEISEKARTE => $this->normalizeSpeisekarte($team, $entity, $clean, $outlet),
             self::TYPE_SPEISEPLAN => $this->normalizeSpeiseplan($team, $entity, $clean),
             default => throw new \InvalidArgumentException("Präsentations-Typ '{$type}' ist in dieser Phase noch nicht unterstützt."),
         };
@@ -199,10 +338,10 @@ class PresentationService
      *
      * @return array{title:string, subtitle:?string, meta:array, body:array}
      */
-    private function normalizeFoodbook(Team $team, FoodAlchemistFoodbook $fb, array $settings): array
+    private function normalizeFoodbook(Team $team, FoodAlchemistFoodbook $fb, array $settings, ?FoodAlchemistOutlet $outlet = null): array
     {
         // mitKaskade=false → Kaskaden-Leak (EK/Lieferant) entsteht gar nicht erst.
-        $dok = app(FoodbookService::class)->dokumentDaten($team, $fb, false, [], false);
+        $dok = app(FoodbookService::class)->dokumentDaten($team, $fb, false, [], false, $outlet);
 
         $showPrice = (bool) $settings['price_display'];
         $showDecl = (bool) $settings['declaration'];
@@ -377,9 +516,9 @@ class PresentationService
      *
      * @return array{title:string, subtitle:?string, meta:array, body:array}
      */
-    private function normalizeSpeisekarte(Team $team, FoodAlchemistSpeisekarte $karte, array $settings): array
+    private function normalizeSpeisekarte(Team $team, FoodAlchemistSpeisekarte $karte, array $settings, ?FoodAlchemistOutlet $outlet = null): array
     {
-        $dok = app(SpeisekarteService::class)->dokumentDaten($team, $karte, false, [], false);
+        $dok = app(SpeisekarteService::class)->dokumentDaten($team, $karte, false, [], false, $outlet);
 
         $showPrice = (bool) $settings['price_display'];
         $showDecl = (bool) $settings['declaration'];

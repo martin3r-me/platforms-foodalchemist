@@ -40,6 +40,9 @@ class SpeisekartePresentationPublishTool extends FoodAlchemistTool implements To
                 'cta_link' => ['type' => 'string'],
                 'slug' => ['type' => 'string', 'description' => 'Optionaler eigener Link-Name statt Zufalls-Token '
                     . '(kebab-normalisiert, je Ausgabeform eindeutig; leerer String = zurück auf Token).'],
+                'outlet_id' => ['type' => 'integer', 'description' => 'Optional (Slice F): veröffentlicht einen '
+                    . 'ZUSÄTZLICHEN Link FÜR diesen Betrieb — eingefroren mit dessen Preisen UND dessen Vorlage, '
+                    . 'eigene Freigabe. Ohne outlet_id = der Standard-Link am Dokument-Kopf. Der Betrieb muss dem Team gehören.'],
             ],
             'required' => ['speisekarte_id', 'expires_at'],
         ];
@@ -52,15 +55,19 @@ class SpeisekartePresentationPublishTool extends FoodAlchemistTool implements To
             return ToolResult::error('Kein Team im Kontext.', 'NO_TEAM');
         }
         try {
-            $res = app(PresentationService::class)->publish($team, 'speisekarte', (int) $arguments['speisekarte_id'], [
+            $settings = [
                 'expires_at' => $arguments['expires_at'] ?? null,
                 'design' => $arguments['design'] ?? null,
                 'price_display' => $arguments['price_display'] ?? true,
                 'declaration' => $arguments['declaration'] ?? true,
                 'cta' => ['text' => $arguments['cta_text'] ?? null, 'link' => $arguments['cta_link'] ?? null],
-            ] + (array_key_exists('slug', $arguments) ? ['slug' => $arguments['slug']] : []));
+            ] + (array_key_exists('slug', $arguments) ? ['slug' => $arguments['slug']] : []);
+            $svc = app(PresentationService::class);
+            $res = ($arguments['outlet_id'] ?? null) !== null
+                ? $svc->publishForOutlet($team, 'speisekarte', (int) $arguments['speisekarte_id'], (int) $arguments['outlet_id'], $settings)
+                : $svc->publish($team, 'speisekarte', (int) $arguments['speisekarte_id'], $settings);
         } catch (ModelNotFoundException) {
-            return ToolResult::error('Speisekarte nicht gefunden oder nicht sichtbar.', 'NOT_FOUND');
+            return ToolResult::error('Speisekarte oder Betrieb nicht gefunden oder nicht sichtbar.', 'NOT_FOUND');
         } catch (\Throwable $e) {
             return ToolResult::error($e->getMessage(), 'VALIDATION_ERROR');
         }

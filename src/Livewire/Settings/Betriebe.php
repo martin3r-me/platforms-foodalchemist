@@ -32,8 +32,8 @@ class Betriebe extends Component
 {
     public ?int $editId = null;
 
-    /** @var array{name:string,color:string,sort_order:int|string} */
-    public array $form = ['name' => '', 'color' => '', 'sort_order' => 100];
+    /** @var array{name:string,color:string,sort_order:int|string,vorlage:string} */
+    public array $form = ['name' => '', 'color' => '', 'sort_order' => 100, 'vorlage' => ''];
 
     /** Ebene 2: Kalkulations-Overrides des bearbeiteten Betriebs (leer = erbt vom Team). */
     public array $overrides = [
@@ -85,6 +85,7 @@ class Betriebe extends Component
             'name' => (string) $o->name,
             'color' => (string) ($o->color ?? ''),
             'sort_order' => (int) $o->sort_order,
+            'vorlage' => (string) ($o->presentation_design ?? ''),
         ];
         $s = app(OutletSettingsService::class)->for($o);
         foreach (array_keys($this->overrides) as $k) {
@@ -120,6 +121,8 @@ class Betriebe extends Component
             // Nur echtes Hex durchlassen — die Farbe landet direkt im Style-Attribut.
             'color' => preg_match('/^#[0-9a-fA-F]{6}$/', $farbe) === 1 ? $farbe : null,
             'sort_order' => max(0, (int) ($this->form['sort_order'] ?? 100)),
+            // Slice F: Präsentations-Vorlage je Betrieb (leer = Dokument-Vorlage beim Betriebs-Link).
+            'presentation_design' => ($v = trim((string) ($this->form['vorlage'] ?? ''))) !== '' ? $v : null,
         ]);
 
         // Ebene 2: Kalkulations-Overrides des Betriebs (leer = zurück auf Team-Erbe).
@@ -174,9 +177,14 @@ class Betriebe extends Component
             }
         }
 
+        // Slice F: Präsentations-Vorlagen (Built-ins + team-eigene Designs) für die „Vorlage je Betrieb"-Wahl.
+        $vorlagenOptionen = $team === null ? []
+            : app(\Platform\FoodAlchemist\Services\PresentationDesignService::class)->pickerOptions($team, 'foodbook');
+
         return view('foodalchemist::livewire.settings.betriebe', [
             'betriebe' => $betriebe,
             'nutzung' => $nutzung,
+            'vorlagenOptionen' => $vorlagenOptionen,
         ]);
     }
 }

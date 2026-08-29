@@ -737,7 +737,7 @@ class SpeisekarteService
      *                                    Eltern werden hochgezogen). $mitKaskade hängt den Produktions-
      *                                    Baum je Gericht an (EK nur bei $intern).
      */
-    public function dokumentDaten(Team $team, FoodAlchemistSpeisekarte $karte, bool $intern = false, array $rubrikFilter = [], bool $mitKaskade = false): array
+    public function dokumentDaten(Team $team, FoodAlchemistSpeisekarte $karte, bool $intern = false, array $rubrikFilter = [], bool $mitKaskade = false, ?\Platform\FoodAlchemist\Models\FoodAlchemistOutlet $outlet = null): array
     {
         $agg = app(ConcepterAggregateService::class);
         $marge = app(MargeService::class);
@@ -804,13 +804,13 @@ class SpeisekarteService
         // #7: Brutto-Rundung der Karte als gebundene Closure in den Walk reichen (nur Anzeige).
         $rundung = $karte->preis_rundung ?? 'keine';
         $runde = fn (?float $b) => $this->rundeBrutto($b, $rundung);
-        $walk = function ($parentId, int $depth) use (&$walk, $byParent, &$rubriken, $codesFuer, $codesFuerGericht, $marge, $mwstSatz, $runde) {
+        $walk = function ($parentId, int $depth) use (&$walk, $byParent, &$rubriken, $codesFuer, $codesFuerGericht, $marge, $mwstSatz, $runde, $outlet) {
             foreach ($byParent[$parentId] ?? [] as $rubrik) {
                 // Kaskade 2026-08-24: spezielle ist_format-Live-Rubrik entfernt — ein Format wird
                 // künftig wie ein Concept gebucht (live-referenziert, Kaskade bleibt live); F5.
                 $positionen = [];
                 foreach ($rubrik->items->where('visible', true)->sortBy('position') as $pos) {
-                    $preis = $this->positionPreis($pos);
+                    $preis = $this->positionPreis($pos, $outlet);
                     $einheit = $marge->proEinheit($preis['vk'], 1, $mwstSatz);
                     // Fix b: menue_ref trägt die Codes PRO GANG (per Gericht), nicht aggregiert auf der Position.
                     $gaenge = [];

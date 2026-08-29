@@ -86,6 +86,18 @@
                                         </label>
                                     @endforeach
                                 </div>
+                                {{-- Slice F: Präsentations-Vorlage je Betrieb — greift beim Betriebs-Link (Foodbook/Speisekarte). --}}
+                                <div class="mt-2 pt-2 border-t border-purple-200">
+                                    <label class="text-[11px] text-gray-600">Präsentations-Vorlage (Betriebs-Link)
+                                        <select wire:model="form.vorlage" class="{{ $input }} !py-1 block">
+                                            <option value="">— Dokument-Vorlage —</option>
+                                            @foreach($vorlagenOptionen as $vo)
+                                                <option value="{{ $vo['value'] }}">{{ $vo['label'] }}</option>
+                                            @endforeach
+                                        </select>
+                                    </label>
+                                    <p class="text-[10px] text-gray-400 mt-0.5">Leer = die Vorlage des jeweiligen Dokuments. Gesetzt = dieser Betrieb bekommt beim „Betrieb-Link" diese Optik.</p>
+                                </div>
                             </td>
                         </tr>
                     @endif

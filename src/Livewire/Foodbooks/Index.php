@@ -63,6 +63,11 @@ class Index extends Component
 
     public ?string $presentationHinweis = null;
 
+    // Slice F: publish-per-Betrieb — zusätzlicher Link je Betrieb mit DESSEN Preisen + eigener Freigabe.
+    public ?int $outletPublishId = null;
+
+    public ?string $outletPublishGueltigBis = null;
+
     public function veroeffentlichen(): void
     {
         $this->presentationFehler = null;
@@ -97,6 +102,50 @@ class Index extends Component
             app(PresentationService::class)->withdraw($this->team(), 'foodbook', $this->selectedId);
             $this->presentationLoadedId = null;
             $this->presentationHinweis = 'Veröffentlichung zurückgezogen — der Link ist jetzt inaktiv (404).';
+        } catch (\Throwable $e) {
+            $this->presentationFehler = $e->getMessage();
+        }
+    }
+
+    /** Slice F: einen zweiten Link FÜR einen Betrieb anlegen — dessen Preise + Vorlage, eigene Freigabe. */
+    public function betriebVeroeffentlichen(): void
+    {
+        $this->presentationFehler = null;
+        $this->presentationHinweis = null;
+        if ($this->selectedId === null) {
+            return;
+        }
+        if ($this->outletPublishId === null) {
+            $this->presentationFehler = 'Bitte zuerst einen Betrieb wählen.';
+
+            return;
+        }
+        try {
+            app(PresentationService::class)->publishForOutlet($this->team(), 'foodbook', $this->selectedId, $this->outletPublishId, [
+                'expires_at' => $this->outletPublishGueltigBis ?: $this->presentationGueltigBis,
+                'price_display' => $this->presentationPreisAnzeige,
+                'declaration' => $this->presentationDeklaration,
+                'cta' => ['text' => $this->presentationCtaText, 'link' => $this->presentationCtaLink],
+            ]);
+            $this->outletPublishId = null;
+            $this->outletPublishGueltigBis = null;
+            $this->presentationHinweis = 'Betriebs-Link veröffentlicht — eigener Link mit den Preisen dieses Betriebs.';
+        } catch (\Throwable $e) {
+            $this->presentationFehler = $e->getMessage();
+        }
+    }
+
+    /** Slice F: einen Betriebs-Link vom Netz nehmen (Standard-Link bleibt unberührt). */
+    public function betriebZuruckziehen(int $outletId): void
+    {
+        $this->presentationFehler = null;
+        $this->presentationHinweis = null;
+        if ($this->selectedId === null) {
+            return;
+        }
+        try {
+            app(PresentationService::class)->withdrawForOutlet($this->team(), 'foodbook', $this->selectedId, $outletId);
+            $this->presentationHinweis = 'Betriebs-Link zurückgezogen.';
         } catch (\Throwable $e) {
             $this->presentationFehler = $e->getMessage();
         }
@@ -1290,7 +1339,19 @@ class Index extends Component
         }
         $presentationDesignOptionen = app(PresentationDesignService::class)->pickerOptions($team, 'foodbook');
 
+        // Slice F: bestehende Betriebs-Links + wählbare Betriebe (aktiv, team-scoped).
+        $betriebsLinks = [];
+        $betriebsOptionen = [];
+        if ($fb !== null) {
+            $betriebsLinks = app(PresentationService::class)->outletPresentations($team, 'foodbook', $fb->id);
+            $betriebsOptionen = \Platform\FoodAlchemist\Models\FoodAlchemistOutlet::where('team_id', $team->id)
+                ->where('is_inactive', false)->orderBy('sort_order')->orderBy('name')->get(['id', 'name'])
+                ->map(fn ($o) => ['id' => (int) $o->id, 'name' => (string) $o->name])->all();
+        }
+
         return view('foodalchemist::livewire.foodbooks.index', [
+            'betriebsLinks' => $betriebsLinks,
+            'betriebsOptionen' => $betriebsOptionen,
             'kapitelImageUrl' => ($kapitel !== null && ($kapitel->image_context_file_id || $kapitel->image_path))
                 ? app(\Platform\FoodAlchemist\Services\FoodAlchemistMediaService::class)->url($kapitel->image_context_file_id, $kapitel->image_path)
                 : null,

@@ -43,6 +43,9 @@ class FoodbookPresentationPublishTool extends FoodAlchemistTool implements ToolC
                 'slug' => ['type' => 'string', 'description' => 'Optionaler eigener Link-Name statt Zufalls-Token '
                     . '(z.B. "broich-empfang-2027" → /p/foodbook/broich-empfang-2027). Wird kebab-normalisiert, '
                     . 'muss je Ausgabeform eindeutig sein; leerer String setzt zurück auf Token.'],
+                'outlet_id' => ['type' => 'integer', 'description' => 'Optional (Slice F): veröffentlicht einen '
+                    . 'ZUSÄTZLICHEN Link FÜR diesen Betrieb — eingefroren mit dessen Preisen UND dessen Vorlage, '
+                    . 'eigene Freigabe. Ohne outlet_id = der Standard-Link am Dokument-Kopf. Der Betrieb muss dem Team gehören.'],
             ],
             'required' => ['foodbook_id', 'expires_at'],
         ];
@@ -55,15 +58,19 @@ class FoodbookPresentationPublishTool extends FoodAlchemistTool implements ToolC
             return ToolResult::error('Kein Team im Kontext.', 'NO_TEAM');
         }
         try {
-            $res = app(PresentationService::class)->publish($team, 'foodbook', (int) $arguments['foodbook_id'], [
+            $settings = [
                 'expires_at' => $arguments['expires_at'] ?? null,
                 'design' => $arguments['design'] ?? null,
                 'price_display' => $arguments['price_display'] ?? true,
                 'declaration' => $arguments['declaration'] ?? true,
                 'cta' => ['text' => $arguments['cta_text'] ?? null, 'link' => $arguments['cta_link'] ?? null],
-            ] + (array_key_exists('slug', $arguments) ? ['slug' => $arguments['slug']] : []));
+            ] + (array_key_exists('slug', $arguments) ? ['slug' => $arguments['slug']] : []);
+            $svc = app(PresentationService::class);
+            $res = ($arguments['outlet_id'] ?? null) !== null
+                ? $svc->publishForOutlet($team, 'foodbook', (int) $arguments['foodbook_id'], (int) $arguments['outlet_id'], $settings)
+                : $svc->publish($team, 'foodbook', (int) $arguments['foodbook_id'], $settings);
         } catch (ModelNotFoundException) {
-            return ToolResult::error('Foodbook nicht gefunden oder nicht sichtbar.', 'NOT_FOUND');
+            return ToolResult::error('Foodbook oder Betrieb nicht gefunden oder nicht sichtbar.', 'NOT_FOUND');
         } catch (\Throwable $e) {
             return ToolResult::error($e->getMessage(), 'VALIDATION_ERROR');
         }

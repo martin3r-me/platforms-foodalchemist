@@ -358,6 +358,56 @@
                         </p>
                     </div>
                 @endif
+
+                {{-- ── Slice F: Betriebs-Links — pro Betrieb ein eigener Link mit dessen Preisen + Vorlage ── --}}
+                <div class="rounded-lg border p-3 space-y-3" style="border-color:#e9d5ff;background:#faf5ff;">
+                    <div class="flex items-center gap-2">
+                        <span class="inline-block w-2 h-2 rounded-full" style="background:#9333ea;"></span>
+                        <h4 class="text-xs font-semibold" style="color:#6b21a8;">Betriebs-Links · eigener Link je Betrieb</h4>
+                    </div>
+                    <p class="text-[11px] text-gray-500">Ein zusätzlicher Kundenlink pro Betrieb — eingefroren mit den <strong>Preisen</strong> und der <strong>Vorlage</strong> dieses Betriebs, eigene Freigabe. Der Standard-Link oben bleibt bestehen.</p>
+
+                    @forelse($betriebsLinks as $bl)
+                        <div class="rounded bg-white border border-gray-200 p-2 text-xs" x-data>
+                            <div class="flex items-center gap-2">
+                                <span class="font-medium text-gray-800">{{ $bl['outlet_name'] }}</span>
+                                <span class="text-[10px] px-1.5 py-0.5 rounded {{ $bl['enabled'] ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-500' }}">{{ $bl['enabled'] ? 'aktiv' : 'inaktiv' }}</span>
+                                <span class="ml-auto text-[10px] text-gray-400">Vorlage: {{ $bl['design'] }}</span>
+                            </div>
+                            <div class="flex items-center gap-2 mt-1">
+                                <div class="flex-1 rounded px-2 py-1 font-mono text-[11px] break-all select-all" style="background:#ffffff;color:#111827;border:1px solid #d1d5db;">{{ $bl['url'] }}</div>
+                                <button type="button" class="{{ $btnGhost }}" x-on:click="navigator.clipboard.writeText('{{ $bl['url'] }}'); $el.textContent='Kopiert ✓'">Kopieren</button>
+                                @if($bl['enabled'])
+                                    <button type="button" wire:click="betriebZuruckziehen({{ $bl['outlet_id'] }})" wire:confirm="Diesen Betriebs-Link zurückziehen? Er liefert dann 404." class="{{ $btnGhost }}">Zurückziehen</button>
+                                @endif
+                            </div>
+                        </div>
+                    @empty
+                        <p class="text-[11px] text-gray-400">Noch kein Betriebs-Link angelegt.</p>
+                    @endforelse
+
+                    @if(count($betriebsOptionen) > 0)
+                        <div class="flex flex-wrap items-end gap-2 pt-1">
+                            <div>
+                                <label class="block text-[10px] text-gray-500">Betrieb</label>
+                                <select wire:model="outletPublishId" class="mt-1 block text-sm border border-gray-300 rounded px-2 py-1">
+                                    <option value="">— wählen —</option>
+                                    @foreach($betriebsOptionen as $o)
+                                        <option value="{{ $o['id'] }}">{{ $o['name'] }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-[10px] text-gray-500">gültig bis (optional)</label>
+                                <input type="date" wire:model="outletPublishGueltigBis" class="mt-1 block text-sm border border-gray-300 rounded px-2 py-1" placeholder="wie oben">
+                            </div>
+                            <button type="button" wire:click="betriebVeroeffentlichen" class="{{ $btnPrimary }}">Betrieb-Link erstellen</button>
+                        </div>
+                        <p class="text-[10px] text-gray-400">Ohne eigenes Datum gilt das „gültig bis" des Standard-Links.</p>
+                    @else
+                        <p class="text-[11px] text-amber-600">Noch keine Betriebe angelegt — unter Einstellungen › Betriebe.</p>
+                    @endif
+                </div>
             </div>
                 </div>{{-- /Tab BRANDING --}}
 
