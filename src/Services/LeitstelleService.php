@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Models\FoodAlchemistFoodbook;
+use Platform\FoodAlchemist\Models\FoodAlchemistOutlet;
 use Platform\FoodAlchemist\Models\FoodAlchemistFoodbookKapitel;
 use RuntimeException;
 
@@ -173,7 +174,7 @@ class LeitstelleService
      *   positionen:list<array{art:string, label:string, preis:?float, preis_einheit:?string, status:string, ref_id:?int, kinder?:list<array{label:string}>}>
      * }>
      */
-    public function speisenBaum(Team $team, FoodAlchemistFoodbook $fb): array
+    public function speisenBaum(Team $team, FoodAlchemistFoodbook $fb, ?FoodAlchemistOutlet $outlet = null): array
     {
         $fb = $this->ladeFoodbook($team, $fb, mitSlots: true);
         $baum = [];
@@ -188,17 +189,23 @@ class LeitstelleService
                             $kinder[] = ['label' => $slot->dish?->name ?? ($slot->package?->name ?? $slot->label ?? 'Slot')];
                         }
                     }
+                    // Ebene 2: im Betriebs-Kontext den €/Gast live gegen den Betrieb rechnen
+                    // (preisCockpit), sonst der Team-Baseline-Cache (= heutiges Verhalten).
+                    $paketPreis = $concept === null ? null
+                        : ($outlet !== null
+                            ? (float) app(\Platform\FoodAlchemist\Services\ConceptService::class)->preisCockpit($concept, $outlet)['price_per_person']
+                            : ($concept->price_per_person_cache !== null ? (float) $concept->price_per_person_cache : null));
                     $positionen[] = [
                         'art' => 'paket',
                         'label' => $concept?->name ?? ($block->label ?? 'Paket'),
-                        'preis' => $concept?->price_per_person_cache !== null ? (float) $concept->price_per_person_cache : null,
+                        'preis' => $paketPreis,
                         'preis_einheit' => 'gast',
                         'status' => $k->released_at !== null ? 'angelegt' : 'entwurf',
                         'ref_id' => $concept !== null ? (int) $concept->id : null,
                         'kinder' => $kinder,
                     ];
                 } else { // recipe_ref
-                    $preis = $this->foodbooks->blockPreis($block);
+                    $preis = $this->foodbooks->blockPreis($block, null, $outlet);
                     $positionen[] = [
                         'art' => 'einzel',
                         'label' => $block->dish?->name ?? ($block->label ?? 'Gericht'),
@@ -243,7 +250,7 @@ class LeitstelleService
      *   hat_ziele:bool, positionen:int, hat_inhalt:bool, bepreist:bool, released:bool,
      *   wareneinsatz:array}>
      */
-    public function kapitelMatrix(Team $team, FoodAlchemistFoodbook $fb): array
+    public function kapitelMatrix(Team $team, FoodAlchemistFoodbook $fb, ?FoodAlchemistOutlet $outlet = null): array
     {
         $fb = $this->ladeFoodbook($team, $fb);
         $rows = [];
@@ -253,7 +260,7 @@ class LeitstelleService
             $hatInhalt = $inhalt->count() > 0 || $k->released_at !== null;
             $bepreist = false;
             if ($hatInhalt) {
-                $agg = $this->foodbooks->kapitelAggregat($team, $k);
+                $agg = $this->foodbooks->kapitelAggregat($team, $k, null, $outlet);
                 $bepreist = $agg['vk_pro_person'] > 0 || $agg['pauschal'] > 0;
             }
             $rows[] = [
@@ -266,7 +273,7 @@ class LeitstelleService
                 'hat_inhalt' => $hatInhalt,
                 'bepreist' => $bepreist,
                 'released' => $k->released_at !== null,
-                'wareneinsatz' => $this->foodbooks->wareneinsatzAmpel($team, $fb, $k),
+                'wareneinsatz' => $this->foodbooks->wareneinsatzAmpel($team, $fb, $k, null, $outlet),
             ];
         }
 
@@ -380,9 +387,12 @@ class LeitstelleService
      *   positionen:list<array<string, mixed>>
      * }>
      */
-    public function kapitelBoard(Team $team, FoodAlchemistFoodbook $fb): array
+    public function kapitelBoard(Team $team, FoodAlchemistFoodbook $fb, ?FoodAlchemistOutlet $outlet = null): array
     {
         $fb = $this->ladeFoodbook($team, $fb);
+        // r2_5-Badge (freigegebener Snapshot ↔ Live-VK) bleibt team-weit — die interne
+        // Pro-Gericht-Drift hängt am VkSnapshotService (team-only); der Betrieb wirkt hier auf
+        // die live gerechneten VK/EK/WE-Werte, nicht auf das Snapshot-Badge.
         $r2_5 = [];
         foreach ($this->vkSnapshots->pending($team) as $p) {
             $r2_5[$p['recipe_id']] = $p;
@@ -390,11 +400,11 @@ class LeitstelleService
         $board = [];
         foreach ($fb->chapters as $k) {
             $inhalt = $this->inhaltsBloecke($k);
-            $agg = $this->foodbooks->kapitelAggregat($team, $k);
-            $we = $this->foodbooks->wareneinsatzAmpel($team, $fb, $k);
+            $agg = $this->foodbooks->kapitelAggregat($team, $k, null, $outlet);
+            $we = $this->foodbooks->wareneinsatzAmpel($team, $fb, $k, null, $outlet);
             $positionen = [];
             foreach ($inhalt as $block) {
-                $preis = $this->foodbooks->blockPreis($block);
+                $preis = $this->foodbooks->blockPreis($block, null, $outlet);
                 if ($block->type === 'concept_ref') {
                     $vk = $preis['vk_pp'];
                     $ek = $preis['ek_pp'];

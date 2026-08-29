@@ -60,14 +60,18 @@ class LeitstelleRail extends Component
         }
 
         // ── Kopf-Modus: Matrix / Speisen / Kalkulation (Alpine-Umschalter) ──
+        // Ebene 2: alle VK/WE-Werte gegen die Betriebsbrille (ambient) rechnen.
+        $outlet = app(\Platform\FoodAlchemist\Services\ActiveOutletContext::class)->current($team);
+
         return view('foodalchemist::livewire.foodbooks.leitstelle-rail', [
             'fb' => $fb,
             'modus' => 'kopf',
-            'matrix' => $leit->kapitelMatrix($team, $fb),
-            'baum' => $leit->speisenBaum($team, $fb),
-            'gesamt' => $svc->gesamt($team, $fb),
+            'matrix' => $leit->kapitelMatrix($team, $fb, $outlet),
+            'baum' => $leit->speisenBaum($team, $fb, $outlet),
+            'gesamt' => $svc->gesamt($team, $fb, $outlet),
             // Portfolio-WE-Ampel des ganzen Foodbooks (E8.2) — Kopf der Kalkulation-Panel.
-            'weGesamt' => $svc->foodbookWareneinsatzAmpel($team, $fb),
+            'weGesamt' => $svc->foodbookWareneinsatzAmpel($team, $fb, $outlet),
+            'aktiverBetrieb' => $outlet?->name,
         ]);
     }
 

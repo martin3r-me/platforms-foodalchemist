@@ -1682,19 +1682,20 @@ class FoodbookService
      * @return array{status: string, ist_pct: ?float, ziel_pct: float, toleranz_pp: float,
      *               quelle: string, partiell: bool}
      */
-    public function wareneinsatzAmpel(Team $team, FoodAlchemistFoodbook $fb, FoodAlchemistFoodbookKapitel $kapitel, ?int $pax = null): array
+    public function wareneinsatzAmpel(Team $team, FoodAlchemistFoodbook $fb, FoodAlchemistFoodbookKapitel $kapitel, ?int $pax = null, ?\Platform\FoodAlchemist\Models\FoodAlchemistOutlet $outlet = null): array
     {
         // kapitelZiele zuerst — erzwingt Team-Scope + Ownership (ownedKapitel) vor jeder Rechnung.
         $ziele = $this->kapitelZiele($team, $kapitel);
         $ziel = $ziele['target_food_cost_pct'];
         $quelle = $ziele['quellen']['target_food_cost_pct'] ?? null;
         if ($ziel === null) {
-            $ziel = app(TeamSettingsService::class)->zielWareneinsatzPct($team);
+            // Ebene 2: ohne Kapitel-Ziel folgt die Soll-Quote der Betriebsbrille (Betriebs-Ziel-WE).
+            $ziel = app(TeamSettingsService::class)->zielWareneinsatzPct($team, $outlet);
             $quelle = 'settings';
         }
         $ziel = (float) $ziel;
 
-        $agg = $this->kapitelAggregat($team, $kapitel, $pax);
+        $agg = $this->kapitelAggregat($team, $kapitel, $pax, $outlet);
         $ist = $agg['food_cost_percent']; // ?float
 
         $tol = $fb->food_cost_tolerance_pp !== null ? (float) $fb->food_cost_tolerance_pp : 5.0;
@@ -1719,9 +1720,9 @@ class FoodbookService
      *
      * @return array{status: string, ist_pct: ?float, ziel_pct: float, toleranz_pp: float, quelle: string, partiell: bool}
      */
-    public function foodbookWareneinsatzAmpel(Team $team, FoodAlchemistFoodbook $fb): array
+    public function foodbookWareneinsatzAmpel(Team $team, FoodAlchemistFoodbook $fb, ?\Platform\FoodAlchemist\Models\FoodAlchemistOutlet $outlet = null): array
     {
-        $gesamt = $this->gesamt($team, $fb);
+        $gesamt = $this->gesamt($team, $fb, $outlet);
         $vk = $gesamt['vk_pro_person'];
         $ek = $gesamt['ek_per_person'];
         $ist = $vk > 0 ? round($ek / $vk * 100, 1) : null;
@@ -1730,7 +1731,8 @@ class FoodbookService
             $ziel = (float) $fb->target_food_cost_pct;
             $quelle = 'foodbook';
         } else {
-            $ziel = app(TeamSettingsService::class)->zielWareneinsatzPct($team);
+            // Ebene 2: Soll-Quote folgt der Betriebsbrille.
+            $ziel = app(TeamSettingsService::class)->zielWareneinsatzPct($team, $outlet);
             $quelle = 'settings';
         }
         $tol = $fb->food_cost_tolerance_pp !== null ? (float) $fb->food_cost_tolerance_pp : 5.0;
