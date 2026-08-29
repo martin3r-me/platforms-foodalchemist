@@ -101,6 +101,22 @@ it('withdrawForOutlet nimmt nur den Betriebs-Link vom Netz + outletPresentations
     expect($listeNach[0]['enabled'])->toBeFalse();   // Zeile bleibt (Wieder-Freigabe möglich)
 });
 
+it('nimmt eine per-Link-Vorlage + einen eigenen Slug (überschreibt die Betriebs-Vorlage)', function () {
+    // Betrieb hat presentation_design = navigator; hier explizit 'menu' + eigener Link-Name.
+    $res = $this->pres->publishForOutlet($this->childA, 'speisekarte', $this->karte->id, $this->betrieb->id, [
+        'expires_at' => now()->addDays(30)->toDateString(),
+        'design' => 'menu',
+        'slug' => 'broich-nord-test',
+    ]);
+    expect($res['design'])->toBe('menu')
+        ->and($res['slug'])->toBe('broich-nord-test')
+        ->and($res['url'])->toContain('broich-nord-test');
+
+    $this->get('/p/speisekarte/broich-nord-test')->assertOk()->assertSee('Abendkarte');
+    $snap = $this->pres->resolveByToken('speisekarte', 'broich-nord-test');
+    expect($snap['resolved_design']['source'])->toBe('menu');   // per-Link-Vorlage, nicht die Betriebs-Default
+});
+
 it('idempotent je (Dokument, Betrieb): zweiter Publish ersetzt denselben Link', function () {
     $a = $this->pres->publishForOutlet($this->childA, 'speisekarte', $this->karte->id, $this->betrieb->id, [
         'expires_at' => now()->addDays(30)->toDateString(),

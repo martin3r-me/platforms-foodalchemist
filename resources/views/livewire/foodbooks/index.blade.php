@@ -565,6 +565,19 @@
                                             <label class="block text-[10px] text-gray-400">gültig bis (optional)</label>
                                             <input type="date" wire:model="outletPublishGueltigBis" class="mt-1 block text-sm rounded px-2 py-1">
                                         </div>
+                                        <div>
+                                            <label class="block text-[10px] text-gray-400">Vorlage (optional)</label>
+                                            <select wire:model="outletPublishDesign" class="mt-1 block text-sm rounded px-2 py-1">
+                                                <option value="">— Betriebs-Vorlage / wie Dokument —</option>
+                                                @foreach($presentationDesignOptionen as $opt)
+                                                    <option value="{{ $opt['value'] }}">{{ $opt['label'] }}</option>
+                                                @endforeach
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label class="block text-[10px] text-gray-400">Link-Name (optional)</label>
+                                            <input type="text" wire:model="outletPublishSlug" placeholder="z.B. broich-nord-2027" class="mt-1 block text-sm rounded px-2 py-1">
+                                        </div>
                                         <button type="button" wire:click="betriebVeroeffentlichen" class="{{ $btnPrimary }}">＋ Betrieb hinzufügen</button>
                                     </div>
                                     <p class="text-[10px] text-gray-500">Beliebig viele Betriebe möglich — je Betrieb ein eigener Link. Ohne eigenes Datum gilt das „gültig bis" des Standard-Links.</p>

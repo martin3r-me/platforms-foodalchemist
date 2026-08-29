@@ -57,6 +57,11 @@ class Index extends Component
 
     public ?string $outletPublishGueltigBis = null;
 
+    // Pro Betriebs-Link eigene Vorlage + eigener Link-Name (leer = Betriebs-Default bzw. Zufalls-Token).
+    public ?string $outletPublishDesign = '';
+
+    public ?string $outletPublishSlug = '';
+
     public function veroeffentlichen(): void
     {
         $this->presentationFehler = null;
@@ -109,15 +114,26 @@ class Index extends Component
             return;
         }
         try {
-            app(PresentationService::class)->publishForOutlet($this->team(), 'speisekarte', $this->karteId, $this->outletPublishId, [
+            $settings = [
                 'expires_at' => $this->outletPublishGueltigBis ?: $this->presentationGueltigBis,
                 'price_display' => $this->presentationPreisAnzeige,
                 'declaration' => $this->presentationDeklaration,
                 'cta' => ['text' => $this->presentationCtaText, 'link' => $this->presentationCtaLink],
-            ]);
+            ];
+            // Nur setzen, wenn der Nutzer aktiv wählt — sonst greift die Fallback-Kette
+            // (Betriebs-Vorlage → Dokument-Vorlage) bzw. der Zufalls-Token.
+            if (trim((string) $this->outletPublishDesign) !== '') {
+                $settings['design'] = $this->outletPublishDesign;
+            }
+            if (trim((string) $this->outletPublishSlug) !== '') {
+                $settings['slug'] = $this->outletPublishSlug;
+            }
+            app(PresentationService::class)->publishForOutlet($this->team(), 'speisekarte', $this->karteId, $this->outletPublishId, $settings);
             $this->outletPublishId = null;
             $this->outletPublishGueltigBis = null;
-            $this->presentationHinweis = 'Betriebs-Link veröffentlicht — eigener Link mit den Preisen dieses Betriebs.';
+            $this->outletPublishDesign = '';
+            $this->outletPublishSlug = '';
+            $this->presentationHinweis = 'Betriebs-Link veröffentlicht — eigener Link mit den Preisen, der Vorlage und dem Namen dieses Betriebs.';
         } catch (\Throwable $e) {
             $this->presentationFehler = $e->getMessage();
         }
