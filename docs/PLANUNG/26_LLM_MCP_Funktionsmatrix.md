@@ -22,7 +22,7 @@ Capability. Sie beantwortet:
 | Capability | Anzahl | Aktuelle Aussage |
 |---|---:|---|
 | Prompt-Keys in `config/foodalchemist.php` | 64 | Registry vorhanden; 11 Keys ohne direkte statische Referenz in `src/` (die 5 seit 01.08. ergänzten Keys sind alle direkt referenziert) |
-| MCP-Toolklassen mit `foodalchemist.*`-Name | 404 | Provider registriert 404 (203 Bestand + 17 D1/Phase 0 + 13 D2 + 18 D3 + 27 D4 + 35 D5 + 10 D6 + 14 D7 + 8 D8 + 13 D9 + 10 D10 + 13 D11 + 8 D12 + 15 D13 Vokabular/Taxonomie-SAFE; Stand 2026-08-29). Offen: D13-Rest (~8 inline-DB-Panel-Vokabulare brauchen Service-Extraktion) + Phase N Navigation. §7-Register wird nachgezogen (Alt-Liste = 169) |
+| MCP-Toolklassen mit `foodalchemist.*`-Name | 406 | Provider registriert 406 (203 Bestand + 17 D1/Phase 0 + 13 D2 + 18 D3 + 27 D4 + 35 D5 + 10 D6 + 14 D7 + 8 D8 + 13 D9 + 10 D10 + 13 D11 + 8 D12 + 15 D13 + 2 Phase N Navigation [ui.OPEN erweitert]; Stand 2026-08-29). **Programm D1–D13 + Phase N durch.** Offen: D13-Rest (~8 inline-DB-Panel-Vokabulare = Service-Extraktion) + Frontend type→route-Map. §7-Register wird nachgezogen (Alt-Liste = 169) |
 | Embedding-Pools mit Observern | 6 | GP, Rezept, Lieferant, Konzept, Foodbook, Lab Note |
 | Wissens-/Retrieval-Schichten | 2 | deterministisch plus optional semantisch |
 | dokumentierte vollständige MCP-Tenant-Abnahme | 0 | einzelne Tests vorhanden, keine 157-Tool-Matrix |
@@ -627,6 +627,9 @@ foodalchemist.vocab_recipe_maingroups.REORDER
 foodalchemist.vocab_dish_maingroups.POST
 foodalchemist.vocab_dish_maingroups.PUT
 foodalchemist.vocab_dish_maingroups.REORDER
+# Phase N: Navigation (ui.OPEN erweitert auf 13 Datensatztypen; Frontend type→route-Map = FE-Restwiring)
+foodalchemist.ui.ROUTES
+foodalchemist.ui.NAVIGATE
 ```
 
 ## 8. MCP-Abnahmematrix

@@ -425,6 +425,9 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\TerminologyPostTool::class,
                     \Platform\FoodAlchemist\Tools\RecipeKlassePostTool::class,
                     \Platform\FoodAlchemist\Tools\UiOpenTool::class,
+                    // Phase N: Navigation — Seiten-Katalog + Seiten-Navigation (ui.OPEN erweitert auf 13 Typen)
+                    \Platform\FoodAlchemist\Tools\UiRoutesTool::class,
+                    \Platform\FoodAlchemist\Tools\UiNavigateTool::class,
                     // Phase 0: GP-Ground-Truth (Match + NEW-GP-Staging, LA-First-konform)
                     \Platform\FoodAlchemist\Tools\GpsMatchTool::class,
                     \Platform\FoodAlchemist\Tools\GpProposalsPostTool::class,

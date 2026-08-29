@@ -354,6 +354,46 @@ abstract class FoodAlchemistTool
         return \Platform\FoodAlchemist\Models\FoodAlchemistFoodbook::visibleToTeam($team)->whereKey($kap->foodbook_id)->first();
     }
 
+    /**
+     * Phase N: Navigations-Katalog der FA-Hauptseiten. route_key (stabil, LLM-freundlich) → Laravel-
+     * Route-Name + Label + optional erwarteter Datensatztyp (für id-Parameter). Geteilt von
+     * ui.ROUTES (Katalog) und ui.NAVIGATE (Validierung). Bewusst kuratiert (Index/Landing + Schlüssel-Detail).
+     *
+     * @return array<string, array{route:string, label:string, record?:string}>
+     */
+    protected function uiRouteCatalog(): array
+    {
+        return [
+            'dashboard' => ['route' => 'foodalchemist.dashboard', 'label' => 'Dashboard'],
+            'recipes' => ['route' => 'foodalchemist.recipes.index', 'label' => 'Basisrezepte'],
+            'verkauf' => ['route' => 'foodalchemist.verkauf.index', 'label' => 'Verkauf / Gerichte'],
+            'gps' => ['route' => 'foodalchemist.gps.index', 'label' => 'Grundprodukte'],
+            'gp_detail' => ['route' => 'foodalchemist.gps.show', 'label' => 'Grundprodukt-Detail', 'record' => 'gp'],
+            'concepter' => ['route' => 'foodalchemist.concepter.index', 'label' => 'Concepter'],
+            'concepts' => ['route' => 'foodalchemist.concepts.index', 'label' => 'Konzepte'],
+            'pakete' => ['route' => 'foodalchemist.pakete.index', 'label' => 'Pakete'],
+            'formate' => ['route' => 'foodalchemist.formate.index', 'label' => 'Formate'],
+            'foodbooks' => ['route' => 'foodalchemist.foodbooks.index', 'label' => 'Foodbooks'],
+            'speisekarte' => ['route' => 'foodalchemist.speisekarte.index', 'label' => 'Speisekarten'],
+            'speiseplan' => ['route' => 'foodalchemist.speiseplan.index', 'label' => 'Speisepläne'],
+            'angebote' => ['route' => 'foodalchemist.angebote.index', 'label' => 'Angebote'],
+            'suppliers' => ['route' => 'foodalchemist.suppliers.index', 'label' => 'Lieferanten'],
+            'geschirr' => ['route' => 'foodalchemist.geschirr.index', 'label' => 'Geschirr'],
+            'orders' => ['route' => 'foodalchemist.orders.index', 'label' => 'Bestellwesen'],
+            'einkauf' => ['route' => 'foodalchemist.einkauf.index', 'label' => 'Einkauf'],
+            'produktion' => ['route' => 'foodalchemist.produktion.index', 'label' => 'Produktion'],
+            'planung' => ['route' => 'foodalchemist.planung.index', 'label' => 'Planung (Leitstelle)'],
+            'controlling' => ['route' => 'foodalchemist.controlling.index', 'label' => 'Controlling'],
+            'kalkulation' => ['route' => 'foodalchemist.kalkulation.index', 'label' => 'Kalkulation'],
+            'knowledge' => ['route' => 'foodalchemist.knowledge.index', 'label' => 'Wissensmodul'],
+            'trendradar' => ['route' => 'foodalchemist.trendradar.index', 'label' => 'Trendradar'],
+            'food_dna' => ['route' => 'foodalchemist.food-dna.index', 'label' => 'Food-DNA'],
+            'favorites' => ['route' => 'foodalchemist.favorites.index', 'label' => 'Favoriten'],
+            'review' => ['route' => 'foodalchemist.review', 'label' => 'Review-Queue'],
+            'einstellungen' => ['route' => 'foodalchemist.einstellungen', 'label' => 'Einstellungen'],
+        ];
+    }
+
     /** Guard für Order-Line-by-id-Tools (D11): Bestellzeile → Bestellung team-eigen? */
     protected function guardOrderLineOwned(Team $team, int $lineId): ?ToolResult
     {
