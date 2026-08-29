@@ -502,6 +502,15 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\SupplierConditionsPutTool::class,
                     \Platform\FoodAlchemist\Tools\SupplierContactsPostTool::class,
                     \Platform\FoodAlchemist\Tools\SupplierDocumentsPostTool::class,
+                    // D4b: Lieferantenartikel-CRUD + Allergene/Deklarationen/Nährwerte + Preise (Bestand-Services).
+                    \Platform\FoodAlchemist\Tools\ArtikelPostTool::class,
+                    \Platform\FoodAlchemist\Tools\ArtikelDeleteTool::class,
+                    \Platform\FoodAlchemist\Tools\ArtikelDiscontinueTool::class,
+                    \Platform\FoodAlchemist\Tools\ArtikelAllergenePutTool::class,
+                    \Platform\FoodAlchemist\Tools\ArtikelDeklarationenPutTool::class,
+                    \Platform\FoodAlchemist\Tools\ArtikelNaehrwertePutTool::class,
+                    \Platform\FoodAlchemist\Tools\ArtikelPreisePostTool::class,
+                    \Platform\FoodAlchemist\Tools\ArtikelPreiseDeleteTool::class,
                     // #513 Tier 1: Grammaturen-Rechner (Bäckerprozent/Extraprozent/Brining/Bloom)
                     \Platform\FoodAlchemist\Tools\ProportionCalcTool::class,
                     // #513: %→Gramm-Rückschreiben (Batch-Skalierung + Einzel-Zutat-Edit, write)
