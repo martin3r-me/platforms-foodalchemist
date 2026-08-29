@@ -6,6 +6,8 @@ use Illuminate\Support\Facades\DB;
 use Platform\Core\Contracts\ToolContext;
 use Platform\Core\Contracts\ToolResult;
 use Platform\Core\Models\Team;
+use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
+use Platform\FoodAlchemist\Models\FoodAlchemistConceptSlot;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipeDarreichung;
 use Platform\FoodAlchemist\Support\TeamScope;
@@ -247,6 +249,27 @@ abstract class FoodAlchemistTool
         return DB::table('foodalchemist_vocab_pairing_anchors')->where('id', $ankerId)->whereNull('deleted_at')
             ->where(fn ($q) => $q->whereNull('team_id')->orWhereIn('team_id', TeamScope::ancestryIds($team)))
             ->exists();
+    }
+
+    /**
+     * Guard für Konzept-Slot-/Block-by-id-Tools: existiert der Slot und gehört sein Konzept dem Team?
+     * Gibt bei Fehler NOT_FOUND/ACCESS_DENIED, sonst null.
+     */
+    protected function guardConceptSlotOwned(Team $team, int $slotId): ?ToolResult
+    {
+        $slot = FoodAlchemistConceptSlot::whereKey($slotId)->first();
+        if ($slot === null) {
+            return ToolResult::error('Slot nicht vorhanden.', 'NOT_FOUND');
+        }
+        $concept = FoodAlchemistConcept::visibleToTeam($team)->whereKey($slot->concept_id)->first();
+        if ($concept === null) {
+            return ToolResult::error('Konzept nicht sichtbar/vorhanden.', 'NOT_FOUND');
+        }
+        if (! $concept->isOwnedBy($team)) {
+            return ToolResult::error('Nur fürs Besitzer-Team des Konzepts.', 'ACCESS_DENIED');
+        }
+
+        return null;
     }
 
     /**

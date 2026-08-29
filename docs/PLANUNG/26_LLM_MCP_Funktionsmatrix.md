@@ -22,7 +22,7 @@ Capability. Sie beantwortet:
 | Capability | Anzahl | Aktuelle Aussage |
 |---|---:|---|
 | Prompt-Keys in `config/foodalchemist.php` | 64 | Registry vorhanden; 11 Keys ohne direkte statische Referenz in `src/` (die 5 seit 01.08. ergänzten Keys sind alle direkt referenziert) |
-| MCP-Toolklassen mit `foodalchemist.*`-Name | 286 | Provider registriert 286 (203 Bestand + 17 D1/Phase 0 + 13 D2 + 18 D3 + 27 D4 + 8 D5a Concepts-Lifecycle, Stand 2026-08-29); §7-Register wird nachgezogen (Alt-Liste = 169) |
+| MCP-Toolklassen mit `foodalchemist.*`-Name | 296 | Provider registriert 296 (203 Bestand + 17 D1/Phase 0 + 13 D2 + 18 D3 + 27 D4 + 8 D5a Concepts-Lifecycle + 10 D5b Slots/Blocks/Varianten/Paket, Stand 2026-08-29); §7-Register wird nachgezogen (Alt-Liste = 169) |
 | Embedding-Pools mit Observern | 6 | GP, Rezept, Lieferant, Konzept, Foodbook, Lab Note |
 | Wissens-/Retrieval-Schichten | 2 | deterministisch plus optional semantisch |
 | dokumentierte vollständige MCP-Tenant-Abnahme | 0 | einzelne Tests vorhanden, keine 157-Tool-Matrix |
@@ -498,6 +498,17 @@ foodalchemist.concepts.PRICE_TARGET
 foodalchemist.concepts.SEKTOR
 foodalchemist.concepts.TEMPLATE_SAVE
 foodalchemist.concepts.TEMPLATE_FORK
+# D5b: Slots/Blocks/Varianten/Paket (Editor-Parität)
+foodalchemist.concept_slots.PUT
+foodalchemist.concept_slots.DELETE
+foodalchemist.concept_slots.REORDER
+foodalchemist.concept_slots.GESCHIRR
+foodalchemist.concept_slots.DARREICHUNG
+foodalchemist.concept_blocks.POST
+foodalchemist.concept_blocks.PUT
+foodalchemist.concept_slot_variante.SWAP
+foodalchemist.concept_slot_variante.RESET
+foodalchemist.concept_paket.BUILD
 ```
 
 ## 8. MCP-Abnahmematrix

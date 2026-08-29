@@ -653,6 +653,17 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\ConceptsPostTool::class,
                     \Platform\FoodAlchemist\Tools\ConceptsDeleteTool::class,
                     \Platform\FoodAlchemist\Tools\ConceptSlotsPostTool::class,
+                    // D5b: Concept-Slots/Blocks/Varianten/Paket (Editor-Parität)
+                    \Platform\FoodAlchemist\Tools\ConceptSlotsPutTool::class,
+                    \Platform\FoodAlchemist\Tools\ConceptSlotsDeleteTool::class,
+                    \Platform\FoodAlchemist\Tools\ConceptSlotsReorderTool::class,
+                    \Platform\FoodAlchemist\Tools\ConceptSlotsGeschirrTool::class,
+                    \Platform\FoodAlchemist\Tools\ConceptSlotsDarreichungTool::class,
+                    \Platform\FoodAlchemist\Tools\ConceptBlocksPostTool::class,
+                    \Platform\FoodAlchemist\Tools\ConceptBlocksPutTool::class,
+                    \Platform\FoodAlchemist\Tools\ConceptSlotVarianteSwapTool::class,
+                    \Platform\FoodAlchemist\Tools\ConceptSlotVarianteResetTool::class,
+                    \Platform\FoodAlchemist\Tools\ConceptPaketBuildTool::class,
                     // Format-Modul: Marken-/Themen-Container über den Konzepten (Editionen), Draft-on-create
                     \Platform\FoodAlchemist\Tools\FormatsListTool::class,
                     \Platform\FoodAlchemist\Tools\FormatsSearchTool::class,
