@@ -666,6 +666,37 @@ class ConceptService
      *
      * @return array{zeilen: list<array>, preis_pro_person: float, ek_pro_person: float, hat_stale: bool, hat_leer: bool, hat_ek_luecke: bool}
      */
+    /**
+     * Ebene 2 — betriebsscharfer €/Gast je Concept/Paket für die Listen-Anzeige. Die Slot-Relationen
+     * werden für die ganze Seite EINMAL eager-geladen (das loadMissing in {@see preisCockpit} wird
+     * dann zum No-op), danach je Zeile preisCockpit(outlet). Ohne Brille leer → die Liste fällt auf
+     * den Team-Baseline-Cache (`price_per_person_cache`) zurück. Paket-/embedded-Anteile bleiben
+     * Team-Baseline, exakt wie in preisCockpit (kein Fan-out).
+     *
+     * @param  \Illuminate\Support\Collection<int, FoodAlchemistConcept>  $concepts
+     * @return array<int, float>  concept_id → €/Gast im Betrieb
+     */
+    public function outletPreisMap(Team $team, \Illuminate\Support\Collection $concepts, ?\Platform\FoodAlchemist\Models\FoodAlchemistOutlet $outlet): array
+    {
+        if ($outlet === null || $concepts->isEmpty()) {
+            return [];
+        }
+        $geladen = FoodAlchemistConcept::whereIn('id', $concepts->pluck('id')->all())
+            ->with(['slots' => fn ($q) => $q->orderBy('position'),
+                'slots.unit:id,slug,dimension,default_in_g',
+                'slots.package:id,name,price_per_person,ek_per_person,price_stale',
+                'slots.embeddedConcept:id,name,price_per_person_cache,ek_per_person_cache',
+                'slots.dish:id,name,sales_net,ek_total_eur,sales_unit_count,sales_quantity_per_unit_g,yield_kg,yield_pieces'])
+            ->get();
+
+        $map = [];
+        foreach ($geladen as $c) {
+            $map[(int) $c->id] = round((float) $this->preisCockpit($c, $outlet)['price_per_person'], 2);
+        }
+
+        return $map;
+    }
+
     public function preisCockpit(FoodAlchemistConcept $concept, ?\Platform\FoodAlchemist\Models\FoodAlchemistOutlet $outlet = null): array
     {
         $concept->loadMissing(['slots' => fn ($q) => $q->orderBy('position'),

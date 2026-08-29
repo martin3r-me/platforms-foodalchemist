@@ -177,8 +177,10 @@
                                 <td class="{{ $td }} text-gray-600">{{ $it->class ?: '—' }}</td>
                                 <td class="{{ $td }} text-gray-600">{{ collect([$it->eventType?->name, $it->servingForm?->label])->filter()->join(' · ') ?: '—' }}</td>
                                 <td class="{{ $td }} text-right tabular-nums text-gray-600">{{ $it->slots_count }}</td>
-                                <td class="{{ $td }} text-right tabular-nums">{{ $it->price_per_person_cache !== null ? number_format((float) $it->price_per_person_cache, 2, ',', '.') . ' €' : '—' }}</td>
-                                @php($wpPk = ($it->price_per_person_cache > 0 && $it->ek_per_person_cache !== null) ? (float) $it->ek_per_person_cache / (float) $it->price_per_person_cache * 100 : null)
+                                {{-- Ebene 2: mit Brille der betriebsscharfe €/Gast ($vkDisplay), sonst der Cache; W% folgt demselben Preis. --}}
+                                @php($pR = ($vkDisplay[$it->id] ?? null) !== null ? (float) $vkDisplay[$it->id] : ($it->price_per_person_cache !== null ? (float) $it->price_per_person_cache : null))
+                                <td class="{{ $td }} text-right tabular-nums {{ isset($vkDisplay[$it->id]) ? 'text-indigo-700 font-medium' : '' }}" @if(isset($vkDisplay[$it->id]))title="€/Gast für {{ $aktiverBetrieb }}"@endif>{{ $pR !== null ? number_format($pR, 2, ',', '.') . ' €' : '—' }}</td>
+                                @php($wpPk = ($pR !== null && $pR > 0 && $it->ek_per_person_cache !== null) ? (float) $it->ek_per_person_cache / $pR * 100 : null)
                                 <td class="{{ $td }} text-right tabular-nums text-gray-600">{{ $wpPk !== null ? number_format($wpPk, 1, ',', '.') . ' %' : '—' }}</td>
                             @else
                                 <td class="{{ $td }} text-gray-600">{{ $it->class ?: '—' }}</td>
@@ -198,7 +200,9 @@
                                     @endif
                                 </td>
                                 <td class="{{ $td }} text-right tabular-nums text-gray-600">{{ $it->slots_count }}</td>
-                                <td class="{{ $td }} text-right tabular-nums">{{ $it->price_per_person_cache !== null ? number_format((float) $it->price_per_person_cache, 2, ',', '.') . ' €' : '—' }}</td>
+                                {{-- Ebene 2: mit Brille der betriebsscharfe €/Gast, sonst der Cache. --}}
+                                @php($pRc = ($vkDisplay[$it->id] ?? null) !== null ? (float) $vkDisplay[$it->id] : ($it->price_per_person_cache !== null ? (float) $it->price_per_person_cache : null))
+                                <td class="{{ $td }} text-right tabular-nums {{ isset($vkDisplay[$it->id]) ? 'text-indigo-700 font-medium' : '' }}" @if(isset($vkDisplay[$it->id]))title="€/Gast für {{ $aktiverBetrieb }}"@endif>{{ $pRc !== null ? number_format($pRc, 2, ',', '.') . ' €' : '—' }}</td>
                             @endif
                         </x-foodalchemist::table-row>
                     @empty

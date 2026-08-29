@@ -103,7 +103,8 @@
                              class="group flex items-center justify-between px-2 py-1 rounded-lg text-xs {{ $selectedId === $c->id ? 'bg-gradient-to-r from-violet-500/10 to-indigo-500/10 text-violet-700' : 'text-gray-600 hover:bg-black/[0.03]' }}">
                             <button type="button" wire:click="waehle({{ $c->id }})" class="min-w-0 flex-1 text-left truncate">
                                 {{ $c->name }}
-                                <span class="text-[10px] text-gray-500">· {{ $c->slots_count }} Slots{{ $c->price_per_person_cache !== null ? ' · ' . number_format((float) $c->price_per_person_cache, 2, ',', '.') . ' €' : '' }} · <span class="text-violet-500/80">{{ \Platform\FoodAlchemist\Services\PhaseService::LABELS[$c->phase] ?? $c->phase }}</span></span>
+                                @php($pRc = ($vkDisplay[$c->id] ?? null) !== null ? (float) $vkDisplay[$c->id] : ($c->price_per_person_cache !== null ? (float) $c->price_per_person_cache : null))
+                                <span class="text-[10px] text-gray-500">· {{ $c->slots_count }} Slots{{ $pRc !== null ? ' · ' : '' }}@if($pRc !== null)<span class="{{ isset($vkDisplay[$c->id]) ? 'text-indigo-600 font-medium' : '' }}" @if(isset($vkDisplay[$c->id]))title="€/Gast für {{ $aktiverBetrieb }}"@endif>{{ number_format($pRc, 2, ',', '.') }} €</span>@endif · <span class="text-violet-500/80">{{ \Platform\FoodAlchemist\Services\PhaseService::LABELS[$c->phase] ?? $c->phase }}</span></span>
                             </button>
                             @if($showVorlagen)
                                 <button type="button" wire:click="ausVorlage({{ $c->id }})" class="shrink-0 text-[10px] text-violet-500 opacity-0 group-hover:opacity-100" title="Aus Vorlage starten">↧ nutzen</button>

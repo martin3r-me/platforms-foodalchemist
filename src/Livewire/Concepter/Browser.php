@@ -259,8 +259,13 @@ class Browser extends Component
             // 4c: Kategorien-Baum abgelöst (Facetten) — categoryFilter bleibt als URL-Back-Compat wirksam
         }
 
+        // Ebene 2: betriebsscharfer €/Gast je Zeile, wenn eine Brille aktiv ist (gilt für beide Reiter).
+        $outlet = app(\Platform\FoodAlchemist\Services\ActiveOutletContext::class)->current($team);
+
         return view('foodalchemist::livewire.concepter.browser', [
             'items' => $items,
+            'vkDisplay' => $concepts->outletPreisMap($team, collect($items->items()), $outlet),
+            'aktiverBetrieb' => $outlet?->name,
             'klassen' => $klassen,
             'rollen' => $rollen,
             // Facetten-Vokabulare (geteilte Dimension: Concepts- UND Pakete-Reiter)

@@ -354,8 +354,15 @@ class Index extends Component
     public function render(ConceptService $svc)
     {
         $team = $this->team();
+        // Ebene 2: die Betriebsbrille treibt Cockpit UND die Listen-Preise.
+        $outlet = $team ? app(\Platform\FoodAlchemist\Services\ActiveOutletContext::class)->current($team) : null;
         $selected = $this->selectedId !== null ? $svc->detail($team, $this->selectedId) : null;
-        $cockpit = $selected !== null ? $svc->preisCockpit($selected, $team ? app(\Platform\FoodAlchemist\Services\ActiveOutletContext::class)->current($team) : null) : null;
+        $cockpit = $selected !== null ? $svc->preisCockpit($selected, $outlet) : null;
+        $concepts = $svc->paginateBrowser([
+            'search' => $this->search, 'vorlagen' => $this->showVorlagen,
+            'category' => $this->categoryFilter !== '' ? $this->categoryFilter : null,
+            'phase' => $this->phaseFilter,
+        ], $team);
 
         $tauschbar = [];
         if ($selected !== null) {
@@ -369,11 +376,9 @@ class Index extends Component
             : collect();
 
         return view('foodalchemist::livewire.concepts.index', [
-            'concepts' => $svc->paginateBrowser([
-                'search' => $this->search, 'vorlagen' => $this->showVorlagen,
-                'category' => $this->categoryFilter !== '' ? $this->categoryFilter : null,
-                'phase' => $this->phaseFilter,
-            ], $team),
+            'concepts' => $concepts,
+            'vkDisplay' => $svc->outletPreisMap($team, collect($concepts->items()), $outlet),
+            'aktiverBetrieb' => $outlet?->name,
             'selected' => $selected,
             'cockpit' => $cockpit,
             'rollup' => $selected !== null ? $svc->allergenRollup($selected) : null,
