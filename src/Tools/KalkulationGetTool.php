@@ -61,6 +61,10 @@ class KalkulationGetTool extends FoodAlchemistTool implements ToolContract, Tool
             if ($outlet === null) {
                 return ToolResult::error('Betrieb nicht gefunden im Team.', 'NOT_FOUND');
             }
+        } else {
+            // Ebene 2: kein explizites outlet_id → aktive Betriebs-Brille (outlets.SET_ACTIVE), sonst Team-Baseline.
+            $outlet = app(\Platform\FoodAlchemist\Services\ActiveOutletContext::class)
+                ->current($team, $context->user?->id !== null ? (int) $context->user->id : null);
         }
 
         try {

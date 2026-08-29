@@ -67,7 +67,16 @@ class OutletsGetTool extends FoodAlchemistTool implements ToolContract, ToolMeta
             ];
         })->all();
 
-        return ToolResult::success(['team_id' => (int) $team->id, 'betriebe' => $betriebe]);
+        // Ebene 2: welche Brille gerade aktiv ist (durabel je User+Team; via outlets.SET_ACTIVE gesetzt).
+        $aktiv = app(\Platform\FoodAlchemist\Services\ActiveOutletContext::class)
+            ->current($team, $context->user?->id !== null ? (int) $context->user->id : null);
+
+        return ToolResult::success([
+            'team_id' => (int) $team->id,
+            'active_outlet_id' => $aktiv?->id,
+            'active_outlet_name' => $aktiv?->name,
+            'betriebe' => $betriebe,
+        ]);
     }
 
     public function getMetadata(): array

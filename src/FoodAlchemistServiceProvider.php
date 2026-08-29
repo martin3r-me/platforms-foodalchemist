@@ -816,6 +816,7 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\OutletsGetTool::class,
                     \Platform\FoodAlchemist\Tools\OutletPostTool::class,
                     \Platform\FoodAlchemist\Tools\OutletSettingsPutTool::class,
+                    \Platform\FoodAlchemist\Tools\OutletsSetActiveTool::class,
                     // D13: Vokabular/Taxonomie SAFE-additiv (POST/PUT/TOGGLE/REORDER, KEIN Delete;
                     // VocabularyService self-guardt globale/kanonische Zeilen read-only).
                     \Platform\FoodAlchemist\Tools\VocabEinheitenPostTool::class,
