@@ -3,6 +3,7 @@
 namespace Platform\FoodAlchemist\Services;
 
 use Platform\Core\Models\Team;
+use Platform\FoodAlchemist\Models\FoodAlchemistOutlet;
 use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
 use Platform\FoodAlchemist\Models\FoodAlchemistPaket;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
@@ -43,15 +44,15 @@ class KalkulationService
      * @return array{bloecke: list<array{key:string,label:string,typ:string,betrag:float}>,
      *               hk2: float, hk: float, mek: float, fek: float, marge_pct: float, vk_vorschlag: float}
      */
-    public function berechne(Team $team, float $we, float $arbeitszeitMin = 0.0, float $nebenkosten = 0.0): array
+    public function berechne(Team $team, float $we, float $arbeitszeitMin = 0.0, float $nebenkosten = 0.0, ?FoodAlchemistOutlet $outlet = null): array
     {
-        $stundensatz = $this->settings->stundensatz($team);
+        $stundensatz = $this->settings->stundensatz($team, $outlet);
         // M-K6: Schema mit aus Fixkosten abgeleiteten %-Sätzen (abgeleitete Blöcke).
-        $schema = $this->fixkosten->aufgeloestesSchema($team);
+        $schema = $this->fixkosten->aufgeloestesSchema($team, $outlet);
         $aktiv = array_values(array_filter($schema, fn ($b) => $b['active']));
 
         // #379+: Lohnnebenkosten-Zuschlag (AG-Anteil) → effektiver Lohnsatz statt Brutto.
-        $lnkFaktor = 1 + $this->settings->lohnnebenkostenPct($team) / 100;
+        $lnkFaktor = 1 + $this->settings->lohnnebenkostenPct($team, $outlet) / 100;
         $rate = fn (array $b) => ($b['value'] > 0 ? $b['value'] : $stundensatz) * $lnkFaktor;
 
         // ── Stufe A: Basisgrößen (reihenfolge-unabhängig) ───────────────────
@@ -98,7 +99,7 @@ class KalkulationService
         }
 
         $hk2 = round($hk + $hkgkTotal, 4);   // Selbstkosten
-        $marge = $this->settings->margePct($team);
+        $marge = $this->settings->margePct($team, $outlet);
 
         return [
             'bloecke' => $bloecke,
@@ -125,7 +126,7 @@ class KalkulationService
      *               db_eur: ?float, db_pct: ?float, wareneinsatz_pct: ?float,
      *               bloecke: list<array>, marge_pct: float, vk_vorschlag: float}
      */
-    public function recipeHk(Team $team, FoodAlchemistRecipe $recipe): array
+    public function recipeHk(Team $team, FoodAlchemistRecipe $recipe, ?FoodAlchemistOutlet $outlet = null): array
     {
         $anzahl = max(1, (int) ($recipe->sales_unit_count ?? 1));
         $hk1Total = (float) ($recipe->ek_total_eur ?? 0);
@@ -134,7 +135,7 @@ class KalkulationService
         $azTotal = 0.0;
 
         // Pro Portion rechnen (Wasserfall), dann auf Total skalieren.
-        $r = $this->berechne($team, $hk1Total / $anzahl, $azTotal / $anzahl, $nebenTotal / $anzahl);
+        $r = $this->berechne($team, $hk1Total / $anzahl, $azTotal / $anzahl, $nebenTotal / $anzahl, $outlet);
         $hk1Pp = round($hk1Total / $anzahl, 4);
         $hk2Pp = $r['hk2'];
         // M2: VK-Wahrheit liegt an der Standard-Darreichung (Resolver), recipes.sales_net nur Fallback.
@@ -147,7 +148,7 @@ class KalkulationService
             'hk2_total' => round($hk2Pp * $anzahl, 4),
             'hk1_pro_portion' => $hk1Pp,
             'hk2_pro_portion' => $hk2Pp,
-            'zuschlag_pct' => $this->settings->hk2Zuschlag($team),
+            'zuschlag_pct' => $this->settings->hk2Zuschlag($team, $outlet),
             'nebenkosten' => round($nebenTotal, 4),
             'anzahl_portionen' => $anzahl,
             'sales_net' => $vk,
@@ -167,11 +168,11 @@ class KalkulationService
      * @return array{hk1_pro_person: float, hk2_pro_person: float, vk_pro_person: float,
      *               db_eur: ?float, db_pct: ?float, bloecke: list<array>, marge_pct: float, vk_vorschlag: float}
      */
-    public function conceptHk(Team $team, FoodAlchemistConcept $concept): array
+    public function conceptHk(Team $team, FoodAlchemistConcept $concept, ?FoodAlchemistOutlet $outlet = null): array
     {
         $cockpit = $this->concepts->preisCockpit($concept);
         $hk1 = (float) $cockpit['ek_per_person'];
-        $r = $this->berechne($team, $hk1, 0.0, 0.0);
+        $r = $this->berechne($team, $hk1, 0.0, 0.0, $outlet);
         $vk = (float) $cockpit['price_per_person'];
 
         return [
@@ -193,11 +194,11 @@ class KalkulationService
      * @return array{hk1_pro_person: float, hk2_pro_person: float, vk_pro_person: ?float,
      *               db_eur: ?float, db_pct: ?float, bloecke: list<array>, marge_pct: float, vk_vorschlag: float}
      */
-    public function paketHk(Team $team, FoodAlchemistPaket $paket): array
+    public function paketHk(Team $team, FoodAlchemistPaket $paket, ?FoodAlchemistOutlet $outlet = null): array
     {
         $agg = $this->aggregat->paketAggregat($paket);
         $hk1 = $paket->ek_per_person !== null ? (float) $paket->ek_per_person : (float) $agg['ek_per_person'];
-        $r = $this->berechne($team, $hk1, 0.0, 0.0);
+        $r = $this->berechne($team, $hk1, 0.0, 0.0, $outlet);
         $vk = $paket->price_per_person !== null ? (float) $paket->price_per_person : null;
 
         return [

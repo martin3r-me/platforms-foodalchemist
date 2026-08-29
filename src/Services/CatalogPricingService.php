@@ -4,6 +4,7 @@ namespace Platform\FoodAlchemist\Services;
 
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Models\FoodAlchemistMarkupClass;
+use Platform\FoodAlchemist\Models\FoodAlchemistOutlet;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipeDarreichung;
 
 /** Mengenunabhängige Preisfindung für eine Darreichung. Produktionszeiten sind hier verboten. */
@@ -20,11 +21,11 @@ class CatalogPricingService
     }
 
     /** @return array{factor:?float,source:?string,components:array,warnings:list<string>,complete:bool} */
-    public function enterpriseBaseRate(Team $team): array
+    public function enterpriseBaseRate(Team $team, ?FoodAlchemistOutlet $outlet = null): array
     {
-        $bases = $this->settings->bezugsbasen($team);
+        $bases = $this->settings->bezugsbasen($team, $outlet);
         $schema = array_values(array_filter(
-            $this->fixkosten->aufgeloestesSchema($team),
+            $this->fixkosten->aufgeloestesSchema($team, $outlet),
             fn (array $block) => (bool) ($block['active'] ?? false),
         ));
         $sum = fn (string $type): float => array_sum(array_map(
@@ -44,19 +45,19 @@ class CatalogPricingService
             $fgkRatio = $fekRatio * $sum('pct_fek');
             $normHk = 1 + $fekRatio + $directRatio + $mgkRatio + $fgkRatio;
             $normHk2 = $normHk * (1 + $sum('pct_hk'));
-            $factor = $normHk2 * (1 + $this->settings->margePct($team) / 100);
+            $factor = $normHk2 * (1 + $this->settings->margePct($team, $outlet) / 100);
 
             return [
                 'factor' => round($factor, 6),
                 'source' => 'kostenstruktur',
                 'components' => compact('fekRatio', 'directRatio', 'mgkRatio', 'fgkRatio', 'normHk', 'normHk2')
-                    + ['profit_markup_pct' => $this->settings->margePct($team), 'bases' => $bases],
+                    + ['profit_markup_pct' => $this->settings->margePct($team, $outlet), 'bases' => $bases],
                 'warnings' => [],
                 'complete' => true,
             ];
         }
 
-        $target = $this->settings->zielWareneinsatzPct($team);
+        $target = $this->settings->zielWareneinsatzPct($team, $outlet);
         if ($target > 0) {
             $warnings[] = 'Monatsbasen unvollständig: Basissatz aus Ziel-Wareneinsatzquote abgeleitet.';
 
@@ -79,10 +80,10 @@ class CatalogPricingService
     }
 
     /** @return array<string,mixed> */
-    public function catalogPrice(Team $team, FoodAlchemistRecipeDarreichung $presentation): array
+    public function catalogPrice(Team $team, FoodAlchemistRecipeDarreichung $presentation, ?FoodAlchemistOutlet $outlet = null, ?array $preBase = null): array
     {
         $presentation->loadMissing('markupClass', 'recipe.markupClass');
-        $base = $this->enterpriseBaseRate($team);
+        $base = $preBase ?? $this->enterpriseBaseRate($team, $outlet);
         $class = $presentation->markupClass;
         $classSource = $class !== null ? 'darreichung' : null;
         if ($class === null && $presentation->recipe?->markupClass !== null) {
@@ -147,6 +148,27 @@ class CatalogPricingService
             'warnings' => $warnings,
             'complete' => $calculated !== null,
         ];
+    }
+
+    /**
+     * Read-Through-VK für eine Darreichung im (optionalen) Betriebs-Kontext (Ebene 2,
+     * Strategie A „on-the-fly"): outlet=null ⇒ der GESPEICHERTE Team-Baseline-VK (kein
+     * Neu-Rechnen); fixer/manueller VK bleibt fix; sonst nur die Aufschlag-Stufe neu gegen
+     * die Betriebs-Kostenstruktur. $preBase = einmal je (Team,Betrieb) memoisierte Basis.
+     */
+    public function salesNetFor(Team $team, FoodAlchemistRecipeDarreichung $presentation, ?FoodAlchemistOutlet $outlet = null, ?array $preBase = null): ?float
+    {
+        if ($outlet === null) {
+            return $presentation->sales_net !== null ? (float) $presentation->sales_net : null;
+        }
+        $expired = $presentation->price_override_expires_at !== null
+            && $presentation->price_override_expires_at->isPast();
+        if (in_array($presentation->price_mode, ['fixed', 'manuell'], true) && ! $expired) {
+            return $presentation->sales_net !== null ? (float) $presentation->sales_net : null;
+        }
+        $preis = $this->catalogPrice($team, $presentation, $outlet, $preBase);
+
+        return $preis['sales_net'] !== null ? (float) $preis['sales_net'] : null;
     }
 
     private function roundPrice(float $value, int $decimals, string $mode): float
