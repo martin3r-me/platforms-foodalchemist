@@ -17,7 +17,7 @@ use Platform\FoodAlchemist\Services\Ai\PoolEmbeddingService;
 class EmbedCommand extends Command
 {
     protected $signature = 'foodalchemist:embed
-        {--pool=all : gps|recipes|knowledge|suppliers|concepts|foodbooks|lab_notes|la|all}
+        {--pool=all : gps|recipes|knowledge|suppliers|concepts|foodbooks|lab_notes|speisekarten|angebote|pakete|formate|la|all}
         {--team= : nur diese reale team_id (Default: alle Partitionen)}
         {--purge : (nur pool=knowledge/all) verwaiste Vektoren entfernen — Probe-Delete über [1..maxId], off-peak (A2)}';
 
@@ -29,7 +29,8 @@ class EmbedCommand extends Command
         $teamOpt = $this->option('team');
         $team = ($teamOpt === null || $teamOpt === '') ? null : (int) $teamOpt;
 
-        $allowed = ['gps', 'recipes', 'knowledge', 'suppliers', 'concepts', 'foodbooks', 'lab_notes', 'la', 'all'];
+        $allowed = ['gps', 'recipes', 'knowledge', 'suppliers', 'concepts', 'foodbooks', 'lab_notes',
+            'speisekarten', 'angebote', 'pakete', 'formate', 'la', 'all'];
         if (! in_array($pool, $allowed, true)) {
             $this->error("Unbekannter --pool='{$pool}'. Erlaubt: " . implode('|', $allowed) . '.');
 
@@ -76,6 +77,26 @@ class EmbedCommand extends Command
         if ($pool === 'lab_notes' || $pool === 'all') {
             $stats = $pools->embedLabNotes($team);
             $rows[] = ['Lab-Note', $stats['candidates'], $this->fmtPartitions($stats['partitions'])];
+        }
+
+        if ($pool === 'speisekarten' || $pool === 'all') {
+            $stats = $pools->embedSpeisekarten($team);
+            $rows[] = ['Speisekarte', $stats['candidates'], $this->fmtPartitions($stats['partitions'])];
+        }
+
+        if ($pool === 'angebote' || $pool === 'all') {
+            $stats = $pools->embedAngebote($team);
+            $rows[] = ['Angebot', $stats['candidates'], $this->fmtPartitions($stats['partitions'])];
+        }
+
+        if ($pool === 'pakete' || $pool === 'all') {
+            $stats = $pools->embedPakete($team);
+            $rows[] = ['Paket', $stats['candidates'], $this->fmtPartitions($stats['partitions'])];
+        }
+
+        if ($pool === 'formate' || $pool === 'all') {
+            $stats = $pools->embedFormate($team);
+            $rows[] = ['Format', $stats['candidates'], $this->fmtPartitions($stats['partitions'])];
         }
 
         if ($pool === 'knowledge' || $pool === 'all') {

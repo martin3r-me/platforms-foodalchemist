@@ -6,6 +6,8 @@ use Platform\Core\Contracts\ToolContract;
 use Platform\Core\Contracts\ToolContext;
 use Platform\Core\Contracts\ToolMetadataContract;
 use Platform\Core\Contracts\ToolResult;
+use Platform\FoodAlchemist\Models\FoodAlchemistPaket;
+use Platform\FoodAlchemist\Services\Ai\PoolEmbeddingService;
 use Platform\FoodAlchemist\Services\PaketService;
 
 /** MCP-Steuerbarkeit · D5d: Pakete per Freitext suchen. Read-only. */
@@ -40,17 +42,31 @@ class PaketeSearchTool extends FoodAlchemistTool implements ToolContract, ToolMe
         if ($team === null) {
             return ToolResult::error('Kein Team im Kontext.', 'NO_TEAM');
         }
-        $filters = ['search' => trim((string) ($arguments['query'] ?? ''))];
+        $q = trim((string) ($arguments['query'] ?? ''));
+        $filters = ['search' => $q];
         if (($role = trim((string) ($arguments['role'] ?? ''))) !== '') {
             $filters['role'] = $role;
         }
         $perPage = (int) ($arguments['per_page'] ?? 100);
-        $page = app(PaketService::class)->paginateBrowser($filters, $team, $perPage > 0 ? $perPage : 100);
+        $limit = $perPage > 0 ? $perPage : 100;
+        $page = app(PaketService::class)->paginateBrowser($filters, $team, $limit);
+        $out = collect($page->items())->map(fn ($p) => $this->paketPayload($p) + ['via' => 'lexical'])->all();
 
-        return ToolResult::success([
-            'total' => $page->total(),
-            'pakete' => collect($page->items())->map(fn ($p) => $this->paketPayload($p))->all(),
-        ]);
+        // Hybrid (Ausbau b): semantischer Pass über den Paket-Pool — ergänzt nur NEUES.
+        $sem = $this->semanticPoolIds($team, $q, PoolEmbeddingService::ENTITY_TYPE_PAKET, array_column($out, 'id'), $limit);
+        if ($sem !== []) {
+            arsort($sem);
+            $rows = FoodAlchemistPaket::visibleToTeam($team)->whereIn('id', array_keys($sem))->get()->keyBy('id');
+            foreach ($sem as $id => $score) {
+                $p = $rows->get($id);
+                if ($p === null || count($out) >= $limit) {
+                    continue;
+                }
+                $out[] = $this->paketPayload($p) + ['via' => 'semantic', 'semantic_score' => round($score, 3)];
+            }
+        }
+
+        return ToolResult::success(['total' => count($out), 'pakete' => $out]);
     }
 
     public function getMetadata(): array

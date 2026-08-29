@@ -191,6 +191,13 @@ class FoodAlchemistServiceProvider extends ServiceProvider
         // umgeht Eloquent → bleibt der explizite Backfill (foodalchemist:embed --pool=la).
         \Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem::observe(\Platform\FoodAlchemist\Observers\SupplierItemEmbeddingObserver::class);
 
+        // Ausbau (b): Ausgabe-/Container-Pools (Speisekarte/Angebot/Paket/Format) — Einzeledits
+        // synchron; Bulk je Pool via foodalchemist:embed --pool=speisekarten|angebote|pakete|formate.
+        \Platform\FoodAlchemist\Models\FoodAlchemistSpeisekarte::observe(\Platform\FoodAlchemist\Observers\SpeisekarteEmbeddingObserver::class);
+        \Platform\FoodAlchemist\Models\FoodAlchemistAngebot::observe(\Platform\FoodAlchemist\Observers\AngebotEmbeddingObserver::class);
+        \Platform\FoodAlchemist\Models\FoodAlchemistPaket::observe(\Platform\FoodAlchemist\Observers\PaketEmbeddingObserver::class);
+        \Platform\FoodAlchemist\Models\FoodAlchemistFormat::observe(\Platform\FoodAlchemist\Observers\FormatEmbeddingObserver::class);
+
         // Embedding-Store-Routing (Runbook 34_Qdrant): FA deklariert selbst, in welchen
         // Store seine Pools gehen — Cores EmbeddingStoreRegistry bleibt entity-agnostisch
         // (der bevorzugte, lose gekoppelte Weg statt zentraler config('embeddings.routing')).

@@ -7,7 +7,11 @@ use Illuminate\Support\Facades\Log;
 use Platform\Core\Services\EmbeddingProviderRegistry;
 use Platform\Core\Services\EmbeddingService;
 use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
+use Platform\FoodAlchemist\Models\FoodAlchemistAngebot;
 use Platform\FoodAlchemist\Models\FoodAlchemistFoodbook;
+use Platform\FoodAlchemist\Models\FoodAlchemistFormat;
+use Platform\FoodAlchemist\Models\FoodAlchemistPaket;
+use Platform\FoodAlchemist\Models\FoodAlchemistSpeisekarte;
 use Platform\FoodAlchemist\Models\FoodAlchemistGp;
 use Platform\FoodAlchemist\Models\FoodAlchemistLabNote;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
@@ -74,6 +78,15 @@ class PoolEmbeddingService
      * mit geroutetem Qdrant-Store. Wird NICHT von --pool=all mitgezogen (separat off-peak).
      */
     public const ENTITY_TYPE_SUPPLIER_ITEM = 'foodalchemist_supplier_item';
+
+    /** Ausbau (b): Ausgabe-/Container-Pools — Speisekarte, Angebot, Paket, Format. */
+    public const ENTITY_TYPE_SPEISEKARTE = 'foodalchemist_menu_card';
+
+    public const ENTITY_TYPE_ANGEBOT = 'foodalchemist_offer';
+
+    public const ENTITY_TYPE_PAKET = 'foodalchemist_package';
+
+    public const ENTITY_TYPE_FORMAT = 'foodalchemist_format';
 
     /** Max. Zeichen für Freitext-Leads (Beschreibung/Body) — kompakt, kein Vektor-Verwässern. */
     private const LEAD_MAX = 400;
@@ -474,6 +487,34 @@ class PoolEmbeddingService
         return ['available' => true, 'candidates' => $candidates, 'partitions' => $partitions];
     }
 
+    public function embedSpeisekarten(?int $onlyTeamId = null): array
+    {
+        return $this->embedSimple(self::ENTITY_TYPE_SPEISEKARTE, 'foodalchemist_menu_cards',
+            ['id', 'name', 'karten_typ', 'description', 'team_id'],
+            fn (object $r): string => $this->speisekarteEmbedText($r), null, $onlyTeamId);
+    }
+
+    public function embedAngebote(?int $onlyTeamId = null): array
+    {
+        return $this->embedSimple(self::ENTITY_TYPE_ANGEBOT, 'foodalchemist_offers',
+            ['id', 'name', 'occasion', 'location', 'brief', 'description', 'team_id'],
+            fn (object $r): string => $this->angebotEmbedText($r), null, $onlyTeamId);
+    }
+
+    public function embedPakete(?int $onlyTeamId = null): array
+    {
+        return $this->embedSimple(self::ENTITY_TYPE_PAKET, 'foodalchemist_packages',
+            ['id', 'name', 'consumer_name', 'role', 'description', 'team_id'],
+            fn (object $r): string => $this->paketEmbedText($r), null, $onlyTeamId);
+    }
+
+    public function embedFormate(?int $onlyTeamId = null): array
+    {
+        return $this->embedSimple(self::ENTITY_TYPE_FORMAT, 'foodalchemist_formats',
+            ['id', 'name', 'consumer_name', 'claim', 'story', 'origin', 'team_id'],
+            fn (object $r): string => $this->formatEmbedText($r), null, $onlyTeamId);
+    }
+
     public function queueSupplier(FoodAlchemistSupplier $s): void
     {
         $this->queueSimple(self::ENTITY_TYPE_SUPPLIER, $s,
@@ -515,6 +556,34 @@ class PoolEmbeddingService
             fn (): string => $this->supplierItemEmbedText($this->supplierItemRow($si)));
     }
 
+    public function queueSpeisekarte(FoodAlchemistSpeisekarte $s): void
+    {
+        $this->queueSimple(self::ENTITY_TYPE_SPEISEKARTE, $s,
+            fn (): bool => $s->deleted_at === null,
+            fn (): string => $this->speisekarteEmbedText($s));
+    }
+
+    public function queueAngebot(FoodAlchemistAngebot $a): void
+    {
+        $this->queueSimple(self::ENTITY_TYPE_ANGEBOT, $a,
+            fn (): bool => $a->deleted_at === null,
+            fn (): string => $this->angebotEmbedText($a));
+    }
+
+    public function queuePaket(FoodAlchemistPaket $p): void
+    {
+        $this->queueSimple(self::ENTITY_TYPE_PAKET, $p,
+            fn (): bool => $p->deleted_at === null,
+            fn (): string => $this->paketEmbedText($p));
+    }
+
+    public function queueFormat(FoodAlchemistFormat $f): void
+    {
+        $this->queueSimple(self::ENTITY_TYPE_FORMAT, $f,
+            fn (): bool => $f->deleted_at === null,
+            fn (): string => $this->formatEmbedText($f));
+    }
+
     public function deleteSupplier(int $id, int|string|null $rawTeamId = null): void
     {
         $this->safeDelete(self::ENTITY_TYPE_SUPPLIER, $this->partitionTeamId($rawTeamId), $id);
@@ -538,6 +607,26 @@ class PoolEmbeddingService
     public function deleteSupplierItem(int $id, int|string|null $rawTeamId = null): void
     {
         $this->safeDelete(self::ENTITY_TYPE_SUPPLIER_ITEM, $this->partitionTeamId($rawTeamId), $id);
+    }
+
+    public function deleteSpeisekarte(int $id, int|string|null $rawTeamId = null): void
+    {
+        $this->safeDelete(self::ENTITY_TYPE_SPEISEKARTE, $this->partitionTeamId($rawTeamId), $id);
+    }
+
+    public function deleteAngebot(int $id, int|string|null $rawTeamId = null): void
+    {
+        $this->safeDelete(self::ENTITY_TYPE_ANGEBOT, $this->partitionTeamId($rawTeamId), $id);
+    }
+
+    public function deletePaket(int $id, int|string|null $rawTeamId = null): void
+    {
+        $this->safeDelete(self::ENTITY_TYPE_PAKET, $this->partitionTeamId($rawTeamId), $id);
+    }
+
+    public function deleteFormat(int $id, int|string|null $rawTeamId = null): void
+    {
+        $this->safeDelete(self::ENTITY_TYPE_FORMAT, $this->partitionTeamId($rawTeamId), $id);
     }
 
     public function supplierEmbedText(object $s): string
@@ -596,6 +685,29 @@ class PoolEmbeddingService
             $si->marketing_name ?? '',
             $si->brand ?? '',
         ]);
+    }
+
+    public function speisekarteEmbedText(object $s): string
+    {
+        return $this->joinParts([$s->name ?? '', $s->karten_typ ?? '', self::lead((string) ($s->description ?? ''))]);
+    }
+
+    public function angebotEmbedText(object $a): string
+    {
+        return $this->joinParts([
+            $a->name ?? '', $a->occasion ?? '', $a->location ?? '',
+            self::lead((string) ($a->brief ?? '')), self::lead((string) ($a->description ?? '')),
+        ]);
+    }
+
+    public function paketEmbedText(object $p): string
+    {
+        return $this->joinParts([$p->name ?? '', $p->consumer_name ?? '', $p->role ?? '', self::lead((string) ($p->description ?? ''))]);
+    }
+
+    public function formatEmbedText(object $f): string
+    {
+        return $this->joinParts([$f->name ?? '', $f->consumer_name ?? '', $f->claim ?? '', self::lead((string) ($f->story ?? '')), $f->origin ?? '']);
     }
 
     // ── Interna ──────────────────────────────────────────────────────────────

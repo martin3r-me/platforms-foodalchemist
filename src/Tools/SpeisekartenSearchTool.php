@@ -7,6 +7,7 @@ use Platform\Core\Contracts\ToolContext;
 use Platform\Core\Contracts\ToolMetadataContract;
 use Platform\Core\Contracts\ToolResult;
 use Platform\FoodAlchemist\Models\FoodAlchemistSpeisekarte;
+use Platform\FoodAlchemist\Services\Ai\PoolEmbeddingService;
 
 /** Speisekarten (dem Team sichtbar) suchen/auflisten. */
 class SpeisekartenSearchTool extends FoodAlchemistTool implements ToolContract, ToolMetadataContract
@@ -42,6 +43,7 @@ class SpeisekartenSearchTool extends FoodAlchemistTool implements ToolContract, 
         }
 
         $q = trim((string) ($arguments['q'] ?? ''));
+        $limit = (int) ($arguments['limit'] ?? 25);
         $karten = FoodAlchemistSpeisekarte::visibleToTeam($team)
             ->withCount('sections')
             ->when($q !== '', fn ($w) => $w->where(fn ($x) => $x
@@ -50,15 +52,34 @@ class SpeisekartenSearchTool extends FoodAlchemistTool implements ToolContract, 
             ->when(! empty($arguments['status']), fn ($w) => $w->where('status', $arguments['status']))
             ->when(! empty($arguments['karten_typ']), fn ($w) => $w->where('karten_typ', $arguments['karten_typ']))
             ->orderBy('name')
-            ->limit((int) ($arguments['limit'] ?? 25))
+            ->limit($limit)
             ->get();
+        $out = $karten->map(fn ($k) => [
+            'id' => $k->id, 'name' => $k->name,
+            'status' => $k->status instanceof \BackedEnum ? $k->status->value : $k->status,
+            'karten_typ' => $k->karten_typ, 'rubriken' => $k->sections_count, 'via' => 'lexical',
+        ])->all();
 
-        return ToolResult::success([
-            'speisekarten' => $karten->map(fn ($k) => [
-                'id' => $k->id, 'name' => $k->name, 'status' => $k->status,
-                'karten_typ' => $k->karten_typ, 'rubriken' => $k->sections_count,
-            ])->all(),
-        ]);
+        // Hybrid (Ausbau b): semantischer Pass über den Speisekarte-Pool — ergänzt nur NEUES.
+        $sem = $this->semanticPoolIds($team, $q, PoolEmbeddingService::ENTITY_TYPE_SPEISEKARTE, array_column($out, 'id'), $limit);
+        if ($sem !== []) {
+            arsort($sem);
+            $rows = FoodAlchemistSpeisekarte::visibleToTeam($team)->withCount('sections')->whereIn('id', array_keys($sem))->get()->keyBy('id');
+            foreach ($sem as $id => $score) {
+                $k = $rows->get($id);
+                if ($k === null || count($out) >= $limit) {
+                    continue;
+                }
+                $out[] = [
+                    'id' => $k->id, 'name' => $k->name,
+                    'status' => $k->status instanceof \BackedEnum ? $k->status->value : $k->status,
+                    'karten_typ' => $k->karten_typ, 'rubriken' => $k->sections_count,
+                    'via' => 'semantic', 'semantic_score' => round($score, 3),
+                ];
+            }
+        }
+
+        return ToolResult::success(['total' => count($out), 'speisekarten' => $out]);
     }
 
     public function getMetadata(): array

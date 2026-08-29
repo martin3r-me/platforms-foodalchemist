@@ -6,6 +6,8 @@ use Platform\Core\Contracts\ToolContract;
 use Platform\Core\Contracts\ToolContext;
 use Platform\Core\Contracts\ToolMetadataContract;
 use Platform\Core\Contracts\ToolResult;
+use Platform\FoodAlchemist\Models\FoodAlchemistAngebot;
+use Platform\FoodAlchemist\Services\Ai\PoolEmbeddingService;
 use Platform\FoodAlchemist\Services\AngebotService;
 
 /** Phase C: Angebote durchsuchen (CRM-gebundener Verkaufs-Einstieg). */
@@ -41,20 +43,31 @@ class AngeboteSearchTool extends FoodAlchemistTool implements ToolContract, Tool
             return ToolResult::error('Kein Team im Kontext.', 'NO_TEAM');
         }
         $svc = app(AngebotService::class);
-        $treffer = $svc->paginateBrowser([
-            'search' => (string) ($arguments['q'] ?? ''),
-            'status' => (string) ($arguments['status'] ?? ''),
-        ], $team, min(50, max(1, (int) ($arguments['limit'] ?? 15))));
+        $q = trim((string) ($arguments['q'] ?? ''));
+        $limit = min(50, max(1, (int) ($arguments['limit'] ?? 15)));
+        $treffer = $svc->paginateBrowser(['search' => $q, 'status' => (string) ($arguments['status'] ?? '')], $team, $limit);
+        $map = fn ($a, string $via) => [
+            'id' => $a->id, 'name' => $a->name,
+            'status' => $a->status instanceof \BackedEnum ? $a->status->value : $a->status,
+            'occasion' => $a->occasion, 'personen' => $a->personen, 'via' => $via,
+        ];
+        $out = collect($treffer->items())->map(fn ($a) => $map($a, 'lexical'))->all();
 
-        return ToolResult::success([
-            'total' => $treffer->total(),
-            'status_werte' => $svc->statusWerte(),
-            'angebote' => collect($treffer->items())->map(fn ($a) => [
-                'id' => $a->id, 'name' => $a->name,
-                'status' => $a->status instanceof \BackedEnum ? $a->status->value : $a->status,
-                'occasion' => $a->occasion, 'personen' => $a->personen,
-            ])->all(),
-        ]);
+        // Hybrid (Ausbau b): semantischer Pass über den Angebot-Pool — ergänzt nur NEUES.
+        $sem = $this->semanticPoolIds($team, $q, PoolEmbeddingService::ENTITY_TYPE_ANGEBOT, array_column($out, 'id'), $limit);
+        if ($sem !== []) {
+            arsort($sem);
+            $rows = FoodAlchemistAngebot::visibleToTeam($team)->whereIn('id', array_keys($sem))->get()->keyBy('id');
+            foreach ($sem as $id => $score) {
+                $a = $rows->get($id);
+                if ($a === null || count($out) >= $limit) {
+                    continue;
+                }
+                $out[] = $map($a, 'semantic') + ['semantic_score' => round($score, 3)];
+            }
+        }
+
+        return ToolResult::success(['total' => count($out), 'status_werte' => $svc->statusWerte(), 'angebote' => $out]);
     }
 
     public function getMetadata(): array
