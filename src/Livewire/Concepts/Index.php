@@ -355,7 +355,7 @@ class Index extends Component
     {
         $team = $this->team();
         $selected = $this->selectedId !== null ? $svc->detail($team, $this->selectedId) : null;
-        $cockpit = $selected !== null ? $svc->preisCockpit($selected) : null;
+        $cockpit = $selected !== null ? $svc->preisCockpit($selected, $team ? app(\Platform\FoodAlchemist\Services\ActiveOutletContext::class)->current($team) : null) : null;
 
         $tauschbar = [];
         if ($selected !== null) {

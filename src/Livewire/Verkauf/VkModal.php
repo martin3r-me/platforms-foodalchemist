@@ -880,12 +880,14 @@ class VkModal extends Component
     {
         $team = Auth::user()?->currentTeamRelation;
         $rezept = $team !== null && $this->recipeId !== null ? $verkauf->detail($team, $this->recipeId) : null;
+        // Ebene 2 (D3): VK folgt dem aktiven Betrieb (ambienter Kontext).
+        $outlet = $team !== null ? app(\Platform\FoodAlchemist\Services\ActiveOutletContext::class)->current($team) : null;
 
         // M9-01d/e: Nährwerte pro Stück + Bio-/Regional-Anteil (Gramm-gewichtet über GP-Tags)
         $gProStueck = null;
         $anteile = ['bio' => null, 'regional' => null];
         if ($rezept !== null) {
-            $cockpitTmp = $verkauf->cockpit($rezept, $team);
+            $cockpitTmp = $verkauf->cockpit($rezept, $team, $outlet);
             $gProStueck = $cockpitTmp['verkauft_als']['g_pro_einheit'] ?? null;
             $totalG = 0.0;
             $summen = ['bio' => 0.0, 'regional' => 0.0];
@@ -920,7 +922,7 @@ class VkModal extends Component
             'bulkRun' => $bulkRun,
             'bulkOffen' => $bulkRun !== null
                 ? app(\Platform\FoodAlchemist\Services\BulkEnrichService::class)->offeneVorschlaege($team, $this->bulkRunId) : 0,
-            'cockpit' => $rezept !== null ? ($cockpitTmp ?? $verkauf->cockpit($rezept, $team)) : null,
+            'cockpit' => $rezept !== null ? ($cockpitTmp ?? $verkauf->cockpit($rezept, $team, $outlet)) : null,
             'gProStueck' => $gProStueck,
             'anteile' => $anteile,
             'hauptgruppen' => $team !== null ? $verkauf->dishMainGroups($team) : collect(),

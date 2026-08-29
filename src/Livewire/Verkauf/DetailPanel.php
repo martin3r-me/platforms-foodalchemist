@@ -283,6 +283,8 @@ class DetailPanel extends Component
         $team = Auth::user()?->currentTeamRelation;
         $rezept = $team !== null && $this->recipeId !== null ? $verkauf->detail($team, $this->recipeId) : null;
         $pairing = app(\Platform\FoodAlchemist\Services\PairingService::class);
+        // Ebene 2 (D3): VK folgt dem aktiven Betrieb.
+        $outlet = $team !== null ? app(\Platform\FoodAlchemist\Services\ActiveOutletContext::class)->current($team) : null;
 
         return view('foodalchemist::livewire.verkauf.detail-panel', [
             'rezept' => $rezept,
@@ -290,7 +292,7 @@ class DetailPanel extends Component
             'rezeptBildUrl' => ($rezept !== null && ($rezept->image_context_file_id || $rezept->image_path))
                 ? app(\Platform\FoodAlchemist\Services\FoodAlchemistMediaService::class)->url($rezept->image_context_file_id, $rezept->image_path)
                 : null,
-            'cockpit' => $rezept !== null ? $verkauf->cockpit($rezept, $team) : null,
+            'cockpit' => $rezept !== null ? $verkauf->cockpit($rezept, $team, $outlet) : null,
             // D-6 §5.x: Kern-Anker · Kohäsions-Score · Pairing-Section (lazy)
             'kernAnker' => $rezept !== null ? $pairing->recipeAnkers($rezept->id) : collect(),
             // v3-Redesign: Sektionen nicht mehr ausklappbar → direkt laden (nicht lazy).
