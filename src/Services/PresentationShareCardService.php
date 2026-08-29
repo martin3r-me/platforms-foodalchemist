@@ -38,10 +38,15 @@ class PresentationShareCardService
         $key = 'fa-og-card:' . md5($type . '|' . $ref . '|' . ($entity->presentation_published_at?->getTimestamp() ?? 0));
 
         try {
-            return Cache::remember($key, now()->addDay(), fn () => $this->compose($snap));
+            // PNG base64-kodiert cachen: der database-Cache-Treiber legt in einer TEXT-Spalte ab —
+            // rohe Binär-Bytes wären ungültiges UTF-8 und würden den Insert sprengen.
+            $b64 = Cache::remember($key, now()->addDay(), fn () => base64_encode($this->compose($snap)));
         } catch (\Throwable) {
             return null; // Controller weicht auf das rohe Cover-Bild aus.
         }
+        $png = base64_decode((string) $b64, true);
+
+        return $png !== false && $png !== '' ? $png : null;
     }
 
     /** Fallback für den Controller: rohe, frisch signierte Cover-/Logo-URL (oder null wenn nicht live). */
