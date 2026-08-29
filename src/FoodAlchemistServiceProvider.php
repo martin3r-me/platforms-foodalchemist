@@ -806,6 +806,16 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\SpeisekartenDuplicateTool::class,
                     \Platform\FoodAlchemist\Tools\SpeisekartenSearchTool::class,
                     \Platform\FoodAlchemist\Tools\SpeisekartenGetTool::class,
+                    // D8: Speisekarte-Vervollständigung (List/Status/Branding/Customer-Link + Rubrik-Bausteine
+                    // + Position-Edit + Wording). Kein Karten-Delete (Status archiviert). GET auf Plural vereinheitlicht.
+                    \Platform\FoodAlchemist\Tools\SpeisekartenListTool::class,
+                    \Platform\FoodAlchemist\Tools\SpeisekartenStatusTool::class,
+                    \Platform\FoodAlchemist\Tools\SpeisekarteBrandingTool::class,
+                    \Platform\FoodAlchemist\Tools\SpeisekarteCustomerLinkTool::class,
+                    \Platform\FoodAlchemist\Tools\SpeisekarteRubrikDeleteTool::class,
+                    \Platform\FoodAlchemist\Tools\SpeisekarteRubrikMoveTool::class,
+                    \Platform\FoodAlchemist\Tools\SpeisekartePositionenPutTool::class,
+                    \Platform\FoodAlchemist\Tools\SpeisekarteWordingTool::class,
                     \Platform\FoodAlchemist\Tools\SpeisekarteLeitstelleGetTool::class,
                     \Platform\FoodAlchemist\Tools\KnowledgeRoutingsGetTool::class,
                     \Platform\FoodAlchemist\Tools\KnowledgeRoutingsPutTool::class,

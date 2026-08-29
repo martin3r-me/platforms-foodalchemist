@@ -108,7 +108,7 @@ class PortfolioGetTool extends FoodAlchemistTool implements ToolContract, ToolMe
             'requires_auth' => true,
             'requires_team' => true,
             'cost_class' => 'local_db',
-            'related_tools' => ['foodalchemist.portfolio_promotion.GET', 'foodalchemist.speisekarte.GET'],
+            'related_tools' => ['foodalchemist.portfolio_promotion.GET', 'foodalchemist.speisekarten.GET'],
             'examples' => [
                 'Welche Speisekarten laufen heute in welchem Betrieb?',
                 'Wo läuft im September nichts?',

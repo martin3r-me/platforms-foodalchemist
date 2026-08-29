@@ -22,7 +22,7 @@ Capability. Sie beantwortet:
 | Capability | Anzahl | Aktuelle Aussage |
 |---|---:|---|
 | Prompt-Keys in `config/foodalchemist.php` | 64 | Registry vorhanden; 11 Keys ohne direkte statische Referenz in `src/` (die 5 seit 01.08. ergänzten Keys sind alle direkt referenziert) |
-| MCP-Toolklassen mit `foodalchemist.*`-Name | 337 | Provider registriert 337 (203 Bestand + 17 D1/Phase 0 + 13 D2 + 18 D3 + 27 D4 + 35 D5 Concepter/Pakete + 10 D6 Format-Aufbau + 14 D7 Foodbook-Vervollständigung, Stand 2026-08-29); §7-Register wird nachgezogen (Alt-Liste = 169) |
+| MCP-Toolklassen mit `foodalchemist.*`-Name | 345 | Provider registriert 345 (203 Bestand + 17 D1/Phase 0 + 13 D2 + 18 D3 + 27 D4 + 35 D5 + 10 D6 + 14 D7 + 8 D8 Speisekarte-Vervollständigung; GET-Rename speisekarte→speisekarten, Stand 2026-08-29); §7-Register wird nachgezogen (Alt-Liste = 169) |
 | Embedding-Pools mit Observern | 6 | GP, Rezept, Lieferant, Konzept, Foodbook, Lab Note |
 | Wissens-/Retrieval-Schichten | 2 | deterministisch plus optional semantisch |
 | dokumentierte vollständige MCP-Tenant-Abnahme | 0 | einzelne Tests vorhanden, keine 157-Tool-Matrix |
@@ -375,7 +375,7 @@ foodalchemist.signale.LIST
 foodalchemist.signale.PUT
 foodalchemist.signale.SEARCH
 foodalchemist.simulation.POST
-foodalchemist.speisekarte.GET
+foodalchemist.speisekarten.GET
 foodalchemist.speisekarte_leitstelle.GET
 foodalchemist.speisekarte_positionen.DELETE
 foodalchemist.speisekarte_positionen.POST
@@ -554,6 +554,15 @@ foodalchemist.foodbook_blocks.REORDER
 foodalchemist.foodbook_blocks.VARIANT_GROUP
 foodalchemist.foodbook.KUNDENTEXT_GENERATE
 foodalchemist.foodbook_kapitel.KUNDENTEXT_GENERATE
+# D8: Speisekarte-Vervollständigung (kein Karten-Delete; GET→Plural vereinheitlicht)
+foodalchemist.speisekarten.LIST
+foodalchemist.speisekarten.STATUS
+foodalchemist.speisekarte.BRANDING
+foodalchemist.speisekarte.CUSTOMER_LINK
+foodalchemist.speisekarte_rubrik.DELETE
+foodalchemist.speisekarte_rubrik.MOVE
+foodalchemist.speisekarte_positionen.PUT
+foodalchemist.speisekarte_wording.GENERATE
 ```
 
 ## 8. MCP-Abnahmematrix

@@ -36,7 +36,7 @@ it('Stufe E MCP: SEARCH findet die Karte', function () {
 });
 
 it('Stufe E MCP: GET liefert Rubriken + Positionen + Preis', function () {
-    $r = $this->registry->get('foodalchemist.speisekarte.GET')->execute(['speisekarte_id' => $this->karte->id], $this->ctx);
+    $r = $this->registry->get('foodalchemist.speisekarten.GET')->execute(['speisekarte_id' => $this->karte->id], $this->ctx);
     expect($r->success)->toBeTrue();
     $rubrik = $r->data['speisekarte']['rubriken'][0];
     expect($rubrik['title'])->toBe('Fisch')

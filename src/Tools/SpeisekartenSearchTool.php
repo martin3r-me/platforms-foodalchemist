@@ -69,7 +69,7 @@ class SpeisekartenSearchTool extends FoodAlchemistTool implements ToolContract, 
             'read_only' => true, 'idempotent' => true, 'risk_level' => 'read',
             'requires_auth' => true, 'requires_team' => true,
             'side_effects' => [], 'cost_class' => 'local_db',
-            'related_tools' => ['foodalchemist.speisekarte.GET'],
+            'related_tools' => ['foodalchemist.speisekarten.GET'],
             'examples' => ['Zeige alle aktiven Weinkarten'],
         ];
     }

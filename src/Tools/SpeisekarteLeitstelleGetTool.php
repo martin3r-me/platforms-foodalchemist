@@ -57,7 +57,7 @@ class SpeisekarteLeitstelleGetTool extends FoodAlchemistTool implements ToolCont
             'read_only' => true, 'idempotent' => true, 'risk_level' => 'read',
             'requires_auth' => true, 'requires_team' => true,
             'side_effects' => [], 'cost_class' => 'local_db',
-            'related_tools' => ['foodalchemist.speisekarte.GET'],
+            'related_tools' => ['foodalchemist.speisekarten.GET'],
             'examples' => ['Ist Speisekarte 3 fertig?'],
         ];
     }

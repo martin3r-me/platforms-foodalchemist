@@ -13,13 +13,15 @@ class SpeisekartenGetTool extends FoodAlchemistTool implements ToolContract, Too
 {
     public function getName(): string
     {
-        return 'foodalchemist.speisekarte.GET';
+        // Token-Vereinheitlichung (D8): GET auf die Plural-Ressource `speisekarten.*` gebracht,
+        // damit Read und Writes denselben Namespace teilen (vorher speisekarte.GET singular).
+        return 'foodalchemist.speisekarten.GET';
     }
 
     public function getDescription(): string
     {
-        return 'Liefert eine Speisekarte mit Rubrik-Baum, Positionen (Gericht/Menü) und aufgelöstem '
-            . 'Netto-VK je Position (Darreichung/Concept/manuell).';
+        return 'Liefert eine Speisekarte mit Kopf (Status, Kontext-Leitplanken, Branding, CRM-Kunde), '
+            . 'Rubrik-Baum, Positionen (Gericht/Menü) und aufgelöstem Netto-VK je Position.';
     }
 
     public function getSchema(): array
@@ -52,8 +54,30 @@ class SpeisekartenGetTool extends FoodAlchemistTool implements ToolContract, Too
 
         return ToolResult::success([
             'speisekarte' => [
-                'id' => $karte->id, 'name' => $karte->name, 'status' => $karte->status,
-                'karten_typ' => $karte->karten_typ, 'rubriken' => $rubriken,
+                'id' => $karte->id, 'name' => $karte->name,
+                'status' => $karte->status instanceof \BackedEnum ? $karte->status->value : $karte->status,
+                'karten_typ' => $karte->karten_typ,
+                // Kontext-Leitplanken (via speisekarten.PUT setzbar; steuern Wording/Defaults)
+                'kontext' => [
+                    'kundentyp' => $karte->kundentyp,
+                    'niveau' => $karte->default_niveau,
+                    'convenience' => $karte->default_convenience,
+                    'writing_style_id' => $karte->writing_style_id !== null ? (int) $karte->writing_style_id : null,
+                    'preis_anzeige_brutto' => (bool) $karte->preis_anzeige_brutto,
+                    'preis_rundung' => $karte->preis_rundung,
+                ],
+                'branding' => [
+                    'brand_color' => $karte->brand_color,
+                    'band_color' => $karte->band_color,
+                    'footer_text' => $karte->footer_text,
+                    'has_logo' => ! empty($karte->logo_path),
+                    'has_cover' => ! empty($karte->cover_image_path),
+                ],
+                'kunde' => [
+                    'crm_company_id' => $karte->crm_company_id !== null ? (int) $karte->crm_company_id : null,
+                    'crm_contact_id' => $karte->crm_contact_id !== null ? (int) $karte->crm_contact_id : null,
+                ],
+                'rubriken' => $rubriken,
             ],
         ]);
     }

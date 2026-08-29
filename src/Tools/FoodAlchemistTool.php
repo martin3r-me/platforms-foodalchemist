@@ -355,6 +355,36 @@ abstract class FoodAlchemistTool
     }
 
     /**
+     * Guard für Speisekarte-Rubrik-by-id-Tools (D8): existiert die Rubrik und gehört ihre Karte dem Team?
+     */
+    protected function guardSpeisekarteRubrikOwned(Team $team, int $rubrikId): ?ToolResult
+    {
+        $rubrik = \Platform\FoodAlchemist\Models\FoodAlchemistSpeisekarteRubrik::whereKey($rubrikId)->first();
+        if ($rubrik === null) {
+            return ToolResult::error('Rubrik nicht vorhanden.', 'NOT_FOUND');
+        }
+
+        return $this->guardOwned($team, \Platform\FoodAlchemist\Models\FoodAlchemistSpeisekarte::class, (int) $rubrik->menu_card_id, 'Speisekarte');
+    }
+
+    /**
+     * Guard für Speisekarte-Positions-by-id-Tools (D8): Position → Rubrik → Karte team-eigen?
+     */
+    protected function guardSpeisekartePositionOwned(Team $team, int $positionId): ?ToolResult
+    {
+        $pos = \Platform\FoodAlchemist\Models\FoodAlchemistSpeisekartePosition::whereKey($positionId)->first();
+        if ($pos === null) {
+            return ToolResult::error('Position nicht vorhanden.', 'NOT_FOUND');
+        }
+        $rubrik = \Platform\FoodAlchemist\Models\FoodAlchemistSpeisekarteRubrik::whereKey($pos->section_id)->first();
+        if ($rubrik === null) {
+            return ToolResult::error('Rubrik nicht vorhanden.', 'NOT_FOUND');
+        }
+
+        return $this->guardOwned($team, \Platform\FoodAlchemist\Models\FoodAlchemistSpeisekarte::class, (int) $rubrik->menu_card_id, 'Speisekarte');
+    }
+
+    /**
      * Guard für Format-Slot-by-id-Tools (D6): existiert der Slot und gehört sein Format dem Team?
      * Gibt bei Fehler NOT_FOUND/ACCESS_DENIED, sonst null.
      */
