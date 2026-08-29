@@ -52,7 +52,8 @@ class SettingsGetTool extends FoodAlchemistTool implements ToolContract, ToolMet
             // Effektiver Wert inkl. Code-Default (nie null).
             'default_topf_deckel_kg' => $svc->defaultTopfDeckelKg($team),
             'default_topf_deckel_stueck' => $svc->defaultTopfDeckelStueck($team),
-            'note' => 'Skalar-Config schreibbar via team_settings.PUT; Vokabular/Taxonomie ändern nur Menschen in der UI.',
+            'note' => 'Skalar-Config via team_settings.PUT. Vokabular/Taxonomie additiv/reversibel via vocab_*.POST/PUT/'
+                . 'TOGGLE/REORDER (nur eigene Team-Zeilen; globale/kanonische read-only; KEIN hartes DELETE — Entfernen = TOGGLE inaktiv).',
         ]);
     }
 

@@ -803,6 +803,23 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     // MCP-Steuerbarkeit Phase 0: Team-Skalar-Config schreiben (sichere Config;
                     // Allow-List, nur eigene Team-Zeile). Vokabular/Taxonomie bleiben eigene Tools/UI.
                     \Platform\FoodAlchemist\Tools\TeamSettingsPutTool::class,
+                    // D13: Vokabular/Taxonomie SAFE-additiv (POST/PUT/TOGGLE/REORDER, KEIN Delete;
+                    // VocabularyService self-guardt globale/kanonische Zeilen read-only).
+                    \Platform\FoodAlchemist\Tools\VocabEinheitenPostTool::class,
+                    \Platform\FoodAlchemist\Tools\VocabEinheitenPutTool::class,
+                    \Platform\FoodAlchemist\Tools\VocabEinheitenToggleTool::class,
+                    \Platform\FoodAlchemist\Tools\VocabWarengruppenPostTool::class,
+                    \Platform\FoodAlchemist\Tools\VocabWarengruppenPutTool::class,
+                    \Platform\FoodAlchemist\Tools\VocabWarengruppenReorderTool::class,
+                    \Platform\FoodAlchemist\Tools\VocabSubkategorienPostTool::class,
+                    \Platform\FoodAlchemist\Tools\VocabSubkategorienPutTool::class,
+                    \Platform\FoodAlchemist\Tools\VocabSubkategorienReorderTool::class,
+                    \Platform\FoodAlchemist\Tools\VocabRecipeMaingroupsPostTool::class,
+                    \Platform\FoodAlchemist\Tools\VocabRecipeMaingroupsPutTool::class,
+                    \Platform\FoodAlchemist\Tools\VocabRecipeMaingroupsReorderTool::class,
+                    \Platform\FoodAlchemist\Tools\VocabDishMaingroupsPostTool::class,
+                    \Platform\FoodAlchemist\Tools\VocabDishMaingroupsPutTool::class,
+                    \Platform\FoodAlchemist\Tools\VocabDishMaingroupsReorderTool::class,
                     \Platform\FoodAlchemist\Tools\SignaleSearchTool::class,
                     \Platform\FoodAlchemist\Tools\SignaleListTool::class,
                     \Platform\FoodAlchemist\Tools\SignalePutTool::class,
