@@ -6,6 +6,7 @@ use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Platform\Core\Models\Team;
+use Platform\FoodAlchemist\Models\FoodAlchemistOutlet;
 use Platform\FoodAlchemist\Models\FoodAlchemistDishClass;
 use Platform\FoodAlchemist\Models\FoodAlchemistDishMainGroup;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
@@ -454,7 +455,7 @@ class SalesRecipeService
      *
      * @return array{verkauft_als: ?array, vk: array, marge: ?array, pro_einheit: ?array, formel_fehlt: bool}
      */
-    public function cockpit(FoodAlchemistRecipe $r, ?Team $team = null): array
+    public function cockpit(FoodAlchemistRecipe $r, ?Team $team = null, ?FoodAlchemistOutlet $outlet = null): array
     {
         $anzahl = $r->sales_unit_count !== null ? (int) $r->sales_unit_count : null;
         $mengeProEinheitG = $r->sales_quantity_per_unit_g !== null
@@ -473,7 +474,7 @@ class SalesRecipeService
         $mwst = $team !== null ? (float) app(TeamSettingsService::class)->mwst($team)['ermaessigt'] : 0.0;
         $standard = $r->standardPresentation()->first();
         if ($team !== null && $standard !== null) {
-            $catalog = $this->catalogPricing->catalogPrice($team, $standard);
+            $catalog = $this->catalogPricing->catalogPrice($team, $standard, $outlet);
             $vk = [
                 'sales_net' => $catalog['sales_net'],
                 'source' => $catalog['price_mode'],
