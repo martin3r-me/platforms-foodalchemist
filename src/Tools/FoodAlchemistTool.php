@@ -354,6 +354,17 @@ abstract class FoodAlchemistTool
         return \Platform\FoodAlchemist\Models\FoodAlchemistFoodbook::visibleToTeam($team)->whereKey($kap->foodbook_id)->first();
     }
 
+    /** Guard für Order-Line-by-id-Tools (D11): Bestellzeile → Bestellung team-eigen? */
+    protected function guardOrderLineOwned(Team $team, int $lineId): ?ToolResult
+    {
+        $line = \Platform\FoodAlchemist\Models\FoodAlchemistOrderLine::whereKey($lineId)->first();
+        if ($line === null) {
+            return ToolResult::error('Bestellzeile nicht vorhanden.', 'NOT_FOUND');
+        }
+
+        return $this->guardOwned($team, \Platform\FoodAlchemist\Models\FoodAlchemistOrder::class, (int) $line->order_id, 'Bestellung');
+    }
+
     /** Guard für Speiseplan-Linien-by-id-Tools (D9): Linie → Plan team-eigen? */
     protected function guardSpeiseplanLinieOwned(Team $team, int $linieId): ?ToolResult
     {

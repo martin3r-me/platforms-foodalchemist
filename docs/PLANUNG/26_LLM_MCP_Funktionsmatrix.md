@@ -22,7 +22,7 @@ Capability. Sie beantwortet:
 | Capability | Anzahl | Aktuelle Aussage |
 |---|---:|---|
 | Prompt-Keys in `config/foodalchemist.php` | 64 | Registry vorhanden; 11 Keys ohne direkte statische Referenz in `src/` (die 5 seit 01.08. ergänzten Keys sind alle direkt referenziert) |
-| MCP-Toolklassen mit `foodalchemist.*`-Name | 368 | Provider registriert 368 (203 Bestand + 17 D1/Phase 0 + 13 D2 + 18 D3 + 27 D4 + 35 D5 + 10 D6 + 14 D7 + 8 D8 + 13 D9 + 10 D10 Angebote-Vervollständigung; Stand 2026-08-29); §7-Register wird nachgezogen (Alt-Liste = 169) |
+| MCP-Toolklassen mit `foodalchemist.*`-Name | 381 | Provider registriert 381 (203 Bestand + 17 D1/Phase 0 + 13 D2 + 18 D3 + 27 D4 + 35 D5 + 10 D6 + 14 D7 + 8 D8 + 13 D9 + 10 D10 + 13 D11 Produktion/Orders; Stand 2026-08-29); §7-Register wird nachgezogen (Alt-Liste = 169) |
 | Embedding-Pools mit Observern | 6 | GP, Rezept, Lieferant, Konzept, Foodbook, Lab Note |
 | Wissens-/Retrieval-Schichten | 2 | deterministisch plus optional semantisch |
 | dokumentierte vollständige MCP-Tenant-Abnahme | 0 | einzelne Tests vorhanden, keine 157-Tool-Matrix |
@@ -588,6 +588,20 @@ foodalchemist.angebot_menue.PROMOTE
 foodalchemist.angebot_menue.DELETE
 foodalchemist.angebot_concept_ref.POST
 foodalchemist.angebot_concept_ref.DELETE
+# D11: Bestell-Belegfacetten + Zeilen-Ops + Versand (outward) + Produktionsplaner + Anproduktion
+foodalchemist.orders.UPDATE_INVOICE
+foodalchemist.orders.UPDATE_PAYMENT
+foodalchemist.orders.UPDATE_APPROVAL
+foodalchemist.orders.CONFIRM_SUPPLIER
+foodalchemist.orders.RECEIPT
+foodalchemist.orders.CLAIM
+foodalchemist.orders.REMOVE_LINE
+foodalchemist.orders.SWITCH_ARTICLE
+foodalchemist.orders.DISPATCH
+foodalchemist.production_plan.SUGGEST
+foodalchemist.production_plan.APPLY
+foodalchemist.speiseplan.ANPRODUKTION
+foodalchemist.angebote.ANPRODUKTION
 ```
 
 ## 8. MCP-Abnahmematrix

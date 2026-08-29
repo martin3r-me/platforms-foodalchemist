@@ -752,6 +752,21 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\OrdersAddLineTool::class,
                     // Spec 20 · E3: „Neu quellen" (Preisstrategie-Switch je Schiene)
                     \Platform\FoodAlchemist\Tools\OrdersResourceTool::class,
+                    // D11: Bestell-Belegfacetten (Rechnung/Zahlung/Freigabe/Lieferantenbest./Wareneingang/
+                    // Reklamation) + Zeilen-Ops + Versand (outward) + Produktionsplaner + Anproduktion.
+                    \Platform\FoodAlchemist\Tools\OrdersUpdateInvoiceTool::class,
+                    \Platform\FoodAlchemist\Tools\OrdersUpdatePaymentTool::class,
+                    \Platform\FoodAlchemist\Tools\OrdersUpdateApprovalTool::class,
+                    \Platform\FoodAlchemist\Tools\OrdersConfirmSupplierTool::class,
+                    \Platform\FoodAlchemist\Tools\OrdersReceiptTool::class,
+                    \Platform\FoodAlchemist\Tools\OrdersClaimTool::class,
+                    \Platform\FoodAlchemist\Tools\OrdersRemoveLineTool::class,
+                    \Platform\FoodAlchemist\Tools\OrdersSwitchArticleTool::class,
+                    \Platform\FoodAlchemist\Tools\OrdersDispatchTool::class,
+                    \Platform\FoodAlchemist\Tools\ProductionPlanSuggestTool::class,
+                    \Platform\FoodAlchemist\Tools\ProductionPlanApplyTool::class,
+                    \Platform\FoodAlchemist\Tools\SpeiseplanAnproduktionTool::class,
+                    \Platform\FoodAlchemist\Tools\AngeboteAnproduktionTool::class,
                     // Produktionsaufträge geben Bedarf frei; Bestellungen entstehen im Bestellwesen.
                     \Platform\FoodAlchemist\Tools\ProductionOrdersGetTool::class,
                     \Platform\FoodAlchemist\Tools\ProductionOrdersAddTargetTool::class,
