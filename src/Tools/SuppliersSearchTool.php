@@ -26,7 +26,8 @@ class SuppliersSearchTool extends FoodAlchemistTool implements ToolContract, Too
     {
         return 'Durchsucht die Lieferanten (Entität) des aktuellen Teams. Hybrid: lexikalisch (Name) '
             . 'plus — sofern der Embedding-Provider aktiv ist — ein semantischer Pass über Name/Branche/'
-            . 'Stadt (via: lexical|semantic je Treffer). Ohne Provider rein lexikalisch. Liefert id, name, '
+            . 'Stadt (via: lexical|semantic je Treffer). Ohne Provider rein lexikalisch. LEERE Query (q="") '
+            . 'listet ALLE sichtbaren Lieferanten (gedeckelt auf limit). Liefert id, name, '
             . 'branch, city, is_inactive — Details via foodalchemist.suppliers.GET. Für Artikel/Sortiment '
             . 'eines Lieferanten → foodalchemist.artikel.SEARCH.';
     }
@@ -57,7 +58,15 @@ class SuppliersSearchTool extends FoodAlchemistTool implements ToolContract, Too
         $base = fn () => FoodAlchemistSupplier::visibleToTeam($team)
             ->when(! $includeInactive, fn ($x) => $x->where('is_inactive', false));
 
-        $suppliers = $q === '' ? []
+        // Leere Query = „alle Lieferanten listen" (gedeckelt) statt 0 Treffer — es gibt kein
+        // suppliers.LIST-Tool, ohne dieses Fallback wären Lieferanten ohne Stichwort nicht auflistbar.
+        $suppliers = $q === ''
+            ? $base()->orderBy('name')->limit($limit)
+                ->get(['id', 'name', 'branch', 'city', 'is_inactive'])
+                ->map(fn ($s) => [
+                    'id' => $s->id, 'name' => $s->name, 'branch' => $s->branch,
+                    'city' => $s->city, 'is_inactive' => (bool) $s->is_inactive, 'via' => 'list',
+                ])->all()
             : $base()->where('name', 'like', '%' . $q . '%')->orderBy('name')->limit($limit)
                 ->get(['id', 'name', 'branch', 'city', 'is_inactive'])
                 ->map(fn ($s) => [

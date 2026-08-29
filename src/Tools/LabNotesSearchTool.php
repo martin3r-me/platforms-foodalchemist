@@ -51,7 +51,14 @@ class LabNotesSearchTool extends FoodAlchemistTool implements ToolContract, Tool
         $limit = min(50, max(1, (int) ($arguments['limit'] ?? 15)));
 
         $cols = ['id', 'title', 'evidence_tier', 'source_ref'];
-        $notes = $q === '' ? []
+        // Leere Query = „alle Lab-Notes listen" (gedeckelt) statt 0 Treffer — kein lab_notes.LIST vorhanden.
+        $notes = $q === ''
+            ? FoodAlchemistLabNote::visibleToTeam($team)
+                ->orderBy('title')->limit($limit)->get($cols)
+                ->map(fn ($n) => [
+                    'id' => $n->id, 'title' => $n->title, 'evidence_tier' => $n->evidence_tier,
+                    'source_ref' => $n->source_ref, 'via' => 'list',
+                ])->all()
             : FoodAlchemistLabNote::visibleToTeam($team)
                 ->where('title', 'like', '%' . $q . '%')
                 ->orderBy('title')->limit($limit)->get($cols)

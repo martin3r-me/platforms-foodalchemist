@@ -25,8 +25,9 @@ class FoodbooksSearchTool extends FoodAlchemistTool implements ToolContract, Too
     {
         return 'Durchsucht die Foodbooks des aktuellen Teams. Hybrid: lexikalisch (Label/Kunde) plus — '
             . 'sofern der Embedding-Provider aktiv ist — ein semantischer Pass über Titel/CRM-Kunde/Beschreibung '
-            . '(via: lexical|semantic je Treffer). Ohne Provider rein lexikalisch. Liefert id, label, customer, '
-            . 'jahr, status — Details (Kapitel/Blöcke) via foodalchemist.foodbooks.GET.';
+            . '(via: lexical|semantic je Treffer). Ohne Provider rein lexikalisch. LEERE Query (q="") listet ALLE '
+            . 'sichtbaren Foodbooks (gedeckelt auf limit) — für die volle paginierte Liste: foodalchemist.foodbooks.LIST. '
+            . 'Liefert id, label, customer, jahr, status — Details (Kapitel/Blöcke) via foodalchemist.foodbooks.GET.';
     }
 
     public function getSchema(): array
@@ -51,7 +52,15 @@ class FoodbooksSearchTool extends FoodAlchemistTool implements ToolContract, Too
         $limit = min(50, max(1, (int) ($arguments['limit'] ?? 15)));
 
         $cols = ['id', 'label', 'crm_company_id', 'crm_contact_id', 'jahr', 'status'];
-        $foodbooks = $q === '' ? []
+        // Leere Query = „alles listen" (gedeckelt) statt 0 Treffer — sonst wirkt ein leeres
+        // Suchwort wie „nichts vorhanden". Für die volle paginierte Liste: foodbooks.LIST.
+        $foodbooks = $q === ''
+            ? FoodAlchemistFoodbook::visibleToTeam($team)->with('crmCompany')
+                ->orderBy('label')->limit($limit)->get($cols)
+                ->map(fn ($f) => [
+                    'id' => $f->id, 'label' => $f->label, 'customer' => $f->crmCompany?->display_name,
+                    'jahr' => $f->jahr, 'status' => $f->status, 'via' => 'list',
+                ])->all()
             : FoodAlchemistFoodbook::visibleToTeam($team)
                 ->with('crmCompany')
                 ->where(fn ($w) => $w->where('label', 'like', '%' . $q . '%')
