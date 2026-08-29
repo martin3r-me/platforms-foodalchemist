@@ -38,7 +38,7 @@
     $navLabel = ($snapshot['type'] ?? 'foodbook') === 'speisekarte' ? 'Rubriken' : 'Kapitel';
 @endphp
 <!DOCTYPE html>
-<html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
+<html lang="de">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -118,6 +118,9 @@
            Greift nur, wenn ein Wort die Zeile sonst sprengen würde → Desktop mit breitem Container unberührt. */
         h1,h2,h3,h4, .pt-hero-title, .pt-section-title, .pt-block-header, .pt-subheader, .pt-heading,
         .pt-line-label, .pt-item .pt-line-label { overflow-wrap: break-word; word-break: break-word; }
+        /* Zusätzlich echte Silbentrennung in großen Überschriften (lang=de) — bricht lange deutsche
+           Wörter an sinnvollen Stellen; break-word oben bleibt harter Fallback für Kunstwörter. */
+        h1,h2,h3,h4, .pt-hero-title, .pt-section-title { -webkit-hyphens: auto; hyphens: auto; }
         .pt-kicker { font-family: var(--pt-body-font); text-transform: uppercase; letter-spacing: .22em; font-size: .68rem; font-weight: 600; color: var(--pt-accent); }
 
         /* Cover / Hero */
