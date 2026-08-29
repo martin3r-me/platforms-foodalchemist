@@ -58,6 +58,21 @@ it('POST ohne designation → VALIDATION_ERROR; preis < 0 → VALIDATION_ERROR',
     expect(($this->run)('foodalchemist.artikel_preise.POST', ['id' => $id, 'preis' => -1])->errorCode)->toBe('VALIDATION_ERROR');
 });
 
+it('artikel.PUT bearbeitet Stammdaten; artikel_preise.PUT ändert einen Preis', function () {
+    $id = ($this->neuArtikel)()->data['id'];
+
+    $put = ($this->run)('foodalchemist.artikel.PUT', ['id' => $id, 'felder' => ['designation' => 'Zanderfilet TK', 'brand' => 'Nordsee']]);
+    expect($put->success)->toBeTrue('put: ' . ($put->error ?? ''))->and($put->data['designation'])->toBe('Zanderfilet TK');
+
+    $preis = ($this->run)('foodalchemist.artikel_preise.POST', ['id' => $id, 'preis' => 8.0]);
+    $pid = $preis->data['price_id'];
+    $edit = ($this->run)('foodalchemist.artikel_preise.PUT', ['id' => $id, 'price_id' => $pid, 'felder' => ['price' => 9.4]]);
+    expect($edit->success)->toBeTrue('preis-put: ' . ($edit->error ?? ''))->and($edit->data['price'])->toBe(9.4);
+
+    // leere felder → VALIDATION_ERROR
+    expect(($this->run)('foodalchemist.artikel.PUT', ['id' => $id, 'felder' => []])->errorCode)->toBe('VALIDATION_ERROR');
+});
+
 it('Guards: unbekannter Artikel → NOT_FOUND; fremd → ACCESS_DENIED', function () {
     $id = ($this->neuArtikel)('Kabeljau')->data['id'];
     expect(($this->run)('foodalchemist.artikel.DISCONTINUE', ['id' => 999999])->errorCode)->toBe('NOT_FOUND');

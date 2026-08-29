@@ -22,7 +22,7 @@ Capability. Sie beantwortet:
 | Capability | Anzahl | Aktuelle Aussage |
 |---|---:|---|
 | Prompt-Keys in `config/foodalchemist.php` | 64 | Registry vorhanden; 11 Keys ohne direkte statische Referenz in `src/` (die 5 seit 01.08. ergänzten Keys sind alle direkt referenziert) |
-| MCP-Toolklassen mit `foodalchemist.*`-Name | 266 | Provider registriert 266 (203 Bestand + 17 D1/Phase 0 + 13 D2 + 18 D3 + 15 D4a/b Lieferanten/Artikel, Stand 2026-08-29); §7-Register wird nachgezogen (Alt-Liste = 169) |
+| MCP-Toolklassen mit `foodalchemist.*`-Name | 278 | Provider registriert 278 (203 Bestand + 17 D1/Phase 0 + 13 D2 + 18 D3 + 27 D4 Lieferanten/Artikel/Matching/Geschirr KOMPLETT, Stand 2026-08-29); §7-Register wird nachgezogen (Alt-Liste = 169) |
 | Embedding-Pools mit Observern | 6 | GP, Rezept, Lieferant, Konzept, Foodbook, Lab Note |
 | Wissens-/Retrieval-Schichten | 2 | deterministisch plus optional semantisch |
 | dokumentierte vollständige MCP-Tenant-Abnahme | 0 | einzelne Tests vorhanden, keine 157-Tool-Matrix |
@@ -476,6 +476,18 @@ foodalchemist.artikel_deklarationen.PUT
 foodalchemist.artikel_naehrwerte.PUT
 foodalchemist.artikel_preise.POST
 foodalchemist.artikel_preise.DELETE
+foodalchemist.artikel.PUT
+foodalchemist.artikel_preise.PUT
+foodalchemist.match.RUN
+foodalchemist.match_proposals.PUT
+foodalchemist.geschirr_suppliers.LIST
+foodalchemist.geschirr_suppliers.POST
+foodalchemist.geschirr_suppliers.PUT
+foodalchemist.geschirr_suppliers.DEACTIVATE
+foodalchemist.geschirr_items.LIST
+foodalchemist.geschirr_items.POST
+foodalchemist.geschirr_items.PUT
+foodalchemist.geschirr_items.DEACTIVATE
 ```
 
 ## 8. MCP-Abnahmematrix

@@ -78,7 +78,7 @@ class ItemModal extends Component
                 ['stammdaten.designation.required' => 'Bezeichnung ist Pflicht.'],
             );
 
-            $item->update([
+            app(SupplierItemService::class)->update($this->team(), $item, [
                 ...collect($this->stammdaten)->map(fn ($v) => $v === '' ? null : $v)->all(),
                 ...collect($this->verpackung)->only(['qty', 'unit_code', 'packaging_unit', 'ordering_unit', 'qty_ordering_per_packaging'])
                     ->map(fn ($v) => $v === '' ? null : $v)->all(),
@@ -184,11 +184,10 @@ class ItemModal extends Component
 
             return;
         }
-        $p->update([
+        app(PriceService::class)->updatePrice($this->team(), $this->item($this->itemId), $this->preisEditId, [
             'price' => (float) $preis,
             'valid_to' => $this->preisEdit['valid_to'] !== '' ? $this->preisEdit['valid_to'] . ' 23:59:59' : null,
             'note' => trim($this->preisEdit['note']) ?: null,
-            'change_date' => now(),
         ]);
         $this->preisEditId = null;
         $this->fehler = null;

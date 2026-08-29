@@ -157,6 +157,33 @@ class PriceService
     }
 
     /**
+     * Preiszeile bearbeiten (MVP: vorher inline in ItemModal::preisUpdate). Nur Besitzer-Team;
+     * Whitelist price/valid_to/note; setzt change_date. RuntimeException wenn nicht am Artikel.
+     */
+    public function updatePrice(Team $team, FoodAlchemistSupplierItem $item, int $priceId, array $felder): FoodAlchemistPrice
+    {
+        if (! $item->isOwnedBy($team)) {
+            throw new \RuntimeException('Geerbter Katalog-Artikel — Preispflege nur durch das Besitzer-Team (D1).');
+        }
+        $price = FoodAlchemistPrice::where('supplier_item_id', $item->id)->whereKey($priceId)->first();
+        if ($price === null) {
+            throw new \RuntimeException('Preis-Eintrag nicht an diesem Artikel gefunden.');
+        }
+        $clean = array_intersect_key($felder, array_flip(['price', 'valid_to', 'note']));
+        if (array_key_exists('price', $clean)) {
+            $p = str_replace(',', '.', trim((string) $clean['price']));
+            if (! is_numeric($p) || (float) $p < 0) {
+                throw new \RuntimeException('Preis braucht eine Zahl ≥ 0.');
+            }
+            $clean['price'] = (float) $p;
+        }
+        $clean['change_date'] = now();
+        $price->update($clean);
+
+        return $price->refresh();
+    }
+
+    /**
      * M2-12 / V-Register: Preis-Anomalien — (a) Sprünge > x % zwischen aufeinander-
      * folgenden Preis-Generationen eines LA, (b) Vergleichspreis-Ausreißer je
      * Warengruppe (Faktor ≥ x vom WG-Median, gleiche Einheit). PHP-seitige

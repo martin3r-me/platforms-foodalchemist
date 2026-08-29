@@ -511,6 +511,21 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\ArtikelNaehrwertePutTool::class,
                     \Platform\FoodAlchemist\Tools\ArtikelPreisePostTool::class,
                     \Platform\FoodAlchemist\Tools\ArtikelPreiseDeleteTool::class,
+                    // D4b-2: Artikel-/Preis-Edit (neue Service-Methoden SupplierItemService::update / PriceService::updatePrice).
+                    \Platform\FoodAlchemist\Tools\ArtikelPutTool::class,
+                    \Platform\FoodAlchemist\Tools\ArtikelPreisePutTool::class,
+                    // D4c: LA→GP-Matching auslösen + Vorschläge übernehmen/verwerfen.
+                    \Platform\FoodAlchemist\Tools\MatchRunTool::class,
+                    \Platform\FoodAlchemist\Tools\MatchProposalsPutTool::class,
+                    // D4d: Geschirr (Lieferanten + Artikel) — bisher komplett ohne MCP-Abdeckung.
+                    \Platform\FoodAlchemist\Tools\GeschirrSuppliersListTool::class,
+                    \Platform\FoodAlchemist\Tools\GeschirrSuppliersPostTool::class,
+                    \Platform\FoodAlchemist\Tools\GeschirrSuppliersPutTool::class,
+                    \Platform\FoodAlchemist\Tools\GeschirrSuppliersDeactivateTool::class,
+                    \Platform\FoodAlchemist\Tools\GeschirrItemsListTool::class,
+                    \Platform\FoodAlchemist\Tools\GeschirrItemsPostTool::class,
+                    \Platform\FoodAlchemist\Tools\GeschirrItemsPutTool::class,
+                    \Platform\FoodAlchemist\Tools\GeschirrItemsDeactivateTool::class,
                     // #513 Tier 1: Grammaturen-Rechner (Bäckerprozent/Extraprozent/Brining/Bloom)
                     \Platform\FoodAlchemist\Tools\ProportionCalcTool::class,
                     // #513: %→Gramm-Rückschreiben (Batch-Skalierung + Einzel-Zutat-Edit, write)

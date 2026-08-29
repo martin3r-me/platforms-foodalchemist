@@ -264,6 +264,32 @@ class SupplierItemService
         ]);
     }
 
+    /** Editierbare Stammdaten-/Verpackungs-/Eigenschafts-Spalten des Lieferantenartikels (Whitelist). */
+    public const EDIT_FELDER = [
+        'designation', 'article_number', 'brand', 'manufacturer', 'origin', 'marketing_name', 'additional_text',
+        'qty', 'unit_code', 'packaging_unit', 'ordering_unit', 'qty_ordering_per_packaging', 'ean_packaging', 'ean_ordering',
+        'is_organic', 'is_vegan', 'is_vegetarian', 'is_alcohol', 'is_halal', 'is_gmo_free', 'is_preorder',
+        'vat', 'origin_country', 'organic_control_number', 'preorder_days', 'ingredients_supplier',
+    ];
+
+    /**
+     * Stammdaten eines bestehenden Artikels bearbeiten (MVP: vorher inline in ItemModal::speichern).
+     * Nur Besitzer-Team; nur Whitelist-Spalten; leere Strings → null.
+     */
+    public function update(Team $team, FoodAlchemistSupplierItem $item, array $felder): FoodAlchemistSupplierItem
+    {
+        if (! $item->isOwnedBy($team)) {
+            throw new \RuntimeException('Geerbter Katalog-Artikel — Pflege nur durch das Besitzer-Team (D1).');
+        }
+        $clean = collect(array_intersect_key($felder, array_flip(self::EDIT_FELDER)))
+            ->map(fn ($v) => $v === '' ? null : $v)->all();
+        if ($clean !== []) {
+            $item->update($clean);
+        }
+
+        return $item->refresh();
+    }
+
     /** Deaktivieren = soft (is_discontinued), nie löschen — nur Besitzer-Team (D1). */
     public function setDiscontinued(Team $team, FoodAlchemistSupplierItem $item, bool $discontinued): void
     {
