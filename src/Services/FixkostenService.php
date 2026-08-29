@@ -5,6 +5,7 @@ namespace Platform\FoodAlchemist\Services;
 use Illuminate\Support\Collection;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Models\FoodAlchemistFixkosten;
+use Platform\FoodAlchemist\Models\FoodAlchemistOutlet;
 
 /**
  * M-K6 / Doc 16 §10.2: Fixkosten → abgeleitete Gemeinkosten-Zuschläge (mehrstufig).
@@ -37,13 +38,21 @@ class FixkostenService
     /** @return Collection<int, FoodAlchemistFixkosten> */
     public function liste(Team $team): Collection
     {
-        return FoodAlchemistFixkosten::visibleToTeam($team)->orderBy('block_key')->orderBy('label')->get();
+        return FoodAlchemistFixkosten::visibleToTeam($team)->whereNull('outlet_id')
+            ->orderBy('block_key')->orderBy('label')->get();
     }
 
-    public function create(Team $team, array $in): FoodAlchemistFixkosten
+    /** Ebene 2: Fixkosten eines Betriebs (nur dessen eigene Override-Zeilen). */
+    public function listeFuerOutlet(Team $team, FoodAlchemistOutlet $outlet): Collection
+    {
+        return $this->rowsFor($team, $outlet);
+    }
+
+    public function create(Team $team, array $in, ?FoodAlchemistOutlet $outlet = null): FoodAlchemistFixkosten
     {
         return FoodAlchemistFixkosten::create([
             'team_id' => $team->id,
+            'outlet_id' => $outlet?->id,
             'label' => trim((string) ($in['label'] ?? 'Fixkosten')) ?: 'Fixkosten',
             'amount' => max(0, (float) str_replace(',', '.', (string) ($in['amount'] ?? 0))),
             'periode' => in_array($p = $in['periode'] ?? 'monatlich', ['monatlich', 'jaehrlich'], true) ? $p : 'monatlich',
@@ -89,15 +98,41 @@ class FixkostenService
         $row->delete();
     }
 
-    /** Σ Fixkosten je Block (monatlich). @return array<string, float> block_key => €/Monat */
-    public function summeJeBlock(Team $team): array
+    /** Σ je Block über eine Zeilen-Menge (monatlich). @return array<string, float> */
+    private function sum(Collection $rows): array
     {
         $out = [];
-        foreach ($this->liste($team) as $row) {
+        foreach ($rows as $row) {
             $out[$row->block_key] = ($out[$row->block_key] ?? 0) + $row->monatsbetrag();
         }
 
         return $out;
+    }
+
+    /** Sichtbare Fixkosten-Zeilen: outlet=null ⇒ Team-Zeilen (heute), sonst die des Betriebs. */
+    private function rowsFor(Team $team, ?FoodAlchemistOutlet $outlet): Collection
+    {
+        $q = FoodAlchemistFixkosten::visibleToTeam($team);
+        $q = $outlet === null ? $q->whereNull('outlet_id') : $q->where('outlet_id', $outlet->id);
+
+        return $q->orderBy('block_key')->orderBy('label')->get();
+    }
+
+    /**
+     * Σ Fixkosten je Block (monatlich). Mit Betrieb: PER-BLOCK-REPLACE — hat der Betrieb
+     * eigene Zeilen für einen Block, ersetzen sie die Team-Summe DIESES Blocks; Blöcke ohne
+     * Betriebs-Zeile erben die Team-Summe. outlet=null ⇒ reine Team-Summe (heute).
+     *
+     * @return array<string, float> block_key => €/Monat
+     */
+    public function summeJeBlock(Team $team, ?FoodAlchemistOutlet $outlet = null): array
+    {
+        $teamSum = $this->sum($this->rowsFor($team, null));
+        if ($outlet === null) {
+            return $teamSum;
+        }
+
+        return array_replace($teamSum, $this->sum($this->rowsFor($team, $outlet)));
     }
 
     /** Abgeleiteter Zuschlag-% für einen Block (0, wenn Basis fehlt). */
@@ -126,10 +161,10 @@ class FixkostenService
      *
      * @return list<array{key:string,label:string,typ:string,wert:float,aktiv:bool,sort:int,modus:string}>
      */
-    public function aufgeloestesSchema(Team $team): array
+    public function aufgeloestesSchema(Team $team, ?FoodAlchemistOutlet $outlet = null): array
     {
-        $summen = $this->summeJeBlock($team);
-        $basen = $this->settings->bezugsbasen($team);
+        $summen = $this->summeJeBlock($team, $outlet);
+        $basen = $this->settings->bezugsbasen($team, $outlet);
 
         return array_map(function ($b) use ($team, $summen, $basen) {
             if (($b['mode'] ?? 'manuell') === 'abgeleitet') {
@@ -137,7 +172,7 @@ class FixkostenService
             }
 
             return $b;
-        }, $this->settings->kalkulationSchema($team));
+        }, $this->settings->kalkulationSchema($team, $outlet));
     }
 
     private function guard(FoodAlchemistFixkosten $row, Team $team): void

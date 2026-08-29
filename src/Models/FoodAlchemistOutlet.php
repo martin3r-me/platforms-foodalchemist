@@ -4,6 +4,7 @@ namespace Platform\FoodAlchemist\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Platform\ActivityLog\Traits\LogsActivity;
 use Platform\FoodAlchemist\Models\Concerns\BelongsToTeamHierarchy;
@@ -36,5 +37,11 @@ class FoodAlchemistOutlet extends Model
     public function chapters(): HasMany
     {
         return $this->hasMany(FoodAlchemistFoodbookKapitel::class, 'outlet_id');
+    }
+
+    /** Ebene 2: Kalkulations-Override dieses Betriebs (eine Zeile, alle Felder nullable). */
+    public function settings(): HasOne
+    {
+        return $this->hasOne(FoodAlchemistOutletSetting::class, 'outlet_id');
     }
 }

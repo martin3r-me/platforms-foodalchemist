@@ -6,6 +6,8 @@ use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Enums\LeadLaStrategie;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Models\FoodAlchemistMarkupClass;
+use Platform\FoodAlchemist\Models\FoodAlchemistOutlet;
+use Platform\FoodAlchemist\Models\FoodAlchemistOutletSetting;
 use Platform\FoodAlchemist\Models\FoodAlchemistTeamSetting;
 
 /**
@@ -129,6 +131,33 @@ class TeamSettingsService
         }
 
         return null;
+    }
+
+    /**
+     * Ebene 2 (Betrieb): Outlet-Settings-Zeile des Teams — NUR wenn das Outlet zum Team
+     * gehört (Tenancy-Guard); sonst NULL. firstOrNew: fehlende Zeile = keine Overrides.
+     */
+    private function outletRow(Team $team, ?FoodAlchemistOutlet $outlet): ?FoodAlchemistOutletSetting
+    {
+        if ($outlet === null || (int) $outlet->team_id !== (int) $team->id) {
+            return null;
+        }
+
+        return FoodAlchemistOutletSetting::firstOrNew(['outlet_id' => $outlet->id, 'team_id' => $team->id]);
+    }
+
+    /**
+     * Ebene 2: Skalar-Kaskade Outlet-Override → Team (rohWert, inkl. ORG_VERERBT) → NULL.
+     * outlet=null ⇒ skalar() === rohWert() (byte-identisch zum bisherigen Team-Pfad).
+     */
+    private function skalar(Team $team, string $spalte, ?FoodAlchemistOutlet $outlet): mixed
+    {
+        $o = $this->outletRow($team, $outlet);
+        if ($o !== null && $o->{$spalte} !== null && $o->{$spalte} !== []) {
+            return $o->{$spalte};
+        }
+
+        return $this->rohWert($team, $spalte);
     }
 
     /**
@@ -321,9 +350,9 @@ class TeamSettingsService
     }
 
     /** M12: Gemeinkosten-Zuschlag % auf den Wareneinsatz (HK1 → HK2, D-HK-1). */
-    public function hk2Zuschlag(Team $team): float
+    public function hk2Zuschlag(Team $team, ?FoodAlchemistOutlet $outlet = null): float
     {
-        return (float) ($this->for($team)->hk2_surcharge_pct ?? 0);
+        return (float) ($this->skalar($team, 'hk2_surcharge_pct', $outlet) ?? 0);
     }
 
     // ── M-K1 / Doc 16: Kalkulations-Block-Schema ─────────────────────────────
@@ -375,10 +404,10 @@ class TeamSettingsService
      *
      * @return list<array{key:string,label:string,typ:string,wert:float,aktiv:bool,sort:int,modus:string}>
      */
-    public function kalkulationSchema(Team $team): array
+    public function kalkulationSchema(Team $team, ?FoodAlchemistOutlet $outlet = null): array
     {
         $erlaubteTypen = ['pct_mek', 'pct_fek', 'pct_hk', 'eur_pro_portion', 'arbeitszeit', 'pct_we'];
-        $schema = $this->for($team)->calculation_schema;
+        $schema = $this->skalar($team, 'calculation_schema', $outlet);
         if (! is_array($schema) || $schema === []) {
             $schema = $this->defaultSchema($team);
         }
@@ -405,9 +434,9 @@ class TeamSettingsService
     }
 
     /** Default-Lohnsatz €/h für den arbeitszeit-Block (D-K2: ein Team-Satz). */
-    public function stundensatz(Team $team): float
+    public function stundensatz(Team $team, ?FoodAlchemistOutlet $outlet = null): float
     {
-        $v = $this->for($team)->stundensatz_eur;
+        $v = $this->skalar($team, 'stundensatz_eur', $outlet);
 
         return $v !== null && (float) $v > 0 ? (float) $v : self::STUNDENSATZ_DEFAULT;
     }
@@ -421,9 +450,9 @@ class TeamSettingsService
     }
 
     /** Marge % auf die HK → VK-Vorschlag (Doc 16). */
-    public function margePct(Team $team): float
+    public function margePct(Team $team, ?FoodAlchemistOutlet $outlet = null): float
     {
-        $v = $this->for($team)->margin_pct;
+        $v = $this->skalar($team, 'margin_pct', $outlet);
 
         return $v !== null ? (float) $v : self::MARGE_DEFAULT;
     }
@@ -462,9 +491,9 @@ class TeamSettingsService
     }
 
     /** #379+: Ziel-Wareneinsatzquote (Food-Cost-%) — Controlling-Ziel + Break-even-Treiber. */
-    public function zielWareneinsatzPct(Team $team): float
+    public function zielWareneinsatzPct(Team $team, ?FoodAlchemistOutlet $outlet = null): float
     {
-        $v = $this->for($team)->target_food_cost_pct;
+        $v = $this->skalar($team, 'target_food_cost_pct', $outlet);
 
         return $v !== null && (float) $v > 0 ? (float) $v : self::ZIEL_WARENEINSATZ_DEFAULT;
     }
@@ -527,9 +556,9 @@ class TeamSettingsService
     }
 
     /** #379+: Lohnnebenkosten-Zuschlag % auf den Produktionslohn (AG-/Sozialabgaben). */
-    public function lohnnebenkostenPct(Team $team): float
+    public function lohnnebenkostenPct(Team $team, ?FoodAlchemistOutlet $outlet = null): float
     {
-        $v = $this->for($team)->labor_overhead_pct;
+        $v = $this->skalar($team, 'labor_overhead_pct', $outlet);
 
         return $v !== null && (float) $v >= 0 ? (float) $v : self::LOHNNEBENKOSTEN_DEFAULT;
     }
@@ -541,9 +570,9 @@ class TeamSettingsService
      *
      * @return array{mek: float, fek: float, hk: float}
      */
-    public function bezugsbasen(Team $team): array
+    public function bezugsbasen(Team $team, ?FoodAlchemistOutlet $outlet = null): array
     {
-        $b = $this->for($team)->calculation_reference_bases ?? [];
+        $b = $this->skalar($team, 'calculation_reference_bases', $outlet) ?? [];
 
         return [
             'mek' => (float) ($b['mek'] ?? 0),
