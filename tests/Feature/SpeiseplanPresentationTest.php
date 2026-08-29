@@ -5,6 +5,7 @@ use Livewire\Livewire;
 use Platform\Core\Contracts\ToolContext;
 use Platform\Core\Tools\ToolRegistry;
 use Platform\FoodAlchemist\Livewire\Speiseplan\Editor;
+use Platform\FoodAlchemist\Models\FoodAlchemistOutlet;
 use Platform\FoodAlchemist\Models\FoodAlchemistSpeiseplan;
 use Platform\FoodAlchemist\Models\FoodAlchemistSpeiseplanEintrag;
 use Platform\FoodAlchemist\Models\FoodAlchemistSpeiseplanLinie;
@@ -43,6 +44,46 @@ beforeEach(function () {
 
         return $plan;
     };
+});
+
+it('Slice F: Betriebs-Aushang-Link mit eigener Vorlage + Slug; MCP outlet_id-Weg', function () {
+    $plan = ($this->bauePlan)($this->rootTeam);
+    $betrieb = FoodAlchemistOutlet::create(['team_id' => $this->rootTeam->id, 'name' => 'Mensa Nord', 'presentation_design' => 'kiosk']);
+
+    $res = $this->pres->publishForOutlet($this->rootTeam, 'speiseplan', $plan->id, $betrieb->id, [
+        'expires_at' => now()->addDays(30)->toDateString(), 'design' => 'editorial', 'slug' => 'mensa-nord-kw23',
+    ]);
+    expect($res['outlet_id'])->toBe($betrieb->id)
+        ->and($res['design'])->toBe('editorial')            // per-Link-Vorlage, nicht die Betriebs-Default 'kiosk'
+        ->and($res['slug'])->toBe('mensa-nord-kw23');
+    $this->get('/p/speiseplan/mensa-nord-kw23')->assertOk()->assertSee('Wochenplan KW23');
+
+    $pub = $this->registry->get('foodalchemist.speiseplan_presentation.PUBLISH')->execute([
+        'speiseplan_id' => $plan->id, 'expires_at' => now()->addDays(30)->toDateString(), 'outlet_id' => $betrieb->id,
+    ], $this->kontext);
+    expect($pub->success)->toBeTrue()->and($pub->data['outlet_id'])->toBe($betrieb->id);
+
+    $this->pres->withdrawForOutlet($this->rootTeam, 'speiseplan', $plan->id, $betrieb->id);
+    expect($this->pres->resolveByToken('speiseplan', 'mensa-nord-kw23'))->toBeNull();
+});
+
+it('Preis-Option: Default preislos; mit price_display erscheint der Preis in der Grid-Zelle', function () {
+    $plan = ($this->bauePlan)($this->rootTeam);
+    $findeZelle = fn ($snap) => collect($snap['content']['grid']['lines'])
+        ->flatMap(fn ($l) => collect($l['cells'])->flatten(1))
+        ->first(fn ($c) => is_array($c) && ($c['label'] ?? '') === 'HG Rindergulasch');
+
+    $ohne = $this->pres->buildSnapshot($this->rootTeam, $plan, 'speiseplan', ['design' => 'kiosk']);
+    $mit = $this->pres->buildSnapshot($this->rootTeam, $plan, 'speiseplan', ['design' => 'kiosk', 'price_display' => true]);
+
+    $zOhne = $findeZelle($ohne);
+    $zMit = $findeZelle($mit);
+    expect($zMit)->not->toBeNull()
+        ->and(array_key_exists('price', $zOhne))->toBeFalse()   // GV-Default: preislos
+        ->and($zMit['price'] ?? null)->not->toBeNull()
+        ->and($zMit['price'])->toContain('€');                  // Preis sichtbar bei price_display
+    // Deklaration/LMIV bleibt in beiden Faellen Pflicht (mergeSettings erzwingt sie).
+    expect($ohne['settings']['declaration'])->toBeTrue()->and($mit['settings']['declaration'])->toBeTrue();
 });
 
 it('buildSnapshot des Speiseplans: Grid + LMIV, preislos, interna-frei', function () {

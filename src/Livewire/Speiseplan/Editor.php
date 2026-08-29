@@ -63,6 +63,15 @@ class Editor extends Component
 
     public ?string $presentationHinweis = null;
 
+    // Slice F: publish-per-Betrieb — eigener Aushang-Link je Betrieb (eigene Vorlage + Slug + Freigabe).
+    public ?int $outletPublishId = null;
+
+    public ?string $outletPublishGueltigBis = null;
+
+    public ?string $outletPublishDesign = '';
+
+    public ?string $outletPublishSlug = '';
+
     public function brandingSpeichern(SpeiseplanService $svc): void
     {
         $this->brandingFehler = null;
@@ -154,6 +163,59 @@ class Editor extends Component
             app(PresentationService::class)->withdraw($this->team(), 'speiseplan', $this->planId);
             $this->presentationLoadedId = null;
             $this->presentationHinweis = 'Veröffentlichung zurückgezogen — der Link ist inaktiv (404).';
+        } catch (\Throwable $e) {
+            $this->presentationFehler = $e->getMessage();
+        }
+    }
+
+    /** Slice F: einen zusätzlichen Aushang-Link FÜR einen Betrieb (eigene Vorlage + Name, eigene Freigabe). */
+    public function betriebVeroeffentlichen(): void
+    {
+        $this->presentationFehler = null;
+        $this->presentationHinweis = null;
+        if ($this->planId === null) {
+            return;
+        }
+        if ($this->outletPublishId === null) {
+            $this->presentationFehler = 'Bitte zuerst einen Betrieb wählen.';
+
+            return;
+        }
+        try {
+            $settings = [
+                'expires_at' => $this->outletPublishGueltigBis ?: $this->presentationGueltigBis,
+                'price_display' => $this->presentationPreisAnzeige,
+                'cta' => ['text' => $this->presentationCtaText, 'link' => $this->presentationCtaLink],
+            ];
+            // Nur setzen, wenn aktiv gewählt — sonst Fallback-Kette (Betriebs-Vorlage → Dokument) bzw. Zufalls-Token.
+            if (trim((string) $this->outletPublishDesign) !== '') {
+                $settings['design'] = $this->outletPublishDesign;
+            }
+            if (trim((string) $this->outletPublishSlug) !== '') {
+                $settings['slug'] = $this->outletPublishSlug;
+            }
+            app(PresentationService::class)->publishForOutlet($this->team(), 'speiseplan', $this->planId, $this->outletPublishId, $settings);
+            $this->outletPublishId = null;
+            $this->outletPublishGueltigBis = null;
+            $this->outletPublishDesign = '';
+            $this->outletPublishSlug = '';
+            $this->presentationHinweis = 'Betriebs-Link veröffentlicht — eigener Aushang mit der Vorlage und dem Namen dieses Betriebs.';
+        } catch (\Throwable $e) {
+            $this->presentationFehler = $e->getMessage();
+        }
+    }
+
+    /** Slice F: einen Betriebs-Aushang-Link vom Netz nehmen (Standard-Link bleibt unberührt). */
+    public function betriebZuruckziehen(int $outletId): void
+    {
+        $this->presentationFehler = null;
+        $this->presentationHinweis = null;
+        if ($this->planId === null) {
+            return;
+        }
+        try {
+            app(PresentationService::class)->withdrawForOutlet($this->team(), 'speiseplan', $this->planId, $outletId);
+            $this->presentationHinweis = 'Betriebs-Link zurückgezogen.';
         } catch (\Throwable $e) {
             $this->presentationFehler = $e->getMessage();
         }
@@ -590,10 +652,22 @@ class Editor extends Component
             ? \Platform\FoodAlchemist\Models\FoodAlchemistOutlet::where('team_id', $team->id)->find($sp->outlet_id)
             : ($team !== null ? app(\Platform\FoodAlchemist\Services\ActiveOutletContext::class)->current($team) : null);
 
+        // Slice F: bestehende Betriebs-Aushang-Links + wählbare Betriebe (aktiv, team-scoped).
+        $betriebsLinks = [];
+        $betriebsOptionen = [];
+        if ($sp !== null && $team !== null) {
+            $betriebsLinks = app(PresentationService::class)->outletPresentations($team, 'speiseplan', $sp->id);
+            $betriebsOptionen = \Platform\FoodAlchemist\Models\FoodAlchemistOutlet::where('team_id', $team->id)
+                ->where('is_inactive', false)->orderBy('sort_order')->orderBy('name')->get(['id', 'name'])
+                ->map(fn ($o) => ['id' => (int) $o->id, 'name' => (string) $o->name])->all();
+        }
+
         return view('foodalchemist::livewire.speiseplan.editor', [
             'presentationInfo' => $presentationInfo,
             'presentationLink' => $presentationLink,
             'presentationDesignOptionen' => $presentationDesignOptionen,
+            'betriebsLinks' => $betriebsLinks,
+            'betriebsOptionen' => $betriebsOptionen,
             'brandingBilder' => $brandingBilder,
             'sp' => $sp,
             // Spec 33 P5: das Bauteil erwartet die Ausgabe selbst; `sp` ist derselbe Datensatz,

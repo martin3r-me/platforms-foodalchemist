@@ -304,7 +304,7 @@ class PresentationService
         $content = match ($type) {
             self::TYPE_FOODBOOK => $this->normalizeFoodbook($team, $entity, $clean, $outlet),
             self::TYPE_SPEISEKARTE => $this->normalizeSpeisekarte($team, $entity, $clean, $outlet),
-            self::TYPE_SPEISEPLAN => $this->normalizeSpeiseplan($team, $entity, $clean),
+            self::TYPE_SPEISEPLAN => $this->normalizeSpeiseplan($team, $entity, $clean, $outlet),
             default => throw new \InvalidArgumentException("Präsentations-Typ '{$type}' ist in dieser Phase noch nicht unterstützt."),
         };
 
@@ -588,21 +588,31 @@ class PresentationService
      *
      * @return array{title:string, subtitle:?string, meta:array, body:array}
      */
-    private function normalizeSpeiseplan(Team $team, FoodAlchemistSpeiseplan $plan, array $settings): array
+    private function normalizeSpeiseplan(Team $team, FoodAlchemistSpeiseplan $plan, array $settings, ?FoodAlchemistOutlet $outlet = null): array
     {
         $mahlzeit = (string) ($settings['mahlzeit'] ?? 'mittag');
         $montag = $settings['montag'] ?? null;
-        $dok = app(SpeiseplanService::class)->dokumentDaten($team, $plan, $mahlzeit, $montag, false, false);
+        // GV-Aushang ist per Default preislos; nur wenn price_display an ist, ziehen wir die
+        // (betriebs-aware) Preise mit — Deklaration/LMIV bleibt davon unberührt (mergeSettings erzwingt sie).
+        $showPrice = (bool) $settings['price_display'];
+        $dok = app(SpeiseplanService::class)->dokumentDaten($team, $plan, $mahlzeit, $montag, false, false, $outlet, $showPrice);
 
         $tage = array_map(fn ($t) => ['key' => $t['ymd'] ?? '', 'label' => $t['label'] ?? ''], $dok['tage'] ?? []);
         $lines = [];
         foreach ($dok['zeilen'] ?? [] as $z) {
             $cells = [];
             foreach ($z['zellen'] ?? [] as $ymd => $eintraege) {
-                $cells[$ymd] = array_map(fn ($e) => [
-                    'label' => (string) ($e['name'] ?? ''),
-                    'codes' => array_values((array) ($e['codes'] ?? [])),
-                ], $eintraege);
+                $cells[$ymd] = array_map(function ($e) use ($showPrice) {
+                    $cell = [
+                        'label' => (string) ($e['name'] ?? ''),
+                        'codes' => array_values((array) ($e['codes'] ?? [])),
+                    ];
+                    if ($showPrice && isset($e['vk']) && (float) $e['vk'] > 0) {
+                        $cell['price'] = number_format((float) $e['vk'], 2, ',', '.') . ' €';
+                    }
+
+                    return $cell;
+                }, $eintraege);
             }
             $lines[] = ['name' => (string) ($z['linie'] ?? ''), 'color' => $z['color'] ?? null, 'cells' => $cells];
         }

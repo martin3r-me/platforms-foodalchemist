@@ -356,7 +356,8 @@
                                     <input type="date" wire:model="presentationGueltigBis" class="{{ $input }} w-full" data-sp-praes-gueltig>
                                 </label>
                             </div>
-                            <p class="text-[11px] text-gray-400 mt-2">GV-Aushang: preislos, LMIV-Kennzeichnung ist Pflicht und immer sichtbar.</p>
+                            <label class="flex items-center gap-2 text-xs text-gray-300 mt-2"><input type="checkbox" wire:model="presentationPreisAnzeige" data-sp-praes-preis> Preise anzeigen (optional — Default aus)</label>
+                            <p class="text-[11px] text-gray-400 mt-1">GV-Aushang ist per Default preislos; die LMIV-Kennzeichnung ist immer Pflicht und sichtbar. Preise z.B. für Café-/Bistro-Pläne — folgen dem aktiven Betrieb.</p>
 
                             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
                                 <label class="text-xs text-gray-300">CTA-Text (optional)
@@ -383,12 +384,78 @@
                             @if($presentationLink)
                                 <div class="rounded-lg bg-white/5 border border-white/10 p-3 text-xs mt-3" x-data>
                                     <div class="flex items-center gap-2">
-                                        <div class="flex-1 rounded px-2 py-1 font-mono text-[11px] break-all select-all" style="background:#ffffff;color:#111827;border:1px solid #d1d5db;" data-sp-praes-link>{{ $presentationLink }}</div>
+                                        <div class="flex-1 rounded px-2 py-1 font-mono text-[11px] break-all select-all bg-black/30 border border-white/10 text-gray-200" data-sp-praes-link>{{ $presentationLink }}</div>
                                         <button type="button" class="{{ $btnGhost }}" x-on:click="navigator.clipboard.writeText('{{ $presentationLink }}'); $el.textContent='Kopiert ✓'">Link kopieren</button>
                                     </div>
                                     <p class="text-[11px] text-gray-400 mt-1">Freigegeben am {{ $presentationInfo['published_at'] ?? '—' }} · gültig bis {{ $presentationInfo['expires_at'] ?? '—' }} · {{ ($presentationInfo['live'] ?? false) ? 'aktiv' : 'inaktiv/abgelaufen' }}</p>
                                 </div>
                             @endif
+
+                            {{-- ── Slice F: Betriebs-Links — pro Betrieb ein eigener Aushang-Link (eigene Vorlage + Name) ── --}}
+                            <div class="rounded-lg border border-violet-400/25 bg-violet-500/[0.06] p-3 space-y-3 mt-3">
+                                <div class="flex items-center gap-2">
+                                    <span class="inline-block w-2 h-2 rounded-full bg-violet-400"></span>
+                                    <h4 class="text-xs font-semibold text-violet-200">Betriebs-Links · eigener Aushang je Betrieb</h4>
+                                </div>
+                                <p class="text-[11px] text-gray-400">Ein zusätzlicher Aushang-Link pro Betrieb — mit der <strong class="text-gray-200">Vorlage</strong> und dem <strong class="text-gray-200">Namen</strong> dieses Betriebs, eigene Freigabe. Der Standard-Link oben bleibt bestehen.</p>
+
+                                @forelse($betriebsLinks as $bl)
+                                    <div class="rounded-lg bg-white/[0.04] border border-white/10 p-2 text-xs" x-data>
+                                        <div class="flex items-center gap-2">
+                                            <span class="font-medium text-gray-100">{{ $bl['outlet_name'] }}</span>
+                                            <span class="text-[10px] px-1.5 py-0.5 rounded {{ $bl['enabled'] ? 'bg-emerald-500/15 text-emerald-300' : 'bg-white/10 text-gray-400' }}">{{ $bl['enabled'] ? 'aktiv' : 'inaktiv' }}</span>
+                                            <span class="ml-auto text-[10px] text-gray-500">Vorlage: {{ $bl['design'] }}</span>
+                                        </div>
+                                        <div class="flex items-center gap-2 mt-1">
+                                            <div class="flex-1 rounded px-2 py-1 font-mono text-[11px] break-all select-all bg-black/30 border border-white/10 text-gray-200">{{ $bl['url'] }}</div>
+                                            <button type="button" class="{{ $btnGhost }}" x-on:click="navigator.clipboard.writeText('{{ $bl['url'] }}'); $el.textContent='Kopiert ✓'">Kopieren</button>
+                                            @if($bl['enabled'])
+                                                <button type="button" wire:click="betriebZuruckziehen({{ $bl['outlet_id'] }})" wire:confirm="Diesen Betriebs-Link zurückziehen? Er liefert dann 404." class="{{ $btnGhost }}">Zurückziehen</button>
+                                            @endif
+                                        </div>
+                                    </div>
+                                @empty
+                                    <p class="text-[11px] text-gray-500">Noch kein Betriebs-Link angelegt.</p>
+                                @endforelse
+
+                                @if(count($betriebsOptionen) > 0)
+                                    <div class="rounded-lg border border-dashed border-violet-400/30 bg-white/[0.02] p-2.5 space-y-2">
+                                        <p class="text-[11px] font-medium text-violet-200">Weiteren Betrieb hinzufügen</p>
+                                        <div class="flex flex-wrap items-end gap-2">
+                                            <div>
+                                                <label class="block text-[10px] text-gray-400">Betrieb</label>
+                                                <select wire:model="outletPublishId" class="mt-1 block text-sm rounded px-2 py-1">
+                                                    <option value="">— wählen —</option>
+                                                    @foreach($betriebsOptionen as $o)
+                                                        <option value="{{ $o['id'] }}">{{ $o['name'] }}</option>
+                                                    @endforeach
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <label class="block text-[10px] text-gray-400">gültig bis (optional)</label>
+                                                <input type="date" wire:model="outletPublishGueltigBis" class="mt-1 block text-sm rounded px-2 py-1">
+                                            </div>
+                                            <div>
+                                                <label class="block text-[10px] text-gray-400">Vorlage (optional)</label>
+                                                <select wire:model="outletPublishDesign" class="mt-1 block text-sm rounded px-2 py-1">
+                                                    <option value="">— Betriebs-Vorlage / wie Dokument —</option>
+                                                    @foreach($presentationDesignOptionen as $opt)
+                                                        <option value="{{ $opt['value'] }}">{{ $opt['label'] }}</option>
+                                                    @endforeach
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <label class="block text-[10px] text-gray-400">Link-Name (optional)</label>
+                                                <input type="text" wire:model="outletPublishSlug" placeholder="z.B. broich-nord-2027" class="mt-1 block text-sm rounded px-2 py-1">
+                                            </div>
+                                            <button type="button" wire:click="betriebVeroeffentlichen" class="{{ $btnPrimary }}">＋ Betrieb hinzufügen</button>
+                                        </div>
+                                        <p class="text-[10px] text-gray-500">Beliebig viele Betriebe möglich — je Betrieb ein eigener Link. Ohne eigenes Datum gilt das „gültig bis" des Standard-Links.</p>
+                                    </div>
+                                @else
+                                    <p class="text-[11px] text-amber-300">Noch keine Betriebe angelegt — lege sie unter <em>Einstellungen › Betriebe</em> an.</p>
+                                @endif
+                            </div>
                         </x-foodalchemist::modal-section>
                     </div>
                 </x-foodalchemist::editor-tabs>

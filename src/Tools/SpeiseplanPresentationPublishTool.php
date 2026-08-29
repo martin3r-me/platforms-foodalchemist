@@ -40,6 +40,9 @@ class SpeiseplanPresentationPublishTool extends FoodAlchemistTool implements Too
                 'cta_link' => ['type' => 'string'],
                 'slug' => ['type' => 'string', 'description' => 'Optionaler eigener Link-Name statt Zufalls-Token '
                     . '(kebab-normalisiert, je Ausgabeform eindeutig; leerer String = zurück auf Token).'],
+                'outlet_id' => ['type' => 'integer', 'description' => 'Optional (Slice F): veröffentlicht einen '
+                    . 'ZUSÄTZLICHEN Aushang-Link FÜR diesen Betrieb — eigene Vorlage + eigener Name, eigene Freigabe. '
+                    . 'Ohne outlet_id = der Standard-Link am Dokument-Kopf. Der Betrieb muss dem Team gehören.'],
             ],
             'required' => ['speiseplan_id', 'expires_at'],
         ];
@@ -52,15 +55,19 @@ class SpeiseplanPresentationPublishTool extends FoodAlchemistTool implements Too
             return ToolResult::error('Kein Team im Kontext.', 'NO_TEAM');
         }
         try {
-            $res = app(PresentationService::class)->publish($team, 'speiseplan', (int) $arguments['speiseplan_id'], [
+            $settings = [
                 'expires_at' => $arguments['expires_at'] ?? null,
                 'design' => $arguments['design'] ?? null,
                 'mahlzeit' => $arguments['mahlzeit'] ?? 'mittag',
                 'montag' => $arguments['montag'] ?? null,
                 'cta' => ['text' => $arguments['cta_text'] ?? null, 'link' => $arguments['cta_link'] ?? null],
-            ] + (array_key_exists('slug', $arguments) ? ['slug' => $arguments['slug']] : []));
+            ] + (array_key_exists('slug', $arguments) ? ['slug' => $arguments['slug']] : []);
+            $svc = app(PresentationService::class);
+            $res = ($arguments['outlet_id'] ?? null) !== null
+                ? $svc->publishForOutlet($team, 'speiseplan', (int) $arguments['speiseplan_id'], (int) $arguments['outlet_id'], $settings)
+                : $svc->publish($team, 'speiseplan', (int) $arguments['speiseplan_id'], $settings);
         } catch (ModelNotFoundException) {
-            return ToolResult::error('Speiseplan nicht gefunden oder nicht sichtbar.', 'NOT_FOUND');
+            return ToolResult::error('Speiseplan oder Betrieb nicht gefunden oder nicht sichtbar.', 'NOT_FOUND');
         } catch (\Throwable $e) {
             return ToolResult::error($e->getMessage(), 'VALIDATION_ERROR');
         }

@@ -543,7 +543,7 @@ class SpeiseplanService
      *               legende:array{allergene:list<array{code:string,label:string}>, zusatzstoffe:list<array{code:string,label:string}>},
      *               kostformen:list, erzeugt:string}
      */
-    public function dokumentDaten(Team $team, FoodAlchemistSpeiseplan $plan, string $mahlzeit = 'mittag', ?string $montag = null, bool $intern = false, bool $mitKaskade = false): array
+    public function dokumentDaten(Team $team, FoodAlchemistSpeiseplan $plan, string $mahlzeit = 'mittag', ?string $montag = null, bool $intern = false, bool $mitKaskade = false, ?\Platform\FoodAlchemist\Models\FoodAlchemistOutlet $outlet = null, bool $mitPreis = false): array
     {
         $mahlzeit = array_key_exists($mahlzeit, self::MAHLZEITEN) ? $mahlzeit : 'mittag';
         $mo = ($montag !== null ? Carbon::parse($montag) : ($plan->start_date ?? Carbon::now()))->startOfWeek(Carbon::MONDAY);
@@ -569,7 +569,7 @@ class SpeiseplanService
         $usedZus = [];
 
         // Zellen-Inhalt je Eintrag → Name + Codes; sammelt nebenbei die Legende.
-        $codesFuer = function (FoodAlchemistSpeiseplanEintrag $e) use ($agg, $allergenCode, $zusatzCode, &$usedAlg, &$usedZus): array {
+        $codesFuer = function (FoodAlchemistSpeiseplanEintrag $e) use ($agg, $allergenCode, $zusatzCode, &$usedAlg, &$usedZus, $outlet, $mitPreis): array {
             $k = $agg->kennzeichnungFromGerichte($this->eintragGerichte($e));
             $codes = [];
             foreach ($k['allergene'] as $a) {
@@ -585,7 +585,13 @@ class SpeiseplanService
                 }
             }
 
-            return ['name' => $this->eintragName($e), 'codes' => $codes];
+            $zelle = ['name' => $this->eintragName($e), 'codes' => $codes];
+            // Preis nur wenn ausdrücklich gewünscht (GV-Aushang ist per Default preislos), betriebs-aware.
+            if ($mitPreis) {
+                $zelle['vk'] = round((float) $this->eintragPreis($e, $outlet)['vk'], 2);
+            }
+
+            return $zelle;
         };
 
         $for = fn (Carbon $d) => $d->format('Y-m-d');

@@ -24,7 +24,7 @@
                                     @php $cells = $line['cells'][$tag['key'] ?? ''] ?? []; @endphp
                                     <td>
                                         @foreach($cells as $cell)
-                                            <div style="margin-bottom:4px;">{{ $cell['label'] ?? '' }}@if(!empty($cell['codes']))<span class="pt-codes">{{ implode(' ', array_map('strval', $cell['codes'])) }}</span>@endif</div>
+                                            <div style="margin-bottom:4px;">{{ $cell['label'] ?? '' }}@if(!empty($cell['codes']))<span class="pt-codes">{{ implode(' ', array_map('strval', $cell['codes'])) }}</span>@endif@if(!empty($cell['price']))<span class="pt-price" style="margin-left:.4em;white-space:nowrap;opacity:.85;font-variant-numeric:tabular-nums;">{{ $cell['price'] }}</span>@endif</div>
                                         @endforeach
                                     </td>
                                 @endforeach
