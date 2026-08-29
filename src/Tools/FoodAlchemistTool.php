@@ -309,6 +309,34 @@ abstract class FoodAlchemistTool
     }
 
     /**
+     * Guard für Format-Slot-by-id-Tools (D6): existiert der Slot und gehört sein Format dem Team?
+     * Gibt bei Fehler NOT_FOUND/ACCESS_DENIED, sonst null.
+     */
+    protected function guardFormatSlotOwned(Team $team, int $slotId): ?ToolResult
+    {
+        $slot = \Platform\FoodAlchemist\Models\FoodAlchemistFormatSlot::whereKey($slotId)->first();
+        if ($slot === null) {
+            return ToolResult::error('Format-Slot nicht vorhanden.', 'NOT_FOUND');
+        }
+
+        return $this->guardOwned($team, \Platform\FoodAlchemist\Models\FoodAlchemistFormat::class, (int) $slot->format_id, 'Format');
+    }
+
+    /**
+     * Guard für Format-Bild-by-id-Tools (D6): existiert das Bild und gehört sein Format dem Team?
+     * Gibt bei Fehler NOT_FOUND/ACCESS_DENIED, sonst null.
+     */
+    protected function guardFormatImageOwned(Team $team, int $imageId): ?ToolResult
+    {
+        $img = \Platform\FoodAlchemist\Models\FoodAlchemistFormatImage::whereKey($imageId)->first();
+        if ($img === null) {
+            return ToolResult::error('Format-Bild nicht vorhanden.', 'NOT_FOUND');
+        }
+
+        return $this->guardOwned($team, \Platform\FoodAlchemist\Models\FoodAlchemistFormat::class, (int) $img->format_id, 'Format');
+    }
+
+    /**
      * Kompakte Paket-Serialisierung (D5d) — geteilt von pakete.GET/LIST/SEARCH. Mit $withDishes werden
      * die Gericht-Positionen (Row-Id, Gericht, Menge/Einheit) mitgegeben.
      */

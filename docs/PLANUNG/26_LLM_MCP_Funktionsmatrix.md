@@ -22,7 +22,7 @@ Capability. Sie beantwortet:
 | Capability | Anzahl | Aktuelle Aussage |
 |---|---:|---|
 | Prompt-Keys in `config/foodalchemist.php` | 64 | Registry vorhanden; 11 Keys ohne direkte statische Referenz in `src/` (die 5 seit 01.08. ergänzten Keys sind alle direkt referenziert) |
-| MCP-Toolklassen mit `foodalchemist.*`-Name | 313 | Provider registriert 313 (203 Bestand + 17 D1/Phase 0 + 13 D2 + 18 D3 + 27 D4 + 8 D5a Concepts-Lifecycle + 10 D5b Slots/Blocks/Varianten/Paket + 5 D5c Kategorien/Wording/Kohäsion + 12 D5d Pakete-Ressource, Stand 2026-08-29 → D5 KOMPLETT); §7-Register wird nachgezogen (Alt-Liste = 169) |
+| MCP-Toolklassen mit `foodalchemist.*`-Name | 323 | Provider registriert 323 (203 Bestand + 17 D1/Phase 0 + 13 D2 + 18 D3 + 27 D4 + 35 D5 Concepter/Pakete + 10 D6 Format-Aufbau, Stand 2026-08-29); §7-Register wird nachgezogen (Alt-Liste = 169) |
 | Embedding-Pools mit Observern | 6 | GP, Rezept, Lieferant, Konzept, Foodbook, Lab Note |
 | Wissens-/Retrieval-Schichten | 2 | deterministisch plus optional semantisch |
 | dokumentierte vollständige MCP-Tenant-Abnahme | 0 | einzelne Tests vorhanden, keine 157-Tool-Matrix |
@@ -528,6 +528,17 @@ foodalchemist.paket_gerichte.SET
 foodalchemist.paket_gerichte.MENGE
 foodalchemist.paket_gerichte.GESCHIRR
 foodalchemist.paket_gerichte.REORDER
+# D6: Format-Aufbau (Status + Slots/Blöcke + Bildwelt; Concept-Insert/Delete = format_editions.*; Binär-Upload deferred)
+foodalchemist.formats.STATUS
+foodalchemist.format_slots.REORDER
+foodalchemist.format_slots.MOVE
+foodalchemist.format_slots.WORDING
+foodalchemist.format_blocks.POST
+foodalchemist.format_blocks.PUT
+foodalchemist.format_images.HERO
+foodalchemist.format_images.CAPTION
+foodalchemist.format_images.REORDER
+foodalchemist.format_images.CLEAR
 ```
 
 ## 8. MCP-Abnahmematrix
