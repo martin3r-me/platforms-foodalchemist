@@ -1234,11 +1234,13 @@ class Editor extends Component
         if ($this->id !== null && $this->type === 'concepts') {
             $concept = $concepts->detail($team, $this->id);
             if ($concept !== null) {
-                $cockpit = $concepts->preisCockpit($concept);
+                // Ebene 2 (D3): Concept-Preise, HK-Kalkulation + Pax-Simulation folgen dem aktiven Betrieb.
+                $outlet = $team ? app(\Platform\FoodAlchemist\Services\ActiveOutletContext::class)->current($team) : null;
+                $cockpit = $concepts->preisCockpit($concept, $outlet);
                 $sektionSumme = $istAufbau ? $this->sektionsSummen($concept, $cockpit['zeilen']) : [];
                 $aggregat = $agg->conceptAggregat($concept);
                 $bewertet = $bewertung->bewerten($concept, $cockpit, $aggregat);
-                $kalkulation = $kalk->conceptHk($team, $concept);
+                $kalkulation = $kalk->conceptHk($team, $concept, $outlet);
                 $conceptVk = (float) ($cockpit['price_per_person'] ?? 0);
                 $conceptMek = (float) ($cockpit['ek_per_person'] ?? 0);
                 $conceptWePct = $conceptVk > 0
@@ -1248,7 +1250,7 @@ class Editor extends Component
                     ->weAmpel($conceptWePct, $zielWareneinsatzPct);
                 if ($this->tab === 'kalkulation' && $this->simulationPax > 0) {
                     $auftragsSimulation = app(OrderCostingService::class)
-                        ->costConcept($team, $concept, $this->simulationPax);
+                        ->costConcept($team, $concept, $this->simulationPax, $outlet);
                 }
                 if ($istAufbau) {
                     foreach ($concept->slots as $slot) {

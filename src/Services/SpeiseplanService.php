@@ -351,7 +351,7 @@ class SpeiseplanService
      *
      * @return array<string, array{count:int, vk:float}>
      */
-    public function monatsRaster(FoodAlchemistSpeiseplan $plan, int $jahr, int $monat, ?string $mahlzeit = null): array
+    public function monatsRaster(FoodAlchemistSpeiseplan $plan, int $jahr, int $monat, ?string $mahlzeit = null, ?\Platform\FoodAlchemist\Models\FoodAlchemistOutlet $outlet = null): array
     {
         $out = [];
         foreach ($plan->entries as $e) {
@@ -362,7 +362,7 @@ class SpeiseplanService
                 continue;
             }
             $key = $e->entry_date->format('Y-m-d');
-            $p = $this->eintragPreis($e);
+            $p = $this->eintragPreis($e, $outlet);
             $out[$key]['count'] = ($out[$key]['count'] ?? 0) + 1;
             $out[$key]['vk'] = round(($out[$key]['vk'] ?? 0) + $p['vk'], 2);
         }
@@ -397,7 +397,7 @@ class SpeiseplanService
      *
      * @return array{pro_tag: array<string,array{vk:float,ek:float}>, woche: array{vk:float,ek:float}}
      */
-    public function wochenKosten(FoodAlchemistSpeiseplan $plan, string $mahlzeit, Carbon $montag): array
+    public function wochenKosten(FoodAlchemistSpeiseplan $plan, string $mahlzeit, Carbon $montag, ?\Platform\FoodAlchemist\Models\FoodAlchemistOutlet $outlet = null): array
     {
         $start = $montag->copy()->startOfDay();
         $ende = $start->copy()->addDays(6);
@@ -408,7 +408,7 @@ class SpeiseplanService
             if ($e->entry_date === null || $e->meal !== $mahlzeit || ! $e->entry_date->between($start, $ende)) {
                 continue;
             }
-            $p = $this->eintragPreis($e);
+            $p = $this->eintragPreis($e, $outlet);
             $k = $e->entry_date->format('Y-m-d');
             $proTag[$k]['vk'] = round(($proTag[$k]['vk'] ?? 0) + $p['vk'], 2);
             $proTag[$k]['ek'] = round(($proTag[$k]['ek'] ?? 0) + $p['ek'], 2);

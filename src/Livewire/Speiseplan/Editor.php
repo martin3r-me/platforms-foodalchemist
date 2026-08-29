@@ -585,6 +585,10 @@ class Editor extends Component
             }
         }
         $presentationDesignOptionen = app(PresentationDesignService::class)->pickerOptions($team, 'speiseplan');
+        // Ebene 2 (D3): Kosten/Belegung folgen dem Betrieb (dokument-gebunden ?? aktiver Betrieb).
+        $outlet = $sp !== null && $sp->outlet_id !== null
+            ? \Platform\FoodAlchemist\Models\FoodAlchemistOutlet::where('team_id', $team->id)->find($sp->outlet_id)
+            : ($team !== null ? app(\Platform\FoodAlchemist\Services\ActiveOutletContext::class)->current($team) : null);
 
         return view('foodalchemist::livewire.speiseplan.editor', [
             'presentationInfo' => $presentationInfo,
@@ -617,8 +621,8 @@ class Editor extends Component
             'montagDt' => $montag,
             'monatStart' => $monatStart,
             'raster' => $sp !== null ? $svc->wochenRaster($sp, $this->mahlzeit, $montag) : [],
-            'monatsRaster' => $sp !== null ? $svc->monatsRaster($sp, (int) $monatStart->year, (int) $monatStart->month, $this->mahlzeit) : [],
-            'kosten' => $sp !== null ? $svc->wochenKosten($sp, $this->mahlzeit, $montag) : null,
+            'monatsRaster' => $sp !== null ? $svc->monatsRaster($sp, (int) $monatStart->year, (int) $monatStart->month, $this->mahlzeit, $outlet) : [],
+            'kosten' => $sp !== null ? $svc->wochenKosten($sp, $this->mahlzeit, $montag, $outlet) : null,
             'veggie' => $sp !== null ? $svc->veggieCheck($sp, $this->mahlzeit, $montag) : null,
             'kostformen' => $sp !== null ? $svc->kostformAbdeckung($sp, $this->mahlzeit, $montag) : [],
             'kennzeichnung' => $sp !== null ? $svc->wochenKennzeichnung($sp, $this->mahlzeit, $montag) : null,

@@ -1768,14 +1768,14 @@ class FoodbookService
      *
      * @return array{vk_pro_person: float, ek_pro_person: float, pauschal: float, personen: ?int, gesamt_vk: ?float, gesamt_ek: ?float, food_cost_percent: ?float}
      */
-    public function gesamt(Team $team, FoodAlchemistFoodbook $fb): array
+    public function gesamt(Team $team, FoodAlchemistFoodbook $fb, ?\Platform\FoodAlchemist\Models\FoodAlchemistOutlet $outlet = null): array
     {
         $pax = $fb->personen;
         $vk = 0.0;
         $ek = 0.0;
         $pauschal = 0.0;
         foreach ($fb->chapters()->whereNull('parent_id')->get() as $top) {
-            $agg = $this->kapitelAggregat($team, $top, $pax);
+            $agg = $this->kapitelAggregat($team, $top, $pax, $outlet);
             $vk += $agg['vk_pro_person'];
             $ek += $agg['ek_per_person'];
             $pauschal += $agg['pauschal'];
@@ -1813,7 +1813,7 @@ class FoodbookService
      *                                     wird auf die oberste Ebene gehoben (sonst nie erreicht).
      * @param  bool  $mitKaskade  #3: zusätzlich den Produktions-Baum je Gericht anhängen (EK nur intern).
      */
-    public function dokumentDaten(Team $team, FoodAlchemistFoodbook $fb, bool $intern = false, array $kapitelFilter = [], bool $mitKaskade = false): array
+    public function dokumentDaten(Team $team, FoodAlchemistFoodbook $fb, bool $intern = false, array $kapitelFilter = [], bool $mitKaskade = false, ?\Platform\FoodAlchemist\Models\FoodAlchemistOutlet $outlet = null): array
     {
         $fb->loadMissing([
             'chapters' => fn ($q) => $q->orderBy('position'),
@@ -1844,7 +1844,7 @@ class FoodbookService
         $wording = app(WordingResolver::class);
 
         $rows = [];
-        $walk = function ($parentId, int $depth) use (&$walk, $byParent, &$rows, $team, $pax, $wording, $intern) {
+        $walk = function ($parentId, int $depth) use (&$walk, $byParent, &$rows, $team, $pax, $wording, $intern, $outlet) {
             foreach ($byParent[$parentId] ?? [] as $k) {
                 // Kaskade 2026-08-24: die spezielle ist_format-Live-Kapitel-Mechanik entfernt. Die
                 // Kaskade bleibt LIVE (Concept-/Basisrezept-Edits wirken durch bis ins Foodbook); ein
@@ -1864,7 +1864,7 @@ class FoodbookService
                         ? $wording->gerichtZeilen($b->concept, $b)
                         : [];
                     // Block-Preis für die Preis-links-Spalte (Referenz-Layout „x € pro Person").
-                    $bp = $this->blockPreis($b, $pax);
+                    $bp = $this->blockPreis($b, $pax, $outlet);
                     // E8.3: €/Gast vs. €/Position — Preis-Einheit typ-getrieben (spiegelt LeitstelleService::preiseBaum):
                     // concept_ref = Paket → pro Gast · recipe_ref = Einzelgericht → pro Position · sonst null (Header/Text).
                     $preisEinheit = match ($b->type) {
@@ -1883,7 +1883,7 @@ class FoodbookService
                         'recipe_id' => $b->type === 'recipe_ref' ? ($b->sales_recipe_id !== null ? (int) $b->sales_recipe_id : null) : null,
                         'codes' => []];
                 }
-                $agg = $this->kapitelAggregat($team, $k, $pax);
+                $agg = $this->kapitelAggregat($team, $k, $pax, $outlet);
                 $row = [
                     'title' => $k->consumer_title ?: $k->title,
                     'title_intern' => $k->title,           // interner Titel für die Projektleitung-Sicht
@@ -1985,7 +1985,7 @@ class FoodbookService
             'fb' => $fb,
             'intern' => $intern,
             'kapitel' => $rows,
-            'gesamt' => $this->gesamt($team, $fb),
+            'gesamt' => $this->gesamt($team, $fb, $outlet),
             // #5b: §-Kennzeichnungs-Legende (nur real vorkommende Allergene/Zusatzstoffe) — ganz unten im Dokument.
             'legende' => $legende,
             // CRM-only: Kontaktperson separat.
