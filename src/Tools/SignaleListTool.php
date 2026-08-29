@@ -40,6 +40,7 @@ class SignaleListTool extends FoodAlchemistTool implements ToolContract, ToolMet
                 'type' => ['type' => 'string', 'enum' => array_column(SignalTyp::cases(), 'value')],
                 'page' => ['type' => 'integer', 'minimum' => 1, 'default' => 1, 'description' => 'Seitennummer (last_page aus der Vorantwort).'],
                 'per_page' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 200, 'default' => 100, 'description' => 'Seitengröße (max. 200).'],
+                'outlet_id' => ['type' => 'integer', 'description' => 'Ebene 2: auf die Betriebs-Brille eingrenzen — nur Signale dieses Betriebs PLUS die betriebs-unabhängigen (Team-Core). Fehlt = alle Lanes. Betriebe via outlets.GET.'],
             ],
             'required' => [],
         ];
@@ -53,26 +54,41 @@ class SignaleListTool extends FoodAlchemistTool implements ToolContract, ToolMet
         }
         $page = max(1, (int) ($arguments['page'] ?? 1));
         $perPage = min(200, max(1, (int) ($arguments['per_page'] ?? 100)));
+
+        // Ebene 2: optionale Betriebs-Lane. outlet_id gesetzt ⇒ Betrieb + Team-Core; sonst alle Lanes.
+        $outlet = null;
+        $nurLane = false;
+        if (! empty($arguments['outlet_id'])) {
+            $outlet = \Platform\FoodAlchemist\Models\FoodAlchemistOutlet::where('team_id', $team->id)->find((int) $arguments['outlet_id']);
+            if ($outlet === null) {
+                return ToolResult::error('Betrieb nicht gefunden im Team.', 'NOT_FOUND');
+            }
+            $nurLane = true;
+        }
+
         Paginator::currentPageResolver(fn () => $page);
         $svc = app(SignalService::class);
         // Default: alle Status (status='') — LIST enumeriert vollständig, nicht nur offene.
         $treffer = $svc->paginate([
             'status' => (string) ($arguments['status'] ?? ''),
             'type' => $arguments['type'] ?? null,
-        ], $team, $perPage);
+        ], $team, $perPage, $outlet, $nurLane);
 
         return ToolResult::success([
             'total' => $treffer->total(),
             'page' => $treffer->currentPage(),
             'last_page' => $treffer->lastPage(),
             'per_page' => $treffer->perPage(),
-            'offen_gesamt' => $svc->offeneCount($team),
+            'active_outlet_id' => $outlet?->id,
+            'offen_gesamt' => $svc->offeneCount($team, $outlet, $nurLane),
             'signale' => collect($treffer->items())->map(fn ($s) => [
                 'id' => $s->id,
                 'type' => $s->type instanceof \BackedEnum ? $s->type->value : $s->type,
                 'severity' => $s->severity instanceof \BackedEnum ? $s->severity->value : $s->severity,
                 'status' => $s->status instanceof \BackedEnum ? $s->status->value : $s->status,
                 'title' => $s->title,
+                // Ebene 2: welche Lane — NULL = Team-Core (betriebs-unabhängig), sonst der Betrieb.
+                'outlet_id' => $s->outlet_id !== null ? (int) $s->outlet_id : null,
                 'created_at' => (string) $s->created_at,
                 // V-009 (22·H4a), gleiche Projektion wie in `signale.SEARCH`.
                 'zuletzt_gesehen' => $s->last_seen_at !== null ? (string) $s->last_seen_at : null,

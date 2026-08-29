@@ -34,6 +34,7 @@ class SignaleSearchTool extends FoodAlchemistTool implements ToolContract, ToolM
                 // auf 7 von 14 Typen zurückgefallen und hätte mit Spec 21 weiter driftet.
                 'type' => ['type' => 'string', 'enum' => array_column(SignalTyp::cases(), 'value')],
                 'limit' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 50, 'default' => 20],
+                'outlet_id' => ['type' => 'integer', 'description' => 'Ebene 2: auf die Betriebs-Brille eingrenzen — Signale dieses Betriebs PLUS die betriebs-unabhängigen (Team-Core). Fehlt = alle Lanes. Betriebe via outlets.GET.'],
             ],
         ];
     }
@@ -44,22 +45,35 @@ class SignaleSearchTool extends FoodAlchemistTool implements ToolContract, ToolM
         if ($team === null) {
             return ToolResult::error('Kein Team im Kontext.', 'NO_TEAM');
         }
+
+        $outlet = null;
+        $nurLane = false;
+        if (! empty($arguments['outlet_id'])) {
+            $outlet = \Platform\FoodAlchemist\Models\FoodAlchemistOutlet::where('team_id', $team->id)->find((int) $arguments['outlet_id']);
+            if ($outlet === null) {
+                return ToolResult::error('Betrieb nicht gefunden im Team.', 'NOT_FOUND');
+            }
+            $nurLane = true;
+        }
+
         $svc = app(SignalService::class);
         $treffer = $svc->paginate(array_filter([
             'status' => $arguments['status'] ?? null,
             'type' => $arguments['type'] ?? null,
-        ], fn ($v) => $v !== null), $team, min(50, max(1, (int) ($arguments['limit'] ?? 20))));
+        ], fn ($v) => $v !== null), $team, min(50, max(1, (int) ($arguments['limit'] ?? 20))), $outlet, $nurLane);
 
         return ToolResult::success([
             'total' => $treffer->total(),
-            'offen_gesamt' => $svc->offeneCount($team),
-            'offen_nach_typ' => $svc->offeneNachTyp($team),
+            'active_outlet_id' => $outlet?->id,
+            'offen_gesamt' => $svc->offeneCount($team, $outlet, $nurLane),
+            'offen_nach_typ' => $svc->offeneNachTyp($team, $outlet, $nurLane),
             'signale' => collect($treffer->items())->map(fn ($s) => [
                 'id' => $s->id,
                 'type' => $s->type instanceof \BackedEnum ? $s->type->value : $s->type,
                 'severity' => $s->severity instanceof \BackedEnum ? $s->severity->value : $s->severity,
                 'status' => $s->status instanceof \BackedEnum ? $s->status->value : $s->status,
                 'title' => $s->title,
+                'outlet_id' => $s->outlet_id !== null ? (int) $s->outlet_id : null,
                 'created_at' => (string) $s->created_at,
                 // V-009 (22·H4a): erstmals gesehen ist `created_at`, zuletzt gesehen und wie
                 // oft steht hier. Ein Befund mit hohem `gesehen_zaehler` ist ein Prozess-

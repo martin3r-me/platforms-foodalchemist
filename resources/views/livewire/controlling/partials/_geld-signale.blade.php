@@ -10,6 +10,15 @@
 @php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
 
 <div data-ctrl-geld-signale class="space-y-3">
+    {{-- Ebene 2: die Zähler folgen der Betriebsbrille — Betriebs-Lane PLUS die betriebs-unabhängigen
+         (Team-Core). Ohne Betrieb ist es die Team-Core-Sicht. --}}
+    @if(!empty($kpi['betrieb_name']))
+        <div class="flex items-center gap-1.5 text-[11px] text-indigo-600">
+            @svg('heroicon-o-building-storefront', 'w-3.5 h-3.5')
+            <span>Geld-Signale für <span class="font-medium">{{ $kpi['betrieb_name'] }}</span> · plus betriebs-unabhängige (Artikel/Hygiene/Rezept)</span>
+        </div>
+    @endif
+
     @if(($kpi['geld_signale'] ?? 0) === 0)
         <p class="text-xs text-gray-500">
             Keine offenen Geld-Signale. Preis-, Marge- und Wareneinsatz-Befunde erzeugt der

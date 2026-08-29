@@ -190,7 +190,8 @@ class Cockpit extends Component
         // (jetzt Kennzahlen-Tab), damit nicht zwei Break-even-Zahlen im Umlauf sind.
         $fixMonat = array_sum($fix->summeJeBlock($team, $outlet));
 
-        $offeneNachTyp = $signale->offeneNachTyp($team);
+        // Ebene 2: die Geld-Signal-Zähler folgen der Betriebsbrille (Betriebs-Lane + Team-Core-Lane).
+        $offeneNachTyp = $signale->offeneNachTyp($team, $outlet, nurLane: true);
         $jeTyp = [];
         $geldSignale = 0;
         foreach (self::GELD_SIGNALE as $typ) {

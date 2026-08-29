@@ -26,6 +26,12 @@
             <div class="flex items-center gap-2 flex-wrap">
                 <span class="text-[13px] font-medium tracking-tight text-gray-900">{{ $sig->title }}</span>
                 <span class="text-[9px] font-semibold uppercase tracking-wider {{ $sv['text'] }}">{{ $sig->severity->label() }}</span>
+                {{-- Ebene 2: Betriebs-Lane sichtbar machen — NULL = Team-Core (kein Badge), sonst der Betrieb. --}}
+                @if($sig->outlet_id)
+                    <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-semibold bg-indigo-500/10 text-indigo-600" title="Signal dieses Betriebs (Betriebs-Lane)">
+                        @svg('heroicon-o-building-storefront', 'w-2.5 h-2.5') {{ optional($sig->outlet)->name ?? 'Betrieb' }}
+                    </span>
+                @endif
             </div>
             <p class="text-[11px] text-gray-500 mt-0.5">
                 <span class="text-gray-400">{{ $sig->type->label() }}</span>@if($sig->description) · {{ \Illuminate\Support\Str::limit($sig->description, 130) }}@endif

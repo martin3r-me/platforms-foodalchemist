@@ -333,6 +333,98 @@ class PresentationService
     }
 
     /**
+     * Ausgabe-Drift (Signale): die im Snapshot GEZEIGTEN Kundenpreise als flache Map
+     * `pfad ⇒ {net, label}` — eine stabile Positions-Identität (Sektion/Block/Item bzw.
+     * Grid-Zelle), damit derselbe Walker die EINGEFRORENE Ausgabe und eine frisch gerechnete
+     * live vergleichen kann. Einheit (netto/brutto) ist die des Snapshots; da beide Seiten aus
+     * DEMSELBEN Pfad denselben Weg nehmen, ist der relative Delta-Vergleich einheiten-neutral.
+     * Preislose Ausgaben (Speiseplan ohne `price_display`) liefern eine leere Map.
+     *
+     * @param  array<string,mixed>  $snapshot  buildSnapshot-Ausgabe (mit Key `content`)
+     * @return array<string,array{net:float,label:?string}>
+     */
+    public function preisPfade(array $snapshot): array
+    {
+        $c = $snapshot['content'] ?? [];
+        $out = [];
+
+        // Linear (Foodbook/Speisekarte): Item-VK, Konzept-Block-Summenpreis, Gesamt/Person.
+        foreach ($c['sections'] ?? [] as $si => $sec) {
+            foreach ($sec['blocks'] ?? [] as $bi => $blk) {
+                foreach ($blk['items'] ?? [] as $ii => $it) {
+                    $p = $this->parsePreis($it['price'] ?? null);
+                    if ($p !== null && $p > 0) {
+                        $out["s{$si}.b{$bi}.i{$ii}"] = ['net' => $p, 'label' => (string) ($it['label'] ?? '')];
+                    }
+                }
+                $bp = $blk['price'] ?? null;
+                if (is_array($bp)) {
+                    foreach (['pp', 'pauschal'] as $k) {
+                        $p = $this->parsePreis($bp[$k] ?? null);
+                        if ($p !== null && $p > 0) {
+                            $out["s{$si}.b{$bi}.{$k}"] = ['net' => $p, 'label' => (string) ($blk['label'] ?? '') . ' (' . $k . ')'];
+                        }
+                    }
+                }
+            }
+        }
+        $t = $c['total'] ?? null;
+        if (is_array($t)) {
+            foreach (['vk_pro_person', 'pauschal', 'gesamt_vk'] as $k) {
+                $p = $this->parsePreis($t[$k] ?? null);
+                if ($p !== null && $p > 0) {
+                    $out["total.{$k}"] = ['net' => $p, 'label' => 'Gesamt: ' . $k];
+                }
+            }
+        }
+
+        // Speiseplan-Grid: Preise stehen NUR in den Rasterzellen (formatierter Text).
+        foreach (($c['grid']['lines'] ?? []) as $li => $line) {
+            foreach ($line['cells'] ?? [] as $ymd => $cells) {
+                foreach ((array) $cells as $ci => $cell) {
+                    $p = $this->parsePreis($cell['price'] ?? null);
+                    if ($p !== null && $p > 0) {
+                        $out["g{$li}.{$ymd}.{$ci}"] = ['net' => $p, 'label' => (string) ($line['name'] ?? '') . ' · ' . (string) ($cell['label'] ?? '')];
+                    }
+                }
+            }
+        }
+
+        return $out;
+    }
+
+    /** Preis aus dem Snapshot lesen: Zahl → float; deutscher Format-String „1.234,56 €" → float. */
+    private function parsePreis(mixed $v): ?float
+    {
+        if (is_int($v) || is_float($v)) {
+            return (float) $v;
+        }
+        if (! is_string($v) || trim($v) === '') {
+            return null;
+        }
+        $s = str_replace(['€', ' ', "\u{00a0}"], '', $v);
+        $s = str_replace('.', '', $s);       // Tausenderpunkt
+        $s = str_replace(',', '.', $s);      // Dezimalkomma
+        return is_numeric($s) ? (float) $s : null;
+    }
+
+    /**
+     * Ausgabe-Drift: die AKTUELL (live) gerechneten Kundenpreise derselben Ausgabe — frisch
+     * gebaut aus dem Entity-Ist-Stand, mit denselben Freigabe-Settings (price_display/Mahlzeit/
+     * Woche) und im gewünschten Betriebs-Kontext (`$settings['outlet']`). Gegenstück zu
+     * {@see preisPfade} auf dem eingefrorenen Snapshot.
+     *
+     * @param  array<string,mixed>  $settings  Freigabe-Settings des Snapshots + optional `outlet`
+     * @return array<string,array{net:float,label:?string}>
+     */
+    public function livePreisIndex(Team $team, string $type, int $id, array $settings): array
+    {
+        $entity = $this->resolveEntity($team, $type, $id, forWrite: false);
+
+        return $this->preisPfade($this->buildSnapshot($team, $entity, $type, $settings));
+    }
+
+    /**
      * ALLOWLIST-Neubau der Foodbook-Kundensicht. Baut ausschließlich sichere Keys neu —
      * niemals wird die dokumentDaten-Ausgabe wholesale übernommen.
      *

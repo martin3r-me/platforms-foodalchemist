@@ -1,11 +1,8 @@
 <?php
 
-use Platform\FoodAlchemist\Enums\SignalTyp;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipeDarreichung;
 use Platform\FoodAlchemist\Models\FoodAlchemistServierform;
-use Platform\FoodAlchemist\Models\FoodAlchemistSignal;
-use Platform\FoodAlchemist\Services\SignalDetektorService;
 use Platform\FoodAlchemist\Services\VkSnapshotService;
 use Platform\FoodAlchemist\Tests\Support\SeedsTeamHierarchy;
 use Platform\FoodAlchemist\Tests\TestCase;
@@ -43,7 +40,7 @@ it('release friert den Live-VK ein; publishedFor liefert den Snapshot', function
         ->and((float) $pub->sales_net)->toBe(25.0);
 });
 
-it('VK-Sprung OHNE Freigabe → Signal + veröffentlichter VK bleibt unverändert', function () {
+it('VK-Sprung OHNE Freigabe → pending meldet Drift, veröffentlichter VK bleibt unverändert', function () {
     $this->snap->release($this->rootTeam, [$this->darr->id]);          // 25 € freigegeben
 
     // Interner Live-VK springt (z. B. EK-Sprung → Recompute) auf 30 €.
@@ -57,13 +54,13 @@ it('VK-Sprung OHNE Freigabe → Signal + veröffentlichter VK bleibt unveränder
         ->and($pending[0]['delta_pct'])->toBe(20.0)
         ->and($pending[0]['richtung'])->toBe('erhoehen');
 
-    // Detektor feuert genau ein Signal.
-    $n = app(SignalDetektorService::class)->vkAnpassungEmpfohlen($this->rootTeam);
-    expect($n)->toBe(1)
-        ->and(FoodAlchemistSignal::where('team_id', $this->rootTeam->id)->where('type', SignalTyp::VkAnpassungEmpfohlen->value)->count())->toBe(1);
-
     // Kernbeweis: OHNE erneute Freigabe bleibt der veröffentlichte VK 25 €.
     expect((float) $this->snap->publishedFor($this->darr->id)->sales_net)->toBe(25.0);
+
+    // Hinweis: das „VK-Anpassung empfohlen"-Signal kommt seit der Vereinheitlichung (Freigabe =
+    // Publish) NICHT mehr aus vk_price_snapshots, sondern aus der veröffentlichten Ausgabe
+    // (Ausgabe-Drift, per Betrieb) → eigener Beweis in AusgabeDriftTest. VkSnapshotService bleibt
+    // bis Stage B als interner Freigabe-Mechanismus bestehen.
 });
 
 it('release schreibt nur eigene Darreichungen (D1-Schreibrecht)', function () {

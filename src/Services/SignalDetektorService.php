@@ -7,6 +7,7 @@ use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Enums\SignalSeverity;
 use Platform\FoodAlchemist\Enums\SignalTyp;
 use Platform\FoodAlchemist\Models\FoodAlchemistGp;
+use Platform\FoodAlchemist\Models\FoodAlchemistOutlet;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Models\FoodAlchemistSignalSnapshot;
 
@@ -54,7 +55,9 @@ class SignalDetektorService
 
     private function detektoren(Team $team): int
     {
-        return $this->datenqualitaetGpLa($team)
+        // Team-Core-Lane (outlet=null): der heutige team-weite Lauf — betriebs-unabhängige Signale
+        // (Artikel/Hygiene/Rezept/Datenqualität) leben hier, die geldabhängigen in ihrer NULL-Lane.
+        $n = $this->datenqualitaetGpLa($team)
             + $this->veraltetePreise($team)
             + $this->preisAnomalie($team)
             + $this->preisSprungMargeImpact($team)
@@ -66,6 +69,44 @@ class SignalDetektorService
             + $this->widerspruchWissenGraph($team)
             + $this->naehrwertPlausi($team)
             + $this->dataQuality->emittiereSignale($team);   // Datenqualitäts-Kaskade-Ampel (P1) mit im Scheduler
+
+        // Ebene 2 — Betriebs-Lanes: die geldabhängigen Detektoren (Marge/Wareneinsatz/Ausgabe-Drift)
+        // je Betrieb MIT eigener Kostenstruktur nochmal, gegen dessen Schwellen. Betriebe, die alles
+        // vom Team erben, würden identische Treffer wie die NULL-Lane liefern → kein Zweitlauf.
+        foreach ($this->betriebeMitOverrides($team) as $o) {
+            $n += $this->margeUnterZiel($team, $o)
+                + $this->wareneinsatzUeberZiel($team, $o)
+                + $this->vkAnpassungEmpfohlen($team, $o);
+        }
+
+        return $n;
+    }
+
+    /**
+     * Die Betriebe, die einen eigenen Signal-Lauf verdienen: aktive Outlets mit mindestens einem
+     * kostenrelevanten Override (Marge / Ziel-Wareneinsatz / Stundensatz / HK2-Zuschlag /
+     * Lohnnebenkosten). Ein Betrieb ohne Override rechnet exakt wie die Team-Baseline — die
+     * NULL-Lane deckt ihn schon ab; ein Zweitlauf wäre nur Doppel-Rauschen.
+     *
+     * @return list<FoodAlchemistOutlet>
+     */
+    private function betriebeMitOverrides(Team $team): array
+    {
+        $settings = app(OutletSettingsService::class);
+        $relevant = ['margin_pct', 'target_food_cost_pct', 'stundensatz_eur', 'hk2_surcharge_pct', 'labor_overhead_pct'];
+
+        $out = [];
+        foreach (FoodAlchemistOutlet::where('team_id', $team->id)->where('is_inactive', false)->orderBy('id')->get() as $o) {
+            $s = $settings->for($o);
+            foreach ($relevant as $feld) {
+                if (($s->{$feld} ?? null) !== null) {
+                    $out[] = $o;
+                    break;
+                }
+            }
+        }
+
+        return $out;
     }
 
     /**
@@ -698,16 +739,18 @@ class SignalDetektorService
      * unter der Zielmarge (settings.margePct, aus recipeHk) liegt. Ein Signal je Gericht
      * (ref auf das Gericht), severity nach Schwere (negativer DB = kritisch).
      */
-    public function margeUnterZiel(Team $team): int
+    public function margeUnterZiel(Team $team, ?FoodAlchemistOutlet $outlet = null): int
     {
         $kalk = app(KalkulationService::class);
         $gerichte = FoodAlchemistRecipe::visibleToTeam($team)->verkauf()
             ->whereNotNull('sales_net')->where('sales_net', '>', 0)->get();
 
+        $betrieb = $outlet !== null ? ' [' . $outlet->name . ']' : '';
         $n = 0;
         $keys = [];
         foreach ($gerichte as $r) {
-            $hk = $kalk->recipeHk($team, $r);
+            // Ebene 2: im Betriebs-Kontext gegen dessen Kostenstruktur (Marge/Stundensatz/Nebenkosten).
+            $hk = $kalk->recipeHk($team, $r, $outlet);
             $db = $hk['db_pct'] ?? null;
             $ziel = (float) ($hk['marge_pct'] ?? 0);
             if ($db === null || $ziel <= 0 || $db >= $ziel) {
@@ -717,20 +760,21 @@ class SignalDetektorService
                 $team,
                 SignalTyp::MargeUnterZiel,
                 $db < 0 ? SignalSeverity::Kritisch : SignalSeverity::Warnung,
-                $r->name . ' — DB ' . number_format((float) $db, 1, ',', '.') . ' % unter Ziel ' . number_format($ziel, 1, ',', '.') . ' %',
+                $r->name . $betrieb . ' — DB ' . number_format((float) $db, 1, ',', '.') . ' % unter Ziel ' . number_format($ziel, 1, ',', '.') . ' %',
                 [
                     'dedup_key' => 'marge-recipe-' . $r->id,
+                    'outlet_id' => $outlet?->id,
                     'ref_type' => 'recipe',
                     'ref_id' => $r->id,
                     'description' => 'Deckungsbeitrag unter der Zielmarge — Verkaufspreis erhöhen oder Wareneinsatz/Vollkosten senken.',
-                    'payload' => ['db_pct' => (float) $db, 'ziel_pct' => $ziel, 'sales_net' => (float) $r->sales_net],
+                    'payload' => ['db_pct' => (float) $db, 'ziel_pct' => $ziel, 'sales_net' => (float) $r->sales_net, 'outlet_id' => $outlet?->id],
                 ]
             );
             $keys[] = 'marge-recipe-' . $r->id;
             $n++;
         }
-        // Behobene Gerichte (DB wieder ≥ Ziel) schließen sich selbst — sonst müllen sie das Postfach zu.
-        $this->signals->schliesseVerschwundene($team, SignalTyp::MargeUnterZiel, 'detektor', $keys, 'Marge wieder ≥ Ziel — automatisch geschlossen');
+        // Behobene Gerichte (DB wieder ≥ Ziel) schließen sich selbst — in DIESER Lane.
+        $this->signals->schliesseVerschwundene($team, SignalTyp::MargeUnterZiel, 'detektor', $keys, 'Marge wieder ≥ Ziel — automatisch geschlossen', $outlet?->id);
 
         return $n;
     }
@@ -741,9 +785,9 @@ class SignalDetektorService
      * (settings.zielWareneinsatzPct) liegt. Ein Signal je Gericht. Gastro-nativster KPI;
      * ergänzt „Marge unter Ziel" um die Einkaufs-/Rezeptur-Seite.
      */
-    public function wareneinsatzUeberZiel(Team $team): int
+    public function wareneinsatzUeberZiel(Team $team, ?FoodAlchemistOutlet $outlet = null): int
     {
-        $ziel = app(TeamSettingsService::class)->zielWareneinsatzPct($team);
+        $ziel = app(TeamSettingsService::class)->zielWareneinsatzPct($team, $outlet);
         if ($ziel <= 0) {
             return 0;
         }
@@ -753,13 +797,13 @@ class SignalDetektorService
         $n = 0;
         $keys = [];
         foreach ($gerichte as $r) {
-            if ($this->wareneinsatzUeberZielFuer($team, $r, $ziel)) {
+            if ($this->wareneinsatzUeberZielFuer($team, $r, $ziel, null, $outlet)) {
                 $keys[] = 'we-quote-recipe-' . $r->id;
                 $n++;
             }
         }
-        // Wieder unter Ziel gefallene Gerichte automatisch schließen (Gegenzweig zum Emittieren).
-        $this->signals->schliesseVerschwundene($team, SignalTyp::WareneinsatzUeberZiel, 'detektor', $keys, 'Wareneinsatz wieder ≤ Ziel — automatisch geschlossen');
+        // Wieder unter Ziel gefallene Gerichte automatisch schließen — in DIESER Lane.
+        $this->signals->schliesseVerschwundene($team, SignalTyp::WareneinsatzUeberZiel, 'detektor', $keys, 'Wareneinsatz wieder ≤ Ziel — automatisch geschlossen', $outlet?->id);
 
         return $n;
     }
@@ -779,29 +823,31 @@ class SignalDetektorService
      *
      * @return bool true, wenn ein Signal erzeugt/aktualisiert wurde
      */
-    public function wareneinsatzUeberZielFuer(Team $team, FoodAlchemistRecipe $r, ?float $ziel = null, ?float $we = null): bool
+    public function wareneinsatzUeberZielFuer(Team $team, FoodAlchemistRecipe $r, ?float $ziel = null, ?float $we = null, ?FoodAlchemistOutlet $outlet = null): bool
     {
-        $ziel ??= app(TeamSettingsService::class)->zielWareneinsatzPct($team);
+        $ziel ??= app(TeamSettingsService::class)->zielWareneinsatzPct($team, $outlet);
         if ($ziel <= 0) {
             return false;
         }
-        $we ??= $this->kalkulation()->recipeHk($team, $r)['wareneinsatz_pct'] ?? null;
+        $we ??= $this->kalkulation()->recipeHk($team, $r, $outlet)['wareneinsatz_pct'] ?? null;
         if ($we === null || $we <= $ziel) {
             return false;
         }
 
+        $betrieb = $outlet !== null ? ' [' . $outlet->name . ']' : '';
         $this->signals->erzeuge(
             $team,
             SignalTyp::WareneinsatzUeberZiel,
             // > 1,5× Ziel = deutlich zu teuer → kritisch, sonst Warnung
             $we > $ziel * 1.5 ? SignalSeverity::Kritisch : SignalSeverity::Warnung,
-            $r->name . ' — Wareneinsatz ' . number_format((float) $we, 1, ',', '.') . ' % über Ziel ' . number_format($ziel, 1, ',', '.') . ' %',
+            $r->name . $betrieb . ' — Wareneinsatz ' . number_format((float) $we, 1, ',', '.') . ' % über Ziel ' . number_format($ziel, 1, ',', '.') . ' %',
             [
                 'dedup_key' => 'we-quote-recipe-' . $r->id,
+                'outlet_id' => $outlet?->id,
                 'ref_type' => 'recipe',
                 'ref_id' => $r->id,
                 'description' => 'Food-Cost über dem Ziel — günstigeren Lead-LA prüfen, Rezeptur/Portion anpassen oder Verkaufspreis erhöhen.',
-                'payload' => ['wareneinsatz_pct' => (float) $we, 'ziel_pct' => $ziel, 'sales_net' => $r->sales_net !== null ? (float) $r->sales_net : null],
+                'payload' => ['wareneinsatz_pct' => (float) $we, 'ziel_pct' => $ziel, 'sales_net' => $r->sales_net !== null ? (float) $r->sales_net : null, 'outlet_id' => $outlet?->id],
             ]
         );
 
@@ -873,47 +919,52 @@ class SignalDetektorService
     }
 
     /**
-     * R2.5 — VK-Anpassung empfohlen: der LIVE gerechnete VK einer Darreichung weicht
-     * vom zuletzt FREIGEGEBENEN Snapshot über die Leitplanke (max_vk_delta_pct) ab.
-     * Trennung Live-Marge ↔ veröffentlichter VK: das Signal fordert eine bewusste
-     * Freigabe (Batch) — ohne die bleibt der Kundenpreis (Snapshot) unverändert.
-     * Ein Signal je Darreichung; Richtung (erhöhen/senken) + Delta im Payload.
+     * Ausgabe-Drift (ex R2.5, reorientiert): die VERÖFFENTLICHTE Kundensicht (Foodbook/Speisekarte/
+     * Speiseplan) friert ihre Preise beim Publish ein; der interne VK läuft per Auto-Aufschlag mit.
+     * So driftet der eingefrorene Kundenpreis unbemerkt von der Kostenrealität weg — genau das
+     * maskiert der Auto-Aufschlag. Das Signal hält die eingefrorene Ausgabe gegen den aktuellen
+     * Live-VK ({@see AusgabeDriftService}); Remediation = neu veröffentlichen (Republish).
+     *
+     * Zwei Ebenen über die Lane: `$outlet=null` = Team-Core (inline Doc-Snapshots, NULL-Lane),
+     * `$outlet=X` = die betriebs-scopten Präsentationen (X-Lane). EIN Signal je Ausgabe (nicht je
+     * Zeile → Rauschen); die gedrifteten Zeilen stehen im Payload.
      */
-    public function vkAnpassungEmpfohlen(Team $team): int
+    public function vkAnpassungEmpfohlen(Team $team, ?FoodAlchemistOutlet $outlet = null): int
     {
-        $mindest = app(TeamSettingsService::class)->mindestMarginPct($team);
+        $betrieb = $outlet !== null ? ' [' . $outlet->name . ']' : '';
         $n = 0;
         $keys = [];
-        foreach (app(VkSnapshotService::class)->pending($team) as $p) {
+        foreach (app(AusgabeDriftService::class)->abgedriftet($team, $outlet) as $d) {
+            $anzahl = count($d['zeilen']);
             $this->signals->erzeuge(
                 $team,
                 SignalTyp::VkAnpassungEmpfohlen,
-                // Preissenkung (Marge fällt) ist dringlicher als eine mögliche Erhöhung.
-                $p['richtung'] === 'erhoehen' ? SignalSeverity::Kritisch : SignalSeverity::Warnung,
-                $p['recipe_name'] . ' — freigegebener VK ' . number_format($p['published_net'], 2, ',', '.')
-                    . ' € vs. live ' . number_format($p['live_net'], 2, ',', '.') . ' € (Δ '
-                    . number_format($p['delta_pct'], 1, ',', '.') . ' %, ' . $p['richtung'] . ')',
+                // Große Drift (≥ 15 %) = kritisch: der Kunde zahlt merklich am aktuellen Preis vorbei.
+                $d['max_delta_pct'] >= 15.0 ? SignalSeverity::Kritisch : SignalSeverity::Warnung,
+                $d['label'] . $betrieb . ' — ' . $anzahl . ' Ausgabe-Preis' . ($anzahl === 1 ? '' : 'e')
+                    . ' gedriftet (max Δ ' . number_format($d['max_delta_pct'], 1, ',', '.') . ' %) — neu veröffentlichen',
                 [
-                    'dedup_key' => 'vk-anpassung-presentation-' . $p['presentation_id'] . '-' . $p['live_net'],
-                    'ref_type' => 'recipe',
-                    'ref_id' => $p['recipe_id'],
-                    'description' => 'Der intern gerechnete VK weicht vom freigegebenen Kundenpreis ab. '
-                        . 'Bewusst freigeben (Batch) oder Live-Kalkulation prüfen — kein stiller Kunden-Preissprung.',
+                    'dedup_key' => $d['dedup_key'],
+                    'outlet_id' => $outlet?->id,
+                    'ref_type' => $d['ref_type'],
+                    'ref_id' => $d['ref_id'],
+                    'description' => 'Die veröffentlichte Ausgabe zeigt Preise, die von der aktuellen Kalkulation abweichen. '
+                        . 'Neu veröffentlichen (Republish) friert den aktuellen Stand ein — kein stiller Kunden-Preissprung.',
                     'payload' => [
-                        'presentation_id' => $p['presentation_id'],
-                        'published_net' => $p['published_net'],
-                        'live_net' => $p['live_net'],
-                        'delta_pct' => $p['delta_pct'],
-                        'richtung' => $p['richtung'],
-                        'mindest_marge_pct' => $mindest,
+                        'doc_type' => $d['doc_type'],
+                        'doc_id' => $d['doc_id'],
+                        'outlet_id' => $outlet?->id,
+                        'anzahl' => $anzahl,
+                        'max_delta_pct' => $d['max_delta_pct'],
+                        'zeilen' => array_slice($d['zeilen'], 0, 20),
                     ],
                 ]
             );
-            $keys[] = 'vk-anpassung-presentation-' . $p['presentation_id'] . '-' . $p['live_net'];
+            $keys[] = $d['dedup_key'];
             $n++;
         }
-        // Freigegebene/wieder deckungsgleiche Darreichungen schließen sich selbst (kein Dauer-Phantom).
-        $this->signals->schliesseVerschwundene($team, SignalTyp::VkAnpassungEmpfohlen, 'detektor', $keys, 'VK wieder innerhalb der Leitplanke — automatisch geschlossen');
+        // Wieder deckungsgleiche / neu veröffentlichte Ausgaben schließen sich selbst — in DIESER Lane.
+        $this->signals->schliesseVerschwundene($team, SignalTyp::VkAnpassungEmpfohlen, 'detektor', $keys, 'Ausgabe wieder deckungsgleich / neu veröffentlicht — automatisch geschlossen', $outlet?->id);
 
         return $n;
     }

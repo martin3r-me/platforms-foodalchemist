@@ -38,6 +38,8 @@ class FoodAlchemistSignal extends Model
         // nicht auf `created_at` geraten, s. Migration 2026_07_28_000004.
         'last_seen_at' => 'datetime',
         'seen_count' => 'integer',
+        // Ebene 2: die Betriebs-Lane. NULL = Team-Core, sonst der Betrieb.
+        'outlet_id' => 'integer',
     ];
 
     public function scopeOffen(Builder $q): Builder
@@ -48,5 +50,25 @@ class FoodAlchemistSignal extends Model
     public function scopeTyp(Builder $q, string $typ): Builder
     {
         return $q->where('type', $typ);
+    }
+
+    public function outlet(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(FoodAlchemistOutlet::class, 'outlet_id');
+    }
+
+    /**
+     * Ebene 2 — die Betriebsbrille als Lane-Filter. Ohne Betrieb (Team-Core-Brille) zeigt sie
+     * nur die NULL-Lane; mit Betrieb dessen Lane PLUS die immer sichtbare Team-Core-Lane
+     * (betriebs-unabhängige Signale — Artikel/Hygiene/Rezept — liegen dort und gelten überall).
+     */
+    public function scopeLane(Builder $q, ?FoodAlchemistOutlet $outlet): Builder
+    {
+        return $q->where(function (Builder $inner) use ($outlet) {
+            $inner->whereNull('outlet_id');
+            if ($outlet !== null) {
+                $inner->orWhere('outlet_id', $outlet->id);
+            }
+        });
     }
 }

@@ -2,11 +2,13 @@
 
 namespace Platform\FoodAlchemist\Services;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Enums\SignalSeverity;
 use Platform\FoodAlchemist\Enums\SignalStatus;
 use Platform\FoodAlchemist\Enums\SignalTyp;
+use Platform\FoodAlchemist\Models\FoodAlchemistOutlet;
 use Platform\FoodAlchemist\Models\FoodAlchemistSignal;
 
 /**
@@ -17,15 +19,19 @@ class SignalService
 {
     /**
      * Erzeugt/aktualisiert ein Signal — idempotent über dedup_key: existiert bereits ein
-     * OFFENES Signal mit gleichem (Team, typ, dedup_key), wird es aktualisiert statt
-     * dupliziert. opts: description, payload(array), dedup_key, ref_type, ref_id, source.
+     * OFFENES Signal mit gleicher (Team, typ, dedup_key, outlet_id)-Lane, wird es aktualisiert
+     * statt dupliziert. opts: description, payload(array), dedup_key, ref_type, ref_id, source,
+     * outlet_id. `outlet_id` (Ebene 2) ist Teil der Dedup-Identität: dasselbe Gericht kann in der
+     * Team-Core-Lane (NULL) UND je Betrieb ein eigenes Signal tragen, ohne zu kollidieren.
      */
     public function erzeuge(Team $team, SignalTyp $typ, SignalSeverity $severity, string $titel, array $opts = []): FoodAlchemistSignal
     {
+        $outletId = isset($opts['outlet_id']) && $opts['outlet_id'] !== null ? (int) $opts['outlet_id'] : null;
         $dedup = $opts['dedup_key'] ?? null;
         if ($dedup !== null) {
             $vorhanden = FoodAlchemistSignal::where('team_id', $team->id)
                 ->where('type', $typ->value)->where('dedup_key', $dedup)
+                ->when($outletId === null, fn (Builder $q) => $q->whereNull('outlet_id'), fn (Builder $q) => $q->where('outlet_id', $outletId))
                 ->where('status', SignalStatus::Offen->value)->first();
             if ($vorhanden !== null) {
                 $vorhanden->update([
@@ -46,6 +52,7 @@ class SignalService
 
         return FoodAlchemistSignal::create([
             'team_id' => $team->id,
+            'outlet_id' => $outletId,
             'type' => $typ->value,
             'severity' => $severity->value,
             'status' => SignalStatus::Offen->value,
@@ -88,12 +95,15 @@ class SignalService
      * @return int Anzahl geschlossener Signale (0 oder 1 im Normalfall — der Dedup lässt
      *             pro Team+Typ+Key nur eine offene Zeile zu)
      */
-    public function schliesseGemessen(Team $team, SignalTyp $typ, string $dedupKey, string $source, string $grund): int
+    public function schliesseGemessen(Team $team, SignalTyp $typ, string $dedupKey, string $source, string $grund, ?int $outletId = null): int
     {
         $offene = FoodAlchemistSignal::where('team_id', $team->id)
             ->where('type', $typ->value)
             ->where('dedup_key', $dedupKey)
             ->where('source', $source)
+            // Ebene 2: strikt in der eigenen Lane schließen — der Team-Core-Lauf (NULL) darf keine
+            // Betriebs-Signale abräumen und umgekehrt.
+            ->when($outletId === null, fn (Builder $q) => $q->whereNull('outlet_id'), fn (Builder $q) => $q->where('outlet_id', $outletId))
             ->where('status', SignalStatus::Offen->value)
             ->get();
 
@@ -122,14 +132,20 @@ class SignalService
      * **Nur der Aufrufer eines VOLLSTÄNDIGEN Laufs darf das rufen** — bei gecapptem/Teil-Lauf
      * würden fremde (nur nicht-geprüfte) Signale mit-abgeräumt.
      *
+     * Ebene 2: `$outletId` grenzt den Sweep auf **eine** Lane ein — jeder Betriebs-Lauf räumt nur
+     * seine eigenen Signale ab, der Team-Core-Lauf (NULL) nur die NULL-Lane. Ohne diese Grenze würde
+     * der Team-Core-Lauf (dessen `$liveKeys` die Betriebs-Keys nicht enthält) die Betriebs-Signale
+     * fälschlich als „verschwunden" schließen.
+     *
      * @param  list<string>  $liveKeys  die in diesem Lauf emittierten dedup_keys
      * @return int  Anzahl geschlossener Signale
      */
-    public function schliesseVerschwundene(Team $team, SignalTyp $typ, string $source, array $liveKeys, string $grund): int
+    public function schliesseVerschwundene(Team $team, SignalTyp $typ, string $source, array $liveKeys, string $grund, ?int $outletId = null): int
     {
         $offene = FoodAlchemistSignal::where('team_id', $team->id)
             ->where('type', $typ->value)
             ->where('source', $source)
+            ->when($outletId === null, fn (Builder $q) => $q->whereNull('outlet_id'), fn (Builder $q) => $q->where('outlet_id', $outletId))
             ->where('status', SignalStatus::Offen->value)
             ->whereNotNull('dedup_key')
             ->when($liveKeys !== [], fn ($q) => $q->whereNotIn('dedup_key', $liveKeys))
@@ -173,13 +189,14 @@ class SignalService
      * Ansicht: sobald man den Typ explizit wählt, sind die Einzel-Signale wieder da.
      * Der Guard versteckt also, er löscht nicht.
      */
-    public function paginate(array $filters, Team $team, int $perPage = 50): LengthAwarePaginator
+    public function paginate(array $filters, Team $team, int $perPage = 50, ?FoodAlchemistOutlet $outlet = null, bool $nurLane = false): LengthAwarePaginator
     {
         $status = $filters['status'] ?? SignalStatus::Offen->value;
         $typ = $filters['type'] ?? '';
         $exclude = $typ === '' ? ($filters['exclude_types'] ?? []) : [];
 
         return FoodAlchemistSignal::visibleToTeam($team)
+            ->when($nurLane, fn ($q) => $q->lane($outlet))
             ->when($status !== '', fn ($q) => $q->where('status', $status))
             ->when($typ !== '', fn ($q) => $q->where('type', $typ))
             ->when($exclude !== [], fn ($q) => $q->whereNotIn('type', $exclude))
@@ -187,15 +204,21 @@ class SignalService
             ->paginate($perPage);
     }
 
-    public function offeneCount(Team $team): int
-    {
-        return FoodAlchemistSignal::visibleToTeam($team)->offen()->count();
-    }
-
-    /** @return array<string,int> offene Signale je Typ */
-    public function offeneNachTyp(Team $team): array
+    public function offeneCount(Team $team, ?FoodAlchemistOutlet $outlet = null, bool $nurLane = false): int
     {
         return FoodAlchemistSignal::visibleToTeam($team)->offen()
+            ->when($nurLane, fn ($q) => $q->lane($outlet))
+            ->count();
+    }
+
+    /**
+     * @return array<string,int> offene Signale je Typ. `$nurLane` (Ebene 2): auf die
+     *                           Betriebsbrille eingrenzen (Betriebs-Lane + Team-Core-Lane).
+     */
+    public function offeneNachTyp(Team $team, ?FoodAlchemistOutlet $outlet = null, bool $nurLane = false): array
+    {
+        return FoodAlchemistSignal::visibleToTeam($team)->offen()
+            ->when($nurLane, fn ($q) => $q->lane($outlet))
             ->selectRaw('type, COUNT(*) as c')->groupBy('type')->pluck('c', 'type')->all();
     }
 

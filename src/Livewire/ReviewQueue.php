@@ -4,6 +4,7 @@ namespace Platform\FoodAlchemist\Livewire;
 
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Livewire\Attributes\On;
 use Livewire\Attributes\Url;
 use Livewire\Component;
 use Livewire\WithPagination;
@@ -293,6 +294,13 @@ class ReviewQueue extends Component
         }
     }
 
+    /** Ebene 2: Betrieb-Wechsel im Sidebar → Signale-Werkbank neu rendern (liest die Lane im render()). */
+    #[On('aktiver-betrieb-geaendert')]
+    public function betriebGewechselt(): void
+    {
+        // no-op: löst nur das Re-Rendering aus; render() liest die aktive Brille frisch.
+    }
+
     public function render()
     {
         $team = Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
@@ -312,6 +320,8 @@ class ReviewQueue extends Component
         $rezept = fn () => DB::table('foodalchemist_recipes')->whereIn('team_id', $kette)->whereNull('deleted_at');
 
         $signalSvc = app(SignalService::class);
+        // Ebene 2: die Signale-Werkbank folgt der Betriebsbrille (Betriebs-Lane + Team-Core-Lane).
+        $outlet = app(\Platform\FoodAlchemist\Services\ActiveOutletContext::class)->current($team);
 
         // Spec 21 · E2: Zustands-Sicht (Bestand + Delta + Policy) über der Einzelliste.
         // Ein Aufruf, zwei Verwendungen — die Zeilen selbst und die Typen, die dadurch
@@ -322,11 +332,11 @@ class ReviewQueue extends Component
             array_filter($zustand, fn (array $z) => $z['aggregiert'])
         ));
 
-        // Überblick-Kacheln: offene Signale nach Schweregrad (read-only, Präsentation).
-        $severitySplit = FoodAlchemistSignal::visibleToTeam($team)->offen()
+        // Überblick-Kacheln: offene Signale nach Schweregrad (read-only, Präsentation) — Lane-gefiltert.
+        $severitySplit = FoodAlchemistSignal::visibleToTeam($team)->offen()->lane($outlet)
             ->selectRaw('severity, COUNT(*) as c')->groupBy('severity')->pluck('c', 'severity')->all();
         // „Kritischste Signale" — Severity-Rang zuerst (SQLite+MySQL-sicher, kein FIELD()).
-        $kritischste = FoodAlchemistSignal::visibleToTeam($team)->offen()
+        $kritischste = FoodAlchemistSignal::visibleToTeam($team)->offen()->lane($outlet)
             ->orderByRaw("CASE severity WHEN 'kritisch' THEN 0 WHEN 'warnung' THEN 1 ELSE 2 END")
             ->orderByDesc('created_at')->limit(6)->get();
 
@@ -355,9 +365,10 @@ class ReviewQueue extends Component
                 // Spec 21 · E2: Typen mit Rausch-Guard fallen in ihre Zustands-Zeile zusammen —
                 // aber nur ungefiltert; ein Klick auf die Zeile (setSignalTyp) klappt sie auf.
                 'exclude_types' => $aggregierteTypen,
-            ], $team, 30),
-            'signalOffen' => $signalSvc->offeneCount($team),
-            'signalNachTyp' => $signalSvc->offeneNachTyp($team),
+            ], $team, 30, $outlet, nurLane: true),
+            'signalOffen' => $signalSvc->offeneCount($team, $outlet, nurLane: true),
+            'signalNachTyp' => $signalSvc->offeneNachTyp($team, $outlet, nurLane: true),
+            'aktiverBetrieb' => $outlet?->name,
             'signalTypWerte' => $signalSvc->typWerte(),
             'signalStatusWerte' => $signalSvc->statusWerte(),
         ])->layout('platform::layouts.app');
