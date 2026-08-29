@@ -15,6 +15,11 @@
         Food Alchemist
     </div>
 
+    {{-- Ebene 2 (D2): aktiver Betrieb — die Preis-Dimension der ganzen FA (nur ausgeklappt). --}}
+    <div x-show="!collapsed" class="px-2">
+        @livewire('foodalchemist.active-outlet-bar')
+    </div>
+
     @foreach($gruppen as $gruppe)
         <x-ui-sidebar-list :label="$gruppe['group'] ?? ''">
             @foreach($gruppe['items'] ?? [] as $item)
