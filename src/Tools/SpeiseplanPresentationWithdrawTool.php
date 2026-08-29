@@ -28,7 +28,10 @@ class SpeiseplanPresentationWithdrawTool extends FoodAlchemistTool implements To
     {
         return [
             'type' => 'object',
-            'properties' => ['speiseplan_id' => ['type' => 'integer']],
+            'properties' => [
+                'speiseplan_id' => ['type' => 'integer'],
+                'outlet_id' => ['type' => 'integer', 'description' => 'Optional (Slice F): zieht NUR den Betriebs-Link dieses Betriebs zurück; ohne outlet_id den Standard-Link am Dokument-Kopf.'],
+            ],
             'required' => ['speiseplan_id'],
         ];
     }
@@ -40,7 +43,11 @@ class SpeiseplanPresentationWithdrawTool extends FoodAlchemistTool implements To
             return ToolResult::error('Kein Team im Kontext.', 'NO_TEAM');
         }
         try {
-            app(PresentationService::class)->withdraw($team, 'speiseplan', (int) $arguments['speiseplan_id']);
+            if (($arguments['outlet_id'] ?? null) !== null) {
+                app(PresentationService::class)->withdrawForOutlet($team, 'speiseplan', (int) $arguments['speiseplan_id'], (int) $arguments['outlet_id']);
+            } else {
+                app(PresentationService::class)->withdraw($team, 'speiseplan', (int) $arguments['speiseplan_id']);
+            }
         } catch (ModelNotFoundException) {
             return ToolResult::error('Speiseplan nicht gefunden oder nicht sichtbar.', 'NOT_FOUND');
         } catch (\Throwable $e) {

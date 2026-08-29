@@ -145,6 +145,33 @@ it('MCP speisekarte_presentation.PUBLISH mit outlet_id erzeugt den Betriebs-Link
     expect($res->success)->toBeFalse()->and($res->errorCode)->toBe('NOT_FOUND');
 });
 
+it('MCP GET listet die Betriebs-Links; WITHDRAW mit outlet_id zieht nur den Betriebs-Link', function () {
+    // Standard-Link + ein Betriebs-Link.
+    $this->pres->publish($this->childA, 'speisekarte', $this->karte->id, ['expires_at' => now()->addDays(30)->toDateString()]);
+    $bl = $this->pres->publishForOutlet($this->childA, 'speisekarte', $this->karte->id, $this->betrieb->id, [
+        'expires_at' => now()->addDays(30)->toDateString(),
+    ]);
+
+    // GET zeigt den Betriebs-Link als eigene Ausgabe.
+    $get = $this->registry->get('foodalchemist.speisekarte_presentation.GET')->execute(['speisekarte_id' => $this->karte->id], $this->kontextA);
+    expect($get->success)->toBeTrue()
+        ->and($get->data['enabled'])->toBeTrue()                       // Standard-Link
+        ->and($get->data['betriebs_links'])->toHaveCount(1)
+        ->and($get->data['betriebs_links'][0]['outlet_id'])->toBe($this->betrieb->id)
+        ->and($get->data['betriebs_links'][0]['enabled'])->toBeTrue();
+
+    // WITHDRAW mit outlet_id zieht NUR den Betriebs-Link; der Standard-Link bleibt live.
+    $wd = $this->registry->get('foodalchemist.speisekarte_presentation.WITHDRAW')->execute([
+        'speisekarte_id' => $this->karte->id, 'outlet_id' => $this->betrieb->id,
+    ], $this->kontextA);
+    expect($wd->success)->toBeTrue();
+    $this->get('/p/speisekarte/' . $bl['token'])->assertNotFound();     // Betriebs-Link weg
+
+    $get2 = $this->registry->get('foodalchemist.speisekarte_presentation.GET')->execute(['speisekarte_id' => $this->karte->id], $this->kontextA);
+    expect($get2->data['enabled'])->toBeTrue()                          // Standard-Link unberührt
+        ->and($get2->data['betriebs_links'][0]['enabled'])->toBeFalse();
+});
+
 it('Tenancy: fremdes Betrieb / fremd-Team-Dokument werfen', function () {
     $betriebB = FoodAlchemistOutlet::create(['team_id' => $this->childB->id, 'name' => 'Fremd-Betrieb']);
 

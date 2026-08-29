@@ -54,6 +54,9 @@ class SpeisekartePresentationGetTool extends FoodAlchemistTool implements ToolCo
             'slug' => $karte->presentation_slug,
             'url' => ($karte->presentation_enabled && $karte->presentationPublicRef())
                 ? url('/p/speisekarte/' . $karte->presentationPublicRef()) : null,
+            // Slice F: zusätzliche Betriebs-Links (je Betrieb eigener Link/Vorlage/Freigabe).
+            'betriebs_links' => app(\Platform\FoodAlchemist\Services\PresentationService::class)
+                ->outletPresentations($team, 'speisekarte', (int) $karte->id),
         ]);
     }
 

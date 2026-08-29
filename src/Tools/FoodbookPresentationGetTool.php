@@ -55,6 +55,9 @@ class FoodbookPresentationGetTool extends FoodAlchemistTool implements ToolContr
             'slug' => $fb->presentation_slug,
             'url' => ($fb->presentation_enabled && $fb->presentationPublicRef())
                 ? url('/p/foodbook/' . $fb->presentationPublicRef()) : null,
+            // Slice F: zusätzliche Betriebs-Links (je Betrieb eigener Link/Vorlage/Freigabe).
+            'betriebs_links' => app(\Platform\FoodAlchemist\Services\PresentationService::class)
+                ->outletPresentations($team, 'foodbook', (int) $fb->id),
         ]);
     }
 

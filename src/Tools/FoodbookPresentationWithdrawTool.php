@@ -30,7 +30,10 @@ class FoodbookPresentationWithdrawTool extends FoodAlchemistTool implements Tool
     {
         return [
             'type' => 'object',
-            'properties' => ['foodbook_id' => ['type' => 'integer']],
+            'properties' => [
+                'foodbook_id' => ['type' => 'integer'],
+                'outlet_id' => ['type' => 'integer', 'description' => 'Optional (Slice F): zieht NUR den Betriebs-Link dieses Betriebs zurück; ohne outlet_id den Standard-Link am Dokument-Kopf.'],
+            ],
             'required' => ['foodbook_id'],
         ];
     }
@@ -42,7 +45,11 @@ class FoodbookPresentationWithdrawTool extends FoodAlchemistTool implements Tool
             return ToolResult::error('Kein Team im Kontext.', 'NO_TEAM');
         }
         try {
-            app(PresentationService::class)->withdraw($team, 'foodbook', (int) $arguments['foodbook_id']);
+            if (($arguments['outlet_id'] ?? null) !== null) {
+                app(PresentationService::class)->withdrawForOutlet($team, 'foodbook', (int) $arguments['foodbook_id'], (int) $arguments['outlet_id']);
+            } else {
+                app(PresentationService::class)->withdraw($team, 'foodbook', (int) $arguments['foodbook_id']);
+            }
         } catch (ModelNotFoundException) {
             return ToolResult::error('Foodbook nicht gefunden oder nicht sichtbar.', 'NOT_FOUND');
         } catch (\Throwable $e) {
