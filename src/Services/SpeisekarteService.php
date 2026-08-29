@@ -608,9 +608,11 @@ class SpeisekarteService
      *
      * @return array{vk: float|null, ek: float|null, we: float|null, quelle: string}
      */
-    public function positionEkVk(FoodAlchemistSpeisekartePosition $pos): array
+    public function positionEkVk(FoodAlchemistSpeisekartePosition $pos, ?\Platform\FoodAlchemist\Models\FoodAlchemistOutlet $outlet = null): array
     {
-        $vkArr = $this->positionPreis($pos);
+        // Ebene 2: VK gegen den Betrieb (positionPreis ist outlet-fähig); EK bleibt kostenseitig
+        // betriebs-unabhängig (ek_total_eur bzw. Concept-Cockpit-EK).
+        $vkArr = $this->positionPreis($pos, $outlet);
         $vk = $vkArr['vk'];
         $ek = null;
 
@@ -622,7 +624,7 @@ class SpeisekarteService
         } elseif ($pos->type === 'menue_ref') {
             $concept = $pos->relationLoaded('concept') ? $pos->concept : $pos->concept()->first();
             if ($concept) {
-                $ek = (float) $this->concepts->preisCockpit($concept)['ek_per_person'];
+                $ek = (float) $this->concepts->preisCockpit($concept, $outlet)['ek_per_person'];
             }
         }
 
@@ -639,7 +641,7 @@ class SpeisekarteService
      *
      * @return array{positionen: array<int, array{vk: float|null, ek: float|null, we: float|null, quelle: string}>, rubriken: array<int, array{vk: float, ek: float, n: int, we: float|null}>}
      */
-    public function boardDaten(Team $team, FoodAlchemistSpeisekarte $karte): array
+    public function boardDaten(Team $team, FoodAlchemistSpeisekarte $karte, ?\Platform\FoodAlchemist\Models\FoodAlchemistOutlet $outlet = null): array
     {
         $sections = $karte->relationLoaded('sections') ? $karte->sections
             : $karte->sections()->with(['items.dish', 'items.concept'])->get();
@@ -653,7 +655,7 @@ class SpeisekarteService
             $ek = 0.0;
             $n = 0;
             foreach ($r->items as $pos) {
-                $ekvk = $this->positionEkVk($pos);
+                $ekvk = $this->positionEkVk($pos, $outlet);
                 $positionen[(int) $pos->id] = $ekvk;
                 if (! in_array($pos->type, ['gericht_ref', 'menue_ref'], true)) {
                     continue;

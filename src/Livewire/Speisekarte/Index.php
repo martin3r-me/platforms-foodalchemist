@@ -796,13 +796,15 @@ class Index extends Component
         $alleRubrikIds = [];
         $baum = [];
         $vorschau = null;
+        // Ebene 2: Aufbau-Board UND Kundensicht-Vorschau gegen die Betriebsbrille (ambient) rechnen.
+        $outlet = app(\Platform\FoodAlchemist\Services\ActiveOutletContext::class)->current($team);
         if ($karte) {
             $baum = $svc->rubrikTree($team, $karte->id);
-            $board = $svc->boardDaten($team, $karte);
+            $board = $svc->boardDaten($team, $karte, $outlet);
             $preise = $board['positionen'];
             $rubrikAgg = $board['rubriken'];
             $alleRubrikIds = $karte->sections->pluck('id')->map(fn ($v) => (int) $v)->all();
-            $vorschau = $svc->dokumentDaten($team, $karte);
+            $vorschau = $svc->dokumentDaten($team, $karte, false, [], false, $outlet);
         }
 
         // Picker-Umbau: persistenter Katalog — Kandidaten je Modus browsebar (unabhängig von der Ziel-Rubrik;
