@@ -75,6 +75,20 @@
                             </td>
                         @endif
                     </tr>
+                    @if($editId === $b->id)
+                        <tr wire:key="outlet-ov-{{ $b->id }}">
+                            <td colspan="5" class="{{ $td }}" style="background-color:#f5f3ff">
+                                <div class="text-[11px] font-medium text-purple-800 mb-1">Kalkulations-Override für „{{ $b->name }}" — leer = erbt vom Team</div>
+                                <div class="flex flex-wrap gap-3">
+                                    @foreach(['margin_pct'=>'Marge %','target_food_cost_pct'=>'Ziel-WE %','stundensatz_eur'=>'Stundensatz €/h','hk2_surcharge_pct'=>'Material-GK %','labor_overhead_pct'=>'Lohnneben. %'] as $ovKey => $ovLab)
+                                        <label class="text-[11px] text-gray-600">{{ $ovLab }}
+                                            <input type="number" step="0.01" min="0" wire:model="overrides.{{ $ovKey }}" placeholder="erbt" class="{{ $input }} !py-1 !w-24 block" />
+                                        </label>
+                                    @endforeach
+                                </div>
+                            </td>
+                        </tr>
+                    @endif
                 @endforeach
             </tbody>
         </table>

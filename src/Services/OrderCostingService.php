@@ -21,7 +21,7 @@ class OrderCostingService
     }
 
     /** @return array<string,mixed> */
-    public function costConcept(Team $team, FoodAlchemistConcept $concept, int $pax): array
+    public function costConcept(Team $team, FoodAlchemistConcept $concept, int $pax, ?\Platform\FoodAlchemist\Models\FoodAlchemistOutlet $outlet = null): array
     {
         $pax = max(0, $pax);
         $sheet = $this->planning->produktionsblatt($team, ['concept_id' => $concept->id, 'persons' => max(1, $pax)]);
@@ -44,7 +44,7 @@ class OrderCostingService
         // können den realen Bedarf erhöhen, aber niemals unter den bereits je
         // Darreichung ausgewiesenen Katalog-MEK drücken. Der Floor verhindert, dass
         // eine unvollständige Explosion eine scheinbar profitable Empfehlung erzeugt.
-        $catalogCockpit = $this->concepts->preisCockpit($concept);
+        $catalogCockpit = $this->concepts->preisCockpit($concept, $outlet);
         $catalogMekPerPerson = (float) ($catalogCockpit['ek_per_person'] ?? 0);
         $catalogMekTotal = $catalogMekPerPerson * $pax;
         $mek = max($explodedMek, $catalogMekTotal);
