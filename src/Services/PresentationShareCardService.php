@@ -104,7 +104,17 @@ class PresentationShareCardService
             imagefilledrectangle($img, 0, 0, $W, $H, imagecolorallocate($img, $primary[0], $primary[1], $primary[2]));
         }
 
-        $this->wash($img, $W, $H);
+        // Default: nur Foto + Logo — robust in JEDEM Zuschnitt (viele Clients beschneiden die
+        // breite Card zur Quadrat-Kachel; ein eingebrannter Titel würde dort abgeschnitten, und
+        // der Messenger zeigt den Titel ohnehin als Text daneben). Token share_card_text=true
+        // schaltet den eingebrannten Titel + Kicker dazu.
+        $withText = ! empty($snap['resolved_design']['tokens']['share_card_text']);
+
+        if ($withText) {
+            $this->wash($img, $W, $H);
+        } else {
+            $this->topWash($img, $W); // nur oben dezent abdunkeln, damit ein helles Logo trägt
+        }
 
         // Logo oben rechts (optional).
         $logo = $this->loadImage($this->branding($snap, 'logo'));
@@ -113,33 +123,32 @@ class PresentationShareCardService
             imagedestroy($logo);
         }
 
-        $fontBold = dirname(__DIR__, 2) . '/resources/fonts/PTSerif-Bold.ttf';
-        $fontReg = dirname(__DIR__, 2) . '/resources/fonts/PTSerif-Regular.ttf';
+        if ($withText) {
+            $fontBold = dirname(__DIR__, 2) . '/resources/fonts/PTSerif-Bold.ttf';
+            $fontReg = dirname(__DIR__, 2) . '/resources/fonts/PTSerif-Regular.ttf';
 
-        $title = trim((string) ($snap['title'] ?? 'Foodbook')) ?: 'Foodbook';
-        $kicker = trim((string) ($snap['meta']['customer'] ?? ''));
-        if (! empty($snap['meta']['jahr'])) {
-            $kicker = trim($kicker . '  ·  ' . $snap['meta']['jahr'], ' ·');
-        }
+            $title = trim((string) ($snap['title'] ?? 'Foodbook')) ?: 'Foodbook';
+            $kicker = trim((string) ($snap['meta']['customer'] ?? ''));
+            if (! empty($snap['meta']['jahr'])) {
+                $kicker = trim($kicker . '  ·  ' . $snap['meta']['jahr'], ' ·');
+            }
 
-        $margin = 66;
-        $maxW = $W - 2 * $margin;
+            $margin = 66;
+            $maxW = $W - 2 * $margin;
 
-        // Titel auto-fit: größte Schrift, die in ≤3 Zeilen passt.
-        [$size, $lines] = $this->fitTitle($fontBold, $title, $maxW, [66, 58, 50, 44, 38], 3);
-        $lineH = (int) round($size * 1.18);
-        $baseBottom = $H - 74;
-        // Titelzeilen von unten nach oben stapeln.
-        $y = $baseBottom - (count($lines) - 1) * $lineH;
-        foreach ($lines as $ln) {
-            $this->text($img, $fontBold, $size, $margin, $y, $ln, [255, 255, 255], true);
-            $y += $lineH;
-        }
-
-        // Kicker (Kunde · Jahr) über dem Titel, in Akzentfarbe.
-        if ($kicker !== '') {
-            $kickBaseline = $baseBottom - (count($lines) - 1) * $lineH - $size - 20;
-            $this->text($img, $fontReg, 27, $margin, $kickBaseline, mb_strtoupper($kicker, 'UTF-8'), $accent, true);
+            // Titel auto-fit: größte Schrift, die in ≤3 Zeilen passt.
+            [$size, $lines] = $this->fitTitle($fontBold, $title, $maxW, [66, 58, 50, 44, 38], 3);
+            $lineH = (int) round($size * 1.18);
+            $baseBottom = $H - 74;
+            $y = $baseBottom - (count($lines) - 1) * $lineH;
+            foreach ($lines as $ln) {
+                $this->text($img, $fontBold, $size, $margin, $y, $ln, [255, 255, 255], true);
+                $y += $lineH;
+            }
+            if ($kicker !== '') {
+                $kickBaseline = $baseBottom - (count($lines) - 1) * $lineH - $size - 20;
+                $this->text($img, $fontReg, 27, $margin, $kickBaseline, mb_strtoupper($kicker, 'UTF-8'), $accent, true);
+            }
         }
 
         ob_start();
@@ -219,6 +228,17 @@ class PresentationShareCardService
             $t = $i / $bandH;
             $a = (int) round(127 - 127 * 0.80 * $t);
             imageline($img, 0, $y0 + $i, $W, $y0 + $i, imagecolorallocatealpha($img, 0, 0, 0, $a));
+        }
+    }
+
+    /** Nur oben leicht abdunkeln (Foto-only-Card) — sichert die Lesbarkeit eines hellen Logos. */
+    private function topWash(\GdImage $img, int $W): void
+    {
+        $bandH = 210;
+        for ($i = 0; $i < $bandH; $i++) {
+            $t = 1 - $i / $bandH; // ganz oben am stärksten
+            $a = (int) round(127 - 127 * 0.42 * $t);
+            imageline($img, 0, $i, $W, $i, imagecolorallocatealpha($img, 0, 0, 0, $a));
         }
     }
 
