@@ -19,6 +19,10 @@ class PresentationShareCardService
     private const W = 1200;
     private const H = 630;
 
+    /** Bei jeder Design-Änderung der Card erhöhen → bustet den Cache automatisch (Key hängt sonst
+     *  nur an published_at, nicht am Code). v2 = nur Foto + Logo (Titel raus). */
+    private const CARD_VERSION = 2;
+
     public function __construct(private FoodAlchemistMediaService $media)
     {
     }
@@ -35,7 +39,7 @@ class PresentationShareCardService
             return null;
         }
 
-        $key = 'fa-og-card:' . md5($type . '|' . $ref . '|' . ($entity->presentation_published_at?->getTimestamp() ?? 0));
+        $key = 'fa-og-card:v' . self::CARD_VERSION . ':' . md5($type . '|' . $ref . '|' . ($entity->presentation_published_at?->getTimestamp() ?? 0));
 
         try {
             // PNG base64-kodiert cachen: der database-Cache-Treiber legt in einer TEXT-Spalte ab —
