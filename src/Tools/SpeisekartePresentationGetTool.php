@@ -51,7 +51,9 @@ class SpeisekartePresentationGetTool extends FoodAlchemistTool implements ToolCo
             'design' => $karte->presentation_design,
             'published_at' => $karte->presentation_published_at?->toIso8601String(),
             'expires_at' => $karte->presentation_expires_at?->toIso8601String(),
-            'url' => ($karte->presentation_enabled && $karte->presentation_token) ? url('/p/speisekarte/' . $karte->presentation_token) : null,
+            'slug' => $karte->presentation_slug,
+            'url' => ($karte->presentation_enabled && $karte->presentationPublicRef())
+                ? url('/p/speisekarte/' . $karte->presentationPublicRef()) : null,
         ]);
     }
 

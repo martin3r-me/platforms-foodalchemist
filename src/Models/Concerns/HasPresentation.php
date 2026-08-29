@@ -32,6 +32,20 @@ trait HasPresentation
         return $query->where('presentation_token', $token);
     }
 
+    /** Öffentliche Auflösung per Token ODER eigenem Link-Namen (Slug) — ohne Team-Scope. */
+    public function scopeByPresentationRef(Builder $query, string $ref): Builder
+    {
+        return $query->where(function (Builder $q) use ($ref) {
+            $q->where('presentation_token', $ref)->orWhere('presentation_slug', $ref);
+        });
+    }
+
+    /** Öffentliche URL-Referenz: eigener Link-Name wenn gesetzt, sonst der Zufalls-Token. */
+    public function presentationPublicRef(): ?string
+    {
+        return $this->presentation_slug ?: ($this->presentation_token ?: null);
+    }
+
     /**
      * Ist der öffentliche Link gerade gültig? enabled + veröffentlicht + Ablauf gesetzt
      * und in der Zukunft. Pflicht-Datum: ohne expires_at ist ein Link nie live.

@@ -38,6 +38,8 @@ class SpeiseplanPresentationPublishTool extends FoodAlchemistTool implements Too
                 'montag' => ['type' => 'string', 'description' => 'Wochen-Montag ISO (Default: Plan-Start)'],
                 'cta_text' => ['type' => 'string'],
                 'cta_link' => ['type' => 'string'],
+                'slug' => ['type' => 'string', 'description' => 'Optionaler eigener Link-Name statt Zufalls-Token '
+                    . '(kebab-normalisiert, je Ausgabeform eindeutig; leerer String = zurück auf Token).'],
             ],
             'required' => ['speiseplan_id', 'expires_at'],
         ];
@@ -56,7 +58,7 @@ class SpeiseplanPresentationPublishTool extends FoodAlchemistTool implements Too
                 'mahlzeit' => $arguments['mahlzeit'] ?? 'mittag',
                 'montag' => $arguments['montag'] ?? null,
                 'cta' => ['text' => $arguments['cta_text'] ?? null, 'link' => $arguments['cta_link'] ?? null],
-            ]);
+            ] + (array_key_exists('slug', $arguments) ? ['slug' => $arguments['slug']] : []));
         } catch (ModelNotFoundException) {
             return ToolResult::error('Speiseplan nicht gefunden oder nicht sichtbar.', 'NOT_FOUND');
         } catch (\Throwable $e) {

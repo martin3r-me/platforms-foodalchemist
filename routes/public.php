@@ -12,13 +12,13 @@ use Platform\FoodAlchemist\Http\Controllers\PresentationController;
 // spezifischer 3-Segment-Pfad, daher VOR der 2-Segment-show-Route registriert.
 Route::get('/p/{type}/{token}/app.webmanifest', [PresentationController::class, 'manifest'])
     ->whereIn('type', ['foodbook', 'speisekarte', 'speiseplan'])
-    ->where('token', '[A-Za-z0-9]+')
+    ->where('token', '[A-Za-z0-9-]+')
     ->middleware(NoCacheHeaders::class)
     ->name('foodalchemist.presentation.manifest');
 
 Route::get('/p/{type}/{token}', [PresentationController::class, 'show'])
     ->whereIn('type', ['foodbook', 'speisekarte', 'speiseplan'])
-    ->where('token', '[A-Za-z0-9]+')
+    ->where('token', '[A-Za-z0-9-]+')
     ->middleware(NoCacheHeaders::class)
     ->name('foodalchemist.presentation.show');
 

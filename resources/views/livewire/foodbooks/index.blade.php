@@ -480,6 +480,18 @@
                             </label>
                         </div>
 
+                        <div>
+                            <label class="block text-xs text-gray-600">Eigener Link-Name (optional)
+                                <input type="text" wire:model.live.debounce.400ms="presentationSlug" placeholder="z.B. broich-empfang-2027"
+                                    class="mt-1 block w-full text-sm border border-gray-300 rounded px-2 py-1" data-fb-praes-slug>
+                            </label>
+                            <p class="mt-1 text-[11px] text-gray-500">
+                                Kundenlink:
+                                <span class="font-mono break-all">{{ url('/p/foodbook') }}/{{ trim((string) $presentationSlug) !== '' ? \Illuminate\Support\Str::slug($presentationSlug) : '⟨automatischer Code⟩' }}</span>
+                                — wirkt nach „Veröffentlichen". Leer lassen = zufälliger Code.
+                            </p>
+                        </div>
+
                         <div class="flex flex-wrap items-center gap-2 pt-1">
                             <a href="{{ route('foodalchemist.foodbooks.praesentation', ['id' => $fb->id, 'design' => $presentationDesign]) }}" target="_blank" class="{{ $btnGhost }}">Vorschau öffnen</a>
                             <button type="button" wire:click="veroeffentlichen"

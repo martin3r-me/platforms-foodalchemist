@@ -38,6 +38,8 @@ class SpeisekartePresentationPublishTool extends FoodAlchemistTool implements To
                 'declaration' => ['type' => 'boolean'],
                 'cta_text' => ['type' => 'string'],
                 'cta_link' => ['type' => 'string'],
+                'slug' => ['type' => 'string', 'description' => 'Optionaler eigener Link-Name statt Zufalls-Token '
+                    . '(kebab-normalisiert, je Ausgabeform eindeutig; leerer String = zurück auf Token).'],
             ],
             'required' => ['speisekarte_id', 'expires_at'],
         ];
@@ -56,7 +58,7 @@ class SpeisekartePresentationPublishTool extends FoodAlchemistTool implements To
                 'price_display' => $arguments['price_display'] ?? true,
                 'declaration' => $arguments['declaration'] ?? true,
                 'cta' => ['text' => $arguments['cta_text'] ?? null, 'link' => $arguments['cta_link'] ?? null],
-            ]);
+            ] + (array_key_exists('slug', $arguments) ? ['slug' => $arguments['slug']] : []));
         } catch (ModelNotFoundException) {
             return ToolResult::error('Speisekarte nicht gefunden oder nicht sichtbar.', 'NOT_FOUND');
         } catch (\Throwable $e) {

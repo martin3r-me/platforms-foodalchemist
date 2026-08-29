@@ -52,7 +52,9 @@ class FoodbookPresentationGetTool extends FoodAlchemistTool implements ToolContr
             'design' => $fb->presentation_design,
             'published_at' => $fb->presentation_published_at?->toIso8601String(),
             'expires_at' => $fb->presentation_expires_at?->toIso8601String(),
-            'url' => ($fb->presentation_enabled && $fb->presentation_token) ? url('/p/foodbook/' . $fb->presentation_token) : null,
+            'slug' => $fb->presentation_slug,
+            'url' => ($fb->presentation_enabled && $fb->presentationPublicRef())
+                ? url('/p/foodbook/' . $fb->presentationPublicRef()) : null,
         ]);
     }
 

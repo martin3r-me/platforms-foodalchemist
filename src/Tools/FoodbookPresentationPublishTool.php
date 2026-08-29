@@ -40,6 +40,9 @@ class FoodbookPresentationPublishTool extends FoodAlchemistTool implements ToolC
                 'declaration' => ['type' => 'boolean'],
                 'cta_text' => ['type' => 'string'],
                 'cta_link' => ['type' => 'string'],
+                'slug' => ['type' => 'string', 'description' => 'Optionaler eigener Link-Name statt Zufalls-Token '
+                    . '(z.B. "broich-empfang-2027" → /p/foodbook/broich-empfang-2027). Wird kebab-normalisiert, '
+                    . 'muss je Ausgabeform eindeutig sein; leerer String setzt zurück auf Token.'],
             ],
             'required' => ['foodbook_id', 'expires_at'],
         ];
@@ -58,7 +61,7 @@ class FoodbookPresentationPublishTool extends FoodAlchemistTool implements ToolC
                 'price_display' => $arguments['price_display'] ?? true,
                 'declaration' => $arguments['declaration'] ?? true,
                 'cta' => ['text' => $arguments['cta_text'] ?? null, 'link' => $arguments['cta_link'] ?? null],
-            ]);
+            ] + (array_key_exists('slug', $arguments) ? ['slug' => $arguments['slug']] : []));
         } catch (ModelNotFoundException) {
             return ToolResult::error('Foodbook nicht gefunden oder nicht sichtbar.', 'NOT_FOUND');
         } catch (\Throwable $e) {

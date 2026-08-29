@@ -51,7 +51,9 @@ class SpeiseplanPresentationGetTool extends FoodAlchemistTool implements ToolCon
             'design' => $plan->presentation_design,
             'published_at' => $plan->presentation_published_at?->toIso8601String(),
             'expires_at' => $plan->presentation_expires_at?->toIso8601String(),
-            'url' => ($plan->presentation_enabled && $plan->presentation_token) ? url('/p/speiseplan/' . $plan->presentation_token) : null,
+            'slug' => $plan->presentation_slug,
+            'url' => ($plan->presentation_enabled && $plan->presentationPublicRef())
+                ? url('/p/speiseplan/' . $plan->presentationPublicRef()) : null,
         ]);
     }
 

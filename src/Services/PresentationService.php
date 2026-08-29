@@ -56,6 +56,11 @@ class PresentationService
         $design = $this->cleanDesignSource($settings['design'] ?? $entity->presentation_design ?? 'editorial');
 
         $token = $this->ensureToken($entity);
+        // Eigener Link-Name (optional): 'slug' gesetzt → normalisieren + auf Eindeutigkeit prüfen,
+        // leer → zurück auf Token-only; Key fehlt → bestehenden Slug behalten.
+        $slug = array_key_exists('slug', $settings)
+            ? $this->normalizeSlug($entity, $settings['slug'])
+            : ($entity->presentation_slug ?: null);
         $userId = auth()->id();
 
         $snapshot = $this->buildSnapshot($team, $entity, $type, $settings + [
@@ -66,6 +71,7 @@ class PresentationService
         $entity->forceFill([
             'presentation_enabled' => true,
             'presentation_token' => $token,
+            'presentation_slug' => $slug,
             'presentation_design' => $design,
             'presentation_published_at' => now(),
             'presentation_published_by' => $userId,
@@ -76,7 +82,8 @@ class PresentationService
 
         return [
             'token' => $token,
-            'url' => $this->publicUrl($type, $token),
+            'slug' => $slug,
+            'url' => $this->publicUrl($type, $slug ?: $token),
             'published_at' => $entity->presentation_published_at->toIso8601String(),
             'expires_at' => $expiresAt->toIso8601String(),
             'design' => $design,
@@ -102,7 +109,7 @@ class PresentationService
     {
         $class = $this->modelClass($type);
         /** @var (Model&\Platform\FoodAlchemist\Models\Concerns\HasPresentation)|null $entity */
-        $entity = $class::query()->where('presentation_token', $token)->first();
+        $entity = $class::query()->byPresentationRef($token)->first();
         if ($entity === null || ! $entity->isPresentationLive()) {
             return null;
         }
@@ -661,6 +668,33 @@ class PresentationService
         } while ($class::query()->where('presentation_token', $token)->exists());
 
         return $token;
+    }
+
+    /**
+     * Eigenen Link-Namen (Slug) normalisieren + auf Eindeutigkeit prüfen. Leer/blank → null
+     * (zurück auf Token-only). Kollision mit fremdem Slug ODER Token derselben Ausgabeform → Fehler.
+     */
+    private function normalizeSlug(Model $entity, mixed $raw): ?string
+    {
+        $slug = \Illuminate\Support\Str::slug(trim((string) $raw));
+        if ($slug === '') {
+            return null;
+        }
+        if (strlen($slug) < 3) {
+            throw new \RuntimeException('Der Link-Name ist zu kurz (mindestens 3 Zeichen).');
+        }
+        $class = $entity::class;
+        $kollision = $class::query()
+            ->whereKeyNot($entity->getKey())
+            ->where(function ($q) use ($slug) {
+                $q->where('presentation_slug', $slug)->orWhere('presentation_token', $slug);
+            })
+            ->exists();
+        if ($kollision) {
+            throw new \RuntimeException("Der Link-Name „{$slug}“ ist schon vergeben — bitte einen anderen wählen.");
+        }
+
+        return $slug;
     }
 
     /**

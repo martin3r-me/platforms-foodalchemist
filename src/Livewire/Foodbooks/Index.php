@@ -55,6 +55,8 @@ class Index extends Component
 
     public ?string $presentationCtaLink = null;
 
+    public ?string $presentationSlug = null;   // Spec 43: optionaler eigener Link-Name (statt Zufalls-Token)
+
     public ?int $presentationLoadedId = null;
 
     public ?string $presentationFehler = null;
@@ -75,6 +77,7 @@ class Index extends Component
                 'price_display' => $this->presentationPreisAnzeige,
                 'declaration' => $this->presentationDeklaration,
                 'cta' => ['text' => $this->presentationCtaText, 'link' => $this->presentationCtaLink],
+                'slug' => $this->presentationSlug,
             ]);
             $this->presentationLoadedId = null; // erzwingt Neuladen des Status im render()
             $this->presentationHinweis = 'Veröffentlicht — der Kundenlink ist aktiv.';
@@ -1247,6 +1250,7 @@ class Index extends Component
             $this->presentationDeklaration = (bool) ($s['declaration'] ?? true);
             $this->presentationCtaText = $s['cta']['text'] ?? null;
             $this->presentationCtaLink = $s['cta']['link'] ?? null;
+            $this->presentationSlug = $fb->presentation_slug;
             $this->presentationLoadedId = $fb->id;
         }
 
@@ -1280,8 +1284,8 @@ class Index extends Component
                 'published_at' => $fb->presentation_published_at?->format('d.m.Y H:i'),
                 'expires_at' => $fb->presentation_expires_at?->format('d.m.Y'),
             ];
-            if ($fb->presentation_enabled && $fb->presentation_token) {
-                $presentationLink = url('/p/foodbook/' . $fb->presentation_token);
+            if ($fb->presentation_enabled && $fb->presentationPublicRef()) {
+                $presentationLink = url('/p/foodbook/' . $fb->presentationPublicRef());
             }
         }
         $presentationDesignOptionen = app(PresentationDesignService::class)->pickerOptions($team, 'foodbook');
