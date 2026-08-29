@@ -114,6 +114,10 @@
         .pt-measure { max-width: var(--pt-measure); margin-inline: auto; padding-inline: clamp(22px, 6vw, 40px); }
         .pt-wide { max-width: var(--pt-wide); margin-inline: auto; padding-inline: clamp(22px, 6vw, 48px); }
         h1,h2,h3,h4 { font-family: var(--pt-heading-font); color: var(--pt-text); margin: 0; line-height: 1.08; font-weight: 600; letter-spacing: -0.01em; }
+        /* Überlange Einzelwörter (z.B. „BROICHCATERING.EMPFANG") in Titeln umbrechen statt abschneiden.
+           Greift nur, wenn ein Wort die Zeile sonst sprengen würde → Desktop mit breitem Container unberührt. */
+        h1,h2,h3,h4, .pt-hero-title, .pt-section-title, .pt-block-header, .pt-subheader, .pt-heading,
+        .pt-line-label, .pt-item .pt-line-label { overflow-wrap: break-word; word-break: break-word; }
         .pt-kicker { font-family: var(--pt-body-font); text-transform: uppercase; letter-spacing: .22em; font-size: .68rem; font-weight: 600; color: var(--pt-accent); }
 
         /* Cover / Hero */
