@@ -309,6 +309,38 @@ abstract class FoodAlchemistTool
     }
 
     /**
+     * Kompakte Paket-Serialisierung (D5d) — geteilt von pakete.GET/LIST/SEARCH. Mit $withDishes werden
+     * die Gericht-Positionen (Row-Id, Gericht, Menge/Einheit) mitgegeben.
+     */
+    protected function paketPayload(\Platform\FoodAlchemist\Models\FoodAlchemistPaket $p, bool $withDishes = false): array
+    {
+        $out = [
+            'id' => (int) $p->id,
+            'name' => $p->name,
+            'consumer_name' => $p->consumer_name,
+            'role' => $p->role,
+            'class' => $p->class,
+            'level' => $p->level,
+            'price_mode' => $p->price_mode,
+            'price_per_person' => $p->price_per_person !== null ? (float) $p->price_per_person : null,
+            'ek_per_person' => $p->ek_per_person !== null ? (float) $p->ek_per_person : null,
+            'food_cost_percent' => $p->food_cost_percent !== null ? (float) $p->food_cost_percent : null,
+            'is_inactive' => (bool) $p->is_inactive,
+        ];
+        if ($withDishes) {
+            $out['dishes'] = $p->dishes->map(fn ($g) => [
+                'row_id' => (int) $g->id,
+                'sales_recipe_id' => (int) $g->sales_recipe_id,
+                'name' => $g->dish?->name,
+                'quantity' => $g->quantity !== null ? (float) $g->quantity : null,
+                'unit' => $g->unit?->slug,
+            ])->values()->all();
+        }
+
+        return $out;
+    }
+
+    /**
      * Guard für Darreichungs-by-id-Tools: existiert die Darreichung und gehört sie einem team-eigenen
      * Gericht? Gibt bei Fehler das passende ToolResult (NOT_FOUND/ACCESS_DENIED), sonst null.
      */
