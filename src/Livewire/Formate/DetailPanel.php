@@ -57,12 +57,21 @@ class DetailPanel extends Component
             $this->selectedId = null;
         }
 
-        // #3: Cockpit — read-only Reduktion der Editions-Caches (Preisspanne + Ø €/P + Zählung),
-        // KEINE eigene Formel/Recompute (spiegelt priceRange). Editionen = Alternativen → Range statt Summe.
+        // #3: Cockpit — read-only Reduktion der Editions-Preise (Preisspanne + Ø €/P + Zählung),
+        // KEINE eigene Formel/Recompute. Editionen = Alternativen → Range statt Summe.
+        // Ebene 2: mit Brille der €/Gast je Edition live gegen den Betrieb (preisCockpit), sonst Cache.
+        $outlet = app(\Platform\FoodAlchemist\Services\ActiveOutletContext::class)->current($this->team());
         $conceptSlots = $format !== null ? $format->slots->where('type', 'concept') : collect();
         $vks = $conceptSlots
-            ->map(fn ($s) => $s->concept?->price_per_person_cache)
-            ->map(fn ($v) => $v !== null ? (float) $v : null)
+            ->map(function ($s) use ($outlet) {
+                $c = $s->concept;
+                if ($c === null) {
+                    return null;
+                }
+                return $outlet !== null
+                    ? (float) app(\Platform\FoodAlchemist\Services\ConceptService::class)->preisCockpit($c, $outlet)['price_per_person']
+                    : ($c->price_per_person_cache !== null ? (float) $c->price_per_person_cache : null);
+            })
             ->filter(fn ($v) => $v !== null && $v > 0)
             ->values();
         $cockpit = [
@@ -75,7 +84,8 @@ class DetailPanel extends Component
 
         return view('foodalchemist::livewire.formate.detail-panel', [
             'format' => $format,
-            'range' => $format?->priceRange() ?? ['min' => null, 'max' => null],
+            // Range = min/max der (brillen-scharfen) Editions-Preise — spiegelt das Cockpit.
+            'range' => ['min' => $cockpit['min'], 'max' => $cockpit['max']],
             'cockpit' => $cockpit,
         ]);
     }

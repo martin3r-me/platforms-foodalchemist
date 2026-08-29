@@ -455,6 +455,8 @@ class Editor extends Component
     public function render(FormatService $formats)
     {
         $format = $this->id !== null ? $formats->detail($this->team(), $this->id) : null;
+        // Ebene 2: die Kalkulation folgt der Betriebsbrille — je Edition der €/Gast gegen den Betrieb.
+        $outlet = app(\Platform\FoodAlchemist\Services\ActiveOutletContext::class)->current($this->team());
 
         // F2: Aufbau-Positionen (Slots) in Reihenfolge — Concept-Referenzen + Struktur-Blöcke.
         $slots = collect();
@@ -521,12 +523,23 @@ class Editor extends Component
             $kalkZeilen = $format->slots()->where('type', 'concept')
                 ->with(['concept:id,name,consumer_name,price_per_person_cache,ek_per_person_cache'])
                 ->orderBy('position')->get()
-                ->map(function ($s) {
+                ->map(function ($s) use ($outlet) {
                     $c = $s->concept;
-                    $vk = $c?->price_per_person_cache !== null ? (float) $c->price_per_person_cache : null;
-                    $ek = $c?->ek_per_person_cache !== null ? (float) $c->ek_per_person_cache : null;
+                    if ($c === null) {
+                        return ['name' => '— (entfernt)', 'vk' => null, 'ek' => null, 'w' => null];
+                    }
+                    // Ebene 2: mit Brille den €/Gast live gegen den Betrieb (preisCockpit); ohne Brille
+                    // der Cache (= heutiges Verhalten). EK bleibt kostenseitig gleich.
+                    if ($outlet !== null) {
+                        $cp = app(ConceptService::class)->preisCockpit($c, $outlet);
+                        $vk = (float) $cp['price_per_person'] > 0 ? (float) $cp['price_per_person'] : null;
+                        $ek = (float) $cp['ek_per_person'] > 0 ? (float) $cp['ek_per_person'] : null;
+                    } else {
+                        $vk = $c->price_per_person_cache !== null ? (float) $c->price_per_person_cache : null;
+                        $ek = $c->ek_per_person_cache !== null ? (float) $c->ek_per_person_cache : null;
+                    }
                     return [
-                        'name' => $c?->consumer_name ?: ($c?->name ?? '— (entfernt)'),
+                        'name' => $c->consumer_name ?: ($c->name ?? '— (entfernt)'),
                         'vk' => $vk,
                         'ek' => $ek,
                         'w' => ($vk !== null && $vk > 0 && $ek !== null) ? round($ek / $vk * 100, 1) : null,
