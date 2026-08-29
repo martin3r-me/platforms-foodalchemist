@@ -31,8 +31,14 @@ class ActiveOutletBar extends Component
         $id = ($value === '' || $value === null) ? null : (int) $value;
         $outlet = app(ActiveOutletContext::class)->set($team, $id);
         $this->aktiverBetrieb = $outlet?->id;
-        // Alle Preis-Flächen auffordern, neu zu rechnen.
-        $this->dispatch('aktiver-betrieb-geaendert');
+        // Voller Seiten-Reload: die Betriebsbrille treibt VK UND Kalkulation auf ALLEN Flächen —
+        // nicht nur die, die auf `aktiver-betrieb-geaendert` hören (VK-Editor, Concepter,
+        // Verkaufsliste lösen den ambienten Kontext beim Rendern auf, ohne Event-Listener). Ein
+        // harter Reload garantiert, dass jede Preis-/Kalkulations-Sicht gegen den jetzt gesetzten
+        // Betrieb neu rechnet, statt still auf Team-Baseline stehen zu bleiben. Der Kontext ist
+        // vor dem Reload schon persistiert (Session + durabler Store), der Neuaufbau liest ihn.
+        $this->dispatch('aktiver-betrieb-geaendert');   // Live-Update für lauschende Flächen (vor dem Reload)
+        $this->js('window.location.reload()');
     }
 
     public function render()
