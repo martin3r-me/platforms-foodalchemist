@@ -20,8 +20,8 @@ class PresentationShareCardService
     private const H = 630;
 
     /** Bei jeder Design-Änderung der Card erhöhen → bustet den Cache automatisch (Key hängt sonst
-     *  nur an published_at, nicht am Code). v2 = nur Foto + Logo (Titel raus). */
-    private const CARD_VERSION = 2;
+     *  nur an published_at, nicht am Code). v3 = Foto + Logo mittig zentriert. */
+    private const CARD_VERSION = 3;
 
     public function __construct(private FoodAlchemistMediaService $media)
     {
@@ -117,13 +117,13 @@ class PresentationShareCardService
         if ($withText) {
             $this->wash($img, $W, $H);
         } else {
-            $this->topWash($img, $W); // nur oben dezent abdunkeln, damit ein helles Logo trägt
+            $this->photoWash($img, $W, $H); // sanfter Gesamt-Schleier, damit das zentrierte Logo trägt
         }
 
-        // Logo oben rechts (optional).
+        // Logo: zentriert (Foto-only) bzw. oben rechts (Titel-Variante).
         $logo = $this->loadImage($this->branding($snap, 'logo'));
         if ($logo !== null) {
-            $this->placeLogo($img, $logo, $W);
+            $this->placeLogo($img, $logo, $W, $H, center: ! $withText);
             imagedestroy($logo);
         }
 
@@ -235,30 +235,27 @@ class PresentationShareCardService
         }
     }
 
-    /** Nur oben leicht abdunkeln (Foto-only-Card) — sichert die Lesbarkeit eines hellen Logos. */
-    private function topWash(\GdImage $img, int $W): void
+    /** Gleichmäßiger sanfter Gesamt-Schleier (Foto-only-Card) — sichert den Kontrast des
+     *  zentrierten Logos, ohne einen sichtbaren dunklen Fleck aufs Motiv zu legen. */
+    private function photoWash(\GdImage $img, int $W, int $H): void
     {
-        $bandH = 210;
-        for ($i = 0; $i < $bandH; $i++) {
-            $t = 1 - $i / $bandH; // ganz oben am stärksten
-            $a = (int) round(127 - 127 * 0.42 * $t);
-            imageline($img, 0, $i, $W, $i, imagecolorallocatealpha($img, 0, 0, 0, $a));
-        }
+        imagefilledrectangle($img, 0, 0, $W, $H, imagecolorallocatealpha($img, 0, 0, 0, 94)); // ~26 %
     }
 
-    private function placeLogo(\GdImage $img, \GdImage $logo, int $W): void
+    private function placeLogo(\GdImage $img, \GdImage $logo, int $W, int $H, bool $center): void
     {
         $lw = imagesx($logo);
         $lh = imagesy($logo);
         if ($lw < 1 || $lh < 1) {
             return;
         }
-        $maxW = 210;
-        $maxH = 88;
+        [$maxW, $maxH] = $center ? [460, 230] : [210, 88];
         $scale = min($maxW / $lw, $maxH / $lh, 1.0);
         $nw = (int) round($lw * $scale);
         $nh = (int) round($lh * $scale);
-        imagecopyresampled($img, $logo, $W - $nw - 56, 52, 0, 0, $nw, $nh, $lw, $lh);
+        $x = $center ? (int) round(($W - $nw) / 2) : $W - $nw - 56;
+        $y = $center ? (int) round(($H - $nh) / 2) : 52;
+        imagecopyresampled($img, $logo, $x, $y, 0, 0, $nw, $nh, $lw, $lh);
     }
 
     /** @return array{0:int,1:list<string>} */
