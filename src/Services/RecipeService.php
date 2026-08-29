@@ -712,7 +712,7 @@ class RecipeService
             ->get(['id', 'name', 'lead_la_supplier_item_id', 'piece_default_g', 'team_id'])
             ->map(fn ($gp) => [
                 'type' => 'gp', 'id' => $gp->id, 'name' => $gp->name,
-                'ek_pro_g' => $recompute->preisProGrammPublic($gp),
+                'ek_pro_g' => $recompute->preisProGrammPublic($gp, $team),
                 'url' => \Platform\FoodAlchemist\Support\Sprungziel::gp($gp->id),  // R5: Sprung-Ziel
             ]);
 

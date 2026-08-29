@@ -10,6 +10,7 @@ use Platform\FoodAlchemist\Enums\AllergenValue;
 use Platform\FoodAlchemist\Enums\EkPriceBasis;
 use Platform\FoodAlchemist\Enums\MatchMethod;
 use Platform\FoodAlchemist\Models\FoodAlchemistGp;
+use Platform\FoodAlchemist\Models\FoodAlchemistGpLaPreference;
 use Platform\FoodAlchemist\Models\FoodAlchemistItemDeclaration;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipeIngredient;
@@ -60,6 +61,7 @@ class RecipeRecomputeService
     public function recomputePipeline(int $recipeId, bool $cascadePrices = true): void
     {
         $this->laCache = [];                                       // Preis-Memo nie über Edits hinweg tragen
+        $this->leadPrefCache = [];
         DB::transaction(function () use ($recipeId) {
             $recipe = FoodAlchemistRecipe::with(['ingredients.unit', 'ingredients.gp', 'ingredients.referencedRecipe'])
                 ->findOrFail($recipeId);
@@ -583,9 +585,11 @@ class RecipeRecomputeService
      *
      * @return array<int, ?float> [ingredient_id => Kosten € | null (unpriced/gefiltert)]
      */
-    public function zeilenKosten(FoodAlchemistRecipe $recipe): array
+    public function zeilenKosten(FoodAlchemistRecipe $recipe, ?Team $team = null): array
     {
+        $this->recomputeTeam = $team;
         $this->laCache = [];
+        $this->leadPrefCache = [];
         $zutaten = $recipe->ingredients->filter(fn ($z) => $z->match_method !== MatchMethod::Ignored);
 
         $out = [];
@@ -605,9 +609,11 @@ class RecipeRecomputeService
      *
      * @return array<int, array{kosten: ?float, masse_g: float}>
      */
-    public function zeilenKostenUndMassen(FoodAlchemistRecipe $recipe): array
+    public function zeilenKostenUndMassen(FoodAlchemistRecipe $recipe, ?Team $team = null): array
     {
+        $this->recomputeTeam = $team;
         $this->laCache = [];
+        $this->leadPrefCache = [];
         $zutaten = $recipe->ingredients->filter(fn ($z) => $z->match_method !== MatchMethod::Ignored);
 
         $out = [];
@@ -1021,8 +1027,12 @@ class RecipeRecomputeService
     }
 
     /** P-8-Picker (M4-08): €/g fürs Client-Live-Rechnen — dieselbe T3-Quelle. */
-    public function preisProGrammPublic(FoodAlchemistGp $gp): ?float
+    public function preisProGrammPublic(FoodAlchemistGp $gp, ?Team $team = null): ?float
     {
+        $this->recomputeTeam = $team;
+        $this->laCache = [];
+        $this->leadPrefCache = [];
+
         return $this->preisProGrammFuer($gp);
     }
 
@@ -1110,28 +1120,103 @@ class RecipeRecomputeService
         return $n > 0 ? [$summe / $n, EkPriceBasis::Avg] : [null, null];
     }
 
-    /** Lead-LA (falls gesetzt) als bevorzugter Preis-Kandidat. */
+    /** Lead-LA (team-bewusst) als bevorzugter Preis-Kandidat. */
     private function preisKandidaten(FoodAlchemistGp $gp): array
     {
-        if ($gp->lead_la_supplier_item_id === null) {
+        $leadId = $this->effektiverLeadId($gp);
+        if ($leadId === null) {
             return [];
         }
-        $lead = $this->laMitPreis($gp)->firstWhere('id', $gp->lead_la_supplier_item_id);
+        $lead = $this->laMitPreis($gp)->firstWhere('id', $leadId);
 
         return $lead !== null ? [$lead] : [];
     }
 
+    /**
+     * Team-bewusster effektiver Lead-LA fürs Recompute-EK: V-27-Overlay
+     * (gp_la_preferences) ÜBER der globalen GL-03-Spalte — spalten-BASIERT, NICHT die
+     * heuristische {@see LeadLaService::effektiverLead} (die würde manuell gesetzte Leads
+     * re-ranken → Backward-Compat-Bruch). Präzedenz:
+     *   1. Team-Pin (verknüpft + bepreist + nicht gesperrt)
+     *   2. globaler Default-Lead, sofern nicht team-gesperrt            ← byte-identisch heute
+     *   3. globaler Lead gesperrt ⇒ erster nicht gesperrter, bepreister Kandidat
+     *   4. sonst NULL (AVG-Pfad)
+     * Ohne Team ODER ohne Overlay ⇒ sofort die globale Spalte (heutiges Verhalten).
+     */
+    private function effektiverLeadId(FoodAlchemistGp $gp): ?int
+    {
+        $global = $gp->lead_la_supplier_item_id !== null ? (int) $gp->lead_la_supplier_item_id : null;
+        if ($this->recomputeTeam === null) {
+            return $global;
+        }
+        $prefs = $this->leadPrefs($gp);
+        if ($prefs === []) {
+            return $global;                                        // kein Overlay ⇒ exakt wie heute
+        }
+        $las = $this->laMitPreis($gp);
+        $bepreist = fn (int $laId): bool => optional($las->firstWhere('id', $laId))->aktiver_preis !== null;
+
+        foreach ($prefs as $laId => $p) {                          // 1. Team-Pin
+            if ($p['gepinnt'] && ! $p['locked'] && $bepreist($laId)) {
+                return $laId;
+            }
+        }
+        if ($global !== null && ! ($prefs[$global]['locked'] ?? false)) {   // 2. globaler Lead (nicht gesperrt)
+            return $global;
+        }
+        if ($global !== null) {                                    // 3. globaler Lead gesperrt ⇒ Ausweich
+            foreach ($las as $la) {
+                if (! ($prefs[$la->id]['locked'] ?? false) && $la->aktiver_preis !== null && ! $la->is_discontinued) {
+                    return (int) $la->id;
+                }
+            }
+        }
+
+        return null;                                               // 4. AVG
+    }
+
+    /**
+     * V-27-Team-Overlay (gp_la_preferences) des Recompute-Teams, je Lauf memoisiert.
+     *
+     * @return array<int, array{gepinnt: bool, locked: bool}>
+     */
+    private function leadPrefs(FoodAlchemistGp $gp): array
+    {
+        if ($this->recomputeTeam === null) {
+            return [];
+        }
+        $key = $this->recomputeTeam->id . ':' . $gp->id;
+
+        return $this->leadPrefCache[$key] ??= FoodAlchemistGpLaPreference::query()
+            ->where('team_id', $this->recomputeTeam->id)
+            ->where('gp_id', $gp->id)
+            ->get(['supplier_item_id', 'gepinnt', 'locked'])
+            ->mapWithKeys(fn ($r) => [(int) $r->supplier_item_id => [
+                'gepinnt' => (bool) $r->gepinnt,
+                'locked' => (bool) $r->locked,
+            ]])
+            ->all();
+    }
+
     private function alleAktivenLas(FoodAlchemistGp $gp): Collection
     {
-        return $this->laMitPreis($gp)->filter(fn ($la) => ! $la->is_discontinued);
+        $prefs = $this->leadPrefs($gp);
+
+        return $this->laMitPreis($gp)->filter(
+            fn ($la) => ! $la->is_discontinued && ! ($prefs[$la->id]['locked'] ?? false),
+        );
     }
 
     /** LAs des GP inkl. Aktiv-Preis (memoisiert pro Pipeline-Lauf). */
     private array $laCache = [];
 
+    /** V-27-Lead-Overlay je (Team,GP), memoisiert pro Lauf (Key "teamId:gpId"). */
+    private array $leadPrefCache = [];
+
     private function laMitPreis(FoodAlchemistGp $gp): Collection
     {
         return $this->laCache[$gp->id] ??= \Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem::query()
+            ->when($this->recomputeTeam, fn ($q) => $q->visibleToTeam($this->recomputeTeam))
             ->join('foodalchemist_supplier_item_structures AS s', 's.supplier_item_id', '=', 'foodalchemist_supplier_items.id')
             ->where('s.gp_id', $gp->id)->whereNull('s.deleted_at')
             ->select('foodalchemist_supplier_items.*')

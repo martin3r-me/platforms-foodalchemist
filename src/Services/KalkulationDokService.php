@@ -245,7 +245,7 @@ class KalkulationDokService
 
         if ($typ === 'gp') {
             $gp = FoodAlchemistGp::where('team_id', $team->id)->find($refId);
-            $proKg = $gp ? (($this->recompute->preisProGrammPublic($gp) ?? 0) * 1000) : 0.0;
+            $proKg = $gp ? (($this->recompute->preisProGrammPublic($gp, $team) ?? 0) * 1000) : 0.0;
 
             return ['label' => $gp?->name ?? 'GP', 'unit' => 'kg', 'einzel_ek' => round($proKg, 4), 'work_time_min' => null];
         }

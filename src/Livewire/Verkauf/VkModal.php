@@ -967,7 +967,7 @@ class VkModal extends Component
                     ->orderBy('label')->get(['id', 'label', 'rental_price'])
                 : collect(),
             'darZeilen' => ($rezept !== null && $this->darDeltaOffen !== null)
-                ? app(\Platform\FoodAlchemist\Services\DarreichungService::class)->standardProEinheit($rezept)
+                ? app(\Platform\FoodAlchemist\Services\DarreichungService::class)->standardProEinheit($rezept, $team)
                 : [],
             'sensorik' => $rezept !== null ? app(\Platform\FoodAlchemist\Services\SensorikService::class)->fuerRezept($rezept->id) : null,
             'komposition' => $rezept !== null ? app(\Platform\FoodAlchemist\Services\SensorikService::class)->gerichtKomposition($rezept->id) : null,

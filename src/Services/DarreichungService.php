@@ -239,6 +239,7 @@ class DarreichungService
     public function recomputePreise(FoodAlchemistRecipeDarreichung $darreichung, ?FoodAlchemistRecipe $recipe = null): void
     {
         $recipe ??= $darreichung->recipe()->with('ingredients.unit', 'ingredients.gp', 'ingredients.referencedRecipe')->first();
+        $team = Team::findOrFail($darreichung->team_id);
         $deltas = $darreichung->deltas()->get();
 
         if ($deltas->isEmpty()) {
@@ -262,7 +263,7 @@ class DarreichungService
             // Stufe 2: Overrides sind ECHTE Gramm je Einheit dieser Form (User-Entscheid
             // 2026-07-03) — die Grammatur der Form ergibt sich aus der Komponenten-Summe,
             // der EK direkt aus Σ (Preis/g × Gramm). Kein Verhältnis-Umweg mehr.
-            $proEinheit = $this->standardProEinheit($recipe);
+            $proEinheit = $this->standardProEinheit($recipe, $team);
             $deltaMap = $deltas->keyBy('recipe_ingredient_id');
             $kosten = 0.0;
             $masse = 0.0;
@@ -292,7 +293,6 @@ class DarreichungService
         $oldCalculated = $darreichung->calculated_sales_net;
         $oldEffective = $darreichung->sales_net;
         $darreichung->forceFill(['quantity_per_unit_g' => $darreichung->quantity_per_unit_g, 'ek_portion' => $ekPortion]);
-        $team = Team::findOrFail($darreichung->team_id);
         $price = $this->catalogPricing->catalogPrice($team, $darreichung);
         $darreichung->update([
             'quantity_per_unit_g' => $darreichung->quantity_per_unit_g,
@@ -360,9 +360,9 @@ class DarreichungService
      *
      * @return array<int, array{masse_g: float, kosten_pro_g: ?float}>
      */
-    public function standardProEinheit(FoodAlchemistRecipe $recipe): array
+    public function standardProEinheit(FoodAlchemistRecipe $recipe, ?Team $team = null): array
     {
-        $zeilen = $this->recompute->zeilenKostenUndMassen($recipe);
+        $zeilen = $this->recompute->zeilenKostenUndMassen($recipe, $team);
         $batchG = array_sum(array_map(fn ($z) => $z['masse_g'], $zeilen));
         // Referenz = Grammatur der Standard-Form — aber nur, wenn diese selbst delta-frei
         // ist (sonst wäre die Referenz zirkulär, weil ihre Grammatur aus Deltas entsteht).

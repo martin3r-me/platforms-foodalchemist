@@ -139,7 +139,7 @@ class SignalCauseService
         }
 
         $recipe->loadMissing(['ingredients.gp', 'ingredients.unit', 'ingredients.referencedRecipe']);
-        $kosten = $this->recompute->zeilenKosten($recipe);
+        $kosten = $this->recompute->zeilenKosten($recipe, $team);
 
         $glieder = [];
         $offen = 0;

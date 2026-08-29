@@ -255,7 +255,7 @@ class DetailPanel extends Component
                     ->orderBy('sort_order')->orderBy('id')->get()
                 : collect(),
             // Nachtrag 13_REFERENZ: EK je Zeile — dieselbe T3-Kaskade wie der Recompute (eine Regel-Stelle)
-            'zeilenEk' => $rezept !== null ? app(RecipeRecomputeService::class)->zeilenKosten($rezept) : [],
+            'zeilenEk' => $rezept !== null ? app(RecipeRecomputeService::class)->zeilenKosten($rezept, $team) : [],
             // M4-10: ↑-Navigation („Verwendet in")
             'eltern' => $rezept !== null ? $recipes->getParents($team, $rezept->id) : collect(),
             // v3-Redesign: Standalone-Sidebar nicht mehr ausklappbar → Netz/Kohäsion/Pairings

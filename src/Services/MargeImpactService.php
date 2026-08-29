@@ -83,7 +83,7 @@ class MargeImpactService
 
             return $expCache[$recipeId] = 0.0;
         }
-        $lines = $lineCache[$recipeId] ??= $this->recompute->zeilenKostenUndMassen($rec);
+        $lines = $lineCache[$recipeId] ??= $this->recompute->zeilenKostenUndMassen($rec, Team::find($rec->team_id));
         $total = 0.0;
         foreach ($lines as $l) {
             if ($l['kosten'] !== null) {

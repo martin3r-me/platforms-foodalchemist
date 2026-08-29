@@ -195,13 +195,18 @@ class IngredientEditor extends Component
      *
      * @return array{min: ?float, avg: ?float}
      */
-    private function ekVarianten(\Platform\FoodAlchemist\Models\FoodAlchemistGp $gp): array
+    private function ekVarianten(\Platform\FoodAlchemist\Models\FoodAlchemistGp $gp, ?\Platform\Core\Models\Team $team = null): array
     {
         $preise = app(\Platform\FoodAlchemist\Services\PriceService::class);
+        // Nur team-sichtbare LAs (eigenes Team + Master-Kette + globaler Seed) — sonst zeigt die
+        // Min/Ø-Variante fremde Betriebs-Preise, während der Zeilen-EK team-bewusst rechnet.
+        $sichtbar = $team !== null
+            ? \Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem::teamAncestryIds($team)
+            : null;
         $werte = app(\Platform\FoodAlchemist\Services\GpService::class)->lasForGp($gp)
-            ->map(fn ($la) => $la->item !== null
-                ? $preise->preisProGramm($la->item, $la->price?->price !== null ? (float) $la->price->price : null)
-                : null)
+            ->filter(fn ($la) => $la->item !== null && ($sichtbar === null
+                || $la->item->team_id === null || in_array((int) $la->item->team_id, $sichtbar, true)))
+            ->map(fn ($la) => $preise->preisProGramm($la->item, $la->price?->price !== null ? (float) $la->price->price : null))
             ->filter(fn ($v) => $v !== null)->values();
 
         return [
@@ -307,7 +312,11 @@ class IngredientEditor extends Component
         // Performance: 30× preisProGrammPublic wären ~60 Queries je Tipper — stattdessen EINE
         // Bulk-Query (Ø €/g über aktive kg/l-LAs). Der präzise Lead-Wert kommt beim Parken nach.
         $aktiverPreis = app(\Platform\FoodAlchemist\Services\PriceService::class)->activePriceSubquery()->toBase();
-        $ekJeGp = \Illuminate\Support\Facades\DB::table('foodalchemist_supplier_items')
+        // Preis-Vorschau nur über team-sichtbare LAs (eigenes Team + Master-Kette + globaler Seed) —
+        // sonst zeigt der Picker fremde Betriebs-Preise, während der Zeilen-EK team-bewusst rechnet.
+        $ekJeGp = \Platform\FoodAlchemist\Support\TeamScope::applyVisible(
+            \Illuminate\Support\Facades\DB::table('foodalchemist_supplier_items'),
+            'foodalchemist_supplier_items.team_id', $team)
             ->join('foodalchemist_supplier_item_structures AS s', 's.supplier_item_id', '=', 'foodalchemist_supplier_items.id')
             ->whereIn('s.gp_id', $gpModels->pluck('id'))->whereNull('s.deleted_at')
             ->whereIn('foodalchemist_supplier_items.unit_code', ['kg', 'l'])
@@ -383,7 +392,7 @@ class IngredientEditor extends Component
         if ($typ === 'gp') {
             $gp = \Platform\FoodAlchemist\Models\FoodAlchemistGp::visibleToTeam($team)->find($id);
 
-            return $gp !== null ? app(RecipeRecomputeService::class)->preisProGrammPublic($gp) : null;
+            return $gp !== null ? app(RecipeRecomputeService::class)->preisProGrammPublic($gp, $team) : null;
         }
         $r = FoodAlchemistRecipe::visibleToTeam($team)->find($id);
 
@@ -410,8 +419,8 @@ class IngredientEditor extends Component
                 $ekProG = null;
                 $varianten = ['min' => null, 'avg' => null];
                 if ($z->gp !== null) {
-                    $ekProG = $recompute->preisProGrammPublic($z->gp);
-                    $varianten = $this->ekVarianten($z->gp);          // R5: günstigster + Ø über alle LAs
+                    $ekProG = $recompute->preisProGrammPublic($z->gp, $team);
+                    $varianten = $this->ekVarianten($z->gp, $team);   // R5: günstigster + Ø über team-sichtbare LAs
                 } elseif ($z->referencedRecipe?->ek_per_kg_eur !== null) {
                     $ekProG = ((float) $z->referencedRecipe->ek_per_kg_eur) / 1000;
                 }

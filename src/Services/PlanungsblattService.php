@@ -749,7 +749,7 @@ class PlanungsblattService
         $gp = [];
         foreach ($gpGram as $gpId => $d) {
             $model = $gpModelle[$gpId];
-            $euroProG = $this->recompute->preisProGrammPublic($model);
+            $euroProG = $this->recompute->preisProGrammPublic($model, $team);
             $gp[$gpId] = [
                 'gp_id' => $gpId,
                 'name' => $model->name,
