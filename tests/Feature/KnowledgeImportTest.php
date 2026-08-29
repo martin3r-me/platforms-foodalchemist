@@ -42,8 +42,10 @@ it('importiert Klasse A, ist idempotent und zählt version bei Inhalts-Änderung
         ->and(DB::table('foodalchemist_knowledge_documents')->where('slug', 'pairing.salbei')->value('category'))->toBe('pairing')
         ->and(DB::table('foodalchemist_knowledge_aliases')->count())->toBe(2)
         // Generator-/Planungs-Routings + Step-by-Step-Discovery + recipe.eigenschaften-Wissen (#2-A:
-        // produktion_kapazitat + regelwerk) — Katalog auf 27 gewachsen.
-        ->and(DB::table('foodalchemist_knowledge_routings')->count())->toBe(27);
+        // produktion_kapazitat + regelwerk) + Workstream-W-Erdung MCP-Steuerbarkeit (D2c/D3
+        // recipe.ueberarbeiten + vk.ueberarbeiten am Regelwerk; D5c concept.wording an cross_cutting)
+        // — Katalog auf 30 gewachsen.
+        ->and(DB::table('foodalchemist_knowledge_routings')->count())->toBe(30);
 
     // 2. Lauf: nichts ändert sich (idempotent)
     $this->artisan('foodalchemist:knowledge-import', ['--vault' => $this->vault, '--rust-src' => $this->rustSrc])->assertSuccessful();

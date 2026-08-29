@@ -1195,6 +1195,100 @@ class ConceptService
         return $ids;
     }
 
+    /**
+     * KI-Wording für ein team-eigenes Concept: Intro (→ description) + Positions-Texte (→ setSlotWording).
+     * Geteilte Web-/MCP-Wahrheit (Concepter-Editor::wordingGenerieren + MCP concept_wording.GENERATE).
+     * Workstream W: erdet über KnowledgeContextService (cross_cutting — Anti-Marker/Fakten fürs
+     * Kundentext-Guardrail) + Food-DNA-Concept-Override. Setzt Texte direkt (Brand-Voice am eigenen
+     * Concept = niedrige Risikoklasse, wie die UI). Wirft bei fremdem/fehlendem Concept.
+     *
+     * @return array{intro:?string, slots_set:int}
+     */
+    public function generateWording(Team $team, int $conceptId, ?int $writingStyleId = null): array
+    {
+        $concept = $this->detail($team, $conceptId);
+        if ($concept === null) {
+            throw new \Illuminate\Database\Eloquent\ModelNotFoundException('Concept nicht sichtbar.');
+        }
+        $this->guardOwner($concept, $team);
+
+        $stil = $writingStyleId ? \Platform\FoodAlchemist\Models\FoodAlchemistWritingStyle::find($writingStyleId) : null;
+        $wissen = app(\Platform\FoodAlchemist\Services\Ai\KnowledgeContextService::class)
+            ->contextFor('concept.wording', (string) ($concept->occasion ?: $concept->name), $stil?->name);
+
+        $kontext = [
+            'concept' => $concept->name,
+            'occasion' => $concept->occasion,
+            'class' => $concept->class,
+            'schreibstil' => $stil?->name,
+            'schreibstil_anweisung' => $stil !== null ? (trim((string) $stil->sprach_duktus) ?: null) : null,
+            'schreibstil_beispiele' => $stil !== null ? (trim((string) $stil->beispiele_md) ?: null) : null,
+            'positionen' => $concept->slots
+                ->filter(fn ($s) => $s->sales_recipe_id !== null && $s->dish)
+                ->map(fn ($s) => ['slot_id' => $s->id, 'name' => $s->dish->name, 'sales_wording_standard' => $s->dish->sales_wording_standard ?? null])
+                ->values()->all(),
+        ];
+
+        $vorschlag = app(\Platform\FoodAlchemist\Services\Ai\AiGatewayService::class)->propose('concept.wording', $kontext, [
+            'food_dna_concept_id' => $concept->id,
+            'knowledge' => $wissen['block'] ?? null,
+            'knowledge_used' => $wissen['files_used'] ?? null,
+        ]);
+
+        $intro = $vorschlag->werte['intro'] ?? null;
+        $intro = is_string($intro) && trim($intro) !== '' ? trim($intro) : null;
+        if ($intro !== null) {
+            $this->update($team, $conceptId, ['description' => $intro]);
+        }
+        $slotsSet = 0;
+        foreach (($vorschlag->werte['slots'] ?? []) as $slotId => $text) {
+            if (is_string($text) && trim($text) !== '') {
+                $this->setSlotWording($team, (int) $slotId, trim($text));
+                $slotsSet++;
+            }
+        }
+
+        return ['intro' => $intro, 'slots_set' => $slotsSet];
+    }
+
+    /**
+     * Aroma-Kohäsion der Gerichte eines Concepts (Slots + eingebettete Pakete/Packages).
+     * Geteilte Web-/MCP-Wahrheit (Concepter-Editor::kohaesionPruefen + MCP concepts.COHESION).
+     * Read-only; kein Owner-Gate nötig (nur sichtbar). Weniger als 2 Gerichte ⇒ `zu_wenig`.
+     */
+    public function menueKohaesion(Team $team, int $conceptId): array
+    {
+        $concept = $this->detail($team, $conceptId);
+        if ($concept === null) {
+            throw new \Illuminate\Database\Eloquent\ModelNotFoundException('Concept nicht sichtbar.');
+        }
+        $dishes = [];
+        foreach ($concept->slots as $slot) {
+            if ($slot->dish) {
+                $dishes[$slot->dish->id] = $slot->dish;
+            } elseif ($slot->embeddedConcept) {
+                foreach ($slot->embeddedConcept->slots as $eps) {
+                    if ($eps->dish) {
+                        $dishes[$eps->dish->id] = $eps->dish;
+                    }
+                }
+            } elseif ($slot->package) {
+                foreach ($slot->package->dishes as $pg) {
+                    if ($pg->dish) {
+                        $dishes[$pg->dish->id] = $pg->dish;
+                    }
+                }
+            }
+        }
+        $pairing = app(\Platform\FoodAlchemist\Services\PairingService::class);
+        $kohaesion = count($dishes) >= 2
+            ? $pairing->menuCohesion(array_values($dishes))
+            : ['score' => 0, 'rated_pairs' => 0, 'total_pairs' => 0, 'coverage_pct' => 0, 'weakest_pair' => null, 'unrated_pairs' => [], 'komponenten' => [], 'zu_wenig' => true];
+        $kohaesion['warnung'] = $pairing->menuKohaesionWarnung($kohaesion);
+
+        return $kohaesion;
+    }
+
     public function createCategory(Team $team, string $name, ?int $parentId = null): FoodAlchemistConceptCategory
     {
         $name = trim($name);

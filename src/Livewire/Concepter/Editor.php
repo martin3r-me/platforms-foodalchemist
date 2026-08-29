@@ -404,35 +404,13 @@ class Editor extends Component
         if ($this->type !== 'concepts' || $this->id === null) {
             return;
         }
-        $concept = app(ConceptService::class)->detail($this->team(), $this->id);
-        if ($concept === null) {
+        // MCP-Steuerbarkeit D5c: Kohäsions-Berechnung (Gericht-Sammlung + menuCohesion + Warnung) liegt
+        // jetzt im ConceptService::menueKohaesion — Editor und MCP concepts.COHESION teilen den Weg.
+        try {
+            $this->menueKohaesion = app(ConceptService::class)->menueKohaesion($this->team(), $this->id);
+        } catch (\Throwable $e) {
             return;
         }
-        $dishes = [];
-        foreach ($concept->slots as $slot) {
-            if ($slot->dish) {
-                $dishes[$slot->dish->id] = $slot->dish;
-            } elseif ($slot->embeddedConcept) {   // Kaskade: eingebettetes Paket = kind=paket-Concept
-                foreach ($slot->embeddedConcept->slots as $eps) {
-                    if ($eps->dish) {
-                        $dishes[$eps->dish->id] = $eps->dish;
-                    }
-                }
-            } elseif ($slot->package) {
-                foreach ($slot->package->dishes as $pg) {
-                    if ($pg->dish) {
-                        $dishes[$pg->dish->id] = $pg->dish;
-                    }
-                }
-            }
-        }
-        $pairing = app(\Platform\FoodAlchemist\Services\PairingService::class);
-        $this->menueKohaesion = count($dishes) >= 2
-            ? $pairing->menuCohesion(array_values($dishes))
-            : ['score' => 0, 'rated_pairs' => 0, 'total_pairs' => 0, 'coverage_pct' => 0, 'weakest_pair' => null, 'unrated_pairs' => [], 'komponenten' => [], 'zu_wenig' => true];
-        // Kohärenz-Gate: den Roh-Score als abgestufte, sichtbare Warnung mitführen
-        // (null = nichts zu beurteilen — zu wenig Gerichte oder kein bewertetes Paar).
-        $this->menueKohaesion['warnung'] = $pairing->menuKohaesionWarnung($this->menueKohaesion);
     }
 
     // ── R4.4: Zutaten-Baum + konzept-lokale Slot-Variante ──────────────
@@ -554,51 +532,23 @@ class Editor extends Component
         if ($this->type !== 'concepts' || $this->id === null) {
             return;
         }
+        // MCP-Steuerbarkeit D5c: Wording-Logik (Kontext-Bau + Wissens-Erdung + Apply) liegt jetzt im
+        // ConceptService::generateWording — Editor und MCP concept_wording.GENERATE rufen denselben Weg
+        // (Web↔MCP-Parität). #389 Food-DNA-Override + GL-06 Sprach-Duktus + W-Grounding im Service.
         $team = $this->team();
-        $concepts = app(ConceptService::class);
-        $concept = $concepts->detail($team, $this->id);
-        if ($concept === null) {
-            return;
-        }
         $stilId = $this->form['writing_style_id'] ?? null;
-        $stil = $stilId ? FoodAlchemistWritingStyle::find($stilId) : null;
-        $kontext = [
-            'concept' => $concept->name,
-            'occasion' => $concept->occasion,
-            'class' => $concept->class,
-            // Bug-Fix 2026-08-25 (Dominique „Regler verändert nichts"): der KI reichte bisher NUR der
-            // Stil-Name — das eigentliche Prompt-Material `sprach_duktus` (GL-06) ging nie mit, daher
-            // wirkte der Schreibstil nicht. Jetzt: Name + Sprach-Duktus (+ Beispiele) in den Kontext.
-            'schreibstil' => $stil?->name,
-            'schreibstil_anweisung' => $stil !== null ? (trim((string) $stil->sprach_duktus) ?: null) : null,
-            'schreibstil_beispiele' => $stil !== null ? (trim((string) $stil->beispiele_md) ?: null) : null,
-            'positionen' => $concept->slots
-                ->filter(fn ($s) => $s->sales_recipe_id !== null && $s->dish)
-                ->map(fn ($s) => ['slot_id' => $s->id, 'name' => $s->dish->name, 'sales_wording_standard' => $s->dish->sales_wording_standard ?? null])
-                ->values()->all(),
-        ];
         try {
-            // #389: Concept-ID durchreichen → Food-DNA-Concept-Override gilt für dieses Wording.
-            $vorschlag = app(\Platform\FoodAlchemist\Services\Ai\AiGatewayService::class)->propose('concept.wording', $kontext, ['food_dna_concept_id' => $concept->id]);
+            $res = app(ConceptService::class)->generateWording($team, $this->id, $stilId ? (int) $stilId : null);
         } catch (\Throwable $e) {
             $this->fehler = $e->getMessage();
 
             return;
         }
-        $intro = $vorschlag->werte['intro'] ?? null;
-        if (is_string($intro) && trim($intro) !== '') {
-            $this->form['description'] = trim($intro);
-            $concepts->update($team, $this->id, ['description' => trim($intro)]);
-        }
-        foreach (($vorschlag->werte['slots'] ?? []) as $slotId => $text) {
-            if (is_string($text) && trim($text) !== '') {
-                $concepts->setSlotWording($team, (int) $slotId, trim($text));
-                if (isset($this->slotForm[(int) $slotId])) {
-                    $this->slotForm[(int) $slotId]['wording'] = trim($text);
-                }
-            }
+        if ($res['intro'] !== null) {
+            $this->form['description'] = $res['intro'];
         }
         $this->fehler = null;
+        $this->reloadSlotForm();
         $this->dispatch('concepter-gespeichert', id: $this->id);
     }
 

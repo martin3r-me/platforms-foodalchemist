@@ -664,6 +664,12 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\ConceptSlotVarianteSwapTool::class,
                     \Platform\FoodAlchemist\Tools\ConceptSlotVarianteResetTool::class,
                     \Platform\FoodAlchemist\Tools\ConceptPaketBuildTool::class,
+                    // D5c: Konzept-Kategorien + Wording (W-Grounding) + Kohäsion-Read
+                    \Platform\FoodAlchemist\Tools\ConceptCategoriesPostTool::class,
+                    \Platform\FoodAlchemist\Tools\ConceptCategoriesPutTool::class,
+                    \Platform\FoodAlchemist\Tools\ConceptCategoriesDeleteTool::class,
+                    \Platform\FoodAlchemist\Tools\ConceptWordingGenerateTool::class,
+                    \Platform\FoodAlchemist\Tools\ConceptsCohesionTool::class,
                     // Format-Modul: Marken-/Themen-Container über den Konzepten (Editionen), Draft-on-create
                     \Platform\FoodAlchemist\Tools\FormatsListTool::class,
                     \Platform\FoodAlchemist\Tools\FormatsSearchTool::class,

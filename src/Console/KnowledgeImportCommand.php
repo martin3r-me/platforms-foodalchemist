@@ -275,6 +275,10 @@ class KnowledgeImportCommand extends Command
             // Basisrezepte-Slug über den Feature-Fallback.
             ['recipe.ueberarbeiten', 'regelwerk', 'always', 1, 7000],
             ['vk.ueberarbeiten', 'regelwerk', 'always', 1, 7000],
+            // Workstream W (D5c, 2026-08-29): Konzept-Wording an Cross-Cutting-Fakten (Anti-Marker
+            // etc.) als Kundentext-Guardrail. KEIN Regelwerk-Kanal (Brand-Voice, kein Bau-Regelwerk).
+            // Spiegel von Migration 2026_08_29_000003.
+            ['concept.wording', 'cross_cutting', 'always', null, null],
             ['ai_plan_dishes', 'cross_cutting', 'always', null, null],
             ['ai_plan_dishes', 'domain', 'discovery', null, null],
             // Spec 19 E6.4 / Spec 08 P6: Kreativ-Divergenz am Kapitel (foodbook.plan) bzw.
