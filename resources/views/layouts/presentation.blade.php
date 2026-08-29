@@ -41,9 +41,44 @@
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
 <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="robots" content="noindex, nofollow">
     <title>{{ $snapshot['title'] ?? 'Präsentation' }}</title>
+
+    {{-- Mobil / PWA / Teilen (Spec 43, rein additiv — ändert die Desktop-Ausgabe nicht) --}}
+    @php
+        $ptTitle = $snapshot['title'] ?? 'Präsentation';
+        $ptImg = $snapshot['branding']['cover']['url'] ?? ($snapshot['branding']['logo']['url'] ?? null);
+        if ($ptImg && ! preg_match('#^(https?:)?//#', $ptImg)) { $ptImg = url($ptImg); }
+        $ptDesc = $snapshot['subtitle']
+            ?? trim(($snapshot['meta']['customer'] ?? '') . ' · ' . ($snapshot['meta']['kicker'] ?? 'Kulinarisches Angebot'), " ·\t");
+    @endphp
+    <meta name="theme-color" content="{{ $pal['primary'] ?? '#6d28d9' }}">
+    <meta name="color-scheme" content="light">
+    <meta name="format-detection" content="telephone=no">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="{{ $ptTitle }}">
+    @isset($manifestUrl)<link rel="manifest" href="{{ $manifestUrl }}">@endisset
+    @if($ptImg)<link rel="apple-touch-icon" href="{{ $ptImg }}">@endif
+
+    {{-- Open Graph / Twitter — schöne Link-Vorschau beim Teilen (WhatsApp/iMessage/Slack …) --}}
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="{{ $snapshot['meta']['customer'] ?? 'Kundenbuch' }}">
+    <meta property="og:title" content="{{ $ptTitle }}">
+    @if($ptDesc)<meta property="og:description" content="{{ $ptDesc }}">@endif
+    @isset($publicUrl)<meta property="og:url" content="{{ $publicUrl }}">@endisset
+    @if($ptImg)
+        <meta property="og:image" content="{{ $ptImg }}">
+        <meta name="twitter:card" content="summary_large_image">
+        <meta name="twitter:image" content="{{ $ptImg }}">
+    @else
+        <meta name="twitter:card" content="summary">
+    @endif
+    <meta name="twitter:title" content="{{ $ptTitle }}">
+    @if($ptDesc)<meta name="twitter:description" content="{{ $ptDesc }}">@endif
+
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -250,6 +285,25 @@
             body { background: #fff; }
             .pt-reveal { opacity: 1 !important; transform: none !important; }
             .pt-blocks.pt-cols-2 { grid-template-columns: 1fr 1fr; }
+        }
+
+        /* Mobil-Feinschliff (additiv — greift nur auf schmalen Viewports; Desktop/Laptop unberührt) */
+        @media (max-width: 600px) {
+            /* Größere Fingerziele in Navigation + CTA */
+            .pt-toc-panel a, .pt-sidebar-nav a { padding-top: 11px; padding-bottom: 11px; }
+            .pt-cta-btn { display: block; }
+            /* iOS-Notch/Home-Leiste: schwebende Bedienelemente aus der Safe-Area halten */
+            .pt-toc { bottom: calc(20px + env(safe-area-inset-bottom)); right: calc(20px + env(safe-area-inset-right)); }
+            .pt-burger { top: calc(14px + env(safe-area-inset-top)); left: calc(14px + env(safe-area-inset-left)); }
+        }
+        @media (max-width: 380px) {
+            .pt-hero-title { font-size: clamp(2rem, 11vw, 2.6rem); }
+            .pt-measure, .pt-wide { padding-inline: 18px; }
+        }
+        /* Als Homescreen-App (standalone) die Geräte-Safe-Area respektieren */
+        @media (display-mode: standalone) {
+            .pt-hero { padding-top: env(safe-area-inset-top); }
+            .pt-wrap { padding-bottom: env(safe-area-inset-bottom); }
         }
     </style>
     @php $customCss = $snapshot['resolved_design']['custom_css'] ?? null; @endphp

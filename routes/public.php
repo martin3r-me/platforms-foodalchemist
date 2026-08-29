@@ -8,6 +8,14 @@ use Platform\FoodAlchemist\Http\Controllers\PresentationController;
 // rendert NUR aus dem eingefrorenen Snapshot. NoCacheHeaders NUR hier (die fa-assets-Route
 // unten braucht ihren immutable-Cache). Type in Phase 1 auf foodbook beschränkt
 // (speisekarte/speiseplan folgen in Phase 2/3).
+// Web-App-Manifest (PWA „Zum Startbildschirm hinzufügen") — additiv zur Präsentation,
+// spezifischer 3-Segment-Pfad, daher VOR der 2-Segment-show-Route registriert.
+Route::get('/p/{type}/{token}/app.webmanifest', [PresentationController::class, 'manifest'])
+    ->whereIn('type', ['foodbook', 'speisekarte', 'speiseplan'])
+    ->where('token', '[A-Za-z0-9]+')
+    ->middleware(NoCacheHeaders::class)
+    ->name('foodalchemist.presentation.manifest');
+
 Route::get('/p/{type}/{token}', [PresentationController::class, 'show'])
     ->whereIn('type', ['foodbook', 'speisekarte', 'speiseplan'])
     ->where('token', '[A-Za-z0-9]+')
