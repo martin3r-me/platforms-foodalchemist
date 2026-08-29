@@ -149,7 +149,7 @@ class Browser extends Component
      */
     private function eigenesDoc(int $id): ?object
     {
-        $doc = $this->sichtbaresDoc($id, ['id', 'team_id']);
+        $doc = $this->sichtbaresDoc($id, ['id', 'team_id', 'slug']);
         if ($doc === null || ! TeamScope::owns($doc->team_id, Auth::user()?->currentTeamRelation)) {
             $this->fehler = 'Geerbtes/Master-Wissen — Aliasse und Bindungen pflegt nur das Besitzer-Team.';
 
@@ -315,7 +315,7 @@ class Browser extends Component
      */
     public function delete(int $id): void
     {
-        $doc = $this->sichtbaresDoc($id, ['id', 'team_id']);
+        $doc = $this->sichtbaresDoc($id, ['id', 'team_id', 'slug']);
         if ($doc === null) {
             return;
         }
@@ -325,14 +325,8 @@ class Browser extends Component
             return;
         }
 
-        try {
-            app(\Platform\Core\Services\EmbeddingService::class)
-                ->delete((int) $doc->team_id, KnowledgeEmbeddingService::ENTITY_TYPE, $id);
-        } catch (\Throwable) {
-            // Index-Bereinigung ist Beiwerk — nie den eigentlichen Löschvorgang daran hängen.
-        }
-
-        DB::table('foodalchemist_knowledge_documents')->where('id', $id)->delete();
+        // D12: Löschen (inkl. Index-Bereinigung) liegt jetzt im KnowledgeService — Browser + MCP knowledge.DELETE teilen den Weg.
+        app(\Platform\FoodAlchemist\Services\KnowledgeService::class)->delete(Auth::user()->currentTeamRelation, (string) $doc->slug);
 
         if ($this->selectedId === $id) {
             $this->selectedId = null;
@@ -346,34 +340,32 @@ class Browser extends Component
 
     public function addAlias(): void
     {
-        $alias = Str::slug(trim($this->newAlias), '_');
-        if ($alias === '' || $this->selectedId === null) {
+        if (trim($this->newAlias) === '' || $this->selectedId === null) {
             return;
         }
-        if ($this->eigenesDoc($this->selectedId) === null) {          // MVP-037
+        $doc = $this->eigenesDoc($this->selectedId);          // MVP-037
+        if ($doc === null) {
             return;
         }
-        $exists = DB::table('foodalchemist_knowledge_aliases')
-            ->where('alias_slug', $alias)->where('knowledge_document_id', $this->selectedId)->exists();
-        if (! $exists) {
-            DB::table('foodalchemist_knowledge_aliases')->insert([
-                'alias_slug' => $alias,
-                'knowledge_document_id' => $this->selectedId,
-                'created_at' => now(), 'updated_at' => now(),
-            ]);
+        // D12: Alias-Anlage liegt jetzt im KnowledgeService (geteilt mit MCP knowledge.ALIAS add).
+        try {
+            app(\Platform\FoodAlchemist\Services\KnowledgeService::class)
+                ->addAlias(Auth::user()->currentTeamRelation, (string) $doc->slug, $this->newAlias);
+        } catch (\RuntimeException) {
+            return;
         }
         $this->newAlias = '';
     }
 
     public function removeAlias(int $aliasId): void
     {
-        // MVP-037: Eltern-Doc über die Alias-ID auflösen und Eigentum prüfen — vorher löschte
-        // die Methode jede beliebige Alias-ID quer über alle Teams.
-        $docId = DB::table('foodalchemist_knowledge_aliases')->where('id', $aliasId)->value('knowledge_document_id');
-        if ($docId === null || $this->eigenesDoc((int) $docId) === null) {
-            return;
+        // MVP-037: Eigentumsprüfung liegt jetzt im KnowledgeService (geteilt mit MCP knowledge.ALIAS remove).
+        try {
+            app(\Platform\FoodAlchemist\Services\KnowledgeService::class)
+                ->removeAlias(Auth::user()->currentTeamRelation, $aliasId);
+        } catch (\RuntimeException) {
+            // still: fremde/unbekannte Alias-ID wird ignoriert (wie vorher).
         }
-        DB::table('foodalchemist_knowledge_aliases')->where('id', $aliasId)->delete();
     }
 
     /** v2: Bindung anlegen (Doc → Einsatzort/Layer) = „einbinden" aus dem Modul. */

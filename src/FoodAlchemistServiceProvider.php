@@ -547,6 +547,16 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\KnowledgeGetTool::class,
                     \Platform\FoodAlchemist\Tools\KnowledgeCreateTool::class,
                     \Platform\FoodAlchemist\Tools\KnowledgeUpdateTool::class,
+                    // D12: Wissen-Löschen/Alias (3 neue Service-Methoden) + Canvas-Einträge + Controlling
+                    // + Trendradar + Präsentations-Designs. match_proposals.RESOLVE = bereits match_proposals.PUT.
+                    \Platform\FoodAlchemist\Tools\KnowledgeDeleteTool::class,
+                    \Platform\FoodAlchemist\Tools\KnowledgeAliasTool::class,
+                    \Platform\FoodAlchemist\Tools\CanvasEntryAddTool::class,
+                    \Platform\FoodAlchemist\Tools\CanvasEntryRemoveTool::class,
+                    \Platform\FoodAlchemist\Tools\SalesFactsMapTool::class,
+                    \Platform\FoodAlchemist\Tools\TrendradarImportTool::class,
+                    \Platform\FoodAlchemist\Tools\PresentationDesignsDuplicateTool::class,
+                    \Platform\FoodAlchemist\Tools\PresentationDesignsGenerateCssTool::class,
                     \Platform\FoodAlchemist\Tools\KnowledgeBindTool::class,
                     \Platform\FoodAlchemist\Tools\KnowledgeUnbindTool::class,
                     \Platform\FoodAlchemist\Tools\PairingsGetTool::class,

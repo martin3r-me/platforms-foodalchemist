@@ -150,6 +150,74 @@ class KnowledgeService
         return $fresh;
     }
 
+    /**
+     * Team-eigenes Wissensdokument löschen (D12). Globales Master-/Seed-Wissen bleibt read-only.
+     * Räumt den Recall-Index best-effort mit. Geteilte Web-/MCP-Wahrheit (Browser + knowledge.DELETE).
+     */
+    public function delete(Team $team, string $slug): void
+    {
+        $doc = DB::table('foodalchemist_knowledge_documents')->where('slug', $slug)->whereNull('deleted_at')->first();
+        if ($doc === null) {
+            throw new \RuntimeException("Wissens-Dokument \"{$slug}\" nicht gefunden.");
+        }
+        if (! TeamScope::owns($doc->team_id, $team)) {
+            if ($doc->team_id === null) {
+                throw new \RuntimeException("\"{$slug}\" ist globales Master-/Seed-Wissen — via MCP nicht löschbar.");
+            }
+            throw new \RuntimeException("Wissens-Dokument \"{$slug}\" nicht gefunden.");
+        }
+        try {
+            app(\Platform\Core\Services\EmbeddingService::class)
+                ->delete((int) $doc->team_id, KnowledgeEmbeddingService::ENTITY_TYPE, (int) $doc->id);
+        } catch (\Throwable) {
+            // Index-Bereinigung ist Beiwerk — nie den Löschvorgang daran hängen.
+        }
+        DB::table('foodalchemist_knowledge_documents')->where('id', $doc->id)->delete();
+    }
+
+    /**
+     * Alias eines team-eigenen Wissensdokuments anlegen (D12). Idempotent. Gibt den normalisierten
+     * Alias-Slug zurück. Geteilte Web-/MCP-Wahrheit (Browser::addAlias + knowledge.ALIAS add).
+     */
+    public function addAlias(Team $team, string $slug, string $alias): string
+    {
+        $doc = DB::table('foodalchemist_knowledge_documents')->where('slug', $slug)->whereNull('deleted_at')->first();
+        if ($doc === null || ! TeamScope::owns($doc->team_id, $team)) {
+            throw new \RuntimeException("Wissens-Dokument \"{$slug}\" nicht gefunden oder nicht team-eigen.");
+        }
+        $aliasSlug = Str::slug(trim($alias), '_');
+        if ($aliasSlug === '') {
+            throw new \RuntimeException('Alias darf nicht leer sein.');
+        }
+        $exists = DB::table('foodalchemist_knowledge_aliases')
+            ->where('alias_slug', $aliasSlug)->where('knowledge_document_id', $doc->id)->exists();
+        if (! $exists) {
+            DB::table('foodalchemist_knowledge_aliases')->insert([
+                'alias_slug' => $aliasSlug, 'knowledge_document_id' => $doc->id,
+                'created_at' => now(), 'updated_at' => now(),
+            ]);
+        }
+
+        return $aliasSlug;
+    }
+
+    /**
+     * Alias eines team-eigenen Wissensdokuments entfernen (D12). Löst das Eltern-Doc über die Alias-ID
+     * auf und prüft Eigentum. Geteilte Web-/MCP-Wahrheit (Browser::removeAlias + knowledge.ALIAS remove).
+     */
+    public function removeAlias(Team $team, int $aliasId): void
+    {
+        $docId = DB::table('foodalchemist_knowledge_aliases')->where('id', $aliasId)->value('knowledge_document_id');
+        if ($docId === null) {
+            throw new \RuntimeException('Alias nicht gefunden.');
+        }
+        $doc = DB::table('foodalchemist_knowledge_documents')->where('id', (int) $docId)->first();
+        if ($doc === null || ! TeamScope::owns($doc->team_id, $team)) {
+            throw new \RuntimeException('Alias nicht team-eigen.');
+        }
+        DB::table('foodalchemist_knowledge_aliases')->where('id', $aliasId)->delete();
+    }
+
     /** Bindet ein Doc an einen Einsatzort (knowledge_layers-Slug), Provenienz $source. */
     public function bindLayer(Team $team, int $docId, string $targetKey, string $mode, string $source = 'mcp'): void
     {

@@ -22,7 +22,7 @@ Capability. Sie beantwortet:
 | Capability | Anzahl | Aktuelle Aussage |
 |---|---:|---|
 | Prompt-Keys in `config/foodalchemist.php` | 64 | Registry vorhanden; 11 Keys ohne direkte statische Referenz in `src/` (die 5 seit 01.08. ergänzten Keys sind alle direkt referenziert) |
-| MCP-Toolklassen mit `foodalchemist.*`-Name | 381 | Provider registriert 381 (203 Bestand + 17 D1/Phase 0 + 13 D2 + 18 D3 + 27 D4 + 35 D5 + 10 D6 + 14 D7 + 8 D8 + 13 D9 + 10 D10 + 13 D11 Produktion/Orders; Stand 2026-08-29); §7-Register wird nachgezogen (Alt-Liste = 169) |
+| MCP-Toolklassen mit `foodalchemist.*`-Name | 389 | Provider registriert 389 (203 Bestand + 17 D1/Phase 0 + 13 D2 + 18 D3 + 27 D4 + 35 D5 + 10 D6 + 14 D7 + 8 D8 + 13 D9 + 10 D10 + 13 D11 + 8 D12 Knowledge/Canvas/Controlling/Trend/Presentation; Stand 2026-08-29); §7-Register wird nachgezogen (Alt-Liste = 169) |
 | Embedding-Pools mit Observern | 6 | GP, Rezept, Lieferant, Konzept, Foodbook, Lab Note |
 | Wissens-/Retrieval-Schichten | 2 | deterministisch plus optional semantisch |
 | dokumentierte vollständige MCP-Tenant-Abnahme | 0 | einzelne Tests vorhanden, keine 157-Tool-Matrix |
@@ -602,6 +602,15 @@ foodalchemist.production_plan.SUGGEST
 foodalchemist.production_plan.APPLY
 foodalchemist.speiseplan.ANPRODUKTION
 foodalchemist.angebote.ANPRODUKTION
+# D12: Knowledge-Löschen/Alias + Canvas-Einträge + Controlling + Trendradar + Präsentations-Designs
+foodalchemist.knowledge.DELETE
+foodalchemist.knowledge.ALIAS
+foodalchemist.canvas.ENTRY_ADD
+foodalchemist.canvas.ENTRY_REMOVE
+foodalchemist.sales_facts.MAP
+foodalchemist.trendradar.IMPORT
+foodalchemist.presentation_designs.DUPLICATE
+foodalchemist.presentation_designs.GENERATE_CSS
 ```
 
 ## 8. MCP-Abnahmematrix
