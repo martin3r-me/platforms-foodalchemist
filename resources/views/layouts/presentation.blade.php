@@ -54,6 +54,8 @@
             ?? trim(($snapshot['meta']['customer'] ?? '') . ' · ' . ($snapshot['meta']['kicker'] ?? 'Kulinarisches Angebot'), " ·\t");
         // Vorschaubild: gerenderte Share-Card (Titel+Logo aufs Cover) auf dem Public-Pfad, sonst rohes Cover.
         $ogImage = ($shareCardUrl ?? null) ?: $ptImg;
+        // Homescreen-Icon: gerendertes Marken-Quadrat (Logo mittig) auf dem Public-Pfad, sonst Cover/Logo.
+        $appleIcon = ($appIconUrl ?? null) ?: $ptImg;
     @endphp
     <meta name="theme-color" content="{{ $pal['primary'] ?? '#6d28d9' }}">
     <meta name="color-scheme" content="light">
@@ -63,7 +65,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="{{ $ptTitle }}">
     @isset($manifestUrl)<link rel="manifest" href="{{ $manifestUrl }}">@endisset
-    @if($ptImg)<link rel="apple-touch-icon" href="{{ $ptImg }}">@endif
+    @if($appleIcon)<link rel="apple-touch-icon" href="{{ $appleIcon }}">@endif
 
     {{-- Open Graph / Twitter — schöne Link-Vorschau beim Teilen (WhatsApp/iMessage/Slack …) --}}
     <meta property="og:type" content="website">

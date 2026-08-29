@@ -30,6 +30,7 @@ class PresentationController extends Controller
             'publicUrl' => route('foodalchemist.presentation.show', ['type' => $type, 'token' => $token]),
             'manifestUrl' => route('foodalchemist.presentation.manifest', ['type' => $type, 'token' => $token]),
             'shareCardUrl' => route('foodalchemist.presentation.share_card', ['type' => $type, 'token' => $token]),
+            'appIconUrl' => $this->appIconUrl($type, $token, 180),
         ]);
     }
 
@@ -82,12 +83,10 @@ class PresentationController extends Controller
             'theme_color' => $primary,
             'background_color' => $bg,
             'lang' => str_replace('_', '-', app()->getLocale()),
-            'icons' => [[
-                'src' => $this->svgIcon($title, $primary),
-                'sizes' => 'any',
-                'type' => 'image/svg+xml',
-                'purpose' => 'any maskable',
-            ]],
+            'icons' => [
+                ['src' => $this->appIconUrl($type, $token, 192), 'sizes' => '192x192', 'type' => 'image/png', 'purpose' => 'any maskable'],
+                ['src' => $this->appIconUrl($type, $token, 512), 'sizes' => '512x512', 'type' => 'image/png', 'purpose' => 'any maskable'],
+            ],
         ], fn ($v) => $v !== null && $v !== '');
 
         return response()->json($manifest, 200, [
@@ -103,17 +102,26 @@ class PresentationController extends Controller
         return preg_match('/^(#[0-9a-fA-F]{3,8}|rgba?\([0-9.,\s%]+\))$/', $value) === 1 ? $value : $fallback;
     }
 
-    /** Data-URI-App-Icon: markenfarbenes Kachel-Quadrat mit dem Anfangsbuchstaben (kein Binär-Upload nötig). */
-    private function svgIcon(string $title, string $primary): string
+    private function appIconUrl(string $type, string $token, int $size): string
     {
-        $letter = mb_strtoupper(mb_substr($title, 0, 1, 'UTF-8'));
-        $letter = htmlspecialchars($letter, ENT_QUOTES | ENT_XML1, 'UTF-8');
-        $svg = '<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">'
-            . '<rect width="512" height="512" rx="112" fill="' . $primary . '"/>'
-            . '<text x="256" y="340" font-family="Georgia,serif" font-size="300" font-weight="700" '
-            . 'text-anchor="middle" fill="#ffffff">' . $letter . '</text></svg>';
+        return route('foodalchemist.presentation.app_icon', ['type' => $type, 'token' => $token]) . '?s=' . $size;
+    }
 
-        return 'data:image/svg+xml;base64,' . base64_encode($svg);
+    /**
+     * PWA-/Homescreen-Icon: quadratisches PNG = Logo mittig auf Marken-Quadrat (Buchstabe als
+     * Fallback). Größe via ?s= (96–1024). Rein additiv; kein Login/Team.
+     */
+    public function appIcon(string $type, string $token, PresentationShareCardService $cards): Response
+    {
+        $png = $cards->renderIcon($type, $token, (int) request()->query('s', 512));
+        if ($png === null) {
+            abort(404);
+        }
+
+        return response($png, 200, [
+            'Content-Type' => 'image/png',
+            'Cache-Control' => 'public, max-age=86400',
+        ]);
     }
 
     /**

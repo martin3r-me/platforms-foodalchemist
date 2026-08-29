@@ -23,6 +23,9 @@ class PresentationShareCardService
      *  nur an published_at, nicht am Code). v3 = Foto + Logo mittig zentriert. */
     private const CARD_VERSION = 3;
 
+    /** Analog für das PWA-/Homescreen-Icon (Logo auf Marken-Quadrat). */
+    private const ICON_VERSION = 1;
+
     public function __construct(private FoodAlchemistMediaService $media)
     {
     }
@@ -69,6 +72,74 @@ class PresentationShareCardService
         }
 
         return null;
+    }
+
+    /** PNG-Bytes eines quadratischen PWA-/Homescreen-Icons (Logo auf Marken-Quadrat) oder null. */
+    public function renderIcon(string $type, string $ref, int $size): ?string
+    {
+        $entity = $this->liveEntity($type, $ref);
+        if ($entity === null) {
+            return null;
+        }
+        $snap = $entity->presentation_snapshot_json;
+        if (! is_array($snap) || $snap === []) {
+            return null;
+        }
+        $size = max(96, min(1024, $size));
+        $key = 'fa-og-icon:v' . self::ICON_VERSION . ':' . md5($type . '|' . $ref . '|' . $size . '|' . ($entity->presentation_published_at?->getTimestamp() ?? 0));
+
+        try {
+            $b64 = Cache::remember($key, now()->addDay(), fn () => base64_encode($this->composeIcon($snap, $size)));
+        } catch (\Throwable) {
+            return null;
+        }
+        $png = base64_decode((string) $b64, true);
+
+        return $png !== false && $png !== '' ? $png : null;
+    }
+
+    private function composeIcon(array $snap, int $size): string
+    {
+        $img = imagecreatetruecolor($size, $size);
+        imagealphablending($img, true);
+        imagesavealpha($img, true);
+
+        $pal = $snap['resolved_design']['tokens']['palette'] ?? [];
+        $primary = $this->hexToRgb($pal['primary'] ?? '#141210', [20, 18, 16]);
+        imagefilledrectangle($img, 0, 0, $size, $size, imagecolorallocate($img, $primary[0], $primary[1], $primary[2]));
+
+        $logo = $this->loadImage($this->branding($snap, 'logo'));
+        if ($logo !== null) {
+            // Logo zentriert, ~66 % Kantenlänge (Safe-Zone für maskable Icons).
+            $lw = imagesx($logo);
+            $lh = imagesy($logo);
+            if ($lw > 0 && $lh > 0) {
+                $box = (int) round($size * 0.66);
+                $scale = min($box / $lw, $box / $lh);
+                $nw = (int) round($lw * $scale);
+                $nh = (int) round($lh * $scale);
+                imagecopyresampled($img, $logo, (int) round(($size - $nw) / 2), (int) round(($size - $nh) / 2), 0, 0, $nw, $nh, $lw, $lh);
+            }
+            imagedestroy($logo);
+        } else {
+            // Fallback: Anfangsbuchstabe zentriert (wie bisher).
+            $letter = mb_strtoupper(mb_substr(trim((string) ($snap['title'] ?? 'F')) ?: 'F', 0, 1, 'UTF-8'), 'UTF-8');
+            $font = dirname(__DIR__, 2) . '/resources/fonts/PTSerif-Bold.ttf';
+            $fs = (int) round($size * 0.5);
+            $bb = imagettfbbox($fs, 0, $font, $letter);
+            $tw = $bb[2] - $bb[0];
+            $th = $bb[1] - $bb[7];
+            $x = (int) round(($size - $tw) / 2 - $bb[0]);
+            $y = (int) round(($size + $th) / 2 - $bb[1]);
+            imagettftext($img, $fs, 0, $x, $y, imagecolorallocate($img, 255, 255, 255), $font, $letter);
+        }
+
+        ob_start();
+        imagepng($img);
+        $png = (string) ob_get_clean();
+        imagedestroy($img);
+
+        return $png;
     }
 
     private function liveEntity(string $type, string $ref)

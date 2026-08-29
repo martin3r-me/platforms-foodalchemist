@@ -56,8 +56,8 @@ it('das Web-App-Manifest ist gültig und aus demselben Snapshot aufgebaut', func
         ->and($m['start_url'])->toContain('/p/foodbook/' . $this->token)
         ->and($m['scope'])->toContain('/p/foodbook/' . $this->token)
         ->and($m['theme_color'])->not->toBeEmpty()
-        ->and($m['icons'][0]['type'])->toBe('image/svg+xml')
-        ->and($m['icons'][0]['src'])->toStartWith('data:image/svg+xml;base64,');
+        ->and($m['icons'][0]['type'])->toBe('image/png')
+        ->and($m['icons'][0]['src'])->toContain('/app-icon.png');
 });
 
 it('Manifest folgt der 404-Matrix (unbekannter/zurückgezogener Token)', function () {

@@ -23,6 +23,13 @@ Route::get('/p/{type}/{token}/share-card.png', [PresentationController::class, '
     ->middleware(NoCacheHeaders::class)
     ->name('foodalchemist.presentation.share_card');
 
+// PWA-/Homescreen-Icon (Logo auf Marken-Quadrat) — additiv, spezifischer 3-Segment-Pfad.
+Route::get('/p/{type}/{token}/app-icon.png', [PresentationController::class, 'appIcon'])
+    ->whereIn('type', ['foodbook', 'speisekarte', 'speiseplan'])
+    ->where('token', '[A-Za-z0-9-]+')
+    ->middleware(NoCacheHeaders::class)
+    ->name('foodalchemist.presentation.app_icon');
+
 Route::get('/p/{type}/{token}', [PresentationController::class, 'show'])
     ->whereIn('type', ['foodbook', 'speisekarte', 'speiseplan'])
     ->where('token', '[A-Za-z0-9-]+')

@@ -57,6 +57,27 @@ it('auch per Slug erreichbar; nach Zurückziehen 404', function () {
     $this->get('/p/foodbook/' . $res['token'] . '/share-card.png')->assertNotFound();
 });
 
+it('liefert ein quadratisches PWA-/Homescreen-Icon-PNG', function () {
+    if (! function_exists('imagettftext')) {
+        $this->markTestSkipped('GD/FreeType nicht verfügbar.');
+    }
+    [, $res] = ($this->publishFb)();
+
+    $resp = $this->get('/p/foodbook/' . $res['token'] . '/app-icon.png?s=192')->assertOk();
+    expect($resp->headers->get('Content-Type'))->toContain('image/png');
+    $info = getimagesizefromstring($resp->getContent());
+    expect($info)->not->toBeFalse()
+        ->and($info[0])->toBe(192)
+        ->and($info[1])->toBe(192);
+});
+
+it('das Web-App-Manifest referenziert die Icon-Route (PNG, nicht mehr Data-URI)', function () {
+    [, $res] = ($this->publishFb)();
+    $m = $this->get('/p/foodbook/' . $res['token'] . '/app.webmanifest')->assertOk()->json();
+    expect($m['icons'][0]['src'])->toContain('/app-icon.png')
+        ->and($m['icons'][0]['type'])->toBe('image/png');
+});
+
 it('die Seite verweist mit og:image auf die Share-Card (+ Maße)', function () {
     [, $res] = ($this->publishFb)();
     $html = $this->get('/p/foodbook/' . $res['token'])->assertOk()->getContent();
