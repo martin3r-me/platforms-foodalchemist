@@ -666,7 +666,7 @@ class ConceptService
      *
      * @return array{zeilen: list<array>, preis_pro_person: float, ek_pro_person: float, hat_stale: bool, hat_leer: bool, hat_ek_luecke: bool}
      */
-    public function preisCockpit(FoodAlchemistConcept $concept): array
+    public function preisCockpit(FoodAlchemistConcept $concept, ?\Platform\FoodAlchemist\Models\FoodAlchemistOutlet $outlet = null): array
     {
         $concept->loadMissing(['slots' => fn ($q) => $q->orderBy('position'),
             'slots.unit:id,slug,dimension,default_in_g',
@@ -716,7 +716,13 @@ class ConceptService
                 $anzahl = $stueck
                     ? (float) $slot->dish->yield_pieces
                     : max(1, (int) ($slot->dish->sales_unit_count ?? 1));
-                $vk = $ekFehlt ? 0.0 : (float) ($dar?->sales_net ?? $slot->dish->sales_net ?? 0) * $pae;
+                // Ebene 2: Gericht-Slot im Betriebs-Kontext on-the-fly; Paket-/Embedded-Caches
+                // bleiben Team-Baseline (kein Fan-out). outlet=null ⇒ identisch zu heute.
+                $vkStd = $dar !== null && $outlet !== null
+                    ? app(CatalogPricingService::class)->salesNetFor(\Platform\Core\Models\Team::find($outlet->team_id), $dar, $outlet)
+                    : ($dar?->sales_net !== null ? (float) $dar->sales_net : null);
+                $vkStd ??= ($slot->dish->sales_net !== null ? (float) $slot->dish->sales_net : 0.0);
+                $vk = $ekFehlt ? 0.0 : $vkStd * $pae;
                 $ek = $ekFehlt ? 0.0
                     : (($dar?->ek_portion !== null && ! $stueck)
                         ? (float) $dar->ek_portion * $pae

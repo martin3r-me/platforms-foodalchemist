@@ -371,10 +371,10 @@ class SpeiseplanService
     }
 
     /** Per-Person-Preis eines Eintrags (Concept/Paket/Gericht). @return array{vk: float, ek: float} */
-    public function eintragPreis(FoodAlchemistSpeiseplanEintrag $e): array
+    public function eintragPreis(FoodAlchemistSpeiseplanEintrag $e, ?\Platform\FoodAlchemist\Models\FoodAlchemistOutlet $outlet = null): array
     {
         if ($e->concept_id !== null && $e->concept) {
-            $c = $this->concepts->preisCockpit($e->concept);
+            $c = $this->concepts->preisCockpit($e->concept, $outlet);
 
             return ['vk' => (float) $c['price_per_person'], 'ek' => (float) $c['ek_per_person']];
         }
@@ -382,7 +382,11 @@ class SpeiseplanService
             return ['vk' => (float) ($e->package->price_per_person ?? 0), 'ek' => (float) ($e->package->ek_per_person ?? 0)];
         }
         if ($e->sales_recipe_id !== null && $e->dish) {
-            return ['vk' => (float) ($e->dish->sales_net ?? 0), 'ek' => (float) ($e->dish->ek_total_eur ?? 0)];
+            $vk = $outlet !== null
+                ? (app(DarreichungResolver::class)->vkNettoMitQuelle($e->dish, $outlet)['vk'] ?? (float) ($e->dish->sales_net ?? 0))
+                : (float) ($e->dish->sales_net ?? 0);
+
+            return ['vk' => $vk, 'ek' => (float) ($e->dish->ek_total_eur ?? 0)];
         }
 
         return ['vk' => 0.0, 'ek' => 0.0];

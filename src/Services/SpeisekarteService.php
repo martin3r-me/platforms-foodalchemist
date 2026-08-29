@@ -562,7 +562,7 @@ class SpeisekarteService
      *
      * @return array{vk: ?float, quelle: string} quelle ∈ manuell|darreichung|legacy|concept|keine
      */
-    public function positionPreis(FoodAlchemistSpeisekartePosition $pos): array
+    public function positionPreis(FoodAlchemistSpeisekartePosition $pos, ?\Platform\FoodAlchemist\Models\FoodAlchemistOutlet $outlet = null): array
     {
         if ($pos->price_mode === 'manuell') {
             return ['vk' => $pos->price_value !== null ? (float) $pos->price_value : null, 'quelle' => 'manuell'];
@@ -572,20 +572,25 @@ class SpeisekarteService
             // Expliziter Darreichungs-Override (Glas/Flasche/Portion) hat Vorrang.
             if ($pos->presentation_id) {
                 $darr = FoodAlchemistRecipeDarreichung::find($pos->presentation_id);
-                if ($darr?->sales_net !== null) {
-                    return ['vk' => (float) $darr->sales_net, 'quelle' => 'darreichung'];
+                if ($darr !== null) {
+                    $vk = $outlet !== null
+                        ? app(CatalogPricingService::class)->salesNetFor(\Platform\Core\Models\Team::find($outlet->team_id), $darr, $outlet)
+                        : ($darr->sales_net !== null ? (float) $darr->sales_net : null);
+                    if ($vk !== null) {
+                        return ['vk' => $vk, 'quelle' => 'darreichung'];
+                    }
                 }
             }
             $dish = $pos->relationLoaded('dish') ? $pos->dish : $pos->dish()->first();
             if ($dish) {
-                return $this->darreichung->vkNettoMitQuelle($dish);
+                return $this->darreichung->vkNettoMitQuelle($dish, $outlet);
             }
         }
 
         if ($pos->type === 'menue_ref') {
             $concept = $pos->relationLoaded('concept') ? $pos->concept : $pos->concept()->first();
             if ($concept) {
-                $cockpit = $this->concepts->preisCockpit($concept);
+                $cockpit = $this->concepts->preisCockpit($concept, $outlet);
 
                 return ['vk' => (float) $cockpit['price_per_person'], 'quelle' => 'concept'];
             }

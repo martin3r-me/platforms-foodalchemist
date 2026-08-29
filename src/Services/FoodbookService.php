@@ -1575,16 +1575,19 @@ class FoodbookService
      *
      * @return array{vk_pp: float, ek_pp: float, pauschal: float}
      */
-    public function blockPreis(FoodAlchemistFoodbookBlock $block, ?int $pax = null): array
+    public function blockPreis(FoodAlchemistFoodbookBlock $block, ?int $pax = null, ?\Platform\FoodAlchemist\Models\FoodAlchemistOutlet $outlet = null): array
     {
         if ($block->type === 'concept_ref' && $block->concept) {
-            $cockpit = $this->concepts->preisCockpit($block->concept);
+            $cockpit = $this->concepts->preisCockpit($block->concept, $outlet);
 
             return ['vk_pp' => (float) $cockpit['price_per_person'], 'ek_pp' => (float) $cockpit['ek_per_person'], 'pauschal' => 0.0];
         }
         if ($block->type === 'recipe_ref' && $block->dish) {
             $faktor = $block->quantity !== null ? (float) $block->quantity : 1.0;
-            $vk = round((float) ($block->dish->sales_net ?? 0) * $faktor, 2);
+            $baseVk = $outlet !== null
+                ? (app(DarreichungResolver::class)->vkNettoMitQuelle($block->dish, $outlet)['vk'] ?? (float) ($block->dish->sales_net ?? 0))
+                : (float) ($block->dish->sales_net ?? 0);
+            $vk = round($baseVk * $faktor, 2);
             $ek = round((float) ($block->dish->ek_total_eur ?? 0) * $faktor, 2);
 
             // Spec 19 E1.2: Einzel-Gericht pauschal (€/Position, flach) vs. per-Person (€/Gast).
@@ -1629,7 +1632,7 @@ class FoodbookService
      *
      * @return array{vk_pro_person: float, ek_pro_person: float, pauschal: float, food_cost_percent: ?float}
      */
-    public function kapitelAggregat(Team $team, FoodAlchemistFoodbookKapitel $kapitel, ?int $pax = null): array
+    public function kapitelAggregat(Team $team, FoodAlchemistFoodbookKapitel $kapitel, ?int $pax = null, ?\Platform\FoodAlchemist\Models\FoodAlchemistOutlet $outlet = null): array
     {
         $kapitel->loadMissing(['blocks' => fn ($q) => $q->where('visible', true),
             'blocks.concept:id,name,price_per_person_cache', 'blocks.dish:id,sales_net,ek_total_eur',
@@ -1639,13 +1642,13 @@ class FoodbookService
         $ek = 0.0;
         $pauschal = 0.0;
         foreach ($kapitel->blocks as $block) {
-            $p = $this->blockPreis($block, $pax);
+            $p = $this->blockPreis($block, $pax, $outlet);
             $vk += $p['vk_pp'];
             $ek += $p['ek_pp'];
             $pauschal += $p['pauschal'];
         }
         foreach ($kapitel->children as $kind) {
-            $kindAgg = $this->kapitelAggregat($team, $kind, $pax);
+            $kindAgg = $this->kapitelAggregat($team, $kind, $pax, $outlet);
             $vk += $kindAgg['vk_pro_person'];
             $ek += $kindAgg['ek_per_person'];
             $pauschal += $kindAgg['pauschal'];

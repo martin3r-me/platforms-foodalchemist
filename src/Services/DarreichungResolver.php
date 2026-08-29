@@ -2,8 +2,10 @@
 
 namespace Platform\FoodAlchemist\Services;
 
+use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Models\FoodAlchemistConceptSlot;
 use Platform\FoodAlchemist\Models\FoodAlchemistFoodbookBlock;
+use Platform\FoodAlchemist\Models\FoodAlchemistOutlet;
 use Platform\FoodAlchemist\Models\FoodAlchemistPaketGericht;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipeDarreichung;
@@ -116,14 +118,21 @@ class DarreichungResolver
      *
      * @return array{vk: ?float, quelle: 'darreichung'|'legacy'|'keine'}
      */
-    public function vkNettoMitQuelle(FoodAlchemistRecipe $recipe): array
+    public function vkNettoMitQuelle(FoodAlchemistRecipe $recipe, ?FoodAlchemistOutlet $outlet = null): array
     {
         $standard = $recipe->relationLoaded('standardPresentation')
             ? $recipe->standardPresentation
             : $this->standardFuer($recipe);
 
-        if ($standard?->sales_net !== null) {
-            return ['vk' => (float) $standard->sales_net, 'quelle' => 'darreichung'];
+        if ($standard !== null) {
+            // Ebene 2: im Betriebs-Kontext den VK on-the-fly gegen dessen Kostenstruktur;
+            // ohne Betrieb der gespeicherte Baseline-VK der Standard-Darreichung (= heute).
+            $vk = $outlet !== null
+                ? app(CatalogPricingService::class)->salesNetFor(Team::find($outlet->team_id), $standard, $outlet)
+                : ($standard->sales_net !== null ? (float) $standard->sales_net : null);
+            if ($vk !== null) {
+                return ['vk' => $vk, 'quelle' => 'darreichung'];
+            }
         }
 
         if ($recipe->sales_net !== null) {
@@ -134,12 +143,17 @@ class DarreichungResolver
     }
 
     /** VK netto im Kontext (Darreichung zuerst, Legacy-Spalte als Fallback). */
-    public function vkNettoFuerSlot(FoodAlchemistConceptSlot $slot): ?float
+    public function vkNettoFuerSlot(FoodAlchemistConceptSlot $slot, ?FoodAlchemistOutlet $outlet = null): ?float
     {
         $darreichung = $this->fuerSlot($slot);
 
-        if ($darreichung?->sales_net !== null) {
-            return (float) $darreichung->sales_net;
+        if ($darreichung !== null) {
+            $vk = $outlet !== null
+                ? app(CatalogPricingService::class)->salesNetFor(Team::find($outlet->team_id), $darreichung, $outlet)
+                : ($darreichung->sales_net !== null ? (float) $darreichung->sales_net : null);
+            if ($vk !== null) {
+                return $vk;
+            }
         }
 
         return $slot->dish?->sales_net !== null ? (float) $slot->dish->sales_net : null;
