@@ -2292,6 +2292,11 @@ class FoodbookService
         $fb = FoodAlchemistFoodbook::visibleToTeam($team)->findOrFail($foodbookId);
         $this->guard($fb, $team);                                    // D1: Schreiben/Erzeugen nur durchs Besitzer-Team
 
+        // Workstream W (MCP-Steuerbarkeit D7): Kundentext an Cross-Cutting-Fakten erden (Anti-Marker
+        // etc.) — Guardrail fürs kundensichtbare Wording. Wirkt Web + MCP (Parität).
+        $wissen = app(\Platform\FoodAlchemist\Services\Ai\KnowledgeContextService::class)
+            ->contextFor('foodbook.kundentext', (string) ($fb->label ?: 'Foodbook'));
+
         $proposal = app(\Platform\FoodAlchemist\Services\Ai\AiGatewayService::class)->propose(
             'foodbook.kundentext',
             $this->kundentextKontext($team, $fb),
@@ -2301,6 +2306,8 @@ class FoodbookService
                 'food_dna_crm_company_id' => $fb->crm_company_id !== null ? (int) $fb->crm_company_id : null,
                 'target_table' => 'foodalchemist_foodbooks',
                 'target_id' => (int) $fb->id,
+                'knowledge' => $wissen['block'] ?? null,
+                'knowledge_used' => $wissen['files_used'] ?? null,
             ],
         );
 
@@ -2326,6 +2333,10 @@ class FoodbookService
         $k = $this->ownedKapitel($team, $kapitelId);           // D1: Pflege nur durchs Besitzer-Team
         $fb = FoodAlchemistFoodbook::visibleToTeam($team)->findOrFail($k->foodbook_id);
 
+        // Workstream W (D7): dieselbe Cross-Cutting-Erdung wie am Buch-Kundentext (geteilter Prompt-Key).
+        $wissen = app(\Platform\FoodAlchemist\Services\Ai\KnowledgeContextService::class)
+            ->contextFor('foodbook.kundentext', (string) ($k->title ?: $fb->label ?: 'Kapitel'));
+
         $proposal = app(\Platform\FoodAlchemist\Services\Ai\AiGatewayService::class)->propose(
             'foodbook.kundentext',
             $this->kapitelKundentextKontext($team, $fb, $k),
@@ -2336,6 +2347,8 @@ class FoodbookService
                 // Feld der Vorschlag füllen soll (sonst sind n Kapitel-Calls nicht unterscheidbar).
                 'target_table' => 'foodalchemist_foodbook_chapters',
                 'target_id' => (int) $k->id,
+                'knowledge' => $wissen['block'] ?? null,
+                'knowledge_used' => $wissen['files_used'] ?? null,
             ],
         );
 

@@ -619,6 +619,22 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\FoodbookKapitelPutTool::class,
                     \Platform\FoodAlchemist\Tools\FoodbookBlocksPostTool::class,
                     \Platform\FoodAlchemist\Tools\FoodbookBlocksDeleteTool::class,
+                    // D7: Foodbook-Vervollständigung (List/Put/Status/Branding/Customer-Link +
+                    // Kapitel-Bausteine + Block-Edits + Kundentext-Vorschläge, W-geerdet). Kein Buch-Delete.
+                    \Platform\FoodAlchemist\Tools\FoodbooksListTool::class,
+                    \Platform\FoodAlchemist\Tools\FoodbooksPutTool::class,
+                    \Platform\FoodAlchemist\Tools\FoodbooksStatusTool::class,
+                    \Platform\FoodAlchemist\Tools\FoodbooksBrandingTool::class,
+                    \Platform\FoodAlchemist\Tools\FoodbooksCustomerLinkTool::class,
+                    \Platform\FoodAlchemist\Tools\FoodbookKapitelDeleteTool::class,
+                    \Platform\FoodAlchemist\Tools\FoodbookKapitelReorderTool::class,
+                    \Platform\FoodAlchemist\Tools\FoodbookKapitelMoveTool::class,
+                    \Platform\FoodAlchemist\Tools\FoodbookKapitelWordingTool::class,
+                    \Platform\FoodAlchemist\Tools\FoodbookBlocksPutTool::class,
+                    \Platform\FoodAlchemist\Tools\FoodbookBlocksReorderTool::class,
+                    \Platform\FoodAlchemist\Tools\FoodbookBlocksVariantGroupTool::class,
+                    \Platform\FoodAlchemist\Tools\FoodbookKundentextTool::class,
+                    \Platform\FoodAlchemist\Tools\FoodbookKapitelKundentextTool::class,
                     // Format-Umbau F5: Format als Kapitel buchen (live concept_ref-Blöcke, kein Sonderweg)
                     \Platform\FoodAlchemist\Tools\FoodbookInsertFormatTool::class,
                     // Spec 19 E3.5: Zielgruppen-Vokabular (Leitstelle-Leseflaeche + Anlage)

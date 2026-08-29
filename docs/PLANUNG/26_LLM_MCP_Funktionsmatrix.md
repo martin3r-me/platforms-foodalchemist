@@ -22,7 +22,7 @@ Capability. Sie beantwortet:
 | Capability | Anzahl | Aktuelle Aussage |
 |---|---:|---|
 | Prompt-Keys in `config/foodalchemist.php` | 64 | Registry vorhanden; 11 Keys ohne direkte statische Referenz in `src/` (die 5 seit 01.08. ergänzten Keys sind alle direkt referenziert) |
-| MCP-Toolklassen mit `foodalchemist.*`-Name | 323 | Provider registriert 323 (203 Bestand + 17 D1/Phase 0 + 13 D2 + 18 D3 + 27 D4 + 35 D5 Concepter/Pakete + 10 D6 Format-Aufbau, Stand 2026-08-29); §7-Register wird nachgezogen (Alt-Liste = 169) |
+| MCP-Toolklassen mit `foodalchemist.*`-Name | 337 | Provider registriert 337 (203 Bestand + 17 D1/Phase 0 + 13 D2 + 18 D3 + 27 D4 + 35 D5 Concepter/Pakete + 10 D6 Format-Aufbau + 14 D7 Foodbook-Vervollständigung, Stand 2026-08-29); §7-Register wird nachgezogen (Alt-Liste = 169) |
 | Embedding-Pools mit Observern | 6 | GP, Rezept, Lieferant, Konzept, Foodbook, Lab Note |
 | Wissens-/Retrieval-Schichten | 2 | deterministisch plus optional semantisch |
 | dokumentierte vollständige MCP-Tenant-Abnahme | 0 | einzelne Tests vorhanden, keine 157-Tool-Matrix |
@@ -539,6 +539,21 @@ foodalchemist.format_images.HERO
 foodalchemist.format_images.CAPTION
 foodalchemist.format_images.REORDER
 foodalchemist.format_images.CLEAR
+# D7: Foodbook-Vervollständigung (kein Buch-Delete; Struktur-Edits nur im Entwurf; Kundentext W-geerdet)
+foodalchemist.foodbooks.LIST
+foodalchemist.foodbooks.PUT
+foodalchemist.foodbooks.STATUS
+foodalchemist.foodbooks.BRANDING
+foodalchemist.foodbooks.CUSTOMER_LINK
+foodalchemist.foodbook_kapitel.DELETE
+foodalchemist.foodbook_kapitel.REORDER
+foodalchemist.foodbook_kapitel.MOVE
+foodalchemist.foodbook_kapitel.WORDING_GENERATE
+foodalchemist.foodbook_blocks.PUT
+foodalchemist.foodbook_blocks.REORDER
+foodalchemist.foodbook_blocks.VARIANT_GROUP
+foodalchemist.foodbook.KUNDENTEXT_GENERATE
+foodalchemist.foodbook_kapitel.KUNDENTEXT_GENERATE
 ```
 
 ## 8. MCP-Abnahmematrix

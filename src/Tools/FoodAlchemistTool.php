@@ -309,6 +309,52 @@ abstract class FoodAlchemistTool
     }
 
     /**
+     * Guard für Foodbook-Struktur-Edits (D7): Foodbook sichtbar + team-eigen + im Status Entwurf?
+     * Kundensichtbare Dokumente sind via MCP nur als Entwurf editierbar (spiegelt Foodbook-Kapitel-/
+     * Block-Tools). Gibt bei Fehler NOT_FOUND/ACCESS_DENIED, sonst null.
+     */
+    protected function guardFoodbookEditable(Team $team, ?\Platform\FoodAlchemist\Models\FoodAlchemistFoodbook $fb): ?ToolResult
+    {
+        if ($fb === null) {
+            return ToolResult::error('Foodbook nicht sichtbar/vorhanden.', 'NOT_FOUND');
+        }
+        if (! $fb->isOwnedBy($team)) {
+            return ToolResult::error('Nur fürs Besitzer-Team des Foodbooks.', 'ACCESS_DENIED');
+        }
+        if ($fb->statusWert() !== \Platform\FoodAlchemist\Enums\AusgabeStatus::Entwurf) {
+            return ToolResult::error("Foodbook-Status \"{$fb->statusWert()->label()}\" — via MCP ist nur ein Entwurf strukturell editierbar.", 'ACCESS_DENIED');
+        }
+
+        return null;
+    }
+
+    /** Lädt das (sichtbare) Foodbook zu einem Kapitel — für die Struktur-Guards (D7). */
+    protected function foodbookVonKapitel(Team $team, int $kapitelId): ?\Platform\FoodAlchemist\Models\FoodAlchemistFoodbook
+    {
+        $kap = \Platform\FoodAlchemist\Models\FoodAlchemistFoodbookKapitel::whereKey($kapitelId)->first();
+        if ($kap === null) {
+            return null;
+        }
+
+        return \Platform\FoodAlchemist\Models\FoodAlchemistFoodbook::visibleToTeam($team)->whereKey($kap->foodbook_id)->first();
+    }
+
+    /** Lädt das (sichtbare) Foodbook zu einem Block (Block → Kapitel → Foodbook) — Struktur-Guards (D7). */
+    protected function foodbookVonBlock(Team $team, int $blockId): ?\Platform\FoodAlchemist\Models\FoodAlchemistFoodbook
+    {
+        $block = \Platform\FoodAlchemist\Models\FoodAlchemistFoodbookBlock::whereKey($blockId)->first();
+        if ($block === null) {
+            return null;
+        }
+        $kap = \Platform\FoodAlchemist\Models\FoodAlchemistFoodbookKapitel::whereKey($block->chapter_id)->first();
+        if ($kap === null) {
+            return null;
+        }
+
+        return \Platform\FoodAlchemist\Models\FoodAlchemistFoodbook::visibleToTeam($team)->whereKey($kap->foodbook_id)->first();
+    }
+
+    /**
      * Guard für Format-Slot-by-id-Tools (D6): existiert der Slot und gehört sein Format dem Team?
      * Gibt bei Fehler NOT_FOUND/ACCESS_DENIED, sonst null.
      */

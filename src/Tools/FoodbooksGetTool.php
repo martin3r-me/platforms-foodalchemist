@@ -54,8 +54,14 @@ class FoodbooksGetTool extends FoodAlchemistTool implements ToolContract, ToolMe
             'status' => $fb->status instanceof \BackedEnum ? $fb->status->value : $fb->status,
             'phase' => $fb->phase, // R4.3 Statusmaschine
 
+            // Tonalität + Kundentyp (Wording-Steuerung; via foodbooks.PUT setzbar)
+            'writing_style_id' => $fb->writing_style_id !== null ? (int) $fb->writing_style_id : null,
+            'kundentyp' => $fb->kundentyp,
+
             // Spec 19 E3.5: Bedarf-Defaults (kaskadieren als Boden in die Kapitel-leitplanken)
             'defaults' => [
+                'niveau' => $fb->default_niveau,
+                'convenience' => $fb->default_convenience,
                 'event_type_id' => $fb->default_event_type_id !== null ? (int) $fb->default_event_type_id : null,
                 'serving_form_id' => $fb->default_serving_form_id !== null ? (int) $fb->default_serving_form_id : null,
                 'target_food_cost_pct' => $fb->target_food_cost_pct,
@@ -65,14 +71,35 @@ class FoodbooksGetTool extends FoodAlchemistTool implements ToolContract, ToolMe
                 'service_moment_ids' => $fb->serviceMoments->map(fn ($m) => (int) $m->id)->values()->all(),
             ],
 
+            // Branding (via foodbooks.BRANDING; Logo/Cover-Binärkanal separat)
+            'branding' => [
+                'brand_color' => $fb->brand_color,
+                'band_color' => $fb->band_color,
+                'footer_text' => $fb->footer_text,
+                'has_logo' => ! empty($fb->logo_path),
+                'has_cover' => ! empty($fb->cover_image_path),
+            ],
+
+            // Spec 43: Public-Präsentation (Snapshot/Freigabe) + Editorial-Settings
+            'presentation' => [
+                'enabled' => (bool) $fb->presentation_enabled,
+                'published_at' => $fb->presentation_published_at?->toDateString(),
+                'expires_at' => $fb->presentation_expires_at?->toDateString(),
+                'settings' => $fb->presentation_settings_json ?? null,
+            ],
+
             'price' => $svc->gesamt($team, $fb),
             'kapitel' => $fb->chapters->map(fn ($k) => [
                 'id' => $k->id,
                 'title' => $k->title,
                 'parent_id' => $k->parent_id,
                 'blocks' => $k->blocks->map(fn ($b) => [
+                    'id' => (int) $b->id,
                     'type' => $b->type,
                     'name' => $b->concept?->name ?? $b->label ?? $b->customer_text,
+                    'visible' => (bool) $b->visible,
+                    'level' => $b->level,
+                    'variant_group_id' => $b->variant_group_id !== null ? (int) $b->variant_group_id : null,
                     'price_per_person' => $b->concept?->price_per_person_cache ?? $b->price_value,
                 ])->values()->all(),
             ])->values()->all(),

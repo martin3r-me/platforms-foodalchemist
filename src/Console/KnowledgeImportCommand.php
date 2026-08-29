@@ -279,6 +279,9 @@ class KnowledgeImportCommand extends Command
             // etc.) als Kundentext-Guardrail. KEIN Regelwerk-Kanal (Brand-Voice, kein Bau-Regelwerk).
             // Spiegel von Migration 2026_08_29_000003.
             ['concept.wording', 'cross_cutting', 'always', null, null],
+            // Workstream W (D7, 2026-08-29): Foodbook-Kundentext (Buch + Kapitel) ebenso an Cross-Cutting.
+            // Spiegel von Migration 2026_08_29_000004.
+            ['foodbook.kundentext', 'cross_cutting', 'always', null, null],
             ['ai_plan_dishes', 'cross_cutting', 'always', null, null],
             ['ai_plan_dishes', 'domain', 'discovery', null, null],
             // Spec 19 E6.4 / Spec 08 P6: Kreativ-Divergenz am Kapitel (foodbook.plan) bzw.
