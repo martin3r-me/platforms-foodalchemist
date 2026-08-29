@@ -792,6 +792,21 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\AssemblierungApplyTool::class,
                     \Platform\FoodAlchemist\Tools\SpeiseplaenePostTool::class,
                     \Platform\FoodAlchemist\Tools\SpeiseplanEintraegePostTool::class,
+                    // D9: Speiseplan-Vervollständigung (Read-Lücke geschlossen + Stamm/Status/Branding/CRM
+                    // + Linien-CRUD + Eintrag-Bausteine + Ausrollen). Kein Plan-Delete (Status archiviert).
+                    \Platform\FoodAlchemist\Tools\SpeiseplaeneGetTool::class,
+                    \Platform\FoodAlchemist\Tools\SpeiseplaeneListTool::class,
+                    \Platform\FoodAlchemist\Tools\SpeiseplaenePutTool::class,
+                    \Platform\FoodAlchemist\Tools\SpeiseplaeneStatusTool::class,
+                    \Platform\FoodAlchemist\Tools\SpeiseplanBrandingTool::class,
+                    \Platform\FoodAlchemist\Tools\SpeiseplanCustomerLinkTool::class,
+                    \Platform\FoodAlchemist\Tools\SpeiseplanLinienPostTool::class,
+                    \Platform\FoodAlchemist\Tools\SpeiseplanLinienPutTool::class,
+                    \Platform\FoodAlchemist\Tools\SpeiseplanLinienDeleteTool::class,
+                    \Platform\FoodAlchemist\Tools\SpeiseplanLinienMoveTool::class,
+                    \Platform\FoodAlchemist\Tools\SpeiseplanEintraegeDeleteTool::class,
+                    \Platform\FoodAlchemist\Tools\SpeiseplanEintraegePaxTool::class,
+                    \Platform\FoodAlchemist\Tools\SpeiseplanAusrollenTool::class,
                     // Speisekarte (Gastro-à-la-carte) — MCP-Lockstep
                     \Platform\FoodAlchemist\Tools\SpeisekartenPostTool::class,
                     \Platform\FoodAlchemist\Tools\SpeisekartenPutTool::class,

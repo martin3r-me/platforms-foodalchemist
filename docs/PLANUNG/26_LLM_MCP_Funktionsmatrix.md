@@ -22,7 +22,7 @@ Capability. Sie beantwortet:
 | Capability | Anzahl | Aktuelle Aussage |
 |---|---:|---|
 | Prompt-Keys in `config/foodalchemist.php` | 64 | Registry vorhanden; 11 Keys ohne direkte statische Referenz in `src/` (die 5 seit 01.08. ergänzten Keys sind alle direkt referenziert) |
-| MCP-Toolklassen mit `foodalchemist.*`-Name | 345 | Provider registriert 345 (203 Bestand + 17 D1/Phase 0 + 13 D2 + 18 D3 + 27 D4 + 35 D5 + 10 D6 + 14 D7 + 8 D8 Speisekarte-Vervollständigung; GET-Rename speisekarte→speisekarten, Stand 2026-08-29); §7-Register wird nachgezogen (Alt-Liste = 169) |
+| MCP-Toolklassen mit `foodalchemist.*`-Name | 358 | Provider registriert 358 (203 Bestand + 17 D1/Phase 0 + 13 D2 + 18 D3 + 27 D4 + 35 D5 + 10 D6 + 14 D7 + 8 D8 + 13 D9 Speiseplan-Vervollständigung; Stand 2026-08-29); §7-Register wird nachgezogen (Alt-Liste = 169) |
 | Embedding-Pools mit Observern | 6 | GP, Rezept, Lieferant, Konzept, Foodbook, Lab Note |
 | Wissens-/Retrieval-Schichten | 2 | deterministisch plus optional semantisch |
 | dokumentierte vollständige MCP-Tenant-Abnahme | 0 | einzelne Tests vorhanden, keine 157-Tool-Matrix |
@@ -563,6 +563,20 @@ foodalchemist.speisekarte_rubrik.DELETE
 foodalchemist.speisekarte_rubrik.MOVE
 foodalchemist.speisekarte_positionen.PUT
 foodalchemist.speisekarte_wording.GENERATE
+# D9: Speiseplan-Vervollständigung (Read-Lücke geschlossen; kein Plan-Delete; ANPRODUKTION → D11)
+foodalchemist.speiseplaene.GET
+foodalchemist.speiseplaene.LIST
+foodalchemist.speiseplaene.PUT
+foodalchemist.speiseplaene.STATUS
+foodalchemist.speiseplan.BRANDING
+foodalchemist.speiseplan.CUSTOMER_LINK
+foodalchemist.speiseplan_linien.POST
+foodalchemist.speiseplan_linien.PUT
+foodalchemist.speiseplan_linien.DELETE
+foodalchemist.speiseplan_linien.MOVE
+foodalchemist.speiseplan_eintraege.DELETE
+foodalchemist.speiseplan_eintraege.PAX
+foodalchemist.speiseplan.AUSROLLEN
 ```
 
 ## 8. MCP-Abnahmematrix

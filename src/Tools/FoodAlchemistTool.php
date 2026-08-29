@@ -354,6 +354,28 @@ abstract class FoodAlchemistTool
         return \Platform\FoodAlchemist\Models\FoodAlchemistFoodbook::visibleToTeam($team)->whereKey($kap->foodbook_id)->first();
     }
 
+    /** Guard für Speiseplan-Linien-by-id-Tools (D9): Linie → Plan team-eigen? */
+    protected function guardSpeiseplanLinieOwned(Team $team, int $linieId): ?ToolResult
+    {
+        $linie = \Platform\FoodAlchemist\Models\FoodAlchemistSpeiseplanLinie::whereKey($linieId)->first();
+        if ($linie === null) {
+            return ToolResult::error('Linie nicht vorhanden.', 'NOT_FOUND');
+        }
+
+        return $this->guardOwned($team, \Platform\FoodAlchemist\Models\FoodAlchemistSpeiseplan::class, (int) $linie->menu_plan_id, 'Speiseplan');
+    }
+
+    /** Guard für Speiseplan-Eintrag-by-id-Tools (D9): Eintrag → Plan team-eigen? */
+    protected function guardSpeiseplanEintragOwned(Team $team, int $eintragId): ?ToolResult
+    {
+        $e = \Platform\FoodAlchemist\Models\FoodAlchemistSpeiseplanEintrag::whereKey($eintragId)->first();
+        if ($e === null) {
+            return ToolResult::error('Eintrag nicht vorhanden.', 'NOT_FOUND');
+        }
+
+        return $this->guardOwned($team, \Platform\FoodAlchemist\Models\FoodAlchemistSpeiseplan::class, (int) $e->menu_plan_id, 'Speiseplan');
+    }
+
     /**
      * Guard für Speisekarte-Rubrik-by-id-Tools (D8): existiert die Rubrik und gehört ihre Karte dem Team?
      */
