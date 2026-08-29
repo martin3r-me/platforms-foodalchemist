@@ -154,7 +154,9 @@ class ReportExportService
         $auftragsSimulation = null;
         $pax = (int) ($optionen['pax'] ?? 0);
         if ($pax > 0 && ($optionen['simulation'] ?? false)) {
-            $auftragsSimulation = app(OrderCostingService::class)->costConcept($team, $concept, $pax);
+            // Ebene 2: ein via $optionen durchgereichter Betrieb rechnet die Sim mit dessen Kosten (sonst Team-Baseline).
+            $simOutlet = ($optionen['outlet'] ?? null) instanceof \Platform\FoodAlchemist\Models\FoodAlchemistOutlet ? $optionen['outlet'] : null;
+            $auftragsSimulation = app(OrderCostingService::class)->costConcept($team, $concept, $pax, $simOutlet);
         }
 
         return [

@@ -201,7 +201,7 @@ class AngebotService
      *   gesamt_vk:float, gesamt_ek:float, gesamt_hk2:float, gesamt_db:float,
      *   menue:list<array>, mengen:list<array>}
      */
-    public function kalkulation(Team $team, FoodAlchemistAngebot $angebot): array
+    public function kalkulation(Team $team, FoodAlchemistAngebot $angebot, ?\Platform\FoodAlchemist\Models\FoodAlchemistOutlet $outlet = null): array
     {
         $kalk = app(KalkulationService::class);
         $orderCosting = app(OrderCostingService::class);
@@ -218,8 +218,8 @@ class AngebotService
         $zielGesamt = 0.0;
         $warnungen = [];
         foreach ($concepts as $c) {
-            $hk = $kalk->conceptHk($team, $c);
-            $orderCost = $pax > 0 ? $orderCosting->costConcept($team, $c, $pax) : null;
+            $hk = $kalk->conceptHk($team, $c, $outlet);
+            $orderCost = $pax > 0 ? $orderCosting->costConcept($team, $c, $pax, $outlet) : null;
             $vkPp += (float) $hk['vk_pro_person'];
             $ekPp += $orderCost !== null ? (float) $orderCost['mek'] / $pax : (float) $hk['hk1_pro_person'];
             $hk2Pp += $orderCost !== null ? (float) $orderCost['hk2'] / $pax : 0.0;

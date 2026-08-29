@@ -69,7 +69,8 @@ class OrderCostingService
             // als Transparenzwert erhalten.
             $productionBatches = (float) ($line['ansaetze'] ?? $line['benoetigt_ansaetze'] ?? 0);
             $time = $this->times->calculateForBatches($team, $recipe, $productionBatches, $station);
-            $rate = $this->laborRates->rate($team, $station);
+            // Zeit ist betriebs-unabhängig (gleiches Rezept = gleiche Minuten); nur die Rate folgt dem Betrieb.
+            $rate = $this->laborRates->rate($team, $station, $outlet);
             $minutes = (float) $time['active_person_minutes'];
             if ($minutes <= 0.0) {
                 $recipesWithoutActiveTime[] = (string) $recipe->name;
@@ -101,8 +102,9 @@ class OrderCostingService
         }
 
         // Arbeitgeberanteile genau einmal auf die aufgelösten Rollen-/Teamsätze anwenden.
-        $fek *= 1 + $this->settings->lohnnebenkostenPct($team) / 100;
-        $schema = array_values(array_filter($this->fixkosten->aufgeloestesSchema($team), fn ($b) => $b['active']));
+        // Ebene 2: Lohnnebenkosten + Gemeinkosten-Schema folgen dem Betrieb (wie im Kalkulations-Cockpit).
+        $fek *= 1 + $this->settings->lohnnebenkostenPct($team, $outlet) / 100;
+        $schema = array_values(array_filter($this->fixkosten->aufgeloestesSchema($team, $outlet), fn ($b) => $b['active']));
         $costBreakdown = [
             ['key' => 'mek', 'label' => 'Wareneinsatz (MEK)', 'amount' => $mek, 'stage' => 'cost'],
             ['key' => 'fek', 'label' => 'Lohn / Produktion (FEK)', 'amount' => $fek, 'stage' => 'cost'],
@@ -147,7 +149,7 @@ class OrderCostingService
         }
         $hk2 = $hk + $hkSurcharges;
         $costBreakdown[] = ['key' => 'hk2', 'label' => 'HK2 (Vollkosten)', 'amount' => $hk2, 'stage' => 'total'];
-        $target = $hk2 * (1 + $this->settings->margePct($team) / 100);
+        $target = $hk2 * (1 + $this->settings->margePct($team, $outlet) / 100);
         $catalogPp = (float) ($catalogCockpit['price_per_person'] ?? 0);
         $catalogTotal = $catalogPp * $pax;
         if ($recipesWithoutActiveTime !== []) {

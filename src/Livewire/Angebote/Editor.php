@@ -332,6 +332,12 @@ class Editor extends Component
         }
     }
 
+    /** Ebene 2: Betrieb-Wechsel im Sidebar → Angebots-Kalkulation gegen den neuen Betrieb neu rendern. */
+    #[On('aktiver-betrieb-geaendert')]
+    public function betriebGewechselt(): void
+    {
+    }
+
     public function render(AngebotService $svc)
     {
         $angebot = $this->selectedId !== null ? $svc->detail($this->team(), $this->selectedId) : null;
@@ -352,9 +358,11 @@ class Editor extends Component
             : collect();
 
         $facetten = $svc->facetten($this->team());
-        $kalkulation = $angebot ? $svc->kalkulation($this->team(), $angebot) : null;
+        // Ebene 2: das Angebot wird gegen den aktiven Betrieb gerechnet (Kosten + Ziel-WE-Ampel).
+        $outlet = app(\Platform\FoodAlchemist\Services\ActiveOutletContext::class)->current($this->team());
+        $kalkulation = $angebot ? $svc->kalkulation($this->team(), $angebot, $outlet) : null;
         $zielWareneinsatzPct = app(\Platform\FoodAlchemist\Services\TeamSettingsService::class)
-            ->zielWareneinsatzPct($this->team());
+            ->zielWareneinsatzPct($this->team(), $outlet);
         $wareneinsatzAmpel = app(\Platform\FoodAlchemist\Services\MargeService::class)
             ->weAmpel($kalkulation['wareneinsatz_pct'] ?? null, $zielWareneinsatzPct);
 

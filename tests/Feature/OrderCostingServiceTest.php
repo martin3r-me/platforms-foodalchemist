@@ -2,6 +2,7 @@
 
 use Platform\FoodAlchemist\Models\FoodAlchemistPrice;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
+use Platform\FoodAlchemist\Models\FoodAlchemistOutlet;
 use Platform\FoodAlchemist\Models\FoodAlchemistServierform;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplier;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem;
@@ -10,6 +11,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistVocabEinheit;
 use Platform\FoodAlchemist\Services\ConceptService;
 use Platform\FoodAlchemist\Services\DarreichungService;
 use Platform\FoodAlchemist\Services\OrderCostingService;
+use Platform\FoodAlchemist\Services\OutletSettingsService;
 use Platform\FoodAlchemist\Services\RecipeRecomputeService;
 use Platform\FoodAlchemist\Services\TeamSettingsService;
 use Platform\FoodAlchemist\Tests\Support\SeedsTeamHierarchy;
@@ -147,4 +149,23 @@ it('löst eingebettete Paket-Concepts in den Auftragsbedarf auf', function () {
         ->and($result['mek'])->toBeGreaterThanOrEqual($result['catalog_mek_total'])
         ->and($result['hk2'])->toBeGreaterThanOrEqual($result['mek'])
         ->and($result['complete'])->toBeTrue();
+});
+
+it('Ebene 2: die Kostenseite folgt dem Betrieb — EK + Zeit bleiben, Rate/Marge ziehen den HK2/Target', function () {
+    $service = app(OrderCostingService::class);
+    // Betrieb Nord: doppelter Stundensatz (120 statt 60) + höhere Marge (40 statt 15).
+    $betrieb = FoodAlchemistOutlet::create(['team_id' => $this->rootTeam->id, 'name' => 'Betrieb Nord']);
+    app(OutletSettingsService::class)->update($this->rootTeam, $betrieb, ['stundensatz_eur' => 120, 'margin_pct' => 40]);
+
+    $ohne = $service->costConcept($this->rootTeam, $this->concept->refresh(), 100);
+    $mit = $service->costConcept($this->rootTeam, $this->concept->refresh(), 100, $betrieb);
+
+    // EK (MEK) und Produktionszeit sind betriebs-unabhängig — nur die Kostenseite bewegt sich.
+    expect($mit['mek'])->toBe($ohne['mek'])
+        ->and($mit['active_person_minutes'])->toBe($ohne['active_person_minutes'])
+        // Rate 120 statt 60 (Lohnnebenkosten 0) ⇒ FEK exakt verdoppelt.
+        ->and(round($mit['fek'] / $ohne['fek'], 1))->toBe(2.0)
+        ->and($mit['hk2'])->toBeGreaterThan($ohne['hk2'])
+        // Höherer HK2 UND höhere Marge ⇒ Target klar höher.
+        ->and($mit['target_price'])->toBeGreaterThan($ohne['target_price']);
 });
