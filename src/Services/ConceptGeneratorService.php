@@ -509,9 +509,9 @@ class ConceptGeneratorService
         $istFoodbook = $ownerType === 'foodbook';
         $istFormat = $ownerType === 'format';
         // owner=format: ein gebrandetes FOODKONZEPT (Chefs Corner / Taste & Fly / Lunchbuffet / Dinner) —
-        // das Gerüst liefert die Marken-Identität (consumer_name/claim/story) + die aufeinander abgestimmten
-        // Concept-Bausteine (je Slot = ein Concept). Struktur wie foodbook (Bausteine, kein Gang-Explode),
-        // eine Ebene über dem Concept.
+        // das Gerüst liefert die Marken-Identität (consumer_name/claim/story) + die eigenständigen Concepte,
+        // die die Marke bündelt (je Slot = eine ganze Veranstaltung/ein Concept). Struktur wie foodbook
+        // (kein Gang-Explode), eine Ebene über dem Concept; Stationen/Gänge baut der Conceptor IM Concept.
         $promptKey = match ($ownerType) {
             'foodbook' => 'foodbook.grundgeruest',
             'format' => 'format.grundgeruest',
@@ -561,9 +561,9 @@ class ConceptGeneratorService
                 return $s;
             }, $sichereSlots);
         } elseif ($istFormat) {
-            // Format-Gerüst = Concept-BAUSTEINE (je Slot ein Concept des gebrandeten Foodkonzepts). Wie beim
-            // Foodbook NICHT auf Gang-Ebene explodieren (jeder Baustein-Slot bringt seine Gänge erst als eigenes
-            // Concept mit) — expandiereContainerGeruest/menueGaengeCap bewusst übersprungen.
+            // Format-Gerüst = ganze VERANSTALTUNGEN (je Slot ein eigenständiges Concept des gebrandeten Foodkonzepts).
+            // Wie beim Foodbook NICHT auf Gang-/Stations-Ebene explodieren (jede Veranstaltung bringt ihre Stationen/
+            // Gänge erst als eigenes Concept mit) — expandiereContainerGeruest/menueGaengeCap bewusst übersprungen.
         } else {
             // Spec 41 B3: Container-Struktur-Guard (s. generiereAusBrief) — Buffet/Menü nie auf 1 Position kollabieren.
             $sichereSlots = $this->expandiereContainerGeruest($sichereSlots, $brief, $menueAchsen);

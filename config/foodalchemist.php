@@ -1021,18 +1021,22 @@ return [
         ],
         // Format-GRUNDGERUEST (owner=format): ein gebrandetes FOODKONZEPT (z.B. CHEFS.CORNER, Taste & Fly,
         // Lunchbuffet, Dinner) — eine Marke/Vorlage EINE Ebene ueber dem Concept. Das Geruest liefert die
-        // MARKEN-IDENTITAET (consumer_name/claim/story) + die aufeinander abgestimmten Concept-BAUSTEINE
-        // (je Slot = ein ganzes Concept, das spaeter seine Gaenge selbst mitbringt). KEINE Gaenge auf dieser
-        // Ebene. Schwester von foodbook.grundgeruest (Bausteine statt Kapitel).
+        // MARKEN-IDENTITAET (consumer_name/claim/story) + die eigenstaendigen VERANSTALTUNGEN, die die Marke
+        // buendelt (je Slot = ein GANZES Concept = ein Tag / ein Event / eine Menue-Variante). Die Stationen/
+        // Pakete/Gaenge INNERHALB einer Veranstaltung baut der Conceptor spaeter IM Concept — NICHT hier. Ein
+        // Brief ueber EINE Veranstaltung => GENAU EIN Concept-Slot. Schwester von foodbook.grundgeruest.
         'format.grundgeruest' => [
             'tier' => 'A',
             'max_tokens' => 8000,
             'system' => 'Du uebersetzt einen Brief in das GRUNDGERUEST eines gebrandeten FOODKONZEPTS (Format) — '
                 . 'einer wiederverwendbaren Marke/Vorlage (z.B. ein Streetfood-Konzept, ein Lunchbuffet, ein Flying-Dinner). '
-                . 'Ein Format hat eine IDENTITAET (Marken-Zeile, Claim, kurze Story) und besteht aus mehreren AUFEINANDER '
-                . 'ABGESTIMMTEN Concept-Bausteinen — jeder Baustein ist ein GANZES Concept (das seine einzelnen Gaenge/Positionen '
-                . 'spaeter selbst mitbringt), NIEMALS ein einzelner Gang. Die Bausteine muessen thematisch/kulinarisch zueinander passen. '
-                . 'NUTZE das mitgelieferte Wissen als INSPIRATION fuer Marken-Handschrift + Zuschnitt der Bausteine: '
+                . 'Ein Format hat eine IDENTITAET (Marken-Zeile, Claim, kurze Story) und BUENDELT mehrere EIGENSTAENDIGE Concepte. '
+                . 'Jeder Slot ist ein VOLLSTAENDIGES Concept = eine VERANSTALTUNG (ein Tag, ein Event, eine Menue-Variante), die fuer sich steht. '
+                . 'Die einzelnen Stationen/Pakete/Gaenge INNERHALB einer Veranstaltung entstehen SPAETER im Concept selbst '
+                . '(der Conceptor zerlegt jedes Concept in seine Stationen/Gaenge) — NIEMALS auf dieser Ebene. '
+                . 'Beschreibt der Brief nur EINE Veranstaltung, ist das GENAU EIN Slot; mehrere Tage/Events/Varianten => mehrere Slots. '
+                . 'Die Veranstaltungen einer Marke muessen zueinander passen (gemeinsame Handschrift). '
+                . 'NUTZE das mitgelieferte Wissen als INSPIRATION fuer Marken-Handschrift + Zuschnitt der Veranstaltungen: '
                 . 'Signatur-Kuechen/Koeche, Weltkuechen, Konzept-/Format- und Event-Wissen (sofern beigefuegt) — als Ideengeber, '
                 . 'NICHT als Faktenquelle: erfinde daraus keine harten Zahlen/Preise/Gerichte, die der Brief nicht hergibt. '
                 . 'Du erfindest keine konkreten Gerichte, Preise oder Fakten, die der Brief nicht hergibt (fehlende Felder weglassen/null). '
@@ -1041,13 +1045,16 @@ return [
             'task' => 'Uebersetze den Brief in ein Format-Grundgeruest: werte = {name (interner Format-Name), '
                 . 'consumer_name (gaeste-/kundenseitige Marken-Zeile, optional), claim (kurze Tagline, optional), '
                 . 'story (1-3 Saetze Marken-Story, optional), target_price_pp, price_min_pp, price_max_pp, '
-                . 'slots: [{label (Name des Concept-Bausteins), slot_type: IMMER "station", target_count (Anzahl Gerichte im Baustein, mind. 1), '
+                . 'slots: [{label (Name der VERANSTALTUNG/Edition, z.B. «Tag 1 — Business-Lunch» oder «Menue-Variante Plant-Forward»), '
+                . 'slot_type: IMMER "station" (technischer Platzhalter, KEINE Bedeutung), '
+                . 'target_count (Anzahl Gerichte der GESAMTEN Veranstaltung, mind. 1), '
                 . 'price_anchor, price_min, price_max, is_pflicht, '
                 . 'rules: [{rule_type: diet_quota, ref_key, operator (min|max|exact), value_num, unit (count|percent)}]}], '
                 . 'rules: [{rule_type: nogo_ingredient, value_text, severity (hart|weich)} | {rule_type: nogo_allergen, ref_key} | {rule_type: allergen_line, value_text}]}. '
-                . 'Jeder Slot ist GENAU EIN abgestimmter Concept-Baustein des Foodkonzepts (z.B. bei einem Lunchbuffet: «Warme Mitte» · «Green & Bowls» · «Suesse Ecke»; '
-                . 'bei einem Streetfood-Format: regionale/thematische Stationen). Leite Anzahl und Zuschnitt der Bausteine aus dem Brief ab — '
-                . 'nur so viele, wie der Brief wirklich hergibt. ERZEUGE NIE gang- oder kapitel-Slots. Preise netto p. P.',
+                . 'Jeder Slot ist GENAU EINE eigenstaendige Veranstaltung/Edition des Foodkonzepts — ein ganzes Concept, das der Conceptor '
+                . 'danach in seine Stationen/Gaenge zerlegt. Beispiele: ein 3-Tage-Lunch-Format => 3 Slots (Tag 1/2/3); ein einzelnes Event => 1 Slot. '
+                . 'Leite die Zahl der Veranstaltungen aus dem Brief ab — nur so viele, wie er wirklich hergibt (bei EINER Veranstaltung GENAU EIN Slot). '
+                . 'ERZEUGE NIE Stations-, gang- oder kapitel-Slots (Stationen/Gaenge baut der Conceptor im Concept). Preise netto p. P.',
         ],
         // Et.2b »Kreativ-Kopf«: Kunden-Brief → kreative Concept-Canvas (die IDEE, nicht das
         // Struktur-Geruest). Schwester von concept.brief_geruest — GERUEST erzeugt Slots/Preise/

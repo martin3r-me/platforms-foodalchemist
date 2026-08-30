@@ -16,7 +16,7 @@ use Platform\FoodAlchemist\Services\TeamSettingsService;
 /**
  * MCP-Einstieg „Format aus Brief" — ein gebrandetes FOODKONZEPT (Chefs Corner / Taste & Fly / Lunchbuffet /
  * Dinner) in der Leitstelle planen. Legt ein Format an (oder lädt via format_id), baut aus dem Brief die
- * Marken-Identität (consumer_name/claim/story) + die aufeinander abgestimmten Concept-Bausteine (Gerüst,
+ * Marken-Identität (consumer_name/claim/story) + die eigenständigen Concepte/Veranstaltungen, die die Marke bündelt (Gerüst,
  * owner=format) und startet die Voll-Kaskade (eager, wie Angebot): je Slot ein Concept, das als Aufbau-Slot
  * (type=concept) ins Format referenziert wird ({@see FormatService::slotConceptEinfuegen}). Tenancy: Writes isOwnedBy.
  */
@@ -32,8 +32,9 @@ class FormatPlanFromBriefTool extends FoodAlchemistTool implements ToolContract,
         return 'Plant ein gebrandetes Foodkonzept (Format: z. B. Streetfood-Konzept, Lunchbuffet, Flying-Dinner) '
             . 'aus einem Brief in der Leitstelle: legt ein Format an (oder lädt via format_id ein bestehendes, '
             . 'team-eigenes), leitet Marken-Identität (consumer_name/claim/story) + aufeinander abgestimmte '
-            . 'Concept-Bausteine aus dem Brief ab und startet die Voll-Kaskade (owner_type=format, eager): je '
-            . 'Baustein ein Concept, das ins Format referenziert wird. Branding wird nur bei NEU angelegten '
+            . 'eigenständige Concepte/Veranstaltungen (ein Tag / Event / eine Menü-Variante) aus dem Brief ab und startet '
+            . 'die Voll-Kaskade (owner_type=format, eager): je Slot ein ganzes Concept, das ins Format referenziert wird '
+            . '(die Stationen/Gänge baut der Conceptor im Concept). Branding wird nur bei NEU angelegten '
             . 'Formaten geschrieben (bestehende Identität bleibt unangetastet). Bildwelt bleibt manuell '
             . '(format_images.*). Liefert format_id + Session + Lauf-Status.';
     }
@@ -94,7 +95,7 @@ class FormatPlanFromBriefTool extends FoodAlchemistTool implements ToolContract,
             ? (string) $arguments['creative_mode'] : 'voll_kreativ';
 
         try {
-            // 2. Gerüst aus dem Brief (owner=format): Marken-Identität + Concept-Bausteine.
+            // 2. Gerüst aus dem Brief (owner=format): Marken-Identität + eigenständige Concepte (Veranstaltungen).
             $geruest = app(ConceptGeneratorService::class)->geruestAusBriefFuerOwner($team, 'format', (int) $format->id, $brief, [
                 'segment' => app(TeamSettingsService::class)->segment($team),
             ]);
@@ -117,7 +118,7 @@ class FormatPlanFromBriefTool extends FoodAlchemistTool implements ToolContract,
                 }
             }
 
-            // 3. Review-Session + Leitplanken + Voll-Kaskade (1 Concept je Baustein → ins Format referenziert).
+            // 3. Review-Session + Leitplanken + Voll-Kaskade (je Slot ein ganzes Concept/Veranstaltung → ins Format referenziert).
             $sessions = app(PlanningSessionService::class);
             $session = $sessions->create($team, [
                 'title' => 'Format aus Brief: ' . ($format->name ?? ('#' . $format->id)),
