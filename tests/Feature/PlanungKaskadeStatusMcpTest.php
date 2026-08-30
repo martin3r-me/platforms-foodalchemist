@@ -116,6 +116,27 @@ it('GET zeigt die wirksamen Leitplanken (run.params, whitelist-gefiltert) + verw
         ->and($r->data['schritte'][0]['wissen'])->toBe(['domain/gemuese_kuerbis', 'regelwerk/basisrezepte']);
 });
 
+it('GET Vollkaskade: Leitplanken fallen auf die Session-generation_params zurück (run.params leer)', function () {
+    // Vollkaskaden legen run.params NICHT an (der Fan-out liest die Session live) → der Read-back muss
+    // die wirksame Steuerung aus der Session ziehen, sonst wäre sie per MCP unsichtbar.
+    $session = \Platform\FoodAlchemist\Models\FoodAlchemistPlanningSession::create([
+        'team_id' => $this->rootTeam->id, 'title' => 'VK', 'status' => 'konvergenz', 'creative_mode' => 'voll_kreativ',
+        'generation_params' => ['menue_gaenge' => 5, 'level' => 'gehoben'],
+    ]);
+    $run = FoodAlchemistCascadeRun::create([
+        'team_id' => $this->rootTeam->id, 'scope' => 'vollkaskade', 'status' => 'running',
+        'planning_session_id' => $session->id, 'source_owner_type' => 'foodbook', 'source_owner_id' => 1,
+    ]);
+    FoodAlchemistCascadeRunStep::create([
+        'team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'concept', 'status' => 'running',
+    ]);
+
+    $r = $this->registry->get('foodalchemist.planung_kaskade.GET')->execute(['run_id' => $run->id], $this->ctx);
+
+    expect($r->success)->toBeTrue()
+        ->and($r->data['leitplanken'])->toMatchArray(['menue_gaenge' => 5, 'level' => 'gehoben']);
+});
+
 it('Tenancy: ein nicht sichtbarer Lauf (Schwester-Team) liefert NOT_FOUND', function () {
     // childB besitzt den Lauf; childA (Schwester) sieht ihn NICHT (Reads visibleToTeam).
     $run = FoodAlchemistCascadeRun::create([

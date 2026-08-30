@@ -398,10 +398,14 @@ class PlanningCascadeService
         $runId = (string) Str::uuid();
         $step->update(['generator_run_id' => $runId]);
         Cache::put(GenerateConceptJob::cacheKey($runId), ['status' => 'pending'], now()->addMinutes(self::RESULT_TTL_MIN));
+        // Kompositions-Fix: die Menü-Leitplanken der Session (menue_*: Gänge/Preis-Korridor/Diät-Quoten/
+        // Balance) an die Concept-Erzeugung reichen — sonst steuert die Zusammenstellung des Menüs/Kapitels/
+        // der Rubrik in JEDER Ausgabeform-Vollkaskade nichts (vorher Default []). Spiegelt dispatchConceptStep.
+        $menueAchsen = $this->sessionMenueAchsen($team, $sessionId);
         GenerateConceptJob::dispatch(
             $runId, $team->id, (int) (\Illuminate\Support\Facades\Auth::id() ?? 0),
             $brief, (string) ($slot->label ?: null),
-            $sessionId, $step->id, $creativeMode, false, false, $ownerType, $containerId
+            $sessionId, $step->id, $creativeMode, false, false, $ownerType, $containerId, $menueAchsen
         );
 
         return $step;
@@ -611,6 +615,27 @@ class PlanningCascadeService
 
         // Menü-Leitplanken bleiben auf der Concept-Ebene — nicht in die Rezept-Generierung durchreichen.
         return array_filter($params, fn ($k) => ! str_starts_with((string) $k, 'menue_'), ARRAY_FILTER_USE_KEY);
+    }
+
+    /**
+     * Die MENÜ-Leitplanken (`menue_*`) der Session — das Gegenstück zu {@see sessionGenerationParams}
+     * (das genau diese herausfiltert). Sie steuern die ZUSAMMENSTELLUNG (Anzahl Gänge · Preis-Korridor je
+     * Person · Diät-Quoten · Portfolio-Balance) und gehören an die Concept-Erzeugung des Vollkaskade-Slot-
+     * Fan-outs ({@see dispatchSlotConcept}) — bis hier bekam der {@see GenerateConceptJob} dort mangels
+     * durchgereichter Achsen den Default `[]`, sodass die Menü-Leitplanken die Komposition NIE erreichten
+     * (der Cockpit-Concept-Pfad {@see dispatchConceptStep} reicht sie dagegen schon durch).
+     *
+     * @return array<string,mixed>
+     */
+    private function sessionMenueAchsen(Team $team, ?int $planningSessionId): array
+    {
+        if ($planningSessionId === null) {
+            return [];
+        }
+        $sess = app(PlanningSessionService::class)->get($team, $planningSessionId);
+        $params = is_array($sess?->generation_params) ? $sess->generation_params : [];
+
+        return array_filter($params, fn ($k) => str_starts_with((string) $k, 'menue_'), ARRAY_FILTER_USE_KEY);
     }
 
     /**
@@ -1886,13 +1911,19 @@ class PlanningCascadeService
             ];
         })->values()->all();
 
-        // Die real wirksamen Leitplanken dieses Laufs: run.params ist die am START eingefrorene Kopie der
-        // Session-generation_params — gegen die Whitelist gefiltert, damit nur die Regler (nicht die
-        // Flow-Steuer-Keys owner_type/cascade_step_id/…) sichtbar werden. So ist per MCP prüfbar, WOMIT
-        // der Lauf lief (Kern des „Leitplanken prüfen").
-        $laufParams = is_array($run->params) ? $run->params : [];
+        // Die real wirksamen Leitplanken dieses Laufs — gegen die Whitelist gefiltert, damit nur die Regler
+        // (nicht die Flow-Steuer-Keys owner_type/cascade_step_id/…) sichtbar werden. So ist per MCP prüfbar,
+        // WOMIT der Lauf lief (Kern des „Leitplanken prüfen").
+        // Quelle: bei Leaf-Läufen (rezept|gericht|concept) ist run.params die am START eingefrorene Kopie;
+        // bei Vollkaskaden bleibt run.params leer (der Fan-out liest die Session live) → Fallback auf die
+        // Session-generation_params, sonst wäre die wirksame Steuerung dort unsichtbar.
+        $quelle = is_array($run->params) ? $run->params : [];
+        if ($quelle === [] && $run->planning_session_id !== null) {
+            $sess = app(PlanningSessionService::class)->get($team, (int) $run->planning_session_id);
+            $quelle = is_array($sess?->generation_params) ? $sess->generation_params : [];
+        }
         $leitplanken = array_intersect_key(
-            $laufParams,
+            $quelle,
             array_flip(FoodAlchemistPlanningSession::ALLOWED_GENERATION_PARAMS)
         );
 

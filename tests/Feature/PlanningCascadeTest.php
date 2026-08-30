@@ -459,6 +459,31 @@ it('E2 Voll-Kaskade Angebot: Frame-Slots → Concept-Steps + Job mit attach owne
     Queue::assertPushed(GenerateConceptJob::class, fn ($job) => $job->attachOwnerType === 'offer' && $job->attachContainerId === (int) $offer->id);
 });
 
+// ── Phase 1 — Kompositions-Bruch geschlossen: Menü-Leitplanken erreichen die Vollkaskade-Concept-Erzeugung ──
+// Vorher dispatchte dispatchSlotConcept den GenerateConceptJob OHNE menueAchsen (Default []), sodass die
+// Menü-Zusammenstellung (Gänge/Preis-Korridor/Diät-Quoten/Balance) der Session-Leitplanken NIE ankam.
+it('Phase 1: Vollkaskade reicht die menue_*-Leitplanken der Session an die Concept-Erzeugung durch (Rezept-Regler NICHT)', function () {
+    $offer = app(\Platform\FoodAlchemist\Services\AngebotService::class)
+        ->create($this->rootTeam, ['name' => 'Menü-Leitplanken', 'occasion' => 'Gala', 'personen' => 40]);
+    $frames = app(PlanningFrameService::class);
+    $frame = $frames->frameFor($this->rootTeam, 'offer', (int) $offer->id);
+    $frames->addSlot($this->rootTeam, $frame, ['label' => 'Vorspeise']);
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Menü', 'brief' => 'x']);
+    // menue_* = Menü-Leitplanken (Concept-Ebene) + level = Rezept-Leitplanke (nur ab Gericht-Fan-out).
+    app(PlanningSessionService::class)->setGenerationParams($this->rootTeam, (int) $session->id, [
+        'menue_gaenge' => 4, 'menue_preis_ziel_pp' => 65, 'menue_quote_vegetarisch_pct' => 50, 'level' => 'gehoben',
+    ]);
+
+    app(PlanningCascadeService::class)->starteKaskade($this->rootTeam, 'vollkaskade', $session, 'voll_kreativ', [
+        'owner_type' => 'offer', 'owner_id' => (int) $offer->id,
+    ]);
+
+    Queue::assertPushed(GenerateConceptJob::class, fn ($job) => ($job->menueAchsen['menue_gaenge'] ?? null) === 4
+        && ($job->menueAchsen['menue_preis_ziel_pp'] ?? null) === 65
+        && ($job->menueAchsen['menue_quote_vegetarisch_pct'] ?? null) === 50
+        && ! array_key_exists('level', $job->menueAchsen));   // Rezept-Regler bleiben draussen (erben erst am Gericht-Fan-out)
+});
+
 it('E2 haengeKonzeptNach: Angebot-Recovery referenziert das Konzept ans Angebot (Pivot)', function () {
     $svc = app(PlanningCascadeService::class);
     $offer = app(\Platform\FoodAlchemist\Services\AngebotService::class)->create($this->rootTeam, ['name' => 'Gala']);

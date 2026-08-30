@@ -47,6 +47,16 @@ class FoodbookPlanFromBriefTool extends FoodAlchemistTool implements ToolContrac
                 'brief' => ['type' => 'string', 'description' => 'Das Briefing (Anlass, Gäste, Saison, Niveau, Budget …).'],
                 'foodbook_id' => ['type' => 'integer', 'description' => 'Optional: ein bestehendes, team-eigenes Foodbook bebriefen (sonst wird ein neues angelegt).'],
                 'label' => ['type' => 'string', 'description' => 'Optionaler Name für ein neues Foodbook (Default „Foodbook aus Brief"). Ignoriert bei foodbook_id.'],
+                'creative_mode' => ['type' => 'string', 'enum' => ['voll_kreativ', 'hybrid', 'datenbank'], 'description' => 'Kreativ-Modus der Kaskade (Default voll_kreativ; datenbank = Bestand reusen).'],
+                'leitplanken' => [
+                    'type' => 'object',
+                    'description' => 'Optional: Richtungs-Regler/Leitplanken für die ganze Kaskade (whitelist-gefiltert). Die menue_*-'
+                        . 'Achsen (menue_gaenge, menue_preis_min_pp/ziel_pp/max_pp, menue_quote_vegan_pct, menue_quote_vegetarisch_pct, '
+                        . 'menue_balance) steuern die Menü-/Kapitel-Komposition; die übrigen (level, sektor, diaet_hart, allergen_nogo[], '
+                        . 'frische_erlaubt[], bio_pref, aroma_kueche, saison, ki_bilder, complete_coverage, …) erben in die Gerichte/'
+                        . 'Basisrezepte. Per planung_kaskade.GET als „leitplanken" prüfbar.',
+                    'additionalProperties' => true,
+                ],
             ],
             'required' => ['brief'],
         ];
@@ -89,12 +99,21 @@ class FoodbookPlanFromBriefTool extends FoodAlchemistTool implements ToolContrac
             // 3. Struktur anwenden (Slots → Kapitel).
             $foodbooks->strukturAusGeruest($team, (int) $fb->id);
             // 4. Review-Session + Voll-Kaskade.
-            $session = app(PlanningSessionService::class)->create($team, [
+            $mode = in_array($arguments['creative_mode'] ?? '', ['voll_kreativ', 'hybrid', 'datenbank'], true)
+                ? (string) $arguments['creative_mode'] : 'voll_kreativ';
+            $sessions = app(PlanningSessionService::class);
+            $session = $sessions->create($team, [
                 'title' => 'Foodbook aus Brief: ' . $fb->label,
                 'brief' => $brief,
+                'creative_mode' => $mode,
                 'created_via' => 'mcp_foodbook_brief',
             ]);
-            $run = app(PlanningCascadeService::class)->starteKaskade($team, 'vollkaskade', $session, 'voll_kreativ', [
+            // Leitplanken der Kaskade setzen (whitelist-gefiltert) — sie steuern Komposition (menue_*) +
+            // erben in Gerichte/Basisrezepte; ohne dies liefe die Kaskade mit leeren Reglern.
+            if (! empty($arguments['leitplanken']) && is_array($arguments['leitplanken'])) {
+                $sessions->setGenerationParams($team, (int) $session->id, $arguments['leitplanken']);
+            }
+            $run = app(PlanningCascadeService::class)->starteKaskade($team, 'vollkaskade', $session, $mode, [
                 'owner_type' => 'foodbook', 'owner_id' => (int) $fb->id, 'created_via' => 'mcp_foodbook_brief',
             ]);
         } catch (\Throwable $e) {

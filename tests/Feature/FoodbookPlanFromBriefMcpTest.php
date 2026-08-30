@@ -108,3 +108,25 @@ it('PLAN_FROM_BRIEF: fremdes/unbekanntes foodbook_id wird abgewiesen (kein Fremd
     expect($res->success)->toBeFalse()->and($res->errorCode)->toBeIn(['NOT_FOUND', 'INHERITED']);
     Queue::assertNotPushed(GenerateConceptJob::class);
 });
+
+it('PLAN_FROM_BRIEF: setzt Leitplanken + creative_mode; menue_* erreichen die Concept-Erzeugung', function () {
+    Queue::fake();
+    bindeMcpFbGeruestStub(['name' => 'Leitplanken-Buch', 'slots' => [['label' => 'Menü', 'slot_type' => 'gang', 'target_count' => 3]]]);
+
+    $res = $this->registry->get('foodalchemist.foodbook.PLAN_FROM_BRIEF')->execute([
+        'brief' => 'Gala, 60 Gäste.',
+        'label' => 'Leitplanken-Buch',
+        'creative_mode' => 'hybrid',
+        'leitplanken' => ['menue_gaenge' => 5, 'menue_preis_ziel_pp' => 70, 'level' => 'gehoben'],
+    ], $this->kontext);
+
+    expect($res->success)->toBeTrue();
+    $session = \Platform\FoodAlchemist\Models\FoodAlchemistPlanningSession::find((int) $res->data['session_id']);
+    expect($session->creative_mode)->toBe('hybrid')
+        ->and($session->generation_params)->toMatchArray(['menue_gaenge' => 5, 'menue_preis_ziel_pp' => 70, 'level' => 'gehoben']);
+
+    // Composition-Fix end-to-end: die menue_*-Achsen erreichen den Concept-Job (Rezept-Regler wie level nicht).
+    Queue::assertPushed(GenerateConceptJob::class, fn ($j) => ($j->menueAchsen['menue_gaenge'] ?? null) === 5
+        && $j->creativeMode === 'hybrid'
+        && ! array_key_exists('level', $j->menueAchsen));
+});
