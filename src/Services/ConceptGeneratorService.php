@@ -502,14 +502,20 @@ class ConceptGeneratorService
             $kontext['struktur_typ'] = 'buffet';
         }
 
-        // Trend-Wissen (Trendradar) additiv einspeisen — der Prompt läuft NICHT durch
-        // contextFor(), also hier holen und als options['knowledge'] durchreichen (Routing
-        // concept.brief_geruest → trend:discovery). Ohne Trend-Bestand liefert er leer.
+        // Owner-abhängiger Gerüst-Prompt: ein FOODBOOK wird in KAPITEL gegliedert (foodbook.grundgeruest —
+        // ein Kapitel = Menü/Thema/Anlass/Service-Format), alle übrigen Owner (concept/speisekarte/offer) in
+        // Gänge/Stationen (concept.brief_geruest). Ohne das erzeugte der Menü→gang-Prompt fürs Foodbook
+        // gang-Slots → strukturAusGeruest macht je Gang ein Kapitel (Fehlstruktur „Gang 1–4 = 4 Kapitel").
+        $istFoodbook = $ownerType === 'foodbook';
+        $promptKey = $istFoodbook ? 'foodbook.grundgeruest' : 'concept.brief_geruest';
+        // Trend-Wissen (Trendradar) additiv einspeisen — der Prompt läuft NICHT durch contextFor(), also hier
+        // holen und als options['knowledge'] durchreichen (Routing concept.brief_geruest → trend:discovery,
+        // generischer Trend-Kanal für beide Gerüst-Prompts). Ohne Trend-Bestand liefert er leer.
         $trendWissen = app(KnowledgeContextService::class)->contextFor('concept.brief_geruest', $brief);
         $wissenOpts = $trendWissen['block'] !== ''
             ? ['knowledge' => $trendWissen['block'], 'knowledge_used' => $trendWissen['files_used']]
             : [];
-        $proposal = app(AiGatewayService::class)->propose('concept.brief_geruest', $kontext, $wissenOpts);
+        $proposal = app(AiGatewayService::class)->propose($promptKey, $kontext, $wissenOpts);
         $werte = $proposal->werte ?? [];
         $slots = is_array($werte['slots'] ?? null) ? $werte['slots'] : [];
         if ($slots === []) {
@@ -532,10 +538,25 @@ class ConceptGeneratorService
         if ($sichereSlots === []) {
             throw new RuntimeException('KI-Gerüst enthielt keine gültigen Slots — Brief präzisieren.');
         }
-        // Spec 41 B3: Container-Struktur-Guard (s. generiereAusBrief) — Buffet/Menü nie auf 1 Position kollabieren.
-        $sichereSlots = $this->expandiereContainerGeruest($sichereSlots, $brief, $menueAchsen);
-        // Gänge/Stationen-Cap (typ-abhängig) + Diät-Quoten autoritativ ins Gerüst (No-op bei leeren Achsen).
-        $sichereSlots = $this->menueGaengeCap($sichereSlots, $menueAchsen);
+        if ($istFoodbook) {
+            // Foodbook-Grundgerüst = KAPITEL. Die gang/station-erzwingenden Nachbearbeiter gehören auf die
+            // Concept-Ebene (ein Kapitel-Concept legt seine Gänge via menue_gaenge selbst an), NICHT auf die
+            // Buch-Ebene — insbesondere expandiereContainerGeruest liest den Brief-Text und würde ein „Menü"
+            // in gang-Slots auflösen. Defensiv: jeden Slot auf kapitel zwingen (falls die KI trotz Prompt
+            // gang liefert), damit strukturAusGeruest nie je Gang ein Kapitel macht.
+            $sichereSlots = array_map(function (array $s): array {
+                $s['slot_type'] = 'kapitel';
+
+                return $s;
+            }, $sichereSlots);
+        } else {
+            // Spec 41 B3: Container-Struktur-Guard (s. generiereAusBrief) — Buffet/Menü nie auf 1 Position kollabieren.
+            $sichereSlots = $this->expandiereContainerGeruest($sichereSlots, $brief, $menueAchsen);
+            // Gänge/Stationen-Cap (typ-abhängig) autoritativ ins Gerüst (No-op bei leeren Achsen).
+            $sichereSlots = $this->menueGaengeCap($sichereSlots, $menueAchsen);
+        }
+        // Diät-Quoten-Rules ins Gerüst (No-op bei leeren Achsen; für Foodbook heute leer, da die Caller keine
+        // menueAchsen ans Gerüst geben — die Quote wirkt im Kapitel-Concept).
         $sichereRules = $this->menueDiaetQuotenMerge($sichereRules, $menueAchsen);
         $this->frames->replaceStructure($team, $frame, $sichereSlots, $sichereRules);
 

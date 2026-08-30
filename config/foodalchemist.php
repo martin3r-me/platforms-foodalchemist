@@ -992,6 +992,33 @@ return [
                 . 'Warme Hauptkomponente(n) inkl. Carving bei > 50 Pax; Saettigungsbeilagen Staerke+Gemuese; Dessert/Sweet-Table; Getraenke). '
                 . 'Ein MENUE erzeugt IMMER MEHRERE gang-Slots (3/5/7/9 Gaenge). NIE ein einziger Container-Slot.',
         ],
+        // Foodbook-GRUNDGERUEST (owner=foodbook): das Buch wird in KAPITEL gegliedert, NICHT in Gaenge.
+        // Ein Kapitel = ein Menue / Thema / Anlass / Service-Format (belegt an realen Kundenbuechern
+        // Broich/TM/DOEC: Kapitel-Typen Service-Format · Anlass · Konzept/Marke · einzelnes Menue — NIE
+        // «Vorspeisen/Hauptgaenge/Desserts» als Top-Level). Die einzelnen Gaenge entstehen SPAETER im
+        // Kapitel-Concept (menue_gaenge, Concept-Ebene) — hier NICHT. Schwester von concept.brief_geruest,
+        // aber eine Ebene hoeher (Buch statt Menue).
+        'foodbook.grundgeruest' => [
+            'tier' => 'A',
+            'max_tokens' => 8000,
+            'system' => 'Du uebersetzt einen Kunden-Brief in das GRUNDGERUEST eines Foodbooks — seine KAPITEL. '
+                . 'Ein Kapitel ist ein Menue, ein Thema, ein Anlass oder ein Service-Format — NIEMALS ein einzelner Gang. '
+                . 'Die Regel «Menue erzeugt Gaenge» gilt hier ausdruecklich NICHT: die einzelnen Gaenge '
+                . '(Vorspeise/Zwischengang/Hauptgang/Dessert) entstehen SPAETER im Kapitel-Concept, nicht auf dieser Ebene. '
+                . 'Du erfindest keine konkreten Gerichte, Preise oder Fakten, die der Brief nicht hergibt (fehlende Felder weglassen/null). '
+                . 'Diaet-Werte NUR aus diaet_vokabular, Allergen-Keys NUR aus allergen_keys.',
+            'task' => 'Uebersetze den Brief in ein Foodbook-Grundgeruest: werte = {name, target_price_pp, price_min_pp, price_max_pp, '
+                . 'slots: [{label, slot_type: IMMER "kapitel", target_count (Anzahl Menues/Gerichte im Kapitel, mind. 1), '
+                . 'price_anchor, price_min, price_max, is_pflicht, '
+                . 'rules: [{rule_type: diet_quota, ref_key, operator (min|max|exact), value_num, unit (count|percent)}]}], '
+                . 'rules: [{rule_type: nogo_ingredient, value_text, severity (hart|weich)} | {rule_type: nogo_allergen, ref_key} | {rule_type: allergen_line, value_text}]}. '
+                . 'Jeder Slot ist GENAU EIN KAPITEL. Leite die Kapitel aus dem Brief ab — moegliche Kapitel-Typen: '
+                . 'Service-Format (Menue · Menue-Buffet/Stationen · Flying · Fingerfood/Empfang · Grillbuffet · Foodstationen · Midnight), '
+                . 'Anlass/Tageszeit (Fruehstueck · Break · Lunch · Dinner · Konferenz · Mitternachtsnack), '
+                . 'Konzept/Marke (thematisch benannt) oder ein einzelnes Menue (z.B. «Menue 01»). '
+                . 'Bei «ein Menue» oder «ein Kapitel» im Brief -> GENAU EIN kapitel-Slot. Nur so viele Kapitel wie der Brief wirklich hergibt. '
+                . 'ERZEUGE NIE gang- oder station-Slots. Preise netto p. P.',
+        ],
         // Et.2b »Kreativ-Kopf«: Kunden-Brief → kreative Concept-Canvas (die IDEE, nicht das
         // Struktur-Geruest). Schwester von concept.brief_geruest — GERUEST erzeugt Slots/Preise/
         // Regeln (deterministischer Rahmen), PLAN erzeugt die kreative Handschrift (Leitidee/USP/
