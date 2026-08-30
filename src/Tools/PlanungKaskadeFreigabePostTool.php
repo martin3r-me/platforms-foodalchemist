@@ -30,10 +30,13 @@ class PlanungKaskadeFreigabePostTool extends FoodAlchemistTool implements ToolCo
 
     public function getDescription(): string
     {
-        return 'Gibt EINEN done-Schritt eines Planungs-Kaskaden-Laufs frei (Draft → live), headless. '
-            . 'In gestuften Läufen startet die Freigabe zugleich die nächste Ebene + die Anreicherung. '
-            . 'Nur team-eigene Schritte (isOwnedBy); ein nicht-done-Schritt ist ein No-op. Liefert den '
-            . 'Lauf-Status wie planung_kaskade.GET zurück.';
+        return 'Gibt EINEN Schritt eines Planungs-Kaskaden-Laufs frei, headless. Zwei Fälle: (1) ein done-'
+            . 'Schritt wird live gesetzt (Draft → approved/active) und startet in gestuften Läufen die nächste '
+            . 'Ebene + Anreicherung. (2) Kapitel-Gate der gestuften Foodbook-Vollkaskade: ein GEPLANTER '
+            . 'Kapitel-Concept-Schritt wird durch die Freigabe ERZEUGT (die Concept-Generierung startet) — so '
+            . 'geht man Kapitel für Kapitel durch (Struktur prüfen → Kapitel freigeben → Concept-Entwurf → '
+            . 'freigeben → Gänge). Nur team-eigene Schritte (isOwnedBy); ein queued/running-Schritt ist ein '
+            . 'No-op. Liefert den Lauf-Status wie planung_kaskade.GET zurück.';
     }
 
     public function getSchema(): array

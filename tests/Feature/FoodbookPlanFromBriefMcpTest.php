@@ -72,8 +72,12 @@ it('PLAN_FROM_BRIEF: legt ein neues Foodbook an, baut das Gerüst und startet di
     expect(FoodAlchemistFoodbook::find($fbId))->not->toBeNull();
 
     $run = FoodAlchemistCascadeRun::where('source_owner_type', 'foodbook')->where('source_owner_id', $fbId)->latest('id')->first();
-    expect($run)->not->toBeNull()->and($run->scope)->toBe('vollkaskade');
-    Queue::assertPushed(GenerateConceptJob::class, fn ($j) => $j->attachOwnerType === 'foodbook' && (int) $j->attachContainerId > 0);
+    // Foodbook läuft GESTUFT (Kapitel-Gate): der Run steht auf review, die Kapitel-Concepts sind geplant,
+    // noch NICHTS dispatcht — die Concept-Erzeugung startet erst die Kapitel-Freigabe.
+    expect($run)->not->toBeNull()->and($run->scope)->toBe('vollkaskade')
+        ->and((bool) $run->staged)->toBeTrue()
+        ->and($run->steps()->where('kind', 'concept')->where('status', 'geplant')->count())->toBeGreaterThan(0);
+    Queue::assertNotPushed(GenerateConceptJob::class);
 });
 
 it('PLAN_FROM_BRIEF: leerer Brief → VALIDATION_ERROR, nichts angelegt', function () {
@@ -124,6 +128,11 @@ it('PLAN_FROM_BRIEF: setzt Leitplanken + creative_mode; menue_* erreichen die Co
     $session = \Platform\FoodAlchemist\Models\FoodAlchemistPlanningSession::find((int) $res->data['session_id']);
     expect($session->creative_mode)->toBe('hybrid')
         ->and($session->generation_params)->toMatchArray(['menue_gaenge' => 5, 'menue_preis_ziel_pp' => 70, 'level' => 'gehoben']);
+
+    // Kapitel-Gate: die Concept-Erzeugung startet erst die Kapitel-Freigabe → dann trägt der Job die menue_*-Achsen.
+    $run = FoodAlchemistCascadeRun::where('planning_session_id', (int) $session->id)->latest('id')->first();
+    $step = $run->steps()->where('kind', 'concept')->where('status', 'geplant')->first();
+    app(\Platform\FoodAlchemist\Services\PlanningCascadeService::class)->gibStepFrei($this->rootTeam, (int) $step->id);
 
     // Composition-Fix end-to-end: die menue_*-Achsen erreichen den Concept-Job (Rezept-Regler wie level nicht).
     Queue::assertPushed(GenerateConceptJob::class, fn ($j) => ($j->menueAchsen['menue_gaenge'] ?? null) === 5

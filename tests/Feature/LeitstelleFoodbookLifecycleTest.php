@@ -96,10 +96,13 @@ it('foodbookAusBrief: plant Rahmen + Inhalte in der Leitstelle und dockt ans neu
         ->where('source_owner_id', $fb->id)->latest('id')->first();
     expect($run)->not->toBeNull()
         ->and($run->scope)->toBe('vollkaskade')
-        ->and($run->planning_session_id)->toBe($session->id);
+        ->and($run->planning_session_id)->toBe($session->id)
+        ->and((bool) $run->staged)->toBeTrue();   // Foodbook gestuft (Kapitel-Gate)
 
-    // 5. Je Slot ein Concept-Job, der ins Foodbook zurückdockt.
-    Queue::assertPushed(GenerateConceptJob::class, fn ($job) => $job->attachOwnerType === 'foodbook' && (int) $job->attachContainerId > 0);
+    // 5. Kapitel-Gate: je Kapitel ein GEPLANTER Concept-Step (nichts dispatcht); die Concept-Erzeugung
+    //    startet erst die Kapitel-Freigabe.
+    expect($run->steps()->where('kind', 'concept')->where('status', 'geplant')->count())->toBeGreaterThan(0);
+    Queue::assertNotPushed(GenerateConceptJob::class);
 });
 
 it('foodbookAusBrief mit fbOwnerId (Handoff aus dem Modul): plant für ein bestehendes Foodbook, legt kein neues an', function () {

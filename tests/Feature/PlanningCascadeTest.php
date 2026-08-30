@@ -484,6 +484,7 @@ it('Phase 1: Vollkaskade reicht die menue_*-Leitplanken der Session an die Conce
         && ! array_key_exists('level', $job->menueAchsen));   // Rezept-Regler bleiben draussen (erben erst am Gericht-Fan-out)
 });
 
+
 it('E2 haengeKonzeptNach: Angebot-Recovery referenziert das Konzept ans Angebot (Pivot)', function () {
     $svc = app(PlanningCascadeService::class);
     $offer = app(\Platform\FoodAlchemist\Services\AngebotService::class)->create($this->rootTeam, ['name' => 'Gala']);
@@ -1441,7 +1442,7 @@ it('Zielpreis-Frame: ohne Frame / ohne Preis-Angabe bleibt ziel_vk_eur ungesetzt
 
 // ── P3: Voll-Kaskade aus dem Foodbook-Frame ─────────────────────────────────
 
-it('vollkaskade (foodbook): 1 Concept-Step je Frame-Slot + GenerateConceptJob mit Attach ans Kapitel', function () {
+it('vollkaskade (foodbook): GESTUFT — je Slot ein geplanter Kapitel-Concept-Step, Freigabe erzeugt mit Attach', function () {
     $fb = $this->makeFoodbook($this->rootTeam, 'Sommer-Foodbook', ['status' => 'draft']);
     $frameSvc = app(PlanningFrameService::class);
     $frame = $frameSvc->frameFor($this->rootTeam, 'foodbook', (int) $fb->id);
@@ -1453,10 +1454,15 @@ it('vollkaskade (foodbook): 1 Concept-Step je Frame-Slot + GenerateConceptJob mi
     expect($run->scope)->toBe('vollkaskade')
         ->and($run->source_owner_type)->toBe('foodbook')
         ->and((int) $run->source_owner_id)->toBe((int) $fb->id)
-        ->and((bool) $run->staged)->toBeFalse()   // Ausgabe-Voll-Kaskade = eager (Sammel-Review), nicht gestuft
-        ->and($run->steps()->where('kind', 'concept')->count())->toBe(2);
+        ->and((bool) $run->staged)->toBeTrue()                 // Foodbook = gestuft (Kapitel-Gate)
+        ->and($run->fresh()->status)->toBe('review')           // geplante Kapitel warten auf Freigabe
+        ->and($run->steps()->where('kind', 'concept')->where('status', 'geplant')->count())->toBe(2);
+    Queue::assertNotPushed(GenerateConceptJob::class);          // Kapitel-Gate: noch nichts dispatcht
 
-    Queue::assertPushed(GenerateConceptJob::class, 2);
+    // Kapitel-Freigabe erzeugt das Concept (mit Attach ans Kapitel).
+    $step = $run->steps()->where('kind', 'concept')->where('status', 'geplant')->first();
+    app(PlanningCascadeService::class)->gibStepFrei($this->rootTeam, (int) $step->id);
+    expect($step->fresh()->status)->toBe('running');
     Queue::assertPushed(GenerateConceptJob::class, fn ($job) => $job->attachOwnerType === 'foodbook' && (int) $job->attachContainerId > 0 && $job->creativeMode === 'voll_kreativ');
 });
 
@@ -1549,7 +1555,7 @@ it('vollkaskade (speiseplan): ein Gericht-Step je leerer Zelle + MaterializeSpei
     $run = app(PlanningCascadeService::class)->starteKaskade($this->rootTeam, 'vollkaskade', null, 'voll_kreativ', ['owner_type' => 'speiseplan', 'owner_id' => (int) $plan->id]);
 
     expect($run->source_owner_type)->toBe('speiseplan')
-        ->and((bool) $run->staged)->toBeFalse()   // eager (Sammel-Review), wie Foodbook/Speisekarte
+        ->and((bool) $run->staged)->toBeFalse()   // Speiseplan eager (Sammel-Review); nur Foodbook ist gestuft
         ->and($run->steps()->where('kind', 'gericht')->count())->toBe($erwartet)
         ->and($erwartet)->toBeGreaterThan(0);
     Queue::assertPushed(MaterializeSpeiseplanCellJob::class, $erwartet);
@@ -1598,24 +1604,30 @@ it('staged: Cockpit-Go ist gestuft (staged=true), opt-out über optionen möglic
     expect($an->staged)->toBeTrue()->and($aus->staged)->toBeFalse();
 });
 
-it('bewusste Unterscheidung: Cockpit-Scope gestuft (staged=true) vs. Ausgabe-Voll-Kaskade eager (staged=false)', function () {
-    // Dokumentiert die Etappe-5-Entscheidung an EINER Stelle: die Cockpit-Ebenen (rezept|gericht|concept)
-    // laufen gestuft — Gate + Freigabe je Ebene; die aus den Ausgabe-Modulen getriggerte Voll-Kaskade
-    // (foodbook/speisekarte/speiseplan) läuft eager (Sammel-Review). Der Wert wird explizit gesetzt,
-    // nicht dem DB-Default überlassen (Schutz gegen ein Ändern des Defaults).
+it('bewusste Unterscheidung: gestuft (Cockpit-Scopes + Foodbook-Kapitel-Gate) vs. eager (Speisekarte/Speiseplan/Angebot)', function () {
+    // Cockpit-Ebenen (rezept|gericht|concept) laufen gestuft — Gate + Freigabe je Ebene. Bei den Ausgabe-
+    // Voll-Kaskaden ist FOODBOOK ebenfalls gestuft (Kapitel-Gate: erst Kapitel-Struktur, dann Kapitel für
+    // Kapitel), während Speisekarte/Speiseplan/Angebot eager laufen (Sammel-Review) — sie haben keine
+    // vorab materialisierte Kapitel-Ebene. Der Wert wird explizit gesetzt (Schutz gegen Default-Änderung).
     $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'X', 'brief' => 'y']);
     $svc = app(PlanningCascadeService::class);
 
     $cockpit = $svc->starteKaskade($this->rootTeam, 'gericht', $session, 'voll_kreativ');
 
-    $fb = $this->makeFoodbook($this->rootTeam, 'Ausgabe-Foodbook', ['status' => 'draft']);
+    $karte = app(\Platform\FoodAlchemist\Services\SpeisekarteService::class)->create($this->rootTeam, ['name' => 'Ausgabe-Karte']);
     $frameSvc = app(PlanningFrameService::class);
-    $frame = $frameSvc->frameFor($this->rootTeam, 'foodbook', (int) $fb->id);
-    $frameSvc->addSlot($this->rootTeam, $frame, ['label' => 'Vorspeisen', 'slot_type' => 'kapitel', 'target_count' => 1]);
-    $ausgabe = $svc->starteKaskade($this->rootTeam, 'vollkaskade', null, 'voll_kreativ', ['owner_type' => 'foodbook', 'owner_id' => (int) $fb->id]);
+    $frame = $frameSvc->frameFor($this->rootTeam, 'speisekarte', (int) $karte->id);
+    $frameSvc->addSlot($this->rootTeam, $frame, ['label' => 'Vorspeisen', 'slot_type' => 'station', 'target_count' => 1]);
+    $eagerAusgabe = $svc->starteKaskade($this->rootTeam, 'vollkaskade', null, 'voll_kreativ', ['owner_type' => 'speisekarte', 'owner_id' => (int) $karte->id]);
+
+    $fb = $this->makeFoodbook($this->rootTeam, 'Ausgabe-Foodbook', ['status' => 'draft']);
+    $frameFb = $frameSvc->frameFor($this->rootTeam, 'foodbook', (int) $fb->id);
+    $frameSvc->addSlot($this->rootTeam, $frameFb, ['label' => 'Herbstmenü', 'slot_type' => 'kapitel', 'target_count' => 1]);
+    $gestuftesFoodbook = $svc->starteKaskade($this->rootTeam, 'vollkaskade', null, 'voll_kreativ', ['owner_type' => 'foodbook', 'owner_id' => (int) $fb->id]);
 
     expect((bool) $cockpit->staged)->toBeTrue()
-        ->and((bool) $ausgabe->staged)->toBeFalse();
+        ->and((bool) $eagerAusgabe->staged)->toBeFalse()
+        ->and((bool) $gestuftesFoodbook->staged)->toBeTrue();
 });
 
 it('staged Freigabe (concept): dispatcht FanoutConceptJob + Run läuft wieder', function () {

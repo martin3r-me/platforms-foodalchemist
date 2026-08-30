@@ -291,6 +291,14 @@ class PlanningCascadeService
             throw new RuntimeException('Ausgabe hat noch kein Planungs-Gerüst — erst Kickoff/Struktur anlegen.');
         }
 
+        // FOODBOOK läuft GESTUFT (Kapitel-Gate): erst das Kapitel-Grundgerüst als geplante Concept-Steps
+        // (Run=prüfen), dann Kapitel für Kapitel die Concept-Erzeugung + Freigabe (Nutzer-Wunsch: Kapitel
+        // erst prüfen/korrigieren). Speisekarte/Angebot bleiben EAGER (staged=false) — sie haben keine
+        // vorab materialisierte Container-/Kapitel-Ebene (Rubriken/Angebot entstehen erst im Fan-out),
+        // ein Kapitel-Gate ist dort nicht sinnvoll. Der Concept→Gericht-Fan-out wird bei staged automatisch
+        // mitgestuft (GenerateConceptJob deferrt ihn), Gate 2 (Concept-Review) läuft über die bestehende
+        // gibStepFrei/starteFolgestufe-Maschinerie.
+        $staged = $ownerType === 'foodbook';
         $run = FoodAlchemistCascadeRun::create([
             'team_id' => $team->id,
             'planning_session_id' => $session?->id,
@@ -298,13 +306,7 @@ class PlanningCascadeService
             'creative_mode' => $creativeMode,
             'brief' => 'Voll-Kaskade ' . $ownerType . ' #' . $ownerId,
             'status' => 'running',
-            // Bewusste Unterscheidung (Etappe 5): Ausgabe-Voll-Kaskaden laufen EAGER (staged=false) —
-            // alle Slot-Konzepte werden hier sofort dispatcht und am Ende gemeinsam (Sammel-Review) im
-            // Editor geprüft. Der Gegensatz sind die Cockpit-Scopes (rezept|gericht|concept), die
-            // gestuft laufen (staged=true, s. starteKaskade Z. 89) — Gate + Freigabe je Ebene. Der Wert
-            // ist explizit gesetzt (nicht dem DB-Default überlassen), damit die Absicht sichtbar und
-            // gegen ein Ändern des Defaults geschützt ist.
-            'staged' => false,
+            'staged' => $staged,
             'source_owner_type' => $ownerType,
             'source_owner_id' => $ownerId,
             'created_via' => (string) ($optionen['created_via'] ?? 'plan_go'),
@@ -313,11 +315,20 @@ class PlanningCascadeService
         $slots = $this->vollkaskadeSlots($team, $ownerType, $ownerId, $frame);
         $idx = 0;
         foreach ($slots as [$slot, $containerId]) {
-            $this->dispatchSlotConcept($team, $run, $slot, $ownerType, (int) $containerId, $idx, $creativeMode, $session?->id);
+            if ($staged) {
+                // Kapitel-Gate: nur PLANEN (geplant), NICHT dispatchen — die Concept-Erzeugung startet erst
+                // die Kapitel-Freigabe (gibStepFrei/FREIGABE auf den geplanten Kapitel-Step).
+                $this->planeSlotConcept($team, $run, $slot, $ownerType, (int) $containerId, $idx, 'geplant');
+            } else {
+                $this->dispatchSlotConcept($team, $run, $slot, $ownerType, (int) $containerId, $idx, $creativeMode, $session?->id);
+            }
             $idx++;
         }
         if ($idx === 0) {
             $run->update(['status' => 'failed']);   // Frame ohne verwertbare Slots
+        } elseif ($staged) {
+            // geplante Kapitel-Steps → Run auf „prüfen" (review) heben, damit der Kapitel-Gate sichtbar ist.
+            $this->recomputeRunStatus((int) $run->id);
         }
 
         return $run;
@@ -380,35 +391,57 @@ class PlanningCascadeService
      */
     private function dispatchSlotConcept(Team $team, FoodAlchemistCascadeRun $run, $slot, string $ownerType, int $containerId, int $idx, string $creativeMode, ?int $sessionId): FoodAlchemistCascadeRunStep
     {
+        $step = $this->planeSlotConcept($team, $run, $slot, $ownerType, $containerId, $idx, 'running');
+        $this->dispatcheConceptStep($team, $run, $step, $slot, $ownerType, $containerId, $creativeMode, $sessionId);
+
+        return $step;
+    }
+
+    /**
+     * Slot → Concept-Step ANLEGEN (ohne Dispatch). $status='running' (eager, direkt danach dispatcht) oder
+     * 'geplant' (gestufte Foodbook-Vollkaskade: Kapitel-Gate — der Step wartet auf die Kapitel-Freigabe,
+     * bevor der GenerateConceptJob läuft). Der EINE Ort, an dem chapter_id/slot_id am Step gesetzt werden.
+     */
+    private function planeSlotConcept(Team $team, FoodAlchemistCascadeRun $run, $slot, string $ownerType, int $containerId, int $idx, string $status): FoodAlchemistCascadeRunStep
+    {
         $chapterId = $ownerType === 'foodbook' ? $containerId : null;
-        $step = FoodAlchemistCascadeRunStep::create([
+
+        return FoodAlchemistCascadeRunStep::create([
             'team_id' => $team->id,
             'cascade_run_id' => $run->id,
             'parent_step_id' => null,
             'kind' => 'concept',
             'label' => Str::limit((string) ($slot->label ?: 'Konzept'), 120),
-            'status' => 'running',
+            'status' => $status,
             'sort' => $idx,
             'chapter_id' => $chapterId,
             'slot_id' => (int) $slot->id,
         ]);
+    }
+
+    /**
+     * Den {@see GenerateConceptJob} für einen bereits angelegten Concept-Step dispatchen (Step → running).
+     * Getrennt von der Step-Anlage, damit der gestufte Foodbook-Gate den Step erst PLANT (geplant) und
+     * erst bei der Kapitel-Freigabe hier dispatcht ({@see erzeugeGeplantesConcept}). Für foodbook trägt der
+     * Brief die editierten Kapitel-Ziele ({@see kapitelBrief}), sonst der reine {@see slotBrief}.
+     */
+    private function dispatcheConceptStep(Team $team, FoodAlchemistCascadeRun $run, FoodAlchemistCascadeRunStep $step, $slot, string $ownerType, int $containerId, string $creativeMode, ?int $sessionId): void
+    {
+        $chapterId = $ownerType === 'foodbook' ? $containerId : null;
         $brief = $chapterId !== null
             ? $this->kapitelBrief($chapterId, $slot)
             : $this->slotBrief($ownerType, (int) $run->source_owner_id, $slot);
         $runId = (string) Str::uuid();
-        $step->update(['generator_run_id' => $runId]);
+        $step->update(['generator_run_id' => $runId, 'status' => 'running']);
         Cache::put(GenerateConceptJob::cacheKey($runId), ['status' => 'pending'], now()->addMinutes(self::RESULT_TTL_MIN));
         // Kompositions-Fix: die Menü-Leitplanken der Session (menue_*: Gänge/Preis-Korridor/Diät-Quoten/
-        // Balance) an die Concept-Erzeugung reichen — sonst steuert die Zusammenstellung des Menüs/Kapitels/
-        // der Rubrik in JEDER Ausgabeform-Vollkaskade nichts (vorher Default []). Spiegelt dispatchConceptStep.
+        // Balance) an die Concept-Erzeugung reichen — sonst steuert die Menü-/Kapitel-Zusammenstellung nichts.
         $menueAchsen = $this->sessionMenueAchsen($team, $sessionId);
         GenerateConceptJob::dispatch(
             $runId, $team->id, (int) (\Illuminate\Support\Facades\Auth::id() ?? 0),
             $brief, (string) ($slot->label ?: null),
             $sessionId, $step->id, $creativeMode, false, false, $ownerType, $containerId, $menueAchsen
         );
-
-        return $step;
     }
 
     /**
@@ -1292,6 +1325,15 @@ class PlanningCascadeService
     public function gibStepFrei(Team $team, int $stepId): void
     {
         $step = $this->ownedStep($team, $stepId);
+        // Kapitel-Gate (gestufte Foodbook-Vollkaskade): ein GEPLANTER Kapitel-Concept-Step wird durch die
+        // „Freigabe" ERZEUGT (dispatch), nicht approved — die Freigabe der Kapitel-Struktur startet die
+        // Concept-Generierung. So bedient dieselbe FREIGABE-Aktion Gate 1 (Kapitel → Concept erzeugen) und
+        // Gate 2 (Concept-Entwurf freigeben + Gänge-Fan-out).
+        if ($step->kind === 'concept' && $step->status === 'geplant') {
+            $this->erzeugeGeplantesConcept($team, $stepId);
+
+            return;
+        }
         if ($step->status !== 'done') {
             return;
         }
@@ -1650,6 +1692,41 @@ class PlanningCascadeService
         if (app(RecipeDependencyWorkflowService::class)->dispatchGeplantesKind($team, $step)) {
             $this->recomputeRunStatus((int) $step->cascade_run_id);
         }
+    }
+
+    /**
+     * Kapitel-Gate (gestufte Foodbook-Vollkaskade): einen GEPLANTEN Kapitel-Concept-Step scharfschalten —
+     * die Kapitel-Freigabe startet die Concept-Erzeugung (dispatcht den {@see GenerateConceptJob}). Analog
+     * {@see erzeugeGeplantenStep} für Rezepte. Rekonstruiert Owner/Container/Modus/Session aus dem Lauf und
+     * den Slot aus `slot_id`. Fehlt der Slot (Kapitel gelöscht) → Step verwerfen statt ins Leere dispatchen.
+     * Wird auch von {@see gibStepFrei} aufgerufen (FREIGABE eines geplanten Kapitels = erzeugen).
+     */
+    public function erzeugeGeplantesConcept(Team $team, int $stepId): void
+    {
+        $step = $this->ownedStep($team, $stepId);
+        if ($step->kind !== 'concept' || $step->status !== 'geplant') {
+            return;
+        }
+        $run = $step->run;
+        if ($run === null) {
+            return;
+        }
+        $ownerType = (string) $run->source_owner_type;
+        $slot = \Platform\FoodAlchemist\Models\FoodAlchemistPlanningFrameSlot::find((int) $step->slot_id);
+        if ($slot === null) {
+            // Kapitel/Slot entfernt → kein Concept erzeugen, Step verwerfen (Tombstone).
+            $step->update(['status' => 'verworfen']);
+            $this->recomputeRunStatus((int) $step->cascade_run_id);
+
+            return;
+        }
+        $containerId = $ownerType === 'foodbook' ? (int) $step->chapter_id : (int) $run->source_owner_id;
+        $this->dispatcheConceptStep(
+            $team, $run, $step, $slot, $ownerType, $containerId,
+            (string) $run->creative_mode,
+            $run->planning_session_id !== null ? (int) $run->planning_session_id : null
+        );
+        $this->recomputeRunStatus((int) $step->cascade_run_id);
     }
 
     /**
