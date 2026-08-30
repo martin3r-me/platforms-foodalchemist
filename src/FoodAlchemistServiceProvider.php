@@ -678,6 +678,8 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\PlanungKaskadeStartPostTool::class,
                     \Platform\FoodAlchemist\Tools\FoodbookPlanFromBriefTool::class,  // Spec 42 F5: Foodbook aus Brief (vollkaskade owner=foodbook)
                     \Platform\FoodAlchemist\Tools\PlanungKaskadeFreigabePostTool::class,
+                    // Kapitel-Gate-Refinement: Kapitel-Reconcile eines gestuften Foodbook-Laufs (add/remove/rename) — WRITE.
+                    \Platform\FoodAlchemist\Tools\PlanungKaskadeSyncPostTool::class,
                     // Spec 19 E7.6: Kapitel-Go „Anlegen" — READ-ONLY (Stempel-Vorschau + Trockenlauf + Anlage-Stand; Go selbst human-only, kein MCP-Trigger)
                     \Platform\FoodAlchemist\Tools\KapitelFreigabeGetTool::class,
                     // Spec 19 E9: Pairing-Inspiration der Kreativ-Phase — READ-ONLY (Aroma-Nachbarn je Modus, abstrakt/geerdet)

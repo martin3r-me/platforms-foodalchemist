@@ -1466,6 +1466,45 @@ it('vollkaskade (foodbook): GESTUFT — je Slot ein geplanter Kapitel-Concept-St
     Queue::assertPushed(GenerateConceptJob::class, fn ($job) => $job->attachOwnerType === 'foodbook' && (int) $job->attachContainerId > 0 && $job->creativeMode === 'voll_kreativ');
 });
 
+it('Kapitel-Reconcile (Refinement): neues Kapitel → geplanter Step, gelöschtes → verworfen, umbenanntes → Label', function () {
+    $fb = $this->makeFoodbook($this->rootTeam, 'Reconcile-Buch');
+    $frames = app(PlanningFrameService::class);
+    $frame = $frames->frameFor($this->rootTeam, 'foodbook', (int) $fb->id);
+    $frames->addSlot($this->rootTeam, $frame, ['label' => 'Empfang', 'slot_type' => 'kapitel']);
+    $frames->addSlot($this->rootTeam, $frame, ['label' => 'Menü', 'slot_type' => 'kapitel']);
+    $svc = app(PlanningCascadeService::class);
+    $run = $svc->starteKaskade($this->rootTeam, 'vollkaskade', null, 'voll_kreativ', ['owner_type' => 'foodbook', 'owner_id' => (int) $fb->id]);
+    expect($run->steps()->where('kind', 'concept')->where('status', 'geplant')->count())->toBe(2);
+
+    $fbSvc = app(\Platform\FoodAlchemist\Services\FoodbookService::class);
+    $kapitel = $fb->chapters()->get();
+    // REMOVE „Empfang" · RENAME „Menü"→„Galamenü" · ADD neues Kapitel „Dessert".
+    $fbSvc->deleteKapitel($this->rootTeam, (int) $kapitel->firstWhere('title', 'Empfang')->id);
+    $fbSvc->updateKapitel($this->rootTeam, (int) $kapitel->firstWhere('title', 'Menü')->id, ['title' => 'Galamenü']);
+    $fbSvc->addKapitel($this->rootTeam, (int) $fb->id, ['title' => 'Dessert']);
+
+    $res = $svc->synchronisiereKapitelSteps($this->rootTeam, (int) $run->id);
+
+    expect($res['ok'])->toBeTrue()
+        ->and($res['verworfen'])->toBe(1)   // Empfang
+        ->and($res['ergaenzt'])->toBe(1)    // Dessert (neues Kapitel bekommt Slot + geplanten Step)
+        ->and($res['umbenannt'])->toBe(1);  // Menü → Galamenü
+    $steps = $run->steps()->where('kind', 'concept')->get();
+    expect($steps->where('status', 'geplant')->pluck('label')->sort()->values()->all())->toBe(['Dessert', 'Galamenü'])
+        ->and($steps->where('status', 'verworfen')->count())->toBe(1);
+});
+
+it('Kapitel-Reconcile: nicht-gestufte / nicht-foodbook Läufe werden abgelehnt (ok=false)', function () {
+    $karte = app(\Platform\FoodAlchemist\Services\SpeisekarteService::class)->create($this->rootTeam, ['name' => 'K']);
+    $frames = app(PlanningFrameService::class);
+    $frame = $frames->frameFor($this->rootTeam, 'speisekarte', (int) $karte->id);
+    $frames->addSlot($this->rootTeam, $frame, ['label' => 'Vorspeisen', 'slot_type' => 'station']);
+    $run = app(PlanningCascadeService::class)->starteKaskade($this->rootTeam, 'vollkaskade', null, 'voll_kreativ', ['owner_type' => 'speisekarte', 'owner_id' => (int) $karte->id]);
+
+    $res = app(PlanningCascadeService::class)->synchronisiereKapitelSteps($this->rootTeam, (int) $run->id);
+    expect($res['ok'])->toBeFalse();   // Speisekarte ist eager, kein Kapitel-Gate
+});
+
 it('vollkaskade ohne Frame/Slots wirft ehrlich', function () {
     $fb = $this->makeFoodbook($this->rootTeam, 'Leer', ['status' => 'draft']);
 

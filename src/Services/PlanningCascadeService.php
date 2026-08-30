@@ -1730,6 +1730,92 @@ class PlanningCascadeService
     }
 
     /**
+     * Kapitel-Reconcile (Refinement zum Kapitel-Gate): gleicht die GEPLANTEN Kapitel-Concept-Steps eines
+     * gestuften Foodbook-Laufs mit der AKTUELLEN Kapitel-Struktur ab — nachdem der Mensch VOR der Freigabe
+     * Kapitel editiert hat (foodbook_kapitel.POST/PUT/DELETE). Ohne diesen Abgleich sind Slot/Kapitel-CRUD
+     * und die geplanten Steps entkoppelt (ein gelöschtes Kapitel würde trotzdem generiert, ein neues gar nicht).
+     *
+     * Drei Pässe, nur bestehende Bausteine: (1) ADD — jedes aktive Kapitel OHNE gekoppelten Frame-Slot bekommt
+     * einen kapitel-Slot (so wird ein von Hand angelegtes Kapitel generierbar); (2) je Slot mit aktivem Kapitel
+     * einen geplanten Step sicherstellen + Label auf den Kapitel-Titel ziehen (Rename); (3) REMOVE — geplanter
+     * Step, dessen Slot weg ODER Kapitel soft-deleted ist → `verworfen` (Tombstone, kein Hard-Delete). Rührt NUR
+     * `geplant`-Steps an (bereits erzeugte Concepts bleiben unberührt — die verwirft der Mensch separat).
+     * Nur gestufte, team-eigene Foodbook-Läufe. Idempotent.
+     *
+     * @return array{ok: bool, grund?: string, ergaenzt?: int, verworfen?: int, umbenannt?: int}
+     */
+    public function synchronisiereKapitelSteps(Team $team, int $runId): array
+    {
+        $run = $this->lauf($team, $runId);
+        if ($run === null || ! $run->isOwnedBy($team) || (string) $run->source_owner_type !== 'foodbook' || ! $run->staged) {
+            return ['ok' => false, 'grund' => 'Nur gestufte, team-eigene Foodbook-Läufe.'];
+        }
+        $foodbookId = (int) $run->source_owner_id;
+        $fb = \Platform\FoodAlchemist\Models\FoodAlchemistFoodbook::visibleToTeam($team)->find($foodbookId);
+        $frame = app(PlanningFrameService::class)->find('foodbook', $foodbookId);
+        if ($fb === null || $frame === null) {
+            return ['ok' => false, 'grund' => 'Foodbook/Gerüst nicht gefunden.'];
+        }
+        $frame->load('slots');
+        $kapitel = $fb->chapters()->get();   // aktive (nicht soft-deleted), position-sortiert
+        $aktiveKapitelIds = $kapitel->pluck('id')->map(fn ($v) => (int) $v)->all();
+
+        // 1. ADD (Hand-Kapitel generierbar machen): jedes aktive Kapitel ohne gekoppelten Slot bekommt einen kapitel-Slot.
+        $gekoppelt = $frame->slots->pluck('chapter_id')->filter()->map(fn ($v) => (int) $v)->all();
+        foreach ($kapitel as $k) {
+            if (! in_array((int) $k->id, $gekoppelt, true)) {
+                app(PlanningFrameService::class)->addSlot($team, $frame, ['label' => (string) $k->title, 'slot_type' => 'kapitel', 'chapter_id' => (int) $k->id]);
+            }
+        }
+        $frame->load('slots');
+
+        $steps = $run->steps()->where('kind', 'concept')->get();
+        $stepBySlot = $steps->keyBy(fn ($s) => (int) $s->slot_id);
+        $ergaenzt = 0;
+        $verworfen = 0;
+        $umbenannt = 0;
+        $idx = (int) ($steps->max('sort') ?? -1);
+
+        // 2. je Slot mit aktivem Kapitel einen geplanten Step sicherstellen + Label pflegen (Rename).
+        foreach ($frame->slots as $slot) {
+            $chapterId = $slot->chapter_id !== null ? (int) $slot->chapter_id : null;
+            if ($chapterId === null || ! in_array($chapterId, $aktiveKapitelIds, true)) {
+                continue;   // Slot ohne aktives Kapitel → REMOVE-Pass
+            }
+            $titel = (string) ($kapitel->firstWhere('id', $chapterId)?->title ?: $slot->label);
+            $st = $stepBySlot->get((int) $slot->id);
+            if ($st === null) {
+                $this->planeSlotConcept($team, $run, $slot, 'foodbook', $chapterId, ++$idx, 'geplant');
+                $ergaenzt++;
+            } elseif ($st->status === 'geplant') {
+                $neuLabel = Str::limit($titel, 120);
+                if ((string) $st->label !== $neuLabel) {
+                    $st->update(['label' => $neuLabel]);
+                    $umbenannt++;
+                }
+            }
+        }
+
+        // 3. REMOVE: geplanter Step, dessen Slot weg ODER Kapitel soft-deleted → verworfen (Tombstone).
+        $slotIds = $frame->slots->pluck('id')->map(fn ($v) => (int) $v)->all();
+        foreach ($steps as $st) {
+            if ($st->status !== 'geplant') {
+                continue;
+            }
+            $slotWeg = ! in_array((int) $st->slot_id, $slotIds, true);
+            $kapitelWeg = $st->chapter_id !== null && ! in_array((int) $st->chapter_id, $aktiveKapitelIds, true);
+            if ($slotWeg || $kapitelWeg) {
+                $st->update(['status' => 'verworfen']);
+                $verworfen++;
+            }
+        }
+
+        $this->recomputeRunStatus((int) $run->id);
+
+        return ['ok' => true, 'ergaenzt' => $ergaenzt, 'verworfen' => $verworfen, 'umbenannt' => $umbenannt];
+    }
+
+    /**
      * „Brauche ich nicht" je Zeile (Etappe 1, Teil 2): verwirft EINEN geplanten Sub-Rezept-Step vor
      * seiner Erzeugung. Der Step wird als `verworfen` behalten (Tombstone), NICHT hart gelöscht — so
      * schaltet die spätere Stufen-Freigabe ({@see RecipeDependencyWorkflowService::dispatchChildren})

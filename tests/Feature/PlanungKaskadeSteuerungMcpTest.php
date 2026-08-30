@@ -30,8 +30,8 @@ beforeEach(function () {
     $this->ctx = new ToolContext($this->user, $this->rootTeam);
 });
 
-it('Registry-Smoke: START + FREIGABE sind registriert + WRITE', function () {
-    foreach (['foodalchemist.planung_kaskade.START', 'foodalchemist.planung_kaskade.FREIGABE'] as $name) {
+it('Registry-Smoke: START + FREIGABE + SYNC sind registriert + WRITE', function () {
+    foreach (['foodalchemist.planung_kaskade.START', 'foodalchemist.planung_kaskade.FREIGABE', 'foodalchemist.planung_kaskade.SYNC'] as $name) {
         $tool = $this->registry->get($name);
         expect($tool)->not->toBeNull()
             ->and($tool->getName())->toBe($name)
