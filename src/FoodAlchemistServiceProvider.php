@@ -678,6 +678,8 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\PlanungKaskadeStartPostTool::class,
                     \Platform\FoodAlchemist\Tools\FoodbookPlanFromBriefTool::class,  // Spec 42 F5: Foodbook aus Brief (vollkaskade owner=foodbook)
                     \Platform\FoodAlchemist\Tools\SpeisekartePlanFromBriefTool::class,  // Speisekarte aus Brief (vollkaskade owner=speisekarte, Gerichte-Default)
+                    \Platform\FoodAlchemist\Tools\SpeiseplanPlanFromBriefTool::class,   // Speiseplan aus Brief (vollkaskade owner=speiseplan, Zell-Fan-out)
+                    \Platform\FoodAlchemist\Tools\AngebotPlanFromBriefTool::class,      // Angebot aus Brief (vollkaskade owner=offer, Concept je Slot)
                     \Platform\FoodAlchemist\Tools\PlanungKaskadeFreigabePostTool::class,
                     // Kapitel-Gate-Refinement: Kapitel-Reconcile eines gestuften Foodbook-Laufs (add/remove/rename) — WRITE.
                     \Platform\FoodAlchemist\Tools\PlanungKaskadeSyncPostTool::class,
