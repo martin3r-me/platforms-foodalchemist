@@ -508,10 +508,12 @@ class ConceptGeneratorService
         // gang-Slots → strukturAusGeruest macht je Gang ein Kapitel (Fehlstruktur „Gang 1–4 = 4 Kapitel").
         $istFoodbook = $ownerType === 'foodbook';
         $promptKey = $istFoodbook ? 'foodbook.grundgeruest' : 'concept.brief_geruest';
-        // Trend-Wissen (Trendradar) additiv einspeisen — der Prompt läuft NICHT durch contextFor(), also hier
-        // holen und als options['knowledge'] durchreichen (Routing concept.brief_geruest → trend:discovery,
-        // generischer Trend-Kanal für beide Gerüst-Prompts). Ohne Trend-Bestand liefert er leer.
-        $trendWissen = app(KnowledgeContextService::class)->contextFor('concept.brief_geruest', $brief);
+        // Wissens-Kontext feature-genau ziehen (Trendradar + Regelwerk via Routing) und als
+        // options['knowledge'] durchreichen — der Prompt läuft NICHT durch contextFor(). Für foodbook
+        // liefert das Feature `foodbook.grundgeruest` das FOODBOOK-Regelwerk (Kapitel statt Gänge, Routing
+        // regelwerk:always) + Trend; für die übrigen Owner `concept.brief_geruest` wie bisher. Ohne
+        // Routing/Bestand liefert er leer.
+        $trendWissen = app(KnowledgeContextService::class)->contextFor($promptKey, $brief);
         $wissenOpts = $trendWissen['block'] !== ''
             ? ['knowledge' => $trendWissen['block'], 'knowledge_used' => $trendWissen['files_used']]
             : [];

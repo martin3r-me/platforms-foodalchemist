@@ -455,6 +455,17 @@ class KnowledgeContextService
                     . "Platzhalter-Slots (Menü → Gänge, Buffet → Stationen). Das strukturelle Sektionieren "
                     . "eines Containers ist erlaubt und Pflicht (kein Gericht/Preis/Fakt erfinden). Halte dich an diese Regeln:\n\n",
             ],
+            'foodbook.grundgeruest' => [
+                'slug_like' => '%foodbook%',
+                'extract' => 'foodbook',
+                'header' => "# REGELWERK FOODBOOK-GRUNDGERÜST (verbindliche Gerüst-Regel — KAPITEL statt Gänge)\n\n"
+                    . "Das Grundgerüst eines Foodbooks sind seine KAPITEL — ein Kapitel = ein Menü, Thema, Anlass "
+                    . "oder Service-Format (Menü · Menü-Buffet/Stationen · Flying · Fingerfood/Empfang · Grillbuffet · "
+                    . "Foodstationen · Frühstück/Lunch/Dinner · Konzept/Marke). NIE «Vorspeisen/Hauptgänge/Desserts» "
+                    . "als Top-Level und NIE ein einzelner Gang als Kapitel. Die einzelnen Gänge "
+                    . "(Vorspeise→Hauptgang→Dessert) sind die INNERE Struktur eines Menü-Kapitels und entstehen erst "
+                    . "im Kapitel-Concept, nicht auf Buch-Ebene. Halte dich an diese Regeln:\n\n",
+            ],
             'ai_generate_recipe' => [
                 'slug_like' => '%basisrezept%',
                 'extract' => 'basisrezept',
@@ -495,7 +506,8 @@ class KnowledgeContextService
      */
     private function extrahiereRegelwerkKern(string $md, string $mode = 'basisrezept'): string
     {
-        if ($mode === 'concept') {
+        // concept + foodbook: das ganze (kurze) Regelwerk injizieren — keine §-Regionen-Extraktion.
+        if ($mode === 'concept' || $mode === 'foodbook') {
             return $md;
         }
 
