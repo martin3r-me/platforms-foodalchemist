@@ -357,6 +357,8 @@
                                 </label>
                             </div>
                             <label class="flex items-center gap-2 text-xs text-gray-300 mt-2"><input type="checkbox" wire:model="presentationPreisAnzeige" data-sp-praes-preis> Preise anzeigen (optional — Default aus)</label>
+                            {{-- Ebene 2 · Republish-Preis-Schutz (nur relevant mit Preisen) --}}
+                            <label class="flex items-center gap-2 text-xs text-gray-300" title="Aus: beim erneuten Veröffentlichen bleiben die eingefrorenen Preise stehen. An: aktuelle VK ziehen. Nur mit Preisen relevant; Erstveröffentlichung immer aktuell."><input type="checkbox" wire:model="presentationPreiseAktualisieren"> Preise aktualisieren</label>
                             <p class="text-[11px] text-gray-400 mt-1">GV-Aushang ist per Default preislos; die LMIV-Kennzeichnung ist immer Pflicht und sichtbar. Preise z.B. für Café-/Bistro-Pläne — folgen dem aktiven Betrieb.</p>
 
                             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">

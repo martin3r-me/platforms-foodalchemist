@@ -75,8 +75,10 @@ it('Team-Core: veröffentlichte Ausgabe driftet gegen den Live-VK → NULL-Lane-
     expect($sig)->toHaveCount(1)
         ->and($sig->first()->outlet_id)->toBeNull();
 
-    // Republish friert 140 ein → deckungsgleich → Detektor schließt das Signal automatisch.
-    $this->pres->publish($this->childA, 'speisekarte', $this->karteId, ['price_display' => true, 'expires_at' => now()->addDays(30)->toDateString()]);
+    // Republish MIT „Preise aktualisieren" (price_mode=auto) friert 140 ein → deckungsgleich →
+    // Detektor schließt das Signal automatisch. (Ohne auto würde der Republish die alten Preise
+    // bewahren — Republish-Preis-Schutz —, die Drift bliebe bewusst offen.)
+    $this->pres->publish($this->childA, 'speisekarte', $this->karteId, ['price_display' => true, 'price_mode' => 'auto', 'expires_at' => now()->addDays(30)->toDateString()]);
     expect(app(AusgabeDriftService::class)->abgedriftet($this->childA, null))->toHaveCount(0)
         ->and($this->det->vkAnpassungEmpfohlen($this->childA))->toBe(0)
         ->and(FoodAlchemistSignal::where('team_id', $this->childA->id)->where('type', SignalTyp::VkAnpassungEmpfohlen->value)->where('status', 'offen')->count())->toBe(0);

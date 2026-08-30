@@ -36,6 +36,9 @@ class SpeiseplanPresentationPublishTool extends FoodAlchemistTool implements Too
                 'design' => ['type' => 'string', 'description' => 'editorial|menu|kiosk oder design:{id}'],
                 'mahlzeit' => ['type' => 'string', 'description' => 'mittag|abend … (Default mittag)'],
                 'montag' => ['type' => 'string', 'description' => 'Wochen-Montag ISO (Default: Plan-Start)'],
+                'price_mode' => ['type' => 'string', 'enum' => ['auto', 'preserve'], 'description' => 'Republish-Preis-Modus '
+                    . '(nur relevant wenn der Aushang mit Preisen läuft): fehlt/„preserve" = eingefrorene Preise BEHALTEN, '
+                    . '„auto" = aktuelle VK ziehen. Erst-Veröffentlichung immer aktuell.'],
                 'cta_text' => ['type' => 'string'],
                 'cta_link' => ['type' => 'string'],
                 'slug' => ['type' => 'string', 'description' => 'Optionaler eigener Link-Name statt Zufalls-Token '
@@ -60,6 +63,7 @@ class SpeiseplanPresentationPublishTool extends FoodAlchemistTool implements Too
                 'design' => $arguments['design'] ?? null,
                 'mahlzeit' => $arguments['mahlzeit'] ?? 'mittag',
                 'montag' => $arguments['montag'] ?? null,
+                'price_mode' => ($arguments['price_mode'] ?? null) === 'auto' ? 'auto' : 'preserve',
                 'cta' => ['text' => $arguments['cta_text'] ?? null, 'link' => $arguments['cta_link'] ?? null],
             ] + (array_key_exists('slug', $arguments) ? ['slug' => $arguments['slug']] : []);
             $svc = app(PresentationService::class);

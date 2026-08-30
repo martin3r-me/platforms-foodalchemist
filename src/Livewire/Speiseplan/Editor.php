@@ -53,6 +53,10 @@ class Editor extends Component
 
     public bool $presentationPreisAnzeige = false;   // GV-Aushang ist preislos
 
+    /** Republish-Preis-Schutz (Ebene 2, nur relevant mit Preisen): AUS = eingefrorene Preise
+     *  behalten; AN = aktuelle VK ziehen. Greift nur beim erneuten Veröffentlichen. */
+    public bool $presentationPreiseAktualisieren = false;
+
     public ?string $presentationCtaText = null;
 
     public ?string $presentationCtaLink = null;
@@ -143,6 +147,7 @@ class Editor extends Component
                 'design' => $this->presentationDesign,
                 'expires_at' => $this->presentationGueltigBis,
                 'price_display' => $this->presentationPreisAnzeige,
+                'price_mode' => $this->presentationPreiseAktualisieren ? 'auto' : 'preserve',
                 'cta' => ['text' => $this->presentationCtaText, 'link' => $this->presentationCtaLink],
             ]);
             $this->presentationLoadedId = null;
@@ -185,6 +190,7 @@ class Editor extends Component
             $settings = [
                 'expires_at' => $this->outletPublishGueltigBis ?: $this->presentationGueltigBis,
                 'price_display' => $this->presentationPreisAnzeige,
+                'price_mode' => $this->presentationPreiseAktualisieren ? 'auto' : 'preserve',
                 'cta' => ['text' => $this->presentationCtaText, 'link' => $this->presentationCtaLink],
             ];
             // Nur setzen, wenn aktiv gewählt — sonst Fallback-Kette (Betriebs-Vorlage → Dokument) bzw. Zufalls-Token.

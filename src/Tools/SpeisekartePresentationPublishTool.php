@@ -35,6 +35,9 @@ class SpeisekartePresentationPublishTool extends FoodAlchemistTool implements To
                 'expires_at' => ['type' => 'string', 'description' => 'Gültig bis (Datum ISO, Pflicht)'],
                 'design' => ['type' => 'string', 'description' => 'editorial|menu|kiosk oder design:{id}'],
                 'price_display' => ['type' => 'boolean'],
+                'price_mode' => ['type' => 'string', 'enum' => ['auto', 'preserve'], 'description' => 'Republish-Preis-Modus: '
+                    . 'fehlt/„preserve" = eingefrorene Preise BEHALTEN (neue Speisen kommen mit aktuellem Preis rein), '
+                    . '„auto" = aktuelle VK ziehen. Erst-Veröffentlichung ist immer aktuell.'],
                 'declaration' => ['type' => 'boolean'],
                 'cta_text' => ['type' => 'string'],
                 'cta_link' => ['type' => 'string'],
@@ -59,6 +62,7 @@ class SpeisekartePresentationPublishTool extends FoodAlchemistTool implements To
                 'expires_at' => $arguments['expires_at'] ?? null,
                 'design' => $arguments['design'] ?? null,
                 'price_display' => $arguments['price_display'] ?? true,
+                'price_mode' => ($arguments['price_mode'] ?? null) === 'auto' ? 'auto' : 'preserve',
                 'declaration' => $arguments['declaration'] ?? true,
                 'cta' => ['text' => $arguments['cta_text'] ?? null, 'link' => $arguments['cta_link'] ?? null],
             ] + (array_key_exists('slug', $arguments) ? ['slug' => $arguments['slug']] : []);

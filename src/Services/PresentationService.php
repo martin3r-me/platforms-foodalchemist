@@ -69,6 +69,9 @@ class PresentationService
             'design' => $design,
             'freigabe' => ['at' => now()->toIso8601String(), 'by' => $userId, 'datum' => now()->format('d.m.Y')],
         ]);
+        // Republish-Preis-Schutz: ohne „Preise aktualisieren" (price_mode=auto) die eingefrorenen
+        // Preise des Alt-Snapshots bewahren (neue Speisen bleiben live). Erstpublish = live (Alt=null).
+        $snapshot = $this->bewahreWennNoetig($settings, $snapshot, $entity->presentation_snapshot_json);
 
         $entity->forceFill([
             'presentation_enabled' => true,
@@ -139,6 +142,9 @@ class PresentationService
             'outlet' => $outlet,
             'freigabe' => ['at' => now()->toIso8601String(), 'by' => $userId, 'datum' => now()->format('d.m.Y')],
         ]);
+        // Republish-Preis-Schutz je Betrieb: Alt-Snapshot dieser Betriebs-Präsentation bewahren
+        // (firstOrNew → snapshot_json null bei Erst-Publish = live).
+        $snapshot = $this->bewahreWennNoetig($settings, $snapshot, $pres->snapshot_json);
 
         $pres->forceFill([
             'enabled' => true,
@@ -422,6 +428,103 @@ class PresentationService
         $entity = $this->resolveEntity($team, $type, $id, forWrite: false);
 
         return $this->preisPfade($this->buildSnapshot($team, $entity, $type, $settings));
+    }
+
+    /**
+     * Republish-Preis-Schutz: die INVERSE zu {@see preisPfade}. Läuft dieselbe Pfad-Taxonomie ab
+     * und SCHREIBT Preise per Pfad-Key zurück in `$snapshot['content']`. Überschreibt nur bereits
+     * vorhandene Preis-Knoten (legt keine an, löscht keine). Formate spiegeln den Leser: linear
+     * (Foodbook/Speisekarte) = float; Speiseplan-Grid = deutscher String „1.234,56 €".
+     *
+     * @param  array<string,float>  $overrides  pfad ⇒ Netto-Preis
+     */
+    public function setzePreisePfade(array $snapshot, array $overrides): array
+    {
+        if ($overrides === []) {
+            return $snapshot;
+        }
+        $c = $snapshot['content'] ?? [];
+
+        foreach ($c['sections'] ?? [] as $si => $sec) {
+            foreach ($sec['blocks'] ?? [] as $bi => $blk) {
+                foreach ($blk['items'] ?? [] as $ii => $it) {
+                    $key = "s{$si}.b{$bi}.i{$ii}";
+                    if (array_key_exists($key, $overrides) && array_key_exists('price', $it)) {
+                        $c['sections'][$si]['blocks'][$bi]['items'][$ii]['price'] = (float) $overrides[$key];
+                    }
+                }
+                if (is_array($blk['price'] ?? null)) {
+                    foreach (['pp', 'pauschal'] as $k) {
+                        $key = "s{$si}.b{$bi}.{$k}";
+                        if (array_key_exists($key, $overrides) && array_key_exists($k, $blk['price'])) {
+                            $c['sections'][$si]['blocks'][$bi]['price'][$k] = (float) $overrides[$key];
+                        }
+                    }
+                }
+            }
+        }
+        if (is_array($c['total'] ?? null)) {
+            foreach (['vk_pro_person', 'pauschal', 'gesamt_vk'] as $k) {
+                $key = "total.{$k}";
+                if (array_key_exists($key, $overrides) && array_key_exists($k, $c['total'])) {
+                    $c['total'][$k] = (float) $overrides[$key];
+                }
+            }
+        }
+        foreach (($c['grid']['lines'] ?? []) as $li => $line) {
+            foreach ($line['cells'] ?? [] as $ymd => $cells) {
+                foreach ((array) $cells as $ci => $cell) {
+                    $key = "g{$li}.{$ymd}.{$ci}";
+                    if (array_key_exists($key, $overrides) && array_key_exists('price', (array) $cell)) {
+                        $c['grid']['lines'][$li]['cells'][$ymd][$ci]['price'] = number_format((float) $overrides[$key], 2, ',', '.') . ' €';
+                    }
+                }
+            }
+        }
+
+        $snapshot['content'] = $c;
+
+        return $snapshot;
+    }
+
+    /**
+     * Republish-Preis-Schutz (Default `preserve`): graftet die EINGEFRORENEN Preise des Alt-Snapshots
+     * auf den frisch gebauten zurück. Label-Guard: ein alter Preis wird nur gesetzt, wenn die Zeile am
+     * SELBEN Pfad in alt UND neu dasselbe `label` trägt — sonst (neue/ersetzte/umsortierte Zeile) bleibt
+     * der Live-Preis. `$alt===null` (Erstpublish) ⇒ unverändert live.
+     */
+    private function bewahrePreise(?array $alt, array $neu): array
+    {
+        if ($alt === null) {
+            return $neu;
+        }
+        $a = $this->preisPfade($alt);
+        if ($a === []) {
+            return $neu;
+        }
+        $n = $this->preisPfade($neu);
+        $ov = [];
+        foreach ($a as $pfad => $info) {
+            if (isset($n[$pfad]) && $n[$pfad]['label'] === $info['label']) {
+                $ov[$pfad] = $info['net'];
+            }
+        }
+
+        return $ov === [] ? $neu : $this->setzePreisePfade($neu, $ov);
+    }
+
+    /**
+     * Wendet den Republish-Preis-Modus an. `price_mode='auto'` ⇒ Live-Preise (nichts tun);
+     * sonst (Default `preserve`) ⇒ alte Preise bewahren. Der Modus lebt pro Veröffentlichung
+     * (`$settings['price_mode']`) — es gibt bewusst keine team-/betriebs-weite Einstellung.
+     *
+     * @param  array<string,mixed>  $settings
+     */
+    private function bewahreWennNoetig(array $settings, array $neuerSnapshot, ?array $alterSnapshot): array
+    {
+        $auto = ($settings['price_mode'] ?? 'preserve') === 'auto';
+
+        return $auto ? $neuerSnapshot : $this->bewahrePreise($alterSnapshot, $neuerSnapshot);
     }
 
     /**

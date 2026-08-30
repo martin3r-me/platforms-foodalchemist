@@ -469,6 +469,8 @@
                         <div class="flex flex-wrap gap-4">
                             <label class="flex items-center gap-2 text-xs text-gray-700"><input type="checkbox" wire:model="presentationPreisAnzeige"> Preise pro Person zeigen</label>
                             <label class="flex items-center gap-2 text-xs text-gray-700"><input type="checkbox" wire:model="presentationDeklaration"> Allergen-Legende zeigen</label>
+                            {{-- Ebene 2 · Republish-Preis-Schutz: aus = eingefrorene Preise behalten (neue Speisen kommen live rein), an = aktuelle VK ziehen. Nur beim erneuten Veröffentlichen; Erstveröffentlichung immer aktuell. --}}
+                            <label class="flex items-center gap-2 text-xs text-gray-700" title="Aus: beim erneuten Veröffentlichen bleiben die eingefrorenen Preise stehen — neue Speisen kommen mit aktuellem Preis rein. An: alle aktuellen VK ziehen. Erstveröffentlichung ist immer aktuell."><input type="checkbox" wire:model="presentationPreiseAktualisieren"> Preise aktualisieren</label>
                         </div>
 
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">

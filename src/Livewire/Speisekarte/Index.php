@@ -40,6 +40,10 @@ class Index extends Component
 
     public bool $presentationPreisAnzeige = true;
 
+    /** Republish-Preis-Schutz (Ebene 2): AUS = eingefrorene Preise behalten (neue Speisen live);
+     *  AN = aktuelle VK ziehen. Greift nur beim erneuten Veröffentlichen; Erstpublish immer live. */
+    public bool $presentationPreiseAktualisieren = false;
+
     public bool $presentationDeklaration = true;
 
     public ?string $presentationCtaText = null;
@@ -74,6 +78,7 @@ class Index extends Component
                 'design' => $this->presentationDesign,
                 'expires_at' => $this->presentationGueltigBis,
                 'price_display' => $this->presentationPreisAnzeige,
+                'price_mode' => $this->presentationPreiseAktualisieren ? 'auto' : 'preserve',
                 'declaration' => $this->presentationDeklaration,
                 'cta' => ['text' => $this->presentationCtaText, 'link' => $this->presentationCtaLink],
             ]);
@@ -117,6 +122,7 @@ class Index extends Component
             $settings = [
                 'expires_at' => $this->outletPublishGueltigBis ?: $this->presentationGueltigBis,
                 'price_display' => $this->presentationPreisAnzeige,
+                'price_mode' => $this->presentationPreiseAktualisieren ? 'auto' : 'preserve',
                 'declaration' => $this->presentationDeklaration,
                 'cta' => ['text' => $this->presentationCtaText, 'link' => $this->presentationCtaLink],
             ];
