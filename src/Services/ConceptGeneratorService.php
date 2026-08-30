@@ -445,6 +445,31 @@ class ConceptGeneratorService
         $zahl = 0;
         foreach ($frame->slots as $frameSlot) {
             $n = max(1, (int) ($frameSlot->target_count ?? 1));
+            // A1: Eine Buffet-STATION mit ≥2 Positionen ist ein PAKET (ein Bündel, das als eine Station
+            // zusammensteht) — kein flacher Haufen Geschwister-Gerichte. Wir legen ein kind=paket-Concept an,
+            // setzen einen Header (Stationsname) hinein — damit es im Foodbook/in der Präsentation als eigene,
+            // betitelte Sektion landet — und N leere Gericht-Slots INS Paket. Ins Haupt-Concept kommt EIN
+            // Slot type=paket (embedded_concept_id). Die inneren Gerichte erfindet der Fan-out rekursiv.
+            // Gang-Slots + Einzel-Stationen (n=1) bleiben flach (Bestandsverhalten).
+            if ((string) $frameSlot->slot_type === 'station' && $n >= 2) {
+                $label = (string) ($frameSlot->label ?: 'Station');
+                $paket = $this->concepts->createPaket($team, ['name' => $label]);
+                $this->concepts->addBlock($team, (int) $paket->id, 'header', ['title' => $label]);
+                for ($i = 0; $i < $n; $i++) {
+                    $this->concepts->addSlot($team, (int) $paket->id, [
+                        'role' => $frameSlot->label,
+                        'is_pflicht' => (bool) $frameSlot->is_pflicht,
+                    ]);
+                }
+                $outer = $this->concepts->addSlot($team, (int) $concept->id, [
+                    'role' => $frameSlot->label,
+                    'is_pflicht' => (bool) $frameSlot->is_pflicht,
+                ]);
+                $this->concepts->fillSlot($team, (int) $outer->id, ['embedded_concept_id' => (int) $paket->id]);
+                $zahl += $n;
+
+                continue;
+            }
             for ($i = 0; $i < $n; $i++) {
                 $this->concepts->addSlot($team, (int) $concept->id, [
                     'role' => $frameSlot->label,

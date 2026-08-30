@@ -806,63 +806,83 @@ class PlanningCascadeService
      * Graceful: ohne LLM (Sandbox/Kill-Switch) wirft die Divergenz → 0 Ideen, 0 Kind-Steps; der Run geht
      * mit dem Konzept allein auf review. Wirft NIE (der Concept-Job fängt zusätzlich ab).
      */
-    public function fanoutConceptInvention(Team $team, int $conceptStepId, int $conceptId, string $mode, ?int $trendDocId = null, ?int $planningSessionId = null): void
+    public function fanoutConceptInvention(Team $team, int $conceptStepId, int $conceptId, string $mode, ?int $trendDocId = null, ?int $planningSessionId = null, array $seen = []): void
     {
         $conceptStep = FoodAlchemistCascadeRunStep::find($conceptStepId);
         if ($conceptStep === null) {
             return;
         }
+        if (in_array($conceptId, $seen, true)) {
+            return;   // A1: Zyklus-Schutz für die Paket-Rekursion (bei generierten Pakets nie erreicht)
+        }
+        $seen[] = $conceptId;
         $runId = (int) $conceptStep->cascade_run_id;
 
+        // Leere Gericht-Slots (Reuse hat noch nicht gefüllt) — OHNE die eingebetteten Paket-Slots
+        // (type=paket, embedded_concept_id): ein Paket-Slot ist kein Gericht zum Erfinden, sondern ein
+        // Bündel (Station), dessen INNERE Gerichte weiter unten rekursiv gefächert werden. (Früher
+        // Latenz-Bug: embed-Paket-Slots galten fälschlich als leer.)
         $leere = FoodAlchemistConceptSlot::where('concept_id', $conceptId)
             ->whereNull('sales_recipe_id')
             ->whereNull('package_id')
+            ->whereNull('embedded_concept_id')
             ->whereNotIn('type', ['text', 'spacer', 'header', 'header_preis'])
             ->orderBy('position')->orderBy('id')
             ->get();
-        if ($leere->isEmpty()) {
-            return;   // nichts zu erfinden — Reuse hat alle Slots gefüllt
-        }
 
-        // Deckel gegen Runaway-/Kosten-Risiko bei großem Menü-Brief (analog SPEISEPLAN_MAX_ZELLEN): wir fragen
-        // die KI gar nicht erst nach mehr als N Ideen und legen höchstens N Kind-Steps/Jobs an. Die Zahl der
-        // übersprungenen Slots steht im Run (`params.gedeckelt_slots_offen`) — kein stiller Deckel.
-        if ($leere->count() > self::CONCEPT_MAX_SLOTS) {
-            $offen = $leere->count() - self::CONCEPT_MAX_SLOTS;
-            $leere = $leere->take(self::CONCEPT_MAX_SLOTS);
-            $run = FoodAlchemistCascadeRun::find($runId);
-            if ($run !== null) {
-                $run->update(['params' => array_merge(is_array($run->params) ? $run->params : [], ['gedeckelt_slots_offen' => $offen])]);
+        if ($leere->isNotEmpty()) {
+            // Deckel gegen Runaway-/Kosten-Risiko bei großem Menü-Brief (analog SPEISEPLAN_MAX_ZELLEN): wir fragen
+            // die KI gar nicht erst nach mehr als N Ideen und legen höchstens N Kind-Steps/Jobs an. Die Zahl der
+            // übersprungenen Slots steht im Run (`params.gedeckelt_slots_offen`) — kein stiller Deckel.
+            if ($leere->count() > self::CONCEPT_MAX_SLOTS) {
+                $offen = $leere->count() - self::CONCEPT_MAX_SLOTS;
+                $leere = $leere->take(self::CONCEPT_MAX_SLOTS);
+                $run = FoodAlchemistCascadeRun::find($runId);
+                if ($run !== null) {
+                    $run->update(['params' => array_merge(is_array($run->params) ? $run->params : [], ['gedeckelt_slots_offen' => $offen])]);
+                }
+            }
+
+            $ideen = [];
+            try {
+                // Wissen+Trend fließen in die Divergenz (voller Stack + generischer Trend + Ursprungs-Trend der Planung).
+                $div = app(IdeenService::class)->kiDivergenzConcept($team, $conceptId, $leere->count(), null, $trendDocId);
+                $ideen = is_array($div['angelegt'] ?? null) ? $div['angelegt'] : [];
+            } catch (\Throwable) {
+                $ideen = [];   // KI nicht verfügbar → keine Erfindung für die direkten Slots (graceful); Pakete werden dennoch versucht
+            }
+
+            foreach (array_values($ideen) as $idx => $idee) {
+                $slot = $leere[$idx] ?? null;
+                if ($slot === null) {
+                    break;   // mehr Ideen als leere Slots — Rest ignorieren
+                }
+                $idee->update([
+                    'generation_status' => 'queued',
+                    'source_meta' => array_merge($idee->source_meta ?? [], ['target_concept_slot_id' => (int) $slot->id]),
+                ]);
+                $step = FoodAlchemistCascadeRunStep::create([
+                    'team_id' => $team->id,
+                    'cascade_run_id' => $runId,
+                    'parent_step_id' => $conceptStepId,
+                    'kind' => 'gericht',
+                    'label' => Str::limit((string) $idee->title, 120),
+                    'status' => 'running',
+                    'sort' => $idx + 1,
+                ]);
+                MaterializeConceptIdeaJob::dispatch($team->id, (int) (\Illuminate\Support\Facades\Auth::id() ?? 0), (int) $idee->id, (int) $step->id, $planningSessionId);
             }
         }
 
-        try {
-            // Wissen+Trend fließen in die Divergenz (voller Stack + generischer Trend + Ursprungs-Trend der Planung).
-            $div = app(IdeenService::class)->kiDivergenzConcept($team, $conceptId, $leere->count(), null, $trendDocId);
-        } catch (\Throwable) {
-            return;   // KI nicht verfügbar → keine Erfindung, Konzept bleibt (graceful)
-        }
-        $ideen = is_array($div['angelegt'] ?? null) ? $div['angelegt'] : [];
-
-        foreach (array_values($ideen) as $idx => $idee) {
-            $slot = $leere[$idx] ?? null;
-            if ($slot === null) {
-                break;   // mehr Ideen als leere Slots — Rest ignorieren
-            }
-            $idee->update([
-                'generation_status' => 'queued',
-                'source_meta' => array_merge($idee->source_meta ?? [], ['target_concept_slot_id' => (int) $slot->id]),
-            ]);
-            $step = FoodAlchemistCascadeRunStep::create([
-                'team_id' => $team->id,
-                'cascade_run_id' => $runId,
-                'parent_step_id' => $conceptStepId,
-                'kind' => 'gericht',
-                'label' => Str::limit((string) $idee->title, 120),
-                'status' => 'running',
-                'sort' => $idx + 1,
-            ]);
-            MaterializeConceptIdeaJob::dispatch($team->id, (int) (\Illuminate\Support\Facades\Auth::id() ?? 0), (int) $idee->id, (int) $step->id, $planningSessionId);
+        // A1: eingebettete Pakete (Buffet-Stationen) rekursiv befüllen — je Paket seine INNEREN Gerichte
+        // erfinden. Der Paket-Auto-Preis (Σ) zieht nach, sobald die inneren Slots gefüllt sind
+        // (MaterializeConceptIdeaJob → fillSlot → refreshCache auf dem Paket-Concept). 1 Ebene tief
+        // (generierte Pakete verschachteln nicht), $seen schützt gegen zyklische Bestands-Embeds.
+        $paketIds = FoodAlchemistConceptSlot::where('concept_id', $conceptId)
+            ->whereNotNull('embedded_concept_id')
+            ->pluck('embedded_concept_id')->unique()->values();
+        foreach ($paketIds as $paketId) {
+            $this->fanoutConceptInvention($team, $conceptStepId, (int) $paketId, $mode, $trendDocId, $planningSessionId, $seen);
         }
     }
 
