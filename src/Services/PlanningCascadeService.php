@@ -1844,6 +1844,7 @@ class PlanningCascadeService
 
         $schritte = $steps->map(function (FoodAlchemistCascadeRunStep $s): array {
             $deferred = is_array($s->deferred) ? $s->deferred : [];
+            $snapshot = is_array($s->context_snapshot) ? $s->context_snapshot : [];
 
             return array_filter([
                 'id' => (int) $s->id,
@@ -1860,6 +1861,9 @@ class PlanningCascadeService
                 // E-P0 (Spec 40): Attach-Fehler auch headless sichtbar — das Konzept ist erzeugt, hängt aber
                 // nicht am Ausgabe-Kapitel/der Rubrik (behebbar per haengeKonzeptNach). Nur gesetzt, wenn offen.
                 'attach_fehler' => $deferred['attach_error'] ?? null,
+                // Verwendetes Wissen je Step (aus context_snapshot, geschrieben von RecipeGenerationContextService::build):
+                // welche Wissens-Dossiers real in den Prompt geflossen sind — damit die Erdung headless prüfbar ist.
+                'wissen' => ! empty($snapshot['knowledge_files']) ? $snapshot['knowledge_files'] : null,
             ], static fn ($v): bool => $v !== null && $v !== '');
         })->all();
 
@@ -1877,15 +1881,27 @@ class PlanningCascadeService
             ];
         })->values()->all();
 
+        // Die real wirksamen Leitplanken dieses Laufs: run.params ist die am START eingefrorene Kopie der
+        // Session-generation_params — gegen die Whitelist gefiltert, damit nur die Regler (nicht die
+        // Flow-Steuer-Keys owner_type/cascade_step_id/…) sichtbar werden. So ist per MCP prüfbar, WOMIT
+        // der Lauf lief (Kern des „Leitplanken prüfen").
+        $laufParams = is_array($run->params) ? $run->params : [];
+        $leitplanken = array_intersect_key(
+            $laufParams,
+            array_flip(FoodAlchemistPlanningSession::ALLOWED_GENERATION_PARAMS)
+        );
+
         return [
             'lauf' => array_filter([
                 'id' => (int) $run->id,
                 'scope' => (string) $run->scope,
                 'status' => (string) $run->status,
                 'gestuft' => (bool) $run->staged,
+                'creative_mode' => (string) $run->creative_mode,
                 'planning_session_id' => $run->planning_session_id !== null ? (int) $run->planning_session_id : null,
                 'origin_dish_idea_id' => $run->origin_dish_idea_id !== null ? (int) $run->origin_dish_idea_id : null,
-            ], static fn ($v): bool => $v !== null),
+            ], static fn ($v): bool => $v !== null && $v !== ''),
+            'leitplanken' => $leitplanken === [] ? null : $leitplanken,
             'stufen' => $stufen,
             'schritte' => $schritte,
             'kohaerenz_warnung' => is_array($run->cohesion_warning) ? $run->cohesion_warning : null,

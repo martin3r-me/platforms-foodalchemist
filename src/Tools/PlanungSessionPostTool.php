@@ -39,6 +39,16 @@ class PlanungSessionPostTool extends FoodAlchemistTool implements ToolContract, 
                 'brief' => ['type' => 'string', 'description' => 'Optionaler Start-Brief für die Erzeugung'],
                 'source_knowledge_document_id' => ['type' => 'integer', 'description' => 'Trend-Doc-ID (category=trend) — Kontext wird übernommen'],
                 'creative_mode' => ['type' => 'string', 'enum' => ['voll_kreativ', 'hybrid', 'datenbank'], 'default' => 'voll_kreativ'],
+                'generation_params' => [
+                    'type' => 'object',
+                    'description' => 'Optional: Richtungs-Regler (Leitplanken) der Session — gegen die Whitelist gefiltert, '
+                        . 'vererben in den Kaskaden-Fan-out. Keys u.a.: convenience, frische_erlaubt[], bio_pref (bio|conventional|neutral), '
+                        . 'level, sektor, diaet_hart, allergen_nogo[], aroma_kueche, aroma, pax, ziel_portion_g, saison, ziel_we_pct, '
+                        . 'occasion, serviceform, kompositions_stil, ziel_vk_eur, ki_bilder (Schritt-/Produktfotos bei der Anreicherung), '
+                        . 'menue_typ (menue|buffet), menue_gaenge, menue_preis_min_pp/ziel_pp/max_pp, menue_quote_vegan_pct, '
+                        . 'menue_quote_vegetarisch_pct, menue_balance. Nicht-Whitelist-Keys werden verworfen.',
+                    'additionalProperties' => true,
+                ],
             ],
         ];
     }
@@ -65,11 +75,20 @@ class PlanungSessionPostTool extends FoodAlchemistTool implements ToolContract, 
                     'created_via' => 'mcp',
                 ]);
             }
+            if (isset($arguments['generation_params']) && is_array($arguments['generation_params'])) {
+                $session = $svc->setGenerationParams($team, (int) $session->id, $arguments['generation_params']);
+            }
         } catch (\RuntimeException $e) {
             return ToolResult::error($e->getMessage(), 'VALIDATION_ERROR');
         }
 
-        return ToolResult::success(['id' => (int) $session->id, 'title' => (string) $session->title, 'status' => (string) $session->status]);
+        return ToolResult::success([
+            'id' => (int) $session->id,
+            'title' => (string) $session->title,
+            'status' => (string) $session->status,
+            'creative_mode' => (string) $session->creative_mode,
+            'generation_params' => $session->generation_params,
+        ]);
     }
 
     public function getMetadata(): array

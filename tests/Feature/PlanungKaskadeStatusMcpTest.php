@@ -89,6 +89,33 @@ it('GET zeigt Anreicherungs-/Bild-Status aus deferred', function () {
         ->and($r->data['schritte'][0]['bilder'])->toBe('failed');
 });
 
+it('GET zeigt die wirksamen Leitplanken (run.params, whitelist-gefiltert) + verwendetes Wissen je Step', function () {
+    $run = FoodAlchemistCascadeRun::create([
+        'team_id' => $this->rootTeam->id, 'scope' => 'vollkaskade', 'status' => 'review', 'staged' => true,
+        'creative_mode' => 'hybrid',
+        // run.params = die am START eingefrorenen Session-Leitplanken + Flow-Steuer-Keys.
+        // Letztere (owner_type/cascade_step_id) sind KEINE Leitplanken → müssen rausgefiltert werden.
+        'params' => [
+            'level' => 'gehoben', 'diaet_hart' => 'vegetarisch', 'ki_bilder' => true,
+            'owner_type' => 'foodbook', 'owner_id' => 9, 'cascade_step_id' => 123,
+        ],
+    ]);
+    FoodAlchemistCascadeRunStep::create([
+        'team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht',
+        'status' => 'done', 'ref_type' => 'recipe', 'ref_id' => 42, 'label' => 'Kürbissuppe', 'sort' => 1,
+        'context_snapshot' => ['knowledge_files' => ['domain/gemuese_kuerbis', 'regelwerk/basisrezepte'], 'built_at' => '2026-08-30'],
+    ]);
+
+    $r = $this->registry->get('foodalchemist.planung_kaskade.GET')->execute(['run_id' => $run->id], $this->ctx);
+
+    expect($r->success)->toBeTrue()
+        ->and($r->data['lauf']['creative_mode'])->toBe('hybrid')
+        ->and($r->data['leitplanken'])->toMatchArray(['level' => 'gehoben', 'diaet_hart' => 'vegetarisch', 'ki_bilder' => true])
+        ->and($r->data['leitplanken'])->not->toHaveKey('owner_type')
+        ->and($r->data['leitplanken'])->not->toHaveKey('cascade_step_id')
+        ->and($r->data['schritte'][0]['wissen'])->toBe(['domain/gemuese_kuerbis', 'regelwerk/basisrezepte']);
+});
+
 it('Tenancy: ein nicht sichtbarer Lauf (Schwester-Team) liefert NOT_FOUND', function () {
     // childB besitzt den Lauf; childA (Schwester) sieht ihn NICHT (Reads visibleToTeam).
     $run = FoodAlchemistCascadeRun::create([

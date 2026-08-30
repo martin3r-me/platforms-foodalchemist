@@ -24,7 +24,8 @@ class PlanungSessionPutTool extends FoodAlchemistTool implements ToolContract, T
     public function getDescription(): string
     {
         return 'Ändert eine Planungs-Session: title/brief/analysis, status (divergenz|konvergenz|erledigt), '
-            . 'creative_mode. Kein „Go" — Materialisierung zu Rezept/Concept bleibt human-only in der UI.';
+            . 'creative_mode, generation_params (Richtungs-Regler/Leitplanken, Whitelist-gefiltert). '
+            . 'Kein „Go" — Materialisierung zu Rezept/Concept bleibt human-only in der UI.';
     }
 
     public function getSchema(): array
@@ -39,6 +40,15 @@ class PlanungSessionPutTool extends FoodAlchemistTool implements ToolContract, T
                 'analysis' => ['type' => 'string'],
                 'status' => ['type' => 'string', 'enum' => ['divergenz', 'konvergenz', 'erledigt']],
                 'creative_mode' => ['type' => 'string', 'enum' => ['voll_kreativ', 'hybrid', 'datenbank']],
+                'generation_params' => [
+                    'type' => 'object',
+                    'description' => 'Richtungs-Regler (Leitplanken) der Session — gegen die Whitelist gefiltert, ersetzt den '
+                        . 'gesamten Regler-Satz (leere/leerwertige Auswahl → keine Regler). Keys u.a.: convenience, frische_erlaubt[], '
+                        . 'bio_pref, level, sektor, diaet_hart, allergen_nogo[], aroma_kueche, aroma, pax, ziel_portion_g, saison, '
+                        . 'ziel_we_pct, occasion, serviceform, kompositions_stil, ziel_vk_eur, ki_bilder, menue_typ, menue_gaenge, '
+                        . 'menue_preis_min_pp/ziel_pp/max_pp, menue_quote_vegan_pct, menue_quote_vegetarisch_pct, menue_balance.',
+                    'additionalProperties' => true,
+                ],
             ],
         ];
     }
@@ -66,6 +76,9 @@ class PlanungSessionPutTool extends FoodAlchemistTool implements ToolContract, T
             if (isset($arguments['creative_mode'])) {
                 $svc->setCreativeMode($team, $id, (string) $arguments['creative_mode']);
             }
+            if (isset($arguments['generation_params']) && is_array($arguments['generation_params'])) {
+                $svc->setGenerationParams($team, $id, $arguments['generation_params']);
+            }
         } catch (ModelNotFoundException $e) {
             return ToolResult::error('Session nicht sichtbar/vorhanden.', 'NOT_FOUND');
         } catch (\RuntimeException $e) {
@@ -79,6 +92,7 @@ class PlanungSessionPutTool extends FoodAlchemistTool implements ToolContract, T
             'title' => (string) ($session?->title ?? ''),
             'status' => (string) ($session?->status ?? ''),
             'creative_mode' => (string) ($session?->creative_mode ?? ''),
+            'generation_params' => $session?->generation_params,
         ]);
     }
 
