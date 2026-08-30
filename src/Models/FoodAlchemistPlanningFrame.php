@@ -19,7 +19,7 @@ class FoodAlchemistPlanningFrame extends Model
 {
     use HasUuidV7, LogsActivity, BelongsToTeamHierarchy, SoftDeletes;
 
-    public const OWNER_TYPES = ['foodbook', 'concept', 'speisekarte', 'speiseplan', 'offer'];
+    public const OWNER_TYPES = ['foodbook', 'concept', 'speisekarte', 'speiseplan', 'offer', 'format'];
 
     protected $table = 'foodalchemist_planning_frames';
 

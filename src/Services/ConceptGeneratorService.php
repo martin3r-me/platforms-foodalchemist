@@ -507,7 +507,16 @@ class ConceptGeneratorService
         // Gänge/Stationen (concept.brief_geruest). Ohne das erzeugte der Menü→gang-Prompt fürs Foodbook
         // gang-Slots → strukturAusGeruest macht je Gang ein Kapitel (Fehlstruktur „Gang 1–4 = 4 Kapitel").
         $istFoodbook = $ownerType === 'foodbook';
-        $promptKey = $istFoodbook ? 'foodbook.grundgeruest' : 'concept.brief_geruest';
+        $istFormat = $ownerType === 'format';
+        // owner=format: ein gebrandetes FOODKONZEPT (Chefs Corner / Taste & Fly / Lunchbuffet / Dinner) —
+        // das Gerüst liefert die Marken-Identität (consumer_name/claim/story) + die aufeinander abgestimmten
+        // Concept-Bausteine (je Slot = ein Concept). Struktur wie foodbook (Bausteine, kein Gang-Explode),
+        // eine Ebene über dem Concept.
+        $promptKey = match ($ownerType) {
+            'foodbook' => 'foodbook.grundgeruest',
+            'format' => 'format.grundgeruest',
+            default => 'concept.brief_geruest',
+        };
         // Wissens-Kontext feature-genau ziehen (Trendradar + Regelwerk via Routing) und als
         // options['knowledge'] durchreichen — der Prompt läuft NICHT durch contextFor(). Für foodbook
         // liefert das Feature `foodbook.grundgeruest` das FOODBOOK-Regelwerk (Kapitel statt Gänge, Routing
@@ -551,6 +560,10 @@ class ConceptGeneratorService
 
                 return $s;
             }, $sichereSlots);
+        } elseif ($istFormat) {
+            // Format-Gerüst = Concept-BAUSTEINE (je Slot ein Concept des gebrandeten Foodkonzepts). Wie beim
+            // Foodbook NICHT auf Gang-Ebene explodieren (jeder Baustein-Slot bringt seine Gänge erst als eigenes
+            // Concept mit) — expandiereContainerGeruest/menueGaengeCap bewusst übersprungen.
         } else {
             // Spec 41 B3: Container-Struktur-Guard (s. generiereAusBrief) — Buffet/Menü nie auf 1 Position kollabieren.
             $sichereSlots = $this->expandiereContainerGeruest($sichereSlots, $brief, $menueAchsen);
@@ -562,12 +575,23 @@ class ConceptGeneratorService
         $sichereRules = $this->menueDiaetQuotenMerge($sichereRules, $menueAchsen);
         $this->frames->replaceStructure($team, $frame, $sichereSlots, $sichereRules);
 
-        return [
+        $ergebnis = [
             'frame' => $frame->refresh(),
             'confidence' => $proposal->confidence ?? null,
             'slots' => count($sichereSlots),
             'name' => is_string($werte['name'] ?? null) && trim($werte['name']) !== '' ? trim($werte['name']) : null,
         ];
+        if ($istFormat) {
+            // Marken-Identität aus dem Brief (der Caller schreibt sie aufs Format) — nur nicht-leere Felder.
+            $marke = static fn ($v) => is_string($v) && trim($v) !== '' ? trim($v) : null;
+            $ergebnis['branding'] = [
+                'consumer_name' => $marke($werte['consumer_name'] ?? null),
+                'claim' => $marke($werte['claim'] ?? null),
+                'story' => $marke($werte['story'] ?? null),
+            ];
+        }
+
+        return $ergebnis;
     }
 
     /**

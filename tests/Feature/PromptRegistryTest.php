@@ -40,6 +40,7 @@ const REGISTRY_SOLL = [
     'foodbook.kapitel_ideen' => 'B',                                  // Spec 19 E6.4: produkt-blinde Kreativ-Divergenz je Kapitel (nur Skizzen)
     'foodbook.kundentext' => 'A',                                     // Spec 03 L2: kundensichtbarer Einleitungstext, BEIDE Ebenen (ebene: foodbook|kapitel)
     'foodbook.grundgeruest' => 'A',                                   // Foodbook-Grundgerüst = KAPITEL (owner=foodbook), Gänge entstehen im Kapitel-Concept
+    'format.grundgeruest' => 'A',                                     // Format-Grundgerüst = Branding + Concept-Bausteine (owner=format)
 
     // Schicht 3: generischer Konformitäts-Critic (artefakt-agnostisch, EIN Prompt für Rezept/VK/GP/LA)
     'conformance.check' => 'B',

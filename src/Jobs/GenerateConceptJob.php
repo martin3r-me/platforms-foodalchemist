@@ -205,6 +205,11 @@ class GenerateConceptJob implements ShouldQueue
             // foodalchemist_offer_concept. attachContainerId ist die Angebots-ID (kein Zwischen-Container).
             app(\Platform\FoodAlchemist\Services\AngebotService::class)
                 ->referenziereConcept($team, $this->attachContainerId, $conceptId);
+        } elseif ($this->attachOwnerType === 'format') {
+            // Format (gebrandetes Foodkonzept): das erzeugte Concept als Aufbau-Slot (type=concept) ins Format
+            // referenzieren — attachContainerId ist die format_id (Container = Format selbst, wie beim Angebot).
+            app(\Platform\FoodAlchemist\Services\FormatService::class)
+                ->slotConceptEinfuegen($team, $this->attachContainerId, $conceptId);
         }
     }
 

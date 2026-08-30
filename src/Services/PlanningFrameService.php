@@ -30,7 +30,8 @@ class PlanningFrameService
             'speisekarte' => FoodAlchemistSpeisekarte::visibleToTeam($team)->findOrFail($ownerId),
             'speiseplan' => FoodAlchemistSpeiseplan::visibleToTeam($team)->findOrFail($ownerId),
             'offer' => \Platform\FoodAlchemist\Models\FoodAlchemistAngebot::visibleToTeam($team)->findOrFail($ownerId),
-            default => throw new RuntimeException("Unbekannter Gerüst-Owner-Typ „{$ownerType}“ — erlaubt: foodbook|concept|speisekarte|speiseplan|offer."),
+            'format' => \Platform\FoodAlchemist\Models\FoodAlchemistFormat::visibleToTeam($team)->findOrFail($ownerId),
+            default => throw new RuntimeException("Unbekannter Gerüst-Owner-Typ „{$ownerType}“ — erlaubt: foodbook|concept|speisekarte|speiseplan|offer|format."),
         };
     }
 

@@ -285,9 +285,10 @@ class PlanningCascadeService
         $ownerType = (string) ($optionen['owner_type'] ?? '');
         $ownerId = (int) ($optionen['owner_id'] ?? 0);
         // P3 foodbook, P4 speisekarte (je 1 Concept/Slot). E2 (Spec 40): offer — je Slot ein Concept, ans
-        // Angebot referenziert (Pivot). Der Speiseplan (P5) läuft über einen eigenen Zell-Pfad.
-        if (! in_array($ownerType, ['foodbook', 'speisekarte', 'offer'], true) || $ownerId <= 0) {
-            throw new RuntimeException('Voll-Kaskade braucht owner_type=foodbook|speisekarte|offer + owner_id.');
+        // Angebot referenziert (Pivot). format — je Slot ein Concept-Baustein, ins gebrandete Foodkonzept
+        // referenziert (format_slot type=concept, wie offer). Der Speiseplan (P5) läuft über einen eigenen Zell-Pfad.
+        if (! in_array($ownerType, ['foodbook', 'speisekarte', 'offer', 'format'], true) || $ownerId <= 0) {
+            throw new RuntimeException('Voll-Kaskade braucht owner_type=foodbook|speisekarte|offer|format + owner_id.');
         }
 
         $frame = app(PlanningFrameService::class)->find($ownerType, $ownerId);
@@ -489,10 +490,12 @@ class PlanningCascadeService
 
             return $out;
         }
-        if ($ownerType === 'offer') {
+        if ($ownerType === 'offer' || $ownerType === 'format') {
             // E2 (Spec 40): der „Container" IST das Angebot selbst — jedes erzeugte Konzept wird ans Angebot
             // referenziert (Pivot foodalchemist_offer_concept, {@see AngebotService::referenziereConcept}); es gibt
             // keinen Zwischen-Container wie Kapitel/Rubrik. Darum ist die containerId überall die Angebots-ID.
+            // format läuft identisch: der Container IST das Format, jedes Concept wird als format_slot
+            // (type=concept) referenziert ({@see FormatService::slotConceptEinfuegen}) — containerId = format_id.
             $frame->load('slots');
             foreach ($frame->slots as $slot) {
                 $out[] = [$slot, $ownerId];
@@ -1118,6 +1121,8 @@ class PlanningCascadeService
             app(SpeisekarteService::class)->addPosition($team, $containerId, ['type' => 'menue_ref', 'concept_id' => $conceptId]);
         } elseif ($ownerType === 'offer') {
             app(AngebotService::class)->referenziereConcept($team, $containerId, $conceptId);   // E2: containerId = Angebots-ID
+        } elseif ($ownerType === 'format') {
+            app(\Platform\FoodAlchemist\Services\FormatService::class)->slotConceptEinfuegen($team, $containerId, $conceptId);   // containerId = format_id
         } else {
             return;
         }
@@ -2076,6 +2081,7 @@ class PlanningCascadeService
             'speisekarte' => ['Speisekarte', \Platform\FoodAlchemist\Models\FoodAlchemistSpeisekarte::visibleToTeam($team)->whereKey($id)->value('name'), 'foodalchemist.speisekarte.index', 'sk'],
             'speiseplan' => ['Speiseplan', FoodAlchemistSpeiseplan::visibleToTeam($team)->whereKey($id)->value('name'), 'foodalchemist.speiseplan.index', 'sp'],
             'offer' => ['Angebot', \Platform\FoodAlchemist\Models\FoodAlchemistAngebot::visibleToTeam($team)->whereKey($id)->value('name'), 'foodalchemist.angebote.index', 'sel'],
+            'format' => ['Format', \Platform\FoodAlchemist\Models\FoodAlchemistFormat::visibleToTeam($team)->whereKey($id)->value('name'), 'foodalchemist.formate.index', 'fmt'],
             default => [null, null, null, null],
         };
         if ($route === null) {

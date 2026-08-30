@@ -466,6 +466,14 @@ class KnowledgeContextService
                     . "(Vorspeise→Hauptgang→Dessert) sind die INNERE Struktur eines Menü-Kapitels und entstehen erst "
                     . "im Kapitel-Concept, nicht auf Buch-Ebene. Halte dich an diese Regeln:\n\n",
             ],
+            // format.grundgeruest hat (noch) KEIN eigenes Regelwerk — expliziter Eintrag, damit der
+            // Basisrezept-Fallback unten NIE fälschlich ans Format-Gerüst gehängt wird (slug_like matcht
+            // kein Regelwerk → sauberes null). Nur relevant, falls jemand später ein regelwerk:always-Routing setzt.
+            'format.grundgeruest' => [
+                'slug_like' => '%format%',
+                'extract' => 'concept',
+                'header' => "# REGELWERK FORMAT\n\n",
+            ],
             'ai_generate_recipe' => [
                 'slug_like' => '%basisrezept%',
                 'extract' => 'basisrezept',

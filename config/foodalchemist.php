@@ -1019,6 +1019,33 @@ return [
                 . 'Bei «ein Menue» oder «ein Kapitel» im Brief -> GENAU EIN kapitel-Slot. Nur so viele Kapitel wie der Brief wirklich hergibt. '
                 . 'ERZEUGE NIE gang- oder station-Slots. Preise netto p. P.',
         ],
+        // Format-GRUNDGERUEST (owner=format): ein gebrandetes FOODKONZEPT (z.B. CHEFS.CORNER, Taste & Fly,
+        // Lunchbuffet, Dinner) — eine Marke/Vorlage EINE Ebene ueber dem Concept. Das Geruest liefert die
+        // MARKEN-IDENTITAET (consumer_name/claim/story) + die aufeinander abgestimmten Concept-BAUSTEINE
+        // (je Slot = ein ganzes Concept, das spaeter seine Gaenge selbst mitbringt). KEINE Gaenge auf dieser
+        // Ebene. Schwester von foodbook.grundgeruest (Bausteine statt Kapitel).
+        'format.grundgeruest' => [
+            'tier' => 'A',
+            'max_tokens' => 8000,
+            'system' => 'Du uebersetzt einen Brief in das GRUNDGERUEST eines gebrandeten FOODKONZEPTS (Format) — '
+                . 'einer wiederverwendbaren Marke/Vorlage (z.B. ein Streetfood-Konzept, ein Lunchbuffet, ein Flying-Dinner). '
+                . 'Ein Format hat eine IDENTITAET (Marken-Zeile, Claim, kurze Story) und besteht aus mehreren AUFEINANDER '
+                . 'ABGESTIMMTEN Concept-Bausteinen — jeder Baustein ist ein GANZES Concept (das seine einzelnen Gaenge/Positionen '
+                . 'spaeter selbst mitbringt), NIEMALS ein einzelner Gang. Die Bausteine muessen thematisch/kulinarisch zueinander passen. '
+                . 'Du erfindest keine konkreten Gerichte, Preise oder Fakten, die der Brief nicht hergibt (fehlende Felder weglassen/null). '
+                . 'consumer_name/claim/story DARFST du im Sinne des Briefs formulieren (Marken-Handschrift), aber im Rahmen bleiben. '
+                . 'Diaet-Werte NUR aus diaet_vokabular, Allergen-Keys NUR aus allergen_keys.',
+            'task' => 'Uebersetze den Brief in ein Format-Grundgeruest: werte = {name (interner Format-Name), '
+                . 'consumer_name (gaeste-/kundenseitige Marken-Zeile, optional), claim (kurze Tagline, optional), '
+                . 'story (1-3 Saetze Marken-Story, optional), target_price_pp, price_min_pp, price_max_pp, '
+                . 'slots: [{label (Name des Concept-Bausteins), slot_type: IMMER "station", target_count (Anzahl Gerichte im Baustein, mind. 1), '
+                . 'price_anchor, price_min, price_max, is_pflicht, '
+                . 'rules: [{rule_type: diet_quota, ref_key, operator (min|max|exact), value_num, unit (count|percent)}]}], '
+                . 'rules: [{rule_type: nogo_ingredient, value_text, severity (hart|weich)} | {rule_type: nogo_allergen, ref_key} | {rule_type: allergen_line, value_text}]}. '
+                . 'Jeder Slot ist GENAU EIN abgestimmter Concept-Baustein des Foodkonzepts (z.B. bei einem Lunchbuffet: «Warme Mitte» · «Green & Bowls» · «Suesse Ecke»; '
+                . 'bei einem Streetfood-Format: regionale/thematische Stationen). Leite Anzahl und Zuschnitt der Bausteine aus dem Brief ab — '
+                . 'nur so viele, wie der Brief wirklich hergibt. ERZEUGE NIE gang- oder kapitel-Slots. Preise netto p. P.',
+        ],
         // Et.2b »Kreativ-Kopf«: Kunden-Brief → kreative Concept-Canvas (die IDEE, nicht das
         // Struktur-Geruest). Schwester von concept.brief_geruest — GERUEST erzeugt Slots/Preise/
         // Regeln (deterministischer Rahmen), PLAN erzeugt die kreative Handschrift (Leitidee/USP/
