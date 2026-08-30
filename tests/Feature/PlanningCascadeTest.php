@@ -9,6 +9,7 @@ use Platform\FoodAlchemist\Jobs\FanoutConceptJob;
 use Platform\FoodAlchemist\Jobs\GenerateConceptJob;
 use Platform\FoodAlchemist\Jobs\GenerateRecipeJob;
 use Platform\FoodAlchemist\Jobs\MaterializeConceptIdeaJob;
+use Platform\FoodAlchemist\Jobs\MaterializeSpeisekartePositionJob;
 use Platform\FoodAlchemist\Jobs\MaterializeSpeiseplanCellJob;
 use Platform\FoodAlchemist\Livewire\Planung\Index as PlanungIndex;
 use Platform\FoodAlchemist\Models\FoodAlchemistCascadeRun;
@@ -1536,7 +1537,7 @@ it('Foodbook-Leitstelle (Spec 42): Voll-Kaskade-Knopf öffnet die Leitstelle im 
 
 // ── P4: Voll-Kaskade aus der Speisekarte ────────────────────────────────────
 
-it('vollkaskade (speisekarte): Concept-Step je Frame-Slot + GenerateConceptJob mit Rubrik-Attach', function () {
+it('vollkaskade (speisekarte): STANDARD Gerichte — je Rubrik target_count Gericht-Steps + MaterializeSpeisekartePositionJob', function () {
     $karte = app(\Platform\FoodAlchemist\Services\SpeisekarteService::class)->create($this->rootTeam, ['name' => 'Sommerkarte']);
     $frameSvc = app(PlanningFrameService::class);
     $frame = $frameSvc->frameFor($this->rootTeam, 'speisekarte', (int) $karte->id);
@@ -1544,12 +1545,47 @@ it('vollkaskade (speisekarte): Concept-Step je Frame-Slot + GenerateConceptJob m
 
     $run = app(PlanningCascadeService::class)->starteKaskade($this->rootTeam, 'vollkaskade', null, 'voll_kreativ', ['owner_type' => 'speisekarte', 'owner_id' => (int) $karte->id]);
 
+    // Default = Gerichte: die Rubrik wird mit target_count einzelnen VK-Gerichten gefüllt (kein Concept).
     expect($run->source_owner_type)->toBe('speisekarte')
-        ->and((bool) $run->staged)->toBeFalse()   // eager (Sammel-Review)
-        ->and($run->steps()->where('kind', 'concept')->count())->toBe(1);
-    Queue::assertPushed(GenerateConceptJob::class, fn ($job) => $job->attachOwnerType === 'speisekarte' && (int) $job->attachContainerId > 0);
+        ->and((bool) $run->staged)->toBeFalse()   // Speisekarte bleibt eager
+        ->and($run->steps()->where('kind', 'gericht')->count())->toBe(2);   // = target_count
+    Queue::assertPushed(MaterializeSpeisekartePositionJob::class, 2);
+    Queue::assertNotPushed(GenerateConceptJob::class);
     // rubrikFuerSlot hat die Rubrik idempotent angelegt (Slot-Label → Rubrik-Titel)
     expect(\Platform\FoodAlchemist\Models\FoodAlchemistSpeisekarteRubrik::where('menu_card_id', $karte->id)->where('title', 'Vorspeisen')->count())->toBe(1);
+});
+
+it('vollkaskade (speisekarte): fuellung=concepte → je Rubrik 1 Concept (altes Verhalten via Flag)', function () {
+    $karte = app(\Platform\FoodAlchemist\Services\SpeisekarteService::class)->create($this->rootTeam, ['name' => 'Fix-Menü-Karte']);
+    $frameSvc = app(PlanningFrameService::class);
+    $frame = $frameSvc->frameFor($this->rootTeam, 'speisekarte', (int) $karte->id);
+    $frameSvc->addSlot($this->rootTeam, $frame, ['label' => 'Menüs', 'slot_type' => 'station', 'target_count' => 3]);
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'x', 'brief' => 'y']);
+    app(PlanningSessionService::class)->setGenerationParams($this->rootTeam, (int) $session->id, ['speisekarte_fuellung' => 'concepte']);
+
+    $run = app(PlanningCascadeService::class)->starteKaskade($this->rootTeam, 'vollkaskade', $session, 'voll_kreativ', ['owner_type' => 'speisekarte', 'owner_id' => (int) $karte->id]);
+
+    // concepte-Flag: je Rubrik EIN Concept (menue_ref), nicht N Gerichte.
+    expect($run->steps()->where('kind', 'concept')->count())->toBe(1)
+        ->and($run->steps()->where('kind', 'gericht')->count())->toBe(0);
+    Queue::assertPushed(GenerateConceptJob::class, fn ($job) => $job->attachOwnerType === 'speisekarte' && (int) $job->attachContainerId > 0);
+    Queue::assertNotPushed(MaterializeSpeisekartePositionJob::class);
+});
+
+it('materialisiereSpeisekartePosition: erdet ein VK-Gericht → gericht_ref-Position an der Rubrik (Gen gemockt)', function () {
+    $karte = app(\Platform\FoodAlchemist\Services\SpeisekarteService::class)->create($this->rootTeam, ['name' => 'Karte']);
+    $rubrik = app(\Platform\FoodAlchemist\Services\SpeisekarteService::class)->addRubrik($this->rootTeam, (int) $karte->id, ['title' => 'Vorspeisen']);
+    $recipe = $this->makeRecipe($this->rootTeam, 'Rubrik-Gericht', ['status' => 'draft', 'is_sales_recipe' => true]);
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'vollkaskade', 'source_owner_type' => 'speisekarte', 'source_owner_id' => $karte->id, 'status' => 'running']);
+    $step = FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht', 'status' => 'running']);
+
+    $this->mock(RecipeGeneratorService::class, fn ($m) => $m->shouldReceive('generiere')->once()
+        ->andReturn(['recipe' => $recipe, 'statistik' => [], 'offene' => []]));
+
+    app(PlanningCascadeService::class)->materialisiereSpeisekartePosition($this->rootTeam, (int) $rubrik->id, 'Eine Vorspeise', (int) $step->id);
+
+    expect($step->refresh()->status)->toBe('done')
+        ->and(\Platform\FoodAlchemist\Models\FoodAlchemistSpeisekartePosition::where('section_id', $rubrik->id)->where('type', 'gericht_ref')->where('sales_recipe_id', $recipe->id)->count())->toBe(1);
 });
 
 it('CoverageService kennt die Speisekarte (istSpeisekarte, kein Fehl-Read als Concept)', function () {

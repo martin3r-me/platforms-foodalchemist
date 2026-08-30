@@ -11,6 +11,7 @@ use Platform\FoodAlchemist\Jobs\FanoutConceptJob;
 use Platform\FoodAlchemist\Jobs\GenerateConceptJob;
 use Platform\FoodAlchemist\Jobs\GenerateRecipeJob;
 use Platform\FoodAlchemist\Jobs\MaterializeConceptIdeaJob;
+use Platform\FoodAlchemist\Jobs\MaterializeSpeisekartePositionJob;
 use Platform\FoodAlchemist\Jobs\MaterializeSpeiseplanCellJob;
 use Platform\FoodAlchemist\Models\FoodAlchemistCascadeRecipeDependency;
 use Platform\FoodAlchemist\Models\FoodAlchemistCascadeRun;
@@ -47,6 +48,9 @@ class PlanningCascadeService
 
     /** Deckel gegen Runaway-Kosten: max. Zellen (= KI-Gericht-Generierungen) je Speiseplan-Voll-Kaskade. */
     private const SPEISEPLAN_MAX_ZELLEN = 30;
+
+    /** Runaway-/Kosten-Deckel: max. VK-Gericht-Positionen einer Speisekarte-Vollkaskade (Gerichte-Füllung). */
+    private const SPEISEKARTE_MAX_POSITIONEN = 40;
 
     /** Deckel gegen Runaway-Kosten: max. leere Slots (= erfundene KI-Gerichte) je Concept-Fan-out. */
     private const CONCEPT_MAX_SLOTS = 30;
@@ -312,6 +316,13 @@ class PlanningCascadeService
             'created_via' => (string) ($optionen['created_via'] ?? 'plan_go'),
         ]);
 
+        // Speisekarte-Füllung (Nutzer: „in der Regel mit Gerichten befüllt"): Standard = je Rubrik N einzelne
+        // VK-Gerichte (gericht_ref); 'concepte' = altes Verhalten (je Rubrik 1 Concept/Fix-Menü). Nur speisekarte.
+        // FRISCH aus der DB lesen — das übergebene Session-Objekt ist nach setGenerationParams veraltet.
+        $freshSession = $session !== null ? app(PlanningSessionService::class)->get($team, (int) $session->id) : null;
+        $sessionParams = is_array($freshSession?->generation_params) ? $freshSession->generation_params : [];
+        $speisekarteGerichte = $ownerType === 'speisekarte' && ($sessionParams['speisekarte_fuellung'] ?? 'gerichte') !== 'concepte';
+
         $slots = $this->vollkaskadeSlots($team, $ownerType, $ownerId, $frame);
         $idx = 0;
         foreach ($slots as [$slot, $containerId]) {
@@ -319,10 +330,14 @@ class PlanningCascadeService
                 // Kapitel-Gate: nur PLANEN (geplant), NICHT dispatchen — die Concept-Erzeugung startet erst
                 // die Kapitel-Freigabe (gibStepFrei/FREIGABE auf den geplanten Kapitel-Step).
                 $this->planeSlotConcept($team, $run, $slot, $ownerType, (int) $containerId, $idx, 'geplant');
+                $idx++;
+            } elseif ($speisekarteGerichte) {
+                // Standard-Speisekarte: die Rubrik mit N einzelnen VK-Gerichten füllen (statt 1 Concept).
+                $idx = $this->dispatchRubrikGerichte($team, $run, $slot, (int) $containerId, $idx, $session?->id);
             } else {
                 $this->dispatchSlotConcept($team, $run, $slot, $ownerType, (int) $containerId, $idx, $creativeMode, $session?->id);
+                $idx++;
             }
-            $idx++;
         }
         if ($idx === 0) {
             $run->update(['status' => 'failed']);   // Frame ohne verwertbare Slots
@@ -690,6 +705,75 @@ class PlanningCascadeService
             }
             app(SpeiseplanService::class)->addEintrag($team, $planId, [
                 'entry_date' => $entryDate, 'mahlzeit' => $meal, 'line_id' => $lineId, 'sales_recipe_id' => (int) $recipe->id,
+            ]);
+            if ($planningSessionId !== null) {
+                $sess = app(PlanningSessionService::class)->get($team, $planningSessionId);
+                if ($sess !== null) {
+                    app(PlanningSessionService::class)->verknuepfeArtefakt($sess, 'recipe', (int) $recipe->id);
+                }
+            }
+            $workflow->afterGenerated($team, $stepId, (int) (\Illuminate\Support\Facades\Auth::id() ?? 0), $recipe, $gen['offene'] ?? [], $params);
+            $this->markStepDone($stepId, 'recipe', (int) $recipe->id);
+        } catch (\Throwable $e) {
+            $this->markStepFailed($stepId, $e->getMessage());
+        }
+    }
+
+    /**
+     * Standard-Speisekarte (Gerichte-Füllung): eine Rubrik mit N einzelnen VK-Gerichten füllen. Je Slot
+     * `target_count` (KI-Vorgabe aus dem Brief) Gericht-Steps + je Step ein {@see MaterializeSpeisekartePositionJob}
+     * (erdet ein VK-Gericht, hängt es als gericht_ref-Position an die Rubrik). Spiegelt den Speiseplan-Zell-
+     * Fan-out. Gedeckelt ({@see SPEISEKARTE_MAX_POSITIONEN}) gegen Runaway-Kosten (Rest → params.gedeckelt_positionen_offen).
+     *
+     * @return int der nächste freie sort-Index
+     */
+    private function dispatchRubrikGerichte(Team $team, FoodAlchemistCascadeRun $run, $slot, int $rubrikId, int $idx, ?int $sessionId): int
+    {
+        $anzahl = max(1, (int) ($slot->target_count ?? 1));
+        $brief = $this->slotBrief('speisekarte', (int) $run->source_owner_id, $slot);
+        $userId = (int) (\Illuminate\Support\Facades\Auth::id() ?? 0);
+        for ($i = 0; $i < $anzahl; $i++) {
+            if ($idx >= self::SPEISEKARTE_MAX_POSITIONEN) {
+                $params = is_array($run->params) ? $run->params : [];
+                $params['gedeckelt_positionen_offen'] = (int) ($params['gedeckelt_positionen_offen'] ?? 0) + ($anzahl - $i);
+                $run->update(['params' => $params]);
+                break;
+            }
+            $step = FoodAlchemistCascadeRunStep::create([
+                'team_id' => $team->id,
+                'cascade_run_id' => $run->id,
+                'parent_step_id' => null,
+                'kind' => 'gericht',
+                'label' => Str::limit((string) ($slot->label ?: 'Gericht') . ' #' . ($i + 1), 120),
+                'status' => 'running',
+                'sort' => $idx,
+                'slot_id' => (int) $slot->id,
+            ]);
+            MaterializeSpeisekartePositionJob::dispatch($team->id, $userId, $rubrikId, $brief, (int) $step->id, $sessionId);
+            $idx++;
+        }
+
+        return $idx;
+    }
+
+    /**
+     * Worker (Standard-Speisekarte): erdet EIN VK-Gericht aus dem Rubrik-Brief und hängt es als
+     * gericht_ref-Position an die Rubrik ({@see SpeisekarteService::addPosition}). 1:1 zu
+     * {@see materialisiereSpeiseplanZelle}, nur der Attach-Endpunkt ändert sich (addPosition statt addEintrag).
+     */
+    public function materialisiereSpeisekartePosition(Team $team, int $rubrikId, string $brief, int $stepId, ?int $planningSessionId = null): void
+    {
+        try {
+            $params = array_merge($this->sessionGenerationParams($team, $planningSessionId), ['auto_dependencies' => true, 'cascade_step_id' => $stepId]);
+            $workflow = app(RecipeDependencyWorkflowService::class);
+            $context = $workflow->prepare($team, $stepId, $brief, $params, true);
+            $gen = app(RecipeGeneratorService::class)->generiere($team, $brief, $params, null, true, 'plan_go', $context);
+            $recipe = $gen['recipe'] ?? null;
+            if ($recipe === null) {
+                throw new RuntimeException('Generierung lieferte kein Rezept.');
+            }
+            app(SpeisekarteService::class)->addPosition($team, $rubrikId, [
+                'type' => 'gericht_ref', 'sales_recipe_id' => (int) $recipe->id,
             ]);
             if ($planningSessionId !== null) {
                 $sess = app(PlanningSessionService::class)->get($team, $planningSessionId);

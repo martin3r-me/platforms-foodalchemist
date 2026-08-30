@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Queue;
 use Livewire\Livewire;
 use Platform\Core\Contracts\LLMProviderContract;
 use Platform\FoodAlchemist\Jobs\GenerateConceptJob;
+use Platform\FoodAlchemist\Jobs\MaterializeSpeisekartePositionJob;
 use Platform\FoodAlchemist\Livewire\Planung\Index as PlanungIndex;
 use Platform\FoodAlchemist\Models\FoodAlchemistCascadeRun;
 use Platform\FoodAlchemist\Models\FoodAlchemistPlanningSession;
@@ -100,8 +101,10 @@ it('speisekarteAusBrief: plant Rahmen + Inhalte in der Leitstelle und dockt an d
         ->and($run->scope)->toBe('vollkaskade')
         ->and($run->planning_session_id)->toBe($session->id);
 
-    // 5. Je Slot ein Concept-Job, der in die Speisekarte zurückdockt (menue_ref-Position).
-    Queue::assertPushed(GenerateConceptJob::class, fn ($job) => $job->attachOwnerType === 'speisekarte' && (int) $job->attachContainerId > 0);
+    // 5. Standard-Füllung „Gerichte": je Rubrik einzelne VK-Gerichte (MaterializeSpeisekartePositionJob),
+    //    kein Concept. (fuellung=concepte würde stattdessen GenerateConceptJob dispatchen.)
+    Queue::assertPushed(MaterializeSpeisekartePositionJob::class);
+    Queue::assertNotPushed(GenerateConceptJob::class);
 });
 
 it('speisekarteAusBrief mit skOwnerId (Handoff aus dem Modul): plant für eine bestehende Karte, legt keine neue an', function () {

@@ -52,6 +52,9 @@ class FoodAlchemistPlanningSession extends Model
         // false = „leichte" Anreicherung (nur Text-Lücken + Kohärenz + Wirtschaftlichkeit). Der GP-Mint
         // (EK-Vollständigkeit) läuft bei der Freigabe UNABHÄNGIG davon immer, damit die Kalkulation stimmt.
         'complete_coverage',
+        // Speisekarte-Füllung: 'gerichte' (Default — je Rubrik N einzelne VK-Gerichte, gericht_ref) oder
+        // 'concepte' (je Rubrik 1 Concept/Fix-Menü, menue_ref = altes Verhalten). Nur im speisekarte-Zweig wirksam.
+        'speisekarte_fuellung',
         // Concept-Typ (#35): Menü (Gänge) vs. Buffet (Stationen) — steuert Slot-Typ + Positionen-Label.
         // Wie die übrigen menue_*-Achsen ein Concept-Concern (kein Per-Teller-Wert) → im Dish-Fan-out
         // gefiltert, persistiert aber am Concept für Concept-Generierung + Resume.
