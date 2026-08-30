@@ -1032,6 +1032,9 @@ return [
                 . 'Ein Format hat eine IDENTITAET (Marken-Zeile, Claim, kurze Story) und besteht aus mehreren AUFEINANDER '
                 . 'ABGESTIMMTEN Concept-Bausteinen — jeder Baustein ist ein GANZES Concept (das seine einzelnen Gaenge/Positionen '
                 . 'spaeter selbst mitbringt), NIEMALS ein einzelner Gang. Die Bausteine muessen thematisch/kulinarisch zueinander passen. '
+                . 'NUTZE das mitgelieferte Wissen als INSPIRATION fuer Marken-Handschrift + Zuschnitt der Bausteine: '
+                . 'Signatur-Kuechen/Koeche, Weltkuechen, Konzept-/Format- und Event-Wissen (sofern beigefuegt) — als Ideengeber, '
+                . 'NICHT als Faktenquelle: erfinde daraus keine harten Zahlen/Preise/Gerichte, die der Brief nicht hergibt. '
                 . 'Du erfindest keine konkreten Gerichte, Preise oder Fakten, die der Brief nicht hergibt (fehlende Felder weglassen/null). '
                 . 'consumer_name/claim/story DARFST du im Sinne des Briefs formulieren (Marken-Handschrift), aber im Rahmen bleiben. '
                 . 'Diaet-Werte NUR aus diaet_vokabular, Allergen-Keys NUR aus allergen_keys.',
