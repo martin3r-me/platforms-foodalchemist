@@ -571,6 +571,10 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\KnowledgeUnbindTool::class,
                     \Platform\FoodAlchemist\Tools\PairingsGetTool::class,
                     \Platform\FoodAlchemist\Tools\PairingsSuggestTool::class,
+                    // Composer per MCP (read-only): Anker-Menge browsen/bewerten/erden (Phase 3)
+                    \Platform\FoodAlchemist\Tools\ComposerAnkerSucheTool::class,
+                    \Platform\FoodAlchemist\Tools\ComposerKohaesionTool::class,
+                    \Platform\FoodAlchemist\Tools\ComposerMenueKohaesionTool::class,
                     \Platform\FoodAlchemist\Tools\SubstitutionSuggestTool::class,
                     \Platform\FoodAlchemist\Tools\DishReverseTool::class,
                     \Platform\FoodAlchemist\Tools\SurplusSuggestTool::class,

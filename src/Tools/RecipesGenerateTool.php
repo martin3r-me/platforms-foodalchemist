@@ -85,6 +85,7 @@ class RecipesGenerateTool extends FoodAlchemistTool implements ToolContract, Too
                 'ziel_vk' => ['type' => 'number', 'description' => '03·L8b: angestrebter NETTO-Verkaufspreis je Portion in EUR (0,50–500). Nur mit vk=true erlaubt. Wirkt zweifach: als Constraint im Vorschlag (Komponenten/Qualitaeten/Grammatur werden auf den Preis hin gewaehlt) und mit voll_anreichern=true als Abgleich nach der Kalkulation (anreicherung.wirtschaftlichkeit.ziel_delta_eur = Ist minus Ziel, ziel_wareneinsatz_pct = Wareneinsatz, den der Zielpreis bedeuten wuerde, ziel_ampel nach derselben Leiter wie die Ist-Ampel). Der Preis wird NIE auf das Ziel gesetzt — es gibt keinen Solver'],
                 'use_favorites_list' => ['type' => 'boolean', 'default' => false, 'description' => '06·H3: bevorzugt aus der kuratierten Favoriten-GP-Liste bauen (bevorzugt, nicht ausschließlich)'],
                 'favorites_convenience_only' => ['type' => 'boolean', 'default' => false, 'description' => '06·H4b: Favoriten-Block auf Convenience-getaggte GPs verengen (nur wirksam mit use_favorites_list)'],
+                'seed_anker' => ['type' => 'array', 'items' => ['type' => 'string'], 'description' => 'Foodpairing-Composer: Liste von Aroma-Anker-SLUGS/Namen (z. B. ["rauch","vanille","apfel"]), auf die das Rezept gezielt gebaut wird. Wirkt zweifach: (1) erdet die GP-Kandidatensuche auf diese Leit-Aromen, (2) erzeugt einen VERBINDLICHEN Leit-Aromen-Block (die Anker MÜSSEN als Zutaten/Komponenten vorkommen) samt Harmonie-Palette je Anker. Slugs vorher via foodalchemist.composer.ANKER_SUCHE (Name→Slug) oder pairing_inspiration.GET wählen; mit composer.KOHAESION prüfen, ob die Menge zusammenhält. Gilt genau für diesen Lauf (nicht vererbt).'],
             ],
             'required' => ['description'],
         ];
@@ -142,6 +143,14 @@ class RecipesGenerateTool extends FoodAlchemistTool implements ToolContract, Too
         $parameter['bio'] = (bool) ($arguments['bio'] ?? false);
         $parameter['use_favorites_list'] = (bool) ($arguments['use_favorites_list'] ?? false);
         $parameter['favorites_convenience_only'] = $parameter['use_favorites_list'] && (bool) ($arguments['favorites_convenience_only'] ?? false);
+        // Composer-Seed: verbindliche Leit-Aromen (Slugs) → RecipeGenerationContextService liest
+        // parameter['seed_anker'] und erzeugt daraus Erdung + pairing_vorgabe (Pflicht-Aromen).
+        if (is_array($arguments['seed_anker'] ?? null)) {
+            $slugs = array_values(array_filter(array_map(fn ($v) => trim((string) $v), $arguments['seed_anker']), fn ($v) => $v !== ''));
+            if ($slugs !== []) {
+                $parameter['seed_anker'] = $slugs;
+            }
+        }
 
         try {
             $resultat = app(RecipeGeneratorService::class)
