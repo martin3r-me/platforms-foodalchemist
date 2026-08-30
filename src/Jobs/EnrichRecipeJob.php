@@ -54,6 +54,7 @@ class EnrichRecipeJob implements ShouldQueue
         public ?int $stepId = null,
         public bool $nurBilder = false,
         public bool $refresh = false,   // #4: Kaskaden-Anreicherung aus dem Editor → auch gefüllte, nicht-manuelle Felder auffrischen
+        public bool $completeCoverage = true,   // Phase 0.3: Anreicherungs-Tiefe (Step-by-Step/Sensorik/…); Default an = Bestandsverhalten
     ) {}
 
     public function handle(RecipeOneShotService $oneShot): void
@@ -77,7 +78,13 @@ class EnrichRecipeJob implements ShouldQueue
         if (! $this->nurBilder) {
             $this->markEnrich('running');
             try {
-                $oneShot->anreichern($team, $recipe, $this->zielVk, completeCoverage: true, refresh: $this->refresh);
+                $oneShot->anreichern($team, $recipe, $this->zielVk, completeCoverage: $this->completeCoverage, refresh: $this->refresh);
+                // GP-Mint (EK-Vollständigkeit) ist orthogonal zur Text-Coverage: `anreichern` mintet nur bei
+                // completeCoverage. Bei „leichter" Anreicherung (Step-by-Step aus) trotzdem minten, damit die
+                // Kalkulation vollständig bleibt (fail-soft, mintet nur echte Roh-Lücken, s. minteFehlendeGps).
+                if (! $this->completeCoverage) {
+                    $oneShot->minteFehlendeGps($team, $recipe->fresh() ?? $recipe);
+                }
                 $this->markEnrich('done');
             } catch (\Throwable $e) {
                 // Rezept bleibt live (fail-soft) — aber der Fehler wird sichtbar (Status + Log), nicht geschluckt.

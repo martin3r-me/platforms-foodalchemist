@@ -45,7 +45,7 @@ class PlanungSessionPutTool extends FoodAlchemistTool implements ToolContract, T
                     'description' => 'Richtungs-Regler (Leitplanken) der Session — gegen die Whitelist gefiltert, ersetzt den '
                         . 'gesamten Regler-Satz (leere/leerwertige Auswahl → keine Regler). Keys u.a.: convenience, frische_erlaubt[], '
                         . 'bio_pref, level, sektor, diaet_hart, allergen_nogo[], aroma_kueche, aroma, pax, ziel_portion_g, saison, '
-                        . 'ziel_we_pct, occasion, serviceform, kompositions_stil, ziel_vk_eur, ki_bilder, menue_typ, menue_gaenge, '
+                        . 'ziel_we_pct, occasion, serviceform, kompositions_stil, ziel_vk_eur, ki_bilder, complete_coverage, menue_typ, menue_gaenge, '
                         . 'menue_preis_min_pp/ziel_pp/max_pp, menue_quote_vegan_pct, menue_quote_vegetarisch_pct, menue_balance.',
                     'additionalProperties' => true,
                 ],

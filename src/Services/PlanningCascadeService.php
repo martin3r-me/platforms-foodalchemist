@@ -1342,10 +1342,14 @@ class PlanningCascadeService
             $params = is_array($step->run?->params) ? $step->run->params : [];
             $zielVk = isset($params['ziel_vk_eur']) ? (float) $params['ziel_vk_eur'] : null;
             $kiBilder = (bool) ($params['ki_bilder'] ?? false);
+            // Anreicherungs-Tiefe (Step-by-Step/Sensorik/…): Default an = Bestandsverhalten; per Leitplanke
+            // (generation_params.complete_coverage=false) auf „leichte" Anreicherung stellbar. GP-Mint bleibt
+            // im Job unabhängig davon an (EK).
+            $completeCoverage = array_key_exists('complete_coverage', $params) ? (bool) $params['complete_coverage'] : true;
             // Anreicherung SYNCHRON als `queued` markieren → die Planung pollt sichtbar durch (der Run
             // ist bei einem flachen Gericht sofort „done", der Job läuft aber async danach).
             $this->markEnrichQueued($step);
-            EnrichRecipeJob::dispatch($team->id, $userId, (int) $step->ref_id, $zielVk, $kiBilder, (int) $step->id);
+            EnrichRecipeJob::dispatch($team->id, $userId, (int) $step->ref_id, $zielVk, $kiBilder, (int) $step->id, false, false, $completeCoverage);
         }
 
         return false;
@@ -1440,8 +1444,9 @@ class PlanningCascadeService
         $params = is_array($step->run?->params) ? $step->run->params : [];
         $zielVk = isset($params['ziel_vk_eur']) ? (float) $params['ziel_vk_eur'] : null;
         $kiBilder = (bool) ($params['ki_bilder'] ?? false);
+        $completeCoverage = array_key_exists('complete_coverage', $params) ? (bool) $params['complete_coverage'] : true;
         $this->markEnrichQueued($step);
-        EnrichRecipeJob::dispatch($team->id, (int) (Auth::id() ?? 0), (int) $step->ref_id, $zielVk, $kiBilder, (int) $step->id);
+        EnrichRecipeJob::dispatch($team->id, (int) (Auth::id() ?? 0), (int) $step->ref_id, $zielVk, $kiBilder, (int) $step->id, false, false, $completeCoverage);
     }
 
     /**

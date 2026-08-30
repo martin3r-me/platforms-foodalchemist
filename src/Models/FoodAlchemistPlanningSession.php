@@ -47,6 +47,11 @@ class FoodAlchemistPlanningSession extends Model
         'occasion', 'serviceform', 'kompositions_stil', 'ziel_vk_eur',
         // KI-Bilder-Toggle (Preisfrage): steuert, ob die Anreicherung Schritt-Fotos + Produktfoto erzeugt.
         'ki_bilder',
+        // Anreicherungs-Tiefe bei der Freigabe (Default an): steuert, ob die Voll-Anreicherung die schwere
+        // Text-Coverage schreibt (Step-by-Step, Sensorik, Equipment, Prozess-/Aromaanker, Pairings, Eignung).
+        // false = „leichte" Anreicherung (nur Text-Lücken + Kohärenz + Wirtschaftlichkeit). Der GP-Mint
+        // (EK-Vollständigkeit) läuft bei der Freigabe UNABHÄNGIG davon immer, damit die Kalkulation stimmt.
+        'complete_coverage',
         // Concept-Typ (#35): Menü (Gänge) vs. Buffet (Stationen) — steuert Slot-Typ + Positionen-Label.
         // Wie die übrigen menue_*-Achsen ein Concept-Concern (kein Per-Teller-Wert) → im Dish-Fan-out
         // gefiltert, persistiert aber am Concept für Concept-Generierung + Resume.

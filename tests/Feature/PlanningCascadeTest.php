@@ -772,6 +772,63 @@ it('EnrichRecipeJob: ohne ki_bilder-Toggle wird KEIN deferred.bilder geschrieben
         ->and($step->deferred['enrich']['status'] ?? null)->toBe('done');
 });
 
+// ── Phase 0.3 — Anreicherungs-Tiefe (Step-by-Step ja/nein) per MCP steuerbar ──
+// completeCoverage steuert die schwere Text-Coverage (Step-by-Step/Sensorik/Equipment/…). Der GP-Mint
+// (EK) bleibt davon unabhängig: bei „leichter" Anreicherung läuft er trotzdem, sonst wäre die
+// Kalkulation unvollständig.
+
+it('EnrichRecipeJob: completeCoverage=false reichert leicht an, mintet aber weiter GPs (EK bleibt)', function () {
+    $recipe = $this->makeRecipe($this->rootTeam, 'Leicht', ['status' => 'draft']);
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'gericht', 'status' => 'review']);
+    $step = FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht', 'status' => 'freigegeben', 'ref_type' => 'recipe', 'ref_id' => $recipe->id]);
+
+    $this->mock(RecipeOneShotService::class, function ($m) {
+        $m->shouldReceive('anreichern')->once()->andReturn([]);
+        $m->shouldReceive('minteFehlendeGps')->once()->andReturn(['status' => 'vollständig', 'minted' => 0, 'ohne_la' => 0]);
+    });
+
+    (new EnrichRecipeJob($this->rootTeam->id, (int) auth()->id(), (int) $recipe->id, null, false, (int) $step->id, false, false, false))
+        ->handle(app(RecipeOneShotService::class));
+
+    expect($step->refresh()->deferred['enrich']['status'] ?? null)->toBe('done');
+});
+
+it('EnrichRecipeJob: completeCoverage=true (Default) mintet NICHT zusätzlich (anreichern übernimmt das)', function () {
+    $recipe = $this->makeRecipe($this->rootTeam, 'Voll', ['status' => 'draft']);
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'gericht', 'status' => 'review']);
+    $step = FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht', 'status' => 'freigegeben', 'ref_type' => 'recipe', 'ref_id' => $recipe->id]);
+
+    $this->mock(RecipeOneShotService::class, function ($m) {
+        $m->shouldReceive('anreichern')->once()->andReturn([]);
+        $m->shouldNotReceive('minteFehlendeGps');   // completeCoverage=true → anreichern mintet selbst
+    });
+
+    (new EnrichRecipeJob($this->rootTeam->id, (int) auth()->id(), (int) $recipe->id, null, false, (int) $step->id))
+        ->handle(app(RecipeOneShotService::class));
+
+    expect($step->refresh()->deferred['enrich']['status'] ?? null)->toBe('done');
+});
+
+it('Freigabe reicht complete_coverage=false aus run.params an den EnrichRecipeJob durch', function () {
+    $recipe = $this->makeRecipe($this->rootTeam, 'Freigabe-leicht', ['status' => 'draft']);
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'gericht', 'status' => 'review', 'staged' => true, 'params' => ['complete_coverage' => false]]);
+    $step = FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht', 'status' => 'done', 'ref_type' => 'recipe', 'ref_id' => $recipe->id, 'label' => 'X', 'sort' => 1]);
+
+    app(PlanningCascadeService::class)->gibStepFrei($this->rootTeam, (int) $step->id);
+
+    Queue::assertPushed(EnrichRecipeJob::class, fn ($job) => (int) $job->recipeId === (int) $recipe->id && $job->completeCoverage === false);
+});
+
+it('Freigabe: ohne complete_coverage-Param bleibt die Anreicherung voll (Default true)', function () {
+    $recipe = $this->makeRecipe($this->rootTeam, 'Freigabe-voll', ['status' => 'draft']);
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'gericht', 'status' => 'review', 'staged' => true, 'params' => []]);
+    $step = FoodAlchemistCascadeRunStep::create(['team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'gericht', 'status' => 'done', 'ref_type' => 'recipe', 'ref_id' => $recipe->id, 'label' => 'Y', 'sort' => 1]);
+
+    app(PlanningCascadeService::class)->gibStepFrei($this->rootTeam, (int) $step->id);
+
+    Queue::assertPushed(EnrichRecipeJob::class, fn ($job) => (int) $job->recipeId === (int) $recipe->id && $job->completeCoverage === true);
+});
+
 // ── Etappe 8 — Fehler-Transparenz (Images): harter Job-Abbruch der richtigen Phase zuordnen ──
 // failed() (Timeout/OOM, nicht vom inneren catch gefangen) darf einen Abbruch NACH abgeschlossener
 // Anreicherung nicht der Anreicherung unterschieben (enrich=done überschreiben), sondern der

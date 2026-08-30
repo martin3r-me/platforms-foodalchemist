@@ -45,6 +45,7 @@ class PlanungSessionPostTool extends FoodAlchemistTool implements ToolContract, 
                         . 'vererben in den Kaskaden-Fan-out. Keys u.a.: convenience, frische_erlaubt[], bio_pref (bio|conventional|neutral), '
                         . 'level, sektor, diaet_hart, allergen_nogo[], aroma_kueche, aroma, pax, ziel_portion_g, saison, ziel_we_pct, '
                         . 'occasion, serviceform, kompositions_stil, ziel_vk_eur, ki_bilder (Schritt-/Produktfotos bei der Anreicherung), '
+                        . 'complete_coverage (Step-by-Step/Sensorik/Equipment bei der Anreicherung, Default an; false = leicht, GP-Mint/EK bleibt), '
                         . 'menue_typ (menue|buffet), menue_gaenge, menue_preis_min_pp/ziel_pp/max_pp, menue_quote_vegan_pct, '
                         . 'menue_quote_vegetarisch_pct, menue_balance. Nicht-Whitelist-Keys werden verworfen.',
                     'additionalProperties' => true,
