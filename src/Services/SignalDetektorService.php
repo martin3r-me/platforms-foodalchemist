@@ -745,11 +745,11 @@ class SignalDetektorService
         $gerichte = FoodAlchemistRecipe::visibleToTeam($team)->verkauf()
             ->whereNotNull('sales_net')->where('sales_net', '>', 0)->get();
 
-        $betrieb = $outlet !== null ? ' [' . $outlet->name . ']' : '';
         $n = 0;
         $keys = [];
         foreach ($gerichte as $r) {
             // Ebene 2: im Betriebs-Kontext gegen dessen Kostenstruktur (Marge/Stundensatz/Nebenkosten).
+            // Der Betrieb steckt in outlet_id + payload + UI-Lane-Badge — NICHT im Titel (Längen-Limit).
             $hk = $kalk->recipeHk($team, $r, $outlet);
             $db = $hk['db_pct'] ?? null;
             $ziel = (float) ($hk['marge_pct'] ?? 0);
@@ -760,7 +760,7 @@ class SignalDetektorService
                 $team,
                 SignalTyp::MargeUnterZiel,
                 $db < 0 ? SignalSeverity::Kritisch : SignalSeverity::Warnung,
-                $r->name . $betrieb . ' — DB ' . number_format((float) $db, 1, ',', '.') . ' % unter Ziel ' . number_format($ziel, 1, ',', '.') . ' %',
+                $r->name . ' — DB ' . number_format((float) $db, 1, ',', '.') . ' % unter Ziel ' . number_format($ziel, 1, ',', '.') . ' %',
                 [
                     'dedup_key' => 'marge-recipe-' . $r->id,
                     'outlet_id' => $outlet?->id,
@@ -834,13 +834,13 @@ class SignalDetektorService
             return false;
         }
 
-        $betrieb = $outlet !== null ? ' [' . $outlet->name . ']' : '';
         $this->signals->erzeuge(
             $team,
             SignalTyp::WareneinsatzUeberZiel,
             // > 1,5× Ziel = deutlich zu teuer → kritisch, sonst Warnung
             $we > $ziel * 1.5 ? SignalSeverity::Kritisch : SignalSeverity::Warnung,
-            $r->name . $betrieb . ' — Wareneinsatz ' . number_format((float) $we, 1, ',', '.') . ' % über Ziel ' . number_format($ziel, 1, ',', '.') . ' %',
+            // Betrieb in outlet_id + payload + UI-Lane-Badge, nicht im Titel (Längen-Limit).
+            $r->name . ' — Wareneinsatz ' . number_format((float) $we, 1, ',', '.') . ' % über Ziel ' . number_format($ziel, 1, ',', '.') . ' %',
             [
                 'dedup_key' => 'we-quote-recipe-' . $r->id,
                 'outlet_id' => $outlet?->id,
@@ -931,7 +931,6 @@ class SignalDetektorService
      */
     public function vkAnpassungEmpfohlen(Team $team, ?FoodAlchemistOutlet $outlet = null): int
     {
-        $betrieb = $outlet !== null ? ' [' . $outlet->name . ']' : '';
         $n = 0;
         $keys = [];
         foreach (app(AusgabeDriftService::class)->abgedriftet($team, $outlet) as $d) {
@@ -940,8 +939,9 @@ class SignalDetektorService
                 $team,
                 SignalTyp::VkAnpassungEmpfohlen,
                 // Große Drift (≥ 15 %) = kritisch: der Kunde zahlt merklich am aktuellen Preis vorbei.
+                // Betrieb in outlet_id + payload + UI-Lane-Badge, nicht im Titel (Längen-Limit).
                 $d['max_delta_pct'] >= 15.0 ? SignalSeverity::Kritisch : SignalSeverity::Warnung,
-                $d['label'] . $betrieb . ' — ' . $anzahl . ' Ausgabe-Preis' . ($anzahl === 1 ? '' : 'e')
+                $d['label'] . ' — ' . $anzahl . ' Ausgabe-Preis' . ($anzahl === 1 ? '' : 'e')
                     . ' gedriftet (max Δ ' . number_format($d['max_delta_pct'], 1, ',', '.') . ' %) — neu veröffentlichen',
                 [
                     'dedup_key' => $d['dedup_key'],

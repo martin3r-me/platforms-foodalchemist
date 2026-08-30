@@ -75,6 +75,15 @@ it('schliesseVerschwundene ist Lane-isoliert: der Betriebs-Sweep schließt nicht
         ->and(FoodAlchemistSignal::where('team_id', $this->childA->id)->where('outlet_id', $this->betrieb->id)->where('status', 'offen')->count())->toBe(1);
 });
 
+it('erzeuge kappt überlange Titel auf 255 (MySQL VARCHAR-Schutz; SQLite erzwingt es nicht)', function () {
+    // Lange Rezeptnamen (FIN-Aroma-Ketten) sprengen auf MySQL die title-Spalte — auf SQLite unsichtbar.
+    $langerTitel = str_repeat('Popcorn | Hartkäse | Honig | Trüffel | ', 20) . '— DB 5 % unter Ziel 20 %';
+    expect(mb_strlen($langerTitel))->toBeGreaterThan(255);
+
+    $sig = $this->svc->erzeuge($this->childA, SignalTyp::MargeUnterZiel, SignalSeverity::Warnung, $langerTitel, ['dedup_key' => 'marge-recipe-999', 'outlet_id' => $this->betrieb->id]);
+    expect(mb_strlen($sig->title))->toBe(255);
+});
+
 it('Detektor: Gericht nur unter der schärferen Betriebsschwelle → Signal in der Betriebs-Lane, nicht Team-Core', function () {
     // Team-Ziel-Wareneinsatz großzügig (50 %), Betrieb scharf (15 %). Gericht ~33 % (EK 10 / VK 30).
     app(TeamSettingsService::class)->update($this->childA, ['target_food_cost_pct' => 50]);

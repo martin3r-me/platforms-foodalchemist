@@ -26,6 +26,10 @@ class SignalService
      */
     public function erzeuge(Team $team, SignalTyp $typ, SignalSeverity $severity, string $titel, array $opts = []): FoodAlchemistSignal
     {
+        // `title` ist VARCHAR(255) — lange Rezeptnamen (z. B. FIN-Aroma-Ketten) sprengen die Spalte
+        // auf MySQL (SQLite erzwingt die Länge NICHT → in Tests unsichtbar). Defensiv kappen; der
+        // volle Befund steht ohnehin in description/payload.
+        $titel = mb_substr($titel, 0, 255);
         $outletId = isset($opts['outlet_id']) && $opts['outlet_id'] !== null ? (int) $opts['outlet_id'] : null;
         $dedup = $opts['dedup_key'] ?? null;
         if ($dedup !== null) {
