@@ -55,6 +55,34 @@
                         @svg('heroicon-o-photo', 'w-3.5 h-3.5 inline-block align-middle') Bild folgt
                     </div>
 
+                    @if($k['ist_format'] ?? false)
+                        {{-- B: LEBENDES Format-Kapitel — Marke + Editionen (Concepte) live aus dem Format. --}}
+                        @if($k['claim'] ?? null)<p class="text-sm italic text-violet-600 mb-2">{{ $k['claim'] }}</p>@endif
+                        @if(($k['preis_range']['min'] ?? null) !== null)
+                            <p class="text-xs text-gray-500 mb-3">{{ number_format((float) $k['preis_range']['min'], 2, ',', '.') }}@if(($k['preis_range']['max'] ?? null) !== null && $k['preis_range']['max'] != $k['preis_range']['min']) – {{ number_format((float) $k['preis_range']['max'], 2, ',', '.') }}@endif € pro Person</p>
+                        @endif
+                        @forelse($k['editionen'] ?? [] as $ed)
+                            @if(($ed['typ'] ?? '') === 'header')
+                                <p class="font-semibold text-gray-800 mt-4 mb-1">{{ $ed['name'] }}</p>
+                            @elseif(($ed['typ'] ?? '') === 'text')
+                                <p class="text-sm text-gray-600 whitespace-pre-line mt-1">{{ $ed['text'] }}</p>
+                            @elseif(($ed['typ'] ?? '') === 'spacer')
+                                <div class="h-3"></div>
+                            @else
+                                <p class="font-semibold text-gray-900 mt-4">{{ $ed['name'] }}@if($ed['preis_pp'] ?? null)<span class="ml-2 text-xs font-normal text-gray-500">{{ number_format((float) $ed['preis_pp'], 2, ',', '.') }} € p.P.</span>@endif</p>
+                                @if($ed['claim'] ?? null)<p class="text-xs italic text-gray-500 mb-1">{{ $ed['claim'] }}</p>@endif
+                                @foreach($ed['gerichte'] ?? [] as $g)
+                                    @if(($g['type'] ?? '') === 'paket' || ($g['type'] ?? '') === 'header')
+                                        <p class="text-sm font-medium text-gray-700 mt-2" style="margin-left: 8px">{{ $g['text'] }}</p>
+                                    @else
+                                        <p class="text-sm text-gray-600" style="margin-left: {{ 8 + ($g['einrueckung'] ?? 0) * 14 }}px">· {{ $g['text'] }}</p>
+                                    @endif
+                                @endforeach
+                            @endif
+                        @empty
+                            <p class="text-xs text-gray-400">— (Format ohne Editionen)</p>
+                        @endforelse
+                    @else
                     @forelse($k['bloecke'] as $b)
                         @php($istKonzept = in_array($b['type'], ['concept_ref', 'recipe_ref'], true))
                         @if($b['ist_header'])
@@ -76,6 +104,7 @@
                     @empty
                         <p class="text-xs text-gray-400">—</p>
                     @endforelse
+                    @endif
             </div>
         @empty
             <div class="{{ $sectionCard }} text-center text-sm text-gray-500 py-8">Dieses Foodbook hat noch keine Inhalte.</div>

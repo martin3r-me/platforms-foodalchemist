@@ -220,6 +220,39 @@
                 <div class="kaptext">{!! nl2br(e($k['text'])) !!}</div>
             @endif
 
+            @if($k['ist_format'] ?? false)
+                {{-- B: LEBENDES Format-Kapitel — Marke + Editionen (Concepte) live aus dem Format (Kunden-PDF). --}}
+                @if($k['claim'] ?? null)<div class="kaptext"><em>{{ $k['claim'] }}</em></div>@endif
+                @if(($k['preis_range']['min'] ?? null) !== null)
+                    <div class="ctag">{{ number_format((float) $k['preis_range']['min'], 2, ',', '.') }}@if(($k['preis_range']['max'] ?? null) !== null && $k['preis_range']['max'] != $k['preis_range']['min']) – {{ number_format((float) $k['preis_range']['max'], 2, ',', '.') }}@endif € pro Person</div>
+                @endif
+                @forelse($k['editionen'] ?? [] as $ed)
+                    @if(($ed['typ'] ?? '') === 'header')
+                        <div class="pos header">{{ $ed['name'] }}</div>
+                    @elseif(($ed['typ'] ?? '') === 'text')
+                        <div class="pos text">{{ $ed['text'] }}</div>
+                    @elseif(($ed['typ'] ?? '') === 'spacer')
+                        <div style="height: 8px"></div>
+                    @else
+                        <table class="cblock"><tr>
+                            <td class="cprice">@if($ed['preis_pp'] ?? null)<div class="val">{{ number_format((float) $ed['preis_pp'], 2, ',', '.') }} €</div><div class="basis">pro Gast</div>@endif</td>
+                            <td class="cbody">
+                                <div class="cname">{{ $ed['name'] }}</div>
+                                @if($ed['claim'] ?? null)<div class="ctag">{{ $ed['claim'] }}</div>@endif
+                                @foreach($ed['gerichte'] ?? [] as $g)
+                                    @if(($g['type'] ?? '') === 'paket' || ($g['type'] ?? '') === 'header')
+                                        <div class="dish paket" style="margin-left: {{ ($g['einrueckung'] ?? 0) * 12 }}px">{{ $g['text'] }}</div>
+                                    @else
+                                        <div class="dish" style="margin-left: {{ ($g['einrueckung'] ?? 0) * 12 }}px"><span class="pipe">|</span>{{ $g['text'] }}@if(($deklaration ?? true) && ! empty($g['codes']))<span class="codes">{{ implode(',', $g['codes']) }}</span>@endif</div>
+                                    @endif
+                                @endforeach
+                            </td>
+                        </tr></table>
+                    @endif
+                @empty
+                    <div class="pos leer">— (Format ohne Editionen)</div>
+                @endforelse
+            @else
             @forelse($k['bloecke'] as $blk)
                 @php($istHeader = $blk['ist_header'] ?? false)
                 @php($istText = ($blk['type'] ?? '') === 'text')
@@ -273,6 +306,7 @@
             @empty
                 <div class="pos leer">—</div>
             @endforelse
+            @endif
         </div>
     @empty
         <p class="leer">Noch keine Kapitel angelegt.</p>

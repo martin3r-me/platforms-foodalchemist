@@ -1829,6 +1829,15 @@ class FoodbookService
             'chapters.blocks.concept.slots.embeddedConcept.slots.package.dishes.dish:id,name,sales_wording_standard',
             // E8.3: recipe_ref braucht sales_net/ek_total_eur für die €/Position-Preisspalte (blockPreis) — sonst rendert der Preis leer.
             'chapters.blocks.dish:id,name,sales_wording_standard,sales_net,ek_total_eur',
+            // B (2026-08-31): LEBENDES Format-Kapitel — Identität + Editionen live aus dem Format. Editionen =
+            // format_slots (type=concept) → Concept; die Wording-Kette der Editions-Concepte wie bei chapters.blocks.
+            'chapters.format', 'chapters.format.images',
+            'chapters.format.slots' => fn ($q) => $q->orderBy('position'),
+            'chapters.format.slots.concept.slots.dish:id,name,sales_wording_standard',
+            'chapters.format.slots.concept.slots.package.dishes.dish:id,name,sales_wording_standard',
+            'chapters.format.slots.concept.slots.embeddedConcept:id,name,consumer_name,price_per_person_cache',
+            'chapters.format.slots.concept.slots.embeddedConcept.slots.dish:id,name,sales_wording_standard',
+            'chapters.format.slots.concept.slots.embeddedConcept.slots.package.dishes.dish:id,name,sales_wording_standard',
             'crmCompany', 'crmContact',
         ]);
         $pax = $fb->personen;
@@ -1848,10 +1857,58 @@ class FoodbookService
         $rows = [];
         $walk = function ($parentId, int $depth) use (&$walk, $byParent, &$rows, $team, $pax, $wording, $intern, $outlet) {
             foreach ($byParent[$parentId] ?? [] as $k) {
-                // Kaskade 2026-08-24: die spezielle ist_format-Live-Kapitel-Mechanik entfernt. Die
-                // Kaskade bleibt LIVE (Concept-/Basisrezept-Edits wirken durch bis ins Foodbook); ein
-                // Format wird künftig WIE EIN CONCEPT gebucht (live-referenzierter Inhalt, F5), nicht als
-                // eigener Format-Kapitel-Codepfad. „Snapshot" = erst beim Versand (snapshot_json).
+                // B (2026-08-31): LEBENDES Format-Kapitel — Identität + Editionen LIVE aus dem Format
+                // rendern (statt der Kapitel-Blöcke). Editionen = format_slots (type=concept) → Concept
+                // (Wording-Kette wie sonst); header/text/spacer = Struktur-Editionen. Showcase:
+                // vk_pro_person=null (Editionen sind Alternativen → Preis-Range, KEIN additiver Summand).
+                if ($k->format_id !== null) {
+                    $format = $k->format;
+                    if ($format === null) {
+                        // Reconciliation: Format weg (soft-deleted) → leerer Platzhalter, kein Fehler.
+                        $rows[] = ['title' => $k->consumer_title ?: $k->title, 'title_intern' => $k->title,
+                            'text' => trim((string) $k->description) ?: null, 'anker' => 'k' . $k->id, 'depth' => $depth,
+                            'bloecke' => [], 'ist_format' => true, 'editionen' => [], 'vk_pro_person' => null];
+                        $walk((int) $k->id, $depth + 1);
+
+                        continue;
+                    }
+                    $editionen = [];
+                    foreach ($format->slots as $fs) {
+                        if ($fs->type === 'concept' && $fs->concept !== null) {
+                            $ed = $fs->concept;
+                            $editionen[] = [
+                                'typ' => 'concept',
+                                'name' => $ed->consumer_name ?: $ed->name,
+                                'claim' => $ed->claim ?: null,
+                                'text' => trim((string) $ed->description) ?: null,
+                                'preis_pp' => $ed->price_per_person_cache !== null ? (float) $ed->price_per_person_cache : null,
+                                'einzelpreise' => $ed->istEinzelpreis(),
+                                'gerichte' => $wording->gerichtZeilen($ed),
+                            ];
+                        } elseif (in_array($fs->type, ['header', 'text', 'spacer'], true)) {
+                            $editionen[] = ['typ' => $fs->type, 'name' => $fs->title, 'text' => $fs->text_content,
+                                'claim' => null, 'preis_pp' => null, 'einzelpreise' => false, 'gerichte' => []];
+                        }
+                    }
+                    $hero = $format->images->firstWhere('is_hero', true);
+                    $rows[] = [
+                        'title' => $k->consumer_title ?: ($format->consumer_name ?: $format->name),
+                        'title_intern' => $k->title ?: $format->name,
+                        'text' => trim((string) ($k->description ?: $format->story)) ?: null,
+                        'anker' => 'k' . $k->id,
+                        'depth' => $depth,
+                        'bloecke' => [],
+                        'ist_format' => true,
+                        'claim' => $format->claim,
+                        'hero' => $hero?->dataUri(),
+                        'preis_range' => $format->priceRange(),
+                        'editionen' => $editionen,
+                        'vk_pro_person' => null,   // Showcase — Editionen sind Alternativen, nicht additiv
+                    ];
+                    $walk((int) $k->id, $depth + 1);
+
+                    continue;
+                }
                 $bloecke = [];
                 foreach ($k->blocks as $b) {
                     $label = $this->dokBlockLabel($b);
@@ -1915,9 +1972,13 @@ class FoodbookService
         $kzAgg = app(\Platform\FoodAlchemist\Services\ConcepterAggregateService::class);
         $katalog = $kzAgg->kennzeichnungKatalog();
         // Alle Gericht-IDs: aus den concept_ref-Gericht-Zeilen UND den recipe_ref-Block-Labels.
-        $recipeIds = collect($rows)->flatMap(fn ($r) => collect($r['bloecke'])->flatMap(function ($b) {
-            return collect($b['gerichte'])->pluck('recipe_id')->push($b['recipe_id'] ?? null);
-        }))->filter()->map(fn ($v) => (int) $v)->unique()->values()->all();
+        $recipeIds = collect($rows)->flatMap(function ($r) {
+            $ausBloecke = collect($r['bloecke'])->flatMap(fn ($b) => collect($b['gerichte'])->pluck('recipe_id')->push($b['recipe_id'] ?? null));
+            // B: Format-Editionen tragen ihre Gericht-Zeilen (LMIV-Codes je Gericht) ausserhalb der bloecke.
+            $ausEditionen = collect($r['editionen'] ?? [])->flatMap(fn ($e) => collect($e['gerichte'])->pluck('recipe_id'));
+
+            return $ausBloecke->concat($ausEditionen);
+        })->filter()->map(fn ($v) => (int) $v)->unique()->values()->all();
         $usedAlg = [];
         $usedZus = [];
         if ($recipeIds !== []) {
@@ -1935,6 +1996,12 @@ class FoodbookService
                     // concept_ref: Codes je Gericht-Zeile.
                     foreach ($blk['gerichte'] as $gi => $g) {
                         $rows[$ri]['bloecke'][$bi]['gerichte'][$gi]['codes'] = $codesFuer(isset($g['recipe_id']) ? (int) $g['recipe_id'] : null);
+                    }
+                }
+                // B: LEBENDES Format-Kapitel — Codes je Editions-Gericht (LMIV, pro Gericht).
+                foreach ($row['editionen'] ?? [] as $ei => $ed) {
+                    foreach ($ed['gerichte'] as $gi => $g) {
+                        $rows[$ri]['editionen'][$ei]['gerichte'][$gi]['codes'] = $codesFuer(isset($g['recipe_id']) ? (int) $g['recipe_id'] : null);
                     }
                 }
             }
@@ -2209,35 +2276,18 @@ class FoodbookService
         }
 
         return DB::transaction(function () use ($team, $fb, $format, $parentId) {
-            // C (Dominique 2026-08-27): Format = SEKTION (Struktur-Kapitel, kein eigenes Food) + JE KONZEPT
-            // ein Unterkapitel. Vorher wurde EIN Kapitel mit den Konzepten als Blöcken angelegt — jetzt wird
-            // die Format-Identität die Sektion und jede Edition ihr eigenes Kapitel (mit einem concept_ref-Block).
+            // B (Dominique 2026-08-31): LEBENDES Format-Kapitel — die Sektion trägt `format_id` und rendert
+            // Identität (Marken-Titel/Story) + Editionen + Struktur LIVE aus dem Format ({@see dokumentDaten}).
+            // KEINE Einmal-Expansion in Unterkapitel/Blöcke mehr (das war C, 2026-08-27): Editionen rein/raus
+            // im Format wirken jetzt sofort in ALLEN eingefügten Foodbooks durch. Der Versand-Snapshot friert
+            // das Ergebnis (PresentationService::publish → dokumentDaten) beim Publish ohnehin ein.
             $sektion = $this->addKapitel($team, $fb->id, ['title' => $format->name], $parentId);
             $sektion->update([
-                'consumer_title' => $format->consumer_name,   // Marketing-Titel (PDF)
-                'description' => $format->story,               // Sektions-Hinführung (Story)
-                'is_struktur' => true,                         // Sektion: kein eigenes Food, gruppiert die Konzept-Kapitel
+                'format_id' => $format->id,                    // Live-Referenz auf das Format
+                'consumer_title' => $format->consumer_name,    // Marketing-Titel (PDF); Fallback im Render
+                'description' => $format->story,               // Sektions-Hinführung (Story); Fallback im Render
+                'is_struktur' => true,                         // Sektion: kein eigenes additives Food
             ]);
-
-            // concept-Slot → eigenes Unterkapitel (Titel = Konzept-Name) mit einem LIVE concept_ref-Block.
-            // header/text/spacer → Struktur-Blöcke auf der SEKTION (Format-Rahmentext bleibt erhalten).
-            foreach ($format->slots as $slot) {
-                if ($slot->type === 'concept' && $slot->concept_id !== null) {
-                    $c = $slot->concept;
-                    $unter = $this->addKapitel($team, $fb->id, ['title' => $c?->name ?: 'Konzept'], $sektion->id);
-                    if ($c !== null && trim((string) $c->consumer_name) !== '') {
-                        $unter->update(['consumer_title' => $c->consumer_name]);
-                    }
-                    $this->addBlock($team, $unter->id, ['type' => 'concept_ref', 'concept_id' => $slot->concept_id]);
-                } else {
-                    match ($slot->type) {
-                        'header' => $this->addBlock($team, $sektion->id, ['type' => 'header_frei', 'label' => $slot->title, 'customer_text' => $slot->title]),
-                        'text' => $this->addBlock($team, $sektion->id, ['type' => 'text', 'customer_text' => $slot->text_content]),
-                        'spacer' => $this->addBlock($team, $sektion->id, ['type' => 'spacer', 'height' => $slot->height ?: 'mittel']),
-                        default => null,
-                    };
-                }
-            }
 
             return $sektion->refresh();
         });

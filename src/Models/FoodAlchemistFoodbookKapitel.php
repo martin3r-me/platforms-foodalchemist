@@ -70,9 +70,20 @@ class FoodAlchemistFoodbookKapitel extends Model
         return $this->belongsTo(self::class, 'parent_id');
     }
 
-    // Kaskade 2026-08-24: format()/istFormatKapitel() entfernt — die spezielle Format-Kapitel-
-    // Mechanik entfällt (Format wird künftig wie ein Concept gebucht, live-referenziert, F5).
-    // Spalte `format_id` bleibt vorerst schlafend (kein Schema-Drop).
+    // B (Dominique 2026-08-31): LEBENDES Format-Kapitel — ein Kapitel mit gesetztem `format_id` rendert
+    // Identität + Editionen LIVE aus dem verknüpften Format ({@see FoodbookService::dokumentDaten}); die
+    // Format-Zusammensetzung (Editionen rein/raus) wirkt durch, statt einer Einmal-Expansion. Reaktiviert
+    // die 2026-08-24 entfernte Mechanik, jetzt über format_slots (nicht die abgelöste editions-Relation).
+    public function format(): BelongsTo
+    {
+        return $this->belongsTo(FoodAlchemistFormat::class, 'format_id');
+    }
+
+    /** Diskriminator: rendert dieses Kapitel seinen Inhalt live aus dem verknüpften Format? */
+    public function istFormatKapitel(): bool
+    {
+        return $this->format_id !== null;
+    }
 
     /** Optionaler Outlet-Tag (Spec 19, E3.6) — lose BelongsTo, keine harte FK. */
     public function outlet(): BelongsTo

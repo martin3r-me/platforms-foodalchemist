@@ -8,10 +8,10 @@ use Platform\FoodAlchemist\Tests\TestCase;
 uses(TestCase::class, SeedsTeamHierarchy::class);
 
 /**
- * Format-Buchung ins Foodbook (Dominique 2026-08-27): Format = SEKTION (Struktur-Kapitel,
- * is_struktur) + JE KONZEPT ein Unterkapitel mit einem live concept_ref-Block. header/text/
- * spacer werden Blöcke auf der Sektion. Kein `format_id`; live über die Kaskade; „Snapshot"
- * erst beim Versand. Deckt Struktur (Sektion + Unterkapitel), Live-Kaskade + die Guards ab.
+ * Format-Buchung ins Foodbook (B, Dominique 2026-08-31): LEBENDES Format-Kapitel — EINE Sektion mit
+ * `format_id` (Live-Referenz), KEINE Einmal-Expansion in Unterkapitel/Blöcke mehr. Identität + Editionen
+ * + Struktur werden zur Render-Zeit LIVE aus dem Format aufgelöst ({@see FoodbookService::dokumentDaten});
+ * Concept-Edits UND Zusammensetzungs-Änderungen wirken durch. Deckt Buchung, Live-Render + die Guards ab.
  */
 beforeEach(function () {
     $this->seedTeamHierarchy();
@@ -41,50 +41,40 @@ beforeEach(function () {
     };
 });
 
-it('bucht ein Format als Sektion (is_struktur) + je Konzept ein Unterkapitel', function () {
+it('bucht ein Format als Sektion mit format_id (Live-Ref, keine Unterkapitel/Blöcke)', function () {
     $format = ($this->baueFormat)($this->rootTeam);
     $buch = $this->makeFoodbook($this->rootTeam, 'Katalog 2027');
 
     $sektion = $this->fb->insertFormatAlsKapitel($this->rootTeam, $buch->id, $format->id);
 
-    // Sektion = Format-Identität, Struktur-Kapitel (kein eigenes Food), kein format_id.
+    // Sektion = Format-Identität, Struktur-Kapitel, MIT format_id (Live-Referenz aufs Format).
     expect($sektion->title)->toBe('CHEFS.CORNER')
         ->and($sektion->consumer_title)->toBe('Chefs Corner')
         ->and($sektion->description)->toBe('Die Welt auf dem Teller.')
-        ->and($sektion->format_id)->toBeNull()
+        ->and((int) $sektion->format_id)->toBe((int) $format->id)
         ->and($sektion->is_struktur)->toBeTrue();
 
-    // Struktur-Slots (header/text) → Blöcke auf der Sektion; KEINE concept_ref-Blöcke auf der Sektion selbst.
-    $sektionBloecke = $sektion->blocks()->orderBy('position')->get();
-    expect($sektionBloecke->pluck('type')->all())->toBe(['header_frei', 'text'])
-        ->and($sektionBloecke->firstWhere('type', 'header_frei')->customer_text)->toBe('Unsere Editionen')
-        ->and($sektionBloecke->firstWhere('type', 'text')->customer_text)->toBe('Ein Wort zum Konzept.');
-
-    // Je Konzept ein Unterkapitel (child der Sektion), Titel = Konzept-Name, mit genau einem concept_ref-Block.
-    $unter = \Platform\FoodAlchemist\Models\FoodAlchemistFoodbookKapitel::where('parent_id', $sektion->id)->orderBy('position')->get();
-    expect($unter->pluck('title')->all())->toBe(['Sommer-Menü', 'Winter-Menü']);
-    $unter->each(function ($u) {
-        $b = $u->blocks()->get();
-        expect($b)->toHaveCount(1)
-            ->and($b[0]->type)->toBe('concept_ref')
-            ->and($b[0]->concept_id)->not->toBeNull();
-    });
+    // B: KEINE Expansion mehr — genau EIN Kapitel (die Sektion), keine Unterkapitel, keine Blöcke.
+    expect(\Platform\FoodAlchemist\Models\FoodAlchemistFoodbookKapitel::where('foodbook_id', $buch->id)->count())->toBe(1)
+        ->and($sektion->blocks()->count())->toBe(0);
 });
 
-it('rendert die Editionen LIVE im Dokument (Unterkapitel je Konzept) — Concept-Edit wirkt durch', function () {
+it('rendert die Editionen LIVE aus dem Format (ist_format) — Concept-Edit UND Zusammensetzung wirken durch', function () {
     $format = ($this->baueFormat)($this->rootTeam);
     $buch = $this->makeFoodbook($this->rootTeam, 'Katalog 2027');
     $this->fb->insertFormatAlsKapitel($this->rootTeam, $buch->id, $format->id);
 
-    // Die Editionen sind jetzt Unterkapitel je Konzept — Gerichte über ALLE Kapitel einsammeln.
-    $alleGerichte = fn ($daten) => collect($daten['kapitel'])
-        ->flatMap(fn ($k) => collect($k['bloecke'])->where('type', 'concept_ref')
-            ->flatMap(fn ($b) => collect($b['gerichte'])->pluck('text')));
+    // Editionen liegen im ist_format-Row unter 'editionen' (concept-Editionen tragen die Gericht-Zeilen).
+    $alleGerichte = function ($daten) {
+        $row = collect($daten['kapitel'])->firstWhere('ist_format', true);
+
+        return collect($row['editionen'] ?? [])->where('typ', 'concept')->flatMap(fn ($e) => collect($e['gerichte'])->pluck('text'));
+    };
 
     $vorher = $alleGerichte($this->fb->dokumentDaten($this->rootTeam, $buch->fresh()));
     expect($vorher->all())->toContain('Rinderfilet Rossini')->toContain('Zander im Speckmantel');
 
-    // Concept-Slot-Wording live ändern → Foodbook zieht nach (Kaskade lebt, nichts eingefroren).
+    // Concept-Slot-Wording live ändern → Foodbook zieht nach (Live-Ref, nichts eingefroren).
     $this->slotC1->update(['wording' => 'Rinderrücken vom Grill']);
     $danach = $alleGerichte($this->fb->dokumentDaten($this->rootTeam, $buch->fresh()));
     expect($danach->all())->toContain('Rinderrücken vom Grill')

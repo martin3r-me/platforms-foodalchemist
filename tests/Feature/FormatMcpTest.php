@@ -79,7 +79,7 @@ it('Tenancy: PUT auf ein fremdes (Kind-)Format ist NOT_FOUND aus Root-Kontext', 
 
 // ── Format-Umbau F5: Format als Kapitel/Rubrik buchen (live, kein Sonderweg) ──────────
 
-it('foodbook_format_chapters.POST: bucht ein Format als Kapitel (live concept_ref-Blöcke)', function () {
+it('foodbook_format_chapters.POST: bucht ein Format als LEBENDES Kapitel (format_id, Live-Ref)', function () {
     $f = FoodAlchemistFormat::create(['team_id' => $this->rootTeam->id, 'name' => 'CHEFS.CORNER', 'consumer_name' => 'Chefs Corner']);
     $c = FoodAlchemistConcept::create(['team_id' => $this->rootTeam->id, 'name' => 'URBAN & FLAVOUR', 'status' => 'active']);
     app(FormatService::class)->slotConceptEinfuegen($this->rootTeam, $f->id, $c->id);
@@ -89,17 +89,14 @@ it('foodbook_format_chapters.POST: bucht ein Format als Kapitel (live concept_re
     expect($res->success)->toBeTrue()
         ->and($res->data['chapter']['title'])->toBe('CHEFS.CORNER');
 
-    // C (Dominique 2026-08-27): Format = SEKTION (Struktur-Kapitel), JE KONZEPT ein Unterkapitel
-    // mit einem LIVE concept_ref-Block — nicht mehr ein flaches Kapitel mit Konzept-Blöcken.
+    // B (Dominique 2026-08-31): EINE Sektion mit format_id (Live-Referenz), KEINE Expansion in Unterkapitel.
     $sektion = \Platform\FoodAlchemist\Models\FoodAlchemistFoodbookKapitel::find($res->data['chapter']['id']);
     expect($sektion)->not->toBeNull()
-        ->and($sektion->format_id)->toBeNull()          // kein Live-Format-Sonderweg
-        ->and((bool) $sektion->is_struktur)->toBeTrue(); // Format = gruppierende Sektion
-
-    $unter = \Platform\FoodAlchemist\Models\FoodAlchemistFoodbookKapitel::where('foodbook_id', $buch->id)
-        ->where('parent_id', $sektion->id)->first();
-    expect($unter)->not->toBeNull()
-        ->and($unter->blocks()->where('type', 'concept_ref')->where('concept_id', $c->id)->exists())->toBeTrue();
+        ->and((int) $sektion->format_id)->toBe((int) $f->id)   // Live-Format-Referenz
+        ->and((bool) $sektion->is_struktur)->toBeTrue();
+    // Keine Unterkapitel, keine Blöcke — Editionen werden live gerendert.
+    expect(\Platform\FoodAlchemist\Models\FoodAlchemistFoodbookKapitel::where('foodbook_id', $buch->id)->count())->toBe(1)
+        ->and($sektion->blocks()->count())->toBe(0);
 });
 
 it('speisekarte_format_rubriken.POST: bucht ein Format als Rubrik (live menue_ref-Positionen)', function () {

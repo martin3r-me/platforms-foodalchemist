@@ -30,6 +30,33 @@
             </div>
             @if(! empty($k['text']))<p class="text-xs text-gray-600 mb-2 whitespace-pre-line">{{ $k['text'] }}</p>@endif
 
+            @if($k['ist_format'] ?? false)
+                {{-- B: LEBENDES Format-Kapitel — Editionen (Concepte) + Struktur live aus dem Format. --}}
+                @if($k['claim'] ?? null)<p class="text-xs italic text-violet-600 mb-2">{{ $k['claim'] }}</p>@endif
+                @forelse($k['editionen'] ?? [] as $ed)
+                    @if(($ed['typ'] ?? '') === 'header')
+                        <p class="text-sm font-semibold text-gray-700 mt-3">{{ $ed['name'] }}</p>
+                    @elseif(($ed['typ'] ?? '') === 'text')
+                        <p class="text-xs text-gray-600 whitespace-pre-line mt-1">{{ $ed['text'] }}</p>
+                    @elseif(($ed['typ'] ?? '') === 'spacer')
+                        <div class="h-2"></div>
+                    @else
+                        <div class="py-0.5">
+                            <p class="text-sm font-semibold text-gray-900 mt-2">{{ $ed['name'] }}@if($ed['preis_pp'] ?? null)<span class="ml-2 text-xs font-normal text-gray-500">{{ number_format((float) $ed['preis_pp'], 2, ',', '.') }} € p.P.</span>@endif</p>
+                            @if($ed['claim'] ?? null)<p class="text-[11px] text-gray-500 italic">{{ $ed['claim'] }}</p>@endif
+                            @foreach($ed['gerichte'] ?? [] as $g)
+                                @if(($g['type'] ?? '') === 'paket' || ($g['type'] ?? '') === 'header')
+                                    <p class="text-xs font-semibold text-gray-600 ml-3 mt-1">{{ $g['text'] }}</p>
+                                @else
+                                    <p class="text-xs text-gray-600 {{ ($g['source'] ?? '') === 'name' ? 'italic text-amber-600' : '' }}" style="margin-left:{{ 12 + ($g['einrueckung'] ?? 0) * 12 }}px">{{ $g['text'] }}@if(($g['source'] ?? '') === 'name')<span class="ml-1 text-[10px]">· Wording fehlt</span>@endif</p>
+                                @endif
+                            @endforeach
+                        </div>
+                    @endif
+                @empty
+                    <p class="text-xs text-gray-500">— (Format ohne Editionen)</p>
+                @endforelse
+            @else
             @forelse($k['bloecke'] as $b)
                 @php($istKonzept = in_array($b['type'], ['concept_ref', 'recipe_ref'], true))
                 <div class="py-0.5">
@@ -47,6 +74,7 @@
             @empty
                 <p class="text-xs text-gray-500">—</p>
             @endforelse
+            @endif
         </section>
     @empty
         <p class="text-xs text-gray-500 py-6 text-center">Noch keine Kapitel — im Editor anlegen und Concepts einfügen.</p>
