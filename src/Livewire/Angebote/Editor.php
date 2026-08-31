@@ -56,7 +56,7 @@ class Editor extends Component
 
     // ── Kapitel-Formular (Foodbook-Parität) ────────────────────────────────────
     /** `description` = Kapitel-Kundentext (Hinführung / Story). */
-    public array $kapitelForm = ['title' => '', 'consumer_title' => '', 'description' => '', 'price_mode' => 'auto', 'price_per_person' => null, 'writing_style_id' => null, 'is_struktur' => false];
+    public array $kapitelForm = ['title' => '', 'consumer_title' => '', 'description' => '', 'price_mode' => 'auto', 'price_per_person' => null, 'personen' => null, 'writing_style_id' => null, 'is_struktur' => false];
 
     public string $neuesKapitelTitel = '';
 
@@ -439,6 +439,7 @@ class Editor extends Component
                 'title' => $k->title, 'consumer_title' => $k->consumer_title ?? '',
                 'description' => $k->description ?? '',
                 'price_mode' => $k->price_mode, 'price_per_person' => $k->price_per_person,
+                'personen' => $k->personen,
                 'writing_style_id' => $k->writing_style_id,
                 'is_struktur' => (bool) $k->is_struktur,
             ];

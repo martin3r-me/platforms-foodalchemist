@@ -105,7 +105,7 @@ class OfferCompositionService
     }
 
     private const KAPITEL_FELDER = ['title', 'consumer_title', 'claim', 'description', 'price_mode', 'price_per_person',
-        'serving_form_id', 'service_moment_id', 'writing_style_id', 'is_struktur', 'creative_mode',
+        'personen', 'serving_form_id', 'service_moment_id', 'writing_style_id', 'is_struktur', 'creative_mode',
         'target_count', 'price_anchor', 'price_min', 'price_max', 'target_food_cost_pct'];
 
     public function updateKapitel(Team $team, int $id, array $in): FoodAlchemistOfferChapter
@@ -467,14 +467,20 @@ class OfferCompositionService
             ])->orderBy('position')->get();
 
         $byParent = $alle->groupBy(fn ($k) => $k->parent_id ?? 0);
+        $angebotPax = max(0, (int) ($angebot->personen ?? 0));
         $kapitel = [];
         $summeVk = 0.0;
         $summeEk = 0.0;
         $summePauschal = 0.0;
+        $summeGesamtVk = 0.0;
+        $summeGesamtEk = 0.0;
 
-        $walk = function ($parentId, int $depth) use (&$walk, $byParent, &$kapitel, &$summeVk, &$summeEk, &$summePauschal, $team, $outlet, $intern, $wording) {
+        $walk = function ($parentId, int $depth) use (&$walk, $byParent, &$kapitel, &$summeVk, &$summeEk, &$summePauschal, &$summeGesamtVk, &$summeGesamtEk, $team, $outlet, $intern, $wording, $angebotPax) {
             foreach ($byParent[$parentId] ?? [] as $k) {
                 $agg = $this->kapitelAggregat($team, $k, $outlet);
+                // Per-Kapitel-Pax (Q1: Σ Kapitel-Pax × €/P): eigene Pax überschreibt, sonst erbt es die Angebots-Pax.
+                $effPax = $k->personen !== null ? max(0, (int) $k->personen) : $angebotPax;
+                $kapGesamt = round((float) ($agg['vk_pro_person'] ?? 0) * $effPax + (float) ($agg['pauschal'] ?? 0), 2);
                 $row = [
                     'id' => (int) $k->id,
                     'title' => $k->consumer_title ?: $k->title,
@@ -487,6 +493,9 @@ class OfferCompositionService
                     'format_id' => $k->format_id !== null ? (int) $k->format_id : null,
                     'format_price_mode' => $k->format_price_mode ?? 'additiv',
                     'price_mode' => $k->price_mode,
+                    'pax' => $effPax,
+                    'eigene_pax' => $k->personen !== null,
+                    'gesamt' => $kapGesamt,
                     'vk_pro_person' => $agg['vk_pro_person'],
                     'pauschal' => $agg['pauschal'],
                     'preis_range' => $agg['preis_range'],
@@ -548,6 +557,9 @@ class OfferCompositionService
                 $summeVk += (float) ($agg['vk_pro_person'] ?? 0);
                 $summeEk += $agg['ek_pro_person'];
                 $summePauschal += $agg['pauschal'];
+                // Gesamt-Summe pax-korrekt (Q1): Σ Kapitel-Pax × €/P (+ Pauschale je Kapitel).
+                $summeGesamtVk += $kapGesamt;
+                $summeGesamtEk += (float) ($agg['ek_pro_person'] ?? 0) * $effPax;
 
                 $kapitel[] = $row;
                 $walk((int) $k->id, $depth + 1);
@@ -557,7 +569,12 @@ class OfferCompositionService
 
         return [
             'kapitel' => $kapitel,
-            'summe' => ['vk_pro_person' => round($summeVk, 2), 'ek_pro_person' => round($summeEk, 2), 'pauschal' => round($summePauschal, 2)],
+            'summe' => [
+                'vk_pro_person' => round($summeVk, 2), 'ek_pro_person' => round($summeEk, 2), 'pauschal' => round($summePauschal, 2),
+                'pax' => $angebotPax,
+                'gesamt_vk' => round($summeGesamtVk, 2),   // Σ Kapitel-Pax × €/P + Pauschalen (pax-korrekt)
+                'gesamt_ek' => round($summeGesamtEk, 2),
+            ],
         ];
     }
 
@@ -575,13 +592,16 @@ class OfferCompositionService
                 'blocks.concept', 'blocks.dish:id,sales_net,ek_total_eur',
                 'format.slots.concept'])->get();
 
+        $angebotPax = max(0, (int) ($angebot->personen ?? 0));
         $concepts = collect();
+        $units = [];   // [{concept, pax}] — Concept-Einheit mit ihrer effektiven Kapitel-Pax (für costConcept)
         $vkExtra = 0.0;
         $ekExtra = 0.0;
         $flat = 0.0;
         $alternativen = [];
 
         foreach ($alle as $k) {
+            $effPax = $k->personen !== null ? max(0, (int) $k->personen) : $angebotPax;
             if ($k->format_id !== null) {
                 if ($k->format === null) {
                     continue;
@@ -595,6 +615,7 @@ class OfferCompositionService
                 foreach ($k->format->slots as $fs) {
                     if ($fs->type === 'concept' && $fs->concept !== null) {
                         $concepts->push($fs->concept);
+                        $units[] = ['concept' => $fs->concept, 'pax' => $effPax];
                     }
                 }
 
@@ -603,6 +624,7 @@ class OfferCompositionService
             foreach ($k->blocks as $b) {
                 if ($b->type === 'concept_ref' && $b->concept !== null) {
                     $concepts->push($b->concept);
+                    $units[] = ['concept' => $b->concept, 'pax' => $effPax];
                 } elseif ($b->type === 'recipe_ref' && $b->dish !== null) {
                     $bp = $this->blockPreis($b, $outlet);
                     $vkExtra += $bp['vk_pp'];
@@ -616,7 +638,7 @@ class OfferCompositionService
             }
         }
 
-        return ['concepts' => $concepts->values(), 'vk_pp_extra' => round($vkExtra, 2),
+        return ['concepts' => $concepts->values(), 'units' => $units, 'vk_pp_extra' => round($vkExtra, 2),
             'ek_pp_extra' => round($ekExtra, 2), 'flat_total' => round($flat, 2), 'alternativen' => $alternativen];
     }
 

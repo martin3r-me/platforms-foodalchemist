@@ -228,80 +228,94 @@ class AngebotService
      */
     public function kalkulation(Team $team, FoodAlchemistAngebot $angebot, ?\Platform\FoodAlchemist\Models\FoodAlchemistOutlet $outlet = null): array
     {
-        $kalk = app(KalkulationService::class);
         $orderCosting = app(OrderCostingService::class);
         $conceptSvc = app(ConceptService::class);
+        $comp = app(OfferCompositionService::class);
         $pax = max(0, (int) ($angebot->personen ?? 0));
-        // #380 Composer: Preis-Einheiten aus der Kapitel/Block-Komposition (concept_ref +
-        // additiv-Format-Editionen = voll bekostete Concepts; recipe_ref/header_preis =
-        // einfache Zuschläge; alternativen-Formate = Range, nicht additiv).
-        $einheiten = app(OfferCompositionService::class)->preisEinheiten($team, $angebot, $outlet);
-        $concepts = $einheiten['concepts'];
 
-        $vkPp = 0.0;
-        $ekPp = 0.0;
-        $hk2Pp = 0.0;
+        // #380 Composer / Per-Kapitel-Pax (Q1): Kopf-Totale kommen pax-korrekt aus der Komposition
+        // (Σ Kapitel-Pax × €/P + Pauschalen; kapitelAggregat deckt concept_ref+recipe_ref+header_preis ab).
+        // Die Rich-KPIs (Zielpreis/HK2/Zeit) kommen aus costConcept je Concept-Einheit × ihrer Kapitel-Pax.
+        $komposition = $comp->komposition($team, $angebot, $outlet, true);
+        $einheiten = $comp->preisEinheiten($team, $angebot, $outlet);
+        $units = $einheiten['units'];
+        $summe = $komposition['summe'];
+        $gesamtVkAuto = round((float) $summe['gesamt_vk'], 2);
+        $gesamtEk = round((float) $summe['gesamt_ek'], 2);
+        // Kopf-€/Person = Gesamt ÷ Angebots-Pax (Mischwert bei unterschiedlichen Kapitel-Pax).
+        $vkPp = $pax > 0 ? round($gesamtVkAuto / $pax, 2) : round((float) $summe['vk_pro_person'], 2);
+        $ekPp = $pax > 0 ? round($gesamtEk / $pax, 2) : round((float) $summe['ek_pro_person'], 2);
+
+        $hk2Gesamt = 0.0;
+        $zielGesamt = 0.0;
+        $aktiveMinuten = 0.0;
+        $warnungen = [];
         $menue = [];
         $mengen = [];
-        $aktiveMinuten = 0.0;
-        $zielGesamt = 0.0;
-        $warnungen = [];
-        foreach ($concepts as $c) {
-            $hk = $kalk->conceptHk($team, $c, $outlet);
-            $orderCost = $pax > 0 ? $orderCosting->costConcept($team, $c, $pax, $outlet) : null;
-            $vkPp += (float) $hk['vk_pro_person'];
-            $ekPp += $orderCost !== null ? (float) $orderCost['mek'] / $pax : (float) $hk['hk1_pro_person'];
-            $hk2Pp += $orderCost !== null ? (float) $orderCost['hk2'] / $pax : 0.0;
-            $aktiveMinuten += (float) ($orderCost['active_person_minutes'] ?? 0);
+        foreach ($units as $u) {
+            $c = $u['concept'];
+            $uPax = max(0, (int) $u['pax']);
+            $orderCost = $uPax > 0 ? $orderCosting->costConcept($team, $c, $uPax, $outlet) : null;
+            $hk2Gesamt += $orderCost !== null ? (float) $orderCost['hk2'] : 0.0;
             $zielGesamt += (float) ($orderCost['target_price'] ?? 0);
+            $aktiveMinuten += (float) ($orderCost['active_person_minutes'] ?? 0);
             $warnungen = array_merge($warnungen, $orderCost['warnings'] ?? []);
             $menue[] = [
-                'id' => $c->id,
-                'name' => $c->name,
-                'vk_pro_person' => round((float) $hk['vk_pro_person'], 2),
-                'hk2_pro_person' => $orderCost !== null ? round((float) $orderCost['hk2'] / $pax, 2) : null,
+                'id' => $c->id, 'name' => $c->name, 'pax' => $uPax,
                 'zielpreis_pro_person' => $orderCost['target_price_per_person'] ?? null,
                 'unwirtschaftlich' => (bool) ($orderCost['unprofitable'] ?? false),
             ];
-            foreach ($conceptSvc->mengenHochrechnung($c, $pax > 0 ? $pax : null) as $z) {
+            foreach ($conceptSvc->mengenHochrechnung($c, $uPax > 0 ? $uPax : null) as $z) {
                 $mengen[] = $z + ['menue' => $c->name];
             }
         }
 
-        // Einfache Zuschläge aus der Komposition: recipe_ref/header_preis(person) je Person,
-        // header_preis(pauschal)/recipe_ref(pauschal) als flacher Anteil (kein ×Pax).
-        $vkPp += (float) $einheiten['vk_pp_extra'];
-        $ekPp += (float) $einheiten['ek_pp_extra'];
-        $hk2Pp += (float) $einheiten['ek_pp_extra']; // Näherung: einfache Posten ohne Arbeitszeit → HK2≈EK (kein DB-Overstate)
+        // Per-Kapitel-Aufschlüsselung (Kalkulation-Tab + Karte + Präsentations-Block „Preis-Aufschlüsselung").
+        $kapitelBreakdown = [];
+        foreach ($komposition['kapitel'] as $kap) {
+            $kapitelBreakdown[] = [
+                'id' => $kap['id'],
+                'titel' => $kap['title_intern'] ?? $kap['title'],
+                'consumer_title' => $kap['title'],
+                'pax' => $kap['pax'],
+                'eigene_pax' => $kap['eigene_pax'] ?? false,
+                'vk_pro_person' => $kap['vk_pro_person'],
+                'ek_pro_person' => $kap['ek_pro_person'] ?? null,
+                'gesamt' => $kap['gesamt'],
+                'preis_range' => $kap['preis_range'],
+                'ist_format' => $kap['ist_format'],
+                'format_price_mode' => $kap['format_price_mode'] ?? null,
+            ];
+        }
 
-        $autoGesamt = round($vkPp * $pax, 2) + (float) $einheiten['flat_total'];
         $expired = $angebot->price_override_expires_at?->isPast() ?? false;
         $manuell = in_array(($angebot->price_mode ?? 'auto'), ['fixed', 'manuell'], true)
             && ! $expired && $angebot->total_price !== null;
-        $gesamt = $manuell ? round((float) $angebot->total_price, 2) : $autoGesamt;
+        $gesamt = $manuell ? round((float) $angebot->total_price, 2) : $gesamtVkAuto;
 
         return [
             'pax' => $pax,
             'price_mode' => $manuell ? ($angebot->price_mode === 'fixed' ? 'fixed' : 'manuell') : 'auto',
-            'leer' => $concepts->isEmpty() && (float) $einheiten['vk_pp_extra'] === 0.0 && (float) $einheiten['flat_total'] === 0.0,
+            'leer' => $gesamtVkAuto <= 0.0 && count($units) === 0,
             'alternativen' => $einheiten['alternativen'],
-            'vk_pro_person' => round($vkPp, 2),
-            'ek_per_person' => round($ekPp, 2),
-            'hk2_pro_person' => round($hk2Pp, 2),
-            'db_pro_person' => round($vkPp - $hk2Pp, 2),
-            'wareneinsatz_pct' => $vkPp > 0 ? round($ekPp / $vkPp * 100, 1) : null,
-            'auto_gesamt' => $autoGesamt,
-            'gesamt_vk' => $gesamt,
-            'gesamt_ek' => round($ekPp * $pax, 2),
-            'gesamt_hk2' => round($hk2Pp * $pax, 2),
-            'gesamt_db' => round($gesamt - $hk2Pp * $pax, 2),
-            'mindestpreis' => round($hk2Pp * $pax, 2),
+            'vk_pro_person' => $vkPp,
+            'ek_per_person' => $ekPp,
+            'hk2_pro_person' => $pax > 0 ? round($hk2Gesamt / $pax, 2) : 0.0,
+            'db_pro_person' => $pax > 0 ? round($vkPp - $hk2Gesamt / $pax, 2) : $vkPp,
+            'wareneinsatz_pct' => $gesamtVkAuto > 0 ? round($gesamtEk / $gesamtVkAuto * 100, 1) : null,
+            'auto_gesamt' => $gesamtVkAuto,
+            'gesamt_vk' => round($gesamt, 2),
+            'gesamt_ek' => $gesamtEk,
+            'gesamt_hk2' => round($hk2Gesamt, 2),
+            'gesamt_db' => round($gesamt - $hk2Gesamt, 2),
+            'mindestpreis' => round($hk2Gesamt, 2),
             'zielpreis' => round($zielGesamt, 2),
             'zielpreis_pro_person' => $pax > 0 ? round($zielGesamt / $pax, 2) : null,
             'zielabweichung' => round($zielGesamt - $gesamt, 2),
-            'unwirtschaftlich' => $pax > 0 && $gesamt + 0.005 < $zielGesamt,
+            'unwirtschaftlich' => $gesamt + 0.005 < $zielGesamt,
             'aktive_personenminuten' => round($aktiveMinuten, 2),
             'warnungen' => array_values(array_unique($warnungen)),
+            'kapitel' => $kapitelBreakdown,
             'menue' => $menue,
             'mengen' => $mengen,
         ];
@@ -391,13 +405,11 @@ class AngebotService
     public function auftragsKalkulation(Team $team, FoodAlchemistAngebot $angebot, ?\Platform\FoodAlchemist\Models\FoodAlchemistOutlet $outlet = null): ?array
     {
         $pax = max(0, (int) ($angebot->personen ?? 0));
-        if ($pax <= 0) {
-            return null; // die Zuschlagskalkulation braucht eine Pax-Zahl
+        $units = app(OfferCompositionService::class)->preisEinheiten($team, $angebot, $outlet)['units'];
+        if ($units === []) {
+            return null; // keine voll bekosteten Concept-Einheiten → kein Zuschlags-Wasserfall
         }
-        $units = app(OfferCompositionService::class)->preisEinheiten($team, $angebot, $outlet)['concepts'];
-        if ($units->isEmpty()) {
-            return null;
-        }
+        $refPax = $pax > 0 ? $pax : 1; // Per-Person-Referenz (Mischwert bei unterschiedlichen Kapitel-Pax)
         $orderCosting = app(OrderCostingService::class);
         $sum = ['mek' => 0.0, 'fek' => 0.0, 'direct_costs' => 0.0, 'mgk' => 0.0, 'fgk' => 0.0, 'hk' => 0.0, 'hk2' => 0.0,
             'minimum_price' => 0.0, 'target_price' => 0.0, 'contribution_margin' => 0.0, 'active_person_minutes' => 0.0,
@@ -406,8 +418,10 @@ class AngebotService
         $timeRows = [];
         $warnings = [];
         $complete = true;
-        foreach ($units as $c) {
-            $cc = $orderCosting->costConcept($team, $c, $pax, $outlet);
+        foreach ($units as $u) {
+            $c = $u['concept'];
+            $uPax = max(1, (int) $u['pax']);
+            $cc = $orderCosting->costConcept($team, $c, $uPax, $outlet);
             foreach ($sum as $k => $_) {
                 $sum[$k] += (float) ($cc[$k] ?? 0);
             }
@@ -427,14 +441,14 @@ class AngebotService
 
         return [
             'pax' => $pax,
-            'catalog_price_per_person' => round($catalogTotal / $pax, 2),
+            'catalog_price_per_person' => round($catalogTotal / $refPax, 2),
             'catalog_price_total' => $catalogTotal,
             'mek' => round($sum['mek'], 2), 'fek' => round($sum['fek'], 2), 'direct_costs' => round($sum['direct_costs'], 2),
             'mgk' => round($sum['mgk'], 2), 'fgk' => round($sum['fgk'], 2),
             'hk' => round($sum['hk'], 2), 'hk2' => round($sum['hk2'], 2),
             'minimum_price' => round($sum['minimum_price'], 2),
             'target_price' => $targetTotal,
-            'target_price_per_person' => round($targetTotal / $pax, 2),
+            'target_price_per_person' => round($targetTotal / $refPax, 2),
             'contribution_margin' => round($sum['contribution_margin'], 2),
             'contribution_margin_pct' => $targetTotal > 0 ? round($sum['contribution_margin'] / $targetTotal * 100, 1) : null,
             'target_gap' => round($targetTotal - $catalogTotal, 2),

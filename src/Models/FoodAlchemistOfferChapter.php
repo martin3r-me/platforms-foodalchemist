@@ -46,6 +46,13 @@ class FoodAlchemistOfferChapter extends Model
         'uuid' => 'string',
         'position' => 'integer',
         'price_per_person' => 'decimal:2',
+        'personen' => 'integer',            // Per-Kapitel-Pax (null = erbt Angebots-Pax)
+        'is_struktur' => 'boolean',
+        'target_count' => 'integer',
+        'price_anchor' => 'decimal:2',
+        'price_min' => 'decimal:2',
+        'price_max' => 'decimal:2',
+        'target_food_cost_pct' => 'decimal:2',
     ];
 
     public function offer(): BelongsTo

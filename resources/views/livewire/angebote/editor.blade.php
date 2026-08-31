@@ -102,10 +102,8 @@
                     :tabs="[
                         'anfrage' => 'Anfrage',
                         'board' => 'Board',
-                        'kontext' => 'Kontext',
                         'aufbau' => 'Aufbau',
                         'kalkulation' => 'Kalkulation',
-                        'geruest' => 'Gerüst',
                         'kunde' => 'Kunde & Business-Case',
                         'branding' => 'Branding & Präsentation',
                     ]">
@@ -213,26 +211,6 @@
                     </div>
                 </div>
 
-                {{-- ═══ Tab: KONTEXT (Segment / Rahmen — Anfrage-Felder liegen im Anfrage-Tab, Kunde im Kunde-Tab) ═══ --}}
-                <div x-show="tab === 'kontext'" x-cloak class="pt-4 space-y-3" data-angebot-panel="kontext">
-                    <div class="relative overflow-hidden {{ $card }} p-5 space-y-3">
-                        <div class="{{ $cardAccent }}"></div>
-                        <div class="flex flex-wrap items-center gap-x-2 gap-y-1" data-angebot-segment>
-                            <span class="{{ $label }} !mb-0">Segment</span>
-                            @if($segment ?? null)
-                                <span class="{{ $pill }} {{ $variantPill['primary'] }}">{{ $segment['label'] }}</span>
-                                <span class="text-[11px] text-gray-500">Niveau {{ \Platform\FoodAlchemist\Services\TeamSettingsService::NIVEAU_LABEL[$segment['niveau']] ?? $segment['niveau'] }} · {{ \Platform\FoodAlchemist\Services\TeamSettingsService::CONVENIENCE_LABEL[$segment['convenience']] ?? $segment['convenience'] }}</span>
-                            @else
-                                <span class="text-[11px] text-amber-600">nicht gesetzt — Küchen-Profil in den Einstellungen wählen (steuert Niveau + Convenience der Generierung)</span>
-                            @endif
-                        </div>
-                        @if($portfolioKonflikt ?? null)
-                            <div class="rounded-lg bg-amber-500/10 border border-amber-400/40 px-2.5 py-1.5 text-[11px] text-amber-700" data-angebot-portfolio-konflikt>{{ $portfolioKonflikt }}</div>
-                        @endif
-                        <p class="text-[11px] text-gray-500 pt-1 border-t border-black/5">Anlass, Gäste und Budget pflegst du im <span class="text-gray-700">Anfrage</span>-Tab, den Kunden im <span class="text-gray-700">Kunde &amp; Business-Case</span>-Tab. Die kreative Planung (Leitidee, Kaskade) läuft in der Leitstelle.</p>
-                    </div>
-                </div>
-
                 {{-- ═══ Tab: AUFBAU — Kapitel-Editor (Konsumententitel · Hinführung/KI · Schreibstil · Bild/Galerie ·
                      Preis-Modus · Textkapitel + Inhalt-Picker Concept/Paket/Format/Gericht + Block-Liste) ═══ --}}
                 <div x-show="tab === 'aufbau'" x-cloak class="pt-3 space-y-3" data-angebot-panel="aufbau" data-angebot-anker="aufbau">
@@ -241,12 +219,13 @@
                     <div class="flex-1 min-w-0 space-y-3" data-angebot-aufbau-links>
                     {{-- Kapitel-Kopf --}}
                     <div class="relative overflow-hidden {{ $card }} p-5 space-y-3" wire:key="kaphdr-{{ $kapitel->id }}">
-                        <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+                        <div class="grid grid-cols-1 md:grid-cols-5 gap-3">
                             <div><label class="{{ $label }}">Kapitel (intern)</label><input type="text" wire:model.blur="kapitelForm.title" wire:change="kapitelSpeichern" class="{{ $input }}" /></div>
                             <div class="md:col-span-2"><label class="{{ $label }}">Konsumententitel</label><input type="text" wire:model.blur="kapitelForm.consumer_title" wire:change="kapitelSpeichern" class="{{ $input }}" placeholder="Marketing-Titel (Kundenausgabe)" /></div>
                             <div><label class="{{ $label }}">Preis-Modus</label>
                                 <select wire:model.live="kapitelForm.price_mode" wire:change="kapitelSpeichern" class="{{ $input }}"><option value="auto">auto (Σ Inhalt)</option><option value="manuell">manuell</option></select>
                             </div>
+                            <div><label class="{{ $label }}">Pax (Kapitel)</label><input type="number" min="0" wire:model.blur="kapitelForm.personen" wire:change="kapitelSpeichern" class="{{ $input }} text-right tabular-nums" placeholder="erbt Angebot ({{ $angebot->personen ?: '—' }})" title="Eigene Gästezahl dieses Kapitels — leer = erbt die Angebots-Pax" /></div>
                         </div>
                         <label class="flex items-start gap-2 text-xs text-gray-500 cursor-pointer">
                             <input type="checkbox" wire:model.live="kapitelForm.is_struktur" wire:change="kapitelSpeichern" class="mt-0.5 accent-violet-500" />
@@ -619,6 +598,36 @@
 
                 {{-- ═══ Tab: KALKULATION (Zuschlagskalkulation-Partial B3 + Preis-Modus + Mengen) ═══ --}}
                 <div x-show="tab === 'kalkulation'" x-cloak class="pt-4 space-y-4" data-angebot-panel="kalkulation">
+                    {{-- Per-Kapitel-Aufschlüsselung (Σ Kapitel-Pax × €/P) — Kern der Angebots-Kalkulation. --}}
+                    @if($kalkulation && ! ($kalkulation['leer'] ?? true) && count($kalkulation['kapitel'] ?? []))
+                    <x-foodalchemist::modal-section title="Aufschlüsselung je Kapitel">
+                        <div class="flex items-center gap-2 pb-1 text-[10px] uppercase tracking-wide text-gray-400">
+                            <span class="flex-1">Kapitel</span><span class="w-16 text-right">Pax</span><span class="w-24 text-right">€/Person</span><span class="w-28 text-right">Gesamt</span>
+                        </div>
+                        @foreach($kalkulation['kapitel'] as $kb)
+                            <div wire:key="kalkkap-{{ $kb['id'] }}" class="flex items-center gap-2 py-1 text-xs border-t border-black/5">
+                                <span class="flex-1 min-w-0 truncate text-gray-800">{{ $kb['titel'] }}</span>
+                                <span class="w-16 text-right tabular-nums text-gray-600">{{ $kb['pax'] ?: '—' }}@if($kb['eigene_pax'] ?? false)<span class="text-violet-500" title="eigene Kapitel-Pax">*</span>@endif</span>
+                                <span class="w-24 text-right tabular-nums text-gray-600">
+                                    @if($kb['ist_format'] && ($kb['format_price_mode'] ?? null) === 'alternativen' && ($kb['preis_range'] ?? null))
+                                        {{ $kb['preis_range']['min'] !== null ? number_format((float) $kb['preis_range']['min'], 2, ',', '.') : '—' }}–{{ $kb['preis_range']['max'] !== null ? number_format((float) $kb['preis_range']['max'], 2, ',', '.') : '—' }} €
+                                    @elseif($kb['vk_pro_person'] !== null)
+                                        {{ number_format((float) $kb['vk_pro_person'], 2, ',', '.') }} €
+                                    @else — @endif
+                                </span>
+                                <span class="w-28 text-right tabular-nums font-medium text-gray-800">{{ number_format((float) ($kb['gesamt'] ?? 0), 2, ',', '.') }} €</span>
+                            </div>
+                        @endforeach
+                        <div class="flex items-center gap-2 pt-1.5 mt-1 border-t-2 border-violet-500/30 text-sm font-semibold">
+                            <span class="flex-1 text-gray-900">Gesamt</span>
+                            <span class="w-16 text-right tabular-nums text-gray-400 text-[11px]">Ø {{ $kalkulation['pax'] ?: '—' }}</span>
+                            <span class="w-24 text-right tabular-nums text-gray-600 text-[11px]">{{ number_format((float) $kalkulation['vk_pro_person'], 2, ',', '.') }} €/P</span>
+                            <span class="w-28 text-right tabular-nums text-gray-900">{{ number_format((float) $kalkulation['gesamt_vk'], 2, ',', '.') }} €</span>
+                        </div>
+                        <p class="text-[10px] text-gray-400 pt-1">* eigene Kapitel-Pax — sonst erbt das Kapitel die Angebots-Pax ({{ $angebot->personen ?: '—' }}). Kopf-„€/Person" = Gesamt ÷ Angebots-Pax.</p>
+                    </x-foodalchemist::modal-section>
+                    @endif
+
                     {{-- B3: Vollkosten-/Zuschlagskalkulation über das gesamte Angebot × Pax ($auftragsKalkulation von B1). --}}
                     @includeIf('foodalchemist::livewire.angebote.partials.zuschlagskalkulation')
 
@@ -652,33 +661,6 @@
                         </div>
                     </x-foodalchemist::modal-section>
                     @endif
-                </div>
-
-                {{-- ═══ Tab: GERÜST (Slots VOR der Voll-Kaskade prüfen/bauen) ═══ --}}
-                <div x-show="tab === 'geruest'" x-cloak class="pt-4 space-y-4" data-angebot-panel="geruest">
-                    <x-foodalchemist::modal-section title="Planungs-Gerüst (Slots für die Voll-Kaskade)">
-                        <p class="text-[11px] text-gray-500 mb-2">Lege die Slots fest (z. B. Vorspeise · Hauptgang · Dessert) — die Voll-Kaskade erzeugt je Slot ein Menü-Konzept und referenziert es ans Angebot. Ohne Gerüst strukturiert die Voll-Kaskade automatisch aus Anlass/Gäste.</p>
-                        <div class="flex gap-2 mb-2">
-                            <input type="text" wire:model="neuerSlot" wire:keydown.enter="geruestSlotNeu" placeholder="Slot-Label (z. B. Hauptgang) …" class="{{ $input }}" data-angebot-slot-input />
-                            <button type="button" wire:click="geruestSlotNeu" class="{{ $btnGhostXs }} shrink-0" data-angebot-slot-neu>+ Slot</button>
-                            <button type="button" wire:click="geruestKickoff" wire:loading.attr="disabled" wire:target="geruestKickoff" class="{{ $btnGhostXs }} shrink-0 text-violet-600" data-angebot-geruest-kickoff>
-                                <span wire:loading.remove wire:target="geruestKickoff">@svg('heroicon-o-sparkles', 'w-3.5 h-3.5 inline align-text-bottom') KI-Vorschlag</span>
-                                <span wire:loading wire:target="geruestKickoff">…</span>
-                            </button>
-                        </div>
-                        <div class="space-y-1.5">
-                            @forelse($geruestSlots ?? [] as $slot)
-                                <div wire:key="ang-slot-{{ $slot->id }}" class="flex items-center gap-2 px-2 py-1 rounded-lg bg-black/[0.05] text-xs">
-                                    <span class="flex-1 truncate text-gray-800">{{ $slot->label }}</span>
-                                    @if($slot->target_count)<span class="text-gray-500">×{{ $slot->target_count }}</span>@endif
-                                    @if($slot->price_anchor !== null)<span class="text-gray-500 tabular-nums">{{ number_format((float) $slot->price_anchor, 2, ',', '.') }} €</span>@endif
-                                    <button type="button" wire:click="geruestSlotLoeschen({{ $slot->id }})" class="text-gray-500 hover:text-red-500 shrink-0" title="Slot löschen">✕</button>
-                                </div>
-                            @empty
-                                <p class="text-[11px] text-gray-500">Noch keine Slots. „+ Slot" oder „KI-Vorschlag" anlegen — dann Voll-Kaskade (über „In der Leitstelle planen").</p>
-                            @endforelse
-                        </div>
-                    </x-foodalchemist::modal-section>
                 </div>
 
                 {{-- ═══ Tab: KUNDE & BUSINESS-CASE ═══ --}}
