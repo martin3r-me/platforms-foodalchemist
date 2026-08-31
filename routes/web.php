@@ -485,6 +485,10 @@ Route::get('/angebote/{id}/karte', function (int $id, \Platform\FoodAlchemist\Se
     return view('foodalchemist::dokumente.angebot-karte', $data + ['istPdf' => false]);
 })->whereNumber('id')->name('foodalchemist.angebote.karte');
 
+/** #380 Composer / Spec 43: interne LIVE-Vorschau der Angebot-Präsentation (auth+team). */
+Route::get('/angebote/{id}/praesentation', [\Platform\FoodAlchemist\Http\Controllers\PresentationController::class, 'previewAngebot'])
+    ->whereNumber('id')->name('foodalchemist.angebote.praesentation');
+
 /**
  * M12: Kalkulations-Übersicht (Kennzahlen + Preissimulation).
  *

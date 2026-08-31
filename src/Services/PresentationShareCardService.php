@@ -3,6 +3,7 @@
 namespace Platform\FoodAlchemist\Services;
 
 use Illuminate\Support\Facades\Cache;
+use Platform\FoodAlchemist\Models\FoodAlchemistAngebot;
 use Platform\FoodAlchemist\Models\FoodAlchemistFoodbook;
 use Platform\FoodAlchemist\Models\FoodAlchemistSpeisekarte;
 use Platform\FoodAlchemist\Models\FoodAlchemistSpeiseplan;
@@ -148,6 +149,7 @@ class PresentationShareCardService
             'foodbook' => FoodAlchemistFoodbook::class,
             'speisekarte' => FoodAlchemistSpeisekarte::class,
             'speiseplan' => FoodAlchemistSpeiseplan::class,
+            'angebot' => FoodAlchemistAngebot::class,
             default => null,
         };
         if ($class === null) {

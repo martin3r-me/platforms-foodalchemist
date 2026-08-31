@@ -298,7 +298,7 @@ class PresentationDesignService
     }
 
     /** Die drei Ausgabeformen, für die ein Design gelten kann. */
-    public const OUTPUT_TYPES = ['foodbook', 'speisekarte', 'speiseplan'];
+    public const OUTPUT_TYPES = ['foodbook', 'speisekarte', 'speiseplan', 'angebot'];
 
     /** Nur gültige Formen; leer/keine → null (= gilt für alle Formen). */
     private function sanitizeOutputTypes(mixed $raw): ?array

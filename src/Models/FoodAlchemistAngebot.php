@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 use Platform\ActivityLog\Traits\LogsActivity;
 use Platform\FoodAlchemist\Enums\AngebotStatus;
 use Platform\FoodAlchemist\Models\Concerns\BelongsToTeamHierarchy;
+use Platform\FoodAlchemist\Models\Concerns\HasPresentation;
 use Platform\FoodAlchemist\Models\Concerns\HasUuidV7;
 
 /**
@@ -26,7 +27,7 @@ use Platform\FoodAlchemist\Models\Concerns\HasUuidV7;
  */
 class FoodAlchemistAngebot extends Model
 {
-    use HasUuidV7, LogsActivity, BelongsToTeamHierarchy, SoftDeletes;
+    use HasUuidV7, LogsActivity, BelongsToTeamHierarchy, SoftDeletes, HasPresentation;
 
     protected $table = 'foodalchemist_offers';
 

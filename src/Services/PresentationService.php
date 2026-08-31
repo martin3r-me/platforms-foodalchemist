@@ -4,6 +4,7 @@ namespace Platform\FoodAlchemist\Services;
 
 use Illuminate\Database\Eloquent\Model;
 use Platform\Core\Models\Team;
+use Platform\FoodAlchemist\Models\FoodAlchemistAngebot;
 use Platform\FoodAlchemist\Models\FoodAlchemistFoodbook;
 use Platform\FoodAlchemist\Models\FoodAlchemistOutlet;
 use Platform\FoodAlchemist\Models\FoodAlchemistPresentation;
@@ -29,6 +30,7 @@ class PresentationService
     public const TYPE_FOODBOOK = 'foodbook';
     public const TYPE_SPEISEKARTE = 'speisekarte';
     public const TYPE_SPEISEPLAN = 'speiseplan';
+    public const TYPE_ANGEBOT = 'angebot';
 
     public const SCHEMA_VERSION = 1;
 
@@ -311,6 +313,7 @@ class PresentationService
             self::TYPE_FOODBOOK => $this->normalizeFoodbook($team, $entity, $clean, $outlet),
             self::TYPE_SPEISEKARTE => $this->normalizeSpeisekarte($team, $entity, $clean, $outlet),
             self::TYPE_SPEISEPLAN => $this->normalizeSpeiseplan($team, $entity, $clean, $outlet),
+            self::TYPE_ANGEBOT => $this->normalizeAngebot($team, $entity, $clean, $outlet),
             default => throw new \InvalidArgumentException("Präsentations-Typ '{$type}' ist in dieser Phase noch nicht unterstützt."),
         };
 
@@ -680,6 +683,135 @@ class PresentationService
     }
 
     /**
+     * ALLOWLIST-Neubau der Angebot-Kundensicht (#380 Composer) — spiegelt normalizeFoodbook,
+     * konsumiert aber die interna-freie {@see OfferCompositionService::komposition} (intern=false →
+     * kein EK/Marge). Kapitel → Section; concept_ref-Block bzw. Format-Edition → Block mit
+     * Gäste-Zeilen; Format-Editionen werden (anders als der Foodbook-Showcase) als Blöcke gezeigt.
+     * Gesamt/Pro-Person aus der Pax-Kalkulation. source/slot_id/recipe_id/EK bleiben draußen.
+     *
+     * @return array{title:string, subtitle:?string, meta:array, body:array}
+     */
+    private function normalizeAngebot(Team $team, FoodAlchemistAngebot $angebot, array $settings, ?FoodAlchemistOutlet $outlet = null): array
+    {
+        $showPrice = (bool) $settings['price_display'];
+
+        $komp = app(OfferCompositionService::class)->komposition($team, $angebot, $outlet, false);
+        $kalk = app(AngebotService::class)->kalkulation($team, $angebot, $outlet);
+
+        $sections = [];
+        foreach ($komp['kapitel'] as $k) {
+            $blocks = [];
+            if ($k['ist_format']) {
+                foreach ($k['editionen'] as $ed) {
+                    $typ = (string) ($ed['typ'] ?? 'concept');
+                    if (in_array($typ, ['header', 'spacer'], true)) {
+                        if (($ed['name'] ?? '') !== '') {
+                            $blocks[] = ['kind' => 'header', 'label' => (string) $ed['name'], 'subtitle' => null,
+                                'is_header' => true, 'per_item_price' => false, 'price' => null, 'codes' => [], 'items' => []];
+                        }
+
+                        continue;
+                    }
+                    if ($typ === 'text') {
+                        if (($ed['text'] ?? '') !== '') {
+                            $blocks[] = ['kind' => 'text', 'label' => (string) $ed['text'], 'subtitle' => null,
+                                'is_header' => false, 'per_item_price' => false, 'price' => null, 'codes' => [], 'items' => []];
+                        }
+
+                        continue;
+                    }
+                    $einzel = (bool) ($ed['einzelpreise'] ?? false);
+                    $blocks[] = [
+                        'kind' => 'concept_ref', 'label' => (string) ($ed['name'] ?? ''), 'subtitle' => $ed['claim'] ?? null,
+                        'is_header' => false, 'per_item_price' => $einzel,
+                        'price' => ($showPrice && ! $einzel && ($ed['preis_pp'] ?? null) !== null)
+                            ? ['pp' => (float) $ed['preis_pp'], 'pauschal' => 0.0, 'unit' => 'gast'] : null,
+                        'codes' => [], 'items' => $this->angebotItems($ed['gerichte'] ?? [], $showPrice),
+                    ];
+                }
+            } else {
+                foreach ($k['bloecke'] as $b) {
+                    if ($b['ist_header']) {
+                        $blocks[] = ['kind' => 'header', 'label' => (string) ($b['label'] ?? ''), 'subtitle' => null,
+                            'is_header' => true, 'per_item_price' => false, 'price' => null, 'codes' => [], 'items' => []];
+
+                        continue;
+                    }
+                    if (($b['type'] ?? '') === 'text') {
+                        if (($b['label'] ?? '') !== '') {
+                            $blocks[] = ['kind' => 'text', 'label' => (string) $b['label'], 'subtitle' => null,
+                                'is_header' => false, 'per_item_price' => false, 'price' => null, 'codes' => [], 'items' => []];
+                        }
+
+                        continue;
+                    }
+                    $einzel = (bool) ($b['einzelpreise'] ?? false);
+                    $blocks[] = [
+                        'kind' => (string) ($b['type'] ?? ''), 'label' => (string) ($b['label'] ?? ''), 'subtitle' => null,
+                        'is_header' => false, 'per_item_price' => $einzel,
+                        'price' => ($showPrice && ! $einzel)
+                            ? ['pp' => (float) ($b['preis_pp'] ?? 0), 'pauschal' => (float) ($b['pauschal'] ?? 0), 'unit' => $b['preis_einheit'] ?? null] : null,
+                        'codes' => [], 'items' => $this->angebotItems($b['gerichte'] ?? [], $showPrice),
+                    ];
+                }
+            }
+            $sections[] = [
+                'title' => (string) ($k['title'] ?? ''),
+                'text' => $k['text'] ?? null,
+                'depth' => (int) ($k['depth'] ?? 0),
+                'anker' => (string) ($k['anker'] ?? ''),
+                'image' => null, 'images' => [],
+                'blocks' => $blocks,
+            ];
+        }
+
+        $total = $showPrice ? [
+            'vk_pro_person' => isset($kalk['vk_pro_person']) ? (float) $kalk['vk_pro_person'] : null,
+            'pauschal' => null,
+            'personen' => $kalk['pax'] ?? null,
+            'gesamt_vk' => isset($kalk['gesamt_vk']) ? (float) $kalk['gesamt_vk'] : null,
+        ] : null;
+
+        $angebot->loadMissing(['crmCompany', 'crmContact']);
+
+        return [
+            'title' => (string) ($angebot->name ?: 'Angebot'),
+            'subtitle' => $angebot->occasion ? (string) $angebot->occasion : null,
+            'meta' => [
+                'customer' => $angebot->crmCompany?->display_name ?? $angebot->crmContact?->display_name,
+                'kontakt' => $angebot->crmContact?->display_name,
+                'jahr' => $angebot->event_date?->year,
+                'mwst' => app(TeamSettingsService::class)->mwst($team),
+                'stand' => optional($angebot->updated_at)->toIso8601String(),
+            ],
+            'body' => [
+                'layout_kind' => 'linear',
+                'sections' => $sections,
+                'legend' => null,
+                'total' => $total,
+            ],
+        ];
+    }
+
+    /** Gäste-Zeilen → interna-freie Präsentations-Items (kein source/slot_id/recipe_id/EK). */
+    private function angebotItems(array $gerichte, bool $showPrice): array
+    {
+        $items = [];
+        foreach ($gerichte as $g) {
+            $items[] = [
+                'kind' => (string) ($g['type'] ?? 'gericht'),
+                'label' => (string) ($g['text'] ?? ''),
+                'indent' => (int) ($g['einrueckung'] ?? 0),
+                'price' => ($showPrice && ($g['preis'] ?? null) !== null) ? (float) $g['preis'] : null,
+                'codes' => [],
+                'image' => null,
+            ];
+        }
+
+        return $items;
+    }
+
+    /**
      * Live-Vorschau für den Struktur-Builder: rendert den (noch ungespeicherten) Layout-/
      * Token-Stand gegen ein echtes Foodbook. Content wird regulär sanitisiert, das Design
      * kommt aus dem Builder (nicht aus einer gespeicherten Quelle).
@@ -996,6 +1128,7 @@ class PresentationService
             self::TYPE_FOODBOOK => FoodAlchemistFoodbook::class,
             self::TYPE_SPEISEKARTE => FoodAlchemistSpeisekarte::class,
             self::TYPE_SPEISEPLAN => FoodAlchemistSpeiseplan::class,
+            self::TYPE_ANGEBOT => FoodAlchemistAngebot::class,
             default => throw new \InvalidArgumentException("Unbekannter Präsentations-Typ '{$type}'."),
         };
     }
