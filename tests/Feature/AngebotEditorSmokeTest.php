@@ -44,3 +44,27 @@ it('Editor: Kapitel anlegen + Concept einbuchen + Kalkulation rendert', function
 
     expect(\Platform\FoodAlchemist\Models\FoodAlchemistOfferBlock::where('chapter_id', $kapId)->where('type', 'concept_ref')->count())->toBeGreaterThan(0);
 });
+
+it('Editor: Präsentation veröffentlichen erzeugt einen Kunden-Link', function () {
+    $angebot = $this->svc->create($this->rootTeam, ['name' => 'Smoke-Präsi', 'personen' => 25]);
+    $c = FoodAlchemistConcept::create([
+        'team_id' => $this->rootTeam->id, 'name' => 'MenüSmoke', 'kind' => 'concept', 'status' => 'active',
+        'price_per_person_cache' => 15.0, 'ek_per_person_cache' => 5.0,
+    ]);
+    $comp = app(\Platform\FoodAlchemist\Services\OfferCompositionService::class);
+    $kap = $comp->addKapitel($this->rootTeam, $angebot->id, ['title' => 'Menü']);
+    $comp->addBlock($this->rootTeam, $kap->id, ['type' => 'concept_ref', 'concept_id' => $c->id]);
+
+    $t = \Livewire\Livewire::test(Editor::class)->call('oeffnen', $angebot->id)
+        ->set('presentationGueltigBis', now()->addDays(30)->toDateString())
+        ->call('veroeffentlichen')->assertOk();
+
+    expect($t->get('presentationFehler'))->toBeNull();
+    $angebot->refresh();
+    expect($angebot->presentation_enabled)->toBeTrue()
+        ->and($angebot->isPresentationLive())->toBeTrue()
+        ->and($angebot->presentationPublicRef())->not->toBeNull();
+
+    // öffentlicher Link rendert (200) + interna-frei.
+    $this->get('/p/angebot/' . $angebot->presentationPublicRef())->assertOk()->assertSee('Smoke-Präsi');
+});

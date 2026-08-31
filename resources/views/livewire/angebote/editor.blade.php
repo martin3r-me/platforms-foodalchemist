@@ -780,7 +780,7 @@
                                 </select>
                             </label>
                             <label class="block text-xs text-gray-600">Gültig bis <span class="text-rose-500">*</span>
-                                <input type="date" wire:model="presentationGueltigBis" class="mt-1 block w-full text-sm border border-gray-300 rounded px-2 py-1" data-angebot-praes-gueltig>
+                                <input type="date" wire:model.live="presentationGueltigBis" class="mt-1 block w-full text-sm border border-gray-300 rounded px-2 py-1" data-angebot-praes-gueltig>
                             </label>
                         </div>
 
