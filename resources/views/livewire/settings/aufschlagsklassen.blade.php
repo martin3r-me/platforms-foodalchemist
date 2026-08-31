@@ -3,9 +3,33 @@
 <div class="space-y-5" data-settings-aufschlagsklassen>
     @if($fehler !== null)<p class="text-xs text-rose-600" data-ak-fehler>{{ $fehler }}</p>@endif
 
+    {{-- Ebene 2: Basissatz-Vorschau je Betrieb (lokal — verändert nicht die globale Brille). --}}
+    @if(count($betriebeOptionen) > 0)
+        <div class="rounded-lg border p-3 flex flex-wrap items-center gap-2" style="border-color:#e9d5ff;background:#faf5ff;">
+            <span class="inline-block w-2 h-2 rounded-full" style="background:#9333ea;"></span>
+            <label class="text-xs font-semibold" style="color:#6b21a8;">Basissatz-Vorschau für</label>
+            <select wire:model.live="outletId" class="{{ $input }} !w-64 !py-1">
+                <option value="">Team-Standard</option>
+                @foreach($betriebeOptionen as $o)
+                    <option value="{{ $o['id'] }}">Betrieb: {{ $o['name'] }}</option>
+                @endforeach
+            </select>
+            <span class="text-[11px] text-purple-800">
+                @if($scopeOutletName)
+                    Basissatz &amp; Gesamtfaktor für <strong>{{ $scopeOutletName }}</strong>. Die <strong>Klassenfaktoren, MwSt &amp; Rundung gelten teamweit</strong> (relative Multiplikatoren).
+                @else
+                    Team-Basissatz. Betrieb wählen, um den Basissatz dieses Betriebs (aus dessen Fixkosten &amp; Marge) zu sehen.
+                @endif
+            </span>
+        </div>
+    @endif
+
     <div class="{{ $card }} p-4 flex items-start justify-between gap-4 flex-wrap">
         <div>
-            <h3 class="font-medium text-gray-900">Dynamischer Unternehmens-Basissatz</h3>
+            <h3 class="font-medium text-gray-900">
+                Dynamischer Unternehmens-Basissatz
+                @if($scopeOutletName)<span class="text-[11px] font-normal text-purple-600">· {{ $scopeOutletName }}</span>@endif
+            </h3>
             <p class="text-[11px] text-gray-500 mt-0.5">Aus bestätigten Monatsbasen, Gemeinkosten und Gewinnaufschlag. Preisklassen verändern diesen Satz nur relativ.</p>
         </div>
         <div class="text-right">

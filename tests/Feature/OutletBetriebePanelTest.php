@@ -10,37 +10,44 @@ use Platform\FoodAlchemist\Tests\TestCase;
 uses(TestCase::class, SeedsTeamHierarchy::class);
 
 /**
- * Ebene 2 — Slice D (Panel): das Betriebe-Panel in den Einstellungen trägt die
- * Kalkulations-Override-Felder. Livewire-Logik: laden → speichern → leer = erbt.
- * (Browser-Layout gesondert abnehmen — Livewire::test ist layout-blind.)
+ * Ebene 2 — Slice D (Panel): das Betriebe-Panel pflegt nur noch Identität/Optik/Vorlage.
+ * Die Kalkulations-Overrides (Marge/Ziel-WE/Stundensatz/Material-GK/Lohnneben. + eigenes
+ * Zuschlagsschema/Fixkosten/Bezugsbasen) wohnen jetzt unter „Herstellkosten & Zuschläge"
+ * (siehe HerstellkostenOutletEditorTest). (Browser-Layout gesondert abnehmen.)
  */
 beforeEach(function () {
     $this->seedTeamHierarchy();
     $this->actingAs($this->makeUser($this->rootTeam));
 });
 
-it('Panel rendert + speichert Kalkulations-Overrides des Betriebs; leer = erbt vom Team', function () {
+it('Panel speichert Identität + Präsentations-Vorlage des Betriebs', function () {
     $outlet = FoodAlchemistOutlet::create(['team_id' => $this->rootTeam->id, 'name' => 'Kantine']);
 
     Livewire::test(Betriebe::class)
         ->call('edit', $outlet->id)
-        ->set('overrides.margin_pct', '33')
-        ->set('overrides.stundensatz_eur', '48,50')   // Komma wird zu Punkt
-        ->set('overrides.target_food_cost_pct', '')     // leer = erbt
+        ->set('form.name', 'Kantine Nord')
+        ->set('form.color', '#6d28d9')
+        ->set('form.vorlage', 'navigator')
         ->call('speichern')
         ->assertHasNoErrors();
 
-    $s = app(OutletSettingsService::class)->for($outlet->fresh());
-    expect((float) $s->margin_pct)->toBe(33.0)
-        ->and((float) $s->stundensatz_eur)->toBe(48.5)
-        ->and($s->target_food_cost_pct)->toBeNull();
+    $fresh = $outlet->fresh();
+    expect($fresh->name)->toBe('Kantine Nord')
+        ->and($fresh->color)->toBe('#6d28d9')
+        ->and($fresh->presentation_design)->toBe('navigator');
 });
 
-it('Panel: erneutes Bearbeiten lädt die gespeicherten Overrides zurück', function () {
+it('Panel fasst die Kosten-Overrides nicht mehr an (die wohnen in Herstellkosten)', function () {
     $outlet = FoodAlchemistOutlet::create(['team_id' => $this->rootTeam->id, 'name' => 'Filiale']);
+    // Vorbestehender Override (z. B. via Herstellkosten gesetzt) bleibt beim Betriebe-Speichern unberührt.
     app(OutletSettingsService::class)->update($this->rootTeam, $outlet, ['margin_pct' => 42]);
 
     Livewire::test(Betriebe::class)
         ->call('edit', $outlet->id)
-        ->assertSet('overrides.margin_pct', '42.00');
+        ->set('form.name', 'Filiale West')
+        ->call('speichern')
+        ->assertHasNoErrors();
+
+    $s = app(OutletSettingsService::class)->for($outlet->fresh());
+    expect((float) $s->margin_pct)->toBe(42.0);   // unverändert
 });

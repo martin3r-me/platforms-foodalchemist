@@ -7,7 +7,6 @@ use Illuminate\Support\Facades\DB;
 use Livewire\Component;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Models\FoodAlchemistOutlet;
-use Platform\FoodAlchemist\Services\OutletSettingsService;
 
 /**
  * Spec 33 · P2 — Pflege der Betriebe/Standorte (Outlets).
@@ -34,12 +33,6 @@ class Betriebe extends Component
 
     /** @var array{name:string,color:string,sort_order:int|string,vorlage:string} */
     public array $form = ['name' => '', 'color' => '', 'sort_order' => 100, 'vorlage' => ''];
-
-    /** Ebene 2: Kalkulations-Overrides des bearbeiteten Betriebs (leer = erbt vom Team). */
-    public array $overrides = [
-        'margin_pct' => '', 'target_food_cost_pct' => '', 'stundensatz_eur' => '',
-        'hk2_surcharge_pct' => '', 'labor_overhead_pct' => '',
-    ];
 
     public string $neuName = '';
 
@@ -87,15 +80,11 @@ class Betriebe extends Component
             'sort_order' => (int) $o->sort_order,
             'vorlage' => (string) ($o->presentation_design ?? ''),
         ];
-        $s = app(OutletSettingsService::class)->for($o);
-        foreach (array_keys($this->overrides) as $k) {
-            $this->overrides[$k] = $s->{$k} !== null ? (string) $s->{$k} : '';
-        }
     }
 
     public function abbrechen(): void
     {
-        $this->reset('editId', 'form', 'fehler', 'overrides');
+        $this->reset('editId', 'form', 'fehler');
     }
 
     public function speichern(): void
@@ -125,14 +114,8 @@ class Betriebe extends Component
             'presentation_design' => ($v = trim((string) ($this->form['vorlage'] ?? ''))) !== '' ? $v : null,
         ]);
 
-        // Ebene 2: Kalkulations-Overrides des Betriebs (leer = zurück auf Team-Erbe).
-        $clean = [];
-        foreach (array_keys($this->overrides) as $k) {
-            $roh = trim((string) ($this->overrides[$k] ?? ''));
-            $clean[$k] = $roh === '' ? null : max(0.0, (float) str_replace(',', '.', $roh));
-        }
-        app(OutletSettingsService::class)->update($team, $o, $clean);
-
+        // Ebene 2: Kosten-Overrides je Betrieb wohnen jetzt in „Herstellkosten & Zuschläge"
+        // (Team/Betrieb-Wähler) — hier nur noch Identität, Farbe, Reihenfolge, Präsentations-Vorlage.
         $this->abbrechen();
     }
 

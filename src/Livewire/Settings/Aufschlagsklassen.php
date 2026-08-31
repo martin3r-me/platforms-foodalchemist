@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
 use Platform\FoodAlchemist\Models\FoodAlchemistMarkupClass;
+use Platform\FoodAlchemist\Models\FoodAlchemistOutlet;
 use Platform\FoodAlchemist\Services\CatalogPricingService;
 use Platform\FoodAlchemist\Services\PricingCascadeService;
 use Platform\FoodAlchemist\Services\TeamSettingsService;
@@ -24,6 +25,13 @@ class Aufschlagsklassen extends Component
     public array $neu = ['code' => '', 'label' => '', 'class_factor_pct' => '100', 'vat_profile_key' => '', 'rounding_decimals' => '', 'rounding_mode' => '', 'note' => ''];
 
     public ?string $fehler = null;
+
+    /**
+     * Ebene 2: lokaler Vorschau-Scope für den Basissatz (null = Team, sonst ein Betrieb).
+     * Verändert NUR die Basissatz-/Gesamtfaktor-Vorschau — die Klassenfaktoren/MwSt/Rundung
+     * bleiben teamweit (relative Multiplikatoren, keine Outlet-Spalten). Nicht die globale Brille.
+     */
+    public ?int $outletId = null;
 
     /**
      * MVP-039 (P0): eine Klasse ist mutierbar nur fürs Besitzer-Team. Sichtbar (global +
@@ -207,11 +215,26 @@ class Aufschlagsklassen extends Component
     {
         // Mandanten-Sichtbarkeit (D1): globaler Seed (team_id NULL) + eigenes Team/Master-Kette.
         $team = Auth::user()?->currentTeamRelation;
-        $base = $team !== null ? app(CatalogPricingService::class)->enterpriseBaseRate($team) : null;
+
+        // Ebene 2: Basissatz-Vorschau folgt dem gewählten Betrieb (team-eigen, aktiv) — sonst Team-Baseline.
+        $outlet = null;
+        if ($team !== null && $this->outletId !== null) {
+            $outlet = FoodAlchemistOutlet::where('team_id', $team->id)
+                ->where('is_inactive', false)->find($this->outletId);
+        }
+        $base = $team !== null ? app(CatalogPricingService::class)->enterpriseBaseRate($team, $outlet) : null;
+
+        $betriebeOptionen = $team !== null
+            ? FoodAlchemistOutlet::where('team_id', $team->id)->where('is_inactive', false)
+                ->orderBy('sort_order')->orderBy('name')->get(['id', 'name'])
+                ->map(fn ($o) => ['id' => (int) $o->id, 'name' => (string) $o->name])->all()
+            : [];
 
         return view('foodalchemist::livewire.settings.aufschlagsklassen', [
             'team' => $team,
             'base' => $base,
+            'betriebeOptionen' => $betriebeOptionen,
+            'scopeOutletName' => $outlet?->name,
             'standardId' => $team !== null ? app(TeamSettingsService::class)->defaultMarkupClassId($team) : null,
             'klassen' => TeamScope::applyVisible(FoodAlchemistMarkupClass::query(), 'team_id', $team)->orderBy('code')->get(),
             // MVP-040: nur sichtbare Gerichte zählen — der Zähler verriet sonst fremde Team-Nutzung.
