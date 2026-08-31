@@ -191,15 +191,17 @@ class Editor extends Component
         if ($this->selectedId === null) {
             return;
         }
-        $svc = app(AngebotService::class);
-        $a = $svc->detail($this->team(), $this->selectedId);
+        // Fürs Formular genügt der Angebotskopf. Die schweren Editor-Relationen
+        // lädt render() direkt danach genau einmal.
+        $a = FoodAlchemistAngebot::visibleToTeam($this->team())->find($this->selectedId);
         if ($a === null) {
             $this->selectedId = null;
 
             return;
         }
-        $svc->aktualisiereAutoPreis($this->team(), $a);
-        $a->refresh();
+        // Öffnen ist ein reiner Leseweg. Preisändernde Commands aktualisieren den
+        // Auto-Preis bereits selbst; eine volle Kalkulation hier würde direkt vor
+        // dem Render dieselbe schwere Arbeit nochmals ausführen und in die DB schreiben.
         $this->form = [
             'name' => $a->name,
             'status' => $a->status?->value ?? 'anfrage',
@@ -1401,10 +1403,31 @@ class Editor extends Component
     //  Render
     // ══════════════════════════════════════════════════════════════════════════
 
-    /** Kapitel-Wording (Schreibstil-Override je Gericht) neu betexten — Enrichment-Nachzug; Klick bleibt fehlerfrei. */
-    public function kapitelWordingGenerieren(): void
+    /** Kapitel-Wording im gewählten Stil als angebots-lokalen Block-Snapshot erzeugen. */
+    public function kapitelWordingGenerieren(OfferCompositionService $svc): void
     {
-        $this->savedToast('Kapitel-Wording-Regenerierung folgt — nutze bis dahin „KI-Text“ für die Hinführung.');
+        if ($this->selectedKapitelId === null) {
+            return;
+        }
+        $this->resetErrorBag('kapitelWording');
+        $svc->updateKapitel($this->team(), $this->selectedKapitelId, $this->kapitelForm);
+        $stilId = $this->kapitelForm['writing_style_id'] ?? null;
+        if ($stilId === null || $stilId === '') {
+            $this->addError('kapitelWording', 'Kein Kapitel-Schreibstil gewählt — Standard erbt live aus den Concepten.');
+
+            return;
+        }
+        try {
+            $anzahl = $svc->kapitelWordingRegenerieren($this->team(), $this->selectedKapitelId);
+        } catch (\Throwable $e) {
+            $this->addError('kapitelWording', $e->getMessage());
+
+            return;
+        }
+        $this->dispatch('angebot-gespeichert');
+        $this->savedToast($anzahl > 0
+            ? "{$anzahl} Konzept(e) im Kapitel-Stil neu betextet."
+            : 'Keine betextbaren Konzept-Blöcke im Kapitel.');
     }
 
     public function render(AngebotService $svc)
@@ -1472,15 +1495,17 @@ class Editor extends Component
 
         // Ebene 2: Angebot wird gegen den aktiven Betrieb gerechnet (Kosten + Ziel-WE-Ampel).
         $outlet = app(\Platform\FoodAlchemist\Services\ActiveOutletContext::class)->current($team);
-        $kalkulation = $angebot ? $svc->kalkulation($team, $angebot, $outlet) : null;
+        // Den schweren Kompositionsbaum und seine Preiseinheiten pro Render nur einmal bauen.
+        $komposition = $angebot ? $comp->komposition($team, $angebot, $outlet, true) : null;
+        $einheiten = $angebot ? $comp->preisEinheiten($team, $angebot, $outlet) : null;
+        $kalkulation = $angebot ? $svc->kalkulation($team, $angebot, $outlet, $komposition, $einheiten) : null;
         $zielWareneinsatzPct = app(\Platform\FoodAlchemist\Services\TeamSettingsService::class)
             ->zielWareneinsatzPct($team, $outlet);
         $wareneinsatzAmpel = app(\Platform\FoodAlchemist\Services\MargeService::class)
             ->weAmpel($kalkulation['wareneinsatz_pct'] ?? null, $zielWareneinsatzPct);
 
-        // Komposition intern (Editor/Vertrieb, mit EK/Marge) + Kundensicht (Menü-Vorschau, ohne EK).
-        $komposition = $angebot ? $comp->komposition($team, $angebot, $outlet, true) : null;
-        $menue = $angebot ? $comp->komposition($team, $angebot, $outlet, false) : null;
+        // Extern-sichere Kundensicht aus demselben Baum ableiten (keine zweite DB-/Preisrunde).
+        $menue = $komposition !== null ? $comp->kundensicht($komposition) : null;
 
         // Board: EIN Baum mit Status + Preis je Kapitel (gegen die Betriebsbrille gerechnet).
         $kapitelBoard = $angebot ? $this->kapitelBoardDaten($team, $angebot, $komposition, $zielWareneinsatzPct) : [];
@@ -1530,7 +1555,9 @@ class Editor extends Component
             'zielWareneinsatzPct' => $zielWareneinsatzPct,
             'statusWerte' => $svc->statusWerte(),
             // Kapitel-Baum + gewähltes Kapitel + Board + Block-Menüs
-            'kapitelTree' => $angebot !== null ? $comp->kapitelTree($team, $angebot->id) : [],
+            'kapitelTree' => array_map(fn (array $k) => [
+                'id' => $k['id'], 'title' => $k['title_intern'], 'parent_id' => $k['parent_id'], 'depth' => $k['depth'],
+            ], $komposition['kapitel'] ?? []),
             'kapitel' => $kapitel,
             'kapitelBoard' => $kapitelBoard,
             'blockMenus' => $blockMenus,
@@ -1587,7 +1614,7 @@ class Editor extends Component
             'segment' => null,
             'portfolioKonflikt' => null,
             // Zuschlagskalkulation (Vollkosten-Wasserfall) fürs GANZE Angebot × Pax (B3-Partial).
-            'auftragsKalkulation' => $angebot ? $svc->auftragsKalkulation($team, $angebot, $outlet) : null,
+            'auftragsKalkulation' => $angebot ? $svc->auftragsKalkulation($team, $angebot, $outlet, $einheiten) : null,
         ]);
     }
 

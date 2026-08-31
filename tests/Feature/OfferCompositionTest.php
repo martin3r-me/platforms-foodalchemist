@@ -101,6 +101,24 @@ it('komposition ist interna-frei ohne intern-Flag', function () {
     expect($intern['kapitel'][0])->toHaveKey('ek_pro_person');
 });
 
+it('Komposition zählt verschachtelte Kapitel genau einmal und kann die Kundensicht ableiten', function () {
+    $eltern = $this->comp->addKapitel($this->rootTeam, $this->angebot->id, ['title' => 'Eltern']);
+    $kind = $this->comp->addKapitel($this->rootTeam, $this->angebot->id, ['title' => 'Kind'], $eltern->id);
+    $this->comp->addBlock($this->rootTeam, $eltern->id, ['type' => 'header_preis', 'label' => 'Eltern-Preis',
+        'price_value' => 10, 'price_basis' => 'person']);
+    $this->comp->addBlock($this->rootTeam, $kind->id, ['type' => 'header_preis', 'label' => 'Kind-Preis',
+        'price_value' => 5, 'price_basis' => 'person']);
+
+    $intern = $this->comp->komposition($this->rootTeam, $this->angebot->fresh(), null, true);
+    $kunde = $this->comp->kundensicht($intern);
+
+    expect($intern['summe']['vk_pro_person'])->toBe(15.0)
+        ->and($intern['summe']['gesamt_vk'])->toBe(750.0)
+        ->and($kunde['summe'])->not->toHaveKey('gesamt_ek')
+        ->and($kunde['kapitel'][0])->not->toHaveKey('ek_pro_person')
+        ->and($kunde['kapitel'][0]['bloecke'][0])->not->toHaveKey('ek_pp');
+});
+
 it('referenziereConcept schreibt idempotent EINEN concept_ref-Block', function () {
     $c = macheConcept($this->rootTeam->id, 'Katalog-Menü', 20.0, 6.0);
     $this->svc->referenziereConcept($this->rootTeam, $this->angebot->id, $c->id);

@@ -26,6 +26,9 @@ use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
  */
 class AngebotService
 {
+    /** @var array<string,array> Teure Vollkosten je Request nur einmal berechnen. */
+    private array $costingCache = [];
+
     /** Editierbare Felder (Anfrage/Briefing + kommerziell + CRM-Verknüpfung). */
     private const FELDER = [
         'name', 'status', 'occasion', 'personen', 'budget', 'event_date', 'location',
@@ -226,7 +229,13 @@ class AngebotService
      *   gesamt_vk:float, gesamt_ek:float, gesamt_hk2:float, gesamt_db:float,
      *   menue:list<array>, mengen:list<array>}
      */
-    public function kalkulation(Team $team, FoodAlchemistAngebot $angebot, ?\Platform\FoodAlchemist\Models\FoodAlchemistOutlet $outlet = null): array
+    public function kalkulation(
+        Team $team,
+        FoodAlchemistAngebot $angebot,
+        ?\Platform\FoodAlchemist\Models\FoodAlchemistOutlet $outlet = null,
+        ?array $komposition = null,
+        ?array $einheiten = null,
+    ): array
     {
         $orderCosting = app(OrderCostingService::class);
         $conceptSvc = app(ConceptService::class);
@@ -236,8 +245,8 @@ class AngebotService
         // #380 Composer / Per-Kapitel-Pax (Q1): Kopf-Totale kommen pax-korrekt aus der Komposition
         // (Σ Kapitel-Pax × €/P + Pauschalen; kapitelAggregat deckt concept_ref+recipe_ref+header_preis ab).
         // Die Rich-KPIs (Zielpreis/HK2/Zeit) kommen aus costConcept je Concept-Einheit × ihrer Kapitel-Pax.
-        $komposition = $comp->komposition($team, $angebot, $outlet, true);
-        $einheiten = $comp->preisEinheiten($team, $angebot, $outlet);
+        $komposition ??= $comp->komposition($team, $angebot, $outlet, true);
+        $einheiten ??= $comp->preisEinheiten($team, $angebot, $outlet);
         $units = $einheiten['units'];
         $summe = $komposition['summe'];
         $gesamtVkAuto = round((float) $summe['gesamt_vk'], 2);
@@ -255,7 +264,7 @@ class AngebotService
         foreach ($units as $u) {
             $c = $u['concept'];
             $uPax = max(0, (int) $u['pax']);
-            $orderCost = $uPax > 0 ? $orderCosting->costConcept($team, $c, $uPax, $outlet) : null;
+            $orderCost = $uPax > 0 ? $this->costConceptCached($orderCosting, $team, $c, $uPax, $outlet) : null;
             $hk2Gesamt += $orderCost !== null ? (float) $orderCost['hk2'] : 0.0;
             $zielGesamt += (float) ($orderCost['target_price'] ?? 0);
             $aktiveMinuten += (float) ($orderCost['active_person_minutes'] ?? 0);
@@ -402,10 +411,16 @@ class AngebotService
      *
      * @return ?array costConcept-förmiges Aggregat; null wenn kein Pax oder keine Concepts.
      */
-    public function auftragsKalkulation(Team $team, FoodAlchemistAngebot $angebot, ?\Platform\FoodAlchemist\Models\FoodAlchemistOutlet $outlet = null): ?array
+    public function auftragsKalkulation(
+        Team $team,
+        FoodAlchemistAngebot $angebot,
+        ?\Platform\FoodAlchemist\Models\FoodAlchemistOutlet $outlet = null,
+        ?array $einheiten = null,
+    ): ?array
     {
         $pax = max(0, (int) ($angebot->personen ?? 0));
-        $units = app(OfferCompositionService::class)->preisEinheiten($team, $angebot, $outlet)['units'];
+        $einheiten ??= app(OfferCompositionService::class)->preisEinheiten($team, $angebot, $outlet);
+        $units = $einheiten['units'];
         if ($units === []) {
             return null; // keine voll bekosteten Concept-Einheiten → kein Zuschlags-Wasserfall
         }
@@ -421,7 +436,7 @@ class AngebotService
         foreach ($units as $u) {
             $c = $u['concept'];
             $uPax = max(1, (int) $u['pax']);
-            $cc = $orderCosting->costConcept($team, $c, $uPax, $outlet);
+            $cc = $this->costConceptCached($orderCosting, $team, $c, $uPax, $outlet);
             foreach ($sum as $k => $_) {
                 $sum[$k] += (float) ($cc[$k] ?? 0);
             }
@@ -459,6 +474,19 @@ class AngebotService
             'time_breakdown' => $timeRows,
             'warnings' => array_values(array_unique($warnings)),
         ];
+    }
+
+    private function costConceptCached(
+        OrderCostingService $service,
+        Team $team,
+        FoodAlchemistConcept $concept,
+        int $pax,
+        ?\Platform\FoodAlchemist\Models\FoodAlchemistOutlet $outlet,
+    ): array
+    {
+        $key = implode(':', [$team->id, $concept->id, $pax, $outlet?->id ?? 0]);
+
+        return $this->costingCache[$key] ??= $service->costConcept($team, $concept, $pax, $outlet);
     }
 
     public function karteDaten(Team $team, int $id): array

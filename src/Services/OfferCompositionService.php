@@ -394,7 +394,12 @@ class OfferCompositionService
      *
      * @return array{vk_pro_person: ?float, ek_pro_person: float, pauschal: float, food_cost_percent: ?float, preis_range: ?array}
      */
-    public function kapitelAggregat(Team $team, FoodAlchemistOfferChapter $kapitel, ?FoodAlchemistOutlet $outlet = null): array
+    public function kapitelAggregat(
+        Team $team,
+        FoodAlchemistOfferChapter $kapitel,
+        ?FoodAlchemistOutlet $outlet = null,
+        bool $mitKindkapiteln = true,
+    ): array
     {
         if ($kapitel->format_id !== null) {
             $format = $kapitel->relationLoaded('format') ? $kapitel->format : $kapitel->format()->with('slots.concept:id,price_per_person_cache,ek_per_person_cache')->first();
@@ -418,8 +423,12 @@ class OfferCompositionService
                 'food_cost_percent' => $vk > 0 ? round($ek / $vk * 100, 1) : null, 'preis_range' => null];
         }
 
-        $kapitel->loadMissing(['blocks' => fn ($q) => $q->where('visible', true),
-            'blocks.concept:id,name,price_per_person_cache', 'blocks.dish:id,sales_net,ek_total_eur', 'children']);
+        $relationen = ['blocks' => fn ($q) => $q->where('visible', true),
+            'blocks.concept:id,name,price_per_person_cache', 'blocks.dish:id,sales_net,ek_total_eur'];
+        if ($mitKindkapiteln) {
+            $relationen[] = 'children';
+        }
+        $kapitel->loadMissing($relationen);
         $vk = 0.0;
         $ek = 0.0;
         $pauschal = 0.0;
@@ -429,11 +438,13 @@ class OfferCompositionService
             $ek += $p['ek_pp'];
             $pauschal += $p['pauschal'];
         }
-        foreach ($kapitel->children as $kind) {
-            $kindAgg = $this->kapitelAggregat($team, $kind, $outlet);
-            $vk += (float) ($kindAgg['vk_pro_person'] ?? 0);
-            $ek += $kindAgg['ek_pro_person'];
-            $pauschal += $kindAgg['pauschal'];
+        if ($mitKindkapiteln) {
+            foreach ($kapitel->children as $kind) {
+                $kindAgg = $this->kapitelAggregat($team, $kind, $outlet);
+                $vk += (float) ($kindAgg['vk_pro_person'] ?? 0);
+                $ek += $kindAgg['ek_pro_person'];
+                $pauschal += $kindAgg['pauschal'];
+            }
         }
         if ($kapitel->price_mode === 'manuell' && $kapitel->price_per_person !== null) {
             $vk = (float) $kapitel->price_per_person;
@@ -477,7 +488,9 @@ class OfferCompositionService
 
         $walk = function ($parentId, int $depth) use (&$walk, $byParent, &$kapitel, &$summeVk, &$summeEk, &$summePauschal, &$summeGesamtVk, &$summeGesamtEk, $team, $outlet, $intern, $wording, $angebotPax) {
             foreach ($byParent[$parentId] ?? [] as $k) {
-                $agg = $this->kapitelAggregat($team, $k, $outlet);
+                // Der Walk besucht jedes Kapitel selbst. Kindkapitel hier nicht erneut
+                // rekursiv einrechnen: das vermeidet N+1-Queries und doppelte Summen.
+                $agg = $this->kapitelAggregat($team, $k, $outlet, false);
                 // Per-Kapitel-Pax (Q1: Σ Kapitel-Pax × €/P): eigene Pax überschreibt, sonst erbt es die Angebots-Pax.
                 $effPax = $k->personen !== null ? max(0, (int) $k->personen) : $angebotPax;
                 $kapGesamt = round((float) ($agg['vk_pro_person'] ?? 0) * $effPax + (float) ($agg['pauschal'] ?? 0), 2);
@@ -576,6 +589,114 @@ class OfferCompositionService
                 'gesamt_ek' => round($summeGesamtEk, 2),
             ],
         ];
+    }
+
+    /**
+     * Leitet die extern-sichere Kundensicht aus der bereits berechneten internen
+     * Komposition ab. So muss der Editor denselben Baum nicht ein zweites Mal laden
+     * und kalkulieren.
+     */
+    public function kundensicht(array $komposition): array
+    {
+        unset($komposition['summe']['ek_pro_person'], $komposition['summe']['gesamt_ek']);
+        foreach (array_keys($komposition['kapitel'] ?? []) as $kapitelIndex) {
+            $kapitel = &$komposition['kapitel'][$kapitelIndex];
+            unset($kapitel['ek_pro_person'], $kapitel['food_cost_percent'], $kapitel['bild'], $kapitel['bilder']);
+            foreach (array_keys($kapitel['bloecke'] ?? []) as $blockIndex) {
+                $block = &$kapitel['bloecke'][$blockIndex];
+                unset($block['ek_pp']);
+                foreach (array_keys($block['gerichte'] ?? []) as $gerichtIndex) {
+                    unset($block['gerichte'][$gerichtIndex]['ek']);
+                }
+                unset($block);
+            }
+            foreach (array_keys($kapitel['editionen'] ?? []) as $editionIndex) {
+                $edition = &$kapitel['editionen'][$editionIndex];
+                unset($edition['ek_pp']);
+                foreach (array_keys($edition['gerichte'] ?? []) as $gerichtIndex) {
+                    unset($edition['gerichte'][$gerichtIndex]['ek']);
+                }
+                unset($edition);
+            }
+            unset($kapitel);
+        }
+
+        return $komposition;
+    }
+
+    /**
+     * Betextet alle concept_ref-Blöcke eines Angebots-Kapitels im gewählten
+     * Kapitel-Schreibstil. Die Texte bleiben als angebots-lokaler Snapshot am
+     * Block; das referenzierte Concept wird nicht verändert.
+     */
+    public function kapitelWordingRegenerieren(Team $team, int $kapitelId): int
+    {
+        $kapitel = $this->ownedKapitel($team, $kapitelId);
+        $kapitel->loadMissing([
+            'writingStyle',
+            'blocks.concept.slots.dish:id,name,sales_wording_standard',
+            'blocks.concept.slots.embeddedConcept.slots.dish:id,name,sales_wording_standard',
+        ]);
+        $stil = $kapitel->writingStyle;
+        if ($stil === null) {
+            return 0;
+        }
+
+        $gateway = app(\Platform\FoodAlchemist\Services\Ai\AiGatewayService::class);
+        $anzahl = 0;
+        foreach ($kapitel->blocks as $block) {
+            if ($block->type !== 'concept_ref' || $block->concept === null) {
+                continue;
+            }
+            $positionen = [];
+            foreach ($block->concept->slots as $slot) {
+                if ($slot->sales_recipe_id !== null && $slot->dish !== null) {
+                    $positionen[] = ['slot_id' => $slot->id, 'name' => $slot->dish->name,
+                        'sales_wording_standard' => $slot->dish->sales_wording_standard ?? null];
+                } elseif ($slot->embedded_concept_id !== null && $slot->embeddedConcept !== null) {
+                    foreach ($slot->embeddedConcept->slots as $paketSlot) {
+                        if ($paketSlot->sales_recipe_id !== null && $paketSlot->dish !== null) {
+                            $positionen[] = ['slot_id' => $paketSlot->id, 'name' => $paketSlot->dish->name,
+                                'sales_wording_standard' => $paketSlot->dish->sales_wording_standard ?? null];
+                        }
+                    }
+                }
+            }
+            if ($positionen === []) {
+                continue;
+            }
+
+            try {
+                $vorschlag = $gateway->propose('concept.wording', [
+                    'concept' => $block->concept->name,
+                    'occasion' => $block->concept->occasion,
+                    'class' => $block->concept->class,
+                    'schreibstil' => $stil->name,
+                    'schreibstil_anweisung' => trim((string) $stil->sprach_duktus) ?: null,
+                    'schreibstil_beispiele' => trim((string) $stil->beispiele_md) ?: null,
+                    'positionen' => $positionen,
+                ], [
+                    'food_dna_concept_id' => $block->concept->id,
+                    'target_table' => 'foodalchemist_offer_blocks',
+                    'target_id' => $block->id,
+                ]);
+            } catch (\Throwable) {
+                continue;
+            }
+
+            $intro = $vorschlag->werte['intro'] ?? null;
+            if (is_string($intro) && trim($intro) !== '') {
+                $this->updateBlock($team, $block->id, ['customer_text' => trim($intro)]);
+            }
+            foreach (($vorschlag->werte['slots'] ?? []) as $slotId => $text) {
+                if (is_string($text) && trim($text) !== '') {
+                    $this->setBlockSlotWording($team, $block->id, (int) $slotId, trim($text));
+                }
+            }
+            $anzahl++;
+        }
+
+        return $anzahl;
     }
 
     /**
