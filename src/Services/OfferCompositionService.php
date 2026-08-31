@@ -2,6 +2,7 @@
 
 namespace Platform\FoodAlchemist\Services;
 
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -11,6 +12,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
 use Platform\FoodAlchemist\Models\FoodAlchemistFormat;
 use Platform\FoodAlchemist\Models\FoodAlchemistOfferBlock;
 use Platform\FoodAlchemist\Models\FoodAlchemistOfferChapter;
+use Platform\FoodAlchemist\Models\FoodAlchemistOfferChapterImage;
 use Platform\FoodAlchemist\Models\FoodAlchemistOutlet;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 
@@ -102,7 +104,9 @@ class OfferCompositionService
         ]);
     }
 
-    private const KAPITEL_FELDER = ['title', 'consumer_title', 'claim', 'description', 'price_mode', 'price_per_person', 'serving_form_id'];
+    private const KAPITEL_FELDER = ['title', 'consumer_title', 'claim', 'description', 'price_mode', 'price_per_person',
+        'serving_form_id', 'service_moment_id', 'writing_style_id', 'is_struktur', 'creative_mode',
+        'target_count', 'price_anchor', 'price_min', 'price_max', 'target_food_cost_pct'];
 
     public function updateKapitel(Team $team, int $id, array $in): FoodAlchemistOfferChapter
     {
@@ -142,6 +146,53 @@ class OfferCompositionService
                 FoodAlchemistOfferChapter::where('id', (int) $id)->where('offer_id', $offerId)->update(['position' => $i]);
             }
         });
+    }
+
+    /** Verschieben mit Zyklus-Schutz (kein Knoten unter eigenen Nachfahren). Spiegelt FoodbookService::moveKapitel. */
+    public function moveKapitel(Team $team, int $id, ?int $newParentId): void
+    {
+        $k = $this->ownedKapitel($team, $id);
+        if ($newParentId !== null) {
+            if ($newParentId === $id || in_array($newParentId, $this->descendantChapterIds($team, (int) $k->offer_id, $id), true)) {
+                throw new \RuntimeException('Zyklus: Kapitel kann nicht unter einen eigenen Nachfahren.');
+            }
+        }
+        $k->update(['parent_id' => $newParentId ?: null]);
+    }
+
+    /** @return list<int> Alle Nachfahren-Kapitel-IDs (transitiv) — nutzt kapitelTree. */
+    private function descendantChapterIds(Team $team, int $offerId, int $chapterId): array
+    {
+        $kinder = [];
+        foreach ($this->kapitelTree($team, $offerId) as $row) {
+            $kinder[$row['parent_id'] ?? 0][] = $row['id'];
+        }
+        $ids = [];
+        $stack = $kinder[$chapterId] ?? [];
+        while ($stack) {
+            $id = array_pop($stack);
+            $ids[] = $id;
+            foreach ($kinder[$id] ?? [] as $kid) {
+                $stack[] = $kid;
+            }
+        }
+
+        return $ids;
+    }
+
+    /**
+     * Board: manuellen Kapitel-Fortschritt setzen (offen|in_arbeit|fertig). Direkt persistiert,
+     * team-gescoped via ownedKapitel; Vokabular-Pflicht (FORTSCHRITT_STUFEN). Spiegelt Foodbook-Board.
+     */
+    public function kapitelFortschritt(Team $team, int $id, string $wert): FoodAlchemistOfferChapter
+    {
+        $k = $this->ownedKapitel($team, $id);
+        if (! in_array($wert, FoodAlchemistOfferChapter::FORTSCHRITT_STUFEN, true)) {
+            throw new \RuntimeException('Unbekannte Fortschritt-Stufe.');
+        }
+        $k->update(['fortschritt' => $wert]);
+
+        return $k->refresh();
     }
 
     // ── Blöcke ──────────────────────────────────────────────────────────────
@@ -196,6 +247,108 @@ class OfferCompositionService
                 FoodAlchemistOfferBlock::where('id', (int) $id)->where('chapter_id', $chapterId)->update(['position' => $i]);
             }
         });
+    }
+
+    /**
+     * Wording-Kette: Per-Gericht-Override eines concept_ref-Blocks
+     * (payload_json['wording_overrides'][slot_id]) setzen/löschen — oberste Stufe der Kette.
+     * Spiegelt FoodbookService::setBlockSlotWording.
+     */
+    public function setBlockSlotWording(Team $team, int $blockId, int $slotId, ?string $text): FoodAlchemistOfferBlock
+    {
+        $block = $this->ownedBlock($team, $blockId);
+        $payload = $block->payload_json ?? [];
+        $overrides = $payload['wording_overrides'] ?? [];
+        $text = trim((string) $text);
+        if ($text === '') {
+            unset($overrides[(string) $slotId], $overrides[$slotId]);
+        } else {
+            $overrides[(string) $slotId] = $text;
+        }
+        $payload['wording_overrides'] = $overrides;
+        $block->update(['payload_json' => $payload]);
+
+        return $block->refresh();
+    }
+
+    /** Wahl-Gruppe „A|B|C": nächste freie Gruppen-ID im Kapitel. Spiegelt FoodbookService::nextVariantGroupId. */
+    public function nextVariantGroupId(Team $team, int $chapterId): int
+    {
+        $this->ownedKapitel($team, $chapterId);
+
+        return (int) FoodAlchemistOfferBlock::where('chapter_id', $chapterId)->max('variant_group_id') + 1;
+    }
+
+    /** @param list<int> $blockIds */
+    public function setVariantGroup(Team $team, array $blockIds, ?int $groupId): void
+    {
+        foreach ($blockIds as $id) {
+            $block = $this->ownedBlock($team, (int) $id);
+            $block->update(['variant_group_id' => $groupId]);
+        }
+    }
+
+    /** Block-Sichtbarkeit setzen (toggle-Ziel aus dem Editor). Spiegelt Foodbook-Index::blockSichtbar. */
+    public function blockSichtbar(Team $team, int $id, bool $visible): FoodAlchemistOfferBlock
+    {
+        return $this->updateBlock($team, $id, ['visible' => $visible]);
+    }
+
+    /** Block-Ebene relativ verschieben, geklemmt auf 0..2. Spiegelt Foodbook-Index::blockEbene. */
+    public function blockEbene(Team $team, int $id, int $delta): FoodAlchemistOfferBlock
+    {
+        $block = $this->ownedBlock($team, $id);
+
+        return $this->updateBlock($team, $id, ['level' => max(0, min(2, (int) $block->level + $delta))]);
+    }
+
+    // ── Kapitel-Bilder (Spec 43 Bild-Epic, offer-scoped) ──────────────────────
+
+    /** Kapitel-Bild setzen (überschreibt das Concept-Titelbild im Kapitel-Band). Spiegelt FoodbookService::setKapitelImage. */
+    public function setKapitelImage(Team $team, int $chapterId, UploadedFile $file): string
+    {
+        $k = $this->ownedKapitel($team, $chapterId);
+        app(FoodAlchemistMediaService::class)->delete($k->image_context_file_id, (string) $k->image_path, $team);
+        $media = app(FoodAlchemistMediaService::class)->storeImage(
+            $file, $team, 'foodalchemist.offer_chapter', $chapterId, "foodalchemist/offer_chapter/{$chapterId}",
+        );
+        $k->update(['image_context_file_id' => $media['context_file_id'], 'image_path' => $media['path']]);
+
+        return $media['path'];
+    }
+
+    public function clearKapitelImage(Team $team, int $chapterId): FoodAlchemistOfferChapter
+    {
+        $k = $this->ownedKapitel($team, $chapterId);
+        app(FoodAlchemistMediaService::class)->delete($k->image_context_file_id, (string) $k->image_path, $team);
+        $k->update(['image_context_file_id' => null, 'image_path' => null]);
+
+        return $k->refresh();
+    }
+
+    /** Weiteres Galeriebild (neben dem Kapitel-Bild) ans Angebot-Kapitel hängen. Spiegelt FoodbookService::addKapitelGalleryImage. */
+    public function addKapitelGalleryImage(Team $team, int $chapterId, UploadedFile $file): FoodAlchemistOfferChapterImage
+    {
+        $k = $this->ownedKapitel($team, $chapterId);
+        $media = app(FoodAlchemistMediaService::class)->storeImage(
+            $file, $team, 'foodalchemist.offer_chapter', $chapterId, "foodalchemist/offer_chapter/{$chapterId}/gallery",
+        );
+
+        return FoodAlchemistOfferChapterImage::create([
+            'team_id' => $k->team_id,
+            'chapter_id' => $chapterId,
+            'context_file_id' => $media['context_file_id'],
+            'path' => $media['path'],
+            'sort_order' => (int) $k->images()->max('sort_order') + 1,
+        ]);
+    }
+
+    public function removeKapitelGalleryImage(Team $team, int $imageId): void
+    {
+        $img = FoodAlchemistOfferChapterImage::findOrFail($imageId);
+        $this->ownedKapitel($team, (int) $img->chapter_id); // Owner-Guard übers Kapitel
+        app(FoodAlchemistMediaService::class)->delete($img->context_file_id, (string) $img->path, $team);
+        $img->delete();
     }
 
     // ── Preis ───────────────────────────────────────────────────────────────
@@ -305,10 +458,12 @@ class OfferCompositionService
                 'blocks.concept.slots.dish:id,name,sales_wording_standard,sales_net,ek_total_eur,dish_class_id,spec_is_vegan,spec_is_vegetarian,spec_contains_pork,spec_contains_beef,allergens_confidence',
                 'blocks.concept.slots.package.dishes.dish:id,name,sales_wording_standard',
                 'blocks.concept.slots.embeddedConcept:id,name,consumer_name,price_per_person_cache',
+                'blocks.concept.images',
                 'blocks.dish:id,name,sales_wording_standard,sales_net,ek_total_eur',
                 'format.slots' => fn ($q) => $q->orderBy('position'),
                 'format.slots.concept.slots.dish:id,name,sales_wording_standard',
                 'format.images',
+                'images',
             ])->orderBy('position')->get();
 
         $byParent = $alle->groupBy(fn ($k) => $k->parent_id ?? 0);
@@ -341,6 +496,11 @@ class OfferCompositionService
                 if ($intern) {
                     $row['ek_pro_person'] = $agg['ek_pro_person'];
                     $row['food_cost_percent'] = $agg['food_cost_percent'];
+                    // Bild-Epic (offer-scoped, wie normalizeFoodbook): Kapitel-Bild + Galerie, sonst Concept-Fallback.
+                    // Rohe Identifier (context_file_id + path) — Auflösung zur data-URI liegt beim Konsumenten.
+                    $bilder = $this->kapitelBilder($k);
+                    $row['bild'] = $bilder[0] ?? null;
+                    $row['bilder'] = array_slice($bilder, 0, 6);
                 }
 
                 if ($k->format_id !== null && $k->format !== null) {
@@ -461,6 +621,46 @@ class OfferCompositionService
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
+
+    /**
+     * Kapitel-Bildmaterial (roh) für die Editor-/Kundensicht — spiegelt normalizeFoodbook:
+     * 1) Kapitel-eigenes Bild (image_*) + Kapitel-Galerie (images()-Relation),
+     * 2) Fallback: erstes concept_ref-Konzept mit Bildmaterial (Titelbild + Concept-Galerie).
+     *
+     * @return list<array{context_file_id:?int, path:?string}>
+     */
+    private function kapitelBilder(FoodAlchemistOfferChapter $k): array
+    {
+        $liste = [];
+        if ($k->image_context_file_id || $k->image_path) {
+            $liste[] = ['context_file_id' => $k->image_context_file_id, 'path' => $k->image_path];
+        }
+        foreach ($k->images ?? [] as $ci) {
+            if ($ci->context_file_id || $ci->path) {
+                $liste[] = ['context_file_id' => $ci->context_file_id, 'path' => $ci->path];
+            }
+        }
+        if ($liste === []) {
+            foreach ($k->blocks as $b) {
+                if ($b->type !== 'concept_ref' || $b->concept === null) {
+                    continue;
+                }
+                if ($b->concept->image_context_file_id || $b->concept->image_path) {
+                    $liste[] = ['context_file_id' => $b->concept->image_context_file_id, 'path' => $b->concept->image_path];
+                }
+                foreach ($b->concept->images ?? [] as $gi) {
+                    if ($gi->context_file_id || $gi->path) {
+                        $liste[] = ['context_file_id' => $gi->context_file_id, 'path' => $gi->path];
+                    }
+                }
+                if ($liste !== []) {
+                    break; // erstes Konzept mit Bildmaterial gewinnt
+                }
+            }
+        }
+
+        return $liste;
+    }
 
     private function blockLabel(FoodAlchemistOfferBlock $block): ?string
     {

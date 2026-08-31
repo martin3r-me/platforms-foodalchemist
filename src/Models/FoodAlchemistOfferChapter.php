@@ -28,6 +28,13 @@ class FoodAlchemistOfferChapter extends Model
     /** Preis-Modus des Kapitels — weiche Prüfung, Vokabular-Pflicht (Foodbook-Parität). */
     public const PRICE_MODES = ['auto', 'manuell'];
 
+    /** Fortschritts-Stufen des Kapitels (Foodbook-Parität). */
+    public const FORTSCHRITT_STUFEN = ['offen', 'in_arbeit', 'fertig'];
+
+    /** Kreativ-Modi der Kapitel-Erstellung (Foodbook-Parität). */
+    public const CREATIVE_MODES = ['voll_kreativ', 'hybrid', 'datenbank'];
+    public const CREATIVE_MODE_DEFAULT = 'hybrid';
+
     /**
      * Nur für Format-Kapitel (format_id gesetzt): wie die Editionen des Formats in den
      * Angebotspreis einfallen — additiv = Σ €/Person der Editions-Concepts (Tages-VA,
@@ -77,5 +84,23 @@ class FoodAlchemistOfferChapter extends Model
     public function servingForm(): BelongsTo
     {
         return $this->belongsTo(FoodAlchemistServierform::class, 'serving_form_id');
+    }
+
+    /** Kapitel-Einsatzmoment-Override (Foodbook-Parität) — sonst Default in der Kaskade. */
+    public function serviceMoment(): BelongsTo
+    {
+        return $this->belongsTo(FoodAlchemistEinsatzmoment::class, 'service_moment_id');
+    }
+
+    /** Schreibstil-Override PRO KAPITEL (Foodbook-Parität). NULL = erbt Standard aus den Concepten. */
+    public function writingStyle(): BelongsTo
+    {
+        return $this->belongsTo(FoodAlchemistWritingStyle::class, 'writing_style_id');
+    }
+
+    /** Zusätzliche Präsentations-Bilder (kleine Galerie neben dem Kapitel-Bild image_*). */
+    public function images(): HasMany
+    {
+        return $this->hasMany(FoodAlchemistOfferChapterImage::class, 'chapter_id')->orderBy('sort_order')->orderBy('id');
     }
 }

@@ -2,6 +2,7 @@
 
 namespace Platform\FoodAlchemist\Services;
 
+use Illuminate\Http\UploadedFile;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
@@ -10,6 +11,7 @@ use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Enums\AngebotStatus;
 use Platform\FoodAlchemist\Models\FoodAlchemistAngebot;
 use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
+use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 
 /**
  * #380 — Kunden-Modul „Angebote": brief-getriebene, kundengebundene Instanz neben
@@ -377,6 +379,74 @@ class AngebotService
      *   customer:?string, kontakt:?string, mwstSatz:float, netto_gesamt:float, mwst_betrag:float,
      *   brutto_gesamt:float, pax:int, vk_pro_person:float}
      */
+    /**
+     * #380 Composer: Vollkosten-/Zuschlagskalkulation (Wasserfall MEK→FEK→…→HK2→Preisempfehlung)
+     * fürs GANZE Angebot × Pax — aggregiert OrderCostingService::costConcept über alle
+     * Concept-Einheiten der Komposition (concept_ref + additiv-Format-Editionen). cost_breakdown
+     * wird per `key` summiert (Wasserfall bleibt konsistent), *_per_person = Summe/Pax. Für das
+     * Zuschlagskalkulation-Partial (livewire.angebote.partials.zuschlagskalkulation).
+     *
+     * @return ?array costConcept-förmiges Aggregat; null wenn kein Pax oder keine Concepts.
+     */
+    public function auftragsKalkulation(Team $team, FoodAlchemistAngebot $angebot, ?\Platform\FoodAlchemist\Models\FoodAlchemistOutlet $outlet = null): ?array
+    {
+        $pax = max(0, (int) ($angebot->personen ?? 0));
+        if ($pax <= 0) {
+            return null; // die Zuschlagskalkulation braucht eine Pax-Zahl
+        }
+        $units = app(OfferCompositionService::class)->preisEinheiten($team, $angebot, $outlet)['concepts'];
+        if ($units->isEmpty()) {
+            return null;
+        }
+        $orderCosting = app(OrderCostingService::class);
+        $sum = ['mek' => 0.0, 'fek' => 0.0, 'direct_costs' => 0.0, 'mgk' => 0.0, 'fgk' => 0.0, 'hk' => 0.0, 'hk2' => 0.0,
+            'minimum_price' => 0.0, 'target_price' => 0.0, 'contribution_margin' => 0.0, 'active_person_minutes' => 0.0,
+            'catalog_price_total' => 0.0];
+        $breakdown = []; // key => ['key','label','stage','amount']
+        $timeRows = [];
+        $warnings = [];
+        $complete = true;
+        foreach ($units as $c) {
+            $cc = $orderCosting->costConcept($team, $c, $pax, $outlet);
+            foreach ($sum as $k => $_) {
+                $sum[$k] += (float) ($cc[$k] ?? 0);
+            }
+            foreach (($cc['cost_breakdown'] ?? []) as $row) {
+                $key = (string) ($row['key'] ?? $row['label'] ?? '?');
+                $breakdown[$key] ??= ['key' => $key, 'label' => $row['label'] ?? $key, 'stage' => $row['stage'] ?? 'cost', 'amount' => 0.0];
+                $breakdown[$key]['amount'] += (float) ($row['amount'] ?? 0);
+            }
+            foreach (($cc['time_breakdown'] ?? []) as $tr) {
+                $timeRows[] = $tr;
+            }
+            $warnings = array_merge($warnings, $cc['warnings'] ?? []);
+            $complete = $complete && (bool) ($cc['complete'] ?? false);
+        }
+        $targetTotal = round($sum['target_price'], 2);
+        $catalogTotal = round($sum['catalog_price_total'], 2);
+
+        return [
+            'pax' => $pax,
+            'catalog_price_per_person' => round($catalogTotal / $pax, 2),
+            'catalog_price_total' => $catalogTotal,
+            'mek' => round($sum['mek'], 2), 'fek' => round($sum['fek'], 2), 'direct_costs' => round($sum['direct_costs'], 2),
+            'mgk' => round($sum['mgk'], 2), 'fgk' => round($sum['fgk'], 2),
+            'hk' => round($sum['hk'], 2), 'hk2' => round($sum['hk2'], 2),
+            'minimum_price' => round($sum['minimum_price'], 2),
+            'target_price' => $targetTotal,
+            'target_price_per_person' => round($targetTotal / $pax, 2),
+            'contribution_margin' => round($sum['contribution_margin'], 2),
+            'contribution_margin_pct' => $targetTotal > 0 ? round($sum['contribution_margin'] / $targetTotal * 100, 1) : null,
+            'target_gap' => round($targetTotal - $catalogTotal, 2),
+            'unprofitable' => $catalogTotal + 0.005 < $targetTotal,
+            'complete' => $complete,
+            'active_person_minutes' => round($sum['active_person_minutes'], 2),
+            'cost_breakdown' => array_values($breakdown),
+            'time_breakdown' => $timeRows,
+            'warnings' => array_values(array_unique($warnings)),
+        ];
+    }
+
     public function karteDaten(Team $team, int $id): array
     {
         $angebot = FoodAlchemistAngebot::visibleToTeam($team)->with(['crmCompany', 'crmContact'])->findOrFail($id);
@@ -544,6 +614,323 @@ class AngebotService
         }
 
         return app(\Platform\Crm\Services\ContactLinkService::class)->searchContacts($suche, $limit);
+    }
+
+    // ── A3 · Picker-Parität (spiegelt FoodbookService::paketKandidaten/gerichtKandidaten) ──
+
+    /**
+     * Paket-Kandidaten (kind=paket-Concepts) für den Angebot-Picker — eigener Reiter neben
+     * Concept (katalogConcepts) + Format (formatKandidaten). Dieselbe Filterkette wie
+     * {@see katalogConcepts}; zeigt `consumer_name` (Kundenname) statt des internen Namens.
+     * Ein Paket wird wie ein Concept als concept_ref-Block gebucht (concept_id trägt beide Arten).
+     * Spiegelt FoodbookService::paketKandidaten.
+     *
+     * @param array{eventtyp?:?int, servierform?:?int, einsatzmoment?:?int, season?:?int} $facetten
+     */
+    public function paketKandidaten(Team $team, string $suche, int $limit = 20, array $facetten = []): Collection
+    {
+        return FoodAlchemistConcept::visibleToTeam($team)->echte()->pakete()
+            ->where('status', 'active')
+            ->when(trim($suche) !== '', fn ($q) => \Platform\FoodAlchemist\Support\Suche::likeAny($q, ['name', "COALESCE(consumer_name, '')"], $suche))
+            ->when(! empty($facetten['eventtyp']), fn ($q) => $q->where('event_type_id', (int) $facetten['eventtyp']))
+            ->when(! empty($facetten['servierform']), fn ($q) => $q->where('serving_form_id', (int) $facetten['servierform']))
+            ->when(! empty($facetten['einsatzmoment']), fn ($q) => $q->whereHas('serviceMoments', fn ($w) => $w->where('foodalchemist_service_moments.id', (int) $facetten['einsatzmoment'])))
+            ->when(! empty($facetten['season']), fn ($q) => $q->whereHas('seasons', fn ($w) => $w->where('foodalchemist_seasons.id', (int) $facetten['season'])))
+            ->orderBy('name')->limit($limit)->get(['id', 'name', 'consumer_name', 'price_per_person_cache', 'event_type_id', 'serving_form_id']);
+    }
+
+    /**
+     * Einzelne Gerichte (VK-Rezepte) für den recipe_ref-Picker. Spiegelt FoodbookService::gerichtKandidaten.
+     * Modell A: HG = Kategorie (recipes.dish_main_group_id), Untergruppe = Diät-Klasse
+     * (recipes.dish_class_id); beide Achsen filtern den Picker (dishClassId ist die feinere).
+     * Slot-Varianten (variant_source_recipe_id) sind konzept-lokal, nicht pickbar (R4.4).
+     */
+    public function gerichtKandidaten(Team $team, string $suche, int $limit = 20, ?int $hauptgruppe = null, ?int $dishClassId = null): Collection
+    {
+        return FoodAlchemistRecipe::visibleToTeam($team)->verkauf()
+            ->whereNull('variant_source_recipe_id')
+            ->when(trim($suche) !== '', fn ($q) => \Platform\FoodAlchemist\Support\Suche::like($q, 'name', $suche))
+            ->when($hauptgruppe !== null, fn ($q) => $q->where('dish_main_group_id', $hauptgruppe))
+            ->when($dishClassId !== null, fn ($q) => $q->where('dish_class_id', $dishClassId))
+            ->orderBy('name')->limit($limit)->get(['id', 'name', 'sales_net']);
+    }
+
+    // ── A3 · Branding (pro Angebot) — spiegelt FoodbookService::setBranding/storeLogo/… ──
+    //
+    // UI-agnostische API: der Branding/CI-Tab UND MCP/Console rufen dieselben Methoden.
+    // Owner-Guard wie überall (D1). Bilder laufen über Core ContextFiles (FoodAlchemistMediaService).
+
+    /** Setzt Farb-/Text-Marke. $in: brand_color, band_color, footer_text (jeweils optional). */
+    public function setBranding(Team $team, int $offerId, array $in): FoodAlchemistAngebot
+    {
+        $angebot = FoodAlchemistAngebot::visibleToTeam($team)->findOrFail($offerId);
+        $this->guardOwner($angebot, $team);
+
+        $daten = [];
+        if (array_key_exists('brand_color', $in)) {
+            $daten['brand_color'] = $this->normHexOderThrow($in['brand_color'], 'brand_color') ?? '#6d28d9';
+        }
+        if (array_key_exists('band_color', $in)) {
+            // Leer → null (Blade leitet dann aus brand_color ab).
+            $daten['band_color'] = $this->normHexOderThrow($in['band_color'], 'band_color', erlaubeLeer: true);
+        }
+        if (array_key_exists('footer_text', $in)) {
+            $t = trim((string) $in['footer_text']);
+            $daten['footer_text'] = $t !== '' ? $t : null;
+        }
+        if ($daten !== []) {
+            $angebot->update($daten);
+        }
+
+        return $angebot->refresh();
+    }
+
+    public function storeLogo(Team $team, int $offerId, UploadedFile $file): string
+    {
+        return $this->speichereBrandingBild($team, $offerId, $file, 'logo_path');
+    }
+
+    public function storeCover(Team $team, int $offerId, UploadedFile $file): string
+    {
+        return $this->speichereBrandingBild($team, $offerId, $file, 'cover_image_path');
+    }
+
+    public function clearLogo(Team $team, int $offerId): FoodAlchemistAngebot
+    {
+        return $this->loescheBrandingBild($team, $offerId, 'logo_path');
+    }
+
+    public function clearCover(Team $team, int $offerId): FoodAlchemistAngebot
+    {
+        return $this->loescheBrandingBild($team, $offerId, 'cover_image_path');
+    }
+
+    private function speichereBrandingBild(Team $team, int $offerId, UploadedFile $file, string $spalte): string
+    {
+        $angebot = FoodAlchemistAngebot::visibleToTeam($team)->findOrFail($offerId);
+        $this->guardOwner($angebot, $team);
+
+        $contextSpalte = $this->brandingContextSpalte($spalte);
+        $alt = (string) $angebot->{$spalte};
+        app(FoodAlchemistMediaService::class)->delete($angebot->{$contextSpalte}, $alt, $team);
+
+        $media = app(FoodAlchemistMediaService::class)->storeImage(
+            $file,
+            $team,
+            'foodalchemist.offer',
+            $offerId,
+            "foodalchemist/offer-branding/{$offerId}",
+        );
+        $pfad = $media['path'];
+        $angebot->update([
+            $spalte => $pfad,
+            $contextSpalte => $media['context_file_id'],
+        ]);
+
+        return $pfad;
+    }
+
+    private function loescheBrandingBild(Team $team, int $offerId, string $spalte): FoodAlchemistAngebot
+    {
+        $angebot = FoodAlchemistAngebot::visibleToTeam($team)->findOrFail($offerId);
+        $this->guardOwner($angebot, $team);
+
+        $contextSpalte = $this->brandingContextSpalte($spalte);
+        $alt = (string) $angebot->{$spalte};
+        app(FoodAlchemistMediaService::class)->delete($angebot->{$contextSpalte}, $alt, $team);
+        $angebot->update([
+            $spalte => null,
+            $contextSpalte => null,
+        ]);
+
+        return $angebot->refresh();
+    }
+
+    private function brandingContextSpalte(string $spalte): string
+    {
+        return match ($spalte) {
+            'logo_path' => 'logo_context_file_id',
+            'cover_image_path' => 'cover_context_file_id',
+            default => throw new \InvalidArgumentException("Unbekannte Branding-Bildspalte: {$spalte}"),
+        };
+    }
+
+    /** Hex-Validierung wie Settings\Kueche::sanitizeFarben. erlaubeLeer=true → '' ⇒ null. */
+    private function normHexOderThrow($wert, string $feld, bool $erlaubeLeer = false): ?string
+    {
+        $v = trim((string) $wert);
+        if ($v === '') {
+            if ($erlaubeLeer) {
+                return null;
+            }
+            throw new \RuntimeException("Farbe {$feld} darf nicht leer sein.");
+        }
+        if (! preg_match('/^#[0-9a-fA-F]{6}$/', $v)) {
+            throw new \RuntimeException("Ungültige Farbe für {$feld}: \"{$v}\" (erwartet #RRGGBB).");
+        }
+
+        return strtolower($v);
+    }
+
+    // ── A3 · KI-Kundentext-Vorschlag (spiegelt FoodbookService::kiKundentextVorschlag) ──
+    //
+    // Nur Vorschlag — persistiert NICHTS (Übernehmen bleibt ein menschlicher Akt, Backup-Lehre).
+    // Anders als im Foodbook: OHNE gebundenen Provider NIE werfen → graceful leerer Vorschlag,
+    // damit der Angebot-Editor nicht bricht.
+
+    /**
+     * Kundentext-Vorschlag für die Angebots-Einleitung. Kontext aus Angebot/Concepts.
+     *
+     * @return array{text: string, confidence: ?float, call_log_id: ?int}
+     */
+    public function kiKundentextVorschlag(Team $team, int $offerId): array
+    {
+        $angebot = FoodAlchemistAngebot::visibleToTeam($team)->findOrFail($offerId);
+        $this->guardOwner($angebot, $team);
+
+        try {
+            $wissen = app(\Platform\FoodAlchemist\Services\Ai\KnowledgeContextService::class)
+                ->contextFor('foodbook.kundentext', (string) ($angebot->name ?: 'Angebot'));
+
+            $proposal = app(\Platform\FoodAlchemist\Services\Ai\AiGatewayService::class)->propose(
+                'foodbook.kundentext',
+                $this->kundentextKontext($team, $angebot),
+                [
+                    'food_dna_crm_company_id' => $angebot->crm_company_id !== null ? (int) $angebot->crm_company_id : null,
+                    'target_table' => 'foodalchemist_offers',
+                    'target_id' => (int) $angebot->id,
+                    'knowledge' => $wissen['block'] ?? null,
+                    'knowledge_used' => $wissen['files_used'] ?? null,
+                ],
+            );
+            $text = trim((string) ($proposal->werte['text'] ?? ''));
+
+            return ['text' => $text, 'confidence' => $proposal->confidence, 'call_log_id' => $proposal->callLogId];
+        } catch (\Throwable $e) {
+            // Kein Provider / KI deaktiviert / Fehler → graceful leerer Vorschlag (nie werfen).
+            return ['text' => '', 'confidence' => null, 'call_log_id' => null];
+        }
+    }
+
+    /**
+     * Dasselbe für die Kapitel-Ebene (`foodalchemist_offer_chapters.description`). Eigener
+     * Einstieg, geteilter Prompt-Key — die Ebene steht im Kontext (`ebene`), nicht im Key.
+     * Ebenfalls graceful (nie werfen).
+     *
+     * @return array{text: string, confidence: ?float, call_log_id: ?int}
+     */
+    public function kiKapitelKundentextVorschlag(Team $team, int $chapterId): array
+    {
+        $kapitel = \Platform\FoodAlchemist\Models\FoodAlchemistOfferChapter::visibleToTeam($team)->findOrFail($chapterId);
+        if (! $kapitel->isOwnedBy($team)) {
+            throw new \RuntimeException('Geerbtes Angebot — Pflege nur durchs Besitzer-Team (D1).');
+        }
+        $angebot = FoodAlchemistAngebot::visibleToTeam($team)->findOrFail($kapitel->offer_id);
+
+        try {
+            $wissen = app(\Platform\FoodAlchemist\Services\Ai\KnowledgeContextService::class)
+                ->contextFor('foodbook.kundentext', (string) ($kapitel->title ?: $angebot->name ?: 'Kapitel'));
+
+            $proposal = app(\Platform\FoodAlchemist\Services\Ai\AiGatewayService::class)->propose(
+                'foodbook.kundentext',
+                $this->kapitelKundentextKontext($team, $angebot, $kapitel),
+                [
+                    'food_dna_crm_company_id' => $angebot->crm_company_id !== null ? (int) $angebot->crm_company_id : null,
+                    'target_table' => 'foodalchemist_offer_chapters',
+                    'target_id' => (int) $kapitel->id,
+                    'knowledge' => $wissen['block'] ?? null,
+                    'knowledge_used' => $wissen['files_used'] ?? null,
+                ],
+            );
+            $text = trim((string) ($proposal->werte['text'] ?? ''));
+
+            return ['text' => $text, 'confidence' => $proposal->confidence, 'call_log_id' => $proposal->callLogId];
+        } catch (\Throwable $e) {
+            return ['text' => '', 'confidence' => null, 'call_log_id' => null];
+        }
+    }
+
+    /**
+     * Kontext-Vertrag des Kundentexts (Buch-Ebene): WAS im Angebot steht (Gliederung über die
+     * Kapitel + sichtbare Positionen) + das Roh-Briefing (description) als Umformungs-Vorlage.
+     *
+     * @return array<string, mixed>
+     */
+    private function kundentextKontext(Team $team, FoodAlchemistAngebot $angebot): array
+    {
+        $angebot->loadMissing(['crmCompany', 'chapters.blocks']);
+
+        $gliederung = [];
+        foreach ($angebot->chapters as $k) {
+            $gliederung[] = $this->kundentextKapitelZeile($k);
+            if (count($gliederung) >= 20) {
+                break;
+            }
+        }
+        $briefing = trim((string) $angebot->description);
+
+        return [
+            'ebene' => 'foodbook',
+            'titel' => $angebot->name,
+            'kunde' => $angebot->crmCompany?->display_name,
+            'personen' => $angebot->personen,
+            'briefing_ist' => $briefing !== '' ? $briefing : null,
+            'gliederung' => $gliederung,
+        ];
+    }
+
+    /**
+     * Kontext-Vertrag der Kapitel-Ebene: Gliederung auf DIESES Kapitel (+ Unterkapitel) geschnitten;
+     * `briefing_ist` ist der Kapitel-Text (Umformen statt Neuschreiben); das Angebot-Briefing kommt
+     * getrennt als `rahmen_einleitung` mit.
+     *
+     * @return array<string, mixed>
+     */
+    private function kapitelKundentextKontext(Team $team, FoodAlchemistAngebot $angebot, \Platform\FoodAlchemist\Models\FoodAlchemistOfferChapter $kapitel): array
+    {
+        $gliederung = [$this->kundentextKapitelZeile($kapitel)];
+        foreach ($kapitel->children()->limit(19)->get() as $kind) {
+            $gliederung[] = $this->kundentextKapitelZeile($kind);
+        }
+        $kapitelText = trim((string) $kapitel->description);
+        $rahmen = trim((string) $angebot->description);
+
+        return [
+            'ebene' => 'kapitel',
+            'titel' => trim((string) ($kapitel->consumer_title ?: $kapitel->title)),
+            'foodbook_titel' => $angebot->name,
+            'kunde' => $angebot->crmCompany?->display_name,
+            'personen' => $angebot->personen,
+            'briefing_ist' => $kapitelText !== '' ? $kapitelText : null,
+            'rahmen_einleitung' => $rahmen !== '' ? $rahmen : null,
+            'gliederung' => $gliederung,
+        ];
+    }
+
+    /**
+     * Eine Kapitel-Zeile der KI-Gliederung: Kunden-Label des Kapitels + seine sichtbaren
+     * Positionen (Concept-/Rezept-Namen). Deckel gegen Prompt-Aufblähung.
+     *
+     * @return array{kapitel: string, positionen: list<string>}
+     */
+    private function kundentextKapitelZeile(\Platform\FoodAlchemist\Models\FoodAlchemistOfferChapter $kapitel): array
+    {
+        $positionen = [];
+        foreach ($kapitel->blocks as $b) {
+            if (! $b->visible) {
+                continue;
+            }
+            // Kundensicht-Wording bevorzugen (Slot-Analog), sonst Concept-Name, sonst interner Label.
+            $label = trim((string) ($b->wording ?: $b->concept?->consumer_name ?: $b->concept?->name ?: $b->label ?: ''));
+            if ($label !== '') {
+                $positionen[] = $label;
+            }
+        }
+
+        return [
+            'kapitel' => trim((string) ($kapitel->consumer_title ?: $kapitel->title)),
+            'positionen' => array_slice(array_values(array_unique($positionen)), 0, 12),
+        ];
     }
 
     private function guardOwner(FoodAlchemistAngebot $angebot, Team $team): void
