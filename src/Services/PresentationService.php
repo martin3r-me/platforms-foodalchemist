@@ -318,6 +318,10 @@ class PresentationService
         };
 
         $branding = $this->brandingIdentifiers($entity);
+        // Ebene 2: eigenes Betriebs-Logo ersetzt beim Betriebs-Link das Dokument-Logo (sonst Dokument-Logo).
+        if ($outlet !== null && (($outlet->logo_context_file_id ?? null) || ($outlet->logo_path ?? null))) {
+            $branding['logo'] = ['context_file_id' => $outlet->logo_context_file_id, 'path' => $outlet->logo_path];
+        }
         $tokens = $this->designs->resolveTokens($designSource, $team, $branding, $clean);
         $speiseplanLayout = ($tokens['speiseplan_layout'] ?? 'grid') === 'liste' ? 'liste' : 'grid';
         $resolvedDesign = [

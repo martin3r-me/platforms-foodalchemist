@@ -61,6 +61,16 @@ it('buildSnapshot friert bei gleicher Vorlage die Betriebs-Preise ein (nicht die
     expect(json_encode($mitBetrieb['content']))->not->toBe(json_encode($base['content']));
 });
 
+it('buildSnapshot: Betriebs-Logo ersetzt das Dokument-Logo (leer = Dokument-Logo)', function () {
+    $this->betrieb->update(['logo_path' => 'foodalchemist/outlet-logo/1/logo.webp']);
+
+    $ohne = $this->pres->buildSnapshot($this->childA, $this->karte, 'speisekarte', ['design' => 'menu']);
+    $mit = $this->pres->buildSnapshot($this->childA, $this->karte, 'speisekarte', ['design' => 'menu', 'outlet' => $this->betrieb->fresh()]);
+
+    expect($mit['branding']['logo']['path'])->toBe('foodalchemist/outlet-logo/1/logo.webp')
+        ->and($ohne['branding']['logo']['path'])->not->toBe('foodalchemist/outlet-logo/1/logo.webp');
+});
+
 it('publishForOutlet: eigener Link mit Betriebs-Vorlage, öffentlich auflösbar, additiv zum Standard-Link', function () {
     $res = $this->pres->publishForOutlet($this->childA, 'speisekarte', $this->karte->id, $this->betrieb->id, [
         'expires_at' => now()->addDays(30)->toDateString(), 'price_display' => true,

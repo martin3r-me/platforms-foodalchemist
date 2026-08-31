@@ -5,8 +5,10 @@ namespace Platform\FoodAlchemist\Livewire\Settings;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Livewire\Component;
+use Livewire\WithFileUploads;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Models\FoodAlchemistOutlet;
+use Platform\FoodAlchemist\Services\FoodAlchemistMediaService;
 
 /**
  * Spec 33 · P2 — Pflege der Betriebe/Standorte (Outlets).
@@ -29,10 +31,15 @@ use Platform\FoodAlchemist\Models\FoodAlchemistOutlet;
  */
 class Betriebe extends Component
 {
+    use WithFileUploads;
+
     public ?int $editId = null;
 
     /** @var array{name:string,color:string,sort_order:int|string,vorlage:string} */
     public array $form = ['name' => '', 'color' => '', 'sort_order' => 100, 'vorlage' => ''];
+
+    /** Präsentations-Logo je Betrieb (temporärer Upload) — ersetzt beim Betriebs-Link das Dokument-Logo. */
+    public $logoUpload = null;
 
     public string $neuName = '';
 
@@ -84,7 +91,37 @@ class Betriebe extends Component
 
     public function abbrechen(): void
     {
-        $this->reset('editId', 'form', 'fehler');
+        $this->reset('editId', 'form', 'fehler', 'logoUpload');
+    }
+
+    /** Betriebs-Logo hochladen (sofort beim Auswählen) — ersetzt beim Betriebs-Link das Dokument-Logo. */
+    public function updatedLogoUpload(): void
+    {
+        $this->fehler = null;
+        $o = $this->editId !== null ? $this->eigenes($this->editId) : null;
+        $team = $this->team();
+        if ($o === null || $team === null || $this->logoUpload === null) {
+            return;
+        }
+        $this->validate(['logoUpload' => 'image|max:4096'], ['logoUpload.image' => 'Bitte eine Bilddatei wählen.', 'logoUpload.max' => 'Max. 4 MB.']);
+
+        $media = app(FoodAlchemistMediaService::class);
+        $media->delete($o->logo_context_file_id, (string) $o->logo_path, $team);   // altes Logo weg
+        $res = $media->storeImage($this->logoUpload, $team, 'foodalchemist.outlet', $o->id, "foodalchemist/outlet-logo/{$o->id}");
+        $o->update(['logo_path' => $res['path'], 'logo_context_file_id' => $res['context_file_id']]);
+        $this->logoUpload = null;
+    }
+
+    /** Betriebs-Logo entfernen → beim Betriebs-Link greift wieder das Dokument-Logo. */
+    public function logoLoeschen(): void
+    {
+        $o = $this->editId !== null ? $this->eigenes($this->editId) : null;
+        $team = $this->team();
+        if ($o === null || $team === null) {
+            return;
+        }
+        app(FoodAlchemistMediaService::class)->delete($o->logo_context_file_id, (string) $o->logo_path, $team);
+        $o->update(['logo_path' => null, 'logo_context_file_id' => null]);
     }
 
     public function speichern(): void
@@ -164,10 +201,20 @@ class Betriebe extends Component
         $vorlagenOptionen = $team === null ? []
             : app(\Platform\FoodAlchemist\Services\PresentationDesignService::class)->pickerOptions($team, 'foodbook');
 
+        // Betriebs-Logo-Vorschau (outlet_id → URL), für die Edit-Zeile.
+        $media = app(FoodAlchemistMediaService::class);
+        $logoUrls = [];
+        foreach ($betriebe as $o) {
+            if (($o->logo_context_file_id ?? null) || ($o->logo_path ?? null)) {
+                $logoUrls[(int) $o->id] = $media->url($o->logo_context_file_id, $o->logo_path);
+            }
+        }
+
         return view('foodalchemist::livewire.settings.betriebe', [
             'betriebe' => $betriebe,
             'nutzung' => $nutzung,
             'vorlagenOptionen' => $vorlagenOptionen,
+            'logoUrls' => $logoUrls,
         ]);
     }
 }

@@ -57,6 +57,8 @@ class OutletsGetTool extends FoodAlchemistTool implements ToolContract, ToolMeta
                 'id' => (int) $o->id,
                 'name' => $o->name,
                 'is_inactive' => (bool) $o->is_inactive,
+                'presentation_design' => $o->presentation_design,
+                'has_logo' => ($o->logo_context_file_id ?? null) !== null || ($o->logo_path ?? null) !== null,
                 'overrides' => array_filter([
                     'margin_pct' => $s->margin_pct,
                     'target_food_cost_pct' => $s->target_food_cost_pct,

@@ -94,6 +94,20 @@
                                     </label>
                                     <p class="text-[10px] text-gray-400 mt-0.5">Leer = die Vorlage des jeweiligen Dokuments. Gesetzt = dieser Betrieb bekommt beim „Betrieb-Link" diese Optik.</p>
                                 </div>
+                                {{-- Präsentations-Logo je Betrieb — ersetzt beim Betriebs-Link das Dokument-Logo (leer = Dokument-Logo). --}}
+                                <div class="mt-2 pt-2 border-t border-purple-200">
+                                    <label class="text-[11px] text-gray-600 block mb-1">Präsentations-Logo (Betriebs-Link)</label>
+                                    <div class="flex items-center gap-3 flex-wrap">
+                                        @if(($logoUrls[$b->id] ?? null))
+                                            <img src="{{ $logoUrls[$b->id] }}" alt="Logo" class="h-10 max-w-[140px] object-contain rounded bg-white/60 border border-black/5 px-1" />
+                                            <button type="button" wire:click="logoLoeschen" class="{{ $btnGhostXs }} text-red-500">Logo entfernen</button>
+                                        @endif
+                                        <input type="file" wire:model="logoUpload" accept="image/*" class="text-[11px] text-gray-600" />
+                                        <span wire:loading wire:target="logoUpload" class="text-[10px] text-violet-500">lädt …</span>
+                                    </div>
+                                    @error('logoUpload')<p class="text-[10px] text-red-500 mt-0.5">{{ $message }}</p>@enderror
+                                    <p class="text-[10px] text-gray-400 mt-0.5">Leer = das Logo des jeweiligen Dokuments (Foodbook/Speisekarte/Speiseplan). Gesetzt = dieses Logo ersetzt es beim „Betrieb-Link".</p>
+                                </div>
                             </td>
                         </tr>
                     @endif
