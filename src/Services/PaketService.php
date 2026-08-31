@@ -10,6 +10,7 @@ use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
 use Platform\FoodAlchemist\Models\FoodAlchemistConceptSlot;
 use Platform\FoodAlchemist\Models\FoodAlchemistDishClass;
+use Platform\FoodAlchemist\Models\FoodAlchemistOutlet;
 use Platform\FoodAlchemist\Models\FoodAlchemistPaket;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Models\FoodAlchemistVocabKlasse;
@@ -343,6 +344,80 @@ class PaketService
         );
 
         return $paket->refresh();
+    }
+
+    /**
+     * Ebene 2: Per-Person-VK des Pakets im Betriebs-Kontext, on-the-fly (KEINE Persistenz).
+     * outlet=null ODER manueller Fix-Preis → gespeicherter Effektivpreis (Team-Baseline).
+     * Auto-Modus + Betrieb → Σ Gericht-Outlet-VK × Portionsäquivalent — spiegelt {@see recomputePrice},
+     * nur mit CatalogPricingService::salesNetFor (base_factor outlet-aware) statt gespeichertem sales_net.
+     * EK/Caches bleiben Team-Baseline (EK ist outlet-unabhängig).
+     */
+    public function paketPreisProPerson(FoodAlchemistPaket $paket, ?FoodAlchemistOutlet $outlet): ?float
+    {
+        $baseline = $paket->price_per_person !== null ? (float) $paket->price_per_person : null;
+        // Kein Betrieb oder manuell gesetzter Fix-Preis → der Betrieb verändert ihn nicht.
+        if ($outlet === null || $paket->price_mode !== 'auto') {
+            return $baseline;
+        }
+
+        $team = Team::find($outlet->team_id);
+        if ($team === null) {
+            return $baseline;
+        }
+
+        $gerichte = $paket->dishes()->with([
+            'gericht:id,sales_net,ek_total_eur,sales_unit_count,sales_quantity_per_unit_g,is_sales_recipe,yield_kg',
+            'unit:id,slug,dimension,default_in_g',
+        ])->get();
+
+        $vkSum = 0.0;
+        foreach ($gerichte as $g) {
+            // Basisrezept-Posten haben keinen Einzel-VK (identisch zu recomputePrice).
+            if (! (bool) ($g->dish->is_sales_recipe ?? true)) {
+                continue;
+            }
+            $dar = app(DarreichungResolver::class)->fuerPaketGericht($g);
+            $darPortionG = $dar?->quantity_per_unit_g !== null ? (float) $dar->quantity_per_unit_g : null;
+            $pae = ConcepterAggregateService::portionsAequivalent(
+                $g->quantity !== null ? (float) $g->quantity : null,
+                $g->unit,
+                $g->dish,
+                $darPortionG,
+            );
+            if ($pae === null) {
+                continue; // Gramm-Position ohne Portionsgewicht → trägt ehrlich nicht bei
+            }
+            // Gericht-VK im Betriebs-Kontext; Fallback = gespeicherter sales_net (Team-Baseline).
+            $vkStd = $dar !== null
+                ? app(CatalogPricingService::class)->salesNetFor($team, $dar, $outlet)
+                : null;
+            $vkStd ??= (float) ($dar?->sales_net ?? $g->dish->sales_net ?? 0);
+            $vkSum += $vkStd * $pae;
+        }
+
+        return $vkSum > 0 ? round($vkSum, 2) : $baseline;
+    }
+
+    /**
+     * Ebene 2: Betriebs-VK je Paket für Listen (paket_id => vk_pro_person).
+     * Leer, wenn kein Betrieb aktiv ist → die Liste zeigt dann die Team-Baseline.
+     */
+    public function outletPreisMap(Team $team, Collection $pakete, ?FoodAlchemistOutlet $outlet): array
+    {
+        if ($outlet === null || $pakete->isEmpty()) {
+            return [];
+        }
+
+        $map = [];
+        foreach ($pakete as $p) {
+            $preis = $this->paketPreisProPerson($p, $outlet);
+            if ($preis !== null) {
+                $map[(int) $p->id] = $preis;
+            }
+        }
+
+        return $map;
     }
 
     /**

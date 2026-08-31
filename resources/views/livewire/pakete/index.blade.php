@@ -166,7 +166,11 @@
                                 <td class="{{ $td }} text-gray-600 whitespace-nowrap">{{ $b->role ?? '—' }}</td>
                                 <td class="{{ $td }} text-gray-600 whitespace-nowrap">{{ $b->level ?? '—' }}</td>
                                 <td class="{{ $td }} text-gray-600 text-right tabular-nums">{{ $b->dishes_count }}</td>
-                                <td class="{{ $td }} text-gray-900 text-right tabular-nums whitespace-nowrap">{{ $b->price_per_person !== null ? number_format((float) $b->price_per_person, 2, ',', '.') . ' €' : '—' }}</td>
+                                @php($vkBetrieb = $vkDisplay[$b->id] ?? null)
+                                <td class="{{ $td }} text-right tabular-nums whitespace-nowrap {{ $vkBetrieb !== null ? 'text-indigo-600 font-medium' : 'text-gray-900' }}"
+                                    @if($vkBetrieb !== null) title="Betriebs-VK ({{ $aktiverBetrieb }}) — Team-Basis: {{ $b->price_per_person !== null ? number_format((float) $b->price_per_person, 2, ',', '.') . ' €' : '—' }}" @endif>
+                                    @if($vkBetrieb !== null){{ number_format((float) $vkBetrieb, 2, ',', '.') }} €@else{{ $b->price_per_person !== null ? number_format((float) $b->price_per_person, 2, ',', '.') . ' €' : '—' }}@endif
+                                </td>
                                 <td class="{{ $td }} text-gray-600 text-right tabular-nums">{{ $b->food_cost_percent !== null ? number_format((float) $b->food_cost_percent, 1, ',', '.') . ' %' : '—' }}</td>
                                 <td class="{{ $td }}"><span class="{{ $pill }} {{ $b->price_mode === 'auto' ? $variantPill['info'] : $variantPill['secondary'] }}">{{ $b->price_mode }}</span></td>
                             </x-foodalchemist::table-row>

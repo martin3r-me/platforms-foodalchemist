@@ -161,11 +161,16 @@ class Index extends Component
     {
         $team = $this->team();
         $selected = $this->selectedId !== null ? $svc->detail($team, $this->selectedId) : null;
+        // Ebene 2: die Betriebsbrille treibt die Listen-Preise (Auto-Pakete on-the-fly, Fix-Preise bleiben).
+        $outlet = app(\Platform\FoodAlchemist\Services\ActiveOutletContext::class)->current($team);
+        $pakete = $svc->paginateBrowser(['search' => $this->search, 'role' => $this->rolleFilter], $team);
 
         return view('foodalchemist::livewire.pakete.index', [
-            'pakete' => $svc->paginateBrowser(['search' => $this->search, 'role' => $this->rolleFilter], $team),
+            'pakete' => $pakete,
             'rollen' => $svc->rollen($team),
             'selected' => $selected,
+            'vkDisplay' => $svc->outletPreisMap($team, collect($pakete->items()), $outlet),
+            'aktiverBetrieb' => $outlet?->name,
             'kandidaten' => $selected !== null
                 ? $svc->gerichtKandidaten($team, $this->gerichtSuche)->reject(
                     fn ($r) => $selected->dishes->pluck('sales_recipe_id')->contains($r->id))

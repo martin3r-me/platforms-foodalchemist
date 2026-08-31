@@ -199,7 +199,10 @@ class KalkulationService
         $agg = $this->aggregat->paketAggregat($paket);
         $hk1 = $paket->ek_per_person !== null ? (float) $paket->ek_per_person : (float) $agg['ek_per_person'];
         $r = $this->berechne($team, $hk1, 0.0, 0.0, $outlet);
-        $vk = $paket->price_per_person !== null ? (float) $paket->price_per_person : null;
+        // Ebene 2: VK/Person folgt dem Betrieb (Auto-Paket: Σ Gericht-Outlet-VK; Fix-Preis bleibt).
+        $vk = $outlet !== null
+            ? app(PaketService::class)->paketPreisProPerson($paket, $outlet)
+            : ($paket->price_per_person !== null ? (float) $paket->price_per_person : null);
 
         return [
             'hk1_pro_person' => round($hk1, 4),

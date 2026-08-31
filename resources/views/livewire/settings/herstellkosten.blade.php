@@ -247,9 +247,18 @@
         @php($fixMonatGesamt = array_sum($fixSummen ?? []))
         <div class="flex flex-col gap-1 pt-2 border-t border-black/5">
             <div class="flex items-center justify-between">
-                <span class="text-xs font-medium text-gray-900">Σ Fixkosten / Monat</span>
+                <span class="text-xs font-medium text-gray-900">Σ Fixkosten / Monat
+                    @if($scopeOutletName && count($fixListe) === 0)
+                        <span class="{{ $pill }} {{ $variantPill['secondary'] }} ml-1">komplett vom Team geerbt</span>
+                    @elseif($scopeOutletName)
+                        <span class="{{ $pill }} {{ $variantPill['info'] }} ml-1">eigen + geerbt</span>
+                    @endif
+                </span>
                 <span class="tabular-nums text-sm font-semibold text-gray-900">{{ number_format((float) $fixMonatGesamt, 2, ',', '.') }} €</span>
             </div>
+            @if($scopeOutletName && count($fixListe) === 0)
+                <p class="text-[10px] text-purple-700">„{{ $scopeOutletName }}" hat noch keine eigenen Fixkosten → nutzt die Team-Fixkosten (leer = erbt, nicht 0). Unten eine Zeile anlegen, um einen Block für diesen Betrieb abweichend zu setzen.</p>
+            @endif
             @if($fixMonatGesamt > 0)
                 <div class="flex flex-wrap gap-1">
                     @foreach($fixSummen as $bk => $summe)

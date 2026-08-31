@@ -1334,8 +1334,10 @@ class Editor extends Component
         } elseif ($this->id !== null && $this->type === 'pakete') {
             $paket = $pakete->detail($team, $this->id);
             if ($paket !== null) {
+                // Ebene 2: Paket-Kalkulation (VK/Person) folgt dem aktiven Betrieb.
+                $outlet = $team ? app(\Platform\FoodAlchemist\Services\ActiveOutletContext::class)->current($team) : null;
                 $aggregat = $agg->paketAggregat($paket);
-                $kalkulation = $kalk->paketHk($team, $paket);
+                $kalkulation = $kalk->paketHk($team, $paket, $outlet);
                 if ($istAufbau && $this->paketQuelle === 'basisrezept') {
                     $paketKandidaten = $this->paketGerichtSuche !== ''
                         ? $pakete->basisKandidaten($team, $this->paketGerichtSuche)
