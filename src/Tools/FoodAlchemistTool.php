@@ -489,7 +489,7 @@ abstract class FoodAlchemistTool
      * Kompakte Paket-Serialisierung (D5d) — geteilt von pakete.GET/LIST/SEARCH. Mit $withDishes werden
      * die Gericht-Positionen (Row-Id, Gericht, Menge/Einheit) mitgegeben.
      */
-    protected function paketPayload(\Platform\FoodAlchemist\Models\FoodAlchemistPaket $p, bool $withDishes = false): array
+    protected function paketPayload(\Platform\FoodAlchemist\Models\FoodAlchemistPaket $p, bool $withDishes = false, ?\Platform\FoodAlchemist\Models\FoodAlchemistOutlet $outlet = null): array
     {
         $out = [
             'id' => (int) $p->id,
@@ -504,6 +504,11 @@ abstract class FoodAlchemistTool
             'food_cost_percent' => $p->food_cost_percent !== null ? (float) $p->food_cost_percent : null,
             'is_inactive' => (bool) $p->is_inactive,
         ];
+        // Ebene 2: VK/Person im Betriebs-Kontext (Auto-Paket on-the-fly; Fix-Preis bleibt) — price_per_person = Team-Baseline.
+        if ($outlet !== null) {
+            $out['outlet_id'] = (int) $outlet->id;
+            $out['price_per_person_outlet'] = app(\Platform\FoodAlchemist\Services\PaketService::class)->paketPreisProPerson($p, $outlet);
+        }
         if ($withDishes) {
             $out['dishes'] = $p->dishes->map(fn ($g) => [
                 'row_id' => (int) $g->id,

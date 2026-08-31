@@ -24,7 +24,10 @@ class PaketeGetTool extends FoodAlchemistTool implements ToolContract, ToolMetad
 
     public function getSchema(): array
     {
-        return ['type' => 'object', 'properties' => ['id' => ['type' => 'integer', 'description' => 'Paket-Id.']], 'required' => ['id']];
+        return ['type' => 'object', 'properties' => [
+            'id' => ['type' => 'integer', 'description' => 'Paket-Id.'],
+            'outlet_id' => ['type' => 'integer', 'description' => 'Optional: Betrieb — VK/Person betriebsscharf (price_per_person_outlet). Fehlt = aktive Brille bzw. Team-Baseline.'],
+        ], 'required' => ['id']];
     }
 
     public function execute(array $arguments, ToolContext $context): ToolResult
@@ -37,8 +40,18 @@ class PaketeGetTool extends FoodAlchemistTool implements ToolContract, ToolMetad
         if ($paket === null) {
             return ToolResult::error('Paket nicht sichtbar/vorhanden.', 'NOT_FOUND');
         }
+        $outlet = null;
+        if (! empty($arguments['outlet_id'])) {
+            $outlet = \Platform\FoodAlchemist\Models\FoodAlchemistOutlet::where('team_id', $team->id)->find((int) $arguments['outlet_id']);
+            if ($outlet === null) {
+                return ToolResult::error('Betrieb nicht gefunden im Team.', 'NOT_FOUND');
+            }
+        } else {
+            $outlet = app(\Platform\FoodAlchemist\Services\ActiveOutletContext::class)
+                ->current($team, $context->user?->id !== null ? (int) $context->user->id : null);
+        }
 
-        return ToolResult::success(['paket' => $this->paketPayload($paket, true)]);
+        return ToolResult::success(['paket' => $this->paketPayload($paket, true, $outlet)]);
     }
 
     public function getMetadata(): array

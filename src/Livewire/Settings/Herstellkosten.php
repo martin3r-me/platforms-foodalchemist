@@ -32,6 +32,9 @@ class Herstellkosten extends Component
 
     public string $laborSource = 'team_flat';
 
+    /** Ebene 2: flacher Stundensatz als eigenes Betrieb-Feld (leer = erbt). Team-Scope: aus arbeitszeit-Block. */
+    public string $stundensatz = '35';
+
     /** Alle Kostenblöcke: [{key,label,typ,aktiv,modus,wert}]. */
     public array $schema = [];
 
@@ -81,19 +84,21 @@ class Herstellkosten extends Component
             $this->marge = $this->fmt($svc->margePct($team));
             $this->zielWe = $this->fmt($svc->zielWareneinsatzPct($team));
             $this->lnk = $this->fmt($svc->lohnnebenkostenPct($team));
+            $this->laborSource = $svc->laborCostSource($team);
+            $this->stundensatz = $this->fmt($svc->stundensatz($team));
             $this->eigenesSchema = true;   // das Team-Schema ist immer „eigen"
         } else {
             $roh = app(OutletSettingsService::class)->for($outlet);
             $this->marge = $roh->margin_pct !== null ? $this->fmt((float) $roh->margin_pct) : '';
             $this->zielWe = $roh->target_food_cost_pct !== null ? $this->fmt((float) $roh->target_food_cost_pct) : '';
             $this->lnk = $roh->labor_overhead_pct !== null ? $this->fmt((float) $roh->labor_overhead_pct) : '';
+            // Ebene 2: Stundensatz + Lohnquelle als eigene erbt/eigen-Felder (unabhängig vom Schema-Toggle).
+            $this->stundensatz = $roh->stundensatz_eur !== null ? $this->fmt((float) $roh->stundensatz_eur) : '';
+            $this->laborSource = in_array($roh->labor_cost_source, ['team_flat', 'station_roles'], true) ? $roh->labor_cost_source : '';
             $this->eigenesSchema = $roh->calculation_schema !== null && $roh->calculation_schema !== [];
         }
 
-        // Lohnquelle bleibt teamweit (keine Outlet-Spalte).
-        $this->laborSource = $svc->laborCostSource($team);
-
-        // Zuschlagsschema + Stundensatz + Bezugsbasen: effektiv (kaskadiert) fürs Anzeigen.
+        // Zuschlagsschema + Bezugsbasen: effektiv (kaskadiert) fürs Anzeigen. Arbeitszeit-Block = effektiver Stundensatz.
         $stundensatz = $svc->stundensatz($team, $outlet);
         $this->schema = [];
         foreach ($svc->kalkulationSchema($team, $outlet) as $b) {
@@ -295,9 +300,9 @@ class Herstellkosten extends Component
     }
 
     /**
-     * Ebene 2: Betriebs-Override schreiben. Skalare pro Feld (leer = null = erbt vom Team);
-     * Zuschlagsschema/Bezugsbasen/Stundensatz/Material-GK nur wenn „eigenes Schema" an — sonst null (erben).
-     * labor_cost_source hat keine Outlet-Spalte → bleibt teamweit, wird hier nicht geschrieben.
+     * Ebene 2: Betriebs-Override schreiben. Skalare pro Feld (leer = null = erbt vom Team).
+     * Stundensatz + Lohnquelle sind eigene erbt/eigen-Felder (unabhängig vom Schema-Toggle).
+     * Zuschlagsschema/Bezugsbasen/Material-GK nur wenn „eigenes Schema" an — sonst null (erben).
      */
     private function speichereBetrieb(FoodAlchemistOutlet $outlet): void
     {
@@ -305,21 +310,23 @@ class Herstellkosten extends Component
             'margin_pct' => $this->nullBeiLeer($this->marge),
             'target_food_cost_pct' => $this->nullBeiLeer($this->zielWe),
             'labor_overhead_pct' => $this->nullBeiLeer($this->lnk),
+            // Stundensatz + Lohnquelle je Betrieb (leer / „erbt" = null = Team).
+            'stundensatz_eur' => $this->nullBeiLeer($this->stundensatz),
+            'labor_cost_source' => in_array($this->laborSource, ['team_flat', 'station_roles'], true) ? $this->laborSource : null,
         ];
 
         if ($this->eigenesSchema) {
             $gemeinWert = 0.0;
-            $stundensatz = 0.0;
-            foreach ($this->schema as $b) {
+            foreach ($this->schema as $i => $b) {
                 if ($b['key'] === 'gemeinkosten') {
                     $gemeinWert = $this->num((string) $b['value']);
                 }
+                // Arbeitszeit-Block spiegelt das Standalone-Stundensatz-Feld (eine Quelle, keine Drift).
                 if ($b['type'] === 'arbeitszeit') {
-                    $stundensatz = $this->num((string) $b['value']);
+                    $this->schema[$i]['value'] = $this->stundensatz;
                 }
             }
             $attr['hk2_surcharge_pct'] = $gemeinWert;
-            $attr['stundensatz_eur'] = $stundensatz;
             $attr['calculation_schema'] = $this->baueSchema();
             $attr['calculation_reference_bases'] = [
                 'mek' => $this->num((string) $this->bezugsbasen['mek']),
@@ -327,9 +334,8 @@ class Herstellkosten extends Component
                 'hk' => $this->num((string) $this->bezugsbasen['hk']),
             ];
         } else {
-            // Erbt das Team-Schema komplett.
+            // Erbt das Team-Schema komplett (Material-GK/Blöcke/Bezugsbasen).
             $attr['hk2_surcharge_pct'] = null;
-            $attr['stundensatz_eur'] = null;
             $attr['calculation_schema'] = null;
             $attr['calculation_reference_bases'] = null;
         }
@@ -350,7 +356,7 @@ class Herstellkosten extends Component
         }
         app(OutletSettingsService::class)->update($this->team(), $outlet, [
             'margin_pct' => null, 'target_food_cost_pct' => null, 'labor_overhead_pct' => null,
-            'hk2_surcharge_pct' => null, 'stundensatz_eur' => null,
+            'hk2_surcharge_pct' => null, 'stundensatz_eur' => null, 'labor_cost_source' => null,
             'calculation_schema' => null, 'calculation_reference_bases' => null,
         ]);
         app(\Platform\FoodAlchemist\Services\PricingCascadeService::class)->recomputeTeam($this->team());
@@ -418,6 +424,8 @@ class Herstellkosten extends Component
             'marge' => $this->fmt($svc->margePct($team)),
             'zielWe' => $this->fmt($svc->zielWareneinsatzPct($team)),
             'lnk' => $this->fmt($svc->lohnnebenkostenPct($team)),
+            'stundensatz' => $this->fmt($svc->stundensatz($team)),
+            'laborSource' => $svc->laborCostSource($team),
         ];
 
         return view('foodalchemist::livewire.settings.herstellkosten', [

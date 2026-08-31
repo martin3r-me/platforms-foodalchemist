@@ -14,13 +14,13 @@ class StationLaborRateService
     /**
      * @return array{hourly_rate:float,source:string,warnings:list<string>}
      *
-     * Ebene 2: der Betrieb überschreibt nur den Stundensatz (Flat-Satz bzw. Rollen-Fallback);
-     * die Rollen-Sätze selbst + der Modus (laborCostSource) bleiben team-eigen.
+     * Ebene 2: der Betrieb überschreibt Stundensatz UND Lohnquelle (Modus);
+     * die Rollen-Sätze selbst (kitchen_roles.stundensatz_eur) bleiben team-eigen.
      */
     public function rate(Team $team, ?FoodAlchemistProductionStation $station, ?FoodAlchemistOutlet $outlet = null): array
     {
         $flat = $this->settings->stundensatz($team, $outlet);
-        if ($this->settings->laborCostSource($team) !== 'station_roles') {
+        if ($this->settings->laborCostSource($team, $outlet) !== 'station_roles') {
             return ['hourly_rate' => $flat, 'source' => 'team_flat', 'warnings' => []];
         }
         if ($station === null || $station->koepfe() <= 0) {

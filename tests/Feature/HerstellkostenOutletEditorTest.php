@@ -54,6 +54,43 @@ it('Betrieb-Scope: Skalare pro Feld — gesetzt schreibt, leer = erbt (null)', f
         ->and($this->settings->margePct($this->team))->not->toBe(60.0);
 });
 
+it('Betrieb-Scope: Stundensatz + Lohnquelle als eigene Felder (unabhängig vom Schema-Toggle)', function () {
+    Livewire::test(Herstellkosten::class)
+        ->set('outletId', $this->betrieb->id)
+        ->assertSet('eigenesSchema', false)          // KEIN eigenes Schema …
+        ->set('stundensatz', '48')                    // … trotzdem eigener Stundensatz
+        ->set('laborSource', 'station_roles')         // … und eigene Lohnquelle
+        ->call('speichern')
+        ->assertHasNoErrors();
+
+    $s = $this->outletSvc->for($this->betrieb->fresh());
+    expect((float) $s->stundensatz_eur)->toBe(48.0)
+        ->and($s->labor_cost_source)->toBe('station_roles')
+        ->and($s->calculation_schema)->toBeNull();    // Schema erbt weiter
+
+    // Kaskade: greift betriebsscharf.
+    expect($this->settings->stundensatz($this->team, $this->betrieb->fresh()))->toBe(48.0)
+        ->and($this->settings->laborCostSource($this->team, $this->betrieb->fresh()))->toBe('station_roles')
+        ->and($this->settings->laborCostSource($this->team))->toBe('team_flat');   // Team unverändert
+});
+
+it('Betrieb-Scope: leere Lohnquelle/Stundensatz = erbt (null)', function () {
+    $this->outletSvc->update($this->team, $this->betrieb, ['stundensatz_eur' => 50, 'labor_cost_source' => 'station_roles']);
+
+    Livewire::test(Herstellkosten::class)
+        ->set('outletId', $this->betrieb->id)
+        ->assertSet('stundensatz', '50')
+        ->assertSet('laborSource', 'station_roles')
+        ->set('stundensatz', '')                      // erbt
+        ->set('laborSource', '')                      // erbt
+        ->call('speichern')
+        ->assertHasNoErrors();
+
+    $s = $this->outletSvc->for($this->betrieb->fresh());
+    expect($s->stundensatz_eur)->toBeNull()
+        ->and($s->labor_cost_source)->toBeNull();
+});
+
 it('Betrieb-Scope: „eigenes Schema" an → calculation_schema + Bezugsbasen werden geschrieben', function () {
     Livewire::test(Herstellkosten::class)
         ->set('outletId', $this->betrieb->id)

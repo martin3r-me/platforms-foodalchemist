@@ -49,6 +49,20 @@ it('enterpriseBaseRate — Outlet-Ziel-Wareneinsatz überschreibt den Basissatz'
         ->and($this->catalog->enterpriseBaseRate($this->childA, $guenstig)['factor'])->toBe(5.0);
 });
 
+it('StationLaborRateService — Lohnquelle + Stundensatz folgen dem Betrieb', function () {
+    $this->settings->update($this->childA, ['stundensatz_eur' => 35, 'labor_cost_source' => 'team_flat']);
+    $betrieb = ($this->betrieb)('Werk', ['stundensatz_eur' => 50, 'labor_cost_source' => 'station_roles']);
+
+    $rateService = app(\Platform\FoodAlchemist\Services\StationLaborRateService::class);
+    // Team: team_flat @ 35 €/h.
+    $team = $rateService->rate($this->childA, null, null);
+    expect($team['source'])->toBe('team_flat')->and($team['hourly_rate'])->toBe(35.0);
+
+    // Betrieb: Modus station_roles (aus Override), aber kein Posten → Fallback auf Betriebs-Stundensatz 50.
+    $out = $rateService->rate($this->childA, null, $betrieb);
+    expect($out['source'])->toBe('team_fallback')->and($out['hourly_rate'])->toBe(50.0);
+});
+
 it('salesNetFor — outlet=null gibt die gespeicherte Baseline; fixer VK bleibt fix', function () {
     $betrieb = ($this->betrieb)('Egal', ['margin_pct' => 99]);
 

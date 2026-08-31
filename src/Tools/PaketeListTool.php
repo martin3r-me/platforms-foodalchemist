@@ -28,6 +28,7 @@ class PaketeListTool extends FoodAlchemistTool implements ToolContract, ToolMeta
             'properties' => [
                 'role' => ['type' => 'string', 'description' => 'Optionaler Rollen-Filter.'],
                 'per_page' => ['type' => 'integer', 'description' => 'Seitengröße (Default 100).'],
+                'outlet_id' => ['type' => 'integer', 'description' => 'Optional: Betrieb — VK/Person betriebsscharf (price_per_person_outlet). Fehlt = aktive Brille bzw. Team-Baseline. IDs via outlets.GET.'],
             ],
         ];
     }
@@ -38,6 +39,16 @@ class PaketeListTool extends FoodAlchemistTool implements ToolContract, ToolMeta
         if ($team === null) {
             return ToolResult::error('Kein Team im Kontext.', 'NO_TEAM');
         }
+        $outlet = null;
+        if (! empty($arguments['outlet_id'])) {
+            $outlet = \Platform\FoodAlchemist\Models\FoodAlchemistOutlet::where('team_id', $team->id)->find((int) $arguments['outlet_id']);
+            if ($outlet === null) {
+                return ToolResult::error('Betrieb nicht gefunden im Team.', 'NOT_FOUND');
+            }
+        } else {
+            $outlet = app(\Platform\FoodAlchemist\Services\ActiveOutletContext::class)
+                ->current($team, $context->user?->id !== null ? (int) $context->user->id : null);
+        }
         $filters = [];
         if (($role = trim((string) ($arguments['role'] ?? ''))) !== '') {
             $filters['role'] = $role;
@@ -47,7 +58,8 @@ class PaketeListTool extends FoodAlchemistTool implements ToolContract, ToolMeta
 
         return ToolResult::success([
             'total' => $page->total(),
-            'pakete' => collect($page->items())->map(fn ($p) => $this->paketPayload($p))->all(),
+            'active_outlet_id' => $outlet?->id,
+            'pakete' => collect($page->items())->map(fn ($p) => $this->paketPayload($p, false, $outlet))->all(),
         ]);
     }
 

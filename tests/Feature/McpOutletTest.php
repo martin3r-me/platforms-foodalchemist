@@ -58,6 +58,37 @@ it('Flow: Betrieb anlegen → Override → outlets.GET spiegelt → kalkulation.
         ->and($mit->data['outlet_id'])->toBe($outletId);
 });
 
+it('outlet_settings.PUT akzeptiert Lohnquelle + eigenes Schema/Bezugsbasen; GET spiegelt sie', function () {
+    $post = $this->registry->get('foodalchemist.outlets.POST')->execute(['name' => 'Werk'], $this->kontext);
+    $outletId = $post->data['id'];
+
+    $put = $this->registry->get('foodalchemist.outlet_settings.PUT')->execute([
+        'outlet_id' => $outletId,
+        'settings' => [
+            'labor_cost_source' => 'station_roles',
+            'stundensatz_eur' => 42,
+            'calculation_reference_bases' => ['mek' => 30000, 'fek' => 25000, 'hk' => 65000],
+        ],
+    ], $this->kontext);
+    expect($put->success)->toBeTrue()
+        ->and($put->data['updated'])->toContain('labor_cost_source');
+
+    $get = $this->registry->get('foodalchemist.outlets.GET')->execute([], $this->kontext);
+    $ov = collect($get->data['betriebe'])->firstWhere('name', 'Werk')['overrides'];
+    expect($ov['labor_cost_source'])->toBe('station_roles')
+        ->and((float) $ov['stundensatz_eur'])->toBe(42.0)
+        ->and((float) $ov['calculation_reference_bases']['mek'])->toBe(30000.0);
+});
+
+it('outlet_settings.PUT weist ungültige Lohnquelle ab', function () {
+    $post = $this->registry->get('foodalchemist.outlets.POST')->execute(['name' => 'X'], $this->kontext);
+    $res = $this->registry->get('foodalchemist.outlet_settings.PUT')->execute([
+        'outlet_id' => $post->data['id'], 'settings' => ['labor_cost_source' => 'quatsch'],
+    ], $this->kontext);
+    expect($res->success)->toBeFalse()
+        ->and($res->errorCode)->toBe('VALIDATION_ERROR');
+});
+
 it('cross-tenant: outlet_settings.PUT auf einen fremden Betrieb → NOT_FOUND, kein Write', function () {
     $fremd = FoodAlchemistOutlet::create(['team_id' => $this->childB->id, 'name' => 'Fremd']);
 

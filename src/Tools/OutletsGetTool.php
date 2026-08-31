@@ -63,7 +63,10 @@ class OutletsGetTool extends FoodAlchemistTool implements ToolContract, ToolMeta
                     'stundensatz_eur' => $s->stundensatz_eur,
                     'hk2_surcharge_pct' => $s->hk2_surcharge_pct,
                     'labor_overhead_pct' => $s->labor_overhead_pct,
-                ], fn ($v) => $v !== null),
+                    'labor_cost_source' => $s->labor_cost_source,
+                    'calculation_schema' => $s->calculation_schema,
+                    'calculation_reference_bases' => $s->calculation_reference_bases,
+                ], fn ($v) => $v !== null && $v !== []),
             ];
         })->all();
 

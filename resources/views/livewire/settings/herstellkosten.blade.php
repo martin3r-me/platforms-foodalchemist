@@ -104,8 +104,10 @@
                                     <span class="block text-[10px] text-gray-500">noch keine Fixkosten</span>
                                 @endif
                             @else
-                                <input type="text" wire:model="schema.{{ $i }}.value" @disabled($schemaLock) class="{{ $input }} !w-24 text-right tabular-nums disabled:opacity-50" placeholder="0" />
+                                @php($stundenBlockGesperrt = $scopeOutletName && $b['type'] === 'arbeitszeit')
+                                <input type="text" wire:model="schema.{{ $i }}.value" @disabled($schemaLock || $stundenBlockGesperrt) class="{{ $input }} !w-24 text-right tabular-nums disabled:opacity-50" placeholder="0" />
                                 <span class="text-[10px] text-gray-500">{{ $b['type'] === 'eur_pro_portion' ? '€' : ($b['type'] === 'arbeitszeit' ? '€/h' : '%') }}</span>
+                                @if($stundenBlockGesperrt)<span class="block text-[10px] text-purple-500">Stundensatz unten je Betrieb setzen</span>@endif
                             @endif
                         </td>
                         <td class="{{ $td }} text-right">
@@ -148,10 +150,21 @@
             <span class="w-40 text-xs text-gray-600">Lohnnebenkosten-Zuschlag</span>
             <input type="text" wire:model="lnk" class="{{ $input }} !w-24 text-right tabular-nums" placeholder="{{ $scopeOutletName ? 'erbt: '.$teamWerte['lnk'] : '0' }}" /> <span class="text-[11px] text-gray-500">% AG-/Sozialabgaben auf den Produktionslohn — rechnet den <strong>echten</strong> Personalkostensatz (statt nur Brutto-Lohn) in HK2</span>
         </div>
+        @if($scopeOutletName)
+            {{-- Ebene 2: Stundensatz als eigenes Betrieb-Feld (unabhängig vom Schema-Toggle). --}}
+            <div class="flex items-center gap-3">
+                <span class="w-40 text-xs text-gray-600">Stundensatz (Lohn)</span>
+                <input type="text" wire:model="stundensatz" class="{{ $input }} !w-24 text-right tabular-nums" placeholder="erbt: {{ $teamWerte['stundensatz'] }}" /> <span class="text-[11px] text-gray-500">€/h — flacher Produktionslohn <span class="text-purple-500">— leer = erbt vom Team</span></span>
+            </div>
+        @endif
         <div class="flex items-center gap-3">
             <span class="w-40 text-xs text-gray-600">Lohnquelle im Auftrag</span>
-            <select wire:model="laborSource" @disabled($scopeOutletName !== null) class="{{ $input }} !w-52 disabled:opacity-50"><option value="team_flat">Team-Stundensatz</option><option value="station_roles">Rollen des Postens</option></select>
-            <span class="text-[11px] text-gray-500">@if($scopeOutletName)<span class="text-purple-500">Gilt teamweit — nicht je Betrieb.</span>@else Fehlende Posten- oder Rollendaten fallen sichtbar auf den Team-Satz zurück.@endif</span>
+            <select wire:model="laborSource" class="{{ $input }} !w-52">
+                @if($scopeOutletName)<option value="">erbt vom Team ({{ $teamWerte['laborSource'] === 'station_roles' ? 'Rollen des Postens' : 'flacher Stundensatz' }})</option>@endif
+                <option value="team_flat">Flacher Stundensatz</option>
+                <option value="station_roles">Rollen des Postens</option>
+            </select>
+            <span class="text-[11px] text-gray-500">@if($scopeOutletName)<span class="text-purple-500">Je Betrieb wählbar — die Rollen-Sätze selbst gelten teamweit.</span>@else Fehlende Posten- oder Rollendaten fallen sichtbar auf den Team-Satz zurück.@endif</span>
         </div>
     </div>
 

@@ -19,6 +19,14 @@ class OutletSettingsPutTool extends FoodAlchemistTool implements ToolContract, T
     /** Setzbare Skalare (float ≥ 0 ODER null = zurück auf Team-Erbe). */
     private const NUM_KEYS = ['margin_pct', 'target_food_cost_pct', 'stundensatz_eur', 'hk2_surcharge_pct', 'labor_overhead_pct'];
 
+    /** Enum-Felder: labor_cost_source ∈ {team_flat, station_roles} ODER null = Team-Erbe. */
+    private const STR_KEYS = ['labor_cost_source'];
+
+    /** JSON-Felder: calculation_schema (Blockliste), calculation_reference_bases ({mek,fek,hk}); null = Team-Erbe. */
+    private const JSON_KEYS = ['calculation_schema', 'calculation_reference_bases'];
+
+    private const LABOR_SOURCES = ['team_flat', 'station_roles'];
+
     public function getName(): string
     {
         return 'foodalchemist.outlet_settings.PUT';
@@ -27,7 +35,8 @@ class OutletSettingsPutTool extends FoodAlchemistTool implements ToolContract, T
     public function getDescription(): string
     {
         return 'Schreibt die Kalkulations-Overrides EINES Betriebs (Outlet): Marge, Ziel-Wareneinsatz, '
-            . 'Stundensatz, Material-GK-/Lohnnebenkosten-Zuschlag. NULL setzt ein Feld zurück auf „erbt vom Team". '
+            . 'Stundensatz, Material-GK-/Lohnnebenkosten-Zuschlag, Lohnquelle (labor_cost_source), eigenes '
+            . 'Zuschlagsschema (calculation_schema) + Bezugsbasen. NULL setzt ein Feld zurück auf „erbt vom Team". '
             . 'Preisklassen bleiben team-geteilt (nicht setzbar). Nur eigene Betriebe. Idempotent (PUT). '
             . 'Betrieb-IDs via outlets.GET; VK-Wirkung prüfen via kalkulation.GET(outlet_id).';
     }
@@ -47,6 +56,9 @@ class OutletSettingsPutTool extends FoodAlchemistTool implements ToolContract, T
                         'stundensatz_eur' => ['type' => ['number', 'null'], 'description' => 'Lohnsatz €/h.'],
                         'hk2_surcharge_pct' => ['type' => ['number', 'null'], 'description' => 'Material-GK-Zuschlag %.'],
                         'labor_overhead_pct' => ['type' => ['number', 'null'], 'description' => 'Lohnnebenkosten-Zuschlag %.'],
+                        'labor_cost_source' => ['type' => ['string', 'null'], 'enum' => ['team_flat', 'station_roles', null], 'description' => 'Lohnquelle: team_flat|station_roles. null = erbt vom Team.'],
+                        'calculation_schema' => ['type' => ['array', 'null'], 'description' => 'Ganzes Zuschlagsschema (Blockliste) ersetzt das Team-Schema; null = erbt.'],
+                        'calculation_reference_bases' => ['type' => ['object', 'null'], 'description' => 'Monats-Bezugsbasen {mek,fek,hk}; null = erbt vom Team.'],
                     ],
                     'additionalProperties' => false,
                 ],
@@ -69,15 +81,41 @@ class OutletSettingsPutTool extends FoodAlchemistTool implements ToolContract, T
         if (! is_array($settings) || $settings === []) {
             return ToolResult::error('settings muss ein nicht-leeres Objekt sein.', 'VALIDATION_ERROR');
         }
-        $unbekannt = array_values(array_diff(array_keys($settings), self::NUM_KEYS));
+        $erlaubt = array_merge(self::NUM_KEYS, self::STR_KEYS, self::JSON_KEYS);
+        $unbekannt = array_values(array_diff(array_keys($settings), $erlaubt));
         if ($unbekannt !== []) {
-            return ToolResult::error('Unbekannte/nicht erlaubte Keys: ' . implode(', ', $unbekannt) . '. Erlaubt: ' . implode(', ', self::NUM_KEYS), 'VALIDATION_ERROR');
+            return ToolResult::error('Unbekannte/nicht erlaubte Keys: ' . implode(', ', $unbekannt) . '. Erlaubt: ' . implode(', ', $erlaubt), 'VALIDATION_ERROR');
         }
 
         $clean = [];
         foreach ($settings as $key => $wert) {
             if ($wert === null) {
                 $clean[$key] = null;
+                continue;
+            }
+            if (in_array($key, self::STR_KEYS, true)) {
+                if (! in_array($wert, self::LABOR_SOURCES, true)) {
+                    return ToolResult::error("Feld {$key} muss eines von " . implode('|', self::LABOR_SOURCES) . ' oder null sein.', 'VALIDATION_ERROR');
+                }
+                $clean[$key] = $wert;
+                continue;
+            }
+            if ($key === 'calculation_schema') {
+                if (! is_array($wert) || ! array_is_list($wert)) {
+                    return ToolResult::error('calculation_schema muss eine Liste von Block-Objekten oder null sein.', 'VALIDATION_ERROR');
+                }
+                $clean[$key] = $wert;
+                continue;
+            }
+            if ($key === 'calculation_reference_bases') {
+                if (! is_array($wert)) {
+                    return ToolResult::error('calculation_reference_bases muss ein Objekt {mek,fek,hk} oder null sein.', 'VALIDATION_ERROR');
+                }
+                $clean[$key] = [
+                    'mek' => (float) ($wert['mek'] ?? 0),
+                    'fek' => (float) ($wert['fek'] ?? 0),
+                    'hk' => (float) ($wert['hk'] ?? 0),
+                ];
                 continue;
             }
             if (! is_numeric($wert) || (float) $wert < 0) {

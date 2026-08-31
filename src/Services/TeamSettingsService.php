@@ -442,9 +442,10 @@ class TeamSettingsService
     }
 
     /** Lohnquelle für Aufträge: flacher Team-Satz oder gewichtete Rollen des Postens. */
-    public function laborCostSource(Team $team): string
+    /** Lohnquelle team_flat|station_roles — Ebene 2: Outlet-Override → Team → 'team_flat'. */
+    public function laborCostSource(Team $team, ?FoodAlchemistOutlet $outlet = null): string
     {
-        $value = (string) ($this->for($team)->labor_cost_source ?? 'team_flat');
+        $value = (string) ($this->skalar($team, 'labor_cost_source', $outlet) ?? 'team_flat');
 
         return in_array($value, ['team_flat', 'station_roles'], true) ? $value : 'team_flat';
     }
