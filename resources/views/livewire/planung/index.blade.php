@@ -68,7 +68,7 @@
     $typIconMap = ['concept' => 'heroicon-o-squares-2x2', 'gericht' => 'heroicon-o-cake', 'rezept' => 'heroicon-o-beaker', 'vollkaskade' => 'heroicon-o-bolt'];
     $typIcon = fn ($s) => $typIconMap[$kaskaden[(int) $s->id]['scope'] ?? ''] ?? 'heroicon-o-light-bulb';
     // Board: Ausgabe-Ziel-Chip (Owner). Kein Owner → „Frei". Text-Chip, keine Emojis.
-    $ausgabeZielLabel = ['foodbook' => 'Foodbook', 'speisekarte' => 'Speisekarte', 'speiseplan' => 'Speiseplan', 'offer' => 'Angebot', 'concept' => 'Concept'];
+    $ausgabeZielLabel = ['foodbook' => 'Foodbook', 'speisekarte' => 'Speisekarte', 'speiseplan' => 'Speiseplan', 'offer' => 'Angebot', 'format' => 'Format', 'concept' => 'Concept'];
     $ausgabeChip = function ($sessionId) use ($kaskaden, $ausgabeZielLabel, $chip) {
         $ot = $kaskaden[(int) $sessionId]['owner_type'] ?? null;
         if ($ot === null) {
@@ -125,6 +125,8 @@
                             <option value="foodbook">Foodbook</option>
                             <option value="speisekarte">Speisekarte</option>
                             <option value="speiseplan">Speiseplan</option>
+                            <option value="offer">Angebot</option>
+                            <option value="format">Format</option>
                         </select>
                     </div>
                 </div>
@@ -418,6 +420,12 @@
                 <button type="button" @click="tab='speiseplan'"
                         :class="tab==='speiseplan' ? 'bg-violet-500/25 text-white' : 'text-gray-300 hover:text-white'"
                         class="px-3 py-1.5 rounded-t-md text-xs font-medium">Speiseplan</button>
+                <button type="button" @click="tab='angebot'"
+                        :class="tab==='angebot' ? 'bg-violet-500/25 text-white' : 'text-gray-300 hover:text-white'"
+                        class="px-3 py-1.5 rounded-t-md text-xs font-medium">Angebot</button>
+                <button type="button" @click="tab='format'"
+                        :class="tab==='format' ? 'bg-violet-500/25 text-white' : 'text-gray-300 hover:text-white'"
+                        class="px-3 py-1.5 rounded-t-md text-xs font-medium">Format</button>
                 {{-- Worker (Ausführung/Status) bewusst ganz am Ende (Dominique 2026-08-24): erst erstellen/
                      planen, dann die Kaskade beobachten. --}}
                 <span class="mx-1 self-center h-4 w-px bg-white/15"></span>
@@ -562,6 +570,58 @@
                         <button type="button" wire:click="speiseplanAusBrief" wire:loading.attr="disabled" wire:target="speiseplanAusBrief" class="{{ $btnPrimary }} disabled:opacity-40" data-tab-sp-erzeugen>
                             <span wire:loading.remove wire:target="speiseplanAusBrief">{{ $spOwnerId ? 'Planen + Kaskade (KI)' : 'Speiseplan erzeugen (KI)' }}</span>
                             <span wire:loading wire:target="speiseplanAusBrief">erzeuge …</span>
+                        </button>
+                    </div>
+                </x-foodalchemist::modal-section>
+            </div>
+
+            {{-- Angebot als Kickoff-Tab: 1 Concept je Slot → docken ans Angebot (owner_type=offer). --}}
+            <div wire:key="planung-tab-angebot" x-show="tab==='angebot'" x-cloak class="space-y-4">
+                <x-foodalchemist::modal-section title="Angebot planen">
+                    <label class="block text-[11px] text-slate-400 mb-1">Bestehendes Angebot wählen</label>
+                    <select wire:model.live="offerOwnerId" class="{{ $input }} w-full" data-tab-offer-auswahl>
+                        <option value="">— neues Angebot aus Brief —</option>
+                        @foreach($offerAuswahl as $ao)<option value="{{ $ao->id }}">{{ $ao->name }}</option>@endforeach
+                    </select>
+                    <p class="text-[11px] text-slate-400 mt-2">Wählen: die Positionen entstehen für das gewählte Angebot. Leer: ein neues Angebot.</p>
+                </x-foodalchemist::modal-section>
+                <x-foodalchemist::modal-section :title="$offerOwnerId ? 'Aus Brief planen (füllt das gewählte Angebot)' : 'Neues Angebot aus Brief'">
+                    <p class="text-[11px] text-slate-400 mb-2">Je Slot ein Konzept; die Konzepte docken automatisch ans Angebot (reine Ausgabe).</p>
+                    @unless($offerOwnerId)
+                        <input type="text" wire:model="offerTitel" class="{{ $input }} w-full mb-2" placeholder="Angebots-Name (optional)" data-tab-offer-titel>
+                    @endunless
+                    <textarea wire:model="offerBrief" rows="4" class="{{ $input }} w-full" placeholder="Brief: Anlass, Gäste/Pax, Saison, Niveau, Budget, Servierform …" data-tab-offer-brief></textarea>
+                    @if($offerMeldung) <p class="text-[11px] text-rose-400 mt-2" data-tab-offer-meldung>{{ $offerMeldung }}</p> @endif
+                    <div class="mt-3">
+                        <button type="button" wire:click="angebotAusBrief" wire:loading.attr="disabled" wire:target="angebotAusBrief" class="{{ $btnPrimary }} disabled:opacity-40" data-tab-offer-erzeugen>
+                            <span wire:loading.remove wire:target="angebotAusBrief">{{ $offerOwnerId ? 'Planen + Kaskade (KI)' : 'Angebot erzeugen (KI)' }}</span>
+                            <span wire:loading wire:target="angebotAusBrief">erzeuge …</span>
+                        </button>
+                    </div>
+                </x-foodalchemist::modal-section>
+            </div>
+
+            {{-- Format als Kickoff-Tab: gebrandetes Foodkonzept — 1 Concept je Slot → docken ans Format (owner_type=format). --}}
+            <div wire:key="planung-tab-format" x-show="tab==='format'" x-cloak class="space-y-4">
+                <x-foodalchemist::modal-section title="Format planen">
+                    <label class="block text-[11px] text-slate-400 mb-1">Bestehendes Format wählen</label>
+                    <select wire:model.live="fmtOwnerId" class="{{ $input }} w-full" data-tab-fmt-auswahl>
+                        <option value="">— neues Format aus Brief —</option>
+                        @foreach($fmtAuswahl as $fo)<option value="{{ $fo->id }}">{{ $fo->name }}</option>@endforeach
+                    </select>
+                    <p class="text-[11px] text-slate-400 mt-2">Wählen: die Konzepte entstehen für das gewählte Format. Leer: ein neues, gebrandetes Format (Name/Claim/Story aus dem Brief).</p>
+                </x-foodalchemist::modal-section>
+                <x-foodalchemist::modal-section :title="$fmtOwnerId ? 'Aus Brief planen (füllt das gewählte Format)' : 'Neues Format aus Brief'">
+                    <p class="text-[11px] text-slate-400 mb-2">Marken-Identität + eigenständige Konzepte je Slot entstehen hier und docken automatisch ins Format.</p>
+                    @unless($fmtOwnerId)
+                        <input type="text" wire:model="fmtTitel" class="{{ $input }} w-full mb-2" placeholder="Format-Name (optional)" data-tab-fmt-titel>
+                    @endunless
+                    <textarea wire:model="fmtBrief" rows="4" class="{{ $input }} w-full" placeholder="Brief: Marke, Anlass, Ausrichtung, Zielgruppe, Niveau, Stationen/Gänge …" data-tab-fmt-brief></textarea>
+                    @if($fmtMeldung) <p class="text-[11px] text-rose-400 mt-2" data-tab-fmt-meldung>{{ $fmtMeldung }}</p> @endif
+                    <div class="mt-3">
+                        <button type="button" wire:click="formatAusBrief" wire:loading.attr="disabled" wire:target="formatAusBrief" class="{{ $btnPrimary }} disabled:opacity-40" data-tab-fmt-erzeugen>
+                            <span wire:loading.remove wire:target="formatAusBrief">{{ $fmtOwnerId ? 'Planen + Kaskade (KI)' : 'Format erzeugen (KI)' }}</span>
+                            <span wire:loading wire:target="formatAusBrief">erzeuge …</span>
                         </button>
                     </div>
                 </x-foodalchemist::modal-section>

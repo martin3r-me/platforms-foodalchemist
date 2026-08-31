@@ -10,6 +10,7 @@ use Livewire\WithFileUploads;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Models\FoodAlchemistAngebot;
 use Platform\FoodAlchemist\Models\FoodAlchemistCascadeRun;
+use Platform\FoodAlchemist\Models\FoodAlchemistFormat;
 use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
 use Platform\FoodAlchemist\Models\FoodAlchemistDishIdea;
 use Platform\FoodAlchemist\Models\FoodAlchemistPlanningSession;
@@ -20,6 +21,7 @@ use Platform\FoodAlchemist\Services\AngebotService;
 use Platform\FoodAlchemist\Services\ConceptGeneratorService;
 use Platform\FoodAlchemist\Services\ConceptService;
 use Platform\FoodAlchemist\Services\FoodbookService;
+use Platform\FoodAlchemist\Services\FormatService;
 use Platform\FoodAlchemist\Services\IdeenService;
 use Platform\FoodAlchemist\Services\PairingService;
 use Platform\FoodAlchemist\Services\PlanningCascadeService;
@@ -600,6 +602,18 @@ class Index extends Component
 
     public bool $offerPanelAuf = false;
 
+    /** Format-aus-Brief-Eingabe (Kickoff-Tab) — owner_type=format (Kaskade/Gerüst/Dock existieren via MCP-Pipeline). */
+    public string $fmtTitel = '';
+
+    public string $fmtBrief = '';
+
+    public ?string $fmtMeldung = null;
+
+    /** Handoff aus einem bestehenden Format: dann kein neues anlegen. */
+    public ?int $fmtOwnerId = null;
+
+    public bool $fmtPanelAuf = false;
+
     /** #5: Angebot-Auswähler — bestehendes Angebot wählen → Owner + jüngste Session (spiegelt updatedSkOwnerId). */
     public function updatedOfferOwnerId(): void
     {
@@ -614,6 +628,22 @@ class Index extends Component
             return;
         }
         $this->aktiviereOwnerSession('offer', $this->offerOwnerId);
+    }
+
+    /** Format-Auswähler — bestehendes Format wählen → Owner + jüngste Session (spiegelt updatedOfferOwnerId). */
+    public function updatedFmtOwnerId(): void
+    {
+        $team = $this->team();
+        if ($team === null || $this->fmtOwnerId === null) {
+            return;
+        }
+        $format = FoodAlchemistFormat::visibleToTeam($team)->find($this->fmtOwnerId);
+        if ($format === null) {
+            $this->fmtOwnerId = null;
+
+            return;
+        }
+        $this->aktiviereOwnerSession('format', $this->fmtOwnerId);
     }
 
     /**
@@ -980,6 +1010,92 @@ class Index extends Component
             // LLM nicht verfügbar/deaktiviert, leerer Brief o.ä. → Meldung statt 500. Eine ggf. schon
             // angelegte leere Angebots-Hülle bleibt in der Liste (verwerfbar) — bewusst kein Rollback.
             $this->offerMeldung = $e->getMessage();
+        }
+    }
+
+    /**
+     * Format aus Brief (Kickoff-Tab) — Leitstellen-Einstieg zum bestehenden MCP-Pfad
+     * (FormatPlanFromBriefTool). owner_type=format: Marken-Identität + eigenständige Concepte je Slot,
+     * die automatisch ans Format docken (Kaskade/Gerüst/Dock kennen 'format' bereits).
+     */
+    public function formatAusBrief(
+        FormatService $formate,
+        ConceptGeneratorService $concepts,
+        PlanningCascadeService $cascade,
+        PlanningSessionService $sessions,
+        TeamSettingsService $settings,
+    ): void {
+        $this->fmtMeldung = null;
+        $team = $this->team();
+        if ($team === null) {
+            $this->fmtMeldung = 'Kein Team zugeordnet — Erstellung nicht möglich.';
+
+            return;
+        }
+        $brief = trim($this->fmtBrief);
+        if ($brief === '') {
+            $this->fmtMeldung = 'Bitte einen Brief eingeben (Marke, Anlass, Ausrichtung, Niveau …).';
+
+            return;
+        }
+
+        try {
+            // 1. Format: bestehendes (Handoff, $fmtOwnerId) ODER neue Hülle.
+            $neu = false;
+            if ($this->fmtOwnerId !== null) {
+                $format = FoodAlchemistFormat::visibleToTeam($team)->find($this->fmtOwnerId);
+                if ($format === null) {
+                    $this->fmtMeldung = 'Format nicht gefunden oder kein Zugriff.';
+
+                    return;
+                }
+            } else {
+                $name = trim($this->fmtTitel) !== '' ? trim($this->fmtTitel) : 'Format aus Brief';
+                $format = $formate->create($team, ['name' => $name, 'origin' => 'eigen']);
+                $neu = true;
+            }
+
+            // 2. Gerüst aus dem Brief (owner=format): Marken-Identität + eigenständige Concepte.
+            $geruest = $concepts->geruestAusBriefFuerOwner($team, 'format', $format->id, $brief, [
+                'segment' => $settings->segment($team),
+            ]);
+
+            // Nur bei NEUEM Format: Name + Branding (consumer_name/claim/story) aus dem Gerüst übernehmen.
+            if ($neu) {
+                $upd = [];
+                if (is_string($geruest['name'] ?? null) && trim((string) $geruest['name']) !== '') {
+                    $upd['name'] = trim((string) $geruest['name']);
+                }
+                foreach (['consumer_name', 'claim', 'story'] as $feld) {
+                    $wert = $geruest['branding'][$feld] ?? null;
+                    if (is_string($wert) && trim($wert) !== '') {
+                        $upd[$feld] = trim($wert);
+                    }
+                }
+                if ($upd !== []) {
+                    $formate->update($team, (int) $format->id, $upd);
+                }
+            }
+
+            // 3. Review-Session + Voll-Kaskade (1 Concept je Slot → ans Format referenziert).
+            $session = $sessions->create($team, [
+                'title' => 'Format aus Brief: ' . $format->name,
+                'brief' => $brief,
+                'created_via' => 'leitstelle_format_brief',
+            ]);
+            $cascade->starteKaskade($team, 'vollkaskade', $session, 'voll_kreativ', [
+                'owner_type' => 'format',
+                'owner_id' => $format->id,
+                'created_via' => 'leitstelle_format_brief',
+            ]);
+
+            $this->fmtTitel = '';
+            $this->fmtBrief = '';
+            $this->fmtOwnerId = null;
+            $this->fmtPanelAuf = false;
+            $this->oeffne($session->id, 'worker');
+        } catch (\Throwable $e) {
+            $this->fmtMeldung = $e->getMessage();
         }
     }
 
@@ -3659,11 +3775,19 @@ class Index extends Component
             ? \Platform\FoodAlchemist\Models\FoodAlchemistSpeiseplan::visibleToTeam($team)
                 ->orderByDesc('id')->get(['id', 'name'])
             : collect();
+        $offerAuswahl = $team !== null
+            ? FoodAlchemistAngebot::visibleToTeam($team)->orderByDesc('id')->get(['id', 'name'])
+            : collect();
+        $fmtAuswahl = $team !== null
+            ? FoodAlchemistFormat::visibleToTeam($team)->orderByDesc('id')->get(['id', 'name'])
+            : collect();
 
         return view('foodalchemist::livewire.planung.index', [
             'fbAuswahl' => $fbAuswahl,
             'skAuswahl' => $skAuswahl,
             'spAuswahl' => $spAuswahl,
+            'offerAuswahl' => $offerAuswahl,
+            'fmtAuswahl' => $fmtAuswahl,
             'sessions' => $sessions,
             'baum' => $baum,
             'kaskaden' => $kaskaden,
