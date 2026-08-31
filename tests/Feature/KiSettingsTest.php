@@ -52,3 +52,27 @@ it('Settings-Sektion: Umschalten persistiert, Banner + Tier-Pills rendern', func
     $c->call('umschalten');
     expect(app(TeamSettingsService::class)->kiAktiv($this->rootTeam->fresh()))->toBeTrue();
 });
+
+it('Kosten folgen dem echten Modell und die Statistik schneidet nach 30 Gruppen nichts ab', function () {
+    foreach (range(0, 30) as $i) {
+        \Illuminate\Support\Facades\DB::table('foodalchemist_ai_call_log')->insert([
+            'uuid' => (string) \Symfony\Component\Uid\UuidV7::generate(),
+            'team_id' => $this->rootTeam->id,
+            'user_id' => auth()->id(),
+            'feature' => "test.feature.{$i}",
+            'tier' => $i % 2 === 0 ? 'A' : 'B',
+            'model' => 'gpt-5.5-2026-04-23',
+            'tokens_in' => $i === 0 ? 1_000_000 : 0,
+            'tokens_cached' => 0,
+            'tokens_out' => $i === 0 ? 1_000_000 : 0,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+    }
+
+    Livewire::test(Ki::class)
+        ->assertSee('gpt-5.5-2026-04-23')
+        ->assertSee('test.feature.30')
+        ->assertSeeHtml('data-ki-registry-luecken')
+        ->assertSee('35,00 $');
+});

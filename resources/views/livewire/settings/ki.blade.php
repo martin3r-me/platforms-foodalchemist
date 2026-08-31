@@ -29,6 +29,15 @@
             @endforeach
         </div>
         <p class="text-[10px] text-gray-500 mt-1">Tier→Modell: @foreach($tiers as $t => $m) {{ $t }}={{ $m ?? 'Plattform-Default' }} @endforeach</p>
+        <p class="text-[10px] text-gray-500 mt-0.5">
+            Tatsächlich im Zeitraum: {{ $aktiveModelle->isEmpty() ? 'keine Calls' : $aktiveModelle->implode(', ') }}
+            · Registry: {{ $registry->count() }} Prompts
+        </p>
+        @if($registryLuecken->isNotEmpty())
+            <p class="text-[10px] text-amber-600 mt-0.5" data-ki-registry-luecken>
+                Im Log, aber nicht in der Prompt-Registry: {{ $registryLuecken->implode(', ') }}
+            </p>
+        @endif
     </div>
 
     <div>
@@ -47,29 +56,40 @@
         @else
             <table class="{{ $table }}" data-ki-statistik>
                 <thead><tr class="text-left">
-                    @foreach(['Feature', 'Tier', 'Calls', 'Tokens in', 'Tokens out', 'Fehler', 'Accepted', '≈ Kosten'] as $h)<th class="{{ $th }}">{{ $h }}</th>@endforeach
+                    @foreach(['Feature', 'Tier', 'Modell', 'Calls', 'Tokens in', 'davon Cache', 'Tokens out', 'Fehler', 'Accepted', '≈ Kosten'] as $h)<th class="{{ $th }}">{{ $h }}</th>@endforeach
                 </tr></thead>
                 <tbody>
                     @foreach($statistik as $z)
-                        <tr class="{{ $tr }}" wire:key="st-{{ $z->feature }}-{{ $z->tier }}">
+                        @php($kostenKey = $z->feature . '|' . ($z->tier ?? '') . '|' . ($z->model ?? ''))
+                        <tr class="{{ $tr }}" wire:key="st-{{ $z->feature }}-{{ $z->tier }}-{{ $z->model ?? 'ohne-modell' }}">
                             <td class="{{ $td }} font-mono text-[11px]">{{ $z->feature }}</td>
                             <td class="{{ $td }}">{{ $z->tier }}</td>
+                            <td class="{{ $td }} font-mono text-[10px] whitespace-nowrap">{{ $z->model ?? '—' }}</td>
                             <td class="{{ $td }}">{{ number_format($z->calls, 0, ',', '.') }}</td>
                             <td class="{{ $td }} text-gray-600">{{ number_format($z->t_in, 0, ',', '.') }}</td>
+                            <td class="{{ $td }} text-gray-600">{{ number_format($z->t_cached, 0, ',', '.') }}</td>
                             <td class="{{ $td }} text-gray-600">{{ number_format($z->t_out, 0, ',', '.') }}</td>
                             <td class="{{ $td }} {{ $z->errors > 0 ? 'text-rose-500' : 'text-gray-600' }}">{{ $z->errors }}</td>
                             <td class="{{ $td }} text-gray-600">{{ $z->accepted }}</td>
-                            <td class="{{ $td }} text-right tabular-nums" data-ki-kosten>{{ number_format($kosten[$z->feature . '|' . $z->tier] ?? 0, 4, ',', '.') }} €</td>
+                            <td class="{{ $td }} text-right tabular-nums whitespace-nowrap" data-ki-kosten>
+                                @if(($kosten[$kostenKey] ?? null) === null) — @else {{ number_format($kosten[$kostenKey], 4, ',', '.') }} {{ $kostenSymbol }} @endif
+                            </td>
                         </tr>
                     @endforeach
                 </tbody>
                 <tfoot>
                     <tr class="border-t border-black/10">
-                        <td colspan="7" class="{{ $td }} text-right text-[11px] text-gray-500">≈ Gesamt (Tokens × Tier-Preis + Bildpauschalen, Deployment-Config <code>ai.kosten_pro_mio</code>/<code>ai.bildkosten</code>)</td>
-                        <td class="{{ $td }} text-right font-medium tabular-nums" data-ki-kosten-gesamt>{{ number_format($kostenGesamt, 2, ',', '.') }} €</td>
+                        <td colspan="9" class="{{ $td }} text-right text-[11px] text-gray-500">
+                            ≈ Gesamt (tatsächliches Modell × offizielle Standard-Preise, {{ $kostenWaehrung }}; ohne Steuer)
+                            @if($kostenUnbekannt > 0) · {{ $kostenUnbekannt }} Gruppe(n) ohne bekannten Preis nicht enthalten @endif
+                        </td>
+                        <td class="{{ $td }} text-right font-medium tabular-nums whitespace-nowrap" data-ki-kosten-gesamt>{{ number_format($kostenGesamt, 2, ',', '.') }} {{ $kostenSymbol }}</td>
                     </tr>
                 </tfoot>
             </table>
+            <p class="text-[10px] text-gray-500 mt-1">
+                Historische Input-Tokens ohne gespeicherten Cache-Anteil werden vorsichtig zum vollen Inputpreis geschätzt. Ab diesem Stand wird der Cache separat erfasst.
+            </p>
         @endif
     </div>
 </div>

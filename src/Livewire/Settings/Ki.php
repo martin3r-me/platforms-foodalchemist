@@ -4,7 +4,10 @@ namespace Platform\FoodAlchemist\Livewire\Settings;
 
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Livewire\Component;
+use Platform\FoodAlchemist\Services\Ai\AiCostCalculator;
+use Platform\FoodAlchemist\Services\RecipeImageService;
 use Platform\FoodAlchemist\Services\TeamSettingsService;
 
 /**
@@ -45,30 +48,42 @@ class Ki extends Component
     {
         $team = Auth::user()?->currentTeamRelation;
         $tage = in_array($this->zeitraum, ['7', '30', '90'], true) ? (int) $this->zeitraum : null;
+        $cachedSelect = Schema::hasColumn('foodalchemist_ai_call_log', 'tokens_cached')
+            ? 'SUM(COALESCE(tokens_cached,0))'
+            : '0';
         $statistik = $team !== null
             ? DB::table('foodalchemist_ai_call_log')->where('team_id', $team->id)
                 ->when($tage !== null, fn ($q) => $q->where('created_at', '>=', now()->subDays($tage)))
-                ->selectRaw('feature, tier, COUNT(*) AS calls, SUM(COALESCE(tokens_in,0)) AS t_in, '
-                    . 'SUM(COALESCE(tokens_out,0)) AS t_out, SUM(CASE WHEN error IS NOT NULL THEN 1 ELSE 0 END) AS errors, '
+                ->selectRaw('feature, tier, model, COUNT(*) AS calls, SUM(COALESCE(tokens_in,0)) AS t_in, '
+                    . $cachedSelect . ' AS t_cached, SUM(COALESCE(tokens_out,0)) AS t_out, '
+                    . 'SUM(CASE WHEN error IS NOT NULL THEN 1 ELSE 0 END) AS errors, '
                     . 'SUM(CASE WHEN accepted_at IS NOT NULL THEN 1 ELSE 0 END) AS accepted')
-                ->groupBy('feature', 'tier')->orderByDesc('calls')->limit(30)->get()
+                ->groupBy('feature', 'tier', 'model')->orderByDesc('calls')->get()
             : collect();
 
-        // M9-04: €-Schätzung je Feature (Tokens × Tier-Preis aus der Deployment-Config)
-        $preise = config('foodalchemist.ai.kosten_pro_mio', []);
-        $bildpreise = config('foodalchemist.ai.bildkosten', []);
-        $euro = fn ($z) => array_key_exists($z->feature, $bildpreise)
-            ? (float) $z->calls * (float) $bildpreise[$z->feature]
-            : ((float) $z->t_in * ($preise[$z->tier]['in'] ?? 0) + (float) $z->t_out * ($preise[$z->tier]['out'] ?? 0)) / 1_000_000;
+        $rechner = app(AiCostCalculator::class);
+        $key = fn ($z) => $z->feature . '|' . ($z->tier ?? '') . '|' . ($z->model ?? '');
+        $kostenUsd = $statistik->mapWithKeys(fn ($z) => [$key($z) => $rechner->costUsd($z)]);
+        $kosten = $kostenUsd->map(fn ($usd) => $rechner->displayCost($usd));
+        $bekannteKosten = $kosten->filter(fn ($betrag) => $betrag !== null);
+
+        $registry = collect(config('foodalchemist.prompts', []))
+            ->except('demo.echo')->map(fn ($p) => $p['tier'] ?? '?')->sort();
+        $auditOhnePrompt = collect([...RecipeImageService::BILD_FEATURES, 'voice.command']);
+        $registryLuecken = $statistik->pluck('feature')->unique()->diff($registry->keys()->merge($auditOhnePrompt))->sort()->values();
 
         return view('foodalchemist::livewire.settings.ki', [
-            'kosten' => $statistik->mapWithKeys(fn ($z) => [$z->feature . '|' . $z->tier => $euro($z)]),
-            'kostenGesamt' => $statistik->sum($euro),
+            'kosten' => $kosten,
+            'kostenGesamt' => $bekannteKosten->sum(),
+            'kostenUnbekannt' => $kosten->count() - $bekannteKosten->count(),
+            'kostenWaehrung' => $rechner->currency(),
+            'kostenSymbol' => $rechner->symbol(),
             'provider' => config('foodalchemist.ai.provider', 'core'),
             'tiers' => config('foodalchemist.ai.tiers', []),
             'fallbackModel' => config('foodalchemist.ai.fallback_model'),
-            'registry' => collect(config('foodalchemist.prompts', []))
-                ->except('demo.echo')->map(fn ($p) => $p['tier'] ?? '?')->sort(),
+            'registry' => $registry,
+            'registryLuecken' => $registryLuecken,
+            'aktiveModelle' => $statistik->whereNotNull('model')->pluck('model')->unique()->sort()->values(),
             'statistik' => $statistik,
             'zeitraumOptionen' => ['7' => 'Letzte 7 Tage', '30' => 'Letzte 30 Tage', '90' => 'Letzte 90 Tage', 'all' => 'Gesamte Historie'],
         ]);

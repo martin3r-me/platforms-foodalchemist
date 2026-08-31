@@ -177,11 +177,15 @@ class AiGatewayService
         $antwort = null;
         $fehler = null;
         $parsed = null;
+        $usageGesamt = ['input_tokens' => 0, 'output_tokens' => 0, 'input_tokens_details' => ['cached_tokens' => 0]];
+        $tatsaechlichesModell = null;
         $tempTreppe = [(float) ($prompt['temperature'] ?? 0.1), 0.5, 0.7];   // §3.3
         foreach ($tempTreppe as $versuch => $temperature) {
             $fehler = null;
             try {
                 $antwort = $this->chatMitBackoff($messages, $options + ['temperature' => $temperature]);
+                $this->addUsage($usageGesamt, (array) ($antwort['usage'] ?? []));
+                $tatsaechlichesModell = $antwort['model'] ?? $tatsaechlichesModell;
                 $parsed = json_decode($this->stripJsonFence((string) ($antwort['content'] ?? '')), true);
                 if (!is_array($parsed)) {
                     throw new RuntimeException("KI-Antwort für [{$promptKey}] ist kein valides JSON (nach Fence-Stripping, Versuch " . ($versuch + 1) . ').');
@@ -196,6 +200,11 @@ class AiGatewayService
             }
         }
         $elapsedMs = (int) ((hrtime(true) - $start) / 1_000_000);
+        if ($antwort !== null) {
+            // Auch verworfene, aber vom Provider erfolgreich beantwortete Re-Rolls werden berechnet.
+            $antwort['usage'] = $usageGesamt;
+            $antwort['model'] = $tatsaechlichesModell ?? ($antwort['model'] ?? null);
+        }
 
         $audit['layers_used'] = $layersUsed;
         $callLogId = $this->schreibeCallLog($promptKey, $tier, $userContent, $antwort, $parsed, $fehler, $elapsedMs, $audit);
@@ -260,6 +269,8 @@ class AiGatewayService
         $toolLaeufe = [];
         $finalText = null;
         $runde = 0;
+        $usageGesamt = ['input_tokens' => 0, 'output_tokens' => 0, 'input_tokens_details' => ['cached_tokens' => 0]];
+        $tatsaechlichesModell = null;
         $kontext = $team !== null && Auth::user() !== null ? new \Platform\Core\Contracts\ToolContext(Auth::user(), $team) : null;
         try {
         while ($runde < $maxRuns) {
@@ -268,6 +279,8 @@ class AiGatewayService
                 'temperature' => 0.0,
                 'model' => config('foodalchemist.ai.tiers', [])['D'] ?? null,
             ]);
+            $this->addUsage($usageGesamt, (array) ($antwort['usage'] ?? []));
+            $tatsaechlichesModell = $antwort['model'] ?? $tatsaechlichesModell;
             $parsed = json_decode($this->stripJsonFence((string) ($antwort['content'] ?? '')), true);
             if (! is_array($parsed)) {
                 $messages[] = ['role' => 'user', 'content' => 'Antwort war kein valides JSON — bitte exakt dem Protokoll folgen.'];
@@ -295,7 +308,7 @@ class AiGatewayService
         } catch (\Throwable $e) {
             // Audit-Vollständigkeit: auch der Fehlerpfad des Tool-Loops schreibt EINE ai_call_log-Zeile (wie propose()).
             $elapsedMs = (int) ((hrtime(true) - $start) / 1_000_000);
-            $this->schreibeCallLog('voice.command', 'D', $auftrag, ['model' => config('foodalchemist.ai.tiers', [])['D'] ?? 'default'], null, $e, $elapsedMs,
+            $this->schreibeCallLog('voice.command', 'D', $auftrag, ['model' => $tatsaechlichesModell, 'usage' => $usageGesamt], null, $e, $elapsedMs,
                 ['knowledge_used' => null, 'target_table' => null, 'target_id' => null, 'layers_used' => null]);
 
             throw $e;
@@ -303,7 +316,7 @@ class AiGatewayService
         $elapsedMs = (int) ((hrtime(true) - $start) / 1_000_000);
 
         // Audit: EIN Eintrag je Loop (Tier D, Runden in der Summary)
-        $this->schreibeCallLog('voice.command', 'D', $auftrag, ['model' => config('foodalchemist.ai.tiers', [])['D'] ?? 'default'],
+        $this->schreibeCallLog('voice.command', 'D', $auftrag, ['model' => $tatsaechlichesModell, 'usage' => $usageGesamt],
             ['werte' => ['runden' => $runde, 'tools' => count($toolLaeufe), 'final' => $finalText !== null]], null, $elapsedMs,
             ['knowledge_used' => null, 'target_table' => null, 'target_id' => null, 'layers_used' => null]);
 
@@ -331,7 +344,7 @@ class AiGatewayService
             $summary = $fehler === null
                 ? mb_strimwidth(json_encode($parsed['werte'] ?? [], JSON_UNESCAPED_UNICODE) ?: '', 0, 200, '…')
                 : null;
-            DB::table('foodalchemist_ai_call_log')->insert([
+            $values = [
                 'uuid' => (string) \Symfony\Component\Uid\UuidV7::generate(),
                 'team_id' => Auth::user()?->currentTeamRelation?->id,
                 'user_id' => Auth::id(),
@@ -351,12 +364,24 @@ class AiGatewayService
                 'error' => $fehler?->getMessage(),
                 'elapsed_ms' => $elapsedMs,
                 'created_at' => now(), 'updated_at' => now(),
-            ]);
+            ];
+            if (\Illuminate\Support\Facades\Schema::hasColumn('foodalchemist_ai_call_log', 'tokens_cached')) {
+                $values['tokens_cached'] = $antwort['usage']['input_tokens_details']['cached_tokens'] ?? null;
+            }
+            DB::table('foodalchemist_ai_call_log')->insert($values);
 
             return (int) DB::getPdo()->lastInsertId();
         } catch (\Throwable) {
             return null;                                             // Audit darf den Fach-Call nie reißen (graceful)
         }
+    }
+
+    /** Addiert die abrechnungsrelevanten OpenAI-Usage-Felder über Re-Rolls/Tool-Runden. */
+    private function addUsage(array &$summe, array $usage): void
+    {
+        $summe['input_tokens'] += (int) ($usage['input_tokens'] ?? 0);
+        $summe['output_tokens'] += (int) ($usage['output_tokens'] ?? 0);
+        $summe['input_tokens_details']['cached_tokens'] += (int) ($usage['input_tokens_details']['cached_tokens'] ?? 0);
     }
 
     /**

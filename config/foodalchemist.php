@@ -331,26 +331,34 @@ return [
         ],
 
         /*
-         * M9-04 / V-09: €-Preise je Tier (in/out je 1 Mio Tokens) — DEPLOYMENT-
-         * Config wie die Modell-Strings; Defaults = Anthropic-Listenpreise der
-         * Default-Modelle (Stand 2026-06, in €) — beim Modell-Wechsel anpassen.
+         * OpenAI-Listenpreise in USD je 1 Mio Tokens (Standard-Verarbeitung,
+         * kurzer Kontext; Stand 2026-08-31). Die Abrechnung folgt dem im Log
+         * gespeicherten echten Modell, NICHT dem fachlichen Tier A–D.
+         * Spezifische Präfixe müssen vor allgemeineren stehen (gpt-5.5 vor gpt-5).
          */
-        'kosten_pro_mio' => [
-            'A' => ['in' => (float) env('FOODALCHEMIST_AI_KOSTEN_A_IN', 2.80), 'out' => (float) env('FOODALCHEMIST_AI_KOSTEN_A_OUT', 14.00)],
-            'B' => ['in' => (float) env('FOODALCHEMIST_AI_KOSTEN_B_IN', 0.75), 'out' => (float) env('FOODALCHEMIST_AI_KOSTEN_B_OUT', 3.75)],
-            'C' => ['in' => (float) env('FOODALCHEMIST_AI_KOSTEN_C_IN', 2.80), 'out' => (float) env('FOODALCHEMIST_AI_KOSTEN_C_OUT', 14.00)],
-            'D' => ['in' => (float) env('FOODALCHEMIST_AI_KOSTEN_D_IN', 2.80), 'out' => (float) env('FOODALCHEMIST_AI_KOSTEN_D_OUT', 14.00)],
+        'modellkosten_pro_mio_usd' => [
+            'gpt-5.6-sol' => ['in' => 2.00, 'cached_in' => 0.20, 'out' => 10.00],
+            'gpt-5.6-terra' => ['in' => 1.00, 'cached_in' => 0.10, 'out' => 6.00],
+            'gpt-5.6-luna' => ['in' => 0.10, 'cached_in' => 0.01, 'out' => 0.60],
+            'gpt-5.5' => ['in' => 5.00, 'cached_in' => 0.50, 'out' => 30.00],
+            'gpt-5.2' => ['in' => 1.75, 'cached_in' => 0.175, 'out' => 14.00],
+            'gpt-5.1' => ['in' => 1.25, 'cached_in' => 0.125, 'out' => 10.00],
+            'gpt-5-mini' => ['in' => 0.25, 'cached_in' => 0.025, 'out' => 2.00],
+            'gpt-5' => ['in' => 1.25, 'cached_in' => 0.125, 'out' => 10.00],
+            'gpt-4.1-mini' => ['in' => 0.40, 'cached_in' => 0.10, 'out' => 1.60],
+            'gpt-4.1' => ['in' => 2.00, 'cached_in' => 0.50, 'out' => 8.00],
+            'gpt-4o-mini' => ['in' => 0.15, 'cached_in' => 0.075, 'out' => 0.60],
+            'gpt-4o' => ['in' => 2.50, 'cached_in' => 1.25, 'out' => 10.00],
         ],
 
-        /*
-         * Bild-Calls haben keine Text-Tokens im ai_call_log. Der Betrag ist daher
-         * eine Deployment-Pauschale pro erfolgreich/versucht geloggtem Bild-Call.
-         */
-        'bildkosten' => [
-            // Standard-Qualität (gpt-image-1.5, 1024²) ≈ 0,04 €/Bild — Deployment-Pauschale, env-überschreibbar.
-            'recipe.step_photos' => (float) env('FOODALCHEMIST_AI_IMAGE_STEP_PHOTO_EUR', 0.04),
-            'recipe.product_photo' => (float) env('FOODALCHEMIST_AI_IMAGE_PRODUCT_PHOTO_EUR', 0.04),
+        /* GPT-Image-1.5, 1024×1024, medium/„standard": 0,034 USD je Bild. */
+        'bildkosten_usd' => [
+            'models' => ['gpt-image-1.5' => 0.034],
+            'features' => [],
         ],
+
+        /* null = ehrliche USD-Anzeige; optionaler Deployment-Kurs für EUR. */
+        'usd_eur' => env('FOODALCHEMIST_AI_USD_EUR', env('AI_USD_EUR')),
     ],
 
     /*

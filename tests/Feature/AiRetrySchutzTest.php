@@ -37,7 +37,11 @@ beforeEach(function () {
                     throw $a;
                 }
 
-                return ['content' => $a, 'model' => 'fake-skript', 'usage' => ['input_tokens' => 1, 'output_tokens' => 1]];
+                return ['content' => $a, 'model' => 'fake-skript', 'usage' => [
+                    'input_tokens' => 1,
+                    'output_tokens' => 1,
+                    'input_tokens_details' => ['cached_tokens' => 1],
+                ]];
             }
         });
     };
@@ -66,7 +70,10 @@ it('DoD §3.3: kaputte Antwort (Degeneration) → Re-Roll mit Temp-Treppe → Er
 
     expect($p->werte)->toBe(['x' => 2])
         ->and($p->confidence)->toBe(0.9)
-        ->and(DB::table('foodalchemist_ai_call_log')->orderByDesc('id')->value('error'))->toBeNull();
+        ->and(DB::table('foodalchemist_ai_call_log')->orderByDesc('id')->value('error'))->toBeNull()
+        ->and((int) DB::table('foodalchemist_ai_call_log')->orderByDesc('id')->value('tokens_in'))->toBe(2)
+        ->and((int) DB::table('foodalchemist_ai_call_log')->orderByDesc('id')->value('tokens_out'))->toBe(2)
+        ->and((int) DB::table('foodalchemist_ai_call_log')->orderByDesc('id')->value('tokens_cached'))->toBe(2);
 });
 
 it('§3.3 Generator-Variante: strukturell unbrauchbar (leere zutaten) → Retry → brauchbar', function () {
