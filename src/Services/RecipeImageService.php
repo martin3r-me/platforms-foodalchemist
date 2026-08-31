@@ -24,7 +24,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistRecipeStepPhoto;
 class RecipeImageService
 {
     private const SIZE = '1024x1024';
-    private const QUALITY = 'low';   // Kosten: „low" reicht für Vorschau-/Doku-Bilder
+    private const QUALITY = 'standard';   // Standard-Qualität (vorher „low") — sichtbar bessere Doku-/Präsentationsbilder.
     private const MODEL = 'gpt-image-1.5';
 
     /** Feature-Keys der KI-Foto-Calls im `foodalchemist_ai_call_log` — EINE Wahrheit für Erzeuger

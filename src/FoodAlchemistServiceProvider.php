@@ -637,6 +637,7 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\RecipeIngredientsPutTool::class,
                     \Platform\FoodAlchemist\Tools\RecipeStepsGetTool::class,      // Spec 27
                     \Platform\FoodAlchemist\Tools\RecipeStepsPutTool::class,      // Spec 27
+                    \Platform\FoodAlchemist\Tools\RecipeImageGenerateTool::class, // KI-Bilder als MCP
                     // Phase B: Foodbook-Kaskade (nativ FA, Draft-only)
                     \Platform\FoodAlchemist\Tools\FoodbooksPostTool::class,
                     \Platform\FoodAlchemist\Tools\FoodbookKapitelPostTool::class,

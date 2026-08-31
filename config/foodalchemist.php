@@ -347,7 +347,9 @@ return [
          * eine Deployment-Pauschale pro erfolgreich/versucht geloggtem Bild-Call.
          */
         'bildkosten' => [
-            'recipe.step_photos' => (float) env('FOODALCHEMIST_AI_IMAGE_STEP_PHOTO_EUR', 0.0),
+            // Standard-Qualität (gpt-image-1.5, 1024²) ≈ 0,04 €/Bild — Deployment-Pauschale, env-überschreibbar.
+            'recipe.step_photos' => (float) env('FOODALCHEMIST_AI_IMAGE_STEP_PHOTO_EUR', 0.04),
+            'recipe.product_photo' => (float) env('FOODALCHEMIST_AI_IMAGE_PRODUCT_PHOTO_EUR', 0.04),
         ],
     ],
 

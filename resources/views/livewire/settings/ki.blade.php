@@ -32,9 +32,18 @@
     </div>
 
     <div>
-        <p class="{{ $dt }} mb-1">Nutzung (ai_call_log, dieses Team)</p>
+        <div class="flex items-center justify-between gap-3 mb-1 flex-wrap">
+            <p class="{{ $dt }}">Nutzung (ai_call_log, dieses Team)</p>
+            <label class="flex items-center gap-2 text-[11px] text-gray-500">Zeitraum
+                <select wire:model.live="zeitraum" class="{{ $input }} !w-40 !py-1">
+                    @foreach($zeitraumOptionen as $val => $lbl)
+                        <option value="{{ $val }}">{{ $lbl }}</option>
+                    @endforeach
+                </select>
+            </label>
+        </div>
         @if($statistik->isEmpty())
-            <p class="text-xs text-gray-500">Noch keine Calls geloggt.</p>
+            <p class="text-xs text-gray-500">Keine Calls im gewählten Zeitraum.</p>
         @else
             <table class="{{ $table }}" data-ki-statistik>
                 <thead><tr class="text-left">

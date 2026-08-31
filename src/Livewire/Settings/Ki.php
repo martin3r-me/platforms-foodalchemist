@@ -19,6 +19,9 @@ class Ki extends Component
 
     public ?string $meldung = null;
 
+    /** Nutzungs-Zeitraum: '7' | '30' | '90' | 'all' (Tage; all = gesamte Historie). */
+    public string $zeitraum = '30';
+
     public function mount(): void
     {
         $team = Auth::user()?->currentTeamRelation;
@@ -41,8 +44,10 @@ class Ki extends Component
     public function render()
     {
         $team = Auth::user()?->currentTeamRelation;
+        $tage = in_array($this->zeitraum, ['7', '30', '90'], true) ? (int) $this->zeitraum : null;
         $statistik = $team !== null
             ? DB::table('foodalchemist_ai_call_log')->where('team_id', $team->id)
+                ->when($tage !== null, fn ($q) => $q->where('created_at', '>=', now()->subDays($tage)))
                 ->selectRaw('feature, tier, COUNT(*) AS calls, SUM(COALESCE(tokens_in,0)) AS t_in, '
                     . 'SUM(COALESCE(tokens_out,0)) AS t_out, SUM(CASE WHEN error IS NOT NULL THEN 1 ELSE 0 END) AS errors, '
                     . 'SUM(CASE WHEN accepted_at IS NOT NULL THEN 1 ELSE 0 END) AS accepted')
@@ -65,6 +70,7 @@ class Ki extends Component
             'registry' => collect(config('foodalchemist.prompts', []))
                 ->except('demo.echo')->map(fn ($p) => $p['tier'] ?? '?')->sort(),
             'statistik' => $statistik,
+            'zeitraumOptionen' => ['7' => 'Letzte 7 Tage', '30' => 'Letzte 30 Tage', '90' => 'Letzte 90 Tage', 'all' => 'Gesamte Historie'],
         ]);
     }
 }
