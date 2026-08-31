@@ -130,7 +130,7 @@ class AngebotService
         $angebot = FoodAlchemistAngebot::visibleToTeam($team)->findOrFail($angebotId);
         $this->guardOwner($angebot, $team);
 
-        return FoodAlchemistConcept::create([
+        $concept = FoodAlchemistConcept::create([
             'team_id' => $team->id,
             'offer_id' => $angebot->id,
             'name' => trim((string) ($name ?? ($angebot->name . ' – Menü'))) ?: 'Menü',
@@ -138,6 +138,29 @@ class AngebotService
             'is_template' => false,
             'occasion' => $angebot->occasion,
         ]);
+        // #380 Composer: der lokale Entwurf erscheint als concept_ref-Block in der Komposition.
+        $this->ensureConceptBlock($team, $angebot->id, (int) $concept->id);
+
+        return $concept;
+    }
+
+    /**
+     * Idempotent: legt für ein Concept einen concept_ref-Block im Default-Kapitel des Angebots an,
+     * falls noch keiner existiert. Verbindet die Menü-Anbindung (neuesConcept/referenziereConcept +
+     * Voll-Kaskade) mit der Kapitel/Block-Komposition (autoritative Preis-/Anzeige-Quelle).
+     */
+    private function ensureConceptBlock(Team $team, int $angebotId, int $conceptId): void
+    {
+        $vorhanden = \Platform\FoodAlchemist\Models\FoodAlchemistOfferBlock::where('type', 'concept_ref')
+            ->where('concept_id', $conceptId)
+            ->whereHas('chapter', fn ($q) => $q->where('offer_id', $angebotId))
+            ->exists();
+        if ($vorhanden) {
+            return;
+        }
+        $comp = app(OfferCompositionService::class);
+        $kapitel = $comp->defaultKapitel($team, $angebotId);
+        $comp->addBlock($team, (int) $kapitel->id, ['type' => 'concept_ref', 'concept_id' => $conceptId]);
     }
 
     /**
@@ -207,7 +230,11 @@ class AngebotService
         $orderCosting = app(OrderCostingService::class);
         $conceptSvc = app(ConceptService::class);
         $pax = max(0, (int) ($angebot->personen ?? 0));
-        $concepts = $this->menueConcepts($angebot);
+        // #380 Composer: Preis-Einheiten aus der Kapitel/Block-Komposition (concept_ref +
+        // additiv-Format-Editionen = voll bekostete Concepts; recipe_ref/header_preis =
+        // einfache Zuschläge; alternativen-Formate = Range, nicht additiv).
+        $einheiten = app(OfferCompositionService::class)->preisEinheiten($team, $angebot, $outlet);
+        $concepts = $einheiten['concepts'];
 
         $vkPp = 0.0;
         $ekPp = 0.0;
@@ -239,7 +266,13 @@ class AngebotService
             }
         }
 
-        $autoGesamt = round($vkPp * $pax, 2);
+        // Einfache Zuschläge aus der Komposition: recipe_ref/header_preis(person) je Person,
+        // header_preis(pauschal)/recipe_ref(pauschal) als flacher Anteil (kein ×Pax).
+        $vkPp += (float) $einheiten['vk_pp_extra'];
+        $ekPp += (float) $einheiten['ek_pp_extra'];
+        $hk2Pp += (float) $einheiten['ek_pp_extra']; // Näherung: einfache Posten ohne Arbeitszeit → HK2≈EK (kein DB-Overstate)
+
+        $autoGesamt = round($vkPp * $pax, 2) + (float) $einheiten['flat_total'];
         $expired = $angebot->price_override_expires_at?->isPast() ?? false;
         $manuell = in_array(($angebot->price_mode ?? 'auto'), ['fixed', 'manuell'], true)
             && ! $expired && $angebot->total_price !== null;
@@ -248,7 +281,8 @@ class AngebotService
         return [
             'pax' => $pax,
             'price_mode' => $manuell ? ($angebot->price_mode === 'fixed' ? 'fixed' : 'manuell') : 'auto',
-            'leer' => $concepts->isEmpty(),
+            'leer' => $concepts->isEmpty() && (float) $einheiten['vk_pp_extra'] === 0.0 && (float) $einheiten['flat_total'] === 0.0,
+            'alternativen' => $einheiten['alternativen'],
             'vk_pro_person' => round($vkPp, 2),
             'ek_per_person' => round($ekPp, 2),
             'hk2_pro_person' => round($hk2Pp, 2),
@@ -335,6 +369,41 @@ class AngebotService
         ];
     }
 
+    /**
+     * #380 Composer: Daten für die schöne Angebots-KARTE (Kundenausgabe, Foodbook-Look).
+     * Interna-frei (komposition intern=false → kein EK/Marge) + Preis-Footer netto+MwSt+brutto.
+     *
+     * @return array{angebot:FoodAlchemistAngebot, titel:string, komposition:array, kalk:array,
+     *   customer:?string, kontakt:?string, mwstSatz:float, netto_gesamt:float, mwst_betrag:float,
+     *   brutto_gesamt:float, pax:int, vk_pro_person:float}
+     */
+    public function karteDaten(Team $team, int $id): array
+    {
+        $angebot = FoodAlchemistAngebot::visibleToTeam($team)->with(['crmCompany', 'crmContact'])->findOrFail($id);
+        $komposition = app(OfferCompositionService::class)->komposition($team, $angebot, null, false);
+        $kalk = $this->kalkulation($team, $angebot);
+        $mwst = app(TeamSettingsService::class)->mwst($team);
+        $satz = ($mwst['default_satz'] ?? 'ermaessigt') === 'regulaer'
+            ? (float) ($mwst['regulaer'] ?? 19.0)
+            : (float) ($mwst['ermaessigt'] ?? 7.0);
+        $nettoGesamt = (float) $kalk['gesamt_vk'];
+
+        return [
+            'angebot' => $angebot,
+            'titel' => $angebot->name,
+            'komposition' => $komposition,
+            'kalk' => $kalk,
+            'customer' => $angebot->crmCompany?->display_name ?? $angebot->crmContact?->display_name,
+            'kontakt' => $angebot->crmContact?->display_name,
+            'mwstSatz' => $satz,
+            'netto_gesamt' => round($nettoGesamt, 2),
+            'mwst_betrag' => round($nettoGesamt * $satz / 100, 2),
+            'brutto_gesamt' => round($nettoGesamt * (1 + $satz / 100), 2),
+            'pax' => (int) $kalk['pax'],
+            'vk_pro_person' => (float) $kalk['vk_pro_person'],
+        ];
+    }
+
     // ── #380 DoD-5: Katalog-Concepts referenzieren ─────────────────────────
 
     /** Alle Menüs eines Angebots: ad-hoc (offer_id) + referenzierte Katalog-Concepts. */
@@ -362,7 +431,10 @@ class AngebotService
             : now()->toDateString();
 
         $targets = [];
-        foreach ($this->menueConcepts($angebot) as $c) {
+        // #380 Composer: Produktions-Ziele aus der Komposition (concept_ref + additiv-Format-Editionen);
+        // je Concept einmal (dedupliziert), unabhängig davon in wie vielen Kapiteln es referenziert ist.
+        $conceptUnits = app(OfferCompositionService::class)->preisEinheiten($team, $angebot)['concepts']->unique('id');
+        foreach ($conceptUnits as $c) {
             $targets[] = ['concept_id' => (int) $c->id, 'persons' => $pax, 'source_ref' => 'angebot:' . $angebot->id . ':c' . $c->id];
         }
         if ($targets === []) {
@@ -388,6 +460,8 @@ class AngebotService
         }
         $pos = (int) (DB::table('foodalchemist_offer_concept')->where('offer_id', $angebot->id)->max('position') ?? -1) + 1;
         $angebot->referencedConcepts()->syncWithoutDetaching([$conceptId => ['team_id' => $team->id, 'position' => $pos]]);
+        // #380 Composer: referenziertes Katalog-Concept erscheint als concept_ref-Block in der Komposition.
+        $this->ensureConceptBlock($team, $angebot->id, $conceptId);
         $this->aktualisiereAutoPreis($team, $angebot);
     }
 
@@ -396,6 +470,11 @@ class AngebotService
         $angebot = FoodAlchemistAngebot::visibleToTeam($team)->findOrFail($angebotId);
         $this->guardOwner($angebot, $team);
         $angebot->referencedConcepts()->detach($conceptId);
+        // #380 Composer: zugehörige concept_ref-Blöcke mitentfernen (Komposition = autoritativ).
+        \Platform\FoodAlchemist\Models\FoodAlchemistOfferBlock::where('type', 'concept_ref')
+            ->where('concept_id', $conceptId)
+            ->whereHas('chapter', fn ($q) => $q->where('offer_id', $angebot->id))
+            ->get()->each->delete();
         $this->aktualisiereAutoPreis($team, $angebot);
     }
 
@@ -418,6 +497,15 @@ class AngebotService
             ->when(! empty($facetten['einsatzmoment']), fn ($q) => $q->whereHas('serviceMoments', fn ($w) => $w->where('foodalchemist_service_moments.id', (int) $facetten['einsatzmoment'])))
             ->when(! empty($facetten['season']), fn ($q) => $q->whereHas('seasons', fn ($w) => $w->where('foodalchemist_seasons.id', (int) $facetten['season'])))
             ->orderBy('name')->limit($limit)->get(['id', 'name', 'price_per_person_cache', 'event_type_id', 'serving_form_id']);
+    }
+
+    /** #380 Composer: Formate (Marken-Container) für den „+ Format"-Picker (team-sichtbar, nicht archiviert). Spiegelt SpeisekarteService::formatKandidaten. */
+    public function formatKandidaten(Team $team, string $suche = '', int $limit = 50): Collection
+    {
+        return \Platform\FoodAlchemist\Models\FoodAlchemistFormat::visibleToTeam($team)
+            ->where('status', '!=', 'archiviert')
+            ->when(trim($suche) !== '', fn ($q) => \Platform\FoodAlchemist\Support\Suche::like($q, 'name', $suche))
+            ->orderBy('name')->limit($limit)->get(['id', 'name', 'consumer_name', 'status']);
     }
 
     /** Concept-Katalog-Facetten (Eventtypen · Servierformen · Momente · Saisons) für die Angebot-Editor-Filterleiste. */

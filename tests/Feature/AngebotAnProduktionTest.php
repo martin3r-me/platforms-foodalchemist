@@ -23,6 +23,11 @@ it('legt aus einem Angebot einen Produktionsauftrag am Event-Tag an', function (
         'status' => 'anfrage', 'personen' => 80, 'event_date' => '2026-08-15',
     ]);
     $concept = $this->makeConcept($this->rootTeam, 'Menü A', ['offer_id' => $angebot->id]);
+    // #380 Composer: die Komposition (Kapitel/Block) ist die autoritative Quelle — das Menü
+    // wird als concept_ref-Block angebunden (so wie neuesConcept/referenziereConcept/Voll-Kaskade es tun).
+    $comp = app(\Platform\FoodAlchemist\Services\OfferCompositionService::class);
+    $kapitel = $comp->addKapitel($this->rootTeam, $angebot->id, ['title' => 'Menü']);
+    $comp->addBlock($this->rootTeam, $kapitel->id, ['type' => 'concept_ref', 'concept_id' => $concept->id]);
 
     $res = app(AngebotService::class)->anProduktion($this->rootTeam, $angebot->id);
 

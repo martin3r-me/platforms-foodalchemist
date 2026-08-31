@@ -7,6 +7,7 @@ use Livewire\Attributes\On;
 use Livewire\Component;
 use Platform\FoodAlchemist\Livewire\Concerns\ManagesCanvas;
 use Platform\FoodAlchemist\Services\AngebotService;
+use Platform\FoodAlchemist\Services\OfferCompositionService;
 
 /**
  * Angebote-Editor (Fullscreen-Modal, pro Angebot) — herausgezogen aus dem bisherigen
@@ -33,6 +34,12 @@ class Editor extends Component
     public string $kontaktSuche = '';
 
     public string $conceptSuche = '';
+
+    /** Composer: Suche im „+ Format"-Picker (Aufbau-Tab). */
+    public string $formatSuche = '';
+
+    /** Composer: in welches Kapitel der „+ Concept"-Inline-Picker gerade einsetzt. */
+    public ?int $pickerChapterId = null;
 
     /** UX-Ausbau: Eingabe fürs neue Gerüst-Slot-Label (Angebot-Gerüst-Review-Tab). */
     public string $neuerSlot = '';
@@ -221,6 +228,127 @@ class Editor extends Component
         $this->dispatch('angebot-gespeichert');
     }
 
+    // ── #380 Composer: Kapitel/Block-Komposition (Foodbook-Aufbau) ─────────────
+    // „wie im Foodbook": Kapitel + Header/Blöcke; Picker setzt Concept (concept_ref-Block)
+    // ODER Format (Format-Kapitel, live) ein. Preise/Anzeige liest OfferCompositionService.
+
+    /** Nach jeder Kompositions-Änderung: Auto-Preis neu + Form + Liste aktualisieren. */
+    private function nachKomposition(): void
+    {
+        if ($this->selectedId !== null) {
+            app(AngebotService::class)->recomputeAngebot($this->team(), $this->selectedId);
+            $this->ladeForm();
+            $this->dispatch('angebot-gespeichert');
+        }
+    }
+
+    public function kapitelNeu(OfferCompositionService $comp): void
+    {
+        if ($this->selectedId === null) {
+            return;
+        }
+        $comp->addKapitel($this->team(), $this->selectedId, ['title' => 'Neues Kapitel']);
+        $this->nachKomposition();
+    }
+
+    public function kapitelUmbenennen(int $id, string $title, OfferCompositionService $comp): void
+    {
+        $comp->updateKapitel($this->team(), $id, ['title' => $title]);
+        $this->nachKomposition();
+    }
+
+    public function kapitelWeg(int $id, OfferCompositionService $comp): void
+    {
+        $comp->deleteKapitel($this->team(), $id);
+        $this->nachKomposition();
+    }
+
+    /** @param list<int> $ids */
+    public function kapitelSortieren(array $ids, OfferCompositionService $comp): void
+    {
+        if ($this->selectedId === null) {
+            return;
+        }
+        $comp->reorderKapitel($this->team(), $this->selectedId, array_map('intval', $ids));
+        $this->nachKomposition();
+    }
+
+    /** „+ Format" — Format-Kapitel (live) einsetzen. */
+    public function formatEinsetzen(int $formatId, OfferCompositionService $comp): void
+    {
+        if ($this->selectedId === null) {
+            return;
+        }
+        try {
+            $comp->insertFormatKapitel($this->team(), $this->selectedId, $formatId);
+            $this->formatSuche = '';
+            $this->nachKomposition();
+        } catch (\Throwable $e) {
+            $this->errorToast($e->getMessage());
+        }
+    }
+
+    public function formatPreisModus(int $chapterId, string $mode, OfferCompositionService $comp): void
+    {
+        try {
+            $comp->setFormatPriceMode($this->team(), $chapterId, $mode);
+            $this->nachKomposition();
+        } catch (\Throwable $e) {
+            $this->errorToast($e->getMessage());
+        }
+    }
+
+    /** „+ Concept" in ein bestimmtes Kapitel. */
+    public function blockConceptAdd(int $chapterId, int $conceptId, OfferCompositionService $comp): void
+    {
+        try {
+            $comp->addBlock($this->team(), $chapterId, ['type' => 'concept_ref', 'concept_id' => $conceptId]);
+            $this->conceptSuche = '';
+            $this->nachKomposition();
+        } catch (\Throwable $e) {
+            $this->errorToast($e->getMessage());
+        }
+    }
+
+    public function blockHeaderAdd(int $chapterId, OfferCompositionService $comp): void
+    {
+        $comp->addBlock($this->team(), $chapterId, ['type' => 'header', 'label' => 'Rubrik']);
+        $this->nachKomposition();
+    }
+
+    public function blockTextAdd(int $chapterId, OfferCompositionService $comp): void
+    {
+        $comp->addBlock($this->team(), $chapterId, ['type' => 'text', 'customer_text' => '']);
+        $this->nachKomposition();
+    }
+
+    public function blockLabel(int $blockId, string $label, OfferCompositionService $comp): void
+    {
+        $comp->updateBlock($this->team(), $blockId, ['label' => $label]);
+        $this->nachKomposition();
+    }
+
+    public function blockWeg(int $blockId, OfferCompositionService $comp): void
+    {
+        $comp->deleteBlock($this->team(), $blockId);
+        $this->nachKomposition();
+    }
+
+    /** @param list<int> $ids */
+    public function blockSortieren(int $chapterId, array $ids, OfferCompositionService $comp): void
+    {
+        $comp->reorderBlocks($this->team(), $chapterId, array_map('intval', $ids));
+        $this->nachKomposition();
+    }
+
+    /** Inline-Concept-Picker für ein bestimmtes Kapitel auf-/zuklappen. */
+    public function pickerOeffnen(int $chapterId): void
+    {
+        $this->pickerChapterId = $this->pickerChapterId === $chapterId ? null : $chapterId;
+        $this->conceptSuche = '';
+        $this->resetConceptFacetten();
+    }
+
     /**
      * E2 (Spec 40): Voll-Kaskade fürs Angebot — je Frame-Slot ein Konzept, ans Angebot referenziert
      * (spiegelt Foodbook/Speisekarte, Rückweg via {@see AngebotService::referenziereConcept}). Slots kann der
@@ -366,8 +494,15 @@ class Editor extends Component
         $wareneinsatzAmpel = app(\Platform\FoodAlchemist\Services\MargeService::class)
             ->weAmpel($kalkulation['wareneinsatz_pct'] ?? null, $zielWareneinsatzPct);
 
+        // #380 Composer: die Aufbau-Komposition (intern = mit EK/Marge fürs Editor/Vertrieb).
+        $komposition = $angebot
+            ? app(OfferCompositionService::class)->komposition($this->team(), $angebot, $outlet, true)
+            : null;
+
         return view('foodalchemist::livewire.angebote.editor', [
             'angebot' => $angebot,
+            'komposition' => $komposition,
+            'formatTreffer' => $this->selectedId !== null ? $svc->formatKandidaten($this->team(), $this->formatSuche) : collect(),
             'geruestSlots' => $geruestSlots,
             'kalkulation' => $kalkulation,
             'wareneinsatzAmpel' => $wareneinsatzAmpel,

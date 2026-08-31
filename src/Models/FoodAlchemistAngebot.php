@@ -90,6 +90,16 @@ class FoodAlchemistAngebot extends Model
         return $this->referencedConcepts();
     }
 
+    /**
+     * #380 Composer: Angebots-Aufbau nach Foodbook-Vorbild (Kapitel → Blöcke, eigene
+     * Tabellen). Alle Kapitel des Angebots (flach); den Baum baut {@see OfferCompositionService}.
+     * Ein Kapitel mit `format_id` ist ein lebendes Format-Kapitel.
+     */
+    public function chapters(): HasMany
+    {
+        return $this->hasMany(FoodAlchemistOfferChapter::class, 'offer_id')->orderBy('position');
+    }
+
     /** Noch nicht final entschiedene Angebote (nicht angenommen/abgelehnt). */
     public function scopeOffen(Builder $q): Builder
     {

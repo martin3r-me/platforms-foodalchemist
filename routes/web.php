@@ -459,6 +459,33 @@ Route::get('/angebote/{id}/dokument', function (int $id, \Platform\FoodAlchemist
 })->whereNumber('id')->name('foodalchemist.angebote.dokument');
 
 /**
+ * #380 Composer: Angebots-KARTE — schöne Kundenausgabe (Foodbook-Look) NEBEN dem schlichten
+ * Dokument. Zeigt die Kapitel/Format-Editionen als Gäste-Menü + Preis-Footer netto+MwSt+brutto.
+ * Druck-HTML; ?pdf=1 = PDF (DomPDF, guarded). Spiegelt concepts.karte.
+ */
+Route::get('/angebote/{id}/karte', function (int $id, \Platform\FoodAlchemist\Services\AngebotService $svc) {
+    $team = \Illuminate\Support\Facades\Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
+    try {
+        $data = $svc->karteDaten($team, $id);
+    } catch (\Illuminate\Database\Eloquent\ModelNotFoundException) {
+        abort(404);
+    }
+
+    if (request()->boolean('pdf')) {
+        if (! class_exists(\Barryvdh\DomPDF\Facade\Pdf::class)) {
+            \Illuminate\Support\Facades\Log::warning('Angebots-Karte-PDF angefordert, aber DomPDF ist nicht installiert.', ['angebot_id' => $id]);
+            abort(500, 'PDF-Export nicht verfügbar: DomPDF ist auf diesem Server nicht installiert.');
+        }
+
+        return \Barryvdh\DomPDF\Facade\Pdf::loadView('foodalchemist::dokumente.angebot-karte', $data + ['istPdf' => true])
+            ->setOption('isPhpEnabled', true)
+            ->download('Angebot-Karte-' . $id . '.pdf');
+    }
+
+    return view('foodalchemist::dokumente.angebot-karte', $data + ['istPdf' => false]);
+})->whereNumber('id')->name('foodalchemist.angebote.karte');
+
+/**
  * M12: Kalkulations-Übersicht (Kennzahlen + Preissimulation).
  *
  * Spec 32: beide Hälften sind ins Controlling-Zentrum gewandert — die Kennzahlen in den
