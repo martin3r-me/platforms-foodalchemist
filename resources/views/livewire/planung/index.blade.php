@@ -402,6 +402,9 @@
                 <button type="button" @click="tab='concept'"
                         :class="tab==='concept' ? 'bg-violet-500/25 text-white' : 'text-gray-300 hover:text-white'"
                         class="px-3 py-1.5 rounded-t-md text-xs font-medium">Concept</button>
+                <button type="button" @click="tab='format'"
+                        :class="tab==='format' ? 'bg-violet-500/25 text-white' : 'text-gray-300 hover:text-white'"
+                        class="px-3 py-1.5 rounded-t-md text-xs font-medium">Format</button>
                 <button type="button" @click="tab='composer'"
                         :class="tab==='composer' ? 'bg-violet-500/25 text-white' : 'text-gray-300 hover:text-white'"
                         class="px-3 py-1.5 rounded-t-md text-xs font-medium">Composer</button>
@@ -423,9 +426,6 @@
                 <button type="button" @click="tab='angebot'"
                         :class="tab==='angebot' ? 'bg-violet-500/25 text-white' : 'text-gray-300 hover:text-white'"
                         class="px-3 py-1.5 rounded-t-md text-xs font-medium">Angebot</button>
-                <button type="button" @click="tab='format'"
-                        :class="tab==='format' ? 'bg-violet-500/25 text-white' : 'text-gray-300 hover:text-white'"
-                        class="px-3 py-1.5 rounded-t-md text-xs font-medium">Format</button>
                 {{-- Worker (Ausführung/Status) bewusst ganz am Ende (Dominique 2026-08-24): erst erstellen/
                      planen, dann die Kaskade beobachten. --}}
                 <span class="mx-1 self-center h-4 w-px bg-white/15"></span>
