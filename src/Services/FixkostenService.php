@@ -60,6 +60,32 @@ class FixkostenService
         ]);
     }
 
+    /**
+     * Ebene 2 (volle Kopie): alle Team-Fixkosten-Zeilen als EIGENE Zeilen für den Betrieb anlegen.
+     * Startpunkt, damit ein Betrieb nicht bei 0 beginnt. Idempotenz-Schutz: nur wenn er noch keine
+     * eigenen Zeilen hat. @return int Anzahl kopierter Zeilen.
+     */
+    public function uebernimmTeamFixkosten(Team $team, FoodAlchemistOutlet $outlet): int
+    {
+        if ((int) $outlet->team_id !== (int) $team->id) {
+            throw new \RuntimeException('Fremder Betrieb — Fixkosten-Übernahme nur durchs Besitzer-Team.');
+        }
+        if ($this->rowsFor($team, $outlet)->isNotEmpty()) {
+            return 0;   // hat schon eigene Zeilen — nicht dazumischen
+        }
+        $n = 0;
+        foreach ($this->rowsFor($team, null) as $row) {
+            FoodAlchemistFixkosten::create([
+                'team_id' => $team->id, 'outlet_id' => $outlet->id,
+                'label' => $row->label, 'amount' => $row->amount,
+                'periode' => $row->periode, 'block_key' => $row->block_key,
+            ]);
+            $n++;
+        }
+
+        return $n;
+    }
+
     /** Legt einen einmaligen, sofort editierbaren Beispielsatz zum Durchrechnen an. */
     public function cateringBeispielwerte(Team $team): void
     {
@@ -98,6 +124,16 @@ class FixkostenService
         $row->delete();
     }
 
+    /** Ebene 2: alle eigenen Fixkosten-Zeilen eines Betriebs löschen (Reset auf Team-Werte). */
+    public function loescheAlleFuerOutlet(Team $team, FoodAlchemistOutlet $outlet): int
+    {
+        if ((int) $outlet->team_id !== (int) $team->id) {
+            return 0;
+        }
+
+        return (int) FoodAlchemistFixkosten::where('team_id', $team->id)->where('outlet_id', $outlet->id)->delete();
+    }
+
     /** Σ je Block über eine Zeilen-Menge (monatlich). @return array<string, float> */
     private function sum(Collection $rows): array
     {
@@ -119,20 +155,16 @@ class FixkostenService
     }
 
     /**
-     * Σ Fixkosten je Block (monatlich). Mit Betrieb: PER-BLOCK-REPLACE — hat der Betrieb
-     * eigene Zeilen für einen Block, ersetzen sie die Team-Summe DIESES Blocks; Blöcke ohne
-     * Betriebs-Zeile erben die Team-Summe. outlet=null ⇒ reine Team-Summe (heute).
+     * Σ Fixkosten je Block (monatlich). Ebene 2 — KEINE Vererbung: ein Betrieb zählt NUR
+     * seine EIGENEN Zeilen (Blöcke ohne eigene Zeile = 0), damit ein Betrieb eine voll
+     * eigenständige Kalkulation ist. outlet=null ⇒ reine Team-Summe. Startpunkt für einen
+     * Betrieb: {@see uebernimmTeamFixkosten} (kopiert alle Team-Zeilen als eigene).
      *
      * @return array<string, float> block_key => €/Monat
      */
     public function summeJeBlock(Team $team, ?FoodAlchemistOutlet $outlet = null): array
     {
-        $teamSum = $this->sum($this->rowsFor($team, null));
-        if ($outlet === null) {
-            return $teamSum;
-        }
-
-        return array_replace($teamSum, $this->sum($this->rowsFor($team, $outlet)));
+        return $this->sum($this->rowsFor($team, $outlet));
     }
 
     /** Abgeleiteter Zuschlag-% für einen Block (0, wenn Basis fehlt). */

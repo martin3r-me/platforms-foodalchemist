@@ -32,9 +32,6 @@ class Herstellkosten extends Component
 
     public string $laborSource = 'team_flat';
 
-    /** Ebene 2: flacher Stundensatz als eigenes Betrieb-Feld (leer = erbt). Team-Scope: aus arbeitszeit-Block. */
-    public string $stundensatz = '35';
-
     /** Alle Kostenblöcke: [{key,label,typ,aktiv,modus,wert}]. */
     public array $schema = [];
 
@@ -46,13 +43,11 @@ class Herstellkosten extends Component
     /**
      * Ebene 2: Bearbeitungs-Scope der GANZEN Seite (null = Team-Standard, sonst ein Betrieb).
      * Rein lokaler Wähler — verändert NICHT die globale Brille (ActiveOutletContext).
-     * Bei gewähltem Betrieb wird die Seite zum Voll-Editor dieses Betriebs (Skalare erben pro Feld,
-     * Fixkosten ersetzen pro Block, Zuschlagsschema/Bezugsbasen via Toggle „eigenes Schema").
+     * „Volle Kopie, KEINE Vererbung": ein gewählter Betrieb ist eine eigenständige Kalkulation —
+     * die Felder werden mit den Team-Werten vorbefüllt (real, editierbar) und beim Speichern als
+     * EIGENE Werte geschrieben; die Team-Fixkosten werden als eigene Zeilen übernommen.
      */
     public ?int $outletId = null;
-
-    /** Ebene 2: Hat der gewählte Betrieb ein EIGENES Zuschlagsschema + Bezugsbasen? Aus = erbt das Team. */
-    public bool $eigenesSchema = false;
 
     public array $neuFix = ['label' => '', 'amount' => '', 'periode' => 'monatlich', 'block_key' => ''];
 
@@ -69,10 +64,9 @@ class Herstellkosten extends Component
     }
 
     /**
-     * Lädt alle Felder im aktuellen Scope. Team-Scope = wie bisher (Team-Werte).
-     * Betrieb-Scope: Skalare als ROH-Override (leer = erbt, Placeholder zeigt Team),
-     * Zuschlagsschema/Bezugsbasen als effektiv-kaskadierte Anzeige; `eigenesSchema` sagt,
-     * ob der Betrieb dort einen eigenen Override hat.
+     * Lädt alle Felder als EFFEKTIVE Werte (Betrieb-Override, sonst Team) — reale, editierbare Zahlen.
+     * Kein „erbt"-Platzhalter mehr: ein gewählter Betrieb zeigt die Team-Werte als Startpunkt und
+     * speichert sie beim Speichern als EIGENE (volle Kopie, keine Vererbung).
      */
     private function ladeWerte(): void
     {
@@ -80,25 +74,12 @@ class Herstellkosten extends Component
         $team = $this->team();
         $outlet = $this->scopeOutlet();
 
-        if ($outlet === null) {
-            $this->marge = $this->fmt($svc->margePct($team));
-            $this->zielWe = $this->fmt($svc->zielWareneinsatzPct($team));
-            $this->lnk = $this->fmt($svc->lohnnebenkostenPct($team));
-            $this->laborSource = $svc->laborCostSource($team);
-            $this->stundensatz = $this->fmt($svc->stundensatz($team));
-            $this->eigenesSchema = true;   // das Team-Schema ist immer „eigen"
-        } else {
-            $roh = app(OutletSettingsService::class)->for($outlet);
-            $this->marge = $roh->margin_pct !== null ? $this->fmt((float) $roh->margin_pct) : '';
-            $this->zielWe = $roh->target_food_cost_pct !== null ? $this->fmt((float) $roh->target_food_cost_pct) : '';
-            $this->lnk = $roh->labor_overhead_pct !== null ? $this->fmt((float) $roh->labor_overhead_pct) : '';
-            // Ebene 2: Stundensatz + Lohnquelle als eigene erbt/eigen-Felder (unabhängig vom Schema-Toggle).
-            $this->stundensatz = $roh->stundensatz_eur !== null ? $this->fmt((float) $roh->stundensatz_eur) : '';
-            $this->laborSource = in_array($roh->labor_cost_source, ['team_flat', 'station_roles'], true) ? $roh->labor_cost_source : '';
-            $this->eigenesSchema = $roh->calculation_schema !== null && $roh->calculation_schema !== [];
-        }
+        $this->marge = $this->fmt($svc->margePct($team, $outlet));
+        $this->zielWe = $this->fmt($svc->zielWareneinsatzPct($team, $outlet));
+        $this->lnk = $this->fmt($svc->lohnnebenkostenPct($team, $outlet));
+        $this->laborSource = $svc->laborCostSource($team, $outlet);
 
-        // Zuschlagsschema + Bezugsbasen: effektiv (kaskadiert) fürs Anzeigen. Arbeitszeit-Block = effektiver Stundensatz.
+        // Zuschlagsschema + Bezugsbasen: effektiv (kaskadiert). Arbeitszeit-Block = effektiver Stundensatz.
         $stundensatz = $svc->stundensatz($team, $outlet);
         $this->schema = [];
         foreach ($svc->kalkulationSchema($team, $outlet) as $b) {
@@ -146,14 +127,6 @@ class Herstellkosten extends Component
         $this->ladeWerte();
     }
 
-    /** Toggle „eigenes Schema" ausgeschaltet → ungespeicherte Betriebs-Edits verwerfen, Team-Schema zeigen. */
-    public function updatedEigenesSchema(): void
-    {
-        if (! $this->eigenesSchema) {
-            $this->ladeWerte();
-        }
-    }
-
     private function fmt(float $v): string
     {
         return rtrim(rtrim(number_format($v, 2, '.', ''), '0'), '.') ?: '0';
@@ -165,17 +138,8 @@ class Herstellkosten extends Component
     }
 
     /** Neuen Kostenblock anlegen (key = Slug des Labels, eindeutig im Schema). */
-    /** Zuschlagsschema editierbar? Team immer; Betrieb nur mit eigenem Schema (sonst geerbt = read-only). */
-    private function schemaEditierbar(): bool
-    {
-        return $this->outletId === null || $this->eigenesSchema;
-    }
-
     public function blockHinzu(): void
     {
-        if (! $this->schemaEditierbar()) {
-            return;
-        }
         $label = trim($this->neuBlock['label'] ?? '');
         $typ = in_array($this->neuBlock['type'] ?? '', ['pct_mek', 'pct_fek', 'pct_hk', 'eur_pro_portion', 'arbeitszeit'], true)
             ? $this->neuBlock['type'] : 'pct_mek';
@@ -202,9 +166,6 @@ class Herstellkosten extends Component
     /** #379+: Alle Gemeinkosten-Blöcke auf automatische Ableitung aus den Fixkosten stellen. */
     public function alleAutomatisch(): void
     {
-        if (! $this->schemaEditierbar()) {
-            return;
-        }
         foreach ($this->schema as $i => $b) {
             if (in_array($b['type'], ['pct_mek', 'pct_fek', 'pct_hk'], true)) {
                 $this->schema[$i]['mode'] = 'abgeleitet';
@@ -215,9 +176,6 @@ class Herstellkosten extends Component
 
     public function blockEntfernen(int $index): void
     {
-        if (! $this->schemaEditierbar()) {
-            return;
-        }
         if (isset($this->schema[$index])) {
             unset($this->schema[$index]);
             $this->schema = array_values($this->schema);
@@ -300,54 +258,63 @@ class Herstellkosten extends Component
     }
 
     /**
-     * Ebene 2: Betriebs-Override schreiben. Skalare pro Feld (leer = null = erbt vom Team).
-     * Stundensatz + Lohnquelle sind eigene erbt/eigen-Felder (unabhängig vom Schema-Toggle).
-     * Zuschlagsschema/Bezugsbasen/Material-GK nur wenn „eigenes Schema" an — sonst null (erben).
+     * Ebene 2 (volle Kopie, KEINE Vererbung): ALLE Felder als EIGENE Werte des Betriebs schreiben
+     * (nie null) — Skalare + Lohnquelle + ganzes Zuschlagsschema + Bezugsbasen. Beim ersten Speichern
+     * werden zusätzlich die Team-Fixkosten als eigene Zeilen übernommen (Startpunkt statt 0).
      */
     private function speichereBetrieb(FoodAlchemistOutlet $outlet): void
     {
-        $attr = [
-            'margin_pct' => $this->nullBeiLeer($this->marge),
-            'target_food_cost_pct' => $this->nullBeiLeer($this->zielWe),
-            'labor_overhead_pct' => $this->nullBeiLeer($this->lnk),
-            // Stundensatz + Lohnquelle je Betrieb (leer / „erbt" = null = Team).
-            'stundensatz_eur' => $this->nullBeiLeer($this->stundensatz),
-            'labor_cost_source' => in_array($this->laborSource, ['team_flat', 'station_roles'], true) ? $this->laborSource : null,
-        ];
-
-        if ($this->eigenesSchema) {
-            $gemeinWert = 0.0;
-            foreach ($this->schema as $i => $b) {
-                if ($b['key'] === 'gemeinkosten') {
-                    $gemeinWert = $this->num((string) $b['value']);
-                }
-                // Arbeitszeit-Block spiegelt das Standalone-Stundensatz-Feld (eine Quelle, keine Drift).
-                if ($b['type'] === 'arbeitszeit') {
-                    $this->schema[$i]['value'] = $this->stundensatz;
-                }
+        $gemeinWert = 0.0;
+        $stundensatz = 0.0;
+        foreach ($this->schema as $b) {
+            if ($b['key'] === 'gemeinkosten') {
+                $gemeinWert = $this->num((string) $b['value']);
             }
-            $attr['hk2_surcharge_pct'] = $gemeinWert;
-            $attr['calculation_schema'] = $this->baueSchema();
-            $attr['calculation_reference_bases'] = [
+            if ($b['type'] === 'arbeitszeit') {
+                $stundensatz = $this->num((string) $b['value']);
+            }
+        }
+
+        app(OutletSettingsService::class)->update($this->team(), $outlet, [
+            'hk2_surcharge_pct' => $gemeinWert,
+            'stundensatz_eur' => $stundensatz,
+            'margin_pct' => $this->num($this->marge),
+            'target_food_cost_pct' => $this->num($this->zielWe),
+            'labor_overhead_pct' => $this->num($this->lnk),
+            'labor_cost_source' => in_array($this->laborSource, ['team_flat', 'station_roles'], true) ? $this->laborSource : 'team_flat',
+            'calculation_schema' => $this->baueSchema(),
+            'calculation_reference_bases' => [
                 'mek' => $this->num((string) $this->bezugsbasen['mek']),
                 'fek' => $this->num((string) $this->bezugsbasen['fek']),
                 'hk' => $this->num((string) $this->bezugsbasen['hk']),
-            ];
-        } else {
-            // Erbt das Team-Schema komplett (Material-GK/Blöcke/Bezugsbasen).
-            $attr['hk2_surcharge_pct'] = null;
-            $attr['calculation_schema'] = null;
-            $attr['calculation_reference_bases'] = null;
-        }
-
-        app(OutletSettingsService::class)->update($this->team(), $outlet, $attr);
+            ],
+        ]);
+        // Volle Kopie: beim ersten Mal die Team-Fixkosten als eigene übernehmen (idempotent — nur wenn keine eigenen da).
+        $kopiert = app(FixkostenService::class)->uebernimmTeamFixkosten($this->team(), $outlet);
         app(\Platform\FoodAlchemist\Services\PricingCascadeService::class)->recomputeTeam($this->team());
-        $this->ladeWerte();   // Roh-Overrides + Erben-Placeholder neu spiegeln
-        $this->meldung = 'Betrieb „' . $outlet->name . '" gespeichert — abweichende VK/Kalkulation greift on-the-fly.';
+        $this->ladeWerte();
+        $this->meldung = 'Betrieb „' . $outlet->name . '" gespeichert — eigenständige Kalkulation'
+            . ($kopiert > 0 ? " ($kopiert Team-Fixkosten übernommen, jetzt eigenständig editierbar)." : '.');
         $this->dispatch('kosten-aktualisiert');
     }
 
-    /** Ebene 2: Betrieb wieder komplett vom Team erben lassen (alle Override-Spalten null). */
+    /** Ebene 2: die Team-Fixkosten explizit als eigene Zeilen für den Betrieb übernehmen (Startpunkt). */
+    public function teamFixkostenUebernehmen(): void
+    {
+        $outlet = $this->scopeOutlet();
+        if ($outlet === null) {
+            return;
+        }
+        $n = app(FixkostenService::class)->uebernimmTeamFixkosten($this->team(), $outlet);
+        app(\Platform\FoodAlchemist\Services\PricingCascadeService::class)->recomputeTeam($this->team());
+        $this->ladeFix();
+        $this->meldung = $n > 0
+            ? $n . ' Team-Fixkosten für „' . $outlet->name . '" übernommen.'
+            : 'Betrieb hat bereits eigene Fixkosten.';
+        $this->dispatch('kosten-aktualisiert');
+    }
+
+    /** Ebene 2: Betrieb komplett zurücksetzen — alle Overrides + eigenen Fixkosten löschen (Neustart vom Team). */
     public function aufTeamZuruecksetzen(): void
     {
         $outlet = $this->scopeOutlet();
@@ -359,15 +326,10 @@ class Herstellkosten extends Component
             'hk2_surcharge_pct' => null, 'stundensatz_eur' => null, 'labor_cost_source' => null,
             'calculation_schema' => null, 'calculation_reference_bases' => null,
         ]);
+        app(FixkostenService::class)->loescheAlleFuerOutlet($this->team(), $outlet);
         app(\Platform\FoodAlchemist\Services\PricingCascadeService::class)->recomputeTeam($this->team());
         $this->ladeWerte();
-        $this->meldung = 'Betrieb „' . $outlet->name . '" erbt jetzt wieder alle Werte vom Team.';
-    }
-
-    /** Leerer String = null (= erbt vom Team); sonst geparste Zahl ≥ 0. */
-    private function nullBeiLeer(string $v): ?float
-    {
-        return trim($v) === '' ? null : $this->num($v);
+        $this->meldung = 'Betrieb „' . $outlet->name . '" zurückgesetzt — zeigt wieder die Team-Werte als Startpunkt.';
     }
 
     /** Schema aus den editierten Zeilen (Reihenfolge = Index × 10). */
@@ -393,7 +355,7 @@ class Herstellkosten extends Component
     {
         $team = $this->team();
         $scopeOutlet = $this->scopeOutlet();
-        // Σ je Block im gewählten Scope: Betriebs-Zeilen ersetzen pro Block die Team-Zeilen (sonst geerbt) —
+        // Σ je Block im gewählten Scope: KEINE Vererbung — Betrieb zählt nur eigene Zeilen (sonst 0);
         // spiegelt exakt, was CatalogPricingService::enterpriseBaseRate für diesen Betrieb rechnet.
         $summen = $fix->summeJeBlock($team, $scopeOutlet);
 
@@ -418,16 +380,6 @@ class Herstellkosten extends Component
             ->where('is_inactive', false)->orderBy('sort_order')->orderBy('name')
             ->get(['id', 'name'])->map(fn ($o) => ['id' => (int) $o->id, 'name' => (string) $o->name])->all();
 
-        // Team-Werte als Placeholder „erbt (X)" im Betrieb-Scope.
-        $svc = app(TeamSettingsService::class);
-        $teamWerte = [
-            'marge' => $this->fmt($svc->margePct($team)),
-            'zielWe' => $this->fmt($svc->zielWareneinsatzPct($team)),
-            'lnk' => $this->fmt($svc->lohnnebenkostenPct($team)),
-            'stundensatz' => $this->fmt($svc->stundensatz($team)),
-            'laborSource' => $svc->laborCostSource($team),
-        ];
-
         return view('foodalchemist::livewire.settings.herstellkosten', [
             'abgeleitet' => $abgeleitet,
             'fixSummen' => $summen,
@@ -435,8 +387,7 @@ class Herstellkosten extends Component
             'gkBloecke' => $gkBloecke,
             'betriebeOptionen' => $betriebeOptionen,
             'scopeOutletName' => $scopeOutlet?->name,
-            'teamWerte' => $teamWerte,
-            'schemaEditierbar' => $this->schemaEditierbar(),
+            'hatEigeneFix' => count($this->fixListe) > 0,
         ]);
     }
 

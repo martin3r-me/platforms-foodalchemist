@@ -56,7 +56,7 @@ it('Tenancy-Guard: fremder Betrieb wird ignoriert (fällt aufs eigene Team zurü
     expect($this->settings->margePct($this->childA, $betriebB))->toBe(22.0);
 });
 
-it('Fixkosten Per-Block-Replace: Betrieb ersetzt nur seine Blöcke, Rest erbt vom Team', function () {
+it('Fixkosten KEINE Vererbung: Betrieb zählt nur eigene Zeilen (Blöcke ohne Zeile = 0)', function () {
     $this->fix->create($this->childA, ['label' => 'Miete', 'amount' => 1000, 'block_key' => 'fertigungs_gk']);
     $this->fix->create($this->childA, ['label' => 'Verwaltung', 'amount' => 500, 'block_key' => 'verwaltung']);
 
@@ -68,9 +68,9 @@ it('Fixkosten Per-Block-Replace: Betrieb ersetzt nur seine Blöcke, Rest erbt vo
 
     expect($team['fertigungs_gk'])->toBe(1000.0)
         ->and($team['verwaltung'])->toBe(500.0)
-        // fertigungs_gk ersetzt (200), verwaltung geerbt (500).
+        // Betrieb: NUR eigene Zeile (fertigungs_gk 200); verwaltung nicht vorhanden (kein Team-Fallback).
         ->and($outlet['fertigungs_gk'])->toBe(200.0)
-        ->and($outlet['verwaltung'])->toBe(500.0);
+        ->and($outlet)->not->toHaveKey('verwaltung');
 });
 
 it('Backward-Compat: Team-Liste + Team-Summe sehen keine Betriebs-Zeilen', function () {

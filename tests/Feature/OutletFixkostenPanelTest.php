@@ -24,14 +24,14 @@ beforeEach(function () {
     $this->fix->create($this->childA, ['label' => 'Miete', 'amount' => 1000, 'periode' => 'monatlich', 'block_key' => 'gemeinkosten']);
 });
 
-it('Team-Standard zeigt Team-Fixkosten; Betrieb-Scope hat keine eigenen Zeilen, erbt aber die Team-Σ', function () {
+it('Team-Standard zeigt Team-Fixkosten; Betrieb-Scope ohne eigene Zeilen = Σ 0 (KEINE Vererbung)', function () {
     $c = Livewire::test(Herstellkosten::class);
     expect($c->get('fixListe'))->toHaveCount(1);   // Team-Miete
 
     $c->set('outletId', $this->betrieb->id);
     expect($c->get('fixListe'))->toHaveCount(0);    // keine eigenen Betriebs-Zeilen
-    // Σ erbt den Team-Block (Per-Block-Replace ohne eigene Zeile = geerbt).
-    expect($this->fix->summeJeBlock($this->childA, $this->betrieb->fresh())['gemeinkosten'])->toBe(1000.0);
+    // Keine Vererbung: der Betrieb zählt NUR eigene Zeilen → gemeinkosten-Block nicht vorhanden (0).
+    expect($this->fix->summeJeBlock($this->childA, $this->betrieb->fresh()))->toBe([]);
 });
 
 it('fixHinzu mit gewähltem Betrieb legt eine Betriebs-Zeile an; ersetzt den Block, Team bleibt unberührt', function () {
