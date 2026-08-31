@@ -24,7 +24,7 @@ class PresentationDesignService
 {
     /** Erlaubte Block-Typen (Whitelist — Renderer wählt Partial per match, kein user-Pfad). */
     public const BLOCK_TYPES = [
-        'cover', 'chapter_loop', 'dish_list', 'price_summary', 'legend', 'grid',
+        'cover', 'chapter_loop', 'dish_list', 'price_summary', 'preis_aufschluesselung', 'legend', 'grid',
         'text', 'heading', 'image', 'spacer', 'cta',
     ];
 
@@ -83,6 +83,7 @@ class PresentationDesignService
                 'layout' => [
                     ['block_type' => 'cover', 'style' => ['align' => 'center', 'show_cover_image' => true, 'show_logo' => true]],
                     ['block_type' => 'chapter_loop', 'style' => ['show_price' => true, 'show_codes' => true, 'dish_columns' => 1, 'show_chapter_image' => true, 'heading_rule' => true]],
+                    ['block_type' => 'preis_aufschluesselung', 'style' => []],
                     ['block_type' => 'price_summary', 'style' => ['mode' => 'pro_person']],
                     ['block_type' => 'legend', 'style' => []],
                 ],

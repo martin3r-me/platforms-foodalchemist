@@ -23,6 +23,7 @@
                 'chapter_loop' => 'foodalchemist::presentation.blocks.chapter_loop',
                 'dish_list' => 'foodalchemist::presentation.blocks.dish_list',
                 'price_summary' => 'foodalchemist::presentation.blocks.price_summary',
+                'preis_aufschluesselung' => 'foodalchemist::presentation.blocks.preis_aufschluesselung',
                 'legend' => 'foodalchemist::presentation.blocks.legend',
                 'grid' => 'foodalchemist::presentation.blocks.grid',
                 'text' => 'foodalchemist::presentation.blocks.text',

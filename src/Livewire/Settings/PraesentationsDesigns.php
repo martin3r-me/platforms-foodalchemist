@@ -100,6 +100,7 @@ class PraesentationsDesigns extends Component
         'chapter_loop' => ['show_price' => true, 'show_codes' => true, 'dish_columns' => 1, 'show_chapter_image' => true, 'show_dish_photos' => false],
         'dish_list' => ['show_price' => true, 'show_codes' => true],
         'price_summary' => ['mode' => 'pro_person'],
+        'preis_aufschluesselung' => [],
         'legend' => [],
         'grid' => [],
         'text' => ['text' => ''],
@@ -111,7 +112,7 @@ class PraesentationsDesigns extends Component
 
     public const BLOCK_LABELS = [
         'cover' => 'Cover', 'chapter_loop' => 'Kapitel-Schleife', 'dish_list' => 'Gericht-Liste',
-        'price_summary' => 'Preis-Summe', 'legend' => 'Legende (LMIV)', 'grid' => 'Wochenraster',
+        'price_summary' => 'Preis-Summe', 'preis_aufschluesselung' => 'Preis-Aufschlüsselung (Angebot)', 'legend' => 'Legende (LMIV)', 'grid' => 'Wochenraster',
         'text' => 'Text', 'heading' => 'Überschrift', 'image' => 'Bild', 'spacer' => 'Abstand', 'cta' => 'Call-to-Action',
     ];
 

@@ -772,6 +772,36 @@ class PresentationService
             'gesamt_vk' => isset($kalk['gesamt_vk']) ? (float) $kalk['gesamt_vk'] : null,
         ] : null;
 
+        // #380 Q2: kundensichere Preis-Aufschlüsselung (Kapitel · Pax · €/P · Zwischensumme + netto/MwSt/brutto,
+        // KEIN EK) für den Präsentations-Block „preis_aufschluesselung". Nur bei Preisanzeige.
+        $breakdown = null;
+        if ($showPrice) {
+            $mwst = app(TeamSettingsService::class)->mwst($team);
+            $satz = ($mwst['default_satz'] ?? 'ermaessigt') === 'regulaer'
+                ? (float) ($mwst['regulaer'] ?? 19.0) : (float) ($mwst['ermaessigt'] ?? 7.0);
+            $zeilen = [];
+            foreach ($komp['kapitel'] as $kap) {
+                $zeilen[] = [
+                    'titel' => (string) $kap['title'],
+                    'pax' => $kap['pax'] ?? null,
+                    'vk_pro_person' => $kap['vk_pro_person'],
+                    'gesamt' => $kap['gesamt'] ?? null,
+                    'alternativen' => $kap['ist_format'] && ($kap['format_price_mode'] ?? null) === 'alternativen',
+                    'preis_range' => $kap['preis_range'] ?? null,
+                ];
+            }
+            $netto = (float) ($kalk['gesamt_vk'] ?? 0);
+            $breakdown = [
+                'zeilen' => $zeilen,
+                'pax' => $kalk['pax'] ?? null,
+                'pro_person' => isset($kalk['vk_pro_person']) ? (float) $kalk['vk_pro_person'] : null,
+                'netto' => round($netto, 2),
+                'mwst_satz' => $satz,
+                'mwst_betrag' => round($netto * $satz / 100, 2),
+                'brutto' => round($netto * (1 + $satz / 100), 2),
+            ];
+        }
+
         $angebot->loadMissing(['crmCompany', 'crmContact']);
 
         return [
@@ -789,6 +819,7 @@ class PresentationService
                 'sections' => $sections,
                 'legend' => null,
                 'total' => $total,
+                'preis_aufschluesselung' => $breakdown,
             ],
         ];
     }

@@ -57,6 +57,7 @@ it('öffentlicher Angebot-Link ohne Login + 404 nach Zurückziehen', function ()
 
     $this->get('/p/angebot/' . $res['token'])
         ->assertOk()->assertSee('Gala-Angebot 2027')->assertSee('Unser Menü')
+        ->assertSee('Preis-Übersicht')  // #380 Q2: kundensichere Preis-Aufschlüsselung im editorial-Default
         ->assertDontSee('Wareneinsatz')->assertDontSee('preis_quelle');
 
     $this->pres->withdraw($this->rootTeam, 'angebot', $this->angebot->id);
