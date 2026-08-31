@@ -105,8 +105,10 @@
                                 @endif
                             @else
                                 @php($stundenBlockGesperrt = $scopeOutletName && $b['type'] === 'arbeitszeit')
-                                <input type="text" wire:model="schema.{{ $i }}.value" @disabled($schemaLock || $stundenBlockGesperrt) class="{{ $input }} !w-24 text-right tabular-nums disabled:opacity-50" placeholder="0" />
+                                @php($istLohnFallback = $b['type'] === 'arbeitszeit' && $laborSource === 'station_roles')
+                                <input type="text" wire:model="schema.{{ $i }}.value" @disabled($schemaLock || $stundenBlockGesperrt) class="{{ $input }} !w-24 text-right tabular-nums disabled:opacity-50 {{ $istLohnFallback ? 'opacity-50' : '' }}" placeholder="0" />
                                 <span class="text-[10px] text-gray-500">{{ $b['type'] === 'eur_pro_portion' ? '€' : ($b['type'] === 'arbeitszeit' ? '€/h' : '%') }}</span>
+                                @if($istLohnFallback)<span class="block text-[10px] text-amber-600" title="Lohnquelle = „Rollen des Postens": der Lohn kommt aus den Rollen-Sätzen; dieser Satz greift nur als Rückfall, wenn ein Posten keine Rollendaten hat.">Fallback (Rollen des Postens aktiv)</span>@endif
                                 @if($stundenBlockGesperrt)<span class="block text-[10px] text-purple-500">Stundensatz unten je Betrieb setzen</span>@endif
                             @endif
                         </td>

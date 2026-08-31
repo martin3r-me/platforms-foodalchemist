@@ -3,6 +3,8 @@
 use Livewire\Livewire;
 use Platform\FoodAlchemist\Livewire\Settings\Rollen;
 use Platform\FoodAlchemist\Models\FoodAlchemistKitchenRole as Role;
+use Platform\FoodAlchemist\Models\FoodAlchemistOutlet;
+use Platform\FoodAlchemist\Services\OutletSettingsService;
 use Platform\FoodAlchemist\Tests\Support\SeedsTeamHierarchy;
 use Platform\FoodAlchemist\Tests\TestCase;
 
@@ -60,6 +62,32 @@ it('benennt um und legt still statt zu löschen', function () {
     Livewire::test(Rollen::class)->call('aktivToggle', $r->id);
     expect($r->fresh()->is_inactive)->toBeTrue();
     expect(Role::withTrashed()->find($r->id))->not->toBeNull();   // nicht gelöscht
+});
+
+it('Betrieb-Scope: Satz-Override landet in outlet_role_rates; leer entfernt ihn', function () {
+    $r = Role::create(['team_id' => $this->rootTeam->id, 'slug' => 'koch', 'name' => 'Koch', 'stundensatz_eur' => 28]);
+    $betrieb = FoodAlchemistOutlet::create(['team_id' => $this->rootTeam->id, 'name' => 'Nord']);
+
+    Livewire::test(Rollen::class)->set('outletId', $betrieb->id)->call('feldSetzen', $r->id, 'satz', '32');
+    $s = app(OutletSettingsService::class)->for($betrieb->fresh());
+    expect((float) $s->outlet_role_rates[(string) $r->id])->toBe(32.0)
+        ->and((float) $r->fresh()->stundensatz_eur)->toBe(28.0);   // Team-Rolle unberührt
+
+    // leer = Override entfernen (erbt wieder Team-Satz).
+    Livewire::test(Rollen::class)->set('outletId', $betrieb->id)->call('feldSetzen', $r->id, 'satz', '');
+    expect(app(OutletSettingsService::class)->for($betrieb->fresh())->outlet_role_rates)->toBeNull();
+});
+
+it('Betrieb-Scope legt keine Rollen an + toggelt nicht (nur Sätze)', function () {
+    $r = Role::create(['team_id' => $this->rootTeam->id, 'slug' => 'koch', 'name' => 'Koch', 'stundensatz_eur' => 28]);
+    $betrieb = FoodAlchemistOutlet::create(['team_id' => $this->rootTeam->id, 'name' => 'Nord']);
+
+    Livewire::test(Rollen::class)->set('outletId', $betrieb->id)
+        ->set('neu.name', 'Neu')->call('create')
+        ->call('aktivToggle', $r->id);
+
+    expect(Role::where('team_id', $this->rootTeam->id)->where('slug', 'neu')->exists())->toBeFalse()
+        ->and($r->fresh()->is_inactive)->toBeFalse();
 });
 
 it('editiert keine geerbte Rolle aus dem Eltern-Team', function () {

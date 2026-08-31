@@ -6,6 +6,9 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
 use Livewire\Component;
 use Platform\FoodAlchemist\Models\FoodAlchemistKitchenRole;
+use Platform\FoodAlchemist\Models\FoodAlchemistOutlet;
+use Platform\FoodAlchemist\Services\OutletSettingsService;
+use Platform\FoodAlchemist\Services\TeamSettingsService;
 
 /**
  * Stufe 3 P3.1 — Küchen-Rollen mit Kostensatz pflegen (Küchenchef / Koch / Hilfskoch …).
@@ -21,12 +24,30 @@ class Rollen extends Component
     /** @var array{name: string, satz: string} */
     public array $neu = ['name' => '', 'satz' => ''];
 
+    /** Ebene 2: Bearbeitungs-Scope der €/Std-Sätze (null = Team-Satz, sonst Betriebs-Override). */
+    public ?int $outletId = null;
+
     public ?string $fehler = null;
 
     public ?string $meldung = null;
 
+    /** Betrieb-Scope der Rollensatz-Overrides (team-eigen, aktiv) oder null (Team-Satz). */
+    private function scopeOutlet(): ?FoodAlchemistOutlet
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        if ($this->outletId === null || $team === null) {
+            return null;
+        }
+
+        return FoodAlchemistOutlet::where('team_id', $team->id)->where('is_inactive', false)->find($this->outletId);
+    }
+
     public function create(): void
     {
+        // Rollen selbst sind Team-Stammdaten — im Betrieb-Scope nur Sätze überschreiben, nicht anlegen.
+        if ($this->outletId !== null) {
+            return;
+        }
         $this->fehler = null;
         $this->meldung = null;
 
@@ -62,6 +83,25 @@ class Rollen extends Component
         $this->fehler = null;
         $this->meldung = null;
 
+        // Ebene 2: im Betrieb-Scope wird nur der €/Std-Satz je Rolle überschrieben (leer = erbt Team-Satz).
+        $outlet = $this->scopeOutlet();
+        if ($outlet !== null) {
+            if ($feld !== 'satz') {
+                return;  // Name/Bestand bleiben Team-Sache
+            }
+            $team = Auth::user()?->currentTeamRelation;
+            $rolle = $team !== null ? FoodAlchemistKitchenRole::visibleToTeam($team)->find($id) : null;
+            if ($rolle === null) {
+                $this->fehler = 'Rolle nicht sichtbar.';
+
+                return;
+            }
+            app(OutletSettingsService::class)->setRoleRate($team, $outlet, $id, $this->satz($wert));
+            $this->meldung = 'Betriebs-Satz gespeichert.';
+
+            return;
+        }
+
         $rolle = $this->eigene($id);
         if ($rolle === null) {
             return;
@@ -81,6 +121,9 @@ class Rollen extends Component
 
     public function aktivToggle(int $id): void
     {
+        if ($this->outletId !== null) {
+            return;  // Bestand ist Team-Sache; Betrieb überschreibt nur Sätze
+        }
         $rolle = $this->eigene($id);
         if ($rolle === null) {
             return;
@@ -116,6 +159,19 @@ class Rollen extends Component
     public function render()
     {
         $team = Auth::user()?->currentTeamRelation;
+        $outlet = $this->scopeOutlet();
+
+        $betriebe = $team !== null
+            ? FoodAlchemistOutlet::where('team_id', $team->id)->where('is_inactive', false)
+                ->orderBy('sort_order')->orderBy('name')->get(['id', 'name'])
+                ->map(fn ($o) => ['id' => (int) $o->id, 'name' => (string) $o->name])->all()
+            : [];
+
+        // Betriebs-Rollensätze (Map roleId→€/Std) fürs Anzeigen im Betrieb-Scope; Keys als int.
+        $outletRates = [];
+        foreach ($team !== null ? app(TeamSettingsService::class)->outletRoleRates($team, $outlet) : [] as $k => $v) {
+            $outletRates[(int) $k] = $v;
+        }
 
         return view('foodalchemist::livewire.settings.rollen', [
             'rollen' => $team !== null
@@ -123,6 +179,9 @@ class Rollen extends Component
                     ->orderBy('sort_order')->orderBy('name')->get()
                 : collect(),
             'eigenesTeamId' => $team?->id,
+            'betriebe' => $betriebe,
+            'scopeOutletName' => $outlet?->name,
+            'outletRates' => $outletRates,
         ]);
     }
 }

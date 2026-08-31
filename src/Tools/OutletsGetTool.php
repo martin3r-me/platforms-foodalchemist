@@ -66,6 +66,7 @@ class OutletsGetTool extends FoodAlchemistTool implements ToolContract, ToolMeta
                     'labor_cost_source' => $s->labor_cost_source,
                     'calculation_schema' => $s->calculation_schema,
                     'calculation_reference_bases' => $s->calculation_reference_bases,
+                    'outlet_role_rates' => $s->outlet_role_rates,
                 ], fn ($v) => $v !== null && $v !== []),
             ];
         })->all();

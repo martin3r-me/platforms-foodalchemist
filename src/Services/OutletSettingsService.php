@@ -33,4 +33,30 @@ class OutletSettingsService
 
         return $row;
     }
+
+    /**
+     * Ebene 2: EINEN Betriebs-Rollensatz setzen/entfernen (Teil-Update der outlet_role_rates-Map).
+     * rate=null entfernt den Override → die Rolle erbt wieder den Team-Satz. Nur Besitzer-Team.
+     */
+    public function setRoleRate(Team $team, FoodAlchemistOutlet $outlet, int $roleId, ?float $rate): FoodAlchemistOutletSetting
+    {
+        if (! $outlet->isOwnedBy($team)) {
+            throw new \RuntimeException('Fremder Betrieb — Override-Pflege nur durchs Besitzer-Team.');
+        }
+        $row = $this->for($outlet);
+        // Auf String-Keys normalisieren (JSON-Objekt), damit Merge/Unset stabil ist.
+        $map = [];
+        foreach (is_array($row->outlet_role_rates) ? $row->outlet_role_rates : [] as $k => $v) {
+            $map[(string) $k] = $v;
+        }
+        if ($rate === null) {
+            unset($map[(string) $roleId]);
+        } else {
+            $map[(string) $roleId] = max(0.0, $rate);
+        }
+        $row->outlet_role_rates = $map === [] ? null : $map;
+        $row->save();
+
+        return $row;
+    }
 }

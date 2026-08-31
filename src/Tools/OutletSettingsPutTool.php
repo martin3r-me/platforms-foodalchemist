@@ -22,8 +22,8 @@ class OutletSettingsPutTool extends FoodAlchemistTool implements ToolContract, T
     /** Enum-Felder: labor_cost_source ∈ {team_flat, station_roles} ODER null = Team-Erbe. */
     private const STR_KEYS = ['labor_cost_source'];
 
-    /** JSON-Felder: calculation_schema (Blockliste), calculation_reference_bases ({mek,fek,hk}); null = Team-Erbe. */
-    private const JSON_KEYS = ['calculation_schema', 'calculation_reference_bases'];
+    /** JSON-Felder: calculation_schema (Blockliste), calculation_reference_bases ({mek,fek,hk}), outlet_role_rates ({role_id:€/Std}); null = Team-Erbe. */
+    private const JSON_KEYS = ['calculation_schema', 'calculation_reference_bases', 'outlet_role_rates'];
 
     private const LABOR_SOURCES = ['team_flat', 'station_roles'];
 
@@ -59,6 +59,7 @@ class OutletSettingsPutTool extends FoodAlchemistTool implements ToolContract, T
                         'labor_cost_source' => ['type' => ['string', 'null'], 'enum' => ['team_flat', 'station_roles', null], 'description' => 'Lohnquelle: team_flat|station_roles. null = erbt vom Team.'],
                         'calculation_schema' => ['type' => ['array', 'null'], 'description' => 'Ganzes Zuschlagsschema (Blockliste) ersetzt das Team-Schema; null = erbt.'],
                         'calculation_reference_bases' => ['type' => ['object', 'null'], 'description' => 'Monats-Bezugsbasen {mek,fek,hk}; null = erbt vom Team.'],
+                        'outlet_role_rates' => ['type' => ['object', 'null'], 'description' => 'Küchen-Rollen-Sätze je Betrieb als {kitchen_role_id: €/Std}; null oder fehlender Key = erbt den Team-Rollensatz.'],
                     ],
                     'additionalProperties' => false,
                 ],
@@ -116,6 +117,20 @@ class OutletSettingsPutTool extends FoodAlchemistTool implements ToolContract, T
                     'fek' => (float) ($wert['fek'] ?? 0),
                     'hk' => (float) ($wert['hk'] ?? 0),
                 ];
+                continue;
+            }
+            if ($key === 'outlet_role_rates') {
+                if (! is_array($wert)) {
+                    return ToolResult::error('outlet_role_rates muss ein Objekt {kitchen_role_id: €/Std} oder null sein.', 'VALIDATION_ERROR');
+                }
+                $map = [];
+                foreach ($wert as $roleId => $satz) {
+                    if (! is_numeric($roleId) || ! is_numeric($satz) || (float) $satz < 0) {
+                        return ToolResult::error('outlet_role_rates: Keys = Rollen-IDs, Werte = Zahl ≥ 0.', 'VALIDATION_ERROR');
+                    }
+                    $map[(string) (int) $roleId] = (float) $satz;
+                }
+                $clean[$key] = $map === [] ? null : $map;
                 continue;
             }
             if (! is_numeric($wert) || (float) $wert < 0) {

@@ -63,6 +63,25 @@ it('StationLaborRateService — Lohnquelle + Stundensatz folgen dem Betrieb', fu
     expect($out['source'])->toBe('team_fallback')->and($out['hourly_rate'])->toBe(50.0);
 });
 
+it('StationLaborRateService — Rollen-Sätze je Betrieb überschreibbar', function () {
+    $this->settings->update($this->childA, ['labor_cost_source' => 'station_roles']);
+    $koch = \Platform\FoodAlchemist\Models\FoodAlchemistKitchenRole::create([
+        'team_id' => $this->childA->id, 'slug' => 'koch', 'name' => 'Koch', 'stundensatz_eur' => 28,
+    ]);
+    $station = \Platform\FoodAlchemist\Models\FoodAlchemistProductionStation::create([
+        'team_id' => $this->childA->id, 'slug' => 'herd', 'name' => 'Herd',
+    ]);
+    $station->besetzung = [(string) $koch->id => 1];
+    $station->save();
+
+    // Betrieb überschreibt den Koch-Satz 28 → 40.
+    $betrieb = ($this->betrieb)('Nord', ['labor_cost_source' => 'station_roles', 'outlet_role_rates' => [(string) $koch->id => 40]]);
+
+    $rateService = app(\Platform\FoodAlchemist\Services\StationLaborRateService::class);
+    expect($rateService->rate($this->childA, $station->fresh(), null)['hourly_rate'])->toBe(28.0)
+        ->and($rateService->rate($this->childA, $station->fresh(), $betrieb)['hourly_rate'])->toBe(40.0);
+});
+
 it('salesNetFor — outlet=null gibt die gespeicherte Baseline; fixer VK bleibt fix', function () {
     $betrieb = ($this->betrieb)('Egal', ['margin_pct' => 99]);
 

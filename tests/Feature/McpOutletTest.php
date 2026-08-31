@@ -80,6 +80,30 @@ it('outlet_settings.PUT akzeptiert Lohnquelle + eigenes Schema/Bezugsbasen; GET 
         ->and((float) $ov['calculation_reference_bases']['mek'])->toBe(30000.0);
 });
 
+it('outlet_settings.PUT setzt Rollen-Sätze je Betrieb; GET spiegelt sie', function () {
+    $post = $this->registry->get('foodalchemist.outlets.POST')->execute(['name' => 'Süd'], $this->kontext);
+    $outletId = $post->data['id'];
+
+    $put = $this->registry->get('foodalchemist.outlet_settings.PUT')->execute([
+        'outlet_id' => $outletId, 'settings' => ['outlet_role_rates' => ['7' => 40, '9' => 25]],
+    ], $this->kontext);
+    expect($put->success)->toBeTrue()
+        ->and($put->data['updated'])->toContain('outlet_role_rates');
+
+    $get = $this->registry->get('foodalchemist.outlets.GET')->execute([], $this->kontext);
+    $ov = collect($get->data['betriebe'])->firstWhere('name', 'Süd')['overrides'];
+    expect((float) $ov['outlet_role_rates']['7'])->toBe(40.0)
+        ->and((float) $ov['outlet_role_rates']['9'])->toBe(25.0);
+});
+
+it('outlet_settings.PUT weist ungültige Rollen-Sätze ab', function () {
+    $post = $this->registry->get('foodalchemist.outlets.POST')->execute(['name' => 'Y'], $this->kontext);
+    $res = $this->registry->get('foodalchemist.outlet_settings.PUT')->execute([
+        'outlet_id' => $post->data['id'], 'settings' => ['outlet_role_rates' => ['7' => -5]],
+    ], $this->kontext);
+    expect($res->success)->toBeFalse()->and($res->errorCode)->toBe('VALIDATION_ERROR');
+});
+
 it('outlet_settings.PUT weist ungültige Lohnquelle ab', function () {
     $post = $this->registry->get('foodalchemist.outlets.POST')->execute(['name' => 'X'], $this->kontext);
     $res = $this->registry->get('foodalchemist.outlet_settings.PUT')->execute([

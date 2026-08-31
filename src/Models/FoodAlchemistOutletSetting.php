@@ -31,6 +31,7 @@ class FoodAlchemistOutletSetting extends Model
         'calculation_reference_bases' => 'array',
         'hk2_surcharge_pct' => 'decimal:2',
         'labor_overhead_pct' => 'decimal:2',
+        'outlet_role_rates' => 'array',
     ];
 
     public function outlet(): BelongsTo

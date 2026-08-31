@@ -442,6 +442,19 @@ class TeamSettingsService
     }
 
     /** Lohnquelle für Aufträge: flacher Team-Satz oder gewichtete Rollen des Postens. */
+    /**
+     * Ebene 2: Betriebs-Overrides der Küchen-Rollen-Sätze — Map {kitchen_role_id: €/Std}.
+     * Leer, wenn kein Betrieb oder keine eigenen Rollen-Sätze → StationLaborRateService fällt
+     * dann pro Rolle auf den Team-Rollen-Satz (bzw. flachen Stundensatz) zurück.
+     */
+    public function outletRoleRates(Team $team, ?FoodAlchemistOutlet $outlet): array
+    {
+        $o = $this->outletRow($team, $outlet);
+        $raw = $o?->outlet_role_rates;
+
+        return is_array($raw) ? $raw : [];
+    }
+
     /** Lohnquelle team_flat|station_roles — Ebene 2: Outlet-Override → Team → 'team_flat'. */
     public function laborCostSource(Team $team, ?FoodAlchemistOutlet $outlet = null): string
     {

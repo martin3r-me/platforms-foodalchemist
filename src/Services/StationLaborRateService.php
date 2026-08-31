@@ -29,9 +29,12 @@ class StationLaborRateService
 
         $roles = FoodAlchemistKitchenRole::where('team_id', $team->id)
             ->whereIn('id', array_keys($station->besetzung ?? []))->pluck('stundensatz_eur', 'id');
+        // Ebene 2: Betriebs-Rollensatz überschreibt pro Rolle → Team-Rollensatz → flacher Satz.
+        $outletRates = $this->settings->outletRoleRates($team, $outlet);
         $sum = 0.0;
         foreach ($station->besetzung ?? [] as $roleId => $count) {
-            $sum += (int) $count * (float) ($roles[(int) $roleId] ?? $flat);
+            $satz = $outletRates[(int) $roleId] ?? $outletRates[(string) $roleId] ?? $roles[(int) $roleId] ?? $flat;
+            $sum += (int) $count * (float) $satz;
         }
 
         return [
