@@ -19,18 +19,15 @@
         <x-ui-page-sidebar title="Foodbooks" width="w-80">
             <div class="p-3 space-y-2">
                 <input type="search" wire:model.live.debounce.300ms="search" placeholder="Foodbook / Kunde suchen …" class="{{ $input }}" />
-                {{-- R4.3: Phasen-Filter (Statusmaschine Kontext→…→Freigabe) --}}
-                <select wire:model.live="phaseFilter" class="{{ $input }}" data-phase-filter>
-                    <option value="">Alle Phasen</option>
-                    @foreach(\Platform\FoodAlchemist\Services\PhaseService::LABELS as $pk => $pl)<option value="{{ $pk }}">{{ $pl }}</option>@endforeach
-                </select>
+                {{-- Phasen-Filter entfernt (2026-08-31): die alte Foodbook-Statusmaschine ist tot (Planung
+                     lebt in der Leitstelle), phase wird nicht mehr fortgeschrieben → Filter filterte auf statischen Daten. --}}
                 <button type="button" wire:click="neu" class="{{ $btnPrimary }} w-full justify-center">+ Neues Foodbook</button>
                 <div class="space-y-0.5 -mx-1">
                     @forelse($foodbooks as $f)
                         <button type="button" wire:key="fb-{{ $f->id }}" wire:click="waehle({{ $f->id }})"
                                 class="w-full text-left px-2 py-1 rounded-lg text-xs {{ $selectedId === $f->id ? $aktiv : $hover }}">
                             <span class="truncate block">{{ $f->label }}</span>
-                            <span class="text-[10px] text-gray-500">{{ $f->crmCompany?->display_name ?? 'ohne Kunde' }} · {{ $f->chapters_count }} Kapitel · <span class="text-violet-500/80">{{ \Platform\FoodAlchemist\Services\PhaseService::LABELS[$f->phase] ?? $f->phase }}</span></span>
+                            <span class="text-[10px] text-gray-500">{{ $f->crmCompany?->display_name ?? 'ohne Kunde' }} · {{ $f->chapters_count }} Kapitel</span>
                         </button>
                     @empty
                         <p class="px-2 py-3 text-[11px] text-gray-500">Noch keine Foodbooks.</p>
@@ -64,7 +61,7 @@
             <div class="flex flex-wrap items-center justify-between gap-3">
                 <div class="min-w-0">
                     <h1 class="text-lg font-semibold tracking-tight text-gray-900 truncate">{{ $fb->label }}</h1>
-                    <p class="text-[11px] text-gray-500">{{ $fb->crmCompany?->display_name ?? 'ohne Kunde' }} · <span class="text-violet-500/80">{{ \Platform\FoodAlchemist\Services\PhaseService::LABELS[$fb->phase] ?? $fb->phase }}</span></p>
+                    <p class="text-[11px] text-gray-500">{{ $fb->crmCompany?->display_name ?? 'ohne Kunde' }}</p>
                 </div>
                 <div class="flex flex-wrap gap-2">
                     <button type="button" @click="$dispatch('modal.open', { name: 'foodbook-editor' })" class="{{ $btnPrimary }}" data-fb-bearbeiten>@svg('heroicon-o-pencil-square', 'w-4 h-4') Bearbeiten</button>
@@ -72,6 +69,7 @@
                     {{-- #5a: technischer Report (Profile + Conceptor-Filter + Produktions-Kaskade + Kapitel-Filter). --}}
                     <a href="{{ route('foodalchemist.foodbooks.report', $fb->id) }}" target="_blank" class="{{ $btnGhost }}" title="Technischer Report — Profile (Kurzblatt … Volle Kaskade) + Filter (Preise/Lieferanten/Deklaration/Nährwerte/Kaskade …) + Kapitel-Filter, wie bei Concept/Format">Report</a>
                     <a href="{{ route('foodalchemist.foodbooks.praesentation', $fb->id) }}" target="_blank" class="{{ $btnGhost }}" title="Externe Kunden-Präsentation (Web-Seite, Preise pro Person, ohne Interna)">Präsentation</a>
+                    <button type="button" wire:click="duplizieren" wire:confirm="Dieses Foodbook mit allen Kapiteln und Blöcken als Kopie (Entwurf) anlegen?" class="{{ $btnGhost }}" data-fb-duplizieren>@svg('heroicon-o-document-duplicate', 'w-4 h-4') Duplizieren</button>
                 </div>
             </div>
 

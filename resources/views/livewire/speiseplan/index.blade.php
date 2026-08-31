@@ -69,6 +69,7 @@
                 <div class="flex flex-wrap gap-2">
                     <button type="button" wire:click="bearbeiten" class="{{ $btnPrimary }}" data-sp-bearbeiten>@svg('heroicon-o-pencil-square', 'w-4 h-4') Bearbeiten</button>
                     <a href="{{ route('foodalchemist.speiseplan.dokument', $plan->id) }}?mahlzeit={{ $vorschauMahlzeit }}" target="_blank" class="{{ $btnGhost }}">Aushang (Druck)</a>
+                    <button type="button" wire:click="duplizieren" wire:confirm="Diesen Speiseplan mit allen Linien und Zellen als Kopie (Entwurf) anlegen?" class="{{ $btnGhost }}" data-sp-duplizieren>@svg('heroicon-o-document-duplicate', 'w-4 h-4') Duplizieren</button>
                 </div>
             </div>
 

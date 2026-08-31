@@ -154,6 +154,64 @@ class FoodbookService
         return $fb->refresh();
     }
 
+    /**
+     * Tiefe Kopie eines Foodbooks: Kopf (inkl. Branding) → Kapitel (2-Pass parent_id) → Blöcke → Staffeln.
+     * Zurückgesetzt: code, Status=Entwurf, alle presentation- und preview- und Kapitel-Snapshot-Felder
+     * (Freigabe/Versand sind pro Dokument). Muster wie SpeisekarteService::dupliziere.
+     */
+    public function dupliziere(Team $team, int $id): FoodAlchemistFoodbook
+    {
+        $quelle = FoodAlchemistFoodbook::visibleToTeam($team)
+            ->with(['chapters' => fn ($q) => $q->orderBy('position'), 'chapters.blocks' => fn ($q) => $q->orderBy('position'), 'chapters.blocks.staffel'])
+            ->findOrFail($id);
+        $this->guard($quelle, $team);
+
+        // Kopf: FELDER + Branding; Name = label (NICHT name).
+        $kopfFelder = array_merge(self::FELDER, ['brand_color', 'band_color', 'logo_path', 'cover_image_path', 'footer_text']);
+
+        return DB::transaction(function () use ($quelle, $team, $kopfFelder) {
+            $neu = FoodAlchemistFoodbook::create($this->pruefeOutlet($team, array_merge(
+                array_intersect_key($quelle->only($kopfFelder), array_flip($kopfFelder)),
+                ['team_id' => $team->id, 'label' => $quelle->label . ' (Kopie)', 'status' => AusgabeStatus::Entwurf->value, 'code' => null],
+            )));
+
+            // Kapitel flach kopieren (parent_id im 2. Pass), dann Blöcke + Staffeln.
+            $map = [];
+            foreach ($quelle->chapters as $k) {
+                $kopie = FoodAlchemistFoodbookKapitel::create(array_merge(
+                    array_intersect_key($k->only(self::KAPITEL_FELDER), array_flip(self::KAPITEL_FELDER)),
+                    [
+                        'team_id' => $neu->team_id, 'foodbook_id' => $neu->id, 'parent_id' => null,
+                        'position' => $k->position, 'status' => 'draft',
+                        // Format-Bindung + Kapitel-Hero mitkopieren (Snapshot/Freigabe bewusst NICHT).
+                        'format_id' => $k->format_id, 'image_context_file_id' => $k->image_context_file_id, 'image_path' => $k->image_path,
+                    ],
+                ));
+                $map[$k->id] = $kopie->id;
+            }
+            foreach ($quelle->chapters as $k) {
+                if ($k->parent_id !== null && isset($map[$k->parent_id])) {
+                    FoodAlchemistFoodbookKapitel::whereKey($map[$k->id])->update(['parent_id' => $map[$k->parent_id]]);
+                }
+                foreach ($k->blocks as $b) {
+                    $blk = FoodAlchemistFoodbookBlock::create(array_merge(
+                        array_intersect_key($b->only(self::BLOCK_FELDER), array_flip(self::BLOCK_FELDER)),
+                        // presentation_id fehlt bewusst in BLOCK_FELDER → für die Kopie explizit mitnehmen.
+                        ['team_id' => $neu->team_id, 'chapter_id' => $map[$k->id], 'position' => $b->position, 'presentation_id' => $b->presentation_id],
+                    ));
+                    foreach ($b->staffel as $st) {
+                        \Platform\FoodAlchemist\Models\FoodAlchemistFoodbookBlockStaffel::create([
+                            'team_id' => $neu->team_id, 'block_id' => $blk->id,
+                            'position' => $st->position, 'min_persons' => $st->min_persons, 'price' => $st->price,
+                        ]);
+                    }
+                }
+            }
+
+            return $neu->refresh();
+        });
+    }
+
     // ── Spec 19 E3.3: Bedarf — Foodbook-Default-Dimensionen (kaskadieren als Boden) ──
 
     /** Default-Einsatzmoment (Tagesablauf) an/abwählen — 1–n-Pivot foodbook_service_moments. */

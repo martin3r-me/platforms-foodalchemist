@@ -62,6 +62,16 @@ class Index extends Component
         }
     }
 
+    /** Tiefe Kopie des gewählten Speiseplans (Linien + Zellen) → auf die Kopie springen. */
+    public function duplizieren(SpeiseplanService $svc): void
+    {
+        if ($this->selectedId === null) {
+            return;
+        }
+        $neu = $svc->dupliziere($this->team(), $this->selectedId);
+        $this->waehle($neu->id);
+    }
+
     public function render(SpeiseplanService $svc)
     {
         $team = $this->team();

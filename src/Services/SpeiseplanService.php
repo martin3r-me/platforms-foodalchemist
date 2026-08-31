@@ -153,6 +153,48 @@ class SpeiseplanService
         return $this->update($team, $id, ['crm_company_id' => $companyId, 'crm_contact_id' => $contactId]);
     }
 
+    /**
+     * Tiefe Kopie eines Speiseplans: Kopf (FELDER) → Linien (Menü 1/Vegetarisch/… mit line-Map)
+     * → Einträge (Zellen, line_id über die Map remappt). Status=Entwurf. Muster wie
+     * SpeisekarteService::dupliziere; nutzt das MODELL-::create (KEINE Starter-Linien).
+     */
+    public function dupliziere(Team $team, int $id): FoodAlchemistSpeiseplan
+    {
+        $quelle = FoodAlchemistSpeiseplan::visibleToTeam($team)
+            ->with(['lines' => fn ($q) => $q->orderBy('sort_order')->orderBy('id'), 'entries'])
+            ->findOrFail($id);
+        $this->guard($quelle, $team);
+
+        return \Illuminate\Support\Facades\DB::transaction(function () use ($quelle, $team) {
+            $neu = FoodAlchemistSpeiseplan::create($this->pruefeOutlet($team, array_merge(
+                array_intersect_key($quelle->only(self::FELDER), array_flip(self::FELDER)),
+                ['team_id' => $team->id, 'name' => $quelle->name . ' (Kopie)', 'status' => AusgabeStatus::Entwurf->value],
+            )));
+
+            // Linien kopieren + Map alt→neu (Einträge referenzieren die Linie).
+            $lineMap = [];
+            foreach ($quelle->lines as $l) {
+                $kopie = FoodAlchemistSpeiseplanLinie::create([
+                    'team_id' => $neu->team_id, 'menu_plan_id' => $neu->id,
+                    'name' => $l->name, 'color' => $l->color, 'is_vegetarian' => $l->is_vegetarian, 'sort_order' => $l->sort_order,
+                ]);
+                $lineMap[$l->id] = $kopie->id;
+            }
+            // Einträge (Zellen) kopieren, line_id remappen (null bleibt null).
+            foreach ($quelle->entries as $e) {
+                FoodAlchemistSpeiseplanEintrag::create([
+                    'team_id' => $neu->team_id, 'menu_plan_id' => $neu->id,
+                    'week' => $e->week, 'weekday' => $e->weekday, 'meal' => $e->meal, 'position' => $e->position,
+                    'entry_date' => $e->entry_date, 'pax' => $e->pax,
+                    'line_id' => $e->line_id !== null ? ($lineMap[$e->line_id] ?? null) : null,
+                    'concept_id' => $e->concept_id, 'package_id' => $e->package_id, 'sales_recipe_id' => $e->sales_recipe_id,
+                ]);
+            }
+
+            return $neu->refresh();
+        });
+    }
+
     public function crmVerfuegbar(): bool
     {
         return class_exists(\Platform\Crm\Services\CompanyLinkService::class);

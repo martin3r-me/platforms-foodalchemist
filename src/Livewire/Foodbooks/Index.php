@@ -331,10 +331,6 @@ class Index extends Component
     #[Url(as: 'q')]
     public string $search = '';
 
-    /** R4.3: Phasen-Filter der Browser-Liste. */
-    #[Url(as: 'phase')]
-    public string $phaseFilter = '';
-
     #[Url(as: 'fb')]
     public ?int $selectedId = null;
 
@@ -669,6 +665,16 @@ class Index extends Component
             $this->selectedId = null;
             $this->selectedKapitelId = null;
         }
+    }
+
+    /** Tiefe Kopie des gewählten Foodbooks (Kapitel + Blöcke) → auf die Kopie springen. */
+    public function duplizieren(FoodbookService $svc): void
+    {
+        if ($this->selectedId === null) {
+            return;
+        }
+        $neu = $svc->dupliziere($this->team(), $this->selectedId);
+        $this->waehle($neu->id, $svc);
     }
 
     // ── Kapitel ───────────────────────────────────────────────────────────
@@ -1397,7 +1403,7 @@ class Index extends Component
             // Spec 19 E5.2: abgeleitete 7-Schritt-Leitstellen-Checkliste (offen/teil/erledigt + Sprungziel)
             'checkliste' => $fb !== null
                 ? app(\Platform\FoodAlchemist\Services\LeitstelleService::class)->checkliste($team, $fb) : [],
-            'foodbooks' => $svc->paginateBrowser(['search' => $this->search, 'phase' => $this->phaseFilter], $team),
+            'foodbooks' => $svc->paginateBrowser(['search' => $this->search], $team),
             'fb' => $fb,
             // Spec 33 P5: Auswahl für das geteilte Status-/Zuordnungs-Bauteil. Nur aktive
             // Betriebe — ein deaktivierter Standort soll nicht neu zugeordnet werden.
