@@ -182,7 +182,7 @@
         {{-- Leitstelle: freie 1-Klick-Erstellung — die eine KI-Erstell-Fläche (de-trend). Legt eine
              leichte „Freie Erstellung"-Session (cockpit_frei) an und öffnet den Editor auf dem
              Planung-Tab mit den Regler-Leitplanken. Trend bleibt EIN Input, nicht der Rahmen. --}}
-        <div class="{{ $card }} p-4 relative z-40" x-data="{ fbOpen: @js($fbPanelAuf), skOpen: false, spOpen: false, offOpen: @js($offerPanelAuf), neuMenu: false }">
+        <div class="{{ $card }} p-4 relative z-40" x-data="{ fbOpen: @js($fbPanelAuf), skOpen: false, spOpen: false, offOpen: @js($offerPanelAuf), fmtOpen: false, neuMenu: false }">
             <div class="flex flex-wrap items-center gap-2">
                 {{-- Ein „Neu erstellen"-Knopf (Dominique 2026-08-23) statt sechs Buttons — Dropdown-Menü. --}}
                 <div class="relative" @click.outside="neuMenu = false">
@@ -195,13 +195,14 @@
                         <button wire:click="schnellErstellen('concept')" @click="neuMenu=false" class="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm text-gray-800 hover:bg-violet-500/10 text-left" data-frei-concept>@svg('heroicon-o-squares-2x2', 'w-4 h-4 text-violet-500') Concept</button>
                         <button wire:click="schnellImport" @click="neuMenu=false" class="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm text-gray-800 hover:bg-violet-500/10 text-left" data-frei-import>@svg('heroicon-o-document-arrow-down', 'w-4 h-4 text-violet-500') Rezept importieren</button>
                         <button wire:click="schnellComposer" @click="neuMenu=false" class="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm text-gray-800 hover:bg-violet-500/10 text-left" data-frei-composer>@svg('heroicon-o-sparkles', 'w-4 h-4 text-violet-500') Composer</button>
-                        <button type="button" @click="fbOpen = true; skOpen=false; spOpen=false; offOpen=false; neuMenu=false" class="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm text-gray-800 hover:bg-violet-500/10 text-left" data-frei-foodbook>@svg('heroicon-o-book-open', 'w-4 h-4 text-violet-500') Foodbook aus Brief</button>
-                        <button type="button" @click="skOpen = true; fbOpen=false; spOpen=false; offOpen=false; neuMenu=false" class="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm text-gray-800 hover:bg-violet-500/10 text-left" data-frei-speisekarte>@svg('heroicon-o-clipboard-document-list', 'w-4 h-4 text-violet-500') Speisekarte aus Brief</button>
-                        <button type="button" @click="spOpen = true; fbOpen=false; skOpen=false; offOpen=false; neuMenu=false" class="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm text-gray-800 hover:bg-violet-500/10 text-left" data-frei-speiseplan>@svg('heroicon-o-calendar-days', 'w-4 h-4 text-violet-500') Speiseplan aus Brief</button>
-                        <button type="button" @click="offOpen = true; fbOpen=false; skOpen=false; spOpen=false; neuMenu=false" class="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm text-gray-800 hover:bg-violet-500/10 text-left" data-frei-angebot>@svg('heroicon-o-document-text', 'w-4 h-4 text-violet-500') Angebot aus Brief</button>
+                        <button type="button" @click="fbOpen = true; skOpen=false; spOpen=false; offOpen=false; fmtOpen=false; neuMenu=false" class="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm text-gray-800 hover:bg-violet-500/10 text-left" data-frei-foodbook>@svg('heroicon-o-book-open', 'w-4 h-4 text-violet-500') Foodbook aus Brief</button>
+                        <button type="button" @click="skOpen = true; fbOpen=false; spOpen=false; offOpen=false; fmtOpen=false; neuMenu=false" class="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm text-gray-800 hover:bg-violet-500/10 text-left" data-frei-speisekarte>@svg('heroicon-o-clipboard-document-list', 'w-4 h-4 text-violet-500') Speisekarte aus Brief</button>
+                        <button type="button" @click="spOpen = true; fbOpen=false; skOpen=false; offOpen=false; fmtOpen=false; neuMenu=false" class="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm text-gray-800 hover:bg-violet-500/10 text-left" data-frei-speiseplan>@svg('heroicon-o-calendar-days', 'w-4 h-4 text-violet-500') Speiseplan aus Brief</button>
+                        <button type="button" @click="offOpen = true; fbOpen=false; skOpen=false; spOpen=false; fmtOpen=false; neuMenu=false" class="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm text-gray-800 hover:bg-violet-500/10 text-left" data-frei-angebot>@svg('heroicon-o-document-text', 'w-4 h-4 text-violet-500') Angebot aus Brief</button>
+                        <button type="button" @click="fmtOpen = true; fbOpen=false; skOpen=false; spOpen=false; offOpen=false; neuMenu=false" class="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-sm text-gray-800 hover:bg-violet-500/10 text-left" data-frei-format>@svg('heroicon-o-swatch', 'w-4 h-4 text-violet-500') Format aus Brief</button>
                     </div>
                 </div>
-                <span class="text-[11px] text-gray-500 ml-1">— Basisrezept · Gericht · Concept · Import · Composer · Foodbook · Speisekarte · Speiseplan · Angebot (KI, mit Regler-Leitplanken).</span>
+                <span class="text-[11px] text-gray-500 ml-1">— Basisrezept · Gericht · Concept · Import · Composer · Foodbook · Speisekarte · Speiseplan · Angebot · Format (KI, mit Regler-Leitplanken).</span>
             </div>
 
             {{-- Spec 42 F1: Ein ganzes Foodbook aus einem Brief planen — Rahmen (Gerüst/Struktur) +
@@ -283,6 +284,28 @@
                         <span wire:loading wire:target="angebotAusBrief">Erzeuge …</span>
                     </button>
                     <span class="text-[11px] text-gray-500">— je Slot ein Konzept; die Konzepte docken automatisch ans Angebot (Preise folgen im Angebots-Editor).</span>
+                </div>
+            </div>
+
+            {{-- Format aus Brief (Landing-Panel, gespiegelt von Angebot) — gebrandetes Foodkonzept. --}}
+            <div x-show="fmtOpen" x-cloak class="mt-3 border-t border-gray-200 pt-3 space-y-2" data-format-brief-panel>
+                @if($fmtOwnerId)
+                    <p class="text-[11px] text-violet-700 bg-violet-500/10 rounded px-2 py-1" data-fmt-owner-hinweis>
+                        Planung für ein bestehendes Format — Brief eingeben, die Konzepte entstehen hier und docken ans Format zurück.
+                    </p>
+                @else
+                    <input type="text" wire:model="fmtTitel" placeholder="Format-Name (optional)"
+                           class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-violet-400 focus:ring-1 focus:ring-violet-400" data-landing-fmt-titel>
+                @endif
+                <textarea wire:model="fmtBrief" rows="3" placeholder="Brief: Marke, Anlass, Ausrichtung, Zielgruppe, Niveau, Stationen/Gänge …"
+                          class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-violet-400 focus:ring-1 focus:ring-violet-400" data-landing-fmt-brief></textarea>
+                @if($fmtMeldung)<p class="text-xs text-rose-600" data-landing-fmt-meldung>{{ $fmtMeldung }}</p>@endif
+                <div class="flex flex-wrap items-center gap-2">
+                    <button wire:click="formatAusBrief" wire:loading.attr="disabled" wire:target="formatAusBrief" class="{{ $btnPrimary }}" data-landing-fmt-erzeugen>
+                        <span wire:loading.remove wire:target="formatAusBrief">@svg('heroicon-o-sparkles', 'w-4 h-4') Format erzeugen (KI)</span>
+                        <span wire:loading wire:target="formatAusBrief">Erzeuge …</span>
+                    </button>
+                    <span class="text-[11px] text-gray-500">— Marken-Identität + je Slot ein Konzept; die Konzepte docken automatisch ans Format.</span>
                 </div>
             </div>
         </div>
