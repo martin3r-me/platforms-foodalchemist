@@ -161,6 +161,22 @@ class Index extends Component
         }
     }
 
+    /** Slice F: einen zurückgezogenen Betriebs-Link wieder live nehmen (Snapshot/Preise bleiben eingefroren). */
+    public function betriebWiederFreigeben(int $outletId): void
+    {
+        $this->presentationFehler = null;
+        $this->presentationHinweis = null;
+        if ($this->karteId === null) {
+            return;
+        }
+        try {
+            app(PresentationService::class)->republishForOutlet($this->team(), 'speisekarte', $this->karteId, $outletId, $this->presentationGueltigBis);
+            $this->presentationHinweis = 'Betriebs-Link wieder freigegeben — gleiche URL, eingefrorene Preise bleiben.';
+        } catch (\Throwable $e) {
+            $this->presentationFehler = $e->getMessage();
+        }
+    }
+
     // Karten-Meta (Editor)
     public string $name = '';
     public string $kartenTyp = 'alacarte';

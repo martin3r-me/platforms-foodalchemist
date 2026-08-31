@@ -173,6 +173,22 @@ class Index extends Component
         }
     }
 
+    /** Slice F: einen zurückgezogenen Betriebs-Link wieder live nehmen (Snapshot/Preise bleiben eingefroren). */
+    public function betriebWiederFreigeben(int $outletId): void
+    {
+        $this->presentationFehler = null;
+        $this->presentationHinweis = null;
+        if ($this->selectedId === null) {
+            return;
+        }
+        try {
+            app(PresentationService::class)->republishForOutlet($this->team(), 'foodbook', $this->selectedId, $outletId, $this->presentationGueltigBis);
+            $this->presentationHinweis = 'Betriebs-Link wieder freigegeben — gleiche URL, eingefrorene Preise bleiben.';
+        } catch (\Throwable $e) {
+            $this->presentationFehler = $e->getMessage();
+        }
+    }
+
     public function brandingSpeichern(FoodbookService $svc): void
     {
         $this->brandingFehler = null;

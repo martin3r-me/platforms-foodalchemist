@@ -413,6 +413,8 @@
                                             <button type="button" class="{{ $btnGhost }}" x-on:click="navigator.clipboard.writeText('{{ $bl['url'] }}'); $el.textContent='Kopiert ✓'">Kopieren</button>
                                             @if($bl['enabled'])
                                                 <button type="button" wire:click="betriebZuruckziehen({{ $bl['outlet_id'] }})" wire:confirm="Diesen Betriebs-Link zurückziehen? Er liefert dann 404." class="{{ $btnGhost }}">Zurückziehen</button>
+                                            @else
+                                                <button type="button" wire:click="betriebWiederFreigeben({{ $bl['outlet_id'] }})" class="{{ $btnPrimary }}">Wieder freigeben</button>
                                             @endif
                                         </div>
                                     </div>

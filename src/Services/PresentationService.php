@@ -183,6 +183,46 @@ class PresentationService
     }
 
     /**
+     * Slice F: einen zurückgezogenen Betriebs-Link wieder live nehmen. Snapshot, Token, Slug und
+     * Vorlage bleiben unangetastet (die eingefrorenen Preise sind damit geschützt) — erneuert wird
+     * nur die Freigabe und, falls das gültig-bis abgelaufen ist, das Ablaufdatum (dann per Fallback
+     * = das gültig-bis des Standard-Links; ohne Fallback +1 Jahr, da ein Link nie ohne Ablauf lebt).
+     *
+     * @return array{token:string, slug:?string, url:string, outlet_id:int, published_at:string, expires_at:string, design:string}
+     */
+    public function republishForOutlet(Team $team, string $type, int $id, int $outletId, ?string $fallbackExpiry = null): array
+    {
+        $entity = $this->resolveEntity($team, $type, $id, forWrite: true);
+        $pres = FoodAlchemistPresentation::where('presentable_type', $type)
+            ->where('presentable_id', $entity->getKey())
+            ->where('outlet_id', $outletId)
+            ->where('team_id', $team->id)
+            ->firstOrFail();
+
+        $expiresAt = $pres->expires_at;
+        if ($expiresAt === null || $expiresAt->isPast()) {
+            $expiresAt = $this->parseExpiry($fallbackExpiry) ?? now()->addYear()->endOfDay();
+        }
+
+        $pres->forceFill([
+            'enabled' => true,
+            'published_at' => now(),
+            'published_by' => auth()->id(),
+            'expires_at' => $expiresAt,
+        ])->save();
+
+        return [
+            'token' => (string) $pres->token,
+            'slug' => $pres->slug,
+            'url' => $this->publicUrl($type, $pres->slug ?: $pres->token),
+            'outlet_id' => (int) $pres->outlet_id,
+            'published_at' => $pres->published_at->toIso8601String(),
+            'expires_at' => $expiresAt->toIso8601String(),
+            'design' => (string) $pres->design,
+        ];
+    }
+
+    /**
      * Alle Betriebs-Links eines Dokuments (fürs Link-Panel).
      *
      * @return list<array{outlet_id:int, outlet_name:string, enabled:bool, url:string, expires_at:?string, design:string}>

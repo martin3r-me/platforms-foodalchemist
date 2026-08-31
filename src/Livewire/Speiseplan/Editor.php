@@ -227,6 +227,22 @@ class Editor extends Component
         }
     }
 
+    /** Slice F: einen zurückgezogenen Betriebs-Aushang-Link wieder live nehmen (Snapshot bleibt eingefroren). */
+    public function betriebWiederFreigeben(int $outletId): void
+    {
+        $this->presentationFehler = null;
+        $this->presentationHinweis = null;
+        if ($this->planId === null) {
+            return;
+        }
+        try {
+            app(PresentationService::class)->republishForOutlet($this->team(), 'speiseplan', $this->planId, $outletId, $this->presentationGueltigBis);
+            $this->presentationHinweis = 'Betriebs-Link wieder freigegeben — gleiche URL, eingefrorener Aushang bleibt.';
+        } catch (\Throwable $e) {
+            $this->presentationFehler = $e->getMessage();
+        }
+    }
+
     public array $form = ['name' => '', 'start_date' => null, 'cycle_weeks' => 4, 'min_abstand_tage' => 0, 'status' => 'draft', 'default_pax' => 100, 'budget_wareneinsatz' => null];
 
     // Stufe C: Rückmeldung der Produktions-Übergabe

@@ -182,6 +182,45 @@ it('MCP GET listet die Betriebs-Links; WITHDRAW mit outlet_id zieht nur den Betr
         ->and($get2->data['betriebs_links'][0]['enabled'])->toBeFalse();
 });
 
+it('republishForOutlet nimmt einen zurückgezogenen Betriebs-Link wieder live — gleicher Token/Slug, Snapshot bleibt', function () {
+    $res = $this->pres->publishForOutlet($this->childA, 'speisekarte', $this->karte->id, $this->betrieb->id, [
+        'expires_at' => now()->addDays(30)->toDateString(), 'slug' => 'broich-nord-reuse',
+    ]);
+    $snapVorher = $this->pres->resolveByToken('speisekarte', $res['token']);
+
+    $this->pres->withdrawForOutlet($this->childA, 'speisekarte', $this->karte->id, $this->betrieb->id);
+    $this->get('/p/speisekarte/' . $res['token'])->assertNotFound();
+
+    $wieder = $this->pres->republishForOutlet($this->childA, 'speisekarte', $this->karte->id, $this->betrieb->id, now()->addDays(90)->toDateString());
+
+    expect($wieder['token'])->toBe($res['token'])         // gleiche Zeile → Token stabil
+        ->and($wieder['slug'])->toBe('broich-nord-reuse'); // Slug/URL unverändert
+    $this->get('/p/speisekarte/' . $res['token'])->assertOk()->assertSee('Abendkarte');
+
+    // Snapshot (eingefrorene Preise/Vorlage) ist unangetastet — Wieder-Freigabe ist kein Re-Snapshot.
+    $snapNachher = $this->pres->resolveByToken('speisekarte', $res['token']);
+    expect(json_encode($snapNachher['content']))->toBe(json_encode($snapVorher['content']));
+
+    $liste = $this->pres->outletPresentations($this->childA, 'speisekarte', $this->karte->id);
+    expect($liste[0]['enabled'])->toBeTrue();
+});
+
+it('republishForOutlet erneuert ein abgelaufenes gültig-bis aus dem Fallback (Standard-Link-Datum)', function () {
+    $res = $this->pres->publishForOutlet($this->childA, 'speisekarte', $this->karte->id, $this->betrieb->id, [
+        'expires_at' => now()->addDays(5)->toDateString(),
+    ]);
+    // Ablauf künstlich in die Vergangenheit setzen + zurückziehen.
+    \Platform\FoodAlchemist\Models\FoodAlchemistPresentation::where('token', $res['token'])
+        ->update(['enabled' => false, 'expires_at' => now()->subDay()]);
+    $this->get('/p/speisekarte/' . $res['token'])->assertNotFound();
+
+    $fallback = now()->addDays(120)->toDateString();
+    $wieder = $this->pres->republishForOutlet($this->childA, 'speisekarte', $this->karte->id, $this->betrieb->id, $fallback);
+
+    expect(\Illuminate\Support\Carbon::parse($wieder['expires_at'])->toDateString())->toBe($fallback);
+    $this->get('/p/speisekarte/' . $res['token'])->assertOk();   // wieder live, weil Ablauf in der Zukunft
+});
+
 it('Tenancy: fremdes Betrieb / fremd-Team-Dokument werfen', function () {
     $betriebB = FoodAlchemistOutlet::create(['team_id' => $this->childB->id, 'name' => 'Fremd-Betrieb']);
 

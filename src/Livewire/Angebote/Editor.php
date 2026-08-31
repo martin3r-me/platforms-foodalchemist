@@ -1260,6 +1260,22 @@ class Editor extends Component
         }
     }
 
+    /** Einen zurückgezogenen Betriebs-Link wieder live nehmen (Snapshot/Preise bleiben eingefroren). */
+    public function betriebWiederFreigeben(int $outletId): void
+    {
+        $this->presentationFehler = null;
+        $this->presentationHinweis = null;
+        if ($this->selectedId === null) {
+            return;
+        }
+        try {
+            app(PresentationService::class)->republishForOutlet($this->team(), PresentationService::TYPE_ANGEBOT, $this->selectedId, $outletId, $this->presentationGueltigBis);
+            $this->presentationHinweis = 'Betriebs-Link wieder freigegeben — gleiche URL, eingefrorene Preise bleiben.';
+        } catch (\Throwable $e) {
+            $this->presentationFehler = $e->getMessage();
+        }
+    }
+
     // ══════════════════════════════════════════════════════════════════════════
     //  Voll-Kaskade + Gerüst-Review (Angebot-Spezifika, erhalten)
     // ══════════════════════════════════════════════════════════════════════════
