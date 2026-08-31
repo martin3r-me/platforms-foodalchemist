@@ -32,6 +32,7 @@
                     <p class="text-[11px] text-gray-500 mb-1">Neu aus Vorlage</p>
                     <div class="flex flex-wrap gap-1">
                         <button type="button" wire:click="neuAusBuiltin('editorial')" class="text-xs px-2 py-1 rounded border border-gray-200 hover:bg-gray-50">Editorial</button>
+                        <button type="button" wire:click="neuAusBuiltin('angebot')" class="text-xs px-2 py-1 rounded border border-gray-200 hover:bg-gray-50">Angebot</button>
                         <button type="button" wire:click="neuAusBuiltin('menu')" class="text-xs px-2 py-1 rounded border border-gray-200 hover:bg-gray-50">Speisekarte</button>
                         <button type="button" wire:click="neuAusBuiltin('kiosk')" class="text-xs px-2 py-1 rounded border border-gray-200 hover:bg-gray-50">Kiosk</button>
                     </div>
@@ -67,7 +68,7 @@
             {{-- Form-Scoping: für welche Ausgabeformen dieses Design im Picker auftaucht (leer = alle). --}}
             <div class="flex flex-wrap items-center gap-3" data-fa-output-types>
                 <span class="text-[11px] text-gray-500">Gilt für</span>
-                @foreach(['foodbook' => 'Foodbook', 'speisekarte' => 'Speisekarte', 'speiseplan' => 'Speiseplan'] as $ot => $otLabel)
+                @foreach(['foodbook' => 'Foodbook', 'angebot' => 'Angebot', 'speisekarte' => 'Speisekarte', 'speiseplan' => 'Speiseplan'] as $ot => $otLabel)
                     <label class="flex items-center gap-1.5 text-sm">
                         <input type="checkbox" value="{{ $ot }}" wire:model.live="outputTypes" class="rounded border-gray-300"> {{ $otLabel }}
                     </label>
@@ -79,6 +80,7 @@
                 <label class="text-[11px] text-gray-500">Vorschau</label>
                 <select wire:model.live="previewType" class="text-sm border border-gray-300 rounded px-2 py-1">
                     <option value="foodbook">Foodbook</option>
+                    <option value="angebot">Angebot</option>
                     <option value="speisekarte">Speisekarte</option>
                     <option value="speiseplan">Speiseplan</option>
                 </select>
@@ -144,6 +146,15 @@
                                 <option value="2">2 Spalten (Raster)</option>
                             </select>
                         </label>
+                        @if($bt === 'chapter_loop')
+                            <label class="block text-sm">Bezeichnung Kapitel
+                                <input type="text" wire:model.live.debounce.400ms="layout.{{ $i }}.style.kicker_haupt" placeholder="Kapitel" class="block w-full text-sm border border-gray-300 rounded px-2 py-1">
+                            </label>
+                            <label class="block text-sm">Bezeichnung Unterkapitel
+                                <input type="text" wire:model.live.debounce.400ms="layout.{{ $i }}.style.kicker_unter" placeholder="Abschnitt" class="block w-full text-sm border border-gray-300 rounded px-2 py-1">
+                            </label>
+                            <p class="text-[11px] text-gray-400">Der kleine Kicker über dem Titel. Leer = „Kapitel" / „Abschnitt". Für Angebote z. B. „Leistung".</p>
+                        @endif
                     @elseif($bt === 'cover')
                         <label class="flex items-center gap-2 text-sm"><input type="checkbox" wire:model.live="layout.{{ $i }}.style.show_cover_image"> Coverbild zeigen</label>
                         <label class="flex items-center gap-2 text-sm"><input type="checkbox" wire:model.live="layout.{{ $i }}.style.show_logo"> Logo zeigen</label>
@@ -199,6 +210,24 @@
                     @elseif($bt === 'spacer')
                         <label class="block text-[11px] text-gray-500">Höhe (px)</label>
                         <input type="number" min="0" wire:model.blur="layout.{{ $i }}.style.height" class="w-24 text-sm border border-gray-300 rounded px-2 py-1">
+                    @elseif($bt === 'price_summary')
+                        <label class="block text-sm">Preis pro Person
+                            <select wire:model.live="layout.{{ $i }}.style.preis_anzeige" class="block w-full text-sm border border-gray-300 rounded px-2 py-1">
+                                <option value="netto">nur netto</option>
+                                <option value="brutto">nur brutto (inkl. MwSt)</option>
+                                <option value="beide">netto + brutto</option>
+                            </select>
+                        </label>
+                        <p class="text-[11px] text-gray-400">Brutto erscheint nur, wenn Preise vorhanden sind (Angebot). Beim Foodbook ohne MwSt bleibt es netto.</p>
+                    @elseif($bt === 'preis_aufschluesselung')
+                        <label class="block text-sm">Summen-Anzeige
+                            <select wire:model.live="layout.{{ $i }}.style.preis_anzeige" class="block w-full text-sm border border-gray-300 rounded px-2 py-1">
+                                <option value="netto">nur netto</option>
+                                <option value="brutto">nur brutto (inkl. MwSt)</option>
+                                <option value="beide">netto + MwSt + brutto</option>
+                            </select>
+                        </label>
+                        <p class="text-[11px] text-gray-400">Zeilen je Leistung sind netto; diese Wahl steuert die Summenzeilen darunter.</p>
                     @else
                         <p class="text-xs text-gray-400">Für diesen Block gibt es keine Stil-Optionen.</p>
                     @endif

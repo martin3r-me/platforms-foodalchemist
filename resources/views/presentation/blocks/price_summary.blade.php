@@ -6,16 +6,23 @@
     $ppBrutto = $total['vk_pro_person_brutto'] ?? null;
     $ppSatz = $total['mwst_satz'] ?? null;
     $hatMwst = $ppBrutto !== null && $ppSatz !== null;
+    $modus = $style['preis_anzeige'] ?? 'beide';   // netto | brutto | beide (Stil-Option, nur wenn MwSt-Daten da)
+    $satzTxt = $ppSatz !== null ? rtrim(rtrim(number_format((float) $ppSatz, 1, ',', '.'), '0'), ',') : '';
 @endphp
 @if($total && $ppNetto !== null && (float) $ppNetto > 0)
     <div class="pt-measure pt-reveal">
         <div class="pt-price-summary">
-            <span class="pt-price-big">{{ number_format((float) $ppNetto, 2, ',', '.') }} €</span>
-            <span class="pt-price-label">pro Person@if($hatMwst) · netto@endif</span>
-            @if($hatMwst)
-                <span style="display:block;margin-top:.4rem;font-size:.95rem;color:var(--pt-muted,#6b7280);">
-                    {{ number_format((float) $ppBrutto, 2, ',', '.') }} € pro Person inkl. {{ rtrim(rtrim(number_format((float) $ppSatz, 1, ',', '.'), '0'), ',') }} % MwSt
-                </span>
+            @if($hatMwst && $modus === 'brutto')
+                <span class="pt-price-big">{{ number_format((float) $ppBrutto, 2, ',', '.') }} €</span>
+                <span class="pt-price-label">pro Person · inkl. {{ $satzTxt }} % MwSt</span>
+            @else
+                <span class="pt-price-big">{{ number_format((float) $ppNetto, 2, ',', '.') }} €</span>
+                <span class="pt-price-label">pro Person@if($hatMwst && $modus === 'beide') · netto@endif</span>
+                @if($hatMwst && $modus === 'beide')
+                    <span style="display:block;margin-top:.4rem;font-size:.95rem;color:var(--pt-muted,#6b7280);">
+                        {{ number_format((float) $ppBrutto, 2, ',', '.') }} € pro Person inkl. {{ $satzTxt }} % MwSt
+                    </span>
+                @endif
             @endif
         </div>
     </div>

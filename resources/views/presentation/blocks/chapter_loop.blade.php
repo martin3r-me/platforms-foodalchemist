@@ -13,11 +13,14 @@
         $cols = min(max((int) ($style['dish_columns'] ?? 1), 1), 2);
         // Split-Kopf: genau ein Bild + Hauptkapitel → Kopf & Bild nebeneinander (asymmetrisch).
         $split = $depth === 0 && count($bandImgs) === 1;
-        // Kicker form-abhängig: Speisekarte = à la carte, kein „Kapitel"-Label. Speiseplan hat keine Sektionen.
-        // Angebot = Kunden-Sicht → neutral „Leistung" statt „Kapitel" (deckt sich mit der Preis-Aufschlüsselung).
+        // Kicker form-abhängig: Speisekarte = à la carte, kein Label. Speiseplan hat keine Sektionen.
         $ptType = $snap['type'] ?? 'foodbook';
         $showKicker = ($style['show_kicker'] ?? true) && ! in_array($ptType, ['speisekarte', 'speiseplan'], true);
-        $kicker = $depth > 0 ? 'Abschnitt' : ($ptType === 'angebot' ? 'Leistung' : 'Kapitel');
+        // Kicker-Wort = Freitext-Override aus dem Design (leer = Default „Kapitel" / „Abschnitt").
+        // Für Angebote tippt man z. B. „Leistung" — keine typ-abhängige Verdrahtung mehr.
+        $kickerHaupt = trim((string) ($style['kicker_haupt'] ?? '')) ?: 'Kapitel';
+        $kickerUnter = trim((string) ($style['kicker_unter'] ?? '')) ?: 'Abschnitt';
+        $kicker = $depth > 0 ? $kickerUnter : $kickerHaupt;
     @endphp
     <section id="{{ $secId }}" class="pt-section pt-depth-{{ $depth }} pt-reveal" data-pt-section data-pt-title="{{ $s['title'] ?? '' }}">
         <div class="pt-wide">

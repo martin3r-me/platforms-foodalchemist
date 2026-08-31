@@ -25,10 +25,14 @@ it('pickerOptions filtert Built-ins je Form (menu nur Speisekarte, kiosk nicht F
     $sk = collect($this->designs->pickerOptions($this->rootTeam, 'speisekarte'))->pluck('value');
     $sp = collect($this->designs->pickerOptions($this->rootTeam, 'speiseplan'))->pluck('value');
 
+    $an = collect($this->designs->pickerOptions($this->rootTeam, 'angebot'))->pluck('value');
+
     expect($fb)->toContain('editorial')->toContain('navigator')
-        ->not->toContain('menu')->not->toContain('kiosk');
+        ->not->toContain('menu')->not->toContain('kiosk')->not->toContain('angebot');
     expect($sk)->toContain('menu')->toContain('kiosk')->toContain('editorial');
     expect($sp)->toContain('kiosk')->toContain('navigator')->not->toContain('menu');
+    // Angebot-Vorlage nur bei der Form „angebot"; „editorial" (alle Formen) greift dort ebenfalls.
+    expect($an)->toContain('angebot')->toContain('editorial');
 });
 
 it('DB-Design mit output_types erscheint nur bei passender Form', function () {

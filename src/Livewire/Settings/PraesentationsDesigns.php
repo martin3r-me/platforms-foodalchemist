@@ -5,6 +5,7 @@ namespace Platform\FoodAlchemist\Livewire\Settings;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
 use Livewire\WithFileUploads;
+use Platform\FoodAlchemist\Models\FoodAlchemistAngebot;
 use Platform\FoodAlchemist\Models\FoodAlchemistFoodbook;
 use Platform\FoodAlchemist\Models\FoodAlchemistSpeisekarte;
 use Platform\FoodAlchemist\Models\FoodAlchemistSpeiseplan;
@@ -97,10 +98,10 @@ class PraesentationsDesigns extends Component
     /** Standard-Style je Block-Typ beim Hinzufügen. */
     private const BLOCK_DEFAULTS = [
         'cover' => ['align' => 'center', 'show_cover_image' => true, 'show_logo' => true],
-        'chapter_loop' => ['show_price' => true, 'show_codes' => true, 'dish_columns' => 1, 'show_chapter_image' => true, 'show_dish_photos' => false],
+        'chapter_loop' => ['show_price' => true, 'show_codes' => true, 'dish_columns' => 1, 'show_chapter_image' => true, 'show_dish_photos' => false, 'kicker_haupt' => '', 'kicker_unter' => ''],
         'dish_list' => ['show_price' => true, 'show_codes' => true],
-        'price_summary' => ['mode' => 'pro_person'],
-        'preis_aufschluesselung' => [],
+        'price_summary' => ['mode' => 'pro_person', 'preis_anzeige' => 'beide'],
+        'preis_aufschluesselung' => ['preis_anzeige' => 'beide'],
         'legend' => [],
         'grid' => [],
         'text' => ['text' => ''],
@@ -329,6 +330,7 @@ class PraesentationsDesigns extends Component
         [$model, $labelCols] = match ($this->previewType) {
             'speisekarte' => [FoodAlchemistSpeisekarte::class, ['name', 'code']],
             'speiseplan' => [FoodAlchemistSpeiseplan::class, ['name']],
+            'angebot' => [FoodAlchemistAngebot::class, ['name']],
             default => [FoodAlchemistFoodbook::class, ['label', 'code']],
         };
 

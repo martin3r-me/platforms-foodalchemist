@@ -28,7 +28,7 @@ class PresentationDesignService
         'text', 'heading', 'image', 'spacer', 'cta',
     ];
 
-    public const BUILTIN_SLUGS = ['editorial', 'menu', 'kiosk', 'navigator'];
+    public const BUILTIN_SLUGS = ['editorial', 'menu', 'kiosk', 'navigator', 'angebot'];
 
     // ── MCP-Vokabular (damit die MCP-Tools alle setzbaren Keys dokumentieren) ──
 
@@ -144,6 +144,26 @@ class PresentationDesignService
                     'typography' => ['heading' => 'display-serif', 'body' => 'sans', 'scale' => 1.0],
                     'spacing' => 'roomy',
                     'nav' => 'sidebar',
+                    'lightbox' => true,
+                ],
+            ],
+            'angebot' => [
+                'name' => 'Angebot',
+                'base_slug' => 'angebot',
+                'output_types' => ['angebot'],
+                'layout' => [
+                    ['block_type' => 'cover', 'style' => ['align' => 'center', 'show_cover_image' => true, 'show_logo' => true]],
+                    // Kunden-Sicht: Kicker „Leistung" statt „Kapitel" (Freitext-Override, leer = „Kapitel"/„Abschnitt").
+                    ['block_type' => 'chapter_loop', 'style' => ['show_price' => true, 'show_codes' => true, 'dish_columns' => 1, 'show_chapter_image' => true, 'heading_rule' => true, 'kicker_haupt' => 'Leistung', 'kicker_unter' => '']],
+                    ['block_type' => 'preis_aufschluesselung', 'style' => ['preis_anzeige' => 'beide']],
+                    ['block_type' => 'price_summary', 'style' => ['mode' => 'pro_person', 'preis_anzeige' => 'beide']],
+                    ['block_type' => 'legend', 'style' => []],
+                ],
+                'tokens' => [
+                    'palette' => ['primary' => '#6d28d9', 'accent' => '#b8874a', 'bg' => '#fbfaf8', 'surface' => 'rgba(26,23,18,0.04)', 'text' => '#1a1712', 'muted' => '#8a8178'],
+                    'typography' => ['heading' => 'display-serif', 'body' => 'sans', 'scale' => 1.0],
+                    'spacing' => 'roomy',
+                    'nav' => 'anchor',
                     'lightbox' => true,
                 ],
             ],
