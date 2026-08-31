@@ -337,9 +337,9 @@ return [
          * Spezifische Präfixe müssen vor allgemeineren stehen (gpt-5.5 vor gpt-5).
          */
         'modellkosten_pro_mio_usd' => [
-            'gpt-5.6-sol' => ['in' => 2.00, 'cached_in' => 0.20, 'out' => 10.00],
-            'gpt-5.6-terra' => ['in' => 1.00, 'cached_in' => 0.10, 'out' => 6.00],
-            'gpt-5.6-luna' => ['in' => 0.10, 'cached_in' => 0.01, 'out' => 0.60],
+            'gpt-5.6-sol' => ['in' => 4.00, 'cached_in' => 0.40, 'out' => 20.00],
+            'gpt-5.6-terra' => ['in' => 2.00, 'cached_in' => 0.20, 'out' => 12.00],
+            'gpt-5.6-luna' => ['in' => 0.20, 'cached_in' => 0.02, 'out' => 1.20],
             'gpt-5.5' => ['in' => 5.00, 'cached_in' => 0.50, 'out' => 30.00],
             'gpt-5.2' => ['in' => 1.75, 'cached_in' => 0.175, 'out' => 14.00],
             'gpt-5.1' => ['in' => 1.25, 'cached_in' => 0.125, 'out' => 10.00],
