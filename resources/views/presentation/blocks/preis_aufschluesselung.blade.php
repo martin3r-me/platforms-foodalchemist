@@ -3,7 +3,7 @@
 @php($pa = $content['preis_aufschluesselung'] ?? null)
 @php($nf = fn ($v) => number_format((float) $v, 2, ',', '.'))
 @if($pa && count($pa['zeilen'] ?? []))
-    <div class="pt-measure pt-reveal" style="margin:1.5rem 0;">
+    <div class="pt-measure pt-reveal" style="margin:1.5rem auto;">
         <h3 style="font-size:1.05rem;font-weight:700;color:var(--pt-text,#111827);margin:0 0 .5rem;">Preis-Übersicht</h3>
         <div style="border-top:2px solid var(--pt-accent,#6d28d9);">
             <div style="display:flex;gap:.75rem;padding:.35rem 0;font-size:.7rem;text-transform:uppercase;letter-spacing:.05em;color:var(--pt-muted,#9ca3af);">

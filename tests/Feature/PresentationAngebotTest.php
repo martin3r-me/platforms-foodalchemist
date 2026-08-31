@@ -21,10 +21,17 @@ beforeEach(function () {
     $this->angebot = app(AngebotService::class)->create($this->rootTeam, [
         'name' => 'Gala-Angebot 2027', 'personen' => 40, 'occasion' => 'Hochzeit',
     ]);
+    // Realistischer Preis-Pfad: preisCockpit summiert Concept-Slots (nicht den Cache).
+    // Ein bepreistes embedded-Paket im Concept → 12 €/P (deterministisch, wie im Betrieb).
+    $paket = FoodAlchemistConcept::create([
+        'team_id' => $this->rootTeam->id, 'name' => 'Menü-Paket', 'kind' => 'paket', 'status' => 'active',
+        'price_per_person_cache' => 12.0, 'ek_per_person_cache' => 4.0,
+    ]);
     $c = FoodAlchemistConcept::create([
         'team_id' => $this->rootTeam->id, 'name' => 'Vorspeise', 'kind' => 'concept', 'status' => 'active',
         'price_per_person_cache' => 12.0, 'ek_per_person_cache' => 4.0,
     ]);
+    $this->makeConceptSlot($c, ['position' => 1, 'type' => 'paket', 'embedded_concept_id' => $paket->id]);
     $kap = $this->comp->addKapitel($this->rootTeam, $this->angebot->id, ['title' => 'Menü', 'consumer_title' => 'Unser Menü']);
     $this->comp->addBlock($this->rootTeam, $kap->id, ['type' => 'concept_ref', 'concept_id' => $c->id]);
 });
@@ -62,4 +69,21 @@ it('öffentlicher Angebot-Link ohne Login + 404 nach Zurückziehen', function ()
 
     $this->pres->withdraw($this->rootTeam, 'angebot', $this->angebot->id);
     $this->get('/p/angebot/' . $res['token'])->assertNotFound();
+});
+
+it('Pro-Person-Total trägt netto + brutto (inkl. MwSt) und leere Kapitel fehlen in der Aufschlüsselung', function () {
+    // Ein zweites, leeres Kapitel (nur Kopf, keine bepreisten Bausteine) → darf keine 0,00-€-Zeile erzeugen.
+    $this->comp->addKapitel($this->rootTeam, $this->angebot->id, ['title' => 'Leer', 'consumer_title' => 'Leer']);
+
+    $snap = $this->pres->buildSnapshot($this->rootTeam, $this->angebot->fresh(), 'angebot', ['design' => 'editorial', 'price_display' => true]);
+
+    // #1: Pro-Person netto UND brutto
+    $total = $snap['content']['total'];
+    expect($total['vk_pro_person'])->toBeGreaterThan(0.0)
+        ->and($total['mwst_satz'])->not->toBeNull()
+        ->and($total['vk_pro_person_brutto'])->toBeGreaterThan($total['vk_pro_person']);
+
+    // #2: Aufschlüsselung listet nur das bepreiste Kapitel (Kunden-Titel), kein leeres 0,00-€-„Leer".
+    $titel = array_column($snap['content']['preis_aufschluesselung']['zeilen'], 'titel');
+    expect($titel)->toContain('Unser Menü')->not->toContain('Leer');
 });

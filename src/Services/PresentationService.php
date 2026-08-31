@@ -765,8 +765,19 @@ class PresentationService
             ];
         }
 
+        // MwSt-Satz einmal auflösen — für das Pro-Person-Brutto UND die Aufschlüsselung.
+        $satz = null;
+        if ($showPrice) {
+            $mwst = app(TeamSettingsService::class)->mwst($team);
+            $satz = ($mwst['default_satz'] ?? 'ermaessigt') === 'regulaer'
+                ? (float) ($mwst['regulaer'] ?? 19.0) : (float) ($mwst['ermaessigt'] ?? 7.0);
+        }
+
+        $ppNetto = isset($kalk['vk_pro_person']) ? (float) $kalk['vk_pro_person'] : null;
         $total = $showPrice ? [
-            'vk_pro_person' => isset($kalk['vk_pro_person']) ? (float) $kalk['vk_pro_person'] : null,
+            'vk_pro_person' => $ppNetto,
+            'vk_pro_person_brutto' => ($ppNetto !== null && $satz !== null) ? round($ppNetto * (1 + $satz / 100), 2) : null,
+            'mwst_satz' => $satz,
             'pauschal' => null,
             'personen' => $kalk['pax'] ?? null,
             'gesamt_vk' => isset($kalk['gesamt_vk']) ? (float) $kalk['gesamt_vk'] : null,
@@ -776,17 +787,20 @@ class PresentationService
         // KEIN EK) für den Präsentations-Block „preis_aufschluesselung". Nur bei Preisanzeige.
         $breakdown = null;
         if ($showPrice) {
-            $mwst = app(TeamSettingsService::class)->mwst($team);
-            $satz = ($mwst['default_satz'] ?? 'ermaessigt') === 'regulaer'
-                ? (float) ($mwst['regulaer'] ?? 19.0) : (float) ($mwst['ermaessigt'] ?? 7.0);
             $zeilen = [];
             foreach ($komp['kapitel'] as $kap) {
+                $isAlt = $kap['ist_format'] && ($kap['format_price_mode'] ?? null) === 'alternativen';
+                $hasRange = $isAlt && ! empty($kap['preis_range']) && ($kap['preis_range']['max'] ?? null) !== null;
+                // Leere Kapitel (Header/Text ohne bepreiste Bausteine) nicht als 0,00-€-Zeile listen.
+                if (! $hasRange && (float) ($kap['gesamt'] ?? 0) <= 0.0) {
+                    continue;
+                }
                 $zeilen[] = [
                     'titel' => (string) $kap['title'],
                     'pax' => $kap['pax'] ?? null,
                     'vk_pro_person' => $kap['vk_pro_person'],
                     'gesamt' => $kap['gesamt'] ?? null,
-                    'alternativen' => $kap['ist_format'] && ($kap['format_price_mode'] ?? null) === 'alternativen',
+                    'alternativen' => $isAlt,
                     'preis_range' => $kap['preis_range'] ?? null,
                 ];
             }
@@ -794,7 +808,7 @@ class PresentationService
             $breakdown = [
                 'zeilen' => $zeilen,
                 'pax' => $kalk['pax'] ?? null,
-                'pro_person' => isset($kalk['vk_pro_person']) ? (float) $kalk['vk_pro_person'] : null,
+                'pro_person' => $ppNetto,
                 'netto' => round($netto, 2),
                 'mwst_satz' => $satz,
                 'mwst_betrag' => round($netto * $satz / 100, 2),

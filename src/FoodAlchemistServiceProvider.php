@@ -766,6 +766,19 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\AngebotMenueDeleteTool::class,
                     \Platform\FoodAlchemist\Tools\AngebotConceptRefPostTool::class,
                     \Platform\FoodAlchemist\Tools\AngebotConceptRefDeleteTool::class,
+                    // #380 Composer · MCP-Lockstep: Kapitel/Block-Komposition (offer-scoped, spiegelt
+                    // Foodbook-Kapitel/Block-Tools über OfferCompositionService) + Format-Kapitel-Einfügung.
+                    \Platform\FoodAlchemist\Tools\OfferChapterPostTool::class,
+                    \Platform\FoodAlchemist\Tools\OfferChapterPutTool::class,
+                    \Platform\FoodAlchemist\Tools\OfferChapterDeleteTool::class,
+                    \Platform\FoodAlchemist\Tools\OfferBlockPostTool::class,
+                    \Platform\FoodAlchemist\Tools\OfferBlockPutTool::class,
+                    \Platform\FoodAlchemist\Tools\OfferBlockDeleteTool::class,
+                    \Platform\FoodAlchemist\Tools\OfferInsertFormatTool::class,
+                    // #380 Composer / Spec 43: Angebot-Präsentation (digitales Kundenbuch, Public-Link).
+                    \Platform\FoodAlchemist\Tools\AngebotPresentationPublishTool::class,
+                    \Platform\FoodAlchemist\Tools\AngebotPresentationWithdrawTool::class,
+                    \Platform\FoodAlchemist\Tools\AngebotPresentationGetTool::class,
                     \Platform\FoodAlchemist\Tools\KalkulationGetTool::class,
                     \Platform\FoodAlchemist\Tools\SimulationPostTool::class,
                     // R7.1: Operative Planungs-Blätter (read-only, rein rechnend)
