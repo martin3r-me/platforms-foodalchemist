@@ -32,23 +32,30 @@ it('rendert Titel, fixe Kopf-Aktionen, Sektionen und Footer-Slot', function () {
 it('verdrahtet den Event-Vertrag modal.open / modal.close / modal.closed', function () {
     $html = Blade::render('<x-foodalchemist::modal name="demo" title="T">X</x-foodalchemist::modal>');
 
-    // Der Punkt steckt im dynamischen Argument, nicht als Alpine-Modifier im Attributnamen.
-    // Dadurch verwaltet Alpine den Listener lifecycle-sicher über Livewire-Morphs hinweg.
-    expect($html)->toContain('x-on:[modalOpenEvent].window')
-        ->and($html)->toContain('x-on:[modalCloseEvent].window')
+    // Native Listener erhalten den Punkt im Eventnamen; Alpine würde ihn in einer statischen
+    // x-on-Direktive als Modifier interpretieren.
+    expect($html)->toContain("addEventListener('modal.open'")
+        ->and($html)->toContain("addEventListener('modal.close'")
         ->and($html)->toContain('modal.closed')          // Schließen meldet sich (State-Reset-Vertrag)
         ->and($html)->toContain('keydown.window.escape') // ESC schließt
         ->and($html)->toContain('x-cloak');              // kein Aufblitzen vor Alpine-Boot
 });
 
-it('beendet ein serverseitiges modal.close ohne die Close-Methode erneut aufzurufen', function () {
+it('holt jedes neu geöffnete Modal vor bereits offene Editoren', function () {
+    $html = Blade::render('<x-foodalchemist::modal name="demo" title="T">X</x-foodalchemist::modal>');
+
+    expect($html)->toContain('bringToFront($el)')
+        ->and($html)->toContain('window.__foodAlchemistModalZ')
+        ->and($html)->toContain('el.style.zIndex');
+});
+
+it('führt beim Schließen den optionalen Livewire-State-Reset aus', function () {
     $html = Blade::render(<<<'BLADE'
         <x-foodalchemist::modal name="demo" title="T" :close-via="'schliessenOderZurueck'">X</x-foodalchemist::modal>
         BLADE);
 
-    expect($html)->toContain("requestClose() {  this.\$wire.schliessenOderZurueck();  }")
-        ->and($html)->toContain("x-on:[modalCloseEvent].window=\"if (!\$event.detail?.name || \$event.detail.name === 'demo') close()\"")
-        ->and($html)->not->toContain("x-on:[modalCloseEvent].window=\"if (!\$event.detail?.name || \$event.detail.name === 'demo') requestClose()\"");
+    expect($html)->toContain("closeWithState() {  this.\$wire.schliessenOderZurueck();  this.close(); }")
+        ->and($html)->toContain("e.detail.name === 'demo') closeWithState()");
 });
 
 it('lässt Aktionen- und Footer-Slot weg, wenn nicht gesetzt', function () {

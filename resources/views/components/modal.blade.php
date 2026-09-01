@@ -40,13 +40,17 @@
 <div x-data="{
         open: false,
         @if($tabInit) tab: '{{ $tabInit }}', @endif
+        bringToFront(el) {
+            window.__foodAlchemistModalZ = Math.max(window.__foodAlchemistModalZ || 100, 100) + 1;
+            el.style.zIndex = String(window.__foodAlchemistModalZ);
+        },
         close() { this.open = false; this.$dispatch('modal.closed', { name: '{{ $name }}' }); },
         closeWithState() { @if($closeVia) this.$wire.{{ $closeVia }}(); @endif this.close(); },
      }"
      {{-- Alpine 3.15 interpretiert Punkte in statischen x-on-Namen als Modifier.
           Deshalb bleiben die bewährten nativen Listener für `modal.open`/`modal.close` erhalten. --}}
      x-init="
-        window.addEventListener('modal.open', e => { if (e.detail?.name === '{{ $name }}') { open = true; @if($tabInit) tab = e.detail?.tab || '{{ $tabInit }}'; @endif } });
+        window.addEventListener('modal.open', e => { if (e.detail?.name === '{{ $name }}') { bringToFront($el); open = true; @if($tabInit) tab = e.detail?.tab || '{{ $tabInit }}'; @endif } });
         window.addEventListener('modal.close', e => { if (!e.detail?.name || e.detail.name === '{{ $name }}') closeWithState() });
      "
      x-show="open" x-cloak

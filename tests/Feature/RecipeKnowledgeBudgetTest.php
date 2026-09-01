@@ -12,7 +12,7 @@ beforeEach(function () {
     $this->seedTeamHierarchy();
 });
 
-it('deckt Rezeptwissen featureweit statt Top-K jeder Kategorie zu addieren', function () {
+it('begrenzt Rezeptwissen nach Zeichenbudget statt nach einer starren Dokumentzahl', function () {
     foreach (range(1, 14) as $i) {
         $category = 'testcat' . $i;
         DB::table('foodalchemist_knowledge_documents')->insert([
@@ -33,7 +33,8 @@ it('deckt Rezeptwissen featureweit statt Top-K jeder Kategorie zu addieren', fun
         'ai_generate_recipe', 'Rinderfilet als Hauptgang', null, [], ['level' => 'gehoben']
     );
 
-    expect($ctx['files_used'])->toHaveCount(KnowledgeContextService::RECIPE_MAX_KNOWLEDGE_DOCS)
+    expect($ctx['files_used'])->each->toContain('rinderfilet-wissen-')
+        ->and($ctx['files_used'])->toHaveCount(14)
         ->and($ctx['total_chars'])->toBeLessThanOrEqual(KnowledgeContextService::RECIPE_MAX_KNOWLEDGE_CHARS + 40);
 });
 

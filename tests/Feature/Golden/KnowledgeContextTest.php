@@ -101,7 +101,7 @@ it('GT-13-5: Filter gewagt (Modern+Kontrast) — Klassisch UND Verbund draußen'
         ->and($g)->not->toContain('TrinitasX');                      // Verbund = eigene ##-Sektion → Filter aus
 });
 
-it('GT-13-6: Discovery Stufe 2a — 2 priorisierte Domains via Alias, alle 7 Cross-Cutting', function () {
+it('GT-13-6: Discovery Stufe 2a — alle 3 passenden Domains via Alias, alle 7 Cross-Cutting', function () {
     ($this->seedGenerator)();
 
     $ctx = $this->svc->contextFor('ai_generate_recipe', 'Lachs mit brauner Butter und Walnuss');
@@ -111,7 +111,7 @@ it('GT-13-6: Discovery Stufe 2a — 2 priorisierte Domains via Alias, alle 7 Cro
         expect($slugs)->toContain($cc);
     }
     $domains = array_values(array_intersect($slugs, ['fisch_seafood', 'milchprodukte', 'nuesse_saaten']));
-    expect($domains)->toBe(['fisch_seafood', 'milchprodukte'])
+    expect($domains)->toBe(['fisch_seafood', 'milchprodukte', 'nuesse_saaten'])
         ->and(substr_count($ctx['block'], '## DOMAIN: '))->toBeLessThanOrEqual(KnowledgeContextService::DOMAIN_TOP_K);
 });
 
@@ -216,7 +216,7 @@ it('DoD: Assembly hält das Gesamtbudget — Rezeptwissen auf 36k Zeichen gedeck
     $ctx = $this->svc->contextFor('ai_generate_recipe', 'Lachs mit brauner Butter und Walnuss');
 
     expect($ctx['total_chars'])->toBeLessThanOrEqual(KnowledgeContextService::RECIPE_MAX_KNOWLEDGE_CHARS)
-        ->and(substr_count($ctx['block'], '[…gekürzt für KI-Kontext…]'))->toBe(7 + 2)
+        ->and(substr_count($ctx['block'], '[…gekürzt für KI-Kontext…]'))->toBe(7 + 3)
         ->and($ctx['total_chars'])->toBe(mb_strlen($ctx['block']));
 });
 
@@ -263,7 +263,7 @@ it('Kontext-Inspektor: used_by_category gruppiert je Kanal und deckt sich exakt 
     expect($ctx)->toHaveKey('used_by_category')
         ->and($ctx['used_by_category'])->toHaveKey('cross_cutting')->toHaveKey('domain')->toHaveKey('niveau');
     expect($ctx['used_by_category']['cross_cutting'])->toHaveCount(7)
-        ->and($ctx['used_by_category']['domain'])->toHaveCount(2)
+        ->and($ctx['used_by_category']['domain'])->toHaveCount(3)
         ->and($ctx['used_by_category']['niveau'])->toBe(['niveau.niveau-1-haute-cuisine@v1']);
 
     // Delta-Trick korrekt: Union aller Gruppen == files_used (nichts verloren, nichts dupliziert).

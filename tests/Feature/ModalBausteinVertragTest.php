@@ -7,21 +7,18 @@ uses(TestCase::class);
 /**
  * UI-Audit 2026-06-12 (Regressionsschutz): Der `.dot`-Event-Modifier wird vom
  * gebündelten Alpine 3.15 IGNORIERT — Listener hörten auf `modal-open` statt
- * `modal.open`, KEIN Modal konnte je per Livewire-Event öffnen (live im
- * Browser bewiesen). Der Baustein nutzt deshalb ein dynamisches x-on-Argument;
- * dieser Vertrag verhindert die Rückkehr der statischen @-Syntax mit Punkt-Events.
+ * `modal.open`. Native Listener bewahren den gepunkteten Eventnamen unverändert.
  */
-it('Modal-Baustein: dynamischer lifecycle-sicherer Listener statt .dot-Listener (Alpine-3.15-Falle)', function () {
+it('Modal-Baustein: nativer Listener statt .dot-Listener (Alpine-3.15-Falle)', function () {
     // Modul-Root über die Klasse auflösen — __DIR__ bricht im Sandbox-Copy-Loop (_SANDBOX_NOTES)
     $modulRoot = dirname((new ReflectionClass(\Platform\FoodAlchemist\FoodAlchemistServiceProvider::class))->getFileName(), 2);
     $blade = file_get_contents($modulRoot . '/resources/views/components/modal.blade.php');
 
     expect($blade)->not->toContain('@modal-open.dot')
         ->and($blade)->not->toContain('@modal-close.dot')
-        ->and($blade)->toContain('x-on:[modalOpenEvent].window')
-        ->and($blade)->toContain('x-on:[modalCloseEvent].window')
-        ->and($blade)->not->toContain("addEventListener('modal.open'")
-        ->and($blade)->not->toContain("addEventListener('modal.close'");
+        ->and($blade)->toContain("addEventListener('modal.open'")
+        ->and($blade)->toContain("addEventListener('modal.close'")
+        ->and($blade)->toContain('bringToFront($el)');
 });
 
 it('keine View nutzt .dot-Event-Listener (gleiches Muster, gleiche Falle)', function () {
