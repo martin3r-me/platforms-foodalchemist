@@ -39,19 +39,18 @@
 
 <div x-data="{
         open: false,
-        modalOpenEvent: 'modal.open',
-        modalCloseEvent: 'modal.close',
         @if($tabInit) tab: '{{ $tabInit }}', @endif
         close() { this.open = false; this.$dispatch('modal.closed', { name: '{{ $name }}' }); },
-        requestClose() { @if($closeVia) this.$wire.{{ $closeVia }}(); @else this.close(); @endif },
+        closeWithState() { @if($closeVia) this.$wire.{{ $closeVia }}(); @endif this.close(); },
      }"
-     {{-- Gepunktete Eventnamen dürfen nicht mit dem statischen Alpine-dot-Modifier geschrieben
-          werden. Dynamische x-on-Argumente erhalten den Punkt und werden von Alpine beim
-          Livewire-Morph automatisch ab- und wieder angemeldet (kein Listener am Alt-State). --}}
-     x-on:[modalOpenEvent].window="if ($event.detail?.name === '{{ $name }}') { open = true; @if($tabInit) tab = $event.detail?.tab || '{{ $tabInit }}'; @endif }"
-     x-on:[modalCloseEvent].window="if (!$event.detail?.name || $event.detail.name === '{{ $name }}') close()"
+     {{-- Alpine 3.15 interpretiert Punkte in statischen x-on-Namen als Modifier.
+          Deshalb bleiben die bewährten nativen Listener für `modal.open`/`modal.close` erhalten. --}}
+     x-init="
+        window.addEventListener('modal.open', e => { if (e.detail?.name === '{{ $name }}') { open = true; @if($tabInit) tab = e.detail?.tab || '{{ $tabInit }}'; @endif } });
+        window.addEventListener('modal.close', e => { if (!e.detail?.name || e.detail.name === '{{ $name }}') closeWithState() });
+     "
      x-show="open" x-cloak
-     @keydown.window.escape="if (open) close()"
+     @keydown.window.escape="if (open) closeWithState()"
      class="fixed inset-0 z-[100] flex items-center justify-center p-4"
      data-modal="{{ $name }}"
      role="dialog" aria-modal="true" @if($title) aria-label="{{ trim($title . ($titleName !== null ? ': ' . $titleName : '')) }}" @endif>
@@ -65,7 +64,7 @@
     @endif
 
     {{-- Backdrop --}}
-    <div class="absolute inset-0 bg-black/50 backdrop-blur-md" @click="close()"></div>
+    <div class="absolute inset-0 bg-black/50 backdrop-blur-md" @click="closeWithState()"></div>
 
     {{-- Panel (frosted, DESIGN.md) --}}
     {{-- max-h: 85vh — Wert MUSS im Host-CSS-Build existieren (arbitrary value!);
@@ -104,7 +103,7 @@
                         @endisset
                     </h2>
                 @endif
-                <button type="button" @click="requestClose()"
+                <button type="button" @click="closeWithState()"
                         class="p-1.5 rounded-md text-gray-500 hover:text-violet-600 hover:bg-black/5 transition-colors duration-150"
                         aria-label="Schließen">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
