@@ -451,7 +451,10 @@ return [
             'tier' => 'C',
             'task' => 'Leite aus der Roh-Bezeichnung eines Lebensmittels die strukturierten '
                 . 'GP-Naming-Felder nach Regelwerk §6 ab: werte = {hauptzutat, condition '
-                . '(frisch|TK|trocken|konserviert), processing, form, pflichtangabe}. '
+                . '(frisch|TK|trocken|konserviert), processing, form, pflichtangabe, '
+                . 'commodity_group_code, sub_category}. Übersetze fremdsprachige Lieferantentexte '
+                . 'fachlich korrekt ins Deutsche. commodity_group_code und sub_category müssen '
+                . 'exakt aus der im Kontext übergebenen taxonomie stammen; nichts erfinden. '
                 . 'Singular/Lemma (§6.1), keine Verpackungswörter (§7.1), Marke nur nach §5-Tiebreaker.',
         ],
         'gp.condition' => [

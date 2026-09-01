@@ -10,6 +10,8 @@ use Platform\FoodAlchemist\Models\FoodAlchemistGp;
 use Platform\FoodAlchemist\Models\FoodAlchemistGpLaPreference;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplierItemStructure;
+use Platform\FoodAlchemist\Models\FoodAlchemistItemAllergen;
+use Platform\FoodAlchemist\Models\FoodAlchemistItemDeclaration;
 
 /**
  * M3-06: Lead-LA-Wahl (GL-03) + V-27-Auflösung.
@@ -343,6 +345,12 @@ class LeadLaService
                 throw new \RuntimeException('LA ist bereits einem anderen GP zugeordnet — erst dort lösen (GL-05).');
             }
 
+            if ($struktur !== null && $struktur->deleted_at === null && (int) $struktur->gp_id === $gp->id) {
+                return; // idempotent: Zähler und Lead nicht erneut verändern
+            }
+
+            $this->guardDeklarationsprofil($team, $gp, $laId);
+
             if ($struktur === null) {
                 $struktur = new FoodAlchemistSupplierItemStructure(['supplier_item_id' => $laId]);
             }
@@ -365,25 +373,40 @@ class LeadLaService
      */
     public function kandidatenFuerGp(Team $team, FoodAlchemistGp $gp, int $limit = 6): Collection
     {
+        // Derselbe Recall-Pfad wie in der Leitstelle: WG-Lead-Scope + Terminologie +
+        // Qdrant/semantischer Recall. Gerade fremdsprachige Artikelnamen werden durch
+        // die alte reine Wortsuche sonst unsichtbar.
+        $leitstelle = app(LaCandidateFinder::class)
+            ->find($team, $gp->name, $gp->commodity_group_code, max($limit * 2, 12))
+            ->filter(fn ($la) => $la->structure?->gp_id === null)
+            ->map(function ($la) {
+                $la->setAttribute('supplier_name', $la->supplier?->name);
+                $la->setAttribute('match_score', (float) ($la->score ?? 0));
+                return $la;
+            });
+
         $basis = mb_strtolower(trim(explode(':', $gp->name)[0]));   // «Aepfel Braeburn: frisch» → «aepfel braeburn»
         $tokens = array_values(array_filter(preg_split('/[\s\/,-]+/', $basis), fn ($t) => mb_strlen($t) >= 3));
         if ($tokens === []) {
-            return collect();
+            return $leitstelle->take($limit)->values();
         }
         $alsWort = fn (string $name, string $token): bool => (bool) preg_match('/\b' . preg_quote($token, '/') . '\b/u', $name);
 
         $query = FoodAlchemistSupplierItem::query()
             ->visibleToTeam($team)                                     // D1: globaler Seed + eigenes Team/Master-Kette
-            ->join('foodalchemist_supplier_item_structures AS s', 's.supplier_item_id', '=', 'foodalchemist_supplier_items.id')
+            ->leftJoin('foodalchemist_supplier_item_structures AS s', function ($join) {
+                $join->on('s.supplier_item_id', '=', 'foodalchemist_supplier_items.id')
+                    ->whereNull('s.deleted_at');
+            })
             ->leftJoin('foodalchemist_suppliers AS sup', 'sup.id', '=', 'foodalchemist_supplier_items.supplier_id')
-            ->whereNull('s.gp_id')->whereNull('s.deleted_at')
+            ->whereNull('s.gp_id')
             ->where('foodalchemist_supplier_items.is_discontinued', false)
             ->whereRaw('LOWER(foodalchemist_supplier_items.designation) LIKE ?', ['%' . $tokens[0] . '%'])
             ->limit(200)
             ->select('foodalchemist_supplier_items.*', 'sup.name AS supplier_name')
             ->get();
 
-        return $query
+        $lexikalisch = $query
             ->map(function ($item) use ($tokens, $alsWort) {
                 $name = mb_strtolower((string) $item->designation);
                 $treffer = count(array_filter($tokens, fn ($t) => $alsWort($name, $t)));
@@ -394,7 +417,10 @@ class LeadLaService
             // Pflicht: Haupttoken als Wort + mind. die Hälfte aller Tokens («Mini …»-Rauschen raus)
             ->filter(fn ($item) => $item->match_score >= 0.5 && $alsWort(mb_strtolower((string) $item->designation), $tokens[0]))
             ->sortBy([fn ($a, $b) => $b->match_score <=> $a->match_score, fn ($a, $b) => strcmp($a->designation, $b->designation)])
-            ->take($limit)->values();
+            ->values();
+
+        return $leitstelle->concat($lexikalisch)->unique('id')
+            ->sortByDesc(fn ($la) => (float) $la->match_score)->take($limit)->values();
     }
 
     public function sucheVerknuepfbare(Team $team, string $suche, int $limit = 8): Collection
@@ -405,17 +431,65 @@ class LeadLaService
 
         $query = FoodAlchemistSupplierItem::query()
             ->visibleToTeam($team)                                     // D1: globaler Seed + eigenes Team/Master-Kette
-            ->join('foodalchemist_supplier_item_structures AS s', 's.supplier_item_id', '=', 'foodalchemist_supplier_items.id')
+            ->leftJoin('foodalchemist_supplier_item_structures AS s', function ($join) {
+                $join->on('s.supplier_item_id', '=', 'foodalchemist_supplier_items.id')
+                    ->whereNull('s.deleted_at');
+            })
             ->leftJoin('foodalchemist_suppliers AS sup', 'sup.id', '=', 'foodalchemist_supplier_items.supplier_id')
             ->whereNull('s.gp_id')
-            ->whereNull('s.deleted_at');
-        \Platform\FoodAlchemist\Support\Suche::like($query, 'foodalchemist_supplier_items.designation', $suche);
+            ->where('foodalchemist_supplier_items.is_discontinued', false);
+        \Platform\FoodAlchemist\Support\Suche::likeAny($query, [
+            'foodalchemist_supplier_items.designation',
+            "COALESCE(foodalchemist_supplier_items.article_number, '')",
+        ], $suche);
 
         return $query
             ->orderBy('foodalchemist_supplier_items.designation')
             ->limit($limit)
             ->select('foodalchemist_supplier_items.*', 'sup.name AS supplier_name')
             ->get();
+    }
+
+    /**
+     * Ein GP ist ein deklaratorisch einheitlicher Einkaufsgegenstand. Sobald zwei
+     * bekannte LA-Profile bei EU-14-Allergenen oder LMIV-Zusatzstoffen voneinander
+     * abweichen, dürfen sie nicht unter demselben GP aggregiert werden. Unbekannte
+     * Werte blockieren nicht; sie sind eine Datenlücke, kein belegter Widerspruch.
+     */
+    private function guardDeklarationsprofil(Team $team, FoodAlchemistGp $gp, int $neuerLaId): void
+    {
+        $neu = FoodAlchemistSupplierItem::visibleToTeam($team)->with(['allergens', 'declarations'])->findOrFail($neuerLaId);
+        $bestehend = FoodAlchemistSupplierItem::query()
+            ->with(['allergens', 'declarations'])
+            ->join('foodalchemist_supplier_item_structures AS s', 's.supplier_item_id', '=', 'foodalchemist_supplier_items.id')
+            ->where('s.gp_id', $gp->id)->whereNull('s.deleted_at')
+            ->where('foodalchemist_supplier_items.id', '!=', $neuerLaId)
+            ->select('foodalchemist_supplier_items.*')->get();
+
+        foreach ($bestehend as $alt) {
+            $abweichungen = [];
+            foreach (array_keys(FoodAlchemistItemAllergen::ALLERGENE) as $feld) {
+                $a = $alt->allergens?->{"allergen_{$feld}"};
+                $b = $neu->allergens?->{"allergen_{$feld}"};
+                if ($a !== null && $b !== null && $a !== $b) {
+                    $abweichungen[] = "Allergen {$feld}";
+                }
+            }
+            foreach (array_keys(FoodAlchemistItemDeclaration::STOFFE) as $feld) {
+                $a = $alt->declarations?->{$feld};
+                $b = $neu->declarations?->{$feld};
+                if (in_array((int) $a, [1, 3], true) && in_array((int) $b, [1, 3], true) && (int) $a !== (int) $b) {
+                    $abweichungen[] = "Zusatzstoff {$feld}";
+                }
+            }
+            if ($abweichungen !== []) {
+                throw new \RuntimeException(
+                    'Deklarationsprofil weicht von einem vorhandenen Lieferantenartikel ab ('
+                    . implode(', ', array_slice($abweichungen, 0, 3))
+                    . ') — dafür muss ein neues GP angelegt werden.'
+                );
+            }
+        }
     }
 
     // ── intern ───────────────────────────────────────────────────────────

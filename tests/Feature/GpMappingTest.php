@@ -8,6 +8,9 @@ use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplier;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplierItemStructure;
+use Platform\FoodAlchemist\Models\FoodAlchemistItemAllergen;
+use Platform\FoodAlchemist\Models\FoodAlchemistItemDeclaration;
+use Platform\FoodAlchemist\Services\LeadLaService;
 use Platform\FoodAlchemist\Tests\Support\SeedsTeamHierarchy;
 use Platform\FoodAlchemist\Tests\TestCase;
 
@@ -55,6 +58,55 @@ it('LA-Modal: kiGpVorschlag findet den Fuzzy-Kandidaten (MatchService v1)', func
     // Klick auf den Vorschlag weist zu
     $c->call('gpZuweisen', $vorschlaege[0]['gp_id'])->assertSet('fehler', null);
     expect((int) DB::table('foodalchemist_supplier_item_structures')->where('supplier_item_id', $this->la->id)->value('gp_id'))->toBe($vorschlaege[0]['gp_id']);
+});
+
+it('LA-Modal startet die GP-Neuanlage mit dem Artikel als LA-first-Quelle', function () {
+    Livewire::test(ItemModal::class)
+        ->call('oeffnen', $this->la->id)
+        ->call('gpNeuAnlegen')
+        ->assertDispatched('gp-modal.oeffnen', id: null, laId: $this->la->id);
+});
+
+it('GP-Suche findet einen ungemappten LA auch ohne Structure-Zeile und über die Artikelnummer', function () {
+    $ohneStruktur = FoodAlchemistSupplierItem::create([
+        'team_id' => $this->rootTeam->id,
+        'supplier_id' => $this->la->supplier_id,
+        'article_number' => '40909330',
+        'designation' => 'BIETENCREME MET DRAGON SOUS VIDE GEGAARD',
+    ]);
+
+    $treffer = app(LeadLaService::class)->sucheVerknuepfbare($this->rootTeam, '40909330');
+
+    expect($treffer->pluck('id'))->toContain($ohneStruktur->id);
+});
+
+it('LA-Verknüpfung blockiert ein bekannt abweichendes Allergen- oder Zusatzstoffprofil', function () {
+    app(LeadLaService::class)->verknuepfen($this->rootTeam, $this->gp, $this->la->id);
+    FoodAlchemistItemAllergen::create([
+        'team_id' => $this->rootTeam->id, 'supplier_item_id' => $this->la->id,
+        'allergen_milk' => 'nicht_enthalten',
+    ]);
+    FoodAlchemistItemDeclaration::create([
+        'team_id' => $this->rootTeam->id, 'supplier_item_id' => $this->la->id,
+        'with_preservative' => 1,
+    ]);
+
+    $neu = FoodAlchemistSupplierItem::create([
+        'team_id' => $this->rootTeam->id, 'supplier_id' => $this->la->supplier_id,
+        'designation' => 'Tomatenmark mit Milch',
+    ]);
+    FoodAlchemistItemAllergen::create([
+        'team_id' => $this->rootTeam->id, 'supplier_item_id' => $neu->id,
+        'allergen_milk' => 'enthalten',
+    ]);
+    FoodAlchemistItemDeclaration::create([
+        'team_id' => $this->rootTeam->id, 'supplier_item_id' => $neu->id,
+        'with_preservative' => 3,
+    ]);
+
+    expect(fn () => app(LeadLaService::class)->verknuepfen($this->rootTeam, $this->gp->fresh(), $neu->id))
+        ->toThrow(RuntimeException::class, 'neues GP');
+    expect(FoodAlchemistSupplierItemStructure::where('supplier_item_id', $neu->id)->whereNotNull('gp_id')->exists())->toBeFalse();
 });
 
 it('GP-Panel: Verwendungen listen Basis- und VK-Rezepte, ★-Lead-Klick setzt den globalen Lead', function () {

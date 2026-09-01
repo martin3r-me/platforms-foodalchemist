@@ -41,6 +41,26 @@ class MatchService
             }
         }
 
+        // Leitstellen-Recall wiederverwenden: Terminologie + Qdrant liefert auch
+        // fremdsprachige/semantische Kandidaten, die der alte Token-Fuzzy-Pfad nie sah.
+        $gesehen = $vorschlaege->pluck('gp')->pluck('id')->all();
+        foreach (app(IngredientMatchService::class)->candidatesFor($team, (string) $la->designation, null, $limit * 2) as $kandidat) {
+            if (($kandidat['kind'] ?? null) !== 'gp' || in_array((int) $kandidat['id'], $gesehen, true)
+                || (float) ($kandidat['score'] ?? 0) < 0.50) {
+                continue;
+            }
+            $gp = FoodAlchemistGp::visibleToTeam($team)->find((int) $kandidat['id']);
+            if ($gp === null) {
+                continue;
+            }
+            $score = (float) $kandidat['score'];
+            $vorschlaege->push([
+                'gp' => $gp, 'score' => $score, 'band' => MatchBand::fuerScore($score),
+                'methode' => 'hybrid_' . ($kandidat['origin'] ?? 'lexical'),
+            ]);
+            $gesehen[] = (int) $gp->id;
+        }
+
         return $vorschlaege
             ->sortBy([fn ($a, $b) => $b['score'] <=> $a['score'], fn ($a, $b) => $a['gp']->id <=> $b['gp']->id])
             ->take($limit)
@@ -59,10 +79,12 @@ class MatchService
     {
         $items = FoodAlchemistSupplierItem::query()
             ->visibleToTeam($team)
-            ->join('foodalchemist_supplier_item_structures AS s', 's.supplier_item_id', '=', 'foodalchemist_supplier_items.id')
+            ->leftJoin('foodalchemist_supplier_item_structures AS s', function ($join) {
+                $join->on('s.supplier_item_id', '=', 'foodalchemist_supplier_items.id')
+                    ->whereNull('s.deleted_at');
+            })
             ->where('foodalchemist_supplier_items.supplier_id', $supplierId)
             ->whereNull('s.gp_id')
-            ->whereNull('s.deleted_at')
             ->where('foodalchemist_supplier_items.is_discontinued', false)
             ->select('foodalchemist_supplier_items.*')
             ->orderBy('foodalchemist_supplier_items.id')

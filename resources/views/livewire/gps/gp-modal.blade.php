@@ -227,6 +227,37 @@
                 </div>
             </x-foodalchemist::modal-section>
 
+            @if($neu)
+                <x-foodalchemist::modal-section title="Lieferantenartikel">
+                    @if($supplierItem !== null)
+                        <div class="flex items-center justify-between gap-3 rounded-lg border border-violet-300 bg-violet-500/5 px-3 py-2 text-xs" data-gp-la-selected>
+                            <div>
+                                <span class="font-medium text-gray-900">{{ $supplierItem->designation }}</span>
+                                <span class="text-gray-500"> · {{ $supplierItem->supplier?->name ?? 'Lieferant' }} · {{ $supplierItem->article_number ?? 'ohne Artikelnr.' }}</span>
+                            </div>
+                            <button type="button" wire:click="supplierItemLoesen" class="{{ $btnGhostXs }}">Lösen</button>
+                        </div>
+                        <p class="text-[11px] text-gray-500 mt-1">Wird beim Anlegen direkt mit dem GP verknüpft. Abweichende bekannte Allergene/Zusatzstoffe werden geblockt.</p>
+                    @else
+                        <input type="search" wire:model.live.debounce.300ms="laSuche"
+                               placeholder="Bezeichnung oder Artikelnummer suchen …" class="{{ $input }}" data-gp-la-search />
+                        @if($supplierItemKandidaten->isNotEmpty())
+                            <div class="mt-1 rounded-lg border border-gray-200 divide-y divide-gray-100" data-gp-la-results>
+                                @foreach($supplierItemKandidaten as $la)
+                                    <button type="button" wire:click="supplierItemWaehlen({{ $la->id }})"
+                                            class="w-full text-left px-3 py-2 text-xs hover:bg-violet-500/5">
+                                        <span class="font-medium text-gray-900">{{ $la->designation }}</span>
+                                        <span class="text-gray-500"> · {{ $la->supplier_name ?? 'Lieferant' }} · {{ $la->article_number ?? 'ohne Artikelnr.' }}</span>
+                                    </button>
+                                @endforeach
+                            </div>
+                        @elseif(trim($laSuche) !== '')
+                            <p class="text-[11px] text-gray-500 mt-1">Kein freier Lieferantenartikel gefunden.</p>
+                        @endif
+                    @endif
+                </x-foodalchemist::modal-section>
+            @endif
+
             {{-- Zustand (§9) — Klassifikations-Attribut, gehört zu Allgemein (nicht Eigenschaften). Nur Edit. --}}
             @if(! $neu && $gp !== null)
                 <x-foodalchemist::modal-section title="Zustand (§9)">

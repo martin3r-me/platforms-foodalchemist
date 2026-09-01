@@ -13,6 +13,7 @@ use Platform\FoodAlchemist\Services\FavoriteGpService;
 use Platform\FoodAlchemist\Services\GpAggregateService;
 use Platform\FoodAlchemist\Services\GpNamingService;
 use Platform\FoodAlchemist\Services\GpService;
+use Platform\FoodAlchemist\Services\LeadLaService;
 use Platform\FoodAlchemist\Services\PriceService;
 use Platform\FoodAlchemist\Services\VocabularyService;
 use Platform\FoodAlchemist\Support\Curate;
@@ -55,6 +56,11 @@ class GpModal extends Component
     /** ✨-Kopf-Button (Neuanlage): Roh-Bezeichnung für gp.suggest. */
     public string $kiRohtext = '';
 
+    /** Optionaler realer Einkaufsartikel, aus dem das GP entsteht (LA-first). */
+    public string $laSuche = '';
+
+    public ?int $supplierItemId = null;
+
     /** @var array<string, array{werte: array, confidence: float, reasoning: ?string}> transiente GL-07-Vorschläge */
     public array $kiVorschlag = [];
 
@@ -81,12 +87,21 @@ class GpModal extends Component
     public ?int $bulkRunId = null;
 
     #[On('gp-modal.oeffnen')]
-    public function oeffnen(?int $id = null): void
+    public function oeffnen(?int $id = null, ?int $laId = null): void
     {
-        $this->reset('fehler', 'force', 'kiVorschlag', 'kiRohtext', 'manuellerName', 'derivatSuche', 'nameVorschlag', 'bulkRunId');
+        $this->reset('fehler', 'force', 'kiVorschlag', 'kiRohtext', 'laSuche', 'supplierItemId', 'manuellerName', 'derivatSuche', 'nameVorschlag', 'bulkRunId');
         $this->gpId = $id;
         $this->builder = self::BUILDER_LEER;
         $this->tags = array_fill_keys(FoodAlchemistGp::TAG_FIELDS, '');
+
+        if ($id === null && $laId !== null && $this->team() !== null) {
+            $la = \Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem::visibleToTeam($this->team())->with('structure')->find($laId);
+            if ($la !== null && $la->structure?->gp_id === null) {
+                $this->supplierItemId = (int) $la->id;
+                $this->kiRohtext = (string) $la->designation;
+                $this->laSuche = (string) $la->designation;
+            }
+        }
 
         if ($id !== null && ($gp = $this->gp()) !== null) {
             $this->manuellerName = $gp->name;
@@ -115,7 +130,7 @@ class GpModal extends Component
     public function geschlossen(string $name): void
     {
         if ($name === 'gp-modal') {
-            $this->reset('gpId', 'builder', 'manuellerName', 'defaults', 'fehler', 'force', 'kiVorschlag', 'kiRohtext');
+            $this->reset('gpId', 'builder', 'manuellerName', 'defaults', 'fehler', 'force', 'kiVorschlag', 'kiRohtext', 'laSuche', 'supplierItemId');
         }
     }
 
@@ -141,7 +156,13 @@ class GpModal extends Component
         try {
             $in = [...$this->builder, 'name' => trim($this->manuellerName)];
             if ($this->gpId === null) {
-                $gp = $naming->createGp($team, $in, $this->force);
+                $gp = \Illuminate\Support\Facades\DB::transaction(function () use ($naming, $team, $in) {
+                    $gp = $naming->createGp($team, $in, $this->force);
+                    if ($this->supplierItemId !== null) {
+                        app(LeadLaService::class)->verknuepfen($team, $gp, $this->supplierItemId);
+                    }
+                    return $gp;
+                });
             } else {
                 $gp = $this->gp();
                 if ($gp === null) {
@@ -508,7 +529,19 @@ class GpModal extends Component
         }
         $this->fehler = null;
         try {
-            $vorschlag = $ki->propose('gp.suggest', ['label' => trim($this->kiRohtext)]);
+            $team = $this->team();
+            $vocab = app(VocabularyService::class);
+            $warengruppen = $team !== null ? $vocab->listWarengruppen($team) : collect();
+            $taxonomie = $warengruppen->map(fn ($wg) => [
+                'code' => (string) $wg->code,
+                'name' => (string) $wg->name,
+                'sub_categories' => $vocab->listSubCategories($team, (string) $wg->code)->pluck('sub_category')->values()->all(),
+            ])->values()->all();
+            $vorschlag = $ki->propose('gp.suggest', [
+                'label' => trim($this->kiRohtext),
+                'taxonomie' => $taxonomie,
+                'regel' => 'commodity_group_code und sub_category ausschließlich aus taxonomie wählen',
+            ]);
         } catch (\RuntimeException $e) {
             $this->fehler = $e->getMessage();
 
@@ -519,6 +552,41 @@ class GpModal extends Component
                 $this->builder[$feld] = $vorschlag->werte[$feld];
             }
         }
+        $code = trim((string) ($vorschlag->werte['commodity_group_code'] ?? ''));
+        $wg = $warengruppen->first(fn ($x) => (string) $x->code === $code)
+            ?? $warengruppen->first(fn ($x) => mb_strtolower((string) $x->name) === mb_strtolower($code));
+        if ($wg !== null) {
+            $this->builder['commodity_group_code'] = (string) $wg->code;
+            $sub = trim((string) ($vorschlag->werte['sub_category'] ?? ''));
+            $erlaubt = $vocab->listSubCategories($team, (string) $wg->code)->pluck('sub_category');
+            $treffer = $erlaubt->first(fn ($x) => mb_strtolower((string) $x) === mb_strtolower($sub));
+            $this->builder['sub_category'] = $treffer !== null ? (string) $treffer : '';
+        }
+        if ($this->supplierItemId === null) {
+            $this->laSuche = trim($this->kiRohtext);
+        }
+    }
+
+    public function supplierItemWaehlen(int $id): void
+    {
+        $team = $this->team();
+        $la = $team !== null
+            ? \Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem::visibleToTeam($team)->with('structure')->find($id)
+            : null;
+        if ($la === null || $la->structure?->gp_id !== null) {
+            $this->fehler = 'Lieferantenartikel ist nicht verfügbar oder bereits einem GP zugeordnet.';
+            return;
+        }
+        $this->supplierItemId = (int) $la->id;
+        $this->laSuche = (string) $la->designation;
+        if ($this->kiRohtext === '') {
+            $this->kiRohtext = (string) $la->designation;
+        }
+    }
+
+    public function supplierItemLoesen(): void
+    {
+        $this->supplierItemId = null;
     }
 
     // ── Name aus Lead-LA ableiten (Wording kommt aus dem Lieferantenartikel) ──
@@ -625,6 +693,12 @@ class GpModal extends Component
             // Punkt C: WG-gescopetes Sub-Kategorie-Dropdown (verwaltet + GP-Freitext gemerged, #371)
             'subKategorien' => $team !== null && ($this->builder['commodity_group_code'] ?? '') !== ''
                 ? $vocab->listSubCategories($team, $this->builder['commodity_group_code'])
+                : collect(),
+            'supplierItem' => $this->supplierItemId !== null && $team !== null
+                ? \Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem::visibleToTeam($team)->with('supplier:id,name')->find($this->supplierItemId)
+                : null,
+            'supplierItemKandidaten' => $this->gpId === null && $team !== null && $this->supplierItemId === null && trim($this->laSuche) !== ''
+                ? app(LeadLaService::class)->sucheVerknuepfbare($team, $this->laSuche, 8)
                 : collect(),
             'statusFaelle' => [GpStatus::Approved, GpStatus::Tentative, GpStatus::Rejected],
             'bulkRun' => $this->bulkRunId !== null && $team !== null ? app(BulkEnrichService::class)->status($team, $this->bulkRunId) : null,

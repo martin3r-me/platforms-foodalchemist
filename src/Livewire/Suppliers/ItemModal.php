@@ -231,6 +231,19 @@ class ItemModal extends Component
         }
     }
 
+    /** LA-first: GP-Neuanlage mit diesem Artikel als Quelle und Direktverknüpfung. */
+    public function gpNeuAnlegen(): void
+    {
+        $item = $this->item($this->itemId);
+        if ($item->structure?->gp_id !== null) {
+            $this->fehler = 'Lieferantenartikel ist bereits einem GP zugeordnet.';
+            return;
+        }
+        $id = (int) $item->id;
+        $this->dispatch('modal.close', name: 'item-modal');
+        $this->dispatch('gp-modal.oeffnen', id: null, laId: $id);
+    }
+
     public function gpZuweisen(int $gpId): void
     {
         $this->fehler = null;

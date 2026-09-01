@@ -3,6 +3,9 @@
 use Livewire\Livewire;
 use Platform\FoodAlchemist\Livewire\Gps\GpModal;
 use Platform\FoodAlchemist\Models\FoodAlchemistGp;
+use Platform\FoodAlchemist\Models\FoodAlchemistSupplier;
+use Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem;
+use Platform\FoodAlchemist\Models\FoodAlchemistSupplierItemStructure;
 use Platform\FoodAlchemist\Tests\Support\SeedsTeamHierarchy;
 use Platform\FoodAlchemist\Tests\TestCase;
 
@@ -130,6 +133,27 @@ it('✨ gp.suggest (Neuanlage): Fake-Echo befüllt die Builder-Felder nicht mit 
         ->call('kiVorschlagNaming')
         // Fake echo't {bezeichnung: …} — kein hauptzutat-Key ⇒ Builder bleibt leer (kein Müll-Mapping)
         ->assertSet('builder.hauptzutat', '');
+});
+
+it('Neuanlage verknüpft den ausgewählten Lieferantenartikel direkt und legt fehlende Structure an', function () {
+    $supplier = FoodAlchemistSupplier::create(['team_id' => $this->rootTeam->id, 'name' => 'Hanos Venlo']);
+    $la = FoodAlchemistSupplierItem::create([
+        'team_id' => $this->rootTeam->id, 'supplier_id' => $supplier->id,
+        'article_number' => '40909330', 'designation' => 'BIETENCREME MET DRAGON SOUS VIDE GEGAARD',
+    ]);
+
+    Livewire::test(GpModal::class)
+        ->call('oeffnen', null, $la->id)
+        ->set('builder.hauptzutat', 'Rote Bete')
+        ->set('builder.condition', 'frisch')
+        ->set('builder.processing', 'sous-vide gegart')
+        ->set('builder.form', 'Creme')
+        ->call('speichern')
+        ->assertSet('fehler', null);
+
+    $gp = FoodAlchemistGp::where('name', 'Rote Bete: frisch, sous-vide gegart')->firstOrFail();
+    expect((int) FoodAlchemistSupplierItemStructure::where('supplier_item_id', $la->id)->value('gp_id'))->toBe($gp->id)
+        ->and($gp->fresh()->n_las_total)->toBe(1);
 });
 
 // ── 06·H4b: Favorit direkt im GP-Editor pinnen (2. Andockpunkt) ──

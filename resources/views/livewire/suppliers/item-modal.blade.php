@@ -212,6 +212,11 @@
                     {{-- E1-11: Emoji raus, Heroicon rein; KI-Chip trägt den btnAi-Stil wie überall --}}
                     <button type="button" wire:click="kiGpVorschlag" class="{{ $btnAi }}"
                             title="MatchService v1: exakte Dubletten (EAN/Art.-Nr) + GL-04-Fuzzy" data-ki-gp-vorschlag>@svg('heroicon-o-sparkles', 'w-3.5 h-3.5') KI-Vorschlag</button>
+                    @if(! $item->structure?->gp)
+                        <button type="button" wire:click="gpNeuAnlegen" class="{{ $btnGhostXs }} text-violet-600" data-gp-neu-aus-la>
+                            @svg('heroicon-o-plus', 'w-3.5 h-3.5') Neues GP aus Artikel
+                        </button>
+                    @endif
                 </x-slot:actions>
 
                 @if($item->structure?->gp)
