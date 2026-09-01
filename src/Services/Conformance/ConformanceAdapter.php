@@ -44,5 +44,5 @@ interface ConformanceAdapter
      * der Regelverstöße) korrigieren, ohne es sonst umzuschreiben. Best-effort —
      * gelingt sie nicht, bleibt der Verstoß als Hinweis stehen (kein Block).
      */
-    public function revise(Team $team, int $id, string $direktive): void;
+    public function revise(Team $team, int $id, string $direktive, array $befunde = []): void;
 }

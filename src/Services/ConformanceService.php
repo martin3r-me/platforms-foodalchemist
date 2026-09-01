@@ -53,7 +53,7 @@ class ConformanceService
         // direkt als Hinweis in die Ablage.
         if ($vorher['befunde'] !== [] && $adapter->unterstuetztHeilung()) {
             try {
-                $adapter->revise($team, $id, $this->heilDirektive($vorher['befunde']));
+                $adapter->revise($team, $id, $this->heilDirektive($vorher['befunde']), $vorher['befunde']);
             } catch (\Throwable $e) {
                 // best-effort: schlägt die Runde fehl, bleibt es beim Erst-Befund (nur Hinweis)
             }

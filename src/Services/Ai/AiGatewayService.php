@@ -27,6 +27,10 @@ use RuntimeException;
  */
 class AiGatewayService
 {
+    private const BOUND_KNOWLEDGE_MAX_DOCS = 3;
+
+    private const BOUND_KNOWLEDGE_CHARS_PER_DOC = 1400;
+
     /**
      * GL-07 Propose: Task-Prompt + Kontext → validiertes Vorschlags-DTO.
      * Persistiert nur den AUDIT-Eintrag (06_KI §5), nie Fachdaten (GL-07 I3).
@@ -109,13 +113,12 @@ class AiGatewayService
                 ->where('b.binding_type', 'layer')->whereIn('b.target_key', array_unique([$promptKey, $bereich]))
                 ->where('d.active', 1)->whereNull('d.deleted_at')
                 ->orderByDesc('b.weight')
-                ->get(['d.slug', 'd.version', 'd.content_md']);
-            $bBlocks = [];
-            foreach ($bound as $doc) {
-                $c = (string) $doc->content_md;   // 2026-08-27: BIND-Cap 2000→8000 + Kürzungs-Marker (war blinder Head-Truncate ohne Hinweis → gebundene Dossiers wurden still halbiert)
-                $bBlocks[] = "## GEBUNDEN: {$doc->slug}\n\n" . (mb_strlen($c) > 8000 ? mb_substr($c, 0, 8000) . "\n\n[…gekürzt für KI-Kontext…]" : $c);
-                $boundSlugs[] = "{$doc->slug}@v{$doc->version}";
-            }
+                ->get(['d.slug', 'd.title', 'd.category', 'd.version', 'd.content_md', 'b.mode', 'b.weight']);
+            [$bBlocks, $boundSlugs] = $this->selectBoundKnowledge(
+                $bound,
+                $context,
+                is_array($options['knowledge_used'] ?? null) ? $options['knowledge_used'] : [],
+            );
             if ($bBlocks !== []) {
                 $wissen .= "# DIREKT GEBUNDENES WISSEN (an diesen Layer verdrahtet)\n\n"
                     . implode("\n\n---\n\n", $bBlocks) . "\n\n";
@@ -229,6 +232,86 @@ class AiGatewayService
             elapsedMs: $elapsedMs,
             callLogId: $callLogId,
         );
+    }
+
+    /**
+     * Eine Layer-Bindung ist kein pauschaler Volltext-Load: `always` ist zwingend,
+     * `discovery`/`grounding` müssen zur konkreten Anfrage passen, `reference` bleibt
+     * rein manuell. Früher wurden alle Modi ungefiltert wie `always` geladen.
+     *
+     * @return array{0:list<string>,1:list<string>}
+     */
+    private function selectBoundKnowledge($rows, array $context, array $alreadyUsed): array
+    {
+        $bereits = [];
+        foreach ($alreadyUsed as $used) {
+            $slug = preg_replace('/@v\d+$/', '', (string) $used);
+            if ($slug !== '') {
+                $bereits[$slug] = true;
+            }
+        }
+
+        $query = json_encode($context, JSON_UNESCAPED_UNICODE) ?: '';
+        $queryTokens = $this->knowledgeTokens($query);
+        $kandidaten = [];
+        foreach ($rows as $row) {
+            $slug = (string) $row->slug;
+            if (isset($bereits[$slug])) {
+                continue;
+            }
+            $mode = (string) ($row->mode ?: 'discovery');
+            if ($mode === 'reference' || $mode === 'none') {
+                continue;
+            }
+            $always = $mode === 'always';
+            $docTokens = $this->knowledgeTokens(implode(' ', [
+                $slug, (string) $row->title, (string) $row->category,
+                mb_substr((string) $row->content_md, 0, 1200),
+            ]));
+            $hits = count(array_intersect($queryTokens, $docTokens));
+            if (! $always && $hits === 0) {
+                continue;
+            }
+            $kandidaten[] = [
+                'row' => $row,
+                'score' => ($always ? 1000 : 0) + $hits * 10 + (int) $row->weight,
+            ];
+        }
+        usort($kandidaten, fn ($a, $b) => $b['score'] <=> $a['score']);
+
+        $blocks = [];
+        $slugs = [];
+        foreach (array_slice($kandidaten, 0, self::BOUND_KNOWLEDGE_MAX_DOCS) as $kandidat) {
+            $doc = $kandidat['row'];
+            $content = (string) $doc->content_md;
+            $blocks[] = "## GEBUNDEN: {$doc->slug}\n\n"
+                . (mb_strlen($content) > self::BOUND_KNOWLEDGE_CHARS_PER_DOC
+                    ? mb_substr($content, 0, self::BOUND_KNOWLEDGE_CHARS_PER_DOC) . "\n\n[…gekürzt für KI-Kontext…]"
+                    : $content);
+            $slugs[] = "{$doc->slug}@v{$doc->version}";
+        }
+
+        return [$blocks, $slugs];
+    }
+
+    /** @return list<string> */
+    private function knowledgeTokens(string $text): array
+    {
+        $text = str_replace(['ä', 'ö', 'ü', 'ß'], ['ae', 'oe', 'ue', 'ss'], mb_strtolower($text));
+        $text = (string) preg_replace('/[^[:alnum:]]+/u', ' ', $text);
+        $stop = array_flip([
+            'der', 'die', 'das', 'den', 'dem', 'des', 'und', 'oder', 'mit', 'ohne', 'fuer',
+            'von', 'aus', 'ein', 'eine', 'einer', 'eines', 'einen', 'ist', 'sind', 'wird',
+            'werden', 'rezept', 'gericht', 'basisrezept', 'komponente', 'zutaten', 'werte',
+        ]);
+        $tokens = [];
+        foreach (preg_split('/\s+/u', $text, -1, PREG_SPLIT_NO_EMPTY) ?: [] as $token) {
+            if (mb_strlen($token) >= 4 && ! isset($stop[$token])) {
+                $tokens[$token] = true;
+            }
+        }
+
+        return array_keys($tokens);
     }
 
     /**

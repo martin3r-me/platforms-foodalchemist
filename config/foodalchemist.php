@@ -923,7 +923,7 @@ return [
             'max_tokens' => 8000,                                     // Gesamt-Rezept zurück (description+preparation+zutaten) — Reasoning-Headroom
             'task' => 'Ueberarbeite das Rezept exakt nach der freien Anweisung (anweisung) — '
                 . 'aendere NUR Angefragtes, behalte ids bestehender Zutaten, neue Zutaten ohne id: '
-                . 'werte = {description, preparation, zutaten: [{id, text, quantity, einheit_slug}], aenderungs_notiz}.',
+                . 'werte = {name, description, preparation, zutaten: [{id, text, quantity, einheit_slug}], aenderungs_notiz}.',
         ],
         'recipe.extract' => [
             'tier' => 'C',                                            // Tier C: unset ⇒ Plattform-Default-Modell (Text ok); Vision (Bild) erst nach Core-Fix
@@ -1231,7 +1231,7 @@ return [
                 . 'passt (z. B. eine Fingerfood-Klasse bleibt handlich, eine vegane Diaetform bleibt '
                 . 'vegan) — gib sie NICHT aus und schlage keine Aenderung an ihnen vor. Widerspricht '
                 . 'die Anweisung einer Facette, sag es in aenderungs_notiz statt die Facette zu '
-                . 'unterlaufen: werte = {description, plating_text, sales_wording_standard, '
+                . 'unterlaufen: werte = {name, description, plating_text, sales_wording_standard, '
                 . 'zutaten: [{id, text, quantity, einheit_slug}], aenderungs_notiz}.',
         ],
         'vk.kohaerenz' => [

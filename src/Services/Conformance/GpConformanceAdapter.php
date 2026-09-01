@@ -87,7 +87,7 @@ class GpConformanceAdapter implements ConformanceAdapter
      * schützt). Der LLM gibt nur aus dem LA ABLEITBARE Werte zurück (Rest null); angewendet über
      * den §6-validierten {@see GpNamingService::updateGp} (gp_key bleibt stabil). Best-effort.
      */
-    public function revise(Team $team, int $id, string $direktive): void
+    public function revise(Team $team, int $id, string $direktive, array $befunde = []): void
     {
         $gp = app(GpService::class)->find($id, $team);
         if ($gp === null || $gp->status !== GpStatus::Tentative) {

@@ -94,6 +94,15 @@ class RecipeDependencyWorkflowService
         unset($childParameter['ziel_vk_eur'], $childParameter['occasion'], $childParameter['serviceform']);
         unset($childParameter['titel_vorgabe']);   // L5: der Titel gilt nur fuers Gericht, nicht fuer seine Sub-Rezepte
         unset($childParameter['pax'], $childParameter['ziel_portion_g']);   // L6: teller-bezogen, nicht fuer Sub-Rezepte
+        $parentKnowledge = is_array($step->context_snapshot)
+            ? ($step->context_snapshot['knowledge_files'] ?? [])
+            : [];
+        if (is_array($parentKnowledge) && $parentKnowledge !== []) {
+            // Einmal am ganzen Gericht breit genug ermitteln; Kinder ranken nur noch innerhalb
+            // dieses Wissensplans (+ eigenes Regelwerk/Niveau). So lädt nicht jedes Basisrezept
+            // erneut beliebige Dossiers aus der gesamten Wissensbasis.
+            $childParameter['_knowledge_scope'] = array_values($parentKnowledge);
+        }
 
         foreach ($this->planChildren($team, $step, $recipe, $offene, $parameter) as [$child, $ingredientId, $text]) {
             if ($child->status === 'done' && $child->ref_id !== null) {
@@ -144,6 +153,12 @@ class RecipeDependencyWorkflowService
         unset($params['ziel_vk_eur'], $params['occasion'], $params['serviceform']);
         unset($params['titel_vorgabe']);
         unset($params['pax'], $params['ziel_portion_g']);
+        $parentKnowledge = is_array($parent?->context_snapshot)
+            ? ($parent->context_snapshot['knowledge_files'] ?? [])
+            : [];
+        if (is_array($parentKnowledge) && $parentKnowledge !== []) {
+            $params['_knowledge_scope'] = array_values($parentKnowledge);
+        }
 
         $runId = (string) Str::uuid();
         $child->update(['status' => 'running', 'generator_run_id' => $runId]);

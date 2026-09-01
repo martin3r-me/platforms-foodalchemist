@@ -65,6 +65,14 @@ it('Selbstheil-Loop: Verstoß → Revise-Runde → sauber → nichts persistiert
     expect(FoodAlchemistConformanceFinding::where('artifact_id', $this->rezept->id)->count())->toBe(0);
 });
 
+it('Selbstheil-Loop übernimmt den kontrollierten Naming-Vorschlag auch wenn der freie Revise ihn auslässt', function () use ($befund) {
+    ConformanceHealStub::bind([[$befund()], []], []);
+
+    app(ConformanceService::class)->pruefeUndHeile($this->rootTeam, 'basisrezept', $this->rezept->id);
+
+    expect($this->rezept->fresh()->name)->toBe('Tomate: gewürfelt');
+});
+
 it('Selbstheil-Loop: Verstoß bleibt nach Runde → als Hinweis persistiert (kein Block)', function () use ($befund) {
     ConformanceHealStub::bind([[$befund()], [$befund()]]);   // Revise half nicht
 

@@ -110,3 +110,33 @@ it('GL-13-Audit-Faden: Generator schreibt knowledge_used ins Log (vorher verlore
     expect($log)->not->toBeNull()
         ->and(json_decode($log->knowledge_used, true))->toBe(['substitutionen@v1']);
 });
+
+it('direkte Wissensbindungen respektieren always, discovery und reference statt alles zu laden', function () {
+    $docs = [
+        ['slug' => 'workflow-pflicht', 'title' => 'Pflicht', 'content' => 'Allgemeiner verbindlicher Ablauf', 'mode' => 'always'],
+        ['slug' => 'kartoffel-technik', 'title' => 'Kartoffel Technik', 'content' => 'Kartoffel Stärke und Garung', 'mode' => 'discovery'],
+        ['slug' => 'miso-curry', 'title' => 'Miso Curry', 'content' => 'Gochujang Reis und Dashi', 'mode' => 'discovery'],
+        ['slug' => 'nur-nachschlagen', 'title' => 'Referenz', 'content' => 'Kartoffel Referenz', 'mode' => 'reference'],
+    ];
+    foreach ($docs as $doc) {
+        $id = DB::table('foodalchemist_knowledge_documents')->insertGetId([
+            'uuid' => (string) \Symfony\Component\Uid\UuidV7::generate(),
+            'slug' => $doc['slug'], 'title' => $doc['title'], 'category' => 'domain',
+            'content_md' => $doc['content'], 'version' => 1,
+            'content_hash' => hash('sha256', $doc['content']), 'char_count' => strlen($doc['content']),
+            'active' => 1, 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        DB::table('foodalchemist_knowledge_bindings')->insert([
+            'uuid' => (string) \Symfony\Component\Uid\UuidV7::generate(),
+            'knowledge_document_id' => $id, 'binding_type' => 'layer',
+            'target_key' => 'recipe.description', 'mode' => $doc['mode'], 'weight' => 0,
+            'active' => 1, 'source' => 'ui', 'created_at' => now(), 'updated_at' => now(),
+        ]);
+    }
+
+    $this->gw->propose('recipe.description', ['description' => 'Kartoffel schonend garen']);
+
+    $used = json_decode(DB::table('foodalchemist_ai_call_log')->latest('id')->value('knowledge_used'), true);
+    expect($used)->toContain('workflow-pflicht@v1', 'kartoffel-technik@v1')
+        ->not->toContain('miso-curry@v1', 'nur-nachschlagen@v1');
+});

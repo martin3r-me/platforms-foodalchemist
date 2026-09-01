@@ -101,7 +101,7 @@ it('GT-13-5: Filter gewagt (Modern+Kontrast) — Klassisch UND Verbund draußen'
         ->and($g)->not->toContain('TrinitasX');                      // Verbund = eigene ##-Sektion → Filter aus
 });
 
-it('GT-13-6: Discovery Stufe 2a — 3 Domains via Alias, alphabetisch, alle 7 Cross-Cutting', function () {
+it('GT-13-6: Discovery Stufe 2a — 2 priorisierte Domains via Alias, alle 7 Cross-Cutting', function () {
     ($this->seedGenerator)();
 
     $ctx = $this->svc->contextFor('ai_generate_recipe', 'Lachs mit brauner Butter und Walnuss');
@@ -111,7 +111,7 @@ it('GT-13-6: Discovery Stufe 2a — 3 Domains via Alias, alphabetisch, alle 7 Cr
         expect($slugs)->toContain($cc);
     }
     $domains = array_values(array_intersect($slugs, ['fisch_seafood', 'milchprodukte', 'nuesse_saaten']));
-    expect($domains)->toBe(['fisch_seafood', 'milchprodukte', 'nuesse_saaten'])  // 3 ≥ 2 → kein Fallback; alphabetisch
+    expect($domains)->toBe(['fisch_seafood', 'milchprodukte'])
         ->and(substr_count($ctx['block'], '## DOMAIN: '))->toBeLessThanOrEqual(KnowledgeContextService::DOMAIN_TOP_K);
 });
 
@@ -207,7 +207,7 @@ it('Inv. 7: ai_extract_recipe bleibt BEWUSST ohne Wissen (Routing none)', functi
     expect($this->svc->contextFor('ai_extract_recipe', 'Lachs mit Butter')['block'])->toBe('');
 });
 
-it('DoD: Assembly hält das Gesamtbudget — übergroße Docs auf ≈52k Zeichen gedeckelt', function () {
+it('DoD: Assembly hält das Gesamtbudget — Rezeptwissen auf 36k Zeichen gedeckelt', function () {
     ($this->seedGenerator)(str_repeat('D', 20000));
     DB::table('foodalchemist_knowledge_documents')->where('category', 'cross_cutting')
         ->update(['content_md' => str_repeat('C', 20000)]);
@@ -215,9 +215,8 @@ it('DoD: Assembly hält das Gesamtbudget — übergroße Docs auf ≈52k Zeichen
 
     $ctx = $this->svc->contextFor('ai_generate_recipe', 'Lachs mit brauner Butter und Walnuss');
 
-    // 7×4.000 + ≤4×6.000 + Header/Marker-Overhead < 53.000 (Spec: ≈52.000 ≈ 13k Tokens)
-    expect($ctx['total_chars'])->toBeLessThan(53000)
-        ->and(substr_count($ctx['block'], '[…gekürzt für KI-Kontext…]'))->toBe(7 + 3)
+    expect($ctx['total_chars'])->toBeLessThanOrEqual(KnowledgeContextService::RECIPE_MAX_KNOWLEDGE_CHARS)
+        ->and(substr_count($ctx['block'], '[…gekürzt für KI-Kontext…]'))->toBe(7 + 2)
         ->and($ctx['total_chars'])->toBe(mb_strlen($ctx['block']));
 });
 
@@ -264,7 +263,7 @@ it('Kontext-Inspektor: used_by_category gruppiert je Kanal und deckt sich exakt 
     expect($ctx)->toHaveKey('used_by_category')
         ->and($ctx['used_by_category'])->toHaveKey('cross_cutting')->toHaveKey('domain')->toHaveKey('niveau');
     expect($ctx['used_by_category']['cross_cutting'])->toHaveCount(7)
-        ->and($ctx['used_by_category']['domain'])->toHaveCount(3)
+        ->and($ctx['used_by_category']['domain'])->toHaveCount(2)
         ->and($ctx['used_by_category']['niveau'])->toBe(['niveau.niveau-1-haute-cuisine@v1']);
 
     // Delta-Trick korrekt: Union aller Gruppen == files_used (nichts verloren, nichts dupliziert).

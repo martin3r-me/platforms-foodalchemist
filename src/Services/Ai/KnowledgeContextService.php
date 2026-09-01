@@ -36,6 +36,18 @@ class KnowledgeContextService
 
     public const MAX_PARTNERS = 28;
 
+    /**
+     * Rezept-Calls laufen in einer Kaskade (Gericht + Basisrezepte). Ohne einen featureweiten
+     * Deckel addiert jede geroutete Discovery-Kategorie ihr eigenes Top-K und aus einem gezielten
+     * Abruf werden 30–40 Volltext-Dossiers pro Call. Der Deckel gilt nur für den eigentlichen
+     * Rezeptgenerator; Planungs-/Concept-Features behalten ihre eigenen Budgets.
+     */
+    public const RECIPE_MAX_KNOWLEDGE_DOCS = 10;
+
+    public const RECIPE_MAX_CHARS_PER_DOC = 3200;
+
+    public const RECIPE_MAX_KNOWLEDGE_CHARS = 36000;
+
     /** Spec 08 P6: Fallback-Budget für `concept:always`, wenn die Routing-Zeile nichts vorgibt. */
     public const CONCEPT_MAX_DOCS = 4;
 
@@ -59,6 +71,8 @@ class KnowledgeContextService
         $filesUsed = [];
         $usedByCategory = [];
         $parts = [];
+        $recipeBudget = $feature === 'ai_generate_recipe';
+        $scopeSlugs = $this->knowledgeScopeSlugs($params['_knowledge_scope'] ?? []);
 
         // Kontext-Inspektor (2026-08-07): jedem Block das Delta an $filesUsed SEINER Kategorie
         // zuordnen — additiv, ohne die Block-Methoden-Signaturen anzufassen. Speist die UI-
@@ -111,7 +125,15 @@ class KnowledgeContextService
         // concept.brief_geruest → Concept). Leere/fehlende Kategorie ⇒ kein Block (Invariante 6).
         if (($r = $routing->get('regelwerk:always')) !== null) {
             $before = count($filesUsed);
-            $regelwerk = $this->regelwerkBlock($feature, (int) ($r->max_chars_per_doc ?: self::REGELWERK_TRUNCATE_CHARS), $filesUsed);
+            $regelwerk = $recipeBudget && $this->remainingRecipeDocs($filesUsed) <= 0
+                ? null
+                : $this->regelwerkBlock(
+                    $feature,
+                    $recipeBudget
+                        ? min(self::RECIPE_MAX_CHARS_PER_DOC, (int) ($r->max_chars_per_doc ?: self::REGELWERK_TRUNCATE_CHARS))
+                        : (int) ($r->max_chars_per_doc ?: self::REGELWERK_TRUNCATE_CHARS),
+                    $filesUsed
+                );
             if ($regelwerk !== null) {
                 $parts[] = $regelwerk;
             }
@@ -122,16 +144,26 @@ class KnowledgeContextService
         $blocks = [];
         if ($routing->has('cross_cutting:always')) {
             $before = count($filesUsed);
-            foreach ($this->crossCuttingDocs() as $doc) {
-                $blocks[] = "## CROSS_CUTTING: {$doc->slug}\n\n" . $this->truncate($doc->content_md, self::CROSS_CUTTING_TRUNCATE_CHARS);
+            $crossDocs = $this->crossCuttingDocs();
+            if ($recipeBudget) {
+                $crossDocs = array_slice($crossDocs, 0, $this->remainingRecipeDocs($filesUsed));
+            }
+            foreach ($crossDocs as $doc) {
+                $maxChars = $recipeBudget ? self::RECIPE_MAX_CHARS_PER_DOC : self::CROSS_CUTTING_TRUNCATE_CHARS;
+                $blocks[] = "## CROSS_CUTTING: {$doc->slug}\n\n" . $this->truncate($doc->content_md, $maxChars);
                 $filesUsed[] = "{$doc->slug}@v{$doc->version}";
             }
             $snap('cross_cutting', $before);
         }
         if ($routing->has('domain:discovery')) {
             $before = count($filesUsed);
-            foreach ($this->discoverDomains($description) as $doc) {
-                $blocks[] = "## DOMAIN: {$doc->slug}\n\n" . $this->truncate($doc->content_md, self::DOMAIN_TRUNCATE_CHARS);
+            $domainDocs = $this->discoverDomains($this->discoveryQuery($description, $params), $scopeSlugs);
+            if ($recipeBudget) {
+                $domainDocs = array_slice($domainDocs, 0, min(2, $this->remainingRecipeDocs($filesUsed)));
+            }
+            foreach ($domainDocs as $doc) {
+                $maxChars = $recipeBudget ? self::RECIPE_MAX_CHARS_PER_DOC : self::DOMAIN_TRUNCATE_CHARS;
+                $blocks[] = "## DOMAIN: {$doc->slug}\n\n" . $this->truncate($doc->content_md, $maxChars);
                 $filesUsed[] = "{$doc->slug}@v{$doc->version}";
             }
             $snap('domain', $before);
@@ -146,7 +178,12 @@ class KnowledgeContextService
         // ── 2. FLAVOR-PAIRING-Block (Generator-Features; SQL-Anker-Graph bleibt primär, GL-10) ──
         if ($routing->has('pairing:discovery')) {
             $before = count($filesUsed);
-            $pairing = $this->pairingBlock($description, $stil, $filesUsed);
+            $pairing = $recipeBudget && $this->remainingRecipeDocs($filesUsed) <= 0
+                ? null
+                : $this->pairingBlock(
+                    $this->discoveryQuery($description, $params), $stil, $filesUsed,
+                    $recipeBudget ? min(self::PAIRING_TOP_K, $this->remainingRecipeDocs($filesUsed)) : self::PAIRING_TOP_K,
+                );
             if ($pairing !== null) {
                 $parts[] = $pairing;
             }
@@ -166,8 +203,10 @@ class KnowledgeContextService
         // Deterministisch: der Typ (params['rezept_typ']) wählt die Slug-Familie, der Level die Stufe.
         if (($r = $routing->get('niveau:discovery')) !== null) {
             $before = count($filesUsed);
-            $niveau = $this->niveauBlock(
-                (int) ($r->max_chars_per_doc ?: 3000),
+            $niveau = $recipeBudget && $this->remainingRecipeDocs($filesUsed) <= 0 ? null : $this->niveauBlock(
+                $recipeBudget
+                    ? min(self::RECIPE_MAX_CHARS_PER_DOC, (int) ($r->max_chars_per_doc ?: 3000))
+                    : (int) ($r->max_chars_per_doc ?: 3000),
                 (string) ($params['niveau'] ?? $params['level'] ?? ''),
                 (string) ($params['rezept_typ'] ?? 'basisrezept'),
                 $filesUsed
@@ -185,18 +224,42 @@ class KnowledgeContextService
         // eine neue Kategorie braucht nur eine Routing-Zeile, KEINEN Service-Code. Bestehende
         // Kategorien werden übersprungen → Verhalten für sie byte-identisch (golden-safe).
         $spezial = ['domain', 'pairing', 'trend', 'concept', 'niveau'];   // niveau (3b) hat eigenen dedizierten Selektor. cross_cutting + regelwerk ab 2026-08-27 über generische Discovery (Dossier-Split): die dedizierten Blöcke oben feuern nur bei mode=always und werden bei routing=discovery automatisch übersprungen, crossCuttingDocs()/regelwerkBlock() sind dann ungenutzt.
-        $leitplankenQuery = trim($description . ' ' . implode(' ', array_filter([
-            (string) ($params['niveau'] ?? $params['level'] ?? ''),
-            (string) ($params['sektor'] ?? ''),
-        ], fn ($v) => $v !== '')));
-        foreach ($routing as $r) {
-            if ($r->mode !== 'discovery' || in_array($r->category, $spezial, true)) {
-                continue;
+        $leitplankenQuery = $this->discoveryQuery($description, $params);
+        $discoveryRoutings = $routing->filter(
+            fn ($r) => $r->mode === 'discovery' && ! in_array($r->category, $spezial, true)
+        );
+        if ($recipeBudget) {
+            $prioritaet = array_flip([
+                'regelwerk', 'kueche', 'kreativ_input', 'referenzgericht',
+                'prasentation_service', 'ernaehrung', 'weltkueche', 'signatur_kuechen',
+                'cross_cutting',
+            ]);
+            $discoveryRoutings = $discoveryRoutings->sortBy(
+                fn ($r) => $prioritaet[(string) $r->category] ?? 100
+            );
+        }
+        foreach ($discoveryRoutings as $r) {
+            $remaining = $recipeBudget ? $this->remainingRecipeDocs($filesUsed) : PHP_INT_MAX;
+            if ($remaining <= 0) {
+                break;
             }
             $before = count($filesUsed);
+            $category = (string) $r->category;
+            $topK = (int) ($r->max_docs ?: 3);
+            if ($recipeBudget) {
+                // Regelwerk darf zwei gezielte Abschnitte tragen; alle suggestiven Kategorien
+                // konkurrieren global und bekommen höchstens einen Platz.
+                $topK = min($topK, $category === 'regelwerk' ? 2 : 1, $remaining);
+            }
+            $allowed = $scopeSlugs !== [] && ! in_array($category, ['regelwerk', 'niveau', 'cross_cutting'], true)
+                ? $scopeSlugs
+                : [];
             $generic = $this->discoverGenericBlock(
-                (string) $r->category, $leitplankenQuery,
-                (int) ($r->max_docs ?: 3), (int) ($r->max_chars_per_doc ?: 3000), $filesUsed
+                $category, $leitplankenQuery, $topK,
+                $recipeBudget
+                    ? min(self::RECIPE_MAX_CHARS_PER_DOC, (int) ($r->max_chars_per_doc ?: 3000))
+                    : (int) ($r->max_chars_per_doc ?: 3000),
+                $filesUsed, $allowed
             );
             if ($generic !== null) {
                 $parts[] = $generic;
@@ -216,8 +279,17 @@ class KnowledgeContextService
                 continue;
             }
             $before = count($filesUsed);
+            $remaining = $recipeBudget ? $this->remainingRecipeDocs($filesUsed) : PHP_INT_MAX;
+            if ($remaining <= 0) {
+                break;
+            }
             $immer = $this->alwaysCategoryBlock(
-                (string) $r->category, (int) ($r->max_docs ?: 2), (int) ($r->max_chars_per_doc ?: 4000), $filesUsed
+                (string) $r->category,
+                min((int) ($r->max_docs ?: 2), $remaining),
+                $recipeBudget
+                    ? min(self::RECIPE_MAX_CHARS_PER_DOC, (int) ($r->max_chars_per_doc ?: 4000))
+                    : (int) ($r->max_chars_per_doc ?: 4000),
+                $filesUsed
             );
             if ($immer !== null) {
                 $parts[] = $immer;
@@ -228,8 +300,62 @@ class KnowledgeContextService
         // (#469-Bindungs-Injektion passiert jetzt zentral im AiGatewayService::propose für ALLE Prompts.)
 
         $block = implode("\n\n", $parts);
+        if ($recipeBudget && mb_strlen($block) > self::RECIPE_MAX_KNOWLEDGE_CHARS) {
+            $block = $this->truncate($block, self::RECIPE_MAX_KNOWLEDGE_CHARS);
+        }
 
         return ['block' => $block, 'files_used' => $filesUsed, 'used_by_category' => $usedByCategory, 'total_chars' => mb_strlen($block)];
+    }
+
+    /**
+     * Die Regler/der Quadrant müssen die Retrieval-Query tatsächlich prägen. Steuer- und Cache-
+     * Felder bleiben draußen; nur kulinarisch bedeutende Werte werden flach angehängt.
+     */
+    private function discoveryQuery(string $description, array $params): string
+    {
+        $keys = [
+            'niveau', 'level', 'sektor', 'convenience', 'frische', 'bio', 'bio_pref',
+            'bestand', 'diaet_hart', 'allergen_nogo', 'aroma', 'aroma_kueche', 'occasion',
+            'serviceform', 'kompositions_stil', 'saison', 'ziel_we_pct', 'rezept_typ',
+        ];
+        $werte = [];
+        foreach ($keys as $key) {
+            $value = $params[$key] ?? null;
+            if (is_array($value)) {
+                $value = implode(' ', array_filter(array_map(
+                    fn ($v) => is_scalar($v) ? (string) $v : '',
+                    $value
+                )));
+            }
+            if (is_scalar($value) && trim((string) $value) !== '') {
+                $werte[] = str_replace(['_', '-'], ' ', (string) $value);
+            }
+        }
+
+        return trim($description . ' ' . implode(' ', $werte));
+    }
+
+    /** @return list<string> */
+    private function knowledgeScopeSlugs(mixed $scope): array
+    {
+        if (! is_array($scope)) {
+            return [];
+        }
+        $slugs = [];
+        foreach ($scope as $item) {
+            $slug = preg_replace('/@v\d+$/', '', trim((string) $item));
+            if ($slug !== '' && ! str_starts_with($slug, 'graph:')) {
+                $slugs[$slug] = true;
+            }
+        }
+
+        return array_keys($slugs);
+    }
+
+    /** @param list<string> $filesUsed */
+    private function remainingRecipeDocs(array $filesUsed): int
+    {
+        return max(0, self::RECIPE_MAX_KNOWLEDGE_DOCS - count(array_unique($filesUsed)));
     }
 
     /**
@@ -641,7 +767,7 @@ class KnowledgeContextService
      * Domain-Fallback) — und lädt Top-K gedeckelt. So trägt jedes neu gepflegte Doc automatisch,
      * ohne Service-Änderung; der Prompt bleibt durch top_k/chars beschränkt (O(1), nicht O(n)).
      */
-    private function discoverGenericBlock(string $category, string $query, int $topK, int $maxChars, array &$filesUsed): ?string
+    private function discoverGenericBlock(string $category, string $query, int $topK, int $maxChars, array &$filesUsed, array $allowedSlugs = []): ?string
     {
         $tokens = $this->tokenize($query);
         if ($topK <= 0) {
@@ -650,6 +776,7 @@ class KnowledgeContextService
 
         $docs = DB::table('foodalchemist_knowledge_documents')
             ->where('category', $category)->where('active', 1)->whereNull('deleted_at')
+            ->when($allowedSlugs !== [], fn ($q) => $q->whereIn('slug', $allowedSlugs))
             ->get(['id', 'slug', 'content_md', 'version']);
         if ($docs->isEmpty()) {
             return null;
@@ -755,7 +882,7 @@ class KnowledgeContextService
      * <2 Treffer: Filename-Token-Fallback (Jaccard + 0,1·Wort-Treffer). Max 4,
      * alphabetisch sortiert geladen.
      */
-    private function discoverDomains(string $description): array
+    private function discoverDomains(string $description, array $allowedSlugs = []): array
     {
         $tokens = $this->tokenize($description);
         $slugs = [];
@@ -808,6 +935,9 @@ class KnowledgeContextService
 
         $slugList = array_map('strval', array_keys($slugs));
         sort($slugList);
+        if ($allowedSlugs !== []) {
+            $slugList = array_values(array_intersect($slugList, $allowedSlugs));
+        }
         $topK = array_slice($slugList, 0, self::DOMAIN_TOP_K);
         $docs = $this->domainDocsBySlug($topK);   // Volltext NUR für die gewählten (Tauri-Muster)
 
@@ -856,7 +986,7 @@ class KnowledgeContextService
      *
      * @param  list<string>  $filesUsed  by-ref-Audit
      */
-    private function pairingBlock(string $description, ?string $stil, array &$filesUsed): ?string
+    private function pairingBlock(string $description, ?string $stil, array &$filesUsed, int $maxAnchors = self::PAIRING_TOP_K): ?string
     {
         // Graph-first (2026-07-13): Partner kommen aus dem Anker-Graphen (PairingService),
         // NICHT mehr aus dem Markdown-Volltext. Der Graph ist das Gehirn (kuratiert + Buch +
@@ -896,7 +1026,7 @@ class KnowledgeContextService
         // Semantischer Recall (Hybrid, opt-in): B2 — MERGEN statt nur auffüllen. Semantisch
         // passende Anker-Stems (über die Anker-Embeddings, NICHT Pairing-Docs) treten IMMER bei
         // und können via Top-K lexikalische Stems verdrängen. Deaktiviert (Default) = no-op.
-        foreach ($this->semanticAnkerStems($description, self::PAIRING_TOP_K) as $stem) {
+        foreach ($this->semanticAnkerStems($description, $maxAnchors) as $stem) {
             if (! in_array($stem, $matched, true)) {
                 $matched[] = $stem;
             }
@@ -910,7 +1040,7 @@ class KnowledgeContextService
         $svc = app(\Platform\FoodAlchemist\Services\PairingService::class);
         $typSet = array_flip($typen);
         $zeilen = [];
-        foreach (array_slice($matched, 0, self::PAIRING_TOP_K) as $stem) {
+        foreach (array_slice($matched, 0, $maxAnchors) as $stem) {
             // Stem (Doc-Slug, evtl. mit »-«) → Anker-Slug (»_«) für die Graph-Auflösung.
             $res = $svc->neighborsForName(str_replace('-', '_', $stem), null, self::MAX_PARTNERS * 4);
             if ($res['anker'] === null) {

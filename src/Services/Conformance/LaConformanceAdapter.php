@@ -59,7 +59,7 @@ class LaConformanceAdapter implements ConformanceAdapter
         ];
     }
 
-    public function revise(Team $team, int $id, string $direktive): void
+    public function revise(Team $team, int $id, string $direktive, array $befunde = []): void
     {
         // v1: kein autonomer LA-Revise (Necta-Spiegel, Vault-Sync EINBAHN §9) → No-Op.
     }
