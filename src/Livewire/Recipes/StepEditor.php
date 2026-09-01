@@ -3,11 +3,9 @@
 namespace Platform\FoodAlchemist\Livewire\Recipes;
 
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB;
 use Livewire\Component;
-use Platform\Core\Models\ContextFile;
+use Livewire\WithFileUploads;
 use Platform\Core\Models\Team;
-use Platform\Core\Services\ImageGenerationService;
 use Platform\FoodAlchemist\Livewire\Settings\Concerns\ReordersLists;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipeStep;
@@ -15,8 +13,8 @@ use Platform\FoodAlchemist\Models\FoodAlchemistRecipeStepPhoto;
 use Platform\FoodAlchemist\Services\Ai\AiGatewayService;
 use Platform\FoodAlchemist\Services\Ai\KnowledgeContextService;
 use Platform\FoodAlchemist\Services\FoodAlchemistMediaService;
+use Platform\FoodAlchemist\Services\RecipeImageService;
 use Platform\FoodAlchemist\Services\RecipeStepService;
-use Symfony\Component\Uid\UuidV7;
 
 /**
  * Spec 27 Phase 2/3 — Schritt-für-Schritt-Editor: Nummer + Text + Foto(s) als EIN Objekt.
@@ -32,8 +30,8 @@ use Symfony\Component\Uid\UuidV7;
  */
 class StepEditor extends Component
 {
-    use \Livewire\WithFileUploads;
     use ReordersLists;
+    use WithFileUploads;
 
     public ?int $recipeId = null;
 
@@ -301,7 +299,7 @@ class StepEditor extends Component
                 $this->kiFotoFuerSchritt($r, $step);
             }
         } catch (\Throwable $e) {
-            $this->fehler = 'KI-Foto konnte nicht erzeugt werden: ' . mb_strimwidth($e->getMessage(), 0, 180);
+            $this->fehler = 'KI-Foto konnte nicht erzeugt werden: '.mb_strimwidth($e->getMessage(), 0, 180);
         }
     }
 
@@ -412,7 +410,7 @@ class StepEditor extends Component
             ->orderBy('position')
             ->limit(30)
             ->get();
-        $beschreibung = trim((string) $recipe->name . "\n" . $zutaten->map(
+        $beschreibung = trim((string) $recipe->name."\n".$zutaten->map(
             fn ($z) => $z->referencedRecipe?->name ?? $z->raw_text
         )->filter()->implode(', '));
         $wissen = app(KnowledgeContextService::class)->contextFor('recipe.steps', $beschreibung, null, [], [
@@ -469,85 +467,7 @@ class StepEditor extends Component
 
     private function kiFotoFuerSchritt(FoodAlchemistRecipe $recipe, FoodAlchemistRecipeStep $step): void
     {
-        $prompt = $this->kiFotoPrompt($recipe, $step);
-        $started = microtime(true);
-
-        try {
-            $result = app(ImageGenerationService::class)->generateAndStore(
-                $prompt,
-                'foodalchemist.recipe',
-                $recipe->id,
-                (int) Auth::id(),
-                (int) $recipe->team_id,
-                ['size' => '1024x1024', 'quality' => 'low'],
-            );
-            $contextFile = ContextFile::findOrFail((int) $result['id']);
-
-            $foto = FoodAlchemistRecipeStepPhoto::create([
-                'team_id' => $recipe->team_id,
-                'recipe_id' => $recipe->id,
-                'pfad' => (string) $contextFile->path,
-                'context_file_id' => (int) $contextFile->id,
-                'caption' => 'KI-Foto: Schritt ' . $step->position,
-                'sort_order' => (int) $step->position * 10,
-            ]);
-
-            $step->photos()->attach($foto->id, ['position' => 1]);
-            $this->kiFotoCallLog($recipe, $step, $prompt, $started, null, $foto->id);
-        } catch (\Throwable $e) {
-            $this->kiFotoCallLog($recipe, $step, $prompt, $started, $e, null);
-            throw $e;
-        }
-    }
-
-    private function kiFotoCallLog(FoodAlchemistRecipe $recipe, FoodAlchemistRecipeStep $step, string $prompt, float $started, ?\Throwable $fehler, ?int $photoId): void
-    {
-        try {
-            DB::table('foodalchemist_ai_call_log')->insert([
-                'uuid' => (string) UuidV7::generate(),
-                'team_id' => $recipe->team_id,
-                'user_id' => Auth::id(),
-                'feature' => 'recipe.step_photos',
-                'tier' => 'I',
-                'model' => 'gpt-image-1.5',
-                'prompt_hash' => hash('sha256', $prompt),
-                'response_summary' => $fehler === null ? 'KI-Foto: Schritt ' . $step->position : null,
-                'tokens_in' => 0,
-                'tokens_out' => 0,
-                'target_table' => $photoId === null ? 'foodalchemist_recipe_steps' : 'foodalchemist_recipe_step_photos',
-                'target_id' => $photoId ?? $step->id,
-                'error' => $fehler?->getMessage(),
-                'elapsed_ms' => (int) round((microtime(true) - $started) * 1000),
-                'created_at' => now(),
-                'updated_at' => now(),
-            ]);
-        } catch (\Throwable) {
-            // Transparenz darf die Bildgenerierung nie blockieren.
-        }
-    }
-
-    private function kiFotoPrompt(FoodAlchemistRecipe $recipe, FoodAlchemistRecipeStep $step): string
-    {
-        $zutaten = $recipe->ingredients->pluck('raw_text')->take(20)->filter()->implode(', ');
-        $alleSchritte = FoodAlchemistRecipeStep::where('recipe_id', $recipe->id)
-            ->orderBy('position')->orderBy('id')
-            ->get(['position', 'phase', 'text'])
-            ->map(fn (FoodAlchemistRecipeStep $s) => $s->position . '. ' . trim(($s->phase ? "[{$s->phase}] " : '') . $s->text))
-            ->implode("\n");
-
-        return trim(<<<PROMPT
-Photorealistic professional catering kitchen process photo.
-Recipe: {$recipe->name}
-Ingredients: {$zutaten}
-
-Create one consistent visual documentation image for this exact preparation step:
-Step {$step->position} ({$step->phase}): {$step->text}
-
-Full step sequence for continuity:
-{$alleSchritte}
-
-Style rules: realistic food photography, same neutral stainless-steel catering kitchen, 45-degree angle, natural light, clean gastro containers and pans, no people, no hands, no faces, no text, no labels, no logos, no packaging, no surreal props. Show the food state of this step, not the final plated dish unless the step is plating or finishing.
-PROMPT);
+        app(RecipeImageService::class)->schrittFoto($this->team(), $recipe, $step);
     }
 
     private function team(): Team

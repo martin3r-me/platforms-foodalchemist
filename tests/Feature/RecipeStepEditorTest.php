@@ -3,6 +3,7 @@
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Livewire\Livewire;
 use Platform\Core\Models\ContextFile;
 use Platform\Core\Services\ImageGenerationService;
@@ -11,6 +12,8 @@ use Platform\FoodAlchemist\Models\FoodAlchemistRecipeStep;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipeStepPhoto;
 use Platform\FoodAlchemist\Services\Ai\AiGatewayService;
 use Platform\FoodAlchemist\Services\Ai\AiProposal;
+use Platform\FoodAlchemist\Services\RecipeImageService;
+use Platform\FoodAlchemist\Services\RecipeStepService;
 use Platform\FoodAlchemist\Tests\Support\SeedsTeamHierarchy;
 use Platform\FoodAlchemist\Tests\TestCase;
 
@@ -28,7 +31,7 @@ beforeEach(function () {
     $this->foto = fn (string $datei) => FoodAlchemistRecipeStepPhoto::create([
         'team_id' => $this->rootTeam->id,
         'recipe_id' => $this->rezept->id,
-        'pfad' => 'foodalchemist/rezepte/' . $this->rezept->id . '/' . $datei,
+        'pfad' => 'foodalchemist/rezepte/'.$this->rezept->id.'/'.$datei,
     ]);
 
     $this->editor = fn () => Livewire::test(StepEditor::class, ['recipeId' => $this->rezept->id]);
@@ -39,7 +42,7 @@ it('legt Schritte an und nummeriert fortlaufend, Abschnitt wird übernommen', fu
 
     $lw = ($this->editor)()->call('schrittAnlegen');
     $erster = FoodAlchemistRecipeStep::where('recipe_id', $this->rezept->id)->firstOrFail();
-    $lw->set('phasen.' . $erster->id, 'Mise en Place')->call('schrittAnlegen');
+    $lw->set('phasen.'.$erster->id, 'Mise en Place')->call('schrittAnlegen');
 
     $steps = FoodAlchemistRecipeStep::where('recipe_id', $this->rezept->id)->orderBy('position')->get();
     expect($steps->pluck('position')->all())->toBe([1, 2])
@@ -52,7 +55,7 @@ it('Text tippen persistiert und zieht den preparation-Spiegel nach', function ()
     $lw = ($this->editor)()->call('schrittAnlegen');
     $s = FoodAlchemistRecipeStep::where('recipe_id', $this->rezept->id)->firstOrFail();
 
-    $lw->set('texte.' . $s->id, 'Zwiebeln in Brunoise schneiden.');
+    $lw->set('texte.'.$s->id, 'Zwiebeln in Brunoise schneiden.');
 
     expect($s->fresh()->text)->toBe('Zwiebeln in Brunoise schneiden.')
         ->and($this->rezept->fresh()->preparation)->toBe('1. Zwiebeln in Brunoise schneiden.');
@@ -61,7 +64,7 @@ it('Text tippen persistiert und zieht den preparation-Spiegel nach', function ()
 it('▲▼ und Drag-Drop sortieren um — die Fotos wandern mit dem Schritt', function () {
     $this->actingAs($this->makeUser($this->rootTeam, 'Root C'));
 
-    app(\Platform\FoodAlchemist\Services\RecipeStepService::class)->sync($this->rezept, [
+    app(RecipeStepService::class)->sync($this->rezept, [
         ['text' => 'eins'], ['text' => 'zwei'], ['text' => 'drei'],
     ]);
     $steps = FoodAlchemistRecipeStep::where('recipe_id', $this->rezept->id)->orderBy('position')->get();
@@ -84,7 +87,7 @@ it('▲▼ und Drag-Drop sortieren um — die Fotos wandern mit dem Schritt', fu
 it('verknüpft ein Foto per Klick an mehrere Schritte und löst es wieder (M:N)', function () {
     $this->actingAs($this->makeUser($this->rootTeam, 'Root D'));
 
-    app(\Platform\FoodAlchemist\Services\RecipeStepService::class)->sync($this->rezept, [
+    app(RecipeStepService::class)->sync($this->rezept, [
         ['text' => 'eins'], ['text' => 'zwei'],
     ]);
     $steps = FoodAlchemistRecipeStep::where('recipe_id', $this->rezept->id)->orderBy('position')->get();
@@ -107,7 +110,7 @@ it('Upload mit aktivem Schritt legt das Foto in den Pool UND verlinkt es', funct
     Storage::fake('public');
     $this->actingAs($this->makeUser($this->rootTeam, 'Root E'));
 
-    app(\Platform\FoodAlchemist\Services\RecipeStepService::class)->sync($this->rezept, [['text' => 'eins']]);
+    app(RecipeStepService::class)->sync($this->rezept, [['text' => 'eins']]);
     $s = FoodAlchemistRecipeStep::where('recipe_id', $this->rezept->id)->firstOrFail();
 
     ($this->editor)()
@@ -128,7 +131,7 @@ it('KI-Fotos erzeugt Bilder fuer alle Schritte ohne Foto und laesst bestehende F
     $user = $this->makeUser($this->rootTeam, 'Root KI-Foto');
     $this->actingAs($user);
 
-    app(\Platform\FoodAlchemist\Services\RecipeStepService::class)->sync($this->rezept, [
+    app(RecipeStepService::class)->sync($this->rezept, [
         ['phase' => 'Mise en Place', 'text' => 'Champignons putzen und schneiden.'],
         ['phase' => 'Garen', 'text' => 'Champignons heiß anbraten.'],
         ['phase' => 'Finish', 'text' => 'Mit Balsamico glacieren.'],
@@ -155,7 +158,7 @@ it('KI-Fotos erzeugt Bilder fuer alle Schritte ohne Foto und laesst bestehende F
                 ->and($teamId)->toBe($rootTeamId)
                 ->and($options)->toBe(['size' => '1024x1024', 'quality' => 'low']);
 
-            $token = 'ki-step-' . $lauf . '-' . \Illuminate\Support\Str::random(8);
+            $token = 'ki-step-'.$lauf.'-'.Str::random(8);
             $file = ContextFile::create([
                 'token' => $token,
                 'team_id' => $teamId,
@@ -195,6 +198,32 @@ it('KI-Fotos erzeugt Bilder fuer alle Schritte ohne Foto und laesst bestehende F
         ->and($logs->whereNotNull('error'))->toHaveCount(0);
 });
 
+it('nutzt zentral getrennte Bild-Prompts fuer Basisrezept-Produktion und Gerichte-Service', function () {
+    app(RecipeStepService::class)->sync($this->rezept, [
+        ['phase' => 'Trocknen', 'text' => 'Masse dünn streichen oder aufspritzen und trocknen.'],
+    ]);
+    $basisStep = FoodAlchemistRecipeStep::where('recipe_id', $this->rezept->id)->firstOrFail();
+
+    $gericht = $this->makeRecipe($this->rootTeam, 'Dessertteller', ['is_sales_recipe' => true]);
+    app(RecipeStepService::class)->sync($gericht, [
+        ['phase' => 'Anrichten', 'text' => 'Creme portionieren und mit Crumble abschließen.'],
+    ]);
+    $gerichtStep = FoodAlchemistRecipeStep::where('recipe_id', $gericht->id)->firstOrFail();
+
+    $bilder = app(RecipeImageService::class);
+    $basisPrompt = $bilder->schrittPrompt($this->rezept, $basisStep);
+    $gerichtPrompt = $bilder->schrittPrompt($gericht, $gerichtStep);
+
+    expect($basisPrompt)
+        ->toContain('professional catering kitchen process photo')
+        ->toContain('show only the first stated method')
+        ->not->toContain('all recipe components are already professionally prepared')
+        ->and($gerichtPrompt)
+        ->toContain('restaurant kitchen service and plating process photo')
+        ->toContain('all recipe components are already professionally prepared')
+        ->toContain('Never show their production from raw ingredients');
+});
+
 it('rahmt KI-Schritte fuer Verkaufsgerichte als Service und Anrichten statt Komponenten-Produktion', function () {
     $user = $this->makeUser($this->rootTeam, 'Root VK-Schritte');
     $this->actingAs($user);
@@ -211,14 +240,14 @@ it('rahmt KI-Schritte fuer Verkaufsgerichte als Service und Anrichten statt Komp
         ->update(['referenced_recipe_id' => $komponente->id]);
 
     $this->mock(AiGatewayService::class, function ($mock) use ($komponente) {
-        $mock->shouldReceive('propose')->once()->with('recipe.steps', \Mockery::on(function (array $payload) use ($komponente) {
+        $mock->shouldReceive('propose')->once()->with('recipe.steps', Mockery::on(function (array $payload) use ($komponente) {
             return ($payload['rezept_typ'] ?? null) === 'gericht'
                 && str_contains((string) ($payload['zubereitungsziel'] ?? ''), 'Anrichteablauf')
                 && str_contains((string) ($payload['hinweis'] ?? ''), 'Nicht neu herstellen')
                 && ($payload['komponenten'][0]['name'] ?? null) === $komponente->name
                 && ($payload['komponenten'][0]['typ'] ?? null) === 'basisrezept'
                 && ($payload['verkaufseinheit']['portion_g'] ?? null) === 140;
-        }), \Mockery::any())->andReturn(new AiProposal([
+        }), Mockery::any())->andReturn(new AiProposal([
             'steps' => [
                 ['phase' => 'Mise en Place', 'text' => 'Komponenten kalt bereitstellen.'],
                 ['phase' => 'Anrichten', 'text' => 'Topfencreme und Knoedel portionieren und mit Crumble abschliessen.'],
@@ -234,7 +263,7 @@ it('rahmt KI-Schritte fuer Verkaufsgerichte als Service und Anrichten statt Komp
 it('Schritt löschen nummeriert neu und lässt das Foto im Pool', function () {
     $this->actingAs($this->makeUser($this->rootTeam, 'Root F'));
 
-    app(\Platform\FoodAlchemist\Services\RecipeStepService::class)->sync($this->rezept, [
+    app(RecipeStepService::class)->sync($this->rezept, [
         ['text' => 'eins'], ['text' => 'zwei'], ['text' => 'drei'],
     ]);
     $steps = FoodAlchemistRecipeStep::where('recipe_id', $this->rezept->id)->orderBy('position')->get();
@@ -252,7 +281,7 @@ it('Schritt löschen nummeriert neu und lässt das Foto im Pool', function () {
 it('Foto endgültig löschen entfernt es aus allen Schritten', function () {
     $this->actingAs($this->makeUser($this->rootTeam, 'Root G'));
 
-    app(\Platform\FoodAlchemist\Services\RecipeStepService::class)->sync($this->rezept, [['text' => 'eins']]);
+    app(RecipeStepService::class)->sync($this->rezept, [['text' => 'eins']]);
     $s = FoodAlchemistRecipeStep::where('recipe_id', $this->rezept->id)->firstOrFail();
     $f = ($this->foto)('weg.jpg');
     $s->photos()->attach($f->id, ['position' => 1]);
@@ -308,7 +337,7 @@ it('Endprodukt-Bild: genau eines je Rezept, zweiter Klick hebt auf', function ()
 it('Endprodukt-Bild darf gleichzeitig an einem Schritt hängen', function () {
     $this->actingAs($this->makeUser($this->rootTeam, 'Root K'));
 
-    app(\Platform\FoodAlchemist\Services\RecipeStepService::class)->sync($this->rezept, [['text' => 'Anrichten.']]);
+    app(RecipeStepService::class)->sync($this->rezept, [['text' => 'Anrichten.']]);
     $s = FoodAlchemistRecipeStep::where('recipe_id', $this->rezept->id)->firstOrFail();
     $f = ($this->foto)('anrichten.jpg');
 

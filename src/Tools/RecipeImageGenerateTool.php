@@ -2,8 +2,8 @@
 
 namespace Platform\FoodAlchemist\Tools;
 
-use Platform\Core\Contracts\ToolContract;
 use Platform\Core\Contracts\ToolContext;
+use Platform\Core\Contracts\ToolContract;
 use Platform\Core\Contracts\ToolMetadataContract;
 use Platform\Core\Contracts\ToolResult;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
@@ -12,7 +12,7 @@ use Platform\FoodAlchemist\Services\RecipeImageService;
 use Platform\FoodAlchemist\Services\TeamSettingsService;
 
 /**
- * MCP-Gegenstück zum „KI-Bilder"-Knopf: erzeugt KI-Fotos (gpt-image-1.5, Standard-Qualität) für
+ * MCP-Gegenstück zum „KI-Bilder"-Knopf: erzeugt KI-Fotos (gpt-image-1.5) für
  * ein Rezept und hängt sie korrekt an — Titel-/Produktfoto ans Rezept, Schrittfotos an die Steps
  * (M:N-Pivot). Wickelt RecipeImageService ein (gleiche Speicherung + ai_call_log wie die UI).
  * SYNCHRON — `all` kann bei vielen Schritten dauern. Respektiert den KI-Kill-Switch.
@@ -27,10 +27,10 @@ class RecipeImageGenerateTool extends FoodAlchemistTool implements ToolContract,
     public function getDescription(): string
     {
         return 'Erzeugt KI-Fotos für ein Rezept und hängt sie an: scope=hero (Titel-/Produktfoto), '
-            . 'step (EIN Schritt — step_id oder position), all (Titel + je Schritt). replace=true '
-            . 'löscht vorher die bisherigen KI-Fotos (Ersetzen statt Anhäufen). Synchron; „all" dauert '
-            . 'bei vielen Schritten. Kosten je Bild (gpt-image-1.5, Standard). Nur eigene Rezepte; '
-            . 'respektiert den KI-Kill-Switch (Einstellungen › KI).';
+            .'step (EIN Schritt — step_id oder position), all (Titel + je Schritt). replace=true '
+            .'löscht vorher die bisherigen KI-Fotos (Ersetzen statt Anhäufen). Synchron; „all" dauert '
+            .'bei vielen Schritten. Kosten je Bild (gpt-image-1.5). Nur eigene Rezepte; '
+            .'respektiert den KI-Kill-Switch (Einstellungen › KI).';
     }
 
     public function getSchema(): array

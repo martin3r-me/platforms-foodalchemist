@@ -10,6 +10,9 @@ use Illuminate\Support\Str;
 use Platform\Core\Models\ContextFile;
 use Platform\Core\Models\Team;
 use Platform\Core\Services\ImageGenerationService;
+use Platform\FoodAlchemist\Jobs\EnrichRecipeJob;
+use Platform\FoodAlchemist\Livewire\Planung\Index;
+use Platform\FoodAlchemist\Livewire\Recipes\StepEditor;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipeStep;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipeStepPhoto;
@@ -17,26 +20,31 @@ use Platform\FoodAlchemist\Models\FoodAlchemistRecipeStepPhoto;
 /**
  * KI-Fotos für ein Rezept (Preisfrage-Feature): ein Produktfoto (Endergebnis) + je Zubereitungsschritt
  * ein Foto. Nutzt den Core-{@see ImageGenerationService} (gpt-image-1.5); jeder Call wird zur Kosten-
- * Transparenz in `foodalchemist_ai_call_log` protokolliert (Muster aus {@see \Platform\FoodAlchemist\Livewire\Recipes\StepEditor}).
- * Ausgelöst bei der Freigabe eines gestuften Drafts über {@see \Platform\FoodAlchemist\Jobs\EnrichRecipeJob},
+ * Transparenz in `foodalchemist_ai_call_log` protokolliert (Muster aus {@see StepEditor}).
+ * Ausgelöst bei der Freigabe eines gestuften Drafts über {@see EnrichRecipeJob},
  * wenn der KI-Bilder-Toggle am Go gesetzt war. Jedes Bild ist einzeln fail-soft.
  */
 class RecipeImageService
 {
     private const SIZE = '1024x1024';
-    private const QUALITY = 'standard';   // Standard-Qualität (vorher „low") — sichtbar bessere Doku-/Präsentationsbilder.
+
+    /** Bis zum Core-Update ist `low` die gemeinsame, von Core und OpenAI akzeptierte Qualität. */
+    private const QUALITY = 'low';
+
     private const MODEL = 'gpt-image-1.5';
 
     /** Feature-Keys der KI-Foto-Calls im `foodalchemist_ai_call_log` — EINE Wahrheit für Erzeuger
-     *  UND Consumer (Kosten-Transparenz im Cockpit, {@see \Platform\FoodAlchemist\Livewire\Planung\Index}). */
+     *  UND Consumer (Kosten-Transparenz im Cockpit, {@see Index}). */
     public const FEATURE_PRODUKTFOTO = 'recipe.product_photo';
+
     public const FEATURE_SCHRITTFOTOS = 'recipe.step_photos';
+
     public const BILD_FEATURES = [self::FEATURE_PRODUKTFOTO, self::FEATURE_SCHRITTFOTOS];
 
     /**
      * Produktfoto + je Schritt ein Foto. Jedes Bild einzeln abgesichert (ein Fehler kippt den Rest
      * nicht) — aber NICHT mehr stumm: das Ergebnis wird als Bilanz zurückgegeben, damit der Aufrufer
-     * ({@see \Platform\FoodAlchemist\Jobs\EnrichRecipeJob}) einen ehrlichen Bild-Status persistieren
+     * ({@see EnrichRecipeJob}) einen ehrlichen Bild-Status persistieren
      * kann (`deferred.bilder`, Cockpit-Badge). Rückgabe: `erzeugt` = angelegte Fotos, `fehler` =
      * fehlgeschlagene Calls, `letzter_fehler` = Message des jüngsten Fehlers (oder null).
      *
@@ -78,7 +86,7 @@ class RecipeImageService
 
     /**
      * KI-erzeugte Fotos eines Rezepts (soft-)löschen — für das „neu erzeugen" der Kaskade (Etappe 7,
-     * Teil 2b: {@see \Platform\FoodAlchemist\Jobs\EnrichRecipeJob} im `nurBilder`-Modus), damit ein
+     * Teil 2b: {@see EnrichRecipeJob} im `nurBilder`-Modus), damit ein
      * Re-Trigger die alten Bilder ERSETZT statt sie anzuhäufen. Discriminator = der Kosten-Call-Log:
      * nur Fotos, die als `target_id` eines BILD_FEATURES-Calls dieses Teams auftauchen, sind KI-erzeugt
      * — MANUELLE Uploads (kein Call-Log) bleiben unangetastet. Rückgabe: Zahl der gelöschten Fotos.
@@ -117,8 +125,8 @@ class RecipeImageService
      * (»so soll es aussehen«) — der häufigste Fall, wenn der Nutzer die KI-Erzeugung durch ein eigenes
      * Teller-Foto ersetzt (Teil 2). Die max.-1-Invariante wird hier gewahrt: vor dem Anlegen werden alle
      * bestehenden `is_result`-Fotos des Rezepts zurückgesetzt (in einer Transaktion), sodass genau EIN
-     * Ergebnis-Foto existiert — dieselbe Semantik wie {@see \Platform\FoodAlchemist\Services\RecipeStepService::endproduktSetzen},
-     * aber ohne Cross-Service-Kopplung. Consumer: der Cockpit-Upload-Knopf am Bild-Status ({@see \Platform\FoodAlchemist\Livewire\Planung\Index::fotoHochladen}).
+     * Ergebnis-Foto existiert — dieselbe Semantik wie {@see RecipeStepService::endproduktSetzen},
+     * aber ohne Cross-Service-Kopplung. Consumer: der Cockpit-Upload-Knopf am Bild-Status ({@see Index::fotoHochladen}).
      */
     public function uebernimmManuellesFoto(Team $team, FoodAlchemistRecipe $recipe, UploadedFile $datei, ?string $caption = null, bool $istErgebnis = false): FoodAlchemistRecipeStepPhoto
     {
@@ -193,7 +201,7 @@ class RecipeImageService
         // außerhalb eines HTTP-Requests. Die tmp-Datei wird nach dem Store wieder entfernt.
         $tmp = tempnam(sys_get_temp_dir(), 'fa_foto_');
         file_put_contents($tmp, $daten['bytes']);
-        $upload = new UploadedFile($tmp, 'reuse.' . $daten['ext'], $daten['mime'], null, true);
+        $upload = new UploadedFile($tmp, 'reuse.'.$daten['ext'], $daten['mime'], null, true);
 
         try {
             return $this->uebernimmManuellesFoto(
@@ -255,9 +263,9 @@ class RecipeImageService
     /** Ein Foto des fertig angerichteten Gerichts (Hero/Endergebnis, ohne Schritt-Kopplung → is_result). */
     public function produktFoto(Team $team, FoodAlchemistRecipe $recipe): FoodAlchemistRecipeStepPhoto
     {
-        $prompt = trim('Professionelles, appetitliches Food-Foto des fertig angerichteten Gerichts «' . $recipe->name . '». '
-            . mb_strimwidth((string) ($recipe->description ?? ''), 0, 280)
-            . ' Natürliches Licht, Restaurant-Qualität, klarer Fokus auf das Gericht, kein Text, kein Logo.');
+        $prompt = trim('Professionelles, appetitliches Food-Foto des fertig angerichteten Gerichts «'.$recipe->name.'». '
+            .mb_strimwidth((string) ($recipe->description ?? ''), 0, 280)
+            .' Natürliches Licht, Restaurant-Qualität, klarer Fokus auf das Gericht, kein Text, kein Logo.');
 
         return $this->generiereFoto($team, $recipe, $prompt, 'KI-Produktfoto', 0, true, self::FEATURE_PRODUKTFOTO, null);
     }
@@ -270,13 +278,57 @@ class RecipeImageService
         if ($text === '') {
             return false;
         }
-        $prompt = 'Food-Foto zum Zubereitungsschritt ' . $step->position . ' von «' . $recipe->name . '»: '
-            . mb_strimwidth($text, 0, 280) . ' Realistischer Küchen-Kontext, klarer Fokus, kein Text.';
+        $prompt = $this->schrittPrompt($recipe, $step);
 
-        $foto = $this->generiereFoto($team, $recipe, $prompt, 'KI-Foto: Schritt ' . $step->position, (int) $step->position * 10, false, self::FEATURE_SCHRITTFOTOS, (int) $step->id);
+        $foto = $this->generiereFoto($team, $recipe, $prompt, 'KI-Foto: Schritt '.$step->position, (int) $step->position * 10, false, self::FEATURE_SCHRITTFOTOS, (int) $step->id);
         $step->photos()->syncWithoutDetaching([$foto->id => ['position' => 1]]);
 
         return true;
+    }
+
+    /** Eine zentrale Prompt-Wahrheit für Planung, Rezept-/Gerichte-Editor und MCP. */
+    public function schrittPrompt(FoodAlchemistRecipe $recipe, FoodAlchemistRecipeStep $step): string
+    {
+        $zutaten = $recipe->ingredients->pluck('raw_text')->take(20)->filter()->implode(', ');
+        $alleSchritte = FoodAlchemistRecipeStep::where('recipe_id', $recipe->id)
+            ->orderBy('position')->orderBy('id')
+            ->get(['position', 'phase', 'text'])
+            ->map(fn (FoodAlchemistRecipeStep $s) => $s->position.'. '.trim(($s->phase ? "[{$s->phase}] " : '').$s->text))
+            ->implode("\n");
+
+        if ($recipe->is_sales_recipe) {
+            return trim(<<<PROMPT
+Photorealistic professional restaurant kitchen service and plating process photo.
+Dish: {$recipe->name}
+Prepared components and ingredients: {$zutaten}
+
+Create one consistent visual documentation image for this exact service or plating step:
+Step {$step->position} ({$step->phase}): {$step->text}
+
+Full service sequence for continuity only:
+{$alleSchritte}
+
+Dish rules: all recipe components are already professionally prepared. Never show their production from raw ingredients. Show only the current action: mise en place for service, regeneration, final seasoning, portioning, assembly, saucing, garnishing or plating as stated. Show one coherent serving of this exact dish and the food state immediately after the current action. If the step contains alternatives such as "or", show only the first stated method; never show multiple alternatives in parallel. Do not invent extra components, garnishes, tableware or processing stages.
+
+Style rules: realistic food photography, same neutral stainless-steel restaurant pass or catering kitchen, 45-degree angle, natural light, clean professional gastro containers and plating tools, no people, no hands, no faces, no text, no labels, no logos, no packaging, no surreal props. Do not show a finished plated dish before the plating or finishing step.
+PROMPT);
+        }
+
+        return trim(<<<PROMPT
+Photorealistic professional catering kitchen process photo.
+Recipe: {$recipe->name}
+Ingredients: {$zutaten}
+
+Create one consistent visual documentation image for this exact preparation step:
+Step {$step->position} ({$step->phase}): {$step->text}
+
+Full step sequence for continuity only:
+{$alleSchritte}
+
+Content rules: show only the current step, as one unambiguous action, and the food state immediately after that action. Use only ingredients, tools and containers relevant to this step. Do not depict actions from earlier or later steps. If the step contains alternatives such as "or", show only the first stated method; never show multiple alternative methods in parallel. Do not invent additional ingredients, garnishes, vessels or processing stages.
+
+Style rules: realistic food photography, same neutral stainless-steel catering kitchen, 45-degree angle, natural light, clean gastro containers and pans, no people, no hands, no faces, no text, no labels, no logos, no packaging, no surreal props. Show the food state of this step, not the final plated dish unless the step is plating or finishing.
+PROMPT);
     }
 
     private function generiereFoto(Team $team, FoodAlchemistRecipe $recipe, string $prompt, string $caption, int $sort, bool $isResult, string $feature, ?int $stepId): FoodAlchemistRecipeStepPhoto
@@ -288,7 +340,10 @@ class RecipeImageService
             (int) $recipe->id,
             (int) (Auth::id() ?? 0),
             (int) $team->id,
-            ['size' => self::SIZE, 'quality' => self::QUALITY],
+            [
+                'size' => self::SIZE,
+                'quality' => self::QUALITY,
+            ],
         );
         $contextFile = ContextFile::findOrFail((int) $result['id']);
 
