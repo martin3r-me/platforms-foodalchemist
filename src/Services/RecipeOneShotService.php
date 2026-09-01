@@ -87,7 +87,7 @@ class RecipeOneShotService
      *
      * @return array{run_id: ?int, schritte: list<string>, uebersprungen: list<string>, uebernommen: int, offen: int, fehler: ?string, kohaerenz_urteil: ?array{score: ?int, label: ?string, schwachstelle: ?string, fehler: ?string}, wirtschaftlichkeit: ?array, coverage?: array}
      */
-    public function anreichern(Team $team, FoodAlchemistRecipe $recipe, ?float $zielVk = null, bool $completeCoverage = false, bool $refresh = false): array
+    public function anreichern(Team $team, FoodAlchemistRecipe $recipe, ?float $zielVk = null, bool $completeCoverage = false, bool $refresh = false, ?callable $shouldStop = null): array
     {
         $alle = $recipe->is_sales_recipe ? BulkEnrichService::SCHRITTE_VK : BulkEnrichService::SCHRITTE;
         // #4: `refresh` = bewusster „Alles anreichern"-Klick im Editor → auch gefüllte, nicht-manuelle
@@ -138,6 +138,11 @@ class RecipeOneShotService
             }
         }
 
+        if ($shouldStop !== null && $shouldStop()) {
+            $ergebnis['abgebrochen'] = true;
+            return $ergebnis;
+        }
+
         if ($completeCoverage) {
             // T5 (Top-Down-Abschluss »GPs aus LAs«): fehlende GPs ZUERST minten, damit die
             // Wirtschaftlichkeit unten mit vollständigem EK rechnet.
@@ -146,7 +151,7 @@ class RecipeOneShotService
         $ergebnis['kohaerenz_urteil'] = $this->kohaerenzGlied($team, $recipe->fresh() ?? $recipe);
         $ergebnis['wirtschaftlichkeit'] = $this->wirtschaftlichkeitsGlied($team, $recipe->fresh() ?? $recipe, $zielVk);
         if ($completeCoverage) {
-            $ergebnis['coverage'] = $this->coverageGlieder($team, $recipe->fresh() ?? $recipe);
+            $ergebnis['coverage'] = $this->coverageGlieder($team, $recipe->fresh() ?? $recipe, $shouldStop);
         }
 
         return $ergebnis;
@@ -252,31 +257,30 @@ class RecipeOneShotService
      *
      * @return array<string, array{status: string, fehler?: string}>
      */
-    private function coverageGlieder(Team $team, FoodAlchemistRecipe $recipe): array
+    private function coverageGlieder(Team $team, FoodAlchemistRecipe $recipe, ?callable $shouldStop = null): array
     {
-        $fertigung = $this->fertigungsGlied($recipe);
-        $eigenschaften = $this->eigenschaftenGlied($recipe);
-        $equipment = $this->equipmentGlied($team, $recipe->fresh() ?? $recipe);
-        $posten = $this->postenGlied($team, $recipe->fresh() ?? $recipe);
-        $steps = $this->stepGlied($recipe->fresh() ?? $recipe);
-        $prozessanker = $this->prozessankerGlied($recipe->fresh() ?? $recipe);
-        $aromaanker = $this->aromaankerGlied($team, $recipe->fresh() ?? $recipe);
-        $pairings = $this->pairingGlied($team, $recipe->fresh() ?? $recipe);
-        $eignung = $this->eignungsGlied($team, $recipe->fresh() ?? $recipe);
-        $sensorik = $this->sensorikGlied($recipe->fresh() ?? $recipe);
-
-        return [
-            'fertigung' => $fertigung,
-            'eigenschaften' => $eigenschaften,
-            'equipment' => $equipment,
-            'posten' => $posten,
-            'steps' => $steps,
-            'prozessanker' => $prozessanker,
-            'aromaanker' => $aromaanker,
-            'pairings' => $pairings,
-            'eignung' => $eignung,
-            'sensorik' => $sensorik,
+        $out = [];
+        $glieder = [
+            'fertigung' => fn () => $this->fertigungsGlied($recipe),
+            'eigenschaften' => fn () => $this->eigenschaftenGlied($recipe->fresh() ?? $recipe),
+            'equipment' => fn () => $this->equipmentGlied($team, $recipe->fresh() ?? $recipe),
+            'posten' => fn () => $this->postenGlied($team, $recipe->fresh() ?? $recipe),
+            'steps' => fn () => $this->stepGlied($recipe->fresh() ?? $recipe),
+            'prozessanker' => fn () => $this->prozessankerGlied($recipe->fresh() ?? $recipe),
+            'aromaanker' => fn () => $this->aromaankerGlied($team, $recipe->fresh() ?? $recipe),
+            'pairings' => fn () => $this->pairingGlied($team, $recipe->fresh() ?? $recipe),
+            'eignung' => fn () => $this->eignungsGlied($team, $recipe->fresh() ?? $recipe),
+            'sensorik' => fn () => $this->sensorikGlied($recipe->fresh() ?? $recipe),
         ];
+        foreach ($glieder as $name => $glied) {
+            if ($shouldStop !== null && $shouldStop()) {
+                $out[$name] = ['status' => 'abgebrochen'];
+                break;
+            }
+            $out[$name] = $glied();
+        }
+
+        return $out;
     }
 
     /** @return array{status: string, production_depth?: ?string, fehler?: string} */
@@ -739,7 +743,9 @@ class RecipeOneShotService
         }
 
         try {
-            return app(SensorikService::class)->bewerteRezept((int) $recipe->id, true);
+            // Automatische Planung nutzt den vorhandenen source_hash-Cache. Ein erzwungener Refresh
+            // gehört nur zum bewussten Editor-Klick und verbrannte hier bei unverändertem Rezept Tokens.
+            return app(SensorikService::class)->bewerteRezept((int) $recipe->id, false);
         } catch (\Throwable $e) {
             return ['status' => 'fehler', 'fehler' => mb_strimwidth($e->getMessage(), 0, 300)];
         }

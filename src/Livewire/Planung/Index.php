@@ -1775,6 +1775,7 @@ class Index extends Component
         $favoriten = (bool) ($r['favoriten'] ?? false);
         $favConvOnly = (bool) ($r['favoriten_conv_only'] ?? false);
         $kiBilder = (bool) ($r['ki_bilder'] ?? false);
+        $vollAnreichern = (bool) ($r['voll_anreichern'] ?? false);
         $p = $r;
         // Bio dreiwertig weiterreichen (bio|conventional|neutral) — der Generator/Matcher kennt einen
         // NEUTRALEN Arm (Adjustment 0). Ohne ihn fiel „egal" auf das Bool false → 'conventional' → Bio-GPs
@@ -1785,14 +1786,12 @@ class Index extends Component
             default => 'conventional',
         };
         $p['bio'] = ($r['bio_praeferenz'] ?? '') === 'bio';
-        // Reuse-Achse: EINE Wahrheit ist der Kreativ-Modus (Select im Eingabe-Block). Der frühere
-        // Doppel-Regler »Bestand-Nutzung« (Chips) ist entfernt; `bestand` wird hier deterministisch
-        // aus dem Modus abgeleitet und reist über den bestehenden params/generation_params-Kanal in
-        // Generator + Fan-out (datenbank = nur Bestand, hybrid = Bestand zuerst, voll_kreativ = neu).
-        $p['bestand'] = match ((string) ($this->eingabe[$scope]['creative_mode'] ?? 'voll_kreativ')) {
+        // Kreativität bestimmt die IDEE, nicht ob bestehende Basisrezepte ignoriert werden. Auch ein
+        // voll kreatives Gericht erdet seine Komponenten deshalb bestand-first; nur echte Lücken werden
+        // neu angelegt. Basisrezepte haben keine Kreativmodus-Achse und nutzen denselben Resolver.
+        $p['bestand'] = match ($scope === 'rezept' ? 'hybrid' : (string) ($this->eingabe[$scope]['creative_mode'] ?? 'hybrid')) {
             'datenbank' => 'nur_bestand',
-            'hybrid' => 'hybrid',
-            default => 'komplett_neu',   // voll_kreativ
+            default => 'hybrid',
         };
         // Frische (L1.5): Multi-Select Erlaubnis-Liste → harte gps.condition-Erlaubnis + primärer Pref
         // (Tiebreak). [] = egal (Key entfällt, kein Filter). Sonst: erlaubte Roh-Zustände + 'frisch'-Vorzug.
@@ -1846,6 +1845,9 @@ class Index extends Component
         $p['use_favorites_list'] = $favoriten;
         $p['favorites_convenience_only'] = $favoriten && $favConvOnly;
         $p['ki_bilder'] = $kiBilder;   // Preisfrage: KI-Fotos bei Anreicherung ja/nein
+        // Der Freigabe-Job liest `complete_coverage`. Fehlte der Key, fiel er historisch auf TRUE
+        // zurück und ignorierte den ausgeschalteten UI-Schalter. Jetzt reist die Entscheidung explizit.
+        $p['complete_coverage'] = $vollAnreichern;
         // Ziel-VK (Netto je Portion) ist die Gericht-Preisachse. Für ein Concept ist der Menü-Preis-
         // Korridor p. P. (unten) die EINZIGE Preisquelle (Entscheid 2026-08-18) — kein konkurrierender
         // Portions-VK im Concept-Prompt. rezept trägt ohnehin keinen VK ($vk deckt das mit ab).
@@ -2347,6 +2349,8 @@ class Index extends Component
             'brief' => $this->effektiverBrief($scope),
             'params' => $laufParams,
             'voll_anreichern' => (bool) ($this->regler[$scope]['voll_anreichern'] ?? false),   // recipe-first: default AUS
+            // Gericht: erst textlicher Bauplan (inkl. Komponenten), Rezept-Draft erst nach Blitz/Freigabe.
+            'proposal_first' => $scope === 'gericht',
         ];
         // GEPLANTER PFAD (Etappe 2b, „Beide Pfade behalten"): wurde vorab ein KI-Kopf-Plan ausgearbeitet
         // und im Conceptor geprüft ($planConceptId), referenziert der Concept-Go dieses Draft-Concept
@@ -2438,6 +2442,23 @@ class Index extends Component
         $this->hinweis = (! $jobBewiesen && $wartet && $alterSek > self::WATCHDOG_SEKUNDEN)
             ? 'Der Lauf läuft ungewöhnlich lange und kein Schritt kommt voran — vermutlich läuft kein Hintergrund-Worker (Queue). Sobald er die Jobs abarbeitet, geht es automatisch weiter.'
             : null;
+    }
+
+    /** Sicherer Abbruch eines einzelnen Planungs-Laufs; der globale Queue-Worker bleibt aktiv. */
+    public function laufAbbrechen(int $runId, PlanningCascadeService $cascade): void
+    {
+        $team = $this->team();
+        if ($team === null) {
+            return;
+        }
+        if ($cascade->brecheLaufAb($team, $runId)) {
+            $this->laeuft = false;
+            $this->hinweis = null;
+            $this->meldung = 'Planung abgebrochen — es werden keine weiteren Kaskaden-Schritte gestartet.';
+            $this->fehler = null;
+        } else {
+            $this->meldung = 'Der Lauf war bereits beendet oder ist nicht mehr abbrechbar.';
+        }
     }
 
     /**
@@ -2820,6 +2841,26 @@ class Index extends Component
         try {
             $cascade->regeneriereStep($team, $stepId, $kommentar !== '' ? $kommentar : null);
             $this->meldung = $kommentar !== '' ? 'Wird mit deinem Feedback neu generiert …' : 'Wird neu generiert …';
+            $this->fehler = null;
+            unset($this->speiseKommentar[$stepId]);
+            $this->kommentarOffen = array_values(array_diff($this->kommentarOffen, [$stepId]));
+        } catch (\Throwable $e) {
+            $this->fehler = $e->getMessage();
+        }
+        $this->refreshLaeuft($cascade);
+    }
+
+    /** Feedback auf einen reinen Gericht-Bauplan anwenden; noch keine Rezept-Materialisierung. */
+    public function vorschlagUeberarbeiten(int $stepId, PlanningCascadeService $cascade): void
+    {
+        $team = $this->team();
+        if ($team === null) {
+            return;
+        }
+        $kommentar = trim((string) ($this->speiseKommentar[$stepId] ?? ''));
+        try {
+            $cascade->ueberarbeiteGerichtVorschlag($team, $stepId, $kommentar);
+            $this->meldung = 'Gerichtsvorschlag wird mit deinem Feedback überarbeitet …';
             $this->fehler = null;
             unset($this->speiseKommentar[$stepId]);
             $this->kommentarOffen = array_values(array_diff($this->kommentarOffen, [$stepId]));

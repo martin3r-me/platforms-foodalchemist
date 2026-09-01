@@ -9,9 +9,9 @@
     $modeLabel = ['voll_kreativ' => 'Voll kreativ', 'hybrid' => 'Hybrid', 'datenbank' => 'Datenbank'];
     // Wirkungs-Hints je Modus (die EINE Reuse-Achse — ersetzt den früheren „Bestand-Nutzung"-Regler):
     $modeHint = [
-        'voll_kreativ' => 'Neu erfinden — Bestand wird ignoriert, alle Komponenten frisch angelegt.',
-        'hybrid' => 'Bestand zuerst — vorhandene Basisrezepte werden wiederverwendet, Neues nur für echte Lücken.',
-        'datenbank' => 'Nur Bestand — ausschließlich vorhandene Basisrezepte; für Lücken ohne Treffer entsteht KEIN neues Rezept (offene Zeile bleibt sichtbar).',
+        'voll_kreativ' => 'Freie Gerichtsidee. Bei der Erdung werden vorhandene Basisrezepte trotzdem wiederverwendet; neu entsteht nur eine echte Lücke.',
+        'hybrid' => 'Freie Idee mit Bestandsbezug; vorhandene Gerichte und Basisrezepte werden bevorzugt wiederverwendet.',
+        'datenbank' => 'Nur Bestand — ausschließlich vorhandene Gerichte/Basisrezepte; Lücken bleiben sichtbar und werden nicht neu erzeugt.',
     ];
     $chip = fn ($t, $c = 'bg-black/[0.04] text-gray-600') => '<span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium ' . $c . '">' . e($t) . '</span>';
     $skizzenAnzahl = $skizzen ? (count($skizzen['einzel']) + collect($skizzen['gruppen'])->sum(fn ($g) => count($g['ideen']))) : 0;

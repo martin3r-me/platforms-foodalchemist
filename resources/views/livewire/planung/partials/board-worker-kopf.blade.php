@@ -49,7 +49,14 @@
                 <div role="button" tabindex="0" wire:click="oeffne({{ $s->id }})" class="w-full text-left group cursor-pointer" data-planung-worker-lauf="{{ $s->id }}" title="Im Editor öffnen">
                     <div class="flex items-center justify-between gap-2 text-[11px]">
                         <span class="font-medium text-gray-700 truncate group-hover:text-violet-700">{{ $anzeigeTitel($s) }}</span>
-                        <span class="shrink-0 text-gray-400 tabular-nums">{{ $fertig }}/{{ $total }}</span>
+                        <span class="shrink-0 inline-flex items-center gap-2">
+                            <span class="text-gray-400 tabular-nums">{{ $fertig }}/{{ $total }}</span>
+                            <button type="button" wire:click.stop="laufAbbrechen({{ (int) ($kaskaden[(int) $s->id]['run_id'] ?? 0) }})"
+                                    wire:confirm="Diese laufende Planung stoppen? Der globale Worker bleibt aktiv."
+                                    class="text-rose-600 hover:text-rose-700 font-medium" title="Nur diese Planung stoppen" data-planung-lauf-stoppen>
+                                Stoppen
+                            </button>
+                        </span>
                     </div>
                     <div class="mt-1 h-1.5 rounded-full bg-black/[0.06] overflow-hidden">
                         <div class="h-full rounded-full bg-amber-400 transition-all" style="width: {{ $prozent }}%"></div>

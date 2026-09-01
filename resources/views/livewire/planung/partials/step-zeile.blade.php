@@ -85,25 +85,44 @@
             {{-- Etappe 1, Teil 2: geplante Sub-Rezepte einzeln bedienen — jetzt erzeugen (vorziehen)
                  oder verwerfen — VOR der Freigabe der Stufe darüber. --}}
             @if($st->status === 'geplant')
-                <button wire:click="erzeugeGeplant({{ $st->id }})" class="text-emerald-300 hover:text-emerald-200" title="Jetzt erzeugen (vorziehen)">@svg('heroicon-o-bolt', 'w-4 h-4')</button>
+                @if($st->kind === 'gericht' && !empty($snap['dish_idea_id']))
+                    <button wire:click="toggleKommentar({{ $st->id }})" class="{{ in_array($st->id, $kommentarOffen ?? [], true) ? 'text-emerald-300' : 'text-gray-400 hover:text-gray-200' }}" title="Vorschlag mit Feedback überarbeiten">@svg('heroicon-o-pencil-square', 'w-4 h-4')</button>
+                    <button wire:click="erzeugeGeplant({{ $st->id }})" class="text-emerald-300 hover:text-emerald-200" title="Vorschlag annehmen und Gericht als Entwurf erzeugen">@svg('heroicon-o-bolt', 'w-4 h-4')</button>
+                @else
+                    <button wire:click="erzeugeGeplant({{ $st->id }})" class="text-emerald-300 hover:text-emerald-200" title="Jetzt erzeugen (vorziehen)">@svg('heroicon-o-bolt', 'w-4 h-4')</button>
+                @endif
                 <button wire:click="verwirfGeplant({{ $st->id }})" class="text-rose-300 hover:text-rose-200" title="Brauche ich nicht (verwerfen)">@svg('heroicon-o-trash', 'w-4 h-4')</button>
             @endif
         </span>
     </div>
     {{-- A2 (per-Speise-Feedback): Kommentar zu GENAU dieser Position, dann gezielt neu generieren —
          nur dieser eine Entwurf wird nach dem Feedback neu gebaut, die Nachbar-Positionen bleiben. --}}
-    @if(in_array($st->id, $kommentarOffen ?? [], true) && in_array($st->status, ['done', 'failed'], true))
+    @if(in_array($st->id, $kommentarOffen ?? [], true) && in_array($st->status, ['geplant', 'done', 'failed'], true))
         <div class="mt-1 pl-1" data-speise-kommentar="{{ $st->id }}" wire:key="kommentar-{{ $st->id }}">
             <textarea wire:model="speiseKommentar.{{ $st->id }}" rows="2"
                       placeholder="Was an dieser Position ändern? (z. B. „vegetarisch statt Rind", „leichter, weniger Sahne", „mehr Säure") …"
                       class="w-full text-[11px] bg-white/5 border border-white/10 rounded px-2 py-1 text-gray-200 placeholder-gray-500"></textarea>
             <div class="mt-1 flex items-center gap-3">
-                <button wire:click="neuGenerieren({{ $st->id }})"
+                <button wire:click="{{ $st->status === 'geplant' ? 'vorschlagUeberarbeiten' : 'neuGenerieren' }}({{ $st->id }})"
                         class="text-[11px] text-emerald-300 hover:text-emerald-200 inline-flex items-center gap-1">
-                    @svg('heroicon-o-arrow-path', 'w-3.5 h-3.5') mit Feedback neu generieren
+                    @svg('heroicon-o-arrow-path', 'w-3.5 h-3.5') {{ $st->status === 'geplant' ? 'Vorschlag überarbeiten' : 'mit Feedback neu generieren' }}
                 </button>
                 <button wire:click="toggleKommentar({{ $st->id }})" class="text-[11px] text-gray-500 hover:text-gray-300">abbrechen</button>
             </div>
+        </div>
+    @endif
+    @if($st->status === 'geplant' && $st->kind === 'gericht' && !empty($snap['dish_idea_id']))
+        <div class="mt-1 pl-1 rounded bg-violet-500/5 border border-violet-500/10 p-2" data-gericht-bauplan="{{ $st->id }}">
+            @if(!empty($snap['beschreibung']))<p class="text-[11px] text-gray-300">{{ $snap['beschreibung'] }}</p>@endif
+            @if(!empty($snap['komponenten']))
+                <p class="mt-1 text-[10px] uppercase tracking-wide text-violet-300/70">Komponentenplan</p>
+                <ul class="mt-0.5 space-y-0.5">
+                    @foreach($snap['komponenten'] as $komponente)
+                        <li class="text-[10px] text-gray-400"><span class="text-gray-200">{{ $komponente['name'] ?? 'Komponente' }}</span>@if(!empty($komponente['funktion'])) · {{ $komponente['funktion'] }}@endif @if(!empty($komponente['herstellung'])) — {{ $komponente['herstellung'] }}@endif</li>
+                    @endforeach
+                </ul>
+            @endif
+            <p class="mt-1 text-[10px] text-gray-500">Noch kein Gericht angelegt. Blitz = annehmen und erst dann als Draft erden.</p>
         </div>
     @endif
     {{-- Etappe 6: EK/VK/Marge je Stufe — schon am Draft sichtbar (Kalkulation aus SalesRecipeService::cockpit,

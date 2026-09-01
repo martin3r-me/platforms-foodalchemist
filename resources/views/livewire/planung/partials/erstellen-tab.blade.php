@@ -19,23 +19,31 @@
         </div>
         <label class="{{ $label ?? 'text-[11px] text-gray-500' }}">Beschreibung (geht in die Erzeugung)</label>
         <textarea wire:model="eingabe.{{ $scope }}.brief" rows="3" class="{{ $input }} mb-3" placeholder="Constraints, Anlass, Richtung …"></textarea>
-        <label class="{{ $label ?? 'text-[11px] text-gray-500' }}">Kreativ-Modus</label>
-        <select wire:model.live="eingabe.{{ $scope }}.creative_mode" class="{{ $input }}">
-            @foreach($modeLabel as $val => $lbl)
-                <option value="{{ $val }}">{{ $lbl }}</option>
-            @endforeach
-        </select>
-        <p class="text-[11px] text-gray-500 mt-1">{{ ($modeHint ?? [])[$eingabe[$scope]['creative_mode'] ?? 'voll_kreativ'] ?? '' }}</p>
+        @if($scope === 'rezept')
+            <p class="text-[11px] text-gray-500">Basisrezepte haben keinen Kreativ-Modus. Vorhandene Basisrezepte und Grundprodukte werden zuerst geprüft; neu entsteht nur eine echte Lücke.</p>
+        @else
+            <label class="{{ $label ?? 'text-[11px] text-gray-500' }}">Kreativ-Modus</label>
+            <select wire:model.live="eingabe.{{ $scope }}.creative_mode" class="{{ $input }}">
+                @foreach($modeLabel as $val => $lbl)
+                    <option value="{{ $val }}">{{ $lbl }}</option>
+                @endforeach
+            </select>
+            <p class="text-[11px] text-gray-500 mt-1">{{ ($modeHint ?? [])[$eingabe[$scope]['creative_mode'] ?? 'voll_kreativ'] ?? '' }}</p>
+        @endif
     </x-foodalchemist::modal-section>
 
     @include('foodalchemist::livewire.planung.partials.leitplanken', ['scope' => $scope])
 
     @include('foodalchemist::livewire.planung.partials.schnellstart-speichern', ['scope' => $scope])
 
-    <x-foodalchemist::modal-section title="Go — {{ $goLabel }} erzeugen (Draft)">
+    <x-foodalchemist::modal-section title="Go — {{ $scope === 'gericht' ? 'Gericht-Bauplan vorschlagen' : $goLabel . ' erzeugen (Draft)' }}">
         @include('foodalchemist::livewire.planung.partials.worker-praesenz')
         <p class="{{ $label ?? 'text-[11px] text-gray-500' }} mb-2">
-            Der Entwurf entsteht im Hintergrund (Draft); der Fortschritt läuft im <b>Worker</b>-Tab sichtbar durch.
+            @if($scope === 'gericht')
+                Zuerst entsteht nur ein textlicher Bauplan mit Komponenten. Erst nach deiner Annahme wird daraus ein Rezept-Draft und die Kaskade läuft weiter.
+            @else
+                Der Entwurf entsteht im Hintergrund (Draft); der Fortschritt läuft im <b>Worker</b>-Tab sichtbar durch.
+            @endif
         </p>
         {{-- Composer-Übernahme: sichtbar machen, dass der Go auf die gewählten Foodpairing-Anker erdet. --}}
         @if(($composerSeedPin['scope'] ?? null) === $scope && !empty($composerSeedPin['slugs']))
@@ -49,7 +57,7 @@
         @endif
         <div class="flex flex-wrap gap-2 items-center">
             <button wire:click="goKaskade('{{ $scope }}')" @click="tab='worker'" @disabled($laeuft) class="{{ $btnPrimary }} disabled:opacity-40">
-                @svg($goIcon, 'w-4 h-4') {{ $goLabel }} erzeugen
+                @svg($goIcon, 'w-4 h-4') {{ $scope === 'gericht' ? 'Bauplan vorschlagen' : $goLabel . ' erzeugen' }}
             </button>
             <button type="button" wire:click="wissenVorschau('{{ $scope }}')" @disabled($laeuft)
                     wire:loading.attr="disabled" wire:target="wissenVorschau"

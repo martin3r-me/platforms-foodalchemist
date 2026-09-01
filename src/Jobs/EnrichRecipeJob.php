@@ -59,6 +59,9 @@ class EnrichRecipeJob implements ShouldQueue
 
     public function handle(RecipeOneShotService $oneShot): void
     {
+        if ($this->kaskadeAbgebrochen()) {
+            return;
+        }
         $team = Team::find($this->teamId);
         $user = User::find($this->userId);
         $recipe = $team === null ? null : FoodAlchemistRecipe::visibleToTeam($team)->find($this->recipeId);
@@ -78,7 +81,17 @@ class EnrichRecipeJob implements ShouldQueue
         if (! $this->nurBilder) {
             $this->markEnrich('running');
             try {
-                $oneShot->anreichern($team, $recipe, $this->zielVk, completeCoverage: $this->completeCoverage, refresh: $this->refresh);
+                $oneShot->anreichern(
+                    $team,
+                    $recipe,
+                    $this->zielVk,
+                    completeCoverage: $this->completeCoverage,
+                    refresh: $this->refresh,
+                    shouldStop: fn () => $this->kaskadeAbgebrochen(),
+                );
+                if ($this->kaskadeAbgebrochen()) {
+                    return;
+                }
                 // GP-Mint (EK-Vollständigkeit) ist orthogonal zur Text-Coverage: `anreichern` mintet nur bei
                 // completeCoverage. Bei „leichter" Anreicherung (Step-by-Step aus) trotzdem minten, damit die
                 // Kalkulation vollständig bleibt (fail-soft, mintet nur echte Roh-Lücken, s. minteFehlendeGps).
@@ -93,7 +106,7 @@ class EnrichRecipeJob implements ShouldQueue
             }
         }
 
-        if ($this->kiBilder || $this->nurBilder) {
+        if (! $this->kaskadeAbgebrochen() && ($this->kiBilder || $this->nurBilder)) {
             try {
                 $imageService = app(RecipeImageService::class);
                 if ($this->nurBilder) {
@@ -115,6 +128,17 @@ class EnrichRecipeJob implements ShouldQueue
                 $this->markBilder('failed', $e->getMessage(), 0);
             }
         }
+    }
+
+    private function kaskadeAbgebrochen(): bool
+    {
+        if ($this->stepId === null) {
+            return false;
+        }
+        $runId = \Platform\FoodAlchemist\Models\FoodAlchemistCascadeRunStep::whereKey($this->stepId)->value('cascade_run_id');
+
+        return $runId !== null
+            && app(\Platform\FoodAlchemist\Services\PlanningCascadeService::class)->istAbgebrochen((int) $runId);
     }
 
     /** Harter Job-Abbruch (nicht vom inneren try/catch abgefangen, z. B. Timeout/OOM): als

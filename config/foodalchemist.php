@@ -1133,9 +1133,21 @@ return [
                 . 'ob das Sortiment die Idee schon hergibt — die Erdung folgt später. Bleibe im Rahmen von '
                 . 'Leitplanken (Zielgruppen/Niveau/Anlass) und Kapitel-Zielen (Menge/Preis), aber ersticke '
                 . 'die Divergenz nicht: liefere unterschiedliche, eigenständige Ansätze statt Varianten desselben.',
-            'task' => 'Entwirf «anzahl» Gericht-Skizzen für das Kapitel: werte = {ideen: [{titel, beschreibung}]}. '
+            'task' => 'Entwirf «anzahl» kompakte Gericht-Baupläne: werte = {ideen: [{titel, beschreibung, komponenten: [{name, funktion, herstellung}]}]}. '
                 . 'titel = kurzer, konkreter Gericht-Name (kein Marketing-Claim); beschreibung = 1–2 Sätze zur '
-                . 'geschmacklichen/handwerklichen Idee. Nur Skizzen — keine Mengen, keine Preise, keine Zutatenlisten.',
+                . 'geschmacklichen/handwerklichen Idee. komponenten nennt die 2–6 tatsächlich benötigten Teller- oder '
+                . 'Basisrezept-Komponenten; funktion erklärt knapp ihre Rolle, herstellung beschreibt in einem Satz das '
+                . 'technische Ziel ohne Mengen. Noch keine vollständigen Rezepturen, Preise oder Datensätze anlegen.',
+        ],
+        'planning.dish_proposal_revise' => [
+            'tier' => 'B',
+            'max_tokens' => 1800,
+            'system' => 'Du überarbeitest einen bereits vorhandenen Gericht-Bauplan gezielt nach menschlichem Feedback. '
+                . 'Bleibe auf der Skizzenebene: keine Mengen, Preise, vollständigen Rezepturen oder Datensätze. '
+                . 'Bewahre gute, vom Feedback nicht betroffene Entscheidungen. Erfinde keine zusätzlichen Varianten.',
+            'task' => 'Überarbeite den einen Bauplan aus bestehend nach feedback: werte = {titel, beschreibung, komponenten: [{name, funktion, herstellung}]}. '
+                . 'Liefere 2–6 tatsächlich benötigte Komponenten. Der Bauplan muss anschließend ausreichend konkret sein, '
+                . 'um vorhandene Basisrezepte zu matchen und nur echte Lücken neu anzulegen.',
         ],
         // Spec 03 · L2: kundensichtbarer Einleitungstext eines Angebots-Abschnitts.
         // EIN Prompt für BEIDE Ebenen (`ebene` im Kontext): Foodbook-Einleitung und

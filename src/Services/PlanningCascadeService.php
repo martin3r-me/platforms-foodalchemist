@@ -9,10 +9,12 @@ use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Jobs\EnrichRecipeJob;
 use Platform\FoodAlchemist\Jobs\FanoutConceptJob;
 use Platform\FoodAlchemist\Jobs\GenerateConceptJob;
+use Platform\FoodAlchemist\Jobs\GenerateDishProposalJob;
 use Platform\FoodAlchemist\Jobs\GenerateRecipeJob;
 use Platform\FoodAlchemist\Jobs\MaterializeConceptIdeaJob;
 use Platform\FoodAlchemist\Jobs\MaterializeSpeisekartePositionJob;
 use Platform\FoodAlchemist\Jobs\MaterializeSpeiseplanCellJob;
+use Platform\FoodAlchemist\Jobs\ReviseDishProposalJob;
 use Platform\FoodAlchemist\Models\FoodAlchemistCascadeRecipeDependency;
 use Platform\FoodAlchemist\Models\FoodAlchemistCascadeRun;
 use Platform\FoodAlchemist\Models\FoodAlchemistVocabEinheit;
@@ -65,6 +67,9 @@ class PlanningCascadeService
      * sicher tot ist.
      */
     public const VERWAIST_NACH_MINUTEN = 30;
+
+    /** Marker in run.params für einen vom Menschen abgebrochenen Lauf. */
+    public const ABBRUCH_KEY = '_cancelled_at';
 
     /**
      * Startet einen Kaskaden-Lauf und gibt ihn zurück (Status `running`). Die eigentliche Generierung
@@ -155,6 +160,17 @@ class PlanningCascadeService
             } else {
                 $this->dispatchConceptStep($team, $step, $brief, $session?->id, $creativeMode, $params);
             }
+        } elseif ($scope === 'gericht' && $staged && $session !== null && (bool) ($optionen['proposal_first'] ?? false)) {
+            // Direkter Gericht-Go: zuerst nur ein kompakter Bauplan. Noch kein Rezeptdatensatz,
+            // keine Dependencies und keine Anreicherung; der geplante Step ist das Freigabe-Gate.
+            GenerateDishProposalJob::dispatch(
+                $team->id,
+                (int) (Auth::id() ?? 0),
+                (int) $session->id,
+                (int) $step->id,
+                $brief,
+                $creativeMode,
+            );
         } else {
             // Im gestuften Lauf schiebt der Root-Step (Basisrezept/Gericht) seine Kinder auf bis zur Freigabe.
             $this->dispatchRezeptStep($team, $step, $brief, $params, $scope === 'gericht', $vollAnreichern, $session?->id, $staged);
@@ -858,7 +874,9 @@ class PlanningCascadeService
                     break;   // mehr Ideen als leere Slots — Rest ignorieren
                 }
                 $idee->update([
-                    'generation_status' => 'queued',
+                    // Vorschlag-Gate: noch KEIN Materialisierungs-Job. Erst der Mensch startet ihn
+                    // über den geplanten Gericht-Step; bis dahin existiert nur diese Text-Skizze.
+                    'generation_status' => null,
                     'source_meta' => array_merge($idee->source_meta ?? [], ['target_concept_slot_id' => (int) $slot->id]),
                 ]);
                 $step = FoodAlchemistCascadeRunStep::create([
@@ -867,10 +885,14 @@ class PlanningCascadeService
                     'parent_step_id' => $conceptStepId,
                     'kind' => 'gericht',
                     'label' => Str::limit((string) $idee->title, 120),
-                    'status' => 'running',
+                    'status' => 'geplant',
                     'sort' => $idx + 1,
+                    'context_snapshot' => [
+                        'dish_idea_id' => (int) $idee->id,
+                        'beschreibung' => (string) ($idee->description ?? ''),
+                        'komponenten' => array_values((array) (($idee->source_meta ?? [])['komponenten'] ?? [])),
+                    ],
                 ]);
-                MaterializeConceptIdeaJob::dispatch($team->id, (int) (\Illuminate\Support\Facades\Auth::id() ?? 0), (int) $idee->id, (int) $step->id, $planningSessionId);
             }
         }
 
@@ -902,6 +924,21 @@ class PlanningCascadeService
         }
         $slotId = (int) ($idee->source_meta['target_concept_slot_id'] ?? 0);
         $beschreibung = trim(implode(' — ', array_filter([(string) $idee->title, (string) $idee->description]))) ?: (string) $idee->title;
+        // Der geprüfte Bauplan ersetzt eine erneute blinde Zerlegung: Der Generator erhält Namen,
+        // Funktion und technisches Ziel der Komponenten und kann damit zuerst Bestands-Basisrezepte matchen.
+        $komponenten = array_values((array) (($idee->source_meta ?? [])['komponenten'] ?? []));
+        if ($komponenten !== []) {
+            $zeilen = collect($komponenten)->filter('is_array')->map(function (array $k): string {
+                return trim(implode(' — ', array_filter([
+                    (string) ($k['name'] ?? ''),
+                    isset($k['funktion']) ? 'Funktion: ' . $k['funktion'] : null,
+                    isset($k['herstellung']) ? 'Ziel: ' . $k['herstellung'] : null,
+                ])));
+            })->filter()->values()->all();
+            if ($zeilen !== []) {
+                $beschreibung .= "\nKomponentenplan:\n- " . implode("\n- ", $zeilen);
+            }
+        }
 
         // Gestuft (Gate pro Ebene): das Gericht schiebt seine Basisrezepte auf bis zu seiner Freigabe.
         $staged = (bool) (FoodAlchemistCascadeRunStep::find($stepId)?->run?->staged ?? false);
@@ -1021,6 +1058,11 @@ class PlanningCascadeService
         if ($step === null) {
             return;
         }
+        // Ein bereits abgebrochener Lauf darf durch eine verspätete Worker-Rückmeldung nicht wieder
+        // auf review/done springen. Das Artefakt bleibt Draft und kann separat verworfen werden.
+        if ($this->istAbgebrochen((int) $step->cascade_run_id)) {
+            return;
+        }
         // L5: das Step-Label auf den ECHTEN Artefakt-Namen nachziehen. Bei der Anlage war es der auf
         // 120 Zeichen geschnittene Brief — das Cockpit zeigte also den Briefing-Text statt des Rezept-/
         // Concept-Namens. Der Brief bleibt separat im Run-Kopf sichtbar. Fail-soft (Name-Auflösung optional).
@@ -1061,6 +1103,37 @@ class PlanningCascadeService
         $step->update(['status' => 'failed', 'error' => Str::limit($error, 500, '')]);
         $this->recomputeRunStatus((int) $step->cascade_run_id);
         $this->scoreConceptCohesionIfComplete($step);
+    }
+
+    /**
+     * Stoppt genau EINEN Planungs-Lauf, nicht den globalen Queue-Worker. Bereits laufende externe
+     * Provider-Requests lassen sich nicht hart unterbrechen; ihre Rückmeldung wird aber ignoriert und
+     * es werden keine Folgestufen mehr gestartet. Queued/geplante Steps werden sofort terminal.
+     */
+    public function brecheLaufAb(Team $team, int $runId): bool
+    {
+        $run = $this->lauf($team, $runId);
+        if ($run === null || ! $run->isOwnedBy($team) || $run->status !== 'running') {
+            return false;
+        }
+        $params = is_array($run->params) ? $run->params : [];
+        $params[self::ABBRUCH_KEY] = now()->toIso8601String();
+        $run->update(['params' => $params, 'status' => 'failed']);
+        $run->steps()->whereIn('status', ['geplant', 'queued', 'running'])->update([
+            'status' => 'failed',
+            'error' => 'Vom Benutzer abgebrochen — keine weiteren Schritte werden gestartet.',
+        ]);
+
+        return true;
+    }
+
+    public function istAbgebrochen(int $runId): bool
+    {
+        $run = FoodAlchemistCascadeRun::find($runId);
+
+        return $run !== null
+            && is_array($run->params)
+            && isset($run->params[self::ABBRUCH_KEY]);
     }
 
     /**
@@ -1798,9 +1871,45 @@ class PlanningCascadeService
     public function erzeugeGeplantenStep(Team $team, int $stepId): void
     {
         $step = $this->ownedStep($team, $stepId);
+        $ideeId = (int) (($step->context_snapshot ?? [])['dish_idea_id'] ?? 0);
+        if ($step->kind === 'gericht' && $step->status === 'geplant' && $ideeId > 0) {
+            if ($this->istAbgebrochen((int) $step->cascade_run_id)) {
+                return;
+            }
+            $idee = FoodAlchemistDishIdea::where('team_id', $team->id)->find($ideeId);
+            if ($idee === null) {
+                $this->markStepFailed($stepId, 'Gerichtsvorschlag nicht gefunden.');
+                return;
+            }
+            $idee->update(['generation_status' => 'queued']);
+            $step->update(['status' => 'running', 'error' => null]);
+            MaterializeConceptIdeaJob::dispatch(
+                $team->id,
+                (int) (\Illuminate\Support\Facades\Auth::id() ?? 0),
+                $ideeId,
+                (int) $step->id,
+                $step->run?->planning_session_id !== null ? (int) $step->run->planning_session_id : null,
+            );
+            $step->run?->update(['status' => 'running']);
+            return;
+        }
         if (app(RecipeDependencyWorkflowService::class)->dispatchGeplantesKind($team, $step)) {
             $this->recomputeRunStatus((int) $step->cascade_run_id);
         }
+    }
+
+    /** Überarbeitet einen geplanten Gericht-Bauplan, ohne ihn zu materialisieren. */
+    public function ueberarbeiteGerichtVorschlag(Team $team, int $stepId, string $feedback): void
+    {
+        $step = $this->ownedStep($team, $stepId);
+        $ideeId = (int) (($step->context_snapshot ?? [])['dish_idea_id'] ?? 0);
+        $feedback = trim($feedback);
+        if ($step->kind !== 'gericht' || $step->status !== 'geplant' || $ideeId <= 0 || $feedback === '') {
+            throw new RuntimeException('Gerichtsvorschlag oder Feedback ist nicht vollständig.');
+        }
+        $step->update(['status' => 'running', 'error' => null]);
+        $step->run?->update(['status' => 'running']);
+        ReviseDishProposalJob::dispatch($team->id, (int) (Auth::id() ?? 0), $stepId, $ideeId, $feedback);
     }
 
     /**
@@ -1938,6 +2047,10 @@ class PlanningCascadeService
             return;
         }
         FoodAlchemistCascadeRecipeDependency::where('child_step_id', $step->id)->delete();
+        $ideeId = (int) (($step->context_snapshot ?? [])['dish_idea_id'] ?? 0);
+        if ($ideeId > 0) {
+            FoodAlchemistDishIdea::where('team_id', $team->id)->whereKey($ideeId)->update(['status' => 'verworfen']);
+        }
         $step->update(['status' => 'verworfen']);
         $this->recomputeRunStatus((int) $step->cascade_run_id);
     }

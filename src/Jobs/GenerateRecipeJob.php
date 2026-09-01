@@ -60,6 +60,10 @@ class GenerateRecipeJob implements ShouldQueue
 
     public function handle(RecipeGeneratorService $generator): void
     {
+        if ($this->kaskadeAbgebrochen()) {
+            $this->schreibe(['status' => 'cancelled']);
+            return;
+        }
         $team = Team::find($this->teamId);
         $user = User::find($this->userId);
         if ($team === null || $user === null) {
@@ -87,6 +91,13 @@ class GenerateRecipeJob implements ShouldQueue
             );
             if ($r === [] || ! isset($r['recipe'])) {
                 throw new \RuntimeException('Generierung lieferte kein Ergebnis.');
+            }
+            // Der Provider-Call kann nicht mitten im HTTP-Request abgewürgt werden. Wurde währenddessen
+            // gestoppt, den eben entstandenen Draft soft-deleten und keinerlei Lineage/Kinder erzeugen.
+            if ($this->kaskadeAbgebrochen()) {
+                $r['recipe']->delete();
+                $this->schreibe(['status' => 'cancelled']);
+                return;
             }
             // Planungs-„Go"-Lineage: Trend-Herkunft + created_via=plan_go ans Rezept, Session→konvergenz.
             $planId = isset($this->parameter['planning_session_id']) ? (int) $this->parameter['planning_session_id'] : null;
@@ -166,6 +177,18 @@ class GenerateRecipeJob implements ShouldQueue
         $roh = $this->parameter['cascade_step_id'] ?? null;
 
         return is_numeric($roh) ? (int) $roh : null;
+    }
+
+    private function kaskadeAbgebrochen(): bool
+    {
+        $stepId = $this->cascadeStepId();
+        if ($stepId === null) {
+            return false;
+        }
+        $runId = \Platform\FoodAlchemist\Models\FoodAlchemistCascadeRunStep::whereKey($stepId)->value('cascade_run_id');
+
+        return $runId !== null
+            && app(\Platform\FoodAlchemist\Services\PlanningCascadeService::class)->istAbgebrochen((int) $runId);
     }
 
     /**

@@ -7,6 +7,7 @@ use Livewire\Livewire;
 use Platform\FoodAlchemist\Jobs\EnrichRecipeJob;
 use Platform\FoodAlchemist\Jobs\FanoutConceptJob;
 use Platform\FoodAlchemist\Jobs\GenerateConceptJob;
+use Platform\FoodAlchemist\Jobs\GenerateDishProposalJob;
 use Platform\FoodAlchemist\Jobs\GenerateRecipeJob;
 use Platform\FoodAlchemist\Jobs\MaterializeConceptIdeaJob;
 use Platform\FoodAlchemist\Jobs\MaterializeSpeisekartePositionJob;
@@ -1000,7 +1001,8 @@ it('Cockpit: goKaskade startet den Lauf in-place (kein Redirect) und pollt', fun
         ->assertNotSet('laufId', null)
         ->assertNoRedirect();
 
-    Queue::assertPushed(GenerateRecipeJob::class, fn ($job) => $job->vkModus === true);
+    Queue::assertPushed(GenerateDishProposalJob::class, fn ($job) => $job->creativeMode === 'voll_kreativ');
+    Queue::assertNotPushed(GenerateRecipeJob::class); // vor Annahme existiert nur der Bauplan
     expect(FoodAlchemistCascadeRun::where('planning_session_id', $session->id)->count())->toBe(1);
 });
 
@@ -1165,7 +1167,7 @@ it('Go (concept, voll_kreativ): reicht creative_mode an GenerateConceptJob durch
     Queue::assertPushed(GenerateConceptJob::class, fn ($job) => $job->creativeMode === 'voll_kreativ');
 });
 
-it('Fan-out: je leerem Slot ein Kind-Step (kind=gericht) + MaterializeConceptIdeaJob (Divergenz gemockt)', function () {
+it('Fan-out: je leerem Slot nur ein geplanter Gericht-Bauplan; Materialisierung erst nach Klick', function () {
     $concept = $this->makeConcept($this->rootTeam, 'Buffet', ['status' => 'draft']);
     $s1 = $this->makeConceptSlot($concept, ['position' => 1]);
     $s2 = $this->makeConceptSlot($concept, ['position' => 2]);
@@ -1182,9 +1184,32 @@ it('Fan-out: je leerem Slot ein Kind-Step (kind=gericht) + MaterializeConceptIde
 
     $kinder = $run->steps()->where('kind', 'gericht')->where('parent_step_id', $conceptStep->id)->get();
     expect($kinder)->toHaveCount(2)
+        ->and($kinder->pluck('status')->unique()->all())->toBe(['geplant'])
+        ->and((int) ($kinder->first()->context_snapshot['dish_idea_id'] ?? 0))->toBe((int) $i1->id)
         ->and((int) ($i1->refresh()->source_meta['target_concept_slot_id'] ?? 0))->toBe((int) $s1->id)
         ->and((int) ($i2->refresh()->source_meta['target_concept_slot_id'] ?? 0))->toBe((int) $s2->id);
-    Queue::assertPushed(MaterializeConceptIdeaJob::class, 2);
+    Queue::assertNotPushed(MaterializeConceptIdeaJob::class);
+
+    app(PlanningCascadeService::class)->erzeugeGeplantenStep($this->rootTeam, (int) $kinder->first()->id);
+    Queue::assertPushed(MaterializeConceptIdeaJob::class, 1);
+    expect($kinder->first()->refresh()->status)->toBe('running')
+        ->and($i1->refresh()->generation_status)->toBe('queued');
+});
+
+it('Planungs-Lauf kann sicher gestoppt werden und startet keine queued Steps mehr', function () {
+    $run = FoodAlchemistCascadeRun::create(['team_id' => $this->rootTeam->id, 'scope' => 'gericht', 'status' => 'running', 'params' => []]);
+    $step = FoodAlchemistCascadeRunStep::create([
+        'team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id,
+        'kind' => 'gericht', 'status' => 'running',
+    ]);
+
+    $ok = app(PlanningCascadeService::class)->brecheLaufAb($this->rootTeam, (int) $run->id);
+
+    expect($ok)->toBeTrue()
+        ->and($run->refresh()->status)->toBe('failed')
+        ->and($run->params)->toHaveKey(PlanningCascadeService::ABBRUCH_KEY)
+        ->and($step->refresh()->status)->toBe('failed')
+        ->and($step->error)->toContain('Vom Benutzer abgebrochen');
 });
 
 it('Fan-out ist graceful: ohne LLM-Provider 0 erfundene Gerichte, kein Job (Konzept bleibt)', function () {
@@ -2217,7 +2242,7 @@ it('L1 komplett_neu: Reuse-Gate übersprungen — trotz Bestand wird neu geplant
         ->and($kinder->first()->status)->toBe('running');
 });
 
-it('L1 goKaskade: Kreativ-Modus datenbank leitet bestand=nur_bestand ab (in den Job-Params)', function () {
+it('L1 goKaskade: Kreativ-Modus datenbank persistiert bestand=nur_bestand für die spätere Erdung', function () {
     $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'DB-Modus', 'brief' => 'x']);
 
     Livewire::test(PlanungIndex::class)
@@ -2227,7 +2252,8 @@ it('L1 goKaskade: Kreativ-Modus datenbank leitet bestand=nur_bestand ab (in den 
         ->call('goKaskade', 'gericht')
         ->assertSet('laeuft', true);
 
-    Queue::assertPushed(GenerateRecipeJob::class, fn ($job) => ($job->parameter['bestand'] ?? null) === 'nur_bestand');
+    Queue::assertPushed(GenerateDishProposalJob::class);
+    Queue::assertNotPushed(GenerateRecipeJob::class);
     expect($session->refresh()->generation_params['bestand'] ?? null)->toBe('nur_bestand');
 });
 

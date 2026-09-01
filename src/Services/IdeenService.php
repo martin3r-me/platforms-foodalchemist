@@ -325,6 +325,7 @@ class IdeenService
                     'quelle' => 'ki_divergenz',
                     'confidence' => $proposal->confidence,
                     'call_log_id' => $proposal->callLogId,
+                    'komponenten' => $this->komponentenPlan($i['komponenten'] ?? []),
                 ],
             ]);
         }
@@ -447,6 +448,7 @@ class IdeenService
                     'quelle' => 'ki_divergenz_concept',
                     'confidence' => $proposal->confidence,
                     'call_log_id' => $proposal->callLogId,
+                    'komponenten' => $this->komponentenPlan($i['komponenten'] ?? []),
                 ],
             ]);
         }
@@ -526,6 +528,7 @@ class IdeenService
                     'quelle' => 'ki_divergenz_session',
                     'confidence' => $proposal->confidence,
                     'call_log_id' => $proposal->callLogId,
+                    'komponenten' => $this->komponentenPlan($i['komponenten'] ?? []),
                 ],
             ]);
         }
@@ -534,6 +537,27 @@ class IdeenService
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────
+
+    /** @return list<array{name:string,funktion:?string,herstellung:?string}> */
+    private function komponentenPlan(mixed $roh): array
+    {
+        if (! is_array($roh)) {
+            return [];
+        }
+
+        return collect($roh)->filter('is_array')->map(function (array $k): ?array {
+            $name = trim((string) ($k['name'] ?? ''));
+            if ($name === '') {
+                return null;
+            }
+
+            return [
+                'name' => mb_strimwidth($name, 0, 120),
+                'funktion' => $this->clean($k['funktion'] ?? null),
+                'herstellung' => $this->clean($k['herstellung'] ?? null),
+            ];
+        })->filter()->take(8)->values()->all();
+    }
 
     /**
      * Owner-XOR-Guard: exakt eines von chapter_id/concept_id. Gibt normalisiertes

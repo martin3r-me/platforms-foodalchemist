@@ -61,6 +61,10 @@ class GenerateConceptJob implements ShouldQueue
 
     public function handle(ConceptGeneratorService $generator): void
     {
+        if ($this->kaskadeAbgebrochen()) {
+            $this->schreibe(['status' => 'cancelled']);
+            return;
+        }
         $team = Team::find($this->teamId);
         $user = User::find($this->userId);
         if ($team === null || $user === null) {
@@ -85,6 +89,11 @@ class GenerateConceptJob implements ShouldQueue
             $concept = $r['concept'] ?? null;
             if ($concept === null) {
                 throw new \RuntimeException('Konzept-Generierung lieferte kein Ergebnis.');
+            }
+            if ($this->kaskadeAbgebrochen()) {
+                $concept->delete();
+                $this->schreibe(['status' => 'cancelled']);
+                return;
             }
             // Planungs-„Go"-Lineage: Trend-Herkunft ans Konzept, Session→konvergenz.
             if ($this->planningSessionId !== null) {
@@ -229,6 +238,17 @@ class GenerateConceptJob implements ShouldQueue
         } catch (\Throwable) {
             // Rückkanal-Fehler bewusst schlucken.
         }
+    }
+
+    private function kaskadeAbgebrochen(): bool
+    {
+        if ($this->cascadeStepId === null) {
+            return false;
+        }
+        $runId = \Platform\FoodAlchemist\Models\FoodAlchemistCascadeRunStep::whereKey($this->cascadeStepId)->value('cascade_run_id');
+
+        return $runId !== null
+            && app(\Platform\FoodAlchemist\Services\PlanningCascadeService::class)->istAbgebrochen((int) $runId);
     }
 
     private function schreibe(array $data): void

@@ -41,6 +41,11 @@ class MaterializeConceptIdeaJob implements ShouldQueue
 
     public function handle(): void
     {
+        $cascade = app(PlanningCascadeService::class);
+        $runId = \Platform\FoodAlchemist\Models\FoodAlchemistCascadeRunStep::whereKey($this->cascadeStepId)->value('cascade_run_id');
+        if ($runId !== null && $cascade->istAbgebrochen((int) $runId)) {
+            return;
+        }
         $team = Team::find($this->teamId);
         if ($team === null) {
             app(PlanningCascadeService::class)->markStepFailed($this->cascadeStepId, 'Team nicht gefunden.');
@@ -52,7 +57,7 @@ class MaterializeConceptIdeaJob implements ShouldQueue
             Auth::login($user);   // Team-Kontext für AiGatewayService (Kill-Switch/DNA/Call-Log)
         }
 
-        app(PlanningCascadeService::class)->materialisiereConceptGericht($team, $this->ideaId, $this->cascadeStepId, $this->planningSessionId);
+        $cascade->materialisiereConceptGericht($team, $this->ideaId, $this->cascadeStepId, $this->planningSessionId);
     }
 
     /** Job-Tod (Timeout/Fatal) → Step trotzdem terminal setzen, sonst hängt der Run auf „running". */

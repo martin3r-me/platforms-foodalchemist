@@ -40,6 +40,9 @@ class FanoutConceptJob implements ShouldQueue
         if ($team === null || $step === null || $step->ref_id === null) {
             return;
         }
+        if ($cascade->istAbgebrochen((int) $step->cascade_run_id)) {
+            return;
+        }
         $user = User::find($this->userId);
         if ($user !== null) {
             Auth::login($user);   // Team-Kontext für AiGatewayService (Divergenz-Call)

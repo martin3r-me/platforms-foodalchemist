@@ -5,6 +5,7 @@ use Livewire\Livewire;
 use Platform\Core\Contracts\LLMProviderContract;
 use Platform\FoodAlchemist\Jobs\GenerateConceptJob;
 use Platform\FoodAlchemist\Jobs\GenerateRecipeJob;
+use Platform\FoodAlchemist\Jobs\GenerateDishProposalJob;
 use Platform\FoodAlchemist\Livewire\Planung\Index as PlanungIndex;
 use Platform\FoodAlchemist\Models\FoodAlchemistBriefTemplate;
 use Platform\FoodAlchemist\Models\FoodAlchemistCascadeRun;
@@ -2273,7 +2274,8 @@ it('L1.5 Aroma-Küche: aroma_kueche reist als Leitplanke in die Job-Params', fun
         ->set('regler.gericht.aroma_kueche', 'japanisch')
         ->call('goKaskade', 'gericht');
 
-    Queue::assertPushed(GenerateRecipeJob::class, fn ($job) => ($job->parameter['aroma_kueche'] ?? null) === 'japanisch');
+    Queue::assertPushed(GenerateDishProposalJob::class);
+    Queue::assertNotPushed(GenerateRecipeJob::class);
     expect($session->refresh()->generation_params['aroma_kueche'] ?? null)->toBe('japanisch');
 });
 
@@ -2298,7 +2300,7 @@ it('L3 Allergen-No-Go: reglerPill togglet allergen_nogo (Multi) und reicht es in
 
 // ── L5 — Titel-Anker + Rehydrierung ──────────────────────────────────────────────────────────
 
-it('L5 Titel-Anker: getippter Gericht-Titel reist als titel_vorgabe in die Job-Params, NICHT in die Session-Params', function () {
+it('L5 Titel-Anker: getippter Gericht-Titel bleibt nur im Bauplan-Brief, NICHT in den Session-Params', function () {
     $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Titel-Test', 'brief' => 'x']);
 
     Livewire::test(PlanungIndex::class)
@@ -2308,7 +2310,8 @@ it('L5 Titel-Anker: getippter Gericht-Titel reist als titel_vorgabe in die Job-P
         ->call('goKaskade', 'gericht')
         ->assertSet('laeuft', true);
 
-    Queue::assertPushed(GenerateRecipeJob::class, fn ($job) => ($job->parameter['titel_vorgabe'] ?? null) === 'Sommerbowl');
+    Queue::assertPushed(GenerateDishProposalJob::class, fn ($job) => str_contains($job->brief, 'Sommerbowl'));
+    Queue::assertNotPushed(GenerateRecipeJob::class);
     // NICHT in den vererbten Session-Params (sonst erbte jedes Fan-out-Kind den Gericht-Titel als Namen).
     expect($session->refresh()->generation_params['titel_vorgabe'] ?? null)->toBeNull();
 });
@@ -2342,12 +2345,11 @@ it('L6 Menge&Ziel: gültige Zahl-Achsen + Saison reisen in die Job-Params, ungü
         ->call('goKaskade', 'gericht')
         ->assertSet('laeuft', true);
 
-    Queue::assertPushed(GenerateRecipeJob::class, function ($job) {
-        return ($job->parameter['pax'] ?? null) === 50
-            && ($job->parameter['ziel_portion_g'] ?? null) === 180
-            && ($job->parameter['saison'] ?? null) === 'sommer'
-            && ! array_key_exists('ziel_we_pct', $job->parameter);   // 999 verworfen
-    });
+    Queue::assertPushed(GenerateDishProposalJob::class);
+    Queue::assertNotPushed(GenerateRecipeJob::class);
+    expect($session->refresh()->generation_params)->toMatchArray([
+        'pax' => 50, 'ziel_portion_g' => 180, 'saison' => 'sommer',
+    ])->not->toHaveKey('ziel_we_pct');
 });
 
 // ── UX (2026-08-20): Auto-Titel aus Kontext + Status in der landingKaskadenMap ────────────────
