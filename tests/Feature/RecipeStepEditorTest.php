@@ -153,7 +153,7 @@ it('KI-Fotos erzeugt Bilder fuer alle Schritte ohne Foto und laesst bestehende F
                 ->and($contextType)->toBe('foodalchemist.recipe')
                 ->and($userId)->toBe($user->id)
                 ->and($teamId)->toBe($rootTeamId)
-                ->and($options)->toBe(['size' => '1024x1024', 'quality' => 'medium']);
+                ->and($options)->toBe(['size' => '1024x1024', 'quality' => 'low']);
 
             $token = 'ki-step-' . $lauf . '-' . \Illuminate\Support\Str::random(8);
             $file = ContextFile::create([
