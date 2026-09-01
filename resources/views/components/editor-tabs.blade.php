@@ -53,6 +53,8 @@
     'marker' => null,              {{-- data-{marker}-tabs am Root + data-{marker}-tab je Button --}}
     'action' => null,              {{-- Server-Modus: Livewire-Methode, z. B. 'setTab' --}}
     'active' => null,              {{-- Server-Modus: aktiver Tab-Schlüssel aus der Komponente --}}
+    'visitAction' => null,         {{-- Alpine-Modus: beim ersten Besuch schwere Inhalte serverseitig freischalten --}}
+    'visited' => [],               {{-- bereits serverseitig aufgebaute Reiter; verhindert Folge-Roundtrips --}}
     'counts' => [],                {{-- Server-Modus (optional): ['key' => int] → Zähler-Badge, nur wenn > 0 --}}
 ])
 @php
@@ -77,7 +79,7 @@
     </div>
 @else
     <div @if($wireKey) wire:key="{{ $wireKey }}" @endif
-         x-data="{ tab: @js($startTab) }"
+         x-data="{ tab: @js($startTab), visited: @js(array_values($visited)) }"
          {{-- `open` existiert nur im Modal-Scope — Guard, damit der Baustein auch außerhalb eines
               Modals (Panel, Seite) ohne Alpine-Fehler läuft. --}}
          x-effect="if (typeof open !== 'undefined' && open) tab = @js($startTab)"
@@ -88,7 +90,7 @@
         @if(count($sichtbar) > 1)
             <div class="{{ $leiste }} -mt-4 pt-4">
                 @foreach($sichtbar as $tabKey => $tabLabel)
-                    <button type="button" @click="tab = @js($tabKey)"
+                    <button type="button" @click="tab = @js($tabKey)@if($visitAction); if (! visited.includes(@js($tabKey))) { visited.push(@js($tabKey)); $wire.{{ $visitAction }}(@js($tabKey)); }@endif"
                             :class="tab === @js($tabKey) ? '{{ $an }}' : '{{ $aus }}'"
                             class="{{ $knopf }}"
                             data-fa-editor-tab="{{ $tabKey }}" @if($marker) data-{{ $marker }}-tab="{{ $tabKey }}" @endif>{{ $tabLabel }}</button>

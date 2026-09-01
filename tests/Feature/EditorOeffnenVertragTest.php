@@ -63,9 +63,32 @@ it('Basisrezept-Editor lädt auf das Öffnen-Event und meldet den Dialog an', fu
         ->dispatch('recipe-modal.oeffnen', id: $rezept->id)
         ->assertSet('istOffen', true)
         ->assertSet('recipeId', $rezept->id)
+        ->assertSet('geladeneTabs', ['aufbau' => true])
         ->assertSee('BBQ Texas')
         // Der Baustein hört auf dieses Event — ohne es bliebe der Dialog zu.
         ->assertDispatched('modal.open', name: 'recipe-modal');
+});
+
+it('Basisrezept-Editor zeigt vor dem Datensatz eine Ladehülle und lädt schwere Reiter erst beim Besuch', function () {
+    $rezept = $this->makeRecipe($this->rootTeam, 'Fond: Lazy');
+
+    Livewire::test(RecipeModal::class)
+        ->assertSee('Basisrezept wird geladen')
+        ->assertSeeHtml('data-rezept-laedt')
+        ->dispatch('recipe-modal.oeffnen', id: $rezept->id)
+        ->assertSet('geladeneTabs', ['aufbau' => true])
+        ->assertSeeHtml('data-rezept-tab-laedt="sensorik"')
+        ->call('tabLaden', 'sensorik')
+        ->assertSet('geladeneTabs.sensorik', true)
+        ->assertDontSeeHtml('data-rezept-tab-laedt="sensorik"');
+});
+
+it('Basisrezept-Browser öffnet die Ladehülle sofort und adressiert den Editor ohne Browser-Roundtrip', function () {
+    $rezept = $this->makeRecipe($this->rootTeam, 'Fond: Sofort');
+
+    Livewire::test(RecipeBrowser::class)
+        ->assertSeeHtml("\$dispatch('modal.open', { name: 'recipe-modal' }); Livewire.dispatch('recipe-modal.oeffnen', { id: {$rezept->id} })")
+        ->assertSee('Fond: Sofort');
 });
 
 it('Gerichte-Editor lädt auf das Öffnen-Event und meldet den Dialog an', function () {
@@ -77,17 +100,18 @@ it('Gerichte-Editor lädt auf das Öffnen-Event und meldet den Dialog an', funct
         ->assertDispatched('modal.open', name: 'vk-modal');
 });
 
-it('hartes Schließen räumt den Serverzustand ab (State-Leak-Vertrag)', function () {
+it('Schließen bleibt lokal und das nächste Öffnen ersetzt den alten Zustand vollständig', function () {
     $rezept = $this->makeRecipe($this->rootTeam, 'BBQ Texas');
+    $naechstes = $this->makeRecipe($this->rootTeam, 'Fond Neu');
 
     Livewire::test(RecipeModal::class)
         ->dispatch('recipe-modal.oeffnen', id: $rezept->id)
         ->assertSet('istOffen', true)
         ->assertSet('recipeId', $rezept->id)
         ->assertSet('form.name', 'BBQ Texas')
-        // `modal.closed` erreicht Livewire — sechs Komponenten bauen per #[On] darauf auf.
-        ->dispatch('modal.closed', name: 'recipe-modal')
-        ->assertSet('istOffen', false)
-        ->assertSet('recipeId', null)
-        ->assertSet('form.name', '');
+        // Wie beim Gerichte-Editor löst das lokale Schließen keine Komponenten-Aktion aus;
+        // der nächste Öffner ersetzt den gehaltenen Zustand vollständig.
+        ->dispatch('recipe-modal.oeffnen', id: $naechstes->id)
+        ->assertSet('recipeId', $naechstes->id)
+        ->assertSet('form.name', 'Fond Neu');
 });

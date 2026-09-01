@@ -14,6 +14,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistGpLaPreference;
 use Platform\FoodAlchemist\Models\FoodAlchemistItemDeclaration;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipeIngredient;
+use Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem;
 
 /**
  * M4-03: GL-02-Recompute-Pipeline — EINE Transaktion pro Rezept (V-07):
@@ -54,8 +55,7 @@ class RecipeRecomputeService
     public function __construct(
         private GpAggregateService $gpAggregate,
         private PriceService $preise,
-    ) {
-    }
+    ) {}
 
     /** Pipeline für EIN Rezept — idempotent (I4), eine Transaktion (V-07). */
     public function recomputePipeline(int $recipeId, bool $cascadePrices = true): void
@@ -221,6 +221,7 @@ class RecipeRecomputeService
      * §3.4: Bulk in topologischer Ordnung (Kahn) — Kinder vor Eltern (A-4: verbindlich).
      *
      * @return array{berechnet: int, reihenfolge_ok: bool}
+     *
      * @throws \RuntimeException bei Zyklus (mit beteiligten recipe_ids)
      */
     public function recomputeAll(): array
@@ -255,7 +256,7 @@ class RecipeRecomputeService
         }
         if (count($order) < count($ids)) {
             $zyklus = array_keys(array_filter($inDegree, fn ($d) => $d > 0));
-            throw new \RuntimeException('Zyklus im Sub-Rezept-Graph — beteiligte recipe_ids: ' . implode(', ', $zyklus));
+            throw new \RuntimeException('Zyklus im Sub-Rezept-Graph — beteiligte recipe_ids: '.implode(', ', $zyklus));
         }
 
         foreach ($order as $id) {
@@ -974,10 +975,10 @@ class RecipeRecomputeService
             }
             $c = $z->gp->allergens_confidence;
             $rang = min($rang, match (true) {
-                $c === null        => 1,                           // unbewertet → low (Werte kommen dennoch aus dem GP)
+                $c === null => 1,                           // unbewertet → low (Werte kommen dennoch aus dem GP)
                 (float) $c >= 0.85 => 3,                           // high
                 (float) $c >= 0.50 => 2,                           // medium
-                default            => 1,                           // 0–0.5 → low; 'unknown' bleibt dem leeren Rezept
+                default => 1,                           // 0–0.5 → low; 'unknown' bleibt dem leeren Rezept
             });
         }
 
@@ -1034,6 +1035,71 @@ class RecipeRecomputeService
         $this->leadPrefCache = [];
 
         return $this->preisProGrammFuer($gp);
+    }
+
+    /**
+     * Preisvarianten für mehrere GPs in konstant vielen Abfragen. Der Zutateneditor braucht
+     * dieselbe team-bewusste Lead-Wahrheit wie das Recompute, zusätzlich aber Minimum und Ø
+     * für den Vergleich. Vorher setzte `preisProGrammPublic()` seine Caches je Zeile zurück
+     * und `GpService::lasForGp()` lud Artikel samt Aktivpreis nochmals je GP (N+1 beim Öffnen).
+     *
+     * @param  Collection<int, FoodAlchemistGp>  $gps
+     * @return array<int, array{lead: ?float, min: ?float, avg: ?float}>
+     */
+    public function preisVariantenProGrammPublic(Collection $gps, ?Team $team = null): array
+    {
+        $gps = $gps->filter()->unique('id')->values();
+        if ($gps->isEmpty()) {
+            return [];
+        }
+
+        $this->recomputeTeam = $team;
+        $this->laCache = [];
+        $this->leadPrefCache = [];
+        $gpIds = $gps->pluck('id')->map(fn ($id) => (int) $id)->all();
+
+        $las = FoodAlchemistSupplierItem::query()
+            ->when($team, fn ($q) => $q->visibleToTeam($team))
+            ->join('foodalchemist_supplier_item_structures AS s', 's.supplier_item_id', '=', 'foodalchemist_supplier_items.id')
+            ->whereIn('s.gp_id', $gpIds)->whereNull('s.deleted_at')
+            ->select('foodalchemist_supplier_items.*')
+            ->addSelect('s.gp_id AS _preis_gp_id')
+            ->selectSub($this->preise->activePriceSubquery()->toBase(), 'aktiver_preis')
+            ->get()
+            ->groupBy(fn ($la) => (int) $la->_preis_gp_id);
+
+        foreach ($gpIds as $gpId) {
+            $this->laCache[$gpId] = $las->get($gpId, collect())->values();
+        }
+
+        if ($team !== null) {
+            $prefs = FoodAlchemistGpLaPreference::query()
+                ->where('team_id', $team->id)->whereIn('gp_id', $gpIds)
+                ->get(['gp_id', 'supplier_item_id', 'gepinnt', 'locked'])
+                ->groupBy('gp_id');
+            foreach ($gpIds as $gpId) {
+                $this->leadPrefCache[$team->id.':'.$gpId] = $prefs->get($gpId, collect())
+                    ->mapWithKeys(fn ($r) => [(int) $r->supplier_item_id => [
+                        'gepinnt' => (bool) $r->gepinnt,
+                        'locked' => (bool) $r->locked,
+                    ]])->all();
+            }
+        }
+
+        $result = [];
+        foreach ($gps as $gp) {
+            $werte = $this->laCache[(int) $gp->id]
+                ->filter(fn ($la) => in_array($la->unit_code, ['kg', 'l'], true) && $la->aktiver_preis !== null)
+                ->map(fn ($la) => $this->preise->preisProGramm($la, (float) $la->aktiver_preis))
+                ->filter(fn ($wert) => $wert !== null)->values();
+            $result[(int) $gp->id] = [
+                'lead' => $this->preisProGrammFuer($gp),
+                'min' => $werte->isNotEmpty() ? (float) $werte->min() : null,
+                'avg' => $werte->isNotEmpty() ? (float) $werte->avg() : null,
+            ];
+        }
+
+        return $result;
     }
 
     /**
@@ -1185,7 +1251,7 @@ class RecipeRecomputeService
         if ($this->recomputeTeam === null) {
             return [];
         }
-        $key = $this->recomputeTeam->id . ':' . $gp->id;
+        $key = $this->recomputeTeam->id.':'.$gp->id;
 
         return $this->leadPrefCache[$key] ??= FoodAlchemistGpLaPreference::query()
             ->where('team_id', $this->recomputeTeam->id)
@@ -1215,7 +1281,7 @@ class RecipeRecomputeService
 
     private function laMitPreis(FoodAlchemistGp $gp): Collection
     {
-        return $this->laCache[$gp->id] ??= \Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem::query()
+        return $this->laCache[$gp->id] ??= FoodAlchemistSupplierItem::query()
             ->when($this->recomputeTeam, fn ($q) => $q->visibleToTeam($this->recomputeTeam))
             ->join('foodalchemist_supplier_item_structures AS s', 's.supplier_item_id', '=', 'foodalchemist_supplier_items.id')
             ->where('s.gp_id', $gp->id)->whereNull('s.deleted_at')

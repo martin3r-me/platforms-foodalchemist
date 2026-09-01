@@ -351,7 +351,7 @@ return [
             'gpt-4o' => ['in' => 2.50, 'cached_in' => 1.25, 'out' => 10.00],
         ],
 
-        /* GPT-Image-1.5, 1024×1024, medium/„standard": 0,034 USD je Bild. */
+        /* GPT-Image-1.5, 1024×1024, medium: 0,034 USD je Bild. */
         'bildkosten_usd' => [
             'models' => ['gpt-image-1.5' => 0.034],
             'features' => [],

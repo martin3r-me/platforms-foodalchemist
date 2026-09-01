@@ -6,10 +6,23 @@ use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\On;
 use Livewire\Component;
 use Livewire\WithFileUploads;
+use Platform\FoodAlchemist\Jobs\EnrichRecipeJob;
+use Platform\FoodAlchemist\Livewire\Concerns\HatRezeptCopilot;
+use Platform\FoodAlchemist\Livewire\Concerns\InteractsWithSavedToast;
+use Platform\FoodAlchemist\Models\FoodAlchemistProductionStation;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipeCategory;
+use Platform\FoodAlchemist\Models\FoodAlchemistVocabKochequipment;
 use Platform\FoodAlchemist\Services\Ai\AiGatewayService;
+use Platform\FoodAlchemist\Services\Ai\KnowledgeContextService;
+use Platform\FoodAlchemist\Services\BulkEnrichService;
+use Platform\FoodAlchemist\Services\FoodAlchemistMediaService;
+use Platform\FoodAlchemist\Services\PairingService;
+use Platform\FoodAlchemist\Services\RecipeOneShotService;
+use Platform\FoodAlchemist\Services\RecipeReviseService;
 use Platform\FoodAlchemist\Services\RecipeService;
+use Platform\FoodAlchemist\Services\RecipeStepService;
+use Platform\FoodAlchemist\Services\SensorikService;
 
 /**
  * M4-06 / P-2: Rezept-Stammdaten-Modal — Name (§1-Syntax-Hint, „Name putzen"-KI),
@@ -18,8 +31,8 @@ use Platform\FoodAlchemist\Services\RecipeService;
  */
 class RecipeModal extends Component
 {
-    use \Platform\FoodAlchemist\Livewire\Concerns\HatRezeptCopilot;   // Spec 03 L6b
-    use \Platform\FoodAlchemist\Livewire\Concerns\InteractsWithSavedToast;
+    use HatRezeptCopilot;   // Spec 03 L6b
+    use InteractsWithSavedToast;
     use WithFileUploads;
 
     /** Spec 43 (Bild-Epic): Gericht-Foto (Stammdaten). */
@@ -65,9 +78,6 @@ class RecipeModal extends Component
 
     public ?string $fehler = null;
 
-    /** Navigations-Stack: aus Rezept A ein Sub-Rezept B öffnen → A wird gemerkt; ✕ springt zurück zu A. */
-    public array $navStack = [];
-
     public bool $istOffen = false;
 
     /** @var array<string, bool> Legacy-Client-State aus kurzzeitigem Lazy-Tab-Render; bleibt als No-op, bis alte Livewire-Snapshots verschwunden sind. */
@@ -80,38 +90,18 @@ class RecipeModal extends Component
     #[On('recipe-modal.oeffnen')]
     public function oeffnen(?int $id = null, bool $copilot = false): void
     {
-        // Sub-Navigation: aus einem bereits OFFENEN Rezept ein anderes öffnen → Eltern auf den Stack.
-        if ($this->istOffen && $this->recipeId !== null && $id !== null && $this->recipeId !== $id) {
-            $this->navStack[] = $this->recipeId;
-        }
+        // Wie beim stabilen Gerichte-Editor: alter Zustand wird erst beim nächsten Öffnen
+        // verworfen. Beim Schließen selbst gibt es dadurch keinen Livewire-Morph des Modals.
+        $this->editorStateEntladen();
         $this->ladeRezept($id);
         if ($copilot && $this->recipeId !== null) {
             $this->copilotAusAblage();
         }
     }
 
-    /** ✕ am Rezept-Modal: bei Sub-Navigation zurück zum Eltern-Rezept, sonst hart schließen. */
-    public function schliessenOderZurueck(): void
-    {
-        if (! empty($this->navStack)) {
-            $this->ladeRezept((int) array_pop($this->navStack));   // zurück — KEIN erneuter Push
-            return;
-        }
-        $this->dispatch('modal.close', name: 'recipe-modal');
-    }
-
-    #[On('modal.closed')]
-    public function beiModalClosed(?string $name = null): void
-    {
-        if ($name === 'recipe-modal') {                            // hartes Schließen (Backdrop/Escape/✕ ohne Stack) → schweren Editor-State entladen
-            $this->editorStateEntladen();
-        }
-    }
-
     private function editorStateEntladen(): void
     {
         $this->istOffen = false;
-        $this->navStack = [];
         $this->recipeId = null;
         $this->form = self::LEER;
         $this->fehler = null;
@@ -175,6 +165,17 @@ class RecipeModal extends Component
 
         $this->istOffen = true;
         $this->dispatch('modal.open', name: 'recipe-modal');
+    }
+
+    /**
+     * Schwere Reiter werden erst bei ihrem ersten Besuch aufgebaut. Der aktive Aufbau-Reiter
+     * bleibt beim Öffnen vollständig bedienbar; weitere Besuche sind danach reine Alpine-Klicks.
+     */
+    public function tabLaden(string $tab): void
+    {
+        if (in_array($tab, ['aufbau', 'eigenschaften', 'preparation', 'details', 'sensorik', 'feedback', 'notes'], true)) {
+            $this->geladeneTabs[$tab] = true;
+        }
     }
 
     public function speichern(RecipeService $recipes): void
@@ -460,7 +461,7 @@ class RecipeModal extends Component
         try {
             // Spec 03 L1a + Workstream W: die grounded Freitext-Revision liegt im geteilten
             // RecipeReviseService (Regelwerk-Erdung via contextFor) — Web + MCP fahren dieselbe Strecke.
-            $roh = app(\Platform\FoodAlchemist\Services\RecipeReviseService::class)->freitextVorschlag($team, $r, $this->anweisung);
+            $roh = app(RecipeReviseService::class)->freitextVorschlag($team, $r, $this->anweisung);
         } catch (\RuntimeException $e) {
             $this->fehler = $e->getMessage();
 
@@ -492,7 +493,7 @@ class RecipeModal extends Component
      */
     public function matchVorschau($team, $r, array $zutaten): array
     {
-        return app(\Platform\FoodAlchemist\Services\RecipeReviseService::class)->vorschau($team, $r, $zutaten);
+        return app(RecipeReviseService::class)->vorschau($team, $r, $zutaten);
     }
 
     /** Übernehmen = der EINE Schreib-Moment: Zutaten-Sync + Text-Felder mit Lineage ki. */
@@ -507,7 +508,7 @@ class RecipeModal extends Component
 
         try {
             if (! empty($werte['zutaten']) && is_array($werte['zutaten'])) {
-                $zeilen = app(\Platform\FoodAlchemist\Services\RecipeReviseService::class)->syncZeilen($r, $werte['zutaten']);
+                $zeilen = app(RecipeReviseService::class)->syncZeilen($r, $werte['zutaten']);
                 if ($zeilen !== []) {
                     app(RecipeService::class)->syncIngredients($team, $this->recipeId, $zeilen);
                 }
@@ -523,7 +524,7 @@ class RecipeModal extends Component
                 $frisch->update(['preparation_source' => 'ki', 'preparation_ai_confidence' => $this->ueberarbeitung['confidence']]);
                 // Spec 27: die KI liefert weiter Markdown — Master sind aber die Schritte.
                 // Der Parser übernimmt, `preparation` wird daraus als Spiegel neu gerendert.
-                app(\Platform\FoodAlchemist\Services\RecipeStepService::class)
+                app(RecipeStepService::class)
                     ->ausMarkdown($frisch, $werte['preparation'], ueberschreiben: true);
             }
         } catch (\RuntimeException $e) {
@@ -602,7 +603,7 @@ class RecipeModal extends Component
     }
 
     /** ✨ Eigenschaften: Arbeitszeit/Temperatur/Funktion + Geschmack in die Form (Ist-App-Pendant). */
-    public function kiEigenschaften(AiGatewayService $ki, \Platform\FoodAlchemist\Services\Ai\KnowledgeContextService $wissen): void
+    public function kiEigenschaften(AiGatewayService $ki, KnowledgeContextService $wissen): void
     {
         $this->fehler = null;
         $r = $this->rezept();
@@ -619,7 +620,7 @@ class RecipeModal extends Component
         // A (Dominique 2026-08-27): gezielter Wissens-Pull — die Eigenschaften-KI bekommt jetzt das
         // Regelwerk (recipe.eigenschaften-Routing; regelwerkBlock fällt für dieses Feature auf das
         // Basisrezepte-Regelwerk zurück). Leeres Routing = leerer Block (no-op), also fail-soft.
-        $wissenBlock = $wissen->contextFor('recipe.eigenschaften', trim(($this->form['name'] ?? '') . ' ' . implode(' · ', $zutaten)));
+        $wissenBlock = $wissen->contextFor('recipe.eigenschaften', trim(($this->form['name'] ?? '').' '.implode(' · ', $zutaten)));
         $wissenOpts = ($wissenBlock['block'] ?? '') !== ''
             ? ['knowledge' => $wissenBlock['block'], 'knowledge_used' => $wissenBlock['files_used'] ?? []]
             : [];
@@ -681,7 +682,7 @@ class RecipeModal extends Component
             $vorschlag = $ki->propose('recipe.equipment', [
                 'name' => $this->form['name'],
                 'equipment_slugs' => [],
-                'vokabular' => \Platform\FoodAlchemist\Models\FoodAlchemistVocabKochequipment::pluck('slug')->all(),
+                'vokabular' => FoodAlchemistVocabKochequipment::pluck('slug')->all(),
                 'zutaten' => $r?->ingredients?->pluck('raw_text')->take(30)->all() ?? [],
             ]);
         } catch (\RuntimeException $e) {
@@ -691,7 +692,7 @@ class RecipeModal extends Component
         }
         $slugs = array_filter((array) ($vorschlag->werte['equipment_slugs'] ?? []), 'is_string');
         if ($slugs !== []) {
-            $ids = \Platform\FoodAlchemist\Models\FoodAlchemistVocabKochequipment::whereIn('slug', $slugs)
+            $ids = FoodAlchemistVocabKochequipment::whereIn('slug', $slugs)
                 ->pluck('id')->map(fn ($i) => (string) $i)->all();
             $this->form['equipment_ids'] = array_values(array_unique([...$this->form['equipment_ids'], ...$ids]));
         }
@@ -703,7 +704,7 @@ class RecipeModal extends Component
         $this->fehler = null;
         if ($this->recipeId !== null) {
             try {
-                app(\Platform\FoodAlchemist\Services\SensorikService::class)->bewerteRezept($this->recipeId, true);
+                app(SensorikService::class)->bewerteRezept($this->recipeId, true);
             } catch (\RuntimeException $e) {
                 $this->fehler = $e->getMessage();
             }
@@ -729,21 +730,21 @@ class RecipeModal extends Component
             if ($recipe === null) {
                 return;
             }
-            $anreicherung = app(\Platform\FoodAlchemist\Services\RecipeOneShotService::class)
+            $anreicherung = app(RecipeOneShotService::class)
                 ->anreichern($team, $recipe, completeCoverage: true, refresh: true);   // #4: expliziter Klick = Refresh auch gefüllter, nicht-manueller Felder
             $this->bulkRunId = null;
             $this->oeffnen($this->recipeId);
             $this->anreicherung = $anreicherung;
             // #4 Kaskade: Sub-Basisrezepte im Hintergrund mit-anreichern (async via EnrichRecipeJob,
             // refresh=true; synchron würde ein mehrgliedriges Gericht in einen Timeout laufen).
-            $subIds = app(\Platform\FoodAlchemist\Services\RecipeOneShotService::class)->subRezeptIds((int) $recipe->id);
+            $subIds = app(RecipeOneShotService::class)->subRezeptIds((int) $recipe->id);
             foreach ($subIds as $subId) {
-                \Platform\FoodAlchemist\Jobs\EnrichRecipeJob::dispatch(
+                EnrichRecipeJob::dispatch(
                     $team->id, (int) (Auth::id() ?? 0), $subId, null, false, null, false, true,
                 );
             }
             if ($subIds !== []) {
-                $this->savedToast(count($subIds) . ' Komponente(n) werden im Hintergrund angereichert …');
+                $this->savedToast(count($subIds).' Komponente(n) werden im Hintergrund angereichert …');
             }
             $this->dispatch('recipe-gespeichert');
         } catch (\Throwable $e) {
@@ -755,7 +756,7 @@ class RecipeModal extends Component
     {
         $team = Auth::user()?->currentTeamRelation;
         if ($team !== null && $this->bulkRunId !== null) {
-            app(\Platform\FoodAlchemist\Services\BulkEnrichService::class)->alleUebernehmen($team, $this->bulkRunId);
+            app(BulkEnrichService::class)->alleUebernehmen($team, $this->bulkRunId);
             $this->bulkRunId = null;
             $this->oeffnen($this->recipeId);                          // Form mit den übernommenen Werten neu laden
             $this->dispatch('recipe-gespeichert');
@@ -806,36 +807,40 @@ class RecipeModal extends Component
 
         $voll = $r !== null && $team !== null ? app(RecipeService::class)->detailAnySicht($team, $r->id) : null;
         $bulkRun = $this->bulkRunId !== null && $team !== null
-            ? app(\Platform\FoodAlchemist\Services\BulkEnrichService::class)->status($team, $this->bulkRunId) : null;
+            ? app(BulkEnrichService::class)->status($team, $this->bulkRunId) : null;
 
         return view('foodalchemist::livewire.recipes.recipe-modal', [
             'neu' => $this->recipeId === null,
             'dishImageUrl' => ($r !== null && ($r->image_context_file_id || $r->image_path))
-                ? app(\Platform\FoodAlchemist\Services\FoodAlchemistMediaService::class)->url($r->image_context_file_id, $r->image_path)
+                ? app(FoodAlchemistMediaService::class)->url($r->image_context_file_id, $r->image_path)
                 : null,
             'istTemplate' => (bool) ($r?->is_template ?? false),
             'voll' => $voll,
             'bulkRun' => $bulkRun,
             'bulkOffen' => $bulkRun !== null
-                ? app(\Platform\FoodAlchemist\Services\BulkEnrichService::class)->offeneVorschlaege($team, $this->bulkRunId) : 0,
+                ? app(BulkEnrichService::class)->offeneVorschlaege($team, $this->bulkRunId) : 0,
             'zustaende' => [
                 'description' => $feldZustand($r?->description, $r?->description_source),
                 'preparation' => $feldZustand($r?->preparation, $r?->preparation_source),
                 'category' => $r?->category_id !== null ? ($r?->category_source ?? 'import') : 'unbefüllt',
             ],
-            'equipmentListe' => \Platform\FoodAlchemist\Models\FoodAlchemistVocabKochequipment::orderBy('group_name')->orderBy('sort_order')->orderBy('name')->get(['id', 'name', 'group_name']),
-            'hauptgruppen' => $team !== null ? $recipes->mainGroups($team) : collect(),
-            'kategorien' => $this->form['hauptgruppe_id'] !== null && $team !== null
+            'equipmentListe' => ($this->geladeneTabs['preparation'] ?? false)
+                ? FoodAlchemistVocabKochequipment::orderBy('group_name')->orderBy('sort_order')->orderBy('name')->get(['id', 'name', 'group_name'])
+                : collect(),
+            'hauptgruppen' => ($this->geladeneTabs['eigenschaften'] ?? false) && $team !== null ? $recipes->mainGroups($team) : collect(),
+            'kategorien' => ($this->geladeneTabs['eigenschaften'] ?? false) && $this->form['hauptgruppe_id'] !== null && $team !== null
                 ? FoodAlchemistRecipeCategory::visibleToTeam($team)->where('main_group_id', $this->form['hauptgruppe_id'])->orderBy('sort_order')->get()
                 : collect(),
             'keyVorschau' => trim($this->form['name']) !== '' ? $recipes->rezeptKey($this->form['name']) : '',
             // Stufe 3 — Posten-Liste fürs Default-Posten-Dropdown des Auto-Planers.
-            'posten' => $team !== null
-                ? \Platform\FoodAlchemist\Models\FoodAlchemistProductionStation::visibleToTeam($team)
+            'posten' => ($this->geladeneTabs['eigenschaften'] ?? false) && $team !== null
+                ? FoodAlchemistProductionStation::visibleToTeam($team)
                     ->where('is_inactive', false)->orderBy('sort_order')->orderBy('name')->get(['id', 'name'])
                 : collect(),
-            'sensorik' => $this->recipeId !== null ? app(\Platform\FoodAlchemist\Services\SensorikService::class)->fuerRezept($this->recipeId) : null,
-            'pairing' => $r !== null ? app(\Platform\FoodAlchemist\Services\PairingService::class)->panelRecipe($r) : null,
+            'sensorik' => $this->recipeId !== null && ($this->geladeneTabs['sensorik'] ?? false)
+                ? app(SensorikService::class)->fuerRezept($this->recipeId) : null,
+            'pairing' => $r !== null && ($this->geladeneTabs['sensorik'] ?? false)
+                ? app(PairingService::class)->panelRecipe($r) : null,
         ]);
     }
 }

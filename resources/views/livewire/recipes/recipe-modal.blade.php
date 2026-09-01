@@ -3,9 +3,13 @@
 @php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
 
 {{-- R4 (Dominique): Voll-Editor nimmt den ganzen Bildschirm — 19-Zutaten-Rezepte brauchen die Fläche --}}
-<x-foodalchemist::modal name="recipe-modal" :title="$neu ? 'Basisrezept anlegen' : 'Rezept bearbeiten'" :title-name="$neu ? null : $form['name']" size="max-w-3xl" :fullscreen="! $neu" :dark-canvas="true" :close-via="'schliessenOderZurueck'">
+<x-foodalchemist::modal name="recipe-modal"
+    :title="! $istOffen ? 'Basisrezept wird geladen' : ($neu ? 'Basisrezept anlegen' : 'Rezept bearbeiten')"
+    :title-name="$istOffen && ! $neu ? $form['name'] : null"
+    size="max-w-3xl" :fullscreen="! $neu" :dark-canvas="true">
     {{-- Aktionsleiste (D-5 §4.2.1) --}}
     <x-slot:actions>
+        @if($istOffen)
         {{-- #1b: EIN Speichern-Weg, sequenziert. Erst Stammdaten (`speichern`), dann — nur bei
              Erfolg und nur im Bestand (Anlage hat noch keine Zutaten) — adressiert das Zutaten-
              Speichern anstoßen (MVP-046). Der eingebettete Editor meldet `zutaten-persistiert`
@@ -29,7 +33,20 @@
                 @svg('heroicon-o-square-2-stack', 'w-3.5 h-3.5') {{ $istTemplate ? 'Template ✓' : 'Als Template' }}
             </button>
         @endif
+        @endif
     </x-slot:actions>
+
+    @if(! $istOffen)
+        {{-- Der Browser öffnet diese bereits montierte Hülle optimistisch. Das eigentliche
+             Rezept kommt im folgenden Livewire-Roundtrip; bis dahin niemals das leere
+             Neuanlageformular vortäuschen. --}}
+        <div class="h-full min-h-72 flex items-center justify-center" data-rezept-laedt>
+            <div class="text-center space-y-2">
+                <div class="mx-auto h-8 w-8 rounded-full border-2 border-violet-300 border-t-violet-600 animate-spin"></div>
+                <p class="text-sm font-medium text-gray-700">Basisrezept wird geladen …</p>
+            </div>
+        </div>
+    @else
 
     {{-- Phase 1: KPI-Streifen fix im Modal-Kopf (immer sichtbar, scrollt nie weg) --}}
     @if($voll !== null)
@@ -78,7 +95,8 @@
          gemountet werden). Start-Tab: «Aufbau», bei Neuanlage «Stammdaten» (Aufbau ist ohne
          Zutaten leer). Die drei Morph-Fallen (wire:key · x-effect-Reset · ein Scope für Leiste
          und Panels) stecken im Baustein. --}}
-    <x-foodalchemist::editor-tabs marker="rezept" wire-key="rezept-tabs-{{ $recipeId ?? 'neu' }}"
+    <x-foodalchemist::editor-tabs marker="rezept" wire-key="rezept-tabs-{{ $recipeId ?? 'neu' }}" visit-action="tabLaden"
+        :visited="array_keys($geladeneTabs)"
         :init="$neu ? 'eigenschaften' : 'aufbau'"
         :tabs="[
             'aufbau' => 'Aufbau',
@@ -196,6 +214,7 @@
 
     {{-- ── Tab: ZUBEREITUNG (Equipment + Zubereitung) ────────────────── --}}
     <div x-show="tab === 'preparation'" x-cloak class="pt-4 space-y-4">
+    @if($geladeneTabs['preparation'] ?? false)
     {{-- EQUIPMENT (§4.2.6) — gruppiert nach Vokabular-Gruppe (Ist-App-Layout) --}}
     <x-foodalchemist::modal-section title="Equipment">
         <x-slot:actions>
@@ -269,10 +288,14 @@
             </p>
         @endif
     </x-foodalchemist::modal-section>
+    @else
+        <p class="py-12 text-center text-xs text-gray-500" data-rezept-tab-laedt="preparation">Zubereitung wird geladen …</p>
+    @endif
     </div>{{-- /Tab ZUBEREITUNG --}}
 
     {{-- ── Tab: STAMMDATEN (Stammdaten + Eigenschaften, 2026-07-31 zusammengelegt) ── --}}
     <div x-show="tab === 'eigenschaften'" x-cloak class="pt-4 space-y-4">
+    @if($geladeneTabs['eigenschaften'] ?? false)
     {{-- STAMMDATEN (§4.2.2) — Name/Herkunft/Status/Taxonomie --}}
     <x-foodalchemist::modal-section title="Stammdaten" class="!p-3">
         <x-slot:actions>
@@ -468,10 +491,14 @@
             <p class="text-xs text-gray-500">Ersatz lässt sich nach dem ersten Speichern verknüpfen.</p>
         @endif
     </x-foodalchemist::modal-section>
+    @else
+        <p class="py-12 text-center text-xs text-gray-500" data-rezept-tab-laedt="eigenschaften">Stammdaten werden geladen …</p>
+    @endif
     </div>{{-- /Tab EIGENSCHAFTEN --}}
 
     {{-- ── Tab: DEKLARATION — Allergene · Zusatzstoffe (Detail-Panel-Embed) + Nährwerte ── --}}
     <div x-show="tab === 'details'" x-cloak class="pt-4 space-y-4">
+        @if($geladeneTabs['details'] ?? false)
         @if($recipeId !== null)
             <livewire:foodalchemist.recipes.detail-panel :recipe-id="$recipeId" :embedded="true" wire:key="rdetail-{{ $recipeId }}" />
 
@@ -507,10 +534,14 @@
         @else
             <p class="text-xs text-gray-500 py-6 text-center">Deklaration erscheint nach dem ersten Speichern.</p>
         @endif
+        @else
+            <p class="py-12 text-center text-xs text-gray-500" data-rezept-tab-laedt="details">Deklaration wird geladen …</p>
+        @endif
     </div>
 
     {{-- ── Tab: SENSORIK & PAIRING (Geschmacks-Balance + Textur + Aroma-Kohäsion über die Zutaten-GPs) ── --}}
     <div x-show="tab === 'sensorik'" x-cloak class="pt-4">
+        @if($geladeneTabs['sensorik'] ?? false)
         @unless($neu)
             <div class="flex items-center justify-between gap-2 mb-2">
                 <span class="text-[11px] text-gray-500">Gegartes Profil — KI liest Zutaten + Zubereitung.</span>
@@ -523,12 +554,19 @@
         @include('foodalchemist::livewire.concepter.partials.sensorik')
         <h3 class="text-[11px] font-semibold uppercase tracking-wide text-gray-500 mt-5 mb-2">Pairing</h3>
         @include('foodalchemist::livewire.concepter.partials.pairing')
+        @else
+            <p class="py-12 text-center text-xs text-gray-500" data-rezept-tab-laedt="sensorik">Sensorik und Pairing werden geladen …</p>
+        @endif
     </div>
 
     {{-- ── Tab: FEEDBACK (R2.6 — Praxis-Feedback Küche/Kunde/Event) ───── --}}
     @if(! $neu && $recipeId !== null)
     <div x-show="tab === 'feedback'" x-cloak class="pt-4">
+        @if($geladeneTabs['feedback'] ?? false)
         <livewire:foodalchemist.recipes.feedback-panel :recipe-id="$recipeId" wire:key="feedback-rez-{{ $recipeId }}" />
+        @else
+            <p class="py-12 text-center text-xs text-gray-500" data-rezept-tab-laedt="feedback">Feedback wird geladen …</p>
+        @endif
     </div>
     @endif
 
@@ -541,6 +579,8 @@
     </x-foodalchemist::modal-section>
     </div>{{-- /Tab NOTIZEN --}}
     </x-foodalchemist::editor-tabs>
+
+    @endif
 
     <x-slot:footer>
         {{-- #1b: Footer-„Speichern" entfernt — es gibt nur noch den EINEN Speichern-Knopf oben in

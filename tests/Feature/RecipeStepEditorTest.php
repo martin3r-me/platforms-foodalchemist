@@ -145,13 +145,15 @@ it('KI-Fotos erzeugt Bilder fuer alle Schritte ohne Foto und laesst bestehende F
             string $contextType,
             int $contextId,
             int $userId,
-            int $teamId
+            int $teamId,
+            array $options,
         ) use (&$lauf, $user, $rootTeamId) {
             $lauf++;
             expect($prompt)->toContain('Photorealistic professional catering kitchen process photo')
                 ->and($contextType)->toBe('foodalchemist.recipe')
                 ->and($userId)->toBe($user->id)
-                ->and($teamId)->toBe($rootTeamId);
+                ->and($teamId)->toBe($rootTeamId)
+                ->and($options)->toBe(['size' => '1024x1024', 'quality' => 'medium']);
 
             $token = 'ki-step-' . $lauf . '-' . \Illuminate\Support\Str::random(8);
             $file = ContextFile::create([

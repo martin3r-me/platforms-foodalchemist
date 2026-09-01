@@ -2,7 +2,13 @@
 
 use Illuminate\Support\Facades\Blade;
 use Livewire\Livewire;
+use Platform\FoodAlchemist\Livewire\Concepter\Editor;
+use Platform\FoodAlchemist\Livewire\Gps\GpModal;
 use Platform\FoodAlchemist\Livewire\Recipes\RecipeModal;
+use Platform\FoodAlchemist\Livewire\Suppliers\ItemModal;
+use Platform\FoodAlchemist\Livewire\Verkauf\VkModal;
+use Platform\FoodAlchemist\Models\FoodAlchemistSupplier;
+use Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem;
 use Platform\FoodAlchemist\Tests\Support\SeedsTeamHierarchy;
 use Platform\FoodAlchemist\Tests\TestCase;
 
@@ -58,10 +64,22 @@ it('editor-tabs rendert Leiste, Marker und die drei Morph-Sicherungen', function
         ->toContain("typeof open !== 'undefined'");
 
     // Start-Tab kommt aus :init, nicht aus dem ersten Schlüssel
-    expect($html)->toContain('{ tab: \'zwei\' }');
+    expect($html)->toContain("tab: 'zwei'")
+        ->toContain('visited: []');
 
     // sticky: die Leiste darf beim Scrollen nie weglaufen
     expect($html)->toContain('sticky');
+});
+
+it('editor-tabs kann schwere Alpine-Reiter beim ersten Besuch freischalten', function () {
+    $html = Blade::render(
+        '<x-foodalchemist::editor-tabs visit-action="tabLaden" :tabs="[\'aufbau\' => \'Aufbau\', \'details\' => \'Details\']">
+            <div>Inhalt</div>
+         </x-foodalchemist::editor-tabs>'
+    );
+
+    expect($html)->toContain("visited.includes('details')")
+        ->toContain("\$wire.tabLaden('details')");
 });
 
 it('kpi-tiles bildet Tones auf die Palette ab und hält die Marker', function () {
@@ -113,7 +131,7 @@ it('der Master-Editor liefert die Marker weiter, die vorher literal in ihm stand
 it('E6: der Gericht-Editor trennt Aufbau von Stammdaten', function () {
     $gericht = $this->makeRecipe($this->rootTeam, 'Rinderfilet | Jus', ['is_sales_recipe' => true]);
 
-    $html = Livewire::test(\Platform\FoodAlchemist\Livewire\Verkauf\VkModal::class)
+    $html = Livewire::test(VkModal::class)
         ->call('oeffnen', $gericht->id)
         ->html();
 
@@ -135,7 +153,7 @@ it('E6: der Gericht-Editor trennt Aufbau von Stammdaten', function () {
 it('E6: der Concepter legt Feldleiste, Coverage und Kohäsion in eigene Tabs', function () {
     $konzept = $this->makeConcept($this->rootTeam, 'Sommerfest 2027');
 
-    $c = Livewire::test(\Platform\FoodAlchemist\Livewire\Concepter\Editor::class)
+    $c = Livewire::test(Editor::class)
         ->call('oeffnen', 'concepts', $konzept->id);
 
     // Neue Lasche + umbenannte Sammel-Laschen
@@ -159,7 +177,7 @@ it('E6: der Concepter legt Feldleiste, Coverage und Kohäsion in eigene Tabs', f
 it('der GP-Editor trägt den KPI-Kopf des GP-Cockpits und eine sticky Leiste', function () {
     $gp = $this->makeGp($this->rootTeam, 'Zanderfilet: frisch, ganz');
 
-    $html = Livewire::test(\Platform\FoodAlchemist\Livewire\Gps\GpModal::class)
+    $html = Livewire::test(GpModal::class)
         ->call('oeffnen', $gp->id)
         ->html();
 
@@ -184,7 +202,7 @@ it('der GP-Editor trägt den KPI-Kopf des GP-Cockpits und eine sticky Leiste', f
     // Tabs aus dem Baustein (vorher eigene Variante ohne sticky/wire:key)
     expect($html)->toContain('data-gp-tab="allgemein"')
         ->toContain('data-gp-tab="kalkulation"')
-        ->toContain('wire:key="gp-tabs-' . $gp->id . '"')
+        ->toContain('wire:key="gp-tabs-'.$gp->id.'"')
         ->toContain('sticky');
 
     // Voll-Editor-Hülle im Bestand
@@ -194,7 +212,7 @@ it('der GP-Editor trägt den KPI-Kopf des GP-Cockpits und eine sticky Leiste', f
 it('die GP-Neuanlage ist dark, aber schmal und ohne Ein-Laschen-Navigation', function () {
     // Dominique 2026-08-27: die Neuanlage-Modals (GP/Basisrezept/Gericht) sollen auch dark sein
     // (dark-canvas jetzt immer an). Größe/Tabs bleiben unverändert — schmal + keine Tab-Leiste + kein KPI-Kopf.
-    $html = Livewire::test(\Platform\FoodAlchemist\Livewire\Gps\GpModal::class)
+    $html = Livewire::test(GpModal::class)
         ->call('oeffnen', null)
         ->html();
 
@@ -209,21 +227,21 @@ it('die GP-Neuanlage ist dark, aber schmal und ohne Ein-Laschen-Navigation', fun
 });
 
 it('der LA-Editor trägt Voll-Editor-Anatomie statt acht linearer Sektionen', function () {
-    $supplier = \Platform\FoodAlchemist\Models\FoodAlchemistSupplier::create([
+    $supplier = FoodAlchemistSupplier::create([
         'team_id' => $this->rootTeam->id, 'name' => 'Delta Fleisch',
     ]);
-    $la = \Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem::create([
+    $la = FoodAlchemistSupplierItem::create([
         'team_id' => $this->rootTeam->id, 'supplier_id' => $supplier->id,
         'designation' => 'Rinderfilet Mittelstück', 'qty' => 2.5, 'unit_code' => 'kg',
     ]);
 
-    $html = Livewire::test(\Platform\FoodAlchemist\Livewire\Suppliers\ItemModal::class)
+    $html = Livewire::test(ItemModal::class)
         ->call('oeffnen', $la->id)
         ->html();
 
     // Vier Tabs statt acht Sektionen am Stück (Spec 28 / E3.2)
     foreach (['stammdaten', 'deklaration', 'gp', 'preise'] as $tab) {
-        expect($html)->toContain('data-la-tab="' . $tab . '"');
+        expect($html)->toContain('data-la-tab="'.$tab.'"');
     }
 
     // KPI-Kopf mit Leitwert EK; GP fehlt → Warn-Kachel statt stiller Lücke

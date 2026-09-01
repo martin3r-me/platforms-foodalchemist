@@ -217,8 +217,12 @@
                                 <input type="checkbox" wire:model.live="auswahl.{{ $r->id }}" class="rounded border-gray-300 text-violet-600 focus:ring-violet-500" data-rezept-checkbox="{{ $r->id }}" />
                             </td>
                             {{-- R6: Namens-Klick öffnet direkt den Voll-Editor (Zeilen-Klick bleibt Panel-Selektion) --}}
-                            <td class="{{ $td }} font-medium w-full min-w-[8rem] break-words" wire:click.stop="bearbeite({{ $r->id }})" title="{{ $r->name }} — Klick: bearbeiten">
-                                <span class="text-gray-900 hover:text-violet-600 hover:underline cursor-pointer" data-rezept-name>{{ $r->name }}</span>
+                            <td class="{{ $td }} font-medium w-full min-w-[8rem] break-words"
+                                x-on:click.stop title="{{ $r->name }} — Klick: bearbeiten">
+                                <button type="button"
+                                        x-on:click.stop="$dispatch('modal.open', { name: 'recipe-modal' }); Livewire.dispatch('recipe-modal.oeffnen', { id: {{ $r->id }} })"
+                                        class="text-left text-gray-900 hover:text-violet-600 hover:underline cursor-pointer"
+                                        data-rezept-name>{{ $r->name }}</button>
                                 @if($r->is_template)<span class="{{ $pill }} {{ $variantPill['success'] }} ml-1.5" data-template-badge>@svg('heroicon-o-square-2-stack', 'w-3.5 h-3.5 inline-block align-middle') Template</span>@endif
                             </td>
                             @if(in_array('kategorie', $spalten, true))<td class="{{ $td }} text-[11px] italic text-gray-600 truncate max-w-[5rem] whitespace-nowrap">{{ $r->category?->label ?? '—' }}</td>@endif

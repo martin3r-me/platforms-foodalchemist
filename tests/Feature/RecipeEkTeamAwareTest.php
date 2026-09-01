@@ -1,5 +1,6 @@
 <?php
 
+use Illuminate\Support\Facades\DB;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Models\FoodAlchemistGp;
 use Platform\FoodAlchemist\Models\FoodAlchemistPrice;
@@ -95,4 +96,25 @@ it('Sperre des geerbten Leads durch das Kind-Team weicht auf den nächsten Kandi
 
     expect(($this->ekFuer)($this->childA, $gp, 'A gesperrt'))->toBe(2.0)
         ->and(($this->ekFuer)($this->rootTeam, $gp, 'Root trotz A-Sperre'))->toBe(1.0);
+});
+
+it('lädt Lead-, Min- und Durchschnittspreise für mehrere Zutaten-GPs gebündelt', function () {
+    $gpA = $this->makeGp($this->rootTeam, 'Batch A');
+    $gpB = $this->makeGp($this->rootTeam, 'Batch B');
+    $laA = ($this->mkLa)($this->rootTeam, $gpA, 10.0, 'Batch A LA');
+    $laB = ($this->mkLa)($this->rootTeam, $gpB, 20.0, 'Batch B LA');
+    $gpA->update(['lead_la_supplier_item_id' => $laA]);
+    $gpB->update(['lead_la_supplier_item_id' => $laB]);
+
+    DB::flushQueryLog();
+    DB::enableQueryLog();
+    $preise = $this->recompute->preisVariantenProGrammPublic(collect([$gpA, $gpB]), $this->rootTeam);
+    $queries = collect(DB::getQueryLog());
+    DB::disableQueryLog();
+
+    expect($preise[$gpA->id])->toMatchArray(['lead' => 0.01, 'min' => 0.01, 'avg' => 0.01])
+        ->and($preise[$gpB->id])->toMatchArray(['lead' => 0.02, 'min' => 0.02, 'avg' => 0.02])
+        // Ein LA-Bulk-Select + ein Preference-Bulk-Select; Team-Ancestry darf wenige
+        // Hilfsqueries brauchen, aber die Zahl wächst nicht mehr mit den Zutaten.
+        ->and($queries->count())->toBeLessThanOrEqual(4);
 });

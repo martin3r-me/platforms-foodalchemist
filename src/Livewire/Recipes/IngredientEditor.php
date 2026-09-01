@@ -3,15 +3,24 @@
 namespace Platform\FoodAlchemist\Livewire\Recipes;
 
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Livewire\Attributes\On;
 use Livewire\Attributes\Renderless;
 use Livewire\Component;
 use Platform\FoodAlchemist\Livewire\Concerns\InteractsWithSavedToast;
+use Platform\FoodAlchemist\Models\FoodAlchemistGp;
 use Platform\FoodAlchemist\Models\FoodAlchemistGpForm;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Models\FoodAlchemistVocabEinheit;
+use Platform\FoodAlchemist\Services\Ai\AiGatewayService;
+use Platform\FoodAlchemist\Services\ComponentEquivalentService;
+use Platform\FoodAlchemist\Services\GpService;
+use Platform\FoodAlchemist\Services\PriceService;
 use Platform\FoodAlchemist\Services\RecipeRecomputeService;
 use Platform\FoodAlchemist\Services\RecipeService;
+use Platform\FoodAlchemist\Services\TeamSettingsService;
+use Platform\FoodAlchemist\Support\Sprungziel;
+use Platform\FoodAlchemist\Support\Suche;
 use Platform\FoodAlchemist\Support\TeamScope;
 
 /**
@@ -94,7 +103,7 @@ class IngredientEditor extends Component
 
         if ($recipeId !== null && $recipeId !== $this->recipeId) {
             $this->fehler = 'Speichern verworfen: der Auftrag gehört zu einem anderen Rezept. '
-                . 'Bitte den Zutaten-Editor des gemeinten Rezepts benutzen.';
+                .'Bitte den Zutaten-Editor des gemeinten Rezepts benutzen.';
 
             return;
         }
@@ -127,13 +136,13 @@ class IngredientEditor extends Component
      * M4-11: Garverlust-Vorschläge via Gateway (GL-07: nichts persistiert —
      * Alpine merged in die rows, geschrieben wird beim Save mit source=ki).
      *
-     * @param array<int, string> $zutaten [index => raw_text]
+     * @param  array<int, string>  $zutaten  [index => raw_text]
      * @return array{verluste: array<int, float>, confidence: float}
      */
     public function garverlustVorschlag(array $zutaten): array
     {
         try {
-            $vorschlag = app(\Platform\FoodAlchemist\Services\Ai\AiGatewayService::class)
+            $vorschlag = app(AiGatewayService::class)
                 ->propose('recipe.garverlust', ['zutaten' => $zutaten, 'verluste' => new \stdClass]);
         } catch (\RuntimeException $e) {
             $this->fehler = $e->getMessage();                          // JS-Helfer: leer zurück statt 500
@@ -159,13 +168,13 @@ class IngredientEditor extends Component
     public function gpArtikel(?int $gpId): array
     {
         $team = Auth::user()?->currentTeamRelation;
-        $gp = $team !== null && $gpId !== null ? app(\Platform\FoodAlchemist\Services\GpService::class)->find($gpId, $team) : null;
+        $gp = $team !== null && $gpId !== null ? app(GpService::class)->find($gpId, $team) : null;
         if ($gp === null) {
             return [];
         }
-        $preise = app(\Platform\FoodAlchemist\Services\PriceService::class);
+        $preise = app(PriceService::class);
 
-        return app(\Platform\FoodAlchemist\Services\GpService::class)->lasForGp($gp)
+        return app(GpService::class)->lasForGp($gp)
             ->map(function ($la) use ($gp, $preise) {
                 $preis = $la->price?->price !== null ? (float) $la->price->price : null;
                 $vergleich = $la->item !== null ? $preise->vergleichspreis($la->item, $preis) : null;
@@ -177,42 +186,16 @@ class IngredientEditor extends Component
                     'label' => $la->item?->designation ?? '—',
                     'marke' => $la->item?->brand ?? null,
                     'vpe' => $la->item?->qty !== null
-                        ? rtrim(rtrim(number_format((float) $la->item->qty, 2, ',', '.'), '0'), ',') . ' ' . ($la->item->packaging_unit ?? $la->item->unit_code ?? '')
+                        ? rtrim(rtrim(number_format((float) $la->item->qty, 2, ',', '.'), '0'), ',').' '.($la->item->packaging_unit ?? $la->item->unit_code ?? '')
                         : null,
-                    'price' => $preis !== null ? number_format($preis, 2, ',', '.') . ' €' : null,
-                    'vergleichspreis' => $vergleich !== null ? number_format($vergleich['value'], 2, ',', '.') . ' ' . $vergleich['unit'] : null,
+                    'price' => $preis !== null ? number_format($preis, 2, ',', '.').' €' : null,
+                    'vergleichspreis' => $vergleich !== null ? number_format($vergleich['value'], 2, ',', '.').' '.$vergleich['unit'] : null,
                     'match' => $la->structure?->main_ingredient_confidence !== null
-                        ? round((float) $la->structure->main_ingredient_confidence * 100) . ' %'
+                        ? round((float) $la->structure->main_ingredient_confidence * 100).' %'
                         : null,
                 ];
             })
             ->sortByDesc('lead')->values()->all();
-    }
-
-    /**
-     * R5 (Dominique): EK-Varianten je GP — günstigster LA-Preis + Ø über alle
-     * LAs (€/g via GL-11-Vergleichspreis), neben der Lead-Strategie-Spalte.
-     *
-     * @return array{min: ?float, avg: ?float}
-     */
-    private function ekVarianten(\Platform\FoodAlchemist\Models\FoodAlchemistGp $gp, ?\Platform\Core\Models\Team $team = null): array
-    {
-        $preise = app(\Platform\FoodAlchemist\Services\PriceService::class);
-        // Nur team-sichtbare LAs (eigenes Team + Master-Kette + globaler Seed) — sonst zeigt die
-        // Min/Ø-Variante fremde Betriebs-Preise, während der Zeilen-EK team-bewusst rechnet.
-        $sichtbar = $team !== null
-            ? \Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem::teamAncestryIds($team)
-            : null;
-        $werte = app(\Platform\FoodAlchemist\Services\GpService::class)->lasForGp($gp)
-            ->filter(fn ($la) => $la->item !== null && ($sichtbar === null
-                || $la->item->team_id === null || in_array((int) $la->item->team_id, $sichtbar, true)))
-            ->map(fn ($la) => $preise->preisProGramm($la->item, $la->price?->price !== null ? (float) $la->price->price : null))
-            ->filter(fn ($v) => $v !== null)->values();
-
-        return [
-            'min' => $werte->isNotEmpty() ? (float) $werte->min() : null,
-            'avg' => $werte->isNotEmpty() ? (float) $werte->avg() : null,
-        ];
     }
 
     /**
@@ -229,8 +212,8 @@ class IngredientEditor extends Component
             return null;
         }
         $id = (int) ($gpId ?? $subId);
-        $treffer = app(\Platform\FoodAlchemist\Services\ComponentEquivalentService::class)
-            ->ersatzHinweise($team, [[$kind, $id]])[$kind . ':' . $id] ?? null;
+        $treffer = app(ComponentEquivalentService::class)
+            ->ersatzHinweise($team, [[$kind, $id]])[$kind.':'.$id] ?? null;
 
         return $treffer !== null ? $this->ersatzPayload($treffer) : null;
     }
@@ -241,11 +224,11 @@ class IngredientEditor extends Component
         return [
             'kind' => $treffer->kind,
             'id' => $treffer->id,
-            'name' => $treffer->kind === 'recipe' ? '↳ ' . $treffer->name : $treffer->name,
+            'name' => $treffer->kind === 'recipe' ? '↳ '.$treffer->name : $treffer->name,
             'faktor' => $treffer->faktor,
             'url' => $treffer->kind === 'gp'
-                ? \Platform\FoodAlchemist\Support\Sprungziel::gp($treffer->id)
-                : \Platform\FoodAlchemist\Support\Sprungziel::rezept($treffer->id),
+                ? Sprungziel::gp($treffer->id)
+                : Sprungziel::rezept($treffer->id),
         ];
     }
 
@@ -294,11 +277,11 @@ class IngredientEditor extends Component
         $recompute = app(RecipeRecomputeService::class);
         $suche = mb_strtolower(trim($q));
 
-        $gpQuery = \Platform\FoodAlchemist\Models\FoodAlchemistGp::visibleToTeam($team)
+        $gpQuery = FoodAlchemistGp::visibleToTeam($team)
             // #4 (Dominique 2026-08-27): im Zutaten-Picker nur verwendbare GPs — abgelehnte/gemergte raus
             // (GP hat keinen Entwurf-Zustand; vorläufig + freigegeben bleiben). Wie tauschKandidaten.
             ->whereNotIn('status', ['rejected', 'merged'])
-            ->when($suche !== '', fn ($w) => \Platform\FoodAlchemist\Support\Suche::like($w, 'name', $suche))
+            ->when($suche !== '', fn ($w) => Suche::like($w, 'name', $suche))
             ->when(($gpFilter['wg'] ?? '') !== '', fn ($w) => $w->where('commodity_group_code', $gpFilter['wg']))
             ->when(($gpFilter['sub'] ?? '') !== '', fn ($w) => $w->where('sub_category', $gpFilter['sub']))
             ->when(($gpFilter['condition'] ?? '') !== '', fn ($w) => $w->where('condition', $gpFilter['condition']))
@@ -311,11 +294,11 @@ class IngredientEditor extends Component
             ->get(['id', 'name', 'condition', 'lead_la_supplier_item_id', 'piece_default_g', 'team_id']);
         // Performance: 30× preisProGrammPublic wären ~60 Queries je Tipper — stattdessen EINE
         // Bulk-Query (Ø €/g über aktive kg/l-LAs). Der präzise Lead-Wert kommt beim Parken nach.
-        $aktiverPreis = app(\Platform\FoodAlchemist\Services\PriceService::class)->activePriceSubquery()->toBase();
+        $aktiverPreis = app(PriceService::class)->activePriceSubquery()->toBase();
         // Preis-Vorschau nur über team-sichtbare LAs (eigenes Team + Master-Kette + globaler Seed) —
         // sonst zeigt der Picker fremde Betriebs-Preise, während der Zeilen-EK team-bewusst rechnet.
-        $ekJeGp = \Platform\FoodAlchemist\Support\TeamScope::applyVisible(
-            \Illuminate\Support\Facades\DB::table('foodalchemist_supplier_items'),
+        $ekJeGp = TeamScope::applyVisible(
+            DB::table('foodalchemist_supplier_items'),
             'foodalchemist_supplier_items.team_id', $team)
             ->join('foodalchemist_supplier_item_structures AS s', 's.supplier_item_id', '=', 'foodalchemist_supplier_items.id')
             ->whereIn('s.gp_id', $gpModels->pluck('id'))->whereNull('s.deleted_at')
@@ -335,12 +318,12 @@ class IngredientEditor extends Component
         $gps = $gpModels
             ->map(function ($gp) use ($ekJeGp, $formSlugsJeGp) {
                 $ek = $ekJeGp[$gp->id] ?? null;
-                $istFluessig = str_contains(mb_strtolower($gp->name . ' ' . ($gp->condition ?? '')), 'fluessig');
+                $istFluessig = str_contains(mb_strtolower($gp->name.' '.($gp->condition ?? '')), 'fluessig');
 
                 return [
                     'type' => 'gp', 'id' => $gp->id, 'name' => $gp->name,
                     'ek_pro_g' => $ek,
-                    'preis_label' => $ek !== null ? number_format($ek * 1000, 2, ',', '.') . ' €/kg' : null,
+                    'preis_label' => $ek !== null ? number_format($ek * 1000, 2, ',', '.').' €/kg' : null,
                     // Spec: Einheit hängt am Produkt (Chilipulver→g, Bier→ml) — Override im Dropdown
                     'einheit_slug' => $istFluessig ? 'ml' : 'g',
                     'einheiten' => $this->erlaubteSlugs($istFluessig, $formSlugsJeGp[$gp->id] ?? [], $gp->piece_default_g !== null),
@@ -352,7 +335,7 @@ class IngredientEditor extends Component
             // Entwurf/Stub (in Arbeit) + Veraltet raus. Review + Freigegeben bleiben.
             ->whereNotIn('status', ['draft', 'stub', 'deprecated'])
             ->where('id', '!=', (int) $this->recipeId)
-            ->when($suche !== '', fn ($w) => \Platform\FoodAlchemist\Support\Suche::like($w, 'foodalchemist_recipes.name', $suche))
+            ->when($suche !== '', fn ($w) => Suche::like($w, 'foodalchemist_recipes.name', $suche))
             ->when(($rezFilter['hg'] ?? '') !== '', fn ($w) => $w->whereHas('category', fn ($k) => $k->where('main_group_id', (int) $rezFilter['hg'])))
             ->when(($rezFilter['kat'] ?? '') !== '', fn ($w) => $w->where('category_id', (int) $rezFilter['kat']))
             ->when(($rezFilter['level'] ?? '') !== '', fn ($w) => $w->whereHas('levelSuitabilities', fn ($n) => $n->where('level_slug', $rezFilter['level'])));
@@ -363,9 +346,9 @@ class IngredientEditor extends Component
                 $hatStueck = $r->yield_pieces !== null && (float) $r->yield_pieces > 0 && $r->yield_kg !== null;
 
                 return [
-                    'type' => 'sub', 'id' => $r->id, 'name' => '↳ ' . $r->name,
+                    'type' => 'sub', 'id' => $r->id, 'name' => '↳ '.$r->name,
                     'ek_pro_g' => $r->ek_per_kg_eur !== null ? ((float) $r->ek_per_kg_eur) / 1000 : null,
-                    'preis_label' => $r->ek_per_kg_eur !== null ? number_format((float) $r->ek_per_kg_eur, 2, ',', '.') . ' €/kg' : null,
+                    'preis_label' => $r->ek_per_kg_eur !== null ? number_format((float) $r->ek_per_kg_eur, 2, ',', '.').' €/kg' : null,
                     // Stück-Ertrag → Einheit beim Einfügen auf „stk" vorbelegen + g/Stück fürs Live-Rechnen
                     'einheit_slug' => $hatStueck ? 'stk' : 'g',
                     // #9c: Sub-Rezept dosiert man in g/kg (+ stk bei Stück-Ertrag) — nicht in Formen/Gebinden.
@@ -390,7 +373,7 @@ class IngredientEditor extends Component
             return null;
         }
         if ($typ === 'gp') {
-            $gp = \Platform\FoodAlchemist\Models\FoodAlchemistGp::visibleToTeam($team)->find($id);
+            $gp = FoodAlchemistGp::visibleToTeam($team)->find($id);
 
             return $gp !== null ? app(RecipeRecomputeService::class)->preisProGrammPublic($gp, $team) : null;
         }
@@ -415,12 +398,17 @@ class IngredientEditor extends Component
                 ? FoodAlchemistGpForm::whereIn('gp_id', $gpIds)->get(['gp_id', 'form_slug'])
                     ->groupBy('gp_id')->map(fn ($g) => $g->pluck('form_slug')->all())
                 : collect();
+            $preisVarianten = $recompute->preisVariantenProGrammPublic(
+                $rezept->ingredients->pluck('gp')->filter()->unique('id')->values(),
+                $team,
+            );
             foreach ($rezept->ingredients as $z) {
                 $ekProG = null;
                 $varianten = ['min' => null, 'avg' => null];
                 if ($z->gp !== null) {
-                    $ekProG = $recompute->preisProGrammPublic($z->gp, $team);
-                    $varianten = $this->ekVarianten($z->gp, $team);   // R5: günstigster + Ø über team-sichtbare LAs
+                    $gpPreise = $preisVarianten[(int) $z->gp->id] ?? ['lead' => null, 'min' => null, 'avg' => null];
+                    $ekProG = $gpPreise['lead'];
+                    $varianten = ['min' => $gpPreise['min'], 'avg' => $gpPreise['avg']];
                 } elseif ($z->referencedRecipe?->ek_per_kg_eur !== null) {
                     $ekProG = ((float) $z->referencedRecipe->ek_per_kg_eur) / 1000;
                 }
@@ -428,11 +416,11 @@ class IngredientEditor extends Component
                     'id' => $z->id,
                     'gp_id' => $z->gp_id,
                     'referenced_recipe_id' => $z->referenced_recipe_id,
-                    'ziel_name' => $z->gp?->name ?? ($z->referencedRecipe !== null ? '↳ ' . $z->referencedRecipe->name : null),
+                    'ziel_name' => $z->gp?->name ?? ($z->referencedRecipe !== null ? '↳ '.$z->referencedRecipe->name : null),
                     // R5: Sprung-Ziel (neuer Tab — Editor-Stand bleibt unberührt)
                     'ziel_url' => $z->gp_id !== null
-                        ? \Platform\FoodAlchemist\Support\Sprungziel::gp($z->gp_id)
-                        : ($z->referenced_recipe_id !== null ? \Platform\FoodAlchemist\Support\Sprungziel::rezept($z->referenced_recipe_id) : null),
+                        ? Sprungziel::gp($z->gp_id)
+                        : ($z->referenced_recipe_id !== null ? Sprungziel::rezept($z->referenced_recipe_id) : null),
                     'raw_text' => $z->raw_text,
                     'display_name' => $z->display_name,
                     'quantity' => (float) $z->quantity,
@@ -441,7 +429,7 @@ class IngredientEditor extends Component
                     // #9c: erlaubte Einheiten dieser Zeile (nur GP-Zeilen; Sub/Frei → null = alle als Fallback)
                     'einheiten' => $z->gp_id !== null
                         ? $this->erlaubteSlugs(
-                            str_contains(mb_strtolower(($z->gp->name ?? '') . ' ' . ($z->gp->condition ?? '')), 'fluessig'),
+                            str_contains(mb_strtolower(($z->gp->name ?? '').' '.($z->gp->condition ?? '')), 'fluessig'),
                             $formSlugsJeGp[$z->gp_id] ?? [],
                             ($z->gp?->piece_default_g) !== null,
                         )
@@ -467,11 +455,11 @@ class IngredientEditor extends Component
                     : ($z['referenced_recipe_id'] !== null ? ['recipe', (int) $z['referenced_recipe_id']] : null))
                 ->filter()->values()->all();
             $hinweise = $team !== null && $paare !== []
-                ? app(\Platform\FoodAlchemist\Services\ComponentEquivalentService::class)->ersatzHinweise($team, $paare)
+                ? app(ComponentEquivalentService::class)->ersatzHinweise($team, $paare)
                 : [];
             foreach ($zeilen as &$z) {
                 $kind = $z['gp_id'] !== null ? 'gp' : ($z['referenced_recipe_id'] !== null ? 'recipe' : null);
-                $treffer = $kind !== null ? ($hinweise[$kind . ':' . (int) ($z['gp_id'] ?? $z['referenced_recipe_id'])] ?? null) : null;
+                $treffer = $kind !== null ? ($hinweise[$kind.':'.(int) ($z['gp_id'] ?? $z['referenced_recipe_id'])] ?? null) : null;
                 $z['ersatz'] = $treffer !== null ? $this->ersatzPayload($treffer) : null;
             }
             unset($z);
@@ -484,7 +472,7 @@ class IngredientEditor extends Component
 
         // R18: Filter-Vokabulare für die Seitenspalten (klein genug für einmaliges Mitgeben;
         // der Client verengt Kategorien nach gewählter Hauptgruppe selbst)
-        $db = \Illuminate\Support\Facades\DB::table('foodalchemist_lookup_commodity_groups');
+        $db = DB::table('foodalchemist_lookup_commodity_groups');
 
         return view('foodalchemist::livewire.recipes.ingredient-editor', [
             'rezept' => $rezept,
@@ -492,20 +480,20 @@ class IngredientEditor extends Component
             'einheiten' => $einheiten,
             // Phase 5: Typ-Farben (GP / Basisrezept / Gericht) für die Seiten-Listen-Badges
             'typFarben' => $team === null
-                ? \Platform\FoodAlchemist\Services\TeamSettingsService::TYP_FARBEN_DEFAULTS
-                : app(\Platform\FoodAlchemist\Services\TeamSettingsService::class)->typFarben($team),
+                ? TeamSettingsService::TYP_FARBEN_DEFAULTS
+                : app(TeamSettingsService::class)->typFarben($team),
             // M9-01a: VK-Kontext zeigt die Rollen-Spalte (V-21 — Gesamt-Gericht-Sicht)
             'vkKontext' => (bool) ($rezept?->is_sales_recipe ?? false),
             'browserVokabular' => $team === null ? null : [
                 'warengruppen' => TeamScope::applyVisible($db->whereNull('deleted_at'), 'team_id', $team)->orderBy('sort_order')->get(['code', 'name'])->all(),
-                'subKategorien' => TeamScope::applyVisible(\Illuminate\Support\Facades\DB::table('foodalchemist_gps')
+                'subKategorien' => TeamScope::applyVisible(DB::table('foodalchemist_gps')
                     ->whereNull('deleted_at')->whereNotNull('sub_category'), 'team_id', $team)
                     ->distinct()->orderBy('sub_category')
                     ->get(['commodity_group_code', 'sub_category'])->all(),
                 'zustande' => ['frisch', 'TK', 'trocken', 'konserviert'],
-                'hauptgruppen' => TeamScope::applyVisible(\Illuminate\Support\Facades\DB::table('foodalchemist_recipe_main_groups')
+                'hauptgruppen' => TeamScope::applyVisible(DB::table('foodalchemist_recipe_main_groups')
                     ->whereNull('deleted_at'), 'team_id', $team)->orderBy('sort_order')->get(['id', 'label'])->all(),
-                'kategorien' => TeamScope::applyVisible(\Illuminate\Support\Facades\DB::table('foodalchemist_recipe_categories')
+                'kategorien' => TeamScope::applyVisible(DB::table('foodalchemist_recipe_categories')
                     ->whereNull('deleted_at'), 'team_id', $team)->orderBy('label')->get(['id', 'label', 'main_group_id'])->all(),
                 'niveaus' => [['slug' => 'haute_cuisine', 'label' => 'Haute'], ['slug' => 'gehoben', 'label' => 'Gehoben'], ['slug' => 'klassisch', 'label' => 'Klassisch']],
             ],

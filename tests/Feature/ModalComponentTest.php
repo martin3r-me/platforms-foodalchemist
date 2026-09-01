@@ -32,13 +32,23 @@ it('rendert Titel, fixe Kopf-Aktionen, Sektionen und Footer-Slot', function () {
 it('verdrahtet den Event-Vertrag modal.open / modal.close / modal.closed', function () {
     $html = Blade::render('<x-foodalchemist::modal name="demo" title="T">X</x-foodalchemist::modal>');
 
-    // UI-Audit 2026-06-12: .dot wird von Alpine 3.15 ignoriert (Live-Beweis) —
-    // der Vertrag ist jetzt die addEventListener-Brücke (ModalBausteinVertragTest)
-    expect($html)->toContain("addEventListener('modal.open'")
-        ->and($html)->toContain("addEventListener('modal.close'")
+    // Der Punkt steckt im dynamischen Argument, nicht als Alpine-Modifier im Attributnamen.
+    // Dadurch verwaltet Alpine den Listener lifecycle-sicher über Livewire-Morphs hinweg.
+    expect($html)->toContain('x-on:[modalOpenEvent].window')
+        ->and($html)->toContain('x-on:[modalCloseEvent].window')
         ->and($html)->toContain('modal.closed')          // Schließen meldet sich (State-Reset-Vertrag)
         ->and($html)->toContain('keydown.window.escape') // ESC schließt
         ->and($html)->toContain('x-cloak');              // kein Aufblitzen vor Alpine-Boot
+});
+
+it('beendet ein serverseitiges modal.close ohne die Close-Methode erneut aufzurufen', function () {
+    $html = Blade::render(<<<'BLADE'
+        <x-foodalchemist::modal name="demo" title="T" :close-via="'schliessenOderZurueck'">X</x-foodalchemist::modal>
+        BLADE);
+
+    expect($html)->toContain("requestClose() {  this.\$wire.schliessenOderZurueck();  }")
+        ->and($html)->toContain("x-on:[modalCloseEvent].window=\"if (!\$event.detail?.name || \$event.detail.name === 'demo') close()\"")
+        ->and($html)->not->toContain("x-on:[modalCloseEvent].window=\"if (!\$event.detail?.name || \$event.detail.name === 'demo') requestClose()\"");
 });
 
 it('lässt Aktionen- und Footer-Slot weg, wenn nicht gesetzt', function () {
