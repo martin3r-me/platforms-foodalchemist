@@ -1127,6 +1127,28 @@ class PlanningCascadeService
         return true;
     }
 
+    /**
+     * Stoppt alle noch aktiven Kaskaden einer Planungs-Session, bevor die Session verworfen wird.
+     * Ohne diesen Schritt bleibt ein bereits eingereihter Queue-Job lebendig und scheitert spaeter
+     * beim Zugriff auf die inzwischen soft-geloeschte Session.
+     */
+    public function brecheSessionLaeufeAb(Team $team, int $sessionId): int
+    {
+        $runIds = FoodAlchemistCascadeRun::visibleToTeam($team)
+            ->where('planning_session_id', $sessionId)
+            ->where('status', 'running')
+            ->pluck('id');
+
+        $abgebrochen = 0;
+        foreach ($runIds as $runId) {
+            if ($this->brecheLaufAb($team, (int) $runId)) {
+                $abgebrochen++;
+            }
+        }
+
+        return $abgebrochen;
+    }
+
     public function istAbgebrochen(int $runId): bool
     {
         $run = FoodAlchemistCascadeRun::find($runId);

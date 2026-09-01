@@ -20,6 +20,6 @@
     <div class="mt-2 flex items-center gap-1 border-t border-black/5 pt-2" data-planung-karten-aktionen>
         <button type="button" wire:click="oeffne({{ $s->id }})" class="{{ $btnGhostXs }}" title="Im Editor öffnen" data-planung-karte-oeffnen>@svg('heroicon-o-pencil-square', 'w-3.5 h-3.5')</button>
         <button type="button" wire:click="planungDuplizieren({{ $s->id }})" class="{{ $btnGhostXs }}" title="Duplizieren" data-planung-karte-duplizieren>@svg('heroicon-o-document-duplicate', 'w-3.5 h-3.5')</button>
-        <button type="button" wire:click="planungVerwerfen({{ $s->id }})" wire:confirm="Diese Planung verwerfen? (reversibel — Soft-Delete)" class="{{ $btnGhostXs }} !text-rose-600" title="Verwerfen" data-planung-karte-verwerfen>@svg('heroicon-o-trash', 'w-3.5 h-3.5')</button>
+        <button type="button" wire:click="planungVerwerfen({{ $s->id }})" wire:confirm="Diese Planung verwerfen? Aktive Generierungen dieser Planung werden ebenfalls gestoppt. (reversibel — Soft-Delete)" class="{{ $btnGhostXs }} !text-rose-600" title="Verwerfen und laufende Generierung stoppen" data-planung-karte-verwerfen>@svg('heroicon-o-trash', 'w-3.5 h-3.5')</button>
     </div>
 </div>

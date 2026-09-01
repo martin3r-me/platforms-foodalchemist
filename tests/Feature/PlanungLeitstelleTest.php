@@ -887,6 +887,27 @@ it('#17 D: planungVerwerfen soft-löscht die Planung (team-owned) + löst den ak
         ->and(FoodAlchemistPlanningSession::withTrashed()->whereKey($s->id)->exists())->toBeTrue(); // aber nur soft-deleted (reversibel)
 });
 
+it('#17 D: planungVerwerfen stoppt aktive Kaskaden vor dem Soft-Delete', function () {
+    $s = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Laufende Planung', 'brief' => 'x']);
+    $run = app(PlanningCascadeService::class)->starteKaskade(
+        $this->rootTeam,
+        'gericht',
+        $s,
+        'voll_kreativ',
+        ['brief' => 'Freies Gericht', 'proposal_first' => true],
+    );
+
+    Livewire::test(PlanungIndex::class)
+        ->call('planungVerwerfen', $s->id)
+        ->assertSee('laufende Generierung(en) gestoppt');
+
+    $run->refresh();
+    expect($run->status)->toBe('failed')
+        ->and($run->params)->toHaveKey(PlanningCascadeService::ABBRUCH_KEY)
+        ->and($run->steps()->where('status', 'failed')->count())->toBe(1)
+        ->and(FoodAlchemistPlanningSession::withTrashed()->find($s->id)?->trashed())->toBeTrue();
+});
+
 it('#17 D: planungDuplizieren legt eine team-eigene Kopie an (frischer Entwurf, Brief übernommen)', function () {
     $s = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Original', 'brief' => 'Brief X']);
 

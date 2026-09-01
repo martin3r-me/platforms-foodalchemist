@@ -156,7 +156,7 @@
                                             </span>
                                         </button>
                                         <button type="button" wire:click="planungVerwerfen({{ $s->id }})"
-                                                wire:confirm="Diese Planung verwerfen? (reversibel — Soft-Delete)"
+                                                wire:confirm="Diese Planung verwerfen? Aktive Generierungen dieser Planung werden ebenfalls gestoppt. (reversibel — Soft-Delete)"
                                                 class="shrink-0 px-1.5 py-1 rounded text-gray-300 hover:text-rose-600 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity"
                                                 title="Planung verwerfen" data-planung-listen-verwerfen="{{ $s->id }}">
                                             @svg('heroicon-o-trash', 'w-3.5 h-3.5')
@@ -380,7 +380,7 @@
                     <div class="flex items-center gap-2 pt-1">
                         <button wire:click="oeffne({{ $active->id }})" class="{{ $btnGhostXs }}">Im Editor öffnen</button>
                         <button wire:click="planungVerwerfen({{ $active->id }})"
-                                wire:confirm="Diese Planung verwerfen? (reversibel — Soft-Delete)"
+                                wire:confirm="Diese Planung verwerfen? Aktive Generierungen dieser Planung werden ebenfalls gestoppt. (reversibel — Soft-Delete)"
                                 class="{{ $btnGhostXs }} !text-rose-600" data-planung-details-verwerfen>
                             @svg('heroicon-o-trash', 'w-3.5 h-3.5') Verwerfen
                         </button>

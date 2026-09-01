@@ -1131,20 +1131,29 @@ class Index extends Component
      * Zuletzt-Karte: Planung verwerfen (Soft-Delete, reversibel; finale Etappe #17). Team-owned (D1)
      * über den Service. War die verworfene Session gerade aktiv, wird der Editor-/Lauf-Kontext gelöst.
      */
-    public function planungVerwerfen(int $id, PlanningSessionService $svc): void
+    public function planungVerwerfen(
+        int $id,
+        PlanningSessionService $svc,
+        PlanningCascadeService $cascade,
+    ): void
     {
         $team = $this->team();
         if ($team === null) {
             return;
         }
         try {
+            // Verwerfen ist zugleich der sichere Stop fuer alle Queue-Arbeit dieser Planung.
+            // Wichtig: VOR dem Soft-Delete, solange Session und Laeufe noch eindeutig aufloesbar sind.
+            $abgebrochen = $cascade->brecheSessionLaeufeAb($team, $id);
             $svc->verwerfen($team, $id);
             if ((int) $this->sessionId === $id) {
                 $this->sessionId = null;
                 $this->laufId = null;
                 $this->laeuft = false;
             }
-            $this->meldung = 'Planung verworfen.';
+            $this->meldung = $abgebrochen > 0
+                ? "Planung verworfen und {$abgebrochen} laufende Generierung(en) gestoppt."
+                : 'Planung verworfen.';
             $this->fehler = null;
         } catch (\Throwable $e) {
             $this->fehler = 'Verwerfen nicht möglich: ' . $e->getMessage();
