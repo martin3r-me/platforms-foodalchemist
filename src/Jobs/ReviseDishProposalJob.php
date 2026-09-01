@@ -56,7 +56,7 @@ class ReviseDishProposalJob implements ShouldQueue
             ], ['target_table' => 'foodalchemist_dish_ideas', 'target_id' => $idee->id]);
             $w = $proposal->werte;
             $titel = trim((string) ($w['titel'] ?? '')) ?: (string) $idee->title;
-            $komponenten = collect((array) ($w['komponenten'] ?? []))->filter('is_array')->map(function (array $k): ?array {
+            $komponenten = collect((array) ($w['komponenten'] ?? []))->filter(fn ($k) => is_array($k))->map(function (array $k): ?array {
                 $name = trim((string) ($k['name'] ?? ''));
                 return $name === '' ? null : [
                     'name' => Str::limit($name, 120, ''),

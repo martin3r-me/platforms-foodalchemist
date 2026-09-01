@@ -928,7 +928,7 @@ class PlanningCascadeService
         // Funktion und technisches Ziel der Komponenten und kann damit zuerst Bestands-Basisrezepte matchen.
         $komponenten = array_values((array) (($idee->source_meta ?? [])['komponenten'] ?? []));
         if ($komponenten !== []) {
-            $zeilen = collect($komponenten)->filter('is_array')->map(function (array $k): string {
+            $zeilen = collect($komponenten)->filter(fn ($k) => is_array($k))->map(function (array $k): string {
                 return trim(implode(' — ', array_filter([
                     (string) ($k['name'] ?? ''),
                     isset($k['funktion']) ? 'Funktion: ' . $k['funktion'] : null,

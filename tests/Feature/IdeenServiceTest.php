@@ -250,7 +250,10 @@ it('E0 kiDivergenzSession legt Session-Skizzen an (planning_session_id, quelle=k
     $session = app(\Platform\FoodAlchemist\Services\PlanningSessionService::class)
         ->create($this->rootTeam, ['title' => 'Herbst-Menü', 'brief' => 'Wild, Pilze, Kürbis']);
     bindDivergenzStub([
-        ['titel' => 'Kürbis-Velouté mit Kernöl', 'beschreibung' => 'samtig, herbstlich'],
+        ['titel' => 'Kürbis-Velouté mit Kernöl', 'beschreibung' => 'samtig, herbstlich', 'komponenten' => [
+            ['name' => 'Kürbiscreme', 'funktion' => 'Basis', 'herstellung' => 'Fein pürieren.'],
+            'keine-struktur',
+        ]],
         ['title' => 'Hirschragout-Bällchen'],                          // englischer Key, ohne Beschreibung
         ['titel' => '  '],                                             // leere Zeile → übersprungen
     ]);
@@ -270,6 +273,9 @@ it('E0 kiDivergenzSession legt Session-Skizzen an (planning_session_id, quelle=k
         ->and($a->target_form)->toBe('einzel')
         ->and($a->sales_recipe_id)->toBeNull()
         ->and($a->source_meta['quelle'])->toBe('ki_divergenz_session')
+        ->and($a->source_meta['komponenten'])->toBe([[
+            'name' => 'Kürbiscreme', 'funktion' => 'Basis', 'herstellung' => 'Fein pürieren.',
+        ]])
         ->and($res['angelegt'][0]->position)->toBe(1)
         ->and($res['angelegt'][1]->position)->toBe(2);
 

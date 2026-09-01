@@ -545,7 +545,7 @@ class IdeenService
             return [];
         }
 
-        return collect($roh)->filter('is_array')->map(function (array $k): ?array {
+        return collect($roh)->filter(fn ($k) => is_array($k))->map(function (array $k): ?array {
             $name = trim((string) ($k['name'] ?? ''));
             if ($name === '') {
                 return null;
