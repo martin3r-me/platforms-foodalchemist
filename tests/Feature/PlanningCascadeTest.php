@@ -2257,6 +2257,34 @@ it('L1 goKaskade: Kreativ-Modus datenbank persistiert bestand=nur_bestand für d
     expect($session->refresh()->generation_params['bestand'] ?? null)->toBe('nur_bestand');
 });
 
+it('Resume eines direkten Gerichtsvorschlags bleibt im Proposal-Gate', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Retry Vorschlag', 'brief' => 'x']);
+    $run = FoodAlchemistCascadeRun::create([
+        'team_id' => $this->rootTeam->id,
+        'planning_session_id' => $session->id,
+        'scope' => 'gericht',
+        'creative_mode' => 'voll_kreativ',
+        'brief' => 'Ein warmer Hauptgang.',
+        'status' => 'failed',
+        'staged' => true,
+    ]);
+    FoodAlchemistCascadeRunStep::create([
+        'team_id' => $this->rootTeam->id,
+        'cascade_run_id' => $run->id,
+        'kind' => 'gericht',
+        'label' => 'Ein warmer Hauptgang.',
+        'status' => 'failed',
+        'sort' => 0,
+    ]);
+
+    $n = app(PlanningCascadeService::class)->setzeLaufFort($this->rootTeam, (int) $run->id);
+
+    expect($n)->toBe(1);
+    Queue::assertPushed(GenerateDishProposalJob::class, fn ($job) => $job->brief === 'Ein warmer Hauptgang.');
+    Queue::assertNotPushed(GenerateRecipeJob::class);
+    expect($run->refresh()->status)->toBe('running');
+});
+
 // ── L4 — Kaskaden-Nahtstellen ────────────────────────────────────────────────────────────────
 
 it('L4.3 recomputeRunStatus: freigegeben + failed → review (kein „done", das luegt)', function () {

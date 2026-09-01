@@ -1825,7 +1825,19 @@ class PlanningCascadeService
         $params = is_array($run?->params) ? $run->params : [];
         $sessionId = $run?->planning_session_id !== null ? (int) $run->planning_session_id : null;
         $staged = (bool) ($run?->staged ?? false);
-        if ($step->kind === 'concept') {
+        if ($step->kind === 'gericht' && $step->parent_step_id === null && $staged && $sessionId !== null) {
+            // Ein fehlgeschlagener direkter Gerichtsvorschlag muss beim Resume wieder auf dieselbe
+            // textliche Gate-Stufe gehen. Der generische Rezeptpfad wuerde sonst das Proposal-Gate
+            // umgehen und sofort einen echten Gericht-Draft erzeugen.
+            GenerateDishProposalJob::dispatch(
+                $team->id,
+                (int) (Auth::id() ?? 0),
+                $sessionId,
+                (int) $step->id,
+                $brief,
+                (string) ($run?->creative_mode ?? 'voll_kreativ'),
+            );
+        } elseif ($step->kind === 'concept') {
             // $params durchreichen — sonst verliert das „neu generieren" eines Concept-Steps SÄMTLICHE
             // Menü-Leitplanken (Gänge/Preis-Korridor/Quoten/Balance/Buffet), weil dispatchConceptStep
             // die menue_*-Teilmenge aus den Run-Params filtert (Default [] = kein Leitplanken-Erbe).
