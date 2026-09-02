@@ -254,15 +254,29 @@ class IngredientMatchService
         $poolTokens = array_values(array_unique($poolTokens));
 
         // Lexikalischer Pool → keyed map "kind\0id".
+        //
+        // ENGE SONDEN ZUSÄTZLICH ZUM BREITEN POOL. `gpPool()` kappt bei 300 und sortiert
+        // dabei nach `id` — also willkürlich, nicht nach Relevanz. Sobald Alias-/
+        // Decompound-Erweiterung den Treffer-Raum über 300 aufbläht, fallen die HOHEN IDs
+        // heraus: neu kuratierte Grundprodukte werden systematisch unsichtbar, je mehr
+        // Bestand da ist. Gemessen auf demo (2026-09-03, 28 Zutaten mit Erweiterung):
+        // 17 liefen ins Limit, 15 verloren dabei exakte Kandidaten — „Sherryessig" verlor
+        // genau das eine richtige GP, „Pflanzenöl" und „Rapsöl" verloren
+        // «Rapsoel / Pflanzenoel», „Weissweinessig" 259 Kandidaten.
+        //
+        // Darum wird der breite Pool mit zwei ENGEN Abfragen vereinigt, die kaum je ins
+        // Limit laufen: den Original-Tokens und dem längsten Einzel-Token (bei deutschen
+        // Zutaten-Komposita der unterscheidende Teil). Rein additiv — Scoring und Ranking
+        // bleiben unberührt, es kann nur MEHR gefunden werden.
         $lex = [];
-        foreach ($this->gpPool($team, $poolTokens, $querySlug) as $gp) {
+        foreach ($this->poolMitEngenSonden($team, $poolTokens, $queryTokens, $querySlug) as $gp) {
             $combined = trim($gp->name . ' ' . ($gp->main_ingredient_display ?? ''));
             $score = $this->bestLexScore($queryTokens, $aliasVariants, $querySlug, $combined, $gp->main_ingredient_slug, $gp->name);
             if ($score > 0.0) {
                 $lex["gp\0{$gp->id}"] = ['kind' => 'gp', 'id' => (int) $gp->id, 'name' => $gp->name, 'score' => $score, 'reference' => "gp:{$gp->id}"];
             }
         }
-        foreach ($this->subPool($team, $poolTokens, $querySlug) as $sub) {
+        foreach ($this->subPoolMitEngenSonden($team, $poolTokens, $queryTokens, $querySlug) as $sub) {
             $score = $this->bestLexScore($queryTokens, $aliasVariants, $querySlug, $sub->name, null, $sub->name);
             if ($score > 0.0) {
                 $lex["sub\0{$sub->id}"] = ['kind' => 'sub', 'id' => (int) $sub->id, 'name' => $sub->name, 'score' => $score, 'reference' => "sub:{$sub->id}"];
@@ -524,6 +538,60 @@ class IngredientMatchService
     }
 
     /** LIKE-Vorfilter (build_like_clauses) — GP-Pool, ORDER BY id (Inv. 7), LIMIT 300. */
+    /**
+     * Breiter Pool ∪ enge Sonden. Siehe Begründung an der Aufrufstelle: `gpPool()` kappt
+     * bei 300 nach `id`, wodurch breite Token-Mengen exakte Treffer mit hoher ID abschneiden.
+     *
+     * Die Sonden laufen NUR, wenn die Erweiterung den Token-Satz tatsächlich verbreitert hat
+     * bzw. ein längstes Token existiert — sonst wäre es dieselbe Abfrage zweimal.
+     */
+    private function poolMitEngenSonden(Team $team, array $poolTokens, array $queryTokens, ?string $querySlug)
+    {
+        $treffer = $this->gpPool($team, $poolTokens, $querySlug);
+        foreach ($this->engeSonden($poolTokens, $queryTokens) as $sonde) {
+            $treffer = $treffer->concat($this->gpPool($team, $sonde, $querySlug));
+        }
+
+        return $treffer->unique('id')->values();
+    }
+
+    /** Dasselbe für die Basisrezepte (subPool kappt bei 200, gleiches Muster). */
+    private function subPoolMitEngenSonden(Team $team, array $poolTokens, array $queryTokens, ?string $querySlug)
+    {
+        $treffer = $this->subPool($team, $poolTokens, $querySlug);
+        foreach ($this->engeSonden($poolTokens, $queryTokens) as $sonde) {
+            $treffer = $treffer->concat($this->subPool($team, $sonde, $querySlug));
+        }
+
+        return $treffer->unique('id')->values();
+    }
+
+    /**
+     * Die engen Sonden: Original-Tokens (falls die Erweiterung verbreitert hat) und das
+     * längste Einzel-Token (bei deutschen Komposita der unterscheidende Teil —
+     * „Sherryessig" gegenüber „sherry"+„essig").
+     *
+     * @return list<list<string>>
+     */
+    private function engeSonden(array $poolTokens, array $queryTokens): array
+    {
+        $sonden = [];
+        if ($queryTokens !== [] && count($poolTokens) > count($queryTokens)) {
+            $sonden[] = $queryTokens;
+        }
+        $laengstes = null;
+        foreach ($queryTokens as $t) {
+            if ($laengstes === null || mb_strlen($t) > mb_strlen($laengstes)) {
+                $laengstes = $t;
+            }
+        }
+        if ($laengstes !== null && $queryTokens !== [$laengstes]) {
+            $sonden[] = [$laengstes];
+        }
+
+        return $sonden;
+    }
+
     private function gpPool(Team $team, array $queryTokens, ?string $querySlug)
     {
         $query = FoodAlchemistGp::visibleToTeam($team)
