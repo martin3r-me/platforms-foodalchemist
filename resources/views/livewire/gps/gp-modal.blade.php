@@ -12,7 +12,9 @@
     {{-- Aktionsleiste (E1-4/5): Speichern zuerst, dann Status-Regler, dann KI-Chips.
          Status und „Alles anreichern" lagen vorher IM Body und scrollten weg. --}}
     <x-slot:actions>
-        <button type="button" wire:click="speichern" class="{{ $btnPrimary }}" data-gp-speichern-kopf>{{ $neu ? 'Anlegen' : 'Speichern' }}</button>
+        <button type="button" wire:click="speichern" class="{{ $btnPrimary }}"
+                @disabled($autoSuggestPending) wire:loading.attr="disabled" wire:target="autoSuggestFromSupplierItem"
+                data-gp-speichern-kopf>{{ $neu ? ($autoSuggestPending ? 'KI analysiert …' : 'Anlegen') : 'Speichern' }}</button>
 
         @if($neu)
             <span class="text-gray-300">|</span>
@@ -85,6 +87,11 @@
 
     @if($fehler !== null)
         <p class="text-xs text-rose-600 mb-3" data-modal-fehler>{{ $fehler }}</p>
+    @endif
+    @if($autoSuggestPending)
+        <div class="rounded-lg bg-violet-500/10 border border-violet-500/30 px-3 py-2 mb-3 text-xs text-violet-700 inline-flex items-center gap-2" data-gp-auto-suggest-laeuft>
+            @svg('heroicon-o-sparkles', 'w-3.5 h-3.5') Lieferantenartikel wird analysiert – GP-Vorschlag wird vorbereitet …
+        </div>
     @endif
 
     {{-- Anreichern-Lauf (Bulk-Mechanik auf EIN GP; Vorschläge landen in den Feldern nach

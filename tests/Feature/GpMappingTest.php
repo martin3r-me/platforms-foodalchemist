@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
 use Platform\FoodAlchemist\Livewire\Gps\DetailPanel;
+use Platform\FoodAlchemist\Livewire\Suppliers\Index as SupplierIndex;
 use Platform\FoodAlchemist\Livewire\Suppliers\ItemModal;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplier;
@@ -64,7 +65,25 @@ it('LA-Modal startet die GP-Neuanlage mit dem Artikel als LA-first-Quelle', func
     Livewire::test(ItemModal::class)
         ->call('oeffnen', $this->la->id)
         ->call('gpNeuAnlegen')
-        ->assertDispatched('gp-modal.oeffnen', id: null, laId: $this->la->id);
+        ->assertDispatched('gp-modal.oeffnen', id: null, laId: $this->la->id, autoSuggest: true)
+        ->assertNotDispatched('modal.close');
+});
+
+it('LA-first schließt das Artikel-Modal erst nach erfolgreicher GP-Verknüpfung', function () {
+    $modal = Livewire::test(ItemModal::class)
+        ->call('oeffnen', $this->la->id)
+        ->call('gpGespeichert')
+        ->assertNotDispatched('modal.close');
+
+    app(LeadLaService::class)->verknuepfen($this->rootTeam, $this->gp, $this->la->id);
+
+    $modal->call('gpGespeichert')
+        ->assertDispatched('modal.close', name: 'item-modal');
+});
+
+it('Lieferantenseite mountet den GP-Editor als Ziel des LA-first-Events', function () {
+    Livewire::test(SupplierIndex::class)
+        ->assertSeeHtml('data-gp-speichern-kopf');
 });
 
 it('GP-Suche findet einen ungemappten LA auch ohne Structure-Zeile und über die Artikelnummer', function () {

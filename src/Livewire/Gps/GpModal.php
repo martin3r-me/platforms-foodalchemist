@@ -61,6 +61,9 @@ class GpModal extends Component
 
     public ?int $supplierItemId = null;
 
+    /** Der LA-first-Editor ist offen; der automatische gp.suggest-Lauf folgt separat. */
+    public bool $autoSuggestPending = false;
+
     /** @var array<string, array{werte: array, confidence: float, reasoning: ?string}> transiente GL-07-Vorschläge */
     public array $kiVorschlag = [];
 
@@ -87,9 +90,9 @@ class GpModal extends Component
     public ?int $bulkRunId = null;
 
     #[On('gp-modal.oeffnen')]
-    public function oeffnen(?int $id = null, ?int $laId = null): void
+    public function oeffnen(?int $id = null, ?int $laId = null, bool $autoSuggest = false): void
     {
-        $this->reset('fehler', 'force', 'kiVorschlag', 'kiRohtext', 'laSuche', 'supplierItemId', 'manuellerName', 'derivatSuche', 'nameVorschlag', 'bulkRunId');
+        $this->reset('fehler', 'force', 'kiVorschlag', 'kiRohtext', 'laSuche', 'supplierItemId', 'autoSuggestPending', 'manuellerName', 'derivatSuche', 'nameVorschlag', 'bulkRunId');
         $this->gpId = $id;
         $this->builder = self::BUILDER_LEER;
         $this->tags = array_fill_keys(FoodAlchemistGp::TAG_FIELDS, '');
@@ -100,6 +103,9 @@ class GpModal extends Component
                 $this->supplierItemId = (int) $la->id;
                 $this->kiRohtext = (string) $la->designation;
                 $this->laSuche = (string) $la->designation;
+                $this->builder['bio'] = (bool) ($la->is_organic ?? false);
+                $this->builder['vegan'] = (bool) ($la->is_vegan ?? false);
+                $this->autoSuggestPending = $autoSuggest;
             }
         }
 
@@ -124,13 +130,32 @@ class GpModal extends Component
         }
 
         $this->dispatch('modal.open', name: 'gp-modal');
+        if ($this->autoSuggestPending && $this->supplierItemId !== null) {
+            // Zweiter Livewire-Request: das Modal wird sofort sichtbar; der Provider-Call
+            // blockiert nicht das Oeffnen und bleibt als Ladezustand nachvollziehbar.
+            $this->dispatch('gp-modal.auto-suggest', laId: $this->supplierItemId)->to(self::class);
+        }
+    }
+
+    #[On('gp-modal.auto-suggest')]
+    public function autoSuggestFromSupplierItem(int $laId, AiGatewayService $ki): void
+    {
+        if (! $this->autoSuggestPending || $this->supplierItemId !== $laId || $this->gpId !== null) {
+            return;
+        }
+
+        try {
+            $this->kiVorschlagNaming($ki);
+        } finally {
+            $this->autoSuggestPending = false;
+        }
     }
 
     #[On('modal.closed')]
     public function geschlossen(string $name): void
     {
         if ($name === 'gp-modal') {
-            $this->reset('gpId', 'builder', 'manuellerName', 'defaults', 'fehler', 'force', 'kiVorschlag', 'kiRohtext', 'laSuche', 'supplierItemId');
+            $this->reset('gpId', 'builder', 'manuellerName', 'defaults', 'fehler', 'force', 'kiVorschlag', 'kiRohtext', 'laSuche', 'supplierItemId', 'autoSuggestPending');
         }
     }
 
@@ -537,11 +562,21 @@ class GpModal extends Component
                 'name' => (string) $wg->name,
                 'sub_categories' => $vocab->listSubCategories($team, (string) $wg->code)->pluck('sub_category')->values()->all(),
             ])->values()->all();
-            $vorschlag = $ki->propose('gp.suggest', [
+            $kontext = [
                 'label' => trim($this->kiRohtext),
                 'taxonomie' => $taxonomie,
                 'regel' => 'commodity_group_code und sub_category ausschließlich aus taxonomie wählen',
-            ]);
+            ];
+            $quelle = $this->supplierItemContext();
+            if ($this->supplierItemId !== null && $quelle === null) {
+                $this->fehler = 'Der ausgewählte Lieferantenartikel ist nicht mehr verfügbar oder bereits einem GP zugeordnet.';
+
+                return;
+            }
+            if ($quelle !== null) {
+                $kontext['quell_lieferantenartikel'] = $quelle;
+            }
+            $vorschlag = $ki->propose('gp.suggest', $kontext);
         } catch (\RuntimeException $e) {
             $this->fehler = $e->getMessage();
 
@@ -565,6 +600,40 @@ class GpModal extends Component
         if ($this->supplierItemId === null) {
             $this->laSuche = trim($this->kiRohtext);
         }
+    }
+
+    /**
+     * Ausgewaehlter LA als grounding fuer gp.suggest. Verpackungsdaten bleiben bewusst
+     * draussen: sie duerfen nach Regelwerk §7.1 nie Teil des GP-Namens werden.
+     */
+    private function supplierItemContext(): ?array
+    {
+        $team = $this->team();
+        if ($team === null || $this->supplierItemId === null) {
+            return null;
+        }
+        $la = \Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem::visibleToTeam($team)
+            ->with(['supplier:id,name', 'structure'])
+            ->find($this->supplierItemId);
+        if ($la === null || $la->structure?->gp_id !== null) {
+            return null;
+        }
+
+        return [
+            'id' => (int) $la->id,
+            'bezeichnung' => (string) $la->designation,
+            'regulierter_name' => $la->regulated_name,
+            'marketing_name' => $la->marketing_name,
+            'zutatenangabe' => $la->ingredients_supplier,
+            'marke' => $la->brand,
+            'hersteller' => $la->manufacturer,
+            'herkunft' => $la->origin ?: $la->origin_country,
+            'lieferant' => $la->supplier?->name,
+            'bio' => $la->is_organic,
+            'vegan' => $la->is_vegan,
+            'vegetarisch' => $la->is_vegetarian,
+            'alkohol' => $la->is_alcohol,
+        ];
     }
 
     public function supplierItemWaehlen(int $id): void

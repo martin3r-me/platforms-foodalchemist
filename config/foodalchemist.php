@@ -455,7 +455,11 @@ return [
                 . 'commodity_group_code, sub_category}. Übersetze fremdsprachige Lieferantentexte '
                 . 'fachlich korrekt ins Deutsche. commodity_group_code und sub_category müssen '
                 . 'exakt aus der im Kontext übergebenen taxonomie stammen; nichts erfinden. '
-                . 'Singular/Lemma (§6.1), keine Verpackungswörter (§7.1), Marke nur nach §5-Tiebreaker.',
+                . 'Wenn quell_lieferantenartikel übergeben ist, ist genau dieser Artikel die Quelle: '
+                . 'nutze Bezeichnung, regulierten Namen und Zutatenangabe zur fachlichen Ableitung, '
+                . 'erfinde aber keine nicht belegten Eigenschaften. Artikelnummer, Lieferant, Gebinde, '
+                . 'Verpackung und Marke gehören nicht in den GP-Namen (Marke nur nach §5-Tiebreaker). '
+                . 'Singular/Lemma (§6.1), keine Verpackungswörter (§7.1).',
         ],
         'gp.condition' => [
             'tier' => 'D',

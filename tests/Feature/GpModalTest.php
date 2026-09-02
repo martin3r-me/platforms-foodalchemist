@@ -156,6 +156,66 @@ it('Neuanlage verknüpft den ausgewählten Lieferantenartikel direkt und legt fe
         ->and($gp->fresh()->n_las_total)->toBe(1);
 });
 
+it('LA-first öffnet sofort und plant den automatischen prüfbaren gp.suggest-Lauf', function () {
+    $supplier = FoodAlchemistSupplier::create(['team_id' => $this->rootTeam->id, 'name' => 'Hanos Venlo']);
+    $la = FoodAlchemistSupplierItem::create([
+        'team_id' => $this->rootTeam->id, 'supplier_id' => $supplier->id,
+        'designation' => 'BIETENCREME MET DRAGON SOUS VIDE GEGAARD',
+        'is_organic' => true, 'is_vegan' => true,
+    ]);
+
+    Livewire::test(GpModal::class)
+        ->call('oeffnen', null, $la->id, true)
+        ->assertSet('supplierItemId', $la->id)
+        ->assertSet('kiRohtext', $la->designation)
+        ->assertSet('builder.bio', true)
+        ->assertSet('builder.vegan', true)
+        ->assertSet('autoSuggestPending', true)
+        ->assertDispatched('modal.open', name: 'gp-modal')
+        ->assertDispatched('gp-modal.auto-suggest', laId: $la->id);
+});
+
+it('automatischer LA-Vorschlag endet sauber und lässt die Quelle zur Prüfung ausgewählt', function () {
+    $supplier = FoodAlchemistSupplier::create(['team_id' => $this->rootTeam->id, 'name' => 'Hanos Venlo']);
+    $la = FoodAlchemistSupplierItem::create([
+        'team_id' => $this->rootTeam->id, 'supplier_id' => $supplier->id,
+        'designation' => 'BIETENCREME MET DRAGON SOUS VIDE GEGAARD',
+        'regulated_name' => 'Rote-Bete-Creme mit Estragon',
+    ]);
+
+    Livewire::test(GpModal::class)
+        ->call('oeffnen', null, $la->id, true)
+        ->call('autoSuggestFromSupplierItem', $la->id)
+        ->assertSet('autoSuggestPending', false)
+        ->assertSet('supplierItemId', $la->id)
+        ->assertSet('fehler', null);
+});
+
+it('LA-first rollt die GP-Anlage zurück wenn der Artikel zwischenzeitlich gemappt wurde', function () {
+    $supplier = FoodAlchemistSupplier::create(['team_id' => $this->rootTeam->id, 'name' => 'Hanos Venlo']);
+    $la = FoodAlchemistSupplierItem::create([
+        'team_id' => $this->rootTeam->id, 'supplier_id' => $supplier->id,
+        'designation' => 'Rote Bete sous-vide mit Estragon',
+    ]);
+    $struktur = FoodAlchemistSupplierItemStructure::create([
+        'team_id' => $this->rootTeam->id, 'supplier_item_id' => $la->id, 'gp_id' => null,
+    ]);
+    $modal = Livewire::test(GpModal::class)
+        ->call('oeffnen', null, $la->id)
+        ->set('builder.hauptzutat', 'Rote Bete')
+        ->set('builder.condition', 'frisch')
+        ->set('builder.processing', 'sous-vide gegart');
+
+    $anderesGp = $this->makeGp($this->rootTeam, 'Rote Bete Bestand');
+    $struktur->update(['gp_id' => $anderesGp->id]);
+
+    $modal->call('speichern')
+        ->assertSet('fehler', fn ($f) => str_contains((string) $f, 'bereits einem anderen GP'));
+
+    expect(FoodAlchemistGp::where('name', 'Rote Bete: frisch, sous-vide gegart')->exists())->toBeFalse()
+        ->and((int) $struktur->fresh()->gp_id)->toBe($anderesGp->id);
+});
+
 // ── 06·H4b: Favorit direkt im GP-Editor pinnen (2. Andockpunkt) ──
 
 it('favoriteToggle pinnt einen Convenience-GP und nimmt ihn wieder heraus', function () {

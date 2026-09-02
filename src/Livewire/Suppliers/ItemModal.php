@@ -240,8 +240,23 @@ class ItemModal extends Component
             return;
         }
         $id = (int) $item->id;
-        $this->dispatch('modal.close', name: 'item-modal');
-        $this->dispatch('gp-modal.oeffnen', id: null, laId: $id);
+        // Das LA-Modal bleibt als Ruecksprung offen. Der GP-Editor hebt sich ueber
+        // den gemeinsamen Modal-Z-Stack nach vorn; erst nach erfolgreicher Anlage
+        // werden beide geschlossen. So entsteht kein leerer Zwischenzustand.
+        $this->dispatch('gp-modal.oeffnen', id: null, laId: $id, autoSuggest: true);
+    }
+
+    #[On('gp-gespeichert')]
+    public function gpGespeichert(): void
+    {
+        if ($this->itemId === null) {
+            return;
+        }
+
+        $item = $this->item($this->itemId)->load('structure');
+        if ($item->structure?->gp_id !== null) {
+            $this->dispatch('modal.close', name: 'item-modal');
+        }
     }
 
     public function gpZuweisen(int $gpId): void

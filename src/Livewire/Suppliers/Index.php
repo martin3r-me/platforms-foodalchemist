@@ -3,6 +3,7 @@
 namespace Platform\FoodAlchemist\Livewire\Suppliers;
 
 use Illuminate\Support\Facades\Auth;
+use Livewire\Attributes\On;
 use Livewire\Attributes\Url;
 use Livewire\Component;
 use Livewire\WithPagination;
@@ -60,6 +61,12 @@ class Index extends Component
 
     /** M3-11-Nachtrag: Checkbox-Selektion für die Bulk-Leiste (D-2 §4) */
     public array $auswahl = [];
+
+    /** Kind-Modal hat GP + LA atomar gespeichert; ein leerer Listener erzwingt den Tabellen-Refresh. */
+    #[On('gp-gespeichert')]
+    public function gpGespeichert(): void
+    {
+    }
 
     public string $bulkGpSuche = '';
 
