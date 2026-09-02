@@ -66,6 +66,8 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                 \Platform\FoodAlchemist\Console\KnowledgeImportCommand::class,
                 // W2-5: der Rückweg — bis hierher gab es nur Import (Modul = SSOT ohne Backup-Pfad).
                 \Platform\FoodAlchemist\Console\KnowledgeExportCommand::class,
+                // W2-4: §-Deckung — hätte den verlorenen §12 gefunden.
+                \Platform\FoodAlchemist\Console\WissenDeckungCommand::class,
                 \Platform\FoodAlchemist\Console\WissenSteuerdatenW0Command::class,
                 \Platform\FoodAlchemist\Console\KnowledgeEmbedCommand::class,
                 \Platform\FoodAlchemist\Console\EmbedCommand::class,
