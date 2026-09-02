@@ -837,7 +837,7 @@ return [
                 // Qualitäten/Grammaturen entsprechend; GIB KEINEN PREIS AUS).
                 . 'unter Beachtung der Richtungs-Parameter (convenience, frische, bio, niveau, sektor, '
                 . 'diaet_hart, allergen_nogo, aroma, anlass, serviceform, kompositions_stil, pax, ziel_portion_g, saison, ziel_we_pct): werte = '
-                . '{name (Pipe-Syntax §4.4 «<HG-Code>: Hauptkomponente | Komponente | …», max 5 Felder, '
+                . '{name (Pipe-Syntax §1 «<HG-Code>: Hauptkomponente | Komponente | …», max 5 Felder, '
                 . 'keine Marketing-Adjektive), description (§8-Stil), taste_direction (grobe Menue-Richtung, NUR EIN Wort: suess|herzhaft|neutral — das Aroma-Profil gehoert in description), '
                 . 'preparation (= PLATING & SERVICE: Teller-Aufbau, Mengenverteilung, Service-Anweisung — '
                 // Spec 37: role/fit-Parität zum Basis-Prompt — dieselbe Zutaten-Selbstbegründung
@@ -1197,17 +1197,17 @@ return [
         ],
         'vk.name_putzen' => [
             'tier' => 'B',
-            'task' => 'Normalisiere den Verkaufsrezept-Namen auf die Pipe-Syntax §4.4 '
+            'task' => 'Normalisiere den Verkaufsrezept-Namen auf die Pipe-Syntax §1 (VK-Regelwerk) '
                 . '«<HG-Code>: Hauptkomponente | Komponente | …» (max 5 Felder, Title Case, '
                 . 'keine Marketing-Adjektive): werte = {name}.',
         ],
         // Et.4 (Eingabe-Reife): Titel-VORSCHLAG aus dem freien Brief (vor der Generierung), nicht das
-        // Putzen eines fertigen Namens. Nüchtern + §4.4-konform; benennt nur, was der Brief hergibt.
+        // Putzen eines fertigen Namens. Nüchtern + §1-konform; benennt nur, was der Brief hergibt.
         'vk.titel_vorschlag' => [
             'tier' => 'B',
             // #75: HG-Code NICHT vom LLM raten lassen — aus einem freien Brief kann es die
             // Warengruppe kaum zuverlässig treffen. Der Titel-Vorschlag liefert nur die nüchterne
-            // Komponenten-Pipe OHNE Code-Präfix; der §4.4-HG-Code wird separat/deterministisch
+            // Komponenten-Pipe OHNE Code-Präfix; der §1-HG-Code wird separat/deterministisch
             // (bei der echten VK-Anlage über die Warengruppen-Klassifikation) ergänzt.
             'task' => 'Leite aus dem Brief EINEN nüchternen Gericht-Titel als Komponenten-Pipe ab: '
                 . '«Hauptkomponente | Komponente | …» (max 5 Felder, Title Case, keine Marketing-'
