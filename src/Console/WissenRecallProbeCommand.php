@@ -35,6 +35,7 @@ class WissenRecallProbeCommand extends Command
         {--fenster=2000 : angenommenes Embedding-Fenster (Kopf/Schwanz-Grenze)}
         {--kategorie=* : nur diese Kategorien}
         {--min-score= : Score-Untergrenze der Suche (Default: Service-Wert)}
+        {--kontrolle : GEGENPROBE — Anfrage aus dem KOPF (innerhalb des Fensters) bauen}
         {--json : Ergebnis als JSON-Zeile (für vor/nach-Vergleich)}';
 
     protected $description = 'W1-1: misst, ob Wissen jenseits des Embedding-Fensters semantisch findbar ist';
@@ -68,8 +69,11 @@ class WissenRecallProbeCommand extends Command
         $docs = $q->orderBy('slug')->limit($limit * 3)->get(['id', 'slug', 'category', 'title', 'content_md', 'char_count']);
 
         $faelle = [];
+        $kontrolle = (bool) $this->option('kontrolle');
         foreach ($docs as $d) {
-            $anfrage = $this->anfrageAusSchwanz((string) $d->content_md, $fenster);
+            $anfrage = $kontrolle
+                ? $this->anfrageAusKopf((string) $d->content_md, $fenster)
+                : $this->anfrageAusSchwanz((string) $d->content_md, $fenster);
             if ($anfrage === null) {
                 continue;                                        // kein brauchbarer Anker im Schwanz
             }
@@ -108,7 +112,8 @@ class WissenRecallProbeCommand extends Command
         }
 
         $this->line('');
-        $this->line(sprintf('W1-1-RECALL-PROBE · Fenster %d · Top-%d · %d Stichproben', $fenster, $k, count($faelle)));
+        $this->line(sprintf('W1-1-RECALL-PROBE%s · Fenster %d · Top-%d · %d Stichproben',
+            $kontrolle ? ' [GEGENPROBE: Anfrage aus dem KOPF]' : '', $fenster, $k, count($faelle)));
         $this->line('');
         foreach ($zeilen as $z) {
             $this->line(sprintf('  %-46s %6d Z.  %s',
@@ -116,9 +121,16 @@ class WissenRecallProbeCommand extends Command
                 $z['rang'] !== null ? 'Rang ' . $z['rang'] : '— nicht in Top-' . $k));
         }
         $this->line('');
-        $this->info(sprintf('Findbar jenseits des Fensters: %d von %d = %.0f %%', $treffer, count($faelle), $quote * 100));
-        $this->line('  Eine niedrige Quote heisst: dieser Teil des Korpus ist semantisch unerreichbar,');
-        $this->line('  egal wie gut die Anfrage ist. Genau das soll ein grösseres Fenster heben.');
+        if ($kontrolle) {
+            $this->info(sprintf('GEGENPROBE — findbar über den KOPF: %d von %d = %.0f %%', $treffer, count($faelle), $quote * 100));
+            $this->line('  Ist diese Quote hoch, sind die Dokumente indiziert und die Suche funktioniert.');
+            $this->line('  Nur DANN belegt eine Null im Schwanz-Lauf, dass es am Fenster liegt.');
+        } else {
+            $this->info(sprintf('Findbar jenseits des Fensters: %d von %d = %.0f %%', $treffer, count($faelle), $quote * 100));
+            $this->line('  Eine niedrige Quote heisst: dieser Teil des Korpus ist semantisch unerreichbar,');
+            $this->line('  egal wie gut die Anfrage ist. Genau das soll ein grösseres Fenster heben.');
+            $this->line('  ZUERST --kontrolle fahren: ohne sie ist eine Null nicht interpretierbar.');
+        }
 
         return self::SUCCESS;
     }
@@ -141,6 +153,24 @@ class WissenRecallProbeCommand extends Command
                 $kandidaten[] = $t;
             }
         }
+        if (count($kandidaten) < 3) {
+            return null;
+        }
+        usort($kandidaten, fn ($a, $b) => [mb_strlen($b), $a] <=> [mb_strlen($a), $b]);
+
+        return implode(' ', array_slice($kandidaten, 0, self::TOKENS_PRO_ANFRAGE));
+    }
+
+    /**
+     * Gegenprobe: Anker aus dem KOPF, also aus dem Bereich, der sicher im Vektor steht.
+     * Absichtlich dieselbe Auswahl-Regel (längste zuerst), damit sich die beiden Läufe
+     * nur in der Herkunft der Begriffe unterscheiden — nicht in der Methode.
+     */
+    private function anfrageAusKopf(string $inhalt, int $fenster): ?string
+    {
+        $kopf = mb_substr($inhalt, 0, $fenster);
+        preg_match_all('/[A-Za-zÄÖÜäöüß]{' . self::MIN_TOKEN . ',}/u', $kopf, $m);
+        $kandidaten = array_values(array_unique($m[0] ?? []));
         if (count($kandidaten) < 3) {
             return null;
         }
