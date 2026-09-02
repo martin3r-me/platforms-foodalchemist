@@ -61,28 +61,30 @@ class KnowledgeEmbeddingService
     /**
      * Lead-Budget für Domain-Docs (Titel + erste N Zeichen).
      *
-     * W1-1, 2026-09-03: 2000 → 8000, GEMESSEN begründet statt gerechnet.
+     * W1-1 WURDE GEMESSEN UND VERWORFEN (2026-09-03). Der Plan wollte 2000 → 8000 heben
+     * („nur 52 % des Korpus semantisch findbar"). Diese Zahl war eine ZEICHEN-Rechnung.
+     * Gemessen mit `foodalchemist:wissen-recall-probe --team=6` (dieselben Fragen, nur der
+     * Index dazwischen neu):
      *
-     * Die Plan-Begründung war eine Zeichen-Rechnung („nur 52 % des Korpus im Vektor";
-     * 469 von 598 aktiven Docs sind länger als 2000). Die Messung mit
-     * `foodalchemist:wissen-recall-probe --team=6` zeigt ein anderes Bild:
+     *                                   Fenster 2000    Fenster 8000
+     *   Anfragen aus dem KOPF              92 %            92 %
+     *   Anfragen JENSEITS von 2000         72 %            68 %
      *
-     *   Anfragen aus dem KOPF   (im Fenster)     23/25 = 92 %  findbar
-     *   Anfragen aus dem SCHWANZ (dahinter)      18/25 = 72 %  findbar
+     * Der Inhalt war bei 8000 nachweislich IM Vektor (source_hash gegengeprüft) — und wurde
+     * trotzdem nicht besser gefunden, eher minimal schlechter. Grund ist die Verdünnung:
+     * ein Vektor über 8000 Zeichen ist ein Mittelwert über mehr Inhalt, die Themen-Signatur
+     * dominiert, und die Konkurrenz zwischen den Dokumenten steigt.
      *
-     * Inhalt jenseits des Fensters ist also NICHT unsichtbar — der Vektor aus Titel +
-     * Lead repräsentiert das Thema des ganzen Dokuments gut genug. Der echte Preis des
-     * Fensters sind die 20 Prozentpunkte Differenz, und die soll dieser Wert holen.
+     * Zwei Schlüsse, die für Welle 1 wichtiger sind als der Wert selbst:
+     *  1. Inhalt jenseits des Fensters ist NICHT unsichtbar (72 %, nicht 0) — die
+     *     52-%-Rechnung hat das Problem stark überzeichnet.
+     *  2. Mehr Text pro Vektor ist KEIN Ersatz für Chunking. Abdeckung ohne Schärfe bringt
+     *     nichts; W1-5 (ein Vektor je Abschnitt, mit heading_path) bleibt der echte Fix.
      *
-     * 8000 deckt 564 von 598 Dokumenten vollständig ab und liegt weit unter dem Limit von
-     * text-embedding-3-large (~32.000 Zeichen). Der eigentliche Fix bleibt Chunking (W1-5):
-     * ein Vektor über 8000 Zeichen ist ein Mittelwert über mehr Inhalt — mehr Abdeckung,
-     * aber nicht mehr Schärfe. Genau darum ist dies ein Zwischenschritt, kein Ziel.
-     *
-     * ACHTUNG: Änderungen hier verändern den Embedding-Text und damit JEDEN Doc-Vektor —
-     * ein `foodalchemist:knowledge-embed` muss folgen, sonst mischen sich alte und neue.
+     * Darum wieder 2000: kostet ein Viertel des Embedding-Textes und liefert dasselbe.
+     * Wer den Wert erneut anfassen will, fährt bitte ZUERST den Probe — die Messung ist da.
      */
-    private const DOMAIN_LEAD_CHARS = 8000;
+    private const DOMAIN_LEAD_CHARS = 2000;
 
     /** Max. Partner-Namen, die in den Pairing-Embedding-Text einfließen. */
     private const PAIRING_MAX_PARTNERS = 40;

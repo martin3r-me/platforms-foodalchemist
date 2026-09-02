@@ -6,9 +6,12 @@ use Platform\FoodAlchemist\Tests\TestCase;
 uses(TestCase::class);
 
 /**
- * W1-1: das Embedding-Fenster. Gemessen begründet (siehe Konstanten-Docblock):
- * Kopf-Anfragen 92 % findbar, Schwanz-Anfragen 72 % — die 20 Punkte Differenz sind
- * der Preis des Fensters, den 8000 holen soll.
+ * W1-1 wurde GEMESSEN UND VERWORFEN. 2000 → 8000 brachte nichts: Kopf-Anfragen blieben bei
+ * 92 %, Anfragen jenseits von 2000 fielen von 72 % auf 68 % — obwohl der Inhalt bei 8000
+ * nachweislich im Vektor war (source_hash gegengeprüft). Verdünnung frisst den Zugewinn.
+ *
+ * Diese Tests pinnen den Wert samt Begründung, damit ihn niemand „naheliegend" wieder
+ * hochsetzt, ohne vorher `foodalchemist:wissen-recall-probe --team=<id>` zu fahren.
  */
 function embedText(object $doc): string
 {
@@ -18,31 +21,26 @@ function embedText(object $doc): string
     return $rm->invoke(app(KnowledgeEmbeddingService::class), $doc);
 }
 
-it('das Fenster steht auf 8000 — und der Wert ist bewusst gesetzt', function () {
+it('das Fenster steht auf 2000 — grösser wurde gemessen und brachte nichts', function () {
     $f = (new ReflectionClass(KnowledgeEmbeddingService::class))->getConstant('DOMAIN_LEAD_CHARS');
 
-    // Wird das hier rot, ZUERST den Docblock der Konstante lesen: der Wert hängt an einer
-    // Messung, nicht an einer Meinung — und jede Änderung verlangt einen Re-Embed.
-    expect($f)->toBe(8000);
+    // Wird das hier rot, ZUERST den Docblock der Konstante lesen: 8000 ist am 2026-09-03
+    // gemessen worden (72 % → 68 %) und wurde deshalb zurückgenommen. Jede Änderung
+    // verlangt ausserdem einen Re-Embed, sonst mischen sich alte und neue Vektoren.
+    expect($f)->toBe(2000);
 });
 
-it('nimmt Inhalt bis 8000 Zeichen mit — vorher endete der Vektor bei 2000', function () {
-    // Marker knapp hinter der ALTEN Grenze: unter 2000 wäre er verloren gewesen.
-    $inhalt = str_repeat('Füllsatz zur Länge. ', 120) . 'MARKERHINTERZWEITAUSEND ' . str_repeat('weiter. ', 50);
+it('kappt jenseits von 2000 — und genau dieser Rest ist trotzdem zu 72 % findbar', function () {
+    $inhalt = str_repeat('Füllsatz zur Länge. ', 120) . 'MARKERHINTERZWEITAUSEND';
     expect(mb_strlen($inhalt))->toBeGreaterThan(2000);
 
     $text = embedText((object) ['title' => 'Dossier', 'category' => 'domain', 'content_md' => $inhalt, 'slug' => 'd']);
 
-    expect($text)->toContain('MARKERHINTERZWEITAUSEND');
-});
-
-it('kappt jenseits von 8000 — das Fenster ist ein Deckel, keine Einladung', function () {
-    $inhalt = str_repeat('x', 8100) . 'MARKERHINTERACHTTAUSEND';
-
-    $text = embedText((object) ['title' => 'D', 'category' => 'domain', 'content_md' => $inhalt, 'slug' => 'd']);
-
-    expect($text)->not->toContain('MARKERHINTERACHTTAUSEND')
-        ->and(mb_strlen($text))->toBeLessThan(8100 + 20);
+    // Nicht im Vektor — und laut Messung trotzdem meist auffindbar, weil die
+    // Themen-Signatur des Kopfes das ganze Dokument trägt. Das ist der Befund, der
+    // W1-1 erledigt hat.
+    expect($text)->not->toContain('MARKERHINTERZWEITAUSEND')
+        ->and(mb_strlen($text))->toBeLessThan(2100);
 });
 
 it('Pairing-Docs bleiben unberührt — sie haben ihren eigenen, kompakten Embedding-Text', function () {
