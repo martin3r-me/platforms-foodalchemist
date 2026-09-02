@@ -86,6 +86,25 @@ it('Lieferantenseite mountet den GP-Editor als Ziel des LA-first-Events', functi
         ->assertSeeHtml('data-gp-speichern-kopf');
 });
 
+it('KI-Ersatzvorschlag übergibt ungemappten LA an die atomare GP-Ersatz-Anlage', function () {
+    Livewire::test(DetailPanel::class, ['gpId' => $this->gp->id, 'embedded' => true, 'section' => 'ersatz'])
+        ->set('ersatzKiVorschlaege', [[
+            'kind' => 'supplier_item', 'id' => $this->la->id, 'name' => $this->la->designation,
+            'score' => 0.91, 'reason' => 'Gleiche kulinarische Funktion.', 'supplier' => 'Necta',
+        ]])
+        ->call('ersatzLaAlsGpAnlegen', $this->la->id)
+        ->assertDispatched(
+            'gp-modal.oeffnen',
+            id: null,
+            laId: $this->la->id,
+            autoSuggest: true,
+            equivalentSourceKind: 'gp',
+            equivalentSourceId: $this->gp->id,
+            equivalentReason: 'Gleiche kulinarische Funktion.',
+            equivalentConfidence: 0.91,
+        );
+});
+
 it('GP-Suche findet einen ungemappten LA auch ohne Structure-Zeile und über die Artikelnummer', function () {
     $ohneStruktur = FoodAlchemistSupplierItem::create([
         'team_id' => $this->rootTeam->id,

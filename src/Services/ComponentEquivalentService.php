@@ -34,6 +34,7 @@ class ComponentEquivalentService
         float $umrechnungsfaktor = 1.0,
         string $standardSeite = Equiv::SEITE_SOURCE,
         ?string $notes = null,
+        ?float $matchConfidence = null,
     ): Equiv {
         foreach ([$sourceKind, $altKind] as $k) {
             if (! in_array($k, [Equiv::KIND_GP, Equiv::KIND_RECIPE], true)) {
@@ -49,7 +50,12 @@ class ComponentEquivalentService
 
         return Equiv::updateOrCreate(
             ['team_id' => $team->id, 'source_kind' => $sourceKind, 'source_id' => $sourceId, 'alt_kind' => $altKind, 'alt_id' => $altId],
-            ['umrechnungsfaktor' => max(0.0001, $umrechnungsfaktor), 'standard_seite' => $standardSeite, 'notes' => $notes],
+            [
+                'umrechnungsfaktor' => max(0.0001, $umrechnungsfaktor),
+                'standard_seite' => $standardSeite,
+                'notes' => $notes,
+                'match_confidence' => $matchConfidence !== null ? min(1, max(0, $matchConfidence)) : null,
+            ],
         );
     }
 

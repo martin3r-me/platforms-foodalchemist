@@ -461,6 +461,17 @@ return [
                 . 'Verpackung und Marke gehören nicht in den GP-Namen (Marke nur nach §5-Tiebreaker). '
                 . 'Singular/Lemma (§6.1), keine Verpackungswörter (§7.1).',
         ],
+        'component.replacement_suggest' => [
+            'tier' => 'B',
+            'max_tokens' => 1800,
+            'task' => 'Ranke fachlich relevante Ersatz-Realisierungen für den Quell-Baustein. '
+                . 'werte = {vorschlaege: [{kind, id, score, reason}]}. Erlaubte kinds sind gp, recipe '
+                . 'und supplier_item. Verwende AUSSCHLIESSLICH kind/id aus kandidaten; nichts erfinden. '
+                . 'Ein Ersatz muss dieselbe kulinarische Funktion erfüllen: GP↔GP als Artikel-Ersatz, '
+                . 'GP↔recipe als make-or-buy und supplier_item als noch ungemappte Einkaufsalternative. '
+                . 'Bevorzuge gleiche Hauptzutat, Funktion, Verarbeitung und Einsatzform. Ähnliche Wörter '
+                . 'allein reichen nicht. score liegt zwischen 0 und 1; reason ist ein kurzer deutscher Satz.',
+        ],
         'gp.condition' => [
             'tier' => 'D',
             'task' => 'Bestimme den §9-Zustand (frisch|TK|trocken|konserviert) des Grundprodukts '

@@ -362,6 +362,13 @@
         {{-- ERSATZ --}}
         @if($section === null || $section === 'ersatz')
         <x-foodalchemist::section title="Ersatz-Produkte" icon="heroicon-o-scale" meta="make-or-buy · Artikel-Ersatz" data-sektion="ersatz">
+            @if($kannKuratieren)
+                <x-slot:actions>
+                    <button type="button" wire:click="ersatzKiRelevant" wire:loading.attr="disabled" wire:target="ersatzKiRelevant" class="{{ $btnAi }}" data-ersatz-ki-relevant>
+                        @svg('heroicon-o-sparkles', 'w-3.5 h-3.5') <span wire:loading.remove wire:target="ersatzKiRelevant">KI relevant</span><span wire:loading wire:target="ersatzKiRelevant">Prüft …</span>
+                    </button>
+                </x-slot:actions>
+            @endif
             <div class="space-y-1">
                 @forelse($ersatz as $e)
                     <div class="flex items-center gap-2 text-[11px]" wire:key="equiv-{{ $e->id }}">
@@ -373,6 +380,30 @@
                 @empty
                     <p class="text-[11px] text-gray-500" data-ersatz-leer>— kein Ersatz hinterlegt —</p>
                 @endforelse
+                @if($ersatzKiVorschlaege !== null)
+                    <div class="rounded-lg border border-violet-500/20 bg-violet-500/5 p-2 space-y-1.5" data-ersatz-ki-vorschlaege>
+                        <div class="flex items-center justify-between gap-2">
+                            <span class="text-[11px] font-medium text-violet-700">Relevante Alternativen aus dem Datenbestand</span>
+                            <button type="button" wire:click="ersatzKiVerwerfen" class="text-[10px] text-gray-500 hover:text-gray-700">verwerfen</button>
+                        </div>
+                        @foreach($ersatzKiVorschlaege as $k)
+                            <div class="flex items-start gap-2 rounded-md bg-white/50 px-2 py-1.5 text-[11px]" wire:key="ersatz-ki-{{ $k['kind'] }}-{{ $k['id'] }}">
+                                <span class="{{ $pill }} {{ $k['kind'] === 'recipe' ? $variantPill['info'] : ($k['kind'] === 'supplier_item' ? $variantPill['warning'] : $variantPill['secondary']) }} shrink-0">
+                                    {{ $k['kind'] === 'recipe' ? 'Rezept' : ($k['kind'] === 'supplier_item' ? 'LA ohne GP' : 'GP') }}
+                                </span>
+                                <div class="min-w-0 flex-1">
+                                    <p class="font-medium text-gray-900 truncate" title="{{ $k['name'] }}">{{ $k['name'] }}</p>
+                                    <p class="text-gray-500">{{ $k['reason'] }}@if($k['supplier']) · {{ $k['supplier'] }}@endif · {{ round($k['score'] * 100) }} %</p>
+                                </div>
+                                @if($k['kind'] === 'supplier_item')
+                                    <button type="button" wire:click="ersatzLaAlsGpAnlegen({{ $k['id'] }})" class="{{ $btnGhostXs }} text-violet-600 shrink-0">GP anlegen &amp; verknüpfen</button>
+                                @else
+                                    <button type="button" wire:click="ersatzVerknuepfen('{{ $k['kind'] }}', {{ $k['id'] }})" class="{{ $btnGhostXs }} text-violet-600 shrink-0">verknüpfen</button>
+                                @endif
+                            </div>
+                        @endforeach
+                    </div>
+                @endif
                 @if($kannKuratieren)
                     <div class="pt-1" data-ersatz-verknuepfen>
                         <input type="search" wire:model.live.debounce.300ms="ersatzSuche" placeholder="+ Ersatz verknüpfen — GP/Rezept suchen …" class="{{ $input }} !py-1" />

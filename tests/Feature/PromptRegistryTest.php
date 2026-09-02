@@ -12,7 +12,7 @@ uses(TestCase::class);
  */
 const REGISTRY_SOLL = [
     // GP-Welt
-    'gp.suggest' => 'B', 'gp.condition' => null, 'gp.tags' => 'C', 'gp.allergene' => 'A',
+    'gp.suggest' => 'B', 'component.replacement_suggest' => 'B', 'gp.condition' => null, 'gp.tags' => 'C', 'gp.allergene' => 'A',
     'gp.domain' => 'B', 'gp.piece_default_g' => 'B', 'gp.zaehl_einheiten' => 'B',
     'gp.anker' => 'B', 'gp.role' => 'B', 'gp.la_suggest' => 'B', 'gp.term_la_rank' => 'B',
     // Rezept-Welt
@@ -38,9 +38,11 @@ const REGISTRY_SOLL = [
     'concept.brief_geruest' => 'A',                                   // R6.1: Kunden-Brief → Planungs-Gerüst (Rahmen; Gericht-Wahl bleibt deterministisch)
     'concept.plan' => 'B',                                            // Et.2b Kreativ-Kopf: Kunden-Brief → kreative Concept-Canvas (Leitidee/USP/Inszenierung/Geschmackswelten)
     'foodbook.kapitel_ideen' => 'B',                                  // Spec 19 E6.4: produkt-blinde Kreativ-Divergenz je Kapitel (nur Skizzen)
+    'planning.dish_proposal_revise' => 'B',                           // menschlich geführte Überarbeitung eines Gericht-Bauplans
     'foodbook.kundentext' => 'A',                                     // Spec 03 L2: kundensichtbarer Einleitungstext, BEIDE Ebenen (ebene: foodbook|kapitel)
     'foodbook.grundgeruest' => 'A',                                   // Foodbook-Grundgerüst = KAPITEL (owner=foodbook), Gänge entstehen im Kapitel-Concept
     'format.grundgeruest' => 'A',                                     // Format-Grundgerüst = Branding + Concept-Bausteine (owner=format)
+    'praesentation.design_css' => 'A',                                // sandboxed CSS aus menschlichem Gestaltungsbrief
 
     // Schicht 3: generischer Konformitäts-Critic (artefakt-agnostisch, EIN Prompt für Rezept/VK/GP/LA)
     'conformance.check' => 'B',

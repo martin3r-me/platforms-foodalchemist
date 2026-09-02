@@ -64,6 +64,15 @@ class GpModal extends Component
     /** Der LA-first-Editor ist offen; der automatische gp.suggest-Lauf folgt separat. */
     public bool $autoSuggestPending = false;
 
+    /** Optional: das neue LA-first-GP direkt als Ersatz des Quellbausteins katalogisieren. */
+    public ?string $equivalentSourceKind = null;
+
+    public ?int $equivalentSourceId = null;
+
+    public ?string $equivalentReason = null;
+
+    public ?float $equivalentConfidence = null;
+
     /** @var array<string, array{werte: array, confidence: float, reasoning: ?string}> transiente GL-07-Vorschläge */
     public array $kiVorschlag = [];
 
@@ -90,9 +99,17 @@ class GpModal extends Component
     public ?int $bulkRunId = null;
 
     #[On('gp-modal.oeffnen')]
-    public function oeffnen(?int $id = null, ?int $laId = null, bool $autoSuggest = false): void
+    public function oeffnen(
+        ?int $id = null,
+        ?int $laId = null,
+        bool $autoSuggest = false,
+        ?string $equivalentSourceKind = null,
+        ?int $equivalentSourceId = null,
+        ?string $equivalentReason = null,
+        ?float $equivalentConfidence = null,
+    ): void
     {
-        $this->reset('fehler', 'force', 'kiVorschlag', 'kiRohtext', 'laSuche', 'supplierItemId', 'autoSuggestPending', 'manuellerName', 'derivatSuche', 'nameVorschlag', 'bulkRunId');
+        $this->reset('fehler', 'force', 'kiVorschlag', 'kiRohtext', 'laSuche', 'supplierItemId', 'autoSuggestPending', 'manuellerName', 'derivatSuche', 'nameVorschlag', 'bulkRunId', 'equivalentSourceKind', 'equivalentSourceId', 'equivalentReason', 'equivalentConfidence');
         $this->gpId = $id;
         $this->builder = self::BUILDER_LEER;
         $this->tags = array_fill_keys(FoodAlchemistGp::TAG_FIELDS, '');
@@ -107,6 +124,14 @@ class GpModal extends Component
                 $this->builder['vegan'] = (bool) ($la->is_vegan ?? false);
                 $this->autoSuggestPending = $autoSuggest;
             }
+        }
+
+        if ($id === null && in_array($equivalentSourceKind, ['gp', 'recipe'], true) && $equivalentSourceId !== null) {
+            $this->equivalentSourceKind = $equivalentSourceKind;
+            $this->equivalentSourceId = $equivalentSourceId;
+            $this->equivalentReason = $equivalentReason;
+            $this->equivalentConfidence = $equivalentConfidence !== null
+                ? min(1, max(0, $equivalentConfidence)) : null;
         }
 
         if ($id !== null && ($gp = $this->gp()) !== null) {
@@ -155,7 +180,7 @@ class GpModal extends Component
     public function geschlossen(string $name): void
     {
         if ($name === 'gp-modal') {
-            $this->reset('gpId', 'builder', 'manuellerName', 'defaults', 'fehler', 'force', 'kiVorschlag', 'kiRohtext', 'laSuche', 'supplierItemId', 'autoSuggestPending');
+            $this->reset('gpId', 'builder', 'manuellerName', 'defaults', 'fehler', 'force', 'kiVorschlag', 'kiRohtext', 'laSuche', 'supplierItemId', 'autoSuggestPending', 'equivalentSourceKind', 'equivalentSourceId', 'equivalentReason', 'equivalentConfidence');
         }
     }
 
@@ -186,6 +211,18 @@ class GpModal extends Component
                     if ($this->supplierItemId !== null) {
                         app(LeadLaService::class)->verknuepfen($team, $gp, $this->supplierItemId);
                     }
+                    if ($this->equivalentSourceKind !== null && $this->equivalentSourceId !== null) {
+                        $this->assertEquivalentSourceWritable($team);
+                        app(\Platform\FoodAlchemist\Services\ComponentEquivalentService::class)->verknuepfe(
+                            $team,
+                            $this->equivalentSourceKind,
+                            $this->equivalentSourceId,
+                            'gp',
+                            (int) $gp->id,
+                            notes: $this->equivalentReason,
+                            matchConfidence: $this->equivalentConfidence,
+                        );
+                    }
                     return $gp;
                 });
             } else {
@@ -205,11 +242,36 @@ class GpModal extends Component
 
             $this->dispatch('modal.close', name: 'gp-modal');
             $this->dispatch('gp-gespeichert');
-            $this->dispatch('gp-selected', id: $gp->id);
+            if ($this->equivalentSourceId === null) {
+                $this->dispatch('gp-selected', id: $gp->id);
+            }
             $this->savedToast('Grundprodukt gespeichert');
         } catch (\RuntimeException $e) {
             $this->fehler = $e->getMessage();
         }
+    }
+
+    private function assertEquivalentSourceWritable(\Platform\Core\Models\Team $team): void
+    {
+        if ($this->equivalentSourceKind === 'gp') {
+            $source = FoodAlchemistGp::visibleToTeam($team)->find($this->equivalentSourceId);
+            if ($source === null || ! Curate::canCurate(Auth::user(), $source)) {
+                throw new \RuntimeException('Das Quell-GP darf nicht als Ersatzkatalog bearbeitet werden.');
+            }
+
+            return;
+        }
+        if ($this->equivalentSourceKind === 'recipe') {
+            $source = \Platform\FoodAlchemist\Models\FoodAlchemistRecipe::visibleToTeam($team)
+                ->where('team_id', $team->id)->find($this->equivalentSourceId);
+            if ($source === null) {
+                throw new \RuntimeException('Das Quell-Rezept darf nicht als Ersatzkatalog bearbeitet werden.');
+            }
+
+            return;
+        }
+
+        throw new \RuntimeException('Ungültige Ersatz-Quelle.');
     }
 
     /** Status-Regler im Modal-Kopf (Kurations-Pflege, D1-Gate). */

@@ -28,6 +28,9 @@ class DetailPanel extends Component
     /** Ersatz-Logik: Suchtext für die Gegenseite (GP/Rezept) im Verknüpfen-Feld. */
     public string $ersatzSuche = '';
 
+    /** @var ?list<array{kind:string,id:int,name:string,score:float,reason:string,supplier:?string}> */
+    public ?array $ersatzKiVorschlaege = null;
+
     /** Verwaltung: Suchtext für das Ersetzungsziel („GP in allen Rezepten tauschen"). */
     public string $tauschSuche = '';
 
@@ -55,6 +58,7 @@ class DetailPanel extends Component
         $this->gpId = $id;
         $this->laSuche = '';
         $this->ersatzSuche = '';
+        $this->ersatzKiVorschlaege = null;
         $this->tauschSuche = '';
         $this->fehler = null;
         $this->hinweis = null;
@@ -71,12 +75,67 @@ class DetailPanel extends Component
             return;
         }
         try {
+            $ki = collect($this->ersatzKiVorschlaege ?? [])->first(
+                fn (array $c) => $c['kind'] === $kind && (int) $c['id'] === $id
+            );
             app(\Platform\FoodAlchemist\Services\ComponentEquivalentService::class)
-                ->verknuepfe(Auth::user()->currentTeamRelation, 'gp', $gp->id, $kind, $id);
+                ->verknuepfe(
+                    Auth::user()->currentTeamRelation,
+                    'gp', $gp->id, $kind, $id,
+                    notes: $ki['reason'] ?? null,
+                    matchConfidence: isset($ki['score']) ? (float) $ki['score'] : null,
+                );
             $this->ersatzSuche = '';
+            $this->ersatzKiVorschlaege = collect($this->ersatzKiVorschlaege ?? [])
+                ->reject(fn (array $c) => $c['kind'] === $kind && (int) $c['id'] === $id)
+                ->values()->all();
         } catch (\RuntimeException $e) {
             $this->fehler = $e->getMessage();
         }
+    }
+
+    public function ersatzKiRelevant(): void
+    {
+        $gp = $this->kuratierbaresGp();
+        if ($gp === null) {
+            return;
+        }
+        $this->ersatzKiVorschlaege = app(\Platform\FoodAlchemist\Services\ReplacementSuggestionService::class)
+            ->forGp(Auth::user()->currentTeamRelation, $gp);
+        if ($this->ersatzKiVorschlaege === []) {
+            $this->fehler = 'Keine fachlich belastbare Ersatz-Alternative im aktuellen Datenbestand gefunden.';
+        }
+    }
+
+    public function ersatzKiVerwerfen(): void
+    {
+        $this->ersatzKiVorschlaege = null;
+    }
+
+    public function ersatzLaAlsGpAnlegen(int $laId): void
+    {
+        $gp = $this->kuratierbaresGp();
+        if ($gp === null) {
+            return;
+        }
+        $candidate = collect($this->ersatzKiVorschlaege ?? [])->first(
+            fn (array $c) => $c['kind'] === 'supplier_item' && (int) $c['id'] === $laId
+        );
+        if ($candidate === null) {
+            $this->fehler = 'Der Lieferantenartikel gehört nicht mehr zum geprüften Vorschlag.';
+
+            return;
+        }
+        $this->dispatch(
+            'gp-modal.oeffnen',
+            id: null,
+            laId: $laId,
+            autoSuggest: true,
+            equivalentSourceKind: 'gp',
+            equivalentSourceId: (int) $gp->id,
+            equivalentReason: (string) $candidate['reason'],
+            equivalentConfidence: (float) $candidate['score'],
+        );
     }
 
     public function ersatzLoesen(int $equivId): void

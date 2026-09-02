@@ -3,6 +3,7 @@
 use Livewire\Livewire;
 use Platform\FoodAlchemist\Livewire\Gps\GpModal;
 use Platform\FoodAlchemist\Models\FoodAlchemistGp;
+use Platform\FoodAlchemist\Models\FoodAlchemistComponentEquivalent;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplier;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem;
 use Platform\FoodAlchemist\Models\FoodAlchemistSupplierItemStructure;
@@ -214,6 +215,32 @@ it('LA-first rollt die GP-Anlage zurück wenn der Artikel zwischenzeitlich gemap
 
     expect(FoodAlchemistGp::where('name', 'Rote Bete: frisch, sous-vide gegart')->exists())->toBeFalse()
         ->and((int) $struktur->fresh()->gp_id)->toBe($anderesGp->id);
+});
+
+it('LA-first Ersatz-Anlage speichert GP, Artikel-Mapping und Äquivalenz in einer Transaktion', function () {
+    $source = $this->makeGp($this->rootTeam, 'Rote-Bete-Creme Convenience');
+    $supplier = FoodAlchemistSupplier::create(['team_id' => $this->rootTeam->id, 'name' => 'Hanos Venlo']);
+    $la = FoodAlchemistSupplierItem::create([
+        'team_id' => $this->rootTeam->id, 'supplier_id' => $supplier->id,
+        'designation' => 'Rote Bete Creme Alternative',
+    ]);
+
+    Livewire::test(GpModal::class)
+        ->call('oeffnen', null, $la->id, false, 'gp', $source->id, 'Gleiche Funktion und Verarbeitung.', 0.93)
+        ->set('builder.hauptzutat', 'Rote Bete')
+        ->set('builder.condition', 'konserviert')
+        ->set('builder.processing', 'püriert')
+        ->call('speichern')
+        ->assertSet('fehler', null)
+        ->assertNotDispatched('gp-selected');
+
+    $created = FoodAlchemistGp::where('name', 'Rote Bete: konserviert, püriert')->firstOrFail();
+    $equiv = FoodAlchemistComponentEquivalent::where('source_kind', 'gp')
+        ->where('source_id', $source->id)->where('alt_kind', 'gp')->where('alt_id', $created->id)->firstOrFail();
+
+    expect((int) FoodAlchemistSupplierItemStructure::where('supplier_item_id', $la->id)->value('gp_id'))->toBe($created->id)
+        ->and((float) $equiv->match_confidence)->toBe(0.93)
+        ->and($equiv->notes)->toBe('Gleiche Funktion und Verarbeitung.');
 });
 
 // ── 06·H4b: Favorit direkt im GP-Editor pinnen (2. Andockpunkt) ──
