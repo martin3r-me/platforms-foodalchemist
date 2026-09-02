@@ -17,6 +17,31 @@ use Illuminate\Support\Facades\DB;
  * pairing/discovery = kompakter FLAVOR-PAIRING-Block (nur Partner-NAMEN, kein
  * Prosa-Volltext), pairing/grounding = Doku-Auszüge je Hauptzutat-Slug.
  * Fehlende Quelle = leerer Kontext, nie Fehler (Invariante 6).
+ *
+ * ── MANDANTEN-INVARIANTE (Produktentscheid Dominique, 2026-09-02) ─────────────
+ * DER WISSENS-KORPUS IST GEMEINSAM. Das Retrieval liest ihn ABSICHTLICH ohne
+ * team_id-Filter: er ist von BHG kuratiert und trägt den Generator für alle Teams.
+ * Gescopet ist die KURATION (Schreiben), nicht das Lesen — `KnowledgeService`
+ * stempelt beim Anlegen ein team_id und `TeamScope::owns()` lässt nur den Eigentümer
+ * ändern. Kurz: alle lesen, nur der Eigentümer schreibt.
+ *
+ * WARNUNG AN JEDEN, DER HIER EINEN FILTER EINBAUEN WILL — mit Zahlen von demo
+ * (2026-09-02, 598 aktive Docs):
+ *   team_id NULL (global):     6 Docs =   1,0 %
+ *   team_id 6   (Kurator):   592 Docs =  99,0 %  (3,2 Mio Zeichen)
+ * Ein `applyVisible`-Filter ist für Team 6 ein No-op (598 → 598) und lässt für
+ * JEDES andere Team sowie für jeden Console-Lauf ohne `--team` genau 6 von 598 Docs
+ * übrig — der Korpus fällt auf 1 % zusammen und die Generierung verliert ihr
+ * Fundament, OHNE dass ein Test rot wird (die Suite seedet team_id NULL). Genau
+ * dieser Weg wurde am 2026-09-02 gebaut und wieder verworfen, nachdem die Messung
+ * ihn widerlegt hat.
+ *
+ * Ein echter Mandanten-Schnitt ist deshalb KEINE Code-Änderung, sondern zuerst eine
+ * DATEN-Entscheidung: entweder wandert der kuratierte Bestand auf `team_id = NULL`,
+ * oder Kundenteams werden über `teams.parent_team_id` Nachfahren des BHG-Teams
+ * (heute ist dieser Wert bei allen 8 Teams NULL, es gibt also gar keine Hierarchie).
+ * Erst danach greift `TeamScope::applyVisible` sinnvoll. Gepinnt in
+ * tests/Feature/WissenKorpusGemeinsamTest.php.
  */
 class KnowledgeContextService
 {
@@ -1485,8 +1510,13 @@ class KnowledgeContextService
 
     /**
      * Volltext-leichte Suche über den Wissens-Bestand: Token-Treffer in
-     * slug/titel + Alias-Treffer (gewichtet). Kein Team-Filter — der
-     * Wissens-Bestand ist global (wie crossCuttingDocs/discoverDomains).
+     * slug/titel + Alias-Treffer (gewichtet).
+     *
+     * Kein Team-Filter — bewusst, siehe MANDANTEN-INVARIANTE im Klassen-Docblock.
+     * Präzisierung gegenüber der früheren Fassung („der Bestand ist global"): die
+     * Zeilen sind NICHT `team_id NULL`, sondern tragen zu 99 % den Kurator (Team 6).
+     * Global ist der Bestand durch PRODUKTENTSCHEID, nicht durch die Spalte — wer
+     * das verwechselt, baut einen Filter ein und kappt 99 % des Korpus.
      *
      * @return list<array{slug: string, titel: string, kategorie: string, version: int, char_count: int, score: float}>
      */
