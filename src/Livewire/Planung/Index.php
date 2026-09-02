@@ -1778,10 +1778,23 @@ class Index extends Component
      */
     public ?array $leitplankenBefund = null;
 
-    /** Diktat: Audio-Blob fürs Briefing (WithFileUploads) + Ziel-Tab. */
+    /** Diktat: Audio-Blob fürs Briefing (WithFileUploads) + Ziel-Feld. */
     public $briefAudio = null;
 
-    public string $diktatScope = 'rezept';
+    /**
+     * Ziel des Diktats — eine Property-Pfad-Angabe, die vom CLIENT kommt und darum
+     * gegen eine Whitelist läuft. Ohne sie könnte ein manipulierter Aufruf beliebige
+     * Livewire-Properties überschreiben; Fail-closed ist hier keine Formalie.
+     *
+     * Deckt ALLE Briefing-Felder der Planungsstelle ab (Dominique 2026-09-02: „in der
+     * planungsstelle"): die drei Erstell-Scopes plus die fünf Ausgabeformen.
+     */
+    public string $diktatZiel = 'eingabe.rezept.brief';
+
+    public const DIKTAT_ZIELE = [
+        'eingabe.rezept.brief', 'eingabe.gericht.brief', 'eingabe.concept.brief',
+        'fbBrief', 'skBrief', 'spBrief', 'offerBrief', 'fmtBrief',
+    ];
 
     /**
      * BRIEFING → LEITPLANKEN in der Oberfläche. Bis hierher war die Brücke nur per MCP
@@ -1864,8 +1877,14 @@ class Index extends Component
 
     public function briefDiktatUebernehmen(): void
     {
-        $scope = in_array($this->diktatScope, self::SCOPES, true) ? $this->diktatScope : 'rezept';
-        if ($this->briefAudio === null || ! isset($this->eingabe[$scope])) {
+        $ziel = in_array($this->diktatZiel, self::DIKTAT_ZIELE, true) ? $this->diktatZiel : null;
+        if ($ziel === null) {
+            $this->fehler = 'Unbekanntes Diktat-Ziel — nichts übernommen.';
+            $this->briefAudio = null;
+
+            return;
+        }
+        if ($this->briefAudio === null) {
             return;
         }
         try {
@@ -1881,14 +1900,41 @@ class Index extends Component
         }
         $this->briefAudio = null;
         if ($text === '') {
+            // Kann auch der Prompt-Echo-Riegel im STT sein (Aufnahme ohne Sprache).
             $this->fehler = 'Diktat war leer — nichts übernommen.';
 
             return;
         }
-        $alt = trim((string) ($this->eingabe[$scope]['brief'] ?? ''));
-        $this->eingabe[$scope]['brief'] = $alt === '' ? $text : $alt . ' ' . $text;
+
+        $alt = trim((string) $this->diktatWert($ziel));
+        $this->diktatSetzen($ziel, $alt === '' ? $text : $alt . ' ' . $text);
         $this->fehler = null;
         $this->meldung = 'Diktat übernommen — bitte gegenlesen.';
+    }
+
+    /** Liest das Whitelist-Ziel; `eingabe.<scope>.brief` ist verschachtelt, der Rest flach. */
+    private function diktatWert(string $ziel): string
+    {
+        if (str_starts_with($ziel, 'eingabe.')) {
+            $scope = explode('.', $ziel)[1] ?? '';
+
+            return (string) ($this->eingabe[$scope]['brief'] ?? '');
+        }
+
+        return (string) ($this->{$ziel} ?? '');
+    }
+
+    private function diktatSetzen(string $ziel, string $wert): void
+    {
+        if (str_starts_with($ziel, 'eingabe.')) {
+            $scope = explode('.', $ziel)[1] ?? '';
+            if (isset($this->eingabe[$scope])) {
+                $this->eingabe[$scope]['brief'] = $wert;
+            }
+
+            return;
+        }
+        $this->{$ziel} = $wert;
     }
 
     /**

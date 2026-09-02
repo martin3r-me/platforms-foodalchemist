@@ -220,6 +220,7 @@
                 <textarea wire:model="fbBrief" rows="3" data-fb-brief
                           placeholder="Brief: Anlass, Gäste, Saison, Niveau, Budget …"
                           class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-violet-400 focus:ring-1 focus:ring-violet-400"></textarea>
+                @include('foodalchemist::livewire.planung.partials.diktat', ['ziel' => 'fbBrief'])
                 @if($fbMeldung)
                     <p class="text-xs text-rose-600" data-fb-meldung>{{ $fbMeldung }}</p>
                 @endif
@@ -239,6 +240,7 @@
                        class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-violet-400 focus:ring-1 focus:ring-violet-400" data-landing-sk-titel>
                 <textarea wire:model="skBrief" rows="3" placeholder="Brief: Anlass, Küchenstil, Saison, Niveau, Preis-Korridor …"
                           class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-violet-400 focus:ring-1 focus:ring-violet-400" data-landing-sk-brief></textarea>
+                @include('foodalchemist::livewire.planung.partials.diktat', ['ziel' => 'skBrief'])
                 @if($skMeldung)<p class="text-xs text-rose-600" data-landing-sk-meldung>{{ $skMeldung }}</p>@endif
                 <div class="flex flex-wrap items-center gap-2">
                     <button wire:click="speisekarteAusBrief" wire:loading.attr="disabled" wire:target="speisekarteAusBrief" class="{{ $btnPrimary }}" data-landing-sk-erzeugen>
@@ -255,6 +257,7 @@
                        class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-violet-400 focus:ring-1 focus:ring-violet-400" data-landing-sp-titel>
                 <textarea wire:model="spBrief" rows="3" placeholder="Brief: Anlass, Saison, Küchenstil, Zyklus (z. B. „4 Wochen“), Diät-Fokus …"
                           class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-violet-400 focus:ring-1 focus:ring-violet-400" data-landing-sp-brief></textarea>
+                @include('foodalchemist::livewire.planung.partials.diktat', ['ziel' => 'spBrief'])
                 @if($spMeldung)<p class="text-xs text-rose-600" data-landing-sp-meldung>{{ $spMeldung }}</p>@endif
                 <div class="flex flex-wrap items-center gap-2">
                     <button wire:click="speiseplanAusBrief" wire:loading.attr="disabled" wire:target="speiseplanAusBrief" class="{{ $btnPrimary }}" data-landing-sp-erzeugen>
@@ -277,6 +280,7 @@
                 @endif
                 <textarea wire:model="offerBrief" rows="3" placeholder="Brief: Anlass, Gäste/Pax, Saison, Niveau, Budget, Servierform …"
                           class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-violet-400 focus:ring-1 focus:ring-violet-400" data-landing-offer-brief></textarea>
+                @include('foodalchemist::livewire.planung.partials.diktat', ['ziel' => 'offerBrief'])
                 @if($offerMeldung)<p class="text-xs text-rose-600" data-landing-offer-meldung>{{ $offerMeldung }}</p>@endif
                 <div class="flex flex-wrap items-center gap-2">
                     <button wire:click="angebotAusBrief" wire:loading.attr="disabled" wire:target="angebotAusBrief" class="{{ $btnPrimary }}" data-landing-offer-erzeugen>
@@ -299,6 +303,7 @@
                 @endif
                 <textarea wire:model="fmtBrief" rows="3" placeholder="Brief: Marke, Anlass, Ausrichtung, Zielgruppe, Niveau, Stationen/Gänge …"
                           class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-violet-400 focus:ring-1 focus:ring-violet-400" data-landing-fmt-brief></textarea>
+                @include('foodalchemist::livewire.planung.partials.diktat', ['ziel' => 'fmtBrief'])
                 @if($fmtMeldung)<p class="text-xs text-rose-600" data-landing-fmt-meldung>{{ $fmtMeldung }}</p>@endif
                 <div class="flex flex-wrap items-center gap-2">
                     <button wire:click="formatAusBrief" wire:loading.attr="disabled" wire:target="formatAusBrief" class="{{ $btnPrimary }}" data-landing-fmt-erzeugen>
@@ -502,6 +507,7 @@
                         <input type="text" wire:model="fbTitel" class="{{ $input }} w-full mb-2" placeholder="Foodbook-Name (optional)" data-tab-fb-titel>
                     @endunless
                     <textarea wire:model="fbBrief" rows="4" class="{{ $input }} w-full" placeholder="Brief: Anlass, Gäste, Saison, Niveau, Budget …" data-tab-fb-brief></textarea>
+                    @include('foodalchemist::livewire.planung.partials.diktat', ['ziel' => 'fbBrief'])
                     @if($fbMeldung) <p class="text-[11px] text-rose-400 mt-2" data-tab-fb-meldung>{{ $fbMeldung }}</p> @endif
                     <div class="mt-3">
                         <button type="button" wire:click="foodbookAusBrief" wire:loading.attr="disabled" wire:target="foodbookAusBrief" class="{{ $btnPrimary }} disabled:opacity-40" data-tab-fb-erzeugen>
@@ -556,6 +562,7 @@
                         <input type="text" wire:model="skTitel" class="{{ $input }} w-full mb-2" placeholder="Speisekarten-Name (optional)" data-tab-sk-titel>
                     @endunless
                     <textarea wire:model="skBrief" rows="4" class="{{ $input }} w-full" placeholder="Brief: Anlass, Küchenstil, Saison, Niveau, Preis-Korridor …" data-tab-sk-brief></textarea>
+                    @include('foodalchemist::livewire.planung.partials.diktat', ['ziel' => 'skBrief'])
                     @if($skMeldung) <p class="text-[11px] text-rose-400 mt-2" data-tab-sk-meldung>{{ $skMeldung }}</p> @endif
                     <div class="mt-3">
                         <button type="button" wire:click="speisekarteAusBrief" wire:loading.attr="disabled" wire:target="speisekarteAusBrief" class="{{ $btnPrimary }} disabled:opacity-40" data-tab-sk-erzeugen>
@@ -588,6 +595,7 @@
                         <input type="text" wire:model="spTitel" class="{{ $input }} w-full mb-2" placeholder="Speiseplan-Name (optional)" data-tab-sp-titel>
                     @endunless
                     <textarea wire:model="spBrief" rows="4" class="{{ $input }} w-full" placeholder="Brief: Anlass, Saison, Küchenstil, Zyklus (z. B. „4 Wochen"), Diät-Fokus …" data-tab-sp-brief></textarea>
+                    @include('foodalchemist::livewire.planung.partials.diktat', ['ziel' => 'spBrief'])
                     @if($spMeldung) <p class="text-[11px] text-rose-400 mt-2" data-tab-sp-meldung>{{ $spMeldung }}</p> @endif
                     <div class="mt-3">
                         <button type="button" wire:click="speiseplanAusBrief" wire:loading.attr="disabled" wire:target="speiseplanAusBrief" class="{{ $btnPrimary }} disabled:opacity-40" data-tab-sp-erzeugen>
@@ -614,6 +622,7 @@
                         <input type="text" wire:model="offerTitel" class="{{ $input }} w-full mb-2" placeholder="Angebots-Name (optional)" data-tab-offer-titel>
                     @endunless
                     <textarea wire:model="offerBrief" rows="4" class="{{ $input }} w-full" placeholder="Brief: Anlass, Gäste/Pax, Saison, Niveau, Budget, Servierform …" data-tab-offer-brief></textarea>
+                    @include('foodalchemist::livewire.planung.partials.diktat', ['ziel' => 'offerBrief'])
                     @if($offerMeldung) <p class="text-[11px] text-rose-400 mt-2" data-tab-offer-meldung>{{ $offerMeldung }}</p> @endif
                     <div class="mt-3">
                         <button type="button" wire:click="angebotAusBrief" wire:loading.attr="disabled" wire:target="angebotAusBrief" class="{{ $btnPrimary }} disabled:opacity-40" data-tab-offer-erzeugen>
@@ -640,6 +649,7 @@
                         <input type="text" wire:model="fmtTitel" class="{{ $input }} w-full mb-2" placeholder="Format-Name (optional)" data-tab-fmt-titel>
                     @endunless
                     <textarea wire:model="fmtBrief" rows="4" class="{{ $input }} w-full" placeholder="Brief: Marke, Anlass, Ausrichtung, Zielgruppe, Niveau, Stationen/Gänge …" data-tab-fmt-brief></textarea>
+                    @include('foodalchemist::livewire.planung.partials.diktat', ['ziel' => 'fmtBrief'])
                     @if($fmtMeldung) <p class="text-[11px] text-rose-400 mt-2" data-tab-fmt-meldung>{{ $fmtMeldung }}</p> @endif
                     <div class="mt-3">
                         <button type="button" wire:click="formatAusBrief" wire:loading.attr="disabled" wire:target="formatAusBrief" class="{{ $btnPrimary }} disabled:opacity-40" data-tab-fmt-erzeugen>
@@ -765,6 +775,7 @@
                     <input type="text" wire:model="eingabe.concept.titel" class="{{ $input }} mb-3" placeholder="z. B. CHEFS.CORNER — Sommer-Menü" data-planung-titel />
                     <label class="{{ $label ?? 'text-[11px] text-gray-500' }}">Briefing (geht in die Erzeugung)</label>
                     <textarea wire:model="eingabe.concept.brief" rows="4" class="{{ $input }} mb-3" placeholder="Anlass, Zielgruppe, Richtung, Pakete/Buffet-Struktur, Gänge …"></textarea>
+                    @include('foodalchemist::livewire.planung.partials.diktat', ['ziel' => 'eingabe.concept.brief', 'mitLeitplanken' => 'concept'])
                     <label class="{{ $label ?? 'text-[11px] text-gray-500' }}">Kreativ-Modus</label>
                     <select wire:model.live="eingabe.concept.creative_mode" class="{{ $input }}">
                         @foreach($modeLabel as $val => $lbl)

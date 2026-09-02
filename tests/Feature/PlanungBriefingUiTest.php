@@ -123,7 +123,7 @@ it('Diktat hängt an und überschreibt ein bestehendes Briefing NIE', function (
     // Echter Upload-Pfad: `set` löst den updated-Hook aus, der Hook delegiert.
     $c = Livewire::test(Index::class)
         ->set('eingabe.rezept.brief', 'Tomatensauce, klassisch')
-        ->set('diktatScope', 'rezept')
+        ->set('diktatZiel', 'eingabe.rezept.brief')
         ->set('briefAudio', UploadedFile::fake()->create('diktat.webm', 1, 'audio/webm'));
 
     // Angehängt, nicht ersetzt — ein überschriebenes Briefing wäre nicht wiederherstellbar.
@@ -141,10 +141,86 @@ it('Diktat ohne Blob fasst nichts an', function () {
 });
 
 it('Die UI-Fläche trägt beide Knöpfe — Diktat und Leitplanken', function () {
-    $blade = file_get_contents(__DIR__ . '/../../resources/views/livewire/planung/partials/erstellen-tab.blade.php');
+    $tab = file_get_contents(__DIR__ . '/../../resources/views/livewire/planung/partials/erstellen-tab.blade.php');
+    $diktat = file_get_contents(__DIR__ . '/../../resources/views/livewire/planung/partials/diktat.blade.php');
 
-    expect($blade)->toContain('data-planung-diktat')
-        ->and($blade)->toContain('data-planung-leitplanken-vorschlag')
-        ->and($blade)->toContain('data-planung-leitplanken-befund')
-        ->and($blade)->toContain("wire:click=\"leitplankenAusBriefing('{{ \$scope }}')\"");
+    // Die Knöpfe liegen seit dem Umzug im GETEILTEN Baustein (ein Recorder statt sechs
+    // Kopien) — der Erstell-Tab bindet ihn nur ein.
+    expect($tab)->toContain("partials.diktat")
+        ->and($tab)->toContain('data-planung-leitplanken-befund');
+    expect($diktat)->toContain('data-planung-diktat')
+        ->and($diktat)->toContain('data-planung-leitplanken-vorschlag')
+        ->and($diktat)->toContain("wire:click=\"leitplankenAusBriefing('{{ \$mitLeitplanken }}')\"");
+});
+
+/*
+ * Das Diktat sitzt an ALLEN Briefing-Feldern der Planungsstelle, nicht nur an den drei
+ * Erstell-Scopes (Dominique 2026-09-02: „in der planungsstelle" — der Concept-Tab und die
+ * fünf Ausgabeformen hatten keinen Knopf). Das Ziel kommt aus dem Blade und damit vom
+ * CLIENT — deshalb läuft es gegen eine Whitelist.
+ */
+it('Diktat trifft jedes Briefing-Feld der Planungsstelle', function () {
+    config(['foodalchemist.stt.provider' => 'fake', 'foodalchemist.stt.fake_text' => 'Empfang für 80 Gäste']);
+
+    foreach (['fbBrief', 'skBrief', 'spBrief', 'offerBrief', 'fmtBrief'] as $feld) {
+        $c = Livewire::test(Index::class)
+            ->set('diktatZiel', $feld)
+            ->set('briefAudio', UploadedFile::fake()->create('d.webm', 1, 'audio/webm'));
+
+        expect($c->get($feld))->toBe('Empfang für 80 Gäste', "Diktat erreicht {$feld} nicht");
+    }
+});
+
+it('Diktat erreicht auch den Concept-Tab — der hatte als einziger Scope keinen Knopf', function () {
+    config(['foodalchemist.stt.provider' => 'fake', 'foodalchemist.stt.fake_text' => 'Sommer-Menü, vier Gänge']);
+
+    $c = Livewire::test(Index::class)
+        ->set('diktatZiel', 'eingabe.concept.brief')
+        ->set('briefAudio', UploadedFile::fake()->create('d.webm', 1, 'audio/webm'));
+
+    expect($c->get('eingabe.concept.brief'))->toBe('Sommer-Menü, vier Gänge');
+});
+
+it('Whitelist: ein fremdes Diktat-Ziel schreibt NICHTS und meldet es', function () {
+    config(['foodalchemist.stt.provider' => 'fake', 'foodalchemist.stt.fake_text' => 'Text']);
+
+    // `diktatZiel` ist eine Livewire-Property und damit vom Client setzbar. Ohne Whitelist
+    // liesse sich damit jede beliebige Property der Komponente überschreiben.
+    $c = Livewire::test(Index::class)
+        ->set('form.title', 'Unberührt')
+        ->set('diktatZiel', 'form.title')
+        ->set('briefAudio', UploadedFile::fake()->create('d.webm', 1, 'audio/webm'));
+
+    expect($c->get('form.title'))->toBe('Unberührt')
+        ->and($c->get('fehler'))->toContain('Diktat-Ziel');
+});
+
+it('Die Whitelist deckt genau die Felder ab, die im Blade auch einen Knopf haben', function () {
+    $index = file_get_contents(__DIR__ . '/../../resources/views/livewire/planung/index.blade.php');
+    $tab = file_get_contents(__DIR__ . '/../../resources/views/livewire/planung/partials/erstellen-tab.blade.php');
+
+    // Die fünf Ausgabeformen + Concept stehen literal im Blade; rezept/gericht kommen
+    // dynamisch über $scope aus dem Erstell-Tab.
+    foreach (['fbBrief', 'skBrief', 'spBrief', 'offerBrief', 'fmtBrief', 'eingabe.concept.brief'] as $ziel) {
+        // toContain ist VARIADISCH (mehrere Nadeln) — ein zweites Argument wäre ein
+        // weiterer Suchbegriff, keine Meldung. Darum die Erwartung nackt und der
+        // Kontext im Kommentar. (Selbst hineingelaufen, 2026-09-02.)
+        expect($index)->toContain("'ziel' => '{$ziel}'");
+        expect(Index::DIKTAT_ZIELE)->toContain($ziel);
+    }
+    expect($tab)->toContain("'ziel' => 'eingabe.' . \$scope . '.brief'");
+    // Und der Baustein muss NACH dem schliessenden </textarea> stehen. Mitten im
+    // ÖFFNENDEN Tag hat er die Ein-Wurzel-Regel von Livewire gebrochen („Multiple root
+    // elements") — mehrzeilige textarea-Tags sind die Falle, selbst hineingelaufen
+    // 2026-09-02. Zeilenweise statt per Regex: lesbar und ohne Escape-Fallen.
+    $zeilen = explode("\n", $index);
+    foreach ($zeilen as $nr => $zeile) {
+        if (! str_contains($zeile, 'partials.diktat')) {
+            continue;
+        }
+        $davor = $zeilen[$nr - 1] ?? '';
+        expect(str_contains($davor, '</textarea>'))->toBeTrue(
+            'Diktat-Include in Zeile ' . ($nr + 1) . ' steht nicht direkt nach </textarea>');
+    }
+    expect(Index::DIKTAT_ZIELE)->toContain('eingabe.rezept.brief')->toContain('eingabe.gericht.brief');
 });
