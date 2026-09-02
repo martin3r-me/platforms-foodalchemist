@@ -461,3 +461,56 @@ it('ueberlebt das Gesamtbudget — Achsen-Wissen wird nicht als Erstes gekappt',
     expect($ctx['block'])->toContain('Gala Ablauf')
         ->and($ctx['dropped_chars'])->toBeGreaterThan(0);
 });
+
+/*
+ * W3-1 — MESSAGE-LAYOUT FÜR DEN PREFIX-CACHE.
+ *
+ * Der Bound-Block (nur `always`-Dossiers) ist über alle Calls eines Prompt-Keys
+ * byte-identisch. Nur wenn er VOR allem Variablen steht, kann der implizite Prefix-Cache
+ * greifen (10 % des Input-Preises). Vorher stand das variable Retrieval-Wissen als Erstes
+ * im User-Content — gemessene Cache-Quote: 0,35 %.
+ */
+it('legt das verbindliche Regelwerk als system-Message VOR alles Variable', function () {
+    config(['foodalchemist.ai.provider' => 'fake']);
+    $this->actingAs($this->makeUser($this->rootTeam));
+
+    // 900 Zeichen: passt unter den konservativen Default-Deckel (1.400/Doc) von
+    // `recipe.description` — so ist die Zerlegung ohne Kürzung nachrechenbar.
+    w0Doc('w31-regel', 'w0bindcat', 900, 'Bau Regel');
+    w0Bind('w31-regel', 'recipe.description', 'always');
+
+    app(\Platform\FoodAlchemist\Services\Ai\AiGatewayService::class)
+        ->propose('recipe.description', ['description' => 'Klarer Fond.'], ['knowledge' => "# RETRIEVAL\n\nVariables Wissen."]);
+
+    $log = DB::table('foodalchemist_ai_call_log')->where('feature', 'recipe.description')->latest('id')->first();
+    $parts = json_decode((string) $log->prompt_parts, true);
+
+    // Der Block ist da, als eigener Topf ausgewiesen …
+    expect($parts['bound'])->toBeGreaterThan(900)
+        ->and($parts['bound'])->toBeLessThan(1100)          // 900 + Block-/Doc-Header, ungekürzt
+        // … und die Zerlegung geht auf: kein Doppelzählen zwischen huelle und bound.
+        ->and($parts['huelle'])->toBeGreaterThan(0)
+        // Die Zerlegung muss prompt_chars EXAKT ergeben — sonst ist die Sonde als Grundlage
+        // für Budget-Entscheidungen wertlos. Separatoren: "\n\n" vor dem Retrieval-Block (2)
+        // und "\n\nKontext:\n" vor dem Kontext-JSON (11).
+        ->and((int) $log->prompt_chars)->toBe(
+            $parts['huelle'] + $parts['bound'] + $parts['task']
+            + ($parts['retrieval'] > 0 ? 2 + $parts['retrieval'] : 0)
+            + 11 + $parts['kontext']
+        );
+});
+
+it('stellt den Task VOR das variable Retrieval-Wissen', function () {
+    config(['foodalchemist.ai.provider' => 'fake']);
+    $this->actingAs($this->makeUser($this->rootTeam));
+
+    // Der Fake-Provider spiegelt den Kontext hinter »Kontext:« — der User-Content muss
+    // also weiterhin mit dem Task beginnen und mit dem Kontext-JSON enden.
+    $p = app(\Platform\FoodAlchemist\Services\Ai\AiGatewayService::class)
+        ->propose('recipe.description', ['description' => 'Klarer Fond.'], ['knowledge' => "# RETRIEVAL\n\nVariables Wissen."]);
+
+    // Der Echo-Provider hat den Kontext gefunden ⇒ die Reihenfolge task → wissen → Kontext
+    // ist intakt (sonst greift sein /Kontext:\s*(\{.*\})/s-Muster nicht).
+    expect($p->werte)->toHaveKey('description')
+        ->and($p->werte['description'])->toBe('Klarer Fond.');
+});

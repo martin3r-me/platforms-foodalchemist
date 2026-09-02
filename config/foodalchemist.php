@@ -336,9 +336,9 @@ return [
          *
          * Die beiden Generatoren brauchen den großen Deckel, weil dort die Bau-§-Dossiers
          * hängen, die per Discovery strukturell nicht surfacen (sie nennen kein Gericht):
-         *   recipe.generator: §2 1.968 + §3 2.459 + §4 2.630 + §6 2.609 + §7 1.599
-         *                     + Erstellungs-Dossier 1.409 = 12.674 Z.
-         *   vk.generator:     dieselben + regelwerk.regelwerk_verkaufsgerichte 8.309 = 20.983 Z.
+         *   recipe.generator: §2 1.968 + §3 2.459 + §4 2.630 + §6 2.609
+         *                     + Erstellungs-Dossier 1.409 = 11.075 Z.
+         *   vk.generator:     dieselben + regelwerk.regelwerk_verkaufsgerichte 8.309 = 19.384 Z.
          *
          * §5 Default-GPs (4.796 Z.) ist seit 2026-09-02 ENTBUNDEN: MatchHeuristics::defaultGpAlias()
          * erzwingt die Tabelle deterministisch (Score 0,97, an 12 von 13 Generika auf demo
@@ -389,8 +389,13 @@ return [
         ],
 
         'bound_knowledge_budget' => [
-            'recipe.generator' => ['docs' => 9, 'chars_per_doc' => 4800, 'total' => 20000],
-            'vk.generator' => ['docs' => 10, 'chars_per_doc' => 8400, 'total' => 28000],
+            // Deckel = Pflichtmenge + EIN vollständiges Universal-Dossier (mengen_defaults,
+            // 7.446 Z.). Bewusst kein Puffer für ein zweites: ein Kopf-Anschnitt einer
+            // Referenztabelle ist kein Wissen, nur Kosten (das war der `substitutionen`-Fall).
+            // recipe.generator: §2+§3+§4+§6 + Erstellungs-Dossier = 11.075 + 7.446 = 18.521
+            'recipe.generator' => ['docs' => 8, 'chars_per_doc' => 8400, 'total' => 19000],
+            // vk.generator: dieselben + regelwerk.regelwerk_verkaufsgerichte 8.309 = 26.830
+            'vk.generator' => ['docs' => 8, 'chars_per_doc' => 8400, 'total' => 27500],
         ],
 
         'knowledge_budget' => [

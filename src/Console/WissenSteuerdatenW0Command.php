@@ -81,7 +81,6 @@ class WissenSteuerdatenW0Command extends Command
         'regelwerk-basisrezepte-3-purees-marks-coulis',
         'regelwerk-basisrezepte-4-sub-rezept-hierarchie-stubs',
         'regelwerk-basisrezepte-6-mengen-einheiten-yield',
-        'regelwerk-basisrezepte-7-allergen-zusatzstoff-vererbung',
     ];
 
     /**
@@ -101,7 +100,29 @@ class WissenSteuerdatenW0Command extends Command
      *
      * @var list<string>
      */
-    private const ENTBUNDEN = ['regelwerk-basisrezepte-5-default-gps-fur-generische-zutaten'];
+    private const ENTBUNDEN = [
+        // §5 Default-GPs (4.796 Z.) — MatchHeuristics::defaultGpAlias() erzwingt die Tabelle
+        // deterministisch (Score 0,97, auf demo an 12 von 13 Generika verifiziert). Die
+        // Benennungs-Direktive, die das Modell wirklich kontrolliert, steht kompakt im Task.
+        'regelwerk-basisrezepte-5-default-gps-fur-generische-zutaten',
+
+        // §7 Allergen-/Zusatzstoff-Vererbung (1.599 Z.) — das Modell liefert NIE Allergene:
+        // RecipeRecomputeService::allergene() aggregiert sie aus GP-/Lieferanten-Stammdaten,
+        // inklusive der rekursiven §7-Konfidenz („unsicheres Sub → unbekannt"). Was das
+        // Modell braucht, ist allein `allergen_nogo` als Constraint — das steht als Parameter
+        // im Task und wird nach der Erzeugung vom Diät-/Allergen-Gate deterministisch geprüft
+        // (verletzende Zeilen werden ENTdrahtet). Die Vererbungsregel selbst ist reiner Code.
+        'regelwerk-basisrezepte-7-allergen-zusatzstoff-vererbung',
+
+        // `substitutionen` (9.851 Z.) — LIEFERT HEUTE NICHTS NUTZBARES. Nach den Pflicht-
+        // Dossiers und `mengen_defaults` bleibt bei recipe.generator gar kein Budget (Rest
+        // < 500 → ganz verworfen) und bei vk.generator ein 980-Zeichen-Kopf-Fragment einer
+        // Substitutionstabelle. Ein Tabellen-Anschnitt ist kein Wissen, nur Kosten.
+        // Substitution ist ZUTATENABHÄNGIG — sie gehört chunk-genau geholt (die zwei
+        // relevanten Zeilen), nicht als Volltext-Dump gedeckelt. Bleibt aktiv im Korpus und
+        // über cross_cutting-Discovery erreichbar, wenn die Query wirklich darauf zeigt.
+        'substitutionen',
+    ];
 
     /**
      * Nur für Basisrezepte: das Erstellungs-Dossier. An `vk.generator` ist es bewusst
@@ -111,6 +132,21 @@ class WissenSteuerdatenW0Command extends Command
      * @var list<string>
      */
     private const ALWAYS_SLUGS_BASIS = ['workflow.basisrezept_erstellungs_dossier'];
+
+    /**
+     * Universelles Wissen, das JEDER Generierung zusteht — und das deshalb `always` sein
+     * MUSS, nicht `discovery`.
+     *
+     * `mengen_defaults` ist Portions-/Mengen-Grundwissen ohne Bezug zu einer konkreten
+     * Zutat; ein Score-Gate darüber ist sinnlos (es matcht mal, mal nicht). Zweiter,
+     * wichtigerer Grund: nur wenn ALLE gebundenen Dossiers `always` sind, ist der
+     * Bound-Block über alle Calls eines Prompt-Keys BYTE-IDENTISCH — und erst dann kann
+     * er als stabiler Cache-Prefix dienen (W3-1). Ein score-gegatetes Dossier im Block
+     * würde den Prefix bei jedem zweiten Aufruf brechen.
+     *
+     * @var list<string>
+     */
+    private const ALWAYS_SLUGS_UNIVERSAL = ['mengen_defaults'];
 
     /** Nur für Gerichte: das VK-Regelwerk (Naming-Skelett + Modell-A-Klassifikation). */
     private const ALWAYS_SLUGS_VK = ['regelwerk.regelwerk_verkaufsgerichte'];
@@ -248,8 +284,8 @@ class WissenSteuerdatenW0Command extends Command
     private function bindingZiele(): array
     {
         return [
-            'recipe.generator' => array_merge(self::ALWAYS_SLUGS_BAU, self::ALWAYS_SLUGS_BASIS),
-            'vk.generator' => array_merge(self::ALWAYS_SLUGS_BAU, self::ALWAYS_SLUGS_VK),
+            'recipe.generator' => array_merge(self::ALWAYS_SLUGS_BAU, self::ALWAYS_SLUGS_BASIS, self::ALWAYS_SLUGS_UNIVERSAL),
+            'vk.generator' => array_merge(self::ALWAYS_SLUGS_BAU, self::ALWAYS_SLUGS_VK, self::ALWAYS_SLUGS_UNIVERSAL),
         ];
     }
 
@@ -286,6 +322,20 @@ class WissenSteuerdatenW0Command extends Command
                 if (! $row->active || ! $row->doc_active) {
                     $fehler[] = "{$targetKey}: «{$slug}» ist inaktiv (binding={$row->active}, doc={$row->doc_active}).";
                 }
+            }
+        }
+
+        // W3-1-Voraussetzung: KEIN `discovery`-Binding an den Generatoren. Ein score-gegatetes
+        // Dossier im Bound-Block macht ihn call-abhängig und zerstört den Cache-Prefix.
+        foreach (array_keys($this->bindingZiele()) as $tk) {
+            $dyn = DB::table('foodalchemist_knowledge_bindings as b')
+                ->join('foodalchemist_knowledge_documents as d', 'd.id', '=', 'b.knowledge_document_id')
+                ->whereNull('b.deleted_at')->where('b.active', 1)->where('b.binding_type', 'layer')
+                ->where('b.target_key', $tk)->where('b.mode', '!=', 'always')
+                ->pluck('d.slug')->all();
+            if ($dyn !== []) {
+                $fehler[] = "{$tk}: nicht-always-Bindings vorhanden (" . implode(', ', $dyn)
+                    . ') — der Bound-Block ist damit call-abhängig und taugt nicht als Cache-Prefix (W3-1).';
             }
         }
 

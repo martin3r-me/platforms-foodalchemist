@@ -135,7 +135,10 @@ class AiGatewayService
         // blind (vgl. Welle 0: ~44 % des Generator-Prompts waren ein rechnerischer Restposten).
         $promptParts = [
             'kanon' => 0,                                            // Welle 2 (CanonBlockBuilder)
-            'retrieval' => mb_strlen($wissen),
+            // Exakt der Retrieval-Block, OHNE den angehängten Trenner: der wird beim
+            // Zusammenbau ohnehin rtrim't, und eine Sonde, die zwei Zeichen zu viel meldet,
+            // macht jede Nachrechnung von prompt_chars unmöglich.
+            'retrieval' => mb_strlen((string) ($options['knowledge'] ?? '')),
             'bound' => 0,
             'task' => mb_strlen((string) $prompt['task']),
             'kontext' => 0,
@@ -146,6 +149,7 @@ class AiGatewayService
         // #469: an diesen Layer gebundenes Wissen additiv laden — Prompt-Key (fein) ODER Bereich (Präfix, grob).
         // Macht „einbinden" für JEDEN Prompt wirksam (zentraler Punkt, alle Prompts laufen durch propose()).
         $boundSlugs = [];
+        $boundBlock = null;
         if (\Illuminate\Support\Facades\Schema::hasTable('foodalchemist_knowledge_bindings')) {
             $bereich = str_contains($promptKey, '.') ? explode('.', $promptKey, 2)[0] : $promptKey;
             $bound = \Illuminate\Support\Facades\DB::table('foodalchemist_knowledge_bindings as b')
@@ -163,9 +167,13 @@ class AiGatewayService
             );
             $promptParts['dropped'] += $boundVerworfen;
             if ($bBlocks !== []) {
-                $boundBlock = "# DIREKT GEBUNDENES WISSEN (an diesen Layer verdrahtet)\n\n"
-                    . implode("\n\n---\n\n", $bBlocks) . "\n\n";
-                $wissen .= $boundBlock;
+                // W3-1: NICHT mehr an $wissen anhängen. Der Bound-Block besteht ausschliesslich
+                // aus `always`-Dossiers und ist damit über alle Calls eines Prompt-Keys
+                // BYTE-IDENTISCH — er ist der Kern des Cache-Prefix und gehört deshalb VOR
+                // alles Variable, als eigene system-Message. Im User-Content stand er hinter
+                // dem variablen Retrieval-Block und war damit für den Prefix-Cache wertlos.
+                $boundBlock = "# VERBINDLICHES REGELWERK (gilt für jede Antwort dieses Auftrags)\n\n"
+                    . implode("\n\n---\n\n", $bBlocks);
                 $promptParts['bound'] = mb_strlen($boundBlock);
             }
         }
@@ -203,14 +211,43 @@ class AiGatewayService
         $kontextJson = json_encode($context, JSON_UNESCAPED_UNICODE);
         $promptParts['kontext'] = mb_strlen((string) $kontextJson);
 
-        $userContent = $wissen . $prompt['task'] . "\n\nKontext:\n" . $kontextJson;
+        /*
+         * W3-1 — MESSAGE-LAYOUT FÜR DEN PREFIX-CACHE. Verbindlich, Reihenfolge ist die Aussage:
+         *
+         *   1.–3. system  Voice-Hülle · Feld-Hülle · JSON-Umschlag      (statisch)
+         *   4.    system  VERBINDLICHES REGELWERK (always-Bindings)     (statisch, byte-identisch)
+         *   5.    user    task                                          (statisch je Prompt-Key)
+         *   6.    user    Retrieval-Wissen                              (variabel)
+         *   7.    user    Kontext-JSON                                  (variabel)
+         *
+         * Alles bis einschliesslich 5 ist über alle Calls eines Prompt-Keys identisch —
+         * ~16.000 Zeichen ≈ 5.400 Token, klar über der 1024-Token-Mindestlänge, ab der der
+         * implizite Prefix-Cache greift (10 % des Input-Preises).
+         *
+         * Vorher stand das VARIABLE Retrieval-Wissen als Erstes im User-Content: damit begann
+         * jeder Prompt anders und der Cache konnte nie greifen — gemessene Quote 0,35 %.
+         * Zusammen mit W0-1 (der Core stellte zusätzlich `'Zeit: ' . now()` sekundengenau
+         * voran) waren das die zwei Gründe, warum Caching strukturell unmöglich war.
+         *
+         * `prompt_cache_key` ist NICHT setzbar (applySupportedSamplingParams ist eine
+         * geschlossene Whitelist) — der Nutzen hängt vollständig an dieser Reihenfolge.
+         */
+        if ($boundBlock !== null) {
+            $messages[] = ['role' => 'system', 'content' => $boundBlock];
+        }
+
+        $userContent = $prompt['task']
+            . ($wissen !== '' ? "\n\n" . rtrim($wissen) : '')
+            . "\n\nKontext:\n" . $kontextJson;
         $messages[] = ['role' => 'user', 'content' => $userContent];
 
-        // W0-0: Hülle = alles, was VOR dem User-Content als system-Message steht.
+        // W0-0: Hülle = die system-Messages OHNE den Regelwerk-Block. Der wird seit W3-1
+        // ebenfalls als system-Message gesendet, ist aber als `bound` separat ausgewiesen —
+        // sonst zählte die Sonde ihn doppelt und `prompt_chars` ginge nicht mehr auf.
         $promptParts['huelle'] = array_sum(array_map(
             fn (array $m): int => $m['role'] === 'system' ? mb_strlen((string) $m['content']) : 0,
             $messages,
-        ));
+        )) - $promptParts['bound'];
         $promptChars = array_sum(array_map(fn (array $m): int => mb_strlen((string) $m['content']), $messages));
 
         // W0-1: Der Core stellt sonst eine System-Message mit `'Zeit: ' . now()` und einer
@@ -280,6 +317,7 @@ class AiGatewayService
         $audit['layers_used'] = $layersUsed;
         $audit['prompt_chars'] = $promptChars;
         $audit['prompt_parts'] = $promptParts;
+        $audit['prompt_volltext'] = implode("\n", array_map(fn (array $m): string => (string) $m['content'], $messages));
         $callLogId = $this->schreibeCallLog($promptKey, $tier, $userContent, $antwort, $parsed, $fehler, $elapsedMs, $audit);
 
         if ($fehler !== null) {
@@ -552,7 +590,13 @@ class AiGatewayService
                     ? json_encode($audit['layers_used']) : null,      // GL-06 Inv. 7
                 'knowledge_used' => isset($audit['knowledge_used']) && $audit['knowledge_used'] !== null && $audit['knowledge_used'] !== []
                     ? json_encode($audit['knowledge_used']) : null,
-                'prompt_hash' => hash('sha256', $userContent),
+                // W3-1: Der Hash deckt ab jetzt den GESAMTEN Prompt ab (alle Messages), nicht
+                // nur den User-Content. Grund: das verbindliche Regelwerk ist in eine
+                // system-Message gewandert — ein Hash über $userContent allein würde zwei
+                // Calls mit unterschiedlichem Regelwerk als identisch ausweisen. Bewusste,
+                // dokumentierte Änderung der Audit-Identität (06_KI §5): Hashes vor und nach
+                // dem 2026-09-02 sind nicht vergleichbar.
+                'prompt_hash' => hash('sha256', $audit['prompt_volltext'] ?? $userContent),
                 'response_summary' => $summary,
                 'tokens_in' => $antwort['usage']['input_tokens'] ?? null,
                 'tokens_out' => $antwort['usage']['output_tokens'] ?? null,
