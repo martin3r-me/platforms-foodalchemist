@@ -64,6 +64,8 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                 \Platform\FoodAlchemist\Console\ImportSliceCommand::class,
                 \Platform\FoodAlchemist\Console\ImportMasterCommand::class,
                 \Platform\FoodAlchemist\Console\KnowledgeImportCommand::class,
+                // W2-5: der Rückweg — bis hierher gab es nur Import (Modul = SSOT ohne Backup-Pfad).
+                \Platform\FoodAlchemist\Console\KnowledgeExportCommand::class,
                 \Platform\FoodAlchemist\Console\WissenSteuerdatenW0Command::class,
                 \Platform\FoodAlchemist\Console\KnowledgeEmbedCommand::class,
                 \Platform\FoodAlchemist\Console\EmbedCommand::class,
