@@ -169,9 +169,25 @@ class FoodAlchemistServiceProvider extends ServiceProvider
     public function boot(): void
     {
         // M7-10 / D8: STT-Fassade — Binding-Tausch genügt für einen späteren Core-Contract
-        $this->app->bind(\Platform\FoodAlchemist\Services\Stt\SttServiceContract::class, fn () => match (config('foodalchemist.stt.provider', 'fake')) {
-            'assemblyai' => new \Platform\FoodAlchemist\Services\Stt\AssemblyAiSttService(),
-            default => new \Platform\FoodAlchemist\Services\Stt\FakeSttService(),
+        // STT-Treiber: 'auto' nimmt den Dienst, für den ein Zugang existiert. Der
+        // frühere Default 'fake' hat auf demo jeden gesprochenen Befehl durch den
+        // Fixtext ersetzt — fehlerfrei und trotzdem falsch. Ein Fallback auf Testdaten
+        // darf nie der Normalfall sein.
+        $this->app->bind(\Platform\FoodAlchemist\Services\Stt\SttServiceContract::class, function () {
+            $provider = (string) config('foodalchemist.stt.provider', 'auto');
+            if ($provider === 'auto') {
+                $provider = match (true) {
+                    (string) config('services.openai.api_key') !== '' => 'openai',
+                    (string) config('foodalchemist.stt.key') !== '' => 'assemblyai',
+                    default => 'fake',
+                };
+            }
+
+            return match ($provider) {
+                'openai' => new \Platform\FoodAlchemist\Services\Stt\OpenAiSttService(),
+                'assemblyai' => new \Platform\FoodAlchemist\Services\Stt\AssemblyAiSttService(),
+                default => new \Platform\FoodAlchemist\Services\Stt\FakeSttService(),
+            };
         });
 
         // E1 (#507): Embedding-Observer — halten die GP-/Rezept-Recall-Vektoren bei

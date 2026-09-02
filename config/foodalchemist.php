@@ -298,10 +298,35 @@ return [
     ],
 
     'stt' => [
-        'provider' => env('FOODALCHEMIST_STT_PROVIDER', 'fake'),
+        /*
+         * 'auto' (Default) wählt den Dienst, für den ein Zugang DA ist — in dieser
+         * Reihenfolge: OpenAI (der Schlüssel, den die Plattform für LLM/Embeddings
+         * ohnehin hat) → AssemblyAI (eigener Schlüssel) → Fake.
+         *
+         * Warum das der richtige Default ist: vorher stand hier 'fake', und auf demo
+         * war damit JEDER gesprochene Befehl durch den Fixtext ersetzt — der Sprachpfad
+         * lief technisch fehlerfrei und antwortete trotzdem immer dasselbe. Ein
+         * Standard, der stillschweigend Testdaten liefert, ist die schlechteste Wahl:
+         * er sieht wie ein Feature aus. 'auto' macht es abhängig davon, ob ein echter
+         * Zugang existiert — in der Testumgebung (kein Key) bleibt es Fake.
+         * Explizit setzbar bleibt es über FOODALCHEMIST_STT_PROVIDER.
+         */
+        'provider' => env('FOODALCHEMIST_STT_PROVIDER', 'auto'),
         'key' => env('ASSEMBLYAI_API_KEY', ''),
+        'model' => env('FOODALCHEMIST_STT_MODEL', 'gpt-4o-mini-transcribe'),
+        'language' => 'de',
         'timeout_s' => 30,
         'fake_text' => 'Suche BBQ Sauce',
+        /*
+         * Kontext-Hinweis an die Transkription (die API nimmt einen `prompt`). Genau
+         * die Begriffe, an denen ein allgemeines Modell scheitert — ohne den Hinweis
+         * wird aus „Grundprodukt" ein „Grund Produkt" und der Tool-Loop sucht ins Leere.
+         */
+        'vokabular_prompt' => 'Küchen- und Warenwirtschafts-Befehle für den Food Alchemist. '
+            . 'Fachbegriffe: Basisrezept, Grundprodukt, Lieferantenartikel, Verkaufsgericht, '
+            . 'Speisekarte, Speiseplan, Foodbook, Concepter, Format, Aufschlagsklasse, '
+            . 'Speisen-Klasse, Darreichung, Warengruppe, Wareneinsatz, Allergene, Leitplanken, '
+            . 'Planung, Kaskade, Bestellwesen, Produktion.',
     ],
 
     'ai' => [
