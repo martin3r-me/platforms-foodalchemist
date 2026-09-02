@@ -1326,7 +1326,11 @@ it('Wissen/Trend: erfundenes Rezept erbt die Trend-Herkunft der Planung (Lineage
 
 it('Fan-out-Vererbung: REZEPT-Leitplanken (Niveau/Convenience) erreichen die Gericht-Generierung', function () {
     $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Leitplanken', 'brief' => 'x']);
-    app(PlanningSessionService::class)->setGenerationParams($this->rootTeam, (int) $session->id, ['level' => 'gehoben', 'convenience' => 'niedrig', 'menue_gaenge' => 3]);
+    // `convenience` trägt hier nur als Marker („kommt der Wert unten an?"). Seit die
+    // Leitplanken WERT-geprüft werden (ALLOWED_GENERATION_VALUES), muss der Marker ein
+    // echter Wert sein — ein Fantasie-Token würde verworfen und der Test prüfte nichts mehr.
+    // Die Aussage des Tests (Vererbung in den Fan-out) ist unverändert.
+    app(PlanningSessionService::class)->setGenerationParams($this->rootTeam, (int) $session->id, ['level' => 'gehoben', 'convenience' => 'teil_convenience', 'menue_gaenge' => 3]);
     $concept = $this->makeConcept($this->rootTeam, 'Menü', ['status' => 'draft']);
     $slot = $this->makeConceptSlot($concept, ['position' => 1]);
     $recipe = $this->makeRecipe($this->rootTeam, 'Erfunden', ['status' => 'draft', 'is_sales_recipe' => true]);
@@ -1346,7 +1350,7 @@ it('Fan-out-Vererbung: REZEPT-Leitplanken (Niveau/Convenience) erreichen die Ger
     app(PlanningCascadeService::class)->materialisiereConceptGericht($this->rootTeam, (int) $idee->id, (int) $step->id, (int) $session->id);
 
     expect($captured['level'] ?? null)->toBe('gehoben')
-        ->and($captured['convenience'] ?? null)->toBe('niedrig');
+        ->and($captured['convenience'] ?? null)->toBe('teil_convenience');
 });
 
 it('Fan-out-Vererbung: MENÜ-Leitplanken (menue_*) sickern NICHT in den Einzel-Gericht-Prompt', function () {

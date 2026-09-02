@@ -408,7 +408,7 @@ return [
             // 7.446 Z.). Bewusst kein Puffer für ein zweites: ein Kopf-Anschnitt einer
             // Referenztabelle ist kein Wissen, nur Kosten (das war der `substitutionen`-Fall).
             // recipe.generator: §2+§3+§4+§6 + Erstellungs-Dossier = 11.075 + 7.446 = 18.521
-            'recipe.generator' => ['docs' => 8, 'chars_per_doc' => 8400, 'total' => 19000],
+        'recipe.generator' => ['docs' => 8, 'chars_per_doc' => 8400, 'total' => 19000],
             // vk.generator: dieselben + regelwerk.regelwerk_verkaufsgerichte 8.309 = 26.830
             'vk.generator' => ['docs' => 8, 'chars_per_doc' => 8400, 'total' => 27500],
         ],
@@ -579,6 +579,46 @@ return [
      *   'tier' (A–D) · 'task' (User-Task) · optional 'system' (Feld-Hülle) · 'temperature'
      */
     'prompts' => [
+            /*
+         * BRIEFING → LEITPLANKEN. Die Brücke zwischen dem suchenden und dem produzierenden
+         * Teil des Systems: ein Mensch (oder Sprache) formuliert frei, hier entsteht daraus
+         * der strukturierte Regler-Satz, den der deterministische Generator dann N-mal
+         * ausführt. Kein Tool-Loop — das ist eine KLASSIFIKATION gegen geschlossene
+         * Vokabulare, keine Exploration. Ein Call, klein, reproduzierbar.
+         *
+         * Die Werte werden nach der Antwort gegen
+         * FoodAlchemistPlanningSession::ALLOWED_GENERATION_VALUES geprüft; erfundene Werte
+         * werden verworfen und dem Menschen gemeldet, nicht stillschweigend übernommen.
+         */
+        'planung.leitplanken' => [
+            'tier' => 'B',
+            'max_tokens' => 900,
+            'temperature' => 0.0,
+            'task' => 'Du bist Planungs-Assistent in einem Catering-Betrieb. Aus einem freien Briefing '
+                . 'destillierst du die LEITPLANKEN — den Regler-Satz, mit dem anschliessend Gerichte '
+                . 'erzeugt werden: werte = {leitplanken:{…}, unklar:[…], begruendung:"<1-2 Sätze>"}. '
+                . 'Setze einen Regler NUR, wenn das Briefing ihn nennt oder ihn eindeutig impliziert '
+                . '(»Sommerfest im Garten, Fingerfood« ⇒ serviceform=flying). Was offen bleibt, gehört '
+                . 'in `unklar` als kurze Rückfrage — RATE NICHT und erfinde keine Werte: ein falscher '
+                . 'Regler ist schlimmer als ein fehlender, weil er die Erzeugung still in die falsche '
+                . 'Richtung lenkt. Erlaubte Werte, ausschliesslich diese: '
+                . 'occasion = fruehstueck|lunch|konferenz|empfang|dinner|late_night · '
+                . 'sektor = betriebsgastronomie|catering|restaurant|care|schule_kita · '
+                . 'level = haute_cuisine|gehoben|klassisch · '
+                . 'serviceform = tellerservice|buffet|flying|stehempfang|boxed · '
+                . 'convenience = from_scratch|teil_convenience|voll_convenience · '
+                . 'bestand = hybrid|komplett_neu|nur_bestand · '
+                . 'bio_praeferenz = konventionell|bio|egal · '
+                . 'diaet_hart = Liste aus vegan|vegetarisch|glutenfrei|laktosefrei|halal|low_carb '
+                . '(NUR bei harten Ausschlüssen für ALLE Gäste — »ein paar Vegetarier« ist KEIN '
+                . 'diaet_hart, das ist eine Quote und gehört in `unklar`). '
+                . 'Zahlenregler frei: pax (Personen), ziel_vk_eur (Netto-Verkaufspreis je Person), '
+                . 'ziel_portion_g, ziel_we_pct (Ziel-Wareneinsatz in %). '
+                . 'Freitext: aroma (Aroma-Richtung, z. B. "rauchig-mediterran"), saison (z. B. "Sommer"). '
+                . 'Ein Budget »45 Euro pro Person« ist ziel_vk_eur=45, kein ziel_we_pct. '
+                . 'Nenne in `begruendung` knapp, woraus du die wichtigsten Regler geschlossen hast.',
+        ],
+
         'demo.echo' => [
             'tier' => 'D',
             'task' => 'Gib die übergebenen Kontext-Felder unverändert als JSON-Objekt '

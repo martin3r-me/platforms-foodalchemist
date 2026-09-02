@@ -676,6 +676,7 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\PlanungSessionGetTool::class,
                     \Platform\FoodAlchemist\Tools\PlanungSessionPostTool::class,
                     \Platform\FoodAlchemist\Tools\PlanungSessionPutTool::class,
+                    \Platform\FoodAlchemist\Tools\PlanungLeitplankenExtractTool::class,
                     // Etappe 9 (Planung-Leitstelle): Kaskaden-Status headless lesen — READ-ONLY.
                     \Platform\FoodAlchemist\Tools\PlanungKaskadeStatusGetTool::class,
                     // Etappe 9 · Slice 2: Kaskaden-START (Go) + FREIGABE (Gate 2) via MCP — WRITE. Der
