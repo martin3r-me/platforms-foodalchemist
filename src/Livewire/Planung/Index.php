@@ -18,6 +18,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipeStepPhoto;
 use Platform\FoodAlchemist\Services\CanvasService;
 use Platform\FoodAlchemist\Services\AngebotService;
+use Platform\FoodAlchemist\Services\BriefingLeitplankenService;
 use Platform\FoodAlchemist\Services\ConceptGeneratorService;
 use Platform\FoodAlchemist\Services\ConceptService;
 use Platform\FoodAlchemist\Services\FoodbookService;
@@ -30,6 +31,7 @@ use Platform\FoodAlchemist\Services\RecipeImageService;
 use Platform\FoodAlchemist\Services\SalesRecipeService;
 use Platform\FoodAlchemist\Services\SpeisekarteService;
 use Platform\FoodAlchemist\Services\SpeiseplanService;
+use Platform\FoodAlchemist\Services\Stt\SttServiceContract;
 use Platform\FoodAlchemist\Services\TeamSettingsService;
 use Platform\FoodAlchemist\Services\TitelVorschlagService;
 use Platform\FoodAlchemist\Services\WorkerHealthService;
@@ -1765,6 +1767,128 @@ class Index extends Component
         $this->eingabe[$scope]['titel'] = $vorschlag;
         $this->fehler = null;
         $this->meldung = 'Titel vorgeschlagen: „'.$vorschlag.'" — bitte prüfen und anpassen.';
+    }
+
+    /**
+     * Befund des letzten Leitplanken-Vorschlags — bewusst SICHTBAR statt still:
+     * was gesetzt wurde, was verworfen (erfundener Wert), was ignoriert (gültiger
+     * Sitzungs-Parameter, aber kein Regler dieses Tabs) und was offen blieb.
+     *
+     * @var array{scope:string,gesetzt:list<string>,verworfen:list<string>,ignoriert:list<string>,unklar:list<string>,begruendung:?string,confidence:float}|null
+     */
+    public ?array $leitplankenBefund = null;
+
+    /** Diktat: Audio-Blob fürs Briefing (WithFileUploads) + Ziel-Tab. */
+    public $briefAudio = null;
+
+    public string $diktatScope = 'rezept';
+
+    /**
+     * BRIEFING → LEITPLANKEN in der Oberfläche. Bis hierher war die Brücke nur per MCP
+     * erreichbar — ein Produkt muss das in sich lösen (Dominique 2026-09-02).
+     *
+     * Die Sitzung wird ABSICHTLICH nicht mitgegeben: der Vorschlag füllt nur die Regler
+     * DIESES Tabs, damit der Mensch die Pills vor dem Go sieht. Persistiert wird am Go
+     * (Start-Tab-Regel) — die Entscheidung bleibt menschlich.
+     */
+    public function leitplankenAusBriefing(string $scope, BriefingLeitplankenService $svc): void
+    {
+        if (! in_array($scope, self::SCOPES, true) || ! isset($this->regler[$scope])) {
+            return;
+        }
+        $brief = trim((string) ($this->eingabe[$scope]['brief'] ?? ''));
+        if ($brief === '') {
+            $this->fehler = 'Für die Leitplanken erst ein Briefing in diesem Tab eingeben.';
+
+            return;
+        }
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team === null) {
+            $this->fehler = 'Kein Team im Kontext.';
+
+            return;
+        }
+
+        try {
+            $r = $svc->ausBriefing($team, $brief);
+        } catch (\Throwable $e) {
+            $this->fehler = 'Leitplanken-Vorschlag fehlgeschlagen: ' . $e->getMessage();
+
+            return;
+        }
+
+        $gesetzt = [];
+        $ignoriert = [];
+        foreach ($r['leitplanken'] as $feld => $wert) {
+            if (! array_key_exists($feld, self::REGLER_DEFAULT)) {
+                // Im Sitzungs-Param-Raum gültig, aber dieser Tab hat den Regler nicht
+                // (z. B. Menü-Quoten). Melden statt verschlucken.
+                $ignoriert[] = (string) $feld;
+
+                continue;
+            }
+            // Formtreue: Multi-Regler bleibt Array, Single-Regler bleibt Skalar — ein String
+            // in `diaet_hart` würde die Pill-Logik (reglerPill) zerlegen.
+            $this->regler[$scope][$feld] = is_array(self::REGLER_DEFAULT[$feld])
+                ? array_values(array_filter((array) $wert, static fn ($v): bool => is_scalar($v)))
+                : (is_array($wert) ? (string) (reset($wert) ?: '') : $wert);
+            $gesetzt[] = (string) $feld;
+        }
+
+        $this->leitplankenBefund = [
+            'scope' => $scope,
+            'gesetzt' => $gesetzt,
+            'verworfen' => $r['verworfen'],
+            'ignoriert' => $ignoriert,
+            'unklar' => $r['unklar'],
+            'begruendung' => $r['begruendung'],
+            'confidence' => $r['confidence'],
+        ];
+        $this->fehler = null;
+        $this->meldung = $gesetzt === []
+            ? 'Keine Leitplanke ableitbar — das Briefing nennt keine der geschlossenen Achsen.'
+            : count($gesetzt) . ' Leitplanke(n) vorgeschlagen — bitte prüfen, das Go bleibt bei dir.';
+    }
+
+    /**
+     * Diktat fürs Briefing: gesprochener Text wird ANGEHÄNGT, nie ersetzt — ein Diktat
+     * ist ein Nachtrag, und ein versehentlich überschriebenes Briefing wäre nicht
+     * wiederherstellbar. Reines STT, kein Tool-Loop: das Briefing soll exakt das sein,
+     * was der Mensch gesagt hat, nicht die Deutung eines Agenten. Die Deutung passiert
+     * danach sichtbar in einem Schritt (Leitplanken vorschlagen).
+     */
+    public function updatedBriefAudio(): void
+    {
+        $this->briefDiktatUebernehmen();                             // dünner Hook, Logik testbar daneben
+    }
+
+    public function briefDiktatUebernehmen(): void
+    {
+        $scope = in_array($this->diktatScope, self::SCOPES, true) ? $this->diktatScope : 'rezept';
+        if ($this->briefAudio === null || ! isset($this->eingabe[$scope])) {
+            return;
+        }
+        try {
+            $text = trim(app(SttServiceContract::class)->transcribe(
+                (string) file_get_contents($this->briefAudio->getRealPath()),
+                $this->briefAudio->getMimeType() ?: 'audio/webm',
+            ));
+        } catch (\Throwable $e) {
+            $this->fehler = 'Diktat fehlgeschlagen: ' . $e->getMessage();
+            $this->briefAudio = null;
+
+            return;
+        }
+        $this->briefAudio = null;
+        if ($text === '') {
+            $this->fehler = 'Diktat war leer — nichts übernommen.';
+
+            return;
+        }
+        $alt = trim((string) ($this->eingabe[$scope]['brief'] ?? ''));
+        $this->eingabe[$scope]['brief'] = $alt === '' ? $text : $alt . ' ' . $text;
+        $this->fehler = null;
+        $this->meldung = 'Diktat übernommen — bitte gegenlesen.';
     }
 
     /**

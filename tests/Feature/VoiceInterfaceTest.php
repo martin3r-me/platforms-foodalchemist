@@ -2,7 +2,7 @@
 
 use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
-use Platform\FoodAlchemist\Livewire\Recipes\VoiceModal;
+use Platform\FoodAlchemist\Livewire\VoiceModal;
 use Platform\FoodAlchemist\Models\FoodAlchemistDishClass;
 use Platform\FoodAlchemist\Models\FoodAlchemistDishMainGroup;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;

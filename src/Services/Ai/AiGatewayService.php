@@ -478,7 +478,29 @@ class AiGatewayService
      * @param  list<string>  $toolNames  erlaubte Tools (Registry-Namen)
      * @return array{text: ?string, runden: int, tool_laeufe: list<array>, elapsed_ms: int}
      */
-    public function callWithTools(string $auftrag, array $toolNames, int $maxRuns = 6): array
+    /**
+     * Agentischer Tool-Loop (Tier D).
+     *
+     * $optionen:
+     *   policy        — callable(string $name, object $tool): bool. Fordert das Modell ein Tool
+     *                   an, das NICHT im Basiskatalog steht, entscheidet diese REGEL statt einer
+     *                   Pflegeliste. Erlaubt ⇒ ausführen und für die Folgerunden freischalten.
+     *                   Die Freischaltung kostet KEINE Prompt-Zeichen: der Katalog in der
+     *                   System-Message bleibt der Basiskatalog (byte-stabil, W3-1) — gewachsen
+     *                   ist nur das Gate. Fail-closed: kein Tool, keine Policy oder kein
+     *                   striktes `true` ⇒ Ablehnung. Ohne `policy` verhält sich der Loop wie bisher.
+     *   arg_guard     — callable(string $name, array $args): array. Entschärft Argumente VOR
+     *                   der Ausführung. Nötig, weil mehrere Proposal-Tools ein Commit-Flag
+     *                   tragen (`confirm`/`accept`/`apply`/`force`) — ohne diesen Filter könnte
+     *                   das Modell mit `accept: true` doch direkt schreiben und die
+     *                   GL-07-Invariante („sprechen → Proposal → bestätigen") wäre nur
+     *                   Dokumentation. Protokolliert werden die ENTSCHÄRFTEN Argumente,
+     *                   also die tatsächlich ausgeführten.
+     *   system_zusatz — eine statische Zeile für die System-Message (Prefix bleibt stabil).
+     *
+     * @param  array{policy?: callable, arg_guard?: callable, system_zusatz?: string}  $optionen
+     */
+    public function callWithTools(string $auftrag, array $toolNames, int $maxRuns = 6, array $optionen = []): array
     {
         $team = Auth::user()?->currentTeamRelation;
         if ($team !== null && ! app(\Platform\FoodAlchemist\Services\TeamSettingsService::class)->kiAktiv($team)) {
@@ -491,12 +513,19 @@ class AiGatewayService
             ->map(fn ($t) => ['name' => $t->getName(), 'description' => $t->getDescription(), 'schema' => $t->getSchema()])
             ->values()->all();
 
+        $policy = $optionen['policy'] ?? null;
+        $argGuard = $optionen['arg_guard'] ?? null;
+        $erlaubt = array_values(array_unique($toolNames));           // wächst über die Policy
+        $freigeschaltet = [];
+
         $messages = [[
             'role' => 'system',
             'content' => 'Du bist der Food-Alchemist-Sprachassistent (Catering-Souschef). Antworte AUSSCHLIESSLICH '
                 . 'mit einem JSON-Objekt: {"action":"tool","name":"<tool>","arguments":{…}} um ein Tool zu rufen, '
                 . 'oder {"action":"final","text":"<kurze deutsche Antwort>"} wenn du fertig bist. '
-                . 'Schreibaktionen NUR über die Proposal-Tools (nie erfinden). Verfügbare Tools: '
+                . 'Schreibaktionen NUR über die Proposal-Tools (nie erfinden). '
+                . (isset($optionen['system_zusatz']) ? trim((string) $optionen['system_zusatz']) . ' ' : '')
+                . 'Verfügbare Tools: '
                 . json_encode($katalog, JSON_UNESCAPED_UNICODE),
         ], ['role' => 'user', 'content' => $auftrag]];
 
@@ -526,14 +555,42 @@ class AiGatewayService
                 $finalText = $parsed['text'] ?? null;
                 break;
             }
-            if (($parsed['action'] ?? null) === 'tool' && is_string($parsed['name'] ?? null) && in_array($parsed['name'], $toolNames, true)) {
-                $tool = $registry->get($parsed['name']);
-                $resultat = $tool !== null
-                    ? $tool->execute((array) ($parsed['arguments'] ?? []), $kontext)
-                    : \Platform\Core\Contracts\ToolResult::error('Tool unbekannt.', 'NOT_FOUND');
-                $toolLaeufe[] = ['name' => $parsed['name'], 'arguments' => $parsed['arguments'] ?? [], 'success' => $resultat->success, 'data' => $resultat->data];
+            if (($parsed['action'] ?? null) === 'tool' && is_string($parsed['name'] ?? null)) {
+                $name = $parsed['name'];
+                $tool = $registry->get($name);
+                // Null-Guard VOR der Katalog-Prüfung: auch ein Basiskatalog-Name kann
+                // unauflösbar sein (Registry-Drift, Modul nicht geladen) — dann darf hier
+                // kein Aufruf auf null passieren.
+                if ($tool === null) {
+                    $messages[] = ['role' => 'assistant', 'content' => (string) ($antwort['content'] ?? '')];
+                    $messages[] = ['role' => 'user', 'content' => 'Tool »' . $name . '« existiert nicht. '
+                        . 'Suche mit tool_registry.SEARCH ein passendes Tool oder antworte final.'];
+
+                    continue;
+                }
+                // Selbst-erweiternde Whitelist: die Grenze ist eine EIGENSCHAFT des Tools
+                // (Namespace + read_only), keine Pflegeliste, die veraltet. Damit kann der
+                // Loop strukturell keinen Direktschreiber rufen, egal was er entdeckt.
+                if (! in_array($name, $erlaubt, true)) {
+                    if (! is_callable($policy) || $policy($name, $tool) !== true) {
+                        $messages[] = ['role' => 'assistant', 'content' => (string) ($antwort['content'] ?? '')];
+                        $messages[] = ['role' => 'user', 'content' => 'Tool »' . $name . '« ist gesperrt (nicht lesend '
+                            . 'oder ausserhalb des Moduls). Änderungen laufen ausschliesslich über die Proposal-Tools. '
+                            . 'Suche mit tool_registry.SEARCH ein lesendes Tool oder antworte final.'];
+
+                        continue;
+                    }
+                    $erlaubt[] = $name;
+                    $freigeschaltet[] = $name;
+                }
+                $argumente = (array) ($parsed['arguments'] ?? []);
+                if (is_callable($argGuard)) {
+                    $argumente = $argGuard($name, $argumente);
+                }
+                $resultat = $tool->execute($argumente, $kontext);
+                $toolLaeufe[] = ['name' => $name, 'arguments' => $argumente, 'success' => $resultat->success, 'data' => $resultat->data];
                 $messages[] = ['role' => 'assistant', 'content' => (string) ($antwort['content'] ?? '')];
-                $messages[] = ['role' => 'user', 'content' => 'TOOL-ERGEBNIS ' . $parsed['name'] . ': '
+                $messages[] = ['role' => 'user', 'content' => 'TOOL-ERGEBNIS ' . $name . ': '
                     . json_encode(['success' => $resultat->success, 'data' => $resultat->data, 'error' => $resultat->error], JSON_UNESCAPED_UNICODE)];
 
                 continue;
@@ -551,11 +608,15 @@ class AiGatewayService
         $elapsedMs = (int) ((hrtime(true) - $start) / 1_000_000);
 
         // Audit: EIN Eintrag je Loop (Tier D, Runden in der Summary)
+        // `freigeschaltet` mitloggen: was die Policy über den Basiskatalog hinaus zugelassen
+        // hat, ist die einzige Stelle, an der der Werkzeugkasten wächst — das gehört ins Audit.
         $this->schreibeCallLog('voice.command', 'D', $auftrag, ['model' => $tatsaechlichesModell, 'usage' => $usageGesamt],
-            ['werte' => ['runden' => $runde, 'tools' => count($toolLaeufe), 'final' => $finalText !== null]], null, $elapsedMs,
+            ['werte' => ['runden' => $runde, 'tools' => count($toolLaeufe), 'final' => $finalText !== null,
+                'freigeschaltet' => $freigeschaltet]], null, $elapsedMs,
             ['knowledge_used' => null, 'target_table' => null, 'target_id' => null, 'layers_used' => null]);
 
-        return ['text' => $finalText, 'runden' => $runde, 'tool_laeufe' => $toolLaeufe, 'elapsed_ms' => $elapsedMs];
+        return ['text' => $finalText, 'runden' => $runde, 'tool_laeufe' => $toolLaeufe, 'elapsed_ms' => $elapsedMs,
+            'freigeschaltet' => $freigeschaltet];
     }
 
     /** 06_KI §5 Pflicht 3: generischer Accept-Stempel (Reject analog). */

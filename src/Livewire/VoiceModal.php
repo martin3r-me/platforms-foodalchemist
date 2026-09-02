@@ -1,6 +1,6 @@
 <?php
 
-namespace Platform\FoodAlchemist\Livewire\Recipes;
+namespace Platform\FoodAlchemist\Livewire;
 
 use Livewire\Attributes\On;
 use Livewire\Component;
@@ -9,10 +9,16 @@ use Platform\FoodAlchemist\Services\Stt\SttServiceContract;
 use Platform\FoodAlchemist\Services\VoiceCommandService;
 
 /**
- * M7-10: 🎙 Voice-Interface — zweiter Bedienweg (UI bleibt parallel).
+ * M7-10 / Phase C2: 🎙 Voice-Interface — zweiter Bedienweg (UI bleibt parallel).
  * MediaRecorder (Opus mono, whisper-Vorbild) → Livewire-Upload → sync STT
- * (D8-Fassade) → agentischer Tool-Loop (Tier D, M8-01-Tools) → Antwort +
- * UI-Aktionen; Schreibaktionen NUR als Proposal mit Bestätigen-Button (GL-07).
+ * (D8-Fassade) → agentischer Tool-Loop (Tier D) → Antwort + UI-Aktionen;
+ * Schreibaktionen NUR als Proposal mit Bestätigen-Button (GL-07).
+ *
+ * Liegt bewusst NICHT mehr unter `Livewire\Recipes`: das Mikrofon steuert seit
+ * Phase C2 den ganzen FoodAlchemist (Dominique: „das Mikrofon ist der eigentliche
+ * MCP-Agent im System") und ist EINMAL global in der Sidebar gemountet, die auf
+ * jeder FA-Seite liegt. Die Rezept-Seite behält nur ihren Knopf und schickt
+ * dasselbe Event — kein zweiter Mount, eine Identität.
  */
 class VoiceModal extends Component
 {
@@ -93,6 +99,6 @@ class VoiceModal extends Component
 
     public function render()
     {
-        return view('foodalchemist::livewire.recipes.voice-modal');
+        return view('foodalchemist::livewire.voice-modal');
     }
 }
