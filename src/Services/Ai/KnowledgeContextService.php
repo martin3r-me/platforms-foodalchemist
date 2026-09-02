@@ -89,6 +89,13 @@ class KnowledgeContextService
     private const DISCOVERY_MIN_SCORE = 0.05;
 
     /**
+     * Pro-Doc-Deckel für achsen-aufgelöstes Wissen (Anlass-Playbook, Segment-Profil).
+     * Bewusst knapp: das sind PRÄZISE Treffer, die den unpräzisen Discovery-Treffern
+     * Budget wegnehmen — das ist der Sinn der Sache, aber es darf sie nicht verdrängen.
+     */
+    private const ACHSEN_TRUNCATE_CHARS = 2400;
+
+    /**
      * W0-6 — Herkunft je ausgewähltem Doc-Slug: `via` (lexical|alias|semantic), `score`,
      * `chars` (Doc-Größe) und `sent` (was nach dem Pro-Doc-Deckel wirklich rausging).
      * Wird je contextFor()-Lauf zurückgesetzt und mit dem Block zurückgegeben.
@@ -208,6 +215,15 @@ class KnowledgeContextService
                 $parts[] = $regelwerk;
             }
             $snap('regelwerk', $before);
+        }
+
+        // ── 0d. ACHSEN-WISSEN: Anlass-Playbook + Segment-Profil, deterministisch aufgelöst ──
+        // Hoch priorisiert (direkt nach dem Regelwerk): das sind exakte Treffer aus den
+        // Leitplanken, keine Ratekandidaten. Sie sollen dem Fuzzy-Retrieval Budget wegnehmen.
+        $before = count($filesUsed);
+        if (($achsen = $this->achsenBlock($params, $filesUsed)) !== null) {
+            $parts[] = $achsen;
+            $snap('achse', $before);
         }
 
         // ── 1. VAULT-WISSEN: Cross-Cutting (always) + Domains (discovery) ──
@@ -372,6 +388,84 @@ class KnowledgeContextService
             'dropped_chars' => max(0, $gebaut - mb_strlen($block)),
             'herkunft' => $this->herkunft,
         ];
+    }
+
+    /**
+     * ACHSEN-AUFLÖSUNG — deterministisches Nachschlagen statt Ranking.
+     *
+     * Für achsen-gebundenes Wissen ist Retrieval das falsche Werkzeug: `occasion=dinner`
+     * → `event_playbook_gala` ist ein Join. Das Slug-Token-Ranking traf hier daneben, und
+     * `event_playbook`/`segment` waren für Gerichte gar nicht geroutet — 20 Docs
+     * Catering-Fachwissen (Anlass-Playbooks, Segment-Profile) waren unerreichbar.
+     *
+     * Gate ist die Anwesenheit des Parameters, nicht eine Routing-Zeile: ein Basisrezept
+     * hat kein `occasion` und löst hier nichts aus. Trifft die Map einen Wert nicht
+     * (z. B. `sektor=restaurant`, für das kein Dossier existiert), bleibt der Kanal
+     * bewusst leer statt auf ein fremdes Profil auszuweichen.
+     *
+     * @param  array<string, mixed>  $params
+     * @param  list<string>  $filesUsed
+     */
+    private function achsenBlock(array $params, array &$filesUsed): ?string
+    {
+        $map = config('foodalchemist.ai.knowledge_axis_map', []);
+        if (! is_array($map) || $map === []) {
+            return null;
+        }
+
+        // Achse → gewünschte Slugs in Kandidaten-Reihenfolge
+        $gesucht = [];
+        foreach ($map as $achse => $werte) {
+            $wert = $params[(string) $achse] ?? null;
+            if (! is_string($wert) || trim($wert) === '' || ! is_array($werte)) {
+                continue;
+            }
+            $kandidaten = $werte[trim($wert)] ?? null;
+            if (is_array($kandidaten) && $kandidaten !== []) {
+                $gesucht[(string) $achse] = array_values(array_filter(array_map('strval', $kandidaten)));
+            }
+        }
+        if ($gesucht === []) {
+            return null;
+        }
+
+        // EINE Query für alle Achsen, danach je Achse der erste aktive Treffer.
+        $alle = array_values(array_unique(array_merge(...array_values($gesucht))));
+        $docs = DB::table('foodalchemist_knowledge_documents')
+            ->whereIn('slug', $alle)->where('active', 1)->whereNull('deleted_at')
+            ->get(['slug', 'title', 'content_md', 'version'])->keyBy('slug');
+        if ($docs->isEmpty()) {
+            return null;
+        }
+
+        $bloecke = [];
+        foreach ($gesucht as $achse => $kandidaten) {
+            foreach ($kandidaten as $slug) {
+                if (! isset($docs[$slug])) {
+                    continue;                                        // deaktiviert → nächster Kandidat
+                }
+                $doc = $docs[$slug];
+                $bloecke[] = '## ' . mb_strtoupper((string) $achse) . ": {$doc->title}\n\n"
+                    . $this->truncate((string) $doc->content_md, self::ACHSEN_TRUNCATE_CHARS);
+                $filesUsed[] = "{$doc->slug}@v{$doc->version}";
+                $this->herkunft[$slug] = [
+                    'score' => null,
+                    'via' => 'achse:' . $achse,
+                    'chars' => mb_strlen((string) $doc->content_md),
+                    'sent' => min(mb_strlen((string) $doc->content_md), self::ACHSEN_TRUNCATE_CHARS),
+                ];
+                break;                                               // ein Dossier je Achse
+            }
+        }
+
+        if ($bloecke === []) {
+            return null;
+        }
+
+        return "# ANLASS- & SEGMENT-WISSEN (aus den Leitplanken aufgelöst — verbindlicher Rahmen)\n\n"
+            . "Diese Dossiers gehören zum gewählten Anlass bzw. Verpflegungskontext. Sie setzen den\n"
+            . "Rahmen für Portionierung, Service-Logik und Erwartungshaltung — nicht die Zutatenwahl.\n\n"
+            . implode("\n\n---\n\n", $bloecke);
     }
 
     /**

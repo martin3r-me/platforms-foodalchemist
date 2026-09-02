@@ -370,3 +370,94 @@ it('liefert gebundene Dossiers in den Prompt, wenn der Kontext-Dienst sie nicht 
     // 1968 + 2459 + 2630 = 7.057 Zeichen Pflichtwissen müssen ankommen.
     expect($parts['bound'])->toBeGreaterThan(7000);
 });
+
+/*
+ * ACHSEN-AUFLÖSUNG — Nachschlagen statt Suchen.
+ *
+ * `occasion` und `sektor` sind geschlossene Enums (RecipesGenerateTool:76/:80) und die
+ * Dossiers sind danach benannt. Vorher waren `event_playbook` (13 Docs) und `segment`
+ * (7 Docs) für Gerichte GAR NICHT geroutet — 20 Docs Catering-Fachwissen unerreichbar.
+ * Jetzt: deterministischer Join, keine Rate-Mechanik.
+ */
+it('loest Anlass und Segment deterministisch aus den Leitplanken auf', function () {
+    w0Doc('event_playbook_gala', 'event_playbook', 3629, 'Gala Ablauf');
+    w0Doc('segment.event_bankett_catering', 'segment', 1688, 'Bankett Profil');
+    // Ein Dossier, das NICHT gewählt werden darf — Gegenprobe gegen Zufallstreffer.
+    w0Doc('event_playbook_brunch', 'event_playbook', 2552, 'Brunch Ablauf');
+
+    $ctx = app(KnowledgeContextService::class)->contextFor(
+        'ai_generate_recipe', 'Geschmorte Ochsenbacke', null, [],
+        ['occasion' => 'dinner', 'sektor' => 'catering'],
+    );
+
+    // Der Block rendert den TITEL (lesbar für die KI), der SLUG steht im Audit —
+    // deshalb wird die Auflösung an files_used/herkunft geprüft, nicht am Fließtext.
+    expect($ctx['used_by_category'])->toHaveKey('achse')
+        ->and($ctx['used_by_category']['achse'])->toContain('event_playbook_gala@v1')
+        ->and($ctx['used_by_category']['achse'])->toContain('segment.event_bankett_catering@v1')
+        ->and($ctx['herkunft']['event_playbook_gala']['via'])->toBe('achse:occasion')
+        ->and($ctx['herkunft']['segment.event_bankett_catering']['via'])->toBe('achse:sektor')
+        // Inhalt ist wirklich drin …
+        ->and($ctx['block'])->toContain('Gala Ablauf')
+        ->and($ctx['block'])->toContain('Bankett Profil')
+        // … und `dinner` zieht NICHT das Brunch-Playbook.
+        ->and($ctx['block'])->not->toContain('Brunch Ablauf')
+        ->and($ctx['used_by_category']['achse'])->not->toContain('event_playbook_brunch@v1');
+});
+
+it('bleibt still, wenn die Achse keinen Wert hat — ein Basisrezept hat keinen Anlass', function () {
+    w0Doc('event_playbook_gala', 'event_playbook', 3629, 'Gala Ablauf');
+
+    $ctx = app(KnowledgeContextService::class)->contextFor(
+        'ai_generate_recipe', 'Selleriepüree als Komponente', null, [], ['level' => 'gehoben'],
+    );
+
+    expect($ctx['block'])->not->toContain('Gala Ablauf')
+        ->and($ctx['used_by_category'])->not->toHaveKey('achse');
+});
+
+it('weicht bei fehlendem Dossier NICHT auf ein fremdes Profil aus', function () {
+    // Für `sektor=restaurant` existiert kein segment-Dossier. Andere sind vorhanden —
+    // genau die Situation, in der ein Fuzzy-Ranking irgendetwas geliefert hätte.
+    w0Doc('segment.betriebsgastronomie', 'segment', 1951, 'Betriebsgastro Profil');
+    w0Doc('segment.klinik_senioren_care', 'segment', 1806, 'Care Profil');
+
+    $ctx = app(KnowledgeContextService::class)->contextFor(
+        'ai_generate_recipe', 'Rinderroulade', null, [], ['sektor' => 'restaurant'],
+    );
+
+    expect($ctx['block'])->not->toContain('Betriebsgastro Profil')
+        ->and($ctx['block'])->not->toContain('Care Profil');
+});
+
+it('nimmt den ersten AKTIVEN Kandidaten der Achse', function () {
+    // schule_kita listet drei Kandidaten; der erste ist deaktiviert → der zweite gewinnt.
+    w0Doc('segment.kita_schule_ernaehrung_dge', 'segment', 5809, 'DGE Standards');
+    DB::table('foodalchemist_knowledge_documents')
+        ->where('slug', 'segment.kita_schule_ernaehrung_dge')->update(['active' => 0]);
+    w0Doc('segment.schulverpflegung', 'segment', 2097, 'Schulverpflegung Profil');
+
+    $ctx = app(KnowledgeContextService::class)->contextFor(
+        'ai_generate_recipe', 'Gemüseauflauf', null, [], ['sektor' => 'schule_kita'],
+    );
+
+    expect($ctx['block'])->toContain('Schulverpflegung Profil')
+        ->and($ctx['block'])->not->toContain('DGE Standards');
+});
+
+it('ueberlebt das Gesamtbudget — Achsen-Wissen wird nicht als Erstes gekappt', function () {
+    w0Doc('event_playbook_gala', 'event_playbook', 3629, 'Gala Ablauf');
+    // Discovery mit reichlich Material, das um dasselbe Budget konkurriert.
+    foreach (range(1, 6) as $i) {
+        w0Doc("ochsenbacke-technik-{$i}", "w0achscat{$i}", 6000, "Ochsenbacke Schmoren {$i}");
+        w0Routing('ai_generate_recipe', "w0achscat{$i}", 'discovery', 3, 8000);
+    }
+
+    $ctx = app(KnowledgeContextService::class)->contextFor(
+        'ai_generate_recipe', 'Ochsenbacke schmoren', null, [], ['occasion' => 'dinner'],
+    );
+
+    // Der Deckel schneidet am ENDE ab — das Achsen-Wissen steht vorn und bleibt.
+    expect($ctx['block'])->toContain('Gala Ablauf')
+        ->and($ctx['dropped_chars'])->toBeGreaterThan(0);
+});

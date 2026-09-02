@@ -342,6 +342,46 @@ return [
          * Reserve auf 20.000 / 28.000, weil die Dossiers über Browser/MCP live editierbar
          * sind und ein Edit sonst still das letzte Dossier aus dem Block wirft.
          */
+        /*
+         * ACHSEN-MAPPING — Nachschlagen statt Suchen.
+         *
+         * Für achsen-gebundenes Wissen ist Retrieval das falsche Werkzeug: der Regler steht
+         * im Formular, das Dokument ist danach benannt. `occasion=dinner` → `event_playbook_gala`
+         * ist ein JOIN, keine Suche. Das Slug-Token-Ranking traf hier systematisch daneben
+         * (und `event_playbook`/`segment` waren für Gerichte überhaupt nicht geroutet, also
+         * unerreichbar — 20 Docs Catering-Fachwissen lagen brach).
+         *
+         * Das Muster ist im Code erprobt: `niveauBlock()` löst `level` genauso deterministisch
+         * auf und funktioniert.
+         *
+         * Gate ist die ANWESENHEIT des Parameters — kein Routing nötig. Ein Basisrezept hat
+         * kein `occasion`, also passiert dort nichts. Leere Map = Funktion aus.
+         *
+         * Wert = geordnete Kandidatenliste; genommen wird der ERSTE aktive Treffer (Robustheit,
+         * wenn ein Dossier deaktiviert wird). Ein Dokument je Achse.
+         *
+         * Enums: RecipesGenerateTool.php:76 (sektor) und :80 (occasion).
+         */
+        'knowledge_axis_map' => [
+            'occasion' => [
+                'fruehstueck' => ['event_playbook_brunch'],
+                'lunch' => ['event_playbook_business_lunch'],
+                'konferenz' => ['event_playbook_tagung'],
+                'empfang' => ['event_playbook_empfang'],
+                'dinner' => ['event_playbook_gala'],
+                'late_night' => ['event_playbook_latenight'],
+            ],
+            'sektor' => [
+                'betriebsgastronomie' => ['segment.betriebsgastronomie'],
+                'catering' => ['segment.event_bankett_catering'],
+                'care' => ['segment.klinik_senioren_care'],
+                'schule_kita' => ['segment.kita_schule_ernaehrung_dge', 'segment.schulverpflegung', 'segment.kita_verpflegung'],
+                // ⚠ LÜCKE: für `restaurant` existiert kein segment-Dossier. Bewusst NICHT auf
+                // ein anderes Segment umgebogen — ein falsches Profil ist schlechter als keins.
+                // Sobald „Segment: Restaurant / à la carte — Profil" angelegt ist, hier eintragen.
+            ],
+        ],
+
         'bound_knowledge_budget' => [
             'recipe.generator' => ['docs' => 9, 'chars_per_doc' => 4800, 'total' => 20000],
             'vk.generator' => ['docs' => 10, 'chars_per_doc' => 8400, 'total' => 28000],

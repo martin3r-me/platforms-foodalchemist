@@ -19,6 +19,7 @@
         'trend' => 'Trends',
         'concept' => 'Konzept',
         'gebunden' => 'Gebundene Regelwerke',
+        'achse' => 'Anlass & Segment',
     ];
     $order = array_keys($labels);
     $bekannt = array_values(array_filter($order, fn ($k) => ! empty($wissen[$k])));
