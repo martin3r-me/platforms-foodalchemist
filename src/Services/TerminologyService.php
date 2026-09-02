@@ -326,6 +326,23 @@ class TerminologyService
             // Compound-bewusster Treffer (Spec 16·S3): ganzes Token ODER Präfix/Suffix
             // eines längeren Tokens (Kompositum-Kopf/Modifier) — „Kalbsbries" ⊃ „bries",
             // „Briekäse" ⊃ „brie". NIE Interieur → „Tamarinde" ⊅ „rind" bleibt geschützt.
+            // WER DEN VERBOTENEN BEGRIFF SELBST SUCHT, VERWECHSELT NICHTS. Ohne diesen
+            // Riegel feuert die Compound-Erkennung gegen sich selbst: die Regel
+            // «sherry ↛ sherryessig» schützt davor, dass „Sherry" auf Sherryessig
+            // matcht — aber `tokenHit` findet „sherry" auch als PRÄFIX in der Anfrage
+            // „Sherryessig", und dann wurde der exakte Treffer gelöscht.
+            //
+            // Live gemessen (demo, 2026-09-03): «Sherryessig: konserviert» stand mit
+            // Score 1.001 im Kandidaten-Pool und wurde hier entfernt — die Zutat blieb
+            // im erzeugten Rezept ungemappt, obwohl das Grundprodukt seit Juni existiert.
+            //
+            // Der Riegel wirkt symmetrisch — wer ausdrücklich „Bries" sucht, soll Bries
+            // bekommen. Belegt ist bislang nur der Sherryessig-Fall (Test wird ohne den
+            // Riegel rot); die Brie/Bries-Regel feuert im Test-Fixture nicht, dort ist der
+            // Riegel also nicht nachgewiesen, sondern nur zugesichert.
+            if ($this->tokenHit($q, $rule['forbid'])) {
+                continue;
+            }
             if ($this->tokenHit($q, $rule['trigger'])
                 && $this->tokenHit($c, $rule['forbid'])
                 && (! isset($rule['unless']) || ! $this->tokenHit($c, $rule['unless']))) {
