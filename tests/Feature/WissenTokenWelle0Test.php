@@ -147,10 +147,12 @@ it('weist je gewaehltem Dossier Herkunft und Groesse aus', function () {
 it('deckelt cross_cutting ueber die Konstante, nicht ueber die Routing-Zeile', function () {
     w0Doc('substitutionen', 'cross_cutting', 9000, 'Substitution Regel');
     // Routing gibt absichtlich einen viel höheren Deckel vor — er muss ins Leere laufen.
-    w0Routing('concept.wording', 'cross_cutting', 'always', 9, 9000);
+    // Synthetisches Feature OHNE B3-Slug-Überschreibung, damit hier wirklich nur der
+    // Konstanten-Vorrang geprüft wird und nicht die feature-genaue Slug-Auswahl.
+    w0Routing('w0cc.konstante', 'cross_cutting', 'always', 9, 9000);
 
     $ctx = app(KnowledgeContextService::class)->contextFor(
-        'concept.wording', 'Substitution', null, [], []
+        'w0cc.konstante', 'Substitution', null, [], []
     );
 
     // Kern der Aussage: der Routing-Wert (9.000) läuft ins Leere, die Konstante (1.800)
@@ -594,4 +596,63 @@ it('akzeptiert Ausschluss-Slugs mit und ohne Versions-Suffix', function () {
 
     expect($mitSuffix['files_used'])->toBe([])
         ->and($ohneSuffix['files_used'])->toBe([]);
+});
+
+/*
+ * B3 — Cross-Cutting je Feature.
+ *
+ * `ALWAYS_LOAD_CROSS_CUTTING` sind sieben PRODUKTIONS-Dossiers (12.600 Z.). Für einen
+ * Generator richtig, für einen Kundentext falsch: `foodbook.kundentext` schreibt 2–4 Sätze
+ * (max_tokens 1.500) und bekam Mengen-Defaults und Brühen-Rezepturen mitgeliefert.
+ */
+it('laedt fuer einen Kundentext nur die passenden Cross-Cutting-Dossiers', function () {
+    foreach (KnowledgeContextService::ALWAYS_LOAD_CROSS_CUTTING as $slug) {
+        w0Doc($slug, 'cross_cutting', 4000, 'Produktionswissen ' . $slug);
+    }
+    w0Routing('foodbook.kundentext', 'cross_cutting', 'always');
+    // Vergleichs-Feature ohne Überschreibung (statt ai_generate_recipe, dessen
+    // RECIPE_MAX_CHARS_PER_DOC-Klemme das Bild verfälschen würde).
+    w0Routing('w0cc.generator', 'cross_cutting', 'always');
+    $svc = app(KnowledgeContextService::class);
+
+    $text = $svc->contextFor('foodbook.kundentext', 'Sommerliches Buffet', null, [], []);
+    $gen = $svc->contextFor('w0cc.generator', 'Sommerliches Buffet', null, [], []);
+
+    $textSlugs = array_map(fn ($f) => explode('@', $f)[0], $text['used_by_category']['cross_cutting'] ?? []);
+    $genSlugs = array_map(fn ($f) => explode('@', $f)[0], $gen['used_by_category']['cross_cutting'] ?? []);
+
+    // Kundentext: nur was er braucht …
+    expect($textSlugs)->toContain('saisonkalender')->toContain('synonyme')
+        ->and($textSlugs)->not->toContain('mengen_defaults')
+        ->and($textSlugs)->not->toContain('bruehen_fonds')
+        ->and($textSlugs)->not->toContain('sauce_mutterstrukturen')
+        // … der Generator behält den vollen Produktions-Satz.
+        ->and($genSlugs)->toContain('mengen_defaults')
+        ->and($genSlugs)->toContain('bruehen_fonds')
+        ->and(count($genSlugs))->toBe(count(KnowledgeContextService::ALWAYS_LOAD_CROSS_CUTTING));
+});
+
+it('rechnet die Pflichtmenge feature-genau — sonst prueft die Invariante Phantasiewerte', function () {
+    // Synthetische Features: die echten tragen aus den Migrationen weitere always-Routings
+    // (regelwerk, produktion_kapazitat …), die die Summe verunreinigen würden.
+    // ERGÄNZEN, nicht ersetzen — ein config()->set() mit nur dem Testschlüssel würde die
+    // echten Einträge (foodbook.kundentext, concept.wording) wegwerfen und die Prüfung
+    // weiter unten sinnlos machen.
+    config()->set('foodalchemist.ai.cross_cutting_slugs', array_merge(
+        (array) config('foodalchemist.ai.cross_cutting_slugs', []),
+        ['w0cc.schmal' => ['saisonkalender', 'synonyme']],
+    ));
+    w0Routing('w0cc.schmal', 'cross_cutting', 'always');
+    w0Routing('w0cc.voll', 'cross_cutting', 'always');
+    $svc = app(KnowledgeContextService::class);
+
+    expect($svc->pflichtZeichen('w0cc.schmal'))
+        ->toBe(2 * KnowledgeContextService::CROSS_CUTTING_TRUNCATE_CHARS)
+        ->and($svc->pflichtZeichen('w0cc.voll'))
+        ->toBe(count(KnowledgeContextService::ALWAYS_LOAD_CROSS_CUTTING) * KnowledgeContextService::CROSS_CUTTING_TRUNCATE_CHARS);
+
+    // Und die echten Kundentext-Features müssen ihre (kleinere) Pflicht tragen können.
+    foreach (['foodbook.kundentext', 'concept.wording'] as $f) {
+        expect($svc->budgetFuer($f))->toBeGreaterThanOrEqual($svc->pflichtZeichen($f));
+    }
 });

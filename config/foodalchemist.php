@@ -368,6 +368,21 @@ return [
          *
          * Enums: RecipesGenerateTool.php:76 (sektor) und :80 (occasion).
          */
+        /*
+         * B3 — Cross-Cutting je Feature. Ohne Eintrag gelten die sieben
+         * KnowledgeContextService::ALWAYS_LOAD_CROSS_CUTTING (Produktions-Dossiers,
+         * 7 × 1.800 = 12.600 Z.) — für Generatoren richtig.
+         *
+         * Für Kundentext/Wording ist es falsch: das sind 2–4 Sätze Fließtext
+         * (foodbook.kundentext: max_tokens 1.500), und mitgeliefert wurden Mengen-Defaults,
+         * Brühen-Rezepturen, Saucen-Mutterstrukturen und Techniken. Nützlich sind dort
+         * `saisonkalender` (Saison-Aussagen belegen) und `synonyme` (richtig benennen).
+         */
+        'cross_cutting_slugs' => [
+            'foodbook.kundentext' => ['saisonkalender', 'synonyme'],
+            'concept.wording' => ['saisonkalender', 'synonyme'],
+        ],
+
         'knowledge_axis_map' => [
             'occasion' => [
                 'fruehstueck' => ['event_playbook_brunch'],
@@ -423,9 +438,9 @@ return [
             'foodbook.plan' => 29000,
             // concept:always 3 × 4000 = 12.000
             'format.grundgeruest' => 13000,
-            // cross_cutting:always = 7 feste Slugs × CROSS_CUTTING_TRUNCATE_CHARS (1.800) = 12.600
-            'concept.wording' => 13500,
-            'foodbook.kundentext' => 13500,
+            // cross_cutting:always — seit B3 feature-genau: 2 Slugs × 1.800 = 3.600 statt 12.600.
+            'concept.wording' => 5000,
+            'foodbook.kundentext' => 5000,
             // regelwerk:always 1 × 7000
             'recipe.ueberarbeiten' => 8000,
             'vk.ueberarbeiten' => 8000,

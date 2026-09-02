@@ -252,7 +252,7 @@ class KnowledgeContextService
         $blocks = [];
         if ($routing->has('cross_cutting:always')) {
             $before = count($filesUsed);
-            $crossDocs = $this->crossCuttingDocs();
+            $crossDocs = $this->crossCuttingDocs($feature);
             foreach ($crossDocs as $doc) {
                 $maxChars = $recipeBudget ? self::RECIPE_MAX_CHARS_PER_DOC : self::CROSS_CUTTING_TRUNCATE_CHARS;
                 $blocks[] = "## CROSS_CUTTING: {$doc->slug}\n\n" . $this->truncate($doc->content_md, $maxChars);
@@ -521,7 +521,9 @@ class KnowledgeContextService
         foreach ($zeilen as $r) {
             $docDeckel = (int) ($r->max_chars_per_doc ?: 0);
             $summe += match ((string) $r->category) {
-                'cross_cutting' => count(self::ALWAYS_LOAD_CROSS_CUTTING) * self::CROSS_CUTTING_TRUNCATE_CHARS,
+                // Dieselbe feature-genaue Auflösung wie crossCuttingDocs() — sonst prüft die
+                // Invariante eine Pflichtmenge, die es für dieses Feature nie gibt.
+                'cross_cutting' => count($this->crossCuttingSlugs($feature)) * self::CROSS_CUTTING_TRUNCATE_CHARS,
                 'regelwerk' => $docDeckel ?: self::REGELWERK_TRUNCATE_CHARS,
                 'concept' => ((int) ($r->max_docs ?: self::CONCEPT_MAX_DOCS)) * ($docDeckel ?: self::CONCEPT_TRUNCATE_CHARS),
                 default => ((int) ($r->max_docs ?: 2)) * ($docDeckel ?: 4000),
@@ -964,15 +966,44 @@ class KnowledgeContextService
     }
 
     /** Die 7 Always-Load-Dokumente in Ist-Reihenfolge (fehlende werden still übersprungen). */
-    private function crossCuttingDocs(): array
+    private function crossCuttingDocs(string $feature): array
     {
+        $slugs = $this->crossCuttingSlugs($feature);
         $docs = DB::table('foodalchemist_knowledge_documents')
             ->where('category', 'cross_cutting')->where('active', 1)->whereNull('deleted_at')
             ->when($this->ausgeschlossen !== [], fn ($q) => $q->whereNotIn('slug', $this->ausgeschlossen))
-            ->whereIn('slug', self::ALWAYS_LOAD_CROSS_CUTTING)
+            ->whereIn('slug', $slugs)
             ->get(['slug', 'content_md', 'version'])->keyBy('slug');
 
-        return array_values(array_filter(array_map(fn ($slug) => $docs->get($slug), self::ALWAYS_LOAD_CROSS_CUTTING)));
+        return array_values(array_filter(array_map(fn ($slug) => $docs->get($slug), $slugs)));
+    }
+
+    /**
+     * B3 — welche Cross-Cutting-Dossiers ein Feature WIRKLICH braucht.
+     *
+     * `ALWAYS_LOAD_CROSS_CUTTING` sind sieben PRODUKTIONS-Dossiers (Substitutionen,
+     * Saisonkalender, Synonyme, Saucen-Mutterstrukturen, Mengen-Defaults, Techniken,
+     * Brühen/Fonds) = 7 × 1.800 = 12.600 Zeichen. Für einen Generator ist das richtig.
+     *
+     * Für einen KUNDENTEXT ist es das nicht: `foodbook.kundentext` schreibt 2–4 Sätze
+     * Fließtext (max_tokens 1.500) und bekam dafür Mengen-Defaults und Brühen-Rezepturen
+     * mitgeliefert. Nützlich sind dort höchstens `saisonkalender` (Saison-Aussagen belegen)
+     * und `synonyme` (Dinge richtig benennen) — der Rest ist Ballast, den das Modell
+     * mitbezahlt und der die Aufmerksamkeit vom Auftrag wegzieht.
+     *
+     * Default bleibt die Konstante (Tests + Wissens-Browser hängen daran); Überschreibung
+     * je Feature über config('foodalchemist.ai.cross_cutting_slugs').
+     *
+     * @return list<string>
+     */
+    private function crossCuttingSlugs(string $feature): array
+    {
+        $map = config('foodalchemist.ai.cross_cutting_slugs', []);
+        if (is_array($map) && isset($map[$feature]) && is_array($map[$feature]) && $map[$feature] !== []) {
+            return array_values(array_map('strval', $map[$feature]));
+        }
+
+        return self::ALWAYS_LOAD_CROSS_CUTTING;
     }
 
     /**
