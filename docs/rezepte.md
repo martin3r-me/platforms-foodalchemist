@@ -46,6 +46,33 @@ Für alles, was die Anleitung nur *liest* (Suche, Prozessanker-Erkennung, Auswer
 
 Bestehende Rezepte werden per `php artisan foodalchemist:steps-backfill` einmalig überführt (deterministisch, ohne KI; Fotos wandern über ihre alte Schrittnummer an den passenden Schritt).
 
+**Das Report-Blatt (PDF + Browser-Druck).** Rezept, Gericht, Concept, Format, Foodbook und
+Speisekarte teilen ein Blatt-Layout. Zwei Ausgabewege, ein Satzspiegel: DomPDF („PDF
+herunterladen") und der Browser-Druck. Was auf dem Blatt trägt:
+
+| Element | Wofür |
+|---|---|
+| **Kaskaden-Adresse** (`K1`, `K3.2`) | Jede Komponente hat eine Hausnummer: `K3` = drittes Basisrezept des Gerichts, `K3.2` = deren zweite Komponente. In der Zutatenzeile steht die Adresse als Verweis, weiter unten trägt der Block sie im Kopf — die Zuordnung hält über Seitenumbrüche, wo Einrückung allein nicht reicht. |
+| **Herkunftszeile** | „Komponente 3 von 4 in *Amuse: Papadam* · Einsatz dort: 0,005 kg" — ein loses Blatt bleibt seinem Gericht zuordenbar. |
+| **€ / Einheit** | Bezugspreis in der Einsatz-Einheit, auf €/kg bzw. €/l normalisiert. |
+| **EK-Anteil** | Was die Zeile im Ansatz kostet, plus Σ-Zeile zum Gegenrechnen gegen „EK gesamt". Beides aus derselben Kosten-Kaskade wie `ek_total_eur` — der Report rechnet nicht selbst. Beträge unter 1 € mit drei Nachkommastellen (Amuse-Mengen). |
+| **Kollipreis** | In der Lieferantenspalte, mit Gebinde — die Bestell-Wahrheit neben der Einsatz-Wahrheit. |
+| **Fotostreifen** | Alle Schrittfotos eines Rezepts in einer Reihe unter der Anleitung, mit Schritt-Nummer. |
+
+Zwei Fallen, die dieses Blatt kosten:
+
+- **Fotos müssen als `data:`-URI ins Markup.** DomPDF lädt keine Remote-URL, und die
+  Foto-URL ist eine signierte Route mit TTL. Der dataUri gehört über
+  `FoodAlchemistMediaService::dataUri($contextFileId, $pfad)` geholt — die ContextFile
+  liegt auf ihrem **eigenen** Disk (Produktion: nicht `public`).
+- **`@page` braucht `size` UND `margin` in beiden Modi.** Ohne beides druckt Chrome auf
+  dem Locale-Default-Papier bis an den Blattrand, also in den nicht druckbaren Bereich.
+  Die Bänder bleiben dabei im Fluss: als `position: fixed` legt Chrome sie beim Drucken
+  über den Satz statt in den Seitenrand.
+
+Wer `partials/report-recipe-node` in ein eigenes Dokument einbindet, muss
+`partials/report-node-css` mit einbinden — sonst laufen Fotos und Badges ohne Maße.
+
 ---
 
 ## 🍽️ Gerichte (Verkaufsrezepte)

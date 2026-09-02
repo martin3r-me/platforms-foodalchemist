@@ -37,6 +37,7 @@
         /* #3: Produktions-Kaskaden-Anhang — self-contained, gescopet. */
         .kaskade-anhang { margin-top: 24px; page-break-before: always; }
         .kaskade-anhang .kaskade-titel { font-size: 15px; color: #6d28d9; border-bottom: 2px solid #6d28d9; padding-bottom: 4px; margin: 0 0 12px; }
+@include('foodalchemist::dokumente.partials.report-node-css')
         .kaskade-anhang .recipe-node { margin: 0 0 10px; }
         .kaskade-anhang .recipe-node.depth-1 { margin-left: 10px; }
         .kaskade-anhang .recipe-node.depth-2, .kaskade-anhang .recipe-node.depth-3, .kaskade-anhang .recipe-node.depth-4 { margin-left: 20px; }
