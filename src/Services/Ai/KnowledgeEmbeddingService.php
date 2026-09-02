@@ -58,8 +58,31 @@ class KnowledgeEmbeddingService
      */
     public const INDEXED_KATEGORIEN = ['domain', 'pairing'];
 
-    /** Lead-Budget für Domain-Docs (Titel + erste N Zeichen). */
-    private const DOMAIN_LEAD_CHARS = 2000;
+    /**
+     * Lead-Budget für Domain-Docs (Titel + erste N Zeichen).
+     *
+     * W1-1, 2026-09-03: 2000 → 8000, GEMESSEN begründet statt gerechnet.
+     *
+     * Die Plan-Begründung war eine Zeichen-Rechnung („nur 52 % des Korpus im Vektor";
+     * 469 von 598 aktiven Docs sind länger als 2000). Die Messung mit
+     * `foodalchemist:wissen-recall-probe --team=6` zeigt ein anderes Bild:
+     *
+     *   Anfragen aus dem KOPF   (im Fenster)     23/25 = 92 %  findbar
+     *   Anfragen aus dem SCHWANZ (dahinter)      18/25 = 72 %  findbar
+     *
+     * Inhalt jenseits des Fensters ist also NICHT unsichtbar — der Vektor aus Titel +
+     * Lead repräsentiert das Thema des ganzen Dokuments gut genug. Der echte Preis des
+     * Fensters sind die 20 Prozentpunkte Differenz, und die soll dieser Wert holen.
+     *
+     * 8000 deckt 564 von 598 Dokumenten vollständig ab und liegt weit unter dem Limit von
+     * text-embedding-3-large (~32.000 Zeichen). Der eigentliche Fix bleibt Chunking (W1-5):
+     * ein Vektor über 8000 Zeichen ist ein Mittelwert über mehr Inhalt — mehr Abdeckung,
+     * aber nicht mehr Schärfe. Genau darum ist dies ein Zwischenschritt, kein Ziel.
+     *
+     * ACHTUNG: Änderungen hier verändern den Embedding-Text und damit JEDEN Doc-Vektor —
+     * ein `foodalchemist:knowledge-embed` muss folgen, sonst mischen sich alte und neue.
+     */
+    private const DOMAIN_LEAD_CHARS = 8000;
 
     /** Max. Partner-Namen, die in den Pairing-Embedding-Text einfließen. */
     private const PAIRING_MAX_PARTNERS = 40;
