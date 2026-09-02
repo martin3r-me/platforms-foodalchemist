@@ -68,6 +68,8 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                 \Platform\FoodAlchemist\Console\KnowledgeExportCommand::class,
                 // W2-4: §-Deckung — hätte den verlorenen §12 gefunden.
                 \Platform\FoodAlchemist\Console\WissenDeckungCommand::class,
+                // W1-1: misst Findbarkeit jenseits des Embedding-Fensters (vor/nach).
+                \Platform\FoodAlchemist\Console\WissenRecallProbeCommand::class,
                 \Platform\FoodAlchemist\Console\WissenSteuerdatenW0Command::class,
                 \Platform\FoodAlchemist\Console\KnowledgeEmbedCommand::class,
                 \Platform\FoodAlchemist\Console\EmbedCommand::class,
