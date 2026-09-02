@@ -336,9 +336,15 @@ return [
          *
          * Die beiden Generatoren brauchen den großen Deckel, weil dort die Bau-§-Dossiers
          * hängen, die per Discovery strukturell nicht surfacen (sie nennen kein Gericht):
-         *   recipe.generator: §2 1.968 + §3 2.459 + §4 2.630 + §5 4.796 + §6 2.609
-         *                     + §7 1.599 + Erstellungs-Dossier 1.409 = 17.470 Z.
-         *   vk.generator:     dieselben + regelwerk.regelwerk_verkaufsgerichte 8.309 = 25.779 Z.
+         *   recipe.generator: §2 1.968 + §3 2.459 + §4 2.630 + §6 2.609 + §7 1.599
+         *                     + Erstellungs-Dossier 1.409 = 12.674 Z.
+         *   vk.generator:     dieselben + regelwerk.regelwerk_verkaufsgerichte 8.309 = 20.983 Z.
+         *
+         * §5 Default-GPs (4.796 Z.) ist seit 2026-09-02 ENTBUNDEN: MatchHeuristics::defaultGpAlias()
+         * erzwingt die Tabelle deterministisch (Score 0,97, an 12 von 13 Generika auf demo
+         * verifiziert). Im Prompt steht nur noch die kompakte Benennungs-Direktive im Task —
+         * das ist der Teil, den das Modell wirklich kontrolliert. Deckel bleiben unverändert
+         * (jetzt mit Reserve), weil die Dossiers live editierbar sind.
          * Reserve auf 20.000 / 28.000, weil die Dossiers über Browser/MCP live editierbar
          * sind und ein Edit sonst still das letzte Dossier aus dem Block wirft.
          */
@@ -682,7 +688,17 @@ return [
                 . 'Unbelegtes. Benennt ein Leit-Aroma eine ZUBEREITUNG, die zu einer recipe_hauptgruppe gehört '
                 . '(z.B. eine Konfitüre, ein Crunch/Krokant, ein Gel, ein Chutney, ein Püree), lege es als '
                 . 'gebaute Komponente mit sub_rezept:true an, statt es 1:1 an ein Convenience-GP zu binden; nur '
-                . 'echte Rohware-Anker binden an einen `gp_kandidaten` (dann dessen gp_id angeben).',
+                . 'echte Rohware-Anker binden an einen `gp_kandidaten` (dann dessen gp_id angeben).'
+                // §5 Default-GPs — KOMPAKT statt Dossier. Die Tabelle selbst erzwingt der
+                // Matcher deterministisch (MatchHeuristics::defaultGpAlias, Score 0,97, auf demo
+                // an 12 von 13 Generika verifiziert); das 4.796-Zeichen-Dossier im Prompt war
+                // Doppelung. Was das MODELL kontrolliert, ist die Benennung — und nur die steht hier.
+                . 'Nenne generische Grundzutaten GENERISCH (»Zucker«, »Mehl«, »Salz«, »Milch«, »Sahne«, '
+                . '»Olivenoel«, »Honig«, »Gelatine«, »Weisswein«, »Pfeffer«, »Eier«) — ohne Marken-, '
+                . 'Sorten- oder Bio-Zusatz: die Standard-Variante nach Regelwerk §5 (unjodiert, Type 405, '
+                . '3,5 %, 30 %, kein Bio) setzt der Resolver selbst, ein Zusatz im Namen verhindert das '
+                . 'und erzwingt Spezial-Ware. Willst du bewusst eine Spezialform (»Meersalz«, »Weizenmehl '
+                . 'Type 550«, »brauner Zucker«), schreibe sie ausdrücklich so.',
         ],
         'recipe.description' => [
             'tier' => 'C',
@@ -804,7 +820,17 @@ return [
                 . 'eine ZUBEREITUNG, die zu einer recipe_hauptgruppe gehört (z.B. eine Konfitüre, ein '
                 . 'Crunch/Krokant, ein Gel, ein Chutney, ein Püree), lege es als gebaute Komponente mit '
                 . 'sub_rezept:true an, statt es 1:1 an ein Convenience-GP zu binden; nur echte Rohware-Anker '
-                . 'binden an einen `gp_kandidaten` (dann dessen gp_id angeben).',
+                . 'binden an einen `gp_kandidaten` (dann dessen gp_id angeben).'
+                // §5 Default-GPs — KOMPAKT statt Dossier. Die Tabelle selbst erzwingt der
+                // Matcher deterministisch (MatchHeuristics::defaultGpAlias, Score 0,97, auf demo
+                // an 12 von 13 Generika verifiziert); das 4.796-Zeichen-Dossier im Prompt war
+                // Doppelung. Was das MODELL kontrolliert, ist die Benennung — und nur die steht hier.
+                . 'Nenne generische Grundzutaten GENERISCH (»Zucker«, »Mehl«, »Salz«, »Milch«, »Sahne«, '
+                . '»Olivenoel«, »Honig«, »Gelatine«, »Weisswein«, »Pfeffer«, »Eier«) — ohne Marken-, '
+                . 'Sorten- oder Bio-Zusatz: die Standard-Variante nach Regelwerk §5 (unjodiert, Type 405, '
+                . '3,5 %, 30 %, kein Bio) setzt der Resolver selbst, ein Zusatz im Namen verhindert das '
+                . 'und erzwingt Spezial-Ware. Willst du bewusst eine Spezialform (»Meersalz«, »Weizenmehl '
+                . 'Type 550«, »brauner Zucker«), schreibe sie ausdrücklich so.',
         ],
         'vk.speisen_klasse' => [
             'tier' => 'B',

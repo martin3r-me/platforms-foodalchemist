@@ -80,10 +80,28 @@ class WissenSteuerdatenW0Command extends Command
         'regelwerk-basisrezepte-2-verarbeitungs-reduktion-brunoise-roh-form',
         'regelwerk-basisrezepte-3-purees-marks-coulis',
         'regelwerk-basisrezepte-4-sub-rezept-hierarchie-stubs',
-        'regelwerk-basisrezepte-5-default-gps-fur-generische-zutaten',
         'regelwerk-basisrezepte-6-mengen-einheiten-yield',
         'regelwerk-basisrezepte-7-allergen-zusatzstoff-vererbung',
     ];
+
+    /**
+     * ENTBUNDEN — Dossiers, die aus den Generator-Prompts RAUS sollen, weil der Code die
+     * Regel deterministisch erzwingt (Architektur-Entscheid 2026-09-02: Zwänge in Resolver
+     * und Validatoren, nicht in den Prompt).
+     *
+     * §5 Default-GPs (4.796 Z., das grösste gebundene Dossier): `MatchHeuristics::defaultGpAlias()`
+     * setzt die Standard-Variante mit Score 0,97 — auf demo an 12 von 13 Generika verifiziert
+     * (Zucker→Raffinade weiss, Salz→unjodiert, Mehl→Type 405, Milch→3,5 %, Sahne→30 % …).
+     * Das Dossier selbst dokumentiert das: „Der GP-Matcher erzwingt §5 jetzt deterministisch."
+     * Was das Modell kontrolliert — generische Benennung, damit der Alias überhaupt feuert —
+     * steht jetzt kompakt im Generator-Task statt als Tabelle im Kontext.
+     *
+     * Das Dossier bleibt AKTIV im Korpus: Schicht 3 lädt per Präfix und muss §5 zitieren können.
+     * Nur die Prompt-Bindung fällt (active=0, reversibel — kein Delete).
+     *
+     * @var list<string>
+     */
+    private const ENTBUNDEN = ['regelwerk-basisrezepte-5-default-gps-fur-generische-zutaten'];
 
     /**
      * Nur für Basisrezepte: das Erstellungs-Dossier. An `vk.generator` ist es bewusst
@@ -122,6 +140,23 @@ class WissenSteuerdatenW0Command extends Command
         $this->table(['category', 'ist (mode/docs/chars)', 'soll', 'aktion'], $plan);
 
         $bPlan = [];
+        // Entbundene Dossiers dürfen den Prompt nicht mehr erreichen — sonst zahlt man die
+        // Zeichen doppelt (Dossier + Task-Direktive).
+        foreach (self::ENTBUNDEN as $slug) {
+            $aktiv = DB::table('foodalchemist_knowledge_bindings as b')
+                ->join('foodalchemist_knowledge_documents as d', 'd.id', '=', 'b.knowledge_document_id')
+                ->whereNull('b.deleted_at')->where('b.active', 1)->where('b.binding_type', 'layer')
+                ->where('d.slug', $slug)->count();
+            if ($aktiv > 0) {
+                $fehler[] = "«{$slug}» ist noch an {$aktiv} Layer aktiv gebunden — der Code erzwingt die Regel, das Dossier gehört nicht mehr in den Prompt.";
+            }
+            $imKorpus = DB::table('foodalchemist_knowledge_documents')
+                ->where('slug', $slug)->where('active', 1)->whereNull('deleted_at')->count();
+            if ($imKorpus === 0) {
+                $fehler[] = "«{$slug}» ist im Korpus inaktiv — Schicht 3 kann §5 dann nicht mehr zitieren. Entbinden heisst NICHT deaktivieren.";
+            }
+        }
+
         foreach ($this->bindingZiele() as $targetKey => $slugs) {
             foreach ($slugs as $slug) {
                 $row = DB::table('foodalchemist_knowledge_bindings as b')
@@ -175,6 +210,16 @@ class WissenSteuerdatenW0Command extends Command
                     ->where('binding_type', 'layer')->where('target_key', $targetKey)
                     ->whereIn('knowledge_document_id', $ids)->whereNull('deleted_at')
                     ->update(['mode' => 'always', 'active' => 1, 'updated_at' => now()]);
+
+                // Code-erzwungene Dossiers aus dem Prompt nehmen (active=0, nicht löschen).
+                $entIds = DB::table('foodalchemist_knowledge_documents')
+                    ->whereIn('slug', self::ENTBUNDEN)->whereNull('deleted_at')->pluck('id');
+                if ($entIds->isNotEmpty()) {
+                    DB::table('foodalchemist_knowledge_bindings')
+                        ->where('binding_type', 'layer')->where('target_key', $targetKey)
+                        ->whereIn('knowledge_document_id', $entIds)->whereNull('deleted_at')
+                        ->update(['active' => 0, 'updated_at' => now()]);
+                }
             }
         });
 
