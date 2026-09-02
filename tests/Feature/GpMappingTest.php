@@ -92,6 +92,9 @@ it('KI-Ersatzvorschlag übergibt ungemappten LA an die atomare GP-Ersatz-Anlage'
             'kind' => 'supplier_item', 'id' => $this->la->id, 'name' => $this->la->designation,
             'score' => 0.91, 'reason' => 'Gleiche kulinarische Funktion.', 'supplier' => 'Necta',
         ]])
+        ->assertSeeHtml('data-ersatz-ki-zeile')
+        ->assertSeeHtml('bg-white/60')
+        ->assertDontSeeHtml('bg-white/50')
         ->call('ersatzLaAlsGpAnlegen', $this->la->id)
         ->assertDispatched(
             'gp-modal.oeffnen',

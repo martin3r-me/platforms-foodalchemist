@@ -387,7 +387,7 @@
                             <button type="button" wire:click="ersatzKiVerwerfen" class="text-[10px] text-gray-500 hover:text-gray-700">verwerfen</button>
                         </div>
                         @foreach($ersatzKiVorschlaege as $k)
-                            <div class="flex items-start gap-2 rounded-md bg-white/50 px-2 py-1.5 text-[11px]" wire:key="ersatz-ki-{{ $k['kind'] }}-{{ $k['id'] }}">
+                            <div class="flex items-start gap-2 rounded-md bg-white/60 px-2 py-1.5 text-[11px]" wire:key="ersatz-ki-{{ $k['kind'] }}-{{ $k['id'] }}" data-ersatz-ki-zeile>
                                 <span class="{{ $pill }} {{ $k['kind'] === 'recipe' ? $variantPill['info'] : ($k['kind'] === 'supplier_item' ? $variantPill['warning'] : $variantPill['secondary']) }} shrink-0">
                                     {{ $k['kind'] === 'recipe' ? 'Rezept' : ($k['kind'] === 'supplier_item' ? 'LA ohne GP' : 'GP') }}
                                 </span>
