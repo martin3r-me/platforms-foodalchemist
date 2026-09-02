@@ -17,22 +17,26 @@
     <meta charset="utf-8">
     <title>{{ $titel ?? 'Report' }} – {{ $name ?? '' }}</title>
     <style>
-        /* DomPDF-Leitplanken wie Speisekarte: keine CSS-Variablen, kein Flex/Grid, feste Bänder, Tabellen/Blocks statt App-CSS. */
-        @page { margin: {{ $pdf ? '2.4cm 1.5cm 1.7cm 1.5cm' : '0' }}; }
+        /* DomPDF-Leitplanken wie Speisekarte: keine CSS-Variablen, kein Flex/Grid, feste Bänder,
+           Tabellen/Blocks statt App-CSS. Zwei Ausgabewege teilen dieses Blatt: DomPDF ($pdf=true)
+           und der Browser-Druck (@media print) — deshalb hat @page IMMER Ränder. Vorher stand dort
+           im HTML-Modus `margin: 0`, zusammen mit `.doc { padding: 0 }` im Druck: der Satz klebte
+           am Blattrand und lief in den nicht druckbaren Bereich. */
+        @page { size: A4 portrait; margin: {{ $pdf ? '2.15cm 1.4cm 1.5cm 1.4cm' : '1.5cm 1.3cm' }}; }
         * { box-sizing: border-box; }
-        body { font-family: "DejaVu Sans", Arial, sans-serif; color: #1f2937; background: {{ $pdf ? '#fff' : '#f3f4f6' }}; margin: 0; padding: 0; font-size: 11px; line-height: 1.5; }
-        .doc { max-width: {{ $pdf ? 'none' : '960px' }}; margin: 0 auto; background: #fff; padding: {{ $pdf ? '0' : '2.4cm 1.5cm 1.7cm 1.5cm' }}; }
+        body { font-family: "DejaVu Sans", Arial, sans-serif; color: #1f2937; background: {{ $pdf ? '#fff' : '#f3f4f6' }}; margin: 0; padding: 0; font-size: 10.5px; line-height: 1.42; }
+        .doc { max-width: {{ $pdf ? 'none' : '960px' }}; margin: 0 auto; background: #fff; padding: {{ $pdf ? '0' : '2.15cm 1.4cm 1.5cm 1.4cm' }}; }
         .band-top {
-            {{ $pdf ? 'position: fixed; top: -2.4cm; left: -1.5cm; width: 21cm;' : '' }}
-            height: 1.4cm; background: {{ $brand }}; color: #fff; padding: 0 1.5cm;
+            {{ $pdf ? 'position: fixed; top: -2.15cm; left: -1.4cm; width: 21cm;' : '' }}
+            height: 1.25cm; background: {{ $brand }}; color: #fff; padding: 0 1.4cm;
         }
-        .band-top .bt-label { {{ $pdf ? 'display: block; padding-top: 0.52cm;' : 'float: left; line-height: 1.4cm;' }} font-size: 10px; letter-spacing: .08em; text-transform: uppercase; opacity: .94; }
+        .band-top .bt-label { {{ $pdf ? 'display: block; padding-top: 0.44cm;' : 'display: block; line-height: 1.25cm;' }} font-size: 9.5px; letter-spacing: .08em; text-transform: uppercase; opacity: .94; }
         .band-bottom {
-            {{ $pdf ? 'position: fixed; bottom: -1.7cm; left: -1.5cm; width: 21cm;' : '' }}
-            height: 1.0cm; border-top: 2px solid {{ $brand }}; color: #9ca3af; font-size: 9px; padding: 0 1.5cm;
+            {{ $pdf ? 'position: fixed; bottom: -1.5cm; left: -1.4cm; width: 21cm;' : '' }}
+            height: 0.95cm; border-top: 2px solid {{ $brand }}; color: #9ca3af; font-size: 8.5px; padding: 0 1.4cm;
         }
-        .band-bottom .bb-foot { {{ $pdf ? 'display: block;' : '' }} line-height: 1.0cm; }
-        .actions { background: #111827; color: #fff; padding: 12px 16px; margin: {{ $pdf ? '0' : '-2.4cm -1.5cm 24px' }}; }
+        .band-bottom .bb-foot { display: block; line-height: 0.95cm; }
+        .actions { background: #111827; color: #fff; padding: 12px 16px; margin: {{ $pdf ? '0' : '-2.15cm -1.4cm 20px' }}; }
         .actions a { display: inline-block; color: #fff; text-decoration: none; border: 1px solid rgba(255,255,255,.25); border-radius: 999px; padding: 5px 10px; margin: 2px; font-size: 11px; }
         .actions a.active { background: {{ $brand }}; border-color: {{ $brand }}; }
         .actions .secondary a { color: #e5e7eb; }
@@ -40,54 +44,67 @@
         .simulation-control form { display: inline-block; margin-left: 6px; }
         .simulation-control input { width: 90px; border: 1px solid rgba(255,255,255,.3); border-radius: 4px; background: #1f2937; color: #fff; padding: 5px 7px; font: inherit; }
         .simulation-control button { border: 0; border-radius: 4px; background: {{ $brand }}; color: #fff; padding: 6px 10px; font: inherit; cursor: pointer; }
-        header { margin-bottom: 14px; }
-        .kicker { font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: #6b7280; }
-        h1 { font-size: 26px; margin: 2px 0 4px; letter-spacing: -.02em; color: #111827; }
-        .rule { height: 3px; width: 4.2cm; background: {{ $brand }}; margin: 10px 0 12px; border-radius: 2px; }
-        h2 { font-size: 17px; margin: 22px 0 8px; border-top: 2px solid #111827; padding-top: 9px; page-break-after: avoid; }
-        h3 { font-size: 15px; margin: 18px 0 8px; border-top: 1px solid #d1d5db; padding-top: 8px; }
-        h4 { font-size: 11px; margin: 14px 0 6px; color: #374151; text-transform: uppercase; letter-spacing: .06em; page-break-after: avoid; }
-        h5 { font-size: 11px; margin: 12px 0 6px; color: #4b5563; }
+        header { margin-bottom: 10px; }
+        .kicker { font-size: 9.5px; letter-spacing: .14em; text-transform: uppercase; color: #6b7280; }
+        h1 { font-size: 23px; margin: 2px 0 3px; letter-spacing: -.02em; color: #111827; }
+        .rule { height: 3px; width: 3.6cm; background: {{ $brand }}; margin: 8px 0 9px; }
+        h2 { font-size: 15px; margin: 16px 0 6px; border-top: 2px solid #111827; padding-top: 7px; page-break-after: avoid; }
+        h3 { font-size: 13px; margin: 13px 0 6px; padding-top: 0; page-break-after: avoid; }
+        h4 { font-size: 10px; margin: 11px 0 4px; color: #374151; text-transform: uppercase; letter-spacing: .06em; page-break-after: avoid; }
+        h5 { font-size: 10.5px; margin: 10px 0 5px; color: #4b5563; }
         .muted { color: #6b7280; font-weight: normal; }
-        .warn { color: #b45309; background: #fffbeb; border: 1px solid #fde68a; padding: 6px 8px; border-radius: 6px; }
-        .intro { margin: 12px 0 18px; color: #374151; white-space: pre-line; }
-        .grid { width: 100%; margin: 8px 0 10px; font-size: 0; }
-        .grid > div { display: inline-block; width: 25%; min-height: 34px; border: 1px solid #e5e7eb; padding: 6px 8px; vertical-align: top; font-size: 11px; margin-right: -1px; margin-bottom: -1px; overflow-wrap: anywhere; }
-        .grid > div.wide { width: 50%; }
-        .grid span { display: block; color: #6b7280; font-size: 9px; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 2px; }
-        table { width: 100%; border-collapse: collapse; margin: 8px 0 12px; table-layout: fixed; page-break-inside: auto; }
+        .warn { color: #b45309; background: #fffbeb; border: 1px solid #fde68a; padding: 5px 7px; }
+        .intro { margin: 9px 0 13px; color: #374151; white-space: pre-line; }
+
+        /* Meta-Kacheln: 3 Spalten statt 4 (mehr Platz je Wert, weniger Umbruch),
+           knapper gesetzt. Leere Werte rendert der Rezept-Partial nicht mehr mit. */
+        .grid { width: 100%; margin: 5px 0 8px; font-size: 0; }
+        .grid > div { display: inline-block; width: 33.33%; border: 1px solid #e5e7eb; padding: 4px 7px; vertical-align: top; font-size: 10.5px; margin-right: -1px; margin-bottom: -1px; overflow-wrap: anywhere; }
+        .grid > div.wide { width: 66.66%; }
+        .grid > div.full { width: 100%; }
+        .grid span { display: block; color: #6b7280; font-size: 8.5px; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 1px; }
+
+        table { width: 100%; border-collapse: collapse; margin: 5px 0 9px; table-layout: fixed; page-break-inside: auto; }
+        thead { display: table-header-group; }
         tr { page-break-inside: avoid; page-break-after: auto; }
-        th, td { border: 1px solid #e5e7eb; padding: 5px 6px; text-align: left; vertical-align: top; overflow-wrap: anywhere; }
-        th { background: #f9fafb; color: #374151; font-size: 9px; text-transform: uppercase; letter-spacing: .05em; }
-        .copy { white-space: pre-line; color: #374151; }
-        .step { margin: 7px 0; padding: 7px 8px; border: 1px solid #e5e7eb; page-break-inside: avoid; }
-        .step-nr { display: inline-block; min-width: 18px; font-weight: 700; color: {{ $brand }}; }
-        .step-phase { font-style: italic; color: #4b5563; }
-        .step-photos { margin: 7px -4px 0; }
-        .step-photo { display: inline-block; width: 31%; margin: 0 4px 6px; vertical-align: top; }
-        .step-photo img { display: block; max-width: 100%; max-height: 3.2cm; border: 1px solid #e5e7eb; object-fit: cover; }
-        .step-photo .caption { display: block; margin-top: 2px; font-size: 8px; color: #6b7280; line-height: 1.25; }
-        .recipe-node.depth-1 { margin-left: {{ $pdf ? '0' : '12px' }}; }
-        .recipe-node.depth-2, .recipe-node.depth-3, .recipe-node.depth-4 { margin-left: {{ $pdf ? '0' : '20px' }}; }
-        .slot { border: 1px solid #e5e7eb; border-radius: 8px; padding: 8px 10px; margin: 8px 0; page-break-inside: avoid; }
-        .badge { display: inline-block; border-radius: 999px; background: #f3f4f6; padding: 2px 7px; font-size: 10px; color: #374151; }
-        .sensorik-radar { display: table; width: 100%; margin: 8px 0 10px; page-break-inside: avoid; }
-        .sensorik-radar-chart { display: table-cell; width: 44%; vertical-align: top; text-align: center; border: 1px solid #e5e7eb; padding: 8px; }
-        .sensorik-radar-values { display: table-cell; width: 56%; vertical-align: top; padding-left: 10px; }
+        th, td { border: 1px solid #e5e7eb; padding: 4px 6px; text-align: left; vertical-align: top; overflow-wrap: anywhere; }
+        th { background: #f9fafb; color: #374151; font-size: 8.5px; text-transform: uppercase; letter-spacing: .05em; }
+        td.num, th.num { text-align: right; }
+        .sum-line td { border-top: 2px solid #9ca3af; font-weight: 700; background: #f9fafb; }
+        .copy { white-space: pre-line; color: #374151; margin: 4px 0 6px; }
+        .copy p, .intro p { margin: 0 0 3px; }
+        p { margin: 0 0 5px; }
+
+@include('foodalchemist::dokumente.partials.report-node-css')
+        .slot { border: 1px solid #e5e7eb; padding: 7px 9px; margin: 7px 0; page-break-inside: avoid; }
+        .badge { display: inline-block; background: #f3f4f6; padding: 2px 6px; font-size: 9.5px; color: #374151; }
+        .sensorik-radar { display: table; width: 100%; margin: 7px 0 9px; page-break-inside: avoid; }
+        .sensorik-radar-chart { display: table-cell; width: 44%; vertical-align: top; text-align: center; border: 1px solid #e5e7eb; padding: 7px; }
+        .sensorik-radar-values { display: table-cell; width: 56%; vertical-align: top; padding-left: 9px; }
         .sensorik-radar-values table { margin-top: 0; }
         .order-simulation { page-break-before: auto; }
         .order-simulation .sum-row td { border-top: 2px solid #d1d5db; font-weight: 700; }
         .order-simulation .accent-row td { color: {{ $brand }}; }
         .order-simulation table { font-size: 9px; }
-        @media print { .actions { display: none; } body { background: #fff; } .doc { padding: 0; } }
+
+        @media print {
+            /* Ränder kommen aus @page (oben), .doc bringt keine eigenen mehr mit.
+               Die Bänder bleiben im Fluss: als `position: fixed` legt Chrome sie beim
+               Drucken NICHT in den Seitenrand, sondern über den Satz (getestet — Kopf-
+               und Fußband landeten mitten in Tabelle und Anleitung). Seitenzahl/Titel
+               liefert der Browser-Druckdialog selbst. */
+            .actions { display: none !important; }
+            body { background: #fff; }
+            .doc { max-width: none; margin: 0; padding: 0; }
+            .band-top { margin-bottom: 12px; }
+            .band-bottom { margin-top: 14px; }
+            .recipe-node, .photo-strip, .grid { page-break-inside: auto; }
+        }
     </style>
 </head>
 <body>
 <div class="band-top">
     <span class="bt-label">{{ $titel ?? 'Report' }} · {{ $name ?? '' }}</span>
-</div>
-<div class="band-bottom">
-    <span class="bb-foot">{{ $footerText }}</span>
 </div>
 <main class="doc">
     @unless($pdf)
@@ -326,7 +343,7 @@
             <p class="muted">Noch kein Aufbau — im Format-Editor Editionen einfügen.</p>
         @endforelse
     @elseif($recipe)
-        @include('foodalchemist::dokumente.partials.report-recipe-node', ['node' => $recipe, 'optionen' => $opt])
+        @include('foodalchemist::dokumente.partials.report-recipe-node', ['node' => $recipe, 'optionen' => $opt, 'istDokumentKopf' => true])
     @elseif($foodbook ?? null)
         {{-- #5a: Technischer Foodbook-Report — Kapitel × Positionen, jede über den GETEILTEN Concept-/
              Rezept-Körper (Filter LITERAL dieselben wie Concept/Format). Die Produktions-Kaskade lebt HIER. --}}
@@ -391,5 +408,8 @@
         @endforelse
     @endif
 </main>
+<div class="band-bottom">
+    <span class="bb-foot">{{ $footerText }}</span>
+</div>
 </body>
 </html>
