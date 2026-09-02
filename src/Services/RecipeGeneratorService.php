@@ -376,6 +376,22 @@ class RecipeGeneratorService
                 $zeilen[] = $zeile;
             }
 
+            // §12.2 DURCHSETZEN: Bei einem Gericht ist `role` der Sortier-Anker der
+            // Komponenten-Reihenfolge (Bodenebene → Haupt → Beilage → Garnitur). Der Prompt
+            // bittet darum (Spec 41 B2), aber gebeten ist nicht durchgesetzt: `position` war
+            // schlicht die Emissions-Reihenfolge des Modells ($i + 1 in syncIngredients).
+            // §12.4 nennt genau das als Anti-Pattern — „role erfasst, aber ungenutzt".
+            // NUR auf dem Generierungs-Pfad: im Editor ordnet der Mensch bewusst um, dort
+            // darf nichts nachsortieren.
+            if ($vkModus) {
+                [$zeilen, $verschoben] = $this->sortiereNachRolle($zeilen);
+                if ($verschoben > 0) {
+                    // Sichtbar machen statt still korrigieren — so wird messbar, wie oft das
+                    // Modell die Reihenfolge verfehlt, statt es hinter dem Fix zu verstecken.
+                    $statistik['reihenfolge_korrigiert'] = $verschoben;
+                }
+            }
+
             $recipe = $this->recipes->syncIngredients($team, $recipe->id, $zeilen);   // inkl. Recompute
 
             // #505 / Kohärenz-Gate (2026-08-07): recipeCohesion nach Zutaten-Sync (braucht
@@ -440,6 +456,44 @@ class RecipeGeneratorService
      * @param  array{recipe: FoodAlchemistRecipe, statistik: array, offene: array}  $result
      * @return array{recipe: FoodAlchemistRecipe, statistik: array, offene: array}
      */
+    /**
+     * §12.2 — Rang der Plating-Ebenen. `role` ist laut Regelwerk der Sortier-Anker:
+     * Bodenebene (Sauce/Jus/Basis) → Hauptkomponente → Beilage → Garnitur.
+     * Ohne Rolle ⇒ Rang 99 (hinten), ohne die Binnenordnung des Modells zu zerstören.
+     */
+    private const ROLLEN_RANG = ['aroma_treiber' => 1, 'komponente' => 2, 'beilage' => 3, 'garnitur' => 4];
+
+    /**
+     * Stabil nach §12.2-Rang sortieren; meldet zurück, wie viele Zeilen sich bewegt haben.
+     *
+     * Stabil heißt: innerhalb einer Rolle bleibt die Reihenfolge des Modells erhalten — dort
+     * steckt kulinarisches Urteil (welche Beilage zuerst), das keine Rang-Tabelle kennt.
+     *
+     * @param  list<array<string, mixed>>  $zeilen
+     * @return array{0: list<array<string, mixed>>, 1: int}
+     */
+    private function sortiereNachRolle(array $zeilen): array
+    {
+        $mitRang = [];
+        foreach (array_values($zeilen) as $i => $z) {
+            $mitRang[] = [
+                'rang' => self::ROLLEN_RANG[(string) ($z['role'] ?? '')] ?? 99,
+                'i' => $i,
+                'zeile' => $z,
+            ];
+        }
+        usort($mitRang, fn ($a, $b) => [$a['rang'], $a['i']] <=> [$b['rang'], $b['i']]);
+
+        $verschoben = 0;
+        foreach ($mitRang as $neuerIndex => $eintrag) {
+            if ($eintrag['i'] !== $neuerIndex) {
+                $verschoben++;
+            }
+        }
+
+        return [array_column($mitRang, 'zeile'), $verschoben];
+    }
+
     private function kohaerenzGate(Team $team, array $result, callable $melde): array
     {
         /** @var FoodAlchemistRecipe $recipe */
