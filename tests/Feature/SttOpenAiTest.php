@@ -103,3 +103,47 @@ it('ohne Zugang und ohne Aufnahme: klare Meldung, kein HTTP', function () {
 
     Http::assertNothingSent();
 });
+
+/*
+ * LIVE gegen demo beobachtet: bei 1 s Stille gab gpt-4o-mini-transcribe wörtlich den
+ * Vokabular-Hinweis als Transkript zurück (bekanntes Whisper-Verhalten ohne Sprachsignal).
+ * Ungefiltert hätte der Tool-Loop die Vokabelliste als Befehl bekommen. Kein Fake-HTTP-Test
+ * hätte das gefunden — nur der echte Durchlauf.
+ *
+ * Vier Fälle in EIGENEN Tests, nicht in einem: mehrere `Http::fake()`-Aufrufe im selben
+ * Test ergänzen die Stubs, und der ERSTE passende gewinnt — alle Fälle bekämen dieselbe
+ * Antwort. (Selbst hineingelaufen.)
+ */
+const ECHO_HINWEIS = 'Küchen-Befehle. Fachbegriffe: Basisrezept, Grundprodukt, Speiseplan.';
+
+function sttMit(string $antwortText): string
+{
+    config([
+        'services.openai.api_key' => 'sk-test',
+        'foodalchemist.stt.vokabular_prompt' => ECHO_HINWEIS,
+    ]);
+    Http::fake(['api.openai.com/*' => Http::response(['text' => $antwortText], 200)]);
+
+    return (new OpenAiSttService())->transcribe('X');
+}
+
+it('Prompt-Echo: das Transkript IST der Hinweis ⇒ leer, kein Befehl aus Stille', function () {
+    expect(sttMit(ECHO_HINWEIS))->toBe('');
+});
+
+it('Prompt-Echo mit echter Sprache dahinter ⇒ nur die Sprache bleibt', function () {
+    expect(sttMit(ECHO_HINWEIS . ' Öffne Rezept 42'))->toBe('Öffne Rezept 42');
+});
+
+it('abgeschnittenes Echo (Anfangsstück des Hinweises) ⇒ leer', function () {
+    expect(sttMit('Küchen-Befehle. Fachbegriffe: Basisrezept, Grund'))->toBe('');
+});
+
+it('ein echter Befehl bleibt unangetastet — der Riegel darf nicht überfiltern', function () {
+    expect(sttMit('Suche Basisrezept Tomatensauce'))->toBe('Suche Basisrezept Tomatensauce');
+});
+
+it('auch ein KURZER Befehl mit Fachwort aus dem Hinweis übersteht den Riegel', function () {
+    // Ein Befehl darf nie als Echo gelten, nur weil er ein Vokabel-Wort enthält.
+    expect(sttMit('Basisrezept anlegen'))->toBe('Basisrezept anlegen');
+});

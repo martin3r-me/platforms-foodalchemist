@@ -81,6 +81,49 @@ class OpenAiSttService implements SttServiceContract
                 . mb_strimwidth($grund, 0, 200, '…'));
         }
 
-        return trim((string) ($antwort->json('text') ?? ''));
+        $text = trim((string) ($antwort->json('text') ?? ''));
+
+        return $vokabular === '' ? $text : self::ohneVokabularEcho($text, $vokabular);
+    }
+
+    /**
+     * PROMPT-ECHO abfangen. Enthält die Aufnahme keine (oder kaum) Sprache, geben
+     * Whisper-artige Modelle den Kontext-Hinweis als Transkript zurück — live gegen
+     * demo mit 1 s Stille beobachtet: die Antwort war wörtlich die Vokabelliste.
+     * Ungefiltert bekäme der Tool-Loop diese Liste als Befehl.
+     *
+     * Kein Unit-Test hätte das gefunden: der Fake-HTTP-Test liefert genau den Text,
+     * den man erwartet. Nur der echte Durchlauf zeigt es.
+     *
+     * Drei Fälle, absichtlich in dieser Reihenfolge:
+     *   1. Das Transkript IST der Hinweis  → leer.
+     *   2. Es BEGINNT mit dem Hinweis      → Präfix abschneiden, Rest ist echte Sprache.
+     *   3. Es ist ein längerer ANFANG des Hinweises (abgeschnittenes Echo) → leer.
+     * Ein echter Befehl ist nie ein Anfangsstück der Vokabelliste, darum ist (3) sicher.
+     */
+    private static function ohneVokabularEcho(string $text, string $vokabular): string
+    {
+        $norm = static fn (string $v): string => trim(preg_replace('/\s+/u', ' ', mb_strtolower($v)) ?? '');
+        $t = $norm($text);
+        $v = $norm($vokabular);
+        if ($t === '' || $v === '') {
+            return $text;
+        }
+        if ($t === $v) {
+            return '';
+        }
+        if (str_starts_with($t, $v)) {
+            // Rest im ORIGINAL abschneiden (Länge stimmt bis auf Whitespace-Normalisierung
+            // nicht exakt) — darum über die Wortzahl des Hinweises gehen.
+            $worte = preg_split('/\s+/u', trim($text)) ?: [];
+            $rest = implode(' ', array_slice($worte, count(preg_split('/\s+/u', $v) ?: [])));
+
+            return trim($rest);
+        }
+        if (mb_strlen($t) >= 40 && str_starts_with($v, $t)) {
+            return '';
+        }
+
+        return $text;
     }
 }
