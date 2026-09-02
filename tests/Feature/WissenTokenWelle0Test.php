@@ -514,3 +514,84 @@ it('stellt den Task VOR das variable Retrieval-Wissen', function () {
     expect($p->werte)->toHaveKey('description')
         ->and($p->werte['description'])->toBe('Klarer Fond.');
 });
+
+/*
+ * B1 — VERKETTETE WISSENSBLÖCKE.
+ *
+ * Aufrufer komponieren: `IdeenService` baut für `foodbook.kapitel_ideen` zwei Blöcke
+ * (concept.plan + concept.brief_geruest) und verkettet sie. Das Budget lebt pro Feature in
+ * contextFor — die Komposition kannte es nicht. Gemessen auf demo am 2026-09-02:
+ * 29.028 + 10.028 = 39.056 Zeichen, darin `kalkulation_event_angebot` DOPPELT.
+ */
+it('respektiert einen Budget-Override des Aufrufers', function () {
+    // Slug-Tokens müssen die Query treffen — das Ranking ist lexikalisch (W0-6).
+    foreach (range(1, 6) as $i) {
+        w0Doc("buffet-technik-{$i}", "w0kompocat{$i}", 6000, "Buffet Technik {$i}");
+        w0Routing('concept.plan', "w0kompocat{$i}", 'discovery', 3, 8000);
+    }
+    $svc = app(KnowledgeContextService::class);
+
+    $ohne = $svc->contextFor('concept.plan', 'Flying Buffet Technik', null, [], []);
+    $mit = $svc->contextFor('concept.plan', 'Flying Buffet Technik', null, [], ['_max_chars' => 8000]);
+
+    // Erst belegen, dass die Fixture überhaupt greift — sonst prüft der Test nichts.
+    expect($ohne['total_chars'])->toBeGreaterThan(8000)
+        // Der Override greift und ist strikt kleiner als das Feature-Budget …
+        ->and($mit['total_chars'])->toBeLessThan($ohne['total_chars'])
+        // … aber NIE unter die Pflichtmenge: ein Override, der `always`-Inhalte abschneidet,
+        // wäre genau der stille Fehler, den die W0-5-Invariante verhindern soll.
+        ->and($mit['total_chars'])->toBeGreaterThanOrEqual($svc->pflichtZeichen('concept.plan'));
+});
+
+it('klemmt einen zu kleinen Override auf die Pflichtmenge statt Pflichtwissen zu kappen', function () {
+    // Pflicht aufbauen: eine always-Kategorie mit realem Inhalt.
+    w0Doc('kompo-pflicht-a', 'w0pflichtkat', 3000, 'Pflicht A');
+    w0Doc('kompo-pflicht-b', 'w0pflichtkat', 3000, 'Pflicht B');
+    w0Routing('kompo.feature', 'w0pflichtkat', 'always', 2, 3000);
+    $svc = app(KnowledgeContextService::class);
+
+    $pflicht = $svc->pflichtZeichen('kompo.feature');
+    expect($pflicht)->toBe(6000);
+
+    // Absurd kleiner Override — darf die Pflicht nicht unterschreiten.
+    $ctx = $svc->contextFor('kompo.feature', 'irgendwas', null, [], ['_max_chars' => 500]);
+
+    expect($ctx['total_chars'])->toBeGreaterThanOrEqual($pflicht);
+});
+
+it('liefert ausgeschlossene Slugs nicht erneut — keine Dopplung im verketteten Block', function () {
+    w0Doc('buffet-geteilt', 'w0sharedcat', 3000, 'Geteiltes Wissen');
+    w0Doc('buffet-eigen', 'w0sharedcat', 3000, 'Eigenes Wissen');
+    // Dieselbe Kategorie für BEIDE Features — genau die Konstellation, die die Dopplung erzeugt.
+    w0Routing('kompo.erst', 'w0sharedcat', 'discovery', 2, 3000);
+    w0Routing('kompo.zweit', 'w0sharedcat', 'discovery', 2, 3000);
+    $svc = app(KnowledgeContextService::class);
+
+    $erst = $svc->contextFor('kompo.erst', 'buffet geteilt', null, [], []);
+    expect($erst['files_used'])->not->toBeEmpty();
+
+    $zweit = $svc->contextFor('kompo.zweit', 'buffet geteilt', null, [], [
+        '_exclude_slugs' => $erst['files_used'],
+    ]);
+
+    // Kein Slug aus dem ersten Block taucht im zweiten wieder auf.
+    $ersteSlugs = array_map(fn ($f) => explode('@', $f)[0], $erst['files_used']);
+    $zweiteSlugs = array_map(fn ($f) => explode('@', $f)[0], $zweit['files_used']);
+    expect(array_intersect($ersteSlugs, $zweiteSlugs))->toBe([]);
+});
+
+it('akzeptiert Ausschluss-Slugs mit und ohne Versions-Suffix', function () {
+    w0Doc('buffet-versioniert', 'w0vercat', 2000, 'Versioniert');
+    w0Routing('kompo.ver', 'w0vercat', 'discovery', 2, 2000);
+    $svc = app(KnowledgeContextService::class);
+
+    // Gegenprobe: ohne Ausschluss greift die Fixture.
+    expect($svc->contextFor('kompo.ver', 'buffet versioniert', null, [], [])['files_used'])->not->toBeEmpty();
+
+    // Der Aufrufer übergibt files_used („slug@v1"); intern wird das Suffix gestrippt.
+    $mitSuffix = $svc->contextFor('kompo.ver', 'buffet versioniert', null, [], ['_exclude_slugs' => ['buffet-versioniert@v1']]);
+    $ohneSuffix = $svc->contextFor('kompo.ver', 'buffet versioniert', null, [], ['_exclude_slugs' => ['buffet-versioniert']]);
+
+    expect($mitSuffix['files_used'])->toBe([])
+        ->and($ohneSuffix['files_used'])->toBe([]);
+});

@@ -364,12 +364,32 @@ class IdeenService
         $beschreibung = trim(implode(' ', array_filter([
             (string) $concept->name, (string) ($concept->brief ?? ''), (string) ($concept->description ?? ''),
         ])));
-        // Wissen+Trend verdrahten: voller Food-/Concept-/Domain-Stack (concept.plan) + generisches
-        // Trendradar-Wissen (concept.brief_geruest = trend/discovery) + der KONKRETE Ursprungs-Trend
-        // dieser Planung (per ID). concept.brief_geruest allein liefert NUR Trend, kein Food-Wissen.
+        /*
+         * Wissen verdrahten: voller Food-/Concept-/Domain-Stack (concept.plan) + das
+         * ergänzende Geschäftsmodell-/Regelwerk-Wissen (concept.brief_geruest) + der
+         * KONKRETE Ursprungs-Trend dieser Planung (per ID).
+         *
+         * B1 (2026-09-02): Zwei contextFor-Aufrufe, EIN Prompt — und bis hierher ohne
+         * gemeinsame Obergrenze. Gemessen: 29.028 + 10.028 = 39.056 Zeichen, darin
+         * `kalkulation_event_angebot` DOPPELT (der Kanal `geschaeftsmodell` ist für beide
+         * Features geroutet). Das Budget lebt pro Feature; die Komposition kannte es nicht.
+         *
+         * Darum jetzt bewusst aufgeteilt: der Food-Stack trägt die Hauptlast, der zweite
+         * Block ergänzt nur — und bekommt die Slugs des ersten als Ausschluss, damit er
+         * nichts wiederholt. `_max_chars` kann die Pflichtmenge nicht unterschreiten
+         * (contextFor klemmt auf pflichtZeichen()), ein `always`-Dossier fällt also nicht
+         * still weg.
+         *
+         * Korrektur am Vorgänger-Kommentar: von „Trendradar-Wissen" kann keine Rede sein —
+         * es gibt keine `trend`-Kategorie im Korpus, `concept.brief_geruest` routet real
+         * `geschaeftsmodell` + `regelwerk`.
+         */
         $kctx = app(KnowledgeContextService::class);
-        $plan = $kctx->contextFor('concept.plan', $beschreibung);
-        $trend = $kctx->contextFor('concept.brief_geruest', $beschreibung);
+        $plan = $kctx->contextFor('concept.plan', $beschreibung, null, [], ['_max_chars' => 14000]);
+        $trend = $kctx->contextFor('concept.brief_geruest', $beschreibung, null, [], [
+            '_max_chars' => 5000,
+            '_exclude_slugs' => $plan['files_used'] ?? [],
+        ]);
         $ursprung = $trendDocId !== null ? $this->ursprungsTrendBlock($team, $trendDocId) : null;
         $wissen = [
             'block' => implode("\n\n", array_filter([$plan['block'] ?? '', $trend['block'] ?? '', $ursprung], fn ($b) => is_string($b) && $b !== '')),

@@ -105,6 +105,19 @@ class KnowledgeContextService
     private array $herkunft = [];
 
     /**
+     * B1 — Slugs, die ein VORHERIGER contextFor-Aufruf desselben Prompts schon geliefert hat.
+     *
+     * Nötig, weil Aufrufer Wissensblöcke KOMPONIEREN: `IdeenService` baut für
+     * `foodbook.kapitel_ideen` zwei Blöcke (concept.plan + concept.brief_geruest) und verkettet
+     * sie. Gemessen am 2026-09-02: 29.028 + 10.028 = 39.056 Zeichen, darin `kalkulation_event_angebot`
+     * DOPPELT — der Kanal `geschaeftsmodell` ist für beide Features geroutet. Das Budget lebt pro
+     * Feature; die Komposition kannte es nicht.
+     *
+     * @var list<string>
+     */
+    private array $ausgeschlossen = [];
+
+    /**
      * Rezept-Calls laufen in einer Kaskade (Gericht + Basisrezepte). Ohne einen featureweiten
      * Deckel addiert jede geroutete Discovery-Kategorie ihr eigenes Top-K und aus einem gezielten
      * Abruf werden 30–40 Volltext-Dossiers pro Call. Der Deckel gilt nur für den eigentlichen
@@ -150,6 +163,15 @@ class KnowledgeContextService
         $usedByCategory = [];
         $parts = [];
         $this->herkunft = [];
+        // B1: Slugs, die ein vorheriger Block schon geliefert hat (Versions-Suffix @vN weg).
+        $this->ausgeschlossen = [];
+        foreach ((array) ($params['_exclude_slugs'] ?? []) as $roh) {
+            $slug = preg_replace('/@v\d+$/', '', trim((string) $roh));
+            if ($slug !== '') {
+                $this->ausgeschlossen[] = $slug;
+            }
+        }
+        $this->ausgeschlossen = array_values(array_unique($this->ausgeschlossen));
         $recipeBudget = $feature === 'ai_generate_recipe';
         $scopeSlugs = $this->knowledgeScopeSlugs($params['_knowledge_scope'] ?? []);
 
@@ -372,6 +394,12 @@ class KnowledgeContextService
         $block = implode("\n\n", $parts);
         $gebaut = mb_strlen($block);
         $budget = $this->knowledgeBudget($feature, $recipeBudget);
+        // B1: Aufrufer-Override für komponierte Blöcke — aber NIE unter die Pflichtmenge.
+        // Ein Override, der `always`-Inhalte abschneidet, wäre genau der stille Fehler, den
+        // die W0-5-Invariante verhindern soll; deshalb hier dieselbe Untergrenze.
+        if (($ueberschreib = (int) ($params['_max_chars'] ?? 0)) > 0) {
+            $budget = max($ueberschreib, $this->pflichtZeichen($feature));
+        }
         if ($gebaut > $budget) {
             $block = $this->truncate($block, $budget);
         }
@@ -940,6 +968,7 @@ class KnowledgeContextService
     {
         $docs = DB::table('foodalchemist_knowledge_documents')
             ->where('category', 'cross_cutting')->where('active', 1)->whereNull('deleted_at')
+            ->when($this->ausgeschlossen !== [], fn ($q) => $q->whereNotIn('slug', $this->ausgeschlossen))
             ->whereIn('slug', self::ALWAYS_LOAD_CROSS_CUTTING)
             ->get(['slug', 'content_md', 'version'])->keyBy('slug');
 
@@ -961,6 +990,7 @@ class KnowledgeContextService
         }
         $docs = DB::table('foodalchemist_knowledge_documents')
             ->where('category', $category)->where('active', 1)->whereNull('deleted_at')
+            ->when($this->ausgeschlossen !== [], fn ($q) => $q->whereNotIn('slug', $this->ausgeschlossen))
             ->orderBy('slug')->limit($maxDocs)->get(['slug', 'content_md', 'version']);
         if ($docs->isEmpty()) {
             return null;
@@ -996,6 +1026,7 @@ class KnowledgeContextService
         $docs = DB::table('foodalchemist_knowledge_documents')
             ->where('category', $category)->where('active', 1)->whereNull('deleted_at')
             ->when($allowedSlugs !== [], fn ($q) => $q->whereIn('slug', $allowedSlugs))
+            ->when($this->ausgeschlossen !== [], fn ($q) => $q->whereNotIn('slug', $this->ausgeschlossen))
             ->get(['id', 'slug', 'version']);
         if ($docs->isEmpty()) {
             return null;
