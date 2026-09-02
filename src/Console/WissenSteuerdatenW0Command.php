@@ -136,10 +136,18 @@ class WissenSteuerdatenW0Command extends Command
         }
         $this->table(['target_key', 'slug', 'ist mode', 'soll', 'chars'], $bPlan);
 
-        $summe = collect($bPlan)->where(0, 'recipe.generator')->sum(4);
-        $this->line("Bound-Summe recipe.generator: {$summe} Zeichen (Deckel: 20.000)");
-        if ($summe > 20000) {
-            $this->warn('⚠ Bound-Summe über dem Deckel — die letzten Dossiers werden gekappt. Deckel prüfen.');
+        foreach (array_keys($this->bindingZiele()) as $tk) {
+            $summe = collect($bPlan)->where(0, $tk)->sum(4);
+            $deckel = $this->boundDeckel((string) $tk);
+            $this->line(sprintf(
+                'Bound-Summe %-18s %s Zeichen (Deckel: %s)',
+                $tk,
+                number_format((int) $summe, 0, ',', '.'),
+                number_format($deckel, 0, ',', '.'),
+            ));
+            if ($summe > $deckel) {
+                $this->warn("⚠ {$tk}: Bound-Summe über dem Deckel — die letzten Dossiers werden gekappt.");
+            }
         }
 
         if (! $apply) {
@@ -173,6 +181,22 @@ class WissenSteuerdatenW0Command extends Command
         $this->info('Geschrieben (eine Transaktion).');
 
         return $this->verify();
+    }
+
+    /**
+     * Bound-Gesamtdeckel eines Prompt-Keys. Muss dieselbe Quelle lesen wie
+     * AiGatewayService::boundBudget() — ein hart verdrahteter Wert hier hätte
+     * `vk.generator` (Budget 28.000) fälschlich als Überlauf gemeldet.
+     */
+    private function boundDeckel(string $promptKey): int
+    {
+        $konfig = config('foodalchemist.ai.bound_knowledge_budget', []);
+        if (is_array($konfig) && isset($konfig[$promptKey]['total'])) {
+            return (int) $konfig[$promptKey]['total'];
+        }
+
+        // Fallback = konservativer Default in AiGatewayService (3 × 1.400).
+        return 4200;
     }
 
     /** @return array<string, list<string>> */
@@ -224,9 +248,15 @@ class WissenSteuerdatenW0Command extends Command
         foreach ($this->bindingZiele() as $targetKey => $slugs) {
             $summe = (int) DB::table('foodalchemist_knowledge_documents')
                 ->whereIn('slug', $slugs)->whereNull('deleted_at')->sum('char_count');
-            $this->line(sprintf('%-18s Pflicht-Dossiers: %s Zeichen', $targetKey, number_format($summe, 0, ',', '.')));
-            if ($summe > 20000) {
-                $fehler[] = "{$targetKey}: Pflicht-Dossiers summieren {$summe} Zeichen > Deckel 20.000 — das letzte Dossier wird still gekappt.";
+            $deckel = $this->boundDeckel($targetKey);
+            $this->line(sprintf(
+                '%-18s Pflicht-Dossiers: %s Zeichen (Deckel %s)',
+                $targetKey,
+                number_format($summe, 0, ',', '.'),
+                number_format($deckel, 0, ',', '.'),
+            ));
+            if ($summe > $deckel) {
+                $fehler[] = "{$targetKey}: Pflicht-Dossiers summieren {$summe} Zeichen > Deckel {$deckel} — das letzte Dossier wird still gekappt.";
             }
         }
 

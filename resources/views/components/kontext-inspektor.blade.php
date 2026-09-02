@@ -18,6 +18,7 @@
         'pairing_grounding' => 'Pairing-Doku',
         'trend' => 'Trends',
         'concept' => 'Konzept',
+        'gebunden' => 'Gebundene Regelwerke',
     ];
     $order = array_keys($labels);
     $bekannt = array_values(array_filter($order, fn ($k) => ! empty($wissen[$k])));

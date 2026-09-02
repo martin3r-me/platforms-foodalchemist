@@ -83,10 +83,22 @@ class RecipeGenerationContextService
         // — Gürtel & Hosenträger zur Prompt-Einleitung (Basisrezept = Baustein, Gericht = Teller).
         $rezeptTyp = $vkModus ? 'gericht' : 'basisrezept';
         $wissen = $this->knowledge->contextFor('ai_generate_recipe', $description, $parameter['kompositions_stil'] ?? null, [], $parameter + ['rezept_typ' => $rezeptTyp]);
-        // Transparenz (Aufbau-Phase): der Gateway injiziert die an recipe.generator/vk.generator GEBUNDENEN
-        // Always-Core-Dossiers in den Prompt (AiGatewayService #469, binding_type=layer), sie stehen aber
-        // NICHT in contextFor()->files_used → hier für den „Verwendetes Wissen"-Chip nachziehen, damit die
-        // Anzeige zeigt, was wirklich im Prompt landet. Spiegelt die Injektions-Query 1:1.
+        /*
+         * Transparenz: die an recipe.generator/vk.generator GEBUNDENEN Dossiers stehen nicht in
+         * contextFor()->files_used, sollen aber im „Verwendetes Wissen"-Chip auftauchen.
+         *
+         * ⚠ W0-3b — sie dürfen NICHT nach `files_used` gespiegelt werden (so war es bis
+         * 2026-09-02). `files_used` geht als `knowledge_used` an propose(), und dort ist es der
+         * DEDUP-EINGANG von selectBoundKnowledge(): jedes Doc, das schon „verwendet" ist, wird
+         * übersprungen. Der Spiegel hat damit genau den Kanal abgeschaltet, den er anzeigen
+         * wollte — gemessen am 2026-09-02 kam von 7 als `always` gebundenen Bau-Dossiers
+         * NULL im Prompt an (prompt_parts.bound = 0), nicht bloß eine gekappte Auswahl.
+         * Zweitschaden: `files_used` bildet auch `snapshot.knowledge_files` und damit den
+         * `_knowledge_scope` der Kind-Rezepte.
+         *
+         * Und der beabsichtigte Nutzen trat nie ein: der Inspektor liest `used_by_category`,
+         * nicht `files_used`. Deshalb landet die Liste jetzt dort — als eigener Kanal.
+         */
         if (\Illuminate\Support\Facades\Schema::hasTable('foodalchemist_knowledge_bindings')) {
             $genKey = $vkModus ? 'vk.generator' : 'recipe.generator';
             $genBereich = $vkModus ? 'vk' : 'recipe';
@@ -98,7 +110,7 @@ class RecipeGenerationContextService
                 ->get(['d.slug', 'd.version'])
                 ->map(fn ($r) => "{$r->slug}@v{$r->version}")->all();
             if ($boundFiles !== []) {
-                $wissen['files_used'] = array_values(array_unique(array_merge($wissen['files_used'] ?? [], $boundFiles)));
+                $wissen['used_by_category']['gebunden'] = $boundFiles;
             }
         }
         $prompt = [

@@ -187,7 +187,7 @@ it('liefert alle gebundenen Bau-Dossiers vollstaendig an den Rezeptgenerator', f
     $slugs = [];
     foreach ([1968, 2459, 2630, 4796, 2609, 1599, 1409] as $i => $chars) {
         $slug = "regelwerk-basisrezepte-w0-{$i}";
-        w0Doc($slug, 'regelwerk', $chars, 'Bau Regel');
+        w0Doc($slug, 'w0bindcat', $chars, 'Bau Regel');
         w0Bind($slug, 'recipe.generator', 'always', 100 - $i);
         $slugs[] = $slug;
     }
@@ -300,4 +300,73 @@ it('rechnet die Pflichtmenge nach den Ist-Deckeln der Block-Builder', function (
     // concept: max_docs × Doc-Deckel.
     w0Routing('w0pflicht.co', 'concept', 'always', 4, 4000);
     expect(app(KnowledgeContextService::class)->pflichtZeichen('w0pflicht.co'))->toBe(16000);
+});
+
+/*
+ * W0-3b — der teuerste Fund der Welle, und der subtilste.
+ *
+ * RecipeGenerationContextService spiegelte die gebundenen Dossiers nach `files_used`, um sie
+ * im „Verwendetes Wissen"-Chip anzuzeigen. `files_used` geht aber als `knowledge_used` an
+ * propose() und ist dort der DEDUP-EINGANG von selectBoundKnowledge(). Ergebnis: von 7 als
+ * `always` gebundenen Bau-Dossiers kam NULL im Prompt an — die Transparenz-Anzeige hatte
+ * genau den Kanal abgeschaltet, den sie sichtbar machen wollte. Gemessen auf demo am
+ * 2026-09-02: prompt_parts.bound = 0 bei vk.generator.
+ *
+ * Der Test prüft beide Richtungen: der Kanal liefert, UND die Anzeige bekommt ihre Liste.
+ */
+it('spiegelt gebundene Dossiers NICHT in files_used — sonst frisst der Dedup den Bound-Kanal', function () {
+    config(['foodalchemist.ai.provider' => 'fake']);
+    $this->actingAs($this->makeUser($this->rootTeam));
+
+    // Fixture-Hinweis: Kategorie ohne Routing-Zeile und Slug OHNE „basisrezept" — sonst würde
+    // contextFor() die Docs selbst laden (regelwerkBlock matcht `slug LIKE '%basisrezept%'`,
+    // und die Migrationen seeden `regelwerk:always`). Der Test soll den SPIEGEL prüfen,
+    // nicht den legitimen Retrieval-Pfad.
+
+    $slugs = [];
+    foreach ([1968, 2459, 2630] as $i => $chars) {
+        $slug = "w0b-bau-regel-{$i}";
+        w0Doc($slug, 'w0bindcat', $chars, 'Bau Regel');
+        w0Bind($slug, 'recipe.generator', 'always', 100 - $i);
+        $slugs[] = $slug;
+    }
+
+    $ctx = app(\Platform\FoodAlchemist\Services\RecipeGenerationContextService::class)
+        ->build($this->rootTeam, 'Rinderfilet als Hauptgang', [], false);
+
+    // 1. files_used bleibt SAUBER — nur was contextFor wirklich geladen hat.
+    foreach ($slugs as $slug) {
+        expect(implode(' ', $ctx['knowledge_used']))->not->toContain($slug);
+        expect(implode(' ', $ctx['snapshot']['knowledge_files']))->not->toContain($slug);
+    }
+
+    // 2. Die Anzeige bekommt sie trotzdem — im Kanal, den der Inspektor auch liest.
+    expect($ctx['kontext']['wissen'])->toHaveKey('gebunden')
+        ->and(implode(' ', $ctx['kontext']['wissen']['gebunden']))->toContain($slugs[0]);
+});
+
+it('liefert gebundene Dossiers in den Prompt, wenn der Kontext-Dienst sie nicht als verwendet meldet', function () {
+    config(['foodalchemist.ai.provider' => 'fake']);
+    $this->actingAs($this->makeUser($this->rootTeam));
+
+    foreach ([1968, 2459, 2630] as $i => $chars) {
+        $slug = "w0c-bau-regel-{$i}";
+        w0Doc($slug, 'w0bindcat', $chars, 'Bau Regel');
+        w0Bind($slug, 'recipe.generator', 'always', 100 - $i);
+    }
+
+    $ctx = app(\Platform\FoodAlchemist\Services\RecipeGenerationContextService::class)
+        ->build($this->rootTeam, 'Rinderfilet als Hauptgang', [], false);
+
+    app(\Platform\FoodAlchemist\Services\Ai\AiGatewayService::class)->propose(
+        'recipe.generator',
+        $ctx['prompt'],
+        ['knowledge' => $ctx['knowledge'], 'knowledge_used' => $ctx['knowledge_used']],
+    );
+
+    $log = DB::table('foodalchemist_ai_call_log')->where('feature', 'recipe.generator')->latest('id')->first();
+    $parts = json_decode((string) $log->prompt_parts, true);
+
+    // 1968 + 2459 + 2630 = 7.057 Zeichen Pflichtwissen müssen ankommen.
+    expect($parts['bound'])->toBeGreaterThan(7000);
 });
