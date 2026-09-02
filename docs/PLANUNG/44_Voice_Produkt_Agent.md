@@ -98,3 +98,47 @@ als keine. Die Vokabular-Widersprüche sind ein eigener Aufräum-Schritt.
   Platzierung ist am CSS belegt, aber nicht gesehen. `Livewire::test` ist layout-blind.
 - Agentischer Briefing-Dialog (Rückfragen als Gespräch statt als `unklar`-Liste).
 - `saved-toast` im eingeklappten Zustand (siehe Nebenbefund).
+
+---
+
+## Bitten an den Core (Martin) — nicht meine Dateien
+
+Beide Punkte sind **keine Blocker**: FA funktioniert ohne sie, sie wären nur die saubere
+Heimat. Dominique dazu: *„vielleicht braucht es den core dazu."*
+
+### 1. Audio-Transkription in den Core
+
+`OpenAiSttService` ruft `https://api.openai.com/v1/audio/transcriptions` direkt, weil der
+Core-LLM-Contract nur `chat()` kennt. Der Schlüssel kommt aus der Plattform-Config
+(`services.openai.api_key`), nicht aus einer modul-eigenen — es läuft also auf der
+Plattform. Gedeckt ist der direkte HTTP durch den D8-Entscheid (siehe Docblock in
+`AssemblyAiSttService`: „die D3-Regel betrifft NUR den LLM-Transport").
+
+**Sauber wäre:** eine `TranscriptionContract`-Fassade im Core, analog zum LLM- und
+Embedding-Contract. Dann hätten alle Module denselben Weg, das Provider-Routing läge an
+einer Stelle, und die Kosten liefen über dasselbe Log.
+
+**Was der Core dabei mitnehmen sollte** (in FA gelernt, würde sonst jedes Modul neu
+erfinden): den PROMPT-ECHO-Riegel. Ohne Sprachsignal gibt das Modell den Kontext-Hinweis
+wörtlich als Transkript zurück — live gegen demo mit 1 s Stille beobachtet. Wer den
+`prompt` anbietet, muss diesen Fall filtern.
+
+### 2. `prompt_cache_key` durchleiten
+
+`OpenAiService` baut den Payload explizit als `model/input/stream/max_output_tokens`
+(:87-92), und die Sampling-Whitelist kennt nur temperature/top_p/penalties/reasoning.
+Damit ist die Cache-Zuordnung dem Provider überlassen. Eine Zeile im Payload-Bau mit z. B.
+`'fa:' . $promptKey` würde W3-1 (fester Cache-Prefix) monetarisierbar machen — der
+Prefix ist mit 24.718 Zeichen ≈ 8.239 Token belegt byte-stabil, die Wirkung nicht.
+
+**Ausdrücklich kein Blocker:** die Message-Reihenfolge ist unabhängig davon richtig, weil
+sie das Regelwerk vor das Variable stellt.
+
+### 3. Nebenbefund für den Betrieb (nicht Core)
+
+Läuft das OpenAI-Guthaben leer, scheitert die Leitstelle **stumm**: gemessen 17
+`conformance.check`-Calls mit `insufficient_quota / credit_balance_exhausted`, plus
+`concept.brief_geruest` und `format.grundgeruest`. Im Log steht es, im Produkt sieht es
+niemand. FA hat 42 Signal-Typen und **keinen** für Provider-/Zugangs-Gesundheit — ein
+neuer Typ zieht laut Hauslogik das Signale-Cockpit mit (siehe
+`feedback_fa_registry_tests_volle_suite`). Kandidat für den nächsten Schritt.
