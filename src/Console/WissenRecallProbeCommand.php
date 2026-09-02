@@ -4,6 +4,8 @@ namespace Platform\FoodAlchemist\Console;
 
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Auth;
+use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Services\Ai\KnowledgeEmbeddingService;
 
 /**
@@ -30,6 +32,7 @@ use Platform\FoodAlchemist\Services\Ai\KnowledgeEmbeddingService;
 class WissenRecallProbeCommand extends Command
 {
     protected $signature = 'foodalchemist:wissen-recall-probe
+        {--team= : PFLICHT — die Suchpartitionen hängen daran (wie bei embed-eval)}
         {--limit=40 : Anzahl Stichproben-Dokumente}
         {--k=10 : Top-K, in denen das Dokument auftauchen muss}
         {--fenster=2000 : angenommenes Embedding-Fenster (Kopf/Schwanz-Grenze)}
@@ -52,6 +55,30 @@ class WissenRecallProbeCommand extends Command
 
             return self::FAILURE;
         }
+        // Partitions-Kontext herstellen: ohne angemeldeten Nutzer sucht der Service NUR in
+        // der globalen Partition und jede Quote wäre wertlos (siehe Klassen-Docblock).
+        $teamId = (int) $this->option('team');
+        if ($teamId <= 0) {
+            $this->error('--team=<id> ist Pflicht — ohne Team misst die Suche nur die globale Partition.');
+
+            return self::INVALID;
+        }
+        $team = Team::find($teamId);
+        if ($team === null) {
+            $this->error("Team {$teamId} nicht gefunden.");
+
+            return self::INVALID;
+        }
+        $nutzer = $team->users()->first();
+        if ($nutzer === null) {
+            $this->error("Team {$teamId} hat keinen Nutzer — ohne einen lässt sich der Partitions-Kontext nicht setzen.");
+
+            return self::INVALID;
+        }
+        Auth::login($nutzer);
+        $partitionen = app(\Platform\FoodAlchemist\Services\Ai\SemanticRetrievalService::class)->partitionsFor($team);
+        $this->line(sprintf('  Kontext: Team %d (%s) · Partitionen [%s]',
+            $team->id, $team->name, implode(', ', $partitionen)));
         $fenster = max(200, (int) $this->option('fenster'));
         $k = max(1, (int) $this->option('k'));
         $limit = max(1, (int) $this->option('limit'));
