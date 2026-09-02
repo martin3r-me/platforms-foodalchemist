@@ -27,9 +27,38 @@ use RuntimeException;
  */
 class AiGatewayService
 {
+    /**
+     * W0-3 — Deckel des Layer-Bound-Kanals.
+     *
+     * Vorher 3 Docs à 1400 Zeichen. An `recipe.generator` hängen aber 9 bewusst gebundene
+     * Dossiers (Bau-§§ 2–7 + Erstellungs-Dossier + substitutionen + mengen_defaults):
+     * 6 davon erreichten den Prompt nie, §5 Default-GPs kam als 29-%-Fragment an. Der
+     * Kanal war damit genau für den Fall unbrauchbar, für den er gebaut wurde — prozedurale
+     * Regeln, die per Discovery nicht surfacen, weil sie kein Gericht nennen.
+     *
+     * ⚠ Die Deckel gelten NICHT global, sondern je Prompt-Key über
+     * config('foodalchemist.ai.bound_knowledge_budget'). Grund: selectBoundKnowledge()
+     * matcht Bindings auf den Prompt-Key ODER dessen BEREICHS-Präfix — an `target_key='recipe'`
+     * hängen live 3 Dossiers mit 24.520 Zeichen, die sonst jeden `recipe.*`-Prompt
+     * (steps, pairing, review, sensorik, …) von 4.200 auf 20.000 Zeichen aufblasen würden.
+     * Ein global gehobener Deckel wäre also keine Blutstillung, sondern eine Kosten-
+     * ausweitung auf ~15 Prompts, die die Bau-§§ gar nicht brauchen.
+     *
+     * Die Konstanten hier sind daher der konservative DEFAULT (= Verhalten vor Welle 0);
+     * die großzügigen Budgets stehen explizit bei `recipe.generator` / `vk.generator`,
+     * wo die Bau-§-Dossiers hingehören.
+     */
     private const BOUND_KNOWLEDGE_MAX_DOCS = 3;
 
     private const BOUND_KNOWLEDGE_CHARS_PER_DOC = 1400;
+
+    private const BOUND_KNOWLEDGE_MAX_TOTAL_CHARS = 4200;
+
+    /**
+     * Fenster für das Relevanz-Token-Matching der `discovery`-Bindings. 1200 Zeichen trafen
+     * bei mehrseitigen Dossiers nur die Einleitung; die eigentliche Regel liegt dahinter.
+     */
+    private const BOUND_KNOWLEDGE_MATCH_WINDOW = 4000;
 
     /**
      * GL-07 Propose: Task-Prompt + Kontext → validiertes Vorschlags-DTO.
@@ -101,6 +130,18 @@ class AiGatewayService
         $wissen = isset($options['knowledge']) && is_string($options['knowledge']) && $options['knowledge'] !== ''
             ? $options['knowledge'] . "\n\n"
             : '';
+        // W0-0 Messsonde: Zeichen je Prompt-Topf. `tokens_in` kommt post-hoc vom Provider und
+        // sagt nicht, WOHER die Bytes kamen — ohne diese Zerlegung ist jede Budget-Änderung
+        // blind (vgl. Welle 0: ~44 % des Generator-Prompts waren ein rechnerischer Restposten).
+        $promptParts = [
+            'kanon' => 0,                                            // Welle 2 (CanonBlockBuilder)
+            'retrieval' => mb_strlen($wissen),
+            'bound' => 0,
+            'task' => mb_strlen((string) $prompt['task']),
+            'kontext' => 0,
+            'huelle' => 0,
+            'dropped' => (int) ($options['knowledge_dropped_chars'] ?? 0),
+        ];
 
         // #469: an diesen Layer gebundenes Wissen additiv laden — Prompt-Key (fein) ODER Bereich (Präfix, grob).
         // Macht „einbinden" für JEDEN Prompt wirksam (zentraler Punkt, alle Prompts laufen durch propose()).
@@ -114,14 +155,18 @@ class AiGatewayService
                 ->where('d.active', 1)->whereNull('d.deleted_at')
                 ->orderByDesc('b.weight')
                 ->get(['d.slug', 'd.title', 'd.category', 'd.version', 'd.content_md', 'b.mode', 'b.weight']);
-            [$bBlocks, $boundSlugs] = $this->selectBoundKnowledge(
+            [$bBlocks, $boundSlugs, $boundVerworfen] = $this->selectBoundKnowledge(
                 $bound,
                 $context,
                 is_array($options['knowledge_used'] ?? null) ? $options['knowledge_used'] : [],
+                $this->boundBudget($promptKey),
             );
+            $promptParts['dropped'] += $boundVerworfen;
             if ($bBlocks !== []) {
-                $wissen .= "# DIREKT GEBUNDENES WISSEN (an diesen Layer verdrahtet)\n\n"
+                $boundBlock = "# DIREKT GEBUNDENES WISSEN (an diesen Layer verdrahtet)\n\n"
                     . implode("\n\n---\n\n", $bBlocks) . "\n\n";
+                $wissen .= $boundBlock;
+                $promptParts['bound'] = mb_strlen($boundBlock);
             }
         }
 
@@ -138,7 +183,7 @@ class AiGatewayService
         $fbFoodDna = $options['food_dna_foodbook_id'] ?? null;
         $agFoodDna = $options['food_dna_angebot_id'] ?? null;
         $kdFoodDna = $options['food_dna_crm_company_id'] ?? null;  // Ebene 2: Endkunde (Kunde-DNA)
-        unset($options['knowledge'], $options['knowledge_used'], $options['tier'], $options['target_table'], $options['target_id'], $options['food_dna_concept_id'], $options['food_dna_foodbook_id'], $options['food_dna_angebot_id'], $options['food_dna_crm_company_id']);
+        unset($options['knowledge'], $options['knowledge_used'], $options['knowledge_dropped_chars'], $options['tier'], $options['target_table'], $options['target_id'], $options['food_dna_concept_id'], $options['food_dna_foodbook_id'], $options['food_dna_angebot_id'], $options['food_dna_crm_company_id']);
 
         // #389/Canvas: stehenden Marken-/Brief-Kontext NUR in kreative Prompts mergen
         // (Klassifikatoren ausgenommen). Kaskade Team-DNA → Kunde-DNA → Angebot → Foodbook → Concept (CanvasService).
@@ -152,8 +197,31 @@ class AiGatewayService
             ) + $context;
         }
 
-        $userContent = $wissen . $prompt['task'] . "\n\nKontext:\n" . json_encode($context, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+        // W0-2: KEIN JSON_PRETTY_PRINT. Der Kontext ist Maschinen-Input, kein Lesetext —
+        // Einrückung und Zeilenumbrüche blähen ihn um Faktor ~2,05 (gemessen an der realen
+        // Generator-Struktur: 2,04 / 2,09) an reinem Whitespace, den das Modell mitbezahlt.
+        $kontextJson = json_encode($context, JSON_UNESCAPED_UNICODE);
+        $promptParts['kontext'] = mb_strlen((string) $kontextJson);
+
+        $userContent = $wissen . $prompt['task'] . "\n\nKontext:\n" . $kontextJson;
         $messages[] = ['role' => 'user', 'content' => $userContent];
+
+        // W0-0: Hülle = alles, was VOR dem User-Content als system-Message steht.
+        $promptParts['huelle'] = array_sum(array_map(
+            fn (array $m): int => $m['role'] === 'system' ? mb_strlen((string) $m['content']) : 0,
+            $messages,
+        ));
+        $promptChars = array_sum(array_map(fn (array $m): int => mb_strlen((string) $m['content']), $messages));
+
+        // W0-1: Der Core stellt sonst eine System-Message mit `'Zeit: ' . now()` und einer
+        // Tool-Übersicht VOR den Prompt (OpenAiService::buildMessagesWithContext, gated über
+        // `with_context`). Ein sekundengenau wechselnder Prefix macht Prompt-Caching
+        // strukturell unmöglich — bei `cached_in` = 10 % des Normalpreises ist das der
+        // teuerste Nebeneffekt im System (gemessene Cache-Quote: 0,35 %). FA-Prompts sind
+        // reine JSON-Generierung und nutzen keine Tools; der agentische Tier-D-Loop baut
+        // seinen Katalog in callWithTools() selbst und ist hiervon nicht betroffen.
+        // `+=` statt Überschreiben: ein Aufrufer, der es explizit setzt, behält die Hoheit.
+        $options += ['with_context' => false, 'tools' => false];
 
         if ($tierModell !== null && ! isset($options['model'])) {
             $options['model'] = $tierModell;
@@ -210,6 +278,8 @@ class AiGatewayService
         }
 
         $audit['layers_used'] = $layersUsed;
+        $audit['prompt_chars'] = $promptChars;
+        $audit['prompt_parts'] = $promptParts;
         $callLogId = $this->schreibeCallLog($promptKey, $tier, $userContent, $antwort, $parsed, $fehler, $elapsedMs, $audit);
 
         if ($fehler !== null) {
@@ -241,7 +311,32 @@ class AiGatewayService
      *
      * @return array{0:list<string>,1:list<string>}
      */
-    private function selectBoundKnowledge($rows, array $context, array $alreadyUsed): array
+    /**
+     * Bound-Budget für einen Prompt-Key: {docs, chars_per_doc, total}.
+     * Override in config('foodalchemist.ai.bound_knowledge_budget'), sonst die Defaults.
+     *
+     * @return array{docs: int, chars_per_doc: int, total: int}
+     */
+    private function boundBudget(string $promptKey): array
+    {
+        $default = [
+            'docs' => self::BOUND_KNOWLEDGE_MAX_DOCS,
+            'chars_per_doc' => self::BOUND_KNOWLEDGE_CHARS_PER_DOC,
+            'total' => self::BOUND_KNOWLEDGE_MAX_TOTAL_CHARS,
+        ];
+        $konfig = config('foodalchemist.ai.bound_knowledge_budget', []);
+        if (! is_array($konfig) || ! isset($konfig[$promptKey]) || ! is_array($konfig[$promptKey])) {
+            return $default;
+        }
+
+        return [
+            'docs' => (int) ($konfig[$promptKey]['docs'] ?? $default['docs']),
+            'chars_per_doc' => (int) ($konfig[$promptKey]['chars_per_doc'] ?? $default['chars_per_doc']),
+            'total' => (int) ($konfig[$promptKey]['total'] ?? $default['total']),
+        ];
+    }
+
+    private function selectBoundKnowledge($rows, array $context, array $alreadyUsed, array $budget): array
     {
         $bereits = [];
         foreach ($alreadyUsed as $used) {
@@ -266,7 +361,7 @@ class AiGatewayService
             $always = $mode === 'always';
             $docTokens = $this->knowledgeTokens(implode(' ', [
                 $slug, (string) $row->title, (string) $row->category,
-                mb_substr((string) $row->content_md, 0, 1200),
+                mb_substr((string) $row->content_md, 0, self::BOUND_KNOWLEDGE_MATCH_WINDOW),
             ]));
             $hits = count(array_intersect($queryTokens, $docTokens));
             if (! $always && $hits === 0) {
@@ -281,17 +376,36 @@ class AiGatewayService
 
         $blocks = [];
         $slugs = [];
-        foreach (array_slice($kandidaten, 0, self::BOUND_KNOWLEDGE_MAX_DOCS) as $kandidat) {
+        $verbraucht = 0;
+        $verworfen = 0;
+        foreach (array_slice($kandidaten, 0, $budget['docs']) as $kandidat) {
             $doc = $kandidat['row'];
             $content = (string) $doc->content_md;
-            $blocks[] = "## GEBUNDEN: {$doc->slug}\n\n"
-                . (mb_strlen($content) > self::BOUND_KNOWLEDGE_CHARS_PER_DOC
-                    ? mb_substr($content, 0, self::BOUND_KNOWLEDGE_CHARS_PER_DOC) . "\n\n[…gekürzt für KI-Kontext…]"
-                    : $content);
+            $laenge = mb_strlen($content);
+
+            // Kandidaten sind nach Score sortiert, `always` bekommt +1000 — Pflicht-Dossiers
+            // ziehen ihr Budget also VOR den score-gegateten. Unter 500 Zeichen Restbudget
+            // ist ein weiterer Anschnitt nur noch Rauschen: abbrechen und den Rest als
+            // `dropped` ausweisen, statt ihn unsichtbar zu verlieren.
+            $rest = $budget['total'] - $verbraucht;
+            if ($rest < 500) {
+                $verworfen += $laenge;
+                continue;
+            }
+            $deckel = min($budget['chars_per_doc'], $rest);
+
+            if ($laenge > $deckel) {
+                $blocks[] = "## GEBUNDEN: {$doc->slug}\n\n" . mb_substr($content, 0, $deckel) . "\n\n[…gekürzt für KI-Kontext…]";
+                $verbraucht += $deckel;
+                $verworfen += $laenge - $deckel;
+            } else {
+                $blocks[] = "## GEBUNDEN: {$doc->slug}\n\n" . $content;
+                $verbraucht += $laenge;
+            }
             $slugs[] = "{$doc->slug}@v{$doc->version}";
         }
 
-        return [$blocks, $slugs];
+        return [$blocks, $slugs, $verworfen];
     }
 
     /** @return list<string> */
@@ -450,6 +564,13 @@ class AiGatewayService
             ];
             if (\Illuminate\Support\Facades\Schema::hasColumn('foodalchemist_ai_call_log', 'tokens_cached')) {
                 $values['tokens_cached'] = $antwort['usage']['input_tokens_details']['cached_tokens'] ?? null;
+            }
+            // W0-0 Messsonde — wie tokens_cached hinter hasColumn, damit ein noch nicht
+            // migrierter Stand den KI-Pfad nicht reißt.
+            if (isset($audit['prompt_chars']) && \Illuminate\Support\Facades\Schema::hasColumn('foodalchemist_ai_call_log', 'prompt_chars')) {
+                $values['prompt_chars'] = (int) $audit['prompt_chars'];
+                $values['prompt_parts'] = is_array($audit['prompt_parts'] ?? null)
+                    ? json_encode($audit['prompt_parts'], JSON_UNESCAPED_UNICODE) : null;
             }
             DB::table('foodalchemist_ai_call_log')->insert($values);
 

@@ -26,9 +26,16 @@ class KnowledgeContextService
         'mengen_defaults', 'techniken', 'bruehen_fonds',
     ];
 
-    public const CROSS_CUTTING_TRUNCATE_CHARS = 4000;
+    /**
+     * W0-4 — Pro-Doc-Deckel für die beiden Kategorien, die ihre Routing-Zeile NICHT lesen.
+     * `cross_cutting:always` und `domain:discovery` werten `max_chars_per_doc`/`max_docs`
+     * nur als Boolean-Gate aus (die Routing-Werte laufen ins Leere), sie sind also
+     * ausschließlich hier steuerbar. 7 Cross-Cutting-Dossiers à 4000 Z. waren allein
+     * 28.000 Z. — bei Features ohne Gesamtbudget (recipe.steps) ungedeckelt.
+     */
+    public const CROSS_CUTTING_TRUNCATE_CHARS = 1800;
 
-    public const DOMAIN_TRUNCATE_CHARS = 6000;
+    public const DOMAIN_TRUNCATE_CHARS = 2500;
 
     public const DOMAIN_TOP_K = 4;
 
@@ -37,14 +44,80 @@ class KnowledgeContextService
     public const MAX_PARTNERS = 28;
 
     /**
+     * W0-6 — Stoppwörter für die Retrieval-Lexik.
+     *
+     * Bis Welle 0 gab es zwei Tokenizer: dieser hier ohne Stoppliste (min. 3 Zeichen) und
+     * AiGatewayService::knowledgeTokens() mit Liste (min. 4). Folge: Füllwörter der
+     * Beschreibung („der", „mit", „ohne") wurden echte Ranking-Tokens und trafen über den
+     * Substring-Term beliebige Slugs — `der` ⊂ `moderne` ist ein real beobachteter Fall.
+     *
+     * Die Mindestlänge bleibt bewusst bei 3 und wird NICHT auf 4 gehoben (so stand es im
+     * Plan): `aal`, `oel`, `jus`, `roh`, `bio` sind bedeutungstragende Kurz-Tokens der
+     * Domäne. Die Fehltreffer kamen von Funktionswörtern, nicht von der Länge — also
+     * werden Funktionswörter entfernt, statt Fachvokabular mit abzuschneiden.
+     */
+    private const STOPWORDS = [
+        'der' => true, 'die' => true, 'das' => true, 'den' => true, 'dem' => true, 'des' => true,
+        'und' => true, 'oder' => true, 'mit' => true, 'ohne' => true, 'fuer' => true, 'auf' => true,
+        'von' => true, 'aus' => true, 'ein' => true, 'eine' => true, 'einer' => true, 'eines' => true,
+        'einen' => true, 'ist' => true, 'sind' => true, 'wird' => true, 'werden' => true,
+        'als' => true, 'auch' => true, 'sehr' => true, 'sowie' => true, 'nach' => true, 'bei' => true,
+        'rezept' => true, 'gericht' => true, 'basisrezept' => true, 'komponente' => true,
+        'zutaten' => true, 'werte' => true,
+    ];
+
+    /**
+     * W0-6 — der Substring-Term (+0,1 je Query-Token, das in einem Slug-Token steckt) darf
+     * erst ab dieser Länge feuern. Kurze Fragmente stecken zufällig in fast jedem Kompositum;
+     * ab 5 Zeichen ist ein Substring-Treffer in der Regel echt („steinpilz" ⊂
+     * „steinpilzrahmsauce").
+     */
+    private const DISCOVERY_SUBSTRING_MIN_LEN = 5;
+
+    /**
+     * W0-6 — Mindest-Score für lexikalische Discovery-Treffer.
+     *
+     * Bewusst NIEDRIG (Plan nannte 0,12) und nicht scharf gezogen: ein einzelner ECHTER
+     * Token-Treffer auf einem 5-Token-Slug gegen eine 12-Token-Query ergibt bereits nur
+     * Jaccard 1/16 = 0,0625 — ein Gate bei 0,12 würde ohne mitfeuernden Substring-Term
+     * genau die echten Treffer verwerfen. Die eigentliche Rausch-Quelle (Funktionswörter ×
+     * Substring) ist mit STOPWORDS + DISCOVERY_SUBSTRING_MIN_LEN an der Wurzel weg.
+     *
+     * Der finale Wert wird gegen echte Läufe kalibriert — dafür liefert contextFor() ab
+     * jetzt `score` und `via` je Treffer zurück, statt den Wert zu behaupten.
+     */
+    private const DISCOVERY_MIN_SCORE = 0.05;
+
+    /**
+     * W0-6 — Herkunft je ausgewähltem Doc-Slug: `via` (lexical|alias|semantic), `score`,
+     * `chars` (Doc-Größe) und `sent` (was nach dem Pro-Doc-Deckel wirklich rausging).
+     * Wird je contextFor()-Lauf zurückgesetzt und mit dem Block zurückgegeben.
+     *
+     * @var array<string, array{score: float|null, via: string, chars?: int, sent?: int}>
+     */
+    private array $herkunft = [];
+
+    /**
      * Rezept-Calls laufen in einer Kaskade (Gericht + Basisrezepte). Ohne einen featureweiten
      * Deckel addiert jede geroutete Discovery-Kategorie ihr eigenes Top-K und aus einem gezielten
      * Abruf werden 30–40 Volltext-Dossiers pro Call. Der Deckel gilt nur für den eigentlichen
      * Rezeptgenerator; Planungs-/Concept-Features behalten ihre eigenen Budgets.
      */
-    public const RECIPE_MAX_CHARS_PER_DOC = 3200;
+    public const RECIPE_MAX_CHARS_PER_DOC = 2400;
 
-    public const RECIPE_MAX_KNOWLEDGE_CHARS = 36000;
+    public const RECIPE_MAX_KNOWLEDGE_CHARS = 12000;
+
+    /**
+     * W0-5 — Gesamtbudget für JEDES Feature.
+     *
+     * Bis Welle 0 hatte nur `ai_generate_recipe` einen featureweiten Deckel; alle anderen
+     * (recipe.steps, concept.plan, foodbook.plan, foodbook.kapitel_ideen, format.grundgeruest,
+     * *.ueberarbeiten, recipe.eigenschaften) summierten ihre Pro-Doc-Caps unbegrenzt auf —
+     * gemessen bis 23.603 Tk/Call bei foodbook.kapitel_ideen. Feature-Overrides in
+     * config('foodalchemist.ai.knowledge_budget'), damit sie diff- und PR-fähig bleiben
+     * statt als unversionierte Handdaten in einer Tabelle zu driften (wie die Routings).
+     */
+    public const MAX_KNOWLEDGE_CHARS_DEFAULT = 12000;
 
     /** Spec 08 P6: Fallback-Budget für `concept:always`, wenn die Routing-Zeile nichts vorgibt. */
     public const CONCEPT_MAX_DOCS = 4;
@@ -58,7 +131,7 @@ class KnowledgeContextService
      * Haupt-Einstieg (Pseudocode §3): baut den Wissens-Block für ein KI-Feature.
      *
      * @param  list<string>  $hauptzutatSlugs  nur für Grounding-Features (ai_suggest_pairings, ai_infer_ankers)
-     * @return array{block: string, files_used: list<string>, used_by_category: array<string, list<string>>, total_chars: int}
+     * @return array{block: string, files_used: list<string>, used_by_category: array<string, list<string>>, total_chars: int, built_chars: int, dropped_chars: int, herkunft: array<string, array<string, mixed>>}
      */
     public function contextFor(string $feature, string $description, ?string $stil = null, array $hauptzutatSlugs = [], array $params = []): array
     {
@@ -69,6 +142,7 @@ class KnowledgeContextService
         $filesUsed = [];
         $usedByCategory = [];
         $parts = [];
+        $this->herkunft = [];
         $recipeBudget = $feature === 'ai_generate_recipe';
         $scopeSlugs = $this->knowledgeScopeSlugs($params['_knowledge_scope'] ?? []);
 
@@ -280,11 +354,83 @@ class KnowledgeContextService
         // (#469-Bindungs-Injektion passiert jetzt zentral im AiGatewayService::propose für ALLE Prompts.)
 
         $block = implode("\n\n", $parts);
-        if ($recipeBudget && mb_strlen($block) > self::RECIPE_MAX_KNOWLEDGE_CHARS) {
-            $block = $this->truncate($block, self::RECIPE_MAX_KNOWLEDGE_CHARS);
+        $gebaut = mb_strlen($block);
+        $budget = $this->knowledgeBudget($feature, $recipeBudget);
+        if ($gebaut > $budget) {
+            $block = $this->truncate($block, $budget);
         }
 
-        return ['block' => $block, 'files_used' => $filesUsed, 'used_by_category' => $usedByCategory, 'total_chars' => mb_strlen($block)];
+        return [
+            'block' => $block,
+            'files_used' => $filesUsed,
+            'used_by_category' => $usedByCategory,
+            'total_chars' => mb_strlen($block),
+            // W0-0/W0-6: was gebaut und dann verworfen wurde. Ohne diese Zahl ist ein
+            // Budget-Schnitt nicht von „Wissen fehlt jetzt" zu unterscheiden — und
+            // `files_used` listet weiterhin Dossiers, deren Text der Deckel gekappt hat.
+            'built_chars' => $gebaut,
+            'dropped_chars' => max(0, $gebaut - mb_strlen($block)),
+            'herkunft' => $this->herkunft,
+        ];
+    }
+
+    /**
+     * W0-5 — Summe der PFLICHT-Inhalte eines Features: was über `mode='always'` geroutet
+     * ist und deshalb unabhängig von jeder Relevanz in den Prompt MUSS.
+     *
+     * Warum das gebraucht wird: das Gesamtbudget kappt am ENDE des zusammengesetzten
+     * Blocks. Ist der Deckel kleiner als die Pflichtmenge, verschwindet das letzte
+     * `always`-Dossier mitsamt Überschrift — still, ohne Fehler, ohne Log. Genau die
+     * Fehlerklasse, die Welle 0 beseitigen soll. Also: Budget >= Pflichtmenge, maschinell
+     * geprüft (`foodalchemist:wissen-steuerdaten-w0 --verify`), nicht per Augenmaß.
+     *
+     * Die Rechnung spiegelt die Ist-Deckel der jeweiligen Block-Builder:
+     *   · cross_cutting — 7 feste Slugs, Routing-Werte werden ignoriert
+     *   · regelwerk     — `->first()`, also genau EIN Doc
+     *   · concept       — max_docs (Default CONCEPT_MAX_DOCS) × Doc-Deckel
+     *   · sonst         — alwaysCategoryBlock: max_docs (Default 2) × Doc-Deckel
+     */
+    public function pflichtZeichen(string $feature): int
+    {
+        $zeilen = DB::table('foodalchemist_knowledge_routings')
+            ->where('feature', $feature)->where('mode', 'always')->get();
+
+        $summe = 0;
+        foreach ($zeilen as $r) {
+            $docDeckel = (int) ($r->max_chars_per_doc ?: 0);
+            $summe += match ((string) $r->category) {
+                'cross_cutting' => count(self::ALWAYS_LOAD_CROSS_CUTTING) * self::CROSS_CUTTING_TRUNCATE_CHARS,
+                'regelwerk' => $docDeckel ?: self::REGELWERK_TRUNCATE_CHARS,
+                'concept' => ((int) ($r->max_docs ?: self::CONCEPT_MAX_DOCS)) * ($docDeckel ?: self::CONCEPT_TRUNCATE_CHARS),
+                default => ((int) ($r->max_docs ?: 2)) * ($docDeckel ?: 4000),
+            };
+        }
+
+        return $summe;
+    }
+
+    /** W0-5: das aufgelöste Zeichenbudget eines Features (für Prüf-Werkzeuge). */
+    public function budgetFuer(string $feature): int
+    {
+        return $this->knowledgeBudget($feature, $feature === 'ai_generate_recipe');
+    }
+
+    /**
+     * W0-5: Featureweites Zeichenbudget. Reihenfolge: Feature-Override aus der Config >
+     * Rezept-Sonderdeckel (historisch, bleibt der strengste) > Default.
+     *
+     * Bewusst auf `$feature` gekeyt, nicht auf den Prompt-Key: `vk.generator` ist KEIN
+     * Routing-Feature — Gerichte laufen über contextFor('ai_generate_recipe'). Ein
+     * Prompt-Key-Scope braucht erst den `_prompt_key`-Durchstich (Welle 1).
+     */
+    private function knowledgeBudget(string $feature, bool $recipeBudget): int
+    {
+        $overrides = config('foodalchemist.ai.knowledge_budget', []);
+        if (is_array($overrides) && isset($overrides[$feature]) && (int) $overrides[$feature] > 0) {
+            return (int) $overrides[$feature];
+        }
+
+        return $recipeBudget ? self::RECIPE_MAX_KNOWLEDGE_CHARS : self::MAX_KNOWLEDGE_CHARS_DEFAULT;
     }
 
     /**
@@ -345,7 +491,7 @@ class KnowledgeContextService
         $s = (string) preg_replace('/[^[:alnum:]]+/u', ' ', $s);
         $tokens = [];
         foreach (preg_split('/\s+/u', $s, -1, PREG_SPLIT_NO_EMPTY) ?: [] as $tok) {
-            if (mb_strlen($tok) >= 3) {
+            if (mb_strlen($tok) >= 3 && ! isset(self::STOPWORDS[$tok])) {
                 $tokens[$tok] = true;
             }
         }
@@ -748,10 +894,15 @@ class KnowledgeContextService
             return null;
         }
 
+        // W0-6 Rank-vor-Load: NUR die Ranking-Felder holen. Vorher lud diese Query
+        // `content_md` ALLER aktiven Docs der Kategorie in den PHP-Speicher, um damit
+        // ausschließlich Slug-Tokens zu vergleichen — bei `cross_cutting` 403.108 Zeichen
+        // für nichts, und mit dem Korpus mitwachsend. `discoverDomains()` macht das über
+        // domainSlugs()/domainDocsBySlug() schon richtig; der generische Pfad nicht.
         $docs = DB::table('foodalchemist_knowledge_documents')
             ->where('category', $category)->where('active', 1)->whereNull('deleted_at')
             ->when($allowedSlugs !== [], fn ($q) => $q->whereIn('slug', $allowedSlugs))
-            ->get(['id', 'slug', 'content_md', 'version']);
+            ->get(['id', 'slug', 'version']);
         if ($docs->isEmpty()) {
             return null;
         }
@@ -774,23 +925,34 @@ class KnowledgeContextService
         $scored = [];
         foreach ($docs as $doc) {
             $slugTokens = $this->tokenize((string) $doc->slug);
+            $substringHits = count(array_filter(
+                $tokens,
+                fn ($t) => mb_strlen($t) >= self::DISCOVERY_SUBSTRING_MIN_LEN
+                    && count(array_filter($slugTokens, fn ($st) => str_contains($st, $t))) > 0,
+            ));
+            $alias = isset($aliasBySlug[$doc->slug]);
             $score = $this->jaccard($tokens, $slugTokens)
-                + 0.1 * count(array_filter($tokens, fn ($t) => count(array_filter($slugTokens, fn ($st) => str_contains($st, $t))) > 0))
-                + (isset($aliasBySlug[$doc->slug]) ? 1.0 : 0.0);
-            if ($score > 0.0) {
-                $scored[] = [$doc, $score];
+                + 0.1 * $substringHits
+                + ($alias ? 1.0 : 0.0);
+            if ($score >= self::DISCOVERY_MIN_SCORE) {
+                $scored[] = [$doc, $score, $alias];
             }
         }
         usort($scored, fn ($x, $y) => $y[1] <=> $x[1]);
         $ordered = array_map(static fn ($s) => (string) $s[0]->slug, $scored);   // Lexik-Rangfolge
+        $lexScores = [];
+        foreach ($scored as $sc) {
+            $lexScores[(string) $sc[0]->slug] = ['score' => round((float) $sc[1], 4), 'via' => $sc[2] ? 'alias' : 'lexical'];
+        }
 
         // B2 — Semantischer Recall (Hybrid, opt-in): MERGEN statt nur auffüllen. Meaning-matched
         // Slugs werden VOR die Lexik gereiht (RAG darf korrigieren, nicht bloß ergänzen), gefiltert
         // auf die aktiven Kategorie-Docs. Deaktiviert (Default) / kein Provider ⇒ leer ⇒ die reine
         // Lexik bleibt führend (byte-identisches Alt-Verhalten).
         $docsBySlug = $docs->keyBy('slug');
+        $semantisch = $this->semanticSlugs($query, [$category], $topK);
         $pick = [];
-        foreach ([...$this->semanticSlugs($query, [$category], $topK), ...$ordered] as $slug) {
+        foreach ([...$semantisch, ...$ordered] as $slug) {
             if (isset($docsBySlug[$slug])) {
                 $pick[$slug] = true;
             }
@@ -800,12 +962,27 @@ class KnowledgeContextService
             return null;
         }
 
+        // W0-6: Volltext erst JETZT — für die Gewinner, nicht für die Kategorie.
+        $semSet = array_flip($semantisch);
+        $inhalte = DB::table('foodalchemist_knowledge_documents')
+            ->whereIn('slug', $pick)->where('active', 1)->whereNull('deleted_at')
+            ->get(['slug', 'content_md'])->keyBy('slug');
+
         $label = mb_strtoupper($category);
         $blocks = [];
         foreach ($pick as $slug) {
             $doc = $docsBySlug->get($slug);
-            $blocks[] = "## {$label}: {$doc->slug}\n\n" . $this->truncate((string) $doc->content_md, $maxChars);
+            $inhalt = (string) ($inhalte->get($slug)->content_md ?? '');
+            $blocks[] = "## {$label}: {$doc->slug}\n\n" . $this->truncate($inhalt, $maxChars);
             $filesUsed[] = "{$doc->slug}@v{$doc->version}";
+            // Herkunfts-Messung: semantischer Recall darf die Lexik überstimmen — ohne
+            // diese Zuordnung ist nicht feststellbar, welcher Pfad die Treffer liefert
+            // (und damit auch nicht, ob ein Score-Gate richtig sitzt).
+            $this->herkunft[$slug] = isset($semSet[$slug])
+                ? ['score' => null, 'via' => 'semantic']
+                : ($lexScores[$slug] ?? ['score' => null, 'via' => 'unbekannt']);
+            $this->herkunft[$slug]['chars'] = mb_strlen($inhalt);
+            $this->herkunft[$slug]['sent'] = min(mb_strlen($inhalt), $maxChars);
         }
 
         return '# ' . $label . "-WISSEN\n\n" . implode("\n\n---\n\n", $blocks);

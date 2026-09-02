@@ -316,6 +316,79 @@ return [
         'max_tokens_default' => (int) env('FOODALCHEMIST_AI_MAX_TOKENS', 4096),
 
         /*
+         * W0-5 — Featureweites Wissens-Zeichenbudget (Input-Seite), je Routing-Feature.
+         * Ohne Eintrag gilt KnowledgeContextService::MAX_KNOWLEDGE_CHARS_DEFAULT (12.000)
+         * bzw. RECIPE_MAX_KNOWLEDGE_CHARS für `ai_generate_recipe`.
+         *
+         * Gemessene Ausgangslage (30 Tage demo, ⌀ tokens_in): kapitel_ideen 23.603 ·
+         * concept.plan 21.069 · format.grundgeruest 20.468 · recipe.steps 18.121 —
+         * alle ohne jeden Gesamtdeckel, weil nur der Rezeptgenerator einen hatte.
+         *
+         * Schlüssel ist das FEATURE (Routing-Ebene), nicht der Prompt-Key.
+         */
+        /*
+         * W0-3 — Budget des Layer-Bound-Kanals JE PROMPT-KEY (docs / chars_per_doc / total).
+         *
+         * Ohne Eintrag gelten die konservativen Defaults in AiGatewayService (3 / 1.400 /
+         * 4.200 = Verhalten vor Welle 0). Das ist Absicht: Bindings matchen auch auf das
+         * BEREICHS-Präfix, an `target_key='recipe'` hängen 24.520 Zeichen — ein global
+         * gehobener Deckel würde jeden `recipe.*`-Prompt mitverteuern.
+         *
+         * Die beiden Generatoren brauchen den großen Deckel, weil dort die Bau-§-Dossiers
+         * hängen, die per Discovery strukturell nicht surfacen (sie nennen kein Gericht):
+         *   recipe.generator: §2 1.968 + §3 2.459 + §4 2.630 + §5 4.796 + §6 2.609
+         *                     + §7 1.599 + Erstellungs-Dossier 1.409 = 17.470 Z.
+         *   vk.generator:     dieselben + regelwerk.regelwerk_verkaufsgerichte 8.309 = 25.779 Z.
+         * Reserve auf 20.000 / 28.000, weil die Dossiers über Browser/MCP live editierbar
+         * sind und ein Edit sonst still das letzte Dossier aus dem Block wirft.
+         */
+        'bound_knowledge_budget' => [
+            'recipe.generator' => ['docs' => 9, 'chars_per_doc' => 4800, 'total' => 20000],
+            'vk.generator' => ['docs' => 10, 'chars_per_doc' => 8400, 'total' => 28000],
+        ],
+
+        'knowledge_budget' => [
+            'concept.brief_geruest' => 10000,
+            'foodbook.kapitel_ideen' => 12000,
+            // cross_cutting:always (geseedet) = 7 × 1.800 = 12.600
+            'recipe.steps' => 13000,
+
+            /*
+             * ⚠ INVARIANTE: Der Deckel muss MINDESTENS die `always`-gerouteten Inhalte des
+             * Features tragen. Sonst kappt das Gesamtbudget genau das Pflichtwissen weg, das
+             * Welle 0 schützen soll — und zwar still (der Block wird am Ende abgeschnitten,
+             * das letzte `always`-Dossier verschwindet mitsamt seiner Überschrift).
+             * Gesichert durch WissenTokenWelle0Test „Budget traegt die Pflicht-Inhalte" und
+             * `foodalchemist:wissen-steuerdaten-w0 --verify` (gegen die LIVE-Tabelle).
+             *
+             * ⚠ Die Zahlen sind an der GESEEDETEN Routing-Lage bemessen, nicht an demo:
+             * die Live-Tabelle wurde von Hand auf `discovery` gedreht und weicht von den
+             * Migrationen ab. Eine frische DB (Disaster Recovery) hat also viel größere
+             * Pflicht-Blöcke als demo — der Deckel muss beide Zustände tragen.
+             *
+             * concept:always 4 × 4000 = 16.000 (+ Block-/Doc-Header, Kürzungs-Marker)
+             */
+            'concept.plan' => 29000,
+            'foodbook.plan' => 29000,
+            // concept:always 3 × 4000 = 12.000
+            'format.grundgeruest' => 13000,
+            // cross_cutting:always = 7 feste Slugs × CROSS_CUTTING_TRUNCATE_CHARS (1.800) = 12.600
+            'concept.wording' => 13500,
+            'foodbook.kundentext' => 13500,
+            // regelwerk:always 1 × 7000
+            'recipe.ueberarbeiten' => 8000,
+            'vk.ueberarbeiten' => 8000,
+            'foodbook.grundgeruest' => 8000,
+            // regelwerk:always 6.000 + produktion_kapazitat:always 3 × 7.000 = 27.000.
+            // Liegt ÜBER dem heutigen Ist-Verbrauch (⌀ 4.031 Tk) — der Deckel greift also
+            // praktisch nicht. Das ist Absicht: hier ist nicht das Budget zu klein, sondern
+            // die Pflichtmenge absurd groß für einen Klassifikations-Prompt. Reduziert wird
+            // sie in Welle 2, wenn der Kanon die `always`-Routings ersetzt; bis dahin darf
+            // der Deckel sie nicht stillschweigend abschneiden.
+            'recipe.eigenschaften' => 27500,
+        ],
+
+        /*
          * M7-02 / V-01: Tier→Modell-Mapping (06_KI §2). Modell-Strings sind
          * DEPLOYMENT-Config, nicht Spec — null = Plattform-Default-Modell
          * (LLMProviderContract-Binding entscheidet). Tier je Prompt steht in

@@ -81,8 +81,14 @@ class RecipeGeneratorService
             }
             if ($vkModus) {
                 // M6-06: VK-Achsen + Taxonomie-Vorrat für Klasse/AK-Vorschlag
+                // W0-8: Klassen abgeschalteter Hauptgruppen NICHT mehr anbieten. Migration 269
+                // (Taxonomie-Neutralisierung) hat APE/SNK/ALC/BVK/ALL auf `is_inactive` gesetzt —
+                // deren 21 von 57 Klassen gingen weiter in jeden VK-Prompt, die KI konnte also
+                // eine stillgelegte Klasse wählen. Das ist primär ein Korrektheits-Fix; der
+                // Token-Gewinn ist mit ~37 % einer kleinen Liste nebensächlich.
                 $kontext['speisen_klassen'] = \Platform\FoodAlchemist\Models\FoodAlchemistDishClass::query()
                     ->join('foodalchemist_dish_main_groups AS hg', 'hg.id', '=', 'foodalchemist_dish_classes.dish_main_group_id')
+                    ->where('hg.is_inactive', false)
                     ->selectRaw("foodalchemist_dish_classes.id AS id, CONCAT(hg.code, ' / ', foodalchemist_dish_classes.label) AS label")
                     ->orderBy('foodalchemist_dish_classes.id')->pluck('label', 'id')->all();
                 $kontext['aufschlagsklassen'] = \Platform\FoodAlchemist\Models\FoodAlchemistMarkupClass::where('is_inactive', false)
@@ -98,6 +104,7 @@ class RecipeGeneratorService
             $vorschlag = $this->ki->propose($vkModus ? 'vk.generator' : 'recipe.generator', $kontext, [
                 'knowledge' => $wissen['block'],
                 'knowledge_used' => $wissen['files_used'],            // M7-01: GL-13-§6-Audit-Lücke geschlossen
+                'knowledge_dropped_chars' => $wissen['dropped_chars'] ?? 0,   // W0-0 Messsonde
                 // M7-03 §3.3 (Ist: commands.rs:20766-20780): valides JSON ohne
                 // name/zutaten ist strukturell unbrauchbar → Gateway re-rollt
                 'structural_retry' => fn (array $parsed) => ! empty($parsed['werte']['name']) && ! empty($parsed['werte']['zutaten']),

@@ -66,12 +66,19 @@ const PAIRING_FIXTURE = "# Salbei\n"
     . "## Verbund-Pairings\n### Trinitas\n[[trinitasx|TrinitasX]]\n"
     . "## Notizen\nignore [[noise|Noise]]\n";
 
-it('GT-13-1: Tokenizer — Umlaut-Expansion, Bindestrich splittet, ≥3 Zeichen', function () {
-    $t = $this->svc->tokenize('Halve Hahn mit Holländer-Käse');
+it('GT-13-1: Tokenizer — Umlaut-Expansion, Bindestrich splittet, ≥3 Zeichen ohne Funktionswörter', function () {
+    $t = $this->svc->tokenize('Halve Hahn mit Holländer-Käse und Jus');
 
     expect($t)->toContain('hollaender')
         ->and($t)->toContain('kaese')
-        ->and($t)->toContain('mit');                                 // bleibt: genau 3 Zeichen
+        // Die Mindestlänge von 3 gilt weiter — belegt an einem 3-Zeichen-FACHWORT.
+        // `aal`, `oel`, `jus`, `roh`, `bio` sind bedeutungstragend und müssen bleiben.
+        ->and($t)->toContain('jus')
+        // W0-6: Funktionswörter sind ab jetzt draußen. Vorher wurde `mit` zu einem
+        // Ranking-Token und traf über den Substring-Term beliebige Slugs
+        // (real beobachtet: `der` ⊂ `moderne`).
+        ->and($t)->not->toContain('mit')
+        ->and($t)->not->toContain('und');
 });
 
 it('GT-13-2: Jaccard {butter,eigelb}×{butter,zucker} = 1/3', function () {
@@ -207,7 +214,7 @@ it('Inv. 7: ai_extract_recipe bleibt BEWUSST ohne Wissen (Routing none)', functi
     expect($this->svc->contextFor('ai_extract_recipe', 'Lachs mit Butter')['block'])->toBe('');
 });
 
-it('DoD: Assembly hält das Gesamtbudget — Rezeptwissen auf 36k Zeichen gedeckelt', function () {
+it('DoD: Assembly hält das Gesamtbudget — Rezeptwissen auf RECIPE_MAX_KNOWLEDGE_CHARS gedeckelt', function () {
     ($this->seedGenerator)(str_repeat('D', 20000));
     DB::table('foodalchemist_knowledge_documents')->where('category', 'cross_cutting')
         ->update(['content_md' => str_repeat('C', 20000)]);
@@ -215,9 +222,20 @@ it('DoD: Assembly hält das Gesamtbudget — Rezeptwissen auf 36k Zeichen gedeck
 
     $ctx = $this->svc->contextFor('ai_generate_recipe', 'Lachs mit brauner Butter und Walnuss');
 
-    expect($ctx['total_chars'])->toBeLessThanOrEqual(KnowledgeContextService::RECIPE_MAX_KNOWLEDGE_CHARS)
-        ->and(substr_count($ctx['block'], '[…gekürzt für KI-Kontext…]'))->toBe(7 + 3)
-        ->and($ctx['total_chars'])->toBe(mb_strlen($ctx['block']));
+    // +40 Toleranz für den Kürzungs-Marker, den truncate() NACH dem Deckel anhängt
+    // (gleiche Toleranz wie RecipeKnowledgeBudgetTest).
+    expect($ctx['total_chars'])->toBeLessThanOrEqual(KnowledgeContextService::RECIPE_MAX_KNOWLEDGE_CHARS + 40)
+        ->and($ctx['total_chars'])->toBe(mb_strlen($ctx['block']))
+        // Der Block endet im Marker = das Gesamtbudget hat wirklich zugeschlagen.
+        ->and($ctx['block'])->toEndWith('[…gekürzt für KI-Kontext…]')
+        // Jedes geladene Dossier ist zusätzlich pro Doc gekappt. Eine EXAKTE Marker-Zahl
+        // (früher 7+3) ist seit W0-4 nicht mehr aussagekräftig: bei 12.000 Gesamtdeckel
+        // und 2.400 pro Doc ist der Block schon zu Ende, bevor alle zehn Dossiers
+        // angehängt sind — die hinteren Marker existieren gar nicht mehr im Ergebnis.
+        ->and(substr_count($ctx['block'], '[…gekürzt für KI-Kontext…]'))->toBeGreaterThanOrEqual(2)
+        // W0-0/W0-6: das Verworfene wird ausgewiesen statt still zu verschwinden.
+        ->and($ctx['built_chars'])->toBeGreaterThan($ctx['total_chars'])
+        ->and($ctx['dropped_chars'])->toBeGreaterThan(0);
 });
 
 // ── S1 (2026-08-07): generische, skalierbare discovery für wachsende Kategorien ──
