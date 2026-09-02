@@ -49,10 +49,35 @@ class Wissenskategorien extends Component
         $this->reset('editId', 'form', 'fehler');
     }
 
+    /**
+     * Schreibrecht auf eine Vokabular-Zeile — DASSELBE Modell, das `delete()` unten schon
+     * sauber führt: eigene Zeile immer, global (team_id NULL) nur als Master-Team, fremde
+     * niemals. `save()` und `toggleActive()` hatten diese Prüfung nicht, obwohl `delete()`
+     * in derselben Klasse sie ausführlich begründet — die Regel war auf halber Strecke
+     * stehengeblieben. Ein Kind-Team konnte damit das für ALLE geltende Vokabular
+     * umbenennen oder abschalten (`toggleActive` nimmt die ID direkt vom Client).
+     *
+     * Lesen bleibt bewusst gemeinsam (das Vokabular trägt den Generator für alle) —
+     * gescopet ist nur das Schreiben. Vgl. MANDANTEN-INVARIANTE in KnowledgeContextService.
+     */
+    private function darfAendern(?int $zeileTeamId): bool
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        $istMaster = $team !== null && $team->parent_team_id === null;
+
+        return TeamScope::owns($zeileTeamId, $team) || ($zeileTeamId === null && $istMaster);
+    }
+
     public function save(): void
     {
         if (trim((string) ($this->form['label'] ?? '')) === '') {
             $this->fehler = 'Label ist Pflicht.';
+
+            return;
+        }
+        $kat = DB::table('foodalchemist_knowledge_categories')->where('id', $this->editId)->first(['team_id']);
+        if ($kat === null || ! $this->darfAendern($kat->team_id)) {
+            $this->fehler = 'Geerbtes/globales Vokabular — umbenennen kann nur das Besitzer-Team.';
 
             return;
         }
@@ -101,11 +126,16 @@ class Wissenskategorien extends Component
 
     public function toggleActive(int $id): void
     {
-        $zeile = DB::table('foodalchemist_knowledge_categories')->where('id', $id)->first(['active']);
-        if ($zeile !== null) {
-            DB::table('foodalchemist_knowledge_categories')->where('id', $id)
-                ->update(['active' => ! $zeile->active, 'updated_at' => now()]);
+        // $id kommt direkt vom Client — ohne Eigentumsprüfung liesse sich jede fremde oder
+        // globale Kategorie abschalten, und damit ihr Wissen aus allen Prompts nehmen.
+        $zeile = DB::table('foodalchemist_knowledge_categories')->where('id', $id)->first(['active', 'team_id']);
+        if ($zeile === null || ! $this->darfAendern($zeile->team_id)) {
+            $this->fehler = 'Geerbtes/globales Vokabular — aktiv/inaktiv setzt nur das Besitzer-Team.';
+
+            return;
         }
+        DB::table('foodalchemist_knowledge_categories')->where('id', $id)
+            ->update(['active' => ! $zeile->active, 'updated_at' => now()]);
     }
 
     /**

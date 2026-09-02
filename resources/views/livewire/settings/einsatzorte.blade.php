@@ -3,6 +3,10 @@
 
 <div class="space-y-5" data-settings-einsatzorte>
 
+    {{-- Der Eigentums-Riegel muss sichtbar sein: sonst klickt jemand auf einen geerbten
+         Einsatzort und es passiert wortlos nichts. --}}
+    @if($fehler !== null)<p class="text-xs text-rose-600" data-einsatzort-fehler>{{ $fehler }}</p>@endif
+
     @foreach([['Bereiche (grob)', $bereiche], ['KI-Prompts (fein)', $prompts]] as [$titel, $liste])
         <div>
             <p class="{{ $dt }} mb-1">{{ $titel }}</p>
