@@ -74,6 +74,8 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                 \Platform\FoodAlchemist\Console\KnowledgeEmbedCommand::class,
                 \Platform\FoodAlchemist\Console\EmbedCommand::class,
                 \Platform\FoodAlchemist\Console\EmbeddingsMigrateStoreCommand::class,
+                // Bereitschafts-Prüfung für den Cutover (lesend) — GO/NO-GO je Pool.
+                \Platform\FoodAlchemist\Console\EmbeddingCutoverCheckCommand::class,
                 \Platform\FoodAlchemist\Console\EmbedEvalCommand::class,
                 \Platform\FoodAlchemist\Console\MatcherEvalCommand::class,
                 \Platform\FoodAlchemist\Console\GeneratorEvalCommand::class,
