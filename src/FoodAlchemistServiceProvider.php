@@ -70,6 +70,8 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                 \Platform\FoodAlchemist\Console\WissenDeckungCommand::class,
                 // W1-1: misst Findbarkeit jenseits des Embedding-Fensters (vor/nach).
                 \Platform\FoodAlchemist\Console\WissenRecallProbeCommand::class,
+                // Leitungswasser: Regelwerk §11.2a + das fehlende GP (Freigabe Dominique 2026-09-03).
+                \Platform\FoodAlchemist\Console\WasserLeitungCommand::class,
                 \Platform\FoodAlchemist\Console\WissenSteuerdatenW0Command::class,
                 \Platform\FoodAlchemist\Console\KnowledgeEmbedCommand::class,
                 \Platform\FoodAlchemist\Console\EmbedCommand::class,
