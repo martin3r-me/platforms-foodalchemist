@@ -189,11 +189,8 @@
                                 <td>
                                     @if($z['gp']['lead_la'] ?? null)
                                         @php($la = $z['gp']['lead_la'])
-                                        {{ $la['supplier'] ?? '—' }} · {{ $la['article_number'] ?? '—' }}<br>
-                                        <span class="muted">{{ $la['designation'] ?? '—' }}</span>
-                                        @if(($la['price'] ?? null) !== null)
-                                            <br>{{ $money($la['price'], 2) }} / Kolli{{ ($la['qty'] ?? null) ? ' (' . $num($la['qty'], 3) . ' ' . ($la['unit_code'] ?? '') . ')' : '' }}
-                                        @endif
+                                        {{ $la['supplier'] ?? '—' }} · {{ $la['article_number'] ?? '—' }}@if(($la['price'] ?? null) !== null) · {{ $money($la['price'], 2) }}/Kolli{{ ($la['qty'] ?? null) ? ' (' . $num($la['qty'], 3) . ' ' . ($la['unit_code'] ?? '') . ')' : '' }}@endif
+                                        <br><span class="muted">{{ $la['designation'] ?? '—' }}</span>
                                     @else
                                         —
                                     @endif
@@ -224,14 +221,17 @@
             @else
                 {{-- Dichte Tabelle statt Kasten je Schritt: der Text liest sich am Stück,
                      die Fotos kommen als eine Reihe darunter. --}}
+                @php($stepsMitFoto = $fotos->pluck('step')->unique()->all())
                 <div class="steps">
                     @foreach($steps as $s)
-                        <div class="step-row"><span class="step-nr">{{ $s['position'] }}</span>@if($s['phase'])<span class="step-phase">{{ $s['phase'] }}:</span> @endif{{ $s['text'] }}</div>
+                        <div class="step-row"><span @class(['step-nr', 'hat-foto' => in_array($s['position'], $stepsMitFoto, true)])>{{ $s['position'] }}</span>@if($s['phase'])<span class="step-phase">{{ $s['phase'] }}:</span> @endif{{ $s['text'] }}</div>
                     @endforeach
                 </div>
                 @if($fotos->isNotEmpty())
                     <div class="photo-strip">
                         @foreach($fotos as $foto)
+                            @php($capRoh = trim((string) ($foto['caption'] ?? '')))
+                            @php($cap = ($capRoh === '' || preg_match('/schritt\s*' . preg_quote((string) $foto['step'], '/') . '\s*$/iu', $capRoh)) ? null : $capRoh)
                             <span class="ps-item">
                                 @if($foto['src'] ?? null)
                                     <img src="{{ $foto['src'] }}" alt="Schritt {{ $foto['step'] }}">
@@ -239,7 +239,7 @@
                                     {{-- Kein dataUri lesbar: ehrlicher Platzhalter statt kaputtem Bild-Rahmen. --}}
                                     <span class="photo-missing">Bild nicht verfügbar</span>
                                 @endif
-                                <span class="ps-cap"><strong>Schritt {{ $foto['step'] }}</strong>@if($foto['caption'] ?? null) · {{ $foto['caption'] }}@endif</span>
+                                <span class="ps-cap"><strong>Schritt {{ $foto['step'] }}</strong>@if($cap) · {{ $cap }}@endif</span>
                             </span>
                         @endforeach
                     </div>

@@ -35,6 +35,7 @@
         .steps { border-top: 1px solid #e5e7eb; margin: 4px 0 6px; }
         .step-row { border-bottom: 1px solid #f3f4f6; padding: 3px 0 3px 0; page-break-inside: avoid; }
         .step-nr { display: inline-block; width: 0.75cm; color: {{ $brand }}; font-weight: 700; }
+        .step-nr.hat-foto { width: auto; min-width: 0.42cm; margin-right: 0.28cm; padding: 0 3px; background: {{ $brand }}; color: #fff; text-align: center; }
         .step-phase { font-style: italic; color: #4b5563; }
         .photo-strip { margin: 4px -3px 9px; font-size: 0; page-break-inside: avoid; }
         .photo-strip .ps-item { display: inline-block; width: 24.6%; margin: 0 3px 5px; vertical-align: top; }
