@@ -33,6 +33,11 @@ afterEach(function () {
 });
 
 it('importiert Klasse A, ist idempotent und zählt version bei Inhalts-Änderung hoch', function () {
+    // Welle 0: der Import seedet KEINE Routings mehr (`seedRoutings` ist raus, die Politik
+    // liegt in `foodalchemist:knowledge-policy-seed`). Deshalb hier eine Invariante statt
+    // einer gepinnten Zahl: was vor dem Import stand, steht danach unverändert.
+    $routingsVorher = DB::table('foodalchemist_knowledge_routings')->count();
+
     $this->artisan('foodalchemist:knowledge-import', ['--vault' => $this->vault, '--rust-src' => $this->rustSrc])
         ->assertSuccessful();
 
@@ -41,11 +46,10 @@ it('importiert Klasse A, ist idempotent und zählt version bei Inhalts-Änderung
     expect(DB::table('foodalchemist_knowledge_documents')->whereIn('category', ['cross_cutting', 'domain', 'pairing'])->count())->toBe(3)
         ->and(DB::table('foodalchemist_knowledge_documents')->where('slug', 'pairing.salbei')->value('category'))->toBe('pairing')
         ->and(DB::table('foodalchemist_knowledge_aliases')->count())->toBe(2)
-        // Generator-/Planungs-Routings + Step-by-Step-Discovery + recipe.eigenschaften-Wissen (#2-A:
-        // produktion_kapazitat + regelwerk) + Workstream-W-Erdung MCP-Steuerbarkeit (D2c/D3
-        // recipe.ueberarbeiten + vk.ueberarbeiten am Regelwerk; D5c concept.wording + D7
-        // foodbook.kundentext an cross_cutting) — Katalog auf 31 gewachsen.
-        ->and(DB::table('foodalchemist_knowledge_routings')->count())->toBe(31);
+        // Der Import ist gegenüber der Steuer-Politik NEUTRAL: er legt Dokumente und Aliase an,
+        // aber keine Routing-Zeile. Vorher lag hier `->toBe(31)` — die 8 zusätzlichen Zeilen kamen
+        // aus `seedRoutings()`, das auf frischer DB den Monolithen-Pfad wiederherstellte.
+        ->and(DB::table('foodalchemist_knowledge_routings')->count())->toBe($routingsVorher);
 
     // 2. Lauf: nichts ändert sich (idempotent)
     $this->artisan('foodalchemist:knowledge-import', ['--vault' => $this->vault, '--rust-src' => $this->rustSrc])->assertSuccessful();
