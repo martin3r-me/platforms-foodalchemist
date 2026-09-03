@@ -164,6 +164,58 @@ gebundenes Regelwerk verhindert den Verstoss offenbar nicht.
 ### ○ Slot-Deckel für Angebot/Format — OFFEN
 Heute weder Gate noch Deckel.
 
+## Der Apfel-Fall — drei Theorien, zwei davon falsch (2026-09-03)
+
+Das Qualitäts-Gate (Gericht 3689) band `Apfel: TK, Wuerfel`, wo ein frischer, spezifischer
+Apfel gehört hätte. Der Weg zur Ursache ist protokollierenswert, weil ich zweimal die falsche
+Stelle beschuldigt habe — beide Male, weil ein Etikett log.
+
+**Theorie 1 (falsch): der Frische-Hook ist nur ein Tiebreaker.** Stimmt als Beobachtung
+(`variantRankResolved` entscheidet laut Docblock nur bei Score-Gleichstand, während das
+Tool-Schema `frische` als »harten Resolver-Hook« bewirbt) — war aber nicht die Ursache.
+
+**Theorie 2 (falsch): der Resolver hat falsch gewählt.** Gegenprobe am echten Matcher:
+`candidatesFor("Apfel")` liefert `Apfel Royal Gala: Ganz` als **Platz 1**. Der Resolver hätte
+richtig gewählt.
+
+**Tatsächliche Ursache: das MODELL hat die `gp_id` vorgeschlagen, der Resolver lief nie.**
+Der Generator verdrahtet eine vom Modell gelieferte `gp_id` direkt (B0-Kern, gepinnt in
+`RecipeGeneratorTest:515`). Das Modell nahm, was im Bestands-Kontext stand.
+
+**Und damit ist der eigentliche Befund der gesättigte Score:**
+
+| # | Kandidat für »Apfel« | Score |
+|---|---|---|
+| 1 | Apfel Royal Gala: Ganz | **1.001** |
+| 2–9 | Apfel-Sorbet Granny Smith · Apfel-Sorbet · Apfel: TK, Wuerfel · Apfel: TK, gewuerfelt BIO · Ruehrkuchen mit Apfel · Apfel: konserviert · Kompott: Apfel · Gel: Apfel | **alle 1.001** |
+
+Neun punktgleiche Kandidaten heisst: die Rangfolge ist **beliebig**, und welche davon in den
+Modell-Kontext kommen, entscheidet keine Relevanz. Dieselbe Klasse wie der `gpPool`-Fehler
+(kappte nach ID statt Relevanz) — dort behoben, hier eine Ebene tiefer.
+
+**Dritter Befund, der jede Reparatur allein zunichte macht:** `Apfel Royal Gala: Ganz` hat
+`condition = NULL` (einer von **163** lebenden approved GPs, davon **76 in Rezepten**). Im
+Tiebreaker ergibt das Rang 0, während `Ruehrkuchen mit Apfel: frisch` durch das Wort »frisch«
+im Namen **+3** bekommt. Ein funktionierender Frische-Hook würde also einen **Rührkuchen** vor
+den Apfel setzen.
+
+**Gemessen und deshalb NICHT gemacht:** der Klassifikator `gp.condition` kostet nur ~170 Token
+pro GP (163 GPs ≈ 0,14 €) — lieferte im Einzeltest an Gala aber **null Vorschläge**. Ein
+Massenlauf gegen eine an 1 von 1 widerlegte Wirksamkeit wäre Geld gegen eine Annahme.
+Erst klären, warum der Vorschlag ausbleibt.
+
+**Kriterium für den Fix, von Dominique geschärft:** nicht »Gala muss gewinnen« — *»es gibt auch
+andere Äpfel«*. Das Ziel ist die **Klasse** der Antwort: eine spezifische, frische, ganze Sorte
+schlägt den TK-Würfel. Welche Sorte, entscheidet das Gericht.
+
+**Erledigt:** §10-Bremse gegen generische Namen im `GpNamingService` (Hard-Error beim Namen,
+nicht erst im Critic) · Fallback-Provenienz `manual` → `gp_v2_fk`, damit künftige Diagnosen
+lesbar sind.
+
+**Offen und Dominiques Entscheid:** den gesättigten Score reparieren und `frische` tatsächlich
+hart machen. Herzstück-Chirurgie mit ~200 Golden-Tests daran — der Sherryessig-Fix hat gezeigt,
+dass man dort einzeln und gemessen vorgeht, nicht in einem Zug.
+
 ## Offene Bauschritte
 
 | # | Punkt | Warum offen |
@@ -191,3 +243,4 @@ Cross-Refs: [[39_Worker_Betrieb_Runbook]] · [[41_Spec_Planungsmodul_Qualitaet]]
 - **2026-09-03** — Erstanlage. Programm lief bis hier nur in einer Session-Plandatei; damit war der Repo-Stand blind für 14 Commits. Zahlen sind gemessen (Messsonde `prompt_parts`), nicht geschätzt.
 - **2026-09-03** — W3-4-Analyse ergänzt: Tier-Etiketten stimmen nicht mit ihrem Inhalt überein. Tier B (»Mechanik-Labels«) trägt alle sieben grössten Verbraucher und ist zugleich der Fallback. W3-4 ist damit erst eine Re-Tierung, dann ein ENV-Schritt.
 - **2026-09-03 (Korrektur)** — die Entscheide-Liste war aus dem Plandokument übernommen und veraltet. Gegen den Live-Stand geprüft: Leitungswasser ist erledigt (GP 9359 existiert, Alias korrigiert), der zweite Kurator ist entschieden (Retrieval global, Schreibseite gescopet). Offen bleiben Kanon §1+§10, §2-Erzwingung und der Slot-Deckel. Lehre: eine »offen«-Liste gegen den Bestand prüfen, nicht aus dem Plan kopieren.
+- **2026-09-03 (Apfel)** — Ursache des TK-Apfels: nicht der Frische-Hook und nicht der Resolver (der wählt richtig), sondern das Modell wählt aus einem Kontext, dessen Kandidaten alle denselben Score 1.001 tragen. Plus 163 GPs ohne `condition`. §10-Namensbremse und ehrliche Fallback-Provenienz erledigt; Score-Reparatur offen.
