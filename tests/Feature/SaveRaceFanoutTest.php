@@ -86,22 +86,62 @@ it('Cockpit-Fan-out: zwei offene Drafts mounten je eine eigene Editor-Instanz', 
         'team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'rezept', 'status' => 'done',
         'label' => 'Draft B', 'ref_id' => $this->rezeptB->id, 'sort' => 2,
     ]);
+    // 2026-09-03: Stufe C ist NEU und trägt den Fall, den der Docblock oben (Punkt 4) beschreibt,
+    // erstmals ZUR LAUFZEIT — sie wiederverwendet DASSELBE Sub-Rezept wie Stufe A. Nur so kann ein
+    // rein ref_id-basierter wire:key zwei Instanzen per Morph kollabieren lassen; mit zwei
+    // verschiedenen Rezepten (A/B) ist der Fall unsichtbar. Bisher prüfte nur ein statischer
+    // Blade-Grep weiter unten, dass die Step-ID im Key steht.
+    $stepC = FoodAlchemistCascadeRunStep::create([
+        'team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'rezept', 'status' => 'done',
+        'label' => 'Draft A (reused)', 'ref_id' => $this->rezeptA->id, 'sort' => 3,
+    ]);
 
     $cockpit = Livewire::test(PlanungIndex::class)
         ->set('sessionId', $session->id)
         ->set('laufId', $run->id)
         ->call('toggleZutaten', $stepA->id)
         ->call('toggleZutaten', $stepB->id)
-        ->assertSet('zutatenOffen', [$stepA->id, $stepB->id]);
+        ->call('toggleZutaten', $stepC->id)
+        ->assertSet('zutatenOffen', [$stepA->id, $stepB->id, $stepC->id]);
 
     $html = $cockpit->html();
-    // Beide Stufen sind aufgeklappt (Toggle-Label je offenem Draft).
-    expect(substr_count($html, 'Zutaten schließen'))->toBe(2)
+
+    // Editor-Wurzeln einsammeln. `wire:name` trägt JEDE montierte Instanz — auch die, die Livewire
+    // als nackten Platzhalter ausgibt, weil das Eltern-Memo sie schon kennt.
+    preg_match_all(
+        '/<[a-zA-Z0-9-]+[^>]*wire:name="foodalchemist\.recipes\.ingredient-editor"[^>]*>/',
+        $html,
+        $editorWurzeln
+    );
+    $editorIds = [];
+    foreach ($editorWurzeln[0] as $wurzel) {
+        if (preg_match('/wire:id="([^"]+)"/', $wurzel, $mid)) {
+            $editorIds[] = $mid[1];
+        }
+    }
+    preg_match_all('/worker-zutaten-\d+-\d+/', $html, $editorKeys);
+
+    // Alle drei Stufen sind aufgeklappt (Toggle-Label je offenem Draft).
+    expect(substr_count($html, 'Zutaten schließen'))->toBe(3)
         // … und JEDER Draft mountet einen EIGENEN, eindeutig gekeyten Editor (Step-ID + Rezept-ID).
         ->and($html)->toContain("worker-zutaten-{$stepA->id}-{$this->rezeptA->id}")
         ->and($html)->toContain("worker-zutaten-{$stepB->id}-{$this->rezeptB->id}")
-        // Zwei getrennte Livewire-Instanzen (nicht eine geteilte) — kein Save-Bleed möglich.
-        ->and(substr_count($html, 'wire:snapshot'))->toBe(2);
+        // Stufe C teilt das Rezept von A — der Key muss sie TROTZDEM trennen (Step-ID im Key).
+        ->and($html)->toContain("worker-zutaten-{$stepC->id}-{$this->rezeptA->id}")
+        ->and(array_unique($editorKeys[0]))->toHaveCount(3)
+        // KORREKTUR 2026-09-03: hier stand `substr_count($html, 'wire:snapshot')->toBe(2)`.
+        // Diese Zusicherung war UNERFÜLLBAR: einen `wire:snapshot` trägt nur ein Kind, das in
+        // GENAU DIESEM Request erstmals montiert wird; ein dem Eltern-Memo bereits bekanntes Kind
+        // gibt Livewire absichtlich als nackten Platzhalter aus (nur `wire:id` + `wire:name`), und
+        // `update()` legt den Eltern-HTML ohnehin nur in `effects['html']`. Bei GETRENNTEN
+        // toggleZutaten-Requests steht deshalb nie mehr als EIN Snapshot im HTML — der Test
+        // konnte nur rot sein.
+        //
+        // Der Ersatz misst, was gemeint war: drei VERSCHIEDENE Instanz-IDs. Wäre eine Instanz
+        // geteilt (Morph-Kollaps), stünde dieselbe `wire:id` zweimal im Render, weil der
+        // Platzhalter die ID des bekannten Kindes übernimmt. Das ist die Invariante
+        // „getrennte Instanzen, kein Save-Bleed" — unabhängig davon, welcher Request montiert.
+        ->and(array_unique($editorIds))->toHaveCount(3);
 });
 
 it('Blade-Vertrag: der Fan-out-Editor-Key ist eindeutig je Step (Step-ID, nicht nur Rezept-ID)', function () {

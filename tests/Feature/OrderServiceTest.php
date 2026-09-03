@@ -788,6 +788,64 @@ it('WaWi: Bestellschluss und Liefertage erzeugen operative Hinweise und Versands
     }
 });
 
+/*
+ * DIE LÜCKE, die erst beim Reparieren der zwei 09-Daten aufgefallen ist.
+ *
+ * Der Nachbar-Test oben pflegt `delivery_days` + `order_lead_days` + `order_cutoff_time`
+ * explizit. Für den NACKTEN Lieferanten — und das ist der Zustand der meisten echten
+ * Lieferanten, solange die Bestell-Logistik nicht gepflegt ist — gab es KEINE Zusicherung.
+ *
+ * Warum das gefährlich ist: `lieferTage()` degradiert bei fehlender Pflege sauber zu
+ * »keine Aussage« ([] → keine Warnung), `supplierDeadline()` ERFINDET dagegen eine
+ * Deadline (`endOfDay()` des Liefertags). Räumt eine spätere Session diese Asymmetrie auf
+ * und lässt `supplierDeadline` ohne Cutoff `null` liefern, dann werden die zwei oben
+ * reparierten Tests von SELBST grün, der gepflegte Nachbar-Test bleibt grün — und FA
+ * verschickt ab dann kommentarlos Bestellungen auf vergangene Liefertage.
+ *
+ * Dieser Test pinnt die Schutzwirkung an der Wurzel, unabhängig von Stammdaten-Pflege.
+ * Zeit gefroren, damit die Zusicherung nicht dieselbe Verrottung erbt wie die zwei 09-Daten.
+ *
+ * NICHT Teil dieser Zusicherung (eigene Aufgabe, weil nutzersichtbare Strings + die harte
+ * Blocker-Liste betroffen sind): dass der Blocker »Bestellschluss verpasst« heisst, obwohl
+ * der Lieferant gar keinen Bestellschluss trägt. Die SPERRE ist richtig, das ETIKETT nicht —
+ * `logistikInfo` liefert `cutoff => null` und trotzdem eine `deadline`, und der Editor druckt
+ * daraus »Bestellschluss: … 23:59« für einen Lieferanten ohne Bestellschluss.
+ */
+it('WaWi: vergangener Liefertag sperrt den Versand AUCH beim Lieferanten ohne Bestell-Logistik', function () {
+    Carbon::setTestNow(Carbon::parse('2026-08-20 09:00'));
+
+    // Bewusst NICHTS pflegen: delivery_days / order_lead_days / order_cutoff_time bleiben NULL,
+    // so wie firstOrCreate sie in der Fixture anlegt.
+    $chefs = FoodAlchemistSupplier::where('name', 'Chefs')->first();
+    expect([$chefs->delivery_days, $chefs->order_lead_days, $chefs->order_cutoff_time])
+        ->toBe([null, null, null]);
+
+    $line = $this->svc->addManualLine($this->rootTeam, $this->laOf['Mehl']->id, 2, null, null, '2026-08-19');
+    $order = $line->order()->with(['supplier', 'lines'])->first();
+
+    // Die Asymmetrie schwarz auf weiss: Liefertage sagen NICHTS (leer), ein Bestellschluss
+    // ist NICHT gepflegt (cutoff null) — und trotzdem steht eine Deadline im Raum.
+    $info = $this->svc->logistikInfo($order);
+    expect($info['delivery_days'])->toBe([])
+        ->and($info['cutoff'])->toBeNull();
+
+    // DAS ist die Zusicherung, die halten muss: der Versand ist gesperrt. Absichtlich NICHT
+    // am Wortlaut »Bestellschluss verpasst« festgemacht — das Etikett ist beim nackten
+    // Lieferanten sachlich falsch und darf umbenannt werden (eigene Aufgabe). Ein Test, der
+    // den String zementiert, würde diese Korrektur blockieren; einer, der die Sperre
+    // zementiert, fängt genau die Regression, um die es hier geht.
+    expect($this->svc->sendBlockers($order))->not->toBe([]);
+
+    expect(fn () => $this->svc->setStatus($this->rootTeam, $order->id, OrderStatus::Sent))
+        ->toThrow(RuntimeException::class, 'Bestellung kann nicht versendet werden');
+
+    // Und die Kehrseite: ein Liefertag in der Zukunft ist beim selben nackten Lieferanten frei.
+    $line2 = $this->svc->addManualLine($this->rootTeam, $this->laOf['Mehl']->id, 2, null, null, '2026-08-21');
+    $order2 = $line2->order()->with(['supplier', 'lines'])->first();
+
+    expect($this->svc->sendBlockers($order2))->toBe([]);
+});
+
 it('WaWi: Wareneingang bucht gelieferte Mengen und bewahrt Differenzen beim Geliefert-Status', function () {
     $this->svc->addNeedFromTarget($this->rootTeam, $this->ziel, 'recipe:kuchen@100');
     $chefs = FoodAlchemistOrder::whereHas('supplier', fn ($q) => $q->where('name', 'Chefs'))->first();
@@ -1321,6 +1379,7 @@ it('E1: parseHerkunft + Detail-Herkunft — Produktion mit id/Link, concept/reci
 });
 
 it('E1: MCP orders.UPDATE registriert + End-to-End (Kopf im Draft) + Guard nach send', function () {
+    Carbon::setTestNow(Carbon::parse('2026-08-01 09:00'));   // fixen 09-01-Liefertag (:1335) nicht rel. zu heute verfallen lassen — Bestellschluss-Guard
     $user = $this->makeUser($this->rootTeam);
     $this->actingAs($user);
     $registry = app(ToolRegistry::class);
@@ -1399,6 +1458,7 @@ it('WaWi: MCP orders.UPDATE pflegt AB, bestätigten Liefertag und Rechnungskopf'
 });
 
 it('WaWi: MCP orders.UPDATE uebernimmt Wareneingang und Rechnung als Massenaktion', function () {
+    Carbon::setTestNow(Carbon::parse('2026-08-01 09:00'));   // fixe 09-01/09-03-Liefertage nicht rel. zu heute verfallen lassen — Bestellschluss-Guard
     $user = $this->makeUser($this->rootTeam);
     $this->actingAs($user);
     $registry = app(ToolRegistry::class);

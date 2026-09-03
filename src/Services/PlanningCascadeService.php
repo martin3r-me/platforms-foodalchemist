@@ -114,6 +114,20 @@ class PlanningCascadeService
         // bis sie freigegeben wird (dann startet die nächste). Opt-out via optionen['staged']=false.
         $staged = (bool) ($optionen['staged'] ?? true);
 
+        // Der Proposal-Gate-Entscheid muss den START ÜBERLEBEN. `regeneriereStep` läuft in einem
+        // späteren Request und sieht nur noch den Run — ohne persistierte Marke musste es raten
+        // (staged + Session + Wurzel-gericht) und schickte damit auch Läufe ins Text-Gate, die nie
+        // eins hatten: die Batch-Skizze (Planung\Index, created_via 'plan_batch_skizze') und der
+        // MCP-Start (PlanungKaskadeStartPostTool) übergeben KEIN `proposal_first`, starten also auf
+        // dem Rezeptpfad — und wurden beim Fortsetzen auf GenerateDishProposalJob umgeleitet.
+        // Doppelt falsch bei der Skizze: das Text-Gate hat der Mensch mit der Auswahl der Skizze
+        // schon passiert. Darum wandert der Entscheid in die ohnehin persistierten `params`.
+        $proposalFirst = $scope === 'gericht' && $staged && $session !== null
+            && (bool) ($optionen['proposal_first'] ?? false);
+        if ($proposalFirst) {
+            $params['proposal_first'] = true;
+        }
+
         // Geplanter Pfad (Etappe 2b, „KI-Kopf"): der Concept-Step referenziert ein SCHON geprüftes
         // Draft-Concept ({@see ConceptGeneratorService::planAusBrief}) statt eines neu zu generierenden.
         // Ownership VOR der Run-Anlage prüfen — ein Fremd-/Fehl-Concept darf keinen Rumpf-Lauf hinterlassen.
@@ -160,7 +174,7 @@ class PlanningCascadeService
             } else {
                 $this->dispatchConceptStep($team, $step, $brief, $session?->id, $creativeMode, $params);
             }
-        } elseif ($scope === 'gericht' && $staged && $session !== null && (bool) ($optionen['proposal_first'] ?? false)) {
+        } elseif ($proposalFirst) {
             // Direkter Gericht-Go: zuerst nur ein kompakter Bauplan. Noch kein Rezeptdatensatz,
             // keine Dependencies und keine Anreicherung; der geplante Step ist das Freigabe-Gate.
             GenerateDishProposalJob::dispatch(
@@ -813,7 +827,12 @@ class PlanningCascadeService
      * Fächert ein frisch erzeugtes Konzept in erfundene Gerichte auf (Erfinden-Modus). Je LEEREM Slot
      * (kein Gericht, kein Paket) lässt die KI eine Gericht-Idee erfinden ({@see IdeenService::kiDivergenzConcept},
      * EIN Call für alle Slots), ordnet Ideen den Slots der Reihe nach zu, legt je Idee einen Kind-Step
-     * (kind=gericht, parent=Concept-Step) an und dispatcht {@see MaterializeConceptIdeaJob} (erdet + verdrahtet).
+     * (kind=gericht, parent=Concept-Step) im Status `geplant` an.
+     *
+     * VORSCHLAG-GATE (2026-09-01): hier wird NICHTS mehr dispatcht. {@see MaterializeConceptIdeaJob}
+     * (erdet + verdrahtet) startet erst der Mensch über {@see erzeugeGeplantenStep}. Dieser Satz stand
+     * bis 2026-09-03 im Gegenteil hier und hat eine Fehldiagnose erzeugt („die Paket-Slot-Erkennung ist
+     * verloren gegangen") — ein Docblock, der dem Code 60 Zeilen darunter widerspricht, ist Teil des Bugs.
      *
      * Gedeckelt ({@see CONCEPT_MAX_SLOTS}) gegen Runaway-Kosten bei großem Menü-Brief; überzählige leere
      * Slots werden übersprungen und ihre Zahl im Run (`params.gedeckelt_slots_offen`) vermerkt — kein
@@ -897,8 +916,10 @@ class PlanningCascadeService
         }
 
         // A1: eingebettete Pakete (Buffet-Stationen) rekursiv befüllen — je Paket seine INNEREN Gerichte
-        // erfinden. Der Paket-Auto-Preis (Σ) zieht nach, sobald die inneren Slots gefüllt sind
-        // (MaterializeConceptIdeaJob → fillSlot → refreshCache auf dem Paket-Concept). 1 Ebene tief
+        // erfinden. Der Paket-Auto-Preis (Σ) zieht nach, sobald die inneren Slots gefüllt sind — was
+        // seit dem Vorschlag-Gate NICHT automatisch passiert, sondern je innerem Slot erst nach dem
+        // menschlichen Klick (erzeugeGeplantenStep → MaterializeConceptIdeaJob → fillSlot →
+        // refreshCache auf dem Paket-Concept). 1 Ebene tief
         // (generierte Pakete verschachteln nicht), $seen schützt gegen zyklische Bestands-Embeds.
         $paketIds = FoodAlchemistConceptSlot::where('concept_id', $conceptId)
             ->whereNotNull('embedded_concept_id')
@@ -1825,10 +1846,17 @@ class PlanningCascadeService
         $params = is_array($run?->params) ? $run->params : [];
         $sessionId = $run?->planning_session_id !== null ? (int) $run->planning_session_id : null;
         $staged = (bool) ($run?->staged ?? false);
-        if ($step->kind === 'gericht' && $step->parent_step_id === null && $staged && $sessionId !== null) {
+        if ($step->kind === 'gericht' && $step->parent_step_id === null && $staged && $sessionId !== null
+            && (bool) ($params['proposal_first'] ?? false)) {
             // Ein fehlgeschlagener direkter Gerichtsvorschlag muss beim Resume wieder auf dieselbe
             // textliche Gate-Stufe gehen. Der generische Rezeptpfad wuerde sonst das Proposal-Gate
             // umgehen und sofort einen echten Gericht-Draft erzeugen.
+            //
+            // Die vierte Klausel (`params.proposal_first`) ist 2026-09-03 nachgezogen: vorher hatte
+            // dieser Zweig nur DREI Klauseln, der Go-Pfad aber VIER — er konnte den Entscheid nicht
+            // rekonstruieren, weil er nirgends persistiert war. Der zu breite Proxy leitete jeden
+            // gestuften Wurzel-gericht-Lauf mit Session ins Text-Gate um, auch Batch-Skizze und
+            // MCP-Start. Jetzt ist genau EIN Gate je Lauf gesetzt, egal wie oft man fortsetzt.
             GenerateDishProposalJob::dispatch(
                 $team->id,
                 (int) (Auth::id() ?? 0),

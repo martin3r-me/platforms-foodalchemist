@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\DB;
 use Platform\Core\Contracts\LLMProviderContract;
 use Platform\Core\Services\LLMProviderRegistry;
 use RuntimeException;
+use Platform\FoodAlchemist\Support\DossierText;
 
 /**
  * M0-14: KI-Gateway-Basis — Fassade vor dem Plattform-LLM (D3-Entscheid, hybrid).
@@ -418,7 +419,12 @@ class AiGatewayService
         $verworfen = 0;
         foreach (array_slice($kandidaten, 0, $budget['docs']) as $kandidat) {
             $doc = $kandidat['row'];
-            $content = (string) $doc->content_md;
+            // Provenienz-Vorspann der §-Dossiers raus: identischer Textbaustein in jedem
+            // Dossier, keine Regel darin, und der Titel trägt die Herkunft schon. Am
+            // Generator sind das 4 gebundene §-Dossiers × ~490 Z. ≈ 1.950 Zeichen je Call,
+            // bei vk.generator 6 × ≈ 2.900 — Platz, der bisher den PFLICHT-Deckel
+            // aufgefressen hat. Siehe DossierText für die Messung.
+            $content = DossierText::ohneVorspann((string) $doc->content_md);
             $laenge = mb_strlen($content);
 
             // Kandidaten sind nach Score sortiert, `always` bekommt +1000 — Pflicht-Dossiers

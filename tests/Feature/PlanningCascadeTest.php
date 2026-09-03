@@ -2261,6 +2261,37 @@ it('L1 goKaskade: Kreativ-Modus datenbank persistiert bestand=nur_bestand für d
     expect($session->refresh()->generation_params['bestand'] ?? null)->toBe('nur_bestand');
 });
 
+/*
+ * DIE NAHT, an der der Bug 2026-09-03 saß: der Go-Pfad entschied über das Proposal-Gate,
+ * schrieb den Entscheid aber nirgends hin — `regeneriereStep` läuft in einem späteren Request
+ * und musste ihn aus „gestuft + Session + Wurzel-gericht" RATEN. Der Proxy war zu breit und
+ * leitete auch Läufe ins Text-Gate um, die nie eins hatten (Batch-Skizze, MCP-Start).
+ *
+ * Dieser Test pinnt die Persistenz SELBST. Ohne ihn wäre sie ungeschützt: der Resume-Test
+ * unten setzt `params` von Hand, und der Gegen-Test in PlanungLeitstelleTest hat gar kein
+ * proposal_first — beide bleiben also grün, wenn jemand die Persistenz wieder entfernt, und
+ * der Resume-Zweig fiele still auf „nie Proposal" zurück. Genau die Klasse Lücke, in die ein
+ * Fixture läuft, das den geprüften Wert selbst herstellt.
+ */
+it('Go-Pfad PERSISTIERT den Proposal-Gate-Entscheid im Lauf (sonst kann Resume ihn nicht lesen)', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Gate-Persistenz', 'brief' => 'x']);
+
+    $mit = app(PlanningCascadeService::class)->starteKaskade(
+        $this->rootTeam, 'gericht', $session, 'voll_kreativ',
+        ['brief' => 'Ein warmer Hauptgang.', 'proposal_first' => true],
+    );
+
+    // Und die Gegenprobe: ohne die Option bleibt die Marke WEG — sonst bekäme die Batch-Skizze
+    // beim Fortsetzen ein Text-Gate, das sie mit der Skizzen-Auswahl längst passiert hat.
+    $ohne = app(PlanningCascadeService::class)->starteKaskade(
+        $this->rootTeam, 'gericht', $session, 'voll_kreativ',
+        ['brief' => 'Ein warmer Hauptgang.', 'created_via' => 'plan_batch_skizze'],
+    );
+
+    expect((bool) (($mit->refresh()->params ?? [])['proposal_first'] ?? false))->toBeTrue()
+        ->and((bool) (($ohne->refresh()->params ?? [])['proposal_first'] ?? false))->toBeFalse();
+});
+
 it('Resume eines direkten Gerichtsvorschlags bleibt im Proposal-Gate', function () {
     $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Retry Vorschlag', 'brief' => 'x']);
     $run = FoodAlchemistCascadeRun::create([
@@ -2271,6 +2302,12 @@ it('Resume eines direkten Gerichtsvorschlags bleibt im Proposal-Gate', function 
         'brief' => 'Ein warmer Hauptgang.',
         'status' => 'failed',
         'staged' => true,
+        // 2026-09-03: DIESE Vorbedingung stellte der Test nie her, obwohl sein Name sie behauptet.
+        // Vorher genügte dem Resume-Zweig „gestuft + Session + Wurzel-gericht" — ein zu breiter
+        // Proxy, der auch Läufe ohne Text-Gate umleitete (Batch-Skizze, MCP-Start). Jetzt liest er
+        // den persistierten Entscheid, also muss der Lauf ihn tragen. Ohne diese Zeile prüft der
+        // Test etwas anderes als sein Titel sagt.
+        'params' => ['proposal_first' => true],
     ]);
     FoodAlchemistCascadeRunStep::create([
         'team_id' => $this->rootTeam->id,

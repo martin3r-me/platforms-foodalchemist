@@ -110,6 +110,26 @@ it('Trait-Vertrag: ALLE Models tragen LogsActivity + BelongsToTeamHierarchy + Ha
             // kein uuid/deleted_at, kein Audit — bewusst ohne die vier Standard-Traits (wie ProductionEvent).
             continue;
         }
+        if (class_basename($klasse) === 'FoodAlchemistActiveOutlet') {
+            // Kein Katalog-Datensatz, sondern der persistierte ZEIGER der Betriebs-„Brille" je
+            // (User, Team) — durabler Zwilling der HTTP-Session (ActiveOutletContext:14-17).
+            // Die Absicht stand schon am Model selbst („bewusst schlank", :10), nur nie hier.
+            //  - kein BelongsToTeamHierarchy: die Zeile gehört EINEM User in EINEM Team.
+            //    scopeVisibleToTeam ORt `team_id IS NULL` + die Eltern-Kette ein — für einen
+            //    User-Zeiger wäre das eine Sichtbarkeits-AUSWEITUNG, dieselbe Lesart wie bei
+            //    $messreihen oben („team_id vorhanden, darf aber NICHT vererben").
+            //  - kein SoftDeletes: unique(user_id, team_id) + updateOrCreate — eine trashed
+            //    Zeile wäre für updateOrCreate unsichtbar und kollidierte am Unique; genau die
+            //    Falle, die GpFormService:43 mit withTrashed() umgeht. Kein Nutzen, nur Risiko.
+            //  - kein HasUuidV7: adressiert wird über (user_id, team_id), nie über eine externe
+            //    ID — Web-Dropdown und MCP (outlets.SET_ACTIVE) reichen User+Team durch.
+            //  - kein LogsActivity: ein UI-Umschalter, kein kuratierter Datensatz.
+            // Abgrenzung nach oben: die kuratierten Geschwister FoodAlchemistOutletSetting und
+            // FoodAlchemistTeamSetting tragen alle vier — ActiveOutlet ist kein Setting,
+            // sondern ein Zeiger auf eines.
+            continue;
+        }
+
         $traits = collect(class_uses_recursive($klasse))->keys()->map(fn ($t) => class_basename($t));
         $ohneHierarchie = array_merge($satelliten, $messreihen);
         $pflichten = in_array(class_basename($klasse), $ohneHierarchie, true)
