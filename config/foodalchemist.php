@@ -14,6 +14,34 @@
  */
 
 return [
+
+    /*
+    |--------------------------------------------------------------------------
+    | Warteschlangen
+    |--------------------------------------------------------------------------
+    |
+    | Fan-out-Jobs nach ARTEFAKT getrennt, damit ein großer Lauf nicht die kleinen, interaktiven
+    | Jobs verdrängt — und damit die Kaskade selbst schneller wird (Zellen und Sub-Rezepte laufen
+    | dann parallel statt hintereinander). Leer = unverändertes Verhalten (alles auf der
+    | Standard-Schlange) — bewusst der Default, weil Jobs auf einer Schlange ohne Worker LAUTLOS
+    | liegen bleiben: die Generierung stünde still, ohne Fehler.
+    |
+    | Scharfstellen in DIESER Reihenfolge:
+    |   1. deployen (nichts ändert sich)
+    |   2. in Forge einen ZWEITEN Queue Worker anlegen, der genau diese Schlange liest
+    |   3. die Env-Variablen setzen (z. B. FOODALCHEMIST_QUEUE_GERICHTE=fa-gerichte)
+    |
+    | Nicht mehrere Schlangen an einen Worker hängen (`--queue=fa-gerichte,default`): Laravel leert
+    | sie in der angegebenen Reihenfolge, der Fan-out würde die kleinen Jobs dann noch härter
+    | aushungern. Es braucht zwei Daemons. Details: {@see \Platform\FoodAlchemist\Support\Warteschlange}
+    |
+    */
+    'queue' => [
+        'gerichte' => env('FOODALCHEMIST_QUEUE_GERICHTE', ''),
+        'rezepte' => env('FOODALCHEMIST_QUEUE_REZEPTE', ''),
+        'kaskade' => env('FOODALCHEMIST_QUEUE_KASKADE', ''),
+        'anreichern' => env('FOODALCHEMIST_QUEUE_ANREICHERN', ''),
+    ],
     /**
      * Routing-Konfiguration
      * 

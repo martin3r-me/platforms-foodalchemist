@@ -29,6 +29,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipeStepPhoto;
 use Platform\FoodAlchemist\Models\FoodAlchemistSpeiseplan;
 use RuntimeException;
+use Platform\FoodAlchemist\Support\Warteschlange;
 
 /**
  * Der geteilte Kaskaden-Motor (Planungs-Kaskade). EIN Einstieg für alle Flächen: {@see starteKaskade}.
@@ -526,11 +527,13 @@ class PlanningCascadeService
         // Kompositions-Fix: die Menü-Leitplanken der Session (menue_*: Gänge/Preis-Korridor/Diät-Quoten/
         // Balance) an die Concept-Erzeugung reichen — sonst steuert die Menü-/Kapitel-Zusammenstellung nichts.
         $menueAchsen = $this->sessionMenueAchsen($team, $sessionId);
+        // Je Frame-Slot ein Concept — bei Foodbook/Angebot/Format also so viele, wie das
+        // Gerüst Slots hat (beim Angebot ungedeckelt). Eigene Schlange.
         GenerateConceptJob::dispatch(
             $runId, $team->id, (int) (\Illuminate\Support\Facades\Auth::id() ?? 0),
             $brief, (string) ($slot->label ?: null),
             $sessionId, $step->id, $creativeMode, false, false, $ownerType, $containerId, $menueAchsen
-        );
+        )->onQueue(Warteschlange::kaskade());
     }
 
     /**
@@ -724,10 +727,13 @@ class PlanningCascadeService
                         'status' => 'running',
                         'sort' => $idx,
                     ]);
+                    // Die größte Menge im System: bis 90 Zellen je Klick. Eigene Schlange,
+                    // damit sie nichts anderes verdrängt — und damit die Sub-Rezepte dieser
+                    // Zellen parallel auf `rezepte` weiterlaufen statt dahinter zu warten.
                     MaterializeSpeiseplanCellJob::dispatch(
                         $team->id, (int) (\Illuminate\Support\Facades\Auth::id() ?? 0),
                         $planId, $datum, $meal, (int) $linie->id, $brief, (int) $step->id, $session?->id
-                    );
+                    )->onQueue(Warteschlange::gerichte());
                     $idx++;
                 }
             }
@@ -1068,7 +1074,10 @@ class PlanningCascadeService
                 'sort' => $idx,
                 'slot_id' => (int) $slot->id,
             ]);
-            MaterializeSpeisekartePositionJob::dispatch($team->id, $userId, $rubrikId, $brief, (int) $step->id, $sessionId);
+            // Bis 40 Positionen je Karte, in einer Schleife — dieselbe Schlange wie die
+            // Speiseplan-Zellen: es ist dasselbe Artefakt (erzeugtes Gericht).
+            MaterializeSpeisekartePositionJob::dispatch($team->id, $userId, $rubrikId, $brief, (int) $step->id, $sessionId)
+                ->onQueue(Warteschlange::gerichte());
             $idx++;
         }
 
@@ -2109,7 +2118,11 @@ class PlanningCascadeService
 
         // Sub-Rezepte im Hintergrund mit-anreichern (nicht am Worker-Step sichtbar, wie allesAnreichern).
         foreach (app(\Platform\FoodAlchemist\Services\RecipeOneShotService::class)->subRezeptIds((int) $recipe->id) as $subId) {
-            EnrichRecipeJob::dispatch($team->id, (int) (Auth::id() ?? 0), (int) $subId, null, false, null, false, true);
+            // Schleife über alle Sub-Rezepte eines Gerichts — viele kleine Läufe hinter EINEM
+            // Klick. Eigene Schlange, damit sie den interaktiven Einzel-Anreicherungs-Klick
+            // (Rezept-/VK-Modal) nicht blockieren.
+            EnrichRecipeJob::dispatch($team->id, (int) (Auth::id() ?? 0), (int) $subId, null, false, null, false, true)
+                ->onQueue(Warteschlange::anreichern());
         }
 
         return $run;

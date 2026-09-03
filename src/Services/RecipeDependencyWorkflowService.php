@@ -11,6 +11,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistCascadeRecipeDependency;
 use Platform\FoodAlchemist\Models\FoodAlchemistCascadeRun;
 use Platform\FoodAlchemist\Models\FoodAlchemistCascadeRunStep;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
+use Platform\FoodAlchemist\Support\Warteschlange;
 
 /** Persistenter, begrenzter DAG für ineinander verschachtelte Basisrezepte. */
 class RecipeDependencyWorkflowService
@@ -135,11 +136,13 @@ class RecipeDependencyWorkflowService
             $runId = (string) Str::uuid();
             $child->update(['status' => 'running', 'generator_run_id' => $runId]);
             Cache::put(GenerateRecipeJob::cacheKey($runId), ['status' => 'pending'], now()->addMinutes(60));
+            // In der planChildren-Schleife: bis MAX_STEPS = 50 Sub-Rezepte je Lauf. Eigene
+            // Schlange, damit sie parallel zu den Gerichten laufen statt dahinter.
             GenerateRecipeJob::dispatch($runId, $team->id, $userId, $text, [
                 ...$childParameter,
                 'cascade_step_id' => $child->id,
                 'auto_dependencies' => true,
-            ], false, $kindVollAnreichern);
+            ], false, $kindVollAnreichern)->onQueue(Warteschlange::rezepte());
         }
     }
 
