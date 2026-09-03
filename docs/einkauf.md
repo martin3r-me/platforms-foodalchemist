@@ -99,6 +99,12 @@ vollständiges Lager zu führen:
   informieren, steht an genau einer Stelle im Code (`OrderService::HARTE_SPERREN` /
   `WEICHE_HINWEISE`); ein Test hält jedes erzeugte Etikett gegen dieses Register, damit ein
   neues nicht stillschweigend als „nur Hinweis" durchrutscht.
+- **Freigaben:** Anfrage, Zusage und Ablehnung werden am Beleg geführt (Status, Zeitpunkt,
+  Freigeber, Notiz). Eine **abgelehnte** Freigabe sperrt den Versand, eine **offene** nicht —
+  die Küche kommt auch bei abwesendem Freigeber an die Ware. Offen im Backlog: eine
+  **Betrags-Schwelle je Team/Betrieb**, oberhalb der die Freigabe automatisch entsteht und
+  dann auch sperrt. Solange sie von Hand angefragt wird, wäre eine harte Sperre beliebig —
+  wer keine Freigabe anfragt, hat keine offene.
 - **Lieferantenbestätigung:** Nach dem Absenden können AB-/Bestellnummer, bestätigter
   Liefertag und Bestätigungsnotiz am Beleg gepflegt werden. Speichern einer Bestätigung setzt
   gesendete Belege automatisch auf `bestätigt`.

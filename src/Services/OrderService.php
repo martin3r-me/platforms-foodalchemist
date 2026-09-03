@@ -70,7 +70,14 @@ class OrderService
      *  · `Reklamation offen`, `Zahlung überfällig` — Lieferanten-Historie, nicht dieser Beleg
      *  · `Liefertag abweichend`             — der Lieferant hat bestätigt, nur anders
      *  · `Freigabe offen`                   — die Küche kommt auch bei abwesendem Freigeber
-     *                                         an die Ware (Entscheid steht bei Dominique an)
+     *    an die Ware. Entschieden 2026-09-03 (Dominique): bleibt weich, „theoretisch müsste
+     *    man ab einer gewissen Summe sich Freigaben holen". Und genau das ist der Grund, warum
+     *    es heute NICHT hart sein kann: die Freigabe wird von HAND angefragt
+     *    (`approval_status` & Co. sind da, ein Auslöser nicht). Hart wäre sie damit beliebig —
+     *    wer keine anfragt, hat keine offene. Mit einer Betrags-Schwelle je Team/Betrieb
+     *    (Muster: `TeamSettingsService::skalar($team, …, $outlet)`, wie `stundensatz_eur`)
+     *    beantwortet sich die Frage von selbst: oberhalb der Schwelle MUSS sie hart sein,
+     *    darunter entsteht sie nie. Backlog, nicht heute.
      *  · `Bestellschluss heute`, `Liefertag heute` — knapp, aber nicht zu spät
      */
     public const WEICHE_HINWEISE = [
