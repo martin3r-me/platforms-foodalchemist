@@ -72,8 +72,8 @@ Produktion, Freitext, „nur mit Positionen" und „nur mit Klärung".
 | **Runden** | Persistente Klammer um die beteiligten Lieferantenbelege, mit Summen, Klärpunkten und Sammelversand. |
 | **Bedarfe** | Freigegebene Produktionsbedarfe planen; nachträglich geänderte Freigaben bleiben bis zur erneuten Freigabe gesperrt. |
 
-Hinweise wie **leer**, **Klärung**, **Mindestwert**, **Bestellschluss verpasst** und
-**Liefertag nicht beliefert** bleiben in allen Sichten sichtbar. Die Suche findet neben
+Hinweise wie **leer**, **Klärung**, **Mindestwert**, **Bestellschluss verpasst**,
+**Liefertag vorbei** und **Liefertag nicht beliefert** bleiben in allen Sichten sichtbar. Die Suche findet neben
 Lieferant, Anlass und Produktion auch interne Bestellnummern (`ord-…`),
 Lieferanten-AB-/Bestellnummern und Rechnungsnummern. Bearbeitet wird jede Bestellung im
 Vollbild-Editor.
@@ -87,11 +87,18 @@ vollständiges Lager zu führen:
   Bestellschluss und Vorlaufzeit werden pro Lieferant ausgewertet.
 - **Operative Warnungen:** Entwürfe markieren leere Bestellungen, Klärbedarf,
   unterschrittene Mindestwerte, verpasste Bestellschlüsse, nicht passende Liefertage und
-  abweichend bestätigte Liefertage.
+  abweichend bestätigte Liefertage. Ist beim Lieferanten **kein Bestellschluss gepflegt**
+  (weder Vorlaufzeit noch Uhrzeit), warnt der Beleg am **Liefertag** selbst — **Liefertag
+  vorbei** bzw. **Liefertag heute** — statt einen Bestellschluss zu behaupten, den es nicht
+  gibt. Die Sperrwirkung ist in beiden Fällen dieselbe.
 - **Vorschau-Warnungen:** Liefertag und Bestellschluss werden bereits in der Cockpit-Vorschau
   je Lieferant+Liefertag geprüft, bevor Drafts gespeichert werden.
-- **Versandsperren:** Leere, ungeklärte, nicht am Liefertag belieferbare oder nach
-  Bestellschluss liegende Bestellungen können nicht versehentlich als gesendet markiert werden.
+- **Versandsperren:** Leere, ungeklärte, nicht am Liefertag belieferbare, nach
+  Bestellschluss liegende oder auf einen **vergangenen Liefertag** datierte Bestellungen können
+  nicht versehentlich als gesendet markiert werden. Welche Hinweise sperren und welche nur
+  informieren, steht an genau einer Stelle im Code (`OrderService::HARTE_SPERREN` /
+  `WEICHE_HINWEISE`); ein Test hält jedes erzeugte Etikett gegen dieses Register, damit ein
+  neues nicht stillschweigend als „nur Hinweis" durchrutscht.
 - **Lieferantenbestätigung:** Nach dem Absenden können AB-/Bestellnummer, bestätigter
   Liefertag und Bestätigungsnotiz am Beleg gepflegt werden. Speichern einer Bestätigung setzt
   gesendete Belege automatisch auf `bestätigt`.

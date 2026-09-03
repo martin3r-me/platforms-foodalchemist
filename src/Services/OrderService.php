@@ -35,6 +35,58 @@ use Platform\FoodAlchemist\Models\FoodAlchemistSupplierItem;
  */
 class OrderService
 {
+    /**
+     * HARTE VERSANDSPERREN. Konstante statt Inline-Array in `sendBlockers()`, weil eine neue
+     * Sperr-Warnung dort sonst STILL zur bloßen Warnung degradiert: der Beleg zeigt den Hinweis,
+     * der Absenden-Knopf wird trotzdem aktiv, `setStatus(Sent)` friert den Snapshot ein und das
+     * Einkaufsjournal bucht ihn als Ist-Einkauf. Nicht umkehrbar in dem Sinn, der zählt — die
+     * Bestellung ist beim Lieferanten raus, auf den falschen Tag. Und kein Test schlägt an,
+     * weil die Warnung ja erzeugt wird.
+     *
+     * `public`, damit der Register-Test die Liste HIER liest statt sie nachzubauen — eine im
+     * Test kopierte Liste driftet vom Original weg und prüft am Ende sich selbst.
+     */
+    public const HARTE_SPERREN = [
+        'leer',
+        'Klärung',
+        'Liefertag nicht beliefert',
+        'Liefertag vorbei',
+        'Bestellschluss verpasst',
+        'Freigabe abgelehnt',
+    ];
+
+    /**
+     * Hinweise, die absichtlich NICHT sperren — die Küche kommt trotzdem an die Ware.
+     *
+     * Zusammen mit HARTE_SPERREN ist das das VOLLSTÄNDIGE Register aller Etiketten, die
+     * `orderWarnings()` und `supplierLogistikWarnings()` erzeugen können. Ein Wächter-Test
+     * liest die Literale aus dem Quelltext dieser Klasse und hält jedes gegen das Register:
+     * ein neues Etikett ist rot, bis jemand es ausdrücklich hart ODER weich stellt. Damit ist
+     * die Vollzähligkeit erzwungen und nicht behauptet.
+     *
+     * Bewusst weich, mit Begründung — das ist die inhaltliche Hälfte der Liste:
+     *  · `Mindestwert`, `Kontingent …`      — kaufmännisch, nicht operativ blockierend
+     *  · `WE-Differenz`, `RE-Differenz`     — treten erst NACH dem Versand auf
+     *  · `Reklamation offen`, `Zahlung überfällig` — Lieferanten-Historie, nicht dieser Beleg
+     *  · `Liefertag abweichend`             — der Lieferant hat bestätigt, nur anders
+     *  · `Freigabe offen`                   — die Küche kommt auch bei abwesendem Freigeber
+     *                                         an die Ware (Entscheid steht bei Dominique an)
+     *  · `Bestellschluss heute`, `Liefertag heute` — knapp, aber nicht zu spät
+     */
+    public const WEICHE_HINWEISE = [
+        'Mindestwert',
+        'WE-Differenz',
+        'RE-Differenz',
+        'Reklamation offen',
+        'Kontingent nicht gültig',
+        'Kontingent überschritten',
+        'Liefertag abweichend',
+        'Zahlung überfällig',
+        'Freigabe offen',
+        'Bestellschluss heute',
+        'Liefertag heute',
+    ];
+
     public function __construct(
         private PlanungsblattService $planung,
         private PriceService $preise,
@@ -3138,11 +3190,9 @@ class OrderService
      */
     public function sendBlockers(FoodAlchemistOrder $order): array
     {
-        $hart = ['leer', 'Klärung', 'Liefertag nicht beliefert', 'Bestellschluss verpasst', 'Freigabe abgelehnt'];
-
         return array_values(array_filter(
             $this->orderWarnings($order),
-            fn ($warning) => in_array($warning, $hart, true)
+            fn ($warning) => in_array($warning, self::HARTE_SPERREN, true)
         ));
     }
 
@@ -3152,11 +3202,17 @@ class OrderService
     public function logistikInfo(FoodAlchemistOrder $order): array
     {
         $supplier = $order->supplier ?? FoodAlchemistSupplier::find($order->supplier_id);
+        $uhrzeit = $supplier !== null ? $this->cutoffUhrzeit($supplier) : null;
         $deadline = $this->orderDeadline($order);
 
+        // `cutoff` an denselben Parser wie `deadline` binden: sonst zeigt die Payload eine
+        // Uhrzeit an (»12:00:00«, »abc«), zu der es keine Frist gibt. `deadline = null` ist ab
+        // jetzt die Aussage »dieser Lieferant hat keinen Bestellschluss« — der Editor guardet
+        // schon darauf und druckt dann nichts. `lead_days` bleibt int mit `?? 0`: NULL und 0
+        // heissen fachlich dasselbe (kein Vorlauf), die Aussage trägt `deadline`.
         return [
             'delivery_days' => $this->lieferTage($supplier),
-            'cutoff' => $supplier?->order_cutoff_time ?: null,
+            'cutoff' => $uhrzeit !== null ? sprintf('%02d:%02d', $uhrzeit[0], $uhrzeit[1]) : null,
             'lead_days' => max(0, (int) ($supplier?->order_lead_days ?? 0)),
             'deadline' => $deadline?->format('Y-m-d H:i'),
         ];
@@ -3193,14 +3249,23 @@ class OrderService
             $warnings[] = 'Liefertag nicht beliefert';
         }
 
+        // Zwei Fälle, zwei Etiketten. Trägt der Lieferant einen Bestellschluss (Vorlaufzeit
+        // ODER Uhrzeit gepflegt), heisst die Grenze so. Trägt er keinen, ist die Grenze der
+        // LIEFERTAG selbst — dann wird auch kein Bestellschluss behauptet. Die Schwelle ist
+        // in beiden Zweigen dieselbe wie bisher (`endOfDay(Liefertag)`), es sperrt also
+        // weiterhin genau dasselbe: nur das Wort ändert sich.
+        $now = Carbon::now();
         $deadline = $this->supplierDeadline($supplier, $date);
         if ($deadline !== null) {
-            $now = Carbon::now();
             if ($now->greaterThan($deadline)) {
                 $warnings[] = 'Bestellschluss verpasst';
             } elseif ($now->isSameDay($deadline)) {
                 $warnings[] = 'Bestellschluss heute';
             }
+        } elseif ($now->greaterThan($date->copy()->endOfDay())) {
+            $warnings[] = 'Liefertag vorbei';
+        } elseif ($now->isSameDay($date)) {
+            $warnings[] = 'Liefertag heute';
         }
 
         return $warnings;
@@ -3217,18 +3282,51 @@ class OrderService
         return $this->supplierDeadline($supplier, $date->copy());
     }
 
+    /**
+     * Gepflegte Bestellschluss-Uhrzeit als [Stunde, Minute], sonst null. Eigene Methode, weil
+     * an ihr auch hängt, OB der Lieferant einen Bestellschluss hat — nicht nur, wann er ist.
+     *
+     * Das optionale `:ss` schliesst einen stillen Fehler: `supplier_conditions.PUT` validiert
+     * das Format nicht, ein per MCP geschriebenes »12:00:00« matchte das alte Muster nicht und
+     * fiel damit in den endOfDay-Zweig — derselbe Bug wie beim nackten Lieferanten, nur mit
+     * gepflegtem Lieferanten und deshalb noch schwerer zu sehen.
+     *
+     * @return ?array{0:int,1:int}
+     */
+    private function cutoffUhrzeit(FoodAlchemistSupplier $supplier): ?array
+    {
+        $cutoff = trim((string) ($supplier->order_cutoff_time ?? ''));
+
+        return preg_match('/^(\d{1,2}):(\d{2})(?::\d{2})?$/', $cutoff, $m) === 1
+            ? [min(23, (int) $m[1]), min(59, (int) $m[2])]
+            : null;
+    }
+
+    /**
+     * Bestellschluss-Zeitpunkt für einen Liefertag — oder null, wenn der Lieferant keinen hat.
+     *
+     * Vorher lieferte der ungepflegte Lieferant `endOfDay(Liefertag)`, also einen ERFUNDENEN
+     * Bestellschluss. Folge: `logistikInfo` wies gleichzeitig `cutoff => null` und eine
+     * `deadline` aus, der Editor druckte daraus »Bestellschluss: … 23:59« für einen
+     * Lieferanten ohne Bestellschluss, und die Sperre trug ein Etikett, das sachlich falsch war.
+     *
+     * Drei Lagen, nicht zwei:
+     *   1. Uhrzeit gepflegt              → echte Frist (Vorlauf + Uhrzeit)
+     *   2. nur Vorlaufzeit gepflegt      → echte Frist, aber tagfein (Ende des Vorlauftags)
+     *   3. weder Vorlauf noch Uhrzeit    → KEINE Frist; der Liefertag selbst ist die Grenze
+     */
     private function supplierDeadline(FoodAlchemistSupplier $supplier, Carbon $date): ?Carbon
     {
         $leadDays = max(0, (int) ($supplier->order_lead_days ?? 0));
-        $deadline = $date->copy()->subDays($leadDays)->startOfDay();
-        $cutoff = trim((string) ($supplier->order_cutoff_time ?? ''));
-        if (preg_match('/^(\d{1,2}):(\d{2})$/', $cutoff, $m)) {
-            $deadline->setTime(min(23, (int) $m[1]), min(59, (int) $m[2]));
-        } else {
-            $deadline->endOfDay();
+        $uhrzeit = $this->cutoffUhrzeit($supplier);
+
+        if ($leadDays === 0 && $uhrzeit === null) {
+            return null;
         }
 
-        return $deadline;
+        $deadline = $date->copy()->subDays($leadDays)->startOfDay();
+
+        return $uhrzeit !== null ? $deadline->setTime($uhrzeit[0], $uhrzeit[1]) : $deadline->endOfDay();
     }
 
     /** @return list<int> */

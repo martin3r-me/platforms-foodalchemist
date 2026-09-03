@@ -90,6 +90,136 @@ beforeEach(function () {
 
 // Leak-sicher: setzt die (in einzelnen Tests via setTestNow gefrorene) Zeit nach JEDEM Test zurück,
 // damit fixe 2026-08-Datumswerte nicht rel. zur realen „heute" den Bestellschluss verpassen.
+/**
+ * DER RIEGEL vor der teuersten stillen Regression im Bestellwesen.
+ *
+ * `sendBlockers()` filtert die Warnungen gegen eine Aufzählung. Wer ein neues Sperr-Etikett
+ * erzeugt und dort einträgt zu vergessen, baut keinen sichtbaren Fehler: der Beleg zeigt den
+ * Hinweis brav an, der Absenden-Knopf wird aktiv, `setStatus(Sent)` friert den Snapshot ein
+ * und das Einkaufsjournal bucht ihn als Ist-Einkauf. Die Bestellung ist dann beim Lieferanten
+ * raus — auf den falschen Tag, mit der falschen Ware. Zurückholen geht nur per Anruf.
+ *
+ * Und kein Feature-Test schlägt an, weil die Warnung ja korrekt erzeugt wird.
+ *
+ * Darum zwei Ebenen, die sich NICHT doppeln:
+ *  1. Vollzähligkeit — jedes im Quelltext erzeugte Etikett liegt in genau einem Register.
+ *     Die Literale kommen aus dem CODE, nicht aus einer im Test nachgebauten Liste (eine
+ *     Kopie würde vom Original wegdriften und am Ende sich selbst prüfen).
+ *  2. Wirkung — ein vergangener Liefertag sperrt in JEDER Stammdaten-Lage. Absichtlich nicht
+ *     am Wortlaut festgemacht: das Etikett darf sich ändern, die Sperre nicht.
+ */
+it('ordnet JEDES im Code erzeugte Warn-Etikett genau einem Register zu (hart | weich)', function () {
+    $quelle = file_get_contents(
+        (new ReflectionClass(OrderService::class))->getFileName()
+    );
+
+    // Alle `$warnings[] = '…';`-Literale. Ein dynamisch gebautes Etikett gäbe es hier nicht —
+    // deshalb prüft die Gegenprobe unten, dass die Ausbeute plausibel groß ist.
+    preg_match_all("/\\\$warnings\\[\\] = '([^']+)'/u", $quelle, $m);
+    $erzeugt = array_values(array_unique($m[1]));
+
+    $hart = OrderService::HARTE_SPERREN;
+    $weich = OrderService::WEICHE_HINWEISE;
+    $register = array_merge($hart, $weich);
+
+    // Gegenprobe zuerst: läuft der Scan leer oder fast leer, prüft der Test nichts und wäre
+    // trügerisch grün (z. B. nach einem Refactor auf eine Enum oder einen Helfer).
+    expect(count($erzeugt))->toBeGreaterThanOrEqual(15,
+        'Der Quelltext-Scan findet kaum Etiketten — wurde die Erzeugung umgebaut? '
+        . 'Dann muss dieser Test der neuen Form folgen, sonst bewacht er nichts.');
+
+    foreach ($erzeugt as $etikett) {
+        // `toContain` ist in Pest VARIADISCH — eine Meldung als zweites Argument würde zum
+        // zweiten Suchbegriff und der Test schlägt mit seiner eigenen Fehlermeldung fehl.
+        // Darum `toBeTrue` mit Meldung; die Meldung ist hier der halbe Wert des Tests.
+        expect(in_array($etikett, $register, true))->toBeTrue(sprintf(
+            'Das Etikett „%s" steht in KEINEM Register. Entscheide bewusst: '
+            . 'HARTE_SPERREN (verhindert den Versand) oder WEICHE_HINWEISE (nur Anzeige). '
+            . 'Ohne Eintrag ist es faktisch weich — und das ist eine Entscheidung, die '
+            . 'niemand getroffen hat.',
+            $etikett
+        ));
+    }
+
+    // Kein Etikett darf in BEIDEN stehen — sonst entscheidet die Reihenfolge im Filter.
+    expect(array_intersect($hart, $weich))->toBe([]);
+
+    // Und das Register darf nicht über den Code hinauswachsen: ein Eintrag ohne Erzeuger ist
+    // toter Ballast, der beim nächsten Lesen für echte Deckung gehalten wird.
+    $ohneErzeuger = array_values(array_diff($register, $erzeugt));
+    expect($ohneErzeuger)->toBe([], 'Register-Einträge ohne Erzeuger im Code: ' . implode(', ', $ohneErzeuger));
+});
+
+it('sperrt einen vergangenen Liefertag in JEDER Stammdaten-Lage', function () {
+    Carbon::setTestNow(Carbon::parse('2026-08-20 09:00'));
+
+    // Vier Pflegegrade — die drei Lagen von supplierDeadline() plus der vollständige Fall.
+    // Der nackte Lieferant ist der Normalzustand, solange die Bestell-Logistik nicht gepflegt
+    // ist, und genau er hatte bis 2026-09-03 keine eigene Zusicherung.
+    $lagen = [
+        'nackt (nichts gepflegt)' => ['delivery_days' => null, 'order_lead_days' => null, 'order_cutoff_time' => null],
+        'nur Uhrzeit' => ['delivery_days' => null, 'order_lead_days' => 0, 'order_cutoff_time' => '12:00'],
+        'nur Vorlaufzeit' => ['delivery_days' => null, 'order_lead_days' => 2, 'order_cutoff_time' => null],
+        'voll gepflegt' => ['delivery_days' => '1,2,3,4,5', 'order_lead_days' => 1, 'order_cutoff_time' => '12:00'],
+        'Uhrzeit mit Sekunden (MCP-Schreibweise)' => ['delivery_days' => null, 'order_lead_days' => 0, 'order_cutoff_time' => '12:00:00'],
+    ];
+
+    $chefs = FoodAlchemistSupplier::where('name', 'Chefs')->first();
+    $line = $this->svc->addManualLine($this->rootTeam, $this->laOf['Mehl']->id, 2, null, null, '2026-08-18');
+
+    foreach ($lagen as $lage => $stamm) {
+        $chefs->update($stamm);
+        $order = $line->order()->with(['supplier', 'lines'])->first();
+
+        expect($this->svc->sendBlockers($order))
+            ->not->toBe([], "Vergangener Liefertag müsste sperren — Lage: {$lage}")
+            ->and(fn () => $this->svc->setStatus($this->rootTeam, $order->id, OrderStatus::Sent))
+            ->toThrow(RuntimeException::class);
+    }
+});
+
+it('nennt die Grenze beim Namen: Bestellschluss nur, wenn es einen gibt', function () {
+    Carbon::setTestNow(Carbon::parse('2026-08-20 09:00'));
+
+    $chefs = FoodAlchemistSupplier::where('name', 'Chefs')->first();
+    $line = $this->svc->addManualLine($this->rootTeam, $this->laOf['Mehl']->id, 2, null, null, '2026-08-18');
+
+    // Nackt: der Liefertag IST die Grenze — kein erfundener Bestellschluss, und die Payload
+    // behauptet auch keinen (der Editor guardet auf `deadline` und druckt dann nichts).
+    $chefs->update(['delivery_days' => null, 'order_lead_days' => null, 'order_cutoff_time' => null]);
+    $order = $line->order()->with(['supplier', 'lines'])->first();
+    $info = $this->svc->logistikInfo($order);
+
+    expect($this->svc->orderWarnings($order))->toContain('Liefertag vorbei')
+        ->and($this->svc->orderWarnings($order))->not->toContain('Bestellschluss verpasst')
+        ->and($info['cutoff'])->toBeNull()
+        ->and($info['deadline'])->toBeNull();
+
+    // Uhrzeit gepflegt: jetzt gibt es einen echten Bestellschluss — und er heisst so.
+    $chefs->update(['order_lead_days' => 0, 'order_cutoff_time' => '12:00']);
+    $order = $line->order()->with(['supplier', 'lines'])->first();
+    $info = $this->svc->logistikInfo($order);
+
+    expect($this->svc->orderWarnings($order))->toContain('Bestellschluss verpasst')
+        ->and($this->svc->orderWarnings($order))->not->toContain('Liefertag vorbei')
+        ->and($info['cutoff'])->toBe('12:00')
+        ->and($info['deadline'])->not->toBeNull();
+});
+
+it('Liefertag heute ist ein Hinweis, keine Sperre', function () {
+    Carbon::setTestNow(Carbon::parse('2026-08-20 09:00'));
+
+    FoodAlchemistSupplier::where('name', 'Chefs')
+        ->update(['delivery_days' => null, 'order_lead_days' => null, 'order_cutoff_time' => null]);
+
+    $line = $this->svc->addManualLine($this->rootTeam, $this->laOf['Mehl']->id, 2, null, null, '2026-08-20');
+    $order = $line->order()->with(['supplier', 'lines'])->first();
+
+    // Heute bestellen für heute ist knapp, aber nicht zu spät — die Küche darf das.
+    expect($this->svc->orderWarnings($order))->toContain('Liefertag heute')
+        ->and($this->svc->sendBlockers($order))->toBe([]);
+});
+
 afterEach(function () {
     \Illuminate\Support\Carbon::setTestNow();
 });
