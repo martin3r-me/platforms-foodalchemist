@@ -95,6 +95,34 @@ für §1+§10 im Prompt liegt bei 10,2 %.
   (je mehr Bestand gepflegt wird, desto unsichtbarer das Neue), und der Anti-Marker löschte
   den exakten Treffer der eigenen Suche.
 
+
+## W3-4 ist eine Falle, nicht nur ein Hebel (gemessen 2026-09-03)
+
+Der Plan warnte, Tier C sei laut Config für Vision reserviert, ein blinder ENV-Flip treffe also
+keinen Klassifikator. Beim Nachlesen der Registry Key für Key ist es **schlimmer**: die
+Tier-Etiketten beschreiben nicht mehr, was auf ihnen liegt.
+
+| Tier | Config-Kommentar sagt | trägt wirklich |
+|---|---|---|
+| **A** (20) | »Qualität (Generatoren, lange Texte)« | Texte, Review, Wording, Plating — **aber keinen einzigen Generator** |
+| **B** (43) | »Mechanik-Labels« | **`recipe.generator`, `vk.generator`, `conformance.check`, `recipe.anker`, `foodbook.kapitel_ideen`, `concept.plan`** — also **alle sieben grössten Token-Verbraucher**. Zusätzlich ist B der **Fallback** (`AiGatewayService:103`: `?? ($prompt['tier'] ?? 'B')`). |
+| **C** (5) | »Vision (Wissenskontext leer)« | `recipe.description`, `gp.suggest`, `gp.tags`, `recipe.garverlust`, `recipe.extract` — nur der letzte ist plausibel Vision, `recipe.description` ist **Produkttext** |
+| **D** (4 + 1) | »Reasoning/Tools« | `voice.command` (nicht in der Registry, in `callWithTools` **hart** auf `'D'`) plus vier triviale Klassifikatoren (`demo.echo`, `gp.condition`, `recipe.category`, `recipe.name_putzen`) |
+
+**Die Falle:** `FOODALCHEMIST_AI_TIER_B=gpt-5.6-luna` liest sich wie »die mechanischen Labels
+aufs billige Modell« und würde in Wahrheit **den Rezept-Generator, den Gericht-Generator und
+den Konformitäts-Critic** auf das billigste Modell der Tabelle setzen ($0,20 statt $5,00 je
+Mio — Faktor 25, gekauft mit der Kernqualität des Produkts).
+
+**Konsequenz für die Reihenfolge:** W3-4 ist **kein ENV-Schritt**, sondern zuerst eine
+Re-Tierung in der Registry (Generatoren nach A, `recipe.description` nach A, die vier
+mechanischen D-Keys nach B, D allein für den Tool-Loop) — mit `PromptRegistryTest` als
+Wächter. **Erst danach** dürfen Modell-Strings gesetzt werden, und dann Key für Key mit
+Golden-Gate, nicht tierweise.
+
+Bei heutigem Volumen sind das ~$4/Monat. Der Wert von W3-4 ist **Kopfraum für die Skalierung
+und Latenz**, nicht die heutige Rechnung — das rechtfertigt keinen unbesehenen Flip.
+
 ## Offene Entscheide für Dominique
 
 | # | Punkt | Konsequenz |
@@ -111,7 +139,7 @@ für §1+§10 im Prompt liegt bei 10,2 %.
 |---|---|---|
 | W1-5 | **Chunking + Qdrant** (~460 Docs, Ziel 900 Z., `heading_path` im Vektor) | Der einzige gemessen begründete Retrieval-Fix. Off-peak, ~5.800 serielle Roundtrips, ~$0,10. |
 | W3-2 | **Kontext-Wiederverwendung in der Kaskade** + Fan-out-Governor | Nicht gebaut. Der Kaskaden-Status kommt aus DB-Zeilen, nicht aus dem 15-Min-Cache — die TTL-Sorge des Plans ist also **kein** Live-Bug. |
-| W3-4 | **Tier/Modell** | **0 von 4 Tier-Variablen auf demo gesetzt** ⇒ alle 72 Prompt-Keys auf dem teuersten Modell. Preisspanne Faktor 25. Cheapster offener Hebel — aber Tier C ist laut Config für Vision reserviert, also Key für Key prüfen, nicht blind per ENV flippen. |
+| W3-4 | **Tier/Modell** | **0 von 4 Tier-Variablen auf demo gesetzt** ⇒ alle 72 Prompt-Keys auf dem teuersten Modell. **Zuerst Re-Tierung, dann ENV** — siehe Abschnitt »W3-4 ist eine Falle«: Tier B heisst »Mechanik-Labels« und trägt den ganzen Erzeugungs-Kern. |
 | W1-3 | `$params['_prompt_key']`-Durchstich | Ohne ihn hat `vk.generator` kein eigenes Budget (VK läuft über `contextFor('ai_generate_recipe')`). |
 | — | `conformance_findings.paragraph` normalisieren | 5 Varianten für §11 ⇒ Befunde sind nicht sauber aggregierbar. |
 | — | `foodalchemist:generator-eval` | Existiert, **nie gelaufen**. Ohne es wird ein Budget-Schnitt als Erfolg abgehakt, während die Rezepte schlechter werden. |
@@ -130,3 +158,4 @@ Cross-Refs: [[39_Worker_Betrieb_Runbook]] · [[41_Spec_Planungsmodul_Qualitaet]]
 
 ## Changelog
 - **2026-09-03** — Erstanlage. Programm lief bis hier nur in einer Session-Plandatei; damit war der Repo-Stand blind für 14 Commits. Zahlen sind gemessen (Messsonde `prompt_parts`), nicht geschätzt.
+- **2026-09-03** — W3-4-Analyse ergänzt: Tier-Etiketten stimmen nicht mit ihrem Inhalt überein. Tier B (»Mechanik-Labels«) trägt alle sieben grössten Verbraucher und ist zugleich der Fallback. W3-4 ist damit erst eine Re-Tierung, dann ein ENV-Schritt.
