@@ -520,7 +520,11 @@ it('B0: valide vorgeschlagene gp_id wird direkt verdrahtet (proposed-first, conf
     $zeile = $resultat['recipe']->ingredients()->first();
     // Die vorgeschlagene GP-id ist verdrahtet (das ist der B0-Kern) + zählt als Bestand.
     // Hinweis: syncIngredients normalisiert die Provenienz generator-verdrahteter GP-Zeilen auf
-    // MatchMethod::Manual (Bestandsverhalten) — die Erdung zeigt sich an gp_id + Statistik.
+    // MatchMethod::GpV2Fk — die Resolver-/FK-Provenienz, die dieser Service auch bei
+    // gegroundeten Zeilen setzt (RecipeService:601/662). Bis 2026-09-03 stand hier
+    // `Manual`, was Handarbeit BEHAUPTETE, wo das Modell die gp_id vorgeschlagen hatte;
+    // das Etikett hat die Diagnose des TK-Apfel-Falls (Gericht 3689) zweimal fehlgeleitet.
+    // Die Erdung selbst zeigt sich unverändert an gp_id + Statistik.
     expect($zeile->gp_id)->toBe($gp->id)
         ->and($resultat['statistik']['bestand_gp'])->toBe(1);
 });

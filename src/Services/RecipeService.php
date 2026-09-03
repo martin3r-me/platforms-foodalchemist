@@ -673,8 +673,28 @@ class RecipeService
                 } else {
                     $neu = $recipe->ingredients()->create([...$attrs,
                         'team_id' => $team->id,
+                        // Fallback-Provenienz, wenn der Aufrufer keine Methode mitgibt.
+                        //
+                        // Bis 2026-09-03 stand hier bei gesetztem gp_id `manual` — also
+                        // »ein Mensch hat das gewählt«. Bei KI-erzeugten Rezepten ist das
+                        // FALSCHE Provenienz: 3.099 Zeilen tragen `manual`, mindestens 112
+                        // davon in Rezepten mit created_via=mcp. Beim Debuggen des
+                        // TK-Apfel-Falls (Gericht 3689) hat dieses Etikett meine Diagnose
+                        // zweimal in die falsche Richtung geschickt — es verdeckt genau,
+                        // WELCHER Mechanismus den GP gewählt hat.
+                        //
+                        // `gp_v2_fk` ist NICHT neu erfunden, sondern das Etikett, das dieser
+                        // Service für genau diesen Fall schon benutzt: Zeile 601 setzt es als
+                        // `$groundedMethod`, und der Kommentar bei 662 nennt es ausdrücklich
+                        // »die Resolver-Provenienz (gp_v2_fk|recipe_ref)«. Der Fallback folgt
+                        // damit dem hier geltenden Vokabular statt ein neues zu öffnen. Auf
+                        // recipe_ingredients entscheidet niemand an `manual` (die
+                        // Schutzregel in SalesImportService:162 gilt für
+                        // foodalchemist_sales_facts, eine andere Tabelle) — der Wechsel ist
+                        // daher verhaltensneutral. Bestehende Zeilen bleiben unangetastet:
+                        // ein Backfill würde echte Handarbeit mit-überschreiben.
                         'match_method' => $attrs['match_method']
-                            ?? ($subId !== null ? 'recipe_ref' : ($gpId !== null ? 'manual' : 'unmatched')),
+                            ?? ($subId !== null ? 'recipe_ref' : ($gpId !== null ? 'gp_v2_fk' : 'unmatched')),
                     ]);
                     $behalten[] = $neu->id;
                 }
