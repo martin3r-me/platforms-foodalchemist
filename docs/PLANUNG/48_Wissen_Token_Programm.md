@@ -220,13 +220,50 @@ dass man dort einzeln und gemessen vorgeht, nicht in einem Zug.
 
 | # | Punkt | Warum offen |
 |---|---|---|
-| W1-5 | **Chunking + Qdrant** (~460 Docs, Ziel 900 Z., `heading_path` im Vektor) | Der einzige gemessen begründete Retrieval-Fix. Off-peak, ~5.800 serielle Roundtrips, ~$0,10. |
+| W1-5 | **Produzent GEBAUT** (`KnowledgeSectionizer` + `KnowledgeChunker` + `foodalchemist:knowledge-sectionize`) | Offen bleibt der **Umschalter**: `min_score` auf die neue Score-Verteilung kalibrieren, Off-Peak-Re-Index (~5.800 serielle Roundtrips, ~$0,10), Purge gegen das Register. Der Embedding-Pfad ist bis dahin unverändert Doc-granular. |
 | W3-2 | **Kontext-Wiederverwendung in der Kaskade** + Fan-out-Governor | Nicht gebaut. Der Kaskaden-Status kommt aus DB-Zeilen, nicht aus dem 15-Min-Cache — die TTL-Sorge des Plans ist also **kein** Live-Bug. |
 | W3-4 | **Tier/Modell** | **0 von 4 Tier-Variablen auf demo gesetzt** ⇒ alle 72 Prompt-Keys auf dem teuersten Modell. **Zuerst Re-Tierung, dann ENV** — siehe Abschnitt »W3-4 ist eine Falle«: Tier B heisst »Mechanik-Labels« und trägt den ganzen Erzeugungs-Kern. |
 | W1-3 | `$params['_prompt_key']`-Durchstich | Ohne ihn hat `vk.generator` kein eigenes Budget (VK läuft über `contextFor('ai_generate_recipe')`). |
 | — | `conformance_findings.paragraph` normalisieren | 5 Varianten für §11 ⇒ Befunde sind nicht sauber aggregierbar. |
 | — | `foodalchemist:generator-eval` | Existiert, **nie gelaufen**. Ohne es wird ein Budget-Schnitt als Erfolg abgehakt, während die Rezepte schlechter werden. |
 | — | `ai_plan_dishes` | 8 Routing-Zeilen ohne jeden Aufrufer. Reine Konfig-Schuld. |
+
+
+## W1-5 — Produzent gebaut, Umschalter offen (2026-09-03)
+
+Die Tabellen `knowledge_sections` und `_chunks` lagen als **leeres Schema** auf demo: 0 Zeilen,
+kein Produzent, kein Leser. Jetzt gibt es den Produzenten.
+
+**Der Kern ist der `embed_text`:** `{Kategorie} · {Doc-Titel} · {heading_path}` steht VOR dem
+Fenster, jeder Vektor trägt also seinen Ort im Dokument. Genau der Fix für »Discovery surfacet
+kein prozedurales Wissen«: der Body von §4 nennt kein Gericht, aber
+`regelwerk · Regelwerk Basisrezepte · §4 Sub-Rezept-Hierarchie` matcht »Steinpilz-Rahmsauce«.
+
+**Zwei Plan-Annahmen beim Bauen gemessen widerlegt:**
+
+| Plan sagte | Messung (598 Docs, 2.192.967 Z.) |
+|---|---|
+| §-Dossiers tragen die Nummer nur im Titel ⇒ Absatz-Notregel als **Hauptpfad** + eigener Fail-Fast | **48 von 49** `regelwerk`-Docs haben `## §n` im **Body**. Nur **5** Docs im Korpus haben gar keine `##` — die Notregel ist ein Randfall. |
+| tabellendominant ⇒ `kind='referenz'` | Hätte **169** Docs getroffen und im Regelwerk das Pflichtwissen abgewertet: W3-3 hat die Regelwerks-Tabellen als **normativ** gemessen (21 % des Prüfblocks), und CLAUDE.md sagt »Beispiele pro Warengruppe (§19) sind **verbindlich**«. Regel jetzt: im `regelwerk` ist alles normativ ausser Changelog/Frontmatter. |
+
+Chunk-Grösse **900 / max 1.400 / Overlap 150** — bewusst nicht grösser, weil die Recall-Probe
+gemessen hat, dass ein grösseres Fenster den Recall **senkt** (2000→8000: 72 % → 68 %,
+Verdünnung). Ein Chunk soll ein Gedanke sein, kein Kapitel.
+
+`pairing` wird **nicht** gechunkt: dessen `embedText()` baut eine kuratierte Oberflächenform
+(Zutat + Partner-Namen), die Zerschneiden zerstören würde. `changelog`/`meta`-Abschnitte
+ebenfalls nicht — Changelogs sind gemessen 33.015 Zeichen = 20 % des importierten Korpus.
+
+**Vorschau ist Default** (wie beim Steuerdaten-Kommando). Grund: eine Fehlklassifikation als
+`changelog`/`referenz` nimmt dem Konformitäts-Critic **still** das Pflichtwissen weg, und
+`ladeRegelwerke()` merkt es nicht (`isEmpty() → return ''`). Deshalb zusätzlich ein Fail-Fast
+und `--verify`: jedes `regelwerk`-Doc muss normative Abschnitte haben.
+
+Tests laufen **ohne DB** (der Sectionizer ist eine reine Funktion): 10 Fälle, 29 ms. Gepinnt
+sind Invarianten statt Beispiele — jedes **Fenster** unter MAX (nicht `char_count`, das enthält
+den Kopf), `entity_key` eindeutig, kein Textverlust an den Schnittkanten, und die
+Längenkappung für `anchor`/`heading_path`: dieselbe Engine-Lücke, die den Steuerdaten-`--apply`
+live mit SQLSTATE[22001] zerlegt hat.
 
 ## Deploy-Mechanik
 
@@ -244,3 +281,4 @@ Cross-Refs: [[39_Worker_Betrieb_Runbook]] · [[41_Spec_Planungsmodul_Qualitaet]]
 - **2026-09-03** — W3-4-Analyse ergänzt: Tier-Etiketten stimmen nicht mit ihrem Inhalt überein. Tier B (»Mechanik-Labels«) trägt alle sieben grössten Verbraucher und ist zugleich der Fallback. W3-4 ist damit erst eine Re-Tierung, dann ein ENV-Schritt.
 - **2026-09-03 (Korrektur)** — die Entscheide-Liste war aus dem Plandokument übernommen und veraltet. Gegen den Live-Stand geprüft: Leitungswasser ist erledigt (GP 9359 existiert, Alias korrigiert), der zweite Kurator ist entschieden (Retrieval global, Schreibseite gescopet). Offen bleiben Kanon §1+§10, §2-Erzwingung und der Slot-Deckel. Lehre: eine »offen«-Liste gegen den Bestand prüfen, nicht aus dem Plan kopieren.
 - **2026-09-03 (Apfel)** — Ursache des TK-Apfels: nicht der Frische-Hook und nicht der Resolver (der wählt richtig), sondern das Modell wählt aus einem Kontext, dessen Kandidaten alle denselben Score 1.001 tragen. Plus 163 GPs ohne `condition`. §10-Namensbremse und ehrliche Fallback-Provenienz erledigt; Score-Reparatur offen.
+- **2026-09-03 (W1-5)** — Produzent gebaut: Sectionizer + Chunker + Kommando, 10 Tests ohne DB. Zwei Plan-Annahmen gemessen widerlegt (§-Überschriften stehen im Body; tabellendominant≠referenz). Umschalter bewusst offen — braucht Kalibrierung, Off-Peak-Re-Index und Purge.
