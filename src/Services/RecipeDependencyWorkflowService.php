@@ -8,6 +8,7 @@ use Illuminate\Support\Str;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Jobs\GenerateRecipeJob;
 use Platform\FoodAlchemist\Models\FoodAlchemistCascadeRecipeDependency;
+use Platform\FoodAlchemist\Models\FoodAlchemistCascadeRun;
 use Platform\FoodAlchemist\Models\FoodAlchemistCascadeRunStep;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 
@@ -15,6 +16,24 @@ use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 class RecipeDependencyWorkflowService
 {
     public const MAX_DEPTH = 3;
+
+    /**
+     * Wie viele SUB-REZEPT-Schritte ein Lauf insgesamt planen darf — die Tiefe des Baums, nicht
+     * die Breite der Ausgabe.
+     *
+     * KORREKTUR 2026-09-03: die Prüfung zählte ALLE nicht-`skipped`-Steps des Laufs, also auch
+     * die `gericht`-Steps der Ausgabe. Ein Speisekarten-Lauf pflanzt bis zu 40 Positionen, ein
+     * Speiseplan bis zu sechs Wochen (90 Zellen) — das Budget war damit aufgebraucht, BEVOR das
+     * erste Basisrezept geplant wurde, und `planChildren` brach beim ersten Kandidaten ab. Folge:
+     * die Zutaten blieben ungebunden, und zwar lautlos.
+     *
+     * Aufgefallen ist es beim Sichtbarmachen dieses Deckels — und es war schon vorher falsch, nur
+     * weniger sichtbar (bei 30 Zellen bekamen etwa die ersten vier Zellen ihre Sub-Rezepte und der
+     * Rest keine). Der Docblock dieser Klasse sagt, was gemeint war: »begrenzter DAG für
+     * ineinander verschachtelte Basisrezepte«. Zwei völlig verschiedene Dinge dürfen sich kein
+     * Budget teilen — die Breite deckeln die Ausgabe-Deckel (SPEISEPLAN_MAX_WOCHEN,
+     * SPEISEKARTE_MAX_POSITIONEN, CONCEPT_MAX_SLOTS), jeder für sich und jeder gemeldet.
+     */
     public const MAX_STEPS = 50;
 
     public function prepare(Team $team, int $stepId, string $description, array $parameter, bool $vkModus): array
@@ -173,6 +192,137 @@ class RecipeDependencyWorkflowService
     }
 
     /**
+     * Wie viele `basisrezept_anlegen`-Kandidaten eines Rezepts noch UNGEBUNDEN sind.
+     *
+     * Der Zustand steht an der Zutat (`referenced_recipe_id`), nicht in der Kandidatenliste —
+     * deshalb ist diese Zahl idempotent, auch wenn dieselbe Liste zweimal durchlaufen wird.
+     *
+     * @param  list<array<string, mixed>>  $kandidaten
+     */
+    private function ungebundeneKandidaten(FoodAlchemistRecipe $recipe, array $kandidaten): int
+    {
+        $recipe->loadMissing('ingredients:id,recipe_id,position,referenced_recipe_id');
+        $offen = 0;
+        foreach ($kandidaten as $k) {
+            if (! is_array($k) || ($k['primaer'] ?? null) !== 'basisrezept_anlegen') {
+                continue;
+            }
+            $zutat = $recipe->ingredients->firstWhere('position', ((int) ($k['index'] ?? 0)) + 1);
+            if ($zutat !== null && $zutat->referenced_recipe_id === null) {
+                $offen++;
+            }
+        }
+
+        return $offen;
+    }
+
+    /**
+     * Vermerkt, dass die Rekursion an der Ebenen-Grenze aufgehört hat.
+     *
+     * Fachlich: Gericht → Sauce → Fond ist Ebene 3. Was darunter läge (der Kalbsfond der Sauce
+     * des Fonds), baut die Kaskade nicht mehr. Das deckt sich mit dem Regelwerk Basisrezepte §4
+     * („max. 3 Ebenen Rekursion") — der Deckel ist also die Regel, nicht ein Notbehelf, und er
+     * darf auch nicht einfach gehoben werden.
+     *
+     * Die HANDLUNG ist bewusst NICHT »über ‚Basisrezept ergänzen' nachziehen«: dieser Knopf ruft
+     * `ergaenzeManuellenSubStep` ohne Eltern-Step, der Fallback-Anker greift dann den WURZEL-Step
+     * des Laufs — die Komponente landete also an der obersten Ebene statt an der untersten, wo
+     * sie hingehört. Die Meldung schickt darum ins Rezept selbst.
+     *
+     * @param  list<array<string, mixed>>  $offene
+     */
+    private function vermerkeTiefenGrenze(FoodAlchemistCascadeRunStep $step, array $offene): void
+    {
+        $kandidaten = 0;
+        foreach ($offene as $k) {
+            if (is_array($k) && ($k['primaer'] ?? null) === 'basisrezept_anlegen') {
+                $kandidaten++;
+            }
+        }
+        if ($kandidaten < 1) {
+            return;   // an der Grenze, aber nichts zu bauen — kein Befund
+        }
+
+        FoodAlchemistCascadeRun::find((int) $step->cascade_run_id)?->vermerkeDeckel(
+            'sub_rezept_tiefe',
+            self::MAX_DEPTH,
+            self::MAX_DEPTH + 1,
+            $kandidaten,
+            sprintf(
+                '%d %s ohne eigenes Rezept — die Kaskade baut nur %d Ebenen tief. In den Rezepten '
+                . 'der untersten Stufe von Hand zuordnen.',
+                $kandidaten,
+                $kandidaten === 1 ? 'Komponente' : 'Komponenten',
+                self::MAX_DEPTH,
+            ),
+        );
+    }
+
+    /**
+     * Vermerkt am Lauf, dass das Sub-Rezept-Budget erschöpft ist — und WAS dadurch liegen bleibt.
+     *
+     * Anders als bei den Ausgabe-Deckeln bedeutet das hier nicht »weniger«, sondern ein
+     * UNFERTIGES Rezept: es entsteht kein Kind-Step und keine Dependency, die Zutat bleibt also
+     * ungebunden. Damit fehlen sie in EK und Allergenen, ohne dass am Gericht etwas fehlend
+     * aussieht.
+     *
+     * Die Zahl kommt aus dem ZUSTAND, nicht aus der Schleifenposition. Das ist der Kern: die
+     * Planung läuft je Eltern-Rezept ZWEIMAL über dieselbe Kandidatenliste (einmal aus
+     * {@see afterGenerated}, einmal aus {@see resumeDeferredChildren} nach der Freigabe). Eine
+     * aus `$i` abgeleitete Zahl würde sich damit verdoppeln und im zweiten Durchgang sogar die
+     * GANZE Liste melden statt des Rests — eine Zahl über der Gesamtmenge der Komponenten
+     * zerstört das Vertrauen in die Meldung sofort.
+     *
+     * Gezählt wird deshalb, was am Ende wirklich offen ist: Zutaten der Rezepte dieses Laufs, die
+     * als `basisrezept_anlegen` vorgemerkt sind und weiterhin kein `referenced_recipe_id` tragen.
+     * Diese Zahl ist über beide Durchgänge idempotent — und passt damit auf die
+     * Replace-Semantik von {@see FoodAlchemistCascadeRun::vermerkeDeckel} statt sie zu brechen:
+     * der letzte Schreiber gewinnt mit dem dann gültigen Stand.
+     */
+    private function vermerkeTiefenBudget(FoodAlchemistCascadeRunStep $step, FoodAlchemistRecipe $recipe, array $offene): void
+    {
+        $run = FoodAlchemistCascadeRun::find((int) $step->cascade_run_id);
+        if ($run === null) {
+            return;
+        }
+
+        // Zwei Quellen, weil es zwei Pfade gibt: im GESTUFTEN Lauf liegen die Kandidaten am Step
+        // (`deferred.children.offene`), im direkten kommen sie als Argument und wurden nie
+        // abgelegt. Nur die abgelegten zu zählen war mein Fehler — der direkte Pfad hätte gar
+        // nichts gemeldet, und genau dieser Pfad fährt die Speiseplan-Zellen.
+        $offen = $this->ungebundeneKandidaten($recipe, $offene);
+
+        $steps = FoodAlchemistCascadeRunStep::where('cascade_run_id', $step->cascade_run_id)
+            ->whereKeyNot($step->getKey())
+            ->whereIn('kind', ['rezept', 'gericht'])
+            ->get(['id', 'ref_id', 'deferred']);
+        foreach ($steps as $s) {
+            $kandidaten = is_array($s->deferred['children']['offene'] ?? null) ? $s->deferred['children']['offene'] : [];
+            if ($kandidaten === [] || $s->ref_id === null) {
+                continue;
+            }
+            $rezept = FoodAlchemistRecipe::with('ingredients:id,recipe_id,position,referenced_recipe_id')->find((int) $s->ref_id);
+            if ($rezept !== null) {
+                $offen += $this->ungebundeneKandidaten($rezept, $kandidaten);
+            }
+        }
+
+        $run->vermerkeDeckel(
+            'sub_rezept_budget',
+            self::MAX_STEPS,
+            self::MAX_STEPS + $offen,
+            $offen,
+            sprintf(
+                '%d %s nicht als Basisrezept angelegt — der Lauf ist bei %d Schritten voll. Sie '
+                . 'stehen offen in den Zutaten: dort verknüpfen, sonst fehlen sie in EK und Allergenen.',
+                $offen,
+                $offen === 1 ? 'Komponente' : 'Komponenten',
+                self::MAX_STEPS,
+            ),
+        );
+    }
+
+    /**
      * Plant die Sub-Rezepte eines Steps: je offener `basisrezept_anlegen`-Zeile ein Kind-Step
      * (`kind=rezept`, Status `geplant` = benannt, noch nicht erzeugt) + die Dependency auf die
      * Eltern-Zutat. Legt KEINE Jobs an — das ist {@see dispatchChildren}. Idempotent über
@@ -186,6 +336,8 @@ class RecipeDependencyWorkflowService
     private function planChildren(Team $team, FoodAlchemistCascadeRunStep $step, FoodAlchemistRecipe $recipe, array $offene, array $parameter): array
     {
         if ((int) $step->depth >= self::MAX_DEPTH) {
+            $this->vermerkeTiefenGrenze($step, $offene);
+
             return [];
         }
         $geplant = [];
@@ -201,8 +353,13 @@ class RecipeDependencyWorkflowService
             if (($open['primaer'] ?? null) !== 'basisrezept_anlegen') {
                 continue;
             }
+            // NUR die Sub-Rezept-Schritte zählen (kind='rezept'). Vorher zählte die Prüfung alle
+            // Steps des Laufs mit — siehe MAX_STEPS.
             if (FoodAlchemistCascadeRunStep::where('cascade_run_id', $step->cascade_run_id)
+                ->where('kind', 'rezept')
                 ->where('status', '!=', 'skipped')->count() >= self::MAX_STEPS) {
+                $this->vermerkeTiefenBudget($step, $recipe, $offene);
+
                 break;
             }
             $ingredient = $recipe->ingredients()->where('position', ((int) ($open['index'] ?? 0)) + 1)->first();

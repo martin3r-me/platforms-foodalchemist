@@ -219,6 +219,110 @@ it('markStepDone: hält das Artefakt fest und hebt den Run auf review', function
         ->and($run->status)->toBe('review');
 });
 
+/*
+ * DIE REGRESSION, die beim Sichtbarmachen des Deckels aufgefallen ist — und die mein eigener
+ * Wochen-Deckel verschärft hatte.
+ *
+ * `MAX_STEPS = 50` sollte die TIEFE des Sub-Rezept-Baums begrenzen (Klassen-Docblock:
+ * »begrenzter DAG für ineinander verschachtelte Basisrezepte«). Die Prüfung zählte aber ALLE
+ * nicht-`skipped`-Steps des Laufs — also auch die `gericht`-Steps der Ausgabe. Ein
+ * Speisekarten-Lauf pflanzt bis zu 40 Positionen, ein Speiseplan seit dem Wochen-Deckel bis zu
+ * 90 Zellen. Damit war das Budget aufgebraucht, BEVOR das erste Basisrezept geplant wurde:
+ * `planChildren` brach beim ersten Kandidaten ab, und die Zutat blieb ungebunden — lautlos, und
+ * ohne dass am Gericht etwas fehlend aussieht (sie fehlt nur in EK und Allergenen).
+ *
+ * Schon vor dem Wochen-Deckel falsch, nur weniger sichtbar: bei 30 Zellen bekamen etwa die
+ * ersten vier ihre Sub-Rezepte und der Rest keine.
+ *
+ * Zwei völlig verschiedene Dinge dürfen sich kein Budget teilen. Die BREITE deckeln die
+ * Ausgabe-Deckel (Wochen/Positionen/Slots), jeder für sich und jeder gemeldet; die TIEFE deckelt
+ * MAX_STEPS.
+ */
+it('MAX_STEPS begrenzt die TIEFE, nicht die Breite — 60 Gericht-Steps verhungern kein Sub-Rezept', function () {
+    $run = \Platform\FoodAlchemist\Models\FoodAlchemistCascadeRun::create([
+        'team_id' => $this->rootTeam->id, 'scope' => 'vollkaskade', 'status' => 'running',
+    ]);
+
+    // Die Breite: 60 Gericht-Steps, wie ein Speiseplan-Zyklus sie anlegt. Weit über MAX_STEPS.
+    foreach (range(1, 60) as $sort) {
+        FoodAlchemistCascadeRunStep::create([
+            'team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id,
+            'kind' => 'gericht', 'status' => 'running', 'sort' => $sort,
+        ]);
+    }
+
+    // Und jetzt EIN Gericht, das ein Sub-Rezept braucht.
+    $eltern = FoodAlchemistCascadeRunStep::create([
+        'team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id,
+        'kind' => 'gericht', 'status' => 'running', 'sort' => 99,
+    ]);
+    $rezept = $this->makeRecipe($this->rootTeam, 'Rinderfilet');
+    $this->makeIngredient($rezept, 'Kalbsfond');
+
+    app(\Platform\FoodAlchemist\Services\RecipeDependencyWorkflowService::class)->afterGenerated(
+        $this->rootTeam, $eltern->id, auth()->id(), $rezept,
+        [['index' => 0, 'text' => 'Kalbsfond', 'primaer' => 'basisrezept_anlegen']],
+        ['auto_dependencies' => true, '_voll_anreichern' => true],
+    );
+
+    // Vorher: 61 >= 50 → break beim ersten Kandidaten, KEIN Kind-Step, Zutat ungebunden.
+    expect(FoodAlchemistCascadeRunStep::where('cascade_run_id', $run->id)->where('kind', 'rezept')->count())->toBe(1)
+        ->and(\Platform\FoodAlchemist\Models\FoodAlchemistCascadeRecipeDependency::count())->toBe(1)
+        // … und weil das Tiefen-Budget gar nicht angeschlagen hat, gibt es auch keinen Befund.
+        ->and($run->refresh()->deckel_hinweise)->toBeNull();
+});
+
+/*
+ * Die Gegenprobe: schlägt das TIEFEN-Budget wirklich an, wird es auch gemeldet — mit einer Zahl
+ * aus dem ZUSTAND. Die Planung läuft je Eltern-Rezept zweimal über dieselbe Kandidatenliste
+ * (afterGenerated + resumeDeferredChildren nach der Freigabe); eine aus der Schleifenposition
+ * abgeleitete Zahl würde sich verdoppeln und im zweiten Durchgang die ganze Liste melden statt
+ * des Rests. Eine Zahl über der Gesamtmenge der Komponenten zerstört das Vertrauen sofort.
+ */
+it('erschoepftes Tiefen-Budget wird gemeldet — und die Zahl kommt aus dem Zustand', function () {
+    $run = \Platform\FoodAlchemist\Models\FoodAlchemistCascadeRun::create([
+        'team_id' => $this->rootTeam->id, 'scope' => 'vollkaskade', 'status' => 'running',
+    ]);
+
+    // 50 Sub-Rezept-Steps = Budget voll (kind='rezept', also die Tiefe).
+    foreach (range(1, 50) as $sort) {
+        FoodAlchemistCascadeRunStep::create([
+            'team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id,
+            'kind' => 'rezept', 'status' => 'geplant', 'sort' => $sort, 'depth' => 1,
+        ]);
+    }
+
+    $eltern = FoodAlchemistCascadeRunStep::create([
+        'team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id,
+        'kind' => 'gericht', 'status' => 'running', 'sort' => 99,
+    ]);
+    $rezept = $this->makeRecipe($this->rootTeam, 'Rinderfilet');
+    // Positionen AUSDRÜCKLICH setzen: `makeIngredient` legt sonst beide auf 1, und die
+    // Kandidaten-Zuordnung läuft über `position === index + 1` — der zweite Kandidat fände
+    // dann keine Zutat und würde nicht gezählt. (Genau darauf reingelaufen.)
+    $this->makeIngredient($rezept, 'Kalbsfond', null, '100', 1);
+    $this->makeIngredient($rezept, 'Pfefferrahm', null, '100', 2);
+
+    app(\Platform\FoodAlchemist\Services\RecipeDependencyWorkflowService::class)->afterGenerated(
+        $this->rootTeam, $eltern->id, auth()->id(), $rezept,
+        [
+            ['index' => 0, 'text' => 'Kalbsfond', 'primaer' => 'basisrezept_anlegen'],
+            ['index' => 1, 'text' => 'Pfefferrahm', 'primaer' => 'basisrezept_anlegen'],
+        ],
+        ['auto_dependencies' => true, '_voll_anreichern' => true],
+    );
+
+    $h = $run->refresh()->deckel_hinweise;
+
+    expect($h)->toHaveCount(1)
+        ->and($h[0]['deckel'])->toBe('sub_rezept_budget')
+        ->and($h[0]['grenze'])->toBe(50)
+        ->and($h[0]['offen'])->toBe(2)
+        ->and($h[0]['text'])->toContain('2 Komponenten nicht als Basisrezept angelegt')
+        // Die Handlung nennt den echten Schaden: nicht »weniger«, sondern EK und Allergene.
+        ->and($h[0]['text'])->toContain('EK und Allergenen');
+});
+
 it('teilt identische fehlende Basisrezepte im Lauf und bindet das Ergebnis an alle Eltern', function () {
     $run = \Platform\FoodAlchemist\Models\FoodAlchemistCascadeRun::create([
         'team_id' => $this->rootTeam->id, 'scope' => 'vollkaskade', 'status' => 'running',
