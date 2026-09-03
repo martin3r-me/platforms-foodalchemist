@@ -5,6 +5,7 @@ namespace Platform\FoodAlchemist\Console;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 use Platform\FoodAlchemist\Services\Ai\KnowledgeContextService;
+use Illuminate\Support\Str;
 
 /**
  * Welle 0 — Steuerdaten für Routings + Layer-Bindings (W0-3 Daten-Hälfte, W0-4 Daten-Hälfte).
@@ -169,6 +170,39 @@ class WissenSteuerdatenW0Command extends Command
     /** Nur für Gerichte: das VK-Regelwerk (Naming-Skelett + Modell-A-Klassifikation). */
     private const ALWAYS_SLUGS_VK = ['regelwerk.regelwerk_verkaufsgerichte'];
 
+    /**
+     * UMBINDEN — Dossiers, die am FALSCHEN Ziel hängen. Prinzip (Dominique 2026-09-03):
+     * „die Dossiers da nutzen, wo sie auch schlussendlich benutzt werden."
+     *
+     * Beide hingen am Bereichs-Präfix `recipe` und wurden damit von ALLEN 22 `recipe.*`-Prompts
+     * mitgeschluckt (siehe die Präfix-Erklärung bei ENTBUNDEN). Zusammen 17.759 Zeichen, die bei
+     * einer Pflichtmenge von 18.521 und einem Deckel von 19.000 als Anschnitt ankamen oder als
+     * `dropped` verpufften — gemessen 8.238 Zeichen gebaut und weggeworfen, pro Call. Zusätzlich
+     * machten sie den Bound-Block call-abhängig und damit als Cache-Prefix unbrauchbar (W3-1).
+     *
+     *  · `produktion-arbeitszeit-und-personenminuten` (7.089 Z.) → `recipe.eigenschaften`.
+     *    Das ist der einzige Prompt, der Arbeitszeit tatsächlich SETZT (`work_time_min`,
+     *    Arbeitszeit, Minuten — die anderen Zeit-nahen Keys sind `recipe.production_depth`
+     *    (Fertigungstiefe) und `recipe.equipment` (Geräte), beide ohne Minuten).
+     *    Dominique: „Arbeitszeit bei den Stammdaten zum Einfüllen der Kochzeiten."
+     *
+     *  · `geschmacksbalance` (10.670 Z.) → `recipe.generator` UND `vk.generator`.
+     *    Dominique: „Geschmacksbalance, ja, braucht es bei Gerichten und Basisrezepten."
+     *    Als `always`, nicht `discovery`: ein score-gegatetes Dossier käme mal ganz, mal als
+     *    Fragment, mal nicht — bei Wissen, das laut Entscheid IMMER gebraucht wird, ist das
+     *    die schlechtere Hälfte. Und nur `always` hält den Block byte-identisch (W3-1); ein
+     *    GRÖSSERER stabiler Prefix ist unter Prompt-Caching billiger, nicht teurer.
+     *
+     * Umbinden heisst NICHT deaktivieren: das Dossier bleibt im Korpus und für die
+     * semantische Suche erreichbar — es verlässt nur den falschen Prompt.
+     *
+     * @var array<string, list<string>>
+     */
+    private const UMBINDEN = [
+        'produktion-arbeitszeit-und-personenminuten' => ['recipe.eigenschaften'],
+        'geschmacksbalance' => ['recipe.generator', 'vk.generator'],
+    ];
+
     public function handle(): int
     {
         if ($this->option('verify')) {
@@ -218,8 +252,12 @@ class WissenSteuerdatenW0Command extends Command
                     ->whereNull('b.deleted_at')->where('b.binding_type', 'layer')
                     ->where('b.target_key', $targetKey)->where('d.slug', $slug)
                     ->first(['b.id', 'b.mode', 'd.char_count', 'd.active']);
+                // 0 statt '' in der Zeichen-Spalte: `collect($bPlan)->sum(4)` unten wirft
+                // sonst »Unsupported operand types: int + string«. Vorher unerreichbar, weil
+                // jede Soll-Bindung existierte — mit den UMBINDEN-Zielen ist »FEHLT (kein
+                // Binding)« der NORMALFALL beim ersten Lauf.
                 $bPlan[] = $row === null
-                    ? [$targetKey, $slug, '—', 'FEHLT (kein Binding)', '']
+                    ? [$targetKey, $slug, '—', 'ANLEGEN (kein Binding)', 0]
                     : [$targetKey, $slug, $row->mode, $row->mode === 'always' ? 'unverändert' : 'always', $row->char_count];
             }
         }
@@ -284,6 +322,56 @@ class WissenSteuerdatenW0Command extends Command
                         ->update(['active' => 0, 'updated_at' => now()]);
                 }
             }
+
+            // UMBINDEN: vom falschen Ziel weg, an die Prompts, die das Dossier wirklich brauchen.
+            // Anders als die Blöcke oben reicht hier kein UPDATE — am neuen Ziel existiert
+            // vielleicht noch gar keine Zeile. Darum: alles ausserhalb der erlaubten Ziele still
+            // legen (active=0, nicht löschen — reversibel), dann je erlaubtem Ziel eine
+            // `always`-Bindung sicherstellen.
+            foreach (self::UMBINDEN as $slug => $zielKeys) {
+                $doc = DB::table('foodalchemist_knowledge_documents')
+                    ->where('slug', $slug)->whereNull('deleted_at')->first(['id', 'team_id']);
+                if ($doc === null) {
+                    continue;
+                }
+
+                DB::table('foodalchemist_knowledge_bindings')
+                    ->where('binding_type', 'layer')
+                    ->where('knowledge_document_id', $doc->id)
+                    ->whereNotIn('target_key', $zielKeys)
+                    ->whereNull('deleted_at')
+                    ->update(['active' => 0, 'updated_at' => now()]);
+
+                foreach ($zielKeys as $ziel) {
+                    $vorhanden = DB::table('foodalchemist_knowledge_bindings')
+                        ->where('binding_type', 'layer')->where('target_key', $ziel)
+                        ->where('knowledge_document_id', $doc->id)->whereNull('deleted_at')
+                        ->first(['id']);
+
+                    if ($vorhanden !== null) {
+                        DB::table('foodalchemist_knowledge_bindings')->where('id', $vorhanden->id)
+                            ->update(['mode' => 'always', 'active' => 1, 'updated_at' => now()]);
+
+                        continue;
+                    }
+
+                    DB::table('foodalchemist_knowledge_bindings')->insert([
+                        'uuid' => (string) Str::uuid(),
+                        // team_id vom Dokument erben — eine Bindung darf nicht sichtbarer sein
+                        // als das Dossier, an dem sie hängt.
+                        'team_id' => $doc->team_id,
+                        'knowledge_document_id' => $doc->id,
+                        'binding_type' => 'layer',
+                        'target_key' => $ziel,
+                        'mode' => 'always',
+                        'weight' => 50,
+                        'active' => 1,
+                        'source' => 'wissen-steuerdaten-w0',
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ]);
+                }
+            }
         });
 
         $this->info('Geschrieben (eine Transaktion).');
@@ -310,10 +398,21 @@ class WissenSteuerdatenW0Command extends Command
     /** @return array<string, list<string>> */
     private function bindingZiele(): array
     {
-        return [
+        $ziele = [
             'recipe.generator' => array_merge(self::ALWAYS_SLUGS_BAU, self::ALWAYS_SLUGS_BASIS, self::ALWAYS_SLUGS_UNIVERSAL),
             'vk.generator' => array_merge(self::ALWAYS_SLUGS_BAU, self::ALWAYS_SLUGS_VK, self::ALWAYS_SLUGS_UNIVERSAL),
         ];
+
+        // Die Umbindungen gehören in dieselbe Soll-Sicht — sonst prüft `verify()` sie nicht
+        // und die Deckel-Rechnung unten zählt sie nicht mit (genau der blinde Fleck, durch den
+        // die MCP-Anleitung am Präfix jahrelang überlebte).
+        foreach (self::UMBINDEN as $slug => $zielKeys) {
+            foreach ($zielKeys as $key) {
+                $ziele[$key] = array_values(array_unique(array_merge($ziele[$key] ?? [], [$slug])));
+            }
+        }
+
+        return $ziele;
     }
 
     /**

@@ -433,9 +433,30 @@ return [
             // 7.446 Z.). Bewusst kein Puffer für ein zweites: ein Kopf-Anschnitt einer
             // Referenztabelle ist kein Wissen, nur Kosten (das war der `substitutionen`-Fall).
             // recipe.generator: §2+§3+§4+§6 + Erstellungs-Dossier = 11.075 + 7.446 = 18.521
-        'recipe.generator' => ['docs' => 8, 'chars_per_doc' => 8400, 'total' => 19000],
+            'recipe.generator' => ['docs' => 9, 'chars_per_doc' => 11000, 'total' => 30000],
             // vk.generator: dieselben + regelwerk.regelwerk_verkaufsgerichte 8.309 = 26.830
-            'vk.generator' => ['docs' => 8, 'chars_per_doc' => 8400, 'total' => 27500],
+            'vk.generator' => ['docs' => 9, 'chars_per_doc' => 11000, 'total' => 37000],
+
+            // NEU 2026-09-03 — Dossier-Routing nach dem Prinzip „dort nutzen, wo es benutzt wird"
+            // (Dominique). `geschmacksbalance` (10.670 Z.) hing am Bereichs-Präfix `recipe` und
+            // wurde von ALLEN 22 `recipe.*`-Prompts mitgeschluckt; jetzt hängt es gezielt an den
+            // zwei Generatoren, weil es dort GEBRAUCHT wird („braucht es bei Gerichten und
+            // Basisrezepten"). Als `always`, damit es ganz ankommt und der Block byte-stabil
+            // bleibt — deshalb die Deckel hoch: 19.000 → 30.000 bzw. 27.500 → 37.000, und
+            // chars_per_doc 8.400 → 11.000, sonst käme das Dossier als 8.400-Anschnitt.
+            //
+            // Kosten ehrlich: +10.670 Zeichen ≈ +3.560 Token je Generierung, bei ~288
+            // Generierungen/30 T. ≈ 1,0 M Token ≈ $5/Monat. Unter Prompt-Caching ist ein
+            // GRÖSSERER stabiler Prefix billiger, nicht teurer (Cache = 10 % des Preises) —
+            // aber das ist eine Erwartung, keine Zusage: gemessen hat der Prefix auf zwei
+            // Testcalls NICHT gegriffen, im Echtbetrieb dagegen zu 98 % bzw. 23 %.
+            //
+            // `recipe.eigenschaften` ist der einzige Prompt, der Arbeitszeit wirklich SETZT
+            // (work_time_min/Minuten) — dorthin gehört `produktion-arbeitszeit-und-
+            // personenminuten` (7.089 Z.), nicht in jeden Rezept-Prompt. Ohne eigenen Deckel
+            // griffe hier der konservative Default (3 × 1.400 = 4.200) und das Dossier käme
+            // als 1.400-Zeichen-Kopf an.
+            'recipe.eigenschaften' => ['docs' => 2, 'chars_per_doc' => 7500, 'total' => 8000],
         ],
 
         'knowledge_budget' => [
