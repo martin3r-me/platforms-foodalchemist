@@ -64,6 +64,10 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                 \Platform\FoodAlchemist\Console\ImportSliceCommand::class,
                 \Platform\FoodAlchemist\Console\ImportMasterCommand::class,
                 \Platform\FoodAlchemist\Console\KnowledgeImportCommand::class,
+                // 2026-09-03: die Routing-Politik hat den Import VERLASSEN. Sie lag dort und wurde
+                // bei jedem Lauf mitgeschrieben — auf einer frischen DB hätte das den
+                // Monolithen-Pfad wiederhergestellt, den Welle 0 abgebaut hat.
+                \Platform\FoodAlchemist\Console\KnowledgePolicySeedCommand::class,
                 // W2-5: der Rückweg — bis hierher gab es nur Import (Modul = SSOT ohne Backup-Pfad).
                 \Platform\FoodAlchemist\Console\KnowledgeExportCommand::class,
                 // W2-4: §-Deckung — hätte den verlorenen §12 gefunden.
@@ -148,6 +152,26 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                 ->onOneServer()          // Hausschreibweise des Hosts (routes/console.php)
                 ->runInBackground()
                 ->description('FoodAlchemist: Qualitäts-Lauf (Signale, DQ-Kaskade, Zeitreihen-Snapshot, Drift)');
+
+            // Wissens-Steuerdaten-Wächter (2026-09-03). Rein LESEND (`--verify`), kein
+            // Provider-Call, kein Schreibvorgang an den Steuerdaten — er meldet nur.
+            //
+            // Warum er sein muss: die Routings/Bindings sind per Hand editierbar (MCP, SQL), und
+            // genau das ist schon passiert (Live-Tabelle `regelwerk|discovery|4x8000` gegen
+            // Migration `always|1|7000`). Ein Regelwerk, das leise aus dem Prompt fällt, erzeugt
+            // KEINEN Fehler — der Generator läuft weiter und liefert nur schlechtere Rezepte.
+            // Ohne diesen Lauf ist jede Token- und Qualitätsarbeit an den Prompts in Wochen
+            // wieder aufgebraucht, ohne dass jemand den Grund benennen kann.
+            //
+            // Der Befund geht als SIGNAL ins Cockpit, nicht in ein Log: eine Log-Zeile hätte
+            // dieselbe Eigenschaft wie der alte Deckel-Vermerk in `params` — technisch vorhanden,
+            // faktisch unsichtbar.
+            $schedule->command(\Platform\FoodAlchemist\Console\WissenSteuerdatenW0Command::class, ['--verify'])
+                ->weeklyOn(1, config('foodalchemist.scheduler.steuerdaten_zeit', '06:30'))
+                ->withoutOverlapping()
+                ->onOneServer()
+                ->runInBackground()
+                ->description('FoodAlchemist: Wissens-Steuerdaten gegen das Soll prüfen (Drift → Signal)');
 
             // Trendradar-Automatisierung: NUR wenn explizit eingeschaltet (Default aus) —
             // der Lauf ruft das Modell pro Trend/Team und gibt sonst ungefragt Provider-Geld aus.

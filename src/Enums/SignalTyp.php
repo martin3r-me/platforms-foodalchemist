@@ -100,10 +100,25 @@ enum SignalTyp: string
     // hat KEINEN eigenen Typ — sie zeigt in der Leitstelle und überlappt mit den rezept_*-Signalen.
     case KonformitaetGp = 'konformitaet_gp';
     case KonformitaetLa = 'konformitaet_la';
+    // Wissens-Steuerdaten-Drift (2026-09-03). KEIN Datenmangel und kein KI-Urteil, sondern ein
+    // KONFIGURATIONS-Signal: die live wirksamen Routings/Bindings weichen von dem ab, was der
+    // Code als Soll führt.
+    //
+    // Anlass: die Steuerdaten sind per Hand editierbar (MCP, SQL), und genau das ist schon
+    // passiert — die Live-Tabelle trug `regelwerk|discovery|4x8000`, wo die Migration
+    // `always|1|7000` gesetzt hatte. Ein Regelwerk, das leise aus dem Prompt fällt, macht keinen
+    // Fehler sichtbar: der Generator läuft weiter und liefert schlechtere Rezepte. Ohne diesen
+    // Wächter ist jede Token-/Qualitäts-Arbeit an den Prompts in Wochen wieder aufgebraucht,
+    // ohne dass jemand den Grund benennen kann.
+    //
+    // Absichtlich in KEINEM der vier `ist*()`-Bereiche: es ist keine Rezept-, Konzept- oder
+    // Foodbook-Qualität, sondern Systemzustand — es gehört in die allgemeine Inbox.
+    case SteuerdatenDrift = 'steuerdaten_drift';
 
     public function label(): string
     {
         return match ($this) {
+            self::SteuerdatenDrift => 'Wissens-Steuerdaten weichen ab',
             self::PreisAnomalie => 'Preis-Anomalie',
             self::PreisSprungMargeImpact => 'Preis-Sprung (Marge-Impact)',
             self::VeraltetePreise => 'Veraltete Preise',
@@ -153,6 +168,7 @@ enum SignalTyp: string
     public function icon(): string
     {
         return match ($this) {
+            self::SteuerdatenDrift => 'heroicon-o-adjustments-horizontal',
             self::PreisAnomalie => 'heroicon-o-arrow-trending-up',
             self::PreisSprungMargeImpact => 'heroicon-o-bolt',
             self::VeraltetePreise => 'heroicon-o-clock',

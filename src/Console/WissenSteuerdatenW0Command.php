@@ -6,6 +6,10 @@ use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 use Platform\FoodAlchemist\Services\Ai\KnowledgeContextService;
 use Illuminate\Support\Str;
+use Platform\Core\Models\Team;
+use Platform\FoodAlchemist\Enums\SignalSeverity;
+use Platform\FoodAlchemist\Enums\SignalTyp;
+use Platform\FoodAlchemist\Services\SignalService;
 
 /**
  * Welle 0 — Steuerdaten für Routings + Layer-Bindings (W0-3 Daten-Hälfte, W0-4 Daten-Hälfte).
@@ -48,7 +52,12 @@ class WissenSteuerdatenW0Command extends Command
      *
      * @var array<string, array{mode: string, max_docs: int|null, max_chars: int|null}>
      */
-    private const ROUTINGS = [
+    /**
+     * `public`, damit {@see KnowledgePolicySeedCommand} und der Drift-Test dieselbe Quelle lesen
+     * können. Zwei Listen, die dasselbe behaupten, driften auseinander — und die Divergenz fiele
+     * erst beim nächsten Neuaufbau auf, also genau dann, wenn niemand sie erwartet.
+     */
+    public const ROUTINGS = [
         // Kommt ab jetzt vollständig über die Layer-Bindings (W0-3) statt als
         // relevanz-gerankte Discovery. `regelwerkBlock()` holte per ->first() ohnehin
         // nur EIN Doc und wurde auf min(RECIPE_MAX_CHARS_PER_DOC) geklemmt.
@@ -420,6 +429,62 @@ class WissenSteuerdatenW0Command extends Command
      * Prüft den EINZIGEN Pfad, der nach W0-4 noch Regelwerk liefert (Layer-Bindings),
      * plus dass der Routing-Weg wirklich zu ist.
      */
+    /**
+     * Meldet Steuerdaten-Drift als SIGNAL, nicht als Log-Zeile.
+     *
+     * Der Grund für den Kanal: die Steuerdaten sind per Hand editierbar (MCP, SQL), und genau das
+     * ist schon passiert — die Live-Tabelle trug `regelwerk|discovery|4x8000`, wo die Migration
+     * `always|1|7000` gesetzt hatte. Ein Regelwerk, das leise aus dem Prompt fällt, erzeugt
+     * KEINEN Fehler: der Generator läuft weiter und liefert nur schlechtere Rezepte. Ein
+     * Scheduler-Lauf, der das in `laravel.log` schreibt, ist deshalb wertlos — er hätte dieselbe
+     * Eigenschaft wie der Deckel-Vermerk in `params`: technisch vorhanden, faktisch unsichtbar.
+     *
+     * Deshalb Signale-Cockpit, mit `dedup_key` (ein offenes Signal je Team, nicht eines je Lauf)
+     * und mit `schliesseGemessen`, wenn die Drift weg ist — sonst bleibt eine behobene Warnung
+     * stehen und stumpft den Riegel ab.
+     *
+     * @param  list<string>  $fehler
+     */
+    private function meldeDrift(array $fehler): void
+    {
+        $team = Team::find((int) $this->option('team'));
+        if ($team === null) {
+            $this->warn('Kein Team #' . $this->option('team') . ' — Drift wird nicht als Signal gemeldet.');
+
+            return;
+        }
+
+        $signale = app(SignalService::class);
+
+        if ($fehler === []) {
+            $signale->schliesseGemessen(
+                $team,
+                SignalTyp::SteuerdatenDrift,
+                'wissen-steuerdaten',
+                'wissen-steuerdaten-w0',
+                'Steuerdaten stimmen wieder mit dem Soll — automatisch geschlossen',
+            );
+
+            return;
+        }
+
+        $signale->erzeuge(
+            $team,
+            SignalTyp::SteuerdatenDrift,
+            SignalSeverity::Warnung,
+            count($fehler) . ' Abweichung(en) in den Wissens-Steuerdaten',
+            [
+                'dedup_key' => 'wissen-steuerdaten',
+                'source' => 'wissen-steuerdaten-w0',
+                'description' => "Die live wirksamen Routings/Bindings weichen vom Soll ab. Der Generator "
+                    . "läuft dabei weiter — er bekommt nur weniger oder anderes Regelwerk, ohne Fehlermeldung.\n\n· "
+                    . implode("\n· ", $fehler)
+                    . "\n\nBeheben: `php artisan foodalchemist:wissen-steuerdaten-w0 --apply`, danach `--verify`.",
+                'payload' => ['abweichungen' => $fehler],
+            ],
+        );
+    }
+
     private function verify(): int
     {
         $fehler = [];
@@ -512,6 +577,8 @@ class WissenSteuerdatenW0Command extends Command
             KnowledgeContextService::CROSS_CUTTING_TRUNCATE_CHARS,
             KnowledgeContextService::DOMAIN_TRUNCATE_CHARS,
         ));
+
+        $this->meldeDrift($fehler);
 
         if ($fehler !== []) {
             $this->newLine();
