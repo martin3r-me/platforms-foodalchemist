@@ -54,7 +54,7 @@ it('deckelt auch Features ohne eigenen Override auf das Default-Wissensbudget', 
         w0Routing('recipe.steps', "w0cat{$i}", 'discovery', 3, 8000);
     }
 
-    $ctx = app(KnowledgeContextService::class)->contextFor(
+    $ctx = app(KnowledgeContextService::class)->contextFor(null,
         'recipe.steps', 'Rinderfilet schmoren', null, [], []
     );
 
@@ -74,7 +74,7 @@ it('nutzt den Default-Deckel für ein Feature ohne Config-Override', function ()
         w0Routing('foodbook.kapitel_ideen', "w0dcat{$i}", 'discovery', 3, 8000);
     }
 
-    $ctx = app(KnowledgeContextService::class)->contextFor(
+    $ctx = app(KnowledgeContextService::class)->contextFor(null,
         'foodbook.kapitel_ideen', 'Lammruecken Niedertemperatur', null, [], []
     );
 
@@ -107,7 +107,7 @@ it('vergibt keinen Substring-Bonus fuer kurze Query-Tokens', function () {
     w0Doc('moderne-kuechentechnik', 'w0substr', 3000, 'Moderne Technik');
     w0Routing('ai_generate_recipe', 'w0substr', 'discovery', 2, 3000);
 
-    $ctx = app(KnowledgeContextService::class)->contextFor(
+    $ctx = app(KnowledgeContextService::class)->contextFor(null,
         'ai_generate_recipe', 'Sud aus Aal', null, [], []
     );
 
@@ -123,7 +123,7 @@ it('weist je gewaehltem Dossier Herkunft und Groesse aus', function () {
     w0Doc('rinderfilet-kerntemperatur', 'w0herk', 5000, 'Rinderfilet Kerntemperatur');
     w0Routing('ai_generate_recipe', 'w0herk', 'discovery', 2, 2000);
 
-    $ctx = app(KnowledgeContextService::class)->contextFor(
+    $ctx = app(KnowledgeContextService::class)->contextFor(null,
         'ai_generate_recipe', 'Rinderfilet Kerntemperatur', null, [], []
     );
 
@@ -151,7 +151,7 @@ it('deckelt cross_cutting ueber die Konstante, nicht ueber die Routing-Zeile', f
     // Konstanten-Vorrang geprüft wird und nicht die feature-genaue Slug-Auswahl.
     w0Routing('w0cc.konstante', 'cross_cutting', 'always', 9, 9000);
 
-    $ctx = app(KnowledgeContextService::class)->contextFor(
+    $ctx = app(KnowledgeContextService::class)->contextFor(null,
         'w0cc.konstante', 'Substitution', null, [], []
     );
 
@@ -387,7 +387,7 @@ it('loest Anlass und Segment deterministisch aus den Leitplanken auf', function 
     // Ein Dossier, das NICHT gewählt werden darf — Gegenprobe gegen Zufallstreffer.
     w0Doc('event_playbook_brunch', 'event_playbook', 2552, 'Brunch Ablauf');
 
-    $ctx = app(KnowledgeContextService::class)->contextFor(
+    $ctx = app(KnowledgeContextService::class)->contextFor(null,
         'ai_generate_recipe', 'Geschmorte Ochsenbacke', null, [],
         ['occasion' => 'dinner', 'sektor' => 'catering'],
     );
@@ -410,7 +410,7 @@ it('loest Anlass und Segment deterministisch aus den Leitplanken auf', function 
 it('bleibt still, wenn die Achse keinen Wert hat — ein Basisrezept hat keinen Anlass', function () {
     w0Doc('event_playbook_gala', 'event_playbook', 3629, 'Gala Ablauf');
 
-    $ctx = app(KnowledgeContextService::class)->contextFor(
+    $ctx = app(KnowledgeContextService::class)->contextFor(null,
         'ai_generate_recipe', 'Selleriepüree als Komponente', null, [], ['level' => 'gehoben'],
     );
 
@@ -424,7 +424,7 @@ it('weicht bei fehlendem Dossier NICHT auf ein fremdes Profil aus', function () 
     w0Doc('segment.betriebsgastronomie', 'segment', 1951, 'Betriebsgastro Profil');
     w0Doc('segment.klinik_senioren_care', 'segment', 1806, 'Care Profil');
 
-    $ctx = app(KnowledgeContextService::class)->contextFor(
+    $ctx = app(KnowledgeContextService::class)->contextFor(null,
         'ai_generate_recipe', 'Rinderroulade', null, [], ['sektor' => 'restaurant'],
     );
 
@@ -439,7 +439,7 @@ it('nimmt den ersten AKTIVEN Kandidaten der Achse', function () {
         ->where('slug', 'segment.kita_schule_ernaehrung_dge')->update(['active' => 0]);
     w0Doc('segment.schulverpflegung', 'segment', 2097, 'Schulverpflegung Profil');
 
-    $ctx = app(KnowledgeContextService::class)->contextFor(
+    $ctx = app(KnowledgeContextService::class)->contextFor(null,
         'ai_generate_recipe', 'Gemüseauflauf', null, [], ['sektor' => 'schule_kita'],
     );
 
@@ -455,7 +455,7 @@ it('ueberlebt das Gesamtbudget — Achsen-Wissen wird nicht als Erstes gekappt',
         w0Routing('ai_generate_recipe', "w0achscat{$i}", 'discovery', 3, 8000);
     }
 
-    $ctx = app(KnowledgeContextService::class)->contextFor(
+    $ctx = app(KnowledgeContextService::class)->contextFor(null,
         'ai_generate_recipe', 'Ochsenbacke schmoren', null, [], ['occasion' => 'dinner'],
     );
 
@@ -533,8 +533,8 @@ it('respektiert einen Budget-Override des Aufrufers', function () {
     }
     $svc = app(KnowledgeContextService::class);
 
-    $ohne = $svc->contextFor('concept.plan', 'Flying Buffet Technik', null, [], []);
-    $mit = $svc->contextFor('concept.plan', 'Flying Buffet Technik', null, [], ['_max_chars' => 8000]);
+    $ohne = $svc->contextFor(null, 'concept.plan', 'Flying Buffet Technik', null, [], []);
+    $mit = $svc->contextFor(null, 'concept.plan', 'Flying Buffet Technik', null, [], ['_max_chars' => 8000]);
 
     // Erst belegen, dass die Fixture überhaupt greift — sonst prüft der Test nichts.
     expect($ohne['total_chars'])->toBeGreaterThan(8000)
@@ -556,7 +556,7 @@ it('klemmt einen zu kleinen Override auf die Pflichtmenge statt Pflichtwissen zu
     expect($pflicht)->toBe(6000);
 
     // Absurd kleiner Override — darf die Pflicht nicht unterschreiten.
-    $ctx = $svc->contextFor('kompo.feature', 'irgendwas', null, [], ['_max_chars' => 500]);
+    $ctx = $svc->contextFor(null, 'kompo.feature', 'irgendwas', null, [], ['_max_chars' => 500]);
 
     expect($ctx['total_chars'])->toBeGreaterThanOrEqual($pflicht);
 });
@@ -569,10 +569,10 @@ it('liefert ausgeschlossene Slugs nicht erneut — keine Dopplung im verketteten
     w0Routing('kompo.zweit', 'w0sharedcat', 'discovery', 2, 3000);
     $svc = app(KnowledgeContextService::class);
 
-    $erst = $svc->contextFor('kompo.erst', 'buffet geteilt', null, [], []);
+    $erst = $svc->contextFor(null, 'kompo.erst', 'buffet geteilt', null, [], []);
     expect($erst['files_used'])->not->toBeEmpty();
 
-    $zweit = $svc->contextFor('kompo.zweit', 'buffet geteilt', null, [], [
+    $zweit = $svc->contextFor(null, 'kompo.zweit', 'buffet geteilt', null, [], [
         '_exclude_slugs' => $erst['files_used'],
     ]);
 
@@ -588,11 +588,11 @@ it('akzeptiert Ausschluss-Slugs mit und ohne Versions-Suffix', function () {
     $svc = app(KnowledgeContextService::class);
 
     // Gegenprobe: ohne Ausschluss greift die Fixture.
-    expect($svc->contextFor('kompo.ver', 'buffet versioniert', null, [], [])['files_used'])->not->toBeEmpty();
+    expect($svc->contextFor(null, 'kompo.ver', 'buffet versioniert', null, [], [])['files_used'])->not->toBeEmpty();
 
     // Der Aufrufer übergibt files_used („slug@v1"); intern wird das Suffix gestrippt.
-    $mitSuffix = $svc->contextFor('kompo.ver', 'buffet versioniert', null, [], ['_exclude_slugs' => ['buffet-versioniert@v1']]);
-    $ohneSuffix = $svc->contextFor('kompo.ver', 'buffet versioniert', null, [], ['_exclude_slugs' => ['buffet-versioniert']]);
+    $mitSuffix = $svc->contextFor(null, 'kompo.ver', 'buffet versioniert', null, [], ['_exclude_slugs' => ['buffet-versioniert@v1']]);
+    $ohneSuffix = $svc->contextFor(null, 'kompo.ver', 'buffet versioniert', null, [], ['_exclude_slugs' => ['buffet-versioniert']]);
 
     expect($mitSuffix['files_used'])->toBe([])
         ->and($ohneSuffix['files_used'])->toBe([]);
@@ -615,8 +615,8 @@ it('laedt fuer einen Kundentext nur die passenden Cross-Cutting-Dossiers', funct
     w0Routing('w0cc.generator', 'cross_cutting', 'always');
     $svc = app(KnowledgeContextService::class);
 
-    $text = $svc->contextFor('foodbook.kundentext', 'Sommerliches Buffet', null, [], []);
-    $gen = $svc->contextFor('w0cc.generator', 'Sommerliches Buffet', null, [], []);
+    $text = $svc->contextFor(null, 'foodbook.kundentext', 'Sommerliches Buffet', null, [], []);
+    $gen = $svc->contextFor(null, 'w0cc.generator', 'Sommerliches Buffet', null, [], []);
 
     $textSlugs = array_map(fn ($f) => explode('@', $f)[0], $text['used_by_category']['cross_cutting'] ?? []);
     $genSlugs = array_map(fn ($f) => explode('@', $f)[0], $gen['used_by_category']['cross_cutting'] ?? []);

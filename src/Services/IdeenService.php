@@ -281,7 +281,7 @@ class IdeenService
         $beschreibung = trim(implode(' ', array_filter([
             (string) $kapitel->title, (string) $kapitel->description, (string) $fb->title,
         ])));
-        $wissen = app(KnowledgeContextService::class)->contextFor('foodbook.plan', $beschreibung);
+        $wissen = app(KnowledgeContextService::class)->contextFor($team, 'foodbook.plan', $beschreibung);
 
         $kontext = [
             'kapitel' => (string) $kapitel->title,
@@ -385,8 +385,8 @@ class IdeenService
          * `geschaeftsmodell` + `regelwerk`.
          */
         $kctx = app(KnowledgeContextService::class);
-        $plan = $kctx->contextFor('concept.plan', $beschreibung, null, [], ['_max_chars' => 14000]);
-        $trend = $kctx->contextFor('concept.brief_geruest', $beschreibung, null, [], [
+        $plan = $kctx->contextFor($team, 'concept.plan', $beschreibung, null, [], ['_max_chars' => 14000]);
+        $trend = $kctx->contextFor($team, 'concept.brief_geruest', $beschreibung, null, [], [
             '_max_chars' => 5000,
             '_exclude_slugs' => $plan['files_used'] ?? [],
         ]);
@@ -503,7 +503,7 @@ class IdeenService
             throw new \RuntimeException('KI-Divergenz braucht einen Analyse-Text als Ausgangslage.');
         }
 
-        $wissen = app(KnowledgeContextService::class)->contextFor('foodbook.plan', $seed);
+        $wissen = app(KnowledgeContextService::class)->contextFor($team, 'foodbook.plan', $seed);
 
         $kontext = array_filter([
             'kapitel' => (string) ($session->title ?: 'Planung'),   // produkt-blindes Prompt-Feld — hier trägt es die Session

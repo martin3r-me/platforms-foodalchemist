@@ -82,7 +82,7 @@ class RecipeGenerationContextService
         // (der Selektor liest params['rezept_typ']) und geht (b) als eigenes Kontext-Feld an die KI
         // — Gürtel & Hosenträger zur Prompt-Einleitung (Basisrezept = Baustein, Gericht = Teller).
         $rezeptTyp = $vkModus ? 'gericht' : 'basisrezept';
-        $wissen = $this->knowledge->contextFor('ai_generate_recipe', $description, $parameter['kompositions_stil'] ?? null, [], $parameter + ['rezept_typ' => $rezeptTyp]);
+        $wissen = $this->knowledge->contextFor($team, 'ai_generate_recipe', $description, $parameter['kompositions_stil'] ?? null, [], $parameter + ['rezept_typ' => $rezeptTyp]);
         /*
          * Transparenz: die an recipe.generator/vk.generator GEBUNDENEN Dossiers stehen nicht in
          * contextFor()->files_used, sollen aber im „Verwendetes Wissen"-Chip auftauchen.

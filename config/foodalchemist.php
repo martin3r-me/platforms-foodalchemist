@@ -553,6 +553,25 @@ return [
      */
     'embedding_store' => env('FOODALCHEMIST_EMBEDDING_STORE', 'mysql'),
 
+    /**
+     * W1-6 / Mandanten-Modell (Dominique 2026-09-03): „das Wissen ist global, damit die
+     * Generatoren laufen; ein neuer Nutzer bekommt es leer und kann für sich Wissen
+     * hinterlegen, das nur für sein Team und Kinder gilt."
+     *
+     * AUS (Default) = das Retrieval liest den Korpus ungefiltert, byte-identisch zu heute.
+     * AN = `TeamScope::applyVisible` (global NULL ODER eigene Ancestry).
+     *
+     * Der Schalter existiert, weil der Filter erst richtig ist, wenn die DATEN es sind:
+     * auf demo liegen 818 kuratierte Dossiers unter team_id = 6 statt NULL. Mit Filter
+     * sähe Team 6 unverändert alles (598 → 598), jedes ANDERE Team und jeder Console-Lauf
+     * aber nur 6 von 598 — der Korpus fiele auf 1 %, ohne rote Tests.
+     *
+     * Reihenfolge für den Flip: erst Daten (Bestand auf team_id NULL heben ODER
+     * `teams.parent_team_id` auf den Kurator setzen), dann diese Zeile. Rollback = Zeile
+     * zurück, kein Deploy.
+     */
+    'knowledge_team_scope' => env('FOODALCHEMIST_KNOWLEDGE_TEAM_SCOPE', false),
+
     'semantic_search' => [
         // Phase 0 (2026-08-06): RAG-Hot-Path war HART AUS — der mysql-Embedding-Store macht
         // Cosine-in-PHP und blockierte/OOMte generiere() bei „Kontext & Wissen", VOR dem LLM.

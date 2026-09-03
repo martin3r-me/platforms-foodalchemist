@@ -101,6 +101,24 @@ class WissenSteuerdatenW0Command extends Command
      * @var list<string>
      */
     private const ENTBUNDEN = [
+        // `workflow.rezept_anlegen_mcp` (6.761 Z.) — IST KEIN REGELWERK. Der Frontmatter sagt
+        // es selbst: `typ: Skill_Workflow`, `code: fa.basisrezept_anlegen`,
+        // `zielgruppe: agent`, plus eine `required_tools`-Liste von MCP-Tools. Es ist eine
+        // Werkzeug-Reihenfolge für einen EXTERNEN MCP-Client — der Generator ruft keine
+        // MCP-Tools auf, er liefert JSON. (Dominique 2026-09-03: „workflow rezept anlegen
+        // sagt es ja schon, ist kein Regelwerk, ist für die MCP".)
+        //
+        // Es lag als `always` am Präfix `recipe` und damit im »VERBINDLICHEN REGELWERK«
+        // JEDES `recipe.*`-Prompts. Damit widersprach die Bindung auch der eigenen
+        // Import-Doku: „MCP-Orchestrierungs-Workflows — searchbar, NICHT always-geroutet".
+        //
+        // Die Wirkung ist die ganze Kappung: always-Summe 25.282 Z. bei Deckel 19.000 →
+        // 6.282 Z. verbindliches Regelwerk wurden pro Call abgeschnitten, und weil alle
+        // Gewichte 0 sind, hatte niemand entschieden welche. Ohne dieses Dossier: 18.521 Z.
+        // — alle §-Dossiers passen, nichts wird mehr gekappt. Eine falsche Bindung, ein
+        // gelöstes Budget-Problem.
+        'workflow.rezept_anlegen_mcp',
+
         // §5 Default-GPs (4.796 Z.) — MatchHeuristics::defaultGpAlias() erzwingt die Tabelle
         // deterministisch (Score 0,97, auf demo an 12 von 13 Generika verifiziert). Die
         // Benennungs-Direktive, die das Modell wirklich kontrolliert, steht kompakt im Task.
@@ -248,11 +266,20 @@ class WissenSteuerdatenW0Command extends Command
                     ->update(['mode' => 'always', 'active' => 1, 'updated_at' => now()]);
 
                 // Code-erzwungene Dossiers aus dem Prompt nehmen (active=0, nicht löschen).
+                //
+                // AUCH DER BEREICHS-PRÄFIX. `selectBoundKnowledge()` liest
+                // `whereIn('target_key', [$promptKey, $bereich])` — der Gateway nimmt also
+                // sowohl `recipe.generator` ALS AUCH `recipe`. Dieser Befehl behandelte nur
+                // den Prompt-Key; ein Dossier am Präfix blieb unsichtbar für ihn und landete
+                // trotzdem in jedem Prompt. Genau so überlebte die MCP-Anleitung (6.761 Z.)
+                // am Präfix `recipe` alle bisherigen Läufe. Selbst hineingelaufen — dieselbe
+                // Präfix-Blindheit steckte auch in der W3-1-Vorbedingung unten.
+                $ziele = array_values(array_unique([$targetKey, explode('.', $targetKey)[0]]));
                 $entIds = DB::table('foodalchemist_knowledge_documents')
                     ->whereIn('slug', self::ENTBUNDEN)->whereNull('deleted_at')->pluck('id');
                 if ($entIds->isNotEmpty()) {
                     DB::table('foodalchemist_knowledge_bindings')
-                        ->where('binding_type', 'layer')->where('target_key', $targetKey)
+                        ->where('binding_type', 'layer')->whereIn('target_key', $ziele)
                         ->whereIn('knowledge_document_id', $entIds)->whereNull('deleted_at')
                         ->update(['active' => 0, 'updated_at' => now()]);
                 }
@@ -331,7 +358,10 @@ class WissenSteuerdatenW0Command extends Command
             $dyn = DB::table('foodalchemist_knowledge_bindings as b')
                 ->join('foodalchemist_knowledge_documents as d', 'd.id', '=', 'b.knowledge_document_id')
                 ->whereNull('b.deleted_at')->where('b.active', 1)->where('b.binding_type', 'layer')
-                ->where('b.target_key', $tk)->where('b.mode', '!=', 'always')
+                // Präfix mitprüfen: der Gateway matcht [$promptKey, $bereich], eine
+                // score-gegatete Bindung am Präfix bricht den Cache-Prefix genauso.
+                ->whereIn('b.target_key', array_values(array_unique([$tk, explode('.', $tk)[0]])))
+                ->where('b.mode', '!=', 'always')
                 ->pluck('d.slug')->all();
             if ($dyn !== []) {
                 $fehler[] = "{$tk}: nicht-always-Bindings vorhanden (" . implode(', ', $dyn)

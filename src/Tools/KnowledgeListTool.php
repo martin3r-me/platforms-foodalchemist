@@ -80,7 +80,7 @@ class KnowledgeListTool extends FoodAlchemistTool implements ToolContract, ToolM
             }
         }
 
-        $ergebnis = app(KnowledgeContextService::class)->listDocuments(
+        $ergebnis = app(KnowledgeContextService::class)->listDocuments($team, 
             $kategorie,
             (int) ($arguments['offset'] ?? 0),
             (int) ($arguments['limit'] ?? 100),

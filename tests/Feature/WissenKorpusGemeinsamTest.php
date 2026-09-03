@@ -10,7 +10,18 @@ use Symfony\Component\Uid\UuidV7;
 uses(TestCase::class, SeedsTeamHierarchy::class);
 
 /**
- * STOLPERDRAHT für einen Produktentscheid, nicht für einen Bug.
+ * DAS MANDANTEN-MODELL, in beiden Schalterstellungen.
+ *
+ * Dominique (2026-09-03): „was wir gerade bauen an Wissen ist global, damit die Generatoren
+ * laufen. Ein neuer User bekommt auch das Wissen, aber komplett leer, und kann dort für sich
+ * Wissen hinterlegen — das kann nur für sein Team und Kinder genutzt werden."
+ *
+ * Das ist wörtlich `TeamScope::applyVisible`: global (team_id NULL) ODER eigene Ancestry.
+ * Der Filter sitzt hinter `foodalchemist.knowledge_team_scope`, weil er erst richtig ist,
+ * wenn die DATEN es sind — auf demo liegen 818 kuratierte Dossiers unter team_id = 6 statt
+ * NULL, und mit Filter fiele der Korpus für jedes andere Team auf 6 von 598.
+ *
+ * Diese Datei pinnt BEIDE Stellungen: aus = byte-identisch zu heute, an = Dominiques Modell.
  *
  * Ein Voll-Audit hat am 2026-09-02 dreiundzwanzig ungescopete Doc-Queries im Retrieval
  * gefunden und als Mandanten-Lecks eingeordnet. Der Filter war gebaut — und wurde nach
@@ -50,10 +61,11 @@ beforeEach(function () {
     $this->svc = app(KnowledgeContextService::class);
 });
 
-it('GEWOLLT: das Retrieval findet Wissen eines FREMDEN Teams — der Korpus ist gemeinsam', function () {
+it('SCHALTER AUS: das Retrieval findet Wissen eines FREMDEN Teams — wie heute', function () {
+    config(['foodalchemist.knowledge_team_scope' => false]);
     korpusDoc($this->childB->id, 'kurator-dossier-zander', 'Zander-Dossier des Kurators');
 
-    $treffer = collect($this->svc->searchDocuments('zander'))->pluck('slug');
+    $treffer = collect($this->svc->searchDocuments($this->childA, 'zander'))->pluck('slug');
 
     // Wird das hier rot, hat jemand einen team_id-Filter eingebaut. BITTE ZUERST den
     // Klassen-Docblock von KnowledgeContextService lesen: der Filter kappt 99 % des
@@ -61,18 +73,20 @@ it('GEWOLLT: das Retrieval findet Wissen eines FREMDEN Teams — der Korpus ist 
     expect($treffer)->toContain('kurator-dossier-zander');
 });
 
-it('GEWOLLT: auch die Katalog-Enumeration ist gemeinsam', function () {
+it('SCHALTER AUS: auch die Katalog-Enumeration ist gemeinsam', function () {
+    config(['foodalchemist.knowledge_team_scope' => false]);
     korpusDoc($this->childB->id, 'kurator-katalog-doc', 'Katalog-Doc des Kurators');
 
-    $slugs = collect($this->svc->listDocuments('domain', 0, 50)['documents'] ?? [])->pluck('slug');
+    $slugs = collect($this->svc->listDocuments($this->childA, 'domain', 0, 50)['documents'] ?? [])->pluck('slug');
 
     expect($slugs)->toContain('kurator-katalog-doc');
 });
 
-it('GEWOLLT: der Volltext ist per Slug für jedes Team lesbar', function () {
+it('SCHALTER AUS: der Volltext ist per Slug für jedes Team lesbar', function () {
+    config(['foodalchemist.knowledge_team_scope' => false]);
     korpusDoc($this->childB->id, 'kurator-volltext', 'Volltext des Kurators');
 
-    expect($this->svc->getDocument('kurator-volltext'))->not->toBeNull();
+    expect($this->svc->getDocument($this->childA, 'kurator-volltext'))->not->toBeNull();
 });
 
 /*
@@ -111,4 +125,45 @@ it('BELEG: ein applyVisible-Filter würde den Korpus für ein fremdes Team auf d
     expect($gefiltert)->toContain('global-seed-doc')
         ->not->toContain('kurator-1')
         ->not->toContain('kurator-2');
+});
+
+/*
+ * ── SCHALTER AN: Dominiques Modell ──────────────────────────────────────────
+ * Global bleibt für alle lesbar (damit die Generatoren laufen), team-eigenes Wissen bleibt
+ * beim Team und seinen Kindern. Der Flip ist eine ENV-Zeile; diese Tests halten fest, was
+ * er bewirkt — damit niemand ihn stellt, ohne die Wirkung zu kennen.
+ */
+it('SCHALTER AN: fremdes Team-Wissen bleibt draussen, globales kommt mit', function () {
+    config(['foodalchemist.knowledge_team_scope' => true]);
+    korpusDoc(null, 'global-dossier', 'Globales Dossier');
+    korpusDoc($this->childB->id, 'fremd-dossier', 'Fremdes Dossier');
+    korpusDoc($this->childA->id, 'eigen-dossier', 'Eigenes Dossier');
+
+    $slugs = collect($this->svc->listDocuments($this->childA, 'domain', 0, 50)['documents'] ?? [])->pluck('slug');
+
+    expect($slugs)->toContain('global-dossier')        // damit die Generatoren laufen
+        ->toContain('eigen-dossier')                    // eigenes Team
+        ->not->toContain('fremd-dossier');              // fremdes Team
+});
+
+it('SCHALTER AN: der Volltext eines fremden Dossiers ist nicht lesbar', function () {
+    config(['foodalchemist.knowledge_team_scope' => true]);
+    korpusDoc($this->childB->id, 'fremd-volltext', 'Fremder Volltext');
+
+    expect($this->svc->getDocument($this->childA, 'fremd-volltext'))->toBeNull();
+});
+
+it('SCHALTER AN ohne Team (Console-Lauf): genau der globale Seed', function () {
+    config(['foodalchemist.knowledge_team_scope' => true]);
+    korpusDoc(null, 'global-cli', 'Global CLI');
+    korpusDoc($this->childB->id, 'team-cli', 'Team CLI');
+
+    $slugs = collect($this->svc->listDocuments(null, 'domain', 0, 50)['documents'] ?? [])->pluck('slug');
+
+    // Nicht alles und nicht nichts — der sichere Ausfall.
+    expect($slugs)->toContain('global-cli')->not->toContain('team-cli');
+});
+
+it('Der Schalter ist standardmässig AUS — kein stiller Verhaltenswechsel beim Deploy', function () {
+    expect((bool) config('foodalchemist.knowledge_team_scope'))->toBeFalse();
 });

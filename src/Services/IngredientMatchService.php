@@ -126,6 +126,36 @@ class IngredientMatchService
             }
         }
 
+        // §2 VERARBEITUNGS-REDUKTION (Regelwerk Basisrezepte): eine Schnittform ist keine
+        // Identität. Das Regelwerk verlangt die Reduktion auf die Rohform — der Code tat es
+        // nicht, und die Schnittform machte den Treffer sogar KAPUTT. Gemessen auf demo
+        // (2026-09-03):
+        //
+        //   »Karotten, Brunoise« → 1. «Gemuesemix: TK, Brunoises» 0,742 · 4. «Karotten: TK,
+        //                            Baby» 0,686 → Entscheid NONE
+        //   »Karotten«           → 1. «Moehren / Karotten: …»     1,001 → Entscheid GP
+        //
+        // `brunoise` wurde wie ein Identitäts-Token gewertet und zog einen GEMÜSEMIX über
+        // die echte Karotte. `isQualifierToken('brunoise')` war längst true — die Bewertung
+        // nutzte es nur nicht. Dieselbe Lage bei »Zwiebeln gehackt«.
+        //
+        // Rein additiv wie die beiden Fallbacks darüber: feuert NUR unter der Schwelle, die
+        // Goldens bleiben unberührt. Bewusst NUR Schnittformen (nicht alle Qualifier) —
+        // Zustand und Verarbeitungsgrad sind eigene Achsen und dürfen nicht verschwinden.
+        if ($final['score'] < MatchHeuristics::MIN_MATCH_SCORE) {
+            $ohneZuschnitt = array_values(array_filter(
+                $queryTokens,
+                fn (string $t): bool => ! $this->engine->isCutFormToken($t),
+            ));
+            // Nur wenn wirklich ein Zuschnitt wegfiel UND eine Identität übrig bleibt.
+            if ($ohneZuschnitt !== [] && count($ohneZuschnitt) < count($queryTokens)) {
+                $reduziert = $this->poolLauf($team, $ohneZuschnitt, $querySlug, $mode, $pref, $preferRaw, $bio);
+                if ($reduziert['score'] > $final['score']) {
+                    $final = $reduziert;
+                }
+            }
+        }
+
         return $final['score'] < MatchHeuristics::MIN_MATCH_SCORE
             ? $this->noMatch($final['score'])
             : $final;

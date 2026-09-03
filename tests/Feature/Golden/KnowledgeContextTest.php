@@ -111,7 +111,7 @@ it('GT-13-5: Filter gewagt (Modern+Kontrast) — Klassisch UND Verbund draußen'
 it('GT-13-6: Discovery Stufe 2a — alle 3 passenden Domains via Alias, alle 7 Cross-Cutting', function () {
     ($this->seedGenerator)();
 
-    $ctx = $this->svc->contextFor('ai_generate_recipe', 'Lachs mit brauner Butter und Walnuss');
+    $ctx = $this->svc->contextFor(null, 'ai_generate_recipe', 'Lachs mit brauner Butter und Walnuss');
 
     $slugs = array_map(fn ($f) => explode('@', $f)[0], $ctx['files_used']);
     foreach (KnowledgeContextService::ALWAYS_LOAD_CROSS_CUTTING as $cc) {
@@ -133,7 +133,7 @@ it('GT-13-7: Budget hart — 10.000 Zeichen → 6.000 + Marker; exakt 6.000 → 
 it('GT-13-8: leere Beschreibung → nur Cross-Cutting, keine Domain, kein Fehler', function () {
     ($this->seedGenerator)();
 
-    $ctx = $this->svc->contextFor('ai_generate_recipe', '');
+    $ctx = $this->svc->contextFor(null, 'ai_generate_recipe', '');
 
     expect(substr_count($ctx['block'], '## CROSS_CUTTING: '))->toBe(7)
         ->and(str_contains($ctx['block'], '## DOMAIN: '))->toBeFalse();
@@ -143,7 +143,7 @@ it('GT-13-9: Wissens-Quelle komplett leer → leerer Kontext, Call läuft weiter
     ($this->mkRouting)('ai_generate_recipe', 'cross_cutting', 'always');
     ($this->mkRouting)('ai_generate_recipe', 'domain', 'discovery');
 
-    $ctx = $this->svc->contextFor('ai_generate_recipe', 'Lachs mit Butter');
+    $ctx = $this->svc->contextFor(null, 'ai_generate_recipe', 'Lachs mit Butter');
 
     expect($ctx['block'])->toBe('')
         ->and($ctx['files_used'])->toBe([])
@@ -177,7 +177,7 @@ it('GT-13-10: Pairing-Block klassisch — eine salbei-Zeile, nur Klassisch-Partn
     $mkKante($salbei, $butter, 'erprobt');                             // klassisch → erprobt: sichtbar
     $mkKante($salbei, $yuzu, 'aroma');                                 // aroma → unter »klassisch« rausgefiltert
 
-    $ctx = $this->svc->contextFor('ai_generate_recipe', 'Salbei-Gnocchi', 'klassisch');
+    $ctx = $this->svc->contextFor(null, 'ai_generate_recipe', 'Salbei-Gnocchi', 'klassisch');
 
     preg_match_all('/^- salbei: (.+)$/m', $ctx['block'], $m);
     expect(count($m[0]))->toBe(1)
@@ -199,7 +199,7 @@ it('GT-13-11: Grounding koriander → beide Sorten-Dokus per Präfix, je 1.400 Z
         ]);
     }
 
-    $ctx = $this->svc->contextFor('ai_infer_ankers', '', null, ['koriander', 'koriander']);  // Dupe-Input
+    $ctx = $this->svc->contextFor(null, 'ai_infer_ankers', '', null, ['koriander', 'koriander']);  // Dupe-Input
 
     expect(substr_count($ctx['block'], '### Pairing-Doku: koriander_blatt'))->toBe(1)
         ->and(substr_count($ctx['block'], '### Pairing-Doku: koriander_saat'))->toBe(1)
@@ -211,7 +211,7 @@ it('Inv. 7: ai_extract_recipe bleibt BEWUSST ohne Wissen (Routing none)', functi
     ($this->seedGenerator)();
     ($this->mkRouting)('ai_extract_recipe', 'cross_cutting', 'none');
 
-    expect($this->svc->contextFor('ai_extract_recipe', 'Lachs mit Butter')['block'])->toBe('');
+    expect($this->svc->contextFor(null, 'ai_extract_recipe', 'Lachs mit Butter')['block'])->toBe('');
 });
 
 it('DoD: Assembly hält das Gesamtbudget — Rezeptwissen auf RECIPE_MAX_KNOWLEDGE_CHARS gedeckelt', function () {
@@ -220,7 +220,7 @@ it('DoD: Assembly hält das Gesamtbudget — Rezeptwissen auf RECIPE_MAX_KNOWLED
         ->update(['content_md' => str_repeat('C', 20000)]);
     ($this->mkDoc)('schwein', 'domain', str_repeat('D', 20000));      // 4. Domain via Fallback unmöglich — Aliase decken 3
 
-    $ctx = $this->svc->contextFor('ai_generate_recipe', 'Lachs mit brauner Butter und Walnuss');
+    $ctx = $this->svc->contextFor(null, 'ai_generate_recipe', 'Lachs mit brauner Butter und Walnuss');
 
     // +40 Toleranz für den Kürzungs-Marker, den truncate() NACH dem Deckel anhängt
     // (gleiche Toleranz wie RecipeKnowledgeBudgetTest).
@@ -248,14 +248,14 @@ it('S1: Niveau-Docs werden parametrisch geladen — nur die aktive Stufe (top_k=
     ($this->mkDoc)('niveau.niveau-2-gehoben', 'niveau', 'Gehoben: solide Klassik, gute Produkte.');
     ($this->mkDoc)('niveau.niveau-3-klassisch', 'niveau', 'Klassisch: bewaehrte Hausmannskost.');
 
-    $haute = $this->svc->contextFor('ai_generate_recipe', 'Rotwein-Schalotten-Reduktion', null, [], ['niveau' => 'haute_cuisine', 'rezept_typ' => 'gericht']);
+    $haute = $this->svc->contextFor(null, 'ai_generate_recipe', 'Rotwein-Schalotten-Reduktion', null, [], ['niveau' => 'haute_cuisine', 'rezept_typ' => 'gericht']);
     expect($haute['files_used'])->toContain('niveau.niveau-1-haute-cuisine@v1')
         ->and($haute['files_used'])->not->toContain('niveau.niveau-2-gehoben@v1')      // top_k=1 + Param-Wahl
         ->and($haute['files_used'])->not->toContain('niveau.niveau-3-klassisch@v1')
         ->and($haute['block'])->toContain('Haute-Cuisine: Reduktionen');
 
     // Anderer Parameter → andere Stufe (Beweis: parametrisch, nicht statisch)
-    $klass = $this->svc->contextFor('ai_generate_recipe', 'Rotwein-Schalotten-Reduktion', null, [], ['niveau' => 'klassisch', 'rezept_typ' => 'gericht']);
+    $klass = $this->svc->contextFor(null, 'ai_generate_recipe', 'Rotwein-Schalotten-Reduktion', null, [], ['niveau' => 'klassisch', 'rezept_typ' => 'gericht']);
     expect($klass['files_used'])->toContain('niveau.niveau-3-klassisch@v1')
         ->and($klass['files_used'])->not->toContain('niveau.niveau-1-haute-cuisine@v1');
 });
@@ -265,7 +265,7 @@ it('S1: eine Kategorie OHNE Routing bleibt draußen (search-only ist gültig, ke
     ($this->mkDoc)('regelwerk.gp-naming', 'regelwerk', 'Lange normative GP-Naming-Regeln.');
 
     // regelwerk ist bewusst NICHT für ai_generate_recipe geroutet → trotz Wort-Treffer nicht im Grounding.
-    $ctx = $this->svc->contextFor('ai_generate_recipe', 'GP naming Regelwerk Schalotten', null, [], []);
+    $ctx = $this->svc->contextFor(null, 'ai_generate_recipe', 'GP naming Regelwerk Schalotten', null, [], []);
     expect($ctx['files_used'])->not->toContain('regelwerk.gp-naming@v1');
 });
 
@@ -275,7 +275,7 @@ it('Kontext-Inspektor: used_by_category gruppiert je Kanal und deckt sich exakt 
     ($this->seedGenerator)();
     ($this->mkDoc)('niveau.niveau-1-haute-cuisine', 'niveau', 'Haute-Cuisine: Reduktionen, Praezision.');
 
-    $ctx = $this->svc->contextFor('ai_generate_recipe', 'Lachs mit brauner Butter und Walnuss', null, [], ['niveau' => 'haute_cuisine', 'rezept_typ' => 'gericht']);
+    $ctx = $this->svc->contextFor(null, 'ai_generate_recipe', 'Lachs mit brauner Butter und Walnuss', null, [], ['niveau' => 'haute_cuisine', 'rezept_typ' => 'gericht']);
 
     // Rückgabe-Kontrakt: neuer Key da, gruppiert nach den erwarteten Kanälen.
     expect($ctx)->toHaveKey('used_by_category')
@@ -300,12 +300,12 @@ it('Spec 37: Basisrezept zieht den Basis-Niveau-Doc, Gericht den Teller-Doc (gle
     ($this->mkDoc)('niveau.niveau-basis-1-haute-cuisine', 'niveau', 'Baustein: Technik an EINER Komponente, KEIN 7-10-Teller.');
 
     // Basisrezept → der Basis-Doc (…basis…), NICHT der Teller-Doc.
-    $basis = $this->svc->contextFor('ai_generate_recipe', 'Tomatensuppe', null, [], ['niveau' => 'haute_cuisine', 'rezept_typ' => 'basisrezept']);
+    $basis = $this->svc->contextFor(null, 'ai_generate_recipe', 'Tomatensuppe', null, [], ['niveau' => 'haute_cuisine', 'rezept_typ' => 'basisrezept']);
     expect($basis['used_by_category']['niveau'] ?? [])->toBe(['niveau.niveau-basis-1-haute-cuisine@v1'])
         ->and($basis['block'])->toContain('EINER Komponente');
 
     // Gericht → der Teller-Doc (kein …basis…), obwohl der Level-Token derselbe ist.
-    $gericht = $this->svc->contextFor('ai_generate_recipe', 'Tomatensuppe', null, [], ['niveau' => 'haute_cuisine', 'rezept_typ' => 'gericht']);
+    $gericht = $this->svc->contextFor(null, 'ai_generate_recipe', 'Tomatensuppe', null, [], ['niveau' => 'haute_cuisine', 'rezept_typ' => 'gericht']);
     expect($gericht['used_by_category']['niveau'] ?? [])->toBe(['niveau.niveau-1-haute-cuisine@v1']);
 });
 
@@ -313,6 +313,6 @@ it('Spec 37: ohne Niveau kein Niveau-Doc (Default egal, kein Fehl-Load)', functi
     ($this->seedGenerator)();
     ($this->mkDoc)('niveau.niveau-basis-1-haute-cuisine', 'niveau', 'x');
 
-    $ctx = $this->svc->contextFor('ai_generate_recipe', 'Tomatensuppe', null, [], ['rezept_typ' => 'basisrezept']);
+    $ctx = $this->svc->contextFor(null, 'ai_generate_recipe', 'Tomatensuppe', null, [], ['rezept_typ' => 'basisrezept']);
     expect($ctx['used_by_category']['niveau'] ?? null)->toBeNull();
 });

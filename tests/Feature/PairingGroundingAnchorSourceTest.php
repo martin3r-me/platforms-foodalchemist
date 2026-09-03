@@ -74,7 +74,7 @@ it('liefert Pairing-Erdung aus dem Anker-Graphen OHNE Pairing-Docs (lexikalisch)
     expect(DB::table('foodalchemist_knowledge_documents')->where('category', 'pairing')->count())->toBe(0);
 
     $ctx = app(KnowledgeContextService::class)
-        ->contextFor('ai_generate_recipe', 'Ein sommerliches Gericht mit Basilikum und Tomate.');
+        ->contextFor(null, 'ai_generate_recipe', 'Ein sommerliches Gericht mit Basilikum und Tomate.');
 
     expect($ctx['block'])->toContain('FLAVOR-PAIRING')
         ->and($ctx['block'])->toContain('Tomate');                 // Partner von basilikum aus dem Graphen

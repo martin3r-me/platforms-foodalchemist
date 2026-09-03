@@ -832,7 +832,7 @@ class AngebotService
 
         try {
             $wissen = app(\Platform\FoodAlchemist\Services\Ai\KnowledgeContextService::class)
-                ->contextFor('foodbook.kundentext', (string) ($angebot->name ?: 'Angebot'));
+                ->contextFor($team, 'foodbook.kundentext', (string) ($angebot->name ?: 'Angebot'));
 
             $proposal = app(\Platform\FoodAlchemist\Services\Ai\AiGatewayService::class)->propose(
                 'foodbook.kundentext',
@@ -871,7 +871,7 @@ class AngebotService
 
         try {
             $wissen = app(\Platform\FoodAlchemist\Services\Ai\KnowledgeContextService::class)
-                ->contextFor('foodbook.kundentext', (string) ($kapitel->title ?: $angebot->name ?: 'Kapitel'));
+                ->contextFor($team, 'foodbook.kundentext', (string) ($kapitel->title ?: $angebot->name ?: 'Kapitel'));
 
             $proposal = app(\Platform\FoodAlchemist\Services\Ai\AiGatewayService::class)->propose(
                 'foodbook.kundentext',

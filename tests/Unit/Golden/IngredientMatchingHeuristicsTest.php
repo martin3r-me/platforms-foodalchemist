@@ -209,9 +209,19 @@ it('nebenprodukt_derivat trennt Mutter von Form + respektiert Anti-Pattern', fun
 });
 
 // D4 2026-08-18: bare Wasser → Leitungswasser-Basis-GP (Flaschen-/Mineralwasser nur mit Zusatz-Token).
+//
+// KORREKTUR 2026-09-03: der erwartete Name war »Wasser: Leitung« — SO HEISST KEIN
+// GRUNDPRODUKT. Das GP ist »Leitungswasser: frisch« (auf demo id 9359, approved, mit einem
+// Nullpreis-Artikel). `resolveGpByName` lief also ins Leere, der Alias blieb wirkungslos,
+// und bares »Wasser« landete weiter auf «Wasser: still, 0,5 l, Bio» — 64 Rezepte rechnen
+// Leitungswasser als Bio-Flaschenwasser.
+//
+// Dieser Test war grün und hat den Fehler dabei FESTGESCHRIEBEN: er prüfte, dass die
+// Funktion einen bestimmten String zurückgibt, nie ob dieser String ein GP trifft. Ein
+// Alias, der ins Leere zeigt, verhält sich wie »kein Alias« — er wirft nichts.
 it('default_gp_alias: bare Wasser → Leitungswasser, Mineral-/Flaschenwasser nicht', function () {
-    expect($this->h->defaultGpAlias(($this->ts)('Wasser'), false))->toBe('Wasser: Leitung')
-        ->and($this->h->defaultGpAlias(($this->ts)('Leitungswasser'), false))->toBe('Wasser: Leitung')
+    expect($this->h->defaultGpAlias(($this->ts)('Wasser'), false))->toBe('Leitungswasser: frisch')
+        ->and($this->h->defaultGpAlias(($this->ts)('Leitungswasser'), false))->toBe('Leitungswasser: frisch')
         ->and($this->h->defaultGpAlias(($this->ts)('Mineralwasser'), false))->toBeNull()
         ->and($this->h->defaultGpAlias(($this->ts)('Wasser still'), false))->toBeNull();
 });

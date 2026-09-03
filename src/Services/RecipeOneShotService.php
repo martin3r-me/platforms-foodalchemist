@@ -747,7 +747,10 @@ class RecipeOneShotService
         $beschreibung = trim((string) $recipe->name . "\n" . $zutaten->map(
             fn ($z) => $z->referencedRecipe?->name ?? $z->raw_text
         )->filter()->implode(', '));
-        $wissen = app(Ai\KnowledgeContextService::class)->contextFor('recipe.steps', $beschreibung, null, [], [
+        // Team aus dem Rezept selbst — funktioniert auch im CLI-Lauf ohne Auth, und die
+        // Sichtbarkeit des Wissens am eigenen Rezept ist die des besitzenden Teams.
+        $wTeam = $recipe->team_id !== null ? \Platform\Core\Models\Team::find((int) $recipe->team_id) : null;
+        $wissen = app(Ai\KnowledgeContextService::class)->contextFor($wTeam, 'recipe.steps', $beschreibung, null, [], [
             'rezept_typ' => $recipe->is_sales_recipe ? 'gericht' : 'basisrezept',
         ]);
 

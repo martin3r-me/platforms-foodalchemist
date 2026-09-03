@@ -126,11 +126,16 @@ it('tiebreaker: FreshFirst/FrozenFirst/PreservedFirst/Neutral über Karotten-Var
 });
 
 // D4 2026-08-18: bare »Wasser« → Leitungswasser-Basis-GP statt der Flaschen-/Bio-Variante (Default-Alias vor Pool-Scan).
+//
+// KORREKTUR 2026-09-03: das Fixture legte »Wasser: Leitung« an — einen Namen, den es im
+// echten Bestand nicht gibt. Damit prüfte der Test den Alias gegen seine eigene Erfindung
+// und war grün, während er auf demo ins Leere lief (das GP heisst »Leitungswasser: frisch«).
+// Ein Fixture, das den Namen selbst herstellt, kann einen falschen Namen nicht entdecken.
 it('default-alias: bare Wasser gewinnt das Leitungswasser-GP, nicht die Flasche', function () {
     ($this->mkGp)('Wasser: still, 0,5 l, Bio', 'wasser');
-    ($this->mkGp)('Wasser: Leitung', 'wasser');
+    ($this->mkGp)('Leitungswasser: frisch', 'wasser');
 
-    expect(($this->match)('Wasser', 'wasser')['gp_name'])->toBe('Wasser: Leitung');
+    expect(($this->match)('Wasser', 'wasser')['gp_name'])->toBe('Leitungswasser: frisch');
 });
 
 it('tiebreaker: Drei-Zustand-Pool (konserviert/TK/frisch) diskriminiert alle Pole', function () {

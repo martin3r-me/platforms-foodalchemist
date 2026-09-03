@@ -62,7 +62,7 @@ it('hängt das Concepting-Wissen an Planungs-Calls — vor dem Food-Wissen', fun
         ($this->mkDoc)($slug, 'cross_cutting', "Wissen zu {$slug}");
     }
 
-    $ctx = $this->svc->contextFor('concept.plan', 'Sommerliches Flying Buffet');
+    $ctx = $this->svc->contextFor(null, 'concept.plan', 'Sommerliches Flying Buffet');
 
     expect($ctx['block'])->toContain('# CONCEPTING-WISSEN')
         ->and($ctx['block'])->toContain('## CONCEPT: concept.menue_dramaturgie')
@@ -77,7 +77,7 @@ it('bleibt bei leerer Kategorie ohne Block (Invariante 6)', function () {
         ($this->mkDoc)($slug, 'cross_cutting', "Wissen zu {$slug}");
     }
 
-    $ctx = $this->svc->contextFor('foodbook.plan', 'Sommerliches Flying Buffet');
+    $ctx = $this->svc->contextFor(null, 'foodbook.plan', 'Sommerliches Flying Buffet');
 
     expect($ctx['block'])->not->toContain('CONCEPTING-WISSEN')
         ->and($ctx['block'])->toContain('# VAULT-WISSEN');
@@ -88,7 +88,7 @@ it('respektiert den Routing-Deckel und kürzt mit Marker', function () {
         ($this->mkDoc)("concept.{$s}", 'concept', str_repeat('X', 5000) . 'ENDE');
     }
 
-    $ctx = $this->svc->contextFor('concept.plan', 'Brief');
+    $ctx = $this->svc->contextFor(null, 'concept.plan', 'Brief');
 
     expect(substr_count($ctx['block'], '## CONCEPT: '))->toBe(4)   // max_docs = 4
         ->and($ctx['block'])->toContain('[…gekürzt für KI-Kontext…]')
@@ -102,7 +102,7 @@ it('zieht keine Fremd-Kategorien in den Concept-Block', function () {
     ($this->mkDoc)('inaktiv', 'concept', 'Alt-Stand.');
     DB::table('foodalchemist_knowledge_documents')->where('slug', 'inaktiv')->update(['active' => 0]);
 
-    $ctx = $this->svc->contextFor('concept.plan', 'Brief');
+    $ctx = $this->svc->contextFor(null, 'concept.plan', 'Brief');
     $conceptTeil = substr($ctx['block'], 0, strpos($ctx['block'] . '# VAULT-WISSEN', '# VAULT-WISSEN'));
 
     expect($conceptTeil)->toContain('Balance-Regeln.')
@@ -120,7 +120,7 @@ it('lässt Rezept-Features unberührt (kein concept-Routing)', function () {
         'created_at' => now(), 'updated_at' => now(),
     ]);
 
-    $ctx = $this->svc->contextFor('ai_generate_recipe', 'Lachs mit brauner Butter');
+    $ctx = $this->svc->contextFor(null, 'ai_generate_recipe', 'Lachs mit brauner Butter');
 
     expect($ctx['block'])->not->toContain('CONCEPTING-WISSEN')
         ->and($ctx['block'])->toContain('# VAULT-WISSEN');

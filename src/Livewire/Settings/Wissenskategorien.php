@@ -62,10 +62,8 @@ class Wissenskategorien extends Component
      */
     private function darfAendern(?int $zeileTeamId): bool
     {
-        $team = Auth::user()?->currentTeamRelation;
-        $istMaster = $team !== null && $team->parent_team_id === null;
-
-        return TeamScope::owns($zeileTeamId, $team) || ($zeileTeamId === null && $istMaster);
+        // Die Regel lebt in TeamScope::mayWrite — hier stand sie kopiert.
+        return TeamScope::mayWrite($zeileTeamId, Auth::user()?->currentTeamRelation);
     }
 
     public function save(): void
