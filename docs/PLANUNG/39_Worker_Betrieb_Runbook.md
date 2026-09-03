@@ -85,6 +85,57 @@ die Queue-Namen). Ab dem Speichern greift die Trennung.
 > die Liste **in der angegebenen Reihenfolge** — der Fan-out würde die kleinen Jobs dann noch
 > härter aushungern als vor der Trennung.
 
+
+### Einrichtung 2026-09-03 — drei Fallen, alle live erlebt
+
+**1. Forges »Running«-Badge lügt.** Ein Worker mit falscher Connection (`'databse'` statt
+`'database'`) stürzt sofort ab, Supervisor startet ihn endlos neu — und die Forge-Liste zeigt
+trotzdem **Running**. Die einzige verlässliche Prüfung:
+
+```bash
+ssh forge@49.13.90.76 "ps -eo args | grep '[q]ueue:work' | grep -oE '\-\-queue=[a-z-]+' | sort | uniq -c"
+```
+
+Fehlt eine Schlange in der Ausgabe, läuft sie nicht — egal was die UI sagt. Log dazu:
+`/home/forge/.forge/worker-<id>.log`.
+
+**2. Das Forge-Formular kann `--queue` verschlucken.** Zweimal war der Wert eingegeben und
+landete nicht in der Konfiguration (vermutlich Feld noch im Fokus beim Absenden). Der Name des
+Prozesses ist nur ein **Anzeigename** — welche Schlange bedient wird, entscheidet allein
+`--queue`. Ohne es bedient der Worker `default`, und die Trennung ist still wirkungslos.
+**Die Preview-Zeile im Formular ist der einzige Beleg vor dem Speichern** — sie muss
+`--queue=<name>` enthalten. Den rohen Supervisor-Editor meiden: die `command=`-Zeile ist
+~150 Zeichen breit, scrollt aus dem Dialog, und man editiert blind genau dort, wo `--queue`
+steht. Lieber löschen und über das Formular neu anlegen; ein Worker hält keinen Zustand.
+
+**3. Die Config ist auf demo GECACHT** (`bootstrap/cache/config.php`). Env-Zeilen allein
+wirken nicht — Laravel liest den Cache. Nach jeder Änderung an den `FOODALCHEMIST_QUEUE_*`:
+
+```bash
+php artisan config:cache      # sonst greifen die Werte nie
+php artisan queue:restart     # die Worker halten ihre Config im Speicher
+```
+
+Der zweite Befehl ist **nicht** Kosmetik: die Kaskaden-Kinder werden **aus einem Worker
+heraus** verteilt, nicht aus dem Web-Prozess. Ein Worker mit altem Cache schickt Sub-Rezepte
+weiter auf `default`, obwohl die Variable steht — Trennung scheinbar aktiv, faktisch nicht.
+
+**Der Badge ist in BEIDE Richtungen unbrauchbar:** er stand grün bei einem Prozess in der
+Absturzschleife, und auf »Starting«, während der Prozess längst lief. Nur `ps` zählt.
+
+**Abnahme-Beweis, zwei getrennte Aussagen (beide kostenlos).** Sie nicht verwechseln — ich
+hatte sie zusammengezogen und damit zu viel behauptet:
+
+1. **Werden Jobs dorthin VERTEILT?** Vier Jobs mit `->delay(now()->addMinutes(10))`
+   dispatchen, `jobs.queue` lesen, Zeilen löschen. Nichts läuft. Beweist die
+   Dispatch-Seite — **aber nicht, dass ein Worker sie abholt** (die `queue`-Spalte
+   braucht keinen Worker).
+2. **Werden sie dort ABGEHOLT?** Eine Zeile mit absichtlich kaputtem Payload in `jobs`
+   einfügen (`commandName` auf eine nicht existierende Klasse), 6 s warten, prüfen ob sie
+   verschwunden und in `failed_jobs` gelandet ist, danach beide Zeilen löschen. Verschwindet
+   sie, bedient wirklich ein Worker diese Schlange. Kostet nichts, weil der Job vor dem
+   ersten Provider-Aufruf stirbt.
+
 ### Speicher — gemessen, nicht geschätzt
 
 Laufende Worker belegen real **202 MB** und **172 MB** (nicht die 256 des Limits). Sechs
@@ -164,3 +215,4 @@ Der Herzschlag lebt im **Cache** (`fa:worker:heartbeat`). Damit die Ampel stimmt
 ## Changelog
 - **2026-08-16** — Erstanlage (Roadmap 38, Et.8 »Worker-Präsenz« Teil 3). Grounded auf `WorkerHealthService` + Provider-Listener; Horizon-Abwesenheit + Cache-Abhängigkeit + Deploy-`queue:restart` dokumentiert.
 - **2026-09-03** — §1a Fan-out-Trennung nach Artefakt-Sorte (4 Queues, Defaults leer). §1 korrigiert: „kein dedizierter Queue-Name nötig" stimmte nicht mehr. Trennung nach Job-KLASSE verworfen, weil `GenerateRecipeJob` Einzel-Klick und 90er-Fan-out teilt. Einrichtungs-Reihenfolge (Worker vor Env) als Sicherheitseigenschaft dokumentiert.
+- **2026-09-03 (Einrichtung)** — vier Worker live auf demo, per Prozessliste + jobs-Tabelle verifiziert. Drei Fallen dokumentiert: „Running"-Badge zeigt auch Absturzschleifen grün · das Forge-Formular kann `--queue` verschlucken (Preview ist der Beleg) · Config ist gecacht, also `config:cache` UND `queue:restart` nötig (Kaskaden-Kinder werden aus Workern verteilt).
