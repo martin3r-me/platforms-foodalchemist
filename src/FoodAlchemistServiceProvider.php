@@ -68,6 +68,7 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                 // bei jedem Lauf mitgeschrieben — auf einer frischen DB hätte das den
                 // Monolithen-Pfad wiederhergestellt, den Welle 0 abgebaut hat.
                 \Platform\FoodAlchemist\Console\KnowledgePolicySeedCommand::class,
+                \Platform\FoodAlchemist\Console\KnowledgeSectionizeCommand::class,
                 // W2-5: der Rückweg — bis hierher gab es nur Import (Modul = SSOT ohne Backup-Pfad).
                 \Platform\FoodAlchemist\Console\KnowledgeExportCommand::class,
                 // W2-4: §-Deckung — hätte den verlorenen §12 gefunden.
