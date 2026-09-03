@@ -587,8 +587,18 @@ class PlanningCascadeService
      * Speiseplan-Voll-Kaskade (P5): füllt leere Zellen des Zyklus (cycle_weeks × Mo–Fr × Mittag × Linien) mit
      * erfundenen Gerichten. Anders als Foodbook/Speisekarte (Slot → Concept) hält eine Zelle EIN Gericht — je
      * leerer Zelle ein Gericht-Step + {@see MaterializeSpeiseplanCellJob} (generiert + trägt via addEintrag ein).
-     * Gedeckelt ({@see SPEISEPLAN_MAX_ZELLEN}) gegen Runaway-Kosten; die Zahl der übersprungenen Zellen steht
-     * im Run (`params.gedeckelt_zellen_offen`) — kein stiller Deckel.
+     * Gedeckelt ({@see SPEISEPLAN_MAX_ZELLEN}) gegen Runaway-Kosten. Der Vermerk liegt in
+     * `deckel_hinweise` (Schlüssel `speiseplan_zellen`) und erreicht über die Status-DTO die
+     * Leitstelle — erst DAMIT ist es kein stiller Deckel.
+     *
+     * Vorher stand hier „die Zahl der übersprungenen Zellen steht im Run
+     * (`params.gedeckelt_zellen_offen`) — kein stiller Deckel". Das war doppelt falsch: der
+     * Schlüssel wurde von niemandem gelesen (die Status-DTO filtert `params` gegen
+     * ALLOWED_GENERATION_PARAMS, weil dieser Beutel die LEITPLANKEN zeigt), und der Schreibweg
+     * überschrieb `params` KOMPLETT statt zu mergen — womit er zusätzlich den
+     * Leitplanken-Fallback tötete, und zwar genau bei den gedeckelten Läufen, die man am
+     * ehesten nachlesen will. Ein Standard-Zyklus sind 4 Wochen × 3 Linien × 5 Werktage
+     * = 60 leere Zellen; die Hälfte fiel damit unsichtbar weg.
      */
     private function starteSpeiseplanVollkaskade(Team $team, ?FoodAlchemistPlanningSession $session, string $creativeMode, array $optionen): FoodAlchemistCascadeRun
     {
@@ -661,14 +671,45 @@ class PlanningCascadeService
                 }
             }
         }
-        if ($offen > 0) {
-            $run->update(['params' => ['gedeckelt_zellen_offen' => $offen]]);
-        }
+        // `verlangt` = alle LEEREN Zellen. Belegte sind oben schon per `continue` raus, `$idx`
+        // zählt nur die gestarteten — die Summe braucht also keinen zweiten Zähler.
+        $run->vermerkeDeckel(
+            'speiseplan_zellen',
+            self::SPEISEPLAN_MAX_ZELLEN,
+            $idx + $offen,
+            $offen,
+            $this->deckelTextZellen($idx, $idx + $offen, $offen),
+        );
         if ($idx === 0) {
             $run->update(['status' => 'done']);   // keine leere Zelle → nichts zu tun (kein Fehler)
         }
 
         return $run;
+    }
+
+    /**
+     * Der Satz, den der Mensch liest, wenn der Zell-Deckel gegriffen hat. EINE Formulierungsstelle —
+     * die Fläche liest den gespeicherten `text` und formatiert nichts nach.
+     *
+     * Zwei Zahlen, nicht eine: »30 nicht erzeugt« sagt nicht, wie groß der Auftrag war. 30 von 33
+     * ist eine Randlage, 30 von 60 der halbe Plan.
+     *
+     * Die Bedingung »wenn die ersten im Plan stehen« ist kein Beiwerk, sondern der Unterschied
+     * zwischen richtig und falsch: {@see materialisiereSpeiseplanZelle} trägt den Eintrag sofort
+     * nach der Generierung ein, nicht erst bei der Freigabe. Ein zweiter Lauf baut `$belegt` aus
+     * den Einträgen und nimmt darum exakt den Rest — klickt der Mensch aber sofort, sind die
+     * Zellen noch leer und er erzeugt dieselben Gerichte ein zweites Mal.
+     */
+    private function deckelTextZellen(int $gestartet, int $verlangt, int $offen): string
+    {
+        return sprintf(
+            '%d von %d Zellen gestartet, %d %s leer — wenn die ersten im Plan stehen, im Speiseplan '
+            . 'noch einmal Voll-Kaskade starten: der Lauf nimmt nur die leeren Zellen.',
+            $gestartet,
+            $verlangt,
+            $offen,
+            $offen === 1 ? 'bleibt' : 'bleiben',
+        );
     }
 
     /**
@@ -2389,6 +2430,14 @@ class PlanningCascadeService
             'stufen' => $stufen,
             'schritte' => $schritte,
             'kohaerenz_warnung' => is_array($run->cohesion_warning) ? $run->cohesion_warning : null,
+            // Was der Lauf NICHT erzeugt hat. Steht hier NEBEN den Leitplanken und nicht darin:
+            // `params` wird oben gegen ALLOWED_GENERATION_PARAMS gefiltert, weil es die wirksame
+            // STEUERUNG zeigen soll — ein Ergebnis-Hinweis darin wurde deshalb weggeworfen. Genau
+            // das ist der Grund, warum `params.gedeckelt_zellen_offen` seit seiner Einführung
+            // niemanden erreicht hat, obwohl der Docblock „kein stiller Deckel" behauptete.
+            'deckel_hinweise' => is_array($run->deckel_hinweise) && $run->deckel_hinweise !== []
+                ? array_values($run->deckel_hinweise)
+                : null,
             'hinweis' => $this->laufStatusHinweis((string) $run->status),
         ];
     }

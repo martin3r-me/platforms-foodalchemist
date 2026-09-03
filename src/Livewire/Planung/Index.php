@@ -375,6 +375,16 @@ class Index extends Component
      */
     public ?string $margenWarnung = null;
 
+    /**
+     * Was der Lauf NICHT erzeugt hat — aus `cascade_runs.deckel_hinweise`. `null` = kein Deckel
+     * gegriffen; ein Nichts wird nicht als Warnung verkauft.
+     *
+     * Gefüllt aus dem LAUF, nicht per Flash: der Deckel ist eine Eigenschaft des Laufs und muss
+     * einen Reload und ein Zu-und-wieder-Aufklappen überleben. Ein Deckel, der erst später in
+     * einem Job greift (Concept-Slots), erreicht dieselbe Zeile über den Poll.
+     */
+    public ?string $deckelHinweis = null;
+
     /** Aktiver Kaskaden-Lauf (in-place „Go") — Ziel des wire:poll. */
     public ?int $laufId = null;
 
@@ -449,6 +459,10 @@ class Index extends Component
         }
         if (request()->boolean('open') && $this->sessionId !== null && $this->aktiveSession() !== null) {
             $this->ladeForm();
+            // Der Speiseplan-Editor leitet nach dem Go HIERHER um (mit `open=1`), und seine eigene
+            // Komponente stirbt mit dem Redirect — ein dort gesetzter Hinweis wäre nie gerendert.
+            // Ohne dieses Laden bliebe die Landung also stumm, obwohl der Deckel am Lauf steht.
+            $this->ladeLetztenLauf();
             $this->dispatch('modal.open', name: 'planung-editor');
         }
         // Spec 42 F2 — Handoff aus dem Foodbook: Leitstelle im Owner-Kontext öffnen, „Foodbook aus
@@ -1188,12 +1202,33 @@ class Index extends Component
         if ($team === null || $this->sessionId === null) {
             $this->laufId = null;
             $this->laeuft = false;
+            $this->deckelHinweis = null;   // sonst bliebe der Hinweis eines FREMDEN Laufs stehen
 
             return;
         }
         $lauf = app(PlanningCascadeService::class)->letzterLauf($team, $this->sessionId);
         $this->laufId = $lauf?->id;
         $this->laeuft = $lauf !== null && $lauf->status === 'running';
+        $this->deckelHinweis = $this->deckelHinweisText($lauf);
+    }
+
+    /**
+     * Die `text`-Felder der Deckel-Vermerke eines Laufs zu einer Zeile — nur zusammenfügen, nicht
+     * neu formulieren (der Satz entsteht dort, wo der Deckel greift, siehe
+     * {@see \Platform\FoodAlchemist\Services\PlanningCascadeService::deckelTextZellen}).
+     *
+     * Ein Lauf kann mehrere Deckel treffen — ein großer Speiseplan zugleich Zellen UND
+     * Sub-Rezept-Schritte.
+     */
+    private function deckelHinweisText(?FoodAlchemistCascadeRun $lauf): ?string
+    {
+        $liste = is_array($lauf?->deckel_hinweise) ? $lauf->deckel_hinweise : [];
+        $texte = array_values(array_filter(array_map(
+            static fn ($e): string => is_array($e) ? trim((string) ($e['text'] ?? '')) : '',
+            $liste,
+        ), static fn (string $t): bool => $t !== ''));
+
+        return $texte === [] ? null : implode(' · ', $texte);
     }
 
     private function ladeForm(): void
@@ -3215,6 +3250,8 @@ class Index extends Component
         $lauf = $cascade->lauf($team, $this->laufId);
         $this->laeuft = $lauf !== null && $lauf->status === 'running';
         $this->anreicherungLaeuft = $this->anreicherungOffen($lauf);
+        // Auch hier: ein Deckel, der erst IM JOB greift (Concept-Slots), wird sonst nie sichtbar.
+        $this->deckelHinweis = $this->deckelHinweisText($lauf);
     }
 
     /**

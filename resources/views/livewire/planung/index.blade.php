@@ -414,6 +414,13 @@
             @if($margenWarnung !== null)
                 <span class="text-xs text-amber-300" data-margen-warnung>⚠ {{ $margenWarnung }}</span>
             @endif
+            {{-- Was der Lauf NICHT erzeugt hat. Amber wie die Margen-Warnung: eine Warnung, kein
+                 Fehler (rose) und kein Erfolg (emerald). MUSS innerhalb von x-slot:actions
+                 stehen — dahinter beginnt die Tab-Leiste, dort landete der Hinweis in der
+                 falschen Modal-Zone. --}}
+            @if($deckelHinweis !== null)
+                <span class="text-xs text-amber-300" data-deckel-hinweis>⚠ {{ $deckelHinweis }}</span>
+            @endif
         </x-slot:actions>
 
         <x-slot:tabs>
