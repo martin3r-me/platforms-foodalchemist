@@ -30,6 +30,19 @@ use Platform\FoodAlchemist\Services\SignalService;
  */
 class WissenSteuerdatenW0Command extends Command
 {
+    /**
+     * Herkunfts-Kanal der geschriebenen Bindings.
+     *
+     * `foodalchemist_knowledge_bindings.source` ist **varchar(16)** und traegt laut
+     * Spalten-Kommentar ein Kanal-Enum: `ui|mcp|import|frontmatter`. Der frueher hier
+     * stehende Kommandoname (`wissen-steuerdaten-w0`, 21 Zeichen) war deshalb zweifach
+     * falsch — zu lang UND die falsche Sorte Wert. Auf demo (MySQL) brach der `--apply`
+     * mit SQLSTATE[22001]; die Suite war gruen, weil SQLite string()-Laengen nicht
+     * erzwingt. Welcher Befehl geschrieben hat, steht im Signal (`source` dort ist
+     * varchar(32) und traegt Labels wie `detektor`) und im Audit — nicht am Binding.
+     */
+    public const BINDING_SOURCE = 'import';
+
     protected $signature = 'foodalchemist:wissen-steuerdaten-w0
         {--apply    : Änderungen schreiben (ohne dieses Flag nur Vorschau)}
         {--verify   : Nur prüfen: sitzen Routings, Bindings und der Regelwerk-Pfad?}
@@ -375,7 +388,7 @@ class WissenSteuerdatenW0Command extends Command
                         'mode' => 'always',
                         'weight' => 50,
                         'active' => 1,
-                        'source' => 'wissen-steuerdaten-w0',
+                        'source' => self::BINDING_SOURCE,
                         'created_at' => now(),
                         'updated_at' => now(),
                     ]);

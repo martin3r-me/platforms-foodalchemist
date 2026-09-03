@@ -125,3 +125,17 @@ it('verify meldet Drift als Signal — und schliesst es wieder, wenn sie weg ist
         ->and($signal->description)->toContain('läuft dabei weiter')
         ->and($signal->description)->toContain('--apply');
 });
+
+it('schreibt Bindings mit einem source-Wert, der in die Spalte UND ins Kanal-Vokabular passt', function () {
+    // Live auf demo gebrochen (SQLSTATE[22001], 2026-09-03): der Wert war der Kommandoname
+    // `wissen-steuerdaten-w0` — 21 Zeichen in einer varchar(16)-Spalte, und dazu die falsche
+    // Sorte Wert. Die Suite war grün, weil SQLite string()-Längen NICHT erzwingt; MySQL schon.
+    // Dieser Test ist die Ersatz-Bremse für genau diese Engine-Lücke.
+    //
+    // Beide Hälften prüfen, nicht nur die Länge: `cli-w0` würde hineinpassen und wäre trotzdem
+    // falsch, weil die Spalte laut ihrem eigenen Migrations-Kommentar ein Kanal-Enum trägt.
+    $erlaubt = ['ui', 'mcp', 'import', 'frontmatter'];   // Spalten-Kommentar der Migration
+
+    expect(mb_strlen(WissenSteuerdatenW0Command::BINDING_SOURCE))->toBeLessThanOrEqual(16)
+        ->and(WissenSteuerdatenW0Command::BINDING_SOURCE)->toBeIn($erlaubt);
+});
