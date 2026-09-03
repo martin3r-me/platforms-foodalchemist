@@ -2,6 +2,7 @@
 
 namespace Platform\FoodAlchemist\Services;
 
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
@@ -1811,7 +1812,32 @@ class PlanningCascadeService
      */
     public function recomputeRunStatus(int $runId): void
     {
-        $run = FoodAlchemistCascadeRun::find($runId);
+        // ATOMAR seit 2026-09-03, weil demo ab jetzt ZWEI Queue-Worker fährt.
+        //
+        // Das hier ist ein Lese-Ändern-Schreiben: alle Steps lesen, daraus den Lauf-Status
+        // ableiten, schreiben. Jeder Kind-Job ruft es über markStepDone. Mit einem Worker war das
+        // zwangsläufig seriell; mit zwei ist folgende Verschränkung möglich:
+        //
+        //   A: Step A = done
+        //   A: liest → B läuft noch → entscheidet »running«
+        //   B: Step B = done
+        //   B: liest → alles fertig → schreibt »review«
+        //   A: schreibt »running«        ← veraltet, überschreibt B
+        //
+        // Folge: der Lauf hängt dauerhaft auf »running«. Das ist der »ewige Spinner« — und
+        // dieselbe Anzeige steht schon für einen ganz anderen Fehler (Generator-OOM), die
+        // Diagnose wäre also doppelt verdeckt. Darum Transaktion + Sperre auf den Lauf und die
+        // Steps INNERHALB der Sperre lesen: zwei Aufrufe serialisieren, der zweite sieht den
+        // Schreibvorgang des ersten und rechnet mit dem gültigen Stand.
+        DB::transaction(function () use ($runId): void {
+            $this->recomputeRunStatusGesperrt($runId);
+        });
+    }
+
+    /** Der eigentliche Rechenweg — läuft ausschließlich unter der Lauf-Sperre. */
+    private function recomputeRunStatusGesperrt(int $runId): void
+    {
+        $run = FoodAlchemistCascadeRun::query()->whereKey($runId)->lockForUpdate()->first();
         if ($run === null) {
             return;
         }
