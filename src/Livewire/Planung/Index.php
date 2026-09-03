@@ -1213,22 +1213,13 @@ class Index extends Component
     }
 
     /**
-     * Die `text`-Felder der Deckel-Vermerke eines Laufs zu einer Zeile — nur zusammenfügen, nicht
-     * neu formulieren (der Satz entsteht dort, wo der Deckel greift, siehe
-     * {@see \Platform\FoodAlchemist\Services\PlanningCascadeService::deckelTextZellen}).
-     *
-     * Ein Lauf kann mehrere Deckel treffen — ein großer Speiseplan zugleich Zellen UND
-     * Sub-Rezept-Schritte.
+     * Der Deckel-Satz des Laufs für die Fläche. Reine Weiterleitung an
+     * {@see FoodAlchemistCascadeRun::deckelMeldung()} — der Wortlaut gehört dorthin, wo der
+     * Deckel greift, nicht in die Anzeige.
      */
     private function deckelHinweisText(?FoodAlchemistCascadeRun $lauf): ?string
     {
-        $liste = is_array($lauf?->deckel_hinweise) ? $lauf->deckel_hinweise : [];
-        $texte = array_values(array_filter(array_map(
-            static fn ($e): string => is_array($e) ? trim((string) ($e['text'] ?? '')) : '',
-            $liste,
-        ), static fn (string $t): bool => $t !== ''));
-
-        return $texte === [] ? null : implode(' · ', $texte);
+        return $lauf?->deckelMeldung();
     }
 
     private function ladeForm(): void

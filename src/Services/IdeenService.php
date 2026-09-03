@@ -32,6 +32,18 @@ use Platform\FoodAlchemist\Services\Ai\KnowledgeContextService;
 class IdeenService
 {
     /**
+     * Wie viele Gericht-Ideen eine Divergenz auf einmal erfindet.
+     *
+     * Herkunft ehrlich: kein gemessener Grund, ein Vorsichts-/Kostendeckel aus der Einführung.
+     * Das Output-Budget des Prompts wird erst oberhalb von grob 15–20 Ideen eng — wer die Zahl
+     * hebt, muss `max_tokens` mitheben UND messen, sonst schneidet die Antwort mitten im JSON ab.
+     *
+     * Ausdrücklich NICHT mit `BATCH_SKIZZEN_MAX` koppeln (auch 12): das ist die Zahl gestarteter
+     * LÄUFE, nicht die Größe einer LLM-Antwort. Gleiche Zahl, andere Sache.
+     */
+    public const IDEEN_MAX = 12;
+
+    /**
      * Skizzen eines Owners (Kapitel XOR Konzept), gruppiert für UI (E6.3) und MCP (E6.5):
      * Paket-Gruppen mit ihren Ideen + freie Einzel-Skizzen. Nur nicht-verworfene sind
      * standardmäßig sichtbar; $inklVerworfen holt auch die Papierkorb-Skizzen.
@@ -261,11 +273,14 @@ class IdeenService
      * Ohne gebundenen LLM-Provider wirft `propose()` typisiert (KiNichtVerfuegbar/KiDeaktiviert);
      * die Aufrufer (UI/MCP) fangen das als Fehler ab — hier bewusst NICHT geschluckt.
      *
-     * @return array{angelegt: list<FoodAlchemistDishIdea>, roh: int, confidence: ?float, call_log_id: ?int}
+     * @return array{angelegt: list<FoodAlchemistDishIdea>, roh: int, confidence: ?float, call_log_id: ?int, grenze: int, verlangt: int, gedeckelt: int}
      */
     public function kiDivergenz(Team $team, int $chapterId, int $anzahl = 5): array
     {
-        $anzahl = max(1, min(12, $anzahl));
+        // Verhalten identisch, aber der VERLANGTE Wert bleibt erhalten — sonst kann der Aufrufer
+        // nicht melden, was weggefallen ist (genau das hielt diesen Deckel stumm).
+        $verlangt = max(1, $anzahl);
+        $anzahl = min(self::IDEEN_MAX, $verlangt);
 
         $kapitel = FoodAlchemistFoodbookKapitel::visibleToTeam($team)->findOrFail($chapterId);
         if (! $kapitel->isOwnedBy($team)) {
@@ -335,6 +350,9 @@ class IdeenService
             'roh' => count($rohe),
             'confidence' => $proposal->confidence,
             'call_log_id' => $proposal->callLogId,
+            'grenze' => self::IDEEN_MAX,
+            'verlangt' => $verlangt,
+            'gedeckelt' => max(0, $verlangt - $anzahl),
         ];
     }
 
@@ -347,11 +365,14 @@ class IdeenService
      *
      * Ohne LLM-Provider wirft `propose()` typisiert — der Aufrufer (Fan-out) fängt das graceful ab.
      *
-     * @return array{angelegt: list<FoodAlchemistDishIdea>, roh: int, confidence: ?float, call_log_id: ?int}
+     * @return array{angelegt: list<FoodAlchemistDishIdea>, roh: int, confidence: ?float, call_log_id: ?int, grenze: int, verlangt: int, gedeckelt: int}
      */
     public function kiDivergenzConcept(Team $team, int $conceptId, int $anzahl = 5, ?string $slotRolle = null, ?int $trendDocId = null): array
     {
-        $anzahl = max(1, min(12, $anzahl));
+        // Verhalten identisch, aber der VERLANGTE Wert bleibt erhalten — sonst kann der Aufrufer
+        // nicht melden, was weggefallen ist (genau das hielt diesen Deckel stumm).
+        $verlangt = max(1, $anzahl);
+        $anzahl = min(self::IDEEN_MAX, $verlangt);
 
         $concept = FoodAlchemistConcept::visibleToTeam($team)->findOrFail($conceptId);
         if (! $concept->isOwnedBy($team)) {
@@ -473,7 +494,8 @@ class IdeenService
             ]);
         }
 
-        return ['angelegt' => $angelegt, 'roh' => count($rohe), 'confidence' => $proposal->confidence, 'call_log_id' => $proposal->callLogId];
+        return ['angelegt' => $angelegt, 'roh' => count($rohe), 'confidence' => $proposal->confidence, 'call_log_id' => $proposal->callLogId,
+            'grenze' => self::IDEEN_MAX, 'verlangt' => $verlangt, 'gedeckelt' => max(0, $verlangt - $anzahl)];
     }
 
     /**
@@ -488,11 +510,14 @@ class IdeenService
      *
      * Ohne LLM-Provider wirft `propose()` typisiert — der Aufrufer (Leitstelle) fängt das graceful ab.
      *
-     * @return array{angelegt: list<FoodAlchemistDishIdea>, roh: int, confidence: ?float, call_log_id: ?int}
+     * @return array{angelegt: list<FoodAlchemistDishIdea>, roh: int, confidence: ?float, call_log_id: ?int, grenze: int, verlangt: int, gedeckelt: int}
      */
     public function kiDivergenzSession(Team $team, int $sessionId, ?string $analyse, int $anzahl = 5, ?string $creativeMode = null): array
     {
-        $anzahl = max(1, min(12, $anzahl));
+        // Verhalten identisch, aber der VERLANGTE Wert bleibt erhalten — sonst kann der Aufrufer
+        // nicht melden, was weggefallen ist (genau das hielt diesen Deckel stumm).
+        $verlangt = max(1, $anzahl);
+        $anzahl = min(self::IDEEN_MAX, $verlangt);
 
         $session = FoodAlchemistPlanningSession::visibleToTeam($team)->findOrFail($sessionId);
         if (! $session->isOwnedBy($team)) {
@@ -553,7 +578,8 @@ class IdeenService
             ]);
         }
 
-        return ['angelegt' => $angelegt, 'roh' => count($rohe), 'confidence' => $proposal->confidence, 'call_log_id' => $proposal->callLogId];
+        return ['angelegt' => $angelegt, 'roh' => count($rohe), 'confidence' => $proposal->confidence, 'call_log_id' => $proposal->callLogId,
+            'grenze' => self::IDEEN_MAX, 'verlangt' => $verlangt, 'gedeckelt' => max(0, $verlangt - $anzahl)];
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────

@@ -381,6 +381,13 @@ class PlanningCascadeService
 
         $slots = $this->vollkaskadeSlots($team, $ownerType, $ownerId, $frame);
         $idx = 0;
+        // Sammler für den Positions-Deckel: EIN Befund für die ganze Karte statt eines Vermerks
+        // je Rubrik. `$idx` ist ein durchlaufender Zähler über alle Rubriken — der Deckel greift
+        // deshalb genau einmal mitten in einer Rubrik, und alle folgenden bekommen null. Ohne
+        // diesen Sammler wüsste die Meldung nicht, WELCHE Rubriken leer geblieben sind, und
+        // „8 Positionen fehlen" ist für einen Koch nutzlos, wenn er nicht weiss, ob ihm die
+        // Vorspeisen oder die Desserts fehlen.
+        $deckel = [];
         foreach ($slots as [$slot, $containerId]) {
             if ($staged) {
                 // Kapitel-Gate: nur PLANEN (geplant), NICHT dispatchen — die Concept-Erzeugung startet erst
@@ -389,11 +396,21 @@ class PlanningCascadeService
                 $idx++;
             } elseif ($speisekarteGerichte) {
                 // Standard-Speisekarte: die Rubrik mit N einzelnen VK-Gerichten füllen (statt 1 Concept).
-                $idx = $this->dispatchRubrikGerichte($team, $run, $slot, (int) $containerId, $idx, $session?->id);
+                $idx = $this->dispatchRubrikGerichte($team, $run, $slot, (int) $containerId, $idx, $session?->id, $deckel);
             } else {
                 $this->dispatchSlotConcept($team, $run, $slot, $ownerType, (int) $containerId, $idx, $creativeMode, $session?->id);
                 $idx++;
             }
+        }
+        if (($deckel['rubriken'] ?? []) !== []) {
+            $offen = (int) array_sum(array_column($deckel['rubriken'], 'offen'));
+            $run->vermerkeDeckel(
+                'speisekarte_positionen',
+                self::SPEISEKARTE_MAX_POSITIONEN,
+                (int) ($deckel['verlangt'] ?? 0),
+                $offen,
+                $this->speisekarteDeckelText($offen, (int) ($deckel['verlangt'] ?? 0), $deckel['rubriken']),
+            );
         }
         if ($idx === 0) {
             $run->update(['status' => 'failed']);   // Frame ohne verwertbare Slots
@@ -743,6 +760,123 @@ class PlanningCascadeService
     }
 
     /**
+     * Vermerkt die Lücke EINES Konzept-Durchgangs — und nennt den Grund, der wirklich gegriffen hat.
+     *
+     * Drei Ursachen, drei Sätze, und der entscheidende Punkt: die Arithmetik muss immer schließen.
+     * Ein Satz wie »18 von 25 Positionen ohne Skizze — die KI liefert höchstens 12« widerspricht
+     * sich selbst (25 − 18 = 7, die Grenze hat also NICHT gebunden) und ist damit genau der
+     * Fehler, den dieser Umbau beheben soll. Der Koch kann nur eine Sache selbst prüfen: ob die
+     * Zahlen aufgehen.
+     *
+     * Die Reihenfolge der Prüfung folgt der DOMINANZ, nicht der Code-Reihenfolge — das war mein
+     * erster Fehler hier. Bei 33 leeren Positionen, 30 angefragten und 2 gelieferten fehlen 31;
+     * der 30er-Deckel erklärt davon aber nur 3. »Der Lauf fragt höchstens 30 ab« wäre dann
+     * formal richtig und trotzdem die falsche Auskunft. Also:
+     *
+     *   1. Modell hat unterliefert (erzeugt < min(angefragt, grenze)) → »die KI hat nur N geliefert«
+     *   2. Ideen-Klemme gegriffen (erzeugt === grenze < angefragt) → »die KI liefert höchstens N auf einmal«
+     *   3. Slot-Deckel gegriffen (leer > CONCEPT_MAX_SLOTS) → »der Lauf fragt höchstens N Positionen auf einmal ab«
+     *
+     * Stapeln sich 2 und 3, wird 2 genannt: die Klemme ist die pro Lauf bindende Grenze, der
+     * 30er würde erst wirken, wenn man sie hebt.
+     *
+     * »auf einmal« statt »je Konzept«: dass eine Paket-Station intern selbst ein Konzept ist, ist
+     * Code-Wissen. Der Leser bezöge die Zahl sonst auf das ganze Konzept statt auf diesen Durchgang.
+     *
+     * KEIN »zweiter Lauf für den Rest«: der Slot-Filter prüft nur auf NULL und sortiert nach
+     * `position, id` — ein zweiter Lauf nimmt real wieder die Positionen 1–12 und doppelt.
+     *
+     * @param  list<int>  $seen  Rekursions-Pfad; ab Tiefe 1 ist dieser Durchgang eine Paket-Station
+     */
+    private function vermerkeConceptLuecke(int $runId, int $conceptId, int $slotsLeer, int $angefragt, int $erzeugt, int $grenze, array $seen): void
+    {
+        $offen = $slotsLeer - $erzeugt;
+        if ($offen < 1) {
+            return;
+        }
+
+        $run = FoodAlchemistCascadeRun::find($runId);
+        if ($run === null) {
+            return;
+        }
+
+        if ($erzeugt < min($angefragt, $grenze)) {
+            $grund = $erzeugt === 0
+                ? 'die KI hat keine geliefert'
+                : sprintf('die KI hat nur %d geliefert', $erzeugt);
+        } elseif ($angefragt > $grenze) {
+            $grund = sprintf('die KI liefert höchstens %d auf einmal', $grenze);
+        } else {
+            $grund = sprintf('der Lauf fragt höchstens %d Positionen auf einmal ab', self::CONCEPT_MAX_SLOTS);
+        }
+
+        // Ab Tiefe 1 ist der Durchgang eine eingebettete Station — der Ort gehört vorn hin, sonst
+        // weiß der Leser nicht, WELCHE Station Lücken hat.
+        $station = count($seen) > 1
+            ? trim((string) (FoodAlchemistConcept::find($conceptId)?->name ?? '')) : '';
+        $ort = $station !== '' ? sprintf('Station „%s": ', $station) : '';
+
+        $run->vermerkeDeckel(
+            'concept_luecke:' . $conceptId,
+            $grenze,
+            $slotsLeer,
+            $offen,
+            sprintf(
+                '%s%d von %d Positionen ohne Skizze — %s. Rest im Konzept besetzen; ein zweiter '
+                . 'Lauf beginnt wieder vorn.',
+                $ort,
+                $offen,
+                $slotsLeer,
+                $grund,
+            ),
+        );
+    }
+
+    /**
+     * Der Satz für den Positions-Deckel der Speisekarte. Nennt die RUBRIKEN, nicht nur die Zahl:
+     * „8 Positionen fehlen" ist für einen Koch nutzlos, wenn er nicht weiss, ob ihm die
+     * Vorspeisen oder die Desserts fehlen.
+     *
+     * Höchstens EINE Rubrik ist angefangen — `$idx` läuft über alle Rubriken durch, der Deckel
+     * greift also genau einmal mitten in einer und alle folgenden bekommen null. Diese eine wird
+     * mit „x von y" genannt, die leeren gesammelt.
+     *
+     * KEIN „zweiter Lauf" als Handlung, anders als beim Speiseplan: dort baut der Lauf `$belegt`
+     * aus den Einträgen und nimmt den Rest. Hier gibt es keinen Bestands-Abgleich und `$idx`
+     * startet wieder bei 0 — ein zweiter Voll-Lauf bestückt also die VORDEREN Rubriken ein
+     * zweites Mal und lässt die leeren weiter leer. Genau die falsche Empfehlung hätte doppelte
+     * Kosten und doppelte Entwürfe erzeugt.
+     *
+     * @param  list<array{rubrik:string, verlangt:int, erzeugt:int, offen:int}>  $rubriken
+     */
+    private function speisekarteDeckelText(int $offen, int $verlangt, array $rubriken): string
+    {
+        $angefangen = array_values(array_filter($rubriken, static fn (array $r): bool => $r['erzeugt'] > 0));
+        $leer = array_values(array_filter($rubriken, static fn (array $r): bool => $r['erzeugt'] === 0));
+
+        $teile = [];
+        foreach ($angefangen as $r) {
+            $teile[] = sprintf('„%s" %d von %d', $r['rubrik'], $r['erzeugt'], $r['verlangt']);
+        }
+        if ($leer !== []) {
+            $namen = array_map(static fn (array $r): string => '„' . $r['rubrik'] . '"', array_slice($leer, 0, 3));
+            $rest = count($leer) - count($namen);
+            $teile[] = implode(' und ', $namen)
+                . ($rest > 0 ? sprintf(' und %d weitere Rubriken', $rest) : '')
+                . ' ganz leer';
+        }
+
+        return sprintf(
+            '%d von %d Gerichten fehlen (je Lauf höchstens %d): %s. Diese Rubriken im Karten-Editor '
+            . 'über „+ Gericht" füllen — ein zweiter Voll-Lauf bestückt die vorderen Rubriken ein zweites Mal.',
+            $offen,
+            $verlangt,
+            self::SPEISEKARTE_MAX_POSITIONEN,
+            implode(', ', $teile),
+        );
+    }
+
+    /**
      * Wie viele Zellen einer Zyklus-Woche noch leer sind — für die Deckel-Rechnung, ohne die
      * Woche zu bauen. Spiegelt die Schleifen-Bedingungen (Mo–Fr × Linien, belegte raus) exakt;
      * eine abweichende Zählung hier würde eine falsche Zahl in die Meldung schreiben, und eine
@@ -896,20 +1030,31 @@ class PlanningCascadeService
      * Standard-Speisekarte (Gerichte-Füllung): eine Rubrik mit N einzelnen VK-Gerichten füllen. Je Slot
      * `target_count` (KI-Vorgabe aus dem Brief) Gericht-Steps + je Step ein {@see MaterializeSpeisekartePositionJob}
      * (erdet ein VK-Gericht, hängt es als gericht_ref-Position an die Rubrik). Spiegelt den Speiseplan-Zell-
-     * Fan-out. Gedeckelt ({@see SPEISEKARTE_MAX_POSITIONEN}) gegen Runaway-Kosten (Rest → params.gedeckelt_positionen_offen).
+     * Fan-out. Gedeckelt ({@see SPEISEKARTE_MAX_POSITIONEN}) gegen Runaway-Kosten; der Rest wird im
+     * Sammler `$deckel` gemerkt und nach der Slot-Schleife als EIN Vermerk in `deckel_hinweise`
+     * geschrieben (vorher: ein `params`-UPDATE je Rubrik, das niemand las — die Status-DTO filtert
+     * `params` gegen ALLOWED_GENERATION_PARAMS).
      *
      * @return int der nächste freie sort-Index
      */
-    private function dispatchRubrikGerichte(Team $team, FoodAlchemistCascadeRun $run, $slot, int $rubrikId, int $idx, ?int $sessionId): int
+    private function dispatchRubrikGerichte(Team $team, FoodAlchemistCascadeRun $run, $slot, int $rubrikId, int $idx, ?int $sessionId, array &$deckel = []): int
     {
         $anzahl = max(1, (int) ($slot->target_count ?? 1));
+        // Nur Rubriken zählen, die wirklich durch DIESEN Pfad laufen — die 'concepte'-Füllung
+        // hat ihren eigenen Zweig und darf die Positions-Rechnung nicht verfälschen.
+        $deckel['verlangt'] = (int) ($deckel['verlangt'] ?? 0) + $anzahl;
         $brief = $this->slotBrief('speisekarte', (int) $run->source_owner_id, $slot);
         $userId = (int) (\Illuminate\Support\Facades\Auth::id() ?? 0);
         for ($i = 0; $i < $anzahl; $i++) {
             if ($idx >= self::SPEISEKARTE_MAX_POSITIONEN) {
-                $params = is_array($run->params) ? $run->params : [];
-                $params['gedeckelt_positionen_offen'] = (int) ($params['gedeckelt_positionen_offen'] ?? 0) + ($anzahl - $i);
-                $run->update(['params' => $params]);
+                // Merken, WIE WEIT diese Rubrik kam — der Name ist die halbe Meldung.
+                $deckel['rubriken'][] = [
+                    'rubrik' => trim((string) ($slot->label ?: 'Rubrik')),
+                    'verlangt' => $anzahl,
+                    'erzeugt' => $i,
+                    'offen' => $anzahl - $i,
+                ];
+
                 break;
             }
             $step = FoodAlchemistCascadeRunStep::create([
@@ -974,9 +1119,12 @@ class PlanningCascadeService
      * bis 2026-09-03 im Gegenteil hier und hat eine Fehldiagnose erzeugt („die Paket-Slot-Erkennung ist
      * verloren gegangen") — ein Docblock, der dem Code 60 Zeilen darunter widerspricht, ist Teil des Bugs.
      *
-     * Gedeckelt ({@see CONCEPT_MAX_SLOTS}) gegen Runaway-Kosten bei großem Menü-Brief; überzählige leere
-     * Slots werden übersprungen und ihre Zahl im Run (`params.gedeckelt_slots_offen`) vermerkt — kein
-     * stiller Deckel (analog {@see SPEISEPLAN_MAX_ZELLEN}).
+     * ZWEI Grenzen wirken hier hintereinander, und die zweite ist meist die WIRKSAME:
+     * {@see CONCEPT_MAX_SLOTS} (30) bestimmt, nach wie vielen Positionen überhaupt gefragt wird,
+     * und {@see IdeenService::IDEEN_MAX} (12), wie viele Skizzen eine Antwort liefert. Bei 25
+     * leeren Positionen greift also nicht der 30er, sondern die 12er-Klemme — eine Meldung über
+     * den 30er wäre irreführend. Beide werden darum als EIN Befund vermerkt
+     * ({@see vermerkeConceptLuecke}), dessen Satz sich in jedem Fall aufrechnet.
      *
      * Graceful: ohne LLM (Sandbox/Kill-Switch) wirft die Divergenz → 0 Ideen, 0 Kind-Steps; der Run geht
      * mit dem Konzept allein auf review. Wirft NIE (der Concept-Job fängt zusätzlich ab).
@@ -1006,19 +1154,18 @@ class PlanningCascadeService
             ->get();
 
         if ($leere->isNotEmpty()) {
-            // Deckel gegen Runaway-/Kosten-Risiko bei großem Menü-Brief (analog SPEISEPLAN_MAX_ZELLEN): wir fragen
-            // die KI gar nicht erst nach mehr als N Ideen und legen höchstens N Kind-Steps/Jobs an. Die Zahl der
-            // übersprungenen Slots steht im Run (`params.gedeckelt_slots_offen`) — kein stiller Deckel.
-            if ($leere->count() > self::CONCEPT_MAX_SLOTS) {
-                $offen = $leere->count() - self::CONCEPT_MAX_SLOTS;
+            // Deckel gegen Runaway-/Kosten-Risiko bei großem Menü-Brief (analog SPEISEPLAN_MAX_WOCHEN):
+            // wir fragen die KI gar nicht erst nach mehr als N Ideen. Der Vermerk geht unten in
+            // `deckel_hinweise` — vorher stand er in `params.gedeckelt_slots_offen`, wo ihn niemand
+            // las (die Status-DTO filtert `params` gegen ALLOWED_GENERATION_PARAMS).
+            // `$slotsLeer` VOR dem Deckel merken — das ist die Zahl, die der Mensch verlangt hat.
+            $slotsLeer = $leere->count();
+            if ($slotsLeer > self::CONCEPT_MAX_SLOTS) {
                 $leere = $leere->take(self::CONCEPT_MAX_SLOTS);
-                $run = FoodAlchemistCascadeRun::find($runId);
-                if ($run !== null) {
-                    $run->update(['params' => array_merge(is_array($run->params) ? $run->params : [], ['gedeckelt_slots_offen' => $offen])]);
-                }
             }
 
             $ideen = [];
+            $div = null;   // muss VOR dem try stehen — im Fehlerfall wäre es sonst undefiniert
             try {
                 // Wissen+Trend fließen in die Divergenz (voller Stack + generischer Trend + Ursprungs-Trend der Planung).
                 $div = app(IdeenService::class)->kiDivergenzConcept($team, $conceptId, $leere->count(), null, $trendDocId);
@@ -1026,6 +1173,21 @@ class PlanningCascadeService
             } catch (\Throwable) {
                 $ideen = [];   // KI nicht verfügbar → keine Erfindung für die direkten Slots (graceful); Pakete werden dennoch versucht
             }
+
+            // EIN Befund für diesen Konzept-Durchgang, statt getrennter Vermerke für den
+            // Slot-Deckel und die Ideen-Klemme. Grund: die beiden greifen nacheinander an
+            // derselben Zahl, und zwei Meldungen über dieselbe Lücke widersprechen sich
+            // rechnerisch. Der Schlüssel trägt die Konzept-ID, weil `vermerkeDeckel` je Schlüssel
+            // ERSETZT — die Paket-Rekursion unten würde den äußeren Eintrag sonst löschen.
+            $this->vermerkeConceptLuecke(
+                $runId,
+                $conceptId,
+                $slotsLeer,
+                $leere->count(),          // tatsächlich ANGEFRAGT (nach dem Slot-Deckel)
+                count($ideen),
+                (int) ($div['grenze'] ?? IdeenService::IDEEN_MAX),
+                $seen,
+            );
 
             foreach (array_values($ideen) as $idx => $idee) {
                 $slot = $leere[$idx] ?? null;

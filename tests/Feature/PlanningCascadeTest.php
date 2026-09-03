@@ -1225,7 +1225,7 @@ it('Fan-out ist graceful: ohne LLM-Provider 0 erfundene Gerichte, kein Job (Konz
     Queue::assertNotPushed(MaterializeConceptIdeaJob::class);
 });
 
-it('Fan-out-Cap: über 30 leere Slots → KI wird nur nach 30 Ideen gefragt + gedeckelt_slots_offen vermerkt', function () {
+it('Fan-out-Cap: über 30 leere Slots → KI wird nur nach 30 Ideen gefragt + Luecke SICHTBAR vermerkt', function () {
     $concept = $this->makeConcept($this->rootTeam, 'Riesen-Buffet', ['status' => 'draft']);
     foreach (range(1, 33) as $pos) {                       // 33 leere Slots → 3 über dem Deckel (30)
         $this->makeConceptSlot($concept, ['position' => $pos]);
@@ -1241,8 +1241,20 @@ it('Fan-out-Cap: über 30 leere Slots → KI wird nur nach 30 Ideen gefragt + ge
 
     app(PlanningCascadeService::class)->fanoutConceptInvention($this->rootTeam, (int) $conceptStep->id, (int) $concept->id, 'voll_kreativ');
 
-    expect((int) ($run->refresh()->params['gedeckelt_slots_offen'] ?? 0))->toBe(3)   // kein stiller Deckel
-        ->and($run->params['ziel_vk_eur'] ?? null)->toBe(12.5);                       // Bestands-Params bleiben (merge)
+    // KORREKTUR 2026-09-03: prüfte `params['gedeckelt_slots_offen'] === 3`. Der Schlüssel lag im
+    // LEITPLANKEN-Beutel und wurde in der Status-DTO gegen ALLOWED_GENERATION_PARAMS gefiltert —
+    // niemand las ihn. Jetzt in `deckel_hinweise`, und die Zahl ist eine andere UND die richtige:
+    // 33 leer, 30 angefragt, der Mock liefert 2 → 31 fehlen. Die 3 des Slot-Deckels erklären davon
+    // nur einen Bruchteil, deshalb nennt der Satz die UNTER-LIEFERUNG als Grund, nicht den Deckel.
+    $h = $run->refresh()->deckel_hinweise;
+    expect($h)->toHaveCount(1)
+        ->and($h[0]['deckel'])->toBe('concept_luecke:' . $concept->id)
+        ->and($h[0]['verlangt'])->toBe(33)
+        ->and($h[0]['offen'])->toBe(31)
+        ->and($h[0]['text'])->toContain('31 von 33 Positionen ohne Skizze')
+        ->and($h[0]['text'])->toContain('die KI hat nur 2 geliefert')
+        // Bestands-Params bleiben unangetastet — der Vermerk fasst `params` nicht mehr an.
+        ->and($run->params['ziel_vk_eur'] ?? null)->toBe(12.5);
 });
 
 it('Fan-out-Cap: bis 30 leere Slots kein Deckel-Vermerk (Bestandsverhalten)', function () {
@@ -1644,6 +1656,80 @@ it('Speisekarte-Leitstelle (Spec 42): Voll-Kaskade-Go springt in die Leitstelle 
     // Parität zum Foodbook (F2): kein Modul-Lauf, kein Job — Rahmen/Inhalte entstehen erst in der Leitstelle.
     expect(FoodAlchemistCascadeRun::where('source_owner_type', 'speisekarte')->where('source_owner_id', $karte->id)->count())->toBe(0);
     Queue::assertNotPushed(GenerateConceptJob::class);
+});
+
+/*
+ * Der Positions-Deckel der Speisekarte (SPEISEKARTE_MAX_POSITIONEN = 40) war der zweite von
+ * dreien, die ihre Zahl nach `params` schrieben und damit von niemandem gelesen wurden.
+ *
+ * Zwei Eigenheiten, die die MELDUNG bestimmen und die man am Code nachrechnen muss:
+ *  1. `$idx` läuft DURCH alle Rubriken (der Aufrufer fädelt den Rückgabewert weiter). Die 40
+ *     gelten also für die ganze Karte, nicht je Rubrik — und der Deckel greift genau EINMAL
+ *     mitten in einer Rubrik, alle folgenden bekommen null.
+ *  2. Es gibt KEINEN Bestands-Abgleich (anders als beim Speiseplan, der `$belegt` aus den
+ *     Einträgen baut). Ein zweiter Voll-Lauf beginnt wieder bei `$idx = 0` und bestückt damit
+ *     die VORDEREN Rubriken ein zweites Mal. »Zweiten Lauf starten« wäre hier die falsche
+ *     Empfehlung — sie kostet doppelt und füllt die leeren Rubriken trotzdem nicht.
+ */
+it('Positions-Deckel der Speisekarte: nennt die betroffenen RUBRIKEN, nicht nur die Zahl', function () {
+    Queue::fake();
+
+    $karte = app(\Platform\FoodAlchemist\Services\SpeisekarteService::class)
+        ->create($this->rootTeam, ['name' => 'Große Karte']);
+
+    $frameSvc = app(PlanningFrameService::class);
+    $frame = $frameSvc->frameFor($this->rootTeam, 'speisekarte', (int) $karte->id);
+    // 4 Rubriken × 15 = 60 verlangt, Deckel 40. Nachgerechnet: Vorspeisen 15 (idx 0–14),
+    // Hauptgänge 15 (idx 15–29), Desserts 10 (idx 30–39, dann greift der Deckel), Käse 0.
+    // Also EINE angefangene Rubrik und EINE ganz leere — genau die Form, die der Text abbildet.
+    foreach (['Vorspeisen', 'Hauptgänge', 'Desserts', 'Käse'] as $rubrik) {
+        $frameSvc->addSlot($this->rootTeam, $frame, ['label' => $rubrik, 'slot_type' => 'gang', 'target_count' => 15]);
+    }
+
+    $run = app(PlanningCascadeService::class)->starteKaskade(
+        $this->rootTeam, 'vollkaskade', null, 'voll_kreativ',
+        ['owner_type' => 'speisekarte', 'owner_id' => (int) $karte->id],
+    );
+
+    $h = $run->deckel_hinweise;
+
+    expect($run->steps()->where('kind', 'gericht')->count())->toBe(40)
+        ->and($h)->toHaveCount(1)
+        ->and($h[0]['deckel'])->toBe('speisekarte_positionen')
+        ->and($h[0]['grenze'])->toBe(40)
+        ->and($h[0]['verlangt'])->toBe(60)
+        ->and($h[0]['offen'])->toBe(20)
+        // Die angefangene Rubrik mit „x von y" …
+        ->and($h[0]['text'])->toContain('„Desserts" 10 von 15')
+        // … die leere namentlich …
+        ->and($h[0]['text'])->toContain('„Käse" ganz leer')
+        // … und die RICHTIGE Handlung: von Hand füllen, NICHT zweiter Lauf.
+        ->and($h[0]['text'])->toContain('+ Gericht')
+        ->and($h[0]['text'])->toContain('ein zweites Mal')
+        // Und die Leitplanken bleiben unangetastet (der alte params-Write hätte sie gelöscht).
+        ->and($run->params)->toBeNull();
+
+    Queue::assertPushed(MaterializeSpeisekartePositionJob::class, 40);
+});
+
+it('ohne Deckel bleibt die Speisekarte still', function () {
+    Queue::fake();
+
+    $karte = app(\Platform\FoodAlchemist\Services\SpeisekarteService::class)
+        ->create($this->rootTeam, ['name' => 'Kleine Karte']);
+    $frameSvc = app(PlanningFrameService::class);
+    $frame = $frameSvc->frameFor($this->rootTeam, 'speisekarte', (int) $karte->id);
+    foreach (['Vorspeisen', 'Hauptgänge'] as $rubrik) {
+        $frameSvc->addSlot($this->rootTeam, $frame, ['label' => $rubrik, 'slot_type' => 'gang', 'target_count' => 5]);
+    }
+
+    $run = app(PlanningCascadeService::class)->starteKaskade(
+        $this->rootTeam, 'vollkaskade', null, 'voll_kreativ',
+        ['owner_type' => 'speisekarte', 'owner_id' => (int) $karte->id],
+    );
+
+    expect($run->steps()->where('kind', 'gericht')->count())->toBe(10)
+        ->and($run->deckel_hinweise)->toBeNull();
 });
 
 // ── P5: Speiseplan-Voll-Kaskade (Zell-Fan-out) ──────────────────────────────

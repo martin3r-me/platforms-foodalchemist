@@ -92,6 +92,28 @@ class FoodAlchemistCascadeRun extends Model
         $this->refresh();
     }
 
+    /**
+     * Die Deckel-Sätze dieses Laufs als EINE Zeile — oder null, wenn kein Deckel gegriffen hat.
+     *
+     * Lese-Gegenstück zu {@see vermerkeDeckel}: der Wortlaut entsteht dort, wo der Deckel greift
+     * (die Zähl-Mechanik ist bei jedem anders), und wird hier nur zusammengefügt. Ein zweiter
+     * Wortlaut in der Livewire-Komponente würde vom gespeicherten driften — dann sagt die
+     * Sofort-Meldung etwas anderes als das Lauf-Detail Wochen später.
+     *
+     * Ein Lauf kann mehrere Deckel treffen (ein großer Speiseplan zugleich Wochen UND
+     * Sub-Rezept-Schritte), darum verbunden statt „der erste gewinnt".
+     */
+    public function deckelMeldung(): ?string
+    {
+        $liste = is_array($this->deckel_hinweise) ? $this->deckel_hinweise : [];
+        $texte = array_values(array_filter(array_map(
+            static fn ($e): string => is_array($e) ? trim((string) ($e['text'] ?? '')) : '',
+            $liste,
+        ), static fn (string $t): bool => $t !== ''));
+
+        return $texte === [] ? null : implode(' · ', $texte);
+    }
+
     /** Steps dieses Laufs (concept/gericht/rezept/gp), Baum über parent_step_id. */
     public function steps(): HasMany
     {
