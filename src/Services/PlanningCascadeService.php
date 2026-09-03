@@ -49,7 +49,32 @@ class PlanningCascadeService
     private const RESULT_TTL_MIN = 15;
 
     /** Deckel gegen Runaway-Kosten: max. Zellen (= KI-Gericht-Generierungen) je Speiseplan-Voll-Kaskade. */
-    private const SPEISEPLAN_MAX_ZELLEN = 30;
+    /**
+     * Wie viele Zyklus-Wochen ein Speiseplan-Lauf auf einmal baut (Dominique 2026-09-03:
+     * „Deckel 6 Wochenplan").
+     *
+     * WOCHEN, nicht Zellen — weil die Küche in Wochen plant und weil eine Zellenzahl die Absicht
+     * nicht ausdrücken kann: die Linienzahl ist pro Plan frei (Starter sind drei, es können mehr
+     * sein), 6 Wochen sind also 90 Zellen bei drei Linien und 150 bei fünf. Ein fester
+     * Zellen-Deckel hätte je nach Plan 6 oder 3,6 Wochen bedeutet, ohne dass es jemand sieht.
+     *
+     * Gezählt werden nur Wochen, in denen der Lauf wirklich etwas gestartet hat. Damit arbeitet
+     * ein zweiter Lauf von selbst weiter: die Zellen der ersten sechs Wochen sind dann belegt,
+     * werden übersprungen, und der Deckel greift erst wieder ab Woche 13.
+     */
+    private const SPEISEPLAN_MAX_WOCHEN = 6;
+
+    /**
+     * Absolute Notbremse gegen einen entarteten Plan (z. B. 20 Linien) — NICHT der eigentliche
+     * Deckel, das sind die Wochen oben. 6 Wochen × 6 Linien × 5 Werktage = 180, darum 200: ein
+     * normal breiter Plan läuft nie hier hinein, ein pathologischer wird gestoppt und gemeldet.
+     *
+     * Vorher stand hier 30 — bei einem Standard-Zyklus (4 Wochen × 3 Linien × 5 Werktage = 60
+     * Zellen) fiel damit die HÄLFTE jedes Auftrags weg, und zwar unsichtbar. Der Wert war als
+     * Kosten-Schutz gedacht; gerechnet kostet ein 30-Zellen-Lauf 0,50–3 $, ein 60er also
+     * einstellige Dollar. Er schützte Centbeträge und warf dafür die halbe Arbeit weg.
+     */
+    private const SPEISEPLAN_MAX_ZELLEN = 200;
 
     /** Runaway-/Kosten-Deckel: max. VK-Gericht-Positionen einer Speisekarte-Vollkaskade (Gerichte-Füllung). */
     private const SPEISEKARTE_MAX_POSITIONEN = 40;
@@ -641,7 +666,25 @@ class PlanningCascadeService
         $planKontext = trim((string) ($session?->brief ?? ''));
         $idx = 0;
         $offen = 0;
+        // Wochen-Deckel: gezählt werden nur Wochen, in denen der Lauf wirklich etwas gestartet
+        // hat. Eine Woche, deren Zellen schon belegt sind, verbraucht also KEIN Budget — genau
+        // dadurch nimmt ein zweiter Lauf die nächsten sechs Wochen und nicht wieder die ersten.
+        $wochenMitArbeit = 0;
+        $wochenOffen = 0;
+        $zellenInOffenenWochen = 0;
         foreach (range(1, $weeks) as $week) {
+            $vorWoche = $idx;
+            if ($wochenMitArbeit >= self::SPEISEPLAN_MAX_WOCHEN) {
+                // Budget aufgebraucht: zählen, was diese Woche gekostet hätte, und weiter —
+                // nicht abbrechen, sonst wüssten wir den Rest nicht.
+                $leerInWoche = $this->leereZellenDerWoche($plan, $start, $week, $meal, $belegt);
+                if ($leerInWoche > 0) {
+                    $wochenOffen++;
+                    $zellenInOffenenWochen += $leerInWoche;
+                }
+
+                continue;
+            }
             foreach (range(1, 5) as $weekday) {   // Mo–Fr (GV-Werktage)
                 $datum = $start->copy()->addDays(($week - 1) * 7 + ($weekday - 1))->format('Y-m-d');
                 foreach ($plan->lines as $linie) {
@@ -670,9 +713,21 @@ class PlanningCascadeService
                     $idx++;
                 }
             }
+            if ($idx > $vorWoche) {
+                $wochenMitArbeit++;
+            }
         }
         // `verlangt` = alle LEEREN Zellen. Belegte sind oben schon per `continue` raus, `$idx`
         // zählt nur die gestarteten — die Summe braucht also keinen zweiten Zähler.
+        $run->vermerkeDeckel(
+            'speiseplan_wochen',
+            self::SPEISEPLAN_MAX_WOCHEN,
+            $wochenMitArbeit + $wochenOffen,
+            $wochenOffen,
+            $this->deckelTextWochen($wochenMitArbeit, $wochenOffen, $zellenInOffenenWochen),
+        );
+        // Die Notbremse wird nur vermerkt, wenn sie wirklich gegriffen hat — bei einem normal
+        // breiten Plan bleibt sie stumm, weil der Wochen-Deckel vorher bindet.
         $run->vermerkeDeckel(
             'speiseplan_zellen',
             self::SPEISEPLAN_MAX_ZELLEN,
@@ -685,6 +740,50 @@ class PlanningCascadeService
         }
 
         return $run;
+    }
+
+    /**
+     * Wie viele Zellen einer Zyklus-Woche noch leer sind — für die Deckel-Rechnung, ohne die
+     * Woche zu bauen. Spiegelt die Schleifen-Bedingungen (Mo–Fr × Linien, belegte raus) exakt;
+     * eine abweichende Zählung hier würde eine falsche Zahl in die Meldung schreiben, und eine
+     * falsche Zahl ist schlimmer als keine Meldung.
+     *
+     * @param  array<string, bool>  $belegt
+     */
+    private function leereZellenDerWoche(FoodAlchemistSpeiseplan $plan, \Illuminate\Support\Carbon $start, int $week, string $meal, array $belegt): int
+    {
+        $leer = 0;
+        foreach (range(1, 5) as $weekday) {
+            $datum = $start->copy()->addDays(($week - 1) * 7 + ($weekday - 1))->format('Y-m-d');
+            foreach ($plan->lines as $linie) {
+                if (! isset($belegt[$datum . '|' . $meal . '|' . (int) $linie->id])) {
+                    $leer++;
+                }
+            }
+        }
+
+        return $leer;
+    }
+
+    /**
+     * Der Satz für den Wochen-Deckel. Nennt WOCHEN, weil der Mensch in Wochen plant — die
+     * Zellenzahl steht als Größenordnung dahinter.
+     *
+     * Die Handlung ist hier einfacher als beim Zell-Deckel: weil nur Wochen MIT Arbeit gezählt
+     * werden, findet ein zweiter Lauf die ersten sechs belegt und nimmt die nächsten sechs. Es
+     * braucht kein Vorrücken des Startdatums und keine Bedingung.
+     */
+    private function deckelTextWochen(int $gebaut, int $offen, int $zellen): string
+    {
+        return sprintf(
+            'Wochen %d–%d noch offen (%d Zellen) — ein Lauf baut höchstens %d Wochen. Wenn die '
+            . 'ersten %d im Plan stehen, noch einmal Voll-Kaskade starten: der Lauf nimmt dann die nächsten.',
+            $gebaut + 1,
+            $gebaut + $offen,
+            $zellen,
+            self::SPEISEPLAN_MAX_WOCHEN,
+            $gebaut,
+        );
     }
 
     /**

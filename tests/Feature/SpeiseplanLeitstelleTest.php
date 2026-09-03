@@ -61,53 +61,92 @@ it('vollKaskadeStarten (Leitstelle P5): legt eine Review-Session an, startet die
 });
 
 /*
- * KORREKTUR 2026-09-03. Dieser Test hiess »Rest steht ehrlich im Run« und prüfte genau das:
- * die Zahl in `params`. Zwei Zeilen darüber stand `assertSet('kaskadeMeldung', null)` — er
- * pinnte also die STILLE als erwartetes Verhalten und nannte sie im Kommentar »kein stiller
- * Deckel«. Beides war grün, und der Deckel war trotzdem unsichtbar: `params` wird in der
- * Status-DTO gegen ALLOWED_GENERATION_PARAMS gefiltert (der Beutel zeigt die LEITPLANKEN),
- * `resources/` hatte null Treffer auf den Schlüssel, und der Schreibweg überschrieb `params`
- * komplett — womit er zusätzlich die Leitplanken-Anzeige löschte.
+ * KORREKTUR 2026-09-03, zweiter Durchgang. Dieser Test prüfte den Zell-Deckel bei 30 und hiess
+ * »Rest steht ehrlich im Run« — er prüfte aber nur die Zahl in `params`, und zwei Zeilen
+ * darüber pinnte `assertSet('kaskadeMeldung', null)` die STILLE als erwartetes Verhalten.
+ * Grün, und trotzdem unsichtbar: `params` wird in der Status-DTO gegen
+ * ALLOWED_GENERATION_PARAMS gefiltert (der Beutel zeigt die LEITPLANKEN), `resources/` hatte
+ * null Treffer, und der Schreibweg überschrieb `params` komplett — womit er zusätzlich die
+ * Leitplanken-Anzeige löschte.
  *
- * Bei einem Standard-Zyklus (4 Wochen × 3 Linien × 5 Werktage = 60 Zellen) fiel damit die
- * HÄLFTE des Auftrags weg, ohne dass es jemand erfuhr.
- *
- * `assertSet('kaskadeMeldung', null)` bleibt richtig und steht weiter drin: die Methode gibt
- * einen Redirect zurück, die Editor-Komponente stirbt damit, und `kaskadeMeldung` ist ihr
- * FEHLER-Kanal. Ein Deckel ist kein Fehler. Der Hinweis gehört dorthin, wo der Mensch landet —
- * das prüft der Test darunter.
+ * Der Deckel selbst ist jetzt ein WOCHEN-Deckel (Dominique: „Deckel 6 Wochenplan"), weil die
+ * Küche in Wochen plant und eine Zellenzahl die Absicht nicht ausdrücken kann: die Linienzahl
+ * ist pro Plan frei. Der alte Wert 30 traf bei einem Standard-Zyklus (4 × 3 × 5 = 60) die
+ * HÄLFTE jedes Auftrags.
  */
-it('vollKaskadeStarten deckelt den Zell-Fan-out (SPEISEPLAN_MAX_ZELLEN=30) — und der Rest ist SICHTBAR', function () {
+it('deckelt den Speiseplan bei 6 Wochen — und der Rest ist SICHTBAR', function () {
     Queue::fake();
 
-    // 4 Zyklus-Wochen × 3 Linien × 5 Werktage = 60 leere Zellen → gedeckelt auf 30, 30 offen.
-    $plan = $this->plaene->create($this->rootTeam, ['name' => 'Großer Zyklus', 'cycle_weeks' => 4]);
-    expect($plan->lines()->count() * 4 * 5)->toBe(60);
+    // 9 Zyklus-Wochen × 3 Linien × 5 Werktage = 135 Zellen; gebaut werden 6 Wochen = 90,
+    // offen bleiben 3 Wochen = 45 Zellen.
+    $plan = $this->plaene->create($this->rootTeam, ['name' => 'Langer Zyklus', 'cycle_weeks' => 9]);
 
     Livewire::test(SpeiseplanEditor::class)
         ->set('planId', $plan->id)
         ->call('vollKaskadeStarten')
         ->assertRedirect()
+        // Bleibt richtig: die Methode gibt einen Redirect zurück, die Editor-Komponente stirbt
+        // damit, und `kaskadeMeldung` ist ihr FEHLER-Kanal. Ein Deckel ist kein Fehler — der
+        // Hinweis gehört dorthin, wo der Mensch LANDET (Test weiter unten).
         ->assertSet('kaskadeMeldung', null);
 
     $run = FoodAlchemistCascadeRun::where('source_owner_type', 'speiseplan')
         ->where('source_owner_id', $plan->id)->latest('id')->first();
-    expect($run)->not->toBeNull()
-        ->and($run->steps()->where('kind', 'gericht')->count())->toBe(30)   // harter Cap
+
+    expect($run->steps()->where('kind', 'gericht')->count())->toBe(90)   // 6 Wochen
         // Der Vermerk liegt in `deckel_hinweise` (eigene Spalte, NICHT im gefilterten
         // Leitplanken-Beutel) und trägt den fertigen Satz mit — er muss auch dann verständlich
         // sein, wenn ihn jemand Wochen später im Lauf-Detail liest.
         ->and($run->deckel_hinweise)->toHaveCount(1)
-        ->and($run->deckel_hinweise[0]['deckel'])->toBe('speiseplan_zellen')
-        ->and($run->deckel_hinweise[0]['grenze'])->toBe(30)
-        ->and($run->deckel_hinweise[0]['verlangt'])->toBe(60)
-        ->and($run->deckel_hinweise[0]['offen'])->toBe(30)
-        ->and($run->deckel_hinweise[0]['text'])->toContain('30 von 60 Zellen')
+        ->and($run->deckel_hinweise[0]['deckel'])->toBe('speiseplan_wochen')
+        ->and($run->deckel_hinweise[0]['grenze'])->toBe(6)
+        ->and($run->deckel_hinweise[0]['verlangt'])->toBe(9)
+        ->and($run->deckel_hinweise[0]['offen'])->toBe(3)
+        ->and($run->deckel_hinweise[0]['text'])->toContain('Wochen 7–9 noch offen (45 Zellen)')
         // … und die Leitplanken sind NICHT mehr kollateral gelöscht (der alte params-Write
         // machte `params` non-empty und damit den Session-Fallback in der DTO wirkungslos).
         ->and($run->params)->toBeNull();
 
-    Queue::assertPushed(MaterializeSpeiseplanCellJob::class, 30);
+    Queue::assertPushed(MaterializeSpeiseplanCellJob::class, 90);
+});
+
+/*
+ * DER GRUND, warum der Wochen-Deckel nur Wochen MIT ARBEIT zählt: ein zweiter Lauf muss von
+ * selbst weiterkommen. Sonst wäre die Handlung in der Meldung („noch einmal starten") eine
+ * Lüge, und der Mensch müsste das Startdatum von Hand vorrücken.
+ */
+it('der zweite Lauf nimmt die naechsten sechs Wochen, nicht wieder die ersten', function () {
+    Queue::fake();
+
+    $plan = $this->plaene->create($this->rootTeam, ['name' => 'Langer Zyklus', 'cycle_weeks' => 9]);
+
+    Livewire::test(SpeiseplanEditor::class)->set('planId', $plan->id)->call('vollKaskadeStarten');
+
+    // Die Zellen der ersten sechs Wochen als belegt nachstellen — im Echtbetrieb macht das
+    // `materialisiereSpeiseplanZelle` per addEintrag, sobald der Job durch ist.
+    $start = \Illuminate\Support\Carbon::parse($plan->start_date ?? now())->startOfWeek();
+    foreach (range(1, 6) as $woche) {
+        foreach (range(1, 5) as $tag) {
+            foreach ($plan->lines as $linie) {
+                $plan->entries()->create([
+                    'team_id' => $this->rootTeam->id,
+                    'entry_date' => $start->copy()->addDays(($woche - 1) * 7 + ($tag - 1))->format('Y-m-d'),
+                    'meal' => 'mittag',
+                    'line_id' => $linie->id,
+                    'label' => 'belegt',
+                ]);
+            }
+        }
+    }
+
+    Livewire::test(SpeiseplanEditor::class)->set('planId', $plan->fresh()->id)->call('vollKaskadeStarten');
+
+    $zweiter = FoodAlchemistCascadeRun::where('source_owner_type', 'speiseplan')
+        ->where('source_owner_id', $plan->id)->latest('id')->first();
+
+    // Wochen 7–9 = 3 × 3 Linien × 5 Werktage = 45 Zellen, und KEIN Deckel mehr (3 < 6).
+    expect($zweiter->steps()->where('kind', 'gericht')->count())->toBe(45)
+        ->and($zweiter->deckel_hinweise)->toBeNull();
 });
 
 /*
@@ -128,7 +167,9 @@ it('vollKaskadeStarten deckelt den Zell-Fan-out (SPEISEPLAN_MAX_ZELLEN=30) — u
 it('der Deckel-Hinweis erreicht die Leitstelle, wo der Mensch nach dem Go landet', function () {
     Queue::fake();
 
-    $plan = $this->plaene->create($this->rootTeam, ['name' => 'Großer Zyklus', 'cycle_weeks' => 4]);
+    // 9 Wochen verlangt, 6 gebaut — der Wochen-Deckel greift. (Ein 4-Wochen-Standardplan
+    // deckelt seit dem Wochen-Deckel zu RECHT nicht mehr; er wäre hier also kein Testfall.)
+    $plan = $this->plaene->create($this->rootTeam, ['name' => 'Langer Zyklus', 'cycle_weeks' => 9]);
 
     Livewire::test(SpeiseplanEditor::class)
         ->set('planId', $plan->id)
@@ -142,9 +183,9 @@ it('der Deckel-Hinweis erreicht die Leitstelle, wo der Mensch nach dem Go landet
     $leitstelle = Livewire::withQueryParams(['session' => $session->id, 'open' => 1])
         ->test(PlanungIndex::class);
 
-    $leitstelle->assertSet('deckelHinweis', fn ($t) => is_string($t) && str_contains($t, '30 von 60 Zellen'))
+    $leitstelle->assertSet('deckelHinweis', fn ($t) => is_string($t) && str_contains($t, 'Wochen 7–9'))
         ->assertSeeHtml('data-deckel-hinweis')
-        ->assertSee('30 bleiben leer');
+        ->assertSee('45 Zellen');
 });
 
 it('ohne Deckel bleibt die Leitstelle still — ein Nichts ist keine Warnung', function () {

@@ -1652,8 +1652,13 @@ it('vollkaskade (speiseplan): ein Gericht-Step je leerer Zelle + MaterializeSpei
     $svc = app(\Platform\FoodAlchemist\Services\SpeiseplanService::class);
     $plan = $svc->create($this->rootTeam, ['name' => 'Wochenplan', 'start_date' => '2026-08-03']);
     $plan->load('lines');
-    // cycle_weeks × Mo–Fr × Linien, gedeckelt auf SPEISEPLAN_MAX_ZELLEN (Runaway-Schutz).
-    $erwartet = min($plan->lines->count() * 5 * max(1, (int) $plan->cycle_weeks), 30);
+    // cycle_weeks × Mo–Fr × Linien. KEIN Deckel hier: der Standard-Zyklus ist 4 Wochen, der
+    // Deckel liegt bei 6 Wochen (2026-09-03, Dominique: „Deckel 6 Wochenplan"). Vorher stand
+    // hier `min(…, 30)` — diese Zeile schrieb also fest, dass von 60 verlangten Zellen 30
+    // ankommen, und nannte es „Runaway-Schutz". Gerechnet kostet ein 60-Zellen-Lauf einstellige
+    // Dollar; der Deckel schützte Centbeträge und warf die halbe Arbeit weg.
+    $erwartet = $plan->lines->count() * 5 * max(1, (int) $plan->cycle_weeks);
+    expect($erwartet)->toBe(60);   // 4 Wochen × 3 Starter-Linien × 5 Werktage
     Queue::fake();
 
     $run = app(PlanningCascadeService::class)->starteKaskade($this->rootTeam, 'vollkaskade', null, 'voll_kreativ', ['owner_type' => 'speiseplan', 'owner_id' => (int) $plan->id]);
