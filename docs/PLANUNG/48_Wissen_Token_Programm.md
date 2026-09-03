@@ -123,15 +123,46 @@ Golden-Gate, nicht tierweise.
 Bei heutigem Volumen sind das ~$4/Monat. Der Wert von W3-4 ist **Kopfraum für die Skalierung
 und Latenz**, nicht die heutige Rechnung — das rechtfertigt keinen unbesehenen Flip.
 
-## Offene Entscheide für Dominique
+## Entscheide — Stand nach Prüfung 2026-09-03
 
-| # | Punkt | Konsequenz |
-|---|---|---|
-| 1 | **Kanon §1.0–1.2 + §10 als `always`** | Deckel 19.000→24.000 / 27.500→31.000. Kehrt eine dokumentierte Spec-41-Entscheidung um (gepinnt in `RegelwerkKnowledgeRoutingTest:80`). Datenlage: §1 = 39 % aller Befunde. |
-| 2 | **§2/Convenience** | `$preferRaw = $convenience !== 'voll_convenience'` — Verarbeitungs-Reduktion code-erzwingen statt binden. |
-| 3 | **Leitungswasser** (§11.2) | `Wasser` matcht auf Bio-Flaschenwasser; **62 Rezepte** rechnen falsch. Braucht zwei Sätze in §11 (`requires_la=0` auch für selbst-gestellte/kostenfreie Ware), dann ist die Umsetzung klein. Bestandsrezepte = getrennter Entscheid. |
-| 4 | **Der zweite Kurator** | Retrieval liest heute gemeinsam, der Browser ist gescopet. Team-weit (A1) oder Team-Default + persönliche Übersteuerung (A2)? Fällt vor dem zweiten kuratierenden Team. |
-| 5 | **Slot-Deckel für Angebot/Format** | Heute weder Gate noch Deckel. |
+Die erste Fassung dieser Liste war aus dem Plandokument übernommen und **veraltet**: zwei der
+vier Punkte hatte Dominique längst entschieden bzw. waren am selben Tag umgesetzt. Gegen den
+Live-Stand geprüft (Bindings auf demo, `MatchHeuristics`, `foodalchemist_gps`):
+
+### ✅ Leitungswasser — ERLEDIGT
+Das GP existiert: **id 9359, »Leitungswasser: frisch«, approved, `is_platzhalter=0`**. Der
+§5-Alias in `MatchHeuristics:548` zeigte auf »Wasser: Leitung« — **diesen Namen gibt es nicht**;
+korrigiert auf den echten. Die Regelwerk-Frage zu §11.2 stellt sich damit nicht: es brauchte
+kein neues GP, nur den richtigen Namen im Alias. Rest-Nuance: `requires_la=1`, d. h. das GP
+verlangt formal einen Lieferantenartikel und hat keinen — Dominique tauscht das bei Bedarf
+über die UI.
+
+### ✅ Zweiter Kurator — ENTSCHIEDEN (Dominique, 2026-09-02)
+> „Was wir gerade an Wissen bauen, ist global, damit die Generatoren laufen. Ein neuer User
+> bekommt das Wissen auch, aber komplett leer, und kann dort für sich Wissen hinterlegen —
+> das kann nur für sein Team und Kind genutzt werden."
+
+Konsequenz war bereits gezogen: der gebaute `team_id`-Filter im **Retrieval** wurde
+**vollständig zurückgenommen** (er hätte für jedes andere Team und jeden Console-Lauf 598 Docs
+auf 6 gekappt, ohne rote Tests). Gescopet bleibt die **Schreib**seite und der Browser.
+
+### ○ Kanon §1 + §10 in den Prompt — WIRKLICH OFFEN
+Live geprüft: an `recipe.generator` hängen sechs `always`-Dossiers (§2, §3, §4, §6,
+`mengen_defaults`, `workflow.basisrezept_erstellungs_dossier`), an `vk.generator` dieselben plus
+`regelwerk_verkaufsgerichte`. **§1 Naming und §10 Anti-Patterns sind bei keinem von beiden
+gebunden** — und auch nicht code-erzwungen. Datenlage: §1 = **65 Befunde = 39 %** aller
+Konformitäts-Funde. Kostet Deckel 19.000→24.000 / 27.500→31.000. Kehrt eine dokumentierte
+Spec-41-Entscheidung um (gepinnt in `RegelwerkKnowledgeRoutingTest:80`).
+
+### ○ §2 code-erzwingen statt binden — OFFEN, aber anders begründet als gedacht
+Die Convenience-**Steuerung** ist längst Code: `from_scratch` verschiebt das Pool-Verhältnis in
+`ConceptGeneratorService:1197-1201`. Offen ist nur, ob §2 *Verarbeitungs-Reduktion*
+(Brunoise → Roh-Form) aus dem Prompt in einen Resolver wandert. Argument dafür ist **nicht**
+Token-Ersparnis, sondern Wirkung: §2 **ist** gebunden und produziert trotzdem **27 Befunde** —
+gebundenes Regelwerk verhindert den Verstoss offenbar nicht.
+
+### ○ Slot-Deckel für Angebot/Format — OFFEN
+Heute weder Gate noch Deckel.
 
 ## Offene Bauschritte
 
@@ -159,3 +190,4 @@ Cross-Refs: [[39_Worker_Betrieb_Runbook]] · [[41_Spec_Planungsmodul_Qualitaet]]
 ## Changelog
 - **2026-09-03** — Erstanlage. Programm lief bis hier nur in einer Session-Plandatei; damit war der Repo-Stand blind für 14 Commits. Zahlen sind gemessen (Messsonde `prompt_parts`), nicht geschätzt.
 - **2026-09-03** — W3-4-Analyse ergänzt: Tier-Etiketten stimmen nicht mit ihrem Inhalt überein. Tier B (»Mechanik-Labels«) trägt alle sieben grössten Verbraucher und ist zugleich der Fallback. W3-4 ist damit erst eine Re-Tierung, dann ein ENV-Schritt.
+- **2026-09-03 (Korrektur)** — die Entscheide-Liste war aus dem Plandokument übernommen und veraltet. Gegen den Live-Stand geprüft: Leitungswasser ist erledigt (GP 9359 existiert, Alias korrigiert), der zweite Kurator ist entschieden (Retrieval global, Schreibseite gescopet). Offen bleiben Kanon §1+§10, §2-Erzwingung und der Slot-Deckel. Lehre: eine »offen«-Liste gegen den Bestand prüfen, nicht aus dem Plan kopieren.
