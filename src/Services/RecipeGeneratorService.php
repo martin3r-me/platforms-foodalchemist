@@ -110,6 +110,18 @@ class RecipeGeneratorService
                 'structural_retry' => fn (array $parsed) => ! empty($parsed['werte']['name']) && ! empty($parsed['werte']['zutaten']),
             ]);
             $kiRezept = $vorschlag->werte;
+            // W3-5: die ECHTEN Prompt-Größen an den Kontext-Inspektor hängen. Bis hierher zeigte
+            // er nur `chars` aus contextFor — also allein den Retrieval-Topf. Gemessen sind das
+            // ~36.000 Zeichen, wo der Prompt ~77.500 hat: der Bound-Block (verbindliches
+            // Regelwerk), Task, Hüllen und das Kontext-JSON fehlten in der Anzeige komplett.
+            // Wer die Zahl liest, unterschätzt den Prompt also um mehr als die Hälfte.
+            //
+            // Die Werte entstehen erst IM Gateway (Messsonde `prompt_parts`), können also nicht
+            // aus dem vorbereiteten Kontext kommen — darum hier nachgezogen, über die Call-Log-ID
+            // des gerade gelaufenen Calls. Fail-soft: ohne Log-Zeile bleibt die Anzeige wie vorher.
+            if ($kontextAudit !== null && $vorschlag->callLogId !== null) {
+                $kontextAudit['prompt'] = $this->promptGroessen((int) $vorschlag->callLogId);
+            }
             // P0.2: die grossen Kontext-/Wissen-/Inventar-Arrays werden ab hier nicht mehr
             // gebraucht (die Transaktions-Closure haelt sie NICHT) → jetzt freigeben, damit
             // der Peak-Speicher waehrend Matching/Sync sinkt (OOM-Gegenmassnahme).
@@ -1124,4 +1136,46 @@ class RecipeGeneratorService
 
         return $unit->id;
     }
+
+    /**
+     * Die sechs Töpfe eines Prompts aus der Messsonde — für den Kontext-Inspektor.
+     *
+     * Reine Int-Liste, damit sie gefahrlos durch Job-Cache und Livewire-Ergebnis reist (dieselbe
+     * Regel wie beim übrigen Inspektor-Bündel). `null` statt Nullen, wenn keine Log-Zeile da ist:
+     * eine Anzeige mit lauter Nullen behauptet Wissen, das wir nicht haben.
+     *
+     * @return ?array{chars:int, huelle:int, bound:int, task:int, retrieval:int, kontext:int, dropped:int, tokens_in:int, tokens_cached:int}
+     */
+    private function promptGroessen(int $callLogId): ?array
+    {
+        // `where('id', …)`, NICHT `whereKey()`: das gibt es nur auf dem Eloquent-Builder. Auf dem
+        // Query-Builder greift die dynamische `whereXxx`-Auflösung und macht daraus lautlos
+        // `where('key', …)` — die Abfrage findet dann nie etwas. Genau daran ist der erste
+        // Durchgang gescheitert, und zwar OHNE Fehler: der Inspektor hätte einfach weiter die
+        // alte Zahl gezeigt.
+        $row = \Illuminate\Support\Facades\DB::table('foodalchemist_ai_call_log')
+            ->where('id', $callLogId)
+            ->first(['prompt_chars', 'prompt_parts', 'tokens_in', 'tokens_cached']);
+        if ($row === null) {
+            return null;
+        }
+
+        $teile = is_string($row->prompt_parts) ? (json_decode($row->prompt_parts, true) ?: []) : [];
+        if (! is_array($teile) || $teile === []) {
+            return null;   // Sonde noch nicht migriert → alte Anzeige, keine erfundenen Nullen
+        }
+
+        return [
+            'chars' => (int) ($row->prompt_chars ?? 0),
+            'huelle' => (int) ($teile['huelle'] ?? 0),
+            'bound' => (int) ($teile['bound'] ?? 0),
+            'task' => (int) ($teile['task'] ?? 0),
+            'retrieval' => (int) ($teile['retrieval'] ?? 0),
+            'kontext' => (int) ($teile['kontext'] ?? 0),
+            'dropped' => (int) ($teile['dropped'] ?? 0),
+            'tokens_in' => (int) ($row->tokens_in ?? 0),
+            'tokens_cached' => (int) ($row->tokens_cached ?? 0),
+        ];
+    }
+
 }
