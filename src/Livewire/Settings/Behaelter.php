@@ -4,6 +4,7 @@ namespace Platform\FoodAlchemist\Livewire\Settings;
 
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Livewire\Component;
 use Platform\FoodAlchemist\Support\TeamScope;
@@ -47,7 +48,13 @@ class Behaelter extends Component
             return;
         }
         $slug = Str::slug($name, '_');
-        if (DB::table($meta['tabelle'])->where('slug', $slug)->whereNull('deleted_at')->exists()) {
+        // E2: Die DB-Unique ist (team_id, slug). Ein ungescopter Check blockiert Kind-Teams,
+        // sobald IRGENDEIN Team den Slug hat — und verrät mit der Meldung dessen Existenz.
+        $kollision = TeamScope::applyVisible(
+            DB::table($meta['tabelle'])->where('slug', $slug)->whereNull('deleted_at'),
+            'team_id', Auth::user()?->currentTeamRelation
+        )->exists();
+        if ($kollision) {
             $this->fehler = "«{$name}» existiert schon in {$meta['label']} ({$slug}).";
 
             return;
@@ -112,7 +119,7 @@ class Behaelter extends Component
         }
         $n = $this->referenzen($vokabular, $zeile);
         if ($n > 0) {
-            $this->fehler = "«{$zeile->name}» wird von {$n} Rezept(en) genutzt — erst umhängen oder deaktivieren.";
+            $this->fehler = "«{$zeile->name}» ist {$n}× in Verwendung (Rezepte, Darreichungen, Regeneration) — erst umhängen oder deaktivieren.";
 
             return;
         }
@@ -121,30 +128,103 @@ class Behaelter extends Component
         $this->meldung = "«{$zeile->name}» gelöscht.";
     }
 
-    /** Rezept-Nutzungen je Vokabular (Behälter/Regen/Vehikel via legacy_id, Equipment via Pivot). */
+    /**
+     * Wo überall dieser Vokabel-Eintrag hängt — Grundlage des Lösch-Schutzes.
+     *
+     * BEFUND 2026-09-04 (Spec 51): die Vorgänger-Fassung zählte ausschliesslich die
+     * `*_legacy_id`-Rohwerte des WaWi-Imports und stieg bei `legacy_id === null` sofort mit 0
+     * aus. Damit war JEDE vom Kunden selbst angelegte Zeile hart löschbar, egal wie oft sie
+     * genutzt wurde — und die echten Fremdschlüssel (`container_warm_vocab_id` &c.) sah sie
+     * ohnehin nie, ebenso wenig Darreichungen und Regenerationszeilen. Weil alle Bestands-FKs
+     * `nullOnDelete` sind, hätte ein Löschen den Behälter an Rezepten und Darreichungen STILL
+     * entfernt.
+     *
+     * Die Bestands-FKs bleiben bewusst `nullOnDelete`: es kann Zeilen geben, die auf bereits
+     * soft-gelöschte Vokabeln zeigen, und eine nachträgliche restrict-Migration würde daran
+     * scheitern. Geschützt wird hier — nur die neue `recipe_containers` ist restrict.
+     *
+     * Defensiv über Schema-Prüfungen, damit die Zählung Schema-Drift überlebt statt zu werfen.
+     */
     private function referenzen(string $vokabular, object $zeile): int
     {
-        $recipeRef = function (array $cols) use ($zeile): int {
-            if ($zeile->legacy_id === null) {
-                return 0;
+        $treffer = 0;
+
+        foreach ($this->nutzungsorte($vokabular) as [$tabelle, $spalten]) {
+            if (! Schema::hasTable($tabelle)) {
+                continue;
+            }
+            $vorhanden = array_values(array_filter($spalten, fn (string $c) => Schema::hasColumn($tabelle, $c)));
+            if ($vorhanden === []) {
+                continue;
             }
 
-            return DB::table('foodalchemist_recipes')->whereNull('deleted_at')
-                ->where(function ($q) use ($cols, $zeile) {
-                    foreach ($cols as $c) {
-                        $q->orWhere($c, $zeile->legacy_id);
-                    }
-                })->count();
-        };
+            $q = DB::table($tabelle);
+            if (Schema::hasColumn($tabelle, 'deleted_at')) {
+                $q->whereNull('deleted_at');
+            }
 
+            $treffer += $q->where(function ($q) use ($vorhanden, $zeile) {
+                foreach ($vorhanden as $c) {
+                    $q->orWhere($c, $zeile->id);
+                }
+            })->count();
+        }
+
+        return $treffer + $this->legacyReferenzen($vokabular, $zeile);
+    }
+
+    /** Echte Fremdschlüssel je Vokabular: [tabelle, spalten]. */
+    private function nutzungsorte(string $vokabular): array
+    {
         return match ($vokabular) {
-            'behaelter' => $recipeRef(['container_warm_legacy_id', 'container_cold_legacy_id']),
-            'regen' => $recipeRef(['regeneration_device_legacy_id']),
-            'vehikel' => $recipeRef(['serving_vehicle_legacy_id']),
-            'equipment' => \Illuminate\Support\Facades\Schema::hasTable('foodalchemist_recipe_equipment')
-                ? DB::table('foodalchemist_recipe_equipment')->where('equipment_id', $zeile->id)->count() : 0,
-            default => 0,
+            'behaelter' => [
+                ['foodalchemist_recipes', ['container_warm_vocab_id', 'container_cold_vocab_id']],
+                ['foodalchemist_recipe_presentations', ['container_warm_vocab_id', 'container_cold_vocab_id']],
+                ['foodalchemist_recipe_containers', ['container_vocab_id']],
+            ],
+            'regen' => [
+                ['foodalchemist_recipe_regenerations', ['device_vocab_id']],
+                ['foodalchemist_recipe_presentations', ['regeneration_device_vocab_id']],
+            ],
+            'vehikel' => [
+                ['foodalchemist_recipes', ['serving_vehicle_vocab_id']],
+                ['foodalchemist_recipe_presentations', ['serving_vehicle_vocab_id']],
+                ['foodalchemist_tableware_items', ['vehicle_vocab_id']],
+            ],
+            'equipment' => [
+                ['foodalchemist_recipe_equipment', ['equipment_id']],
+            ],
+            default => [],
         };
+    }
+
+    /**
+     * Zusätzlich die Import-Rohwerte: bei WaWi-Zeilen, deren `*_vocab_id` nie nachgezogen wurde,
+     * ist die `legacy_id` der einzige Beleg für eine Nutzung.
+     */
+    private function legacyReferenzen(string $vokabular, object $zeile): int
+    {
+        if ($zeile->legacy_id === null || ! Schema::hasTable('foodalchemist_recipes')) {
+            return 0;
+        }
+
+        $spalten = match ($vokabular) {
+            'behaelter' => ['container_warm_legacy_id', 'container_cold_legacy_id'],
+            'regen' => ['regeneration_device_legacy_id'],
+            'vehikel' => ['serving_vehicle_legacy_id'],
+            default => [],
+        };
+        $spalten = array_values(array_filter($spalten, fn (string $c) => Schema::hasColumn('foodalchemist_recipes', $c)));
+        if ($spalten === []) {
+            return 0;
+        }
+
+        return DB::table('foodalchemist_recipes')->whereNull('deleted_at')
+            ->where(function ($q) use ($spalten, $zeile) {
+                foreach ($spalten as $c) {
+                    $q->orWhere($c, $zeile->legacy_id);
+                }
+            })->count();
     }
 
     public function render()
