@@ -1,6 +1,6 @@
 # 50 · Gericht: Anleitungs-Ebenen, KI-Briefing und Deklaration auf Angebotsebene
 
-**Stand:** 2026-09-04 · umgesetzt und getestet · Regelwerke: `Regelwerk_Verkaufsgerichte` v1.6 (§3, §4), `Regelwerk_Concept` v1.1 (§7)
+**Stand:** 2026-09-04 · umgesetzt und getestet · Regelwerke: `Regelwerk_Verkaufsgerichte` v1.7 (§3, §4), `Regelwerk_Concept` v1.1 (§7)
 
 Zwei Runden mit derselben Wurzel: Felder lagen ohne Kontrakt nebeneinander, deshalb konnte
 weder der Druck filtern noch die KI trennen noch die Oberfläche eine brauchbare Aussage
@@ -110,9 +110,35 @@ sind Formulierung, keine Schnittstelle.
 
 ---
 
+## Teil D — Schritt-Texte tragen keine absoluten Mengen (§3.8)
+
+Ein Zucchini-Puffer-Rezept stand auf ~33 Portionen je Ansatz: die Zutatenliste zeigte 166 g
+Salz und 33 Stück Eier, die Anleitung sagte weiter „mit 10 g Salz mischen" und „2 Eiern".
+Wer danach arbeitet, produziert Ausschuss — und der Fehler ist unsichtbar, weil beide
+Angaben für sich plausibel aussehen.
+
+Die Zutatenliste ist die **einzige** Mengen-Wahrheit; sie skaliert mit dem Ansatz, der
+Schritt-Text nicht. Der Riegel sitzt an allen vier schritt-erzeugenden Prompts
+(`recipe.steps`, `vk.plating`, `recipe.generator`, `vk.generator`) — `recipe.steps` hatte
+Mengen vorher aktiv angefordert, und die Generatoren schreiben Schritte und Zutatenliste in
+einem Zug.
+
+| verboten | erlaubt |
+|---|---|
+| „10 g Salz", „2 Eier", „80 g Mehl" | „das Salz", „die Eier" · Anteile: „die Hälfte des Öls" |
+| Ansatz-/Gesamtmengen | **Teller-Mengen beim Anrichten** — portionsbezogen, skalierungsfest, dort gefordert |
+
+Zeiten, Gar- und Kerntemperaturen und Größenangaben bleiben konkret.
+
+---
+
 ## Offen
 
 - **Behälter-Logik** — eigener Plan, macht Dominique separat
 - **Anreicherung** (Paket E des Ursprungsplans): Vollständigkeit gegen den Kontrakt, inklusive
   der Frage, ob `voll_anreichern` für Gerichte Default an wird
 - Massen-`recompute --all` bewusst nicht gefahren (Bestand wandert Rezept für Rezept)
+- **Bestand mit absoluten Mengen in den Schritten** (§3.8): der Prompt-Riegel wirkt nur bei
+  Neu-Erzeugung. Schritte von vor dem 2026-09-04 können Ur-Ansatz-Mengen tragen und sind
+  falsch, wo der Ansatz seither skaliert wurde. Eine Prüfliste ließe sich über Schritt-Texte
+  mit Mengenangaben gegen die Ansatzgröße bauen — ungemessen
