@@ -117,6 +117,20 @@
         {{-- §3.2 REGENERATION — eigene Ebene, eigener Schalter. Adressat ist die Küche vor
              Ort (Satellit), nicht die Produktionsküche. Stand bis 2026-09-04 in KEINEM
              Druckstück, obwohl im Editor gepflegt. --}}
+        {{-- Spec 51: was fuer DIESE Zielmenge gepackt werden muss. Skaliert mit der
+             Hochrechnung — 6 kg brauchen andere Behaelter als 60. --}}
+        @if(($opt['behaelter'] ?? false) && count($node['behaelter'] ?? []))
+            <h4>Behälter</h4>
+            <table>
+                <thead><tr><th>Zweck</th><th>Bedarf</th></tr></thead>
+                <tbody>
+                @foreach($node['behaelter'] as $b)
+                    <tr><td>{{ ucfirst($b['zweck']) }}</td><td>{{ $b['kurz'] }}</td></tr>
+                @endforeach
+                </tbody>
+            </table>
+        @endif
+
         @if(($opt['regeneration'] ?? false) && count($node['regenerationen'] ?? []))
             <h4>Regeneration</h4>
             <table>

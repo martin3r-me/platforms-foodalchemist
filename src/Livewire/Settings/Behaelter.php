@@ -361,7 +361,6 @@ class Behaelter extends Component
             ],
             'regen' => [
                 ['foodalchemist_recipe_regenerations', ['device_vocab_id']],
-                ['foodalchemist_recipe_presentations', ['regeneration_device_vocab_id']],
             ],
             'vehikel' => [
                 ['foodalchemist_recipes', ['serving_vehicle_vocab_id']],

@@ -11,6 +11,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistDishMainGroup;
 use Platform\FoodAlchemist\Models\FoodAlchemistMarkupClass;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Models\FoodAlchemistVocabEinheit;
+use Platform\FoodAlchemist\Models\FoodAlchemistVocabContainer;
 use Platform\FoodAlchemist\Services\RegenerationCascadeService;
 use Platform\FoodAlchemist\Services\SalesRecipeService;
 use Platform\FoodAlchemist\Support\TeamScope;
@@ -99,6 +100,7 @@ class VkModal extends Component
         $this->formZuruecksetzen();
         $this->recipeId = $id;
         $this->fehler = null;
+        $this->behaelterLaden();
         if ($id !== null) {
             $team = Auth::user()?->currentTeamRelation;
             $r = $team !== null ? app(SalesRecipeService::class)->detail($team, $id) : null;
@@ -379,6 +381,17 @@ class VkModal extends Component
             // Legacy-VK darf beim allgemeinen Speichern keinen Auto-Preis fixieren.
             unset($update['sales_net'], $update['price_override_reason']);
             app(SalesRecipeService::class)->updateVk($team, $this->recipeId, $update);
+
+            // Spec 51: die Behälter-Overrides hängen am selben Speichern-Knopf. Leerer Behälter
+            // heisst »wie die Komponente« — also die Override-Zeile weg, nicht eine leere anlegen.
+            foreach ($this->behaelterForm as $zweck => $zeile) {
+                if (($zeile['container_vocab_id'] ?? '') === '') {
+                    app(SalesRecipeService::class)->deleteContainer($team, $this->recipeId, (string) $zweck);
+
+                    continue;
+                }
+                app(SalesRecipeService::class)->upsertContainer($team, $this->recipeId, (string) $zweck, $zeile);
+            }
         } catch (\Throwable $e) {
             $this->fehler = $e->getMessage();
 
@@ -776,6 +789,83 @@ class VkModal extends Component
         $this->rollenVorschlag = null;
     }
 
+    // ── Spec 51: Behälter je Zweck am Gericht (Override) + Bedarfs-Vorschau ──
+
+    /** Referenz für die Vorschau. Rund, damit die Skalierung ablesbar ist. */
+    public const VORSCHAU_PORTIONEN = 100;
+
+    /** @var array<string, array<string, mixed>> */
+    public array $behaelterForm = [];
+
+    /** Lädt die Override-Zeilen des Gerichts. */
+    private function behaelterLaden(): void
+    {
+        $zahl = fn ($w) => $w === null ? '' : rtrim(rtrim(number_format((float) $w, 3, ',', ''), '0'), ',');
+        $vorhanden = $this->recipeId === null ? collect() : DB::table('foodalchemist_recipe_containers')
+            ->where('recipe_id', $this->recipeId)->whereNull('deleted_at')->get()->keyBy('zweck');
+
+        $this->behaelterForm = [];
+        foreach (FoodAlchemistVocabContainer::ZWECKE as $zweck) {
+            $z = $vorhanden->get($zweck);
+            $this->behaelterForm[$zweck] = [
+                'container_vocab_id' => (string) ($z->container_vocab_id ?? ''),
+                'referenz_menge_kg' => $zahl($z->referenz_menge_kg ?? null),
+                'skalierung' => (string) ($z->skalierung ?? ''),
+                'stueck_je_behaelter' => (string) ($z->stueck_je_behaelter ?? ''),
+            ];
+        }
+    }
+
+    /**
+     * Bedarfs-Vorschau — über DENSELBEN Pfad wie die Produktion.
+     *
+     * Bewusst kein zweiter Rechenweg im Editor: eine Vorschau, die anders rechnet als der Auftrag,
+     * ist schlimmer als keine. Deshalb das echte Produktionsblatt für eine runde Referenzmenge.
+     *
+     * @return list<string>
+     */
+    private function behaelterVorschau(): array
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team === null || $this->recipeId === null) {
+            return [];
+        }
+
+        try {
+            $blatt = app(\Platform\FoodAlchemist\Services\PlanungsblattService::class)
+                ->produktionsblattFuerZiele($team, [[
+                    'recipe_id' => $this->recipeId, 'portions' => self::VORSCHAU_PORTIONEN,
+                ]]);
+        } catch (\Throwable) {
+            return [];
+        }
+
+        $summe = [];
+        foreach ($blatt['rezepte'] ?? [] as $zeile) {
+            $block = $zeile['behaelter'] ?? null;
+            if ($block === null) {
+                continue;
+            }
+            $kandidaten = array_filter(
+                [$block['abfuellen'] ?? null, ...($block['je_komponente'] ?? [])],
+                fn ($e) => is_array($e) && ! ($e['bereits_gezaehlt'] ?? false) && ($e['berechenbar'] ?? false)
+            );
+            foreach ($kandidaten as $e) {
+                $basis = $e['varianten'][0] ?? null;
+                if ($basis !== null && ($basis['behaelter'] ?? null) !== null) {
+                    $summe[$basis['behaelter']] = ($summe[$basis['behaelter']] ?? 0) + (int) $basis['anzahl'];
+                }
+            }
+        }
+
+        $raus = [];
+        foreach ($summe as $name => $anzahl) {
+            $raus[] = "{$anzahl}× {$name}";
+        }
+
+        return $raus;
+    }
+
     // ── V-19 + Spec 51: Regen-Zeilen als Kaskade ─────────────────────────
 
     /**
@@ -1087,6 +1177,8 @@ class VkModal extends Component
             // Spec 51: die Liste ist ABGELEITET. Gespeichert ist nur, was hier bewusst
             // uebersteuert wurde — der Rest kommt aus den Komponenten und folgt ihnen.
             'kaskade' => $this->kaskade(),
+            'behaelterVorschau' => $this->behaelterVorschau(),
+            'behaelterVorschauPax' => self::VORSCHAU_PORTIONEN,
             'kunden' => $this->recipeId !== null
                 ? TeamScope::applyVisible(DB::table('foodalchemist_recipe_customer_names')->where('recipe_id', $this->recipeId)->whereNull('deleted_at'), 'team_id', $team)->orderBy('customer_name')->get()
                 : collect(),

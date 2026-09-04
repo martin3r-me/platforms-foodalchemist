@@ -182,7 +182,7 @@
                      zuschaltbar, damit Produktionsküche, Satellit und Pass sich jeweils ihr Blatt
                      ziehen. „Anleitung" bleibt neutral benannt: dasselbe Flag rendert am
                      Basisrezept die Produktion und am Gericht die Fertigstellung. --}}
-                @foreach(['preise' => 'Preise', 'lieferanten' => 'Lieferanten', 'steps' => 'Anleitung', 'regeneration' => 'Regeneration', 'anrichten' => 'Anrichten', 'bilder' => 'Bilder', 'deklaration' => 'Deklaration', 'naehrwerte' => 'Nährwerte', 'sensorik' => 'Sensorik', 'produktion' => 'Produktion', 'notizen' => 'Notizen', 'kaskade' => 'Kaskade'] as $key => $label)
+                @foreach(['preise' => 'Preise', 'lieferanten' => 'Lieferanten', 'steps' => 'Anleitung', 'regeneration' => 'Regeneration', 'behaelter' => 'Behälter', 'anrichten' => 'Anrichten', 'bilder' => 'Bilder', 'deklaration' => 'Deklaration', 'naehrwerte' => 'Nährwerte', 'sensorik' => 'Sensorik', 'produktion' => 'Produktion', 'notizen' => 'Notizen', 'kaskade' => 'Kaskade'] as $key => $label)
                     <a href="{{ request()->fullUrlWithQuery([$key => ($opt[$key] ?? false) ? 0 : 1, 'pdf' => null]) }}" class="{{ ($opt[$key] ?? false) ? 'active' : '' }}">{{ $label }}</a>
                 @endforeach
             </div>

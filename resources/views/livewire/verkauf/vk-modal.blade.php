@@ -712,38 +712,51 @@
         {{-- ── Tab: REGENERATION (§3.2 — finaler Garprozess am Einsatztag, oft am Satelliten;
              dazu die Behälter, weil sie Transport und Warmhalten tragen, §3.4) ───────────── --}}
         <div x-show="tab === 'regeneration'" x-cloak class="pt-4 space-y-4">
-        <x-foodalchemist::modal-section title="Behälter (Transport & Warmhalten)">
-            <x-slot:actions>
-                {{-- Spec 51: der KI-Knopf »Behälter« ist entfallen. Die Anzahl ist eine Rechnung
-                     (BehaelterRechner aus der produzierten Menge), kein Ratespiel — und der alte
-                     Übernahme-Pfad nullte bei jedem Klick die von Hand getippte Zahl. --}}
-            </x-slot:actions>
-            <div class="grid grid-cols-2 gap-3" data-vk-container>
-                <div>
-                    <label class="block {{ $label }} mb-1">Behälter warm</label>
-                    <div class="flex gap-2">
-                        <select wire:model="form.container_warm_vocab_id" class="{{ $input }} flex-1">
-                            <option value="">—</option>
+        {{-- Spec 51: der alte Block hatte zwei Skalare (warm/kalt) und ein handgetipptes »n«.
+             Warm/kalt ist eine Temperatur-Achse — der Prozess braucht eine Prozess-Achse, und die
+             ANZAHL ist eine Rechnung aus der produzierten Menge, keine Eingabe. Beides ersetzt. --}}
+        <x-foodalchemist::modal-section title="Behälter je Zweck">
+            <p class="text-[11px] text-gray-500 mb-2">
+                Leer heisst: es gilt der Behälter der jeweiligen Komponente. Was hier steht, ist ein
+                <strong>Override für dieses Gericht</strong>. Die <em>Anzahl</em> rechnet die Produktion aus der
+                produzierten Menge — sie wird hier nicht getippt.
+            </p>
+
+            <div class="grid grid-cols-1 xl:grid-cols-2 gap-x-5 gap-y-2" data-vk-container>
+                @foreach(\Platform\FoodAlchemist\Models\FoodAlchemistVocabContainer::ZWECKE as $zweck)
+                    @php($lagen = ($behaelterForm[$zweck]['skalierung'] ?? '') === 'lagenware')
+                    <div class="flex flex-wrap items-center gap-1.5" wire:key="vkbh-{{ $zweck }}" data-behaelter-zweck="{{ $zweck }}">
+                        <span class="text-[11px] text-gray-500 !w-24 shrink-0">{{ ucfirst($zweck) }}</span>
+                        <select wire:model="behaelterForm.{{ $zweck }}.container_vocab_id" class="{{ $input }} !py-1 !w-44">
+                            <option value="">— wie Komponente —</option>
                             @foreach($behaelter as $b)
-                                <option value="{{ $b->id }}" @if($b->is_inactive && $form['container_warm_vocab_id'] != $b->id) hidden @endif>{{ $b->name }}{{ $b->group_name ? ' · ' . $b->group_name : '' }}{{ $b->is_inactive ? ' (inaktiv)' : '' }}</option>
+                                <option value="{{ $b->id }}" @if($b->is_inactive) hidden @endif>{{ $b->name }}</option>
                             @endforeach
                         </select>
-                        <input type="number" min="0" wire:model="form.container_warm_count" class="{{ $input }} w-16" placeholder="n" />
-                    </div>
-                </div>
-                <div>
-                    <label class="block {{ $label }} mb-1">Behälter kalt</label>
-                    <div class="flex gap-2">
-                        <select wire:model="form.container_cold_vocab_id" class="{{ $input }} flex-1">
-                            <option value="">—</option>
-                            @foreach($behaelter as $b)
-                                <option value="{{ $b->id }}" @if($b->is_inactive && $form['container_cold_vocab_id'] != $b->id) hidden @endif>{{ $b->name }}{{ $b->group_name ? ' · ' . $b->group_name : '' }}{{ $b->is_inactive ? ' (inaktiv)' : '' }}</option>
-                            @endforeach
+                        <input type="text" wire:model="behaelterForm.{{ $zweck }}.{{ $lagen ? 'stueck_je_behaelter' : 'referenz_menge_kg' }}"
+                               placeholder="{{ $lagen ? 'Stk.' : 'passt: kg' }}" class="{{ $input }} !py-1 !w-20 text-right" />
+                        <select wire:model.live="behaelterForm.{{ $zweck }}.skalierung" class="{{ $input }} !py-1 !w-36">
+                            <option value="">Skalierung …</option>
+                            <option value="tiefer_fuellbar">tiefer füllbar</option>
+                            <option value="hoehe_gebunden">höhengebunden</option>
+                            <option value="lagenware">Lagenware</option>
                         </select>
-                        <input type="number" min="0" wire:model="form.container_cold_count" class="{{ $input }} w-16" placeholder="n" />
                     </div>
-                </div>
+                @endforeach
             </div>
+
+            @if($behaelterVorschau !== [])
+                <div class="mt-3 pt-2 border-t border-black/5">
+                    <p class="text-[11px] text-gray-500 mb-1">
+                        Bedarf für {{ $behaelterVorschauPax }} Portionen — skaliert mit der Menge, nicht getippt:
+                    </p>
+                    <div class="flex flex-wrap gap-1.5" data-vk-behaelter-vorschau>
+                        @foreach($behaelterVorschau as $v)
+                            <span class="{{ $pill }} {{ $variantPill['secondary'] }}">{{ $v }}</span>
+                        @endforeach
+                    </div>
+                </div>
+            @endif
         </x-foodalchemist::modal-section>
 
         <x-foodalchemist::modal-section title="Regeneration (je Komponente, V-19)">

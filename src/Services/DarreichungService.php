@@ -115,8 +115,10 @@ class DarreichungService
         'markup_class_id', 'price_mode', 'sales_net',
         'vat_profile_key', 'price_override_reason', 'price_override_expires_at',
         'container_warm_vocab_id', 'container_cold_vocab_id',
-        'regeneration_temp_c', 'regeneration_duration_min', 'regeneration_core_temp_c',
-        'regeneration_device_vocab_id', 'serving_vehicle_vocab_id',
+        // Spec 51: die vier Regenerations-Skalare sind entfallen. Sie waren eine zweite Wahrheit
+        // neben `recipe_regenerations`, die kein Schreibpfad je fuellte — eine Servierform aendert
+        // nichts an 140 °C. Behaelter und Vehikel bleiben: dort greift die Form legitim ein.
+        'serving_vehicle_vocab_id',
         'work_time_surcharge_min', 'offer_text_override', 'note',
         'tableware_item_id', // Default-Geschirr der Form (Concepter-Vorschlag)
     ];

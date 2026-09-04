@@ -112,9 +112,8 @@
                              stehen (Alt-Daten aus dem WaWi-Import); die gepflegte Wahrheit ist die
                              Tabelle oben. Kein Schreibpfad füllt die Skalare heute noch. --}}
                         @if(! count($r['regenerationen'] ?? []))
-                            @if(($d['regeneration_temp_c'] ?? null) !== null) Regeneration {{ $d['regeneration_temp_c'] }} °C @endif
-                            @if(($d['regeneration_duration_min'] ?? null) !== null) / {{ $d['regeneration_duration_min'] }} min @endif
-                            @if(($d['regeneration_core_temp_c'] ?? null) !== null) · Kerntemp. {{ $d['regeneration_core_temp_c'] }} °C @endif
+                            {{-- Spec 51: die Regeneration kommt aus `regen_snapshot` (je Komponente),
+                                 nicht mehr aus den Darreichungs-Skalaren — die waren die zweite Quelle. --}}
                             @if(($d['geraet'] ?? null)) · Gerät {{ $d['geraet'] }} @endif
                         @endif
                         @if(($d['behaelter_warm'] ?? null)) · Behälter warm {{ $d['behaelter_warm'] }} @endif

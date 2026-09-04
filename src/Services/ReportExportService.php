@@ -38,25 +38,25 @@ class ReportExportService
                 'stammdaten' => true, 'zutaten' => true, 'steps' => false, 'sensorik' => false,
                 'produktion' => false, 'preise' => false, 'lieferanten' => false, 'kaskade' => false,
                 'bilder' => false, 'deklaration' => false, 'naehrwerte' => false, 'notizen' => false, 'intern' => false, 'simulation' => false,
-                'regeneration' => false, 'anrichten' => false,
+                'regeneration' => false, 'anrichten' => false, 'behaelter' => false,
             ],
             'kalkulation' => [
                 'stammdaten' => true, 'zutaten' => true, 'steps' => false, 'sensorik' => false,
                 'produktion' => false, 'preise' => true, 'lieferanten' => true, 'kaskade' => true,
                 'bilder' => false, 'deklaration' => false, 'naehrwerte' => true, 'notizen' => false, 'intern' => true, 'simulation' => false,
-                'regeneration' => false, 'anrichten' => false,
+                'regeneration' => false, 'anrichten' => false, 'behaelter' => false,
             ],
             'voll' => [
                 'stammdaten' => true, 'zutaten' => true, 'steps' => true, 'sensorik' => true,
                 'produktion' => true, 'preise' => true, 'lieferanten' => true, 'kaskade' => true,
                 'bilder' => false, 'deklaration' => true, 'naehrwerte' => true, 'notizen' => true, 'intern' => true, 'simulation' => false,
-                'regeneration' => true, 'anrichten' => true,
+                'regeneration' => true, 'anrichten' => true, 'behaelter' => true,
             ],
             default => [
                 'stammdaten' => true, 'zutaten' => true, 'steps' => true, 'sensorik' => false,
                 'produktion' => true, 'preise' => false, 'lieferanten' => false, 'kaskade' => true,
                 'bilder' => false, 'deklaration' => false, 'naehrwerte' => false, 'notizen' => false, 'intern' => false, 'simulation' => false,
-                'regeneration' => true, 'anrichten' => false,
+                'regeneration' => true, 'anrichten' => false, 'behaelter' => true,
             ],
         };
 
@@ -719,6 +719,43 @@ class ReportExportService
      * @param  array<int, true>  $visited
      * @return array<string, mixed>
      */
+    /**
+     * Behälter-Bedarf für ein Rezept im Bericht — je Zweck, auf die Zielmenge gerechnet.
+     *
+     * Bewusst NUR das eigene Rezept: die Komponenten stehen im Bericht ohnehin als eigene Knoten
+     * und bringen ihren Bedarf dort selbst mit. Sie hier zusätzlich zu summieren hiesse, dasselbe
+     * Geschirr zweimal aufs Blatt zu schreiben.
+     *
+     * @return array<int, array{zweck:string, kurz:?string}>|null
+     */
+    private function behaelterBedarf(FoodAlchemistRecipe $recipe, mixed $zielKg): ?array
+    {
+        $team = $recipe->teamRelation ?? \Platform\Core\Models\Team::find($recipe->team_id);
+        if ($team === null) {
+            return null;
+        }
+
+        $svc = app(\Platform\FoodAlchemist\Services\BehaelterBedarfService::class);
+        $menge = $zielKg !== null ? (float) $zielKg : null;
+
+        $ergebnisse = array_filter([
+            $svc->abfuellen($team, $recipe, $menge),
+            ...$svc->jeKomponente($team, [[
+                'recipe' => $recipe, 'label' => $recipe->name, 'menge_kg' => (float) ($menge ?? 0),
+            ]]),
+        ]);
+
+        $raus = [];
+        foreach ($ergebnisse as $e) {
+            $kurz = \Platform\FoodAlchemist\Services\BehaelterBedarfService::varianteKurz($e);
+            if ($kurz !== null) {
+                $raus[] = ['zweck' => $e['zweck'], 'kurz' => $kurz];
+            }
+        }
+
+        return $raus === [] ? null : $raus;
+    }
+
     private function recipeNode(
         FoodAlchemistRecipe $recipe,
         array $optionen,
@@ -823,6 +860,11 @@ class ReportExportService
                     : [],
             ])->all(),
             // §3.2 Regeneration — eigene Ebene, eigener Schalter (`opt['regeneration']`).
+            // Spec 51: aus der HOCHGERECHNETEN Ausbeute — der Bericht skaliert auf ein Ziel,
+            // und der Behaelterbedarf muss mitskalieren, sonst zeigt er die Ansatzgroesse.
+            'behaelter' => ($optionen['behaelter'] ?? false)
+                ? $this->behaelterBedarf($recipe, $this->skaliere($recipe->yield_kg, $optionen))
+                : null,
             'regenerationen' => $recipe->regenerations->map(fn ($r) => [
                 'komponente' => $r->component_label,
                 'geraet' => $r->device?->name,

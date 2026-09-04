@@ -528,6 +528,7 @@ class Tagesplan extends Component
                         'anrichten_schritte' => $this->wallGerichtAnrichtenSchritte($teile),
                         'regeneration' => $this->wallGerichtRegeneration($teile),
                         'darreichung' => $this->wallGerichtDarreichung($teile),
+                        'behaelter' => $this->wallGerichtBehaelter($teile),
                         'rezept_uebersicht' => $this->wallGerichtRezeptUebersicht($arbeitsZeilen),
                         'zeilen' => $arbeitsZeilen,
                     ];
@@ -655,6 +656,64 @@ class Tagesplan extends Component
             ->first(fn (array $r) => $r !== []) ?? [];
     }
 
+    /**
+     * Was fuer diese Gruppe gepackt werden muss — ueber ALLE Zeilen, nicht nur die erste.
+     *
+     * BEFUND: `wallGerichtDarreichung()` nimmt bewusst die erste Zeile mit Inhalt — fuer Geschirr
+     * und Servierform ist das richtig, die gehoeren dem Gericht. Der BEHAELTER-Bedarf verteilt
+     * sich aber ueber mehrere Zeilen: Abfuellen haengt an jeder Produktionszeile, Regenerieren
+     * und Ausgabe an der Gericht-Zeile. Wer hier `first()` nimmt, zeigt am Pass genau einen
+     * Behaelter und verschweigt den Rest.
+     *
+     * Gezaehlt wird nur die BASIS-Variante — die Alternativen sind ein Angebot an die Kueche,
+     * keine zweite Wahrheit. `bereits_gezaehlt` faellt raus: eine durchgaengige Komponente reist
+     * im eigenen Abfuellbehaelter mit und ist an dessen Zeile schon gezaehlt.
+     *
+     * @return array<int, array{label:string, wert:string}>
+     */
+    private function wallGerichtBehaelter(\Illuminate\Support\Collection $zeilen): array
+    {
+        $summe = [];
+        $ohne = 0;
+
+        foreach ($zeilen as $z) {
+            $block = ((array) ($z->darreichung ?? []))['behaelter_bedarf'] ?? null;
+            if (! is_array($block)) {
+                continue;
+            }
+            $kandidaten = array_filter(
+                [$block['abfuellen'] ?? null, ...($block['je_komponente'] ?? [])],
+                fn ($e) => is_array($e) && ! ($e['bereits_gezaehlt'] ?? false)
+            );
+            foreach ($kandidaten as $e) {
+                if (! ($e['berechenbar'] ?? false)) {
+                    $ohne++;
+
+                    continue;
+                }
+                $basis = $e['varianten'][0] ?? null;
+                if ($basis === null || ($basis['behaelter'] ?? null) === null) {
+                    continue;
+                }
+                $summe[$basis['behaelter']] = ($summe[$basis['behaelter']] ?? 0) + (int) $basis['anzahl'];
+            }
+        }
+
+        if ($summe === [] && $ohne === 0) {
+            return [];
+        }
+
+        $raus = [];
+        foreach ($summe as $name => $anzahl) {
+            $raus[] = ['label' => 'Behälter', 'wert' => "{$anzahl}× {$name}"];
+        }
+        if ($ohne > 0) {
+            $raus[] = ['label' => 'Behälter', 'wert' => "{$ohne} Position(en) nicht bemessbar"];
+        }
+
+        return $raus;
+    }
+
     private function wallGerichtDarreichung(\Illuminate\Support\Collection $zeilen): array
     {
         $darreichung = $zeilen
@@ -675,9 +734,6 @@ class Tagesplan extends Component
             'behaelter_kalt' => 'Behälter kalt',
         ];
 
-        // Spec 51: der gerechnete Bedarf steht ganz oben — er ist das, was am Pass gepackt wird.
-        $bedarf = \Platform\FoodAlchemist\Services\BehaelterBedarfService::kurz($darreichung['behaelter_bedarf'] ?? null);
-
         return collect($labels)
             ->map(function (string $label, string $key) use ($darreichung) {
                 $wert = $darreichung[$key] ?? null;
@@ -688,7 +744,6 @@ class Tagesplan extends Component
                 return ['label' => $label, 'wert' => (string) $wert];
             })
             ->filter()
-            ->when($bedarf !== null, fn ($c) => $c->prepend(['label' => 'Benötigte Behälter', 'wert' => $bedarf]))
             ->values()
             ->all();
     }

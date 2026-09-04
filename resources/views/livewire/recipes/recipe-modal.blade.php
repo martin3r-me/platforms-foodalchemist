@@ -543,84 +543,84 @@
 
     {{-- ── Tab: SENSORIK & PAIRING (Geschmacks-Balance + Textur + Aroma-Kohäsion über die Zutaten-GPs) ── --}}
     {{-- ── Tab: REGENERATION & BEHÄLTER (Spec 51) ──────────────────────────────
-         Der Default der Komponente: einmal hier gepflegt, von jedem Gericht geerbt. Vorher stand
-         beides NUR am Gericht und musste dort für jede Verwendung neu getippt werden. --}}
-    <div x-show="tab === 'regeneration'" x-cloak class="pt-4 space-y-4">
+         Der Default der Komponente: einmal hier gepflegt, von jedem Gericht geerbt. Gespeichert
+         wird mit dem GLOBALEN Speichern-Knopf oben — kein zweiter Knopf im Tab. --}}
+    <div x-show="tab === 'regeneration'" x-cloak class="pt-6 space-y-4">
         @if($regenMeldung !== null)<p class="text-xs text-emerald-600" data-regen-meldung>{{ $regenMeldung }}</p>@endif
 
-        <div>
-            <p class="{{ $dt }} mb-1">Regeneration — so wird diese Komponente auf Temperatur gebracht</p>
+        <x-foodalchemist::modal-section title="Regeneration — so wird diese Komponente auf Temperatur gebracht">
             <p class="text-[11px] text-gray-500 mb-2">
                 Gilt als Default in jedem Gericht, das diese Komponente enthält. Kein Gerät gewählt heisst
                 <strong>kalt servieren</strong> — alles leer heisst „keine Angabe“ und wird als Lücke gemeldet.
             </p>
             <div class="flex flex-wrap items-center gap-2" data-regen-selbst>
-                <select wire:model="regenForm.device_vocab_id" class="{{ $input }} !py-1 w-48">
+                <select wire:model="regenForm.device_vocab_id" class="{{ $input }} !py-1 !w-48">
                     <option value="">kalt servieren</option>
                     @foreach($geraeteListe as $g)<option value="{{ $g->id }}">{{ $g->name }}</option>@endforeach
                 </select>
-                <input type="text" wire:model="regenForm.temp_c" placeholder="°C" class="{{ $input }} !py-1 w-20 text-right" />
-                <input type="text" wire:model="regenForm.duration_min" placeholder="min" class="{{ $input }} !py-1 w-20 text-right" />
-                <input type="text" wire:model="regenForm.core_temp_c" placeholder="KT °C" class="{{ $input }} !py-1 w-20 text-right" />
-                <input type="text" wire:model="regenForm.note" placeholder="Hinweis (z. B. abgedeckt)" class="{{ $input }} !py-1 flex-1 min-w-[12rem]" />
+                <input type="text" wire:model="regenForm.temp_c" placeholder="°C" class="{{ $input }} !py-1 !w-20 text-right" />
+                <input type="text" wire:model="regenForm.duration_min" placeholder="min" class="{{ $input }} !py-1 !w-20 text-right" />
+                <input type="text" wire:model="regenForm.core_temp_c" placeholder="KT °C" class="{{ $input }} !py-1 !w-20 text-right" />
+                <input type="text" wire:model="regenForm.note" placeholder="Hinweis (z. B. abgedeckt)" class="{{ $input }} !py-1 !w-72" />
             </div>
-        </div>
+        </x-foodalchemist::modal-section>
 
-        <div>
-            <p class="{{ $dt }} mb-1">Behälter je Zweck</p>
+        <x-foodalchemist::modal-section title="Behälter je Zweck">
+            <x-slot:actions>
+                <button type="button" wire:click="kiDichteklasse" class="{{ $btnAi }}"
+                        title="recipe.dichteklasse: Produkteigenschaft schaetzen — nie die Behaelterzahl"
+                        data-ki-dichteklasse>@svg('heroicon-o-sparkles', 'w-3.5 h-3.5')Schätzen</button>
+            </x-slot:actions>
+
             <p class="text-[11px] text-gray-500 mb-2">
                 Abfüllen ist nicht Regenerieren: die Suppe kommt aus dem Kipper in Eimer und geht erst am
                 Einsatztag ins GN. Wählt man beim Regenerieren <em>denselben</em> Behälter wie beim Abfüllen,
                 zählt die Produktion ihn einmal — „durchgängig, kein Umfüllen“.
             </p>
 
-            <div class="mb-2 flex flex-wrap items-center gap-2">
-                <span class="text-[11px] text-gray-500 w-40">Dichteklasse (Auffangnetz)</span>
-                <select wire:model="dichteklasse" class="{{ $input }} !py-1 w-56">
+            <div class="flex flex-wrap items-center gap-2 mb-2">
+                <span class="text-[11px] text-gray-500 !w-24 shrink-0">Dichteklasse</span>
+                <select wire:model="dichteklasse" class="{{ $input }} !py-1 !w-56">
                     <option value="">— nicht gepflegt —</option>
                     @foreach(\Platform\FoodAlchemist\Services\BehaelterRechner::DICHTE as $klasse => $kgProLiter)
                         <option value="{{ $klasse }}">{{ $klasse }} ({{ number_format($kgProLiter, 2, ',', '') }} kg/l)</option>
                     @endforeach
                 </select>
-                <button type="button" wire:click="kiDichteklasse" class="{{ $btnAi }}"
-                        title="recipe.dichteklasse: Produkteigenschaft schaetzen — nie die Behaelterzahl"
-                        data-ki-dichteklasse>@svg('heroicon-o-sparkles', 'w-3.5 h-3.5')Schaetzen</button>
-                <span class="text-[11px] text-gray-400">greift nur, wo keine Referenzmenge steht</span>
+                <span class="text-[11px] text-gray-400">Auffangnetz — greift nur, wo keine Referenzmenge steht</span>
             </div>
 
-            @foreach(\Platform\FoodAlchemist\Models\FoodAlchemistVocabContainer::ZWECKE as $zweck)
-                <div class="flex flex-wrap items-center gap-2 mb-1.5" wire:key="bh-{{ $zweck }}" data-behaelter-zweck="{{ $zweck }}">
-                    <span class="text-[11px] text-gray-500 w-40">{{ ucfirst($zweck) }}</span>
-                    <select wire:model="behaelterForm.{{ $zweck }}.container_vocab_id" class="{{ $input }} !py-1 w-56">
-                        <option value="">— keiner —</option>
-                        @foreach($behaelterListe as $b)<option value="{{ $b->id }}">{{ $b->name }}</option>@endforeach
-                    </select>
-                    <input type="text" wire:model="behaelterForm.{{ $zweck }}.referenz_menge_kg"
-                           placeholder="passt: kg" class="{{ $input }} !py-1 w-24 text-right"
-                           title="So viel passt in GENAU diesen Behälter — am grössten praktikablen angeben" />
-                    <select wire:model="behaelterForm.{{ $zweck }}.skalierung" class="{{ $input }} !py-1 w-44">
-                        <option value="">Skalierung …</option>
-                        <option value="tiefer_fuellbar">tiefer füllbar (Sauce, Suppe)</option>
-                        <option value="hoehe_gebunden">höhengebunden (Gulasch, Salat)</option>
-                        <option value="lagenware">Lagenware (wird gelegt)</option>
-                    </select>
-                    @if($zweck === 'lagenware' || ($behaelterForm[$zweck]['skalierung'] ?? '') === 'lagenware')
-                        <input type="text" wire:model="behaelterForm.{{ $zweck }}.stueck_je_behaelter"
-                               placeholder="Stück je Behälter" class="{{ $input }} !py-1 w-32 text-right" />
-                    @endif
-                    @if($zweck === 'regenerieren')
-                        <button type="button" wire:click="behaelterUebernehmen('abfuellen', 'regenerieren')"
-                                class="{{ $btnGhostXs }} text-violet-600" data-behaelter-durchgaengig>
-                            = wie Abfüllen
-                        </button>
-                    @endif
-                </div>
-            @endforeach
-        </div>
-
-        <button type="button" wire:click="regenerationSpeichern" class="{{ $btnGhostXs }} text-emerald-600" data-regen-speichern>
-            Regeneration &amp; Behälter speichern
-        </button>
+            {{-- Zwei Spalten: vier Zwecke untereinander machten die Seite unnoetig lang.
+                 Breiten mit !w-, sonst gewinnt das w-full aus $input und alles bricht um. --}}
+            <div class="grid grid-cols-1 xl:grid-cols-2 gap-x-5 gap-y-2">
+                @foreach(\Platform\FoodAlchemist\Models\FoodAlchemistVocabContainer::ZWECKE as $zweck)
+                    @php($lagen = ($behaelterForm[$zweck]['skalierung'] ?? '') === 'lagenware')
+                    <div class="flex flex-wrap items-center gap-1.5" wire:key="bh-{{ $zweck }}" data-behaelter-zweck="{{ $zweck }}">
+                        <span class="text-[11px] text-gray-500 !w-24 shrink-0">{{ ucfirst($zweck) }}</span>
+                        <select wire:model="behaelterForm.{{ $zweck }}.container_vocab_id" class="{{ $input }} !py-1 !w-44">
+                            <option value="">— keiner —</option>
+                            @foreach($behaelterListe as $b)<option value="{{ $b->id }}">{{ $b->name }}</option>@endforeach
+                        </select>
+                        <input type="text" wire:model="behaelterForm.{{ $zweck }}.{{ $lagen ? 'stueck_je_behaelter' : 'referenz_menge_kg' }}"
+                               placeholder="{{ $lagen ? 'Stk.' : 'passt: kg' }}" class="{{ $input }} !py-1 !w-20 text-right"
+                               title="{{ $lagen ? 'Wie viele Stück auf/in GENAU diesen Behälter' : 'So viel passt in GENAU diesen Behälter — am grössten praktikablen angeben' }}" />
+                        <select wire:model.live="behaelterForm.{{ $zweck }}.skalierung" class="{{ $input }} !py-1 !w-36">
+                            <option value="">Skalierung …</option>
+                            <option value="tiefer_fuellbar">tiefer füllbar</option>
+                            <option value="hoehe_gebunden">höhengebunden</option>
+                            <option value="lagenware">Lagenware</option>
+                        </select>
+                        @if($zweck === 'regenerieren')
+                            <button type="button" wire:click="behaelterUebernehmen('abfuellen', 'regenerieren')"
+                                    class="{{ $btnGhostXs }} text-violet-600 shrink-0" title="Derselbe Behälter — kein Umfüllen"
+                                    data-behaelter-durchgaengig>= wie Abfüllen</button>
+                        @endif
+                    </div>
+                @endforeach
+            </div>
+            <p class="text-[11px] text-gray-400 mt-2">
+                tiefer füllbar = Sauce, Suppe · höhengebunden = Gulasch, Reis, Salat · Lagenware = wird gelegt (Schnitzel, Papadam)
+            </p>
+        </x-foodalchemist::modal-section>
     </div>
 
     <div x-show="tab === 'sensorik'" x-cloak class="pt-4">

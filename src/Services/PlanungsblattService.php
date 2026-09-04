@@ -691,6 +691,15 @@ class PlanungsblattService
                             'menge_kg' => round(($bruttoProBatch * $batches) / 1000, 3),
                         ];
                     }
+                    // Befund auf Echtdaten (demo, Spec 51): eine Komponente in »stk« ohne
+                    // Stückgewicht ergibt Masse 0 — und faellt damit KOMPLETT aus dem Blatt,
+                    // ohne ein Wort. Mit ihr verschwindet ihr Behaelter- und Zeitbedarf. Eine
+                    // fehlende Zeile ist schlimmer als eine falsche Zahl: die faellt auf.
+                    if ($bruttoProBatch <= 0 && ! $qsOderOpt) {
+                        $warnings[] = "Rezept „{$recipe->name}“: Komponente „{$name}“ trägt keine Masse"
+                            .' (Einheit ohne Gewicht, z. B. »stk« ohne Stückgewicht) — sie fehlt in'
+                            .' Produktion, Einkauf und Behälter-Bedarf.';
+                    }
                     if ($basisG > 0) {
                         $needBatches[(int) $z->referenced_recipe_id] = ($needBatches[(int) $z->referenced_recipe_id] ?? 0.0)
                             + ($bruttoProBatch * $batches) / $basisG;

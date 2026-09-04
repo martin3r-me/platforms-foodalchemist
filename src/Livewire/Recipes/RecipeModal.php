@@ -248,6 +248,14 @@ class RecipeModal extends Component
             $recipe = $warNeu
                 ? $recipes->create($team, $in)
                 : $recipes->update($team, $this->recipeId, $in);
+
+            // Spec 51: Regeneration und Behälter hängen am SELBEN Knopf. Ein eigener im Tab
+            // stellte zwei »Speichern« auf einen Schirm — eine Frage, die niemand beantworten
+            // will. Der Tab-Guard ist kein Detail: war der Tab nie offen, stehen in den
+            // Formularen leere Defaults, und ein Save daraus würde gepflegte Zeilen LÖSCHEN.
+            if (! $warNeu && ($this->geladeneTabs['regeneration'] ?? false)) {
+                $this->regenerationSpeichern(app(SalesRecipeService::class));
+            }
             // Beim ANLEGEN getippter Freitext wird in Schritte geparst — das macht
             // RecipeService::create zentral (gilt so für jeden Schreibweg, Spec 27).
 
@@ -870,6 +878,10 @@ class RecipeModal extends Component
         }
     }
 
+    /**
+     * Wird vom globalen »Speichern« mitgerufen — kein eigener Knopf mehr.
+     * Zwei Speichern-Knoepfe auf einem Schirm sind eine Frage, die niemand beantworten will.
+     */
     public function regenerationSpeichern(SalesRecipeService $vk): void
     {
         $team = Auth::user()?->currentTeamRelation;

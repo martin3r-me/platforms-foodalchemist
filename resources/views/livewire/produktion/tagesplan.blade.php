@@ -429,10 +429,23 @@
                                     @endif
                                 </article>
                             @endif
-                            @if(collect($wallGericht->darreichung ?? [])->isNotEmpty())
+                            {{-- Spec 51: auch wenn es kein Geschirr gibt. Eine Basisrezept-Gruppe hat
+                                 keine Servierform, aber sehr wohl einen Abfuell-Bedarf — an der
+                                 alten Bedingung waere er wortlos verschwunden. --}}
+                            @if(collect($wallGericht->darreichung ?? [])->isNotEmpty() || collect($wallGericht->behaelter ?? [])->isNotEmpty())
                                 <article class="rounded-2xl border border-white/10 bg-white/5 p-4" data-tagesplan-wall-gericht-geschirr>
                                     <p class="text-xs font-bold uppercase tracking-wide text-slate-400">Geschirr & Ausgabe</p>
                                     <div class="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-1">
+                                        {{-- Spec 51: was gepackt werden muss, steht oben — es ist die
+                                             Handlung. Aggregiert ueber ALLE Zeilen der Gruppe, nicht
+                                             nur die erste (Abfuellen haengt an den Produktionszeilen,
+                                             Regenerieren an der Gericht-Zeile). --}}
+                                        @foreach($wallGericht->behaelter ?? [] as $info)
+                                            <div class="rounded-xl bg-violet-500/10 border border-violet-500/25 px-3 py-2" data-wall-behaelter>
+                                                <p class="text-[11px] font-bold uppercase tracking-wide text-violet-300">{{ $info['label'] }}</p>
+                                                <p class="mt-0.5 text-base font-semibold text-slate-100">{{ $info['wert'] }}</p>
+                                            </div>
+                                        @endforeach
                                         @foreach($wallGericht->darreichung as $info)
                                             <div class="rounded-xl bg-slate-950/45 px-3 py-2">
                                                 <p class="text-[11px] font-bold uppercase tracking-wide text-slate-500">{{ $info['label'] }}</p>
