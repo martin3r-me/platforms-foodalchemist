@@ -435,7 +435,7 @@ class RecipeOneShotService
         // 2026-09-04): der Gericht-Name ist eine Komponenten-Liste
         // („[HG] Rinderfilet | Kartoffel-Baumkuchen | …"), und ein Posten ist nie für
         // ein ganzes Gericht zuständig — die Komponenten liegen auf ihren eigenen
-        // Posten. Was am Gericht bleibt, ist der FINALISIERUNGS-Posten; der wird aus
+        // Posten. Was am Gericht bleibt, ist der FERTIGSTELLUNGS-Posten; der wird aus
         // der Hauptkomponente geerdet, nicht aus Wortzufall.
         if ($recipe->is_sales_recipe) {
             return $this->stationAusKomponenten($team, $recipe);
@@ -478,7 +478,7 @@ class RecipeOneShotService
     }
 
     /**
-     * Finalisierungs-Posten eines Gerichts aus seinen Komponenten (2026-09-04).
+     * Fertigstellungs-Posten eines Gerichts aus seinen Komponenten (2026-09-04).
      *
      * Erdung auf die Aufbau-Reihenfolge des Regelwerks (Basisrezepte §12.2, `role`
      * als Sortier-Anker): der Teller läuft an dem Posten zusammen, der die

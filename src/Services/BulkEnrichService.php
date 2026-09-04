@@ -282,6 +282,19 @@ class BulkEnrichService
         }
 
         $r->update($update);
+
+        // 2026-09-04: `plating_text` ist der Spiegel der ANRICHTE-Schritte (Regelwerk §3.3).
+        // Die anderen Schreibwege (Editor, MCP, updateVk) parsen ankommenden Markdown in
+        // Schritte — ohne diesen Zweig setzte allein die Anreicherung einen Text OHNE Schritte,
+        // und der Anrichten-Tab stünde leer, obwohl das Feld gefüllt ist.
+        if ($prop->field === 'plating' && ($update['plating_text'] ?? null) !== null) {
+            $svc = app(RecipeStepService::class);
+            $ebene = \Platform\FoodAlchemist\Models\FoodAlchemistRecipeStep::EBENE_ANRICHTEN;
+            if ($svc->ausMarkdown($r, (string) $update['plating_text'], ebene: $ebene) === 0) {
+                $svc->spiegele($r);   // Ebene hatte schon Schritte → sie gewinnen
+            }
+        }
+
         $this->ki->stempleAccepted($prop->call_log_id !== null ? (int) $prop->call_log_id : null);
         $prop->update(['status' => BulkProposalStatus::Uebernommen]);
 

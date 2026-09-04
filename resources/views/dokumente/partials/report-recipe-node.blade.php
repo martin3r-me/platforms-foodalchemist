@@ -84,9 +84,33 @@
 
         {{-- §3.3 ANRICHTEN — Adressat ist der Pass. Hing vorher am `stammdaten`-Flag und
              kam damit auf jedem Blatt mit, auch auf dem Kalkulations-Auszug. --}}
-        @if(($opt['anrichten'] ?? false) && ($node['plating_text'] ?? null))
-            <h4>Anrichten &amp; Ausgabe</h4>
-            <div class="copy"><p>{{ $node['plating_text'] }}</p></div>
+        {{-- §3.3 ANRICHTEN — seit 2026-09-04 eine bebilderte Schrittfolge (dieselben
+             `recipe_steps` mit ebene='anrichten'). Der Spiegel-Text bleibt der Fallback für
+             Gerichte, deren Anrichte-Ebene noch keine Schritte trägt (Altbestand). --}}
+        @if($opt['anrichten'] ?? false)
+            @if(count($node['anrichte_schritte'] ?? []))
+                <h4>Anrichten &amp; Ausgabe</h4>
+                @foreach($node['anrichte_schritte'] as $s)
+                    <div class="step">
+                        <div><span class="step-nr">{{ $s['position'] }}.</span> @if($s['phase'])<span class="step-phase">{{ $s['phase'] }}:</span> @endif{{ $s['text'] }}</div>
+                        @if(($opt['bilder'] ?? false) && count($s['photos'] ?? []))
+                            <div class="step-photos">
+                                @foreach($s['photos'] as $foto)
+                                    @if($foto['src'] ?? null)
+                                        <span class="step-photo">
+                                            <img src="{{ $foto['src'] }}" alt="{{ $foto['caption'] ?? ('Anrichten ' . $s['position']) }}">
+                                            @if($foto['caption'] ?? null)<span class="caption">{{ $foto['caption'] }}</span>@endif
+                                        </span>
+                                    @endif
+                                @endforeach
+                            </div>
+                        @endif
+                    </div>
+                @endforeach
+            @elseif($node['plating_text'] ?? null)
+                <h4>Anrichten &amp; Ausgabe</h4>
+                <div class="copy"><p>{{ $node['plating_text'] }}</p></div>
+            @endif
         @endif
 
         @if($opt['produktion'] ?? false)

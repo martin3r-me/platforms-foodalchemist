@@ -99,9 +99,26 @@ class FoodAlchemistRecipe extends Model
     }
 
     /** Zubereitungs-Schritte (Spec 27) — Master, `preparation` ist nur ihr gerenderter Spiegel. */
+    /**
+     * Schritte der Ebene `produktion` — Herstellung (Basisrezept) bzw. Fertigstellen (Gericht).
+     *
+     * Bewusst gefiltert (2026-09-04): seit die Anrichte-Anleitung in derselben Tabelle liegt
+     * (Regelwerk Verkaufsgerichte §3), würde eine ungefilterte Relation Produktions- und
+     * Anrichte-Schritte in EINE Nummerierung mischen — beide beginnen bei 1.
+     */
     public function steps(): HasMany
     {
-        return $this->hasMany(FoodAlchemistRecipeStep::class, 'recipe_id')->orderBy('position');
+        return $this->hasMany(FoodAlchemistRecipeStep::class, 'recipe_id')
+            ->where('ebene', FoodAlchemistRecipeStep::EBENE_PRODUKTION)
+            ->orderBy('position');
+    }
+
+    /** Schritte der Ebene `anrichten` — Teller-Aufbau am Pass (§3.3). */
+    public function platingSteps(): HasMany
+    {
+        return $this->hasMany(FoodAlchemistRecipeStep::class, 'recipe_id')
+            ->where('ebene', FoodAlchemistRecipeStep::EBENE_ANRICHTEN)
+            ->orderBy('position');
     }
 
     /** Stufe 3 — Default-Posten des Rezepts (weiche Referenz, team-scoped, kein DB-FK). */

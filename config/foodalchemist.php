@@ -468,7 +468,7 @@ return [
      */
     'step_kontext' => [
         'gericht' => [
-            'ziel' => 'Finalisierungs-Ablauf am Einsatztag fuer ein Verkaufsgericht.',
+            'ziel' => 'Ablauf der Fertigstellung am Einsatztag fuer ein Verkaufsgericht.',
             'hinweis' => 'Komponenten sind vorbereitet oder fertig produziert. Nicht neu herstellen. '
                 . 'Nur bereitstellen, portionieren, tranchieren, montieren, abschmecken und uebergeben. '
                 . 'Das Regenerations-Programm (Geraet, Temperatur, Dauer, Kerntemperatur) und der '
@@ -677,8 +677,8 @@ return [
                 // `recipe_steps`), der Teller-Aufbau lebt in `plating_text` und wird von
                 // `vk.plating` gefüllt (Teil der VK-Anreicherung). Zwei Autoren auf einem Feld —
                 // wer zuletzt lief, gewann. Jetzt beschreibt `preparation` dieselbe Ebene wie
-                // `recipe.steps`: die Finalisierung am Einsatztag (Regelwerk Verkaufsgerichte §3).
-                . 'preparation (= FINALISIEREN am Einsatztag: bereitstellen, portionieren, tranchieren, '
+                // `recipe.steps`: die Fertigstellung am Einsatztag (Regelwerk Verkaufsgerichte §3).
+                . 'preparation (= FERTIGSTELLEN am Einsatztag: bereitstellen, portionieren, tranchieren, '
                 . 'montieren, abschmecken, uebergeben — NICHT die Produktion der Komponenten, NICHT das '
                 . 'Regenerations-Programm und NICHT der Teller-Aufbau), '
                 // Spec 37: role/fit-Parität zum Basis-Prompt — dieselbe Zutaten-Selbstbegründung
@@ -861,7 +861,7 @@ return [
             'max_tokens' => 8000,
             'task' => 'Schreibe die Zubereitung als Schrittfolge. '
                 . 'Wenn rezept_typ=gericht: schreibe KEINE Herstellung der Komponenten, sondern den kompakten '
-                . 'Ablauf am Einsatztag — bereitstellen, temperieren, finalisieren (abschmecken, montieren), '
+                . 'Ablauf am Einsatztag — bereitstellen, temperieren, fertigstellen (abschmecken, montieren), '
                 . 'portionieren, uebergeben. Komponenten gelten als vorbereitet bzw. fertig produziert. '
                 // Regelwerk Verkaufsgerichte §3: drei getrennte Ebenen. Vorher forderte dieser
                 // Prompt selbst einen "Service-, Regenerations- und Anrichteablauf" — damit stand

@@ -146,9 +146,11 @@ class RecipeStepService
      *
      * @param  list<array{id?: int|string|null, phase?: ?string, text?: ?string}>  $rows
      */
-    public function sync(FoodAlchemistRecipe $recipe, array $rows): void
+    public function sync(FoodAlchemistRecipe $recipe, array $rows, string $ebene = FoodAlchemistRecipeStep::EBENE_PRODUKTION): void
     {
-        DB::transaction(function () use ($recipe, $rows) {
+        $ebene = $this->ebene($ebene);
+
+        DB::transaction(function () use ($recipe, $rows, $ebene) {
             $behalten = [];
             $pos = 0;
 
@@ -163,7 +165,7 @@ class RecipeStepService
 
                 $id = isset($row['id']) ? (int) $row['id'] : 0;
                 $step = $id > 0
-                    ? FoodAlchemistRecipeStep::where('recipe_id', $recipe->id)->whereKey($id)->first()
+                    ? FoodAlchemistRecipeStep::where('recipe_id', $recipe->id)->ebene($ebene)->whereKey($id)->first()
                     : null;
 
                 if ($step !== null) {
@@ -172,6 +174,7 @@ class RecipeStepService
                     $step = FoodAlchemistRecipeStep::create([
                         'team_id' => $recipe->team_id,
                         'recipe_id' => $recipe->id,
+                        'ebene' => $ebene,
                         'position' => $pos,
                         'phase' => $phase,
                         'text' => $text,
@@ -180,7 +183,9 @@ class RecipeStepService
                 $behalten[] = $step->id;
             }
 
-            FoodAlchemistRecipeStep::where('recipe_id', $recipe->id)
+            // NUR in dieser Ebene aufräumen: ein Speichern im Anrichten-Tab darf die
+            // Produktions-Schritte nicht wegwerfen (und umgekehrt).
+            FoodAlchemistRecipeStep::where('recipe_id', $recipe->id)->ebene($ebene)
                 ->whereNotIn('id', $behalten !== [] ? $behalten : [0])
                 ->get()->each->delete();
 
@@ -192,14 +197,17 @@ class RecipeStepService
      * Nummeriert die Schritte eines Rezepts lückenlos neu (1..n) und zieht den
      * Spiegel nach. Nach Anlegen/Löschen/Umsortieren einzelner Schritte aufrufen.
      */
-    public function renumber(FoodAlchemistRecipe $recipe): void
+    public function renumber(FoodAlchemistRecipe $recipe, ?string $ebene = null): void
     {
-        $pos = 0;
-        foreach (FoodAlchemistRecipeStep::where('recipe_id', $recipe->id)
-            ->orderBy('position')->orderBy('id')->get() as $step) {
-            $pos++;
-            if ((int) $step->position !== $pos) {
-                $step->update(['position' => $pos]);
+        // Ohne Ebenen-Angabe beide durchnummerieren — jede Ebene beginnt bei 1.
+        foreach ($ebene !== null ? [$this->ebene($ebene)] : FoodAlchemistRecipeStep::EBENEN as $stufe) {
+            $pos = 0;
+            foreach (FoodAlchemistRecipeStep::where('recipe_id', $recipe->id)->ebene($stufe)
+                ->orderBy('position')->orderBy('id')->get() as $step) {
+                $pos++;
+                if ((int) $step->position !== $pos) {
+                    $step->update(['position' => $pos]);
+                }
             }
         }
 
@@ -215,19 +223,34 @@ class RecipeStepService
      */
     public function spiegele(FoodAlchemistRecipe $recipe): void
     {
-        $steps = FoodAlchemistRecipeStep::where('recipe_id', $recipe->id)
-            ->orderBy('position')->orderBy('id')->get();
+        $update = [];
 
-        if ($steps->isEmpty()) {
-            return;   // keine Schritte → bestehenden Freitext NICHT wegwerfen
+        // Je Ebene ein Spiegel-Feld: produktion → preparation, anrichten → plating_text.
+        foreach (FoodAlchemistRecipeStep::SPIEGEL_FELD as $ebene => $feld) {
+            $steps = FoodAlchemistRecipeStep::where('recipe_id', $recipe->id)->ebene($ebene)
+                ->orderBy('position')->orderBy('id')->get();
+
+            if ($steps->isEmpty()) {
+                continue;   // keine Schritte → bestehenden Freitext NICHT wegwerfen
+            }
+
+            $md = $this->render($steps);
+            if (trim($md) !== trim((string) $recipe->{$feld})) {
+                $update[$feld] = $md;
+            }
         }
 
-        $md = $this->render($steps);
-        if (trim($md) === trim((string) $recipe->preparation)) {
-            return;
+        if ($update !== []) {
+            $recipe->forceFill($update)->save();
         }
+    }
 
-        $recipe->forceFill(['preparation' => $md])->save();
+    /** Unbekannte Ebene fällt auf `produktion` zurück statt eine Fantasie-Ebene anzulegen. */
+    private function ebene(?string $ebene): string
+    {
+        return in_array($ebene, FoodAlchemistRecipeStep::EBENEN, true)
+            ? $ebene
+            : FoodAlchemistRecipeStep::EBENE_PRODUKTION;
     }
 
     /**
@@ -273,17 +296,24 @@ class RecipeStepService
      *
      * Überschreibt vorhandene Schritte nur mit $ueberschreiben = true.
      */
-    public function ausMarkdown(FoodAlchemistRecipe $recipe, ?string $markdown, bool $ueberschreiben = false): int
-    {
+    public function ausMarkdown(
+        FoodAlchemistRecipe $recipe,
+        ?string $markdown,
+        bool $ueberschreiben = false,
+        string $ebene = FoodAlchemistRecipeStep::EBENE_PRODUKTION,
+    ): int {
+        $ebene = $this->ebene($ebene);
         $rows = $this->parse($markdown);
         if ($rows === []) {
             return 0;
         }
-        if (! $ueberschreiben && FoodAlchemistRecipeStep::where('recipe_id', $recipe->id)->exists()) {
+        // Der Bestandsschutz gilt JE EBENE: ein Plating-Text darf Schritte anlegen, auch
+        // wenn die Produktions-Ebene schon gefüllt ist (und umgekehrt).
+        if (! $ueberschreiben && FoodAlchemistRecipeStep::where('recipe_id', $recipe->id)->ebene($ebene)->exists()) {
             return 0;
         }
 
-        $this->sync($recipe, $rows);
+        $this->sync($recipe, $rows, $ebene);
 
         return count($rows);
     }

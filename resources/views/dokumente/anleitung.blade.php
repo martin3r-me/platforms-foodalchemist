@@ -57,7 +57,7 @@
             @else
                 <a class="btn ghost" href="{{ request()->fullUrlWithQuery(['regen' => 1]) }}">mit Regeneration</a>
             @endif
-            @if($plating ?? null)
+            @if(count($anrichteSchritte ?? []) || ($plating ?? null))
                 <a class="btn ghost" href="{{ request()->fullUrlWithQuery(['anrichten' => 0]) }}">ohne Anrichten</a>
             @else
                 <a class="btn ghost" href="{{ request()->fullUrlWithQuery(['anrichten' => 1]) }}">mit Anrichten</a>
@@ -112,7 +112,15 @@
         'istPdf' => $istPdf ?? false,
     ])
 
-    @if($plating ?? null)
+    @if(count($anrichteSchritte ?? []))
+        <p class="zutaten-kurz"><strong>Anrichten &amp; Ausgabe</strong></p>
+        @include('foodalchemist::dokumente.partials.schritt-karten', [
+            'schritte' => $anrichteSchritte,
+            'zubereitung' => null,
+            'mitFotos' => $mitFotos,
+            'istPdf' => $istPdf ?? false,
+        ])
+    @elseif($plating ?? null)
         <p class="zutaten-kurz"><strong>Anrichten:</strong> {{ $plating }}</p>
     @endif
 

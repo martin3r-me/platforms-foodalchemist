@@ -57,9 +57,22 @@ class StepEditor extends Component
     /** @var array{steps: list<array{phase: ?string, text: string}>, confidence: float, reasoning: ?string}|null */
     public ?array $kiVorschlag = null;
 
-    public function mount(?int $recipeId = null): void
+    /**
+     * Anleitungs-Ebene dieser Editor-Instanz (2026-09-04, Regelwerk Verkaufsgerichte §3).
+     *
+     * Dieselbe Komponente wird am Gericht ZWEIMAL eingebettet: einmal für die
+     * Fertigstellung, einmal fürs Anrichten. Jede Instanz sieht, bearbeitet und
+     * nummeriert ausschließlich ihre eigene Ebene; der Foto-Pool bleibt geteilt
+     * (ein Mise-en-Place-Bild darf an beiden Ebenen hängen).
+     */
+    public string $ebene = FoodAlchemistRecipeStep::EBENE_PRODUKTION;
+
+    public function mount(?int $recipeId = null, ?string $ebene = null): void
     {
         $this->recipeId = $recipeId;
+        if (in_array($ebene, FoodAlchemistRecipeStep::EBENEN, true)) {
+            $this->ebene = $ebene;
+        }
         $this->hydrierePuffer();
     }
 
@@ -72,10 +85,11 @@ class StepEditor extends Component
             return;
         }
 
-        $letzte = FoodAlchemistRecipeStep::where('recipe_id', $r->id)->orderByDesc('position')->first();
+        $letzte = FoodAlchemistRecipeStep::where('recipe_id', $r->id)->ebene($this->ebene)->orderByDesc('position')->first();
         FoodAlchemistRecipeStep::create([
             'team_id' => $r->team_id,
             'recipe_id' => $r->id,
+            'ebene' => $this->ebene,
             'position' => (int) ($letzte?->position ?? 0) + 1,
             'phase' => $letzte?->phase,                 // neue Zeile bleibt im laufenden Abschnitt
             'text' => '',
@@ -91,14 +105,14 @@ class StepEditor extends Component
             return;
         }
 
-        $step = FoodAlchemistRecipeStep::where('recipe_id', $r->id)->whereKey($stepId)->first();
+        $step = FoodAlchemistRecipeStep::where('recipe_id', $r->id)->ebene($this->ebene)->whereKey($stepId)->first();
         if ($step === null) {
             return;
         }
         $step->photos()->detach();                      // Pivot hart lösen — das Foto bleibt im Pool
         $step->delete();
 
-        app(RecipeStepService::class)->renumber($r);
+        app(RecipeStepService::class)->renumber($r, $this->ebene);
         $this->hydrierePuffer();
     }
 
@@ -118,7 +132,7 @@ class StepEditor extends Component
         if ($r === null || $stepId <= 0) {
             return;
         }
-        $step = FoodAlchemistRecipeStep::where('recipe_id', $r->id)->whereKey($stepId)->first();
+        $step = FoodAlchemistRecipeStep::where('recipe_id', $r->id)->ebene($this->ebene)->whereKey($stepId)->first();
         if ($step === null) {
             return;
         }
@@ -154,7 +168,7 @@ class StepEditor extends Component
             return;
         }
 
-        $ids = FoodAlchemistRecipeStep::where('recipe_id', $r->id)
+        $ids = FoodAlchemistRecipeStep::where('recipe_id', $r->id)->ebene($this->ebene)
             ->orderBy('position')->orderBy('id')->pluck('id')->map(fn ($i) => (int) $i)->all();
 
         $neu = $umsortieren($ids);
@@ -163,7 +177,7 @@ class StepEditor extends Component
         }
 
         foreach ($neu as $i => $id) {
-            FoodAlchemistRecipeStep::where('recipe_id', $r->id)->whereKey($id)->update(['position' => $i + 1]);
+            FoodAlchemistRecipeStep::where('recipe_id', $r->id)->ebene($this->ebene)->whereKey($id)->update(['position' => $i + 1]);
         }
 
         app(RecipeStepService::class)->spiegele($r);
@@ -185,7 +199,7 @@ class StepEditor extends Component
             return;
         }
 
-        $step = FoodAlchemistRecipeStep::where('recipe_id', $r->id)->whereKey($stepId)->first();
+        $step = FoodAlchemistRecipeStep::where('recipe_id', $r->id)->ebene($this->ebene)->whereKey($stepId)->first();
         $foto = FoodAlchemistRecipeStepPhoto::where('recipe_id', $r->id)->whereKey($photoId)->first();
         if ($step === null || $foto === null) {
             return;
@@ -207,7 +221,7 @@ class StepEditor extends Component
         if ($r === null) {
             return;
         }
-        FoodAlchemistRecipeStep::where('recipe_id', $r->id)->whereKey($stepId)->first()
+        FoodAlchemistRecipeStep::where('recipe_id', $r->id)->ebene($this->ebene)->whereKey($stepId)->first()
             ?->photos()->detach($photoId);
     }
 
@@ -282,7 +296,7 @@ class StepEditor extends Component
             return;
         }
 
-        $steps = FoodAlchemistRecipeStep::where('recipe_id', $r->id)
+        $steps = FoodAlchemistRecipeStep::where('recipe_id', $r->id)->ebene($this->ebene)
             ->withCount('photos')
             ->orderBy('position')->orderBy('id')->get()
             ->filter(fn (FoodAlchemistRecipeStep $step) => (int) $step->photos_count === 0)
@@ -313,7 +327,7 @@ class StepEditor extends Component
             return;
         }
 
-        $anzahl = $svc->ausMarkdown($r, $this->markdownImport, ueberschreiben: true);
+        $anzahl = $svc->ausMarkdown($r, $this->markdownImport, ueberschreiben: true, ebene: $this->ebene);
         if ($anzahl === 0) {
             $this->fehler = 'Im eingefügten Text war kein Schritt erkennbar.';
 
@@ -458,7 +472,7 @@ class StepEditor extends Component
                 'anzahl' => $recipe->sales_unit_count,
                 'portion_g' => $recipe->sales_quantity_per_unit_g,
             ] : null,
-            'schritte_bestand' => FoodAlchemistRecipeStep::where('recipe_id', $recipe->id)
+            'schritte_bestand' => FoodAlchemistRecipeStep::where('recipe_id', $recipe->id)->ebene($this->ebene)
                 ->orderBy('position')->pluck('text')->all(),
         ];
     }
@@ -508,7 +522,7 @@ class StepEditor extends Component
             return;
         }
 
-        foreach (FoodAlchemistRecipeStep::where('recipe_id', $this->recipeId)
+        foreach (FoodAlchemistRecipeStep::where('recipe_id', $this->recipeId)->ebene($this->ebene)
             ->orderBy('position')->orderBy('id')->get() as $s) {
             $this->texte[$s->id] = (string) $s->text;
             $this->phasen[$s->id] = (string) ($s->phase ?? '');
@@ -520,7 +534,7 @@ class StepEditor extends Component
         $r = $this->rezept();
 
         $schritte = $r !== null
-            ? FoodAlchemistRecipeStep::where('recipe_id', $r->id)
+            ? FoodAlchemistRecipeStep::where('recipe_id', $r->id)->ebene($this->ebene)
                 ->with('photos')->orderBy('position')->orderBy('id')->get()
             : collect();
 

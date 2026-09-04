@@ -201,8 +201,8 @@ class SalesRecipeService
      * Beteiligte Posten eines Gerichts — ABGELEITET aus den Komponenten (2026-09-04).
      *
      * Ein Posten ist nie für ein ganzes Gericht zuständig: jede Komponente liegt auf
-     * dem Posten ihres Basisrezepts, im Gericht kommt nur die Finalisierung dazu.
-     * Der Editor zeigt die Liste darum read-only neben dem Finalisierungs-Posten.
+     * dem Posten ihres Basisrezepts, im Gericht kommt nur die Fertigstellung dazu.
+     * Der Editor zeigt die Liste darum read-only neben dem Fertigstellungs-Posten.
      *
      * Bewusst NICHT persistiert — eine Spalte würde beim nächsten Komponententausch
      * driften, und der Produktionsplaner routet ohnehin je Zeile. Spiegelt damit die
@@ -240,7 +240,7 @@ class SalesRecipeService
      * Warum überhaupt: die Auftrags-Explosion erzeugt genau EINE Zeile je Rezept
      * ({@see ProductionOrderService}), jede Komponente wird also eigenständig geplant und
      * bringt ihre eigene Zeit mit. Das Zeitfeld am GERICHT ist deshalb nicht die
-     * Gesamtzeit, sondern die Zeit der Finalisierung. Wer dort die Gesamtzeit einträgt,
+     * Gesamtzeit, sondern die Zeit der Fertigstellung. Wer dort die Gesamtzeit einträgt,
      * zählt im selben Auftrag doppelt — einmal über die Komponenten-Zeilen, einmal über
      * die Gericht-Zeile.
      *
@@ -381,8 +381,29 @@ class SalesRecipeService
             // liegt an der Darreichung, die Legacy-Spalten sind Anzeige-/Kompat-Schicht.
             $this->syncStandardDarreichung($team, $recipe->refresh(), $update);
 
+            // 2026-09-04: `plating_text` ist der Spiegel der ANRICHTE-Schritte (Regelwerk §3.3),
+            // genau wie `preparation` der Spiegel der Produktions-Schritte ist. Ein Markdown-Write
+            // (Editor-Textarea, KI-Plating, MCP) ist damit ein EINGANG: er wird in Schritte
+            // geparst. Hat die Ebene schon Schritte, gewinnen sie — dann wird der Spiegel neu
+            // gerendert, sonst stünde im Feld ein Text, den die Anleitung nicht sagt.
+            $this->platingSchritteAusMarkdown($recipe->refresh(), $update);
+
             return $recipe->refresh();
         });
+    }
+
+    /** Markdown-Eingang der Anrichte-Ebene — Muster wie {@see RecipeService::schritteAusMarkdown}. */
+    private function platingSchritteAusMarkdown(FoodAlchemistRecipe $recipe, array $update): void
+    {
+        if (! array_key_exists('plating_text', $update) || trim((string) ($update['plating_text'] ?? '')) === '') {
+            return;
+        }
+
+        $svc = app(RecipeStepService::class);
+        $ebene = \Platform\FoodAlchemist\Models\FoodAlchemistRecipeStep::EBENE_ANRICHTEN;
+        if ($svc->ausMarkdown($recipe, (string) $update['plating_text'], ebene: $ebene) === 0) {
+            $svc->spiegele($recipe);
+        }
     }
 
     /** VK-Felder des Legacy-Editors in die Standard-Darreichung spiegeln (eine Wahrheit). */

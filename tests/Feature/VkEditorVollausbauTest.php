@@ -81,9 +81,15 @@ it('Rollen-Spalte rendert NUR im VK-Kontext; Rollen-Wert geht durch den Sync (V-
         ->toBe('komponente');
 });
 
-it('VK-Editor rendert die neuen Sektionen (Deklaration, Nährwerte, Spezifikation, Plating, KPI-Leiste)', function () {
+// 2026-09-04: `data-vk-plating-text` (das Markdown-Textarea) ist ersetzt — das Anrichten
+// läuft über den eingebetteten Step-Editor der Ebene `anrichten`, `plating_text` ist nur
+// noch dessen Spiegel. Der Container-Marker `data-vk-plating` bleibt.
+it('VK-Editor rendert die neuen Sektionen (Deklaration, Nährwerte, Spezifikation, Anrichten, KPI-Leiste)', function () {
     $html = Livewire::test(VkModal::class)->call('oeffnen', $this->vk->id)->html();
-    foreach (['data-deklaration', 'data-vk-naehrwerte-leer', 'data-vk-spezifikation', 'data-vk-plating-text', 'data-vk-editor-kpis', 'data-md-toolbar', 'data-ki-wording', 'data-ki-behaelter', 'data-ki-regeneration'] as $marker) {
+    // `data-md-toolbar` entfällt mit dem Plating-Textarea: die Markdown-Leiste gehörte zu
+    // diesem einen Freitextfeld. Die Schritt-Felder brauchen keine — Nummer und Phase
+    // kommen aus der Struktur, nicht aus getippten `##`.
+    foreach (['data-deklaration', 'data-vk-naehrwerte-leer', 'data-vk-spezifikation', 'data-vk-plating', 'data-vk-editor-kpis', 'data-ki-wording', 'data-ki-behaelter', 'data-ki-regeneration'] as $marker) {
         expect($html)->toContain($marker);
     }
     expect($html)->toContain('Rohertragsquote')
@@ -261,20 +267,20 @@ it('rendert die drei Ebenen als eigene Tabs und keinen Service-Tab mehr', functi
 
     // Die Ebenen-Beschriftung ist Teil des Vertrags — sie sagt dem Koch, was hingehört.
     expect($html)->toContain('Regeneration')
-        ->and($html)->toContain('Finalisieren')
+        ->and($html)->toContain('Fertigstellen')
         ->and($html)->toContain('Anrichten');
 });
 
-it('rendert die abgeleiteten Marken: Finalisierungszeit, Servierform-Select, Posten-Hinweis', function () {
+it('rendert die abgeleiteten Marken: Fertigstellungszeit, Servierform-Select, Posten-Hinweis', function () {
     // Standard-Darreichung anlegen, damit die Darreichungs-Tabelle Zeilen hat.
     app(\Platform\FoodAlchemist\Services\DarreichungService::class)
         ->ensureStandard($this->rootTeam, $this->vk->id, 'fa_ui');
 
     $html = Livewire::test(VkModal::class)->call('oeffnen', $this->vk->id)->html();
 
-    expect($html)->toContain('data-vk-finalisierungszeit')      // Zeitfeld neu beschriftet
+    expect($html)->toContain('data-vk-fertigstellungszeit')      // Zeitfeld neu beschriftet
         ->and($html)->toContain('data-dar-form')                // Servierform je Zeile wählbar (Review-Ausgang)
-        ->and($html)->toContain('Finalisierungs-Posten');       // Posten = Zusammensetzen, nicht das ganze Gericht
+        ->and($html)->toContain('Fertigstellungs-Posten');       // Posten = Zusammensetzen, nicht das ganze Gericht
 });
 
 it('bietet als Verkaufseinheit nur die vier zulaessigen Einheiten an', function () {

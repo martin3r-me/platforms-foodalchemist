@@ -130,13 +130,13 @@
         <x-foodalchemist::editor-tabs marker="vk" wire-key="vk-tabs-{{ $rezept->id }}" :init="'aufbau'"
             {{-- Tab-Namen folgen den drei Anleitungs-Ebenen (Regelwerk Verkaufsgerichte §3,
                  User-Entscheid 2026-09-04) in ihrer Prozess-Reihenfolge: regenerieren →
-                 finalisieren → anrichten. Der alte Sammel-Tab „Service" ist aufgeteilt; er
+                 fertigstellen → anrichten. Der alte Sammel-Tab „Service" ist aufgeteilt; er
                  mischte Behälter, Regenerations-Programm, Eigenschaften und Teller-Aufbau. --}}
             :tabs="[
                 'aufbau' => 'Aufbau',
                 'stammdaten' => 'Stammdaten',
                 'regeneration' => 'Regeneration',
-                'preparation' => 'Finalisieren',
+                'preparation' => 'Fertigstellen',
                 'plating' => 'Anrichten',
                 'allergene' => 'Deklaration',
                 'kalkulation' => 'Kalkulation',
@@ -226,19 +226,19 @@
              recipe.default_station_id (ProductionPlanService) — ohne diese Felder blieben sie
              „nicht zugeteilt". Als eigene, klar benannte Sektion (nicht in „Eigenschaften"
              vergraben), damit die Zuweisung auffindbar ist. --}}
-        <x-foodalchemist::modal-section title="Produktion (Auto-Planer) — Finalisierungs-Lauf">
+        <x-foodalchemist::modal-section title="Produktion (Auto-Planer) — Fertigstellungs-Lauf">
             {{-- 2026-09-04: Diese Werte gelten für das ZUSAMMENSETZEN, nicht fürs ganze Gericht.
                  Der Auftrag explodiert jede Komponente in eine eigene Zeile mit eigenem Posten,
                  eigener Zeit und eigenem Vorlauf — die Summen kommen also aus den Basisrezepten. --}}
             <p class="text-[11px] text-gray-500 mb-2">
-                Gilt für den Finalisierungs-Lauf am Einsatztag. Herstellung, Zeiten und Vorlauf der Komponenten stehen an deren Basisrezepten und werden im Auftrag je Zeile geplant.
+                Gilt für den Fertigstellungs-Lauf am Einsatztag. Herstellung, Zeiten und Vorlauf der Komponenten stehen an deren Basisrezepten und werden im Auftrag je Zeile geplant.
             </p>
             <div class="grid grid-cols-2 md:grid-cols-4 gap-3" data-vk-produktion>
-                {{-- 2026-09-04: am Gericht ist das der FINALISIERUNGS-Posten — wer zusammensetzt,
+                {{-- 2026-09-04: am Gericht ist das der FERTIGSTELLUNGS-Posten — wer zusammensetzt,
                      abschmeckt und ausgibt. Die Komponenten produzieren auf ihren eigenen Posten
                      (aus dem jeweiligen Basisrezept); die routet der Planer je Zeile. --}}
                 <div>
-                    <label class="block {{ $label }} mb-1">Finalisierungs-Posten <span class="normal-case text-gray-500">(Zusammensetzen &amp; Ausgabe)</span></label>
+                    <label class="block {{ $label }} mb-1">Fertigstellungs-Posten <span class="normal-case text-gray-500">(Zusammensetzen &amp; Ausgabe)</span></label>
                     <select wire:model="form.default_station_id" class="{{ $input }}" data-vk-default-station>
                         <option value="">— keiner —</option>
                         @foreach($posten as $p)<option value="{{ $p->id }}">{{ $p->name }}</option>@endforeach
@@ -292,16 +292,17 @@
              immer. Lineage-Buttons (manual/Reset) bleiben dem Basisrezept-Editor
              vorbehalten (RecipeModal-Methoden), hier nicht verdrahtet. --}}
         <div x-show="tab === 'preparation'" x-cloak class="pt-4 space-y-4">
-        <x-foodalchemist::modal-section title="Finalisieren am Einsatztag">
+        <x-foodalchemist::modal-section title="Fertigstellen am Einsatztag">
             <p class="text-[11px] text-gray-500 mb-2">
                 Alles zwischen <em>regeneriert</em> und <em>angerichtet</em>: bereitstellen, portionieren, tranchieren, montieren, abschmecken. Die <strong>Herstellung</strong> der Komponenten steht in deren Basisrezepten, das <strong>Regenerations-Programm</strong> im Tab Regeneration, der <strong>Teller-Aufbau</strong> im Tab Anrichten.
             </p>
-            <livewire:foodalchemist.recipes.step-editor :recipe-id="$rezept->id" wire:key="schritt-editor-vk-{{ $rezept->id }}" />
+            <livewire:foodalchemist.recipes.step-editor :recipe-id="$rezept->id" ebene="produktion"
+                wire:key="schritt-editor-vk-produktion-{{ $rezept->id }}" />
             <p class="text-[10px] text-gray-500 mt-1">
                 Schritte sind der Master — der Markdown in <code>preparation</code> wird daraus erzeugt (Produktionsdruck, Suche und Prozessanker lesen ihn). Gleiche Mechanik wie im Basisrezept-Editor.
             </p>
         </x-foodalchemist::modal-section>
-        </div>{{-- /Tab FINALISIEREN --}}
+        </div>{{-- /Tab FERTIGSTELLEN --}}
 
         {{-- ── Tab: AUFBAU (nur Komponenten) ─────────────────────────────── --}}
         <div x-show="tab === 'aufbau'" x-cloak class="pt-4 space-y-4">
@@ -797,12 +798,12 @@
                 <button type="button" wire:click="ki('eigenschaften')" class="{{ $btnAi }}" data-ki-eigenschaften>@svg('heroicon-o-sparkles', 'w-3.5 h-3.5')Eigenschaften</button>
             </x-slot:actions>
             <div class="grid grid-cols-2 gap-3" data-vk-eigenschaften>
-                {{-- 2026-09-04: am Gericht ist das die FINALISIERUNGS-Zeit. Die Auftrags-Explosion
+                {{-- 2026-09-04: am Gericht ist das die FERTIGSTELLUNGS-Zeit. Die Auftrags-Explosion
                      erzeugt eine eigene Zeile je Komponente, jede mit ihrer eigenen Zeit — wer hier
                      die Gesamtzeit einträgt, zählt im selben Auftrag doppelt. --}}
                 <div>
-                    <label class="block {{ $label }} mb-1" title="Nur das Zusammensetzen am Einsatztag. Die Herstellungszeit steht am jeweiligen Basisrezept und wird im Auftrag als eigene Zeile geplant.">Finalisierungszeit (min) <span class="normal-case text-gray-500">nur Zusammensetzen</span></label>
-                    <input type="number" min="0" wire:model="form.work_time_min" class="{{ $input }}" data-vk-finalisierungszeit />
+                    <label class="block {{ $label }} mb-1" title="Nur das Zusammensetzen am Einsatztag. Die Herstellungszeit steht am jeweiligen Basisrezept und wird im Auftrag als eigene Zeile geplant.">Fertigstellungszeit (min) <span class="normal-case text-gray-500">nur Zusammensetzen</span></label>
+                    <input type="number" min="0" wire:model="form.work_time_min" class="{{ $input }}" data-vk-fertigstellungszeit />
                     @if(($komponentenZeiten['anzahl'] ?? 0) > 0)
                         <p class="text-[10px] text-gray-500 mt-1" data-vk-komponenten-zeiten>
                             Komponenten je Ansatz: {{ $komponentenZeiten['work_time_min'] }} min aktiv
@@ -815,7 +816,7 @@
                              kann nur der Mensch entscheiden — automatisch abziehen wäre geraten. --}}
                         @if($komponentenZeiten['work_time_min'] > 0 && (float) ($form['work_time_min'] ?? 0) >= $komponentenZeiten['work_time_min'])
                             <p class="text-[10px] text-amber-600 mt-1" data-vk-zeit-verdacht>
-                                Der Wert erreicht die Komponenten-Summe — steht hier vielleicht die Gesamtzeit statt der Finalisierung? Sie würde doppelt zählen.
+                                Der Wert erreicht die Komponenten-Summe — steht hier vielleicht die Gesamtzeit statt der Fertigstellung? Sie würde doppelt zählen.
                             </p>
                         @endif
                     @endif
@@ -875,18 +876,25 @@
             </div>
         </x-foodalchemist::modal-section>
 
-        {{-- M9-01g: Teller-Aufbau, Mengenverteilung — keine Produktion, keine Regeneration --}}
+        {{-- Teller-Aufbau als bebilderte Schrittfolge (User-Entscheid 2026-09-04): das
+             Anrichten war die einzige der drei Ebenen ohne Bilder — dabei ist es der
+             visuellste Arbeitsgang. Statt einer zweiten Foto-Mechanik läuft es über
+             dieselben `recipe_steps` mit `ebene='anrichten'`; `plating_text` bleibt der
+             gerenderte Spiegel (Foodbook/Report lesen unverändert das Textfeld). --}}
         <x-foodalchemist::modal-section title="Anrichten &amp; Ausgabe">
             <x-slot:actions>
-                <button type="button" wire:click="ki('plating')" class="{{ $btnAi }}" title="vk.plating: Hybrid-Plating-Anweisung" data-ki-plating>@svg('heroicon-o-sparkles', 'w-3.5 h-3.5')Plating</button>
+                <button type="button" wire:click="ki('plating')" class="{{ $btnAi }}" title="vk.plating: Plating-Vorschlag — wird in Anrichte-Schritte geparst" data-ki-plating>@svg('heroicon-o-sparkles', 'w-3.5 h-3.5')Plating</button>
             </x-slot:actions>
-            <div x-data data-vk-plating>
-                <div class="flex items-center justify-between mb-1">
-                    <span class="text-[10px] text-gray-500">Markdown — ## für Phasen, nummerierte Schritte</span>
-                    @include('foodalchemist::livewire.recipes.partials.md-toolbar', ['ziel' => 'vk-plating-text'])
-                </div>
-                <textarea wire:model="form.plating_text" id="vk-plating-text" rows="7" class="{{ $input }} font-mono text-[11px]" data-vk-plating-text></textarea>
+            <p class="text-[11px] text-gray-500 mb-2">
+                Teller-Aufbau am Pass: Reihenfolge, Mengen je Teller, Geometrie, Garnitur — Schritt für Schritt, mit Fotos. Keine Produktion und keine Regenerations-Parameter.
+            </p>
+            <div data-vk-plating>
+                <livewire:foodalchemist.recipes.step-editor :recipe-id="$rezept->id" ebene="anrichten"
+                    wire:key="schritt-editor-vk-anrichten-{{ $rezept->id }}" />
             </div>
+            <p class="text-[10px] text-gray-500 mt-1">
+                Die Schritte sind der Master — <code>plating_text</code> wird daraus erzeugt (Foodbook, Angebot und Report lesen weiterhin diesen Text).
+            </p>
         </x-foodalchemist::modal-section>
         </div>{{-- /Tab ANRICHTEN --}}
 

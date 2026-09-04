@@ -92,7 +92,12 @@ it('L1b: »Alle übernehmen« schreibt VK-Wording, Plating, Beschreibung und Kla
     expect($n)->toBe(4)
         ->and($r->sales_wording_standard)->toBe('Zarter Rinderrücken')
         ->and($r->sales_wording_source)->toBe('ki')
-        ->and($r->plating_text)->toBe('Fleisch mittig, Jus angießen.')
+        // 2026-09-04: Der Accept parst den Plating-Vorschlag in Anrichte-Schritte
+        // (Regelwerk §3.3) und rendert `plating_text` daraus neu — der Spiegel ist
+        // deshalb nummeriert, nicht mehr der rohe KI-Satz.
+        ->and($r->plating_text)->toBe('1. Fleisch mittig, Jus angießen.')
+        ->and(\Platform\FoodAlchemist\Models\FoodAlchemistRecipeStep::where('recipe_id', $this->vk->id)
+            ->ebene(\Platform\FoodAlchemist\Models\FoodAlchemistRecipeStep::EBENE_ANRICHTEN)->count())->toBe(1)
         ->and($r->plating_source)->toBe('ki')
         ->and($r->description)->toBe('Kurzgebratener Rücken mit Jus.')
         ->and((int) $r->dish_class_id)->toBe((int) $this->klasse->id)

@@ -11,7 +11,7 @@ uses(TestCase::class, SeedsTeamHierarchy::class);
 
 /**
  * Die drei Anleitungs-Ebenen am Gericht (Regelwerk Verkaufsgerichte §3, 2026-09-04):
- * Produktion/Finalisierung · Regeneration · Anrichten.
+ * Produktion/Fertigstellung · Regeneration · Anrichten.
  *
  * Diese Tests halten die TRENNUNG fest, nicht die Formulierung. Anlass war eine
  * doppelte Wahrheit: der `recipe.steps`-Prompt forderte selbst einen „Service-,
@@ -59,7 +59,7 @@ it('vk.generator beansprucht preparation nicht mehr fuer das Plating', function 
     $task = (string) (config('foodalchemist.prompts', [])['vk.generator']['task'] ?? null);
 
     expect($task)->not->toContain('preparation (= PLATING & SERVICE')
-        ->and($task)->toContain('preparation (= FINALISIEREN am Einsatztag');
+        ->and($task)->toContain('preparation (= FERTIGSTELLEN am Einsatztag');
 });
 
 it('der Schritt-Kontext hat genau eine Quelle fuer beide Kontextbauer', function () {
@@ -191,7 +191,7 @@ it('beteiligtePosten ist leer, wenn keine Komponente einen Posten traegt', funct
     expect(app(SalesRecipeService::class)->beteiligtePosten($gericht->fresh()))->toBeEmpty();
 });
 
-// ── Produktionszeit am Gericht = Finalisierung, Komponenten bringen ihre eigene ──
+// ── Produktionszeit am Gericht = Fertigstellung, Komponenten bringen ihre eigene ──
 
 it('komponentenZeiten summiert die Zeiten der Komponenten und zaehlt die Luecken', function () {
     // Die Auftrags-Explosion erzeugt eine eigene Zeile je Rezept — die Zeit am Gericht ist
@@ -204,7 +204,7 @@ it('komponentenZeiten summiert die Zeiten der Komponenten und zaehlt die Luecken
     $ohne = $this->makeRecipe($this->rootTeam, 'Crunch');          // keine Zeitangabe
 
     $gericht = $this->makeRecipe($this->rootTeam, 'Zeit-Gericht', [
-        'is_sales_recipe' => true, 'work_time_min' => 8,            // nur Finalisierung
+        'is_sales_recipe' => true, 'work_time_min' => 8,            // nur Fertigstellung
     ]);
     foreach ([$jus, $creme, $ohne] as $i => $k) {
         $this->makeIngredient($gericht, $k->name, null, '100', $i + 1)
@@ -229,4 +229,90 @@ it('komponentenZeiten ist bei einem Gericht ohne Sub-Rezepte leer', function () 
 
     expect(app(SalesRecipeService::class)->komponentenZeiten($gericht->fresh()))
         ->toMatchArray(['work_time_min' => 0, 'anzahl' => 0, 'ohne_zeit' => 0]);
+});
+
+// ── §3.3 Anrichten als bebilderte Schrittfolge (dieselbe Tabelle, eigene Ebene) ──
+
+it('trennt Produktions- und Anrichte-Schritte in derselben Tabelle', function () {
+    // Beide Ebenen nummerieren bei 1 — ungefiltert würden sie zu einer wirren Liste
+    // verschmelzen. Und ein Speichern in der einen Ebene darf die andere nicht wegräumen.
+    $this->seedTeamHierarchy();
+    $svc = app(\Platform\FoodAlchemist\Services\RecipeStepService::class);
+    $step = \Platform\FoodAlchemist\Models\FoodAlchemistRecipeStep::class;
+    $gericht = $this->makeRecipe($this->rootTeam, 'Ebenen-Gericht', ['is_sales_recipe' => true]);
+
+    $svc->sync($gericht, [
+        ['phase' => 'Mise en Place', 'text' => 'Komponenten bereitstellen.'],
+        ['phase' => null, 'text' => 'Filet tranchieren.'],
+    ], $step::EBENE_PRODUKTION);
+
+    $svc->sync($gericht, [
+        ['phase' => null, 'text' => 'Creme als Spiegel aufziehen.'],
+    ], $step::EBENE_ANRICHTEN);
+
+    expect($step::where('recipe_id', $gericht->id)->ebene($step::EBENE_PRODUKTION)->count())->toBe(2)
+        ->and($step::where('recipe_id', $gericht->id)->ebene($step::EBENE_ANRICHTEN)->count())->toBe(1);
+
+    // Jede Ebene beginnt bei 1.
+    expect($step::where('recipe_id', $gericht->id)->ebene($step::EBENE_ANRICHTEN)->first()->position)->toBe(1);
+
+    // Erneutes Speichern der Anrichte-Ebene lässt die Produktions-Schritte unberührt.
+    $svc->sync($gericht, [['phase' => null, 'text' => 'Jus angießen.']], $step::EBENE_ANRICHTEN);
+    expect($step::where('recipe_id', $gericht->id)->ebene($step::EBENE_PRODUKTION)->count())->toBe(2);
+});
+
+it('spiegelt jede Ebene in ihr eigenes Feld', function () {
+    // EINBAHN Schritte → Markdown: produktion → preparation, anrichten → plating_text.
+    // Foodbook, Angebot und Report lesen unverändert die Textfelder.
+    $this->seedTeamHierarchy();
+    $svc = app(\Platform\FoodAlchemist\Services\RecipeStepService::class);
+    $step = \Platform\FoodAlchemist\Models\FoodAlchemistRecipeStep::class;
+    $gericht = $this->makeRecipe($this->rootTeam, 'Spiegel-Gericht', ['is_sales_recipe' => true]);
+
+    $svc->sync($gericht, [['phase' => null, 'text' => 'Filet tranchieren.']], $step::EBENE_PRODUKTION);
+    $svc->sync($gericht, [['phase' => null, 'text' => 'Creme als Spiegel aufziehen.']], $step::EBENE_ANRICHTEN);
+
+    $frisch = $gericht->fresh();
+    expect($frisch->preparation)->toContain('Filet tranchieren')
+        ->and($frisch->preparation)->not->toContain('Creme als Spiegel')
+        ->and($frisch->plating_text)->toContain('Creme als Spiegel')
+        ->and($frisch->plating_text)->not->toContain('Filet tranchieren');
+});
+
+it('parst einen plating_text-Write in Anrichte-Schritte', function () {
+    // Markdown bleibt der EINGANG (MCP, Revise, Generator) — Schritte sind der Master.
+    $this->seedTeamHierarchy();
+    $step = \Platform\FoodAlchemist\Models\FoodAlchemistRecipeStep::class;
+    $gericht = $this->makeRecipe($this->rootTeam, 'Plating-Eingang', ['is_sales_recipe' => true]);
+
+    app(SalesRecipeService::class)->updateVk($this->rootTeam, $gericht->id, [
+        'plating_text' => "1. Creme aufziehen.\n2. Filet mittig setzen.",
+    ]);
+
+    expect($step::where('recipe_id', $gericht->id)->ebene($step::EBENE_ANRICHTEN)->count())->toBe(2);
+    // Und der Bestand gewinnt: ein zweiter Text-Write legt nicht nochmal an.
+    app(SalesRecipeService::class)->updateVk($this->rootTeam, $gericht->id, [
+        'plating_text' => '1. Ganz anders.',
+    ]);
+    expect($step::where('recipe_id', $gericht->id)->ebene($step::EBENE_ANRICHTEN)->count())->toBe(2);
+});
+
+it('der Report liefert die Anrichte-Schritte als eigene Liste', function () {
+    $this->seedTeamHierarchy();
+    $svc = app(\Platform\FoodAlchemist\Services\RecipeStepService::class);
+    $step = \Platform\FoodAlchemist\Models\FoodAlchemistRecipeStep::class;
+    $gericht = $this->makeRecipe($this->rootTeam, 'Report-Gericht', ['is_sales_recipe' => true]);
+
+    $svc->sync($gericht, [['phase' => null, 'text' => 'Filet tranchieren.']], $step::EBENE_PRODUKTION);
+    $svc->sync($gericht, [['phase' => null, 'text' => 'Creme aufziehen.']], $step::EBENE_ANRICHTEN);
+
+    $daten = app(ReportExportService::class)->rezeptDaten(
+        $this->rootTeam,
+        $gericht->id,
+        app(ReportExportService::class)->optionen(['profil' => 'voll'], 'recipe'),
+    );
+
+    $node = $daten['recipe'];
+    expect(collect($node['steps'])->pluck('text')->all())->toBe(['Filet tranchieren.'])
+        ->and(collect($node['anrichte_schritte'])->pluck('text')->all())->toBe(['Creme aufziehen.']);
 });

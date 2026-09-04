@@ -61,12 +61,18 @@
 
             @if($schreibbar)
                 <span class="ml-auto flex items-center gap-1.5">
-                    <button type="button" wire:click="kiSchritte" wire:loading.attr="disabled" wire:target="kiSchritte"
-                            class="{{ $btnAi }}" title="Schritt-Vorschlag aus den Zutaten (nichts wird gespeichert)" data-ki-schritte>
-                        @svg('heroicon-o-sparkles', 'w-3.5 h-3.5')
-                        <span wire:loading.remove wire:target="kiSchritte">Schritte</span>
-                        <span wire:loading wire:target="kiSchritte">denkt …</span>
-                    </button>
+                    {{-- Der Schritt-Vorschlag hängt am Prompt `recipe.steps` (Zutaten →
+                         Zubereitung). Für die Anrichte-Ebene ist das der falsche Prompt —
+                         dort schlägt der ✨-Knopf „Plating" am Panel vor (`vk.plating`) und
+                         schreibt seinen Vorschlag direkt in diese Schritte. --}}
+                    @if($ebene !== \Platform\FoodAlchemist\Models\FoodAlchemistRecipeStep::EBENE_ANRICHTEN)
+                        <button type="button" wire:click="kiSchritte" wire:loading.attr="disabled" wire:target="kiSchritte"
+                                class="{{ $btnAi }}" title="Schritt-Vorschlag aus den Zutaten (nichts wird gespeichert)" data-ki-schritte>
+                            @svg('heroicon-o-sparkles', 'w-3.5 h-3.5')
+                            <span wire:loading.remove wire:target="kiSchritte">Schritte</span>
+                            <span wire:loading wire:target="kiSchritte">denkt …</span>
+                        </button>
+                    @endif
                     <button type="button" wire:click="kiFotos" wire:loading.attr="disabled" wire:target="kiFotos"
                             class="{{ $btnAi }}" title="KI-Fotos für alle Schritte ohne Foto erzeugen" data-ki-fotos>
                         @svg('heroicon-o-photo', 'w-3.5 h-3.5')

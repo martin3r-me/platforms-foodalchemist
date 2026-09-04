@@ -17,8 +17,13 @@ use Platform\FoodAlchemist\Models\Concerns\HasUuidV7;
  * Fotos hängen many-to-many am Schritt-Datensatz (Pivot `..._recipe_step_photo_links`),
  * nicht mehr an einer getippten Nummer.
  *
- * Schreibweg ist AUSSCHLIESSLICH der RecipeStepService — er hält nach jedem Schreiben
- * `recipes.preparation` als gerenderten Lese-Spiegel nach (EINBAHN Schritte → Markdown).
+ * Schreibweg ist AUSSCHLIESSLICH der RecipeStepService — er hält nach jedem Schreiben den
+ * gerenderten Lese-Spiegel nach (EINBAHN Schritte → Markdown): `recipes.preparation` für die
+ * Ebene `produktion`, `recipes.plating_text` für die Ebene `anrichten`.
+ *
+ * `ebene` (2026-09-04, Regelwerk Verkaufsgerichte §3) trennt die beiden Anleitungs-Ebenen in
+ * DERSELBEN Tabelle: `produktion` = Herstellung (Basisrezept) bzw. Fertigstellen (Gericht),
+ * `anrichten` = Teller-Aufbau am Pass. `position` läuft je Ebene bei 1 los.
  */
 class FoodAlchemistRecipeStep extends Model
 {
@@ -32,6 +37,27 @@ class FoodAlchemistRecipeStep extends Model
         'uuid' => 'string',
         'position' => 'integer',
     ];
+
+    /** Herstellung (Basisrezept) bzw. Fertigstellen (Gericht) — Adressat ist die Küche. */
+    public const EBENE_PRODUKTION = 'produktion';
+
+    /** Teller-Aufbau — Adressat ist der Pass. */
+    public const EBENE_ANRICHTEN = 'anrichten';
+
+    /** @var list<string> */
+    public const EBENEN = [self::EBENE_PRODUKTION, self::EBENE_ANRICHTEN];
+
+    /** Spiegel-Feld je Ebene (EINBAHN Schritte → Markdown). */
+    public const SPIEGEL_FELD = [
+        self::EBENE_PRODUKTION => 'preparation',
+        self::EBENE_ANRICHTEN => 'plating_text',
+    ];
+
+    /** @param  \Illuminate\Database\Eloquent\Builder<self>  $query */
+    public function scopeEbene($query, string $ebene)
+    {
+        return $query->where('ebene', $ebene);
+    }
 
     public function recipe(): BelongsTo
     {

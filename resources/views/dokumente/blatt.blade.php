@@ -85,7 +85,7 @@
                     </tbody>
                 </table>
                 {{-- §3.2 Regenerations-Programm je Komponente (V-19). Steht bewusst VOR der
-                     Schrittfolge: am Einsatztag wird zuerst regeneriert, dann finalisiert. --}}
+                     Schrittfolge: am Einsatztag wird zuerst regeneriert, dann fertiggestellt. --}}
                 @if(count($r['regenerationen'] ?? []))
                     <p class="meta" style="margin-top:4px"><strong>Regeneration</strong></p>
                     <table>

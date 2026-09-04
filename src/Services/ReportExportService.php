@@ -622,6 +622,10 @@ class ReportExportService
             'regenerations.device:id,name',
             'steps',
             'steps.photos',
+            // §3.3: die Anrichte-Ebene liegt in derselben Tabelle — eigene Relation, damit
+            // die beiden Nummerierungen nicht in einer Liste landen.
+            'platingSteps',
+            'platingSteps.photos',
             'ingredients' => fn ($q) => $q->whereNull('deleted_at')->orderBy('position'),
             'ingredients.unit:id,slug,display_de',
             'ingredients.gp.leadLa.supplier:id,name',
@@ -700,6 +704,21 @@ class ReportExportService
                 'standzeit_min' => $recipe->standzeit_min,
                 'equipment' => $recipe->equipment->pluck('name')->values()->all(),
             ],
+            // §3.3 Anrichten als SCHRITTE (nicht mehr nur der Spiegel-Text): der Teller-Aufbau
+            // ist der visuellste Arbeitsgang — die Fotos gehören mit aufs Blatt.
+            'anrichte_schritte' => $recipe->platingSteps->sortBy('position')->values()->map(fn ($s) => [
+                'position' => (int) $s->position,
+                'phase' => $s->phase,
+                'text' => $s->text,
+                'photos' => ($optionen['bilder'] ?? false)
+                    ? $s->photos->map(fn ($foto) => [
+                        'id' => (int) $foto->id,
+                        'caption' => $foto->caption,
+                        'url' => $foto->url(),
+                        'src' => $this->photoDataUri($foto->pfad) ?? $foto->url(),
+                    ])->values()->all()
+                    : [],
+            ])->all(),
             // §3.2 Regeneration — eigene Ebene, eigener Schalter (`opt['regeneration']`).
             'regenerationen' => $recipe->regenerations->map(fn ($r) => [
                 'komponente' => $r->component_label,

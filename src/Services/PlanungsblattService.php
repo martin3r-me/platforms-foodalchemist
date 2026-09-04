@@ -867,6 +867,10 @@ class PlanungsblattService
         $disk = \Illuminate\Support\Facades\Storage::disk('public');
 
         return \Platform\FoodAlchemist\Models\FoodAlchemistRecipeStep::where('recipe_id', $recipe->id)
+            // §3: nur die Produktions-/Fertigstellungs-Ebene — das Anrichten hat seit
+            // 2026-09-04 eigene Schritte in derselben Tabelle, die hier nicht mit
+            // hineinnummerieren dürfen.
+            ->ebene(\Platform\FoodAlchemist\Models\FoodAlchemistRecipeStep::EBENE_PRODUKTION)
             ->with('photos')->orderBy('position')->orderBy('id')->get()
             ->map(fn ($s) => [
                 'nr' => (int) $s->position,

@@ -145,7 +145,11 @@ class VkModal extends Component
                 'temperature' => $r->temperature,
                 'function' => $r->function,
                 'production_depth' => $r->production_depth,
-                'plating_text' => $r->plating_text,
+                // `plating_text` NICHT im Formular (2026-09-04): es ist der gerenderte
+                // Spiegel der Anrichte-Schritte (Regelwerk §3.3). Ein Mitsenden bei jedem
+                // Speichern würde die Schritte aus ihrem eigenen Spiegel neu parsen und
+                // dabei die Foto-Verknüpfungen verlieren — dieselbe Regel wie bei
+                // `preparation`, das hier ebenfalls fehlt.
                 'notes_manual' => $r->notes_manual,
             ];
             // MVP-049: Modell A — die Hauptgruppe hängt am Gericht (`recipes.dish_main_group_id`),
@@ -468,14 +472,39 @@ class VkModal extends Component
         }
     }
 
+    /**
+     * KI-Plating übernehmen (2026-09-04): der Vorschlag landet als ANRICHTE-SCHRITTE,
+     * nicht in einem Formularfeld — `plating_text` ist nur noch deren Spiegel.
+     *
+     * `ueberschreiben: true`, weil der Klick eine bewusste Neu-Erzeugung ist (Muster wie
+     * `regenVorschlagUebernehmen`). Foto-Verknüpfungen an ersetzten Schritten gehen dabei
+     * verloren — das ist beim expliziten „neu vorschlagen" gewollt und unterscheidet den
+     * Knopf vom stillen Markdown-Eingang in `updateVk`, der den Bestand schützt.
+     */
     private function uebernehmePlating(\Platform\FoodAlchemist\Services\Ai\AiProposal $v): void
     {
         $wert = $v->werte['preparation'] ?? $v->werte['plating_text'] ?? null;   // Registry-Schema: {preparation}
-        if (is_string($wert) && trim($wert) !== '') {
-            $this->form['plating_text'] = trim($wert);
-        } else {
+        if (! is_string($wert) || trim($wert) === '') {
             $this->fehler = 'KI lieferte keinen verwertbaren Plating-Text — echter Provider nötig.';
+
+            return;
         }
+
+        $team = Auth::user()?->currentTeamRelation;
+        $rezept = $team !== null && $this->recipeId !== null
+            ? FoodAlchemistRecipe::visibleToTeam($team)->find($this->recipeId)
+            : null;
+        if ($rezept === null) {
+            return;
+        }
+
+        app(\Platform\FoodAlchemist\Services\RecipeStepService::class)->ausMarkdown(
+            $rezept,
+            trim($wert),
+            ueberschreiben: true,
+            ebene: \Platform\FoodAlchemist\Models\FoodAlchemistRecipeStep::EBENE_ANRICHTEN,
+        );
+        $this->dispatch('recipe-gespeichert');
     }
 
     private function uebernehmeEigenschaften(\Platform\FoodAlchemist\Services\Ai\AiGatewayService $ki, array $kontext): void
@@ -987,11 +1016,11 @@ class VkModal extends Component
             'behaelter' => TeamScope::applyVisible(DB::table('foodalchemist_vocab_containers')->whereNull('deleted_at'), 'team_id', $team)->orderBy('group_name')->orderBy('sort_order')->get(['id', 'name', 'group_name', 'is_inactive']),
             'geraete' => TeamScope::applyVisible(DB::table('foodalchemist_vocab_regeneration_devices')->whereNull('deleted_at'), 'team_id', $team)->orderBy('sort_order')->get(['id', 'name', 'is_inactive']),
             'vehikel' => TeamScope::applyVisible(DB::table('foodalchemist_vocab_serving_vehicles')->whereNull('deleted_at'), 'team_id', $team)->orderBy('group_name')->orderBy('sort_order')->get(['id', 'name', 'group_name', 'is_inactive']),
-            // 2026-09-04: die Posten der Komponenten, read-only neben dem Finalisierungs-Posten.
+            // 2026-09-04: die Posten der Komponenten, read-only neben dem Fertigstellungs-Posten.
             // Ein Posten ist nie für ein ganzes Gericht zuständig — abgeleitet, nie persistiert.
             'beteiligtePosten' => $rezept !== null ? $verkauf->beteiligtePosten($rezept) : collect(),
             // Orientierung zum Zeitfeld: die Komponenten bringen im Auftrag ihre eigene Zeit
-            // mit (eine Auftragszeile je Rezept) — am Gericht steht nur die Finalisierung.
+            // mit (eine Auftragszeile je Rezept) — am Gericht steht nur die Fertigstellung.
             'komponentenZeiten' => $rezept !== null ? $verkauf->komponentenZeiten($rezept) : null,
             // Stufe 3 — Posten-Liste fürs Default-Posten-Dropdown (Parität Basisrezept-Editor).
             'posten' => $team !== null

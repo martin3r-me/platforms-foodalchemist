@@ -910,7 +910,10 @@ Route::get('/rezepte/{recipe}/anleitung', function (int $recipe) {
     $rezept = \Platform\FoodAlchemist\Models\FoodAlchemistRecipe::visibleToTeam($team)->find($recipe) ?? abort(404);
 
     $disk = \Illuminate\Support\Facades\Storage::disk('public');
-    $schritte = \Platform\FoodAlchemist\Models\FoodAlchemistRecipeStep::where('recipe_id', $rezept->id)
+    // Schritte je Anleitungs-Ebene (§3): beide Ebenen liegen in derselben Tabelle und
+    // nummerieren jede bei 1 — ungefiltert stünden sie als eine wirre Liste auf dem Zettel.
+    $ladeSchritte = fn (string $ebene) => \Platform\FoodAlchemist\Models\FoodAlchemistRecipeStep::where('recipe_id', $rezept->id)
+        ->ebene($ebene)
         ->with('photos')->orderBy('position')->orderBy('id')->get()
         ->map(fn ($s) => [
             'nr' => (int) $s->position,
@@ -922,6 +925,9 @@ Route::get('/rezepte/{recipe}/anleitung', function (int $recipe) {
                 'caption' => $f->caption,
             ])->values()->all(),
         ])->values()->all();
+
+    $schritte = $ladeSchritte(\Platform\FoodAlchemist\Models\FoodAlchemistRecipeStep::EBENE_PRODUKTION);
+    $anrichteSchritte = $ladeSchritte(\Platform\FoodAlchemist\Models\FoodAlchemistRecipeStep::EBENE_ANRICHTEN);
 
     $zutaten = $rezept->ingredients->map(fn ($z) => [
         'name' => $z->gp?->name ?? $z->referencedRecipe?->name ?? $z->display_name ?? $z->raw_text,
@@ -941,7 +947,7 @@ Route::get('/rezepte/{recipe}/anleitung', function (int $recipe) {
     ];
 
     // §3.2 Regeneration: der Postenzettel haengt am Posten bzw. am Satelliten — dort wird
-    // regeneriert, bevor finalisiert wird. Zuschaltbar wie die Fotos (`?regen=0` blendet aus).
+    // regeneriert, bevor fertiggestellt wird. Zuschaltbar wie die Fotos (`?regen=0` blendet aus).
     $regenerationen = \Platform\FoodAlchemist\Models\FoodAlchemistRecipeRegeneration::where('recipe_id', $rezept->id)
         ->with('device:id,name')
         ->orderBy('sort_order')->orderBy('id')->get()
@@ -961,7 +967,11 @@ Route::get('/rezepte/{recipe}/anleitung', function (int $recipe) {
         'endprodukt' => $endprodukt,
         'mitFotos' => request()->query('fotos') !== '0',
         'regenerationen' => request()->query('regen') === '0' ? [] : $regenerationen,
-        'plating' => request()->query('anrichten') === '1' ? $rezept->plating_text : null,
+        // §3.3 als Schrittfolge (mit Fotos); der Spiegel-Text bleibt Fallback für Altbestand.
+        'anrichteSchritte' => request()->query('anrichten') === '1' ? $anrichteSchritte : [],
+        'plating' => request()->query('anrichten') === '1' && $anrichteSchritte === []
+            ? $rezept->plating_text
+            : null,
     ];
 
     if ($istPdf) {
