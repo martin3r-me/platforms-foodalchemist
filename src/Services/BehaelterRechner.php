@@ -91,9 +91,19 @@ class BehaelterRechner
             return (float) $c->volumen_l / $tiefe;
         }
 
-        $rand = self::grundflaecheCm2($c);
-
-        return $rand !== null ? $rand / 100 : null;      // cm² → l je mm
+        // ★ KEIN Rueckfall auf die Kantenlaengen. Zwei Gruende, beide am Echtbestand gemessen:
+        //
+        // 1. Die alte Zeile `$rand / 100` war schlicht falsch — 1 cm² × 1 mm sind 0,0001 l, nicht
+        //    0,01 l. Faktor 100 daneben. Auf demo bot der Rechner deshalb ein GN 1/2-20 mit
+        //    117 kg an (real fasst es unter 1 kg), direkt hinter dem Vorschlag.
+        // 2. Selbst richtig gerechnet bliebe es falsch: GN-Behaelter sind KONISCH. 530×325×65
+        //    ergeben geometrisch 11,2 l, im Handel stehen 8,8 l — die Kantenrechnung ueberschaetzt
+        //    um gut ein Fuenftel und schlaegt systematisch ZU WENIGE Behaelter vor. Denselben
+        //    Rueckfall haben wir aus `nutzvolumenL()` bereits ersatzlos entfernt; hier ueberlebte er.
+        //
+        // Ohne Nennvolumen ist ein Behaelter nicht skalierbar. Er wird dann NICHT vorgeschlagen —
+        // eine Zeile, die niemand waehlen kann, entwertet die ganze Liste.
+        return null;
     }
 
     /**

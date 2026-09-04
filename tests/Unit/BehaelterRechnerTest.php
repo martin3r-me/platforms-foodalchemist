@@ -336,3 +336,27 @@ it('die Menge waehlt die Groesse, nie die Bauform — tiefer als die Referenz fu
     expect($klein['varianten'][0]['behaelter'])->toBe('GN 1/2 65mm')
         ->and($klein['varianten'][0]['anzahl'])->toBe(1);
 });
+
+it('bietet einen Behaelter ohne Nennvolumen gar nicht erst an', function () {
+    // Auf demo gemessen: GN 1/2-20 hat kein Litermaß (der Handel veroeffentlicht dort keins).
+    // Der alte Kanten-Rueckfall rechnete daraus 117 kg — real fasst es unter 1 kg — und stellte
+    // die Zeile direkt hinter den Vorschlag. Zweimal falsch: der Faktor (1 cm² × 1 mm = 0,0001 l,
+    // nicht 0,01 l) UND das Prinzip (GN ist konisch, Kanten ueberschaetzen um ~21 %).
+    $ohneVolumen = (object) [
+        'id' => 7, 'name' => 'GN 1/2 20mm', 'familie' => 'GN',
+        'laenge_mm' => 325, 'breite_mm' => 265, 'tiefe_mm' => 20, 'volumen_l' => null,
+        'nutzfaktor' => 0.85, 'max_fuellgewicht_kg' => null, 'kapazitaet_kg' => null, 'eignung' => null,
+    ];
+
+    $out = $this->r->varianten(
+        9.0,
+        ($this->basis)(['referenz_menge_kg' => 6.0, 'skalierung' => 'tiefer_fuellbar']),
+        [$ohneVolumen, $this->gn11_100],
+        'regenerieren'
+    );
+
+    $namen = collect($out['varianten'])->pluck('behaelter');
+    expect($namen)->not->toContain('GN 1/2 20mm')     // nicht skalierbar → nicht anbieten
+        ->and($namen)->toContain('GN 1/1 65mm')       // die Referenz bleibt
+        ->and($namen)->toContain('GN 1/1 100mm');     // bemessbare Alternativen bleiben
+});
