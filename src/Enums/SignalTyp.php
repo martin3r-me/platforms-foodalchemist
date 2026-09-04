@@ -56,6 +56,11 @@ enum SignalTyp: string
     // eigener Typ und nicht ein Unterfall von `rezept_plausi_ki`, weil die Auflösung
     // eine andere ist: dort korrigiert man Zeilen, hier stellt man ein Rezept um.
     case RezeptGerichtVsKomponente = 'rezept_gericht_vs_komponente';
+    // Das einzige Rezept-Signal, dessen Befund von MENSCHEN kommt, die es gekocht haben: die
+    // Kueche bewertet am Wandmonitor, das Aggregat kippt, hier steht es. Kein Praedikat ueber
+    // Stammdaten und kein KI-Urteil — deshalb kein Fixer-Knopf: die Aufloesung ist, das Rezept
+    // zu ueberarbeiten (oder aus dem Feedback eine Iteration zu ziehen, R2.6 „weiterentwickeln").
+    case RezeptFeedbackKritisch = 'rezept_feedback_kritisch';
     // Spec 21 Tranche C: Konzept-Ebene (bis dahin 0 Signale — die Kaskade endete am Gericht).
     // Gemessen wird nur an Konzepten, die IN GEBRAUCH sind (s. DataQualityService::konzepteInGebrauch):
     // ein unfertiger Entwurf ist kein Mangel, ein unfertiges verkauftes Konzept schon.
@@ -147,6 +152,7 @@ enum SignalTyp: string
             self::RezeptVerwaist => 'Rezept verwaist',
             self::RezeptPlausiKi => 'Rezept mit offenem KI-Befund',
             self::RezeptGerichtVsKomponente => 'Gericht oder Komponente? (Bauart-Zweifel)',
+            self::RezeptFeedbackKritisch => 'Küchen-Feedback kritisch',
             self::KonzeptSlotLuecke => 'Konzept mit unbesetztem Pflicht-Slot',
             self::KonzeptOhneWording => 'Konzept ohne Kunden-Wording',
             self::KonzeptPreisbandVerletzt => 'Konzept außerhalb des Preisbands',
@@ -197,6 +203,7 @@ enum SignalTyp: string
             self::RezeptVerwaist => 'heroicon-o-archive-box',
             self::RezeptPlausiKi => 'heroicon-o-chat-bubble-left-right',
             self::RezeptGerichtVsKomponente => 'heroicon-o-arrows-right-left',
+            self::RezeptFeedbackKritisch => 'heroicon-o-hand-thumb-down',
             self::KonzeptSlotLuecke => 'heroicon-o-squares-2x2',
             self::KonzeptOhneWording => 'heroicon-o-chat-bubble-bottom-center-text',
             self::KonzeptPreisbandVerletzt => 'heroicon-o-banknotes',

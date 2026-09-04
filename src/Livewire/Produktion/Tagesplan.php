@@ -8,10 +8,12 @@ use Illuminate\Support\Facades\Storage;
 use Livewire\Attributes\Url;
 use Livewire\Component;
 use Platform\Core\Models\ContextFile;
+use Platform\FoodAlchemist\Enums\FeedbackQuelle;
 use Platform\FoodAlchemist\Enums\ProductionLineStatus;
 use Platform\FoodAlchemist\Enums\ProductionOrderStatus;
 use Platform\FoodAlchemist\Models\FoodAlchemistProductionOrderLine;
 use Platform\FoodAlchemist\Models\FoodAlchemistProductionStation;
+use Platform\FoodAlchemist\Services\FeedbackService;
 use Platform\FoodAlchemist\Services\ProductionCapacityService;
 use Platform\FoodAlchemist\Services\ProductionOrderService;
 use Platform\FoodAlchemist\Services\ProductionPlanService;
@@ -78,6 +80,19 @@ class Tagesplan extends Component
 
     /** Wandmonitor: flüchtige Step-Checks je geöffneter Anleitungszeile. Dauerhaft ist die Zeile selbst. */
     public array $anleitungStepStatus = [];
+
+    /**
+     * Wandmonitor: Mini-Feedbackbogen zum Rezept. Landet über `FeedbackService` in DERSELBEN
+     * Ablage wie der Feedback-Tab des Rezepts (R2.6) — kein zweiter Speicherort, ein Ø-Score.
+     *
+     * Bewusst kleiner als das Formular im Editor: „Gäste-Reaktion" fehlt, weil die Person am
+     * Posten die Gäste nicht sieht. Ein Feld, das nur geraten beantwortet werden kann,
+     * verdirbt das Aggregat, für das die Küche die ehrlichste Quelle ist.
+     */
+    public array $feedbackForm = ['score' => null, 'machbarkeit' => null, 'aufwand' => null,
+        'geschmack' => null, 'comment' => ''];
+
+    public bool $feedbackGespeichert = false;
 
     private const DASHBOARD_FENSTER = [3, 7, 14, 30];
 
@@ -337,6 +352,57 @@ class Tagesplan extends Component
     public function gerichtSchliessen(): void
     {
         $this->wallGerichtKey = null;
+    }
+
+    /** Touch statt Tastatur: ein Tipp setzt (oder loescht) den Wert. */
+    public function feedbackSetzen(string $feld, int $wert): void
+    {
+        if (! array_key_exists($feld, $this->feedbackForm) || $feld === 'comment') {
+            return;
+        }
+        $this->feedbackForm[$feld] = ((int) ($this->feedbackForm[$feld] ?? 0)) === $wert ? null : $wert;
+        $this->feedbackGespeichert = false;
+    }
+
+    /**
+     * Feedback der Kueche zum Rezept DIESER Zeile.
+     *
+     * Der Kontext kommt aus dem Auftrag und wird nicht getippt: Name und Produktionstag stehen
+     * hier ohnehin fest — im Editor muesste sie jemand aus dem Gedaechtnis nachtragen.
+     */
+    public function feedbackSpeichern(FeedbackService $svc): void
+    {
+        $this->fehler = null;
+        $this->feedbackGespeichert = false;
+        try {
+            if ($this->anleitungLineId === null) {
+                return;
+            }
+            $team = Auth::user()?->currentTeamRelation ?? abort(403, 'Kein Team zugeordnet.');
+            $line = FoodAlchemistProductionOrderLine::findOrFail($this->anleitungLineId);
+            if ($line->recipe_id === null) {
+                throw new \RuntimeException('Diese Zeile hängt an keinem Rezept — Feedback braucht ein Rezept.');
+            }
+
+            $svc->erstelle($team, (int) $line->recipe_id, [
+                'quelle' => FeedbackQuelle::Kueche->value,
+                'score' => $this->feedbackForm['score'] ?? null,
+                'machbarkeit' => $this->feedbackForm['machbarkeit'] ?? null,
+                'aufwand' => $this->feedbackForm['aufwand'] ?? null,
+                'geschmack' => $this->feedbackForm['geschmack'] ?? null,
+                'comment' => $this->feedbackForm['comment'] ?? null,
+                'kontext_label' => $line->productionOrder?->name,
+                'kontext_datum' => $line->productionOrder?->production_date?->toDateString(),
+                'author_user_id' => Auth::id(),
+                'created_via' => 'fa_wall',
+            ]);
+
+            $this->feedbackForm = ['score' => null, 'machbarkeit' => null, 'aufwand' => null,
+                'geschmack' => null, 'comment' => ''];
+            $this->feedbackGespeichert = true;
+        } catch (\Throwable $e) {
+            $this->fehler = $e->getMessage();
+        }
     }
 
     public function anleitungStarten(ProductionOrderService $svc): void

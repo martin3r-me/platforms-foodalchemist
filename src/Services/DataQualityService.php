@@ -4,6 +4,7 @@ namespace Platform\FoodAlchemist\Services;
 
 use Illuminate\Support\Facades\DB;
 use Platform\Core\Models\Team;
+use Platform\FoodAlchemist\Enums\FeedbackQuelle;
 use Platform\FoodAlchemist\Enums\SignalSeverity;
 use Platform\FoodAlchemist\Enums\SignalTyp;
 use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
@@ -11,6 +12,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistFoodbook;
 use Platform\FoodAlchemist\Models\FoodAlchemistGp;
 use Platform\FoodAlchemist\Models\FoodAlchemistPrice;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
+use Platform\FoodAlchemist\Models\FoodAlchemistRecipeFeedback;
 use Platform\FoodAlchemist\Models\FoodAlchemistServierform;
 
 /**
@@ -62,6 +64,11 @@ class DataQualityService
 
     /** Zubereitungs-Text unter dieser Länge gilt als nicht vorhanden (Spec 21 §2). */
     private const MIN_ZUBEREITUNG_ZEICHEN = 20;
+
+    /** Kuechen-Feedback: ab wann ist es ein Befund und nicht eine schlechte Schicht. */
+    private const FEEDBACK_SCHWELLE = 2.5;
+
+    private const FEEDBACK_MIN_N = 2;
 
     /** So lange unberührt + unreferenziert ⇒ Pflege-Kandidat. */
     private const VERWAIST_TAGE = 180;
@@ -387,6 +394,32 @@ class DataQualityService
                 // (Umlaute machen MySQL nur minimal nachsichtiger), dafür ohne Dialekt-Fallunterscheidung.
                 'q' => fn (Team $t) => $this->produktiveRezepte($t)
                     ->whereRaw("LENGTH(TRIM(COALESCE(preparation, ''))) < " . self::MIN_ZUBEREITUNG_ZEICHEN),
+            ],
+            'rezept_feedback_kritisch' => [
+                'label' => 'Rezepte mit kritischem Küchen-Feedback',
+                'typ' => SignalTyp::RezeptFeedbackKritisch,
+                'dedup' => 'dq-rezept-feedback-kritisch',
+                'sev' => SignalSeverity::Warnung,
+                'desc' => 'Die Küche hat dieses Rezept mehrfach schlecht bewertet (Ø ≤ '
+                    . self::FEEDBACK_SCHWELLE . ' bei mindestens ' . self::FEEDBACK_MIN_N . ' Bewertungen). '
+                    . 'Das ist der einzige Rezept-Befund, der von Menschen kommt, die es gekocht haben — '
+                    . 'ein Datenfehler ist es nicht, ein Rezeptfehler oft schon. Die Einträge stehen im '
+                    . 'Feedback-Tab des Rezepts; von dort führt „Weiterentwickeln" direkt in eine Iteration.',
+                // Einzelne Ausreisser erzeugen kein Signal: eine schlechte Schicht ist kein
+                // schlechtes Rezept. Erst die WIEDERHOLUNG ist ein Befund.
+                'q' => fn (Team $t) => $this->produktiveRezepte($t)->whereIn('id',
+                    FoodAlchemistRecipeFeedback::visibleToTeam($t)
+                        ->where('quelle', FeedbackQuelle::Kueche->value)
+                        ->whereNotNull('score')
+                        ->groupBy('recipe_id')
+                        // ★ Schwelle als LITERAL, nicht als Binding: Laravel bindet einen Float als
+                        // PDO::PARAM_STR, und SQLite sortiert jeden Zahlwert VOR jedem Text — dort
+                        // waere `AVG(score) <= '2.5'` fuer JEDEN Durchschnitt wahr (gemessen: Ø 3,5
+                        // schlug an). Auf MySQL liefe dieselbe Zeile still richtig. Beide Werte sind
+                        // Klassenkonstanten, kein Nutzereingabe-Pfad.
+                        ->havingRaw('COUNT(*) >= '.self::FEEDBACK_MIN_N.' AND AVG(score) <= '.self::FEEDBACK_SCHWELLE)
+                        ->select('recipe_id')
+                ),
             ],
             'rezept_mengen_luecke' => [
                 'label' => 'Rezepte mit Mengen-Lücke (Zutat ohne Menge)',

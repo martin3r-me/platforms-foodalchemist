@@ -7,6 +7,7 @@ use Platform\FoodAlchemist\Livewire\Produktion\Tagesplan;
 use Platform\FoodAlchemist\Models\FoodAlchemistProductionOrderLine as Line;
 use Platform\FoodAlchemist\Models\FoodAlchemistProductionStation as Posten;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
+use Platform\FoodAlchemist\Models\FoodAlchemistRecipeFeedback;
 use Platform\FoodAlchemist\Models\FoodAlchemistVocabKochequipment;
 use Platform\FoodAlchemist\Services\ProductionOrderService;
 use Platform\FoodAlchemist\Tests\Support\SeedsTeamHierarchy;
@@ -476,6 +477,58 @@ it('zeigt einen durchgaengigen Behaelter EINMAL, und den Grund wenn nichts bemes
         ->call('oeffneAnleitung', $lineId)
         ->assertSeeHtml('data-tagesplan-wall-behaelter')
         ->assertSee('Ausbeute (yield_kg) fehlt');
+});
+
+/**
+ * Der Mitarbeiter am Posten bewertet das Rezept, das er gerade gekocht hat. Entscheidend ist,
+ * dass es in DIESELBE Ablage geht wie der Feedback-Tab des Rezepts — sonst haette das Rezept
+ * zwei Ø-Scores, die auseinanderlaufen.
+ */
+it('nimmt am Wandmonitor ein Kuechen-Feedback auf und legt es an derselben Stelle ab wie der Editor', function () {
+    $lineId = Line::where('production_order_id', $this->a1->id)->value('id');
+    $recipeId = (int) Line::whereKey($lineId)->value('recipe_id');
+
+    Livewire::test(Tagesplan::class, ['von' => '2026-08-20', 'display' => 'wall'])
+        ->set('modus', 'editor')
+        ->call('oeffneAnleitung', $lineId)
+        ->assertSeeHtml('data-tagesplan-wall-feedback')
+        ->assertSeeHtml('data-tagesplan-wall-feedback-speichern')
+        ->call('feedbackSetzen', 'score', 2)
+        ->call('feedbackSetzen', 'machbarkeit', 3)
+        ->set('feedbackForm.comment', 'Ansatz zu groß für den Kipper.')
+        ->call('feedbackSpeichern')
+        ->assertSet('fehler', null)
+        ->assertSet('feedbackGespeichert', true)
+        ->assertSet('feedbackForm.score', null);   // Bogen ist wieder leer, kein Doppel-Eintrag
+
+    $f = FoodAlchemistRecipeFeedback::where('recipe_id', $recipeId)->latest('id')->first();
+
+    expect($f)->not->toBeNull()
+        ->and($f->quelle->value)->toBe('kueche')
+        ->and($f->score)->toBe(2)
+        ->and($f->machbarkeit)->toBe(3)
+        ->and($f->created_via)->toBe('fa_wall')
+        // Der Kontext kommt aus dem Auftrag und wurde nicht getippt — im Editor muesste ihn
+        // jemand aus dem Gedaechtnis nachtragen.
+        ->and($f->kontext_label)->not->toBeNull()
+        ->and($f->kontext_datum?->toDateString())->toBe('2026-08-20');
+});
+
+it('loescht den Wert, wenn dieselbe Zahl noch einmal getippt wird', function () {
+    $lineId = Line::where('production_order_id', $this->a1->id)->value('id');
+
+    Livewire::test(Tagesplan::class, ['von' => '2026-08-20', 'display' => 'wall'])
+        ->set('modus', 'editor')
+        ->call('oeffneAnleitung', $lineId)
+        ->call('feedbackSetzen', 'score', 4)
+        ->assertSet('feedbackForm.score', 4)
+        ->call('feedbackSetzen', 'score', 4)
+        ->assertSet('feedbackForm.score', null)
+        // Ohne Score UND ohne Kommentar gibt es nichts zu speichern — der Service sagt das,
+        // und der Fehler landet sichtbar an der Wand statt still im Log.
+        ->call('feedbackSpeichern')
+        ->assertSet('feedbackGespeichert', false)
+        ->assertSet('fehler', fn ($f) => str_contains((string) $f, 'Score oder einen Kommentar'));
 });
 
 it('öffnet im Wandmodus die touchfreundliche Anleitung mit Medienbereich', function () {

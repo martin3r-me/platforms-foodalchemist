@@ -51,10 +51,13 @@ it('hat für jeden Signal-Typ Label und Icon (Enum-Vollständigkeit)', function 
     // steuert ZWEI Typen auf derselben Ebene bei, beide mit KI-Herkunft:
     // `rezept_plausi_ki` (Rezeptur, S5b-1) und `rezept_gericht_vs_komponente`
     // (Bauart, S5b-2) — s. SignalTyp::istKiUrteil.
+    // Dazu `rezept_feedback_kritisch`: dritte Herkunft auf derselben Ebene — nicht Stammdaten
+    // und nicht KI, sondern MENSCHEN, die das Rezept gekocht haben (Wandmonitor-Feedback).
+    // Deterministisch ist die Zähl-Query trotzdem: sie liest abgelegte Bewertungen.
     $rezept = array_filter(SignalTyp::cases(), fn (SignalTyp $t) => $t->istRezeptQualitaet());
     $deterministisch = array_filter($rezept, fn (SignalTyp $t) => ! $t->istKiUrteil());
-    expect($rezept)->toHaveCount(13)
-        ->and($deterministisch)->toHaveCount(11)
+    expect($rezept)->toHaveCount(14)
+        ->and($deterministisch)->toHaveCount(12)
         ->and(SignalTyp::EkKetteUnvollstaendig->istRezeptQualitaet())->toBeFalse();
 });
 
@@ -121,6 +124,43 @@ it('löst die betroffenen Rezepte auf (betroffene/countFor teilen dieselbe Query
 // Jeder Check bekommt Positiv- UND Negativfall. Der Negativfall ist hier der
 // wichtigere: das Fixture-Standardrezept ist bewusst sauber, es DARF von keinem
 // Check angefasst werden. Ein Check, der es mitflaggt, würde das Cockpit fluten.
+
+/**
+ * Der einzige Rezept-Befund, dessen Quelle Menschen sind, die es gekocht haben (Wandmonitor).
+ *
+ * Der Negativfall ist hier der wichtigere: EINE schlechte Bewertung ist eine schlechte Schicht,
+ * kein schlechtes Rezept. Ein Signal darauf wuerde die Kueche lehren, nicht mehr zu bewerten.
+ */
+it('flaggt Rezepte mit wiederholt schlechtem Kuechen-Feedback — ein Ausreisser reicht nicht', function () {
+    $fb = app(\Platform\FoodAlchemist\Services\FeedbackService::class);
+    $bewerte = function (int $recipeId, array $scores) use ($fb) {
+        foreach ($scores as $s) {
+            $fb->erstelle($this->rootTeam, $recipeId, ['quelle' => 'kueche', 'score' => $s, 'created_via' => 'fa_wall']);
+        }
+    };
+
+    $schlecht = $this->makeRecipe($this->rootTeam, 'Zweimal durchgefallen');
+    $bewerte($schlecht->id, [1, 2]);                                        // ✗ Ø 1,5 bei n=2
+
+    $ausreisser = $this->makeRecipe($this->rootTeam, 'Eine schlechte Schicht');
+    $bewerte($ausreisser->id, [1]);                                         // n=1 → kein Befund
+
+    $gemischt = $this->makeRecipe($this->rootTeam, 'Schwankt, aber traegt');
+    $bewerte($gemischt->id, [2, 5]);                                        // Ø 3,5 → kein Befund
+
+    $this->makeRecipe($this->rootTeam, 'Nie bewertet');                     // gar kein Feedback
+
+    // Kundenstimmen sind kein Kuechen-Befund: der Koch kann nichts machbarer kochen, weil
+    // ein Gast das Gericht nicht mochte. Der Check misst ausdruecklich die Kueche.
+    $kunde = $this->makeRecipe($this->rootTeam, 'Gast war unzufrieden');
+    $fb->erstelle($this->rootTeam, $kunde->id, ['quelle' => 'kunde', 'score' => 1]);
+    $fb->erstelle($this->rootTeam, $kunde->id, ['quelle' => 'kunde', 'score' => 1]);
+
+    $m = rqMetrik($this->dq->messeAlleEbenen($this->rootTeam), 'rezept_feedback_kritisch');
+
+    expect($m['wert'])->toBe(1)
+        ->and($m['signal']['sev'])->toBe(SignalSeverity::Warnung);   // Befund, kein Produktionsstopp
+});
 
 it('flaggt produktive Rezepte ohne Zubereitung — und lässt Stubs/Entwürfe aus', function () {
     $this->makeRecipe($this->rootTeam, 'Sauber dokumentiert');                                    // langer Text → ok

@@ -728,6 +728,53 @@
                             </section>
                         @endif
 
+                        {{-- Am Ende, wo es hingehoert: bewertet wird, was gekocht wurde. Landet ueber
+                             FeedbackService in derselben Ablage wie der Feedback-Tab des Rezepts. --}}
+                        <section class="rounded-xl border border-white/10 bg-white/5 px-3 py-2" data-tagesplan-wall-feedback>
+                            <h3 class="text-base font-bold">Feedback zum Rezept</h3>
+                            @if($feedbackGespeichert)
+                                <p class="mt-1 text-xs text-emerald-300" data-tagesplan-wall-feedback-ok>Gespeichert — steht jetzt am Rezept.</p>
+                            @else
+                                <p class="mt-0.5 text-xs text-slate-400">Die Küche, die es kocht, ist die ehrlichste Quelle.</p>
+                            @endif
+
+                            @php
+                                $fbAchsen = [
+                                    'score' => 'Wie lief es?',
+                                    'machbarkeit' => 'Machbarkeit',
+                                    'aufwand' => 'Aufwand',
+                                    'geschmack' => 'Geschmack',
+                                ];
+                            @endphp
+                            <div class="mt-2 space-y-2">
+                                @foreach($fbAchsen as $fbKey => $fbLabel)
+                                    <div wire:key="fb-{{ $fbKey }}">
+                                        <span class="block text-xs text-slate-400">{{ $fbLabel }}</span>
+                                        <div class="mt-1 flex gap-1.5" data-tagesplan-wall-feedback-achse="{{ $fbKey }}">
+                                            @for($fbN = 1; $fbN <= 5; $fbN++)
+                                                @php
+                                                    $fbAktiv = (int) ($feedbackForm[$fbKey] ?? 0) === $fbN;
+                                                @endphp
+                                                <button type="button"
+                                                        wire:click="feedbackSetzen('{{ $fbKey }}', {{ $fbN }})"
+                                                        class="h-11 min-w-11 flex-1 rounded-lg border text-base font-bold tabular-nums transition {{ $fbAktiv ? 'border-violet-300/60 bg-violet-500/30 text-white' : 'border-white/10 bg-slate-950/30 text-slate-300' }}"
+                                                        @if($fbAktiv) data-tagesplan-wall-feedback-aktiv @endif>{{ $fbN }}</button>
+                                            @endfor
+                                        </div>
+                                    </div>
+                                @endforeach
+
+                                <textarea wire:model="feedbackForm.comment" rows="2"
+                                          class="w-full rounded-lg border border-white/10 bg-slate-950/30 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500"
+                                          placeholder="Was lief, was fehlte, was man ändern müsste …"
+                                          data-tagesplan-wall-feedback-kommentar></textarea>
+
+                                <button type="button" wire:click="feedbackSpeichern"
+                                        class="h-11 w-full rounded-lg border border-violet-300/40 bg-violet-500/30 text-sm font-bold text-white"
+                                        data-tagesplan-wall-feedback-speichern>Feedback speichern</button>
+                            </div>
+                        </section>
+
                     </aside>
 
                     <section class="rounded-xl border border-white/10 bg-white/5 p-3" data-tagesplan-wall-media>
