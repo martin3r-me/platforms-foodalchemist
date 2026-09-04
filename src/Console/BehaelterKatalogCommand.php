@@ -53,18 +53,21 @@ class BehaelterKatalogCommand extends Command
         $teamId = $this->option('team') !== null ? (int) $this->option('team') : null;
         $apply = (bool) $this->option('apply');
 
+        // ★ Entdoppelt wird ueber den NAMEN, nicht den Slug. Der Bestand aus dem WaWi-Import
+        // schreibt `gn_1_1_65mm`, Str::slug hier `gn_11_65mm` — verschiedene Slugs, gleicher
+        // Behaelter. Die erste Fassung verglich Slugs und legte auf demo 16 GN-Groessen ein
+        // zweites Mal an (Reparatur: Migration 2026_09_04_000015).
         $vorhanden = DB::table(self::TABELLE)
             ->when($teamId === null, fn ($q) => $q->whereNull('team_id'), fn ($q) => $q->where('team_id', $teamId))
             ->whereNull('deleted_at')
-            ->pluck('slug')->flip();
+            ->pluck('name')->map(fn ($n) => self::namensSchluessel((string) $n))->flip();
 
         $neu = [];
         foreach ($this->katalog() as $zeile) {
-            $slug = Str::slug($zeile['name'], '_');
-            if (isset($vorhanden[$slug])) {
+            if (isset($vorhanden[self::namensSchluessel($zeile['name'])])) {
                 continue;
             }
-            $neu[] = ['slug' => $slug] + $zeile;
+            $neu[] = ['slug' => Str::slug($zeile['name'], '_')] + $zeile;
         }
 
         if ($neu === []) {
@@ -90,9 +93,11 @@ class BehaelterKatalogCommand extends Command
         // global. Wer den Grundstock dann global anlegt, sieht anschliessend beides nebeneinander —
         // dieselben GN-Groessen zweimal, einmal team-eigen und einmal geerbt.
         if ($teamId === null) {
-            $slugs = collect($neu)->pluck('slug');
+            $namen = collect($neu)->map(fn (array $z) => self::namensSchluessel($z['name']))->flip();
             $kollision = DB::table(self::TABELLE)->whereNotNull('team_id')->whereNull('deleted_at')
-                ->whereIn('slug', $slugs)->select('team_id')->distinct()->pluck('team_id');
+                ->get(['team_id', 'name'])
+                ->filter(fn ($r) => $namen->has(self::namensSchluessel((string) $r->name)))
+                ->pluck('team_id')->unique()->values();
             if ($kollision->isNotEmpty()) {
                 $this->warn('⚠ Team '.$kollision->implode(', ').' hat bereits Behälter mit denselben Namen.');
                 $this->line('  Global anzulegen erzeugt Dubletten (team-eigen + geerbt nebeneinander).');
@@ -184,5 +189,19 @@ class BehaelterKatalogCommand extends Command
         }
 
         return $zeilen;
+    }
+
+    /**
+     * „GN 1/1 65mm", „GN 1/1-65" und „gn 1/1 65 mm" ergeben denselben Schluessel.
+     * Wortgleich in Migration 2026_09_04_000015 — Migrationen duerfen nicht auf App-Klassen
+     * zeigen, die sich spaeter aendern.
+     */
+    public static function namensSchluessel(string $name): string
+    {
+        $s = mb_strtolower(trim($name));
+        $s = (string) preg_replace('/(\d)\s*mm\b/u', '$1', $s);
+        $s = (string) preg_replace('/[^\p{L}\p{N}]+/u', ' ', $s);
+
+        return trim((string) preg_replace('/\s+/u', ' ', $s));
     }
 }
