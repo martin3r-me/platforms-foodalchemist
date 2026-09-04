@@ -31,6 +31,28 @@ $briefingKlausel = 'BRIEFING (optional, Feld `briefing`): ist es gefuellt, ist e
     . 'Widerspricht das Briefing der Ebenen-Abgrenzung, gilt die Abgrenzung. Ist `briefing` '
     . 'leer oder fehlt es, entscheide fachlich frei. ';
 
+/**
+ * MENGEN-VERBOT für Schrittfolgen (2026-09-04, Dominique).
+ *
+ * Anlass: ein Zucchini-Puffer-Rezept war auf ~33 Portionen je Ansatz skaliert. Die
+ * Zutatenliste zeigte 166 g Salz und 33 Stück Eier, die Anleitung sagte weiter „mit 10 g
+ * Salz mischen" und „2 Eiern" — die Mengen des Ur-Ansatzes. Wer nach der Anleitung
+ * arbeitet, produziert Ausschuss, und der Fehler ist nicht sichtbar: beide Angaben sehen
+ * für sich plausibel aus.
+ *
+ * Die Zutatenliste ist die EINZIGE Mengen-Wahrheit — sie skaliert mit, der Schritt-Text
+ * nicht. Zeiten, Temperaturen und Größenangaben bleiben dagegen konkret: die ändern sich
+ * beim Hochrechnen nicht.
+ */
+$mengenVerbot = 'MENGEN (verbindlich): schreibe KEINE absoluten Mengen in die Schritte — '
+    . 'kein «10 g Salz», kein «2 Eier», kein «80 g Mehl». Der Ansatz wird skaliert, die '
+    . 'Zutatenliste ist die einzige Mengen-Wahrheit; eine Zahl im Schritt-Text wird beim '
+    . 'Hochrechnen still falsch. Verweise stattdessen auf die Zutat selbst («das Salz», '
+    . '«die Eier», «das Mehl») oder nenne ANTEILE («die Haelfte des Oels», «ein Drittel '
+    . 'der Butter»). Zeiten, Temperaturen, Kerntemperaturen und Groessenangaben '
+    . '(Wuerfelgroesse, Durchmesser, Schichtdicke) bleiben konkret — sie aendern sich beim '
+    . 'Skalieren nicht. ';
+
 return [
 
     /*
@@ -840,7 +862,10 @@ return [
                 // diese Portionsgröße; parameter.saison lenkt die Zutatenwahl auf das Erntefenster.
                 . 'Parameter (convenience, frische, bio, niveau, sektor, diaet_hart, allergen_nogo, aroma, ziel_portion_g, saison): werte = '
                 . '{name (§1-Syntax <Typ>: <Bezeichnung>), description (§8-Stil), taste_direction (grobe Menue-Richtung, NUR EIN Wort: suess|herzhaft|neutral — das Aroma-Profil gehoert in description), '
-                . 'preparation (Markdown-Schritte), zutaten: [{text, quantity, unit (g|ml|kg|l|el|tl|stk), '
+                // Der Generator schreibt Schritte MIT der Zutatenliste in einem Zug — genau hier
+                // entstand die Drift: er nennt die Mengen seines eigenen Ansatzes im Text, und der
+                // Text bleibt stehen, wenn der Ansatz später skaliert wird.
+                . 'preparation (Markdown-Schritte; ' . $mengenVerbot . '), zutaten: [{text, quantity, unit (g|ml|kg|l|el|tl|stk), '
                 . 'slug (hauptzutat), commodity_group, note, '
                 // Grounding (2026-08-20): explizite Rückbindung an den Bestand. gp_id/sub_rezept_id
                 // sind die id EINES unter gp_kandidaten/rezept_kandidaten gelisteten Eintrags, wenn die
@@ -981,7 +1006,7 @@ return [
                 // `recipe.steps`: die Fertigstellung am Einsatztag (Regelwerk Verkaufsgerichte §3).
                 . 'preparation (= FERTIGSTELLEN am Einsatztag: bereitstellen, portionieren, tranchieren, '
                 . 'montieren, abschmecken, uebergeben — NICHT die Produktion der Komponenten, NICHT das '
-                . 'Regenerations-Programm und NICHT der Teller-Aufbau), '
+                . 'Regenerations-Programm und NICHT der Teller-Aufbau; ' . $mengenVerbot . '), '
                 // Spec 37: role/fit-Parität zum Basis-Prompt — dieselbe Zutaten-Selbstbegründung
                 // (senkt plausibel klingende Fremdkörper VOR dem Kritiker-Pass, sobald das VK-Gate scharf wird).
                 . 'zutaten: [{text, quantity, unit (g|ml|kg|l|el|tl|stk), slug, note, '
@@ -1209,7 +1234,7 @@ return [
                 . 'Buendele zusammengehoerige Kuechenhandlungen sinnvoll; keine Mikro-Schritte fuer Waschen, Schneiden, '
                 . 'Pfanne erhitzen oder einzelne Gewuerzzugaben, wenn sie fachlich zusammengehoeren. '
                 . 'Einfache Rezepte: 3-5 Schritte; komplexe Rezepte: 6-9 Schritte; maximal 9 Schritte. '
-                . 'Temperaturen/Zeiten/Mengen konkret, aber Kleinstmengen nicht mechanisch in jeden Satz kopieren. '
+                . $mengenVerbot
                 . 'Keine Fuellsaetze. '
                 . $briefingKlausel
                 . 'phase = Abschnittsname (z. B. Mise en Place, Garen, Finish) oder null, gleiche Phase '
@@ -1378,7 +1403,9 @@ return [
                 . 'Ueberschrift). Ein Schritt = EIN Handgriff am Pass, in Aufbau-Reihenfolge: '
                 . 'Teller/Vehikel vorbereiten, Basis (Sauce/Creme/Spiegel) setzen, Hauptkomponente '
                 . 'platzieren, Beilagen anlegen, Garnitur, Finish (Sauce nachziehen, Crunch zuletzt), '
-                . 'Uebergabe. Nenne die Menge je Teller pro Komponente. '
+                . 'Uebergabe. Nenne die Menge JE TELLER pro Komponente — eine Teller-Menge ist '
+                . 'skalierungsfest. Ansatz- oder Gesamtmengen gehoeren NICHT in die Schritte: die '
+                . 'Zutatenliste skaliert mit, der Schritt-Text nicht. '
                 . 'ABGRENZUNG (verbindlich): KEINE Produktion der Komponenten, KEIN Regenerations-'
                 . 'Programm (keine Grad-, Minuten- oder Kerntemperatur-Werte fuers Wiedererhitzen) '
                 . 'und keine Fertigstellungs-Handgriffe wie tranchieren oder portionieren — die '
