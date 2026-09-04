@@ -582,6 +582,9 @@
                         <option value="{{ $klasse }}">{{ $klasse }} ({{ number_format($kgProLiter, 2, ',', '') }} kg/l)</option>
                     @endforeach
                 </select>
+                <button type="button" wire:click="kiDichteklasse" class="{{ $btnAi }}"
+                        title="recipe.dichteklasse: Produkteigenschaft schaetzen — nie die Behaelterzahl"
+                        data-ki-dichteklasse>@svg('heroicon-o-sparkles', 'w-3.5 h-3.5')Schaetzen</button>
                 <span class="text-[11px] text-gray-400">greift nur, wo keine Referenzmenge steht</span>
             </div>
 

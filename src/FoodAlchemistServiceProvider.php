@@ -554,6 +554,12 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\RecipeRegenerationPutTool::class,
                     \Platform\FoodAlchemist\Tools\RecipeRegenerationDeleteTool::class,
                     \Platform\FoodAlchemist\Tools\RecipeRegenerationReorderTool::class,
+                    // Spec 51: Kaskade lesen (Herkunft je Zeile) + Behälter je Zweck + gerechneter Bedarf.
+                    \Platform\FoodAlchemist\Tools\RecipeRegenerationGetTool::class,
+                    \Platform\FoodAlchemist\Tools\RecipeContainerPutTool::class,
+                    \Platform\FoodAlchemist\Tools\RecipeContainerDeleteTool::class,
+                    \Platform\FoodAlchemist\Tools\BehaelterBedarfGetTool::class,
+                    \Platform\FoodAlchemist\Tools\BehaelterKatalogGetTool::class,
                     \Platform\FoodAlchemist\Tools\RecipeCustomerNamesPostTool::class,
                     \Platform\FoodAlchemist\Tools\RecipeCustomerNamesDeleteTool::class,
                     // D3d: KI-Rollenverteilung (Vorschlag/accept) + kulinarische Kohärenz/Teller-Heber.

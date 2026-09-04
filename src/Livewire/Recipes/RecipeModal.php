@@ -18,6 +18,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistVocabContainer;
 use Platform\FoodAlchemist\Models\FoodAlchemistVocabKochequipment;
 use Platform\FoodAlchemist\Services\Ai\AiGatewayService;
 use Platform\FoodAlchemist\Services\Ai\KnowledgeContextService;
+use Platform\FoodAlchemist\Services\BehaelterRechner;
 use Platform\FoodAlchemist\Services\BulkEnrichService;
 use Platform\FoodAlchemist\Services\FoodAlchemistMediaService;
 use Platform\FoodAlchemist\Services\PairingService;
@@ -915,6 +916,67 @@ class RecipeModal extends Component
 
         $this->regenerationLaden();
         $this->regenMeldung = 'Regeneration und Behälter gespeichert.';
+    }
+
+    /**
+     * KI-Vorschlag für Dichteklasse und Skalierung.
+     *
+     * Was die KI hier darf, ist eine PRODUKTeigenschaft: wie dicht liegt das Zeug im Behälter,
+     * und wächst beim Formatwechsel die Höhe mit oder nur die Fläche. Was sie NIE darf, ist die
+     * Anzahl Behälter — das ist eine Rechnung, und die Datenbank kennt die Kilogramm exakt
+     * (deshalb ist `vk.behaelter` ersatzlos entfallen).
+     *
+     * Der Vorschlag landet im Formular, nicht in der Datenbank: gespeichert wird erst mit dem
+     * Knopf darunter (GL-07 — die Übernahme ist eine Entscheidung des Menschen).
+     */
+    public function kiDichteklasse(AiGatewayService $gateway): void
+    {
+        $r = $this->rezept();
+        if ($r === null) {
+            return;
+        }
+
+        try {
+            $v = $gateway->propose('recipe.dichteklasse', [
+                'name' => $r->name,
+                'kategorie' => $r->category?->label,
+                'zutaten' => $r->ingredients->take(15)
+                    ->map(fn ($z) => $z->display_name ?: ($z->gp?->name ?? $z->raw_text))->filter()->values()->all(),
+            ]);
+        } catch (\RuntimeException $e) {
+            $this->regenMeldung = $e->getMessage();
+
+            return;
+        }
+
+        $klasse = $v->werte['dichteklasse'] ?? null;
+        $skalierung = $v->werte['skalierung'] ?? null;
+        $gesetzt = [];
+
+        if (is_string($klasse) && array_key_exists($klasse, BehaelterRechner::DICHTE)) {
+            $this->dichteklasse = $klasse;
+            $gesetzt[] = "Dichteklasse {$klasse}";
+        }
+
+        // Die Skalierung greift nur, wo noch nichts steht — ein gepflegter Wert ist eine
+        // Entscheidung und wird von einem Vorschlag nicht überschrieben (Override-First).
+        $erlaubt = ['tiefer_fuellbar', 'hoehe_gebunden', 'lagenware'];
+        if (is_string($skalierung) && in_array($skalierung, $erlaubt, true)) {
+            $leere = 0;
+            foreach (array_keys($this->behaelterForm) as $zweck) {
+                if (($this->behaelterForm[$zweck]['skalierung'] ?? '') === '') {
+                    $this->behaelterForm[$zweck]['skalierung'] = $skalierung;
+                    $leere++;
+                }
+            }
+            if ($leere > 0) {
+                $gesetzt[] = "Skalierung {$skalierung} in {$leere} Zweck(en)";
+            }
+        }
+
+        $this->regenMeldung = $gesetzt === []
+            ? 'KI lieferte keinen verwertbaren Vorschlag — nichts übernommen.'
+            : 'Vorschlag übernommen: '.implode(' · ', $gesetzt).'. Noch nicht gespeichert.';
     }
 
     /** Der häufigste gute Fall: das GN mit Deckel geht direkt aus dem Kühlhaus in den Ofen. */
