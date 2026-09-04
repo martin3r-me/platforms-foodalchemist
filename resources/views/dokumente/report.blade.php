@@ -109,6 +109,49 @@
 <main class="doc">
     @unless($pdf)
         <div class="actions">
+            {{-- E (2026-09-04): Bedarfs-Hochrechnung am Rezept/Gericht. Basisrezept in Ziel-Kilo,
+                 Gericht in „N × Darreichung" (Standard vorgewählt, umschaltbar) — dieselbe
+                 Mechanik wie die Concept-Auftragssimulation, nur die Eingabe unterscheidet sich. --}}
+            @if(($recipe ?? null) && ($hochrechnung ?? null))
+                <div class="simulation-control" data-report-hochrechnung>
+                    <strong>Bedarf hochrechnen:</strong>
+                    <form method="get" action="{{ request()->url() }}">
+                        @foreach(request()->except(['ziel_kg', 'ziel_menge', 'darreichung', 'pdf']) as $key => $value)
+                            @if(is_scalar($value))<input type="hidden" name="{{ $key }}" value="{{ $value }}">@endif
+                        @endforeach
+                        @if(($typ ?? '') === 'gericht' && ($hochrechnung['darreichungen'] ?? []) !== [])
+                            <input type="number" min="1" max="1000000" step="1" name="ziel_menge"
+                                   value="{{ (int) ($hochrechnung['ziel_menge'] ?? 0) ?: '' }}"
+                                   placeholder="Anzahl" aria-label="Anzahl der Verkaufseinheiten">
+                            <select name="darreichung" aria-label="Darreichung">
+                                @foreach($hochrechnung['darreichungen'] as $d)
+                                    <option value="{{ $d['id'] }}"
+                                        @selected(($hochrechnung['darreichung']['id'] ?? null) === $d['id']
+                                            || (($hochrechnung['darreichung'] ?? null) === null && $d['is_standard']))>
+                                        {{ $d['label'] }}{{ $d['gramm'] !== null ? ' · ' . number_format($d['gramm'], 0, ',', '.') . ' g' : ' · kein Gewicht' }}
+                                    </option>
+                                @endforeach
+                            </select>
+                        @else
+                            <input type="text" name="ziel_kg" inputmode="decimal"
+                                   value="{{ ($hochrechnung['ziel_kg'] ?? null) !== null ? str_replace('.', ',', (string) $hochrechnung['ziel_kg']) : '' }}"
+                                   placeholder="z. B. 50" aria-label="Zielmenge in Kilogramm" style="width:6em">
+                            <span>kg</span>
+                        @endif
+                        <button type="submit">Hochrechnen</button>
+                    </form>
+                    @if($hochrechnung['aktiv'] ?? false)
+                        <a class="active" href="{{ request()->fullUrlWithQuery(['ziel_kg' => null, 'ziel_menge' => null, 'darreichung' => null, 'pdf' => null]) }}">
+                            {{ number_format((float) $hochrechnung['ziel_kg'], 3, ',', '.') }} kg
+                            (Ansatz {{ number_format((float) ($hochrechnung['ansatz_kg'] ?? 0), 3, ',', '.') }} kg ·
+                            ×{{ number_format((float) $hochrechnung['faktor'], 2, ',', '.') }}) ×
+                        </a>
+                    @endif
+                    @if($hochrechnung['hinweis'] ?? null)
+                        <span style="color:#b45309">{{ $hochrechnung['hinweis'] }}</span>
+                    @endif
+                </div>
+            @endif
             @if($concept ?? null)
                 <div class="simulation-control" data-report-simulation-control>
                     <strong>Auftragssimulation:</strong>
@@ -151,6 +194,22 @@
         <h1>{{ $name ?? 'Report' }}</h1>
         <div class="rule"></div>
         <div class="muted">Profil: {{ $profile[$opt['profil'] ?? 'produktion'] ?? ($opt['profil'] ?? '—') }}</div>
+        {{-- Steht AUCH im PDF: ein hochgerechnetes Blatt darf nicht wie der Ansatz aussehen.
+             Die Arbeitszeit ist bewusst nicht mitskaliert (Rüstzeit fällt einmal an, Batch-
+             Grenzen und Standzeit rechnet der Produktionsplaner) — das wird hier gesagt,
+             statt eine linear hochgerechnete Zahl hinzustellen. --}}
+        @if($hochrechnung['aktiv'] ?? false)
+            <div style="margin-top:6px;padding:6px 10px;border-left:3px solid #7c3aed;background:#f5f3ff;font-size:11px">
+                <strong>Bedarf für {{ number_format((float) $hochrechnung['ziel_kg'], 3, ',', '.') }} kg</strong>
+                @if(($hochrechnung['ziel_menge'] ?? null) && ($hochrechnung['darreichung'] ?? null))
+                    — {{ $hochrechnung['ziel_menge'] }} × {{ $hochrechnung['darreichung']['label'] }}
+                @endif
+                · Ansatz {{ number_format((float) ($hochrechnung['ansatz_kg'] ?? 0), 3, ',', '.') }} kg
+                · Faktor ×{{ number_format((float) $hochrechnung['faktor'], 3, ',', '.') }}<br>
+                Mengen, Ausbeute und Einkaufswerte sind hochgerechnet. <strong>Arbeitszeiten nicht</strong> —
+                die sind nicht linear (Rüstzeit einmalig, Batch-Grenzen, Standzeit); dafür den Produktionsplaner nutzen.
+            </div>
+        @endif
     </header>
 
     @if($report ?? null)

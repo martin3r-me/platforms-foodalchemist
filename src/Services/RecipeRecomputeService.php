@@ -876,7 +876,13 @@ class RecipeRecomputeService
             : null;
 
         if ($z->unit?->dimension === 'count') {                 // T3 Zeile count
-            if ($pStk !== null) {
+            // €/Stk ist der Preis EINES GANZEN Artikel-Stücks — er gilt also nur, wenn die
+            // Rezept-Einheit auch das Stück meint. Vorher zählte jede Zähl-Einheit als Stück:
+            // „8 Scheiben" wurden als 8 ganze Baguettes mit 8,96 € bepreist statt mit 0,61 €
+            // (8 × 30 g × €/g). Vom Anzeige-Wächter gefunden, 2026-09-04. „stk" ist dabei
+            // system-weit das Stück — GpFormService spiegelt genau diesen Slug auf
+            // piece_default_g, alle anderen Formen tragen ihr eigenes Gramm-Gewicht.
+            if ($pStk !== null && $z->unit->slug === 'stk') {
                 return [$mengeAvg * $pStk, true, $bStk];
             }
             if ($mengeG > 0 && $pG !== null) {                     // count→mass-Brücke
@@ -889,11 +895,11 @@ class RecipeRecomputeService
             return [0.0, false, null];
         }
 
-        // mass/volume/pinch/piece
-        $stkDefaultG = $gp?->piece_default_g !== null ? (float) $gp->piece_default_g : null;
+        // mass/volume/pinch/piece — die Stk→g-Brücke steckt jetzt in `preisProGrammMitBasis`
+        // (dort erbt sie jeder €/g-Konsument), $pG deckt sie also mit ab. Präzedenz unverändert:
+        // kg/l vor Stk-Brücke vor Sub-Rezept.
         [$source, $basis] = match (true) {
             $pG !== null => [$pG, $bG],
-            $pStk !== null && $stkDefaultG > 0 => [$pStk / $stkDefaultG, $bStk],   // Stk→g-Brücke
             $pSub !== null => [$pSub, $bSub],
             default => [null, null],
         };
@@ -1011,22 +1017,51 @@ class RecipeRecomputeService
                 return (float) $sub->yield_kg * 1000 / $ertrag;
             }
         }
-        if ($unit?->default_in_g !== null) {
-            return (float) $unit->default_in_g;
-        }
-        if ($unit?->default_in_ml !== null) {
-            return (float) $unit->default_in_ml;                // Dichte 1.0 (Wasser)
-        }
+        // A (2026-09-04, Dominique): PRODUKTSPEZIFISCH VOR GLOBAL bei Zähl-Einheiten.
+        // Das Vokabular trägt für einige Zähl-Einheiten ein globales Gewicht (Bund = 30 g,
+        // Zweig = 2 g, Fäden = 0,01 g) — und das stand vorher VOR dem produktspezifischen.
+        // Damit war das ganze Formen-Feature ausgehebelt: ein per KI geschätztes „Bund
+        // Petersilie 60 g" wurde nie gelesen, ein Bund Petersilie wog so viel wie ein Bund
+        // Möhren. Genau der Fall, für den es das Feature gibt („halber Bund, ohne zu wissen
+        // was der wiegt"). Für Masse/Volumen ändert das nichts — dort greift dieser Block
+        // wegen dimension !== 'count' gar nicht und das globale Gewicht bleibt die Wahrheit.
         if ($unit?->dimension === 'count' && $z->gp_id !== null) {
+            // #9-Formen (gp_forms) sind die LEBENDE Quelle: der Formen-Editor am GP und die
+            // KI-Schätzung schreiben ausschliesslich hierhin, und der Modell-Docblock nennt
+            // form_slug ausdrücklich „für die EK-Umrechnung nutzbar". Gelesen wurde die Tabelle
+            // hier trotzdem nie (Befund 2026-09-04) — nur „stk" wirkte, weil GpFormService es auf
+            // piece_default_g spiegelt. „scheibe 30 g" stand im Rezept-Dropdown und landete mit
+            // Faktor 0 in Yield UND EK: die Zutat verschwand still aus beidem.
+            // Vorrang vor der Alt-Tabelle: die trägt 19 Import-Zeilen aus der WaWi und ist im UI
+            // nicht editierbar — wer im Editor ein Gewicht setzt, muss es wirken sehen.
+            $form = DB::table('foodalchemist_gp_forms')
+                ->where('gp_id', $z->gp_id)->where('form_slug', $unit->slug)
+                ->whereNull('deleted_at')->value('gramm');
+            if ($form !== null) {
+                return (float) $form;                              // T1 Zeile 3a (Formen-Editor/KI)
+            }
             $eintrag = DB::table('foodalchemist_gp_count_unit_defaults')
                 ->where('gp_id', $z->gp_id)->where('unit_vocab_id', $z->unit_vocab_id)
                 ->whereNull('deleted_at')->value('default_g');
             if ($eintrag !== null) {
-                return (float) $eintrag;                           // T1 Zeile 3 (Zehe 5 g / Knolle 40 g)
+                return (float) $eintrag;                           // T1 Zeile 3b (Zehe 5 g / Knolle 40 g)
             }
-            if ($z->gp?->piece_default_g !== null) {
-                return (float) $z->gp->piece_default_g;              // T1 Zeile 4
-            }
+        }
+
+        if ($unit?->default_in_g !== null) {
+            return (float) $unit->default_in_g;                    // T1 Zeile 4a: generische Naturalgrösse / Masse
+        }
+        if ($unit?->default_in_ml !== null) {
+            return (float) $unit->default_in_ml;                // Dichte 1.0 (Wasser)
+        }
+
+        // Stückgewicht gilt NUR beim Stück. Vorher fiel JEDE Zähl-Einheit darauf zurück:
+        // eine „Scheibe" wog das ganze Stück (440 g statt 30 g), eine „Portion" ebenso.
+        // Das ist eine Erfindung, keine Umrechnung — ohne hinterlegtes Gewicht ist die
+        // Naturalgrösse unbekannt (0 g) und fällt als unbepreist/ungewogen auf, statt
+        // still eine plausible falsche Zahl zu liefern.
+        if ($unit?->slug === 'stk' && $z->gp?->piece_default_g !== null) {
+            return (float) $z->gp->piece_default_g;                // T1 Zeile 4b
         }
 
         return 0.0;                                                // T1 Zeile 5: kein Beitrag
@@ -1042,6 +1077,16 @@ class RecipeRecomputeService
         return $this->preisProGrammFuer($gp);
     }
 
+    /** Stk-Zwilling zu preisProGrammPublic: €/Stk fürs Client-Live-Rechnen bei Stück-Zeilen. */
+    public function preisProStueckPublic(FoodAlchemistGp $gp, ?Team $team = null): ?float
+    {
+        $this->recomputeTeam = $team;
+        $this->laCache = [];
+        $this->leadPrefCache = [];
+
+        return $this->preisProStueckFuer($gp);
+    }
+
     /**
      * Preisvarianten für mehrere GPs in konstant vielen Abfragen. Der Zutateneditor braucht
      * dieselbe team-bewusste Lead-Wahrheit wie das Recompute, zusätzlich aber Minimum und Ø
@@ -1049,7 +1094,7 @@ class RecipeRecomputeService
      * und `GpService::lasForGp()` lud Artikel samt Aktivpreis nochmals je GP (N+1 beim Öffnen).
      *
      * @param  Collection<int, FoodAlchemistGp>  $gps
-     * @return array<int, array{lead: ?float, min: ?float, avg: ?float}>
+     * @return array<int, array{lead: ?float, min: ?float, avg: ?float, stk: ?float}>
      */
     public function preisVariantenProGrammPublic(Collection $gps, ?Team $team = null): array
     {
@@ -1097,10 +1142,25 @@ class RecipeRecomputeService
                 ->filter(fn ($la) => in_array($la->unit_code, ['kg', 'l'], true) && $la->aktiver_preis !== null)
                 ->map(fn ($la) => $this->preise->preisProGramm($la, (float) $la->aktiver_preis))
                 ->filter(fn ($wert) => $wert !== null)->values();
+            // Stk→g-Brücke für die Vergleichsspalten (EK ↓ / EK Ø): dieselbe Präzedenz wie
+            // `preisProGrammMitBasis` — erst wenn es KEINEN kg/l-Preis gibt, zählen die
+            // Stk-LAs über das Stückgewicht. Sonst blieben die zwei Spalten neben einem
+            // gefüllten Lead-EK leer und lasen sich wie „kein Vergleich möglich".
+            $stueckG = $gp->piece_default_g !== null ? (float) $gp->piece_default_g : null;
+            if ($werte->isEmpty() && $stueckG !== null && $stueckG > 0) {
+                $werte = $this->laCache[(int) $gp->id]
+                    ->filter(fn ($la) => $la->unit_code === 'Stk' && $la->qty > 0 && $la->aktiver_preis !== null)
+                    ->map(fn ($la) => ((float) $la->aktiver_preis) / (float) $la->qty / $stueckG)
+                    ->values();
+            }
             $result[(int) $gp->id] = [
                 'lead' => $this->preisProGrammFuer($gp),
                 'min' => $werte->isNotEmpty() ? (float) $werte->min() : null,
                 'avg' => $werte->isNotEmpty() ? (float) $werte->avg() : null,
+                // €/Stk direkt: eine Stück-Zeile braucht KEIN Gewicht, um bepreist zu sein
+                // (zutatKosten rechnet Menge × €/Stk). Ohne diesen Wert war der Client bei
+                // „3 Stk, kein Stückgewinn hinterlegt" auf 0,00 € — der Save auf 3,36 €.
+                'stk' => $this->preisProStueckFuer($gp),
             ];
         }
 
@@ -1132,6 +1192,14 @@ class RecipeRecomputeService
      * Dieselbe T3-Kaskade, aber mit der Herkunft (V-014): [€/g|null, basis|null].
      * Eine Regel-Stelle — `preisProGrammFuer` ist die Ein-Wert-Sicht darauf.
      *
+     * Inklusive der GL-11-Stk→g-Brücke (€/Stk ÷ Stückgewicht): die stand vorher NUR privat
+     * in `zutatKosten` und fehlte damit jedem anderen €/g-Konsumenten — Zutaten-Editor
+     * (Zeilen-EK/Σ/„bepreist“-Zähler), GP-Picker-Preisvorschau und Planungsblatt-Bedarf
+     * zeigten einen stk-bepreisten GP als unbepreist an, während der Save-Recompute ihn
+     * korrekt rechnete (Baguettes 1,12 €/Stk à 440 g: Kachel 28,06 € vs. Zeile „—“).
+     * Die Reihenfolge ist bewusst kg/l-Lead → kg/l-Ø → Stk-Lead → Stk-Ø, also byte-gleich
+     * zu der Präzedenz, die `zutatKosten` bisher über seine zwei match-Arme hatte.
+     *
      * @return array{0: ?float, 1: ?EkPriceBasis}
      */
     private function preisProGrammMitBasis(FoodAlchemistGp $gp): array
@@ -1157,7 +1225,21 @@ class RecipeRecomputeService
             }
         }
 
-        return $n > 0 ? [$summe / $n, EkPriceBasis::Avg] : [null, null];
+        if ($n > 0) {
+            return [$summe / $n, EkPriceBasis::Avg];
+        }
+
+        // Stk→g-Brücke: kein kg/l-LA, aber €/Stk + hinterlegtes Stückgewicht (gp_forms „stk“
+        // spiegelt auf piece_default_g). Ohne Gewicht bleibt es NULL — nie geraten.
+        $stueckG = $gp->piece_default_g !== null ? (float) $gp->piece_default_g : null;
+        if ($stueckG !== null && $stueckG > 0) {
+            [$pStk, $bStk] = $this->preisProStueckMitBasis($gp);
+            if ($pStk !== null) {
+                return [$pStk / $stueckG, $bStk];
+            }
+        }
+
+        return [null, null];
     }
 
     /** T3: Lead-€/Stk, sonst AVG-€/Stk über aktive Stk-LAs. */

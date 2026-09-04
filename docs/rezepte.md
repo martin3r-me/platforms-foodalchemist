@@ -22,9 +22,21 @@ Pro Rezept werden u. a. gepflegt:
 
 Der **Wareneinsatz** ergibt sich automatisch aus den Lead-LA-Preisen der enthaltenen Grundprodukte.
 
-### 👣 Die Zubereitung als Anleitung
+### 👣 Die Anleitung als Schrittfolge
 
-Die Zubereitung ist keine Textwand, sondern eine **Liste aus Schritten**. Ein Schritt hat eine Nummer, einen optionalen Abschnitt (z. B. „Mise en Place", „Garen", „Finish") und seine **eigenen Fotos**.
+> **Drei Ebenen am Gericht (ab 2026-09-04).** Ein Gericht trägt nicht eine Anleitung, sondern drei — mit verschiedenen Orten, Zeitpunkten und Adressaten. Die Tabs im Gericht-Editor folgen der Prozess-Reihenfolge:
+>
+> | Tab | Frage | Adressat |
+> |---|---|---|
+> | **Regeneration** | Wie wird es fertig gegart / auf Temperatur gebracht? | Küche vor Ort (oft Satellit) |
+> | **Fertigstellen** | Was passiert zwischen regeneriert und angerichtet — portionieren, tranchieren, montieren, abschmecken? | Küche |
+> | **Anrichten** | Wie wird der Teller aufgebaut und ausgegeben? | Pass |
+>
+> Die **Herstellung** der Komponenten steht in deren Basisrezepten; dort heißt der Tab weiter **Zubereitung**. Am Gericht heißt er **Fertigstellen**, weil „Zubereitung" dazu verleitete, die Komponenten-Arbeit dort einzutragen — die der Produktionsauftrag ohnehin als eigene Zeile je Rezept plant.
+>
+> Fertigstellen und Anrichten sind **beide** bebilderte Schrittfolgen und liegen in derselben Tabelle, getrennt über die Ebene; die Nummerierung beginnt je Ebene bei 1. Die Regeneration ist dagegen **strukturiert** — eine Zeile je Komponente mit Gerät, °C, Minuten und Kerntemperatur; sie kommt ohne Prosa aus.
+
+Eine Anleitung ist keine Textwand, sondern eine **Liste aus Schritten**. Ein Schritt hat eine Nummer, einen optionalen Abschnitt (z. B. „Mise en Place", „Garen", „Finish") und seine **eigenen Fotos**.
 
 - Die **Nummer entsteht aus der Reihenfolge** — sie wird nie getippt. Wer einen Schritt nach oben zieht, nummeriert alles automatisch neu.
 - **Fotos kleben am Schritt**, nicht an einer Nummer. Umsortieren verliert also keine Bildzuordnung mehr.
@@ -36,7 +48,7 @@ Die Zubereitung ist keine Textwand, sondern eine **Liste aus Schritten**. Ein Sc
 
 Für alles, was die Anleitung nur *liest* (Suche, Prozessanker-Erkennung, Auswertungen), wird zusätzlich eine Textfassung mitgeführt. Sie wird **automatisch aus den Schritten erzeugt** und ist deshalb nie von Hand zu pflegen.
 
-**Drucken.** Die Anleitung kommt an drei Stellen aufs Papier — jeweils mit einem Umschalter **mit Fotos / nur Text**:
+**Drucken.** Die Anleitung kommt an drei Stellen aufs Papier — jeweils mit einem Umschalter **mit Fotos / nur Text**. Regeneration und Anrichten sind dort **einzeln zuschaltbar**, damit sich Produktionsküche, Satellit und Pass jeweils das passende Blatt ziehen: im Produktions-Profil ist die Regeneration an und das Anrichten aus, im Voll-Profil beides, im Kalkulations-Auszug keins.
 
 | Wo | Wofür |
 |---|---|
@@ -110,7 +122,8 @@ Der Tausch ist damit die **Vorstufe zum Löschen**: erst umhängen, dann lösche
 Ein Gericht ist die **verkaufsfähige Speise** — der Teller, den der Gast bekommt. Es wird aus Komponenten zusammengesetzt (am besten aus fertigen Basisrezepten) und trägt alles, was es zum Verkauf braucht:
 
 - **Speisen-Klasse** — die Einordnung in die Verkaufs-Taxonomie.
-- **Plating & Service** — wie der Teller aufgebaut und serviert wird (nicht zu verwechseln mit der Produktion).
+- **Regeneration · Fertigstellen · Anrichten** — die drei Anleitungs-Ebenen (siehe oben), jede mit eigenem Tab, eigenem Adressaten und eigenem Druck-Schalter. Nicht zu verwechseln mit der Herstellung: die steht in den Basisrezepten der Komponenten.
+- **Verkaufseinheit** — Portion, Stück, Kilogramm oder Liter. Zeit und Posten am Gericht meinen die **Fertigstellung**; Rüstzeit und Vorproduzierbarkeit gibt es hier nicht (das sind Herstellungs-Größen der Komponenten).
 - **Preis & Marge** — der Verkaufspreis und was davon hängenbleibt.
 
 Weil ein Gericht auf Basisrezepten und Grundprodukten steht, kennt es seinen Wareneinsatz automatisch — die Grundlage für die [Kalkulation](kalkulation).

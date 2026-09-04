@@ -23,7 +23,7 @@ class GpFormsPutTool extends FoodAlchemistTool implements ToolContract, ToolMeta
     public function getDescription(): string
     {
         return 'Setzt/aktualisiert eine Naturaleinheit-Form eines team-eigenen GP (Gramm je Stück/Scheibe/…). '
-            . 'Erlaubte Formen: ' . implode(', ', GpFormService::FORM_SLUGS) . '. „stk" pflegt zugleich das Stückgewicht.';
+            . 'Erlaubte Formen: ' . implode(', ', GpFormService::formSlugs()) . '. „stk" pflegt zugleich das Stückgewicht.';
     }
 
     public function getSchema(): array
@@ -32,7 +32,7 @@ class GpFormsPutTool extends FoodAlchemistTool implements ToolContract, ToolMeta
             'type' => 'object',
             'properties' => [
                 'gp_id' => ['type' => 'integer', 'description' => 'GP-Id (team-eigen).'],
-                'form_slug' => ['type' => 'string', 'enum' => GpFormService::FORM_SLUGS, 'description' => 'Form-Slug.'],
+                'form_slug' => ['type' => 'string', 'enum' => GpFormService::formSlugs(), 'description' => 'Form-Slug.'],
                 'gramm' => ['type' => 'number', 'description' => 'Gewicht je Einheit in Gramm (> 0).'],
             ],
             'required' => ['gp_id', 'form_slug', 'gramm'],

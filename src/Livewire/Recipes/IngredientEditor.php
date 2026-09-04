@@ -11,6 +11,7 @@ use Platform\FoodAlchemist\Livewire\Concerns\InteractsWithSavedToast;
 use Platform\FoodAlchemist\Models\FoodAlchemistGp;
 use Platform\FoodAlchemist\Models\FoodAlchemistGpForm;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
+use Platform\FoodAlchemist\Models\FoodAlchemistRecipeIngredient;
 use Platform\FoodAlchemist\Models\FoodAlchemistVocabEinheit;
 use Platform\FoodAlchemist\Services\Ai\AiGatewayService;
 use Platform\FoodAlchemist\Services\ComponentEquivalentService;
@@ -259,6 +260,21 @@ class IngredientEditor extends Component
      * @param  array<int, string>  $formSlugs
      * @return array<int, string>
      */
+    /**
+     * Stufe 1 der T1-Kaskade: Stück-Ertrag eines Sub-Rezepts (Yield ÷ yield_pieces).
+     * Gilt bei JEDER Zähl-Einheit und schlägt alles andere — wie im Server-grammFaktor.
+     * Bewusst getrennt vom GP-Stückgewicht (Stufe 4b): das galt früher gemeinsam in
+     * EINEM Feld und war damit die Stelle, an der „Scheibe = ganzes Stück" entstand.
+     */
+    private function gProStueckSub(FoodAlchemistRecipeIngredient $z): ?float
+    {
+        $sub = $z->referencedRecipe;
+
+        return $sub !== null && $sub->yield_pieces !== null && (float) $sub->yield_pieces > 0 && $sub->yield_kg !== null
+            ? (float) $sub->yield_kg * 1000 / (float) $sub->yield_pieces
+            : null;
+    }
+
     private function erlaubteSlugs(bool $istFluessig, array $formSlugs, bool $hatStueck): array
     {
         $base = $istFluessig ? ['ml', 'l', 'g', 'kg'] : ['g', 'kg'];
@@ -295,14 +311,45 @@ class IngredientEditor extends Component
         // Performance: 30× preisProGrammPublic wären ~60 Queries je Tipper — stattdessen EINE
         // Bulk-Query (Ø €/g über aktive kg/l-LAs). Der präzise Lead-Wert kommt beim Parken nach.
         $aktiverPreis = app(PriceService::class)->activePriceSubquery()->toBase();
+        $stueckGJeGp = $gpModels->filter(fn ($gp) => $gp->piece_default_g !== null && (float) $gp->piece_default_g > 0)
+            ->mapWithKeys(fn ($gp) => [(int) $gp->id => (float) $gp->piece_default_g]);
         // Preis-Vorschau nur über team-sichtbare LAs (eigenes Team + Master-Kette + globaler Seed) —
         // sonst zeigt der Picker fremde Betriebs-Preise, während der Zeilen-EK team-bewusst rechnet.
+        // Stk-LAs zählen mit, sobald ein Stückgewicht hinterlegt ist (GL-11-Brücke, wie
+        // RecipeRecomputeService::preisProGrammMitBasis) — sonst stand ein stk-bepreister GP
+        // (TK-Baguette 1,12 €/Stk) hier preislos in der Liste, obwohl der EK ihn kennt.
         $ekJeGp = TeamScope::applyVisible(
             DB::table('foodalchemist_supplier_items'),
             'foodalchemist_supplier_items.team_id', $team)
             ->join('foodalchemist_supplier_item_structures AS s', 's.supplier_item_id', '=', 'foodalchemist_supplier_items.id')
             ->whereIn('s.gp_id', $gpModels->pluck('id'))->whereNull('s.deleted_at')
-            ->whereIn('foodalchemist_supplier_items.unit_code', ['kg', 'l'])
+            ->whereIn('foodalchemist_supplier_items.unit_code', ['kg', 'l', 'Stk'])
+            ->where('foodalchemist_supplier_items.qty', '>', 0)
+            ->where('foodalchemist_supplier_items.is_discontinued', false)
+            ->select('s.gp_id', 'foodalchemist_supplier_items.qty', 'foodalchemist_supplier_items.unit_code')
+            ->selectSub($aktiverPreis, 'aktiver_preis')
+            ->get()
+            ->filter(fn ($r) => $r->aktiver_preis !== null)
+            ->groupBy('gp_id')
+            ->map(function ($g, $gpId) use ($stueckGJeGp) {
+                $masse = $g->where('unit_code', '!=', 'Stk');
+                if ($masse->isNotEmpty()) {                        // kg/l schlägt die Brücke
+                    return $masse->avg(fn ($r) => ((float) $r->aktiver_preis) / (((float) $r->qty) * 1000));
+                }
+                $stueckG = $stueckGJeGp[(int) $gpId] ?? null;
+
+                return $stueckG !== null
+                    ? $g->avg(fn ($r) => ((float) $r->aktiver_preis) / (float) $r->qty / $stueckG)
+                    : null;
+            })
+            ->filter(fn ($wert) => $wert !== null);
+        // €/Stk je GP — eine Stück-Zeile ist auch ohne Stückgewicht bepreist.
+        $stkJeGp = TeamScope::applyVisible(
+            DB::table('foodalchemist_supplier_items'),
+            'foodalchemist_supplier_items.team_id', $team)
+            ->join('foodalchemist_supplier_item_structures AS s', 's.supplier_item_id', '=', 'foodalchemist_supplier_items.id')
+            ->whereIn('s.gp_id', $gpModels->pluck('id'))->whereNull('s.deleted_at')
+            ->where('foodalchemist_supplier_items.unit_code', 'Stk')
             ->where('foodalchemist_supplier_items.qty', '>', 0)
             ->where('foodalchemist_supplier_items.is_discontinued', false)
             ->select('s.gp_id', 'foodalchemist_supplier_items.qty')
@@ -310,13 +357,20 @@ class IngredientEditor extends Component
             ->get()
             ->filter(fn ($r) => $r->aktiver_preis !== null)
             ->groupBy('gp_id')
-            ->map(fn ($g) => $g->avg(fn ($r) => ((float) $r->aktiver_preis) / (((float) $r->qty) * 1000)));
+            ->map(fn ($g) => $g->avg(fn ($r) => ((float) $r->aktiver_preis) / (float) $r->qty));
         // #9c (Dominique 2026-08-28): je GP die im Rezept ERLAUBTEN Einheiten (Basis + hinterlegte Formen)
         // — der Dropdown zeigt dann nur Umrechenbares, nicht alle 30 Einheiten („das verwirrt").
-        $formSlugsJeGp = FoodAlchemistGpForm::whereIn('gp_id', $gpModels->pluck('id'))
-            ->get(['gp_id', 'form_slug'])->groupBy('gp_id')->map(fn ($g) => $g->pluck('form_slug')->all());
+        $formenJeGp = FoodAlchemistGpForm::whereIn('gp_id', $gpModels->pluck('id'))
+            ->get(['gp_id', 'form_slug', 'gramm'])->groupBy('gp_id');
+        $formSlugsJeGp = $formenJeGp->map(fn ($g) => $g->pluck('form_slug')->all());
+        $idFuerSlug = FoodAlchemistVocabEinheit::visibleToTeam($team)->where('is_inactive', false)
+            ->pluck('id', 'slug');
+        $formenGJeGp = $formenJeGp->map(fn ($g) => $g
+            ->filter(fn ($f) => $idFuerSlug->has($f->form_slug))
+            ->mapWithKeys(fn ($f) => [(int) $idFuerSlug[$f->form_slug] => (float) $f->gramm])
+            ->all());
         $gps = $gpModels
-            ->map(function ($gp) use ($ekJeGp, $formSlugsJeGp) {
+            ->map(function ($gp) use ($ekJeGp, $stkJeGp, $formSlugsJeGp, $formenGJeGp) {
                 $ek = $ekJeGp[$gp->id] ?? null;
                 $istFluessig = str_contains(mb_strtolower($gp->name.' '.($gp->condition ?? '')), 'fluessig');
 
@@ -327,6 +381,12 @@ class IngredientEditor extends Component
                     // Spec: Einheit hängt am Produkt (Chilipulver→g, Bier→ml) — Override im Dropdown
                     'einheit_slug' => $istFluessig ? 'ml' : 'g',
                     'einheiten' => $this->erlaubteSlugs($istFluessig, $formSlugsJeGp[$gp->id] ?? [], $gp->piece_default_g !== null),
+                    // Wir bieten „stk" im Dropdown an, sobald ein Stückgewicht hinterlegt ist —
+                    // dann muss der Client es auch KENNEN, sonst rechnet er die Zeile mit
+                    // Faktor 0 (Anteil %/Yield/EK leer), während der Save 25 Stk voll ansetzt.
+                    'stueck_gewicht' => $gp->piece_default_g !== null ? (float) $gp->piece_default_g : null,
+                    'formen_g' => $formenGJeGp[$gp->id] ?? [],
+                    'ek_pro_stk' => $stkJeGp[$gp->id] ?? null,
                 ];
             })->values()->all();
 
@@ -366,6 +426,57 @@ class IngredientEditor extends Component
 
     /** R18: präziser Lead-€/g fürs geparkte Ziel (T3-Logik) — die Listen tragen nur den Bulk-Ø. */
     #[Renderless]
+    /**
+     * ♻-Ersatz-Tausch: Preis UND Gramm-Umrechnung des neuen Ziels in EINEM Round-Trip.
+     * Der ♻-Pfad setzte g_pro_stueck bisher auf null und liess es dort — die Zeile blieb
+     * nach dem Tausch auf ein Stück-Produkt rechnerisch blind (Anteil %/Yield/EK leer),
+     * bis gespeichert wurde. `ekFuerZiel` bleibt als Ein-Wert-Sicht unberührt (drei
+     * Aufrufer, ?float-Vertrag) und delegiert hierhin — eine Regel-Stelle.
+     *
+     * @return array{ek_pro_g: ?float, ek_pro_stk: ?float, g_pro_stueck: ?float, stueck_gewicht: ?float, formen_g: array<int, float>}
+     */
+    public function zielDaten(string $typ, int $id): array
+    {
+        $leer = ['ek_pro_g' => null, 'ek_pro_stk' => null, 'g_pro_stueck' => null, 'stueck_gewicht' => null, 'formen_g' => []];
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team === null) {
+            return $leer;
+        }
+        if ($typ === 'gp') {
+            $gp = FoodAlchemistGp::visibleToTeam($team)->find($id);
+            if ($gp === null) {
+                return $leer;
+            }
+            $idFuerSlug = FoodAlchemistVocabEinheit::visibleToTeam($team)->where('is_inactive', false)
+                ->pluck('id', 'slug');
+
+            return [
+                'ek_pro_g' => app(RecipeRecomputeService::class)->preisProGrammPublic($gp, $team),
+                'ek_pro_stk' => app(RecipeRecomputeService::class)->preisProStueckPublic($gp, $team),
+                'g_pro_stueck' => null,                        // GP ist kein Sub-Rezept
+                'stueck_gewicht' => $gp->piece_default_g !== null ? (float) $gp->piece_default_g : null,
+                'formen_g' => FoodAlchemistGpForm::where('gp_id', $gp->id)->get(['form_slug', 'gramm'])
+                    ->filter(fn ($f) => $idFuerSlug->has($f->form_slug))
+                    ->mapWithKeys(fn ($f) => [(int) $idFuerSlug[$f->form_slug] => (float) $f->gramm])
+                    ->all(),
+            ];
+        }
+        $r = FoodAlchemistRecipe::visibleToTeam($team)->find($id);
+        if ($r === null) {
+            return $leer;
+        }
+        $hatStueck = $r->yield_pieces !== null && (float) $r->yield_pieces > 0 && $r->yield_kg !== null;
+
+        return [
+            'ek_pro_g' => $r->ek_per_kg_eur !== null ? ((float) $r->ek_per_kg_eur) / 1000 : null,
+            'ek_pro_stk' => null,                                  // Sub-Rezepte tragen €/kg, kein €/Stk
+            // Stück-Sub: eigener Stück-Ertrag, identisch zur Server-grammFaktor-Regel
+            'g_pro_stueck' => $hatStueck ? (float) $r->yield_kg * 1000 / (float) $r->yield_pieces : null,
+            'stueck_gewicht' => null,                              // Sub-Rezepte tragen kein GP-Stückgewicht
+            'formen_g' => [],                                      // Formen hängen am GP, nicht am Rezept
+        ];
+    }
+
     public function ekFuerZiel(string $typ, int $id): ?float
     {
         $team = Auth::user()?->currentTeamRelation;
@@ -390,24 +501,40 @@ class IngredientEditor extends Component
             ? app(RecipeService::class)->detailAnySicht($team, $this->recipeId)
             : null;
 
+        // Vokabular VOR den Zeilen: die Formen-Map unten braucht slug → unit_vocab_id.
+        $einheiten = $team !== null
+            ? FoodAlchemistVocabEinheit::visibleToTeam($team)->where('is_inactive', false)
+                ->orderBy('sort_order')->get(['id', 'slug', 'display_de', 'dimension', 'default_in_g', 'default_in_ml'])
+            : collect();
+        $idFuerSlug = $einheiten->pluck('id', 'slug');
+
         $zeilen = [];
         if ($rezept !== null) {
             // #9c: erlaubte Einheiten je GP der Bestandszeilen (Basis + hinterlegte Formen) für den Dropdown-Filter.
             $gpIds = $rezept->ingredients->pluck('gp_id')->filter()->unique()->all();
-            $formSlugsJeGp = $gpIds !== []
-                ? FoodAlchemistGpForm::whereIn('gp_id', $gpIds)->get(['gp_id', 'form_slug'])
-                    ->groupBy('gp_id')->map(fn ($g) => $g->pluck('form_slug')->all())
+            $formenJeGp = $gpIds !== []
+                ? FoodAlchemistGpForm::whereIn('gp_id', $gpIds)->get(['gp_id', 'form_slug', 'gramm'])->groupBy('gp_id')
                 : collect();
+            $formSlugsJeGp = $formenJeGp->map(fn ($g) => $g->pluck('form_slug')->all());
+            // Gewicht je Einheit fürs Client-Live-Rechnen — Spiegel des Server-grammFaktor,
+            // der die Formen jetzt liest. Ohne diese Map käme der Client bei „scheibe" wieder
+            // auf Faktor 0, während der Save korrekt 30 g ansetzt.
+            $formenGJeGp = $formenJeGp->map(fn ($g) => $g
+                ->filter(fn ($f) => $idFuerSlug->has($f->form_slug))
+                ->mapWithKeys(fn ($f) => [(int) $idFuerSlug[$f->form_slug] => (float) $f->gramm])
+                ->all());
             $preisVarianten = $recompute->preisVariantenProGrammPublic(
                 $rezept->ingredients->pluck('gp')->filter()->unique('id')->values(),
                 $team,
             );
             foreach ($rezept->ingredients as $z) {
                 $ekProG = null;
+                $ekProStk = null;
                 $varianten = ['min' => null, 'avg' => null];
                 if ($z->gp !== null) {
-                    $gpPreise = $preisVarianten[(int) $z->gp->id] ?? ['lead' => null, 'min' => null, 'avg' => null];
+                    $gpPreise = $preisVarianten[(int) $z->gp->id] ?? ['lead' => null, 'min' => null, 'avg' => null, 'stk' => null];
                     $ekProG = $gpPreise['lead'];
+                    $ekProStk = $gpPreise['stk'] ?? null;
                     $varianten = ['min' => $gpPreise['min'], 'avg' => $gpPreise['avg']];
                 } elseif ($z->referencedRecipe?->ek_per_kg_eur !== null) {
                     $ekProG = ((float) $z->referencedRecipe->ek_per_kg_eur) / 1000;
@@ -444,6 +571,17 @@ class IngredientEditor extends Component
                     'ek_pro_g' => $ekProG,
                     'ek_pro_g_min' => $varianten['min'],
                     'ek_pro_g_avg' => $varianten['avg'],
+                    // g/Stück fürs Live-Rechnen bei Zähl-Einheiten — GP: hinterlegtes
+                    // Stückgewicht, Sub-Rezept: eigener Stück-Ertrag (Yield ÷ yield_pieces).
+                    // Spiegelt RecipeRecomputeService::grammFaktor; fehlte hier komplett,
+                    // deshalb waren Anteil %/Yield/EK einer stk-Zeile leer.
+                    // T1-Kaskade, in Stufen getrennt gespiegelt (siehe gFaktor im Blade):
+                    'g_pro_stueck' => $this->gProStueckSub($z),          // 1: Sub-Stück-Ertrag
+                    'stueck_gewicht' => $z->gp?->piece_default_g !== null // 4b: NUR bei „stk"
+                        ? (float) $z->gp->piece_default_g : null,
+                    'formen_g' => $z->gp_id !== null ? ($formenGJeGp[$z->gp_id] ?? []) : [],
+                    // €/Stück fürs gewichtsfreie Stück-Rechnen (Spiegel zutatKosten count-Zweig)
+                    'ek_pro_stk' => $ekProStk,
                     'ersatz' => null,                                 // Äquivalenz-Katalog — gebündelt unten
                 ];
             }
@@ -464,11 +602,6 @@ class IngredientEditor extends Component
             }
             unset($z);
         }
-
-        $einheiten = $team !== null
-            ? FoodAlchemistVocabEinheit::visibleToTeam($team)->where('is_inactive', false)
-                ->orderBy('sort_order')->get(['id', 'slug', 'display_de', 'dimension', 'default_in_g', 'default_in_ml'])
-            : collect();
 
         // R18: Filter-Vokabulare für die Seitenspalten (klein genug für einmaliges Mitgeben;
         // der Client verengt Kategorien nach gewählter Hauptgruppe selbst)

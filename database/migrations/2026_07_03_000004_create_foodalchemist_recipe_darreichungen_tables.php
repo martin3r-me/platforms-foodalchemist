@@ -64,6 +64,10 @@ return new class extends Migration
 
             // Genau EIN Standard pro Gericht (partieller Unique-Index; SQLite + Postgres).
             // MySQL kennt keine partiellen Indizes — dort erzwingt der Service die Invariante.
+            // ACHTUNG: auf SQLite überlebt dieser Index den späteren FK-Nachtrag in
+            // 2026_07_03_000007 NICHT (Laravel baut die Tabelle neu und schreibt Indizes mit
+            // eigener Grammatik nach — ohne WHERE). Die Reparatur steht darum in
+            // 2026_09_04_000001_repair_darreichung_ein_standard_index.
             if (in_array(DB::connection()->getDriverName(), ['sqlite', 'pgsql'], true)) {
                 DB::statement(
                     'CREATE UNIQUE INDEX fa_recipe_darreichungen_ein_standard'
@@ -71,6 +75,7 @@ return new class extends Migration
                     .' WHERE is_standard = 1 AND deleted_at IS NULL'
                 );
             }
+
         }
 
         // Recovery: failed Prod-Deploy hinterließ Tabelle mit den ersten kurzen FKs,

@@ -1092,9 +1092,29 @@ return [
             'task' => 'Liste die natuerlichen Stueck-/Zaehl-FORMEN des Grundprodukts mit dem '
                 . 'Durchschnittsgewicht je EINER Einheit in Gramm — NUR real anwendbare Formen '
                 . '(z. B. Zwiebel: stk/wuerfel/scheibe/ring; Oel/Bruehe/Mehl: KEINE => leere Liste). '
-                . 'unit MUSS aus diesem Set stammen: stk, scheibe, wuerfel, streifen, blatt, ring, '
-                . 'zehe, bund, zweig. Unsichere Form weglassen (nicht schaetzen/erfinden): '
+                . 'unit MUSS aus dem mitgegebenen Set erlaubte_einheiten stammen (B/2026-09-04: '
+                . 'kommt aus dem Einheiten-Vokabular des Teams, damit Prompt und Katalog nicht '
+                . 'auseinanderlaufen — vorher stand hier eine feste Neuner-Liste, die real '
+                . 'benutzte Einheiten wie bund/zweige/beet/haende nicht enthielt). '
+                . 'Verpackungs-Einheiten sind im Set gar nicht enthalten und duerfen nie '
+                . 'geschaetzt werden (eine Flasche/Dose wiegt je Lieferant anders). '
+                . 'Unsichere Form weglassen (nicht schaetzen/erfinden): '
                 . 'werte = {einheiten: [{unit, gewicht_g}]}.',
+        ],
+        // D (2026-09-04): Rezeptzeilen, die in einer VERPACKUNGS-Einheit dosieren („1,5 Paeckchen
+        // Vanillinzucker"), auf Masse bringen. Die Gebindegroesse des Lieferantenartikels ist die
+        // BESSERE Quelle und wird deterministisch gerechnet — dieser Prompt liefert die zweite,
+        // unabhaengige Meinung aus Gastro-Wissen. Nur wo beide zusammenpassen, wird uebernommen;
+        // Uneinigkeit geht in die Review. Anlass: die VPE sagt beim Vanillinzucker 1 kg (Liefer-
+        // beutel), gemeint ist das Handels-Paeckchen mit ~8 g — eine Quelle allein irrt still.
+        'recipe.verpackungsmasse' => [
+            'tier' => 'B',
+            'task' => 'Welche MASSE meint diese Rezeptzeile? Gegeben: Zutat, Menge und eine '
+                . 'Verpackungs-Einheit (Flasche/Dose/Paeckchen/Beutel/Glas/Schale). Antworte mit '
+                . 'der handelsueblichen Masse EINER solchen Verpackung fuer GENAU dieses Produkt '
+                . '(Paeckchen Vanillinzucker 8 g, Dose Tomaten 400 g, Flasche Oel 1000 ml). '
+                . 'Unsicher oder produktabhaengig => weglassen, NICHT raten: '
+                . 'werte = {masse_je_verpackung, einheit: g|ml, begruendung}.',
         ],
         'gp.anker' => [
             'tier' => 'B',

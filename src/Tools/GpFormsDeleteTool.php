@@ -31,7 +31,7 @@ class GpFormsDeleteTool extends FoodAlchemistTool implements ToolContract, ToolM
             'type' => 'object',
             'properties' => [
                 'gp_id' => ['type' => 'integer', 'description' => 'GP-Id (team-eigen).'],
-                'form_slug' => ['type' => 'string', 'enum' => GpFormService::FORM_SLUGS, 'description' => 'Form-Slug.'],
+                'form_slug' => ['type' => 'string', 'enum' => GpFormService::formSlugs(), 'description' => 'Form-Slug.'],
             ],
             'required' => ['gp_id', 'form_slug'],
         ];

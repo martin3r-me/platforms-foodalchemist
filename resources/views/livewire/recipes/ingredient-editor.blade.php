@@ -130,12 +130,19 @@
                 z.raw_text = (this.zahl(z.quantity) ?? '') + ' ' + e.name.replace('↳ ', '');
                 z.lineage = e.kind === 'recipe' ? 'recipe_ref' : 'manual';
                 z.ek_pro_g = null; z.ek_pro_g_min = null; z.ek_pro_g_avg = null;
-                z.g_pro_stueck = null;                               // Stück-Faktor kennt nur der Save-Recompute präzise
+                z.g_pro_stueck = null; z.stueck_gewicht = null; z.formen_g = null; z.ek_pro_stk = null;   // kommt aus zielDaten nach
                 z.einheiten = null;                                  // #9c: Ersatz-Payload kennt keine Formen → Fallback alle (kein Lock-out)
                 z._peek = null;
                 z.ersatz = zurueck;
                 z._flash = true; setTimeout(() => { z._flash = false; }, 1600);
-                this.$wire.ekFuerZiel(e.kind === 'gp' ? 'gp' : 'sub', e.id).then(ek => { if (ek !== null) z.ek_pro_g = ek; });
+                // EIN Round-Trip für Preis UND Gramm-Umrechnung: sonst blieb die Zeile nach einem
+                // ♻ auf ein Stück-/Formen-Produkt bis zum Speichern rechnerisch blind.
+                this.$wire.zielDaten(e.kind === 'gp' ? 'gp' : 'sub', e.id).then(d => {
+                    if (!d) return;
+                    z.ek_pro_g = d.ek_pro_g; z.ek_pro_stk = d.ek_pro_stk;
+                    z.g_pro_stueck = d.g_pro_stueck; z.stueck_gewicht = d.stueck_gewicht;
+                    z.formen_g = d.formen_g;
+                });
             },
             ladeErsatz(z) {                                          // neue/gebrowste Zeile: Hinweis leise nachladen
                 this.$wire.ersatzFuer(z.gp_id, z.referenced_recipe_id).then(e => { z.ersatz = e; });
@@ -165,6 +172,9 @@
                 z.lineage = ziel.type === 'sub' ? 'recipe_ref' : 'manual';
                 z.ek_pro_g = ziel.ek_pro_g ?? null;
                 z.g_pro_stueck = ziel.g_pro_stueck ?? null;          // Stück-Sub: g/Stück fürs Live-Rechnen
+                z.formen_g = ziel.formen_g ?? null;                  // Gewicht je Form (scheibe/wuerfel/…)
+                z.ek_pro_stk = ziel.ek_pro_stk ?? null;              // €/Stück (gewichtsfreier Stück-Weg)
+                z.stueck_gewicht = ziel.stueck_gewicht ?? null;      // GP-Stückgewicht (nur „stk")
                 z.einheiten = ziel.einheiten ?? null;                // #9c: erlaubte Einheiten des neuen Produkts
                 // aktuelle Einheit nicht mehr umrechenbar? → auf die Produkt-Default-Einheit umstellen (Preis greift wieder)
                 if (Array.isArray(z.einheiten) && z.einheiten.length) {
@@ -199,7 +209,7 @@
                 zeile._peek = await this.$wire.gpArtikel(zeile.gp_id);
             },
             payload() {
-                return this.rows.map(({ _key, ziel_name, ziel_url, lineage, ek_pro_g, ek_pro_g_min, ek_pro_g_avg, ersatz, _garverlust_ki, _peek, _flash, ...rest }) => ({ ...rest, cooking_loss_source: _garverlust_ki ? 'ki' : undefined }));
+                return this.rows.map(({ _key, ziel_name, ziel_url, lineage, ek_pro_g, ek_pro_g_min, ek_pro_g_avg, ek_pro_stk, g_pro_stueck, stueck_gewicht, formen_g, ersatz, _garverlust_ki, _peek, _flash, ...rest }) => ({ ...rest, cooking_loss_source: _garverlust_ki ? 'ki' : undefined }));
             },
             init() {
                 // Window-Event: der Haupt-"Speichern" des Rezept-Modals (UND der Standalone-Modal-Footer)
@@ -236,11 +246,36 @@
                 return m === null ? null : (mx !== null ? (m + mx) / 2 : m);
             },
             // g-Faktor je Zeile: g/ml-Einheit ODER (Stück-Sub) g/Stück = Yield÷yield_pieces (spiegelt Server-grammFaktor)
-            gFaktor(z) { return this.einheiten[z.unit_vocab_id]?.g ?? z.g_pro_stueck ?? null; },
+            // Spiegel von RecipeRecomputeService::grammFaktor — GLEICHE Reihenfolge, Stufe für Stufe.
+            // Weicht sie ab, weicht die Anzeige von der Buchung ab; der Wächter in
+            // EditorEkStueckBrueckeTest hält beide Seiten aneinander.
+            //   1  Sub-Rezept per Stück: eigener Stück-Ertrag, schlägt alles
+            //   3  produktspezifisches Formgewicht (KI/Editor) — VOR dem globalen
+            //   4a globales Einheiten-Gewicht (Bund 30 g generisch, g/ml/kg)
+            //   4b GP-Stückgewicht, nur bei „stk"
+            gFaktor(z) {
+                const e = this.einheiten[z.unit_vocab_id];
+                if (e?.dim === 'count' && z.g_pro_stueck) return z.g_pro_stueck;
+                const form = z.formen_g?.[z.unit_vocab_id];
+                if (form) return form;
+                if (e?.g) return e.g;
+                if (e?.slug === 'stk' && z.stueck_gewicht) return z.stueck_gewicht;
+                return null;
+            },
             zeilenEk(z, feld = 'ek_pro_g') {  // Live-Näherung: menge_g × €/g; R5: feld wählt Lead | min | Ø
-                if (z.is_optional || z[feld] === null || z[feld] === undefined) return null;
-                const avg = this.mengeAvg(z); const f = this.gFaktor(z);
-                if (avg === null || !f) return null;
+                const avg = this.mengeAvg(z);
+                if (z.is_optional || avg === null) return null;
+                // Stück-Zeile: €/Stück gilt DIREKT und braucht kein Gewicht — genau wie der
+                // count-Zweig in zutatKosten. Fehlte das, stand „3 stk" ohne hinterlegtes
+                // Stückgewicht auf „—", während der Save 3 × €/Stk buchte. Nur für den
+                // Lead-Wert; die Vergleichsspalten (min/Ø) laufen weiter über €/g.
+                if (feld === 'ek_pro_g' && this.einheiten[z.unit_vocab_id]?.slug === 'stk'
+                    && z.ek_pro_stk !== null && z.ek_pro_stk !== undefined) {
+                    return (avg * z.ek_pro_stk).toFixed(2).replace('.', ',') + ' €';
+                }
+                if (z[feld] === null || z[feld] === undefined) return null;
+                const f = this.gFaktor(z);
+                if (!f) return null;
                 return (avg * f * z[feld]).toFixed(2).replace('.', ',') + ' €';
             },
             summe(feld = 'ek_pro_g') {
@@ -259,7 +294,7 @@
                     if (z.is_optional) continue;
                     if (!z.gp_id && !z.referenced_recipe_id) continue;
                     total++;
-                    if (z.ek_pro_g !== null && z.ek_pro_g !== undefined) priced++;
+                    if (this.zeilenEk(z) !== null) priced++;      // dieselbe Regel wie die Anzeige (inkl. €/Stk-Direktweg)
                 }
                 return { priced, total };
             },
@@ -315,6 +350,9 @@
                     lineage: ziel.type === 'sub' ? 'recipe_ref' : 'manual',
                     ek_pro_g: ziel.ek_pro_g,
                     g_pro_stueck: ziel.g_pro_stueck ?? null,          // Stück-Sub: g/Stück fürs Live-Rechnen
+                    formen_g: ziel.formen_g ?? null,                 // Gewicht je Form (scheibe/wuerfel/…)
+                    ek_pro_stk: ziel.ek_pro_stk ?? null,             // €/Stück (gewichtsfreier Stück-Weg)
+                    stueck_gewicht: ziel.stueck_gewicht ?? null,     // GP-Stückgewicht (nur „stk")
                     einheiten: ziel.einheiten ?? null,               // #9c: erlaubte Einheiten des Produkts
                     ersatz: null,
                 });
