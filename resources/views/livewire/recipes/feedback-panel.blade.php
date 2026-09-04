@@ -38,6 +38,10 @@
                         @if($f->score !== null)<span class="text-xs font-semibold tabular-nums text-gray-900">{{ $f->score }}/5</span>@endif
                         @if($f->created_at)<span class="text-[11px] text-gray-500">{{ $f->created_at->format('d.m.Y') }}</span>@endif
                         @if($f->created_via === 'mcp')<span class="{{ $pill }} {{ $variantPill['secondary'] }}" title="via KI/MCP angelegt">KI</span>@endif
+                        {{-- Stempel: am Posten erfasst, waehrend gekocht wurde. Das ist eine andere
+                             Aussage als „jemand hat es spaeter in den Editor getippt" — und die
+                             belastbarere: der Eintrag entstand an der Charge, nicht aus Erinnerung. --}}
+                        @if($f->created_via === 'fa_wall')<span class="{{ $pill }} {{ $variantPill['primary'] }}" title="Am Wandmonitor erfasst, während der Produktion" data-feedback-stempel-wand>Produktion</span>@endif
                     </div>
                     <div class="flex items-center gap-1">
                         <button type="button" wire:click="weiterentwickeln({{ $f->id }})" class="{{ $btnGhostXs }}" title="Aus diesem Feedback eine Draft-Rezept-Iteration erzeugen">↗ Weiterentwickeln</button>
@@ -55,7 +59,7 @@
                     </div>
                 @endif
                 @if($f->comment)<p class="text-xs text-gray-600 mt-1.5">{{ $f->comment }}</p>@endif
-                @if($f->kontext_label)<p class="text-[11px] text-gray-500 mt-0.5">Kontext: {{ $f->kontext_label }}</p>@endif
+                @if($f->kontext_label)<p class="text-[11px] text-gray-500 mt-0.5">Kontext: {{ $f->kontext_label }}@if($f->kontext_datum) · {{ $f->kontext_datum->format('d.m.Y') }}@endif</p>@endif
                 @if($f->spawned_recipe_id)<p class="text-[11px] text-violet-500 mt-0.5">→ Draft-Iteration #{{ $f->spawned_recipe_id }} abgeleitet</p>@endif
             </div>
         @empty

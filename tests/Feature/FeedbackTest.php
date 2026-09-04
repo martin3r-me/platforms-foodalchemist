@@ -1,5 +1,7 @@
 <?php
 
+use Livewire\Livewire;
+use Platform\FoodAlchemist\Livewire\Recipes\FeedbackPanel;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipeFeedback;
 use Platform\FoodAlchemist\Services\FeedbackService;
@@ -91,4 +93,33 @@ it('löschen nur durch das Besitzer-Team (D1)', function () {
     expect(fn () => $this->svc->loeschen($this->rootTeam, $f->id))->toThrow(RuntimeException::class);
     $this->svc->loeschen($this->childA, $f->id); // Besitzer darf
     expect(FoodAlchemistRecipeFeedback::withTrashed()->find($f->id)->trashed())->toBeTrue();
+});
+
+/**
+ * Woher ein Eintrag kommt, entscheidet mit, wie schwer er wiegt: am Posten waehrend der
+ * Produktion erfasst ist etwas anderes als spaeter aus der Erinnerung in den Editor getippt.
+ * Die Herkunft lag schon in `created_via` — sie war nur nirgends zu sehen.
+ */
+it('stempelt Feedback aus dem Wandmonitor als „Produktion" und zeigt den Auftrag dazu', function () {
+    $this->actingAs($this->makeUser($this->rootTeam));
+
+    $this->svc->erstelle($this->rootTeam, $this->gericht->id, [
+        'quelle' => 'kueche', 'score' => 2, 'comment' => 'Ansatz zu groß für den Kipper.',
+        'kontext_label' => 'Sommerfest Zentrag', 'kontext_datum' => '2026-08-20',
+        'created_via' => 'fa_wall',
+    ]);
+    $this->svc->erstelle($this->rootTeam, $this->gericht->id, [
+        'quelle' => 'kueche', 'score' => 4, 'comment' => 'Im Editor nachgetragen.',
+    ]);
+
+    Livewire::test(FeedbackPanel::class, ['recipeId' => $this->gericht->id])
+        ->assertSeeHtml('data-feedback-stempel-wand')
+        ->assertSee('Produktion')
+        // Der Kontext kam aus der Produktionszeile, nicht aus dem Gedaechtnis.
+        ->assertSee('Sommerfest Zentrag')
+        ->assertSee('20.08.2026');
+
+    // Der Editor-Eintrag traegt den Stempel NICHT — sonst waere er wertlos.
+    expect(FoodAlchemistRecipeFeedback::where('recipe_id', $this->gericht->id)
+        ->where('created_via', 'fa_wall')->count())->toBe(1);
 });
