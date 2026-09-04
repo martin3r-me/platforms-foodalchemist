@@ -169,7 +169,12 @@ class RegenerationHochziehenCommand extends Command
     /** Normalisierter Vergleich: Gross/Klein und Mehrfach-Leerzeichen sind kein Unterschied. */
     private function findeKomponente(int $recipeId, string $label): ?object
     {
-        $norm = fn (string $s) => preg_replace('/\s+/u', ' ', mb_strtolower(trim($s)));
+        // Satzzeichen mit weg: die GP-Benennung nach Regelwerk §6 setzt »Name: Eigenschaft«,
+        // die handgetippten Labels nicht. Auf Echtdaten unterschied sich »Himbeeren frisch« von
+        // »Himbeeren: frisch« GENAU um diesen Doppelpunkt. Weiterhin exakter Vergleich — nur die
+        // Interpunktion faellt weg, kein Wort wird geraten.
+        $norm = fn (string $s) => trim(preg_replace('/\s+/u', ' ',
+            str_replace([':', ',', ';', '-', '–'], ' ', mb_strtolower(trim($s)))));
         $ziel = $norm($label);
 
         $zutaten = DB::table('foodalchemist_recipe_ingredients AS zi')

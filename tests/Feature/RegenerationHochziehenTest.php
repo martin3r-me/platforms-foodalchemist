@@ -179,3 +179,47 @@ it('bindet eine Grundprodukt-Zeile als Override, statt sie in die Review zu schi
 
     expect((int) $zeile->ingredient_id)->toBe((int) $zutat->id);   // gebunden, nicht verwaist
 });
+
+it('der Doppelpunkt der GP-Benennung ist kein Unterschied', function () {
+    // Echtdaten: das Label hiess »Himbeeren frisch«, das Grundprodukt »Himbeeren: frisch« —
+    // Regelwerk §6 setzt »Name: Eigenschaft«, die handgetippten Labels nicht.
+    $gp = \Platform\FoodAlchemist\Models\FoodAlchemistGp::create([
+        'team_id' => $this->rootTeam->id, 'gp_key' => 'g|himb',
+        'name' => 'Himbeeren: frisch', 'condition' => 'frisch',
+    ]);
+    $teller = ($this->rezept)('Dessert: Beeren', true);
+    $zutat = \Platform\FoodAlchemist\Models\FoodAlchemistRecipeIngredient::create([
+        'team_id' => $this->rootTeam->id, 'recipe_id' => $teller->id, 'gp_id' => $gp->id,
+        'raw_text' => 'Himbeeren', 'quantity' => '25',
+        'unit_vocab_id' => $this->unitG($this->rootTeam)->id, 'position' => 1,
+    ]);
+    ($this->alteZeile)($teller, 'Himbeeren frisch', ['duration_min' => 0]);
+
+    $this->artisan('foodalchemist:regeneration-hochziehen --apply')->assertExitCode(0);
+
+    expect((int) DB::table('foodalchemist_recipe_regenerations')
+        ->where('recipe_id', $teller->id)->whereNull('deleted_at')->value('ingredient_id'))->toBe((int) $zutat->id);
+});
+
+it('bindet NICHT, wenn ein Sammel-Grundprodukt mehrere Komponenten abdeckt', function () {
+    // Echtdaten: vier Labels (Carpaccio, Mousse, Schnee, Knusper) gegen EIN Grundprodukt
+    // »Ananas-Dessertkomponenten: frisch, Mousse, Schnee, Knusper«. Token-Enthaltensein wuerde
+    // hier binden — und damit vier verschiedene Entscheidungen auf eine Zeile werfen.
+    $gp = \Platform\FoodAlchemist\Models\FoodAlchemistGp::create([
+        'team_id' => $this->rootTeam->id, 'gp_key' => 'g|sammel',
+        'name' => 'Ananas-Dessertkomponenten: frisch, Mousse, Schnee, Knusper', 'condition' => 'TK',
+    ]);
+    $teller = ($this->rezept)('Dessert: Ananas', true);
+    \Platform\FoodAlchemist\Models\FoodAlchemistRecipeIngredient::create([
+        'team_id' => $this->rootTeam->id, 'recipe_id' => $teller->id, 'gp_id' => $gp->id,
+        'raw_text' => 'Desserts Base Ananas', 'quantity' => '35',
+        'unit_vocab_id' => $this->unitG($this->rootTeam)->id, 'position' => 1,
+    ]);
+    ($this->alteZeile)($teller, 'Estragonschnee', ['duration_min' => 0]);
+
+    $this->artisan('foodalchemist:regeneration-hochziehen --apply')->assertExitCode(0);
+
+    // Unveraendert, ungebunden — gehoert einem Menschen vorgelegt.
+    expect(DB::table('foodalchemist_recipe_regenerations')
+        ->where('recipe_id', $teller->id)->whereNull('deleted_at')->value('ingredient_id'))->toBeNull();
+});
