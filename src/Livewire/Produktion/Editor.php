@@ -825,7 +825,13 @@ class Editor extends Component
             if ($block === null) {
                 continue;
             }
-            $ergebnisse = array_filter([$block['abfuellen'] ?? null, ...($block['je_komponente'] ?? [])]);
+            // `bereits_gezaehlt` = die Komponente ist durchgängig, ihre Regenerations-Behälter sind
+            // dieselben, die an ihrer eigenen Produktionszeile schon fürs Abfüllen zählen. Sie hier
+            // erneut zu summieren ergäbe doppeltes Geschirr auf dem Wagen.
+            $ergebnisse = array_filter(
+                [$block['abfuellen'] ?? null, ...($block['je_komponente'] ?? [])],
+                fn ($e) => $e !== null && ! ($e['bereits_gezaehlt'] ?? false)
+            );
             foreach ($ergebnisse as $e) {
                 if (! ($e['berechenbar'] ?? false)) {
                     $ohne++;

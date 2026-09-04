@@ -61,10 +61,14 @@ class BehaelterBedarfService
         $raus = [];
 
         foreach ($komponenten as $k) {
+            $durchgaengig = $this->istDurchgaengig($k['recipe']);
             foreach (['regenerieren', 'ausgabe'] as $zweck) {
                 $bedarf = $this->fuerZweck($team, $k['recipe'], $zweck, $k['menge_kg'], $k['label']);
                 if ($bedarf !== null) {
-                    $raus[] = $bedarf;
+                    // Ist die Komponente durchgaengig, sind DIESE Behaelter dieselben, die an ihrer
+                    // eigenen Produktionszeile schon fuers Abfuellen gezaehlt wurden. Sie reisen mit;
+                    // sie noch einmal zu zaehlen ergaebe doppeltes Geschirr auf dem Zettel.
+                    $raus[] = $bedarf + ['bereits_gezaehlt' => $durchgaengig && $zweck === 'regenerieren'];
                 }
             }
         }
@@ -73,19 +77,44 @@ class BehaelterBedarfService
     }
 
     /**
-     * Zählt einen durchgängigen Behälter EINMAL.
+     * Trägt DIESES Rezept seine Ware durchgängig — vom Abfüllen bis in den Ofen?
      *
-     * Ragout im GN mit Deckel geht aus dem Kühlhaus direkt in den Ofen. Beide Zeilen zweimal zu
-     * zählen hiesse doppeltes Geschirr auf dem Zettel — und niemand glaubt der Liste mehr.
+     * Ragout im GN mit Deckel geht aus dem Kühlhaus direkt in den Konvektomat: ein Behälter, eine
+     * Zahl. Ein Eimer kann das nicht, dann wird umgefüllt und beide zählen.
+     *
+     * BEFUND beim Nachprüfen: die erste Fassung verglich die `abfuellen`-Zeile des GERICHTS mit der
+     * `regenerieren`-Zeile der ERSTEN Komponente. Das sind zwei verschiedene Rezepte und zwei
+     * verschiedene Behälter-Reisen — bei einem Gericht mit fünf Komponenten war das Ergebnis
+     * schlicht willkürlich. Durchgängigkeit ist eine Eigenschaft EINES Rezepts.
      */
-    public function zusammenlegen(?array $abfuellen, array $jeKomponente): array
+    public function istDurchgaengig(FoodAlchemistRecipe $recipe): bool
     {
-        $regen = collect($jeKomponente)->firstWhere('zweck', 'regenerieren');
+        $zeilen = DB::table('foodalchemist_recipe_containers')
+            ->where('recipe_id', $recipe->id)->whereNull('deleted_at')
+            ->whereIn('zweck', ['abfuellen', 'regenerieren'])
+            ->pluck('container_vocab_id', 'zweck');
+
+        $ab = $zeilen['abfuellen'] ?? null;
+        $re = $zeilen['regenerieren'] ?? null;
+
+        return $ab !== null && $re !== null && (int) $ab === (int) $re;
+    }
+
+    /**
+     * Der Bedarf EINES Rezepts, zusammengelegt: gleicher Behälter für Abfüllen und Regenerieren
+     * heisst eine Zahl, nicht zwei.
+     */
+    public function zusammenlegen(Team $team, FoodAlchemistRecipe $recipe, ?array $abfuellen, ?float $mengeKg): array
+    {
+        if (! $this->istDurchgaengig($recipe)) {
+            return ['durchgaengig' => false, 'anzahl' => null, 'behaelter' => null,
+                'hinweis' => $abfuellen !== null ? 'Umfüllen am Einsatztag' : ''];
+        }
+
+        $regen = $this->fuerZweck($team, $recipe, 'regenerieren', $mengeKg, $recipe->name);
         $zusammen = $this->rechner->zusammenlegen($abfuellen, $regen);
 
-        return $zusammen['durchgaengig']
-            ? $zusammen + ['behaelter' => $abfuellen['varianten'][0]['behaelter'] ?? null]
-            : $zusammen;
+        return $zusammen + ['behaelter' => $abfuellen['varianten'][0]['behaelter'] ?? null];
     }
 
     /**
@@ -111,8 +140,8 @@ class BehaelterBedarfService
         }
 
         foreach ($block['je_komponente'] ?? [] as $k) {
-            if (($zusammen['durchgaengig'] ?? false) && $k['zweck'] === 'regenerieren') {
-                continue;                                  // steht schon oben als »durchgängig«
+            if ($k['bereits_gezaehlt'] ?? false) {
+                continue;   // reist im eigenen Abfüllbehälter mit — an dessen Zeile schon gezählt
             }
             $kurz = self::varianteKurz($k);
             if ($kurz !== null) {

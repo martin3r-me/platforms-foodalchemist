@@ -981,7 +981,9 @@ class PlanungsblattService
         return [
             'abfuellen' => $abfuellen,
             'je_komponente' => $jeKomponente,
-            'zusammen' => $this->behaelter->zusammenlegen($abfuellen, $jeKomponente),
+            // Durchgängigkeit ist eine Eigenschaft DIESES Rezepts (eigenes Abfüllen == eigenes
+            // Regenerieren), nicht ein Vergleich über Rezeptgrenzen hinweg.
+            'zusammen' => $this->behaelter->zusammenlegen($team, $recipe, $abfuellen, $mengeKg),
         ];
     }
 

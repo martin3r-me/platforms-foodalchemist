@@ -165,10 +165,53 @@ it('ohne Ausbeute nennt der Bedarf einen Grund statt einer Zahl', function () {
         ->and($zeile['behaelter']['abfuellen']['grund'])->toContain('yield_kg');
 });
 
-it('derselbe Behälter zum Abfüllen und Regenerieren wird einmal gezählt', function () {
+it('durchgängig gilt JE REZEPT — eigenes Abfüllen == eigenes Regenerieren', function () {
     $ragout = $this->makeRecipe($this->rootTeam, 'Ragout: Rind', ['yield_kg' => 10]);
     $this->makeIngredient($ragout, 'Rind', $this->makeGp($this->rootTeam, 'Rind'), '10000');
     $ragout->forceFill(['yield_kg' => 10])->save();
+
+    // Ragout im GN mit Deckel: aus dem Kühlhaus direkt in den Ofen — beide Zeilen, ein Behälter.
+    ($this->behaelterAn)($ragout, RC::ZWECK_ABFUELLEN, $this->gn65, 8.0);
+    ($this->behaelterAn)($ragout, RC::ZWECK_REGENERIEREN, $this->gn65, 8.0);
+
+    $blatt = $this->blatt->produktionsblattFuerZiele($this->rootTeam, [
+        ['recipe_id' => $ragout->id, 'amount_kg' => 10],
+    ]);
+
+    $zeile = collect($blatt['rezepte'])->firstWhere('recipe_id', $ragout->id);
+
+    expect($zeile['behaelter']['zusammen']['durchgaengig'])->toBeTrue()
+        ->and($zeile['behaelter']['zusammen']['behaelter'])->toBe('GN 1/1 65mm')
+        ->and($zeile['behaelter']['zusammen']['hinweis'])->toContain('kein Umfüllen');
+});
+
+it('verschiedene Behälter am selben Rezept benennen den Umfüll-Schritt', function () {
+    $sauce = $this->makeRecipe($this->rootTeam, 'Sauce: Pfeffer', ['yield_kg' => 10]);
+    $this->makeIngredient($sauce, 'Sahne', $this->makeGp($this->rootTeam, 'Sahne'), '10000');
+    $sauce->forceFill(['yield_kg' => 10])->save();
+
+    ($this->behaelterAn)($sauce, RC::ZWECK_ABFUELLEN, $this->eimer, 9.0);
+    ($this->behaelterAn)($sauce, RC::ZWECK_REGENERIEREN, $this->gn65, 8.0);
+
+    $blatt = $this->blatt->produktionsblattFuerZiele($this->rootTeam, [
+        ['recipe_id' => $sauce->id, 'amount_kg' => 10],
+    ]);
+
+    $zeile = collect($blatt['rezepte'])->firstWhere('recipe_id', $sauce->id);
+
+    expect($zeile['behaelter']['zusammen']['durchgaengig'])->toBeFalse()
+        ->and($zeile['behaelter']['zusammen']['hinweis'])->toContain('Umfüllen am Einsatztag');
+});
+
+it('eine durchgängige Komponente wird am Gericht NICHT noch einmal gezählt', function () {
+    // BEFUND: die erste Fassung verglich das Abfüllen des GERICHTS mit dem Regenerieren der
+    // ERSTEN Komponente — zwei verschiedene Rezepte, zwei verschiedene Behälter-Reisen. Bei
+    // einem Gericht mit mehreren Komponenten war das Ergebnis willkürlich, und die durchgängigen
+    // Behälter landeten doppelt im Rollup.
+    $ragout = $this->makeRecipe($this->rootTeam, 'Ragout: Rind', ['yield_kg' => 10]);
+    $this->makeIngredient($ragout, 'Rind', $this->makeGp($this->rootTeam, 'Rind'), '10000');
+    $ragout->forceFill(['yield_kg' => 10])->save();
+    ($this->behaelterAn)($ragout, RC::ZWECK_ABFUELLEN, $this->gn65, 8.0);
     ($this->behaelterAn)($ragout, RC::ZWECK_REGENERIEREN, $this->gn65, 8.0);
 
     $teller = $this->makeRecipe($this->rootTeam, 'Teller: Ragout', [
@@ -176,15 +219,42 @@ it('derselbe Behälter zum Abfüllen und Regenerieren wird einmal gezählt', fun
     ]);
     ($this->alsKomponente)($teller, $ragout, '200');
     $teller->forceFill(['yield_kg' => 0.3])->save();
-    ($this->behaelterAn)($teller, RC::ZWECK_ABFUELLEN, $this->gn65, 8.0);
 
     $blatt = $this->blatt->produktionsblattFuerZiele($this->rootTeam, [
         ['recipe_id' => $teller->id, 'portions' => 40],
     ]);
 
-    $zeile = collect($blatt['rezepte'])->firstWhere('recipe_id', $teller->id);
+    $regen = collect(collect($blatt['rezepte'])->firstWhere('recipe_id', $teller->id)['behaelter']['je_komponente'])
+        ->firstWhere('zweck', 'regenerieren');
 
-    // Ragout im GN mit Deckel: aus dem Kühlhaus direkt in den Ofen — kein Umfüllen.
-    expect($zeile['behaelter']['zusammen']['durchgaengig'])->toBeTrue()
-        ->and($zeile['behaelter']['zusammen']['hinweis'])->toContain('kein Umfüllen');
+    // Die GNs reisen mit — an der Ragout-Zeile sind sie fuers Abfuellen schon gezaehlt.
+    expect($regen['bereits_gezaehlt'])->toBeTrue();
+
+    $ragoutZeile = collect($blatt['rezepte'])->firstWhere('recipe_id', $ragout->id);
+    expect($ragoutZeile['behaelter']['abfuellen']['berechenbar'])->toBeTrue();
+});
+
+it('eine NICHT durchgängige Komponente zählt am Gericht sehr wohl', function () {
+    $sauce = $this->makeRecipe($this->rootTeam, 'Sauce: Pfeffer', ['yield_kg' => 10]);
+    $this->makeIngredient($sauce, 'Sahne', $this->makeGp($this->rootTeam, 'Sahne'), '10000');
+    $sauce->forceFill(['yield_kg' => 10])->save();
+    ($this->behaelterAn)($sauce, RC::ZWECK_ABFUELLEN, $this->eimer, 9.0);
+    ($this->behaelterAn)($sauce, RC::ZWECK_REGENERIEREN, $this->gn65, 8.0);
+
+    $teller = $this->makeRecipe($this->rootTeam, 'Teller: Steak', [
+        'is_sales_recipe' => true, 'sales_unit_count' => 1, 'yield_kg' => 0.3,
+    ]);
+    ($this->alsKomponente)($teller, $sauce, '200');
+    $teller->forceFill(['yield_kg' => 0.3])->save();
+
+    $blatt = $this->blatt->produktionsblattFuerZiele($this->rootTeam, [
+        ['recipe_id' => $teller->id, 'portions' => 40],
+    ]);
+
+    $regen = collect(collect($blatt['rezepte'])->firstWhere('recipe_id', $teller->id)['behaelter']['je_komponente'])
+        ->firstWhere('zweck', 'regenerieren');
+
+    // Aus dem Eimer ins GN: die GNs kommen zusaetzlich, sie muessen gezaehlt werden.
+    expect($regen['bereits_gezaehlt'])->toBeFalse()
+        ->and($regen['varianten'][0]['behaelter'])->toBe('GN 1/1 65mm');
 });
