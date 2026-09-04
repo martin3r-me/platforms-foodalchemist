@@ -5,8 +5,12 @@
 > (beschlossen 2026-09-04): Regeneration wandert vom Gericht an die Komponente, der Behälter wird
 > gerechnet statt getippt, und es gibt Behälter **je Zweck** statt zwei Skalar-Spalten.
 
-**Status:** `Entwurf` — freigegeben 2026-09-04, Bau läuft auf `feat/spec51-regeneration-behaelter`.
-Ein offener Entscheid (§13 Nr. 1) blockiert nur Etappe G.
+**Status:** `gebaut` (2026-09-04) auf `feat/spec51-regeneration-behaelter` — Etappen A–H umgesetzt
+und getestet, Regelwerke nachgezogen (VK v1.8 §3.2a/§3.4/§3.4e, Basisrezepte v1.8 §14, neu
+`Cross_Cutting/Behaelter_und_Gastronorm.md`).
+**Offen:** der Entscheid aus §5 Nr. 1 (Drop der `recipe_presentations.regeneration_*`-Spalten) —
+gelesen werden sie bereits nicht mehr, die Spalten stehen unangetastet. Volle Suite und
+Browser-Abnahme stehen aus; nicht deployt.
 Statuswerte (aus [README](../README.md)): `gebaut` · `getestet` (Sandbox) · `demo-geprüft` · `abgenommen`.
 
 Alle Codepfade relativ zu `platforms-foodalchemist/` (canonical Clone).
