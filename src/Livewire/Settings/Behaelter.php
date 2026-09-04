@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Livewire\Component;
+use Platform\FoodAlchemist\Models\FoodAlchemistVocabContainer;
 use Platform\FoodAlchemist\Support\TeamScope;
 
 /**
@@ -24,8 +25,28 @@ class Behaelter extends Component
         'equipment' => ['tabelle' => 'foodalchemist_vocab_kitchen_equipment', 'label' => 'Koch-Equipment (Basisrezepte)', 'kapazitaet' => false],
     ];
 
-    /** @var array<string, array{name: string, gruppe: string, kapazitaet_kg: string}> Add-Form je Vokabular */
+    /**
+     * Spec 51: Felder, die nur der Behälter-Katalog trägt. Fläche und Tiefe GETRENNT, weil eine
+     * einzelne kg-Zahl »flach statt tief« nicht ausdrücken kann; `eignung` sagt, wofür ein Typ
+     * freigegeben ist — GEPFLEGT, nicht aus einem Material abgeleitet.
+     */
+    public const BEHAELTER_FELDER = [
+        'familie', 'format_code', 'laenge_mm', 'breite_mm', 'tiefe_mm', 'volumen_l',
+        'nutzfaktor', 'max_fuellgewicht_kg', 'ist_traeger', 'traeger_plaetze', 'traeger_format',
+    ];
+
+    /** Diese Felder kommen als Komma-Zahl aus dem Formular. */
+    private const ZAHLEN = ['laenge_mm', 'breite_mm', 'tiefe_mm', 'volumen_l', 'nutzfaktor', 'max_fuellgewicht_kg', 'kapazitaet_kg'];
+
+    public const FAMILIEN = ['GN', 'EN600x400', 'Eimer', 'Kanne', 'Schale', 'Blech', 'Kiste', 'Traeger', 'frei'];
+
+    /** @var array<string, array<string, mixed>> Add-Form je Vokabular */
     public array $neu = [];
+
+    /** Offene Bearbeitung eines Behälters (leer = keine). */
+    public array $edit = [];
+
+    public ?int $editId = null;
 
     public ?string $fehler = null;
 
@@ -34,7 +55,7 @@ class Behaelter extends Component
     public function mount(): void
     {
         foreach (array_keys(self::VOKABULARE) as $key) {
-            $this->neu[$key] = ['name' => '', 'group_name' => '', 'kapazitaet_kg' => ''];
+            $this->neu[$key] = $this->leereForm($key);
         }
     }
 
@@ -70,14 +91,167 @@ class Behaelter extends Component
             'created_at' => now(), 'updated_at' => now(),
         ];
         if ($meta['kapazitaet']) {
-            $kap = str_replace(',', '.', trim($this->neu[$vokabular]['kapazitaet_kg'] ?? ''));
-            $zeile['kapazitaet_kg'] = is_numeric($kap) ? (float) $kap : null;
+            $zeile += $this->behaelterFelder($this->neu[$vokabular]);
         }
         DB::table($meta['tabelle'])->insert($zeile);
 
-        $this->neu[$vokabular] = ['name' => '', 'group_name' => '', 'kapazitaet_kg' => ''];
+        $this->neu[$vokabular] = $this->leereForm($vokabular);
         $this->fehler = null;
         $this->meldung = "«{$name}» angelegt.";
+    }
+
+    /** Tooltip einer Katalog-Zeile: was gepflegt ist, sieht man sonst nirgends. */
+    public static function titel(object $zeile): string
+    {
+        $teile = [$zeile->slug];
+
+        if (($zeile->laenge_mm ?? null) !== null && ($zeile->breite_mm ?? null) !== null) {
+            $mm = fn ($w) => rtrim(rtrim(number_format((float) $w, 1, ',', ''), '0'), ',');
+            $teile[] = $mm($zeile->laenge_mm).'×'.$mm($zeile->breite_mm)
+                .(($zeile->tiefe_mm ?? null) !== null ? '×'.$mm($zeile->tiefe_mm) : '').' mm';
+        }
+        foreach (['volumen_l' => 'l', 'kapazitaet_kg' => 'kg', 'max_fuellgewicht_kg' => 'kg max'] as $feld => $einheit) {
+            if (($zeile->{$feld} ?? null) !== null) {
+                $teile[] = rtrim(rtrim(number_format((float) $zeile->{$feld}, 3, ',', '.'), '0'), ',').' '.$einheit;
+            }
+        }
+        if (($zeile->ist_traeger ?? false)) {
+            $teile[] = 'Träger'.(($zeile->traeger_plaetze ?? null) !== null ? " ({$zeile->traeger_plaetze} Plätze)" : '');
+        }
+        $eignung = ($zeile->eignung ?? null) !== null ? (json_decode((string) $zeile->eignung, true) ?: []) : [];
+        $teile[] = $eignung === [] ? 'Freigaben nicht gepflegt' : 'für '.implode(', ', $eignung);
+
+        return implode(' · ', $teile);
+    }
+
+    /** Leere Formularzeile — Behälter tragen mehr Felder als die anderen Vokabulare. */
+    private function leereForm(string $vokabular): array
+    {
+        $form = ['name' => '', 'group_name' => '', 'kapazitaet_kg' => ''];
+        if (! (self::VOKABULARE[$vokabular]['kapazitaet'] ?? false)) {
+            return $form;
+        }
+
+        foreach (self::BEHAELTER_FELDER as $feld) {
+            $form[$feld] = $feld === 'ist_traeger' ? false : '';
+        }
+        $form['nutzfaktor'] = '0,85';
+        $form['eignung'] = [];
+
+        return $form;
+    }
+
+    /** Komma-Eingaben zu Zahlen, Checkbox-Set zu JSON. Leeres Feld bleibt NULL, nicht 0. */
+    private function behaelterFelder(array $form): array
+    {
+        $out = [];
+
+        foreach (['kapazitaet_kg', ...self::BEHAELTER_FELDER] as $feld) {
+            if ($feld === 'ist_traeger') {
+                $out['ist_traeger'] = (bool) ($form['ist_traeger'] ?? false);
+
+                continue;
+            }
+            $wert = trim((string) ($form[$feld] ?? ''));
+            if ($wert === '') {
+                $out[$feld] = null;
+
+                continue;
+            }
+            if (in_array($feld, self::ZAHLEN, true)) {
+                $zahl = str_replace(',', '.', $wert);
+                $out[$feld] = is_numeric($zahl) ? (float) $zahl : null;
+
+                continue;
+            }
+            if ($feld === 'traeger_plaetze') {
+                $out[$feld] = ctype_digit($wert) ? (int) $wert : null;
+
+                continue;
+            }
+            $out[$feld] = $wert;
+        }
+
+        // eignung === null heisst »nicht gepflegt« (keine bekannte Einschränkung), nicht »gesperrt«.
+        $eignung = array_values(array_filter(
+            (array) ($form['eignung'] ?? []),
+            fn ($z) => in_array($z, FoodAlchemistVocabContainer::ZWECKE, true)
+        ));
+        $out['eignung'] = $eignung === [] ? null : json_encode($eignung);
+
+        if ($out['nutzfaktor'] === null) {
+            $out['nutzfaktor'] = 0.85;
+        }
+
+        return $out;
+    }
+
+    /** Bestandszeilen müssen pflegbar sein — sonst bleibt der Katalog auf dem Import stehen. */
+    public function bearbeitenStart(int $id): void
+    {
+        $zeile = DB::table('foodalchemist_vocab_containers')->where('id', $id)->first();
+        if ($zeile === null) {
+            return;
+        }
+        if (! TeamScope::owns($zeile->team_id, Auth::user()?->currentTeamRelation)) {
+            $this->fehler = 'Geerbter/Master-Eintrag — nur das Besitzer-Team kann ändern.';
+
+            return;
+        }
+
+        $zahl = fn ($w) => $w === null ? '' : rtrim(rtrim(number_format((float) $w, 3, ',', ''), '0'), ',');
+
+        $this->editId = $id;
+        $this->edit = [
+            'name' => $zeile->name,
+            'group_name' => $zeile->group_name ?? '',
+            'kapazitaet_kg' => $zahl($zeile->kapazitaet_kg),
+            'eignung' => $zeile->eignung !== null ? (json_decode((string) $zeile->eignung, true) ?: []) : [],
+        ];
+        foreach (self::BEHAELTER_FELDER as $feld) {
+            $roh = $zeile->{$feld} ?? null;
+            $this->edit[$feld] = match (true) {
+                $feld === 'ist_traeger' => (bool) $roh,
+                in_array($feld, self::ZAHLEN, true) => $zahl($roh),
+                default => (string) ($roh ?? ''),
+            };
+        }
+        $this->fehler = null;
+    }
+
+    public function bearbeitenAbbrechen(): void
+    {
+        $this->editId = null;
+        $this->edit = [];
+    }
+
+    public function bearbeitenSpeichern(): void
+    {
+        if ($this->editId === null) {
+            return;
+        }
+        $zeile = DB::table('foodalchemist_vocab_containers')->where('id', $this->editId)->first(['team_id']);
+        if ($zeile === null || ! TeamScope::owns($zeile->team_id, Auth::user()?->currentTeamRelation)) {
+            $this->fehler = 'Geerbter/Master-Eintrag — nur das Besitzer-Team kann ändern.';
+
+            return;
+        }
+        $name = trim((string) ($this->edit['name'] ?? ''));
+        if ($name === '') {
+            $this->fehler = 'Name ist Pflicht.';
+
+            return;
+        }
+
+        // Der Slug bleibt: Rezepte und Auswertungen hängen daran, ein Rename ist kein Neuanlegen.
+        DB::table('foodalchemist_vocab_containers')->where('id', $this->editId)->update(
+            ['name' => $name, 'group_name' => trim((string) ($this->edit['group_name'] ?? '')) ?: null, 'updated_at' => now()]
+            + $this->behaelterFelder($this->edit)
+        );
+
+        $this->meldung = "«{$name}» gespeichert.";
+        $this->fehler = null;
+        $this->bearbeitenAbbrechen();
     }
 
     /** V-06: nur deaktivieren — inaktive bleiben an Rezepten sichtbar. */

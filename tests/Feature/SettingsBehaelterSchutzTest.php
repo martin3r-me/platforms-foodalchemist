@@ -121,3 +121,72 @@ it('E2: im EIGENEN Team bleibt die Dublette blockiert', function () {
 
     expect(DB::table('foodalchemist_vocab_containers')->where('slug', 'eimer_10_l')->count())->toBe(1);
 });
+
+it('legt einen neuen Behälter mit Maßen und Freigaben an — ohne Deployment', function () {
+    $this->actingAs($this->makeUser($this->rootTeam));
+
+    Livewire::test(Behaelter::class)
+        ->set('neu.behaelter.name', 'Eimer 10 l')
+        ->set('neu.behaelter.familie', 'Eimer')
+        ->set('neu.behaelter.volumen_l', '10')
+        ->set('neu.behaelter.nutzfaktor', '0,9')
+        ->set('neu.behaelter.max_fuellgewicht_kg', '10')
+        ->set('neu.behaelter.eignung', ['abfuellen', 'transport'])
+        ->call('create', 'behaelter')
+        ->assertSet('fehler', null);
+
+    $b = DB::table('foodalchemist_vocab_containers')->where('slug', 'eimer_10_l')->first();
+
+    expect($b->familie)->toBe('Eimer')
+        ->and((float) $b->volumen_l)->toBe(10.0)
+        ->and((float) $b->nutzfaktor)->toBe(0.9)
+        ->and(json_decode((string) $b->eignung, true))->toBe(['abfuellen', 'transport'])
+        ->and($b->laenge_mm)->toBeNull();                       // rund — Maße bleiben leer, kein 0
+});
+
+it('Freigabe entziehen wirkt: der Rechner rechnet danach nicht mehr, sondern nennt den Grund', function () {
+    $this->actingAs($this->makeUser($this->rootTeam));
+
+    Livewire::test(Behaelter::class)
+        ->set('neu.behaelter.name', 'Eimer 10 l')
+        ->set('neu.behaelter.volumen_l', '10')
+        ->set('neu.behaelter.eignung', ['abfuellen', 'regenerieren'])
+        ->call('create', 'behaelter');
+
+    $id = DB::table('foodalchemist_vocab_containers')->where('slug', 'eimer_10_l')->value('id');
+
+    Livewire::test(Behaelter::class)
+        ->call('bearbeitenStart', $id)
+        ->assertSet('edit.name', 'Eimer 10 l')
+        ->set('edit.eignung', ['abfuellen'])                    // Kunststoff gehört nicht in den Ofen
+        ->call('bearbeitenSpeichern')
+        ->assertSet('fehler', null);
+
+    $behaelter = \Platform\FoodAlchemist\Models\FoodAlchemistVocabContainer::find($id);
+    expect($behaelter->eignung)->toBe(['abfuellen']);
+
+    $rechner = new \Platform\FoodAlchemist\Services\BehaelterRechner;
+    $out = $rechner->varianten(40.0, [
+        'container' => $behaelter, 'referenz_menge_kg' => 9.0, 'dichteklasse' => null,
+        'skalierung' => 'tiefer_fuellbar', 'max_schichthoehe_mm' => null, 'konfidenz_rang3' => false,
+    ], [], 'regenerieren');
+
+    expect($out['berechenbar'])->toBeFalse()
+        ->and($out['grund'])->toContain('regenerieren');
+});
+
+it('das Bearbeiten lässt den Slug in Ruhe — Rezepte hängen daran', function () {
+    $this->actingAs($this->makeUser($this->rootTeam));
+
+    $id = ($this->behaelterAnlegen)($this->rootTeam->id, 'GN 1/1 65mm');
+
+    Livewire::test(Behaelter::class)
+        ->call('bearbeitenStart', $id)
+        ->set('edit.name', 'GN 1/1 65 mm (Edelstahl)')
+        ->call('bearbeitenSpeichern')
+        ->assertSet('fehler', null);
+
+    $b = DB::table('foodalchemist_vocab_containers')->find($id);
+    expect($b->name)->toBe('GN 1/1 65 mm (Edelstahl)')
+        ->and($b->slug)->toBe('gn_11_65mm');
+});
