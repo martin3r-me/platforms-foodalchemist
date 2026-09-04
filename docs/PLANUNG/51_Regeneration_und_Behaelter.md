@@ -710,3 +710,41 @@ nicht.
 
 **Browser-Abnahme** auf dem Dev-Server — der Test-Harness ist layout-blind: Livewire-Tests werden
 grün, während die Seite 500 wirft.
+
+---
+
+## Nachtrag 2026-09-04 · zweite Echtdaten-Runde (deployt und gemessen)
+
+**Die Menge wählt die Größe** (§5.6). Gemessen auf demo, durch den Produktionspfad, Rezept 1784
+„Suppe: Kokos-Curry", Abfüllen-Referenz `Eimer 10 l` @ 9 kg:
+
+| Ziel | Ansätze | produziert | Vorschlag | Alternative |
+|---|---|---|---|---|
+| 9 kg | 1 | 10,973 kg | **1× Eimer 10 l** (Rest 0) | 2× Eimer 5 l (Rest 0) |
+| 4 kg | 1 | 10,973 kg | **1× Eimer 5 l** (Rest 0,5) | 1× Eimer 10 l (Rest 5) |
+
+Beide Zeilen produzieren denselben ganzen Ansatz — der Ansatz treibt die Geschirrzahl nicht
+(§3.4e). Und `regenerieren` erscheint korrekt NICHT: das Basisrezept läuft solo, wird also
+produziert und eingelagert, nicht serviert (§8 Etappe E, „die Grenze ist *wird serviert*").
+
+★ **Zwei weitere Fehler, die erst der Echtbestand hergab — beide von mir eingeschleppt:**
+
+1. **Der Katalog-Seed entdoppelte über den SLUG.** Der WaWi-Bestand schreibt `gn_1_1_65mm`, der
+   Seed `gn_11_65mm` — verschiedene Slugs, gleicher Behälter. Auf demo standen 16 GN-Größen
+   doppelt (57 statt 41), sichtbar getrennt in „sonstig" (Bestand, `group_name` NULL) und „GN"
+   (Seed). Die Spec hatte das Muster in §7.2 selbst benannt (»der Matcher normalisiert über den
+   NAMEN«) — der Backfill-Matcher tat das, der Seed nicht.
+   Reparatur: Migration `000015` merged auf die **niedrigste ID**. Gegenprobe vor dem Merge: alle
+   6 Referenzen zeigten auf den Bestand, keine einzige auf den Seed — die „sonstigen" zu löschen
+   hätte 6 Verweise genullt. Danach: 41 aktiv, 0 Namens-Dubletten, 0 verwaiste Referenzen.
+2. **`wirkflaeche()` hatte den Kanten-Rückfall noch.** demo bot für 9 kg ein „GN 1/2-20 mit
+   117,4 kg" an, direkt hinter dem Vorschlag (real fasst es unter 1 kg). Zwei Fehler in einer
+   Zeile: der Faktor war um 100 daneben (1 cm² × 1 mm = 0,0001 l), und selbst richtig gerechnet
+   bliebe die Kantenrechnung falsch (GN ist konisch, ~21 % Überschätzung). Genau diesen Rückfall
+   hatten wir nach Befund 1 der ersten Runde aus `nutzvolumenL()` schon entfernt — in
+   `wirkflaeche()` überlebte er. Jetzt: ohne Nennvolumen **nicht skalierbar, also nicht
+   vorgeschlagen**.
+
+**Behälterbedarf am Wandmonitor** (neu, zwischen Zutaten und Equipment): je Zeile statt je Gruppe,
+mit der Alternative daneben, durchgängiger Behälter einmal, und dem **Umfüll-Schritt** wenn Abfüll-
+und Regenerationsbehälter verschieden sind — ein Arbeitsschritt, der bis dahin nirgends stand.
