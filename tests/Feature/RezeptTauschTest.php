@@ -153,6 +153,53 @@ it('Bilanz trennt eigene von geerbten Verwendungen', function () {
     expect($bilanz)->toMatchArray(['zeilen' => 1, 'rezepte' => 1, 'fremd_zeilen' => 1, 'fremd_rezepte' => 1]);
 });
 
+// ── „Wo ist es drin?" (2026-09-04, Dominique) — Mengen ohne Adresse helfen nicht ────────────
+
+it('nennt die Verwendungen beim Namen, getrennt nach eigen und geerbt', function () {
+    $this->actingAs($this->makeUser($this->childA));
+    $alt = $this->makeRecipe($this->rootTeam, 'Jus: Kalb');
+    $eigenBasis = $this->makeRecipe($this->childA, 'Fond-Ansatz (Kind A)');
+    $eigenGericht = $this->makeRecipe($this->childA, 'Kalbsrücken (Kind A)', ['is_sales_recipe' => true]);
+    $master = $this->makeRecipe($this->rootTeam, 'Kalbsrücken (Master)');
+    ($this->subZeile)($eigenBasis, $alt);
+    ($this->subZeile)($eigenGericht, $alt);
+    ($this->subZeile)($master, $alt);
+
+    $bilanz = app(RecipeService::class)->verwendungsBilanz($this->childA, $alt->id);
+
+    // Alphabetisch, mit der Unterscheidung Gericht/Basis — sonst weiß niemand, wo er
+    // zum Umhängen hinmuss („1 Zeile(n) in 1 Rezept(en)" war eine Sackgasse).
+    expect(array_column($bilanz['eltern_namen'], 'name'))->toBe(['Fond-Ansatz (Kind A)', 'Kalbsrücken (Kind A)'])
+        ->and(array_column($bilanz['eltern_namen'], 'ist_gericht'))->toBe([false, true])
+        ->and(array_column($bilanz['fremd_namen'], 'name'))->toBe(['Kalbsrücken (Master)']);
+});
+
+it('nennt auch die blockierenden Eltern beim Namen', function () {
+    $this->actingAs($this->makeUser($this->rootTeam));
+    $alt = $this->makeRecipe($this->rootTeam, 'Jus: Kalb');
+    $teller = $this->makeRecipe($this->rootTeam, 'Kalbsrücken mit Jus', ['is_sales_recipe' => true]);
+    ($this->subZeile)($teller, $alt);
+
+    $ref = app(RecipeService::class)->referenzen($alt->id);
+
+    expect($ref['blocker'])->toBeGreaterThan(0)
+        ->and(array_column($ref['eltern_namen'], 'name'))->toBe(['Kalbsrücken mit Jus']);
+});
+
+it('setzt den Verwaltungs-Titel ohne HTML-Entity — modal-section escapt selbst', function () {
+    $modal = file_get_contents(__DIR__ . '/../../resources/views/livewire/recipes/recipe-modal.blade.php');
+    $partial = file_get_contents(__DIR__ . '/../../resources/views/livewire/recipes/partials/verwaltung.blade.php');
+
+    // „&amp;" im title-Attribut wird von der Komponente ein ZWEITES Mal escapt → „&AMP;".
+    // Derselbe Fehler war am 2026-08-03 schon einmal da; deshalb ein Test statt nur ein Fix.
+    expect($modal)->toContain('title="Verwaltung — Rezept tauschen & löschen"')
+        ->and($modal)->not->toContain('tauschen &amp; löschen');
+
+    // Und die Namens-Flächen sind da.
+    expect($partial)->toContain('data-rezept-tausch-eltern')
+        ->and($partial)->toContain('data-rezept-ref-eltern');
+});
+
 // ── Löschen (2026-09-04): der Guard prüft jetzt JEDE harte Referenz, nicht nur Eltern-Zeilen ──
 
 it('löscht ein referenzloses eigenes Basisrezept (Soft-Delete) und leert die Auswahl', function () {

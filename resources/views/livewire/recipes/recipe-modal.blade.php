@@ -661,7 +661,8 @@
 
     {{-- ── Tab: VERWALTUNG (tauschen + löschen — dasselbe Partial wie im Detail-Panel) ── --}}
     <div x-show="tab === 'verwaltung'" x-cloak class="pt-4 space-y-4">
-    <x-foodalchemist::modal-section title="Verwaltung — Rezept tauschen &amp; löschen">
+    {{-- KEIN &amp; im Titel: modal-section escapt {{ $title }} selbst → „&AMP;". --}}
+    <x-foodalchemist::modal-section title="Verwaltung — Rezept tauschen & löschen">
         <p class="text-[11px] text-gray-500 mb-2">Der Tausch hängt dieses Rezept in ALLEN eigenen Gerichten und Basisrezepten, die es als Komponente führen, auf ein anderes um — Menge, Einheit und Verlust-Overrides der Zeilen bleiben stehen, die betroffenen Rezepte werden neu berechnet. Gelöscht werden kann erst, wenn nichts mehr darauf zeigt.</p>
         @include('foodalchemist::livewire.recipes.partials.verwaltung', ['rezeptName' => $form['name'] ?: 'dieses Rezept', 'kompakt' => false])
     </x-foodalchemist::modal-section>

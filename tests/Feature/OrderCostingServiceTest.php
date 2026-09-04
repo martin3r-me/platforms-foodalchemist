@@ -95,16 +95,22 @@ it('hält den Katalogpreis pax-unabhängig und skaliert den realen Auftrags-HK2'
         ->and(collect($small['cost_breakdown'])->firstWhere('key', 'hk2')['amount'])->toBe($small['hk2']);
 });
 
-it('weist Rüstzeit je Auftrag nur einmal und Batchzeit nach physischer Grenze aus', function () {
+it('weist Batchzeit nach physischer Grenze aus — ohne Rüstzeit am Gericht', function () {
     $service = app(OrderCostingService::class);
 
     $small = $service->costConcept($this->rootTeam, $this->concept->refresh(), 100);
     $large = $service->costConcept($this->rootTeam, $this->concept->refresh(), 5000);
 
-    // 100 Pax = 10 kg: 30 Rüst + 1 × 60 Vorgang + 10 variabel.
-    expect($small['active_person_minutes'])->toBe(100.0)
-        // 5.000 Pax = 500 kg: 30 Rüst + 25 × 60 Vorgang + 500 variabel.
-        ->and($large['active_person_minutes'])->toBe(2030.0);
+    // Das Rezept dieser Fixture ist ein VERKAUFSGERICHT und trägt `setup_time_min = 30`
+    // aus der Zeit, als das Feld dort noch angezeigt wurde. Seit dem Entscheid vom
+    // 2026-09-04 (Regelwerk Verkaufsgerichte §3.4a) ist Rüstzeit eine Herstellungs-Größe
+    // und gilt nur am Basisrezept — sonst rechneten Alt-Werte still weiter, die die
+    // Oberfläche nicht mehr zeigt. Die 30 Minuten fallen hier also bewusst weg.
+    //
+    // 100 Pax = 10 kg: 1 × 60 Vorgang + 10 variabel.
+    expect($small['active_person_minutes'])->toBe(70.0)
+        // 5.000 Pax = 500 kg: 25 × 60 Vorgang + 500 variabel.
+        ->and($large['active_person_minutes'])->toBe(2000.0);
 });
 
 it('weist den Fertigungslohn aus und markiert fehlende Produktionszeiten als unvollständig', function () {

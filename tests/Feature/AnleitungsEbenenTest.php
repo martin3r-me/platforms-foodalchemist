@@ -37,6 +37,41 @@ it('recipe.steps fordert keine Regenerations-Parameter mehr an', function () {
         ->and($task)->not->toContain('Service-, Regenerations- und Anrichteablauf');
 });
 
+it('verbietet absolute Mengen in JEDEM schritt-erzeugenden Prompt', function () {
+    // Anlass (Dominique 2026-09-04): ein Rezept war auf ~33 Portionen je Ansatz skaliert —
+    // die Zutatenliste zeigte 166 g Salz und 33 Stueck Eier, die Anleitung sagte weiter
+    // „mit 10 g Salz mischen" und „2 Eiern". Wer danach arbeitet, produziert Ausschuss,
+    // und der Fehler ist unsichtbar: beide Angaben sehen fuer sich plausibel aus.
+    //
+    // Der Test deckt ALLE vier Stellen ab, die Schritt-Text erzeugen. Vorher forderte
+    // `recipe.steps` die Mengen sogar aktiv an („Temperaturen/Zeiten/Mengen konkret").
+    $prompts = config('foodalchemist.prompts', []);
+
+    // Die drei ANSATZ-Prompts: gar keine absoluten Mengen. Der Ansatz skaliert, der Text nicht.
+    foreach (['recipe.steps', 'recipe.generator', 'vk.generator'] as $key) {
+        $task = (string) ($prompts[$key]['task'] ?? '');
+
+        expect($task)->toContain('Zutatenliste ist die einzige Mengen-Wahrheit')
+            ->and($task)->toContain('KEINE absoluten Mengen');
+    }
+
+    // ANRICHTEN ist der Sonderfall und darf NICHT eingeebnet werden: eine Menge JE TELLER
+    // ist portionsbezogen und damit skalierungsfest — sie ist dort sogar gefordert. Verboten
+    // sind nur Ansatz- und Gesamtmengen. Ein pauschales Mengen-Verbot hätte die
+    // Anrichte-Anleitung um ihre nützlichste Angabe gebracht.
+    $plating = (string) ($prompts['vk.plating']['task'] ?? '');
+    expect($plating)->toContain('Menge JE TELLER')
+        ->and($plating)->toContain('Ansatz- oder Gesamtmengen gehoeren NICHT')
+        ->and($plating)->toContain('die Zutatenliste skaliert mit, der Schritt-Text nicht');
+
+    // Gegenprobe: Zeiten und Temperaturen sind skalierungsfest und MUESSEN konkret bleiben —
+    // ein pauschales „keine Zahlen" haette die Anleitung unbrauchbar gemacht.
+    expect((string) ($prompts['recipe.steps']['task'] ?? ''))
+        ->toContain('bleiben konkret')
+        // Und die alte, gegenteilige Forderung ist weg.
+        ->and((string) ($prompts['recipe.steps']['task'] ?? ''))->not->toContain('Temperaturen/Zeiten/Mengen konkret');
+});
+
 it('vk.regeneration bleibt die strukturierte Wahrheit der Regenerations-Ebene', function () {
     $task = (string) (config('foodalchemist.prompts', [])['vk.regeneration']['task'] ?? null);
 

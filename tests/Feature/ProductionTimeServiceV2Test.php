@@ -81,6 +81,29 @@ it('meldet eine nicht umrechenbare variable Bezugsart sichtbar', function () {
         ->and($result['warnings'])->toHaveCount(1);
 });
 
+it('zaehlt Ruestzeit am Basisrezept, ignoriert sie am Gericht', function () {
+    // Regelwerk Verkaufsgerichte §3.4a: Rüstzeit ist eine Herstellungs-Größe. Die Grenze
+    // muss BEIDSEITIG geprüft werden — ein Guard, der versehentlich global greift, würde
+    // die Produktionsplanung aller Basisrezepte um ihre Rüstzeit verkürzen, ohne dass es
+    // irgendwo auffällt.
+    $felder = [
+        'team_id' => $this->rootTeam->id, 'status' => 'approved',
+        'setup_time_min' => 25, 'work_time_min' => 40,
+    ];
+    $basis = FoodAlchemistRecipe::create($felder + [
+        'recipe_key' => 'ruest-basis', 'name' => 'Fond: Ansatz', 'is_sales_recipe' => false,
+    ]);
+    $gericht = FoodAlchemistRecipe::create($felder + [
+        'recipe_key' => 'ruest-gericht', 'name' => 'Teller mit Fond', 'is_sales_recipe' => true,
+    ]);
+
+    $mitRuest = $this->times->calculateForBatches($this->rootTeam, $basis, 2);
+    $ohneRuest = $this->times->calculateForBatches($this->rootTeam, $gericht, 2);
+
+    expect($mitRuest['active_person_minutes'])->toBe(105.0)      // 25 Rüst + 2 × 40
+        ->and($ohneRuest['active_person_minutes'])->toBe(80.0);  // nur 2 × 40
+});
+
 it('rechnet variable Portionszeit aus Ansätzen und Portionen je Ansatz um', function () {
     $recipe = FoodAlchemistRecipe::create([
         'team_id' => $this->rootTeam->id, 'recipe_key' => 'portion-time', 'name' => 'Portionszeit',

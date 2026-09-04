@@ -18,9 +18,23 @@
         <p class="{{ $meldung }} {{ $kompakt ? 'text-emerald-600' : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-700' }}" data-rezept-tausch-hinweis>{{ $hinweisTausch }}</p>
     @endif
 
-    {{-- 1. Wo hängt das Rezept? --}}
+    {{-- 1. Wo hängt das Rezept? MIT Namen (2026-09-04, Dominique: „es wird nicht angezeigt
+         wo es drin ist") — eine Menge ohne Adresse hilft beim Umhängen nicht weiter. --}}
     @if($tauschBilanz !== null && ($tauschBilanz['zeilen'] > 0 || $tauschBilanz['fremd_zeilen'] > 0))
         <p class="{{ $tt }} text-gray-600" data-rezept-tausch-bilanz>Als Komponente eingesetzt: {{ $tauschBilanz['zeilen'] }} Zeile(n) in {{ $tauschBilanz['rezepte'] }} eigenen Rezept(en) @if($tauschBilanz['fremd_zeilen'] > 0)· {{ $tauschBilanz['fremd_rezepte'] }} geerbte(s) Rezept(e) bleiben unberührt (read-only, D1)@endif</p>
+        @if(($tauschBilanz['eltern_namen'] ?? []) !== [])
+            <ul class="{{ $tt }} mt-1 mb-1 space-y-0.5" data-rezept-tausch-eltern>
+                @foreach($tauschBilanz['eltern_namen'] as $e)
+                    <li class="flex items-center gap-1.5" wire:key="rvw-eltern-{{ $e['id'] }}">
+                        <span class="{{ $pill }} {{ $e['ist_gericht'] ? $variantPill['info'] : $variantPill['secondary'] }} shrink-0">{{ $e['ist_gericht'] ? 'Gericht' : 'Basis' }}</span>
+                        <span class="min-w-0 truncate text-gray-700">{{ $e['name'] }}</span>
+                    </li>
+                @endforeach
+            </ul>
+        @endif
+        @if(($tauschBilanz['fremd_namen'] ?? []) !== [])
+            <p class="{{ $tt }} text-gray-400" data-rezept-tausch-fremd>Geerbt (unberührt): {{ implode(' · ', array_column($tauschBilanz['fremd_namen'], 'name')) }}</p>
+        @endif
     @endif
 
     {{-- 2. Tauschen — der Ausweg aus einer blockierten Löschung --}}
@@ -52,6 +66,12 @@
                 <p class="{{ $tt }} text-gray-500 mt-1">Keine Referenzen — Löschen möglich (Soft-Delete, wiederherstellbar).</p>
             @else
                 <p class="{{ $tt }} text-gray-600" data-rezept-ref-zusammenfassung>Löschen blockiert — wird referenziert: {{ implode(' · ', $tauschReferenzen['blocker_teile']) }}. @if($tauschBilanz !== null && $tauschBilanz['zeilen'] > 0)Erst oben umhängen, dann löschen.@endif</p>
+                @if(($tauschReferenzen['eltern_namen'] ?? []) !== [])
+                    {{-- Adresse statt Menge: die Eltern-Rezepte, die das Löschen blockieren.
+                         Hier stehen ALLE (auch geerbte) — sie blockieren ebenfalls, tauchen aber
+                         in der Tausch-Bilanz oben bewusst nur als „unberührt" auf. --}}
+                    <p class="{{ $tt }} text-gray-500 mt-1" data-rezept-ref-eltern>Referenziert in: {{ implode(' · ', array_column($tauschReferenzen['eltern_namen'], 'name')) }}</p>
+                @endif
             @endif
             @php($refInfo = array_filter([$tauschReferenzen['produktion_historie'] > 0 ? $tauschReferenzen['produktion_historie'] . ' Zeile(n) in abgeschlossenen Produktionsaufträgen' : null, $tauschReferenzen['instanzen'] > 0 ? $tauschReferenzen['instanzen'] . ' daraus instanziierte(s) Rezept(e)' : null]))
             @if($refInfo !== [])

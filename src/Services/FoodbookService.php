@@ -2158,6 +2158,12 @@ class FoodbookService
 
         $wording = app(WordingResolver::class);
 
+        // §-Kennzeichnung je Gericht + Legende (2026-09-04): die Karte geht an den Kunden,
+        // trug aber bis hierher KEINE Deklaration — anders als Foodbook, Speisekarte und
+        // Speiseplan, die dieselbe Code-Quelle längst nutzen (Regelwerk Concept §7.1).
+        $kz = app(\Platform\FoodAlchemist\Services\ConcepterAggregateService::class)
+            ->codesFuerZeilen($wording->gerichtZeilen($concept));
+
         return [
             'concept' => $concept,
             'titel' => $concept->consumer_name ?: $concept->name,
@@ -2166,7 +2172,8 @@ class FoodbookService
             'preis_pp' => $concept->price_per_person_cache !== null ? (float) $concept->price_per_person_cache : null,
             // Preisdarstellung (2026-08-25): einzel → Concept-Summenpreis ausblenden, Preise je Gericht-Zeile.
             'einzelpreise' => $concept->istEinzelpreis(),
-            'gerichte' => $wording->gerichtZeilen($concept),
+            'gerichte' => $kz['zeilen'],
+            'legende' => $kz['legende'],
             'mwst' => app(TeamSettingsService::class)->mwst($team),
             'stand' => $concept->updated_at,
         ];
