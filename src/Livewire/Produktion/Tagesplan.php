@@ -525,6 +525,8 @@ class Tagesplan extends Component
                             'warnungen' => $arbeitsZeilen->flatMap(fn ($z) => $z->sicherheit['warnungen'] ?? [])->unique()->values(),
                         ],
                         'anrichten' => $this->wallGerichtAnrichten($teile),
+                        'anrichten_schritte' => $this->wallGerichtAnrichtenSchritte($teile),
+                        'regeneration' => $this->wallGerichtRegeneration($teile),
                         'darreichung' => $this->wallGerichtDarreichung($teile),
                         'rezept_uebersicht' => $this->wallGerichtRezeptUebersicht($arbeitsZeilen),
                         'zeilen' => $arbeitsZeilen,
@@ -595,9 +597,25 @@ class Tagesplan extends Component
             ->values();
     }
 
+    /**
+     * Anrichte-Anleitung fürs Wand-Gericht (§3.3).
+     *
+     * Reihenfolge der Quellen: eingefrorene Anrichte-SCHRITTE (seit 2026-09-04, mit Fotos)
+     * → `plating_text` als deren Spiegel bzw. für Alt-Aufträge → Zubereitung als letzter
+     * Notnagel. Die Schritte liefert {@see self::wallGerichtAnrichtenSchritte}; hier bleibt
+     * der Text für die kompakte Kachel.
+     */
     private function wallGerichtAnrichten(\Illuminate\Support\Collection $zeilen): ?string
     {
         $vk = $zeilen->first(fn ($z) => (bool) ($z->ist_verkaufsrezept ?? false));
+
+        $schritte = (array) ($vk->anrichte_schritte ?? []);
+        if ($schritte !== []) {
+            return collect($schritte)
+                ->map(fn ($s) => trim(($s['nr'] ?? '') . '. ' . ($s['text'] ?? '')))
+                ->filter()->implode("\n");
+        }
+
         $text = trim((string) ($vk->plating_text ?? ''));
         if ($text !== '') {
             return $text;
@@ -606,6 +624,35 @@ class Tagesplan extends Component
         $fallback = trim((string) ($vk->zubereitung ?? ''));
 
         return $fallback !== '' ? $fallback : null;
+    }
+
+    /**
+     * Anrichte-Schritte samt Fotos fürs Wand-Gericht — das ist der Grund, warum das
+     * Anrichten überhaupt eine Schrittfolge bekam: der Pass soll den Aufbau SEHEN.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function wallGerichtAnrichtenSchritte(\Illuminate\Support\Collection $zeilen): array
+    {
+        $vk = $zeilen->first(fn ($z) => (bool) ($z->ist_verkaufsrezept ?? false));
+
+        return $this->normalisierteAnleitungsSchritte((array) ($vk->anrichte_schritte ?? []));
+    }
+
+    /**
+     * Regenerations-Programm je Komponente fürs Wand-Gericht (§3.2).
+     *
+     * Bis 2026-09-04 kam die Regeneration allein aus {@see self::wallGerichtDarreichung} —
+     * also aus den Skalaren der Standard-Darreichung, die kein Schreibpfad füllt. Am Pass
+     * stand sie deshalb leer, obwohl sie im Editor gepflegt ist.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function wallGerichtRegeneration(\Illuminate\Support\Collection $zeilen): array
+    {
+        return $zeilen
+            ->map(fn ($z) => (array) ($z->regenerationen ?? []))
+            ->first(fn (array $r) => $r !== []) ?? [];
     }
 
     private function wallGerichtDarreichung(\Illuminate\Support\Collection $zeilen): array

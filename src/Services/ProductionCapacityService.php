@@ -162,7 +162,9 @@ class ProductionCapacityService
                 'r.spec_is_gluten_free', 'r.spec_is_lactose_free',
                 ...array_map(fn (string $a) => "r.allergen_{$a}", array_keys(FoodAlchemistItemAllergen::ALLERGENE)),
                 'o.id as order_id', 'o.name as auftrag', 'o.production_date as liefertag',
-            ], $mitAnleitung ? ['l.zutaten', 'l.steps_snapshot', 'l.zubereitung', 'l.darreichung'] : []))->get();
+            // §3 (2026-09-04): die eingefrorenen Nachbar-Ebenen mitziehen — der Wandmonitor
+            // las die Regeneration bisher aus `darreichung` (Skalare, die niemand füllt).
+            ], $mitAnleitung ? ['l.zutaten', 'l.steps_snapshot', 'l.regen_snapshot', 'l.plating_snapshot', 'l.zubereitung', 'l.darreichung'] : []))->get();
 
         $equipmentNachRezept = collect();
         if ($mitAnleitung) {
@@ -205,6 +207,10 @@ class ProductionCapacityService
                         ? (json_decode($z->zutaten, true) ?: []) : ($z->zutaten ?? []);
                     $z->darreichung = property_exists($z, 'darreichung') && is_string($z->darreichung)
                         ? (json_decode($z->darreichung, true) ?: []) : ($z->darreichung ?? []);
+                    foreach (['regen_snapshot' => 'regenerationen', 'plating_snapshot' => 'anrichte_schritte'] as $spalte => $ziel) {
+                        $roh = property_exists($z, $spalte) ? $z->{$spalte} : null;
+                        $z->{$ziel} = is_string($roh) ? (json_decode($roh, true) ?: []) : ($roh ?? []);
+                    }
                     if ($mitAnleitung && $z->schritte === [] && trim((string) ($z->zubereitung ?? '')) === '') {
                         $z->sicherheit['warnungen'][] = 'Ohne Anleitung';
                         $z->sicherheit['warnungen'] = array_values(array_unique($z->sicherheit['warnungen']));

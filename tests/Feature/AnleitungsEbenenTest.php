@@ -316,3 +316,52 @@ it('der Report liefert die Anrichte-Schritte als eigene Liste', function () {
     expect(collect($node['steps'])->pluck('text')->all())->toBe(['Filet tranchieren.'])
         ->and(collect($node['anrichte_schritte'])->pluck('text')->all())->toBe(['Creme aufziehen.']);
 });
+
+// ── Auftrag + Wandmonitor: die Ebenen werden mit eingefroren ──────────────────
+
+it('der Produktionsschein kennt Regeneration und Anrichten als eigene Schalter', function () {
+    // §3.6 auch am Auftrag: die Küche vor Ort braucht das Programm, der Pass den Aufbau.
+    $svc = app(\Platform\FoodAlchemist\Services\ProductionOrderService::class);
+
+    $produktion = $svc->dokumentOptionen(['profil' => 'produktion']);
+    expect($produktion['regeneration'])->toBeTrue()
+        ->and($produktion['anrichten'])->toBeFalse();
+
+    expect($svc->dokumentOptionen(['profil' => 'kurz']))
+        ->toMatchArray(['regeneration' => false, 'anrichten' => false]);
+
+    // einzeln überschreibbar
+    expect($svc->dokumentOptionen(['profil' => 'produktion', 'anrichten' => '1'])['anrichten'])->toBeTrue();
+});
+
+it('das Produktionsblatt liefert Regenerations-Programm und Anrichte-Schritte je Gericht', function () {
+    // Das ist die Quelle, aus der der Auftrag seine Snapshots einfriert — und aus der
+    // Wandmonitor und Produktionsschein lesen. Vorher fehlten beide Ebenen komplett.
+    $this->seedTeamHierarchy();
+    $stepSvc = app(\Platform\FoodAlchemist\Services\RecipeStepService::class);
+    $step = \Platform\FoodAlchemist\Models\FoodAlchemistRecipeStep::class;
+
+    $gericht = $this->makeRecipe($this->rootTeam, 'Blatt-Gericht', [
+        'is_sales_recipe' => true, 'sales_quantity_per_unit_g' => 300, 'sales_unit_count' => 1,
+    ]);
+    $this->makeIngredient($gericht, 'Rinderfilet', $this->makeGp($this->rootTeam, 'Rinderfilet'), '150', 1);
+
+    $stepSvc->sync($gericht, [['phase' => null, 'text' => 'Filet tranchieren.']], $step::EBENE_PRODUKTION);
+    $stepSvc->sync($gericht, [['phase' => null, 'text' => 'Creme aufziehen.']], $step::EBENE_ANRICHTEN);
+
+    \Platform\FoodAlchemist\Models\FoodAlchemistRecipeRegeneration::create([
+        'team_id' => $this->rootTeam->id, 'recipe_id' => $gericht->id,
+        'component_label' => 'Rinderfilet sous-vide', 'temp_c' => 54, 'duration_min' => 25,
+        'core_temp_c' => 52, 'sort_order' => 1,
+    ]);
+
+    $blatt = app(\Platform\FoodAlchemist\Services\PlanungsblattService::class)
+        ->produktionsblattFuerZiele($this->rootTeam, [['recipe_id' => $gericht->id, 'portionen' => 10]]);
+
+    $zeile = collect($blatt['rezepte'])->firstWhere('recipe_id', $gericht->id);
+    expect($zeile)->not->toBeNull();
+    expect(collect($zeile['regenerationen'])->pluck('komponente')->all())->toBe(['Rinderfilet sous-vide'])
+        ->and(collect($zeile['anrichte_schritte'])->pluck('text')->all())->toBe(['Creme aufziehen.'])
+        // Die Produktions-Schritte bleiben getrennt — keine Vermischung der Nummerierungen.
+        ->and(collect($zeile['schritte'])->pluck('text')->all())->toBe(['Filet tranchieren.']);
+});

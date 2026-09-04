@@ -18,6 +18,8 @@
         'rezepte' => 'Rezepte',
         'zutaten' => 'Zutaten',
         'anleitung' => 'Anleitung',
+        'regeneration' => 'Regeneration',
+        'anrichten' => 'Anrichten',
         'bilder' => 'Bilder',
         'darreichung' => 'Darreichung',
         'notizen' => 'Notizen',
@@ -141,10 +143,40 @@
                 </table>
             @endif
 
+            {{-- §3.2 Regeneration: das eingefrorene Programm je Komponente. Vorher stand es nur
+                 als Einzeiler in `darreichung` — aus Skalaren, die kein Schreibpfad füllt. --}}
+            @if(($opt['regeneration'] ?? false) && count($z['regenerationen'] ?? []))
+                <table>
+                    <thead><tr><th>Komponente</th><th>Gerät</th><th class="right">°C</th><th class="right">min</th><th class="right">Kern °C</th><th>Hinweis</th></tr></thead>
+                    <tbody>
+                    @foreach($z['regenerationen'] as $reg)
+                        <tr>
+                            <td>{{ $reg['komponente'] ?? '—' }}</td>
+                            <td>{{ $reg['geraet'] ?? '—' }}</td>
+                            <td class="right">{{ $reg['temp_c'] ?? '—' }}</td>
+                            <td class="right">{{ $reg['duration_min'] ?? '—' }}</td>
+                            <td class="right">{{ $reg['core_temp_c'] ?? '—' }}</td>
+                            <td>{{ $reg['note'] ?? '' }}</td>
+                        </tr>
+                    @endforeach
+                    </tbody>
+                </table>
+            @endif
+
             @if($opt['anleitung'] ?? false)
                 @include('foodalchemist::dokumente.partials.schritt-karten', [
                     'schritte' => $z['schritte'] ?? [],
                     'zubereitung' => $z['zubereitung'] ?? null,
+                    'mitFotos' => $opt['bilder'] ?? false,
+                    'istPdf' => $pdf,
+                ])
+            @endif
+
+            {{-- §3.3 Anrichten: eingefrorene Schritte samt Fotos (Adressat ist der Pass). --}}
+            @if(($opt['anrichten'] ?? false) && count($z['anrichte_schritte'] ?? []))
+                @include('foodalchemist::dokumente.partials.schritt-karten', [
+                    'schritte' => $z['anrichte_schritte'],
+                    'zubereitung' => null,
                     'mitFotos' => $opt['bilder'] ?? false,
                     'istPdf' => $pdf,
                 ])

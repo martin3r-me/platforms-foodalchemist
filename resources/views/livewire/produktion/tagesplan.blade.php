@@ -371,12 +371,62 @@
                         @endif
                     </header>
 
+                    {{-- §3.2 Regeneration am Pass: das Programm je Komponente aus dem eingefrorenen
+                         Auftrag. Bis 2026-09-04 stand hier nichts — die Kachel unten las die
+                         Regenerations-Skalare der Standard-Darreichung, die kein Schreibpfad füllt. --}}
+                    @if(collect($wallGericht->regeneration ?? [])->isNotEmpty())
+                        <section class="rounded-2xl border border-white/10 bg-white/5 p-4" data-tagesplan-wall-gericht-regeneration>
+                            <p class="text-xs font-bold uppercase tracking-wide text-slate-400">Regeneration</p>
+                            <div class="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                                @foreach($wallGericht->regeneration as $reg)
+                                    <div class="rounded-xl bg-slate-950/45 px-3 py-2">
+                                        <p class="text-base font-semibold text-slate-100">{{ $reg['komponente'] ?? '—' }}</p>
+                                        <p class="mt-0.5 text-sm text-slate-300">
+                                            {{ collect([
+                                                $reg['geraet'] ?? null,
+                                                ($reg['temp_c'] ?? null) !== null ? $reg['temp_c'] . ' °C' : null,
+                                                ($reg['duration_min'] ?? null) !== null ? $reg['duration_min'] . ' min' : null,
+                                                ($reg['core_temp_c'] ?? null) !== null ? 'KT ' . $reg['core_temp_c'] . ' °C' : null,
+                                            ])->filter()->implode(' · ') }}
+                                        </p>
+                                        @if($reg['note'] ?? null)
+                                            <p class="mt-0.5 text-xs text-slate-400">{{ $reg['note'] }}</p>
+                                        @endif
+                                    </div>
+                                @endforeach
+                            </div>
+                        </section>
+                    @endif
+
                     @if($wallGericht->anrichten || collect($wallGericht->darreichung ?? [])->isNotEmpty())
                         <section class="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1.4fr)_minmax(18rem,0.6fr)]" data-tagesplan-wall-gericht-service>
                             @if($wallGericht->anrichten)
                                 <article class="rounded-2xl border border-white/10 bg-white/5 p-4" data-tagesplan-wall-gericht-anrichten>
                                     <p class="text-xs font-bold uppercase tracking-wide text-slate-400">Anrichten</p>
-                                    <p class="mt-2 whitespace-pre-line text-lg font-semibold leading-snug text-slate-100">{{ $wallGericht->anrichten }}</p>
+                                    @if(collect($wallGericht->anrichten_schritte ?? [])->isNotEmpty())
+                                        <ol class="mt-2 space-y-3">
+                                            @foreach($wallGericht->anrichten_schritte as $s)
+                                                <li class="flex gap-3">
+                                                    <span class="mt-0.5 text-base font-bold text-slate-500">{{ $s['nr'] ?? $loop->iteration }}</span>
+                                                    <div class="min-w-0">
+                                                        <p class="text-lg font-semibold leading-snug text-slate-100">{{ $s['text'] ?? '' }}</p>
+                                                        @if(collect($s['fotos'] ?? [])->isNotEmpty())
+                                                            <div class="mt-2 flex flex-wrap gap-2">
+                                                                @foreach($s['fotos'] as $foto)
+                                                                    @if($foto['url'] ?? null)
+                                                                        <img src="{{ $foto['url'] }}" alt="{{ $foto['caption'] ?? 'Anrichten' }}"
+                                                                             class="h-24 w-32 rounded-lg object-cover" />
+                                                                    @endif
+                                                                @endforeach
+                                                            </div>
+                                                        @endif
+                                                    </div>
+                                                </li>
+                                            @endforeach
+                                        </ol>
+                                    @else
+                                        <p class="mt-2 whitespace-pre-line text-lg font-semibold leading-snug text-slate-100">{{ $wallGericht->anrichten }}</p>
+                                    @endif
                                 </article>
                             @endif
                             @if(collect($wallGericht->darreichung ?? [])->isNotEmpty())

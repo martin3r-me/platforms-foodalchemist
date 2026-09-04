@@ -738,6 +738,7 @@ class PlanungsblattService
                 'schritte' => $this->schritteFuer($recipe),           // Spec 27: die eigentliche Anleitung (Nummer + Text + Fotos)
                 'darreichung' => $istVk ? $this->darreichungsInfo($recipe) : null, // Behälter/Vehikel der Standard-Form
                 'regenerationen' => $this->regenerationenFuer($recipe),   // §3.2: Programm je Komponente (V-19)
+                'anrichte_schritte' => $istVk ? $this->anrichteSchritteFuer($recipe) : [],   // §3.3 (nur am Gericht)
                 'zutaten' => $zeilen,
             ];
         }
@@ -871,6 +872,31 @@ class PlanungsblattService
             // 2026-09-04 eigene Schritte in derselben Tabelle, die hier nicht mit
             // hineinnummerieren dürfen.
             ->ebene(\Platform\FoodAlchemist\Models\FoodAlchemistRecipeStep::EBENE_PRODUKTION)
+            ->with('photos')->orderBy('position')->orderBy('id')->get()
+            ->map(fn ($s) => [
+                'nr' => (int) $s->position,
+                'phase' => $s->phase,
+                'text' => (string) $s->text,
+                'fotos' => $s->photos->map(fn ($f) => [
+                    'url' => $f->url(),
+                    'pfad_abs' => $disk->exists($f->pfad) ? $disk->path($f->pfad) : null,
+                    'caption' => $f->caption,
+                ])->values()->all(),
+            ])->values()->all();
+    }
+
+    /**
+     * Die Anrichte-Schritte (§3.3) in derselben Form wie {@see self::schritteFuer} — samt
+     * Fotos, damit der Pass den Teller-Aufbau auf Papier UND am Monitor bebildert sieht.
+     *
+     * @return list<array{nr: int, phase: ?string, text: string, fotos: list<array<string, mixed>>}>
+     */
+    private function anrichteSchritteFuer(FoodAlchemistRecipe $recipe): array
+    {
+        $disk = \Illuminate\Support\Facades\Storage::disk('public');
+
+        return \Platform\FoodAlchemist\Models\FoodAlchemistRecipeStep::where('recipe_id', $recipe->id)
+            ->ebene(\Platform\FoodAlchemist\Models\FoodAlchemistRecipeStep::EBENE_ANRICHTEN)
             ->with('photos')->orderBy('position')->orderBy('id')->get()
             ->map(fn ($s) => [
                 'nr' => (int) $s->position,

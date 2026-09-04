@@ -280,6 +280,11 @@ class ProductionOrderService
                 'standzeit_min' => $r['standzeit_min'] ?? null,
                 'zubereitung' => $r['zubereitung'],
                 'steps_snapshot' => $r['schritte'] ?? null,   // Spec 27: Schrittfolge mit einfrieren
+                // §3 (2026-09-04): die beiden anderen Ebenen ebenfalls einfrieren. Vorher las
+                // der Auftrag die Regeneration aus `darreichung` — den Skalaren der
+                // Standard-Darreichung, die kein Schreibpfad füllt; am Pass stand sie leer.
+                'regen_snapshot' => $r['regenerationen'] ?? null,
+                'plating_snapshot' => $r['anrichte_schritte'] ?? null,
                 'darreichung' => $r['darreichung'],
                 'zutaten' => $r['zutaten'],
                 'position' => $i,
@@ -971,6 +976,8 @@ class ProductionOrderService
                 'done_at' => $l->done_at?->format('d.m.Y H:i'),
                 'zubereitung' => $l->zubereitung,
                 'schritte' => $l->steps_snapshot ?? [],   // Spec 27 (leer = Alt-Auftrag → Text-Fallback)
+                'regenerationen' => $l->regen_snapshot ?? [],      // §3.2 (leer = Alt-Auftrag → Darreichungs-Skalare)
+                'anrichte_schritte' => $l->plating_snapshot ?? [], // §3.3 (leer = Alt-Auftrag → plating_text)
                 'darreichung' => $l->darreichung,
                 'zutaten' => $l->zutaten,
                 'note' => $l->note,
@@ -1125,7 +1132,7 @@ class ProductionOrderService
             && $order->procurement_targets_hash !== self::targetsHash($order->targets);
     }
 
-    /** @return array{profil:string,rezepte:bool,zutaten:bool,anleitung:bool,bilder:bool,darreichung:bool,notizen:bool,posten:string} */
+    /** @return array{profil:string,rezepte:bool,zutaten:bool,anleitung:bool,regeneration:bool,anrichten:bool,bilder:bool,darreichung:bool,notizen:bool,posten:string} */
     public function dokumentOptionen(array $query): array
     {
         $profil = (string) ($query['profil'] ?? 'produktion');
@@ -1137,10 +1144,14 @@ class ProductionOrderService
             'kurz' => [
                 'rezepte' => true, 'zutaten' => false, 'anleitung' => false, 'bilder' => false,
                 'darreichung' => false, 'notizen' => false,
+                'regeneration' => false, 'anrichten' => false,
             ],
+            // §3.6: die Küche vor Ort braucht das Regenerations-Programm, der Teller-Aufbau
+            // gehört dem Pass — beides einzeln zuschaltbar, wie im Report.
             default => [
                 'rezepte' => true, 'zutaten' => true, 'anleitung' => true, 'bilder' => true,
                 'darreichung' => true, 'notizen' => true,
+                'regeneration' => true, 'anrichten' => false,
             ],
         };
 

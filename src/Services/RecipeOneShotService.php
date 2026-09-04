@@ -325,6 +325,10 @@ class RecipeOneShotService
                 'max_vorlauf_tage' => $recipe->max_vorlauf_tage,
                 'temperature' => $recipe->temperature,
                 'function' => $recipe->function,
+                // Ohne den Ertrag kann das Modell keine sinnvolle Chargengröße nennen —
+                // der Prompt fragt sie an, bekam aber nie eine Bezugsgröße.
+                'yield_kg' => $recipe->yield_kg_manual ?? $recipe->yield_kg,
+                'yield_pieces' => $recipe->yield_pieces,
                 'preparation' => $recipe->preparation,
                 'zutaten' => $recipe->ingredients()->whereNull('deleted_at')->pluck('raw_text')->take(30)->all(),
             ], [
@@ -351,6 +355,21 @@ class RecipeOneShotService
             if (isset($vorschlag->werte['max_vorlauf_tage']) && is_numeric($vorschlag->werte['max_vorlauf_tage'])) {
                 $update['max_vorlauf_tage'] = max(0, min(14, (int) $vorschlag->werte['max_vorlauf_tage']));
             }
+            // Chargengrenze: der Prompt fordert GENAU EINE (kg für Gewichts-, Stück für
+            // Stück-Rezepte). Sie fehlte in dieser Whitelist, obwohl angefragt — der
+            // Topf-Deckel blieb damit auf dem Team-Default, und der bestimmt in
+            // ProductionTimeService die Anzahl der Ansätze und somit die Personenminuten.
+            foreach (['batch_max_kg', 'batch_max_pieces'] as $feld) {
+                $wert = $vorschlag->werte[$feld] ?? null;
+                if (is_numeric($wert) && (float) $wert > 0) {
+                    $update[$feld] = round((float) $wert, 3);
+                }
+            }
+            // Nie beide gleichzeitig: die Ertragsart entscheidet, welcher Deckel gilt.
+            if (isset($update['batch_max_kg'], $update['batch_max_pieces'])) {
+                unset($update[$recipe->istStueckErtrag() ? 'batch_max_kg' : 'batch_max_pieces']);
+            }
+
             foreach (['temperature', 'function'] as $feld) {
                 $wert = $vorschlag->werte[$feld] ?? null;
                 if (is_string($wert) && trim($wert) !== '') {
@@ -374,6 +393,8 @@ class RecipeOneShotService
                 'max_vorlauf_tage' => isset($update['max_vorlauf_tage']) ? (int) $update['max_vorlauf_tage'] : $recipe->max_vorlauf_tage,
                 'temperature' => $update['temperature'] ?? $recipe->temperature,
                 'function' => $update['function'] ?? $recipe->function,
+                'batch_max_kg' => $update['batch_max_kg'] ?? $recipe->batch_max_kg,
+                'batch_max_pieces' => $update['batch_max_pieces'] ?? $recipe->batch_max_pieces,
             ];
         } catch (\Throwable $e) {
             return ['status' => 'fehler', 'fehler' => mb_strimwidth($e->getMessage(), 0, 300)];

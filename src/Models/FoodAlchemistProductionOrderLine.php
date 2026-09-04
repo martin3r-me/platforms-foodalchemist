@@ -48,6 +48,9 @@ class FoodAlchemistProductionOrderLine extends Model
         'darreichung' => 'array',
         'zutaten' => 'array',
         'steps_snapshot' => 'array',   // Spec 27: eingefrorene Schrittfolge (NULL = Alt-Auftrag)
+        // §3 (2026-09-04): die beiden anderen Anleitungs-Ebenen, ebenfalls eingefroren.
+        'regen_snapshot' => 'array',   // V-19-Programm je Komponente
+        'plating_snapshot' => 'array', // Anrichte-Schritte inkl. Fotos
         'manual_ansaetze' => 'decimal:3',   // Spec 30
         'is_manual_ansaetze' => 'boolean',
         'is_struck' => 'boolean',
