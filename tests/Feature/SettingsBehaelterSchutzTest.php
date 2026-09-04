@@ -253,3 +253,13 @@ it('der Master pflegt globale Katalog-Zeilen, ein Kind-Team nicht', function () 
         ->call('bearbeitenStart', $id)
         ->assertSet('fehler', fn ($f) => str_contains((string) $f, 'nur das Besitzer-Team'));
 });
+
+it('warnt, wenn ein globaler Grundstock Team-Dubletten erzeugen würde', function () {
+    // Echtdaten-Fussangel: der Bestand kam per WaWi-Import in ein TEAM. Global anzulegen
+    // stellt dieselben GN-Groessen ein zweites Mal daneben.
+    ($this->behaelterAnlegen)($this->rootTeam->id, 'GN 1/1 65mm');
+
+    $this->artisan('foodalchemist:behaelter-katalog')
+        ->expectsOutputToContain('hat bereits Behälter mit denselben Namen')
+        ->assertExitCode(0);
+});

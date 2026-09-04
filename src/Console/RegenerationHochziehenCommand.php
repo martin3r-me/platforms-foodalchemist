@@ -82,9 +82,15 @@ class RegenerationHochziehenCommand extends Command
 
         // Gruppieren je Basisrezept: nur EINDEUTIGE Werte wandern hoch.
         $jeKomponente = [];
+        $gpOverrides = [];
         foreach ($treffer as $t) {
             if ($t['zutat']->referenced_recipe_id === null) {
-                $review[] = ['zeile' => $t['zeile'], 'grund' => 'Komponente ist kein Basisrezept (GP oder ungemappt)'];
+                // Ein Grundprodukt kann keinen eigenen Default tragen (Rang 3 leitet ihn aus
+                // `gps.condition` ab). Die vorhandene Zeile ist aber eine getroffene Entscheidung
+                // und gehoert deshalb als OVERRIDE an ihre Komponente gebunden — sie in die
+                // Review-Liste zu schieben hiesse, eine gepflegte Angabe zur offenen Frage zu
+                // erklaeren. Gemeldet wird sie trotzdem, damit niemand sie uebersieht.
+                $gpOverrides[] = $t;
 
                 continue;
             }
@@ -92,7 +98,7 @@ class RegenerationHochziehenCommand extends Command
         }
 
         $hoch = [];
-        $bleibtOverride = [];
+        $bleibtOverride = $gpOverrides;
         foreach ($jeKomponente as $basisId => $gruppe) {
             $signaturen = collect($gruppe)->map(fn ($t) => $this->signatur($t['zeile']))->unique();
 
@@ -180,6 +186,24 @@ class RegenerationHochziehenCommand extends Command
             }
         }
 
+        // Zweiter Durchgang OHNE nachgestellten Klammer-Zusatz. Auf Echtdaten (demo) tragen die
+        // Labels haeufig eine Zustands-Notiz, die der Komponentenname nicht hat:
+        // »Ananas-Carpaccio (TK)« gegen »Ananas-Carpaccio«. Weiterhin EXAKTER Vergleich, nur auf
+        // der bereinigten Form — kein Fuzzy-Matching, kein Raten.
+        $ohneKlammer = fn (string $s) => $norm((string) preg_replace('/\s*\([^)]*\)\s*$/u', '', $s));
+        $zielOhne = $ohneKlammer($label);
+        if ($zielOhne === '' || $zielOhne === $ziel) {
+            return null;
+        }
+
+        foreach ($zutaten as $z) {
+            foreach ([$z->sub_name, $z->gp_name, $z->raw_text] as $kandidat) {
+                if ($kandidat !== null && $ohneKlammer((string) $kandidat) === $zielOhne) {
+                    return $z;
+                }
+            }
+        }
+
         return null;
     }
 
@@ -228,9 +252,10 @@ class RegenerationHochziehenCommand extends Command
     private function bericht(array $gesamt, array $hoch, array $override, array $review, array $behaelter, bool $apply): void
     {
         $this->line('');
+        $gp = collect($override)->filter(fn ($t) => $t['zutat']->referenced_recipe_id === null)->count();
         $this->info(sprintf(
-            '%d Zeilen »Gesamt« (bleiben) · %d Komponenten werden hochgezogen · %d bleiben Override · %d in Review',
-            count($gesamt), count($hoch), count($override), count($review)
+            '%d Zeilen »Gesamt« (bleiben) · %d Komponenten werden hochgezogen · %d bleiben Override (davon %d an Grundprodukten) · %d in Review',
+            count($gesamt), count($hoch), count($override), $gp, count($review)
         ));
 
         if ($behaelter !== []) {

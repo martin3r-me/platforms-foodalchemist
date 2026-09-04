@@ -86,6 +86,20 @@ class BehaelterKatalogCommand extends Command
 
         $ziel = $teamId === null ? 'GLOBAL (team_id NULL)' : "Team {$teamId}";
 
+        // Fussangel, auf Echtdaten aufgefallen: der Bestand kam per WaWi-Import in ein TEAM, nicht
+        // global. Wer den Grundstock dann global anlegt, sieht anschliessend beides nebeneinander —
+        // dieselben GN-Groessen zweimal, einmal team-eigen und einmal geerbt.
+        if ($teamId === null) {
+            $slugs = collect($neu)->pluck('slug');
+            $kollision = DB::table(self::TABELLE)->whereNotNull('team_id')->whereNull('deleted_at')
+                ->whereIn('slug', $slugs)->select('team_id')->distinct()->pluck('team_id');
+            if ($kollision->isNotEmpty()) {
+                $this->warn('⚠ Team '.$kollision->implode(', ').' hat bereits Behälter mit denselben Namen.');
+                $this->line('  Global anzulegen erzeugt Dubletten (team-eigen + geerbt nebeneinander).');
+                $this->line('  Gemeint ist vermutlich: --team='.$kollision->first());
+            }
+        }
+
         if (! $apply) {
             $this->warn(count($neu)." Zeilen fehlen in {$ziel}. Dry-Run — mit --apply schreiben.");
             $this->line('Hinweis: nutzfaktor 0,85 und die kg-Deckel sind Vorschläge, keine Herstellerangaben.');

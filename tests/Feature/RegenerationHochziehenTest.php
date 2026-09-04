@@ -138,3 +138,44 @@ it('läuft zweimal ohne Schaden', function () {
     expect(DB::table('foodalchemist_recipe_regenerations')
         ->where('recipe_id', $ratatouille->id)->whereNull('deleted_at')->count())->toBe(1);
 });
+
+it('trifft eine Komponente auch mit Zustands-Zusatz im Label', function () {
+    // Echtdaten-Befund (demo): sechs von acht Review-Faellen waren Labels wie
+    // »Ananas-Carpaccio (TK)« gegen die Komponente »Ananas-Carpaccio«. Der Zusatz beschreibt
+    // den Zustand, nicht ein anderes Produkt.
+    $sorbet = ($this->rezept)('Kokosnusssorbet');
+    $dessert = ($this->rezept)('Dessert: Ananas', true);
+    ($this->hinein)($dessert, $sorbet);
+    ($this->alteZeile)($dessert, 'Kokosnusssorbet (TK)', ['temp_c' => -18]);
+
+    $this->artisan('foodalchemist:regeneration-hochziehen --apply')->assertExitCode(0);
+
+    $default = DB::table('foodalchemist_recipe_regenerations')
+        ->where('recipe_id', $sorbet->id)->whereNull('deleted_at')->first();
+
+    expect($default)->not->toBeNull()->and((int) $default->temp_c)->toBe(-18);
+});
+
+it('bindet eine Grundprodukt-Zeile als Override, statt sie in die Review zu schieben', function () {
+    // »Erbse Microgreens: frisch, geerntet« — ein GP kann keinen eigenen Default tragen (Rang 3
+    // leitet ihn aus dem Zustand ab), aber die vorhandene Zeile ist eine getroffene Entscheidung.
+    $gp = \Platform\FoodAlchemist\Models\FoodAlchemistGp::create([
+        'team_id' => $this->rootTeam->id, 'gp_key' => 'g|kresse',
+        'name' => 'Erbse Microgreens: frisch, geerntet', 'condition' => 'frisch',
+    ]);
+
+    $teller = ($this->rezept)('Teller: Amuse', true);
+    $zutat = \Platform\FoodAlchemist\Models\FoodAlchemistRecipeIngredient::create([
+        'team_id' => $this->rootTeam->id, 'recipe_id' => $teller->id, 'gp_id' => $gp->id,
+        'raw_text' => $gp->name, 'quantity' => '5',
+        'unit_vocab_id' => $this->unitG($this->rootTeam)->id, 'position' => 1,
+    ]);
+    ($this->alteZeile)($teller, 'Erbse Microgreens: frisch, geerntet', ['duration_min' => 0]);
+
+    $this->artisan('foodalchemist:regeneration-hochziehen --apply')->assertExitCode(0);
+
+    $zeile = DB::table('foodalchemist_recipe_regenerations')
+        ->where('recipe_id', $teller->id)->whereNull('deleted_at')->first();
+
+    expect((int) $zeile->ingredient_id)->toBe((int) $zutat->id);   // gebunden, nicht verwaist
+});
