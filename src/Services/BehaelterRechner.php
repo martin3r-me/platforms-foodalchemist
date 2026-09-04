@@ -160,7 +160,7 @@ class BehaelterRechner
             return [...$leer, 'grund' => "«{$name}» ist nicht für „{$zweck}“ freigegeben."];
         }
 
-        [$refKgProBehaelter, $konfidenz] = $this->basisMenge($ref, $refKg, $dichte, $basis['konfidenz_rang3'] ?? false);
+        [$refKgProBehaelter, $konfidenz] = $this->basisMenge($ref, $refKg, $dichte, $basis['konfidenz_rang3'] ?? false, $basis['referenz_quelle'] ?? null);
 
         if ($refKgProBehaelter === null) {
             return [...$leer, 'grund' => $refKg === null && $dichte === null
@@ -284,10 +284,14 @@ class BehaelterRechner
     }
 
     /** @return array{0: ?float, 1: string} kg je Referenzbehälter + Konfidenz */
-    private function basisMenge(object $ref, ?float $refKg, ?string $dichte, bool $rang3): array
+    private function basisMenge(object $ref, ?float $refKg, ?string $dichte, bool $rang3, ?string $refQuelle = null): array
     {
         if ($refKg !== null && $refKg > 0.0) {
-            return [$refKg, 'hoch'];                                  // Rang 1 — aus der Küche
+            // Rang 1 — aber nur „hoch", wenn die Zahl aus der Küche kommt. Eine KI-hergeleitete
+            // Referenz ist besser als die grobe Dichteklasse (sie nutzt den dokumentierten
+            // Füllgrad und eine feinere Dichte), aber sie ist nicht gemessen. Als „hoch" abgelegt
+            // würde sie genau das Auffangnetz überstimmen, das es für Schätzungen gibt.
+            return [$refKg, $refQuelle === 'ki' ? 'mittel' : 'hoch'];
         }
 
         if ($dichte !== null && isset(self::DICHTE[$dichte])) {

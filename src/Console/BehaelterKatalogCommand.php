@@ -36,15 +36,25 @@ class BehaelterKatalogCommand extends Command
 
     private const TABELLE = 'foodalchemist_vocab_containers';
 
-    /** DIN EN 631: format => [laenge_mm, breite_mm, [tiefe_mm => brutto_liter]]. */
+    /**
+     * EuroNorm 631-1: format => [laenge_mm, breite_mm, [tiefe_mm => nennvolumen_liter]].
+     *
+     * ★ EINE Quelle, kein Mix: Haendlerblatt nach EuroNorm 631-1 (Badorf Fachgrosshandel),
+     * GN 1/9 aus METRO/WAS Germany (1/9-100 mm = 1,0 l). Die erste Fassung mischte mehrere
+     * Haendlerseiten und lag bei 1/1-40 und 1/2-40 ZU HOCH — ein zu hohes Nennvolumen schlaegt
+     * systematisch ZU WENIGE Behaelter vor, und das faellt erst auf, wenn die Ware nicht
+     * hineinpasst. Korrigiert in Migration 2026_09_05_000001.
+     *
+     * 2/1 und 2/3 stehen nicht auf dem Blatt; ihre Werte bleiben aus dem Bestand.
+     */
     private const GN = [
         '2/1' => [650, 530, [40 => 10.0, 65 => 18.5, 100 => 28.5, 150 => 42.0]],
-        '1/1' => [530, 325, [20 => 2.5, 40 => 5.5, 65 => 8.8, 100 => 13.7, 150 => 20.0, 200 => 27.8]],
+        '1/1' => [530, 325, [20 => 2.5, 40 => 5.0, 65 => 9.0, 100 => 14.0, 150 => 21.0, 200 => 28.0]],
         '2/3' => [354, 325, [40 => 3.3, 65 => 5.4, 100 => 8.0, 150 => 11.9, 200 => 15.5]],
-        '1/2' => [325, 265, [40 => 2.3, 65 => 4.0, 100 => 6.5, 150 => 9.5, 200 => 12.5]],
-        '1/3' => [325, 176, [40 => 1.4, 65 => 2.5, 100 => 4.0, 150 => 5.7, 200 => 7.5]],
+        '1/2' => [325, 265, [20 => 1.25, 40 => 2.0, 65 => 4.0, 100 => 6.5, 150 => 9.5, 200 => 12.5]],
+        '1/3' => [325, 176, [20 => 0.75, 40 => 1.5, 65 => 2.5, 100 => 4.0, 150 => 5.7, 200 => 7.8]],
         '1/4' => [265, 162, [65 => 1.8, 100 => 2.8, 150 => 4.0, 200 => 5.5]],
-        '1/6' => [176, 162, [65 => 1.0, 100 => 1.6, 150 => 2.4]],
+        '1/6' => [176, 162, [65 => 1.0, 100 => 1.6, 150 => 2.4, 200 => 3.4]],
         '1/9' => [176, 108, [65 => 0.6, 100 => 1.0, 150 => 1.5]],
     ];
 

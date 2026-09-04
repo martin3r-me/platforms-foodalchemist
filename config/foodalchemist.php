@@ -1720,8 +1720,15 @@ return [
                 . 'wird. Nimm das GROESSTE Format, das kuechenueblich ist — nach unten rechnet das System selbst. '
                 . 'Zweck nicht sinnvoll ⇒ dort null (lieber leer als falsch: eine falsche Zeile schickt die Ware in '
                 . 'den falschen Behaelter). KEINE Mengen, KEINE Behaelterzahl — die rechnet das System aus der Ausbeute. '
+                . 'VIERTENS je Zweck die Referenz-Fuellmenge in kg — aber NUR, wenn das mitgelieferte '
+                . 'Wissen eine Fuellgrad- und Dichtetabelle enthaelt. Dann rechne '
+                . 'kg = Nennvolumen(Behaelter) × Fuellgrad(Situation) × Dichte(Produktklasse), auf 0,5 kg gerundet. '
+                . 'Steht die Tabelle NICHT im Kontext: alle Werte null. Nicht selbst schaetzen — eine '
+                . 'geratene Zahl sieht aus wie eine gemessene und ueberstimmt genau das Auffangnetz, '
+                . 'das es fuer Schaetzungen gibt. '
                 . 'Unsicher bei einem Feld ⇒ dort null, NIEMALS raten: '
-                . 'werte = {dichteklasse, skalierung, behaelter_je_zweck: {abfuellen, regenerieren, ausgabe, transport}}.',
+                . 'werte = {dichteklasse, skalierung, behaelter_je_zweck: {abfuellen, regenerieren, ausgabe, transport}, '
+                . 'referenz_menge_kg_je_zweck: {abfuellen, regenerieren, ausgabe, transport}}.',
         ],
 
         'vk.regeneration' => [

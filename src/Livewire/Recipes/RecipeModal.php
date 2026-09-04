@@ -874,6 +874,7 @@ class RecipeModal extends Component
                 'skalierung' => (string) ($z->skalierung ?? ''),
                 'max_schichthoehe_mm' => $zahl($z->max_schichthoehe_mm ?? null),
                 'stueck_je_behaelter' => (string) ($z->stueck_je_behaelter ?? ''),
+                'source' => (string) ($z->source ?? 'manual'),
             ];
         }
     }
@@ -941,7 +942,7 @@ class RecipeModal extends Component
      * Der Vorschlag landet im Formular, nicht in der Datenbank: gespeichert wird erst mit dem
      * Knopf darunter (GL-07 — die Übernahme ist eine Entscheidung des Menschen).
      */
-    public function kiDichteklasse(AiGatewayService $gateway): void
+    public function kiDichteklasse(AiGatewayService $gateway, KnowledgeContextService $wissen): void
     {
         $r = $this->rezept();
         if ($r === null) {
@@ -952,6 +953,19 @@ class RecipeModal extends Component
         // wirklich hat — nicht aus ihrem Weltwissen ueber Gastronorm. Ein erfundener Behaelter
         // waere hier besonders teuer, weil er wie eine gepflegte Entscheidung aussaehe.
         $katalog = $this->behaelterKatalogFuerKi();
+
+        // Das Fuellmengen-Dossier aus dem Wissensmodul mitgeben (Routing `recipe.eigenschaften` ×
+        // `produktion_kapazitat`, Discovery). Damit RAET die KI die Referenzmenge nicht, sie wendet
+        // eine dokumentierte Tabelle an — und die korrigiert man an EINER Stelle statt an 1.400
+        // Rezepten. Leeres Routing = leerer Block, also fail-soft.
+        $wissenBlock = $wissen->contextFor(
+            Auth::user()?->currentTeamRelation,
+            'recipe.eigenschaften',
+            trim($r->name.' Behälter Füllmenge Füllgrad Dichte')
+        );
+        $wissenOpts = ($wissenBlock['block'] ?? '') !== ''
+            ? ['knowledge' => $wissenBlock['block'], 'knowledge_used' => $wissenBlock['files_used'] ?? []]
+            : [];
 
         try {
             $v = $gateway->propose('recipe.dichteklasse', [
@@ -968,7 +982,7 @@ class RecipeModal extends Component
                     'tiefe_mm' => $b->tiefe_mm !== null ? (int) $b->tiefe_mm : null,
                     'freigegeben_fuer' => $b->eignung !== null ? json_decode((string) $b->eignung, true) : null,
                 ])->values()->all(),
-            ]);
+            ], $wissenOpts);
         } catch (\RuntimeException $e) {
             $this->regenMeldung = $e->getMessage();
 
@@ -1001,10 +1015,66 @@ class RecipeModal extends Component
         }
 
         $gesetzt = array_merge($gesetzt, $this->uebernehmeKiBehaelter($v->werte['behaelter_je_zweck'] ?? null, $katalog));
+        $gesetzt = array_merge($gesetzt, $this->uebernehmeKiMengen($v->werte['referenz_menge_kg_je_zweck'] ?? null));
 
         $this->regenMeldung = $gesetzt === []
             ? 'KI lieferte keinen verwertbaren Vorschlag — nichts übernommen.'
             : 'Vorschlag übernommen: '.implode(' · ', $gesetzt).'. Noch nicht gespeichert.';
+    }
+
+    /**
+     * KI-Referenzmengen übernehmen — hergeleitet aus dem Füllmengen-Dossier, nicht geschätzt.
+     *
+     * Der entscheidende Teil ist `source = 'ki'`: die Zahl steht danach zwar in Rang 1, wird aber
+     * mit Konfidenz „mittel" gerechnet statt „hoch". Ohne diese Markierung wäre eine hergeleitete
+     * Zahl von einer in der Küche gewogenen nicht mehr zu unterscheiden — und die Bemessung würde
+     * Genauigkeit behaupten, die sie nicht hat.
+     *
+     * @return list<string>
+     */
+    private function uebernehmeKiMengen(mixed $vorschlag): array
+    {
+        if (! is_array($vorschlag)) {
+            return [];
+        }
+
+        $gesetzt = [];
+        foreach (FoodAlchemistVocabContainer::ZWECKE as $zweck) {
+            $kg = $vorschlag[$zweck] ?? null;
+            if ($kg === null || $kg === '' || ! is_numeric($kg) || (float) $kg <= 0.0) {
+                continue;
+            }
+            // Nur zu einem gesetzten Behälter — eine Menge ohne Behälter ist bedeutungslos.
+            if (($this->behaelterForm[$zweck]['container_vocab_id'] ?? '') === '') {
+                continue;
+            }
+            // Override-First: was jemand gepflegt hat, bleibt.
+            if (($this->behaelterForm[$zweck]['referenz_menge_kg'] ?? '') !== '') {
+                continue;
+            }
+            $wert = round((float) $kg, 2);
+            $this->behaelterForm[$zweck]['referenz_menge_kg'] = rtrim(rtrim(number_format($wert, 2, ',', ''), '0'), ',');
+            $this->behaelterForm[$zweck]['source'] = 'ki';
+            $gesetzt[] = ucfirst($zweck).": {$wert} kg (hergeleitet)";
+        }
+
+        return $gesetzt;
+    }
+
+    /**
+     * Tippt jemand die Referenzmenge selbst, ist sie keine KI-Herleitung mehr — dann darf sie
+     * auch wieder mit voller Konfidenz rechnen. Ohne diesen Haken bliebe der Stempel „ki" ewig
+     * an einer von Hand gewogenen Zahl kleben.
+     */
+    public function updatedBehaelterForm(mixed $wert, ?string $key = null): void
+    {
+        if ($key === null || ! str_ends_with($key, '.referenz_menge_kg')) {
+            return;
+        }
+        $zweck = explode('.', $key)[0] ?? null;
+        if ($zweck !== null && isset($this->behaelterForm[$zweck])) {
+            $this->behaelterForm[$zweck]['source'] = 'manual';
+        }
     }
 
     /** Sichtbarer Behälter-Katalog des Teams — dieselbe Auswahl, die auch das Formular anbietet. */

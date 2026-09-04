@@ -84,7 +84,7 @@ it('die KI hat keinen Weg mehr, eine Behälterzahl zu setzen', function () {
         ->and(config('foodalchemist.prompts'))->toHaveKey('recipe.dichteklasse');
 });
 
-it('der Prompt-Vertrag nennt genau die drei erlaubten Felder — strukturell, nicht per Wortsuche', function () {
+it('der Prompt-Vertrag nennt genau die vier erlaubten Felder — strukturell, nicht per Wortsuche', function () {
     $task = (string) (config('foodalchemist.prompts')['recipe.dichteklasse']['task'] ?? '');
 
     // Auf Prompt-WOERTER zu pruefen ist die falsche Sonde: die erste Fassung dieses Tests brach,
@@ -107,15 +107,19 @@ it('der Prompt-Vertrag nennt genau die drei erlaubten Felder — strukturell, ni
     }
     if (trim($puffer) !== '') { $oben[] = trim($puffer); }
 
-    // Oberste Ebene: die drei erlaubten Felder — und NICHTS, was nach Menge oder Anzahl riecht.
+    // Oberste Ebene: genau diese vier — und NICHTS, was nach Behaelter-ANZAHL riecht. Die Menge
+    // darf die KI liefern (aus dem Fuellmengen-Dossier hergeleitet, als „ki" markiert), die
+    // Anzahl nie: die rechnet das System aus der Ausbeute.
     $namen = array_map(fn (string $f) => trim(explode(':', $f)[0]), $oben);
-    expect($namen)->toBe(['dichteklasse', 'skalierung', 'behaelter_je_zweck']);
+    expect($namen)->toBe(['dichteklasse', 'skalierung', 'behaelter_je_zweck', 'referenz_menge_kg_je_zweck']);
 
-    // Die Behaelterwahl deckt genau die vier Zwecke ab — kein fuenftes Feld, in dem eine
-    // Referenzmenge oder eine Anzahl mitreisen koennte.
-    preg_match('/behaelter_je_zweck:\s*\{([^}]*)\}/u', $task, $inner);
-    $zwecke = collect(explode(',', $inner[1] ?? ''))->map(fn ($f) => trim($f))->filter()->values()->all();
-    expect($zwecke)->toBe(\Platform\FoodAlchemist\Models\FoodAlchemistVocabContainer::ZWECKE);
+    // Beide Zweck-Objekte decken genau die vier Zwecke ab — kein fuenftes Feld, in dem eine
+    // Anzahl mitreisen koennte.
+    foreach (['behaelter_je_zweck', 'referenz_menge_kg_je_zweck'] as $feld) {
+        preg_match('/'.$feld.':\s*\{([^}]*)\}/u', $task, $inner);
+        $zwecke = collect(explode(',', $inner[1] ?? ''))->map(fn ($f) => trim($f))->filter()->values()->all();
+        expect($zwecke)->toBe(\Platform\FoodAlchemist\Models\FoodAlchemistVocabContainer::ZWECKE, $feld);
+    }
 });
 
 it('die Skalierungs-Werte sind kulinarisch begruendet, nicht mechanisch', function () {
@@ -171,7 +175,43 @@ it('übernimmt die Behälterwahl je Zweck — und hält Erfundenes, Unfreigegebe
         ->assertSet('behaelterForm.ausgabe.container_vocab_id', (string) $schale)
         ->assertSet('behaelterForm.transport.container_vocab_id', '');
 
-    // Und die Referenzmenge bleibt leer: eine Schaetzung dort waere Rang 1 mit Konfidenz „hoch"
-    // und wuerde die Dichteklasse ueberstimmen, die es genau fuer Schaetzungen gibt.
+    // Ohne Mengen-Vorschlag bleibt die Referenzmenge leer.
     $c->assertSet('behaelterForm.ausgabe.referenz_menge_kg', '');
+});
+
+/**
+ * Die Referenzmenge darf die KI nur liefern, weil das Fuellmengen-Dossier im Kontext steht —
+ * hergeleitet statt geraten. Entscheidend ist der Herkunfts-Stempel: die Zahl rechnet danach mit
+ * Konfidenz „mittel" statt „hoch" (s. BehaelterRechnerTest), sonst waere sie von einer in der
+ * Kueche gewogenen nicht mehr zu unterscheiden.
+ */
+it('übernimmt hergeleitete Referenzmengen — nur zum gesetzten Behälter, nur in leere Felder, als „ki" markiert', function () {
+    $gn = DB::table('foodalchemist_vocab_containers')->insertGetId([
+        'uuid' => (string) Str::uuid7(), 'team_id' => $this->rootTeam->id,
+        'slug' => 'gn_11_65', 'name' => 'GN 1/1 65mm', 'sort_order' => 10,
+        'familie' => 'GN', 'volumen_l' => 8.8, 'tiefe_mm' => 65,
+        'created_at' => now(), 'updated_at' => now(),
+    ]);
+
+    ($this->mockKi)([
+        'dichteklasse' => 'dicht',
+        'behaelter_je_zweck' => ['regenerieren' => $gn],
+        'referenz_menge_kg_je_zweck' => [
+            'regenerieren' => 5.9,     // ✓ Behaelter wird im selben Zug gesetzt
+            'ausgabe' => 4.0,          // ✗ kein Behaelter → eine Menge ohne Behaelter ist bedeutungslos
+            'transport' => 0,          // ✗ 0 ist keine Menge
+        ],
+    ]);
+
+    $c = Livewire::test(RecipeModal::class)->call('oeffnen', $this->rezept->id)->call('tabLaden', 'regeneration')
+        ->call('kiDichteklasse')
+        ->assertSet('behaelterForm.regenerieren.referenz_menge_kg', '5,9')
+        ->assertSet('behaelterForm.regenerieren.source', 'ki')
+        ->assertSet('behaelterForm.ausgabe.referenz_menge_kg', '')
+        ->assertSet('behaelterForm.transport.referenz_menge_kg', '');
+
+    // Tippt jemand die Zahl selbst, ist sie keine Herleitung mehr — sonst klebte der Stempel
+    // „ki" fuer immer an einem von Hand gewogenen Wert.
+    $c->set('behaelterForm.regenerieren.referenz_menge_kg', '7')
+        ->assertSet('behaelterForm.regenerieren.source', 'manual');
 });

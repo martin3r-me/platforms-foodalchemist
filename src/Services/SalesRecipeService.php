@@ -621,7 +621,10 @@ class SalesRecipeService
             'stueck_je_behaelter' => ($in['stueck_je_behaelter'] ?? null) !== null && $in['stueck_je_behaelter'] !== ''
                 ? (int) $in['stueck_je_behaelter'] : null,
             'note' => $in['note'] ?? null,
-            'source' => 'manual', 'ai_confidence' => null, 'ai_reasoning' => null,
+            // Herkunft NICHT hart auf 'manual': ein KI-Wert, der Handarbeit behauptet, lenkt jede
+            // spaetere Diagnose in die Irre — und die Konfidenz-Stufe der Bemessung haengt daran.
+            'source' => in_array($in['source'] ?? null, ['manual', 'ki'], true) ? $in['source'] : 'manual',
+            'ai_confidence' => null, 'ai_reasoning' => null,
             'updated_at' => now(),
         ];
 

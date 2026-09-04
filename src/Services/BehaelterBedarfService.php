@@ -208,6 +208,7 @@ class BehaelterBedarfService
                 'stueck_je_behaelter' => $zeile->stueck_je_behaelter,
                 'stueck_gesamt' => $this->stueckGesamt($recipe, $mengeKg),
                 'konfidenz_rang3' => false,
+                'referenz_quelle' => $zeile->source ?? null,
             ],
             // Alternativen nur aus derselben Familie: ein Eimer ist keine Variante zu einem GN.
             $katalog->where('familie', $basisBehaelter->familie)->all(),

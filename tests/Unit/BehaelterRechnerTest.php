@@ -360,3 +360,20 @@ it('bietet einen Behaelter ohne Nennvolumen gar nicht erst an', function () {
         ->and($namen)->toContain('GN 1/1 65mm')       // die Referenz bleibt
         ->and($namen)->toContain('GN 1/1 100mm');     // bemessbare Alternativen bleiben
 });
+
+it('rechnet eine KI-hergeleitete Referenzmenge mit niedrigerer Konfidenz als eine gewogene', function () {
+    // Beide Male dieselbe Zahl — aber nicht dieselbe Aussage. Ohne diese Unterscheidung waere
+    // eine hergeleitete Menge von einer in der Kueche gewogenen nicht mehr zu trennen, und die
+    // Bemessung behauptete Genauigkeit, die sie nicht hat.
+    $basis = fn (?string $quelle) => ($this->basis)([
+        'referenz_menge_kg' => 6.0, 'skalierung' => 'hoehe_gebunden', 'referenz_quelle' => $quelle,
+    ]);
+
+    $gewogen = $this->r->varianten(12.0, $basis('manual'), [], 'regenerieren');
+    $hergeleitet = $this->r->varianten(12.0, $basis('ki'), [], 'regenerieren');
+
+    expect($gewogen['varianten'][0]['konfidenz'])->toBe('hoch')
+        ->and($hergeleitet['varianten'][0]['konfidenz'])->toBe('mittel')
+        // Die MENGE ist identisch — nur die Aussage ueber ihre Belastbarkeit unterscheidet sich.
+        ->and($hergeleitet['varianten'][0]['anzahl'])->toBe($gewogen['varianten'][0]['anzahl']);
+});
