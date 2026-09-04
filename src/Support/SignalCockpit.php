@@ -141,6 +141,15 @@ final class SignalCockpit
      * ein zweiter, per Hand gepflegter Pfad würde davon wegdriften.
      */
     private const NAVIGATE = [
+        // Der einzige Rezept-Befund, dessen Quelle Menschen sind, die es gekocht haben. Ein
+        // Auto-Fix waere hier sinnlos — es gibt keine Datenluecke zu schliessen; die Bewertung
+        // IST der Befund. Aber es gibt einen konkreten Weg, und der endet nicht im Nichts:
+        // die Eintraege stehen im Feedback-Tab, und „Weiterentwickeln" zieht daraus eine
+        // Draft-Iteration (R2.6). Deshalb navigate und nicht ohne_weg.
+        'rezept_feedback_kritisch' => 'Die Bewertungen im Feedback-Tab des Rezepts lesen — sie nennen den Grund '
+            . '(Machbarkeit, Aufwand, Geschmack) und den Auftrag, bei dem es auffiel. Von dort erzeugt '
+            . '„Weiterentwickeln" eine Draft-Iteration; oder das Rezept wird ausgemustert. Beides ist eine '
+            . 'Entscheidung am Rezept, keine Datenkorrektur.',
         'veraltete_preise' => 'Preise am Lieferantenartikel pflegen (Lieferanten → Artikel → Preise) oder den '
             . 'Katalog-Import laufen lassen — mit der nächsten gültigen Preiszeile verschwindet der Befund.',
         'naehrwert_plausi' => 'Die gemeldete Nährwertangabe am Artikel gegen das Etikett prüfen und korrigieren '
