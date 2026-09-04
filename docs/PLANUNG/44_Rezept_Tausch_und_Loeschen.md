@@ -1,8 +1,8 @@
-# Spec 44 — Rezept-Tausch (Verwaltungs-Block für Basisrezepte)
+# Spec 44 — Rezept-Tausch & Rezept-Löschen (Verwaltungs-Block für Basisrezepte)
 
-> **Tracking:** Office Dev-Package 23, Features-Board. Kein DB-Schema — reine Service-/Livewire-/View-Arbeit plus ein MCP-Tool. Zieht das nach, was der **GP** seit 2026-07-02 hat (`GpService::ersetzeInRezepten`), und räumt die Auffindbarkeit des GP-Pendants auf. Das Löschen folgt im zweiten Schritt.
+> **Tracking:** Office Dev-Package 23, Features-Board. Kein DB-Schema — reine Service-/Livewire-/View-Arbeit plus ein MCP-Tool. Zieht das nach, was der **GP** seit 2026-07-02 hat (`GpService::ersetzeInRezepten` + `deleteGp`), und räumt die Auffindbarkeit des GP-Pendants auf.
 
-**Status:** ✅ Tausch umgesetzt auf `feat/rezept-tausch` (2026-09-04). Lösch-Teil folgt als zweiter Commit. Nicht deployt.
+**Status:** ✅ Umgesetzt auf `feat/rezept-tausch` (2026-09-04). Volle Suite steht aus, Browser-Abnahme steht aus, nicht deployt.
 
 ---
 
@@ -12,6 +12,7 @@ Beim Grundprodukt gibt es im Detail-Panel unter *Verwaltung* zwei Dinge: „In a
 
 - Wer merkt, dass zwei Fonds dasselbe sind, musste **jedes Gericht einzeln öffnen** und die Zeile umhängen.
 - `RecipeService::delete()` sagte dazu nur *„wird als Sub-Rezept referenziert von: … — erst dort lösen"* — ohne einen Weg anzubieten, genau das zu tun.
+- Einen Lösch-Knopf gab es im UI **überhaupt nicht**, nur per MCP (`recipes.DELETE`).
 
 Zweiter Anlass (Dominique): „das aus dem Detail-Panel fehlt auch im Editor vom GP". **Befund: es fehlte nicht, es war unfindbar** — Commit `fe600db8` (2026-08-27) hatte den GP-Tausch in den Reiter **Kalkulation** gelegt, und die Kandidaten-Liste zeigte dort `{{ $k->status }}` auf einem Enum-Cast, also den rohen String `tentative` statt Label + Farb-Pill.
 
@@ -21,7 +22,8 @@ Zweiter Anlass (Dominique): „das aus dem Detail-Panel fehlt auch im Editor vom
 |---|---|---|
 | 1 | Der Tausch fasst **nur die Komponenten-Zeilen** an (`recipe_ingredients.referenced_recipe_id`) | Alle sechs Ausgabe-Ebenen (Foodbook-Blöcke, Speisekarte-Positionen, Speiseplan-Zeilen, Angebot-Blöcke, Konzept-Slots, Paket-Gerichte) hängen an `sales_recipe_id`, also am **Gericht**. Ein Basisrezept steht in einem Foodbook nur ÜBER das Gericht — tausche ich es im Gericht, folgen die Ausgaben von selbst. |
 | 2 | **`swap_locked` wird ignoriert** | Das Flag schützt die *Fertig-/Selbst*-Realisierung. Ein Rezept→Rezept-Tausch ändert nicht die Realisierung, sondern nur *welches* Rezept es ist — derselbe Fall wie beim GP-Tausch, der das Flag ebenfalls nicht beachtet. |
-| 3 | Verwaltungs-Block liegt in Panel **und** Editor, im Editor als eigener Reiter **Verwaltung** | Genau die Lehre aus dem GP-Fall: in „Kalkulation" findet es niemand. Der GP-Block ist mitgewandert, Panel und Editor teilen jetzt **ein** Blade-Partial statt zweier Kopien. |
+| 3 | **Löschen mit ehrlicher Referenz-Bilanz** kommt dazu | Der Tausch ist die Vorstufe zum Löschen; ohne Lösch-Knopf bleibt die Dublette liegen. |
+| 4 | Verwaltungs-Block liegt in Panel **und** Editor, im Editor als eigener Reiter **Verwaltung** | Genau die Lehre aus dem GP-Fall: in „Kalkulation" findet es niemand. Der GP-Block ist mitgewandert, Panel und Editor teilen jetzt **ein** Blade-Partial statt zweier Kopien. |
 
 ## Umsetzung
 
@@ -31,6 +33,14 @@ Zweiter Anlass (Dominique): „das aus dem Detail-Panel fehlt auch im Editor vom
 - `RecipeService::ersetzeInVerwendungen($team, $von, $nach)` — mandantenscharf (D1): geschrieben wird nur in Eltern des eigenen Teams, geerbte Master-Eltern bleiben unberührt und werden **gezählt gemeldet**. Zyklus/Selbstreferenz je Eltern-Rezept über das vorhandene `RecipeRecomputeService::pruefeVerknuepfung()`; Menge, Einheit und Verlust-Overrides bleiben; `match_method` wandert auf `override_subrecipe` (dieselbe Provenienz wie der Hard-Stop-Resolver — ein stehengelassenes `gemini_proposed` wäre ein falsches Etikett); Recompute der betroffenen Menge **einmal topologisch** (`recomputeMany`, V-049).
 - Rückmeldung nennt auch das Unangenehme: geerbte Eltern, Zyklus-Ablehnungen und „Ziel steckte hier schon drin — jetzt zwei Zeilen, Mengen prüfen".
 
+### Löschen
+
+- `RecipeService::referenzen($id)` — bewusst **ungescoped**, wie `GpService::referenzen()`. Grund ist die Vererbungsrichtung: ein Master-Rezept ist für Kind-Teams sichtbar, deren Rezepte sind für den Master unsichtbar; eine team-gefilterte Zählung würde dem Master erlauben, ein Rezept zu löschen, an dem ein Kind-Team hängt.
+  - **Blockierend:** Eltern-Zeilen · Ersatz-Verknüpfungen (`component_equivalents`, `kind=recipe`) · direkt gepinnte Ausgabe-Positionen · Zeilen in **offenen** Produktionsaufträgen (`planned`/`in_progress`).
+  - **Nur Info:** Zeilen in abgeschlossenen Aufträgen (Historie bleibt lesbar, das Rezept ist nur soft-deleted) · aus diesem Rezept instanziierte Rezepte (`instantiated_from_recipe_id`, nullOnDelete).
+- `RecipeService::delete()` blockt jetzt auf dieser Bilanz statt nur auf Eltern-Zeilen — vorher fielen Ersatz-Verknüpfungen, gepinnte Ausgabe-Positionen und offene Produktionsaufträge **still** weg. Wirkt auf beiden Wegen (UI + `recipes.DELETE`).
+- Lösch-Knopf nur für **eigene Basisrezepte**; Gerichte laufen über den VK-Editor (`SalesRecipeService::deleteDish`).
+
 ### Oberfläche & MCP
 
 - `src/Livewire/Concerns/TauschtRezept.php` — Mechanik einmal für Panel + Editor.
@@ -39,14 +49,16 @@ Zweiter Anlass (Dominique): „das aus dem Detail-Panel fehlt auch im Editor vom
 
 ## Tests
 
-`tests/Feature/RezeptTauschTest.php` (7) + Ergänzungen in `McpRecipesLifecycleTest` und `GpTauschEditorTest` (Reiter-Position festgenagelt).
+`tests/Feature/RezeptTauschTest.php` (13) + Ergänzungen in `McpRecipesLifecycleTest` und `GpTauschEditorTest` (Reiter-Position festgenagelt) — 22 Tests / 114 Assertions.
+
+Eine Invariante hält die Referenz-Query gültig: sie zählt sechs Tabellen **per Namen**, und `foodalchemist_package_dishes` (ex-`baustein_gerichte`) ist fachlich abgelöst, physisch aber noch nicht gedroppt. Daran ist die erste Fassung zerbrochen; der Test prüft jetzt Name + Spalte, solange die Tabelle steht, und der `hasTable`-Guard nimmt sie beim Drop aus der Query.
 
 ## Offen
 
-- Lösch-Knopf mit Referenz-Bilanz (zweiter Commit).
 - Volle Pest-Suite + Browser-Abnahme (Panel · Rezept-Editor · GP-Editor).
 - Deploy demo (kein `migrate` nötig).
 
 ## Cross-Refs
 
 - **Spec 36** Rezeptqualität (Matching-Achse) · **Spec 41** Planungsmodul-Qualität (Grounding) · **Spec 43** Schicht-3-Critic (Konformität)
+- Paket-Umbau → `_Spec_Concepter_Leitstelle` (der noch offene physische `packages`-Drop berührt die Referenz-Query)

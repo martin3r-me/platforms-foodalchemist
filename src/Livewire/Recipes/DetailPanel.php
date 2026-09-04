@@ -20,7 +20,7 @@ use Platform\FoodAlchemist\Support\TeamScope;
  */
 class DetailPanel extends Component
 {
-    use TauschtRezept;   // Verwaltungs-Block: tauschen — identisch im Editor (RecipeModal)
+    use TauschtRezept;   // Verwaltungs-Block: tauschen + löschen — identisch im Editor (RecipeModal)
 
     public ?int $recipeId = null;
 
@@ -264,9 +264,10 @@ class DetailPanel extends Component
             'zeilenEk' => $rezept !== null ? app(RecipeRecomputeService::class)->zeilenKosten($rezept, $team) : [],
             // M4-10: ↑-Navigation („Verwendet in")
             'eltern' => $rezept !== null ? $recipes->getParents($team, $rezept->id) : collect(),
-            // Verwaltungs-Block (tauschen) — nur im Standalone-Panel, wie beim GP
+            // Verwaltungs-Block (tauschen + löschen) — nur im Standalone-Panel, wie beim GP
             'tauschBilanz' => $rezept !== null && $this->section === null ? $this->tauschBilanz() : null,
             'tauschKandidaten' => $rezept !== null && $this->section === null ? $this->tauschKandidaten() : collect(),
+            'tauschReferenzen' => $rezept !== null && $this->section === null ? $this->tauschReferenzen() : null,
             // v3-Redesign: Standalone-Sidebar nicht mehr ausklappbar → Netz/Kohäsion/Pairings
             // direkt laden, aber NUR standalone (im Editor-Embed/nur-Sektion bleiben sie ungenutzt → gespart).
             'kernAnker' => $rezept !== null ? app(\Platform\FoodAlchemist\Services\PairingService::class)->recipeAnkers($rezept->id) : collect(),

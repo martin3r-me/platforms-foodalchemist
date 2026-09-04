@@ -34,7 +34,7 @@ class RecipeModal extends Component
 {
     use HatRezeptCopilot;   // Spec 03 L6b
     use InteractsWithSavedToast;
-    use TauschtRezept;      // Verwaltungs-Reiter: Rezept-Tausch (dieselbe Mechanik wie im Panel)
+    use TauschtRezept;      // Verwaltungs-Reiter: tauschen + löschen (dieselbe Mechanik wie im Panel)
     use WithFileUploads;
 
     /** Spec 43 (Bild-Epic): Gericht-Foto (Stammdaten). */
@@ -170,6 +170,14 @@ class RecipeModal extends Component
 
         $this->istOffen = true;
         $this->dispatch('modal.open', name: 'recipe-modal');
+    }
+
+    /** Nach dem Löschen schließt der Editor zusätzlich — das gelöschte Rezept ist nicht mehr da. */
+    protected function nachRezeptLoeschung(): void
+    {
+        $this->recipeId = null;
+        $this->istOffen = false;
+        $this->dispatch('modal.close', name: 'recipe-modal');
     }
 
     /**
@@ -820,12 +828,13 @@ class RecipeModal extends Component
                 ? app(FoodAlchemistMediaService::class)->url($r->image_context_file_id, $r->image_path)
                 : null,
             'istTemplate' => (bool) ($r?->is_template ?? false),
-            // Verwaltungs-Reiter (Tausch). Bewusst NICHT hinter $geladeneTabs gegated:
+            // Verwaltungs-Reiter (tauschen + löschen). Bewusst NICHT hinter $geladeneTabs gegated:
             // `speichern()` ruft bei Neuanlagen `ladeRezept()` und setzt die Reiter-Memo zurück,
             // während Alpines `visited` clientseitig bestehen bleibt — der Reiter wäre danach leer,
             // ohne dass ein zweiter Klick ihn nachlädt. Ein paar Count-Queries sind der Preis.
             'tauschBilanz' => $r !== null ? $this->tauschBilanz() : null,
             'tauschKandidaten' => $r !== null ? $this->tauschKandidaten() : collect(),
+            'tauschReferenzen' => $r !== null ? $this->tauschReferenzen() : null,
             'voll' => $voll,
             'bulkRun' => $bulkRun,
             'bulkOffen' => $bulkRun !== null

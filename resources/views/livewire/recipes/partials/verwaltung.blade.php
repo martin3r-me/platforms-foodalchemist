@@ -1,9 +1,9 @@
-{{-- „Rezept in allen Verwendungen tauschen" — EIN Partial für Detail-Panel UND Editor
-     (Pendant zum GP-Verwaltungsblock, 2026-09-04). Bewusst geteilt: der GP-Block wurde
-     2026-08 in den Editor KOPIERT und lief seitdem auseinander (roher Status-String,
+{{-- „Rezept in allen Verwendungen tauschen" + „Rezept löschen" — EIN Partial für Detail-Panel
+     UND Editor (Pendant zum GP-Verwaltungsblock, 2026-09-04). Bewusst geteilt: der GP-Block
+     wurde 2026-08 in den Editor KOPIERT und lief seitdem auseinander (roher Status-String,
      unfindbarer Reiter). Hier gibt es nur eine Quelle.
 
-     Erwartet aus der Komponente: $tauschBilanz · $tauschKandidaten ·
+     Erwartet aus der Komponente: $tauschBilanz · $tauschKandidaten · $tauschReferenzen ·
      $fehlerTausch · $hinweisTausch (Trait TauschtRezept) sowie Ui-Maps im Kontext.
      Parameter: $rezeptName (für die Rückfragen) · $kompakt (Panel-Typo statt Editor-Typo). --}}
 @php(extract(\Platform\FoodAlchemist\Support\Ui::maps()))
@@ -44,4 +44,19 @@
         </div>
     @endif
 
+    {{-- 3. Löschen — nur für eigene Basisrezepte; $tauschReferenzen ist sonst null --}}
+    @if($tauschReferenzen !== null)
+        <div class="pt-2 mt-2 border-t border-black/5" data-rezept-loeschen-block>
+            @if($tauschReferenzen['blocker'] === 0)
+                <button type="button" wire:click="rezeptLoeschen" wire:confirm="„{{ $rezeptName }}“ löschen? (Keine Referenzen vorhanden — das Rezept verschwindet aus den Listen.)" class="{{ $btnGhostXs }} text-rose-600" data-rezept-loeschen>Rezept löschen</button>
+                <p class="{{ $tt }} text-gray-500 mt-1">Keine Referenzen — Löschen möglich (Soft-Delete, wiederherstellbar).</p>
+            @else
+                <p class="{{ $tt }} text-gray-600" data-rezept-ref-zusammenfassung>Löschen blockiert — wird referenziert: {{ implode(' · ', $tauschReferenzen['blocker_teile']) }}. @if($tauschBilanz !== null && $tauschBilanz['zeilen'] > 0)Erst oben umhängen, dann löschen.@endif</p>
+            @endif
+            @php($refInfo = array_filter([$tauschReferenzen['produktion_historie'] > 0 ? $tauschReferenzen['produktion_historie'] . ' Zeile(n) in abgeschlossenen Produktionsaufträgen' : null, $tauschReferenzen['instanzen'] > 0 ? $tauschReferenzen['instanzen'] . ' daraus instanziierte(s) Rezept(e)' : null]))
+            @if($refInfo !== [])
+                <p class="{{ $tt }} text-gray-400 mt-1" data-rezept-ref-info>Nur zur Info (blockiert nicht): {{ implode(' · ', $refInfo) }}</p>
+            @endif
+        </div>
+    @endif
 </div>

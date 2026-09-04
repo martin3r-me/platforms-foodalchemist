@@ -10,11 +10,11 @@ use Platform\FoodAlchemist\Services\RecipeService;
 use Platform\FoodAlchemist\Support\Suche;
 
 /**
- * „Rezept in allen Verwendungen tauschen" (Spec 44, Dominique 2026-09-04) — das Pendant zum
- * GP-Tausch, gleichzeitig im Detail-Panel UND im Editor. Der GP-Tausch lag anfangs nur im Panel
- * und wurde später in den Editor KOPIERT; die Kopie lief auseinander (roher Status-String,
- * unfindbarer Reiter). Deshalb liegt die Mechanik hier von Anfang an EINMAL im Trait und die
- * Oberfläche in EINEM Blade-Partial.
+ * Verwaltungs-Block für Basisrezepte (Spec 44, Dominique 2026-09-04): „in allen Verwendungen
+ * tauschen" + „löschen" — das Pendant zum GP-Verwaltungsblock, gleichzeitig im Detail-Panel UND
+ * im Editor. Der GP-Tausch lag anfangs nur im Panel und wurde später in den Editor KOPIERT; die
+ * Kopie lief auseinander (roher Status-String, unfindbarer Reiter). Deshalb liegt die Mechanik
+ * hier von Anfang an EINMAL im Trait und die Oberfläche in EINEM Blade-Partial.
  *
  * Erwartet an der einbindenden Komponente: `public ?int $recipeId`.
  */
@@ -72,6 +72,58 @@ trait TauschtRezept
         return $team !== null && $this->recipeId !== null
             ? app(RecipeService::class)->verwendungsBilanz($team, $this->recipeId)
             : ['zeilen' => 0, 'rezepte' => 0, 'fremd_zeilen' => 0, 'fremd_rezepte' => 0];
+    }
+
+    /**
+     * Lösch-Bilanz — `null` heißt „hier gibt es keinen Lösch-Knopf": Gerichte gehen über den
+     * VK-Editor (`SalesRecipeService::deleteDish`), geerbte Rezepte gar nicht (D1).
+     *
+     * @return array{eltern_zeilen:int, eltern:int, ersatz:int, ausgaben:int, produktion_offen:int,
+     *               produktion_historie:int, instanzen:int, blocker:int, blocker_teile:list<string>}|null
+     */
+    protected function tauschReferenzen(): ?array
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team === null || $this->recipeId === null) {
+            return null;
+        }
+        $rezept = FoodAlchemistRecipe::visibleToTeam($team)->find($this->recipeId, ['id', 'team_id', 'is_sales_recipe']);
+        if ($rezept === null || $rezept->is_sales_recipe || ! $rezept->isOwnedBy($team)) {
+            return null;
+        }
+
+        return app(RecipeService::class)->referenzen($this->recipeId);
+    }
+
+    /** Rezept löschen (Soft-Delete) — der Service blockt bei jeder harten Referenz. */
+    public function rezeptLoeschen(): void
+    {
+        $this->fehlerTausch = null;
+        $this->hinweisTausch = null;
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team === null || $this->recipeId === null) {
+            return;
+        }
+        if ($this->tauschReferenzen() === null) {
+            $this->fehlerTausch = 'Löschen hier nicht möglich — Gerichte laufen über den Verkaufs-Editor, geerbte Rezepte über ihr Besitzer-Team (D1).';
+
+            return;
+        }
+        try {
+            app(RecipeService::class)->delete($team, $this->recipeId);
+        } catch (\Throwable $e) {
+            $this->fehlerTausch = $e->getMessage();
+
+            return;
+        }
+        $this->dispatch('recipe-gespeichert');                     // Browser: Zeile verschwindet
+        $this->nachRezeptLoeschung();
+    }
+
+    /** Aufräumen nach dem Löschen — das Panel leert seine Auswahl, der Editor schließt zusätzlich. */
+    protected function nachRezeptLoeschung(): void
+    {
+        $this->recipeId = null;
     }
 
     /** Ergebnis-Satz — nennt AUCH das Übersprungene (geerbt / Zyklus / Ziel schon drin). */

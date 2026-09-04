@@ -57,9 +57,24 @@ Manchmal stellt sich heraus, dass zwei Basisrezepte dasselbe sind — oder dass 
 - Ein Tausch, der ein Rezept in sich selbst schachteln würde (**Zyklus**), wird abgewiesen und benannt.
 - Steckte das Ziel in einem Eltern-Rezept **schon drin**, sagt die Rückmeldung das — dort stehen danach zwei Zeilen, deren Mengen du zusammenführen willst.
 
-Der Tausch ist außerdem die **Vorstufe zum Löschen**: solange ein Rezept irgendwo als Komponente hängt, lässt es sich nicht löschen. Erst umhängen, dann löschen.
+### 🗑️ Ein Basisrezept löschen
 
-> Für Grundprodukte gibt es denselben Weg — im GP-Detail und im GP-Editor unter **Verwaltung**.
+Im selben Verwaltungs-Block sitzt der Lösch-Knopf — und der sagt vorher ehrlich, was dagegen spricht.
+
+**Blockiert das Löschen** (die Zahlen stehen im Block):
+
+- das Rezept steckt noch als **Komponente** in Gerichten oder anderen Basisrezepten
+- es hängt im **Ersatz-Katalog** (make-or-buy)
+- es ist direkt in eine **Ausgabe** gepinnt (Foodbook, Speisekarte, Speiseplan, Angebot, Konzept)
+- es steht in einem **offenen Produktionsauftrag** (geplant oder in Arbeit)
+
+**Blockiert nicht, wird nur genannt:** Zeilen in *abgeschlossenen* Produktionsaufträgen — die Historie bleibt lesbar — und Rezepte, die einmal aus diesem instanziiert wurden.
+
+Ist nichts davon da, wird gelöscht — als **Soft-Delete**: das Rezept verschwindet aus den Listen, die Zeile bleibt in der Datenbank. Gelöscht wird nur, was dem eigenen Team gehört; **geerbte** Rezepte aus dem Master-Katalog kann nur ihr Besitzer-Team entfernen, und **Gerichte** haben ihren eigenen Weg im Verkaufs-Editor.
+
+Der Tausch ist damit die **Vorstufe zum Löschen**: erst umhängen, dann löschen.
+
+> Für Grundprodukte gibt es beides genauso — im GP-Detail und im GP-Editor unter **Verwaltung**.
 
 ---
 

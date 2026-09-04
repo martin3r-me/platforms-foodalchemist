@@ -326,9 +326,9 @@
             </x-foodalchemist::section>
         @endif
 
-        {{-- VERWALTUNG — in allen Verwendungen tauschen (Pendant zum GP-Verwaltungsblock, 2026-09-04).
+        {{-- VERWALTUNG — tauschen + löschen (Pendant zum GP-Verwaltungsblock, 2026-09-04).
              Nur im Standalone-Panel: der Editor zeigt dasselbe Partial in seinem Verwaltungs-Reiter. --}}
-        @if($tauschBilanz !== null && ($tauschBilanz['zeilen'] > 0 || $tauschBilanz['fremd_zeilen'] > 0))
+        @if($tauschReferenzen !== null || ($tauschBilanz !== null && ($tauschBilanz['zeilen'] > 0 || $tauschBilanz['fremd_zeilen'] > 0)))
             <x-foodalchemist::section title="Verwaltung" icon="heroicon-o-cog-6-tooth" data-sektion="verwaltung">
                 @include('foodalchemist::livewire.recipes.partials.verwaltung', ['rezeptName' => $rezept->name, 'kompakt' => true])
             </x-foodalchemist::section>
