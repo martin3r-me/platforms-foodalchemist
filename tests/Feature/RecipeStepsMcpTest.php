@@ -154,3 +154,45 @@ it('ein Markdown-Update überschreibt bestehende (feinere) Schritte NICHT', func
         // …und der Spiegel zeigt die Schritte, NICHT den verworfenen Text
         ->and($this->rezept->fresh()->preparation)->toBe("## Garen\n1. handgepflegter Schritt");
 });
+
+/**
+ * MCP-Lockstep (2026-09-04): seit die Anrichte-Anleitung in derselben Tabelle liegt
+ * (Regelwerk Verkaufsgerichte §3.3), müssen die Step-Tools die Ebene kennen — sonst
+ * könnte die UI mehr als das Tool, und ein Agent käme an den Teller-Aufbau nicht heran.
+ */
+it('recipe_steps.PUT/GET erreichen die Anrichte-Ebene, ohne die Produktions-Ebene zu berühren', function () {
+    $step = \Platform\FoodAlchemist\Models\FoodAlchemistRecipeStep::class;
+
+    $ctx = ($this->ctx)($this->rootTeam);
+
+    (new RecipeStepsPutTool)->execute([
+        'recipe_id' => $this->rezept->id,
+        'steps' => [['text' => 'Filet tranchieren.']],
+    ], $ctx);
+
+    $anrichten = (new RecipeStepsPutTool)->execute([
+        'recipe_id' => $this->rezept->id,
+        'ebene' => 'anrichten',
+        'steps' => [['text' => 'Creme aufziehen.'], ['text' => 'Jus angießen.']],
+    ], $ctx);
+    expect($anrichten->success)->toBeTrue('PUT anrichten: ' . ($anrichten->error ?? ''))
+        ->and($anrichten->data['ebene'])->toBe('anrichten')
+        ->and($anrichten->data['n_steps'])->toBe(2);
+
+    // Die Produktions-Ebene bleibt unangetastet — und ist der Default beim Lesen.
+    $default = (new \Platform\FoodAlchemist\Tools\RecipeStepsGetTool)->execute(['recipe_id' => $this->rezept->id], $ctx);
+    expect($default->data['ebene'])->toBe('produktion')
+        ->and($default->data['n_steps'])->toBe(1)
+        ->and($default->data['steps'][0]['text'])->toBe('Filet tranchieren.');
+
+    $gelesen = (new \Platform\FoodAlchemist\Tools\RecipeStepsGetTool)->execute([
+        'recipe_id' => $this->rezept->id, 'ebene' => 'anrichten',
+    ], $ctx);
+    expect(collect($gelesen->data['steps'])->pluck('text')->all())->toBe(['Creme aufziehen.', 'Jus angießen.']);
+
+    // Jede Ebene nummeriert bei 1.
+    expect($step::where('recipe_id', $this->rezept->id)->ebene('anrichten')->min('position'))->toBe(1);
+
+    // Und der Spiegel landet im richtigen Feld.
+    expect($this->rezept->fresh()->plating_text)->toContain('Creme aufziehen');
+});

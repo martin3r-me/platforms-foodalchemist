@@ -25,7 +25,9 @@ class RecipeStepsPutTool extends FoodAlchemistTool implements ToolContract, Tool
 
     public function getDescription(): string
     {
-        return 'Setzt die Zubereitung eines Rezepts als Schrittfolge (nur Status stub/draft). Die '
+        return 'Setzt die Anleitung eines Rezepts als Schrittfolge (nur Status stub/draft). `ebene` '
+            . 'waehlt die Anleitungs-Ebene: produktion (Default: Herstellung bzw. Fertigstellen) oder '
+            . 'anrichten (Teller-Aufbau am Pass). Die '
             . 'Reihenfolge im Array IST die Nummerierung — position wird nicht übergeben. Eine Zeile '
             . 'mit `id` aktualisiert genau diesen Schritt und behält seine Fotos; weggelassene '
             . 'Schritte werden gelöscht. Alternativ `preparation_markdown` senden: `##` wird zum '
@@ -39,6 +41,7 @@ class RecipeStepsPutTool extends FoodAlchemistTool implements ToolContract, Tool
             'type' => 'object',
             'properties' => [
                 'recipe_id' => ['type' => 'integer'],
+                'ebene' => ['type' => 'string', 'description' => 'produktion (Default: Herstellung/Fertigstellen) oder anrichten (Teller-Aufbau am Pass)'],
                 'steps' => [
                     'type' => 'array',
                     'description' => 'Schrittfolge in Reihenfolge. Entweder dieses Feld ODER preparation_markdown.',
@@ -82,6 +85,12 @@ class RecipeStepsPutTool extends FoodAlchemistTool implements ToolContract, Tool
 
         $svc = app(RecipeStepService::class);
         $markdown = trim((string) ($arguments['preparation_markdown'] ?? ''));
+        // Default `produktion` = unverändertes Bestandsverhalten; `anrichten` schreibt die
+        // Teller-Aufbau-Schritte (Regelwerk §3.3), damit das Tool kann, was die UI kann.
+        $ebene = in_array($arguments['ebene'] ?? null, FoodAlchemistRecipeStep::EBENEN, true)
+            ? $arguments['ebene']
+            : FoodAlchemistRecipeStep::EBENE_PRODUKTION;
+
         $rohSteps = $arguments['steps'] ?? null;
 
         if (is_array($rohSteps) && $rohSteps !== []) {
@@ -103,19 +112,20 @@ class RecipeStepsPutTool extends FoodAlchemistTool implements ToolContract, Tool
             if ($rows === []) {
                 return ToolResult::error('Kein Schritt mit Text übergeben.', 'VALIDATION_ERROR');
             }
-            $svc->sync($recipe, $rows);
+            $svc->sync($recipe, $rows, $ebene);
         } elseif ($markdown !== '') {
-            if ($svc->ausMarkdown($recipe, $markdown, ueberschreiben: true) === 0) {
+            if ($svc->ausMarkdown($recipe, $markdown, ueberschreiben: true, ebene: $ebene) === 0) {
                 return ToolResult::error('Im Markdown war kein Schritt erkennbar.', 'VALIDATION_ERROR');
             }
         } else {
             return ToolResult::error('Entweder steps[] oder preparation_markdown angeben.', 'VALIDATION_ERROR');
         }
 
-        $steps = FoodAlchemistRecipeStep::where('recipe_id', $recipe->id)->orderBy('position')->get();
+        $steps = FoodAlchemistRecipeStep::where('recipe_id', $recipe->id)->ebene($ebene)->orderBy('position')->get();
 
         return ToolResult::success([
             'recipe' => ['id' => $recipe->id, 'name' => $recipe->name, 'status' => $this->statusWert($recipe)],
+            'ebene' => $ebene,
             'n_steps' => $steps->count(),
             'steps' => $steps->map(fn (FoodAlchemistRecipeStep $s) => [
                 'id' => $s->id, 'position' => (int) $s->position, 'phase' => $s->phase, 'text' => $s->text,

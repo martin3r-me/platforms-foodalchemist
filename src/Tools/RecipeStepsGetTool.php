@@ -23,7 +23,8 @@ class RecipeStepsGetTool extends FoodAlchemistTool implements ToolContract, Tool
 
     public function getDescription(): string
     {
-        return 'Liest die Zubereitung eines Rezepts als Schrittfolge: position (1-basiert, ergibt die '
+        return 'Liest die Anleitung eines Rezepts als Schrittfolge. `ebene`: produktion (Default: '
+            . 'Herstellung bzw. Fertigstellen) oder anrichten (Teller-Aufbau am Pass). Felder: position (1-basiert, ergibt die '
             . 'Nummer), phase (Abschnitt wie „Mise en Place" oder null), text und die am Schritt '
             . 'verknüpften Fotos. Zusätzlich `result_photo` = das Endprodukt-Bild („so soll es fertig '
             . 'aussehen"), falls markiert. Die Schritte sind der Master — das Markdown-Feld '
@@ -36,6 +37,7 @@ class RecipeStepsGetTool extends FoodAlchemistTool implements ToolContract, Tool
             'type' => 'object',
             'properties' => [
                 'recipe_id' => ['type' => 'integer'],
+                'ebene' => ['type' => 'string', 'description' => 'produktion (Default) oder anrichten'],
             ],
             'required' => ['recipe_id'],
         ];
@@ -52,13 +54,20 @@ class RecipeStepsGetTool extends FoodAlchemistTool implements ToolContract, Tool
             return ToolResult::error('Rezept nicht sichtbar/vorhanden.', 'NOT_FOUND');
         }
 
-        $steps = FoodAlchemistRecipeStep::where('recipe_id', $recipe->id)
+        // 2026-09-04: die Anrichte-Anleitung liegt in derselben Tabelle (Regelwerk §3).
+        // Default `produktion` = unverändertes Bestandsverhalten für alle Aufrufer.
+        $ebene = in_array($arguments['ebene'] ?? null, FoodAlchemistRecipeStep::EBENEN, true)
+            ? $arguments['ebene']
+            : FoodAlchemistRecipeStep::EBENE_PRODUKTION;
+
+        $steps = FoodAlchemistRecipeStep::where('recipe_id', $recipe->id)->ebene($ebene)
             ->with('photos')->orderBy('position')->orderBy('id')->get();
 
         $endprodukt = app(\Platform\FoodAlchemist\Services\RecipeStepService::class)->endprodukt($recipe->id);
 
         return ToolResult::success([
             'recipe' => ['id' => $recipe->id, 'name' => $recipe->name],
+            'ebene' => $ebene,
             'n_steps' => $steps->count(),
             // Endprodukt-Bild: „so soll es fertig aussehen" (null = keins markiert)
             'result_photo' => $endprodukt === null ? null : [
