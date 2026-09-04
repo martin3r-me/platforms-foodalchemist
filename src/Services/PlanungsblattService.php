@@ -736,7 +736,8 @@ class PlanungsblattService
                 'standzeit_min' => $recipe->standzeitMin(),   // passive Gar-/Standzeit (Durchlaufzeit, kein Posten)
                 'zubereitung' => $recipe->preparation ?: null,        // Spiegel-Freitext (Fallback für Rezepte ohne Schritte)
                 'schritte' => $this->schritteFuer($recipe),           // Spec 27: die eigentliche Anleitung (Nummer + Text + Fotos)
-                'darreichung' => $istVk ? $this->darreichungsInfo($recipe) : null, // Regeneration/Behälter/Vehikel der Standard-Form
+                'darreichung' => $istVk ? $this->darreichungsInfo($recipe) : null, // Behälter/Vehikel der Standard-Form
+                'regenerationen' => $this->regenerationenFuer($recipe),   // §3.2: Programm je Komponente (V-19)
                 'zutaten' => $zeilen,
             ];
         }
@@ -876,6 +877,31 @@ class PlanungsblattService
                     'pfad_abs' => $disk->exists($f->pfad) ? $disk->path($f->pfad) : null,
                     'caption' => $f->caption,
                 ])->values()->all(),
+            ])->values()->all();
+    }
+
+    /**
+     * Das Regenerations-Programm je Komponente (V-19, Regelwerk Verkaufsgerichte §3.2).
+     *
+     * Bis 2026-09-04 druckte das Blatt nur den Ein-Zeiler der Standard-Darreichung
+     * ({@see self::darreichungsInfo}) — und der wurde von keinem Schreibpfad gefüllt,
+     * während die im Editor gepflegte Liste in KEINEM Druckstück auftauchte. Die
+     * Küche vor Ort bekam damit kein Regenerations-Programm aufs Papier.
+     *
+     * @return list<array{komponente: ?string, geraet: ?string, temp_c: mixed, duration_min: mixed, core_temp_c: mixed, note: ?string}>
+     */
+    private function regenerationenFuer(FoodAlchemistRecipe $recipe): array
+    {
+        return \Platform\FoodAlchemist\Models\FoodAlchemistRecipeRegeneration::where('recipe_id', $recipe->id)
+            ->with('device:id,name')
+            ->orderBy('sort_order')->orderBy('id')->get()
+            ->map(fn ($r) => [
+                'komponente' => $r->component_label,
+                'geraet' => $r->device?->name,
+                'temp_c' => $r->temp_c,
+                'duration_min' => $r->duration_min,
+                'core_temp_c' => $r->core_temp_c,
+                'note' => $r->note,
             ])->values()->all();
     }
 

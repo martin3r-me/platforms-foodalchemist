@@ -437,12 +437,10 @@ class StepEditor extends Component
         return [
             'name' => $recipe->name,
             'rezept_typ' => $gericht ? 'gericht' : 'basisrezept',
-            'zubereitungsziel' => $gericht
-                ? 'Service-, Regenerations- und Anrichteablauf fuer ein Verkaufsgericht.'
-                : 'Produktions-Zubereitung fuer ein Basisrezept.',
-            'hinweis' => $gericht
-                ? 'Komponenten sind vorbereitet oder fertig produziert. Nicht neu herstellen; nur bereitstellen, regenerieren, finalisieren, portionieren und anrichten.'
-                : 'Rohwaren und Teilkomponenten fachlich produzieren.',
+            // Eine Quelle fuer beide Kontextbauer (Editor + One-Shot), damit die Leitplanke
+            // nicht auseinanderlaeuft. Trennung der Ebenen: Regelwerk Verkaufsgerichte §3.
+            'zubereitungsziel' => (string) config('foodalchemist.step_kontext.' . ($gericht ? 'gericht' : 'basisrezept') . '.ziel'),
+            'hinweis' => (string) config('foodalchemist.step_kontext.' . ($gericht ? 'gericht' : 'basisrezept') . '.hinweis'),
             'zutaten' => $zutaten->pluck('raw_text')->filter()->values()->all(),
             'komponenten' => $zutaten->filter(fn ($z) => $z->referencedRecipe !== null)->map(fn ($z) => [
                 'name' => $z->referencedRecipe?->name,

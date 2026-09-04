@@ -46,7 +46,7 @@ it('POST legt Darreichung an (erste = Standard); unbekannte serving_form → VAL
     expect($bad->success)->toBeFalse()->and($bad->errorCode)->toBe('VALIDATION_ERROR');
 });
 
-it('PUT bearbeitet + STANDARD (idempotent) + DELETE auf eigener Darreichung', function () {
+it('PUT bearbeitet + STANDARD (idempotent) + Formwechsel; DELETE der einzigen Standard-Zeile ist gesperrt', function () {
     $p1 = ($this->postDar)('teller')->data['presentation_id'];
 
     $put = ($this->run)('foodalchemist.recipe_darreichung.PUT', ['presentation_id' => $p1, 'attrs' => ['note' => 'Testnotiz']]);
@@ -55,8 +55,21 @@ it('PUT bearbeitet + STANDARD (idempotent) + DELETE auf eigener Darreichung', fu
     $std = ($this->run)('foodalchemist.recipe_darreichung.STANDARD', ['presentation_id' => $p1]);
     expect($std->success)->toBeTrue('STANDARD: ' . ($std->error ?? ''))->and($std->data['is_standard'])->toBeTrue();
 
+    // 2026-09-04: Die Standard-Darreichung tragt Preis-Wahrheit und Slot-Aufloesung. Vorher
+    // loeschte dieser Pfad sie, WENN sie die einzige war — der Guard griff nur bei >1 Zeile,
+    // und die UI versteckt den Knopf ohnehin. Das Gericht stand danach ohne Preis-Anker da.
     $del = ($this->run)('foodalchemist.recipe_darreichung.DELETE', ['presentation_id' => $p1]);
-    expect($del->success)->toBeTrue('DELETE: ' . ($del->error ?? ''))->and($del->data['deleted'])->toBeTrue();
+    expect($del->success)->toBeFalse()
+        ->and($del->errorCode)->toBe('VALIDATION_ERROR');
+
+    // Der vorgesehene Weg ist der FORMWECHSEL an derselben Zeile (§4) — auch per MCP,
+    // sonst koennte die UI mehr als das Tool.
+    $schale = FoodAlchemistServierform::where('code', 'schale')->firstOrFail();
+    $wechsel = ($this->run)('foodalchemist.recipe_darreichung.PUT', [
+        'presentation_id' => $p1, 'attrs' => ['serving_form_id' => $schale->id],
+    ]);
+    expect($wechsel->success)->toBeTrue('Formwechsel: ' . ($wechsel->error ?? ''))
+        ->and((int) $wechsel->data['serving_form_id'])->toBe((int) $schale->id);
 });
 
 it('Guards: unbekannte presentation_id → NOT_FOUND; fremd → ACCESS_DENIED', function () {

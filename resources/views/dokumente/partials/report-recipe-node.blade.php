@@ -52,13 +52,41 @@
                 <div><span>Status</span>{{ $node['status'] ?? '—' }}</div>
             </div>
 
-            @if(($node['description'] ?? null) || ($node['sales_wording_standard'] ?? null) || ($node['plating_text'] ?? null))
+            @if(($node['description'] ?? null) || ($node['sales_wording_standard'] ?? null))
                 <div class="copy">
                     @if($node['sales_wording_standard'] ?? null)<p><strong>Wording:</strong> {{ $node['sales_wording_standard'] }}</p>@endif
                     @if($node['description'] ?? null)<p>{{ $node['description'] }}</p>@endif
-                    @if($node['plating_text'] ?? null)<p><strong>Plating:</strong> {{ $node['plating_text'] }}</p>@endif
                 </div>
             @endif
+        @endif
+
+        {{-- §3.2 REGENERATION — eigene Ebene, eigener Schalter. Adressat ist die Küche vor
+             Ort (Satellit), nicht die Produktionsküche. Stand bis 2026-09-04 in KEINEM
+             Druckstück, obwohl im Editor gepflegt. --}}
+        @if(($opt['regeneration'] ?? false) && count($node['regenerationen'] ?? []))
+            <h4>Regeneration</h4>
+            <table>
+                <thead><tr><th>Komponente</th><th>Gerät</th><th style="text-align:right">°C</th><th style="text-align:right">min</th><th style="text-align:right">Kern °C</th><th>Hinweis</th></tr></thead>
+                <tbody>
+                @foreach($node['regenerationen'] as $reg)
+                    <tr>
+                        <td>{{ $reg['komponente'] ?? '—' }}</td>
+                        <td>{{ $reg['geraet'] ?? '—' }}</td>
+                        <td style="text-align:right">{{ $reg['temp_c'] ?? '—' }}</td>
+                        <td style="text-align:right">{{ $reg['duration_min'] ?? '—' }}</td>
+                        <td style="text-align:right">{{ $reg['core_temp_c'] ?? '—' }}</td>
+                        <td>{{ $reg['note'] ?? '' }}</td>
+                    </tr>
+                @endforeach
+                </tbody>
+            </table>
+        @endif
+
+        {{-- §3.3 ANRICHTEN — Adressat ist der Pass. Hing vorher am `stammdaten`-Flag und
+             kam damit auf jedem Blatt mit, auch auf dem Kalkulations-Auszug. --}}
+        @if(($opt['anrichten'] ?? false) && ($node['plating_text'] ?? null))
+            <h4>Anrichten &amp; Ausgabe</h4>
+            <div class="copy"><p>{{ $node['plating_text'] }}</p></div>
         @endif
 
         @if($opt['produktion'] ?? false)
@@ -73,6 +101,8 @@
                 <div><span>Rüstzeit</span>{{ $p['setup_time_min'] !== null ? $p['setup_time_min'] . ' min' : '—' }}</div>
                 <div><span>Vorlauf</span>{{ $p['max_vorlauf_tage'] !== null ? $p['max_vorlauf_tage'] . ' Tage' : '—' }}</div>
                 <div><span>Batchdeckel</span>{{ $p['batch_max_kg'] !== null ? $num($p['batch_max_kg'], 3, ' kg') : ($p['batch_max_pieces'] !== null ? $num($p['batch_max_pieces'], 2, ' Stk.') : '—') }}</div>
+                <div><span>Variable Zeit</span>{{ $p['variable_work_time_min'] !== null ? $num($p['variable_work_time_min'], 2, ' min/' . ($p['variable_work_time_basis'] ?? '?')) : '—' }}</div>
+                <div><span>Standzeit</span>{{ $p['standzeit_min'] !== null ? $p['standzeit_min'] . ' min' : '—' }}</div>
                 <div class="wide"><span>Equipment</span>{{ implode(', ', $p['equipment'] ?? []) ?: '—' }}</div>
             </div>
         @endif

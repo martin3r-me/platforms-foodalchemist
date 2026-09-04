@@ -124,3 +124,59 @@ it('fuerBlock: Servierform ohne passende Darreichung → Standard-Fallback', fun
     $gefunden = $this->resolver->fuerBlock($block->fresh(), $form->id);
     expect($gefunden)->not->toBeNull()->and($gefunden->id)->toBe($standard->id);
 });
+
+/**
+ * §4 (2026-09-04): `unbestimmt` ist ein Review-ZUSTAND, kein Label. Der Weg heraus ist
+ * das Setzen der Servierform an der Zeile — das Vokabular-Label wird nie umbenannt
+ * (es ist WaWi-Master und gilt für alle Gerichte).
+ */
+it('setzeServierform holt die Standard-Zeile aus dem Review-Zustand', function () {
+    $dar = $this->svc->ensureStandard($this->rootTeam, $this->gericht->id);
+    $unbestimmt = FoodAlchemistServierform::where('code', 'unbestimmt')->firstOrFail();
+    expect((int) $dar->serving_form_id)->toBe((int) $unbestimmt->id);
+
+    $teller = FoodAlchemistServierform::firstOrCreate(
+        ['code' => 'teller', 'team_id' => $this->rootTeam->id],
+        ['label' => 'Teller / serviertes Menü', 'sort_order' => 1]
+    );
+
+    $frisch = $this->svc->setzeServierform($this->rootTeam, $dar->id, $teller->id);
+
+    expect((int) $frisch->serving_form_id)->toBe((int) $teller->id)
+        ->and($frisch->is_standard)->toBeTrue()                  // bleibt Standard
+        ->and((int) $frisch->id)->toBe((int) $dar->id);          // dieselbe Zeile, kein Neuanlegen
+});
+
+it('setzeServierform lehnt eine deaktivierte Form ab', function () {
+    $dar = $this->svc->ensureStandard($this->rootTeam, $this->gericht->id);
+    $aus = FoodAlchemistServierform::create([
+        'team_id' => $this->rootTeam->id, 'code' => 'stillgelegt',
+        'label' => 'Stillgelegt', 'is_inactive' => true,
+    ]);
+
+    expect(fn () => $this->svc->setzeServierform($this->rootTeam, $dar->id, $aus->id))
+        ->toThrow(RuntimeException::class);
+});
+
+it('setzeServierform auf die eigene Form ist ein No-Op', function () {
+    $dar = $this->svc->ensureStandard($this->rootTeam, $this->gericht->id);
+
+    $frisch = $this->svc->setzeServierform($this->rootTeam, $dar->id, (int) $dar->serving_form_id);
+
+    expect((int) $frisch->id)->toBe((int) $dar->id);
+});
+
+/**
+ * Guard-Lücke bis 2026-09-04: `loeschen` sperrte die Standard-Zeile nur, wenn es MEHR
+ * als eine Darreichung gab. Die einzige Zeile war über den MCP-Pfad löschbar — die UI
+ * versteckt den Knopf unabhängig von der Anzahl, deshalb fiel es nie auf. Ohne
+ * Standard-Darreichung verliert das Gericht Preis-Wahrheit und Slot-Auflösung.
+ */
+it('die einzige Standard-Darreichung kann nicht geloescht werden', function () {
+    $dar = $this->svc->ensureStandard($this->rootTeam, $this->gericht->id);
+
+    expect(FoodAlchemistRecipeDarreichung::where('recipe_id', $this->gericht->id)->count())->toBe(1);
+    expect(fn () => $this->svc->loeschen($this->rootTeam, $dar->id))
+        ->toThrow(RuntimeException::class);
+    expect(FoodAlchemistRecipeDarreichung::where('recipe_id', $this->gericht->id)->count())->toBe(1);
+});

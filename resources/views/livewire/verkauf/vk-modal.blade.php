@@ -128,14 +128,19 @@
              'allergene'-Key bleibt stabil, Label seit 2026-07-02 „Deklaration" (bündelt Allergene ·
              Zusatzstoffe · Nährwerte · Spezifikation — Rezept-Editor-Parität). --}}
         <x-foodalchemist::editor-tabs marker="vk" wire-key="vk-tabs-{{ $rezept->id }}" :init="'aufbau'"
+            {{-- Tab-Namen folgen den drei Anleitungs-Ebenen (Regelwerk Verkaufsgerichte §3,
+                 User-Entscheid 2026-09-04) in ihrer Prozess-Reihenfolge: regenerieren →
+                 finalisieren → anrichten. Der alte Sammel-Tab „Service" ist aufgeteilt; er
+                 mischte Behälter, Regenerations-Programm, Eigenschaften und Teller-Aufbau. --}}
             :tabs="[
                 'aufbau' => 'Aufbau',
                 'stammdaten' => 'Stammdaten',
-                'preparation' => 'Zubereitung',
+                'regeneration' => 'Regeneration',
+                'preparation' => 'Finalisieren',
+                'plating' => 'Anrichten',
                 'allergene' => 'Deklaration',
                 'kalkulation' => 'Kalkulation',
                 'darreichungen' => 'Darreichungen',
-                'service' => 'Service',
                 'sensorik' => 'Sensorik & Pairing',
                 'feedback' => 'Feedback',
                 'notes' => 'Notizen',
@@ -223,12 +228,21 @@
              vergraben), damit die Zuweisung auffindbar ist. --}}
         <x-foodalchemist::modal-section title="Produktion (Auto-Planer)">
             <div class="grid grid-cols-2 md:grid-cols-4 gap-3" data-vk-produktion>
+                {{-- 2026-09-04: am Gericht ist das der FINALISIERUNGS-Posten — wer zusammensetzt,
+                     abschmeckt und ausgibt. Die Komponenten produzieren auf ihren eigenen Posten
+                     (aus dem jeweiligen Basisrezept); die routet der Planer je Zeile. --}}
                 <div>
-                    <label class="block {{ $label }} mb-1">Default-Posten <span class="normal-case text-gray-500">(Planer-Routing)</span></label>
+                    <label class="block {{ $label }} mb-1">Finalisierungs-Posten <span class="normal-case text-gray-500">(Zusammensetzen &amp; Ausgabe)</span></label>
                     <select wire:model="form.default_station_id" class="{{ $input }}" data-vk-default-station>
                         <option value="">— keiner —</option>
                         @foreach($posten as $p)<option value="{{ $p->id }}">{{ $p->name }}</option>@endforeach
                     </select>
+                    @if($beteiligtePosten->isNotEmpty())
+                        <p class="text-[10px] text-gray-500 mt-1" data-vk-beteiligte-posten>
+                            Komponenten produzieren auf:
+                            {{ $beteiligtePosten->map(fn ($p) => $p['name'] . ($p['anzahl'] > 1 ? " ({$p['anzahl']})" : ''))->implode(' · ') }}
+                        </p>
+                    @endif
                 </div>
                 <div>
                     <label class="block {{ $label }} mb-1">Rüstzeit (min) <span class="normal-case text-gray-500">einmal je Lauf</span></label>
@@ -272,13 +286,16 @@
              immer. Lineage-Buttons (manual/Reset) bleiben dem Basisrezept-Editor
              vorbehalten (RecipeModal-Methoden), hier nicht verdrahtet. --}}
         <div x-show="tab === 'preparation'" x-cloak class="pt-4 space-y-4">
-        <x-foodalchemist::modal-section title="Zubereitung">
+        <x-foodalchemist::modal-section title="Finalisieren am Einsatztag">
+            <p class="text-[11px] text-gray-500 mb-2">
+                Alles zwischen <em>regeneriert</em> und <em>angerichtet</em>: bereitstellen, portionieren, tranchieren, montieren, abschmecken. Die <strong>Herstellung</strong> der Komponenten steht in deren Basisrezepten, das <strong>Regenerations-Programm</strong> im Tab Regeneration, der <strong>Teller-Aufbau</strong> im Tab Anrichten.
+            </p>
             <livewire:foodalchemist.recipes.step-editor :recipe-id="$rezept->id" wire:key="schritt-editor-vk-{{ $rezept->id }}" />
             <p class="text-[10px] text-gray-500 mt-1">
-                Schritte sind der Master — der Markdown in <code>preparation</code> wird daraus erzeugt (Produktionsdruck, Suche und Prozessanker lesen ihn). Gleiche Anleitung wie im Basisrezept-Editor.
+                Schritte sind der Master — der Markdown in <code>preparation</code> wird daraus erzeugt (Produktionsdruck, Suche und Prozessanker lesen ihn). Gleiche Mechanik wie im Basisrezept-Editor.
             </p>
         </x-foodalchemist::modal-section>
-        </div>{{-- /Tab ZUBEREITUNG --}}
+        </div>{{-- /Tab FINALISIEREN --}}
 
         {{-- ── Tab: AUFBAU (nur Komponenten) ─────────────────────────────── --}}
         <div x-show="tab === 'aufbau'" x-cloak class="pt-4 space-y-4">
@@ -452,9 +469,9 @@
             <div class="grid grid-cols-3 gap-3" data-vk-unit-block>
                 <div>
                     <label class="block {{ $label }} mb-1">Einheit</label>
-                    <select wire:model="form.sales_unit_vocab_id" class="{{ $input }}">
+                    <select wire:model="form.sales_unit_vocab_id" class="{{ $input }}" data-vk-unit-select>
                         <option value="">—</option>
-                        @foreach($einheiten as $e)
+                        @foreach($verkaufsEinheiten as $e)
                             <option value="{{ $e->id }}">{{ $e->display_de ?? $e->slug }}</option>
                         @endforeach
                     </select>
@@ -503,6 +520,9 @@
         <div x-show="tab === 'darreichungen'" x-cloak class="pt-4 space-y-4" data-vk-darreichungen>
         <x-foodalchemist::modal-section title="Darreichungen">
             <p class="text-[11px] text-gray-500 mb-2">Ein Gericht = ein kulinarischer Kern; je Servierform eine Variante mit eigener Grammatur und eigenem EK/VK. Varianten entstehen nachfragegetrieben — meist per Klick aus dem Concepter. Komponenten dürfen nur reduziert oder weggelassen werden (neue Zutaten = neues Gericht).</p>
+            {{-- Schon vergebene Formen: fallen aus der Anlage-Auswahl und aus den Zeilen-Selects
+                 der ANDEREN Zeilen (eine Form höchstens einmal je Gericht, DB-Unique). --}}
+            @php($belegte = $darreichungen->pluck('serving_form_id')->all())
             <table class="w-full text-xs">
                 <thead>
                     <tr class="text-left text-gray-500">
@@ -524,8 +544,18 @@
                 <tbody>
                 @forelse($darreichungen as $d)
                     <tr wire:key="dar-{{ $d->id }}" class="border-t border-black/5 align-top">
+                        {{-- Servierform ist WÄHLBAR (2026-09-04): so kommt eine Zeile aus dem
+                             Review-Zustand „Unbestimmt" heraus. Das Vokabular-Label selbst wird
+                             nie umbenannt — es ist WaWi-Master und gilt für alle Gerichte. --}}
                         <td class="py-1.5 pr-2">
-                            <span class="font-medium">{{ $d->servingForm?->label ?? '—' }}</span>
+                            <select wire:change="darreichungForm({{ $d->id }}, $event.target.value)"
+                                    class="{{ $input }} !py-0.5 !w-40 font-medium" data-dar-form="{{ $d->id }}"
+                                    title="Servierform dieser Darreichung wechseln">
+                                @foreach($servierformenAlle as $sf)
+                                    @continue($sf->id !== $d->serving_form_id && in_array($sf->id, $belegte))
+                                    <option value="{{ $sf->id }}" @selected($sf->id === $d->serving_form_id)>{{ $sf->label }}</option>
+                                @endforeach
+                            </select>
                             @if($d->created_via)<span class="block text-[10px] text-gray-500">{{ $d->created_via }}</span>@endif
                         </td>
                         <td class="py-1.5 pr-2 text-center">
@@ -653,7 +683,6 @@
                 </tbody>
             </table>
 
-            @php($belegte = $darreichungen->pluck('serving_form_id')->all())
             <div class="flex items-center gap-2 mt-2" data-dar-anlegen>
                 <select wire:model="darNeueForm" class="{{ $input }} !py-1 w-52">
                     <option value="">Neue Darreichung: Servierform …</option>
@@ -668,11 +697,12 @@
         </div>{{-- /Tab DARREICHUNGEN --}}
 
         {{-- ── Tab: SERVICE (Behälter + Regeneration + Eigenschaften + Plating) ── --}}
-        <div x-show="tab === 'service'" x-cloak class="pt-4 space-y-4">
-        <x-foodalchemist::modal-section title="Container & Service">
+        {{-- ── Tab: REGENERATION (§3.2 — finaler Garprozess am Einsatztag, oft am Satelliten;
+             dazu die Behälter, weil sie Transport und Warmhalten tragen, §3.4) ───────────── --}}
+        <div x-show="tab === 'regeneration'" x-cloak class="pt-4 space-y-4">
+        <x-foodalchemist::modal-section title="Behälter (Transport & Warmhalten)">
             <x-slot:actions>
                 <button type="button" wire:click="ki('behaelter')" class="{{ $btnAi }}" title="vk.behaelter: warm/kalt + Anzahl fürs Catering" data-ki-behaelter>@svg('heroicon-o-sparkles', 'w-3.5 h-3.5')Behälter</button>
-                <button type="button" wire:click="ki('vehikel')" class="{{ $btnAi }}" title="vk.servier_vehikel: worauf wird angerichtet" data-ki-vehikel>@svg('heroicon-o-sparkles', 'w-3.5 h-3.5')Servier-Vorschlag</button>
             </x-slot:actions>
             <div class="grid grid-cols-2 gap-3" data-vk-container>
                 <div>
@@ -698,15 +728,6 @@
                         </select>
                         <input type="number" min="0" wire:model="form.container_cold_count" class="{{ $input }} w-16" placeholder="n" />
                     </div>
-                </div>
-                <div>
-                    <label class="block {{ $label }} mb-1">Servier-Vehikel</label>
-                    <select wire:model="form.serving_vehicle_vocab_id" class="{{ $input }}">
-                        <option value="">—</option>
-                        @foreach($vehikel as $v)
-                            <option value="{{ $v->id }}" @if($v->is_inactive && $form['serving_vehicle_vocab_id'] != $v->id) hidden @endif>{{ $v->name }}{{ $v->group_name ? ' · ' . $v->group_name : '' }}{{ $v->is_inactive ? ' (inaktiv)' : '' }}</option>
-                        @endforeach
-                    </select>
                 </div>
             </div>
         </x-foodalchemist::modal-section>
@@ -754,6 +775,16 @@
             </div>
         </x-foodalchemist::modal-section>
 
+        </div>{{-- /Tab REGENERATION --}}
+
+        {{-- ── Tab: STAMMDATEN (Fortsetzung) ── Die Eigenschaften sind KEINE Anleitung:
+             Arbeitszeit, Standzeit, Nebenkosten, Temperatur, Funktion, Fertigungstiefe und
+             Beschreibung sind Attribute des Gerichts und gehören zu den Stammdaten (die
+             verwandten Zeitfelder Rüst-/Vorlaufzeit stehen dort schon im Auto-Planer).
+             Der Block steht nur physisch hier — der x-show-Wrapper ordnet ihn dem
+             Stammdaten-Tab zu; die DOM-Reihenfolge weicht in diesem Editor ohnehin von der
+             Tab-Reihenfolge ab. --}}
+        <div x-show="tab === 'stammdaten'" x-cloak class="pt-4 space-y-4">
         {{-- M9-01f: Eigenschaften (+ ✨ recipe.eigenschaften/geschmack) --}}
         <x-foodalchemist::modal-section title="Eigenschaften">
             <x-slot:actions>
@@ -796,8 +827,31 @@
             </div>
         </x-foodalchemist::modal-section>
 
-        {{-- M9-01g: Plating & Service (Teller-Aufbau, Mengenverteilung — keine Produktion) --}}
-        <x-foodalchemist::modal-section title="Plating & Service">
+        </div>{{-- /Tab STAMMDATEN (Fortsetzung) --}}
+
+        {{-- ── Tab: ANRICHTEN (§3.3 — wie der Teller aufgebaut und ausgegeben wird; keine
+             Produktion, keine Regenerations-Parameter. Dazu das Servier-Vehikel: das ist,
+             was der Gast sieht, §3.4) ────────────────────────────────────────────────── --}}
+        <div x-show="tab === 'plating'" x-cloak class="pt-4 space-y-4">
+        <x-foodalchemist::modal-section title="Servier-Vehikel">
+            <x-slot:actions>
+                <button type="button" wire:click="ki('vehikel')" class="{{ $btnAi }}" title="vk.servier_vehikel: worauf wird angerichtet" data-ki-vehikel>@svg('heroicon-o-sparkles', 'w-3.5 h-3.5')Servier-Vorschlag</button>
+            </x-slot:actions>
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    <label class="block {{ $label }} mb-1">Servier-Vehikel <span class="normal-case text-gray-500">(was der Gast sieht)</span></label>
+                    <select wire:model="form.serving_vehicle_vocab_id" class="{{ $input }}">
+                        <option value="">—</option>
+                        @foreach($vehikel as $v)
+                            <option value="{{ $v->id }}" @if($v->is_inactive && $form['serving_vehicle_vocab_id'] != $v->id) hidden @endif>{{ $v->name }}{{ $v->group_name ? ' · ' . $v->group_name : '' }}{{ $v->is_inactive ? ' (inaktiv)' : '' }}</option>
+                        @endforeach
+                    </select>
+                </div>
+            </div>
+        </x-foodalchemist::modal-section>
+
+        {{-- M9-01g: Teller-Aufbau, Mengenverteilung — keine Produktion, keine Regeneration --}}
+        <x-foodalchemist::modal-section title="Anrichten &amp; Ausgabe">
             <x-slot:actions>
                 <button type="button" wire:click="ki('plating')" class="{{ $btnAi }}" title="vk.plating: Hybrid-Plating-Anweisung" data-ki-plating>@svg('heroicon-o-sparkles', 'w-3.5 h-3.5')Plating</button>
             </x-slot:actions>
@@ -809,7 +863,7 @@
                 <textarea wire:model="form.plating_text" id="vk-plating-text" rows="7" class="{{ $input }} font-mono text-[11px]" data-vk-plating-text></textarea>
             </div>
         </x-foodalchemist::modal-section>
-        </div>{{-- /Tab SERVICE --}}
+        </div>{{-- /Tab ANRICHTEN --}}
 
         {{-- ── Tab: SENSORIK & PAIRING (Geschmacks-Balance + Textur + Aroma-Kohäsion über die Zutaten-GPs) ── --}}
         <div x-show="tab === 'sensorik'" x-cloak class="pt-4">

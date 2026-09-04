@@ -50,6 +50,18 @@
             @else
                 <a class="btn ghost" href="{{ request()->fullUrlWithQuery(['fotos' => 1]) }}">mit Fotos</a>
             @endif
+            {{-- Die beiden Nachbar-Ebenen (§3.2/§3.3) sind zuschaltbar: der Posten braucht die
+                 Regeneration, der Pass das Anrichten — selten beide auf einem Zettel. --}}
+            @if(count($regenerationen ?? []))
+                <a class="btn ghost" href="{{ request()->fullUrlWithQuery(['regen' => 0]) }}">ohne Regeneration</a>
+            @else
+                <a class="btn ghost" href="{{ request()->fullUrlWithQuery(['regen' => 1]) }}">mit Regeneration</a>
+            @endif
+            @if($plating ?? null)
+                <a class="btn ghost" href="{{ request()->fullUrlWithQuery(['anrichten' => 0]) }}">ohne Anrichten</a>
+            @else
+                <a class="btn ghost" href="{{ request()->fullUrlWithQuery(['anrichten' => 1]) }}">mit Anrichten</a>
+            @endif
         </div>
     @endunless
 
@@ -80,12 +92,29 @@
         </p>
     @endif
 
+    @if(count($regenerationen ?? []))
+        <p class="zutaten-kurz"><strong>Regeneration:</strong>
+            {{ collect($regenerationen)->map(fn ($r) => trim(
+                ($r['komponente'] ?? '') . ' — ' .
+                collect([$r['geraet'] ?? null,
+                         ($r['temp_c'] ?? null) !== null ? $r['temp_c'] . ' °C' : null,
+                         ($r['duration_min'] ?? null) !== null ? $r['duration_min'] . ' min' : null,
+                         ($r['core_temp_c'] ?? null) !== null ? 'KT ' . $r['core_temp_c'] . ' °C' : null,
+                         $r['note'] ?? null,
+                ])->filter()->implode(' · ')))->implode(' | ') }}
+        </p>
+    @endif
+
     @include('foodalchemist::dokumente.partials.schritt-karten', [
         'schritte' => $schritte,
         'zubereitung' => $rezept->preparation,
         'mitFotos' => $mitFotos,
         'istPdf' => $istPdf ?? false,
     ])
+
+    @if($plating ?? null)
+        <p class="zutaten-kurz"><strong>Anrichten:</strong> {{ $plating }}</p>
+    @endif
 
     @if(empty($schritte) && trim((string) $rezept->preparation) === '')
         <p class="muted">Für dieses Rezept ist noch keine Zubereitung erfasst.</p>

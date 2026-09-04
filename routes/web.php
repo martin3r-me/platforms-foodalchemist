@@ -940,12 +940,28 @@ Route::get('/rezepte/{recipe}/anleitung', function (int $recipe) {
         'caption' => $hero->caption,
     ];
 
+    // §3.2 Regeneration: der Postenzettel haengt am Posten bzw. am Satelliten — dort wird
+    // regeneriert, bevor finalisiert wird. Zuschaltbar wie die Fotos (`?regen=0` blendet aus).
+    $regenerationen = \Platform\FoodAlchemist\Models\FoodAlchemistRecipeRegeneration::where('recipe_id', $rezept->id)
+        ->with('device:id,name')
+        ->orderBy('sort_order')->orderBy('id')->get()
+        ->map(fn ($r) => [
+            'komponente' => $r->component_label,
+            'geraet' => $r->device?->name,
+            'temp_c' => $r->temp_c,
+            'duration_min' => $r->duration_min,
+            'core_temp_c' => $r->core_temp_c,
+            'note' => $r->note,
+        ])->values()->all();
+
     $data = [
         'rezept' => $rezept,
         'schritte' => $schritte,
         'zutaten' => $zutaten,
         'endprodukt' => $endprodukt,
         'mitFotos' => request()->query('fotos') !== '0',
+        'regenerationen' => request()->query('regen') === '0' ? [] : $regenerationen,
+        'plating' => request()->query('anrichten') === '1' ? $rezept->plating_text : null,
     ];
 
     if ($istPdf) {

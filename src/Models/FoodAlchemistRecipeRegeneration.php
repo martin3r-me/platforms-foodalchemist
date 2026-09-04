@@ -3,6 +3,7 @@
 namespace Platform\FoodAlchemist\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Platform\ActivityLog\Traits\LogsActivity;
 use Platform\FoodAlchemist\Models\Concerns\BelongsToTeamHierarchy;
@@ -20,4 +21,16 @@ class FoodAlchemistRecipeRegeneration extends Model
     protected $table = 'foodalchemist_recipe_regenerations';
 
     protected $guarded = ['id'];
+
+    /** Regenerations-Gerät (Kombidämpfer, Bain Marie …) — für Editor UND Druck. */
+    public function device(): BelongsTo
+    {
+        return $this->belongsTo(FoodAlchemistVocabRegenerationDevice::class, 'device_vocab_id');
+    }
+
+    /** Deutscher Alias (Modul-Konvention). */
+    public function geraet(): BelongsTo
+    {
+        return $this->device();
+    }
 }

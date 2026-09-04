@@ -433,6 +433,53 @@ return [
      */
     'billables' => [],
 
+    /*
+     * Verkaufseinheiten eines Gerichts (Entscheid Dominique 2026-09-04).
+     *
+     * Das Einheiten-Vokabular (`foodalchemist_vocab_units`) bedient primär die
+     * ZUTATEN-Zeilen und führt darum über 50 Einträge bis hin zu Prise,
+     * Messerspitze und Zweig. Als VERKAUFS-Einheit ist davon nur eine Handvoll
+     * sinnvoll: ein Gericht wird als Portion verkauft, in Stück (Fingerfood),
+     * nach Gewicht (Theke/Barverkauf, Buffet-Ware) oder als Volumen (Suppe,
+     * Bowle, Getränk).
+     *
+     * Bewusst eine Slug-Whitelist und kein Filter über `dimension` /
+     * `is_approximate`: „Stück" trägt im Bestand `is_approximate=1` und wäre
+     * durch jeden mechanischen Filter herausgefallen, während Dose, Karton und
+     * Eimer hineinfielen. Ein `is_sales_unit`-Flag am Vokabular wäre der
+     * Stammdaten-Weg — für vier Werte ist die Config ehrlicher und reversibel.
+     *
+     * Reihenfolge = Anzeigereihenfolge im Select (Portion zuerst = Normalfall).
+     * Slugs gegen den Bestand verifiziert (WaWi `vocab_einheit`, Import 1:1).
+     */
+    'sales_units' => ['portion', 'stk', 'kg', 'l'],
+
+    /*
+     * Ziel und Leitplanke der Schritt-Generierung (`recipe.steps`).
+     *
+     * Stand vorher an DREI Orten wortgleich im Code (RecipeOneShotService::stepKontext,
+     * StepEditor-Kontextbau und implizit im Prompt-Task) — bei jeder Semantik-Änderung
+     * mussten alle drei manuell nachgezogen werden, sonst briefte ein Pfad das Modell
+     * anders als der nächste.
+     *
+     * Inhaltlich setzt der Gericht-Zweig die Ebenen-Trennung aus Regelwerk
+     * Verkaufsgerichte §3 durch: das Regenerations-Programm (Gerät/°C/min/Kerntemperatur)
+     * und der Teller-Aufbau werden getrennt geführt und gehören nicht in die Schritte.
+     */
+    'step_kontext' => [
+        'gericht' => [
+            'ziel' => 'Finalisierungs-Ablauf am Einsatztag fuer ein Verkaufsgericht.',
+            'hinweis' => 'Komponenten sind vorbereitet oder fertig produziert. Nicht neu herstellen. '
+                . 'Nur bereitstellen, portionieren, tranchieren, montieren, abschmecken und uebergeben. '
+                . 'Das Regenerations-Programm (Geraet, Temperatur, Dauer, Kerntemperatur) und der '
+                . 'Teller-Aufbau werden getrennt gefuehrt und gehoeren NICHT in diese Schritte.',
+        ],
+        'basisrezept' => [
+            'ziel' => 'Produktions-Zubereitung fuer ein Basisrezept.',
+            'hinweis' => 'Rohwaren und Teilkomponenten fachlich produzieren.',
+        ],
+    ],
+
     /**
      * TASK_PROMPT-Registry — Skeleton (M0-14).
      * Der volle Umzug der 42 Prompts aus 06_KI_SPEZIFIKATION kommt mit M7-04
@@ -625,10 +672,18 @@ return [
                 . 'diaet_hart, allergen_nogo, aroma, anlass, serviceform, kompositions_stil, pax, ziel_portion_g, saison, ziel_we_pct): werte = '
                 . '{name (Pipe-Syntax §4.4 «<HG-Code>: Hauptkomponente | Komponente | …», max 5 Felder, '
                 . 'keine Marketing-Adjektive), description (§8-Stil), taste_direction (grobe Menue-Richtung, NUR EIN Wort: suess|herzhaft|neutral — das Aroma-Profil gehoert in description), '
-                . 'preparation (= PLATING & SERVICE: Teller-Aufbau, Mengenverteilung, Service-Anweisung — '
+                // 2026-09-04: hier stand „preparation (= PLATING & SERVICE …)". Das kollidierte:
+                // `preparation` ist der Spiegel der Schritte (RecipeStepService schreibt es aus
+                // `recipe_steps`), der Teller-Aufbau lebt in `plating_text` und wird von
+                // `vk.plating` gefüllt (Teil der VK-Anreicherung). Zwei Autoren auf einem Feld —
+                // wer zuletzt lief, gewann. Jetzt beschreibt `preparation` dieselbe Ebene wie
+                // `recipe.steps`: die Finalisierung am Einsatztag (Regelwerk Verkaufsgerichte §3).
+                . 'preparation (= FINALISIEREN am Einsatztag: bereitstellen, portionieren, tranchieren, '
+                . 'montieren, abschmecken, uebergeben — NICHT die Produktion der Komponenten, NICHT das '
+                . 'Regenerations-Programm und NICHT der Teller-Aufbau), '
                 // Spec 37: role/fit-Parität zum Basis-Prompt — dieselbe Zutaten-Selbstbegründung
                 // (senkt plausibel klingende Fremdkörper VOR dem Kritiker-Pass, sobald das VK-Gate scharf wird).
-                . 'NICHT die Produktion), zutaten: [{text, quantity, unit (g|ml|kg|l|el|tl|stk), slug, note, '
+                . 'zutaten: [{text, quantity, unit (g|ml|kg|l|el|tl|stk), slug, note, '
                 // Grounding (2026-08-20): explizite Rückbindung an den Bestand (s. recipe.generator).
                 . 'gp_id (OPTIONAL: numerische id EINES unter gp_kandidaten gelisteten Grundprodukts, '
                 . 'wenn diese Zutat EXAKT diesem GP entspricht — sonst weglassen, NIE raten), '
@@ -788,9 +843,10 @@ return [
             'task' => 'Klassifiziere die Fertigungstiefe (from_scratch|teilfertig|convenience) '
                 . 'aus den Zutaten: werte = {production_depth}.',
         ],
-        // Markdown-Variante: liefert weiter EINEN Textblock. Bleibt im Inventar, weil
-        // Generator/Revise/MCP Markdown schreiben (es wird beim Write in Schritte
-        // geparst). Für den Editor ist `recipe.steps` der Weg (Spec 27).
+        // DEPRECATED (2026-09-04): kein `propose()`-Aufrufer mehr im Modul — Generator und
+        // Revise liefern `preparation` als Teil ihrer eigenen Schemas, der Editor nutzt
+        // `recipe.steps` (Spec 27). Bleibt im Inventar, weil `PromptRegistryTest` die
+        // Key-Liste als Vertrag prüft; nicht neu verdrahten, sondern `recipe.steps` nutzen.
         'recipe.preparation' => [
             'tier' => 'A',                                            // V-02: langes Einzeltext-Feld
             'max_tokens' => 8000,                                     // lange Markdown-Zubereitung — Reasoning-Headroom
@@ -804,10 +860,18 @@ return [
             'tier' => 'A',                                            // langer, strukturierter Einzeltext
             'max_tokens' => 8000,
             'task' => 'Schreibe die Zubereitung als Schrittfolge. '
-                . 'Wenn rezept_typ=gericht: schreibe KEINE Herstellung der Komponenten, sondern einen kompakten '
-                . 'Service-, Regenerations- und Anrichteablauf fuer ein Verkaufsgericht. Komponenten gelten als '
-                . 'vorbereitet bzw. fertig produziert; nur temperieren, regenerieren, warmhalten, finalisieren, '
-                . 'portionieren und anrichten. '
+                . 'Wenn rezept_typ=gericht: schreibe KEINE Herstellung der Komponenten, sondern den kompakten '
+                . 'Ablauf am Einsatztag — bereitstellen, temperieren, finalisieren (abschmecken, montieren), '
+                . 'portionieren, uebergeben. Komponenten gelten als vorbereitet bzw. fertig produziert. '
+                // Regelwerk Verkaufsgerichte §3: drei getrennte Ebenen. Vorher forderte dieser
+                // Prompt selbst einen "Service-, Regenerations- und Anrichteablauf" — damit stand
+                // das Regenerations-Programm zweimal im System (hier als Prosa, in
+                // recipe_regenerations als Datensatz) und beide Fassungen droheten zu driften.
+                . 'ABGRENZUNG (verbindlich): das Regenerations-PROGRAMM (Geraet, Garraumtemperatur, '
+                . 'Dauer, Kerntemperatur) und der TELLER-AUFBAU werden getrennt gefuehrt und gehoeren '
+                . 'NICHT in diese Schritte. Nenne hier also keine Grad-, Minuten- oder '
+                . 'Kerntemperatur-Werte fuers Wiedererhitzen und keine Anrichte-Geometrie; '
+                . 'verweise stattdessen knapp ("nach Regenerationsplan", "nach Anrichte-Vorgabe"). '
                 . 'Wenn rezept_typ=basisrezept: schreibe die Produktions-Zubereitung des Basisrezepts. '
                 . 'Buendele zusammengehoerige Kuechenhandlungen sinnvoll; keine Mikro-Schritte fuer Waschen, Schneiden, '
                 . 'Pfanne erhitzen oder einzelne Gewuerzzugaben, wenn sie fachlich zusammengehoeren. '

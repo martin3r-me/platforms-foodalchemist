@@ -84,14 +84,39 @@
                         @endforeach
                     </tbody>
                 </table>
+                {{-- §3.2 Regenerations-Programm je Komponente (V-19). Steht bewusst VOR der
+                     Schrittfolge: am Einsatztag wird zuerst regeneriert, dann finalisiert. --}}
+                @if(count($r['regenerationen'] ?? []))
+                    <p class="meta" style="margin-top:4px"><strong>Regeneration</strong></p>
+                    <table>
+                        <thead><tr><th>Komponente</th><th>Gerät</th><th style="text-align:right">°C</th><th style="text-align:right">min</th><th style="text-align:right">Kern °C</th><th>Hinweis</th></tr></thead>
+                        <tbody>
+                        @foreach($r['regenerationen'] as $reg)
+                            <tr>
+                                <td>{{ $reg['komponente'] ?? '—' }}</td>
+                                <td>{{ $reg['geraet'] ?? '—' }}</td>
+                                <td style="text-align:right">{{ $reg['temp_c'] ?? '—' }}</td>
+                                <td style="text-align:right">{{ $reg['duration_min'] ?? '—' }}</td>
+                                <td style="text-align:right">{{ $reg['core_temp_c'] ?? '—' }}</td>
+                                <td>{{ $reg['note'] ?? '' }}</td>
+                            </tr>
+                        @endforeach
+                        </tbody>
+                    </table>
+                @endif
                 @if($r['darreichung'] ?? null)
                     @php($d = $r['darreichung'])
                     <p class="meta" style="margin-top:4px">
                         <strong>Ausgabe:</strong>
-                        @if(($d['regeneration_temp_c'] ?? null) !== null) Regeneration {{ $d['regeneration_temp_c'] }} °C @endif
-                        @if(($d['regeneration_duration_min'] ?? null) !== null) / {{ $d['regeneration_duration_min'] }} min @endif
-                        @if(($d['regeneration_core_temp_c'] ?? null) !== null) · Kerntemp. {{ $d['regeneration_core_temp_c'] }} °C @endif
-                        @if(($d['geraet'] ?? null)) · Gerät {{ $d['geraet'] }} @endif
+                        {{-- Die Regenerations-Skalare der Standard-Darreichung bleiben als Fallback
+                             stehen (Alt-Daten aus dem WaWi-Import); die gepflegte Wahrheit ist die
+                             Tabelle oben. Kein Schreibpfad füllt die Skalare heute noch. --}}
+                        @if(! count($r['regenerationen'] ?? []))
+                            @if(($d['regeneration_temp_c'] ?? null) !== null) Regeneration {{ $d['regeneration_temp_c'] }} °C @endif
+                            @if(($d['regeneration_duration_min'] ?? null) !== null) / {{ $d['regeneration_duration_min'] }} min @endif
+                            @if(($d['regeneration_core_temp_c'] ?? null) !== null) · Kerntemp. {{ $d['regeneration_core_temp_c'] }} °C @endif
+                            @if(($d['geraet'] ?? null)) · Gerät {{ $d['geraet'] }} @endif
+                        @endif
                         @if(($d['behaelter_warm'] ?? null)) · Behälter warm {{ $d['behaelter_warm'] }} @endif
                         @if(($d['behaelter_kalt'] ?? null)) · Behälter kalt {{ $d['behaelter_kalt'] }} @endif
                         @if(($d['vehikel'] ?? null)) · Vehikel {{ $d['vehikel'] }} @endif

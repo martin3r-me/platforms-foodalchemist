@@ -282,6 +282,18 @@ class VkModal extends Component
         $this->darServiceCall(fn ($svc, $team) => $svc->setzeStandard($team, $id));
     }
 
+    /**
+     * Servierform einer Zeile wechseln — der Weg aus dem Review-Zustand „Unbestimmt"
+     * (Entscheid 2026-09-04): entschieden wird die FORM, nicht der Name.
+     */
+    public function darreichungForm(int $id, ?string $servierformId): void
+    {
+        if ($servierformId === null || $servierformId === '') {
+            return;                                               // leere Auswahl = kein Wechsel
+        }
+        $this->darServiceCall(fn ($svc, $team) => $svc->setzeServierform($team, $id, (int) $servierformId));
+    }
+
     public function darDeltaToggle(int $id): void
     {
         $this->darDeltaOffen = $this->darDeltaOffen === $id ? null : $id;
@@ -876,6 +888,40 @@ class VkModal extends Component
         }
     }
 
+    /**
+     * Auswahlliste für die Verkaufseinheit (Entscheid Dominique 2026-09-04).
+     *
+     * Ein Gericht wird als Portion, in Stück, nach Gewicht oder als Volumen
+     * verkauft — nicht in Prisen und Zweigen. Das Einheiten-Vokabular bedient
+     * aber primär die Zutaten-Zeilen und bot hier bisher über 50 Einträge an.
+     *
+     * Bestandsschutz: die aktuell gesetzte Einheit bleibt in der Liste, auch
+     * wenn sie nicht zur Whitelist gehört. Ohne sie fiele der Wert stumm aus
+     * dem Select und der nächste Speichern-Klick würde die Einheit löschen.
+     *
+     * @return \Illuminate\Support\Collection<int, FoodAlchemistVocabEinheit>
+     */
+    private function verkaufsEinheiten(\Platform\Core\Models\Team $team): \Illuminate\Support\Collection
+    {
+        $slugs = (array) config('foodalchemist.sales_units', []);
+        $gesetzt = $this->form['sales_unit_vocab_id'] ?? null;
+
+        $treffer = FoodAlchemistVocabEinheit::visibleToTeam($team)
+            ->where(function ($q) use ($slugs, $gesetzt) {
+                $q->where(fn ($q2) => $q2->whereIn('slug', $slugs)->where('is_inactive', false));
+                if ($gesetzt !== null && $gesetzt !== '') {
+                    $q->orWhere('id', (int) $gesetzt);       // Bestandsschutz, auch wenn inaktiv
+                }
+            })
+            ->get(['id', 'slug', 'display_de']);
+
+        // Anzeigereihenfolge = Reihenfolge der Whitelist (Portion zuerst = Normalfall);
+        // eine bestandsgeschützte Fremd-Einheit hängt hinten dran.
+        $rang = array_flip(array_values($slugs));
+
+        return $treffer->sortBy(fn ($e) => $rang[$e->slug] ?? PHP_INT_MAX)->values();
+    }
+
     public function render(SalesRecipeService $verkauf)
     {
         $team = Auth::user()?->currentTeamRelation;
@@ -935,9 +981,15 @@ class VkModal extends Component
             'aufschlagsklassen' => FoodAlchemistMarkupClass::visibleToTeam($team)
                 ->where('is_inactive', false)->orderBy('code')->get(['id', 'code', 'label', 'class_factor_pct']),
             'einheiten' => $team !== null ? FoodAlchemistVocabEinheit::visibleToTeam($team)->where('is_inactive', false)->orderBy('slug')->get(['id', 'slug', 'display_de']) : collect(),
+            // Entscheid 2026-09-04: die VERKAUFS-Einheit ist eine eigene, kurze Liste —
+            // `einheiten` bleibt unverändert das volle Vokabular für die Zutaten-Zeilen.
+            'verkaufsEinheiten' => $team !== null ? $this->verkaufsEinheiten($team) : collect(),
             'behaelter' => TeamScope::applyVisible(DB::table('foodalchemist_vocab_containers')->whereNull('deleted_at'), 'team_id', $team)->orderBy('group_name')->orderBy('sort_order')->get(['id', 'name', 'group_name', 'is_inactive']),
             'geraete' => TeamScope::applyVisible(DB::table('foodalchemist_vocab_regeneration_devices')->whereNull('deleted_at'), 'team_id', $team)->orderBy('sort_order')->get(['id', 'name', 'is_inactive']),
             'vehikel' => TeamScope::applyVisible(DB::table('foodalchemist_vocab_serving_vehicles')->whereNull('deleted_at'), 'team_id', $team)->orderBy('group_name')->orderBy('sort_order')->get(['id', 'name', 'group_name', 'is_inactive']),
+            // 2026-09-04: die Posten der Komponenten, read-only neben dem Finalisierungs-Posten.
+            // Ein Posten ist nie für ein ganzes Gericht zuständig — abgeleitet, nie persistiert.
+            'beteiligtePosten' => $rezept !== null ? $verkauf->beteiligtePosten($rezept) : collect(),
             // Stufe 3 — Posten-Liste fürs Default-Posten-Dropdown (Parität Basisrezept-Editor).
             'posten' => $team !== null
                 ? \Platform\FoodAlchemist\Models\FoodAlchemistProductionStation::visibleToTeam($team)
@@ -962,8 +1014,16 @@ class VkModal extends Component
                 ? \Platform\FoodAlchemist\Models\FoodAlchemistRecipeDarreichung::with('servingForm', 'deltas')
                     ->where('recipe_id', $this->recipeId)->orderByDesc('is_standard')->orderBy('id')->get()
                 : collect(),
-            'servierformenAlle' => \Platform\FoodAlchemist\Models\FoodAlchemistServierform::where('is_inactive', false)
-                ->orderBy('sort_order')->get(['id', 'code', 'label']),
+            // Bestandsschutz (2026-09-04): eine schon zugewiesene Form bleibt in der Liste,
+            // auch wenn sie inzwischen deaktiviert wurde. Sonst fiele sie aus dem Zeilen-Select
+            // und ein unbedachter Change würde die Form der Darreichung stumm überschreiben.
+            'servierformenAlle' => \Platform\FoodAlchemist\Models\FoodAlchemistServierform::where(function ($q) {
+                $q->where('is_inactive', false);
+                if ($this->recipeId !== null) {
+                    $q->orWhereIn('id', \Platform\FoodAlchemist\Models\FoodAlchemistRecipeDarreichung::query()
+                        ->where('recipe_id', $this->recipeId)->pluck('serving_form_id'));
+                }
+            })->orderBy('sort_order')->get(['id', 'code', 'label']),
             'geschirrItems' => $team !== null
                 ? \Platform\FoodAlchemist\Models\FoodAlchemistGeschirrItem::visibleToTeam($team)
                     ->orderBy('label')->get(['id', 'label', 'rental_price'])

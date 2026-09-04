@@ -224,7 +224,11 @@ it('nutzt zentral getrennte Bild-Prompts fuer Basisrezept-Produktion und Gericht
         ->toContain('Never show their production from raw ingredients');
 });
 
-it('rahmt KI-Schritte fuer Verkaufsgerichte als Service und Anrichten statt Komponenten-Produktion', function () {
+// 2026-09-04: Die Rahmung ist von „Service + Regeneration + Anrichten in einem" auf die
+// reine FINALISIERUNG umgestellt (Regelwerk Verkaufsgerichte §3). Das Regenerations-Programm
+// führt `vk.regeneration` strukturiert, der Teller-Aufbau `vk.plating` — vorher forderte
+// dieser Prompt beides zusätzlich als Prosa an und erzeugte damit eine zweite Wahrheit.
+it('rahmt KI-Schritte fuer Verkaufsgerichte als Finalisierung statt Komponenten-Produktion', function () {
     $user = $this->makeUser($this->rootTeam, 'Root VK-Schritte');
     $this->actingAs($user);
 
@@ -242,8 +246,11 @@ it('rahmt KI-Schritte fuer Verkaufsgerichte als Service und Anrichten statt Komp
     $this->mock(AiGatewayService::class, function ($mock) use ($komponente) {
         $mock->shouldReceive('propose')->once()->with('recipe.steps', Mockery::on(function (array $payload) use ($komponente) {
             return ($payload['rezept_typ'] ?? null) === 'gericht'
-                && str_contains((string) ($payload['zubereitungsziel'] ?? ''), 'Anrichteablauf')
+                && str_contains((string) ($payload['zubereitungsziel'] ?? ''), 'Finalisierungs-Ablauf')
                 && str_contains((string) ($payload['hinweis'] ?? ''), 'Nicht neu herstellen')
+                // Die Abgrenzung der Nachbar-Ebenen muss im Kontext ankommen, sonst
+                // schreibt das Modell wieder °C/min in die Schritte.
+                && str_contains((string) ($payload['hinweis'] ?? ''), 'NICHT in diese Schritte')
                 && ($payload['komponenten'][0]['name'] ?? null) === $komponente->name
                 && ($payload['komponenten'][0]['typ'] ?? null) === 'basisrezept'
                 && ($payload['verkaufseinheit']['portion_g'] ?? null) === 140;

@@ -36,21 +36,25 @@ class ReportExportService
                 'stammdaten' => true, 'zutaten' => true, 'steps' => false, 'sensorik' => false,
                 'produktion' => false, 'preise' => false, 'lieferanten' => false, 'kaskade' => false,
                 'bilder' => false, 'deklaration' => false, 'naehrwerte' => false, 'notizen' => false, 'intern' => false, 'simulation' => false,
+                'regeneration' => false, 'anrichten' => false,
             ],
             'kalkulation' => [
                 'stammdaten' => true, 'zutaten' => true, 'steps' => false, 'sensorik' => false,
                 'produktion' => false, 'preise' => true, 'lieferanten' => true, 'kaskade' => true,
                 'bilder' => false, 'deklaration' => false, 'naehrwerte' => true, 'notizen' => false, 'intern' => true, 'simulation' => false,
+                'regeneration' => false, 'anrichten' => false,
             ],
             'voll' => [
                 'stammdaten' => true, 'zutaten' => true, 'steps' => true, 'sensorik' => true,
                 'produktion' => true, 'preise' => true, 'lieferanten' => true, 'kaskade' => true,
                 'bilder' => false, 'deklaration' => true, 'naehrwerte' => true, 'notizen' => true, 'intern' => true, 'simulation' => false,
+                'regeneration' => true, 'anrichten' => true,
             ],
             default => [
                 'stammdaten' => true, 'zutaten' => true, 'steps' => true, 'sensorik' => false,
                 'produktion' => true, 'preise' => false, 'lieferanten' => false, 'kaskade' => true,
                 'bilder' => false, 'deklaration' => false, 'naehrwerte' => false, 'notizen' => false, 'intern' => false, 'simulation' => false,
+                'regeneration' => true, 'anrichten' => false,
             ],
         };
 
@@ -611,6 +615,11 @@ class ReportExportService
             'salesUnit:id,slug,display_de',
             'defaultStation:id,name,slug,group_name',
             'equipment:id,slug,name',
+            // §3.2: das Regenerations-Programm je Komponente. Bis 2026-09-04 las es KEIN
+            // Druckpfad — gepflegt wurde es im Editor, auf dem Blatt stand nur der
+            // Ein-Zeiler der Standard-Darreichung (den niemand füllte).
+            'regenerations' => fn ($q) => $q->whereNull('deleted_at')->orderBy('sort_order'),
+            'regenerations.device:id,name',
             'steps',
             'steps.photos',
             'ingredients' => fn ($q) => $q->whereNull('deleted_at')->orderBy('position'),
@@ -685,8 +694,21 @@ class ReportExportService
                 'max_vorlauf_tage' => $recipe->max_vorlauf_tage,
                 'batch_max_kg' => $recipe->batch_max_kg,
                 'batch_max_pieces' => $recipe->batch_max_pieces,
+                // Fehlten hier, obwohl der Editor sie pflegt (Auto-Planer rechnet mit ihnen).
+                'variable_work_time_min' => $recipe->variable_work_time_min,
+                'variable_work_time_basis' => $recipe->variable_work_time_basis,
+                'standzeit_min' => $recipe->standzeit_min,
                 'equipment' => $recipe->equipment->pluck('name')->values()->all(),
             ],
+            // §3.2 Regeneration — eigene Ebene, eigener Schalter (`opt['regeneration']`).
+            'regenerationen' => $recipe->regenerations->map(fn ($r) => [
+                'komponente' => $r->component_label,
+                'geraet' => $r->device?->name,
+                'temp_c' => $r->temp_c,
+                'duration_min' => $r->duration_min,
+                'core_temp_c' => $r->core_temp_c,
+                'note' => $r->note,
+            ])->values()->all(),
             'steps' => $recipe->steps->sortBy('position')->values()->map(fn ($s) => [
                 'position' => (int) $s->position,
                 'phase' => $s->phase,

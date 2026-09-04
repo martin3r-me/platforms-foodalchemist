@@ -630,7 +630,7 @@ class RecipeModal extends Component
                 'name' => $this->form['name'],
                 'zubereitung' => $zubereitung ?: null,
                 'portionen' => $r?->yield_pieces,
-                'haltbarkeit_tage' => null, 'regenerierbarkeit' => null, 'transportstabilitaet' => null,
+                'haltbarkeit_tage' => null, 'transportstabilitaet' => null,
                 'work_time_min' => $this->form['work_time_min'],
                 'setup_time_min' => $this->form['setup_time_min'],
                 'variable_work_time_min' => $this->form['variable_work_time_min'],

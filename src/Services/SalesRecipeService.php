@@ -165,6 +165,65 @@ class SalesRecipeService
     }
 
     /** Detail STRIKT im verkauf()-Scope (Basisrezepte liefern null — §7.8). */
+    /**
+     * Beteiligte Posten eines Gerichts — ABGELEITET aus den Komponenten (2026-09-04).
+     *
+     * Ein Posten ist nie für ein ganzes Gericht zuständig: jede Komponente liegt auf
+     * dem Posten ihres Basisrezepts, im Gericht kommt nur die Finalisierung dazu.
+     * Der Editor zeigt die Liste darum read-only neben dem Finalisierungs-Posten.
+     *
+     * Bewusst NICHT persistiert — eine Spalte würde beim nächsten Komponententausch
+     * driften, und der Produktionsplaner routet ohnehin je Zeile. Spiegelt damit die
+     * Spec-30-Doktrin „Posten statt Personen, nie aggregieren": hier wird angezeigt,
+     * nicht zusammengefasst.
+     *
+     * @return Collection<int, array{id:int,name:string,anzahl:int}>
+     */
+    public function beteiligtePosten(FoodAlchemistRecipe $recipe, int $maxTiefe = 3): Collection
+    {
+        // Sub-Rezept-Baum bis maxTiefe (Regelwerk Basisrezepte §4: max. 3 Ebenen),
+        // zyklensicher über die Besucht-Liste.
+        $besucht = [(int) $recipe->id => true];
+        $ebene = [(int) $recipe->id];
+        $rezeptIds = [];
+
+        for ($tiefe = 0; $tiefe < $maxTiefe && $ebene !== []; $tiefe++) {
+            $kinder = \Platform\FoodAlchemist\Models\FoodAlchemistRecipeIngredient::query()
+                ->whereIn('recipe_id', $ebene)
+                ->whereNotNull('referenced_recipe_id')
+                ->whereNull('deleted_at')
+                ->distinct()->pluck('referenced_recipe_id')
+                ->map(fn ($v) => (int) $v)
+                ->reject(fn ($id) => isset($besucht[$id]))
+                ->values()->all();
+
+            foreach ($kinder as $id) {
+                $besucht[$id] = true;
+                $rezeptIds[] = $id;
+            }
+            $ebene = $kinder;
+        }
+
+        if ($rezeptIds === []) {
+            return collect();
+        }
+
+        // Explizite Spaltenliste: `recipes` trägt große Text-/JSON-Spalten, die in einer
+        // gruppierten Abfrage nichts zu suchen haben.
+        return FoodAlchemistRecipe::whereIn('id', $rezeptIds)
+            ->whereNotNull('default_station_id')
+            ->with('defaultStation:id,name')
+            ->get(['id', 'default_station_id'])
+            ->groupBy('default_station_id')
+            ->map(fn (Collection $gruppe) => [
+                'id' => (int) $gruppe->first()->default_station_id,
+                'name' => (string) ($gruppe->first()->defaultStation?->name ?? '—'),
+                'anzahl' => $gruppe->count(),
+            ])
+            ->sortByDesc('anzahl')
+            ->values();
+    }
+
     public function detail(Team $team, int $id): ?FoodAlchemistRecipe
     {
         return FoodAlchemistRecipe::visibleToTeam($team)->verkauf()
@@ -245,6 +304,20 @@ class SalesRecipeService
                     $update[$feld] = TeamScope::referenz($modelClass, $update[$feld], $team, $feld);
                 }
             }
+            // Entscheid 2026-09-04: als VERKAUFS-Einheit ist nur die kurze Whitelist zulässig
+            // (Portion/Stück/kg/l). Ohne diese Prüfung könnte ein MCP-Aufruf eine „Prise"
+            // setzen, die die UI gar nicht mehr anbietet — das Tool darf nicht mehr können
+            // als der Editor. Ein UNVERÄNDERTER Alt-Wert bleibt erlaubt (Bestandsschutz),
+            // sonst bricht an solchen Gerichten das Speichern beliebiger anderer Felder.
+            if (array_key_exists('sales_unit_vocab_id', $update)
+                && $update['sales_unit_vocab_id'] !== null
+                && (int) $update['sales_unit_vocab_id'] !== (int) $recipe->sales_unit_vocab_id) {
+                $slug = \Platform\FoodAlchemist\Models\FoodAlchemistVocabEinheit::find($update['sales_unit_vocab_id'])?->slug;
+                if (! in_array($slug, (array) config('foodalchemist.sales_units', []), true)) {
+                    throw new \RuntimeException('Als Verkaufseinheit sind nur Portion, Stück, Kilogramm und Liter zulässig.');
+                }
+            }
+
             // Wording/Marketing/Plating manuell editiert → Lineage auf manual (GL-07).
             // Spalten-Muster: <feld>_source + <feld>_ai_confidence (English-Rename).
             foreach (['sales_wording_standard' => 'sales_wording', 'marketing_text' => 'marketing_text', 'plating_text' => 'plating'] as $feld => $praefix) {

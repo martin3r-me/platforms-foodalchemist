@@ -184,11 +184,63 @@ class DarreichungService
         return $darreichung->refresh();
     }
 
+    /**
+     * Servierform einer bestehenden Darreichung wechseln (Entscheid Dominique 2026-09-04).
+     *
+     * `unbestimmt` ist ein REVIEW-ZUSTAND, kein Label. Steht fest, wie das Gericht
+     * ausgegeben wird, wird die FORM der Zeile gesetzt — das Vokabular wird nie
+     * umbenannt (es ist WaWi-Master und an allen Gerichten dasselbe). Darum ist
+     * `serving_form_id` bewusst kein Eintrag in {@see self::FELDER}: der Formwechsel
+     * ist ein eigener Übergang mit Kollisionsprüfung, kein Attribut-Update.
+     *
+     * Preisneutral: die Aufschlagsklasse bleibt eigenständig (Umbau-Spec F7, kein
+     * Servierform→Aufschlag-Mapping), deshalb kein Recompute.
+     */
+    public function setzeServierform(Team $team, int $darreichungId, int $servierformId): FoodAlchemistRecipeDarreichung
+    {
+        $darreichung = $this->find($team, $darreichungId);
+        if ((int) $darreichung->serving_form_id === $servierformId) {
+            return $darreichung;                                  // nichts zu tun
+        }
+
+        // Sichtbarkeit statt Eigentum: geerbte und globale Formen müssen am eigenen
+        // Gericht wählbar bleiben (Master-Vererbung, wie TeamScope::referenz()).
+        $form = \Platform\FoodAlchemist\Models\FoodAlchemistServierform::visibleToTeam($team)
+            ->whereKey($servierformId)->first();
+        if ($form === null) {
+            throw new \RuntimeException('Unbekannte Servierform.');
+        }
+        if ($form->is_inactive) {
+            throw new \RuntimeException('Diese Servierform ist deaktiviert.');
+        }
+        if ($darreichung->recipe->presentations()
+            ->where('serving_form_id', $servierformId)
+            ->whereKeyNot($darreichung->id)->exists()) {
+            throw new \RuntimeException('Diese Servierform existiert schon an diesem Gericht.');
+        }
+
+        // Soft-gelöschte Zeile derselben Form blockiert den DB-Unique (wie in anlegen()).
+        FoodAlchemistRecipeDarreichung::onlyTrashed()
+            ->where('recipe_id', $darreichung->recipe_id)
+            ->where('serving_form_id', $servierformId)
+            ->get()->each->forceDelete();
+
+        $darreichung->update(['serving_form_id' => $servierformId]);
+
+        return $darreichung->refresh();
+    }
+
     public function loeschen(Team $team, int $darreichungId): void
     {
         $darreichung = $this->find($team, $darreichungId);
-        if ($darreichung->is_standard && $darreichung->recipe->presentations()->count() > 1) {
-            throw new \RuntimeException('Standard-Darreichung zuerst auf eine andere Form übertragen.');
+        // Die Standard-Darreichung ist der Anker der Preis-Wahrheit und der Slot-Auflösung.
+        // Sie darf nie verschwinden — vorher (2026-09-04) griff der Guard nur bei >1 Zeile,
+        // die EINZIGE Darreichung war über den MCP-Pfad löschbar (die UI versteckt den
+        // Knopf unabhängig von der Anzahl, deshalb fiel es nie auf).
+        if ($darreichung->is_standard) {
+            throw new \RuntimeException($darreichung->recipe->presentations()->count() > 1
+                ? 'Standard-Darreichung zuerst auf eine andere Form übertragen.'
+                : 'Die einzige Darreichung eines Gerichts kann nicht gelöscht werden — stattdessen die Servierform wechseln.');
         }
         $darreichung->delete();
     }
