@@ -106,6 +106,7 @@
             'sensorik' => $neu ? null : 'Sensorik & Pairing',
             'feedback' => $neu ? null : 'Feedback',
             'notes' => 'Notizen',
+            'verwaltung' => $neu ? null : 'Verwaltung',
         ]">
 
     {{-- ── Tab: AUFBAU (nur Zutaten) ───────────────────────── --}}
@@ -578,6 +579,14 @@
                   placeholder="z. B. Anpassung im Catering-Kontext, Mengen-Korrektur, …"></textarea>
     </x-foodalchemist::modal-section>
     </div>{{-- /Tab NOTIZEN --}}
+
+    {{-- ── Tab: VERWALTUNG (Rezept-Tausch — dasselbe Partial wie im Detail-Panel) ── --}}
+    <div x-show="tab === 'verwaltung'" x-cloak class="pt-4 space-y-4">
+    <x-foodalchemist::modal-section title="Verwaltung — Rezept tauschen">
+        <p class="text-[11px] text-gray-500 mb-2">Der Tausch hängt dieses Rezept in ALLEN eigenen Gerichten und Basisrezepten, die es als Komponente führen, auf ein anderes um — Menge, Einheit und Verlust-Overrides der Zeilen bleiben stehen, die betroffenen Rezepte werden neu berechnet.</p>
+        @include('foodalchemist::livewire.recipes.partials.verwaltung', ['rezeptName' => $form['name'] ?: 'dieses Rezept', 'kompakt' => false])
+    </x-foodalchemist::modal-section>
+    </div>{{-- /Tab VERWALTUNG --}}
     </x-foodalchemist::editor-tabs>
 
     @endif

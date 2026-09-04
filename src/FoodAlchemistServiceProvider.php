@@ -462,12 +462,14 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\PlatzhalterDeleteTool::class,
                     \Platform\FoodAlchemist\Tools\GpsReplaceTool::class,
                     // D2a: Basisrezept-Lifecycle (base-scoped is_sales_recipe=false; delete confirm;
-                    // status single/bulk; duplicate visible→owned Kopie; template; recompute).
+                    // status single/bulk; duplicate visible→owned Kopie; template; recompute;
+                    // replace = Komponenten-Tausch in allen EIGENEN Eltern, confirm/destruktiv).
                     \Platform\FoodAlchemist\Tools\RecipesDeleteTool::class,
                     \Platform\FoodAlchemist\Tools\RecipesStatusTool::class,
                     \Platform\FoodAlchemist\Tools\RecipesDuplicateTool::class,
                     \Platform\FoodAlchemist\Tools\RecipesTemplateToggleTool::class,
                     \Platform\FoodAlchemist\Tools\RecipesRecomputeTool::class,
+                    \Platform\FoodAlchemist\Tools\RecipesReplaceTool::class,
                     // D2b: Rezept-Assoziationen (Eignung owner; Anker/Pairing team-scoped auf sichtbares
                     // Rezept), Sensorik (KI, owner), Feedback löschen/weiterentwickeln.
                     \Platform\FoodAlchemist\Tools\RecipeEignungPutTool::class,

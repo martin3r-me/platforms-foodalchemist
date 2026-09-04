@@ -123,6 +123,7 @@
             'ersatz' => $neu ? null : 'Ersatz',
             'sensorik' => $neu ? null : 'Sensorik & Pairing',
             'kalkulation' => $neu ? null : 'Kalkulation',
+            'verwaltung' => $neu ? null : 'Verwaltung',
         ]">
 
         {{-- ── Tab: ALLGEMEIN (Benennung · Klassifikation · Derivat) ──────── --}}
@@ -455,9 +456,14 @@
                     </div>
                 </x-foodalchemist::modal-section>
 
+            </div>{{-- /Tab KALKULATION --}}
+
+            {{-- Tab: VERWALTUNG — 2026-09-04 aus «Kalkulation» hierher geholt: dort hat es
+                 niemand gefunden. Steht jetzt an derselben Stelle wie beim Rezept-Editor. --}}
+            <div x-show="tab === 'verwaltung'" x-cloak class="pt-2">
                 {{-- #8 (2026-08-27): „GP in allen Rezepten tauschen" — aus dem Detail-Panel in den Editor gezogen. --}}
                 <x-foodalchemist::modal-section title="Verwaltung — GP tauschen">
-                    <p class="{{ $label }} mb-1 normal-case">GP in ALLEN Rezepten durch einen anderen ersetzen (Vorstufe zum Löschen). Alle Rezept-Zeilen werden umgehängt + neu berechnet.</p>
+                    <p class="text-[11px] text-gray-500 mb-2">GP in ALLEN Rezepten durch einen anderen ersetzen (Vorstufe zum Löschen). Alle Rezept-Zeilen werden umgehängt + neu berechnet.</p>
                     @if($hinweis)<div class="mb-2 rounded-lg bg-emerald-500/10 border border-emerald-500/30 px-2.5 py-1.5 text-[11px] text-emerald-700" data-gp-tausch-hinweis>{{ $hinweis }}</div>@endif
                     <input type="search" wire:model.live.debounce.300ms="tauschSuche" placeholder="Ziel-GP suchen …" class="{{ $input }}" data-gp-tausch-suche />
                     @if($tauschKandidaten->isNotEmpty())
@@ -467,7 +473,7 @@
                                         wire:confirm="Diesen GP in ALLEN Rezepten durch „{{ $k->name }}“ ersetzen?"
                                         class="w-full text-left px-2 py-1 rounded hover:bg-black/[0.05] text-sm flex items-center justify-between gap-2" data-gp-tausch-kandidat>
                                     <span class="min-w-0 truncate">{{ $k->name }}</span>
-                                    <span class="{{ $pill }} {{ $variantPill['secondary'] }} shrink-0">{{ $k->status }}</span>
+                                    <span class="{{ $pill }} {{ $variantPill[$k->status->badgeVariant()] ?? $variantPill['secondary'] }} shrink-0">{{ $k->status->label() }}</span>
                                 </button>
                             @endforeach
                         </div>
@@ -476,7 +482,7 @@
                     @endif
                     @error('tauschSuche')<div class="mt-1 text-[11px] text-red-500">{{ $message }}</div>@enderror
                 </x-foodalchemist::modal-section>
-            </div>{{-- /Tab KALKULATION --}}
+            </div>{{-- /Tab VERWALTUNG --}}
         @endif
     </x-foodalchemist::editor-tabs>
 

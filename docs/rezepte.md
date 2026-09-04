@@ -46,6 +46,21 @@ Für alles, was die Anleitung nur *liest* (Suche, Prozessanker-Erkennung, Auswer
 
 Bestehende Rezepte werden per `php artisan foodalchemist:steps-backfill` einmalig überführt (deterministisch, ohne KI; Fotos wandern über ihre alte Schrittnummer an den passenden Schritt).
 
+### 🔁 Ein Basisrezept überall austauschen
+
+Manchmal stellt sich heraus, dass zwei Basisrezepte dasselbe sind — oder dass eine Komponente ab jetzt anders gebaut wird. Dann müsste man jedes Gericht einzeln aufmachen und die Zeile umhängen. Dafür gibt es den **Tausch**: im rechten Detail-Panel und im Rezept-Editor unter **Verwaltung**.
+
+- Du siehst zuerst, **wo das Rezept überhaupt hängt**: wie viele Zeilen in wie vielen eigenen Gerichten und Basisrezepten.
+- Ein Suchfeld wählt das **Ziel-Rezept**, ein Klick hängt **alle** Verwendungen um. **Menge, Einheit und die Verlust-Werte der Zeilen bleiben stehen** — es wechselt nur die Komponente.
+- Die betroffenen Rezepte werden anschließend **neu gerechnet** (Ausbeute, Allergene, Wareneinsatz — inklusive der Rezepte, die darüber liegen).
+- **Geerbte Rezepte** (aus dem Master-Katalog) bleiben unberührt und werden in der Rückmeldung mitgezählt — dort darf nur das Besitzer-Team ändern.
+- Ein Tausch, der ein Rezept in sich selbst schachteln würde (**Zyklus**), wird abgewiesen und benannt.
+- Steckte das Ziel in einem Eltern-Rezept **schon drin**, sagt die Rückmeldung das — dort stehen danach zwei Zeilen, deren Mengen du zusammenführen willst.
+
+Der Tausch ist außerdem die **Vorstufe zum Löschen**: solange ein Rezept irgendwo als Komponente hängt, lässt es sich nicht löschen. Erst umhängen, dann löschen.
+
+> Für Grundprodukte gibt es denselben Weg — im GP-Detail und im GP-Editor unter **Verwaltung**.
+
 ---
 
 ## 🍽️ Gerichte (Verkaufsrezepte)
