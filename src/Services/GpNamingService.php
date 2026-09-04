@@ -30,6 +30,21 @@ class GpNamingService
         'Stange', 'Atmospack', 'Vac', 'Bund', 'Gebinde',
     ];
 
+    /**
+     * §10-Bremse: Platzhalter-Marker, die kein Produktname sind.
+     *
+     * Anlass 2026-09-03: das GP »Apfel (generisch): frisch« existierte und konkurrierte im
+     * Matcher PUNKTGLEICH mit »Apfel Royal Gala: Ganz« (beide Score 1.001) — Regelwerk §10
+     * verlangt aber ausdrücklich »Generisches > Spezifisches vermeiden«. Dominique dazu:
+     * »generisch darf gar nicht benannt werden, das ist absolut ein Fehler gewesen.«
+     * Deshalb ein harter Fehler beim NAMEN, nicht nur eine Beanstandung im Critic — der
+     * beanstandet erst, wenn der falsche Name schon in Rezepten steckt.
+     *
+     * Bewusst KURZ: nur echte Platzhalter-Marker. »Diverses«, »Sonstige« o. Ä. wären eine
+     * eigene fachliche Entscheidung und stehen hier nicht.
+     */
+    public const GENERIK_MARKER = ['generisch', 'generic'];
+
     public function __construct(private TokenEngine $engine)
     {
     }
@@ -113,6 +128,12 @@ class GpNamingService
         foreach (self::VERPACKUNGSWOERTER as $wort) {
             if (preg_match('/(?<![\p{L}\p{N}])' . preg_quote($wort, '/') . '(?![\p{L}\p{N}])/iu', $name)) {
                 $errors[] = "§7.1: Verpackungswort »{$wort}« gehört nie in den GP-Namen.";
+            }
+        }
+        foreach (self::GENERIK_MARKER as $wort) {
+            if (preg_match('/(?<![\p{L}\p{N}])' . preg_quote($wort, '/') . '(?![\p{L}\p{N}])/iu', $name)) {
+                $errors[] = "§10: »{$wort}« ist kein Produktname — Spezifisches vor Generischem. "
+                    . 'Die konkrete Sorte oder Variante benennen (»Apfel Royal Gala« statt »Apfel (generisch)«).';
             }
         }
         $condition = $this->normalisiereZustand($in['condition'] ?? null);

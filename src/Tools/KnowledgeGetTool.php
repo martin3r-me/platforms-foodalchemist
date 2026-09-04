@@ -41,7 +41,7 @@ class KnowledgeGetTool extends FoodAlchemistTool implements ToolContract, ToolMe
             return ToolResult::error('Kein Team im Kontext.', 'NO_TEAM');
         }
         $svc = app(KnowledgeContextService::class);
-        $doc = $svc->getDocument((string) $arguments['slug']);
+        $doc = $svc->getDocument($team, (string) $arguments['slug']);
         if ($doc === null) {
             return ToolResult::error('Wissens-Dokument nicht gefunden.', 'NOT_FOUND');
         }

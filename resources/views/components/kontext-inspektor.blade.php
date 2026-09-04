@@ -7,6 +7,10 @@
     $wissen = is_array($kontext) ? (array) ($kontext['wissen'] ?? []) : [];
     $templates = is_array($kontext) ? (array) ($kontext['templates'] ?? []) : [];
     $chars = is_array($kontext) ? (int) ($kontext['chars'] ?? 0) : 0;
+    // W3-5: die ECHTEN Prompt-Größen (Messsonde). `$chars` oben ist NUR der Retrieval-Topf —
+    // gemessen ~36.000 Zeichen, wo der Prompt ~77.500 hat. Wer allein diese Zahl liest,
+    // unterschätzt den Prompt um mehr als die Hälfte. `null` = Sonde (noch) ohne Daten.
+    $prompt = is_array($kontext) && is_array($kontext['prompt'] ?? null) ? $kontext['prompt'] : null;
 
     $labels = [
         'cross_cutting' => 'Cross-Cutting',
@@ -18,6 +22,8 @@
         'pairing_grounding' => 'Pairing-Doku',
         'trend' => 'Trends',
         'concept' => 'Konzept',
+        'gebunden' => 'Gebundene Regelwerke',
+        'achse' => 'Anlass & Segment',
     ];
     $order = array_keys($labels);
     $bekannt = array_values(array_filter($order, fn ($k) => ! empty($wissen[$k])));
@@ -35,9 +41,44 @@
     <details class="mt-3 rounded-lg border border-black/10 bg-gray-50/70" data-generator-kontext>
         <summary class="cursor-pointer select-none px-3 py-2 text-[11px] font-medium text-gray-700 flex items-center gap-1.5">
             🧠 Verwendetes Wissen
-            <span class="text-gray-400 font-normal">· {{ $docCount }} Doc{{ $docCount === 1 ? '' : 's' }}@if($templates !== []), {{ count($templates) }} Template{{ count($templates) === 1 ? '' : 's' }}@endif@if($chars > 0) · ~{{ number_format($chars, 0, ',', '.') }} Zeichen @endif</span>
+            <span class="text-gray-400 font-normal">· {{ $docCount }} Doc{{ $docCount === 1 ? '' : 's' }}@if($templates !== []), {{ count($templates) }} Template{{ count($templates) === 1 ? '' : 's' }}@endif@if($prompt) · Prompt {{ number_format($prompt['chars'], 0, ',', '.') }} Zeichen @elseif($chars > 0) · ~{{ number_format($chars, 0, ',', '.') }} Zeichen @endif</span>
         </summary>
         <div class="px-3 pb-3 pt-1 space-y-2">
+            {{-- Die sechs Töpfe des Prompts. Vorher zeigte der Inspektor nur den Retrieval-Anteil
+                 und ließ damit den größten Posten (das verbindliche Regelwerk) UND den Kontext
+                 unsichtbar. `dropped` steht bewusst mit dabei: gebaut-und-weggeworfen ist eine
+                 Größe, die man sehen muss, sonst sucht man den Deckel nicht. --}}
+            @if($prompt)
+                <div>
+                    <p class="text-[10px] uppercase tracking-wide text-gray-400 mb-1">Prompt-Größen</p>
+                    <div class="flex flex-wrap gap-1" data-prompt-groessen>
+                        @foreach([
+                            'Regelwerk (verbindlich)' => $prompt['bound'],
+                            'Retrieval' => $prompt['retrieval'],
+                            'Kontext-JSON' => $prompt['kontext'],
+                            'Aufgabe' => $prompt['task'],
+                            'Hüllen' => $prompt['huelle'],
+                        ] as $label => $wert)
+                            @if($wert > 0)
+                                <span class="inline-block rounded bg-white border border-black/10 px-1.5 py-0.5 text-[10px] text-gray-700">
+                                    {{ $label }} {{ number_format($wert, 0, ',', '.') }}
+                                </span>
+                            @endif
+                        @endforeach
+                        @if($prompt['dropped'] > 0)
+                            <span class="inline-block rounded bg-amber-50 border border-amber-200 px-1.5 py-0.5 text-[10px] text-amber-800" title="Gebaut und wieder verworfen, weil ein Deckel gegriffen hat">
+                                verworfen {{ number_format($prompt['dropped'], 0, ',', '.') }}
+                            </span>
+                        @endif
+                        @if($prompt['tokens_in'] > 0)
+                            <span class="inline-block rounded bg-gray-100 border border-black/10 px-1.5 py-0.5 text-[10px] text-gray-600">
+                                @php($cacheAnteil = $prompt['tokens_cached'] > 0 ? round($prompt['tokens_cached'] / $prompt['tokens_in'] * 100) : null)
+                                {{ number_format($prompt['tokens_in'], 0, ',', '.') }} Token{{ $cacheAnteil !== null ? ', ' . $cacheAnteil . ' % aus dem Cache' : '' }}
+                            </span>
+                        @endif
+                    </div>
+                </div>
+            @endif
             @foreach($kanaele as $cat)
                 @php($eintraege = (array) ($wissen[$cat] ?? []))
                 @if($eintraege !== [])

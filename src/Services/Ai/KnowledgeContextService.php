@@ -3,6 +3,8 @@
 namespace Platform\FoodAlchemist\Services\Ai;
 
 use Illuminate\Support\Facades\DB;
+use Platform\Core\Models\Team;
+use Platform\FoodAlchemist\Support\TeamScope;
 
 /**
  * M5-06 / GL-13: Wissenskontext-Beschaffung für KI-Calls — 1:1-Port von
@@ -17,6 +19,31 @@ use Illuminate\Support\Facades\DB;
  * pairing/discovery = kompakter FLAVOR-PAIRING-Block (nur Partner-NAMEN, kein
  * Prosa-Volltext), pairing/grounding = Doku-Auszüge je Hauptzutat-Slug.
  * Fehlende Quelle = leerer Kontext, nie Fehler (Invariante 6).
+ *
+ * ── MANDANTEN-INVARIANTE (Produktentscheid Dominique, 2026-09-02) ─────────────
+ * DER WISSENS-KORPUS IST GEMEINSAM. Das Retrieval liest ihn ABSICHTLICH ohne
+ * team_id-Filter: er ist von BHG kuratiert und trägt den Generator für alle Teams.
+ * Gescopet ist die KURATION (Schreiben), nicht das Lesen — `KnowledgeService`
+ * stempelt beim Anlegen ein team_id und `TeamScope::owns()` lässt nur den Eigentümer
+ * ändern. Kurz: alle lesen, nur der Eigentümer schreibt.
+ *
+ * WARNUNG AN JEDEN, DER HIER EINEN FILTER EINBAUEN WILL — mit Zahlen von demo
+ * (2026-09-02, 598 aktive Docs):
+ *   team_id NULL (global):     6 Docs =   1,0 %
+ *   team_id 6   (Kurator):   592 Docs =  99,0 %  (3,2 Mio Zeichen)
+ * Ein `applyVisible`-Filter ist für Team 6 ein No-op (598 → 598) und lässt für
+ * JEDES andere Team sowie für jeden Console-Lauf ohne `--team` genau 6 von 598 Docs
+ * übrig — der Korpus fällt auf 1 % zusammen und die Generierung verliert ihr
+ * Fundament, OHNE dass ein Test rot wird (die Suite seedet team_id NULL). Genau
+ * dieser Weg wurde am 2026-09-02 gebaut und wieder verworfen, nachdem die Messung
+ * ihn widerlegt hat.
+ *
+ * Ein echter Mandanten-Schnitt ist deshalb KEINE Code-Änderung, sondern zuerst eine
+ * DATEN-Entscheidung: entweder wandert der kuratierte Bestand auf `team_id = NULL`,
+ * oder Kundenteams werden über `teams.parent_team_id` Nachfahren des BHG-Teams
+ * (heute ist dieser Wert bei allen 8 Teams NULL, es gibt also gar keine Hierarchie).
+ * Erst danach greift `TeamScope::applyVisible` sinnvoll. Gepinnt in
+ * tests/Feature/WissenKorpusGemeinsamTest.php.
  */
 class KnowledgeContextService
 {
@@ -26,9 +53,16 @@ class KnowledgeContextService
         'mengen_defaults', 'techniken', 'bruehen_fonds',
     ];
 
-    public const CROSS_CUTTING_TRUNCATE_CHARS = 4000;
+    /**
+     * W0-4 — Pro-Doc-Deckel für die beiden Kategorien, die ihre Routing-Zeile NICHT lesen.
+     * `cross_cutting:always` und `domain:discovery` werten `max_chars_per_doc`/`max_docs`
+     * nur als Boolean-Gate aus (die Routing-Werte laufen ins Leere), sie sind also
+     * ausschließlich hier steuerbar. 7 Cross-Cutting-Dossiers à 4000 Z. waren allein
+     * 28.000 Z. — bei Features ohne Gesamtbudget (recipe.steps) ungedeckelt.
+     */
+    public const CROSS_CUTTING_TRUNCATE_CHARS = 1800;
 
-    public const DOMAIN_TRUNCATE_CHARS = 6000;
+    public const DOMAIN_TRUNCATE_CHARS = 2500;
 
     public const DOMAIN_TOP_K = 4;
 
@@ -37,14 +71,100 @@ class KnowledgeContextService
     public const MAX_PARTNERS = 28;
 
     /**
+     * W0-6 — Stoppwörter für die Retrieval-Lexik.
+     *
+     * Bis Welle 0 gab es zwei Tokenizer: dieser hier ohne Stoppliste (min. 3 Zeichen) und
+     * AiGatewayService::knowledgeTokens() mit Liste (min. 4). Folge: Füllwörter der
+     * Beschreibung („der", „mit", „ohne") wurden echte Ranking-Tokens und trafen über den
+     * Substring-Term beliebige Slugs — `der` ⊂ `moderne` ist ein real beobachteter Fall.
+     *
+     * Die Mindestlänge bleibt bewusst bei 3 und wird NICHT auf 4 gehoben (so stand es im
+     * Plan): `aal`, `oel`, `jus`, `roh`, `bio` sind bedeutungstragende Kurz-Tokens der
+     * Domäne. Die Fehltreffer kamen von Funktionswörtern, nicht von der Länge — also
+     * werden Funktionswörter entfernt, statt Fachvokabular mit abzuschneiden.
+     */
+    private const STOPWORDS = [
+        'der' => true, 'die' => true, 'das' => true, 'den' => true, 'dem' => true, 'des' => true,
+        'und' => true, 'oder' => true, 'mit' => true, 'ohne' => true, 'fuer' => true, 'auf' => true,
+        'von' => true, 'aus' => true, 'ein' => true, 'eine' => true, 'einer' => true, 'eines' => true,
+        'einen' => true, 'ist' => true, 'sind' => true, 'wird' => true, 'werden' => true,
+        'als' => true, 'auch' => true, 'sehr' => true, 'sowie' => true, 'nach' => true, 'bei' => true,
+        'rezept' => true, 'gericht' => true, 'basisrezept' => true, 'komponente' => true,
+        'zutaten' => true, 'werte' => true,
+    ];
+
+    /**
+     * W0-6 — der Substring-Term (+0,1 je Query-Token, das in einem Slug-Token steckt) darf
+     * erst ab dieser Länge feuern. Kurze Fragmente stecken zufällig in fast jedem Kompositum;
+     * ab 5 Zeichen ist ein Substring-Treffer in der Regel echt („steinpilz" ⊂
+     * „steinpilzrahmsauce").
+     */
+    private const DISCOVERY_SUBSTRING_MIN_LEN = 5;
+
+    /**
+     * W0-6 — Mindest-Score für lexikalische Discovery-Treffer.
+     *
+     * Bewusst NIEDRIG (Plan nannte 0,12) und nicht scharf gezogen: ein einzelner ECHTER
+     * Token-Treffer auf einem 5-Token-Slug gegen eine 12-Token-Query ergibt bereits nur
+     * Jaccard 1/16 = 0,0625 — ein Gate bei 0,12 würde ohne mitfeuernden Substring-Term
+     * genau die echten Treffer verwerfen. Die eigentliche Rausch-Quelle (Funktionswörter ×
+     * Substring) ist mit STOPWORDS + DISCOVERY_SUBSTRING_MIN_LEN an der Wurzel weg.
+     *
+     * Der finale Wert wird gegen echte Läufe kalibriert — dafür liefert contextFor() ab
+     * jetzt `score` und `via` je Treffer zurück, statt den Wert zu behaupten.
+     */
+    private const DISCOVERY_MIN_SCORE = 0.05;
+
+    /**
+     * Pro-Doc-Deckel für achsen-aufgelöstes Wissen (Anlass-Playbook, Segment-Profil).
+     * Bewusst knapp: das sind PRÄZISE Treffer, die den unpräzisen Discovery-Treffern
+     * Budget wegnehmen — das ist der Sinn der Sache, aber es darf sie nicht verdrängen.
+     */
+    private const ACHSEN_TRUNCATE_CHARS = 2400;
+
+    /**
+     * W0-6 — Herkunft je ausgewähltem Doc-Slug: `via` (lexical|alias|semantic), `score`,
+     * `chars` (Doc-Größe) und `sent` (was nach dem Pro-Doc-Deckel wirklich rausging).
+     * Wird je contextFor()-Lauf zurückgesetzt und mit dem Block zurückgegeben.
+     *
+     * @var array<string, array{score: float|null, via: string, chars?: int, sent?: int}>
+     */
+    private array $herkunft = [];
+
+    /**
+     * B1 — Slugs, die ein VORHERIGER contextFor-Aufruf desselben Prompts schon geliefert hat.
+     *
+     * Nötig, weil Aufrufer Wissensblöcke KOMPONIEREN: `IdeenService` baut für
+     * `foodbook.kapitel_ideen` zwei Blöcke (concept.plan + concept.brief_geruest) und verkettet
+     * sie. Gemessen am 2026-09-02: 29.028 + 10.028 = 39.056 Zeichen, darin `kalkulation_event_angebot`
+     * DOPPELT — der Kanal `geschaeftsmodell` ist für beide Features geroutet. Das Budget lebt pro
+     * Feature; die Komposition kannte es nicht.
+     *
+     * @var list<string>
+     */
+    private array $ausgeschlossen = [];
+
+    /**
      * Rezept-Calls laufen in einer Kaskade (Gericht + Basisrezepte). Ohne einen featureweiten
      * Deckel addiert jede geroutete Discovery-Kategorie ihr eigenes Top-K und aus einem gezielten
      * Abruf werden 30–40 Volltext-Dossiers pro Call. Der Deckel gilt nur für den eigentlichen
      * Rezeptgenerator; Planungs-/Concept-Features behalten ihre eigenen Budgets.
      */
-    public const RECIPE_MAX_CHARS_PER_DOC = 3200;
+    public const RECIPE_MAX_CHARS_PER_DOC = 2400;
 
-    public const RECIPE_MAX_KNOWLEDGE_CHARS = 36000;
+    public const RECIPE_MAX_KNOWLEDGE_CHARS = 12000;
+
+    /**
+     * W0-5 — Gesamtbudget für JEDES Feature.
+     *
+     * Bis Welle 0 hatte nur `ai_generate_recipe` einen featureweiten Deckel; alle anderen
+     * (recipe.steps, concept.plan, foodbook.plan, foodbook.kapitel_ideen, format.grundgeruest,
+     * *.ueberarbeiten, recipe.eigenschaften) summierten ihre Pro-Doc-Caps unbegrenzt auf —
+     * gemessen bis 23.603 Tk/Call bei foodbook.kapitel_ideen. Feature-Overrides in
+     * config('foodalchemist.ai.knowledge_budget'), damit sie diff- und PR-fähig bleiben
+     * statt als unversionierte Handdaten in einer Tabelle zu driften (wie die Routings).
+     */
+    public const MAX_KNOWLEDGE_CHARS_DEFAULT = 12000;
 
     /** Spec 08 P6: Fallback-Budget für `concept:always`, wenn die Routing-Zeile nichts vorgibt. */
     public const CONCEPT_MAX_DOCS = 4;
@@ -58,9 +178,9 @@ class KnowledgeContextService
      * Haupt-Einstieg (Pseudocode §3): baut den Wissens-Block für ein KI-Feature.
      *
      * @param  list<string>  $hauptzutatSlugs  nur für Grounding-Features (ai_suggest_pairings, ai_infer_ankers)
-     * @return array{block: string, files_used: list<string>, used_by_category: array<string, list<string>>, total_chars: int}
+     * @return array{block: string, files_used: list<string>, used_by_category: array<string, list<string>>, total_chars: int, built_chars: int, dropped_chars: int, herkunft: array<string, array<string, mixed>>}
      */
-    public function contextFor(string $feature, string $description, ?string $stil = null, array $hauptzutatSlugs = [], array $params = []): array
+    public function contextFor(?Team $team, string $feature, string $description, ?string $stil = null, array $hauptzutatSlugs = [], array $params = []): array
     {
         $routing = DB::table('foodalchemist_knowledge_routings')
             ->where('feature', $feature)
@@ -69,6 +189,16 @@ class KnowledgeContextService
         $filesUsed = [];
         $usedByCategory = [];
         $parts = [];
+        $this->herkunft = [];
+        // B1: Slugs, die ein vorheriger Block schon geliefert hat (Versions-Suffix @vN weg).
+        $this->ausgeschlossen = [];
+        foreach ((array) ($params['_exclude_slugs'] ?? []) as $roh) {
+            $slug = preg_replace('/@v\d+$/', '', trim((string) $roh));
+            if ($slug !== '') {
+                $this->ausgeschlossen[] = $slug;
+            }
+        }
+        $this->ausgeschlossen = array_values(array_unique($this->ausgeschlossen));
         $recipeBudget = $feature === 'ai_generate_recipe';
         $scopeSlugs = $this->knowledgeScopeSlugs($params['_knowledge_scope'] ?? []);
 
@@ -88,7 +218,7 @@ class KnowledgeContextService
         // und rahmt damit die Zutaten-Ebene darunter. Leere Kategorie ⇒ kein Block.
         if (($r = $routing->get('concept:always')) !== null) {
             $before = count($filesUsed);
-            $concept = $this->conceptBlock(
+            $concept = $this->conceptBlock($team, 
                 (int) ($r->max_docs ?: self::CONCEPT_MAX_DOCS),
                 (int) ($r->max_chars_per_doc ?: self::CONCEPT_TRUNCATE_CHARS),
                 $filesUsed
@@ -104,7 +234,7 @@ class KnowledgeContextService
         // ist (Anlass/Inspiration), bevor die Zutaten-Ebene darunter greift.
         if (($r = $routing->get('trend:discovery')) !== null) {
             $before = count($filesUsed);
-            $trend = $this->trendBlock(
+            $trend = $this->trendBlock($team, 
                 (int) ($r->max_docs ?: 5),
                 (int) ($r->max_chars_per_doc ?: 1500),
                 $description,
@@ -123,7 +253,7 @@ class KnowledgeContextService
         // concept.brief_geruest → Concept). Leere/fehlende Kategorie ⇒ kein Block (Invariante 6).
         if (($r = $routing->get('regelwerk:always')) !== null) {
             $before = count($filesUsed);
-            $regelwerk = $this->regelwerkBlock(
+            $regelwerk = $this->regelwerkBlock($team, 
                     $feature,
                     $recipeBudget
                         ? min(self::RECIPE_MAX_CHARS_PER_DOC, (int) ($r->max_chars_per_doc ?: self::REGELWERK_TRUNCATE_CHARS))
@@ -136,11 +266,20 @@ class KnowledgeContextService
             $snap('regelwerk', $before);
         }
 
+        // ── 0d. ACHSEN-WISSEN: Anlass-Playbook + Segment-Profil, deterministisch aufgelöst ──
+        // Hoch priorisiert (direkt nach dem Regelwerk): das sind exakte Treffer aus den
+        // Leitplanken, keine Ratekandidaten. Sie sollen dem Fuzzy-Retrieval Budget wegnehmen.
+        $before = count($filesUsed);
+        if (($achsen = $this->achsenBlock($team, $params, $filesUsed)) !== null) {
+            $parts[] = $achsen;
+            $snap('achse', $before);
+        }
+
         // ── 1. VAULT-WISSEN: Cross-Cutting (always) + Domains (discovery) ──
         $blocks = [];
         if ($routing->has('cross_cutting:always')) {
             $before = count($filesUsed);
-            $crossDocs = $this->crossCuttingDocs();
+            $crossDocs = $this->crossCuttingDocs($team, $feature);
             foreach ($crossDocs as $doc) {
                 $maxChars = $recipeBudget ? self::RECIPE_MAX_CHARS_PER_DOC : self::CROSS_CUTTING_TRUNCATE_CHARS;
                 $blocks[] = "## CROSS_CUTTING: {$doc->slug}\n\n" . $this->truncate($doc->content_md, $maxChars);
@@ -150,7 +289,7 @@ class KnowledgeContextService
         }
         if ($routing->has('domain:discovery')) {
             $before = count($filesUsed);
-            $domainDocs = $this->discoverDomains($this->discoveryQuery($description, $params), $scopeSlugs);
+            $domainDocs = $this->discoverDomains($team, $this->discoveryQuery($description, $params), $scopeSlugs);
             if ($recipeBudget) {
                 // Kein globales Dokument-Limit: alle wirklich gematchten Domains dürfen hinein.
                 // Die Routing-Grenze und das Gesamtzeichenbudget verhindern weiterhin Bloat.
@@ -186,7 +325,7 @@ class KnowledgeContextService
         // ── 3. Pairing-Doku-Grounding (Anker-/Pairing-Inferenz) ──
         if (($r = $routing->get('pairing:grounding')) !== null) {
             $before = count($filesUsed);
-            $parts[] = $this->groundingBlock($hauptzutatSlugs, (int) $r->max_docs, (int) $r->max_chars_per_doc, $filesUsed);
+            $parts[] = $this->groundingBlock($team, $hauptzutatSlugs, (int) $r->max_docs, (int) $r->max_chars_per_doc, $filesUsed);
             $snap('pairing_grounding', $before);
         }
 
@@ -196,7 +335,7 @@ class KnowledgeContextService
         // Deterministisch: der Typ (params['rezept_typ']) wählt die Slug-Familie, der Level die Stufe.
         if (($r = $routing->get('niveau:discovery')) !== null) {
             $before = count($filesUsed);
-            $niveau = $this->niveauBlock(
+            $niveau = $this->niveauBlock($team, 
                 $recipeBudget
                     ? min(self::RECIPE_MAX_CHARS_PER_DOC, (int) ($r->max_chars_per_doc ?: 3000))
                     : (int) ($r->max_chars_per_doc ?: 3000),
@@ -238,7 +377,7 @@ class KnowledgeContextService
             $allowed = $scopeSlugs !== [] && ! in_array($category, ['regelwerk', 'niveau', 'cross_cutting'], true)
                 ? $scopeSlugs
                 : [];
-            $generic = $this->discoverGenericBlock(
+            $generic = $this->discoverGenericBlock($team, 
                 $category, $leitplankenQuery, $topK,
                 $recipeBudget
                     ? min(self::RECIPE_MAX_CHARS_PER_DOC, (int) ($r->max_chars_per_doc ?: 3000))
@@ -263,7 +402,7 @@ class KnowledgeContextService
                 continue;
             }
             $before = count($filesUsed);
-            $immer = $this->alwaysCategoryBlock(
+            $immer = $this->alwaysCategoryBlock($team, 
                 (string) $r->category,
                 (int) ($r->max_docs ?: 2),
                 $recipeBudget
@@ -280,11 +419,200 @@ class KnowledgeContextService
         // (#469-Bindungs-Injektion passiert jetzt zentral im AiGatewayService::propose für ALLE Prompts.)
 
         $block = implode("\n\n", $parts);
-        if ($recipeBudget && mb_strlen($block) > self::RECIPE_MAX_KNOWLEDGE_CHARS) {
-            $block = $this->truncate($block, self::RECIPE_MAX_KNOWLEDGE_CHARS);
+        $gebaut = mb_strlen($block);
+        $budget = $this->knowledgeBudget($feature, $recipeBudget);
+        // B1: Aufrufer-Override für komponierte Blöcke — aber NIE unter die Pflichtmenge.
+        // Ein Override, der `always`-Inhalte abschneidet, wäre genau der stille Fehler, den
+        // die W0-5-Invariante verhindern soll; deshalb hier dieselbe Untergrenze.
+        if (($ueberschreib = (int) ($params['_max_chars'] ?? 0)) > 0) {
+            $budget = max($ueberschreib, $this->pflichtZeichen($feature));
+        }
+        if ($gebaut > $budget) {
+            $block = $this->truncate($block, $budget);
         }
 
-        return ['block' => $block, 'files_used' => $filesUsed, 'used_by_category' => $usedByCategory, 'total_chars' => mb_strlen($block)];
+        return [
+            'block' => $block,
+            'files_used' => $filesUsed,
+            'used_by_category' => $usedByCategory,
+            'total_chars' => mb_strlen($block),
+            // W0-0/W0-6: was gebaut und dann verworfen wurde. Ohne diese Zahl ist ein
+            // Budget-Schnitt nicht von „Wissen fehlt jetzt" zu unterscheiden — und
+            // `files_used` listet weiterhin Dossiers, deren Text der Deckel gekappt hat.
+            'built_chars' => $gebaut,
+            'dropped_chars' => max(0, $gebaut - mb_strlen($block)),
+            'herkunft' => $this->herkunft,
+        ];
+    }
+
+    /**
+     * ACHSEN-AUFLÖSUNG — deterministisches Nachschlagen statt Ranking.
+     *
+     * Für achsen-gebundenes Wissen ist Retrieval das falsche Werkzeug: `occasion=dinner`
+     * → `event_playbook_gala` ist ein Join. Das Slug-Token-Ranking traf hier daneben, und
+     * `event_playbook`/`segment` waren für Gerichte gar nicht geroutet — 20 Docs
+     * Catering-Fachwissen (Anlass-Playbooks, Segment-Profile) waren unerreichbar.
+     *
+     * Gate ist die Anwesenheit des Parameters, nicht eine Routing-Zeile: ein Basisrezept
+     * hat kein `occasion` und löst hier nichts aus. Trifft die Map einen Wert nicht
+     * (z. B. `sektor=restaurant`, für das kein Dossier existiert), bleibt der Kanal
+     * bewusst leer statt auf ein fremdes Profil auszuweichen.
+     *
+     * @param  array<string, mixed>  $params
+     * @param  list<string>  $filesUsed
+     */
+    /**
+     * Sichtbarkeits-Filter für die ROHEN Doc-Queries — HINTER EINEM SCHALTER.
+     *
+     * Dominiques Modell (2026-09-03): „das Wissen ist global, damit die Generatoren laufen;
+     * ein neuer Nutzer bekommt es leer und kann für sich Wissen hinterlegen, das nur für
+     * sein Team und Kinder gilt." Das ist wörtlich `TeamScope::applyVisible` — NULL ODER
+     * eigene Ancestry.
+     *
+     * WARUM DER SCHALTER: der Filter ist erst richtig, wenn die DATEN es sind. Auf demo
+     * liegen 818 kuratierte Dossiers unter `team_id = 6` statt NULL — gemessen am
+     * 2026-09-03 wären mit Filter für Team 6 alles unverändert (598 → 598), für JEDES
+     * andere Team und für jeden Console-Lauf ohne Team aber nur 6 von 598 übrig. Der Korpus
+     * fiele auf 1 %, ohne dass ein Test rot wird (die Suite seedet mit team_id NULL).
+     * Genau dieser Weg wurde in der Nacht gebaut, gemessen und wieder verworfen.
+     *
+     * Schalter AUS (Default) = byte-identisch zu heute: der Closure ist die Identität.
+     * Schalter AN = Dominiques Modell. Der Flip ist eine ENV-Zeile, der Rollback dieselbe
+     * Zeile zurück — kein Deploy. Reihenfolge: erst Daten (Bestand auf NULL heben ODER
+     * `teams.parent_team_id` setzen), dann Flip.
+     *
+     * Bei $team === null bleibt genau der globale Seed übrig — nicht alles, nicht nichts.
+     */
+    private function nurSichtbar(?Team $team, string $spalte = 'team_id'): \Closure
+    {
+        if (! (bool) config('foodalchemist.knowledge_team_scope', false)) {
+            return static fn ($q) => $q;                         // Schalter aus: keine Änderung
+        }
+
+        return static fn ($q) => TeamScope::applyVisible($q, $spalte, $team);
+    }
+
+    private function achsenBlock(?Team $team, array $params, array &$filesUsed): ?string
+    {
+        $map = config('foodalchemist.ai.knowledge_axis_map', []);
+        if (! is_array($map) || $map === []) {
+            return null;
+        }
+
+        // Achse → gewünschte Slugs in Kandidaten-Reihenfolge
+        $gesucht = [];
+        foreach ($map as $achse => $werte) {
+            $wert = $params[(string) $achse] ?? null;
+            if (! is_string($wert) || trim($wert) === '' || ! is_array($werte)) {
+                continue;
+            }
+            $kandidaten = $werte[trim($wert)] ?? null;
+            if (is_array($kandidaten) && $kandidaten !== []) {
+                $gesucht[(string) $achse] = array_values(array_filter(array_map('strval', $kandidaten)));
+            }
+        }
+        if ($gesucht === []) {
+            return null;
+        }
+
+        // EINE Query für alle Achsen, danach je Achse der erste aktive Treffer.
+        $alle = array_values(array_unique(array_merge(...array_values($gesucht))));
+        $docs = DB::table('foodalchemist_knowledge_documents')->tap($this->nurSichtbar($team))
+            ->whereIn('slug', $alle)->where('active', 1)->whereNull('deleted_at')
+            ->get(['slug', 'title', 'content_md', 'version'])->keyBy('slug');
+        if ($docs->isEmpty()) {
+            return null;
+        }
+
+        $bloecke = [];
+        foreach ($gesucht as $achse => $kandidaten) {
+            foreach ($kandidaten as $slug) {
+                if (! isset($docs[$slug])) {
+                    continue;                                        // deaktiviert → nächster Kandidat
+                }
+                $doc = $docs[$slug];
+                $bloecke[] = '## ' . mb_strtoupper((string) $achse) . ": {$doc->title}\n\n"
+                    . $this->truncate((string) $doc->content_md, self::ACHSEN_TRUNCATE_CHARS);
+                $filesUsed[] = "{$doc->slug}@v{$doc->version}";
+                $this->herkunft[$slug] = [
+                    'score' => null,
+                    'via' => 'achse:' . $achse,
+                    'chars' => mb_strlen((string) $doc->content_md),
+                    'sent' => min(mb_strlen((string) $doc->content_md), self::ACHSEN_TRUNCATE_CHARS),
+                ];
+                break;                                               // ein Dossier je Achse
+            }
+        }
+
+        if ($bloecke === []) {
+            return null;
+        }
+
+        return "# ANLASS- & SEGMENT-WISSEN (aus den Leitplanken aufgelöst — verbindlicher Rahmen)\n\n"
+            . "Diese Dossiers gehören zum gewählten Anlass bzw. Verpflegungskontext. Sie setzen den\n"
+            . "Rahmen für Portionierung, Service-Logik und Erwartungshaltung — nicht die Zutatenwahl.\n\n"
+            . implode("\n\n---\n\n", $bloecke);
+    }
+
+    /**
+     * W0-5 — Summe der PFLICHT-Inhalte eines Features: was über `mode='always'` geroutet
+     * ist und deshalb unabhängig von jeder Relevanz in den Prompt MUSS.
+     *
+     * Warum das gebraucht wird: das Gesamtbudget kappt am ENDE des zusammengesetzten
+     * Blocks. Ist der Deckel kleiner als die Pflichtmenge, verschwindet das letzte
+     * `always`-Dossier mitsamt Überschrift — still, ohne Fehler, ohne Log. Genau die
+     * Fehlerklasse, die Welle 0 beseitigen soll. Also: Budget >= Pflichtmenge, maschinell
+     * geprüft (`foodalchemist:wissen-steuerdaten-w0 --verify`), nicht per Augenmaß.
+     *
+     * Die Rechnung spiegelt die Ist-Deckel der jeweiligen Block-Builder:
+     *   · cross_cutting — 7 feste Slugs, Routing-Werte werden ignoriert
+     *   · regelwerk     — `->first()`, also genau EIN Doc
+     *   · concept       — max_docs (Default CONCEPT_MAX_DOCS) × Doc-Deckel
+     *   · sonst         — alwaysCategoryBlock: max_docs (Default 2) × Doc-Deckel
+     */
+    public function pflichtZeichen(string $feature): int
+    {
+        $zeilen = DB::table('foodalchemist_knowledge_routings')
+            ->where('feature', $feature)->where('mode', 'always')->get();
+
+        $summe = 0;
+        foreach ($zeilen as $r) {
+            $docDeckel = (int) ($r->max_chars_per_doc ?: 0);
+            $summe += match ((string) $r->category) {
+                // Dieselbe feature-genaue Auflösung wie crossCuttingDocs() — sonst prüft die
+                // Invariante eine Pflichtmenge, die es für dieses Feature nie gibt.
+                'cross_cutting' => count($this->crossCuttingSlugs($feature)) * self::CROSS_CUTTING_TRUNCATE_CHARS,
+                'regelwerk' => $docDeckel ?: self::REGELWERK_TRUNCATE_CHARS,
+                'concept' => ((int) ($r->max_docs ?: self::CONCEPT_MAX_DOCS)) * ($docDeckel ?: self::CONCEPT_TRUNCATE_CHARS),
+                default => ((int) ($r->max_docs ?: 2)) * ($docDeckel ?: 4000),
+            };
+        }
+
+        return $summe;
+    }
+
+    /** W0-5: das aufgelöste Zeichenbudget eines Features (für Prüf-Werkzeuge). */
+    public function budgetFuer(string $feature): int
+    {
+        return $this->knowledgeBudget($feature, $feature === 'ai_generate_recipe');
+    }
+
+    /**
+     * W0-5: Featureweites Zeichenbudget. Reihenfolge: Feature-Override aus der Config >
+     * Rezept-Sonderdeckel (historisch, bleibt der strengste) > Default.
+     *
+     * Bewusst auf `$feature` gekeyt, nicht auf den Prompt-Key: `vk.generator` ist KEIN
+     * Routing-Feature — Gerichte laufen über contextFor('ai_generate_recipe'). Ein
+     * Prompt-Key-Scope braucht erst den `_prompt_key`-Durchstich (Welle 1).
+     */
+    private function knowledgeBudget(string $feature, bool $recipeBudget): int
+    {
+        $overrides = config('foodalchemist.ai.knowledge_budget', []);
+        if (is_array($overrides) && isset($overrides[$feature]) && (int) $overrides[$feature] > 0) {
+            return (int) $overrides[$feature];
+        }
+
+        return $recipeBudget ? self::RECIPE_MAX_KNOWLEDGE_CHARS : self::MAX_KNOWLEDGE_CHARS_DEFAULT;
     }
 
     /**
@@ -345,7 +673,7 @@ class KnowledgeContextService
         $s = (string) preg_replace('/[^[:alnum:]]+/u', ' ', $s);
         $tokens = [];
         foreach (preg_split('/\s+/u', $s, -1, PREG_SPLIT_NO_EMPTY) ?: [] as $tok) {
-            if (mb_strlen($tok) >= 3) {
+            if (mb_strlen($tok) >= 3 && ! isset(self::STOPWORDS[$tok])) {
                 $tokens[$tok] = true;
             }
         }
@@ -506,9 +834,9 @@ class KnowledgeContextService
      *
      * @param  list<string>  $filesUsed  by-ref-Audit
      */
-    private function conceptBlock(int $maxDocs, int $maxChars, array &$filesUsed): ?string
+    private function conceptBlock(?Team $team, int $maxDocs, int $maxChars, array &$filesUsed): ?string
     {
-        $docs = DB::table('foodalchemist_knowledge_documents')
+        $docs = DB::table('foodalchemist_knowledge_documents')->tap($this->nurSichtbar($team))
             ->where('category', 'concept')->where('active', 1)->whereNull('deleted_at')
             ->orderBy('slug')->limit(max(1, $maxDocs))
             ->get(['slug', 'content_md', 'version']);
@@ -543,7 +871,7 @@ class KnowledgeContextService
      *
      * @param  list<string>  $filesUsed  by-ref-Audit
      */
-    private function regelwerkBlock(string $feature, int $maxChars, array &$filesUsed): ?string
+    private function regelwerkBlock(?Team $team, string $feature, int $maxChars, array &$filesUsed): ?string
     {
         $map = [
             'concept.brief_geruest' => [
@@ -587,7 +915,7 @@ class KnowledgeContextService
         ];
         $cfg = $map[$feature] ?? $map['ai_generate_recipe'];    // Bestand-Fallback
 
-        $doc = DB::table('foodalchemist_knowledge_documents')
+        $doc = DB::table('foodalchemist_knowledge_documents')->tap($this->nurSichtbar($team))
             ->where('category', 'regelwerk')->where('active', 1)->whereNull('deleted_at')
             ->where('slug', 'like', $cfg['slug_like'])
             ->orderBy('slug')->first(['slug', 'content_md', 'version']);
@@ -649,13 +977,13 @@ class KnowledgeContextService
      *
      * @param  list<string>  $filesUsed  by-ref-Audit
      */
-    private function trendBlock(int $maxDocs, int $maxChars, string $description, array &$filesUsed): ?string
+    private function trendBlock(?Team $team, int $maxDocs, int $maxChars, string $description, array &$filesUsed): ?string
     {
         $maxDocs = max(1, $maxDocs);
         $tokens = $this->tokenize($description);
         $weight = ['high' => 3, 'medium' => 2, 'low' => 1];
 
-        $rows = DB::table('foodalchemist_knowledge_documents as d')
+        $rows = DB::table('foodalchemist_knowledge_documents as d')->tap($this->nurSichtbar($team, 'd.team_id'))
             ->leftJoin('foodalchemist_trend_meta as m', 'm.knowledge_document_id', '=', 'd.id')
             ->where('d.category', 'trend')->where('d.active', 1)->whereNull('d.deleted_at')
             ->get(['d.id', 'd.slug', 'd.title', 'd.version', 'm.relevance', 'm.trend_class', 'm.category']);
@@ -673,7 +1001,7 @@ class KnowledgeContextService
         $top = array_slice($scored, 0, $maxDocs);
 
         $ids = array_map(fn ($p) => $p[0]->id, $top);
-        $docs = DB::table('foodalchemist_knowledge_documents')->whereIn('id', $ids)
+        $docs = DB::table('foodalchemist_knowledge_documents')->tap($this->nurSichtbar($team))->whereIn('id', $ids)
             ->get(['id', 'slug', 'content_md', 'version'])->keyBy('id');
 
         $blocks = [];
@@ -696,14 +1024,44 @@ class KnowledgeContextService
     }
 
     /** Die 7 Always-Load-Dokumente in Ist-Reihenfolge (fehlende werden still übersprungen). */
-    private function crossCuttingDocs(): array
+    private function crossCuttingDocs(?Team $team, string $feature): array
     {
-        $docs = DB::table('foodalchemist_knowledge_documents')
+        $slugs = $this->crossCuttingSlugs($feature);
+        $docs = DB::table('foodalchemist_knowledge_documents')->tap($this->nurSichtbar($team))
             ->where('category', 'cross_cutting')->where('active', 1)->whereNull('deleted_at')
-            ->whereIn('slug', self::ALWAYS_LOAD_CROSS_CUTTING)
+            ->when($this->ausgeschlossen !== [], fn ($q) => $q->whereNotIn('slug', $this->ausgeschlossen))
+            ->whereIn('slug', $slugs)
             ->get(['slug', 'content_md', 'version'])->keyBy('slug');
 
-        return array_values(array_filter(array_map(fn ($slug) => $docs->get($slug), self::ALWAYS_LOAD_CROSS_CUTTING)));
+        return array_values(array_filter(array_map(fn ($slug) => $docs->get($slug), $slugs)));
+    }
+
+    /**
+     * B3 — welche Cross-Cutting-Dossiers ein Feature WIRKLICH braucht.
+     *
+     * `ALWAYS_LOAD_CROSS_CUTTING` sind sieben PRODUKTIONS-Dossiers (Substitutionen,
+     * Saisonkalender, Synonyme, Saucen-Mutterstrukturen, Mengen-Defaults, Techniken,
+     * Brühen/Fonds) = 7 × 1.800 = 12.600 Zeichen. Für einen Generator ist das richtig.
+     *
+     * Für einen KUNDENTEXT ist es das nicht: `foodbook.kundentext` schreibt 2–4 Sätze
+     * Fließtext (max_tokens 1.500) und bekam dafür Mengen-Defaults und Brühen-Rezepturen
+     * mitgeliefert. Nützlich sind dort höchstens `saisonkalender` (Saison-Aussagen belegen)
+     * und `synonyme` (Dinge richtig benennen) — der Rest ist Ballast, den das Modell
+     * mitbezahlt und der die Aufmerksamkeit vom Auftrag wegzieht.
+     *
+     * Default bleibt die Konstante (Tests + Wissens-Browser hängen daran); Überschreibung
+     * je Feature über config('foodalchemist.ai.cross_cutting_slugs').
+     *
+     * @return list<string>
+     */
+    private function crossCuttingSlugs(string $feature): array
+    {
+        $map = config('foodalchemist.ai.cross_cutting_slugs', []);
+        if (is_array($map) && isset($map[$feature]) && is_array($map[$feature]) && $map[$feature] !== []) {
+            return array_values(array_map('strval', $map[$feature]));
+        }
+
+        return self::ALWAYS_LOAD_CROSS_CUTTING;
     }
 
     /**
@@ -714,13 +1072,14 @@ class KnowledgeContextService
      * rankt und eine General-Referenz mit Score 0 verfehlen würde) — hier zählt die Kategorie-
      * Zugehörigkeit, nicht der Rezept-Bezug.
      */
-    private function alwaysCategoryBlock(string $category, int $maxDocs, int $maxChars, array &$filesUsed): ?string
+    private function alwaysCategoryBlock(?Team $team, string $category, int $maxDocs, int $maxChars, array &$filesUsed): ?string
     {
         if ($maxDocs <= 0) {
             return null;
         }
-        $docs = DB::table('foodalchemist_knowledge_documents')
+        $docs = DB::table('foodalchemist_knowledge_documents')->tap($this->nurSichtbar($team))
             ->where('category', $category)->where('active', 1)->whereNull('deleted_at')
+            ->when($this->ausgeschlossen !== [], fn ($q) => $q->whereNotIn('slug', $this->ausgeschlossen))
             ->orderBy('slug')->limit($maxDocs)->get(['slug', 'content_md', 'version']);
         if ($docs->isEmpty()) {
             return null;
@@ -741,24 +1100,30 @@ class KnowledgeContextService
      * Domain-Fallback) — und lädt Top-K gedeckelt. So trägt jedes neu gepflegte Doc automatisch,
      * ohne Service-Änderung; der Prompt bleibt durch top_k/chars beschränkt (O(1), nicht O(n)).
      */
-    private function discoverGenericBlock(string $category, string $query, int $topK, int $maxChars, array &$filesUsed, array $allowedSlugs = []): ?string
+    private function discoverGenericBlock(?Team $team, string $category, string $query, int $topK, int $maxChars, array &$filesUsed, array $allowedSlugs = []): ?string
     {
         $tokens = $this->tokenize($query);
         if ($topK <= 0) {
             return null;
         }
 
-        $docs = DB::table('foodalchemist_knowledge_documents')
+        // W0-6 Rank-vor-Load: NUR die Ranking-Felder holen. Vorher lud diese Query
+        // `content_md` ALLER aktiven Docs der Kategorie in den PHP-Speicher, um damit
+        // ausschließlich Slug-Tokens zu vergleichen — bei `cross_cutting` 403.108 Zeichen
+        // für nichts, und mit dem Korpus mitwachsend. `discoverDomains()` macht das über
+        // domainSlugs()/domainDocsBySlug() schon richtig; der generische Pfad nicht.
+        $docs = DB::table('foodalchemist_knowledge_documents')->tap($this->nurSichtbar($team))
             ->where('category', $category)->where('active', 1)->whereNull('deleted_at')
             ->when($allowedSlugs !== [], fn ($q) => $q->whereIn('slug', $allowedSlugs))
-            ->get(['id', 'slug', 'content_md', 'version']);
+            ->when($this->ausgeschlossen !== [], fn ($q) => $q->whereNotIn('slug', $this->ausgeschlossen))
+            ->get(['id', 'slug', 'version']);
         if ($docs->isEmpty()) {
             return null;
         }
 
         // Alias-Treffer (falls gepflegt) → Bonus, damit ein exakt passendes Doc sicher oben landet.
         $aliasBySlug = [];
-        foreach (DB::table('foodalchemist_knowledge_aliases as a')
+        foreach (DB::table('foodalchemist_knowledge_aliases as a')->tap($this->nurSichtbar($team, 'd.team_id'))
             ->join('foodalchemist_knowledge_documents as d', 'd.id', 'a.knowledge_document_id')
             ->where('d.category', $category)->where('d.active', 1)->whereNull('d.deleted_at')
             ->get(['a.alias_slug', 'd.slug']) as $al) {
@@ -774,23 +1139,34 @@ class KnowledgeContextService
         $scored = [];
         foreach ($docs as $doc) {
             $slugTokens = $this->tokenize((string) $doc->slug);
+            $substringHits = count(array_filter(
+                $tokens,
+                fn ($t) => mb_strlen($t) >= self::DISCOVERY_SUBSTRING_MIN_LEN
+                    && count(array_filter($slugTokens, fn ($st) => str_contains($st, $t))) > 0,
+            ));
+            $alias = isset($aliasBySlug[$doc->slug]);
             $score = $this->jaccard($tokens, $slugTokens)
-                + 0.1 * count(array_filter($tokens, fn ($t) => count(array_filter($slugTokens, fn ($st) => str_contains($st, $t))) > 0))
-                + (isset($aliasBySlug[$doc->slug]) ? 1.0 : 0.0);
-            if ($score > 0.0) {
-                $scored[] = [$doc, $score];
+                + 0.1 * $substringHits
+                + ($alias ? 1.0 : 0.0);
+            if ($score >= self::DISCOVERY_MIN_SCORE) {
+                $scored[] = [$doc, $score, $alias];
             }
         }
         usort($scored, fn ($x, $y) => $y[1] <=> $x[1]);
         $ordered = array_map(static fn ($s) => (string) $s[0]->slug, $scored);   // Lexik-Rangfolge
+        $lexScores = [];
+        foreach ($scored as $sc) {
+            $lexScores[(string) $sc[0]->slug] = ['score' => round((float) $sc[1], 4), 'via' => $sc[2] ? 'alias' : 'lexical'];
+        }
 
         // B2 — Semantischer Recall (Hybrid, opt-in): MERGEN statt nur auffüllen. Meaning-matched
         // Slugs werden VOR die Lexik gereiht (RAG darf korrigieren, nicht bloß ergänzen), gefiltert
         // auf die aktiven Kategorie-Docs. Deaktiviert (Default) / kein Provider ⇒ leer ⇒ die reine
         // Lexik bleibt führend (byte-identisches Alt-Verhalten).
         $docsBySlug = $docs->keyBy('slug');
+        $semantisch = $this->semanticSlugs($query, [$category], $topK);
         $pick = [];
-        foreach ([...$this->semanticSlugs($query, [$category], $topK), ...$ordered] as $slug) {
+        foreach ([...$semantisch, ...$ordered] as $slug) {
             if (isset($docsBySlug[$slug])) {
                 $pick[$slug] = true;
             }
@@ -800,12 +1176,27 @@ class KnowledgeContextService
             return null;
         }
 
+        // W0-6: Volltext erst JETZT — für die Gewinner, nicht für die Kategorie.
+        $semSet = array_flip($semantisch);
+        $inhalte = DB::table('foodalchemist_knowledge_documents')->tap($this->nurSichtbar($team))
+            ->whereIn('slug', $pick)->where('active', 1)->whereNull('deleted_at')
+            ->get(['slug', 'content_md'])->keyBy('slug');
+
         $label = mb_strtoupper($category);
         $blocks = [];
         foreach ($pick as $slug) {
             $doc = $docsBySlug->get($slug);
-            $blocks[] = "## {$label}: {$doc->slug}\n\n" . $this->truncate((string) $doc->content_md, $maxChars);
+            $inhalt = (string) ($inhalte->get($slug)->content_md ?? '');
+            $blocks[] = "## {$label}: {$doc->slug}\n\n" . $this->truncate($inhalt, $maxChars);
             $filesUsed[] = "{$doc->slug}@v{$doc->version}";
+            // Herkunfts-Messung: semantischer Recall darf die Lexik überstimmen — ohne
+            // diese Zuordnung ist nicht feststellbar, welcher Pfad die Treffer liefert
+            // (und damit auch nicht, ob ein Score-Gate richtig sitzt).
+            $this->herkunft[$slug] = isset($semSet[$slug])
+                ? ['score' => null, 'via' => 'semantic']
+                : ($lexScores[$slug] ?? ['score' => null, 'via' => 'unbekannt']);
+            $this->herkunft[$slug]['chars'] = mb_strlen($inhalt);
+            $this->herkunft[$slug]['sent'] = min(mb_strlen($inhalt), $maxChars);
         }
 
         return '# ' . $label . "-WISSEN\n\n" . implode("\n\n---\n\n", $blocks);
@@ -821,7 +1212,7 @@ class KnowledgeContextService
      *
      * @param  list<string>  $filesUsed  by-ref-Audit
      */
-    private function niveauBlock(int $maxChars, string $level, string $rezeptTyp, array &$filesUsed): ?string
+    private function niveauBlock(?Team $team, int $maxChars, string $level, string $rezeptTyp, array &$filesUsed): ?string
     {
         $levelToken = match ($level) {
             'haute_cuisine' => 'haute',
@@ -833,7 +1224,7 @@ class KnowledgeContextService
             return null;
         }
         $istBasis = $rezeptTyp === 'basisrezept';
-        $doc = DB::table('foodalchemist_knowledge_documents')
+        $doc = DB::table('foodalchemist_knowledge_documents')->tap($this->nurSichtbar($team))
             ->where('category', 'niveau')->where('active', 1)->whereNull('deleted_at')
             ->where('slug', 'like', '%' . $levelToken . '%')
             ->when(
@@ -856,14 +1247,14 @@ class KnowledgeContextService
      * <2 Treffer: Filename-Token-Fallback (Jaccard + 0,1·Wort-Treffer). Max 4,
      * alphabetisch sortiert geladen.
      */
-    private function discoverDomains(string $description, array $allowedSlugs = []): array
+    private function discoverDomains(?Team $team, string $description, array $allowedSlugs = []): array
     {
         $tokens = $this->tokenize($description);
         $slugs = [];
 
         if ($tokens !== []) {
             // 2a. Explizites Alias-Mapping
-            $aliases = DB::table('foodalchemist_knowledge_aliases as a')
+            $aliases = DB::table('foodalchemist_knowledge_aliases as a')->tap($this->nurSichtbar($team, 'd.team_id'))
                 ->join('foodalchemist_knowledge_documents as d', 'd.id', 'a.knowledge_document_id')
                 ->where('d.category', 'domain')->where('d.active', 1)->whereNull('d.deleted_at')
                 ->get(['a.alias_slug', 'd.slug']);
@@ -883,7 +1274,7 @@ class KnowledgeContextService
         // 2b. Fallback: Slug-/Titel-Token-Match, nur wenn das Mapping kaum greift
         if (count($slugs) < 2 && $tokens !== []) {
             $scored = [];
-            foreach ($this->domainSlugs() as $slug) {
+            foreach ($this->domainSlugs($team) as $slug) {
                 $slugTokens = $this->tokenize($slug);
                 $score = $this->jaccard($tokens, $slugTokens);
                 $wordHits = count(array_filter($tokens, fn ($t) => str_contains($slug, $t)
@@ -913,7 +1304,7 @@ class KnowledgeContextService
             $slugList = array_values(array_intersect($slugList, $allowedSlugs));
         }
         $topK = array_slice($slugList, 0, self::DOMAIN_TOP_K);
-        $docs = $this->domainDocsBySlug($topK);   // Volltext NUR für die gewählten (Tauri-Muster)
+        $docs = $this->domainDocsBySlug($team, $topK);   // Volltext NUR für die gewählten (Tauri-Muster)
 
         return array_values(array_filter(array_map(
             fn ($slug) => $docs->get($slug),
@@ -929,9 +1320,9 @@ class KnowledgeContextService
      *
      * @return list<string>
      */
-    private function domainSlugs(): array
+    private function domainSlugs(?Team $team): array
     {
-        return DB::table('foodalchemist_knowledge_documents')
+        return DB::table('foodalchemist_knowledge_documents')->tap($this->nurSichtbar($team))
             ->where('category', 'domain')->where('active', 1)->whereNull('deleted_at')
             ->orderBy('slug')->pluck('slug')->map(fn ($s) => (string) $s)->all();
     }
@@ -940,13 +1331,13 @@ class KnowledgeContextService
      * content_md NUR für die ausgewählten Top-K-Slugs laden (entspricht dem `read_truncated`
      * je Top-K der Tauri-App). Leere Auswahl → leere Collection (kein Query).
      */
-    private function domainDocsBySlug(array $slugs): \Illuminate\Support\Collection
+    private function domainDocsBySlug(?Team $team, array $slugs): \Illuminate\Support\Collection
     {
         if ($slugs === []) {
             return collect();
         }
 
-        return DB::table('foodalchemist_knowledge_documents')
+        return DB::table('foodalchemist_knowledge_documents')->tap($this->nurSichtbar($team))
             ->where('category', 'domain')->where('active', 1)->whereNull('deleted_at')
             ->whereIn('slug', $slugs)
             ->get(['slug', 'content_md', 'version'])->keyBy('slug');
@@ -1082,7 +1473,7 @@ class KnowledgeContextService
      * @param  list<string>  $hauptzutatSlugs
      * @param  list<string>  $filesUsed  by-ref-Audit
      */
-    private function groundingBlock(array $hauptzutatSlugs, int $maxDocs, int $maxChars, array &$filesUsed): string
+    private function groundingBlock(?Team $team, array $hauptzutatSlugs, int $maxDocs, int $maxChars, array &$filesUsed): string
     {
         $blocks = [];
         $geladen = [];
@@ -1102,7 +1493,7 @@ class KnowledgeContextService
                     if (isset($geladen[$stem])) {
                         continue;
                     }
-                    $doc = $this->pairingDoc($stem);
+                    $doc = $this->pairingDoc($team, $stem);
                     if ($doc !== null) {
                         $geladen[$stem] = true;
                         $blocks[] = "### Pairing-Doku: {$stem}\n" . $this->truncate($doc->content_md, $maxChars);
@@ -1140,9 +1531,9 @@ class KnowledgeContextService
         return $stems;
     }
 
-    private function pairingDoc(string $stem): ?object
+    private function pairingDoc(?Team $team, string $stem): ?object
     {
-        return DB::table('foodalchemist_knowledge_documents')
+        return DB::table('foodalchemist_knowledge_documents')->tap($this->nurSichtbar($team))
             ->where('category', 'pairing')->where('active', 1)->whereNull('deleted_at')
             ->whereIn('slug', ["pairing.{$stem}", $stem])
             ->first(['slug', 'content_md', 'version']);
@@ -1152,12 +1543,17 @@ class KnowledgeContextService
 
     /**
      * Volltext-leichte Suche über den Wissens-Bestand: Token-Treffer in
-     * slug/titel + Alias-Treffer (gewichtet). Kein Team-Filter — der
-     * Wissens-Bestand ist global (wie crossCuttingDocs/discoverDomains).
+     * slug/titel + Alias-Treffer (gewichtet).
+     *
+     * Kein Team-Filter — bewusst, siehe MANDANTEN-INVARIANTE im Klassen-Docblock.
+     * Präzisierung gegenüber der früheren Fassung („der Bestand ist global"): die
+     * Zeilen sind NICHT `team_id NULL`, sondern tragen zu 99 % den Kurator (Team 6).
+     * Global ist der Bestand durch PRODUKTENTSCHEID, nicht durch die Spalte — wer
+     * das verwechselt, baut einen Filter ein und kappt 99 % des Korpus.
      *
      * @return list<array{slug: string, titel: string, kategorie: string, version: int, char_count: int, score: float}>
      */
-    public function searchDocuments(string $q, ?string $kategorie = null, int $limit = 10, bool $includeInactive = false): array
+    public function searchDocuments(?Team $team, string $q, ?string $kategorie = null, int $limit = 10, bool $includeInactive = false): array
     {
         $tokens = $this->tokenize($q);
         if ($tokens === []) {
@@ -1165,14 +1561,19 @@ class KnowledgeContextService
         }
         $limit = max(1, min(50, $limit));
 
-        // Alias-Treffer: exakte Token-Übereinstimmung zählt doppelt
+        // Alias-Treffer: exakte Token-Übereinstimmung zählt doppelt.
+        // BEWUSST ohne Team-Filter: `foodalchemist_knowledge_aliases` trägt gar keine
+        // team_id (Alias-Zeilen sind nur über ihr Eltern-Doc mandantiert), und diese Map ist
+        // eine reine Bonus-Nachschlagetabelle nach Doc-ID. Die Dokumente selbst sind unten
+        // gefiltert — eine fremde ID kann in $docs also nie auftauchen. Ein Filter hier wäre
+        // wirkungslos und würde Sicherheit vortäuschen.
         $aliasHits = DB::table('foodalchemist_knowledge_aliases')
             ->whereIn('alias_slug', $tokens)
             ->pluck('knowledge_document_id')
             ->countBy()->all();
 
         $scored = [];
-        $docs = DB::table('foodalchemist_knowledge_documents')
+        $docs = DB::table('foodalchemist_knowledge_documents')->tap($this->nurSichtbar($team))
             ->whereNull('deleted_at')
             ->when(! $includeInactive, fn ($query) => $query->where('active', 1))
             ->when($kategorie !== null, fn ($query) => $query->where('category', $kategorie))
@@ -1206,7 +1607,7 @@ class KnowledgeContextService
                 $vorhanden = array_flip(array_column($out, 'slug'));
                 $ids = $embed->searchDocIds($q, $limit * 2);
                 if ($ids !== []) {
-                    $semDocs = DB::table('foodalchemist_knowledge_documents')
+                    $semDocs = DB::table('foodalchemist_knowledge_documents')->tap($this->nurSichtbar($team))
                         ->whereIn('id', $ids)->whereNull('deleted_at')
                         ->when(! $includeInactive, fn ($query) => $query->where('active', 1))
                         ->when($kategorie !== null, fn ($query) => $query->where('category', $kategorie))
@@ -1240,18 +1641,18 @@ class KnowledgeContextService
      *
      * @return array{total: int, offset: int, limit: int, next_offset: ?int, categories: array<string,int>, documents: list<array>}
      */
-    public function listDocuments(?string $kategorie, int $offset, int $limit, bool $mitFrontmatter = true, bool $includeInactive = false): array
+    public function listDocuments(?Team $team, ?string $kategorie, int $offset, int $limit, bool $mitFrontmatter = true, bool $includeInactive = false): array
     {
         $limit = max(1, min(200, $limit));
         $offset = max(0, $offset);
 
-        $base = DB::table('foodalchemist_knowledge_documents')
+        $base = DB::table('foodalchemist_knowledge_documents')->tap($this->nurSichtbar($team))
             ->whereNull('deleted_at')
             ->when(! $includeInactive, fn ($q) => $q->where('active', 1))
             ->when($kategorie !== null, fn ($q) => $q->where('category', $kategorie));
 
         $total = (clone $base)->count();
-        $categories = DB::table('foodalchemist_knowledge_documents')
+        $categories = DB::table('foodalchemist_knowledge_documents')->tap($this->nurSichtbar($team))
             ->whereNull('deleted_at')
             ->when(! $includeInactive, fn ($q) => $q->where('active', 1))
             ->select('category', DB::raw('COUNT(*) AS c'))->groupBy('category')
@@ -1390,9 +1791,9 @@ class KnowledgeContextService
     }
 
     /** Einzelnes Wissens-Dokument per Slug (aktiv, nicht gelöscht). */
-    public function getDocument(string $slug): ?object
+    public function getDocument(?Team $team, string $slug): ?object
     {
-        return DB::table('foodalchemist_knowledge_documents')
+        return DB::table('foodalchemist_knowledge_documents')->tap($this->nurSichtbar($team))
             ->where('slug', $slug)->where('active', 1)->whereNull('deleted_at')
             ->first(['slug', 'title', 'category', 'version', 'char_count', 'content_md']);
     }

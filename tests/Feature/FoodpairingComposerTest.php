@@ -74,7 +74,7 @@ it('C-b: der FLAVOR-PAIRING-Block rahmt die Harmonie mit ●●● / ●●', fu
     ]);
 
     $ctx = app(KnowledgeContextService::class)
-        ->contextFor('ai_generate_recipe', 'Tomate', null, [], ['rezept_typ' => 'basisrezept']);
+        ->contextFor(null, 'ai_generate_recipe', 'Tomate', null, [], ['rezept_typ' => 'basisrezept']);
 
     expect($ctx['block'])->toContain('FLAVOR-PAIRING')
         ->and($ctx['block'])->toContain('●●●')

@@ -22,6 +22,8 @@ An jedem Grundprodukt hängen:
 
 > Ein gut gepflegtes Grundprodukt zahlt sich überall aus: seine Allergene und Kosten erscheinen automatisch in jedem Rezept, das es verwendet.
 
+**Grundprodukt überall austauschen.** Stellt sich ein Grundprodukt als Dublette heraus, hängt der Punkt **Verwaltung** (im GP-Detail und im GP-Editor) es in *allen* Rezept-Zeilen auf ein anderes um und rechnet die betroffenen Rezepte neu — die Vorstufe zum Löschen. Für Basisrezepte gibt es denselben Weg, siehe [Rezepte](rezepte).
+
 ---
 
 ## 🚚 Lieferanten & Lieferantenartikel (LA)

@@ -109,7 +109,22 @@ it('fanout: ein eingebetteter Paket-Slot gilt NICHT als leer — die INNEREN Ger
     expect($run->steps()->where('kind', 'gericht')->count())->toBe(2)
         ->and((int) ($i1->refresh()->source_meta['target_concept_slot_id'] ?? 0))->toBe((int) $innerA->id)
         ->and((int) ($i2->refresh()->source_meta['target_concept_slot_id'] ?? 0))->toBe((int) $innerB->id);
-    Queue::assertPushed(\Platform\FoodAlchemist\Jobs\MaterializeConceptIdeaJob::class, 2);
+    // KORREKTUR 2026-09-03: hier stand `assertPushed(MaterializeConceptIdeaJob, 2)`. Der
+    // Fan-out dispatcht seit dem VORSCHLAG-GATE (ff91d522, 2026-09-01) NICHTS mehr — er legt
+    // pro Idee nur einen Bauplan im Status `geplant` an; materialisiert wird erst, wenn der
+    // Mensch klickt (erzeugeGeplantenStep). Der Test ist zwei Tage ÄLTER als das Gate und
+    // beschreibt die Welt davor.
+    //
+    // Der Ersatz macht ihn nicht bloss grün, er behält die AUSSAGE: jeder innere Slot wurde
+    // bedient UND ist bedienbar. Der zweite Teil hängt am `dish_idea_id`-Griff im
+    // context_snapshot — ohne ihn rendert die Karte nicht und erzeugeGeplantenStep fällt
+    // still durch, der Vorschlag wäre also eine unerreichbare Sackgasse. Genau diese
+    // Regression hat das alte assertPushed gefangen; der Status allein belegt sie NICHT.
+    $innere = $run->steps()->where('kind', 'gericht')->get();
+    expect($innere->pluck('status')->unique()->all())->toBe(['geplant'])
+        ->and($innere->map(fn ($s) => (int) (($s->context_snapshot ?? [])['dish_idea_id'] ?? 0))->sort()->values()->all())
+        ->toBe(collect([(int) $i1->id, (int) $i2->id])->sort()->values()->all());
+    Queue::assertNotPushed(\Platform\FoodAlchemist\Jobs\MaterializeConceptIdeaJob::class);
 });
 
 it('fanout mixed: direktes Gericht + Paket-Station → beide gefächert (1 + 2 innere)', function () use ($mkIdee) {
@@ -135,5 +150,12 @@ it('fanout mixed: direktes Gericht + Paket-Station → beide gefächert (1 + 2 i
     app(PlanningCascadeService::class)->fanoutConceptInvention($this->rootTeam, (int) $conceptStep->id, (int) $concept->id, 'voll_kreativ');
 
     expect($run->steps()->where('kind', 'gericht')->count())->toBe(3);   // 1 direkt + 2 innere
-    Queue::assertPushed(\Platform\FoodAlchemist\Jobs\MaterializeConceptIdeaJob::class, 3);
+
+    // Gleiche Wurzel wie oben (Vorschlag-Gate ff91d522). Die Ideen entstehen hier anonym in
+    // der Mock-Closure, sind also nicht namentlich vergleichbar — darum die Existenz-Form
+    // über alle drei. Sie genügt: ein Zweig ohne Griff macht den Test rot.
+    $alle = $run->steps()->where('kind', 'gericht')->get();
+    expect($alle->pluck('status')->unique()->all())->toBe(['geplant'])
+        ->and($alle->filter(fn ($s) => (int) (($s->context_snapshot ?? [])['dish_idea_id'] ?? 0) > 0))->toHaveCount(3);
+    Queue::assertNotPushed(\Platform\FoodAlchemist\Jobs\MaterializeConceptIdeaJob::class);
 });

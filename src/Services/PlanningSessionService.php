@@ -259,14 +259,68 @@ class PlanningSessionService
         return $session->refresh();
     }
 
-    /** Whitelist + Leerwert-Filter für die Richtungs-Regler. @return array|null */
-    public function filterGenerationParams(array $params): ?array
+    /**
+     * Whitelist + Leerwert-Filter + WERT-Prüfung für die Richtungs-Regler.
+     *
+     * Die Key-Whitelist allein reicht nicht: ein falscher WERT (»Gala« statt `dinner`)
+     * lief stumm durch und lief damit ins Leere — das Achsen-Mapping löst `occasion`/`sektor`
+     * deterministisch auf und findet für einen unbekannten Wert nichts. Weder Fehler noch
+     * Playbook. Relevant wird das, sobald Leitplanken aus Freitext/Sprache extrahiert
+     * werden statt aus Dropdowns.
+     *
+     * Geprüft werden nur Keys mit deklariertem Vokabular
+     * ({@see FoodAlchemistPlanningSession::ALLOWED_GENERATION_VALUES}); alle anderen
+     * (Zahlen, Booleans, Freitext wie `aroma`) passieren unverändert.
+     *
+     * @param  array<string, mixed>  $params
+     * @param  list<string>|null  $verworfen  füllt sich mit »key=wert«-Notizen zu allem, was
+     *                                        verworfen wurde — für Aufrufer, die das dem
+     *                                        Menschen zeigen wollen (Freitext-Extraktion).
+     * @return array<string, mixed>|null
+     */
+    public function filterGenerationParams(array $params, ?array &$verworfen = null): ?array
     {
+        $verworfen = [];
+
+        $unbekannt = array_diff(array_keys($params), FoodAlchemistPlanningSession::ALLOWED_GENERATION_PARAMS);
+        foreach ($unbekannt as $key) {
+            $verworfen[] = $key . ' (kein Leitplanken-Regler)';
+        }
+
         $gefiltert = array_intersect_key(
             $params,
             array_flip(FoodAlchemistPlanningSession::ALLOWED_GENERATION_PARAMS)
         );
         $gefiltert = array_filter($gefiltert, static fn ($v) => $v !== null && $v !== '' && $v !== []);
+
+        foreach ($gefiltert as $key => $wert) {
+            $erlaubt = FoodAlchemistPlanningSession::ALLOWED_GENERATION_VALUES[$key] ?? null;
+            if ($erlaubt === null) {
+                continue;                                            // kein deklariertes Vokabular → durchlassen
+            }
+            if (is_array($wert)) {
+                // Mehrfachauswahl (diaet_hart): jeden Eintrag einzeln prüfen, Rest behalten.
+                $sauber = [];
+                foreach ($wert as $einzel) {
+                    if (in_array($einzel, $erlaubt, true)) {
+                        $sauber[] = $einzel;
+                    } else {
+                        $verworfen[] = $key . '=' . (is_scalar($einzel) ? (string) $einzel : gettype($einzel));
+                    }
+                }
+                if ($sauber === []) {
+                    unset($gefiltert[$key]);
+                } else {
+                    $gefiltert[$key] = array_values($sauber);
+                }
+
+                continue;
+            }
+            if (! in_array($wert, $erlaubt, true)) {
+                $verworfen[] = $key . '=' . (is_scalar($wert) ? (string) $wert : gettype($wert));
+                unset($gefiltert[$key]);
+            }
+        }
 
         return $gefiltert === [] ? null : $gefiltert;
     }

@@ -32,6 +32,18 @@ use Platform\FoodAlchemist\Services\Ai\KnowledgeContextService;
 class IdeenService
 {
     /**
+     * Wie viele Gericht-Ideen eine Divergenz auf einmal erfindet.
+     *
+     * Herkunft ehrlich: kein gemessener Grund, ein Vorsichts-/Kostendeckel aus der Einführung.
+     * Das Output-Budget des Prompts wird erst oberhalb von grob 15–20 Ideen eng — wer die Zahl
+     * hebt, muss `max_tokens` mitheben UND messen, sonst schneidet die Antwort mitten im JSON ab.
+     *
+     * Ausdrücklich NICHT mit `BATCH_SKIZZEN_MAX` koppeln (auch 12): das ist die Zahl gestarteter
+     * LÄUFE, nicht die Größe einer LLM-Antwort. Gleiche Zahl, andere Sache.
+     */
+    public const IDEEN_MAX = 12;
+
+    /**
      * Skizzen eines Owners (Kapitel XOR Konzept), gruppiert für UI (E6.3) und MCP (E6.5):
      * Paket-Gruppen mit ihren Ideen + freie Einzel-Skizzen. Nur nicht-verworfene sind
      * standardmäßig sichtbar; $inklVerworfen holt auch die Papierkorb-Skizzen.
@@ -261,11 +273,14 @@ class IdeenService
      * Ohne gebundenen LLM-Provider wirft `propose()` typisiert (KiNichtVerfuegbar/KiDeaktiviert);
      * die Aufrufer (UI/MCP) fangen das als Fehler ab — hier bewusst NICHT geschluckt.
      *
-     * @return array{angelegt: list<FoodAlchemistDishIdea>, roh: int, confidence: ?float, call_log_id: ?int}
+     * @return array{angelegt: list<FoodAlchemistDishIdea>, roh: int, confidence: ?float, call_log_id: ?int, grenze: int, verlangt: int, gedeckelt: int}
      */
     public function kiDivergenz(Team $team, int $chapterId, int $anzahl = 5): array
     {
-        $anzahl = max(1, min(12, $anzahl));
+        // Verhalten identisch, aber der VERLANGTE Wert bleibt erhalten — sonst kann der Aufrufer
+        // nicht melden, was weggefallen ist (genau das hielt diesen Deckel stumm).
+        $verlangt = max(1, $anzahl);
+        $anzahl = min(self::IDEEN_MAX, $verlangt);
 
         $kapitel = FoodAlchemistFoodbookKapitel::visibleToTeam($team)->findOrFail($chapterId);
         if (! $kapitel->isOwnedBy($team)) {
@@ -281,7 +296,7 @@ class IdeenService
         $beschreibung = trim(implode(' ', array_filter([
             (string) $kapitel->title, (string) $kapitel->description, (string) $fb->title,
         ])));
-        $wissen = app(KnowledgeContextService::class)->contextFor('foodbook.plan', $beschreibung);
+        $wissen = app(KnowledgeContextService::class)->contextFor($team, 'foodbook.plan', $beschreibung);
 
         $kontext = [
             'kapitel' => (string) $kapitel->title,
@@ -335,6 +350,9 @@ class IdeenService
             'roh' => count($rohe),
             'confidence' => $proposal->confidence,
             'call_log_id' => $proposal->callLogId,
+            'grenze' => self::IDEEN_MAX,
+            'verlangt' => $verlangt,
+            'gedeckelt' => max(0, $verlangt - $anzahl),
         ];
     }
 
@@ -347,11 +365,14 @@ class IdeenService
      *
      * Ohne LLM-Provider wirft `propose()` typisiert — der Aufrufer (Fan-out) fängt das graceful ab.
      *
-     * @return array{angelegt: list<FoodAlchemistDishIdea>, roh: int, confidence: ?float, call_log_id: ?int}
+     * @return array{angelegt: list<FoodAlchemistDishIdea>, roh: int, confidence: ?float, call_log_id: ?int, grenze: int, verlangt: int, gedeckelt: int}
      */
     public function kiDivergenzConcept(Team $team, int $conceptId, int $anzahl = 5, ?string $slotRolle = null, ?int $trendDocId = null): array
     {
-        $anzahl = max(1, min(12, $anzahl));
+        // Verhalten identisch, aber der VERLANGTE Wert bleibt erhalten — sonst kann der Aufrufer
+        // nicht melden, was weggefallen ist (genau das hielt diesen Deckel stumm).
+        $verlangt = max(1, $anzahl);
+        $anzahl = min(self::IDEEN_MAX, $verlangt);
 
         $concept = FoodAlchemistConcept::visibleToTeam($team)->findOrFail($conceptId);
         if (! $concept->isOwnedBy($team)) {
@@ -364,12 +385,32 @@ class IdeenService
         $beschreibung = trim(implode(' ', array_filter([
             (string) $concept->name, (string) ($concept->brief ?? ''), (string) ($concept->description ?? ''),
         ])));
-        // Wissen+Trend verdrahten: voller Food-/Concept-/Domain-Stack (concept.plan) + generisches
-        // Trendradar-Wissen (concept.brief_geruest = trend/discovery) + der KONKRETE Ursprungs-Trend
-        // dieser Planung (per ID). concept.brief_geruest allein liefert NUR Trend, kein Food-Wissen.
+        /*
+         * Wissen verdrahten: voller Food-/Concept-/Domain-Stack (concept.plan) + das
+         * ergänzende Geschäftsmodell-/Regelwerk-Wissen (concept.brief_geruest) + der
+         * KONKRETE Ursprungs-Trend dieser Planung (per ID).
+         *
+         * B1 (2026-09-02): Zwei contextFor-Aufrufe, EIN Prompt — und bis hierher ohne
+         * gemeinsame Obergrenze. Gemessen: 29.028 + 10.028 = 39.056 Zeichen, darin
+         * `kalkulation_event_angebot` DOPPELT (der Kanal `geschaeftsmodell` ist für beide
+         * Features geroutet). Das Budget lebt pro Feature; die Komposition kannte es nicht.
+         *
+         * Darum jetzt bewusst aufgeteilt: der Food-Stack trägt die Hauptlast, der zweite
+         * Block ergänzt nur — und bekommt die Slugs des ersten als Ausschluss, damit er
+         * nichts wiederholt. `_max_chars` kann die Pflichtmenge nicht unterschreiten
+         * (contextFor klemmt auf pflichtZeichen()), ein `always`-Dossier fällt also nicht
+         * still weg.
+         *
+         * Korrektur am Vorgänger-Kommentar: von „Trendradar-Wissen" kann keine Rede sein —
+         * es gibt keine `trend`-Kategorie im Korpus, `concept.brief_geruest` routet real
+         * `geschaeftsmodell` + `regelwerk`.
+         */
         $kctx = app(KnowledgeContextService::class);
-        $plan = $kctx->contextFor('concept.plan', $beschreibung);
-        $trend = $kctx->contextFor('concept.brief_geruest', $beschreibung);
+        $plan = $kctx->contextFor($team, 'concept.plan', $beschreibung, null, [], ['_max_chars' => 14000]);
+        $trend = $kctx->contextFor($team, 'concept.brief_geruest', $beschreibung, null, [], [
+            '_max_chars' => 5000,
+            '_exclude_slugs' => $plan['files_used'] ?? [],
+        ]);
         $ursprung = $trendDocId !== null ? $this->ursprungsTrendBlock($team, $trendDocId) : null;
         $wissen = [
             'block' => implode("\n\n", array_filter([$plan['block'] ?? '', $trend['block'] ?? '', $ursprung], fn ($b) => is_string($b) && $b !== '')),
@@ -453,7 +494,8 @@ class IdeenService
             ]);
         }
 
-        return ['angelegt' => $angelegt, 'roh' => count($rohe), 'confidence' => $proposal->confidence, 'call_log_id' => $proposal->callLogId];
+        return ['angelegt' => $angelegt, 'roh' => count($rohe), 'confidence' => $proposal->confidence, 'call_log_id' => $proposal->callLogId,
+            'grenze' => self::IDEEN_MAX, 'verlangt' => $verlangt, 'gedeckelt' => max(0, $verlangt - $anzahl)];
     }
 
     /**
@@ -468,11 +510,14 @@ class IdeenService
      *
      * Ohne LLM-Provider wirft `propose()` typisiert — der Aufrufer (Leitstelle) fängt das graceful ab.
      *
-     * @return array{angelegt: list<FoodAlchemistDishIdea>, roh: int, confidence: ?float, call_log_id: ?int}
+     * @return array{angelegt: list<FoodAlchemistDishIdea>, roh: int, confidence: ?float, call_log_id: ?int, grenze: int, verlangt: int, gedeckelt: int}
      */
     public function kiDivergenzSession(Team $team, int $sessionId, ?string $analyse, int $anzahl = 5, ?string $creativeMode = null): array
     {
-        $anzahl = max(1, min(12, $anzahl));
+        // Verhalten identisch, aber der VERLANGTE Wert bleibt erhalten — sonst kann der Aufrufer
+        // nicht melden, was weggefallen ist (genau das hielt diesen Deckel stumm).
+        $verlangt = max(1, $anzahl);
+        $anzahl = min(self::IDEEN_MAX, $verlangt);
 
         $session = FoodAlchemistPlanningSession::visibleToTeam($team)->findOrFail($sessionId);
         if (! $session->isOwnedBy($team)) {
@@ -483,7 +528,7 @@ class IdeenService
             throw new \RuntimeException('KI-Divergenz braucht einen Analyse-Text als Ausgangslage.');
         }
 
-        $wissen = app(KnowledgeContextService::class)->contextFor('foodbook.plan', $seed);
+        $wissen = app(KnowledgeContextService::class)->contextFor($team, 'foodbook.plan', $seed);
 
         $kontext = array_filter([
             'kapitel' => (string) ($session->title ?: 'Planung'),   // produkt-blindes Prompt-Feld — hier trägt es die Session
@@ -533,7 +578,8 @@ class IdeenService
             ]);
         }
 
-        return ['angelegt' => $angelegt, 'roh' => count($rohe), 'confidence' => $proposal->confidence, 'call_log_id' => $proposal->callLogId];
+        return ['angelegt' => $angelegt, 'roh' => count($rohe), 'confidence' => $proposal->confidence, 'call_log_id' => $proposal->callLogId,
+            'grenze' => self::IDEEN_MAX, 'verlangt' => $verlangt, 'gedeckelt' => max(0, $verlangt - $anzahl)];
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────

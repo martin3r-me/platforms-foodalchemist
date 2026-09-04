@@ -54,7 +54,7 @@ it('zieht content_md nur für die Top-K Domain-Dossiers, nie für alle (DB-seiti
     }
 
     DB::enableQueryLog();
-    $res = app(KnowledgeContextService::class)->contextFor('ai_generate_recipe', 'Kartoffel Gratin', null);
+    $res = app(KnowledgeContextService::class)->contextFor(null, 'ai_generate_recipe', 'Kartoffel Gratin', null);
     $log = DB::getQueryLog();
 
     // KERN-GARANTIE: keine content_md-Query gegen knowledge_documents OHNE Slug-Filter
@@ -77,7 +77,7 @@ it('Scoring läuft über Slugs allein — die Volltext-Query bindet höchstens T
     }
 
     DB::enableQueryLog();
-    app(KnowledgeContextService::class)->contextFor('ai_generate_recipe', 'Gratin', null);
+    app(KnowledgeContextService::class)->contextFor(null, 'ai_generate_recipe', 'Gratin', null);
     $log = DB::getQueryLog();
 
     // Die gebundene Domain-Volltext-Query (whereIn slug) darf höchstens TOP_K Slugs binden.

@@ -427,7 +427,7 @@ class StepEditor extends Component
         $beschreibung = trim((string) $recipe->name."\n".$zutaten->map(
             fn ($z) => $z->referencedRecipe?->name ?? $z->raw_text
         )->filter()->implode(', '));
-        $wissen = app(KnowledgeContextService::class)->contextFor('recipe.steps', $beschreibung, null, [], [
+        $wissen = app(KnowledgeContextService::class)->contextFor($this->team(), 'recipe.steps', $beschreibung, null, [], [
             'rezept_typ' => $recipe->is_sales_recipe ? 'gericht' : 'basisrezept',
         ]);
 

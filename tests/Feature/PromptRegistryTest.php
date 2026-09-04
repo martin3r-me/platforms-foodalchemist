@@ -39,6 +39,7 @@ const REGISTRY_SOLL = [
     'concept.plan' => 'B',                                            // Et.2b Kreativ-Kopf: Kunden-Brief → kreative Concept-Canvas (Leitidee/USP/Inszenierung/Geschmackswelten)
     'foodbook.kapitel_ideen' => 'B',                                  // Spec 19 E6.4: produkt-blinde Kreativ-Divergenz je Kapitel (nur Skizzen)
     'planning.dish_proposal_revise' => 'B',                           // menschlich geführte Überarbeitung eines Gericht-Bauplans
+    'planung.leitplanken' => 'B',                                     // Phase C1: Freitext-Briefing → geschlossenes Leitplanken-Vokabular (Klassifikation, temp 0)
     'foodbook.kundentext' => 'A',                                     // Spec 03 L2: kundensichtbarer Einleitungstext, BEIDE Ebenen (ebene: foodbook|kapitel)
     'foodbook.grundgeruest' => 'A',                                   // Foodbook-Grundgerüst = KAPITEL (owner=foodbook), Gänge entstehen im Kapitel-Concept
     'format.grundgeruest' => 'A',                                     // Format-Grundgerüst = Branding + Concept-Bausteine (owner=format)

@@ -121,7 +121,9 @@
     <livewire:foodalchemist.recipes.pairing-netz-modal />
 
     {{-- M7-10: Voice-Interface --}}
-    <livewire:foodalchemist.recipes.voice-modal />
+    {{-- Phase C2: Sprachbedienung ist umgezogen — Mount UND Knopf liegen jetzt global in
+         der Sidebar (Dominique: „aktuell liegt er ja nur in den Basisrezepten, für mich
+         gehört er hierhin"). Ein zweiter Mount hätte dieselbe Modal-Identität doppelt belegt. --}}
 
     <x-ui-page-container padding="px-6 pb-6" spacing="space-y-4">
         <div class="flex items-center justify-between pt-1">
@@ -145,7 +147,6 @@
                         </div>
                     @endif
                 </div>
-                <button type="button" wire:click="$dispatch('voice-modal.oeffnen')" class="{{ $btnAi }}" title="Sprachbedienung (M7-10) — zweiter Bedienweg, UI bleibt parallel" data-voice-oeffnen>@svg('heroicon-o-microphone', 'w-3.5 h-3.5')</button>
             </div>
             @if($bulkRunId !== null)
                 @php($bulkSvc = app(\Platform\FoodAlchemist\Services\BulkEnrichService::class))

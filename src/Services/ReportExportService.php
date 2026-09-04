@@ -3,7 +3,6 @@
 namespace Platform\FoodAlchemist\Services;
 
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Storage;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Models\FoodAlchemistConcept;
 use Platform\FoodAlchemist\Models\FoodAlchemistFoodbook;
@@ -23,6 +22,9 @@ use Platform\FoodAlchemist\Models\FoodAlchemistSupplier;
  */
 class ReportExportService
 {
+    /** @var array<int, ?Team> Team je ID — die Zeilen-EK-Abfrage braucht das Team je Rezept. */
+    private array $teamCache = [];
+
     /** @return array<string, bool|string> */
     public function optionen(array $query, string $scope): array
     {
@@ -627,7 +629,7 @@ class ReportExportService
             'platingSteps',
             'platingSteps.photos',
             'ingredients' => fn ($q) => $q->whereNull('deleted_at')->orderBy('position'),
-            'ingredients.unit:id,slug,display_de',
+            'ingredients.unit:id,slug,display_de,dimension,default_in_g,default_in_ml',
             'ingredients.gp.leadLa.supplier:id,name',
             'ingredients.gp.leadLa.prices' => fn ($q) => $q->orderByDesc('change_date')->orderByDesc('id')->limit(1),
             'ingredients.referencedRecipe',
@@ -638,14 +640,22 @@ class ReportExportService
      * @param  array<int, true>  $visited
      * @return array<string, mixed>
      */
-    private function recipeNode(FoodAlchemistRecipe $recipe, array $optionen, int $tiefe, array $visited): array
-    {
+    private function recipeNode(
+        FoodAlchemistRecipe $recipe,
+        array $optionen,
+        int $tiefe,
+        array $visited,
+        string $adresse = '',
+        ?array $eltern = null,
+    ): array {
         if (isset($visited[$recipe->id])) {
             return [
                 'id' => (int) $recipe->id,
                 'name' => $recipe->name,
                 'zyklus' => true,
                 'tiefe' => $tiefe,
+                'adresse' => $adresse,
+                'eltern' => $eltern,
             ];
         }
         $visited[$recipe->id] = true;
@@ -663,9 +673,17 @@ class ReportExportService
             }
         }
 
+        // Zeilen-EK aus der EINEN Kosten-Wahrheit (dieselbe T3-Kaskade, die
+        // `ek_total_eur` erzeugt) — nicht im Report nachgerechnet. Σ Zeilen = EK gesamt.
+        // UNGERUNDET (zeilenKostenUndMassen), weil der abgeleitete €/kg-Preis sonst bei
+        // Amuse-Mengen auf 0 zusammenfällt: 0,008 kg × 0,18 €/kg = 0,0014 € → gerundet 0,00.
+        $zeilenKosten = $this->zeilenKosten($recipe);
+
         return [
             'id' => (int) $recipe->id,
             'name' => $recipe->name,
+            'adresse' => $adresse,
+            'eltern' => $eltern,
             'is_sales_recipe' => (bool) $recipe->is_sales_recipe,
             'status' => $recipe->status?->value ?? (string) $recipe->status,
             'tiefe' => $tiefe,
@@ -737,28 +755,81 @@ class ReportExportService
                         'id' => (int) $foto->id,
                         'caption' => $foto->caption,
                         'url' => $foto->url(),
-                        'src' => $this->photoDataUri($foto->pfad) ?? $foto->url(),
+                        'src' => $this->photoDataUri($foto->context_file_id, $foto->pfad) ?? $foto->url(),
                     ])->values()->all()
                     : [],
             ])->all(),
             'deklaration' => $this->recipeDeklaration($recipe),
             'naehrwerte' => $this->recipeNaehrwerte($recipe),
             'sensorik' => $sensorik,
-            'ingredients' => $recipe->ingredients->map(fn ($z) => $this->ingredientNode($z, $optionen, $tiefe, $visited))->values()->all(),
+            'ingredients' => $recipe->ingredients->values()
+                ->map(fn ($z, $i) => $this->ingredientNode(
+                    $z,
+                    $optionen,
+                    $tiefe,
+                    $visited,
+                    $i + 1,
+                    $recipe->ingredients->count(),
+                    $adresse,
+                    ['id' => (int) $recipe->id, 'name' => $recipe->name, 'adresse' => $adresse],
+                    $zeilenKosten[$z->id] ?? null,
+                ))->all(),
         ];
     }
 
-    /** @return array<string, mixed> */
-    private function ingredientNode($z, array $optionen, int $tiefe, array $visited): array
+    /**
+     * Zeilen-EK je Zutat-ID über {@see RecipeRecomputeService::zeilenKosten} — dieselbe
+     * Quelle wie der Recompute, damit der Report keine zweite Preis-Wahrheit aufmacht.
+     * Fail-soft: ohne Team/bei Fehlern bleibt die Spalte leer statt den Report zu kippen.
+     *
+     * @return array<int, ?float>
+     */
+    private function zeilenKosten(FoodAlchemistRecipe $recipe): array
     {
+        try {
+            $team = $recipe->team_id !== null
+                ? ($this->teamCache[$recipe->team_id] ??= Team::find($recipe->team_id))
+                : null;
+
+            $zeilen = app(RecipeRecomputeService::class)->zeilenKostenUndMassen($recipe, $team);
+
+            return array_map(fn ($z) => $z['kosten'], $zeilen);
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
+    /** @return array<string, mixed> */
+    private function ingredientNode(
+        $z,
+        array $optionen,
+        int $tiefe,
+        array $visited,
+        int $nr = 1,
+        int $von = 1,
+        string $elternAdresse = '',
+        ?array $elternInfo = null,
+        ?float $zeilenEk = null,
+    ): array {
         $gp = $z->gp;
         $sub = $z->referencedRecipe;
         $lead = $gp?->leadLa;
         $price = $lead?->prices instanceof Collection ? $lead->prices->first() : null;
 
+        // Kaskaden-Adresse: Komponente 3 des Gerichts = „K3", ihre 2. Komponente = „K3.2".
+        // Sie macht die Zugehörigkeit über Seitenumbrüche hinweg lesbar (Einrückung allein
+        // reicht in DomPDF nicht — dort gab es sie bisher gar nicht).
+        $kindAdresse = $sub !== null
+            ? ($elternAdresse === '' ? 'K' . $nr : $elternAdresse . '.' . $nr)
+            : null;
+
+        [$proEinheit, $proEinheitLabel] = $this->preisProEinsatzEinheit($z, $zeilenEk);
+
         return [
             'id' => (int) $z->id,
+            'nr' => $nr,
             'position' => (int) $z->position,
+            'adresse' => $kindAdresse,
             'name' => $sub?->name ?? $gp?->name ?? $z->display_name ?? $z->raw_text,
             'raw_text' => $z->raw_text,
             'menge' => $this->mengeText($z->quantity, $z->unit),
@@ -766,11 +837,61 @@ class ReportExportService
             'unit' => $z->unit?->display_de ?? $z->unit?->slug,
             'role' => $z->role,
             'type' => $sub !== null ? 'basisrezept' : ($gp !== null ? 'gp' : 'offen'),
+            'ek_anteil_eur' => $zeilenEk,
+            'ek_pro_einheit_eur' => $proEinheit,
+            'ek_pro_einheit_label' => $proEinheitLabel,
             'gp' => $gp ? $this->gpNode($gp, $lead, $price) : null,
             'subrecipe' => ($sub !== null && ($optionen['kaskade'] ?? false))
-                ? $this->recipeNode($sub, $optionen, $tiefe + 1, $visited)
+                ? $this->recipeNode(
+                    $sub,
+                    $optionen,
+                    $tiefe + 1,
+                    $visited,
+                    (string) $kindAdresse,
+                    ($elternInfo ?? []) + [
+                        'nr' => $nr,
+                        'von' => $von,
+                        'einsatz' => $this->mengeText($z->quantity, $z->unit),
+                    ],
+                )
                 : null,
         ];
+    }
+
+    /**
+     * Bezugspreis in der Einsatz-Einheit, abgeleitet aus dem Zeilen-EK (`Anteil ÷ Menge`) —
+     * also aus derselben Kosten-Wahrheit, kein zweiter Preis-Pfad. Masse wird auf €/kg,
+     * Volumen auf €/l normalisiert (€/g wäre unlesbar klein), alles andere bleibt
+     * €/Einsatzeinheit. Bei Mengen-Bereichen zählt der Mittelwert (wie I6/F6.4).
+     *
+     * @return array{0: ?float, 1: ?string}
+     */
+    private function preisProEinsatzEinheit($z, ?float $zeilenEk): array
+    {
+        if ($zeilenEk === null) {
+            return [null, null];
+        }
+
+        $menge = $z->quantity_max !== null
+            ? ((float) $z->quantity + (float) $z->quantity_max) / 2
+            : (float) $z->quantity;
+        if ($menge <= 0) {
+            return [null, null];
+        }
+
+        $proEinheit = $zeilenEk / $menge;
+        $unit = $z->unit;
+
+        if ($unit?->dimension === 'mass' && (float) ($unit->default_in_g ?? 0) > 0) {
+            return [$proEinheit * (1000 / (float) $unit->default_in_g), '€/kg'];
+        }
+        if ($unit?->dimension === 'volume' && (float) ($unit->default_in_ml ?? 0) > 0) {
+            return [$proEinheit * (1000 / (float) $unit->default_in_ml), '€/l'];
+        }
+
+        $label = $unit?->display_de ?? $unit?->slug;
+
+        return [$proEinheit, $label ? '€/' . $label : null];
     }
 
     /** @return array<string, mixed> */
@@ -892,22 +1013,18 @@ class ReportExportService
         ];
     }
 
-    private function photoDataUri(?string $pfad): ?string
+    /**
+     * Foto als base64-dataUri fürs PDF. Die Quelle ist die ContextFile (eigener `disk` —
+     * auf demo `local`/`hetzner`, NICHT `public`), erst danach der Legacy-`pfad`. Vorher
+     * prüfte diese Methode nur den public-Disk und fiel sonst auf `$foto->url()` zurück:
+     * eine SIGNIERTE Core-Route mit TTL, die DomPDF nie laden kann ⇒ Schrittfotos fehlten
+     * in jeder Report-PDF. Die Fallback-Kette gehört genau einmal ins Modul, deshalb hier
+     * über {@see FoodAlchemistMediaService::dataUri}.
+     */
+    private function photoDataUri(?int $contextFileId, ?string $pfad): ?string
     {
-        if (! $pfad) {
-            return null;
-        }
-
         try {
-            $disk = Storage::disk('public');
-            if (! $disk->exists($pfad)) {
-                return null;
-            }
-
-            $mime = $disk->mimeType($pfad) ?: 'image/jpeg';
-            $data = $disk->get($pfad);
-
-            return 'data:' . $mime . ';base64,' . base64_encode($data);
+            return app(FoodAlchemistMediaService::class)->dataUri($contextFileId, $pfad);
         } catch (\Throwable) {
             return null;
         }

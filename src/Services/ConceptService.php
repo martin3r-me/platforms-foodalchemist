@@ -1251,7 +1251,7 @@ class ConceptService
 
         $stil = $writingStyleId ? \Platform\FoodAlchemist\Models\FoodAlchemistWritingStyle::find($writingStyleId) : null;
         $wissen = app(\Platform\FoodAlchemist\Services\Ai\KnowledgeContextService::class)
-            ->contextFor('concept.wording', (string) ($concept->occasion ?: $concept->name), $stil?->name);
+            ->contextFor($team, 'concept.wording', (string) ($concept->occasion ?: $concept->name), $stil?->name);
 
         $kontext = [
             'concept' => $concept->name,

@@ -115,7 +115,7 @@ it('L2: der Kontext trägt Gliederung über die WORDING-Kette + Leitplanken + da
     $this->foodbooks->kiKundentextVorschlag($this->rootTeam, $fb->id);
     $prompt = $GLOBALS['ki_kundentext_user_prompt'] ?? '';
 
-    expect($prompt)->toContain('"ebene": "foodbook"')
+    expect($prompt)->toContain('"ebene":"foodbook"')
         ->toContain('Hotel Adler')
         ->toContain('Rustikal, viel Gemüse')       // briefing_ist = Umformungs-Vorlage
         ->toContain('Unser Menü')                  // Konsumententitel, nicht der interne
@@ -224,7 +224,7 @@ it('L2b: der Kapitel-Kontext ist auf DIESES Kapitel geschnitten und nennt die Bu
     $this->foodbooks->kiKapitelKundentextVorschlag($this->rootTeam, $kap->id);
     $prompt = $GLOBALS['ki_kundentext_user_prompt'] ?? '';
 
-    expect($prompt)->toContain('"ebene": "kapitel"')
+    expect($prompt)->toContain('"ebene":"kapitel"')
         ->toContain('Unser Menü')                       // Konsumententitel des Kapitels
         ->toContain('Zanderfilet auf Linsen')           // seine Position aus der Wording-Kette
         ->toContain('rahmen_einleitung')                // Buch-Briefing als Rahmen, nicht als Vorlage

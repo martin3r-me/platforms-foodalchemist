@@ -38,7 +38,81 @@ class FoodAlchemistCascadeRun extends Model
         'params' => 'array',
         'staged' => 'boolean',
         'cohesion_warning' => 'array',
+        'deckel_hinweise' => 'array',
     ];
+
+    /**
+     * Vermerkt, was ein Deckel diesem Lauf WEGGENOMMEN hat — der eine Schreibweg für alle sechs
+     * Runaway-Deckel der Generierung.
+     *
+     * Warum am Model und nicht im Service: die Deckel sitzen in drei verschiedenen Diensten
+     * ({@see \Platform\FoodAlchemist\Services\PlanningCascadeService} für Zellen/Positionen/Slots,
+     * {@see \Platform\FoodAlchemist\Services\RecipeDependencyWorkflowService} für Schritte/Tiefe,
+     * {@see \Platform\FoodAlchemist\Services\IdeenService} für die Ideen-Klemme). Ein gemeinsamer
+     * Weg hier verhindert, dass die Struktur über sechs Stellen driftet — und dass der siebte
+     * Deckel wieder still wird, weil sein Autor die Form nicht kennt.
+     *
+     * ATOMAR, mit Absicht: die Kind-Jobs eines Laufs können parallel laufen (auf demo heute nur
+     * ein Worker, aber darauf darf sich das Datenmodell nicht verlassen). Ein naives
+     * read-modify-write würde bei zwei gleichzeitigen Deckeln einen Hinweis verlieren — und ein
+     * verlorener Hinweis ist genau der Zustand, den diese Spalte beseitigen soll.
+     *
+     * Idempotent je Deckel-Schlüssel: ein zweiter Vermerk desselben Deckels ersetzt den ersten
+     * (ein Lauf, der zweimal an derselben Grenze anschlägt, hat EINEN Befund, nicht zwei).
+     */
+    public function vermerkeDeckel(string $deckel, int $grenze, int $verlangt, int $offen, string $text): void
+    {
+        if ($offen < 1) {
+            return;   // nichts weggefallen = kein Hinweis. Ein Nichts wird nicht als Befund verkauft.
+        }
+
+        \Illuminate\Support\Facades\DB::transaction(function () use ($deckel, $grenze, $verlangt, $offen, $text): void {
+            /** @var self|null $frisch */
+            $frisch = self::query()->whereKey($this->getKey())->lockForUpdate()->first();
+            if ($frisch === null) {
+                return;
+            }
+
+            $liste = is_array($frisch->deckel_hinweise) ? $frisch->deckel_hinweise : [];
+            $liste = array_values(array_filter(
+                $liste,
+                static fn ($e): bool => is_array($e) && ($e['deckel'] ?? null) !== $deckel
+            ));
+            $liste[] = [
+                'deckel' => $deckel,
+                'grenze' => $grenze,
+                'verlangt' => $verlangt,
+                'offen' => $offen,
+                'text' => $text,
+            ];
+
+            $frisch->forceFill(['deckel_hinweise' => $liste])->save();
+        });
+
+        $this->refresh();
+    }
+
+    /**
+     * Die Deckel-Sätze dieses Laufs als EINE Zeile — oder null, wenn kein Deckel gegriffen hat.
+     *
+     * Lese-Gegenstück zu {@see vermerkeDeckel}: der Wortlaut entsteht dort, wo der Deckel greift
+     * (die Zähl-Mechanik ist bei jedem anders), und wird hier nur zusammengefügt. Ein zweiter
+     * Wortlaut in der Livewire-Komponente würde vom gespeicherten driften — dann sagt die
+     * Sofort-Meldung etwas anderes als das Lauf-Detail Wochen später.
+     *
+     * Ein Lauf kann mehrere Deckel treffen (ein großer Speiseplan zugleich Wochen UND
+     * Sub-Rezept-Schritte), darum verbunden statt „der erste gewinnt".
+     */
+    public function deckelMeldung(): ?string
+    {
+        $liste = is_array($this->deckel_hinweise) ? $this->deckel_hinweise : [];
+        $texte = array_values(array_filter(array_map(
+            static fn ($e): string => is_array($e) ? trim((string) ($e['text'] ?? '')) : '',
+            $liste,
+        ), static fn (string $t): bool => $t !== ''));
+
+        return $texte === [] ? null : implode(' · ', $texte);
+    }
 
     /** Steps dieses Laufs (concept/gericht/rezept/gp), Baum über parent_step_id. */
     public function steps(): HasMany

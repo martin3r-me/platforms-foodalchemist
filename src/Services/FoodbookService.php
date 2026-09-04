@@ -2408,7 +2408,7 @@ class FoodbookService
         // Workstream W (MCP-Steuerbarkeit D7): Kundentext an Cross-Cutting-Fakten erden (Anti-Marker
         // etc.) — Guardrail fürs kundensichtbare Wording. Wirkt Web + MCP (Parität).
         $wissen = app(\Platform\FoodAlchemist\Services\Ai\KnowledgeContextService::class)
-            ->contextFor('foodbook.kundentext', (string) ($fb->label ?: 'Foodbook'));
+            ->contextFor($team, 'foodbook.kundentext', (string) ($fb->label ?: 'Foodbook'));
 
         $proposal = app(\Platform\FoodAlchemist\Services\Ai\AiGatewayService::class)->propose(
             'foodbook.kundentext',
@@ -2448,7 +2448,7 @@ class FoodbookService
 
         // Workstream W (D7): dieselbe Cross-Cutting-Erdung wie am Buch-Kundentext (geteilter Prompt-Key).
         $wissen = app(\Platform\FoodAlchemist\Services\Ai\KnowledgeContextService::class)
-            ->contextFor('foodbook.kundentext', (string) ($k->title ?: $fb->label ?: 'Kapitel'));
+            ->contextFor($team, 'foodbook.kundentext', (string) ($k->title ?: $fb->label ?: 'Kapitel'));
 
         $proposal = app(\Platform\FoodAlchemist\Services\Ai\AiGatewayService::class)->propose(
             'foodbook.kundentext',

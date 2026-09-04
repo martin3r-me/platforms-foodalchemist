@@ -552,17 +552,87 @@ class RecipeOneShotService
         }
     }
 
+    /**
+     * W0-7 — Anker-Kandidatenmenge für `recipe.anker`.
+     *
+     * Drei Quellen, vereinigt und gedeckelt:
+     *   (a) Anker der bereits gemappten GPs der Rezeptzutaten — die faktisch belegte Basis,
+     *   (b) 1-Hop-Nachbarn dieser Anker im Pairing-Graphen (beide Kantenrichtungen),
+     *   (c) semantischer Recall über Name + Zutaten (searchAnkerSlugs).
+     *
+     * ⚠ Diese Liste ist gleichzeitig die Validierungs-Whitelist des Aufrufers
+     * (`in_array($slug, $vokabular, true)`): was hier fehlt, kann die KI nicht wählen —
+     * ein Vorfilter ist also eine Verhaltensänderung, nicht nur eine Sparmaßnahme.
+     * Darum großzügig gedeckelt (120) und mit (a) immer vollständig drin.
+     *
+     * Fallback: liefern alle drei Quellen nichts (ungemapptes Rezept ohne Provider), wird
+     * auf die häufigsten Anker zurückgefallen, statt eine leere Whitelist zu senden —
+     * leer hieße „kein Anker wählbar" und das Glied liefe still ins Nichts.
+     *
+     * @param  list<string>  $zutaten
+     * @return list<string>
+     */
+    private function ankerKandidaten(FoodAlchemistRecipe $recipe, array $zutaten): array
+    {
+        $deckel = 120;
+
+        // (a) Anker der gemappten GPs dieses Rezepts
+        $gpAnkerIds = \Illuminate\Support\Facades\DB::table('foodalchemist_gp_anchor_mappings as m')
+            ->join('foodalchemist_recipe_ingredients as ri', 'ri.gp_id', '=', 'm.gp_id')
+            ->where('ri.recipe_id', $recipe->id)
+            ->whereNull('ri.deleted_at')->whereNull('m.deleted_at')
+            ->distinct()->pluck('m.anchor_id')->all();
+
+        // (b) 1-Hop-Nachbarn im Graphen, beide Richtungen
+        $nachbarIds = [];
+        if ($gpAnkerIds !== []) {
+            $nachbarIds = \Illuminate\Support\Facades\DB::table('foodalchemist_pairing_anchor_edges')
+                ->whereIn('anchor_a_id', $gpAnkerIds)->distinct()->pluck('anchor_b_id')->all();
+            $nachbarIds = array_merge($nachbarIds, \Illuminate\Support\Facades\DB::table('foodalchemist_pairing_anchor_edges')
+                ->whereIn('anchor_b_id', $gpAnkerIds)->distinct()->pluck('anchor_a_id')->all());
+        }
+
+        $ids = array_values(array_unique(array_map('intval', array_merge($gpAnkerIds, $nachbarIds))));
+        $slugs = $ids === [] ? [] : \Illuminate\Support\Facades\DB::table('foodalchemist_vocab_pairing_anchors')
+            ->whereIn('id', $ids)->whereNull('deleted_at')->orderBy('slug')->pluck('slug')->all();
+
+        // (c) semantischer Recall — fängt Anker, die über kein gemapptes GP erreichbar sind
+        try {
+            $semantisch = app(Ai\KnowledgeEmbeddingService::class)
+                ->searchAnkerSlugs(trim($recipe->name . ' ' . implode(' ', array_slice($zutaten, 0, 15))), 40);
+        } catch (\Throwable) {
+            $semantisch = [];                                        // Recall ist Beigabe, nie Bedingung
+        }
+
+        $vereint = array_values(array_unique(array_merge($slugs, $semantisch)));
+
+        if ($vereint === []) {
+            // Kein gemapptes GP UND kein semantischer Treffer: hier ist NICHTS über das
+            // Rezept bekannt, also gibt es auch keine begründete Vorauswahl. Dann bewusst
+            // das Alt-Verhalten (Vollvokabular) statt einer willkürlichen Teilmenge —
+            // eine geratene Whitelist wäre schlimmer als ein teurer Call, weil sie die
+            // richtige Antwort unerreichbar macht. Betrifft nur ungemappte Rezepte.
+            return \Illuminate\Support\Facades\DB::table('foodalchemist_vocab_pairing_anchors')
+                ->whereNull('deleted_at')->orderBy('slug')->pluck('slug')->all();
+        }
+
+        return array_slice($vereint, 0, $deckel);
+    }
+
     /** @return array{status: string, n_anker?: int, fehler?: string} */
     private function aromaankerGlied(Team $team, FoodAlchemistRecipe $recipe): array
     {
         try {
             $pairings = app(PairingService::class);
-            $vokabular = \Illuminate\Support\Facades\DB::table('foodalchemist_vocab_pairing_anchors')
-                ->whereNull('deleted_at')->orderBy('slug')->pluck('slug')->all();
+            $zutaten = $recipe->ingredients()->whereNull('deleted_at')->pluck('raw_text')->take(30)->all();
+            // W0-7: Kandidaten statt Vollvokabular. Vorher gingen ALLE Anker (live 2.628
+            // Slugs / 39.478 Zeichen) in jeden Call — gemessen ⌀ 25.007 Input-Token, der
+            // vierthöchste Posten im System, für eine Aufgabe die 3–7 Anker zurückgibt.
+            $vokabular = $this->ankerKandidaten($recipe, $zutaten);
             $vorschlag = app(Ai\AiGatewayService::class)->propose('recipe.anker', [
                 'name' => $recipe->name,
                 'zubereitung' => $recipe->preparation,
-                'zutaten' => $recipe->ingredients()->whereNull('deleted_at')->pluck('raw_text')->take(30)->all(),
+                'zutaten' => $zutaten,
                 'vokabular' => $vokabular,
             ], ['target_table' => 'foodalchemist_recipe_anchor_mappings', 'target_id' => $recipe->id]);
 
@@ -700,6 +770,7 @@ class RecipeOneShotService
             ], [
                 'knowledge' => $wissen['block'],
                 'knowledge_used' => $wissen['files_used'],
+                'knowledge_dropped_chars' => $wissen['dropped_chars'] ?? 0,   // W0-0 Messsonde
                 'target_table' => 'foodalchemist_recipe_steps',
                 'target_id' => $recipe->id,
                 'structural_retry' => fn (array $p) => is_array($p['werte']['steps'] ?? null) && $p['werte']['steps'] !== [],
@@ -743,7 +814,10 @@ class RecipeOneShotService
         $beschreibung = trim((string) $recipe->name . "\n" . $zutaten->map(
             fn ($z) => $z->referencedRecipe?->name ?? $z->raw_text
         )->filter()->implode(', '));
-        $wissen = app(Ai\KnowledgeContextService::class)->contextFor('recipe.steps', $beschreibung, null, [], [
+        // Team aus dem Rezept selbst — funktioniert auch im CLI-Lauf ohne Auth, und die
+        // Sichtbarkeit des Wissens am eigenen Rezept ist die des besitzenden Teams.
+        $wTeam = $recipe->team_id !== null ? \Platform\Core\Models\Team::find((int) $recipe->team_id) : null;
+        $wissen = app(Ai\KnowledgeContextService::class)->contextFor($wTeam, 'recipe.steps', $beschreibung, null, [], [
             'rezept_typ' => $recipe->is_sales_recipe ? 'gericht' : 'basisrezept',
         ]);
 

@@ -110,3 +110,43 @@ it('§11.2: Derivat-Anlage setzt requires_la=0', function () {
         ->and($derivat->requires_la)->toBeFalse()
         ->and($derivat->derivat_von_gp_id)->toBe($mutter->id);
 });
+
+it('§10: »generisch« im GP-Namen ist ein Hard-Error, Wort-Boundary bleibt gewahrt', function () {
+    // Anlass 2026-09-03: »Apfel (generisch): frisch« existierte auf demo und konkurrierte im
+    // Matcher PUNKTGLEICH (Score 1.001) mit »Apfel Royal Gala: Ganz«. §10 verlangt Spezifisches
+    // vor Generischem; Dominique: »generisch darf gar nicht benannt werden«.
+    $gen = $this->svc->validateGpName('Apfel (generisch): frisch', ['hauptzutat' => 'Apfel', 'condition' => 'frisch']);
+    expect($gen['errors'])->not->toBeEmpty()
+        ->and(implode(' ', $gen['errors']))->toContain('§10');
+
+    // Englische Variante ebenso — der Marker kommt auch aus Importen.
+    $en = $this->svc->validateGpName('Apple generic: frisch', ['hauptzutat' => 'Apple generic', 'condition' => 'frisch']);
+    expect(implode(' ', $en['errors']))->toContain('§10');
+
+    // Die korrekte, spezifische Benennung darf NICHT blocken — sonst wäre die Bremse eine Falle.
+    $gala = $this->svc->validateGpName('Apfel Royal Gala: frisch', ['hauptzutat' => 'Apfel Royal Gala', 'condition' => 'frisch']);
+    expect(implode(' ', $gala['errors']))->not->toContain('§10');
+
+    // Wort-Boundary wie bei §7.1: ein Kompositum, das den Marker nur enthält, ist erlaubt.
+    // (»Generischsalat« gibt es nicht — der Test sichert die Mechanik, nicht das Beispiel.)
+    $kompositum = $this->svc->validateGpName('Generischsalat: frisch', ['hauptzutat' => 'Generischsalat', 'condition' => 'frisch']);
+    expect(implode(' ', $kompositum['errors']))->not->toContain('§10');
+});
+
+it('syncIngredients behauptet nicht »manual«, wenn niemand von Hand gewaehlt hat', function () {
+    // Anlass: der TK-Apfel in Gericht 3689 trug `manual`, obwohl das Rezept per MCP
+    // erzeugt wurde. Der Fallback beschriftete »gp_id gesetzt, keine Methode« als
+    // Handarbeit — falsche Provenienz, die die Diagnose zweimal fehlgeleitet hat.
+    // Auf recipe_ingredients entscheidet niemand an `manual`; die Schutzregel in
+    // SalesImportService gilt fuer foodalchemist_sales_facts, eine andere Tabelle.
+    $quelle = file_get_contents(__DIR__ . '/../../../src/Services/RecipeService.php');
+    $stelle = mb_strpos($quelle, "\$attrs['match_method']\n                            ??");
+
+    expect($stelle)->not->toBeFalse();
+
+    $zeile = mb_substr($quelle, $stelle, 220);
+    expect($zeile)->not->toContain("'manual'")
+        ->and($zeile)->toContain("'gp_v2_fk'")
+        ->and($zeile)->toContain("'recipe_ref'")
+        ->and($zeile)->toContain("'unmatched'");
+});

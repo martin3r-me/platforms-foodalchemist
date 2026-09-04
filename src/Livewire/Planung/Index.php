@@ -18,6 +18,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipeStepPhoto;
 use Platform\FoodAlchemist\Services\CanvasService;
 use Platform\FoodAlchemist\Services\AngebotService;
+use Platform\FoodAlchemist\Services\BriefingLeitplankenService;
 use Platform\FoodAlchemist\Services\ConceptGeneratorService;
 use Platform\FoodAlchemist\Services\ConceptService;
 use Platform\FoodAlchemist\Services\FoodbookService;
@@ -30,6 +31,7 @@ use Platform\FoodAlchemist\Services\RecipeImageService;
 use Platform\FoodAlchemist\Services\SalesRecipeService;
 use Platform\FoodAlchemist\Services\SpeisekarteService;
 use Platform\FoodAlchemist\Services\SpeiseplanService;
+use Platform\FoodAlchemist\Services\Stt\SttServiceContract;
 use Platform\FoodAlchemist\Services\TeamSettingsService;
 use Platform\FoodAlchemist\Services\TitelVorschlagService;
 use Platform\FoodAlchemist\Services\WorkerHealthService;
@@ -373,6 +375,16 @@ class Index extends Component
      */
     public ?string $margenWarnung = null;
 
+    /**
+     * Was der Lauf NICHT erzeugt hat — aus `cascade_runs.deckel_hinweise`. `null` = kein Deckel
+     * gegriffen; ein Nichts wird nicht als Warnung verkauft.
+     *
+     * Gefüllt aus dem LAUF, nicht per Flash: der Deckel ist eine Eigenschaft des Laufs und muss
+     * einen Reload und ein Zu-und-wieder-Aufklappen überleben. Ein Deckel, der erst später in
+     * einem Job greift (Concept-Slots), erreicht dieselbe Zeile über den Poll.
+     */
+    public ?string $deckelHinweis = null;
+
     /** Aktiver Kaskaden-Lauf (in-place „Go") — Ziel des wire:poll. */
     public ?int $laufId = null;
 
@@ -447,6 +459,10 @@ class Index extends Component
         }
         if (request()->boolean('open') && $this->sessionId !== null && $this->aktiveSession() !== null) {
             $this->ladeForm();
+            // Der Speiseplan-Editor leitet nach dem Go HIERHER um (mit `open=1`), und seine eigene
+            // Komponente stirbt mit dem Redirect — ein dort gesetzter Hinweis wäre nie gerendert.
+            // Ohne dieses Laden bliebe die Landung also stumm, obwohl der Deckel am Lauf steht.
+            $this->ladeLetztenLauf();
             $this->dispatch('modal.open', name: 'planung-editor');
         }
         // Spec 42 F2 — Handoff aus dem Foodbook: Leitstelle im Owner-Kontext öffnen, „Foodbook aus
@@ -1186,12 +1202,24 @@ class Index extends Component
         if ($team === null || $this->sessionId === null) {
             $this->laufId = null;
             $this->laeuft = false;
+            $this->deckelHinweis = null;   // sonst bliebe der Hinweis eines FREMDEN Laufs stehen
 
             return;
         }
         $lauf = app(PlanningCascadeService::class)->letzterLauf($team, $this->sessionId);
         $this->laufId = $lauf?->id;
         $this->laeuft = $lauf !== null && $lauf->status === 'running';
+        $this->deckelHinweis = $this->deckelHinweisText($lauf);
+    }
+
+    /**
+     * Der Deckel-Satz des Laufs für die Fläche. Reine Weiterleitung an
+     * {@see FoodAlchemistCascadeRun::deckelMeldung()} — der Wortlaut gehört dorthin, wo der
+     * Deckel greift, nicht in die Anzeige.
+     */
+    private function deckelHinweisText(?FoodAlchemistCascadeRun $lauf): ?string
+    {
+        return $lauf?->deckelMeldung();
     }
 
     private function ladeForm(): void
@@ -1765,6 +1793,174 @@ class Index extends Component
         $this->eingabe[$scope]['titel'] = $vorschlag;
         $this->fehler = null;
         $this->meldung = 'Titel vorgeschlagen: „'.$vorschlag.'" — bitte prüfen und anpassen.';
+    }
+
+    /**
+     * Befund des letzten Leitplanken-Vorschlags — bewusst SICHTBAR statt still:
+     * was gesetzt wurde, was verworfen (erfundener Wert), was ignoriert (gültiger
+     * Sitzungs-Parameter, aber kein Regler dieses Tabs) und was offen blieb.
+     *
+     * @var array{scope:string,gesetzt:list<string>,verworfen:list<string>,ignoriert:list<string>,unklar:list<string>,begruendung:?string,confidence:float}|null
+     */
+    public ?array $leitplankenBefund = null;
+
+    /** Diktat: Audio-Blob fürs Briefing (WithFileUploads) + Ziel-Feld. */
+    public $briefAudio = null;
+
+    /**
+     * Ziel des Diktats — eine Property-Pfad-Angabe, die vom CLIENT kommt und darum
+     * gegen eine Whitelist läuft. Ohne sie könnte ein manipulierter Aufruf beliebige
+     * Livewire-Properties überschreiben; Fail-closed ist hier keine Formalie.
+     *
+     * Deckt ALLE Briefing-Felder der Planungsstelle ab (Dominique 2026-09-02: „in der
+     * planungsstelle"): die drei Erstell-Scopes plus die fünf Ausgabeformen.
+     */
+    public string $diktatZiel = 'eingabe.rezept.brief';
+
+    public const DIKTAT_ZIELE = [
+        'eingabe.rezept.brief', 'eingabe.gericht.brief', 'eingabe.concept.brief',
+        'fbBrief', 'skBrief', 'spBrief', 'offerBrief', 'fmtBrief',
+    ];
+
+    /**
+     * BRIEFING → LEITPLANKEN in der Oberfläche. Bis hierher war die Brücke nur per MCP
+     * erreichbar — ein Produkt muss das in sich lösen (Dominique 2026-09-02).
+     *
+     * Die Sitzung wird ABSICHTLICH nicht mitgegeben: der Vorschlag füllt nur die Regler
+     * DIESES Tabs, damit der Mensch die Pills vor dem Go sieht. Persistiert wird am Go
+     * (Start-Tab-Regel) — die Entscheidung bleibt menschlich.
+     */
+    public function leitplankenAusBriefing(string $scope, BriefingLeitplankenService $svc): void
+    {
+        if (! in_array($scope, self::SCOPES, true) || ! isset($this->regler[$scope])) {
+            return;
+        }
+        $brief = trim((string) ($this->eingabe[$scope]['brief'] ?? ''));
+        if ($brief === '') {
+            $this->fehler = 'Für die Leitplanken erst ein Briefing in diesem Tab eingeben.';
+
+            return;
+        }
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team === null) {
+            $this->fehler = 'Kein Team im Kontext.';
+
+            return;
+        }
+
+        try {
+            $r = $svc->ausBriefing($team, $brief);
+        } catch (\Throwable $e) {
+            $this->fehler = 'Leitplanken-Vorschlag fehlgeschlagen: ' . $e->getMessage();
+
+            return;
+        }
+
+        $gesetzt = [];
+        $ignoriert = [];
+        foreach ($r['leitplanken'] as $feld => $wert) {
+            if (! array_key_exists($feld, self::REGLER_DEFAULT)) {
+                // Im Sitzungs-Param-Raum gültig, aber dieser Tab hat den Regler nicht
+                // (z. B. Menü-Quoten). Melden statt verschlucken.
+                $ignoriert[] = (string) $feld;
+
+                continue;
+            }
+            // Formtreue: Multi-Regler bleibt Array, Single-Regler bleibt Skalar — ein String
+            // in `diaet_hart` würde die Pill-Logik (reglerPill) zerlegen.
+            $this->regler[$scope][$feld] = is_array(self::REGLER_DEFAULT[$feld])
+                ? array_values(array_filter((array) $wert, static fn ($v): bool => is_scalar($v)))
+                : (is_array($wert) ? (string) (reset($wert) ?: '') : $wert);
+            $gesetzt[] = (string) $feld;
+        }
+
+        $this->leitplankenBefund = [
+            'scope' => $scope,
+            'gesetzt' => $gesetzt,
+            'verworfen' => $r['verworfen'],
+            'ignoriert' => $ignoriert,
+            'unklar' => $r['unklar'],
+            'begruendung' => $r['begruendung'],
+            'confidence' => $r['confidence'],
+        ];
+        $this->fehler = null;
+        $this->meldung = $gesetzt === []
+            ? 'Keine Leitplanke ableitbar — das Briefing nennt keine der geschlossenen Achsen.'
+            : count($gesetzt) . ' Leitplanke(n) vorgeschlagen — bitte prüfen, das Go bleibt bei dir.';
+    }
+
+    /**
+     * Diktat fürs Briefing: gesprochener Text wird ANGEHÄNGT, nie ersetzt — ein Diktat
+     * ist ein Nachtrag, und ein versehentlich überschriebenes Briefing wäre nicht
+     * wiederherstellbar. Reines STT, kein Tool-Loop: das Briefing soll exakt das sein,
+     * was der Mensch gesagt hat, nicht die Deutung eines Agenten. Die Deutung passiert
+     * danach sichtbar in einem Schritt (Leitplanken vorschlagen).
+     */
+    public function updatedBriefAudio(): void
+    {
+        $this->briefDiktatUebernehmen();                             // dünner Hook, Logik testbar daneben
+    }
+
+    public function briefDiktatUebernehmen(): void
+    {
+        $ziel = in_array($this->diktatZiel, self::DIKTAT_ZIELE, true) ? $this->diktatZiel : null;
+        if ($ziel === null) {
+            $this->fehler = 'Unbekanntes Diktat-Ziel — nichts übernommen.';
+            $this->briefAudio = null;
+
+            return;
+        }
+        if ($this->briefAudio === null) {
+            return;
+        }
+        try {
+            $text = trim(app(SttServiceContract::class)->transcribe(
+                (string) file_get_contents($this->briefAudio->getRealPath()),
+                $this->briefAudio->getMimeType() ?: 'audio/webm',
+            ));
+        } catch (\Throwable $e) {
+            $this->fehler = 'Diktat fehlgeschlagen: ' . $e->getMessage();
+            $this->briefAudio = null;
+
+            return;
+        }
+        $this->briefAudio = null;
+        if ($text === '') {
+            // Kann auch der Prompt-Echo-Riegel im STT sein (Aufnahme ohne Sprache).
+            $this->fehler = 'Diktat war leer — nichts übernommen.';
+
+            return;
+        }
+
+        $alt = trim((string) $this->diktatWert($ziel));
+        $this->diktatSetzen($ziel, $alt === '' ? $text : $alt . ' ' . $text);
+        $this->fehler = null;
+        $this->meldung = 'Diktat übernommen — bitte gegenlesen.';
+    }
+
+    /** Liest das Whitelist-Ziel; `eingabe.<scope>.brief` ist verschachtelt, der Rest flach. */
+    private function diktatWert(string $ziel): string
+    {
+        if (str_starts_with($ziel, 'eingabe.')) {
+            $scope = explode('.', $ziel)[1] ?? '';
+
+            return (string) ($this->eingabe[$scope]['brief'] ?? '');
+        }
+
+        return (string) ($this->{$ziel} ?? '');
+    }
+
+    private function diktatSetzen(string $ziel, string $wert): void
+    {
+        if (str_starts_with($ziel, 'eingabe.')) {
+            $scope = explode('.', $ziel)[1] ?? '';
+            if (isset($this->eingabe[$scope])) {
+                $this->eingabe[$scope]['brief'] = $wert;
+            }
+
+            return;
+        }
+        $this->{$ziel} = $wert;
     }
 
     /**
@@ -3045,6 +3241,8 @@ class Index extends Component
         $lauf = $cascade->lauf($team, $this->laufId);
         $this->laeuft = $lauf !== null && $lauf->status === 'running';
         $this->anreicherungLaeuft = $this->anreicherungOffen($lauf);
+        // Auch hier: ein Deckel, der erst IM JOB greift (Concept-Slots), wird sonst nie sichtbar.
+        $this->deckelHinweis = $this->deckelHinweisText($lauf);
     }
 
     /**

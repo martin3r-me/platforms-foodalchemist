@@ -9,6 +9,7 @@ use Livewire\WithFileUploads;
 use Platform\FoodAlchemist\Jobs\EnrichRecipeJob;
 use Platform\FoodAlchemist\Livewire\Concerns\HatRezeptCopilot;
 use Platform\FoodAlchemist\Livewire\Concerns\InteractsWithSavedToast;
+use Platform\FoodAlchemist\Livewire\Concerns\TauschtRezept;
 use Platform\FoodAlchemist\Models\FoodAlchemistProductionStation;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipeCategory;
@@ -33,6 +34,7 @@ class RecipeModal extends Component
 {
     use HatRezeptCopilot;   // Spec 03 L6b
     use InteractsWithSavedToast;
+    use TauschtRezept;      // Verwaltungs-Reiter: tauschen + löschen (dieselbe Mechanik wie im Panel)
     use WithFileUploads;
 
     /** Spec 43 (Bild-Epic): Gericht-Foto (Stammdaten). */
@@ -124,6 +126,9 @@ class RecipeModal extends Component
         $this->copilotZuruecksetzen();                             // L6b: Befunde gehören zu GENAU diesem Rezept
         $this->recipeId = $id;
         $this->form = self::LEER;
+        $this->tauschSuche = '';
+        $this->fehlerTausch = null;
+        $this->hinweisTausch = null;
         $this->geladeneTabs = [($id === null ? 'eigenschaften' : 'aufbau') => true];
 
         if ($id !== null) {
@@ -167,13 +172,21 @@ class RecipeModal extends Component
         $this->dispatch('modal.open', name: 'recipe-modal');
     }
 
+    /** Nach dem Löschen schließt der Editor zusätzlich — das gelöschte Rezept ist nicht mehr da. */
+    protected function nachRezeptLoeschung(): void
+    {
+        $this->recipeId = null;
+        $this->istOffen = false;
+        $this->dispatch('modal.close', name: 'recipe-modal');
+    }
+
     /**
      * Schwere Reiter werden erst bei ihrem ersten Besuch aufgebaut. Der aktive Aufbau-Reiter
      * bleibt beim Öffnen vollständig bedienbar; weitere Besuche sind danach reine Alpine-Klicks.
      */
     public function tabLaden(string $tab): void
     {
-        if (in_array($tab, ['aufbau', 'eigenschaften', 'preparation', 'details', 'sensorik', 'feedback', 'notes'], true)) {
+        if (in_array($tab, ['aufbau', 'eigenschaften', 'preparation', 'details', 'sensorik', 'feedback', 'notes', 'verwaltung'], true)) {
             $this->geladeneTabs[$tab] = true;
         }
     }
@@ -620,7 +633,7 @@ class RecipeModal extends Component
         // A (Dominique 2026-08-27): gezielter Wissens-Pull — die Eigenschaften-KI bekommt jetzt das
         // Regelwerk (recipe.eigenschaften-Routing; regelwerkBlock fällt für dieses Feature auf das
         // Basisrezepte-Regelwerk zurück). Leeres Routing = leerer Block (no-op), also fail-soft.
-        $wissenBlock = $wissen->contextFor('recipe.eigenschaften', trim(($this->form['name'] ?? '').' '.implode(' · ', $zutaten)));
+        $wissenBlock = $wissen->contextFor(Auth::user()?->currentTeamRelation, 'recipe.eigenschaften', trim(($this->form['name'] ?? '').' '.implode(' · ', $zutaten)));
         $wissenOpts = ($wissenBlock['block'] ?? '') !== ''
             ? ['knowledge' => $wissenBlock['block'], 'knowledge_used' => $wissenBlock['files_used'] ?? []]
             : [];
@@ -815,6 +828,13 @@ class RecipeModal extends Component
                 ? app(FoodAlchemistMediaService::class)->url($r->image_context_file_id, $r->image_path)
                 : null,
             'istTemplate' => (bool) ($r?->is_template ?? false),
+            // Verwaltungs-Reiter (tauschen + löschen). Bewusst NICHT hinter $geladeneTabs gegated:
+            // `speichern()` ruft bei Neuanlagen `ladeRezept()` und setzt die Reiter-Memo zurück,
+            // während Alpines `visited` clientseitig bestehen bleibt — der Reiter wäre danach leer,
+            // ohne dass ein zweiter Klick ihn nachlädt. Ein paar Count-Queries sind der Preis.
+            'tauschBilanz' => $r !== null ? $this->tauschBilanz() : null,
+            'tauschKandidaten' => $r !== null ? $this->tauschKandidaten() : collect(),
+            'tauschReferenzen' => $r !== null ? $this->tauschReferenzen() : null,
             'voll' => $voll,
             'bulkRun' => $bulkRun,
             'bulkOffen' => $bulkRun !== null

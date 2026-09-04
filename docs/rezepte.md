@@ -46,6 +46,63 @@ Für alles, was die Anleitung nur *liest* (Suche, Prozessanker-Erkennung, Auswer
 
 Bestehende Rezepte werden per `php artisan foodalchemist:steps-backfill` einmalig überführt (deterministisch, ohne KI; Fotos wandern über ihre alte Schrittnummer an den passenden Schritt).
 
+**Das Report-Blatt (PDF + Browser-Druck).** Rezept, Gericht, Concept, Format, Foodbook und
+Speisekarte teilen ein Blatt-Layout. Zwei Ausgabewege, ein Satzspiegel: DomPDF („PDF
+herunterladen") und der Browser-Druck. Was auf dem Blatt trägt:
+
+| Element | Wofür |
+|---|---|
+| **Kaskaden-Adresse** (`K1`, `K3.2`) | Jede Komponente hat eine Hausnummer: `K3` = drittes Basisrezept des Gerichts, `K3.2` = deren zweite Komponente. In der Zutatenzeile steht die Adresse als Verweis, weiter unten trägt der Block sie im Kopf — die Zuordnung hält über Seitenumbrüche, wo Einrückung allein nicht reicht. |
+| **Herkunftszeile** | „Komponente 3 von 4 in *Amuse: Papadam* · Einsatz dort: 0,005 kg" — ein loses Blatt bleibt seinem Gericht zuordenbar. |
+| **€ / Einheit** | Bezugspreis in der Einsatz-Einheit, auf €/kg bzw. €/l normalisiert. |
+| **EK-Anteil** | Was die Zeile im Ansatz kostet, plus Σ-Zeile zum Gegenrechnen gegen „EK gesamt". Beides aus derselben Kosten-Kaskade wie `ek_total_eur` — der Report rechnet nicht selbst. Beträge unter 1 € mit drei Nachkommastellen (Amuse-Mengen). |
+| **Kollipreis** | In der Lieferantenspalte, mit Gebinde — die Bestell-Wahrheit neben der Einsatz-Wahrheit. |
+| **Fotostreifen** | Alle Schrittfotos eines Rezepts in einer Reihe unter der Anleitung, mit Schritt-Nummer. |
+
+Zwei Fallen, die dieses Blatt kosten:
+
+- **Fotos müssen als `data:`-URI ins Markup.** DomPDF lädt keine Remote-URL, und die
+  Foto-URL ist eine signierte Route mit TTL. Der dataUri gehört über
+  `FoodAlchemistMediaService::dataUri($contextFileId, $pfad)` geholt — die ContextFile
+  liegt auf ihrem **eigenen** Disk (Produktion: nicht `public`).
+- **`@page` braucht `size` UND `margin` in beiden Modi.** Ohne beides druckt Chrome auf
+  dem Locale-Default-Papier bis an den Blattrand, also in den nicht druckbaren Bereich.
+  Die Bänder bleiben dabei im Fluss: als `position: fixed` legt Chrome sie beim Drucken
+  über den Satz statt in den Seitenrand.
+
+Wer `partials/report-recipe-node` in ein eigenes Dokument einbindet, muss
+`partials/report-node-css` mit einbinden — sonst laufen Fotos und Badges ohne Maße.
+
+### 🔁 Ein Basisrezept überall austauschen
+
+Manchmal stellt sich heraus, dass zwei Basisrezepte dasselbe sind — oder dass eine Komponente ab jetzt anders gebaut wird. Dann müsste man jedes Gericht einzeln aufmachen und die Zeile umhängen. Dafür gibt es den **Tausch**: im rechten Detail-Panel und im Rezept-Editor unter **Verwaltung**.
+
+- Du siehst zuerst, **wo das Rezept überhaupt hängt**: wie viele Zeilen in wie vielen eigenen Gerichten und Basisrezepten.
+- Ein Suchfeld wählt das **Ziel-Rezept**, ein Klick hängt **alle** Verwendungen um. **Menge, Einheit und die Verlust-Werte der Zeilen bleiben stehen** — es wechselt nur die Komponente.
+- Die betroffenen Rezepte werden anschließend **neu gerechnet** (Ausbeute, Allergene, Wareneinsatz — inklusive der Rezepte, die darüber liegen).
+- **Geerbte Rezepte** (aus dem Master-Katalog) bleiben unberührt und werden in der Rückmeldung mitgezählt — dort darf nur das Besitzer-Team ändern.
+- Ein Tausch, der ein Rezept in sich selbst schachteln würde (**Zyklus**), wird abgewiesen und benannt.
+- Steckte das Ziel in einem Eltern-Rezept **schon drin**, sagt die Rückmeldung das — dort stehen danach zwei Zeilen, deren Mengen du zusammenführen willst.
+
+### 🗑️ Ein Basisrezept löschen
+
+Im selben Verwaltungs-Block sitzt der Lösch-Knopf — und der sagt vorher ehrlich, was dagegen spricht.
+
+**Blockiert das Löschen** (die Zahlen stehen im Block):
+
+- das Rezept steckt noch als **Komponente** in Gerichten oder anderen Basisrezepten
+- es hängt im **Ersatz-Katalog** (make-or-buy)
+- es ist direkt in eine **Ausgabe** gepinnt (Foodbook, Speisekarte, Speiseplan, Angebot, Konzept)
+- es steht in einem **offenen Produktionsauftrag** (geplant oder in Arbeit)
+
+**Blockiert nicht, wird nur genannt:** Zeilen in *abgeschlossenen* Produktionsaufträgen — die Historie bleibt lesbar — und Rezepte, die einmal aus diesem instanziiert wurden.
+
+Ist nichts davon da, wird gelöscht — als **Soft-Delete**: das Rezept verschwindet aus den Listen, die Zeile bleibt in der Datenbank. Gelöscht wird nur, was dem eigenen Team gehört; **geerbte** Rezepte aus dem Master-Katalog kann nur ihr Besitzer-Team entfernen, und **Gerichte** haben ihren eigenen Weg im Verkaufs-Editor.
+
+Der Tausch ist damit die **Vorstufe zum Löschen**: erst umhängen, dann löschen.
+
+> Für Grundprodukte gibt es beides genauso — im GP-Detail und im GP-Editor unter **Verwaltung**.
+
 ---
 
 ## 🍽️ Gerichte (Verkaufsrezepte)

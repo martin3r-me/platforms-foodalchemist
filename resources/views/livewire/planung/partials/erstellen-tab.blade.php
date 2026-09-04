@@ -18,7 +18,43 @@
             </button>
         </div>
         <label class="{{ $label ?? 'text-[11px] text-gray-500' }}">Beschreibung (geht in die Erzeugung)</label>
-        <textarea wire:model="eingabe.{{ $scope }}.brief" rows="3" class="{{ $input }} mb-3" placeholder="Constraints, Anlass, Richtung …"></textarea>
+        <textarea wire:model="eingabe.{{ $scope }}.brief" rows="3" class="{{ $input }} mb-2" placeholder="Constraints, Anlass, Richtung …"></textarea>
+
+        {{-- Phase C2, zweite Ebene: hier ist Sprache EINGABE, nicht Steuerung. Der Recorder
+             liegt im geteilten Baustein — er sitzt an ALLEN Briefing-Feldern der
+             Planungsstelle, nicht nur hier (Dominique: „in der planungsstelle"). --}}
+        @include('foodalchemist::livewire.planung.partials.diktat', [
+            'ziel' => 'eingabe.' . $scope . '.brief',
+            'mitLeitplanken' => $scope,
+        ])
+
+        {{-- Befund sichtbar: gesetzt / verworfen / ignoriert / offen. Ein stiller Vorschlag
+             wäre die schlechtere Hälfte — der Mensch muss sehen, was die KI NICHT wusste. --}}
+        @if(($leitplankenBefund['scope'] ?? null) === $scope)
+            <div class="mb-3 rounded-lg bg-black/[0.03] px-3 py-2 space-y-1.5 text-[11px]" data-planung-leitplanken-befund>
+                @if(!empty($leitplankenBefund['gesetzt']))
+                    <p class="text-gray-900">Gesetzt: <b>{{ implode(', ', $leitplankenBefund['gesetzt']) }}</b>
+                        <span class="text-gray-500">· Konfidenz {{ round(($leitplankenBefund['confidence'] ?? 0) * 100) }} %</span></p>
+                @endif
+                @if(!empty($leitplankenBefund['unklar']))
+                    <div class="rounded bg-amber-500/10 border border-amber-500/30 px-2 py-1.5">
+                        <p class="font-medium text-amber-700">Offen — bitte entscheiden:</p>
+                        <ul class="list-disc pl-4 text-amber-700/90">
+                            @foreach($leitplankenBefund['unklar'] as $u)<li>{{ $u }}</li>@endforeach
+                        </ul>
+                    </div>
+                @endif
+                @if(!empty($leitplankenBefund['verworfen']))
+                    <p class="text-rose-500">Verworfen (kein gültiger Wert): {{ implode(', ', $leitplankenBefund['verworfen']) }}</p>
+                @endif
+                @if(!empty($leitplankenBefund['ignoriert']))
+                    <p class="text-gray-500">Nicht auf diesem Tab: {{ implode(', ', $leitplankenBefund['ignoriert']) }}</p>
+                @endif
+                @if(($leitplankenBefund['begruendung'] ?? null) !== null)
+                    <p class="text-gray-500">{{ $leitplankenBefund['begruendung'] }}</p>
+                @endif
+            </div>
+        @endif
         @if($scope === 'rezept')
             <p class="text-[11px] text-gray-500">Basisrezepte haben keinen Kreativ-Modus. Vorhandene Basisrezepte und Grundprodukte werden zuerst geprüft; neu entsteht nur eine echte Lücke.</p>
         @else

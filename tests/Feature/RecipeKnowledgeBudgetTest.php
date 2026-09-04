@@ -29,7 +29,7 @@ it('begrenzt Rezeptwissen nach Zeichenbudget statt nach einer starren Dokumentza
         ]);
     }
 
-    $ctx = app(KnowledgeContextService::class)->contextFor(
+    $ctx = app(KnowledgeContextService::class)->contextFor(null,
         'ai_generate_recipe', 'Rinderfilet als Hauptgang', null, [], ['level' => 'gehoben']
     );
 
@@ -57,7 +57,7 @@ it('verwendet den Wissensplan des Gerichts als Scope für ein Basisrezept', func
         'created_at' => now(), 'updated_at' => now(),
     ]);
 
-    $ctx = app(KnowledgeContextService::class)->contextFor(
+    $ctx = app(KnowledgeContextService::class)->contextFor(null,
         'ai_generate_recipe', 'Kartoffel französisch japanisch', null, [], [
             'rezept_typ' => 'basisrezept',
             '_knowledge_scope' => ['franzoesische-kartoffeltechnik@v1'],
