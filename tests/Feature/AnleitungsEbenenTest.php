@@ -44,12 +44,17 @@ it('vk.regeneration bleibt die strukturierte Wahrheit der Regenerations-Ebene', 
         ->and($task)->toContain('programme');
 });
 
-it('vk.plating bleibt frei von Regenerations-Parametern', function () {
+it('vk.plating fordert keine Regenerations-Parameter an', function () {
+    // Wie bei `recipe.steps`: der Prompt DARF die Nachbar-Ebene nennen, um sie
+    // abzugrenzen — er darf sie nur nicht anfordern. Der Test prüft deshalb das
+    // Verbot, nicht die Abwesenheit des Wortes (so war er vorher formuliert und
+    // wurde durch die eigene Abgrenzungs-Klausel rot).
     $task = (string) (config('foodalchemist.prompts', [])['vk.plating']['task'] ?? null);
 
-    foreach (['core_temp_c', 'Kerntemperatur', 'regenerier'] as $fremd) {
-        expect($task)->not->toContain($fremd);
-    }
+    expect($task)->toContain('KEIN Regenerations-')
+        // Das strukturierte Schema der Regenerations-Ebene hat hier nichts zu suchen.
+        ->and($task)->not->toContain('core_temp_c')
+        ->and($task)->not->toContain('programme');
 });
 
 it('vk.generator beansprucht preparation nicht mehr fuer das Plating', function () {
@@ -413,4 +418,38 @@ it('die Anreicherung setzt Batchgrenzen, aber keine Ruestzeit am Gericht', funct
     // und der Topf-Deckel blieb auf dem Team-Default (= falsche Personenminuten).
     expect(config('foodalchemist.prompts', [])['recipe.eigenschaften']['task'] ?? '')
         ->toContain('batch_max_kg');
+});
+
+// ── Jeder Ebene ihr eigener Prompt ───────────────────────────────────────────
+
+it('vk.plating fordert eine nummerierte Anrichte-Schrittfolge, keine Prosa', function () {
+    // Vorher lieferte der Prompt einen Prosa-Block. Daraus konnte der Parser keine
+    // Schritte machen → der Anrichten-Tab blieb bei „0 Schritte", obwohl der
+    // Vorschlag ankam. Der Text ist der EINGANG der Schritte, also muss er
+    // nummeriert sein.
+    $task = (string) (config('foodalchemist.prompts', [])['vk.plating']['task'] ?? null);
+
+    expect($task)->toContain('nummerierte Schrittfolge')
+        ->and($task)->toContain('«1.»')
+        // Und die Nachbar-Ebenen bleiben draußen.
+        ->and($task)->toContain('KEIN Regenerations-')
+        ->and($task)->toContain('tranchieren oder portionieren');
+});
+
+it('recipe.steps beschreibt am Gericht nur das Fertigstellen', function () {
+    $task = (string) (config('foodalchemist.prompts', [])['recipe.steps']['task'] ?? null);
+
+    expect($task)->toContain('FERTIGSTELLEN am Einsatztag')
+        ->and($task)->toContain('ZWISCHEN regeneriert und angerichtet')
+        // „temperieren" ist Regeneration und hatte hier nichts zu suchen.
+        ->and($task)->not->toContain('temperieren');
+});
+
+it('die beiden Ebenen-Prompts ueberschneiden sich nicht', function () {
+    $steps = (string) (config('foodalchemist.prompts', [])['recipe.steps']['task'] ?? null);
+    $plating = (string) (config('foodalchemist.prompts', [])['vk.plating']['task'] ?? null);
+
+    // Der Teller-Aufbau gehört nur ins Plating, das Tranchieren nur ins Fertigstellen.
+    expect($plating)->toContain('Aufbau-Reihenfolge')
+        ->and($steps)->not->toContain('Aufbau-Reihenfolge');
 });

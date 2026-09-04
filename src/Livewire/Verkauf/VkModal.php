@@ -498,12 +498,23 @@ class VkModal extends Component
             return;
         }
 
-        app(\Platform\FoodAlchemist\Services\RecipeStepService::class)->ausMarkdown(
+        $ebene = \Platform\FoodAlchemist\Models\FoodAlchemistRecipeStep::EBENE_ANRICHTEN;
+        $anzahl = app(\Platform\FoodAlchemist\Services\RecipeStepService::class)->ausMarkdown(
             $rezept,
             trim($wert),
             ueberschreiben: true,
-            ebene: \Platform\FoodAlchemist\Models\FoodAlchemistRecipeStep::EBENE_ANRICHTEN,
+            ebene: $ebene,
         );
+
+        if ($anzahl === 0) {
+            $this->fehler = 'Im KI-Vorschlag war kein Anrichte-Schritt erkennbar.';
+
+            return;
+        }
+
+        // Der eingebettete Step-Editor haelt seinen eigenen Puffer — ohne dieses Event
+        // zeigte er weiter „0 Schritte", obwohl die Zeilen geschrieben waren.
+        $this->dispatch('schritte-aktualisiert', recipeId: (int) $rezept->id, ebene: $ebene);
         $this->dispatch('recipe-gespeichert');
     }
 

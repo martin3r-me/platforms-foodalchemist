@@ -3,6 +3,7 @@
 namespace Platform\FoodAlchemist\Livewire\Recipes;
 
 use Illuminate\Support\Facades\Auth;
+use Livewire\Attributes\On;
 use Livewire\Component;
 use Livewire\WithFileUploads;
 use Platform\Core\Models\Team;
@@ -66,6 +67,28 @@ class StepEditor extends Component
      * (ein Mise-en-Place-Bild darf an beiden Ebenen hängen).
      */
     public string $ebene = FoodAlchemistRecipeStep::EBENE_PRODUKTION;
+
+    /**
+     * Neu laden, wenn jemand von AUSSEN in unsere Schritte geschrieben hat
+     * (z. B. der ✨-Plating-Knopf am Panel, der den KI-Vorschlag direkt als
+     * Anrichte-Schritte speichert). Ohne diesen Listener zeigte der eingebettete
+     * Editor weiter „0 Schritte", obwohl die Zeilen in der DB standen.
+     *
+     * Fremde Rezepte und fremde Ebenen ignorieren — am Gericht hängen zwei
+     * Instanzen dieser Komponente nebeneinander.
+     */
+    #[On('schritte-aktualisiert')]
+    public function schritteNeuLaden(?int $recipeId = null, ?string $ebene = null): void
+    {
+        if ($recipeId !== null && (int) $recipeId !== (int) $this->recipeId) {
+            return;
+        }
+        if ($ebene !== null && $ebene !== $this->ebene) {
+            return;
+        }
+
+        $this->hydrierePuffer();
+    }
 
     public function mount(?int $recipeId = null, ?string $ebene = null): void
     {

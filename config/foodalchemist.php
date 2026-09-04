@@ -702,7 +702,8 @@ return [
         'gericht' => [
             'ziel' => 'Ablauf der Fertigstellung am Einsatztag fuer ein Verkaufsgericht.',
             'hinweis' => 'Komponenten sind vorbereitet oder fertig produziert. Nicht neu herstellen. '
-                . 'Nur bereitstellen, portionieren, tranchieren, montieren, abschmecken und uebergeben. '
+                . 'Nur die Handgriffe ZWISCHEN regeneriert und angerichtet: Mise en Place am Pass, '
+                . 'portionieren, tranchieren, montieren, abschmecken, abbinden, an den Pass geben. '
                 . 'Das Regenerations-Programm (Geraet, Temperatur, Dauer, Kerntemperatur) und der '
                 . 'Teller-Aufbau werden getrennt gefuehrt und gehoeren NICHT in diese Schritte.',
         ],
@@ -1152,9 +1153,11 @@ return [
             'tier' => 'A',                                            // langer, strukturierter Einzeltext
             'max_tokens' => 8000,
             'task' => 'Schreibe die Zubereitung als Schrittfolge. '
-                . 'Wenn rezept_typ=gericht: schreibe KEINE Herstellung der Komponenten, sondern den kompakten '
-                . 'Ablauf am Einsatztag — bereitstellen, temperieren, fertigstellen (abschmecken, montieren), '
-                . 'portionieren, uebergeben. Komponenten gelten als vorbereitet bzw. fertig produziert. '
+                . 'Wenn rezept_typ=gericht: schreibe KEINE Herstellung der Komponenten, sondern nur das '
+                . 'FERTIGSTELLEN am Einsatztag — die Handgriffe ZWISCHEN regeneriert und angerichtet: '
+                . 'Mise en Place am Pass, portionieren, tranchieren/aufschneiden, montieren, abschmecken, '
+                . 'abbinden, Garnitur vorbereiten, an den Pass geben. Komponenten gelten als vorbereitet '
+                . 'bzw. fertig produziert. '
                 // Regelwerk Verkaufsgerichte §3: drei getrennte Ebenen. Vorher forderte dieser
                 // Prompt selbst einen "Service-, Regenerations- und Anrichteablauf" — damit stand
                 // das Regenerations-Programm zweimal im System (hier als Prosa, in
@@ -1321,11 +1324,26 @@ return [
                 . 'zutaten: [{text, quantity, unit, sub_rezept (bool, default false)}], preparation, '
                 . 'komponenten: [{name, zutaten: [{text, quantity, unit}], preparation}] (leer, wenn keine)}.',
         ],
+        // §3.3 Anrichten. Liefert bewusst MARKDOWN mit nummerierten Schritten und nicht
+        // ein `steps`-Array: derselbe Prompt speist die Anreicherung (Bulk-Zielfeld
+        // `plating_text`) UND den ✨-Knopf, der den Text in Anrichte-Schritte parst. Ein
+        // Schema-Wechsel haette den Bulk-Accept gebrochen.
+        //
+        // Vorher forderte er einen Prosa-Block („Pro Portion ca. 432 g anrichten. Vorgewaermten
+        // Teller verwenden …"). Daraus konnte `RecipeStepService::parse()` keine Schritte
+        // machen — der Anrichten-Tab blieb bei „0 Schritte", obwohl der Vorschlag ankam.
         'vk.plating' => [
             'tier' => 'A',                                            // V-02
-            'task' => 'Schreibe die Hybrid-Plating-Anweisung fuers Verkaufsrezept (Teller-Aufbau, '
-                . 'Mengenverteilung pro Komponente, Service-Anweisung — NICHT die Produktion): '
-                . 'werte = {preparation}.',
+            'task' => 'Schreibe die ANRICHTE-Anleitung fuers Gericht als nummerierte Schrittfolge '
+                . '(Markdown: jede Zeile beginnt mit «1.», «2.» …; optional «## Abschnitt» als '
+                . 'Ueberschrift). Ein Schritt = EIN Handgriff am Pass, in Aufbau-Reihenfolge: '
+                . 'Teller/Vehikel vorbereiten, Basis (Sauce/Creme/Spiegel) setzen, Hauptkomponente '
+                . 'platzieren, Beilagen anlegen, Garnitur, Finish (Sauce nachziehen, Crunch zuletzt), '
+                . 'Uebergabe. Nenne die Menge je Teller pro Komponente. '
+                . 'ABGRENZUNG (verbindlich): KEINE Produktion der Komponenten, KEIN Regenerations-'
+                . 'Programm (keine Grad-, Minuten- oder Kerntemperatur-Werte fuers Wiedererhitzen) '
+                . 'und keine Fertigstellungs-Handgriffe wie tranchieren oder portionieren — die '
+                . 'stehen in ihren eigenen Ebenen. 4-8 Schritte: werte = {preparation}.',
         ],
         'vk.name_putzen' => [
             'tier' => 'B',

@@ -878,7 +878,7 @@
              visuellste Arbeitsgang. Statt einer zweiten Foto-Mechanik läuft es über
              dieselben `recipe_steps` mit `ebene='anrichten'`; `plating_text` bleibt der
              gerenderte Spiegel (Foodbook/Report lesen unverändert das Textfeld). --}}
-        <x-foodalchemist::modal-section title="Anrichten &amp; Ausgabe">
+        <x-foodalchemist::modal-section title="Anrichten & Ausgabe">
             <x-slot:actions>
                 <button type="button" wire:click="ki('plating')" class="{{ $btnAi }}" title="vk.plating: Plating-Vorschlag — wird in Anrichte-Schritte geparst" data-ki-plating>@svg('heroicon-o-sparkles', 'w-3.5 h-3.5')Plating</button>
             </x-slot:actions>
