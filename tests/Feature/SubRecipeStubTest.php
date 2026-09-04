@@ -96,7 +96,7 @@ it('getParents liefert die ↑-Navigation (DoD: Rekursion sichtbar)', function (
         ->toBe(['Suppe: A', 'Suppe: B']);
 });
 
-it('#2 §7: unsicheres Sub-Rezept deckelt Allergen-Konfidenz des Eltern auf low + Felder unbekannt', function () {
+it('#2 §7: unsicheres Sub-Rezept deckelt die Allergen-Konfidenz des Eltern auf low', function () {
     // Sub mit unbekannter Allergen-Konfidenz (Stub-artig, F7.3).
     $sub = FoodAlchemistRecipe::create([
         'team_id' => $this->rootTeam->id, 'name' => 'Unsicherer Fond', 'recipe_key' => 'test-unsicherer-fond', 'status' => 'stub',
@@ -114,5 +114,30 @@ it('#2 §7: unsicheres Sub-Rezept deckelt Allergen-Konfidenz des Eltern auf low 
 
     $eltern->refresh();
     expect($eltern->allergens_confidence)->toBe('low')              // NICHT 'high' — §7 schwächstes Glied
-        ->and($eltern->allergen_gluten)->toBe('unbekannt');         // Totalreset, keine falsche Sicherheit
+        ->and($eltern->allergen_gluten)->toBe('unbekannt');         // das Sub selbst weiss nichts ⇒ kein Beitrag
+});
+
+it('#2b §7 F7.5: ein low-Sub deckelt die Konfidenz, verwirft die Allergen-Werte des Eltern aber NICHT', function () {
+    // Sub kennt seine Allergene (Butter/Mehl), ist aber nur low-konfident — der Regelfall im Bestand:
+    // die GP-Konfidenz kommt live aus dem LA-Profil und ist selten 'high'.
+    $sub = FoodAlchemistRecipe::create([
+        'team_id' => $this->rootTeam->id, 'name' => 'Fond: mit bekannten Allergenen', 'recipe_key' => 'test-fond-bekannt',
+        'status' => 'approved', 'allergens_confidence' => 'low',
+        'allergen_gluten' => 'enthalten', 'allergen_milk' => 'enthalten', 'allergen_tree_nuts' => 'spuren',
+    ]);
+    $eltern = FoodAlchemistRecipe::create(['team_id' => $this->rootTeam->id, 'name' => 'Gericht auf low-Sub', 'recipe_key' => 'test-eltern-low-sub', 'status' => 'draft']);
+    FoodAlchemistRecipeIngredient::create([
+        'team_id' => $this->rootTeam->id, 'recipe_id' => $eltern->id, 'position' => 1,
+        'raw_text' => 'Fond', 'quantity' => 500, 'unit_vocab_id' => $this->g->id,
+        'referenced_recipe_id' => $sub->id, 'match_method' => 'recipe_ref',
+    ]);
+
+    app(\Platform\FoodAlchemist\Services\RecipeRecomputeService::class)->recomputeAndPropagate($eltern->id);
+
+    $eltern->refresh();
+    expect($eltern->allergens_confidence)->toBe('low')              // Konfidenz wird gedeckelt (F7.4 c)
+        ->and($eltern->allergen_gluten)->toBe('enthalten')          // ... die WERTE bleiben (F7.5)
+        ->and($eltern->allergen_milk)->toBe('enthalten')
+        ->and($eltern->allergen_tree_nuts)->toBe('spuren')
+        ->and($eltern->allergen_fish)->toBe('unbekannt');           // kein Beitrag ⇒ weiterhin unbekannt
 });

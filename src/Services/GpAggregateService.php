@@ -27,6 +27,13 @@ class GpAggregateService
     public const ALLERGEN_KONF_MAP = ['high' => 1.0, 'medium' => 0.66, 'low' => 0.33, 'none' => 0.0];
 
     /**
+     * kategorial → Rang (Spiegel von RecipeRecomputeService::KONF_RANG) — Single source für die
+     * Rezept-Allergen-Konfidenz (§7 F7.4). `none` = kein LA-Allergenprofil ⇒ LOW: der GP trägt in
+     * allergene() ohnehin nichts bei (source `keine`), darf die Konfidenz aber nicht schönen.
+     */
+    public const ALLERGEN_KONF_RANG = ['high' => 3, 'medium' => 2, 'low' => 1, 'none' => 1];
+
+    /**
      * Effektive Allergen-Auflösung je GP:
      * [feld => ['value' => AllergenValue, 'source' => override|mutter|la|keine]].
      */
