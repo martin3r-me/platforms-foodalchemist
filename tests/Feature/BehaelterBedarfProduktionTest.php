@@ -258,3 +258,76 @@ it('eine NICHT durchgängige Komponente zählt am Gericht sehr wohl', function (
     expect($regen['bereits_gezaehlt'])->toBeFalse()
         ->and($regen['varianten'][0]['behaelter'])->toBe('GN 1/1 65mm');
 });
+
+it('am Konzept skaliert der Bedarf mit der Personenzahl — aus dem Produktionspfad', function () {
+    // BEFUND: im Concept-Scope treibt `pax` NUR die Kosten-Simulation; `faktor` wird dort nie
+    // gesetzt. Der Bericht haette die Ansatzgroesse gezeigt — bei 50 wie bei 500 Personen
+    // dieselbe Zahl. Der Bedarf kommt deshalb aus dem echten Produktionsblatt.
+    $sauce = $this->makeRecipe($this->rootTeam, 'Sauce: Pfeffer', ['yield_kg' => 10]);
+    $this->makeIngredient($sauce, 'Sahne', $this->makeGp($this->rootTeam, 'Sahne'), '10000');
+    $sauce->forceFill(['yield_kg' => 10])->save();
+    ($this->behaelterAn)($sauce, RC::ZWECK_ABFUELLEN, $this->eimer, 9.0);
+
+    $teller = $this->makeRecipe($this->rootTeam, 'Teller: Steak', [
+        'is_sales_recipe' => true, 'sales_unit_count' => 1, 'yield_kg' => 0.3,
+    ]);
+    ($this->alsKomponente)($teller, $sauce, '100');
+    // Portionsgewicht: ohne das ergibt eine Gramm-Menge am Slot kein Portions-Aequivalent.
+    $teller->forceFill(['yield_kg' => 0.3, 'sales_quantity_per_unit_g' => 300])->save();
+
+    $concept = \Platform\FoodAlchemist\Models\FoodAlchemistConcept::create([
+        'team_id' => $this->rootTeam->id, 'name' => 'Buffet Herbst', 'status' => 'draft',
+    ]);
+    \Platform\FoodAlchemist\Models\FoodAlchemistConceptSlot::create([
+        'team_id' => $this->rootTeam->id, 'concept_id' => $concept->id, 'position' => 1,
+        'sales_recipe_id' => $teller->id, 'quantity' => 300,
+        'unit_vocab_id' => $this->unitG($this->rootTeam)->id,
+    ]);
+
+    $svc = app(\Platform\FoodAlchemist\Services\ReportExportService::class);
+    $anzahl = function (int $pax) use ($svc, $concept, $sauce) {
+        $daten = $svc->conceptDaten($this->rootTeam, (int) $concept->id, [
+            'behaelter' => true, 'kaskade' => true, 'pax' => $pax, 'simulation' => false,
+        ]);
+
+        // Der Bedarf der Sauce haengt an IHREM Knoten — im Concept steht sie als Komponente
+        // unter dem Gericht.
+        $suche = function (array $node) use (&$suche, $sauce) {
+            if ((int) ($node['id'] ?? 0) === (int) $sauce->id) {
+                return $node['behaelter'] ?? null;
+            }
+            foreach ($node['ingredients'] ?? [] as $kind) {
+                $treffer = is_array($kind['subrecipe'] ?? null) ? $suche($kind['subrecipe']) : null;
+                if ($treffer !== null) {
+                    return $treffer;
+                }
+            }
+
+            return null;
+        };
+
+        foreach ($daten['concept']['slots'] ?? [] as $slot) {
+            foreach ($slot['gerichte'] ?? [] as $g) {
+                $treffer = $suche($g['recipe'] ?? []);
+                if ($treffer !== null) {
+                    return $treffer;
+                }
+            }
+        }
+
+        return null;
+    };
+
+    $klein = $anzahl(50);
+    $gross = $anzahl(500);
+
+    //  50 Pax × 100 g =  5 kg Bedarf → aber ein Basisrezept wird in GANZEN Ansaetzen gekocht:
+    //                     1 Ansatz = 10 kg produziert → 2 Eimer à 9 kg.
+    // 500 Pax × 100 g = 50 kg Bedarf → 5 Ansaetze = 50 kg → 6 Eimer.
+    // Vorher stand hier zweimal dieselbe Zahl, weil am Concept ueberhaupt nichts skalierte.
+    expect($klein)->not->toBeNull()
+        ->and($gross)->not->toBeNull()
+        ->and($klein[0]['kurz'])->not->toBe($gross[0]['kurz'])
+        ->and($klein[0]['kurz'])->toContain('2× Eimer 10 l')
+        ->and($gross[0]['kurz'])->toContain('6× Eimer 10 l');
+});

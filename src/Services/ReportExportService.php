@@ -196,6 +196,8 @@ class ReportExportService
             ])
             ->findOrFail($id);
 
+        $this->behaelterAusConcept($team, $concept, $optionen);
+
         $slots = $concept->slots->map(function ($slot) use ($optionen) {
             $gerichte = collect();
             if ($slot->dish !== null) {
@@ -720,6 +722,56 @@ class ReportExportService
      * @return array<string, mixed>
      */
     /**
+     * Behälter-Bedarf je Rezept-Id, wenn er aus dem Produktionspfad kommt (Concept mit pax).
+     *
+     * @var array<int, array<int, array{zweck:string, kurz:?string}>>
+     */
+    private array $behaelterAusProduktion = [];
+
+    /**
+     * Concept + Personenzahl → derselbe Bedarf, den der Produktionsauftrag rechnen wuerde.
+     *
+     * Am Rezept-Bericht skaliert die Hochrechnung ueber einen Faktor; am Concept gibt es den
+     * nicht — dort ist die Personenzahl die Groesse. Statt im Bericht eine zweite Mechanik zu
+     * bauen, wird hier EINMAL das echte Produktionsblatt gerechnet und je Rezept zugeordnet.
+     */
+    private function behaelterAusConcept(Team $team, FoodAlchemistConcept $concept, array $optionen): void
+    {
+        $this->behaelterAusProduktion = [];
+        $pax = (int) ($optionen['pax'] ?? 0);
+        if (! ($optionen['behaelter'] ?? false) || $pax <= 0) {
+            return;
+        }
+
+        try {
+            $blatt = app(\Platform\FoodAlchemist\Services\PlanungsblattService::class)
+                ->produktionsblattFuerZiele($team, [['concept_id' => (int) $concept->id, 'persons' => $pax]]);
+        } catch (\Throwable) {
+            return;                                    // Bericht bleibt lesbar, nur ohne Bedarf
+        }
+
+        foreach ($blatt['rezepte'] ?? [] as $zeile) {
+            $block = $zeile['behaelter'] ?? null;
+            if ($block === null) {
+                continue;
+            }
+            $raus = [];
+            foreach (array_filter([$block['abfuellen'] ?? null, ...($block['je_komponente'] ?? [])]) as $e) {
+                if ($e['bereits_gezaehlt'] ?? false) {
+                    continue;
+                }
+                $kurz = \Platform\FoodAlchemist\Services\BehaelterBedarfService::varianteKurz($e);
+                if ($kurz !== null) {
+                    $raus[] = ['zweck' => $e['zweck'], 'kurz' => $kurz];
+                }
+            }
+            if ($raus !== []) {
+                $this->behaelterAusProduktion[(int) $zeile['recipe_id']] = $raus;
+            }
+        }
+    }
+
+    /**
      * Behälter-Bedarf für ein Rezept im Bericht — je Zweck, auf die Zielmenge gerechnet.
      *
      * Bewusst NUR das eigene Rezept: die Komponenten stehen im Bericht ohnehin als eigene Knoten
@@ -862,8 +914,13 @@ class ReportExportService
             // §3.2 Regeneration — eigene Ebene, eigener Schalter (`opt['regeneration']`).
             // Spec 51: aus der HOCHGERECHNETEN Ausbeute — der Bericht skaliert auf ein Ziel,
             // und der Behaelterbedarf muss mitskalieren, sonst zeigt er die Ansatzgroesse.
+            // Spec 51: am REZEPT skaliert die Hochrechnung (faktor), am CONCEPT die Personenzahl.
+            // Im Concept-Fall kommt der Bedarf deshalb aus dem echten Produktionspfad — dieselbe
+            // Rechnung, die der Auftrag fuehrt. Eine zweite Mechanik im Bericht waere eine zweite
+            // Wahrheit; genau die stellt dieser Spec ab.
             'behaelter' => ($optionen['behaelter'] ?? false)
-                ? $this->behaelterBedarf($recipe, $this->skaliere($recipe->yield_kg, $optionen))
+                ? ($this->behaelterAusProduktion[(int) $recipe->id]
+                    ?? $this->behaelterBedarf($recipe, $this->skaliere($recipe->yield_kg, $optionen)))
                 : null,
             'regenerationen' => $recipe->regenerations->map(fn ($r) => [
                 'komponente' => $r->component_label,
