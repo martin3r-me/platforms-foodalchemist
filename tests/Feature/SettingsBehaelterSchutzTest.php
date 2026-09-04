@@ -190,3 +190,66 @@ it('das Bearbeiten lässt den Slug in Ruhe — Rezepte hängen daran', function 
     expect($b->name)->toBe('GN 1/1 65 mm (Edelstahl)')
         ->and($b->slug)->toBe('gn_11_65mm');
 });
+
+it('das Katalog-Kommando ist ein Dry-Run und legt erst mit --apply an', function () {
+    $vorher = DB::table('foodalchemist_vocab_containers')->count();
+
+    $this->artisan('foodalchemist:behaelter-katalog')->assertExitCode(0);
+    expect(DB::table('foodalchemist_vocab_containers')->count())->toBe($vorher);
+
+    $this->artisan('foodalchemist:behaelter-katalog --apply')->assertExitCode(0);
+
+    $gn = DB::table('foodalchemist_vocab_containers')->where('slug', 'gn_11_65mm')->first();
+    expect((float) $gn->volumen_l)->toBe(8.8)             // EN 631, nicht die Kantenrechnung (11,2)
+        ->and((float) $gn->laenge_mm)->toBe(530.0)
+        ->and($gn->team_id)->toBeNull();                   // global — nur der Master pflegt sie
+
+    $eimer = DB::table('foodalchemist_vocab_containers')->where('slug', 'eimer_10_l')->first();
+    expect((float) $eimer->volumen_l)->toBe(10.0)
+        ->and($eimer->laenge_mm)->toBeNull()               // rund: keine erfundenen Kantenmaße
+        ->and(json_decode((string) $eimer->eignung, true))->toBe(['abfuellen', 'transport']);
+
+    $box = DB::table('foodalchemist_vocab_containers')->where('slug', 'thermobox_600x400_200_mm')->first();
+    expect((bool) $box->ist_traeger)->toBeTrue()
+        ->and($box->traeger_plaetze)->toBeNull();          // haengt an Innenhoehe × Behaeltertiefe
+});
+
+it('das Katalog-Kommando ist idempotent — zweimal laufen legt nichts doppelt an', function () {
+    $this->artisan('foodalchemist:behaelter-katalog --apply')->assertExitCode(0);
+    $nach1 = DB::table('foodalchemist_vocab_containers')->count();
+
+    $this->artisan('foodalchemist:behaelter-katalog --apply')->assertExitCode(0);
+
+    expect(DB::table('foodalchemist_vocab_containers')->count())->toBe($nach1);
+});
+
+it('ein Team bekommt seinen eigenen Katalog, ohne den globalen zu doppeln', function () {
+    $this->artisan('foodalchemist:behaelter-katalog --apply')->assertExitCode(0);
+    $global = DB::table('foodalchemist_vocab_containers')->whereNull('team_id')->count();
+
+    $this->artisan("foodalchemist:behaelter-katalog --team={$this->childA->id} --apply")->assertExitCode(0);
+
+    expect(DB::table('foodalchemist_vocab_containers')->where('team_id', $this->childA->id)->count())->toBe($global)
+        ->and(DB::table('foodalchemist_vocab_containers')->whereNull('team_id')->count())->toBe($global);
+});
+
+it('der Master pflegt globale Katalog-Zeilen, ein Kind-Team nicht', function () {
+    $this->artisan('foodalchemist:behaelter-katalog --apply')->assertExitCode(0);
+    $id = DB::table('foodalchemist_vocab_containers')->whereNull('team_id')->where('slug', 'gn_11_65mm')->value('id');
+
+    // Master (Team ohne Eltern) darf — sonst bliebe der globale Grundstock ungepflegt.
+    $this->actingAs($this->makeUser($this->rootTeam));
+    Livewire::test(Behaelter::class)
+        ->call('bearbeitenStart', $id)
+        ->set('edit.max_fuellgewicht_kg', '12')
+        ->call('bearbeitenSpeichern')
+        ->assertSet('fehler', null);
+
+    expect((float) DB::table('foodalchemist_vocab_containers')->find($id)->max_fuellgewicht_kg)->toBe(12.0);
+
+    // Kind-Team sieht die Zeile (Vererbung), pflegt sie aber nicht.
+    $this->actingAs($this->makeUser($this->childA));
+    Livewire::test(Behaelter::class)
+        ->call('bearbeitenStart', $id)
+        ->assertSet('fehler', fn ($f) => str_contains((string) $f, 'nur das Besitzer-Team'));
+});
