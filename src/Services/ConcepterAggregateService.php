@@ -114,6 +114,17 @@ class ConcepterAggregateService
      */
     public function paketAggregat(FoodAlchemistPaket $paket): array
     {
+        return $this->aggregat($this->paketPositionen($paket));
+    }
+
+    /**
+     * Die (gericht, quantity, unit, darreichung)-Liste eines Pakets — eine Quelle für
+     * Aggregat UND Deklarationsblatt, damit beide über dieselbe Grundmenge reden.
+     *
+     * @return Collection<int, array{gericht: object, quantity: ?float, unit: ?object, darreichung: mixed}>
+     */
+    public function paketPositionen(FoodAlchemistPaket $paket): Collection
+    {
         // load() statt loadMissing(): erzwingt den vollen Spalten-Satz, auch wenn der
         // Aufrufer die Gerichte schon mit reduzierten Spalten geladen hat (z. B. detail()).
         $paket->load([
@@ -122,12 +133,10 @@ class ConcepterAggregateService
             'dishes.dish' => fn ($q) => $q->select($this->recipeCols()),
         ]);
 
-        $mitMenge = $paket->dishes
+        return $paket->dishes
             ->map(fn ($pg) => ['gericht' => $pg->dish, 'quantity' => $pg->quantity, 'unit' => $pg->unit,
                 'darreichung' => $pg->dish !== null ? $this->darreichungen->fuerPaketGericht($pg) : null])
             ->filter(fn ($r) => $r['gericht'] !== null)->values();
-
-        return $this->aggregat($mitMenge);
     }
 
     // ── Concept-Aggregat (über Pakete + feste Gerichte) ──────────────────────
@@ -137,6 +146,19 @@ class ConcepterAggregateService
      *               ek_pro_person:float, vk_summe:float, work_time_min:int}
      */
     public function conceptAggregat(FoodAlchemistConcept $concept): array
+    {
+        $mitMenge = $this->conceptPositionen($concept);
+
+        return ['n_slots' => $concept->slots->count()] + $this->aggregat($mitMenge);
+    }
+
+    /**
+     * Die (gericht, quantity, unit, darreichung)-Liste eines Konzepts — über Pakete und
+     * feste Gerichte hinweg. Eine Quelle für Aggregat UND Deklarationsblatt.
+     *
+     * @return Collection<int, array{gericht: object, quantity: ?float, unit: ?object, darreichung: mixed}>
+     */
+    public function conceptPositionen(FoodAlchemistConcept $concept): Collection
     {
         // load() statt loadMissing(): erzwingt den vollen Recipe-Spalten-Satz, auch wenn
         // der Aufrufer Slots/Gerichte schon mit reduzierten Spalten geladen hat (detail()).
@@ -165,7 +187,7 @@ class ConcepterAggregateService
             }
         }
 
-        return ['n_slots' => $concept->slots->count()] + $this->aggregat($mitMenge);
+        return $mitMenge;
     }
 
     // ── Kern: Aggregat über eine (gericht, quantity)-Liste ─────────────────────
@@ -523,6 +545,42 @@ class ConcepterAggregateService
     }
 
     /**
+     * Codes an eine ZEILEN-Liste hängen (jede Zeile mit `recipe_id`) + Legende dazu.
+     *
+     * Dritte Kopie vermieden: FoodbookService und SpeisekarteService führten die by-ref-
+     * Sammelmechanik je selbst; die Concept-Karte und der Concept-Report brauchten sie als
+     * Nächstes. Ein `arrow fn` scheidet dabei aus — `$usedAlg`/`$usedZus` MÜSSEN by-ref
+     * laufen, sonst bleibt die Legende leer.
+     *
+     * @param  list<array<string, mixed>>  $zeilen
+     * @return array{zeilen: list<array<string, mixed>>, legende: array{allergene: list<array{code:string,label:string}>, zusatzstoffe: list<array{code:string,label:string}>}}
+     */
+    public function codesFuerZeilen(array $zeilen, string $idFeld = 'recipe_id'): array
+    {
+        $ids = collect($zeilen)->pluck($idFeld)->filter()->map(fn ($v) => (int) $v)->unique()->values()->all();
+        $katalog = $this->kennzeichnungKatalog();
+        $usedAlg = [];
+        $usedZus = [];
+
+        if ($ids !== []) {
+            // Volle Modelle: die Deklarations-Spalten müssen geladen sein, sonst liefert
+            // `gerichtCodes()` still leere Codes (nicht geladenes Attribut = null).
+            $dishes = $this->mitDeklarationsSpalten($ids)->keyBy('id');
+            foreach ($zeilen as $i => $z) {
+                $rid = isset($z[$idFeld]) ? (int) $z[$idFeld] : null;
+                $zeilen[$i]['codes'] = $rid !== null && $dishes->get($rid) !== null
+                    ? $this->gerichtCodes($dishes->get($rid), $usedAlg, $usedZus, $katalog)
+                    : [];
+            }
+        }
+
+        return [
+            'zeilen' => $zeilen,
+            'legende' => $this->kennzeichnungLegende($usedAlg, $usedZus, $katalog),
+        ];
+    }
+
+    /**
      * Legende (nur real vorkommende Codes) aus den by-ref gesammelten Slugs.
      *
      * @return array{allergene: list<array{code:string,label:string}>, zusatzstoffe: list<array{code:string,label:string}>}
@@ -544,6 +602,223 @@ class ConcepterAggregateService
         }
 
         return ['allergene' => $alg, 'zusatzstoffe' => $zus];
+    }
+
+    // ── Deklarationsblatt (Concepter/Paket-Tab „Deklaration") ────────────────
+    // Entscheid Dominique 2026-09-04: die Deklaration gehört JE GERICHT (rechtlich ist sie
+    // je Speise geschuldet, nie je Angebot); übergeordnet stehen nur Tags. Der reine
+    // ALL-MAXIMAL-Rollup war auf dieser Ebene wertlos — ein Gericht mit Gluten machte das
+    // ganze Konzept „glutenhaltig", was mathematisch stimmt und niemandem hilft.
+    //
+    // Zusatzstoffe sind bewusst mit drin: sie werden in Foodbook und Speisekarte ohnehin
+    // deklariert (FoodbookService/SpeisekarteService nutzen dieselben Bausteine) — der
+    // Editor war die einzige Fläche, die sie verschwieg.
+
+    /**
+     * Lädt die Deklarations-Spalten (allergen_* / additive_* + Spezifikation) zu einer
+     * ID-Liste nach und behält deren Reihenfolge. IDs, die es nicht mehr gibt, fallen
+     * heraus — das ist gewollt.
+     *
+     * @param  list<int>  $ids
+     * @return Collection<int, FoodAlchemistRecipe>
+     */
+    private function mitDeklarationsSpalten(array $ids): Collection
+    {
+        $ids = array_values(array_unique(array_filter(array_map('intval', $ids))));
+        if ($ids === []) {
+            return collect();
+        }
+
+        $cols = ['id', 'name', 'is_sales_recipe', 'sales_quantity_per_unit_g', 'nutri_kcal_per_100g',
+            'nutri_confidence', 'allergens_confidence', 'spec_is_vegan', 'spec_is_vegetarian',
+            'spec_is_halal', 'spec_is_gluten_free', 'spec_is_lactose_free', 'spec_contains_pork',
+            'spec_contains_beef', 'yield_kg', 'yield_pieces', 'sales_unit_count'];
+        foreach (array_keys(\Platform\FoodAlchemist\Models\FoodAlchemistItemAllergen::ALLERGENE) as $slug) {
+            $cols[] = "allergen_{$slug}";
+        }
+        foreach (array_keys(\Platform\FoodAlchemist\Models\FoodAlchemistItemDeclaration::STOFFE) as $slug) {
+            $cols[] = "additive_{$slug}";
+        }
+
+        $geladen = FoodAlchemistRecipe::whereIn('id', $ids)->get($cols)->keyBy('id');
+
+        return collect($ids)->map(fn ($id) => $geladen->get($id))->filter()->values();
+    }
+
+    /**
+     * Ein Deklarationsblatt über eine (gericht, quantity, unit)-Liste.
+     *
+     * @param  Collection<int, array{gericht: object, quantity: ?float, unit: ?object}>  $mitMenge
+     * @param  string  $naehrwertModus  'summe' (Menü/Paket — der Gast isst alles) oder
+     *                                  'spanne' (Auswahl à la carte — eine Summe wäre Unsinn)
+     * @return array{
+     *   zeilen: list<array{id:int,name:string,codes:list<string>,kcal:?float,portion_g:?float,
+     *                      confidence:string,diaet:list<string>,fehlt:list<string>}>,
+     *   legende: array{allergene: list<array{code:string,label:string}>, zusatzstoffe: list<array{code:string,label:string}>},
+     *   quoten: array{n:int,vegetarisch:int,vegan:int,glutenfrei:int,laktosefrei:int,halal:int,
+     *                 schwein:list<string>,rind:list<string>},
+     *   luecken: list<array{name:string,fehlt:list<string>}>,
+     *   modus: string, vollstaendig: bool, confidence: string, schwaechstes: ?string}
+     */
+    public function deklarationsblatt(Collection $mitMenge, string $naehrwertModus = 'summe'): array
+    {
+        $katalog = $this->kennzeichnungKatalog();
+        $usedAlg = [];
+        $usedZus = [];
+
+        // Distinkt je Gericht: ein zweimal eingesetztes Gericht ist EINE Deklarationszeile.
+        // (Für die Nährwert-SUMME zählt es doppelt — das macht naehrwertAggregat, nicht hier.)
+        $roh = $mitMenge->map(fn ($r) => $r['gericht'] ?? null)->filter()->unique('id')->values();
+        $mengeJeGericht = [];
+        foreach ($mitMenge as $r) {
+            $g = $r['gericht'] ?? null;
+            if ($g === null) {
+                continue;
+            }
+            $mengeJeGericht[$g->id] ??= ['quantity' => $r['quantity'] ?? null, 'unit' => $r['unit'] ?? null];
+        }
+
+        // Die Deklarations-Spalten NACHLADEN: `recipeCols()` führt sie nicht (14 Allergen-
+        // Strings + die Zusatzstoff-Flags würden jedes Concept-Aggregat verteuern), und ein
+        // nicht geladenes Eloquent-Attribut liefert still `null` — `gerichtCodes()` hätte
+        // dann für jedes Gericht LEERE Codes gemeldet, ohne Fehler. Spaltenliste explizit
+        // aus den Konstanten statt `select('*')`: `recipes` trägt JSON-Spalten.
+        $gerichte = $this->mitDeklarationsSpalten($roh->pluck('id')->all());
+
+        $zeilen = [];
+        $luecken = [];
+        $kcalWerte = [];
+        $minKonf = null;
+        $schwaechstes = null;
+
+        foreach ($gerichte as $g) {
+            $istGericht = (bool) ($g->is_sales_recipe ?? true);
+            $portionG = $g->sales_quantity_per_unit_g !== null ? (float) $g->sales_quantity_per_unit_g : null;
+            $kcal100 = $g->nutri_kcal_per_100g !== null ? (float) $g->nutri_kcal_per_100g : null;
+
+            // Was fehlt, wird BENANNT statt in eine Sammelkonfidenz gedrückt: „8 von 9 fehlen"
+            // ist eine Zahl, „Gericht X hat kein Portionsgramm" ist eine Arbeitsanweisung.
+            $fehlt = [];
+            if ($kcal100 === null) {
+                $fehlt[] = 'Nährwerte';
+            }
+            if ($istGericht && ($portionG === null || $portionG <= 0)) {
+                $fehlt[] = 'Portionsgramm';
+            }
+            if (($g->allergens_confidence ?? 'none') === 'none') {
+                $fehlt[] = 'Allergen-Profil';
+            }
+
+            // kcal-Bedeutung folgt dem Modus: bei einer Auswahl interessiert die PORTION
+            // („wenn der Gast das nimmt"), bei Menü/Paket der BEITRAG/Person — dann erklären
+            // die Zeilen sichtbar die Summe darunter.
+            $kcal = null;
+            if ($kcal100 !== null) {
+                if ($naehrwertModus === 'spanne' && $istGericht) {
+                    $kcal = $portionG !== null && $portionG > 0 ? round($kcal100 * $portionG / 100.0) : null;
+                } elseif ($istGericht) {
+                    $pae = self::portionsAequivalent(
+                        $mengeJeGericht[$g->id]['quantity'] ?? null,
+                        $mengeJeGericht[$g->id]['unit'] ?? null,
+                        $g,
+                    );
+                    $kcal = $pae !== null && $portionG !== null && $portionG > 0
+                        ? round($kcal100 * $pae * $portionG / 100.0) : null;
+                } else {
+                    // Basisrezept: Menge ist GRAMM/Person, kein Portionsgramm nötig.
+                    $mengeG = $mengeJeGericht[$g->id]['quantity'] ?? null;
+                    $kcal = $mengeG !== null && (float) $mengeG > 0 ? round($kcal100 * (float) $mengeG / 100.0) : null;
+                }
+            }
+            if ($kcal !== null) {
+                $kcalWerte[] = $kcal;
+            }
+
+            $diaet = [];
+            foreach (['spec_is_vegan' => 'vegan', 'spec_is_vegetarian' => 'vegetarisch',
+                'spec_is_gluten_free' => 'glutenfrei', 'spec_is_lactose_free' => 'laktosefrei',
+                'spec_is_halal' => 'halal'] as $feld => $tag) {
+                if ((bool) ($g->{$feld} ?? false)) {
+                    $diaet[] = $tag;
+                }
+            }
+            // vegan impliziert vegetarisch — beide Pills nebeneinander sind Rauschen.
+            if (in_array('vegan', $diaet, true)) {
+                $diaet = array_values(array_diff($diaet, ['vegetarisch']));
+            }
+
+            $konf = (string) ($g->allergens_confidence ?? 'none');
+            $rang = self::KONF_RANG[$konf] ?? 0;
+            if ($minKonf === null || $rang < $minKonf) {
+                $minKonf = $rang;
+                $schwaechstes = (string) $g->name;
+            }
+
+            $zeilen[] = [
+                'id' => (int) $g->id,
+                'name' => (string) $g->name,
+                'codes' => $this->gerichtCodes($g, $usedAlg, $usedZus, $katalog),
+                'kcal' => $kcal,
+                'portion_g' => $portionG,
+                'confidence' => $konf,
+                'diaet' => $diaet,
+                'fehlt' => $fehlt,
+            ];
+            if ($fehlt !== []) {
+                $luecken[] = ['name' => (string) $g->name, 'fehlt' => $fehlt];
+            }
+        }
+
+        $zaehl = fn (string $feld) => $gerichte->filter(fn ($g) => (bool) ($g->{$feld} ?? false))->count();
+        $namen = fn (string $feld) => $gerichte->filter(fn ($g) => (bool) ($g->{$feld} ?? false))
+            ->map(fn ($g) => (string) $g->name)->values()->all();
+
+        return [
+            'zeilen' => $zeilen,
+            'legende' => $this->kennzeichnungLegende($usedAlg, $usedZus, $katalog),
+            'quoten' => [
+                'n' => $gerichte->count(),
+                // Quoten statt Alles-oder-nichts: „3 von 9 vegetarisch" ist die Aussage, die
+                // ein Kunde hören will — der ALL-Rollup sagte dazu nur „nicht vegetarisch".
+                'vegetarisch' => $zaehl('spec_is_vegetarian'),
+                'vegan' => $zaehl('spec_is_vegan'),
+                'glutenfrei' => $zaehl('spec_is_gluten_free'),
+                'laktosefrei' => $zaehl('spec_is_lactose_free'),
+                'halal' => $zaehl('spec_is_halal'),
+                'schwein' => $namen('spec_contains_pork'),
+                'rind' => $namen('spec_contains_beef'),
+            ],
+            'luecken' => $luecken,
+            'modus' => $naehrwertModus,
+            'vollstaendig' => $luecken === [],
+            'confidence' => $minKonf === null ? 'unknown' : (array_search($minKonf, self::KONF_RANG, true) ?: 'unknown'),
+            'schwaechstes' => $schwaechstes,
+            // Spanne nur, wenn es etwas zu spannen gibt (mind. zwei Werte).
+            'kcal_min' => $kcalWerte === [] ? null : min($kcalWerte),
+            'kcal_max' => $kcalWerte === [] ? null : max($kcalWerte),
+            'kcal_schnitt' => $kcalWerte === [] ? null : round(array_sum($kcalWerte) / count($kcalWerte)),
+        ];
+    }
+
+    /**
+     * Deklarationsblatt eines Konzepts. Der Nährwert-Modus folgt der PREISDARSTELLUNG:
+     *
+     * - `gesamt` (ein Preis fürs Konzept) → der Gast isst alles → SUMME/Person ist richtig.
+     * - `einzel` (à la carte, Auswahl) → niemand isst alle Positionen → eine Summe wäre
+     *   sinnlos, und „Untergrenze" wäre sogar falsch: es gibt keine untere Grenze, sondern
+     *   eine SPANNE über die Gerichte.
+     */
+    public function conceptDeklaration(FoodAlchemistConcept $concept): array
+    {
+        $modus = $concept->istEinzelpreis() ? 'spanne' : 'summe';   // eine Quelle für die Einzelpreis-Frage
+
+        return $this->deklarationsblatt($this->conceptPositionen($concept), $modus);
+    }
+
+    /** Deklarationsblatt eines Pakets — ein Paket ist immer ein Gesamtpreis, also Summe. */
+    public function paketDeklaration(FoodAlchemistPaket $paket): array
+    {
+        return $this->deklarationsblatt($this->paketPositionen($paket), 'summe');
     }
 
     // ── Cache-Persistenz ─────────────────────────────────────────────────────

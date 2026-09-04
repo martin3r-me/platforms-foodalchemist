@@ -1224,6 +1224,10 @@ class Editor extends Component
         $istStammdaten = $this->tab === 'stammdaten';
         $istKonzeptTab = $this->tab === 'konzept';
         $istGeschirrTab = $this->tab === 'geschirr';
+        // Das Deklarationsblatt lädt die 32 Kennzeichnungs-Spalten je Gericht nach — nur
+        // holen, wenn der Tab wirklich offen ist.
+        $istDeklarationTab = $this->tab === 'allergene';
+        $deklaration = null;
         // F7b: Facetten-Vokabular auch im Aufbau-Tab, wenn der Paket-Picker aktiv ist (Dropdown-Filter).
         $paketPickerFacetten = $istAufbau && $this->type === 'concepts' && $this->linkeListe === 'paket';
 
@@ -1239,6 +1243,7 @@ class Editor extends Component
                 $cockpit = $concepts->preisCockpit($concept, $outlet);
                 $sektionSumme = $istAufbau ? $this->sektionsSummen($concept, $cockpit['zeilen']) : [];
                 $aggregat = $agg->conceptAggregat($concept);
+                $deklaration = $istDeklarationTab ? $agg->conceptDeklaration($concept) : null;
                 $bewertet = $bewertung->bewerten($concept, $cockpit, $aggregat);
                 $kalkulation = $kalk->conceptHk($team, $concept, $outlet);
                 $conceptVk = (float) ($cockpit['price_per_person'] ?? 0);
@@ -1337,6 +1342,7 @@ class Editor extends Component
                 // Ebene 2: Paket-Kalkulation (VK/Person) folgt dem aktiven Betrieb.
                 $outlet = $team ? app(\Platform\FoodAlchemist\Services\ActiveOutletContext::class)->current($team) : null;
                 $aggregat = $agg->paketAggregat($paket);
+                $deklaration = $istDeklarationTab ? $agg->paketDeklaration($paket) : null;
                 $kalkulation = $kalk->paketHk($team, $paket, $outlet);
                 if ($istAufbau && $this->paketQuelle === 'basisrezept') {
                     $paketKandidaten = $this->paketGerichtSuche !== ''
@@ -1412,6 +1418,7 @@ class Editor extends Component
                 : [],
             'einheiten' => $istAufbau ? app(\Platform\FoodAlchemist\Services\VocabularyService::class)->listEinheiten($team) : collect(),
             'aggregat' => $aggregat,
+            'deklaration' => $deklaration,
             'bewertung' => $bewertet,
             'kalkulation' => $kalkulation,
             'wareneinsatzAmpel' => $wareneinsatzAmpel,

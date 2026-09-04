@@ -51,6 +51,15 @@
         .btn { display: inline-block; padding: 6px 12px; background: {{ $brand }}; color: #fff; text-decoration: none; border-radius: 6px; margin-right: 6px; }
         .btn.ghost { background: #eee; color: #374151; }
         @media print { .actions { display: none; } }
+    
+        /* §-Kennzeichnung (2026-09-04) — identische Optik zum Foodbook, damit derselbe
+           Code beim Kunden nicht zweimal anders aussieht. */
+        .dish .codes { color: #9ca3af; font-size: 9px; vertical-align: super; margin-left: 2px; }
+        .legende { margin-top: 20px; border-top: 1px solid #e5e7eb; padding-top: 10px; }
+        .legende h4 { font-size: 11px; font-weight: bold; letter-spacing: .06em; text-transform: uppercase; color: #374151; margin: 0 0 6px; }
+        .legende .grp { color: #4b5563; font-size: 10px; line-height: 1.7; }
+        .legende .code { color: {{ $brand }}; font-weight: bold; }
+        .legende .disclaimer { color: #9ca3af; font-size: 9px; margin-top: 8px; }
     </style>
 </head>
 <body>
@@ -85,7 +94,7 @@
             @elseif(($g['type'] ?? '') === 'paket')
                 <div class="dish paket" style="margin-left: {{ ($g['einrueckung'] ?? 0) * 12 }}px">{{ $g['text'] }}@if(($g['preis'] ?? null) !== null && $g['preis'] > 0)<span style="float: right; font-weight: normal; color: #6b7280;">{{ number_format($g['preis'], 2, ',', '.') }} €/Gast</span>@endif</div>
             @else
-                <div class="dish" style="margin-left: {{ ($g['einrueckung'] ?? 0) * 12 }}px"><span class="pipe">|</span>{{ $g['text'] }}@if(($g['preis'] ?? null) !== null && $g['preis'] > 0)<span style="float: right; font-weight: normal; color: #6b7280;">{{ number_format($g['preis'], 2, ',', '.') }} €/Gast</span>@endif</div>
+                <div class="dish" style="margin-left: {{ ($g['einrueckung'] ?? 0) * 12 }}px"><span class="pipe">|</span>{{ $g['text'] }}@if(($g['preis'] ?? null) !== null && $g['preis'] > 0)<span style="float: right; font-weight: normal; color: #6b7280;">{{ number_format($g['preis'], 2, ',', '.') }} €/Gast</span>@endif @if(! empty($g['codes']))<span class="codes">{{ implode(',', $g['codes']) }}</span>@endif</div>
             @endif
         @empty
             <div class="dish leer">— noch keine Gerichte —</div>
@@ -104,6 +113,27 @@
             @php($mwstSatz = ($mwst ?? null) ? (($mwst['default_satz'] ?? 'ermaessigt') === 'regulaer' ? ($mwst['regulaer'] ?? 19) : ($mwst['ermaessigt'] ?? 7)) : null)
             @php($mwstText = 'Alle Preise netto' . ($mwstSatz !== null ? ' zzgl. gesetzl. MwSt (' . rtrim(rtrim(number_format((float) $mwstSatz, 1, ',', '.'), '0'), ',') . ' %)' : '') . '.')
             <div style="color:#9ca3af; font-size:10px; margin-top:6px">{{ $mwstText }}</div>
+        </div>
+    @endif
+
+    {{-- Kennzeichnungs-Legende: nur real vorkommende Codes (Regelwerk Concept §7.1).
+         Die Karte geht an den Kunden — ohne Legende sind die Ziffern an den Gerichten
+         wertlos, und ohne Ziffern fehlt die Deklaration ganz. --}}
+    @if(count($legende['allergene'] ?? []) || count($legende['zusatzstoffe'] ?? []))
+        <div class="legende">
+            @if(count($legende['allergene'] ?? []))
+                <h4>Allergene</h4>
+                <div class="grp">
+                    @foreach($legende['allergene'] as $a)<span class="code">{{ $a['code'] }}</span> {{ $a['label'] }}@if(!$loop->last) &nbsp;·&nbsp; @endif @endforeach
+                </div>
+            @endif
+            @if(count($legende['zusatzstoffe'] ?? []))
+                <h4 style="margin-top:8px">Zusatzstoffe</h4>
+                <div class="grp">
+                    @foreach($legende['zusatzstoffe'] as $z)<span class="code">{{ $z['code'] }}</span> {{ $z['label'] }}@if(!$loop->last) &nbsp;·&nbsp; @endif @endforeach
+                </div>
+            @endif
+            <div class="disclaimer">Kennzeichnung je Gericht nach LMIV (Allergene) und ZZulV (Zusatzstoffe); <span class="code">*</span> = Spuren möglich (Vorsorgeprinzip).</div>
         </div>
     @endif
 

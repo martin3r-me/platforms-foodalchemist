@@ -910,45 +910,138 @@
                 @endif
             @endif
 
-            {{-- ── Tab: DEKLARATION (Diät-Rollup + Nährwerte/Person — zusammengelegt 2026-07-02, Parität zu Rezept-/VK-Modal) ── --}}
-            @if($tab === 'allergene')
-                @if($aggregat && $aggregat['allergene']['n_gerichte'] > 0)
-                    <span class="{{ $label }}">Aggregiert aus {{ $aggregat['allergene']['n_gerichte'] }} Gerichten (kein manuelles Gruppieren)</span>
-                    <div class="flex flex-wrap gap-1.5">
-                        @if($aggregat['allergene']['is_vegan'])<span class="{{ $pill }} {{ $variantPill['success'] }}">vegan</span>
-                        @elseif($aggregat['allergene']['is_vegetarian'])<span class="{{ $pill }} {{ $variantPill['success'] }}">vegetarisch</span>@endif
-                        @if($aggregat['allergene']['is_gluten_free'])<span class="{{ $pill }} {{ $variantPill['info'] }}">glutenfrei</span>@endif
-                        @if($aggregat['allergene']['is_lactose_free'])<span class="{{ $pill }} {{ $variantPill['info'] }}">laktosefrei</span>@endif
-                        @if($aggregat['allergene']['is_halal'])<span class="{{ $pill }} {{ $variantPill['info'] }}">halal</span>@endif
-                        @if($aggregat['allergene']['contains_pork'])<span class="{{ $pill }} {{ $variantPill['warning'] }}">enthält Schwein</span>@endif
-                        @if($aggregat['allergene']['contains_beef'])<span class="{{ $pill }} {{ $variantPill['warning'] }}">enthält Rind</span>@endif
-                        <span class="{{ $pill }} {{ $konfPill[$aggregat['allergene']['confidence']] ?? $variantPill['secondary'] }}">Konf. {{ $aggregat['allergene']['confidence'] }}</span>
-                    </div>
-                @else
-                    <p class="text-sm text-gray-500 py-6 text-center">Noch keine Gerichte für den Allergen-Rollup.</p>
-                @endif
+            {{-- ── Tab: DEKLARATION ──────────────────────────────────────────
+                 Drei Zonen (Entscheid Dominique 2026-09-04):
+                   1. TAGS/QUOTEN übergeordnet — Aussagen über das ANGEBOT
+                   2. DEKLARATION JE GERICHT — die eigentliche Pflicht (LMIV: je Speise)
+                   3. NÄHRWERTE nur, wo sie fachlich stimmen
 
-                <div class="border-t border-black/5 mt-4 pt-3 space-y-2">
-                @if($aggregat && $aggregat['naehrwerte']['kcal'] !== null)
-                    <div class="flex items-center justify-between">
-                        <span class="{{ $label }}">Nährwerte / Person (aus den Gerichten · Portionsgramm)</span>
-                        <span class="{{ $pill }} {{ $konfPill[$aggregat['naehrwerte']['confidence']] ?? $variantPill['secondary'] }}">Konf. {{ $aggregat['naehrwerte']['confidence'] }}</span>
-                    </div>
-                    <div class="grid grid-cols-7 gap-2">
-                        @foreach(['kcal' => 'kcal', 'protein_g' => 'Eiweiß (g)', 'fett_g' => 'Fett (g)', 'gesfett_g' => 'dav. ges. (g)', 'kh_g' => 'KH (g)', 'zucker_g' => 'dav. Zucker (g)', 'salz_g' => 'Salz (g)'] as $k => $l)
-                            <div class="rounded-lg bg-black/[0.03] px-3 py-2 text-center">
-                                <p class="text-base font-semibold tabular-nums">{{ $aggregat['naehrwerte'][$k] !== null ? number_format((float) $aggregat['naehrwerte'][$k], $k === 'kcal' ? 0 : 1, ',', '.') : '—' }}</p>
-                                <p class="text-[10px] text-gray-500 uppercase">{{ $l }}</p>
-                            </div>
-                        @endforeach
-                    </div>
-                    @unless($aggregat['naehrwerte']['vollstaendig'])
-                        <p class="text-[11px] text-amber-600">@svg('heroicon-o-exclamation-triangle', 'w-3.5 h-3.5 inline-block align-middle') Nur {{ $aggregat['naehrwerte']['n_mit_naehrwerten'] }}/{{ $aggregat['naehrwerte']['n_gerichte'] }} Gerichte haben Nährwert + Portionsgramm — Werte sind eine Untergrenze.</p>
-                    @endunless
+                 Vorher stand hier ein reiner ALL-MAXIMAL-Rollup: ein Gericht mit Gluten
+                 machte das ganze Konzept „glutenhaltig" — mathematisch richtig und für
+                 niemanden brauchbar. Die Ziffern-Kennzeichnung (Buchstaben = Allergene,
+                 Zahlen = Zusatzstoffe) ist dieselbe, die Foodbook und Speisekarte ausgeben. --}}
+            @if($tab === 'allergene')
+                @if($deklaration === null || $deklaration['quoten']['n'] === 0)
+                    <p class="text-sm text-gray-500 py-6 text-center">Noch keine Gerichte — die Deklaration entsteht aus den Positionen.</p>
                 @else
-                    <p class="text-sm text-gray-500 py-6 text-center">Keine Nährwerte — den Gerichten fehlen Werte oder Portionsgramm.</p>
+                    {{-- ── Zone 1: Tags & Quoten übers Angebot ────────────────── --}}
+                    <div class="flex flex-wrap items-center gap-1.5" data-deklaration-quoten>
+                        <span class="{{ $label }} mr-1">{{ $deklaration['quoten']['n'] }} {{ $deklaration['quoten']['n'] === 1 ? 'Gericht' : 'Gerichte' }}</span>
+                        @foreach(['vegetarisch' => 'vegetarisch', 'vegan' => 'vegan', 'glutenfrei' => 'glutenfrei', 'laktosefrei' => 'laktosefrei', 'halal' => 'halal'] as $k => $l)
+                            @if($deklaration['quoten'][$k] > 0)
+                                {{-- Quote statt Alles-oder-nichts: „3 von 9" ist die Aussage, die ein
+                                     Kunde hören will; der ALL-Rollup sagte dazu nur „nicht vegetarisch". --}}
+                                <span class="{{ $pill }} {{ $deklaration['quoten'][$k] === $deklaration['quoten']['n'] ? $variantPill['success'] : $variantPill['secondary'] }}">
+                                    {{ $deklaration['quoten'][$k] }}/{{ $deklaration['quoten']['n'] }} {{ $l }}
+                                </span>
+                            @endif
+                        @endforeach
+                        @foreach(['schwein' => 'Schwein', 'rind' => 'Rind'] as $k => $l)
+                            @if(count($deklaration['quoten'][$k]) > 0)
+                                {{-- Warnung MIT Adresse: welche Gerichte es sind, steht im Titel. --}}
+                                <span class="{{ $pill }} {{ $variantPill['warning'] }}" title="{{ implode(' · ', $deklaration['quoten'][$k]) }}">
+                                    enthält {{ $l }} ({{ count($deklaration['quoten'][$k]) }})
+                                </span>
+                            @endif
+                        @endforeach
+                        <span class="{{ $pill }} {{ $konfPill[$deklaration['confidence']] ?? $variantPill['secondary'] }} ml-auto"
+                              @if($deklaration['schwaechstes']) title="schwächstes Glied: {{ $deklaration['schwaechstes'] }}" @endif>
+                            Konf. {{ $deklaration['confidence'] }}@if($deklaration['schwaechstes']) · {{ $deklaration['schwaechstes'] }}@endif
+                        </span>
+                    </div>
+
+                    {{-- ── Zone 2: Deklaration je Gericht ─────────────────────── --}}
+                    <div class="border-t border-black/5 mt-4 pt-3">
+                        <span class="{{ $label }}">Deklaration je Gericht (Buchstaben = Allergene, Zahlen = Zusatzstoffe, * = Spuren)</span>
+                        <table class="{{ $table }} mt-1" data-deklaration-tabelle>
+                            <thead><tr class="text-left">
+                                <th class="{{ $th }}">Gericht</th>
+                                <th class="{{ $th }}">Kennzeichnung</th>
+                                <th class="{{ $th }}">Eignung</th>
+                                <th class="{{ $th }} text-right">{{ $deklaration['modus'] === 'spanne' ? 'kcal / Portion' : 'kcal / Person' }}</th>
+                                <th class="{{ $th }}">Stand</th>
+                            </tr></thead>
+                            <tbody>
+                                @foreach($deklaration['zeilen'] as $z)
+                                    <tr class="{{ $tr }}" wire:key="dekl-{{ $z['id'] }}">
+                                        <td class="{{ $td }}">{{ $z['name'] }}</td>
+                                        <td class="{{ $td }} font-mono text-[11px]">{{ $z['codes'] === [] ? '—' : implode(', ', $z['codes']) }}</td>
+                                        <td class="{{ $td }}">
+                                            @forelse($z['diaet'] as $d)<span class="{{ $pill }} {{ $variantPill['success'] }} mr-1">{{ $d }}</span>@empty<span class="text-gray-400">—</span>@endforelse
+                                        </td>
+                                        <td class="{{ $td }} text-right tabular-nums">{{ $z['kcal'] !== null ? number_format((float) $z['kcal'], 0, ',', '.') : '—' }}</td>
+                                        <td class="{{ $td }}">
+                                            @if($z['fehlt'] === [])
+                                                <span class="{{ $pill }} {{ $konfPill[$z['confidence']] ?? $variantPill['secondary'] }}">{{ $z['confidence'] }}</span>
+                                            @else
+                                                <span class="{{ $pill }} {{ $variantPill['danger'] }}">fehlt: {{ implode(', ', $z['fehlt']) }}</span>
+                                            @endif
+                                        </td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+
+                        @if($deklaration['legende']['allergene'] !== [] || $deklaration['legende']['zusatzstoffe'] !== [])
+                            {{-- Legende: nur real vorkommende Codes (identisch zu Foodbook/Speisekarte). --}}
+                            <p class="text-[11px] text-gray-500 mt-1.5 leading-relaxed" data-deklaration-legende>
+                                @foreach($deklaration['legende']['allergene'] as $a)<span class="font-mono">{{ $a['code'] }}</span> {{ $a['label'] }}@if(! $loop->last) · @endif @endforeach
+                                @if($deklaration['legende']['allergene'] !== [] && $deklaration['legende']['zusatzstoffe'] !== []) <br> @endif
+                                @foreach($deklaration['legende']['zusatzstoffe'] as $z)<span class="font-mono">{{ $z['code'] }}</span> {{ $z['label'] }}@if(! $loop->last) · @endif @endforeach
+                            </p>
+                        @endif
+                    </div>
+
+                    {{-- ── Zone 3: Nährwerte — nur wo sie fachlich stimmen ────── --}}
+                    <div class="border-t border-black/5 mt-4 pt-3 space-y-2">
+                        @if($deklaration['luecken'] !== [])
+                            {{-- Entscheid Dominique: bei Lücken KEINE Summe, sondern eine Aufgabenliste.
+                                 „8 von 9 fehlen" ist eine Zahl, „Gericht X hat kein Portionsgramm" ist
+                                 eine Arbeitsanweisung — und eine Summe über Löcher lädt zum Fehlschluss ein. --}}
+                            <span class="{{ $label }}">Nährwerte noch nicht belastbar — {{ count($deklaration['luecken']) }} von {{ $deklaration['quoten']['n'] }} {{ count($deklaration['luecken']) === 1 ? 'Gericht braucht' : 'Gerichte brauchen' }} Nacharbeit</span>
+                            <ul class="text-[11px] space-y-0.5" data-deklaration-luecken>
+                                @foreach($deklaration['luecken'] as $l)
+                                    <li class="flex items-center gap-1.5">
+                                        @svg('heroicon-o-exclamation-triangle', 'w-3.5 h-3.5 text-amber-500 shrink-0')
+                                        <span class="text-gray-700">{{ $l['name'] }}</span>
+                                        <span class="text-gray-500">— {{ implode(', ', $l['fehlt']) }}</span>
+                                    </li>
+                                @endforeach
+                            </ul>
+                        @elseif($deklaration['modus'] === 'spanne')
+                            {{-- Auswahl à la carte: eine Summe/Person wäre sinnlos (niemand isst alle
+                                 Positionen), „Untergrenze" sogar falsch. Also Spanne über die Gerichte. --}}
+                            <div class="flex items-center justify-between">
+                                <span class="{{ $label }}">Nährwerte je Portion (Einzelpreise — der Gast wählt aus, keine Summe)</span>
+                                <span class="{{ $pill }} {{ $konfPill[$aggregat['naehrwerte']['confidence']] ?? $variantPill['secondary'] }}">Konf. {{ $aggregat['naehrwerte']['confidence'] }}</span>
+                            </div>
+                            <div class="grid grid-cols-3 gap-2" data-deklaration-spanne>
+                                @foreach(['kcal_min' => 'niedrigstes Gericht', 'kcal_schnitt' => 'Durchschnitt', 'kcal_max' => 'höchstes Gericht'] as $k => $l)
+                                    <div class="rounded-lg bg-black/[0.03] px-3 py-2 text-center">
+                                        <p class="text-base font-semibold tabular-nums">{{ $deklaration[$k] !== null ? number_format((float) $deklaration[$k], 0, ',', '.') : '—' }}</p>
+                                        <p class="text-[10px] text-gray-500 uppercase">kcal · {{ $l }}</p>
+                                    </div>
+                                @endforeach
+                            </div>
+                        @elseif($aggregat && $aggregat['naehrwerte']['kcal'] !== null)
+                            {{-- Gesamtpreis/Paket: der Gast isst alles → Summe/Person ist die richtige Zahl. --}}
+                            <div class="flex items-center justify-between">
+                                <span class="{{ $label }}">Nährwerte / Person (Summe über die Positionen)</span>
+                                <span class="{{ $pill }} {{ $konfPill[$aggregat['naehrwerte']['confidence']] ?? $variantPill['secondary'] }}">Konf. {{ $aggregat['naehrwerte']['confidence'] }}</span>
+                            </div>
+                            <div class="grid grid-cols-7 gap-2" data-deklaration-summe>
+                                @foreach(['kcal' => 'kcal', 'protein_g' => 'Eiweiß (g)', 'fett_g' => 'Fett (g)', 'gesfett_g' => 'dav. ges. (g)', 'kh_g' => 'KH (g)', 'zucker_g' => 'dav. Zucker (g)', 'salz_g' => 'Salz (g)'] as $k => $l)
+                                    <div class="rounded-lg bg-black/[0.03] px-3 py-2 text-center">
+                                        <p class="text-base font-semibold tabular-nums">{{ $aggregat['naehrwerte'][$k] !== null ? number_format((float) $aggregat['naehrwerte'][$k], $k === 'kcal' ? 0 : 1, ',', '.') : '—' }}</p>
+                                        <p class="text-[10px] text-gray-500 uppercase">{{ $l }}</p>
+                                    </div>
+                                @endforeach
+                            </div>
+                        @else
+                            <p class="text-sm text-gray-500 py-4 text-center">Keine Nährwerte — den Gerichten fehlen Werte oder Portionsgramm.</p>
+                        @endif
+                    </div>
                 @endif
-                </div>
             @endif
 
             {{-- ── Tab: KALKULATION ──────────────────────────────────────── --}}
