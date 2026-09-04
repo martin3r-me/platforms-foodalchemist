@@ -77,7 +77,7 @@ class AiGatewayService
      */
     public const FOOD_DNA_KEYS = [
         'recipe.generator', 'recipe.description', 'recipe.preparation', 'recipe.steps', 'recipe.ueberarbeiten', 'recipe.pairing', 'recipe.review',
-        'vk.generator', 'vk.wording', 'vk.marketing', 'vk.plating', 'vk.servier_vehikel', 'vk.behaelter', 'vk.regeneration', 'vk.kohaerenz', 'vk.teller_heber', 'vk.review',
+        'vk.generator', 'vk.wording', 'vk.marketing', 'vk.plating', 'vk.servier_vehikel', 'vk.regeneration', 'recipe.dichteklasse', 'vk.kohaerenz', 'vk.teller_heber', 'vk.review',
         'vk.ueberarbeiten',         // Spec 03 L1a: Revise formt Texte + Komponenten des Gerichts — ohne DNA-Kette revidiert sie gegen die Marke
         'concept.wording',
         'concept.plan',             // Et.2b Kreativ-Kopf: die Concept-Leitidee IST Marke — ohne DNA-Kette formt sie am Team-/Kunden-Rahmen vorbei

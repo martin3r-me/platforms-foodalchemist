@@ -91,7 +91,7 @@ it('VK-Editor rendert die neuen Sektionen (Deklaration, Nährwerte, Spezifikatio
     // `data-md-toolbar` entfällt mit dem Plating-Textarea: die Markdown-Leiste gehörte zu
     // diesem einen Freitextfeld. Die Schritt-Felder brauchen keine — Nummer und Phase
     // kommen aus der Struktur, nicht aus getippten `##`.
-    foreach (['data-deklaration', 'data-vk-naehrwerte-leer', 'data-vk-spezifikation', 'data-vk-plating', 'data-vk-editor-kpis', 'data-ki-wording', 'data-ki-behaelter', 'data-ki-regeneration'] as $marker) {
+    foreach (['data-deklaration', 'data-vk-naehrwerte-leer', 'data-vk-spezifikation', 'data-vk-plating', 'data-vk-editor-kpis', 'data-ki-wording', 'data-ki-regeneration'] as $marker) {
         expect($html)->toContain($marker);
     }
     expect($html)->toContain('Rohertragsquote')
@@ -233,23 +233,24 @@ it('✨-Fake-Pfade sind ehrlich (kein gültiger Wert ⇒ kiFehler, Form unverän
 });
 
 it('✨ Behälter übernimmt validierte Vokabular-IDs in die Form (Mock-Gateway)', function () {
-    $warmId = (int) DB::table('foodalchemist_vocab_containers')->insertGetId([
-        'uuid' => (string) \Illuminate\Support\Str::uuid7(), 'team_id' => $this->rootTeam->id,
-        'slug' => 'gn_11_65', 'name' => 'GN 1/1 65mm', 'sort_order' => 1, 'created_at' => now(), 'updated_at' => now(),
-    ]);
-    $this->mock(\Platform\FoodAlchemist\Services\Ai\AiGatewayService::class, function ($mock) use ($warmId) {
-        $mock->shouldReceive('propose')->andReturn(new \Platform\FoodAlchemist\Services\Ai\AiProposal(
-            ['behaelter_warm_id' => $warmId, 'behaelter_warm_anzahl' => 2, 'behaelter_kalt_id' => 999999], 0.9,
-        ));
-    });
+    // Spec 51: Der KI-Knopf »Behälter« ist entfallen — mit ihm der Prompt `vk.behaelter`.
+    //
+    // Der alte Test hat den Defekt MASKIERT, den er hätte finden müssen: er fütterte den Mock mit
+    // `behaelter_warm_anzahl` (deutsch) und prüfte, dass die Anzahl ankommt. Der echte Prompt gab
+    // aber `container_warm_count` (englisch) aus — gelesen wurde der deutsche Key, und das
+    // Ergebnis landete BEDINGUNGSLOS im Formular. Jede KI-Übernahme setzte damit die von Hand
+    // getippte Anzahl auf NULL.
+    //
+    // Die Anzahl ist ohnehin eine Rechnung, keine Schätzung: sie kommt aus BehaelterRechner,
+    // sobald die produzierte Menge bekannt ist. Was bleibt, ist die Prüfung, dass die Aktion
+    // nichts mehr tut, statt still Daten zu zerstören.
+    $vorher = ['container_warm_vocab_id' => null, 'container_warm_count' => 3];
+    $this->vk->forceFill($vorher)->save();
 
     Livewire::test(VkModal::class)
         ->call('oeffnen', $this->vk->id)
         ->call('ki', 'behaelter')
-        ->assertSet('fehler', null)
-        ->assertSet('form.container_warm_vocab_id', $warmId)
-        ->assertSet('form.container_warm_count', 2)
-        ->assertSet('form.container_cold_vocab_id', null);            // ungültige ID fliegt
+        ->assertSet('form.container_warm_count', 3);      // unangetastet
 });
 
 /**

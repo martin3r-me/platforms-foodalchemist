@@ -714,7 +714,9 @@
         <div x-show="tab === 'regeneration'" x-cloak class="pt-4 space-y-4">
         <x-foodalchemist::modal-section title="Behälter (Transport & Warmhalten)">
             <x-slot:actions>
-                <button type="button" wire:click="ki('behaelter')" class="{{ $btnAi }}" title="vk.behaelter: warm/kalt + Anzahl fürs Catering" data-ki-behaelter>@svg('heroicon-o-sparkles', 'w-3.5 h-3.5')Behälter</button>
+                {{-- Spec 51: der KI-Knopf »Behälter« ist entfallen. Die Anzahl ist eine Rechnung
+                     (BehaelterRechner aus der produzierten Menge), kein Ratespiel — und der alte
+                     Übernahme-Pfad nullte bei jedem Klick die von Hand getippte Zahl. --}}
             </x-slot:actions>
             <div class="grid grid-cols-2 gap-3" data-vk-container>
                 <div>

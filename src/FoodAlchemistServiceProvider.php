@@ -63,6 +63,7 @@ class FoodAlchemistServiceProvider extends ServiceProvider
             $this->commands([
                 \Platform\FoodAlchemist\Console\BehaelterKatalogCommand::class,
                 \Platform\FoodAlchemist\Console\ImportSliceCommand::class,
+                \Platform\FoodAlchemist\Console\RegenerationHochziehenCommand::class,
                 \Platform\FoodAlchemist\Console\ImportMasterCommand::class,
                 \Platform\FoodAlchemist\Console\KnowledgeImportCommand::class,
                 // 2026-09-03: die Routing-Politik hat den Import VERLASSEN. Sie lag dort und wurde

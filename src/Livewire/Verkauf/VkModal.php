@@ -451,9 +451,6 @@ class VkModal extends Component
                 'wording' => $this->uebernehmeText('sales_wording_standard', $gateway->propose('vk.wording', $kontext)),
                 'plating' => $this->uebernehmePlating($gateway->propose('vk.plating', $kontext + ['portion_g' => $this->form['sales_quantity_per_unit_g'] ?? null])),
                 'eigenschaften' => $this->uebernehmeEigenschaften($gateway, $kontext),
-                'behaelter' => $this->uebernehmeBehaelter($gateway->propose('vk.behaelter', $kontext + [
-                    'vokabular' => TeamScope::applyVisible(DB::table('foodalchemist_vocab_containers')->whereNull('deleted_at')->where('is_inactive', false), 'team_id', $team)->pluck('name', 'id')->all(),
-                ])),
                 'vehikel' => $this->uebernehmeVehikel($gateway->propose('vk.servier_vehikel', $kontext + [
                     'vokabular' => TeamScope::applyVisible(DB::table('foodalchemist_vocab_serving_vehicles')->whereNull('deleted_at')->where('is_inactive', false), 'team_id', $team)->pluck('name', 'id')->all(),
                 ])),
@@ -543,25 +540,20 @@ class VkModal extends Component
         }
     }
 
-    private function uebernehmeBehaelter(\Platform\FoodAlchemist\Services\Ai\AiProposal $v): void
-    {
-        $team = Auth::user()?->currentTeamRelation;
-        $gueltig = TeamScope::applyVisible(DB::table('foodalchemist_vocab_containers')->whereNull('deleted_at'), 'team_id', $team)->pluck('id')->flip();
-        $gesetzt = false;
-        // AI-Contract-Keys bleiben deutsch (behaelter_warm/kalt = KI-Ausgabe); Form-Keys englisch (container_warm/cold, wie Form-Load Z.86-89).
-        foreach (['warm' => 'warm', 'kalt' => 'cold'] as $aiSeite => $formSeite) {
-            $id = $v->werte["behaelter_{$aiSeite}_id"] ?? null;
-            if ($id !== null && isset($gueltig[(int) $id])) {
-                $this->form["container_{$formSeite}_vocab_id"] = (int) $id;
-                $anzahl = $v->werte["behaelter_{$aiSeite}_anzahl"] ?? null;
-                $this->form["container_{$formSeite}_count"] = is_numeric($anzahl) ? (int) $anzahl : null;
-                $gesetzt = true;
-            }
-        }
-        if (! $gesetzt) {
-            $this->fehler = 'KI lieferte keinen gültigen Behälter-Vorschlag — echter Provider nötig.';
-        }
-    }
+    /*
+     * `uebernehmeBehaelter()` ist mit Spec 51 ENTFALLEN — zusammen mit dem Prompt `vk.behaelter`.
+     *
+     * Zwei Gruende, und der zweite war ein Datenverlust:
+     *
+     * 1. Die ANZAHL ist eine Rechnung, keine Schaetzung. Ein LLM danach zu fragen, waehrend die
+     *    Datenbank die produzierte Menge exakt kennt, ist genau das Anti-Pattern der
+     *    Kanon-Entscheidungsvorlage. Sie kommt jetzt aus BehaelterRechner.
+     *
+     * 2. Der Uebernahme-Pfad war destruktiv: der Prompt lieferte `container_warm_count`
+     *    (englisch), gelesen wurde `behaelter_warm_anzahl` (deutsch) — und das Ergebnis wurde
+     *    BEDINGUNGSLOS ins Formular geschrieben. Jede KI-Uebernahme hat damit die von Hand
+     *    getippte Anzahl auf NULL gesetzt. Der Test fuetterte den deutschen Key und maskierte es.
+     */
 
     private function uebernehmeVehikel(\Platform\FoodAlchemist\Services\Ai\AiProposal $v): void
     {

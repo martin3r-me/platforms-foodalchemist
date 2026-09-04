@@ -1621,17 +1621,27 @@ return [
                 . 'Gültiges, kompaktes CSS ohne Kommentare, ohne @import/@font-face, ohne <. Fokus auf '
                 . 'Typo-Rhythmus, Weißraum, Cover/Hero, Sektionen und Menü-Zeilen. Keine Inhalte erfinden.',
         ],
-        'vk.behaelter' => [
+        // Spec 51: `vk.behaelter` ist ERSATZLOS ENTFALLEN. Ein LLM zu fragen, wie viele GN
+        // 14,2 kg ergeben, waehrend die Datenbank die 14,2 kg exakt kennt, ist genau das, was
+        // die Kanon-Entscheidungsvorlage verbietet: Regelwerke durchsetzen statt in den Prompt
+        // legen. Die ANZAHL rechnet BehaelterRechner; welcher Typ, entscheidet der Mensch.
+        // Die KI darf stattdessen die Dichteklasse vorschlagen — siehe `recipe.dichteklasse`.
+        'recipe.dichteklasse' => [
             'tier' => 'B',
-            'task' => 'Schlage Behaelter (warm/kalt getrennt) + Anzahl fuers Catering vor '
-                . '(Kontext: Gesamtgewicht + Speisen-Klasse, Vokabular mitgegeben): '
-                . 'werte = {behaelter_warm_id, container_warm_count, behaelter_kalt_id, container_cold_count}.',
+            'task' => 'Schaetze, wie dicht dieses Produkt in einem Behaelter liegt — eine PRODUKT-'
+                . 'eigenschaft, keine Rechnung. dichteklasse: fluessig (Suppe, Fond, Sauce) | dicht '
+                . '(Pueree, Ragout) | schuettfaehig (Gemuesewuerfel, Reis, Nudeln) | locker (Blattsalat, '
+                . 'Kraeuter, Chips). skalierung: tiefer_fuellbar (darf im tieferen Behaelter hoeher '
+                . 'stehen) | hoehe_gebunden (nur die Flaeche skaliert) | lagenware (wird gelegt, nicht '
+                . 'geschuettet). Im Zweifel null zurueckgeben, NIEMALS raten: '
+                . 'werte = {dichteklasse, skalierung}.',
         ],
+
         'vk.regeneration' => [
             'tier' => 'B',
             'task' => 'Schlage die Regenerations-Programme als LISTE vor — eine Zeile pro '
                 . 'erkannter Komponente (V-19; Geraet aus Vokabular, kalt = ohne Geraet): '
-                . 'werte = {programme: [{component_label, geraet_id, temp_c, duration_min, core_temp_c, hinweis}]}.',
+                . 'werte = {programme: [{component_label, geraet_id, temp_c, duration_min, core_temp_c, note}]}.',
         ],
         'vk.servier_vehikel' => [
             'tier' => 'B',

@@ -31,7 +31,7 @@ const REGISTRY_SOLL = [
     // VK-Welt
     'vk.generator' => 'B', 'vk.speisen_klasse' => 'B', 'vk.rollen' => 'B',
     'vk.plating' => 'A', 'vk.name_putzen' => 'B', 'vk.titel_vorschlag' => 'B', 'vk.marketing' => 'A', 'vk.wording' => 'A',
-    'vk.behaelter' => 'B', 'vk.regeneration' => 'B', 'vk.servier_vehikel' => 'B',
+    'vk.regeneration' => 'B', 'vk.servier_vehikel' => 'B', 'recipe.dichteklasse' => 'B',
     'vk.review' => 'A', 'vk.kohaerenz' => 'A', 'vk.teller_heber' => 'A',
     'vk.ueberarbeiten' => 'A',                                        // Spec 03 L1a: VK-Revise (freie Anweisung, Facetten sind Vorgabe)
     // Concepter
