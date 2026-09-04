@@ -365,3 +365,52 @@ it('das Produktionsblatt liefert Regenerations-Programm und Anrichte-Schritte je
         // Die Produktions-Schritte bleiben getrennt — keine Vermischung der Nummerierungen.
         ->and(collect($zeile['schritte'])->pluck('text')->all())->toBe(['Filet tranchieren.']);
 });
+
+// ── Rüstzeit und Vorproduzierbarkeit gibt es am Gericht nicht ────────────────
+
+it('updateVk schreibt Ruestzeit und Vorlauf am Gericht nicht mehr', function () {
+    // Beides sind Herstellungs-Eigenschaften (Entscheid 2026-09-04). Was am Gericht
+    // keine Bedeutung hat, darf auch das Tool nicht setzen — sonst stünde ein Wert in
+    // der Spalte, den die UI nicht zeigt.
+    $this->seedTeamHierarchy();
+    $gericht = $this->makeRecipe($this->rootTeam, 'Ohne-Ruestzeit', ['is_sales_recipe' => true]);
+
+    $frisch = app(SalesRecipeService::class)->updateVk($this->rootTeam, $gericht->id, [
+        'setup_time_min' => 30,
+        'max_vorlauf_tage' => 5,
+        'work_time_min' => 8,          // Gegenprobe: die Fertigstellungszeit geht durch
+    ]);
+
+    expect($frisch->setup_time_min)->toBeNull()
+        ->and($frisch->max_vorlauf_tage)->toBeNull()
+        ->and((int) $frisch->work_time_min)->toBe(8);
+});
+
+it('die Zeitrechnung ignoriert eine Alt-Ruestzeit am Gericht', function () {
+    // Bestandswerte bleiben in der Spalte stehen (kein Datenverlust) — sie dürfen aber
+    // nicht unsichtbar weiterrechnen. Genau das war das Muster, das diese Runde beseitigt.
+    $this->seedTeamHierarchy();
+    $gericht = $this->makeRecipe($this->rootTeam, 'Alt-Ruestzeit', [
+        'is_sales_recipe' => true, 'work_time_min' => 10, 'setup_time_min' => 45,
+    ]);
+    $basis = $this->makeRecipe($this->rootTeam, 'Basis-Ruestzeit', [
+        'work_time_min' => 10, 'setup_time_min' => 45,
+    ]);
+
+    $svc = app(\Platform\FoodAlchemist\Services\ProductionTimeService::class);
+    $amGericht = $svc->calculate($this->rootTeam, $gericht->fresh(), 1.0, 'kg');
+    $amBasis = $svc->calculate($this->rootTeam, $basis->fresh(), 1.0, 'kg');
+
+    expect($amGericht['setup_minutes'])->toBe(0.0)
+        ->and($amGericht['active_person_minutes'])->toBe(10.0)
+        // Am Basisrezept zählt sie unverändert.
+        ->and($amBasis['setup_minutes'])->toBe(45.0)
+        ->and($amBasis['active_person_minutes'])->toBe(55.0);
+});
+
+it('die Anreicherung setzt Batchgrenzen, aber keine Ruestzeit am Gericht', function () {
+    // Der Prompt fordert die Chargengröße an — vorher verwarf die Whitelist sie still,
+    // und der Topf-Deckel blieb auf dem Team-Default (= falsche Personenminuten).
+    expect(config('foodalchemist.prompts', [])['recipe.eigenschaften']['task'] ?? '')
+        ->toContain('batch_max_kg');
+});

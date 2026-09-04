@@ -83,7 +83,10 @@ class ProductionTimeService
             $warnings[] = "Variable Zeit auf {$variableBasis} kann aus {$basis} ohne Umrechnung nicht belastbar berechnet werden.";
         }
 
-        $setup = max(0.0, (float) ($recipe->setup_time_min ?? 0));
+        // Entscheid 2026-09-04: Ruestzeit ist eine Herstellungs-Groesse und gilt nur am
+        // Basisrezept. Am Gericht wird sie ignoriert — sonst rechneten Alt-Werte, die die
+        // UI nicht mehr zeigt, still weiter in die Personenminuten.
+        $setup = $recipe->is_sales_recipe ? 0.0 : max(0.0, (float) ($recipe->setup_time_min ?? 0));
         $batch = max(0.0, (float) ($recipe->work_time_min ?? 0)) * $operations;
         $variable = max(0.0, (float) ($recipe->variable_work_time_min ?? 0)) * $variableQuantity;
         $active = $setup + $batch + $variable;

@@ -250,14 +250,11 @@
                         </p>
                     @endif
                 </div>
-                <div>
-                    <label class="block {{ $label }} mb-1">Rüstzeit (min) <span class="normal-case text-gray-500">einmal je Lauf</span></label>
-                    <input type="number" wire:model="form.setup_time_min" min="0" class="{{ $input }}" placeholder="0" data-vk-setup />
-                </div>
-                <div>
-                    <label class="block {{ $label }} mb-1">Vorproduzierbar (Tage) <span class="normal-case text-gray-500">0 = nur am Tag</span></label>
-                    <input type="number" wire:model="form.max_vorlauf_tage" min="0" max="14" class="{{ $input }}" placeholder="—" data-vk-vorlauf />
-                </div>
+                {{-- Rüstzeit und Vorproduzierbarkeit sind RAUS am Gericht (User-Entscheid
+                     2026-09-04): beides sind Herstellungs-Eigenschaften. Ein „Rüsten des
+                     Laufs" gibt es beim Zusammensetzen nicht, und ein fertiggestelltes
+                     Gericht ist nicht vorproduzierbar — vorproduziert werden seine
+                     Komponenten, und die tragen die Werte an ihren Basisrezepten. --}}
                 <div>
                     <label class="block {{ $label }} mb-1">Variable Personenminuten</label>
                     <input type="text" inputmode="decimal" wire:model="form.variable_work_time_min" class="{{ $input }}" placeholder="0" />

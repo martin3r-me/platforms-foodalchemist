@@ -330,8 +330,11 @@ class SalesRecipeService
         'additional_costs_eur',                                            // M12: Energie/Nebenkosten je Charge (HK2)
         // Auto-Produktionsplaner (2026-08-03): Parität zum Basisrezept-Editor — sonst verwirft
         // die Whitelist die Werte still und der Planer routet Gericht-Zeilen nie.
-        'default_station_id', 'setup_time_min', 'variable_work_time_min',
-        'variable_work_time_basis', 'standzeit_min', 'batch_max_kg', 'batch_max_pieces', 'max_vorlauf_tage',
+        // `setup_time_min` + `max_vorlauf_tage` bewusst NICHT (Entscheid 2026-09-04):
+        // Rüstzeit und Vorproduzierbarkeit sind Herstellungs-Eigenschaften und gehören an
+        // die Komponenten-Basisrezepte. Am Gericht wären sie nur eine stille Fehlerquelle.
+        'default_station_id', 'variable_work_time_min',
+        'variable_work_time_basis', 'standzeit_min', 'batch_max_kg', 'batch_max_pieces',
     ];
 
     public function updateVk(Team $team, int $id, array $in): FoodAlchemistRecipe

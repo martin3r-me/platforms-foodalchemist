@@ -133,14 +133,14 @@ class VkModal extends Component
                 // Auto-Produktionsplaner (Parität Basisrezept-Editor 2026-08-03): Posten-Routing +
                 // Rüstzeit + Vorproduzierbarkeit. Ohne diese landeten Gericht-Zeilen im Planer immer
                 // „nicht zugeteilt" (ProductionPlanService routet über recipe.default_station_id).
-                'setup_time_min' => $r->setup_time_min,
+                // `setup_time_min` + `max_vorlauf_tage` NICHT im Formular (Entscheid 2026-09-04):
+                // Herstellungs-Eigenschaften, die am Gericht keine Bedeutung haben.
                 'variable_work_time_min' => $r->variable_work_time_min,
                 'variable_work_time_basis' => $r->variable_work_time_basis ?: 'portion',
                 'standzeit_min' => $r->standzeit_min,
                 'batch_max_kg' => $r->batch_max_kg,
                 'batch_max_pieces' => $r->batch_max_pieces,
                 'default_station_id' => $r->default_station_id,
-                'max_vorlauf_tage' => $r->max_vorlauf_tage,
                 'additional_costs_eur' => $r->additional_costs_eur,             // M-K8: direkte Einzelkosten → HK2 (#379)
                 'temperature' => $r->temperature,
                 'function' => $r->function,

@@ -122,8 +122,12 @@
                 <div><span>Temperatur</span>{{ $p['temperature'] ?? '—' }}</div>
                 <div><span>Funktion</span>{{ $p['function'] ?? '—' }}</div>
                 <div><span>Posten</span>{{ $p['default_station'] ?? '—' }}</div>
-                <div><span>Rüstzeit</span>{{ $p['setup_time_min'] !== null ? $p['setup_time_min'] . ' min' : '—' }}</div>
-                <div><span>Vorlauf</span>{{ $p['max_vorlauf_tage'] !== null ? $p['max_vorlauf_tage'] . ' Tage' : '—' }}</div>
+                {{-- Rüstzeit + Vorlauf nur am Basisrezept (Entscheid 2026-09-04): am Gericht
+                     haben sie keine Bedeutung, vorproduziert werden die Komponenten. --}}
+                @unless($node['is_sales_recipe'] ?? false)
+                    <div><span>Rüstzeit</span>{{ $p['setup_time_min'] !== null ? $p['setup_time_min'] . ' min' : '—' }}</div>
+                    <div><span>Vorlauf</span>{{ $p['max_vorlauf_tage'] !== null ? $p['max_vorlauf_tage'] . ' Tage' : '—' }}</div>
+                @endunless
                 <div><span>Batchdeckel</span>{{ $p['batch_max_kg'] !== null ? $num($p['batch_max_kg'], 3, ' kg') : ($p['batch_max_pieces'] !== null ? $num($p['batch_max_pieces'], 2, ' Stk.') : '—') }}</div>
                 <div><span>Variable Zeit</span>{{ $p['variable_work_time_min'] !== null ? $num($p['variable_work_time_min'], 2, ' min/' . ($p['variable_work_time_basis'] ?? '?')) : '—' }}</div>
                 <div><span>Standzeit</span>{{ $p['standzeit_min'] !== null ? $p['standzeit_min'] . ' min' : '—' }}</div>

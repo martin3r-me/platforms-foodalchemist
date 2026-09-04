@@ -58,7 +58,11 @@ class ProductionPlanService
                 'tag' => $tag,
                 'liefertag' => $tag,
                 'arbeitszeit_min' => $arbeit,
-                'max_vorlauf' => $z->max_vorlauf_tage !== null ? (int) $z->max_vorlauf_tage : 0,
+                // Entscheid 2026-09-04: am Gericht kein Vorlauf — vorgezogen werden seine
+                // Komponenten (eigene Auftragszeilen mit eigenem `max_vorlauf_tage`).
+                'max_vorlauf' => ((int) ($z->ist_verkaufsrezept ?? 0) === 1 || (bool) ($z->is_sales_recipe ?? false))
+                    ? 0
+                    : ($z->max_vorlauf_tage !== null ? (int) $z->max_vorlauf_tage : 0),
                 'rezept' => $z->rezept,
                 'auftrag' => $z->auftrag,
                 'alt_station' => $z->station_id ? (int) $z->station_id : null,
@@ -112,7 +116,7 @@ class ProductionPlanService
             ->select([
                 'l.id', 'l.station_id', 'l.arbeitszeit_min', 'l.vorlauf_tage',
                 'o.production_date', 'o.name as auftrag',
-                'r.name as rezept', 'r.default_station_id', 'r.max_vorlauf_tage',
+                'r.name as rezept', 'r.default_station_id', 'r.max_vorlauf_tage', 'r.is_sales_recipe',
             ])->get();
     }
 

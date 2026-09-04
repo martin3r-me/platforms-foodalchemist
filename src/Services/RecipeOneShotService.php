@@ -340,7 +340,11 @@ class RecipeOneShotService
             if (isset($vorschlag->werte['work_time_min']) && is_numeric($vorschlag->werte['work_time_min'])) {
                 $update['work_time_min'] = max(0, (int) $vorschlag->werte['work_time_min']);
             }
-            if (isset($vorschlag->werte['setup_time_min']) && is_numeric($vorschlag->werte['setup_time_min'])) {
+            // Rüstzeit + Vorproduzierbarkeit nur am BASISREZEPT (Entscheid 2026-09-04): am
+            // Gericht gibt es kein Rüsten des Laufs, und fertiggestellt wird es nicht
+            // vorproduziert — das tun seine Komponenten.
+            if (! $recipe->is_sales_recipe
+                && isset($vorschlag->werte['setup_time_min']) && is_numeric($vorschlag->werte['setup_time_min'])) {
                 $update['setup_time_min'] = max(0, (int) $vorschlag->werte['setup_time_min']);
             }
             if (isset($vorschlag->werte['variable_work_time_min']) && is_numeric($vorschlag->werte['variable_work_time_min'])) {
@@ -352,7 +356,8 @@ class RecipeOneShotService
             if (isset($vorschlag->werte['standzeit_min']) && is_numeric($vorschlag->werte['standzeit_min'])) {
                 $update['standzeit_min'] = max(0, (int) $vorschlag->werte['standzeit_min']);
             }
-            if (isset($vorschlag->werte['max_vorlauf_tage']) && is_numeric($vorschlag->werte['max_vorlauf_tage'])) {
+            if (! $recipe->is_sales_recipe
+                && isset($vorschlag->werte['max_vorlauf_tage']) && is_numeric($vorschlag->werte['max_vorlauf_tage'])) {
                 $update['max_vorlauf_tage'] = max(0, min(14, (int) $vorschlag->werte['max_vorlauf_tage']));
             }
             // Chargengrenze: der Prompt fordert GENAU EINE (kg für Gewichts-, Stück für
