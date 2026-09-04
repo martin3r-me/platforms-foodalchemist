@@ -3,6 +3,7 @@
 namespace Platform\FoodAlchemist\Livewire\Recipes;
 
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Livewire\Attributes\On;
 use Livewire\Component;
 use Livewire\WithFileUploads;
@@ -13,6 +14,7 @@ use Platform\FoodAlchemist\Livewire\Concerns\TauschtRezept;
 use Platform\FoodAlchemist\Models\FoodAlchemistProductionStation;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipeCategory;
+use Platform\FoodAlchemist\Models\FoodAlchemistVocabContainer;
 use Platform\FoodAlchemist\Models\FoodAlchemistVocabKochequipment;
 use Platform\FoodAlchemist\Services\Ai\AiGatewayService;
 use Platform\FoodAlchemist\Services\Ai\KnowledgeContextService;
@@ -22,6 +24,8 @@ use Platform\FoodAlchemist\Services\PairingService;
 use Platform\FoodAlchemist\Services\RecipeOneShotService;
 use Platform\FoodAlchemist\Services\RecipeReviseService;
 use Platform\FoodAlchemist\Services\RecipeService;
+use Platform\FoodAlchemist\Services\SalesRecipeService;
+use Platform\FoodAlchemist\Support\TeamScope;
 use Platform\FoodAlchemist\Services\RecipeStepService;
 use Platform\FoodAlchemist\Services\SensorikService;
 
@@ -186,8 +190,11 @@ class RecipeModal extends Component
      */
     public function tabLaden(string $tab): void
     {
-        if (in_array($tab, ['aufbau', 'eigenschaften', 'preparation', 'details', 'sensorik', 'feedback', 'notes', 'verwaltung'], true)) {
+        if (in_array($tab, ['aufbau', 'eigenschaften', 'preparation', 'details', 'regeneration', 'sensorik', 'feedback', 'notes', 'verwaltung'], true)) {
             $this->geladeneTabs[$tab] = true;
+        }
+        if ($tab === 'regeneration') {
+            $this->regenerationLaden();
         }
     }
 
@@ -803,6 +810,119 @@ class RecipeModal extends Component
         $this->form['category_id'] = null;                        // Kategorie hängt an der HG
     }
 
+    // ── Spec 51: Regeneration & Behälter am Basisrezept ──────────────────────────
+    //
+    // Warum hier und nicht nur am Gericht: wie eine Komponente regeneriert wird und worin sie
+    // transportiert wird, ist eine Eigenschaft DER KOMPONENTE. Bis Spec 51 musste beides in
+    // jedem Gericht neu getippt werden — n-fache Pflege mit garantierter Drift. Was hier steht,
+    // erbt jedes Gericht; wer dort abweichen will, setzt einen sichtbaren Override.
+
+    /** Die eigene Regenerationszeile (»das bin ich«) — ingredient_id bleibt NULL. */
+    public array $regenForm = ['device_vocab_id' => '', 'temp_c' => '', 'duration_min' => '', 'core_temp_c' => '', 'note' => ''];
+
+    /** Behälter je Zweck. */
+    public array $behaelterForm = [];
+
+    public string $dichteklasse = '';
+
+    public string $skalierungDefault = '';
+
+    public ?string $regenMeldung = null;
+
+    /** Lädt Regeneration und Behälter in die Formulare — beim Öffnen des Tabs. */
+    public function regenerationLaden(): void
+    {
+        $r = $this->rezept();
+        if ($r === null) {
+            return;
+        }
+
+        $zeile = DB::table('foodalchemist_recipe_regenerations')
+            ->where('recipe_id', $r->id)->whereNull('ingredient_id')->whereNull('deleted_at')
+            ->orderBy('sort_order')->first();
+
+        $this->regenForm = [
+            'id' => $zeile->id ?? null,
+            'device_vocab_id' => (string) ($zeile->device_vocab_id ?? ''),
+            'temp_c' => (string) ($zeile->temp_c ?? ''),
+            'duration_min' => (string) ($zeile->duration_min ?? ''),
+            'core_temp_c' => (string) ($zeile->core_temp_c ?? ''),
+            'note' => (string) ($zeile->note ?? ''),
+        ];
+
+        $this->dichteklasse = (string) ($r->dichteklasse ?? '');
+
+        $zahl = fn ($w) => $w === null ? '' : rtrim(rtrim(number_format((float) $w, 3, ',', ''), '0'), ',');
+        $vorhanden = DB::table('foodalchemist_recipe_containers')
+            ->where('recipe_id', $r->id)->whereNull('deleted_at')->get()->keyBy('zweck');
+
+        $this->behaelterForm = [];
+        foreach (FoodAlchemistVocabContainer::ZWECKE as $zweck) {
+            $z = $vorhanden->get($zweck);
+            $this->behaelterForm[$zweck] = [
+                'container_vocab_id' => (string) ($z->container_vocab_id ?? ''),
+                'referenz_menge_kg' => $zahl($z->referenz_menge_kg ?? null),
+                'skalierung' => (string) ($z->skalierung ?? ''),
+                'max_schichthoehe_mm' => $zahl($z->max_schichthoehe_mm ?? null),
+                'stueck_je_behaelter' => (string) ($z->stueck_je_behaelter ?? ''),
+            ];
+        }
+    }
+
+    public function regenerationSpeichern(SalesRecipeService $vk): void
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        $r = $this->rezept();
+        if ($team === null || $r === null) {
+            return;
+        }
+
+        $leer = fn (mixed $w) => $w === null || $w === '' ? null : $w;
+        $alleLeer = collect($this->regenForm)->except('id')->every(fn ($w) => $w === '' || $w === null);
+
+        // Alles leer heisst »keine Angabe«, nicht »kalt servieren«. Eine Zeile mit leerem Gerät
+        // WÄRE eine Entscheidung (kalt); keine Zeile ist eine Lücke. Der Unterschied muss halten.
+        if ($alleLeer) {
+            if (($this->regenForm['id'] ?? null) !== null) {
+                $vk->deleteRegeneration($team, (int) $r->id, (int) $this->regenForm['id']);
+            }
+        } else {
+            $vk->upsertRegeneration($team, (int) $r->id, [
+                'component_label' => $r->name,
+                'ingredient_id' => null,
+                'device_vocab_id' => $leer($this->regenForm['device_vocab_id'] ?? null),
+                'temp_c' => $leer($this->regenForm['temp_c'] ?? null),
+                'duration_min' => $leer($this->regenForm['duration_min'] ?? null),
+                'core_temp_c' => $leer($this->regenForm['core_temp_c'] ?? null),
+                'note' => $leer($this->regenForm['note'] ?? null),
+            ], $this->regenForm['id'] ?? null);
+        }
+
+        DB::table('foodalchemist_recipes')->where('id', $r->id)->update([
+            'dichteklasse' => $this->dichteklasse !== '' ? $this->dichteklasse : null,
+            'dichteklasse_source' => $this->dichteklasse !== '' ? 'manual' : null,
+            'updated_at' => now(),
+        ]);
+
+        foreach ($this->behaelterForm as $zweck => $form) {
+            if (($form['container_vocab_id'] ?? '') === '') {
+                $vk->deleteContainer($team, (int) $r->id, (string) $zweck);
+
+                continue;
+            }
+            $vk->upsertContainer($team, (int) $r->id, (string) $zweck, $form);
+        }
+
+        $this->regenerationLaden();
+        $this->regenMeldung = 'Regeneration und Behälter gespeichert.';
+    }
+
+    /** Der häufigste gute Fall: das GN mit Deckel geht direkt aus dem Kühlhaus in den Ofen. */
+    public function behaelterUebernehmen(string $vonZweck, string $nachZweck): void
+    {
+        $this->behaelterForm[$nachZweck] = $this->behaelterForm[$vonZweck] ?? [];
+    }
+
     public function render(RecipeService $recipes)
     {
         $team = Auth::user()?->currentTeamRelation;
@@ -822,7 +942,15 @@ class RecipeModal extends Component
         $bulkRun = $this->bulkRunId !== null && $team !== null
             ? app(BulkEnrichService::class)->status($team, $this->bulkRunId) : null;
 
+        // Spec 51: Vokabulare für den Regenerations-Tab. Sichtbarkeit statt Eigentum —
+        // geerbte und globale Behälter müssen am eigenen Rezept wählbar sein (MVP-050).
+        $vokabular = fn (string $tabelle) => $team === null ? collect() : TeamScope::applyVisible(
+            DB::table($tabelle)->whereNull('deleted_at')->where('is_inactive', false), 'team_id', $team
+        )->orderBy('group_name')->orderBy('sort_order')->orderBy('name')->get();
+
         return view('foodalchemist::livewire.recipes.recipe-modal', [
+            'behaelterListe' => $vokabular('foodalchemist_vocab_containers'),
+            'geraeteListe' => $vokabular('foodalchemist_vocab_regeneration_devices'),
             'neu' => $this->recipeId === null,
             'dishImageUrl' => ($r !== null && ($r->image_context_file_id || $r->image_path))
                 ? app(FoodAlchemistMediaService::class)->url($r->image_context_file_id, $r->image_path)

@@ -10,6 +10,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistOutlet;
 use Platform\FoodAlchemist\Models\FoodAlchemistDishClass;
 use Platform\FoodAlchemist\Models\FoodAlchemistDishMainGroup;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
+use Platform\FoodAlchemist\Models\FoodAlchemistVocabContainer;
 use Platform\FoodAlchemist\Support\TeamScope;
 
 /**
@@ -504,11 +505,25 @@ class SalesRecipeService
 
     // V-19: Regen-Programme (zeilenbasiert)
 
+    /**
+     * Spec 51: KEIN `->verkauf()` mehr.
+     *
+     * Wie eine Komponente regeneriert wird, ist eine Eigenschaft der Komponente — also gehoert
+     * die Zeile ans BASISREZEPT, wo sie einmal gepflegt und von jedem Gericht geerbt wird. Das
+     * Schema konnte das immer (`recipe_id` ohne is_sales_recipe-Constraint), der Lesepfad zieht
+     * sie laengst ab (PlanungsblattService::regenerationenFuer(), die rekursive Report-Node,
+     * regen_snapshot je Auftragszeile) — nur der Schreibpfad war auf Gerichte verriegelt.
+     *
+     * `ingredient_id` traegt die Bedeutung der Zeile (siehe FoodAlchemistRecipeRegeneration):
+     * gesetzt = Override je Komponente, NULL am Gericht = »Gesamt«, NULL am Basisrezept =
+     * »das bin ich«. Die Spalte war bis hierher tot — kein Leser, kein Schreiber.
+     */
     public function upsertRegeneration(Team $team, int $recipeId, array $in, ?int $id = null): void
     {
-        $recipe = FoodAlchemistRecipe::visibleToTeam($team)->verkauf()->findOrFail($recipeId);
+        $recipe = FoodAlchemistRecipe::visibleToTeam($team)->findOrFail($recipeId);
         $werte = [
             'component_label' => trim((string) ($in['component_label'] ?? '')) ?: 'Gesamt',
+            'ingredient_id' => $this->pruefeKomponente($recipe, $in['ingredient_id'] ?? null),
             'device_vocab_id' => $in['device_vocab_id'] ?? null,
             'temp_c' => $in['temp_c'] ?? null,
             'duration_min' => $in['duration_min'] ?? null,
@@ -534,7 +549,7 @@ class SalesRecipeService
 
     public function deleteRegeneration(Team $team, int $recipeId, int $id): void
     {
-        FoodAlchemistRecipe::visibleToTeam($team)->verkauf()->findOrFail($recipeId);
+        FoodAlchemistRecipe::visibleToTeam($team)->findOrFail($recipeId);
         DB::table('foodalchemist_recipe_regenerations')->where('id', $id)->where('recipe_id', $recipeId)
             ->update(['deleted_at' => now()]);
     }
@@ -542,13 +557,98 @@ class SalesRecipeService
     /** @param list<int> $ids neue Reihenfolge */
     public function reorderRegenerations(Team $team, int $recipeId, array $ids): void
     {
-        FoodAlchemistRecipe::visibleToTeam($team)->verkauf()->findOrFail($recipeId);
+        FoodAlchemistRecipe::visibleToTeam($team)->findOrFail($recipeId);
         DB::transaction(function () use ($recipeId, $ids) {
             foreach (array_values($ids) as $i => $id) {
                 DB::table('foodalchemist_recipe_regenerations')
                     ->where('id', (int) $id)->where('recipe_id', $recipeId)->update(['sort_order' => $i]);
             }
         });
+    }
+
+    /**
+     * Ein Override darf nur auf eine EIGENE, lebende Zutatenzeile zeigen.
+     *
+     * Ohne die Pruefung koennte ein Formular jede beliebige ingredient_id setzen — und ein
+     * Override, der auf eine fremde oder soft-geloeschte Zeile zeigt, beschreibt still etwas
+     * anderes als er behauptet.
+     */
+    private function pruefeKomponente(FoodAlchemistRecipe $recipe, mixed $ingredientId): ?int
+    {
+        if ($ingredientId === null || $ingredientId === '') {
+            return null;                                          // »Gesamt« bzw. »das bin ich«
+        }
+
+        return DB::table('foodalchemist_recipe_ingredients')
+            ->where('id', (int) $ingredientId)->where('recipe_id', $recipe->id)
+            ->whereNull('deleted_at')->exists() ? (int) $ingredientId : null;
+    }
+
+    // Spec 51: Behaelter je Zweck (abfuellen | regenerieren | ausgabe | transport)
+
+    /**
+     * Gilt fuer JEDES Rezept: das Basisrezept traegt hier seinen Default, das Gericht seinen
+     * Override. Ein Zweck kommt genau einmal je Rezept vor — unter MySQL gibt es dafuer keinen
+     * partiellen Unique-Index, also traegt der Service die Invariante (Praezedenz
+     * 2026_09_04_000001_repair_darreichung_ein_standard_index).
+     */
+    public function upsertContainer(Team $team, int $recipeId, string $zweck, array $in): void
+    {
+        $recipe = FoodAlchemistRecipe::visibleToTeam($team)->findOrFail($recipeId);
+        if (! in_array($zweck, FoodAlchemistVocabContainer::ZWECKE, true)) {
+            return;
+        }
+
+        $containerId = $in['container_vocab_id'] ?? null;
+        if ($containerId !== null && $containerId !== '') {
+            // Sichtbarkeit, nicht Eigentum: geerbte und globale Vokabeln muessen am eigenen
+            // Rezept verwendbar sein (MVP-050).
+            $erlaubt = TeamScope::applyVisible(
+                DB::table('foodalchemist_vocab_containers')->whereNull('deleted_at'), 'team_id', $team
+            )->where('id', (int) $containerId)->exists();
+            $containerId = $erlaubt ? (int) $containerId : null;
+        } else {
+            $containerId = null;
+        }
+
+        $zahl = fn (mixed $w) => $w === null || $w === '' ? null : (float) str_replace(',', '.', (string) $w);
+
+        $werte = [
+            'container_vocab_id' => $containerId,
+            'referenz_menge_kg' => $zahl($in['referenz_menge_kg'] ?? null),
+            'skalierung' => $in['skalierung'] ?? null,
+            'max_schichthoehe_mm' => $zahl($in['max_schichthoehe_mm'] ?? null),
+            'stueck_je_behaelter' => ($in['stueck_je_behaelter'] ?? null) !== null && $in['stueck_je_behaelter'] !== ''
+                ? (int) $in['stueck_je_behaelter'] : null,
+            'note' => $in['note'] ?? null,
+            'source' => 'manual', 'ai_confidence' => null, 'ai_reasoning' => null,
+            'updated_at' => now(),
+        ];
+
+        $vorhanden = DB::table('foodalchemist_recipe_containers')
+            ->where('recipe_id', $recipe->id)->where('zweck', $zweck)->whereNull('deleted_at')->first(['id']);
+
+        if ($vorhanden !== null) {
+            DB::table('foodalchemist_recipe_containers')->where('id', $vorhanden->id)->update($werte);
+
+            return;
+        }
+
+        DB::table('foodalchemist_recipe_containers')->insert($werte + [
+            'uuid' => (string) \Symfony\Component\Uid\UuidV7::generate(),
+            'team_id' => $recipe->team_id,
+            'recipe_id' => $recipe->id,
+            'zweck' => $zweck,
+            'created_at' => now(),
+        ]);
+    }
+
+    public function deleteContainer(Team $team, int $recipeId, string $zweck): void
+    {
+        FoodAlchemistRecipe::visibleToTeam($team)->findOrFail($recipeId);
+        DB::table('foodalchemist_recipe_containers')
+            ->where('recipe_id', $recipeId)->where('zweck', $zweck)
+            ->update(['deleted_at' => now()]);
     }
 
     // Verwendungsnachweise (Kunde × Marketing-Name, team-eigen)

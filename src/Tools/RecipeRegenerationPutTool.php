@@ -9,8 +9,11 @@ use Platform\Core\Contracts\ToolResult;
 use Platform\FoodAlchemist\Services\SalesRecipeService;
 
 /**
- * MCP-Steuerbarkeit · D3: Regenerations-Programm (Aufbereitung je Komponente) eines Gerichts upsert.
- * Ohne id wird angelegt, mit id aktualisiert. Nur team-eigene Gerichte.
+ * MCP-Steuerbarkeit · D3: Regenerations-Programm (Aufbereitung je Komponente) upsert.
+ * Ohne id wird angelegt, mit id aktualisiert. Nur team-eigene Rezepte.
+ *
+ * Spec 51: gilt fuer JEDES Rezept, nicht nur fuer Gerichte. Der Default gehoert ans Basisrezept —
+ * dort einmal gepflegt, von jedem Gericht geerbt.
  */
 class RecipeRegenerationPutTool extends FoodAlchemistTool implements ToolContract, ToolMetadataContract
 {
@@ -22,7 +25,9 @@ class RecipeRegenerationPutTool extends FoodAlchemistTool implements ToolContrac
     public function getDescription(): string
     {
         return 'Legt ein Regenerations-Programm an oder aktualisiert es (id). felder: component_label (Pflicht), '
-            . 'device_vocab_id, temp_c, duration_min, core_temp_c, note.';
+            . 'ingredient_id, device_vocab_id, temp_c, duration_min, core_temp_c, note. '
+            . 'ingredient_id leer = »Gesamt« (Gericht als Ganzes) bzw. am Basisrezept der Default, den Gerichte erben; '
+            . 'gesetzt = Override fuer genau diese Komponente. device_vocab_id leer heisst »kalt servieren«.';
     }
 
     public function getSchema(): array
@@ -30,9 +35,9 @@ class RecipeRegenerationPutTool extends FoodAlchemistTool implements ToolContrac
         return [
             'type' => 'object',
             'properties' => [
-                'recipe_id' => ['type' => 'integer', 'description' => 'Gericht-Id (team-eigen).'],
+                'recipe_id' => ['type' => 'integer', 'description' => 'Rezept-Id (team-eigen) — Basisrezept ODER Gericht.'],
                 'id' => ['type' => 'integer', 'description' => 'Regenerations-Id (leer = neu).'],
-                'felder' => ['type' => 'object', 'description' => 'component_label, device_vocab_id, temp_c, duration_min, core_temp_c, note.'],
+                'felder' => ['type' => 'object', 'description' => 'component_label, ingredient_id, device_vocab_id, temp_c, duration_min, core_temp_c, note.'],
             ],
             'required' => ['recipe_id', 'felder'],
         ];
@@ -50,7 +55,7 @@ class RecipeRegenerationPutTool extends FoodAlchemistTool implements ToolContrac
         }
 
         $recipeId = (int) ($arguments['recipe_id'] ?? 0);
-        if (($guard = $this->guardVkRecipe($team, $recipeId)) !== null) {
+        if (($guard = $this->guardRecipe($team, $recipeId)) !== null) {
             return $guard;
         }
 

@@ -26,7 +26,7 @@ class RecipeRegenerationReorderTool extends FoodAlchemistTool implements ToolCon
         return [
             'type' => 'object',
             'properties' => [
-                'recipe_id' => ['type' => 'integer', 'description' => 'Gericht-Id (team-eigen).'],
+                'recipe_id' => ['type' => 'integer', 'description' => 'Rezept-Id (team-eigen) — Basisrezept ODER Gericht.'],
                 'ids' => ['type' => 'array', 'items' => ['type' => 'integer'], 'description' => 'Regenerations-Ids in Zielreihenfolge.'],
             ],
             'required' => ['recipe_id', 'ids'],
@@ -45,7 +45,7 @@ class RecipeRegenerationReorderTool extends FoodAlchemistTool implements ToolCon
         }
 
         $recipeId = (int) ($arguments['recipe_id'] ?? 0);
-        if (($guard = $this->guardVkRecipe($team, $recipeId)) !== null) {
+        if (($guard = $this->guardRecipe($team, $recipeId)) !== null) {
             return $guard;
         }
 

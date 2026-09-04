@@ -26,7 +26,7 @@ class RecipeRegenerationDeleteTool extends FoodAlchemistTool implements ToolCont
         return [
             'type' => 'object',
             'properties' => [
-                'recipe_id' => ['type' => 'integer', 'description' => 'Gericht-Id (team-eigen).'],
+                'recipe_id' => ['type' => 'integer', 'description' => 'Rezept-Id (team-eigen) — Basisrezept ODER Gericht.'],
                 'id' => ['type' => 'integer', 'description' => 'Regenerations-Id.'],
             ],
             'required' => ['recipe_id', 'id'],
@@ -40,7 +40,7 @@ class RecipeRegenerationDeleteTool extends FoodAlchemistTool implements ToolCont
             return ToolResult::error('Kein Team im Kontext.', 'NO_TEAM');
         }
         $recipeId = (int) ($arguments['recipe_id'] ?? 0);
-        if (($guard = $this->guardVkRecipe($team, $recipeId)) !== null) {
+        if (($guard = $this->guardRecipe($team, $recipeId)) !== null) {
             return $guard;
         }
 
