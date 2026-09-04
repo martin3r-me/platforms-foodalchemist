@@ -154,10 +154,7 @@ class BehaelterRechner
             return [...$leer, 'grund' => 'Kein Behälter für diesen Zweck hinterlegt.'];
         }
         if ($skalierung === 'lagenware') {
-            $stueck = $basis['stueck_je_behaelter'] ?? null;
-            if ($stueck === null || (int) $stueck <= 0) {
-                return [...$leer, 'grund' => 'Lagenware — Stückzahl je Behälter nicht hinterlegt.'];
-            }
+            return $this->lagenware($basis, $ref, $zweck, $leer);
         }
         if (! self::taugtFuer($ref, $zweck)) {
             $name = $ref->name ?? 'Behälter';
@@ -192,6 +189,46 @@ class BehaelterRechner
         usort($varianten, fn (array $a, array $b) => ($a['tiefe_mm'] ?? PHP_INT_MAX) <=> ($b['tiefe_mm'] ?? PHP_INT_MAX));
 
         return ['berechenbar' => true, 'varianten' => [$kopf, ...$varianten], 'grund' => null];
+    }
+
+    /**
+     * Lagenware wird GELEGT, nicht geschüttet: Papadam, Schnitzel, Tartelettes. Für sie ist die
+     * Masse die falsche Grösse — 3 kg Papadam füllen kein GN zu 3 kg, sondern zu einer Lage.
+     *
+     * Gerechnet wird deshalb über Stück. Fehlt eine der beiden Zahlen (Stückzahl je Behälter am
+     * Rezept, Gesamtstückzahl aus Ausbeute × Stückertrag), rechnet der Rechner NICHT — eine
+     * Umrechnung über die Masse wäre genau die Erfindung, die er sonst überall vermeidet.
+     *
+     * Alternativen gibt es hier bewusst keine: die Stückzahl bezieht sich auf GENAU diesen
+     * Behälter; auf ein anderes Format zu skalieren hiesse, die Legefläche zu raten.
+     */
+    private function lagenware(array $basis, object $ref, string $zweck, array $leer): array
+    {
+        $jeBehaelter = $basis['stueck_je_behaelter'] ?? null;
+        $gesamt = $basis['stueck_gesamt'] ?? null;
+
+        if ($jeBehaelter === null || (int) $jeBehaelter <= 0) {
+            return [...$leer, 'grund' => 'Lagenware — Stückzahl je Behälter nicht hinterlegt.'];
+        }
+        if ($gesamt === null || (float) $gesamt <= 0) {
+            return [...$leer, 'grund' => 'Lagenware — Stückertrag (yield_pieces) am Rezept fehlt.'];
+        }
+
+        $anzahl = max(1, (int) ceil((float) $gesamt / (int) $jeBehaelter - 1e-9));
+
+        return ['berechenbar' => true, 'varianten' => [[
+            'container_id' => $ref->id ?? null,
+            'behaelter' => $ref->name ?? null,
+            'tiefe_mm' => isset($ref->tiefe_mm) && $ref->tiefe_mm !== null ? (float) $ref->tiefe_mm : null,
+            'anzahl' => $anzahl,
+            'kg_je_behaelter' => null,
+            'stueck_je_behaelter' => (int) $jeBehaelter,
+            'stueck_gesamt' => (int) round((float) $gesamt),
+            'rest_im_letzten_kg' => null,
+            'auf_deckel_gekappt' => false,
+            'konfidenz' => 'hoch',
+            'ist_basis' => true,
+        ]], 'grund' => null];
     }
 
     /** @return array{0: ?float, 1: string} kg je Referenzbehälter + Konfidenz */

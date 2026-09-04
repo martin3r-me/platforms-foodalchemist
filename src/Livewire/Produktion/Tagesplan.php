@@ -665,15 +665,14 @@ class Tagesplan extends Component
             return [];
         }
 
+        // Spec 51: Regeneration kommt hier NICHT mehr her. Sie steht in `regen_snapshot`
+        // (je Komponente) und wird von wallGerichtRegeneration() gerendert — zwei Quellen
+        // nebeneinander waren genau die Drift, die dieser Spec abstellt.
         $labels = [
             'geschirr' => 'Geschirr',
             'vehikel' => 'Servierform',
             'behaelter_warm' => 'Behälter warm',
             'behaelter_kalt' => 'Behälter kalt',
-            'geraet' => 'Regeneration',
-            'regeneration_temp_c' => 'Temperatur',
-            'regeneration_duration_min' => 'Zeit',
-            'regeneration_core_temp_c' => 'Kerntemperatur',
         ];
 
         return collect($labels)
@@ -683,13 +682,7 @@ class Tagesplan extends Component
                     return null;
                 }
 
-                $suffix = match ($key) {
-                    'regeneration_temp_c', 'regeneration_core_temp_c' => ' °C',
-                    'regeneration_duration_min' => ' min',
-                    default => '',
-                };
-
-                return ['label' => $label, 'wert' => (string) $wert . $suffix];
+                return ['label' => $label, 'wert' => (string) $wert];
             })
             ->filter()
             ->values()

@@ -285,7 +285,13 @@ class ProductionOrderService
                 // Standard-Darreichung, die kein Schreibpfad füllt; am Pass stand sie leer.
                 'regen_snapshot' => $r['regenerationen'] ?? null,
                 'plating_snapshot' => $r['anrichte_schritte'] ?? null,
-                'darreichung' => $r['darreichung'],
+                // Spec 51: der gerechnete Behaelter-Bedarf wandert in den BESTEHENDEN
+                // darreichung-Blob. Bewusst keine vierte JSON-Spalte an dieser Zeile — drei
+                // Blobs mit ueberlappender Semantik sind genau das Drift-Muster, das dieser
+                // Spec an den Regenerations-Ablagen behebt.
+                'darreichung' => $r['behaelter'] !== null
+                    ? (array) ($r['darreichung'] ?? []) + ['behaelter_bedarf' => $r['behaelter']]
+                    : $r['darreichung'],
                 'zutaten' => $r['zutaten'],
                 'position' => $i,
             ], $overlay[$r['recipe_id']] ?? []));

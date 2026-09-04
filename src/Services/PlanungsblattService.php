@@ -49,6 +49,7 @@ class PlanungsblattService
         private DarreichungResolver $darreichungen,
         private GebindeRechner $gebinde,
         private ProductionTimeService $productionTimes,
+        private BehaelterBedarfService $behaelter,
     ) {
     }
 
@@ -667,6 +668,7 @@ class PlanungsblattService
             $batches = $istVk ? $roh : (float) max(1, (int) ceil($roh - 1e-9));
 
             $zeilen = [];
+            $komponentenMasse = [];
             foreach ($recipe->ingredients as $z) {
                 $mengeAvg = $z->quantity_max !== null
                     ? ((float) $z->quantity + (float) $z->quantity_max) / 2
@@ -679,6 +681,16 @@ class PlanungsblattService
                     $sub = $z->referencedRecipe;
                     $basisG = (float) ($sub?->yield_kg ?? 0) * 1000;
                     $bruttoProBatch = $this->recompute->bruttoMasseG($z);
+                    // Spec 51: der ANTEIL dieser Komponente an DIESEM Gericht. Die aggregierte
+                    // Basisrezept-Zeile kennt ihn nicht — eine Sauce in drei Gerichten wird an
+                    // drei Paessen je anteilig gewaermt.
+                    if ($sub !== null && $bruttoProBatch > 0) {
+                        $komponentenMasse[] = [
+                            'recipe' => $sub,
+                            'label' => $name,
+                            'menge_kg' => round(($bruttoProBatch * $batches) / 1000, 3),
+                        ];
+                    }
                     if ($basisG > 0) {
                         $needBatches[(int) $z->referenced_recipe_id] = ($needBatches[(int) $z->referenced_recipe_id] ?? 0.0)
                             + ($bruttoProBatch * $batches) / $basisG;
@@ -736,8 +748,12 @@ class PlanungsblattService
                 'standzeit_min' => $recipe->standzeitMin(),   // passive Gar-/Standzeit (Durchlaufzeit, kein Posten)
                 'zubereitung' => $recipe->preparation ?: null,        // Spiegel-Freitext (Fallback für Rezepte ohne Schritte)
                 'schritte' => $this->schritteFuer($recipe),           // Spec 27: die eigentliche Anleitung (Nummer + Text + Fotos)
-                'darreichung' => $istVk ? $this->darreichungsInfo($recipe) : null, // Behälter/Vehikel der Standard-Form
+                'darreichung' => $istVk ? $this->darreichungsInfo($recipe) : null, // Vehikel/Geschirr der Standard-Form
                 'regenerationen' => $this->regenerationenFuer($recipe),   // §3.2: Programm je Komponente (V-19)
+                // Spec 51: Abfuellen an JEDER Zeile (was produziert wird, muss irgendwo hinein);
+                // Regenerieren/Ausgabe nur, wo auch serviert wird — und dort je Komponente.
+                'behaelter' => $this->behaelterBedarf($team, $recipe, $istVk, (int) $tiefe[$rid],
+                    $basisYieldKg !== null ? round($basisYieldKg * $batches, 3) : null, $komponentenMasse),
                 'anrichte_schritte' => $istVk ? $this->anrichteSchritteFuer($recipe) : [],   // §3.3 (nur am Gericht)
                 'zutaten' => $zeilen,
             ];
@@ -936,17 +952,51 @@ class PlanungsblattService
     }
 
     /** Regenerations-/Behälter-/Vehikel-Parameter der Standard-Darreichung (Küchen-Ausgabe). */
+    /**
+     * Spec 51: Behälter-Bedarf einer Produktionszeile.
+     *
+     * Die Grenze fürs Regenerieren ist »wird serviert«, NICHT »steht oben«: ein Basisrezept kann
+     * Auftrags-Top sein (»Brauner Fond, 6 kg«) und stünde dann ebenfalls auf tiefe 0 — ein Fond
+     * wird aber produziert und gelagert, nicht am Pass gewärmt.
+     *
+     * @param  array<int, array{recipe: FoodAlchemistRecipe, label: string, menge_kg: float}>  $komponenten
+     */
+    private function behaelterBedarf(
+        Team $team,
+        FoodAlchemistRecipe $recipe,
+        bool $istVk,
+        int $tiefe,
+        ?float $mengeKg,
+        array $komponenten
+    ): ?array {
+        $abfuellen = $this->behaelter->abfuellen($team, $recipe, $mengeKg);
+        $jeKomponente = ($istVk && $tiefe === 0)
+            ? $this->behaelter->jeKomponente($team, $komponenten)
+            : [];
+
+        if ($abfuellen === null && $jeKomponente === []) {
+            return null;
+        }
+
+        return [
+            'abfuellen' => $abfuellen,
+            'je_komponente' => $jeKomponente,
+            'zusammen' => $this->behaelter->zusammenlegen($abfuellen, $jeKomponente),
+        ];
+    }
+
     private function darreichungsInfo(FoodAlchemistRecipe $recipe): ?array
     {
         $dar = $this->darreichungen->standardFuer($recipe);
         if ($dar === null) {
             return null;
         }
+        // Spec 51: Die Regenerations-Skalare der Darreichung werden hier NICHT mehr gelesen.
+        // Sie waren die zweite Quelle neben `regen_snapshot` — am Wandmonitor standen damit zwei
+        // Regenerationen nebeneinander, die sich bei WaWi-Import-Gerichten widersprechen konnten.
+        // Ein Schreibpfad fuellt sie ohnehin nie (syncStandardDarreichung spiegelt sie nicht).
+        // Die SPALTEN bleiben unangetastet — ihr Verbleib ist eine offene Entscheidung (Spec §5).
         $info = array_filter([
-            'regeneration_temp_c' => $dar->regeneration_temp_c,
-            'regeneration_duration_min' => $dar->regeneration_duration_min,
-            'regeneration_core_temp_c' => $dar->regeneration_core_temp_c,
-            'geraet' => $this->vocabName('foodalchemist_vocab_regeneration_devices', $dar->regeneration_device_vocab_id),
             'behaelter_warm' => $this->vocabName('foodalchemist_vocab_containers', $dar->container_warm_vocab_id),
             'behaelter_kalt' => $this->vocabName('foodalchemist_vocab_containers', $dar->container_cold_vocab_id),
             'vehikel' => $this->vocabName('foodalchemist_vocab_serving_vehicles', $dar->serving_vehicle_vocab_id),

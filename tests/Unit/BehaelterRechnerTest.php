@@ -238,3 +238,23 @@ it('verschiedene Behälter benennen den Umfüll-Schritt', function () {
     expect($out['durchgaengig'])->toBeFalse()
         ->and($out['hinweis'])->toContain('Umfüllen am Einsatztag');
 });
+
+it('Lagenware rechnet über Stück — nicht über Masse', function () {
+    // 3 kg Papadam füllen kein GN zu 3 kg, sondern zu einer Lage. 240 Stück à 40 je Blech = 6.
+    $out = $this->r->varianten(3.0, ($this->basis)([
+        'skalierung' => 'lagenware', 'stueck_je_behaelter' => 40, 'stueck_gesamt' => 240,
+    ]), [$this->gn11_100], 'regenerieren');
+
+    expect($out['berechenbar'])->toBeTrue()
+        ->and($out['varianten'])->toHaveCount(1)          // keine Alternativen: Legefläche wäre geraten
+        ->and($out['varianten'][0]['anzahl'])->toBe(6)
+        ->and($out['varianten'][0]['kg_je_behaelter'])->toBeNull();
+});
+
+it('Lagenware ohne Stückertrag rechnet nicht, sondern sagt warum', function () {
+    $out = $this->r->varianten(3.0, ($this->basis)([
+        'skalierung' => 'lagenware', 'stueck_je_behaelter' => 40, 'stueck_gesamt' => null,
+    ]), [], 'regenerieren');
+
+    expect($out['berechenbar'])->toBeFalse()->and($out['grund'])->toContain('yield_pieces');
+});
