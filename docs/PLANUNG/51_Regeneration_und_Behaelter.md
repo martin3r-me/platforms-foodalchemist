@@ -276,9 +276,28 @@ Produkts haben dieselbe Dichte; zwei Felder würden driften. Je Zweck gehört nu
                                                       + Konfidenz-Abwertung
                 dann: kg_je_behaelter = min(kg, max_fuellgewicht_kg)
 4. Durchgängig  abfuellen.container == regenerieren.container ⇒ ein Bedarf, n = max(beide)
-5. Ausgabe      Basis + 2 Alternativen, flach → tief, je mit Konfidenz-Marke
+5. Rangfolge    Die MENGE waehlt die GROESSE: (a) wenigste Behaelter, (b) geringster Leerraum,
+                (c) das flachere Format. Aber: ein Kandidat TIEFER als der eingestellte fuehrt nie.
+6. Ausgabe      Vorschlag + Alternativen, je mit Konfidenz-Marke
 6. Träger       Plätze gegen traeger_plaetze — Hinweis, kein Filter
 ```
+
+**Warum Schritt 5 zwei Aussagen zugleich hält.** Dominique hat beides gesagt, und beide sind wahr:
+*„Wenn ich 9 Kilo koche, brauche ich den 10-Liter-Eimer oder zwei 5-Liter — bei 4 schlägt er nur den
+5-Liter vor"* und *„nie automatisch flach↔tief umschalten"*. Der Widerspruch ist keiner, sobald man
+**Größe** und **Bauform** trennt:
+
+- Die **Größe** wählt die Menge. 9 kg → ein 10-l-Eimer (1 Stück, kein Rest) vor zwei 5-l (2 Stück,
+  kein Rest). 4 kg → der 5-l (1 Stück, 0,5 kg Luft) vor dem 10-l (1 Stück, 5 kg Luft).
+- Die **Bauform** wählt die Küche. Bei 10 kg Suppe rechnet sich *ein* GN 1/1-100 gegen *zwei*
+  GN 1/1-65 — und trotzdem führt der Rechner die zwei flachen, weil flach gleichmäßiger regeneriert.
+  Das tiefe GN steht als Alternative daneben, sichtbar und wählbar.
+
+Formal: Kandidaten mit `tiefe_mm > tiefe_mm(Referenz)` sind von der Führung ausgeschlossen, nach
+unten — flacher, kleiner — darf der Rechner führen (die konservative Richtung, *„und dann runter
+überlegen oder hoch"*). Behälter ohne Tiefenmaß (Eimer, Kanne) liegen nicht auf dieser Achse und
+konkurrieren frei. Der am Rezept eingestellte Behälter bleibt als `ist_referenz` markiert — er trägt
+die Referenzmenge und ist damit die **Wissensquelle**, nicht automatisch der Vorschlag.
 
 **Warum Schritt 3 eine Richtung braucht:** „nur Fläche, Rest bleibt Luft" stimmt nur flach → tief.
 Tief → flach **kappt**: Referenz `GN 1/1-100` mit 12 kg, Schicht steht bei 80 mm — das passt nicht

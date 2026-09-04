@@ -172,11 +172,9 @@ class BehaelterRechner
             $varianten[] = $this->variante($kandidat, $mengeKg, $kg, $konf, false);
         }
 
-        // Basis bleibt vorn; Alternativen flach → tief, damit die schonendere Variante zuerst steht.
-        $kopf = array_shift($varianten);
-        usort($varianten, fn (array $a, array $b) => ($a['tiefe_mm'] ?? PHP_INT_MAX) <=> ($b['tiefe_mm'] ?? PHP_INT_MAX));
+        $refTiefe = isset($ref->tiefe_mm) ? (float) $ref->tiefe_mm : null;
 
-        return ['berechenbar' => true, 'varianten' => [$kopf, ...$varianten], 'grund' => null];
+        return ['berechenbar' => true, 'varianten' => $this->ranking($varianten, $refTiefe), 'grund' => null];
     }
 
     /**
@@ -217,6 +215,62 @@ class BehaelterRechner
             'konfidenz' => 'hoch',
             'ist_basis' => true,
         ]], 'grund' => null];
+    }
+
+    /**
+     * DIE MENGE WÄHLT DIE GRÖSSE (User-Entscheid 2026-09-04).
+     *
+     * »Wenn ich 9 Kilo koche, brauche ich den 10-Liter-Eimer oder zwei 5-Liter. Bei 4 schlägt er
+     * nur den 5-Liter vor.« Genau das leistet diese Rangfolge — vorher stand immer der am Rezept
+     * EINGESTELLTE Behälter vorn, egal wie schlecht er passte.
+     *
+     *   1. wenigste Behälter — weniger Geschirr ist weniger Arbeit, Transport und Abwasch
+     *   2. bei Gleichstand: geringster Leerraum — 4 kg in den 10-l-Eimer ist ein halb leerer Eimer
+     *   3. bei Gleichstand: das flachere Format — die schonendere Variante zuerst (§3.4e)
+     *
+     * Damit fällt für 9 kg der 10-l-Eimer (1 Stück, kein Rest) vor zwei 5-l (2 Stück, kein Rest),
+     * und für 4 kg der 5-l (1 Stück, 0,5 kg Luft) vor dem 10-l (1 Stück, 5 kg Luft).
+     *
+     * ★ ABER: gewählt wird die GRÖSSE, nie die BAUFORM. Ein Kandidat, der TIEFER ist als der am
+     * Rezept eingestellte, kann den Vorschlag nicht anführen — er bleibt als Alternative sichtbar.
+     * Sonst führte diese Rangfolge bei 10 kg Suppe EIN GN 1/1-100 vor ZWEI GN 1/1-65, und genau das
+     * ist der Entscheid »nie automatisch flach↔tief umschalten« (§3.4e): flach regeneriert
+     * gleichmäßiger, das entscheidet die Küche und nicht die Arithmetik. Nach unten — flacher,
+     * kleiner — darf der Rechner führen; das ist die konservative Richtung.
+     * Behälter ohne Tiefenmaß (Eimer, Kanne) liegen nicht auf dieser Achse und konkurrieren frei.
+     *
+     * Der eingestellte Behälter bleibt als `ist_referenz` erkennbar: er trägt die Referenzmenge,
+     * aus der alle anderen skaliert sind — er ist die Wissens-, nicht die Vorschlagsquelle.
+     * Und die Alternativen bleiben SICHTBAR: gewählt wird in der Küche, nicht vom Rechner.
+     *
+     * @param  list<array<string, mixed>>  $varianten
+     * @return list<array<string, mixed>>
+     */
+    private function ranking(array $varianten, ?float $refTiefeMm): array
+    {
+        $passung = fn (array $a, array $b) => [
+            $a['anzahl'], $a['rest_im_letzten_kg'] ?? 0.0, $a['tiefe_mm'] ?? PHP_INT_MAX,
+        ] <=> [
+            $b['anzahl'], $b['rest_im_letzten_kg'] ?? 0.0, $b['tiefe_mm'] ?? PHP_INT_MAX,
+        ];
+
+        $fuehrend = $tiefer = [];
+        foreach ($varianten as $v) {
+            $t = $v['tiefe_mm'] ?? null;
+            $istTiefer = $refTiefeMm !== null && $t !== null && $t > $refTiefeMm + 1e-9;
+            $istTiefer ? $tiefer[] = $v : $fuehrend[] = $v;
+        }
+
+        usort($fuehrend, $passung);     // die Referenz liegt immer hier drin → nie leer
+        usort($tiefer, $passung);
+        $varianten = [...$fuehrend, ...$tiefer];
+
+        foreach ($varianten as $i => $v) {
+            $varianten[$i]['ist_referenz'] = $v['ist_basis'];       // was am Rezept steht
+            $varianten[$i]['ist_basis'] = $i === 0;                 // was vorgeschlagen wird
+        }
+
+        return $varianten;
     }
 
     /** @return array{0: ?float, 1: string} kg je Referenzbehälter + Konfidenz */

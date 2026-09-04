@@ -283,3 +283,56 @@ it('das Verhältnis zweier Formate bleibt nutzbar, auch ohne eigenes Nennvolumen
 
     expect(collect($out['varianten'])->firstWhere('behaelter', 'GN 1/2 65mm')['kg_je_behaelter'])->toBe(3.636);
 });
+
+it('die Menge wählt die Größe — 9 kg nehmen den 10-l-Eimer, 4 kg den 5-l', function () {
+    // Der Fall aus der Kueche: »wenn ich 9 Kilo koche, brauche ich den 10-Liter-Eimer oder zwei
+    // 5-Liter. Bei 4 schlaegt er nur den 5-Liter vor.« Vorher stand immer der am Rezept
+    // EINGESTELLTE Behaelter vorn, egal wie schlecht er passte.
+    $eimer = fn (int $id, string $name, float $liter) => (object) [
+        'id' => $id, 'name' => $name, 'familie' => 'Eimer',
+        'laenge_mm' => null, 'breite_mm' => null, 'tiefe_mm' => null, 'volumen_l' => $liter,
+        'nutzfaktor' => 0.9, 'max_fuellgewicht_kg' => $liter, 'kapazitaet_kg' => null, 'eignung' => null,
+    ];
+    $e5 = $eimer(1, 'Eimer 5 l', 5);      // nutzbar 4,5 kg
+    $e10 = $eimer(2, 'Eimer 10 l', 10);   // nutzbar 9,0 kg
+
+    $basis = fn ($ref) => ['container' => $ref, 'referenz_menge_kg' => null, 'dichteklasse' => 'fluessig',
+        'skalierung' => 'tiefer_fuellbar', 'max_schichthoehe_mm' => null, 'konfidenz_rang3' => false];
+
+    // 9 kg: ein 10-l (Rest 0) schlaegt zwei 5-l (Rest 0) — wenigste Behaelter.
+    $neun = $this->r->varianten(9.0, $basis($e5), [$e10], 'abfuellen');
+    expect($neun['varianten'][0]['behaelter'])->toBe('Eimer 10 l')
+        ->and($neun['varianten'][0]['anzahl'])->toBe(1)
+        ->and($neun['varianten'][1]['behaelter'])->toBe('Eimer 5 l')
+        ->and($neun['varianten'][1]['anzahl'])->toBe(2);
+
+    // 4 kg: beide brauchen EINEN — dann gewinnt der mit weniger Luft.
+    $vier = $this->r->varianten(4.0, $basis($e10), [$e5], 'abfuellen');
+    expect($vier['varianten'][0]['behaelter'])->toBe('Eimer 5 l')
+        ->and($vier['varianten'][0]['anzahl'])->toBe(1)
+        ->and($vier['varianten'][0]['rest_im_letzten_kg'])->toBe(0.5)
+        // Der eingestellte Behaelter bleibt erkennbar — er ist die Wissensquelle, nicht der Vorschlag.
+        ->and(collect($vier['varianten'])->firstWhere('ist_referenz', true)['behaelter'])->toBe('Eimer 10 l');
+});
+
+it('die Menge waehlt die Groesse, nie die Bauform — tiefer als die Referenz fuehrt nie', function () {
+    // Gegenprobe zum Fall darueber: Suppe (tiefer_fuellbar) kann im GN 1/1-100 rechnerisch in EINEN
+    // Behaelter, statt in zwei flache GN 1/1-65. Genau das darf der Rechner NICHT vorschlagen —
+    // »nie automatisch flach↔tief umschalten«, flach regeneriert gleichmaessiger.
+    $out = $this->r->varianten(
+        10.0,
+        ($this->basis)(['referenz_menge_kg' => 7.5, 'skalierung' => 'tiefer_fuellbar']),
+        [$this->gn11_100],
+        'regenerieren'
+    );
+
+    expect($out['varianten'][0]['behaelter'])->toBe('GN 1/1 65mm')
+        ->and($out['varianten'][0]['anzahl'])->toBe(2)
+        // sichtbar bleibt das tiefe GN trotzdem — waehlen darf es die Kueche.
+        ->and(collect($out['varianten'])->pluck('behaelter'))->toContain('GN 1/1 100mm');
+
+    // Nach unten darf er fuehren: bei 3 kg ist das flachere, kleinere GN 1/2-65 die bessere Passung.
+    $klein = $this->r->varianten(3.0, ($this->basis)(['referenz_menge_kg' => 7.5]), [$this->gn12_65], 'regenerieren');
+    expect($klein['varianten'][0]['behaelter'])->toBe('GN 1/2 65mm')
+        ->and($klein['varianten'][0]['anzahl'])->toBe(1);
+});
