@@ -685,6 +685,32 @@
                             </section>
                         @endif
 
+                        @if(!empty($anleitung['behaelter']))
+                            <section class="rounded-xl border border-white/10 bg-white/5 px-3 py-2" data-tagesplan-wall-behaelter>
+                                <h3 class="text-base font-bold">Behälter</h3>
+                                <div class="mt-1.5 divide-y divide-white/10">
+                                    @foreach($anleitung['behaelter'] as $bh)
+                                        <div class="py-1.5 text-sm" data-tagesplan-wall-behaelter-item>
+                                            <div class="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3">
+                                                <span class="min-w-0 whitespace-normal leading-snug text-slate-400">{{ $bh['zweck'] }}</span>
+                                                @if($bh['wert'])
+                                                    <span class="shrink-0 text-right font-semibold tabular-nums text-slate-100">{{ $bh['wert'] }}</span>
+                                                @else
+                                                    <span class="shrink-0 text-right text-xs text-amber-100">—</span>
+                                                @endif
+                                            </div>
+                                            @if($bh['zusatz'])
+                                                <p class="mt-0.5 text-xs text-slate-400" data-tagesplan-wall-behaelter-alt>{{ $bh['zusatz'] }}</p>
+                                            @endif
+                                            @if($bh['hinweis'])
+                                                <p class="mt-0.5 text-xs {{ $bh['wert'] ? 'text-slate-400' : 'text-amber-100' }}">{{ $bh['hinweis'] }}</p>
+                                            @endif
+                                        </div>
+                                    @endforeach
+                                </div>
+                            </section>
+                        @endif
+
                         @if(!empty($anleitung['equipment']))
                             <section class="rounded-xl border border-white/10 bg-white/5 px-3 py-2" data-tagesplan-wall-equipment>
                                 <h3 class="text-base font-bold">Equipment</h3>

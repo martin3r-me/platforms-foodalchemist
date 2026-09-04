@@ -714,6 +714,88 @@ class Tagesplan extends Component
         return $raus;
     }
 
+    /**
+     * Der Behaelterbedarf DIESER einen Zeile — fuer die Anleitung am Wandmonitor.
+     *
+     * Die Gericht-Kachel summiert ueber die ganze Gruppe (`wallGerichtBehaelter`); wer vor dem
+     * Posten steht, braucht aber die Zeile, die er gerade abarbeitet: worin fuellt er DIESE
+     * Charge ab, worin wird sie regeneriert. Deshalb Zeile statt Gruppe — und deshalb mit der
+     * ALTERNATIVE: gewaehlt wird in der Kueche, nicht vom Rechner (§3.4e).
+     *
+     * @return array<int, array{zweck:string, wert:?string, zusatz:?string, hinweis:?string}>
+     */
+    private function wallZeileBehaelter(object $zeile): array
+    {
+        $block = ((array) ($zeile->darreichung ?? []))['behaelter_bedarf'] ?? null;
+        if (! is_array($block)) {
+            return [];
+        }
+
+        $zusammen = $block['zusammen'] ?? [];
+        $raus = [];
+        $regeneriert = false;
+
+        // Durchgaengig = derselbe Behaelter beim Abfuellen und Regenerieren. Dann ist es EIN
+        // Stapel, der aus dem Kuehlhaus direkt in den Ofen geht — zweimal zeigen waere falsch.
+        if (($zusammen['durchgaengig'] ?? false) && ($zusammen['behaelter'] ?? null) !== null) {
+            return [[
+                'zweck' => 'Abfüllen & Regenerieren',
+                'wert' => $zusammen['anzahl'].'× '.$zusammen['behaelter'],
+                'zusatz' => null,
+                'hinweis' => 'durchgängig, kein Umfüllen',
+            ]];
+        }
+
+        if (is_array($block['abfuellen'] ?? null)) {
+            $raus[] = $this->behaelterZeile('Abfüllen', $block['abfuellen']);
+        }
+
+        foreach ($block['je_komponente'] ?? [] as $k) {
+            if (! is_array($k) || ($k['bereits_gezaehlt'] ?? false)) {
+                continue;   // reist im eigenen Abfuellbehaelter mit
+            }
+            $zweck = ucfirst((string) ($k['zweck'] ?? '')).(($k['label'] ?? null) !== null ? ' · '.$k['label'] : '');
+            $raus[] = $this->behaelterZeile(trim($zweck), $k);
+            $regeneriert = $regeneriert || ($k['zweck'] ?? null) === 'regenerieren';
+        }
+
+        // Verschiedene Behaelter fuer Abfuellen und Regenerieren heissen: jemand fuellt am
+        // Einsatztag um. Das ist ein Arbeitsschritt, der heute nirgends steht — und der am
+        // Posten auffallen muss, sonst sucht die Fruehschicht die Suppe im falschen Geschirr.
+        if ($regeneriert && ($zusammen['hinweis'] ?? '') !== '') {
+            $raus[] = ['zweck' => 'Umfüllen', 'wert' => $zusammen['hinweis'], 'zusatz' => null, 'hinweis' => null];
+        }
+
+        return array_values(array_filter($raus));
+    }
+
+    /** @return array{zweck:string, wert:?string, zusatz:?string, hinweis:?string} */
+    private function behaelterZeile(string $zweck, array $ergebnis): array
+    {
+        if (! ($ergebnis['berechenbar'] ?? false)) {
+            // Der Grund gehoert an die Wand, nicht in ein Log: nur so faellt am Posten auf,
+            // dass eine Angabe fehlt, statt dass der Behaelter stillschweigend verschwindet.
+            return ['zweck' => $zweck, 'wert' => null, 'zusatz' => null,
+                'hinweis' => $ergebnis['grund'] ?? 'nicht bemessbar'];
+        }
+
+        $basis = $ergebnis['varianten'][0] ?? null;
+        if ($basis === null) {
+            return ['zweck' => $zweck, 'wert' => null, 'zusatz' => null, 'hinweis' => 'nicht bemessbar'];
+        }
+
+        $alt = $ergebnis['varianten'][1] ?? null;
+
+        return [
+            'zweck' => $zweck,
+            'wert' => isset($basis['stueck_je_behaelter'])
+                ? $basis['anzahl'].'× '.$basis['behaelter'].' (à '.$basis['stueck_je_behaelter'].' Stk.)'
+                : $basis['anzahl'].'× '.$basis['behaelter'],
+            'zusatz' => $alt !== null ? 'oder '.$alt['anzahl'].'× '.$alt['behaelter'] : null,
+            'hinweis' => ($basis['konfidenz'] ?? 'hoch') !== 'hoch' ? 'geschätzt' : null,
+        ];
+    }
+
     private function wallGerichtDarreichung(\Illuminate\Support\Collection $zeilen): array
     {
         $darreichung = $zeilen
@@ -883,6 +965,7 @@ class Tagesplan extends Component
             'schritte' => $this->normalisierteAnleitungsSchritte($treffer->schritte ?? ($line?->steps_snapshot ?? [])),
             'zubereitung' => $treffer->zubereitung ?? $line?->zubereitung,
             'zutaten' => $zutaten,
+            'behaelter' => $this->wallZeileBehaelter($treffer),
             'sub_rezepte' => $this->anleitungSubRezepte($treffer, (array) $zutaten, $zeilen),
             'sicherheit' => $treffer->sicherheit ?? ['allergene' => [], 'diaet' => [], 'warnungen' => [], 'konfidenz' => 'unknown'],
             'arbeitsschritte' => $this->arbeitsschritte($treffer->schritte ?? ($line?->steps_snapshot ?? []), $treffer->zubereitung ?? $line?->zubereitung),

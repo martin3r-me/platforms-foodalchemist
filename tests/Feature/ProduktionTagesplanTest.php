@@ -414,6 +414,70 @@ it('zeigt im leeren Wandmodus trotzdem den gewählten Tag und den Zurück-Button
         ->assertDontSee('Kein Tag geplant');
 });
 
+/**
+ * Spec 51 — der Behaelterbedarf gehoert an den Posten, nicht nur an die Gericht-Kachel.
+ *
+ * Wer vor der Zeile steht, die er abarbeitet, will wissen: worin fuelle ich DIESE Charge ab,
+ * worin wird sie regeneriert — und dass dazwischen umgefuellt wird.
+ */
+it('zeigt in der Wand-Anleitung den Behaelterbedarf dieser Zeile samt Alternative und Umfuell-Schritt', function () {
+    $lineId = Line::where('production_order_id', $this->a1->id)->value('id');
+    Line::whereKey($lineId)->update(['darreichung' => ['behaelter_bedarf' => [
+        'abfuellen' => ['berechenbar' => true, 'varianten' => [
+            ['behaelter' => 'Eimer 10 l', 'anzahl' => 1, 'konfidenz' => 'hoch'],
+            ['behaelter' => 'Eimer 5 l', 'anzahl' => 2, 'konfidenz' => 'mittel'],
+        ]],
+        'je_komponente' => [[
+            'zweck' => 'regenerieren', 'label' => 'Brauner Fond', 'berechenbar' => true,
+            'varianten' => [['behaelter' => 'GN 1/1 65mm', 'anzahl' => 2, 'konfidenz' => 'hoch']],
+        ]],
+        'zusammen' => ['durchgaengig' => false, 'anzahl' => null, 'behaelter' => null,
+            'hinweis' => 'Umfüllen am Einsatztag'],
+    ]]]);
+
+    Livewire::test(Tagesplan::class, ['von' => '2026-08-20', 'display' => 'wall'])
+        ->set('modus', 'editor')
+        ->call('oeffneAnleitung', $lineId)
+        ->assertSeeHtml('data-tagesplan-wall-behaelter')
+        ->assertSee('1× Eimer 10 l')
+        ->assertSee('Regenerieren · Brauner Fond')
+        ->assertSee('2× GN 1/1 65mm')
+        // Die Alternative bleibt sichtbar — gewaehlt wird in der Kueche, nicht vom Rechner.
+        ->assertSeeHtml('data-tagesplan-wall-behaelter-alt')
+        ->assertSee('oder 2× Eimer 5 l')
+        ->assertSee('Umfüllen am Einsatztag');
+});
+
+it('zeigt einen durchgaengigen Behaelter EINMAL, und den Grund wenn nichts bemessbar ist', function () {
+    $lineId = Line::where('production_order_id', $this->a1->id)->value('id');
+
+    Line::whereKey($lineId)->update(['darreichung' => ['behaelter_bedarf' => [
+        'abfuellen' => ['berechenbar' => true, 'varianten' => [['behaelter' => 'GN 1/1 65mm', 'anzahl' => 5, 'konfidenz' => 'hoch']]],
+        'je_komponente' => [],
+        'zusammen' => ['durchgaengig' => true, 'anzahl' => 5, 'behaelter' => 'GN 1/1 65mm', 'hinweis' => 'durchgängig, kein Umfüllen'],
+    ]]]);
+
+    Livewire::test(Tagesplan::class, ['von' => '2026-08-20', 'display' => 'wall'])
+        ->set('modus', 'editor')
+        ->call('oeffneAnleitung', $lineId)
+        ->assertSee('Abfüllen & Regenerieren')
+        ->assertSee('5× GN 1/1 65mm')
+        ->assertSee('durchgängig, kein Umfüllen');
+
+    // Nicht bemessbar: der GRUND steht an der Wand. Sonst verschwindet der Behaelter still
+    // und am Posten faellt niemandem auf, dass eine Angabe fehlt.
+    Line::whereKey($lineId)->update(['darreichung' => ['behaelter_bedarf' => [
+        'abfuellen' => ['berechenbar' => false, 'varianten' => [], 'grund' => 'Ausbeute (yield_kg) fehlt — Behälter nicht bemessbar'],
+        'je_komponente' => [], 'zusammen' => ['durchgaengig' => false, 'hinweis' => ''],
+    ]]]);
+
+    Livewire::test(Tagesplan::class, ['von' => '2026-08-20', 'display' => 'wall'])
+        ->set('modus', 'editor')
+        ->call('oeffneAnleitung', $lineId)
+        ->assertSeeHtml('data-tagesplan-wall-behaelter')
+        ->assertSee('Ausbeute (yield_kg) fehlt');
+});
+
 it('öffnet im Wandmodus die touchfreundliche Anleitung mit Medienbereich', function () {
     $lineId = Line::where('production_order_id', $this->a1->id)->value('id');
     Line::whereKey($lineId)->update(['zubereitung' => "## Mise en Place\n1. Fonds erhitzen.\n2. Abschmecken und bereitstellen."]);
