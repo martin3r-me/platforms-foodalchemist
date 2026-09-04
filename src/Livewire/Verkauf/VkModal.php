@@ -990,6 +990,9 @@ class VkModal extends Component
             // 2026-09-04: die Posten der Komponenten, read-only neben dem Finalisierungs-Posten.
             // Ein Posten ist nie für ein ganzes Gericht zuständig — abgeleitet, nie persistiert.
             'beteiligtePosten' => $rezept !== null ? $verkauf->beteiligtePosten($rezept) : collect(),
+            // Orientierung zum Zeitfeld: die Komponenten bringen im Auftrag ihre eigene Zeit
+            // mit (eine Auftragszeile je Rezept) — am Gericht steht nur die Finalisierung.
+            'komponentenZeiten' => $rezept !== null ? $verkauf->komponentenZeiten($rezept) : null,
             // Stufe 3 — Posten-Liste fürs Default-Posten-Dropdown (Parität Basisrezept-Editor).
             'posten' => $team !== null
                 ? \Platform\FoodAlchemist\Models\FoodAlchemistProductionStation::visibleToTeam($team)

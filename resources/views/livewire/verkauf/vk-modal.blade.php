@@ -226,7 +226,13 @@
              recipe.default_station_id (ProductionPlanService) — ohne diese Felder blieben sie
              „nicht zugeteilt". Als eigene, klar benannte Sektion (nicht in „Eigenschaften"
              vergraben), damit die Zuweisung auffindbar ist. --}}
-        <x-foodalchemist::modal-section title="Produktion (Auto-Planer)">
+        <x-foodalchemist::modal-section title="Produktion (Auto-Planer) — Finalisierungs-Lauf">
+            {{-- 2026-09-04: Diese Werte gelten für das ZUSAMMENSETZEN, nicht fürs ganze Gericht.
+                 Der Auftrag explodiert jede Komponente in eine eigene Zeile mit eigenem Posten,
+                 eigener Zeit und eigenem Vorlauf — die Summen kommen also aus den Basisrezepten. --}}
+            <p class="text-[11px] text-gray-500 mb-2">
+                Gilt für den Finalisierungs-Lauf am Einsatztag. Herstellung, Zeiten und Vorlauf der Komponenten stehen an deren Basisrezepten und werden im Auftrag je Zeile geplant.
+            </p>
             <div class="grid grid-cols-2 md:grid-cols-4 gap-3" data-vk-produktion>
                 {{-- 2026-09-04: am Gericht ist das der FINALISIERUNGS-Posten — wer zusammensetzt,
                      abschmeckt und ausgibt. Die Komponenten produzieren auf ihren eigenen Posten
@@ -791,9 +797,28 @@
                 <button type="button" wire:click="ki('eigenschaften')" class="{{ $btnAi }}" data-ki-eigenschaften>@svg('heroicon-o-sparkles', 'w-3.5 h-3.5')Eigenschaften</button>
             </x-slot:actions>
             <div class="grid grid-cols-2 gap-3" data-vk-eigenschaften>
+                {{-- 2026-09-04: am Gericht ist das die FINALISIERUNGS-Zeit. Die Auftrags-Explosion
+                     erzeugt eine eigene Zeile je Komponente, jede mit ihrer eigenen Zeit — wer hier
+                     die Gesamtzeit einträgt, zählt im selben Auftrag doppelt. --}}
                 <div>
-                    <label class="block {{ $label }} mb-1">Arbeitszeit (min)</label>
-                    <input type="number" min="0" wire:model="form.work_time_min" class="{{ $input }}" />
+                    <label class="block {{ $label }} mb-1" title="Nur das Zusammensetzen am Einsatztag. Die Herstellungszeit steht am jeweiligen Basisrezept und wird im Auftrag als eigene Zeile geplant.">Finalisierungszeit (min) <span class="normal-case text-gray-500">nur Zusammensetzen</span></label>
+                    <input type="number" min="0" wire:model="form.work_time_min" class="{{ $input }}" data-vk-finalisierungszeit />
+                    @if(($komponentenZeiten['anzahl'] ?? 0) > 0)
+                        <p class="text-[10px] text-gray-500 mt-1" data-vk-komponenten-zeiten>
+                            Komponenten je Ansatz: {{ $komponentenZeiten['work_time_min'] }} min aktiv
+                            @if($komponentenZeiten['setup_time_min'] > 0) · {{ $komponentenZeiten['setup_time_min'] }} min Rüsten @endif
+                            @if($komponentenZeiten['ohne_zeit'] > 0)
+                                · <span class="text-amber-600">{{ $komponentenZeiten['ohne_zeit'] }} von {{ $komponentenZeiten['anzahl'] }} ohne Zeitangabe</span>
+                            @endif
+                        </p>
+                        {{-- Verdachts-Hinweis statt stiller Korrektur: ob im Feld die Gesamtzeit steht,
+                             kann nur der Mensch entscheiden — automatisch abziehen wäre geraten. --}}
+                        @if($komponentenZeiten['work_time_min'] > 0 && (float) ($form['work_time_min'] ?? 0) >= $komponentenZeiten['work_time_min'])
+                            <p class="text-[10px] text-amber-600 mt-1" data-vk-zeit-verdacht>
+                                Der Wert erreicht die Komponenten-Summe — steht hier vielleicht die Gesamtzeit statt der Finalisierung? Sie würde doppelt zählen.
+                            </p>
+                        @endif
+                    @endif
                 </div>
                 <div>
                     <label class="block {{ $label }} mb-1">Passive Standzeit (min)</label>

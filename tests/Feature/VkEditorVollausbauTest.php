@@ -243,3 +243,58 @@ it('✨ Behälter übernimmt validierte Vokabular-IDs in die Form (Mock-Gateway)
         ->assertSet('form.container_warm_count', 2)
         ->assertSet('form.container_cold_vocab_id', null);            // ungültige ID fliegt
 });
+
+/**
+ * 2026-09-04: Der Editor ist nach den drei Anleitungs-Ebenen geschnitten (Regelwerk
+ * Verkaufsgerichte §3) — der Sammel-Tab „Service" ist in Regeneration und Anrichten
+ * aufgeteilt. Dieser Render-Test ist die eigentliche Absicherung des Blade-Umbaus:
+ * ein Kompilat-Lint ist in der Sandbox ohne MySQL nicht zu haben, ein ParseError oder
+ * ein verlorener Block fällt hier als roter Test auf.
+ */
+it('rendert die drei Ebenen als eigene Tabs und keinen Service-Tab mehr', function () {
+    $html = Livewire::test(VkModal::class)->call('oeffnen', $this->vk->id)->html();
+
+    foreach (["tab === 'regeneration'", "tab === 'preparation'", "tab === 'plating'"] as $tab) {
+        expect($html)->toContain($tab);
+    }
+    expect($html)->not->toContain("tab === 'service'");
+
+    // Die Ebenen-Beschriftung ist Teil des Vertrags — sie sagt dem Koch, was hingehört.
+    expect($html)->toContain('Regeneration')
+        ->and($html)->toContain('Finalisieren')
+        ->and($html)->toContain('Anrichten');
+});
+
+it('rendert die abgeleiteten Marken: Finalisierungszeit, Servierform-Select, Posten-Hinweis', function () {
+    // Standard-Darreichung anlegen, damit die Darreichungs-Tabelle Zeilen hat.
+    app(\Platform\FoodAlchemist\Services\DarreichungService::class)
+        ->ensureStandard($this->rootTeam, $this->vk->id, 'fa_ui');
+
+    $html = Livewire::test(VkModal::class)->call('oeffnen', $this->vk->id)->html();
+
+    expect($html)->toContain('data-vk-finalisierungszeit')      // Zeitfeld neu beschriftet
+        ->and($html)->toContain('data-dar-form')                // Servierform je Zeile wählbar (Review-Ausgang)
+        ->and($html)->toContain('Finalisierungs-Posten');       // Posten = Zusammensetzen, nicht das ganze Gericht
+});
+
+it('bietet als Verkaufseinheit nur die vier zulaessigen Einheiten an', function () {
+    foreach ([['portion', 'Portion'], ['stk', 'Stück'], ['kg', 'Kilogramm'], ['l', 'Liter']] as [$slug, $label]) {
+        \Platform\FoodAlchemist\Models\FoodAlchemistVocabEinheit::firstOrCreate(
+            ['team_id' => $this->rootTeam->id, 'slug' => $slug],
+            ['display_de' => $label, 'dimension' => 'count']
+        );
+    }
+    // Zutaten-Einheit, die im VK-Select NICHT auftauchen darf.
+    \Platform\FoodAlchemist\Models\FoodAlchemistVocabEinheit::firstOrCreate(
+        ['team_id' => $this->rootTeam->id, 'slug' => 'prise'],
+        ['display_de' => 'Prise', 'dimension' => 'mass', 'is_approximate' => true]
+    );
+
+    $html = Livewire::test(VkModal::class)->call('oeffnen', $this->vk->id)->html();
+
+    // Das VK-Select steht im Kalkulations-Tab; der Zutaten-Editor ist eine eigene Komponente,
+    // deshalb darf „Prise" im HTML dieses Modals gar nicht vorkommen.
+    expect($html)->toContain('data-vk-unit-select')
+        ->and($html)->toContain('Portion')
+        ->and($html)->not->toContain('Prise');
+});

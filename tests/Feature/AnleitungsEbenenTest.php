@@ -190,3 +190,43 @@ it('beteiligtePosten ist leer, wenn keine Komponente einen Posten traegt', funct
 
     expect(app(SalesRecipeService::class)->beteiligtePosten($gericht->fresh()))->toBeEmpty();
 });
+
+// ── Produktionszeit am Gericht = Finalisierung, Komponenten bringen ihre eigene ──
+
+it('komponentenZeiten summiert die Zeiten der Komponenten und zaehlt die Luecken', function () {
+    // Die Auftrags-Explosion erzeugt eine eigene Zeile je Rezept — die Zeit am Gericht ist
+    // deshalb NICHT die Gesamtzeit. Der Editor zeigt die Komponenten-Zeiten zur Orientierung,
+    // damit dort niemand die Gesamtzeit eintraegt (die im Auftrag doppelt zaehlen wuerde).
+    $this->seedTeamHierarchy();
+
+    $jus = $this->makeRecipe($this->rootTeam, 'Jus', ['work_time_min' => 90, 'setup_time_min' => 10]);
+    $creme = $this->makeRecipe($this->rootTeam, 'Creme', ['work_time_min' => 30, 'standzeit_min' => 120]);
+    $ohne = $this->makeRecipe($this->rootTeam, 'Crunch');          // keine Zeitangabe
+
+    $gericht = $this->makeRecipe($this->rootTeam, 'Zeit-Gericht', [
+        'is_sales_recipe' => true, 'work_time_min' => 8,            // nur Finalisierung
+    ]);
+    foreach ([$jus, $creme, $ohne] as $i => $k) {
+        $this->makeIngredient($gericht, $k->name, null, '100', $i + 1)
+            ->update(['referenced_recipe_id' => $k->id]);
+    }
+
+    $zeiten = app(SalesRecipeService::class)->komponentenZeiten($gericht->fresh());
+
+    expect($zeiten['work_time_min'])->toBe(120)                     // 90 + 30, das Gericht selbst zaehlt nicht mit
+        ->and($zeiten['setup_time_min'])->toBe(10)
+        ->and($zeiten['standzeit_min'])->toBe(120)
+        ->and($zeiten['anzahl'])->toBe(3)
+        ->and($zeiten['ohne_zeit'])->toBe(1);                       // die Luecke wird benannt, nicht geraten
+});
+
+it('komponentenZeiten ist bei einem Gericht ohne Sub-Rezepte leer', function () {
+    $this->seedTeamHierarchy();
+    $gericht = $this->makeRecipe($this->rootTeam, 'Solo-Gericht', [
+        'is_sales_recipe' => true, 'work_time_min' => 15,
+    ]);
+    $this->makeIngredient($gericht, 'Salz', null, '5', 1);
+
+    expect(app(SalesRecipeService::class)->komponentenZeiten($gericht->fresh()))
+        ->toMatchArray(['work_time_min' => 0, 'anzahl' => 0, 'ohne_zeit' => 0]);
+});

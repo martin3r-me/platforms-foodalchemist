@@ -166,6 +166,38 @@ class SalesRecipeService
 
     /** Detail STRIKT im verkauf()-Scope (Basisrezepte liefern null — §7.8). */
     /**
+     * Ids aller Komponenten-Rezepte im Sub-Rezept-Baum (Regelwerk Basisrezepte §4:
+     * max. 3 Ebenen), zyklensicher über die Besucht-Liste.
+     *
+     * @return list<int>
+     */
+    private function komponentenIds(FoodAlchemistRecipe $recipe, int $maxTiefe = 3): array
+    {
+        $besucht = [(int) $recipe->id => true];
+        $ebene = [(int) $recipe->id];
+        $ids = [];
+
+        for ($tiefe = 0; $tiefe < $maxTiefe && $ebene !== []; $tiefe++) {
+            $kinder = \Platform\FoodAlchemist\Models\FoodAlchemistRecipeIngredient::query()
+                ->whereIn('recipe_id', $ebene)
+                ->whereNotNull('referenced_recipe_id')
+                ->whereNull('deleted_at')
+                ->distinct()->pluck('referenced_recipe_id')
+                ->map(fn ($v) => (int) $v)
+                ->reject(fn ($id) => isset($besucht[$id]))
+                ->values()->all();
+
+            foreach ($kinder as $id) {
+                $besucht[$id] = true;
+                $ids[] = $id;
+            }
+            $ebene = $kinder;
+        }
+
+        return $ids;
+    }
+
+    /**
      * Beteiligte Posten eines Gerichts — ABGELEITET aus den Komponenten (2026-09-04).
      *
      * Ein Posten ist nie für ein ganzes Gericht zuständig: jede Komponente liegt auf
@@ -181,29 +213,7 @@ class SalesRecipeService
      */
     public function beteiligtePosten(FoodAlchemistRecipe $recipe, int $maxTiefe = 3): Collection
     {
-        // Sub-Rezept-Baum bis maxTiefe (Regelwerk Basisrezepte §4: max. 3 Ebenen),
-        // zyklensicher über die Besucht-Liste.
-        $besucht = [(int) $recipe->id => true];
-        $ebene = [(int) $recipe->id];
-        $rezeptIds = [];
-
-        for ($tiefe = 0; $tiefe < $maxTiefe && $ebene !== []; $tiefe++) {
-            $kinder = \Platform\FoodAlchemist\Models\FoodAlchemistRecipeIngredient::query()
-                ->whereIn('recipe_id', $ebene)
-                ->whereNotNull('referenced_recipe_id')
-                ->whereNull('deleted_at')
-                ->distinct()->pluck('referenced_recipe_id')
-                ->map(fn ($v) => (int) $v)
-                ->reject(fn ($id) => isset($besucht[$id]))
-                ->values()->all();
-
-            foreach ($kinder as $id) {
-                $besucht[$id] = true;
-                $rezeptIds[] = $id;
-            }
-            $ebene = $kinder;
-        }
-
+        $rezeptIds = $this->komponentenIds($recipe, $maxTiefe);
         if ($rezeptIds === []) {
             return collect();
         }
@@ -222,6 +232,43 @@ class SalesRecipeService
             ])
             ->sortByDesc('anzahl')
             ->values();
+    }
+
+    /**
+     * Produktionszeiten der Komponenten — ABGELEITET, als Orientierung im Editor (2026-09-04).
+     *
+     * Warum überhaupt: die Auftrags-Explosion erzeugt genau EINE Zeile je Rezept
+     * ({@see ProductionOrderService}), jede Komponente wird also eigenständig geplant und
+     * bringt ihre eigene Zeit mit. Das Zeitfeld am GERICHT ist deshalb nicht die
+     * Gesamtzeit, sondern die Zeit der Finalisierung. Wer dort die Gesamtzeit einträgt,
+     * zählt im selben Auftrag doppelt — einmal über die Komponenten-Zeilen, einmal über
+     * die Gericht-Zeile.
+     *
+     * Bewusst KEINE Planzahl: die belastbare Personenzeit hängt an Menge, Ansätzen und
+     * Topf-Deckel und wird von {@see ProductionTimeService} im Auftrag gerechnet. Hier
+     * stehen die Stammdaten-Zeiten je Ansatz — plus die Zahl der Komponenten OHNE
+     * Zeitangabe, denn die rechnet der Planer stillschweigend als 0.
+     *
+     * @return array{work_time_min: int, setup_time_min: int, standzeit_min: int, anzahl: int, ohne_zeit: int}
+     */
+    public function komponentenZeiten(FoodAlchemistRecipe $recipe, int $maxTiefe = 3): array
+    {
+        $ids = $this->komponentenIds($recipe, $maxTiefe);
+        $leer = ['work_time_min' => 0, 'setup_time_min' => 0, 'standzeit_min' => 0, 'anzahl' => 0, 'ohne_zeit' => 0];
+        if ($ids === []) {
+            return $leer;
+        }
+
+        $komponenten = FoodAlchemistRecipe::whereIn('id', $ids)
+            ->get(['id', 'work_time_min', 'setup_time_min', 'standzeit_min']);
+
+        return [
+            'work_time_min' => (int) round($komponenten->sum(fn ($r) => (float) ($r->work_time_min ?? 0))),
+            'setup_time_min' => (int) round($komponenten->sum(fn ($r) => (float) ($r->setup_time_min ?? 0))),
+            'standzeit_min' => (int) round($komponenten->sum(fn ($r) => (float) ($r->standzeit_min ?? 0))),
+            'anzahl' => $komponenten->count(),
+            'ohne_zeit' => $komponenten->filter(fn ($r) => (float) ($r->work_time_min ?? 0) <= 0)->count(),
+        ];
     }
 
     public function detail(Team $team, int $id): ?FoodAlchemistRecipe
