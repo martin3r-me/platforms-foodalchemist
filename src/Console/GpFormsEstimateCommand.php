@@ -175,6 +175,12 @@ class GpFormsEstimateCommand extends Command
             ->values();
     }
 
+    /** Markdown-Zellen härten (Pipes in Namen zerlegen sonst die Tabellenzeile). */
+    private function zelle(mixed $wert): string
+    {
+        return str_replace(['|', "\n"], ['\\|', ' '], (string) $wert);
+    }
+
     private function schreibeReport(string $pfad, bool $apply, array $zeilen, array $review, int $n): void
     {
         $md = "# Naturaleinheit-Gewichte per KI — ".date('Y-m-d H:i')."\n\n"
@@ -185,11 +191,11 @@ class GpFormsEstimateCommand extends Command
             ."„Stück\", Flüssigprodukt in „Stück\"). Einheit korrigieren, nicht Gewicht erfinden.\n\n"
             ."| Grundprodukt | Einheit fehlt weiter | Rezeptzeilen |\n|---|---|---|\n";
         foreach ($review as $r) {
-            $md .= "| {$r['gp']} | {$r['fehlt']} | {$r['n_zeilen']} |\n";
+            $md .= '| '.$this->zelle($r['gp']).' | '.$this->zelle($r['fehlt']).' | '.$r['n_zeilen']." |\n";
         }
         $md .= "\n## Alle bearbeiteten Grundprodukte\n\n| Grundprodukt | benutzte Einheit(en) | Rezeptzeilen | gesetzte Formen |\n|---|---|---|---|\n";
         foreach ($zeilen as $r) {
-            $md .= "| {$r['gp']} | {$r['einheiten']} | {$r['n_zeilen']} | {$r['formen']} |\n";
+            $md .= '| '.$this->zelle($r['gp']).' | '.$this->zelle($r['einheiten']).' | '.$r['n_zeilen'].' | '.$this->zelle($r['formen'])." |\n";
         }
         @file_put_contents($pfad, $md);
     }
