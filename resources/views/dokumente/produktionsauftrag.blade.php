@@ -130,6 +130,9 @@
                 @if($z['produzierte_menge_kg'] !== null) · {{ number_format($z['produzierte_menge_kg'], 2, ',', '.') }} kg @endif
                 @if($z['arbeitszeit_min'] !== null) · {{ $z['arbeitszeit_min'] }} min Arbeitszeit @endif
                 · Posten: {{ $z['station'] ?? 'Nicht zugeteilt' }}
+                {{-- Spec 51: gedruckt wird EIN Wert. Gewaehlt wird im Editor, nicht auf dem Zettel. --}}
+                @php($behaelter = ($opt['darreichung'] ?? false) ? \Platform\FoodAlchemist\Services\BehaelterBedarfService::kurz($z['darreichung']['behaelter_bedarf'] ?? null) : null)
+                @if($behaelter !== null) · {{ $behaelter }} @endif
             </div>
 
             @if(($opt['zutaten'] ?? false) && $z['zutaten'])

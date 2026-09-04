@@ -74,6 +74,7 @@
                             <th class="{{ $th }} w-full">Rezept / Position</th>
                             <th class="{{ $th }} text-right whitespace-nowrap">Ansätze</th>
                             <th class="{{ $th }} text-right whitespace-nowrap">Portionen</th>
+                            <th class="{{ $th }} whitespace-nowrap" title="Aus der produzierten Menge gerechnet — Alternativen im Rezept">Behälter</th>
                             <th class="{{ $th }} text-right whitespace-nowrap">Zeit</th>
                             <th class="{{ $th }} whitespace-nowrap">Posten</th>
                             <th class="{{ $th }} whitespace-nowrap">Verantwortlich</th>
@@ -123,6 +124,8 @@
                                     @endif
                                 </td>
                                 <td class="{{ $td }} text-right tabular-nums">{{ $z['portionen'] ?? '—' }}</td>
+                                @php($behaelter = \Platform\FoodAlchemist\Services\BehaelterBedarfService::kurz($z['darreichung']['behaelter_bedarf'] ?? null))
+                                <td class="{{ $td }} text-[11px] whitespace-nowrap" data-zeile-behaelter>{{ $behaelter ?? '—' }}</td>
                                 <td class="{{ $td }} text-right tabular-nums">{{ $z['arbeitszeit_min'] !== null ? $z['arbeitszeit_min'] . ' min' : '—' }}</td>
                                 <td class="{{ $td }} whitespace-nowrap">
                                     @if($darfDisponieren)

@@ -729,6 +729,10 @@ class Editor extends Component
             }
         }
 
+        // Spec 51: Behälter-Rollup über den ganzen Auftrag — »6× GN 1/1-65, 2× Eimer 10 l«.
+        // Die Küche packt nicht je Rezept, sie packt den Wagen; die Summe ist die Arbeitsgrösse.
+        $behaelterRollup = $this->behaelterRollup();
+
         // Spec 30 E3: Posten-Auswahl + Auslastungs-Warnungen des Auftrags
         $postenListe = $team !== null
             ? \Platform\FoodAlchemist\Models\FoodAlchemistProductionStation::visibleToTeam($team)
@@ -745,6 +749,7 @@ class Editor extends Component
             'postenSummen' => $postenSummen,
             'kapazitaetsWarnungen' => $kapazitaetsWarnungen,
             'allergenRollup' => $allergenRollup,
+            'behaelterRollup' => $behaelterRollup,
             'zielVokabular' => $this->browserVokabular($team),
             'foodbooks' => $foodbooks,
             'kapitelBaum' => $kapitelBaum,
@@ -795,5 +800,46 @@ class Editor extends Component
         $walk(0, 0);
 
         return $out;
+    }
+
+    /**
+     * Summiert die Basis-Variante jeder Zeile je Behältertyp.
+     *
+     * Bewusst NUR die Basis: die Alternativen sind ein Angebot an die Küche, keine zweite
+     * Wahrheit — sie zu addieren ergäbe eine Zahl, die niemand packt. Nicht berechenbare Zeilen
+     * fallen nicht still weg, sondern werden gezählt.
+     *
+     * @return array{summe: array<string, int>, ohne: int}|null
+     */
+    private function behaelterRollup(): ?array
+    {
+        if ($this->vorschau === null || empty($this->vorschau['rezepte'])) {
+            return null;
+        }
+
+        $summe = [];
+        $ohne = 0;
+
+        foreach ($this->vorschau['rezepte'] as $r) {
+            $block = $r['behaelter'] ?? null;
+            if ($block === null) {
+                continue;
+            }
+            $ergebnisse = array_filter([$block['abfuellen'] ?? null, ...($block['je_komponente'] ?? [])]);
+            foreach ($ergebnisse as $e) {
+                if (! ($e['berechenbar'] ?? false)) {
+                    $ohne++;
+
+                    continue;
+                }
+                $basis = $e['varianten'][0] ?? null;
+                if ($basis === null || $basis['behaelter'] === null) {
+                    continue;
+                }
+                $summe[$basis['behaelter']] = ($summe[$basis['behaelter']] ?? 0) + (int) $basis['anzahl'];
+            }
+        }
+
+        return ($summe === [] && $ohne === 0) ? null : ['summe' => $summe, 'ohne' => $ohne];
     }
 }

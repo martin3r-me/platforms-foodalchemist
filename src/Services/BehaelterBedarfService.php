@@ -88,6 +88,71 @@ class BehaelterBedarfService
             : $zusammen;
     }
 
+    /**
+     * Eine Zeile fürs Blatt: gedruckt wird EIN Wert, nie drei Varianten.
+     *
+     * »Küche entscheidet« heisst nicht, dass der Produktionsschein die Entscheidung abdruckt.
+     * Er zeigt die Basis und sagt dazu, dass es Alternativen gibt — gewählt wird im Editor.
+     */
+    public static function kurz(?array $block): ?string
+    {
+        if ($block === null) {
+            return null;
+        }
+
+        $teile = [];
+        $zusammen = $block['zusammen'] ?? [];
+
+        if (($zusammen['durchgaengig'] ?? false) && ($zusammen['behaelter'] ?? null) !== null) {
+            // Ragout im GN mit Deckel: aus dem Kühlhaus direkt in den Ofen. Einmal zählen.
+            $teile[] = "{$zusammen['anzahl']}× {$zusammen['behaelter']} · durchgängig";
+        } elseif (($ab = self::varianteKurz($block['abfuellen'] ?? null)) !== null) {
+            $teile[] = 'Abfüllen: '.$ab;
+        }
+
+        foreach ($block['je_komponente'] ?? [] as $k) {
+            if (($zusammen['durchgaengig'] ?? false) && $k['zweck'] === 'regenerieren') {
+                continue;                                  // steht schon oben als »durchgängig«
+            }
+            $kurz = self::varianteKurz($k);
+            if ($kurz !== null) {
+                $teile[] = ucfirst($k['zweck']).' '.$k['label'].': '.$kurz;
+            }
+        }
+
+        return $teile === [] ? null : implode(' · ', $teile);
+    }
+
+    /** Basis-Variante plus ehrlicher Hinweis auf Alternativen bzw. auf den Grund. */
+    public static function varianteKurz(?array $ergebnis): ?string
+    {
+        if ($ergebnis === null) {
+            return null;
+        }
+        if (! ($ergebnis['berechenbar'] ?? false)) {
+            return $ergebnis['grund'] ?? null;
+        }
+
+        $basis = $ergebnis['varianten'][0] ?? null;
+        if ($basis === null) {
+            return null;
+        }
+
+        $text = isset($basis['stueck_je_behaelter'])
+            ? "{$basis['anzahl']}× {$basis['behaelter']} (à {$basis['stueck_je_behaelter']} Stk.)"
+            : "{$basis['anzahl']}× {$basis['behaelter']}";
+
+        if (($basis['konfidenz'] ?? 'hoch') !== 'hoch') {
+            $text .= ' · geschätzt';
+        }
+        $weitere = max(0, count($ergebnis['varianten']) - 1);
+        if ($weitere > 0) {
+            $text .= " · {$weitere} Alternative".($weitere > 1 ? 'n' : '');
+        }
+
+        return $text;
+    }
+
     private function fuerZweck(Team $team, FoodAlchemistRecipe $recipe, string $zweck, ?float $mengeKg, string $label): ?array
     {
         $zeile = DB::table('foodalchemist_recipe_containers')

@@ -18,6 +18,22 @@
             <p class="text-[10px] text-gray-500 mt-2">„vegan/…/frei" = trifft auf ALLE Rezepte zu · „enthält" = mind. ein Rezept. Rollup aus den Rezept-Spezifikationen (schwächste Konfidenz gewinnt).</p>
         </x-foodalchemist::modal-section>
     @endif
+    {{-- Spec 51: was insgesamt gepackt werden muss. Die Kueche packt nicht je Rezept, sie packt
+         den Wagen — nur die Basis-Variante zaehlt, Alternativen sind ein Angebot, keine zweite Wahrheit. --}}
+    @if($behaelterRollup)
+        <x-foodalchemist::modal-section title="Behälter (über die ganze Produktion)">
+            <div class="flex flex-wrap gap-1.5 items-center text-[11px]" data-produktion-behaelter>
+                @forelse($behaelterRollup['summe'] as $name => $anzahl)
+                    <span class="{{ $pill }} {{ $variantPill['secondary'] }}">{{ $anzahl }}× {{ $name }}</span>
+                @empty
+                    <span class="text-gray-500">kein Behälter-Bedarf gerechnet</span>
+                @endforelse
+                @if($behaelterRollup['ohne'] > 0)
+                    <span class="ml-auto text-amber-600">{{ $behaelterRollup['ohne'] }} Zeile(n) nicht bemessbar — Referenzmenge oder Ausbeute fehlt</span>
+                @endif
+            </div>
+        </x-foodalchemist::modal-section>
+    @endif
     <x-foodalchemist::modal-section title="Vorschau">
         @if($vorschau === null)
             <p class="text-[12px] text-gray-500">Ziele hinzufügen, um die Ansätze-Vorschau zu sehen.</p>
@@ -27,6 +43,7 @@
                     <th class="{{ $th }} text-left">Rezept</th>
                     <th class="{{ $th }} text-right">Ansätze</th>
                     <th class="{{ $th }} text-right">Portionen/kg</th>
+                    <th class="{{ $th }} text-left">Behälter</th>
                     <th class="{{ $th }} text-right">Arbeitszeit</th>
                 </tr></thead>
                 <tbody>
@@ -35,6 +52,8 @@
                             <td class="{{ $td }}">{{ $r['name'] }} @if($r['ist_basisrezept'])<span class="{{ $pill }} {{ $variantPill['secondary'] }} ml-1">Basisrezept</span>@endif</td>
                             <td class="{{ $td }} text-right tabular-nums">{{ rtrim(rtrim(number_format($r['ansaetze'], 2, ',', '.'), '0'), ',') }}</td>
                             <td class="{{ $td }} text-right tabular-nums">{{ $r['portionen'] !== null ? $r['portionen'] . ' Port.' : ($r['produzierte_menge_kg'] !== null ? number_format($r['produzierte_menge_kg'], 2, ',', '.') . ' kg' : '—') }}</td>
+                            @php($behaelter = \Platform\FoodAlchemist\Services\BehaelterBedarfService::kurz($r['behaelter'] ?? null))
+                            <td class="{{ $td }} text-[11px]" data-vorschau-behaelter>{{ $behaelter ?? '—' }}</td>
                             <td class="{{ $td }} text-right tabular-nums">{{ $r['arbeitszeit_min'] !== null ? $r['arbeitszeit_min'] . ' min' : '—' }}</td>
                         </tr>
                     @endforeach

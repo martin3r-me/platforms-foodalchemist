@@ -675,6 +675,9 @@ class Tagesplan extends Component
             'behaelter_kalt' => 'Behälter kalt',
         ];
 
+        // Spec 51: der gerechnete Bedarf steht ganz oben — er ist das, was am Pass gepackt wird.
+        $bedarf = \Platform\FoodAlchemist\Services\BehaelterBedarfService::kurz($darreichung['behaelter_bedarf'] ?? null);
+
         return collect($labels)
             ->map(function (string $label, string $key) use ($darreichung) {
                 $wert = $darreichung[$key] ?? null;
@@ -685,6 +688,7 @@ class Tagesplan extends Component
                 return ['label' => $label, 'wert' => (string) $wert];
             })
             ->filter()
+            ->when($bedarf !== null, fn ($c) => $c->prepend(['label' => 'Benötigte Behälter', 'wert' => $bedarf]))
             ->values()
             ->all();
     }
