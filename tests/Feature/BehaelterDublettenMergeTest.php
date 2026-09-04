@@ -58,7 +58,10 @@ it('fuehrt namensgleiche Behaelter auf die niedrigste ID zusammen und haengt Ref
         ->and((float) $nach[$behalt]->volumen_l)->toBe(8.80)
         // Die Referenz zeigt auf den Behalt-Datensatz — sonst zeigte sie auf eine geloeschte Zeile.
         ->and((int) DB::table('foodalchemist_recipe_containers')->where('recipe_id', $rezept->id)
-            ->value('container_vocab_id'))->toBe($behalt);
+            ->value('container_vocab_id'))->toBe($behalt)
+        // Anzeige-Gruppe folgt der Familie: der Bestand stand sonst weiter unter »sonstig«,
+        // waehrend dieselbe Groesse aus dem Seed unter »GN« lag — der Doppel-Eindruck in der UI.
+        ->and($nach[$behalt]->group_name)->toBe('GN');
 });
 
 it('laesst zwei verschiedene Behaelter mit aehnlichem Namen in Ruhe', function () {

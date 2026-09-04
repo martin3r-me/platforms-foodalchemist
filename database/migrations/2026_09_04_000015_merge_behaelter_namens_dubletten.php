@@ -45,6 +45,23 @@ return new class extends Migration
                 'updated_at' => now(),
             ]);
         }
+
+        $this->gruppeNachziehen();
+    }
+
+    /**
+     * Die Einstellungen gruppieren nach `group_name`. Der Bestand aus dem WaWi-Import hat dort
+     * NULL und landete deshalb sichtbar unter »sonstig«, waehrend der Seed dieselben Groessen
+     * unter »GN« zeigte — der Doppel-Eindruck im Screenshot. Die Familie ist seit 000010 an
+     * beiden Saetzen gepflegt; wo die Anzeige-Gruppe fehlt, folgt sie ihr.
+     */
+    private function gruppeNachziehen(): void
+    {
+        DB::table(self::TABELLE)
+            ->whereNull('deleted_at')
+            ->whereNotNull('familie')
+            ->where(fn ($q) => $q->whereNull('group_name')->orWhere('group_name', ''))
+            ->update(['group_name' => DB::raw('familie'), 'updated_at' => now()]);
     }
 
     public function down(): void
@@ -104,7 +121,7 @@ return new class extends Migration
     {
         $felder = ['familie', 'format_code', 'laenge_mm', 'breite_mm', 'tiefe_mm', 'volumen_l',
             'nutzfaktor', 'max_fuellgewicht_kg', 'eignung', 'kapazitaet_kg', 'ist_traeger',
-            'traeger_plaetze', 'traeger_format'];
+            'traeger_plaetze', 'traeger_format', 'group_name'];
 
         $patch = [];
         foreach ($felder as $f) {
