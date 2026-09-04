@@ -56,6 +56,25 @@ $mengenVerbot = 'MENGEN (verbindlich): schreibe KEINE absoluten Mengen in die Sc
 return [
 
     /*
+     * Tipp-Gruende am Kuechen-Feedback (Wandmonitor).
+     *
+     * Bewusst eine kurze, feste Liste: je mehr Kacheln, desto weniger wird getippt. Sie sollen
+     * die Faelle abdecken, die WIEDERHOLT auftreten — der Einzelfall gehoert in den Kommentar.
+     * Hier und nicht in einer Vokabel-Tabelle, weil die Liste die Auswertung praegt: aendert sie
+     * sich staendig, ist keine Haeufigkeit ueber die Zeit mehr vergleichbar.
+     */
+    'feedback_gruende' => [
+        'menge_falsch' => 'Menge stimmt nicht',
+        'zeit_knapp' => 'Zeit zu knapp',
+        'zutat_fehlte' => 'Zutat fehlte',
+        'geraet_belegt' => 'Gerät belegt',
+        'schritte_unklar' => 'Schritte unklar',
+        'behaelter_passt_nicht' => 'Behälter passt nicht',
+        'geschmack_ab' => 'Geschmack weicht ab',
+    ],
+
+
+    /*
     |--------------------------------------------------------------------------
     | Warteschlangen
     |--------------------------------------------------------------------------

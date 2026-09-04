@@ -1,5 +1,6 @@
 <?php
 
+use Illuminate\Http\UploadedFile;
 use Livewire\Livewire;
 use Platform\FoodAlchemist\Enums\ProductionLineStatus;
 use Platform\FoodAlchemist\Enums\ProductionOrderStatus;
@@ -493,9 +494,15 @@ it('nimmt am Wandmonitor ein Kuechen-Feedback auf und legt es an derselben Stell
         ->call('oeffneAnleitung', $lineId)
         ->assertSeeHtml('data-tagesplan-wall-feedback')
         ->assertSeeHtml('data-tagesplan-wall-feedback-speichern')
+        ->assertSeeHtml('data-tagesplan-wall-feedback-gruende')
         ->call('feedbackSetzen', 'score', 2)
         ->call('feedbackSetzen', 'machbarkeit', 3)
+        ->call('feedbackGrundUmschalten', 'menge_falsch')
+        ->call('feedbackGrundUmschalten', 'zeit_knapp')
+        ->call('feedbackGrundUmschalten', 'zeit_knapp')          // zweiter Tipp nimmt zurueck
+        ->call('feedbackGrundUmschalten', 'gibt_es_nicht')       // unbekannter Slug prallt ab
         ->set('feedbackForm.comment', 'Ansatz zu groß für den Kipper.')
+        ->assertSet('feedbackForm.gruende', ['menge_falsch'])
         ->call('feedbackSpeichern')
         ->assertSet('fehler', null)
         ->assertSet('feedbackGespeichert', true)
@@ -508,10 +515,37 @@ it('nimmt am Wandmonitor ein Kuechen-Feedback auf und legt es an derselben Stell
         ->and($f->score)->toBe(2)
         ->and($f->machbarkeit)->toBe(3)
         ->and($f->created_via)->toBe('fa_wall')
+        // Die zaehlbare Haelfte: als Slug-Liste, nicht als Prosa im Kommentar.
+        ->and($f->gruende)->toBe(['menge_falsch'])
         // Der Kontext kommt aus dem Auftrag und wurde nicht getippt — im Editor muesste ihn
         // jemand aus dem Gedaechtnis nachtragen.
         ->and($f->kontext_label)->not->toBeNull()
         ->and($f->kontext_datum?->toDateString())->toBe('2026-08-20');
+});
+
+/**
+ * Am Pass bedienen nasse oder behandschuhte Haende keine Bildschirmtastatur — und sie verdeckt
+ * den halben Schirm. Derselbe Diktat-Knopf wie Planungsstelle und Step-Editor, gleicher Vertrag:
+ * Gesprochenes wird ANGEHAENGT, nie ersetzt.
+ */
+it('haengt ein Diktat an den Feedback-Kommentar an, statt ihn zu ersetzen', function () {
+    config(['foodalchemist.stt.provider' => 'fake', 'foodalchemist.stt.fake_text' => 'der Kipper war belegt']);
+    $lineId = Line::where('production_order_id', $this->a1->id)->value('id');
+
+    $c = Livewire::test(Tagesplan::class, ['von' => '2026-08-20', 'display' => 'wall'])
+        ->set('modus', 'editor')
+        ->call('oeffneAnleitung', $lineId)
+        ->assertSeeHtml('data-diktat="wall-feedback"')
+        ->set('feedbackForm.comment', 'Ansatz zu groß.')
+        ->set('feedbackAudio', UploadedFile::fake()->create('diktat.webm', 1, 'audio/webm'));
+
+    expect($c->get('feedbackForm.comment'))->toBe('Ansatz zu groß. der Kipper war belegt')
+        ->and($c->get('feedbackAudio'))->toBeNull();     // Blob nach Übernahme freigegeben
+
+    // Leeres Diktat meldet sich, statt still nichts zu tun.
+    config(['foodalchemist.stt.fake_text' => '']);
+    $c->set('feedbackAudio', UploadedFile::fake()->create('leer.webm', 1, 'audio/webm'))
+        ->assertSet('fehler', fn ($f) => str_contains((string) $f, 'Diktat war leer'));
 });
 
 it('loescht den Wert, wenn dieselbe Zahl noch einmal getippt wird', function () {
@@ -524,11 +558,16 @@ it('loescht den Wert, wenn dieselbe Zahl noch einmal getippt wird', function () 
         ->assertSet('feedbackForm.score', 4)
         ->call('feedbackSetzen', 'score', 4)
         ->assertSet('feedbackForm.score', null)
-        // Ohne Score UND ohne Kommentar gibt es nichts zu speichern — der Service sagt das,
+        // Ohne Score, Grund UND Kommentar gibt es nichts zu speichern — der Service sagt das,
         // und der Fehler landet sichtbar an der Wand statt still im Log.
         ->call('feedbackSpeichern')
         ->assertSet('feedbackGespeichert', false)
-        ->assertSet('fehler', fn ($f) => str_contains((string) $f, 'Score oder einen Kommentar'));
+        ->assertSet('fehler', fn ($f) => str_contains((string) $f, 'Score, einen Grund oder einen Kommentar'))
+        // Ein angetippter Grund IST eine Aussage — sonst muesste jemand zusaetzlich tippen,
+        // nur damit sein Hinweis zaehlt.
+        ->call('feedbackGrundUmschalten', 'geraet_belegt')
+        ->call('feedbackSpeichern')
+        ->assertSet('feedbackGespeichert', true);
 });
 
 it('öffnet im Wandmodus die touchfreundliche Anleitung mit Medienbereich', function () {

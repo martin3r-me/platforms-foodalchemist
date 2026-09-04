@@ -58,6 +58,15 @@
                         @if($f->gaeste_reaktion)<span class="{{ $pill }} {{ $variantPill['secondary'] }}">Gäste {{ $f->gaeste_reaktion }}</span>@endif
                     </div>
                 @endif
+                @if(! empty($f->gruende))
+                    {{-- Die zaehlbare Haelfte des Feedbacks: gleiche Worte fuer denselben Fall. --}}
+                    <div class="flex flex-wrap gap-1 mt-1.5" data-feedback-gruende>
+                        @php($gruendeVokabular = (array) config('foodalchemist.feedback_gruende', []))
+                        @foreach($f->gruende as $g)
+                            <span class="{{ $pill }} {{ $variantPill['warning'] ?? $variantPill['secondary'] }}">{{ $gruendeVokabular[$g] ?? $g }}</span>
+                        @endforeach
+                    </div>
+                @endif
                 @if($f->comment)<p class="text-xs text-gray-600 mt-1.5">{{ $f->comment }}</p>@endif
                 @if($f->kontext_label)<p class="text-[11px] text-gray-500 mt-0.5">Kontext: {{ $f->kontext_label }}@if($f->kontext_datum) · {{ $f->kontext_datum->format('d.m.Y') }}@endif</p>@endif
                 @if($f->spawned_recipe_id)<p class="text-[11px] text-violet-500 mt-0.5">→ Draft-Iteration #{{ $f->spawned_recipe_id }} abgeleitet</p>@endif

@@ -33,7 +33,7 @@ class FeedbackService
      * Katalog-Rezepte dürfen bewertet werden — D1: Kind bewertet eigenständig).
      * team_id = das handelnde Team (nicht das Besitzer-Team des Rezepts).
      *
-     * @param  array{quelle:string,score?:int|null,machbarkeit?:int|null,aufwand?:int|null,geschmack?:int|null,gaeste_reaktion?:int|null,comment?:string|null,kontext_kind?:string|null,kontext_id?:int|null,kontext_datum?:string|null,kontext_label?:string|null,author_user_id?:int|null,created_via?:string|null}  $in
+     * @param  array{quelle:string,score?:int|null,machbarkeit?:int|null,aufwand?:int|null,geschmack?:int|null,gaeste_reaktion?:int|null,comment?:string|null,gruende?:list<string>|null,kontext_kind?:string|null,kontext_id?:int|null,kontext_datum?:string|null,kontext_label?:string|null,author_user_id?:int|null,created_via?:string|null}  $in
      */
     public function erstelle(Team $team, int $recipeId, array $in): FoodAlchemistRecipeFeedback
     {
@@ -60,8 +60,19 @@ class FeedbackService
         }
 
         $comment = isset($in['comment']) ? trim((string) $in['comment']) : null;
-        if ($score === null && ($comment === null || $comment === '')) {
-            throw new \InvalidArgumentException('Feedback braucht mindestens einen Score oder einen Kommentar.');
+
+        // Tipp-Gruende gegen das konfigurierte Vokabular filtern — nie roh uebernehmen. Ein
+        // freier Slug waere derselbe unzaehlbare Text wie der Kommentar, nur schlechter versteckt.
+        $erlaubt = array_keys((array) config('foodalchemist.feedback_gruende', []));
+        $gruende = array_values(array_unique(array_intersect(
+            array_map('strval', (array) ($in['gruende'] ?? [])),
+            $erlaubt
+        )));
+
+        // Ein angetippter Grund IST eine Aussage — sonst muesste jemand zusaetzlich tippen,
+        // nur damit der Eintrag zaehlt.
+        if ($score === null && ($comment === null || $comment === '') && $gruende === []) {
+            throw new \InvalidArgumentException('Feedback braucht mindestens einen Score, einen Grund oder einen Kommentar.');
         }
 
         return FoodAlchemistRecipeFeedback::create([
@@ -71,6 +82,7 @@ class FeedbackService
             'score' => $score,
             ...$achsen,
             'comment' => $comment ?: null,
+            'gruende' => $gruende !== [] ? $gruende : null,
             'kontext_kind' => in_array($in['kontext_kind'] ?? null, ['concept', 'event'], true) ? $in['kontext_kind'] : null,
             'kontext_id' => isset($in['kontext_id']) && $in['kontext_id'] !== '' ? (int) $in['kontext_id'] : null,
             'kontext_datum' => $in['kontext_datum'] ?? null,

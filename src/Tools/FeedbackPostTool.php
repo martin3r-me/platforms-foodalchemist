@@ -25,7 +25,9 @@ class FeedbackPostTool extends FoodAlchemistTool implements ToolContract, ToolMe
     {
         return 'Legt Praxis-Feedback zu einem Gericht/Basisrezept an. quelle=kueche|kunde|event, '
             . 'score 1–5, optional Kommentar. Bei quelle=kueche zusätzlich die Achsen machbarkeit/'
-            . 'aufwand/geschmack/gaeste_reaktion (1–5). Optionaler Kontext (Konzept/Event/Datum).';
+            . 'aufwand/geschmack/gaeste_reaktion (1–5). Optionaler Kontext (Konzept/Event/Datum). '
+            . 'Optional `gruende`: Slugs aus dem festen Vokabular (config foodalchemist.feedback_gruende) — '
+            . 'die zählbare Hälfte des Feedbacks, unbekannte Slugs werden verworfen.';
     }
 
     public function getSchema(): array
@@ -40,6 +42,11 @@ class FeedbackPostTool extends FoodAlchemistTool implements ToolContract, ToolMe
                 'score' => array_merge($skala, ['description' => 'Gesamt-Score 1–5']),
                 'machbarkeit' => $skala, 'aufwand' => $skala, 'geschmack' => $skala, 'gaeste_reaktion' => $skala,
                 'comment' => ['type' => 'string'],
+                'gruende' => [
+                    'type' => 'array',
+                    'items' => ['type' => 'string', 'enum' => array_keys((array) config('foodalchemist.feedback_gruende', []))],
+                    'description' => 'Tipp-Gründe (zählbar). Alles ausserhalb des Vokabulars gehört in `comment`.',
+                ],
                 'kontext_kind' => ['type' => 'string', 'enum' => ['concept', 'event']],
                 'kontext_id' => ['type' => 'integer'],
                 'kontext_datum' => ['type' => 'string', 'description' => 'YYYY-MM-DD'],
@@ -76,8 +83,14 @@ class FeedbackPostTool extends FoodAlchemistTool implements ToolContract, ToolMe
             'recipe_id' => $f->recipe_id,
             'quelle' => $f->quelle->value,
             'score' => $f->score,
+            // Zurueckgeben, was ANGEKOMMEN ist: unbekannte Slugs verwirft der Service still,
+            // sonst glaubt der Aufrufer, sein erfundener Grund sei gespeichert.
+            'gruende' => $f->gruende ?? [],
             'created_via' => $f->created_via,
-        ], 'Feedback angelegt.');
+            // Kein Text als 2. Argument: `ToolResult::success()` erwartet dort ein array
+            // ($metadata). Der String liess das Tool auf dem ERFOLGSPFAD mit einem TypeError
+            // aussteigen — aufgefallen erst, als ein Test es das erste Mal wirklich aufrief.
+        ]);
     }
 
     public function getMetadata(): array

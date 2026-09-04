@@ -764,10 +764,45 @@
                                     </div>
                                 @endforeach
 
-                                <textarea wire:model="feedbackForm.comment" rows="2"
-                                          class="w-full rounded-lg border border-white/10 bg-slate-950/30 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500"
-                                          placeholder="Was lief, was fehlte, was man ändern müsste …"
-                                          data-tagesplan-wall-feedback-kommentar></textarea>
+                                {{-- Antippbare Gruende: der haeufige Fall wird zaehlbar, ohne Tastatur. --}}
+                                @php
+                                    $fbGruende = (array) config('foodalchemist.feedback_gruende', []);
+                                    $fbGewaehlt = (array) ($feedbackForm['gruende'] ?? []);
+                                @endphp
+                                @if($fbGruende !== [])
+                                    <div>
+                                        <span class="block text-xs text-slate-400">Was war los? (mehrfach möglich)</span>
+                                        <div class="mt-1 flex flex-wrap gap-1.5" data-tagesplan-wall-feedback-gruende>
+                                            @foreach($fbGruende as $fbSlug => $fbText)
+                                                @php
+                                                    $fbAn = in_array($fbSlug, $fbGewaehlt, true);
+                                                @endphp
+                                                <button type="button" wire:key="fbg-{{ $fbSlug }}"
+                                                        wire:click="feedbackGrundUmschalten('{{ $fbSlug }}')"
+                                                        class="h-10 rounded-lg border px-3 text-sm font-medium transition {{ $fbAn ? 'border-violet-300/60 bg-violet-500/30 text-white' : 'border-white/10 bg-slate-950/30 text-slate-300' }}"
+                                                        @if($fbAn) data-tagesplan-wall-feedback-grund-aktiv="{{ $fbSlug }}" @endif>{{ $fbText }}</button>
+                                            @endforeach
+                                        </div>
+                                    </div>
+                                @endif
+
+                                <div>
+                                    <div class="flex items-center justify-between gap-2">
+                                        <span class="text-xs text-slate-400">Sonst noch was?</span>
+                                        {{-- Derselbe Diktat-Knopf wie Planungsstelle und Step-Editor: am Pass
+                                             bedienen nasse Hände keine Bildschirmtastatur. --}}
+                                        @include('foodalchemist::livewire.recipes.partials.diktat-knopf', [
+                                            'audio' => 'feedbackAudio',
+                                            'marker' => 'wall-feedback',
+                                            'label' => 'sprechen',
+                                            'btnAi' => 'inline-flex items-center gap-1.5 h-10 rounded-lg border border-white/10 bg-slate-950/30 px-3 text-sm font-medium text-slate-200',
+                                        ])
+                                    </div>
+                                    <textarea wire:model="feedbackForm.comment" rows="2"
+                                              class="mt-1 w-full rounded-lg border border-white/10 bg-slate-950/30 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500"
+                                              placeholder="Sprechen oder tippen — der Einzelfall, den keine Kachel trifft …"
+                                              data-tagesplan-wall-feedback-kommentar></textarea>
+                                </div>
 
                                 <button type="button" wire:click="feedbackSpeichern"
                                         class="h-11 w-full rounded-lg border border-violet-300/40 bg-violet-500/30 text-sm font-bold text-white"

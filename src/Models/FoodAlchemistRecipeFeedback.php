@@ -33,6 +33,7 @@ class FoodAlchemistRecipeFeedback extends Model
         'geschmack' => 'integer',
         'gaeste_reaktion' => 'integer',
         'kontext_datum' => 'date',
+        'gruende' => 'array',
     ];
 
     public function recipe(): BelongsTo

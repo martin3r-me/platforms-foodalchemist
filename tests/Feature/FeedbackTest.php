@@ -107,6 +107,7 @@ it('stempelt Feedback aus dem Wandmonitor als „Produktion" und zeigt den Auftr
         'quelle' => 'kueche', 'score' => 2, 'comment' => 'Ansatz zu groß für den Kipper.',
         'kontext_label' => 'Sommerfest Zentrag', 'kontext_datum' => '2026-08-20',
         'created_via' => 'fa_wall',
+        'gruende' => ['menge_falsch', 'behaelter_passt_nicht', 'erfunden'],   // letzter faellt raus
     ]);
     $this->svc->erstelle($this->rootTeam, $this->gericht->id, [
         'quelle' => 'kueche', 'score' => 4, 'comment' => 'Im Editor nachgetragen.',
@@ -117,9 +118,40 @@ it('stempelt Feedback aus dem Wandmonitor als „Produktion" und zeigt den Auftr
         ->assertSee('Produktion')
         // Der Kontext kam aus der Produktionszeile, nicht aus dem Gedaechtnis.
         ->assertSee('Sommerfest Zentrag')
-        ->assertSee('20.08.2026');
+        ->assertSee('20.08.2026')
+        // Tipp-Gruende erscheinen im Klartext des Vokabulars — und nur die gueltigen.
+        ->assertSeeHtml('data-feedback-gruende')
+        ->assertSee('Menge stimmt nicht')
+        ->assertSee('Behälter passt nicht')
+        ->assertDontSee('erfunden');
 
     // Der Editor-Eintrag traegt den Stempel NICHT — sonst waere er wertlos.
     expect(FoodAlchemistRecipeFeedback::where('recipe_id', $this->gericht->id)
         ->where('created_via', 'fa_wall')->count())->toBe(1);
+});
+
+/**
+ * MCP im Lockstep: die neue Spalte muss das Tool kennen, sonst kann die KI Feedback anlegen,
+ * das die Auswertung nicht sieht. Und sie muss zurueckgeben, was ANGEKOMMEN ist — der Service
+ * verwirft unbekannte Slugs still.
+ */
+it('nimmt Tipp-Gruende ueber das MCP-Tool an und meldet zurueck, welche gezaehlt haben', function () {
+    $user = $this->makeUser($this->rootTeam);
+    $this->actingAs($user);
+
+    $tool = app(\Platform\FoodAlchemist\Tools\FeedbackPostTool::class);
+    $ctx = new \Platform\Core\Contracts\ToolContext(user: $user, team: $this->rootTeam);
+
+    $res = $tool->execute([
+        'recipe_id' => $this->gericht->id, 'quelle' => 'kueche', 'score' => 2,
+        'gruende' => ['zeit_knapp', 'frei_erfunden'],
+    ], $ctx);
+
+    // ToolResult hat oeffentliche readonly-Properties, keine Getter (Hauskonvention, s. McpBehaelterTest).
+    expect($res->success)->toBeTrue()
+        ->and($res->data['gruende'])->toBe(['zeit_knapp']);
+
+    // Und das Schema bietet nur das Vokabular an — keine Freitext-Slugs.
+    $enum = $tool->getSchema()['properties']['gruende']['items']['enum'];
+    expect($enum)->toContain('zeit_knapp')->and($enum)->not->toContain('frei_erfunden');
 });

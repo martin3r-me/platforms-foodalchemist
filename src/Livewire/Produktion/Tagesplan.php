@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Attributes\Url;
 use Livewire\Component;
+use Livewire\WithFileUploads;
 use Platform\Core\Models\ContextFile;
 use Platform\FoodAlchemist\Enums\FeedbackQuelle;
 use Platform\FoodAlchemist\Enums\ProductionLineStatus;
@@ -18,6 +19,7 @@ use Platform\FoodAlchemist\Services\ProductionCapacityService;
 use Platform\FoodAlchemist\Services\ProductionOrderService;
 use Platform\FoodAlchemist\Services\ProductionPlanService;
 use Platform\FoodAlchemist\Services\ProductionReadinessService;
+use Platform\FoodAlchemist\Services\Stt\SttServiceContract;
 
 /**
  * Spec 30 E3 — Tagesplan: was steht an welchem Tag an welchem Posten an, über ALLE Aufträge.
@@ -31,6 +33,8 @@ use Platform\FoodAlchemist\Services\ProductionReadinessService;
  */
 class Tagesplan extends Component
 {
+    use WithFileUploads;
+
     #[Url(as: 'von')]
     public string $von = '';
 
@@ -90,9 +94,12 @@ class Tagesplan extends Component
      * verdirbt das Aggregat, für das die Küche die ehrlichste Quelle ist.
      */
     public array $feedbackForm = ['score' => null, 'machbarkeit' => null, 'aufwand' => null,
-        'geschmack' => null, 'comment' => ''];
+        'geschmack' => null, 'comment' => '', 'gruende' => []];
 
     public bool $feedbackGespeichert = false;
+
+    /** Diktat fuer den Feedback-Kommentar (WithFileUploads) — Muster wie Planungsstelle/StepEditor. */
+    public $feedbackAudio = null;
 
     private const DASHBOARD_FENSTER = [3, 7, 14, 30];
 
@@ -354,10 +361,70 @@ class Tagesplan extends Component
         $this->wallGerichtKey = null;
     }
 
+    /**
+     * Diktat statt Tastatur — am Wandmonitor der eigentliche Gewinn: nasse oder behandschuhte
+     * Haende bedienen keine Bildschirmtastatur, und die verdeckt am Pass den halben Schirm.
+     *
+     * Gesprochenes wird ANGEHAENGT, nie ersetzt (Muster StepEditor/Planungsstelle): ein Diktat
+     * ist ein Nachtrag zu dem, was schon dasteht. Reines STT ueber `SttServiceContract`, kein
+     * Tool-Loop — im Feld soll stehen, was gesagt wurde, nicht was eine KI daraus macht.
+     *
+     * Die zaehlbare Haelfte bleiben die Tipp-Gruende; das Diktat traegt den Einzelfall nach.
+     */
+    public function updatedFeedbackAudio(): void
+    {
+        if ($this->feedbackAudio === null) {
+            return;
+        }
+        try {
+            $text = trim(app(SttServiceContract::class)->transcribe(
+                (string) file_get_contents($this->feedbackAudio->getRealPath()),
+                $this->feedbackAudio->getMimeType() ?: 'audio/webm',
+            ));
+        } catch (\Throwable $e) {
+            $this->fehler = 'Diktat fehlgeschlagen: '.$e->getMessage();
+            $this->feedbackAudio = null;
+
+            return;
+        }
+
+        $this->feedbackAudio = null;
+        if ($text === '') {
+            // Kann auch der Prompt-Echo-Riegel im STT sein (Aufnahme ohne Sprache).
+            $this->fehler = 'Diktat war leer — nichts übernommen.';
+
+            return;
+        }
+
+        $bisher = trim((string) ($this->feedbackForm['comment'] ?? ''));
+        $this->feedbackForm['comment'] = $bisher === '' ? $text : $bisher.' '.$text;
+        $this->feedbackGespeichert = false;
+        $this->fehler = null;
+    }
+
+    /**
+     * Antippbare Gruende statt Tippen.
+     *
+     * Am Wandmonitor ist die Tastatur nicht das Problem — freier Text ist es: zwoelf Leute
+     * formulieren „Menge stimmt nicht" auf zwoelf Arten, und keine Auswertung sieht das. Die
+     * Kacheln machen aus dem haeufigen Fall eine Haeufigkeit; der Kommentar bleibt fuer den Rest.
+     */
+    public function feedbackGrundUmschalten(string $slug): void
+    {
+        if (! array_key_exists($slug, (array) config('foodalchemist.feedback_gruende', []))) {
+            return;
+        }
+        $gruende = collect($this->feedbackForm['gruende'] ?? [])->map(fn ($g) => (string) $g);
+        $this->feedbackForm['gruende'] = $gruende->contains($slug)
+            ? $gruende->reject(fn ($g) => $g === $slug)->values()->all()
+            : $gruende->push($slug)->unique()->values()->all();
+        $this->feedbackGespeichert = false;
+    }
+
     /** Touch statt Tastatur: ein Tipp setzt (oder loescht) den Wert. */
     public function feedbackSetzen(string $feld, int $wert): void
     {
-        if (! array_key_exists($feld, $this->feedbackForm) || $feld === 'comment') {
+        if (! array_key_exists($feld, $this->feedbackForm) || in_array($feld, ['comment', 'gruende'], true)) {
             return;
         }
         $this->feedbackForm[$feld] = ((int) ($this->feedbackForm[$feld] ?? 0)) === $wert ? null : $wert;
@@ -391,6 +458,7 @@ class Tagesplan extends Component
                 'aufwand' => $this->feedbackForm['aufwand'] ?? null,
                 'geschmack' => $this->feedbackForm['geschmack'] ?? null,
                 'comment' => $this->feedbackForm['comment'] ?? null,
+                'gruende' => $this->feedbackForm['gruende'] ?? [],
                 'kontext_label' => $line->productionOrder?->name,
                 'kontext_datum' => $line->productionOrder?->production_date?->toDateString(),
                 'author_user_id' => Auth::id(),
@@ -398,7 +466,7 @@ class Tagesplan extends Component
             ]);
 
             $this->feedbackForm = ['score' => null, 'machbarkeit' => null, 'aufwand' => null,
-                'geschmack' => null, 'comment' => ''];
+                'geschmack' => null, 'comment' => '', 'gruende' => []];
             $this->feedbackGespeichert = true;
         } catch (\Throwable $e) {
             $this->fehler = $e->getMessage();
