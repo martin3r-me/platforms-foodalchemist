@@ -10,7 +10,7 @@ use Platform\FoodAlchemist\Services\RecipeService;
 use Platform\FoodAlchemist\Support\Suche;
 
 /**
- * Verwaltungs-Block für Basisrezepte (Spec 44, Dominique 2026-09-04): „in allen Verwendungen
+ * Verwaltungs-Block für Basisrezepte (Spec 49, Dominique 2026-09-04): „in allen Verwendungen
  * tauschen" + „löschen" — das Pendant zum GP-Verwaltungsblock, gleichzeitig im Detail-Panel UND
  * im Editor. Der GP-Tausch lag anfangs nur im Panel und wurde später in den Editor KOPIERT; die
  * Kopie lief auseinander (roher Status-String, unfindbarer Reiter). Deshalb liegt die Mechanik

@@ -1484,7 +1484,7 @@ class Index extends Component
             'firmen' => $svc->sucheFirmen($this->firmaSuche),
             'kontakte' => $svc->sucheKontakte($this->kontaktSuche),
             // Phase 4: Trend-Tab — Wissensschrank-Pull (Kategorie „trend") als Inspiration
-            'trendDocs' => $fb !== null ? app(\Platform\FoodAlchemist\Services\Ai\KnowledgeContextService::class)->listDocuments('trend', 0, 8, true)['documents'] : [],
+            'trendDocs' => $fb !== null ? app(\Platform\FoodAlchemist\Services\Ai\KnowledgeContextService::class)->listDocuments($team, 'trend', 0, 8, true)['documents'] : [],
             // Phase 5: Segment (aus Küchen-Typ abgeleitet) — die Achse, an der die Planung hängt
             'segment' => app(\Platform\FoodAlchemist\Services\TeamSettingsService::class)->segment($team),
             // Kreativ-Tab: Schreibstile fürs Foodbook-Tonalitäts-Override (aktive, team-sichtbar)

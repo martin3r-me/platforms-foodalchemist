@@ -10,6 +10,7 @@ use Platform\FoodAlchemist\Services\Conformance\ConformanceAdapter;
 use Platform\FoodAlchemist\Services\Conformance\GpConformanceAdapter;
 use Platform\FoodAlchemist\Services\Conformance\LaConformanceAdapter;
 use Platform\FoodAlchemist\Services\Conformance\RecipeConformanceAdapter;
+use Platform\FoodAlchemist\Support\DossierText;
 
 /**
  * Schicht 3 — der GENERISCHE Konformitäts-Critic. EIN Prompt (`conformance.check`),
@@ -178,8 +179,13 @@ class ConformanceService
             return '';
         }
 
+        // Vorspann raus (siehe DossierText): 18,1 % / 22,0 % / 12,5 % der drei
+        // Regelwerk-Präfixe sind derselbe Provenienz-Textbaustein, 17 bzw. 20 bzw. 9 mal
+        // wiederholt. Der Block bleibt ungekappt — jede REGEL kommt weiter vollständig an,
+        // es fällt nur die Wiederholung. `orderBy('slug')` oben macht ihn zusätzlich
+        // byte-identisch über alle Calls, womit er cache-prefix-fähig wird (W3-1).
         $bloecke = $dossiers
-            ->map(fn ($d) => "## REGELWERK: {$d->title}\n\n" . trim((string) $d->content_md))
+            ->map(fn ($d) => "## REGELWERK: {$d->title}\n\n" . trim(DossierText::ohneVorspann((string) $d->content_md)))
             ->all();
 
         return "# REGELWERKE (vollständig — §-genau prüfen)\n\n"

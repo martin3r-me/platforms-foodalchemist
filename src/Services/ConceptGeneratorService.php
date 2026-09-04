@@ -226,7 +226,7 @@ class ConceptGeneratorService
         // Trend-Wissen (Trendradar) additiv einspeisen — der Prompt läuft NICHT durch
         // contextFor(), also hier holen und als options['knowledge'] durchreichen (Routing
         // concept.brief_geruest → trend:discovery). Ohne Trend-Bestand liefert er leer.
-        $trendWissen = app(KnowledgeContextService::class)->contextFor('concept.brief_geruest', $brief);
+        $trendWissen = app(KnowledgeContextService::class)->contextFor($team, 'concept.brief_geruest', $brief);
         $wissenOpts = $trendWissen['block'] !== ''
             ? ['knowledge' => $trendWissen['block'], 'knowledge_used' => $trendWissen['files_used']]
             : [];
@@ -377,7 +377,7 @@ class ConceptGeneratorService
         // die concept.plan-Routings (cross_cutting/domain/concept) fließen NUR, wenn der Aufrufer
         // sie über KnowledgeContextService auflöst und als options['knowledge'] mitgibt (wie
         // generiereAusBrief für concept.brief_geruest). Sonst liefe der Kreativ-Kopf wissens-blind.
-        $wissen = app(KnowledgeContextService::class)->contextFor('concept.plan', $brief);
+        $wissen = app(KnowledgeContextService::class)->contextFor($team, 'concept.plan', $brief);
         $opts = $wissen['block'] !== ''
             ? ['knowledge' => $wissen['block'], 'knowledge_used' => $wissen['files_used']]
             : [];
@@ -547,7 +547,7 @@ class ConceptGeneratorService
         // liefert das Feature `foodbook.grundgeruest` das FOODBOOK-Regelwerk (Kapitel statt Gänge, Routing
         // regelwerk:always) + Trend; für die übrigen Owner `concept.brief_geruest` wie bisher. Ohne
         // Routing/Bestand liefert er leer.
-        $trendWissen = app(KnowledgeContextService::class)->contextFor($promptKey, $brief);
+        $trendWissen = app(KnowledgeContextService::class)->contextFor($team, $promptKey, $brief);
         $wissenOpts = $trendWissen['block'] !== ''
             ? ['knowledge' => $trendWissen['block'], 'knowledge_used' => $trendWissen['files_used']]
             : [];

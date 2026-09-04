@@ -1,4 +1,4 @@
-# Spec 44 — Rezept-Tausch & Rezept-Löschen (Verwaltungs-Block für Basisrezepte)
+# Spec 49 — Rezept-Tausch & Rezept-Löschen (Verwaltungs-Block für Basisrezepte)
 
 > **Tracking:** Office Dev-Package 23, Features-Board. Kein DB-Schema — reine Service-/Livewire-/View-Arbeit plus ein MCP-Tool. Zieht das nach, was der **GP** seit 2026-07-02 hat (`GpService::ersetzeInRezepten` + `deleteGp`), und räumt die Auffindbarkeit des GP-Pendants auf.
 
@@ -61,4 +61,5 @@ Eine Invariante hält die Referenz-Query gültig: sie zählt sechs Tabellen **pe
 ## Cross-Refs
 
 - **Spec 36** Rezeptqualität (Matching-Achse) · **Spec 41** Planungsmodul-Qualität (Grounding) · **Spec 43** Schicht-3-Critic (Konformität)
+- Nummer: 44 war beim Schreiben frei, ist inzwischen vom Report-Blatt belegt — deshalb 49 (2026-09-04, beim Merge auf den aktuellen `main` korrigiert)
 - Paket-Umbau → `_Spec_Concepter_Leitstelle` (der noch offene physische `packages`-Drop berührt die Referenz-Query)

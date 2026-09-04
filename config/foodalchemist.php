@@ -14,6 +14,34 @@
  */
 
 return [
+
+    /*
+    |--------------------------------------------------------------------------
+    | Warteschlangen
+    |--------------------------------------------------------------------------
+    |
+    | Fan-out-Jobs nach ARTEFAKT getrennt, damit ein großer Lauf nicht die kleinen, interaktiven
+    | Jobs verdrängt — und damit die Kaskade selbst schneller wird (Zellen und Sub-Rezepte laufen
+    | dann parallel statt hintereinander). Leer = unverändertes Verhalten (alles auf der
+    | Standard-Schlange) — bewusst der Default, weil Jobs auf einer Schlange ohne Worker LAUTLOS
+    | liegen bleiben: die Generierung stünde still, ohne Fehler.
+    |
+    | Scharfstellen in DIESER Reihenfolge:
+    |   1. deployen (nichts ändert sich)
+    |   2. in Forge einen ZWEITEN Queue Worker anlegen, der genau diese Schlange liest
+    |   3. die Env-Variablen setzen (z. B. FOODALCHEMIST_QUEUE_GERICHTE=fa-gerichte)
+    |
+    | Nicht mehrere Schlangen an einen Worker hängen (`--queue=fa-gerichte,default`): Laravel leert
+    | sie in der angegebenen Reihenfolge, der Fan-out würde die kleinen Jobs dann noch härter
+    | aushungern. Es braucht zwei Daemons. Details: {@see \Platform\FoodAlchemist\Support\Warteschlange}
+    |
+    */
+    'queue' => [
+        'gerichte' => env('FOODALCHEMIST_QUEUE_GERICHTE', ''),
+        'rezepte' => env('FOODALCHEMIST_QUEUE_REZEPTE', ''),
+        'kaskade' => env('FOODALCHEMIST_QUEUE_KASKADE', ''),
+        'anreichern' => env('FOODALCHEMIST_QUEUE_ANREICHERN', ''),
+    ],
     /**
      * Routing-Konfiguration
      * 
@@ -298,10 +326,35 @@ return [
     ],
 
     'stt' => [
-        'provider' => env('FOODALCHEMIST_STT_PROVIDER', 'fake'),
+        /*
+         * 'auto' (Default) wählt den Dienst, für den ein Zugang DA ist — in dieser
+         * Reihenfolge: OpenAI (der Schlüssel, den die Plattform für LLM/Embeddings
+         * ohnehin hat) → AssemblyAI (eigener Schlüssel) → Fake.
+         *
+         * Warum das der richtige Default ist: vorher stand hier 'fake', und auf demo
+         * war damit JEDER gesprochene Befehl durch den Fixtext ersetzt — der Sprachpfad
+         * lief technisch fehlerfrei und antwortete trotzdem immer dasselbe. Ein
+         * Standard, der stillschweigend Testdaten liefert, ist die schlechteste Wahl:
+         * er sieht wie ein Feature aus. 'auto' macht es abhängig davon, ob ein echter
+         * Zugang existiert — in der Testumgebung (kein Key) bleibt es Fake.
+         * Explizit setzbar bleibt es über FOODALCHEMIST_STT_PROVIDER.
+         */
+        'provider' => env('FOODALCHEMIST_STT_PROVIDER', 'auto'),
         'key' => env('ASSEMBLYAI_API_KEY', ''),
+        'model' => env('FOODALCHEMIST_STT_MODEL', 'gpt-4o-mini-transcribe'),
+        'language' => 'de',
         'timeout_s' => 30,
         'fake_text' => 'Suche BBQ Sauce',
+        /*
+         * Kontext-Hinweis an die Transkription (die API nimmt einen `prompt`). Genau
+         * die Begriffe, an denen ein allgemeines Modell scheitert — ohne den Hinweis
+         * wird aus „Grundprodukt" ein „Grund Produkt" und der Tool-Loop sucht ins Leere.
+         */
+        'vokabular_prompt' => 'Küchen- und Warenwirtschafts-Befehle für den Food Alchemist. '
+            . 'Fachbegriffe: Basisrezept, Grundprodukt, Lieferantenartikel, Verkaufsgericht, '
+            . 'Speisekarte, Speiseplan, Foodbook, Concepter, Format, Aufschlagsklasse, '
+            . 'Speisen-Klasse, Darreichung, Warengruppe, Wareneinsatz, Allergene, Leitplanken, '
+            . 'Planung, Kaskade, Bestellwesen, Produktion.',
     ],
 
     'ai' => [
@@ -314,6 +367,166 @@ return [
          * Pro Prompt via prompts.<key>.max_tokens übersteuerbar (siehe Voll-Generatoren).
          */
         'max_tokens_default' => (int) env('FOODALCHEMIST_AI_MAX_TOKENS', 4096),
+
+        /*
+         * W0-5 — Featureweites Wissens-Zeichenbudget (Input-Seite), je Routing-Feature.
+         * Ohne Eintrag gilt KnowledgeContextService::MAX_KNOWLEDGE_CHARS_DEFAULT (12.000)
+         * bzw. RECIPE_MAX_KNOWLEDGE_CHARS für `ai_generate_recipe`.
+         *
+         * Gemessene Ausgangslage (30 Tage demo, ⌀ tokens_in): kapitel_ideen 23.603 ·
+         * concept.plan 21.069 · format.grundgeruest 20.468 · recipe.steps 18.121 —
+         * alle ohne jeden Gesamtdeckel, weil nur der Rezeptgenerator einen hatte.
+         *
+         * Schlüssel ist das FEATURE (Routing-Ebene), nicht der Prompt-Key.
+         */
+        /*
+         * W0-3 — Budget des Layer-Bound-Kanals JE PROMPT-KEY (docs / chars_per_doc / total).
+         *
+         * Ohne Eintrag gelten die konservativen Defaults in AiGatewayService (3 / 1.400 /
+         * 4.200 = Verhalten vor Welle 0). Das ist Absicht: Bindings matchen auch auf das
+         * BEREICHS-Präfix, an `target_key='recipe'` hängen 24.520 Zeichen — ein global
+         * gehobener Deckel würde jeden `recipe.*`-Prompt mitverteuern.
+         *
+         * Die beiden Generatoren brauchen den großen Deckel, weil dort die Bau-§-Dossiers
+         * hängen, die per Discovery strukturell nicht surfacen (sie nennen kein Gericht):
+         *   recipe.generator: §2 1.968 + §3 2.459 + §4 2.630 + §6 2.609
+         *                     + Erstellungs-Dossier 1.409 = 11.075 Z.
+         *   vk.generator:     dieselben + regelwerk.regelwerk_verkaufsgerichte 8.309 = 19.384 Z.
+         *
+         * §5 Default-GPs (4.796 Z.) ist seit 2026-09-02 ENTBUNDEN: MatchHeuristics::defaultGpAlias()
+         * erzwingt die Tabelle deterministisch (Score 0,97, an 12 von 13 Generika auf demo
+         * verifiziert). Im Prompt steht nur noch die kompakte Benennungs-Direktive im Task —
+         * das ist der Teil, den das Modell wirklich kontrolliert. Deckel bleiben unverändert
+         * (jetzt mit Reserve), weil die Dossiers live editierbar sind.
+         * Reserve auf 20.000 / 28.000, weil die Dossiers über Browser/MCP live editierbar
+         * sind und ein Edit sonst still das letzte Dossier aus dem Block wirft.
+         */
+        /*
+         * ACHSEN-MAPPING — Nachschlagen statt Suchen.
+         *
+         * Für achsen-gebundenes Wissen ist Retrieval das falsche Werkzeug: der Regler steht
+         * im Formular, das Dokument ist danach benannt. `occasion=dinner` → `event_playbook_gala`
+         * ist ein JOIN, keine Suche. Das Slug-Token-Ranking traf hier systematisch daneben
+         * (und `event_playbook`/`segment` waren für Gerichte überhaupt nicht geroutet, also
+         * unerreichbar — 20 Docs Catering-Fachwissen lagen brach).
+         *
+         * Das Muster ist im Code erprobt: `niveauBlock()` löst `level` genauso deterministisch
+         * auf und funktioniert.
+         *
+         * Gate ist die ANWESENHEIT des Parameters — kein Routing nötig. Ein Basisrezept hat
+         * kein `occasion`, also passiert dort nichts. Leere Map = Funktion aus.
+         *
+         * Wert = geordnete Kandidatenliste; genommen wird der ERSTE aktive Treffer (Robustheit,
+         * wenn ein Dossier deaktiviert wird). Ein Dokument je Achse.
+         *
+         * Enums: RecipesGenerateTool.php:76 (sektor) und :80 (occasion).
+         */
+        /*
+         * B3 — Cross-Cutting je Feature. Ohne Eintrag gelten die sieben
+         * KnowledgeContextService::ALWAYS_LOAD_CROSS_CUTTING (Produktions-Dossiers,
+         * 7 × 1.800 = 12.600 Z.) — für Generatoren richtig.
+         *
+         * Für Kundentext/Wording ist es falsch: das sind 2–4 Sätze Fließtext
+         * (foodbook.kundentext: max_tokens 1.500), und mitgeliefert wurden Mengen-Defaults,
+         * Brühen-Rezepturen, Saucen-Mutterstrukturen und Techniken. Nützlich sind dort
+         * `saisonkalender` (Saison-Aussagen belegen) und `synonyme` (richtig benennen).
+         */
+        'cross_cutting_slugs' => [
+            'foodbook.kundentext' => ['saisonkalender', 'synonyme'],
+            'concept.wording' => ['saisonkalender', 'synonyme'],
+        ],
+
+        'knowledge_axis_map' => [
+            'occasion' => [
+                'fruehstueck' => ['event_playbook_brunch'],
+                'lunch' => ['event_playbook_business_lunch'],
+                'konferenz' => ['event_playbook_tagung'],
+                'empfang' => ['event_playbook_empfang'],
+                'dinner' => ['event_playbook_gala'],
+                'late_night' => ['event_playbook_latenight'],
+            ],
+            'sektor' => [
+                'betriebsgastronomie' => ['segment.betriebsgastronomie'],
+                'catering' => ['segment.event_bankett_catering'],
+                'care' => ['segment.klinik_senioren_care'],
+                'schule_kita' => ['segment.kita_schule_ernaehrung_dge', 'segment.schulverpflegung', 'segment.kita_verpflegung'],
+                // ⚠ LÜCKE: für `restaurant` existiert kein segment-Dossier. Bewusst NICHT auf
+                // ein anderes Segment umgebogen — ein falsches Profil ist schlechter als keins.
+                // Sobald „Segment: Restaurant / à la carte — Profil" angelegt ist, hier eintragen.
+            ],
+        ],
+
+        'bound_knowledge_budget' => [
+            // Deckel = Pflichtmenge + EIN vollständiges Universal-Dossier (mengen_defaults,
+            // 7.446 Z.). Bewusst kein Puffer für ein zweites: ein Kopf-Anschnitt einer
+            // Referenztabelle ist kein Wissen, nur Kosten (das war der `substitutionen`-Fall).
+            // recipe.generator: §2+§3+§4+§6 + Erstellungs-Dossier = 11.075 + 7.446 = 18.521
+            'recipe.generator' => ['docs' => 9, 'chars_per_doc' => 11000, 'total' => 30000],
+            // vk.generator: dieselben + regelwerk.regelwerk_verkaufsgerichte 8.309 = 26.830
+            'vk.generator' => ['docs' => 9, 'chars_per_doc' => 11000, 'total' => 37000],
+
+            // NEU 2026-09-03 — Dossier-Routing nach dem Prinzip „dort nutzen, wo es benutzt wird"
+            // (Dominique). `geschmacksbalance` (10.670 Z.) hing am Bereichs-Präfix `recipe` und
+            // wurde von ALLEN 22 `recipe.*`-Prompts mitgeschluckt; jetzt hängt es gezielt an den
+            // zwei Generatoren, weil es dort GEBRAUCHT wird („braucht es bei Gerichten und
+            // Basisrezepten"). Als `always`, damit es ganz ankommt und der Block byte-stabil
+            // bleibt — deshalb die Deckel hoch: 19.000 → 30.000 bzw. 27.500 → 37.000, und
+            // chars_per_doc 8.400 → 11.000, sonst käme das Dossier als 8.400-Anschnitt.
+            //
+            // Kosten ehrlich: +10.670 Zeichen ≈ +3.560 Token je Generierung, bei ~288
+            // Generierungen/30 T. ≈ 1,0 M Token ≈ $5/Monat. Unter Prompt-Caching ist ein
+            // GRÖSSERER stabiler Prefix billiger, nicht teurer (Cache = 10 % des Preises) —
+            // aber das ist eine Erwartung, keine Zusage: gemessen hat der Prefix auf zwei
+            // Testcalls NICHT gegriffen, im Echtbetrieb dagegen zu 98 % bzw. 23 %.
+            //
+            // `recipe.eigenschaften` ist der einzige Prompt, der Arbeitszeit wirklich SETZT
+            // (work_time_min/Minuten) — dorthin gehört `produktion-arbeitszeit-und-
+            // personenminuten` (7.089 Z.), nicht in jeden Rezept-Prompt. Ohne eigenen Deckel
+            // griffe hier der konservative Default (3 × 1.400 = 4.200) und das Dossier käme
+            // als 1.400-Zeichen-Kopf an.
+            'recipe.eigenschaften' => ['docs' => 2, 'chars_per_doc' => 7500, 'total' => 8000],
+        ],
+
+        'knowledge_budget' => [
+            'concept.brief_geruest' => 10000,
+            'foodbook.kapitel_ideen' => 12000,
+            // cross_cutting:always (geseedet) = 7 × 1.800 = 12.600
+            'recipe.steps' => 13000,
+
+            /*
+             * ⚠ INVARIANTE: Der Deckel muss MINDESTENS die `always`-gerouteten Inhalte des
+             * Features tragen. Sonst kappt das Gesamtbudget genau das Pflichtwissen weg, das
+             * Welle 0 schützen soll — und zwar still (der Block wird am Ende abgeschnitten,
+             * das letzte `always`-Dossier verschwindet mitsamt seiner Überschrift).
+             * Gesichert durch WissenTokenWelle0Test „Budget traegt die Pflicht-Inhalte" und
+             * `foodalchemist:wissen-steuerdaten-w0 --verify` (gegen die LIVE-Tabelle).
+             *
+             * ⚠ Die Zahlen sind an der GESEEDETEN Routing-Lage bemessen, nicht an demo:
+             * die Live-Tabelle wurde von Hand auf `discovery` gedreht und weicht von den
+             * Migrationen ab. Eine frische DB (Disaster Recovery) hat also viel größere
+             * Pflicht-Blöcke als demo — der Deckel muss beide Zustände tragen.
+             *
+             * concept:always 4 × 4000 = 16.000 (+ Block-/Doc-Header, Kürzungs-Marker)
+             */
+            'concept.plan' => 29000,
+            'foodbook.plan' => 29000,
+            // concept:always 3 × 4000 = 12.000
+            'format.grundgeruest' => 13000,
+            // cross_cutting:always — seit B3 feature-genau: 2 Slugs × 1.800 = 3.600 statt 12.600.
+            'concept.wording' => 5000,
+            'foodbook.kundentext' => 5000,
+            // regelwerk:always 1 × 7000
+            'recipe.ueberarbeiten' => 8000,
+            'vk.ueberarbeiten' => 8000,
+            'foodbook.grundgeruest' => 8000,
+            // regelwerk:always 6.000 + produktion_kapazitat:always 3 × 7.000 = 27.000.
+            // Liegt ÜBER dem heutigen Ist-Verbrauch (⌀ 4.031 Tk) — der Deckel greift also
+            // praktisch nicht. Das ist Absicht: hier ist nicht das Budget zu klein, sondern
+            // die Pflichtmenge absurd groß für einen Klassifikations-Prompt. Reduziert wird
+            // sie in Welle 2, wenn der Kanon die `always`-Routings ersetzt; bis dahin darf
+            // der Deckel sie nicht stillschweigend abschneiden.
+            'recipe.eigenschaften' => 27500,
+        ],
 
         /*
          * M7-02 / V-01: Tier→Modell-Mapping (06_KI §2). Modell-Strings sind
@@ -389,6 +602,25 @@ return [
      */
     'embedding_store' => env('FOODALCHEMIST_EMBEDDING_STORE', 'mysql'),
 
+    /**
+     * W1-6 / Mandanten-Modell (Dominique 2026-09-03): „das Wissen ist global, damit die
+     * Generatoren laufen; ein neuer Nutzer bekommt es leer und kann für sich Wissen
+     * hinterlegen, das nur für sein Team und Kinder gilt."
+     *
+     * AUS (Default) = das Retrieval liest den Korpus ungefiltert, byte-identisch zu heute.
+     * AN = `TeamScope::applyVisible` (global NULL ODER eigene Ancestry).
+     *
+     * Der Schalter existiert, weil der Filter erst richtig ist, wenn die DATEN es sind:
+     * auf demo liegen 818 kuratierte Dossiers unter team_id = 6 statt NULL. Mit Filter
+     * sähe Team 6 unverändert alles (598 → 598), jedes ANDERE Team und jeder Console-Lauf
+     * aber nur 6 von 598 — der Korpus fiele auf 1 %, ohne rote Tests.
+     *
+     * Reihenfolge für den Flip: erst Daten (Bestand auf team_id NULL heben ODER
+     * `teams.parent_team_id` auf den Kurator setzen), dann diese Zeile. Rollback = Zeile
+     * zurück, kein Deploy.
+     */
+    'knowledge_team_scope' => env('FOODALCHEMIST_KNOWLEDGE_TEAM_SCOPE', false),
+
     'semantic_search' => [
         // Phase 0 (2026-08-06): RAG-Hot-Path war HART AUS — der mysql-Embedding-Store macht
         // Cosine-in-PHP und blockierte/OOMte generiere() bei „Kontext & Wissen", VOR dem LLM.
@@ -440,6 +672,46 @@ return [
      *   'tier' (A–D) · 'task' (User-Task) · optional 'system' (Feld-Hülle) · 'temperature'
      */
     'prompts' => [
+            /*
+         * BRIEFING → LEITPLANKEN. Die Brücke zwischen dem suchenden und dem produzierenden
+         * Teil des Systems: ein Mensch (oder Sprache) formuliert frei, hier entsteht daraus
+         * der strukturierte Regler-Satz, den der deterministische Generator dann N-mal
+         * ausführt. Kein Tool-Loop — das ist eine KLASSIFIKATION gegen geschlossene
+         * Vokabulare, keine Exploration. Ein Call, klein, reproduzierbar.
+         *
+         * Die Werte werden nach der Antwort gegen
+         * FoodAlchemistPlanningSession::ALLOWED_GENERATION_VALUES geprüft; erfundene Werte
+         * werden verworfen und dem Menschen gemeldet, nicht stillschweigend übernommen.
+         */
+        'planung.leitplanken' => [
+            'tier' => 'B',
+            'max_tokens' => 900,
+            'temperature' => 0.0,
+            'task' => 'Du bist Planungs-Assistent in einem Catering-Betrieb. Aus einem freien Briefing '
+                . 'destillierst du die LEITPLANKEN — den Regler-Satz, mit dem anschliessend Gerichte '
+                . 'erzeugt werden: werte = {leitplanken:{…}, unklar:[…], begruendung:"<1-2 Sätze>"}. '
+                . 'Setze einen Regler NUR, wenn das Briefing ihn nennt oder ihn eindeutig impliziert '
+                . '(»Sommerfest im Garten, Fingerfood« ⇒ serviceform=flying). Was offen bleibt, gehört '
+                . 'in `unklar` als kurze Rückfrage — RATE NICHT und erfinde keine Werte: ein falscher '
+                . 'Regler ist schlimmer als ein fehlender, weil er die Erzeugung still in die falsche '
+                . 'Richtung lenkt. Erlaubte Werte, ausschliesslich diese: '
+                . 'occasion = fruehstueck|lunch|konferenz|empfang|dinner|late_night · '
+                . 'sektor = betriebsgastronomie|catering|restaurant|care|schule_kita · '
+                . 'level = haute_cuisine|gehoben|klassisch · '
+                . 'serviceform = tellerservice|buffet|flying|stehempfang|boxed · '
+                . 'convenience = from_scratch|teil_convenience|voll_convenience · '
+                . 'bestand = hybrid|komplett_neu|nur_bestand · '
+                . 'bio_praeferenz = konventionell|bio|egal · '
+                . 'diaet_hart = Liste aus vegan|vegetarisch|glutenfrei|laktosefrei|halal|low_carb '
+                . '(NUR bei harten Ausschlüssen für ALLE Gäste — »ein paar Vegetarier« ist KEIN '
+                . 'diaet_hart, das ist eine Quote und gehört in `unklar`). '
+                . 'Zahlenregler frei: pax (Personen), ziel_vk_eur (Netto-Verkaufspreis je Person), '
+                . 'ziel_portion_g, ziel_we_pct (Ziel-Wareneinsatz in %). '
+                . 'Freitext: aroma (Aroma-Richtung, z. B. "rauchig-mediterran"), saison (z. B. "Sommer"). '
+                . 'Ein Budget »45 Euro pro Person« ist ziel_vk_eur=45, kein ziel_we_pct. '
+                . 'Nenne in `begruendung` knapp, woraus du die wichtigsten Regler geschlossen hast.',
+        ],
+
         'demo.echo' => [
             'tier' => 'D',
             'task' => 'Gib die übergebenen Kontext-Felder unverändert als JSON-Objekt '
@@ -569,7 +841,17 @@ return [
                 . 'Unbelegtes. Benennt ein Leit-Aroma eine ZUBEREITUNG, die zu einer recipe_hauptgruppe gehört '
                 . '(z.B. eine Konfitüre, ein Crunch/Krokant, ein Gel, ein Chutney, ein Püree), lege es als '
                 . 'gebaute Komponente mit sub_rezept:true an, statt es 1:1 an ein Convenience-GP zu binden; nur '
-                . 'echte Rohware-Anker binden an einen `gp_kandidaten` (dann dessen gp_id angeben).',
+                . 'echte Rohware-Anker binden an einen `gp_kandidaten` (dann dessen gp_id angeben).'
+                // §5 Default-GPs — KOMPAKT statt Dossier. Die Tabelle selbst erzwingt der
+                // Matcher deterministisch (MatchHeuristics::defaultGpAlias, Score 0,97, auf demo
+                // an 12 von 13 Generika verifiziert); das 4.796-Zeichen-Dossier im Prompt war
+                // Doppelung. Was das MODELL kontrolliert, ist die Benennung — und nur die steht hier.
+                . 'Nenne generische Grundzutaten GENERISCH (»Zucker«, »Mehl«, »Salz«, »Milch«, »Sahne«, '
+                . '»Olivenoel«, »Honig«, »Gelatine«, »Weisswein«, »Pfeffer«, »Eier«) — ohne Marken-, '
+                . 'Sorten- oder Bio-Zusatz: die Standard-Variante nach Regelwerk §5 (unjodiert, Type 405, '
+                . '3,5 %, 30 %, kein Bio) setzt der Resolver selbst, ein Zusatz im Namen verhindert das '
+                . 'und erzwingt Spezial-Ware. Willst du bewusst eine Spezialform (»Meersalz«, »Weizenmehl '
+                . 'Type 550«, »brauner Zucker«), schreibe sie ausdrücklich so.',
         ],
         'recipe.description' => [
             'tier' => 'C',
@@ -623,7 +905,7 @@ return [
                 // Qualitäten/Grammaturen entsprechend; GIB KEINEN PREIS AUS).
                 . 'unter Beachtung der Richtungs-Parameter (convenience, frische, bio, niveau, sektor, '
                 . 'diaet_hart, allergen_nogo, aroma, anlass, serviceform, kompositions_stil, pax, ziel_portion_g, saison, ziel_we_pct): werte = '
-                . '{name (Pipe-Syntax §4.4 «<HG-Code>: Hauptkomponente | Komponente | …», max 5 Felder, '
+                . '{name (Pipe-Syntax §1 «<HG-Code>: Hauptkomponente | Komponente | …», max 5 Felder, '
                 . 'keine Marketing-Adjektive), description (§8-Stil), taste_direction (grobe Menue-Richtung, NUR EIN Wort: suess|herzhaft|neutral — das Aroma-Profil gehoert in description), '
                 . 'preparation (= PLATING & SERVICE: Teller-Aufbau, Mengenverteilung, Service-Anweisung — '
                 // Spec 37: role/fit-Parität zum Basis-Prompt — dieselbe Zutaten-Selbstbegründung
@@ -691,7 +973,17 @@ return [
                 . 'eine ZUBEREITUNG, die zu einer recipe_hauptgruppe gehört (z.B. eine Konfitüre, ein '
                 . 'Crunch/Krokant, ein Gel, ein Chutney, ein Püree), lege es als gebaute Komponente mit '
                 . 'sub_rezept:true an, statt es 1:1 an ein Convenience-GP zu binden; nur echte Rohware-Anker '
-                . 'binden an einen `gp_kandidaten` (dann dessen gp_id angeben).',
+                . 'binden an einen `gp_kandidaten` (dann dessen gp_id angeben).'
+                // §5 Default-GPs — KOMPAKT statt Dossier. Die Tabelle selbst erzwingt der
+                // Matcher deterministisch (MatchHeuristics::defaultGpAlias, Score 0,97, auf demo
+                // an 12 von 13 Generika verifiziert); das 4.796-Zeichen-Dossier im Prompt war
+                // Doppelung. Was das MODELL kontrolliert, ist die Benennung — und nur die steht hier.
+                . 'Nenne generische Grundzutaten GENERISCH (»Zucker«, »Mehl«, »Salz«, »Milch«, »Sahne«, '
+                . '»Olivenoel«, »Honig«, »Gelatine«, »Weisswein«, »Pfeffer«, »Eier«) — ohne Marken-, '
+                . 'Sorten- oder Bio-Zusatz: die Standard-Variante nach Regelwerk §5 (unjodiert, Type 405, '
+                . '3,5 %, 30 %, kein Bio) setzt der Resolver selbst, ein Zusatz im Namen verhindert das '
+                . 'und erzwingt Spezial-Ware. Willst du bewusst eine Spezialform (»Meersalz«, »Weizenmehl '
+                . 'Type 550«, »brauner Zucker«), schreibe sie ausdrücklich so.',
         ],
         'vk.speisen_klasse' => [
             'tier' => 'B',
@@ -973,17 +1265,17 @@ return [
         ],
         'vk.name_putzen' => [
             'tier' => 'B',
-            'task' => 'Normalisiere den Verkaufsrezept-Namen auf die Pipe-Syntax §4.4 '
+            'task' => 'Normalisiere den Verkaufsrezept-Namen auf die Pipe-Syntax §1 (VK-Regelwerk) '
                 . '«<HG-Code>: Hauptkomponente | Komponente | …» (max 5 Felder, Title Case, '
                 . 'keine Marketing-Adjektive): werte = {name}.',
         ],
         // Et.4 (Eingabe-Reife): Titel-VORSCHLAG aus dem freien Brief (vor der Generierung), nicht das
-        // Putzen eines fertigen Namens. Nüchtern + §4.4-konform; benennt nur, was der Brief hergibt.
+        // Putzen eines fertigen Namens. Nüchtern + §1-konform; benennt nur, was der Brief hergibt.
         'vk.titel_vorschlag' => [
             'tier' => 'B',
             // #75: HG-Code NICHT vom LLM raten lassen — aus einem freien Brief kann es die
             // Warengruppe kaum zuverlässig treffen. Der Titel-Vorschlag liefert nur die nüchterne
-            // Komponenten-Pipe OHNE Code-Präfix; der §4.4-HG-Code wird separat/deterministisch
+            // Komponenten-Pipe OHNE Code-Präfix; der §1-HG-Code wird separat/deterministisch
             // (bei der echten VK-Anlage über die Warengruppen-Klassifikation) ergänzt.
             'task' => 'Leite aus dem Brief EINEN nüchternen Gericht-Titel als Komponenten-Pipe ab: '
                 . '«Hauptkomponente | Komponente | …» (max 5 Felder, Title Case, keine Marketing-'

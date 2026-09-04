@@ -2,8 +2,10 @@
 
 namespace Platform\FoodAlchemist\Livewire\Settings;
 
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Livewire\Component;
+use Platform\FoodAlchemist\Support\TeamScope;
 
 /**
  * Wissens-Modul #469: Einsatzorte/Layer (Bindungs-Ziele fürs Wissen).
@@ -17,24 +19,55 @@ class Einsatzorte extends Component
 
     public array $form = [];
 
+    public ?string $fehler = null;
+
+    /**
+     * Schreibrecht auf eine Layer-Zeile: eigene immer, global (team_id NULL) nur als
+     * Master-Team, fremde niemals. Dasselbe Modell wie in `Wissenskategorien` und
+     * `Knowledge\Browser` — hier fehlte es ganz.
+     *
+     * Warum das zählt: `toggleActive()` nahm die ID direkt vom Client. Ein Layer ist ein
+     * BINDUNGS-ZIEL; abgeschaltet verliert jeder daran gebundene Prompt sein Wissen. Ein
+     * Kind-Team konnte damit die KI-Versorgung aller Teams stilllegen.
+     *
+     * Lesen bleibt gemeinsam (die Layer sind Registry-abgeleitet und gelten für alle) —
+     * gescopet ist nur das Schreiben.
+     */
+    private function darfAendern(?int $zeileTeamId): bool
+    {
+        // Die Regel lebt in TeamScope::mayWrite — hier stand sie kopiert.
+        return TeamScope::mayWrite($zeileTeamId, Auth::user()?->currentTeamRelation);
+    }
+
     public function edit(int $id): void
     {
         $z = DB::table('foodalchemist_knowledge_layers')->where('id', $id)->first();
-        if ($z === null) {
+        if ($z === null || ! $this->darfAendern($z->team_id)) {
+            $this->fehler = 'Geerbter/globaler Einsatzort — pflegen kann ihn nur das Besitzer-Team.';
+
             return;
         }
+        $this->fehler = null;
         $this->editId = $id;
         $this->form = ['label' => $z->label, 'description' => $z->description];
     }
 
     public function cancel(): void
     {
-        $this->reset('editId', 'form');
+        $this->reset('editId', 'form', 'fehler');
     }
 
     public function save(): void
     {
         if (trim((string) ($this->form['label'] ?? '')) === '') {
+            return;
+        }
+        // Erneut prüfen statt auf edit() zu vertrauen: editId ist eine Livewire-Property
+        // und damit vom Client setzbar — ein Guard nur beim Laden wäre keiner.
+        $z = DB::table('foodalchemist_knowledge_layers')->where('id', $this->editId)->first(['team_id']);
+        if ($z === null || ! $this->darfAendern($z->team_id)) {
+            $this->fehler = 'Geerbter/globaler Einsatzort — umbenennen kann nur das Besitzer-Team.';
+
             return;
         }
         DB::table('foodalchemist_knowledge_layers')->where('id', $this->editId)->update([
@@ -47,11 +80,14 @@ class Einsatzorte extends Component
 
     public function toggleActive(int $id): void
     {
-        $z = DB::table('foodalchemist_knowledge_layers')->where('id', $id)->first(['active']);
-        if ($z !== null) {
-            DB::table('foodalchemist_knowledge_layers')->where('id', $id)
-                ->update(['active' => ! $z->active, 'updated_at' => now()]);
+        $z = DB::table('foodalchemist_knowledge_layers')->where('id', $id)->first(['active', 'team_id']);
+        if ($z === null || ! $this->darfAendern($z->team_id)) {
+            $this->fehler = 'Geerbter/globaler Einsatzort — aktiv/inaktiv setzt nur das Besitzer-Team.';
+
+            return;
         }
+        DB::table('foodalchemist_knowledge_layers')->where('id', $id)
+            ->update(['active' => ! $z->active, 'updated_at' => now()]);
     }
 
     public function render()

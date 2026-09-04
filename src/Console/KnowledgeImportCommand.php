@@ -55,7 +55,13 @@ class KnowledgeImportCommand extends Command
         $stats['concept'] = $this->importOrdner("{$vault}/07.01_Lebensmittel_und_Gastronomie/Concepting", 'concept', $dryRun, slugPrefix: 'concept.', force: $force);
 
         $stats['aliases'] = $this->importAliases($dryRun);
-        $stats['routings'] = $this->seedRoutings($dryRun);
+        // 2026-09-03: der Import setzt KEINE Politik mehr. Die Routing-Liste lag hier und wurde
+        // bei jedem Import mitgeschrieben — auf demo ein No-op (`insertOrIgnore`), auf einer
+        // FRISCHEN DB aber die Wiederherstellung des Monolithen-Pfads, den Welle 0 abgebaut hat
+        // (15 von 31 Tupeln mit `mode='always'`, darunter `ai_generate_recipe|regelwerk|always`,
+        // was den toten `regelwerkBlock`-Pfad wiederbelebt hätte). Ein Import liest Dokumente; er
+        // entscheidet keine Politik. → {@see KnowledgePolicySeedCommand}
+        $stats['routings'] = ['hinweis' => 'getrennt: foodalchemist:knowledge-policy-seed'];
         $stats['anker_links'] = $this->verdrahteAnker($dryRun);
 
         $this->table(['Phase', 'Quelle', 'neu', 'aktualisiert', 'unverändert/übersprungen', 'geschützt'],
@@ -239,95 +245,6 @@ class KnowledgeImportCommand extends Command
     }
 
     /** GL-13 Tabelle 4.1 als Daten (pro KI-Feature konfigurierbar). */
-    private function seedRoutings(bool $dryRun): array
-    {
-        $routings = [
-            ['ai_generate_recipe', 'cross_cutting', 'always', null, null],
-            ['ai_generate_recipe', 'domain', 'discovery', null, null],
-            ['ai_generate_recipe', 'pairing', 'discovery', null, null],
-            // S1 (Skalierbarkeit 2026-08-07): suggestive, WACHSENDE Kategorien generisch als
-            // `discovery` — jedes neu gepflegte Doc trägt automatisch, gedeckelt (kein `always` =
-            // kein Bloat). Niveau parametrisch (Leitplanken-Wert augmentiert die Query, top_k 1 =
-            // nur die aktive Stufe). Spiegel von Migration 2026_08_07_000001.
-            ['ai_generate_recipe', 'niveau', 'discovery', 1, 3000],
-            ['ai_generate_recipe', 'kueche', 'discovery', 3, 3000],
-            ['ai_generate_recipe', 'kreativ_input', 'discovery', 3, 2000],
-            // Etappe 1 (»Mise en Place« 2026-08-14) + Spec 41 B1 (2026-08-21): das Regelwerk
-            // Basisrezepte (§2 Verarbeitungs-Reduktion · §3 Pürees · §4 Sub-Rezept-Hierarchie
-            // + §12 Zutaten-/Komponenten-Reihenfolge) als verbindliche Bau-Regel in den
-            // Rezept-Generator. `always` + dediziert (regelwerkBlock, pro-Feature) statt discovery.
-            // Deckel 9500 Chars, damit §2–§4 (~6,5k) UND §12 (~2,2k) ins Budget passen.
-            // Spiegel von Migration 2026_08_14_000010 (Bestand) + 2026_08_21_000010 (§12 + Concept).
-            ['ai_generate_recipe', 'regelwerk', 'always', 1, 9500],
-            // Spec 41 B1: das Regelwerk Concept (Archetypen/Gerüst-Regel/Vokabular/Preislogik) hart
-            // in den Concept-Gerüst-Generator — verhindert den 1-Position-Kollaps (RC-4/C1). Concept-
-            // Doc ist kompakt (~8,7k) → Volltext, Deckel 9000. Spiegel von Migration 2026_08_21_000010.
-            ['concept.brief_geruest', 'regelwerk', 'always', 1, 9000],
-            // Step-by-Step nutzt Technik-/Domain-Wissen, aber keine kreative Rezept-Ideen-Ebene.
-            // Spiegel von Migration 2026_08_11_000003.
-            ['recipe.steps', 'cross_cutting', 'always', null, null],
-            ['recipe.steps', 'domain', 'discovery', null, null],
-            ['recipe.steps', 'kueche', 'discovery', 3, 3000],
-            ['recipe.steps', 'niveau', 'discovery', 1, 3000],
-            // Workstream W (MCP-Steuerbarkeit D2c/D3, 2026-08-29): Freitext-Revision am Regelwerk
-            // Basisrezepte erden (Editor + MCP recipes.REVISE / verkaufsrezepte.REVISE). Spiegel von
-            // Migrationen 2026_08_29_000001 (Rezept) + _000002 (Gericht). regelwerkBlock wählt den
-            // Basisrezepte-Slug über den Feature-Fallback.
-            ['recipe.ueberarbeiten', 'regelwerk', 'always', 1, 7000],
-            ['vk.ueberarbeiten', 'regelwerk', 'always', 1, 7000],
-            // Workstream W (D5c, 2026-08-29): Konzept-Wording an Cross-Cutting-Fakten (Anti-Marker
-            // etc.) als Kundentext-Guardrail. KEIN Regelwerk-Kanal (Brand-Voice, kein Bau-Regelwerk).
-            // Spiegel von Migration 2026_08_29_000003.
-            ['concept.wording', 'cross_cutting', 'always', null, null],
-            // Workstream W (D7, 2026-08-29): Foodbook-Kundentext (Buch + Kapitel) ebenso an Cross-Cutting.
-            // Spiegel von Migration 2026_08_29_000004.
-            ['foodbook.kundentext', 'cross_cutting', 'always', null, null],
-            ['ai_plan_dishes', 'cross_cutting', 'always', null, null],
-            ['ai_plan_dishes', 'domain', 'discovery', null, null],
-            // Spec 19 E6.4 / Spec 08 P6: Kreativ-Divergenz am Kapitel (foodbook.plan) bzw.
-            // standalone-Konzept (concept.plan). Concepting- + Food-Wissen, keine Pairing-Grounding
-            // (Divergenz ist produkt-blind — der Anker-Graph inspiriert, erdet aber nicht).
-            // Spec 08 P6: dazu das Concepting-Handwerk selbst (Kategorie `concept`, always mit
-            // Deckel). Spiegel von Migration 2026_07_27_000001 — beide Wege müssen dasselbe setzen.
-            ['foodbook.plan', 'cross_cutting', 'always', null, null],
-            ['foodbook.plan', 'domain', 'discovery', null, null],
-            ['foodbook.plan', 'concept', 'always', 4, 4000],
-            ['concept.plan', 'cross_cutting', 'always', null, null],
-            ['concept.plan', 'domain', 'discovery', null, null],
-            ['concept.plan', 'concept', 'always', 4, 4000],
-            // Trendradar: aktuelle Trends als Anlass/Inspiration in die Planungs-Prompts
-            // (discovery, thematisch gefiltert). Spiegel von Migration 2026_08_02_000002 —
-            // beide Wege müssen dasselbe setzen (frisch-migriert == reimportiert).
-            ['foodbook.plan', 'trend', 'discovery', 5, 1500],
-            ['concept.brief_geruest', 'trend', 'discovery', 5, 1500],
-            ['ai_extract_recipe', 'cross_cutting', 'none', null, null],     // bewusst leer
-            ['ai_suggest_pairings', 'pairing', 'grounding', 5, 1200],
-            ['ai_infer_ankers', 'pairing', 'grounding', 3, 1400],
-            // #2-A (2026-08-27): die Eigenschaften-KI (recipe.eigenschaften) bekommt das Produktions-
-            // Zeitkennwerte-Dossier (Kategorie produktion_kapazitat, `always` via alwaysCategoryBlock —
-            // rezept-unabhängige Referenz, discovery verfehlt sie per Slug-Jaccard) + das Basisrezepte-
-            // Regelwerk. Spiegel von Migration 2026_08_27_140000.
-            ['recipe.eigenschaften', 'produktion_kapazitat', 'always', 3, 7000],
-            ['recipe.eigenschaften', 'regelwerk', 'always', 1, 6000],
-        ];
-        if ($dryRun) {
-            return ['source' => count($routings), 'neu' => 0, 'geaendert' => 0, 'skip' => count($routings)];
-        }
-        $neu = $skip = 0;
-        $now = now()->toDateTimeString();
-        foreach ($routings as [$feature, $kategorie, $modus, $maxDocs, $maxChars]) {
-            $ok = DB::table('foodalchemist_knowledge_routings')->insertOrIgnore([
-                'feature' => $feature, 'category' => $kategorie, 'mode' => $modus,
-                'max_docs' => $maxDocs, 'max_chars_per_doc' => $maxChars,
-                'created_at' => $now, 'updated_at' => $now,
-            ]);
-            $ok ? $neu++ : $skip++;
-        }
-
-        return ['source' => count($routings), 'neu' => $neu, 'geaendert' => 0, 'skip' => $skip];
-    }
-
-    /** Anker → Pairing-Dokument über source_path (ersetzt file_path, D4). */
     private function verdrahteAnker(bool $dryRun): array
     {
         if ($dryRun) {

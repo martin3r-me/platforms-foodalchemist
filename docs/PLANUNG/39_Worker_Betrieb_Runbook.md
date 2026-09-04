@@ -32,10 +32,122 @@ Die Food Alchemist nutzt **plain `queue:work`** — **kein Horizon** (nicht als 
 php artisan queue:work --sleep=3 --tries=3 --max-time=3600
 ```
 
-- **Queue:** FA-Jobs teilen die **Default-Queue** — ein Worker, der die Default-Queue leert, bedient die gesamte Leitstelle. Kein dedizierter Queue-Name nötig.
+- **Queue:** FA-Jobs liefen bis 2026-09-03 **alle** auf der Default-Queue. Seit der Artefakt-Trennung (§1a) können die vier Fan-out-Sorten je eine eigene Schlange bekommen — **standardmässig aber nicht**: ohne gesetzte Env-Variablen bleibt alles auf der Default-Queue und dieses Kapitel gilt unverändert.
 - **Daemon, nicht `queue:listen`:** `queue:work` hält den Prozess offen (schneller, kein Framework-Reboot je Job). Er muss von einem Prozess-Manager überwacht und neu gestartet werden (Supervisor / Forge-Daemon / systemd).
 - **Auf `demo`:** der Worker läuft als **Forge-Daemon** auf dem App-Host. Nach einem Deploy (Lock-Pin + `foodalchemist:import-master`) prüfen, dass der Daemon aktiv ist und neu gestartet wurde (§3). *(Deploy selbst ist NICHT Teil der Umsetzungs-Routine — nur Dominique.)*
 - **Lokal / Sandbox:** ein Terminal mit `php artisan queue:work` daneben offen halten, sonst hängt jeder Go. In der **Test-Suite** laufen Jobs synchron/gefaked — das Runbook gilt für den echten Betrieb, nicht für Pest.
+
+---
+
+## 1a. Fan-out-Trennung nach ARTEFAKT (seit 2026-09-03)
+
+### Warum nicht nach Job-Klasse
+
+Der erste Entwurf trennte nach Job-Klasse. Dominiques Frage kippte ihn:
+*„ein großes foodbook oder speisekarte würde doch auch den worker verdrängen oder nicht?"* —
+ja. `GenerateRecipeJob` bedient **denselben** Klassen-Namen für einen Einzel-Klick UND für
+90 Speiseplan-Zellen. Eine Trennung nach Klasse hätte den Einzel-Klick mit in die
+Fan-out-Schlange geworfen und genau nichts gelöst.
+
+Getrennt wird deshalb nach **Artefakt-Sorte am Dispatch-Ort**, nicht nach Klasse:
+
+| Queue-Key (`config('foodalchemist.queue.*')`) | Env | was darauf läuft | Menge je Klick |
+|---|---|---|---|
+| `gerichte` | `FOODALCHEMIST_QUEUE_GERICHTE` | Speiseplan-Zellen, Speisekarten-Positionen | bis **90** |
+| `rezepte` | `FOODALCHEMIST_QUEUE_REZEPTE` | Kaskaden-Kinder (Sub-Rezepte) | bis **50** |
+| `kaskade` | `FOODALCHEMIST_QUEUE_KASKADE` | Slot-Concepts (Foodbook/Angebot/Format) | je Slot 1 |
+| `anreichern` | `FOODALCHEMIST_QUEUE_ANREICHERN` | Anreicherung je Sub-Rezept | je Sub 1 |
+
+**Defaults sind leer** (`Support\Warteschlange` gibt dann `null` zurück ⇒ Default-Queue).
+Verhalten also unverändert, bis jemand die Variablen setzt. Das ist Absicht: der Code kann
+vor der Server-Einrichtung deployen.
+
+### Einrichtung auf Forge — Reihenfolge ist eine Sicherheitseigenschaft
+
+Server `49.13.90.76` → Site `demo.bhgdigital.de` → **Queue**.
+
+**1. Erst die vier Worker anlegen.** Je: **Connection** `database` · **Processes** `1` ·
+**Timeout** `600` · **Sleep** `3` · **Tries** `2` · **Max Memory** `256` · **Daemon** ja.
+Nur das Feld **Queue** unterscheidet sie (`fa-gerichte`, `fa-rezepte`, `fa-kaskade`,
+`fa-anreichern`). Sie laufen ins Leere, solange die Env-Variablen fehlen — der sichere Zustand.
+
+**2. Den bestehenden `Queue Worker` NICHT anfassen** (bleibt `numprocs=2`). Er bedient danach
+die kleinen, interaktiven Jobs; zwei Prozesse dafür sind Reserve, kein Verschnitt.
+
+**3. Zuletzt** Site → **Environment** um die vier Zeilen ergänzen (`FOODALCHEMIST_QUEUE_*` auf
+die Queue-Namen). Ab dem Speichern greift die Trennung.
+
+> ⚠ **Nie die Env-Variablen vor den Workern setzen.** Jobs auf einer Schlange ohne Worker
+> bleiben **lautlos** liegen — die Generierung stünde still, ohne Fehlermeldung. Das ist
+> dieselbe Symptomatik wie der ewige Spinner in §0, aber mit anderer Ursache.
+
+> ⚠ **Nicht** mehrere Schlangen an einen Worker (`--queue=fa-gerichte,default`). Laravel leert
+> die Liste **in der angegebenen Reihenfolge** — der Fan-out würde die kleinen Jobs dann noch
+> härter aushungern als vor der Trennung.
+
+
+### Einrichtung 2026-09-03 — drei Fallen, alle live erlebt
+
+**1. Forges »Running«-Badge lügt.** Ein Worker mit falscher Connection (`'databse'` statt
+`'database'`) stürzt sofort ab, Supervisor startet ihn endlos neu — und die Forge-Liste zeigt
+trotzdem **Running**. Die einzige verlässliche Prüfung:
+
+```bash
+ssh forge@49.13.90.76 "ps -eo args | grep '[q]ueue:work' | grep -oE '\-\-queue=[a-z-]+' | sort | uniq -c"
+```
+
+Fehlt eine Schlange in der Ausgabe, läuft sie nicht — egal was die UI sagt. Log dazu:
+`/home/forge/.forge/worker-<id>.log`.
+
+**2. Das Forge-Formular kann `--queue` verschlucken.** Zweimal war der Wert eingegeben und
+landete nicht in der Konfiguration (vermutlich Feld noch im Fokus beim Absenden). Der Name des
+Prozesses ist nur ein **Anzeigename** — welche Schlange bedient wird, entscheidet allein
+`--queue`. Ohne es bedient der Worker `default`, und die Trennung ist still wirkungslos.
+**Die Preview-Zeile im Formular ist der einzige Beleg vor dem Speichern** — sie muss
+`--queue=<name>` enthalten. Den rohen Supervisor-Editor meiden: die `command=`-Zeile ist
+~150 Zeichen breit, scrollt aus dem Dialog, und man editiert blind genau dort, wo `--queue`
+steht. Lieber löschen und über das Formular neu anlegen; ein Worker hält keinen Zustand.
+
+**3. Die Config ist auf demo GECACHT** (`bootstrap/cache/config.php`). Env-Zeilen allein
+wirken nicht — Laravel liest den Cache. Nach jeder Änderung an den `FOODALCHEMIST_QUEUE_*`:
+
+```bash
+php artisan config:cache      # sonst greifen die Werte nie
+php artisan queue:restart     # die Worker halten ihre Config im Speicher
+```
+
+Der zweite Befehl ist **nicht** Kosmetik: die Kaskaden-Kinder werden **aus einem Worker
+heraus** verteilt, nicht aus dem Web-Prozess. Ein Worker mit altem Cache schickt Sub-Rezepte
+weiter auf `default`, obwohl die Variable steht — Trennung scheinbar aktiv, faktisch nicht.
+
+**Der Badge ist in BEIDE Richtungen unbrauchbar:** er stand grün bei einem Prozess in der
+Absturzschleife, und auf »Starting«, während der Prozess längst lief. Nur `ps` zählt.
+
+**Abnahme-Beweis, zwei getrennte Aussagen (beide kostenlos).** Sie nicht verwechseln — ich
+hatte sie zusammengezogen und damit zu viel behauptet:
+
+1. **Werden Jobs dorthin VERTEILT?** Vier Jobs mit `->delay(now()->addMinutes(10))`
+   dispatchen, `jobs.queue` lesen, Zeilen löschen. Nichts läuft. Beweist die
+   Dispatch-Seite — **aber nicht, dass ein Worker sie abholt** (die `queue`-Spalte
+   braucht keinen Worker).
+2. **Werden sie dort ABGEHOLT?** Eine Zeile mit absichtlich kaputtem Payload in `jobs`
+   einfügen (`commandName` auf eine nicht existierende Klasse), 6 s warten, prüfen ob sie
+   verschwunden und in `failed_jobs` gelandet ist, danach beide Zeilen löschen. Verschwindet
+   sie, bedient wirklich ein Worker diese Schlange. Kostet nichts, weil der Job vor dem
+   ersten Provider-Aufruf stirbt.
+
+### Speicher — gemessen, nicht geschätzt
+
+Laufende Worker belegen real **202 MB** und **172 MB** (nicht die 256 des Limits). Sechs
+Prozesse (1 default×2 + 4 Artefakt) ≈ **1,2 GB** bei **2.469 MB frei** auf 2 Kernen. Passt.
+
+### Die offene Warnung: Provider-Rate, nicht Speicher
+
+Vier parallele Generierungs-Worker heissen ~67.000 Token **gleichzeitig** beim Provider
+(4 × ⌀16.800). Ob das die TPM-Grenze des Kontos reisst, ist vom Server aus nicht prüfbar.
+Im Modul gibt es **kein** `RateLimited` und keinen 429-Backoff — bei `tries=2` würden Jobs
+dann **scheitern statt zu warten**. Bei vier Workern vertretbar; **ab sechs vorher den
+Backoff einbauen**.
 
 ---
 
@@ -102,3 +214,5 @@ Der Herzschlag lebt im **Cache** (`fa:worker:heartbeat`). Damit die Ampel stimmt
 
 ## Changelog
 - **2026-08-16** — Erstanlage (Roadmap 38, Et.8 »Worker-Präsenz« Teil 3). Grounded auf `WorkerHealthService` + Provider-Listener; Horizon-Abwesenheit + Cache-Abhängigkeit + Deploy-`queue:restart` dokumentiert.
+- **2026-09-03** — §1a Fan-out-Trennung nach Artefakt-Sorte (4 Queues, Defaults leer). §1 korrigiert: „kein dedizierter Queue-Name nötig" stimmte nicht mehr. Trennung nach Job-KLASSE verworfen, weil `GenerateRecipeJob` Einzel-Klick und 90er-Fan-out teilt. Einrichtungs-Reihenfolge (Worker vor Env) als Sicherheitseigenschaft dokumentiert.
+- **2026-09-03 (Einrichtung)** — vier Worker live auf demo, per Prozessliste + jobs-Tabelle verifiziert. Drei Fallen dokumentiert: „Running"-Badge zeigt auch Absturzschleifen grün · das Forge-Formular kann `--queue` verschlucken (Preview ist der Beleg) · Config ist gecacht, also `config:cache` UND `queue:restart` nötig (Kaskaden-Kinder werden aus Workern verteilt).

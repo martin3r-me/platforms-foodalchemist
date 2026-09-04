@@ -81,8 +81,14 @@ class RecipeGeneratorService
             }
             if ($vkModus) {
                 // M6-06: VK-Achsen + Taxonomie-Vorrat für Klasse/AK-Vorschlag
+                // W0-8: Klassen abgeschalteter Hauptgruppen NICHT mehr anbieten. Migration 269
+                // (Taxonomie-Neutralisierung) hat APE/SNK/ALC/BVK/ALL auf `is_inactive` gesetzt —
+                // deren 21 von 57 Klassen gingen weiter in jeden VK-Prompt, die KI konnte also
+                // eine stillgelegte Klasse wählen. Das ist primär ein Korrektheits-Fix; der
+                // Token-Gewinn ist mit ~37 % einer kleinen Liste nebensächlich.
                 $kontext['speisen_klassen'] = \Platform\FoodAlchemist\Models\FoodAlchemistDishClass::query()
                     ->join('foodalchemist_dish_main_groups AS hg', 'hg.id', '=', 'foodalchemist_dish_classes.dish_main_group_id')
+                    ->where('hg.is_inactive', false)
                     ->selectRaw("foodalchemist_dish_classes.id AS id, CONCAT(hg.code, ' / ', foodalchemist_dish_classes.label) AS label")
                     ->orderBy('foodalchemist_dish_classes.id')->pluck('label', 'id')->all();
                 $kontext['aufschlagsklassen'] = \Platform\FoodAlchemist\Models\FoodAlchemistMarkupClass::where('is_inactive', false)
@@ -98,11 +104,24 @@ class RecipeGeneratorService
             $vorschlag = $this->ki->propose($vkModus ? 'vk.generator' : 'recipe.generator', $kontext, [
                 'knowledge' => $wissen['block'],
                 'knowledge_used' => $wissen['files_used'],            // M7-01: GL-13-§6-Audit-Lücke geschlossen
+                'knowledge_dropped_chars' => $wissen['dropped_chars'] ?? 0,   // W0-0 Messsonde
                 // M7-03 §3.3 (Ist: commands.rs:20766-20780): valides JSON ohne
                 // name/zutaten ist strukturell unbrauchbar → Gateway re-rollt
                 'structural_retry' => fn (array $parsed) => ! empty($parsed['werte']['name']) && ! empty($parsed['werte']['zutaten']),
             ]);
             $kiRezept = $vorschlag->werte;
+            // W3-5: die ECHTEN Prompt-Größen an den Kontext-Inspektor hängen. Bis hierher zeigte
+            // er nur `chars` aus contextFor — also allein den Retrieval-Topf. Gemessen sind das
+            // ~36.000 Zeichen, wo der Prompt ~77.500 hat: der Bound-Block (verbindliches
+            // Regelwerk), Task, Hüllen und das Kontext-JSON fehlten in der Anzeige komplett.
+            // Wer die Zahl liest, unterschätzt den Prompt also um mehr als die Hälfte.
+            //
+            // Die Werte entstehen erst IM Gateway (Messsonde `prompt_parts`), können also nicht
+            // aus dem vorbereiteten Kontext kommen — darum hier nachgezogen, über die Call-Log-ID
+            // des gerade gelaufenen Calls. Fail-soft: ohne Log-Zeile bleibt die Anzeige wie vorher.
+            if ($kontextAudit !== null && $vorschlag->callLogId !== null) {
+                $kontextAudit['prompt'] = $this->promptGroessen((int) $vorschlag->callLogId);
+            }
             // P0.2: die grossen Kontext-/Wissen-/Inventar-Arrays werden ab hier nicht mehr
             // gebraucht (die Transaktions-Closure haelt sie NICHT) → jetzt freigeben, damit
             // der Peak-Speicher waehrend Matching/Sync sinkt (OOM-Gegenmassnahme).
@@ -369,6 +388,22 @@ class RecipeGeneratorService
                 $zeilen[] = $zeile;
             }
 
+            // §12.2 DURCHSETZEN: Bei einem Gericht ist `role` der Sortier-Anker der
+            // Komponenten-Reihenfolge (Bodenebene → Haupt → Beilage → Garnitur). Der Prompt
+            // bittet darum (Spec 41 B2), aber gebeten ist nicht durchgesetzt: `position` war
+            // schlicht die Emissions-Reihenfolge des Modells ($i + 1 in syncIngredients).
+            // §12.4 nennt genau das als Anti-Pattern — „role erfasst, aber ungenutzt".
+            // NUR auf dem Generierungs-Pfad: im Editor ordnet der Mensch bewusst um, dort
+            // darf nichts nachsortieren.
+            if ($vkModus) {
+                [$zeilen, $verschoben] = $this->sortiereNachRolle($zeilen);
+                if ($verschoben > 0) {
+                    // Sichtbar machen statt still korrigieren — so wird messbar, wie oft das
+                    // Modell die Reihenfolge verfehlt, statt es hinter dem Fix zu verstecken.
+                    $statistik['reihenfolge_korrigiert'] = $verschoben;
+                }
+            }
+
             $recipe = $this->recipes->syncIngredients($team, $recipe->id, $zeilen);   // inkl. Recompute
 
             // #505 / Kohärenz-Gate (2026-08-07): recipeCohesion nach Zutaten-Sync (braucht
@@ -433,6 +468,44 @@ class RecipeGeneratorService
      * @param  array{recipe: FoodAlchemistRecipe, statistik: array, offene: array}  $result
      * @return array{recipe: FoodAlchemistRecipe, statistik: array, offene: array}
      */
+    /**
+     * §12.2 — Rang der Plating-Ebenen. `role` ist laut Regelwerk der Sortier-Anker:
+     * Bodenebene (Sauce/Jus/Basis) → Hauptkomponente → Beilage → Garnitur.
+     * Ohne Rolle ⇒ Rang 99 (hinten), ohne die Binnenordnung des Modells zu zerstören.
+     */
+    private const ROLLEN_RANG = ['aroma_treiber' => 1, 'komponente' => 2, 'beilage' => 3, 'garnitur' => 4];
+
+    /**
+     * Stabil nach §12.2-Rang sortieren; meldet zurück, wie viele Zeilen sich bewegt haben.
+     *
+     * Stabil heißt: innerhalb einer Rolle bleibt die Reihenfolge des Modells erhalten — dort
+     * steckt kulinarisches Urteil (welche Beilage zuerst), das keine Rang-Tabelle kennt.
+     *
+     * @param  list<array<string, mixed>>  $zeilen
+     * @return array{0: list<array<string, mixed>>, 1: int}
+     */
+    private function sortiereNachRolle(array $zeilen): array
+    {
+        $mitRang = [];
+        foreach (array_values($zeilen) as $i => $z) {
+            $mitRang[] = [
+                'rang' => self::ROLLEN_RANG[(string) ($z['role'] ?? '')] ?? 99,
+                'i' => $i,
+                'zeile' => $z,
+            ];
+        }
+        usort($mitRang, fn ($a, $b) => [$a['rang'], $a['i']] <=> [$b['rang'], $b['i']]);
+
+        $verschoben = 0;
+        foreach ($mitRang as $neuerIndex => $eintrag) {
+            if ($eintrag['i'] !== $neuerIndex) {
+                $verschoben++;
+            }
+        }
+
+        return [array_column($mitRang, 'zeile'), $verschoben];
+    }
+
     private function kohaerenzGate(Team $team, array $result, callable $melde): array
     {
         /** @var FoodAlchemistRecipe $recipe */
@@ -1063,4 +1136,46 @@ class RecipeGeneratorService
 
         return $unit->id;
     }
+
+    /**
+     * Die sechs Töpfe eines Prompts aus der Messsonde — für den Kontext-Inspektor.
+     *
+     * Reine Int-Liste, damit sie gefahrlos durch Job-Cache und Livewire-Ergebnis reist (dieselbe
+     * Regel wie beim übrigen Inspektor-Bündel). `null` statt Nullen, wenn keine Log-Zeile da ist:
+     * eine Anzeige mit lauter Nullen behauptet Wissen, das wir nicht haben.
+     *
+     * @return ?array{chars:int, huelle:int, bound:int, task:int, retrieval:int, kontext:int, dropped:int, tokens_in:int, tokens_cached:int}
+     */
+    private function promptGroessen(int $callLogId): ?array
+    {
+        // `where('id', …)`, NICHT `whereKey()`: das gibt es nur auf dem Eloquent-Builder. Auf dem
+        // Query-Builder greift die dynamische `whereXxx`-Auflösung und macht daraus lautlos
+        // `where('key', …)` — die Abfrage findet dann nie etwas. Genau daran ist der erste
+        // Durchgang gescheitert, und zwar OHNE Fehler: der Inspektor hätte einfach weiter die
+        // alte Zahl gezeigt.
+        $row = \Illuminate\Support\Facades\DB::table('foodalchemist_ai_call_log')
+            ->where('id', $callLogId)
+            ->first(['prompt_chars', 'prompt_parts', 'tokens_in', 'tokens_cached']);
+        if ($row === null) {
+            return null;
+        }
+
+        $teile = is_string($row->prompt_parts) ? (json_decode($row->prompt_parts, true) ?: []) : [];
+        if (! is_array($teile) || $teile === []) {
+            return null;   // Sonde noch nicht migriert → alte Anzeige, keine erfundenen Nullen
+        }
+
+        return [
+            'chars' => (int) ($row->prompt_chars ?? 0),
+            'huelle' => (int) ($teile['huelle'] ?? 0),
+            'bound' => (int) ($teile['bound'] ?? 0),
+            'task' => (int) ($teile['task'] ?? 0),
+            'retrieval' => (int) ($teile['retrieval'] ?? 0),
+            'kontext' => (int) ($teile['kontext'] ?? 0),
+            'dropped' => (int) ($teile['dropped'] ?? 0),
+            'tokens_in' => (int) ($row->tokens_in ?? 0),
+            'tokens_cached' => (int) ($row->tokens_cached ?? 0),
+        ];
+    }
+
 }

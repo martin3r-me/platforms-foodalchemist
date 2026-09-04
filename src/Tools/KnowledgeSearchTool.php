@@ -69,7 +69,7 @@ class KnowledgeSearchTool extends FoodAlchemistTool implements ToolContract, Too
             }
         }
 
-        $treffer = app(KnowledgeContextService::class)->searchDocuments(
+        $treffer = app(KnowledgeContextService::class)->searchDocuments($team, 
             (string) $arguments['q'],
             $kategorie,
             (int) ($arguments['limit'] ?? 10),

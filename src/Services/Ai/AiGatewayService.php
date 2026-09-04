@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\DB;
 use Platform\Core\Contracts\LLMProviderContract;
 use Platform\Core\Services\LLMProviderRegistry;
 use RuntimeException;
+use Platform\FoodAlchemist\Support\DossierText;
 
 /**
  * M0-14: KI-Gateway-Basis — Fassade vor dem Plattform-LLM (D3-Entscheid, hybrid).
@@ -27,9 +28,38 @@ use RuntimeException;
  */
 class AiGatewayService
 {
+    /**
+     * W0-3 — Deckel des Layer-Bound-Kanals.
+     *
+     * Vorher 3 Docs à 1400 Zeichen. An `recipe.generator` hängen aber 9 bewusst gebundene
+     * Dossiers (Bau-§§ 2–7 + Erstellungs-Dossier + substitutionen + mengen_defaults):
+     * 6 davon erreichten den Prompt nie, §5 Default-GPs kam als 29-%-Fragment an. Der
+     * Kanal war damit genau für den Fall unbrauchbar, für den er gebaut wurde — prozedurale
+     * Regeln, die per Discovery nicht surfacen, weil sie kein Gericht nennen.
+     *
+     * ⚠ Die Deckel gelten NICHT global, sondern je Prompt-Key über
+     * config('foodalchemist.ai.bound_knowledge_budget'). Grund: selectBoundKnowledge()
+     * matcht Bindings auf den Prompt-Key ODER dessen BEREICHS-Präfix — an `target_key='recipe'`
+     * hängen live 3 Dossiers mit 24.520 Zeichen, die sonst jeden `recipe.*`-Prompt
+     * (steps, pairing, review, sensorik, …) von 4.200 auf 20.000 Zeichen aufblasen würden.
+     * Ein global gehobener Deckel wäre also keine Blutstillung, sondern eine Kosten-
+     * ausweitung auf ~15 Prompts, die die Bau-§§ gar nicht brauchen.
+     *
+     * Die Konstanten hier sind daher der konservative DEFAULT (= Verhalten vor Welle 0);
+     * die großzügigen Budgets stehen explizit bei `recipe.generator` / `vk.generator`,
+     * wo die Bau-§-Dossiers hingehören.
+     */
     private const BOUND_KNOWLEDGE_MAX_DOCS = 3;
 
     private const BOUND_KNOWLEDGE_CHARS_PER_DOC = 1400;
+
+    private const BOUND_KNOWLEDGE_MAX_TOTAL_CHARS = 4200;
+
+    /**
+     * Fenster für das Relevanz-Token-Matching der `discovery`-Bindings. 1200 Zeichen trafen
+     * bei mehrseitigen Dossiers nur die Einleitung; die eigentliche Regel liegt dahinter.
+     */
+    private const BOUND_KNOWLEDGE_MATCH_WINDOW = 4000;
 
     /**
      * GL-07 Propose: Task-Prompt + Kontext → validiertes Vorschlags-DTO.
@@ -101,10 +131,26 @@ class AiGatewayService
         $wissen = isset($options['knowledge']) && is_string($options['knowledge']) && $options['knowledge'] !== ''
             ? $options['knowledge'] . "\n\n"
             : '';
+        // W0-0 Messsonde: Zeichen je Prompt-Topf. `tokens_in` kommt post-hoc vom Provider und
+        // sagt nicht, WOHER die Bytes kamen — ohne diese Zerlegung ist jede Budget-Änderung
+        // blind (vgl. Welle 0: ~44 % des Generator-Prompts waren ein rechnerischer Restposten).
+        $promptParts = [
+            'kanon' => 0,                                            // Welle 2 (CanonBlockBuilder)
+            // Exakt der Retrieval-Block, OHNE den angehängten Trenner: der wird beim
+            // Zusammenbau ohnehin rtrim't, und eine Sonde, die zwei Zeichen zu viel meldet,
+            // macht jede Nachrechnung von prompt_chars unmöglich.
+            'retrieval' => mb_strlen((string) ($options['knowledge'] ?? '')),
+            'bound' => 0,
+            'task' => mb_strlen((string) $prompt['task']),
+            'kontext' => 0,
+            'huelle' => 0,
+            'dropped' => (int) ($options['knowledge_dropped_chars'] ?? 0),
+        ];
 
         // #469: an diesen Layer gebundenes Wissen additiv laden — Prompt-Key (fein) ODER Bereich (Präfix, grob).
         // Macht „einbinden" für JEDEN Prompt wirksam (zentraler Punkt, alle Prompts laufen durch propose()).
         $boundSlugs = [];
+        $boundBlock = null;
         if (\Illuminate\Support\Facades\Schema::hasTable('foodalchemist_knowledge_bindings')) {
             $bereich = str_contains($promptKey, '.') ? explode('.', $promptKey, 2)[0] : $promptKey;
             $bound = \Illuminate\Support\Facades\DB::table('foodalchemist_knowledge_bindings as b')
@@ -114,14 +160,22 @@ class AiGatewayService
                 ->where('d.active', 1)->whereNull('d.deleted_at')
                 ->orderByDesc('b.weight')
                 ->get(['d.slug', 'd.title', 'd.category', 'd.version', 'd.content_md', 'b.mode', 'b.weight']);
-            [$bBlocks, $boundSlugs] = $this->selectBoundKnowledge(
+            [$bBlocks, $boundSlugs, $boundVerworfen] = $this->selectBoundKnowledge(
                 $bound,
                 $context,
                 is_array($options['knowledge_used'] ?? null) ? $options['knowledge_used'] : [],
+                $this->boundBudget($promptKey),
             );
+            $promptParts['dropped'] += $boundVerworfen;
             if ($bBlocks !== []) {
-                $wissen .= "# DIREKT GEBUNDENES WISSEN (an diesen Layer verdrahtet)\n\n"
-                    . implode("\n\n---\n\n", $bBlocks) . "\n\n";
+                // W3-1: NICHT mehr an $wissen anhängen. Der Bound-Block besteht ausschliesslich
+                // aus `always`-Dossiers und ist damit über alle Calls eines Prompt-Keys
+                // BYTE-IDENTISCH — er ist der Kern des Cache-Prefix und gehört deshalb VOR
+                // alles Variable, als eigene system-Message. Im User-Content stand er hinter
+                // dem variablen Retrieval-Block und war damit für den Prefix-Cache wertlos.
+                $boundBlock = "# VERBINDLICHES REGELWERK (gilt für jede Antwort dieses Auftrags)\n\n"
+                    . implode("\n\n---\n\n", $bBlocks);
+                $promptParts['bound'] = mb_strlen($boundBlock);
             }
         }
 
@@ -138,7 +192,7 @@ class AiGatewayService
         $fbFoodDna = $options['food_dna_foodbook_id'] ?? null;
         $agFoodDna = $options['food_dna_angebot_id'] ?? null;
         $kdFoodDna = $options['food_dna_crm_company_id'] ?? null;  // Ebene 2: Endkunde (Kunde-DNA)
-        unset($options['knowledge'], $options['knowledge_used'], $options['tier'], $options['target_table'], $options['target_id'], $options['food_dna_concept_id'], $options['food_dna_foodbook_id'], $options['food_dna_angebot_id'], $options['food_dna_crm_company_id']);
+        unset($options['knowledge'], $options['knowledge_used'], $options['knowledge_dropped_chars'], $options['tier'], $options['target_table'], $options['target_id'], $options['food_dna_concept_id'], $options['food_dna_foodbook_id'], $options['food_dna_angebot_id'], $options['food_dna_crm_company_id']);
 
         // #389/Canvas: stehenden Marken-/Brief-Kontext NUR in kreative Prompts mergen
         // (Klassifikatoren ausgenommen). Kaskade Team-DNA → Kunde-DNA → Angebot → Foodbook → Concept (CanvasService).
@@ -152,8 +206,60 @@ class AiGatewayService
             ) + $context;
         }
 
-        $userContent = $wissen . $prompt['task'] . "\n\nKontext:\n" . json_encode($context, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+        // W0-2: KEIN JSON_PRETTY_PRINT. Der Kontext ist Maschinen-Input, kein Lesetext —
+        // Einrückung und Zeilenumbrüche blähen ihn um Faktor ~2,05 (gemessen an der realen
+        // Generator-Struktur: 2,04 / 2,09) an reinem Whitespace, den das Modell mitbezahlt.
+        $kontextJson = json_encode($context, JSON_UNESCAPED_UNICODE);
+        $promptParts['kontext'] = mb_strlen((string) $kontextJson);
+
+        /*
+         * W3-1 — MESSAGE-LAYOUT FÜR DEN PREFIX-CACHE. Verbindlich, Reihenfolge ist die Aussage:
+         *
+         *   1.–3. system  Voice-Hülle · Feld-Hülle · JSON-Umschlag      (statisch)
+         *   4.    system  VERBINDLICHES REGELWERK (always-Bindings)     (statisch, byte-identisch)
+         *   5.    user    task                                          (statisch je Prompt-Key)
+         *   6.    user    Retrieval-Wissen                              (variabel)
+         *   7.    user    Kontext-JSON                                  (variabel)
+         *
+         * Alles bis einschliesslich 5 ist über alle Calls eines Prompt-Keys identisch —
+         * ~16.000 Zeichen ≈ 5.400 Token, klar über der 1024-Token-Mindestlänge, ab der der
+         * implizite Prefix-Cache greift (10 % des Input-Preises).
+         *
+         * Vorher stand das VARIABLE Retrieval-Wissen als Erstes im User-Content: damit begann
+         * jeder Prompt anders und der Cache konnte nie greifen — gemessene Quote 0,35 %.
+         * Zusammen mit W0-1 (der Core stellte zusätzlich `'Zeit: ' . now()` sekundengenau
+         * voran) waren das die zwei Gründe, warum Caching strukturell unmöglich war.
+         *
+         * `prompt_cache_key` ist NICHT setzbar (applySupportedSamplingParams ist eine
+         * geschlossene Whitelist) — der Nutzen hängt vollständig an dieser Reihenfolge.
+         */
+        if ($boundBlock !== null) {
+            $messages[] = ['role' => 'system', 'content' => $boundBlock];
+        }
+
+        $userContent = $prompt['task']
+            . ($wissen !== '' ? "\n\n" . rtrim($wissen) : '')
+            . "\n\nKontext:\n" . $kontextJson;
         $messages[] = ['role' => 'user', 'content' => $userContent];
+
+        // W0-0: Hülle = die system-Messages OHNE den Regelwerk-Block. Der wird seit W3-1
+        // ebenfalls als system-Message gesendet, ist aber als `bound` separat ausgewiesen —
+        // sonst zählte die Sonde ihn doppelt und `prompt_chars` ginge nicht mehr auf.
+        $promptParts['huelle'] = array_sum(array_map(
+            fn (array $m): int => $m['role'] === 'system' ? mb_strlen((string) $m['content']) : 0,
+            $messages,
+        )) - $promptParts['bound'];
+        $promptChars = array_sum(array_map(fn (array $m): int => mb_strlen((string) $m['content']), $messages));
+
+        // W0-1: Der Core stellt sonst eine System-Message mit `'Zeit: ' . now()` und einer
+        // Tool-Übersicht VOR den Prompt (OpenAiService::buildMessagesWithContext, gated über
+        // `with_context`). Ein sekundengenau wechselnder Prefix macht Prompt-Caching
+        // strukturell unmöglich — bei `cached_in` = 10 % des Normalpreises ist das der
+        // teuerste Nebeneffekt im System (gemessene Cache-Quote: 0,35 %). FA-Prompts sind
+        // reine JSON-Generierung und nutzen keine Tools; der agentische Tier-D-Loop baut
+        // seinen Katalog in callWithTools() selbst und ist hiervon nicht betroffen.
+        // `+=` statt Überschreiben: ein Aufrufer, der es explizit setzt, behält die Hoheit.
+        $options += ['with_context' => false, 'tools' => false];
 
         if ($tierModell !== null && ! isset($options['model'])) {
             $options['model'] = $tierModell;
@@ -210,6 +316,9 @@ class AiGatewayService
         }
 
         $audit['layers_used'] = $layersUsed;
+        $audit['prompt_chars'] = $promptChars;
+        $audit['prompt_parts'] = $promptParts;
+        $audit['prompt_volltext'] = implode("\n", array_map(fn (array $m): string => (string) $m['content'], $messages));
         $callLogId = $this->schreibeCallLog($promptKey, $tier, $userContent, $antwort, $parsed, $fehler, $elapsedMs, $audit);
 
         if ($fehler !== null) {
@@ -241,7 +350,32 @@ class AiGatewayService
      *
      * @return array{0:list<string>,1:list<string>}
      */
-    private function selectBoundKnowledge($rows, array $context, array $alreadyUsed): array
+    /**
+     * Bound-Budget für einen Prompt-Key: {docs, chars_per_doc, total}.
+     * Override in config('foodalchemist.ai.bound_knowledge_budget'), sonst die Defaults.
+     *
+     * @return array{docs: int, chars_per_doc: int, total: int}
+     */
+    private function boundBudget(string $promptKey): array
+    {
+        $default = [
+            'docs' => self::BOUND_KNOWLEDGE_MAX_DOCS,
+            'chars_per_doc' => self::BOUND_KNOWLEDGE_CHARS_PER_DOC,
+            'total' => self::BOUND_KNOWLEDGE_MAX_TOTAL_CHARS,
+        ];
+        $konfig = config('foodalchemist.ai.bound_knowledge_budget', []);
+        if (! is_array($konfig) || ! isset($konfig[$promptKey]) || ! is_array($konfig[$promptKey])) {
+            return $default;
+        }
+
+        return [
+            'docs' => (int) ($konfig[$promptKey]['docs'] ?? $default['docs']),
+            'chars_per_doc' => (int) ($konfig[$promptKey]['chars_per_doc'] ?? $default['chars_per_doc']),
+            'total' => (int) ($konfig[$promptKey]['total'] ?? $default['total']),
+        ];
+    }
+
+    private function selectBoundKnowledge($rows, array $context, array $alreadyUsed, array $budget): array
     {
         $bereits = [];
         foreach ($alreadyUsed as $used) {
@@ -266,7 +400,7 @@ class AiGatewayService
             $always = $mode === 'always';
             $docTokens = $this->knowledgeTokens(implode(' ', [
                 $slug, (string) $row->title, (string) $row->category,
-                mb_substr((string) $row->content_md, 0, 1200),
+                mb_substr((string) $row->content_md, 0, self::BOUND_KNOWLEDGE_MATCH_WINDOW),
             ]));
             $hits = count(array_intersect($queryTokens, $docTokens));
             if (! $always && $hits === 0) {
@@ -281,17 +415,41 @@ class AiGatewayService
 
         $blocks = [];
         $slugs = [];
-        foreach (array_slice($kandidaten, 0, self::BOUND_KNOWLEDGE_MAX_DOCS) as $kandidat) {
+        $verbraucht = 0;
+        $verworfen = 0;
+        foreach (array_slice($kandidaten, 0, $budget['docs']) as $kandidat) {
             $doc = $kandidat['row'];
-            $content = (string) $doc->content_md;
-            $blocks[] = "## GEBUNDEN: {$doc->slug}\n\n"
-                . (mb_strlen($content) > self::BOUND_KNOWLEDGE_CHARS_PER_DOC
-                    ? mb_substr($content, 0, self::BOUND_KNOWLEDGE_CHARS_PER_DOC) . "\n\n[…gekürzt für KI-Kontext…]"
-                    : $content);
+            // Provenienz-Vorspann der §-Dossiers raus: identischer Textbaustein in jedem
+            // Dossier, keine Regel darin, und der Titel trägt die Herkunft schon. Am
+            // Generator sind das 4 gebundene §-Dossiers × ~490 Z. ≈ 1.950 Zeichen je Call,
+            // bei vk.generator 6 × ≈ 2.900 — Platz, der bisher den PFLICHT-Deckel
+            // aufgefressen hat. Siehe DossierText für die Messung.
+            $content = DossierText::ohneVorspann((string) $doc->content_md);
+            $laenge = mb_strlen($content);
+
+            // Kandidaten sind nach Score sortiert, `always` bekommt +1000 — Pflicht-Dossiers
+            // ziehen ihr Budget also VOR den score-gegateten. Unter 500 Zeichen Restbudget
+            // ist ein weiterer Anschnitt nur noch Rauschen: abbrechen und den Rest als
+            // `dropped` ausweisen, statt ihn unsichtbar zu verlieren.
+            $rest = $budget['total'] - $verbraucht;
+            if ($rest < 500) {
+                $verworfen += $laenge;
+                continue;
+            }
+            $deckel = min($budget['chars_per_doc'], $rest);
+
+            if ($laenge > $deckel) {
+                $blocks[] = "## GEBUNDEN: {$doc->slug}\n\n" . mb_substr($content, 0, $deckel) . "\n\n[…gekürzt für KI-Kontext…]";
+                $verbraucht += $deckel;
+                $verworfen += $laenge - $deckel;
+            } else {
+                $blocks[] = "## GEBUNDEN: {$doc->slug}\n\n" . $content;
+                $verbraucht += $laenge;
+            }
             $slugs[] = "{$doc->slug}@v{$doc->version}";
         }
 
-        return [$blocks, $slugs];
+        return [$blocks, $slugs, $verworfen];
     }
 
     /** @return list<string> */
@@ -326,7 +484,29 @@ class AiGatewayService
      * @param  list<string>  $toolNames  erlaubte Tools (Registry-Namen)
      * @return array{text: ?string, runden: int, tool_laeufe: list<array>, elapsed_ms: int}
      */
-    public function callWithTools(string $auftrag, array $toolNames, int $maxRuns = 6): array
+    /**
+     * Agentischer Tool-Loop (Tier D).
+     *
+     * $optionen:
+     *   policy        — callable(string $name, object $tool): bool. Fordert das Modell ein Tool
+     *                   an, das NICHT im Basiskatalog steht, entscheidet diese REGEL statt einer
+     *                   Pflegeliste. Erlaubt ⇒ ausführen und für die Folgerunden freischalten.
+     *                   Die Freischaltung kostet KEINE Prompt-Zeichen: der Katalog in der
+     *                   System-Message bleibt der Basiskatalog (byte-stabil, W3-1) — gewachsen
+     *                   ist nur das Gate. Fail-closed: kein Tool, keine Policy oder kein
+     *                   striktes `true` ⇒ Ablehnung. Ohne `policy` verhält sich der Loop wie bisher.
+     *   arg_guard     — callable(string $name, array $args): array. Entschärft Argumente VOR
+     *                   der Ausführung. Nötig, weil mehrere Proposal-Tools ein Commit-Flag
+     *                   tragen (`confirm`/`accept`/`apply`/`force`) — ohne diesen Filter könnte
+     *                   das Modell mit `accept: true` doch direkt schreiben und die
+     *                   GL-07-Invariante („sprechen → Proposal → bestätigen") wäre nur
+     *                   Dokumentation. Protokolliert werden die ENTSCHÄRFTEN Argumente,
+     *                   also die tatsächlich ausgeführten.
+     *   system_zusatz — eine statische Zeile für die System-Message (Prefix bleibt stabil).
+     *
+     * @param  array{policy?: callable, arg_guard?: callable, system_zusatz?: string}  $optionen
+     */
+    public function callWithTools(string $auftrag, array $toolNames, int $maxRuns = 6, array $optionen = []): array
     {
         $team = Auth::user()?->currentTeamRelation;
         if ($team !== null && ! app(\Platform\FoodAlchemist\Services\TeamSettingsService::class)->kiAktiv($team)) {
@@ -339,12 +519,19 @@ class AiGatewayService
             ->map(fn ($t) => ['name' => $t->getName(), 'description' => $t->getDescription(), 'schema' => $t->getSchema()])
             ->values()->all();
 
+        $policy = $optionen['policy'] ?? null;
+        $argGuard = $optionen['arg_guard'] ?? null;
+        $erlaubt = array_values(array_unique($toolNames));           // wächst über die Policy
+        $freigeschaltet = [];
+
         $messages = [[
             'role' => 'system',
             'content' => 'Du bist der Food-Alchemist-Sprachassistent (Catering-Souschef). Antworte AUSSCHLIESSLICH '
                 . 'mit einem JSON-Objekt: {"action":"tool","name":"<tool>","arguments":{…}} um ein Tool zu rufen, '
                 . 'oder {"action":"final","text":"<kurze deutsche Antwort>"} wenn du fertig bist. '
-                . 'Schreibaktionen NUR über die Proposal-Tools (nie erfinden). Verfügbare Tools: '
+                . 'Schreibaktionen NUR über die Proposal-Tools (nie erfinden). '
+                . (isset($optionen['system_zusatz']) ? trim((string) $optionen['system_zusatz']) . ' ' : '')
+                . 'Verfügbare Tools: '
                 . json_encode($katalog, JSON_UNESCAPED_UNICODE),
         ], ['role' => 'user', 'content' => $auftrag]];
 
@@ -374,14 +561,42 @@ class AiGatewayService
                 $finalText = $parsed['text'] ?? null;
                 break;
             }
-            if (($parsed['action'] ?? null) === 'tool' && is_string($parsed['name'] ?? null) && in_array($parsed['name'], $toolNames, true)) {
-                $tool = $registry->get($parsed['name']);
-                $resultat = $tool !== null
-                    ? $tool->execute((array) ($parsed['arguments'] ?? []), $kontext)
-                    : \Platform\Core\Contracts\ToolResult::error('Tool unbekannt.', 'NOT_FOUND');
-                $toolLaeufe[] = ['name' => $parsed['name'], 'arguments' => $parsed['arguments'] ?? [], 'success' => $resultat->success, 'data' => $resultat->data];
+            if (($parsed['action'] ?? null) === 'tool' && is_string($parsed['name'] ?? null)) {
+                $name = $parsed['name'];
+                $tool = $registry->get($name);
+                // Null-Guard VOR der Katalog-Prüfung: auch ein Basiskatalog-Name kann
+                // unauflösbar sein (Registry-Drift, Modul nicht geladen) — dann darf hier
+                // kein Aufruf auf null passieren.
+                if ($tool === null) {
+                    $messages[] = ['role' => 'assistant', 'content' => (string) ($antwort['content'] ?? '')];
+                    $messages[] = ['role' => 'user', 'content' => 'Tool »' . $name . '« existiert nicht. '
+                        . 'Suche mit tool_registry.SEARCH ein passendes Tool oder antworte final.'];
+
+                    continue;
+                }
+                // Selbst-erweiternde Whitelist: die Grenze ist eine EIGENSCHAFT des Tools
+                // (Namespace + read_only), keine Pflegeliste, die veraltet. Damit kann der
+                // Loop strukturell keinen Direktschreiber rufen, egal was er entdeckt.
+                if (! in_array($name, $erlaubt, true)) {
+                    if (! is_callable($policy) || $policy($name, $tool) !== true) {
+                        $messages[] = ['role' => 'assistant', 'content' => (string) ($antwort['content'] ?? '')];
+                        $messages[] = ['role' => 'user', 'content' => 'Tool »' . $name . '« ist gesperrt (nicht lesend '
+                            . 'oder ausserhalb des Moduls). Änderungen laufen ausschliesslich über die Proposal-Tools. '
+                            . 'Suche mit tool_registry.SEARCH ein lesendes Tool oder antworte final.'];
+
+                        continue;
+                    }
+                    $erlaubt[] = $name;
+                    $freigeschaltet[] = $name;
+                }
+                $argumente = (array) ($parsed['arguments'] ?? []);
+                if (is_callable($argGuard)) {
+                    $argumente = $argGuard($name, $argumente);
+                }
+                $resultat = $tool->execute($argumente, $kontext);
+                $toolLaeufe[] = ['name' => $name, 'arguments' => $argumente, 'success' => $resultat->success, 'data' => $resultat->data];
                 $messages[] = ['role' => 'assistant', 'content' => (string) ($antwort['content'] ?? '')];
-                $messages[] = ['role' => 'user', 'content' => 'TOOL-ERGEBNIS ' . $parsed['name'] . ': '
+                $messages[] = ['role' => 'user', 'content' => 'TOOL-ERGEBNIS ' . $name . ': '
                     . json_encode(['success' => $resultat->success, 'data' => $resultat->data, 'error' => $resultat->error], JSON_UNESCAPED_UNICODE)];
 
                 continue;
@@ -399,11 +614,15 @@ class AiGatewayService
         $elapsedMs = (int) ((hrtime(true) - $start) / 1_000_000);
 
         // Audit: EIN Eintrag je Loop (Tier D, Runden in der Summary)
+        // `freigeschaltet` mitloggen: was die Policy über den Basiskatalog hinaus zugelassen
+        // hat, ist die einzige Stelle, an der der Werkzeugkasten wächst — das gehört ins Audit.
         $this->schreibeCallLog('voice.command', 'D', $auftrag, ['model' => $tatsaechlichesModell, 'usage' => $usageGesamt],
-            ['werte' => ['runden' => $runde, 'tools' => count($toolLaeufe), 'final' => $finalText !== null]], null, $elapsedMs,
+            ['werte' => ['runden' => $runde, 'tools' => count($toolLaeufe), 'final' => $finalText !== null,
+                'freigeschaltet' => $freigeschaltet]], null, $elapsedMs,
             ['knowledge_used' => null, 'target_table' => null, 'target_id' => null, 'layers_used' => null]);
 
-        return ['text' => $finalText, 'runden' => $runde, 'tool_laeufe' => $toolLaeufe, 'elapsed_ms' => $elapsedMs];
+        return ['text' => $finalText, 'runden' => $runde, 'tool_laeufe' => $toolLaeufe, 'elapsed_ms' => $elapsedMs,
+            'freigeschaltet' => $freigeschaltet];
     }
 
     /** 06_KI §5 Pflicht 3: generischer Accept-Stempel (Reject analog). */
@@ -438,7 +657,13 @@ class AiGatewayService
                     ? json_encode($audit['layers_used']) : null,      // GL-06 Inv. 7
                 'knowledge_used' => isset($audit['knowledge_used']) && $audit['knowledge_used'] !== null && $audit['knowledge_used'] !== []
                     ? json_encode($audit['knowledge_used']) : null,
-                'prompt_hash' => hash('sha256', $userContent),
+                // W3-1: Der Hash deckt ab jetzt den GESAMTEN Prompt ab (alle Messages), nicht
+                // nur den User-Content. Grund: das verbindliche Regelwerk ist in eine
+                // system-Message gewandert — ein Hash über $userContent allein würde zwei
+                // Calls mit unterschiedlichem Regelwerk als identisch ausweisen. Bewusste,
+                // dokumentierte Änderung der Audit-Identität (06_KI §5): Hashes vor und nach
+                // dem 2026-09-02 sind nicht vergleichbar.
+                'prompt_hash' => hash('sha256', $audit['prompt_volltext'] ?? $userContent),
                 'response_summary' => $summary,
                 'tokens_in' => $antwort['usage']['input_tokens'] ?? null,
                 'tokens_out' => $antwort['usage']['output_tokens'] ?? null,
@@ -450,6 +675,13 @@ class AiGatewayService
             ];
             if (\Illuminate\Support\Facades\Schema::hasColumn('foodalchemist_ai_call_log', 'tokens_cached')) {
                 $values['tokens_cached'] = $antwort['usage']['input_tokens_details']['cached_tokens'] ?? null;
+            }
+            // W0-0 Messsonde — wie tokens_cached hinter hasColumn, damit ein noch nicht
+            // migrierter Stand den KI-Pfad nicht reißt.
+            if (isset($audit['prompt_chars']) && \Illuminate\Support\Facades\Schema::hasColumn('foodalchemist_ai_call_log', 'prompt_chars')) {
+                $values['prompt_chars'] = (int) $audit['prompt_chars'];
+                $values['prompt_parts'] = is_array($audit['prompt_parts'] ?? null)
+                    ? json_encode($audit['prompt_parts'], JSON_UNESCAPED_UNICODE) : null;
             }
             DB::table('foodalchemist_ai_call_log')->insert($values);
 

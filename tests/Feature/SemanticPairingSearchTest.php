@@ -113,7 +113,7 @@ it('verdrahtet den semantischen Fallback in discoverDomains (über contextFor)',
     $this->svc->embedCorpus(['domain']);
 
     // "topinambur" matcht lexikalisch NICHT auf Slug "wurzelgemuese" → nur Semantik findet es.
-    $ctx = app(KnowledgeContextService::class)->contextFor('ai_generate_recipe', 'Topinambur Velouté');
+    $ctx = app(KnowledgeContextService::class)->contextFor(null, 'ai_generate_recipe', 'Topinambur Velouté');
 
     expect($ctx['block'])->toContain('## DOMAIN: wurzelgemuese');
 });
@@ -126,7 +126,7 @@ it('lässt die Lexik unangetastet, wenn das Flag aus ist (kein Embedding-Zugriff
     DB::table('foodalchemist_knowledge_routings')->insert([
         ['feature' => 'ai_generate_recipe', 'category' => 'domain', 'mode' => 'discovery', 'created_at' => now(), 'updated_at' => now()],
     ]);
-    $ctx = app(KnowledgeContextService::class)->contextFor('ai_generate_recipe', 'Topinambur Velouté');
+    $ctx = app(KnowledgeContextService::class)->contextFor(null, 'ai_generate_recipe', 'Topinambur Velouté');
 
     expect($this->svc->searchEnabled())->toBeFalse()
         ->and($ctx['block'])->not->toContain('## DOMAIN: wurzelgemuese');   // rein lexikalisch: kein Treffer

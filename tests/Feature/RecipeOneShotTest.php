@@ -172,7 +172,7 @@ it('KI-Erstellknopf: Complete-Coverage zieht fehlende Schritte und Sensorik gezi
         ->and($r->fresh()->description)->toBe('Steht.');
 });
 
-it('Voll anreichern synchronisiert bestehende Step-by-step-Anleitung und Sensorik neu', function () {
+it('Coverage-Pass synchronisiert bestehende Step-by-step-Anleitung und Sensorik neu (Auto-Pfad, ohne refresh)', function () {
     $this->mock(AiGatewayService::class, function ($mock) {
         $mock->shouldReceive('propose')->once()->with('recipe.production_depth', \Mockery::any(), \Mockery::any())
             ->andReturn(new AiProposal(['production_depth' => 'teilfertig'], 0.75, 'Mock', [], 'fertigung-refresh'));
@@ -210,9 +210,17 @@ it('Voll anreichern synchronisiert bestehende Step-by-step-Anleitung und Sensori
     ]);
     $this->makeIngredient($r, 'Fleur de Sel', $this->makeGp($this->rootTeam, 'Fleur de Sel-refresh'), '2', 1);
     app(\Platform\FoodAlchemist\Services\RecipeStepService::class)->sync($r, [['phase' => 'Alt', 'text' => 'Alte Anleitung.']]);
+    // KORREKTUR 2026-09-03: stand hier auf 'manual' — und das ist der Override-First-Schutz
+    // (SensorikService, Gate »source === manual«), den der automatische Coverage-Pass seit
+    // ff91d522 bewusst NICHT bricht (RecipeOneShotService ruft bewerteRezept mit force=false).
+    // Der Test verlangte also, dass die Automatik Handpflege überschreibt — genau das Gegenteil
+    // der Regel »nie user-bearbeitete Daten beim Regenerieren überschreiben«. Der CODE war
+    // richtig, der Test beschrieb die Welt davor. 'ai' = Bestand aus einem FRÜHEREN KI-Lauf,
+    // den der Pass zu Recht erneuert. ('source_hash' bleibt 'old', damit das zweite Gate
+    // — Hash-Vergleich — weiter nicht matcht und der Pass überhaupt läuft.)
     DB::table('foodalchemist_recipe_taste_vectors')->insert([
         'recipe_id' => $r->id,
-        'source' => 'manual',
+        'source' => 'ai',
         'source_hash' => 'old',
         'suess' => 1,
         'salzig' => 0,
@@ -244,6 +252,61 @@ it('Voll anreichern synchronisiert bestehende Step-by-step-Anleitung und Sensori
         ->and($r->fresh()->work_time_min)->toBe(12)
         ->and($r->fresh()->production_depth)->toBe('teilfertig')
         ->and($r->fresh()->description)->toBe('Bleibt.');
+});
+
+/*
+ * DER WÄCHTER zur Korrektur oben. Der rote Test hat einen echten Code-Entscheid ausgehebelt —
+ * damit er beim nächsten Mal nicht still zurückgedreht wird, hält ihn ab jetzt eine eigene
+ * Zusicherung: der AUTOMATISCHE Coverage-Pass lässt eine handgepflegte Sensorik stehen.
+ *
+ * Der Detektor ist die LÜCKE im Mock: `recipe.sensorik` ist absichtlich NICHT erwartet.
+ * Greift der Schutz, wird propose für diesen Key nie gerufen und der Status ist
+ * 'manual_geschuetzt'. Dreht jemand force zurück auf true, ruft das Glied propose, der
+ * strikte Mock wirft, das Glied fängt → Status 'fehler' ≠ 'manual_geschuetzt' → ROT.
+ * (Bewusst kein `->never()`: bei mehreren passenden Mockery-Erwartungen ist die
+ * Reihenfolge-Semantik eine Falle; »Key gar nicht erwarten« ist der robustere Detektor.)
+ *
+ * EHRLICH DAZU, damit dieser Test keinen Vertrag behauptet, den es nicht gibt: Stand heute
+ * schreibt KEIN Produktivpfad `source='manual'` in diese Tabelle — der einzige Schreiber
+ * setzt hart 'ai'. Der Schutz ist Vorleistung für einen manuellen Sensorik-Editor. Er
+ * bewacht also den Code-Entscheid, nicht einen heute erreichbaren Nutzer-Zustand. Wenn der
+ * Editor nicht kommt, ist die richtige Konsequenz NICHT dieser Test, sondern das Gate zu
+ * streichen und die Migrations-Doku (»ai | manual«) zu korrigieren — Produkt-Entscheid.
+ */
+it('GL-07: der automatische Coverage-Pass laesst eine handgepflegte Sensorik stehen', function () {
+    $this->mock(AiGatewayService::class, function ($mock) {
+        // Alles ausser recipe.sensorik erwartet — die Lücke IST der Detektor.
+        $mock->shouldReceive('propose')->with('recipe.production_depth', \Mockery::any(), \Mockery::any())
+            ->andReturn(new AiProposal(['production_depth' => 'teilfertig'], 0.7, 'Mock', [], 'fertigung-gl07'));
+        $mock->shouldReceive('propose')->with('recipe.eigenschaften', \Mockery::any(), \Mockery::any())
+            ->andReturn(new AiProposal(['work_time_min' => 8, 'temperature' => 'kalt', 'function' => 'Finish'], 0.7, 'Mock', [], 'eigenschaften-gl07'));
+        $mock->shouldReceive('propose')->with('recipe.equipment', \Mockery::any(), \Mockery::any())
+            ->andReturn(new AiProposal(['equipment_slugs' => []], 0.7, 'Mock', [], 'equipment-gl07'));
+        $mock->shouldReceive('propose')->with('recipe.steps', \Mockery::any(), \Mockery::any())
+            ->andReturn(new AiProposal(['steps' => [['phase' => 'Alt', 'text' => 'Steht.']]], 0.9, 'Mock', [], 'steps-gl07'));
+    });
+
+    $r = $this->makeRecipe($this->rootTeam, 'Handverkostet', [
+        'status' => 'draft',
+        'description' => 'Bleibt.',
+        'description_source' => 'ki',
+        'category_id' => $this->kategorie->id,
+        'category_source' => 'ki',
+    ]);
+    $this->makeIngredient($r, 'Fleur de Sel', $this->makeGp($this->rootTeam, 'Fleur de Sel-gl07'), '2', 1);
+    DB::table('foodalchemist_recipe_taste_vectors')->insert([
+        'recipe_id' => $r->id, 'source' => 'manual', 'source_hash' => 'old',
+        'suess' => 1, 'salzig' => 0, 'sauer' => 0, 'bitter' => 0, 'umami' => 0, 'fettig' => 0, 'scharf' => 0,
+        'created_at' => now(), 'updated_at' => now(),
+    ]);
+
+    $erg = app(RecipeOneShotService::class)->anreichern($this->rootTeam, $r->refresh(), completeCoverage: true);
+
+    $taste = DB::table('foodalchemist_recipe_taste_vectors')->where('recipe_id', $r->id)->first();
+
+    expect($erg['coverage']['sensorik']['status'])->toBe('manual_geschuetzt')
+        ->and($taste->source)->toBe('manual')          // nicht auf 'ai' umgeschrieben
+        ->and((float) $taste->suess)->toBe(1.0);       // Handwert unangetastet
 });
 
 it('Voll anreichern synchronisiert operative Detail-Felder: Equipment, Posten und Prozessanker', function () {

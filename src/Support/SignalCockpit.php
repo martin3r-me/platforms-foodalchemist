@@ -155,6 +155,15 @@ final class SignalCockpit
         'trend_konzept_vorschlag' => 'Die automatisch erzeugten Konzept-Entwürfe im Concepter sichten und '
             . 'entscheiden: weiterbauen oder verwerfen. Sie liegen als Entwurf und werden ohne Zutun '
             . 'nirgends sichtbar — ein Vorschlag ist kein Befund.',
+        // Welle 0 · Steuerdaten-Wächter: der Weg ist die Konsole, bewusst kein Knopf. Ein
+        // UI-Knopf würde Routings UND Bindings live umschreiben — und genau unversionierte
+        // Hand-Änderungen an diesen zwei Tabellen sind die Ursache der Drift. Der Command
+        // fährt beide Hälften in EINER Transaktion mit Post-Condition-Assert.
+        'steuerdaten_drift' => 'Die Wissens-Steuerdaten weichen vom Soll ab: der Generator baut seinen '
+            . 'Wissensblock anders als geplant. Weg zum Fix ist die Konsole — '
+            . '`foodalchemist:wissen-steuerdaten-w0 --verify` nennt die Abweichung, `--apply` heilt sie in '
+            . 'einer Transaktion. Absichtlich knopflos: Routings und Bindings scheitern beide still, und '
+            . 'genau Hand-Änderungen daran erzeugen diesen Befund.',
         // Spec 21 Tranche A — Küchen-Wissen am Einzelfall. Kein Sammel-propose (s. ASSIST),
         // aber sehr wohl ein benennbarer Ort.
         'rezept_ohne_zubereitung' => 'Zubereitung am Rezept ergänzen (Basisrezepte → Rezept → Zubereitung) — '

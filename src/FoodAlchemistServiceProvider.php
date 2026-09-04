@@ -64,9 +64,23 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                 \Platform\FoodAlchemist\Console\ImportSliceCommand::class,
                 \Platform\FoodAlchemist\Console\ImportMasterCommand::class,
                 \Platform\FoodAlchemist\Console\KnowledgeImportCommand::class,
+                // 2026-09-03: die Routing-Politik hat den Import VERLASSEN. Sie lag dort und wurde
+                // bei jedem Lauf mitgeschrieben — auf einer frischen DB hätte das den
+                // Monolithen-Pfad wiederhergestellt, den Welle 0 abgebaut hat.
+                \Platform\FoodAlchemist\Console\KnowledgePolicySeedCommand::class,
+                \Platform\FoodAlchemist\Console\KnowledgeSectionizeCommand::class,
+                // W2-5: der Rückweg — bis hierher gab es nur Import (Modul = SSOT ohne Backup-Pfad).
+                \Platform\FoodAlchemist\Console\KnowledgeExportCommand::class,
+                // W2-4: §-Deckung — hätte den verlorenen §12 gefunden.
+                \Platform\FoodAlchemist\Console\WissenDeckungCommand::class,
+                // W1-1: misst Findbarkeit jenseits des Embedding-Fensters (vor/nach).
+                \Platform\FoodAlchemist\Console\WissenRecallProbeCommand::class,
+                \Platform\FoodAlchemist\Console\WissenSteuerdatenW0Command::class,
                 \Platform\FoodAlchemist\Console\KnowledgeEmbedCommand::class,
                 \Platform\FoodAlchemist\Console\EmbedCommand::class,
                 \Platform\FoodAlchemist\Console\EmbeddingsMigrateStoreCommand::class,
+                // Bereitschafts-Prüfung für den Cutover (lesend) — GO/NO-GO je Pool.
+                \Platform\FoodAlchemist\Console\EmbeddingCutoverCheckCommand::class,
                 \Platform\FoodAlchemist\Console\EmbedEvalCommand::class,
                 \Platform\FoodAlchemist\Console\MatcherEvalCommand::class,
                 \Platform\FoodAlchemist\Console\GeneratorEvalCommand::class,
@@ -140,6 +154,26 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                 ->runInBackground()
                 ->description('FoodAlchemist: Qualitäts-Lauf (Signale, DQ-Kaskade, Zeitreihen-Snapshot, Drift)');
 
+            // Wissens-Steuerdaten-Wächter (2026-09-03). Rein LESEND (`--verify`), kein
+            // Provider-Call, kein Schreibvorgang an den Steuerdaten — er meldet nur.
+            //
+            // Warum er sein muss: die Routings/Bindings sind per Hand editierbar (MCP, SQL), und
+            // genau das ist schon passiert (Live-Tabelle `regelwerk|discovery|4x8000` gegen
+            // Migration `always|1|7000`). Ein Regelwerk, das leise aus dem Prompt fällt, erzeugt
+            // KEINEN Fehler — der Generator läuft weiter und liefert nur schlechtere Rezepte.
+            // Ohne diesen Lauf ist jede Token- und Qualitätsarbeit an den Prompts in Wochen
+            // wieder aufgebraucht, ohne dass jemand den Grund benennen kann.
+            //
+            // Der Befund geht als SIGNAL ins Cockpit, nicht in ein Log: eine Log-Zeile hätte
+            // dieselbe Eigenschaft wie der alte Deckel-Vermerk in `params` — technisch vorhanden,
+            // faktisch unsichtbar.
+            $schedule->command(\Platform\FoodAlchemist\Console\WissenSteuerdatenW0Command::class, ['--verify'])
+                ->weeklyOn(1, config('foodalchemist.scheduler.steuerdaten_zeit', '06:30'))
+                ->withoutOverlapping()
+                ->onOneServer()
+                ->runInBackground()
+                ->description('FoodAlchemist: Wissens-Steuerdaten gegen das Soll prüfen (Drift → Signal)');
+
             // Trendradar-Automatisierung: NUR wenn explizit eingeschaltet (Default aus) —
             // der Lauf ruft das Modell pro Trend/Team und gibt sonst ungefragt Provider-Geld aus.
             if (config('foodalchemist.scheduler.trend_konzepte_enabled', false)) {
@@ -168,9 +202,25 @@ class FoodAlchemistServiceProvider extends ServiceProvider
     public function boot(): void
     {
         // M7-10 / D8: STT-Fassade — Binding-Tausch genügt für einen späteren Core-Contract
-        $this->app->bind(\Platform\FoodAlchemist\Services\Stt\SttServiceContract::class, fn () => match (config('foodalchemist.stt.provider', 'fake')) {
-            'assemblyai' => new \Platform\FoodAlchemist\Services\Stt\AssemblyAiSttService(),
-            default => new \Platform\FoodAlchemist\Services\Stt\FakeSttService(),
+        // STT-Treiber: 'auto' nimmt den Dienst, für den ein Zugang existiert. Der
+        // frühere Default 'fake' hat auf demo jeden gesprochenen Befehl durch den
+        // Fixtext ersetzt — fehlerfrei und trotzdem falsch. Ein Fallback auf Testdaten
+        // darf nie der Normalfall sein.
+        $this->app->bind(\Platform\FoodAlchemist\Services\Stt\SttServiceContract::class, function () {
+            $provider = (string) config('foodalchemist.stt.provider', 'auto');
+            if ($provider === 'auto') {
+                $provider = match (true) {
+                    (string) config('services.openai.api_key') !== '' => 'openai',
+                    (string) config('foodalchemist.stt.key') !== '' => 'assemblyai',
+                    default => 'fake',
+                };
+            }
+
+            return match ($provider) {
+                'openai' => new \Platform\FoodAlchemist\Services\Stt\OpenAiSttService(),
+                'assemblyai' => new \Platform\FoodAlchemist\Services\Stt\AssemblyAiSttService(),
+                default => new \Platform\FoodAlchemist\Services\Stt\FakeSttService(),
+            };
         });
 
         // E1 (#507): Embedding-Observer — halten die GP-/Rezept-Recall-Vektoren bei
@@ -677,6 +727,7 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\PlanungSessionGetTool::class,
                     \Platform\FoodAlchemist\Tools\PlanungSessionPostTool::class,
                     \Platform\FoodAlchemist\Tools\PlanungSessionPutTool::class,
+                    \Platform\FoodAlchemist\Tools\PlanungLeitplankenExtractTool::class,
                     // Etappe 9 (Planung-Leitstelle): Kaskaden-Status headless lesen — READ-ONLY.
                     \Platform\FoodAlchemist\Tools\PlanungKaskadeStatusGetTool::class,
                     // Etappe 9 · Slice 2: Kaskaden-START (Go) + FREIGABE (Gate 2) via MCP — WRITE. Der

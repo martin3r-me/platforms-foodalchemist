@@ -70,7 +70,7 @@ it('hängt das Regelwerk-Basisrezepte an den Rezept-Generator — mit §2–§4,
         ($this->mkDoc)($slug, 'cross_cutting', "Wissen zu {$slug}");
     }
 
-    $ctx = $this->svc->contextFor('ai_generate_recipe', 'Steinpilz-Risotto mit Rinderjus');
+    $ctx = $this->svc->contextFor(null, 'ai_generate_recipe', 'Steinpilz-Risotto mit Rinderjus');
 
     expect($ctx['block'])->toContain('# REGELWERK BASISREZEPTE')
         ->and($ctx['block'])->toContain('## §2 Verarbeitungs-Reduktion')
@@ -89,7 +89,7 @@ it('bleibt ohne Regelwerk-Doc ohne Block (Invariante 6)', function () {
         ($this->mkDoc)($slug, 'cross_cutting', "Wissen zu {$slug}");
     }
 
-    $ctx = $this->svc->contextFor('ai_generate_recipe', 'Lachs mit brauner Butter');
+    $ctx = $this->svc->contextFor(null, 'ai_generate_recipe', 'Lachs mit brauner Butter');
 
     expect($ctx['block'])->not->toContain('# REGELWERK BASISREZEPTE')
         ->and($ctx['block'])->toContain('# VAULT-WISSEN');
@@ -99,7 +99,7 @@ it('wählt gezielt das Basisrezepte-Regelwerk, nicht andere regelwerk-Docs', fun
     ($this->mkDoc)('regelwerk.regelwerk_grundprodukte', 'regelwerk', "## §2 Foo\nGP-Regel-Text.\n\n## §5 Bar\n");
     ($this->mkDoc)('regelwerk.regelwerk_basisrezepte', 'regelwerk', $this->regelwerkMd);
 
-    $ctx = $this->svc->contextFor('ai_generate_recipe', 'Beliebiges Gericht');
+    $ctx = $this->svc->contextFor(null, 'ai_generate_recipe', 'Beliebiges Gericht');
 
     expect($ctx['block'])->toContain('Sauce/Jus/Püree = eigenes Sub-Rezept.')
         ->and($ctx['block'])->not->toContain('GP-Regel-Text.')
@@ -114,7 +114,7 @@ it('respektiert den Zeichen-Deckel und kürzt mit Marker', function () {
         ->where('feature', 'ai_generate_recipe')->where('category', 'regelwerk')
         ->update(['max_chars_per_doc' => 500]);
 
-    $ctx = $this->svc->contextFor('ai_generate_recipe', 'Brief');
+    $ctx = $this->svc->contextFor(null, 'ai_generate_recipe', 'Brief');
 
     expect($ctx['block'])->toContain('[…gekürzt für KI-Kontext…]')
         ->and($ctx['block'])->not->toContain('ENDE');
@@ -125,7 +125,7 @@ it('ignoriert inaktive regelwerk-Docs', function () {
     DB::table('foodalchemist_knowledge_documents')
         ->where('slug', 'regelwerk.regelwerk_basisrezepte')->update(['active' => 0]);
 
-    $ctx = $this->svc->contextFor('ai_generate_recipe', 'Brief');
+    $ctx = $this->svc->contextFor(null, 'ai_generate_recipe', 'Brief');
 
     expect($ctx['block'])->not->toContain('# REGELWERK BASISREZEPTE');
 });
@@ -138,7 +138,7 @@ it('nimmt die §12-Reihenfolge-Region mit, wenn vorhanden (Spec 41 B1)', functio
         . "## Roadmap / Offene Ideen\n### §13 Grundrezepte\nBacklog.\n";
     ($this->mkDoc)('regelwerk.regelwerk_basisrezepte', 'regelwerk', $md);
 
-    $ctx = $this->svc->contextFor('ai_generate_recipe', 'Tomatencremesuppe');
+    $ctx = $this->svc->contextFor(null, 'ai_generate_recipe', 'Tomatencremesuppe');
 
     expect($ctx['block'])->toContain('## §12 Zutaten-/Komponenten-Reihenfolge')
         ->and($ctx['block'])->toContain('Fett → Aromaten → Hauptmasse.')
@@ -152,7 +152,7 @@ it('bindet fürs Concept-Gerüst das Concept-Regelwerk, nicht Basisrezepte (Spec
     ($this->mkDoc)('regelwerk.regelwerk_concept', 'regelwerk',
         "# Regelwerk Concept\n\n## §3 Gerüst-Regel\nEin Container ist NIE eine atomare Position.\n");
 
-    $ctx = $this->svc->contextFor('concept.brief_geruest', 'Lunchbuffet für eine Tagung');
+    $ctx = $this->svc->contextFor(null, 'concept.brief_geruest', 'Lunchbuffet für eine Tagung');
 
     expect($ctx['block'])->toContain('# REGELWERK CONCEPT')
         ->and($ctx['block'])->toContain('Ein Container ist NIE eine atomare Position.')

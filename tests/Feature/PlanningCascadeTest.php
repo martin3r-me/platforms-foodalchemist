@@ -219,6 +219,110 @@ it('markStepDone: hält das Artefakt fest und hebt den Run auf review', function
         ->and($run->status)->toBe('review');
 });
 
+/*
+ * DIE REGRESSION, die beim Sichtbarmachen des Deckels aufgefallen ist — und die mein eigener
+ * Wochen-Deckel verschärft hatte.
+ *
+ * `MAX_STEPS = 50` sollte die TIEFE des Sub-Rezept-Baums begrenzen (Klassen-Docblock:
+ * »begrenzter DAG für ineinander verschachtelte Basisrezepte«). Die Prüfung zählte aber ALLE
+ * nicht-`skipped`-Steps des Laufs — also auch die `gericht`-Steps der Ausgabe. Ein
+ * Speisekarten-Lauf pflanzt bis zu 40 Positionen, ein Speiseplan seit dem Wochen-Deckel bis zu
+ * 90 Zellen. Damit war das Budget aufgebraucht, BEVOR das erste Basisrezept geplant wurde:
+ * `planChildren` brach beim ersten Kandidaten ab, und die Zutat blieb ungebunden — lautlos, und
+ * ohne dass am Gericht etwas fehlend aussieht (sie fehlt nur in EK und Allergenen).
+ *
+ * Schon vor dem Wochen-Deckel falsch, nur weniger sichtbar: bei 30 Zellen bekamen etwa die
+ * ersten vier ihre Sub-Rezepte und der Rest keine.
+ *
+ * Zwei völlig verschiedene Dinge dürfen sich kein Budget teilen. Die BREITE deckeln die
+ * Ausgabe-Deckel (Wochen/Positionen/Slots), jeder für sich und jeder gemeldet; die TIEFE deckelt
+ * MAX_STEPS.
+ */
+it('MAX_STEPS begrenzt die TIEFE, nicht die Breite — 60 Gericht-Steps verhungern kein Sub-Rezept', function () {
+    $run = \Platform\FoodAlchemist\Models\FoodAlchemistCascadeRun::create([
+        'team_id' => $this->rootTeam->id, 'scope' => 'vollkaskade', 'status' => 'running',
+    ]);
+
+    // Die Breite: 60 Gericht-Steps, wie ein Speiseplan-Zyklus sie anlegt. Weit über MAX_STEPS.
+    foreach (range(1, 60) as $sort) {
+        FoodAlchemistCascadeRunStep::create([
+            'team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id,
+            'kind' => 'gericht', 'status' => 'running', 'sort' => $sort,
+        ]);
+    }
+
+    // Und jetzt EIN Gericht, das ein Sub-Rezept braucht.
+    $eltern = FoodAlchemistCascadeRunStep::create([
+        'team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id,
+        'kind' => 'gericht', 'status' => 'running', 'sort' => 99,
+    ]);
+    $rezept = $this->makeRecipe($this->rootTeam, 'Rinderfilet');
+    $this->makeIngredient($rezept, 'Kalbsfond');
+
+    app(\Platform\FoodAlchemist\Services\RecipeDependencyWorkflowService::class)->afterGenerated(
+        $this->rootTeam, $eltern->id, auth()->id(), $rezept,
+        [['index' => 0, 'text' => 'Kalbsfond', 'primaer' => 'basisrezept_anlegen']],
+        ['auto_dependencies' => true, '_voll_anreichern' => true],
+    );
+
+    // Vorher: 61 >= 50 → break beim ersten Kandidaten, KEIN Kind-Step, Zutat ungebunden.
+    expect(FoodAlchemistCascadeRunStep::where('cascade_run_id', $run->id)->where('kind', 'rezept')->count())->toBe(1)
+        ->and(\Platform\FoodAlchemist\Models\FoodAlchemistCascadeRecipeDependency::count())->toBe(1)
+        // … und weil das Tiefen-Budget gar nicht angeschlagen hat, gibt es auch keinen Befund.
+        ->and($run->refresh()->deckel_hinweise)->toBeNull();
+});
+
+/*
+ * Die Gegenprobe: schlägt das TIEFEN-Budget wirklich an, wird es auch gemeldet — mit einer Zahl
+ * aus dem ZUSTAND. Die Planung läuft je Eltern-Rezept zweimal über dieselbe Kandidatenliste
+ * (afterGenerated + resumeDeferredChildren nach der Freigabe); eine aus der Schleifenposition
+ * abgeleitete Zahl würde sich verdoppeln und im zweiten Durchgang die ganze Liste melden statt
+ * des Rests. Eine Zahl über der Gesamtmenge der Komponenten zerstört das Vertrauen sofort.
+ */
+it('erschoepftes Tiefen-Budget wird gemeldet — und die Zahl kommt aus dem Zustand', function () {
+    $run = \Platform\FoodAlchemist\Models\FoodAlchemistCascadeRun::create([
+        'team_id' => $this->rootTeam->id, 'scope' => 'vollkaskade', 'status' => 'running',
+    ]);
+
+    // 50 Sub-Rezept-Steps = Budget voll (kind='rezept', also die Tiefe).
+    foreach (range(1, 50) as $sort) {
+        FoodAlchemistCascadeRunStep::create([
+            'team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id,
+            'kind' => 'rezept', 'status' => 'geplant', 'sort' => $sort, 'depth' => 1,
+        ]);
+    }
+
+    $eltern = FoodAlchemistCascadeRunStep::create([
+        'team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id,
+        'kind' => 'gericht', 'status' => 'running', 'sort' => 99,
+    ]);
+    $rezept = $this->makeRecipe($this->rootTeam, 'Rinderfilet');
+    // Positionen AUSDRÜCKLICH setzen: `makeIngredient` legt sonst beide auf 1, und die
+    // Kandidaten-Zuordnung läuft über `position === index + 1` — der zweite Kandidat fände
+    // dann keine Zutat und würde nicht gezählt. (Genau darauf reingelaufen.)
+    $this->makeIngredient($rezept, 'Kalbsfond', null, '100', 1);
+    $this->makeIngredient($rezept, 'Pfefferrahm', null, '100', 2);
+
+    app(\Platform\FoodAlchemist\Services\RecipeDependencyWorkflowService::class)->afterGenerated(
+        $this->rootTeam, $eltern->id, auth()->id(), $rezept,
+        [
+            ['index' => 0, 'text' => 'Kalbsfond', 'primaer' => 'basisrezept_anlegen'],
+            ['index' => 1, 'text' => 'Pfefferrahm', 'primaer' => 'basisrezept_anlegen'],
+        ],
+        ['auto_dependencies' => true, '_voll_anreichern' => true],
+    );
+
+    $h = $run->refresh()->deckel_hinweise;
+
+    expect($h)->toHaveCount(1)
+        ->and($h[0]['deckel'])->toBe('sub_rezept_budget')
+        ->and($h[0]['grenze'])->toBe(50)
+        ->and($h[0]['offen'])->toBe(2)
+        ->and($h[0]['text'])->toContain('2 Komponenten nicht als Basisrezept angelegt')
+        // Die Handlung nennt den echten Schaden: nicht »weniger«, sondern EK und Allergene.
+        ->and($h[0]['text'])->toContain('EK und Allergenen');
+});
+
 it('teilt identische fehlende Basisrezepte im Lauf und bindet das Ergebnis an alle Eltern', function () {
     $run = \Platform\FoodAlchemist\Models\FoodAlchemistCascadeRun::create([
         'team_id' => $this->rootTeam->id, 'scope' => 'vollkaskade', 'status' => 'running',
@@ -1225,7 +1329,7 @@ it('Fan-out ist graceful: ohne LLM-Provider 0 erfundene Gerichte, kein Job (Konz
     Queue::assertNotPushed(MaterializeConceptIdeaJob::class);
 });
 
-it('Fan-out-Cap: über 30 leere Slots → KI wird nur nach 30 Ideen gefragt + gedeckelt_slots_offen vermerkt', function () {
+it('Fan-out-Cap: über 30 leere Slots → KI wird nur nach 30 Ideen gefragt + Luecke SICHTBAR vermerkt', function () {
     $concept = $this->makeConcept($this->rootTeam, 'Riesen-Buffet', ['status' => 'draft']);
     foreach (range(1, 33) as $pos) {                       // 33 leere Slots → 3 über dem Deckel (30)
         $this->makeConceptSlot($concept, ['position' => $pos]);
@@ -1241,8 +1345,20 @@ it('Fan-out-Cap: über 30 leere Slots → KI wird nur nach 30 Ideen gefragt + ge
 
     app(PlanningCascadeService::class)->fanoutConceptInvention($this->rootTeam, (int) $conceptStep->id, (int) $concept->id, 'voll_kreativ');
 
-    expect((int) ($run->refresh()->params['gedeckelt_slots_offen'] ?? 0))->toBe(3)   // kein stiller Deckel
-        ->and($run->params['ziel_vk_eur'] ?? null)->toBe(12.5);                       // Bestands-Params bleiben (merge)
+    // KORREKTUR 2026-09-03: prüfte `params['gedeckelt_slots_offen'] === 3`. Der Schlüssel lag im
+    // LEITPLANKEN-Beutel und wurde in der Status-DTO gegen ALLOWED_GENERATION_PARAMS gefiltert —
+    // niemand las ihn. Jetzt in `deckel_hinweise`, und die Zahl ist eine andere UND die richtige:
+    // 33 leer, 30 angefragt, der Mock liefert 2 → 31 fehlen. Die 3 des Slot-Deckels erklären davon
+    // nur einen Bruchteil, deshalb nennt der Satz die UNTER-LIEFERUNG als Grund, nicht den Deckel.
+    $h = $run->refresh()->deckel_hinweise;
+    expect($h)->toHaveCount(1)
+        ->and($h[0]['deckel'])->toBe('concept_luecke:' . $concept->id)
+        ->and($h[0]['verlangt'])->toBe(33)
+        ->and($h[0]['offen'])->toBe(31)
+        ->and($h[0]['text'])->toContain('31 von 33 Positionen ohne Skizze')
+        ->and($h[0]['text'])->toContain('die KI hat nur 2 geliefert')
+        // Bestands-Params bleiben unangetastet — der Vermerk fasst `params` nicht mehr an.
+        ->and($run->params['ziel_vk_eur'] ?? null)->toBe(12.5);
 });
 
 it('Fan-out-Cap: bis 30 leere Slots kein Deckel-Vermerk (Bestandsverhalten)', function () {
@@ -1326,7 +1442,11 @@ it('Wissen/Trend: erfundenes Rezept erbt die Trend-Herkunft der Planung (Lineage
 
 it('Fan-out-Vererbung: REZEPT-Leitplanken (Niveau/Convenience) erreichen die Gericht-Generierung', function () {
     $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Leitplanken', 'brief' => 'x']);
-    app(PlanningSessionService::class)->setGenerationParams($this->rootTeam, (int) $session->id, ['level' => 'gehoben', 'convenience' => 'niedrig', 'menue_gaenge' => 3]);
+    // `convenience` trägt hier nur als Marker („kommt der Wert unten an?"). Seit die
+    // Leitplanken WERT-geprüft werden (ALLOWED_GENERATION_VALUES), muss der Marker ein
+    // echter Wert sein — ein Fantasie-Token würde verworfen und der Test prüfte nichts mehr.
+    // Die Aussage des Tests (Vererbung in den Fan-out) ist unverändert.
+    app(PlanningSessionService::class)->setGenerationParams($this->rootTeam, (int) $session->id, ['level' => 'gehoben', 'convenience' => 'teil_convenience', 'menue_gaenge' => 3]);
     $concept = $this->makeConcept($this->rootTeam, 'Menü', ['status' => 'draft']);
     $slot = $this->makeConceptSlot($concept, ['position' => 1]);
     $recipe = $this->makeRecipe($this->rootTeam, 'Erfunden', ['status' => 'draft', 'is_sales_recipe' => true]);
@@ -1346,7 +1466,7 @@ it('Fan-out-Vererbung: REZEPT-Leitplanken (Niveau/Convenience) erreichen die Ger
     app(PlanningCascadeService::class)->materialisiereConceptGericht($this->rootTeam, (int) $idee->id, (int) $step->id, (int) $session->id);
 
     expect($captured['level'] ?? null)->toBe('gehoben')
-        ->and($captured['convenience'] ?? null)->toBe('niedrig');
+        ->and($captured['convenience'] ?? null)->toBe('teil_convenience');
 });
 
 it('Fan-out-Vererbung: MENÜ-Leitplanken (menue_*) sickern NICHT in den Einzel-Gericht-Prompt', function () {
@@ -1642,14 +1762,93 @@ it('Speisekarte-Leitstelle (Spec 42): Voll-Kaskade-Go springt in die Leitstelle 
     Queue::assertNotPushed(GenerateConceptJob::class);
 });
 
+/*
+ * Der Positions-Deckel der Speisekarte (SPEISEKARTE_MAX_POSITIONEN = 40) war der zweite von
+ * dreien, die ihre Zahl nach `params` schrieben und damit von niemandem gelesen wurden.
+ *
+ * Zwei Eigenheiten, die die MELDUNG bestimmen und die man am Code nachrechnen muss:
+ *  1. `$idx` läuft DURCH alle Rubriken (der Aufrufer fädelt den Rückgabewert weiter). Die 40
+ *     gelten also für die ganze Karte, nicht je Rubrik — und der Deckel greift genau EINMAL
+ *     mitten in einer Rubrik, alle folgenden bekommen null.
+ *  2. Es gibt KEINEN Bestands-Abgleich (anders als beim Speiseplan, der `$belegt` aus den
+ *     Einträgen baut). Ein zweiter Voll-Lauf beginnt wieder bei `$idx = 0` und bestückt damit
+ *     die VORDEREN Rubriken ein zweites Mal. »Zweiten Lauf starten« wäre hier die falsche
+ *     Empfehlung — sie kostet doppelt und füllt die leeren Rubriken trotzdem nicht.
+ */
+it('Positions-Deckel der Speisekarte: nennt die betroffenen RUBRIKEN, nicht nur die Zahl', function () {
+    Queue::fake();
+
+    $karte = app(\Platform\FoodAlchemist\Services\SpeisekarteService::class)
+        ->create($this->rootTeam, ['name' => 'Große Karte']);
+
+    $frameSvc = app(PlanningFrameService::class);
+    $frame = $frameSvc->frameFor($this->rootTeam, 'speisekarte', (int) $karte->id);
+    // 4 Rubriken × 15 = 60 verlangt, Deckel 40. Nachgerechnet: Vorspeisen 15 (idx 0–14),
+    // Hauptgänge 15 (idx 15–29), Desserts 10 (idx 30–39, dann greift der Deckel), Käse 0.
+    // Also EINE angefangene Rubrik und EINE ganz leere — genau die Form, die der Text abbildet.
+    foreach (['Vorspeisen', 'Hauptgänge', 'Desserts', 'Käse'] as $rubrik) {
+        $frameSvc->addSlot($this->rootTeam, $frame, ['label' => $rubrik, 'slot_type' => 'gang', 'target_count' => 15]);
+    }
+
+    $run = app(PlanningCascadeService::class)->starteKaskade(
+        $this->rootTeam, 'vollkaskade', null, 'voll_kreativ',
+        ['owner_type' => 'speisekarte', 'owner_id' => (int) $karte->id],
+    );
+
+    $h = $run->deckel_hinweise;
+
+    expect($run->steps()->where('kind', 'gericht')->count())->toBe(40)
+        ->and($h)->toHaveCount(1)
+        ->and($h[0]['deckel'])->toBe('speisekarte_positionen')
+        ->and($h[0]['grenze'])->toBe(40)
+        ->and($h[0]['verlangt'])->toBe(60)
+        ->and($h[0]['offen'])->toBe(20)
+        // Die angefangene Rubrik mit „x von y" …
+        ->and($h[0]['text'])->toContain('„Desserts" 10 von 15')
+        // … die leere namentlich …
+        ->and($h[0]['text'])->toContain('„Käse" ganz leer')
+        // … und die RICHTIGE Handlung: von Hand füllen, NICHT zweiter Lauf.
+        ->and($h[0]['text'])->toContain('+ Gericht')
+        ->and($h[0]['text'])->toContain('ein zweites Mal')
+        // Und die Leitplanken bleiben unangetastet (der alte params-Write hätte sie gelöscht).
+        ->and($run->params)->toBeNull();
+
+    Queue::assertPushed(MaterializeSpeisekartePositionJob::class, 40);
+});
+
+it('ohne Deckel bleibt die Speisekarte still', function () {
+    Queue::fake();
+
+    $karte = app(\Platform\FoodAlchemist\Services\SpeisekarteService::class)
+        ->create($this->rootTeam, ['name' => 'Kleine Karte']);
+    $frameSvc = app(PlanningFrameService::class);
+    $frame = $frameSvc->frameFor($this->rootTeam, 'speisekarte', (int) $karte->id);
+    foreach (['Vorspeisen', 'Hauptgänge'] as $rubrik) {
+        $frameSvc->addSlot($this->rootTeam, $frame, ['label' => $rubrik, 'slot_type' => 'gang', 'target_count' => 5]);
+    }
+
+    $run = app(PlanningCascadeService::class)->starteKaskade(
+        $this->rootTeam, 'vollkaskade', null, 'voll_kreativ',
+        ['owner_type' => 'speisekarte', 'owner_id' => (int) $karte->id],
+    );
+
+    expect($run->steps()->where('kind', 'gericht')->count())->toBe(10)
+        ->and($run->deckel_hinweise)->toBeNull();
+});
+
 // ── P5: Speiseplan-Voll-Kaskade (Zell-Fan-out) ──────────────────────────────
 
 it('vollkaskade (speiseplan): ein Gericht-Step je leerer Zelle + MaterializeSpeiseplanCellJob', function () {
     $svc = app(\Platform\FoodAlchemist\Services\SpeiseplanService::class);
     $plan = $svc->create($this->rootTeam, ['name' => 'Wochenplan', 'start_date' => '2026-08-03']);
     $plan->load('lines');
-    // cycle_weeks × Mo–Fr × Linien, gedeckelt auf SPEISEPLAN_MAX_ZELLEN (Runaway-Schutz).
-    $erwartet = min($plan->lines->count() * 5 * max(1, (int) $plan->cycle_weeks), 30);
+    // cycle_weeks × Mo–Fr × Linien. KEIN Deckel hier: der Standard-Zyklus ist 4 Wochen, der
+    // Deckel liegt bei 6 Wochen (2026-09-03, Dominique: „Deckel 6 Wochenplan"). Vorher stand
+    // hier `min(…, 30)` — diese Zeile schrieb also fest, dass von 60 verlangten Zellen 30
+    // ankommen, und nannte es „Runaway-Schutz". Gerechnet kostet ein 60-Zellen-Lauf einstellige
+    // Dollar; der Deckel schützte Centbeträge und warf die halbe Arbeit weg.
+    $erwartet = $plan->lines->count() * 5 * max(1, (int) $plan->cycle_weeks);
+    expect($erwartet)->toBe(60);   // 4 Wochen × 3 Starter-Linien × 5 Werktage
     Queue::fake();
 
     $run = app(PlanningCascadeService::class)->starteKaskade($this->rootTeam, 'vollkaskade', null, 'voll_kreativ', ['owner_type' => 'speiseplan', 'owner_id' => (int) $plan->id]);
@@ -2257,6 +2456,37 @@ it('L1 goKaskade: Kreativ-Modus datenbank persistiert bestand=nur_bestand für d
     expect($session->refresh()->generation_params['bestand'] ?? null)->toBe('nur_bestand');
 });
 
+/*
+ * DIE NAHT, an der der Bug 2026-09-03 saß: der Go-Pfad entschied über das Proposal-Gate,
+ * schrieb den Entscheid aber nirgends hin — `regeneriereStep` läuft in einem späteren Request
+ * und musste ihn aus „gestuft + Session + Wurzel-gericht" RATEN. Der Proxy war zu breit und
+ * leitete auch Läufe ins Text-Gate um, die nie eins hatten (Batch-Skizze, MCP-Start).
+ *
+ * Dieser Test pinnt die Persistenz SELBST. Ohne ihn wäre sie ungeschützt: der Resume-Test
+ * unten setzt `params` von Hand, und der Gegen-Test in PlanungLeitstelleTest hat gar kein
+ * proposal_first — beide bleiben also grün, wenn jemand die Persistenz wieder entfernt, und
+ * der Resume-Zweig fiele still auf „nie Proposal" zurück. Genau die Klasse Lücke, in die ein
+ * Fixture läuft, das den geprüften Wert selbst herstellt.
+ */
+it('Go-Pfad PERSISTIERT den Proposal-Gate-Entscheid im Lauf (sonst kann Resume ihn nicht lesen)', function () {
+    $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Gate-Persistenz', 'brief' => 'x']);
+
+    $mit = app(PlanningCascadeService::class)->starteKaskade(
+        $this->rootTeam, 'gericht', $session, 'voll_kreativ',
+        ['brief' => 'Ein warmer Hauptgang.', 'proposal_first' => true],
+    );
+
+    // Und die Gegenprobe: ohne die Option bleibt die Marke WEG — sonst bekäme die Batch-Skizze
+    // beim Fortsetzen ein Text-Gate, das sie mit der Skizzen-Auswahl längst passiert hat.
+    $ohne = app(PlanningCascadeService::class)->starteKaskade(
+        $this->rootTeam, 'gericht', $session, 'voll_kreativ',
+        ['brief' => 'Ein warmer Hauptgang.', 'created_via' => 'plan_batch_skizze'],
+    );
+
+    expect((bool) (($mit->refresh()->params ?? [])['proposal_first'] ?? false))->toBeTrue()
+        ->and((bool) (($ohne->refresh()->params ?? [])['proposal_first'] ?? false))->toBeFalse();
+});
+
 it('Resume eines direkten Gerichtsvorschlags bleibt im Proposal-Gate', function () {
     $session = app(PlanningSessionService::class)->create($this->rootTeam, ['title' => 'Retry Vorschlag', 'brief' => 'x']);
     $run = FoodAlchemistCascadeRun::create([
@@ -2267,6 +2497,12 @@ it('Resume eines direkten Gerichtsvorschlags bleibt im Proposal-Gate', function 
         'brief' => 'Ein warmer Hauptgang.',
         'status' => 'failed',
         'staged' => true,
+        // 2026-09-03: DIESE Vorbedingung stellte der Test nie her, obwohl sein Name sie behauptet.
+        // Vorher genügte dem Resume-Zweig „gestuft + Session + Wurzel-gericht" — ein zu breiter
+        // Proxy, der auch Läufe ohne Text-Gate umleitete (Batch-Skizze, MCP-Start). Jetzt liest er
+        // den persistierten Entscheid, also muss der Lauf ihn tragen. Ohne diese Zeile prüft der
+        // Test etwas anderes als sein Titel sagt.
+        'params' => ['proposal_first' => true],
     ]);
     FoodAlchemistCascadeRunStep::create([
         'team_id' => $this->rootTeam->id,

@@ -50,6 +50,54 @@ final class TeamScope
         return $team !== null && $rowTeamId !== null && (int) $rowTeamId === (int) $team->id;
     }
 
+    /** Master = Team ohne Eltern. Die einzige Instanz, die GLOBALE Zeilen pflegen darf. */
+    public static function isMaster(?Team $team): bool
+    {
+        return $team !== null && $team->parent_team_id === null;
+    }
+
+    /**
+     * SCHREIBRECHT MIT MASTER-AUSNAHME — die dritte Regel neben `owns()` (strikt) und
+     * `applyVisible()` (Sichtbarkeit).
+     *
+     * `owns()` allein sperrt globale Zeilen für JEDEN aus: `owns(null, …)` ist immer false.
+     * Für geerbtes Master-Wissen ist das richtig — ein Kind-Team soll den Katalog nicht
+     * verändern. Für den KURATOR ist es falsch: er pflegt genau diesen globalen Bestand.
+     *
+     * Konkret sichtbar geworden am 2026-09-03: die 6 global geseedeten Wissens-Dokumente
+     * sind über den Browser von niemandem editierbar, auch nicht von BHG. Und sobald der
+     * kuratierte Korpus (818 Dossiers) auf `team_id NULL` wandert — Dominiques Modell:
+     * „das Wissen ist global, damit die Generatoren laufen" —, wäre das gesamte Wissen
+     * eingefroren. `owns()` ist dafür das falsche Werkzeug, nicht die falsche Regel.
+     *
+     * Dieselbe Ausnahme führte `Wissenskategorien::delete()` schon lokal und ausführlich
+     * begründet; sie stand danach zweimal kopiert in den Einstellungen. Hier lebt sie an
+     * EINER Stelle.
+     *
+     * ⚠ NICHT FÜR WISSENS-DOKUMENTE. Dort gilt eine andere, ausdrücklich getestete Regel:
+     * global geseedetes Wissen (team_id NULL) ist für JEDEN unveränderlich und wird nur per
+     * Import gepflegt — gepinnt in `KnowledgeWriteToolsTest`, `KnowledgeSetActiveToolTest`
+     * und `KnowledgeBindToolTest` („sperrt globales Master/Seed-Wissen"). Ich habe die
+     * Wissens-Schreibpfade am 2026-09-03 versuchsweise hierauf umgestellt; drei Tests haben
+     * es zu Recht abgelehnt. Sie nutzen weiter `owns()`.
+     *
+     * FOLGE FÜR DAS MANDANTEN-MODELL: weil globales Wissen unveränderlich ist, darf der
+     * kuratierte Korpus NICHT auf `team_id NULL` wandern — er wäre eingefroren. Der Weg zu
+     * „global lesbar, team-eigen schreibbar" führt über `teams.parent_team_id`: Kundenteams
+     * werden Kinder des Kurator-Teams, dann liefert `applyVisible` genau das gewünschte
+     * Bild, und der Kurator behält sein Schreibrecht.
+     *
+     * Verwendet wird `mayWrite()` darum nur für VOKABULAR-Tabellen (Wissenskategorien,
+     * Einsatzorte) — dort führte `delete()` die Master-Ausnahme schon vor mir.
+     *
+     * Bewusst NICHT geändert: `owns()` selbst. 27 Aufrufstellen verlassen sich auf die
+     * strikte Bedeutung; wer die Ausnahme will, fragt danach.
+     */
+    public static function mayWrite(mixed $rowTeamId, ?Team $team): bool
+    {
+        return self::owns($rowTeamId, $team) || ($rowTeamId === null && self::isMaster($team));
+    }
+
     /**
      * Die dritte Zugriffsart: einen REFERENZIERTEN Fremdschlüssel autorisieren (MVP-044/050).
      *

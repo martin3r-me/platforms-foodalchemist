@@ -13,7 +13,7 @@ use Platform\FoodAlchemist\Services\RecipeService;
  * MCP-Steuerbarkeit · D2: Basisrezept löschen. Destruktiv → confirm=true Pflicht.
  *
  * Nur team-eigene Basisrezepte (is_sales_recipe=false). Der Service blockt bei JEDER harten
- * Referenz (Spec 44): Komponenten-Zeilen, Ersatz-Verknüpfungen, direkt gepinnte Ausgabe-Positionen
+ * Referenz (Spec 49): Komponenten-Zeilen, Ersatz-Verknüpfungen, direkt gepinnte Ausgabe-Positionen
  * und Zeilen in offenen Produktionsaufträgen — Komponenten-Zeilen löst `recipes.REPLACE` auf.
  * VK-Gerichte laufen über verkaufsrezepte.DELETE.
  */

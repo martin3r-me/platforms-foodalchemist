@@ -88,12 +88,12 @@ it('always-Loader: produktion_kapazitat-Referenz landet für recipe.eigenschafte
     $svc = app(\Platform\FoodAlchemist\Services\Ai\KnowledgeContextService::class);
 
     // Query mit 0 Slug-Overlap zum Dossier → discovery würde nichts finden; always lädt es trotzdem.
-    $eig = $svc->contextFor('recipe.eigenschaften', 'Schaumsauce Beurre Blanc Butter Wein');
+    $eig = $svc->contextFor(null, 'recipe.eigenschaften', 'Schaumsauce Beurre Blanc Butter Wein');
     expect($eig['block'])->toContain('RUESTZEIT-KENNWERT: 12 Minuten je Lauf.')
         ->and($eig['block'])->toContain('REFERENZ-WISSEN (produktion_kapazitat)')
         ->and($eig['files_used'])->toContain('produktions-zeitkennwerte-kalibrier-set@v1');
 
     // Routing-gated: ein Feature OHNE das produktion_kapazitat-Routing bekommt die Referenz NICHT.
-    $gen = $svc->contextFor('ai_generate_recipe', 'Schaumsauce Beurre Blanc Butter Wein');
+    $gen = $svc->contextFor(null, 'ai_generate_recipe', 'Schaumsauce Beurre Blanc Butter Wein');
     expect($gen['block'])->not->toContain('RUESTZEIT-KENNWERT');
 });

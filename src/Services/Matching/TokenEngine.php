@@ -110,6 +110,23 @@ class TokenEngine
     }
 
     /** rs:265–277 */
+    /**
+     * Ist dieses Token eine SCHNITTFORM? Enger als `isQualifierToken()`, das auch
+     * Zustand (frisch/TK), Größe (mini/gross) und Verarbeitungsgrad (Pulver/Konzentrat)
+     * einschließt. Für §2 Verarbeitungs-Reduktion zählt nur der Zuschnitt: »Brunoise«
+     * beschreibt, was mit der Karotte gemacht wurde — nicht, DASS es eine Karotte ist.
+     */
+    public function isCutFormToken(string $t): bool
+    {
+        foreach (self::CUT_FORM_MARKERS as $marker) {
+            if (str_contains($t, $marker)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public function isQualifierToken(string $t): bool
     {
         if ($t === 'tk') {

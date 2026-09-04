@@ -58,7 +58,32 @@ class KnowledgeEmbeddingService
      */
     public const INDEXED_KATEGORIEN = ['domain', 'pairing'];
 
-    /** Lead-Budget für Domain-Docs (Titel + erste N Zeichen). */
+    /**
+     * Lead-Budget für Domain-Docs (Titel + erste N Zeichen).
+     *
+     * W1-1 WURDE GEMESSEN UND VERWORFEN (2026-09-03). Der Plan wollte 2000 → 8000 heben
+     * („nur 52 % des Korpus semantisch findbar"). Diese Zahl war eine ZEICHEN-Rechnung.
+     * Gemessen mit `foodalchemist:wissen-recall-probe --team=6` (dieselben Fragen, nur der
+     * Index dazwischen neu):
+     *
+     *                                   Fenster 2000    Fenster 8000
+     *   Anfragen aus dem KOPF              92 %            92 %
+     *   Anfragen JENSEITS von 2000         72 %            68 %
+     *
+     * Der Inhalt war bei 8000 nachweislich IM Vektor (source_hash gegengeprüft) — und wurde
+     * trotzdem nicht besser gefunden, eher minimal schlechter. Grund ist die Verdünnung:
+     * ein Vektor über 8000 Zeichen ist ein Mittelwert über mehr Inhalt, die Themen-Signatur
+     * dominiert, und die Konkurrenz zwischen den Dokumenten steigt.
+     *
+     * Zwei Schlüsse, die für Welle 1 wichtiger sind als der Wert selbst:
+     *  1. Inhalt jenseits des Fensters ist NICHT unsichtbar (72 %, nicht 0) — die
+     *     52-%-Rechnung hat das Problem stark überzeichnet.
+     *  2. Mehr Text pro Vektor ist KEIN Ersatz für Chunking. Abdeckung ohne Schärfe bringt
+     *     nichts; W1-5 (ein Vektor je Abschnitt, mit heading_path) bleibt der echte Fix.
+     *
+     * Darum wieder 2000: kostet ein Viertel des Embedding-Textes und liefert dasselbe.
+     * Wer den Wert erneut anfassen will, fährt bitte ZUERST den Probe — die Messung ist da.
+     */
     private const DOMAIN_LEAD_CHARS = 2000;
 
     /** Max. Partner-Namen, die in den Pairing-Embedding-Text einfließen. */

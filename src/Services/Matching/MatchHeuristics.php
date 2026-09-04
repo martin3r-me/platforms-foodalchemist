@@ -532,12 +532,20 @@ class MatchHeuristics
         if ($has('salz') && $n === 1) {
             return 'Salz / Kochsalz: trocken, unjodiert, Raffinade';
         }
-        // D4 2026-08-18: bare »Wasser«/»Leitungswasser« → Leitungswasser-Basis-GP (normales GP, requires_la=0,
-        // gratis) statt der nächsten Flaschen-/Bio-Variante (Live-Bug: »Wasser« matchte »Wasser: still, 0,5 l,
-        // Bio«). NUR n===1 → »Mineralwasser«/»Wasser still«/»Sprudel« bleiben bewusst die gekaufte Ware.
-        // Inert, solange das »Wasser: Leitung«-GP nicht existiert (resolveGpByName → null → Pool-Scan wie bisher).
+        // D4 2026-08-18: bare »Wasser«/»Leitungswasser« → Leitungswasser-GP statt der nächsten
+        // Flaschen-/Bio-Variante (Live-Bug: »Wasser« matchte »Wasser: still, 0,5 l, Bio«).
+        // NUR n===1 → »Mineralwasser«/»Wasser still«/»Sprudel« bleiben bewusst die gekaufte Ware.
+        //
+        // KORREKTUR 2026-09-03: der Alias zeigte auf »Wasser: Leitung« — diesen Namen gibt es
+        // nicht. Das GP heisst »Leitungswasser: frisch« (id 9359 auf demo), existiert seit
+        // langem, ist approved und über einen Nullpreis-Artikel mit 0,00 €/kg korrekt
+        // modelliert. Der Alias lief also seit dem 18.08. ins Leere (resolveGpByName → null →
+        // Pool-Scan), und »Wasser« landete weiter auf dem Bio-Flaschenwasser: 64 Rezepte
+        // rechnen es so. Es war ein FALSCHER NAME im Code, kein fehlendes Grundprodukt —
+        // die zuvor vermutete Regelwerk-Lücke (§11.2 requires_la-Kopplung) besteht nicht,
+        // weil das GP den normalen Weg über einen Artikel geht.
         if (($has('wasser') || $has('leitungswasser')) && $n === 1) {
-            return 'Wasser: Leitung';
+            return 'Leitungswasser: frisch';
         }
         if ($n === 1 && ($has('zucker') || $has('feinzucker') || $has('kristallzucker')
             || $has('streuzucker') || $has('raffinadezucker') || $has('haushaltszucker') || $has('weisszucker'))) {

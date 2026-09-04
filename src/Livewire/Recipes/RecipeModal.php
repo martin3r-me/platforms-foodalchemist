@@ -633,7 +633,7 @@ class RecipeModal extends Component
         // A (Dominique 2026-08-27): gezielter Wissens-Pull — die Eigenschaften-KI bekommt jetzt das
         // Regelwerk (recipe.eigenschaften-Routing; regelwerkBlock fällt für dieses Feature auf das
         // Basisrezepte-Regelwerk zurück). Leeres Routing = leerer Block (no-op), also fail-soft.
-        $wissenBlock = $wissen->contextFor('recipe.eigenschaften', trim(($this->form['name'] ?? '').' '.implode(' · ', $zutaten)));
+        $wissenBlock = $wissen->contextFor(Auth::user()?->currentTeamRelation, 'recipe.eigenschaften', trim(($this->form['name'] ?? '').' '.implode(' · ', $zutaten)));
         $wissenOpts = ($wissenBlock['block'] ?? '') !== ''
             ? ['knowledge' => $wissenBlock['block'], 'knowledge_used' => $wissenBlock['files_used'] ?? []]
             : [];

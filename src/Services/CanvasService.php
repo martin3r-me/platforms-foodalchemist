@@ -217,6 +217,13 @@ class CanvasService
      * Generierung (jede Ebene spezialisiert die darüber). Liefert ['marken_kontext' => block]
      * oder [] (nichts injizieren). $crmCompanyId = Endkunde (Ebene 2, aus foodbook.crm_company_id).
      */
+    /**
+     * W0-8 — Deckel je DNA-Ebene (Team → Kunde → Angebot → Foodbook → Concept).
+     * 3.000 Zeichen fassen einen vollständig gepflegten Canvas; darüber beginnt
+     * Wiederholung, und die unteren, spezifischeren Ebenen sind die wichtigeren.
+     */
+    private const KONTEXT_MAX_CHARS_PRO_EBENE = 3000;
+
     public function cascadeKontext(Team $team, ?int $conceptId = null, ?int $foodbookId = null, ?int $angebotId = null, ?int $crmCompanyId = null): array
     {
         $bloecke = [];
@@ -233,7 +240,14 @@ class CanvasService
             }
             $canvas = $this->find($type, $ownerType, $ownerId);
             if ($canvas !== null && ($block = $this->promptKontext($canvas)) !== null) {
-                $bloecke[] = $block;
+                // W0-8: Die Canvas-Felder sind Freitext (inkl. `repeatable` mit Claim +
+                // Beschreibung je Eintrag) und liefen über alle fünf Kaskaden-Ebenen ganz
+                // OHNE Deckel in jeden kreativen Prompt — der einzige echt unbegrenzte
+                // Kontext-Block im Generator. Pro Ebene gekappt, damit eine ausführlich
+                // gepflegte Team-DNA nicht die spezialisierenden Ebenen unter sich begräbt.
+                $bloecke[] = mb_strlen($block) > self::KONTEXT_MAX_CHARS_PRO_EBENE
+                    ? mb_substr($block, 0, self::KONTEXT_MAX_CHARS_PRO_EBENE) . "\n- […gekürzt für KI-Kontext…]"
+                    : $block;
             }
         }
 

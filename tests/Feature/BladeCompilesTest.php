@@ -63,6 +63,8 @@ function fa_blade_befunde(string $quelle): array
 
     // Bewusst nur echte Blade-Direktiven: `@click`/`@media`/E-Mail-Adressen sind kein Befund.
     // `@{{ … }}` (escaped echo) ist ebenfalls keins — es kompiliert zu `{{ … }}` ohne `@`.
+    // Und ebenfalls keins: ein `@if` in einem PHP-Kommentar des Kompilats — dort kann es nicht
+    // ausgegeben werden. Nur Kommentare sind inert; geechoter PHP-Inhalt bleibt geprüft.
     $direktiven = 'if|elseif|else|endif|unless|endunless|isset|endisset|empty|endempty|'
         . 'foreach|endforeach|forelse|endforelse|for|endfor|while|endwhile|'
         . 'switch|case|default|break|continue|endswitch|'
@@ -81,7 +83,29 @@ function fa_blade_befunde(string $quelle): array
             . 'OBERHALB aller Kurzformen stehen, und `@endphp` nicht im Kommentar vorkommen)';
     }
 
-    if (preg_match('/@(' . $direktiven . ')\b/', $compiled, $m)) {
+    // KORREKTUR 2026-09-03: der Grep lief über das GESAMTE Kompilat als String und hat damit
+    // auch ein `@if` in einem PHP-KOMMENTAR beanstandet — das ist inert, es kann nichts
+    // ausgeben. Genau daran hing der Dauer-Rote: `presentation/blocks/price_summary.blade.php`
+    // dokumentiert in einem Kommentar INNERHALB eines `@php`-Blocks, warum dort kein geklebtes
+    // `@if` stehen darf — und Blade setzt `@php … @endphp` als Rohblock wörtlich wieder ein,
+    // also landet dieser Kommentar samt `@if` im Kompilat. Das Blade ist korrekt; der Kommentar
+    // ist wertvoll und bleibt.
+    //
+    // Ausgeblendet werden NUR Kommentare, nicht »alles außer T_INLINE_HTML«: geechoter
+    // PHP-Inhalt IST Ausgabe (`@php $s = "@if(x)"; @endphp{{ $s }}` gibt die Direktive
+    // wörtlich aus — ein echtes Leck, das die Prüfung weiter fangen muss). Kommentar → EIN
+    // Leerzeichen, damit das Ausblenden keine neuen Treffer zusammenklebt; die Prüfung bleibt
+    // damit eine echte Teilmenge des vollen Greps und kann nichts erfinden.
+    $sichtbar = '';
+    foreach (token_get_all($compiled) as $token) {
+        if (is_array($token)) {
+            $sichtbar .= ($token[0] === T_COMMENT || $token[0] === T_DOC_COMMENT) ? ' ' : $token[1];
+        } else {
+            $sichtbar .= $token;
+        }
+    }
+
+    if (preg_match('/@(' . $direktiven . ')\b/', $sichtbar, $m)) {
         $befunde['direktive'] = "`@{$m[1]}` blieb als Text stehen (klebt die Direktive an ein Wortzeichen? "
             . 'Blade verlangt ein Nicht-Wortzeichen davor)';
     }
@@ -168,6 +192,27 @@ it('schlägt bei den bekannten Fehlerbildern tatsächlich an', function () {
     // (c) Unbalanciertes Paar: `@if` ohne `@endif`.
     $c = fa_blade_befunde('@if($x) <span>a</span>');
     expect($c['parse'])->not->toBeNull('unbalanciertes Direktiven-Paar (c) nicht erkannt');
+
+    // (d) 2026-09-03 — die Kante, die beim Entschärfen der Kommentar-Fehlbefunde fast
+    // verloren ging: eine Direktive, die als STRING durch PHP läuft und dann geechot wird.
+    // Sie steht im Kompilat nicht im Klartext-HTML, sondern in PHP-Code — wer beim
+    // Ausblenden „alles außer T_INLINE_HTML" wegwirft, sieht sie nicht mehr und der Riegel
+    // wäre hier stumpf. Ausgeblendet werden darum nur KOMMENTARE.
+    // (Mehrzeilige `@php`-Form gewählt, weil sie in einem nackten BladeCompiler nachweisbar
+    // aufgelöst wird und der Treffer damit reproduzierbar ist. Über die einzeilige
+    // `@php … @endphp`-Schreibweise sage ich hier bewusst NICHTS: mein Nachbau liess sie als
+    // `@__raw_block_N__` stehen, aber im Bestand nutzen sie 12 Views und der `parse`-Riegel
+    // ist über alle grün — der Nachbau war für diese Form also unzuverlässig, nicht die Form
+    // kaputt. Eine Aussage darüber gehört erst hierher, wenn sie am echten Kompilat gemessen
+    // ist.)
+    $d = fa_blade_befunde("@php\n\$s = '@if(1)';\n@endphp\n{{ \$s }}");
+    expect($d['direktive'])->not->toBeNull('geechote Direktive aus einem PHP-String (d) nicht erkannt');
+
+    // (e) Die Gegenprobe dazu: dieselbe Direktive in einem PHP-KOMMENTAR ist inert und
+    // darf KEINEN Befund erzeugen — das ist der Dauer-Rote, der hier behoben wurde
+    // (presentation/blocks/price_summary.blade.php dokumentiert dort seinen Fix-Grund).
+    $e = fa_blade_befunde('@php  // kein geklebtes @if im Label\n$s = 1; @endphp<p>{{ $s }}</p>');
+    expect($e['direktive'])->toBeNull('Direktive im PHP-Kommentar faelschlich beanstandet');
 
     // Und die Gegenprobe: ein sauberes Blade erzeugt KEINEN Befund (sonst wäre der Riegel
     // nur laut, nicht scharf) — inklusive der Fälle, die absichtlich `@` enthalten.

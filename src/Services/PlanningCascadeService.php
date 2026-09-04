@@ -2,6 +2,7 @@
 
 namespace Platform\FoodAlchemist\Services;
 
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
@@ -28,6 +29,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipeStepPhoto;
 use Platform\FoodAlchemist\Models\FoodAlchemistSpeiseplan;
 use RuntimeException;
+use Platform\FoodAlchemist\Support\Warteschlange;
 
 /**
  * Der geteilte Kaskaden-Motor (Planungs-Kaskade). EIN Einstieg für alle Flächen: {@see starteKaskade}.
@@ -49,7 +51,32 @@ class PlanningCascadeService
     private const RESULT_TTL_MIN = 15;
 
     /** Deckel gegen Runaway-Kosten: max. Zellen (= KI-Gericht-Generierungen) je Speiseplan-Voll-Kaskade. */
-    private const SPEISEPLAN_MAX_ZELLEN = 30;
+    /**
+     * Wie viele Zyklus-Wochen ein Speiseplan-Lauf auf einmal baut (Dominique 2026-09-03:
+     * „Deckel 6 Wochenplan").
+     *
+     * WOCHEN, nicht Zellen — weil die Küche in Wochen plant und weil eine Zellenzahl die Absicht
+     * nicht ausdrücken kann: die Linienzahl ist pro Plan frei (Starter sind drei, es können mehr
+     * sein), 6 Wochen sind also 90 Zellen bei drei Linien und 150 bei fünf. Ein fester
+     * Zellen-Deckel hätte je nach Plan 6 oder 3,6 Wochen bedeutet, ohne dass es jemand sieht.
+     *
+     * Gezählt werden nur Wochen, in denen der Lauf wirklich etwas gestartet hat. Damit arbeitet
+     * ein zweiter Lauf von selbst weiter: die Zellen der ersten sechs Wochen sind dann belegt,
+     * werden übersprungen, und der Deckel greift erst wieder ab Woche 13.
+     */
+    private const SPEISEPLAN_MAX_WOCHEN = 6;
+
+    /**
+     * Absolute Notbremse gegen einen entarteten Plan (z. B. 20 Linien) — NICHT der eigentliche
+     * Deckel, das sind die Wochen oben. 6 Wochen × 6 Linien × 5 Werktage = 180, darum 200: ein
+     * normal breiter Plan läuft nie hier hinein, ein pathologischer wird gestoppt und gemeldet.
+     *
+     * Vorher stand hier 30 — bei einem Standard-Zyklus (4 Wochen × 3 Linien × 5 Werktage = 60
+     * Zellen) fiel damit die HÄLFTE jedes Auftrags weg, und zwar unsichtbar. Der Wert war als
+     * Kosten-Schutz gedacht; gerechnet kostet ein 30-Zellen-Lauf 0,50–3 $, ein 60er also
+     * einstellige Dollar. Er schützte Centbeträge und warf dafür die halbe Arbeit weg.
+     */
+    private const SPEISEPLAN_MAX_ZELLEN = 200;
 
     /** Runaway-/Kosten-Deckel: max. VK-Gericht-Positionen einer Speisekarte-Vollkaskade (Gerichte-Füllung). */
     private const SPEISEKARTE_MAX_POSITIONEN = 40;
@@ -114,6 +141,20 @@ class PlanningCascadeService
         // bis sie freigegeben wird (dann startet die nächste). Opt-out via optionen['staged']=false.
         $staged = (bool) ($optionen['staged'] ?? true);
 
+        // Der Proposal-Gate-Entscheid muss den START ÜBERLEBEN. `regeneriereStep` läuft in einem
+        // späteren Request und sieht nur noch den Run — ohne persistierte Marke musste es raten
+        // (staged + Session + Wurzel-gericht) und schickte damit auch Läufe ins Text-Gate, die nie
+        // eins hatten: die Batch-Skizze (Planung\Index, created_via 'plan_batch_skizze') und der
+        // MCP-Start (PlanungKaskadeStartPostTool) übergeben KEIN `proposal_first`, starten also auf
+        // dem Rezeptpfad — und wurden beim Fortsetzen auf GenerateDishProposalJob umgeleitet.
+        // Doppelt falsch bei der Skizze: das Text-Gate hat der Mensch mit der Auswahl der Skizze
+        // schon passiert. Darum wandert der Entscheid in die ohnehin persistierten `params`.
+        $proposalFirst = $scope === 'gericht' && $staged && $session !== null
+            && (bool) ($optionen['proposal_first'] ?? false);
+        if ($proposalFirst) {
+            $params['proposal_first'] = true;
+        }
+
         // Geplanter Pfad (Etappe 2b, „KI-Kopf"): der Concept-Step referenziert ein SCHON geprüftes
         // Draft-Concept ({@see ConceptGeneratorService::planAusBrief}) statt eines neu zu generierenden.
         // Ownership VOR der Run-Anlage prüfen — ein Fremd-/Fehl-Concept darf keinen Rumpf-Lauf hinterlassen.
@@ -160,7 +201,7 @@ class PlanningCascadeService
             } else {
                 $this->dispatchConceptStep($team, $step, $brief, $session?->id, $creativeMode, $params);
             }
-        } elseif ($scope === 'gericht' && $staged && $session !== null && (bool) ($optionen['proposal_first'] ?? false)) {
+        } elseif ($proposalFirst) {
             // Direkter Gericht-Go: zuerst nur ein kompakter Bauplan. Noch kein Rezeptdatensatz,
             // keine Dependencies und keine Anreicherung; der geplante Step ist das Freigabe-Gate.
             GenerateDishProposalJob::dispatch(
@@ -342,6 +383,13 @@ class PlanningCascadeService
 
         $slots = $this->vollkaskadeSlots($team, $ownerType, $ownerId, $frame);
         $idx = 0;
+        // Sammler für den Positions-Deckel: EIN Befund für die ganze Karte statt eines Vermerks
+        // je Rubrik. `$idx` ist ein durchlaufender Zähler über alle Rubriken — der Deckel greift
+        // deshalb genau einmal mitten in einer Rubrik, und alle folgenden bekommen null. Ohne
+        // diesen Sammler wüsste die Meldung nicht, WELCHE Rubriken leer geblieben sind, und
+        // „8 Positionen fehlen" ist für einen Koch nutzlos, wenn er nicht weiss, ob ihm die
+        // Vorspeisen oder die Desserts fehlen.
+        $deckel = [];
         foreach ($slots as [$slot, $containerId]) {
             if ($staged) {
                 // Kapitel-Gate: nur PLANEN (geplant), NICHT dispatchen — die Concept-Erzeugung startet erst
@@ -350,11 +398,21 @@ class PlanningCascadeService
                 $idx++;
             } elseif ($speisekarteGerichte) {
                 // Standard-Speisekarte: die Rubrik mit N einzelnen VK-Gerichten füllen (statt 1 Concept).
-                $idx = $this->dispatchRubrikGerichte($team, $run, $slot, (int) $containerId, $idx, $session?->id);
+                $idx = $this->dispatchRubrikGerichte($team, $run, $slot, (int) $containerId, $idx, $session?->id, $deckel);
             } else {
                 $this->dispatchSlotConcept($team, $run, $slot, $ownerType, (int) $containerId, $idx, $creativeMode, $session?->id);
                 $idx++;
             }
+        }
+        if (($deckel['rubriken'] ?? []) !== []) {
+            $offen = (int) array_sum(array_column($deckel['rubriken'], 'offen'));
+            $run->vermerkeDeckel(
+                'speisekarte_positionen',
+                self::SPEISEKARTE_MAX_POSITIONEN,
+                (int) ($deckel['verlangt'] ?? 0),
+                $offen,
+                $this->speisekarteDeckelText($offen, (int) ($deckel['verlangt'] ?? 0), $deckel['rubriken']),
+            );
         }
         if ($idx === 0) {
             $run->update(['status' => 'failed']);   // Frame ohne verwertbare Slots
@@ -469,11 +527,13 @@ class PlanningCascadeService
         // Kompositions-Fix: die Menü-Leitplanken der Session (menue_*: Gänge/Preis-Korridor/Diät-Quoten/
         // Balance) an die Concept-Erzeugung reichen — sonst steuert die Menü-/Kapitel-Zusammenstellung nichts.
         $menueAchsen = $this->sessionMenueAchsen($team, $sessionId);
+        // Je Frame-Slot ein Concept — bei Foodbook/Angebot/Format also so viele, wie das
+        // Gerüst Slots hat (beim Angebot ungedeckelt). Eigene Schlange.
         GenerateConceptJob::dispatch(
             $runId, $team->id, (int) (\Illuminate\Support\Facades\Auth::id() ?? 0),
             $brief, (string) ($slot->label ?: null),
             $sessionId, $step->id, $creativeMode, false, false, $ownerType, $containerId, $menueAchsen
-        );
+        )->onQueue(Warteschlange::kaskade());
     }
 
     /**
@@ -573,8 +633,18 @@ class PlanningCascadeService
      * Speiseplan-Voll-Kaskade (P5): füllt leere Zellen des Zyklus (cycle_weeks × Mo–Fr × Mittag × Linien) mit
      * erfundenen Gerichten. Anders als Foodbook/Speisekarte (Slot → Concept) hält eine Zelle EIN Gericht — je
      * leerer Zelle ein Gericht-Step + {@see MaterializeSpeiseplanCellJob} (generiert + trägt via addEintrag ein).
-     * Gedeckelt ({@see SPEISEPLAN_MAX_ZELLEN}) gegen Runaway-Kosten; die Zahl der übersprungenen Zellen steht
-     * im Run (`params.gedeckelt_zellen_offen`) — kein stiller Deckel.
+     * Gedeckelt ({@see SPEISEPLAN_MAX_ZELLEN}) gegen Runaway-Kosten. Der Vermerk liegt in
+     * `deckel_hinweise` (Schlüssel `speiseplan_zellen`) und erreicht über die Status-DTO die
+     * Leitstelle — erst DAMIT ist es kein stiller Deckel.
+     *
+     * Vorher stand hier „die Zahl der übersprungenen Zellen steht im Run
+     * (`params.gedeckelt_zellen_offen`) — kein stiller Deckel". Das war doppelt falsch: der
+     * Schlüssel wurde von niemandem gelesen (die Status-DTO filtert `params` gegen
+     * ALLOWED_GENERATION_PARAMS, weil dieser Beutel die LEITPLANKEN zeigt), und der Schreibweg
+     * überschrieb `params` KOMPLETT statt zu mergen — womit er zusätzlich den
+     * Leitplanken-Fallback tötete, und zwar genau bei den gedeckelten Läufen, die man am
+     * ehesten nachlesen will. Ein Standard-Zyklus sind 4 Wochen × 3 Linien × 5 Werktage
+     * = 60 leere Zellen; die Hälfte fiel damit unsichtbar weg.
      */
     private function starteSpeiseplanVollkaskade(Team $team, ?FoodAlchemistPlanningSession $session, string $creativeMode, array $optionen): FoodAlchemistCascadeRun
     {
@@ -617,7 +687,25 @@ class PlanningCascadeService
         $planKontext = trim((string) ($session?->brief ?? ''));
         $idx = 0;
         $offen = 0;
+        // Wochen-Deckel: gezählt werden nur Wochen, in denen der Lauf wirklich etwas gestartet
+        // hat. Eine Woche, deren Zellen schon belegt sind, verbraucht also KEIN Budget — genau
+        // dadurch nimmt ein zweiter Lauf die nächsten sechs Wochen und nicht wieder die ersten.
+        $wochenMitArbeit = 0;
+        $wochenOffen = 0;
+        $zellenInOffenenWochen = 0;
         foreach (range(1, $weeks) as $week) {
+            $vorWoche = $idx;
+            if ($wochenMitArbeit >= self::SPEISEPLAN_MAX_WOCHEN) {
+                // Budget aufgebraucht: zählen, was diese Woche gekostet hätte, und weiter —
+                // nicht abbrechen, sonst wüssten wir den Rest nicht.
+                $leerInWoche = $this->leereZellenDerWoche($plan, $start, $week, $meal, $belegt);
+                if ($leerInWoche > 0) {
+                    $wochenOffen++;
+                    $zellenInOffenenWochen += $leerInWoche;
+                }
+
+                continue;
+            }
             foreach (range(1, 5) as $weekday) {   // Mo–Fr (GV-Werktage)
                 $datum = $start->copy()->addDays(($week - 1) * 7 + ($weekday - 1))->format('Y-m-d');
                 foreach ($plan->lines as $linie) {
@@ -639,22 +727,229 @@ class PlanningCascadeService
                         'status' => 'running',
                         'sort' => $idx,
                     ]);
+                    // Die größte Menge im System: bis 90 Zellen je Klick. Eigene Schlange,
+                    // damit sie nichts anderes verdrängt — und damit die Sub-Rezepte dieser
+                    // Zellen parallel auf `rezepte` weiterlaufen statt dahinter zu warten.
                     MaterializeSpeiseplanCellJob::dispatch(
                         $team->id, (int) (\Illuminate\Support\Facades\Auth::id() ?? 0),
                         $planId, $datum, $meal, (int) $linie->id, $brief, (int) $step->id, $session?->id
-                    );
+                    )->onQueue(Warteschlange::gerichte());
                     $idx++;
                 }
             }
+            if ($idx > $vorWoche) {
+                $wochenMitArbeit++;
+            }
         }
-        if ($offen > 0) {
-            $run->update(['params' => ['gedeckelt_zellen_offen' => $offen]]);
-        }
+        // `verlangt` = alle LEEREN Zellen. Belegte sind oben schon per `continue` raus, `$idx`
+        // zählt nur die gestarteten — die Summe braucht also keinen zweiten Zähler.
+        $run->vermerkeDeckel(
+            'speiseplan_wochen',
+            self::SPEISEPLAN_MAX_WOCHEN,
+            $wochenMitArbeit + $wochenOffen,
+            $wochenOffen,
+            $this->deckelTextWochen($wochenMitArbeit, $wochenOffen, $zellenInOffenenWochen),
+        );
+        // Die Notbremse wird nur vermerkt, wenn sie wirklich gegriffen hat — bei einem normal
+        // breiten Plan bleibt sie stumm, weil der Wochen-Deckel vorher bindet.
+        $run->vermerkeDeckel(
+            'speiseplan_zellen',
+            self::SPEISEPLAN_MAX_ZELLEN,
+            $idx + $offen,
+            $offen,
+            $this->deckelTextZellen($idx, $idx + $offen, $offen),
+        );
         if ($idx === 0) {
             $run->update(['status' => 'done']);   // keine leere Zelle → nichts zu tun (kein Fehler)
         }
 
         return $run;
+    }
+
+    /**
+     * Vermerkt die Lücke EINES Konzept-Durchgangs — und nennt den Grund, der wirklich gegriffen hat.
+     *
+     * Drei Ursachen, drei Sätze, und der entscheidende Punkt: die Arithmetik muss immer schließen.
+     * Ein Satz wie »18 von 25 Positionen ohne Skizze — die KI liefert höchstens 12« widerspricht
+     * sich selbst (25 − 18 = 7, die Grenze hat also NICHT gebunden) und ist damit genau der
+     * Fehler, den dieser Umbau beheben soll. Der Koch kann nur eine Sache selbst prüfen: ob die
+     * Zahlen aufgehen.
+     *
+     * Die Reihenfolge der Prüfung folgt der DOMINANZ, nicht der Code-Reihenfolge — das war mein
+     * erster Fehler hier. Bei 33 leeren Positionen, 30 angefragten und 2 gelieferten fehlen 31;
+     * der 30er-Deckel erklärt davon aber nur 3. »Der Lauf fragt höchstens 30 ab« wäre dann
+     * formal richtig und trotzdem die falsche Auskunft. Also:
+     *
+     *   1. Modell hat unterliefert (erzeugt < min(angefragt, grenze)) → »die KI hat nur N geliefert«
+     *   2. Ideen-Klemme gegriffen (erzeugt === grenze < angefragt) → »die KI liefert höchstens N auf einmal«
+     *   3. Slot-Deckel gegriffen (leer > CONCEPT_MAX_SLOTS) → »der Lauf fragt höchstens N Positionen auf einmal ab«
+     *
+     * Stapeln sich 2 und 3, wird 2 genannt: die Klemme ist die pro Lauf bindende Grenze, der
+     * 30er würde erst wirken, wenn man sie hebt.
+     *
+     * »auf einmal« statt »je Konzept«: dass eine Paket-Station intern selbst ein Konzept ist, ist
+     * Code-Wissen. Der Leser bezöge die Zahl sonst auf das ganze Konzept statt auf diesen Durchgang.
+     *
+     * KEIN »zweiter Lauf für den Rest«: der Slot-Filter prüft nur auf NULL und sortiert nach
+     * `position, id` — ein zweiter Lauf nimmt real wieder die Positionen 1–12 und doppelt.
+     *
+     * @param  list<int>  $seen  Rekursions-Pfad; ab Tiefe 1 ist dieser Durchgang eine Paket-Station
+     */
+    private function vermerkeConceptLuecke(int $runId, int $conceptId, int $slotsLeer, int $angefragt, int $erzeugt, int $grenze, array $seen): void
+    {
+        $offen = $slotsLeer - $erzeugt;
+        if ($offen < 1) {
+            return;
+        }
+
+        $run = FoodAlchemistCascadeRun::find($runId);
+        if ($run === null) {
+            return;
+        }
+
+        if ($erzeugt < min($angefragt, $grenze)) {
+            $grund = $erzeugt === 0
+                ? 'die KI hat keine geliefert'
+                : sprintf('die KI hat nur %d geliefert', $erzeugt);
+        } elseif ($angefragt > $grenze) {
+            $grund = sprintf('die KI liefert höchstens %d auf einmal', $grenze);
+        } else {
+            $grund = sprintf('der Lauf fragt höchstens %d Positionen auf einmal ab', self::CONCEPT_MAX_SLOTS);
+        }
+
+        // Ab Tiefe 1 ist der Durchgang eine eingebettete Station — der Ort gehört vorn hin, sonst
+        // weiß der Leser nicht, WELCHE Station Lücken hat.
+        $station = count($seen) > 1
+            ? trim((string) (FoodAlchemistConcept::find($conceptId)?->name ?? '')) : '';
+        $ort = $station !== '' ? sprintf('Station „%s": ', $station) : '';
+
+        $run->vermerkeDeckel(
+            'concept_luecke:' . $conceptId,
+            $grenze,
+            $slotsLeer,
+            $offen,
+            sprintf(
+                '%s%d von %d Positionen ohne Skizze — %s. Rest im Konzept besetzen; ein zweiter '
+                . 'Lauf beginnt wieder vorn.',
+                $ort,
+                $offen,
+                $slotsLeer,
+                $grund,
+            ),
+        );
+    }
+
+    /**
+     * Der Satz für den Positions-Deckel der Speisekarte. Nennt die RUBRIKEN, nicht nur die Zahl:
+     * „8 Positionen fehlen" ist für einen Koch nutzlos, wenn er nicht weiss, ob ihm die
+     * Vorspeisen oder die Desserts fehlen.
+     *
+     * Höchstens EINE Rubrik ist angefangen — `$idx` läuft über alle Rubriken durch, der Deckel
+     * greift also genau einmal mitten in einer und alle folgenden bekommen null. Diese eine wird
+     * mit „x von y" genannt, die leeren gesammelt.
+     *
+     * KEIN „zweiter Lauf" als Handlung, anders als beim Speiseplan: dort baut der Lauf `$belegt`
+     * aus den Einträgen und nimmt den Rest. Hier gibt es keinen Bestands-Abgleich und `$idx`
+     * startet wieder bei 0 — ein zweiter Voll-Lauf bestückt also die VORDEREN Rubriken ein
+     * zweites Mal und lässt die leeren weiter leer. Genau die falsche Empfehlung hätte doppelte
+     * Kosten und doppelte Entwürfe erzeugt.
+     *
+     * @param  list<array{rubrik:string, verlangt:int, erzeugt:int, offen:int}>  $rubriken
+     */
+    private function speisekarteDeckelText(int $offen, int $verlangt, array $rubriken): string
+    {
+        $angefangen = array_values(array_filter($rubriken, static fn (array $r): bool => $r['erzeugt'] > 0));
+        $leer = array_values(array_filter($rubriken, static fn (array $r): bool => $r['erzeugt'] === 0));
+
+        $teile = [];
+        foreach ($angefangen as $r) {
+            $teile[] = sprintf('„%s" %d von %d', $r['rubrik'], $r['erzeugt'], $r['verlangt']);
+        }
+        if ($leer !== []) {
+            $namen = array_map(static fn (array $r): string => '„' . $r['rubrik'] . '"', array_slice($leer, 0, 3));
+            $rest = count($leer) - count($namen);
+            $teile[] = implode(' und ', $namen)
+                . ($rest > 0 ? sprintf(' und %d weitere Rubriken', $rest) : '')
+                . ' ganz leer';
+        }
+
+        return sprintf(
+            '%d von %d Gerichten fehlen (je Lauf höchstens %d): %s. Diese Rubriken im Karten-Editor '
+            . 'über „+ Gericht" füllen — ein zweiter Voll-Lauf bestückt die vorderen Rubriken ein zweites Mal.',
+            $offen,
+            $verlangt,
+            self::SPEISEKARTE_MAX_POSITIONEN,
+            implode(', ', $teile),
+        );
+    }
+
+    /**
+     * Wie viele Zellen einer Zyklus-Woche noch leer sind — für die Deckel-Rechnung, ohne die
+     * Woche zu bauen. Spiegelt die Schleifen-Bedingungen (Mo–Fr × Linien, belegte raus) exakt;
+     * eine abweichende Zählung hier würde eine falsche Zahl in die Meldung schreiben, und eine
+     * falsche Zahl ist schlimmer als keine Meldung.
+     *
+     * @param  array<string, bool>  $belegt
+     */
+    private function leereZellenDerWoche(FoodAlchemistSpeiseplan $plan, \Illuminate\Support\Carbon $start, int $week, string $meal, array $belegt): int
+    {
+        $leer = 0;
+        foreach (range(1, 5) as $weekday) {
+            $datum = $start->copy()->addDays(($week - 1) * 7 + ($weekday - 1))->format('Y-m-d');
+            foreach ($plan->lines as $linie) {
+                if (! isset($belegt[$datum . '|' . $meal . '|' . (int) $linie->id])) {
+                    $leer++;
+                }
+            }
+        }
+
+        return $leer;
+    }
+
+    /**
+     * Der Satz für den Wochen-Deckel. Nennt WOCHEN, weil der Mensch in Wochen plant — die
+     * Zellenzahl steht als Größenordnung dahinter.
+     *
+     * Die Handlung ist hier einfacher als beim Zell-Deckel: weil nur Wochen MIT Arbeit gezählt
+     * werden, findet ein zweiter Lauf die ersten sechs belegt und nimmt die nächsten sechs. Es
+     * braucht kein Vorrücken des Startdatums und keine Bedingung.
+     */
+    private function deckelTextWochen(int $gebaut, int $offen, int $zellen): string
+    {
+        return sprintf(
+            'Wochen %d–%d noch offen (%d Zellen) — ein Lauf baut höchstens %d Wochen. Wenn die '
+            . 'ersten %d im Plan stehen, noch einmal Voll-Kaskade starten: der Lauf nimmt dann die nächsten.',
+            $gebaut + 1,
+            $gebaut + $offen,
+            $zellen,
+            self::SPEISEPLAN_MAX_WOCHEN,
+            $gebaut,
+        );
+    }
+
+    /**
+     * Der Satz, den der Mensch liest, wenn der Zell-Deckel gegriffen hat. EINE Formulierungsstelle —
+     * die Fläche liest den gespeicherten `text` und formatiert nichts nach.
+     *
+     * Zwei Zahlen, nicht eine: »30 nicht erzeugt« sagt nicht, wie groß der Auftrag war. 30 von 33
+     * ist eine Randlage, 30 von 60 der halbe Plan.
+     *
+     * Die Bedingung »wenn die ersten im Plan stehen« ist kein Beiwerk, sondern der Unterschied
+     * zwischen richtig und falsch: {@see materialisiereSpeiseplanZelle} trägt den Eintrag sofort
+     * nach der Generierung ein, nicht erst bei der Freigabe. Ein zweiter Lauf baut `$belegt` aus
+     * den Einträgen und nimmt darum exakt den Rest — klickt der Mensch aber sofort, sind die
+     * Zellen noch leer und er erzeugt dieselben Gerichte ein zweites Mal.
+     */
+    private function deckelTextZellen(int $gestartet, int $verlangt, int $offen): string
+    {
+        return sprintf(
+            '%d von %d Zellen gestartet, %d %s leer — wenn die ersten im Plan stehen, im Speiseplan '
+            . 'noch einmal Voll-Kaskade starten: der Lauf nimmt nur die leeren Zellen.',
+            $gestartet,
+            $verlangt,
+            $offen,
+            $offen === 1 ? 'bleibt' : 'bleiben',
+        );
     }
 
     /**
@@ -742,20 +1037,31 @@ class PlanningCascadeService
      * Standard-Speisekarte (Gerichte-Füllung): eine Rubrik mit N einzelnen VK-Gerichten füllen. Je Slot
      * `target_count` (KI-Vorgabe aus dem Brief) Gericht-Steps + je Step ein {@see MaterializeSpeisekartePositionJob}
      * (erdet ein VK-Gericht, hängt es als gericht_ref-Position an die Rubrik). Spiegelt den Speiseplan-Zell-
-     * Fan-out. Gedeckelt ({@see SPEISEKARTE_MAX_POSITIONEN}) gegen Runaway-Kosten (Rest → params.gedeckelt_positionen_offen).
+     * Fan-out. Gedeckelt ({@see SPEISEKARTE_MAX_POSITIONEN}) gegen Runaway-Kosten; der Rest wird im
+     * Sammler `$deckel` gemerkt und nach der Slot-Schleife als EIN Vermerk in `deckel_hinweise`
+     * geschrieben (vorher: ein `params`-UPDATE je Rubrik, das niemand las — die Status-DTO filtert
+     * `params` gegen ALLOWED_GENERATION_PARAMS).
      *
      * @return int der nächste freie sort-Index
      */
-    private function dispatchRubrikGerichte(Team $team, FoodAlchemistCascadeRun $run, $slot, int $rubrikId, int $idx, ?int $sessionId): int
+    private function dispatchRubrikGerichte(Team $team, FoodAlchemistCascadeRun $run, $slot, int $rubrikId, int $idx, ?int $sessionId, array &$deckel = []): int
     {
         $anzahl = max(1, (int) ($slot->target_count ?? 1));
+        // Nur Rubriken zählen, die wirklich durch DIESEN Pfad laufen — die 'concepte'-Füllung
+        // hat ihren eigenen Zweig und darf die Positions-Rechnung nicht verfälschen.
+        $deckel['verlangt'] = (int) ($deckel['verlangt'] ?? 0) + $anzahl;
         $brief = $this->slotBrief('speisekarte', (int) $run->source_owner_id, $slot);
         $userId = (int) (\Illuminate\Support\Facades\Auth::id() ?? 0);
         for ($i = 0; $i < $anzahl; $i++) {
             if ($idx >= self::SPEISEKARTE_MAX_POSITIONEN) {
-                $params = is_array($run->params) ? $run->params : [];
-                $params['gedeckelt_positionen_offen'] = (int) ($params['gedeckelt_positionen_offen'] ?? 0) + ($anzahl - $i);
-                $run->update(['params' => $params]);
+                // Merken, WIE WEIT diese Rubrik kam — der Name ist die halbe Meldung.
+                $deckel['rubriken'][] = [
+                    'rubrik' => trim((string) ($slot->label ?: 'Rubrik')),
+                    'verlangt' => $anzahl,
+                    'erzeugt' => $i,
+                    'offen' => $anzahl - $i,
+                ];
+
                 break;
             }
             $step = FoodAlchemistCascadeRunStep::create([
@@ -768,7 +1074,10 @@ class PlanningCascadeService
                 'sort' => $idx,
                 'slot_id' => (int) $slot->id,
             ]);
-            MaterializeSpeisekartePositionJob::dispatch($team->id, $userId, $rubrikId, $brief, (int) $step->id, $sessionId);
+            // Bis 40 Positionen je Karte, in einer Schleife — dieselbe Schlange wie die
+            // Speiseplan-Zellen: es ist dasselbe Artefakt (erzeugtes Gericht).
+            MaterializeSpeisekartePositionJob::dispatch($team->id, $userId, $rubrikId, $brief, (int) $step->id, $sessionId)
+                ->onQueue(Warteschlange::gerichte());
             $idx++;
         }
 
@@ -813,11 +1122,19 @@ class PlanningCascadeService
      * Fächert ein frisch erzeugtes Konzept in erfundene Gerichte auf (Erfinden-Modus). Je LEEREM Slot
      * (kein Gericht, kein Paket) lässt die KI eine Gericht-Idee erfinden ({@see IdeenService::kiDivergenzConcept},
      * EIN Call für alle Slots), ordnet Ideen den Slots der Reihe nach zu, legt je Idee einen Kind-Step
-     * (kind=gericht, parent=Concept-Step) an und dispatcht {@see MaterializeConceptIdeaJob} (erdet + verdrahtet).
+     * (kind=gericht, parent=Concept-Step) im Status `geplant` an.
      *
-     * Gedeckelt ({@see CONCEPT_MAX_SLOTS}) gegen Runaway-Kosten bei großem Menü-Brief; überzählige leere
-     * Slots werden übersprungen und ihre Zahl im Run (`params.gedeckelt_slots_offen`) vermerkt — kein
-     * stiller Deckel (analog {@see SPEISEPLAN_MAX_ZELLEN}).
+     * VORSCHLAG-GATE (2026-09-01): hier wird NICHTS mehr dispatcht. {@see MaterializeConceptIdeaJob}
+     * (erdet + verdrahtet) startet erst der Mensch über {@see erzeugeGeplantenStep}. Dieser Satz stand
+     * bis 2026-09-03 im Gegenteil hier und hat eine Fehldiagnose erzeugt („die Paket-Slot-Erkennung ist
+     * verloren gegangen") — ein Docblock, der dem Code 60 Zeilen darunter widerspricht, ist Teil des Bugs.
+     *
+     * ZWEI Grenzen wirken hier hintereinander, und die zweite ist meist die WIRKSAME:
+     * {@see CONCEPT_MAX_SLOTS} (30) bestimmt, nach wie vielen Positionen überhaupt gefragt wird,
+     * und {@see IdeenService::IDEEN_MAX} (12), wie viele Skizzen eine Antwort liefert. Bei 25
+     * leeren Positionen greift also nicht der 30er, sondern die 12er-Klemme — eine Meldung über
+     * den 30er wäre irreführend. Beide werden darum als EIN Befund vermerkt
+     * ({@see vermerkeConceptLuecke}), dessen Satz sich in jedem Fall aufrechnet.
      *
      * Graceful: ohne LLM (Sandbox/Kill-Switch) wirft die Divergenz → 0 Ideen, 0 Kind-Steps; der Run geht
      * mit dem Konzept allein auf review. Wirft NIE (der Concept-Job fängt zusätzlich ab).
@@ -847,19 +1164,18 @@ class PlanningCascadeService
             ->get();
 
         if ($leere->isNotEmpty()) {
-            // Deckel gegen Runaway-/Kosten-Risiko bei großem Menü-Brief (analog SPEISEPLAN_MAX_ZELLEN): wir fragen
-            // die KI gar nicht erst nach mehr als N Ideen und legen höchstens N Kind-Steps/Jobs an. Die Zahl der
-            // übersprungenen Slots steht im Run (`params.gedeckelt_slots_offen`) — kein stiller Deckel.
-            if ($leere->count() > self::CONCEPT_MAX_SLOTS) {
-                $offen = $leere->count() - self::CONCEPT_MAX_SLOTS;
+            // Deckel gegen Runaway-/Kosten-Risiko bei großem Menü-Brief (analog SPEISEPLAN_MAX_WOCHEN):
+            // wir fragen die KI gar nicht erst nach mehr als N Ideen. Der Vermerk geht unten in
+            // `deckel_hinweise` — vorher stand er in `params.gedeckelt_slots_offen`, wo ihn niemand
+            // las (die Status-DTO filtert `params` gegen ALLOWED_GENERATION_PARAMS).
+            // `$slotsLeer` VOR dem Deckel merken — das ist die Zahl, die der Mensch verlangt hat.
+            $slotsLeer = $leere->count();
+            if ($slotsLeer > self::CONCEPT_MAX_SLOTS) {
                 $leere = $leere->take(self::CONCEPT_MAX_SLOTS);
-                $run = FoodAlchemistCascadeRun::find($runId);
-                if ($run !== null) {
-                    $run->update(['params' => array_merge(is_array($run->params) ? $run->params : [], ['gedeckelt_slots_offen' => $offen])]);
-                }
             }
 
             $ideen = [];
+            $div = null;   // muss VOR dem try stehen — im Fehlerfall wäre es sonst undefiniert
             try {
                 // Wissen+Trend fließen in die Divergenz (voller Stack + generischer Trend + Ursprungs-Trend der Planung).
                 $div = app(IdeenService::class)->kiDivergenzConcept($team, $conceptId, $leere->count(), null, $trendDocId);
@@ -867,6 +1183,21 @@ class PlanningCascadeService
             } catch (\Throwable) {
                 $ideen = [];   // KI nicht verfügbar → keine Erfindung für die direkten Slots (graceful); Pakete werden dennoch versucht
             }
+
+            // EIN Befund für diesen Konzept-Durchgang, statt getrennter Vermerke für den
+            // Slot-Deckel und die Ideen-Klemme. Grund: die beiden greifen nacheinander an
+            // derselben Zahl, und zwei Meldungen über dieselbe Lücke widersprechen sich
+            // rechnerisch. Der Schlüssel trägt die Konzept-ID, weil `vermerkeDeckel` je Schlüssel
+            // ERSETZT — die Paket-Rekursion unten würde den äußeren Eintrag sonst löschen.
+            $this->vermerkeConceptLuecke(
+                $runId,
+                $conceptId,
+                $slotsLeer,
+                $leere->count(),          // tatsächlich ANGEFRAGT (nach dem Slot-Deckel)
+                count($ideen),
+                (int) ($div['grenze'] ?? IdeenService::IDEEN_MAX),
+                $seen,
+            );
 
             foreach (array_values($ideen) as $idx => $idee) {
                 $slot = $leere[$idx] ?? null;
@@ -897,8 +1228,10 @@ class PlanningCascadeService
         }
 
         // A1: eingebettete Pakete (Buffet-Stationen) rekursiv befüllen — je Paket seine INNEREN Gerichte
-        // erfinden. Der Paket-Auto-Preis (Σ) zieht nach, sobald die inneren Slots gefüllt sind
-        // (MaterializeConceptIdeaJob → fillSlot → refreshCache auf dem Paket-Concept). 1 Ebene tief
+        // erfinden. Der Paket-Auto-Preis (Σ) zieht nach, sobald die inneren Slots gefüllt sind — was
+        // seit dem Vorschlag-Gate NICHT automatisch passiert, sondern je innerem Slot erst nach dem
+        // menschlichen Klick (erzeugeGeplantenStep → MaterializeConceptIdeaJob → fillSlot →
+        // refreshCache auf dem Paket-Concept). 1 Ebene tief
         // (generierte Pakete verschachteln nicht), $seen schützt gegen zyklische Bestands-Embeds.
         $paketIds = FoodAlchemistConceptSlot::where('concept_id', $conceptId)
             ->whereNotNull('embedded_concept_id')
@@ -1488,7 +1821,32 @@ class PlanningCascadeService
      */
     public function recomputeRunStatus(int $runId): void
     {
-        $run = FoodAlchemistCascadeRun::find($runId);
+        // ATOMAR seit 2026-09-03, weil demo ab jetzt ZWEI Queue-Worker fährt.
+        //
+        // Das hier ist ein Lese-Ändern-Schreiben: alle Steps lesen, daraus den Lauf-Status
+        // ableiten, schreiben. Jeder Kind-Job ruft es über markStepDone. Mit einem Worker war das
+        // zwangsläufig seriell; mit zwei ist folgende Verschränkung möglich:
+        //
+        //   A: Step A = done
+        //   A: liest → B läuft noch → entscheidet »running«
+        //   B: Step B = done
+        //   B: liest → alles fertig → schreibt »review«
+        //   A: schreibt »running«        ← veraltet, überschreibt B
+        //
+        // Folge: der Lauf hängt dauerhaft auf »running«. Das ist der »ewige Spinner« — und
+        // dieselbe Anzeige steht schon für einen ganz anderen Fehler (Generator-OOM), die
+        // Diagnose wäre also doppelt verdeckt. Darum Transaktion + Sperre auf den Lauf und die
+        // Steps INNERHALB der Sperre lesen: zwei Aufrufe serialisieren, der zweite sieht den
+        // Schreibvorgang des ersten und rechnet mit dem gültigen Stand.
+        DB::transaction(function () use ($runId): void {
+            $this->recomputeRunStatusGesperrt($runId);
+        });
+    }
+
+    /** Der eigentliche Rechenweg — läuft ausschließlich unter der Lauf-Sperre. */
+    private function recomputeRunStatusGesperrt(int $runId): void
+    {
+        $run = FoodAlchemistCascadeRun::query()->whereKey($runId)->lockForUpdate()->first();
         if ($run === null) {
             return;
         }
@@ -1760,7 +2118,11 @@ class PlanningCascadeService
 
         // Sub-Rezepte im Hintergrund mit-anreichern (nicht am Worker-Step sichtbar, wie allesAnreichern).
         foreach (app(\Platform\FoodAlchemist\Services\RecipeOneShotService::class)->subRezeptIds((int) $recipe->id) as $subId) {
-            EnrichRecipeJob::dispatch($team->id, (int) (Auth::id() ?? 0), (int) $subId, null, false, null, false, true);
+            // Schleife über alle Sub-Rezepte eines Gerichts — viele kleine Läufe hinter EINEM
+            // Klick. Eigene Schlange, damit sie den interaktiven Einzel-Anreicherungs-Klick
+            // (Rezept-/VK-Modal) nicht blockieren.
+            EnrichRecipeJob::dispatch($team->id, (int) (Auth::id() ?? 0), (int) $subId, null, false, null, false, true)
+                ->onQueue(Warteschlange::anreichern());
         }
 
         return $run;
@@ -1825,10 +2187,17 @@ class PlanningCascadeService
         $params = is_array($run?->params) ? $run->params : [];
         $sessionId = $run?->planning_session_id !== null ? (int) $run->planning_session_id : null;
         $staged = (bool) ($run?->staged ?? false);
-        if ($step->kind === 'gericht' && $step->parent_step_id === null && $staged && $sessionId !== null) {
+        if ($step->kind === 'gericht' && $step->parent_step_id === null && $staged && $sessionId !== null
+            && (bool) ($params['proposal_first'] ?? false)) {
             // Ein fehlgeschlagener direkter Gerichtsvorschlag muss beim Resume wieder auf dieselbe
             // textliche Gate-Stufe gehen. Der generische Rezeptpfad wuerde sonst das Proposal-Gate
             // umgehen und sofort einen echten Gericht-Draft erzeugen.
+            //
+            // Die vierte Klausel (`params.proposal_first`) ist 2026-09-03 nachgezogen: vorher hatte
+            // dieser Zweig nur DREI Klauseln, der Go-Pfad aber VIER — er konnte den Entscheid nicht
+            // rekonstruieren, weil er nirgends persistiert war. Der zu breite Proxy leitete jeden
+            // gestuften Wurzel-gericht-Lauf mit Session ins Text-Gate um, auch Batch-Skizze und
+            // MCP-Start. Jetzt ist genau EIN Gate je Lauf gesetzt, egal wie oft man fortsetzt.
             GenerateDishProposalJob::dispatch(
                 $team->id,
                 (int) (Auth::id() ?? 0),
@@ -2361,6 +2730,14 @@ class PlanningCascadeService
             'stufen' => $stufen,
             'schritte' => $schritte,
             'kohaerenz_warnung' => is_array($run->cohesion_warning) ? $run->cohesion_warning : null,
+            // Was der Lauf NICHT erzeugt hat. Steht hier NEBEN den Leitplanken und nicht darin:
+            // `params` wird oben gegen ALLOWED_GENERATION_PARAMS gefiltert, weil es die wirksame
+            // STEUERUNG zeigen soll — ein Ergebnis-Hinweis darin wurde deshalb weggeworfen. Genau
+            // das ist der Grund, warum `params.gedeckelt_zellen_offen` seit seiner Einführung
+            // niemanden erreicht hat, obwohl der Docblock „kein stiller Deckel" behauptete.
+            'deckel_hinweise' => is_array($run->deckel_hinweise) && $run->deckel_hinweise !== []
+                ? array_values($run->deckel_hinweise)
+                : null,
             'hinweis' => $this->laufStatusHinweis((string) $run->status),
         ];
     }
