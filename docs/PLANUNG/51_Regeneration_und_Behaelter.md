@@ -285,6 +285,12 @@ Tief → flach **kappt**: Referenz `GN 1/1-100` mit 12 kg, Schicht steht bei 80 
 proportional in ein `GN 1/1-65`. Ohne gepflegte Füllhöhe kann der Rechner das nicht wissen, also
 rechnet er konservativ und wertet die Konfidenz ab. Optional `max_schichthoehe_mm` an der Zeile.
 
+**Der Ansatz treibt den Behälterbedarf NICHT** (User-Entscheid 2026-09-04). Ein Basisrezept wird
+auf ganze Ansätze gerundet — das ist richtig für die Rezeptmenge und für die Produktionszeit, aber
+es ist keine Aussage darüber, wie viel Geschirr am Pass gebraucht wird. Wer 4 kg zieht, braucht
+Behälter für 4 kg, auch wenn der Ansatz 10 kg gross ist. Gerechnet wird deshalb mit dem
+**ungerundeten Bedarf**, nicht mit `produzierte_menge_kg`.
+
 **Warum `max_fuellgewicht_kg`:** `tiefer_fuellbar` × Volumenverhältnis ergibt Suppe in `GN 1/1-200`
 ≈ 25–28 kg **in einem Behälter**. Rechnerisch korrekt, nicht tragbar. Ohne Deckel steht in der
 Varianten-Liste eine Zeile, die nie jemand wählt — und die Liste verliert Vertrauen.

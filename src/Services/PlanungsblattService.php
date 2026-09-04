@@ -761,8 +761,12 @@ class PlanungsblattService
                 'regenerationen' => $this->regenerationenFuer($recipe),   // §3.2: Programm je Komponente (V-19)
                 // Spec 51: Abfuellen an JEDER Zeile (was produziert wird, muss irgendwo hinein);
                 // Regenerieren/Ausgabe nur, wo auch serviert wird — und dort je Komponente.
+                // Spec 51 (User-Entscheid 2026-09-04): Behälter folgen dem BEDARF, nicht dem
+                // aufgerundeten Ansatz. Der Ansatz existiert, um die Rezeptmenge einmal zu haben
+                // und in die Produktionszeit einzugehen — er ist keine Aussage darüber, wie viel
+                // Geschirr am Pass gebraucht wird. Deshalb $roh (ungerundet), nicht $batches.
                 'behaelter' => $this->behaelterBedarf($team, $recipe, $istVk, (int) $tiefe[$rid],
-                    $basisYieldKg !== null ? round($basisYieldKg * $batches, 3) : null, $komponentenMasse),
+                    $basisYieldKg !== null ? round($basisYieldKg * $roh, 3) : null, $komponentenMasse),
                 'anrichte_schritte' => $istVk ? $this->anrichteSchritteFuer($recipe) : [],   // §3.3 (nur am Gericht)
                 'zutaten' => $zeilen,
             ];

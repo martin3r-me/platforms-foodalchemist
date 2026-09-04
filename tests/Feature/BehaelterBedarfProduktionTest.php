@@ -51,7 +51,7 @@ beforeEach(function () {
     ]);
 });
 
-it('rechnet den Abfüll-Bedarf aus der produzierten Menge — an jeder Zeile', function () {
+it('rechnet den Abfüll-Bedarf aus der benötigten Menge — an jeder Zeile', function () {
     $sauce = $this->makeRecipe($this->rootTeam, 'Sauce: Pfeffer', ['yield_kg' => 10]);
     $this->makeIngredient($sauce, 'Sahne', $this->makeGp($this->rootTeam, 'Sahne'), '10000');
     $sauce->forceFill(['yield_kg' => 10])->save();
@@ -65,7 +65,7 @@ it('rechnet den Abfüll-Bedarf aus der produzierten Menge — an jeder Zeile', f
     $zeile = collect($blatt['rezepte'])->firstWhere('recipe_id', $sauce->id);
     $ab = $zeile['behaelter']['abfuellen'];
 
-    // 4 Ansätze à 10 kg = 40 kg, in Eimer à 9 kg ⇒ fünf. Vier wären 36 kg.
+    // 40 kg Ziel in Eimer à 9 kg ⇒ fünf. Vier wären 36 kg.
     expect($zeile['produzierte_menge_kg'])->toBe(40.0)
         ->and($ab['berechenbar'])->toBeTrue()
         ->and($ab['varianten'][0]['behaelter'])->toBe('Eimer 10 l')
@@ -321,13 +321,44 @@ it('am Konzept skaliert der Bedarf mit der Personenzahl — aus dem Produktionsp
     $klein = $anzahl(50);
     $gross = $anzahl(500);
 
-    //  50 Pax × 100 g =  5 kg Bedarf → aber ein Basisrezept wird in GANZEN Ansaetzen gekocht:
-    //                     1 Ansatz = 10 kg produziert → 2 Eimer à 9 kg.
-    // 500 Pax × 100 g = 50 kg Bedarf → 5 Ansaetze = 50 kg → 6 Eimer.
+    //  50 Pax × 100 g =  5 kg → 1 Eimer à 9 kg.
+    // 500 Pax × 100 g = 50 kg → 6 Eimer.
+    // Der ANSATZ spielt hier bewusst keine Rolle: er traegt die Rezeptmenge und geht in die
+    // Produktionszeit ein — er sagt nichts darueber, wie viel Geschirr gebraucht wird.
     // Vorher stand hier zweimal dieselbe Zahl, weil am Concept ueberhaupt nichts skalierte.
     expect($klein)->not->toBeNull()
         ->and($gross)->not->toBeNull()
         ->and($klein[0]['kurz'])->not->toBe($gross[0]['kurz'])
-        ->and($klein[0]['kurz'])->toContain('2× Eimer 10 l')
+        ->and($klein[0]['kurz'])->toContain('1× Eimer 10 l')
         ->and($gross[0]['kurz'])->toContain('6× Eimer 10 l');
+});
+
+it('ein angebrochener Ansatz treibt den Behälterbedarf NICHT hoch', function () {
+    // User-Entscheid 2026-09-04: der Ansatz existiert, um die Rezeptmenge einmal zu haben und in
+    // die Produktionszeit einzugehen. Er ist KEINE Aussage darüber, wie viel Geschirr gebraucht
+    // wird. Wer 4 kg zieht, braucht Behälter für 4 kg — auch wenn der Ansatz 10 kg gross ist.
+    $sauce = $this->makeRecipe($this->rootTeam, 'Sauce: Pfeffer', ['yield_kg' => 10]);
+    $this->makeIngredient($sauce, 'Sahne', $this->makeGp($this->rootTeam, 'Sahne'), '10000');
+    $sauce->forceFill(['yield_kg' => 10])->save();
+    ($this->behaelterAn)($sauce, RC::ZWECK_ABFUELLEN, $this->eimer, 9.0);
+
+    $teller = $this->makeRecipe($this->rootTeam, 'Teller: Steak', [
+        'is_sales_recipe' => true, 'sales_unit_count' => 1, 'yield_kg' => 0.3,
+    ]);
+    ($this->alsKomponente)($teller, $sauce, '100');
+    $teller->forceFill(['yield_kg' => 0.3])->save();
+
+    $blatt = $this->blatt->produktionsblattFuerZiele($this->rootTeam, [
+        ['recipe_id' => $teller->id, 'portions' => 40],          // 40 × 100 g = 4 kg
+    ]);
+
+    $zeile = collect($blatt['rezepte'])->firstWhere('recipe_id', $sauce->id);
+    $ab = $zeile['behaelter']['abfuellen'];
+
+    // Der Ansatz wird weiterhin auf 1 aufgerundet — das ist fuer Zeit und Rezeptmenge richtig.
+    expect((int) $zeile['ansaetze'])->toBe(1)
+        ->and($zeile['produzierte_menge_kg'])->toBe(10.0)
+        // Der Behaelter folgt aber den 4 kg, nicht den 10.
+        ->and($ab['menge_kg'])->toBe(4.0)
+        ->and($ab['varianten'][0]['anzahl'])->toBe(1);
 });
