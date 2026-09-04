@@ -562,7 +562,8 @@ class RecipeService
      * beim Löschen auf NULL).
      *
      * @return array{eltern_zeilen:int, eltern:int, ersatz:int, ausgaben:int, produktion_offen:int,
-     *               produktion_historie:int, instanzen:int, blocker:int, blocker_teile:list<string>}
+     *               produktion_historie:int, instanzen:int, blocker:int, blocker_teile:list<string>,
+     *               eltern_namen: list<array{id:int,name:string,ist_gericht:bool}>}
      */
     public function referenzen(int $id): array
     {
@@ -604,6 +605,19 @@ class RecipeService
             'instanzen' => FoodAlchemistRecipe::where('instantiated_from_recipe_id', $id)->count(),
         ];
 
+        // Adressen statt Mengen: welche Eltern-Rezepte blockieren (2026-09-04). Ohne Namen
+        // ist „Löschen blockiert — 1 Zeile(n) in 1 Rezept(en)" eine Sackgasse.
+        $ref['eltern_namen'] = FoodAlchemistRecipeIngredient::query()
+            ->join('foodalchemist_recipes as r', 'r.id', '=', 'foodalchemist_recipe_ingredients.recipe_id')
+            ->where('foodalchemist_recipe_ingredients.referenced_recipe_id', $id)
+            ->whereNull('r.deleted_at')
+            ->distinct()
+            ->orderBy('r.name')
+            ->limit(20)
+            ->get(['r.id', 'r.name', 'r.is_sales_recipe'])
+            ->map(fn ($r) => ['id' => (int) $r->id, 'name' => (string) $r->name, 'ist_gericht' => (bool) $r->is_sales_recipe])
+            ->all();
+
         $ref['blocker_teile'] = array_values(array_filter([
             $ref['eltern_zeilen'] > 0 ? "{$ref['eltern_zeilen']} Zeile(n) in {$ref['eltern']} Rezept(en)" : null,
             $ref['ersatz'] > 0 ? "{$ref['ersatz']} Ersatz-Verknüpfung(en)" : null,
@@ -635,15 +649,26 @@ class RecipeService
             ->whereNull('ri.deleted_at')
             ->whereNull('r.deleted_at');
         $zeilen = TeamScope::applyVisible($q, 'r.team_id', $team)
-            ->get(['ri.id as zeile_id', 'r.id as parent_id', 'r.team_id']);
+            ->get(['ri.id as zeile_id', 'r.id as parent_id', 'r.name as parent_name', 'r.team_id', 'r.is_sales_recipe']);
         $eigen = $zeilen->filter(fn ($z) => (int) $z->team_id === (int) $team->id);
         $fremd = $zeilen->filter(fn ($z) => (int) $z->team_id !== (int) $team->id);
+
+        // Die NAMEN mitgeben (2026-09-04, Dominique: „es wird nicht angezeigt wo es drin ist"):
+        // „1 Zeile(n) in 1 Rezept(en)" nennt eine Menge, aber keine Adresse — wer umhängen
+        // oder löschen will, muss wissen, WELCHES Rezept er aufmachen muss.
+        $namen = fn ($c) => $c->unique('parent_id')->map(fn ($z) => [
+            'id' => (int) $z->parent_id,
+            'name' => (string) $z->parent_name,
+            'ist_gericht' => (bool) $z->is_sales_recipe,
+        ])->sortBy('name')->values()->all();
 
         return [
             'zeilen' => $eigen->count(),
             'rezepte' => $eigen->pluck('parent_id')->unique()->count(),
             'fremd_zeilen' => $fremd->count(),
             'fremd_rezepte' => $fremd->pluck('parent_id')->unique()->count(),
+            'eltern_namen' => $namen($eigen),
+            'fremd_namen' => $namen($fremd),
         ];
     }
 

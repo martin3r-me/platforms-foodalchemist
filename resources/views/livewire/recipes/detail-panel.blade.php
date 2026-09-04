@@ -89,31 +89,32 @@
 
     {{-- ── STANDALONE-Sidebar: v3 Kosten-Linse ── --}}
     @else
-        {{-- Kopf --}}
+        {{-- Kopf: Name ÜBER den Aktionen (2026-09-04, Dominique) — identischer Aufbau wie das
+             Verkauf-Panel. Vorher standen Name und Aktionen in EINER Flex-Zeile: im schmalen
+             Panel blieb dem Titel nur eine Wortbreite, „Fond: Dunkler Geflügelfond" brach
+             mitten in die Knopfreihe hinein. --}}
         <div>
-            <div class="flex items-start justify-between gap-2">
-                <div class="flex items-start gap-2 min-w-0">
-                    @if(!empty($rezeptBildUrl))
-                        <img src="{{ $rezeptBildUrl }}" alt="" class="h-10 w-10 object-cover rounded-md border border-black/10 shrink-0" data-rezept-mini-bild>
-                    @endif
-                    <h3 class="text-base font-semibold tracking-tight text-gray-900 leading-snug">{{ $rezept->name }}</h3>
-                </div>
-                <div class="flex items-center gap-1.5 shrink-0">
-                    <button type="button" wire:click="$dispatch('recipe-modal.oeffnen', { id: {{ $rezept->id }} })" class="{{ $btnGhostXs }}" data-rezept-bearbeiten>@svg('heroicon-o-pencil-square', 'w-3.5 h-3.5') Bearbeiten</button>
-                    <a href="{{ route('foodalchemist.rezepte.dokument', ['id' => $rezept->id, 'profil' => 'produktion']) }}" target="_blank"
-                       class="{{ $btnGhostXs }}" title="Druck-/PDF-Report mit Profilen und Filtern" data-rezept-panel-druck>
-                        @svg('heroicon-o-printer', 'w-3.5 h-3.5') Druck
-                    </a>
-                    <a href="{{ route('foodalchemist.rezepte.dokument', ['id' => $rezept->id, 'profil' => 'produktion', 'pdf' => 1]) }}"
-                       class="{{ $btnGhostXs }}" title="PDF herunterladen" data-rezept-panel-pdf>PDF</a>
-                    <button type="button" wire:click="neuBerechnen" class="{{ $btnGhostXs }}" title="GL-02-Pipeline + Eltern-Propagation" data-recompute-btn>@svg('heroicon-o-arrow-path', 'w-3.5 h-3.5')</button>
-                    <span class="{{ $pill }} font-medium {{ $statusPill[$rezept->status->value] ?? $variantPill['secondary'] }}">{{ $rezept->status->label() }}</span>
-                </div>
+            <div class="flex items-start gap-2">
+                @if(!empty($rezeptBildUrl))
+                    <img src="{{ $rezeptBildUrl }}" alt="" class="h-10 w-10 object-cover rounded-md border border-black/10 shrink-0" data-rezept-mini-bild>
+                @endif
+                <h3 class="text-base font-semibold tracking-tight text-gray-900 leading-snug">{{ $rezept->name }}</h3>
             </div>
-            <p class="text-[11px] text-gray-500 mt-1.5 flex items-center gap-1.5">
+            <div class="flex flex-wrap items-center gap-1.5 mt-2.5" data-rezept-aktionen>
+                <button type="button" wire:click="$dispatch('recipe-modal.oeffnen', { id: {{ $rezept->id }} })" class="{{ $btnGhostXs }}" data-rezept-bearbeiten>@svg('heroicon-o-pencil-square', 'w-3.5 h-3.5') Bearbeiten</button>
+                <a href="{{ route('foodalchemist.rezepte.dokument', ['id' => $rezept->id, 'profil' => 'produktion']) }}" target="_blank"
+                   class="{{ $btnGhostXs }}" title="Druck-/PDF-Report mit Profilen und Filtern" data-rezept-panel-druck>
+                    @svg('heroicon-o-printer', 'w-3.5 h-3.5') Druck
+                </a>
+                <a href="{{ route('foodalchemist.rezepte.dokument', ['id' => $rezept->id, 'profil' => 'produktion', 'pdf' => 1]) }}"
+                   class="{{ $btnGhostXs }}" title="PDF herunterladen" data-rezept-panel-pdf>PDF</a>
+                <button type="button" wire:click="neuBerechnen" class="{{ $btnGhostXs }}" title="GL-02-Pipeline + Eltern-Propagation" data-recompute-btn>@svg('heroicon-o-arrow-path', 'w-3.5 h-3.5') Neu rechnen</button>
+            </div>
+            <div class="flex flex-wrap items-center gap-1.5 mt-2">
+                <span class="{{ $pill }} font-medium {{ $statusPill[$rezept->status->value] ?? $variantPill['secondary'] }}">{{ $rezept->status->label() }}</span>
                 <span class="{{ $pill }} {{ $variantPill['info'] }}">{{ $rezept->category?->label ?? '—' }}</span>
-                <span class="text-gray-400">{{ $rezept->recipe_key }}</span>
-            </p>
+                <span class="text-[11px] text-gray-400">{{ $rezept->recipe_key }}</span>
+            </div>
         </div>
 
         {{-- Cockpit (Kosten): EK/kg + Bepreist-Signal + EK gesamt/Yield/Konfidenz --}}

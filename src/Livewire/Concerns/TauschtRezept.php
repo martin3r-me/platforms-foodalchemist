@@ -64,14 +64,21 @@ trait TauschtRezept
         )->orderBy('name')->limit(6)->get(['id', 'name', 'status', 'team_id', 'is_sales_recipe']);
     }
 
-    /** @return array{zeilen: int, rezepte: int, fremd_zeilen: int, fremd_rezepte: int} */
+    /**
+     * @return array{zeilen:int, rezepte:int, fremd_zeilen:int, fremd_rezepte:int,
+     *               eltern_namen: list<array{id:int,name:string,ist_gericht:bool}>,
+     *               fremd_namen: list<array{id:int,name:string,ist_gericht:bool}>}
+     */
     protected function tauschBilanz(): array
     {
         $team = Auth::user()?->currentTeamRelation;
 
         return $team !== null && $this->recipeId !== null
             ? app(RecipeService::class)->verwendungsBilanz($team, $this->recipeId)
-            : ['zeilen' => 0, 'rezepte' => 0, 'fremd_zeilen' => 0, 'fremd_rezepte' => 0];
+            // Die Namens-Schlüssel MÜSSEN auch im Leerfall stehen — das Partial liest sie
+            // direkt, ein fehlender Key wäre ein „Undefined array key" im Render.
+            : ['zeilen' => 0, 'rezepte' => 0, 'fremd_zeilen' => 0, 'fremd_rezepte' => 0,
+                'eltern_namen' => [], 'fremd_namen' => []];
     }
 
     /**
@@ -79,7 +86,8 @@ trait TauschtRezept
      * VK-Editor (`SalesRecipeService::deleteDish`), geerbte Rezepte gar nicht (D1).
      *
      * @return array{eltern_zeilen:int, eltern:int, ersatz:int, ausgaben:int, produktion_offen:int,
-     *               produktion_historie:int, instanzen:int, blocker:int, blocker_teile:list<string>}|null
+     *               produktion_historie:int, instanzen:int, blocker:int, blocker_teile:list<string>,
+     *               eltern_namen: list<array{id:int,name:string,ist_gericht:bool}>}|null
      */
     protected function tauschReferenzen(): ?array
     {
