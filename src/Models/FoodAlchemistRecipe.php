@@ -363,6 +363,21 @@ class FoodAlchemistRecipe extends Model
         return $this->hasMany(FoodAlchemistRecipeRegeneration::class, 'recipe_id')->orderBy('sort_order');
     }
 
+    /**
+     * Spec 51: welcher Behälter für welchen Zweck (abfuellen | regenerieren | ausgabe | transport).
+     * Gilt für JEDES Rezept — ein Basisrezept trägt hier seinen Default, ein Gericht seinen Override.
+     */
+    public function containers(): HasMany
+    {
+        return $this->hasMany(FoodAlchemistRecipeContainer::class, 'recipe_id');
+    }
+
+    /** Deutscher Alias (Modul-Konvention). */
+    public function behaelter(): HasMany
+    {
+        return $this->containers();
+    }
+
     /** R2.6: Praxis-Feedback (Küche/Kunde/Event), neueste zuerst. */
     public function feedbacks(): HasMany
     {

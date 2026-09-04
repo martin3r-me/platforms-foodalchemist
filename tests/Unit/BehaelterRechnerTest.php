@@ -1,0 +1,240 @@
+<?php
+
+use Platform\FoodAlchemist\Services\BehaelterRechner;
+
+/**
+ * Spec 51 — produzierte Menge (kg) → ganze Behälter, plus Alternativen.
+ *
+ * Pure Unit-Tests, Behälter duck-typed. Die Maße sind ECHTE Werte nach DIN EN 631
+ * (GN 1/1 = 530 × 325 mm, 65 mm ≙ 8,8 l brutto) — keine erfundene Fixture, die sich
+ * ihren eigenen Vertrag baut.
+ */
+beforeEach(function () {
+    $this->r = new BehaelterRechner;
+
+    $this->gn = fn (int $id, string $name, float $l, float $b, float $t, float $vol, ?array $eignung = null) => (object) [
+        'id' => $id, 'name' => $name,
+        'laenge_mm' => $l, 'breite_mm' => $b, 'tiefe_mm' => $t, 'volumen_l' => $vol,
+        'nutzfaktor' => 0.85, 'max_fuellgewicht_kg' => 15.0, 'kapazitaet_kg' => null,
+        'eignung' => $eignung,
+    ];
+
+    $this->gn11_65 = ($this->gn)(1, 'GN 1/1 65mm', 530, 325, 65, 8.8);
+    $this->gn11_100 = ($this->gn)(2, 'GN 1/1 100mm', 530, 325, 100, 13.7);
+    $this->gn11_200 = ($this->gn)(3, 'GN 1/1 200mm', 530, 325, 200, 27.8);
+    $this->gn12_65 = ($this->gn)(4, 'GN 1/2 65mm', 325, 265, 65, 4.0);
+    $this->gn16_100 = ($this->gn)(5, 'GN 1/6 100mm', 176, 162, 100, 1.6);
+
+    $this->eimer = (object) [
+        'id' => 9, 'name' => 'Eimer 10 l',
+        'laenge_mm' => null, 'breite_mm' => null, 'tiefe_mm' => null, 'volumen_l' => 10.0,
+        'nutzfaktor' => 0.90, 'max_fuellgewicht_kg' => 10.0, 'kapazitaet_kg' => null,
+        'eignung' => ['abfuellen', 'transport'],
+    ];
+
+    $this->basis = fn (array $a) => array_merge([
+        'container' => $this->gn11_65, 'referenz_menge_kg' => null, 'dichteklasse' => null,
+        'skalierung' => 'hoehe_gebunden', 'max_schichthoehe_mm' => null, 'konfidenz_rang3' => false,
+    ], $a);
+});
+
+it('10 kg auf eine 8-kg-Referenz ergibt zwei flache GN — der Fall aus der Küche', function () {
+    $out = $this->r->varianten(10.0, ($this->basis)(['referenz_menge_kg' => 8.0]), [], 'regenerieren');
+
+    expect($out['berechenbar'])->toBeTrue()
+        ->and($out['varianten'][0]['behaelter'])->toBe('GN 1/1 65mm')
+        ->and($out['varianten'][0]['anzahl'])->toBe(2)
+        ->and($out['varianten'][0]['konfidenz'])->toBe('hoch')
+        ->and($out['varianten'][0]['rest_im_letzten_kg'])->toBe(6.0);
+});
+
+it('2 kg passen in EINEN kleineren Einsatz — die Menge wählt die Größe', function () {
+    $out = $this->r->varianten(
+        2.0,
+        ($this->basis)(['referenz_menge_kg' => 8.0]),
+        [$this->gn12_65, $this->gn16_100],
+        'regenerieren'
+    );
+
+    $nachName = collect($out['varianten'])->keyBy('behaelter');
+
+    // GN 1/2-65 fasst 45 % des GN 1/1-65 (nicht 50 % — die kleinere Form verliert mehr an Wand).
+    expect($nachName['GN 1/2 65mm']['kg_je_behaelter'])->toBe(3.636)
+        ->and($nachName['GN 1/2 65mm']['anzahl'])->toBe(1);
+});
+
+it('exaktes Vielfaches rundet NICHT hoch (Epsilon-Guard)', function () {
+    $out = $this->r->varianten(16.0, ($this->basis)(['referenz_menge_kg' => 8.0]), [], 'regenerieren');
+
+    expect($out['varianten'][0]['anzahl'])->toBe(2)
+        ->and($out['varianten'][0]['rest_im_letzten_kg'])->toBe(0.0);
+});
+
+it('ohne Menge kommt ein Grund statt einer Zahl', function () {
+    $out = $this->r->varianten(0.0, ($this->basis)(['referenz_menge_kg' => 8.0]), [], 'regenerieren');
+
+    expect($out['berechenbar'])->toBeFalse()
+        ->and($out['varianten'])->toBe([])
+        ->and($out['grund'])->toContain('yield_kg');
+});
+
+it('ohne Referenz und ohne Dichteklasse wird nicht geraten', function () {
+    $ohne = clone $this->gn11_65;
+    $ohne->volumen_l = null;
+    $ohne->laenge_mm = null;
+    $ohne->breite_mm = null;
+
+    $out = $this->r->varianten(10.0, ($this->basis)(['container' => $ohne]), [], 'regenerieren');
+
+    expect($out['berechenbar'])->toBeFalse()
+        ->and($out['grund'])->toContain('Dichteklasse');
+});
+
+it('Dichteklasse trägt als Rang 2 — mit abgestufter Konfidenz', function () {
+    $out = $this->r->varianten(
+        20.0,
+        ($this->basis)(['container' => $this->gn11_100, 'dichteklasse' => 'schuettfaehig']),
+        [],
+        'regenerieren'
+    );
+
+    // 13,7 l brutto × 0,85 Nutzfaktor × 0,6 kg/l = 6,987 kg je Behälter.
+    expect($out['varianten'][0]['kg_je_behaelter'])->toBe(6.987)
+        ->and($out['varianten'][0]['anzahl'])->toBe(3)
+        ->and($out['varianten'][0]['konfidenz'])->toBe('mittel');
+});
+
+it('Warengruppen-Default stuft die Konfidenz auf niedrig', function () {
+    $out = $this->r->varianten(
+        20.0,
+        ($this->basis)(['container' => $this->gn11_100, 'dichteklasse' => 'schuettfaehig', 'konfidenz_rang3' => true]),
+        [],
+        'regenerieren'
+    );
+
+    expect($out['varianten'][0]['konfidenz'])->toBe('niedrig');
+});
+
+it('Behälter ohne Maße fällt sauber auf sein Nennvolumen zurück (Eimer)', function () {
+    $out = $this->r->varianten(
+        40.0,
+        ['container' => $this->eimer, 'referenz_menge_kg' => null, 'dichteklasse' => 'fluessig',
+            'skalierung' => 'tiefer_fuellbar', 'max_schichthoehe_mm' => null, 'konfidenz_rang3' => false],
+        [],
+        'abfuellen'
+    );
+
+    // 10 l × 0,90 = 9 kg je Eimer → 40 kg brauchen fünf, nicht vier.
+    expect($out['berechenbar'])->toBeTrue()
+        ->and($out['varianten'][0]['kg_je_behaelter'])->toBe(9.0)
+        ->and($out['varianten'][0]['anzahl'])->toBe(5);
+});
+
+it('hoehe_gebunden: tiefer bringt nichts, flacher kappt und stuft ab', function () {
+    $out = $this->r->varianten(
+        10.0,
+        ($this->basis)(['container' => $this->gn11_100, 'referenz_menge_kg' => 12.0]),
+        [$this->gn11_65],
+        'regenerieren'
+    );
+
+    $flach = collect($out['varianten'])->firstWhere('behaelter', 'GN 1/1 65mm');
+
+    // Wirkfläche 8,8/65 vs 13,7/100 → 0,9882; Tiefenfaktor 65/100 → zusammen 0,6423 × 12 kg.
+    expect($flach['kg_je_behaelter'])->toBe(7.708)
+        ->and($flach['konfidenz'])->toBe('mittel');
+});
+
+it('tiefer_fuellbar nutzt die volle Tiefe — bis der Handhabungs-Deckel greift', function () {
+    $out = $this->r->varianten(
+        60.0,
+        ($this->basis)(['referenz_menge_kg' => 8.0, 'skalierung' => 'tiefer_fuellbar']),
+        [$this->gn11_200],
+        'regenerieren'
+    );
+
+    $tief = collect($out['varianten'])->firstWhere('behaelter', 'GN 1/1 200mm');
+
+    // Rechnerisch ~25 kg Suppe in einem GN 1/1-200 — korrekt, aber niemand trägt das.
+    expect($tief['auf_deckel_gekappt'])->toBeTrue()
+        ->and($tief['kg_je_behaelter'])->toBe(15.0)
+        ->and($tief['anzahl'])->toBe(4);
+});
+
+it('gepflegte Schichthöhe schlägt die Faustregel und hält die Konfidenz', function () {
+    $out = $this->r->varianten(
+        10.0,
+        ($this->basis)(['container' => $this->gn11_100, 'referenz_menge_kg' => 12.0, 'max_schichthoehe_mm' => 50.0]),
+        [$this->gn11_65],
+        'regenerieren'
+    );
+
+    $flach = collect($out['varianten'])->firstWhere('behaelter', 'GN 1/1 65mm');
+
+    // Die Ware steht nur 50 mm hoch — beide Behälter fassen sie, es zählt nur die Fläche.
+    expect($flach['kg_je_behaelter'])->toBe(11.859)
+        ->and($flach['konfidenz'])->toBe('hoch');
+});
+
+it('ein Behälter ohne Freigabe für den Zweck liefert einen Grund, keine Zahl', function () {
+    $out = $this->r->varianten(
+        40.0,
+        ['container' => $this->eimer, 'referenz_menge_kg' => 9.0, 'dichteklasse' => null,
+            'skalierung' => 'tiefer_fuellbar', 'max_schichthoehe_mm' => null, 'konfidenz_rang3' => false],
+        [],
+        'regenerieren'
+    );
+
+    expect($out['berechenbar'])->toBeFalse()
+        ->and($out['grund'])->toContain('regenerieren');
+});
+
+it('nicht freigegebene Kandidaten tauchen gar nicht erst als Alternative auf', function () {
+    $out = $this->r->varianten(
+        40.0,
+        ($this->basis)(['referenz_menge_kg' => 8.0]),
+        [$this->eimer],
+        'regenerieren'
+    );
+
+    expect(collect($out['varianten'])->pluck('behaelter'))->not->toContain('Eimer 10 l');
+});
+
+it('Lagenware ohne Stückzahl rechnet nicht, sondern sagt warum', function () {
+    $out = $this->r->varianten(
+        10.0,
+        ($this->basis)(['referenz_menge_kg' => 8.0, 'skalierung' => 'lagenware']),
+        [],
+        'regenerieren'
+    );
+
+    expect($out['berechenbar'])->toBeFalse()
+        ->and($out['grund'])->toContain('Stückzahl');
+});
+
+it('derselbe Behälter zum Abfüllen und Regenerieren zählt EINMAL', function () {
+    $ab = $this->r->varianten(10.0, ($this->basis)(['referenz_menge_kg' => 8.0]), [], 'abfuellen');
+    $re = $this->r->varianten(10.0, ($this->basis)(['referenz_menge_kg' => 8.0]), [], 'regenerieren');
+
+    $out = $this->r->zusammenlegen($ab, $re);
+
+    expect($out['durchgaengig'])->toBeTrue()
+        ->and($out['anzahl'])->toBe(2)
+        ->and($out['hinweis'])->toContain('kein Umfüllen');
+});
+
+it('verschiedene Behälter benennen den Umfüll-Schritt', function () {
+    $ab = $this->r->varianten(
+        40.0,
+        ['container' => $this->eimer, 'referenz_menge_kg' => 9.0, 'dichteklasse' => null,
+            'skalierung' => 'tiefer_fuellbar', 'max_schichthoehe_mm' => null, 'konfidenz_rang3' => false],
+        [],
+        'abfuellen'
+    );
+    $re = $this->r->varianten(40.0, ($this->basis)(['referenz_menge_kg' => 8.0]), [], 'regenerieren');
+
+    $out = $this->r->zusammenlegen($ab, $re);
+
+    expect($out['durchgaengig'])->toBeFalse()
+        ->and($out['hinweis'])->toContain('Umfüllen am Einsatztag');
+});
