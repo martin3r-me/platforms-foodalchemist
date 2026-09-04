@@ -127,7 +127,9 @@ class RecipeService
                 'kategorie:id,main_group_id,label',
                 'ingredients.gp:id,name,main_ingredient_slug,lead_la_supplier_item_id,piece_default_g',
                 'ingredients.unit:id,slug,display_de,dimension,default_in_g,default_in_ml',
-                'ingredients.referencedRecipe:id,name,ek_per_kg_eur',
+                // yield_kg/yield_pieces: g/Stück fürs Live-Rechnen im Zutaten-Editor
+                // (Stück-Sub — spiegelt RecipeRecomputeService::grammFaktor)
+                'ingredients.referencedRecipe:id,name,ek_per_kg_eur,yield_kg,yield_pieces',
                 'equipment',
                 'niveauEignungen',
                 'sektorEignungen',
@@ -945,6 +947,9 @@ class RecipeService
             ->map(fn ($gp) => [
                 'type' => 'gp', 'id' => $gp->id, 'name' => $gp->name,
                 'ek_pro_g' => $recompute->preisProGrammPublic($gp, $team),
+                // Stückgewicht fürs Live-Rechnen: ohne das bleibt eine stk-Zeile im Client
+                // ohne Gramm-Faktor (Anteil %/Yield/EK leer), obwohl der Server sie kennt.
+                'g_pro_stueck' => $gp->piece_default_g !== null ? (float) $gp->piece_default_g : null,
                 'url' => \Platform\FoodAlchemist\Support\Sprungziel::gp($gp->id),  // R5: Sprung-Ziel
             ]);
 

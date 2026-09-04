@@ -156,8 +156,17 @@
                         <td class="{{ $td }} !px-2 !py-0.5"><input type="text" x-model="zeile.quantity" class="{{ $input }} !w-20 !py-0.5 !text-[11px] text-right" data-quantity /></td>
                         <td class="{{ $td }} !px-2 !py-0.5">
                             {{-- #9c: nur die für dieses Produkt hinterlegten/umrechenbaren Einheiten (Fallback: alle) --}}
+                            {{-- :selected ist PFLICHT, nicht Deko (2026-09-04, Dominique). x-model schiebt
+                                 seinen Wert EINMAL beim Aufbau in den Select — die Optionen aus dem
+                                 verschachtelten x-for existieren da noch nicht, der Wert fällt weg, und der
+                                 Select bleibt auf der ersten Option stehen. Ergebnis: jede Zeile, deren
+                                 Einheit nicht die erste erlaubte ist (bei GPs immer „g"), zeigte kg/stk/
+                                 scheibe als „g" an, WÄHREND gerechnet wurde wie hinterlegt — 1 stk Sub-Rezept
+                                 stand als „1 g" da und trug 199 g bei. Am Minimal-Nachbau gemessen: x-effect
+                                 + $nextTick heilt nur die beim Laden vorhandene Zeile, nicht die nachträglich
+                                 eingefügte; :selected heilt beide, und x-model schreibt weiter zurück. --}}
                             <select x-model.number="zeile.unit_vocab_id" class="{{ $input }} !w-24 !py-0.5 !text-[11px]">
-                                <template x-for="e in erlaubteEinheiten(zeile)" :key="e.id"><option :value="e.id" x-text="e.slug"></option></template>
+                                <template x-for="e in erlaubteEinheiten(zeile)" :key="e.id"><option :value="e.id" :selected="e.id === zeile.unit_vocab_id" x-text="e.slug"></option></template>
                             </select>
                         </td>
                         {{-- R19: Hinweis-Spalte raus → Platz für die EINZEILIGE Zutat (note bleibt im Datensatz) --}}

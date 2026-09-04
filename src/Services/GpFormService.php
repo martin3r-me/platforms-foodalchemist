@@ -5,6 +5,7 @@ namespace Platform\FoodAlchemist\Services;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Models\FoodAlchemistGp;
 use Platform\FoodAlchemist\Models\FoodAlchemistGpForm;
+use Platform\FoodAlchemist\Models\FoodAlchemistVocabEinheit;
 use Platform\FoodAlchemist\Services\Ai\AiGatewayService;
 use Platform\FoodAlchemist\Support\Curate;
 
@@ -16,8 +17,56 @@ use Platform\FoodAlchemist\Support\Curate;
  */
 class GpFormService
 {
-    /** Erlaubte Form-Slugs (Zähl-/Stück-Einheiten; die ersten fünf existieren als Rezept-Einheiten). */
-    public const FORM_SLUGS = ['stk', 'scheibe', 'wuerfel', 'streifen', 'blatt', 'ring', 'zehe', 'bund', 'zweig'];
+    /**
+     * B (2026-09-04): Verpackungs-Einheiten — für sie gibt es KEIN Naturalgewicht am
+     * Grundprodukt. Eine Flasche Öl hat beim einen Lieferanten 0,75 l, beim anderen 1 l;
+     * das Gewicht hängt am Gebinde des Lieferantenartikels, nicht am Produkt (GP-Regelwerk
+     * §7.1 verbietet Verpackungsangaben am GP aus demselben Grund). „portion" ist eine
+     * Verkaufs-, keine Einkaufsgrösse. Für diese darf die KI nichts schätzen.
+     */
+    public const VERPACKUNGS_SLUGS = [
+        'beutel', 'dose', 'dosen', 'eimer', 'flasche', 'glas', 'kanister', 'kapsel',
+        'karton', 'pck', 'portion', 'schale', 'schalen', 'zaepfle',
+    ];
+
+    /**
+     * Rückfall, wenn das Vokabular nicht lesbar ist (kein DB-Kontext beim Schema-Aufbau)
+     * oder leer antwortet. Bewusst der Alt-Stand: nichts kaputt, nur weniger.
+     */
+    public const FALLBACK_SLUGS = ['stk', 'scheibe', 'wuerfel', 'streifen', 'blatt', 'ring', 'zehe', 'bund', 'zweig'];
+
+    /**
+     * Erlaubte Form-Slugs = alle aktiven ZÄHL-Einheiten des Vokabulars minus Verpackung.
+     *
+     * Vorher eine handgepflegte Neuner-Liste — und die war von der Wirklichkeit abgekoppelt:
+     * das Vokabular führt 35 Zähl-Einheiten, im Einsatz waren u. a. beet/hände/fäden/zweige,
+     * für die der Editor kein Gewicht annahm (und die KI darum nichts schätzen konnte),
+     * während `blatt` und `ring` in der Liste standen, ohne als Einheit zu existieren.
+     * Zwei Listen, die dasselbe meinen, driften auseinander — dieselbe Fehlerklasse, die
+     * heute schon Preis- und Gewichts-Kaskade gekostet hat. Darum: EINE Quelle, das Vokabular.
+     *
+     * @return list<string>
+     */
+    public static function formSlugs(?Team $team = null): array
+    {
+        try {
+            $slugs = FoodAlchemistVocabEinheit::query()
+                ->when($team, fn ($q) => $q->visibleToTeam($team))
+                ->where('is_inactive', false)
+                ->where('dimension', 'count')
+                ->whereNotIn('slug', self::VERPACKUNGS_SLUGS)
+                ->orderBy('slug')
+                ->pluck('slug')
+                ->all();
+        } catch (\Throwable) {
+            // MCP-Tool-Schemas rufen das beim Registry-Aufbau — auch in Kontexten ohne
+            // (migrierte) DB, z. B. `migrate` auf einer frischen Instanz. Dort darf ein
+            // Enum-Schema nicht die halbe Anwendung mitreissen.
+            return self::FALLBACK_SLUGS;
+        }
+
+        return $slugs !== [] ? $slugs : self::FALLBACK_SLUGS;
+    }
 
     public function __construct(private AiGatewayService $ki) {}
 
@@ -32,8 +81,9 @@ class GpFormService
     {
         $gp = $this->kuratierbaresGp($team, $gpId);
         $formSlug = mb_strtolower(trim($formSlug));
-        if (! in_array($formSlug, self::FORM_SLUGS, true)) {
-            throw new \RuntimeException("Unbekannte Form „{$formSlug}\" — erlaubt: " . implode(', ', self::FORM_SLUGS) . '.');
+        $erlaubt = self::formSlugs($team);
+        if (! in_array($formSlug, $erlaubt, true)) {
+            throw new \RuntimeException("Unbekannte Form „{$formSlug}\" — erlaubt: " . implode(', ', $erlaubt) . '.');
         }
         if ($gramm <= 0) {
             throw new \RuntimeException('Gewicht muss > 0 g sein.');
@@ -77,10 +127,12 @@ class GpFormService
         $manuell = FoodAlchemistGpForm::where('gp_id', $gp->id)->where('source', 'manual')
             ->pluck('form_slug')->all();
 
+        $erlaubt = self::formSlugs($team);
         $vorschlag = $this->ki->propose('gp.zaehl_einheiten', [
             'name' => $gp->name,
             'zustand' => $gp->condition,
             'warengruppe' => $gp->commodity_group_code,
+            'erlaubte_einheiten' => $erlaubt,                      // B: Katalog = Vokabular, nicht Prompt-Text
         ]);
         $einheiten = (array) ($vorschlag->werte['einheiten'] ?? []);
 
@@ -91,7 +143,7 @@ class GpFormService
             }
             $slug = mb_strtolower(trim((string) ($e['unit'] ?? '')));
             $gramm = (float) ($e['gewicht_g'] ?? 0);
-            if (! in_array($slug, self::FORM_SLUGS, true) || $gramm <= 0) {
+            if (! in_array($slug, $erlaubt, true) || $gramm <= 0) {
                 continue;
             }
             if (in_array($slug, $manuell, true)) {

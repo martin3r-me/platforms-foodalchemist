@@ -847,7 +847,7 @@ class GpModal extends Component
                 : collect(),
             // #9: Naturaleinheit-Formen (Gramm je Form) + wählbare Form-Slugs für „Form hinzufügen".
             'formen' => $gp !== null ? app(\Platform\FoodAlchemist\Services\GpFormService::class)->list($gp->id) : collect(),
-            'formSlugs' => \Platform\FoodAlchemist\Services\GpFormService::FORM_SLUGS,
+            'formSlugs' => \Platform\FoodAlchemist\Services\GpFormService::formSlugs(Auth::user()?->currentTeamRelation),
             'sensorik' => $this->gpId !== null ? app(\Platform\FoodAlchemist\Services\SensorikService::class)->fuerGp($this->gpId) : null,
             'pairing' => $this->gpId !== null ? app(\Platform\FoodAlchemist\Services\PairingService::class)->panelGp($this->gpId) : null,
         ]);

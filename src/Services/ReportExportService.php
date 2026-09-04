@@ -76,6 +76,15 @@ class ReportExportService
         if ($scope === 'concept') {
             $optionen['pax'] = min(1_000_000, max(0, (int) ($query['pax'] ?? 0)));
         }
+        if ($scope === 'recipe') {
+            // E (Dominique, 2026-09-04): Bedarfs-Hochrechnung wie die Concept-Auftrags-
+            // simulation, aber am Rezept. Zwei Eingabe-Sichten auf EINE Mechanik:
+            // Basisrezept in Ziel-Kilo, Gericht in „N × Darreichung" (deren Portionsgewicht
+            // die Zielmasse ergibt). Entscheid: Basisrezept nur kg, Gericht mit Umschalter.
+            $optionen['ziel_kg'] = max(0.0, (float) str_replace(',', '.', (string) ($query['ziel_kg'] ?? 0)));
+            $optionen['ziel_menge'] = min(1_000_000, max(0, (int) ($query['ziel_menge'] ?? 0)));
+            $optionen['darreichung'] = max(0, (int) ($query['darreichung'] ?? 0));
+        }
 
         return $optionen;
     }
@@ -87,6 +96,8 @@ class ReportExportService
             ->with($this->recipeRelations())
             ->findOrFail($id);
 
+        $hoch = $this->hochrechnung($recipe, $optionen);
+        $optionen['faktor'] = $hoch['faktor'];
         $baum = $this->recipeNode($recipe, $optionen, 0, []);
 
         return [
@@ -96,7 +107,75 @@ class ReportExportService
             'optionen' => $optionen,
             'recipe' => $baum,
             'concept' => null,
+            'hochrechnung' => $hoch,
         ];
+    }
+
+    /**
+     * E: Bedarfs-Faktor für den Report. EINE Mechanik — Zielmasse ÷ Ansatz-Ausbeute —
+     * mit zwei Eingabe-Sichten:
+     *   · Basisrezept: Ziel in kg direkt („50 kg Linsensalat")
+     *   · Gericht:     N × Darreichung; die Zielmasse kommt aus dem Portionsgewicht der
+     *                  gewählten Darreichung (Standard vorgewählt, umschaltbar). Damit
+     *                  stimmt „je nach Verkaufseinheit" von selbst: Teller, Platte und
+     *                  Stück tragen je ein eigenes Gramm-Gewicht.
+     *
+     * Ohne Ausbeute (yield_kg leer/0) gibt es keinen Faktor — dann bleibt der Report der
+     * Ansatz, mit Hinweis. Nichts wird geschätzt.
+     *
+     * @return array<string, mixed>
+     */
+    private function hochrechnung(FoodAlchemistRecipe $recipe, array $optionen): array
+    {
+        $darreichungen = $recipe->is_sales_recipe
+            ? $recipe->darreichungen()->with('servingForm')->get()
+                ->map(fn ($d) => [
+                    'id' => (int) $d->id,
+                    'label' => $d->servingForm?->label ?? 'Darreichung #'.$d->id,
+                    'gramm' => $d->quantity_per_unit_g !== null ? (float) $d->quantity_per_unit_g : null,
+                    'is_standard' => (bool) $d->is_standard,
+                ])->values()->all()
+            : [];
+
+        $aus = [
+            'aktiv' => false, 'faktor' => null, 'ziel_kg' => null, 'ziel_menge' => null,
+            'darreichungen' => $darreichungen, 'darreichung' => null, 'hinweis' => null,
+        ];
+
+        $yield = $recipe->yield_kg !== null ? (float) $recipe->yield_kg : 0.0;
+        $zielKg = (float) ($optionen['ziel_kg'] ?? 0);
+        $zielMenge = (int) ($optionen['ziel_menge'] ?? 0);
+
+        if ($zielKg <= 0 && $zielMenge <= 0) {
+            return $aus;
+        }
+        if ($yield <= 0) {
+            return ['hinweis' => 'Keine Ausbeute hinterlegt — ohne Ansatz-Menge lässt sich der Bedarf nicht hochrechnen.'] + $aus;
+        }
+
+        if ($zielMenge > 0 && $darreichungen !== []) {
+            $gewaehlt = collect($darreichungen)->firstWhere('id', (int) ($optionen['darreichung'] ?? 0))
+                ?? collect($darreichungen)->firstWhere('is_standard', true)
+                ?? $darreichungen[0];
+            if (($gewaehlt['gramm'] ?? null) === null || $gewaehlt['gramm'] <= 0) {
+                return ['hinweis' => 'Für „'.$gewaehlt['label'].'" ist kein Portionsgewicht hinterlegt — '
+                    .'ohne das ist die Zielmasse unbekannt.', 'darreichung' => $gewaehlt] + $aus;
+            }
+            $zielKg = $zielMenge * $gewaehlt['gramm'] / 1000;
+            $aus['darreichung'] = $gewaehlt;
+            $aus['ziel_menge'] = $zielMenge;
+        }
+
+        if ($zielKg <= 0) {
+            return ['hinweis' => 'Zielmenge unklar — bitte Kilo oder eine Darreichung mit Portionsgewicht angeben.'] + $aus;
+        }
+
+        return array_merge($aus, [
+            'aktiv' => true,
+            'faktor' => $zielKg / $yield,
+            'ziel_kg' => round($zielKg, 3),
+            'ansatz_kg' => round($yield, 3),
+        ]);
     }
 
     /** @return array<string, mixed> */
@@ -691,9 +770,15 @@ class ReportExportService
             'description' => $recipe->description,
             'preparation' => $recipe->preparation,
             'notes_manual' => $recipe->notes_manual,
-            'yield_kg' => $recipe->yield_kg,
-            'yield_pieces' => $recipe->yield_pieces,
-            'ek_total_eur' => $recipe->ek_total_eur,
+            // E: Hochrechnung. Skaliert wird, was eine MENGE ist — Ausbeute, Stückzahl,
+            // EK-Summe. Verhältniszahlen (€/kg, Wareneinsatz-%) bleiben, sie ändern sich
+            // beim Skalieren nicht. Die Arbeitszeit bleibt bewusst UNSKALIERT: sie ist
+            // nicht linear (Rüstzeit fällt einmal an, Batch-Grenzen und Standzeit rechnet
+            // der Produktionsplaner) — sie hier mit dem Faktor zu multiplizieren wäre eine
+            // erfundene Zahl. Der Report weist das aus.
+            'yield_kg' => $this->skaliere($recipe->yield_kg, $optionen),
+            'yield_pieces' => $this->skaliere($recipe->yield_pieces, $optionen),
+            'ek_total_eur' => $this->skaliere($recipe->ek_total_eur, $optionen),
             'ek_per_kg_eur' => $recipe->ek_per_kg_eur,
             'sales_net' => $recipe->sales_net,
             'food_cost_percent' => ((float) ($recipe->sales_net ?? 0) > 0 && $recipe->ek_total_eur !== null)
@@ -778,6 +863,21 @@ class ReportExportService
     }
 
     /**
+     * E: Menge × Bedarfs-Faktor. Ohne aktive Hochrechnung unverändert (identity), damit
+     * der Normal-Report byte-gleich bleibt und die Hochrechnung keine zweite Render-Route
+     * aufmacht. NULL bleibt NULL — eine fehlende Zahl wird durch Skalieren nicht besser.
+     */
+    private function skaliere(mixed $wert, array $optionen): mixed
+    {
+        $faktor = $optionen['faktor'] ?? null;
+        if ($faktor === null || $wert === null) {
+            return $wert;
+        }
+
+        return round((float) $wert * (float) $faktor, 4);
+    }
+
+    /**
      * Zeilen-EK je Zutat-ID über {@see RecipeRecomputeService::zeilenKosten} — dieselbe
      * Quelle wie der Recompute, damit der Report keine zweite Preis-Wahrheit aufmacht.
      * Fail-soft: ohne Team/bei Fehlern bleibt die Spalte leer statt den Report zu kippen.
@@ -832,13 +932,13 @@ class ReportExportService
             'adresse' => $kindAdresse,
             'name' => $sub?->name ?? $gp?->name ?? $z->display_name ?? $z->raw_text,
             'raw_text' => $z->raw_text,
-            'menge' => $this->mengeText($z->quantity, $z->unit),
-            'quantity' => $z->quantity,
+            'menge' => $this->mengeText($this->skaliere($z->quantity, $optionen), $z->unit),
+            'quantity' => $this->skaliere($z->quantity, $optionen),
             'unit' => $z->unit?->display_de ?? $z->unit?->slug,
             'role' => $z->role,
             'type' => $sub !== null ? 'basisrezept' : ($gp !== null ? 'gp' : 'offen'),
-            'ek_anteil_eur' => $zeilenEk,
-            'ek_pro_einheit_eur' => $proEinheit,
+            'ek_anteil_eur' => $this->skaliere($zeilenEk, $optionen),
+            'ek_pro_einheit_eur' => $proEinheit,                   // Bezugspreis — skaliert NICHT
             'ek_pro_einheit_label' => $proEinheitLabel,
             'gp' => $gp ? $this->gpNode($gp, $lead, $price) : null,
             'subrecipe' => ($sub !== null && ($optionen['kaskade'] ?? false))
@@ -851,7 +951,7 @@ class ReportExportService
                     ($elternInfo ?? []) + [
                         'nr' => $nr,
                         'von' => $von,
-                        'einsatz' => $this->mengeText($z->quantity, $z->unit),
+                        'einsatz' => $this->mengeText($this->skaliere($z->quantity, $optionen), $z->unit),
                     ],
                 )
                 : null,
