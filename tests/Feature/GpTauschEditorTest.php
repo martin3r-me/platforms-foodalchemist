@@ -29,6 +29,9 @@ it('GpModal: GP in allen Rezepten tauschen hängt die Zutat-Zeilen um', function
 
     Livewire::test(GpModal::class)
         ->call('oeffnen', $quelle->id)
+        // 2026-09-04: der Block lag im «Kalkulation»-Reiter und war dort unfindbar —
+        // er gehört in «Verwaltung», wie beim Rezept-Editor. Diese Zusicherung hält ihn dort.
+        ->assertSeeHtml("tab === 'verwaltung'")
         ->set('tauschSuche', 'Zander')
         ->call('gpErsetzen', $ziel->id)
         ->assertHasNoErrors()

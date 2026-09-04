@@ -12,8 +12,10 @@ use Platform\FoodAlchemist\Services\RecipeService;
 /**
  * MCP-Steuerbarkeit · D2: Basisrezept löschen. Destruktiv → confirm=true Pflicht.
  *
- * Nur team-eigene Basisrezepte (is_sales_recipe=false). Der Service blockt, wenn das Rezept als
- * Sub-Rezept referenziert wird (erst dort lösen). VK-Gerichte laufen über verkaufsrezepte.DELETE.
+ * Nur team-eigene Basisrezepte (is_sales_recipe=false). Der Service blockt bei JEDER harten
+ * Referenz (Spec 49): Komponenten-Zeilen, Ersatz-Verknüpfungen, direkt gepinnte Ausgabe-Positionen
+ * und Zeilen in offenen Produktionsaufträgen — Komponenten-Zeilen löst `recipes.REPLACE` auf.
+ * VK-Gerichte laufen über verkaufsrezepte.DELETE.
  */
 class RecipesDeleteTool extends FoodAlchemistTool implements ToolContract, ToolMetadataContract
 {
@@ -24,8 +26,9 @@ class RecipesDeleteTool extends FoodAlchemistTool implements ToolContract, ToolM
 
     public function getDescription(): string
     {
-        return 'Löscht ein team-eigenes Basisrezept (confirm=true Pflicht). Blockiert, solange es als '
-            . 'Sub-Rezept genutzt wird. VK-Gerichte → verkaufsrezepte.DELETE.';
+        return 'Löscht ein team-eigenes Basisrezept (confirm=true Pflicht). Blockiert, solange etwas darauf '
+            . 'zeigt: Komponenten-Zeilen, Ersatz-Verknüpfungen, Ausgabe-Positionen, offene Produktionsaufträge. '
+            . 'Komponenten-Zeilen vorher per recipes.REPLACE umhängen. VK-Gerichte → verkaufsrezepte.DELETE.';
     }
 
     public function getSchema(): array
@@ -77,7 +80,7 @@ class RecipesDeleteTool extends FoodAlchemistTool implements ToolContract, ToolM
             'requires_auth' => true, 'requires_team' => true, 'cost_class' => 'local_db',
             'confirmation_required' => true,
             'side_effects' => ['deletes'],
-            'related_tools' => ['foodalchemist.recipes.STATUS', 'foodalchemist.verkaufsrezepte.DELETE'],
+            'related_tools' => ['foodalchemist.recipes.REPLACE', 'foodalchemist.recipes.STATUS', 'foodalchemist.verkaufsrezepte.DELETE'],
             'examples' => ['Lösche Basisrezept 123 (confirm=true).'],
         ];
     }

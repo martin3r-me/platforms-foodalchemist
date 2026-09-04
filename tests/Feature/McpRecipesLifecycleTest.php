@@ -29,8 +29,8 @@ beforeEach(function () {
     ], $over));
 });
 
-it('Registry-Smoke: recipes.DELETE/STATUS/DUPLICATE/TEMPLATE_TOGGLE/RECOMPUTE registriert', function () {
-    foreach (['DELETE', 'STATUS', 'DUPLICATE', 'TEMPLATE_TOGGLE', 'RECOMPUTE'] as $v) {
+it('Registry-Smoke: recipes.DELETE/STATUS/DUPLICATE/TEMPLATE_TOGGLE/RECOMPUTE/REPLACE registriert', function () {
+    foreach (['DELETE', 'STATUS', 'DUPLICATE', 'TEMPLATE_TOGGLE', 'RECOMPUTE', 'REPLACE'] as $v) {
         $tool = $this->registry->get("foodalchemist.recipes.{$v}");
         expect($tool)->not->toBeNull($v);
         expect($tool->getSchema()['type'] ?? null)->toBe('object', $v);
@@ -94,4 +94,43 @@ it('recipes.TEMPLATE_TOGGLE + RECOMPUTE: eigenes ok; fremd-Team → ACCESS_DENIE
     $rootRez = ($this->mkRecipe)();
     expect(($this->runChild)('foodalchemist.recipes.TEMPLATE_TOGGLE', ['id' => $rootRez->id])->errorCode)->toBe('ACCESS_DENIED');
     expect(($this->runChild)('foodalchemist.recipes.RECOMPUTE', ['id' => $rootRez->id])->errorCode)->toBe('ACCESS_DENIED');
+});
+
+/**
+ * recipes.REPLACE (2026-09-04) — Pendant zu gps.REPLACE. Schreibt NUR in eigene Eltern;
+ * `from` darf geerbt sein (das from-Rezept selbst wird nie verändert).
+ */
+it('recipes.REPLACE: hängt eigene Verwendungen um, confirm ist Pflicht, geerbte Eltern bleiben', function () {
+    $alt = ($this->mkRecipe)(['name' => 'Fond: Kalb']);
+    $neu = ($this->mkRecipe)(['name' => 'Fond: Kalb klar']);
+    $eigen = FoodAlchemistRecipe::create(['team_id' => $this->childA->id, 'recipe_key' => 'rk_' . bin2hex(random_bytes(4)),
+        'name' => 'Suppe (Kind A)', 'status' => 'draft', 'yield_kg' => 1.0, 'is_sales_recipe' => false]);
+    $master = ($this->mkRecipe)(['name' => 'Suppe (Master)']);
+    $zEigen = \Platform\FoodAlchemist\Models\FoodAlchemistRecipeIngredient::create([
+        'team_id' => $this->childA->id, 'recipe_id' => $eigen->id, 'referenced_recipe_id' => $alt->id,
+        'raw_text' => '300 g Fond', 'quantity' => '300', 'unit_vocab_id' => $this->unitG($this->rootTeam)->id, 'position' => 1,
+    ]);
+    $zMaster = \Platform\FoodAlchemist\Models\FoodAlchemistRecipeIngredient::create([
+        'team_id' => $this->rootTeam->id, 'recipe_id' => $master->id, 'referenced_recipe_id' => $alt->id,
+        'raw_text' => '300 g Fond', 'quantity' => '300', 'unit_vocab_id' => $this->unitG($this->rootTeam)->id, 'position' => 1,
+    ]);
+
+    // ohne confirm: nichts passiert
+    expect(($this->runChild)('foodalchemist.recipes.REPLACE', ['from_id' => $alt->id, 'to_id' => $neu->id])->errorCode)
+        ->toBe('CONFIRM_REQUIRED');
+    expect((int) $zEigen->refresh()->referenced_recipe_id)->toBe($alt->id);
+
+    // als childA: eigene Zeile wandert, die Master-Zeile nicht
+    $res = ($this->runChild)('foodalchemist.recipes.REPLACE', ['from_id' => $alt->id, 'to_id' => $neu->id, 'confirm' => true]);
+    expect($res->success)->toBeTrue()
+        ->and($res->data['zeilen'])->toBe(1)
+        ->and($res->data['geerbt_unberuehrt'])->toBe(1);
+    expect((int) $zEigen->refresh()->referenced_recipe_id)->toBe($neu->id)
+        ->and((int) $zMaster->refresh()->referenced_recipe_id)->toBe($alt->id);
+
+    // Ziel = Quelle → VALIDATION_ERROR; unsichtbares Ziel → NOT_FOUND
+    expect(($this->run)('foodalchemist.recipes.REPLACE', ['from_id' => $alt->id, 'to_id' => $alt->id, 'confirm' => true])->errorCode)
+        ->toBe('VALIDATION_ERROR');
+    expect(($this->run)('foodalchemist.recipes.REPLACE', ['from_id' => $alt->id, 'to_id' => 999999, 'confirm' => true])->errorCode)
+        ->toBe('NOT_FOUND');
 });

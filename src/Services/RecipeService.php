@@ -6,10 +6,15 @@ use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Platform\Core\Models\Team;
+use Platform\FoodAlchemist\Enums\MatchMethod;
+use Platform\FoodAlchemist\Enums\RecipeStatus;
+use Platform\FoodAlchemist\Models\FoodAlchemistComponentEquivalent;
 use Platform\FoodAlchemist\Models\FoodAlchemistGp;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipeCategory;
+use Platform\FoodAlchemist\Models\FoodAlchemistRecipeIngredient;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipeMainGroup;
 use Platform\FoodAlchemist\Services\Ai\PoolEmbeddingService;
 use Platform\FoodAlchemist\Support\TeamScope;
@@ -339,17 +344,26 @@ class RecipeService
         });
     }
 
-    /** Löschen blockt, wenn Eltern dieses Rezept als Sub referenzieren (typisierte Exception, V-06). */
+    /**
+     * Löschen (Soft-Delete) — blockt bei JEDER harten Referenz, nicht mehr nur bei Eltern-Zeilen
+     * (2026-09-04). Vorher fielen Ersatz-Verknüpfungen, direkt gepinnte Ausgabe-Positionen und
+     * Zeilen in offenen Produktionsaufträgen still weg. Die Bilanz kommt aus `referenzen()` und
+     * ist dieselbe, die Panel und Editor anzeigen — eine Regel, ein Text (V-06).
+     */
     public function delete(Team $team, int $id): void
     {
         $recipe = FoodAlchemistRecipe::visibleToTeam($team)->findOrFail($id);
         if ((int) $recipe->team_id !== (int) $team->id) {
             throw new \RuntimeException('Geerbtes Rezept — Löschen nur durchs Besitzer-Team (D1).');
         }
-        $eltern = $recipe->parentIngredients()->whereNull('deleted_at')->with('recipe:id,name')->get();
-        if ($eltern->isNotEmpty()) {
-            throw new \RuntimeException('Rezept wird als Sub-Rezept referenziert von: '
-                . $eltern->pluck('recipe.name')->unique()->implode(', ') . ' — erst dort lösen.');
+        $ref = $this->referenzen($id);
+        if ($ref['blocker'] > 0) {
+            $eltern = $recipe->parentIngredients()->whereNull('deleted_at')->with('recipe:id,name')
+                ->get()->pluck('recipe.name')->filter()->unique();
+            throw new \RuntimeException('Löschen blockiert — wird referenziert: '
+                . implode(', ', $ref['blocker_teile'])
+                . ($eltern->isNotEmpty() ? ' — als Sub-Rezept in: ' . $eltern->implode(', ') : '')
+                . '. Erst umhängen („in allen Verwendungen ersetzen"), dann löschen.');
         }
         DB::transaction(function () use ($recipe) {
             $recipe->ingredients()->delete();
@@ -506,6 +520,204 @@ class RecipeService
                 ->whereNull('deleted_at')->distinct()->pluck('recipe_id'))
             ->orderBy('name')
             ->get(['id', 'name', 'status', 'team_id', 'is_sales_recipe']);
+    }
+
+    /**
+     * Ausgabe-Ebenen, die direkt auf ein Rezept zeigen. Sie hängen ALLE an der GERICHT-Spalte
+     * (`sales_recipe_id`, D-PLAN-1) — ein Basisrezept steht in einem Foodbook also nur ÜBER das
+     * Gericht, das es als Komponente führt. Genau deshalb reicht dem Tausch die Komponenten-Zeile:
+     * die Ausgaben folgen von selbst. Gezählt wird hier trotzdem, weil die Spalte technisch jede
+     * Rezept-ID annimmt — wer ein Basisrezept direkt in eine Ausgabe pinnt, soll es nicht unter
+     * den Füßen verlieren.
+     */
+    private const AUSGABE_REFERENZEN = [
+        'foodalchemist_foodbook_blocks' => 'sales_recipe_id',
+        'foodalchemist_menu_card_items' => 'sales_recipe_id',
+        'foodalchemist_menu_plan_entries' => 'sales_recipe_id',
+        'foodalchemist_offer_blocks' => 'sales_recipe_id',
+        'foodalchemist_concept_slots' => 'sales_recipe_id',
+    ];
+
+    /**
+     * Dasselbe für Tabellen, die der Paket-Umbau fachlich abgelöst hat, physisch aber noch nicht
+     * gedroppt sind (`packages`/`package_dishes`, ex-`bausteine`). Solange sie stehen, können sie
+     * Zeilen halten — deshalb mitzählen, aber per hasTable geprüft, damit der Drop nichts bricht.
+     */
+    private const AUSGABE_REFERENZEN_LEGACY = [
+        'foodalchemist_package_dishes' => 'sales_recipe_id',
+    ];
+
+    /**
+     * Lösch-Bilanz eines Rezepts — bewusst UNGESCOPED, wie `GpService::referenzen()`.
+     *
+     * Der Grund ist die Vererbungsrichtung: ein Master-Rezept ist für KIND-Teams sichtbar, deren
+     * Rezepte sind für den Master aber unsichtbar. Eine team-gefilterte Zählung würde dem Master
+     * erlauben, ein Rezept zu löschen, an dem ein Kind-Team hängt. (Der Tausch bleibt gescoped —
+     * dort wird geschrieben, hier nur gezählt: `verwendungsBilanz()`.)
+     *
+     * `blocker_teile` sind die harten Gründe im Klartext; `produktion_historie` und `instanzen`
+     * stehen nur zur Information (abgeschlossene Aufträge bleiben lesbar, Herkunfts-Zeiger fallen
+     * beim Löschen auf NULL).
+     *
+     * @return array{eltern_zeilen:int, eltern:int, ersatz:int, ausgaben:int, produktion_offen:int,
+     *               produktion_historie:int, instanzen:int, blocker:int, blocker_teile:list<string>}
+     */
+    public function referenzen(int $id): array
+    {
+        $eltern = FoodAlchemistRecipeIngredient::where('referenced_recipe_id', $id);
+
+        // Ausgabe-Ebenen in EINEM Roundtrip — das Panel rendert die Bilanz bei jedem Tastendruck
+        // im Tausch-Suchfeld neu. Tabellen-/Spaltennamen kommen aus der Konstante, nicht aus Input.
+        $tabellen = self::AUSGABE_REFERENZEN;
+        foreach (self::AUSGABE_REFERENZEN_LEGACY as $tabelle => $spalte) {
+            if (Schema::hasTable($tabelle)) {
+                $tabellen[$tabelle] = $spalte;
+            }
+        }
+        $summanden = [];
+        $bindings = [];
+        foreach ($tabellen as $tabelle => $spalte) {
+            $summanden[] = "(SELECT COUNT(*) FROM {$tabelle} WHERE {$spalte} = ? AND deleted_at IS NULL)";
+            $bindings[] = $id;
+        }
+        $ausgaben = (int) DB::selectOne('SELECT ' . implode(' + ', $summanden) . ' AS n', $bindings)->n;
+
+        $produktion = DB::table('foodalchemist_production_order_lines as l')
+            ->join('foodalchemist_production_orders as o', 'o.id', '=', 'l.production_order_id')
+            ->where('l.recipe_id', $id)->whereNull('l.deleted_at')->whereNull('o.deleted_at')
+            ->selectRaw("SUM(CASE WHEN o.status IN ('planned', 'in_progress') THEN 1 ELSE 0 END) AS offen")
+            ->selectRaw("SUM(CASE WHEN o.status IN ('done', 'cancelled') THEN 1 ELSE 0 END) AS historie")
+            ->first();
+
+        $ref = [
+            'eltern_zeilen' => (clone $eltern)->count(),
+            'eltern' => (clone $eltern)->distinct()->count('recipe_id'),
+            'ersatz' => FoodAlchemistComponentEquivalent::where(fn (Builder $w) => $w
+                ->where(fn (Builder $q) => $q->where('source_kind', FoodAlchemistComponentEquivalent::KIND_RECIPE)->where('source_id', $id))
+                ->orWhere(fn (Builder $q) => $q->where('alt_kind', FoodAlchemistComponentEquivalent::KIND_RECIPE)->where('alt_id', $id)))
+                ->count(),
+            'ausgaben' => $ausgaben,
+            'produktion_offen' => (int) ($produktion->offen ?? 0),
+            'produktion_historie' => (int) ($produktion->historie ?? 0),
+            'instanzen' => FoodAlchemistRecipe::where('instantiated_from_recipe_id', $id)->count(),
+        ];
+
+        $ref['blocker_teile'] = array_values(array_filter([
+            $ref['eltern_zeilen'] > 0 ? "{$ref['eltern_zeilen']} Zeile(n) in {$ref['eltern']} Rezept(en)" : null,
+            $ref['ersatz'] > 0 ? "{$ref['ersatz']} Ersatz-Verknüpfung(en)" : null,
+            $ref['ausgaben'] > 0 ? "{$ref['ausgaben']} Ausgabe-Position(en) (Foodbook/Speisekarte/Speiseplan/Angebot/Konzept)" : null,
+            $ref['produktion_offen'] > 0 ? "{$ref['produktion_offen']} Zeile(n) in offenen Produktionsaufträgen" : null,
+        ]));
+        $ref['blocker'] = $ref['eltern_zeilen'] + $ref['ersatz'] + $ref['ausgaben'] + $ref['produktion_offen'];
+
+        return $ref;
+    }
+
+    // ── Rezept-Tausch (Dominique 2026-09-04) — Pendant zu GpService::ersetzeInRezepten ──
+    //
+    // Unterschied zum GP-Katalog: Rezepte sind team-besessen (D1). Umgehängt wird deshalb NUR
+    // in EIGENEN Eltern; geerbte Master-/Seed-Rezepte, die dieses Rezept ebenfalls einsetzen,
+    // bleiben unberührt und werden gezählt zurückgemeldet (nichts still überspringen).
+
+    /**
+     * Verwendungs-Bilanz als Komponente — Datenbasis des Tausch-Blocks (Panel + Editor).
+     * „eigen" = umhängbar · „fremd" = sichtbar, aber read-only (Master/Seed, D1).
+     *
+     * @return array{zeilen: int, rezepte: int, fremd_zeilen: int, fremd_rezepte: int}
+     */
+    public function verwendungsBilanz(Team $team, int $id): array
+    {
+        $q = DB::table('foodalchemist_recipe_ingredients as ri')
+            ->join('foodalchemist_recipes as r', 'r.id', '=', 'ri.recipe_id')
+            ->where('ri.referenced_recipe_id', $id)
+            ->whereNull('ri.deleted_at')
+            ->whereNull('r.deleted_at');
+        $zeilen = TeamScope::applyVisible($q, 'r.team_id', $team)
+            ->get(['ri.id as zeile_id', 'r.id as parent_id', 'r.team_id']);
+        $eigen = $zeilen->filter(fn ($z) => (int) $z->team_id === (int) $team->id);
+        $fremd = $zeilen->filter(fn ($z) => (int) $z->team_id !== (int) $team->id);
+
+        return [
+            'zeilen' => $eigen->count(),
+            'rezepte' => $eigen->pluck('parent_id')->unique()->count(),
+            'fremd_zeilen' => $fremd->count(),
+            'fremd_rezepte' => $fremd->pluck('parent_id')->unique()->count(),
+        ];
+    }
+
+    /**
+     * Dieses Rezept in ALLEN eigenen Verwendungen (Gerichte + Basisrezepte, die es als Sub
+     * führen) durch ein anderes ersetzen — Dubletten-Bereinigung bzw. globaler Komponenten-
+     * Wechsel. Menge, Einheit, Rolle und Verlust-Overrides der Zeile bleiben stehen; getauscht
+     * wird allein die Komponenten-FK (wie beim GP-Tausch). `match_method` wandert bewusst auf
+     * `override_subrecipe`: die Zeile zeigt jetzt dorthin, weil ein Mensch es angeordnet hat
+     * (dieselbe Provenienz wie der Hard-Stop-Resolver) — ein stehengelassenes
+     * `gemini_proposed` wäre ein falsches Etikett.
+     *
+     * Zyklen/Selbstreferenz fängt pruefeVerknuepfung je Eltern-Rezept; die betroffene Menge
+     * wird EINMAL topologisch neu gerechnet (V-049).
+     *
+     * @return array{zeilen: int, rezepte: int, fremd_rezepte: int, zyklus: list<string>, doppelt: list<string>}
+     */
+    public function ersetzeInVerwendungen(Team $team, int $vonId, int $nachId): array
+    {
+        $von = FoodAlchemistRecipe::visibleToTeam($team)->find($vonId);
+        $nach = FoodAlchemistRecipe::visibleToTeam($team)->find($nachId);
+        if ($von === null || $nach === null) {
+            throw new \RuntimeException('Quell- oder Ziel-Rezept nicht gefunden.');
+        }
+        if ((int) $von->id === (int) $nach->id) {
+            throw new \RuntimeException('Quelle und Ziel sind identisch.');
+        }
+        if ($nach->status === RecipeStatus::Deprecated) {
+            throw new \RuntimeException('Ziel-Rezept ist „Veraltet" — kein gültiges Ersetzungsziel.');
+        }
+
+        $bilanz = $this->verwendungsBilanz($team, (int) $von->id);
+        $zeilen = FoodAlchemistRecipeIngredient::where('referenced_recipe_id', $von->id)
+            ->whereIn('recipe_id', FoodAlchemistRecipe::query()->where('team_id', $team->id)->select('id'))
+            ->get(['id', 'recipe_id']);
+        if ($zeilen->isEmpty()) {
+            throw new \RuntimeException($bilanz['fremd_zeilen'] > 0
+                ? "Verwendet nur in {$bilanz['fremd_rezepte']} geerbten Rezept(en) — die sind für dieses Team read-only (D1)."
+                : 'Wird in keinem Rezept als Komponente verwendet — nichts zu tauschen.');
+        }
+
+        $elternIds = $zeilen->pluck('recipe_id')->map(fn ($id) => (int) $id)->unique()->values()->all();
+        $namen = FoodAlchemistRecipe::whereIn('id', $elternIds)->pluck('name', 'id');
+        $schonDrin = FoodAlchemistRecipeIngredient::where('referenced_recipe_id', $nach->id)
+            ->whereIn('recipe_id', $elternIds)->distinct()->pluck('recipe_id')
+            ->map(fn ($id) => (int) $id)->all();
+
+        $recompute = app(RecipeRecomputeService::class);
+        $erlaubt = [];
+        $zyklus = [];
+        foreach ($elternIds as $pid) {
+            $pruefung = $recompute->pruefeVerknuepfung($pid, (int) $nach->id);
+            if ($pruefung['erlaubt']) {
+                $erlaubt[] = $pid;
+            } else {
+                $zyklus[] = ($namen[$pid] ?? "#{$pid}") . " ({$pruefung['grund']})";
+            }
+        }
+        if ($erlaubt === []) {
+            throw new \RuntimeException('Tausch abgelehnt — würde einen Zyklus erzeugen: ' . implode(', ', $zyklus) . '.');
+        }
+
+        $zeilenIds = $zeilen->whereIn('recipe_id', $erlaubt)->pluck('id')->all();
+        $anzahl = DB::transaction(fn () => FoodAlchemistRecipeIngredient::whereIn('id', $zeilenIds)
+            ->update(['referenced_recipe_id' => $nach->id, 'match_method' => MatchMethod::OverrideSubrecipe->value]));
+
+        $recompute->recomputeMany($erlaubt);
+
+        return [
+            'zeilen' => (int) $anzahl,
+            'rezepte' => count($erlaubt),
+            'fremd_rezepte' => $bilanz['fremd_rezepte'],
+            'zyklus' => $zyklus,
+            'doppelt' => collect($schonDrin)->intersect($erlaubt)
+                ->map(fn ($id) => $namen[$id] ?? "#{$id}")->values()->all(),
+        ];
     }
 
     // ── M9-01k: Sektor-/Niveau-Eignung pflegen (Zeile = geeignet; unique recipe+slug) ──

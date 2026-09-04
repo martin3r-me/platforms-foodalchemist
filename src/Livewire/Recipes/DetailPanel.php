@@ -5,6 +5,7 @@ namespace Platform\FoodAlchemist\Livewire\Recipes;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\On;
 use Livewire\Component;
+use Platform\FoodAlchemist\Livewire\Concerns\TauschtRezept;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Services\RecipeRecomputeService;
 use Platform\FoodAlchemist\Services\RecipeService;
@@ -19,6 +20,8 @@ use Platform\FoodAlchemist\Support\TeamScope;
  */
 class DetailPanel extends Component
 {
+    use TauschtRezept;   // Verwaltungs-Block: tauschen + löschen — identisch im Editor (RecipeModal)
+
     public ?int $recipeId = null;
 
     /** Eingebettet als Editor-Kartei: blendet die im Editor redundante KPI/Beschreibung/Zutaten aus. */
@@ -56,6 +59,9 @@ class DetailPanel extends Component
         $this->ankerSuche = '';
         $this->pairingSuche = '';
         $this->ersatzSuche = '';
+        $this->tauschSuche = '';
+        $this->fehlerTausch = null;
+        $this->hinweisTausch = null;
     }
 
     /**
@@ -258,6 +264,10 @@ class DetailPanel extends Component
             'zeilenEk' => $rezept !== null ? app(RecipeRecomputeService::class)->zeilenKosten($rezept, $team) : [],
             // M4-10: ↑-Navigation („Verwendet in")
             'eltern' => $rezept !== null ? $recipes->getParents($team, $rezept->id) : collect(),
+            // Verwaltungs-Block (tauschen + löschen) — nur im Standalone-Panel, wie beim GP
+            'tauschBilanz' => $rezept !== null && $this->section === null ? $this->tauschBilanz() : null,
+            'tauschKandidaten' => $rezept !== null && $this->section === null ? $this->tauschKandidaten() : collect(),
+            'tauschReferenzen' => $rezept !== null && $this->section === null ? $this->tauschReferenzen() : null,
             // v3-Redesign: Standalone-Sidebar nicht mehr ausklappbar → Netz/Kohäsion/Pairings
             // direkt laden, aber NUR standalone (im Editor-Embed/nur-Sektion bleiben sie ungenutzt → gespart).
             'kernAnker' => $rezept !== null ? app(\Platform\FoodAlchemist\Services\PairingService::class)->recipeAnkers($rezept->id) : collect(),
