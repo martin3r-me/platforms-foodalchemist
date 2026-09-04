@@ -1674,15 +1674,26 @@ return [
         // die Kanon-Entscheidungsvorlage verbietet: Regelwerke durchsetzen statt in den Prompt
         // legen. Die ANZAHL rechnet BehaelterRechner; welcher Typ, entscheidet der Mensch.
         // Die KI darf stattdessen die Dichteklasse vorschlagen — siehe `recipe.dichteklasse`.
+        // Fein justiert nach dem ersten Echtdaten-Lauf (demo, 2026-09-04): die erste Fassung
+        // beschrieb `skalierung` MECHANISCH (»nur die Flaeche skaliert«) — das ist die Sicht des
+        // Rechners, nicht die der Kueche. Ergebnis waren 6 von 6 Rezepten »tiefer_fuellbar«, also
+        // kein Urteil, sondern der erstgenannte Wert. Jetzt steht die Entscheidungsfrage vorn, die
+        // Werte tragen kulinarische Kriterien, und der Zweifelsfall ist die KONSERVATIVE Richtung:
+        // lieber ein Behaelter mehr als einer, in dem die Ware zusammensackt.
         'recipe.dichteklasse' => [
             'tier' => 'B',
-            'task' => 'Schaetze, wie dicht dieses Produkt in einem Behaelter liegt — eine PRODUKT-'
-                . 'eigenschaft, keine Rechnung. dichteklasse: fluessig (Suppe, Fond, Sauce) | dicht '
-                . '(Pueree, Ragout) | schuettfaehig (Gemuesewuerfel, Reis, Nudeln) | locker (Blattsalat, '
-                . 'Kraeuter, Chips). skalierung: tiefer_fuellbar (darf im tieferen Behaelter hoeher '
-                . 'stehen) | hoehe_gebunden (nur die Flaeche skaliert) | lagenware (wird gelegt, nicht '
-                . 'geschuettet). Im Zweifel null zurueckgeben, NIEMALS raten: '
-                . 'werte = {dichteklasse, skalierung}.',
+            'task' => 'Zwei PRODUKTeigenschaften schaetzen — keine Rechnung, keine Behaelterzahl. '
+                . 'ERSTENS dichteklasse (wie schwer ist ein Liter davon): fluessig (Suppe, Fond, Sauce, Sud) | '
+                . 'dicht (Pueree, Ragout, Auflaufmasse) | schuettfaehig (Gemuesewuerfel, Reis, Nudeln, '
+                . 'angemachter Salat) | locker (Blattsalat, Kraeuter, Chips, Microgreens). '
+                . 'ZWEITENS skalierung. Die Frage dazu lautet: Wuerde das Produkt in einem doppelt so '
+                . 'TIEFEN Behaelter auch doppelt so hoch stehen, ohne Schaden zu nehmen? '
+                . 'tiefer_fuellbar = ja, es fliesst oder setzt sich, Hoehe schadet nicht. '
+                . 'hoehe_gebunden = nein: zu hoch drueckt es sich zusammen, wird ungleich warm oder '
+                . 'unansehnlich — das gilt fuer fast alles Stueckige und fuer alles, was regeneriert wird. '
+                . 'lagenware = es wird GELEGT statt geschuettet (Schnitzel, Papadam, Tartelettes, Blaetterteig). '
+                . 'Im Zweifel hoehe_gebunden: ein Behaelter zu viel ist harmlos, zu tief gefuellt ruiniert die Ware. '
+                . 'Unsicher bei einem Feld ⇒ dort null, NIEMALS raten: werte = {dichteklasse, skalierung}.',
         ],
 
         'vk.regeneration' => [

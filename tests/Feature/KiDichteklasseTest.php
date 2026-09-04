@@ -82,12 +82,26 @@ it('die KI hat keinen Weg mehr, eine Behälterzahl zu setzen', function () {
         ->and(config('foodalchemist.prompts'))->toHaveKey('recipe.dichteklasse');
 });
 
-it('der Prompt fordert genau die zwei Felder — und keine Anzahl', function () {
+it('der Prompt-Vertrag umfasst genau zwei Felder — strukturell, nicht per Wortsuche', function () {
     $task = (string) (config('foodalchemist.prompts')['recipe.dichteklasse']['task'] ?? '');
 
-    expect($task)->toContain('dichteklasse')
-        ->and($task)->toContain('skalierung')
-        ->and($task)->toContain('PRODUKT')                    // die Abgrenzung steht im Prompt selbst
-        ->and(mb_strtolower($task))->not->toContain('anzahl')
-        ->and(mb_strtolower($task))->not->toContain('behaelterzahl');
+    // Auf Prompt-WOERTER zu pruefen ist die falsche Sonde: die erste Fassung dieses Tests brach,
+    // als der Prompt »keine Behaelterzahl« schrieb — eine Verneinung, die die Wortsuche traf.
+    // Der Vertrag ist die werte-Klammer, und nur die.
+    preg_match('/werte\s*=\s*\{([^}]*)\}/u', $task, $m);
+    $felder = collect(explode(',', $m[1] ?? ''))->map(fn ($f) => trim($f))->filter()->values()->all();
+
+    expect($felder)->toBe(['dichteklasse', 'skalierung']);
+});
+
+it('die Skalierungs-Werte sind kulinarisch begruendet, nicht mechanisch', function () {
+    // Erster Echtdaten-Lauf: 6 von 6 Rezepten kamen als »tiefer_fuellbar« zurueck — kein Urteil,
+    // sondern der erstgenannte Wert. Die Beschreibung war die Sicht des Rechners (»nur die Flaeche
+    // skaliert«), nicht die der Kueche. Der Riegel: die Entscheidungsfrage muss im Prompt stehen,
+    // und der Zweifelsfall muss die konservative Richtung nennen.
+    $task = (string) (config('foodalchemist.prompts')['recipe.dichteklasse']['task'] ?? '');
+
+    expect($task)->toContain('doppelt so')                 // die Entscheidungsfrage
+        ->and($task)->toContain('Im Zweifel hoehe_gebunden')
+        ->and($task)->toContain('lagenware');
 });
