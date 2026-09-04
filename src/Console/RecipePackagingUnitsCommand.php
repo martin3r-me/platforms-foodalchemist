@@ -251,6 +251,16 @@ class RecipePackagingUnitsCommand extends Command
         return self::SUCCESS;
     }
 
+    /**
+     * Markdown-Zellen härten: Gericht-Namen tragen selbst „|" als Bauart-Trenner
+     * („[BRO] Baguette | Ciabatta"). Unescaped zerlegt jeder solche Name die Tabellen-
+     * zeile, und der Bericht wird für genau die Zeilen unlesbar, um die es geht.
+     */
+    private function zelle(mixed $wert): string
+    {
+        return str_replace(['|', "\n"], ['\\|', ' '], (string) $wert);
+    }
+
     private function schreibeReport(string $pfad, bool $apply, array $einig, array $review, ?string $undo): void
     {
         $md = '# Verpackungs-Einheiten → Masse — '.date('Y-m-d H:i')."\n\n"
@@ -261,14 +271,17 @@ class RecipePackagingUnitsCommand extends Command
             ."(Lieferbeutel), gemeint ist das Handels-Päckchen mit ~8 g.\n\n"
             ."## Review — NICHT umgestellt\n\n| Rezept | Zutat | Menge | Einheit | Gebinde | KI | Grund |\n|---|---|---|---|---|---|---|\n";
         foreach ($review as $p) {
-            $md .= "| {$p['rezept']} | {$p['gp']} | {$p['menge']} | {$p['slug']} | "
-                .($p['vpe'] !== null ? round($p['vpe']).' ' : '—').' | '
-                .($p['ki'] !== null ? round($p['ki']).' ' : '—')." | {$p['grund']} |\n";
+            $md .= '| '.$this->zelle($p['rezept']).' | '.$this->zelle($p['gp']).' | '
+                .$this->zelle($p['menge']).' | '.$this->zelle($p['slug']).' | '
+                .($p['vpe'] !== null ? round($p['vpe']) : '—').' | '
+                .($p['ki'] !== null ? round($p['ki']) : '—').' | '
+                .$this->zelle($p['grund'])." |\n";
         }
         $md .= "\n## Einig — ".($apply ? 'umgestellt' : 'übernehmbar')."\n\n| Rezept | Zutat | vorher | nachher | Grund |\n|---|---|---|---|---|\n";
         foreach ($einig as $p) {
-            $md .= "| {$p['rezept']} | {$p['gp']} | {$p['menge']} {$p['slug']} | "
-                .round($p['masse'], 2).' '.$p['einheit']." | {$p['grund']} |\n";
+            $md .= '| '.$this->zelle($p['rezept']).' | '.$this->zelle($p['gp']).' | '
+                .$this->zelle($p['menge'].' '.$p['slug']).' | '
+                .round($p['masse'], 2).' '.$p['einheit'].' | '.$this->zelle($p['grund'])." |\n";
         }
         @file_put_contents($pfad, $md);
     }
