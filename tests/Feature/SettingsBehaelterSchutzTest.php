@@ -200,7 +200,8 @@ it('das Katalog-Kommando ist ein Dry-Run und legt erst mit --apply an', function
     $this->artisan('foodalchemist:behaelter-katalog --apply')->assertExitCode(0);
 
     $gn = DB::table('foodalchemist_vocab_containers')->where('slug', 'gn_11_65mm')->first();
-    expect((float) $gn->volumen_l)->toBe(8.8)             // EN 631, nicht die Kantenrechnung (11,2)
+    // EuroNorm 631-1, nicht die Kantenrechnung (die ergaebe 11,2 l — GN ist konisch).
+    expect((float) $gn->volumen_l)->toBe(9.0)
         ->and((float) $gn->laenge_mm)->toBe(530.0)
         ->and($gn->team_id)->toBeNull();                   // global — nur der Master pflegt sie
 

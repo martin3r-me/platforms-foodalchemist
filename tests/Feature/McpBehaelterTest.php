@@ -118,8 +118,8 @@ it('der Katalog zeigt, was bemessbar ist — und was nicht', function () {
     $out = app(BehaelterKatalogGetTool::class)->execute(['familie' => 'GN', 'zweck' => 'regenerieren'], $this->ctx);
     $gn = collect($out->data['behaelter'])->firstWhere('name', 'GN 1/1 65mm');
 
-    expect($gn['volumen_l'])->toBe(8.8)
-        ->and($gn['nutzvolumen_l'])->toBe(7.48)                  // 8,8 × 0,85
+    expect($gn['volumen_l'])->toBe(9.0)                          // EuroNorm 631-1
+        ->and($gn['nutzvolumen_l'])->toBe(7.65)                  // 9,0 × 0,85
         ->and($gn['bemessbar'])->toBeTrue()
         ->and(collect($out->data['behaelter'])->pluck('name'))->not->toContain('Irgendein Behälter');
 

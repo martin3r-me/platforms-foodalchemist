@@ -5,8 +5,8 @@ use Platform\FoodAlchemist\Services\BehaelterRechner;
 /**
  * Spec 51 — produzierte Menge (kg) → ganze Behälter, plus Alternativen.
  *
- * Pure Unit-Tests, Behälter duck-typed. Die Maße sind ECHTE Werte nach DIN EN 631
- * (GN 1/1 = 530 × 325 mm, 65 mm ≙ 8,8 l brutto) — keine erfundene Fixture, die sich
+ * Pure Unit-Tests, Behälter duck-typed. Die Maße sind ECHTE Werte nach EuroNorm 631-1
+ * (GN 1/1 = 530 × 325 mm, 65 mm ≙ 9,0 l Nennvolumen) — keine erfundene Fixture, die sich
  * ihren eigenen Vertrag baut.
  */
 beforeEach(function () {
@@ -19,9 +19,9 @@ beforeEach(function () {
         'eignung' => $eignung,
     ];
 
-    $this->gn11_65 = ($this->gn)(1, 'GN 1/1 65mm', 530, 325, 65, 8.8);
-    $this->gn11_100 = ($this->gn)(2, 'GN 1/1 100mm', 530, 325, 100, 13.7);
-    $this->gn11_200 = ($this->gn)(3, 'GN 1/1 200mm', 530, 325, 200, 27.8);
+    $this->gn11_65 = ($this->gn)(1, 'GN 1/1 65mm', 530, 325, 65, 9.0);
+    $this->gn11_100 = ($this->gn)(2, 'GN 1/1 100mm', 530, 325, 100, 14.0);
+    $this->gn11_200 = ($this->gn)(3, 'GN 1/1 200mm', 530, 325, 200, 28.0);
     $this->gn12_65 = ($this->gn)(4, 'GN 1/2 65mm', 325, 265, 65, 4.0);
     $this->gn16_100 = ($this->gn)(5, 'GN 1/6 100mm', 176, 162, 100, 1.6);
 
@@ -58,8 +58,9 @@ it('2 kg passen in EINEN kleineren Einsatz — die Menge wählt die Größe', fu
 
     $nachName = collect($out['varianten'])->keyBy('behaelter');
 
-    // GN 1/2-65 fasst 45 % des GN 1/1-65 (nicht 50 % — die kleinere Form verliert mehr an Wand).
-    expect($nachName['GN 1/2 65mm']['kg_je_behaelter'])->toBe(3.636)
+    // GN 1/2-65 fasst 44 % des GN 1/1-65 (nicht 50 % — die kleinere Form verliert mehr an Wand):
+    // 4,0 l / 9,0 l × 8 kg = 3,556.
+    expect($nachName['GN 1/2 65mm']['kg_je_behaelter'])->toBe(3.556)
         ->and($nachName['GN 1/2 65mm']['anzahl'])->toBe(1);
 });
 
@@ -98,8 +99,8 @@ it('Dichteklasse trägt als Rang 2 — mit abgestufter Konfidenz', function () {
         'regenerieren'
     );
 
-    // 13,7 l brutto × 0,85 Nutzfaktor × 0,6 kg/l = 6,987 kg je Behälter.
-    expect($out['varianten'][0]['kg_je_behaelter'])->toBe(6.987)
+    // 14,0 l Nennvolumen × 0,85 Nutzfaktor × 0,6 kg/l = 7,14 kg je Behälter.
+    expect($out['varianten'][0]['kg_je_behaelter'])->toBe(7.14)
         ->and($out['varianten'][0]['anzahl'])->toBe(3)
         ->and($out['varianten'][0]['konfidenz'])->toBe('mittel');
 });
@@ -140,8 +141,8 @@ it('hoehe_gebunden: tiefer bringt nichts, flacher kappt und stuft ab', function 
 
     $flach = collect($out['varianten'])->firstWhere('behaelter', 'GN 1/1 65mm');
 
-    // Wirkfläche 8,8/65 vs 13,7/100 → 0,9882; Tiefenfaktor 65/100 → zusammen 0,6423 × 12 kg.
-    expect($flach['kg_je_behaelter'])->toBe(7.708)
+    // Wirkfläche 9,0/65 vs 14,0/100 → 0,9890; Tiefenfaktor 65/100 → zusammen 0,6429 × 12 kg.
+    expect($flach['kg_je_behaelter'])->toBe(7.714)
         ->and($flach['konfidenz'])->toBe('mittel');
 });
 
@@ -172,7 +173,7 @@ it('gepflegte Schichthöhe schlägt die Faustregel und hält die Konfidenz', fun
     $flach = collect($out['varianten'])->firstWhere('behaelter', 'GN 1/1 65mm');
 
     // Die Ware steht nur 50 mm hoch — beide Behälter fassen sie, es zählt nur die Fläche.
-    expect($flach['kg_je_behaelter'])->toBe(11.859)
+    expect($flach['kg_je_behaelter'])->toBe(11.868)
         ->and($flach['konfidenz'])->toBe('hoch');
 });
 
@@ -281,7 +282,7 @@ it('das Verhältnis zweier Formate bleibt nutzbar, auch ohne eigenes Nennvolumen
     // weitgehend heraus. Nur das ABSOLUTE Volumen laesst sich nicht daraus ableiten.
     $out = $this->r->varianten(10.0, ($this->basis)(['referenz_menge_kg' => 8.0]), [$this->gn12_65], 'regenerieren');
 
-    expect(collect($out['varianten'])->firstWhere('behaelter', 'GN 1/2 65mm')['kg_je_behaelter'])->toBe(3.636);
+    expect(collect($out['varianten'])->firstWhere('behaelter', 'GN 1/2 65mm')['kg_je_behaelter'])->toBe(3.556);
 });
 
 it('die Menge wählt die Größe — 9 kg nehmen den 10-l-Eimer, 4 kg den 5-l', function () {
