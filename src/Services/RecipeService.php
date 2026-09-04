@@ -707,19 +707,48 @@ class RecipeService
         }
 
         $zeilenIds = $zeilen->whereIn('recipe_id', $erlaubt)->pluck('id')->all();
-        $anzahl = DB::transaction(fn () => FoodAlchemistRecipeIngredient::whereIn('id', $zeilenIds)
-            ->update(['referenced_recipe_id' => $nach->id, 'match_method' => MatchMethod::OverrideSubrecipe->value]));
+        $anzahl = DB::transaction(function () use ($zeilenIds, $nach) {
+            $n = FoodAlchemistRecipeIngredient::whereIn('id', $zeilenIds)
+                ->update(['referenced_recipe_id' => $nach->id, 'match_method' => MatchMethod::OverrideSubrecipe->value]);
+            $this->loeseRegenerationsOverrides($zeilenIds);
+
+            return $n;
+        });
 
         $recompute->recomputeMany($erlaubt);
 
         return [
             'zeilen' => (int) $anzahl,
+            'regen_overrides_geloest' => $this->zuletztGeloest,
             'rezepte' => count($erlaubt),
             'fremd_rezepte' => $bilanz['fremd_rezepte'],
             'zyklus' => $zyklus,
             'doppelt' => collect($schonDrin)->intersect($erlaubt)
                 ->map(fn ($id) => $namen[$id] ?? "#{$id}")->values()->all(),
         ];
+    }
+
+    /** Zahl der beim letzten Tausch geloesten Regenerations-Overrides (Rueckmeldung ans UI). */
+    private int $zuletztGeloest = 0;
+
+    /**
+     * Spec 51: Ein Tausch haengt die Zutatenzeile IN PLACE auf ein anderes Rezept um — dieselbe
+     * Zeilen-Id, anderer Inhalt. Ein Regenerations-Override an dieser Id wuerde das ueberleben und
+     * danach still etwas anderes beschreiben: »Kombidaempfer 140 °C, 12 min« stuende dann an einer
+     * Komponente, fuer die das nie jemand entschieden hat.
+     *
+     * Deshalb wird der Override geloest, nicht mitgeschleift. Die Komponente gibt wieder den Ton
+     * an — das ist der Zustand, den jemand beim naechsten Blick erwartet, und die Kaskade zeigt
+     * ihn als »geerbt« an. Wer erneut abweichen will, sieht die Zeile und entscheidet neu.
+     *
+     * @param  list<int>  $ingredientIds
+     */
+    private function loeseRegenerationsOverrides(array $ingredientIds): void
+    {
+        $this->zuletztGeloest = $ingredientIds === [] ? 0 : (int) DB::table('foodalchemist_recipe_regenerations')
+            ->whereIn('ingredient_id', $ingredientIds)
+            ->whereNull('deleted_at')
+            ->update(['deleted_at' => now()]);
     }
 
     // ── M9-01k: Sektor-/Niveau-Eignung pflegen (Zeile = geeignet; unique recipe+slug) ──

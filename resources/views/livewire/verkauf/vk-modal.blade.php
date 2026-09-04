@@ -760,18 +760,59 @@
                 </div>
             @endif
             <div class="space-y-1.5" data-vk-regen>
-                @foreach($regenZeilen as $z)
-                    <div wire:key="rg-{{ $z->id }}" class="flex items-center gap-2 text-xs text-gray-700" data-regen-zeile="{{ $z->id }}">
+                {{-- Spec 51: Die Liste ist ABGELEITET. Was hier steht, kommt aus den Komponenten —
+                     gespeichert ist nur, was jemand an DIESEM Gericht bewusst uebersteuert hat. --}}
+                @if($kaskade['gesamt'] !== [])
+                    @foreach($kaskade['gesamt'] as $g)
+                        <div wire:key="rg-{{ $g['regeneration_id'] }}" class="flex items-center gap-2 text-xs text-gray-700" data-regen-zeile="{{ $g['regeneration_id'] }}">
+                            <span class="{{ $pill }} {{ $variantPill['secondary'] }} shrink-0" title="Das Gericht wird als Ganzes regeneriert">Gesamt</span>
+                            <span class="flex-1 truncate">
+                                <span class="text-gray-500">{{ $g['device'] ?? 'kalt servieren' }}{{ $g['temp_c'] !== null ? " · {$g['temp_c']} °C" : '' }}{{ $g['duration_min'] !== null ? " · {$g['duration_min']} min" : '' }}{{ $g['core_temp_c'] !== null ? " · KT {$g['core_temp_c']} °C" : '' }}{{ $g['note'] ? " · {$g['note']}" : '' }}</span>
+                            </span>
+                            <button type="button" wire:click="regenSchieben({{ $g['regeneration_id'] }}, -1)" class="{{ $btnGhostXs }}" title="hoch">↑</button>
+                            <button type="button" wire:click="regenSchieben({{ $g['regeneration_id'] }}, 1)" class="{{ $btnGhostXs }}" title="runter">↓</button>
+                            <button type="button" wire:click="regenBearbeiten({{ $g['regeneration_id'] }})" class="{{ $btnGhostXs }}">Edit</button>
+                            <button type="button" wire:click="regenLoeschen({{ $g['regeneration_id'] }})" class="{{ $btnGhostXs }} text-rose-500">✕</button>
+                        </div>
+                    @endforeach
+                @endif
+
+                @foreach($kaskade['komponenten'] as $z)
+                    @php($farbe = ['override' => 'text-violet-600', 'geerbt' => 'text-gray-400', 'regel' => 'text-gray-400', 'fehlt' => 'text-amber-600'][$z['herkunft']] ?? 'text-gray-400')
+                    <div wire:key="rk-{{ $z['ingredient_id'] }}" class="flex items-center gap-2 text-xs text-gray-700" data-regen-komponente="{{ $z['ingredient_id'] }}">
                         <span class="flex-1 truncate">
-                            <span class="font-medium">{{ $z->component_label }}</span>
-                            <span class="text-gray-500">· {{ $z->geraet ?? 'kalt servieren' }}{{ $z->temp_c !== null ? " · {$z->temp_c} °C" : '' }}{{ $z->duration_min !== null ? " · {$z->duration_min} min" : '' }}{{ $z->core_temp_c !== null ? " · KT {$z->core_temp_c} °C" : '' }}{{ $z->note ? " · {$z->note}" : '' }}</span>
+                            <span class="font-medium">{{ $z['label'] }}</span>
+                            @if($z['herkunft'] === 'fehlt')
+                                <span class="text-amber-600">· keine Regeneration hinterlegt</span>
+                            @else
+                                <span class="text-gray-500">· {{ $z['device'] ?? 'kalt servieren' }}{{ $z['temp_c'] !== null ? " · {$z['temp_c']} °C" : '' }}{{ $z['duration_min'] !== null ? " · {$z['duration_min']} min" : '' }}{{ $z['core_temp_c'] !== null ? " · KT {$z['core_temp_c']} °C" : '' }}{{ $z['note'] ? " · {$z['note']}" : '' }}</span>
+                            @endif
                         </span>
-                        <button type="button" wire:click="regenSchieben({{ $z->id }}, -1)" class="{{ $btnGhostXs }}" title="hoch">↑</button>
-                        <button type="button" wire:click="regenSchieben({{ $z->id }}, 1)" class="{{ $btnGhostXs }}" title="runter">↓</button>
-                        <button type="button" wire:click="regenBearbeiten({{ $z->id }})" class="{{ $btnGhostXs }}">Edit</button>
-                        <button type="button" wire:click="regenLoeschen({{ $z->id }})" class="{{ $btnGhostXs }} text-rose-500">✕</button>
+                        <span class="text-[10px] {{ $farbe }} shrink-0" data-regen-herkunft="{{ $z['herkunft'] }}"
+                              title="{{ $z['herkunft'] === 'geerbt' ? 'Kommt aus «' . $z['von_recipe_name'] . '» — dort aendern wirkt in allen Gerichten' : ($z['herkunft'] === 'regel' ? 'Aus dem Zustand des Grundprodukts abgeleitet' : ($z['herkunft'] === 'override' ? 'An DIESEM Gericht bewusst abweichend' : 'Weder am Basisrezept noch hier gepflegt')) }}">
+                            {{ ['override' => 'Override', 'geerbt' => 'geerbt', 'regel' => 'Regel', 'fehlt' => 'fehlt'][$z['herkunft']] ?? '' }}
+                        </span>
+                        <button type="button" wire:click="regenKomponenteBearbeiten({{ $z['ingredient_id'] }})" class="{{ $btnGhostXs }}">Edit</button>
+                        @if($z['herkunft'] === 'override')
+                            <button type="button" wire:click="regenOverrideZuruecksetzen({{ $z['regeneration_id'] }})"
+                                    class="{{ $btnGhostXs }} text-gray-500" title="zurück auf den Stand der Komponente"
+                                    data-regen-reset>↺</button>
+                        @endif
                     </div>
                 @endforeach
+
+                @if($kaskade['luecken'] > 0)
+                    <p class="text-[11px] text-amber-600" data-regen-luecken>
+                        {{ $kaskade['luecken'] }} Komponente(n) ohne Regeneration — gehört ans jeweilige Basisrezept.
+                    </p>
+                @endif
+                @foreach($kaskade['verwaist'] as $w)
+                    <p class="text-[11px] text-rose-500" wire:key="rw-{{ $w['regeneration_id'] }}" data-regen-verwaist>
+                        «{{ $w['label'] }}»: Override ohne Komponente — die Zutat wurde entfernt oder getauscht.
+                        <button type="button" wire:click="regenOverrideZuruecksetzen({{ $w['regeneration_id'] }})" class="{{ $btnGhostXs }} text-rose-500">aufräumen</button>
+                    </p>
+                @endforeach
+
                 <div class="grid grid-cols-6 gap-2 pt-1" data-regen-form>
                     <input type="text" wire:model="regenForm.component_label" class="{{ $input }} col-span-2" placeholder="Komponente (z. B. Gesamt)" />
                     <select wire:model="regenForm.device_vocab_id" class="{{ $input }}">

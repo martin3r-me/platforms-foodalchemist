@@ -11,6 +11,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistDishMainGroup;
 use Platform\FoodAlchemist\Models\FoodAlchemistMarkupClass;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Models\FoodAlchemistVocabEinheit;
+use Platform\FoodAlchemist\Services\RegenerationCascadeService;
 use Platform\FoodAlchemist\Services\SalesRecipeService;
 use Platform\FoodAlchemist\Support\TeamScope;
 
@@ -783,7 +784,58 @@ class VkModal extends Component
         $this->rollenVorschlag = null;
     }
 
-    // ── V-19: Regen-Zeilen ───────────────────────────────────────────────
+    // ── V-19 + Spec 51: Regen-Zeilen als Kaskade ─────────────────────────
+
+    /**
+     * Was der Tab zeigt: Gesamt-Zeile(n) plus eine Zeile je Direkt-Komponente, mit Herkunft.
+     * Vgl. {@see RegenerationCascadeService} — Tiefe 1, Overrides gewinnen, Luecken werden gezaehlt.
+     */
+    private function kaskade(): array
+    {
+        $leer = ['gesamt' => [], 'komponenten' => [], 'luecken' => 0, 'verwaist' => []];
+        if ($this->recipeId === null) {
+            return $leer;
+        }
+        $r = FoodAlchemistRecipe::find($this->recipeId);
+
+        return $r !== null ? app(RegenerationCascadeService::class)->fuerRezept($r) : $leer;
+    }
+
+    /**
+     * Eine geerbte Zeile anfassen heisst: einen Override anlegen — sichtbar, mit Ruecksetzer.
+     * Vorbefuellt mit dem geerbten Stand, damit »ein Grad anders« nicht bei null anfaengt.
+     */
+    public function regenKomponenteBearbeiten(int $ingredientId): void
+    {
+        $zeile = collect($this->kaskade()['komponenten'])->firstWhere('ingredient_id', $ingredientId);
+        if ($zeile === null) {
+            return;
+        }
+
+        $this->regenEditId = $zeile['regeneration_id'];               // gesetzt = bestehender Override
+        $this->regenForm = [
+            'ingredient_id' => $ingredientId,
+            'component_label' => $zeile['label'],
+            'device_vocab_id' => $zeile['device_vocab_id'],
+            'temp_c' => $zeile['temp_c'],
+            'duration_min' => $zeile['duration_min'],
+            'core_temp_c' => $zeile['core_temp_c'],
+            'note' => $zeile['note'],
+        ];
+    }
+
+    /** Override weg = die Komponente gibt wieder den Ton an. */
+    public function regenOverrideZuruecksetzen(int $regenerationId): void
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team !== null && $this->recipeId !== null) {
+            app(SalesRecipeService::class)->deleteRegeneration($team, $this->recipeId, $regenerationId);
+            $this->regenForm = [];
+            $this->regenEditId = null;
+        }
+    }
+
+
 
     public function regenBearbeiten(int $id): void
     {
@@ -791,6 +843,7 @@ class VkModal extends Component
         if ($zeile !== null) {
             $this->regenEditId = $id;
             $this->regenForm = [
+                'ingredient_id' => $zeile->ingredient_id,            // Override bleibt Override
                 'component_label' => $zeile->component_label, 'device_vocab_id' => $zeile->device_vocab_id,
                 'temp_c' => $zeile->temp_c, 'duration_min' => $zeile->duration_min, 'core_temp_c' => $zeile->core_temp_c,
                 'note' => $zeile->note,
@@ -806,7 +859,7 @@ class VkModal extends Component
         }
         app(SalesRecipeService::class)->upsertRegeneration($team, $this->recipeId, array_map(
             fn ($v) => $v === '' ? null : $v, $this->regenForm,
-        ), $this->regenEditId);
+        ) + ['ingredient_id' => null], $this->regenEditId);
         $this->regenForm = [];
         $this->regenEditId = null;
     }
@@ -1039,12 +1092,9 @@ class VkModal extends Component
                 ? \Platform\FoodAlchemist\Models\FoodAlchemistProductionStation::visibleToTeam($team)
                     ->where('is_inactive', false)->orderBy('sort_order')->orderBy('name')->get(['id', 'name'])
                 : collect(),
-            'regenZeilen' => $this->recipeId !== null
-                ? DB::table('foodalchemist_recipe_regenerations AS rr')
-                    ->leftJoin('foodalchemist_vocab_regeneration_devices AS g', 'g.id', '=', 'rr.device_vocab_id')
-                    ->where('rr.recipe_id', $this->recipeId)->whereNull('rr.deleted_at')
-                    ->orderBy('rr.sort_order')->get(['rr.id', 'rr.component_label', 'rr.temp_c', 'rr.duration_min', 'rr.core_temp_c', 'rr.note', 'g.name AS geraet'])
-                : collect(),
+            // Spec 51: die Liste ist ABGELEITET. Gespeichert ist nur, was hier bewusst
+            // uebersteuert wurde — der Rest kommt aus den Komponenten und folgt ihnen.
+            'kaskade' => $this->kaskade(),
             'kunden' => $this->recipeId !== null
                 ? TeamScope::applyVisible(DB::table('foodalchemist_recipe_customer_names')->where('recipe_id', $this->recipeId)->whereNull('deleted_at'), 'team_id', $team)->orderBy('customer_name')->get()
                 : collect(),

@@ -146,8 +146,15 @@ class RegenerationCascadeService
         ?string $label = null,
         ?FoodAlchemistRecipe $von = null
     ): array {
+        // `regeneration_id` heisst »Zeile AN DIESEM Rezept« — nur die kann der Editor
+        // aktualisieren, zuruecksetzen oder loeschen. Bei einer GEERBTEN Zeile gehoert die Id der
+        // Komponente; sie hier durchzureichen liesse den Editor gegen ein fremdes Rezept updaten
+        // (und still nichts tun). Die Herkunft steht separat in `quelle_regeneration_id`.
+        $geerbt = $herkunft === self::HERKUNFT_GEERBT;
+
         return [
-            'regeneration_id' => (int) $z->id,
+            'regeneration_id' => $geerbt ? null : (int) $z->id,
+            'quelle_regeneration_id' => (int) $z->id,
             'ingredient_id' => $zutat !== null ? (int) $zutat->id : ($z->ingredient_id !== null ? (int) $z->ingredient_id : null),
             'label' => $label ?? (string) $z->component_label,
             'device_vocab_id' => $z->device_vocab_id !== null ? (int) $z->device_vocab_id : null,
@@ -172,6 +179,7 @@ class RegenerationCascadeService
     ): array {
         return [
             'regeneration_id' => null,
+            'quelle_regeneration_id' => null,
             'ingredient_id' => (int) $zutat->id,
             'label' => $label,
             'device_vocab_id' => $werte['device_vocab_id'] ?? null,
