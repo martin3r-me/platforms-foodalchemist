@@ -5,12 +5,64 @@
 > (beschlossen 2026-09-04): Regeneration wandert vom Gericht an die Komponente, der Behälter wird
 > gerechnet statt getippt, und es gibt Behälter **je Zweck** statt zwei Skalar-Spalten.
 
-**Status:** `gebaut` (2026-09-04) auf `feat/spec51-regeneration-behaelter` — Etappen A–H umgesetzt
-und getestet, Regelwerke nachgezogen (VK v1.8 §3.2a/§3.4/§3.4e, Basisrezepte v1.8 §14, neu
-`Cross_Cutting/Behaelter_und_Gastronorm.md`).
-**Offen:** der Entscheid aus §5 Nr. 1 (Drop der `recipe_presentations.regeneration_*`-Spalten) —
-gelesen werden sie bereits nicht mehr, die Spalten stehen unangetastet. Volle Suite und
-Browser-Abnahme stehen aus; nicht deployt.
+**Status:** `demo-geprüft` (2026-09-04). Etappen A–H umgesetzt, MCP im Lockstep (5 Tools),
+Regelwerke nachgezogen (VK v1.8 §3.2a/§3.4/§3.4e, Basisrezepte v1.8 §14, neu
+`Cross_Cutting/Behaelter_und_Gastronorm.md`). Auf demo deployt und gegen Echtdaten geprüft.
+**Offen:** Entscheid §5 Nr. 1 (Drop der `recipe_presentations.regeneration_*`-Spalten — gelesen
+werden sie bereits nicht mehr, die Spalten stehen unangetastet) · `regeneration-hochziehen --apply`
+auf demo (bisher nur Trockenlauf) · Browser-Abnahme.
+
+---
+
+## Was der Echtdaten-Lauf auf demo ergeben hat (2026-09-04)
+
+Fünf Befunde, die kein Test in der Sandbox gefunden hätte — die Daten mussten echt sein.
+
+**1. Die Kantenrechnung lag 38 % daneben.** Der Katalog meldete für `GN 1/1 20mm` ein Nutzvolumen
+von 2,928 l statt ~2,1 l. Für 20-mm-Formate veröffentlicht der Handel gar kein Litermaß — es sind
+Einlege-*Schalen* —, also sprang still der geometrische Fallback ein. Ausgerechnet dort, wo er am
+meisten daneben liegt: bei flachen Formaten ist der Randanteil am größten. **Der Fallback ist
+ersatzlos entfallen**; ohne Nennvolumen ist ein Behälter nicht bemessbar, und das Tool sagt warum.
+
+**2. Ein Deckel, der nie greift, entwertet die Deckel, die greifen.** `max_fuellgewicht_kg = 15`
+stand an jeder GN-Zeile, auch an einem GN 1/9 mit 0,6 l. Folgenlos in der Rechnung, aber Rauschen.
+Bleibt nur, wo er binden kann (Migration `000013` räumt nach).
+
+**3. Träger sind keine Lücke.** Thermoboxen wurden als „ohne Bemessungsgrundlage" gezählt. Falsch:
+sie werden über *Steckplätze* bemessen, nicht über Liter. Ihre echte Lücke sind die fehlenden Plätze.
+
+**4. Der Grundstock hätte Dubletten erzeugt.** Alle 18 Behälter auf demo liegen bei **Team 6**
+(WaWi-Import), keine einzige global. Der Seed legt per Default global an — danach stünden dieselben
+GN-Größen zweimal da. Das Kommando warnt jetzt und nennt das gemeinte `--team=`.
+
+**5. Der Matcher scheiterte nicht am Matching, sondern an der Datenlage.** Dessert #2717 hat
+**3 Zutaten-Zeilen, aber 6 Regenerations-Labels**: vier davon zeigen auf *ein* Sammel-Grundprodukt
+(„Ananas-Dessertkomponenten: frisch, Mousse, Schnee, Knusper"). Sicher matchbar war genau einer —
+`Himbeeren frisch` gegen `Himbeeren: frisch`, Unterschied: der **Doppelpunkt** der GP-Benennung
+(§6). Die Normalisierung fällt jetzt über die Interpunktion. Die übrigen bleiben **bewusst** in der
+Review: vier Labels an einen Sammel-GP zu binden hieße, vier Entscheidungen auf eine Zeile zu werfen.
+
+### Bestands-Migration, Trockenlauf auf demo
+
+`11 hochgezogen · 3 Overrides (alle an Grundprodukten) · 5 Review · 1 »Gesamt«` — von ursprünglich
+8 Review-Fällen bleiben 5, und die sind echte Uneindeutigkeit.
+
+### Gemessen: die Massen-Grundlage trägt
+
+**62 von 3.540 Rezepten** haben kein `yield_kg` — **1,75 %**. Die offene Frage aus dem Plan
+(„vor Etappe E messen") ist damit beantwortet, und zwar günstig.
+
+### KI-Bewertung mit echtem Provider
+
+Erster Lauf: die **Dichteklasse** war 6/6 vertretbar (inklusive der richtigen Trennung von
+Spargelsalat = `schuettfaehig` gegen Blattsalat = `locker`). Die **Skalierung** war 6/6 identisch
+`tiefer_fuellbar` — kein Urteil, sondern der erstgenannte Wert. Ursache: die Werte waren
+*mechanisch* beschrieben („nur die Fläche skaliert"), also aus Sicht des Rechners statt der Küche.
+
+Nach der Nachjustierung (Entscheidungsfrage vorn, kulinarische Kriterien, konservativer
+Zweifelsfall) über 13 Rezepte **alle drei Werte korrekt getroffen**: Schnitzel/Croissant/Papadam →
+`lagenware`, Gratin/Reis/Krautsalat → `hoehe_gebunden`, Suppen/Sauce/Sud/Ganache →
+`tiefer_fuellbar`.
 Statuswerte (aus [README](../README.md)): `gebaut` · `getestet` (Sandbox) · `demo-geprüft` · `abgenommen`.
 
 Alle Codepfade relativ zu `platforms-foodalchemist/` (canonical Clone).
