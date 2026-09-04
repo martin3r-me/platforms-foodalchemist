@@ -139,8 +139,10 @@ return new class extends Migration
                 'laenge_mm' => $laenge,
                 'breite_mm' => $breite,
                 'tiefe_mm' => $tiefe,
-                'volumen_l' => self::VOLUMEN[$format][$tiefe] ?? null,
-                'max_fuellgewicht_kg' => 15,
+                'volumen_l' => $liter = self::VOLUMEN[$format][$tiefe] ?? null,
+                // Der Deckel wird nur gesetzt, wo er bindet. Ein GN 1/9 (0,6 l) fasst nie 15 kg;
+                // die Zahl dort einzutragen ist Rauschen, das die echten Deckel entwertet.
+                'max_fuellgewicht_kg' => $liter !== null && $liter * 0.85 > 15 ? 15 : null,
                 'eignung' => json_encode(['abfuellen', 'regenerieren', 'ausgabe']),
                 'updated_at' => now(),
             ]);

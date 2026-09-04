@@ -73,7 +73,10 @@ class BehaelterKatalogGetTool extends FoodAlchemistTool implements ToolContract,
             }
 
             $nutz = BehaelterRechner::nutzvolumenL($z);
-            if ($nutz === null && $z->kapazitaet_kg === null) {
+            // Ein Träger wird über STECKPLÄTZE bemessen, nicht über Liter — er wird nie befüllt.
+            // Ihn unter »ohne Bemessungsgrundlage« zu zählen wäre eine Falschmeldung.
+            $fuellbar = ! $z->ist_traeger;
+            if ($fuellbar && $nutz === null && $z->kapazitaet_kg === null) {
                 $blind++;
             }
 
@@ -90,7 +93,8 @@ class BehaelterKatalogGetTool extends FoodAlchemistTool implements ToolContract,
                 'ist_traeger' => (bool) $z->ist_traeger,
                 'traeger_plaetze' => $z->traeger_plaetze,
                 'is_inactive' => (bool) $z->is_inactive,
-                'bemessbar' => $nutz !== null || $z->kapazitaet_kg !== null,
+                'bemessbar' => $z->ist_traeger ? $z->traeger_plaetze !== null : ($nutz !== null || $z->kapazitaet_kg !== null),
+                'grund' => $this->grund($z, $nutz),
             ];
         }
 
@@ -102,6 +106,30 @@ class BehaelterKatalogGetTool extends FoodAlchemistTool implements ToolContract,
                 ? "{$blind} Zeile(n) haben weder Maße noch Volumen — für die kann kein Bedarf gerechnet werden."
                 : null,
         ]);
+    }
+
+    /**
+     * Warum eine Zeile nicht bemessbar ist — ohne das steht dort nur `false` und niemand weiss,
+     * welches Feld fehlt.
+     */
+    private function grund(object $z, ?float $nutz): ?string
+    {
+        if ($z->ist_traeger) {
+            return $z->traeger_plaetze === null
+                ? 'Träger ohne Steckplätze — die Zahl hängt an Innenhöhe und Behältertiefe und muss gepflegt werden.'
+                : null;
+        }
+        if ($nutz !== null || $z->kapazitaet_kg !== null) {
+            return null;
+        }
+        if ($z->laenge_mm !== null) {
+            // Der haeufigste Fall im Bestand: 20-mm-Einlegeschalen, fuer die der Handel gar kein
+            // Litermass veroeffentlicht. Aus den Kantenlaengen laesst es sich nicht ableiten —
+            // GN-Behaelter sind konisch, die Kantenrechnung liegt rund ein Fuenftel daneben.
+            return 'Maße vorhanden, aber kein Nennvolumen — bei konischen Behältern nicht ableitbar. Liter eintragen.';
+        }
+
+        return 'Weder Maße noch Nennvolumen hinterlegt.';
     }
 
     public function getMetadata(): array

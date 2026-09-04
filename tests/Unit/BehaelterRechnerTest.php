@@ -258,3 +258,28 @@ it('Lagenware ohne Stückertrag rechnet nicht, sondern sagt warum', function () 
 
     expect($out['berechenbar'])->toBeFalse()->and($out['grund'])->toContain('yield_pieces');
 });
+
+it('rechnet das Volumen NICHT aus den Kantenlängen — auch wenn Maße da sind', function () {
+    // Echtdaten-Befund (demo, 2026-09-04): fuer 20-mm-Formate veroeffentlicht der Handel kein
+    // Litermass (Einlegeschalen). Die Kantenrechnung sprang ein und lieferte 2,928 l statt ~2,1 l
+    // — 38 % zu hoch, still, und als Zahl praesentiert. GN-Behaelter sind konisch.
+    $ohneVolumen = ($this->gn)(99, 'GN 1/1 20mm', 530, 325, 20, 0.0);
+    $ohneVolumen->volumen_l = null;
+
+    expect(BehaelterRechner::nutzvolumenL($ohneVolumen))->toBeNull();
+
+    $out = $this->r->varianten(5.0, ($this->basis)([
+        'container' => $ohneVolumen, 'dichteklasse' => 'dicht',
+    ]), [], 'regenerieren');
+
+    expect($out['berechenbar'])->toBeFalse()
+        ->and($out['grund'])->toContain('Maße');
+});
+
+it('das Verhältnis zweier Formate bleibt nutzbar, auch ohne eigenes Nennvolumen', function () {
+    // Die Masse taugen weiterhin fuer die WIRKFLAECHE — dort kuerzt sich der Konizitaets-Fehler
+    // weitgehend heraus. Nur das ABSOLUTE Volumen laesst sich nicht daraus ableiten.
+    $out = $this->r->varianten(10.0, ($this->basis)(['referenz_menge_kg' => 8.0]), [$this->gn12_65], 'regenerieren');
+
+    expect(collect($out['varianten'])->firstWhere('behaelter', 'GN 1/2 65mm')['kg_je_behaelter'])->toBe(3.636);
+});

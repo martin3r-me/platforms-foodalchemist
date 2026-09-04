@@ -124,7 +124,9 @@ class BehaelterKatalogCommand extends Command
                     'laenge_mm' => $laenge, 'breite_mm' => $breite, 'tiefe_mm' => $tiefe,
                     'volumen_l' => $liter,
                     'nutzfaktor' => 0.85,
-                    'max_fuellgewicht_kg' => 15,
+                    // Nur setzen, wo er wirklich bindet: ein GN 1/9 (0,6 l) fasst nie 15 kg —
+                    // die Zahl dort einzutragen ist Rauschen, das echte Deckel unglaubwuerdig macht.
+                    'max_fuellgewicht_kg' => $liter * 0.85 > 15 ? 15 : null,
                     'eignung' => json_encode(['abfuellen', 'regenerieren', 'ausgabe']),
                     'ist_traeger' => false, 'traeger_plaetze' => null, 'traeger_format' => null,
                     'kapazitaet_kg' => null,

@@ -38,33 +38,27 @@ class BehaelterRechner
     private const KONFIDENZ_ABSTUFUNG = ['hoch' => 'mittel', 'mittel' => 'niedrig', 'niedrig' => 'niedrig'];
 
     /**
-     * Nutzbares Volumen in Litern: Bruttovolumen abzüglich Rand, Radien und Transport-Freibord.
+     * Nutzbares Volumen in Litern — NUR aus einem veröffentlichten Nennvolumen.
      *
-     * Präzedenz `volumen_l` VOR den Maßen — und das ist keine Bequemlichkeit: GN-Behälter sind
-     * KONISCH. 530 × 325 × 65 mm sind die Randmaße und ergeben geometrisch 11,2 l, im Handel
-     * stehen 8,8 l. Wer aus den Kantenlängen rechnet, überschätzt um gut ein Viertel und schlägt
-     * systematisch zu wenige Behälter vor. Die Kantenmaße dienen dem Skalieren zwischen Formaten,
-     * nicht dem absoluten Volumen. `kapazitaet_kg` gehört nicht hierher (Masse, kein Volumen).
+     * Die Kantenrechnung ist bewusst KEIN Fallback mehr. GN-Behälter sind konisch: 530 × 325 × 65 mm
+     * ergeben geometrisch 11,2 l, im Handel stehen 8,8 l. Auf Echtdaten (demo, 2026-09-04) fiel auf,
+     * dass genau dieser Fallback bei den 20-mm-Formaten zuschlug — für die veröffentlicht der Handel
+     * gar kein Litermaß, weil es Einlege-Schalen sind. Ergebnis war ein um 38 % zu hohes
+     * Nutzvolumen, still und als Zahl präsentiert.
+     *
+     * Ohne Nennvolumen ist ein Behälter deshalb NICHT bemessbar, und das wird gesagt. Die Maße
+     * bleiben trotzdem nützlich: fürs VERHÄLTNIS zwischen zwei Formaten (siehe wirkflaeche()), wo
+     * sich der Konizitäts-Fehler weitgehend herauskürzt.
      */
     public static function nutzvolumenL(?object $c): ?float
     {
-        if ($c === null) {
+        if ($c === null || ! isset($c->volumen_l) || $c->volumen_l === null || (float) $c->volumen_l <= 0.0) {
             return null;
         }
 
         $faktor = isset($c->nutzfaktor) && $c->nutzfaktor !== null ? (float) $c->nutzfaktor : 0.85;
 
-        if (isset($c->volumen_l) && $c->volumen_l !== null && (float) $c->volumen_l > 0.0) {
-            return round((float) $c->volumen_l * $faktor, 3);
-        }
-
-        if (self::hatMasse($c)) {                       // nur für Behälter ohne Herstellerangabe
-            $brutto = ((float) $c->laenge_mm * (float) $c->breite_mm * (float) $c->tiefe_mm) / 1_000_000;
-
-            return round($brutto * $faktor, 3);
-        }
-
-        return null;
+        return round((float) $c->volumen_l * $faktor, 3);
     }
 
     /** Grundfläche in cm² aus den Randmaßen — für die Anzeige in den Einstellungen. */
@@ -100,12 +94,6 @@ class BehaelterRechner
         $rand = self::grundflaecheCm2($c);
 
         return $rand !== null ? $rand / 100 : null;      // cm² → l je mm
-    }
-
-    private static function hatMasse(object $c): bool
-    {
-        return isset($c->laenge_mm, $c->breite_mm, $c->tiefe_mm)
-            && $c->laenge_mm !== null && $c->breite_mm !== null && $c->tiefe_mm !== null;
     }
 
     /**

@@ -194,3 +194,18 @@ it('ein fremdes Rezept bleibt unerreichbar', function () {
 
     expect($out->success)->toBeFalse();
 });
+
+it('ein Träger gilt nicht als »ohne Bemessungsgrundlage« — er wird über Plätze bemessen', function () {
+    $box = collect(app(BehaelterKatalogGetTool::class)->execute(['nur_traeger' => true], $this->ctx)->data['behaelter'])
+        ->firstWhere('name', 'Thermobox 600x400 (200 mm)');
+
+    // Er hat bewusst kein Fuellvolumen — er wird nie befuellt. Die Steckplaetze fehlen aber
+    // wirklich (sie haengen an Innenhoehe UND Behaeltertiefe), und genau das sagt der Grund.
+    expect($box['ist_traeger'])->toBeTrue()
+        ->and($box['volumen_l'])->toBeNull()
+        ->and($box['bemessbar'])->toBeFalse()
+        ->and($box['grund'])->toContain('Steckplätze');
+
+    $alle = app(BehaelterKatalogGetTool::class)->execute([], $this->ctx)->data;
+    expect($alle['ohne_bemessungsgrundlage'])->toBe(0);      // ohne die Blind-Zeile aus dem anderen Fall
+});
