@@ -686,6 +686,27 @@ return [
      */
     'sales_units' => ['portion', 'stk', 'kg', 'l'],
 
+    /**
+     * Spec 51, Rang 3 der Regenerations-Kaskade: was gilt, wenn eine Komponente ein
+     * GRUNDPRODUKT ist (kein Basisrezept, das seinen eigenen Default trägt).
+     *
+     * Bewusst KLEIN. Hier steht nur, was aus dem Zustand wirklich folgt:
+     * frische und trockene Grundprodukte gehen als solche auf den Teller — Kräuter,
+     * Microgreens, Blattsalat, Gewürze. »Kalt servieren« heisst im Datenmodell
+     * `device_vocab_id = null` (siehe FoodAlchemistRecipeRegeneration::istKalt()).
+     *
+     * TK und konserviert stehen ABSICHTLICH NICHT hier. Ob eine TK-Komponente aufgetaut,
+     * regeneriert oder direkt aus dem Frost verarbeitet wird, hängt am Produkt und nicht am
+     * Zustand — ein Default wäre geraten und würde als Wahrheit gelesen. Solche Komponenten
+     * melden eine Lücke, und die gehört ans Basisrezept.
+     *
+     * Erweitern heisst hier: erst belegen, dann eintragen.
+     */
+    'regeneration_regeln' => [
+        'frisch' => ['device_vocab_id' => null, 'temp_c' => null, 'duration_min' => 0, 'note' => 'kalt servieren'],
+        'trocken' => ['device_vocab_id' => null, 'temp_c' => null, 'duration_min' => 0, 'note' => 'kalt servieren'],
+    ],
+
     /*
      * Ziel und Leitplanke der Schritt-Generierung (`recipe.steps`).
      *
