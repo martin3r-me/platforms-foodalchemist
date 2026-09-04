@@ -16,6 +16,7 @@ use Platform\FoodAlchemist\Services\Ai\KnowledgeContextService;
 use Platform\FoodAlchemist\Services\FoodAlchemistMediaService;
 use Platform\FoodAlchemist\Services\RecipeImageService;
 use Platform\FoodAlchemist\Services\RecipeStepService;
+use Platform\FoodAlchemist\Services\Stt\SttServiceContract;
 
 /**
  * Spec 27 Phase 2/3 — Schritt-für-Schritt-Editor: Nummer + Text + Foto(s) als EIN Objekt.
@@ -57,6 +58,26 @@ class StepEditor extends Component
 
     /** @var array{steps: list<array{phase: ?string, text: string}>, confidence: float, reasoning: ?string}|null */
     public ?array $kiVorschlag = null;
+
+    /**
+     * Briefing für den KI-Knopf (2026-09-04) — ein EINGABE-Werkzeug, kein Wissensspeicher.
+     *
+     * Der Koch sagt hier für DIESES Rezept, wie die Schritte sein sollen: Technik,
+     * Reihenfolge, Gerät, Wortwahl. Gefüllt ist es die Vorgabe, leer entscheidet die KI
+     * fachlich frei — den Gesamtkontext (Zutaten, Komponenten, Regelwerk, Ebene) sieht sie
+     * in beiden Fällen unverändert (Dominique: „soll es berücksichtigen, aber trotzdem den
+     * Gesamtblick haben").
+     *
+     * ABSICHTLICH transient: nicht persistiert, nicht am Rezept gespeichert. Es beschreibt
+     * einen Auftrag, kein Rezeptmerkmal — und ein viertes Wissensfeld, das niemand pflegt,
+     * hätte niemandem geholfen. Was davon Bestand haben soll, steht danach in den Schritten.
+     */
+    public string $kiBriefing = '';
+
+    public bool $briefingOffen = false;
+
+    /** Diktat: Audio-Blob fürs Briefing (WithFileUploads) — Muster wie die Planungsstelle. */
+    public $briefingAudio = null;
 
     /**
      * Anleitungs-Ebene dieser Editor-Instanz (2026-09-04, Regelwerk Verkaufsgerichte §3).
@@ -371,15 +392,23 @@ class StepEditor extends Component
             return;
         }
 
+        $prompt = $this->promptKey();
+        $anrichten = $this->ebene === FoodAlchemistRecipeStep::EBENE_ANRICHTEN;
+
         try {
-            $wissen = $this->stepWissen($r);
-            $vorschlag = $ki->propose('recipe.steps', $this->stepKontext($r), [
+            $wissen = $this->stepWissen($r, $prompt);
+            $vorschlag = $ki->propose($prompt, $this->stepKontext($r), [
                 'knowledge' => $wissen['block'],
                 'knowledge_used' => $wissen['files_used'],
                 'target_table' => 'foodalchemist_recipe_steps',
                 'target_id' => $r->id,
                 // Ein valides JSON ohne Schritte ist strukturell unbrauchbar → Gateway re-rollt.
-                'structural_retry' => fn (array $p) => is_array($p['werte']['steps'] ?? null) && $p['werte']['steps'] !== [],
+                // `vk.plating` liefert Markdown in EINEM Feld, `recipe.steps` ein Array —
+                // die Bedingung muss beides kennen, sonst re-rollt das Gateway das gute
+                // Ergebnis der jeweils anderen Ebene endlos.
+                'structural_retry' => $anrichten
+                    ? fn (array $p) => trim((string) ($p['werte']['preparation'] ?? '')) !== ''
+                    : fn (array $p) => is_array($p['werte']['steps'] ?? null) && $p['werte']['steps'] !== [],
             ]);
         } catch (\RuntimeException $e) {
             $this->fehler = $e->getMessage();
@@ -387,8 +416,15 @@ class StepEditor extends Component
             return;
         }
 
+        // Anrichten kommt als nummeriertes Markdown (ein Feld), Fertigstellen/Produktion als
+        // Schritt-Array. Beide landen hier in DERSELBEN Vorschlagsform — der Mensch sieht die
+        // gleiche Vorschau und übernimmt mit dem gleichen Knopf (GL-07).
+        $roh = $anrichten
+            ? app(RecipeStepService::class)->parse((string) ($vorschlag->werte['preparation'] ?? $vorschlag->werte['plating_text'] ?? ''))
+            : (array) ($vorschlag->werte['steps'] ?? []);
+
         $steps = [];
-        foreach ($vorschlag->werte['steps'] ?? [] as $s) {
+        foreach ($roh as $s) {
             $text = trim((string) ($s['text'] ?? ''));
             if ($text === '') {
                 continue;
@@ -418,28 +454,93 @@ class StepEditor extends Component
             return;
         }
 
-        if ($r->preparation_source === 'manual') {                    // GL-07 Override-First
-            $this->fehler = 'Zubereitung ist manuell gepflegt — erst Reset, dann KI übernehmen.';
+        // Quellen-Trio je Ebene: die Anrichte-Instanz darf nicht die Produktions-Herkunft
+        // umschreiben (und umgekehrt). Ohne diese Trennung hätte ein Plating-Klick die
+        // Zubereitung als „KI" markiert, obwohl sie unangetastet blieb.
+        $anrichten = $this->ebene === FoodAlchemistRecipeStep::EBENE_ANRICHTEN;
+        [$quelle, $konfidenz] = $anrichten
+            ? ['plating_source', 'plating_ai_confidence']
+            : ['preparation_source', 'preparation_ai_confidence'];
+
+        if ($r->{$quelle} === 'manual') {                              // GL-07 Override-First
+            $this->fehler = $anrichten
+                ? 'Anrichten ist manuell gepflegt — erst Reset, dann KI übernehmen.'
+                : 'Zubereitung ist manuell gepflegt — erst Reset, dann KI übernehmen.';
 
             return;
         }
 
-        $svc->sync($r, $this->kiVorschlag['steps']);
-        $r->update(['preparation_source' => 'ki', 'preparation_ai_confidence' => $this->kiVorschlag['confidence']]);
+        $svc->sync($r, $this->kiVorschlag['steps'], $this->ebene);
+        $r->update([$quelle => 'ki', $konfidenz => $this->kiVorschlag['confidence']]);
 
         $this->kiVorschlag = null;
+        // Der Auftrag ist erledigt. Bliebe das Briefing stehen, würde es beim nächsten
+        // KI-Klick unbemerkt wieder mitwirken — genau die stille Wirkung, die ein
+        // Eingabe-Werkzeug nicht haben darf.
+        $this->kiBriefing = '';
+        $this->briefingOffen = false;
         $this->hydrierePuffer();
     }
 
     public function kiVerwerfen(): void
     {
-        $this->kiVorschlag = null;
+        $this->kiVorschlag = null;                       // Briefing bleibt: man will nachjustieren
+    }
+
+    /**
+     * Diktat fürs Briefing — gesprochener Text wird ANGEHÄNGT, nie ersetzt (Muster wie die
+     * Planungsstelle). Reines STT, kein Tool-Loop: im Feld soll stehen, was gesagt wurde;
+     * die Deutung passiert sichtbar im nächsten Schritt, wenn der KI-Knopf läuft.
+     */
+    public function updatedBriefingAudio(): void
+    {
+        $this->briefingDiktatUebernehmen();
+    }
+
+    public function briefingDiktatUebernehmen(): void
+    {
+        if ($this->briefingAudio === null) {
+            return;
+        }
+        try {
+            $text = trim(app(SttServiceContract::class)->transcribe(
+                (string) file_get_contents($this->briefingAudio->getRealPath()),
+                $this->briefingAudio->getMimeType() ?: 'audio/webm',
+            ));
+        } catch (\Throwable $e) {
+            $this->fehler = 'Diktat fehlgeschlagen: ' . $e->getMessage();
+            $this->briefingAudio = null;
+
+            return;
+        }
+        $this->briefingAudio = null;
+        if ($text === '') {
+            // Kann auch der Prompt-Echo-Riegel im STT sein (Aufnahme ohne Sprache).
+            $this->fehler = 'Diktat war leer — nichts übernommen.';
+
+            return;
+        }
+
+        $alt = trim($this->kiBriefing);
+        $this->kiBriefing = $alt === '' ? $text : $alt . ' ' . $text;
+        $this->briefingOffen = true;
+        $this->fehler = null;
     }
 
     // ── intern ───────────────────────────────────────────────────────────
 
+    /**
+     * Prompt je Anleitungs-Ebene (Regelwerk Verkaufsgerichte §3): Fertigstellen/Produktion
+     * fragt `recipe.steps`, Anrichten fragt `vk.plating`. Vorher lief der Knopf auf beiden
+     * Ebenen gegen `recipe.steps` — die Anrichte-Instanz bekam damit Fertigstellungs-Schritte.
+     */
+    private function promptKey(): string
+    {
+        return $this->ebene === FoodAlchemistRecipeStep::EBENE_ANRICHTEN ? 'vk.plating' : 'recipe.steps';
+    }
+
     /** @return array{block: string, files_used: list<string>} */
-    private function stepWissen(FoodAlchemistRecipe $recipe): array
+    private function stepWissen(FoodAlchemistRecipe $recipe, string $prompt = 'recipe.steps'): array
     {
         $zutaten = $recipe->ingredients()
             ->whereNull('deleted_at')
@@ -450,7 +551,7 @@ class StepEditor extends Component
         $beschreibung = trim((string) $recipe->name."\n".$zutaten->map(
             fn ($z) => $z->referencedRecipe?->name ?? $z->raw_text
         )->filter()->implode(', '));
-        $wissen = app(KnowledgeContextService::class)->contextFor($this->team(), 'recipe.steps', $beschreibung, null, [], [
+        $wissen = app(KnowledgeContextService::class)->contextFor($this->team(), $prompt, $beschreibung, null, [], [
             'rezept_typ' => $recipe->is_sales_recipe ? 'gericht' : 'basisrezept',
         ]);
 
@@ -471,9 +572,14 @@ class StepEditor extends Component
             ->get();
         $gericht = (bool) $recipe->is_sales_recipe;
 
+        $briefing = trim($this->kiBriefing);
+
         return [
             'name' => $recipe->name,
             'rezept_typ' => $gericht ? 'gericht' : 'basisrezept',
+            // Nur mitgeben, wenn gefüllt: ein leeres `briefing` im JSON würde das Modell
+            // beschäftigen und Tokens kosten, ohne etwas zu sagen.
+            ...($briefing !== '' ? ['briefing' => $briefing] : []),
             // Eine Quelle fuer beide Kontextbauer (Editor + One-Shot), damit die Leitplanke
             // nicht auseinanderlaeuft. Trennung der Ebenen: Regelwerk Verkaufsgerichte §3.
             'zubereitungsziel' => (string) config('foodalchemist.step_kontext.' . ($gericht ? 'gericht' : 'basisrezept') . '.ziel'),
@@ -552,6 +658,41 @@ class StepEditor extends Component
         }
     }
 
+    /**
+     * Beschriftung des KI-Knopfs und seines Briefings — je Ebene und Rezepttyp.
+     *
+     * Drei Knöpfe, drei Aufgaben: Produktion (Basisrezept), Fertigstellen (Gericht) und
+     * Anrichten (Gericht). Ein gemeinsames „Schritte" für alle drei hat genau die
+     * Vermischung begünstigt, die Regelwerk Verkaufsgerichte §3 auflöst. Der Platzhalter
+     * zeigt am Beispiel, welche Art Vorgabe hier gemeint ist — Handwerk für DIESES Rezept,
+     * kein allgemeines Kochwissen.
+     *
+     * @return array{kiLabel: string, kiTitel: string, kiPlatzhalter: string}
+     */
+    private function kiBeschriftung(?FoodAlchemistRecipe $r): array
+    {
+        if ($this->ebene === FoodAlchemistRecipeStep::EBENE_ANRICHTEN) {
+            return [
+                'kiLabel' => 'Anrichten',
+                'kiTitel' => 'Anrichte-Schritte für den Pass',
+                'kiPlatzhalter' => 'z. B. Sauce als Spiegel, Fleisch mittig gefächert, Kräuteröl nur drei Punkte — kein Wischer.',
+            ];
+        }
+        if ((bool) ($r?->is_sales_recipe ?? false)) {
+            return [
+                'kiLabel' => 'Fertigstellen',
+                'kiTitel' => 'Fertigstellungs-Schritte am Einsatztag',
+                'kiPlatzhalter' => 'z. B. Filet erst am Pass tranchieren, Sauce separat aufschlagen — nicht vorher montieren.',
+            ];
+        }
+
+        return [
+            'kiLabel' => 'Schritte',
+            'kiTitel' => 'Zubereitungs-Schritte aus den Zutaten',
+            'kiPlatzhalter' => 'z. B. Ansatz kalt aufsetzen, nie kochen — nur ziehen lassen. Durch Etamin passieren, nicht durchdrücken.',
+        ];
+    }
+
     public function render()
     {
         $r = $this->rezept();
@@ -579,6 +720,7 @@ class StepEditor extends Component
             'endprodukt' => $pool->firstWhere('is_result', true),   // „so soll es fertig aussehen"
             'phasenVorschlaege' => $schritte->pluck('phase')->filter()->unique()->values()->all(),
             'schreibbar' => $r !== null && (int) $r->team_id === (int) (Auth::user()?->currentTeamRelation?->id ?? 0),
+            ...$this->kiBeschriftung($r),
         ]);
     }
 }

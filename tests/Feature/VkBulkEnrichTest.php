@@ -47,7 +47,12 @@ beforeEach(function () {
             $user = collect($messages)->last()['content'];
             $werte = match (true) {
                 str_contains($user, 'Marketing-Namen') => ['sales_wording_standard' => 'Zarter Rinderrücken'],
-                str_contains($user, 'Plating-Anweisung') => ['preparation' => 'Fleisch mittig, Jus angießen.'],
+                // Marker STRUKTURELL, nicht als Formulierung: nur der Plating-Schritt gibt
+                // `portion_g` in den Kontext (BulkEnrichService::vorschlag). Vorher matchte
+                // dieser Zweig auf das Wort „Plating-Anweisung" — beim Prompt-Umbau
+                // (2026-09-04, Ebenen-Trennung §3) fiel das Wort weg, der Fake rutschte in
+                // den default-Zweig und der Plating-Vorschlag entstand still nicht mehr.
+                str_contains($user, '"portion_g"') => ['preparation' => 'Fleisch mittig, Jus angießen.'],
                 str_contains($user, 'Klassifiziere') => ['dish_class_id' => $this->klasseId, 'klasse_name' => 'Teller omnivor'],
                 default => ['description' => 'Kurzgebratener Rücken mit Jus.'],
             };

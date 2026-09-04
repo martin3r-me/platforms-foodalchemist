@@ -13,6 +13,24 @@
  * @see Platform\Core\PlatformCore::registerModule() für Details zur Modul-Registrierung
  */
 
+/**
+ * BRIEFING-KLAUSEL für die drei Schritt-Prompts (2026-09-04).
+ *
+ * Das Briefing ist ein EINGABE-Werkzeug, kein Wissensspeicher: der Koch sagt für DIESES
+ * Rezept, wie die Schritte sein sollen (Technik, Reihenfolge, Wording, Gerät). Es wird
+ * nicht persistiert und ersetzt keinen Kontext — Zutaten, Komponenten, Regelwerk und die
+ * Ebenen-Abgrenzung bleiben in voller Breite gültig (Dominique: „die KI soll es
+ * berücksichtigen, aber trotzdem den Gesamtblick haben").
+ *
+ * Eine Quelle für `recipe.steps` und `vk.plating`, damit die Zusage nicht je Knopf driftet.
+ */
+$briefingKlausel = 'BRIEFING (optional, Feld `briefing`): ist es gefuellt, ist es die VORGABE '
+    . 'des Kochs fuer genau diese Schritte — uebernimm Technik, Reihenfolge, Geraete und '
+    . 'Wortwahl daraus und ergaenze nur fachlich, was zur Ausfuehrbarkeit fehlt. Es ersetzt '
+    . 'den uebrigen Kontext NICHT: Zutaten, Komponenten und Mengen bleiben maszgeblich. '
+    . 'Widerspricht das Briefing der Ebenen-Abgrenzung, gilt die Abgrenzung. Ist `briefing` '
+    . 'leer oder fehlt es, entscheide fachlich frei. ';
+
 return [
 
     /*
@@ -1193,6 +1211,7 @@ return [
                 . 'Einfache Rezepte: 3-5 Schritte; komplexe Rezepte: 6-9 Schritte; maximal 9 Schritte. '
                 . 'Temperaturen/Zeiten/Mengen konkret, aber Kleinstmengen nicht mechanisch in jeden Satz kopieren. '
                 . 'Keine Fuellsaetze. '
+                . $briefingKlausel
                 . 'phase = Abschnittsname (z. B. Mise en Place, Garen, Finish) oder null, gleiche Phase '
                 . 'fuer aufeinanderfolgende Schritte desselben Abschnitts. Nur was aus den Zutaten '
                 . 'ableitbar ist — nichts erfinden: werte = {steps: [{phase, text}]}.',
@@ -1363,7 +1382,9 @@ return [
                 . 'ABGRENZUNG (verbindlich): KEINE Produktion der Komponenten, KEIN Regenerations-'
                 . 'Programm (keine Grad-, Minuten- oder Kerntemperatur-Werte fuers Wiedererhitzen) '
                 . 'und keine Fertigstellungs-Handgriffe wie tranchieren oder portionieren — die '
-                . 'stehen in ihren eigenen Ebenen. 4-8 Schritte: werte = {preparation}.',
+                . 'stehen in ihren eigenen Ebenen. '
+                . $briefingKlausel
+                . '4-8 Schritte: werte = {preparation}.',
         ],
         'vk.name_putzen' => [
             'tier' => 'B',

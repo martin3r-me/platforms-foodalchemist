@@ -61,18 +61,23 @@
 
             @if($schreibbar)
                 <span class="ml-auto flex items-center gap-1.5">
-                    {{-- Der Schritt-Vorschlag hängt am Prompt `recipe.steps` (Zutaten →
-                         Zubereitung). Für die Anrichte-Ebene ist das der falsche Prompt —
-                         dort schlägt der ✨-Knopf „Plating" am Panel vor (`vk.plating`) und
-                         schreibt seinen Vorschlag direkt in diese Schritte. --}}
-                    @if($ebene !== \Platform\FoodAlchemist\Models\FoodAlchemistRecipeStep::EBENE_ANRICHTEN)
-                        <button type="button" wire:click="kiSchritte" wire:loading.attr="disabled" wire:target="kiSchritte"
-                                class="{{ $btnAi }}" title="Schritt-Vorschlag aus den Zutaten (nichts wird gespeichert)" data-ki-schritte>
-                            @svg('heroicon-o-sparkles', 'w-3.5 h-3.5')
-                            <span wire:loading.remove wire:target="kiSchritte">Schritte</span>
-                            <span wire:loading wire:target="kiSchritte">denkt …</span>
-                        </button>
-                    @endif
+                    {{-- Ein Knopf für beide Ebenen: der Prompt folgt der Ebene
+                         (StepEditor::promptKey → `recipe.steps` bzw. `vk.plating`), damit
+                         Anrichten nicht mit Fertigstellungs-Schritten befüllt wird. --}}
+                    <button type="button" wire:click="kiSchritte" wire:loading.attr="disabled" wire:target="kiSchritte"
+                            class="{{ $btnAi }}" title="{{ $kiTitel }} (Vorschlag — nichts wird gespeichert)" data-ki-schritte>
+                        @svg('heroicon-o-sparkles', 'w-3.5 h-3.5')
+                        <span wire:loading.remove wire:target="kiSchritte">{{ $kiLabel }}</span>
+                        <span wire:loading wire:target="kiSchritte">denkt …</span>
+                    </button>
+                    <button type="button" wire:click="$toggle('briefingOffen')"
+                            class="{{ $btnGhostXs }} @if(trim($kiBriefing) !== '') text-violet-600 @endif"
+                            title="Eigene Vorgabe für diesen KI-Knopf — sprechen oder tippen" data-briefing-toggle>
+                        @svg('heroicon-o-chat-bubble-bottom-center-text', 'w-3.5 h-3.5')
+                        {{-- Kein geklebtes @if: nach einem Wortzeichen erkennt Blade die
+                             Direktive nicht (\B), das @endif aber doch → ParseError. --}}
+                        Briefing {{ trim($kiBriefing) !== '' ? '●' : '' }}
+                    </button>
                     <button type="button" wire:click="kiFotos" wire:loading.attr="disabled" wire:target="kiFotos"
                             class="{{ $btnAi }}" title="KI-Fotos für alle Schritte ohne Foto erzeugen" data-ki-fotos>
                         @svg('heroicon-o-photo', 'w-3.5 h-3.5')
@@ -89,6 +94,32 @@
                 </span>
             @endif
         </div>
+
+        {{-- ── KI-Briefing: eigene Vorgabe für DIESE Schrittfolge ──────────
+             Eingabe-Werkzeug, kein Wissensspeicher: nicht persistiert, wirkt nur auf den
+             nächsten KI-Klick und wird nach der Übernahme geleert. Leer = die KI entscheidet
+             fachlich frei; gefüllt = sie folgt der Vorgabe und sieht den Kontext trotzdem
+             vollständig (Zutaten, Komponenten, Regelwerk, Ebenen-Abgrenzung). --}}
+        @if($briefingOffen && $schreibbar)
+            <div class="fa-step-pool mb-2" data-ki-briefing>
+                <div class="flex items-center gap-2 mb-1">
+                    <p class="{{ $dt }}">Vorgabe für „{{ $kiLabel }}"</p>
+                    <span class="ml-auto flex items-center gap-1.5">
+                        @include('foodalchemist::livewire.recipes.partials.diktat-knopf', [
+                            'audio' => 'briefingAudio', 'marker' => 'briefing', 'label' => 'sprechen',
+                        ])
+                        @if(trim($kiBriefing) !== '')
+                            <button type="button" wire:click="$set('kiBriefing', '')" class="{{ $btnGhostXs }}"
+                                    data-briefing-leeren>leeren</button>
+                        @endif
+                    </span>
+                </div>
+                <textarea wire:model.blur="kiBriefing" rows="3" class="{{ $input }} text-[12px]"
+                          data-briefing-feld
+                          placeholder="{{ $kiPlatzhalter }}"></textarea>
+                <p class="fa-step-hint mt-1">Wirkt nur auf den nächsten ✨-Klick — wird nicht am Rezept gespeichert.</p>
+            </div>
+        @endif
 
         {{-- ── Markdown-Import ─────────────────────────────────────────── --}}
         @if($importOffen && $schreibbar)
