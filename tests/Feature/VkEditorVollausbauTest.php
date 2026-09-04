@@ -45,7 +45,7 @@ it('M9-Felder speichern über die Whitelist; Plating/Marketing manuell ⇒ Linea
         ->set('form.plating_text', '## Aufbau\n1. Bun setzen.')
         ->set('form.work_time_min', 8)
         ->set('form.additional_costs_eur', '1.50')
-        ->set('form.function', 'Fingerfood')
+        ->set('form.production_depth', 'teilfertig')
         ->set('form.production_depth', 'teilfertig')
         ->set('form.notes_manual', 'Catering-Notiz')
         ->call('speichern')
@@ -57,7 +57,9 @@ it('M9-Felder speichern über die Whitelist; Plating/Marketing manuell ⇒ Linea
         ->and($r->plating_source)->toBe('manual')
         ->and($r->work_time_min)->toBe(8)
         ->and((float) $r->additional_costs_eur)->toBe(1.5)                 // M-K8-Pflege zurück (#379)
-        ->and($r->function)->toBe('Fingerfood')
+        // `function` ist am Gericht nicht mehr schreibbar (Speisen-Hauptgruppe als Freitext).
+        ->and($r->function)->toBeNull()
+        ->and($r->production_depth)->toBe('teilfertig')
         ->and($r->production_depth)->toBe('teilfertig')
         ->and($r->notes_manual)->toBe('Catering-Notiz');
 });
@@ -280,7 +282,10 @@ it('rendert die abgeleiteten Marken: Fertigstellungszeit, Servierform-Select, Po
 
     expect($html)->toContain('data-vk-fertigstellungszeit')      // Zeitfeld neu beschriftet
         ->and($html)->toContain('data-dar-form')                // Servierform je Zeile wählbar (Review-Ausgang)
-        ->and($html)->toContain('Fertigstellungs-Posten');       // Posten = Zusammensetzen, nicht das ganze Gericht
+        // Das Posten-Feld ist optional benannt: am Pass arbeitet das Team, ein einzelner
+        // „Posten des Gerichts" existiert fachlich nicht (Entscheid 2026-09-04).
+        ->and($html)->toContain('Ausgabe-Posten')
+        ->and($html)->toContain('Team am Pass');
 });
 
 it('bietet als Verkaufseinheit nur die vier zulaessigen Einheiten an', function () {

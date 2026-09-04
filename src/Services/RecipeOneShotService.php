@@ -438,6 +438,16 @@ class RecipeOneShotService
     /** @return array{status: string, station_id?: ?int, station?: ?string, fehler?: string} */
     private function postenGlied(Team $team, FoodAlchemistRecipe $recipe): array
     {
+        // Am GERICHT wird kein Posten gesetzt (Entscheid Dominique 2026-09-04): in der
+        // Küche laufen die BASISREZEPTE über Posten; beim Fertigstellen und Anrichten
+        // kommen die Posten zusammen und sind wieder ein Team. Ein einzelner „Posten,
+        // der das Gericht macht" existiert nicht — die Kalkulation bewertet die
+        // Fertigstellung deshalb mit dem Team-Satz. Welche Posten beteiligt sind, leitet
+        // der Editor read-only aus den Komponenten ab (`beteiligtePosten`).
+        if ($recipe->is_sales_recipe) {
+            return ['status' => 'uebersprungen', 'grund' => 'Gericht — Fertigstellung ist Team-Arbeit am Pass'];
+        }
+
         try {
             $station = $this->stationVorschlag($team, $recipe);
             if ($station === null) {
@@ -457,16 +467,6 @@ class RecipeOneShotService
 
     private function stationVorschlag(Team $team, FoodAlchemistRecipe $recipe): ?FoodAlchemistProductionStation
     {
-        // Am GERICHT ist der Token-Match sinnlos und irreführend (Entscheid Dominique
-        // 2026-09-04): der Gericht-Name ist eine Komponenten-Liste
-        // („[HG] Rinderfilet | Kartoffel-Baumkuchen | …"), und ein Posten ist nie für
-        // ein ganzes Gericht zuständig — die Komponenten liegen auf ihren eigenen
-        // Posten. Was am Gericht bleibt, ist der FERTIGSTELLUNGS-Posten; der wird aus
-        // der Hauptkomponente geerdet, nicht aus Wortzufall.
-        if ($recipe->is_sales_recipe) {
-            return $this->stationAusKomponenten($team, $recipe);
-        }
-
         $stations = FoodAlchemistProductionStation::visibleToTeam($team)
             ->where('is_inactive', false)->orderBy('sort_order')->orderBy('name')->get();
         if ($stations->isEmpty()) {
@@ -501,38 +501,6 @@ class RecipeOneShotService
         }
 
         return $bestScore > 0 ? $best : null;
-    }
-
-    /**
-     * Fertigstellungs-Posten eines Gerichts aus seinen Komponenten (2026-09-04).
-     *
-     * Erdung auf die Aufbau-Reihenfolge des Regelwerks (Basisrezepte §12.2, `role`
-     * als Sortier-Anker): der Teller läuft an dem Posten zusammen, der die
-     * Hauptkomponente verantwortet; fehlt sie, ist es der Posten des Aroma-Treibers
-     * (Sauce/Jus — der Saucier, der im Gericht eingreift).
-     *
-     * Nur Sub-Rezept-Zeilen tragen einen Posten; eine Rohware-Zeile (nur GP) hat
-     * keinen. Findet sich keiner, bleibt der Posten LEER statt geraten.
-     */
-    private function stationAusKomponenten(Team $team, FoodAlchemistRecipe $recipe): ?FoodAlchemistProductionStation
-    {
-        foreach (['komponente', 'aroma_treiber'] as $rolle) {
-            $stationId = \Platform\FoodAlchemist\Models\FoodAlchemistRecipeIngredient::query()
-                ->join('foodalchemist_recipes AS sub', 'sub.id', '=', 'foodalchemist_recipe_ingredients.referenced_recipe_id')
-                ->where('foodalchemist_recipe_ingredients.recipe_id', $recipe->id)
-                ->where('foodalchemist_recipe_ingredients.role', $rolle)
-                ->whereNull('foodalchemist_recipe_ingredients.deleted_at')
-                ->whereNotNull('sub.default_station_id')
-                ->orderBy('foodalchemist_recipe_ingredients.position')   // §12.2-Reihenfolge
-                ->value('sub.default_station_id');
-
-            if ($stationId !== null) {
-                return FoodAlchemistProductionStation::visibleToTeam($team)
-                    ->where('is_inactive', false)->whereKey((int) $stationId)->first();
-            }
-        }
-
-        return null;
     }
 
     /** @return array{status: string, matched?: list<string>, added?: list<string>, removed?: list<string>, fehler?: string} */

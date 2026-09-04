@@ -237,16 +237,24 @@
                 {{-- 2026-09-04: am Gericht ist das der FERTIGSTELLUNGS-Posten — wer zusammensetzt,
                      abschmeckt und ausgibt. Die Komponenten produzieren auf ihren eigenen Posten
                      (aus dem jeweiligen Basisrezept); die routet der Planer je Zeile. --}}
+                {{-- Entscheid 2026-09-04: In der Küche laufen die BASISREZEPTE über Posten.
+                     Beim Fertigstellen und Anrichten kommen die Posten zusammen und sind wieder
+                     ein Team — ein einzelner „Posten, der das Gericht macht" existiert nicht.
+                     Das Feld bleibt optional (für Betriebe mit echtem Pass-/Ausgabe-Posten samt
+                     Rollenbesetzung); LEER ist der Normalfall, die Kalkulation rechnet dann mit
+                     dem Team-Stundensatz. Die eigentliche Information steht darunter: welche
+                     Posten am Fertigungstag beteiligt sind. --}}
                 <div>
-                    <label class="block {{ $label }} mb-1">Fertigstellungs-Posten <span class="normal-case text-gray-500">(Zusammensetzen &amp; Ausgabe)</span></label>
+                    <label class="block {{ $label }} mb-1">Ausgabe-Posten <span class="normal-case text-gray-500">(optional — am Pass arbeitet das Team)</span></label>
                     <select wire:model="form.default_station_id" class="{{ $input }}" data-vk-default-station>
-                        <option value="">— keiner —</option>
+                        <option value="">— Team am Pass —</option>
                         @foreach($posten as $p)<option value="{{ $p->id }}">{{ $p->name }}</option>@endforeach
                     </select>
                     @if($beteiligtePosten->isNotEmpty())
                         <p class="text-[10px] text-gray-500 mt-1" data-vk-beteiligte-posten>
-                            Komponenten produzieren auf:
+                            Beteiligt am Fertigungstag:
                             {{ $beteiligtePosten->map(fn ($p) => $p['name'] . ($p['anzahl'] > 1 ? " ({$p['anzahl']})" : ''))->implode(' · ') }}
+                            <span class="text-gray-600">— aus den Basisrezepten der Komponenten</span>
                         </p>
                     @endif
                 </div>
@@ -273,7 +281,7 @@
                 </div>
             </div>
             @if($posten->isEmpty())
-                <p class="text-[10px] text-amber-600 mt-2">Noch keine Posten angelegt — unter Einstellungen → „Posten &amp; Kapazität" anlegen, dann hier zuweisen.</p>
+                <p class="text-[10px] text-gray-500 mt-2">Noch keine Posten angelegt (Einstellungen → „Posten & Kapazität"). Am Gericht unkritisch — die Fertigstellung rechnet mit dem Team-Satz.</p>
             @endif
         </x-foodalchemist::modal-section>
 
@@ -823,17 +831,14 @@
                     <input type="number" min="0" wire:model="form.standzeit_min" class="{{ $input }}" />
                 </div>
                 <div>
-                    <label class="block {{ $label }} mb-1" title="M-K8: direkte Einzelkosten je Portion (Energie, Verpackung …) — fließen als Block in HK2">Nebenkosten (€/Portion)</label>
+                    <label class="block {{ $label }} mb-1" title="Direkte Einzelkosten je ANSATZ (Energie, Verpackung …) — fließen als Block in HK2. Die Kalkulation teilt sie auf die Portionen des Ansatzes.">Nebenkosten (€ je Ansatz)</label>
                     <input type="number" min="0" step="0.01" wire:model="form.additional_costs_eur" class="{{ $input }}" data-vk-nebenkosten />
                 </div>
-                <div>
-                    <label class="block {{ $label }} mb-1">Temperatur</label>
-                    <input type="text" wire:model="form.temperature" placeholder="z. B. 75 °C Kerntemperatur · gekühlt" class="{{ $input }}" />
-                </div>
-                <div>
-                    <label class="block {{ $label }} mb-1">Funktion</label>
-                    <input type="text" wire:model="form.function" placeholder="z. B. Hauptgang, Fingerfood" class="{{ $input }}" />
-                </div>
+                {{-- „Temperatur" und „Funktion" sind am Gericht RAUS (Entscheid 2026-09-04):
+                     die Regeneration führt Garraum- und Kerntemperatur strukturiert je
+                     Komponente — ein Freitext daneben wäre die nächste konkurrierende
+                     Wahrheit. „Funktion" war die Speisen-Hauptgruppe als Freitext und wurde
+                     nirgends gelesen. Beide bleiben am Basisrezept-Editor. --}}
                 <div>
                     <label class="block {{ $label }} mb-1">Fertigungstiefe</label>
                     <select wire:model="form.production_depth" class="{{ $input }}">

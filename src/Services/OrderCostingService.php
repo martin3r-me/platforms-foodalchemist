@@ -71,6 +71,15 @@ class OrderCostingService
             $time = $this->times->calculateForBatches($team, $recipe, $productionBatches, $station);
             // Zeit ist betriebs-unabhängig (gleiches Rezept = gleiche Minuten); nur die Rate folgt dem Betrieb.
             $rate = $this->laborRates->rate($team, $station, $outlet);
+            // Am GERICHT ist „kein Posten" der Normalfall, kein Mangel (Entscheid 2026-09-04):
+            // beim Fertigstellen und Anrichten kommen die Posten zusammen und sind wieder ein
+            // Team — der pauschale Team-Satz ist dort die fachlich richtige Bewertung. Die
+            // Warnung des Rate-Service gilt nur für Basisrezepte, die wirklich auf einem
+            // Posten produziert werden.
+            if ($recipe->is_sales_recipe && $station === null) {
+                $rate['warnings'] = [];
+                $rate['source'] = 'team_pass';
+            }
             $minutes = (float) $time['active_person_minutes'];
             if ($minutes <= 0.0) {
                 $recipesWithoutActiveTime[] = (string) $recipe->name;

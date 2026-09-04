@@ -325,7 +325,9 @@ class SalesRecipeService
         'container_warm_vocab_id', 'container_warm_count', 'container_cold_vocab_id', 'container_cold_count',
         'serving_vehicle_vocab_id', 'taste_direction',
         // M9-01: Voll-Editor-Parität — Eigenschaften, Texte, Plating, Notizen
-        'marketing_text', 'description', 'work_time_min', 'temperature', 'function',
+        // `temperature` + `function` bewusst NICHT (Entscheid 2026-09-04): Temperaturen
+        // stehen strukturiert an der Regeneration, „Funktion" ist die Hauptgruppe.
+        'marketing_text', 'description', 'work_time_min',
         'production_depth', 'plating_text', 'notes_manual',
         'additional_costs_eur',                                            // M12: Energie/Nebenkosten je Charge (HK2)
         // Auto-Produktionsplaner (2026-08-03): Parität zum Basisrezept-Editor — sonst verwirft

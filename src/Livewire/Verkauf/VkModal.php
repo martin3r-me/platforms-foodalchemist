@@ -142,8 +142,9 @@ class VkModal extends Component
                 'batch_max_pieces' => $r->batch_max_pieces,
                 'default_station_id' => $r->default_station_id,
                 'additional_costs_eur' => $r->additional_costs_eur,             // M-K8: direkte Einzelkosten → HK2 (#379)
-                'temperature' => $r->temperature,
-                'function' => $r->function,
+                // `temperature` + `function` NICHT im Formular (Entscheid 2026-09-04):
+                // die Regeneration führt die Temperaturen strukturiert je Komponente,
+                // und „Funktion" ist die Speisen-Hauptgruppe als Freitext.
                 'production_depth' => $r->production_depth,
                 // `plating_text` NICHT im Formular (2026-09-04): es ist der gerenderte
                 // Spiegel der Anrichte-Schritte (Regelwerk §3.3). Ein Mitsenden bei jedem

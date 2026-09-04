@@ -453,3 +453,39 @@ it('die beiden Ebenen-Prompts ueberschneiden sich nicht', function () {
     expect($plating)->toContain('Aufbau-Reihenfolge')
         ->and($steps)->not->toContain('Aufbau-Reihenfolge');
 });
+
+// ── Posten: am Pass arbeitet das Team, nicht ein Posten ─────────────────────
+
+it('die Anreicherung setzt am Gericht keinen Posten mehr', function () {
+    // In der Küche laufen die BASISREZEPTE über Posten. Beim Fertigstellen und
+    // Anrichten kommen sie zusammen und sind wieder ein Team — ein einzelner
+    // „Posten, der das Gericht macht" existiert fachlich nicht (Entscheid 2026-09-04).
+    $this->seedTeamHierarchy();
+    FoodAlchemistProductionStation::create([
+        'team_id' => $this->rootTeam->id, 'name' => 'Saucier', 'slug' => 'saucier', 'sort_order' => 1,
+    ]);
+    $gericht = $this->makeRecipe($this->rootTeam, 'Saucier-Gericht', ['is_sales_recipe' => true]);
+
+    $ergebnis = app(\Platform\FoodAlchemist\Services\RecipeOneShotService::class)
+        ->anreichern($this->rootTeam, $gericht->fresh(), completeCoverage: true);
+
+    expect($ergebnis['coverage']['posten']['status'] ?? null)->toBe('uebersprungen')
+        ->and($gericht->fresh()->default_station_id)->toBeNull();
+});
+
+it('updateVk nimmt Temperatur und Funktion am Gericht nicht mehr an', function () {
+    // Die Regeneration führt die Temperaturen strukturiert je Komponente; „Funktion"
+    // war die Speisen-Hauptgruppe als Freitext und wurde nirgends gelesen.
+    $this->seedTeamHierarchy();
+    $gericht = $this->makeRecipe($this->rootTeam, 'Ohne-Freitext', ['is_sales_recipe' => true]);
+
+    $frisch = app(SalesRecipeService::class)->updateVk($this->rootTeam, $gericht->id, [
+        'temperature' => '75 °C Kerntemperatur',
+        'function' => 'Hauptgang',
+        'production_depth' => 'teilfertig',      // Gegenprobe: Fertigungstiefe bleibt
+    ]);
+
+    expect($frisch->temperature)->toBeNull()
+        ->and($frisch->function)->toBeNull()
+        ->and($frisch->production_depth)->toBe('teilfertig');
+});
