@@ -51,13 +51,14 @@ it('hat für jeden Signal-Typ Label und Icon (Enum-Vollständigkeit)', function 
     // steuert ZWEI Typen auf derselben Ebene bei, beide mit KI-Herkunft:
     // `rezept_plausi_ki` (Rezeptur, S5b-1) und `rezept_gericht_vs_komponente`
     // (Bauart, S5b-2) — s. SignalTyp::istKiUrteil.
-    // Dazu `rezept_feedback_kritisch`: dritte Herkunft auf derselben Ebene — nicht Stammdaten
-    // und nicht KI, sondern MENSCHEN, die das Rezept gekocht haben (Wandmonitor-Feedback).
-    // Deterministisch ist die Zähl-Query trotzdem: sie liest abgelegte Bewertungen.
+    // Dazu `rezept_feedback_kritisch` und `rezept_feedback_stark`: dritte Herkunft auf derselben
+    // Ebene — nicht Stammdaten und nicht KI, sondern MENSCHEN, die das Rezept gekocht haben
+    // (Wandmonitor-Feedback). Deterministisch ist die Zähl-Query trotzdem: sie liest abgelegte
+    // Bewertungen. `_stark` ist der einzige Typ im Katalog, der KEIN Mangel ist.
     $rezept = array_filter(SignalTyp::cases(), fn (SignalTyp $t) => $t->istRezeptQualitaet());
     $deterministisch = array_filter($rezept, fn (SignalTyp $t) => ! $t->istKiUrteil());
-    expect($rezept)->toHaveCount(14)
-        ->and($deterministisch)->toHaveCount(12)
+    expect($rezept)->toHaveCount(15)
+        ->and($deterministisch)->toHaveCount(13)
         ->and(SignalTyp::EkKetteUnvollstaendig->istRezeptQualitaet())->toBeFalse();
 });
 
@@ -160,6 +161,36 @@ it('flaggt Rezepte mit wiederholt schlechtem Kuechen-Feedback — ein Ausreisser
 
     expect($m['wert'])->toBe(1)
         ->and($m['signal']['sev'])->toBe(SignalSeverity::Warnung);   // Befund, kein Produktionsstopp
+});
+
+/**
+ * Das Gegenstueck — und der einzige Befund im Katalog, der kein Mangel ist.
+ *
+ * ★ Die Huerde ist ABSICHTLICH hoeher als beim Mangel (3 statt 2 Bewertungen): Lob muss verdient
+ * sein, sonst flutet es die Arbeitsliste, die es zu lesen gilt.
+ */
+it('meldet Küchen-Favoriten als Info — mit höherer Hürde als der Mangel', function () {
+    $fb = app(\Platform\FoodAlchemist\Services\FeedbackService::class);
+    $bewerte = function (int $recipeId, array $scores) use ($fb) {
+        foreach ($scores as $s) {
+            $fb->erstelle($this->rootTeam, $recipeId, ['quelle' => 'kueche', 'score' => $s, 'created_via' => 'fa_wall']);
+        }
+    };
+
+    $favorit = $this->makeRecipe($this->rootTeam, 'Laeuft am Posten');
+    $bewerte($favorit->id, [5, 5, 4]);                     // ✓ Ø 4,67 bei n=3
+
+    $gutAberSelten = $this->makeRecipe($this->rootTeam, 'Zweimal gelobt');
+    $bewerte($gutAberSelten->id, [5, 5]);                  // n=2 → noch kein Favorit
+
+    $solide = $this->makeRecipe($this->rootTeam, 'Solide');
+    $bewerte($solide->id, [4, 4, 4]);                      // Ø 4,0 → gut, aber kein Befund
+
+    $m = rqMetrik($this->dq->messeAlleEbenen($this->rootTeam), 'rezept_feedback_stark');
+
+    expect($m['wert'])->toBe(1)
+        // Info, nicht Warnung: es ist nichts kaputt. Ein Lob in Alarmfarbe waere eine Luege.
+        ->and($m['signal']['sev'])->toBe(SignalSeverity::Info);
 });
 
 it('flaggt produktive Rezepte ohne Zubereitung — und lässt Stubs/Entwürfe aus', function () {

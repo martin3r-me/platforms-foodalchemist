@@ -948,12 +948,26 @@ class RecipeModal extends Component
             return;
         }
 
+        // Der Katalog geht MIT in den Prompt: die KI waehlt eine id aus dem, was dieses Team
+        // wirklich hat — nicht aus ihrem Weltwissen ueber Gastronorm. Ein erfundener Behaelter
+        // waere hier besonders teuer, weil er wie eine gepflegte Entscheidung aussaehe.
+        $katalog = $this->behaelterKatalogFuerKi();
+
         try {
             $v = $gateway->propose('recipe.dichteklasse', [
                 'name' => $r->name,
                 'kategorie' => $r->category?->label,
                 'zutaten' => $r->ingredients->take(15)
                     ->map(fn ($z) => $z->display_name ?: ($z->gp?->name ?? $z->raw_text))->filter()->values()->all(),
+                'ausbeute_kg' => $r->yield_kg !== null ? round((float) $r->yield_kg, 2) : null,
+                'behaelter' => $katalog->map(fn ($b) => [
+                    'id' => (int) $b->id,
+                    'name' => $b->name,
+                    'familie' => $b->familie,
+                    'liter' => $b->volumen_l !== null ? (float) $b->volumen_l : null,
+                    'tiefe_mm' => $b->tiefe_mm !== null ? (int) $b->tiefe_mm : null,
+                    'freigegeben_fuer' => $b->eignung !== null ? json_decode((string) $b->eignung, true) : null,
+                ])->values()->all(),
             ]);
         } catch (\RuntimeException $e) {
             $this->regenMeldung = $e->getMessage();
@@ -986,9 +1000,73 @@ class RecipeModal extends Component
             }
         }
 
+        $gesetzt = array_merge($gesetzt, $this->uebernehmeKiBehaelter($v->werte['behaelter_je_zweck'] ?? null, $katalog));
+
         $this->regenMeldung = $gesetzt === []
             ? 'KI lieferte keinen verwertbaren Vorschlag — nichts übernommen.'
             : 'Vorschlag übernommen: '.implode(' · ', $gesetzt).'. Noch nicht gespeichert.';
+    }
+
+    /** Sichtbarer Behälter-Katalog des Teams — dieselbe Auswahl, die auch das Formular anbietet. */
+    private function behaelterKatalogFuerKi(): \Illuminate\Support\Collection
+    {
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team === null) {
+            return collect();
+        }
+
+        return TeamScope::applyVisible(
+            DB::table('foodalchemist_vocab_containers')->whereNull('deleted_at')->where('is_inactive', false),
+            'team_id',
+            $team
+        )->orderBy('name')->get();
+    }
+
+    /**
+     * KI-Behältervorschlag übernehmen — mit drei Riegeln.
+     *
+     * 1. NUR ids aus dem sichtbaren Katalog. Eine erfundene id wäre hier besonders teuer: sie sähe
+     *    aus wie eine gepflegte Entscheidung und schickte die Ware in einen Behälter, den es nicht gibt.
+     * 2. NUR wo die Freigabe (`eignung`) den Zweck trägt — sonst empfiehlt die KI den Eimer für den Ofen.
+     * 3. NUR in leere Felder (Override-First, wie bei `skalierung`): ein gepflegter Wert ist eine
+     *    Entscheidung und wird von einem Vorschlag nicht überschrieben.
+     *
+     * Die Referenz-Füllmenge bleibt bewusst AUSSEN VOR. Sie ist Rang 1 mit Konfidenz „hoch" — eine
+     * Schätzung dort würde die Dichteklasse überstimmen, die es genau für Schätzungen gibt (Rang 2,
+     * „mittel"). Geraten und als gemessen abgelegt ist schlechter als gar nichts.
+     *
+     * @return list<string>
+     */
+    private function uebernehmeKiBehaelter(mixed $vorschlag, \Illuminate\Support\Collection $katalog): array
+    {
+        if (! is_array($vorschlag) || $katalog->isEmpty()) {
+            return [];
+        }
+
+        $nachId = $katalog->keyBy(fn ($b) => (int) $b->id);
+        $gesetzt = [];
+
+        foreach (FoodAlchemistVocabContainer::ZWECKE as $zweck) {
+            $id = $vorschlag[$zweck] ?? null;
+            if ($id === null || $id === '' || ! is_numeric($id)) {
+                continue;
+            }
+            $b = $nachId->get((int) $id);
+            if ($b === null) {
+                continue;                                        // Riegel 1: nicht im Katalog
+            }
+            $eignung = $b->eignung !== null ? (array) json_decode((string) $b->eignung, true) : null;
+            if ($eignung !== null && ! in_array($zweck, $eignung, true)) {
+                continue;                                        // Riegel 2: nicht freigegeben
+            }
+            if (($this->behaelterForm[$zweck]['container_vocab_id'] ?? '') !== '') {
+                continue;                                        // Riegel 3: schon gepflegt
+            }
+            $this->behaelterForm[$zweck]['container_vocab_id'] = (string) $b->id;
+            $gesetzt[] = ucfirst($zweck).': '.$b->name;
+        }
+
+        return $gesetzt;
     }
 
     /** Der häufigste gute Fall: das GN mit Deckel geht direkt aus dem Kühlhaus in den Ofen. */

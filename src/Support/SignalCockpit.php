@@ -150,6 +150,11 @@ final class SignalCockpit
             . '(Machbarkeit, Aufwand, Geschmack) und den Auftrag, bei dem es auffiel. Von dort erzeugt '
             . '„Weiterentwickeln" eine Draft-Iteration; oder das Rezept wird ausgemustert. Beides ist eine '
             . 'Entscheidung am Rezept, keine Datenkorrektur.',
+        // Kein Mangel, trotzdem ein Weg: was am Posten funktioniert, gehoert dorthin, wo es
+        // wiederverwendet wird. Ohne diesen Satz waere es eine Kachel zum Wegklicken.
+        'rezept_feedback_stark' => 'Ins Standardrepertoire heben: in die nächste Karte oder ins Foodbook aufnehmen, '
+            . 'als Vorlage für Varianten nutzen — oder schlicht so lassen und den Befund abhaken. Die Bewertungen '
+            . 'und Kommentare stehen im Feedback-Tab des Rezepts.',
         'veraltete_preise' => 'Preise am Lieferantenartikel pflegen (Lieferanten → Artikel → Preise) oder den '
             . 'Katalog-Import laufen lassen — mit der nächsten gültigen Preiszeile verschwindet der Befund.',
         'naehrwert_plausi' => 'Die gemeldete Nährwertangabe am Artikel gegen das Etikett prüfen und korrigieren '

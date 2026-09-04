@@ -61,6 +61,14 @@ enum SignalTyp: string
     // Stammdaten und kein KI-Urteil — deshalb kein Fixer-Knopf: die Aufloesung ist, das Rezept
     // zu ueberarbeiten (oder aus dem Feedback eine Iteration zu ziehen, R2.6 „weiterentwickeln").
     case RezeptFeedbackKritisch = 'rezept_feedback_kritisch';
+    // Das Gegenstueck — und der einzige Typ im ganzen Katalog, der KEIN Mangel ist.
+    // Begruendung (Dominique, 2026-09-05): »wir gucken uns aktuell ja nur negative an … positive
+    // ja auch«. Ein System, das ausschliesslich Probleme meldet, erzieht die Kueche dazu, es als
+    // Nörgler zu lesen — und ein Rezept, das am Posten wiederholt Bestnoten bekommt, ist eine
+    // Handlungsempfehlung: ins Standardrepertoire, in die naechste Karte, als Vorlage.
+    // Deshalb Severity Info und eine HOEHERE Huerde als beim Mangel: Lob muss verdient sein,
+    // sonst flutet es die Arbeitsliste, die es zu lesen gilt.
+    case RezeptFeedbackStark = 'rezept_feedback_stark';
     // Spec 21 Tranche C: Konzept-Ebene (bis dahin 0 Signale — die Kaskade endete am Gericht).
     // Gemessen wird nur an Konzepten, die IN GEBRAUCH sind (s. DataQualityService::konzepteInGebrauch):
     // ein unfertiger Entwurf ist kein Mangel, ein unfertiges verkauftes Konzept schon.
@@ -153,6 +161,7 @@ enum SignalTyp: string
             self::RezeptPlausiKi => 'Rezept mit offenem KI-Befund',
             self::RezeptGerichtVsKomponente => 'Gericht oder Komponente? (Bauart-Zweifel)',
             self::RezeptFeedbackKritisch => 'Küchen-Feedback kritisch',
+            self::RezeptFeedbackStark => 'Küchen-Favorit (wiederholt Bestnoten)',
             self::KonzeptSlotLuecke => 'Konzept mit unbesetztem Pflicht-Slot',
             self::KonzeptOhneWording => 'Konzept ohne Kunden-Wording',
             self::KonzeptPreisbandVerletzt => 'Konzept außerhalb des Preisbands',
@@ -204,6 +213,7 @@ enum SignalTyp: string
             self::RezeptPlausiKi => 'heroicon-o-chat-bubble-left-right',
             self::RezeptGerichtVsKomponente => 'heroicon-o-arrows-right-left',
             self::RezeptFeedbackKritisch => 'heroicon-o-hand-thumb-down',
+            self::RezeptFeedbackStark => 'heroicon-o-hand-thumb-up',
             self::KonzeptSlotLuecke => 'heroicon-o-squares-2x2',
             self::KonzeptOhneWording => 'heroicon-o-chat-bubble-bottom-center-text',
             self::KonzeptPreisbandVerletzt => 'heroicon-o-banknotes',

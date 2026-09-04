@@ -1712,7 +1712,16 @@ return [
                 . 'unansehnlich — das gilt fuer fast alles Stueckige und fuer alles, was regeneriert wird. '
                 . 'lagenware = es wird GELEGT statt geschuettet (Schnitzel, Papadam, Tartelettes, Blaetterteig). '
                 . 'Im Zweifel hoehe_gebunden: ein Behaelter zu viel ist harmlos, zu tief gefuellt ruiniert die Ware. '
-                . 'Unsicher bei einem Feld ⇒ dort null, NIEMALS raten: werte = {dichteklasse, skalierung}.',
+                . 'DRITTENS je Zweck den passenden Behaelter aus der mitgelieferten Liste `behaelter` waehlen — '
+                . 'NUR deren id, nie einen erfundenen Namen. Die Zwecke sind verschiedene Momente, nicht Synonyme: '
+                . 'abfuellen = direkt nach der Produktion, meist Eimer/Kanne bei Fluessigem, GN mit Deckel bei Stueckigem. '
+                . 'regenerieren = am Einsatztag im Ofen, also ein ofenfestes FLACHES Format (Suppe wird NICHT im GN warm '
+                . 'gemacht, sie kommt aus dem Kipper). ausgabe = am Pass/Buffet. transport = nur wenn wirklich gefahren '
+                . 'wird. Nimm das GROESSTE Format, das kuechenueblich ist — nach unten rechnet das System selbst. '
+                . 'Zweck nicht sinnvoll ⇒ dort null (lieber leer als falsch: eine falsche Zeile schickt die Ware in '
+                . 'den falschen Behaelter). KEINE Mengen, KEINE Behaelterzahl — die rechnet das System aus der Ausbeute. '
+                . 'Unsicher bei einem Feld ⇒ dort null, NIEMALS raten: '
+                . 'werte = {dichteklasse, skalierung, behaelter_je_zweck: {abfuellen, regenerieren, ausgabe, transport}}.',
         ],
 
         'vk.regeneration' => [

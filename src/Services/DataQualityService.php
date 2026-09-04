@@ -70,6 +70,11 @@ class DataQualityService
 
     private const FEEDBACK_MIN_N = 2;
 
+    /** Lob braucht eine hoehere Huerde als Tadel — sonst flutet es die Arbeitsliste. */
+    private const FEEDBACK_STARK_SCHWELLE = 4.5;
+
+    private const FEEDBACK_STARK_MIN_N = 3;
+
     /** So lange unberührt + unreferenziert ⇒ Pflege-Kandidat. */
     private const VERWAIST_TAGE = 180;
 
@@ -418,6 +423,27 @@ class DataQualityService
                         // schlug an). Auf MySQL liefe dieselbe Zeile still richtig. Beide Werte sind
                         // Klassenkonstanten, kein Nutzereingabe-Pfad.
                         ->havingRaw('COUNT(*) >= '.self::FEEDBACK_MIN_N.' AND AVG(score) <= '.self::FEEDBACK_SCHWELLE)
+                        ->select('recipe_id')
+                ),
+            ],
+            'rezept_feedback_stark' => [
+                'label' => 'Küchen-Favoriten (wiederholt Bestnoten)',
+                'typ' => SignalTyp::RezeptFeedbackStark,
+                'dedup' => 'dq-rezept-feedback-stark',
+                'sev' => SignalSeverity::Info,
+                'desc' => 'Die Küche bewertet dieses Rezept wiederholt mit Bestnoten (Ø ≥ '
+                    . self::FEEDBACK_STARK_SCHWELLE . ' bei mindestens ' . self::FEEDBACK_STARK_MIN_N . ' Bewertungen). '
+                    . 'Kein Mangel, sondern eine Empfehlung: solche Rezepte gehören ins Standardrepertoire, in die '
+                    . 'nächste Karte oder als Vorlage für Varianten. Ein System, das nur Probleme meldet, wird als '
+                    . 'Nörgler gelesen — und was am Posten funktioniert, weiß sonst niemand ausser dem Posten.',
+                'q' => fn (Team $t) => $this->produktiveRezepte($t)->whereIn('id',
+                    FoodAlchemistRecipeFeedback::visibleToTeam($t)
+                        ->where('quelle', FeedbackQuelle::Kueche->value)
+                        ->whereNotNull('score')
+                        ->groupBy('recipe_id')
+                        // Schwellen als LITERAL, nicht als Binding — s. rezept_feedback_kritisch:
+                        // SQLite sortiert jeden Zahlwert vor jedem Text, ein gebundener Float traf JEDES Rezept.
+                        ->havingRaw('COUNT(*) >= '.self::FEEDBACK_STARK_MIN_N.' AND AVG(score) >= '.self::FEEDBACK_STARK_SCHWELLE)
                         ->select('recipe_id')
                 ),
             ],
