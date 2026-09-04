@@ -497,8 +497,11 @@ class RecipeRecomputeService
     {
         $felder = FoodAlchemistGp::ALLERGEN_FIELDS;
 
-        if ($this->hatUngemappteRelevante($zutaten)                   // F7.1-Guard (verfeinert): nur nicht-optionale ungemappte
-            || $this->subKonfidenzRang($zutaten, 'allergens_confidence') <= self::KONF_RANG['low']) { // §7 rekursiv: unsicheres Sub → unbekannt
+        // §7 F7.1/F7.3 abschliessend: NUR eine ungemappte Pflicht-Zutat (bzw. das leere Rezept)
+        // löscht das Profil. Eine niedrige Sub-/GP-Konfidenz deckelt allergens_confidence
+        // (yieldUndZaehler), verwirft die Werte aber NICHT (F7.5) — sonst versteckt ein einziges
+        // unsicheres Sub die bekannten Allergene aller übrigen Komponenten.
+        if ($this->hatUngemappteRelevante($zutaten)) {                // F7.1: nur nicht-optionale ungemappte
             foreach ($felder as $f) {
                 $recipe->{"allergen_{$f}"} = 'unbekannt';
             }
@@ -547,8 +550,8 @@ class RecipeRecomputeService
     {
         $stoffe = array_keys(FoodAlchemistItemDeclaration::STOFFE);
 
-        if ($this->hatUngemappteRelevante($zutaten)                   // F7.1-Guard (verfeinert): nur nicht-optionale ungemappte → alle 18 NULL
-            || $this->subKonfidenzRang($zutaten, 'allergens_confidence') <= self::KONF_RANG['low']) { // §7 rekursiv: unsicheres Sub → unbekannt
+        // §7 F7.1/F7.5 — identisch zu allergene(): unsicheres Sub deckelt, löscht nicht.
+        if ($this->hatUngemappteRelevante($zutaten)) {                // F7.1: nur nicht-optionale ungemappte → alle 18 NULL
             foreach ($stoffe as $s) {
                 $recipe->{"additive_{$s}"} = null;
             }
@@ -962,8 +965,15 @@ class RecipeRecomputeService
     }
 
     /**
-     * GL-01 §4.4: schwächste Allergen-Konfidenz unter den gemappten GP-Zutaten (nicht Sub-Rezepte).
-     * Quelle der Rezept-Allergen-Konfidenz sind die GP-Allergene selbst, nicht die Match-Methode.
+     * GL-01 §4.4 / §7 F7.4: schwächste Allergen-Konfidenz unter den gemappten GP-Zutaten (nicht
+     * Sub-Rezepte). Quelle sind die GP-Allergene selbst, nicht die Match-Methode.
+     *
+     * LIVE aus dem LA-Profil (GpAggregateService::allergenKonfidenz), NICHT aus der Spalte
+     * gps.allergens_confidence: die füllt allein `foodalchemist:gp-allergen-backfill`, der in
+     * keinem Scheduler steht — sie war dadurch flächendeckend NULL und hat über `null → low`
+     * jedes Rezept gedeckelt. Die WERT-Kaskade LA → GP ist aus demselben Grund on-read; die
+     * Konfidenz folgt jetzt demselben Muster und heilt mit, sobald eine LA korrigiert wird.
+     *
      * 3 (high), wenn keine GP-Zutat beiträgt (dann führen Mapping-Guard + Sub-Rezepte).
      */
     private function gpKonfidenzRang(Collection $zutaten): int
@@ -973,13 +983,8 @@ class RecipeRecomputeService
             if ($z->gp_id === null || $z->gp === null) {
                 continue;                                          // Sub-Rezepte: siehe subKonfidenzRang
             }
-            $c = $z->gp->allergens_confidence;
-            $rang = min($rang, match (true) {
-                $c === null => 1,                           // unbewertet → low (Werte kommen dennoch aus dem GP)
-                (float) $c >= 0.85 => 3,                           // high
-                (float) $c >= 0.50 => 2,                           // medium
-                default => 1,                           // 0–0.5 → low; 'unknown' bleibt dem leeren Rezept
-            });
+            $konf = $this->gpAggregate->allergenKonfidenz($z->gp)['confidence'];
+            $rang = min($rang, GpAggregateService::ALLERGEN_KONF_RANG[$konf] ?? 1);
         }
 
         return $rang;
