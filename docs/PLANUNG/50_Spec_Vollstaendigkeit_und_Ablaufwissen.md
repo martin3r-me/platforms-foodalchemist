@@ -796,6 +796,44 @@ Und sie schließen sich nicht aus: für die discovery-Kategorien ist der Endzust
 Befüllen bleibt gestuft (E-7d), aber die Zielmenge ist vollständig: alle vier
 `always`-Kategorien.
 
+#### ⚠ Voraussetzung, die E-7 ab Stufe 3 still leerlaufen ließe: der Korpus ist kaum global
+
+Gemessen 2026-09-05 auf der Dev-DB (`foodalchemist_knowledge_documents`, ohne gelöschte):
+**10 global, 442 team-eigen.**
+
+| Kategorie | global | team-eigen | Folge für den Kanon |
+|---|---:|---:|---|
+| `regelwerk` | **4** | 0 | Stufe 1 trägt — globale Kanon-Zeilen möglich ✅ |
+| `cross_cutting` | **0** | 40 | `always`, aber vollständig team-eigen ❗ |
+| `concept` | **0** | 3 | `always`, team-eigen ❗ |
+| `produktion_kapazitat` | (nicht im Bestand) | — | Stufe 4 vorerst gegenstandslos |
+| `workflow` | 1 | 9 | `ablauf.GET` sähe aus einem globalen Kanon nur **ein** Doc ❗ |
+| `domain` · `kueche` · `weltkueche` · `signatur_kuechen` | 0 | 40 · 27 · 58 · 51 | `discovery` → E-8 |
+| `niveau` | 5 | 3 | gemischt |
+
+Der Sectionizer spiegelt `team_id` vom Dokument auf den Abschnitt („Spiegel des Doc-Werts.
+NULL = global/BHG-kuratiert, wie beim Dokument"). Zusammen mit der Kanon-Invariante — eine
+Zeile mit `team_id` NULL darf nur Abschnitte mit `team_id` NULL referenzieren — heißt das:
+**für `cross_cutting`, `concept` und den Großteil von `workflow` lässt sich heute gar kein
+globaler Kanon bauen.** Ein Versuch würde keine Fehlermeldung erzeugen, sondern eine leere
+Auswahl — und der Leser fiele auf den alten Doc-Block zurück. Genau die Sorte stiller
+Wirkungslosigkeit, die diese Spec sonst aufräumt.
+
+**Konsequenz für E-7d — die Staffelung folgt dem Scope, nicht der Befundlast:**
+
+1. `regelwerk` (4 global) — unverändert Stufe 1, trägt sofort.
+2. `workflow` — nur mit team-scoped Kanon-Zeilen sinnvoll, **oder** die 9 team-eigenen
+   Workflow-Docs werden vorher globalisiert (sie sind BHG-kuratiert, nicht kundenspezifisch —
+   das ist der wahrscheinlich richtige Weg, aber eine eigene Entscheidung).
+3. `cross_cutting` / `concept` — **blockiert**, bis der Korpus-Scope geklärt ist.
+
+Dominiques Modell dazu steht schon im Code (`KnowledgeContextService`, Sichtbarkeits-Filter):
+„das Wissen ist global, damit die Generatoren laufen; ein neuer Nutzer bekommt es leer und
+kann für sich Wissen hinterlegen, das nur für sein Team und Kinder gilt." Die 442
+team-eigenen Docs sind also vermutlich ein **Import-Artefakt**, kein gewollter Zustand. Das
+ist vor E-7d zu klären — es ist eine Daten-Entscheidung, kein Bau, und sie gehört nicht in
+diese Spec, aber sie ist deren Voraussetzung.
+
 #### E-7 — Kanon befüllen (Entscheid Dominique 2026-09-04)
 
 Vier Teile, in dieser Reihenfolge:
