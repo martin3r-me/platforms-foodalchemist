@@ -58,7 +58,7 @@ class KnowledgePolicySeedCommand extends Command
         // ── Rezept-Generator: Stand nach Welle 0 ──
         ['ai_generate_recipe', 'cross_cutting', 'always', null, null],
         ['ai_generate_recipe', 'domain', 'discovery', null, null],
-        ['ai_generate_recipe', 'pairing', 'discovery', null, null],
+        ['ai_generate_recipe', 'pairing', 'none', null, null],             // Spec 50: Pairing-Dossiers gibt es nicht mehr — der Anker-Graph stützt den Generator, kein Prosa-Wissen
         ['ai_generate_recipe', 'regelwerk', 'none', null, null],
         ['ai_generate_recipe', 'referenzgericht', 'none', null, null],
         ['ai_generate_recipe', 'kueche', 'discovery', 2, 2500],
@@ -75,8 +75,10 @@ class KnowledgePolicySeedCommand extends Command
         ['recipe.steps', 'domain', 'discovery', null, null],
         ['recipe.steps', 'kueche', 'discovery', 3, 3000],
         ['recipe.steps', 'niveau', 'discovery', 1, 3000],
-        ['recipe.ueberarbeiten', 'regelwerk', 'always', 1, 7000],
-        ['vk.ueberarbeiten', 'regelwerk', 'always', 1, 7000],
+        ['recipe.ueberarbeiten', 'regelwerk', 'discovery', 3, 4000],       // Spec 50 (2026-09-05): discovery über §-Dossiers statt always-Erstes-Doc
+        ['vk.ueberarbeiten', 'regelwerk', 'discovery', 3, 4000],
+        ['recipe.review', 'regelwerk', 'discovery', 3, 4000],              // Spec 50: Copilot-Prüf-Pass bekommt das Regelwerk als Massstab
+        ['vk.review', 'regelwerk', 'discovery', 3, 4000],
         ['concept.wording', 'cross_cutting', 'always', null, null],
         ['foodbook.kundentext', 'cross_cutting', 'always', null, null],
         ['foodbook.plan', 'cross_cutting', 'always', null, null],
@@ -91,7 +93,7 @@ class KnowledgePolicySeedCommand extends Command
         ['ai_suggest_pairings', 'pairing', 'grounding', 5, 1200],
         ['ai_infer_ankers', 'pairing', 'grounding', 3, 1400],
         ['recipe.eigenschaften', 'produktion_kapazitat', 'always', 3, 7000],
-        ['recipe.eigenschaften', 'regelwerk', 'always', 1, 6000],
+        ['recipe.eigenschaften', 'regelwerk', 'discovery', 3, 4000],
     ];
 
     public function handle(): int
