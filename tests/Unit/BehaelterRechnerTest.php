@@ -378,3 +378,35 @@ it('rechnet eine KI-hergeleitete Referenzmenge mit niedrigerer Konfidenz als ein
         // Die MENGE ist identisch — nur die Aussage ueber ihre Belastbarkeit unterscheidet sich.
         ->and($hergeleitet['varianten'][0]['anzahl'])->toBe($gewogen['varianten'][0]['anzahl']);
 });
+
+it('kappt die Variantenliste auf fünf — Vorschlag und Referenz bleiben, gängige Formate füllen auf', function () {
+    // Ungekappt standen fuer 12 kg 38 Varianten da, darunter „30x GN 1/9-65". Rechnerisch
+    // korrekt, praktisch ein Katalog-Abzug: bei 38 entscheidet niemand.
+    $mit = fn (object $c, int $g) => (object) ((array) $c + ['gaengigkeit' => $g]);
+
+    $kandidaten = [
+        $mit($this->gn11_100, 10),                  // „10er" — gaengig
+        $mit($this->gn12_65, 30),
+        $mit($this->gn16_100, 60),                  // Kleinformat
+        $mit(($this->gn)(6, 'GN 1/9 65mm', 176, 108, 65, 0.6), 60),
+        $mit(($this->gn)(7, 'GN 1/3 65mm', 325, 176, 65, 2.5), 50),
+        $mit(($this->gn)(8, 'GN 1/1 40mm', 530, 325, 40, 5.0), 20),
+    ];
+
+    $out = $this->r->varianten(
+        12.0,
+        ($this->basis)(['referenz_menge_kg' => 6.0, 'skalierung' => 'tiefer_fuellbar']),
+        $kandidaten,
+        'regenerieren'
+    );
+
+    $namen = collect($out['varianten'])->pluck('behaelter');
+
+    expect($out['varianten'])->toHaveCount(5)
+        // Referenz bleibt IMMER — sie traegt die Fuellmenge, aus der alles andere skaliert ist.
+        ->and(collect($out['varianten'])->firstWhere('ist_referenz', true)['behaelter'])->toBe('GN 1/1 65mm')
+        ->and(collect($out['varianten'])->where('ist_basis', true))->toHaveCount(1)
+        // Die Kleinstformate fallen raus — sie sind nie die Antwort auf „wohin mit 12 kg".
+        ->and($namen)->not->toContain('GN 1/9 65mm')
+        ->and($namen)->toContain('GN 1/1 40mm');     // gaengiges Format bleibt
+});

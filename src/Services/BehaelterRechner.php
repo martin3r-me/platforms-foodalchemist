@@ -35,6 +35,13 @@ class BehaelterRechner
         'locker' => 0.20,
     ];
 
+    /**
+     * So viele Varianten stehen am Ende da. Fünf ist die Zahl, die man überfliegt: Vorschlag,
+     * Referenz und drei Alternativen. Alles darüber wird zur Tabelle, und Tabellen liest am Pass
+     * niemand.
+     */
+    private const MAX_VARIANTEN = 5;
+
     private const KONFIDENZ_ABSTUFUNG = ['hoch' => 'mittel', 'mittel' => 'niedrig', 'niedrig' => 'niedrig'];
 
     /**
@@ -280,7 +287,50 @@ class BehaelterRechner
             $varianten[$i]['ist_basis'] = $i === 0;                 // was vorgeschlagen wird
         }
 
-        return $varianten;
+        return $this->kappen($varianten);
+    }
+
+    /**
+     * Die Liste auf eine Zahl kürzen, die jemand LESEN kann.
+     *
+     * ★ Ungekappt standen für 12 kg **38** Varianten da, darunter „30× GN 1/9-65" — rechnerisch
+     * korrekt, praktisch ein Katalog-Abzug. Die Regel lautet »das System zeigt Varianten, die
+     * Küche entscheidet«; bei 38 entscheidet niemand, und eine Liste, die niemand liest,
+     * entwertet auch den einen guten Vorschlag darin.
+     *
+     * Was bleibt: der **Vorschlag** (beste Passung) und die **Referenz** (was am Rezept steht) —
+     * beide immer. Aufgefüllt wird nach `gaengigkeit`: erst die Formate, die im Haus wirklich
+     * laufen (GN 1/1-65 und -100), dann der Rest. Die Gängigkeit entscheidet also nicht, WAS
+     * vorgeschlagen wird — das bleibt die Passung —, sondern nur, was daneben stehen bleibt.
+     *
+     * @param  list<array<string, mixed>>  $varianten
+     * @return list<array<string, mixed>>
+     */
+    private function kappen(array $varianten): array
+    {
+        if (count($varianten) <= self::MAX_VARIANTEN) {
+            return $varianten;
+        }
+
+        $pflicht = [];
+        $rest = [];
+        foreach ($varianten as $rang => $v) {
+            if (($v['ist_basis'] ?? false) || ($v['ist_referenz'] ?? false)) {
+                $pflicht[] = [$rang, $v];
+
+                continue;
+            }
+            $rest[] = [$rang, $v];
+        }
+
+        // Auffüllen: gängige Formate zuerst, bei gleicher Gängigkeit die bessere Passung.
+        usort($rest, fn (array $a, array $b) => [$a[1]['gaengigkeit'] ?? 50, $a[0]] <=> [$b[1]['gaengigkeit'] ?? 50, $b[0]]);
+        $behalten = array_merge($pflicht, array_slice($rest, 0, max(0, self::MAX_VARIANTEN - count($pflicht))));
+
+        // Die ursprüngliche Passungs-Reihenfolge wiederherstellen — sie ist die Aussage.
+        usort($behalten, fn (array $a, array $b) => $a[0] <=> $b[0]);
+
+        return array_map(fn (array $e) => $e[1], $behalten);
     }
 
     /** @return array{0: ?float, 1: string} kg je Referenzbehälter + Konfidenz */
@@ -384,6 +434,8 @@ class BehaelterRechner
             'container_id' => $c->id ?? null,
             'behaelter' => $c->name ?? null,
             'tiefe_mm' => isset($c->tiefe_mm) && $c->tiefe_mm !== null ? (float) $c->tiefe_mm : null,
+            // Alltagshäufigkeit: steuert nur, welche Alternativen die Kappung überleben.
+            'gaengigkeit' => isset($c->gaengigkeit) && $c->gaengigkeit !== null ? (int) $c->gaengigkeit : 50,
             'anzahl' => $anzahl,
             'kg_je_behaelter' => round($kg, 3),
             'rest_im_letzten_kg' => round($anzahl * $kg - $mengeKg, 3),
