@@ -96,7 +96,7 @@ Aus der Rückfrage 2026-09-04 und dem Anlass:
 
 | Fähigkeit | Wo | Erreichbarkeit heute |
 |---|---|---|
-| VK-Vorbedingungen (`portion`, `aufschlagsklasse`, `darreichung`) + Food-Cost-Ampel | `RecipeOneShotService::wirtschaftlichkeitsGlied():1003` | nur über `recipes.GENERATE`; `private`; **schreibt** vor dem Messen |
+| VK-Vorbedingungen (`luecken`: `portion`, `darreichung`) + Food-Cost-Ampel + Ziel-VK-Abgleich | `RecipeOneShotService::wirtschaftlichkeitsGlied():971` | nur über `recipes.GENERATE`; `private`; **schreibt** vor dem Messen (`updateVk` + `ensureStandard`) |
 | Lücken in den Anreicherungs-Zielfeldern | `BulkEnrichService::luecken()` + `ZIELFELDER` | intern |
 | Anreicherungs-Schrittfolge auf echte Leerstellen geschnitten | `RecipeOneShotService::anreichern()` | intern |
 | Datenqualität **live pro Objekt** | `DataQualityService::trifftObjekt($team,$metrik,$kind,$id)`; Metriken `gp_kein_la`, `gp_kein_preis`, `gp_kein_lead`, `gp_lead_ohne_preis`, `gp_allergen_konfidenz`, `gp_anker_fehlt`, `gp_tentative_genutzt`, `br_ek_null/teil`, `br_anker_fehlt`, `vk_ek_null/teil`, `vk_anker_fehlt`, `vk_servierform_unbestimmt` | intern + aggregiert im Signale-Cockpit |
