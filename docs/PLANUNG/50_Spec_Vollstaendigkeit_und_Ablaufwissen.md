@@ -837,7 +837,58 @@ team-eigenen Docs sind also vermutlich ein **Import-Artefakt**, kein gewollter Z
 ist vor E-7d zu klären — es ist eine Daten-Entscheidung, kein Bau, und sie gehört nicht in
 diese Spec, aber sie ist deren Voraussetzung.
 
-#### E-7 — Kanon befüllen (Entscheid Dominique 2026-09-04)
+#### ⟳ ARCHITEKTUR-WECHSEL 2026-09-05: der Kanon zeigt auf DOKUMENTE, nicht auf Abschnitte
+
+Entscheid Dominique, umgesetzt von der Strang-III-Session. **Alles unterhalb dieser Zeile,
+das von `knowledge_section_id`, Sectionizer oder Chunking spricht, ist damit überholt** —
+es bleibt als Herleitung stehen, weil die Messungen weiter gelten.
+
+**Was sich ändert:** statt ein Dossier in Abschnitte zu zerlegen und die Abschnitte zu
+verteilen, wird **das Wissen selbst granular**. Ein Dossier = ein Thema, Richtwert ≤ ~4.000
+Zeichen; ein Regelwerk-§ = ein eigenes Dossier. Der Kanon referenziert dann Dokumente.
+
+**Warum das besser ist als Chunking:**
+
+- **Kein Anker-Drift.** Ein `§6.1`-Anker zeigt nach jedem Doc-Edit womöglich woandershin;
+  eine Kanon-Zeile auf ein Dossier überlebt jede Textänderung.
+- **Regel ändern = ein Dossier editieren**, statt Sectionizer-Lauf + Re-Index + Purge.
+- **E-7a entfällt komplett** (kein Sectionize-Lauf als Voraussetzung), **E-8 wird
+  „Dossier-Split"** statt Chunk-Retrieval.
+
+**Messung dahinter (dev):** 386 von 452 Dossiers sind länger als 2.000 Zeichen — der eine
+Doc-Vektor sieht also nur den Anfang. Auf **demo** (825 Dossiers, die Wahrheit; der Vault ist
+veraltet) ist der Split bereits im Gange: 47 §-Dossiers `regelwerk` aktiv, die drei
+Monolithen (GP 57k · Basisrezepte 50k · LA 25k) inaktiv, 26 große `domain`-Docs inaktiv.
+Aktiv über 4.000 Zeichen sind noch **157**, davon 33 über 8k — Schwerpunkt `cross_cutting`.
+
+**Schnittstelle zu Strang II** (ersetzt `sectionsFor`):
+`KnowledgeCanonService::documentsFor(string $scope, string $scopeKey, Team $team, string $role = 'root'): Collection`
+— Zeilen mit `document_id`, `slug`, `title`, `category`, `content_md`, `mode`, `version`,
+`char_count`, in `ord`-Reihenfolge. Leere Collection = kein Kanon ⇒ `ablauf.GET`/`regelwerk.GET`
+liefern ganze Docs über das heutige `always`-Binding.
+
+**Kurations-Regel, die dabei entsteht** (vorher eine Code-Eigenschaft): der Sectionizer stufte
+Abschnitte als `normativ | referenz | beispiel | changelog | meta | prosa` ein, und `ablauf.GET`
+sollte darauf filtern. Bei Dossiers als Einheit wandert die Trennung in die **Dossier-Grenze**:
+
+> **Changelog und Meta gehören nie in ein Kanon-Dossier.** Wer ein §-Dossier anlegt, lässt den
+> Changelog weg oder legt ihn als eigenes Dossier **ohne** Kanon-Bindung ab.
+
+Sonst schleppt jeder Kanon-Treffer den Changelog in den Prompt — genau der Ballast, den §5.1
+herausrechnen wollte. Strang III baut dazu einen Guard in den Kanon-PUT: ein Dossier mit
+`## Changelog`-Überschrift im Body wird abgelehnt.
+
+**Folge für das Erfolgskriterium in §8:** „`dropped_chars` gegen null" bedeutet jetzt etwas
+anderes. Bei §-Abschnitten hiess es *die richtigen Paragraphen passen ins Budget*; bei
+Dossiers heisst es *die Dossiers sind klein genug*. Das ist zur Hälfte Kuration (Split der
+157 aktiven Docs > 4.000 Z.) und zur Hälfte Code (Embed-Fenster 2.000 → ganzes Dossier). Die
+Baseline aus §9 bleibt gültig, ihre Deutung verschiebt sich von *Verteiler* zu *Kuration*.
+
+`foodalchemist_knowledge_sections` bleibt ungenutzt stehen — additiv, leer, kostenlos; ein
+Drop-Commit auf eine Tabelle, die zwei Sessions gerade unterschiedlich einschätzen, wäre mehr
+Risiko als Nutzen.
+
+#### E-7 — Kanon befüllen (Entscheid Dominique 2026-09-04, Ziel-Ebene 2026-09-05 auf Dokumente gewechselt)
 
 Vier Teile, in dieser Reihenfolge:
 
