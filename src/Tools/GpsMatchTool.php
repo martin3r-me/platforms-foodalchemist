@@ -42,6 +42,20 @@ class GpsMatchTool extends FoodAlchemistTool implements ToolContract, ToolMetada
                 'main_ingredient_slug' => ['type' => 'string', 'description' => 'Optionaler Slug der Hauptzutat zur Präzisierung'],
                 'k' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 10, 'default' => 5, 'description' => 'Anzahl Kandidaten'],
                 'mint_if_missing' => ['type' => 'boolean', 'default' => false, 'description' => 'Bei target=none LA-First ein GP aus passender LA minten (tentative). Ohne passende LA bleibt es none.'],
+                'mode' => ['type' => 'string', 'enum' => ['gp_first', 'sub_recipe_first'],
+                    'description' => 'Was zuerst gesucht wird: ein Grundprodukt (Default) oder ein bestehendes Sub-Rezept.'],
+                'frische' => ['type' => 'string', 'enum' => ['neutral', 'fresh_first', 'frozen_first', 'preserved_first'],
+                    'description' => 'Zustands-Präferenz, ebenfalls ein Tiebreak (s. `bio`). fresh_first bevorzugt frische Ware '
+                        . 'und straft TK/konserviert ab; preserved_first dreht das um und bevorzugt zusätzlich verarbeitete '
+                        . 'Formen (Convenience). frozen_first lässt frisch als Roh-Fallback zu.'],
+                'bio' => ['type' => 'string', 'enum' => ['neutral', 'bio', 'conventional'],
+                    'description' => 'Bio-Präferenz. WICHTIG — wirkt als TIEBREAK, nicht als Filter: sie entscheidet '
+                        . 'zwischen gleich gut passenden Namen («Akazienhonig: trocken» vs. «…, Bio»), überstimmt aber '
+                        . 'keinen deutlich besseren Namenstreffer. Wer Bio erzwingen muss, prüft `candidates` selbst. '
+                        . 'Feld-primär über die bio-Spalte, Token nur als Fallback — «Biolandhof» im Namen macht kein Bio-Produkt.'],
+                'prefer_raw' => ['type' => 'boolean', 'default' => false,
+                    'description' => 'From Scratch: straft Schnitt-/Größen-Formen ab, damit die Roh-Grundform gewinnt '
+                        . '(«Zwiebel» statt «Zwiebel geachtelt»).'],
                 'commodity_group' => ['type' => 'string', 'description' => 'Optionaler Warengruppen-Code (Spec 16): verengt die LA-Suche beim Mint auf die WG-Lead-Lieferanten. Fehlt er → alle Leads.'],
             ],
             'required' => ['zutat'],
@@ -61,7 +75,19 @@ class GpsMatchTool extends FoodAlchemistTool implements ToolContract, ToolMetada
         $slug = isset($arguments['main_ingredient_slug']) ? (string) $arguments['main_ingredient_slug'] : null;
         $svc = app(IngredientMatchService::class);
 
-        $match = $svc->matchIngredient($team, $zutat, $slug);
+        // Spec 50 · E-2: Die Präferenzen kannte der SERVICE schon immer
+        // ({@see IngredientMatchService::matchIngredient} + MatchHeuristics::variantRankResolved),
+        // nur reichte das Tool sie nicht durch — es rief mit lauter Defaults auf. Deshalb musste
+        // ein Agent am 2026-09-03 „Bio oder nicht?" als Rückfrage stellen und ein bereits
+        // angelegtes Rezept nachkorrigieren. Das war keine Design-Entscheidung, sondern eine
+        // fehlende Schema-Zeile. Unbekannte Werte fallen auf den neutralen Default zurück,
+        // wie im Service.
+        $mode = (string) ($arguments['mode'] ?? 'gp_first');
+        $pref = (string) ($arguments['frische'] ?? 'neutral');
+        $bio = (string) ($arguments['bio'] ?? 'neutral');
+        $preferRaw = (bool) ($arguments['prefer_raw'] ?? false);
+
+        $match = $svc->matchIngredient($team, $zutat, $slug, $mode, $pref, $preferRaw, $bio);
 
         // 07·M3: mint-if-missing — Bestand-Miss + passende LA → LA-First-Mint (tentative),
         // damit der Rezept-Flow nicht bei GP-Lücken dead-endet. Ohne LA bleibt target=none.
