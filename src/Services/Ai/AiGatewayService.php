@@ -135,7 +135,7 @@ class AiGatewayService
         // sagt nicht, WOHER die Bytes kamen — ohne diese Zerlegung ist jede Budget-Änderung
         // blind (vgl. Welle 0: ~44 % des Generator-Prompts waren ein rechnerischer Restposten).
         $promptParts = [
-            'kanon' => 0,                                            // Welle 2 (CanonBlockBuilder)
+            'kanon' => 0,                                            // Welle 2: Kanon-Block (selectKanon), ersetzt bound je Prompt-Key
             // Exakt der Retrieval-Block, OHNE den angehängten Trenner: der wird beim
             // Zusammenbau ohnehin rtrim't, und eine Sonde, die zwei Zeichen zu viel meldet,
             // macht jede Nachrechnung von prompt_chars unmöglich.
@@ -147,11 +147,35 @@ class AiGatewayService
             'dropped' => (int) ($options['knowledge_dropped_chars'] ?? 0),
         ];
 
+        // Spec 50 / Welle 2 — KANON (Packliste je Prompt-Key, Dossier-Slugs) ersetzt die
+        // always-Bindings, SOBALD für diesen Prompt-Key Kanon-Zeilen existieren. Ohne Zeilen
+        // ändert sich nichts (Fallback #469-Bindings unten). Nur `scope='prompt_key'`: der
+        // Gateway kennt den Prompt-Key, nicht das Routing-Feature — für den Generator also
+        // `prompt_key=recipe.generator`, nicht `feature=ai_generate_recipe`. Bewusst OHNE
+        // Bereichs-Präfix: der Kanon ist eine explizite Liste („dort nutzen, wo es benutzt wird").
+        $kanonSlugs = [];
+        $kanonBlock = null;
+        if ($team !== null && \Illuminate\Support\Facades\Schema::hasTable('foodalchemist_knowledge_canon')) {
+            [$kBlocks, $kanonSlugs, $kanonVerworfen] = $this->selectKanon(
+                app(\Platform\FoodAlchemist\Services\Knowledge\KnowledgeCanonService::class)->documentsFor('prompt_key', $promptKey, $team),
+                is_array($options['knowledge_used'] ?? null) ? $options['knowledge_used'] : [],
+                $this->boundBudget($promptKey),
+            );
+            $promptParts['dropped'] += $kanonVerworfen;
+            if ($kBlocks !== []) {
+                $kanonBlock = "# VERBINDLICHES REGELWERK (gilt für jede Antwort dieses Auftrags)\n\n"
+                    . implode("\n\n---\n\n", $kBlocks);
+                $promptParts['kanon'] = mb_strlen($kanonBlock);
+            }
+        }
+
         // #469: an diesen Layer gebundenes Wissen additiv laden — Prompt-Key (fein) ODER Bereich (Präfix, grob).
         // Macht „einbinden" für JEDEN Prompt wirksam (zentraler Punkt, alle Prompts laufen durch propose()).
+        // Welle 2: nur noch FALLBACK — hat der Prompt-Key einen Kanon, sind die Bindings für ihn stumm
+        // (sonst doppelt: altes Ganz-Dossier per Binding + §-Dossier per Kanon).
         $boundSlugs = [];
         $boundBlock = null;
-        if (\Illuminate\Support\Facades\Schema::hasTable('foodalchemist_knowledge_bindings')) {
+        if ($kanonBlock === null && \Illuminate\Support\Facades\Schema::hasTable('foodalchemist_knowledge_bindings')) {
             $bereich = str_contains($promptKey, '.') ? explode('.', $promptKey, 2)[0] : $promptKey;
             $bound = \Illuminate\Support\Facades\DB::table('foodalchemist_knowledge_bindings as b')
                 ->join('foodalchemist_knowledge_documents as d', 'd.id', '=', 'b.knowledge_document_id')
@@ -180,8 +204,8 @@ class AiGatewayService
         }
 
         $knowledgeUsed = $options['knowledge_used'] ?? null;
-        if ($boundSlugs !== []) {
-            $knowledgeUsed = array_values(array_unique(array_merge(is_array($knowledgeUsed) ? $knowledgeUsed : [], $boundSlugs)));
+        if ($boundSlugs !== [] || $kanonSlugs !== []) {
+            $knowledgeUsed = array_values(array_unique(array_merge(is_array($knowledgeUsed) ? $knowledgeUsed : [], $kanonSlugs, $boundSlugs)));
         }
         $audit = [
             'knowledge_used' => $knowledgeUsed,
@@ -233,7 +257,11 @@ class AiGatewayService
          * `prompt_cache_key` ist NICHT setzbar (applySupportedSamplingParams ist eine
          * geschlossene Whitelist) — der Nutzen hängt vollständig an dieser Reihenfolge.
          */
-        if ($boundBlock !== null) {
+        // Welle 2: Kanon und Bindings schliessen sich aus (s. o.) — es steht also genau EIN
+        // Regelwerk-Block, an derselben Stelle, byte-stabil je Prompt-Key.
+        if ($kanonBlock !== null) {
+            $messages[] = ['role' => 'system', 'content' => $kanonBlock];
+        } elseif ($boundBlock !== null) {
             $messages[] = ['role' => 'system', 'content' => $boundBlock];
         }
 
@@ -248,7 +276,7 @@ class AiGatewayService
         $promptParts['huelle'] = array_sum(array_map(
             fn (array $m): int => $m['role'] === 'system' ? mb_strlen((string) $m['content']) : 0,
             $messages,
-        )) - $promptParts['bound'];
+        )) - $promptParts['bound'] - $promptParts['kanon'];
         $promptChars = array_sum(array_map(fn (array $m): int => mb_strlen((string) $m['content']), $messages));
 
         // W0-1: Der Core stellt sonst eine System-Message mit `'Zeit: ' . now()` und einer
@@ -373,6 +401,50 @@ class AiGatewayService
             'chars_per_doc' => (int) ($konfig[$promptKey]['chars_per_doc'] ?? $default['chars_per_doc']),
             'total' => (int) ($konfig[$promptKey]['total'] ?? $default['total']),
         ];
+    }
+
+    /**
+     * Welle 2 (Spec 50) — Kanon-Block: `pflicht`-Dossiers kommen IMMER und VOLLSTÄNDIG (nur der
+     * Provenienz-Vorspann fällt weg), unabhängig von Budget und Retrieval — der Block muss je
+     * Prompt-Key byte-identisch bleiben (Cache-Prefix, W3-1), und ein Kanon-Dossier ist per
+     * Kuration ≤ Deckel (4.000). `wenn_platz`-Dossiers folgen in `ord`-Reihenfolge, solange das
+     * Budget (`bound_knowledge_budget[total]` des Prompt-Keys) reicht und das Retrieval sie nicht
+     * schon geliefert hat; was nicht passt, wird als `dropped` ausgewiesen, nie angeschnitten
+     * (ein Kopf-Anschnitt eines §-Dossiers ist keine Regel).
+     *
+     * @param  \Illuminate\Support\Collection<int, object>  $rows  documentsFor()-Zeilen in ord-Reihenfolge
+     * @return array{0: list<string>, 1: list<string>, 2: int}  [Blöcke, slug@vN, verworfene Zeichen]
+     */
+    private function selectKanon($rows, array $alreadyUsed, array $budget): array
+    {
+        $bereits = [];
+        foreach ($alreadyUsed as $used) {
+            $slug = preg_replace('/@v\d+$/', '', (string) $used);
+            if ($slug !== '') {
+                $bereits[$slug] = true;
+            }
+        }
+
+        $blocks = [];
+        $slugs = [];
+        $verbraucht = 0;
+        $verworfen = 0;
+        foreach ($rows as $doc) {
+            $content = DossierText::ohneVorspann((string) $doc->content_md);
+            $laenge = mb_strlen($content);
+            $pflicht = ((string) $doc->mode) === 'pflicht';
+            if (! $pflicht) {
+                if (isset($bereits[(string) $doc->slug]) || $verbraucht + $laenge > $budget['total']) {
+                    $verworfen += $laenge;
+                    continue;
+                }
+            }
+            $blocks[] = "## KANON: {$doc->slug}\n\n" . $content;
+            $verbraucht += $laenge;
+            $slugs[] = "{$doc->slug}@v{$doc->version}";
+        }
+
+        return [$blocks, $slugs, $verworfen];
     }
 
     private function selectBoundKnowledge($rows, array $context, array $alreadyUsed, array $budget): array

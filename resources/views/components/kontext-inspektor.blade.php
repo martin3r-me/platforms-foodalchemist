@@ -53,7 +53,8 @@
                     <p class="text-[10px] uppercase tracking-wide text-gray-400 mb-1">Prompt-Größen</p>
                     <div class="flex flex-wrap gap-1" data-prompt-groessen>
                         @foreach([
-                            'Regelwerk (verbindlich)' => $prompt['bound'],
+                            'Kanon (verbindlich)' => $prompt['kanon'] ?? 0,
+                            'Regelwerk gebunden (Fallback)' => $prompt['bound'],
                             'Retrieval' => $prompt['retrieval'],
                             'Kontext-JSON' => $prompt['kontext'],
                             'Aufgabe' => $prompt['task'],

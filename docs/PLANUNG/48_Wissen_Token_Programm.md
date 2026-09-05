@@ -1,7 +1,7 @@
 # Spec 48 — Wissen/Token-Programm: Regelwerk vollständig in den Prompt, Token runter
 
 > **Tracking:** Office Dev-Package 23, Features-Board (`dev_board_id=53`).
-> **Status:** Welle 0 + Klasse-2-Extraktion **deployt**. Welle 1 (Chunking) offen, Welle 2 (Kanon) wartet auf fachliche Abnahme, Welle 3 teilweise (W3-1 deployt, W3-2/W3-4 offen).
+> **Status:** Welle 0 + Klasse-2-Extraktion **deployt**. Welle 1 (Chunking) offen, **Welle 2 (Kanon-Consumer) gebaut** (2026-09-06, Befüllung per MCP offen), Welle 3 teilweise (W3-1 deployt, W3-2/W3-4 offen).
 
 ## Anlass
 
@@ -146,7 +146,20 @@ Konsequenz war bereits gezogen: der gebaute `team_id`-Filter im **Retrieval** wu
 **vollständig zurückgenommen** (er hätte für jedes andere Team und jeden Console-Lauf 598 Docs
 auf 6 gekappt, ohne rote Tests). Gescopet bleibt die **Schreib**seite und der Browser.
 
-### ○ Kanon §1 + §10 in den Prompt — WIRKLICH OFFEN
+### ◐ Kanon §1 + §10 in den Prompt — Consumer GEBAUT (Welle 2, 2026-09-06), Befüllung offen
+**Welle 2 im Gateway:** `AiGatewayService::selectKanon()` liest `KnowledgeCanonService::documentsFor('prompt_key', $promptKey, $team)`
+und baut daraus den Regelwerk-Block (`# VERBINDLICHES REGELWERK`, ein `## KANON: <slug>` je Dossier, ord-Reihenfolge).
+**Sobald für einen Prompt-Key Kanon-Zeilen existieren, ersetzt der Kanon die always-Bindings vollständig** — Bindings
+sind nur noch Fallback für Prompt-Keys ohne Kanon. `pflicht` immer + vollständig (nie gekappt, auch über Budget);
+`wenn_platz` in ord-Reihenfolge solange `bound_knowledge_budget[promptKey].total` reicht und das Dossier nicht schon
+im Retrieval steckt; Verworfenes zählt in `dropped`, nie angeschnitten. Messsonde: `prompt_parts.kanon` (Inspektor-Topf
+»Kanon (verbindlich)«, `bound` heisst jetzt »Regelwerk gebunden (Fallback)«). Tests: `WissenKanonBlockTest` (4).
+**Warum jetzt:** Spec 50 hat die 155 Original-Dossiers in 452 Ein-Thema-Dossiers gesplittet; die Bindings zeigen auf
+die **Originale**. Ohne Kanon-Consumer wäre der Regelwerk-Block beim Deaktivieren der Originale still auf null gefallen.
+**Offen:** Kanon je Prompt-Key per `knowledge_canon.PUT` befüllen (Kandidaten → Vault `00_INBOX/_Wissen_Split_Cutover_2026-09-05.md`),
+danach messen, dann Originale deaktivieren.
+
+Ursprünglicher Befund (bleibt als Datenlage gültig):
 Live geprüft: an `recipe.generator` hängen sechs `always`-Dossiers (§2, §3, §4, §6,
 `mengen_defaults`, `workflow.basisrezept_erstellungs_dossier`), an `vk.generator` dieselben plus
 `regelwerk_verkaufsgerichte`. **§1 Naming und §10 Anti-Patterns sind bei keinem von beiden
@@ -277,6 +290,7 @@ Cross-Refs: [[39_Worker_Betrieb_Runbook]] · [[41_Spec_Planungsmodul_Qualitaet]]
 [[47_Notiz_an_Core_Semantic_Layer]]
 
 ## Changelog
+- **2026-09-06 (Welle 2)** — Kanon-Consumer im Gateway gebaut: `selectKanon` ersetzt die always-Bindings je Prompt-Key, sobald Kanon-Zeilen existieren (pflicht nie gekappt, wenn_platz budget- und retrieval-dedupliziert). Inspektor-Topf »Kanon (verbindlich)«. Anlass: Spec-50-Split — Bindings zeigen auf die Originale, die deaktiviert werden. Befüllung des Kanons folgt per MCP.
 - **2026-09-03** — Erstanlage. Programm lief bis hier nur in einer Session-Plandatei; damit war der Repo-Stand blind für 14 Commits. Zahlen sind gemessen (Messsonde `prompt_parts`), nicht geschätzt.
 - **2026-09-03** — W3-4-Analyse ergänzt: Tier-Etiketten stimmen nicht mit ihrem Inhalt überein. Tier B (»Mechanik-Labels«) trägt alle sieben grössten Verbraucher und ist zugleich der Fallback. W3-4 ist damit erst eine Re-Tierung, dann ein ENV-Schritt.
 - **2026-09-03 (Korrektur)** — die Entscheide-Liste war aus dem Plandokument übernommen und veraltet. Gegen den Live-Stand geprüft: Leitungswasser ist erledigt (GP 9359 existiert, Alias korrigiert), der zweite Kurator ist entschieden (Retrieval global, Schreibseite gescopet). Offen bleiben Kanon §1+§10, §2-Erzwingung und der Slot-Deckel. Lehre: eine »offen«-Liste gegen den Bestand prüfen, nicht aus dem Plan kopieren.
