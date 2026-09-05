@@ -225,9 +225,9 @@ tauchen in keiner Schrittfolge auf.
 | Aspekt | Prompt-Key | Einziger Weg heute |
 |---|---|---|
 | Rollen (`recipe_ingredients.role`) | `vk.rollen` | `recipe_rollen.POST` / `VkModal:753` |
-| Behälter (`container_*_vocab_id`) | `vk.behaelter` | **nur** `VkModal:452` |
+| Behälter je **Zweck** (`foodalchemist_recipe_containers`, `zweck ∈ abfuellen\|regenerieren\|ausgabe\|transport`) + `recipes.dichteklasse` | `recipe.dichteklasse` | `RecipeModal` (UI-Knopf) · `recipe_container.PUT` · Bedarf gerechnet in `BehaelterBedarfService` — **am Basisrezept, nicht am Gericht** |
 | Servier-Vehikel (`serving_vehicle_vocab_id`) | `vk.servier_vehikel` | **nur** `VkModal:455` |
-| Regeneration | `vk.regeneration` | `recipe_regeneration.PUT` (manuell) / `VkModal:577` |
+| Regeneration (`foodalchemist_recipe_regenerations`) | `vk.regeneration` | `recipe_regeneration.GET/PUT/DELETE/REORDER` (manuell) / `VkModal:577` |
 | Teller-Heber | `vk.teller_heber` | `recipe_coherence.POST mode=heber` |
 | Marketing-/Kundentext | `vk.marketing` | hängt am **Foodbook-/Angebots-Block**, nicht am Gericht |
 | Titel / Namens-Normalisierung | `recipe.name_putzen`, `*.titel_vorschlag` | nur UI |
@@ -243,6 +243,16 @@ Geschmacksrichtung **am Gericht** (nicht in `SCHRITTE_VK`, obwohl `VkModal:527` 
 Prozessanker (braucht `preparation`) · **Pairings (Kettenabhängigkeit: `uebersprungen_ohne_grounding`,
 wenn `aromaanker` nichts fand, `:673`)** · Posten · Sensorik (`unveraendert` bei gleichem
 `source_hash`) · Sektor/Level (nur `eignung==='geeignet'` wird geschrieben, `:736`).
+
+> **Stand nachgezogen 2026-09-04 (48 Commits, Spec 51).** Die Behälter-Logik ist umgebaut:
+> `vk.behaelter` **existiert nicht mehr**; an seine Stelle tritt `recipe.dichteklasse` am
+> **Basisrezept**, Behälter liegen je Zweck in `foodalchemist_recipe_containers`, und die
+> Anzahl wird gerechnet statt getippt (`BehaelterBedarfService`, `BehaelterRechner`; neue
+> Tools `behaelter_bedarf.GET`, `behaelter_katalog.GET`, `recipe_container.PUT/DELETE`).
+> **Der Befund dieser Spec bleibt trotzdem gültig — er sitzt nur eine Ebene tiefer:**
+> `SCHRITTE`/`SCHRITTE_VK`/`SCHRITTE_GP` sind unverändert (3/4/4), und `dichteklasse` läuft
+> in **keinem** Anreicherungs-Pfad (nur `RecipeModal`). Ein per MCP angelegtes Basisrezept
+> hat also keine Dichteklasse — und ohne sie kann der Behälterbedarf nicht gerechnet werden.
 
 **Drei Prompt-Waisen:** `recipe.sub_typ`, `recipe.preparation` (von `recipe.steps` abgelöst),
 `vk.name_putzen` — bereits in `26_LLM_MCP_Funktionsmatrix.md` §5.5 als unreferenziert geführt.
@@ -586,7 +596,7 @@ Entscheid: automatisch vollständig, Bilder ausgenommen.
 
 | # | Was |
 |---|---|
-| B-1 | `SCHRITTE_VK` erweitern um `rollen`, `behaelter`, `servier_vehikel`, `regeneration`, `teller_heber`, `geschmack` — je Schritt ein `ZIELFELDER`-Eintrag (Feld + `*_source`), damit Override-First greift und `luecken()` schneidet. Vier davon haben schon einen Accept-Pfad (`SpeisenKlassenService::acceptRollen:137`, `VkModal:533/553/577`) — es fehlt nur die Bulk-Verdrahtung. |
+| B-1 | `SCHRITTE_VK` erweitern um `rollen`, `servier_vehikel`, `regeneration`, `teller_heber`, `geschmack` (Behälter **nicht** — der ist seit Spec 51 ein Basisrezept-Thema, siehe B-10) — je Schritt ein `ZIELFELDER`-Eintrag (Feld + `*_source`), damit Override-First greift und `luecken()` schneidet. Vier davon haben schon einen Accept-Pfad (`SpeisenKlassenService::acceptRollen:137`, `VkModal:533/553/577`) — es fehlt nur die Bulk-Verdrahtung. |
 | B-2 | `SCHRITTE` (Basisrezept) um `garverlust` erweitern (Zutaten-Ebene, eigener Accept-Pfad in `IngredientEditor:147`) und eine Titel-Normalisierung entscheiden. |
 | B-3 | **~~GP-Anreicherung in die Kette~~ — Prämisse entfallen** (§4.9). `LaFirstGpService:99` ruft beim Minten schon `backfillAllergenKonfidenz(apply: true)`; Allergene sind live LA-abgeleitet, Zusatzstoffe rein LA, Nährwerte AVG über LAs. Ein `'unbekannt'` im Rezept ist eine **LA-Datenlücke**, kein fehlender Anreicherungsschritt — sie gehört gemeldet (Paket D über `gp_allergen_konfidenz`), nicht geschätzt. Bleibt: nach dem Minten die **drei** echten Felder aus B-7 nachziehen, sobald die dort existieren. |
 | B-4 | Pairing-Kettenabhängigkeit entschärfen: `pairings` steigt heute mit `uebersprungen_ohne_grounding` aus, wenn `aromaanker` nichts fand (`:673`). Ein GP-erdeter Anker-Fallback über den Graphen (`pairing_lookup`-Logik) oder eine ehrliche Lücken-Meldung statt stillem Skip. **Das ist das Symptom; die Ursache ist B-7 (`gp.anker` ist eine Waise, §4.9 W1)** — B-4 bleibt trotzdem nötig, weil auch ein geerdeter GP-Anker fehlen kann. |
@@ -594,6 +604,7 @@ Entscheid: automatisch vollständig, Bilder ausgenommen.
 | B-6 | Bilder bleiben **draußen** — `ki_bilder` Default aus, `recipe_images.GENERATE` bleibt der explizite Weg. |
 | **B-7** | **`SCHRITTE_GP` um die drei quellenlosen Felder erweitern** (§4.9): `anker`, `domain`, `role` — je Schritt ein `ZIELFELDER_GP`-Eintrag (Feld + `*_source`), damit Override-First greift und `luecken()` schneidet. Für alle drei existiert nur der Prompt, kein Accept-Pfad; der ist mitzubauen (Muster `BulkEnrichService::uebernehmen()`). **Vorrang: `anker`** — löst W1 und erdet die Rezept-Pairings von unten. `allergene`/`naehrwerte` werden hier **nicht** ergänzt, sondern in A8 entschärft; Stückgewicht und Zähl-Einheiten laufen auf `fix/ek-stk-bruecke-live`. |
 | **B-8** | **`gp_anker_fehlt` erst nach B-7 scharf lesen**: die Metrik meldet heute einen Zustand, dessen Behebungs-Prompt niemand aufruft — sie kann strukturell nicht auf Null gehen. Nach B-7 ist sie eine echte Ampel; in Etappe 0 wird sie als Baseline erhoben, nicht als Fehler interpretiert. |
+| **B-10** | **`dichteklasse` in `SCHRITTE`** (Basisrezept, Stand-Nachtrag §4.6): `recipe.dichteklasse` hat einen Prompt und einen Accept-Pfad in `RecipeModal`, aber keine Bulk-Verdrahtung. Ohne sie rechnet `BehaelterBedarfService` für ein per MCP angelegtes Rezept nichts. `ZIELFELDER`-Eintrag ist da (`dichteklasse` + `dichteklasse_source`), also reine Verdrahtung. **Vor B-1**, weil der Behälterbedarf am Gericht auf den Basisrezepten aufsetzt. |
 | **B-9** | **`gps.ENRICH` mitziehen**: das Tool exponiert heute genau die vier Alt-Schritte (`GpsEnrichTool:73` → `starteGp`). Nach A8 + B-7 bietet es `condition`/`tags`/`anker`/`domain`/`role` an — und `allergene`/`naehrwerte` nur noch explizit für den LA-losen Fall, nie als Teil eines „alles anreichern"-Laufs. Sonst bleibt der Alltags-Weg beim GP hinter dem UI-Weg zurück (Asymmetrie aus §4.1) oder richtet den Schaden aus A8 an. |
 
 ### Paket C — Concept und Format: Header + zweiter Pass
@@ -1006,3 +1017,96 @@ mit.
   `26_LLM_MCP_Funktionsmatrix.md` ist als Tool-Liste veraltet (nennt 169/406/157 bei real
   431) — bei dieser Gelegenheit geradeziehen. Die drei Waisen aus B-5 dort ebenfalls
   nachtragen.
+
+---
+
+## §9 Etappe 0 — die Baseline (gemessen 2026-09-05, Dev-DB Team 6 „Demo")
+
+Erhoben mit `php artisan foodalchemist:vollstaendigkeit-report --team=6 --json`
+(read-only). Diese Zahlen sind der Vergleichsmaßstab für Etappe 5 und 6 — ohne sie ist
+„vollständiger angereichert" hinterher eine Behauptung.
+
+### A · VK-Vorbedingungen (950 Gerichte)
+
+| Kennzahl | Wert |
+|---|---|
+| ohne Aufschlagsklasse | **926 (97,5 %)** |
+| ohne Portion am Rezept | **925 (97,4 %)** |
+| ohne jede Darreichung | 45 (4,7 %) |
+| Standard steht auf `unbestimmt` (Review-Zustand) | 336 |
+| ohne VK | 76 (8,0 %) |
+
+Die 97,5 % sind der Ist-Beleg für B1 (`markup_class_id` wird still verworfen) **und** für
+§4.1 (kein Anreicherungspfad für Bestandsgerichte). Kein Randfall — der Normalzustand.
+
+### B · Anreicherung
+
+| Ebene | Kennzahl | Wert |
+|---|---|---|
+| Basisrezept (2.335) | leer: description / category / geschmack | 5 · 55 · 11 |
+| Gericht (950) | **leer: `sales_wording_standard`** | **939 (98,8 %)** |
+| Gericht | leer: plating · speisen_klasse | 52 · 22 |
+| beide | **`work_time_min` leer** | Basisrezept 51 · **Gericht 912 (96 %)** |
+| beide | `dichteklasse` leer | 2.335 / 2.335 · 950 / 950 (**100 %**) |
+
+**Der schärfste Beleg dieser Spec:** `wording` steht **in** `SCHRITTE_VK` — und ist trotzdem
+bei 98,8 % der Gerichte leer. Die Schrittfolge existiert, sie läuft für Bestandsgerichte nur
+nie (§4.1). Und `work_time_min` bei 96 % leer heißt: **FEK = 0 ist die Regel**, nicht der
+Sonderfall aus der Session vom 03.09.
+
+Coverage-Glieder (von 3.285 Rezepten ohne eine einzige Zeile):
+`ohne_steps` 3.257 · `ohne_sensorik` 945 · `ohne_aromaanker` 3.282 · `ohne_pairings` 3.285 ·
+`ohne_equipment` 1.121.
+
+### C · Grundprodukte (7.948)
+
+| Kennzahl | Wert |
+|---|---|
+| tentative | 791 |
+| **ohne Aroma-Anker** | **7.948 (100,0 %)** |
+| ohne Food-Domain | 294 (3,7 %) |
+| **KI-abgeschirmt trotz LA-Profil (A8)** | **9** |
+
+**100,0 % ohne Anker** ist die Bestätigung von §4.9 W1 in Reinform: `gp.anker` hat keinen
+Aufrufer, also hat **kein einziger** GP einen Anker — und `DataQualityService::gp_anker_fehlt`
+meldet seit jeher alle 7.948. Damit erklärt sich auch `ohne_pairings` = 3.285 von 3.285:
+das `pairings`-Glied steigt mit `uebersprungen_ohne_grounding` aus, weil die Erdung von unten
+nie entsteht. **Eine unverdrahtete Zeile in der Prompt-Registry kostet die komplette
+Aroma-Erdung des Bestands.**
+
+Der A8-Schaden ist real, aber noch klein: 9 GPs (u. a. `Schalotten: frisch, Wuerfel 5 mm`,
+`Dill: frisch, ganz`, `Aepfel Pink Lady: frisch, ganz`) heilen nicht mehr mit, wenn ihr LA
+korrigiert wird. Klein genug zum Reparieren, groß genug als Beleg, dass der Mechanismus greift
+— und genau deshalb steht A8 **vor** Paket B.
+
+### D · Concept-Struktur (27 Concepts)
+
+| Kennzahl | Wert |
+|---|---|
+| ohne gerenderten Header | **23 (85,2 %)** |
+| davon mit `role` statt `header` | 5 |
+
+Die 5 sind der Beweis für §4.7: die Gliederung **ist** da, sie kommt im Kundendokument nur
+nicht an, weil `WordingResolver` `type=header` + `title` verlangt und der Generator `role`
+schreibt.
+
+### E · KI-Kosten (Basis für den Vor/Nach-Vergleich)
+
+318 Calls, 2.414.614 Tokens. Größte Posten: `recipe.generator` 45 Calls / 856k Tokens,
+`vk.generator` 21 / 636k, `recipe.steps` 29 / 366k.
+
+**Lese-Hinweis zur Spalte „offen":** nur `recipe.category` (15 angenommen) und
+`vk.speisen_klasse` (1) durchlaufen den Proposal-/Accept-Lifecycle; alle übrigen Features
+schreiben direkt und tragen deshalb weder `accepted_at` noch `rejected_at`. „Offen" ist dort
+**kein Rückstand**, sondern bedeutet „kein Freigabe-Schritt vorhanden". Eine Akzeptanzquote
+lässt sich aus diesen Zahlen also nur für die zwei Felder-KIs bilden — das ist zugleich der
+Ist-Stand zu LLM-17 („Promptqualität und Drift messen") aus der Funktionsmatrix.
+
+### Was die Baseline für die Reihenfolge bedeutet
+
+1. **A8 zuerst** — 9 abgeschirmte GPs sind reparierbar; nach einem Bulk-Lauf über 7.948 GPs
+   wäre es ein Flächenschaden.
+2. **B-7 (`gp.anker`) ist der Hebel mit der größten Reichweite** — er sitzt vor der
+   Aroma-Erdung von 3.285 Rezepten.
+3. **A1 + E-1 zusammen** heben die 97,5 % ohne Aufschlagsklasse; einzeln bewirkt keines von
+   beiden etwas (A1 setzt den Default, E-1 bringt ihn an Bestandsgerichte).
