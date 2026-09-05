@@ -67,11 +67,11 @@ class VerkaufsrezeptePutTool extends FoodAlchemistTool implements ToolContract, 
             return ToolResult::error($e->getMessage(), 'VALIDATION_ERROR');
         }
 
-        return ToolResult::success([
+        return ToolResult::success($this->mitReife([
             'id' => (int) $r->id,
             'name' => $r->name,
             'status' => $this->statusWert($r),
-        ]);
+        ], $team, (int) $r->id, true));
     }
 
     public function getMetadata(): array

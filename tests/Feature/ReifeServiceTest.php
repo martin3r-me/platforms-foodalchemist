@@ -113,3 +113,41 @@ it('unbekannter Artefakt-Typ wirft — kein stiller Leerbefund', function () {
     expect(fn () => $this->svc->reife($this->rootTeam, 'quatsch', 1))
         ->toThrow(InvalidArgumentException::class);
 });
+
+// ── D-4: die Write-Antworten sprechen ────────────────────────────────────────
+
+it('★ recipes.POST trägt die Reife mit — der Anlass der ganzen Spec', function () {
+    // Am 2026-09-03 legte ein Agent per MCP ein Concept mit 6 Gerichten an und merkte erst
+    // im Review, dass Aufschlagsklasse, Portion und Arbeitszeit fehlten. Der Server wusste
+    // es die ganze Zeit. Ab hier sagt er es in der Antwort auf den Schreibvorgang.
+    $user = $this->makeUser($this->rootTeam);
+    $this->actingAs($user);
+
+    $res = app(ToolRegistry::class)->get('foodalchemist.recipes.POST')->execute(
+        ['name' => 'HG: Frisch angelegt', 'is_sales_recipe' => true],
+        new ToolContext($user, $this->rootTeam)
+    );
+
+    expect($res->success)->toBeTrue()
+        ->and($res->data)->toHaveKey('reife');
+
+    $codes = $res->data['reife']['luecken'];
+    expect($codes)->toContain('work_time_min')          // → FEK = 0, der „Lohn 0 €"-Befund
+        ->and($codes)->toContain('portion')             // → kein Auto-VK
+        ->and($res->data['reife']['naechste_schritte'])->not->toBeEmpty();
+});
+
+it('D-4: die Reife-Beigabe ist additiv — Bestandsfelder bleiben unberührt', function () {
+    $user = $this->makeUser($this->rootTeam);
+    $this->actingAs($user);
+
+    $res = app(ToolRegistry::class)->get('foodalchemist.recipes.POST')->execute(
+        ['name' => 'Fond: Additiv'],
+        new ToolContext($user, $this->rootTeam)
+    );
+
+    // Der bisherige Vertrag steht unverändert; `reife` kommt nur dazu.
+    expect($res->data)->toHaveKey('recipe')
+        ->and($res->data)->toHaveKey('note')
+        ->and($res->data['recipe'])->toHaveKeys(['id', 'name', 'status']);
+});
