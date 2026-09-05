@@ -692,6 +692,8 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\FavoritesPutTool::class,
                     // Phase A: Rezept-Schreibkaskade (Weg-A-Ausnahme, Draft-Quarantäne)
                     \Platform\FoodAlchemist\Tools\RecipesPostTool::class,
+                    // Spec 50 · Schicht 4 — read-only Vollständigkeits-Messung.
+                    \Platform\FoodAlchemist\Tools\RecipeReifeGetTool::class,
                     \Platform\FoodAlchemist\Tools\RecipesGenerateTool::class, // 03·L5 (Lockstep-Schuld aus #505)
                     \Platform\FoodAlchemist\Tools\RecipesExtractTool::class,  // Rezept-Import (Rohtext/Foto-Umweg → geerdeter Draft)
                     \Platform\FoodAlchemist\Tools\RecipesReviewTool::class,   // 03·L6 Copilot-Pruefpass (read-only)
