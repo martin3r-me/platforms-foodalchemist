@@ -18,7 +18,7 @@ class ConceptBlocksPutTool extends FoodAlchemistTool implements ToolContract, To
 
     public function getDescription(): string
     {
-        return 'Bearbeitet einen Layout-Block eines team-eigenen Konzepts (per Slot-Id; felder label/text/…).';
+        return 'Bearbeitet einen Layout-Block eines team-eigenen Konzepts (per Slot-Id). Felder: title, text_content, height, price_value, price_basis.';
     }
 
     public function getSchema(): array
@@ -27,7 +27,7 @@ class ConceptBlocksPutTool extends FoodAlchemistTool implements ToolContract, To
             'type' => 'object',
             'properties' => [
                 'slot_id' => ['type' => 'integer', 'description' => 'Block-/Slot-Id.'],
-                'felder' => ['type' => 'object', 'description' => 'Block-Felder.'],
+                'felder' => ['type' => 'object', 'description' => 'Block-Felder. Erlaubt: `title` (die Überschrift — NUR sie wird im Kundendokument gerendert), `text_content` (Fließtext bei type=text), `height` (bei type=spacer: schmal|mittel|breit), `price_value` + `price_basis` (nur bei type=header_preis). Achtung: NICHT `label`/`text` — die werden stillschweigend nicht geschrieben.'],
             ],
             'required' => ['slot_id', 'felder'],
         ];
@@ -42,6 +42,9 @@ class ConceptBlocksPutTool extends FoodAlchemistTool implements ToolContract, To
         $felder = $arguments['felder'] ?? null;
         if (! is_array($felder) || $felder === []) {
             return ToolResult::error('felder muss ein nicht-leeres Objekt sein.', 'VALIDATION_ERROR');
+        }
+        if (($fehler = ConceptBlocksPostTool::pruefeFelder($felder)) !== null) {
+            return ToolResult::error($fehler, 'VALIDATION_ERROR');   // A3: gleiche Prüfung wie beim Anlegen
         }
         $slotId = (int) ($arguments['slot_id'] ?? 0);
         if (($guard = $this->guardConceptSlotOwned($team, $slotId)) !== null) {
