@@ -194,6 +194,15 @@ class RecipeService
             'origin_source' => ($in['origin_source'] ?? '') ?: null,
             'category_id' => $kategorieId,
             'is_sales_recipe' => (bool) ($in['is_sales_recipe'] ?? false),
+            // Spec 50 · A1 — dritter Fall derselben Klasse wie die Stufe-3- und #509-Parität:
+            // `SalesRecipeService::createLeer`/`createFromBasis` übergeben hier den
+            // Team-Default (`TeamSettingsService::defaultMarkupClassId`), create() las ihn nie
+            // und verwarf ihn still. Messung 2026-09-05: 926 von 950 Gerichten ohne
+            // Aufschlagsklasse. Referenz wird autorisiert wie category_id/default_station_id.
+            'markup_class_id' => TeamScope::referenz(
+                \Platform\FoodAlchemist\Models\FoodAlchemistMarkupClass::class,
+                $in['markup_class_id'] ?? null, $team, 'Aufschlagsklasse'
+            ),
             'status' => 'draft',
             'taste_direction' => ($in['taste_direction'] ?? '') ?: null,
             'production_depth' => ($in['production_depth'] ?? '') ?: null,
