@@ -79,6 +79,8 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                 \Platform\FoodAlchemist\Console\WissenRecallProbeCommand::class,
                 \Platform\FoodAlchemist\Console\WissenSteuerdatenW0Command::class,
                 \Platform\FoodAlchemist\Console\KnowledgeEmbedCommand::class,
+                // Spec 50 Strang III: Arbeitsliste zu großer Dossiers (ein Thema pro Dossier ≤ Deckel).
+                \Platform\FoodAlchemist\Console\KnowledgeOversizedCommand::class,
                 \Platform\FoodAlchemist\Console\EmbedCommand::class,
                 \Platform\FoodAlchemist\Console\EmbeddingsMigrateStoreCommand::class,
                 // Bereitschafts-Prüfung für den Cutover (lesend) — GO/NO-GO je Pool.
@@ -998,6 +1000,10 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\BriefTemplatesPostTool::class,
                     \Platform\FoodAlchemist\Tools\BriefTemplatesPutTool::class,
                     \Platform\FoodAlchemist\Tools\BriefTemplatesDeleteTool::class,
+                    // Spec 50 Strang III — Wissens-Kanon (Dossier-Packliste je Feature/Prompt-Key)
+                    \Platform\FoodAlchemist\Tools\KnowledgeCanonGetTool::class,
+                    \Platform\FoodAlchemist\Tools\KnowledgeCanonPutTool::class,
+                    \Platform\FoodAlchemist\Tools\KnowledgeCanonDeleteTool::class,
                 ] as $toolClass) {
                     try {
                         $tool = new $toolClass();

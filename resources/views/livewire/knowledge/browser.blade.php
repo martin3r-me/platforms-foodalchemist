@@ -97,7 +97,13 @@
                         <label class="flex items-center gap-1.5 text-xs text-gray-600">
                             <input type="checkbox" wire:model="form.active" /> aktiv
                         </label>
-                        <p class="text-[10px] font-mono text-gray-500">{{ $selected->slug }} · v{{ $selected->version }}</p>
+                        <p class="text-[10px] font-mono text-gray-500">{{ $selected->slug }} · v{{ $selected->version }} · {{ number_format($selected->char_count, 0, ',', '.') }} Z.</p>
+                        {{-- Spec 50 Strang III: Deckel erinnert, blockiert nicht — ein Thema pro Dossier. --}}
+                        @if($dossierHinweis)
+                            <p class="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-2 py-1" data-wissen-deckel>
+                                ⚠ {{ $dossierHinweis }}
+                            </p>
+                        @endif
                     </div>
                     <div class="{{ $card }} p-4 space-y-2" data-wissen-aliases>
                     <p class="{{ $dt }}">Aliase <span class="text-[10px] text-gray-500">— Begriffe, unter denen die KI dieses Wissen findet</span></p>

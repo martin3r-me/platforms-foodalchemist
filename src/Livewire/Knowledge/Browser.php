@@ -532,6 +532,10 @@ class Browser extends Component
 
         return view('foodalchemist::livewire.knowledge.browser', [
             'inhaltHtml' => $this->vorschau ? $this->inhaltGerendert() : null,
+            'dossierHinweis' => $selected
+                ? app(\Platform\FoodAlchemist\Services\Knowledge\KnowledgeCanonService::class)
+                    ->groessenHinweis((int) $selected->char_count, (string) ($selected->content_md ?? ''))
+                : null,
             'frontmatter' => $this->vorschau ? $this->frontmatter() : [],
             'kategorien' => $kategorien,
             'docs' => $docs,

@@ -701,6 +701,19 @@ return [
         // injiziert falsche Pairing-Kanten, das ist schlimmer als „unbekannt".
         'anker_min_score' => (float) env('FOODALCHEMIST_SEMANTIC_ANKER_MIN_SCORE', 0.55),
 
+        // ── Embedding-Fenster je Wissens-Dossier (Titel + erste N Zeichen) ────
+        // Gehört mit dem Dossier-Deckel zusammen (Spec 50 Strang III, Dominique
+        // 2026-09-05: „ein Dossier = ein Thema", Kanon zeigt auf Dossiers, kein
+        // Chunking): ein Dossier darf so groß sein wie das Fenster, nicht größer.
+        // 2000 ist der gemessene Stand (W1-1, s. KnowledgeEmbeddingService); 4000 ist
+        // der Kandidat für Ein-Themen-Dossiers — NUR nach `wissen-recall-probe`
+        // vor/nach ändern, nicht nach Gefühl. Rollback = ENV weg + Re-Embed.
+        'embed_lead_chars' => (int) env('FOODALCHEMIST_EMBED_LEAD_CHARS', 2000),
+        // Größen-Deckel für den Kurations-Guard (Wissens-Browser/MCP warnen darüber).
+        // Soll dem Fenster entsprechen; getrennt konfigurierbar, weil der Deckel
+        // eine Kurationsregel ist und das Fenster eine Index-Eigenschaft.
+        'dossier_max_chars' => (int) env('FOODALCHEMIST_DOSSIER_MAX_CHARS', 4000),
+
         // ── E2 (#507): Hybrider Retrieval-Layer über den GP-/Rezept-Pools ──────
         // SEM_FLOOR aus GL-04 §6.1 (V-04). ⚠ 0.55 ist Gemini-768d-geeicht — für
         // OpenAI (Entscheid A) am Golden-Set (E0/E5) NEU kalibrieren, hier nur
