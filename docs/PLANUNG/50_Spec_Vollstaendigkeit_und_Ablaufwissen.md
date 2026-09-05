@@ -819,13 +819,16 @@ globaler Kanon bauen.** Ein Versuch würde keine Fehlermeldung erzeugen, sondern
 Auswahl — und der Leser fiele auf den alten Doc-Block zurück. Genau die Sorte stiller
 Wirkungslosigkeit, die diese Spec sonst aufräumt.
 
-**Konsequenz für E-7d — die Staffelung folgt dem Scope, nicht der Befundlast:**
+**ENTSCHIEDEN 2026-09-05 (Dominique):** Der Korpus bleibt wie er ist — **keine
+Globalisierung der 442 jetzt**. `regelwerk` ist global und bleibt es; Kanon-Zeilen für
+`cross_cutting`, `concept` und `workflow` entstehen **team-scoped (Team 6)**. Damit ist die
+Blockade aufgelöst, ohne die Daten-Entscheidung vorwegzunehmen. Ein Globalisierungs-Befehl
+kommt später als eigene Runde.
 
-1. `regelwerk` (4 global) — unverändert Stufe 1, trägt sofort.
-2. `workflow` — nur mit team-scoped Kanon-Zeilen sinnvoll, **oder** die 9 team-eigenen
-   Workflow-Docs werden vorher globalisiert (sie sind BHG-kuratiert, nicht kundenspezifisch —
-   das ist der wahrscheinlich richtige Weg, aber eine eigene Entscheidung).
-3. `cross_cutting` / `concept` — **blockiert**, bis der Korpus-Scope geklärt ist.
+**Eigentum:** Strang III (Etappen 9–10, E-7 + E-8) wird ab 2026-09-05 **parallel von einer
+zweiten Session** gebaut (Worktree `wt-wissen-granular`). Diese Spec bleibt die gemeinsame
+Grundlage; die Schnittstelle ist `KnowledgeCanonService::sectionsFor(scope, scopeKey, Team,
+role)` — Strang II liest, Strang III schreibt. Leere Rückgabe ⇒ E-3/E-4 liefern ganze Docs.
 
 Dominiques Modell dazu steht schon im Code (`KnowledgeContextService`, Sichtbarkeits-Filter):
 „das Wissen ist global, damit die Generatoren laufen; ein neuer Nutzer bekommt es leer und
@@ -1148,3 +1151,50 @@ Ist-Stand zu LLM-17 („Promptqualität und Drift messen") aus der Funktionsmatr
    Aroma-Erdung von 3.285 Rezepten.
 3. **A1 + E-1 zusammen** heben die 97,5 % ohne Aufschlagsklasse; einzeln bewirkt keines von
    beiden etwas (A1 setzt den Default, E-1 bringt ihn an Bestandsgerichte).
+
+---
+
+## §10 Notizen aus der Umsetzung (nicht Teil des Auftrags)
+
+### Dill-Fall — Mapping-Verdacht, geparkt
+
+Beim A8-Apply (Etappe 1) wurde sichtbar, was der KI-Override verdeckt hatte: **GP 8623
+„Dill: frisch, ganz"** löst aus dem LA jetzt `gluten=enthalten`, `eggs=enthalten`,
+`fish=enthalten` auf. Für ein frisches Kraut ist das fachlich unsinnig.
+
+**Die Reparatur hat das nicht verursacht, nur sichtbar gemacht** — der Wert stand die ganze
+Zeit im LA, die Schätzung lag nur darüber.
+
+Gegenprüfung in der WaWi-Quelle (read-only, durch die Koordinations-Session) widerlegt die
+naheliegende Erklärung „überbreite Lieferanten-Deklaration":
+
+- Alle Dill-Artikel dort (Bund, Topf, 40 g, BIOLAND …) stehen bei Gluten/Ei/Fisch auf
+  `nicht_enthalten`. Keiner auf `enthalten`.
+- Die Quelle kodiert vierwertig (1 = nicht_enthalten, 2 = spuren, 3 = enthalten) — „Spuren"
+  wird nicht eingeebnet. `ImportSliceCommand.php:204` mappt korrekt. Kein Importfehler.
+- Die Signatur Gluten + Ei + Fisch steht in der Quelle bei genau einer Gruppe:
+  „Heringshappen in Dillsauce", „Dill Happen 950g", „Sander Dillsauce", „Gambas in Dillsosse".
+
+**Wahrscheinlichste Ursache: ein Convenience-LA hängt falsch am Rohware-GP.** Die
+ALL-MAXIMAL-Union (`GpAggregateService:245`) zieht dessen Werte durch. Also ein
+**Mapping-Fehler, kein Deklarationsfehler** — dasselbe Muster wie Pfefferkörner →
+Pfefferrahm-Sauce (WaWi-Skript 215).
+
+**Status: geparkt** (Entscheid Dominique 2026-09-05). Keine Voraussetzung für Spec 50 —
+`ReifeService`, Reife-Tools und `reife`/`naechste_schritte` hängen nicht daran. Hier
+festgehalten, damit der Befund nicht verlorengeht.
+
+### A5 — die UI-Hälfte bleibt offen
+
+Der Datenfehler ist behoben (symmetrischer `NUR_BASIS`-Wächter: eine Basisrezept-Kategorie
+kann nicht mehr auf einem Gericht landen). Offen bleibt die Ergonomie: der Rezept-Browser
+listet beide Ebenen und startet EINEN Lauf; eine gemischte Auswahl erzeugt jetzt ehrliche
+Fehler statt falscher Vorschläge, aber der bequeme Weg wäre ein Lauf je Ebene mit zwei
+Fortschritts-Anzeigen (`browser.blade.php:151-165`). Bewusst zurückgestellt: reine
+UI-Arbeit, und Livewire-Tests sind layout-blind — das braucht eine Browser-Abnahme.
+
+### A2 — zurückgestellt wegen Blast-Radius
+
+`sales_unit_count` liegt mitten in der parallelen EK-Stück-Arbeit
+(`fix/ek-stk-bruecke-live`: `GpFormService`, `RecipeRecomputeService`, `IngredientEditor`).
+Nach deren Merge nachziehen — die Etappe-0-Zahlen dafür stehen in §9.
