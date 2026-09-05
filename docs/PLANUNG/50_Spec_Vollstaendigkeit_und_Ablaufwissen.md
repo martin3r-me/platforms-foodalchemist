@@ -15,6 +15,19 @@
 
 **Status:** 🚧 in Umsetzung, begonnen 2026-09-04. Branch `feat/schicht4-vollstaendigkeit`.
 
+| Etappe | Stand |
+|---|---|
+| **0 · Messung** | ✅ `foodalchemist:vollstaendigkeit-report` + Baseline Team 6 (§9) |
+| **1 · Paket A** | ✅ A1 · A3 · A4 · A5 (Datenhälfte) · A6 · A7 · A8 — **A2 zurückgestellt** (EK-Stück-Blast-Radius) |
+| **2 · T2** | ✅ `RecipeOneShotService::vkVorbedingungen()` read-only herausgezogen |
+| **3 · Paket D (Rezept + Gericht)** | ✅ `ReifeService` + `RecipeReifeAdapter` + `recipes.REIFE` + `reife` an fünf Schreib-Tools + D-2 |
+| **4 · E-1/E-2** | offen — `recipes.ENRICH`, `gps.MATCH`-Parameter |
+| **5–7 · Paket B/C, Container** | offen |
+| **8 · E-3 bis E-6** | offen |
+| **9–10 · Strang III** | parallel, zweite Session (`wt-wissen-granular`) |
+
+**Volle Suite auf stabilem Stand (2026-09-05): 3921 Tests, 3916 grün, 5 skipped, 0 rot.**
+
 > **Drei Stränge, in dieser Reihenfolge abzuarbeiten:**
 > **(I) Etappen 0–7** — die stillen Fehler, vollständige Anreicherung, Header, und die
 > Vollständigkeits-Messung, die am Schreibpfad mitspricht (Pakete A–D).
