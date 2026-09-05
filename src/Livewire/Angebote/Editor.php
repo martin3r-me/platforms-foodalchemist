@@ -748,7 +748,10 @@ class Editor extends Component
             return;
         }
         $comp->addBlock($this->team(), $this->selectedKapitelId, [
-            'type' => $type, 'header_source' => $slug, 'label' => $label,
+            // A6: `header_source` trägt das Angebot nicht (keine Spalte, kein BLOCK_FELDER-Eintrag)
+            // — es wurde bisher übergeben und still verworfen. Die Preset-Herkunft bleibt damit
+            // dem Foodbook vorbehalten; hier zählt allein das Label.
+            'type' => $type, 'label' => $label,
             'price_basis' => $type === 'header_frei_preis' ? ($preisBasis ?: 'person') : null,
             'price_value' => $type === 'header_frei_preis' ? 0 : null,
             'visible' => $sichtbar,
