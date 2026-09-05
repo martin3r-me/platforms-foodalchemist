@@ -81,7 +81,7 @@ class EnrichRecipeJob implements ShouldQueue
         if (! $this->nurBilder) {
             $this->markEnrich('running');
             try {
-                $oneShot->anreichern(
+                $ergebnis = $oneShot->anreichern(
                     $team,
                     $recipe,
                     $this->zielVk,
@@ -98,7 +98,13 @@ class EnrichRecipeJob implements ShouldQueue
                 if (! $this->completeCoverage) {
                     $oneShot->minteFehlendeGps($team, $recipe->fresh() ?? $recipe);
                 }
-                $this->markEnrich('done');
+                // Spec 50 · D-2: `anreichern()` liefert seine Coverage — welches Glied lief,
+                // welches stieg mit welchem Grund aus. Bis 2026-09-05 stand hier ein Aufruf ohne
+                // Zuweisungsziel: die Lückenliste wurde berechnet und weggeworfen. Der
+                // Reife-Report kann den ZUSTAND live messen, aber nicht rekonstruieren, WARUM
+                // ein Glied übersprungen wurde (z. B. `uebersprungen_ohne_grounding`). Genau das
+                // gehört ins Lauf-Protokoll, wo `planung_kaskade.GET` es je Step ausweist.
+                $this->markEnrich('done', null, $this->coverageKurz($ergebnis));
             } catch (\Throwable $e) {
                 // Rezept bleibt live (fail-soft) — aber der Fehler wird sichtbar (Status + Log), nicht geschluckt.
                 Log::warning('[EnrichRecipeJob] Anreicherung fehlgeschlagen', ['recipe' => $this->recipeId, 'error' => $e->getMessage()]);
@@ -191,7 +197,32 @@ class EnrichRecipeJob implements ShouldQueue
      * Anreicherungs-Status am auslösenden Kaskaden-Step festhalten (`deferred.enrich`).
      * Beiwerk — ein Tracking-Fehler darf die Anreicherung nie kippen.
      */
-    private function markEnrich(string $status, ?string $error = null): void
+    /**
+     * Spec 50 · D-2: die Coverage auf das eindampfen, was im Protokoll etwas erklärt —
+     * je Glied nur der Status. Die vollen Werte stehen am Rezept; hier zählt die Frage
+     * „warum ist das leer geblieben?".
+     *
+     * @param  array<string, mixed>  $ergebnis
+     * @return array<string, string>|null
+     */
+    private function coverageKurz(array $ergebnis): ?array
+    {
+        $coverage = $ergebnis['coverage'] ?? null;
+        if (! is_array($coverage) || $coverage === []) {
+            return null;
+        }
+        $kurz = [];
+        foreach ($coverage as $glied => $wert) {
+            $status = is_array($wert) ? ($wert['status'] ?? null) : (is_string($wert) ? $wert : null);
+            if (is_string($status) && $status !== '') {
+                $kurz[(string) $glied] = $status;
+            }
+        }
+
+        return $kurz === [] ? null : $kurz;
+    }
+
+    private function markEnrich(string $status, ?string $error = null, ?array $coverage = null): void
     {
         if ($this->stepId === null) {
             return;
@@ -205,6 +236,7 @@ class EnrichRecipeJob implements ShouldQueue
             $deferred['enrich'] = array_filter([
                 'status' => $status,
                 'error' => $error !== null ? Str::limit($error, 200) : null,
+                'coverage' => $coverage,                            // D-2: je Glied der Status
                 'at' => now()->toIso8601String(),
             ], fn ($v) => $v !== null);
             $step->update(['deferred' => $deferred]);
