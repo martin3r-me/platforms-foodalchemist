@@ -310,6 +310,40 @@ class GpAggregateService
     }
 
     /** Alle LA-Allergen-Zeilen des GP (über die Struktur-Brücke). */
+    /**
+     * Spec 50 · A8 — trägt dieser GP ein LA-Allergenprofil?
+     *
+     * Der Wächter für die beiden KI-Schreibpfade ({@see \Platform\FoodAlchemist\Livewire\Gps\DetailPanel::kiUebernehmen}
+     * und {@see BulkEnrichService::uebernehmenGp}). Beide schreiben die KI-Werte in die
+     * **Override-Ebene** — GL-01 §4.3 Prio 1, also ÜBER die LA-MAX-Auflösung. Auf einem
+     * Compliance-Feld, dessen eigener Prompt „im Zweifel unbekannt (F7.1: nie falsch-negativ
+     * raten)" verlangt, ist das die falsche Richtung: eine Schätzung verdeckt eine Messung.
+     *
+     * Und im Panel-Pfad kommt `allergens_source='ki'` dazu, das {@see self::backfillAllergenKonfidenz}
+     * künftig überspringen lässt — der GP fällt dauerhaft aus der Kaskade „LA fixen → GP heilt".
+     *
+     * Gemessen 2026-09-05: 9 GPs auf demo waren so bereits abgeschirmt.
+     *
+     * Bewusst GP-weit statt je Allergen: ein NULL am LA heißt „unbekannt", nicht „nicht
+     * enthalten". Eine KI, die diese Lücke mit `nicht_enthalten` füllt, erzeugt genau das
+     * falsch-negative Ergebnis, das F7.1 ausschliesst. Wo ein LA-Profil existiert, gilt die
+     * Kette — die KI bleibt der dokumentierte Fallback für GPs GANZ ohne LA-Daten.
+     *
+     * `manual` bleibt unberührt: ein Mensch darf die LA-Kette bewusst übersteuern.
+     */
+    public function hatLaAllergenProfil(FoodAlchemistGp $gp): bool
+    {
+        foreach ($this->laProfile((int) $gp->id) as $la) {
+            foreach (FoodAlchemistGp::ALLERGEN_FIELDS as $feld) {
+                if ($la->getAttribute("allergen_{$feld}") !== null) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
     private function laProfile(int $gpId): \Illuminate\Support\Collection
     {
         return FoodAlchemistItemAllergen::query()

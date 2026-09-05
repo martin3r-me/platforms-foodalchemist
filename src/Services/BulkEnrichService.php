@@ -481,6 +481,12 @@ class BulkEnrichService
                 $ok = true;
             }
         } elseif ($prop->field === 'allergene' && is_array($wert)) {
+            // Spec 50 · A8: derselbe Wächter wie im Panel — wo ein LA-Profil existiert, gilt
+            // die LA-Kette (GL-01 §4.3). Der Bulk-Pfad setzt zwar kein `allergens_source`,
+            // schreibt aber ebenfalls in die Override-Ebene und würde die Messung verdecken.
+            if (app(GpAggregateService::class)->hatLaAllergenProfil($gp)) {
+                return false;
+            }
             $update = [];
             foreach (FoodAlchemistGp::ALLERGEN_FIELDS as $feld) {
                 $v = $wert['allergene'][$feld] ?? $wert[$feld] ?? null;
