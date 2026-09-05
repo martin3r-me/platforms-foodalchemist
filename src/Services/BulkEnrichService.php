@@ -41,6 +41,18 @@ class BulkEnrichService
     /** Die Teilmenge, die es nur am Gericht gibt — auf einem Basisrezept ehrlicher Fehler statt Unsinn. */
     private const NUR_GERICHT = ['wording', 'plating', 'speisen_klasse'];
 
+    /**
+     * Spec 50 · A5 — das Gegenstück, das bisher fehlte.
+     *
+     * `category` ist die 186er REZEPT-Kategorie (Basisrezept-Taxonomie); am Gericht heisst die
+     * Klassifikation `speisen_klasse` und läuft über eine eigene Achse — deshalb steht
+     * `category` bewusst nicht in `SCHRITTE_VK` (s. Kommentar dort). Ungeschützt war nur die
+     * Richtung Basisschritt → Gericht: der Rezept-Browser listet BEIDE Ebenen
+     * (`RecipeService::paginateBrowser` filtert nicht) und startete für die ganze Auswahl
+     * `SCHRITTE`. Ein markiertes Gericht bekam damit eine Basisrezept-Kategorie vorgeschlagen.
+     */
+    private const NUR_BASIS = ['category'];
+
     /** GP-Bulk-Autopilot-Schritte (Feld-KIs mit vorhandenem Accept-Pfad). */
     public const SCHRITTE_GP = ['condition', 'tags', 'allergene', 'naehrwerte'];
 
@@ -189,6 +201,9 @@ class BulkEnrichService
     {
         if (in_array($feld, self::NUR_GERICHT, true) && ! $r->is_sales_recipe) {
             throw new \RuntimeException("Bulk-Schritt [{$feld}] gilt nur fuer Verkaufsgerichte.");
+        }
+        if (in_array($feld, self::NUR_BASIS, true) && $r->is_sales_recipe) {
+            throw new \RuntimeException("Bulk-Schritt [{$feld}] gilt nur fuer Basisrezepte (am Gericht: speisen_klasse).");
         }
         if ($feld === 'speisen_klasse') {
             // Eine Wahrheit: Taxonomie-Aufbau, Aktiv-Filter und Klassen-Validierung

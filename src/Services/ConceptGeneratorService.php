@@ -244,7 +244,12 @@ class ConceptGeneratorService
         ]);
         $concept->update([
             'created_via' => 'concept_generator_brief_' . $via,
-            'description' => mb_substr($brief, 0, 2000),   // create() kennt description nicht — Brief als Kontext ans Konzept
+            // Spec 50 · A4: der Brief gehört in `brief`, nicht in `description`.
+            // `description` ist das Ziel von `ConceptService::generateWording` (KI-Intro) —
+            // wer danach Wording erzeugte, überschrieb den Brief still, und `concepts.brief`
+            // blieb dabei immer NULL. Beide Spalten existieren; nur `create()` kennt sie nicht
+            // (es nimmt 6 Felder), deshalb weiterhin per update().
+            'brief' => mb_substr($brief, 0, 2000),
         ]);
 
         $frame = $this->frames->frameFor($team, 'concept', $concept->id, 'ai_brief');
@@ -315,14 +320,14 @@ class ConceptGeneratorService
             throw new RuntimeException('Leerer Brief — Freitext nötig.');
         }
 
-        // Draft-Concept zuerst (als Gerüst-/Canvas-Owner). Description = Brief als Kontext.
+        // Draft-Concept zuerst (als Gerüst-/Canvas-Owner). Der Brief geht nach `brief` (A4).
         $concept = $this->concepts->create($team, [
             'name' => $name !== null && trim($name) !== '' ? trim($name) : 'Konzept-Entwurf (KI-Plan)',
             'status' => 'draft',
         ]);
         $concept->update([
             'created_via' => 'concept_plan_' . $via,
-            'description' => mb_substr($brief, 0, 2000),
+            'brief' => mb_substr($brief, 0, 2000),
         ]);
 
         // Frame — Reuse: KI baut Slots/Preise/Diät-Regeln aus dem Brief (Pflicht). Wirft die KI,

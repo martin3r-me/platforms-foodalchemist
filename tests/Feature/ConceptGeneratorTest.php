@@ -182,7 +182,11 @@ it('Brief-Pfad: KI baut das Gerüst (Provider-Stub), Assembler bleibt determinis
     expect($concept->status)->toBe('draft')
         ->and($concept->created_via)->toBe('concept_generator_brief_ui')
         ->and($concept->name)->toBe('Gartenfest')
-        ->and($concept->description)->toContain('Sommerfest');
+        // Spec 50 · A4: der Brief gehört in `brief`. Bis 2026-09-05 landete er in
+        // `description` — dem Ziel von `ConceptService::generateWording`. Wer danach Wording
+        // erzeugte, überschrieb den Brief still, und `concepts.brief` blieb immer NULL.
+        ->and($concept->brief)->toContain('Sommerfest')
+        ->and($concept->description)->toBeNull();
 
     // Gerüst hängt am Konzept (KI-Rahmen), kaputte KI-Regel wurde verworfen, gültige blieb
     $frame = $this->frames->find('concept', $concept->id);
@@ -643,7 +647,9 @@ it('Kreativ-Kopf planAusBrief: Draft + Gerüst + kreative Canvas + LEERE Fan-out
     expect($concept->status)->toBe('draft')
         ->and($concept->created_via)->toBe('concept_plan_ui')
         ->and($concept->name)->toBe('KI-Plan-Menü')
-        ->and($concept->description)->toContain('Herbst-Galadinner')
+        // Spec 50 · A4: Brief nach `brief`, `description` bleibt dem Wording-Intro vorbehalten.
+        ->and($concept->brief)->toContain('Herbst-Galadinner')
+        ->and($concept->description)->toBeNull()
         ->and($e['geruest_confidence'])->toBe(0.82)
         ->and($e['plan_confidence'])->toBe(0.77);
 
@@ -769,4 +775,19 @@ it('MCP: concepts.GENERATE über Gerüst-Owner + typisierte Fehler ohne Input', 
 
     $leer = $registry->get('foodalchemist.concepts.GENERATE')->execute([], $kontext);
     expect($leer->success)->toBeFalse();
+});
+
+it('A4: Wording-Erzeugung überschreibt den Brief nicht mehr', function () {
+    // Der Kollisionsfall in klein — ohne Generator, direkt an den zwei Schreibpfaden:
+    // der Brief steht in `brief`, `generateWording` schreibt sein Intro nach `description`.
+    // Vorher teilten sich beide `description`, und das Wording gewann.
+    $svc = app(\Platform\FoodAlchemist\Services\ConceptService::class);
+    $concept = $svc->create($this->rootTeam, ['name' => 'Brief-Schutz']);
+    $svc->update($this->rootTeam, $concept->id, ['brief' => 'Sommerfest, 80 Gäste']);
+
+    $svc->update($this->rootTeam, $concept->id, ['description' => 'Ein sommerlicher Abend.']);
+
+    $frisch = $concept->fresh();
+    expect($frisch->brief)->toBe('Sommerfest, 80 Gäste')
+        ->and($frisch->description)->toBe('Ein sommerlicher Abend.');
 });

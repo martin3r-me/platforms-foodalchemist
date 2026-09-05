@@ -25,7 +25,12 @@ class FoodAlchemistSpeisekartePosition extends Model
     protected $guarded = ['id'];
 
     /** Positions-Typen. */
-    public const TYPES = ['gericht_ref', 'menue_ref', 'header', 'text', 'spacer', 'image'];
+        // Spec 50 · A7: `image` war hier deklariert, aber NIRGENDS beschreibbar oder renderbar
+    // (`grep "=> 'image'"` über src/ und resources/ = leer; 0 Zeilen im Bestand). Im
+    // Angebot stand der Typ zusätzlich im MCP-Enum: ein Agent konnte ihn setzen und bekam
+    // einen Block, den keine Ausgabe zeigt. Bilder leben entitätsweit (`*_images`-Tabellen)
+    // bzw. als Presentation-Design-Block — beides unberührt.
+    public const TYPES = ['gericht_ref', 'menue_ref', 'header', 'text', 'spacer'];
 
     /** Positions-Typen mit einem referenzierten Inhalt (Gericht bzw. Concept). */
     public const REF_TYPES = ['gericht_ref', 'menue_ref'];

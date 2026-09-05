@@ -1451,7 +1451,12 @@ class FoodbookService
      * recipe_ref bereits; hier wird nur der Schreibpfad freigeschaltet. Wahl-Gruppen A|B|C
      * bleiben (zwischen Concepts wie zwischen Gerichten).
      */
-    public const BLOCK_TYPES = ['concept_ref', 'recipe_ref', 'header_neutral', 'header_frei', 'header_frei_preis', 'spacer', 'text', 'image'];
+        // Spec 50 · A7: `image` war hier deklariert, aber NIRGENDS beschreibbar oder renderbar
+    // (`grep "=> 'image'"` über src/ und resources/ = leer; 0 Zeilen im Bestand). Im
+    // Angebot stand der Typ zusätzlich im MCP-Enum: ein Agent konnte ihn setzen und bekam
+    // einen Block, den keine Ausgabe zeigt. Bilder leben entitätsweit (`*_images`-Tabellen)
+    // bzw. als Presentation-Design-Block — beides unberührt.
+    public const BLOCK_TYPES = ['concept_ref', 'recipe_ref', 'header_neutral', 'header_frei', 'header_frei_preis', 'spacer', 'text'];
 
     private const BLOCK_FELDER = ['type', 'level', 'visible', 'label', 'wording', 'customer_text', 'interne_bemerkung',
         'variant_group_id', 'concept_id', 'sales_recipe_id', 'quantity', 'unit_vocab_id', 'price_value', 'price_basis', 'height', 'header_source', 'payload_json'];
