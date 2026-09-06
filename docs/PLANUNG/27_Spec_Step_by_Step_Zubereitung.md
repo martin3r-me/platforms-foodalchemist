@@ -32,7 +32,7 @@ Ein Foto je Rezept trägt das Flag **`is_result`** = „so soll es fertig ausseh
 
 **Entscheidungen aus der Umsetzung (Phase 3/4):**
 - **Markdown bleibt Eingangskanal, aber Schritte gewinnen:** `RecipeService::create/update` parst ankommendes `preparation` in Schritte — hat das Rezept schon Schritte, wird der Markdown-Write **verworfen** und der Spiegel aus den Schritten neu gerendert (sonst stünde im Feld ein Text, den die Anleitung nicht sagt). Wer Schritte ändern will, nutzt `recipe_steps.PUT` bzw. den Editor.
-- **Kein `recipe.preparation`-Aufruf mehr im Editor**, der Prompt-Key bleibt aber im Inventar (Generator/Revise liefern weiter Markdown).
+- **Kein `recipe.preparation`-Aufruf mehr im Editor**, der Prompt-Key bleibt aber im Inventar (Generator/Revise liefern weiter Markdown). *(Nachtrag 2026-09-06, Spec 50 B-5: Prompt-Key aus dem Inventar gestrichen — Generator/Revise liefern `preparation` in ihren eigenen Schemas.)*
 - **Foto-Quelle doppelt** im Druck-Array (`url` fürs HTML, `pfad_abs` fürs PDF): DomPDF lädt remote URLs nur mit `isRemoteEnabled`.
 - **Schritt-Karten-CSS float-basiert**, nicht Flexbox — DomPDF rendert Flexbox nicht.
 - **`steps_snapshot` friert Verweise, keine Bilddateien** ein: ein gelöschtes Foto fehlt dann im Nachdruck, statt Speicher zu duplizieren.

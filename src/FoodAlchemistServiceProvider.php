@@ -618,6 +618,8 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\ProportionApplyTool::class,
                     // #513 Tier 1 Punkt 2: Kerntemperatur-Referenz (Qualitäts-Zielwerte, weich)
                     \Platform\FoodAlchemist\Tools\ReferenceGetTool::class,
+                    // Spec 50 C-8: Header-Presets + Sektions-Gerüst + Gang-Leiter/Stationen als Vokabular-Read
+                    \Platform\FoodAlchemist\Tools\StrukturVokabularGetTool::class,
                     // Phase K: Wissen + Pairing-Graph für externe LLM-Clients
                     \Platform\FoodAlchemist\Tools\KnowledgeSearchTool::class,
                     \Platform\FoodAlchemist\Tools\KnowledgeListTool::class,
@@ -788,6 +790,8 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\ConceptCategoriesDeleteTool::class,
                     \Platform\FoodAlchemist\Tools\ConceptWordingGenerateTool::class,
                     \Platform\FoodAlchemist\Tools\ConceptsCohesionTool::class,
+                    // Spec 50 · C-4: Anreicherung bestehender Konzepte (Gegenstück zu recipes.ENRICH)
+                    \Platform\FoodAlchemist\Tools\ConceptsEnrichTool::class,
                     // D5d: Pakete-Ressource (physische Pakete, spiegelt Livewire\Pakete\Index) + Positionen
                     \Platform\FoodAlchemist\Tools\PaketeGetTool::class,
                     \Platform\FoodAlchemist\Tools\PaketeListTool::class,

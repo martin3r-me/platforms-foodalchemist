@@ -350,8 +350,61 @@ class FormatService
         });
     }
 
-    /** Phase D: Standard-Sektions-Gerüst einer neu angelegten Edition (Concepter 2.0). */
+    /**
+     * Phase D: Standard-Sektions-Gerüst einer neu angelegten Edition (Concepter 2.0) — UI-Default ohne
+     * Planungs-Gerüst. Die kanonische Gang-/Stations-Struktur (Spec 50 C-1) liefert `neueEdition(...)`
+     * mit `$geruest = ['typ' => 'menue'|'buffet', 'gaenge' => ?int]`.
+     */
     public const SEKTIONS_GERUEST = ['Amuse', 'Vorspeise', 'Hauptgang', 'Dessert'];
+
+    /**
+     * Spec 50 C-5 — NEUE Edition (Concept) anlegen, Struktur seeden und als Aufbau-Position ins Format
+     * referenzieren. EIN Weg für UI (Formate/Editor::neueEdition) und MCP (`format_editions.POST neu={…}`),
+     * damit ein Agent dieselbe Struktur reproduziert, die die UI seedet — statt eines flachen Concepts.
+     *
+     *  - ohne `$geruest`: UI-Default — aktive Edition mit den SEKTIONS_GERUEST-Headern (kein Planungs-Gerüst).
+     *  - mit `$geruest`: kanonisches Gerüst (C-1) — Entwurf mit Planungs-Gerüst, Header + leeren Positionen;
+     *    aktiv setzt ein Mensch, sobald die Positionen gefüllt sind (concepts.POST-Regel).
+     *
+     * Alles in einer Transaktion: ein ungültiger Gerüst-Typ hinterlässt kein verwaistes Concept.
+     *
+     * @param  array{typ: string, gaenge?: int}|null  $geruest
+     * @return array{concept: FoodAlchemistConcept, slot: FoodAlchemistFormatSlot, header: int, positionen_leer: int}
+     */
+    public function neueEdition(Team $team, int $formatId, ?string $name = null, ?int $afterSlotId = null, ?array $geruest = null): array
+    {
+        $format = FoodAlchemistFormat::visibleToTeam($team)->findOrFail($formatId);
+        $this->guardOwner($format, $team);
+        $kanonisch = is_array($geruest) && trim((string) ($geruest['typ'] ?? '')) !== '';
+
+        return DB::transaction(function () use ($team, $formatId, $name, $afterSlotId, $geruest, $kanonisch) {
+            $concepts = app(ConceptService::class);
+            $concept = $concepts->create($team, [
+                'name' => trim((string) $name) !== '' ? trim((string) $name) : 'Neue Edition',
+                'status' => $kanonisch ? 'draft' : 'active',
+            ]);
+            $leer = 0;
+            if ($kanonisch) {
+                $g = app(ConceptGeneratorService::class)->kanonischesGeruest(
+                    $team, $concept->refresh(), (string) $geruest['typ'],
+                    isset($geruest['gaenge']) ? (int) $geruest['gaenge'] : null,
+                );
+                $leer = (int) $g['slots'];
+            } else {
+                foreach (self::SEKTIONS_GERUEST as $sektion) {
+                    $concepts->addBlock($team, $concept->id, 'header', ['title' => $sektion]);
+                }
+            }
+            $slot = $this->slotConceptEinfuegen($team, $formatId, (int) $concept->id, $afterSlotId);
+
+            return [
+                'concept' => $concept->refresh(),
+                'slot' => $slot,
+                'header' => (int) $concept->slots()->where('type', 'header')->count(),
+                'positionen_leer' => $leer,
+            ];
+        });
+    }
 
     // ── Marketing-Bilder ─────────────────────────────────────────────────────
 

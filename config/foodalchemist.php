@@ -1025,10 +1025,18 @@ return [
             'task' => 'Ordne das Rezept der passenden Produktions-Kategorie zu (aus der mitgegebenen '
                 . 'Kategorie-Liste): werte = {category_id, kategorie_name}.',
         ],
+        // B-2 (Spec 50, 2026-09-06): Skala 0-100 statt 0-60 — Regelwerk Basisrezepte §6 F6.5: der
+        // Einkochverlust ist Garverlust je Zutat, abgeseihte Feststoffe (Knochen, Karkassen,
+        // Röstgemüse im Fond) sind 100. Mit dem 60er-Deckel war „auf ein Viertel reduzieren" (75)
+        // nicht sagbar und der EK/kg einer Jus um den Einkochfaktor zu niedrig.
         'recipe.garverlust' => [
             'tier' => 'C',
-            'task' => 'Schätze je Zutat den Garverlust in Prozent (0-60, küchenübliche Werte; '
-                . 'Flüssigkeiten beim Reduzieren hoch, Trockenwaren 0): werte = {verluste: {<zutat_id>: pct}}.',
+            'task' => 'Schätze je Zutat den Garverlust in Prozent (0-100, Regelwerk §6 F6.5): '
+                . 'Reduzieren auf die Hälfte 50, auf ein Drittel 67, auf ein Viertel 75; Fond-Flüssigkeit '
+                . '20-40; abgeseihte/entfernte Feststoffe (Knochen, Karkassen, Röstgemüse, Kräuter, Gewürze '
+                . 'im Fond) 100; Brat-/Garverlust Fleisch/Fisch 20-30, Gemüse 10-25; kalte Rohmischungen, '
+                . 'Dressings, Marinaden, Trockenwaren 0. Nur die mitgegebenen zutat-ids, keine erfundenen: '
+                . 'werte = {verluste: {<zutat_id>: pct}}.',
         ],
         'recipe.name_putzen' => [
             'tier' => 'D',
@@ -1260,27 +1268,13 @@ return [
             'task' => 'Beurteile die Eignung des Rezepts je Niveau-Stufe '
                 . '(geeignet|bedingt|ungeeignet + kurze Begruendung): werte = {niveaus: {<slug>: {eignung, grund}}}.',
         ],
-        'recipe.sub_typ' => [
-            'tier' => 'B',
-            'task' => 'Klassifiziere das Rezept zu GENAU EINEM Sub-Rezept-Typ aus dem mitgegebenen '
-                . 'Vokabular; kein Treffer => null: werte = {sub_typ_slug}.',
-        ],
         'recipe.production_depth' => [
             'tier' => 'B',
             'task' => 'Klassifiziere die Fertigungstiefe (from_scratch|teilfertig|convenience) '
                 . 'aus den Zutaten: werte = {production_depth}.',
         ],
-        // DEPRECATED (2026-09-04): kein `propose()`-Aufrufer mehr im Modul — Generator und
-        // Revise liefern `preparation` als Teil ihrer eigenen Schemas, der Editor nutzt
-        // `recipe.steps` (Spec 27). Bleibt im Inventar, weil `PromptRegistryTest` die
-        // Key-Liste als Vertrag prüft; nicht neu verdrahten, sondern `recipe.steps` nutzen.
-        'recipe.preparation' => [
-            'tier' => 'A',                                            // V-02: langes Einzeltext-Feld
-            'max_tokens' => 8000,                                     // lange Markdown-Zubereitung — Reasoning-Headroom
-            'task' => 'Schreibe die Schritt-fuer-Schritt-Zubereitung fuers PRODUKTIONS-Rezept '
-                . '(Markdown, nummerierte Schritte, Temperaturen/Zeiten konkret, H2 fuer Phasen): '
-                . 'werte = {preparation}.',
-        ],
+        // Spec 50 B-5 (2026-09-06): `recipe.preparation` (Markdown-Blob) und `recipe.sub_typ` aus dem
+        // Inventar gestrichen — beide ohne `propose()`-Aufrufer; Zubereitung = `recipe.steps` (Spec 27).
         // Spec 27: strukturierte Schritte statt Markdown-Blob — die Schritte sind der
         // Master, `preparation` nur ihr Spiegel. phase = Abschnittsname oder null.
         'recipe.steps' => [
@@ -1484,12 +1478,8 @@ return [
                 . $briefingKlausel
                 . '4-8 Schritte: werte = {preparation}.',
         ],
-        'vk.name_putzen' => [
-            'tier' => 'B',
-            'task' => 'Normalisiere den Verkaufsrezept-Namen auf die Pipe-Syntax §1 (VK-Regelwerk) '
-                . '«<HG-Code>: Hauptkomponente | Komponente | …» (max 5 Felder, Title Case, '
-                . 'keine Marketing-Adjektive): werte = {name}.',
-        ],
+        // Spec 50 B-5 (2026-09-06): `vk.name_putzen` gestrichen — kein Aufrufer (VkModal putzt nicht;
+        // Titel-Vorschlag läuft über `vk.titel_vorschlag`).
         // Et.4 (Eingabe-Reife): Titel-VORSCHLAG aus dem freien Brief (vor der Generierung), nicht das
         // Putzen eines fertigen Namens. Nüchtern + §1-konform; benennt nur, was der Brief hergibt.
         'vk.titel_vorschlag' => [
@@ -1647,9 +1637,15 @@ return [
                 . 'richte Tonalitaet, Wortwahl und Satzbau eng an `schreibstil_anweisung` (Sprach-Duktus) aus — '
                 . 'orientiere dich an `schreibstil_beispiele`, falls vorhanden; faellt beides weg, an `schreibstil`. '
                 . 'Der Stil MUSS im Ergebnis klar erkennbar sein, ein anderer Stil muss deutlich anders klingen. '
-                . 'werte = {intro, slots}. intro = kurzer Einleitungs-/Praesentationstext fuer das ganze Konzept. '
+                . 'werte = {intro, slots, header, consumer_name, claim}. intro = kurzer Einleitungs-/Praesentationstext fuer das ganze Konzept. '
                 . 'slots = Map slot_id -> Brand-Voice-Anzeigename je Position (Variante des neutralen sales_wording_standard, '
-                . 'ueber das gesamte Menue stimmig und wiedererkennbar).',
+                . 'ueber das gesamte Menue stimmig und wiedererkennbar). '
+                // Spec 50 C-2: Gang-/Stationsüberschriften + Kopf-Felder — nur, wenn der Kontext sie anbietet.
+                . 'header = Map slot_id -> Ueberschrift je Gang/Station, NUR fuer die in `header` gelisteten Slots: '
+                . 'aus dem neutralen Frame-Label (z. B. "Hauptgang", "Kalte Vorspeisen / Salate") wird eine kurze '
+                . 'Ueberschrift im Schreibstil (max. 6 Woerter, keine Gerichtnamen, keine Preise); fehlt `header`, lasse es weg. '
+                . 'consumer_name = kundensichtbarer Konzeptname (max. 60 Zeichen, kein Doppelpunkt-Suffix), claim = ein '
+                . 'Satz/Halbsatz Leitidee (max. 120 Zeichen) — beide NUR, wenn sie in `kopf.luecken` stehen; sonst weglassen.',
         ],
         // Spec 19 E6.4: KI-Divergenz der Kreativ-/Skizzen-Phase. PRODUKT-BLIND — die KI DARF
         // frei erfinden (Anker-Graph nur als Inspiration), OHNE Bestandsprüfung; die Erdung
@@ -1762,6 +1758,22 @@ return [
                 . 'referenz_menge_kg_je_zweck: {abfuellen, regenerieren, ausgabe, transport}}.',
         ],
 
+        // B-1 (Spec 50, 2026-09-06): Regeneration gehört der KOMPONENTE (Spec 51) — der Default
+        // steht als Gesamt-Zeile am Basisrezept („das bin ich"), das Gericht erbt. Darum ein eigener
+        // Basisrezept-Key mit EINEM Programm; `vk.regeneration` (Liste je Komponente) bleibt der
+        // Override-Weg am Gericht. `kalt: true` ist eine Entscheidung (Gerät null = kalt servieren),
+        // NICHT „nichts verwertbar" — der Vertrag „keine Zeile = Lücke" braucht diesen Unterschied.
+        'recipe.regeneration' => [
+            'tier' => 'B',
+            'task' => 'Lege fuer dieses Basisrezept als GANZES fest, wie es am Einsatztag regeneriert '
+                . 'wird — EIN Programm, kein Programm je Zutat. Geraet NUR als id aus dem mitgelieferten '
+                . 'Vokabular `geraete`, nie erfunden. Wird das Produkt kalt serviert oder gar nicht erwaermt '
+                . '(Dressing, Salat, Dessert, Rohkost): kalt = true und geraet_id = null. Sonst kalt = false, '
+                . 'geraet_id gesetzt, temp_c (Geraetetemperatur), duration_min, core_temp_c (Kerntemperatur, '
+                . 'nur wenn kuechenueblich gemessen, sonst null), note (kurz, z. B. abgedeckt, Fluessigkeit '
+                . 'angiessen). Unsicher bei einem Zahlenfeld ⇒ null, nie raten: '
+                . 'werte = {kalt, geraet_id, temp_c, duration_min, core_temp_c, note}.',
+        ],
         'vk.regeneration' => [
             'tier' => 'B',
             'task' => 'Schlage die Regenerations-Programme als LISTE vor — eine Zeile pro '

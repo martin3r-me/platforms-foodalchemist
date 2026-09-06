@@ -82,5 +82,5 @@ it('Kill-Switch mitten im Bulk: Items zählen als Fehler, Run wird trotzdem done
 
     expect($run->status)->toBe(BulkRunStatus::Done)
         ->and((int) $run->failed)->toBe(5)
-        ->and(DB::table('foodalchemist_bulk_proposals')->where('run_id', $runId)->whereNotNull('error')->count())->toBe(15);
+        ->and(DB::table('foodalchemist_bulk_proposals')->where('run_id', $runId)->whereNotNull('error')->count())->toBe(25);   // 5 × 5 Schritte (B-10 dichteklasse, B-1 regeneration); garverlust (B-2) ruft ohne Zutaten nicht → leer, kein Fehler
 });

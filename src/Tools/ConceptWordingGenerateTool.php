@@ -24,8 +24,10 @@ class ConceptWordingGenerateTool extends FoodAlchemistTool implements ToolContra
 
     public function getDescription(): string
     {
-        return 'Erzeugt KI-Wording für ein team-eigenes Konzept: Intro (→ Beschreibung) + Positions-Texte. '
-            . 'Optional writing_style_id für den Schreibstil. Schreibt die Texte direkt ans Konzept.';
+        return 'Erzeugt KI-Wording für ein team-eigenes Konzept: Intro (→ Beschreibung) + Positions-Texte '
+            . '+ Gang-/Stations-Überschriften (Header-Slots, nur solange sie noch das neutrale Frame-Label tragen) '
+            . '+ consumer_name/claim (nur wenn leer). Optional writing_style_id für den Schreibstil; '
+            . 'nur_luecken=true füllt nur leere Felder (regeneriert nichts). Schreibt die Texte direkt ans Konzept.';
     }
 
     public function getSchema(): array
@@ -35,6 +37,7 @@ class ConceptWordingGenerateTool extends FoodAlchemistTool implements ToolContra
             'properties' => [
                 'concept_id' => ['type' => 'integer', 'description' => 'Konzept-Id (team-eigen).'],
                 'writing_style_id' => ['type' => 'integer', 'description' => 'Optionaler Schreibstil.'],
+                'nur_luecken' => ['type' => 'boolean', 'default' => false, 'description' => 'Nur leere Felder füllen (Intro/Wording/Header), nichts regenerieren.'],
             ],
             'required' => ['concept_id'],
         ];
@@ -55,7 +58,8 @@ class ConceptWordingGenerateTool extends FoodAlchemistTool implements ToolContra
             $res = app(ConceptService::class)->generateWording(
                 $team,
                 $conceptId,
-                isset($arguments['writing_style_id']) ? (int) $arguments['writing_style_id'] : null
+                isset($arguments['writing_style_id']) ? (int) $arguments['writing_style_id'] : null,
+                ['nur_luecken' => (bool) ($arguments['nur_luecken'] ?? false)]
             );
         } catch (ModelNotFoundException $e) {
             return ToolResult::error('Konzept nicht sichtbar.', 'NOT_FOUND');
@@ -63,7 +67,8 @@ class ConceptWordingGenerateTool extends FoodAlchemistTool implements ToolContra
             return ToolResult::error($e->getMessage(), 'VALIDATION_ERROR');
         }
 
-        return ToolResult::success(['concept_id' => $conceptId, 'intro' => $res['intro'], 'slots_set' => $res['slots_set']]);
+        return ToolResult::success(['concept_id' => $conceptId, 'intro' => $res['intro'], 'slots_set' => $res['slots_set'],
+            'header_set' => $res['header_set'], 'kopf_set' => $res['kopf_set']]);
     }
 
     public function getMetadata(): array

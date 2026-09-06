@@ -178,6 +178,12 @@ Für `gp.domain`, `gp.zaehl_einheiten`, `gp.anker`, `gp.role`, `gp.la_suggest`,
 „Vorsorglich registriert“ ist kein dauerhafter Status, weil ungenutzte Prompts
 Wartungs-, Kosten- und Sicherheitsannahmen erzeugen.
 
+**Stand 2026-09-06 (Spec 50 B-5/B-7):** `gp.anker` ist verdrahtet (Schritt `anker` in
+`BulkEnrichService::SCHRITTE_GP`, `gps.ENRICH`, Nachzug nach `mintFromLa`); `recipe.sub_typ`,
+`vk.name_putzen` und das schon deprecated `recipe.preparation` sind **aus Registry und
+`FOOD_DNA_KEYS` entfernt**. `gp.domain`/`gp.role` bleiben Waisen — Entscheid offen (Empfehlung:
+zurückstellen, kein Accept-Pfad, keine Ampel hängt daran).
+
 ### 5.6 Vector-Database-Capabilities
 
 Der vollständige Migrations- und Betriebsplan steht unter `C-VECTOR` mit

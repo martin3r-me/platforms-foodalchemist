@@ -41,7 +41,8 @@ it('Basisrezept: meldet die Felder ohne Schrittfolge als eigene Lücken', functi
 });
 
 it('Gegenfall: gefüllte Felder erscheinen unter erfuellt, nicht als Lücke', function () {
-    $r = $this->makeRecipe($this->rootTeam, 'Fond: Voll', ['work_time_min' => 30, 'dichteklasse' => 'mittel']);
+    $r = $this->makeRecipe($this->rootTeam, 'Fond: Voll', ['work_time_min' => 30, 'dichteklasse' => 'fluessig']);
+    $this->makeContainerRow($this->rootTeam, $r);                       // B-10: erfüllt = Klasse UND Behälter
 
     $reife = $this->svc->reife($this->rootTeam, 'recipe', $r->id);
 

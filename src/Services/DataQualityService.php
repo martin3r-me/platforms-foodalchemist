@@ -1688,11 +1688,11 @@ class DataQualityService
             ->whereColumn('ri.gp_id', 'foodalchemist_gps.id');
     }
 
-    /** EXISTS: GP hat ein Anker-Mapping. */
+    /** EXISTS: GP hat ein LEBENDES Anker-Mapping (soft-gelöschte zählen nicht — B-7 räumt alte ai_inferred so weg). */
     private function gpHatAnker(): \Closure
     {
         return fn ($q) => $q->select(DB::raw(1))->from('foodalchemist_gp_anchor_mappings as m')
-            ->whereColumn('m.gp_id', 'foodalchemist_gps.id');
+            ->whereColumn('m.gp_id', 'foodalchemist_gps.id')->whereNull('m.deleted_at');
     }
 
     /**

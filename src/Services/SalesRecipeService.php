@@ -340,14 +340,22 @@ class SalesRecipeService
         'variable_work_time_basis', 'standzeit_min', 'batch_max_kg', 'batch_max_pieces',
     ];
 
-    public function updateVk(Team $team, int $id, array $in): FoodAlchemistRecipe
+    /**
+     * @param  array<string,float>  $kiLineage  Spec 50 (Nebenbefund 2026-09-06): Werte, die im Editor per
+     *   ✨-Knopf aus einem KI-Vorschlag ins Formular kamen, sind KEINE Handarbeit. Der Aufrufer meldet sie
+     *   hier als Präfix ⇒ Konfidenz (`sales_wording`, `plating`, `marketing_text`, `serving_vehicle`);
+     *   für diese Felder wird die Lineage `ki` + Konfidenz geschrieben statt `manual`. Bewusst ein
+     *   eigener Parameter und KEIN Eintrag in VK_FELDER: die Lineage darf nicht über die Feld-Whitelist
+     *   (MCP `verkaufsrezepte.PUT`) frei gesetzt werden — nur der Editor kennt die Herkunft seiner Werte.
+     */
+    public function updateVk(Team $team, int $id, array $in, array $kiLineage = []): FoodAlchemistRecipe
     {
         $recipe = FoodAlchemistRecipe::visibleToTeam($team)->verkauf()->findOrFail($id);
         if (! $recipe->isOwnedBy($team)) {
             throw new \RuntimeException('Geerbtes Rezept — VK-Pflege nur durchs Besitzer-Team (D1).');
         }
 
-        return DB::transaction(function () use ($team, $recipe, $in) {
+        return DB::transaction(function () use ($team, $recipe, $in, $kiLineage) {
             $update = array_intersect_key($in, array_flip(self::VK_FELDER));
 
             // MVP-050 (P0): Referenzen autorisieren, BEVOR sie geschrieben werden. Der
@@ -373,10 +381,30 @@ class SalesRecipeService
 
             // Wording/Marketing/Plating manuell editiert → Lineage auf manual (GL-07).
             // Spalten-Muster: <feld>_source + <feld>_ai_confidence (English-Rename).
-            foreach (['sales_wording_standard' => 'sales_wording', 'marketing_text' => 'marketing_text', 'plating_text' => 'plating'] as $feld => $praefix) {
-                if (array_key_exists($feld, $update) && $update[$feld] !== $recipe->{$feld}) {
+            // Ausnahme: der Editor meldet KI-übernommene Werte über $kiLineage → `ki` + Konfidenz.
+            $lineage = function (string $praefix) use (&$update, $kiLineage): void {
+                if (array_key_exists($praefix, $kiLineage)) {
+                    $update["{$praefix}_source"] = 'ki';
+                    $update["{$praefix}_ai_confidence"] = max(0, min(1, (float) $kiLineage[$praefix]));
+                } else {
                     $update["{$praefix}_source"] = 'manual';
                     $update["{$praefix}_ai_confidence"] = null;
+                }
+            };
+            foreach (['sales_wording_standard' => 'sales_wording', 'marketing_text' => 'marketing_text', 'plating_text' => 'plating'] as $feld => $praefix) {
+                if (array_key_exists($feld, $update) && $update[$feld] !== $recipe->{$feld}) {
+                    $lineage($praefix);
+                }
+            }
+            // B-1 (Spec 50): das Servier-Vehikel bekommt dasselbe Lineage-Paar. Vergleich als int —
+            // die Id kommt aus dem Select als String, `!==` gegen den Model-Wert wäre immer „geändert".
+            if (array_key_exists('serving_vehicle_vocab_id', $update)
+                && (int) $update['serving_vehicle_vocab_id'] !== (int) $recipe->serving_vehicle_vocab_id) {
+                if ($update['serving_vehicle_vocab_id'] === null) {
+                    $update['serving_vehicle_source'] = null;
+                    $update['serving_vehicle_ai_confidence'] = null;
+                } else {
+                    $lineage('serving_vehicle');
                 }
             }
             $recipeUpdate = array_diff_key($update, array_flip(['price_mode', 'price_override_reason']));
@@ -410,6 +438,17 @@ class SalesRecipeService
         if ($svc->ausMarkdown($recipe, (string) $update['plating_text'], ebene: $ebene) === 0) {
             $svc->spiegele($recipe);
         }
+    }
+
+    /**
+     * B-1 (Spec 50): der Anreicherungs-Accept schreibt das Servier-Vehikel mit Lineage `ki` direkt am
+     * Rezept (durch `updateVk` würde es `manual`) — die Standard-Darreichung muss trotzdem
+     * mitlaufen, sonst zeigt die Ausgabe ein anderes Vehikel als der Editor. Derselbe Spiegel,
+     * nur von außen erreichbar.
+     */
+    public function spiegeleStandardDarreichung(Team $team, FoodAlchemistRecipe $recipe, array $update): void
+    {
+        $this->syncStandardDarreichung($team, $recipe, $update);
     }
 
     /** VK-Felder des Legacy-Editors in die Standard-Darreichung spiegeln (eine Wahrheit). */
@@ -521,6 +560,11 @@ class SalesRecipeService
     public function upsertRegeneration(Team $team, int $recipeId, array $in, ?int $id = null): void
     {
         $recipe = FoodAlchemistRecipe::visibleToTeam($team)->findOrFail($recipeId);
+        // B-1 (Spec 50): Provenienz kommt vom Aufrufer. Editor/MCP schreiben `manual` (Default), die
+        // Anreicherung `ki` + Konfidenz/Begründung — vorher stempelte jeder Weg hart `manual`, und ein
+        // KI-Programm hätte ausgesehen wie eine Entscheidung (Etikett lügt). Konfidenz/Begründung
+        // nur bei `ki`, ein manueller Eintrag nullt sie (manual gewinnt, GL-07).
+        $source = ($in['source'] ?? 'manual') === 'ki' ? 'ki' : 'manual';
         $werte = [
             'component_label' => trim((string) ($in['component_label'] ?? '')) ?: 'Gesamt',
             'ingredient_id' => $this->pruefeKomponente($recipe, $in['ingredient_id'] ?? null),
@@ -529,7 +573,9 @@ class SalesRecipeService
             'duration_min' => $in['duration_min'] ?? null,
             'core_temp_c' => $in['core_temp_c'] ?? null,
             'note' => $in['note'] ?? null,
-            'source' => 'manual', 'ai_confidence' => null, 'ai_reasoning' => null,      // manual gewinnt (GL-07)
+            'source' => $source,
+            'ai_confidence' => $source === 'ki' ? ($in['ai_confidence'] ?? null) : null,
+            'ai_reasoning' => $source === 'ki' ? ($in['ai_reasoning'] ?? null) : null,
             'updated_at' => now(),
         ];
         if ($id !== null) {
@@ -624,9 +670,11 @@ class SalesRecipeService
             // Herkunft NICHT hart auf 'manual': ein KI-Wert, der Handarbeit behauptet, lenkt jede
             // spaetere Diagnose in die Irre — und die Konfidenz-Stufe der Bemessung haengt daran.
             'source' => in_array($in['source'] ?? null, ['manual', 'ki'], true) ? $in['source'] : 'manual',
-            'ai_confidence' => null, 'ai_reasoning' => null,
             'updated_at' => now(),
         ];
+        // Konfidenz/Begründung nur zu einer KI-Herkunft — ein manueller Wert trägt keine.
+        $werte['ai_confidence'] = $werte['source'] === 'ki' && is_numeric($in['ai_confidence'] ?? null) ? (float) $in['ai_confidence'] : null;
+        $werte['ai_reasoning'] = $werte['source'] === 'ki' && ($in['ai_reasoning'] ?? null) !== null ? (string) $in['ai_reasoning'] : null;
 
         $vorhanden = DB::table('foodalchemist_recipe_containers')
             ->where('recipe_id', $recipe->id)->where('zweck', $zweck)->whereNull('deleted_at')->first(['id']);

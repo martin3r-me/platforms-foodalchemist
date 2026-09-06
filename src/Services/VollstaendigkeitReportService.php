@@ -24,8 +24,7 @@ use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
  * Fünf Blöcke:
  *  A · VK-Vorbedingungen — was den Auto-VK blockiert (Aufschlagsklasse, Portion, Darreichung).
  *  B · Anreicherung — welche Zielfelder der Schrittfolgen leer sind, getrennt nach Basisrezept
- *      und Gericht, plus die beiden Felder, die in KEINER Schrittfolge stehen
- *      (`work_time_min` → FEK=0, `dichteklasse` → Behälterbedarf nicht rechenbar).
+ *      und Gericht, plus das Feld, das in KEINER Schrittfolge steht (`work_time_min` → FEK=0).
  *  C · Grundprodukte — die Felder ohne LA-Quelle (Anker, Domain) UND der A8-Schaden:
  *      GPs, die `allergens_source='ki'` tragen, OBWOHL ihre LAs ein Allergenprofil haben —
  *      die sind aus der LA-Kaskade ausgeschert ({@see GpAggregateService::backfillAllergenKonfidenz}
@@ -42,27 +41,61 @@ use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
  */
 class VollstaendigkeitReportService
 {
-    /** Zielfelder der Basisrezept-Schrittfolge ({@see BulkEnrichService::SCHRITTE}). */
-    private const FELDER_BASIS = [
-        'description' => 'description',
-        'category' => 'category_id',
-        'geschmack' => 'taste_direction',
-    ];
-
-    /** Zielfelder der Gericht-Schrittfolge ({@see BulkEnrichService::SCHRITTE_VK}). */
-    private const FELDER_VK = [
-        'description' => 'description',
-        'wording' => 'sales_wording_standard',
-        'plating' => 'plating_text',
-        'speisen_klasse' => 'dish_class_id',
-    ];
-
     /**
      * Felder, die in KEINER Schrittfolge stehen, aber eine Kette tragen.
      * `work_time_min` → `KalkulationService::recipeHk` rechnet FEK/FGK = 0.
-     * `dichteklasse` → `BehaelterBedarfService` kann den Bedarf nicht rechnen (Spec 51).
+     * (`dichteklasse` stand hier bis B-10; seit 2026-09-06 ist sie Schritt der Basisrezept-Folge.)
      */
-    private const FELDER_OHNE_SCHRITT = ['work_time_min', 'dichteklasse'];
+    private const FELDER_OHNE_SCHRITT = ['work_time_min'];
+
+    /**
+     * Zielfelder einer Schrittfolge — aus {@see BulkEnrichService::ZIELFELDER} abgeleitet, damit der
+     * Report nicht eine zweite Kopie der Zuordnung pflegt (B-10 hätte sonst zwei Stellen gebraucht).
+     *
+     * @return array<string,string> schritt => spalte
+     */
+    private function felder(array $schritte): array
+    {
+        $felder = [];
+        foreach ($schritte as $schritt) {
+            $ziel = BulkEnrichService::ZIELFELDER[$schritt] ?? null;
+            // Zeilen-Schritte (B-1/B-2: regeneration, garverlust, rollen) haben kein Spaltenziel —
+            // ihre Lücke zählt `zeilenLuecken()` relational.
+            if ($ziel !== null && $ziel['feld'] !== null) {
+                $felder[$schritt] = $ziel['feld'];
+            }
+        }
+
+        return $felder;
+    }
+
+    /**
+     * Lücken der Zeilen-Schritte, gespiegelt an `BulkEnrichService::relationaleLuecke`:
+     * regeneration = keine lebende Gesamt-Zeile; garverlust/rollen = mindestens eine lebende Zutat
+     * ohne `cooking_loss_pct` bzw. `role`.
+     */
+    private function zeilenLuecken(Builder $rezepte, array $schritte): array
+    {
+        $out = [];
+        if (in_array('regeneration', $schritte, true)) {
+            $out['leer_regeneration'] = (clone $rezepte)
+                ->whereNotExists(fn ($q) => $q->from('foodalchemist_recipe_regenerations AS rg')
+                    ->whereColumn('rg.recipe_id', 'foodalchemist_recipes.id')
+                    ->whereNull('rg.ingredient_id')->whereNull('rg.deleted_at'))
+                ->count();
+        }
+        foreach (['garverlust' => 'cooking_loss_pct', 'rollen' => 'role'] as $schritt => $spalte) {
+            if (in_array($schritt, $schritte, true)) {
+                $out["leer_{$schritt}"] = (clone $rezepte)
+                    ->whereExists(fn ($q) => $q->from('foodalchemist_recipe_ingredients AS ri')
+                        ->whereColumn('ri.recipe_id', 'foodalchemist_recipes.id')
+                        ->whereNull("ri.{$spalte}")->whereNull('ri.deleted_at'))
+                    ->count();
+            }
+        }
+
+        return $out;
+    }
 
     /**
      * @return array{team_id:int, a_vk_vorbedingungen:array, b_anreicherung:array,
@@ -146,14 +179,16 @@ class VollstaendigkeitReportService
     private function blockAnreicherung(Team $team): array
     {
         $basis = ['gesamt' => $this->basisrezepte($team)->count()];
-        foreach (self::FELDER_BASIS as $schritt => $feld) {
+        foreach ($this->felder(BulkEnrichService::SCHRITTE) as $schritt => $feld) {
             $basis["leer_{$schritt}"] = (clone $this->basisrezepte($team))->whereNull($feld)->count();
         }
+        $basis += $this->zeilenLuecken($this->basisrezepte($team), BulkEnrichService::SCHRITTE);
 
         $vk = ['gesamt' => $this->gerichte($team)->count()];
-        foreach (self::FELDER_VK as $schritt => $feld) {
+        foreach ($this->felder(BulkEnrichService::SCHRITTE_VK) as $schritt => $feld) {
             $vk["leer_{$schritt}"] = (clone $this->gerichte($team))->whereNull($feld)->count();
         }
+        $vk += $this->zeilenLuecken($this->gerichte($team), BulkEnrichService::SCHRITTE_VK);
 
         $ohneSchritt = [];
         foreach (self::FELDER_OHNE_SCHRITT as $feld) {

@@ -166,7 +166,7 @@ class RecipeOneShotService
      * kein LA → kein GP → die Zeile bleibt unbepreist (echte Sourcing-Lücke, kein geratenes GP).
      * Fail-soft — ein gescheiterter Mint kippt die Anreicherung nie.
      *
-     * @return array{status: string, minted: int, ohne_la: int, fehler?: string}
+     * @return array{status: string, minted: int, ohne_la: int, anker?: ?array, fehler?: string}
      */
     public function minteFehlendeGps(Team $team, FoodAlchemistRecipe $recipe): array
     {
@@ -191,6 +191,7 @@ class RecipeOneShotService
             $mint = app(\Platform\FoodAlchemist\Services\LaFirstGpService::class);
             $minted = 0;
             $ohneLa = 0;
+            $gpIds = [];
             foreach ($offene as $zut) {
                 $text = trim((string) ($zut->display_name ?: $zut->raw_text));
                 if ($text === '') {
@@ -201,15 +202,20 @@ class RecipeOneShotService
                     $zut->gp_id = $gp->id;
                     $zut->save();
                     $minted++;
+                    $gpIds[] = (int) $gp->id;
                 } else {
                     $ohneLa++;   // kein LA → Sourcing-Lücke, bleibt unbepreist (kein Rate-GP)
                 }
             }
+            $anker = null;
             if ($minted > 0) {
                 app(\Platform\FoodAlchemist\Services\RecipeRecomputeService::class)->recomputeAndPropagate((int) $recipe->id);
+                // Spec 50 · B-3: ein gemintetes GP ist erst mit Kern-Anker vollständig — sonst bleibt es
+                // im Pairing-Graph unsichtbar und das Pairing-Glied unten läuft ins Leere.
+                $anker = $this->bulk->ankerNachziehen($team, array_values(array_unique($gpIds)));
             }
 
-            return ['status' => $minted > 0 ? 'gemintet' : ($ohneLa > 0 ? 'kein_la' : 'vollständig'), 'minted' => $minted, 'ohne_la' => $ohneLa];
+            return ['status' => $minted > 0 ? 'gemintet' : ($ohneLa > 0 ? 'kein_la' : 'vollständig'), 'minted' => $minted, 'ohne_la' => $ohneLa, 'anker' => $anker];
         } catch (\Throwable $e) {
             return ['status' => 'fehler', 'minted' => 0, 'ohne_la' => 0, 'fehler' => mb_strimwidth($e->getMessage(), 0, 200)];
         }
@@ -627,17 +633,25 @@ class RecipeOneShotService
         }
     }
 
-    /** @return array{status: string, n_pairings?: int, fehler?: string} */
+    /** @return array{status: string, n_pairings?: int, grund?: string, fehler?: string} */
     private function pairingGlied(Team $team, FoodAlchemistRecipe $recipe): array
     {
         try {
             $pairings = app(PairingService::class);
             $anker = $pairings->recipeAnkers((int) $recipe->id);
+            // Spec 50 · B-4: ehrlich sagen, WARUM nichts passiert — „ohne Anker" (Rezept hat keinen
+            // Kern-Anker: Aromaanker-Glied leer / GPs ohne Anker) ist ein anderer Befund als „ohne
+            // Grounding" (Anker da, aber keine Kanten im Graph). Vorher sah beides gleich aus.
+            if ($anker->isEmpty()) {
+                return ['status' => 'uebersprungen_ohne_anker', 'n_pairings' => 0,
+                    'grund' => 'Rezept hat keinen Kern-Anker — Aromaanker-Glied leer oder GPs ohne Anker (gps.ENRICH felder [anker]).'];
+            }
             $grounding = $anker->flatMap(fn ($a) => $pairings->ankerNeighbors($a->slug, 'aroma', 30)
                 ->concat($pairings->ankerNeighbors($a->slug, 'kontrast', 30)))
                 ->unique(fn ($a) => $a->slug . '|' . $a->type)->values();
             if ($grounding->isEmpty()) {
-                return ['status' => 'uebersprungen_ohne_grounding', 'n_pairings' => 0];
+                return ['status' => 'uebersprungen_ohne_grounding', 'n_pairings' => 0,
+                    'grund' => 'Anker ' . implode(', ', $anker->pluck('slug')->all()) . ' haben keine Aroma-/Kontrast-Kanten im Pairing-Graph.'];
             }
 
             $vorschlag = app(Ai\AiGatewayService::class)->propose('recipe.pairing', [

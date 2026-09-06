@@ -1771,6 +1771,10 @@ class PlanningCascadeService
         if ($team === null) {
             return;
         }
+        // Spec 50 C-2: alle erfundenen Gerichte stehen → Wording-Pass (Header-Titel, Positions-Wording,
+        // Intro, consumer_name/claim), nur Lücken, fail-soft — VOR dem Kohäsions-Score, damit das
+        // Konzept beim Review komplett ist.
+        app(ConceptService::class)->wordingPassFailSoft($team, (int) $conceptStep->ref_id);
         try {
             $this->persistConceptCohesion((int) $conceptStep->cascade_run_id, $team, (int) $conceptStep->ref_id);
         } catch (\Throwable) {

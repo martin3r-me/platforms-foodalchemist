@@ -41,6 +41,7 @@ class ConceptsGenerateTool extends FoodAlchemistTool implements ToolContract, To
                 'name' => ['type' => 'string', 'description' => 'Name des neuen Konzepts (optional)'],
                 'use_favorites_list' => ['type' => 'boolean', 'default' => false, 'description' => '06·H3: bevorzugt aus der kuratierten Favoriten-GP-Liste bauen (nur Brief-Pfad; Default aus)'],
                 'favorites_convenience_only' => ['type' => 'boolean', 'default' => false, 'description' => '06·H4b: Favoriten-Block auf Convenience-getaggte GPs verengen (nur wirksam mit use_favorites_list)'],
+                'wording' => ['type' => 'boolean', 'default' => true, 'description' => 'Spec 50 C-2: nach der Befüllung einen Wording-Pass anhängen (Header-Titel, Positions-Wording, Intro, consumer_name/claim — nur Lücken, fail-soft). false = reine Struktur, Wording später via concept_wording.GENERATE.'],
             ],
         ];
     }
@@ -76,9 +77,16 @@ class ConceptsGenerateTool extends FoodAlchemistTool implements ToolContract, To
             return ToolResult::error($e->getMessage(), 'VALIDATION_ERROR');
         }
 
+        // C-2: Wording-Pass fail-soft — ohne KI-Provider bleibt es beim befüllten Konzept (wording=null).
+        $wording = ($arguments['wording'] ?? true)
+            ? app(\Platform\FoodAlchemist\Services\ConceptService::class)->wordingPassFailSoft($team, (int) $ergebnis['concept']->id)
+            : null;
+
         return ToolResult::success([
             'concept_id' => $ergebnis['concept']->id,
-            'name' => $ergebnis['concept']->name,
+            'name' => $ergebnis['concept']->fresh()->name,
+            'consumer_name' => $ergebnis['concept']->fresh()->consumer_name,
+            'wording' => $wording,
             'status' => $ergebnis['concept']->status,
             'created_via' => $ergebnis['concept']->created_via,
             'protokoll' => $ergebnis['protokoll'],

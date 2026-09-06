@@ -21,12 +21,14 @@
 | **1 · Paket A** | ✅ A1 · A3 · A4 · A5 (Datenhälfte) · A6 · A7 · A8 — **A2 zurückgestellt** (EK-Stück-Blast-Radius) |
 | **2 · T2** | ✅ `RecipeOneShotService::vkVorbedingungen()` read-only herausgezogen |
 | **3 · Paket D (Rezept + Gericht)** | ✅ `ReifeService` + `RecipeReifeAdapter` + `recipes.REIFE` + `reife` an fünf Schreib-Tools + D-2 |
-| **4 · E-1/E-2** | offen — `recipes.ENRICH`, `gps.MATCH`-Parameter |
-| **5–7 · Paket B/C, Container** | offen |
+| **4 · E-1/E-2** | ✅ `recipes.ENRICH` (`complete_coverage`/`ki_bilder`) + `gps.MATCH` mit `bio`/`pref`/`mode`/`prefer_raw` (Bio wirkt als Tiebreak, so im Schema benannt) |
+| **5 · Paket B** | ✅ B-10 (`dichteklasse`) · B-1 (`regeneration` Basis, VK += `geschmack`/`servier_vehikel`/`rollen`) · B-2 (`garverlust` je Zutat) · B-7 (`anker` in `SCHRITTE_GP`, Kandidaten lexikalisch+semantisch+`neutral`, Override-First) · B-9 (`gps.ENRICH` Standard `condition/tags/anker`, `allergene/naehrwerte` nur explizit) · B-3 (`ankerNachziehen` nach Mint) · B-4 (`uebersprungen_ohne_anker` + `grund`) · B-8 (`gpHatAnker` ohne soft-deleted) · B-5 (drei Waisen gestrichen) — **offen:** `gp.domain`/`gp.role` (Empfehlung: zurückstellen) |
+| **6 · Paket C** | ✅ C-1 (Header deterministisch aus dem Gerüst, alle Erzeugungswege + `concepts.POST geruest`) · C-2 (`concept.wording` in der Kaskade, `nur_luecken`) · C-3 (`consumer_name`/`claim`/`target_price_per_person` vom Frame/`name_claim`; `price_display` bleibt DB-Default — NOT NULL, „nicht gesetzt" dort nicht messbar) · C-4 (`ConceptOneShotService::anreichern` + `concepts.ENRICH` + `BulkRunType::EnrichConcept`) · C-5 (`FormatService::neueEdition` = EIN Weg für UI-Button und `format_editions.POST neu={name, geruest}`; PLAN_FROM_BRIEF Branding Override-First) · C-6 (`composition_source`/`ai_confidence`/`ai_reasoning` werden aus `planAusBrief`/`generiereAusBrief` gefüllt; `phase` lebt (R4.3), `concept_slots.level` bleibt als Tag) · C-8 (`struktur_vokabular.GET`: Header-Presets + `SEKTIONS_GERUEST` + Gerüst-Vorschau; `ConceptGeneratorService::geruestVorschau`) — **C-7 (Angebot auf Foodbook-Niveau) zurückgestellt** als eigene Etappe hinter 7/8; **C-9 Speiseplan = „nicht anwendbar"** im Reife-Adapter (GV-Tagesraster ohne Struktur-/Textebene) |
+| **7 · Container-Adapter** | offen — Design steht (ein Adapter je `PlanningFrame::OWNER_TYPES`, Coverage nur für concept/foodbook/speisekarte, Rest ehrlich `nicht_messbar`) |
 | **8 · E-3 bis E-6** | offen |
-| **9–10 · Strang III** | parallel, zweite Session (`wt-wissen-granular`) |
+| **9–10 · Strang III** | ✅ in `main` (PR #40, 2026-09-06): Kanon 28 Zeilen `pflicht`, 415 Themen-Splits, Kanon-Consumer im Gateway — Etappe 8 (E-3/E-4) baut gegen `KnowledgeCanonService::documentsFor()` |
 
-**Volle Suite auf stabilem Stand (2026-09-05): 3921 Tests, 3916 grün, 5 skipped, 0 rot.**
+**Volle Suite auf stabilem Stand (2026-09-06, nach Etappe 6): 4019 Tests, 4014 grün, 5 skipped, 0 rot** (Etappe 4: 3936/3931). `origin/main` (Strang III) am 2026-09-06 konfliktfrei eingemergt.
 
 > **Drei Stränge, in dieser Reihenfolge abzuarbeiten:**
 > **(I) Etappen 0–7** — die stillen Fehler, vollständige Anreicherung, Header, und die

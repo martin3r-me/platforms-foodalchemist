@@ -21,7 +21,7 @@ use Platform\FoodAlchemist\Services\RecipeOneShotService;
  * die Etappe-0-Messung sie als Massenphänomen ausgewiesen hat (§9):
  *  · `work_time_min` fehlt → `KalkulationService::recipeHk` rechnet FEK und FGK = 0
  *    (912 von 950 Gerichten auf demo).
- *  · `dichteklasse` fehlt → `BehaelterBedarfService` kann den Bedarf nicht rechnen
+ *  · `dichteklasse` fehlt → `BehaelterBedarfService` kann den Bedarf nicht rechnen (Basisrezept: seit B-10 Schrittfolge)
  *    (100 % auf beiden Ebenen — das Feld ist neu aus Spec 51).
  */
 class RecipeReifeAdapter implements ReifeAdapter
@@ -95,12 +95,17 @@ class RecipeReifeAdapter implements ReifeAdapter
         } else {
             $erfuellt[] = 'work_time_min';
         }
-        if ($r->dichteklasse === null) {
-            $luecken[] = $this->luecke('dichteklasse', $istVk ? 'gericht' : 'basisrezept', 'wichtig',
-                'Ohne Dichteklasse lässt sich der Behälterbedarf nicht rechnen (Spec 51).',
-                null);
-        } else {
-            $erfuellt[] = 'dichteklasse';
+        // `dichteklasse` läuft seit B-10 über die Basisrezept-Schrittfolge (Block 1). Am Gericht steht
+        // der Schritt nicht — dort bleibt die Klasse eine Lücke ohne Schrittfolge, damit der Behälterbedarf
+        // eines Gerichts nicht still unrechenbar bleibt.
+        if ($istVk) {
+            if ($r->dichteklasse === null) {
+                $luecken[] = $this->luecke('dichteklasse', 'gericht', 'wichtig',
+                    'Ohne Dichteklasse lässt sich der Behälterbedarf nicht rechnen (Spec 51).',
+                    null);
+            } else {
+                $erfuellt[] = 'dichteklasse';
+            }
         }
 
         // ── 3. Satelliten — was complete_coverage füllen würde ───────────────────────

@@ -148,6 +148,34 @@ class PairingService
     }
 
     /**
+     * Spec 50 · B-7: lexikalische Anker-KANDIDATEN für einen Namen — alle Anker, deren Term
+     * als ganzes Wort im Namen steht (Wortgrenze wie lexicalAnkerIsSolid, KEINE Substrings:
+     * „auberGINe" liefert hier kein Gin). Reihenfolge: längster Term zuerst, Gleichstand →
+     * niedrigere prio. Das ist die billige Vorauswahl, aus der die KI den Kern-Anker wählt;
+     * resolveByName (EIN Gewinner, auch Substring) bleibt für den Signal-Fixer.
+     *
+     * @return list<int> Anker-Ids
+     */
+    public function lexicalAnkerKandidaten(string $name, int $limit = 8): array
+    {
+        $folded = $this->fold($name);
+        $treffer = [];                                                // id => [len, prio]
+        foreach ($this->anchorIndex() as $term => [$ankerId, $prio]) {
+            if (! str_contains($folded, ' ' . $term . ' ')) {
+                continue;
+            }
+            $len = mb_strlen((string) $term);
+            if (! isset($treffer[$ankerId]) || $treffer[$ankerId][0] < $len
+                || ($treffer[$ankerId][0] === $len && $treffer[$ankerId][1] > $prio)) {
+                $treffer[$ankerId] = [$len, $prio];
+            }
+        }
+        uasort($treffer, fn ($a, $b) => [$b[0], $a[1]] <=> [$a[0], $b[1]]);
+
+        return array_slice(array_map('intval', array_keys($treffer)), 0, $limit);
+    }
+
+    /**
      * Quality-Gate für einen lexikalischen Anker-Treffer: NUR akzeptieren, wenn
      * ein Anker-Term als ganzes Wort in der Anfrage steht. resolveByName matcht
      * auch beliebige Substrings — „auberGINe" trifft so den „Gin"-Anker. Ein
@@ -1090,6 +1118,32 @@ class PairingService
             ['uuid' => (string) \Symfony\Component\Uid\UuidV7::generate(), 'team_id' => $team->id, 'role' => 'kern',
                 'source' => 'manual', 'ai_confidence' => null, 'ai_reasoning' => null,   // manual gewinnt (Inv. 3), wie setRecipeAnker
                 'deleted_at' => null, 'updated_at' => now(), 'created_at' => now()],
+        );
+    }
+
+    /**
+     * Spec 50 · B-7: KI-Inferenz des GP-Kern-Ankers (Bulk-Schritt `anker`). Manuelle Mappings
+     * werden nie ersetzt (Inv. 3); ältere `ai_inferred`-Mappings desselben GPs weichen, damit
+     * der Bulk-Lauf EINEN Kern-Anker setzt und den CAP_GP nicht mit KI-Resten füllt.
+     * `neutral` ist ein gültiger Anker („kein Aroma-Träger" ist eine Entscheidung).
+     */
+    public function setGpAnkerInference(Team $team, int $gpId, int $ankerId, float $confidence, string $reasoning = 'Bulk-Anreicherung'): void
+    {
+        $gp = \Platform\FoodAlchemist\Models\FoodAlchemistGp::visibleToTeam($team)->findOrFail($gpId);
+        $manual = DB::table('foodalchemist_gp_anchor_mappings')
+            ->where('gp_id', $gp->id)->where('anchor_id', $ankerId)->where('source', 'manual')->exists();
+        if ($manual) {
+            return;
+        }
+        DB::table('foodalchemist_gp_anchor_mappings')->where('gp_id', $gp->id)
+            ->where('anchor_id', '!=', $ankerId)->where('source', 'ai_inferred')->whereNull('deleted_at')
+            ->update(['deleted_at' => now(), 'updated_at' => now()]);
+        DB::table('foodalchemist_gp_anchor_mappings')->updateOrInsert(
+            ['gp_id' => $gp->id, 'anchor_id' => $ankerId],
+            ['uuid' => (string) \Symfony\Component\Uid\UuidV7::generate(), 'team_id' => $team->id,
+                'role' => 'kern', 'source' => 'ai_inferred', 'ai_confidence' => max(0, min(1, $confidence)),
+                'ai_reasoning' => mb_strimwidth($reasoning, 0, 500), 'deleted_at' => null,
+                'updated_at' => now(), 'created_at' => now()],
         );
     }
 

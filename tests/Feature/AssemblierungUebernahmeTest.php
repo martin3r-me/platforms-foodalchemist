@@ -154,9 +154,13 @@ it('APPLY übernimmt GENAU die Vorschau als Draft-Konzept — inkl. eigener Ger�
 
     // Geschrieben ist die Vorschau — Position für Position, nicht „auch ein gutes Menü".
     $concept = FoodAlchemistConcept::with('slots')->findOrFail($res->data['concept_id']);
-    expect($concept->slots->pluck('sales_recipe_id')->all())->toBe($erwarteteIds)
-        ->and($concept->slots->pluck('role')->all())->toBe(['Vorspeisen', 'Hauptgänge'])
-        ->and($concept->slots->pluck('type')->unique()->all())->toBe(['gericht']);
+    // Spec 50 C-1: vor jeder Gang-Gruppe steht ein Header-Block (title = role = Frame-Label).
+    $positionen = $concept->slots->where('type', 'gericht')->values();
+    $header = $concept->slots->where('type', 'header')->values();
+    expect($positionen->pluck('sales_recipe_id')->all())->toBe($erwarteteIds)
+        ->and($positionen->pluck('role')->all())->toBe(['Vorspeisen', 'Hauptgänge'])
+        ->and($header->pluck('title')->all())->toBe(['Vorspeisen', 'Hauptgänge'])
+        ->and($concept->slots->sortBy('position')->pluck('type')->all())->toBe(['header', 'gericht', 'header', 'gericht']);
 
     // Eigene Messlatte am Konzept (Coverage misst am Konzept, nicht am Foodbook-Gerüst)
     $kopie = $this->frames->find('concept', $concept->id);
@@ -216,7 +220,8 @@ it('leeres Draft-Konzept wird befüllt — ohne sein vorhandenes Gerüst zu verd
 
     expect($res->success)->toBeTrue()
         ->and($res->data['concept_id'])->toBe($concept->id)
-        ->and($concept->refresh()->slots()->count())->toBe(2);
+        ->and($concept->refresh()->slots()->where('type', 'gericht')->count())->toBe(2)
+        ->and($concept->slots()->where('type', 'header')->count())->toBe(2);   // C-1: je Gang ein Header
 
     // Punkt 4: ein vorhandenes Gerüst bleibt, wie es ist — kein Merge, keine Dubletten.
     expect($this->frames->find('concept', $concept->id)->id)->toBe($eigenes->id)
@@ -237,7 +242,7 @@ it('unbefüllbarer Slot landet als leere Position MIT Begründung — nie ein er
         ->and($leer['gerichte'])->toBe([]);
 
     $slots = FoodAlchemistConcept::with('slots')->findOrFail($res->data['concept_id'])->slots;
-    $leerSlot = $slots->firstWhere('role', 'Desserts');
+    $leerSlot = $slots->where('type', 'gericht')->firstWhere('role', 'Desserts');   // C-1: der Header trägt die Rolle auch
     expect($leerSlot->sales_recipe_id)->toBeNull()
         ->and($leerSlot->note)->toContain('Slot bleibt leer');
 });

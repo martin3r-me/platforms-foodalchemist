@@ -143,7 +143,9 @@ class ConceptGeneratorService
 
         $protokoll = [];
         $recipeIds = [];
+        $letzterHeader = null;
         foreach ($assemblierung['slots'] as $zeile) {
+            $this->headerFuerFrameSlot($team, (int) $concept->id, $zeile['label'] ?? null, $letzterHeader);   // C-1
             if ($zeile['gerichte'] === []) {
                 $leer = $this->concepts->addSlot($team, $concept->id, ['role' => $zeile['label']]);
                 $this->concepts->updateSlot($team, $leer->id, ['note' => $zeile['begruendung']]);
@@ -244,6 +246,10 @@ class ConceptGeneratorService
         ]);
         $concept->update([
             'created_via' => 'concept_generator_brief_' . $via,
+            // Spec 50 C-6: Provenienz — Gerüst von der KI, Positionen deterministisch aus dem Bestand.
+            'composition_source' => 'assembler',
+            'ai_confidence' => is_numeric($proposal->confidence ?? null) ? round((float) $proposal->confidence, 3) : null,
+            'ai_reasoning' => is_string($proposal->reasoning ?? null) && trim($proposal->reasoning) !== '' ? mb_substr(trim($proposal->reasoning), 0, 2000) : null,
             // Spec 50 · A4: der Brief gehört in `brief`, nicht in `description`.
             // `description` ist das Ziel von `ConceptService::generateWording` (KI-Intro) —
             // wer danach Wording erzeugte, überschrieb den Brief still, und `concepts.brief`
@@ -344,12 +350,20 @@ class ConceptGeneratorService
         if (($name === null || trim($name) === '') && is_string($geruest['name'] ?? null) && trim($geruest['name']) !== '') {
             $concept->update(['name' => trim($geruest['name'])]);
         }
+        // Spec 50 C-6: Provenienz am Concept selbst (GL-07-Lineage) — die Spalten existierten seit M10R-1,
+        // wurden aber nie geschrieben; die Werte lagen nur im Rückgabe-Array des Aufrufers.
+        $concept->update([
+            'composition_source' => 'ki',
+            'ai_confidence' => is_numeric($geruest['confidence'] ?? null) ? round((float) $geruest['confidence'], 3) : null,
+            'ai_reasoning' => $geruest['reasoning'] ?? null,
+        ]);
 
         // Kreative Canvas (concept.plan) — fail-soft: leer/KI-aus kippt den Draft nicht.
         $planConfidence = $this->fuelleCanvasAusPlan($team, $concept, $brief, $extra);
 
         // Fan-out-Ziele: je Frame-Slot N LEERE Concept-Slots (NICHT befüllen).
         $slotZahl = $this->materialisiereLeereSlots($team, $concept, $frame);
+        $this->uebernehmeKopfAusFrame($concept, $frame->refresh());
 
         return [
             'concept' => $concept->refresh(),
@@ -358,6 +372,70 @@ class ConceptGeneratorService
             'geruest_confidence' => $geruest['confidence'] ?? null,
             'plan_confidence' => $planConfidence,
         ];
+    }
+
+    /**
+     * Spec 50 C-1 — kanonisches Gerüst OHNE KI an ein bestehendes, leeres Draft-Konzept hängen und
+     * als Header + leere Positionen materialisieren. Für den MCP-Weg `concepts.POST geruest={typ,gaenge}`:
+     * ein Agent legt das Konzept an und bekommt sofort die Gang-/Stations-Struktur (Regelwerk_Concept §4),
+     * die er dann Position für Position füllt — statt eines flachen Slot-Haufens ohne Überschriften.
+     * Ein Konzept, das schon Positionen oder ein Gerüst hat, wird nicht angetastet (GL 5).
+     *
+     * @param  'menue'|'buffet'  $typ
+     * @return array{frame: FoodAlchemistPlanningFrame, slots: int, header: int}
+     */
+    public function kanonischesGeruest(Team $team, FoodAlchemistConcept $concept, string $typ, ?int $gaenge = null): array
+    {
+        if (! in_array($typ, ['menue', 'buffet'], true)) {
+            throw new RuntimeException("Unbekannter Gerüst-Typ „{$typ}“ — erlaubt: menue | buffet.");
+        }
+        if ((string) $concept->status !== 'draft') {
+            throw new RuntimeException("Konzept hat Status „{$concept->status}“ — ein Gerüst bekommt nur ein Entwurf.");
+        }
+        if ($concept->slots()->count() > 0) {
+            throw new RuntimeException('Konzept hat schon Positionen — das kanonische Gerüst schreibt nur in ein leeres Konzept.');
+        }
+        if ($this->frames->find('concept', (int) $concept->id) !== null) {
+            throw new RuntimeException('Konzept hat schon ein Planungs-Gerüst — erst foodalchemist.planning.GET ansehen.');
+        }
+
+        $frame = $this->frames->frameFor($team, 'concept', (int) $concept->id, 'kanonisch');
+        $slots = $typ === 'buffet'
+            ? $this->buffetSektionsGeruest()
+            : $this->menueGangGeruest($gaenge !== null ? ['menue_gaenge' => $gaenge] : []);
+        if ($concept->target_price_per_person !== null) {
+            $this->frames->setHead($team, $frame, ['target_price_pp' => (float) $concept->target_price_per_person]);
+        }
+        $this->frames->replaceStructure($team, $frame, $slots, []);
+        $frame = $frame->refresh();
+
+        $zahl = $this->materialisiereLeereSlots($team, $concept, $frame);
+        $this->uebernehmeKopfAusFrame($concept, $frame);
+
+        return [
+            'frame' => $frame,
+            'slots' => $zahl,
+            'header' => (int) $concept->slots()->where('type', 'header')->count(),
+        ];
+    }
+
+    /** C-3: „Name – Claim"-Zeile in consumer_name/claim splitten (nur Lücken). */
+    private function uebernehmeNameClaim(FoodAlchemistConcept $concept, string $nameClaim): void
+    {
+        $concept->refresh();   // Lücken-Check gegen den DB-Stand, nicht gegen eine evtl. veraltete Instanz
+        $teile = preg_split('/\s+[–—-]\s+|:\s+/u', trim($nameClaim), 2) ?: [];
+        $name = trim((string) ($teile[0] ?? ''), " \t\n\r\0\x0B\"„“»«");
+        $claim = trim((string) ($teile[1] ?? ''), " \t\n\r\0\x0B\"„“»«");
+        $update = [];
+        if ($name !== '' && trim((string) $concept->consumer_name) === '') {
+            $update['consumer_name'] = mb_substr($name, 0, 190);
+        }
+        if ($claim !== '' && trim((string) $concept->claim) === '') {
+            $update['claim'] = mb_substr($claim, 0, 190);
+        }
+        if ($update !== []) {
+            $concept->update($update);
+        }
     }
 
     /**
@@ -412,6 +490,12 @@ class ConceptGeneratorService
         if ($skalar !== []) {
             app(CanvasService::class)->saveSkalare($canvas, $skalar);
         }
+        // Spec 50 C-3: `name_claim` („Name – Claim") lebte nur in der Canvas; die kundensichtbaren
+        // Kopf-Felder consumer_name/claim blieben leer. Split am ersten Gedankenstrich/Doppelpunkt,
+        // nur in Lücken (ein gesetzter Kundenname bleibt). Ohne Trenner ist die ganze Zeile der Name.
+        if (isset($skalar['name_claim'])) {
+            $this->uebernehmeNameClaim($concept, $skalar['name_claim']);
+        }
 
         // Geschmackswelten (repeatable): value = Überschrift (claim), description ins meta.
         $welten = is_array($werte['geschmackswelten'] ?? null) ? $werte['geschmackswelten'] : [];
@@ -448,6 +532,7 @@ class ConceptGeneratorService
     {
         $frame->loadMissing('slots');
         $zahl = 0;
+        $letzterHeader = null;
         foreach ($frame->slots as $frameSlot) {
             $n = max(1, (int) ($frameSlot->target_count ?? 1));
             // A1: Eine Buffet-STATION mit ≥2 Positionen ist ein PAKET (ein Bündel, das als eine Station
@@ -475,6 +560,9 @@ class ConceptGeneratorService
 
                 continue;
             }
+            // C-1: flache Positionen bekommen ihre Gang-/Stations-Überschrift (der Paket-Zweig oben trägt
+            // seinen Header IM Paket — der WordingResolver rendert die Paket-Zeile selbst).
+            $this->headerFuerFrameSlot($team, (int) $concept->id, $frameSlot->label, $letzterHeader);
             for ($i = 0; $i < $n; $i++) {
                 $this->concepts->addSlot($team, (int) $concept->id, [
                     'role' => $frameSlot->label,
@@ -485,6 +573,23 @@ class ConceptGeneratorService
         }
 
         return $zahl;
+    }
+
+    /**
+     * Spec 50 C-1 — Überschrift vor die Positionen eines Frame-Slots (Gang/Station). Ein Konzept ohne
+     * Header ist im Foodbook/in der Präsentation ein flacher Haufen Gerichte; der WordingResolver
+     * rendert nur `type=header` mit Titel. Der Header trägt das Frame-Label als `title` UND `role`:
+     * `title === role` heißt für den Wording-Pass (C-2) „noch nicht betextet". Leeres oder unmittelbar
+     * wiederholtes Label → kein Header (Assembler-Zeilen gleicher Rolle folgen aufeinander).
+     */
+    private function headerFuerFrameSlot(Team $team, int $conceptId, ?string $label, ?string &$letzter): void
+    {
+        $label = trim((string) $label);
+        if ($label === '' || $label === $letzter) {
+            return;
+        }
+        $this->concepts->addBlock($team, $conceptId, 'header', ['title' => $label, 'role' => $label]);
+        $letzter = $label;
     }
 
     /**
@@ -608,6 +713,7 @@ class ConceptGeneratorService
         $ergebnis = [
             'frame' => $frame->refresh(),
             'confidence' => $proposal->confidence ?? null,
+            'reasoning' => is_string($proposal->reasoning ?? null) && trim($proposal->reasoning) !== '' ? mb_substr(trim($proposal->reasoning), 0, 2000) : null,
             'slots' => count($sichereSlots),
             'name' => is_string($werte['name'] ?? null) && trim($werte['name']) !== '' ? trim($werte['name']) : null,
         ];
@@ -763,6 +869,29 @@ class ConceptGeneratorService
      *
      * @return list<array<string,mixed>>
      */
+    /**
+     * Spec 50 C-8 — kanonische Gerüst-Positionen als Vorschau (read-only), exakt die Slots, die
+     * `kanonischesGeruest()` anlegt. Für `foodalchemist.struktur_vokabular.GET`: ein Agent sieht die
+     * Gang-Leiter/Stationen, bevor er anlegt, statt Header-Titel frei zu raten.
+     *
+     * @param  'menue'|'buffet'  $typ
+     * @return list<array{label: string, slot_type: string, target_count: int, is_pflicht: bool}>
+     */
+    public function geruestVorschau(string $typ, ?int $gaenge = null): array
+    {
+        if (! in_array($typ, ['menue', 'buffet'], true)) {
+            throw new RuntimeException("Unbekannter Gerüst-Typ „{$typ}“ — erlaubt: menue | buffet.");
+        }
+        $slots = $typ === 'buffet'
+            ? $this->buffetSektionsGeruest()
+            : $this->menueGangGeruest($gaenge !== null ? ['menue_gaenge' => $gaenge] : []);
+
+        return array_map(fn (array $s) => [
+            'label' => (string) $s['label'], 'slot_type' => (string) $s['slot_type'],
+            'target_count' => (int) $s['target_count'], 'is_pflicht' => (bool) $s['is_pflicht'],
+        ], $slots);
+    }
+
     private function buffetSektionsGeruest(): array
     {
         $mk = fn (string $label, int $count, bool $pflicht): array => [
@@ -945,6 +1074,26 @@ class ConceptGeneratorService
         ];
     }
 
+    /**
+     * Spec 50 C-3: Kopf-Felder aus dem Planungs-Gerüst ans Konzept — nur Lücken. Der Zielpreis p. P.
+     * stand bisher NUR am Frame (`target_price_pp`), das Konzept blieb bei `target_price_per_person`
+     * NULL, obwohl der Concepter genau dieses Feld anzeigt/kalkuliert; und ohne `price_display` fiel
+     * die Kundensicht auf den Modell-Default zurück. Mensch-Werte bleiben unangetastet.
+     */
+    public function uebernehmeKopfAusFrame(FoodAlchemistConcept $concept, FoodAlchemistPlanningFrame $frame): void
+    {
+        $concept->refresh();
+        $update = [];
+        if ($concept->target_price_per_person === null && $frame->target_price_pp !== null) {
+            $update['target_price_per_person'] = (float) $frame->target_price_pp;
+        }
+        // `price_display` bleibt beim DB-Default `gesamt` (NOT NULL): Zielpreis p. P. = Paketpreis-Logik.
+        // Ein „ist noch nicht gesetzt" gibt es für die Spalte nicht — darum hier kein Zweig dafür.
+        if ($update !== []) {
+            $concept->update($update);
+        }
+    }
+
     /** Assembler-Kern auf ein EXISTIERENDES Konzept anwenden (Brief-Pfad: Gerüst hängt schon dran). */
     private function fuelleBestehendesKonzept(Team $team, FoodAlchemistConcept $concept, FoodAlchemistPlanningFrame $frame): array
     {
@@ -959,6 +1108,7 @@ class ConceptGeneratorService
         $protokoll = [];
         $gewaehlt = collect();
         $gewaehlteAnker = [];
+        $letzterHeader = null;
         foreach ($frame->slots as $frameSlot) {
             $n = max(1, (int) ($frameSlot->target_count ?? 1));
             $kandidaten = $this->pool->filterFuerSlot($pool, $frame, $frameSlot)->reject(fn ($k) => $gewaehlt->has($k['id']));
@@ -986,6 +1136,7 @@ class ConceptGeneratorService
                 $gewaehlteAnker = array_unique(array_merge($gewaehlteAnker, $treffer['anker']));
             }
 
+            $this->headerFuerFrameSlot($team, (int) $concept->id, $frameSlot->label, $letzterHeader);   // C-1
             if ($slotWahl->isEmpty()) {
                 $begruendung = 'Kein VK-Gericht erfüllt die Vorgaben (' . $this->pool->filterBeschreibung($frame, $frameSlot) . ') — Slot bewusst leer gelassen.';
                 $leer = $this->concepts->addSlot($team, $concept->id, ['role' => $frameSlot->label]);
@@ -1012,6 +1163,7 @@ class ConceptGeneratorService
         }
 
         $dishes = FoodAlchemistRecipe::whereIn('id', $gewaehlt->keys())->get()->all();
+        $this->uebernehmeKopfAusFrame($concept, $frame);
 
         return [
             'concept' => $concept->refresh(),

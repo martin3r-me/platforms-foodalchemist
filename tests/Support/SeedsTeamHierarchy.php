@@ -212,6 +212,46 @@ trait SeedsTeamHierarchy
     }
 
     /**
+     * Behälter-Zeile am Rezept (Spec 51 · B-10). Seit `dichteklasse` in der Basisrezept-
+     * Schrittfolge steht, gilt der Schritt erst als erfüllt, wenn Klasse UND ein Behälter je Zweck
+     * stehen — ein Fixture, das „nichts anzureichern" beweisen will, braucht darum diese Zeile.
+     * Legt bei Bedarf einen sichtbaren Katalog-Behälter an (GN 1/1-65, 8,8 l).
+     */
+    protected function makeContainerRow(Team $owner, \Platform\FoodAlchemist\Models\FoodAlchemistRecipe $r, string $zweck = 'abfuellen', array $attrs = []): int
+    {
+        $vocabId = $attrs['container_vocab_id'] ?? \Illuminate\Support\Facades\DB::table('foodalchemist_vocab_containers')
+            ->where('team_id', $owner->id)->where('slug', 'fixture_gn_11_65')->value('id');
+        $vocabId ??= \Illuminate\Support\Facades\DB::table('foodalchemist_vocab_containers')->insertGetId([
+            'uuid' => (string) \Illuminate\Support\Str::uuid7(), 'team_id' => $owner->id,
+            'slug' => 'fixture_gn_11_65', 'name' => 'GN 1/1-65 (Fixture)', 'sort_order' => 1, 'familie' => 'GN',
+            'laenge_mm' => 530, 'breite_mm' => 325, 'tiefe_mm' => 65, 'volumen_l' => 8.8, 'nutzfaktor' => 0.85,
+            'eignung' => json_encode(['abfuellen', 'regenerieren', 'ausgabe', 'transport']),
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        return \Illuminate\Support\Facades\DB::table('foodalchemist_recipe_containers')->insertGetId(array_merge([
+            'uuid' => (string) \Illuminate\Support\Str::uuid7(), 'team_id' => $owner->id, 'recipe_id' => $r->id,
+            'zweck' => $zweck, 'container_vocab_id' => $vocabId, 'source' => 'manual',
+            'created_at' => now(), 'updated_at' => now(),
+        ], $attrs));
+    }
+
+    /**
+     * B-1 (Spec 50): eine lebende Gesamt-Zeile (`ingredient_id NULL`) der Regeneration — die
+     * Entscheidung, die den Anreicherungs-Schritt `regeneration` als erfüllt zählt. Default ist
+     * „kalt servieren" (`device_vocab_id NULL`), also der Spec-51-Vertrag ohne Geräte-Fixture.
+     */
+    protected function makeRegenerationRow(Team $owner, \Platform\FoodAlchemist\Models\FoodAlchemistRecipe $r, array $attrs = []): int
+    {
+        return \Illuminate\Support\Facades\DB::table('foodalchemist_recipe_regenerations')->insertGetId(array_merge([
+            'uuid' => (string) \Illuminate\Support\Str::uuid7(), 'team_id' => $owner->id, 'recipe_id' => $r->id,
+            'component_label' => 'Gesamt', 'ingredient_id' => null, 'device_vocab_id' => null,
+            'source' => 'manual', 'sort_order' => 1,
+            'created_at' => now(), 'updated_at' => now(),
+        ], $attrs));
+    }
+
+    /**
      * VK-Speisen-Hauptgruppe (Modell A, hängt direkt am Gericht) — die Tabelle mit
      * `is_inactive`; `$code` variieren, um eine stillgelegte Gruppe zu bauen.
      */

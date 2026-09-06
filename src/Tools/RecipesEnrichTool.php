@@ -37,6 +37,11 @@ class RecipesEnrichTool extends FoodAlchemistTool implements ToolContract, ToolM
         return 'Reichert ein BESTEHENDES Basisrezept oder Verkaufsgericht an (der Weg, den es bisher nur im Editor gab): '
             . 'füllt die leeren Zielfelder der Schrittfolge, mintet fehlende GPs, und bei einem Gericht zusätzlich '
             . 'Kohärenz-Urteil und Wirtschaftlichkeit (Preisklasse, Standard-Darreichung, Auto-VK, Food-Cost-Ampel). '
+            . 'Schrittfolge Basisrezept: Beschreibung, 186er-Kategorie, Geschmacksrichtung, Dichteklasse + Behälter '
+            . '(Abfüllen/Regenerieren), Regeneration (Gerät/Temperatur/Zeit oder bewusst kalt) und Garverlust je Zutat '
+            . '(Reduktion/Fond → Ausbeute). Gericht: Beschreibung, Wording, Plating, Speisen-Klasse, Geschmacksrichtung, '
+            . 'Servier-Vehikel und Zutaten-Rollen (Aroma-Treiber/Komponente/Beilage/Garnitur). '
+            . 'Nährwerte, Allergene und Zusatzstoffe kommen NICHT aus der KI, sondern aus den Lieferantenartikeln. '
             . 'Sub-Rezepte laufen mit. Läuft ASYNCHRON über den Worker — die Antwort liefert run_id und step_id, '
             . 'den Fortschritt zeigt foodalchemist.planung_kaskade.GET, das Ergebnis foodalchemist.recipes.REIFE. '
             . 'Bereits gefüllte Felder werden nie angetastet (Override-First). Kostet Provider-Calls je fehlendem Feld.';

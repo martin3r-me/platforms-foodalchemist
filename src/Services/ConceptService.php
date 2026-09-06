@@ -415,6 +415,9 @@ class ConceptService
         return $concept->slots()->create([
             'team_id' => $concept->team_id,
             'type' => $type,
+            // Spec 50 C-1: ein Gang-/Stations-Header trägt sein Frame-Label als `role`, damit der
+            // Wording-Pass den Header seiner Rolle zuordnen kann. Freie Blöcke (Editor/MCP) lassen es leer.
+            'role' => $this->norm($in['role'] ?? null),
             'title' => $this->norm($in['title'] ?? null),
             'text_content' => $this->norm($in['text_content'] ?? null),
             'height' => $type === 'spacer' ? ($in['height'] ?? 'mittel') : null,
@@ -1233,25 +1236,44 @@ class ConceptService
     }
 
     /**
-     * KI-Wording für ein team-eigenes Concept: Intro (→ description) + Positions-Texte (→ setSlotWording).
-     * Geteilte Web-/MCP-Wahrheit (Concepter-Editor::wordingGenerieren + MCP concept_wording.GENERATE).
+     * KI-Wording für ein team-eigenes Concept: Intro (→ description) + Positions-Texte (→ setSlotWording)
+     * + Spec 50 Paket C-2: Header-Titel (Gang-/Stationsüberschriften, → title) und Kopf-Felder
+     * `consumer_name`/`claim` (nur, wenn leer — ein gesetzter Kundenname wird nie überschrieben).
+     * Geteilte Web-/MCP-Wahrheit (Concepter-Editor::wordingGenerieren + MCP concept_wording.GENERATE
+     * + Job/Kaskade/concepts.GENERATE via {@see wordingPassFailSoft}).
      * Workstream W: erdet über KnowledgeContextService (cross_cutting — Anti-Marker/Fakten fürs
      * Kundentext-Guardrail) + Food-DNA-Concept-Override. Setzt Texte direkt (Brand-Voice am eigenen
      * Concept = niedrige Risikoklasse, wie die UI). Wirft bei fremdem/fehlendem Concept.
      *
-     * @return array{intro:?string, slots_set:int}
+     * Header-Regel: die KI darf nur GENERATOR-Header umtexten — erkennbar an `title === role`
+     * (das Frame-Label steht in beiden Feldern, {@see ConceptGeneratorService::headerFuerFrameSlot}).
+     * Hat ein Mensch den Titel schon geändert (title ≠ role), bleibt er stehen (GL-07 Override-First).
+     *
+     * Optionen: `nur_luecken` (bool, default false) — Intro, Positions-Wording und Header werden nur
+     * geschrieben, wo noch nichts steht (Auto-Pässe aus Job/Kaskade/GENERATE); der explizite
+     * concept_wording.GENERATE-Aufruf regeneriert wie bisher.
+     *
+     * @param  array{nur_luecken?:bool}  $opt
+     * @return array{intro:?string, slots_set:int, header_set:int, kopf_set:list<string>}
      */
-    public function generateWording(Team $team, int $conceptId, ?int $writingStyleId = null): array
+    public function generateWording(Team $team, int $conceptId, ?int $writingStyleId = null, array $opt = []): array
     {
         $concept = $this->detail($team, $conceptId);
         if ($concept === null) {
             throw new \Illuminate\Database\Eloquent\ModelNotFoundException('Concept nicht sichtbar.');
         }
         $this->guardOwner($concept, $team);
+        $nurLuecken = (bool) ($opt['nur_luecken'] ?? false);
 
         $stil = $writingStyleId ? \Platform\FoodAlchemist\Models\FoodAlchemistWritingStyle::find($writingStyleId) : null;
         $wissen = app(\Platform\FoodAlchemist\Services\Ai\KnowledgeContextService::class)
             ->contextFor($team, 'concept.wording', (string) ($concept->occasion ?: $concept->name), $stil?->name);
+
+        // Generator-Header (title === role) sind KI-umtextbar; von Menschen betitelte nicht.
+        $headerSlots = $concept->slots
+            ->filter(fn ($s) => in_array($s->type, ['header', 'header_preis'], true)
+                && trim((string) $s->title) !== '' && (string) $s->title === (string) $s->role);
+        $kopfLuecken = array_values(array_filter(['consumer_name', 'claim'], fn ($f) => trim((string) $concept->{$f}) === ''));
 
         $kontext = [
             'concept' => $concept->name,
@@ -1262,8 +1284,17 @@ class ConceptService
             'schreibstil_beispiele' => $stil !== null ? (trim((string) $stil->beispiele_md) ?: null) : null,
             'positionen' => $concept->slots
                 ->filter(fn ($s) => $s->sales_recipe_id !== null && $s->dish)
+                ->filter(fn ($s) => ! $nurLuecken || trim((string) $s->wording) === '')
                 ->map(fn ($s) => ['slot_id' => $s->id, 'name' => $s->dish->name, 'sales_wording_standard' => $s->dish->sales_wording_standard ?? null])
                 ->values()->all(),
+            // C-2: Gang-/Stationsüberschriften (Frame-Label als neutraler Ausgangspunkt) + Kopf-Lücken.
+            'header' => $headerSlots->map(fn ($s) => ['slot_id' => $s->id, 'title' => $s->title])->values()->all(),
+            'kopf' => [
+                'consumer_name' => $concept->consumer_name,
+                'claim' => $concept->claim,
+                'description' => $concept->description,
+                'luecken' => $kopfLuecken,
+            ],
         ];
 
         $vorschlag = app(\Platform\FoodAlchemist\Services\Ai\AiGatewayService::class)->propose('concept.wording', $kontext, [
@@ -1272,20 +1303,71 @@ class ConceptService
             'knowledge_used' => $wissen['files_used'] ?? null,
         ]);
 
-        $intro = $vorschlag->werte['intro'] ?? null;
-        $intro = is_string($intro) && trim($intro) !== '' ? trim($intro) : null;
-        if ($intro !== null) {
-            $this->update($team, $conceptId, ['description' => $intro]);
+        $text = static fn ($v): ?string => is_string($v) && trim($v) !== '' ? trim($v) : null;
+
+        $intro = $text($vorschlag->werte['intro'] ?? null);
+        $kopfUpdate = [];
+        if ($intro !== null && (! $nurLuecken || trim((string) $concept->description) === '')) {
+            $kopfUpdate['description'] = $intro;
+        } else {
+            $intro = null;
         }
+        foreach ($kopfLuecken as $feld) {
+            $wert = $text($vorschlag->werte[$feld] ?? null);
+            if ($wert !== null) {
+                $kopfUpdate[$feld] = mb_substr($wert, 0, 190);
+            }
+        }
+        if ($kopfUpdate !== []) {
+            $this->update($team, $conceptId, $kopfUpdate);
+        }
+
         $slotsSet = 0;
-        foreach (($vorschlag->werte['slots'] ?? []) as $slotId => $text) {
-            if (is_string($text) && trim($text) !== '') {
-                $this->setSlotWording($team, (int) $slotId, trim($text));
+        $positionIds = array_map(fn ($p) => (int) $p['slot_id'], $kontext['positionen']);
+        foreach (($vorschlag->werte['slots'] ?? []) as $slotId => $t) {
+            // Nur angebotene Positionen — bei nur_luecken sind das genau die ohne Wording.
+            if (($t = $text($t)) !== null && in_array((int) $slotId, $positionIds, true)) {
+                $this->setSlotWording($team, (int) $slotId, $t);
                 $slotsSet++;
             }
         }
+        $headerSet = 0;
+        $headerIds = $headerSlots->pluck('id')->map(fn ($id) => (int) $id)->all();
+        foreach (($vorschlag->werte['header'] ?? []) as $slotId => $t) {
+            // Nur die angebotenen Generator-Header — die KI kann keinen fremden Slot betiteln.
+            if (($t = $text($t)) !== null && in_array((int) $slotId, $headerIds, true)) {
+                $this->updateSlot($team, (int) $slotId, ['title' => mb_substr($t, 0, 120)]);
+                $headerSet++;
+            }
+        }
 
-        return ['intro' => $intro, 'slots_set' => $slotsSet];
+        return ['intro' => $intro, 'slots_set' => $slotsSet, 'header_set' => $headerSet,
+            'kopf_set' => array_values(array_diff(array_keys($kopfUpdate), ['description']))];
+    }
+
+    /**
+     * C-2: Wording-Pass als fail-softer Anhang an Generator-Pfade (GenerateConceptJob nach der
+     * Befüllung, PlanningCascade nach dem Fan-out, MCP concepts.GENERATE). Immer `nur_luecken`
+     * — ein Auto-Pass darf nichts überschreiben, was ein Mensch oder ein früherer Pass gesetzt hat.
+     * Schreibstil = der des Concepts (writing_style_id), sonst neutral. `null`, wenn KI/Provider
+     * fehlen oder kippen — das Konzept selbst steht dann trotzdem (Vollständigkeit ist Zusatz, kein Gate).
+     *
+     * @return array{intro:?string, slots_set:int, header_set:int, kopf_set:list<string>}|null
+     */
+    public function wordingPassFailSoft(Team $team, int $conceptId): ?array
+    {
+        try {
+            $concept = FoodAlchemistConcept::query()->whereKey($conceptId)->first();
+            if ($concept === null) {
+                return null;
+            }
+
+            return $this->generateWording($team, $conceptId, $concept->writing_style_id ? (int) $concept->writing_style_id : null, ['nur_luecken' => true]);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::info('[FA] Concept-Wording-Pass übersprungen: ' . $e->getMessage(), ['concept_id' => $conceptId]);
+
+            return null;
+        }
     }
 
     /**

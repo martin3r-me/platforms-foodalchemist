@@ -307,11 +307,12 @@ it('L7a: voll_anreichern=true hängt die Kaskade an — die Lücken sind nach de
     $res = $this->registry->get('foodalchemist.recipes.GENERATE')
         ->execute(['description' => 'Dunkle Rotwein-Schalotten-Reduktion', 'voll_anreichern' => true], $this->kontext);
 
-    // Nur `category` bleibt als Lücke: description UND taste_direction setzt der
-    // Generator schon selbst (das Enum passt), und die Kaskade zahlt für ein
-    // gefülltes Feld keinen zweiten Call — genau die L7a-Regel.
+    // `category`, `dichteklasse` (B-10), `regeneration` (B-1) und `garverlust` (B-2: die Schalotte
+    // trägt keinen Verlust) bleiben als Lücke — der Generator schreibt keins davon. description UND
+    // taste_direction setzt er selbst (das Enum passt), und die Kaskade zahlt für ein gefülltes Feld
+    // keinen zweiten Call — die L7a-Regel.
     expect($res->success)->toBeTrue()
-        ->and($res->data['anreicherung']['schritte'])->toBe(['category'])
+        ->and($res->data['anreicherung']['schritte'])->toBe(['category', 'dichteklasse', 'regeneration', 'garverlust'])
         ->and($res->data['anreicherung']['uebersprungen'])->toBe(['description', 'geschmack'])
         ->and($res->data['anreicherung']['uebernommen'])->toBe(1);
 

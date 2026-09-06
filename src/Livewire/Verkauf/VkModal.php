@@ -337,7 +337,8 @@ class VkModal extends Component
     {
         $this->reset(['recipeId', 'form', 'neuName', 'basisSuche', 'basisId', 'regenForm', 'regenEditId', 'kundeName', 'kundeMarketing', 'fehler', 'rollenVorschlag', 'regenVorschlaege',
             'ueberarbeitenOffen', 'anweisung', 'ueberarbeitung',     // L1a: Revise-Vorschau darf nicht ins nächste Gericht lecken
-            'bulkRunId', 'anreicherung']);                          // L1b: dito für die Anreicherungs-Lauf-Box
+            'bulkRunId', 'anreicherung',                            // L1b: dito für die Anreicherungs-Lauf-Box
+            'kiLineage']);                                          // KI-Herkunfts-Marker gehören zu GENAU diesem Gericht
         $this->copilotZuruecksetzen();                              // L6b: Befunde gehören zu GENAU diesem Gericht
     }
 
@@ -380,7 +381,8 @@ class VkModal extends Component
             // Preis-Wahrheit liegt an der Darreichung. Ein im Rezeptkopf angezeigter
             // Legacy-VK darf beim allgemeinen Speichern keinen Auto-Preis fixieren.
             unset($update['sales_net'], $update['price_override_reason']);
-            app(SalesRecipeService::class)->updateVk($team, $this->recipeId, $update);
+            app(SalesRecipeService::class)->updateVk($team, $this->recipeId, $update, $this->kiLineage);
+            $this->kiLineage = [];
 
             // Spec 51: die Behälter-Overrides hängen am selben Speichern-Knopf. Leerer Behälter
             // heisst »wie die Komponente« — also die Override-Zeile weg, nicht eine leere anlegen.
@@ -443,6 +445,33 @@ class VkModal extends Component
     /** @var ?array{rollen: array<int, string>, confidence: float, reasoning: ?string} */
     public ?array $rollenVorschlag = null;
 
+    /**
+     * Spec 50 (Nebenbefund 2026-09-06): welche Formularwerte aus einem ✨-KI-Vorschlag stammen —
+     * Lineage-Präfix ⇒ Konfidenz. Bis hier landete ein KI-Wording/-Vehikel nur im Formular und
+     * `speichern()` etikettierte es als `manual` (Handarbeit, die keine war — und die jede spätere
+     * KI-Korrektur für immer blockte). Der Marker wandert in `updateVk(..., $kiLineage)`; tippt der
+     * Nutzer nach der Übernahme selbst ins Feld, fällt er (dann IST es Handarbeit).
+     *
+     * @var array<string,float>
+     */
+    public array $kiLineage = [];
+
+    /** Formular-Feld ⇒ Lineage-Präfix der Felder, die eine `_source`-Spalte tragen. */
+    private const KI_LINEAGE_FELDER = [
+        'sales_wording_standard' => 'sales_wording',
+        'plating_text' => 'plating',
+        'serving_vehicle_vocab_id' => 'serving_vehicle',
+    ];
+
+    /** Nutzer ändert ein KI-übernommenes Feld selbst → ab jetzt Handarbeit. */
+    public function updatedForm(mixed $value, string $key): void
+    {
+        $praefix = self::KI_LINEAGE_FELDER[$key] ?? null;
+        if ($praefix !== null) {
+            unset($this->kiLineage[$praefix]);
+        }
+    }
+
     public function ki(string $aktion): void
     {
         $team = Auth::user()?->currentTeamRelation;
@@ -479,6 +508,9 @@ class VkModal extends Component
         $wert = $v->werte[$feld] ?? null;
         if (is_string($wert) && trim($wert) !== '') {
             $this->form[$feld] = trim($wert);
+            if (isset(self::KI_LINEAGE_FELDER[$feld])) {
+                $this->kiLineage[self::KI_LINEAGE_FELDER[$feld]] = (float) ($v->confidence ?? 0.5);
+            }
         } else {
             $this->fehler = 'KI lieferte keinen verwertbaren Text — echter Provider nötig.';
         }
@@ -574,6 +606,7 @@ class VkModal extends Component
         $id = $v->werte['servier_vehikel_id'] ?? null;
         if ($id !== null && TeamScope::applyVisible(DB::table('foodalchemist_vocab_serving_vehicles')->whereNull('deleted_at')->where('id', (int) $id), 'team_id', $team)->exists()) {
             $this->form['serving_vehicle_vocab_id'] = (int) $id;
+            $this->kiLineage['serving_vehicle'] = (float) ($v->confidence ?? 0.5);   // Etikett ehrlich: KI, nicht Handarbeit
         } else {
             $this->fehler = 'KI lieferte kein gültiges Servier-Vehikel — echter Provider nötig.';
         }

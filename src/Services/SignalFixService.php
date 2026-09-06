@@ -329,7 +329,8 @@ class SignalFixService
                 'hinweis' => 'GP-Name löst auf keinen Anker auf — Vokabular-Lücke.'];
         }
 
-        return ['wirkt' => true, 'felder' => ['gp_anchor_mappings (kern)' => 'Anker #' . $ankerId], 'hinweis' => null];
+        return ['wirkt' => true, 'felder' => ['gp_anchor_mappings (kern)' => 'Anker #' . $ankerId . ' (ai_inferred, lexikalisch)'],
+            'hinweis' => 'Namens-Match, keine Handarbeit — ein bestehendes manuelles Mapping bleibt unangetastet.'];
     }
 
     /**
@@ -420,7 +421,11 @@ class SignalFixService
         if ($ankerId === null) {
             return false;   // Name löst auf keinen Anker auf (Vokabular-Lücke)
         }
-        $this->pairing->setGpAnker($team, $gpId, (int) $ankerId);
+        // Spec 50 (Nebenbefund 2026-09-06): der Fund ist ein Namens-Match, keine Handarbeit — bis hier
+        // schrieb der Fixer `source='manual'` und schützte damit einen lexikalischen Treffer vor jeder
+        // späteren KI-Korrektur (Inv. 3: manual gewinnt). Provenienz ehrlich: `ai_inferred` mit
+        // Begründung; Konfidenz 0,7 = eindeutige Wortauflösung ohne Kontext (Regel »Etikett lügt«).
+        $this->pairing->setGpAnkerInference($team, $gpId, (int) $ankerId, 0.7, 'SignalFix: lexikalisch aus dem GP-Namen aufgelöst');
 
         return true;
     }
