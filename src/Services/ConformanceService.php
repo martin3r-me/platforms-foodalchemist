@@ -172,6 +172,11 @@ class ConformanceService
                     $w->orWhere('slug', 'like', $p . '%');
                 }
             })
+            // Spec 50 Welle 2: der Split-Builder trennt den `## Changelog` jedes Regelwerks
+            // als eigenes Dossier `<slug>-changelog` ab. Das trifft der Präfix-Match mit —
+            // Versionshistorie ist aber keine Regel; im Critic-Prompt wäre sie nur Noise
+            // (~1.000 Z. je Regelwerk), gegen die kein Artefakt „verstoßen" kann.
+            ->where('slug', 'not like', '%-changelog')
             ->orderBy('slug')
             ->get(['slug', 'title', 'content_md']);
 

@@ -6,6 +6,7 @@ use Platform\Core\Contracts\ToolContract;
 use Platform\Core\Contracts\ToolContext;
 use Platform\Core\Contracts\ToolMetadataContract;
 use Platform\Core\Contracts\ToolResult;
+use Platform\FoodAlchemist\Services\Knowledge\KnowledgeCanonService;
 use Platform\FoodAlchemist\Services\KnowledgeService;
 
 /**
@@ -88,6 +89,8 @@ class KnowledgeCreateTool extends FoodAlchemistTool implements ToolContract, Too
                 'created_via' => $doc->created_via,
             ],
             'note' => 'Entwurf (inaktiv). Aktivieren macht ein Mensch im Wissens-Browser — erst dann wirkt es in der KI.',
+            // Spec 50 Strang III: Deckel erinnert, blockiert nicht.
+            'hinweis' => app(KnowledgeCanonService::class)->groessenHinweis((int) $doc->char_count, (string) ($arguments['content_md'] ?? '')),
         ]);
     }
 

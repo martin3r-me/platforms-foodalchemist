@@ -67,7 +67,7 @@ it('zeigt die ECHTEN Prompt-Groessen, nicht nur den Retrieval-Anteil', function 
         'chars' => 11000,     // nur Retrieval — die alte, irreführende Zahl
         'templates' => [],
         'prompt' => [
-            'chars' => 51008, 'huelle' => 333, 'bound' => 28630, 'task' => 5024,
+            'chars' => 51008, 'huelle' => 333, 'kanon' => 1200, 'bound' => 28630, 'task' => 5024,
             'retrieval' => 11000, 'kontext' => 6021, 'dropped' => 13667,
             'tokens_in' => 16778, 'tokens_cached' => 3840,
         ],
@@ -80,7 +80,8 @@ it('zeigt die ECHTEN Prompt-Groessen, nicht nur den Retrieval-Anteil', function 
         ->toContain('Prompt 51.008 Zeichen')
         ->not->toContain('~11.000 Zeichen')
         // Der größte Posten war vorher unsichtbar.
-        ->toContain('Regelwerk (verbindlich) 28.630')
+        ->toContain('Regelwerk gebunden (Fallback) 28.630')
+        ->toContain('Kanon (verbindlich) 1.200')
         ->toContain('Kontext-JSON 6.021')
         ->toContain('Aufgabe 5.024')
         // `dropped` muss sichtbar sein: gebaut-und-weggeworfen ist die Größe, an der man den

@@ -139,3 +139,126 @@ it('schreibt Bindings mit einem source-Wert, der in die Spalte UND ins Kanal-Vok
     expect(mb_strlen(WissenSteuerdatenW0Command::BINDING_SOURCE))->toBeLessThanOrEqual(16)
         ->and(WissenSteuerdatenW0Command::BINDING_SOURCE)->toBeIn($erlaubt);
 });
+
+/*
+ * Spec 50 Welle 2 (2026-09-06): der Kanon hat die Layer-Bindings an den Generatoren abgelöst.
+ * Der Gateway liest bei vorhandenem Kanon KEINE Bindings mehr — und die gebundenen Originale
+ * (`mengen_defaults`, `geschmacksbalance`, `regelwerk.regelwerk_verkaufsgerichte`) sind zugunsten
+ * ihrer Ein-Thema-Splits deaktiviert. Ein Wächter, der weiter die Bindings prüft, meldet ab dann
+ * jeden Montag 06:30 eine Drift, die es nicht gibt — und übersieht die, die es gibt (ein inaktives
+ * Kanon-Dossier fällt genauso still aus dem Prompt wie früher ein inaktives gebundenes).
+ */
+function w0MkDoc(string $slug, string $kategorie, bool $aktiv = true, int $chars = 1200, ?int $teamId = null): int
+{
+    $inhalt = str_repeat('x', $chars);
+
+    return (int) DB::table('foodalchemist_knowledge_documents')->insertGetId([
+        'uuid' => (string) \Symfony\Component\Uid\UuidV7::generate(),
+        'team_id' => $teamId, 'slug' => $slug, 'title' => $slug, 'category' => $kategorie,
+        'content_md' => $inhalt, 'version' => 1, 'content_hash' => hash('sha256', $inhalt),
+        'char_count' => $chars, 'active' => $aktiv, 'created_at' => now(), 'updated_at' => now(),
+    ]);
+}
+
+function w0Kanon(int $teamId, string $scopeKey, string $slug, string $mode = 'pflicht'): void
+{
+    $docId = (int) DB::table('foodalchemist_knowledge_documents')->where('slug', $slug)->value('id');
+    DB::table('foodalchemist_knowledge_canon')->insert([
+        'uuid' => (string) \Symfony\Component\Uid\UuidV7::generate(),
+        'team_id' => $teamId, 'scope' => 'prompt_key', 'scope_key' => $scopeKey, 'role' => 'root',
+        'ord' => 0, 'knowledge_document_id' => $docId, 'mode' => $mode, 'active' => true,
+        'created_at' => now(), 'updated_at' => now(),
+    ]);
+}
+
+it('verify prueft bei vorhandenem Kanon den KANON — inaktive Originale hinter ihm sind keine Drift', function () {
+    // Zustand nach Welle 2: das gebundene Original ist inaktiv, sein Split steckt im Kanon.
+    w0MkDoc('mengen_defaults', 'cross_cutting', aktiv: false);
+    w0MkDoc('mengen_defaults--hauptgang-komponenten', 'cross_cutting', teamId: $this->rootTeam->id);
+    w0MkDoc('regelwerk-basisrezepte-2-verarbeitungs-reduktion-brunoise-roh-form', 'regelwerk', teamId: $this->rootTeam->id);
+    w0Kanon($this->rootTeam->id, 'recipe.generator', 'mengen_defaults--hauptgang-komponenten');
+    w0Kanon($this->rootTeam->id, 'recipe.generator', 'regelwerk-basisrezepte-2-verarbeitungs-reduktion-brunoise-roh-form');
+
+    $this->artisan('foodalchemist:wissen-steuerdaten-w0', ['--verify' => true, '--team' => $this->rootTeam->id])
+        ->expectsOutputToContain('recipe.generator   Kanon-Pflicht: 2 Dossiers');
+
+    // Die Kanon-Ziele erzeugen KEINE Binding-Befunde — andere Ziele ohne Kanon dürfen es (Fallback).
+    $signal = FoodAlchemistSignal::where('team_id', $this->rootTeam->id)
+        ->where('type', SignalTyp::SteuerdatenDrift->value)->first();
+    $befunde = $signal?->payload['abweichungen'] ?? [];
+
+    expect(collect($befunde)->filter(fn ($f) => str_starts_with($f, 'recipe.generator:'))->all())->toBe([]);
+});
+
+it('verify meldet ein INAKTIVES Kanon-Pflicht-Dossier — es faellt genauso still aus dem Prompt wie frueher ein gebundenes', function () {
+    w0MkDoc('regelwerk-basisrezepte-2-verarbeitungs-reduktion-brunoise-roh-form', 'regelwerk', teamId: $this->rootTeam->id);
+    w0MkDoc('geschmacksbalance--grundprinzipien', 'cross_cutting', aktiv: false, teamId: $this->rootTeam->id);
+    w0Kanon($this->rootTeam->id, 'vk.generator', 'regelwerk-basisrezepte-2-verarbeitungs-reduktion-brunoise-roh-form');
+    w0Kanon($this->rootTeam->id, 'vk.generator', 'geschmacksbalance--grundprinzipien');
+
+    $this->artisan('foodalchemist:wissen-steuerdaten-w0', ['--verify' => true, '--team' => $this->rootTeam->id])
+        ->assertExitCode(1);
+
+    $signal = FoodAlchemistSignal::where('team_id', $this->rootTeam->id)
+        ->where('type', SignalTyp::SteuerdatenDrift->value)->first();
+
+    expect($signal->description)->toContain('vk.generator: Kanon-Pflicht «geschmacksbalance--grundprinzipien» ist inaktiv');
+});
+
+it('verify meldet einen cross_cutting:always-Slug ohne aktives Dossier — die stille Luecke von Kundentext und Wording', function () {
+    // Genau die Regression des Split-Cutovers: das Routing sagt `always`, die Slug-Liste zeigt auf
+    // ein deaktiviertes Original, `crossCuttingDocs()` liefert leise nichts.
+    config()->set('foodalchemist.ai.cross_cutting_slugs', ['foodbook.kundentext' => ['saisonkalender', 'synonyme']]);
+    DB::table('foodalchemist_knowledge_routings')->updateOrInsert(
+        ['feature' => 'foodbook.kundentext', 'category' => 'cross_cutting'],
+        ['mode' => 'always', 'max_docs' => 2, 'max_chars_per_doc' => 1800, 'created_at' => now(), 'updated_at' => now()],
+    );
+    w0MkDoc('saisonkalender', 'cross_cutting', aktiv: false);
+    w0MkDoc('synonyme', 'cross_cutting', aktiv: true);
+
+    $this->artisan('foodalchemist:wissen-steuerdaten-w0', ['--verify' => true, '--team' => $this->rootTeam->id])
+        ->assertExitCode(1);
+
+    $signal = FoodAlchemistSignal::where('team_id', $this->rootTeam->id)
+        ->where('type', SignalTyp::SteuerdatenDrift->value)->first();
+    $befunde = collect($signal->payload['abweichungen']);
+
+    expect($befunde->contains(fn ($f) => str_contains($f, '«foodbook.kundentext» lädt cross_cutting:always «saisonkalender»')))->toBeTrue()
+        ->and($befunde->contains(fn ($f) => str_contains($f, '«synonyme»')))->toBeFalse();
+});
+
+it('apply fasst an einem Kanon-Ziel KEINE Bindings an und (re)aktiviert nie eine Bindung auf ein inaktives Dossier', function () {
+    // recipe.generator hat einen Kanon → Bindings dort bleiben, wie sie sind (stumm im Gateway).
+    // vk.generator hat keinen → Fallback greift, aber nur für AKTIVE Dossiers.
+    $bau = w0MkDoc('regelwerk-basisrezepte-2-verarbeitungs-reduktion-brunoise-roh-form', 'regelwerk');
+    $md = w0MkDoc('mengen_defaults', 'cross_cutting', aktiv: false);
+    $gb = w0MkDoc('geschmacksbalance', 'cross_cutting', aktiv: false);
+    w0Kanon($this->rootTeam->id, 'recipe.generator', 'regelwerk-basisrezepte-2-verarbeitungs-reduktion-brunoise-roh-form');
+
+    $binding = fn (int $docId, string $ziel, string $mode, int $active) => [
+        'uuid' => (string) \Illuminate\Support\Str::uuid(), 'team_id' => null, 'knowledge_document_id' => $docId,
+        'binding_type' => 'layer', 'target_key' => $ziel, 'mode' => $mode, 'weight' => 50, 'active' => $active,
+        'source' => 'import', 'created_at' => now(), 'updated_at' => now(),
+    ];
+    DB::table('foodalchemist_knowledge_bindings')->insert([
+        $binding($bau, 'recipe.generator', 'discovery', 0),   // Kanon-Ziel: darf NICHT angefasst werden
+        $binding($bau, 'vk.generator', 'discovery', 0),       // Fallback-Ziel: wird always/aktiv
+        $binding($md, 'vk.generator', 'discovery', 0),        // inaktives Dossier: bleibt, wie es ist
+        $binding($gb, 'vk.generator', 'always', 1),           // inaktives UMBINDEN-Dossier: wird stillgelegt
+    ]);
+
+    $this->artisan('foodalchemist:wissen-steuerdaten-w0', ['--apply' => true, '--team' => $this->rootTeam->id]);
+
+    $b = fn (int $docId, string $ziel) => DB::table('foodalchemist_knowledge_bindings')
+        ->where('knowledge_document_id', $docId)->where('target_key', $ziel)->whereNull('deleted_at')->first();
+
+    expect($b($bau, 'recipe.generator')->mode)->toBe('discovery')
+        ->and((int) $b($bau, 'recipe.generator')->active)->toBe(0)
+        ->and($b($bau, 'vk.generator')->mode)->toBe('always')
+        ->and((int) $b($bau, 'vk.generator')->active)->toBe(1)
+        ->and($b($md, 'vk.generator')->mode)->toBe('discovery')
+        ->and((int) $b($md, 'vk.generator')->active)->toBe(0)
+        ->and((int) $b($gb, 'vk.generator')->active)->toBe(0)
+        // und am Kanon-Ziel ist durch UMBINDEN nichts Neues entstanden
+        ->and(DB::table('foodalchemist_knowledge_bindings')->where('target_key', 'recipe.generator')->count())->toBe(1);
+});

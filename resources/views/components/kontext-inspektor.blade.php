@@ -13,6 +13,9 @@
     $prompt = is_array($kontext) && is_array($kontext['prompt'] ?? null) ? $kontext['prompt'] : null;
 
     $labels = [
+        // Spec 50 Welle 2: Kanon-Dossiers (pflicht/wenn_platz je Prompt-Key) — ersetzt am
+        // Generator die gebundenen Regelwerke; steht bewusst zuerst, es ist der verbindliche Teil.
+        'kanon' => 'Kanon (verbindlich)',
         'cross_cutting' => 'Cross-Cutting',
         'domain' => 'Domänen',
         'niveau' => 'Niveau',
@@ -53,7 +56,8 @@
                     <p class="text-[10px] uppercase tracking-wide text-gray-400 mb-1">Prompt-Größen</p>
                     <div class="flex flex-wrap gap-1" data-prompt-groessen>
                         @foreach([
-                            'Regelwerk (verbindlich)' => $prompt['bound'],
+                            'Kanon (verbindlich)' => $prompt['kanon'] ?? 0,
+                            'Regelwerk gebunden (Fallback)' => $prompt['bound'],
                             'Retrieval' => $prompt['retrieval'],
                             'Kontext-JSON' => $prompt['kontext'],
                             'Aufgabe' => $prompt['task'],

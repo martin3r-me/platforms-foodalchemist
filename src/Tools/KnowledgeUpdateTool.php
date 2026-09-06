@@ -6,6 +6,7 @@ use Platform\Core\Contracts\ToolContract;
 use Platform\Core\Contracts\ToolContext;
 use Platform\Core\Contracts\ToolMetadataContract;
 use Platform\Core\Contracts\ToolResult;
+use Platform\FoodAlchemist\Services\Knowledge\KnowledgeCanonService;
 use Platform\FoodAlchemist\Services\KnowledgeService;
 
 /**
@@ -87,6 +88,7 @@ class KnowledgeUpdateTool extends FoodAlchemistTool implements ToolContract, Too
                 'active' => (bool) $doc->active,
                 'created_via' => $doc->created_via,
             ],
+            'hinweis' => app(KnowledgeCanonService::class)->groessenHinweis((int) $doc->char_count, (string) ($doc->content_md ?? '')),
         ]);
     }
 

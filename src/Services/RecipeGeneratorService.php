@@ -1168,6 +1168,7 @@ class RecipeGeneratorService
         return [
             'chars' => (int) ($row->prompt_chars ?? 0),
             'huelle' => (int) ($teile['huelle'] ?? 0),
+            'kanon' => (int) ($teile['kanon'] ?? 0),   // Welle 2: Kanon-Block (ersetzt bound je Prompt-Key)
             'bound' => (int) ($teile['bound'] ?? 0),
             'task' => (int) ($teile['task'] ?? 0),
             'retrieval' => (int) ($teile['retrieval'] ?? 0),

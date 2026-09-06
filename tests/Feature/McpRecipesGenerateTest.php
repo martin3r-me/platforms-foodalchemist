@@ -124,6 +124,28 @@ it('L5 DoD: Draft-Quarantäne — Rezept entsteht als draft mit created_via=mcp,
     // festzuschreiben wuerde den Drift zementieren.
 });
 
+it('Spec 50 (MCP-Lockstep): die Antwort traegt den Schluessel kontext — die Messsonde ist per MCP sichtbar', function () {
+    ($this->mkGpMitPreis)($this->rootTeam, 'Schalotten: frisch, ganz', 'schalotten', 4.00);
+    ($this->stubKi)([
+        'name' => 'Reduktion: Rotwein-Schalotte',
+        'description' => 'Sirupartige Saucenbasis.',
+        'preparation' => '1. Schalotten anschwitzen.',
+        'zutaten' => [['text' => 'Schalotten', 'slug' => 'schalotten', 'quantity' => 300, 'unit' => 'g']],
+    ]);
+
+    $res = $this->registry->get('foodalchemist.recipes.GENERATE')
+        ->execute(['description' => 'Dunkle Rotwein-Schalotten-Reduktion'], $this->kontext);
+
+    // Der Schlüssel muss DA sein (null ist erlaubt: Override-Pfad / Sonde nicht migriert) —
+    // fehlt er, ist der Kanon per MCP unbeweisbar, während die UI ihn im Inspektor zeigt.
+    expect($res->success)->toBeTrue()
+        ->and($res->data)->toHaveKey('kontext');
+    if ($res->data['kontext'] !== null) {
+        expect($res->data['kontext'])->toBeArray()->toHaveKeys(['wissen', 'chars']);
+    }
+    expect($this->registry->get('foodalchemist.recipes.GENERATE')->getDescription())->toContain('kontext.prompt');
+});
+
 it('L5 DoD: vk=true ist ein PARAMETER, kein zweites Tool — dasselbe Tool liefert das VK-Gericht', function () {
     ($this->mkGpMitPreis)($this->rootTeam, 'Lachs: frisch, Filet', 'lachs', 24.00);
     ($this->stubKi)([

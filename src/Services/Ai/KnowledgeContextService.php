@@ -4,6 +4,7 @@ namespace Platform\FoodAlchemist\Services\Ai;
 
 use Illuminate\Support\Facades\DB;
 use Platform\Core\Models\Team;
+use Platform\FoodAlchemist\Services\Knowledge\KnowledgeCanonService;
 use Platform\FoodAlchemist\Support\TeamScope;
 
 /**
@@ -47,7 +48,17 @@ use Platform\FoodAlchemist\Support\TeamScope;
  */
 class KnowledgeContextService
 {
-    /** Invariante 1: diese 7 gehen bei Generator-Calls IMMER mit (Reihenfolge = Ist). */
+    /**
+     * Invariante 1: diese 7 gehen bei `cross_cutting:always`-Features IMMER mit (Reihenfolge = Ist).
+     *
+     * ⚠ LEGACY-DEFAULT seit Spec 50 Welle 2 (2026-09-06): alle 7 Originale sind auf demo
+     * DEAKTIVIERT (in Ein-Thema-Splits zerlegt), und kein live geroutetes Feature nutzt den
+     * Default mehr — `concept.wording` + `foodbook.kundentext` überschreiben ihn per config
+     * `ai.cross_cutting_slugs` mit Split-Slugs; die Generatoren laden cross_cutting per
+     * discovery. Die Konstante bleibt, weil Tests + Wissens-Browser daran hängen. Ein Feature,
+     * das künftig ohne Override auf `always` geroutet wird, bekäme hier still NICHTS —
+     * `wissen-steuerdaten-w0 --verify` (Cross-Cutting-Wächter) macht das sichtbar.
+     */
     public const ALWAYS_LOAD_CROSS_CUTTING = [
         'substitutionen', 'saisonkalender', 'synonyme', 'sauce_mutterstrukturen',
         'mengen_defaults', 'techniken', 'bruehen_fonds',
@@ -197,6 +208,19 @@ class KnowledgeContextService
             if ($slug !== '') {
                 $this->ausgeschlossen[] = $slug;
             }
+        }
+        // Spec 50 Welle 2 (2026-09-06): `_kanon_prompt_key` = der Prompt-Key, dessen KANON der
+        // Gateway ohnehin vollständig in den Prompt stellt (`pflicht` ignoriert Budget UND Dedup,
+        // KnowledgeCanonService/AiGatewayService). Diese Dossiers darf das Retrieval nicht ein
+        // zweites Mal laden — gemessen: `ai_generate_recipe × cross_cutting discovery 6×8000` zog
+        // die mengen_defaults-/geschmacksbalance-Splits erneut. `wenn_platz` bleibt ABSICHTLICH
+        // draußen: die können dem Kanon-Budget zum Opfer fallen und sollen dann noch findbar sein.
+        // Der Aufrufer kennt nur seinen Prompt-Key; die Auflösung passiert hier, an EINEM Ort.
+        $kanonKey = trim((string) ($params['_kanon_prompt_key'] ?? ''));
+        if ($kanonKey !== '' && $team !== null) {
+            $kanonSlugs = app(KnowledgeCanonService::class)->documentsFor('prompt_key', $kanonKey, $team)
+                ->where('mode', 'pflicht')->pluck('slug')->map(static fn ($s) => (string) $s)->all();
+            $this->ausgeschlossen = array_merge($this->ausgeschlossen, $kanonSlugs);
         }
         $this->ausgeschlossen = array_values(array_unique($this->ausgeschlossen));
         $recipeBudget = $feature === 'ai_generate_recipe';
@@ -519,6 +543,7 @@ class KnowledgeContextService
         $alle = array_values(array_unique(array_merge(...array_values($gesucht))));
         $docs = DB::table('foodalchemist_knowledge_documents')->tap($this->nurSichtbar($team))
             ->whereIn('slug', $alle)->where('active', 1)->whereNull('deleted_at')
+            ->when($this->ausgeschlossen !== [], fn ($q) => $q->whereNotIn('slug', $this->ausgeschlossen))
             ->get(['slug', 'title', 'content_md', 'version'])->keyBy('slug');
         if ($docs->isEmpty()) {
             return null;
@@ -918,6 +943,7 @@ class KnowledgeContextService
         $doc = DB::table('foodalchemist_knowledge_documents')->tap($this->nurSichtbar($team))
             ->where('category', 'regelwerk')->where('active', 1)->whereNull('deleted_at')
             ->where('slug', 'like', $cfg['slug_like'])
+            ->when($this->ausgeschlossen !== [], fn ($q) => $q->whereNotIn('slug', $this->ausgeschlossen))
             ->orderBy('slug')->first(['slug', 'content_md', 'version']);
         if ($doc === null) {
             return null;                                             // Invariante 6: fehlende Quelle = leerer Kontext
@@ -1050,11 +1076,14 @@ class KnowledgeContextService
      * mitbezahlt und der die Aufmerksamkeit vom Auftrag wegzieht.
      *
      * Default bleibt die Konstante (Tests + Wissens-Browser hängen daran); Überschreibung
-     * je Feature über config('foodalchemist.ai.cross_cutting_slugs').
+     * je Feature über config('foodalchemist.ai.cross_cutting_slugs') — seit Welle 2 mit
+     * Split-Slugs (`saisonkalender--hauptsaison-nach-monaten-de`,
+     * `synonyme--cross-sprachliche-synonyme-gleicher-lebensmittel`), die Originale sind inaktiv.
+     * Public, weil der W0-Wächter genau diese Auflösung gegen den Korpus prüft.
      *
      * @return list<string>
      */
-    private function crossCuttingSlugs(string $feature): array
+    public function crossCuttingSlugs(string $feature): array
     {
         $map = config('foodalchemist.ai.cross_cutting_slugs', []);
         if (is_array($map) && isset($map[$feature]) && is_array($map[$feature]) && $map[$feature] !== []) {

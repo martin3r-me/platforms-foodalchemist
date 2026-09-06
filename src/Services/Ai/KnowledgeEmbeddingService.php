@@ -83,6 +83,12 @@ class KnowledgeEmbeddingService
      *
      * Darum wieder 2000: kostet ein Viertel des Embedding-Textes und liefert dasselbe.
      * Wer den Wert erneut anfassen will, fährt bitte ZUERST den Probe — die Messung ist da.
+     *
+     * Seit Spec 50 Strang III (2026-09-05) ist der Wert konfigurierbar
+     * (`foodalchemist.semantic_search.embed_lead_chars`, Default weiter 2000): das Wissen
+     * wird als DOSSIER granular (ein Thema ≤ Deckel), nicht per Chunking — dann gehören
+     * Fenster und Deckel zusammen, und der Kandidat 4000 wird für Ein-Themen-Dossiers
+     * erneut mit dem Probe gemessen, nicht geglaubt. {@see leadChars()}
      */
     private const DOMAIN_LEAD_CHARS = 2000;
 
@@ -654,6 +660,17 @@ class KnowledgeEmbeddingService
         }
 
         // domain (+ Fallback): Titel-gewichtet + Lead.
-        return trim($titel . "\n\n" . mb_substr($inhalt, 0, self::DOMAIN_LEAD_CHARS));
+        return trim($titel . "\n\n" . mb_substr($inhalt, 0, $this->leadChars()));
+    }
+
+    /**
+     * Embedding-Fenster (Zeichen nach dem Titel). Config-Wert, Fallback auf den
+     * gemessenen Stand; unsinnige Werte (≤ 0) fallen ebenfalls auf den Default zurück.
+     */
+    public function leadChars(): int
+    {
+        $n = (int) config('foodalchemist.semantic_search.embed_lead_chars', self::DOMAIN_LEAD_CHARS);
+
+        return $n > 0 ? $n : self::DOMAIN_LEAD_CHARS;
     }
 }

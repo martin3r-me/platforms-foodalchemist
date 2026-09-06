@@ -5,6 +5,7 @@ namespace Platform\FoodAlchemist\Services;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
 use Platform\FoodAlchemist\Services\Ai\AiGatewayService;
+use Platform\FoodAlchemist\Services\Ai\KnowledgeContextService;
 use Platform\FoodAlchemist\Services\Matching\MatchHeuristics;
 
 /**
@@ -61,12 +62,20 @@ class RecipeReviewService
             throw new \RuntimeException('Rezept nicht gefunden oder nicht sichtbar.');
         }
         $vk = (bool) $r->is_sales_recipe;
+        $feature = $vk ? 'vk.review' : 'recipe.review';
 
-        $vorschlag = app(AiGatewayService::class)->propose(
-            $vk ? 'vk.review' : 'recipe.review',
-            $this->kontext($r, $vk),
-            ['target_table' => 'foodalchemist_recipes', 'target_id' => $r->id],
-        );
+        // Spec 50 (Dominique 2026-09-05): der Prüf-Pass bekommt das REGELWERK als Massstab —
+        // über das Routing `recipe.review`/`vk.review` × regelwerk (discovery, gedeckelt). Nur
+        // Regelwerk, kein Food-/Pairing-Wissen: prüfen heisst gegen Regeln halten, nicht umdichten.
+        // Leeres Routing = leerer Block (no-op), fail-soft wie bei recipe.eigenschaften.
+        $wissen = app(KnowledgeContextService::class)
+            ->contextFor($team, $feature, trim((string) ($r->description ?: $r->name)));
+        $opts = ['target_table' => 'foodalchemist_recipes', 'target_id' => $r->id];
+        if (($wissen['block'] ?? '') !== '') {
+            $opts += ['knowledge' => $wissen['block'], 'knowledge_used' => $wissen['files_used'] ?? []];
+        }
+
+        $vorschlag = app(AiGatewayService::class)->propose($feature, $this->kontext($r, $vk), $opts);
 
         $roh = $vorschlag->werte['befunde'] ?? [];
 
@@ -104,7 +113,8 @@ class RecipeReviewService
     /**
      * Prompt-Kontext: Rezept + Zutaten + Zubereitung, sonst nichts. Die
      * CJ-Referenz injiziert hier bewusst KEIN Pairing-/Vault-Wissen — ein
-     * Prüf-Pass soll das Rezept beurteilen, nicht es umdichten.
+     * Prüf-Pass soll das Rezept beurteilen, nicht es umdichten. Das Regelwerk
+     * als Prüf-Massstab kommt separat über das Wissens-Routing (s. pruefe()).
      *
      * @return array<string, mixed>
      */

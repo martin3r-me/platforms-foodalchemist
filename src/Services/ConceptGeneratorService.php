@@ -226,7 +226,7 @@ class ConceptGeneratorService
         // Trend-Wissen (Trendradar) additiv einspeisen — der Prompt läuft NICHT durch
         // contextFor(), also hier holen und als options['knowledge'] durchreichen (Routing
         // concept.brief_geruest → trend:discovery). Ohne Trend-Bestand liefert er leer.
-        $trendWissen = app(KnowledgeContextService::class)->contextFor($team, 'concept.brief_geruest', $brief);
+        $trendWissen = app(KnowledgeContextService::class)->contextFor($team, 'concept.brief_geruest', $brief, null, [], ['_kanon_prompt_key' => 'concept.brief_geruest']);
         $wissenOpts = $trendWissen['block'] !== ''
             ? ['knowledge' => $trendWissen['block'], 'knowledge_used' => $trendWissen['files_used']]
             : [];
@@ -552,7 +552,7 @@ class ConceptGeneratorService
         // liefert das Feature `foodbook.grundgeruest` das FOODBOOK-Regelwerk (Kapitel statt Gänge, Routing
         // regelwerk:always) + Trend; für die übrigen Owner `concept.brief_geruest` wie bisher. Ohne
         // Routing/Bestand liefert er leer.
-        $trendWissen = app(KnowledgeContextService::class)->contextFor($team, $promptKey, $brief);
+        $trendWissen = app(KnowledgeContextService::class)->contextFor($team, $promptKey, $brief, null, [], ['_kanon_prompt_key' => $promptKey]);
         $wissenOpts = $trendWissen['block'] !== ''
             ? ['knowledge' => $trendWissen['block'], 'knowledge_used' => $trendWissen['files_used']]
             : [];

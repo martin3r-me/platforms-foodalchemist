@@ -53,6 +53,8 @@ class RecipesGenerateTool extends FoodAlchemistTool implements ToolContract, Too
             . 'Mit complete_coverage=true synchronisiert der MCP-Pfad zusaetzlich operative Detail-Bausteine neu: Fertigungstiefe, '
             . 'Arbeitszeit/Eigenschaften, Equipment, Default-Posten soweit belastbar ableitbar, Prozessanker, Step-by-step und Sensorik. Bestehende '
             . 'Schritte und vorhandene Sensorik werden dabei bewusst ueberschrieben, damit Aenderungen am Rezept wieder konsistent sind. '
+            . 'Die Antwort enthaelt unter kontext die Prompt-Messsonde (kontext.prompt: chars/huelle/kanon/bound/task/retrieval/dropped, tokens_in/tokens_cached) '
+            . 'und die geladenen Wissens-Dossiers je Kanal (kontext.wissen: kanon, gebunden, regelwerk, cross_cutting, …) — identisch zum Kontext-Inspektor der UI. '
             . 'Mit vk=true kann ein ziel_vk (Netto je Portion) vorgegeben werden: er steuert den Vorschlag (Komponenten/Grammatur) und wird danach '
             . 'gegen den gerechneten Preis gehalten — gedrueckt wird der VK nie. '
             . 'Braucht einen LLM-Provider und dauert je nach Modell ~20–40 s. Freigabe (approved) macht nur ein Mensch im Editor.';
@@ -220,6 +222,14 @@ class RecipesGenerateTool extends FoodAlchemistTool implements ToolContract, Too
             // optional `coverage` (operative Detail-Bausteine: Fertigung, Eigenschaften,
             // Equipment, Posten, Prozessanker, Step-by-step, Sensorik; nur wenn complete_coverage=true).
             'anreicherung' => $anreicherung,
+            // Spec 50 Welle 2 (MCP-Lockstep): dieselbe Messsonde wie der Kontext-Inspektor der UI —
+            // `kontext.prompt` trägt die Prompt-Größen (chars/huelle/kanon/bound/task/retrieval/dropped
+            // + tokens_in/tokens_cached), `kontext.wissen` die geladenen Dossiers je Kanal
+            // (kanon | gebunden | regelwerk | cross_cutting | …), `kontext.chars` das Wissens-Budget.
+            // Nur damit lässt sich per MCP
+            // nachweisen, dass der Kanon ankommt und der Retrieval-Block ihn nicht dupliziert.
+            // null im Override-Pfad (kein KI-Call) oder solange die Sonde nicht migriert ist.
+            'kontext' => $resultat['kontext'] ?? null,
             'hinweis' => ($offen > 0
                     ? "⚠ {$offen} Zutat(en) ohne Treffer — bewusst NICHT geraten. Pro Zeile Bestand prüfen; bei GP-Lücken "
                         . 'zuerst einen vorgeschlagenen Lieferantenartikel bestätigen, danach GP zuordnen/anlegen. '

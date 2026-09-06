@@ -76,6 +76,32 @@ it('Slice 1: Regelwerk landet im Prompt + Roh-Befunde werden zu normierten Regel
     expect($ergebnis['gesamturteil'])->toBe('Zwei Verstöße gefunden.');
 });
 
+it('Spec 50: ein `<slug>-changelog`-Split trifft den Regelwerk-Präfix, landet aber NICHT im Prompt', function () {
+    // Der Split-Builder trennt den `## Changelog` als eigenes Dossier ab — gleicher Präfix,
+    // gleiche Kategorie, aktiv. Versionshistorie ist keine Regel: der Critic darf sie nicht laden.
+    DB::table('foodalchemist_knowledge_documents')->insert([
+        'uuid' => (string) \Symfony\Component\Uid\UuidV7::generate(),
+        'team_id' => $this->rootTeam->id,
+        'slug' => 'regelwerk-basisrezepte-changelog',
+        'title' => 'Regelwerk Basisrezepte — Changelog',
+        'category' => 'regelwerk',
+        'content_md' => 'SCHICHT3_CHANGELOG_MARKER v1.1 (2026-05-22): §6 ergänzt.',
+        'version' => 1,
+        'content_hash' => str_repeat('b', 64),
+        'char_count' => 55,
+        'active' => 1,
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+    CopilotStub::bind([], 'Keine Verstöße.');
+
+    app(ConformanceService::class)->pruefe($this->rootTeam, 'basisrezept', $this->rezept->id);
+
+    expect($GLOBALS['l6_user_prompt'] ?? '')
+        ->toContain('SCHICHT3_REGELWERK_MARKER')
+        ->not->toContain('SCHICHT3_CHANGELOG_MARKER');
+});
+
 it('Slice 1: ohne aktives Regelwerk-Dossier wirft die Prüfung (keine Blind-Prüfung)', function () {
     DB::table('foodalchemist_knowledge_documents')->update(['active' => 0]);
     CopilotStub::bind([]);

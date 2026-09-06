@@ -134,7 +134,9 @@ it('die Deckel tragen die neue Pflichtmenge — sonst kommt das Dossier als Ansc
     $b = config('foodalchemist.ai.bound_knowledge_budget');
 
     // Pflicht recipe.generator: 18.521 (Bau-§§ + Basis + mengen_defaults) + 10.670 = 29.191
-    expect($b['recipe.generator']['total'])->toBeGreaterThanOrEqual(29191)
+    // Spec 50 Welle 2: Kanon-Pflicht recipe.generator = 13 Dossiers Σ 33.902 — der Deckel muss
+    // die Summe tragen, sonst behauptet die Config ein Budget, das der Prompt längst reißt.
+    expect($b['recipe.generator']['total'])->toBeGreaterThanOrEqual(33902)
         // …und chars_per_doc muss das GRÖSSTE Pflicht-Dossier ganz fassen, nicht 8.400 davon.
         ->and($b['recipe.generator']['chars_per_doc'])->toBeGreaterThanOrEqual(10670)
         // Pflicht vk.generator: 25.421 + 10.670 = 36.091
