@@ -20,7 +20,8 @@ class FormatsPostTool extends FoodAlchemistTool implements ToolContract, ToolMet
     {
         return 'Legt ein Format (Marken-/Themen-Container über den Konzepten) als ENTWURF an (status=draft). '
             . 'Editionen (bestehende Konzepte) danach via foodalchemist.format_editions.POST zuordnen. '
-            . 'origin ∈ eigen|gruppe|kunde (kunde = Kunden-IP, nie fremd wiederverwenden).';
+            . 'origin ∈ eigen|gruppe|kunde (kunde = Kunden-IP, nie fremd wiederverwenden).'
+            . ' Ablauf, Soll-Aspekte und geltende Regelwerke vorher: foodalchemist.ablauf.GET(vorgang="format_anlegen").';
     }
 
     public function getSchema(): array

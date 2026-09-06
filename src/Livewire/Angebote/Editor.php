@@ -11,7 +11,6 @@ use Platform\FoodAlchemist\Models\FoodAlchemistAngebot;
 use Platform\FoodAlchemist\Models\FoodAlchemistOfferBlock;
 use Platform\FoodAlchemist\Models\FoodAlchemistOfferChapter;
 use Platform\FoodAlchemist\Services\AngebotService;
-use Platform\FoodAlchemist\Services\FoodbookService;
 use Platform\FoodAlchemist\Services\OfferCompositionService;
 use Platform\FoodAlchemist\Services\PresentationDesignService;
 use Platform\FoodAlchemist\Services\PresentationService;
@@ -748,10 +747,11 @@ class Editor extends Component
             return;
         }
         $comp->addBlock($this->team(), $this->selectedKapitelId, [
-            // A6: `header_source` trägt das Angebot nicht (keine Spalte, kein BLOCK_FELDER-Eintrag)
-            // — es wurde bisher übergeben und still verworfen. Die Preset-Herkunft bleibt damit
-            // dem Foodbook vorbehalten; hier zählt allein das Label.
-            'type' => $type, 'label' => $label,
+            // Spec 50 · C-7: `header_source` GIBT es am Angebot (Spalte seit 2026_08_31_000033) —
+            // es fehlte nur in OfferCompositionService::BLOCK_FELDER und wurde deshalb still
+            // verworfen. Der frühere Kommentar an dieser Stelle („keine Spalte") war falsch.
+            // Die Preset-Herkunft trägt die KI-Lineage und gehört ans Angebot wie ans Foodbook.
+            'type' => $type, 'label' => $label, 'header_source' => $slug,
             'price_basis' => $type === 'header_frei_preis' ? ($preisBasis ?: 'person') : null,
             'price_value' => $type === 'header_frei_preis' ? 0 : null,
             'visible' => $sichtbar,
@@ -1564,7 +1564,9 @@ class Editor extends Component
             'kapitel' => $kapitel,
             'kapitelBoard' => $kapitelBoard,
             'blockMenus' => $blockMenus,
-            'headerPresets' => FoodbookService::headerPresets(),
+            // Spec 50 · C-7: die angebots-eigene Preset-Liste — ohne das Staffel-Preset,
+            // das nur das Foodbook rechnen kann (OfferCompositionService::headerPresets).
+            'headerPresets' => OfferCompositionService::headerPresets(),
             // Kapitel-Bild + Galerie
             'kapitelImageUrl' => ($kapitel !== null && ($kapitel->image_context_file_id || $kapitel->image_path))
                 ? $media->url($kapitel->image_context_file_id, $kapitel->image_path)

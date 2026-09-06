@@ -23,7 +23,8 @@ class VerkaufsrezeptePostTool extends FoodAlchemistTool implements ToolContract,
     public function getDescription(): string
     {
         return 'Legt ein Verkaufsrezept (Gericht) an. Mit basis_recipe_id wird das (sichtbare) Basisrezept '
-            . 'als erste Komponente eingehängt; ohne wird ein leeres Gericht erzeugt.';
+            . 'als erste Komponente eingehängt; ohne wird ein leeres Gericht erzeugt.'
+            . ' Ablauf, Soll-Aspekte und geltende Regelwerke vorher: foodalchemist.ablauf.GET(vorgang="gericht_anlegen").';
     }
 
     public function getSchema(): array

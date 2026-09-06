@@ -203,4 +203,61 @@ class RecipeReifeAdapter implements ReifeAdapter
             'wie' => $tool !== null ? ['tool' => $tool] : null,
         ];
     }
+
+    /**
+     * Spec 50 · E-3 — {@see ReifeAdapter::sollAspekte()}.
+     *
+     * Die Schrittfolgen werden aus {@see BulkEnrichService::SCHRITTE} bzw. `SCHRITTE_VK`
+     * ABGELEITET, nicht abgeschrieben: kommt ein Anreicherungs-Schritt dazu, taucht er hier
+     * automatisch auf. Genau das ist der Unterschied zu einer gepflegten Markdown-Liste, die
+     * still veraltet.
+     *
+     * `ebene` unterscheidet Basisrezept und Gericht, weil derselbe Code je Ebene ein anderes
+     * Werkzeug hat (`recipes.PUT` vs. `verkaufsrezepte.PUT`) — und weil es Aspekte gibt, die
+     * es nur am Gericht gibt (Portion, Darreichung, Aufschlagsklasse).
+     */
+    public function sollAspekte(): array
+    {
+        $br = 'foodalchemist.recipes.PUT';
+        $vk = 'foodalchemist.verkaufsrezepte.PUT';
+        $aspekt = fn (string $code, string $schwere, ?string $wie, string $ebene, ?string $bedingt = null) => array_filter([
+            'code' => $code, 'schwere' => $schwere, 'wie' => $wie, 'ebene' => $ebene, 'bedingt' => $bedingt,
+        ], fn ($v, $k) => $v !== null || $k === 'wie', ARRAY_FILTER_USE_BOTH);
+
+        $aus = [];
+        foreach (BulkEnrichService::SCHRITTE as $schritt) {
+            $aus[] = $aspekt($schritt, 'wichtig', $br, 'basisrezept');
+        }
+        foreach (BulkEnrichService::SCHRITTE_VK as $schritt) {
+            $aus[] = $aspekt($schritt, 'wichtig', $vk, 'gericht');
+        }
+
+        // Beide Ebenen
+        foreach (['basisrezept' => $br, 'gericht' => $vk] as $ebene => $tool) {
+            $aus[] = $aspekt('work_time_min', 'blockiert', $tool, $ebene);
+            $aus[] = $aspekt('steps', 'hinweis', 'foodalchemist.recipe_steps.PUT', $ebene);
+            $aus[] = $aspekt('sensorik', 'hinweis', 'foodalchemist.recipe_sensorik.POST', $ebene);
+            $aus[] = $aspekt('aromaanker', 'hinweis', 'foodalchemist.recipe_anchors.PUT', $ebene);
+            $aus[] = $aspekt('pairings', 'hinweis', 'foodalchemist.recipe_pairings.PUT', $ebene, 'mit_anker');
+            // Equipment haengt an Stammdaten, nicht am Rezept-Schreibpfad — kein Werkzeug.
+            $aus[] = $aspekt('equipment', 'hinweis', null, $ebene);
+        }
+
+        // Nur am Gericht: die VK-Vorbedingungen (T2) und die Dichteklasse fuer den Behaelter.
+        $aus[] = $aspekt('portion', 'blockiert', 'foodalchemist.recipe_darreichung.PUT', 'gericht');
+        $aus[] = $aspekt('darreichung', 'blockiert', 'foodalchemist.recipe_darreichung.POST', 'gericht');
+        $aus[] = $aspekt('aufschlagsklasse', 'wichtig', $vk, 'gericht');
+        $aus[] = $aspekt('dichteklasse', 'wichtig', null, 'gericht');
+
+        // Aus der Datenqualitaets-Ampel gespiegelt — kein eigenes Werkzeug.
+        foreach (['br_ek_null', 'br_ek_teil', 'br_anker_fehlt'] as $code) {
+            $aus[] = $aspekt($code, 'wichtig', null, 'basisrezept', 'ampel');
+        }
+        foreach (['vk_ek_null', 'vk_ek_teil', 'vk_anker_fehlt', 'vk_servierform_unbestimmt'] as $code) {
+            $aus[] = $aspekt($code, 'wichtig', null, 'gericht', 'ampel');
+        }
+
+        return $aus;
+    }
+
 }

@@ -151,7 +151,11 @@ it('Angebot: ohne Kapitel und ohne Konzept blockiert (keine_substanz), personen 
         // Kein Preis = Lücke `preis`, nicht „vorläufig" — vorläufig heißt: Preis da, aber nie gerechnet.
         ->and($res->data['vorlaeufig'])->toBeFalse()
         ->and(($this->codes)($res))->toContain('keine_substanz', 'personen', 'occasion', 'preis')
-        ->and(($this->nm)($res))->toContain('geruest', 'ampel');
+        // C-7 hat das frühere pauschale `geruest` aufgeteilt: die MATERIALISIERUNG (sind die
+        // geplanten Slots Kapitel geworden?) ist seither messbar, die BELEGUNG bleibt es nicht
+        // — CoverageService kennt den Owner-Typ offer nach wie vor nicht. Ohne Gerüst am
+        // Angebot ist auch die Materialisierung nichts, was fehlen könnte.
+        ->and(($this->nm)($res))->toContain('geruest_belegung', 'ampel', 'geruest_nicht_materialisiert');
 
     $personen = collect($res->data['luecken'])->firstWhere('code', 'personen');
     expect($personen['schwere'])->toBe('blockiert')

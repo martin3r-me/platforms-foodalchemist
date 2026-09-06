@@ -20,7 +20,8 @@ class SpeiseplaenePostTool extends FoodAlchemistTool implements ToolContract, To
     {
         return 'Legt einen Speiseplan als ENTWURF an (status=draft, Starter-Linien Menü 1/Vegetarisch/Dessert '
             . 'automatisch). Einträge danach via foodalchemist.speiseplan_eintraege.POST. '
-            . 'start_date = Montag der ersten Woche (YYYY-MM-DD).';
+            . 'start_date = Montag der ersten Woche (YYYY-MM-DD).'
+            . ' Ablauf, Soll-Aspekte und geltende Regelwerke vorher: foodalchemist.ablauf.GET(vorgang="speiseplan_erstellen").';
     }
 
     public function getSchema(): array

@@ -90,4 +90,23 @@ class FormatReifeAdapter extends ContainerReifeAdapter
 
         return $this->ergebnis((string) $f->name, $f->status, $luecken, $erfuellt, $nichtMessbar, $kennzahlen);
     }
+
+    /** Spec 50 · E-3 — {@see ReifeAdapter::sollAspekte()}. */
+    public function sollAspekte(): array
+    {
+        $put = 'foodalchemist.formats.PUT';
+
+        return [
+            ['code' => 'consumer_name', 'schwere' => 'wichtig', 'wie' => $put],
+            ['code' => 'claim', 'schwere' => 'hinweis', 'wie' => $put],
+            ['code' => 'story', 'schwere' => 'hinweis', 'wie' => $put],
+            ['code' => 'origin', 'schwere' => 'hinweis', 'wie' => $put],
+            ['code' => 'keine_edition', 'schwere' => 'blockiert', 'wie' => 'foodalchemist.format_editions.POST'],
+            // Kein Werkzeug setzt heute `concept_id` an einem Editions-Block — ehrliches null.
+            ['code' => 'edition_ohne_konzept', 'schwere' => 'blockiert', 'wie' => null],
+            ['code' => 'header_fehlt', 'schwere' => 'hinweis', 'wie' => 'foodalchemist.format_blocks.POST'],
+            ['code' => 'header_ohne_titel', 'schwere' => 'wichtig', 'wie' => 'foodalchemist.format_blocks.PUT'],
+        ];
+    }
+
 }

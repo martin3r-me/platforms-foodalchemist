@@ -117,4 +117,25 @@ class SpeisekarteReifeAdapter extends ContainerReifeAdapter
 
         return $this->ergebnis((string) $sk->name, $sk->status, $luecken, $erfuellt, $nichtMessbar, $kennzahlen);
     }
+
+    /** Spec 50 · E-3 — {@see ReifeAdapter::sollAspekte()}. */
+    public function sollAspekte(): array
+    {
+        $put = 'foodalchemist.speisekarten.PUT';
+        $pos = 'foodalchemist.speisekarte_positionen.POST';
+
+        return array_merge([
+            ['code' => 'name', 'schwere' => 'wichtig', 'wie' => $put],
+            ['code' => 'description', 'schwere' => 'hinweis', 'wie' => $put],
+            ['code' => 'outlet_id', 'schwere' => 'hinweis', 'wie' => $put],
+            ['code' => 'keine_rubriken', 'schwere' => 'blockiert', 'wie' => 'foodalchemist.speisekarte_rubrik.POST'],
+            ['code' => 'kein_inhalt', 'schwere' => 'blockiert', 'wie' => $pos],
+            ['code' => 'rubrik_leer', 'schwere' => 'wichtig', 'wie' => $pos],
+            ['code' => 'ref_ohne_ziel', 'schwere' => 'blockiert', 'wie' => 'foodalchemist.speisekarte_positionen.PUT'],
+            ['code' => 'header_ohne_titel', 'schwere' => 'wichtig', 'wie' => 'foodalchemist.speisekarte_positionen.PUT'],
+            ['code' => 'rubrik_ohne_titel', 'schwere' => 'wichtig', 'wie' => 'foodalchemist.speisekarte_rubrik.PUT'],
+            ['code' => 'position_wording', 'schwere' => 'hinweis', 'wie' => 'foodalchemist.speisekarte_wording.GENERATE'],
+        ], $this->geruestAspekte());
+    }
+
 }

@@ -77,6 +77,20 @@ class ReifeService
     }
 
     /**
+     * Spec 50 · E-3 — das Soll eines Artefakt-Typs, ohne ein Artefakt zu brauchen.
+     *
+     * Das ist die Auskunft, die `ablauf.GET` einem Agenten gibt, BEVOR er etwas anlegt:
+     * woran wird ein Rezept / Konzept / Foodbook gemessen, und mit welchem Werkzeug schliesst
+     * man welche Lücke. {@see reife()} beantwortet dieselbe Frage für ein konkretes Objekt.
+     *
+     * @return list<array{code: string, schwere: string, wie: ?string, ebene?: string, bedingt?: string}>
+     */
+    public function sollAspekte(string $kind): array
+    {
+        return $this->adapter($kind)->sollAspekte();
+    }
+
+    /**
      * Die Kurzform für Write-Antworten: dieselbe Messung, aber nur das, was der Aufrufer
      * unmittelbar braucht. Vollständig lesen kann er danach über das Reife-Tool.
      *

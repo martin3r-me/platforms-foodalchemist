@@ -102,4 +102,29 @@ class SpeiseplanReifeAdapter extends ContainerReifeAdapter
 
         return $this->ergebnis((string) $sp->name, $sp->status, $luecken, $erfuellt, $nichtMessbar, $kennzahlen);
     }
+
+    /**
+     * Spec 50 · E-3 — {@see ReifeAdapter::sollAspekte()}.
+     *
+     * Auffaellig und richtig so: die Kopf-Felder tragen alle `wie: null`. Es gibt kein
+     * MCP-Werkzeug, das den Kopf eines Speiseplans setzt — der Agent sieht die Lücke,
+     * ohne dass ihm ein Tool-Name vorgegaukelt wird, den er nicht aufrufen kann.
+     */
+    public function sollAspekte(): array
+    {
+        $eintraege = 'foodalchemist.speiseplan_eintraege.POST';
+
+        return [
+            ['code' => 'name', 'schwere' => 'wichtig', 'wie' => null],
+            ['code' => 'start_date', 'schwere' => 'wichtig', 'wie' => null],
+            ['code' => 'budget_wareneinsatz', 'schwere' => 'hinweis', 'wie' => null],
+            ['code' => 'outlet_id', 'schwere' => 'hinweis', 'wie' => null],
+            ['code' => 'keine_linien', 'schwere' => 'blockiert', 'wie' => 'foodalchemist.speiseplan_linien.POST'],
+            ['code' => 'keine_eintraege', 'schwere' => 'blockiert', 'wie' => $eintraege],
+            ['code' => 'eintrag_ohne_ziel', 'schwere' => 'blockiert', 'wie' => $eintraege],
+            ['code' => 'linie_leer', 'schwere' => 'hinweis', 'wie' => $eintraege, 'bedingt' => 'linien_und_eintraege'],
+            ['code' => 'eintrag_ohne_linie', 'schwere' => 'wichtig', 'wie' => null, 'bedingt' => 'linien_und_eintraege'],
+        ];
+    }
+
 }

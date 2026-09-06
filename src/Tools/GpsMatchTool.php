@@ -30,7 +30,8 @@ class GpsMatchTool extends FoodAlchemistTool implements ToolContract, ToolMetada
             . 'PFLICHT vor jeder Rezept-Zutat: nur gematchte gp_id/recipe_id verwenden. '
             . 'Mit mint_if_missing=true wird bei target=none LA-First ein GP aus passender LA gemintet '
             . '(tentative, sofort verwendbar); ohne LA bleibt es none. '
-            . 'Kein Treffer und kein Mint → foodalchemist.gp_proposals.POST (Beschaffungs-Wunsch), nie raten.';
+            . 'Kein Treffer und kein Mint → foodalchemist.gp_proposals.POST (Beschaffungs-Wunsch), nie raten.'
+            . ' Ablauf, Soll-Aspekte und geltende Regelwerke vorher: foodalchemist.ablauf.GET(vorgang="gp_aus_la_anlegen").';
     }
 
     public function getSchema(): array

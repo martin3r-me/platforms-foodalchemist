@@ -24,7 +24,8 @@ class AngebotePostTool extends FoodAlchemistTool implements ToolContract, ToolMe
     {
         return 'Legt ein Angebot im Eingangs-Status (anfrage) an, optional direkt mit angebots-lokalen '
             . 'Concepts (concepts: Liste von Namen — danach via foodalchemist.concept_slots.POST befüllen). '
-            . 'Status-Wechsel und CRM-Kunde macht ein Mensch im Editor.';
+            . 'Status-Wechsel und CRM-Kunde macht ein Mensch im Editor.'
+            . ' Ablauf, Soll-Aspekte und geltende Regelwerke vorher: foodalchemist.ablauf.GET(vorgang="angebot_erstellen").';
     }
 
     public function getSchema(): array
