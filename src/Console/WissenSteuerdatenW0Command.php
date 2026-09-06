@@ -10,6 +10,7 @@ use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Enums\SignalSeverity;
 use Platform\FoodAlchemist\Enums\SignalTyp;
 use Platform\FoodAlchemist\Services\SignalService;
+use Platform\FoodAlchemist\Support\TeamScope;
 
 /**
  * Welle 0 — Steuerdaten für Routings + Layer-Bindings (W0-3 Daten-Hälfte, W0-4 Daten-Hälfte).
@@ -96,6 +97,16 @@ class WissenSteuerdatenW0Command extends Command
      * `substitutionen` (9.851 Z.) und `mengen_defaults` (7.446 Z.) bleiben `discovery`:
      * sie sind ZUTATENABHÄNGIG. Als `always` würden sie über den Score-Bonus die Bau-§§
      * aus dem Gesamtdeckel verdrängen — genau der Fehler, den W0-3 behebt.
+     *
+     * ⚠ SEIT WELLE 2 (Spec 50, 2026-09-06) NUR NOCH FALLBACK: die Prompt-Keys `recipe.generator`
+     * und `vk.generator` haben einen KANON (`foodalchemist_knowledge_canon`, `pflicht`-Dossiers,
+     * `KnowledgeCanonService::documentsFor`). Ist ein Kanon vorhanden, sind die Layer-Bindings im
+     * Gateway stumm (`AiGatewayService`: `$kanonBlock === null && …bindings…`) — und die hier
+     * gelisteten Original-Dossiers (`mengen_defaults`, `geschmacksbalance`,
+     * `regelwerk.regelwerk_verkaufsgerichte`) sind DEAKTIVIERT, weil sie in Ein-Thema-Splits
+     * zerlegt wurden. `--verify` prüft darum je Ziel zuerst den Kanon und fällt nur ohne Kanon
+     * auf die Bindings zurück (`kanonZeilen()`); `--apply` legt an Kanon-Zielen keine Bindings an
+     * und bindet nie ein inaktives Dossier. Die Listen bleiben für Sandboxen ohne Kanon.
      *
      * @var list<string>
      */
@@ -267,7 +278,14 @@ class WissenSteuerdatenW0Command extends Command
             }
         }
 
+        $team = Team::find((int) $this->option('team'));
         foreach ($this->bindingZiele() as $targetKey => $slugs) {
+            // Kanon vorhanden → Bindings sind im Gateway stumm; hier nichts anzulegen.
+            if ($this->kanonZeilen($targetKey, $team)->isNotEmpty()) {
+                $bPlan[] = [$targetKey, '(Kanon vorhanden)', '—', 'ÜBERSPRUNGEN — Kanon steuert', 0];
+
+                continue;
+            }
             foreach ($slugs as $slug) {
                 $row = DB::table('foodalchemist_knowledge_bindings as b')
                     ->join('foodalchemist_knowledge_documents as d', 'd.id', '=', 'b.knowledge_document_id')
@@ -306,7 +324,7 @@ class WissenSteuerdatenW0Command extends Command
             return self::SUCCESS;
         }
 
-        DB::transaction(function (): void {
+        DB::transaction(function () use ($team): void {
             foreach (self::ROUTINGS as $category => $ziel) {
                 DB::table('foodalchemist_knowledge_routings')
                     ->where('feature', 'ai_generate_recipe')->where('category', $category)
@@ -318,8 +336,15 @@ class WissenSteuerdatenW0Command extends Command
                     ]);
             }
             foreach ($this->bindingZiele() as $targetKey => $slugs) {
+                // Kanon-Ziel: keine Bindings (re)aktivieren — sie wären im Gateway stumm und
+                // würden beim nächsten Kanon-Ausfall veraltete Originale in den Prompt heben.
+                if ($this->kanonZeilen($targetKey, $team)->isNotEmpty()) {
+                    continue;
+                }
+                // Nur AKTIVE Dossiers binden: eine Bindung auf ein inaktives Doc ist ein
+                // Versprechen, das der Gateway nicht hält (er filtert d.active).
                 $ids = DB::table('foodalchemist_knowledge_documents')
-                    ->whereIn('slug', $slugs)->whereNull('deleted_at')->pluck('id');
+                    ->whereIn('slug', $slugs)->where('active', 1)->whereNull('deleted_at')->pluck('id');
                 DB::table('foodalchemist_knowledge_bindings')
                     ->where('binding_type', 'layer')->where('target_key', $targetKey)
                     ->whereIn('knowledge_document_id', $ids)->whereNull('deleted_at')
@@ -352,10 +377,21 @@ class WissenSteuerdatenW0Command extends Command
             // `always`-Bindung sicherstellen.
             foreach (self::UMBINDEN as $slug => $zielKeys) {
                 $doc = DB::table('foodalchemist_knowledge_documents')
-                    ->where('slug', $slug)->whereNull('deleted_at')->first(['id', 'team_id']);
+                    ->where('slug', $slug)->whereNull('deleted_at')->first(['id', 'team_id', 'active']);
                 if ($doc === null) {
                     continue;
                 }
+                if (! $doc->active) {
+                    // Inaktives Original (Split-Nachfolger im Kanon): nicht umbinden, nur stilllegen.
+                    DB::table('foodalchemist_knowledge_bindings')
+                        ->where('binding_type', 'layer')->where('knowledge_document_id', $doc->id)
+                        ->whereNull('deleted_at')->update(['active' => 0, 'updated_at' => now()]);
+                    $this->line("  · «{$slug}» ist inaktiv — Bindungen stillgelegt, nichts umgebunden.");
+
+                    continue;
+                }
+                // Ziele mit Kanon auslassen — dort steuert der Kanon, nicht die Bindung.
+                $zielKeys = array_values(array_filter($zielKeys, fn (string $k) => $this->kanonZeilen($k, $team)->isEmpty()));
 
                 DB::table('foodalchemist_knowledge_bindings')
                     ->where('binding_type', 'layer')
@@ -399,6 +435,27 @@ class WissenSteuerdatenW0Command extends Command
         $this->info('Geschrieben (eine Transaktion).');
 
         return $this->verify();
+    }
+
+    /**
+     * Kanon-Zeilen eines Prompt-Keys (Spec 50 Welle 2) — inklusive INAKTIVER Dossiers, damit
+     * `--verify` sie melden kann (`KnowledgeCanonService::documentsFor` filtert die weg).
+     * Sichtbarkeit wie der Gateway (global ∪ Ahnenkette des `--team`); ohne Team team-agnostisch.
+     *
+     * @return \Illuminate\Support\Collection<int, object{slug: string, mode: string, char_count: int, doc_active: int}>
+     */
+    private function kanonZeilen(string $targetKey, ?Team $team): \Illuminate\Support\Collection
+    {
+        $q = DB::table('foodalchemist_knowledge_canon as c')
+            ->join('foodalchemist_knowledge_documents as d', 'd.id', '=', 'c.knowledge_document_id')
+            ->whereNull('c.deleted_at')->whereNull('d.deleted_at')
+            ->where('c.scope', 'prompt_key')->where('c.scope_key', $targetKey)
+            ->where('c.role', 'root')->where('c.active', 1);
+        if ($team !== null) {
+            TeamScope::applyVisible($q, 'c.team_id', $team);
+        }
+
+        return $q->orderBy('c.ord')->get(['d.slug', 'c.mode', 'd.char_count', 'd.active as doc_active']);
     }
 
     /**
@@ -501,6 +558,8 @@ class WissenSteuerdatenW0Command extends Command
     private function verify(): int
     {
         $fehler = [];
+        $team = Team::find((int) $this->option('team'));
+        $kanonZiele = [];
 
         $rw = DB::table('foodalchemist_knowledge_routings')
             ->where('feature', 'ai_generate_recipe')->where('category', 'regelwerk')->first();
@@ -508,7 +567,44 @@ class WissenSteuerdatenW0Command extends Command
             $fehler[] = "Routing regelwerk steht auf '{$rw->mode}' statt 'none' — Doppelweg offen.";
         }
 
+        // Spec 50 Welle 2: hat ein Prompt-Key einen Kanon, ist DER die Wahrheit — der Gateway
+        // liest dann keine Bindings mehr. Geprüft wird also der Kanon: jedes `pflicht`-Dossier
+        // aktiv, unter dem Dossier-Deckel, Summe unter dem Bound-Deckel. Die Binding-Prüfung
+        // darunter bleibt der Fallback für Umgebungen ohne Kanon.
+        $dossierDeckel = app(\Platform\FoodAlchemist\Services\Knowledge\KnowledgeCanonService::class)->dossierMaxChars();
         foreach ($this->bindingZiele() as $targetKey => $slugs) {
+            $kanon = $this->kanonZeilen($targetKey, $team);
+            if ($kanon->isEmpty()) {
+                continue;
+            }
+            $kanonZiele[] = $targetKey;
+            $pflicht = $kanon->where('mode', 'pflicht');
+            foreach ($pflicht as $z) {
+                if (! $z->doc_active) {
+                    $fehler[] = "{$targetKey}: Kanon-Pflicht «{$z->slug}» ist inaktiv — das Dossier fällt still aus dem Prompt.";
+                }
+                if ((int) $z->char_count > $dossierDeckel) {
+                    $fehler[] = "{$targetKey}: Kanon-Pflicht «{$z->slug}» hat {$z->char_count} Zeichen > Dossier-Deckel {$dossierDeckel} — kein Ein-Thema-Dossier mehr.";
+                }
+            }
+            $summe = (int) $pflicht->sum('char_count');
+            $deckel = $this->boundDeckel($targetKey);
+            $this->line(sprintf(
+                '%-18s Kanon-Pflicht: %d Dossiers, %s Zeichen (Deckel %s)',
+                $targetKey,
+                $pflicht->count(),
+                number_format($summe, 0, ',', '.'),
+                number_format($deckel, 0, ',', '.'),
+            ));
+            if ($summe > $deckel) {
+                $fehler[] = "{$targetKey}: Kanon-Pflicht summiert {$summe} Zeichen > Deckel {$deckel} — Budget-Config lügt über den Prompt.";
+            }
+        }
+
+        foreach ($this->bindingZiele() as $targetKey => $slugs) {
+            if (in_array($targetKey, $kanonZiele, true)) {
+                continue;
+            }
             foreach ($slugs as $slug) {
                 $row = DB::table('foodalchemist_knowledge_bindings as b')
                     ->join('foodalchemist_knowledge_documents as d', 'd.id', '=', 'b.knowledge_document_id')
@@ -548,6 +644,9 @@ class WissenSteuerdatenW0Command extends Command
 
         // Deckel-Realitätscheck: passen die Pflicht-Dossiers überhaupt in das Budget?
         foreach ($this->bindingZiele() as $targetKey => $slugs) {
+            if (in_array($targetKey, $kanonZiele, true)) {
+                continue;                                           // oben über den Kanon geprüft
+            }
             $summe = (int) DB::table('foodalchemist_knowledge_documents')
                 ->whereIn('slug', $slugs)->whereNull('deleted_at')->sum('char_count');
             $deckel = $this->boundDeckel($targetKey);
@@ -568,6 +667,24 @@ class WissenSteuerdatenW0Command extends Command
         $features = DB::table('foodalchemist_knowledge_routings')
             ->where('mode', 'always')->distinct()->pluck('feature');
         $zeilen = [];
+
+        // Cross-Cutting-Wächter (2026-09-06): `cross_cutting:always` lädt eine FEST VERDRAHTETE
+        // Slug-Liste (Konstante bzw. config `ai.cross_cutting_slugs`), und `crossCuttingDocs()`
+        // überspringt fehlende/inaktive Slugs STILL. Genau so verloren `foodbook.kundentext` und
+        // `concept.wording` beim Split-Cutover ihr Saison-/Synonym-Wissen, ohne dass irgendwo
+        // etwas rot wurde. Jeder Slug, den ein always-Feature wirklich lädt, muss aktiv existieren.
+        $ccFeatures = DB::table('foodalchemist_knowledge_routings')
+            ->where('category', 'cross_cutting')->where('mode', 'always')->pluck('feature');
+        foreach ($ccFeatures as $feature) {
+            $soll = $kcs->crossCuttingSlugs((string) $feature);
+            $aktiv = DB::table('foodalchemist_knowledge_documents')
+                ->whereIn('slug', $soll)->where('category', 'cross_cutting')
+                ->where('active', 1)->whereNull('deleted_at')->pluck('slug')->all();
+            foreach (array_diff($soll, $aktiv) as $slug) {
+                $fehler[] = "«{$feature}» lädt cross_cutting:always «{$slug}» — Dossier fehlt oder ist inaktiv; das Feature bekommt an dieser Stelle still nichts.";
+            }
+        }
+
         foreach ($features as $feature) {
             $pflicht = $kcs->pflichtZeichen((string) $feature);
             $budget = $kcs->budgetFuer((string) $feature);

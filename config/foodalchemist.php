@@ -489,10 +489,16 @@ return [
          * (foodbook.kundentext: max_tokens 1.500), und mitgeliefert wurden Mengen-Defaults,
          * Brühen-Rezepturen, Saucen-Mutterstrukturen und Techniken. Nützlich sind dort
          * `saisonkalender` (Saison-Aussagen belegen) und `synonyme` (richtig benennen).
+         *
+         * Spec 50 Welle 2 (2026-09-06): die Originale `saisonkalender`/`synonyme` sind
+         * DEAKTIVIERT (Split in Ein-Thema-Dossiers ≤ 4.000 Z.) — die Liste zeigt seither auf
+         * die beiden allgemeinsten Splits. `crossCuttingDocs()` überspringt fehlende/inaktive
+         * Slugs STILL; ob jeder Slug hier ein aktives Dossier hat, prüft
+         * `wissen-steuerdaten-w0 --verify` (Cross-Cutting-Wächter).
          */
         'cross_cutting_slugs' => [
-            'foodbook.kundentext' => ['saisonkalender', 'synonyme'],
-            'concept.wording' => ['saisonkalender', 'synonyme'],
+            'foodbook.kundentext' => ['saisonkalender--hauptsaison-nach-monaten-de', 'synonyme--cross-sprachliche-synonyme-gleicher-lebensmittel'],
+            'concept.wording' => ['saisonkalender--hauptsaison-nach-monaten-de', 'synonyme--cross-sprachliche-synonyme-gleicher-lebensmittel'],
         ],
 
         'knowledge_axis_map' => [
@@ -516,13 +522,25 @@ return [
         ],
 
         'bound_knowledge_budget' => [
-            // Deckel = Pflichtmenge + EIN vollständiges Universal-Dossier (mengen_defaults,
+            // ⚠ Spec 50 Welle 2 (2026-09-06): an `recipe.generator`/`vk.generator` steuert der
+            // KANON (`foodalchemist_knowledge_canon`, KnowledgeCanonService) — die Bindings sind
+            // dort stumm (AiGatewayService: Kanon vorhanden → kein Bound-Block). Für den Kanon gilt:
+            // `pflicht` kommt IMMER vollständig (ignoriert diesen Deckel und den Dedup),
+            // `wenn_platz` wird gegen `total` budgetiert. Der Deckel ist also nur noch für
+            // (a) den Bindings-Fallback ohne Kanon und (b) `wenn_platz`-Zeilen relevant.
+            // Kanon-Wahrheit (demo, 28 Zeilen alle pflicht): recipe.generator 13 Dossiers
+            // Σ 33.902 Z., vk.generator 12 Dossiers Σ 31.673 Z. Der `total` muss die Pflicht-
+            // summe tragen, sonst lügt die Config über den realen Prompt — `wissen-steuerdaten-w0
+            // --verify` prüft genau das (Kanon-Pflicht ≤ Deckel).
+            // Historie: Deckel = Pflichtmenge + EIN vollständiges Universal-Dossier (mengen_defaults,
             // 7.446 Z.). Bewusst kein Puffer für ein zweites: ein Kopf-Anschnitt einer
             // Referenztabelle ist kein Wissen, nur Kosten (das war der `substitutionen`-Fall).
-            // recipe.generator: §2+§3+§4+§6 + Erstellungs-Dossier = 11.075 + 7.446 = 18.521
-            'recipe.generator' => ['docs' => 9, 'chars_per_doc' => 11000, 'total' => 30000],
-            // vk.generator: dieselben + regelwerk.regelwerk_verkaufsgerichte 8.309 = 26.830
-            'vk.generator' => ['docs' => 9, 'chars_per_doc' => 11000, 'total' => 37000],
+            // recipe.generator (alt): §2+§3+§4+§6 + Erstellungs-Dossier = 11.075 + 7.446 = 18.521
+            // → Welle 2: 30.000 → 36.000 (Kanon Σ 33.902 + Puffer ~ein Split-Dossier ≤ 4.000)
+            'recipe.generator' => ['docs' => 13, 'chars_per_doc' => 11000, 'total' => 36000],
+            // vk.generator (alt): dieselben + regelwerk.regelwerk_verkaufsgerichte 8.309 = 26.830
+            // → Welle 2: Kanon Σ 31.673 ≤ 37.000, Deckel bleibt.
+            'vk.generator' => ['docs' => 13, 'chars_per_doc' => 11000, 'total' => 37000],
 
             // NEU 2026-09-03 — Dossier-Routing nach dem Prinzip „dort nutzen, wo es benutzt wird"
             // (Dominique). `geschmacksbalance` (10.670 Z.) hing am Bereichs-Präfix `recipe` und

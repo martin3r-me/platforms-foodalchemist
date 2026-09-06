@@ -13,6 +13,9 @@
     $prompt = is_array($kontext) && is_array($kontext['prompt'] ?? null) ? $kontext['prompt'] : null;
 
     $labels = [
+        // Spec 50 Welle 2: Kanon-Dossiers (pflicht/wenn_platz je Prompt-Key) — ersetzt am
+        // Generator die gebundenen Regelwerke; steht bewusst zuerst, es ist der verbindliche Teil.
+        'kanon' => 'Kanon (verbindlich)',
         'cross_cutting' => 'Cross-Cutting',
         'domain' => 'Domänen',
         'niveau' => 'Niveau',

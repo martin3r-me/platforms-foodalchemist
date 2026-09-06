@@ -41,6 +41,27 @@ it('GeneratorModal rendert das Kontext-Panel, wenn ergebnis[kontext] gesetzt ist
         ->assertSee('gemuese');
 });
 
+it('GeneratorModal benennt den Kanon-Kanal lesbar — nicht als roher Schlüssel', function () {
+    Livewire::test(GeneratorModal::class)
+        ->set('ergebnis', [
+            'recipe_id' => 1,
+            'name' => 'Püree: Karotte-Ingwer',
+            'statistik' => ['bestand_gp' => 3, 'bestand_sub' => 0, 'stub_neu' => 0, 'offen' => 0, 'stubs' => []],
+            'offene' => [],
+            'kontext' => [
+                'wissen' => [
+                    'kanon' => ['regelwerk-basisrezepte-1-naming@v3', 'mengen-defaults--portionsgroessen@v1'],
+                ],
+                'chars' => 7000,
+                'templates' => [],
+            ],
+        ])
+        ->assertSee('Verwendetes Wissen')
+        ->assertSee('Kanon (verbindlich)')
+        ->assertSee('regelwerk-basisrezepte-1-naming')
+        ->assertDontSee('Gebundene Regelwerke');
+});
+
 it('GeneratorModal zeigt KEIN Panel, wenn kontext null ist (Alt-Ergebnisse / Override-Pfad)', function () {
     Livewire::test(GeneratorModal::class)
         ->set('ergebnis', [

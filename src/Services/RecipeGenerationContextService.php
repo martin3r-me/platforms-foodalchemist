@@ -82,7 +82,10 @@ class RecipeGenerationContextService
         // (der Selektor liest params['rezept_typ']) und geht (b) als eigenes Kontext-Feld an die KI
         // — Gürtel & Hosenträger zur Prompt-Einleitung (Basisrezept = Baustein, Gericht = Teller).
         $rezeptTyp = $vkModus ? 'gericht' : 'basisrezept';
-        $wissen = $this->knowledge->contextFor($team, 'ai_generate_recipe', $description, $parameter['kompositions_stil'] ?? null, [], $parameter + ['rezept_typ' => $rezeptTyp]);
+        $genKey = $vkModus ? 'vk.generator' : 'recipe.generator';
+        $genBereich = $vkModus ? 'vk' : 'recipe';
+        // Spec 50: der Kanon von $genKey steht ohnehin im Prompt → Retrieval lädt ihn nicht doppelt.
+        $wissen = $this->knowledge->contextFor($team, 'ai_generate_recipe', $description, $parameter['kompositions_stil'] ?? null, [], $parameter + ['rezept_typ' => $rezeptTyp, '_kanon_prompt_key' => $genKey]);
         /*
          * Transparenz: die an recipe.generator/vk.generator GEBUNDENEN Dossiers stehen nicht in
          * contextFor()->files_used, sollen aber im „Verwendetes Wissen"-Chip auftauchen.
@@ -99,9 +102,17 @@ class RecipeGenerationContextService
          * Und der beabsichtigte Nutzen trat nie ein: der Inspektor liest `used_by_category`,
          * nicht `files_used`. Deshalb landet die Liste jetzt dort — als eigener Kanal.
          */
-        if (\Illuminate\Support\Facades\Schema::hasTable('foodalchemist_knowledge_bindings')) {
-            $genKey = $vkModus ? 'vk.generator' : 'recipe.generator';
-            $genBereich = $vkModus ? 'vk' : 'recipe';
+        // Spec 50 Welle 2 (2026-09-06): hat $genKey einen KANON, sind die Bindings im Gateway stumm
+        // (`$kanonBlock === null && …`). Der Chip zeigt dann den Kanon als eigenen Kanal `kanon` —
+        // und NICHT die Bindings, die zwar in der DB stehen, aber nicht im Prompt.
+        $kanonFiles = \Illuminate\Support\Facades\Schema::hasTable('foodalchemist_knowledge_canon')
+            ? app(\Platform\FoodAlchemist\Services\Knowledge\KnowledgeCanonService::class)
+                ->documentsFor('prompt_key', $genKey, $team)
+                ->map(fn ($d) => "{$d->slug}@v{$d->version}")->all()
+            : [];
+        if ($kanonFiles !== []) {
+            $wissen['used_by_category']['kanon'] = $kanonFiles;
+        } elseif (\Illuminate\Support\Facades\Schema::hasTable('foodalchemist_knowledge_bindings')) {
             $boundFiles = \Illuminate\Support\Facades\DB::table('foodalchemist_knowledge_bindings as b')
                 ->join('foodalchemist_knowledge_documents as d', 'd.id', '=', 'b.knowledge_document_id')
                 ->whereNull('b.deleted_at')->where('b.active', 1)
