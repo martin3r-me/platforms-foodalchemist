@@ -698,6 +698,7 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\RecipesPostTool::class,
                     // Spec 50 · Schicht 4 — read-only Vollständigkeits-Messung.
                     \Platform\FoodAlchemist\Tools\RecipeReifeGetTool::class,
+                    \Platform\FoodAlchemist\Tools\ReifeGetTool::class,
                     \Platform\FoodAlchemist\Tools\RecipesEnrichTool::class,
                     \Platform\FoodAlchemist\Tools\RecipesGenerateTool::class, // 03·L5 (Lockstep-Schuld aus #505)
                     \Platform\FoodAlchemist\Tools\RecipesExtractTool::class,  // Rezept-Import (Rohtext/Foto-Umweg → geerdeter Draft)

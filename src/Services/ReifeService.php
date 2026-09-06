@@ -3,8 +3,14 @@
 namespace Platform\FoodAlchemist\Services;
 
 use Platform\Core\Models\Team;
+use Platform\FoodAlchemist\Services\Reife\AngebotReifeAdapter;
+use Platform\FoodAlchemist\Services\Reife\ConceptReifeAdapter;
+use Platform\FoodAlchemist\Services\Reife\FoodbookReifeAdapter;
+use Platform\FoodAlchemist\Services\Reife\FormatReifeAdapter;
 use Platform\FoodAlchemist\Services\Reife\RecipeReifeAdapter;
 use Platform\FoodAlchemist\Services\Reife\ReifeAdapter;
+use Platform\FoodAlchemist\Services\Reife\SpeisekarteReifeAdapter;
+use Platform\FoodAlchemist\Services\Reife\SpeiseplanReifeAdapter;
 
 /**
  * Spec 50 · Schicht 4 — VOLLSTÄNDIGKEIT. **Read-only, kein Provider-Call.**
@@ -32,6 +38,15 @@ class ReifeService
 {
     /** Schwere → Ampel-Rang. Eine blockierende Lücke macht rot, egal wie viel sonst steht. */
     private const RANG = ['hinweis' => 1, 'wichtig' => 2, 'blockiert' => 3];
+
+    /**
+     * Alle Artefakt-Typen, die einen Adapter haben (Etappe 7: ein Adapter je PlanningFrame::OWNER_TYPES
+     * plus Rezept/Gericht). Aliasse zeigen auf denselben Adapter (`vk` = `gericht`, `offer` = `angebot`).
+     */
+    public const KINDS = [
+        'recipe', 'basisrezept', 'sales_recipe', 'vk', 'gericht',
+        'concept', 'paket', 'format', 'foodbook', 'speisekarte', 'speiseplan', 'angebot', 'offer',
+    ];
 
     /**
      * @return array{kind: string, id: int, name: string, status: ?string, ampel: string,
@@ -137,6 +152,12 @@ class ReifeService
     {
         return match ($kind) {
             'recipe', 'basisrezept', 'sales_recipe', 'vk', 'gericht' => app(RecipeReifeAdapter::class),
+            'concept', 'paket' => app(ConceptReifeAdapter::class),
+            'format' => app(FormatReifeAdapter::class),
+            'foodbook' => app(FoodbookReifeAdapter::class),
+            'speisekarte' => app(SpeisekarteReifeAdapter::class),
+            'speiseplan' => app(SpeiseplanReifeAdapter::class),
+            'angebot', 'offer' => app(AngebotReifeAdapter::class),
             default => throw new \InvalidArgumentException("Kein Reife-Adapter für Artefakt-Typ «{$kind}»."),
         };
     }
