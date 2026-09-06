@@ -50,7 +50,14 @@ class VorgangsRegisterService
         'basisrezept_anlegen' => [
             'titel' => 'Basisrezept anlegen',
             'kind' => 'recipe',
-            'doc_slugs' => ['workflow.rezept_anlegen_mcp'],
+            // Vier Teile statt eines 8.691-Zeichen-Dossiers (Migration 2026_09_07_000001);
+            // das alte `workflow.rezept_anlegen_mcp` ist dort stillgelegt.
+            'doc_slugs' => [
+                'workflow.basisrezept_regeln',
+                'workflow.basisrezept_erzeugen',
+                'workflow.basisrezept_komponenten',
+                'workflow.basisrezept_abschluss',
+            ],
             'feature' => 'ai_generate_recipe',
             'prompt_keys' => ['recipe.generator'],
             'einstieg' => 'foodalchemist.recipes.POST',

@@ -270,7 +270,9 @@ it('kein Dossier eines Vorgangs überschreitet den 4.000-Zeichen-Deckel', functi
     // noch deaktivierbar. Sie brauchen eine Migration (Split in Ein-Thema-Dossiers oder
     // Stilllegung). Bis dahin steht die Schuld hier sichtbar; wird eines von ihnen bereinigt,
     // schlägt der zweite Teil des Tests an und erinnert daran, es hier zu streichen.
-    $altlast = ['workflow.rezept_anlegen_mcp', 'workflow.gericht_anlegen_mcp'];
+    // Seit Migration 2026_09_07_000001 sind beide globalen Alt-Dossiers stillgelegt und durch
+    // Ein-Thema-Teile ersetzt — die Liste ist leer und soll es bleiben.
+    $altlast = [];
 
     $deckel = app(\Platform\FoodAlchemist\Services\Knowledge\KnowledgeCanonService::class)->dossierMaxChars();
     $zuGross = [];
