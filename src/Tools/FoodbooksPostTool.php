@@ -34,7 +34,8 @@ class FoodbooksPostTool extends FoodAlchemistTool implements ToolContract, ToolM
     {
         return 'Legt ein neues Foodbook als ENTWURF an (status=draft), optional direkt mit Kapitel-Gerüst '
             . '(kapitel: Liste von Titeln). Inhalte danach: foodalchemist.foodbook_kapitel.POST für weitere/'
-            . 'verschachtelte Kapitel, foodalchemist.foodbook_blocks.POST für Gerichte/Texte/Header pro Kapitel.';
+            . 'verschachtelte Kapitel, foodalchemist.foodbook_blocks.POST für Gerichte/Texte/Header pro Kapitel.'
+            . ' Ablauf, Soll-Aspekte und geltende Regelwerke vorher: foodalchemist.ablauf.GET(vorgang="foodbook_anlegen").';
     }
 
     public function getSchema(): array

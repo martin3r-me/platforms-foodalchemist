@@ -20,7 +20,8 @@ class SpeisekartenPostTool extends FoodAlchemistTool implements ToolContract, To
     {
         return 'Legt eine Speisekarte als ENTWURF an (status=entwurf). Danach Rubriken via '
             . 'foodalchemist.speisekarte_rubrik.POST, Positionen via foodalchemist.speisekarte_positionen.POST. '
-            . 'karten_typ ∈ alacarte|tageskarte|saisonkarte|getraenkekarte|weinkarte.';
+            . 'karten_typ ∈ alacarte|tageskarte|saisonkarte|getraenkekarte|weinkarte.'
+            . ' Ablauf, Soll-Aspekte und geltende Regelwerke vorher: foodalchemist.ablauf.GET(vorgang="speisekarte_anlegen").';
     }
 
     public function getSchema(): array

@@ -386,15 +386,18 @@
                                                     <span class="text-gray-500 tabular-nums">{{ $block->dish?->sales_net !== null ? '· ' . number_format((float) $block->dish->sales_net, 2, ',', '.') . ' €' . ($block->price_basis === 'pauschal' ? ' pauschal' : '/Pos') : '' }}</span>
                                                     @if(trim((string) $block->wording) !== '')<span class="italic text-violet-600">· „{{ $block->wording }}“</span>@endif
                                                     @break
-                                                @case('header_neutral') @case('header_frei')
+                                                {{-- Spec 50 · C-7: die PERSISTIERTEN Typen sind `header`/`header_preis`
+                                                     (OfferCompositionService::TYP_ALIAS loest die Foodbook-Namen auf).
+                                                     Bis hierher standen nur die Foodbook-Namen — jeder Header fiel in
+                                                     @default und wurde als kursives „(Text)" gerendert. --}}
+                                                @case('header')
                                                     <span class="font-semibold">{{ $block->label ?: '(Header)' }}</span>
                                                     @break
-                                                @case('header_frei_preis')
+                                                @case('header_preis')
                                                     <span class="font-semibold">{{ $block->label ?: '(Header)' }}</span>
-                                                    <span class="text-gray-600">· {{ $block->price_basis === 'staffel' ? 'Staffel' : number_format((float) ($block->price_value ?? 0), 2, ',', '.') . ' € ' . ($block->price_basis === 'pauschal' ? 'pauschal' : '/P') }}</span>
+                                                    <span class="text-gray-600">· {{ number_format((float) ($block->price_value ?? 0), 2, ',', '.') . ' € ' . ($block->price_basis === 'pauschal' ? 'pauschal' : '/P') }}</span>
                                                     @break
                                                 @case('spacer') <span class="italic text-gray-500">Leerzeile ({{ $block->height ?? 'mittel' }})</span> @break
-                                                @case('image') <span class="text-gray-600">@svg('heroicon-o-photo', 'w-3.5 h-3.5 inline-block align-middle') Bild</span> @break
                                                 @default <span class="italic">{{ \Illuminate\Support\Str::limit($block->customer_text ?? '(Text)', 80) }}</span>
                                             @endswitch
                                         </span>

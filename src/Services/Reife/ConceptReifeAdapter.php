@@ -161,4 +161,34 @@ class ConceptReifeAdapter extends ContainerReifeAdapter
 
         return $this->ergebnis((string) $c->name, $c->status, $luecken, $erfuellt, $nichtMessbar, $kennzahlen);
     }
+
+    /** Spec 50 · E-3 — {@see ReifeAdapter::sollAspekte()}. */
+    public function sollAspekte(): array
+    {
+        $enrich = 'foodalchemist.concepts.ENRICH';
+        $slots = 'foodalchemist.concept_slots.PUT';
+        $wording = 'foodalchemist.concept_wording.GENERATE';
+
+        return array_merge([
+            ['code' => 'target_price_per_person', 'schwere' => 'wichtig', 'wie' => $enrich],
+            ['code' => 'description', 'schwere' => 'wichtig', 'wie' => $enrich],
+            ['code' => 'consumer_name', 'schwere' => 'hinweis', 'wie' => $enrich],
+            ['code' => 'claim', 'schwere' => 'hinweis', 'wie' => $enrich],
+            ['code' => 'keine_positionen', 'schwere' => 'blockiert', 'wie' => 'foodalchemist.concept_slots.POST'],
+            ['code' => 'keine_belegte_position', 'schwere' => 'blockiert', 'wie' => $slots],
+            ['code' => 'pflicht_slot_leer', 'schwere' => 'blockiert', 'wie' => $slots],
+            ['code' => 'slot_wording', 'schwere' => 'wichtig', 'wie' => $wording],
+            ['code' => 'header_titel', 'schwere' => 'hinweis', 'wie' => $wording],
+            ['code' => 'header_fehlt', 'schwere' => 'hinweis', 'wie' => 'foodalchemist.concept_slots.POST'],
+            ['code' => 'header_ohne_titel', 'schwere' => 'wichtig', 'wie' => $slots],
+            // Aus der Datenqualitaets-Ampel gespiegelt — kein eigenes Werkzeug, die Ursache
+            // liegt jeweils bei einem der Codes darueber.
+            ['code' => 'konzept_slot_luecke', 'schwere' => 'blockiert', 'wie' => null, 'bedingt' => 'ampel'],
+            ['code' => 'konzept_ohne_wording', 'schwere' => 'wichtig', 'wie' => null, 'bedingt' => 'ampel'],
+            ['code' => 'konzept_preisband_verletzt', 'schwere' => 'wichtig', 'wie' => null, 'bedingt' => 'ampel'],
+            ['code' => 'konzept_regel_verletzt', 'schwere' => 'wichtig', 'wie' => null, 'bedingt' => 'ampel'],
+            ['code' => 'konzept_dramaturgie', 'schwere' => 'hinweis', 'wie' => null, 'bedingt' => 'ampel'],
+        ], $this->geruestAspekte());
+    }
+
 }

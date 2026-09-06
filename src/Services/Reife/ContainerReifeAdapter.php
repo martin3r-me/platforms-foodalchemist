@@ -31,6 +31,23 @@ abstract class ContainerReifeAdapter implements ReifeAdapter
         protected DataQualityService $dq,
     ) {}
 
+    /**
+     * Spec 50 · E-3 — die Coverage-Aspekte, die {@see geruest()} erzeugen kann.
+     *
+     * Die Dimensionen kommen aus {@see CoverageService::befund()}; `unbekannt` ist dessen
+     * Fallback. Kein Tool: eine Coverage-Lücke schliesst man, indem man Inhalt anlegt, nicht
+     * indem man ein Feld setzt — welcher Weg der richtige ist, hängt am Container.
+     *
+     * @return list<array{code: string, schwere: string, wie: null, bedingt: string}>
+     */
+    protected function geruestAspekte(): array
+    {
+        return array_map(
+            fn (string $d) => ['code' => 'geruest_' . $d, 'schwere' => 'wichtig', 'wie' => null, 'bedingt' => 'geruest'],
+            ['preis', 'dramaturgie', 'menge', 'diaet', 'saison', 'nogo', 'unbekannt']
+        );
+    }
+
     /** @return array{code: string, ebene: string, schwere: string, was: string, wie: ?array} */
     protected function luecke(string $code, string $schwere, string $was, ?string $tool, array $args = []): array
     {

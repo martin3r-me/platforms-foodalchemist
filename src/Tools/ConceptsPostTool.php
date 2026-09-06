@@ -20,7 +20,8 @@ class ConceptsPostTool extends FoodAlchemistTool implements ToolContract, ToolMe
     {
         return 'Legt ein Gerichte-Konzept als ENTWURF an (status=draft). Slots (Gerichte/Pakete) danach '
             . 'via foodalchemist.concept_slots.POST. brief = KI-Arbeitsauftrag ans Konzept; zielpreis_pro_person '
-            . 'für die Kalkulations-Leitplanke.';
+            . 'für die Kalkulations-Leitplanke.'
+            . ' Ablauf, Soll-Aspekte und geltende Regelwerke vorher: foodalchemist.ablauf.GET(vorgang="konzept_anlegen").';
     }
 
     public function getSchema(): array

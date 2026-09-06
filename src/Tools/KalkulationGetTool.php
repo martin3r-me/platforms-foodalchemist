@@ -27,7 +27,8 @@ class KalkulationGetTool extends FoodAlchemistTool implements ToolContract, Tool
     {
         return 'Rechnet die Kalkulation (HK1/HK2, Wareneinsatz, Arbeitszeit, Nebenkosten) nach den '
             . 'Team-Parametern — GENAU EINES angeben: recipe_id, concept_id oder package_id. '
-            . 'Optional outlet_id: rechnet gegen die Kostenstruktur EINES Betriebs (Ebene 2). Read-only.';
+            . 'Optional outlet_id: rechnet gegen die Kostenstruktur EINES Betriebs (Ebene 2). Read-only.'
+            . ' Ablauf und geltende Regelwerke vorher: foodalchemist.ablauf.GET(vorgang="preis_margen_monitoring").';
     }
 
     public function getSchema(): array

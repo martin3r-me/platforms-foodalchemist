@@ -896,6 +896,43 @@ class KnowledgeContextService
      *
      * @param  list<string>  $filesUsed  by-ref-Audit
      */
+    /**
+     * Spec 50 · E-4 — welches Regelwerk-Dossier zu einem Feature gehört.
+     *
+     * Bis Etappe 8 steckte diese Auswahl ausschliesslich in {@see regelwerkBlock()}, das
+     * `private` ist und einen fertigen PROMPT-Block baut. `regelwerk.GET` braucht aber das
+     * DOKUMENT, nicht den Block. Statt die Auswahl ein zweites Mal zu schreiben — der Fehler,
+     * vor dem `docs/ARCHITEKTUR.md` unter „Eine Formel pro fachlicher Wahrheit" warnt — steht
+     * sie hier einmal, und beide rufen sie auf.
+     *
+     * Bewusst dieselbe Query wie zuvor, inklusive `ausgeschlossen`-Filter und `orderBy('slug')`:
+     * wenn der Generator dieses Dossier lädt, muss `regelwerk.GET` genau dieses nennen.
+     *
+     * @param  list<string>  $spalten
+     */
+    public function regelwerkDokumentFuer(?Team $team, string $feature, array $spalten = ['slug', 'title', 'char_count', 'version']): ?object
+    {
+        $slugLike = self::REGELWERK_SLUG_LIKE[$feature] ?? self::REGELWERK_SLUG_LIKE['ai_generate_recipe'];
+
+        return DB::table('foodalchemist_knowledge_documents')->tap($this->nurSichtbar($team))
+            ->where('category', 'regelwerk')->where('active', 1)->whereNull('deleted_at')
+            ->where('slug', 'like', $slugLike)
+            ->when($this->ausgeschlossen !== [], fn ($q) => $q->whereNotIn('slug', $this->ausgeschlossen))
+            ->orderBy('slug')->first($spalten);
+    }
+
+    /**
+     * Feature → Slug-Muster des zugehörigen Regelwerks. `format.grundgeruest` ist bewusst
+     * eigen eingetragen, damit es NICHT auf den Basisrezept-Fallback rutscht — es gibt (noch)
+     * kein Format-Regelwerk, und ein falsches wäre schlimmer als keines.
+     */
+    public const REGELWERK_SLUG_LIKE = [
+        'concept.brief_geruest' => '%concept%',
+        'foodbook.grundgeruest' => '%foodbook%',
+        'format.grundgeruest' => '%format%',
+        'ai_generate_recipe' => '%basisrezept%',
+    ];
+
     private function regelwerkBlock(?Team $team, string $feature, int $maxChars, array &$filesUsed): ?string
     {
         $map = [
@@ -940,11 +977,7 @@ class KnowledgeContextService
         ];
         $cfg = $map[$feature] ?? $map['ai_generate_recipe'];    // Bestand-Fallback
 
-        $doc = DB::table('foodalchemist_knowledge_documents')->tap($this->nurSichtbar($team))
-            ->where('category', 'regelwerk')->where('active', 1)->whereNull('deleted_at')
-            ->where('slug', 'like', $cfg['slug_like'])
-            ->when($this->ausgeschlossen !== [], fn ($q) => $q->whereNotIn('slug', $this->ausgeschlossen))
-            ->orderBy('slug')->first(['slug', 'content_md', 'version']);
+        $doc = $this->regelwerkDokumentFuer($team, $feature, ['slug', 'content_md', 'version']);
         if ($doc === null) {
             return null;                                             // Invariante 6: fehlende Quelle = leerer Kontext
         }

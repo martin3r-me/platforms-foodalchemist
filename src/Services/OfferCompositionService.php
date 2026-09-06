@@ -15,6 +15,8 @@ use Platform\FoodAlchemist\Models\FoodAlchemistOfferChapter;
 use Platform\FoodAlchemist\Models\FoodAlchemistOfferChapterImage;
 use Platform\FoodAlchemist\Models\FoodAlchemistOutlet;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
+use Platform\FoodAlchemist\Services\FoodbookService;
+use Platform\FoodAlchemist\Services\PlanningFrameService;
 
 /**
  * #380 Composer — Angebot-Aufbau nach Foodbook-Vorbild, aber in EIGENEN Tabellen
@@ -137,6 +139,63 @@ class OfferCompositionService
         $this->ownedKapitel($team, $id)->delete();
     }
 
+    /**
+     * Spec 50 · C-7 — das Planungs-Geruest des Angebots in Kapitel materialisieren.
+     *
+     * Spiegelt {@see FoodbookService::strukturAusGeruest()} offer-scoped. Bis hierher endete
+     * jeder Weg ins Angebot bei {@see defaultKapitel()} mit dem Titel „Menue": die Slot-Labels
+     * des Frames („Aperitif", „Hauptgang", „Dessert") wurden zwar geplant, kamen im
+     * Kundendokument aber nie an, und {@see \Platform\FoodAlchemist\Services\CoverageService}
+     * hatte am Angebot nichts, wogegen es messen konnte.
+     *
+     * **Idempotent**: Slots mit gueltiger `chapter_id` werden uebersprungen; ein Slot, dessen
+     * Kapitel geloescht wurde, bekommt ein neues. Ziele wandern vom flachen Slot ans Kapitel,
+     * genau wie beim Foodbook. `personen` bleibt aussen vor: die Spalte gibt es zwar am
+     * Angebots-Kapitel (Migration 2026_08_31_000034), am Slot aber nicht — es gaebe nichts
+     * zu uebernehmen.
+     *
+     * @return array{kein_geruest: bool, angelegt: int, uebersprungen: int, protokoll: list<array{slot:string, status:string, chapter_id:?int, ziele_uebernommen?:list<string>}>}
+     */
+    public function strukturAusGeruest(Team $team, int $offerId): array
+    {
+        $this->ownedOffer($team, $offerId);
+        $frames = app(PlanningFrameService::class);
+        $frame = $frames->find('offer', $offerId);
+        if ($frame === null || (int) $frame->slots()->count() === 0) {
+            return ['kein_geruest' => true, 'angelegt' => 0, 'uebersprungen' => 0, 'protokoll' => []];
+        }
+        $vorhandene = array_map('intval', FoodAlchemistOfferChapter::where('offer_id', $offerId)->pluck('id')->all());
+        $angelegt = 0;
+        $uebersprungen = 0;
+        $protokoll = [];
+        foreach ($frame->slots()->orderBy('position')->get() as $slot) {
+            if ($slot->chapter_id !== null && in_array((int) $slot->chapter_id, $vorhandene, true)) {
+                $uebersprungen++;
+                $protokoll[] = ['slot' => $slot->label, 'status' => 'vorhanden', 'chapter_id' => (int) $slot->chapter_id];
+
+                continue;
+            }
+            $kapitel = $this->addKapitel($team, $offerId, ['title' => $slot->label]);
+            $ziele = array_filter([
+                'target_count' => $slot->target_count,
+                'price_anchor' => $slot->price_anchor,
+                'price_min' => $slot->price_min,
+                'price_max' => $slot->price_max,
+            ], fn ($v) => $v !== null);
+            $uebernommen = [];
+            if ($ziele !== []) {
+                $kapitel->update($ziele);
+                $uebernommen = array_keys($ziele);
+            }
+            $frames->updateSlot($team, $slot->id, ['chapter_id' => $kapitel->id]);
+            $vorhandene[] = (int) $kapitel->id;
+            $angelegt++;
+            $protokoll[] = ['slot' => $slot->label, 'status' => 'angelegt', 'chapter_id' => (int) $kapitel->id, 'ziele_uebernommen' => $uebernommen];
+        }
+
+        return ['kein_geruest' => false, 'angelegt' => $angelegt, 'uebersprungen' => $uebersprungen, 'protokoll' => $protokoll];
+    }
+
     /** @param list<int> $ids */
     public function reorderKapitel(Team $team, int $offerId, array $ids): void
     {
@@ -198,7 +257,11 @@ class OfferCompositionService
     // ── Blöcke ──────────────────────────────────────────────────────────────
 
     private const BLOCK_FELDER = ['type', 'level', 'visible', 'label', 'wording', 'customer_text', 'interne_bemerkung',
-        'concept_id', 'sales_recipe_id', 'quantity', 'unit_vocab_id', 'presentation_id', 'price_value', 'price_basis', 'height', 'payload_json'];
+        'concept_id', 'sales_recipe_id', 'quantity', 'unit_vocab_id', 'presentation_id', 'price_value', 'price_basis', 'height', 'payload_json',
+        // Spec 50 · C-7: beide Spalten gibt es seit 2026_08_31_000033, sie fehlten nur hier —
+        // uebergebene Werte wurden still verworfen (`header_source` = die Preset-Herkunft fuer
+        // die KI-Lineage, `variant_group_id` = die Wahl-Gruppe).
+        'header_source', 'variant_group_id'];
 
     /**
      * Spec 50 · A6 — das Angebot spricht ein anderes Header-Vokabular als das Foodbook.
@@ -217,6 +280,56 @@ class OfferCompositionService
         'header_frei' => 'header',
         'header_frei_preis' => 'header_preis',
     ];
+
+    /**
+     * Spec 50 · C-7 — die Preset-Liste, die das ANGEBOT tragen kann.
+     *
+     * {@see FoodbookService::headerPresets()} ist gemeinsames Vokabular, enthaelt aber ein
+     * `price_basis = 'staffel'`-Preset. Staffelpreise kann nur das Foodbook
+     * ({@see FoodbookService::setStaffel()}); {@see FoodAlchemistOfferBlock::PRICE_BASES}
+     * kennt sie nicht und es gibt keine Staffel-Tabelle am Angebot. Bis hierher landete
+     * `'staffel'` trotzdem in der Spalte und wurde nirgends gerechnet — ein Preis, den der
+     * Kunde sieht und den niemand ausrechnet.
+     *
+     * Darum wird das Preset hier ausgeblendet statt beim Klick zu werfen: das Angebot bietet
+     * nur an, was es auch kann.
+     *
+     * @return array<string, list<array>>
+     */
+    public static function headerPresets(): array
+    {
+        $raus = [];
+        foreach (FoodbookService::headerPresets() as $gruppe => $items) {
+            $gefiltert = array_values(array_filter(
+                $items,
+                fn (array $p) => ! isset($p['price_basis']) || in_array($p['price_basis'], FoodAlchemistOfferBlock::PRICE_BASES, true)
+            ));
+            if ($gefiltert !== []) {
+                $raus[$gruppe] = $gefiltert;
+            }
+        }
+
+        return $raus;
+    }
+
+    /**
+     * Spec 50 · C-7 — `price_basis` gegen das Vokabular des Angebots pruefen.
+     * Gleiche Haltung wie {@see aufloesenBlockTyp()}: lieber ein Wurf mit Begruendung als ein
+     * stiller Wert, den die Kalkulation spaeter nicht deuten kann.
+     */
+    private function pruefePreisBasis(?string $basis): void
+    {
+        if ($basis === null || $basis === '') {
+            return;
+        }
+        if (! in_array($basis, FoodAlchemistOfferBlock::PRICE_BASES, true)) {
+            throw new \RuntimeException(
+                'Unbekannte Preis-Basis "' . $basis . '". Das Angebot kennt: '
+                . implode(', ', FoodAlchemistOfferBlock::PRICE_BASES)
+                . ' (Staffelpreise gibt es nur im Foodbook).'
+            );
+        }
+    }
 
     public static function aufloesenBlockTyp(string $typ): string
     {
@@ -240,6 +353,7 @@ class OfferCompositionService
         }
         $daten = array_intersect_key($in, array_flip(self::BLOCK_FELDER));
         $daten['type'] = self::aufloesenBlockTyp($in['type'] ?? '');
+        $this->pruefePreisBasis($daten['price_basis'] ?? null);
         if ($daten['type'] === 'concept_ref') {
             $this->pruefeConceptRef($team, $daten['concept_id'] ?? null);
         }

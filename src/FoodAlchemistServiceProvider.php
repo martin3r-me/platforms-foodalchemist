@@ -699,6 +699,10 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     // Spec 50 · Schicht 4 — read-only Vollständigkeits-Messung.
                     \Platform\FoodAlchemist\Tools\RecipeReifeGetTool::class,
                     \Platform\FoodAlchemist\Tools\ReifeGetTool::class,
+                    // Spec 50 · E-3/E-4: das Ablauf-Wissen ausliefern. Die Kategorie `workflow`
+                    // hat kein Routing — ohne Abhol-Tool bleiben die Dossiers unsichtbar.
+                    \Platform\FoodAlchemist\Tools\AblaufGetTool::class,
+                    \Platform\FoodAlchemist\Tools\RegelwerkGetTool::class,
                     \Platform\FoodAlchemist\Tools\RecipesEnrichTool::class,
                     \Platform\FoodAlchemist\Tools\RecipesGenerateTool::class, // 03·L5 (Lockstep-Schuld aus #505)
                     \Platform\FoodAlchemist\Tools\RecipesExtractTool::class,  // Rezept-Import (Rohtext/Foto-Umweg → geerdeter Draft)
@@ -851,6 +855,14 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\OfferBlockPutTool::class,
                     \Platform\FoodAlchemist\Tools\OfferBlockDeleteTool::class,
                     \Platform\FoodAlchemist\Tools\OfferInsertFormatTool::class,
+                    // Spec 50 · C-7: Angebot auf Foodbook-Niveau — Struktur aus dem Geruest
+                    // (Slot-Labels statt „Menue"), Reihenfolge/Verschachtelung ueber MCP steuerbar,
+                    // und der Kundentext-Vorschlag, den es bisher nur im Editor gab.
+                    \Platform\FoodAlchemist\Tools\OfferStrukturAusGeruestTool::class,
+                    \Platform\FoodAlchemist\Tools\OfferChapterReorderTool::class,
+                    \Platform\FoodAlchemist\Tools\OfferChapterMoveTool::class,
+                    \Platform\FoodAlchemist\Tools\OfferBlockReorderTool::class,
+                    \Platform\FoodAlchemist\Tools\AngebotKundentextTool::class,
                     // #380 Composer / Spec 43: Angebot-Präsentation (digitales Kundenbuch, Public-Link).
                     \Platform\FoodAlchemist\Tools\AngebotPresentationPublishTool::class,
                     \Platform\FoodAlchemist\Tools\AngebotPresentationWithdrawTool::class,

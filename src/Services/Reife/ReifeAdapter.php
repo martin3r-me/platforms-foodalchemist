@@ -34,4 +34,24 @@ interface ReifeAdapter
      *         null = nicht gefunden oder für dieses Team nicht sichtbar.
      */
     public function messe(Team $team, int $id): ?array;
+
+    /**
+     * Spec 50 · E-3 — das SOLL ohne Objekt: welche Aspekte kann dieser Adapter überhaupt messen?
+     *
+     * `messe()` beantwortet „was fehlt DIESEM Artefakt", `sollAspekte()` beantwortet „woran wird
+     * ein Artefakt dieser Art gemessen" — das ist es, was `ablauf.GET` einem Agenten sagen muss,
+     * BEVOR er etwas anlegt.
+     *
+     * Wo die Codes aus einer Code-Konstante stammen (Schrittfolgen des `BulkEnrichService`),
+     * wird von dort abgeleitet statt abgeschrieben. Für den Rest ist die Deklaration eine
+     * zweite Liste neben `messe()` — deshalb hält `ReifeSollAspekteTest` sie synchron: jeder
+     * Code, den ein realer `messe()`-Lauf erzeugt, muss hier deklariert sein. Ohne diesen
+     * Wächter altert die Liste genau so wie die Workflow-Docs seit Juli 2026.
+     *
+     * `wie` = das Werkzeug, das die Lücke schließt, oder `null`, wenn es keines gibt. Ein
+     * erfundener Tool-Name wäre schlimmer als ein ehrliches `null`.
+     *
+     * @return list<array{code: string, schwere: string, wie: ?string, ebene?: string, bedingt?: string}>
+     */
+    public function sollAspekte(): array;
 }

@@ -133,4 +133,29 @@ class FoodbookReifeAdapter extends ContainerReifeAdapter
 
         return $this->ergebnis((string) $fb->label, $fb->status, $luecken, $erfuellt, $g['nicht_messbar'], $kennzahlen);
     }
+
+    /** Spec 50 · E-3 — {@see ReifeAdapter::sollAspekte()}. */
+    public function sollAspekte(): array
+    {
+        $bloecke = 'foodalchemist.foodbook_blocks.POST';
+
+        return array_merge([
+            ['code' => 'label', 'schwere' => 'wichtig', 'wie' => 'foodalchemist.foodbooks.PUT'],
+            ['code' => 'description', 'schwere' => 'hinweis', 'wie' => 'foodalchemist.foodbook.KUNDENTEXT_GENERATE'],
+            ['code' => 'customer', 'schwere' => 'hinweis', 'wie' => 'foodalchemist.foodbooks.CUSTOMER_LINK'],
+            ['code' => 'keine_kapitel', 'schwere' => 'blockiert', 'wie' => 'foodalchemist.foodbook_kapitel.POST'],
+            ['code' => 'kein_inhalt', 'schwere' => 'blockiert', 'wie' => $bloecke],
+            ['code' => 'kapitel_leer', 'schwere' => 'wichtig', 'wie' => $bloecke],
+            ['code' => 'kapitel_ohne_text', 'schwere' => 'hinweis', 'wie' => 'foodalchemist.foodbook_kapitel.KUNDENTEXT_GENERATE'],
+            ['code' => 'ref_ohne_ziel', 'schwere' => 'blockiert', 'wie' => 'foodalchemist.foodbook_blocks.PUT'],
+            ['code' => 'header_ohne_titel', 'schwere' => 'wichtig', 'wie' => 'foodalchemist.foodbook_blocks.PUT'],
+            ['code' => 'kapitel_ohne_titel', 'schwere' => 'wichtig', 'wie' => 'foodalchemist.foodbook_kapitel.PUT'],
+            ['code' => 'foodbook_kapitel_leer', 'schwere' => 'wichtig', 'wie' => null, 'bedingt' => 'ampel'],
+            ['code' => 'foodbook_kapitel_ohne_text', 'schwere' => 'hinweis', 'wie' => null, 'bedingt' => 'ampel'],
+            ['code' => 'foodbook_ziel_verfehlt', 'schwere' => 'wichtig', 'wie' => null, 'bedingt' => 'ampel'],
+            ['code' => 'foodbook_stale', 'schwere' => 'wichtig', 'wie' => null, 'bedingt' => 'ampel'],
+            ['code' => 'foodbook_skizze_ungeerdet', 'schwere' => 'hinweis', 'wie' => null, 'bedingt' => 'ampel'],
+        ], $this->geruestAspekte());
+    }
+
 }

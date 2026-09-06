@@ -27,7 +27,8 @@ class RecipesPostTool extends FoodAlchemistTool implements ToolContract, ToolMet
         return 'Legt ein neues Rezept als ENTWURF an (status=draft, created_via=mcp — nie automatisch aktiv). '
             . 'Zutaten optional direkt mit: pro Zeile name + quantity + unit (Slug, z. B. g/kg/ml/stk) und '
             . 'gp_id ODER referenced_recipe_id (XOR; vorher via foodalchemist.gps.MATCH erden — ungematcht nur als Ausnahme). '
-            . 'Yield/Allergene/EK werden automatisch aggregiert. Freigabe (approved) macht nur ein Mensch im Editor.';
+            . 'Yield/Allergene/EK werden automatisch aggregiert. Freigabe (approved) macht nur ein Mensch im Editor.'
+            . ' Ablauf, Soll-Aspekte und geltende Regelwerke vorher: foodalchemist.ablauf.GET(vorgang="basisrezept_anlegen").';
     }
 
     public function getSchema(): array
