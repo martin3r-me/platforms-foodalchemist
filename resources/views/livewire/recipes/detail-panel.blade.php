@@ -335,6 +335,9 @@
             </x-foodalchemist::section>
         @endif
 
+        {{-- KI-Kontext der Erstellung (Call-Log ↔ Rezept) — nur bei KI-generierten Rezepten befüllt --}}
+        @include('foodalchemist::livewire.recipes.partials.ki-kontext')
+
         {{-- Workflow + Fuß --}}
         <div class="border-t border-black/5 pt-3 space-y-2" data-workflow>
             <div class="flex flex-wrap items-center gap-1.5">

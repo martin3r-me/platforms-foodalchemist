@@ -257,5 +257,8 @@
             @include('foodalchemist::livewire.recipes.partials.deklaration')
         </x-foodalchemist::section>
 
+        {{-- KI-Kontext der Erstellung (Call-Log ↔ Gericht) — nur bei KI-generierten Gerichten befüllt --}}
+        @include('foodalchemist::livewire.recipes.partials.ki-kontext')
+
     @endif
 </div>

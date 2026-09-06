@@ -203,7 +203,8 @@
                                 </select>
                             </td>
                         @endif
-                        <td class="{{ $td }} !px-2 !py-0.5"><input type="text" x-model="zeile.cooking_loss_pct" placeholder="0" class="{{ $input }} !w-14 !py-0.5 !text-[11px] text-right" /></td>
+                        {{-- Garverlust: KI-Schätzung (Generator/Vorschlag) violett markiert; Tippen macht den Wert manuell --}}
+                        <td class="{{ $td }} !px-2 !py-0.5"><input type="text" x-model="zeile.cooking_loss_pct" placeholder="0" class="{{ $input }} !w-14 !py-0.5 !text-[11px] text-right" :class="zeile._garverlust_ki ? '!text-violet-700 !border-violet-300' : ''" :title="zeile._garverlust_ki ? 'Garverlust: KI-Schätzung — Tippen übernimmt den Wert als manuell' : ''" @input="zeile._garverlust_ki = false" data-garverlust-input /></td>
                         {{-- Gewichtsanteil — % vom Gesamtgewicht (Summe 100 %), reine Anzeige.
                              Bäckerprozent (Referenz-Sicht + %→Gramm-Rückschreiben) lebt jetzt im
                              Grammaturen-Rechner (ProportionService/MCP), nicht mehr im Editor. --}}

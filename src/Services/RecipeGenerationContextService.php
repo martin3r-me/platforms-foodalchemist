@@ -254,7 +254,12 @@ class RecipeGenerationContextService
             'knowledge_used' => $wissen['files_used'],
             'kontext' => $kontext,
             'snapshot' => [
+                // `knowledge_files` = NUR der Retrieval-Fund (Dedup-Eingang W0-3b + `_knowledge_scope`
+                // der Kind-Rezepte) — bleibt unverändert. Der Kanon steht daneben in einem EIGENEN Feld,
+                // damit die Step-Zeile das komplette Wissen zeigen kann (Kanon · Recherche), ohne den
+                // Dedup-Kanal zu verschmutzen (Anlass 2026-09-06: „man sieht nie komplett, was benutzt wurde").
                 'knowledge_files' => $wissen['files_used'],
+                'kanon_files' => $kanonFiles,
                 'template_ids' => array_column($templateContext, 'id'),
                 'pairing_keys' => array_values(array_filter(array_keys($prompt), fn ($key) => str_contains((string) $key, 'pair'))),
                 'built_at' => now()->toIso8601String(),
