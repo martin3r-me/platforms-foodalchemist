@@ -609,6 +609,14 @@ it('laedt fuer einen Kundentext nur die passenden Cross-Cutting-Dossiers', funct
     foreach (KnowledgeContextService::ALWAYS_LOAD_CROSS_CUTTING as $slug) {
         w0Doc($slug, 'cross_cutting', 4000, 'Produktionswissen ' . $slug);
     }
+    // Welle 2: der Kundentext zeigt per config auf die SPLIT-Dossiers, nicht mehr auf die
+    // (inaktiven) Originale — genau die müssen im Korpus liegen, sonst kommt still nichts.
+    // (Array-Zugriff statt Punkt-Pfad: der Feature-Key enthält selbst einen Punkt.)
+    $textSoll = config('foodalchemist.ai.cross_cutting_slugs')['foodbook.kundentext'] ?? null;
+    expect($textSoll)->toBe(['saisonkalender--hauptsaison-nach-monaten-de', 'synonyme--cross-sprachliche-synonyme-gleicher-lebensmittel']);
+    foreach ($textSoll as $slug) {
+        w0Doc($slug, 'cross_cutting', 3000, 'Kundentextwissen ' . $slug);
+    }
     w0Routing('foodbook.kundentext', 'cross_cutting', 'always');
     // Vergleichs-Feature ohne Überschreibung (statt ai_generate_recipe, dessen
     // RECIPE_MAX_CHARS_PER_DOC-Klemme das Bild verfälschen würde).
@@ -622,7 +630,8 @@ it('laedt fuer einen Kundentext nur die passenden Cross-Cutting-Dossiers', funct
     $genSlugs = array_map(fn ($f) => explode('@', $f)[0], $gen['used_by_category']['cross_cutting'] ?? []);
 
     // Kundentext: nur was er braucht …
-    expect($textSlugs)->toContain('saisonkalender')->toContain('synonyme')
+    expect($textSlugs)->toBe($textSoll)
+        ->and($textSlugs)->not->toContain('saisonkalender')
         ->and($textSlugs)->not->toContain('mengen_defaults')
         ->and($textSlugs)->not->toContain('bruehen_fonds')
         ->and($textSlugs)->not->toContain('sauce_mutterstrukturen')
