@@ -12,8 +12,9 @@ namespace Platform\FoodAlchemist\Enums;
  * die Menge der zulässigen Werte kennt. Das Vokabular lebt darum hier und nicht im
  * Migrations-Kommentar von 2026-06-12 — der kennt nur zwei der fünf Fälle (V-020).
  *
- * Alle sechs Fälle haben heute einen echten Schreiber; es ist keine Wunschliste:
+ * Alle sieben Fälle haben heute einen echten Schreiber; es ist keine Wunschliste:
  * `enrich`/`enrich_vk`/`enrich_gp` aus {@see \Platform\FoodAlchemist\Services\BulkEnrichService},
+ * `enrich_concept` aus {@see \Platform\FoodAlchemist\Services\ConceptOneShotService} (Spec 50 · C-4),
  * `ingest` aus {@see \Platform\FoodAlchemist\Services\FileArticleImportService},
  * `review` aus {@see \Platform\FoodAlchemist\Services\RecipeFindingsBatchService},
  * `detektor` aus {@see \Platform\FoodAlchemist\Services\QualityRunService}.
@@ -28,6 +29,13 @@ enum BulkRunType: string
 
     /** Anreicherungs-Autopilot auf Grundprodukten (eigener Vorschlags-Speicher). */
     case EnrichGp = 'enrich_gp';
+
+    /**
+     * Anreicherungs-Pass am KONZEPT (Spec 50 · C-4): Frame-Kopf + `concept.wording` nur für Lücken.
+     * Eigener Typ, weil der Lauf am Konzept hängt (`context.concept_id`), nicht an einem Rezept —
+     * in `runs.GET` sonst nicht von einem Gerichte-Lauf zu unterscheiden.
+     */
+    case EnrichConcept = 'enrich_concept';
 
     /** Datei-Import von Lieferantenartikeln (Spec 13 · Kanal B). */
     case Ingest = 'ingest';
@@ -53,6 +61,7 @@ enum BulkRunType: string
             self::Enrich => 'Anreicherung (Basisrezepte)',
             self::EnrichVk => 'Anreicherung (Gerichte)',
             self::EnrichGp => 'Anreicherung (Grundprodukte)',
+            self::EnrichConcept => 'Anreicherung (Konzepte)',
             self::Ingest => 'Artikel-Import',
             self::Review => 'KI-Review',
             self::Detektor => 'Qualitäts-Lauf (Ampel)',
@@ -73,7 +82,7 @@ enum BulkRunType: string
     public function istKiLauf(): bool
     {
         return match ($this) {
-            self::Enrich, self::EnrichVk, self::EnrichGp, self::Review => true,
+            self::Enrich, self::EnrichVk, self::EnrichGp, self::EnrichConcept, self::Review => true,
             self::Ingest, self::Detektor => false,
         };
     }

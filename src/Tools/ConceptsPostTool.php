@@ -44,6 +44,16 @@ class ConceptsPostTool extends FoodAlchemistTool implements ToolContract, ToolMe
                 'event_type' => ['type' => 'string', 'description' => 'Eventtyp-Name (Vokabular)'],
                 'service_moments' => ['type' => 'array', 'items' => ['type' => 'string'], 'description' => 'Einsatzmomente (Namen, mehrfach)'],
                 'seasons' => ['type' => 'array', 'items' => ['type' => 'string'], 'description' => 'Saison-Facetten (Namen, mehrfach) — nicht die season-Freitextangabe'],
+                // Spec 50 C-1: kanonische Struktur ohne KI — Header (Gang/Station) + leere Positionen sofort da.
+                'geruest' => [
+                    'type' => 'object',
+                    'description' => 'Optional: kanonisches Gerüst gleich anlegen (Regelwerk_Concept §4). typ=menue → Gänge mit Überschrift je Gang (gaenge 3–9, Default 3); typ=buffet → 6 Stations-Sektionen (Stationen ≥2 Positionen als Paket mit Header). Danach Positionen via foodalchemist.concept_slots.PUT/POST füllen; Header via concept_blocks.PUT betexten.',
+                    'properties' => [
+                        'typ' => ['type' => 'string', 'enum' => ['menue', 'buffet']],
+                        'gaenge' => ['type' => 'integer', 'minimum' => 3, 'maximum' => 9],
+                    ],
+                    'required' => ['typ'],
+                ],
             ],
             'required' => ['name'],
         ];
@@ -85,14 +95,31 @@ class ConceptsPostTool extends FoodAlchemistTool implements ToolContract, ToolMe
             if (! empty($arguments['seasons'])) {
                 $svc->syncSaisons($team, $c->id, $this->resolveFacetIds($team, 'foodalchemist_seasons', (array) $arguments['seasons']));
             }
+            $geruest = null;
+            if (is_array($arguments['geruest'] ?? null) && ($arguments['geruest']['typ'] ?? '') !== '') {
+                $g = app(\Platform\FoodAlchemist\Services\ConceptGeneratorService::class)->kanonischesGeruest(
+                    $team, $c->refresh(), (string) $arguments['geruest']['typ'],
+                    isset($arguments['geruest']['gaenge']) ? (int) $arguments['geruest']['gaenge'] : null,
+                );
+                $geruest = [
+                    'typ' => (string) $arguments['geruest']['typ'],
+                    'positionen_leer' => $g['slots'],
+                    'header' => $g['header'],
+                    'struktur' => $c->slots()->orderBy('position')->get(['id', 'type', 'role', 'title', 'embedded_concept_id'])
+                        ->map(fn ($s) => ['slot_id' => (int) $s->id, 'type' => $s->type, 'role' => $s->role, 'title' => $s->title, 'paket_concept_id' => $s->embedded_concept_id])
+                        ->all(),
+                ];
+            }
         } catch (\RuntimeException $e) {
             return ToolResult::error($e->getMessage(), 'VALIDATION_ERROR');
         }
 
-        return ToolResult::success([
+        return ToolResult::success(array_filter([
             'concept' => ['id' => $c->id, 'name' => $c->name, 'status' => $c->status, 'serving_form_id' => $c->serving_form_id],
-            'note' => 'Entwurf: aktiv setzen macht ein Mensch im Concepter. Servierform steuert die Slot-Darreichungs-Auflösung.',
-        ]);
+            'geruest' => $geruest,
+            'note' => 'Entwurf: aktiv setzen macht ein Mensch im Concepter. Servierform steuert die Slot-Darreichungs-Auflösung.'
+                . ($geruest !== null ? ' Gerüst steht: leere Positionen (type=gericht) per foodalchemist.concept_slots.PUT mit sales_recipe_id füllen, Header-Titel per concept_blocks.PUT.' : ''),
+        ], fn ($v) => $v !== null));
     }
 
     public function getMetadata(): array
@@ -103,7 +130,7 @@ class ConceptsPostTool extends FoodAlchemistTool implements ToolContract, ToolMe
             'read_only' => false, 'idempotent' => false, 'risk_level' => 'write',
             'requires_auth' => true, 'requires_team' => true,
             'side_effects' => ['creates'], 'cost_class' => 'local_db',
-            'related_tools' => ['foodalchemist.concept_slots.POST', 'foodalchemist.concepts.GET'],
+            'related_tools' => ['foodalchemist.concept_slots.POST', 'foodalchemist.concept_slots.PUT', 'foodalchemist.concept_blocks.PUT', 'foodalchemist.concepts.GET', 'foodalchemist.concepts.ENRICH'],
             'examples' => ['Lege ein Konzept "Streetfood-Hochzeit" mit Zielpreis 45 € p. P. an'],
         ];
     }

@@ -310,3 +310,54 @@ it('bietet als Verkaufseinheit nur die vier zulaessigen Einheiten an', function 
         ->and($html)->toContain('Portion')
         ->and($html)->not->toContain('Prise');
 });
+
+it('KI-Übernahme trägt die Lineage bis in den Save: Vehikel + Wording ⇒ `ki` mit Konfidenz (Etikett ehrlich)', function () {
+    // Nebenbefund Spec 50/Etappe 5: `uebernehmeVehikel`/`uebernehmeText` schrieben in die Form, der Save
+    // etikettierte danach ALLES als `manual`. Der Marker `kiLineage` wandert jetzt in `updateVk(...)`.
+    $vehikelId = DB::table('foodalchemist_vocab_serving_vehicles')->insertGetId([
+        'uuid' => (string) \Illuminate\Support\Str::uuid7(), 'team_id' => $this->rootTeam->id, 'slug' => 'fx_schiefer',
+        'name' => 'Schiefer', 'group_name' => 'Platten', 'sort_order' => 1, 'is_inactive' => false, 'created_at' => now(), 'updated_at' => now(),
+    ]);
+
+    Livewire::test(VkModal::class)
+        ->call('oeffnen', $this->vk->id)
+        ->set('form.serving_vehicle_vocab_id', $vehikelId)
+        ->set('form.sales_wording_standard', 'Hot Dog vom Wiener, Brioche-Bun')
+        // Marker NACH den Form-Sets — so wie `uebernehmeVehikel`/`uebernehmeText` sie setzen
+        ->set('kiLineage', ['serving_vehicle' => 0.9, 'sales_wording' => 0.65])
+        ->call('speichern')
+        ->assertSet('fehler', null)
+        ->assertSet('kiLineage', []);
+
+    $r = $this->vk->fresh();
+    expect($r->serving_vehicle_vocab_id)->toBe($vehikelId)
+        ->and($r->serving_vehicle_source)->toBe('ki')
+        ->and((float) $r->serving_vehicle_ai_confidence)->toBe(0.9)
+        ->and($r->sales_wording_source)->toBe('ki')
+        ->and((float) $r->sales_wording_ai_confidence)->toBe(0.65);
+});
+
+it('Nutzer-Edit nach KI-Übernahme kippt die Lineage zurück auf `manual`', function () {
+    $vehikelId = DB::table('foodalchemist_vocab_serving_vehicles')->insertGetId([
+        'uuid' => (string) \Illuminate\Support\Str::uuid7(), 'team_id' => $this->rootTeam->id, 'slug' => 'fx_schiefer',
+        'name' => 'Schiefer', 'group_name' => 'Platten', 'sort_order' => 1, 'is_inactive' => false, 'created_at' => now(), 'updated_at' => now(),
+    ]);
+    $zweiteId = DB::table('foodalchemist_vocab_serving_vehicles')->insertGetId([
+        'uuid' => (string) \Illuminate\Support\Str::uuid7(), 'team_id' => $this->rootTeam->id, 'slug' => 'fx_holzbrett',
+        'name' => 'Holzbrett', 'group_name' => 'Platten', 'sort_order' => 2, 'is_inactive' => false, 'created_at' => now(), 'updated_at' => now(),
+    ]);
+
+    Livewire::test(VkModal::class)
+        ->call('oeffnen', $this->vk->id)
+        ->set('form.serving_vehicle_vocab_id', $vehikelId)
+        ->set('kiLineage', ['serving_vehicle' => 0.9])
+        ->set('form.serving_vehicle_vocab_id', $zweiteId)      // Nutzer korrigiert den KI-Vorschlag
+        ->assertSet('kiLineage', [])
+        ->call('speichern')
+        ->assertSet('fehler', null);
+
+    $r = $this->vk->fresh();
+    expect($r->serving_vehicle_vocab_id)->toBe($zweiteId)
+        ->and($r->serving_vehicle_source)->toBe('manual')
+        ->and($r->serving_vehicle_ai_confidence)->toBeNull();
+});

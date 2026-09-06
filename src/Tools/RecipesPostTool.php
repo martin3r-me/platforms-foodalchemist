@@ -134,7 +134,7 @@ class RecipesPostTool extends FoodAlchemistTool implements ToolContract, ToolMet
             return ToolResult::error($e->getMessage(), 'VALIDATION_ERROR');
         }
 
-        return ToolResult::success([
+        return ToolResult::success($this->mitReife([
             'recipe' => [
                 'id' => $recipe->id, 'name' => $recipe->name, 'recipe_key' => $recipe->recipe_key,
                 'status' => $this->statusWert($recipe), 'created_via' => $recipe->created_via,
@@ -147,7 +147,7 @@ class RecipesPostTool extends FoodAlchemistTool implements ToolContract, ToolMet
                     : '')
                 . 'Entwurf (Draft-Quarantäne): fließt erst nach menschlichem Review in Verkauf/Kalkulation.'
                 . ($standardForm !== null ? ' Standard-Darreichung (Form „unbestimmt") angelegt — Servierform kuratieren.' : ''),
-        ]);
+        ], $team, (int) $recipe->id, (bool) $recipe->is_sales_recipe));
     }
 
     public function getMetadata(): array

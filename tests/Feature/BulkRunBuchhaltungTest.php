@@ -58,7 +58,7 @@ it('legt leeren Kontext als NULL ab statt als leeres Objekt', function () {
         ->and(FoodAlchemistBulkRun::findOrFail($run->id)->context)->toBeNull();
 });
 
-it('kennt genau die sechs Lauf-Arten, die im Bestand geschrieben werden', function () {
+it('kennt genau die sieben Lauf-Arten, die im Bestand geschrieben werden', function () {
     // Registry-Riegel im Muster von 22·H1 (V-003): jede Art braucht ein Label, und
     // die Menge selbst ist die Dokumentation — nicht der Migrations-Kommentar (V-020).
     //
@@ -66,8 +66,10 @@ it('kennt genau die sechs Lauf-Arten, die im Bestand geschrieben werden', functi
     // bis dahin synchron im Livewire-Request und war darum weder abbrechbar noch nachlesbar.
     // Als eingereihter Lauf braucht er dieselbe Quittung wie die KI-Läufe — sonst ist ein
     // Klick, der 90 Sekunden dauert, von einem Klick ins Timeout nicht zu unterscheiden.
+    // `enrich_concept` kam 2026-09-06 dazu (Spec 50 · C-4): der Konzept-One-Shot braucht dieselbe
+    // Quittung wie der Rezept-One-Shot — am Konzept, nicht an einem Rezept aufgehängt.
     expect(array_map(fn (BulkRunType $t) => $t->value, BulkRunType::cases()))
-        ->toBe(['enrich', 'enrich_vk', 'enrich_gp', 'ingest', 'review', 'detektor']);
+        ->toBe(['enrich', 'enrich_vk', 'enrich_gp', 'enrich_concept', 'ingest', 'review', 'detektor']);
 
     foreach (BulkRunType::cases() as $typ) {
         expect($typ->label())->not->toBeEmpty();

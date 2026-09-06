@@ -108,6 +108,8 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                 \Platform\FoodAlchemist\Console\RecipeFindingsCommand::class,
                 \Platform\FoodAlchemist\Console\ImportArticlesCommand::class,
                 \Platform\FoodAlchemist\Console\MoneyTruthReportCommand::class,
+                \Platform\FoodAlchemist\Console\VollstaendigkeitReportCommand::class,
+                \Platform\FoodAlchemist\Console\AllergenLaVorrangCommand::class,
                 \Platform\FoodAlchemist\Console\SeedRebateTiersCommand::class,
                 \Platform\FoodAlchemist\Console\StepsBackfillCommand::class,
                 \Platform\FoodAlchemist\Console\TrendClusterCommand::class,
@@ -616,6 +618,8 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\ProportionApplyTool::class,
                     // #513 Tier 1 Punkt 2: Kerntemperatur-Referenz (Qualitäts-Zielwerte, weich)
                     \Platform\FoodAlchemist\Tools\ReferenceGetTool::class,
+                    // Spec 50 C-8: Header-Presets + Sektions-Gerüst + Gang-Leiter/Stationen als Vokabular-Read
+                    \Platform\FoodAlchemist\Tools\StrukturVokabularGetTool::class,
                     // Phase K: Wissen + Pairing-Graph für externe LLM-Clients
                     \Platform\FoodAlchemist\Tools\KnowledgeSearchTool::class,
                     \Platform\FoodAlchemist\Tools\KnowledgeListTool::class,
@@ -692,6 +696,10 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\FavoritesPutTool::class,
                     // Phase A: Rezept-Schreibkaskade (Weg-A-Ausnahme, Draft-Quarantäne)
                     \Platform\FoodAlchemist\Tools\RecipesPostTool::class,
+                    // Spec 50 · Schicht 4 — read-only Vollständigkeits-Messung.
+                    \Platform\FoodAlchemist\Tools\RecipeReifeGetTool::class,
+                    \Platform\FoodAlchemist\Tools\ReifeGetTool::class,
+                    \Platform\FoodAlchemist\Tools\RecipesEnrichTool::class,
                     \Platform\FoodAlchemist\Tools\RecipesGenerateTool::class, // 03·L5 (Lockstep-Schuld aus #505)
                     \Platform\FoodAlchemist\Tools\RecipesExtractTool::class,  // Rezept-Import (Rohtext/Foto-Umweg → geerdeter Draft)
                     \Platform\FoodAlchemist\Tools\RecipesReviewTool::class,   // 03·L6 Copilot-Pruefpass (read-only)
@@ -783,6 +791,8 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\ConceptCategoriesDeleteTool::class,
                     \Platform\FoodAlchemist\Tools\ConceptWordingGenerateTool::class,
                     \Platform\FoodAlchemist\Tools\ConceptsCohesionTool::class,
+                    // Spec 50 · C-4: Anreicherung bestehender Konzepte (Gegenstück zu recipes.ENRICH)
+                    \Platform\FoodAlchemist\Tools\ConceptsEnrichTool::class,
                     // D5d: Pakete-Ressource (physische Pakete, spiegelt Livewire\Pakete\Index) + Positionen
                     \Platform\FoodAlchemist\Tools\PaketeGetTool::class,
                     \Platform\FoodAlchemist\Tools\PaketeListTool::class,

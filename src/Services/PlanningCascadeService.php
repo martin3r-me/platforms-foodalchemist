@@ -1771,6 +1771,10 @@ class PlanningCascadeService
         if ($team === null) {
             return;
         }
+        // Spec 50 C-2: alle erfundenen Gerichte stehen → Wording-Pass (Header-Titel, Positions-Wording,
+        // Intro, consumer_name/claim), nur Lücken, fail-soft — VOR dem Kohäsions-Score, damit das
+        // Konzept beim Review komplett ist.
+        app(ConceptService::class)->wordingPassFailSoft($team, (int) $conceptStep->ref_id);
         try {
             $this->persistConceptCohesion((int) $conceptStep->cascade_run_id, $team, (int) $conceptStep->ref_id);
         } catch (\Throwable) {
@@ -2086,8 +2090,17 @@ class PlanningCascadeService
      * So erscheint der Import als Worker-Lauf statt synchron im Request zu minten. Sub-Rezepte laufen im
      * Hintergrund mit (stepId=null, refresh — wie {@see \Platform\FoodAlchemist\Livewire\Recipes\RecipeModal::allesAnreichern}).
      */
-    public function enrichBestehendesRezept(Team $team, int $recipeId, bool $vkModus, ?int $planningSessionId = null): FoodAlchemistCascadeRun
-    {
+    public function enrichBestehendesRezept(
+        Team $team,
+        int $recipeId,
+        bool $vkModus,
+        ?int $planningSessionId = null,
+        // Spec 50 · E-1: die zwei Regler, die der MCP-Weg braucht. Defaults = bisheriges
+        // Verhalten (byte-kompatibel für die Livewire-Aufrufer). `kiBilder` bleibt AUS —
+        // Entscheid „KI-Fotos auf Bedarf", Bilder sind der teure Teil der Anreicherung.
+        bool $completeCoverage = true,
+        bool $kiBilder = false,
+    ): FoodAlchemistCascadeRun {
         $recipe = FoodAlchemistRecipe::visibleToTeam($team)->findOrFail($recipeId);
         $kind = $vkModus ? 'gericht' : 'rezept';
 
@@ -2114,14 +2127,14 @@ class PlanningCascadeService
         ]);
 
         $this->markEnrichQueued($step);
-        EnrichRecipeJob::dispatch($team->id, (int) (Auth::id() ?? 0), (int) $recipe->id, null, false, (int) $step->id);
+        EnrichRecipeJob::dispatch($team->id, (int) (Auth::id() ?? 0), (int) $recipe->id, null, $kiBilder, (int) $step->id, false, false, $completeCoverage);
 
         // Sub-Rezepte im Hintergrund mit-anreichern (nicht am Worker-Step sichtbar, wie allesAnreichern).
         foreach (app(\Platform\FoodAlchemist\Services\RecipeOneShotService::class)->subRezeptIds((int) $recipe->id) as $subId) {
             // Schleife über alle Sub-Rezepte eines Gerichts — viele kleine Läufe hinter EINEM
             // Klick. Eigene Schlange, damit sie den interaktiven Einzel-Anreicherungs-Klick
             // (Rezept-/VK-Modal) nicht blockieren.
-            EnrichRecipeJob::dispatch($team->id, (int) (Auth::id() ?? 0), (int) $subId, null, false, null, false, true)
+            EnrichRecipeJob::dispatch($team->id, (int) (Auth::id() ?? 0), (int) $subId, null, false, null, false, true, $completeCoverage)
                 ->onQueue(Warteschlange::anreichern());
         }
 

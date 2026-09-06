@@ -288,6 +288,17 @@ class DetailPanel extends Component
             return;
         }
         if ($this->kiVorschlag['type'] === 'allergene') {
+            // Spec 50 · A8: kein KI-Override über eine LA-Messung. Die KI-Allergene sind der
+            // Fallback für GPs OHNE LA-Daten; über einem LA-Profil würden sie die GL-01-Kette
+            // umkehren (Schätzung Prio 1 vor Messung) und `allergens_source='ki'` schirmte den
+            // GP zusätzlich dauerhaft von `backfillAllergenKonfidenz` ab.
+            if (app(\Platform\FoodAlchemist\Services\GpAggregateService::class)->hatLaAllergenProfil($gp)) {
+                $this->fehler = 'Dieser GP hat ein LA-Allergenprofil — die Lieferantendaten gelten (GL-01 §4.3). '
+                    .'KI-Allergene sind nur der Fallback ohne LA-Daten; zum bewussten Übersteuern die Werte manuell setzen.';
+                $this->kiVorschlag = null;
+
+                return;
+            }
             $update = [];
             foreach ($this->kiVorschlag['werte'] as $feld => $wert) {
                 $update["allergen_{$feld}"] = $wert;             // GL-01 Prio 1: Override

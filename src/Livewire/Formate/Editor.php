@@ -364,7 +364,8 @@ class Editor extends Component
     /**
      * Eine NEUE Edition (Concept, aktiv) anlegen, ihr Standard-Sektions-Gerüst seeden und als
      * Aufbau-Position (Referenz) einfügen. Ersetzt den alten createEdition/attachEdition-Pfad
-     * (kein `format_id`-Besitz mehr — reine Slot-Referenz).
+     * (kein `format_id`-Besitz mehr — reine Slot-Referenz). Struktur-Seed liegt seit C-5 im
+     * FormatService::neueEdition — UI und MCP (`format_editions.POST neu`) gehen denselben Weg.
      */
     public function neueEdition(FormatService $formats): void
     {
@@ -372,16 +373,11 @@ class Editor extends Component
             return;
         }
         try {
-            $concepts = app(ConceptService::class);
-            $concept = $concepts->create($this->team(), [
-                'name' => trim($this->neueEditionName) !== '' ? trim($this->neueEditionName) : 'Neue Edition',
-                'status' => 'active',
-            ]);
-            // Auto-Sektions-Gerüst (Header-Blöcke am Concept selbst) — „automatisch"-Grundgerüst.
-            foreach (FormatService::SEKTIONS_GERUEST as $sektion) {
-                $concepts->addBlock($this->team(), $concept->id, 'header', ['title' => $sektion]);
-            }
-            $slot = $formats->slotConceptEinfuegen($this->team(), $this->id, $concept->id, $this->einfuegenNachId);
+            $slot = $formats->neueEdition(
+                $this->team(), $this->id,
+                trim($this->neueEditionName) !== '' ? trim($this->neueEditionName) : null,
+                $this->einfuegenNachId,
+            )['slot'];
             if ($this->einfuegenNachId !== null) {
                 $this->einfuegenNachId = $slot->id;
             }

@@ -24,7 +24,12 @@ class FoodAlchemistOfferBlock extends Model
     protected $guarded = ['id'];
 
     /** Erlaubte Block-Typen (Enum im PHP-Layer). recipe_ref = Parität, im Picker vorerst aus. */
-    public const BLOCK_TYPES = ['concept_ref', 'recipe_ref', 'header', 'header_preis', 'text', 'spacer', 'image'];
+        // Spec 50 · A7: `image` war hier deklariert, aber NIRGENDS beschreibbar oder renderbar
+    // (`grep "=> 'image'"` über src/ und resources/ = leer; 0 Zeilen im Bestand). Im
+    // Angebot stand der Typ zusätzlich im MCP-Enum: ein Agent konnte ihn setzen und bekam
+    // einen Block, den keine Ausgabe zeigt. Bilder leben entitätsweit (`*_images`-Tabellen)
+    // bzw. als Presentation-Design-Block — beides unberührt.
+    public const BLOCK_TYPES = ['concept_ref', 'recipe_ref', 'header', 'header_preis', 'text', 'spacer'];
 
     /** Kanonische Preis-Basen für header_preis (Vokabular-Pflicht). */
     public const PRICE_BASES = ['person', 'pauschal'];

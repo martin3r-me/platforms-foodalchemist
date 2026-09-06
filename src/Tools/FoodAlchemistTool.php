@@ -574,4 +574,27 @@ abstract class FoodAlchemistTool
 
         return null;
     }
+
+    /**
+     * Spec 50 · Schicht 4 — die Reife-Kurzform an eine Write-Antwort hängen.
+     *
+     * Additiv: ist nichts offen (oder die Messung nicht möglich), bleibt die Antwort
+     * unverändert. Read-only und ohne Provider-Call — sonst würde jeder Schreibvorgang
+     * Kosten verursachen.
+     *
+     * Der Anlass steht in Spec 50: ein Agent legte per MCP ein ganzes Concept an und
+     * erfuhr erst im Review, dass Aufschlagsklasse, Darreichung und Arbeitszeit fehlten.
+     * Der Server wusste es die ganze Zeit.
+     */
+    protected function mitReife(array $daten, \Platform\Core\Models\Team $team, int $recipeId, bool $istVk): array
+    {
+        try {
+            $kurz = app(\Platform\FoodAlchemist\Services\ReifeService::class)
+                ->kurz($team, $istVk ? 'sales_recipe' : 'recipe', $recipeId);
+        } catch (\Throwable $e) {
+            return $daten;                                          // Messung darf den Schreibvorgang nie kippen
+        }
+
+        return $kurz === null ? $daten : $daten + ['reife' => $kurz];
+    }
 }

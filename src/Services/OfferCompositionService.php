@@ -200,6 +200,38 @@ class OfferCompositionService
     private const BLOCK_FELDER = ['type', 'level', 'visible', 'label', 'wording', 'customer_text', 'interne_bemerkung',
         'concept_id', 'sales_recipe_id', 'quantity', 'unit_vocab_id', 'presentation_id', 'price_value', 'price_basis', 'height', 'payload_json'];
 
+    /**
+     * Spec 50 · A6 — das Angebot spricht ein anderes Header-Vokabular als das Foodbook.
+     *
+     * `Livewire/Angebote/Editor` bezieht seine Presets aus {@see FoodbookService::headerPresets()};
+     * die tragen `header_neutral` / `header_frei` / `header_frei_preis`. Das Angebot kennt nur
+     * `header` / `header_preis` — der frühere Einzeiler liess jeden Header still zu einem
+     * `text`-Block werden, und die Render-Zweige im Blade konnten nie matchen. Der Nutzer
+     * klickte „Überschrift" und bekam wortlos einen Textblock.
+     *
+     * Deshalb hier ein echtes Mapping statt eines Rückfalls — und ein Wurf für alles
+     * Unbekannte: ein stiller Typ-Wechsel ist die schlechteste Rückmeldung.
+     */
+    private const TYP_ALIAS = [
+        'header_neutral' => 'header',
+        'header_frei' => 'header',
+        'header_frei_preis' => 'header_preis',
+    ];
+
+    public static function aufloesenBlockTyp(string $typ): string
+    {
+        $typ = self::TYP_ALIAS[$typ] ?? $typ;
+        if (! in_array($typ, FoodAlchemistOfferBlock::BLOCK_TYPES, true)) {
+            throw new \RuntimeException(
+                'Unbekannter Block-Typ "' . $typ . '". Erlaubt: '
+                . implode(', ', FoodAlchemistOfferBlock::BLOCK_TYPES)
+                . ' (Foodbook-Aliasse: ' . implode(', ', array_keys(self::TYP_ALIAS)) . ').'
+            );
+        }
+
+        return $typ;
+    }
+
     public function addBlock(Team $team, int $chapterId, array $in): FoodAlchemistOfferBlock
     {
         $k = $this->ownedKapitel($team, $chapterId);
@@ -207,7 +239,7 @@ class OfferCompositionService
             throw new \RuntimeException('Format-Kapitel trägt keine eigenen Blöcke (Inhalt kommt live aus dem Format).');
         }
         $daten = array_intersect_key($in, array_flip(self::BLOCK_FELDER));
-        $daten['type'] = in_array($in['type'] ?? '', FoodAlchemistOfferBlock::BLOCK_TYPES, true) ? $in['type'] : 'text';
+        $daten['type'] = self::aufloesenBlockTyp($in['type'] ?? '');
         if ($daten['type'] === 'concept_ref') {
             $this->pruefeConceptRef($team, $daten['concept_id'] ?? null);
         }
@@ -224,6 +256,9 @@ class OfferCompositionService
     {
         $block = $this->ownedBlock($team, $blockId);
         $daten = array_intersect_key($in, array_flip(self::BLOCK_FELDER));
+        if (array_key_exists('type', $daten)) {
+            $daten['type'] = self::aufloesenBlockTyp((string) $daten['type']);   // A6: auch beim Ändern
+        }
         $effTyp = array_key_exists('type', $daten) ? $daten['type'] : $block->type;
         if ($effTyp === 'recipe_ref' && array_key_exists('sales_recipe_id', $daten)) {
             $this->pruefeRecipeRef($team, $daten['sales_recipe_id']);

@@ -90,16 +90,35 @@ it('concept_slots.GESCHIRR + DARREICHUNG: lösen (null) läuft durch', function 
 });
 
 it('concept_blocks.POST + PUT: Header-Block anlegen und ändern', function () {
+    // Spec 50 · A3: hier stand bis 2026-09-05 `['label' => 'Menü']` — ein Key, den weder
+    // addBlock noch updateBlock kennt. Das Tool schluckte ihn, meldete `success` und schrieb
+    // NICHTS; der Test war grün und zementierte damit genau den Bug, den er hätte finden
+    // sollen. Deshalb prüft er jetzt beides: den echten Feldnamen UND dass der Wert ankommt.
     $post = ($this->run)('foodalchemist.concept_blocks.POST', [
-        'concept_id' => $this->concept->id, 'type' => 'header', 'felder' => ['label' => 'Menü'],
+        'concept_id' => $this->concept->id, 'type' => 'header', 'felder' => ['title' => 'Menü'],
     ]);
     expect($post->success)->toBeTrue('block-post: ' . ($post->error ?? ''));
     $blockId = $post->data['slot_id'];
+    expect(FoodAlchemistConceptSlot::find($blockId)?->title)->toBe('Menü');
 
     $put = ($this->run)('foodalchemist.concept_blocks.PUT', [
-        'slot_id' => $blockId, 'felder' => ['label' => 'Abendmenü'],
+        'slot_id' => $blockId, 'felder' => ['title' => 'Abendmenü'],
     ]);
     expect($put->success)->toBeTrue('block-put: ' . ($put->error ?? ''));
+    expect(FoodAlchemistConceptSlot::find($blockId)?->title)->toBe('Abendmenü');
+});
+
+it('A3: ein unbekanntes Block-Feld wird gemeldet statt geschluckt', function () {
+    // Der Agenten-Fall: die Tool-Beschreibung nannte `label`/`text`, der Service liest
+    // `title`/`text_content`. Ein stiller Erfolg mit leerem Block ist die schlechteste
+    // Rückmeldung — jetzt kommt ein Fehler MIT der Liste des Erlaubten.
+    $post = ($this->run)('foodalchemist.concept_blocks.POST', [
+        'concept_id' => $this->concept->id, 'type' => 'header', 'felder' => ['label' => 'Menü'],
+    ]);
+
+    expect($post->success)->toBeFalse()
+        ->and($post->error)->toContain('label')
+        ->and($post->error)->toContain('title');
 });
 
 it('concept_paket.BUILD: zwei Gericht-Slots zu einem Paket bündeln', function () {

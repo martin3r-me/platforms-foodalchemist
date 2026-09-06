@@ -143,3 +143,38 @@ it('Tenancy: fremdes Team kann den Aufbau nicht ändern', function () {
     }
     expect($verweigert)->toBeTrue();
 });
+
+// ── Spec 50 · A6 — Header-Vokabular Angebot ⇄ Foodbook ────────────────────────
+
+it('A6: die Foodbook-Header-Presets landen als echte Header, nicht als Textblock', function () {
+    // Der Editor bezieht seine Presets aus FoodbookService::headerPresets() — die tragen
+    // `header_neutral`/`header_frei`/`header_frei_preis`. Das Angebot kennt nur
+    // `header`/`header_preis`; der frühere Rückfall machte daraus wortlos einen `text`-Block,
+    // und die Render-Zweige im Blade konnten nie greifen.
+    $kap = $this->comp->addKapitel($this->rootTeam, $this->angebot->id, ['title' => 'Buffet']);
+
+    $neutral = $this->comp->addBlock($this->rootTeam, $kap->id, ['type' => 'header_neutral', 'label' => 'Vorspeisen']);
+    $frei = $this->comp->addBlock($this->rootTeam, $kap->id, ['type' => 'header_frei', 'label' => 'Eigenes']);
+    $preis = $this->comp->addBlock($this->rootTeam, $kap->id, ['type' => 'header_frei_preis', 'label' => 'Menü', 'price_value' => 42.0]);
+
+    expect($neutral->type)->toBe('header')
+        ->and($frei->type)->toBe('header')
+        ->and($preis->type)->toBe('header_preis')
+        ->and($preis->label)->toBe('Menü');
+});
+
+it('A6: ein unbekannter Block-Typ wirft, statt still zu Text zu werden', function () {
+    $kap = $this->comp->addKapitel($this->rootTeam, $this->angebot->id, ['title' => 'Buffet']);
+
+    expect(fn () => $this->comp->addBlock($this->rootTeam, $kap->id, ['type' => 'quatsch', 'label' => 'X']))
+        ->toThrow(RuntimeException::class);
+});
+
+it('A6: auch das Ändern löst den Typ auf', function () {
+    $kap = $this->comp->addKapitel($this->rootTeam, $this->angebot->id, ['title' => 'Buffet']);
+    $b = $this->comp->addBlock($this->rootTeam, $kap->id, ['type' => 'text', 'customer_text' => 'x']);
+
+    $b = $this->comp->updateBlock($this->rootTeam, $b->id, ['type' => 'header_frei', 'label' => 'Neu']);
+
+    expect($b->type)->toBe('header');
+});

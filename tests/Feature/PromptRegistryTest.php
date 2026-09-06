@@ -18,8 +18,8 @@ const REGISTRY_SOLL = [
     // Rezept-Welt
     'recipe.generator' => 'B', 'recipe.description' => 'C', 'recipe.category' => 'D',
     'recipe.garverlust' => 'C', 'recipe.name_putzen' => 'D', 'recipe.titel_vorschlag' => 'B', 'recipe.sektor' => 'B',
-    'recipe.level' => 'B', 'recipe.sub_typ' => 'B', 'recipe.production_depth' => 'B',
-    'recipe.preparation' => 'A', 'recipe.eigenschaften' => 'B', 'recipe.geschmack' => 'B',
+    'recipe.level' => 'B', 'recipe.production_depth' => 'B',
+    'recipe.eigenschaften' => 'B', 'recipe.geschmack' => 'B',
     'recipe.steps' => 'A',                                            // Spec 27: strukturierte Schritte (Master), preparation ist nur ihr Spiegel
     'recipe.review' => 'A', 'recipe.pairing' => 'A', 'recipe.anker' => 'B',
     'recipe.bauart' => 'B',                                           // Spec 21 S5b-2: Gericht-vs-Komponente nach Bauart (Klassifikator, darum Tier B + keine Food-DNA)
@@ -30,8 +30,8 @@ const REGISTRY_SOLL = [
     'gp.naehrwerte' => 'B',                                           // R10: Nährwert-Fallback ohne LA-Daten (Ist-Feature)
     // VK-Welt
     'vk.generator' => 'B', 'vk.speisen_klasse' => 'B', 'vk.rollen' => 'B',
-    'vk.plating' => 'A', 'vk.name_putzen' => 'B', 'vk.titel_vorschlag' => 'B', 'vk.marketing' => 'A', 'vk.wording' => 'A',
-    'vk.regeneration' => 'B', 'vk.servier_vehikel' => 'B', 'recipe.dichteklasse' => 'B',
+    'vk.plating' => 'A', 'vk.titel_vorschlag' => 'B', 'vk.marketing' => 'A', 'vk.wording' => 'A',
+    'vk.regeneration' => 'B', 'vk.servier_vehikel' => 'B', 'recipe.dichteklasse' => 'B', 'recipe.regeneration' => 'B',
     'vk.review' => 'A', 'vk.kohaerenz' => 'A', 'vk.teller_heber' => 'A',
     'vk.ueberarbeiten' => 'A',                                        // Spec 03 L1a: VK-Revise (freie Anweisung, Facetten sind Vorgabe)
     // Concepter
@@ -79,7 +79,7 @@ it('keine unbekannten Keys außer demo.echo (Inventar-Disziplin)', function () {
 });
 
 it('Compliance- und V-02-Features sind Tier A (06_KI §2-Begründung)', function () {
-    foreach (['gp.allergene', 'recipe.preparation', 'vk.plating', 'recipe.pairing', 'vk.marketing'] as $key) {
+    foreach (['gp.allergene', 'recipe.steps', 'vk.plating', 'recipe.pairing', 'vk.marketing'] as $key) {
         expect(config('foodalchemist.prompts')[$key]['tier'])->toBe('A', $key);
     }
 });

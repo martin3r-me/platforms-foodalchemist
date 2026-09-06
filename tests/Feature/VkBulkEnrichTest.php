@@ -67,7 +67,7 @@ beforeEach(function () {
     ]);
 });
 
-it('L1b: der Lauf am Gericht erzeugt die VIER VK-Vorschläge — und schreibt nichts (GL-07)', function () {
+it('L1b: der Lauf am Gericht erzeugt die vier VK-Text-Vorschläge offen (B-1-Schritte ohne Fake-Antwort bleiben leer) — und schreibt nichts (GL-07)', function () {
     $runId = $this->svc->starteVk($this->rootTeam, [$this->vk->id]);
 
     $run = $this->svc->status($this->rootTeam, $runId);
@@ -152,7 +152,7 @@ it('L1b: VK-Schritte auf einem Basisrezept erzeugen einen ehrlichen Fehler statt
     $runId = $this->svc->starte($this->rootTeam, [$basis->id], BulkEnrichService::SCHRITTE_VK);
 
     expect((int) $this->svc->status($this->rootTeam, $runId)->failed)->toBe(1)
-        ->and(DB::table('foodalchemist_bulk_proposals')->where('run_id', $runId)->whereNotNull('error')->count())->toBe(3)
+        ->and(DB::table('foodalchemist_bulk_proposals')->where('run_id', $runId)->whereNotNull('error')->count())->toBe(5)   // NUR_GERICHT: wording · plating · speisen_klasse · servier_vehikel · rollen (B-1)
         ->and($basis->fresh()->plating_text)->toBeNull();
 });
 

@@ -106,8 +106,13 @@ it('Gerüst-Pfad: nur echte Gerichte, No-Go hart, Graph rankt, leerer Slot mit B
     // Dessert: kein Gericht ≥50 € → LEER mit Begründung am Slot (nie halluziniert)
     $dessert = collect($e['protokoll'])->firstWhere('slot', 'Dessert');
     expect($dessert['status'])->toBe('leer')->and($dessert['begruendung'])->toContain('bewusst leer');
-    $leererSlot = FoodAlchemistConceptSlot::where('concept_id', $concept->id)->whereNull('sales_recipe_id')->whereNull('package_id')->first();
+    $leererSlot = FoodAlchemistConceptSlot::where('concept_id', $concept->id)->whereNull('sales_recipe_id')->whereNull('package_id')
+        ->whereNotIn('type', \Platform\FoodAlchemist\Services\ConceptService::STRUKTUR_TYPEN)->first();   // C-1: Header sind keine Positionen
     expect($leererSlot->note)->toContain('Kein VK-Gericht erfüllt');
+    // Spec 50 C-1: vor jeder Gang-Gruppe steht eine Überschrift — auch vor dem bewusst leeren Dessert.
+    $header = FoodAlchemistConceptSlot::where('concept_id', $concept->id)->where('type', 'header')->orderBy('position')->get();
+    expect($header->pluck('title')->all())->toContain('Dessert')
+        ->and($header->every(fn ($h) => $h->title === $h->role))->toBeTrue();
 
     // Alle befüllten Slots referenzieren echte Rezepte des Teams
     $ids = FoodAlchemistConceptSlot::where('concept_id', $concept->id)->whereNotNull('sales_recipe_id')->pluck('sales_recipe_id');
@@ -182,7 +187,11 @@ it('Brief-Pfad: KI baut das Gerüst (Provider-Stub), Assembler bleibt determinis
     expect($concept->status)->toBe('draft')
         ->and($concept->created_via)->toBe('concept_generator_brief_ui')
         ->and($concept->name)->toBe('Gartenfest')
-        ->and($concept->description)->toContain('Sommerfest');
+        // Spec 50 · A4: der Brief gehört in `brief`. Bis 2026-09-05 landete er in
+        // `description` — dem Ziel von `ConceptService::generateWording`. Wer danach Wording
+        // erzeugte, überschrieb den Brief still, und `concepts.brief` blieb immer NULL.
+        ->and($concept->brief)->toContain('Sommerfest')
+        ->and($concept->description)->toBeNull();
 
     // Gerüst hängt am Konzept (KI-Rahmen), kaputte KI-Regel wurde verworfen, gültige blieb
     $frame = $this->frames->find('concept', $concept->id);
@@ -194,6 +203,11 @@ it('Brief-Pfad: KI baut das Gerüst (Provider-Stub), Assembler bleibt determinis
     $hauptgang = collect($e['protokoll'])->firstWhere('slot', 'Hauptgang');
     expect(collect($hauptgang['gerichte'])->pluck('name')->all())->toBe(['HG: Basilikum-Gnocchi'])
         ->and($e['brief_confidence'])->toBe(0.9);
+    // Spec 50 C-6: Provenienz steht am Concept, nicht nur im Rückgabe-Array.
+    $concept->refresh();
+    expect($concept->composition_source)->toBe('assembler')
+        ->and((float) $concept->ai_confidence)->toBe(0.9)
+        ->and($concept->ai_reasoning)->toBe('stub');
 });
 
 it('Menü-Leitplanken: explizit gesetzter Preis-Korridor je Person überschreibt den KI-Gerüst-Kopf', function () {
@@ -643,15 +657,26 @@ it('Kreativ-Kopf planAusBrief: Draft + Gerüst + kreative Canvas + LEERE Fan-out
     expect($concept->status)->toBe('draft')
         ->and($concept->created_via)->toBe('concept_plan_ui')
         ->and($concept->name)->toBe('KI-Plan-Menü')
-        ->and($concept->description)->toContain('Herbst-Galadinner')
+        // Spec 50 · A4: Brief nach `brief`, `description` bleibt dem Wording-Intro vorbehalten.
+        ->and($concept->brief)->toContain('Herbst-Galadinner')
+        ->and($concept->description)->toBeNull()
         ->and($e['geruest_confidence'])->toBe(0.82)
-        ->and($e['plan_confidence'])->toBe(0.77);
+        ->and($e['plan_confidence'])->toBe(0.77)
+        // Spec 50 C-6: Provenienz am Concept (Gerüst-Konfidenz; die Canvas ist Kür).
+        ->and($concept->composition_source)->toBe('ki')
+        ->and((float) $concept->ai_confidence)->toBe(0.82);
 
     // Frame hängt am Konzept (Reuse geruestAusBriefFuerOwner)
     $frame = $this->frames->find('concept', $concept->id);
     expect($frame)->not->toBeNull()
         ->and($frame->slots()->count())->toBe(2)
         ->and((float) $frame->target_price_pp)->toBe(40.0);
+    // Spec 50 C-3: Zielpreis wandert vom Frame ans Konzept (+ price_display gesamt), name_claim wird
+    // in die kundensichtbaren Kopf-Felder gesplittet — die Canvas behält die Originalzeile.
+    expect((float) $concept->target_price_per_person)->toBe(40.0)
+        ->and($concept->price_display)->toBe('gesamt')
+        ->and($concept->consumer_name)->toBe('Alpenglühen')
+        ->and($concept->claim)->toBe('der Berg auf dem Teller');
 
     // LEERE Fan-out-Slots: 1 + 2 = 3 Positionen, alle leer (kein Gericht/Paket), Typ-Default 'gericht'
     // → exakt der fanoutConceptInvention-Filter. NICHTS wurde vom Assembler befüllt.
@@ -697,7 +722,8 @@ it('Kreativ-Kopf planAusBrief: fail-soft — scheiternder concept.plan lässt Co
 
     // Gerüst + leerer Fan-out-Slot stehen trotz gescheitertem Plan
     expect($this->frames->find('concept', $concept->id))->not->toBeNull()
-        ->and(FoodAlchemistConceptSlot::where('concept_id', $concept->id)->whereNull('sales_recipe_id')->count())->toBe(1);
+        ->and(FoodAlchemistConceptSlot::where('concept_id', $concept->id)->whereNull('sales_recipe_id')
+            ->whereNotIn('type', \Platform\FoodAlchemist\Services\ConceptService::STRUKTUR_TYPEN)->count())->toBe(1);   // C-1: + 1 Header
 
     // Canvas blieb leer (kein Entry angelegt)
     $canvas = app(\Platform\FoodAlchemist\Services\CanvasService::class);
@@ -769,4 +795,19 @@ it('MCP: concepts.GENERATE über Gerüst-Owner + typisierte Fehler ohne Input', 
 
     $leer = $registry->get('foodalchemist.concepts.GENERATE')->execute([], $kontext);
     expect($leer->success)->toBeFalse();
+});
+
+it('A4: Wording-Erzeugung überschreibt den Brief nicht mehr', function () {
+    // Der Kollisionsfall in klein — ohne Generator, direkt an den zwei Schreibpfaden:
+    // der Brief steht in `brief`, `generateWording` schreibt sein Intro nach `description`.
+    // Vorher teilten sich beide `description`, und das Wording gewann.
+    $svc = app(\Platform\FoodAlchemist\Services\ConceptService::class);
+    $concept = $svc->create($this->rootTeam, ['name' => 'Brief-Schutz']);
+    $svc->update($this->rootTeam, $concept->id, ['brief' => 'Sommerfest, 80 Gäste']);
+
+    $svc->update($this->rootTeam, $concept->id, ['description' => 'Ein sommerlicher Abend.']);
+
+    $frisch = $concept->fresh();
+    expect($frisch->brief)->toBe('Sommerfest, 80 Gäste')
+        ->and($frisch->description)->toBe('Ein sommerlicher Abend.');
 });

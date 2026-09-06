@@ -83,13 +83,13 @@ class RecipeIngredientsPutTool extends FoodAlchemistTool implements ToolContract
             return ToolResult::error($e->getMessage(), 'VALIDATION_ERROR');
         }
 
-        return ToolResult::success([
+        return ToolResult::success($this->mitReife([
             'recipe' => [
                 'id' => $recipe->id, 'name' => $recipe->name, 'status' => $this->statusWert($recipe),
                 'yield_kg' => $recipe->yield_kg, 'ek_total_eur' => $recipe->ek_total_eur,
                 'n_ingredients_total' => $recipe->n_ingredients_total, 'n_ingredients_unmapped' => $recipe->n_ingredients_unmapped,
             ],
-        ]);
+        ], $team, (int) $recipe->id, (bool) $recipe->is_sales_recipe));
     }
 
     public function getMetadata(): array

@@ -111,6 +111,12 @@ class GenerateConceptJob implements ShouldQueue
             ]);
             // Voll-Kaskade (P3/P4): das erzeugte Konzept ans Ausgabe-Kapitel/-Rubrik hängen (concept_ref/menue_ref).
             $this->attachToOutput($team, (int) $concept->id);
+            // Spec 50 C-2: Reuse-Modus hat seine Positionen jetzt → Wording-Pass (Header-Titel, Positions-
+            // Wording, Intro, consumer_name/claim) fail-soft, nur Lücken. In den Erfinden-Modi sind die
+            // Slots noch leer — dort läuft der Pass nach dem Fan-out (PlanningCascadeService).
+            if (! $planFirst) {
+                app(\Platform\FoodAlchemist\Services\ConceptService::class)->wordingPassFailSoft($team, (int) $concept->id);
+            }
             // P1b: in den Erfinden-Modi fächert das Konzept in erfundene Gerichte auf (je leerem Slot
             // eine KI-Idee → eigener Kind-Step + Materialisierungs-Job). Reuse-Modus (datenbank) tut nichts.
             // Muss VOR meldeKaskade laufen (dessen recompute soll die Kind-Steps schon sehen). Graceful:

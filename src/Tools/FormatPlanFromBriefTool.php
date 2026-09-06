@@ -99,23 +99,22 @@ class FormatPlanFromBriefTool extends FoodAlchemistTool implements ToolContract,
             $geruest = app(ConceptGeneratorService::class)->geruestAusBriefFuerOwner($team, 'format', (int) $format->id, $brief, [
                 'segment' => app(TeamSettingsService::class)->segment($team),
             ]);
-            // Nur bei NEU angelegtem Format: Name + Branding aus dem Gerüst schreiben (bestehende Identität bleibt).
+            // Override-First (Spec 50 GL-07, C-5): Name nur bei NEU angelegtem Format; Branding-Felder füllen
+            // ausschließlich LÜCKEN — eine gesetzte Identität (Mensch/Vorlauf) bleibt, auch am bestehenden Format.
             $brandingApplied = [];
-            if ($neu) {
-                $upd = [];
-                if (is_string($geruest['name'] ?? null) && trim((string) $geruest['name']) !== '') {
-                    $upd['name'] = trim((string) $geruest['name']);
+            $upd = [];
+            if ($neu && is_string($geruest['name'] ?? null) && trim((string) $geruest['name']) !== '') {
+                $upd['name'] = trim((string) $geruest['name']);
+            }
+            foreach (['consumer_name', 'claim', 'story'] as $feld) {
+                $wert = $geruest['branding'][$feld] ?? null;
+                if (is_string($wert) && trim($wert) !== '' && trim((string) $format->{$feld}) === '') {
+                    $upd[$feld] = trim($wert);
                 }
-                foreach (['consumer_name', 'claim', 'story'] as $feld) {
-                    $wert = $geruest['branding'][$feld] ?? null;
-                    if (is_string($wert) && trim($wert) !== '') {
-                        $upd[$feld] = trim($wert);
-                    }
-                }
-                if ($upd !== []) {
-                    $formate->update($team, (int) $format->id, $upd);
-                    $brandingApplied = array_keys($upd);
-                }
+            }
+            if ($upd !== []) {
+                $formate->update($team, (int) $format->id, $upd);
+                $brandingApplied = array_keys($upd);
             }
 
             // 3. Review-Session + Leitplanken + Voll-Kaskade (je Slot ein ganzes Concept/Veranstaltung → ins Format referenziert).

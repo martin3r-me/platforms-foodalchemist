@@ -14,7 +14,7 @@ use Platform\FoodAlchemist\Services\OfferCompositionService;
 /**
  * #380 Composer · MCP-Lockstep: einen Block in einem Angebot-Kapitel anlegen (Position ans Ende).
  * concept_ref (concept_id = Konzept/Paket, live) oder recipe_ref (sales_recipe_id = echtes VK-Gericht),
- * dazu header/header_preis/text/spacer/image. Format-Kapitel tragen KEINE eigenen Blöcke (Inhalt
+ * dazu header/header_preis/text/spacer. Format-Kapitel tragen KEINE eigenen Blöcke (Inhalt
  * kommt live aus dem Format). Spiegelt FoodbookBlocksPostTool, offer-scoped über
  * {@see OfferCompositionService::addBlock}. Owner-Guard (D1) über das Kapitel.
  */
@@ -30,7 +30,7 @@ class OfferBlockPostTool extends FoodAlchemistTool implements ToolContract, Tool
         return 'Legt einen Block in einem Angebot-Kapitel an (Position ans Ende). '
             . 'concept_ref (concept_id = Konzept/Paket, via foodalchemist.concepts.SEARCH) oder '
             . 'recipe_ref (sales_recipe_id = echtes VK-Gericht, via foodalchemist.verkaufsrezepte.SEARCH). '
-            . 'Weitere Typen: header | header_preis | text | spacer | image. '
+            . 'Weitere Typen: header | header_preis | text | spacer. '
             . 'price_basis (nur header_preis): person | pauschal. Format-Kapitel tragen keine eigenen Blöcke.';
     }
 

@@ -95,7 +95,7 @@ class SpeisenKlassenService
      * ai_verteile_rollen (Gesamt-Gericht-Sicht, V-21): Vorschlag je Zutat-Zeile,
      * validiert gegen ROLLEN + die Zeilen des Rezepts.
      *
-     * @return array{rollen: array<int, string>, confidence: float, reasoning: ?string}
+     * @return array{rollen: array<int, string>, confidence: float, reasoning: ?string, call_log_id: ?int}
      */
     public function verteileRollen(Team $team, int $recipeId): array
     {
@@ -111,7 +111,7 @@ class SpeisenKlassenService
             'zutaten' => $zeilen,
             'rollen' => $r->ingredients->mapWithKeys(fn ($z) => [$z->id => $z->role])->filter()->all(),  // Kontext-Echo
             'vokabular' => self::ROLLEN,
-        ]);
+        ], ['target_table' => 'foodalchemist_recipes', 'target_id' => $r->id]);   // B-1: Call-Log ↔ Rezept
 
         $gueltig = [];
         $ids = array_map('intval', array_keys($zeilen));
@@ -125,6 +125,7 @@ class SpeisenKlassenService
             'rollen' => $gueltig,
             'confidence' => max(0.0, min(1.0, $vorschlag->confidence)),
             'reasoning' => $vorschlag->reasoning,
+            'call_log_id' => $vorschlag->callLogId,                     // B-1: Accept-Stempel im Bulk-Pfad
         ];
     }
 

@@ -66,12 +66,13 @@ beforeEach(function () {
 
 it('L7a: die Schrittfolge wird auf LÜCKEN geschnitten — was der Generator schon schrieb, wird nicht erneut bezahlt', function () {
     // So sieht ein frisch generiertes Basisrezept aus: description steht (Lineage ki),
-    // Kategorie und Geschmacksrichtung sind offen.
+    // Kategorie, Geschmacksrichtung, Dichteklasse/Behälter (B-10) und Regeneration (B-1) sind
+    // offen; Garverlust (B-2) nicht — ohne Zutaten gibt es keine Zeile, die einen Verlust tragen könnte.
     $r = ($this->basis)(['description' => 'Vom Generator.', 'description_source' => 'ki']);
 
     $offen = app(BulkEnrichService::class)->luecken($r, BulkEnrichService::SCHRITTE);
 
-    expect($offen)->toBe(['category', 'geschmack'])
+    expect($offen)->toBe(['category', 'geschmack', 'dichteklasse', 'regeneration'])
         ->and(BulkEnrichService::ZIELFELDER['category']['feld'])->toBe('category_id');
 });
 
@@ -81,8 +82,11 @@ it('L7a: die Kaskade füllt die Lücken selbst — mit Lineage, ohne die Bestand
 
     $erg = $this->svc->anreichern($this->rootTeam, $r);
 
-    expect($erg['schritte'])->toBe(['category', 'geschmack'])
-        ->and($erg['uebersprungen'])->toBe(['description'])
+    // B-10/B-1: `dichteklasse` und `regeneration` fahren mit, der Stub liefert dafür aber nichts
+    // Verwertbares (keine Klasse, kein Behälter, weder kalt noch Gerät) → Vorschlag `leer`, zählt
+    // weder als übernommen noch als offen.
+    expect($erg['schritte'])->toBe(['category', 'geschmack', 'dichteklasse', 'regeneration'])
+        ->and($erg['uebersprungen'])->toBe(['description', 'garverlust'])   // B-2: ohne Zutaten keine Zeile ohne Verlust
         ->and($erg['uebernommen'])->toBe(2)
         ->and($erg['offen'])->toBe(0)
         ->and($erg['fehler'])->toBeNull();
@@ -101,7 +105,11 @@ it('L7a: die Kaskade füllt die Lücken selbst — mit Lineage, ohne die Bestand
         ->and($lauf->status)->toBe(BulkRunStatus::Done)
         ->and((int) $lauf->failed)->toBe(0)
         ->and(DB::table('foodalchemist_bulk_proposals')->where('run_id', $erg['run_id'])
-            ->where('status', 'uebernommen')->count())->toBe(2);
+            ->where('status', 'uebernommen')->count())->toBe(2)
+        ->and(DB::table('foodalchemist_bulk_proposals')->where('run_id', $erg['run_id'])
+            ->where('field', 'dichteklasse')->value('status'))->toBe('leer')
+        ->and(DB::table('foodalchemist_bulk_proposals')->where('run_id', $erg['run_id'])
+            ->where('field', 'regeneration')->value('status'))->toBe('leer');
 });
 
 it('L7a: ein von Hand gepflegtes Feld erzeugt gar keinen Vorschlag — es kostet nicht einmal einen Call', function () {
@@ -110,7 +118,10 @@ it('L7a: ein von Hand gepflegtes Feld erzeugt gar keinen Vorschlag — es kostet
         'description' => 'Handarbeit.', 'description_source' => 'manual',
         'category_id' => $this->kategorie->id, 'category_source' => 'manual',
         'taste_direction' => 'suess',
+        'dichteklasse' => 'fluessig', 'dichteklasse_source' => 'manual',
     ]);
+    $this->makeContainerRow($this->rootTeam, $r);                       // B-10: Klasse + Behälter = erfüllt
+    $this->makeRegenerationRow($this->rootTeam, $r);                    // B-1: Gesamt-Zeile = Entscheidung
 
     $erg = $this->svc->anreichern($this->rootTeam, $r);
 
@@ -155,8 +166,12 @@ it('KI-Erstellknopf: Complete-Coverage zieht fehlende Schritte und Sensorik gezi
         'category_id' => $this->kategorie->id,
         'category_source' => 'ki',
         'taste_direction' => 'herzhaft',
+        'dichteklasse' => 'fluessig', 'dichteklasse_source' => 'ki',
     ]);
-    $this->makeIngredient($r, 'Schalotte', $this->makeGp($this->rootTeam, 'Schalotte-coverage'), '200', 1);
+    $this->makeContainerRow($this->rootTeam, $r);                       // B-10
+    $this->makeRegenerationRow($this->rootTeam, $r);                    // B-1
+    $this->makeIngredient($r, 'Schalotte', $this->makeGp($this->rootTeam, 'Schalotte-coverage'), '200', 1)
+        ->update(['cooking_loss_pct' => 10, 'cooking_loss_source' => 'manual']);   // B-2: kein Garverlust-Call
 
     $erg = app(RecipeOneShotService::class)->anreichern($this->rootTeam, $r->refresh(), completeCoverage: true);
 
@@ -402,7 +417,9 @@ it('L7a: die Ebene entscheidet das is_sales_recipe-Flag — ein Gericht bekommt 
 
     $offen = app(BulkEnrichService::class)->luecken($vk, BulkEnrichService::SCHRITTE_VK);
 
-    expect($offen)->toBe(['description', 'wording', 'plating', 'speisen_klasse'])
+    // B-1: Geschmack und Servier-Vehikel sind am Gericht Lücken; `rollen` nicht — ohne Zutaten gibt
+    // es keine Zeile ohne Rolle.
+    expect($offen)->toBe(['description', 'wording', 'plating', 'speisen_klasse', 'geschmack', 'servier_vehikel'])
         ->and($offen)->not->toContain('category');                      // 186er-Kategorie ist Basisrezept-Ebene
 });
 
@@ -422,7 +439,7 @@ it('L7a: Provider-Ausfall mitten in der Kaskade lässt das Rezept vollständig z
         ->and($erg['uebernommen'])->toBe(0)
         ->and((int) app(BulkEnrichService::class)->status($this->rootTeam, $erg['run_id'])->failed)->toBe(1)
         ->and(DB::table('foodalchemist_bulk_proposals')->where('run_id', $erg['run_id'])
-            ->whereNotNull('error')->count())->toBe(2);
+            ->whereNotNull('error')->count())->toBe(4);                  // category · geschmack · dichteklasse (B-10) · regeneration (B-1)
 
     $frisch = $r->fresh();
     expect($frisch)->not->toBeNull()
@@ -446,14 +463,22 @@ $vkFertig = function (object $t, int $komponenten = 2): \Platform\FoodAlchemist\
             ['label' => 'Teller omnivor', 'diet_form' => 'omnivor'],
         );
 
+        // B-1: Servier-Vehikel (manual) + Zutaten-Rollen sind ebenfalls VK-Ziel-Felder — vorbelegen.
+        $vehikelId = \Illuminate\Support\Facades\DB::table('foodalchemist_vocab_serving_vehicles')->insertGetId([
+            'uuid' => (string) \Illuminate\Support\Str::uuid7(), 'team_id' => $this->rootTeam->id,
+            'slug' => 'fixture_teller_' . bin2hex(random_bytes(3)), 'name' => 'Teller (Fixture)', 'sort_order' => 1,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
         $vk = $this->makeRecipe($this->rootTeam, 'TEL: Rinderrücken | Jus', [
             'is_sales_recipe' => true, 'status' => 'draft',
             'description' => 'Steht.', 'sales_wording_standard' => 'Steht.',
             'plating_text' => 'Steht.', 'dish_class_id' => $klasse->id,
             'taste_direction' => 'herzhaft',
+            'serving_vehicle_vocab_id' => $vehikelId, 'serving_vehicle_source' => 'manual',
         ]);
         for ($i = 1; $i <= $komponenten; $i++) {
-            $this->makeIngredient($vk, 'Komponente ' . $i, $this->makeGp($this->rootTeam, 'Komponente ' . $i . '-' . $vk->id), '100', $i);
+            $this->makeIngredient($vk, 'Komponente ' . $i, $this->makeGp($this->rootTeam, 'Komponente ' . $i . '-' . $vk->id), '100', $i)
+                ->update(['role' => 'komponente']);
         }
 
         return $vk->refresh();
@@ -492,9 +517,14 @@ it('L7b-2: ein Basisrezept bekommt kein Teller-Urteil — und bezahlt dafür auc
     });
     $basis = $this->makeRecipe($this->rootTeam, 'Reduktion: Rotwein-Schalotte', [
         'description' => 'Steht.', 'category_id' => $this->kategorie->id, 'taste_direction' => 'herzhaft',
+        'dichteklasse' => 'fluessig',
     ]);
-    $this->makeIngredient($basis, 'Schalotte', $this->makeGp($this->rootTeam, 'Schalotte-basis'), '200', 1);
-    $this->makeIngredient($basis, 'Rotwein', $this->makeGp($this->rootTeam, 'Rotwein-basis'), '500', 2);
+    $this->makeContainerRow($this->rootTeam, $basis);                   // B-10: sonst kostet dichteklasse einen Call
+    $this->makeRegenerationRow($this->rootTeam, $basis);                // B-1: dito regeneration
+    $this->makeIngredient($basis, 'Schalotte', $this->makeGp($this->rootTeam, 'Schalotte-basis'), '200', 1)
+        ->update(['cooking_loss_pct' => 10, 'cooking_loss_source' => 'manual']);   // B-2: dito garverlust
+    $this->makeIngredient($basis, 'Rotwein', $this->makeGp($this->rootTeam, 'Rotwein-basis'), '500', 2)
+        ->update(['cooking_loss_pct' => 50, 'cooking_loss_source' => 'manual']);   // jede Zeile entschieden → kein Call
 
     $erg = app(RecipeOneShotService::class)->anreichern($this->rootTeam, $basis->refresh());
 

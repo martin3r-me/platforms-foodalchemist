@@ -166,7 +166,7 @@ class RecipeOneShotService
      * kein LA → kein GP → die Zeile bleibt unbepreist (echte Sourcing-Lücke, kein geratenes GP).
      * Fail-soft — ein gescheiterter Mint kippt die Anreicherung nie.
      *
-     * @return array{status: string, minted: int, ohne_la: int, fehler?: string}
+     * @return array{status: string, minted: int, ohne_la: int, anker?: ?array, fehler?: string}
      */
     public function minteFehlendeGps(Team $team, FoodAlchemistRecipe $recipe): array
     {
@@ -191,6 +191,7 @@ class RecipeOneShotService
             $mint = app(\Platform\FoodAlchemist\Services\LaFirstGpService::class);
             $minted = 0;
             $ohneLa = 0;
+            $gpIds = [];
             foreach ($offene as $zut) {
                 $text = trim((string) ($zut->display_name ?: $zut->raw_text));
                 if ($text === '') {
@@ -201,15 +202,20 @@ class RecipeOneShotService
                     $zut->gp_id = $gp->id;
                     $zut->save();
                     $minted++;
+                    $gpIds[] = (int) $gp->id;
                 } else {
                     $ohneLa++;   // kein LA → Sourcing-Lücke, bleibt unbepreist (kein Rate-GP)
                 }
             }
+            $anker = null;
             if ($minted > 0) {
                 app(\Platform\FoodAlchemist\Services\RecipeRecomputeService::class)->recomputeAndPropagate((int) $recipe->id);
+                // Spec 50 · B-3: ein gemintetes GP ist erst mit Kern-Anker vollständig — sonst bleibt es
+                // im Pairing-Graph unsichtbar und das Pairing-Glied unten läuft ins Leere.
+                $anker = $this->bulk->ankerNachziehen($team, array_values(array_unique($gpIds)));
             }
 
-            return ['status' => $minted > 0 ? 'gemintet' : ($ohneLa > 0 ? 'kein_la' : 'vollständig'), 'minted' => $minted, 'ohne_la' => $ohneLa];
+            return ['status' => $minted > 0 ? 'gemintet' : ($ohneLa > 0 ? 'kein_la' : 'vollständig'), 'minted' => $minted, 'ohne_la' => $ohneLa, 'anker' => $anker];
         } catch (\Throwable $e) {
             return ['status' => 'fehler', 'minted' => 0, 'ohne_la' => 0, 'fehler' => mb_strimwidth($e->getMessage(), 0, 200)];
         }
@@ -627,17 +633,25 @@ class RecipeOneShotService
         }
     }
 
-    /** @return array{status: string, n_pairings?: int, fehler?: string} */
+    /** @return array{status: string, n_pairings?: int, grund?: string, fehler?: string} */
     private function pairingGlied(Team $team, FoodAlchemistRecipe $recipe): array
     {
         try {
             $pairings = app(PairingService::class);
             $anker = $pairings->recipeAnkers((int) $recipe->id);
+            // Spec 50 · B-4: ehrlich sagen, WARUM nichts passiert — „ohne Anker" (Rezept hat keinen
+            // Kern-Anker: Aromaanker-Glied leer / GPs ohne Anker) ist ein anderer Befund als „ohne
+            // Grounding" (Anker da, aber keine Kanten im Graph). Vorher sah beides gleich aus.
+            if ($anker->isEmpty()) {
+                return ['status' => 'uebersprungen_ohne_anker', 'n_pairings' => 0,
+                    'grund' => 'Rezept hat keinen Kern-Anker — Aromaanker-Glied leer oder GPs ohne Anker (gps.ENRICH felder [anker]).'];
+            }
             $grounding = $anker->flatMap(fn ($a) => $pairings->ankerNeighbors($a->slug, 'aroma', 30)
                 ->concat($pairings->ankerNeighbors($a->slug, 'kontrast', 30)))
                 ->unique(fn ($a) => $a->slug . '|' . $a->type)->values();
             if ($grounding->isEmpty()) {
-                return ['status' => 'uebersprungen_ohne_grounding', 'n_pairings' => 0];
+                return ['status' => 'uebersprungen_ohne_grounding', 'n_pairings' => 0,
+                    'grund' => 'Anker ' . implode(', ', $anker->pluck('slug')->all()) . ' haben keine Aroma-/Kontrast-Kanten im Pairing-Graph.'];
             }
 
             $vorschlag = app(Ai\AiGatewayService::class)->propose('recipe.pairing', [
@@ -974,38 +988,13 @@ class RecipeOneShotService
             return null;                                          // Basisrezept hat keinen VK
         }
 
-        $ziel = $this->settings->zielWareneinsatzPct($team);
-        // Nicht-positive Vorgaben (0, negativ) sind keine Vorgabe — die Bänder stehen
-        // an den Eingängen (Modal/MCP), hier nur der Schutz gegen Unsinn im Nenner.
-        $zielVk = $zielVk !== null && $zielVk > 0 ? round($zielVk, 2) : null;
-        $leer = [
-            'sales_net' => null, 'ek_total_eur' => null, 'ek_pro_portion' => null,
-            'wareneinsatz_pct' => null, 'ziel_pct' => $ziel, 'ampel' => 'unbekannt',
-            'portion_g' => null, 'aufschlagsklasse' => null, 'vorlaeufig' => false,
-            'luecken' => [], 'signal' => false, 'ziel_vk' => $zielVk,
-            'price_mode' => 'auto', 'calculated_sales_net' => null,
-            'price_source' => null, 'price_warnings' => [],
-            'ziel_delta_eur' => null, 'ziel_wareneinsatz_pct' => null, 'ziel_ampel' => 'unbekannt',
-            'fehler' => null,
-        ];
-
         try {
             $recipe = $recipe->fresh() ?? $recipe;                // Klasse/HG kommen aus dem Pass davor
 
-            // ── 1. Portion: Primärwert; ensureStandard kann zusätzlich aus Yield/Anzahl ableiten. ──
-            $portion = $recipe->sales_quantity_per_unit_g !== null ? (float) $recipe->sales_quantity_per_unit_g : null;
-
-            // ── 2. Aufschlagsklasse: gesetzt > Klasse-Default > HG-Default > Lücke ──
-            $ak = $recipe->markup_class_id
-                ?? $recipe->dishClass?->default_markup_class_id
-                ?? $recipe->dishMainGroup?->default_markup_class_id;
-
-            $update = [];
+            // ── Schreiben 1: Aufschlagsklasse aus der Kaskade festschreiben ──
+            $ak = $this->markupKaskade($recipe)['id'];
             if ($recipe->markup_class_id === null && $ak !== null) {
-                $update['markup_class_id'] = $ak;
-            }
-            if ($update !== []) {
-                $this->sales->updateVk($team, $recipe->id, $update);
+                $this->sales->updateVk($team, $recipe->id, ['markup_class_id' => $ak]);
                 // `updateVk` stempelt `last_modified_by='vk_editor'` — das ist die
                 // Provenienz der Editor-Fläche. Hier hat kein Mensch editiert, also
                 // zurück auf die Provenienz des Laufs (roh, damit `updated_at` steht).
@@ -1013,15 +1002,61 @@ class RecipeOneShotService
                     ->where('id', $recipe->id)->update(['last_modified_by' => 'vk_generator']);
             }
 
-            // ── 3. Standard-Darreichung (idempotent; rechnet EK/VK beim Anlegen mit) ──
-            $standard = $this->darreichungen->ensureStandard($team, $recipe->id, 'one_shot');
+            // ── Schreiben 2: Standard-Darreichung (idempotent; rechnet EK/VK beim Anlegen mit) ──
+            $this->darreichungen->ensureStandard($team, $recipe->id, 'one_shot');
 
-            // ── 4. Zahlen + Ampel aus der Preis-Wahrheit: der Darreichung ──
-            $recipe = $recipe->fresh() ?? $recipe;
-            $standard = $standard?->refresh();
+            // ── Messen: derselbe Code, den auch Schicht 4 read-only nutzt ──
+            return $this->vkVorbedingungen($team, $recipe->fresh() ?? $recipe, $zielVk);
+        } catch (\Throwable $e) {
+            return ['fehler' => mb_strimwidth($e->getMessage(), 0, 300)] + $this->vkLeer($team, $zielVk);
+        }
+    }
+
+    /**
+     * Spec 50 · Etappe 2 — der MESSENDE Teil, **read-only** und öffentlich.
+     *
+     * Warum getrennt: {@see self::wirtschaftlichkeitsGlied} schreibt, BEVOR es misst
+     * (Aufschlagsklasse festschreiben, Standard-Darreichung anlegen). Schicht 4 braucht
+     * dieselben Zahlen, darf aber nichts anfassen — ein Reife-Report, der beim Lesen Daten
+     * erzeugt, ist kein Report. Die Fallback-Kette ein zweites Mal zu schreiben verstösst
+     * gegen „Eine Formel pro fachlicher Wahrheit" (ARCHITEKTUR.md §5), deshalb: eine
+     * Wahrheit, zwei Aufrufer — der Schreiber ruft den Messer selbst auf.
+     *
+     * Unterschied zum Schreib-Pfad, bewusst: hier wird die **vorhandene** Standard-Darreichung
+     * gelesen, nicht eine angelegt. Fehlt sie, ist das eine Lücke (`darreichung`) — genau die
+     * Aussage, die eine Messung treffen soll.
+     *
+     * Nie werfen — ein Rezept ohne Preis ist eine Lücke, kein gescheiterter Lauf.
+     *
+     * @return array{sales_net: ?float, ek_total_eur: ?float, ek_pro_portion: ?float,
+     *               wareneinsatz_pct: ?float, ziel_pct: float, ampel: string, portion_g: ?float,
+     *               aufschlagsklasse: ?string, aufschlagsklasse_quelle: string, vorlaeufig: bool,
+     *               luecken: list<string>, signal: bool, price_mode: string,
+     *               calculated_sales_net: ?float, price_source: ?string, price_warnings: list<string>,
+     *               ziel_vk: ?float, ziel_delta_eur: ?float, ziel_wareneinsatz_pct: ?float,
+     *               ziel_ampel: string, fehler: ?string}|null
+     */
+    public function vkVorbedingungen(Team $team, FoodAlchemistRecipe $recipe, ?float $zielVk = null): ?array
+    {
+        if (! $recipe->is_sales_recipe) {
+            return null;                                          // Basisrezept hat keinen VK
+        }
+
+        $ziel = $this->settings->zielWareneinsatzPct($team);
+        $zielVk = $zielVk !== null && $zielVk > 0 ? round($zielVk, 2) : null;
+
+        try {
+            $kaskade = $this->markupKaskade($recipe);
+
+            // Preis-Wahrheit ist die Darreichung — die VORHANDENE, nicht eine neue.
+            $standard = $recipe->relationLoaded('standardPresentation')
+                ? $recipe->standardPresentation
+                : $recipe->standardPresentation()->first();
+
             $portion = $standard?->quantity_per_unit_g !== null
                 ? (float) $standard->quantity_per_unit_g
-                : $portion;
+                : ($recipe->sales_quantity_per_unit_g !== null ? (float) $recipe->sales_quantity_per_unit_g : null);
+
             $catalog = $standard !== null ? $this->catalogPricing->catalogPrice($team, $standard) : null;
             $vk = $standard?->sales_net !== null ? (float) $standard->sales_net : null;
             $ekPortion = $standard?->ek_portion !== null ? (float) $standard->ek_portion : null;
@@ -1033,11 +1068,6 @@ class RecipeOneShotService
             }
             // Eine fehlende Preisklasse blockiert den Katalogpreis nicht: Der zentrale
             // Dienst verwendet sichtbar den neutralen Klassenfaktor 100 %.
-            // L8b: die dritte Vorbedingung war bis hierher stumm. `ensureStandard`
-            // gibt bewusst `null` zurück, wenn es nichts raten darf (Varianten ohne
-            // Standard-Flag) oder das Servierform-Vokabular `unbestimmt` fehlt —
-            // dann gibt es keine Preis-Zeile und damit keinen VK. Ohne diese Lücke
-            // zeigte die Fläche in dem Fall GAR NICHTS: kein Preis, kein Grund.
             if ($standard === null) {
                 $luecken[] = 'darreichung';
             }
@@ -1045,17 +1075,10 @@ class RecipeOneShotService
             $gesamt = (int) ($recipe->ek_n_ingredients_total ?? 0);
             $bepreist = (int) ($recipe->ek_n_ingredients_priced ?? 0);
 
-            // Signal mit DEMSELBEN Wert, den die Ampel zeigt (Übergabe statt
-            // Zweitrechnung) — sonst sagt das Generator-Ergebnis „gelb" und das
-            // Cockpit rechnet sich seine eigene Quote dazu.
+            // Signal mit DEMSELBEN Wert, den die Ampel zeigt (Übergabe statt Zweitrechnung).
             $signal = $we !== null && $we > $ziel
                 && $this->detektor->wareneinsatzUeberZielFuer($team, $recipe, $ziel, $we);
 
-            // ── 5. L8b-2: Ist gegen Ziel — was WÜRDE der Zielpreis bedeuten? ──
-            // Der Wareneinsatz am Ziel-VK braucht nur den EK je Portion, nicht den
-            // gerechneten VK: er steht auch dann, wenn der Ist-Preis noch an einer
-            // Lücke hängt (fehlende Aufschlagsklasse). Genau dann ist er am
-            // nützlichsten — er sagt, ob das Ziel überhaupt tragfähig ist.
             $zielWe = $zielVk !== null ? ($this->marge->marge($zielVk, $ekPortion)['wareneinsatz_pct'] ?? null) : null;
 
             return [
@@ -1066,7 +1089,12 @@ class RecipeOneShotService
                 'ziel_pct' => $ziel,
                 'ampel' => $this->weAmpel($we, $ziel),
                 'portion_g' => $portion,
-                'aufschlagsklasse' => $recipe->markupClass?->code,
+                'aufschlagsklasse' => $recipe->markupClass?->code ?? $kaskade['code'],
+                // Neu gegenüber dem Schreib-Pfad: WOHER die Klasse kommt. Der Schreiber
+                // verwischt das, weil er sie festschreibt; für einen Reife-Report ist der
+                // Unterschied zwischen „am Gericht gesetzt" und „nur aus dem Default
+                // ableitbar" genau die Information, die zählt.
+                'aufschlagsklasse_quelle' => $kaskade['quelle'],
                 // #511-F2: Park-GPs ohne Preis machen den EK unvollständig — der VK
                 // daraus ist vorläufig und muss es auch heißen.
                 'vorlaeufig' => $gesamt > 0 && $bepreist < $gesamt,
@@ -1076,9 +1104,6 @@ class RecipeOneShotService
                 'calculated_sales_net' => $catalog['calculated_sales_net'] ?? null,
                 'price_source' => $catalog['base_source'] ?? null,
                 'price_warnings' => $catalog['warnings'] ?? [],
-                // L8b-2: Vorgabe, Abstand und Folge — drei Zahlen, keine Wertung
-                // darüber hinaus. `ziel_delta_eur` ist Ist − Ziel: positiv = das
-                // Gericht ist zum Zielpreis (noch) nicht kalkulierbar.
                 'ziel_vk' => $zielVk,
                 'ziel_delta_eur' => $zielVk !== null && $vk !== null ? round($vk - $zielVk, 2) : null,
                 'ziel_wareneinsatz_pct' => $zielWe,
@@ -1086,8 +1111,51 @@ class RecipeOneShotService
                 'fehler' => null,
             ];
         } catch (\Throwable $e) {
-            return ['fehler' => mb_strimwidth($e->getMessage(), 0, 300)] + $leer;
+            return ['fehler' => mb_strimwidth($e->getMessage(), 0, 300)] + $this->vkLeer($team, $zielVk);
         }
+    }
+
+    /**
+     * Aufschlagsklasse: gesetzt > Klasse-Default > HG-Default > keine.
+     * EINE Auflösung für beide Pfade — der Schreiber schreibt sie fest, der Messer weist
+     * sie mit Herkunft aus.
+     *
+     * @return array{id: ?int, code: ?string, quelle: string}
+     */
+    private function markupKaskade(FoodAlchemistRecipe $recipe): array
+    {
+        if ($recipe->markup_class_id !== null) {
+            return ['id' => (int) $recipe->markup_class_id, 'code' => $recipe->markupClass?->code, 'quelle' => 'gesetzt'];
+        }
+        // Code über die ID auflösen statt über eine Relation: `FoodAlchemistDishMainGroup`
+        // hat kein `defaultMarkupClass()`, und ein `?->` darauf liefert kommentarlos null —
+        // die Klasse sähe leer aus, obwohl sie ableitbar ist.
+        $code = fn (int $id): ?string => \Platform\FoodAlchemist\Models\FoodAlchemistMarkupClass::find($id)?->code;
+
+        if (($id = $recipe->dishClass?->default_markup_class_id) !== null) {
+            return ['id' => (int) $id, 'code' => $code((int) $id), 'quelle' => 'speisen_klasse'];
+        }
+        if (($id = $recipe->dishMainGroup?->default_markup_class_id) !== null) {
+            return ['id' => (int) $id, 'code' => $code((int) $id), 'quelle' => 'hauptgruppe'];
+        }
+
+        return ['id' => null, 'code' => null, 'quelle' => 'keine'];
+    }
+
+    /** Leer-Gerüst für den Fehlerfall — dieselbe Form, damit Aufrufer nie auf Keys prüfen müssen. */
+    private function vkLeer(Team $team, ?float $zielVk): array
+    {
+        return [
+            'sales_net' => null, 'ek_total_eur' => null, 'ek_pro_portion' => null,
+            'wareneinsatz_pct' => null, 'ziel_pct' => $this->settings->zielWareneinsatzPct($team),
+            'ampel' => 'unbekannt', 'portion_g' => null, 'aufschlagsklasse' => null,
+            'aufschlagsklasse_quelle' => 'keine', 'vorlaeufig' => false,
+            'luecken' => [], 'signal' => false, 'ziel_vk' => $zielVk,
+            'price_mode' => 'auto', 'calculated_sales_net' => null,
+            'price_source' => null, 'price_warnings' => [],
+            'ziel_delta_eur' => null, 'ziel_wareneinsatz_pct' => null, 'ziel_ampel' => 'unbekannt',
+            'fehler' => null,
+        ];
     }
 
     /**

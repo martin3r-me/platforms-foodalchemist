@@ -46,11 +46,13 @@ it('materialisiereLeereSlots: eine Station (target_count>=2) wird ein Paket mit 
     $m->setAccessible(true);
     $m->invoke($svc, $this->rootTeam, $concept->fresh(), FoodAlchemistPlanningFrame::find($frame->id));
 
-    // Haupt-Concept: EIN Paket-Slot (Station) + EIN flacher Gang-Slot (Dessert)
+    // Haupt-Concept: EIN Paket-Slot (Station) + Header »Dessert« (C-1) + EIN flacher Gang-Slot (Dessert)
     $slots = FoodAlchemistConceptSlot::where('concept_id', $concept->id)->orderBy('position')->get();
-    expect($slots)->toHaveCount(2);
+    expect($slots)->toHaveCount(3)
+        ->and($slots->pluck('type')->all())->toBe(['paket', 'header', 'gericht'])   // kein Haupt-Header vor dem Paket
+        ->and($slots->firstWhere('type', 'header')->title)->toBe('Dessert');
     $paketSlot = $slots->firstWhere('type', 'paket');
-    $gangSlot = $slots->firstWhere('role', 'Dessert');
+    $gangSlot = $slots->where('type', 'gericht')->firstWhere('role', 'Dessert');
     expect($paketSlot)->not->toBeNull()
         ->and((int) $paketSlot->embedded_concept_id)->toBeGreaterThan(0)
         ->and($paketSlot->role)->toBe('Bowl-Station')
@@ -77,8 +79,9 @@ it('materialisiereLeereSlots: eine Einzel-Station (target_count=1) bleibt flach 
     $m->setAccessible(true);
     $m->invoke($svc, $this->rootTeam, $concept->fresh(), FoodAlchemistPlanningFrame::find($frame->id));
 
-    $slots = FoodAlchemistConceptSlot::where('concept_id', $concept->id)->get();
-    expect($slots)->toHaveCount(1)->and($slots->first()->type)->not->toBe('paket');
+    $slots = FoodAlchemistConceptSlot::where('concept_id', $concept->id)->orderBy('position')->get();
+    expect($slots->pluck('type')->all())->toBe(['header', 'gericht'])   // C-1: Stations-Header + flache Position
+        ->and($slots->first()->title)->toBe('Signature');
 });
 
 // ── fanoutConceptInvention: Paket-Slot ist NICHT leer + innere Gerichte werden rekursiv gefächert ──
