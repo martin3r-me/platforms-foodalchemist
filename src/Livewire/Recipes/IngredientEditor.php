@@ -562,6 +562,11 @@ class IngredientEditor extends Component
                         )
                         : null,
                     'cooking_loss_pct' => $z->cooking_loss_pct !== null ? (float) $z->cooking_loss_pct : null,
+                    // Provenienz mitladen (2026-09-06): der Generator schreibt Garverluste als `ki`;
+                    // ohne dieses Flag kippte JEDES Speichern die Quelle still auf null (Etikett weg),
+                    // obwohl der Wert unverändert die KI-Schätzung war. Tippt der Mensch in die Zelle,
+                    // setzt das Blade das Flag zurück → Save schreibt source=null (= manuell).
+                    '_garverlust_ki' => $z->cooking_loss_source === 'ki' && $z->cooking_loss_pct !== null,
                     'trimming_loss_pct' => $z->trimming_loss_pct !== null ? (float) $z->trimming_loss_pct : null,
                     'is_optional' => (bool) $z->is_optional,
                     'note' => $z->note,

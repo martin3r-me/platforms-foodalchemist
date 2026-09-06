@@ -5,7 +5,17 @@
 @php
     $indent = $indent ?? false;
     $snap = is_array($st->context_snapshot) ? $st->context_snapshot : [];
+    // Verwendetes Wissen — ZWEI Kanäle, getrennt persistiert (RecipeGenerationContextService::build):
+    // `kanon_files` = verbindlicher Kanon des Prompt-Keys, `knowledge_files` = Retrieval-Fund (Recherche).
+    // Alte Snapshots (vor 2026-09-06) haben nur `knowledge_files` → Kanon-Gruppe bleibt dann leer.
     $wissenFiles = (array) ($snap['knowledge_files'] ?? []);
+    $kanonFiles = (array) ($snap['kanon_files'] ?? []);
+    $wissenGesamt = count($kanonFiles) + count($wissenFiles);
+    // "slug@vN" / "graph:anker" / Alt-Pfad "pairings/tomate.md" → lesbarer Chip. Bewusst NICHT
+    // `beforeLast('.')`: Slugs wie `workflow.basisrezept_erstellungs_dossier` enthalten Punkte.
+    $wissenChip = fn (string $e): string => (string) preg_replace(
+        ['/^graph:/', '/\.md$/', '#^.*/#'], '', explode('@', $e, 2)[0]
+    );
     // B3 (2026-08-20): Hardstop-Zeile aus dem »Nur Bestand«-Fanout (kein DB-Treffer). status ist
     // technisch `skipped`, darf aber NICHT als „übernommen" gelesen werden — eigener Warnhinweis.
     $hardstop = (is_array($st->deferred) && is_array($st->deferred['hardstop'] ?? null)) ? $st->deferred['hardstop'] : null;
@@ -314,17 +324,30 @@
             </div>
         @endif
     @endif
-    @if($wissenFiles !== [])
-        <details class="mt-0.5">
-            <summary class="text-[10px] text-gray-500 cursor-pointer hover:text-gray-300">Verwendetes Wissen ({{ count($wissenFiles) }})</summary>
-            <div class="mt-1 flex flex-wrap gap-1">
-                @foreach(array_slice($wissenFiles, 0, 14) as $f)
-                    <span class="px-1.5 py-0.5 rounded bg-white/5 text-[10px] text-gray-400">{{ \Illuminate\Support\Str::of((string) $f)->afterLast('/')->beforeLast('.') }}</span>
-                @endforeach
-                @if(count($wissenFiles) > 14)
-                    <span class="text-[10px] text-gray-500">+{{ count($wissenFiles) - 14 }}</span>
-                @endif
-            </div>
+    @if($wissenGesamt > 0)
+        {{-- Komplett, ohne Kappung: der Chip ist die einzige Stelle, an der man je Step nachprüfen
+             kann, was WIRKLICH im Prompt stand — eine „+N"-Abkürzung nimmt genau diese Kontrolle weg. --}}
+        <details class="mt-0.5" data-wissen-chip>
+            <summary class="text-[10px] text-gray-500 cursor-pointer hover:text-gray-300">
+                Verwendetes Wissen ({{ $wissenGesamt }})
+                <span class="text-gray-600">— Kanon ({{ count($kanonFiles) }}) · Recherche ({{ count($wissenFiles) }})</span>
+            </summary>
+            @if($kanonFiles !== [])
+                <div class="mt-1 text-[9px] uppercase tracking-wide text-violet-300/70">Kanon (verbindlich)</div>
+                <div class="mt-0.5 flex flex-wrap gap-1">
+                    @foreach($kanonFiles as $f)
+                        <span class="px-1.5 py-0.5 rounded bg-violet-500/10 border border-violet-500/20 text-[10px] text-violet-200/80" title="{{ $f }}">{{ $wissenChip((string) $f) }}</span>
+                    @endforeach
+                </div>
+            @endif
+            @if($wissenFiles !== [])
+                <div class="mt-1 text-[9px] uppercase tracking-wide text-gray-500">Recherche</div>
+                <div class="mt-0.5 flex flex-wrap gap-1">
+                    @foreach($wissenFiles as $f)
+                        <span class="px-1.5 py-0.5 rounded bg-white/5 text-[10px] text-gray-400" title="{{ $f }}">{{ $wissenChip((string) $f) }}</span>
+                    @endforeach
+                </div>
+            @endif
         </details>
     @endif
     {{-- Schicht 3: Konformitäts-Hinweise (§-genau gegen die Regelwerke, hart=rot/weich=gelb) +

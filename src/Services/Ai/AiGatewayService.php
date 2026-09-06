@@ -207,8 +207,21 @@ class AiGatewayService
         if ($boundSlugs !== [] || $kanonSlugs !== []) {
             $knowledgeUsed = array_values(array_unique(array_merge(is_array($knowledgeUsed) ? $knowledgeUsed : [], $kanonSlugs, $boundSlugs)));
         }
+        // Wissens-Kanäle (2026-09-06): die Inspektor-Sicht des Calls persistieren. Retrieval-Kanäle
+        // liefert der Aufrufer (`knowledge_channels`, z.B. used_by_category aus contextFor); Kanon
+        // und Bound kennt NUR der Gateway und überschreibt sie hier — eine Wahrheit, keine Rekonstruktion.
+        $knowledgeChannels = is_array($options['knowledge_channels'] ?? null)
+            ? array_filter($options['knowledge_channels'], fn ($v, $k) => is_array($v) && $v !== [] && ! in_array($k, ['kanon', 'gebunden'], true), ARRAY_FILTER_USE_BOTH)
+            : (is_array($knowledgeUsed) && $knowledgeUsed !== [] ? ['retrieval' => array_values(array_diff($knowledgeUsed, $kanonSlugs, $boundSlugs))] : []);
+        if ($kanonSlugs !== []) {
+            $knowledgeChannels = ['kanon' => array_values($kanonSlugs)] + $knowledgeChannels;
+        }
+        if ($boundSlugs !== []) {
+            $knowledgeChannels['gebunden'] = array_values($boundSlugs);
+        }
         $audit = [
             'knowledge_used' => $knowledgeUsed,
+            'knowledge_channels' => $knowledgeChannels !== [] ? $knowledgeChannels : null,
             'target_table' => $options['target_table'] ?? null,
             'target_id' => $options['target_id'] ?? null,
         ];
@@ -216,7 +229,7 @@ class AiGatewayService
         $fbFoodDna = $options['food_dna_foodbook_id'] ?? null;
         $agFoodDna = $options['food_dna_angebot_id'] ?? null;
         $kdFoodDna = $options['food_dna_crm_company_id'] ?? null;  // Ebene 2: Endkunde (Kunde-DNA)
-        unset($options['knowledge'], $options['knowledge_used'], $options['knowledge_dropped_chars'], $options['tier'], $options['target_table'], $options['target_id'], $options['food_dna_concept_id'], $options['food_dna_foodbook_id'], $options['food_dna_angebot_id'], $options['food_dna_crm_company_id']);
+        unset($options['knowledge'], $options['knowledge_used'], $options['knowledge_channels'], $options['knowledge_dropped_chars'], $options['tier'], $options['target_table'], $options['target_id'], $options['food_dna_concept_id'], $options['food_dna_foodbook_id'], $options['food_dna_angebot_id'], $options['food_dna_crm_company_id']);
 
         // #389/Canvas: stehenden Marken-/Brief-Kontext NUR in kreative Prompts mergen
         // (Klassifikatoren ausgenommen). Kaskade Team-DNA → Kunde-DNA → Angebot → Foodbook → Concept (CanvasService).
@@ -750,6 +763,9 @@ class AiGatewayService
             }
             // W0-0 Messsonde — wie tokens_cached hinter hasColumn, damit ein noch nicht
             // migrierter Stand den KI-Pfad nicht reißt.
+            if (is_array($audit['knowledge_channels'] ?? null) && \Illuminate\Support\Facades\Schema::hasColumn('foodalchemist_ai_call_log', 'knowledge_channels')) {
+                $values['knowledge_channels'] = json_encode($audit['knowledge_channels'], JSON_UNESCAPED_UNICODE);
+            }
             if (isset($audit['prompt_chars']) && \Illuminate\Support\Facades\Schema::hasColumn('foodalchemist_ai_call_log', 'prompt_chars')) {
                 $values['prompt_chars'] = (int) $audit['prompt_chars'];
                 $values['prompt_parts'] = is_array($audit['prompt_parts'] ?? null)

@@ -938,6 +938,20 @@ return [
                 // Text bleibt stehen, wenn der Ansatz später skaliert wird.
                 . 'preparation (Markdown-Schritte; ' . $mengenVerbot . '), zutaten: [{text, quantity, unit (g|ml|kg|l|el|tl|stk), '
                 . 'slug (hauptzutat), commodity_group, note, '
+                // Ausbeute-Lücke (2026-09-06): der Generator lieferte keinen Garverlust, die
+                // Verlust-Kaskade (Zutat → GP-Default → Team-WG-Default) ist für Flüssigkeiten 0 —
+                // damit stand bei Reduktion/Fond/Jus/Sirup der EINSATZ als Yield und der EK/kg
+                // war um den Einkochfaktor zu niedrig (3740 »Reduktion: Rotwein-Schalotte«:
+                // 3,736 kg = Einsatz, 1,94 €/kg statt ~5–6 €). Die Ausbeute wird nicht als
+                // Summe geraten, sondern je Zutat als Verlust — das ist das Modell, das
+                // Recompute/Editor/GP-Default schon kennen (§6 Auto-Sum mit Verlust-Faktor);
+                // Provenienz `cooking_loss_source=ki` je Zeile, der Mensch korrigiert im Editor.
+                . 'garverlust_pct (0-100, OPTIONAL: Anteil der Zutat, der die FERTIGE AUSBEUTE nicht '
+                . 'erreicht — Einkochverlust beim Reduzieren [Wein/Fond auf 1/4 → 75], Verdampfen bei '
+                . 'Fond/Jus/Sirup/Konfitüre, Brat-/Garverlust bei Fleisch/Gemüse [15-35], abgeseihte oder '
+                . 'entfernte Feststoffe [Knochen, Karkassen, Gemüse und Kräuter, die nach dem Auskochen aus '
+                . 'einem Fond kommen → 100]; kalte Rohmischungen/Dressings/Marinaden 0; weglassen, wenn kein '
+                . 'Garprozess stattfindet), '
                 // Grounding (2026-08-20): explizite Rückbindung an den Bestand. gp_id/sub_rezept_id
                 // sind die id EINES unter gp_kandidaten/rezept_kandidaten gelisteten Eintrags, wenn die
                 // Zutat exakt diesem entspricht — sonst weglassen (NIE raten; eine falsche/fremde id
@@ -1089,6 +1103,12 @@ return [
                 // Spec 37: role/fit-Parität zum Basis-Prompt — dieselbe Zutaten-Selbstbegründung
                 // (senkt plausibel klingende Fremdkörper VOR dem Kritiker-Pass, sobald das VK-Gate scharf wird).
                 . 'zutaten: [{text, quantity, unit (g|ml|kg|l|el|tl|stk), slug, note, '
+                // Ausbeute (2026-09-06): Garverlust je Zutat wie im Basis-Prompt — auch am Teller
+                // schwindet die Rohware (Steak 25 %, gebratenes Gemüse 20 %), sonst steht der
+                // Einsatz als Tellergewicht/Yield.
+                . 'garverlust_pct (0-100, OPTIONAL: Anteil der Zutat, der das fertige Gericht nicht erreicht — '
+                . 'Brat-/Garverlust [Fleisch/Fisch 20-30, Gemüse 10-25], Einkochen bei Saucen; roh servierte '
+                . 'Komponenten und fertige Sub-Rezepte 0; weglassen, wenn kein Garprozess stattfindet), '
                 // Grounding (2026-08-20): explizite Rückbindung an den Bestand (s. recipe.generator).
                 . 'gp_id (OPTIONAL: numerische id EINES unter gp_kandidaten gelisteten Grundprodukts, '
                 . 'wenn diese Zutat EXAKT diesem GP entspricht — sonst weglassen, NIE raten), '

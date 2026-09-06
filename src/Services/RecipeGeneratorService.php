@@ -61,6 +61,7 @@ class RecipeGeneratorService
         // VOR dem OOM-`unset` unten gesichert (winzige String-Listen) und am Ende ans Ergebnis
         // gehängt. null im Override-Pfad (kein frischer Kontext) → UI blendet das Panel aus.
         $kontextAudit = null;
+        $callLogId = null;   // Call-Log-Zeile des Generator-Calls → nach der Anlage ans Rezept gehängt (target_*)
         if ($kiRezept === null) {
             $melde('Kontext & Wissen werden geladen …');
             $preparedContext ??= app(RecipeGenerationContextService::class)->build($team, $description, $parameter, $vkModus);
@@ -105,6 +106,10 @@ class RecipeGeneratorService
                 'knowledge' => $wissen['block'],
                 'knowledge_used' => $wissen['files_used'],            // M7-01: GL-13-§6-Audit-Lücke geschlossen
                 'knowledge_dropped_chars' => $wissen['dropped_chars'] ?? 0,   // W0-0 Messsonde
+                // 2026-09-06: Inspektor-Sicht (Dossiers je Kanal) in die Call-Log-Zeile — damit das
+                // Rezept-Detail später zeigen kann, WAS der Generator gelesen hat. Kanon/gebunden
+                // setzt der Gateway selbst (er ist die Wahrheit dafür), hier nur der Retrieval-Teil.
+                'knowledge_channels' => is_array($kontextAudit['wissen'] ?? null) ? $kontextAudit['wissen'] : null,
                 // M7-03 §3.3 (Ist: commands.rs:20766-20780): valides JSON ohne
                 // name/zutaten ist strukturell unbrauchbar → Gateway re-rollt
                 'structural_retry' => fn (array $parsed) => ! empty($parsed['werte']['name']) && ! empty($parsed['werte']['zutaten']),
@@ -122,6 +127,7 @@ class RecipeGeneratorService
             if ($kontextAudit !== null && $vorschlag->callLogId !== null) {
                 $kontextAudit['prompt'] = $this->promptGroessen((int) $vorschlag->callLogId);
             }
+            $callLogId = $vorschlag->callLogId !== null ? (int) $vorschlag->callLogId : null;
             // P0.2: die grossen Kontext-/Wissen-/Inventar-Arrays werden ab hier nicht mehr
             // gebraucht (die Transaktions-Closure haelt sie NICHT) → jetzt freigeben, damit
             // der Peak-Speicher waehrend Matching/Sync sinkt (OOM-Gegenmassnahme).
@@ -231,6 +237,13 @@ class RecipeGeneratorService
                     // bisher tote role-Feld (Schicht 1). Whitelist-Guard wie taste_direction —
                     // nur gültige Rollen, sonst null (kein Insert-Crash durch Freitext).
                     'role' => in_array($z['role'] ?? null, SpeisenKlassenService::ROLLEN, true) ? $z['role'] : null,
+                    // Ausbeute-Lücke (2026-09-06): Garverlust je Zutat aus dem Vorschlag → die
+                    // Verlust-Kaskade im Recompute (Zutat → GP → Team-WG → 0) greift damit auch
+                    // bei Reduktion/Fond/Jus, wo alle Defaults 0 sind und der Einsatz als Yield
+                    // stand. Provenienz `ki` je Zeile (GL-07) — wie der Garverlust-Vorschlag im
+                    // Editor; der Mensch überschreibt dort und die Quelle kippt auf manual.
+                    'cooking_loss_pct' => $garverlust = $this->garverlustPct($z['garverlust_pct'] ?? null),
+                    'cooking_loss_source' => $garverlust !== null ? 'ki' : null,
                     // Der Generator hat bereits bewusst geroutet. Ein Miss bleibt
                     // bis zur menschlichen LA-/GP- bzw. Subrezept-Bestätigung offen.
                     'auto_ground' => false,
@@ -418,6 +431,16 @@ class RecipeGeneratorService
 
             return ['recipe' => $recipe, 'statistik' => $statistik, 'offene' => $offene];
         });
+
+        // Call-Log ↔ Rezept verknüpfen (2026-09-06): bis hier hatte der Generator-Call KEIN Ziel
+        // (target_table/target_id leer), weil das Rezept erst nach dem Call entsteht. Ohne die
+        // Rückverknüpfung ist der KI-Kontext eines Rezepts später nicht mehr auffindbar — der
+        // Inspektor lebte nur im Modal, solange es offen war. Konvention wie bei den Bild-Calls
+        // (RecipeImageService): target_table = Tabellenname. Nach dem Commit, damit die ID steht.
+        if ($callLogId !== null) {
+            DB::table('foodalchemist_ai_call_log')->where('id', $callLogId)
+                ->update(['target_table' => 'foodalchemist_recipes', 'target_id' => (int) $result['recipe']->id, 'updated_at' => now()]);
+        }
 
         // Kohärenz-Gate (Phase 2, 2026-08-07) — NACH dem Transaktions-Commit, VOR dem Return.
         // Bewusst ausserhalb der Transaktion: der Kritiker ist ein KI-Call (Tier A, potenziell
@@ -1114,6 +1137,23 @@ class RecipeGeneratorService
      * aus L8a (`luecken: ['portion']`), die an der Fläche sichtbar ist. Ein
      * Fehler wäre hier falsch: das Rezept selbst ist verwertbar.
      */
+    /**
+     * Garverlust-Guard (Ausbeute-Lücke 2026-09-06): nur numerische Werte 0–100 kommen
+     * durch — 100 ist legitim (abgeseihte Knochen/Karkassen im Fond erreichen die
+     * Ausbeute nicht), alles darüber oder Freitext bleibt null = Kaskade wie bisher.
+     * Bewusst weiter als der Editor-Clamp 0–60 (`IngredientEditor::garverlustVorschlag`):
+     * der kennt keine Reduktion auf ein Viertel und kein Abseihen.
+     */
+    public function garverlustPct(mixed $raw): ?float
+    {
+        if ($raw === null || $raw === '' || ! is_numeric($raw)) {
+            return null;
+        }
+        $pct = round((float) $raw, 2);
+
+        return $pct >= 0.0 && $pct <= 100.0 ? $pct : null;
+    }
+
     private function portionG(mixed $raw): ?float
     {
         if (! is_numeric($raw)) {
@@ -1156,27 +1196,9 @@ class RecipeGeneratorService
         $row = \Illuminate\Support\Facades\DB::table('foodalchemist_ai_call_log')
             ->where('id', $callLogId)
             ->first(['prompt_chars', 'prompt_parts', 'tokens_in', 'tokens_cached']);
-        if ($row === null) {
-            return null;
-        }
 
-        $teile = is_string($row->prompt_parts) ? (json_decode($row->prompt_parts, true) ?: []) : [];
-        if (! is_array($teile) || $teile === []) {
-            return null;   // Sonde noch nicht migriert → alte Anzeige, keine erfundenen Nullen
-        }
-
-        return [
-            'chars' => (int) ($row->prompt_chars ?? 0),
-            'huelle' => (int) ($teile['huelle'] ?? 0),
-            'kanon' => (int) ($teile['kanon'] ?? 0),   // Welle 2: Kanon-Block (ersetzt bound je Prompt-Key)
-            'bound' => (int) ($teile['bound'] ?? 0),
-            'task' => (int) ($teile['task'] ?? 0),
-            'retrieval' => (int) ($teile['retrieval'] ?? 0),
-            'kontext' => (int) ($teile['kontext'] ?? 0),
-            'dropped' => (int) ($teile['dropped'] ?? 0),
-            'tokens_in' => (int) ($row->tokens_in ?? 0),
-            'tokens_cached' => (int) ($row->tokens_cached ?? 0),
-        ];
+        // Mapping lebt seit 2026-09-06 im RecipeKiKontextService (das Rezept-Detail liest dieselben Größen).
+        return $row === null ? null : app(\Platform\FoodAlchemist\Services\Ai\RecipeKiKontextService::class)->promptGroessen($row);
     }
 
 }

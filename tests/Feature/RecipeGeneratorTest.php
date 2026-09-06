@@ -586,3 +586,55 @@ it('B1: der GP-Kandidaten-Hinweis unterscheidet nur_bestand (hart) von hybrid (w
         ->and($hWeich)->not->toContain('DATENBANK-Modus')
         ->and($hStrikt)->not->toBe($hWeich);
 });
+
+// ── Ausbeute-Lücke (2026-09-06) — Garverlust je Zutat aus dem Vorschlag ─────────────────────
+
+it('Ausbeute: garverlust_pct aus dem Vorschlag landet als cooking_loss_pct (ki) und senkt den Yield', function () {
+    ($this->mkGpMitPreis)('Schalotten: frisch, ganz', 'schalotten', 4.00);
+    ($this->mkGpMitPreis)('Rotwein: trocken, Spätburgunder', 'rotwein', 6.00);
+
+    $resultat = $this->svc->generiere($this->rootTeam, 'Rotwein-Schalotten-Reduktion', [
+        'convenience' => 'from_scratch',
+    ], kiRezeptOverride: [
+        'name' => 'Reduktion: Rotwein-Schalotte',
+        'zutaten' => [
+            ['text' => 'Schalotten', 'slug' => 'schalotten', 'quantity' => 200, 'unit' => 'g', 'garverlust_pct' => 20],
+            ['text' => 'Rotwein', 'slug' => 'rotwein', 'quantity' => 1000, 'unit' => 'ml', 'garverlust_pct' => 75],
+        ],
+    ]);
+
+    $recipe = $resultat['recipe']->refresh();
+    $zeilen = $recipe->ingredients()->orderBy('position')->get();
+    expect((float) $zeilen[0]->cooking_loss_pct)->toBe(20.0)
+        ->and($zeilen[0]->cooking_loss_source)->toBe('ki')
+        ->and((float) $zeilen[1]->cooking_loss_pct)->toBe(75.0)
+        ->and($zeilen[1]->cooking_loss_source)->toBe('ki')
+        // 200·0,8 + 1000·0,25 = 410 g statt 1.200 g Einsatz — der Einkochfaktor steht jetzt im Yield
+        ->and((float) $recipe->yield_kg)->toBe(0.41)
+        ->and($recipe->yield_kg_manual)->toBeNull();
+});
+
+it('Ausbeute: implausibler oder fehlender Garverlust bleibt null (Kaskade wie bisher)', function () {
+    ($this->mkGpMitPreis)('Karotte: frisch, ganz', 'karotte', 2.00);
+    $svc = $this->svc;
+
+    expect($svc->garverlustPct(100))->toBe(100.0)   // abgeseihte Knochen: legitim
+        ->and($svc->garverlustPct('37,5'))->toBeNull()   // Komma-String ist nicht numerisch → kein Raten
+        ->and($svc->garverlustPct(101))->toBeNull()
+        ->and($svc->garverlustPct(-1))->toBeNull()
+        ->and($svc->garverlustPct('hoch'))->toBeNull()
+        ->and($svc->garverlustPct(null))->toBeNull();
+
+    $resultat = $svc->generiere($this->rootTeam, 'Karotten', [], kiRezeptOverride: [
+        'name' => 'Basis: Karotte roh',
+        'zutaten' => [
+            ['text' => 'Karotte', 'slug' => 'karotte', 'quantity' => 500, 'unit' => 'g', 'garverlust_pct' => 250],
+            ['text' => 'Karotte', 'slug' => 'karotte', 'quantity' => 500, 'unit' => 'g'],
+        ],
+    ]);
+    $zeilen = $resultat['recipe']->ingredients()->orderBy('position')->get();
+    expect($zeilen[0]->cooking_loss_pct)->toBeNull()
+        ->and($zeilen[0]->cooking_loss_source)->toBeNull()
+        ->and($zeilen[1]->cooking_loss_pct)->toBeNull()
+        ->and((float) $resultat['recipe']->refresh()->yield_kg)->toBe(1.0);
+});
