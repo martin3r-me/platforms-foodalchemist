@@ -66,6 +66,10 @@ class Index extends Component
         // — Wissen (#469: Vokabular, das die KI mit Wissen füttert) —
         'wissenskategorien' => ['label' => 'Wissens-Kategorien', 'hint' => 'Vokabular fürs Wissens-Modul (#469) — Klassifikation + grobe Routing-Ebene'],
         'einsatzorte' => ['label' => 'Einsatzorte (Wissen)', 'hint' => 'Bindungs-Ziele fürs Wissen (#469) — Bereiche grob + KI-Prompts fein'],
+        // Spec 52 (Grundsatz E): der Kanon — die GEWINNENDE Ebene — hatte keine Oberflaeche,
+        // die Routings seit `docs/wissen.md` nur einen „Ausblick"-Eintrag. Wer hier kuratierte,
+        // pflegte damit ausschliesslich den Fallback.
+        'wissenssteuerung' => ['label' => 'Wissens-Steuerung', 'hint' => 'Welches Wissen erreicht welchen KI-Schritt — Profil, Befunde, Routing-Editor (Spec 52)'],
 
         // — Produktion & Kapazität —
         // Spec 30 E3: Arbeitsplätze mit optionaler Tageskapazität — bewusst getrennt vom

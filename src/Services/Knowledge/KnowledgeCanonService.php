@@ -82,6 +82,74 @@ class KnowledgeCanonService
             ]);
     }
 
+    /**
+     * Spec 52 · D6 — Kanon-Zeilen, die ins Leere zeigen.
+     *
+     * `documentsFor()` filtert `d.active = 1`, und `zeilenQuery()` filtert zusätzlich
+     * `d.deleted_at IS NULL`. Beides ist für den Prompt-Bau richtig — aber es macht drei
+     * Zustände **unsichtbar**, statt sie zu melden:
+     *
+     *   · **Dossier deaktiviert** — die Zeile fällt aus `documentsFor()`, `hasCanon()` sagt
+     *     weiter `true`. Der Gateway baut den Kanon-Block aus dem REST und fällt auch nicht auf
+     *     die Bindungen zurück. Ergebnis: still weniger Pflichtwissen.
+     *   · **Dossier soft-deleted** — die Zeile ist über `zeilenQuery()` **nirgends** mehr
+     *     sichtbar, auch nicht in `list()`. Sie existiert in der DB und ist für jeden Lesepfad weg.
+     *   · **Dossier hart gelöscht** — der FK ist `cascade`, die Kanon-Zeile verschwindet
+     *     mit. Dann sagt `hasCanon()` `false`, und der Gateway schaltet **die alten Bindungen
+     *     wieder scharf** (`$kanonBlock === null`). Ein Korpus-Umbau, der Dossiers löscht und
+     *     neu anlegt, reaktiviert damit stillschweigend die Alt-Struktur.
+     *
+     * Diese Methode sieht bewusst OHNE die beiden Filter nach, damit genau das meldbar wird.
+     *
+     * Nicht betroffen: **Umbenennen.** Der Kanon hängt an `knowledge_document_id`, nicht am
+     * Slug — ein Slug-Wechsel trägt die Zeile mit.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function unaufloesbareZeilen(Team $team, ?string $scopeKey = null): array
+    {
+        $q = DB::table(self::TABLE . ' as c')
+            ->leftJoin(self::DOCS . ' as d', 'd.id', '=', 'c.knowledge_document_id')
+            ->whereNull('c.deleted_at')
+            ->where('c.active', 1)
+            ->where(function ($w) {
+                $w->whereNull('d.id')                 // Dossier weg (sollte der FK verhindern)
+                    ->orWhereNotNull('d.deleted_at')  // soft-deleted → sonst NIRGENDS sichtbar
+                    ->orWhere('d.active', 0);         // deaktiviert → still uebersprungen
+            })
+            ->select([
+                'c.id as canon_id', 'c.scope', 'c.scope_key', 'c.role', 'c.ord', 'c.mode',
+                'c.team_id as canon_team_id', 'c.knowledge_document_id as document_id',
+                'd.slug', 'd.title', 'd.active as doc_active', 'd.deleted_at as doc_deleted_at',
+            ]);
+
+        TeamScope::applyVisible($q, 'c.team_id', $team);
+        if ($scopeKey !== null) {
+            $q->where('c.scope_key', $scopeKey);
+        }
+
+        return $q->orderBy('c.scope_key')->orderBy('c.ord')->get()->map(fn ($r) => [
+            'canon_id' => (int) $r->canon_id,
+            'scope' => (string) $r->scope,
+            'scope_key' => (string) $r->scope_key,
+            'role' => (string) $r->role,
+            'ord' => (int) $r->ord,
+            'mode' => (string) $r->mode,
+            'global' => $r->canon_team_id === null,
+            'document_id' => (int) $r->document_id,
+            'slug' => $r->slug === null ? null : (string) $r->slug,
+            'titel' => $r->title === null ? null : (string) $r->title,
+            'grund' => match (true) {
+                $r->slug === null => 'dossier_fehlt',
+                $r->doc_deleted_at !== null => 'dossier_geloescht',
+                default => 'dossier_inaktiv',
+            },
+            // Eine unaufloesbare PFLICHT-Zeile ist der schwere Fall: „pflicht" heisst, die Regel
+            // gilt immer und wird nie gekappt — kommt sie nicht an, ist die Antwort ungedeckt.
+            'schwere' => (string) $r->mode === 'pflicht' ? 'blockiert' : 'hinweis',
+        ])->all();
+    }
+
     /** Hat dieser Scope/Key überhaupt einen Kanon (aktive Zeilen, unabhängig vom Doc-Status)? */
     public function hasCanon(string $scope, string $scopeKey, Team $team, string $role = 'root'): bool
     {

@@ -107,6 +107,16 @@ trait SeedsTeamHierarchy
                 $core . '/2025_01_01_000002_create_context_file_variants_table.php',
                 $core . '/2025_01_01_000003_create_context_file_references_table.php',
                 $core . '/2026_02_15_000001_make_user_id_nullable_on_context_files_table.php',
+                // Spec 52: Cores `layouts/app.blade.php` liest bei JEDEM Full-Page-Render die
+                // UI-Praeferenzen des Users (Sidebar-Zustand). Ohne diese Tabelle antwortet
+                // JEDER `$this->get(route(...))` mit 500 — und weil `Livewire::test` das Layout
+                // gar nicht rendert, blieb genau das jahrelang unsichtbar
+                // (feedback_fa_test_harness_layout_blind). Damit sind Ganzseiten-Tests
+                // ueberhaupt erst moeglich.
+                $core . '/2026_06_06_000001_create_user_ui_preferences_table.php',
+                // Ebenfalls Layout: die Navbar liest das Team-Modell-Mapping.
+                $core . '/2026_02_05_000001_create_team_core_ai_models_table.php',
+                $core . '/0001_01_01_000007_create_team_invitations_table.php',
                 $module,
             ],
         ])->run();
