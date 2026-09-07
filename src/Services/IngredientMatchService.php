@@ -622,6 +622,71 @@ class IngredientMatchService
         return $sonden;
     }
 
+    /**
+     * POST-MATCH-DRAW, Auswahl-Hälfte — die Kandidaten, aus denen nach einer erfolglosen
+     * Matcher-Entscheidung noch gezogen werden DARF, in Score-Reihenfolge.
+     *
+     * Hintergrund: die Match-ENTSCHEIDUNG ({@see matchIngredient}) ist bewusst lexikalisch mit
+     * Band-Gate — unter dem Gate heißt „zu schwach", nicht „ungeprüft". Semantik kommt danach
+     * als eigener Zug über einen HÖHEREN, modus-abhängigen Boden. Das ist die Erdungs-Stärke
+     * B2 (2026-08-20) und war bisher privat in `RecipeGeneratorService::ziehtAusBestand`
+     * eingebaut — mit der Folge, dass `foodalchemist.gps.MATCH` diesen Zug NICHT kannte und
+     * `none` meldete, wo die Pipeline gezogen hätte. Ein Agent, der der Tool-Anleitung folgt
+     * („kein Treffer → minten oder Beschaffungs-Wunsch"), legte daraufhin ein GP-Duplikat oder
+     * Phantom-Bedarf an, obwohl ein approved-Kandidat in derselben Antwort stand.
+     *
+     * Darum liegt die Auswahl jetzt HIER, an einer Stelle, und beide Aufrufer teilen sie. Die
+     * PRÜFUNG bleibt beim Aufrufer: der Generator braucht zusätzlich den Zyklus-Schutz gegen das
+     * Eltern-Rezept, das MCP-Tool hat kein Eltern-Rezept. Darum die ganze Liste statt nur des
+     * ersten Treffers — der Aufrufer nimmt den ersten, der seine Prüfung besteht.
+     *
+     * @param  list<array<string, mixed>>  $shortlist  aus {@see candidatesFor} (score-desc)
+     * @param  'gp'|'sub'  $wantKind
+     * @return list<array{kind: string, id: int, score: float}>
+     */
+    public function drawKandidaten(array $shortlist, string $wantKind, string $bestand): array
+    {
+        $floor = $this->drawFloor($bestand);
+        if ($floor === null) {
+            return [];   // komplett_neu zieht NIE
+        }
+        $out = [];
+        foreach ($shortlist as $c) {
+            if (($c['kind'] ?? null) !== $wantKind) {
+                continue;
+            }
+            // Nur semantisch (mit)getragene Kandidaten. Rein lexikalische sind bereits durch
+            // das Band-Gate der Entscheidung gelaufen; sie hier erneut zu ziehen würde das
+            // Gate aushebeln.
+            if (! in_array($c['origin'] ?? 'lexical', ['both', 'semantic'], true)) {
+                continue;
+            }
+            if ((float) ($c['score'] ?? 0) < $floor) {
+                break;   // desc-sortiert: ab hier liegt alles unter dem Boden
+            }
+            $id = (int) ($c['id'] ?? 0);
+            if ($id > 0) {
+                $out[] = ['kind' => (string) $c['kind'], 'id' => $id, 'score' => (float) $c['score']];
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * Der Modus-Boden des Post-Match-Draws — `null` bedeutet „dieser Modus zieht nicht".
+     * Öffentlich, weil `gps.MATCH` ihn in der Antwort ausweist: ein gezogener Treffer ohne
+     * sichtbaren Boden wäre für den Aufrufer nicht von einem Namenstreffer zu unterscheiden.
+     */
+    public function drawFloor(string $bestand): ?float
+    {
+        return match ($bestand) {
+            'nur_bestand' => 0.55,   // Datenbank-Modus: breiter erden (B1)
+            'hybrid' => 0.70,
+            default => null,         // komplett_neu / unbekannt
+        };
+    }
+
     private function gpPool(Team $team, array $queryTokens, ?string $querySlug)
     {
         $query = FoodAlchemistGp::visibleToTeam($team)

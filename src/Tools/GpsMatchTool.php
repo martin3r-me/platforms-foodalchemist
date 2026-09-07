@@ -28,8 +28,11 @@ class GpsMatchTool extends FoodAlchemistTool implements ToolContract, ToolMetada
         return 'Matcht einen Zutat-Freitext gegen die Grundprodukte (GPs) und Sub-Rezepte des Teams. '
             . 'Liefert best_match (target gp|sub_recipe|none, score, band) + candidates (Top-k GPs). '
             . 'PFLICHT vor jeder Rezept-Zutat: nur gematchte gp_id/recipe_id verwenden. '
-            . 'Mit mint_if_missing=true wird bei target=none LA-First ein GP aus passender LA gemintet '
-            . '(tentative, sofort verwendbar); ohne LA bleibt es none. '
+            . 'Bleibt die (lexikalische) Entscheidung unter dem Band, wird wie in der Generierung noch '
+            . 'aus der semantisch-inklusiven Shortlist GEZOGEN (status=gezogen, mit origin + draw_floor) — '
+            . 'ein Bestandstreffer wird also nicht als none gemeldet. '
+            . 'Mit mint_if_missing=true wird NUR bei danach noch target=none LA-First ein GP aus passender LA '
+            . 'gemintet (tentative, sofort verwendbar); ohne LA bleibt es none. '
             . 'Kein Treffer und kein Mint → foodalchemist.gp_proposals.POST (Beschaffungs-Wunsch), nie raten.'
             . ' Ablauf, Soll-Aspekte und geltende Regelwerke vorher: foodalchemist.ablauf.GET(vorgang="gp_aus_la_anlegen").';
     }
@@ -58,6 +61,10 @@ class GpsMatchTool extends FoodAlchemistTool implements ToolContract, ToolMetada
                     'description' => 'From Scratch: straft Schnitt-/Größen-Formen ab, damit die Roh-Grundform gewinnt '
                         . '(«Zwiebel» statt «Zwiebel geachtelt»).'],
                 'commodity_group' => ['type' => 'string', 'description' => 'Optionaler Warengruppen-Code (Spec 16): verengt die LA-Suche beim Mint auf die WG-Lead-Lieferanten. Fehlt er → alle Leads.'],
+                'bestand' => ['type' => 'string', 'enum' => ['hybrid', 'nur_bestand', 'komplett_neu'], 'default' => 'hybrid',
+                    'description' => 'Reuse-Achse wie im Kreativ-Modus — steuert den Boden des Post-Match-Draws: '
+                        . 'hybrid = 0,70 (Default), nur_bestand = 0,55 (breiter erden), komplett_neu = zieht NIE. '
+                        . 'Denselben Wert setzen wie in der Session, sonst weicht das Tool-Urteil von der Generierung ab.'],
             ],
             'required' => ['zutat'],
         ];
@@ -90,8 +97,61 @@ class GpsMatchTool extends FoodAlchemistTool implements ToolContract, ToolMetada
 
         $match = $svc->matchIngredient($team, $zutat, $slug, $mode, $pref, $preferRaw, $bio);
 
+        // Kandidaten EINMAL holen: sie speisen den Draw unten UND die Antwort. Vorher wurden sie
+        // erst am Ende geholt — der gezogene Treffer wäre also nicht zwingend derselbe gewesen,
+        // den der Aufrufer in `candidates` sieht.
+        $k = min(10, max(1, (int) ($arguments['k'] ?? 5)));
+        $kandidaten = $svc->candidatesFor($team, $zutat, $slug, $k);
+
+        // ── POST-MATCH-DRAW (2026-09-07) ─────────────────────────────────────────────────
+        // Der Generator zieht nach einer erfolglosen Matcher-Entscheidung noch aus der
+        // semantisch-inklusiven Shortlist ({@see RecipeGeneratorService::ziehtAusBestand}).
+        // Dieses Tool kannte den Zug NICHT und meldete `none` — bei „Tomaten, geschält, aus der
+        // Dose" mit dem korrekten Pelati bei 0,769 in derselben Antwort. Zusammen mit der eigenen
+        // Anleitung („kein Treffer → minten oder Beschaffungs-Wunsch") erzeugte das GP-Dubletten
+        // und Phantom-Bedarf. Der Draw läuft darum HIER, und zwar VOR dem Mint.
+        // Die Auswahl ist geteilt (drawKandidaten), die Prüfung ist hier: kein Eltern-Rezept,
+        // also kein Zyklus-Schutz, nur Sichtbarkeit + Status.
+        $bestand = (string) ($arguments['bestand'] ?? 'hybrid');
+        $drawFloor = $svc->drawFloor($bestand);
+        if (($match['target'] ?? null) === 'none') {
+            $wantKind = $mode === 'sub_recipe_first' ? 'sub' : 'gp';
+            foreach ($svc->drawKandidaten($kandidaten, $wantKind, $bestand) as $c) {
+                $gezogen = $wantKind === 'gp'
+                    ? \Platform\FoodAlchemist\Models\FoodAlchemistGp::query()->visibleToTeam($team)
+                        ->whereIn('status', ['approved', 'tentative'])->where('is_platzhalter', false)
+                        ->find($c['id'])
+                    // Status-Set EXAKT wie `validiereProposedSub` — inklusive `stub`. Das ist hier
+                    // die richtige Wahl, auch wenn ein Stub im Reuse-Gate der Kaskade kein
+                    // „Bestand" ist: dort lautet die Frage „ist die Komponente fertig?", hier
+                    // „auf welches Rezept zeigt dieser Zutat-Text?". Wer abweicht, lügt in die
+                    // andere Richtung.
+                    : \Platform\FoodAlchemist\Models\FoodAlchemistRecipe::visibleToTeam($team)->basis()
+                        ->whereIn('status', ['stub', 'draft', 'review', 'approved'])->find($c['id']);
+                if ($gezogen === null) {
+                    continue;
+                }
+                $match = [
+                    'target' => $wantKind === 'gp' ? 'gp' : 'sub_recipe',
+                    'status' => 'gezogen',   // Provenienz-Band: nicht der Name traf, die Bedeutung
+                    'gp_id' => $wantKind === 'gp' ? (int) $gezogen->id : null,
+                    'gp_name' => $wantKind === 'gp' ? (string) $gezogen->name : null,
+                    'recipe_id' => $wantKind === 'gp' ? null : (int) $gezogen->id,
+                    'recipe_name' => $wantKind === 'gp' ? null : (string) $gezogen->name,
+                    'score' => round($c['score'], 4),
+                    // Ohne diese zwei Felder wäre ein gezogener Treffer für den Aufrufer nicht
+                    // von einem Namenstreffer zu unterscheiden.
+                    'origin' => 'semantic',
+                    'draw_floor' => $drawFloor,
+                ];
+                break;
+            }
+        }
+
         // 07·M3: mint-if-missing — Bestand-Miss + passende LA → LA-First-Mint (tentative),
         // damit der Rezept-Flow nicht bei GP-Lücken dead-endet. Ohne LA bleibt target=none.
+        // WICHTIG: erst NACH dem Draw — sonst mintet das Tool an einem vorhandenen Bestandstreffer
+        // vorbei und legt eine Dublette an.
         $minted = false;
         $wgHint = isset($arguments['commodity_group']) ? trim((string) $arguments['commodity_group']) : null;
         if (($match['target'] ?? null) === 'none' && ($arguments['mint_if_missing'] ?? false)) {
@@ -116,7 +176,10 @@ class GpsMatchTool extends FoodAlchemistTool implements ToolContract, ToolMetada
         return ToolResult::success([
             'best_match' => $match,
             'minted' => $minted,
-            'candidates' => $svc->candidatesFor($team, $zutat, $slug, min(10, max(1, (int) ($arguments['k'] ?? 5)))),
+            // Nachvollziehbar machen, WARUM (nicht) gezogen wurde: bei `none` ist die Frage
+            // „lag nichts über dem Boden?" sonst nicht beantwortbar.
+            'draw' => ['bestand' => $bestand, 'floor' => $drawFloor],
+            'candidates' => $kandidaten,
         ]);
     }
 
