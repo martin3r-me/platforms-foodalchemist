@@ -654,6 +654,42 @@ class KnowledgeContextService
     }
 
     /**
+     * Spec 52/A2 — Routing-Namen, die ein Aufrufer selbst führt, OHNE dass es dazu eine
+     * Prompt-Registry-Zeile gibt. Dritte Variante des Schlüssel-Bruchs, nach dem Alias
+     * (`recipe.generator` → `ai_generate_recipe`) und dem Feld-Mismatch (`recipe.dichteklasse`).
+     *
+     * Ohne diese Liste hielte der Versorgungs-Bericht solche Namen für toten Ballast — sie sind
+     * aber live. Umgekehrt gilt: **welche Routing-Features WIRKLICH keinen Aufrufer haben, lässt
+     * sich statisch nicht abschliessend feststellen**, weil mehrere Stellen mit einer Variablen
+     * rufen (`contextFor($team, $promptKey, …)` in `ConceptGeneratorService`,
+     * `contextFor($this->team(), $prompt, …)` in `StepEditor`). Der Bericht sagt deshalb
+     * „ohne Prompt-Key", nicht „ohne Aufrufer" — und nennt die vier, für die ein `grep` über
+     * `src/` am 2026-09-07 wirklich leer war.
+     *
+     * @var array<string, string>  Feature → Fundstelle
+     */
+    public const CONTEXT_ONLY_FEATURES = [
+        'foodbook.plan' => 'IdeenService — contextFor(…, \'foodbook.plan\'), kein Registry-Key',
+    ];
+
+    /**
+     * Routing-Features, für die ein `grep` über `src/` am 2026-09-07 KEINEN `contextFor()`-Aufrufer
+     * fand — also konfigurierte Politik, die nichts steuert. 11 der 73 Zeilen.
+     *
+     * Besonders bitter bei `ai_extract_recipe × cross_cutting = none`: das ist eine BEWUSSTE
+     * Entscheidung („dieser Schritt braucht kein Wissen"), hinterlegt unter einem Namen, den
+     * niemand ruft. Der eigentliche Key heisst `recipe.extract` und hat keine Zeile.
+     *
+     * Als Datum geführt, nicht als Wahrheit: fügt jemand einen Aufrufer hinzu, gehört der Name
+     * hier heraus.
+     *
+     * @var list<string>
+     */
+    public const OHNE_AUFRUFER_GEMESSEN = [
+        'ai_extract_recipe', 'ai_infer_ankers', 'ai_plan_dishes', 'ai_suggest_pairings',
+    ];
+
+    /**
      * Spec 52/B3 — die Optionen für `propose()` aus einem `contextFor()`-Ergebnis bauen.
      *
      * Warum ein Helfer und nicht 18 Aufrufstellen von Hand: `knowledge_dropped_chars` gaben

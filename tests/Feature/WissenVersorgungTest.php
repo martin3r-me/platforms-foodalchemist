@@ -143,3 +143,82 @@ it('bricht ohne gueltigen Team-Kontext ab statt eine falsche Deckungsluecke zu b
         ->expectsOutputToContain('nicht aussagekräftig')
         ->assertExitCode(1);
 });
+
+/**
+ * Spec 52/A2 · Grundsatz E — dieselbe Antwort per MCP.
+ *
+ * Warum das Tool existiert, obwohl es das Kommando gibt: **auf demo gibt es keine Shell.** Ein
+ * Bericht, den man nur in einer lokalen Sandbox fahren kann, misst die falsche Umgebung — genau
+ * das ist beim Bau passiert (die ersten 42-von-71 kamen aus der Dev-MySQL, die dem
+ * Frisch-DB-Zustand entspricht und mit demo nichts zu tun hat).
+ */
+it('MCP: knowledge_versorgung.GET liefert denselben Bericht wie das Kommando', function () {
+    config(['foodalchemist.prompts' => [
+        'test.nackt' => ['tier' => 'B', 'task' => 'Tu etwas.'],
+        'test.mit_kanon' => ['tier' => 'B', 'task' => 'Tu etwas.'],
+    ]]);
+    ($this->mkKanon)(($this->mkDoc)('kanon-doc'), 'test.mit_kanon');
+
+    $user = $this->makeUser($this->rootTeam);
+    $this->actingAs($user);
+    $res = app(\Platform\Core\Tools\ToolRegistry::class)
+        ->get('foodalchemist.knowledge_versorgung.GET')
+        ->execute([], new \Platform\Core\Contracts\ToolContext($user, $this->rootTeam));
+
+    expect($res->success)->toBeTrue((string) ($res->error ?? ''))
+        ->and($res->data['keys'])->toBe(2)
+        ->and($res->data['gesteuert'])->toBe(1)
+        ->and($res->data['ungesteuert'])->toBe(1)
+        // Die Deutung muss mitkommen — ein Agent soll nicht raten, ob 1 von 2 schlimm ist.
+        ->and($res->data['hinweis'])->toContain('erreicht KEIN Dossier');
+});
+
+it('MCP: eine einzelne Registry-Zeile ist abfragbar, unbekannte werden abgewiesen', function () {
+    config(['foodalchemist.prompts' => ['test.eins' => ['tier' => 'B', 'task' => 'Tu etwas.']]]);
+    $user = $this->makeUser($this->rootTeam);
+    $this->actingAs($user);
+    $kontext = new \Platform\Core\Contracts\ToolContext($user, $this->rootTeam);
+    $tool = app(\Platform\Core\Tools\ToolRegistry::class)->get('foodalchemist.knowledge_versorgung.GET');
+
+    expect($tool->execute(['prompt_key' => 'test.eins'], $kontext)->data['zeile']['prompt_key'])->toBe('test.eins')
+        ->and($tool->execute(['prompt_key' => 'gibt.es.nicht'], $kontext)->errorCode)->toBe('VALIDATION_ERROR');
+});
+
+it('trennt "ohne Aufrufer gemessen" von "unklar" und "Aufrufer-Eigenname"', function () {
+    // Meine erste Fassung meldete `foodbook.plan` als tot — es ist aber live, bloss kein
+    // Registry-Key (IdeenService ruft contextFor damit). Und ob ein Feature WIRKLICH keinen
+    // Aufrufer hat, ist statisch nicht entscheidbar, weil mehrere Stellen mit einer Variablen
+    // rufen. Der Bericht darf das nicht verwischen.
+    config(['foodalchemist.prompts' => ['recipe.generator' => ['tier' => 'B', 'task' => 'x']]]);
+    ($this->mkRouting)('ai_plan_dishes', 'domain', 'discovery');      // gemessen ohne Aufrufer
+    ($this->mkRouting)('foodbook.plan', 'domain', 'discovery');        // Aufrufer-Eigenname
+    ($this->mkRouting)('voellig.unbekannt', 'domain', 'discovery');    // unklar
+    ($this->mkRouting)('ai_generate_recipe', 'domain', 'discovery');   // Alias, muss NICHT auftauchen
+
+    $rf = app(\Platform\FoodAlchemist\Services\Knowledge\WissensVersorgungService::class)
+        ->routingFeaturesOhnePromptKey();
+
+    expect($rf['ohne_aufrufer_gemessen'])->toContain('ai_plan_dishes')
+        ->and($rf['aufrufer_eigenname'])->toBe(['foodbook.plan'])
+        ->and($rf['ohne_prompt_key'])->toContain('voellig.unbekannt')
+        // Keine Doppelnennung: was als "ohne Aufrufer" gemessen ist, steht nicht noch in "unklar".
+        ->and($rf['ohne_prompt_key'])->not->toContain('ai_plan_dishes')
+        // Der Alias ist bekannt und damit kein Befund.
+        ->and($rf['ohne_prompt_key'])->not->toContain('ai_generate_recipe');
+});
+
+it('weist eine Bindung an einem Key MIT Kanon als stumm aus, nicht als Versorgung', function () {
+    // Genau der demo-Zustand: 9 Bindungen, alle auf recipe.generator/vk.generator, alle stumm,
+    // weil dort ein Kanon steht (AiGatewayService:178). Sie sehen im Browser nach Verdrahtung
+    // aus und liefern nichts.
+    config(['foodalchemist.prompts' => ['recipe.generator' => ['tier' => 'B', 'task' => 'x']]]);
+    ($this->mkKanon)(($this->mkDoc)('kanon-regel'), 'recipe.generator');
+    ($this->mkBindung)(($this->mkDoc)('alte-bindung', aktiv: true), 'recipe.generator');
+
+    $zeile = app(\Platform\FoodAlchemist\Services\Knowledge\WissensVersorgungService::class)
+        ->zeileFuer('recipe.generator', $this->rootTeam);
+
+    expect($zeile['verdikt'])->toBe('gesteuert')
+        ->and($zeile['bindungen'])->toBe(1)
+        ->and($zeile['bindungen_stumm'])->toBe(1);
+});

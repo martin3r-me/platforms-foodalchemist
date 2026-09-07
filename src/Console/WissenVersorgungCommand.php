@@ -3,42 +3,21 @@
 namespace Platform\FoodAlchemist\Console;
 
 use Illuminate\Console\Command;
-use Illuminate\Support\Facades\DB;
 use Platform\Core\Models\Team;
-use Platform\FoodAlchemist\Services\Ai\AiGatewayService;
-use Platform\FoodAlchemist\Services\Ai\KnowledgeContextService;
-use Platform\FoodAlchemist\Services\Knowledge\KnowledgeCanonService;
+use Platform\FoodAlchemist\Services\Knowledge\WissensVersorgungService;
 
 /**
- * Spec 52 · A2 — der Versorgungs-Bericht: was bekommt jeder Prompt-Key TATSÄCHLICH an Wissen?
+ * Spec 52 · A2 — der Versorgungs-Bericht am Terminal.
  *
- * Diese Frage konnte bis jetzt **niemand** beantworten, und das ist die Ursache unter allen
- * Symptomen. Drei Steuertabellen antworten unabhängig voneinander:
- *   · `foodalchemist_knowledge_canon`    — „muss rein" (neu, Spec 50)
- *   · `foodalchemist_knowledge_routings` — „darf gesucht werden" (feature × category)
- *   · `foodalchemist_knowledge_bindings` — „ist angeheftet" (alt, #469, Fallback ohne Kanon)
+ * Die Rechnung steht in {@see WissensVersorgungService} — dieses Kommando ist nur die
+ * Darstellung. Der zweite Abnehmer ist `foodalchemist.knowledge_versorgung.GET`, und der ist
+ * auf demo der einzige Weg: dort gibt es keine Shell (Grundsatz E — alles in der UI
+ * einstellbar, alles per MCP bedienbar; ein Kommando allein reicht nicht).
  *
- * Dazu kommen zwei Schlüsselräume im selben Aufruf: der Gateway löst den Kanon über den
- * **Prompt-Key** auf (`recipe.generator`), das Routing wird aber mit einem hartkodierten
- * **Alt-Feature** gerufen (`RecipeGenerationContextService:88` übergibt `ai_generate_recipe`
- * für Basisrezept UND Gericht). Eine Routing-Zeile auf `vk.generator` würde also stumm ins
- * Leere schreiben — sichtbar wird das erst hier.
- *
- * **Gegen die Registry, nicht gegen die Doku.** Der Bericht läuft über
- * `config('foodalchemist.prompts')`. Die Funktionsmatrix in `docs/PLANUNG/26_*` nennt 22
- * `recipe.*` und 15 `vk.*`; real sind es 23 und 13, und `vk.behaelter` steht dort noch, obwohl
- * Spec 50 es abgeschafft hat. Wer gegen die Doku prüft, prüft einen alten Stand.
- *
- * Verdikt je Zeile:
- *   · `gesteuert`     — Kanon und/oder Routing greifen
- *   · `none`          — ausdrücklich leer geroutet (bewusste Entscheidung, z. B. ai_extract_recipe)
- *   · `nur-bindung`   — kein Kanon, kein Routing, aber eine Bindung hängt dran (Alt-Struktur)
- *   · `UNGESTEUERT`   — nichts von allem. Das ist ein **Befund**, keine Leerzeile.
- *
- * **Abgrenzung zu `foodalchemist:wissen-deckung` (W2-4).** Das prüft die KORPUS-Richtung:
- * nennt ein Prompt-Task einen §, muss der Korpus ein Dossier dazu haben (der §12-Fall). Dieser
- * Befehl prüft die VERSORGUNGS-Richtung: erreicht diesen Prompt überhaupt Wissen, und welches.
- * Zwei Richtungen desselben Problems, deshalb zwei Befehle — nicht einer mit zwei Modi.
+ * **Abgrenzung zu `foodalchemist:wissen-deckung` (W2-4).** Das prüft die KORPUS-Richtung: nennt
+ * ein Prompt-Task einen §, muss der Korpus ein Dossier dazu haben (der §12-Fall). Dieser Befehl
+ * prüft die VERSORGUNGS-Richtung: erreicht diesen Prompt überhaupt Wissen, und welches. Zwei
+ * Richtungen desselben Problems, deshalb zwei Befehle — nicht einer mit zwei Modi.
  *
  * Rein lesend. Exit-Code 1, sobald ungesteuerte Keys existieren, damit ein Scheduler-Lauf
  * sichtbar fehlschlägt statt still durchzulaufen.
@@ -47,71 +26,54 @@ class WissenVersorgungCommand extends Command
 {
     protected $signature = 'foodalchemist:wissen-versorgung
         {--team=6 : Team-Kontext für die Kanon-Sichtbarkeit (global ∪ Ahnenkette)}
-        {--praefix= : nur Keys mit diesem Bereichs-Präfix (z. B. recipe, vk, concept)}
+        {--praefix= : nur Keys mit diesem Bereichs-Präfix (z. B. recipe, vk, gp)}
         {--nur-befunde : nur ungesteuerte Keys ausgeben}
         {--json : Maschinenlesbar ausgeben (für Vorher/Nachher-Vergleiche)}';
 
     protected $description = 'Spec 52/A2: zeigt je Prompt-Key, welches Wissen ihn erreicht (Kanon, Routing, Bindung, Budget)';
 
-    public function handle(KnowledgeCanonService $canon): int
+    public function handle(WissensVersorgungService $dienst): int
     {
-        $registry = config('foodalchemist.prompts', []);
-        if (! is_array($registry) || $registry === []) {
-            $this->error('config(foodalchemist.prompts) ist leer — falscher Kontext?');
-
-            return 1;
-        }
-
         $team = Team::find((int) $this->option('team'));
         if ($team === null) {
             // Ohne Nutzer greift nur die globale Partition — der Kanon sähe fast leer aus und
             // der Bericht behauptete eine Deckungslücke, die es nicht gibt. Lieber abbrechen.
             $this->error('Kein Team #'.$this->option('team').' — ohne Team-Kontext ist die Kanon-Sicht nicht aussagekräftig.');
 
-            return 1;
+            return self::FAILURE;
         }
 
-        $praefixFilter = (string) ($this->option('praefix') ?? '');
-        $zeilen = [];
+        $praefix = (string) ($this->option('praefix') ?? '');
+        $bericht = $dienst->bericht($team, $praefix !== '' ? $praefix : null);
 
-        foreach (array_keys($registry) as $promptKey) {
-            $promptKey = (string) $promptKey;
-            $bereich = str_contains($promptKey, '.') ? explode('.', $promptKey, 2)[0] : $promptKey;
-            if ($praefixFilter !== '' && $bereich !== $praefixFilter) {
-                continue;
-            }
+        if ($bericht['keys'] === 0) {
+            $this->error('Keine Prompt-Registry-Zeile gefunden'.($praefix !== '' ? " (Präfix «{$praefix}»)" : '').'.');
 
-            $zeilen[] = $this->zeileFuer($promptKey, $bereich, $team, $canon);
+            return self::FAILURE;
         }
-
-        $ungesteuert = array_values(array_filter($zeilen, fn ($z) => $z['verdikt'] === 'UNGESTEUERT'));
-        $nurBindung = array_values(array_filter($zeilen, fn ($z) => $z['verdikt'] === 'nur-bindung'));
 
         if ($this->option('json')) {
-            $this->line((string) json_encode([
-                'keys' => count($zeilen),
-                'ungesteuert' => count($ungesteuert),
-                'nur_bindung' => count($nurBindung),
-                'zeilen' => $zeilen,
-            ], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+            $this->line((string) json_encode($bericht, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
 
-            return $ungesteuert === [] ? 0 : 1;
+            return $bericht['ungesteuert'] === 0 ? self::SUCCESS : self::FAILURE;
         }
 
-        $ausgabe = $this->option('nur-befunde') ? $ungesteuert : $zeilen;
+        $ungesteuert = array_values(array_filter($bericht['zeilen'], fn ($z) => $z['verdikt'] === 'UNGESTEUERT'));
+        $nurBindung = array_values(array_filter($bericht['zeilen'], fn ($z) => $z['verdikt'] === 'nur-bindung'));
+        $ausgabe = $this->option('nur-befunde') ? $ungesteuert : $bericht['zeilen'];
 
         if ($ausgabe !== []) {
             $this->table(
                 ['Prompt-Key', 'Routing-Schlüssel', 'Kanon', 'Routing', 'Bindung', 'Budget (bound/retr.)', 'Verdikt'],
                 array_map(fn ($z) => [
                     $z['prompt_key'],
-                    $z['routing_key'] === $z['prompt_key'] ? '=' : $z['routing_key'].' (alt)',
+                    $z['alt_schluessel'] ? $z['routing_key'].' (alt)' : '=',
                     $z['kanon_docs'] > 0 ? $z['kanon_docs'].' · '.number_format($z['kanon_chars'], 0, ',', '.').' Z.' : '–',
                     $z['routing'] === [] ? '–' : implode(', ', array_map(
-                        fn ($r) => $r['category'].':'.$r['mode'].($r['max_docs'] ? ' '.$r['max_docs'].'×'.$r['max_chars'] : ''),
+                        fn ($r) => $r['category'].':'.$r['mode'].($r['max_docs'] ? ' '.$r['max_docs'].'×'.$r['max_chars_per_doc'] : ''),
                         $z['routing']
                     )),
-                    $z['bindungen'] > 0 ? $z['bindungen'].($z['bindungen_tot'] > 0 ? " ({$z['bindungen_tot']} tot)" : '') : '–',
+                    $this->bindungsZelle($z),
                     number_format($z['budget_bound'], 0, ',', '.').' / '.number_format($z['budget_retrieval'], 0, ',', '.'),
                     $z['verdikt'],
                 ], $ausgabe)
@@ -121,109 +83,82 @@ class WissenVersorgungCommand extends Command
         $this->newLine();
         $this->info(sprintf(
             'Registry: %d Prompt-Keys%s · gesteuert %d · bewusst none %d · nur Bindung %d · UNGESTEUERT %d',
-            count($zeilen),
-            $praefixFilter !== '' ? " (Präfix «{$praefixFilter}»)" : '',
-            count(array_filter($zeilen, fn ($z) => $z['verdikt'] === 'gesteuert')),
-            count(array_filter($zeilen, fn ($z) => $z['verdikt'] === 'none')),
-            count($nurBindung),
-            count($ungesteuert),
+            $bericht['keys'],
+            $praefix !== '' ? " (Präfix «{$praefix}»)" : '',
+            $bericht['gesteuert'], $bericht['none'], $bericht['nur_bindung'], $bericht['ungesteuert'],
         ));
 
+        $rf = $bericht['routing_features'];
+        if ($rf['ohne_aufrufer_gemessen'] !== []) {
+            $this->newLine();
+            $this->warn('Routing-Features OHNE AUFRUFER (grep-Befund 2026-09-07) — Politik, die nichts steuert:');
+            foreach ($rf['ohne_aufrufer_gemessen'] as $f) {
+                $this->line("  · {$f}");
+            }
+            $this->line('  Bei einem `none` ist damit die BEWUSSTE Entscheidung „kein Wissen" unter einem');
+            $this->line('  Namen hinterlegt, den niemand ruft — sie existiert, wirkt aber nicht.');
+        }
+        if ($rf['ohne_prompt_key'] !== []) {
+            $this->newLine();
+            $this->warn('Routing-Features ohne Prompt-Key — ENTWEDER Ballast ODER ein Aufrufer-Eigenname:');
+            foreach ($rf['ohne_prompt_key'] as $f) {
+                $this->line("  · {$f}");
+            }
+            $this->line('  Welches von beidem, steht nur im Code: mehrere Stellen rufen contextFor() mit');
+            $this->line('  einer Variablen, das ist statisch nicht entscheidbar. Bekannte Eigennamen stehen');
+            $this->line('  in KnowledgeContextService::CONTEXT_ONLY_FEATURES.');
+        }
+        if ($rf['aufrufer_eigenname'] !== []) {
+            $this->line('  (als Aufrufer-Eigenname dokumentiert: '.implode(', ', $rf['aufrufer_eigenname']).')');
+        }
+
         if ($nurBindung !== []) {
+            $this->newLine();
             $this->warn('Nur über die ALT-Struktur versorgt (Bindung, kein Kanon/Routing) — Spec 52/F1:');
             foreach ($nurBindung as $z) {
-                $this->line("  · {$z['prompt_key']} — {$z['bindungen']} Bindung(en)"
-                    .($z['bindungen_tot'] > 0 ? ", davon {$z['bindungen_tot']} auf INAKTIVE Dossiers" : ''));
+                $this->line("  · {$z['prompt_key']} — ".implode(', ', $z['bindungs_slugs']));
             }
         }
 
         if ($ungesteuert !== []) {
+            $this->newLine();
             $this->error(count($ungesteuert).' Prompt-Key(s) erhalten weder Kanon noch Routing noch Bindung:');
             foreach ($ungesteuert as $z) {
-                // Eine Bindung auf ein deaktiviertes Dossier ist der SCHLIMMERE Fall: es sieht
+                // Eine Bindung auf ein deaktiviertes Dossier ist der SCHLIMMERE Fall: sie sieht
                 // im Browser nach Verdrahtung aus und liefert nichts. Genau so ist beim
-                // 155-Originale-Cutover still Wissen verschwunden — deshalb eigene Zeile,
-                // nicht nur eine Tabellenzelle.
-                $totNote = $z['bindungen_tot'] > 0
+                // 155-Originale-Cutover still Wissen verschwunden.
+                $tot = $z['bindungen_tot'] > 0
                     ? " — ACHTUNG: {$z['bindungen_tot']} tot(e) Bindung(en) auf INAKTIVE Dossiers ("
                         .implode(', ', $z['bindungs_slugs']).')'
                     : '';
-                $this->line("  · {$z['prompt_key']}{$totNote}");
+                $this->line("  · {$z['prompt_key']}{$tot}");
             }
             $this->newLine();
             $this->line('Jede Zeile braucht eine Entscheidung: Kanon-Zeile, Routing-Zeile oder ausdrücklich `none`.');
+            $this->line('«ungesteuert» heisst: aus dem Wissens-Korpus erreicht diesen Prompt nichts. Regeln im');
+            $this->line('Prompt-TEXT selbst sind davon unberührt — die prüft `foodalchemist:wissen-deckung`.');
 
-            return 1;
+            return self::FAILURE;
         }
 
         $this->info('Kein ungesteuerter Prompt-Key.');
 
-        return 0;
+        return self::SUCCESS;
     }
 
-    /** @return array<string, mixed> */
-    private function zeileFuer(string $promptKey, string $bereich, Team $team, KnowledgeCanonService $canon): array
+    /** @param array<string, mixed> $z */
+    private function bindungsZelle(array $z): string
     {
-        // Eine Auflösung für Bericht und Auskunft — siehe KnowledgeContextService::ROUTING_ALIAS.
-        $routingKey = KnowledgeContextService::routingFeatureFuer($promptKey);
-
-        // Kanon über den SERVICE, nicht per eigener Query: der Gateway löst genau
-        // scope='prompt_key', role='root' auf (AiGatewayService:159), und die Tenancy-Regel
-        // (global ∪ Ahnenkette, Team-Zeile gewinnt) lebt in KnowledgeCanonService. Eine zweite
-        // Query hier wäre eine zweite Wahrheit — und würde beim nächsten Schema-Schritt
-        // auseinanderlaufen, wie es die Dev-MySQL mit `knowledge_section_id` vorgemacht hat.
-        $kanon = $canon->documentsFor('prompt_key', $promptKey, $team);
-
-        $routing = DB::table('foodalchemist_knowledge_routings')
-            ->where('feature', $routingKey)
-            ->orderBy('category')
-            ->get(['category', 'mode', 'max_docs', 'max_chars_per_doc']);
-
-        // Bindung: Prompt-Key (fein) ODER Bereichs-Präfix (grob) — genau wie AiGatewayService:179.
-        $bindungen = DB::table('foodalchemist_knowledge_bindings as b')
-            ->join('foodalchemist_knowledge_documents as d', 'd.id', '=', 'b.knowledge_document_id')
-            ->whereNull('b.deleted_at')->where('b.active', 1)
-            ->where('b.binding_type', 'layer')
-            ->whereIn('b.target_key', array_unique([$promptKey, $bereich]))
-            ->whereNull('d.deleted_at')
-            ->get(['d.slug', 'd.active as doc_active']);
-
-        $budgetBound = app(AiGatewayService::class)->boundBudgetFuer($promptKey);
-        $budgetRetrieval = app(KnowledgeContextService::class)->budgetFuer($routingKey);
-
-        $routingListe = $routing->map(fn ($r) => [
-            'category' => (string) $r->category,
-            'mode' => (string) $r->mode,
-            'max_docs' => $r->max_docs !== null ? (int) $r->max_docs : null,
-            'max_chars' => $r->max_chars_per_doc !== null ? (int) $r->max_chars_per_doc : null,
-        ])->all();
-
-        $wirksamesRouting = array_values(array_filter($routingListe, fn ($r) => $r['mode'] !== 'none'));
-        $bindungenTot = $bindungen->filter(fn ($b) => (int) $b->doc_active !== 1)->count();
-        $bindungenLebend = $bindungen->count() - $bindungenTot;
-
-        $verdikt = match (true) {
-            $kanon->isNotEmpty() || $wirksamesRouting !== [] => 'gesteuert',
-            $bindungenLebend > 0 => 'nur-bindung',
-            $routingListe !== [] => 'none',
-            default => 'UNGESTEUERT',
-        };
-
-        return [
-            'prompt_key' => $promptKey,
-            'bereich' => $bereich,
-            'routing_key' => $routingKey,
-            'kanon_docs' => $kanon->count(),
-            'kanon_chars' => (int) $kanon->sum('char_count'),
-            'kanon_pflicht' => $kanon->where('mode', 'pflicht')->count(),
-            'kanon_slugs' => $kanon->pluck('slug')->all(),
-            'routing' => $routingListe,
-            'bindungen' => $bindungen->count(),
-            'bindungen_tot' => $bindungenTot,
-            'bindungs_slugs' => $bindungen->pluck('slug')->all(),
-            'budget_bound' => (int) $budgetBound['total'],
-            'budget_retrieval' => $budgetRetrieval,
-            'verdikt' => $verdikt,
-        ];
+        if ((int) $z['bindungen'] === 0) {
+            return '–';
+        }
+        $teile = [(string) $z['bindungen']];
+        if ((int) $z['bindungen_tot'] > 0) {
+            $teile[] = $z['bindungen_tot'].' tot';
+        }
+        if ((int) $z['bindungen_stumm'] > 0) {
+            $teile[] = $z['bindungen_stumm'].' stumm';
+        }
+        return count($teile) === 1 ? $teile[0] : $teile[0].' ('.implode(', ', array_slice($teile, 1)).')';
     }
 }
