@@ -95,9 +95,9 @@ MD);
 
     expect($res->data['kette'])->toBe(['foodalchemist.concepts.POST', 'foodalchemist.concept_slots.POST'])
         ->and($res->data['trigger_phrasen'])->toBe(['Konzept anlegen', 'Menü zusammenstellen'])
-        ->and($res->data['dossier']['slug'])->toBe('workflow.konzept_anlegen_mcp')
-        ->and($res->data['dossier']['abschnitte'])->toContain('Anti-Patterns')
-        ->and($res->data['dossier']['lesen_mit']['tool'])->toBe('foodalchemist.knowledge.GET')
+        ->and($res->data['dossiers'][0]['slug'])->toBe('workflow.konzept_anlegen_mcp')
+        ->and($res->data['dossiers'][0]['abschnitte'])->toContain('Anti-Patterns')
+        ->and($res->data['dossiers'][0]['lesen_mit']['tool'])->toBe('foodalchemist.knowledge.GET')
         // Vollständig: kein nicht_verfuegbar-Eintrag mehr für Prosa oder Kette.
         ->and(array_column($res->data['nicht_verfuegbar'] ?? [], 'was'))->not->toContain('ablauf_prosa', 'kette');
 });
@@ -110,7 +110,7 @@ it('ein Dossier ohne required_tools meldet die fehlende Kette, statt eine zu rat
 
     expect($res->data)->not->toHaveKey('kette')
         ->and(array_column($res->data['nicht_verfuegbar'], 'was'))->toContain('kette')
-        ->and($res->data['dossier']['slug'])->toBe('workflow.speiseplan_erstellen_mcp');
+        ->and($res->data['dossiers'][0]['slug'])->toBe('workflow.speiseplan_erstellen_mcp');
 });
 
 it('ein Vorgang ohne Reife-Artefakt meldet ehrlich, dass es kein Soll gibt', function () {
@@ -221,4 +221,80 @@ it('jedes Einstiegs-Tool zeigt auf seinen Ablauf (E-5)', function () {
     }
 
     expect($ohneZeiger)->toBe([], 'Einstiegs-Tools ohne Ablauf-Zeiger: ' . implode(', ', $ohneZeiger));
+});
+
+
+it('ein Vorgang darf aus mehreren Dossiers bestehen — und meldet, wenn eines davon fehlt', function () {
+    // „Gericht anlegen" ist EIN Prozess mit zwei Ausführenden (KI über die Leitstelle vs. Agent in
+    // ihrer Rolle). Das passt nicht in ein Dossier, weil keines über 4.000 Zeichen gehen darf
+    // (Spec 50 Strang III, Ein-Thema-Regel) — also drei: Regeln, Weg A, Weg B.
+    ($this->mkDoc)('workflow.verkaufsgericht_anlegen_mcp', 'workflow', <<<'MD'
+---
+code: fa.gericht_anlegen
+required_tools:
+  - foodalchemist.recipes.POST
+trigger_phrases:
+  - Gericht anlegen
+---
+
+# Gericht anlegen
+
+## Eiserne Regeln
+Text.
+MD);
+    ($this->mkDoc)('workflow.gericht_weg_a_leitstelle', 'workflow', "# Weg A
+
+## Schritt 1
+Text.");
+
+    $res = ($this->run)('foodalchemist.ablauf.GET', ['vorgang' => 'gericht_anlegen']);
+
+    expect($res->data['dossiers'])->toHaveCount(2)
+        ->and(array_column($res->data['dossiers'], 'slug'))
+        ->toBe(['workflow.verkaufsgericht_anlegen_mcp', 'workflow.gericht_weg_a_leitstelle'])
+        // Kopf-Felder kommen aus dem Leit-Dossier, nicht aus allen gemischt.
+        ->and($res->data['kette'])->toBe(['foodalchemist.recipes.POST'])
+        // Der dritte Teil fehlt — das wird gesagt, nicht verschwiegen.
+        ->and(array_column($res->data['nicht_verfuegbar'], 'was'))->toContain('ablauf_prosa_teilweise');
+
+    $warum = collect($res->data['nicht_verfuegbar'])->firstWhere('was', 'ablauf_prosa_teilweise')['warum'];
+    expect($warum)->toContain('workflow.gericht_weg_b_eigenregie');
+});
+
+it('kein Dossier eines Vorgangs überschreitet den 4.000-Zeichen-Deckel', function () {
+    // Der Deckel ist keine Kosmetik: jenseits des Embedding-Fensters ist Inhalt semantisch kaum
+    // findbar, und die Wissens-Oberfläche meldet zu grosse Dossiers als Fehler.
+    //
+    // BEKANNTE ALTLAST — bewusst als Liste statt als aufgeweichte Prüfung: diese Dossiers wurden
+    // per Migration als GLOBALES Master-Wissen angelegt und sind darum über MCP weder editier-
+    // noch deaktivierbar. Sie brauchen eine Migration (Split in Ein-Thema-Dossiers oder
+    // Stilllegung). Bis dahin steht die Schuld hier sichtbar; wird eines von ihnen bereinigt,
+    // schlägt der zweite Teil des Tests an und erinnert daran, es hier zu streichen.
+    // Seit Migration 2026_09_07_000001 sind beide globalen Alt-Dossiers stillgelegt und durch
+    // Ein-Thema-Teile ersetzt — die Liste ist leer und soll es bleiben.
+    $altlast = [];
+
+    $deckel = app(\Platform\FoodAlchemist\Services\Knowledge\KnowledgeCanonService::class)->dossierMaxChars();
+    $zuGross = [];
+    $unnoetigeAusnahme = [];
+
+    foreach (VorgangsRegisterService::VORGAENGE as $code => $v) {
+        foreach ($v['doc_slugs'] as $slug) {
+            $doc = DB::table('foodalchemist_knowledge_documents')
+                ->where('slug', $slug)->where('active', 1)->whereNull('deleted_at')->first(['slug', 'char_count']);
+            if ($doc === null) {
+                continue;
+            }
+            $ueber = (int) $doc->char_count > $deckel;
+            if ($ueber && ! in_array($slug, $altlast, true)) {
+                $zuGross[] = "$code: {$doc->slug} ({$doc->char_count} > $deckel)";
+            }
+            if (! $ueber && in_array($slug, $altlast, true)) {
+                $unnoetigeAusnahme[] = $slug;
+            }
+        }
+    }
+
+    expect($zuGross)->toBe([], 'Neue Dossiers über dem Deckel: ' . implode(', ', $zuGross))
+        ->and($unnoetigeAusnahme)->toBe([], 'Aus der Altlast-Liste streichen: ' . implode(', ', $unnoetigeAusnahme));
 });

@@ -37,7 +37,11 @@ class VorgangsRegisterService
      * aus dem Code bzw. aus dem Dossier.
      *
      * `kind`         Reife-Artefakt-Typ ({@see ReifeService::KINDS}) oder null
-     * `doc_slug`     Workflow-Dossier in der Wissensbasis oder null
+     * `doc_slugs`    Workflow-Dossiers in der Wissensbasis, in Lesereihenfolge (leer = keines).
+     *                Das ERSTE ist das Leit-Dossier: aus seinem Kopf kommen `required_tools`
+     *                und `trigger_phrases`. Mehrere, weil ein Dossier höchstens 4.000 Zeichen
+     *                tragen darf (Spec 50 Strang III, Ein-Thema-Regel) — ein Vorgang mit zwei
+     *                Wegen passt nicht in eines.
      * `feature`      Schlüssel für die Regelwerk-Auswahl ({@see KnowledgeContextService})
      * `prompt_keys`  Prompt-Registry-Zeilen, die dieser Vorgang benutzt
      * `einstieg`     das Tool, mit dem der Vorgang beginnt
@@ -46,7 +50,14 @@ class VorgangsRegisterService
         'basisrezept_anlegen' => [
             'titel' => 'Basisrezept anlegen',
             'kind' => 'recipe',
-            'doc_slug' => 'workflow.rezept_anlegen_mcp',
+            // Vier Teile statt eines 8.691-Zeichen-Dossiers (Migration 2026_09_07_000001);
+            // das alte `workflow.rezept_anlegen_mcp` ist dort stillgelegt.
+            'doc_slugs' => [
+                'workflow.basisrezept_regeln',
+                'workflow.basisrezept_erzeugen',
+                'workflow.basisrezept_komponenten',
+                'workflow.basisrezept_abschluss',
+            ],
             'feature' => 'ai_generate_recipe',
             'prompt_keys' => ['recipe.generator'],
             'einstieg' => 'foodalchemist.recipes.POST',
@@ -54,12 +65,17 @@ class VorgangsRegisterService
         'gericht_anlegen' => [
             'titel' => 'Gericht / Verkaufsrezept anlegen',
             'kind' => 'gericht',
-            // Zusammengeführtes Dossier (2026-09-06): EIN Prozess, zwei Ausführende — Weg A die
-            // SaaS-KI über die Planungs-Leitstelle, Weg B der Agent in ihrer Rolle, mit derselben
-            // Schrittfolge. Der ältere Slug `workflow.gericht_anlegen_mcp` beschrieb nur Weg A und
-            // ist globales Master-Wissen (per MCP weder editier- noch deaktivierbar) — deshalb trägt
-            // das team-eigene Dossier die zusammengeführte Wahrheit und nennt den alten unter `ersetzt`.
-            'doc_slug' => 'workflow.verkaufsgericht_anlegen_mcp',
+            // EIN Prozess, zwei Ausführende — Weg A die SaaS-KI über die Planungs-Leitstelle,
+            // Weg B der Agent in ihrer Rolle, mit derselben Schrittfolge. Auf drei Dossiers
+            // verteilt, weil keines über 4.000 Zeichen gehen darf: das Leit-Dossier trägt die
+            // Regeln, die für BEIDE Wege gelten, die beiden anderen je einen Weg.
+            // Der ältere `workflow.gericht_anlegen_mcp` beschrieb nur Weg A und ist globales
+            // Master-Wissen (per MCP weder editier- noch deaktivierbar).
+            'doc_slugs' => [
+                'workflow.verkaufsgericht_anlegen_mcp',
+                'workflow.gericht_weg_a_leitstelle',
+                'workflow.gericht_weg_b_eigenregie',
+            ],
             'feature' => 'ai_generate_recipe',
             'prompt_keys' => ['vk.generator'],
             'einstieg' => 'foodalchemist.verkaufsrezepte.POST',
@@ -67,7 +83,7 @@ class VorgangsRegisterService
         'konzept_anlegen' => [
             'titel' => 'Konzept anlegen (Concepter)',
             'kind' => 'concept',
-            'doc_slug' => 'workflow.konzept_anlegen_mcp',
+            'doc_slugs' => ['workflow.konzept_anlegen_mcp'],
             'feature' => 'concept.brief_geruest',
             'prompt_keys' => ['concept.brief_geruest', 'concept.plan', 'concept.wording'],
             'einstieg' => 'foodalchemist.concepts.POST',
@@ -75,7 +91,7 @@ class VorgangsRegisterService
         'foodbook_anlegen' => [
             'titel' => 'Foodbook anlegen',
             'kind' => 'foodbook',
-            'doc_slug' => 'workflow.foodbook_anlegen_mcp',
+            'doc_slugs' => ['workflow.foodbook_anlegen_mcp'],
             'feature' => 'foodbook.grundgeruest',
             'prompt_keys' => ['foodbook.grundgeruest', 'foodbook.kundentext'],
             'einstieg' => 'foodalchemist.foodbooks.POST',
@@ -83,7 +99,7 @@ class VorgangsRegisterService
         'angebot_erstellen' => [
             'titel' => 'Angebot erstellen',
             'kind' => 'angebot',
-            'doc_slug' => 'workflow.angebot_erstellen_mcp',
+            'doc_slugs' => ['workflow.angebot_erstellen_mcp'],
             'feature' => 'concept.brief_geruest',
             'prompt_keys' => ['foodbook.kundentext'],
             'einstieg' => 'foodalchemist.angebote.POST',
@@ -91,7 +107,7 @@ class VorgangsRegisterService
         'speiseplan_erstellen' => [
             'titel' => 'Speiseplan erstellen',
             'kind' => 'speiseplan',
-            'doc_slug' => 'workflow.speiseplan_erstellen_mcp',
+            'doc_slugs' => ['workflow.speiseplan_erstellen_mcp'],
             'feature' => 'ai_generate_recipe',
             'prompt_keys' => [],
             'einstieg' => 'foodalchemist.speiseplaene.POST',
@@ -99,9 +115,7 @@ class VorgangsRegisterService
         'speisekarte_anlegen' => [
             'titel' => 'Speisekarte anlegen',
             'kind' => 'speisekarte',
-            // Für die Speisekarte gibt es (noch) kein Workflow-Dossier — das meldet der
-            // Vorgang ehrlich, statt die Prosa eines anderen Vorgangs zu borgen.
-            'doc_slug' => null,
+            'doc_slugs' => ['workflow.speisekarte_anlegen_mcp'],
             'feature' => 'ai_generate_recipe',
             // Das Karten-Wording laeuft ueber `foodbook.kundentext` (SpeisekarteService::kiWordingVorschlag)
             // — es gibt keine eigene Registry-Zeile `speisekarte.wording`.
@@ -111,7 +125,7 @@ class VorgangsRegisterService
         'format_anlegen' => [
             'titel' => 'Format anlegen',
             'kind' => 'format',
-            'doc_slug' => null,
+            'doc_slugs' => ['workflow.format_anlegen_mcp'],
             'feature' => 'format.grundgeruest',
             'prompt_keys' => ['format.grundgeruest'],
             'einstieg' => 'foodalchemist.formats.POST',
@@ -120,7 +134,7 @@ class VorgangsRegisterService
             'titel' => 'Grundprodukt aus Lieferantenartikel anlegen (LA-First)',
             // Grundprodukte haben keinen Reife-Adapter — es gibt kein Soll zu melden.
             'kind' => null,
-            'doc_slug' => 'workflow.gp_aus_la_anlegen_mcp',
+            'doc_slugs' => ['workflow.gp_aus_la_anlegen_mcp'],
             'feature' => 'ai_generate_recipe',
             'prompt_keys' => [],
             'einstieg' => 'foodalchemist.gps.MATCH',
@@ -128,7 +142,7 @@ class VorgangsRegisterService
         'preis_margen_monitoring' => [
             'titel' => 'Preis- und Margen-Monitoring',
             'kind' => null,
-            'doc_slug' => 'workflow.preis_margen_monitoring_mcp',
+            'doc_slugs' => ['workflow.preis_margen_monitoring_mcp'],
             'feature' => 'ai_generate_recipe',
             'prompt_keys' => [],
             'einstieg' => 'foodalchemist.kalkulation.GET',
@@ -170,19 +184,33 @@ class VorgangsRegisterService
         }
 
         $nichtVerfuegbar = [];
-        $doc = $v['doc_slug'] !== null ? $this->wissen->getDocument($team, $v['doc_slug']) : null;
-        if ($v['doc_slug'] === null) {
+        $docs = [];
+        $fehlend = [];
+        foreach ($v['doc_slugs'] as $slug) {
+            $d = $this->wissen->getDocument($team, $slug);
+            if ($d !== null) {
+                $docs[] = $d;
+            } else {
+                $fehlend[] = $slug;
+            }
+        }
+        if ($v['doc_slugs'] === []) {
             $nichtVerfuegbar[] = ['was' => 'ablauf_prosa', 'warum' => 'Für diesen Vorgang gibt es kein Workflow-Dossier.'];
-        } elseif ($doc === null) {
+        } elseif ($docs === []) {
             $nichtVerfuegbar[] = ['was' => 'ablauf_prosa',
-                'warum' => 'Das Dossier «' . $v['doc_slug'] . '» ist nicht aktiv oder für dieses Team nicht sichtbar.'];
+                'warum' => 'Kein Dossier des Vorgangs ist aktiv oder für dieses Team sichtbar (' . implode(', ', $fehlend) . ').'];
+        } elseif ($fehlend !== []) {
+            // Teil-Verfügbarkeit ehrlich melden: der Agent sieht sonst nicht, dass ihm ein Weg fehlt.
+            $nichtVerfuegbar[] = ['was' => 'ablauf_prosa_teilweise',
+                'warum' => 'Diese Dossiers fehlen oder sind inaktiv: ' . implode(', ', $fehlend) . '.'];
         }
 
-        $kopf = $doc !== null ? $this->wissen->frontmatterOf((string) $doc->content_md) : [];
+        // Kopf-Felder kommen aus dem Leit-Dossier (dem ersten), nicht gemischt aus allen.
+        $kopf = $docs !== [] ? $this->wissen->frontmatterOf((string) $docs[0]->content_md) : [];
         $kette = $this->kette($kopf);
-        if ($kette === null && $doc !== null) {
+        if ($kette === null && $docs !== []) {
             $nichtVerfuegbar[] = ['was' => 'kette',
-                'warum' => 'Das Dossier «' . $v['doc_slug'] . '» nennt im Kopf keine required_tools.'];
+                'warum' => 'Das Leit-Dossier «' . $docs[0]->slug . '» nennt im Kopf keine required_tools.'];
         }
 
         $aspekte = null;
@@ -206,13 +234,14 @@ class VorgangsRegisterService
                 : null,
             'regelwerke' => $this->regelwerke($v, $team),
             'prompt_keys' => $v['prompt_keys'],
-            'dossier' => $doc !== null ? [
-                'slug' => $doc->slug,
-                'titel' => $doc->title,
-                'version' => (int) $doc->version,
-                'abschnitte' => $this->abschnitte((string) $doc->content_md),
-                'lesen_mit' => ['tool' => 'foodalchemist.knowledge.GET', 'args' => ['slug' => $doc->slug]],
-            ] : null,
+            'dossiers' => $docs !== [] ? array_map(fn ($d) => [
+                'slug' => $d->slug,
+                'titel' => $d->title,
+                'version' => (int) $d->version,
+                'zeichen' => (int) $d->char_count,
+                'abschnitte' => $this->abschnitte((string) $d->content_md),
+                'lesen_mit' => ['tool' => 'foodalchemist.knowledge.GET', 'args' => ['slug' => $d->slug]],
+            ], $docs) : null,
             'nicht_verfuegbar' => $nichtVerfuegbar,
         ], fn ($v) => $v !== null);
     }
