@@ -931,34 +931,22 @@ class RecipeGeneratorService
      */
     private function ziehtAusBestand(Team $team, int $parentRecipeId, array $shortlist, bool $istBasisrezept, string $bestand): ?array
     {
-        if (! in_array($bestand, ['nur_bestand', 'hybrid'], true)) {
-            return null;
-        }
-        $floor = $bestand === 'nur_bestand' ? 0.55 : 0.70;
+        // Die AUSWAHL (Modus-Boden, origin-Gate, Score-Reihenfolge) liegt seit 2026-09-07 in
+        // {@see IngredientMatchService::drawKandidaten} — an EINER Stelle, weil
+        // `foodalchemist.gps.MATCH` denselben Zug fahren muss. Vorher war sie hier privat, und
+        // das Tool meldete `none`, wo diese Methode gezogen hätte. Die PRÜFUNG bleibt hier: nur
+        // der Generator kennt das Eltern-Rezept und damit den Zyklus-Schutz.
         $wantKind = $istBasisrezept ? 'sub' : 'gp';
-        foreach ($shortlist as $c) {
-            if (($c['kind'] ?? null) !== $wantKind) {
-                continue;
-            }
-            if (! in_array($c['origin'] ?? 'lexical', ['both', 'semantic'], true)) {
-                continue;
-            }
-            if ((float) ($c['score'] ?? 0) < $floor) {
-                break;   // desc-sortiert: der beste passende liegt schon unter dem Floor
-            }
-            $id = (int) ($c['id'] ?? 0);
-            if ($id <= 0) {
-                continue;
-            }
+        foreach ($this->matcher->drawKandidaten($shortlist, $wantKind, $bestand) as $c) {
             if ($wantKind === 'gp') {
-                if ($this->validiereProposedGp($team, $id) !== null) {
-                    return ['target' => 'gp', 'id' => $id, 'score' => (float) $c['score']];
+                if ($this->validiereProposedGp($team, $c['id']) !== null) {
+                    return ['target' => 'gp', 'id' => $c['id'], 'score' => $c['score']];
                 }
 
                 continue;
             }
-            if ($this->validiereProposedSub($team, $parentRecipeId, $id) !== null) {
-                return ['target' => 'sub', 'id' => $id, 'score' => (float) $c['score']];
+            if ($this->validiereProposedSub($team, $parentRecipeId, $c['id']) !== null) {
+                return ['target' => 'sub', 'id' => $c['id'], 'score' => $c['score']];
             }
         }
 
