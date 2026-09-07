@@ -55,11 +55,13 @@ beforeEach(function () {
         ]);
     };
 
+    // updateOrInsert, nicht insert: die Migrationen seeden Routing-Zeilen mit, und
+    // (feature, category) ist unique — ein blindes insert stirbt am Bestand.
     $this->mkRouting = function (string $feature, string $kategorie, string $mode): void {
-        DB::table('foodalchemist_knowledge_routings')->insert([
-            'feature' => $feature, 'category' => $kategorie, 'mode' => $mode,
-            'created_at' => now(), 'updated_at' => now(),
-        ]);
+        DB::table('foodalchemist_knowledge_routings')->updateOrInsert(
+            ['feature' => $feature, 'category' => $kategorie],
+            ['mode' => $mode, 'updated_at' => now(), 'created_at' => now()],
+        );
     };
 });
 

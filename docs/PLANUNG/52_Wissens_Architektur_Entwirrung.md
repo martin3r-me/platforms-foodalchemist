@@ -852,6 +852,48 @@ vorhandene Nummer ist 51). Tracking wie üblich: Office Dev-Package 23, Features
 **DoD Etappe A:** Es existiert eine Zahl für jede Behauptung in den Befunden A–I. Nichts in
 B–G startet auf einer Schätzung.
 
+#### ✅ A2 erledigt 2026-09-07 — und korrigiert zwei meiner Zahlen
+
+`foodalchemist:wissen-versorgung` gebaut (`src/Console/WissenVersorgungCommand.php`, 7 Tests).
+Erste Messung, **auf der Dev-MySQL** — und die ist der interessantere Fall, siehe unten:
+
+| Kennzahl | Wert |
+|---|---|
+| Registry-Keys | **71** (nicht ~48 — die Zahl in `docs/wissen.md` war überholt) |
+| davon `recipe.*` / `vk.*` | **23 / 13** (nicht 22/15 — `26_LLM_MCP_Funktionsmatrix.md` ist an der Stelle veraltet, u. a. steht `vk.behaelter` noch drin) |
+| **UNGESTEUERT** | **42** |
+| nur über die Alt-Struktur versorgt | **18**, alle `recipe.*` |
+| gesteuert | 11 |
+
+**Die Präfix-Streuung, jetzt gezählt:** `geschmacksbalance` und `workflow.rezept_anlegen_mcp`
+hängen über das Bereichs-Ziel `recipe` an **je 23 Prompt-Keys** — unabhängig von jeder
+Relevanz. Das ist die Blindleistung aus Spec 46 §2d, erstmals als Zahl.
+Nebenbefund: `workflow.rezept_anlegen_mcp` steht in der `ENTBUNDEN`-Liste von
+`WissenSteuerdatenW0Command`, ist hier aber aktiv gebunden — der `--apply`-Lauf ist in diesem
+Zustand nie gefahren.
+
+**★ Die Dev-MySQL IST der Wiederherstellungs-Fall aus Befund G1.** Sie trägt **keine
+Kanon-Zeile**, `regelwerk:always 1×7000` bei `recipe.ueberarbeiten`, `always 1×6000` bei
+`recipe.eigenschaften` und `cross_cutting:always` bei `recipe.steps` — also exakt den
+Migrations-Stand, nicht den handgedrehten demo-Stand. Was ich als Risiko für „neuer Kunde,
+neuer Rechner" beschrieben habe, ist lokal reproduzierbar. Zusätzlich stand dort noch das
+**v1-Kanon-Schema** (`knowledge_section_id`); die Kanon-Migration `2026_09_05_000010` war nie
+gelaufen. Konsequenz, die niemandem aufgefallen war: **auf der Dev-MySQL konnte der Kanon-Pfad
+nie ausgeführt werden** — jede Kanon-Query bricht dort ab. Gezielt migriert (Tabelle hatte 0
+Zeilen), die 12 übrigen offenen Migrationen bewusst nicht angefasst (Fremdmodule).
+
+**Der Alias ist zentralisiert:** `KnowledgeContextService::ROUTING_ALIAS` +
+`routingFeatureFuer()` — Bericht und Auskunft geben dieselbe Antwort, und mit `D1` verschwindet
+die Tabelle an genau einer Stelle. Hätte ich sie im Kommando gelassen, hätte ich die zweite
+Wahrheit gebaut, die diese Spec anklagt.
+
+**Abgrenzung, die ich erst beim Bauen gefunden habe:** `foodalchemist:wissen-deckung` (W2-4)
+existiert schon und prüft die **Korpus**-Richtung des §-Problems — „nennt ein Prompt einen §,
+den kein Dossier hat" (der §12-Fall). Mein Bericht heisst deshalb `wissen-versorgung` und
+prüft die **Versorgungs**-Richtung. Für `H7` (hängende §-Verweise im zusammengesetzten Prompt)
+ist W2-4 die halbe Antwort: es fehlt die Richtung „Dossier verweist auf ein § außerhalb
+desselben Prompts". Also `H7` erweitert W2-4, statt ein drittes Kommando zu bauen.
+
 ### Etappe B — Sofort-Riegel gegen stille Verluste
 
 | ID | Arbeitspaket | Definition of Done |
@@ -1019,7 +1061,7 @@ und `B7`.
 | **H3** | Bestand markieren: 1.105 Dossiers mit `art` + Achsenwerten versehen — **KI-Vorschlag, menschliche Freigabe** | Muster existiert im Vault: `110_destillate_aktivieren.py` hat 73 Destillate per Gemini mit Frontmatter-Feldern angereichert. Kein Dossier wird ohne Freigabe scharf. Fortschritt ist zählbar (markiert / offen). |
 | **H4** | Dossiers aufteilen, **nicht Kategorien nach Art trennen** — erst nach H1 | ⚠ **Korrektur meiner ersten Fassung:** gemischte Arten in einer Kategorie sind **erlaubt und richtig**. Eine Kategorie „Saucen" enthält legitim eine Regel (Anforderungen an eine Saucenrezeptur), ein Datenwerk (Dosiertabelle Bindemittel), Fachwissen (warum eine Emulsion bricht) und eine Referenz (Beispielrezept). Was aufgeteilt wird, ist ein **einzelnes Dokument**, das Inhalte verschiedener Arten mischt und getrennt benutzt werden muss. **Keine Obergrenze pro Kategorie** — die Dokumentzahl sagt nichts über die Auswahlqualität (Grundsatz C). DoD: jedes Dossier mit gemischten Arten ist geteilt, jedes Teil trägt eine Art. |
 | **H6** | **Typisierte Querverbindungen** zwischen Dossiers — die dritte Dimension neben Art und Achse. Achsen beantworten *„welches Dossier gilt hier"*, Links beantworten *„ohne welches ist es unvollständig"* | Drei Typen: **`ergaenzt`** (A ist ohne B unvollständig — maschinell nutzbar, Hüllenbildung) · **`ersetzt`** (Nachfolger; hätte die stille Regression beim 155-Cutover verhindert, wo Slugs auf deaktivierte Dossiers zeigten) · **`siehe_auch`** (Nachbarschaft, nur UI-Navigation). **Ernten statt kuratieren:** der Vault hat die Kanten schon als `[[Wikilinks]]` + `referenzen:`-Frontmatter, `broken_link_check.py` validiert sie wöchentlich — `knowledge-import` liest sie mit. ⚠ **Harte Regel: Links sind KEIN Retrieval-Mechanismus.** Folgt die Suche Kanten, zieht ein Treffer die Nachbarschaft mit und das Budget explodiert — dasselbe Muster wie die Präfix-Bindungen (16.952 Z. Blindleistung), nur über eine andere Straße. `ergaenzt` gilt **nur für `art=regel`**, typisiert und gedeckelt; `siehe_auch` wirkt **nur** in der UI. |
-| **H7** | **Hüllen-Prüfung: kein hängender §-Verweis im zusammengesetzten Prompt** — der Defekt, den der Split erzeugt hat | Vorher war `Regelwerk_Basisrezepte` **ein** Dokument, §2 konnte inline auf §4 und §11 verweisen. Nach dem Split ist der Verweis ein Textstring ohne Ziel. Belegbar: der Kanon von `recipe.generator` trägt §1.0–1.5, §2, §3, §4, §6 — **nicht** §11 (Derivate), **nicht** §1.10/§1.11 (Anti-Patterns), auf die §2 verweist. DoD: ein Prüfer meldet jeden §-Verweis in einem übermittelten Dossier, dessen Ziel nicht im selben Prompt steht. Auflösung je Fall: Ziel mitliefern (`ergaenzt`), Verweis auflösen, oder Verweis entfernen — **nie** hängen lassen. |
+| **H7** | **Hüllen-Prüfung: kein hängender §-Verweis im zusammengesetzten Prompt** — der Defekt, den der Split erzeugt hat. ⚠ **Erweitert `foodalchemist:wissen-deckung` (W2-4)**, baut kein drittes Kommando: das prüft schon „Prompt nennt § → Korpus hat Dossier"; hier fehlt „Dossier verweist auf § → § steht im selben Prompt" | Vorher war `Regelwerk_Basisrezepte` **ein** Dokument, §2 konnte inline auf §4 und §11 verweisen. Nach dem Split ist der Verweis ein Textstring ohne Ziel. Belegbar: der Kanon von `recipe.generator` trägt §1.0–1.5, §2, §3, §4, §6 — **nicht** §11 (Derivate), **nicht** §1.10/§1.11 (Anti-Patterns), auf die §2 verweist. DoD: ein Prüfer meldet jeden §-Verweis in einem übermittelten Dossier, dessen Ziel nicht im selben Prompt steht. Auflösung je Fall: Ziel mitliefern (`ergaenzt`), Verweis auflösen, oder Verweis entfernen — **nie** hängen lassen. |
 | **H5** | Kategorie-Vokabular aufräumen | `pairing` (3 Routing-Zeilen, keine Kategorie) und `trend` (2 Seed-Zeilen, keine Kategorie) sind weg (→ D2). Die sechs nur-Team-Kategorien sind global (→ D8). Vokabular und Routing-Kategorien sind deckungsgleich — der A2-Bericht beweist es. |
 
 **DoD Etappe H:** Jedes Dossier trägt eine Art. Verbindliche Zahlen und Vokabulare erreichen

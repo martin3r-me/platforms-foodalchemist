@@ -129,11 +129,23 @@
                     <div>
                     <p class="text-[11px] font-medium text-gray-600 mb-1">Grobe Ebene — automatisch via Kategorie «{{ $selected->category }}»</p>
                     @if($selected->category === 'cross_cutting' && $autoGeladen === false)
-                    {{-- #469 Chip-Wahrheit: cross_cutting lädt zur Laufzeit NUR die 7 Kern-Files --}}
+                    {{--
+                        Spec 52/A4 — der Hinweis sagt jetzt die Wahrheit. Vorher stand hier bei
+                        158 von 165 cross_cutting-Dossiers, die Laufzeit lade „nur die 7
+                        Kern-Files" — dreifach falsch: die 7 Originale sind seit Welle 2
+                        DEAKTIVIERT, die Generatoren ziehen die Kategorie per `discovery` über
+                        den ganzen Korpus, und der Rat „binde es an einen Einsatzort" führte in
+                        die Alt-Struktur, die bei Prompt-Keys mit Kanon stumm ist.
+                        Er erscheint nur noch, wenn wirklich ausschliesslich `always`-Routen
+                        greifen und dieses Dossier in keiner davon aufgelösten Slug-Liste steht.
+                    --}}
                     <span class="text-[11px] text-amber-600" data-wissen-auto-warnung>
-                    @svg('heroicon-o-exclamation-triangle', 'w-3.5 h-3.5 inline-block align-middle') Die Laufzeit lädt automatisch nur die 7 Kern-cross_cutting-Files
-                    (Substitutionen, Saisonkalender, Synonyme, Sauce-Mutterstrukturen, Mengen-Defaults, Techniken, Brühen&nbsp;/&nbsp;Fonds).
-                    Dieses Doc gehört <strong>nicht</strong> dazu → es wirkt erst, wenn du es unten an einen Einsatzort bindest.
+                    @svg('heroicon-o-exclamation-triangle', 'w-3.5 h-3.5 inline-block align-middle')
+                    Die Kategorie wird nur fest geladen (<code>always</code>) von:
+                    <strong>{{ implode(', ', $ccAlwaysFeatures) }}</strong> — und deren aufgelöste
+                    Slug-Liste enthält dieses Dossier nicht. Es kommt dort also nicht mit.
+                    Wirksam wird es über eine <strong>Kanon-Zeile</strong> für den betreffenden
+                    Prompt-Key oder über eine <code>discovery</code>-Route auf die Kategorie.
                     </span>
                     @else
                     @forelse($routings as $r)
@@ -151,6 +163,20 @@
 
                     <div>
                     <p class="text-[11px] font-medium text-gray-600 mb-1">Feine Ebene — an Einsatzorte gebunden (direkt einbinden)</p>
+                    {{--
+                        Spec 52/A4: Bindungen sind seit Welle 2 nur noch FALLBACK. Hat ein
+                        Prompt-Key Kanon-Zeilen, stellt der Gateway die Bindungen fuer ihn stumm
+                        (AiGatewayService:178) — eine Bindung auf `recipe.generator`,
+                        `vk.generator` oder `concept.brief_geruest` bewirkt heute nichts. Das
+                        muss hier stehen, sonst kuratiert ein Mensch ins Leere.
+                    --}}
+                    <p class="text-[11px] text-amber-600 mb-2">
+                    @svg('heroicon-o-information-circle', 'w-3.5 h-3.5 inline-block align-middle')
+                    Bindungen sind <strong>Fallback</strong>: hat ein Prompt-Key einen Kanon,
+                    werden sie für ihn <strong>stumm</strong> gestellt. Für die Generatoren
+                    (<code>recipe.generator</code>, <code>vk.generator</code>) und
+                    <code>concept.brief_geruest</code> wirkt hier nichts — dort zählt der Kanon.
+                    </p>
                     <div class="flex flex-wrap gap-1.5 mb-2">
                     @forelse($bindings as $b)
                     <span class="inline-flex items-center gap-1 text-[11px] {{ $pill }}" wire:key="bd-{{ $b->id }}">

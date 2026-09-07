@@ -155,3 +155,40 @@ it('öffnet ein Doc per Deep-Link (?doc=) ohne 500 — mount() befüllt das Form
         ->assertSet('form.title', 'Deeplink Doc')
         ->assertSee('Deeplink Doc');
 });
+
+/**
+ * Spec 52/A4 — der Chip-Hinweis für `cross_cutting` behauptete bei 158 von 165 Dossiers, die
+ * Laufzeit lade „nur die 7 Kern-Files". Dreifach falsch: die 7 Originale sind seit Welle 2
+ * deaktiviert, die Generatoren ziehen die Kategorie per `discovery` über den ganzen Korpus,
+ * und der Rat „binde es an einen Einsatzort" führte in die Alt-Struktur, die bei Prompt-Keys
+ * mit Kanon stumm ist. Der Hinweis darf nur noch erscheinen, wenn er zutrifft.
+ */
+it('warnt NICHT bei cross_cutting, wenn die Kategorie per discovery gezogen wird', function () {
+    $id = ($this->mkDoc)('menue_architektur--gaenge-logik', 'cross_cutting', 'Gänge-Logik', "# Gänge\nText.\n");
+    DB::table('foodalchemist_knowledge_routings')->updateOrInsert(
+        ['feature' => 'ai_generate_recipe', 'category' => 'cross_cutting'],
+        ['mode' => 'discovery', 'max_docs' => 6, 'max_chars_per_doc' => 8000, 'created_at' => now(), 'updated_at' => now()],
+    );
+
+    Livewire::test(Browser::class)
+        ->set('selectedId', $id)
+        ->assertViewHas('autoGeladen', true);
+});
+
+it('warnt bei cross_cutting nur, wenn ausschliesslich always-Routen greifen und der Slug fehlt', function () {
+    // Nur `always`, und das Dossier steht in keiner aufgelösten Slug-Liste → der Hinweis ist
+    // berechtigt. Er nennt jetzt aber das FEATURE und den Weg (Kanon-Zeile), statt eine
+    // 7er-Liste zu behaupten, die es nicht mehr gibt.
+    $id = ($this->mkDoc)('irgendein-cc-doc', 'cross_cutting', 'Irgendwas', "# Irgendwas\nText.\n");
+    DB::table('foodalchemist_knowledge_routings')->where('category', 'cross_cutting')->delete();
+    DB::table('foodalchemist_knowledge_routings')->insert([
+        'feature' => 'concept.wording', 'category' => 'cross_cutting', 'mode' => 'always',
+        'created_at' => now(), 'updated_at' => now(),
+    ]);
+
+    Livewire::test(Browser::class)
+        ->set('selectedId', $id)
+        ->assertViewHas('autoGeladen', false)
+        ->assertViewHas('ccAlwaysFeatures', fn ($f) => in_array('concept.wording', $f, true))
+        ->assertSee('Kanon-Zeile');
+});

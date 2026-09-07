@@ -53,21 +53,6 @@ class WissenVersorgungCommand extends Command
 
     protected $description = 'Spec 52/A2: zeigt je Prompt-Key, welches Wissen ihn erreicht (Kanon, Routing, Bindung, Budget)';
 
-    /**
-     * Alt-Feature-Schlüssel, mit denen Aufrufer das Routing rufen, obwohl der Prompt-Key
-     * anders heisst. **Aus den Aufrufstellen abgelesen, nicht geraten** — jede Zeile trägt
-     * ihre Quelle. Verschwindet mit Spec 52/D1, dann ist der Schlüsselraum einer.
-     *
-     * @var array<string, string>
-     */
-    private const ALT_ROUTING_KEY = [
-        // RecipeGenerationContextService:88 — ein Pfad, `$vkModus` entscheidet nur den Kanon-Key
-        'recipe.generator' => 'ai_generate_recipe',
-        'vk.generator' => 'ai_generate_recipe',
-        // RecipeModal:961 / BulkEnrichService — contextFor('recipe.eigenschaften'), propose('recipe.dichteklasse')
-        'recipe.dichteklasse' => 'recipe.eigenschaften',
-    ];
-
     public function handle(KnowledgeCanonService $canon): int
     {
         $registry = config('foodalchemist.prompts', []);
@@ -179,7 +164,8 @@ class WissenVersorgungCommand extends Command
     /** @return array<string, mixed> */
     private function zeileFuer(string $promptKey, string $bereich, Team $team, KnowledgeCanonService $canon): array
     {
-        $routingKey = self::ALT_ROUTING_KEY[$promptKey] ?? $promptKey;
+        // Eine Auflösung für Bericht und Auskunft — siehe KnowledgeContextService::ROUTING_ALIAS.
+        $routingKey = KnowledgeContextService::routingFeatureFuer($promptKey);
 
         // Kanon über den SERVICE, nicht per eigener Query: der Gateway löst genau
         // scope='prompt_key', role='root' auf (AiGatewayService:159), und die Tenancy-Regel
