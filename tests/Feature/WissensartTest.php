@@ -132,3 +132,19 @@ it('erlaubt art=null, damit der noch nicht eingeordnete Bestand weiter geliefert
     expect($docs->pluck('slug')->all())->toBe(['alt-ohne-art'])
         ->and(Wissensart::darfInPrompt(null))->toBeTrue();
 });
+
+it('gibt die Art in der Inventar-Sicht zurueck', function () {
+    // Beim Korpus-Umbau ist „welche Dossiers sind noch nicht eingeordnet" genau die Frage,
+    // die man an LIST stellt. Ohne das Feld dort waere die Einordnung nicht nachhaltbar —
+    // und ich hatte in PR #51 faelschlich behauptet, LIST liefere sie bereits.
+    ($this->mkDoc)('mit-art', Wissensart::DATENWERK, 'cross_cutting');
+    ($this->mkDoc)('ohne-art', null, 'cross_cutting');
+
+    $liste = app(KnowledgeContextService::class)
+        ->listDocuments($this->rootTeam, 'cross_cutting', 0, 50, false, false);
+
+    $nach = collect($liste['documents'])->keyBy('slug');
+
+    expect($nach['mit-art']['art'])->toBe(Wissensart::DATENWERK)
+        ->and($nach['ohne-art']['art'])->toBeNull();
+});
