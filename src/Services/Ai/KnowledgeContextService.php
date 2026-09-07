@@ -654,6 +654,37 @@ class KnowledgeContextService
     }
 
     /**
+     * Spec 52/B3 — die Optionen für `propose()` aus einem `contextFor()`-Ergebnis bauen.
+     *
+     * Warum ein Helfer und nicht 18 Aufrufstellen von Hand: `knowledge_dropped_chars` gaben
+     * genau ZWEI von achtzehn Aufrufern weiter, und darum stand in sechzehn Features
+     * `prompt_parts.dropped = 0`, obwohl Zeichen fehlten (Befund I3). Das ist keine
+     * Nachlässigkeit einzelner Stellen, sondern eine Konvention ohne Durchsetzung — dieselbe
+     * Klasse wie `_kanon_prompt_key` (2 von 14). Ein Helfer, der ALLE Messfelder mitnimmt,
+     * macht die nächste neue Aufrufstelle automatisch richtig; ein Wächter-Test hält es.
+     *
+     * Extras (`target_table`, `tier`, …) hängt der Aufrufer per `+` an.
+     *
+     * @param  array<string, mixed>  $wissen  Ergebnis von {@see contextFor()}
+     * @return array<string, mixed>
+     */
+    public static function proposeOptionen(array $wissen): array
+    {
+        $block = (string) ($wissen['block'] ?? '');
+
+        // BEWUSST ohne `knowledge_channels`: dieses Feld ist der Dedup-/Anzeige-Eingang, an dem
+        // schon einmal der Bound-Kanal gestorben ist (W0-3b — ein Anzeige-Spiegel schrieb auf
+        // das Feld, das die Auswahl-Logik liest). Wer Kanäle liefert, liefert sie weiterhin
+        // selbst und bewusst. Dieser Helfer schliesst nur die Messlücke.
+        return [
+            'knowledge' => $block !== '' ? $block : null,
+            'knowledge_used' => $wissen['files_used'] ?? [],
+            // Ohne diese Zeile ist die Kappung im Call-Log unsichtbar.
+            'knowledge_dropped_chars' => (int) ($wissen['dropped_chars'] ?? 0),
+        ];
+    }
+
+    /**
      * W0-5: Featureweites Zeichenbudget. Reihenfolge: Feature-Override aus der Config >
      * Rezept-Sonderdeckel (historisch, bleibt der strengste) > Default.
      *

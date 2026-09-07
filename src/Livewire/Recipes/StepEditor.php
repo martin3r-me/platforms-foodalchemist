@@ -397,9 +397,9 @@ class StepEditor extends Component
 
         try {
             $wissen = $this->stepWissen($r, $prompt);
-            $vorschlag = $ki->propose($prompt, $this->stepKontext($r), [
-                'knowledge' => $wissen['block'],
-                'knowledge_used' => $wissen['files_used'],
+            // Spec 52/B3: Wissens-Optionen über den Helfer — er nimmt `knowledge_dropped_chars`
+            // mit, das hier fehlte und `prompt_parts.dropped` blind liess.
+            $vorschlag = $ki->propose($prompt, $this->stepKontext($r), \Platform\FoodAlchemist\Services\Ai\KnowledgeContextService::proposeOptionen($wissen) + [
                 'target_table' => 'foodalchemist_recipe_steps',
                 'target_id' => $r->id,
                 // Ein valides JSON ohne Schritte ist strukturell unbrauchbar → Gateway re-rollt.

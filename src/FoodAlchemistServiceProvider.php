@@ -89,6 +89,9 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                 // („nennt ein Prompt einen §, den kein Dossier hat"), das hier die
                 // VERSORGUNGS-Richtung („welches Wissen erreicht diesen Prompt überhaupt").
                 \Platform\FoodAlchemist\Console\WissenVersorgungCommand::class,
+                // Spec 52/A1: Grundlinie am tatsächlich versendeten Aufruf — inkl. der drei
+                // Folge-Calls, die der Kontext-Inspektor ausblendet.
+                \Platform\FoodAlchemist\Console\WissenGrundlinieCommand::class,
                 \Platform\FoodAlchemist\Console\KnowledgeEmbedCommand::class,
                 // Spec 50 Strang III: Arbeitsliste zu großer Dossiers (ein Thema pro Dossier ≤ Deckel).
                 \Platform\FoodAlchemist\Console\KnowledgeOversizedCommand::class,

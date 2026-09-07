@@ -901,7 +901,7 @@ desselben Prompts". Also `H7` erweitert W2-4, statt ein drittes Kommando zu baue
 | **B0** | **Drei Größen trennen**, die heute vermischt sind | Es gibt getrennt: **Kandidatenlimit** (wie viele Treffer je Suchverfahren untersucht werden — eigenes, großzügiges Limit), **Endauswahl** (welche Quellen übernommen werden), **Kontextbudget** (was insgesamt ans Modell geht). Ein Test belegt, dass ein Verstellen der einen die anderen nicht verschiebt. |
 | **B1** | Budget-Kappung stoppen (Befund I): `recipe.ueberarbeiten` / `vk.ueberarbeiten` 8.000 → ~13.000 · `recipe.review` / `vk.review` **explizit** eintragen · `concept.brief_geruest` entscheiden (Budget ~26.000 **oder** Routing runter) | **Nur das Pflichtwissen muss ins Budget passen** — per Test **gegen die Live-Tabelle**, nicht gegen die Migration. Optionales Wissen **darf** größer sein als das Restbudget; es wird abschnittsweise vollständig aufgenommen, solange Platz ist, der Rest wird protokolliert. **Eine große optionale Kandidatenmenge ist für sich kein Konfigurationsfehler.** |
 | **B2** | Kappung **dokumentweise** statt mitten im Text (Grundsatz D) | `truncate($block, $budget)` ist ersetzt: es fällt immer ein **ganzes** Dossier weg, nie ein Teil. Test: ein Block mit 3 Dossiers und einem Budget für 2 liefert exakt 2 vollständige Dossiers + `dropped_chars` = Größe des dritten. |
-| **B3** | `knowledge_dropped_chars` an **allen** `contextFor()`-Aufrufern durchgeben (heute 2 von 14, Befund I3) | Ein Test zählt die Aufrufstellen und schlägt fehl, wenn eine ohne die Option existiert. `prompt_parts.dropped` ist bei allen Features aussagekräftig. |
+| **B3** | `knowledge_dropped_chars` an **allen** `contextFor()`-Aufrufern durchgeben (Befund I3) | Ein Test zählt die Aufrufstellen und schlägt fehl, wenn eine ohne die Option existiert. `prompt_parts.dropped` ist bei allen Features aussagekräftig. **◐ Teil-erledigt 2026-09-07 — siehe unten.** |
 | **B4** | W0-5-Invariante schärfen (Befund I4: `pflichtZeichen()` prüft nur `mode='always'`) | Der Wächter prüft **die Pflichtmenge gegen das Budget** — und zwar auch dort, wo die Pflicht heute per Kanon statt per `always`-Routing entsteht. Er meldet **nicht** mehr, dass eine große optionale Discovery-Menge das Budget übersteigt (das ist der Normalfall, s. B1). Auf demo Exit 0, mit künstlich zu großer **Pflicht** Exit ≠ 0. |
 | **B5** | Discovery-Dämpfer: `domain` bei `ai_generate_recipe` deckeln (heute `max_docs: null` bei 192 Dossiers) · `DISCOVERY_MIN_SCORE` (0,05) **messen** und begründet setzen | Messprotokoll: Trefferzahl und Rang-Position der fachlich richtigen Dossiers für 10 Anfragen, vor/nach. Die Schwelle ist mit dieser Messung begründet, nicht geraten. |
 | **B6** | **Ein strukturierter Mengen-Standard als Datenwerk** — nicht ein per Achse gefundenes Markdown-Dossier. Ein gefundenes Dossier erfüllt den Vertrag **nicht** | Jeder Eintrag trägt: **Geltungsbedingungen** (Gang, Komponentenrolle, Format, Niveau) · **Wert oder Wertebereich** · **Einheit + Bezugsgröße** (pro Portion vs. pro Ansatz, Rohgewicht vs. verzehrfertig — genau die Verwechslung, die Regelwerk_Basisrezepte §6 regelt) · **Quelle + Version**. Präzedenz im Repo: `ProportionService::BLOOM_BLATTGELATINE` (Wert, Range, Quelle, „Herstellerangabe hat Vorrang") — **prüfen, ob `ProportionService` der Ort ist, bevor ein neuer Speicher entsteht.** |
@@ -910,6 +910,32 @@ desselben Prompts". Also `H7` erweitert W2-4, statt ein drittes Kommando zu baue
 **DoD Etappe B:** Kein Modellaufruf verliert mehr Wissen, ohne dass es in `prompt_parts.dropped`
 steht. Kein Dossier wird mehr angeschnitten. Die Referenzfälle aus A1 sind erneut gemessen und
 nicht schlechter.
+
+#### ◐ B3 Teil-erledigt 2026-09-07 — Rezept-Kette ja, Rest bewusst offen
+
+Statt 18 Aufrufstellen von Hand zu flicken (und die nächste vergisst es wieder) gibt es jetzt
+`KnowledgeContextService::proposeOptionen($wissen)`: **ein Helfer, der alle Messfelder
+mitnimmt.** Das ist derselbe Schritt wie beim Routing-Alias — Naht statt Konvention. Er lässt
+`knowledge_channels` **bewusst** aus: an diesem Feld ist in W0-3b schon einmal der Bound-Kanal
+gestorben, weil ein Anzeige-Spiegel auf das Feld schrieb, das die Auswahl-Logik liest. Wer
+Kanäle liefert, tut es weiterhin selbst.
+
+**Umgestellt (die Kette, die A1 messen muss):** `RecipeReviewService`, `RecipeReviseService`
+(2×), `BulkEnrichService`, `RecipeModal` (2×), `StepEditor`. `RecipeGeneratorService` und
+`RecipeOneShotService` gaben das Feld schon vorher weiter — das waren die 2 von 18.
+
+**Bewusst offen (B3-Rest):** `IdeenService` (3×), `ConceptGeneratorService` (3×),
+`ConceptService`, `AngebotService` (2×), `FoodbookService` (2×). Diese Features liegen
+außerhalb des senkrechten Durchlaufs; sie ohne Messbedarf anzufassen wäre Risiko ohne Ertrag.
+Sie kommen mit ihrer jeweiligen Migration. **Der Wächter-Test deckt deshalb heute die
+Rezept-Kette ab, nicht alle Aufrufer** — das steht so im Test, damit niemand ihn für mehr hält.
+
+`ConformanceService:130` gehört nicht dazu: dort ist `knowledge` ein **String** aus
+`ladeRegelwerke()`, kein `contextFor()`-Ergebnis. Das ist `C4`.
+
+⚠ **Der Wächter-Test scannt Quelltext** und ist damit grob — Marker statt Bedeutung. Er fängt
+„neue Aufrufstelle vergisst das Feld", nicht jede Umformulierung. Mit `C2` verschwinden Helfer
+und Test gemeinsam, weil `propose()` den Kontext dann selbst baut.
 
 ### Etappe C — Der senkrechte Durchlauf (Basisrezept) · **der Beweis**
 

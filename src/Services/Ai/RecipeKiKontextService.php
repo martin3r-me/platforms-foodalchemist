@@ -73,6 +73,51 @@ class RecipeKiKontextService
     }
 
     /**
+     * Spec 52/A1 — ALLE Modell-Aufrufe eines Rezepts, ohne Feature-Filter.
+     *
+     * {@see fuerRezept()} zeigt bewusst nur die Erstellung (`GENERATOR_FEATURES`). Für die
+     * Grundlinien-Messung ist genau das das Problem: pro Rezept-Erstellung laufen drei bis vier
+     * Aufrufe (Generator → `conformance.check` → Selbstheilung → Review), und der Inspektor
+     * blendet drei davon aus. Wer wissen will, ob ein Anreicherungs-Schritt Wissen bekam, sieht
+     * es dort nie.
+     *
+     * Solange es keine Lauf-ID gibt (Spec 52/C1), ist `target_table`/`target_id` die einzige
+     * Klammer — und die trägt nur, was der Aufrufer selbst gesetzt hat. Fehlt eine Zeile hier,
+     * heisst das also nicht „kein Aufruf", sondern „nicht ans Rezept gehängt". Deshalb gibt
+     * diese Methode zurück, was sie findet, und behauptet keine Vollständigkeit.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function alleCallsFuerRezept(FoodAlchemistRecipe $rezept): array
+    {
+        $hatKanaele = \Illuminate\Support\Facades\Schema::hasColumn('foodalchemist_ai_call_log', 'knowledge_channels');
+
+        $rows = DB::table('foodalchemist_ai_call_log')
+            ->where('team_id', (int) $rezept->team_id)
+            ->where('target_table', 'foodalchemist_recipes')
+            ->where('target_id', (int) $rezept->id)
+            ->orderBy('id')
+            ->get(['id', 'feature', 'model', 'tier', 'knowledge_used', 'prompt_chars', 'prompt_parts',
+                'tokens_in', 'tokens_out', 'tokens_cached', 'error', 'created_at',
+                ...($hatKanaele ? ['knowledge_channels'] : [])]);
+
+        return $rows->map(function ($row) {
+            $kanaele = is_string($row->knowledge_channels ?? null) ? (json_decode($row->knowledge_channels, true) ?: []) : [];
+            $flach = is_string($row->knowledge_used) ? (json_decode($row->knowledge_used, true) ?: []) : [];
+
+            return [
+                'call_log_id' => (int) $row->id,
+                'feature' => (string) $row->feature,
+                'erstellt_am' => $row->created_at !== null ? (string) $row->created_at : null,
+                'fehler' => $row->error !== null ? (string) $row->error : null,
+                'groessen' => $this->promptGroessen($row),
+                'kanaele' => is_array($kanaele) ? $kanaele : [],
+                'wissen_slugs' => is_array($flach) ? array_values($flach) : [],
+            ];
+        })->values()->all();
+    }
+
+    /**
      * Die ECHTEN Prompt-Größen aus der Messsonde (W3-5) — null, wenn die Sonde für diese
      * Zeile nichts hat (keine erfundenen Nullen).
      *

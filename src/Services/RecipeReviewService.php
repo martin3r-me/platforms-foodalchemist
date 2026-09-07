@@ -70,10 +70,10 @@ class RecipeReviewService
         // Leeres Routing = leerer Block (no-op), fail-soft wie bei recipe.eigenschaften.
         $wissen = app(KnowledgeContextService::class)
             ->contextFor($team, $feature, trim((string) ($r->description ?: $r->name)));
-        $opts = ['target_table' => 'foodalchemist_recipes', 'target_id' => $r->id];
-        if (($wissen['block'] ?? '') !== '') {
-            $opts += ['knowledge' => $wissen['block'], 'knowledge_used' => $wissen['files_used'] ?? []];
-        }
+        // Spec 52/B3: über den Helfer, damit `knowledge_dropped_chars` mitgeht — sonst steht im
+        // Call-Log `dropped: 0`, während der Deckel Zeichen abgeschnitten hat.
+        $opts = ['target_table' => 'foodalchemist_recipes', 'target_id' => $r->id]
+            + KnowledgeContextService::proposeOptionen($wissen);
 
         $vorschlag = app(AiGatewayService::class)->propose($feature, $this->kontext($r, $vk), $opts);
 
