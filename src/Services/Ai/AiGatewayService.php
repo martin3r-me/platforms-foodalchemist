@@ -167,6 +167,32 @@ class AiGatewayService
                     . implode("\n\n---\n\n", $kBlocks);
                 $promptParts['kanon'] = mb_strlen($kanonBlock);
             }
+
+            // Spec 52/D6 — eine Kanon-Zeile, die ins Leere zeigt, darf nicht still weniger
+            // liefern. `documentsFor()` filtert deaktivierte und geloeschte Dossiers heraus;
+            // ohne diese Meldung sieht der Call danach aus wie ein normaler Lauf.
+            //
+            // Bewusst NUR eine Log-Zeile, kein Abbruch: ein Wissensproblem darf keine
+            // Generierung zerreissen. Der laute Kanal ist der Waechter
+            // (`foodalchemist:wissen-profil --pruefen`, woechentlich als Signal) — diese Zeile
+            // ist der Beleg, der EINEN konkreten Lauf erklaerbar macht.
+            //
+            // Der schwerste Fall steht dabei nicht in dieser Liste: wird ein Dossier HART
+            // geloescht, nimmt der `cascade`-FK die Kanon-Zeile mit, `hasCanon()` wird `false`
+            // — und der Bindungs-Zweig unten schaltet sich wieder scharf. Deshalb meldet der
+            // Waechter zusaetzlich Prompt-Keys, die ihren Kanon komplett verloren haben.
+            $unaufloesbar = app(\Platform\FoodAlchemist\Services\Knowledge\KnowledgeCanonService::class)
+                ->unaufloesbareZeilen($team, $promptKey);
+            if ($unaufloesbar !== []) {
+                \Illuminate\Support\Facades\Log::warning('foodalchemist.kanon.unaufloesbar', [
+                    'prompt_key' => $promptKey,
+                    'team_id' => $team->id,
+                    'zeilen' => array_map(
+                        fn ($z) => ['slug' => $z['slug'], 'grund' => $z['grund'], 'mode' => $z['mode']],
+                        $unaufloesbar,
+                    ),
+                ]);
+            }
         }
 
         // #469: an diesen Layer gebundenes Wissen additiv laden — Prompt-Key (fein) ODER Bereich (Präfix, grob).

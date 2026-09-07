@@ -1246,6 +1246,60 @@ sich die Reihenfolge innerhalb von H:
 > (alt → neu), damit der Umbau die Kanon-Zeilen mitnimmt statt sie zu verwaisen. Das ist
 > derselbe Mechanismus wie `H6`s `ersetzt`-Kante.
 
+## ✅ Etappe C0 + D6 — Profil, Fingerabdruck, drei Zustände (2026-09-07)
+
+**Vorgezogen, weil der Korpus-Umbau ansteht.** Ohne diese Prüfung liefe er in dieselbe stille
+Falle wie der 155-Originale-Cutover.
+
+### ★ Korrektur meiner eigenen Warnung: der Kanon hängt an IDs, nicht an Slugs
+
+Ich hatte geschrieben „der Kanon zeigt auf Slugs → ein Umbau leert ihn still". Das ist
+**falsch**. `foodalchemist_knowledge_canon.knowledge_document_id` ist ein FK auf die Doc-ID.
+Daraus folgt eine andere, präzisere Risikolage:
+
+| Was du beim Umbau tust | Was mit dem Kanon passiert |
+|---|---|
+| Dossier **umbenennen** (Slug ändern) | ✅ **nichts** — die Zeile trägt mit |
+| Dossier **inhaltlich überarbeiten** | ✅ trägt mit (der Fingerabdruck ändert sich, weil `version` eingeht) |
+| Dossier **deaktivieren** | ⚠️ Zeile fällt still aus `documentsFor()`, `hasCanon()` sagt weiter `true` → **weniger Pflichtwissen, kein Hinweis** |
+| Dossier **soft-deleten** | ⚠️ Zeile ist über `zeilenQuery()` **nirgends** mehr sichtbar, auch nicht in `list()` |
+| Dossier **löschen + neu anlegen** | ⛔ `cascade` nimmt die Zeile mit → `hasCanon()` wird `false` → **der Gateway schaltet die alten Bindungen wieder scharf** |
+
+Der letzte Fall ist der gefährlichste und war vorher nirgends beschrieben: ein Umbau, der
+Dossiers ersetzt statt bearbeitet, **reaktiviert stillschweigend die Alt-Struktur**. Auf demo
+wären das die 9 Bindungen auf den zwei Generator-Keys — statt 13 kuratierter §-Dossiers käme
+`recipe.generator` dann mit 5 durch.
+
+→ **Praktische Konsequenz für den Umbau:** wo möglich **bearbeiten statt ersetzen**
+(`knowledge.PUT`), und die 9 Bindungen aus `F1` **vor** dem Umbau löschen, damit es keinen
+stillen Rückfall gibt.
+
+### Was gebaut ist
+
+| Baustein | Inhalt |
+|---|---|
+| `KnowledgeCanonService::unaufloesbareZeilen()` | sieht bewusst **ohne** die beiden Doc-Filter nach — die drei unsichtbaren Zustände oben werden meldbar |
+| `WissensProfilService` | aufgelöstes Profil je Prompt-Key: Pflicht (mit Version), wenn_platz, Routing, beide Budgets, Zustand, Befunde, **Fingerabdruck** (16 Stellen über Kanon+Versionen+Routing+Budget) |
+| Vier Zustände (D6) | `gesteuert` · `bewusst_leer` · `ungesteuert` · **`fehlerhaft`** — der neue: hinterlegt, aber löst nicht auf. Sah vorher wie `gesteuert` aus und lieferte weniger. |
+| Befund `bindung_wuerde_scharf` | warnt genau vor dem `cascade`-Fall, **bevor** er eintritt |
+| Laufzeit (`AiGatewayService`) | eine `Log::warning`-Zeile je Call mit unauflösbarer Kanon-Zeile — bewusst **kein Abbruch**: ein Wissensproblem darf keine Generierung zerreissen. Der laute Kanal ist der Wächter. |
+| `foodalchemist:wissen-profil` + `knowledge_profil.GET` | beide Flächen (Grundsatz E), Exit 1 bei blockierendem Befund |
+| **UI-Sektion „Wissens-Steuerung"** | Überblick + Profile + Befunde **und** der Routing-Editor. Damit hat die neue Ebene erstmals eine Oberfläche — vorher hatte nur die Alt-Struktur eine. |
+
+**Nur `blockiert` kippt den Zustand**, ein `hinweis` nicht — sonst stünden die drei gesunden
+Kanon-Keys als fehlerhaft da und die Meldung wäre nach einer Woche Rauschen.
+
+### Nebenbefund: drei echte Lücken im Test-Harness geschlossen
+
+Der Ganzseiten-Test deckte auf, dass **jeder** `$this->get(route(...))` im Harness mit 500
+geantwortet hätte: Cores `layouts/app.blade.php` braucht `user_ui_preferences`,
+`team_core_ai_models` und `team_invitations`. Alle drei sind jetzt in der Allowlist. Die Kette
+endet bei `oauth_access_tokens` (Passport) — dort ist Schluss, der Test bleibt übersprungen und
+die Seite ist stattdessen **gegen die Dev-MySQL** verifiziert (Status 200). Das ist genau der
+Weg, den `feedback_fa_test_harness_layout_blind` vorschreibt.
+
+---
+
 ## Runbook — Messung auf demo (nach jedem Deploy dieser Etappe)
 
 Immer **mit `--team=6`**: ohne Nutzer greift nur die globale Partition, und der Bericht

@@ -89,6 +89,7 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                 // („nennt ein Prompt einen §, den kein Dossier hat"), das hier die
                 // VERSORGUNGS-Richtung („welches Wissen erreicht diesen Prompt überhaupt").
                 \Platform\FoodAlchemist\Console\WissenVersorgungCommand::class,
+                \Platform\FoodAlchemist\Console\WissenProfilCommand::class,
                 // Spec 52/A1: Grundlinie am tatsächlich versendeten Aufruf — inkl. der drei
                 // Folge-Calls, die der Kontext-Inspektor ausblendet.
                 \Platform\FoodAlchemist\Console\WissenGrundlinieCommand::class,
@@ -1048,6 +1049,8 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     // Spec 52/A2 (Grundsatz E): der Versorgungs-Bericht auch per MCP — auf
                     // demo gibt es keine Shell, ein Kommando allein misst die falsche Umgebung.
                     \Platform\FoodAlchemist\Tools\KnowledgeVersorgungGetTool::class,
+                    // Spec 52/C0+D6: aufgeloestes Profil + Integritaet (was gilt, und loest es auf).
+                    \Platform\FoodAlchemist\Tools\KnowledgeProfilGetTool::class,
                     \Platform\FoodAlchemist\Tools\KnowledgeCategoriesGetTool::class,
                     \Platform\FoodAlchemist\Tools\KnowledgeCategoriesPostTool::class,
                     \Platform\FoodAlchemist\Tools\KnowledgeSetActiveTool::class,
