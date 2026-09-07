@@ -27,10 +27,13 @@ it('registriert knowledge.SET_ACTIVE', function () {
 });
 
 it('aktiviert und deaktiviert ein eigenes Doc (idempotent)', function () {
+    // `active: false` ausdrücklich, damit der Test bei seinem Ausgangszustand bleibt: seit
+    // 2026-09-07 legt `knowledge.POST` sonst aktiv an.
     $post = $this->registry->get('foodalchemist.knowledge.POST')->execute([
-        'title' => 'Mein Entwurf', 'category' => 'cross_cutting', 'content_md' => '# X',
+        'title' => 'Mein Entwurf', 'category' => 'cross_cutting', 'content_md' => '# X', 'active' => false,
     ], $this->kontext);
     $slug = $post->data['document']['slug'];
+    expect((bool) DB::table('foodalchemist_knowledge_documents')->where('slug', $slug)->value('active'))->toBeFalse();
 
     $an = $this->registry->get('foodalchemist.knowledge.SET_ACTIVE')->execute(['slug' => $slug, 'active' => true], $this->kontext);
     expect($an->success)->toBeTrue()

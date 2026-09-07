@@ -35,7 +35,7 @@ class KnowledgeService
     /**
      * Legt ein neues Wissens-Dokument an (inaktiv). Optional: Aliase + Einsatzort-Bindungen.
      *
-     * @param  array{title?:string,category?:string,content_md?:string,source?:string,aliases?:array,bind_layers?:array}  $data
+     * @param  array{title?:string,category?:string,content_md?:string,source?:string,aliases?:array,bind_layers?:array,active?:bool}  $data
      */
     public function create(Team $team, array $data): object
     {
@@ -64,7 +64,13 @@ class KnowledgeService
             'content_hash' => hash('sha256', $content),
             'imported_hash' => null,       // nicht Vault-verwaltet → Import-Guard N/A
             'char_count' => mb_strlen($content),
-            'active' => false,             // Quarantäne — Aktivierung ist menschlich
+            // Entscheid Dominique 2026-09-07: AKTIV als Default. Die frühere Quarantäne
+            // (immer inaktiv, Freigabe nur im Browser) war als Schutz gedacht, wirkte in der
+            // Praxis aber als stille Falle: `POST` + vergessenes `SET_ACTIVE` hinterlässt ein
+            // fertiges Dossier, das nirgends wirkt und dem man das nicht ansieht. Wer bewusst
+            // einen Entwurf will, setzt `active: false` — dann ist die Quarantäne eine
+            // Entscheidung statt eines Standards.
+            'active' => array_key_exists('active', $data) ? (bool) $data['active'] : true,
             'source_path' => null,
             'created_via' => $source,
             'created_at' => $now, 'updated_at' => $now,

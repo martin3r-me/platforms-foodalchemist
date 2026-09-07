@@ -10,10 +10,15 @@ use Platform\FoodAlchemist\Services\Knowledge\KnowledgeCanonService;
 use Platform\FoodAlchemist\Services\KnowledgeService;
 
 /**
- * #469 v3: neues Wissens-Dokument „von außen" anlegen (Trends/Know-how). Immer
- * INAKTIV (Quarantäne) + created_via='mcp'; ein Mensch aktiviert es im Browser,
- * erst dann wirkt es im KI-Kontext. Kategorie muss im Vokabular stehen
- * (foodalchemist.settings.GET / Browser). Optional Aliase + Einsatzort-Bindungen.
+ * #469 v3: neues Wissens-Dokument „von außen" anlegen (Trends/Know-how), created_via='mcp'.
+ * Kategorie muss im Vokabular stehen (foodalchemist.settings.GET / Browser). Optional Aliase
+ * + Einsatzort-Bindungen.
+ *
+ * **Aktiv als Default (Entscheid Dominique 2026-09-07).** Bis dahin landete jede Anlage in
+ * Quarantäne und musste im Browser freigeschaltet werden. Gedacht als Schutz, gewirkt als
+ * stille Falle: ein vergessenes `SET_ACTIVE` hinterlässt ein fertiges Dossier, das nirgends
+ * wirkt — und man sieht ihm nicht an, ob es Absicht war. Wer einen Entwurf will, setzt
+ * `active: false`; dann ist die Quarantäne eine Entscheidung statt eines Standards.
  */
 class KnowledgeCreateTool extends FoodAlchemistTool implements ToolContract, ToolMetadataContract
 {
@@ -24,9 +29,10 @@ class KnowledgeCreateTool extends FoodAlchemistTool implements ToolContract, Too
 
     public function getDescription(): string
     {
-        return 'Legt ein neues Wissens-Dokument als ENTWURF an (inaktiv, created_via=mcp) — z. B. einen '
-            . 'Trend oder Know-how-Baustein. Wirkt erst im KI-Kontext, wenn ein Mensch es im Wissens-Browser '
-            . 'aktiviert. category muss ein bestehender Kategorie-Slug sein. Optional: aliases (Findbarkeit) '
+        return 'Legt ein neues Wissens-Dokument an (created_via=mcp) — z. B. einen Trend oder '
+            . 'Know-how-Baustein. Es ist SOFORT AKTIV und wirkt im KI-Kontext seiner Kategorie; mit '
+            . 'active=false entsteht stattdessen ein Entwurf, den ein Mensch im Wissens-Browser freischaltet. '
+            . 'category muss ein bestehender Kategorie-Slug sein. Optional: aliases (Findbarkeit) '
             . 'und bind_layers (an Einsatzorte binden: target_key = Bereich/Prompt-Slug, mode). '
             . 'Vault-Regelwerke NICHT hier neu anlegen — die kommen aus dem Vault-Import.';
     }
@@ -40,6 +46,7 @@ class KnowledgeCreateTool extends FoodAlchemistTool implements ToolContract, Too
                 'category' => ['type' => 'string', 'description' => 'Kategorie-Slug aus dem Vokabular, z. B. trend, domain, cross_cutting, workflow, concept'],
                 'slug' => ['type' => 'string', 'description' => 'Optionaler expliziter Slug (sonst aus Titel). Für Vault-Konsistenz nutzen, z. B. workflow.rezept_anlegen_mcp — dann reconciled ein späterer Vault-Import statt zu duplizieren.'],
                 'content_md' => ['type' => 'string', 'description' => 'Inhalt als Markdown'],
+                'active' => ['type' => 'boolean', 'default' => true, 'description' => 'Default true: wirkt sofort im KI-Kontext. false = Entwurf in Quarantäne, den ein Mensch freischaltet.'],
                 'aliases' => ['type' => 'array', 'items' => ['type' => 'string'], 'description' => 'Begriffe, unter denen die KI das Doc findet'],
                 'bind_layers' => [
                     'type' => 'array',
@@ -73,6 +80,7 @@ class KnowledgeCreateTool extends FoodAlchemistTool implements ToolContract, Too
                 'content_md' => $arguments['content_md'] ?? '',
                 'aliases' => $arguments['aliases'] ?? [],
                 'bind_layers' => $arguments['bind_layers'] ?? [],
+                'active' => array_key_exists('active', $arguments) ? (bool) $arguments['active'] : true,
                 'source' => 'mcp',
             ]);
         } catch (\RuntimeException $e) {
@@ -88,7 +96,9 @@ class KnowledgeCreateTool extends FoodAlchemistTool implements ToolContract, Too
                 'active' => (bool) $doc->active,
                 'created_via' => $doc->created_via,
             ],
-            'note' => 'Entwurf (inaktiv). Aktivieren macht ein Mensch im Wissens-Browser — erst dann wirkt es in der KI.',
+            'note' => $doc->active
+                ? 'Aktiv — wirkt ab dem nächsten KI-Kontext-Bau in seiner Kategorie.'
+                : 'Entwurf (inaktiv, weil active=false gesetzt wurde). Freischalten macht ein Mensch im Wissens-Browser.',
             // Spec 50 Strang III: Deckel erinnert, blockiert nicht.
             'hinweis' => app(KnowledgeCanonService::class)->groessenHinweis((int) $doc->char_count, (string) ($arguments['content_md'] ?? '')),
         ]);
@@ -103,7 +113,10 @@ class KnowledgeCreateTool extends FoodAlchemistTool implements ToolContract, Too
             'requires_auth' => true, 'requires_team' => true,
             'side_effects' => ['creates'], 'cost_class' => 'local_db',
             'related_tools' => ['foodalchemist.knowledge.PUT', 'foodalchemist.knowledge.SEARCH', 'foodalchemist.knowledge.GET'],
-            'examples' => ['Lege ein Wissens-Dokument zum Trend "Fermentierte Chili-Pasten" an'],
+            'examples' => [
+                'Lege ein Wissens-Dokument zum Trend "Fermentierte Chili-Pasten" an',
+                'Lege es als Entwurf an, ich will es erst lesen (active=false)',
+            ],
         ];
     }
 }
