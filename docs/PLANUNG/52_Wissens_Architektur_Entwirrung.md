@@ -702,8 +702,28 @@ Symptomen:
 |---|---|---|
 | **Verbindliche Regeln** | Naming-§§, Pflichtfelder, erlaubte Kategorien | gezielt laden **und** den maschinell prüfbaren Teil im Code erzwingen |
 | **Strukturierte Fachdaten** | GPs, Einheiten, Preise, vorhandene Basisrezepte, **Mengen-Standards** | über IDs/Achsen **auflösen**, nie suchen |
-| **Fachwissen** | Bindeverhalten, Garverfahren, Geschmacksbalance | nach Aufgabe und Zutaten gezielt suchen |
+| **Fachwissen** | Bindeverhalten, Garverfahren, Geschmacksbalance, `workflow.basisrezept_erstellungs_dossier` (Mutterstruktur einer Sauce, ein Leitgeschmack im Püree) | nach Aufgabe und Zutaten gezielt suchen |
 | **Referenz & Inspiration** | Vergleichsrezepte, Küchenstile, Plating | optional suchen, als Anregung gekennzeichnet |
+| **Ablauf-Anleitung** ⟵ *fünfte Art, 2026-09-07 ergänzt* | `workflow.basisrezept_regeln` / `_erzeugen` / `_komponenten` / `_abschluss` — „Regel 1: alles ist Entwurf", „Schritt 1: Rahmen laden", „`primaer=lieferantenartikel_waehlen`" | **ausdrücklich KEIN Prompt-Inhalt.** Geht an Agenten über `ablauf.GET`; im Generator-Prompt wäre es Rauschen, weil der Generator keine Werkzeuge ruft, sondern JSON produziert |
+
+**Warum die fünfte Art dazukam — und was sie an meinem eigenen Plan korrigiert.** Ich hatte
+gefordert, die vier neuen `workflow.basisrezept_*`-Dossiers (10.746 Z., alle vom 2026-09-07)
+müssten den In-App-Generator erreichen, weil `workflow` kein Routing hat. Das war auf eine
+**Zeichenzahl** gebaut, nicht auf den Inhalt. Beim Lesen: die vier sind Agenten-Anleitungen und
+sollen den Generator gar nicht erreichen — sie erreichen Agenten über `ablauf.GET`, und das tun
+sie. **Dass `workflow` kein Routing hat, ist richtig, nicht defekt** — die Forderung nach einem
+`workflow`-Routing ist damit gestrichen.
+
+Ebenfalls durch Nachsehen geklärt statt entschieden: `workflow.rezept_anlegen_mcp` (stand in der
+`ENTBUNDEN`-Liste, war auf dev aber aktiv an 23 Keys gebunden) **existiert auf demo gar nicht
+mehr** — 19 Dossiers mit `include_inactive`, es ist gelöscht. Die Entscheidung ist dort vollzogen;
+nur die Dev-MySQL ist stehengeblieben. Für die Bindungs-Triage (`F1`) heißt das: dieser Eintrag
+ist kein Fall, sondern ein Rest.
+
+Und genau das ist der beste Beleg für diesen Grundsatz: **die Kategorie `workflow` mischt zwei
+Arten** — Handwerkswissen für den Prompt (`basisrezept_erstellungs_dossier`, zu Recht im Kanon)
+und Ablauf-Anleitung für den Agenten. Ein Routing auf die Kategorie hätte beides in jeden Prompt
+gezogen. Der Fix ist das `art`-Feld (`H1`), nicht ein Routing.
 
 **Der Testsatz:** ein verbindlicher Mengen-Standard darf nicht davon abhängen, ob die Suche
 ihn unter den ersten drei Treffern findet. Er muss über Gang × Komponentenrolle ×
@@ -769,6 +789,33 @@ Ohne den dritten Weg entsteht beim Umbau eine Doppelung statt einer Vereinheitli
 eigene Nachladen wegnehmen. Umgekehrt tauscht man „manchmal doppelt" gegen „manchmal nichts" —
 der stillere und schlimmere Fehler.
 
+### Grundsatz E — alles in der UI einstellbar, alles per MCP bedienbar
+
+**Vorgabe Dominique, 2026-09-07.** Jede Steuerung, die diese Spec baut, braucht **beide**
+Oberflächen: einen Platz in der UI für den Menschen und ein Tool für den Agenten. Kein
+Kommando-only, kein MCP-only.
+
+Das ist nicht Komfort, sondern die Behebung der Asymmetrie aus Befund H7: die **alte** Struktur
+(Bindungen) hat eine Kurations-UI, die **neue** (Kanon) hat keine — deshalb kuratiert ein Mensch
+am Fallback und ein Agent an der Wahrheit. Wer die neue Steuerung ohne UI baut, wiederholt das.
+
+Ist-Stand der Flächen (2026-09-07), und was fehlt:
+
+| Steuerung | MCP | UI | Kommando |
+|---|---|---|---|
+| Kanon (`knowledge_canon`) | ✅ GET/PUT/DELETE | **fehlt** | — |
+| Routings (`knowledge_routings`) | ✅ GET/PUT | **fehlt** (steht seit `docs/wissen.md` als „Ausblick") | — |
+| Bindungen (Alt) | ✅ BIND/UNBIND + **neu** `knowledge_bindings.GET` | ✅ Browser | — |
+| Versorgungs-Bericht (`A2`) | **fehlt** | **fehlt** | ✅ `wissen-versorgung` |
+| Grundlinie (`A1`) | **fehlt** | **fehlt** | ✅ `wissen-grundlinie` |
+| `art` / Achsen / Querverbindungen (`H1`/`H2`/`H6`) | zu bauen | zu bauen | — |
+| Profile & Regelpakete (`C0`/`D5`) | zu bauen | zu bauen | — |
+
+**Zusatz-Arbeitspakete daraus** (in die jeweilige Etappe eingehängt, nicht als eigene):
+`A2`/`A1` bekommen je ein Lese-Tool und eine Sicht in den Einstellungen · `D5`/`C0` werden von
+Anfang an mit UI **und** MCP gebaut, nicht nachgerüstet · `F7` (Kanon-/Profil-UI) rutscht damit
+aus „Aufräumen" nach vorn: sie ist Bedingung, nicht Nachlese.
+
 ### Grundsatz C — Kandidatensuche ≠ Endauswahl
 
 `max_docs` darf die **endgültige Auswahl** begrenzen, nicht die Kandidatenermittlung. Lexikalisch
@@ -812,6 +859,12 @@ A (messen)  →  H1/H2 (Felder: art + Achsen)  →  B (Riegel)  →  C (Durchsti
                                                                       ↓
                                                           F (Alt-Struktur weg)   ·   G (Zugriff)
 ```
+
+> **Änderung 2026-09-07 (Dominique):** Der Dossier-**Inhalt** wird von ihm neu aufgebaut und
+> steht deshalb **am Ende**. Vorgezogen werden dafür die **Felder** (`H1`/`H2`/`H6`) und
+> **`D6` + `C0`** — sonst leert der Umbau den Kanon still, weil er auf Slugs zeigt.
+> Zusätzlich gilt durchgehend **Grundsatz E**: alles in der UI einstellbar, alles per MCP
+> bedienbar.
 
 - **A zuerst**, ausnahmslos: nichts wird auf einer Schätzung gebaut. **Aber `B3` kann vor `A1`
   nötig sein:** erfassen die heutigen Logs die ausgelassenen Inhalte nicht vollständig (I3 —
@@ -1094,11 +1147,73 @@ und `B7`.
 den Prompt **deterministisch über Achsen**, nicht über Suchrang. Keine Kategorie mischt Arten.
 Die Zahl der Routing-Zeilen ist **kleiner** als heute, nicht größer.
 
-**Reihenfolge:** `H1` + `H2` sind **Voraussetzung** für `B6` (mengen_defaults in den Resolver)
-und für `E2` (Kandidatensuche ≠ Endauswahl) — die Felder müssen existieren, bevor der
-Mechanismus sie nutzen kann. Die **Bestandsmarkierung H3** und der **Schnitt H4** laufen nach
-der Abnahme von Etappe C: erst beweisen, dass der Durchstich trägt, dann 1.105 Dossiers
-anfassen.
+**Reihenfolge — NEU GESETZT 2026-09-07 (Dominique baut die Dossiers inhaltlich um):**
+
+Dominique wird den Korpus **inhaltlich neu aufbauen**: die Dossiers genügen seinem Anspruch
+nicht, sie sind nicht sauber einem Thema zugeordnet, und Themen überlappen sich. Damit dreht
+sich die Reihenfolge innerhalb von H:
+
+- **`H1` + `H2` + `H6` nach vorn (Felder zuerst).** `art`, Achsenwerte und typisierte
+  Querverbindungen müssen **existieren, bevor** er schreibt — dann tragen die neuen Dossiers
+  sie von Anfang an, statt hinterher markiert zu werden. Beide auch als **UI + MCP**
+  (Grundsatz E), denn er pflegt sie.
+- **`H3` (1.105 Dossiers markieren) entfällt weitgehend.** Bestand markieren, der ersetzt wird,
+  ist Arbeit für die Tonne. Was bleibt: markieren, was den Umbau überlebt.
+- **`H4` macht der Umbau selbst.** Unsere Aufgabe ist nicht das Schneiden, sondern der
+  **Wächter**, der gemischte Arten in einem Dokument nicht zurückkommen lässt.
+- **`H7` bleibt** als Wächter — hängende §-Verweise entstehen beim Umbau genauso wie beim Split.
+
+> ★ **Reihenfolge-Konsequenz, die ich für die wichtigste dieser Runde halte:
+> `D6` muss VOR dem Dossier-Umbau stehen.**
+>
+> Der Kanon referenziert **Slugs**. Ein inhaltlicher Neuaufbau, der Slugs umbenennt oder Themen
+> neu schneidet, **leert den Kanon still** — genau die Falle, in die der 155-Originale-Cutover
+> gelaufen ist (Bindungen zeigten auf deaktivierte Dossiers, `crossCuttingDocs()` übersprang
+> lautlos). Ohne `D6` („Profil oder Pflichtquelle fehlt → **Konfigurationsfehler zur
+> Laufzeit**") merkt niemand, dass die Generatoren nach dem Umbau ohne Regelwerk laufen. Es
+> würde nur schlechtere Rezepte geben.
+>
+> Deshalb: **`D6` vorziehen, gemeinsam mit `C0`** — und dazu eine Slug-Zuordnung führen
+> (alt → neu), damit der Umbau die Kanon-Zeilen mitnimmt statt sie zu verwaisen. Das ist
+> derselbe Mechanismus wie `H6`s `ersetzt`-Kante.
+
+## Runbook — Messung auf demo (nach jedem Deploy dieser Etappe)
+
+Immer **mit `--team=6`**: ohne Nutzer greift nur die globale Partition, und der Bericht
+behauptete eine Deckungslücke, die es nicht gibt (die Beinahe-Fehldiagnose aus der
+Semantik-Messung).
+
+```bash
+php artisan foodalchemist:wissen-versorgung --team=6 --json > /tmp/versorgung_demo.json
+php artisan foodalchemist:wissen-versorgung --team=6 --nur-befunde
+php artisan foodalchemist:wissen-grundlinie --team=6 --limit=6
+php artisan foodalchemist:wissen-steuerdaten-w0 --verify --team=6
+php artisan foodalchemist:wissen-deckel-check
+```
+
+Bindungs-Bestand über MCP (`knowledge_bindings.GET`), drei Abfragen:
+`{}` für alles · `{"nur_wirkungslos": true}` für den Aufräum-Bestand ·
+`{"target_key": "recipe"}` und `{"target_key": "vk"}` für die Präfix-Streuung.
+
+**Was der Vergleich dev ⇄ demo zeigen muss:** dev ist der Frisch-DB-Zustand (kein Kanon,
+`always`-Routings), demo der handgedrehte. Weichen sie ab, ist das kein Messfehler, sondern
+**Befund G1/H1** — und die Differenz ist genau das, was ein neuer Kunde anders bekäme.
+
+### Vorlage für die Bindungs-Triage (`F1`, Entscheidung 2)
+
+Eine Zeile je Bindung, vier Spalten — so wird sie Dominique vorgelegt:
+
+| Dossier | heutige Reichweite | Art (Grundsatz A) | Vorschlag |
+|---|---|---|---|
+| z. B. `geschmacksbalance` | Ziel `recipe` → 23 Prompt-Keys | fachwissen | Kanon-Zeile an `recipe.geschmack` + `recipe.sensorik`, sonst weg |
+| z. B. `workflow.*_regeln` | Ziel `recipe` → 23 Keys | **ablauf** | aus jedem Prompt heraus — gehört zu `ablauf.GET` |
+| z. B. Bindung auf inaktives Doc | — | — | löschen |
+
+Ausgänge: **Kanon-Zeile** (namentlich, an genannte Keys) · **Resolver** (Datenwerk, über Achsen)
+· **Suche** (Routing auf die Kategorie) · **`none`** (bewusst leer) · **löschen**.
+Das Bereichs-Ziel ist **kein** Ausgang mehr — Entscheidung 1 vom 2026-09-07.
+
+---
 
 ## Warum kein Modul-Umbau
 
