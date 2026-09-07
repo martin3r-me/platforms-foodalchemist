@@ -3,8 +3,10 @@
 namespace Platform\FoodAlchemist\Services\Ai;
 
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Services\Knowledge\KnowledgeCanonService;
+use Platform\FoodAlchemist\Services\Knowledge\Wissensart;
 use Platform\FoodAlchemist\Support\TeamScope;
 
 /**
@@ -514,6 +516,33 @@ class KnowledgeContextService
         }
 
         return static fn ($q) => TeamScope::applyVisible($q, $spalte, $team);
+    }
+
+    /**
+     * Spec 52/H1 — Dossiers, die in einen PROMPT dürfen.
+     *
+     * Bewusst nicht in `nurSichtbar()`: `knowledge.SEARCH` und der Wissens-Browser müssen
+     * `ablauf`-Dossiers weiter **finden** — genau darüber holen sich Agenten ihre Anleitung
+     * (`ablauf.GET`). Nur der Prompt-Bau schliesst sie aus, denn der Generator ruft keine
+     * Werkzeuge, er produziert JSON: eine Werkzeug-Reihenfolge wäre dort reines Rauschen.
+     *
+     * `art IS NULL` bleibt erlaubt — sonst fiele der gesamte, noch nicht eingeordnete Bestand
+     * aus jedem Prompt. Einordnen ist eine Kurations-Aufgabe, kein Schalter.
+     */
+    private function nurFuerPrompt(?Team $team, string $spalte = 'team_id', string $artSpalte = 'art'): \Closure
+    {
+        $sichtbar = $this->nurSichtbar($team, $spalte);
+
+        return static function ($q) use ($sichtbar, $artSpalte) {
+            $sichtbar($q);
+
+            if (! Schema::hasColumn('foodalchemist_knowledge_documents', 'art')) {
+                return $q;    // vor der H1-Migration: unveraendert
+            }
+
+            return $q->where(fn ($w) => $w->whereNull($artSpalte)
+                ->orWhereNotIn($artSpalte, Wissensart::NIE_IM_PROMPT));
+        };
     }
 
     private function achsenBlock(?Team $team, array $params, array &$filesUsed): ?string
@@ -1184,7 +1213,7 @@ class KnowledgeContextService
     private function crossCuttingDocs(?Team $team, string $feature): array
     {
         $slugs = $this->crossCuttingSlugs($feature);
-        $docs = DB::table('foodalchemist_knowledge_documents')->tap($this->nurSichtbar($team))
+        $docs = DB::table('foodalchemist_knowledge_documents')->tap($this->nurFuerPrompt($team))
             ->where('category', 'cross_cutting')->where('active', 1)->whereNull('deleted_at')
             ->when($this->ausgeschlossen !== [], fn ($q) => $q->whereNotIn('slug', $this->ausgeschlossen))
             ->whereIn('slug', $slugs)
@@ -1237,7 +1266,7 @@ class KnowledgeContextService
         if ($maxDocs <= 0) {
             return null;
         }
-        $docs = DB::table('foodalchemist_knowledge_documents')->tap($this->nurSichtbar($team))
+        $docs = DB::table('foodalchemist_knowledge_documents')->tap($this->nurFuerPrompt($team))
             ->where('category', $category)->where('active', 1)->whereNull('deleted_at')
             ->when($this->ausgeschlossen !== [], fn ($q) => $q->whereNotIn('slug', $this->ausgeschlossen))
             ->orderBy('slug')->limit($maxDocs)->get(['slug', 'content_md', 'version']);
@@ -1272,7 +1301,7 @@ class KnowledgeContextService
         // ausschließlich Slug-Tokens zu vergleichen — bei `cross_cutting` 403.108 Zeichen
         // für nichts, und mit dem Korpus mitwachsend. `discoverDomains()` macht das über
         // domainSlugs()/domainDocsBySlug() schon richtig; der generische Pfad nicht.
-        $docs = DB::table('foodalchemist_knowledge_documents')->tap($this->nurSichtbar($team))
+        $docs = DB::table('foodalchemist_knowledge_documents')->tap($this->nurFuerPrompt($team))
             ->where('category', $category)->where('active', 1)->whereNull('deleted_at')
             ->when($allowedSlugs !== [], fn ($q) => $q->whereIn('slug', $allowedSlugs))
             ->when($this->ausgeschlossen !== [], fn ($q) => $q->whereNotIn('slug', $this->ausgeschlossen))

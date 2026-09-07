@@ -45,6 +45,7 @@ class KnowledgeService
             throw new RuntimeException('title und category sind Pflicht.');
         }
         $this->assertKategorie($team, $category);
+        $art = $this->pruefeArt($data['art'] ?? null);
 
         $content = (string) ($data['content_md'] ?? '');
         $source = ((string) ($data['source'] ?? 'mcp')) ?: 'mcp';
@@ -59,6 +60,7 @@ class KnowledgeService
             'slug' => $slug,
             'title' => $title,
             'category' => $category,
+            'art' => $art,
             'content_md' => $content,
             'version' => 1,
             'content_hash' => hash('sha256', $content),
@@ -119,6 +121,10 @@ class KnowledgeService
         $payload = ['updated_at' => now()];
         if (array_key_exists('title', $data) && trim((string) $data['title']) !== '') {
             $payload['title'] = trim((string) $data['title']);
+        }
+        if (array_key_exists('art', $data)) {
+            // Leerstring = ausdruecklich zuruecksetzen auf „noch nicht eingeordnet".
+            $payload['art'] = trim((string) $data['art']) === '' ? null : $this->pruefeArt($data['art']);
         }
         if (array_key_exists('category', $data) && trim((string) $data['category']) !== '') {
             $cat = trim((string) $data['category']);
@@ -333,6 +339,30 @@ class KnowledgeService
      * DIESE Methode, damit Lese- und Schreibweg dieselbe Menge und dieselbe
      * „Verfügbar: …"-Meldung benutzen statt zwei Wahrheiten zu pflegen.
      */
+    /**
+     * Spec 52/H1 — die Wissensart pruefen.
+     *
+     * Anders als die Kategorie ist die Art KEIN pflegbares Vokabular, sondern eine
+     * Code-Konstante: der Prompt-Bau entscheidet anhand dieser Werte (`ablauf` kommt nie in
+     * einen Prompt). Waere die Liste zur Laufzeit erweiterbar, koennte er sich nicht darauf
+     * verlassen — ein frei erfundener Wert waere still wirkungslos.
+     */
+    private function pruefeArt(mixed $art): ?string
+    {
+        $wert = trim((string) ($art ?? ''));
+        if ($wert === '') {
+            return null;
+        }
+        if (! \Platform\FoodAlchemist\Services\Knowledge\Wissensart::gueltig($wert)) {
+            throw new RuntimeException(
+                'Unbekannte Wissensart «'.$wert.'». Erlaubt: '
+                .implode(', ', \Platform\FoodAlchemist\Services\Knowledge\Wissensart::ALLE).'.'
+            );
+        }
+
+        return $wert;
+    }
+
     public function assertKategorie(Team $team, string $slug): void
     {
         $ok = DB::table('foodalchemist_knowledge_categories')->whereNull('deleted_at')

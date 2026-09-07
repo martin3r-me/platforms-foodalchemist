@@ -44,6 +44,7 @@ class KnowledgeCreateTool extends FoodAlchemistTool implements ToolContract, Too
             'properties' => [
                 'title' => ['type' => 'string'],
                 'category' => ['type' => 'string', 'description' => 'Kategorie-Slug aus dem Vokabular, z. B. trend, domain, cross_cutting, workflow, concept'],
+                'art' => ['type' => 'string', 'description' => 'Wissensart — steuert, WIE das Wissen benutzt werden darf (die Kategorie sagt nur, WORUM es geht): regel (verbindlich) | datenwerk (Nachschlagewerk: wird ueber Achsen aufgeloest, nicht gesucht) | fachwissen (echter Suchfall) | referenz (Inspiration) | ablauf (Anleitung fuer AGENTEN — gehoert in KEINEN Prompt). Weglassen = noch nicht eingeordnet.'],
                 'slug' => ['type' => 'string', 'description' => 'Optionaler expliziter Slug (sonst aus Titel). Für Vault-Konsistenz nutzen, z. B. workflow.rezept_anlegen_mcp — dann reconciled ein späterer Vault-Import statt zu duplizieren.'],
                 'content_md' => ['type' => 'string', 'description' => 'Inhalt als Markdown'],
                 'active' => ['type' => 'boolean', 'default' => true, 'description' => 'Default true: wirkt sofort im KI-Kontext. false = Entwurf in Quarantäne, den ein Mensch freischaltet.'],
@@ -76,6 +77,7 @@ class KnowledgeCreateTool extends FoodAlchemistTool implements ToolContract, Too
             $doc = app(KnowledgeService::class)->create($team, [
                 'title' => (string) $arguments['title'],
                 'category' => (string) $arguments['category'],
+                'art' => $arguments['art'] ?? null,
                 'slug' => isset($arguments['slug']) ? (string) $arguments['slug'] : null,
                 'content_md' => $arguments['content_md'] ?? '',
                 'aliases' => $arguments['aliases'] ?? [],
@@ -92,6 +94,7 @@ class KnowledgeCreateTool extends FoodAlchemistTool implements ToolContract, Too
                 'slug' => $doc->slug,
                 'title' => $doc->title,
                 'category' => $doc->category,
+                'art' => $doc->art ?? null,
                 'version' => (int) $doc->version,
                 'active' => (bool) $doc->active,
                 'created_via' => $doc->created_via,

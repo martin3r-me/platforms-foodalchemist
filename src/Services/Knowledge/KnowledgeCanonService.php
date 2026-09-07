@@ -4,6 +4,7 @@ namespace Platform\FoodAlchemist\Services\Knowledge;
 
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use InvalidArgumentException;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Support\TeamScope;
@@ -53,6 +54,14 @@ class KnowledgeCanonService
             ->where('c.scope', $scope)->where('c.scope_key', $scopeKey)->where('c.role', $role)
             ->where('c.active', 1)
             ->where('d.active', 1)
+            // Spec 52/H1: `ablauf`-Dossiers gehoeren in KEINEN Prompt (Agenten-Anleitung).
+            // Sie verschwinden hier nicht still — `unaufloesbareZeilen()` meldet sie als
+            // Befund, damit der Kurator lernt statt zu raten.
+            ->when(
+                Schema::hasColumn(self::DOCS, 'art'),
+                fn ($q) => $q->where(fn ($w) => $w->whereNull('d.art')
+                    ->orWhereNotIn('d.art', Wissensart::NIE_IM_PROMPT)),
+            )
             ->orderBy('c.ord')->orderBy('c.id')
             ->get();
 
@@ -116,12 +125,19 @@ class KnowledgeCanonService
                 $w->whereNull('d.id')                 // Dossier weg (sollte der FK verhindern)
                     ->orWhereNotNull('d.deleted_at')  // soft-deleted → sonst NIRGENDS sichtbar
                     ->orWhere('d.active', 0);         // deaktiviert → still uebersprungen
+                if (Schema::hasColumn(self::DOCS, 'art')) {
+                    // H1: im Kanon, aber die Art gehoert nie in einen Prompt.
+                    $w->orWhereIn('d.art', Wissensart::NIE_IM_PROMPT);
+                }
             })
             ->select([
                 'c.id as canon_id', 'c.scope', 'c.scope_key', 'c.role', 'c.ord', 'c.mode',
                 'c.team_id as canon_team_id', 'c.knowledge_document_id as document_id',
                 'd.slug', 'd.title', 'd.active as doc_active', 'd.deleted_at as doc_deleted_at',
             ]);
+        if (Schema::hasColumn(self::DOCS, 'art')) {
+            $q->addSelect('d.art as doc_art');
+        }
 
         TeamScope::applyVisible($q, 'c.team_id', $team);
         if ($scopeKey !== null) {
@@ -142,6 +158,7 @@ class KnowledgeCanonService
             'grund' => match (true) {
                 $r->slug === null => 'dossier_fehlt',
                 $r->doc_deleted_at !== null => 'dossier_geloescht',
+                in_array($r->doc_art ?? null, Wissensart::NIE_IM_PROMPT, true) => 'art_nie_im_prompt',
                 default => 'dossier_inaktiv',
             },
             // Eine unaufloesbare PFLICHT-Zeile ist der schwere Fall: „pflicht" heisst, die Regel
