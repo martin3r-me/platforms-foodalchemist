@@ -21,6 +21,10 @@ use Symfony\Component\Uid\UuidV7;
  *    die den Prozess als „EIN Prozess, zwei Ausführende" führen und dabei die Regeln tragen,
  *    die das globale Dossier nicht kannte (Shared-Entity-Schutz, §4-Zerlegung, GL-07).
  *
+ * ⚠ Nur `gericht_anlegen_mcp` ist wirklich global. `rezept_anlegen_mcp` steht auf v4, wurde
+ * also per MCP editiert und liegt team-eigen — die beiden stammen aus derselben Migration,
+ * teilen aber nicht dasselbe Eigentum. Deshalb filtert das UPDATE unten NICHT auf `team_id`.
+ *
  * Der Schnitt folgt der Bedeutung, nicht der Zeichenzahl: Regeln · Erzeugen · Komponenten
  * auflösen · Abschluss. Ein Ablauf-Dossier mechanisch entlang der Überschriften zu bündeln
  * würde „Schritt 5" ohne „Schritt 1–4" hinterlassen. `ablauf.GET` führt die Teile über
@@ -43,9 +47,14 @@ return new class extends Migration
             $this->upsert($slug, $titel, $inhalt);
         }
 
+        // BEWUSST OHNE `whereNull('team_id')`: der erste Wurf hatte den Filter als „Sicherheit"
+        // drin — in der Annahme, beide Dossiers seien global, weil sie aus derselben Migration
+        // stammen. `workflow.rezept_anlegen_mcp` wurde seither per MCP editiert (v4) und ist
+        // damit team-eigen; der Filter übersprang es, und das 8.691-Zeichen-Dossier blieb neben
+        // seinen vier Nachfolgern aktiv. Der Slug ist unique — ein team_id-Filter schützt hier
+        // vor nichts und verhindert nur den beabsichtigten Effekt.
         DB::table('foodalchemist_knowledge_documents')
             ->whereIn('slug', self::ALT)
-            ->whereNull('team_id')
             ->whereNull('deleted_at')
             ->update(['active' => false, 'updated_at' => now()]);
     }
@@ -60,7 +69,6 @@ return new class extends Migration
         // aber die abgelösten Originale werden wieder sichtbar.
         DB::table('foodalchemist_knowledge_documents')
             ->whereIn('slug', self::ALT)
-            ->whereNull('team_id')
             ->update(['active' => true, 'updated_at' => now()]);
     }
 

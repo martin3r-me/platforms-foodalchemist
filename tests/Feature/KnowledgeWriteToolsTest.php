@@ -27,7 +27,10 @@ it('registriert knowledge.POST und knowledge.PUT', function () {
         ->and($this->registry->get('foodalchemist.knowledge.PUT'))->not->toBeNull();
 });
 
-it('legt ein Doc inaktiv + created_via=mcp an und hält es aus der SEARCH-Sicht raus', function () {
+it('legt ein Doc aktiv + created_via=mcp an — es wirkt sofort und ist auffindbar', function () {
+    // Entscheid Dominique 2026-09-07: aktiv als Default. Vorher landete jede Anlage in
+    // Quarantäne; der dafür nötige zweite Call (`SET_ACTIVE`) wurde vergessen, und ein
+    // fertiges Dossier lag unwirksam herum, ohne dass man ihm das ansah.
     $res = $this->registry->get('foodalchemist.knowledge.POST')->execute([
         'title' => 'Trend: Fermentierte Chili-Pasten',
         'category' => 'trend',
@@ -35,15 +38,31 @@ it('legt ein Doc inaktiv + created_via=mcp an und hält es aus der SEARCH-Sicht 
     ], $this->kontext);
 
     expect($res->success)->toBeTrue()
-        ->and($res->data['document']['active'])->toBeFalse()
+        ->and($res->data['document']['active'])->toBeTrue()
         ->and($res->data['document']['created_via'])->toBe('mcp');
 
     $slug = $res->data['document']['slug'];
     $doc = DB::table('foodalchemist_knowledge_documents')->where('slug', $slug)->first();
-    expect($doc->active)->toBeFalsy()->and((int) $doc->version)->toBe(1)->and($doc->source_path)->toBeNull();
+    expect($doc->active)->toBeTruthy()->and((int) $doc->version)->toBe(1)->and($doc->source_path)->toBeNull();
+
+    $such = $this->registry->get('foodalchemist.knowledge.SEARCH')->execute(['q' => 'Chili Pasten'], $this->kontext);
+    expect(collect($such->data['documents'])->pluck('slug'))->toContain($slug);
+});
+
+it('mit active=false bleibt der Entwurfs-Weg samt SEARCH-Filter erhalten', function () {
+    // Die Quarantäne ist nicht weg — sie ist nur keine Voreinstellung mehr.
+    $res = $this->registry->get('foodalchemist.knowledge.POST')->execute([
+        'title' => 'Trend: Noch nicht geprüft',
+        'category' => 'trend',
+        'content_md' => "# Entwurf\nNoch ungeprüft.",
+        'active' => false,
+    ], $this->kontext);
+
+    $slug = $res->data['document']['slug'];
+    expect($res->data['document']['active'])->toBeFalse();
 
     // inaktiv ⇒ nicht in der (aktiv-gefilterten) knowledge.SEARCH
-    $such = $this->registry->get('foodalchemist.knowledge.SEARCH')->execute(['q' => 'Chili Pasten'], $this->kontext);
+    $such = $this->registry->get('foodalchemist.knowledge.SEARCH')->execute(['q' => 'Noch nicht geprüft'], $this->kontext);
     expect(collect($such->data['documents'])->pluck('slug'))->not->toContain($slug);
 });
 
