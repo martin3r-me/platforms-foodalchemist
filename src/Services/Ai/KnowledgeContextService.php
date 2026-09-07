@@ -1848,6 +1848,12 @@ class KnowledgeContextService
             ->pluck('c', 'category')->map(fn ($c) => (int) $c)->all();
 
         $spalten = ['slug', 'title', 'category', 'active', 'version', 'char_count', 'updated_at'];
+        // Spec 52/H1: die Art gehoert in die Inventar-Sicht — beim Korpus-Umbau ist „welche
+        // Dossiers sind noch nicht eingeordnet" genau die Frage, die man an LIST stellt.
+        // Schema-Wache, damit die Liste vor der Migration nicht stirbt.
+        if (Schema::hasColumn('foodalchemist_knowledge_documents', 'art')) {
+            $spalten[] = 'art';
+        }
         if ($mitFrontmatter) {
             $spalten[] = 'content_md';
         }
@@ -1859,6 +1865,7 @@ class KnowledgeContextService
                 'slug' => $doc->slug,
                 'title' => $doc->title,
                 'category' => $doc->category,
+                'art' => $doc->art ?? null,
                 'active' => (bool) $doc->active,
                 'version' => (int) $doc->version,
                 'char_count' => (int) $doc->char_count,
