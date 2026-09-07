@@ -481,6 +481,38 @@ class RecipeService
      */
     public function findByTokenSet(Team $team, string $name): ?FoodAlchemistRecipe
     {
+        $treffer = $this->findByTokenSetMitReife($team, $name);
+
+        return $treffer['recipe'] ?? null;
+    }
+
+    /**
+     * Wie {@see findByTokenSet}, aber MIT Reifegrad — der Aufrufer erfährt, ob der
+     * „Bestand" wirklich Bestand ist.
+     *
+     * WARUM (Befund 2026-09-07, Lauf 65 / Step 460 „Basisrezept: Gemüsebrühe"):
+     * Das Reuse-Gate prüfte weder Status noch Vollständigkeit — der erste Namens-Treffer
+     * nach `id` gewann. Übernommen wurde Rezept 3400: `draft`, **0 Schritte**, eine Zutat
+     * („Petersilienstiele") ohne GP, unbepreist. Die Kaskade band es als Sub-Rezept ein,
+     * setzte den Step auf `skipped` („übernommen") und meldete den Lauf als
+     * „abgeschlossen — alle Artefakte freigegeben oder als Bestand übernommen".
+     *
+     * Die Regel des Nutzers dazu ist eindeutig: „Übernommene Rezepte sind hoffentlich schon
+     * angereichert und müssten dann nicht nochmal angereichert werden. Nur die neuen."
+     * Genau diese Annahme traf der Code — ungeprüft. Hier wird sie prüfbar:
+     *
+     *   reif  = produktionsreif ⇒ echter Bestand, wird NIE angetastet (Design bleibt)
+     *   eigen = gehört dem übernehmenden Team ⇒ eine Lücke darf geschlossen werden
+     *
+     * Zusätzlich: ein `stub` ist niemals Bestand (0-Zutaten-Hülle, s. createSubRecipeStub) —
+     * ihn zu übernehmen hieße, eine leere Hülle als fertige Komponente zu verbuchen. Und die
+     * Reihenfolge ist jetzt „reif zuerst": existiert dieselbe Komponente doppelt (fertig +
+     * als Altlast-Stub), gewinnt die fertige, nicht die mit der kleineren `id`.
+     *
+     * @return array{recipe: FoodAlchemistRecipe, reif: bool, eigen: bool, luecken: list<string>}|null
+     */
+    public function findByTokenSetMitReife(Team $team, string $name): ?array
+    {
         $name = trim($name);
         if ($name === '') {
             return null;
@@ -491,15 +523,58 @@ class RecipeService
         if ($zielTokens === []) {
             return null;
         }
+        $kandidaten = [];
         foreach (FoodAlchemistRecipe::visibleToTeam($team)->basis()->orderBy('id')->cursor() as $r) {
             $tokens = $engine->tokenize((string) $r->name);
             sort($tokens);
-            if ($tokens === $zielTokens) {
-                return $r;
+            if ($tokens !== $zielTokens) {
+                continue;
             }
+            // Stub = leere Hülle, kein Bestand. Bewusst ausgeschlossen statt „unreif":
+            // eine Hülle zu binden liefert dem Eltern-Rezept nicht einmal eine Zutat.
+            if ($r->status === RecipeStatus::Stub) {
+                continue;
+            }
+            $kandidaten[] = $r;
+        }
+        if ($kandidaten === []) {
+            return null;
+        }
+        // Reif zuerst, dann die kleinste id (stabile Reihenfolge wie vorher).
+        $bewertet = array_map(fn ($r) => ['recipe' => $r] + $this->reifegrad($r), $kandidaten);
+        usort($bewertet, static fn ($x, $y) => [$y['reif'], -$x['recipe']->id] <=> [$x['reif'], -$y['recipe']->id]);
+        $treffer = $bewertet[0];
+        $treffer['eigen'] = (int) ($treffer['recipe']->team_id ?? 0) === (int) $team->id;
+
+        return $treffer;
+    }
+
+    /**
+     * Produktionsreife eines Basisrezepts — der EINE Ort, an dem „fertig" definiert ist.
+     *
+     * Bewusst schmal und deterministisch: drei Dinge, die ein Koch braucht und die ohne KI
+     * prüfbar sind. Alles Weitere (Sensorik, Equipment, Posten, Zeiten) ist Anreicherungs-
+     * Tiefe und haengt an `complete_coverage` — das darf hier nicht mit hinein, sonst gilt
+     * fast jedes Bestandsrezept als unreif und die Kaskade reichert dauernd Fremdes nach.
+     *
+     * @return array{reif: bool, luecken: list<string>}
+     */
+    public function reifegrad(FoodAlchemistRecipe $recipe): array
+    {
+        $luecken = [];
+        if (! $recipe->steps()->whereNull('deleted_at')->exists()) {
+            $luecken[] = 'keine Schritte';
+        }
+        $offeneZutaten = $recipe->ingredients()->whereNull('deleted_at')
+            ->whereNull('gp_id')->whereNull('referenced_recipe_id')->count();
+        if ($offeneZutaten > 0) {
+            $luecken[] = $offeneZutaten.' Zutat(en) ohne Verknüpfung';
+        }
+        if ($recipe->ek_total_eur === null || (float) $recipe->ek_total_eur <= 0.0) {
+            $luecken[] = 'unbepreist';
         }
 
-        return null;
+        return ['reif' => $luecken === [], 'luecken' => $luecken];
     }
 
     /**
