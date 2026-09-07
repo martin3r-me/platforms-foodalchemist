@@ -83,6 +83,12 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                 \Platform\FoodAlchemist\Console\ReuseReifeBackfillCommand::class,
                 \Platform\FoodAlchemist\Console\WissenSteuerdatenW0Command::class,
                 \Platform\FoodAlchemist\Console\WissenDeckelCheckCommand::class,
+                // Spec 52/A2: welcher Prompt-Key bekommt welches Wissen — Kanon, Routing,
+                // Bindung, Budget in einer Tabelle. Ungesteuerte Keys sind ein Befund.
+                // Abgrenzung zu `wissen-deckung` (W2-4): das prüft die KORPUS-Richtung
+                // („nennt ein Prompt einen §, den kein Dossier hat"), das hier die
+                // VERSORGUNGS-Richtung („welches Wissen erreicht diesen Prompt überhaupt").
+                \Platform\FoodAlchemist\Console\WissenVersorgungCommand::class,
                 \Platform\FoodAlchemist\Console\KnowledgeEmbedCommand::class,
                 // Spec 50 Strang III: Arbeitsliste zu großer Dossiers (ein Thema pro Dossier ≤ Deckel).
                 \Platform\FoodAlchemist\Console\KnowledgeOversizedCommand::class,

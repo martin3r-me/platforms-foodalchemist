@@ -397,6 +397,22 @@ class AiGatewayService
      *
      * @return array{docs: int, chars_per_doc: int, total: int}
      */
+    /**
+     * Spec 52/A2: das aufgelöste Bound-/Kanon-Budget eines Prompt-Keys für Prüf-Werkzeuge.
+     * Spiegelt {@see KnowledgeContextService::budgetFuer()} — der Deckungs-Bericht muss die
+     * Zahl nennen können, die der Gateway wirklich anwendet, ohne sie nachzurechnen (eine
+     * zweite Rechnung driftet).
+     *
+     * @return array{docs: int, chars_per_doc: int, total: int}
+     */
+    public function boundBudgetFuer(string $promptKey): array
+    {
+        return $this->boundBudget($promptKey);
+    }
+
+    /**
+     * @return array{docs: int, chars_per_doc: int, total: int}
+     */
     private function boundBudget(string $promptKey): array
     {
         $default = [
