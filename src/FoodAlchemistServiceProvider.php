@@ -1045,6 +1045,9 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     // Spec 52/A3: die Alt-Struktur war schreibbar (BIND/UNBIND), aber nicht
                     // lesbar — deshalb blieb „Bindung auf inaktives Dossier" still.
                     \Platform\FoodAlchemist\Tools\KnowledgeBindingsGetTool::class,
+                    // Spec 52/A2 (Grundsatz E): der Versorgungs-Bericht auch per MCP — auf
+                    // demo gibt es keine Shell, ein Kommando allein misst die falsche Umgebung.
+                    \Platform\FoodAlchemist\Tools\KnowledgeVersorgungGetTool::class,
                     \Platform\FoodAlchemist\Tools\KnowledgeCategoriesGetTool::class,
                     \Platform\FoodAlchemist\Tools\KnowledgeCategoriesPostTool::class,
                     \Platform\FoodAlchemist\Tools\KnowledgeSetActiveTool::class,

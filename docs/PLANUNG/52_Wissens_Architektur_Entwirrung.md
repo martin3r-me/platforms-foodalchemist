@@ -940,6 +940,75 @@ Zeilen), die 12 übrigen offenen Migrationen bewusst nicht angefasst (Fremdmodul
 die Tabelle an genau einer Stelle. Hätte ich sie im Kommando gelassen, hätte ich die zweite
 Wahrheit gebaut, die diese Spec anklagt.
 
+#### ✅ Die demo-Messung, 2026-09-07 nach dem Deploy von Etappe A
+
+**Bindungs-Bestand auf demo: 9 Zeilen — und alle neun sind wirkungslos.** Jede sitzt auf
+`recipe.generator` oder `vk.generator`, beide haben einen Kanon, also stellt der Gateway sie
+stumm (`AiGatewayService:178`). `ziel_art` ist neunmal `prompt`, **nie `bereich`**.
+
+Damit korrigiert sich einer meiner Befunde: **die Präfix-Streuung ist auf demo schon abgeräumt.**
+`geschmacksbalance` und `workflow.rezept_anlegen_mcp` an je 23 Keys war ein **rein dev-lokaler**
+Zustand — das `UMBINDEN` aus W0 wurde auf demo vollzogen, auf der Dev-MySQL nie. Die verbliebenen
+9 sind das alte `ALWAYS_SLUGS_BAU`-Set (§2/§3/§4/§6 + Erstellungs-Dossier), komplett vom Kanon
+überholt.
+
+→ **`F1` (Bindungs-Triage) schrumpft auf einen Aufräum-Schritt.** Kein fachlicher Einzelfall
+darunter, keine Entscheidung „gehört `geschmacksbalance` an `recipe.geschmack`". Neun Zeilen
+löschen.
+
+**Deckung auf demo: 16 von 71 Prompt-Keys gesteuert, 55 nicht.** Verteilung:
+
+| Bereich | Keys | gesteuert |
+|---|---|---|
+| `recipe.*` | 23 | 6 |
+| `vk.*` | 13 | 3 |
+| `concept.*` / `foodbook.*` / `format.*` | 7 | 7 |
+| **`gp.*`** | **13** | **0** |
+| `signal.*` | 6 | 0 |
+| Rest (chat, price, trend, planung, praesentation, …) | 9 | 0 |
+
+★ **Kein einziger GP-Prompt bekommt das GP-Regelwerk.** Im Korpus liegen GP §3 (Warengruppen),
+§6 (Benennungsschema), §6.1 (Singular-Pflicht), §7+§8 (Grammatur/Pflichtangaben) — und
+`gp.suggest`, `gp.domain`, `gp.tags` und die zehn anderen erreichen **keines** davon.
+Gleichzeitig zieht der GP-**Critic** über `GpConformanceAdapter` das komplette
+`regelwerk-gp-`-Präfix. Dieselbe Asymmetrie wie beim Rezept: **der Prüfer kennt die Regeln, der
+Ersteller nicht.** GP-Namen, die gegen §6.1 verstoßen, haben hier ihre Ursache.
+
+⚠ **Vorbehalt:** diese 16/71 sind aus Kanon + Routings + Bindungen **von Hand** gerechnet, weil
+`wissen-versorgung` ein Artisan-Kommando ist und demo keine Shell hat. Genau diese Lücke ist der
+Anlass für die MCP-Fläche unten — danach ist die Zahl maschinell verifiziert.
+
+#### ✅ A2 bekommt seine MCP-Fläche (Grundsatz E), 2026-09-07
+
+Grundsatz E hat sofort bei meinem eigenen Werkzeug gebissen: ein Bericht, den man nur in einer
+lokalen Sandbox fahren kann, **misst die falsche Umgebung** — meine ersten Zahlen (42 von 71)
+kamen aus der Dev-MySQL, die dem Frisch-DB-Zustand entspricht.
+
+Gebaut: `WissensVersorgungService` (die Rechnung) + `foodalchemist.knowledge_versorgung.GET`
+(MCP) + das Kommando als reine Darstellung. **Eine Antwort, zwei Flächen** — zwei
+Implementierungen wären die Doppelung, die diese Spec abbaut.
+
+**Und noch ein Schlüssel-Bruch, den die Messung selbst gefunden hat — der dritte:**
+`foodbook.plan` ist ein Routing-Feature, das `IdeenService` direkt an `contextFor()` übergibt,
+**ohne dass es eine Prompt-Registry-Zeile dazu gibt**. Nach dem Alias (`recipe.generator` →
+`ai_generate_recipe`) und dem Feld-Mismatch (`recipe.dichteklasse`) ist das die dritte Variante:
+ein Aufrufer-Eigenname. Dokumentiert in `KnowledgeContextService::CONTEXT_ONLY_FEATURES`.
+
+**Dabei habe ich eine eigene Überziehung korrigiert:** meine erste Fassung hieß
+`toteRoutingFeatures()` und meldete `foodbook.plan` als tot — es ist live. Ob ein Feature
+**wirklich** keinen Aufrufer hat, ist statisch **nicht** entscheidbar, weil mehrere Stellen mit
+einer Variablen rufen (`contextFor($team, $promptKey, …)` in `ConceptGeneratorService`,
+`contextFor($this->team(), $prompt, …)` in `StepEditor`). Der Bericht trennt jetzt drei Aussagen:
+`ohne_aufrufer_gemessen` (ein `grep`-Befund vom 2026-09-07, als **Datum** geführt),
+`aufrufer_eigenname` (dokumentiert) und `ohne_prompt_key` (unklar, nur im Code entscheidbar).
+
+**11 von 73 Routing-Zeilen haben keinen Aufrufer:** `ai_plan_dishes` (8 Zeilen, inkl.
+`cross_cutting 5×8000` — eine komplett konfigurierte Suchmatrix ohne Aufruf),
+`ai_suggest_pairings`, `ai_infer_ankers`, `ai_extract_recipe`. Besonders bitter beim letzten:
+`ai_extract_recipe × cross_cutting = none` ist eine **bewusste** Entscheidung („dieser Schritt
+braucht kein Wissen"), hinterlegt unter einem Namen, den niemand ruft — der eigentliche Key
+heißt `recipe.extract` und hat keine Zeile. Die Entscheidung existiert und wirkt nicht.
+
 **Abgrenzung, die ich erst beim Bauen gefunden habe:** `foodalchemist:wissen-deckung` (W2-4)
 existiert schon und prüft die **Korpus**-Richtung des §-Problems — „nennt ein Prompt einen §,
 den kein Dossier hat" (der §12-Fall). Mein Bericht heisst deshalb `wissen-versorgung` und
@@ -1294,7 +1363,7 @@ Messbar, nicht gefühlt — alle Sonden existieren schon:
 
 | Entscheidung | Wann, und was sie vorher braucht |
 |---|---|
-| **Alte Bindungen abschaffen** (Etappe F) | Nach `A5` — dem gemessenen Bindungs-Bestand. Empfehlung bleibt **gestaffelt**: Triage `F1`, je migriertem Ablauf umstellen, dann den alten Pfad entfernen. Ich lege sie dir mit der Bestandszahl vor. |
+| ~~**Alte Bindungen abschaffen**~~ | ✅ **entschieden 2026-09-07, nach der demo-Messung.** (1) Präfix-Erbe **abgeschafft** — es wandert nicht in den Kanon. (2) Triage: auf demo **9 Bindungen, alle stumm**, kein fachlicher Einzelfall → reiner Aufräum-Schritt statt Entscheidungsliste. (3) `workflow.rezept_anlegen_mcp`: keine Entscheidung nötig, auf demo gelöscht. (4) Zeitpunkt: **gestaffelt**, je migriertem Ablauf, der Gateway-Zweig fällt zuletzt — meine Entscheidung als Kurator. |
 | **Zugriff auf den Korpus** (Etappe G) | Nach der Datenmigrations-Analyse. Empfehlung bleibt **Eigentum und Lesefreigabe trennen** — nicht global, keine erfundene `parent_team_id`-Hierarchie. Der dokumentierte 598→6-Fall muss vorher ausgeschlossen sein. |
 
 ### 🔑 Mandat (Dominique, 2026-09-07)
