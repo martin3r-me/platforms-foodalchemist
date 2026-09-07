@@ -375,10 +375,9 @@ class BulkEnrichService
         $wissen = app(KnowledgeContextService::class)->contextFor(
             $team, 'recipe.eigenschaften', trim($r->name.' Behälter Füllmenge Füllgrad Dichte')
         );
-        $opts = ($wissen['block'] ?? '') !== ''
-            ? ['knowledge' => $wissen['block'], 'knowledge_used' => $wissen['files_used'] ?? []]
-            : [];
-        $opts += ['target_table' => 'foodalchemist_recipes', 'target_id' => $r->id];
+        // Spec 52/B3: Messfelder über den Helfer, sonst bleibt `dropped` hier blind.
+        $opts = KnowledgeContextService::proposeOptionen($wissen)
+            + ['target_table' => 'foodalchemist_recipes', 'target_id' => $r->id];
 
         $p = $this->ki->propose('recipe.dichteklasse', [
             'name' => $r->name,

@@ -623,6 +623,68 @@ class KnowledgeContextService
     }
 
     /**
+     * Spec 52/A2+A4 — welcher ROUTING-Schlüssel gehört zu einem Prompt-Key?
+     *
+     * Heute sind das zwei Schlüsselräume im selben Aufruf: der Gateway löst den Kanon über den
+     * Prompt-Key auf (`recipe.generator`), das Routing wird aber mit einem hartkodierten
+     * Alt-Feature gerufen. Wer das nicht weiss, hält die Generatoren für ungesteuert — und ein
+     * `knowledge_routings.PUT` auf `vk.generator` schreibt stumm ins Leere.
+     *
+     * Die Tabelle ist AUS DEN AUFRUFSTELLEN abgelesen, nicht geraten; jede Zeile nennt ihre.
+     * Sie ist bewusst hier zentral, damit Bericht (`wissen-versorgung`) und Auskunft
+     * (`regelwerk.GET`) dieselbe Antwort geben. **Mit Spec 52/D1 verschwindet sie** — dann ist
+     * der Schlüsselraum einer und diese Methode gibt den Prompt-Key unverändert zurück.
+     *
+     * @var array<string, string>
+     */
+    public const ROUTING_ALIAS = [
+        // RecipeGenerationContextService:88 — EIN Pfad; `$vkModus` entscheidet nur den Kanon-Key,
+        // nicht den Routing-Key. Basisrezept und Gericht teilen sich damit eine Routing-Politik.
+        'recipe.generator' => 'ai_generate_recipe',
+        'vk.generator' => 'ai_generate_recipe',
+        // RecipeModal:961 / BulkEnrichService::proposeDichteklasse — contextFor() läuft unter
+        // 'recipe.eigenschaften', propose() unter 'recipe.dichteklasse'.
+        'recipe.dichteklasse' => 'recipe.eigenschaften',
+    ];
+
+    /** Der Routing-Schlüssel, unter dem dieser Prompt-Key sein Wissen zieht. */
+    public static function routingFeatureFuer(string $promptKey): string
+    {
+        return self::ROUTING_ALIAS[$promptKey] ?? $promptKey;
+    }
+
+    /**
+     * Spec 52/B3 — die Optionen für `propose()` aus einem `contextFor()`-Ergebnis bauen.
+     *
+     * Warum ein Helfer und nicht 18 Aufrufstellen von Hand: `knowledge_dropped_chars` gaben
+     * genau ZWEI von achtzehn Aufrufern weiter, und darum stand in sechzehn Features
+     * `prompt_parts.dropped = 0`, obwohl Zeichen fehlten (Befund I3). Das ist keine
+     * Nachlässigkeit einzelner Stellen, sondern eine Konvention ohne Durchsetzung — dieselbe
+     * Klasse wie `_kanon_prompt_key` (2 von 14). Ein Helfer, der ALLE Messfelder mitnimmt,
+     * macht die nächste neue Aufrufstelle automatisch richtig; ein Wächter-Test hält es.
+     *
+     * Extras (`target_table`, `tier`, …) hängt der Aufrufer per `+` an.
+     *
+     * @param  array<string, mixed>  $wissen  Ergebnis von {@see contextFor()}
+     * @return array<string, mixed>
+     */
+    public static function proposeOptionen(array $wissen): array
+    {
+        $block = (string) ($wissen['block'] ?? '');
+
+        // BEWUSST ohne `knowledge_channels`: dieses Feld ist der Dedup-/Anzeige-Eingang, an dem
+        // schon einmal der Bound-Kanal gestorben ist (W0-3b — ein Anzeige-Spiegel schrieb auf
+        // das Feld, das die Auswahl-Logik liest). Wer Kanäle liefert, liefert sie weiterhin
+        // selbst und bewusst. Dieser Helfer schliesst nur die Messlücke.
+        return [
+            'knowledge' => $block !== '' ? $block : null,
+            'knowledge_used' => $wissen['files_used'] ?? [],
+            // Ohne diese Zeile ist die Kappung im Call-Log unsichtbar.
+            'knowledge_dropped_chars' => (int) ($wissen['dropped_chars'] ?? 0),
+        ];
+    }
+
+    /**
      * W0-5: Featureweites Zeichenbudget. Reihenfolge: Feature-Override aus der Config >
      * Rezept-Sonderdeckel (historisch, bleibt der strengste) > Default.
      *

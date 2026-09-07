@@ -1,0 +1,1357 @@
+# Spec 52 — Wissens-Architektur: Entwirrung der Steuerschicht
+
+> **Tracking:** Office Dev-Package 23, Features-Board (`dev_board_id=53`).
+> **Status:** Diagnose abgeschlossen, Plan freigegeben von Dominique 2026-09-07. Etappe A läuft.
+> **Branch:** `feat/wissen-architektur` (Worktree `15_GITHUB/wt-wissen-architektur`).
+> **Basis-Commit:** `a9f23c50` (origin/main, PR #47). Alle Befunde wurden auf `c0fbfafd`
+> (PR #45) erhoben und gegen `a9f23c50` gegengeprüft — im Wissens-Code keine Änderung
+> dazwischen (neu ist nur `conformance.konzentrat_anteil_max`, unbeteiligt).
+>
+> **Umbau-Umfang in einem Satz:** die **Steuer- und Zusammenbau-Schicht** wird umgebaut,
+> **Inhalt und Dokumentenschicht bleiben**. Kein Modul-Neubau — Begründung im Abschnitt
+> „Warum kein Modul-Umbau".
+
+
+## Context
+
+Symptom (Dominique, 2026-09-07): Beim Erstellen eines **Basisrezepts** oder eines **Gerichts**
+greift die KI nicht das richtige Wissen ab. Verdacht: die „Bindung" stammt aus einer alten
+Struktur und läuft parallel zum neuen Kanon → Doppelung, die das System verkompliziert.
+Zusatzbeobachtung: die Diktier-Eingabe hat eine eigene Knowledge-Search-Funktion.
+
+Ziel dieses Dokuments: erst **Diagnose belegen** (Ist-Zustand, Live-Daten + Code), dann einen
+**Entwirrungs-Plan** mit einer einzigen Wahrheitsquelle pro Frage.
+
+---
+
+## Befund A — Live-Steuerdaten auf demo (Team 6, 2026-09-07, per MCP gelesen)
+
+### A1 · Kanon: 28 Zeilen, aber nur 3 Prompt-Keys
+
+`knowledge_canon.GET` → `total: 28`, alle `scope=prompt_key`, `role=root`, `mode=pflicht`:
+
+| scope_key | Zeilen | Inhalt |
+|---|---|---|
+| `recipe.generator` | 13 | Basis §1.0–1.2, §1.3–1.5 (2 Teile), §2, §3, §4, §6 · workflow-Dossier · geschmacksbalance ×2 · mengen_defaults ×2 |
+| `vk.generator` | 12 | VK §1/§1.2a/§2 · Basis §2/§3/§4/§6 · workflow-Dossier · gb ×2 · md ×2 |
+| `concept.brief_geruest` | 3 | Regelwerk Concept §1+2 / §3+4 / §5+6 |
+
+→ **Jeder andere Prompt-Key hat keinen Kanon.**
+
+### A2 · Routings: 73 Zeilen — und zwei Generationen von Schlüsseln
+
+`knowledge_routings.GET` → `total: 73`, 19 „features" in **zwei Namensräumen**:
+
+- **alt (`ai_*`)**: `ai_extract_recipe`, `ai_generate_recipe`, `ai_infer_ankers`,
+  `ai_plan_dishes`, `ai_suggest_pairings`
+- **neu (Prompt-Key, gepunktet)**: `concept.brief_geruest`, `concept.plan`, `concept.wording`,
+  `foodbook.grundgeruest`, `foodbook.kundentext`, `foodbook.plan`, `format.grundgeruest`,
+  `recipe.eigenschaften`, `recipe.review`, `recipe.steps`, `recipe.ueberarbeiten`,
+  `vk.review`, `vk.ueberarbeiten`
+
+**Die zwei Keys, die den ganzen Kanon tragen — `recipe.generator` und `vk.generator` —
+haben NULL Routing-Zeilen.** Das Discovery-Wissen für die Rezept-Erstellung hängt
+stattdessen unter dem Altnamen `ai_generate_recipe` (13 Zeilen, `regelwerk: none`,
+`pairing: none`, `cross_cutting: discovery 6×8000`, `domain` ungekappt, …).
+→ Das ist **kein Versehen, sondern gebaut so** — siehe Befund B5.
+
+`concept.brief_geruest` ist der **einzige** Key mit BEIDEM: Kanon (3 × regelwerk `pflicht`)
+**und** Routing (`regelwerk` discovery 3×8000) → derselbe Korpus zweimal im selben Prompt,
+wenn nicht dedupliziert wird.
+
+### A3 · Kategorie-Vokabular vs. Routing-Kategorien
+
+`knowledge_categories.GET` → 21 aktive Kategorien.
+
+- **`pairing`** steht in 3 Routing-Zeilen (`ai_infer_ankers` grounding, `ai_suggest_pairings`
+  grounding, `ai_generate_recipe` none) — ist aber **keine Kategorie im Vokabular** → veraltete
+  Routing-Schlüssel.
+- **`workflow`** (die Handlungs-Workflow-Dossiers) hat **kein einziges Routing** in keinem
+  Feature. Erreichbar nur über Kanon (genau 1 Slug: `workflow.basisrezept_erstellungs_dossier`)
+  oder `knowledge.SEARCH`. Deckt sich mit dem Etappe-8-Befund („`workflow` hat kein Routing,
+  30.000 Zeichen Kalkulationswissen kamen nie in einen Prompt").
+- Bewusst search-only laut Beschreibung: `referenz_rezepte`, `foodcontent`.
+
+### A4 · Drei Steuer-Ebenen für dieselbe Frage
+
+| Ebene | Schlüsselraum | Schreib-Tool | Status |
+|---|---|---|---|
+| `knowledge_routings` | feature × **category** | `knowledge_routings.PUT` | aktiv, 73 Zeilen, 2 Namensgenerationen |
+| `bind_layers` (Bindung) | slug × **target_key** (Bereich `gp/recipe/vk/concept` ODER Einzel-Prompt `recipe.geschmack`, `vk.plating`) | `knowledge.BIND` / `.UNBIND`, `bind_layers` in `knowledge.POST/PUT` | Tool aktiv — **Alt-Struktur, Verdachtskern** |
+| `knowledge_canon` | scope(`feature`\|`prompt_key`) × scope_key × **slug** | `knowledge_canon.PUT` | aktiv, 28 Zeilen, neue Struktur |
+
+Alle drei beantworten: „welches Dossier gehört in welchen Prompt".
+
+### A5 · `ablauf.GET` / `regelwerk.GET` sind Sichten, keine vierte Quelle
+
+`regelwerk.GET(prompt_key=recipe.generator)` → `quelle: "kanon"`, exakt die 13 Kanon-Slugs.
+`ablauf.GET(vorgang=gericht_anlegen)` → `prompt_keys: ["vk.generator"]`, `regelwerke.quelle: kanon`,
+die 12 Kanon-Slugs + 4 `workflow.*`-Dossiers (Weg A/B/Abschluss/Regeln). Also **keine
+Datendoppelung**, sondern eine Agenten-Sicht auf den Kanon. Sie gilt aber nur für MCP-Agenten,
+nicht für den In-App-Generator.
+
+---
+
+## Befund B — Zwei Injektionspunkte, vier Steuertabellen (Doku + Commit-Historie)
+
+### B1 · Das dokumentierte Modell (`docs/wissen.md`) kennt den Kanon gar nicht
+
+`docs/wissen.md:33-51,91-105` beschreibt als Wirk-Mechanismus:
+
+| Tabelle | Zweck laut Doku |
+|---|---|
+| `knowledge_layers` | Einsatzorte: **Bereiche** (grob: `gp`, `recipe`, `vk`, `concept`, `preis`, `chat`) + **Prompt-Keys** (fein, aus der Registry) |
+| `knowledge_bindings` | Doc → Einsatzort (`binding_type='layer'`, mode, weight, source) |
+| `knowledge_routings` | „grobe Auto-Ebene": Feature × Kategorie |
+
+Und den Injektionspunkt: **„Der zentrale Trick: Injektion im Gateway"** —
+`AiGatewayService::propose($promptKey)` lädt gebundenes Wissen automatisch „für **jeden** der
+~48 Prompts", Match **exakt (Prompt-Key) ODER dessen Bereich (Präfix vor dem Punkt)**.
+
+Der Kanon steht in dieser Doku nicht. Das ist die Doppelung in Reinform: **ein zweiter
+Injektionspfad ist dazugekommen, der erste wurde nie abgeräumt.**
+
+### B2 · Der Kanon ist ein Per-Key-Override, kein Ersatz
+
+Commit `7224f4a1` („Welle 2: Kanon-Consumer im Gateway ersetzt always-Bindings **je
+Prompt-Key**"):
+
+- `AiGatewayService::selectKanon()` liest `KnowledgeCanonService::documentsFor('prompt_key', …)`
+- **„Bindings (#469) nur noch Fallback für Prompt-Keys ohne Kanon-Zeilen"**
+- Anlass wörtlich: *„Spec-50-Split — **Bindings zeigen auf die 155 Originale, die deaktiviert
+  werden; ohne Consumer fiele der Regelwerk-Block still auf null.**"*
+
+→ Für `recipe.generator` / `vk.generator` / `concept.brief_geruest` gewinnt der Kanon.
+**Für alle anderen Prompt-Keys gilt weiter die Alt-Struktur** — und deren Slugs sind durch den
+Split entwertet worden.
+
+### B3 · Die Deckungslücke, quantifiziert
+
+Prompt-Registry laut `docs/PLANUNG/26_LLM_MCP_Funktionsmatrix.md:104-149`: **22 `recipe.*` +
+15 `vk.*`** Keys (Spec 50 §4.5 bestätigt die Zahl).
+
+| Steuerung | recipe.* | vk.* |
+|---|---|---|
+| **Kanon** | 1 (`generator`) | 1 (`generator`) |
+| **Routing** | 4 (`eigenschaften`, `review`, `steps`, `ueberarbeiten`) | 2 (`review`, `ueberarbeiten`) |
+| **weder Kanon noch Routing** | **17** | **12** |
+
+⚠ **Präzision:** „weder Kanon noch Routing" ist **nicht** gleich „kein Wissen". Der Gateway
+fällt bei fehlendem Kanon auf `knowledge_bindings` zurück (`target_key` = Prompt-Key **oder**
+Bereichs-Präfix). Deren Bestand ist ungemessen — es gibt kein Lesetool (B7). Der belastbare
+Befund lautet: **die Versorgung ist uneinheitlich und für 29 Keys nicht nachgewiesen.** Ob ein
+konkreter Schritt real ohne Wissen läuft, zeigt nur die Messung am fertig zusammengesetzten
+Aufruf.
+
+Ungesteuert u. a.: `description`, `category`, `geschmack`, `sensorik`, `garverlust`,
+`production_depth`, `equipment`, `preparation`, `titel_vorschlag`, `bauart`, `pairing`,
+`anker` · `plating`, `wording`, `marketing`, `rollen`, `speisen_klasse`, `regeneration`,
+`servier_vehikel`, `kohaerenz`, `teller_heber`, `titel_vorschlag`.
+
+**Das sind genau die Schritte, die „KI-Erstellen" nach dem Draft fährt**
+(`BulkEnrichService::SCHRITTE` = description|category|geschmack, `SCHRITTE_VK` =
+description|wording|plating|speisen_klasse, plus `RecipeOneShotService::coverageGlieder()`).
+→ Symptom „Wissen fehlte komplett" trifft die Anreicherung, nicht den Draft.
+
+### B4 · Zwei Schlüssel-Generationen in `knowledge_routings`
+
+Die 5 `ai_*`-Features (24 der 73 Zeilen) tragen Altnamen für Prompt-Keys, die heute gepunktet
+heißen: `ai_generate_recipe` ↔ `recipe.generator`/`vk.generator` · `ai_extract_recipe` ↔
+`recipe.extract` · `ai_suggest_pairings` ↔ `recipe.pairing` · `ai_infer_ankers` ↔
+`recipe.anker`/`gp.anker` · `ai_plan_dishes` ↔ `concept.plan`/`foodbook.plan`.
+
+**Genau in `ai_generate_recipe` liegt die ganze Discovery-Erdung** (cross_cutting 6×8000,
+domain **ungekappt**, kueche 2×2500, weltkueche/niveau/signatur_kuechen/ernaehrung/
+kreativ_input/prasentation_service je 1) — und `recipe.generator`/`vk.generator` haben **keine
+eigene Routing-Zeile**. Welche Hälfte lebt, entscheidet die Schlüssel-Auflösung im Code
+(→ Befund B5).
+
+Beides ist erklärungsfähig für **„thematisch unpassendes Wissen"**: `domain` ist ungekappt bei
+166 Docs, `cross_cutting` zieht 6 aus 162, und `regelwerk` discovery 3×4000 wählt aus 61 Docs
+(Memory-Vorfall: „vk bekam Basisrezepte statt Verkaufsgerichte").
+
+### B5 · Der Kern in einer Zeile: **ein Call trägt zwei Identitäten**
+
+`src/Services/RecipeGenerationContextService.php:88`
+
+```php
+$wissen = $this->knowledge->contextFor(
+    $team,
+    'ai_generate_recipe',                    // ← Routing-Schlüssel: hartkodierter ALT-Name
+    $description, …,
+    $parameter + ['…', '_kanon_prompt_key' => $genKey]   // ← Kanon-Schlüssel: recipe.generator | vk.generator
+);
+```
+
+Damit ist Befund A2 präzisiert: die `ai_*`-Zeilen sind **nicht toter Ballast**, sondern der
+**zweite, parallele Schlüsselraum** desselben Aufrufs. Konsequenzen:
+
+1. **Basisrezept und Verkaufsgericht teilen sich EINE Routing-Politik.** Beide laufen unter
+   `ai_generate_recipe`. Ein VK-Gericht bekommt die Discovery-Politik des Basisrezepts; eine
+   VK-eigene Politik ist ohne Code-Änderung nicht setzbar. `knowledge_routings.PUT` auf
+   `vk.generator` würde stumm ins Leere schreiben — die Zeile entstünde, wirkte aber nie.
+2. **`domain` ist bei `ai_generate_recipe` ungekappt** (`max_docs: null`) bei 192 domain-Docs —
+   in Kombination mit Befund C (lexikalisch-zuerst) die zweite Quelle für „thematisch
+   unpassendes Wissen".
+3. Denselben Alt-Namen trägt auch `VorgangsRegisterService.php:61,81,113,121,140,148`
+   (`'feature' => 'ai_generate_recipe'`), d. h. das neue Vorgangs-Register aus Etappe 8 hat den
+   Alt-Schlüssel schon wieder mit übernommen.
+
+### B5a · Steuerdaten-Drift: der Wiederaufbau-Seed erzeugt eine ANDERE Politik
+
+`src/Console/KnowledgePolicySeedCommand.php::ROUTINGS` (die Politik für frische DB /
+Disaster Recovery / neuen Kunden) hat **36 Tupel — live stehen 73.** Abgleich:
+
+| feature × category | Seed | Live |
+|---|---|---|
+| `ai_generate_recipe` × `cross_cutting` | `always` | `discovery 6×8000` |
+| `concept.brief_geruest` × `regelwerk` | `always 1×9000` | `discovery 3×8000` |
+| `recipe.steps` × `cross_cutting` | `always` | `discovery 4×8000` |
+| `recipe.steps` × `niveau` | `discovery 1×3000` | `discovery 1×8000` |
+| `foodbook.plan` × `cross_cutting` | `always` | `discovery 5×8000` |
+| `concept.plan` × `cross_cutting` | `always` | `discovery 5×8000` |
+| `recipe.eigenschaften` × `produktion_kapazitat` | `always 3×7000` | `discovery 3×6000` |
+| `foodbook.plan` × **`trend`** | `discovery 5×1500` | **fehlt** |
+| `concept.brief_geruest` × **`trend`** | `discovery 5×1500` | **fehlt** |
+| ~37 Live-Zeilen (`ai_plan_dishes`, `format.grundgeruest`, `foodbook.grundgeruest`, …) | **fehlen** | vorhanden |
+
+`insertOrIgnore` + „NICHT überschreiben, nur melden" ist richtig gebaut — aber die Liste ist
+inhaltlich veraltet: **`trend` ist keine Kategorie mehr** (nicht im 21er-Vokabular), und ein
+frisches Team bekämme in 7 Tupeln eine andere Lade-Politik als demo. Der Kommentar im Kopf
+warnt genau davor („zwei Listen, die dasselbe behaupten, driften sonst auseinander") — die
+Drift ist eingetreten.
+
+Zusätzlich dokumentiert derselbe Kopf den Grund, warum `always` gefährlich ist:
+**„`regelwerkBlock()` holt per `->first()` genau EIN Dossier"** — bei 61 Regelwerks-Splits ist
+`always` damit eine Zufallsauswahl.
+
+### B5b · Die Rangfolge im Gateway, wörtlich
+
+`AiGatewayService.php:150-204`: Kanon zuerst (`selectKanon()`, nur `scope='prompt_key'`,
+**bewusst ohne Bereichs-Präfix**), Bindungen nur `if ($kanonBlock === null)` — dann mit
+`target_key IN [promptKey, Bereich]`, also **mit** Präfix-Erbe (`recipe`, `vk`).
+Kommentar im Code: *„Kanon und Bindings schliessen sich aus — es steht also genau EIN
+Regelwerk-Block."* Gepinnt von `WissenKanonBlockTest`.
+
+**Die Reihenfolge im fertigen Prompt** (nicht die Berechnungsreihenfolge):
+`[system]` Voice-Hülle → Feld-Hülle → JSON-Umschlag → **Kanon- ODER Bound-Block** ·
+`[user]` task + **`contextFor()`-Retrieval-Block** + Kontext-JSON.
+Der Kanon landet also **vor** dem Retrieval im Prompt, obwohl er im Code danach aufgelöst wird.
+
+### B6 · Der Doppelpflege-Beleg
+
+Commit `253b30d4` band `geschmacksbalance` gezielt an **beide Generatoren** und
+`produktion-arbeitszeit-und-personenminuten` an `recipe.eigenschaften`. Die
+`geschmacksbalance`-Splits stehen heute zusätzlich als `pflicht` im Kanon von
+`recipe.generator` **und** `vk.generator` (je 2 Zeilen). Dieselbe Aussage an zwei Orten
+gepflegt; der Kanon unterdrückt die Bindung nur zufällig, weil dieser Key einen Kanon hat.
+
+### B7 · Die Alt-Struktur ist per MCP schreibbar, aber nicht lesbar
+
+`knowledge.BIND` / `knowledge.UNBIND` schreiben Bindungen (target_key = Bereich **oder**
+Prompt). Es gibt **kein** `knowledge_bindings.GET`. Der Bindungszustand ist damit weder per
+MCP prüfbar noch von einem Wächter erfassbar — nur im Browser-UI sichtbar. Das ist der Grund,
+warum diese Klasse Fehler still bleibt.
+
+### B8 · Strategischer Widerspruch in den Specs
+
+`docs/PLANUNG/48_Wissen_Token_Programm.md:45-57` hält als **Architektur-Entscheid** fest:
+Wissen nach Funktion trennen — (1) achsen-gebunden → nachschlagen, (2) **Regelwerke →
+durchsetzen statt in den Prompt legen**, (3) offenes Material → Suchfall.
+`46_Kanon_Entscheidungsvorlage.md` legt dann §1+§10 **doch** in den Prompt (mit
+Break-even-Rechnung) — und heute stehen 13 bzw. 12 Regelwerks-Dossiers als `pflicht` im Kanon
+(33.116 Z. gemessen). Beides ist einzeln begründet, zusammen ergibt es keine Linie.
+Dasselbe Regelwerk fließt zusätzlich ungekappt in `ConformanceService::ladeRegelwerke()`
+(per `slug LIKE`), also ein dritter, slug-gemusterter Zugriffsweg.
+
+## Befund C — Die Discovery-Suche ist lexikalisch-zuerst, nicht hybrid-fusioniert
+
+Vier Live-Proben gegen `knowledge.SEARCH` auf demo (2026-09-07). Jede Zeile trägt `via`
+(`lexical`|`semantic`) und `score` — daraus liest sich die Regel:
+
+| Anfrage | Ergebnis | Deutung |
+|---|---|---|
+| „Wie viel Gramm Hauptkomponente pro Person beim mehrgängigen Menü ansetzen" | **10/10 `lexical`**, Score 2–1. Platz 1+2 = **Behälter-Füllmengen** (`produktion_kapazitat`). Das richtige Dossier `mengen_defaults--hauptgang-komponenten` erst auf **Platz 7** | Prosa-Anfrage: „wie viel"/„pro" sättigen alle Slots mit Rauschen |
+| „Naming-Syntax Basisrezept Typ-Vokabular" | 10/10 `lexical`, die zwei §1-Dossiers Score 4 auf 1+2 | mit trennscharfen Begriffen funktioniert lexikalisch gut |
+| „Erdapfel" | **10/10 `semantic`**, Score 0. `kartoffel-kochtypen-sortenwahl` auf **Platz 9** | ohne lexikalischen Treffer springt Semantik ein — mit schwachem Ranking |
+| „Akkord-Theorie" | **1× `lexical`** (Score 2, korrekt) **+ 9× `semantic`** (Score 0) | **die Regel: lexikalisch zuerst, Semantik füllt nur die Restplätze auf** |
+
+**Das ist keine fusionierte Hybrid-Suche, sondern ein Auffüller.** Liefert die lexikalische
+Hälfte so viele Treffer wie der Deckel groß ist, kommt die Semantik **gar nicht** zum Zug. Der
+lexikalische Score ist offenbar eine Begriffszählung — bei natürlicher Sprache gewinnen damit
+Dossiers, die häufige deutsche Wörter oft wiederholen.
+
+**Wirkung auf die Rezept-Erstellung:** die Discovery-Routings arbeiten mit `max_docs` **1 bis
+6** (`niveau` 1, `kreativ_input` 1, `weltkueche` 1, `kueche` 2, `regelwerk` 3, `cross_cutting`
+6). Was bei Deckel 10 auf Platz 7 landet, existiert bei Deckel 6 nicht mehr. Bei `max_docs: 1`
+entscheidet ein einziger Rauschtreffer den ganzen Wissensblock.
+
+**Reichweite dieser Messung — wichtige Einschränkung:** Sie trifft
+`KnowledgeContextService::searchDocuments()` (Token-Schnittmenge + Alias×2, ab
+`KnowledgeContextService.php:1618`). Der **In-App-Generator benutzt einen ANDEREN Scorer** —
+`discoverGenericBlock()`/`discoverDomains()` (`:1165-1265`, `:1312-1375`, Jaccard +
+Substring-Bonus + Alias-Bonus, Tokenizer ≥3 Zeichen). Die gemessene Rangfolge gilt also
+belegt für den **MCP- und Voice-Pfad**; für den UI-Pfad ist sie ein Indiz, kein Beweis. Was
+sie ohne Einschränkung belegt: **derselbe Korpus wird von verschiedenen Einstiegen
+verschieden bewertet** (→ Befund C2).
+
+**Widerlegt:** Meine Zwischenannahme, die Team-6-Splits seien semantisch unsichtbar (die
+Ausblick-Notiz in `docs/wissen.md:107` zur globalen Partition), stimmt nicht — die
+„Erdapfel"-Probe liefert Team-6-Splits (`obst_kernobst--*`, `synonyme--gemuese`,
+`referenz-rezept-*`). Die Partition ist in Ordnung, das **Ranking** ist das Problem.
+
+### C2 · Vier Relevanz-Formeln für einen Korpus
+
+| Einstieg | Formel | Fundstelle |
+|---|---|---|
+| **Generator-Discovery** | Jaccard + Substring-Bonus + Alias-Bonus, Tokenizer ≥3 Z. | `KnowledgeContextService.php:1165-1265,1312-1375` |
+| `knowledge.SEARCH` / Agent / Voice | Token-Schnittmenge + Alias×2 | `KnowledgeContextService.php:1618-1695` |
+| **Bindungs-Auswahl** | eigener Tokenizer ≥4 Z., Score = `always×1000 + Treffer×10 + weight` | `AiGatewayService.php:463-538,541-558` |
+| **Wissens-Browser** (Mensch) | rohes SQL `LIKE` **oder** rein semantisch — **kein Hybrid** | `Livewire/Knowledge/Browser.php:436-476` |
+
+Dieselbe Frage („welches Dossier passt zu X") hat vier Antworten. **Der Kurator im Browser
+sieht damit nie, was der Generator sieht** — Kuratieren ist Blindflug.
+
+### C3 · Tenancy-Divergenz: die KI sieht mehr als der Mensch
+
+`config/foodalchemist.php:699` → `knowledge_team_scope` **Default `false`**.
+`KnowledgeContextService::nurSichtbar()` (`:510-517`) filtert nur, wenn der Schalter an ist →
+**alle KI-/MCP-Pfade lesen den gesamten Korpus über alle Teams**. Der Browser ruft
+`TeamScope::applyVisible()` dagegen **unbedingt** (`Browser.php:138-144,451-457`).
+Zwei Antworten auf „was ist sichtbar", aus zwei unabhängigen Code-Stellen.
+
+## Befund D — Die Diktier-Eingabe ist ein fünfter, gegenläufiger Weg
+
+Zwei Diktat-Arten, nur eine mit eigenem Wissenspfad:
+
+⚠ **Die zwei Mikrofone auseinanderhalten** (Präzisierung nach Rückfrage Dominique):
+das Mikrofon in der **Planungs-Leitstelle** transkribiert nur — das ist D2 und daran ist
+nichts zu ändern. Gemeint ist das **globale Mikrofon links in der Sidebar**, und das ist ein
+Agent mit Werkzeugzugriff: `resources/views/livewire/sidebar.blade.php:30` mountet
+`foodalchemist.voice-modal` **einmal global**, jede Seite öffnet es per Event
+(`voice-modal.oeffnen`). Der Docblock nennt den Grund: *„das Mikrofon steuert seit Phase C2
+den ganzen FoodAlchemist … das Mikrofon ist der eigentliche MCP-Agent im System"*.
+
+**D1 · Globales Sidebar-Mikrofon** (`Livewire/VoiceModal.php:23-104` → `VoiceCommandService.php:38-148`):
+läuft **nicht** über `contextFor()`, sondern über `AiGatewayService::callWithTools()`
+(`:594-699`). Dieser Pfad baut **nur** System-Message + Tool-Katalog —
+**kein Kanon-Block, kein Bindungs-Block, kein Routing.** Das Modell muss sich sein Wissen
+selbst holen, indem es `knowledge.SEARCH`/`.GET` als Tool aufruft (erlaubt über
+`darfNutzen():86-97`, jedes `read_only`-Tool im `foodalchemist.*`-Namespace).
+
+→ **Das ist ein Pull-Modell gegen das Push-Modell des restlichen Systems.** Am Mikrofon
+gelten Kanon und Regelwerk **nicht** — es sei denn, das Modell sucht von selbst danach. Für
+„Rezept per Sprache anlegen" heißt das: der Naming-§ ist nur dann im Spiel, wenn das Modell
+sich entscheidet, ihn zu suchen. Und die Suche, die es dann benutzt, ist die aus Befund C
+gemessene (lexikalisch-zuerst).
+
+**D2 · Feld-Diktat in der Leitstelle** (`resources/views/livewire/planung/partials/diktat.blade.php:1-15`,
+`Livewire/Recipes/StepEditor.php:62-80`): reines STT („kein Tool-Loop"), speist denselben
+deterministischen Pfad wie getippter Text (`StepEditor::stepWissen():543-561` → `contextFor()`).
+**Unbedenklich.**
+
+## Befund E — Der Kanon⇄Discovery-Schutz greift nur an 2 von ~14 Stellen
+
+`contextFor()` nimmt `_kanon_prompt_key`, um Kanon-Pflichtdossiers nicht zusätzlich selbst zu
+ziehen (`KnowledgeContextService.php:212-225`). Gesetzt wird der Parameter **nur** von
+`RecipeGenerationContextService.php:88` und `ConceptGeneratorService.php:231,660`.
+
+**Nicht gesetzt** von: `RecipeOneShotService.php:802` · `FoodbookService.php:2423,2463` ·
+`ConceptService.php:1270` · `RecipeModal.php:652,961` · `IdeenService.php:299,409,531` ·
+`RecipeReviseService.php:159,201` · `RecipeReviewService.php:72` ·
+`AngebotService.php:835,874` · `StepEditor.php:554`.
+
+Die zweite Schutzschicht (`selectKanon()`/`selectBoundKnowledge()` deduplizieren gegen
+`options['knowledge_used']`, `AiGatewayService.php:433-439,465-471`) vergleicht **exakte
+Slugs**. Zwei Dokumente mit demselben Fachinhalt und verschiedenem Slug — genau der Fall
+Monolith vs. §-Splits — werden **nicht** erkannt.
+
+`RecipeOneShotService.php:802` ist dabei der wichtigste Ausfall: das ist der
+Anreicherungs-Pfad hinter „KI-Erstellen".
+
+## Befund F — Weitere Doppelpflege im selben Modul
+
+| Doppelt | Wo |
+|---|---|
+| `_sections` / `_chunks` = **totes Schema** (Producer `knowledge-sectionize` schreibt, niemand liest) | Migration `2026_09_05_000010_…:20-23` sagt es wörtlich |
+| **Bindungs-Schreibpfad** zweimal: `KnowledgeService::bindExisting()` (mit Layer-Prüfung + Soft-Delete-Revive) vs. `Browser::addBinding()` (roher Insert, ohne diese Garantien) | `KnowledgeService.php:228-275` vs. `Browser.php:372-420` |
+| **Kategorie-Anlage** zweimal implementiert, „bewusst gespiegelt" statt geteilt | `KnowledgeService::createCategory():352-359` vs. `Settings/Wissenskategorien.php:32-155` |
+| **Vorgang→Dossier** zweimal: `VORGAENGE[…]['doc_slugs']` (Code) vs. `gilt_fuer_vorgang`-Frontmatter (Daten); nur durch den Wächter `wissen-deckel-check` zusammengehalten — mit mindestens einem realen Auseinanderlaufen (`workflow.gericht_abschluss` fehlte) | `VorgangsRegisterService.php:49-152` vs. `WissenDeckelCheckCommand.php:10-30,116-140` |
+| **Substitutionen/Synonyme** zweimal: Markdown-Dossier (für den Prompt) und PHP-Konstanten `ALIAS_GROUPS`/`ANTI_MARKERS` (für den Matcher) — laut Docblock aus derselben Vault-Quelle, **ohne Abgleich** | `TerminologyService.php:19-24,153-218` |
+| **Tenancy-Regel** kopiert statt aufgerufen („Die Regel lebt in TeamScope::mayWrite — hier stand sie kopiert") | `Settings/Einsatzorte.php:36-40` |
+| `regelwerkBlock()`-Pfad (`->first()` = EIN Monolith) bleibt vollständig vorhanden und reaktivierbar, falls eine Routing-Zeile je auf `always` zurückfällt | `KnowledgeContextService.php:936-991` |
+
+---
+
+## Befund G — Was die Code-Analyse zusätzlich fand
+
+### G1 · Migration ⇄ Seed definieren dasselbe Routing mit ENTGEGENGESETZTEM Modus
+
+Für drei Prompt-Keys existieren **zwei widersprechende Definitionen im Repo**:
+
+| Prompt-Key | Migration (älter) | `KnowledgePolicySeedCommand` (neuer) | Live demo |
+|---|---|---|---|
+| `recipe.eigenschaften` × regelwerk | **always**, 1 Doc, 6000 Z. (`2026_08_27_140000_…:25`) | **discovery**, 3×4000 (`:96`) | discovery 3×4000 |
+| `recipe.ueberarbeiten` × regelwerk | **always**, 1 Doc, 7000 Z. (`2026_08_29_000001_…:21`) | **discovery**, 3×4000 (`:78`) | discovery 3×4000 |
+| `vk.ueberarbeiten` × regelwerk | **always**, 1 Doc, 7000 Z. (`2026_08_29_000002_…:16`) | **discovery**, 3×4000 (`:79`) | discovery 3×4000 |
+
+Das ist nicht Drift in Zahlen, sondern **zwei verschiedene Auswahl-Algorithmen**:
+`always` → `regelwerkBlock()` nimmt per `->first()` **EIN** Dossier (bei 61 Regelwerks-Splits
+also praktisch zufällig); `discovery` → `discoverGenericBlock()` rankt 3 per Jaccard.
+
+Und weil der Seed bewusst **nicht** überschreibt (`:111-124`), entscheidet allein die
+**Reihenfolge der Skripte**, welcher Zustand gilt: auf einer frischen DB legt die Migration
+`always` an, der Seed lässt es stehen. **Ein neuer Kunde bekommt damit den `->first()`-Pfad,
+demo den Discovery-Pfad.** Zwei Umgebungen, zwei Verhalten, ein Repo.
+
+### G2 · Der Cross-Cutting-Legacy-Default ist eine scharfe Falle (auf demo entschärft)
+
+`KnowledgeContextService.php:54-60` sagt über `ALWAYS_LOAD_CROSS_CUTTING` (7 Slugs) selbst:
+*„⚠ LEGACY-DEFAULT … alle 7 Originale sind auf demo DEAKTIVIERT (in Ein-Thema-Splits
+zerlegt)"*. `ai_generate_recipe` hat **keinen** `cross_cutting_slugs`-Override
+(`config/foodalchemist.php:499-502` kennt nur `foodbook.kundentext` und `concept.wording`).
+
+**Wichtige Präzisierung:** dieser Pfad feuert nur bei `mode='always'`. Live steht
+`ai_generate_recipe × cross_cutting` auf **`discovery 6×8000`** — auf demo läuft der
+Cross-Cutting-Kanal also über Discovery und **liefert** (die Messung aus Welle 2 zeigt
+retrieval 12.028 Z. / 15 Slugs). Aber: der **Seed setzt `always`** (Befund B5a) → auf einer
+frischen DB lädt `crossCuttingDocs()` die 7 deaktivierten Alt-Slugs und der
+Cross-Cutting-Block ist **leer, ohne Fehlermeldung** (Invariante „fehlende Quelle = leerer
+Kontext, nie Fehler"). Dieselbe Falle wie G1, andere Zeile.
+
+### G3 · Cross-Cutting hängt am `feature`, der Kanon am `prompt_key`
+
+`crossCuttingSlugs(string $feature)` (`:1119-1127`) wird mit `'ai_generate_recipe'` gerufen —
+**identisch für Basisrezept und Gericht**. Eine unterschiedliche Cross-Cutting-Bestückung für
+`recipe.generator` vs. `vk.generator` ist über diesen Mechanismus **nicht möglich**, während
+der Kanon genau das kann (13 vs. 12 Dossiers). Zwei Granularitäten im selben Call — die
+zweite Hälfte von Befund B5.
+
+### G4 · Ein dritter Schlüssel-Bruch: `recipe.dichteklasse`
+
+`RecipeModal.php:961-971` / `BulkEnrichService.php:372-390` rufen
+`contextFor($team, 'recipe.eigenschaften', …)` — aber
+`propose('recipe.dichteklasse', …)`. Folge: das **Retrieval** arbeitet mit dem
+`recipe.eigenschaften`-Budget (27.500 Z., `config:605`), der **Kanon-/Bound-Kanal** mit dem
+konservativen Default (3 Docs / 1.400 Z. / 4.200 gesamt, `AiGatewayService.php:52-56`), weil
+`recipe.dichteklasse` in `bound_knowledge_budget` gar nicht gelistet ist.
+
+### G5 · Dieselbe Regel wird pro Erstellung drei- bis viermal ausgeliefert
+
+`ConformanceService::ladeRegelwerke()` (`:152-198`) lädt per
+`where('slug','like', $praefix.'%')` **alle** §-Dossiers **ungekappt** — an Kanon, Routing und
+Bindungen komplett vorbei. Präfixe hartkodiert in den Adaptern
+(`RecipeConformanceAdapter.php:70,72`). Damit läuft pro Rezept-Erstellung:
+
+1. **Generator-Call** — Kanon-Auszug (13 bzw. 12 Dossiers, gedeckelt)
+2. **`conformance.check`** — dieselben Regelwerke als **voller Text, ungekappt**
+   (automatisch nach der Generierung, `GenerateRecipeJob.php:242-252`)
+3. **Selbstheil-Call** `recipe.ueberarbeiten`/`vk.ueberarbeiten` bei Befunden — dritte
+   Auflösung, eigener Kanon-/Routing-Durchlauf (`RecipeConformanceAdapter.php:86-99`)
+4. bei Basisrezepten zusätzlich `recipe.review` (`kohaerenzGate()`)
+
+**Keine gemeinsame Dedup-Buchhaltung** zwischen `ConformanceService` und
+`KnowledgeCanonService`. Drei Prompts, drei Kappungsgrade, dieselbe Regel.
+
+### G6 · Der Kontext-Inspektor zeigt nur ein Drittel
+
+`RecipeKiKontextService::GENERATOR_FEATURES` (`:25`) filtert auf
+`feature IN ('recipe.generator','vk.generator')`. Die Calls aus G5 Nr. 2–4 landen zwar im
+`foodalchemist_ai_call_log`, sind im Rezept-Detail-Panel aber **unsichtbar**. Wer im UI
+nachsieht, „welches Wissen hat die KI benutzt", sieht den Generator-Call — nicht die drei
+anderen.
+
+### G7 · Die strukturelle Ursache: es gibt keinen Engpass
+
+**Es existiert kein Eloquent-Model für Wissensdokumente.** 27 Dateien sprechen direkt
+`DB::table('foodalchemist_knowledge_documents')`. Es gibt keine Repository-Schicht, durch die
+jeder Zugriff müsste. Genau deshalb konnte jede neue Funktion ihren eigenen Zugriff bauen —
+und genau deshalb ist keine der Doppelungen aus Befund C/F ein Versehen einzelner Personen,
+sondern die zwangsläufige Folge einer fehlenden Naht.
+
+## Befund I — Das Budget kappt die Discovery, still und mitten im Text
+
+Nachgerechnet 2026-09-07 (Dominiques Frage „3×4000 kommt ja nicht rein oder?" — sie stimmt):
+
+| Prompt-Key | Routing baut bis | `ai.knowledge_budget` | Verlust |
+|---|---|---|---|
+| `recipe.ueberarbeiten` | 3×4000 = **12.000** | **8.000** | ~4.000 |
+| `vk.ueberarbeiten` | 3×4000 = **12.000** | **8.000** | ~4.000 |
+| `recipe.review` / `vk.review` | 3×4000 = **12.000** | kein Eintrag → `MAX_KNOWLEDGE_CHARS_DEFAULT` **12.000** | null Luft; Block-/Doc-Header kippen es drüber |
+| `concept.brief_geruest` | regelwerk 3×8000 + geschaeftsmodell 2×8000 = **40.000** | **10.000** | ~30.000 |
+| `recipe.eigenschaften` | produktion_kapazitat 3×6000 + regelwerk 3×4000 = **30.000** | 27.500 | ~2.500 |
+
+Nur `ai_generate_recipe` bekommt `$recipeBudget = true` und damit den Pro-Doc-Deckel
+`RECIPE_MAX_CHARS_PER_DOC` (2.400). Alle anderen Features nehmen den Routing-Wert
+`max_chars_per_doc` unverändert — deshalb baut `3×4000` dort wirklich 12.000.
+
+**I1 · Das Budget ist für die ALTE Routing-Lage bemessen.** Über der 8.000 steht in
+`config/foodalchemist.php` wörtlich `// regelwerk:always 1 × 7000`. Als Spec 50 die
+Live-Tabelle von `always 1×7000` auf `discovery 3×4000` drehte, wanderte das Budget nicht mit.
+Derselbe Schlüsselraum-Bruch wie B5/G1, nur in Zeichen.
+
+**I2 · Geschnitten wird mitten im Text.** `KnowledgeContextService.php:454-456` macht
+`truncate($block, $budget)` auf den **fertig zusammengesetzten** Block — nicht „das dritte
+Dossier weglassen". Ergebnis: halbe Tabelle. Spec 46 §2d hat den Satz selbst geschrieben:
+*„Ein Tabellen-Anschnitt ist kein Wissen, nur Kosten."*
+
+**I3 · Der Verlust ist im Call-Log unsichtbar.** `knowledge_dropped_chars` wird nur von
+`RecipeGeneratorService.php:108` und `RecipeOneShotService.php:755` an `propose()` übergeben.
+`RecipeReviseService` und `RecipeReviewService` übergeben nur `knowledge` + `knowledge_used`
+→ `prompt_parts.dropped` bleibt **0**, während 4.000 Zeichen fehlen.
+
+**I4 · Der Wächter ist für Discovery blind.** `pflichtZeichen()` (`:598-617`) summiert
+`->where('mode', 'always')`. Die W0-5-Invariante „Budget ≥ Pflichtmenge" prüft also
+ausschließlich `always`-Zeilen. Als Spec 50 auf `discovery` umstellte, fielen diese Keys aus
+dem Sichtfeld des Wächters. **Das ist der Grund, warum es niemand gemerkt hat.**
+
+**I5 · Beim Selbstheilen hilft kein Budget — dort wird kein Retrieval geladen.**
+`RecipeConformanceAdapter.php:97` ruft `propose('recipe.ueberarbeiten', [...])` mit **einem
+einzigen Argument**: kein `contextFor()`, kein `'knowledge'`. Das `discovery 3×4000`-Routing,
+das Spec 50 genau für diesen Zweck gesetzt hat, feuert auf diesem Pfad **nie**.
+
+⚠ **Präzision (nicht überziehen):** damit ist belegt, dass **Retrieval** fehlt — und der
+**Kanon** liefert dort nachweislich auch nichts, weil für `recipe.ueberarbeiten` keine
+Kanon-Zeile existiert (live geprüft: 28 Zeilen, nur 3 Prompt-Keys). Bleibt der
+**Bindungs-Fallback** (`target_key IN ['recipe.ueberarbeiten', 'recipe']`) — **ungemessen**.
+Der belastbare Satz ist also „kein Retrieval, kein Kanon; Bindung offen", nicht „ohne den §".
+
+**I6 · Und die Discovery-Query ist die falsche Frage.**
+`RecipeReviseService.php:159` rankt gegen `$r->description ?: $r->name` — die
+**Rezeptbeschreibung**, nicht die Anweisung und nicht den Befund. Anweisung „Menge auf 4
+Portionen" → welche 3 von 61 Regelwerks-Dossiers kommen, entscheidet der Text „Cremiges
+Karottenpüree mit Ingwer".
+
+---
+
+## Befund J — Die Kurations-UI weist den Menschen aktiv in die tote Struktur
+
+Gefunden von Dominique, 2026-09-07. In
+[`resources/views/livewire/knowledge/browser.blade.php:130-136`](15_GITHUB/wt-anreicherung-recall/resources/views/livewire/knowledge/browser.blade.php:130)
+steht bei **jedem** `cross_cutting`-Dossier, das nicht in der 7er-Legacy-Liste ist — also bei
+**158 von 165** — diese Warnung:
+
+> „Die Laufzeit lädt automatisch nur die 7 Kern-cross_cutting-Files (Substitutionen,
+> Saisonkalender, Synonyme, Sauce-Mutterstrukturen, Mengen-Defaults, Techniken, Brühen/Fonds).
+> Dieses Doc gehört **nicht** dazu → es wirkt erst, wenn du es unten an einen Einsatzort
+> bindest."
+
+**Dreifach falsch:**
+
+1. **Die sieben genannten Dateien existieren nicht mehr als aktive Dokumente.** Der Code sagt
+   es über seiner eigenen Konstante (`KnowledgeContextService.php:54-60`): *„alle 7 Originale
+   sind auf demo DEAKTIVIERT (in Ein-Thema-Splits zerlegt)"*.
+2. **Der beschriebene Mechanismus gilt für die Generatoren nicht.** `ALWAYS_LOAD_CROSS_CUTTING`
+   wird nur bei `mode='always'` gelesen; live steht `ai_generate_recipe × cross_cutting` auf
+   **`discovery 6×8000`** — es wird über alle 165 gesucht. Den rohen Default nutzt heute
+   **kein** Feature mehr (`concept.wording`/`foodbook.kundentext` haben einen Override auf
+   Split-Slugs).
+3. **Der Handlungsrat führt in die stumme Struktur.** „an einen Einsatzort binden" = Bindung —
+   und für `recipe.generator`, `vk.generator` und `concept.brief_geruest` sind Bindungen
+   **stumm**, weil der Kanon gewinnt (B2). Der Kurator wird angewiesen, etwas zu tun, das an
+   den zwei wichtigsten Prompts nachweislich nichts bewirkt.
+
+**Das ist die schädlichste Form der Doppelung**, weil sie nicht still ist, sondern aktiv
+falsch anleitet — und sie erklärt einen Teil des ursprünglichen Bauchgefühls: das Produkt
+beschreibt seit Welle 2 ein System, das es nicht mehr gibt. Behandelt in `A4` (Diagnose-Texte
+ehrlich machen), `E3` (Vorschau statt Behauptung) und `F7` (Kurations-UI auf Profile).
+
+---
+
+## Befund H — Steuerdaten: vier Schreiber, ein Test, kein Sollzustand im Code
+
+### H1 · Vier unabhängige Wege erzeugen Routing-Zeilen
+
+| Weg | Umfang | Verhalten |
+|---|---|---|
+| **Migrationen** (13 Daten-Migrationen 07-27 … 08-29) | 23 Zeilen | `insertOrIgnore`, kumulativ |
+| **`KnowledgePolicySeedCommand::ROUTINGS`** | 36 Zeilen | manuell, `insertOrIgnore`, überschreibt nie |
+| **`WissenSteuerdatenW0Command::ROUTINGS`** | 9 Zeilen (nur `ai_generate_recipe`) | manuell, `--apply` macht **UPDATE** |
+| **MCP `knowledge_routings.PUT`** | beliebig | jederzeit live, an allen drei vorbei |
+
+Ein fünfter Weg (`KnowledgeImportCommand::seedRoutings`) wurde entfernt — ein Test pinnt, dass
+er nicht wiederkommt. Aber: **die vier verbleibenden haben keinen gemeinsamen Sollzustand.**
+`--verify` läuft montags, `--apply` ist ein Handgriff.
+
+### H2 · Der Drift-Test deckt nur ein Feature ab
+
+`WissenSteuerdatenPolitikTest` hält `KnowledgePolicySeedCommand::ROUTINGS` und
+`WissenSteuerdatenW0Command::ROUTINGS` **nur für `ai_generate_recipe`** gegeneinander. Der
+Widerspruch aus G1 (`recipe.ueberarbeiten` / `vk.ueberarbeiten` / `recipe.eigenschaften`:
+`always 1×7000` vs. `discovery 3×4000`) ist damit **von keinem Test abgedeckt**.
+
+### H3 · Zeilen, die es nur im Seed gibt
+
+In **keiner** Migration, nur in `KnowledgePolicySeedCommand`: `recipe.review`, `vk.review`,
+`ai_extract_recipe`, `ai_suggest_pairings`, `ai_infer_ankers` und 8 `ai_generate_recipe`-
+Kategorien (`cross_cutting`, `domain`, `pairing`, `referenzgericht`, `weltkueche`,
+`signatur_kuechen`, `ernaehrung`, `prasentation_service`).
+→ Eine rein migrierte DB hat für diese Paare **gar keine Routing-Zeile**. Für
+`ai_extract_recipe` ist das ausdrücklich gewollt (Golden-Test „Inv. 7"); für
+`recipe.review`/`vk.review` — den Copilot-Prüfpass — ist unklar, ob es je gesetzt wurde.
+
+### H4 · Sechs Kategorien existieren im Routing, aber nicht im Vokabular-Seed
+
+`produktion_kapazitat`, `referenzgericht`, `weltkueche`, `signatur_kuechen`, `ernaehrung`,
+`prasentation_service` wurden nie per Migration in `knowledge_categories` geseedet, und
+`KnowledgeService::assertKategorie()` prüft **strikt**. Auf demo existieren sie als
+**`scope: team`** (nachträglich per `knowledge_categories.POST`) — bei einem neuen Kunden
+wären die Routing-Zeilen **Vorwärtsdeklarationen ohne Wirkung**, und ein `knowledge.POST` in
+diesen Kategorien würde mit „Unbekannte Kategorie" scheitern.
+
+### H5 · Zwei parallele Budget-Bäume mit widersprüchlichen Zahlen
+
+| Config | Ebene | Bedient |
+|---|---|---|
+| `ai.bound_knowledge_budget` (`config:524`) | **prompt_key** | Bindungen **und** Kanon |
+| `ai.knowledge_budget` (`config:567`) | **feature** | nur `contextFor()`-Retrieval |
+
+`recipe.eigenschaften` trägt gleichzeitig `knowledge_budget = 27.500` und
+`bound_knowledge_budget.total = 8.000` — zwei Antworten auf „wie viel Wissen darf rein", je
+nach Kanal.
+
+### H6 · `mengen_defaults` ist dreifach verankert
+
+`KnowledgeContextService::ALWAYS_LOAD_CROSS_CUTTING` (`:62`) **und**
+`WissenSteuerdatenW0Command::ALWAYS_SLUGS_UNIVERSAL` (`:201`) **und** als Split-Nachfolger
+zweimal im Kanon von `recipe.generator`/`vk.generator`. Das Original-Dokument selbst ist
+**inaktiv**. Drei Code-Strukturen zeigen auf eine Regel, von der zwei auf eine Leiche zeigen.
+
+### H7 · Der Kanon steht nirgends im Code — nur in der Live-DB
+
+Kanon-Zeilen entstehen **ausschließlich** über MCP `knowledge_canon.PUT`
+(`KnowledgeCanonService::set()`, einziger Aufrufer `KnowledgeCanonPutTool`). Kein Seeder, kein
+Migrations-Insert, **keine UI**. Die Migration lässt die Tabelle bewusst leer.
+
+**Damit ist der Disaster-Recovery-Fall der schlimmste Fall:** eine frische DB hat
+**keinen Kanon** → der Gateway fällt auf **Bindungen** zurück → die zeigen (laut Commit
+`7224f4a1`) auf die **deaktivierten Original-Monolithen** → und `regelwerk`-Routing steht aus
+der Migration auf **`always` + `->first()`**. Ein neuer Kunde bekommt also im schlechtesten
+Fall ein zufälliges Einzel-Dossier statt 13 kuratierter §-Dossiers — ohne Fehlermeldung.
+
+**Und die Asymmetrie, die dein Bauchgefühl erklärt:** die **alte** Struktur (Bindungen) hat
+eine UI im Wissens-Browser. Die **neue** (Kanon) hat keine. Wer im UI kuratiert, pflegt den
+Mechanismus, der nur noch Fallback ist.
+
+### H8 · Sechs Tests schreiben die Alt-Struktur weiter fest
+
+`KnowledgeBindToolTest`, `WissenTenantTest`, `DossierRoutingZielTest` (pinnt `UMBINDEN` auf der
+Bindungs-Tabelle), `WissensVokabularSchreibrechtTest`, Teile von `WissenTokenWelle0Test`,
+`RegelwerkKnowledgeRoutingTest` (pinnt den `regelwerkBlock()`-`always`-Pfad). Alle grün, alle
+gepflegt, **kein Deprecation-Marker**. Etappe F (F6) muss diese Verträge mitziehen, sonst wird die
+Suite rot in fremden Dateien ([[feedback_teilsuite_deployt_roten_test]]).
+
+---
+
+## Urteil: ja, die Architektur ist nicht sauber — und zwar auf eine bestimmte Weise
+
+Kein einzelner Mechanismus ist falsch. Jeder ist mit Messung und Begründung gebaut, oft mit
+einem Kommentar, der die Doppelung von damals ausdrücklich benennt. Der Schaden entsteht
+durch das **Muster**: jede neue Ebene wurde **neben** die alte gesetzt und die alte „als
+Fallback" behalten.
+
+Bilanz für die eine Frage „welches Wissen kommt in diesen Prompt":
+
+- **3 Steuertabellen** — `knowledge_canon`, `knowledge_routings`, `knowledge_bindings`(+`_layers`)
+- **2 Injektionspunkte** — `AiGatewayService::propose()` (Kanon + Bindung, feuert immer) und
+  `KnowledgeContextService::contextFor()` (Routing + Discovery, feuert nur wenn der Aufrufer will)
+- **2 Schlüsselräume im selben Call** — `feature='ai_generate_recipe'` fürs Routing,
+  `prompt_key='recipe.generator'` fürs Kanon (Befund B5) — plus ein dritter Bruch bei
+  `recipe.dichteklasse` (G4)
+- **4 Relevanz-Formeln** auf denselben Korpus (C2), **3 Tokenizer** mit verschiedenen
+  Mindestlängen und Stoppwortlisten
+- **4 Schreiber** für dieselben Routing-Steuerdaten, ohne gemeinsamen Sollzustand (H1) — und
+  **3 Zeilen, die zweimal mit entgegengesetztem Modus definiert sind** (G1), davon **keine
+  einzige von einem Test abgedeckt** (H2)
+- **2 Budget-Bäume** mit widersprüchlichen Zahlen für dasselbe Feature (H5)
+- **5 Zugriffsmodi** — Push (Generator), Pull (Voice/MCP-Agent), Register (`ablauf.GET`),
+  Critic (`slug LIKE`, ungekappt), Browser (Mensch)
+- **1 totes Schema** (`_sections`/`_chunks`) mit lauffähigem Producer und ohne Leser
+- **0 Engpässe** — kein Eloquent-Model, kein Repository; 27 Dateien greifen direkt per
+  `DB::table()` auf den Korpus zu (G7). Das ist die strukturelle Ursache, nicht die Folge.
+- **0 Stellen, die sagen, was ein Prompt tatsächlich bekommt** — `regelwerk.GET` antwortet bei
+  ungesteuerten Keys „schau bei `ablauf.GET`", und `ablauf.GET` liest denselben Kanon. Der
+  UI-Inspektor filtert auf die zwei Generator-Keys und blendet die drei Folge-Calls aus (G6).
+- **und die Asymmetrie, die es falsch anfühlen lässt:** die **alte** Struktur hat eine
+  Kurations-UI, die **neue** keine (H7).
+
+Deshalb sind beide Symptome erklärbar, ohne dass jemand einen Fehler gemacht hat:
+**„Wissen fehlte komplett"** = 29 von 37 Rezept-/Gericht-Prompt-Keys haben keine Steuerung
+(Befund B3), darunter alle Anreicherungsschritte hinter „KI-Erstellen".
+**„Thematisch unpassendes Wissen"** = ungekappte `domain`-Discovery über 192 Dossiers, bewertet
+von einer der vier Formeln, deren Rangfolge niemand sieht (Befund C).
+
+---
+
+## Empfehlung: eine Frage, eine Tabelle, ein Rechner
+
+Das System muss genau drei Fragen beantworten. Jede bekommt **einen** Besitzer:
+
+| Frage | Besitzer künftig | heute |
+|---|---|---|
+| Welches Dossier **muss** in diesen Prompt? | `knowledge_canon` | Kanon **und** Bindungen |
+| Welche Kategorie **darf** gesucht werden, wie tief? | `knowledge_routings`, auf **Prompt-Key** | Routings auf zwei Schlüsselräumen |
+| Welches Dossier **passt** zu diesem Text? | **ein** Scorer | vier Formeln, drei Tokenizer |
+
+### Grundsatz A — vier Wissensarten unterscheiden
+
+Heute ist fast alles ein Dossier, das gesucht wird. Das ist der Kategorienfehler unter den
+Symptomen:
+
+| Art | Beispiel bei uns | Wie sie gehört |
+|---|---|---|
+| **Verbindliche Regeln** | Naming-§§, Pflichtfelder, erlaubte Kategorien | gezielt laden **und** den maschinell prüfbaren Teil im Code erzwingen |
+| **Strukturierte Fachdaten** | GPs, Einheiten, Preise, vorhandene Basisrezepte, **Mengen-Standards** | über IDs/Achsen **auflösen**, nie suchen |
+| **Fachwissen** | Bindeverhalten, Garverfahren, Geschmacksbalance, `workflow.basisrezept_erstellungs_dossier` (Mutterstruktur einer Sauce, ein Leitgeschmack im Püree) | nach Aufgabe und Zutaten gezielt suchen |
+| **Referenz & Inspiration** | Vergleichsrezepte, Küchenstile, Plating | optional suchen, als Anregung gekennzeichnet |
+| **Ablauf-Anleitung** ⟵ *fünfte Art, 2026-09-07 ergänzt* | `workflow.basisrezept_regeln` / `_erzeugen` / `_komponenten` / `_abschluss` — „Regel 1: alles ist Entwurf", „Schritt 1: Rahmen laden", „`primaer=lieferantenartikel_waehlen`" | **ausdrücklich KEIN Prompt-Inhalt.** Geht an Agenten über `ablauf.GET`; im Generator-Prompt wäre es Rauschen, weil der Generator keine Werkzeuge ruft, sondern JSON produziert |
+
+**Warum die fünfte Art dazukam — und was sie an meinem eigenen Plan korrigiert.** Ich hatte
+gefordert, die vier neuen `workflow.basisrezept_*`-Dossiers (10.746 Z., alle vom 2026-09-07)
+müssten den In-App-Generator erreichen, weil `workflow` kein Routing hat. Das war auf eine
+**Zeichenzahl** gebaut, nicht auf den Inhalt. Beim Lesen: die vier sind Agenten-Anleitungen und
+sollen den Generator gar nicht erreichen — sie erreichen Agenten über `ablauf.GET`, und das tun
+sie. **Dass `workflow` kein Routing hat, ist richtig, nicht defekt** — die Forderung nach einem
+`workflow`-Routing ist damit gestrichen.
+
+Ebenfalls durch Nachsehen geklärt statt entschieden: `workflow.rezept_anlegen_mcp` (stand in der
+`ENTBUNDEN`-Liste, war auf dev aber aktiv an 23 Keys gebunden) **existiert auf demo gar nicht
+mehr** — 19 Dossiers mit `include_inactive`, es ist gelöscht. Die Entscheidung ist dort vollzogen;
+nur die Dev-MySQL ist stehengeblieben. Für die Bindungs-Triage (`F1`) heißt das: dieser Eintrag
+ist kein Fall, sondern ein Rest.
+
+Und genau das ist der beste Beleg für diesen Grundsatz: **die Kategorie `workflow` mischt zwei
+Arten** — Handwerkswissen für den Prompt (`basisrezept_erstellungs_dossier`, zu Recht im Kanon)
+und Ablauf-Anleitung für den Agenten. Ein Routing auf die Kategorie hätte beides in jeden Prompt
+gezogen. Der Fix ist das `art`-Feld (`H1`), nicht ein Routing.
+
+**Der Testsatz:** ein verbindlicher Mengen-Standard darf nicht davon abhängen, ob die Suche
+ihn unter den ersten drei Treffern findet. Er muss über Gang × Komponentenrolle ×
+Portionskontext aufgelöst werden.
+
+Bei uns ist das belegbar falsch gelöst. `46_Kanon_Entscheidungsvorlage.md` §4 schreibt unter
+„Was ich NICHT vorschlage": *„`substitutionen`/`mengen_defaults` in den Kanon. Zutatenabhängig;
+gehören ins Chunk-Retrieval, nicht in jeden Prompt."* Heute stehen
+`mengen_defaults--hauptgang-komponenten` (3.834 Z.) und `--format-multiplikatoren` (1.135 Z.)
+als **`pflicht` in beiden Generatoren** — gegen die Empfehlung des Papiers, das den Kanon
+begründet hat. Befund C zeigt die andere Hälfte: als Suchfall landet dasselbe Wissen auf Platz 7.
+
+**Der Mechanismus existiert schon:** `achsenBlock()` (`:519-580`) mit
+`config('foodalchemist.ai.knowledge_axis_map')` löst Anlass und Sektor deterministisch auf —
+ohne Suche, ohne Routing. `mengen_defaults` benutzt ihn nur nicht. Umzugs-Aufgabe, keine
+Neubau-Aufgabe.
+
+Damit löst sich der Spec-Widerspruch aus B8: nicht „Regeln in den Prompt **oder** in den Code",
+sondern **nach Art getrennt** — die KI bekommt die Regeln zur Erstellung, der Code erzwingt die
+eindeutig prüfbaren, beide gegen dieselbe veröffentlichte Regelversion.
+
+### Grundsatz B — strukturell, nicht vereinbart
+
+Ein zentraler Kontext-Aufbau, den „alle Aufrufer verwenden müssen", wäre eine Konvention. Und
+Konventionen sind genau das, was hierher geführt hat: `_kanon_prompt_key` an 2 von 14 Stellen
+(E), `knowledge_dropped_chars` an 2 von 14 Stellen (I3), sechs Kategorien nur als Team-Zeilen
+(H4), vier Schreiber ohne Sollzustand (H1).
+
+**Der Durchsetzungsmechanismus hat zwei Hälften. Die Option `knowledge` verschwindet aus der
+Aufrufsignatur — und der Auftrag wird getippt.** Das Feld zu entfernen schließt die
+beschriftete Tür, nicht die Wand: `propose($promptKey, $kontext, $options)` nimmt `$kontext`
+als **freies Array** und serialisiert es als `"Kontext:\n{json}"`. Da kann jeder Aufrufer
+Regeltext hineinlegen. Erst ein getippter Auftrag macht es strukturell.
+
+**Der Eingabevertrag muss vollständig sein**, sonst kann der zentrale Aufbau nicht auswählen:
+
+| Feld | Zweck |
+|---|---|
+| Schritt / `prompt_key` | Profil, Suche, Budget, Protokoll — **ein** Schlüssel (B5) |
+| Auftrag / Änderungswunsch | die eigentliche Discovery-Query (heute: die Rezeptbeschreibung, I6) |
+| Rezeptstand | Zutaten, Mengen, Texte |
+| **Prüfbefunde als Regel-ID + Befund** | der Dienst lädt die Regelversion **selbst** — nicht der Aufrufer den Regeltext |
+| Benutzer-, Team-, Profilkontext | Sichtbarkeit und Profilauflösung |
+
+**Provenienz-Invariante:** die Trennung existiert bei uns schon — der Kanon steht als
+**system**-Message („VERBINDLICHES REGELWERK"), Retrieval in der **user**-Message. Sie muss zur
+Regel werden: **nur der zentrale Aufbau schreibt in den System-Regelblock.** Was aus Suche oder
+Nutzereingabe kommt, bleibt in der User-Message und bleibt als solches beschriftet — es wird
+nie zur verbindlichen Systemregel. (Gleiche Familie wie
+[[feedback_prompt_wortlaut_ist_keine_schnittstelle]]: Marker strukturell, nicht textlich.)
+
+Drei Wege müssen dabei zusammen, nicht nur einer:
+
+| Weg | heute | Ziel |
+|---|---|---|
+| `propose()` | Aufrufer übergibt `'knowledge'`, Gateway ergänzt Kanon/Bindung | baut den Kontext selbst, nimmt kein Wissen von außen |
+| `callWithTools()` (Sprache) | **gar kein** Kontext-Aufbau (D1) | derselbe Aufbau |
+| `ConformanceService` | lädt Regelwerke per `slug LIKE` und übergibt sie **an** `propose()` (G5) | bezieht sie aus demselben Aufbau |
+
+Ohne den dritten Weg entsteht beim Umbau eine Doppelung statt einer Vereinheitlichung.
+
+**Die Reihenfolge ist zwingend:** erst den Aufbau ins Gateway ziehen, **dann** dem Gateway das
+eigene Nachladen wegnehmen. Umgekehrt tauscht man „manchmal doppelt" gegen „manchmal nichts" —
+der stillere und schlimmere Fehler.
+
+### Grundsatz E — alles in der UI einstellbar, alles per MCP bedienbar
+
+**Vorgabe Dominique, 2026-09-07.** Jede Steuerung, die diese Spec baut, braucht **beide**
+Oberflächen: einen Platz in der UI für den Menschen und ein Tool für den Agenten. Kein
+Kommando-only, kein MCP-only.
+
+Das ist nicht Komfort, sondern die Behebung der Asymmetrie aus Befund H7: die **alte** Struktur
+(Bindungen) hat eine Kurations-UI, die **neue** (Kanon) hat keine — deshalb kuratiert ein Mensch
+am Fallback und ein Agent an der Wahrheit. Wer die neue Steuerung ohne UI baut, wiederholt das.
+
+Ist-Stand der Flächen (2026-09-07), und was fehlt:
+
+| Steuerung | MCP | UI | Kommando |
+|---|---|---|---|
+| Kanon (`knowledge_canon`) | ✅ GET/PUT/DELETE | **fehlt** | — |
+| Routings (`knowledge_routings`) | ✅ GET/PUT | **fehlt** (steht seit `docs/wissen.md` als „Ausblick") | — |
+| Bindungen (Alt) | ✅ BIND/UNBIND + **neu** `knowledge_bindings.GET` | ✅ Browser | — |
+| Versorgungs-Bericht (`A2`) | **fehlt** | **fehlt** | ✅ `wissen-versorgung` |
+| Grundlinie (`A1`) | **fehlt** | **fehlt** | ✅ `wissen-grundlinie` |
+| `art` / Achsen / Querverbindungen (`H1`/`H2`/`H6`) | zu bauen | zu bauen | — |
+| Profile & Regelpakete (`C0`/`D5`) | zu bauen | zu bauen | — |
+
+**Zusatz-Arbeitspakete daraus** (in die jeweilige Etappe eingehängt, nicht als eigene):
+`A2`/`A1` bekommen je ein Lese-Tool und eine Sicht in den Einstellungen · `D5`/`C0` werden von
+Anfang an mit UI **und** MCP gebaut, nicht nachgerüstet · `F7` (Kanon-/Profil-UI) rutscht damit
+aus „Aufräumen" nach vorn: sie ist Bedingung, nicht Nachlese.
+
+### Grundsatz C — Kandidatensuche ≠ Endauswahl
+
+`max_docs` darf die **endgültige Auswahl** begrenzen, nicht die Kandidatenermittlung. Lexikalisch
+und semantisch werden unabhängig gesucht, dann gemeinsam bewertet (RRF), dann auf das Budget
+zugeschnitten. Findet sich kein brauchbarer Treffer, bleibt optionales Fachwissen **leer** —
+statt den besten Rauschtreffer zu nehmen (heute: `DISCOVERY_MIN_SCORE` = 0,05).
+
+---
+
+### Grundsatz D — Budget-Verhalten festlegen, nicht Budget erhöhen
+
+„`pflicht` wird nie gekappt" löst nichts — es verlagert den Überlauf nur. Das Verhalten muss
+eindeutig sein:
+
+| Situation | Verhalten |
+|---|---|
+| Pflichtwissen passt | vollständig übernehmen |
+| Optionales Wissen übersteigt den Rest | **ganze, fachlich zusammenhängende Dossiers weglassen** |
+| Pflichtwissen allein > Budget | betroffenen Schritt mit verständlichem Fehler stoppen — Profil verkleinern oder Aufgabe teilen |
+| Pflichtquelle fehlt oder ist inaktiv | als Konfigurationsfehler melden |
+
+**Nie mitten in einer Tabelle schneiden.** Heute macht `KnowledgeContextService.php:454-456`
+genau das (`truncate($block, $budget)` auf den fertigen Block). Das ist der eigentliche Fix zu
+Befund I2 — eine Budget-Erhöhung ist die Sofortmaßnahme, nicht die Lösung.
+
+## Spec-Liste — Arbeitspakete mit Definition of Done
+
+**Umbau-Umfang, ehrlich benannt:** die **Steuer- und Zusammenbau-Schicht** wird umgebaut
+(3 Tabellen → ein Profil-Begriff, 4 Rechner → einer, 2 Budget-Bäume → einer). **Inhalt und
+Dokumentenschicht bleiben** (Dossier-Korpus, `knowledge_documents` + Aliase + Kategorien +
+Import-Guard, `knowledge_canon` als „Muss"-Tabelle, `KnowledgeEmbeddingService`, der
+Konformitäts-Critic als eigener Pass). Kein Modul-Neubau — Begründung siehe „Warum kein
+Modul-Umbau" unten.
+
+**Reihenfolge ist bindend:**
+
+```
+A (messen)  →  H1/H2 (Felder: art + Achsen)  →  B (Riegel)  →  C (Durchstich, Abnahme)
+                                                                      ↓
+                                              D (Schlüsselraum) · E (Rechner) · H3/H4 (Bestand)
+                                                                      ↓
+                                                          F (Alt-Struktur weg)   ·   G (Zugriff)
+```
+
+> **Änderung 2026-09-07 (Dominique):** Der Dossier-**Inhalt** wird von ihm neu aufgebaut und
+> steht deshalb **am Ende**. Vorgezogen werden dafür die **Felder** (`H1`/`H2`/`H6`) und
+> **`D6` + `C0`** — sonst leert der Umbau den Kanon still, weil er auf Slugs zeigt.
+> Zusätzlich gilt durchgehend **Grundsatz E**: alles in der UI einstellbar, alles per MCP
+> bedienbar.
+
+- **A zuerst**, ausnahmslos: nichts wird auf einer Schätzung gebaut. **Aber `B3` kann vor `A1`
+  nötig sein:** erfassen die heutigen Logs die ausgelassenen Inhalte nicht vollständig (I3 —
+  nur 2 von 14 Aufrufern geben `knowledge_dropped_chars` weiter), lässt sich die Grundmessung
+  daraus nicht rekonstruieren. Dann wird **erst die Beobachtung ergänzt**, ohne eine fachliche
+  Auswahl zu ändern.
+- **H1/H2 vor B**, weil `B6`/`B7` (Mengen-Standard als Datenwerk) die Felder brauchen.
+- **C ist die Abnahme — und C braucht Teile von D.** Der Durchstich verlangt Profilversion je
+  Aufruf (C1), gleiche Regelversionen im Lauf (C4) und Wiederherstellung (C9). Deshalb sind
+  **`C0` (minimale Profil-/Veröffentlichungsstruktur mit Versions-Fingerprint + Export/Import)**,
+  **`D1` (ein Prompt-Key)** und **`D4` (ein Budget)** ausdrücklich **Teil von C** — begrenzt auf
+  die Keys des Basisrezept-Ablaufs. Ohne sie beweist C die Architektur nicht.
+- **Der Rest von D–G beginnt nach der Abnahme von C.** Das ist die Übertragung auf die
+  übrigen Funktionen, nicht die Erfindung des Mechanismus.
+- **H3/H4** (1.105 Dossiers markieren, Kategorien schneiden) erst nach C — erst beweisen,
+  dann den Bestand anfassen.
+- **G** ist ein eigener Entscheid (Zugriffsmodell), fachlich unabhängig vom Rest.
+
+**Migrations-Regel für den ganzen Umbau:** pro Ablauf gilt ausdrücklich **die alte ODER die
+neue** Ausführung. Innerhalb eines Laufs gibt es **keinen stillen Rückfall** auf die alte
+Wissensversorgung. Nicht migrierte Funktionen behalten den bisherigen Pfad, bis sie migriert
+sind — sichtbar, nicht heimlich.
+
+**Ziel-Ablageort:** `docs/PLANUNG/52_Wissens_Architektur_Entwirrung.md` (52 ist frei, höchste
+vorhandene Nummer ist 51). Tracking wie üblich: Office Dev-Package 23, Features-Board
+`dev_board_id=53`.
+
+### Etappe A — Grundlinie messen (vor jedem Fix)
+
+| ID | Arbeitspaket | Definition of Done |
+|---|---|---|
+| **A1** | Referenzfälle festlegen: je 3 gute + 3 problematische Basisrezepte, heutigen Ablauf **vollständig** erfassen (Generator, Anreicherung, `conformance.check`, Selbstheilung, Review) | Ein Baseline-Dokument nennt je Fall und je Modellaufruf: `feature`, `prompt_chars`, `prompt_parts` (kanon/bound/retrieval/task/kontext/huelle/dropped), `knowledge_used`, `knowledge_channels`, Befunde. Reproduzierbar aus `foodalchemist_ai_call_log`. |
+| **A2** | Kommando `foodalchemist:wissen-deckung` (read-only) über **`config('foodalchemist.prompts')`**, nicht über die Doku | Eine Zeile je Registry-Key mit: Kanon-Zeilen · Routing-Zeilen · Bindungen · effektiver Routing-Schlüssel · Σ Zeichen · Rechner. Keys **ohne jede** Steuerung erscheinen als **Befund**. Läuft grün auf demo und in der Suite. |
+| **A3** | MCP-Lesetool `knowledge_bindings.GET` | Liefert je Bindung: `target_key`, Dossier-Slug, `mode`, `weight`, `active`, **und ob das Dossier noch aktiv ist**. Damit ist der Bestand erstmals messbar (Voraussetzung für F1). |
+| **A4** | **Diagnose-Texte ehrlich machen** — `regelwerk.GET` / `ablauf.GET` **und** die Kurations-UI (Befund J) | (a) Bei ungesteuerten Keys `quelle: "ungesteuert"` + Liste dessen, was per Routing käme; der Verweis auf ein Tool, das dieselbe Quelle liest, ist weg. (b) Die `cross_cutting`-Warnung in `browser.blade.php:130-136` ist entfernt oder sagt die Wahrheit: sie behauptet heute bei **158 von 165** Dossiers eine 7er-Liste, die deaktiviert ist, einen `always`-Mechanismus, der nicht mehr greift, und empfiehlt eine Bindung, die an den Generatoren stumm ist. Test pinnt die Zustände. |
+| **A5** | Bindungs-Bestand messen und protokollieren | Zahl der Bindungen, Verteilung über `target_key`, **Zahl der Bindungen auf inaktive Dossiers**. Ergebnis steht im Spec-Dokument — F1 wird ohne diese Zahl nicht geplant. |
+
+**DoD Etappe A:** Es existiert eine Zahl für jede Behauptung in den Befunden A–I. Nichts in
+B–G startet auf einer Schätzung.
+
+#### ✅ A2 erledigt 2026-09-07 — und korrigiert zwei meiner Zahlen
+
+`foodalchemist:wissen-versorgung` gebaut (`src/Console/WissenVersorgungCommand.php`, 7 Tests).
+Erste Messung, **auf der Dev-MySQL** — und die ist der interessantere Fall, siehe unten:
+
+| Kennzahl | Wert |
+|---|---|
+| Registry-Keys | **71** (nicht ~48 — die Zahl in `docs/wissen.md` war überholt) |
+| davon `recipe.*` / `vk.*` | **23 / 13** (nicht 22/15 — `26_LLM_MCP_Funktionsmatrix.md` ist an der Stelle veraltet, u. a. steht `vk.behaelter` noch drin) |
+| **UNGESTEUERT** | **42** |
+| nur über die Alt-Struktur versorgt | **18**, alle `recipe.*` |
+| gesteuert | 11 |
+
+**Die Präfix-Streuung, jetzt gezählt:** `geschmacksbalance` und `workflow.rezept_anlegen_mcp`
+hängen über das Bereichs-Ziel `recipe` an **je 23 Prompt-Keys** — unabhängig von jeder
+Relevanz. Das ist die Blindleistung aus Spec 46 §2d, erstmals als Zahl.
+Nebenbefund: `workflow.rezept_anlegen_mcp` steht in der `ENTBUNDEN`-Liste von
+`WissenSteuerdatenW0Command`, ist hier aber aktiv gebunden — der `--apply`-Lauf ist in diesem
+Zustand nie gefahren.
+
+**★ Die Dev-MySQL IST der Wiederherstellungs-Fall aus Befund G1.** Sie trägt **keine
+Kanon-Zeile**, `regelwerk:always 1×7000` bei `recipe.ueberarbeiten`, `always 1×6000` bei
+`recipe.eigenschaften` und `cross_cutting:always` bei `recipe.steps` — also exakt den
+Migrations-Stand, nicht den handgedrehten demo-Stand. Was ich als Risiko für „neuer Kunde,
+neuer Rechner" beschrieben habe, ist lokal reproduzierbar. Zusätzlich stand dort noch das
+**v1-Kanon-Schema** (`knowledge_section_id`); die Kanon-Migration `2026_09_05_000010` war nie
+gelaufen. Konsequenz, die niemandem aufgefallen war: **auf der Dev-MySQL konnte der Kanon-Pfad
+nie ausgeführt werden** — jede Kanon-Query bricht dort ab. Gezielt migriert (Tabelle hatte 0
+Zeilen), die 12 übrigen offenen Migrationen bewusst nicht angefasst (Fremdmodule).
+
+**Der Alias ist zentralisiert:** `KnowledgeContextService::ROUTING_ALIAS` +
+`routingFeatureFuer()` — Bericht und Auskunft geben dieselbe Antwort, und mit `D1` verschwindet
+die Tabelle an genau einer Stelle. Hätte ich sie im Kommando gelassen, hätte ich die zweite
+Wahrheit gebaut, die diese Spec anklagt.
+
+**Abgrenzung, die ich erst beim Bauen gefunden habe:** `foodalchemist:wissen-deckung` (W2-4)
+existiert schon und prüft die **Korpus**-Richtung des §-Problems — „nennt ein Prompt einen §,
+den kein Dossier hat" (der §12-Fall). Mein Bericht heisst deshalb `wissen-versorgung` und
+prüft die **Versorgungs**-Richtung. Für `H7` (hängende §-Verweise im zusammengesetzten Prompt)
+ist W2-4 die halbe Antwort: es fehlt die Richtung „Dossier verweist auf ein § außerhalb
+desselben Prompts". Also `H7` erweitert W2-4, statt ein drittes Kommando zu bauen.
+
+### Etappe B — Sofort-Riegel gegen stille Verluste
+
+| ID | Arbeitspaket | Definition of Done |
+|---|---|---|
+| **B0** | **Drei Größen trennen**, die heute vermischt sind | Es gibt getrennt: **Kandidatenlimit** (wie viele Treffer je Suchverfahren untersucht werden — eigenes, großzügiges Limit), **Endauswahl** (welche Quellen übernommen werden), **Kontextbudget** (was insgesamt ans Modell geht). Ein Test belegt, dass ein Verstellen der einen die anderen nicht verschiebt. |
+| **B1** | Budget-Kappung stoppen (Befund I): `recipe.ueberarbeiten` / `vk.ueberarbeiten` 8.000 → ~13.000 · `recipe.review` / `vk.review` **explizit** eintragen · `concept.brief_geruest` entscheiden (Budget ~26.000 **oder** Routing runter) | **Nur das Pflichtwissen muss ins Budget passen** — per Test **gegen die Live-Tabelle**, nicht gegen die Migration. Optionales Wissen **darf** größer sein als das Restbudget; es wird abschnittsweise vollständig aufgenommen, solange Platz ist, der Rest wird protokolliert. **Eine große optionale Kandidatenmenge ist für sich kein Konfigurationsfehler.** |
+| **B2** | Kappung **dokumentweise** statt mitten im Text (Grundsatz D) | `truncate($block, $budget)` ist ersetzt: es fällt immer ein **ganzes** Dossier weg, nie ein Teil. Test: ein Block mit 3 Dossiers und einem Budget für 2 liefert exakt 2 vollständige Dossiers + `dropped_chars` = Größe des dritten. |
+| **B3** | `knowledge_dropped_chars` an **allen** `contextFor()`-Aufrufern durchgeben (Befund I3) | Ein Test zählt die Aufrufstellen und schlägt fehl, wenn eine ohne die Option existiert. `prompt_parts.dropped` ist bei allen Features aussagekräftig. **◐ Teil-erledigt 2026-09-07 — siehe unten.** |
+| **B4** | W0-5-Invariante schärfen (Befund I4: `pflichtZeichen()` prüft nur `mode='always'`) | Der Wächter prüft **die Pflichtmenge gegen das Budget** — und zwar auch dort, wo die Pflicht heute per Kanon statt per `always`-Routing entsteht. Er meldet **nicht** mehr, dass eine große optionale Discovery-Menge das Budget übersteigt (das ist der Normalfall, s. B1). Auf demo Exit 0, mit künstlich zu großer **Pflicht** Exit ≠ 0. |
+| **B5** | Discovery-Dämpfer: `domain` bei `ai_generate_recipe` deckeln (heute `max_docs: null` bei 192 Dossiers) · `DISCOVERY_MIN_SCORE` (0,05) **messen** und begründet setzen | Messprotokoll: Trefferzahl und Rang-Position der fachlich richtigen Dossiers für 10 Anfragen, vor/nach. Die Schwelle ist mit dieser Messung begründet, nicht geraten. |
+| **B6** | **Ein strukturierter Mengen-Standard als Datenwerk** — nicht ein per Achse gefundenes Markdown-Dossier. Ein gefundenes Dossier erfüllt den Vertrag **nicht** | Jeder Eintrag trägt: **Geltungsbedingungen** (Gang, Komponentenrolle, Format, Niveau) · **Wert oder Wertebereich** · **Einheit + Bezugsgröße** (pro Portion vs. pro Ansatz, Rohgewicht vs. verzehrfertig — genau die Verwechslung, die Regelwerk_Basisrezepte §6 regelt) · **Quelle + Version**. Präzedenz im Repo: `ProportionService::BLOOM_BLATTGELATINE` (Wert, Range, Quelle, „Herstellerangabe hat Vorrang") — **prüfen, ob `ProportionService` der Ort ist, bevor ein neuer Speicher entsteht.** |
+| **B7** | Definiertes Verhalten bei **keinem** und bei **mehreren widersprüchlichen** Treffern | Kein Treffer → kein erfundener Wert, die Lücke bleibt sichtbar und wird gemeldet. Mehrere widersprüchliche → Unklarheit bleibt sichtbar (kein stilles „erster gewinnt"). Beides mit Test. Damit gilt auch: **`mengen_defaults` verlässt den Kanon erst, wenn B6+B7 stehen** — sonst tauschen wir Prosa gegen Lücke. |
+
+**DoD Etappe B:** Kein Modellaufruf verliert mehr Wissen, ohne dass es in `prompt_parts.dropped`
+steht. Kein Dossier wird mehr angeschnitten. Die Referenzfälle aus A1 sind erneut gemessen und
+nicht schlechter.
+
+#### ◐ B3 Teil-erledigt 2026-09-07 — Rezept-Kette ja, Rest bewusst offen
+
+Statt 18 Aufrufstellen von Hand zu flicken (und die nächste vergisst es wieder) gibt es jetzt
+`KnowledgeContextService::proposeOptionen($wissen)`: **ein Helfer, der alle Messfelder
+mitnimmt.** Das ist derselbe Schritt wie beim Routing-Alias — Naht statt Konvention. Er lässt
+`knowledge_channels` **bewusst** aus: an diesem Feld ist in W0-3b schon einmal der Bound-Kanal
+gestorben, weil ein Anzeige-Spiegel auf das Feld schrieb, das die Auswahl-Logik liest. Wer
+Kanäle liefert, tut es weiterhin selbst.
+
+**Umgestellt (die Kette, die A1 messen muss):** `RecipeReviewService`, `RecipeReviseService`
+(2×), `BulkEnrichService`, `RecipeModal` (2×), `StepEditor`. `RecipeGeneratorService` und
+`RecipeOneShotService` gaben das Feld schon vorher weiter — das waren die 2 von 18.
+
+**Bewusst offen (B3-Rest):** `IdeenService` (3×), `ConceptGeneratorService` (3×),
+`ConceptService`, `AngebotService` (2×), `FoodbookService` (2×). Diese Features liegen
+außerhalb des senkrechten Durchlaufs; sie ohne Messbedarf anzufassen wäre Risiko ohne Ertrag.
+Sie kommen mit ihrer jeweiligen Migration. **Der Wächter-Test deckt deshalb heute die
+Rezept-Kette ab, nicht alle Aufrufer** — das steht so im Test, damit niemand ihn für mehr hält.
+
+`ConformanceService:130` gehört nicht dazu: dort ist `knowledge` ein **String** aus
+`ladeRegelwerke()`, kein `contextFor()`-Ergebnis. Das ist `C4`.
+
+⚠ **Der Wächter-Test scannt Quelltext** und ist damit grob — Marker statt Bedeutung. Er fängt
+„neue Aufrufstelle vergisst das Feld", nicht jede Umformulierung. Mit `C2` verschwinden Helfer
+und Test gemeinsam, weil `propose()` den Kontext dann selbst baut.
+
+### Etappe C — Der senkrechte Durchlauf (Basisrezept) · **der Beweis**
+
+Ablauf: **erstellen → anreichern → prüfen → einen gezielt eingebauten Verstoß korrigieren.**
+Scope: **Team 6**, nur Basisrezept, über **Formular, Sprache und MCP**.
+
+| ID | Arbeitspaket | Definition of Done |
+|---|---|---|
+| **C0** | **Minimale Profil-/Veröffentlichungsstruktur** — nur für die Keys des Basisrezept-Ablaufs. Vorgezogen aus D5–D7, weil C1/C4/C9 sie brauchen | Ein Profil je Schritt, **veröffentlichbar mit Versions-Fingerprint** der referenzierten Dossiers, **exportierbar und importierbar**. Ein Schreibdienst für UI und MCP. Die vollständige Paket-Struktur und die Übertragung auf alle Features bleibt D5–D7. |
+| **C0b** | **Ein Prompt-Key** (`D1`) und **ein Budget** (`D4`) für die Keys dieses Ablaufs — vorgezogen, sonst beweist C die Architektur nicht | `RecipeGenerationContextService:88` übergibt `$genKey`. ⚠ **Seam:** das ist **ein** Code-Pfad mit `$vkModus`-Flag — VK wird zwangsläufig mitberührt. Deshalb werden die 13 `ai_generate_recipe`-Zeilen **gleichzeitig auf `recipe.generator` und `vk.generator` gespiegelt**, damit das VK-Verhalten unverändert bleibt. Belegt durch einen Vorher/Nachher-Vergleich an einem VK-Referenzfall. |
+| **C1** | Getippter `RecipeAuftrag` + **Lauf-ID** über den ganzen Vorgang | Der Auftrag trägt: Schritt/`prompt_key`, Auftrag/Änderungswunsch, Rezeptstand, **Prüfbefunde als Regel-ID + Befund**, Benutzer-/Team-/Profilkontext. Alle Aufrufe eines Vorgangs (Generator, `conformance.check`, Selbstheilung, Review) tragen dieselbe Lauf-ID im Call-Log und sind über sie abfragbar. |
+| **C2** | Kontext-Aufbau ins Gateway ziehen; für die migrierten Keys nimmt es **kein** Wissen von außen | **Scope-treu:** für den neuen Basisrezept-Ablauf gilt der Eingabevertrag vollständig, und es gibt **keinen Rückfall** auf die alte Versorgung. Nicht migrierte Funktionen (Gerichte, Konzepte, Foodbook, Angebot) behalten ausdrücklich den bisherigen Pfad. **Nachweis am Verhalten der Schnittstelle:** ein übergebenes `knowledge` wird für einen migrierten Key **abgewiesen** (Exception, nicht ignoriert) — eine Textsuche im Quellcode ist höchstens Zusatzkontrolle. Die **globale Entfernung der Option** ist `F2`, nicht hier. **Reihenfolge:** erst Aufbau im Gateway, dann Entzug — nie umgekehrt. |
+| **C3** | **Sidebar-Mikrofon** (`voice-modal` / `callWithTools()`) auf denselben Aufbau — Befund D1: heute weder Kanon noch Routing. **Das Leitstellen-Diktat bleibt unverändert** (D2, reines STT, speist schon den richtigen Pfad) | Ein Sprach-Auftrag „Basisrezept für Pilzragout, 80 Personen" wird in einen strukturierten `RecipeAuftrag` übersetzt und läuft dann **exakt** wie über das Formular: im Call-Log **dieselben** Pflichtquellen und dieselbe Profilversion. Freie Wissensfragen und Recherche bleiben Tool-Loop wie heute. Schreibaktionen bleiben Proposal mit Bestätigen-Knopf (GL-07). |
+| **C4** | `ConformanceService` bezieht die Regelwerke aus demselben Aufbau statt per `slug LIKE` (Befund G5) | `ladeRegelwerke()` ist entfernt oder ruft den zentralen Aufbau. Der Critic-Prompt enthält dieselben Regelversionen wie der Generator-Prompt desselben Laufs — per Fingerprint belegt. |
+| **C5** | Selbstheilung erden (Befund I5/I6): Regel-ID + Befund gehen hinein, der Dienst lädt die Regelversion | `RecipeConformanceAdapter::revise()` ruft nicht mehr ohne Kontext. Der Selbstheil-Prompt enthält **den verletzten §** + Grundregeln — nicht 3 per Jaccard gewürfelte aus 61. Umfang nach Anlass: Titeländerung ≠ vollständige Überarbeitung ≠ Fehlerkorrektur. |
+| **C6** | Provenienz-Invariante | Nur der zentrale Aufbau schreibt in den System-Regelblock. Suchergebnisse und Nutzereingaben stehen in der User-Message und sind beschriftet. Test: ein Aufrufer, der Regeltext über ein Kontextfeld einschleusen will, landet nicht im System-Block. |
+| **C7** | Fünf sichtbare Felder je Modellaufruf | Im Inspektor **und** im Call-Log je Aufruf: Auftrag · Profilversion · übermittelte Quellen (Slug@Version) · **ausgelassene Inhalte** · Prüfergebnis. `GENERATOR_FEATURES` filtert nicht mehr die drei Folge-Calls weg (Befund G6). |
+| **C8** | **Abnahme-Lauf mit eingebautem Fehler** | Ein Basisrezept wird erzeugt, angereichert, geprüft; ein gezielt eingebauter §-Verstoß wird erkannt **und** korrigiert; höchstens 2 automatische Korrekturrunden, danach bleibt ein Entwurf mit **offenen Punkten** erhalten. Der ganze Lauf ist über die Lauf-ID nachlesbar. |
+| **C9** | Wiederherstellungs-Probe, solange der Ablauf klein ist | Eine leere Umgebung stellt den veröffentlichten Stand **samt Quellen** her und baut denselben fachlichen Kontext auf. Kriterium: gleiche Regeln, gleiche Datenzugriffe, bestandene fachliche Prüfungen — **nicht** identische KI-Formulierungen. |
+
+**DoD Etappe C — die Abnahme der ganzen Spec:**
+1. Derselbe Auftrag über Formular, Sprache und MCP erhält **dieselben Pflichtregeln und
+   dieselben Datenzugriffsrechte** (Kanal-Äquivalenz, als Test).
+2. Kein erforderliches Wissen verschwindet still durch Budget (B2/B3 greifen).
+3. Jeder Schritt zeigt übermittelte Quellen **mit Version** und ausgelassene Inhalte.
+   **Und keinen hängenden §-Verweis** (`H7`): kein übermitteltes Dossier verweist auf ein §,
+   das nicht im selben Prompt steht.
+4. Änderungen an Mengen oder Zutaten lösen die nötigen Folgeberechnungen und -prüfungen aus.
+5. Eine frisch aufgesetzte Umgebung lädt denselben veröffentlichten Regelstand.
+6. Die Referenzrezepte aus A1 bestehen die vorher festgelegten fachlichen Prüfungen.
+7. **Die Zahl gepflegter Prompt-Keys ist kein Abnahmekriterium.**
+
+### Etappe D — Ein Schlüsselraum, ein Sollzustand
+
+| ID | Arbeitspaket | Definition of Done |
+|---|---|---|
+| **D1** | Routing-Schlüssel = **Prompt-Key**: `RecipeGenerationContextService:88` übergibt `$genKey` statt `'ai_generate_recipe'` (Befund B5) | `vk.generator` ist eigenständig routbar. Ein Test belegt, dass ein Routing auf `vk.generator` wirkt (heute schreibt es stumm ins Leere). |
+| **D2** | Steuerdaten migrieren: 13 `ai_generate_recipe`-Zeilen auf `recipe.generator` **und** `vk.generator` spiegeln; `ai_extract_recipe`/`ai_suggest_pairings`/`ai_infer_ankers`/`ai_plan_dishes` auf ihre Nachfolger; **`pairing` und `trend` entfernen** (keine Kategorien mehr) | `knowledge_routings` enthält keinen `ai_*`-Schlüssel und keine Kategorie außerhalb des 21er-Vokabulars mehr. A2-Bericht ist frei von Waisen. |
+| **D3** | `VorgangsRegisterService` (6 Stellen) auf den Prompt-Key umstellen | `grep -n "ai_generate_recipe" src/` liefert nur noch Doku/Beispiele in Tool-Beschreibungen. |
+| **D4** | **Ein** Budget-Baum: `ai.knowledge_budget` (feature) und `ai.bound_knowledge_budget` (prompt_key) zusammenführen (Befund H5) | Kein Feature hat mehr zwei Zahlen. `recipe.eigenschaften` 27.500 vs. 8.000 ist aufgelöst und begründet. |
+| **D5** | **Profil-Entität + Regelpakete + Veröffentlichung.** ⚠ Schema-Arbeit: `scope`/`role` in `knowledge_canon` sind zwei Enum-Spalten, keine Paketzuordnung | Es existieren: Paket-Entität, Paket→Dossier, Prompt-Key→Paket, Veröffentlichungsstempel mit **Versions-Fingerprint** der referenzierten Dossiers, definierte Auflösungsreihenfolge bei Widersprüchen. Dieselbe Naming-Regel wird **einmal** gepflegt und von n Keys benutzt. |
+| **D6** | Drei explizite Zustände | Profil vorhanden → Schritt läuft · bewusst `none` → Schritt läuft, Entscheidung dokumentiert · **Profil oder Pflichtquelle fehlt → Konfigurationsfehler zur Laufzeit**. Ein fehlendes Profil aktiviert **nie** still eine alte Bindung. Test je Zustand. |
+| **D7** | Seeder wird Installationswerkzeug, nicht zweite Wahrheit (Befund H1/H2, Widerspruch G1) | Die **veröffentlichte Profilversion** ist der verbindliche Stand; Oberfläche und MCP schreiben Entwürfe über **einen** Schreibdienst; Installation/Wiederherstellung **importieren** veröffentlichte Versionen. Die drei widersprüchlichen Routing-Migrationen (`2026_08_27_140000`, `2026_08_29_000001/2`) sind durch eine korrigierende überholt. |
+| **D8** | Sechs Kategorien global seeden (Befund H4) | `produktion_kapazitat`, `referenzgericht`, `weltkueche`, `signatur_kuechen`, `ernaehrung`, `prasentation_service` existieren global. `knowledge.POST` in diesen Kategorien funktioniert in einem frischen Team. |
+| **D9** | Drift-Test auf **alle** Features und **Code gegen DB** (heute: nur `ai_generate_recipe`, nur Code gegen Code) | Der Test schlägt fehl, wenn Live-Tabelle und veröffentlichter Sollzustand für **irgendein** Feature auseinanderlaufen. |
+
+**DoD Etappe D:** Ein Call trägt **einen** Schlüssel. Es gibt genau **einen** Ort, der sagt,
+was ein Schritt bekommt — und genau **einen** Sollzustand, aus dem eine leere Umgebung ihn
+herstellt.
+
+### Etappe E — Ein Rechner
+
+| ID | Arbeitspaket | Definition of Done |
+|---|---|---|
+| **E1** | Vier Formeln → **eine**: lexikalisch und semantisch unabhängig ermitteln, dann fusioniert bewerten (RRF); **ein** Tokenizer, **eine** Stoppwortliste (Befund C2) | `discoverGenericBlock`, `searchDocuments`, `selectBoundKnowledge` und der Browser rufen denselben Rechner. Die vier Proben aus Befund C sind Regressionstest: „Wie viel Gramm Hauptkomponente pro Person" liefert `mengen_defaults--hauptgang-komponenten` auf **Platz 1–3**, nicht 7. |
+| **E2** | Kandidatensuche ≠ Endauswahl (Grundsatz C, Größen aus `B0`) | `max_docs` begrenzt die **Endauswahl**. Die Kandidatenermittlung hat ihr **eigenes, großzügiges Limit** — nicht unbegrenzt, aber deutlich über der Endauswahl, damit es etwas zu wählen gibt. Ohne brauchbaren Treffer bleibt optionales Fachwissen **leer**, statt den besten Rauschtreffer zu nehmen. |
+| **E3** | Browser-**Vorschau** mit demselben Auftrag und Profil | Der Kurator wählt einen Schritt + Auftrag und sieht genau die Auswahl, die dieser Schritt bekäme — inklusive der ausgelassenen Inhalte. |
+| **E4** | Browser benutzt denselben Rechner (heute rohes `LIKE` **oder** rein semantisch, kein Hybrid) | Gleiche Anfrage → gleiche Rangfolge in Browser, Generator und MCP. Test vergleicht die drei Einstiege. |
+
+**DoD Etappe E:** Dieselbe Frage hat **eine** Antwort, egal wer fragt. Der Mensch kuratiert
+gegen dieselbe Rangfolge, die die KI sieht.
+
+### Etappe F — Alt-Struktur abräumen (erst nach A5 + C)
+
+| ID | Arbeitspaket | Definition of Done |
+|---|---|---|
+| **F1** | **Bindungs-Triage** — keine Umbuchung. Je Bindung eine Entscheidung: verbindliche Regel → Regelpaket · Mengen-/Zahlen-Standard → Resolver · Fachwissen → Suche · Inspiration → optional · veraltet/doppelt → **entfernen** | Jede Bindung aus A5 hat eine dokumentierte Entscheidung. **Bereichs-Präfix-Bindungen (`recipe`, `vk`) sind aufgelöst** — die haben in Spec 46 §2d 16.952 Zeichen Blindleistung erzeugt. |
+| **F2** | Bindungs-Zweig aus `AiGatewayService::propose()` entfernen | `prompt_parts.bound` = 0 bei **jedem** Prompt-Key. `selectBoundKnowledge()` und der dritte Tokenizer sind weg. |
+| **F3** | `knowledge.BIND`/`.UNBIND` deprecated; Browser-UI „Einbinden" auf Profil umstellen; roher Schreibpfad `Browser::addBinding()` mit erledigt (Befund F) | Registry-Count-Tests mitgezogen. Kein Schreibpfad auf `knowledge_bindings` außerhalb der Migration. |
+| **F4** | `regelwerkBlock()` + `REGELWERK_SLUG_LIKE` + `->first()`-Pfad **löschen**, nicht entschärfen | Vorher ziehen `concept.brief_geruest` und `foodbook.grundgeruest` auf Profile um. `RegelwerkKnowledgeRoutingTest` ist mit abgeräumt. Danach kann keine `always`-Zeile mehr ein Monolith-Dossier reaktivieren. |
+| **F5** | `_sections` + `_chunks` + `knowledge-sectionize` droppen (Migration `2026_09_05_000010` nennt es als eigenen Entscheid) | Tabellen weg, Command weg, `KnowledgeSectionizerTest` weg. |
+| **F6** | Sechs Tests der Alt-Struktur mitziehen (Befund H8) | `KnowledgeBindToolTest`, `WissenTenantTest`, `DossierRoutingZielTest`, `WissensVokabularSchreibrechtTest`, Teile von `WissenTokenWelle0Test`, `RegelwerkKnowledgeRoutingTest` sind angepasst oder entfernt. **Volle Suite grün** vor Deploy. |
+| **F7** | **Profil-UI** — die neue Struktur bekommt eine Kurationsoberfläche (heute hat nur die alte eine, Befund H7) | Ein Mensch kann Profile und Regelpakete pflegen, veröffentlichen und die Versionshistorie sehen — ohne MCP. |
+| **F8** | `knowledge.DELETE` der 155 Originale (offener Punkt aus Spec 50) nach Vault-Spiegel | Erst nach explizitem Go und gesichertem Vault-Spiegel der 452. |
+
+**DoD Etappe F:** Es gibt **eine** Steuertabelle für „muss", **eine** für „darf gesucht
+werden", **keine** Bindungen, **kein** reaktivierbarer Monolithen-Pfad und **kein** totes Schema.
+
+### Etappe G — Zugriffsmodell (eigener Entscheid, nach C)
+
+| ID | Arbeitspaket | Definition of Done |
+|---|---|---|
+| **G1** | **Bestand + Eigentümer + Lesefreigaben + Dokumentzuordnung** — statt „alles global" oder erfundener `parent_team_id`-Hierarchie | BHG.DIGITAL besitzt den kuratierten Kochwissens-Bestand, die 8 Caterer-Teams haben Lesefreigabe, Kundenrezepturen bleiben getrennt. |
+| **G2** | `knowledge_team_scope` **und** die eigene `applyVisible`-Logik des Browsers **ersetzen** — nicht daneben treten | Es gibt genau **eine** Antwort auf „was ist sichtbar", für Browser, KI und MCP bei gleichem Benutzer- und Teamkontext. |
+| **G3** | Datenmigration vor der Umstellung prüfen | Messung vorher/nachher: kein Team verliert Zugriff auf Dossiers, die es fachlich braucht. Der dokumentierte 598→6-Fall (1-%-Korpus) tritt nicht ein. |
+
+**DoD Etappe G:** Eigentum und Lesefreigabe sind getrennt. Kein Team sieht 1 % des Korpus,
+und keine Org-Hierarchie behauptet eine Beziehung, die fachlich nicht besteht.
+
+---
+
+### Etappe H — Wissen nach ART und ACHSE ablegen, nicht nur nach Thema
+
+**Der Anlass, gemessen:** `cross_cutting` hat **165 Dossiers** — und die Kategorie **ist** die
+Routing-Einheit. `ai_generate_recipe × cross_cutting discovery 6×8000` heißt wörtlich: wähle
+6 aus 165 per Jaccard. In dieser einen Kategorie liegen mindestens **sieben verschiedene Arten**
+von Wissen:
+
+| Was drin liegt | Art | Wie es benutzt werden müsste |
+|---|---|---|
+| `mengen_defaults`, Garverluste | Zahlen-Tabelle | **auflösen** über Gang × Rolle × Portion |
+| `synonyme`, `anti_marker`, `substitutionen` | Vokabular/Mapping | **auflösen** über Zutat |
+| `geschmacksbalance`, `foodpairing-prinzip` | Sensorik-Theorie | suchen, aufgabenbezogen |
+| `sauce_mutterstrukturen`, `techniken`, `bruehen_fonds` | Handwerk | suchen, zutatenbezogen |
+| `menue_architektur`, `anlass_serviceformen` | Komposition | auflösen über Anlass/Format |
+| `saisonkalender` | Zeitbezug | **auflösen** über Monat |
+| `allergen_patterns` | Kennzeichnung | Code erzwingt es ohnehin (§7) |
+
+**Die Diagnose:** das Feld `category` macht **zwei Jobs, die sich widersprechen** — thematische
+Ablage für Menschen (Browsen, Kuratieren) **und** Routing-Einheit für die Maschine
+(feature × category → Modus/Deckel). Solange ein Feld beides tut, entsteht die
+Sammelschublade zwangsläufig. Und aus einer Schublade mit sieben Arten kann keine Suche
+sinnvoll sechs ziehen.
+
+**Der falsche Fix wäre, `cross_cutting` in acht Unterkategorien zu schneiden.** Dann sind es
+~30 Kategorien × ~15 Features = bis zu **450 zu pflegende Routing-Zeilen** (Befund H1 im
+Quadrat) — und die Maschine weiß weiterhin nicht, *wie* sie das Wissen benutzen soll. Sie
+sucht weiter nach einer Zahlentabelle.
+
+**Der richtige Fix ist eine zweite, orthogonale Achse.** Nicht feinere Kategorien, sondern zwei
+Felder plus Achsenwerte:
+
+- **`art`** ∈ `regel | datenwerk | fachwissen | referenz` → entscheidet den **Mechanismus**
+  (Grundsatz A). Vier Werte, nicht dreißig.
+- **`category`** → bleibt die **thematische Ablage** für Mensch und Suchfilter.
+- **Achsenwerte am Dossier** (Gang, Komponentenrolle, Niveau, Anlass, Sektor, Saison,
+  Warengruppe) → dort, wo das Dossier fachlich gilt.
+- **Typisierte Querverbindungen** (`H6`) → die dritte Dimension. Achsen beantworten
+  *„welches Dossier gilt hier"*, Links beantworten *„ohne welches ist es unvollständig"*.
+  Zwei verschiedene Fragen — die Achse ersetzt den Link nicht.
+
+Damit wird Retrieval für `datenwerk` ein **Join statt einer Suche** — zuverlässig im
+**Auswählen des richtigen Eintrags**, kein
+Jaccard, keine Budget-Lotterie. Das ist der Mechanismus, den `achsenBlock()` +
+`config('foodalchemist.ai.knowledge_axis_map')` **schon haben** — heute mit genau **zwei**
+Achsen (`occasion`, `sektor`), ~10 Zuordnungen und einer im Code dokumentierten Lücke
+(`restaurant` hat kein Segment-Dossier, bewusst nicht umgebogen).
+
+⚠ **Ein Join wählt zuverlässig das richtige Dossier — er garantiert keinen richtigen Wert.**
+Bei einem Mengen-Standard entscheiden Bezugsgröße und Einheit (pro Portion vs. pro Ansatz,
+Rohgewicht vs. verzehrfertig); bei Garverlusten Produkt und Verfahren. Deshalb braucht
+`datenwerk` einen **strukturierten Eintrag**, kein per Achse gefundenes Markdown — siehe `B6`
+und `B7`.
+
+| ID | Arbeitspaket | Definition of Done |
+|---|---|---|
+| **H1** | Feld **`art`** am Dossier + Vokabular. Routing entscheidet künftig über **Arten** („dieser Schritt darf Fachwissen suchen"), nicht über Feature×Kategorie-Paare | Jedes Dossier hat genau eine `art`. Das Routing-Schema kennt Arten. Ein Test verhindert `datenwerk` im Suchpfad und `fachwissen` im Resolver-Pfad. |
+| **H2** | **Achsenwerte am Dossier** + Ausbau von `knowledge_axis_map` über die heutigen zwei Achsen hinaus (Gang, Komponentenrolle, Niveau, Saison, Warengruppe) | Für jede ausgebaute Achse gilt: das zuständige Dossier erreicht den Prompt **per Join**, unabhängig vom Suchrang. Belegt an den A1-Referenzfällen. Die `restaurant`-Lücke ist geschlossen oder als Lücke bestätigt. |
+| **H3** | Bestand markieren: 1.105 Dossiers mit `art` + Achsenwerten versehen — **KI-Vorschlag, menschliche Freigabe** | Muster existiert im Vault: `110_destillate_aktivieren.py` hat 73 Destillate per Gemini mit Frontmatter-Feldern angereichert. Kein Dossier wird ohne Freigabe scharf. Fortschritt ist zählbar (markiert / offen). |
+| **H4** | Dossiers aufteilen, **nicht Kategorien nach Art trennen** — erst nach H1 | ⚠ **Korrektur meiner ersten Fassung:** gemischte Arten in einer Kategorie sind **erlaubt und richtig**. Eine Kategorie „Saucen" enthält legitim eine Regel (Anforderungen an eine Saucenrezeptur), ein Datenwerk (Dosiertabelle Bindemittel), Fachwissen (warum eine Emulsion bricht) und eine Referenz (Beispielrezept). Was aufgeteilt wird, ist ein **einzelnes Dokument**, das Inhalte verschiedener Arten mischt und getrennt benutzt werden muss. **Keine Obergrenze pro Kategorie** — die Dokumentzahl sagt nichts über die Auswahlqualität (Grundsatz C). DoD: jedes Dossier mit gemischten Arten ist geteilt, jedes Teil trägt eine Art. |
+| **H6** | **Typisierte Querverbindungen** zwischen Dossiers — die dritte Dimension neben Art und Achse. Achsen beantworten *„welches Dossier gilt hier"*, Links beantworten *„ohne welches ist es unvollständig"* | Drei Typen: **`ergaenzt`** (A ist ohne B unvollständig — maschinell nutzbar, Hüllenbildung) · **`ersetzt`** (Nachfolger; hätte die stille Regression beim 155-Cutover verhindert, wo Slugs auf deaktivierte Dossiers zeigten) · **`siehe_auch`** (Nachbarschaft, nur UI-Navigation). **Ernten statt kuratieren:** der Vault hat die Kanten schon als `[[Wikilinks]]` + `referenzen:`-Frontmatter, `broken_link_check.py` validiert sie wöchentlich — `knowledge-import` liest sie mit. ⚠ **Harte Regel: Links sind KEIN Retrieval-Mechanismus.** Folgt die Suche Kanten, zieht ein Treffer die Nachbarschaft mit und das Budget explodiert — dasselbe Muster wie die Präfix-Bindungen (16.952 Z. Blindleistung), nur über eine andere Straße. `ergaenzt` gilt **nur für `art=regel`**, typisiert und gedeckelt; `siehe_auch` wirkt **nur** in der UI. |
+| **H7** | **Hüllen-Prüfung: kein hängender §-Verweis im zusammengesetzten Prompt** — der Defekt, den der Split erzeugt hat. ⚠ **Erweitert `foodalchemist:wissen-deckung` (W2-4)**, baut kein drittes Kommando: das prüft schon „Prompt nennt § → Korpus hat Dossier"; hier fehlt „Dossier verweist auf § → § steht im selben Prompt" | Vorher war `Regelwerk_Basisrezepte` **ein** Dokument, §2 konnte inline auf §4 und §11 verweisen. Nach dem Split ist der Verweis ein Textstring ohne Ziel. Belegbar: der Kanon von `recipe.generator` trägt §1.0–1.5, §2, §3, §4, §6 — **nicht** §11 (Derivate), **nicht** §1.10/§1.11 (Anti-Patterns), auf die §2 verweist. DoD: ein Prüfer meldet jeden §-Verweis in einem übermittelten Dossier, dessen Ziel nicht im selben Prompt steht. Auflösung je Fall: Ziel mitliefern (`ergaenzt`), Verweis auflösen, oder Verweis entfernen — **nie** hängen lassen. |
+| **H5** | Kategorie-Vokabular aufräumen | `pairing` (3 Routing-Zeilen, keine Kategorie) und `trend` (2 Seed-Zeilen, keine Kategorie) sind weg (→ D2). Die sechs nur-Team-Kategorien sind global (→ D8). Vokabular und Routing-Kategorien sind deckungsgleich — der A2-Bericht beweist es. |
+
+**DoD Etappe H:** Jedes Dossier trägt eine Art. Verbindliche Zahlen und Vokabulare erreichen
+den Prompt **deterministisch über Achsen**, nicht über Suchrang. Keine Kategorie mischt Arten.
+Die Zahl der Routing-Zeilen ist **kleiner** als heute, nicht größer.
+
+**Reihenfolge — NEU GESETZT 2026-09-07 (Dominique baut die Dossiers inhaltlich um):**
+
+Dominique wird den Korpus **inhaltlich neu aufbauen**: die Dossiers genügen seinem Anspruch
+nicht, sie sind nicht sauber einem Thema zugeordnet, und Themen überlappen sich. Damit dreht
+sich die Reihenfolge innerhalb von H:
+
+- **`H1` + `H2` + `H6` nach vorn (Felder zuerst).** `art`, Achsenwerte und typisierte
+  Querverbindungen müssen **existieren, bevor** er schreibt — dann tragen die neuen Dossiers
+  sie von Anfang an, statt hinterher markiert zu werden. Beide auch als **UI + MCP**
+  (Grundsatz E), denn er pflegt sie.
+- **`H3` (1.105 Dossiers markieren) entfällt weitgehend.** Bestand markieren, der ersetzt wird,
+  ist Arbeit für die Tonne. Was bleibt: markieren, was den Umbau überlebt.
+- **`H4` macht der Umbau selbst.** Unsere Aufgabe ist nicht das Schneiden, sondern der
+  **Wächter**, der gemischte Arten in einem Dokument nicht zurückkommen lässt.
+- **`H7` bleibt** als Wächter — hängende §-Verweise entstehen beim Umbau genauso wie beim Split.
+
+> ★ **Reihenfolge-Konsequenz, die ich für die wichtigste dieser Runde halte:
+> `D6` muss VOR dem Dossier-Umbau stehen.**
+>
+> Der Kanon referenziert **Slugs**. Ein inhaltlicher Neuaufbau, der Slugs umbenennt oder Themen
+> neu schneidet, **leert den Kanon still** — genau die Falle, in die der 155-Originale-Cutover
+> gelaufen ist (Bindungen zeigten auf deaktivierte Dossiers, `crossCuttingDocs()` übersprang
+> lautlos). Ohne `D6` („Profil oder Pflichtquelle fehlt → **Konfigurationsfehler zur
+> Laufzeit**") merkt niemand, dass die Generatoren nach dem Umbau ohne Regelwerk laufen. Es
+> würde nur schlechtere Rezepte geben.
+>
+> Deshalb: **`D6` vorziehen, gemeinsam mit `C0`** — und dazu eine Slug-Zuordnung führen
+> (alt → neu), damit der Umbau die Kanon-Zeilen mitnimmt statt sie zu verwaisen. Das ist
+> derselbe Mechanismus wie `H6`s `ersetzt`-Kante.
+
+## Runbook — Messung auf demo (nach jedem Deploy dieser Etappe)
+
+Immer **mit `--team=6`**: ohne Nutzer greift nur die globale Partition, und der Bericht
+behauptete eine Deckungslücke, die es nicht gibt (die Beinahe-Fehldiagnose aus der
+Semantik-Messung).
+
+```bash
+php artisan foodalchemist:wissen-versorgung --team=6 --json > /tmp/versorgung_demo.json
+php artisan foodalchemist:wissen-versorgung --team=6 --nur-befunde
+php artisan foodalchemist:wissen-grundlinie --team=6 --limit=6
+php artisan foodalchemist:wissen-steuerdaten-w0 --verify --team=6
+php artisan foodalchemist:wissen-deckel-check
+```
+
+Bindungs-Bestand über MCP (`knowledge_bindings.GET`), drei Abfragen:
+`{}` für alles · `{"nur_wirkungslos": true}` für den Aufräum-Bestand ·
+`{"target_key": "recipe"}` und `{"target_key": "vk"}` für die Präfix-Streuung.
+
+**Was der Vergleich dev ⇄ demo zeigen muss:** dev ist der Frisch-DB-Zustand (kein Kanon,
+`always`-Routings), demo der handgedrehte. Weichen sie ab, ist das kein Messfehler, sondern
+**Befund G1/H1** — und die Differenz ist genau das, was ein neuer Kunde anders bekäme.
+
+### Vorlage für die Bindungs-Triage (`F1`, Entscheidung 2)
+
+Eine Zeile je Bindung, vier Spalten — so wird sie Dominique vorgelegt:
+
+| Dossier | heutige Reichweite | Art (Grundsatz A) | Vorschlag |
+|---|---|---|---|
+| z. B. `geschmacksbalance` | Ziel `recipe` → 23 Prompt-Keys | fachwissen | Kanon-Zeile an `recipe.geschmack` + `recipe.sensorik`, sonst weg |
+| z. B. `workflow.*_regeln` | Ziel `recipe` → 23 Keys | **ablauf** | aus jedem Prompt heraus — gehört zu `ablauf.GET` |
+| z. B. Bindung auf inaktives Doc | — | — | löschen |
+
+Ausgänge: **Kanon-Zeile** (namentlich, an genannte Keys) · **Resolver** (Datenwerk, über Achsen)
+· **Suche** (Routing auf die Kategorie) · **`none`** (bewusst leer) · **löschen**.
+Das Bereichs-Ziel ist **kein** Ausgang mehr — Entscheidung 1 vom 2026-09-07.
+
+---
+
+## Warum kein Modul-Umbau
+
+Das Modul hat drei Schichten, und **eine** ist beschädigt:
+
+| Schicht | Zustand | Entscheidung |
+|---|---|---|
+| **Inhalt** — 1.105 Dossiers, 415 kuratierte Splits, ein Thema, ≤ 4.000 Z. | gut, und der teure Teil | **erhalten** |
+| **Dokumentenschicht** — Slug/Version/`content_hash`/`active`, Aliase, Kategorien-Vokabular, Import-Guard, Embedding-Pool, Browser, MCP-CRUD | gut, getestet, bewusst gebaut | **erhalten** |
+| **Steuerung & Zusammenbau** — 3 Tabellen, 2 Injektionspunkte, 4 Rechner, 3 Tokenizer, 2 Budget-Bäume, kein Engpass | **der Schaden** | **umbauen** (Etappen B–G) |
+
+Ein Modul-Neubau würde die zwei guten Schichten wegwerfen und neu verdienen, mit dem Risiko
+beim Inhalt (1.105 Slugs, auf die der Kanon zeigt). Und er würde das Problem nicht lösen: die
+Fehler sind nicht „schlecht gebaut", sondern „zwei Mechanismen entscheiden unabhängig". Diese
+Eigenschaft baut man in ein neues Modul genauso wieder ein — es sei denn, die Durchsetzung ist
+ein **getippter Vertrag** statt einer Vorgabe (C1/C2/C6).
+
+**Der Beleg liegt im eigenen Repo:** `_sections`/`_chunks` war ein Umbau der Retrieval-Einheit,
+vollständig gebaut, mit Producer und Tests — und **überholt, bevor es einen Leser hatte**. So
+sieht ein Umbau aus, wenn das Problem woanders lag.
+
+**Was durch Löschen billiger ist als durch Migrieren:** `knowledge_bindings` + `_layers` (F1–F3),
+`_sections` + `_chunks` (F5), `regelwerkBlock()` + `->first()` (F4), drei von vier Rechnern (E1),
+zwei von drei Tokenizern (E1), einer von zwei Budget-Bäumen (D4), der eigene Schreibpfad des
+Browsers (F3).
+
+---
+
+## Verifikation
+
+Messbar, nicht gefühlt — alle Sonden existieren schon:
+
+1. **Der eigentliche Nachweis ist der Referenzfall, nicht die Zeilenzahl.** Die Rezepte aus
+   Schritt 0 müssen die vorher festgelegten fachlichen Prüfungen bestehen — Naming-§,
+   Mengenplausibilität, geerdete Zutaten, Kohärenz. **Die Zahl gepflegter Prompt-Keys ist
+   Hygiene, kein Erfolgsnachweis** (Deckungs-Bericht: 29 → 0, jede Zeile gesteuert oder
+   ausdrücklich `none`).
+2. **`recipes.GENERATE` gibt `kontext` zurück** (Nachzug A5): pro Testlauf
+   `kontext.prompt.kanon / bound / retrieval / dropped` + `kontext.wissen.kanon` protokollieren.
+   Erwartung nach F2: `bound = 0` bei **jedem** Prompt-Key, nicht nur bei den Generatoren.
+3. **Anreicherungs-Lauf messen:** ein Basisrezept und ein Gericht über „KI-Erstellen" mit
+   `complete_coverage`, dann im Call-Log (`foodalchemist_ai_call_log`) je Schritt prüfen, ob
+   Wissen ankam. **Was heute ankommt, ist offen** — Kanon und Routing fehlen bei diesen Keys
+   (B3), der Bindungs-Fallback ist ungemessen (A5). Genau deshalb ist A1 die Referenzmessung
+   und keine Bestätigung einer Erwartung.
+4. **Discovery-Rangfolge** (B5 / E1): die vier Proben aus Befund C als Regressionstest
+   festschreiben — „Wie viel Gramm Hauptkomponente pro Person" muss
+   `mengen_defaults--hauptgang-komponenten` auf Platz 1–3 liefern, nicht auf 7.
+5. **Volle Suite** vor jedem Deploy (`./fa_test.sh`, ~35 Min / 3.646+ Tests) — Vertragsänderungen
+   am Kontext-Service brechen Tests in fremden Dateien
+   ([[feedback_teilsuite_deployt_roten_test.md]]).
+6. **Wächter-Läufe** nach Deploy: `foodalchemist:wissen-steuerdaten-w0 --verify --team=6`
+   (Mo 06:30) und `foodalchemist:wissen-deckel-check` (Mo 06:45) müssen Exit 0 liefern —
+   und der neue Deckungs-Wächter dazu.
+7. **Kanal-Äquivalenz:** derselbe Auftrag über Formular, Sprache und MCP muss dieselben
+   Pflichtregeln und dieselben Datenzugriffsrechte erhalten. Heute ist das nachweislich nicht
+   so (Befund D1: das Mikrofon bekommt weder Kanon noch Routing). Das ist ein Test, kein
+   Bericht.
+8. **Pflichtwissen verschwindet nie still:** kein `pflicht`-Dossier darf durch Budget gekappt
+   werden, und jede Kappung muss in `prompt_parts.dropped` landen — an **allen** Aufrufern, nicht
+   an zwei (I3). Als Regressionstest gegen die Zahlen aus Befund I.
+9. **Test-Fixture gegen demo prüfen**, nicht nur die Sandbox
+   ([[feedback_testfixture_zeigt_migrationsstand]]): die Steuerdaten-Drift aus Befund B5a ist
+   genau der Fall, den eine grüne Suite nicht sieht.
+
+## Entscheidungen & Mandat
+
+### ✅ GESETZT von Dominique, 2026-09-07
+
+| Entscheidung | Beschluss |
+|---|---|
+| **Regeln im Prompt oder Code** | **Nach Art getrennt** (Grundsatz A): relevante Regeln gehen zur Erstellung in den Prompt, die eindeutig prüfbaren werden **zusätzlich** im Code erzwungen — beide gegen dieselbe veröffentlichte Version. Der Widerspruch Spec 46 ⇄ Spec 48 (Befund B8) ist damit entschieden und gehört in eine der beiden Specs nachgetragen. |
+| **Sprache** | **Sidebar-Mikrofon** (`voice-modal`, der Tool-Loop-Agent) übersetzt Rezeptaufträge in einen strukturierten Auftrag und fährt dann **denselben Ablauf** wie das Formular — mit Kanon und Regelwerk (`C3`). Freie Wissensfragen und Recherche bleiben Pull. **Das Leitstellen-Diktat bleibt unverändert** — es transkribiert nur und speist schon den richtigen Pfad. |
+| **Anzahl Prompt-Keys** | **Im Durchlauf messen.** Keine spekulative Umstrukturierung; in Etappe C wird gemessen, ob ein gemeinsamer Aufruf für zusammengehörige Felder besser und billiger ist. Entscheidung dann mit Zahlen. |
+| **Wiederherstellung** | **Vorziehen in Etappe C.** `C0` baut die Profilstruktur mit Versions-Fingerprint und Export/Import, `C9` prüft die leere Umgebung — solange der Ablauf klein ist. |
+
+### ⏳ Vertagt, weil sie ohne Zahlen blind wären
+
+| Entscheidung | Wann, und was sie vorher braucht |
+|---|---|
+| **Alte Bindungen abschaffen** (Etappe F) | Nach `A5` — dem gemessenen Bindungs-Bestand. Empfehlung bleibt **gestaffelt**: Triage `F1`, je migriertem Ablauf umstellen, dann den alten Pfad entfernen. Ich lege sie dir mit der Bestandszahl vor. |
+| **Zugriff auf den Korpus** (Etappe G) | Nach der Datenmigrations-Analyse. Empfehlung bleibt **Eigentum und Lesefreigabe trennen** — nicht global, keine erfundene `parent_team_id`-Hierarchie. Der dokumentierte 598→6-Fall muss vorher ausgeschlossen sein. |
+
+### 🔑 Mandat (Dominique, 2026-09-07)
+
+Autonom durcharbeiten · Merge und `./update.sh` auf demo erlaubt · Steuerdaten (`knowledge_routings.PUT`,
+`knowledge_canon.PUT`) live setzen erlaubt · Test-Generierungen fahren und aufräumen erlaubt ·
+Wissens-Dossiers per MCP schreiben erlaubt (`H3`).
+
+**Selbstauflagen dazu:** volle Suite vor jedem Deploy (~35 Min, **nie** eine Teil-Suite — eine
+Vertragsänderung am Kontext-Service bricht Tests in fremden Dateien) · Deploy **off-peak** und
+vorher angesagt · jede Steuerdaten-Änderung mit **Vorher-Wert protokolliert**, damit sie in
+einem Befehl rückstellbar ist · Test-Drafts mit IDs protokolliert und gelöscht · **keine
+erfundenen Werte** (`B6`: unklare Bezugsgröße → Review-Liste, keine Schätzung) · Branch vor
+jedem Befehl geprüft, nur eigene Dateien gestaget · Haupt-Clone (`feat/spec51-…`) und
+`wt-anreicherung-recall` (uncommittete Parallel-Arbeit) werden **nicht** angefasst · eigene
+Test-Sandbox per `cp -al`, der bestehende Symlink wird **nicht** umgebogen.
+
+> **Das ist die letzte Design-Runde.** Drei Review-Durchgänge haben den Plan echt verbessert,
+> aber er wird nicht kleiner, und die letzten Runden liefern zunehmend Zielbild statt Befund.
+> Was danach noch strittig ist, entscheidet der senkrechte Durchlauf mit dem eingebauten
+> Fehler — nicht die vierte Meinung.
+
+**Detail zu den beiden vertagten Punkten:**
+
+- **Bindungen (Etappe F):** radikal ist sauberer, aber es ist der Pfad, der heute für ~45
+  Prompt-Keys der einzige ist — und der Bestand ist ungemessen (kein Lesetool, B7). Deshalb
+  erst `A3` (Lesetool) → `A5` (Bestand) → Triage `F1`, dann entscheiden.
+- **Zugriff (Etappe G):** die Frage ist nicht „sieht die KI weniger oder der Mensch mehr",
+  sondern **wem der kuratierte Bestand gehören und für wen er freigegeben sein soll**. Drei
+  Wege: Bestand auf `team_id = NULL`, `parent_team_id`-Hierarchie (heute bei allen 8 Teams
+  NULL — würde eine Beziehung erfinden), oder **Bestand + Eigentümer + Lesefreigaben**
+  (empfohlen). Alle drei sind eine Migration, keine Config-Zeile — der dokumentierte
+  598→6-Fall muss vorher ausgeschlossen sein.
+
+---
+
+## Was ich NICHT geprüft habe (damit niemand darauf aufbaut)
+
+- **Der Bindungs-Bestand ist ungemessen.** Es gibt kein Lesetool (B7) und ich habe keinen
+  DB-Zugriff. Wie viele Bindungen es live gibt, an welchen `target_key`s sie hängen und wie
+  viele auf inaktive Dokumente zeigen, ist **Annahme aus Commit-Text und Code** — nicht
+  gemessen. A3/A5 existieren genau deshalb, und Etappe F sollte erst danach entschieden
+  werden.
+- **Die Discovery-Rangfolge im UI-Pfad ist nicht gemessen**, nur die des MCP-Pfads (Befund C).
+  Für den Generator-Scorer (`discoverGenericBlock`) braucht es einen echten Generierungslauf mit
+  `kontext`-Rückgabe — das ist Verifikations-Schritt 3.
+- **Ob `pruefeUndHeile()` ein Versuchslimit hat**, habe ich nicht nachgelesen. Der Vorschlag
+  „höchstens zwei automatische Korrekturrunden, danach ein Entwurf mit offenen Punkten" ist
+  vernünftig — aber prüfen, bevor gebaut wird, ob es das schon gibt.
+- **Ob `max_docs` die Kandidatenliste oder erst die Endauswahl kappt**, habe ich nur für
+  `max_chars_per_doc` geklärt (wird pro Dossier angewandt, Routing-Wert außer bei
+  `ai_generate_recipe`). Grundsatz C setzt voraus, dass es die Endauswahl ist — das ist zu
+  verifizieren, nicht anzunehmen.
+- **Die Budget-Zahlen in Befund I sind Obergrenzen** („baut bis"), keine gemessenen Ist-Werte.
+  Was real gebaut wird, hängt daran, wie viele Dossiers über `DISCOVERY_MIN_SCORE` kommen. Die
+  Kappung tritt also nicht bei jedem Call ein — aber sie kann, und niemand würde es sehen (I3).
+- **Die Zahl „29 ungesteuerte Keys"** stammt aus dem Abgleich Registry-Doku
+  (`26_LLM_MCP_Funktionsmatrix.md`) gegen die Live-Steuerdaten. Die Doku ist an mindestens
+  einer Stelle veraltet (`vk.behaelter` existiert laut Spec 50 nicht mehr). Der Deckungs-Bericht
+  aus A2 muss gegen `config('foodalchemist.prompts')` laufen, nicht gegen die Doku.

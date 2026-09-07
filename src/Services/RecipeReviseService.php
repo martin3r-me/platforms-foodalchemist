@@ -4,6 +4,7 @@ namespace Platform\FoodAlchemist\Services;
 
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Models\FoodAlchemistRecipe;
+use Platform\FoodAlchemist\Services\Ai\KnowledgeContextService;
 use Platform\FoodAlchemist\Services\Matching\MatchHeuristics;
 
 /**
@@ -169,7 +170,7 @@ class RecipeReviseService
                 'quantity' => (float) $z->quantity,
                 'einheit_slug' => $z->unit?->slug,
             ])->values()->all(),
-        ], ['knowledge' => $wissen['block'] ?? null, 'knowledge_used' => $wissen['files_used'] ?? null]);
+        ], KnowledgeContextService::proposeOptionen($wissen));
 
         return ['werte' => (array) $vorschlag->werte, 'confidence' => max(0.0, min(1.0, (float) $vorschlag->confidence))];
     }
@@ -212,7 +213,7 @@ class RecipeReviseService
                 'quantity' => (float) $z->quantity,
                 'einheit_slug' => $z->unit?->slug,
             ])->values()->all(),
-        ] + $facetten, ['knowledge' => $wissen['block'] ?? null, 'knowledge_used' => $wissen['files_used'] ?? null]);
+        ] + $facetten, KnowledgeContextService::proposeOptionen($wissen));
 
         return ['werte' => (array) $vorschlag->werte, 'confidence' => max(0.0, min(1.0, (float) $vorschlag->confidence))];
     }

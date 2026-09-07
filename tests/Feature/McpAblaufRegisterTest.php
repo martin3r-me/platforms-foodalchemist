@@ -173,10 +173,17 @@ it('regelwerk.GET weist unbekannte Prompt-Keys und Rollen ab', function () {
     expect(($this->run)('foodalchemist.regelwerk.GET', ['prompt_key' => 'gibt.es.nicht'])->errorCode)->toBe('VALIDATION_ERROR');
     expect(($this->run)('foodalchemist.regelwerk.GET', ['vorgang' => 'basisrezept_anlegen', 'role' => 'chef'])->errorCode)->toBe('VALIDATION_ERROR');
 
+    // Spec 52/A4 hat den Vertrag für den Fall „kein Kanon" GEÄNDERT: statt `quelle: 'keine'`
+    // mit dem Verweis auf `ablauf.GET` (das denselben leeren Kanon liest — der Agent lief im
+    // Kreis) wird jetzt das Routing wirklich aufgelöst. Für `recipe.generator` heisst das
+    // `routing` unter dem Alt-Schlüssel `ai_generate_recipe`, weil die Migrationen dort eine
+    // Regelwerk-Route seeden. `keine` gibt es nicht mehr — die drei Zustände sind
+    // `routing` | `bindung` | `ungesteuert`.
     $ohneKanon = ($this->run)('foodalchemist.regelwerk.GET', ['prompt_key' => 'recipe.generator']);
     expect($ohneKanon->success)->toBeTrue()
-        ->and($ohneKanon->data['quelle'])->toBe('keine')
-        ->and($ohneKanon->data['dokumente'])->toBe([]);
+        ->and($ohneKanon->data['quelle'])->toBeIn(['routing', 'bindung', 'ungesteuert'])
+        ->and($ohneKanon->data['quelle'])->not->toBe('keine')
+        ->and($ohneKanon->data['dokumente'])->toBeArray();
 });
 
 it('jeder Vorgang ist konsistent verdrahtet: Einstiegs-Tool und Reife-Kind existieren wirklich', function () {

@@ -83,6 +83,15 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                 \Platform\FoodAlchemist\Console\ReuseReifeBackfillCommand::class,
                 \Platform\FoodAlchemist\Console\WissenSteuerdatenW0Command::class,
                 \Platform\FoodAlchemist\Console\WissenDeckelCheckCommand::class,
+                // Spec 52/A2: welcher Prompt-Key bekommt welches Wissen — Kanon, Routing,
+                // Bindung, Budget in einer Tabelle. Ungesteuerte Keys sind ein Befund.
+                // Abgrenzung zu `wissen-deckung` (W2-4): das prüft die KORPUS-Richtung
+                // („nennt ein Prompt einen §, den kein Dossier hat"), das hier die
+                // VERSORGUNGS-Richtung („welches Wissen erreicht diesen Prompt überhaupt").
+                \Platform\FoodAlchemist\Console\WissenVersorgungCommand::class,
+                // Spec 52/A1: Grundlinie am tatsächlich versendeten Aufruf — inkl. der drei
+                // Folge-Calls, die der Kontext-Inspektor ausblendet.
+                \Platform\FoodAlchemist\Console\WissenGrundlinieCommand::class,
                 \Platform\FoodAlchemist\Console\KnowledgeEmbedCommand::class,
                 // Spec 50 Strang III: Arbeitsliste zu großer Dossiers (ein Thema pro Dossier ≤ Deckel).
                 \Platform\FoodAlchemist\Console\KnowledgeOversizedCommand::class,
@@ -1033,6 +1042,9 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\SpeisekarteLeitstelleGetTool::class,
                     \Platform\FoodAlchemist\Tools\KnowledgeRoutingsGetTool::class,
                     \Platform\FoodAlchemist\Tools\KnowledgeRoutingsPutTool::class,
+                    // Spec 52/A3: die Alt-Struktur war schreibbar (BIND/UNBIND), aber nicht
+                    // lesbar — deshalb blieb „Bindung auf inaktives Dossier" still.
+                    \Platform\FoodAlchemist\Tools\KnowledgeBindingsGetTool::class,
                     \Platform\FoodAlchemist\Tools\KnowledgeCategoriesGetTool::class,
                     \Platform\FoodAlchemist\Tools\KnowledgeCategoriesPostTool::class,
                     \Platform\FoodAlchemist\Tools\KnowledgeSetActiveTool::class,

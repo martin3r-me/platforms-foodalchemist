@@ -650,9 +650,7 @@ class RecipeModal extends Component
         // Regelwerk (recipe.eigenschaften-Routing; regelwerkBlock fällt für dieses Feature auf das
         // Basisrezepte-Regelwerk zurück). Leeres Routing = leerer Block (no-op), also fail-soft.
         $wissenBlock = $wissen->contextFor(Auth::user()?->currentTeamRelation, 'recipe.eigenschaften', trim(($this->form['name'] ?? '').' '.implode(' · ', $zutaten)));
-        $wissenOpts = ($wissenBlock['block'] ?? '') !== ''
-            ? ['knowledge' => $wissenBlock['block'], 'knowledge_used' => $wissenBlock['files_used'] ?? []]
-            : [];
+        $wissenOpts = \Platform\FoodAlchemist\Services\Ai\KnowledgeContextService::proposeOptionen($wissenBlock); // Spec 52/B3: dropped mitmessen
         // Der Prompt fordert „vorhandene Zubereitung beachten" — Zubereitung + Portionen als Basis mitgeben.
         try {
             $eigenschaften = $ki->propose('recipe.eigenschaften', [
@@ -963,9 +961,7 @@ class RecipeModal extends Component
             'recipe.eigenschaften',
             trim($r->name.' Behälter Füllmenge Füllgrad Dichte')
         );
-        $wissenOpts = ($wissenBlock['block'] ?? '') !== ''
-            ? ['knowledge' => $wissenBlock['block'], 'knowledge_used' => $wissenBlock['files_used'] ?? []]
-            : [];
+        $wissenOpts = \Platform\FoodAlchemist\Services\Ai\KnowledgeContextService::proposeOptionen($wissenBlock); // Spec 52/B3: dropped mitmessen
 
         try {
             $v = $gateway->propose('recipe.dichteklasse', [

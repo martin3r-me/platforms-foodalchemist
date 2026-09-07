@@ -501,14 +501,28 @@ class Browser extends Component
                 ->where('mode', '!=', 'none')->orderBy('feature')->get()
             : collect();
 
-        // #469 Chip-Wahrheit: der Kategorie-Routing-Chip allein ist irreführend, weil die
-        // Laufzeit für cross_cutting NUR die fest verdrahtete 7er-Kernliste lädt
-        // (KnowledgeContextService::ALWAYS_LOAD_CROSS_CUTTING), nicht jedes cross_cutting-Doc.
-        // false = trotz Kategorie-Route NICHT automatisch geladen (nur via Bindung wirksam).
-        // true = wird/kann geladen; null = keine Auswahl.
+        // #469 Chip-Wahrheit, Spec 52/A4 KORRIGIERT: die alte Fassung prüfte nur, ob der Slug
+        // in der 7er-Kernliste steht — ohne den MODUS anzusehen. Damit behauptete sie bei
+        // 158 von 165 cross_cutting-Dossiers, sie würden nicht geladen, obwohl die Generatoren
+        // die Kategorie längst per `discovery` ziehen (über den ganzen Korpus, nicht über die
+        // 7er-Liste). Zusätzlich sind genau diese 7 Originale seit Welle 2 DEAKTIVIERT.
+        //
+        // Ehrliche Auflösung, in derselben Reihenfolge wie die Laufzeit:
+        //   · irgendeine `discovery`-Route auf die Kategorie → auffindbar, kein Hinweis;
+        //   · nur `always`-Routen → dann entscheidet die je Feature aufgelöste Slug-Liste
+        //     (`crossCuttingSlugs()` mit dem config-Override), nicht die rohe Konstante.
+        $wissenService = app(\Platform\FoodAlchemist\Services\Ai\KnowledgeContextService::class);
+        $ccDiscovery = $routings->contains(fn ($r) => (string) $r->mode === 'discovery');
+        $ccAlwaysFeatures = $routings->filter(fn ($r) => (string) $r->mode === 'always')
+            ->pluck('feature')->map(fn ($f) => (string) $f)->all();
+        $ccTraegtSlug = $selected !== null && array_filter(
+            $ccAlwaysFeatures,
+            fn (string $f) => in_array($selected->slug, $wissenService->crossCuttingSlugs($f), true),
+        ) !== [];
+
         $autoGeladen = $selected === null ? null
             : ($selected->category === 'cross_cutting'
-                ? in_array($selected->slug, \Platform\FoodAlchemist\Services\Ai\KnowledgeContextService::ALWAYS_LOAD_CROSS_CUTTING, true)
+                ? ($ccDiscovery || $ccTraegtSlug || $ccAlwaysFeatures === [])
                 : true);
 
         // v2-Ziele: pflegbare Einsatzorte/Layer
@@ -545,6 +559,9 @@ class Browser extends Component
             'bindings' => $bindings,
             'routings' => $routings,
             'autoGeladen' => $autoGeladen,
+            // Spec 52/A4: der Hinweis muss sagen, WELCHE Features die Kategorie fest laden —
+            // sonst steht dort eine Behauptung ohne Adresse.
+            'ccAlwaysFeatures' => $ccAlwaysFeatures,
             'layers' => $layers,
             'layerLabels' => $layerLabels,
             'traceResults' => $traceResults,
