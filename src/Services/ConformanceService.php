@@ -131,11 +131,24 @@ class ConformanceService
         );
 
         $roh = $vorschlag->werte['befunde'] ?? [];
+        $befunde = is_array($roh) ? $this->normalisiere($roh) : [];
+
+        // Deterministische Befunde DAZU (2026-09-07): was exakt entscheidbar ist, darf nicht von
+        // einem Sampling abhaengen. Sie laufen durch dieselbe Normalisierung und dieselbe Ablage,
+        // werden also bei jedem Lauf neu gemeldet und ueberleben damit den Sweep in speichere().
+        // Fail-soft: ein Fehler in einer Regel darf den KI-Pass nicht kippen.
+        try {
+            $befunde = [...$befunde, ...$this->normalisiere($adapter->deterministischeBefunde($team, $id))];
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('[Konformitaet] deterministische Regeln fehlgeschlagen', [
+                'typ' => $adapter->artifactType(), 'id' => $id, 'error' => $e->getMessage(),
+            ]);
+        }
 
         return [
             'gesamturteil' => trim((string) ($vorschlag->werte['gesamturteil'] ?? '')),
             'confidence' => max(0.0, min(1.0, $vorschlag->confidence)),
-            'befunde' => is_array($roh) ? $this->normalisiere($roh) : [],
+            'befunde' => $befunde,
         ];
     }
 

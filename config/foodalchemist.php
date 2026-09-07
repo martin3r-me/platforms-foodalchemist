@@ -698,6 +698,20 @@ return [
      */
     'knowledge_team_scope' => env('FOODALCHEMIST_KNOWLEDGE_TEAM_SCOPE', false),
 
+    /*
+     * Schicht 3 — Konformitaets-Critic: die DETERMINISTISCHEN Regeln neben dem LLM-§-Pass.
+     * Was exakt entscheidbar ist, wird exakt entschieden (gemessene Lehre aus dem
+     * Regelwerk-Programm: code-erzwungen = 0 Befunde, prompt-gebunden = Befunde bleiben).
+     */
+    'conformance' => [
+        // Anteil an der Einsatzmasse, ab dem eine Konzentrat-/Trockenform als Hauptmasse gilt
+        // (RecipeConformanceAdapter::deterministischeBefunde). Fachliche Setzung, nicht gemessen:
+        // Lauf 65 hatte 1.600 g Trockentomate in einer Cremesuppe, legitime Reduktionen und
+        // Tomatenmark liegen klar unter 20 %. Senken erzeugt Befunde an Saucen, heben verliert
+        // den Fall. 0 oder >= 1 schaltet die Regel aus.
+        'konzentrat_anteil_max' => (float) env('FOODALCHEMIST_KONZENTRAT_ANTEIL_MAX', 0.20),
+    ],
+
     'semantic_search' => [
         // Phase 0 (2026-08-06): RAG-Hot-Path war HART AUS — der mysql-Embedding-Store macht
         // Cosine-in-PHP und blockierte/OOMte generiere() bei „Kontext & Wissen", VOR dem LLM.

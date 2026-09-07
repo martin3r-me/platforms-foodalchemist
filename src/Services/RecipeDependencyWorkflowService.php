@@ -379,7 +379,9 @@ class RecipeDependencyWorkflowService
                 // Bestand zuerst: existiert die Komponente als Basisrezept (Token-Set-Namensgleichheit)?
                 // Treffer → Eltern-Zutat binden + Reuse-Sichtzeile (skipped), KEIN neuer Erzeugungs-Lauf.
                 // Das ist der eigentliche Fix gegen „datenbank → sehr viele neue Rezepte".
-                $bestehend = app(\Platform\FoodAlchemist\Services\RecipeService::class)->findByTokenSet($team, $text);
+                $reuse = app(\Platform\FoodAlchemist\Services\RecipeService::class)
+                    ->findByTokenSetMitReife($team, $text);
+                $bestehend = $reuse['recipe'] ?? null;
                 if ($bestehend !== null && (int) $bestehend->id !== (int) $recipe->id) {
                     $this->bindIngredient($team, (int) $ingredient->id, (int) $bestehend->id);
                     FoodAlchemistCascadeRunStep::firstOrCreate([
@@ -395,6 +397,10 @@ class RecipeDependencyWorkflowService
                         'ref_type' => 'recipe',
                         'ref_id' => (int) $bestehend->id,
                         'sort' => (int) $ingredient->position,
+                        // Der Reifegrad reist MIT: „übernommen" heißt nur dann „fertig", wenn
+                        // es das auch ist. Ohne diesen Marker meldete der Lauf „abgeschlossen"
+                        // über einem draft mit 0 Schritten (Lauf 65, Step 460).
+                        'deferred' => ['reuse' => $this->reuseMarker($reuse)],
                     ]);
 
                     continue;
@@ -489,10 +495,18 @@ class RecipeDependencyWorkflowService
         try {
             $zeilen = $recipe->ingredients()->whereNotNull('referenced_recipe_id')
                 ->with('referencedRecipe:id,name')->orderBy('position')->get();
+            $svc = app(\Platform\FoodAlchemist\Services\RecipeService::class);
             foreach ($zeilen as $z) {
                 if ((int) $z->referenced_recipe_id === (int) $recipe->id) {
                     continue;   // Selbstbezug kann nie eine eigene Stufe sein
                 }
+                // Auch der Spiegel-Pfad trägt den Reifegrad — sonst zeigt die Zeile
+                // „übernommen" für ein hohles Bestands-Rezept (s. planChildren).
+                $ziel = FoodAlchemistRecipe::visibleToTeam($team)->find((int) $z->referenced_recipe_id);
+                $marker = $ziel === null ? null : $this->reuseMarker([
+                    'recipe' => $ziel,
+                    'eigen' => (int) ($ziel->team_id ?? 0) === (int) $team->id,
+                ] + $svc->reifegrad($ziel));
                 FoodAlchemistCascadeRunStep::firstOrCreate([
                     'cascade_run_id' => $step->cascade_run_id,
                     'dedupe_key' => 'reuse:' . (int) $z->referenced_recipe_id,
@@ -506,11 +520,33 @@ class RecipeDependencyWorkflowService
                     'ref_type' => 'recipe',
                     'ref_id' => (int) $z->referenced_recipe_id,
                     'sort' => (int) $z->position,
+                    'deferred' => $marker === null ? null : ['reuse' => $marker],
                 ]);
             }
         } catch (\Throwable) {
             // Parallel angelegt (dedupe-Unique) oder Zeile weg — Sichtbarkeit ist kein Blocker.
         }
+    }
+
+    /**
+     * Der Reuse-Marker, der am Step landet (`deferred.reuse`). Eine Struktur, zwei Pfade
+     * (planChildren + spiegleReuseKinder), damit UI, Zähler und MCP dasselbe lesen.
+     *
+     * `eigen` entscheidet, ob eine Lücke automatisch geschlossen werden DARF: ein
+     * team-eigener Entwurf ist ein unfertiges Stück dieses Hauses, ein Referenz-Rezept aus
+     * einem übergeordneten Team ist fremdes, lebendes Gut — daran schreibt die Kaskade nicht.
+     *
+     * @param  array{recipe: FoodAlchemistRecipe, reif: bool, eigen?: bool, luecken: list<string>}  $reuse
+     * @return array{reif: bool, eigen: bool, luecken: list<string>, status: string}
+     */
+    private function reuseMarker(array $reuse): array
+    {
+        return [
+            'reif' => (bool) ($reuse['reif'] ?? false),
+            'eigen' => (bool) ($reuse['eigen'] ?? false),
+            'luecken' => array_values((array) ($reuse['luecken'] ?? [])),
+            'status' => (string) ($reuse['recipe']->status?->value ?? ''),
+        ];
     }
 
     private function bindCompletedChild(Team $team, FoodAlchemistCascadeRunStep $child, FoodAlchemistRecipe $recipe): void

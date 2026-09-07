@@ -237,11 +237,57 @@ class EnrichRecipeJob implements ShouldQueue
                 'status' => $status,
                 'error' => $error !== null ? Str::limit($error, 200) : null,
                 'coverage' => $coverage,                            // D-2: je Glied der Status
+                // TIEFE des Passes (2026-09-07). Das Badge zeigte „angereichert ✓" auch fuer
+                // einen Lauf mit completeCoverage=false, der Step-by-Step, Sensorik, Zeiten,
+                // Equipment und Pairings uebersprungen hat — genau der Fall in Lauf 65, wo am
+                // freigegebenen Rezept `work_time_min` null blieb. Explizit statt aus dem
+                // Fehlen von `coverage` erraten: coverageKurz() gibt auch null zurueck, wenn
+                // die Glieder leere Status tragen.
+                'tief' => $this->completeCoverage,
                 'at' => now()->toIso8601String(),
             ], fn ($v) => $v !== null);
             $step->update(['deferred' => $deferred]);
+
+            // Trägt der Step einen REUSE-Marker (übernommenes Bestands-Rezept), muss dessen
+            // Reifegrad nach einer erfolgreichen Anreicherung NEU bestimmt werden — sonst
+            // stünde dort für immer `reif => false`: die Zeile behauptete weiter „Bestand
+            // unfertig", und `recomputeRunStatus` hielte den Lauf dauerhaft in `review`.
+            // Ohne das hätte der Fix nur die Richtung der Lüge gedreht.
+            if ($status === 'done' && is_array($deferred['reuse'] ?? null)) {
+                $this->frischeReuseReife($step);
+            }
         } catch (\Throwable) {
             // Tracking ist Beiwerk — nie blockierend.
+        }
+    }
+
+    /**
+     * Den Reuse-Marker eines Steps nach der Anreicherung nachziehen und den Lauf-Status neu
+     * bewerten. Getrennte Methode, weil sie zwei Dinge anfasst (Step + Run) und {@see markEnrich}
+     * sonst zwei Verantwortungen hätte.
+     */
+    private function frischeReuseReife(FoodAlchemistCascadeRunStep $step): void
+    {
+        $team = Team::find($this->teamId);
+        $recipe = $team === null ? null : FoodAlchemistRecipe::visibleToTeam($team)->find($this->recipeId);
+        if ($team === null || $recipe === null) {
+            return;
+        }
+        $fresh = $step->fresh() ?? $step;
+        $deferred = is_array($fresh->deferred) ? $fresh->deferred : [];
+        if (! is_array($deferred['reuse'] ?? null)) {
+            return;
+        }
+        $reife = app(\Platform\FoodAlchemist\Services\RecipeService::class)->reifegrad($recipe->fresh() ?? $recipe);
+        $deferred['reuse']['reif'] = $reife['reif'];
+        $deferred['reuse']['luecken'] = $reife['luecken'];
+        $deferred['reuse']['status'] = (string) ($recipe->fresh()?->status?->value ?? $deferred['reuse']['status'] ?? '');
+        $fresh->update(['deferred' => $deferred]);
+
+        // Der Lauf hing wegen dieser Lücke in `review` — ist sie zu, darf er abschließen.
+        if ($reife['reif'] && $fresh->cascade_run_id !== null) {
+            app(\Platform\FoodAlchemist\Services\PlanningCascadeService::class)
+                ->recomputeRunStatus((int) $fresh->cascade_run_id);
         }
     }
 

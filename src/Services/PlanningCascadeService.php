@@ -1854,7 +1854,7 @@ class PlanningCascadeService
         if ($run === null) {
             return;
         }
-        $steps = $run->steps()->get(['status']);
+        $steps = $run->steps()->get(['status', 'deferred']);
         if ($steps->whereIn('status', ['queued', 'running'])->count() > 0) {
             if ($run->status !== 'running') {
                 $run->update(['status' => 'running']);
@@ -1871,11 +1871,21 @@ class PlanningCascadeService
         }
         $positiv = $steps->whereIn('status', ['freigegeben', 'skipped'])->count();
         $hatFehler = $steps->where('status', 'failed')->count() > 0;
+        // 2026-09-07: eine UNREIFE Übernahme ist kein Abschluss. Vorher zählte jedes `skipped`
+        // als positiv, und Lauf 65 meldete „abgeschlossen — alle Artefakte freigegeben oder als
+        // Bestand übernommen" über einem `draft` mit 0 Schritten und ungemappter Zutat. Der Lauf
+        // bleibt jetzt in `review`, bis die Lücke geschlossen ist — automatisch (eigener Entwurf)
+        // oder durch eine menschliche Entscheidung (fremdes/lebendes Rezept).
+        $unreifeUebernahme = $steps->where('status', 'skipped')->contains(function ($st) {
+            $reuse = is_array($st->deferred['reuse'] ?? null) ? $st->deferred['reuse'] : null;
+
+            return $reuse !== null && ! ($reuse['reif'] ?? false);
+        });
         // L4: „done" darf nicht lügen. Ist ein Kind-Step gescheitert (und nichts mehr in-flight/geplant),
         // bleibt der Run in `review` statt `done` — der Mensch sieht den Fehler im Cockpit und kann den
         // Step neu erzeugen. Nur ein sauberer Abschluss ohne failed-Step meldet `done`.
         if ($positiv > 0) {
-            $run->update(['status' => $hatFehler ? 'review' : 'done']);
+            $run->update(['status' => ($hatFehler || $unreifeUebernahme) ? 'review' : 'done']);
 
             return;
         }
@@ -1983,9 +1993,68 @@ class PlanningCascadeService
             // ist bei einem flachen Gericht sofort „done", der Job läuft aber async danach).
             $this->markEnrichQueued($step);
             EnrichRecipeJob::dispatch($team->id, $userId, (int) $step->ref_id, $zielVk, $kiBilder, (int) $step->id, false, false, $completeCoverage);
+            $this->anreichereUnreifeUebernahmen($team, $step, $userId, $zielVk, $kiBilder, $completeCoverage);
         }
 
         return false;
+    }
+
+    /**
+     * Die UNREIFEN, TEAM-EIGENEN Übernahmen unter diesem Step mit anreichern.
+     *
+     * WARUM (Befund 2026-09-07, Lauf 65): `starteFolgestufe` reicherte ausschließlich das
+     * freigegebene Rezept selbst an — eine Schleife über die Kinder gibt es nur in
+     * `enrichBestehendesRezept`, `RecipeModal::allesAnreichern` und
+     * `VkModal::allesAnreichern`, also genau nicht im Pfad der Kaskaden-Freigabe. Step 460
+     * („Basisrezept: Gemüsebrühe") blieb deshalb ein `draft` mit 0 Schritten, und der Lauf
+     * meldete trotzdem „abgeschlossen".
+     *
+     * Die Regel des Nutzers bleibt gewahrt — „nur die neuen": ein REIFES Bestands-Rezept
+     * wird nicht angefasst, und ein FREMDES (Referenz-Rezept eines übergeordneten Teams,
+     * oder team-eigen und schon `approved`) auch nicht, selbst wenn es Lücken hat. Dort
+     * gehört die Entscheidung dem Menschen; die Zeile zeigt sie an und der Lauf gilt nicht
+     * als fertig. Angereichert wird nur, was ohnehin ein unfertiges Stück dieses Hauses ist.
+     *
+     * Fail-soft: eine fehlende Übernahme kippt die Freigabe nie.
+     */
+    private function anreichereUnreifeUebernahmen(
+        Team $team,
+        FoodAlchemistCascadeRunStep $step,
+        int $userId,
+        ?float $zielVk,
+        bool $kiBilder,
+        bool $completeCoverage,
+    ): void {
+        try {
+            $kinder = FoodAlchemistCascadeRunStep::where('cascade_run_id', $step->cascade_run_id)
+                ->where('parent_step_id', $step->id)
+                ->where('status', 'skipped')
+                ->where('ref_type', 'recipe')
+                ->whereNotNull('ref_id')
+                ->get();
+            foreach ($kinder as $kind) {
+                $reuse = is_array($kind->deferred['reuse'] ?? null) ? $kind->deferred['reuse'] : null;
+                if ($reuse === null || ($reuse['reif'] ?? false) || ! ($reuse['eigen'] ?? false)) {
+                    continue;   // reif = fertig · fremd = nicht unsere Baustelle
+                }
+                // Nur eigene ENTWÜRFE: an einem freigegebenen Rezept hängen möglicherweise
+                // Gerichte, Foodbooks und Speisepläne — das wird nicht im Vorbeigehen neu
+                // geschrieben, auch wenn es dem eigenen Team gehört.
+                if (! in_array((string) ($reuse['status'] ?? ''), ['stub', 'draft'], true)) {
+                    continue;
+                }
+                $this->markEnrichQueued($kind);
+                EnrichRecipeJob::dispatch(
+                    $team->id, $userId, (int) $kind->ref_id, $zielVk, $kiBilder,
+                    (int) $kind->id, false, false, $completeCoverage,
+                )->onQueue(Warteschlange::anreichern());
+            }
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('[PlanungKaskade] Anreicherung übernommener Sub-Rezepte fehlgeschlagen', [
+                'step' => $step->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     /** Anreicherungs-Status eines Rezept-/Gericht-Steps synchron auf `queued` setzen (Sicht-Signal fürs Polling). */
@@ -2068,7 +2137,7 @@ class PlanningCascadeService
      * „Neu anreichern" (Cockpit): stößt die Anreicherung eines bereits freigegebenen Rezept-/Gericht-Steps
      * erneut an — z. B. nachdem der erste EnrichRecipeJob-Lauf fehlschlug (deferred.enrich=failed).
      */
-    public function reAnreichern(Team $team, int $stepId): void
+    public function reAnreichern(Team $team, int $stepId, ?bool $completeCoverageErzwingen = null): void
     {
         $step = $this->ownedStep($team, $stepId);
         if ($step->ref_type !== 'recipe' || $step->ref_id === null || ! in_array($step->kind, ['rezept', 'gericht'], true)) {
@@ -2077,7 +2146,11 @@ class PlanningCascadeService
         $params = is_array($step->run?->params) ? $step->run->params : [];
         $zielVk = isset($params['ziel_vk_eur']) ? (float) $params['ziel_vk_eur'] : null;
         $kiBilder = (bool) ($params['ki_bilder'] ?? false);
-        $completeCoverage = array_key_exists('complete_coverage', $params) ? (bool) $params['complete_coverage'] : true;
+        // Die Lauf-Leitplanke ist der Default — aber der Knopf „voll anreichern" an einer
+        // leicht angereicherten Zeile muss sie ueberstimmen koennen. Sonst faehrt er denselben
+        // flachen Pass erneut, und die Zeile bleibt ohne Schritte und Zeiten.
+        $completeCoverage = $completeCoverageErzwingen
+            ?? (array_key_exists('complete_coverage', $params) ? (bool) $params['complete_coverage'] : true);
         $this->markEnrichQueued($step);
         EnrichRecipeJob::dispatch($team->id, (int) (Auth::id() ?? 0), (int) $step->ref_id, $zielVk, $kiBilder, (int) $step->id, false, false, $completeCoverage);
     }
@@ -2688,6 +2761,18 @@ class PlanningCascadeService
                 'ref_id' => $s->ref_id !== null ? (int) $s->ref_id : null,
                 'parent_step_id' => $s->parent_step_id !== null ? (int) $s->parent_step_id : null,
                 'anreicherung' => $deferred['enrich']['status'] ?? null,
+                // Tiefe des Anreicherungs-Passes: bei complete_coverage=false bleiben Schritte,
+                // Sensorik, Zeiten, Equipment und Pairings leer. Headless war das nicht
+                // unterscheidbar — 'done' sah in beiden Faellen gleich aus.
+                'anreicherung_tief' => isset($deferred['enrich']['tief'])
+                    ? (bool) $deferred['enrich']['tief'] : null,
+                // Reifegrad einer UEBERNAHME (`skipped`). Ohne das ist per MCP nicht erkennbar,
+                // dass „uebernommen" auf ein draft mit 0 Schritten zeigt — genau der Fall, der
+                // Lauf 65 als „abgeschlossen" meldete.
+                'uebernahme_reif' => isset($deferred['reuse']['reif'])
+                    ? (bool) $deferred['reuse']['reif'] : null,
+                'uebernahme_luecken' => ! empty($deferred['reuse']['luecken'])
+                    ? array_values((array) $deferred['reuse']['luecken']) : null,
                 'bilder' => $deferred['bilder']['status'] ?? null,
                 'fehler' => $s->error,
                 // E-P0 (Spec 40): Attach-Fehler auch headless sichtbar — das Konzept ist erzeugt, hängt aber
@@ -2751,13 +2836,32 @@ class PlanningCascadeService
             'deckel_hinweise' => is_array($run->deckel_hinweise) && $run->deckel_hinweise !== []
                 ? array_values($run->deckel_hinweise)
                 : null,
-            'hinweis' => $this->laufStatusHinweis((string) $run->status),
+            'hinweis' => $this->laufStatusHinweis((string) $run->status, $steps),
         ];
     }
 
     /** Übersetzt den Run-Status in einen Handlungs-Satz (Freigabe/Fortsetzen bleiben human-only). */
-    private function laufStatusHinweis(string $status): string
+    private function laufStatusHinweis(string $status, mixed $steps = null): string
     {
+        // Ein Lauf, der nur noch wegen einer UNREIFEN ÜBERNAHME in `review` haengt, braucht einen
+        // anderen Satz als „Entwuerfe warten auf Freigabe" — sonst sucht man die Freigabe-Aktion,
+        // die es dort nicht gibt (eine `skipped`-Zeile ist nicht freigebbar).
+        if ($status === 'review' && $steps !== null) {
+            $unreif = collect($steps)->where('status', 'skipped')->filter(static function ($st) {
+                $reuse = is_array($st->deferred['reuse'] ?? null) ? $st->deferred['reuse'] : null;
+
+                return $reuse !== null && ! ($reuse['reif'] ?? false);
+            });
+            $offeneEntwuerfe = collect($steps)->whereIn('status', ['done', 'geplant'])->count();
+            if ($unreif->isNotEmpty() && $offeneEntwuerfe === 0) {
+                return 'Übernommene Bestands-Rezepte sind nicht produktionsreif ('
+                    .$unreif->pluck('label')->filter()->implode(', ')
+                    .'). Eigene Entwürfe werden bei der Freigabe automatisch angereichert; fremde oder '
+                    .'freigegebene Rezepte brauchen eine bewusste Entscheidung im Cockpit '
+                    .'(„Bestand anreichern"). Details je Schritt: uebernahme_reif / uebernahme_luecken.';
+            }
+        }
+
         return match ($status) {
             'running' => 'Der Worker rechnet noch (Steps queued/running). Auf Abschluss warten, dann prüfen/freigeben.',
             'review' => 'Fertige Entwürfe warten auf die menschliche Freigabe (Gate 2); geplante Sub-Rezepte auf die Freigabe der Stufe darüber. Freigeben/Verwerfen ist human-only, kein MCP-Trigger.',

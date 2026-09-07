@@ -165,7 +165,13 @@ class Index extends Component
         'ziel_einheit' => '', 'ziel_menge' => '',
         'occasion' => '', 'serviceform' => '', 'kompositions_stil' => '',
         'favoriten' => false, 'favoriten_conv_only' => false,
-        'ziel_vk' => '', 'voll_anreichern' => false, 'ki_bilder' => false,
+        // `voll_anreichern` Default AN (Entscheid Dominique 2026-09-07): mit AUS ueberspringt
+        // die Anreicherung `coverageGlieder` — Step-by-Step, Sensorik, Arbeits-/Ruestzeit,
+        // Equipment, Posten, Prozess-/Aromaanker, Pairings. In Lauf 65 war der Schalter aus,
+        // deshalb stand `work_time_min` auch am FREIGEGEBENEN Rezept auf null, waehrend das
+        // Badge einen Abschluss zeigte. `ki_bilder` bleibt AUS — das ist die teure Achse
+        // (ein KI-Call je Bild), die Coverage kostet einen Textlauf.
+        'ziel_vk' => '', 'voll_anreichern' => true, 'ki_bilder' => false,
         // Concept-Typ (#35): Menü (Gänge) vs. Buffet (Stationen) — steuert Label + Positionen-Logik.
         // Default 'menue' (byte-identisch bisher); nur 'buffet' ist ein Signal (station-Slots).
         'menue_typ' => 'menue',
@@ -1550,7 +1556,7 @@ class Index extends Component
 
         $params = $this->reglerParams('gericht');
         $creativeMode = (string) ($this->eingabe['gericht']['creative_mode'] ?? 'voll_kreativ');
-        $vollAnreichern = (bool) ($this->regler['gericht']['voll_anreichern'] ?? false);
+        $vollAnreichern = (bool) ($this->regler['gericht']['voll_anreichern'] ?? true);
         // Fan-out-Vererbung wie beim Einzel-Go (fail-soft — kippt sie, darf der Batch NICHT sterben).
         try {
             $svc->setGenerationParams($team, $session->id, $params);
@@ -1980,7 +1986,7 @@ class Index extends Component
         $favoriten = (bool) ($r['favoriten'] ?? false);
         $favConvOnly = (bool) ($r['favoriten_conv_only'] ?? false);
         $kiBilder = (bool) ($r['ki_bilder'] ?? false);
-        $vollAnreichern = (bool) ($r['voll_anreichern'] ?? false);
+        $vollAnreichern = (bool) ($r['voll_anreichern'] ?? true);
         $p = $r;
         // Bio dreiwertig weiterreichen (bio|conventional|neutral) — der Generator/Matcher kennt einen
         // NEUTRALEN Arm (Adjustment 0). Ohne ihn fiel „egal" auf das Bool false → 'conventional' → Bio-GPs
@@ -2553,7 +2559,7 @@ class Index extends Component
             'created_via' => 'plan_go',
             'brief' => $this->effektiverBrief($scope),
             'params' => $laufParams,
-            'voll_anreichern' => (bool) ($this->regler[$scope]['voll_anreichern'] ?? false),   // recipe-first: default AUS
+            'voll_anreichern' => (bool) ($this->regler[$scope]['voll_anreichern'] ?? true),   // Default AN (s. $reglerDefaults)
             // Gericht: erst textlicher Bauplan (inkl. Komponenten), Rezept-Draft erst nach Blitz/Freigabe.
             'proposal_first' => $scope === 'gericht',
         ];
@@ -3106,12 +3112,23 @@ class Index extends Component
             // `skipped` = übernommenes Bestands-Rezept (Reuse) — nichts zu erzeugen, also fertig.
             $geplant = $grp->where('status', 'geplant')->count();
             $uebernommen = $grp->where('status', 'skipped')->count();
-            $zustand = $running > 0 ? 'läuft' : ($done > 0 ? 'prüfen' : ($geplant > 0 ? 'geplant' : 'erledigt'));
+            // …ABER nur, wenn die Übernahme wirklich fertig ist. 2026-09-07: Lauf 65 zählte
+            // Step 460 („Basisrezept: Gemüsebrühe", draft, 0 Schritte, unbepreist) als fertig
+            // und der Lauf meldete „abgeschlossen". Eine unreife Übernahme ist eine offene
+            // Aufgabe, kein Abschluss — sie erscheint als eigene Zahl und nicht in `fertig`.
+            $unreif = $grp->where('status', 'skipped')->filter(function ($st) {
+                $reuse = is_array($st->deferred['reuse'] ?? null) ? $st->deferred['reuse'] : null;
+
+                return $reuse !== null && ! ($reuse['reif'] ?? false);
+            })->count();
+            $zustand = $running > 0 ? 'läuft'
+                : ($done > 0 ? 'prüfen' : ($geplant > 0 ? 'geplant' : ($unreif > 0 ? 'prüfen' : 'erledigt')));
             $out[] = [
                 'kind' => $d['kind'], 'label' => $d['label'], 'total' => $total,
                 'running' => $running, 'done' => $done, 'freigegeben' => $freigegeben,
                 'verworfen' => $verworfen, 'failed' => $failed, 'geplant' => $geplant,
-                'uebernommen' => $uebernommen, 'fertig' => $done + $freigegeben + $uebernommen,
+                'uebernommen' => $uebernommen, 'uebernommen_unreif' => $unreif,
+                'fertig' => $done + $freigegeben + max(0, $uebernommen - $unreif),
                 'zustand' => $zustand,
             ];
         }
@@ -3154,7 +3171,9 @@ class Index extends Component
         // Steps aller jüngsten Läufe in EINEM Pass holen → je Lauf gruppieren (kein N+1).
         $runIds = array_map(fn ($r) => (int) $r->id, array_values($latest));
         $stepsByRun = \Platform\FoodAlchemist\Models\FoodAlchemistCascadeRunStep::whereIn('cascade_run_id', $runIds)
-            ->get(['cascade_run_id', 'kind', 'status', 'label', 'ref_id'])
+            // `deferred` mitholen: stufenAusSteps liest daraus den Reifegrad der Übernahmen.
+            // Ohne die Spalte zählte eine unreife Übernahme auf der Hauptseite still als fertig.
+            ->get(['cascade_run_id', 'kind', 'status', 'label', 'ref_id', 'deferred'])
             ->groupBy('cascade_run_id');
 
         // Spec 42 / Board: Ausgabe-Ziel (Owner) je Lauf — Namen batch-auflösen (ein Query je Owner-Typ,
@@ -3258,7 +3277,11 @@ class Index extends Component
         }
 
         return $lauf->steps->contains(function ($s) {
-            if ($s->status !== 'freigegeben' || ! in_array($s->kind, ['rezept', 'gericht'], true)) {
+            // `skipped` mit aufnehmen: seit 2026-09-07 kann auch eine übernommene Zeile eine
+            // laufende Anreicherung haben (unreifer eigener Entwurf). Ohne das pollte die
+            // Fläche nicht und der Spinner an der Sub-Rezept-Zeile stand still.
+            if (! in_array($s->status, ['freigegeben', 'skipped'], true)
+                || ! in_array($s->kind, ['rezept', 'gericht'], true)) {
                 return false;
             }
             $deferred = is_array($s->deferred) ? $s->deferred : [];
@@ -3270,15 +3293,20 @@ class Index extends Component
         });
     }
 
-    /** „Neu anreichern" (Cockpit): Anreicherung eines freigegebenen Drafts erneut anstoßen (nach Fehler). */
-    public function neuAnreichern(int $stepId, PlanningCascadeService $cascade): void
+    /**
+     * „Neu anreichern" (Cockpit): Anreicherung eines Steps erneut anstoßen — nach einem Fehler,
+     * an einer unreifen Übernahme, oder mit `$voll` als „jetzt in voller Tiefe" (2026-09-07):
+     * war der Lauf mit `complete_coverage=false` gefahren, fehlen Schritte, Sensorik und Zeiten,
+     * und ein einfacher Neu-Lauf würde denselben flachen Pass wiederholen.
+     */
+    public function neuAnreichern(int $stepId, PlanningCascadeService $cascade, bool $voll = false): void
     {
         $team = $this->team();
         if ($team === null) {
             return;
         }
         try {
-            $cascade->reAnreichern($team, $stepId);
+            $cascade->reAnreichern($team, $stepId, $voll ? true : null);
             $this->meldung = 'Anreicherung neu gestartet …';
             $this->fehler = null;
         } catch (\Throwable $e) {

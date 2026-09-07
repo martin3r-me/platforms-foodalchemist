@@ -157,6 +157,7 @@ class GenerationContextService
 
         $out = [];
         if ($gp !== []) {
+            $treffer = $this->mitZustandsfeldern($team, array_slice(array_values($gp), 0, $gpCandMax));
             $out['gp_kandidaten'] = [
                 // B1 (2026-08-20): im Datenbank-Modus HART erden (jede fachlich passende Zutat exakt
                 // benennen + gp_id angeben), sonst weich (Angebot). Der Fit-Guard im recipe/vk.generator
@@ -164,7 +165,15 @@ class GenerationContextService
                 'hinweis' => $strikt
                     ? 'DATENBANK-Modus: benenne JEDE Zutat, für die hier ein Kandidat FACHLICH passt, EXAKT auf diesen und gib seine gp_id an. Erfinde nur, wo die Liste fachlich nichts hergibt.'
                     : 'Benenne Zutaten wenn möglich exakt auf diese EXISTIERENDEN Grundprodukte (gp_id nutzen) statt neue zu erfinden.',
-                'treffer' => array_slice(array_values($gp), 0, $gpCandMax),
+                // D2 (2026-09-07): zustand/verarbeitung/form NEBEN dem Namen. Vorher bekam das
+                // Modell nur {id, name, score} — der Name war ein opaker String, und die
+                // produktbestimmende Achse musste es sich daraus zusammenreimen.
+                'lesehilfe' => 'zustand/verarbeitung/form sind die PRODUKTBESTIMMENDEN Felder. '
+                    .'Sie müssen zur Rolle der Zutat im Gericht passen: eine Trocken-/Konzentrat-/'
+                    .'Pulver-Variante ist eine Würz- oder Aromakomponente in kleiner Menge, NIE die '
+                    .'Hauptmasse eines Gerichts. Ist `zustand` leer, ist der Zustand ungeprüft — '
+                    .'dann den Namen lesen und im Zweifel einen Kandidaten mit gefülltem Feld wählen.',
+                'treffer' => $treffer,
             ];
         }
         if ($rezepte !== []) {
@@ -224,6 +233,57 @@ class GenerationContextService
                 . 'Produkte (gp_id nutzen); ergänze frei, wo die Liste nichts hergibt (bevorzugt, nicht ausschließlich).',
             'treffer' => $treffer,
         ];
+    }
+
+    /**
+     * D2 (Befund 2026-09-07): die Kandidatenliste um die PRODUKTBESTIMMENDEN Felder ergänzen.
+     *
+     * Der Prompt bekam je Kandidat nur `{id, name, score}`. Im Fall „Crème-Suppe: Tomate-Speck"
+     * hat das Modell daraus `Tomaten: TK, getrocknet` als Hauptmasse gewählt — 1.600 g in einer
+     * 2,764-kg-Suppe. Der Code-Tie-Break hätte das nie getan (unter `fresh_first` bekommt
+     * `preserved` −2, ein frischer Tomaten-GP +3); der Vorschlag des Modells hat aber Vorrang
+     * (`match_method = 'gemini_proposed'`, Konfidenz 1.0) und `validiereProposedGp` prüft nur
+     * Existenz und Sichtbarkeit, keine Plausibilität.
+     *
+     * Der GP-Kritiker macht es längst richtig ({@see Conformance\GpConformanceAdapter}: zustand,
+     * verarbeitung, form als eigene Felder) — der Generator nicht. Eine Abfrage für alle Kandidaten.
+     *
+     * Leere Felder werden BEWUSST als `null` mitgeschickt statt weggelassen: „Zustand ungeprüft"
+     * ist eine Information (GP 13757 trägt „TK" im Namen und NULL im Feld), und das Weglassen
+     * hätte genau die Blindheit reproduziert, die den Fehler ausgelöst hat.
+     *
+     * @param  list<array<string, mixed>>  $kandidaten
+     * @return list<array<string, mixed>>
+     */
+    private function mitZustandsfeldern(Team $team, array $kandidaten): array
+    {
+        $ids = array_values(array_filter(array_map(
+            static fn ($k) => isset($k['id']) ? (int) $k['id'] : null,
+            $kandidaten,
+        )));
+        if ($ids === []) {
+            return $kandidaten;
+        }
+        try {
+            $felder = FoodAlchemistGp::query()->visibleToTeam($team)
+                ->whereIn('id', $ids)
+                ->get(['id', 'condition', 'processing', 'form'])
+                ->keyBy('id');
+        } catch (\Throwable) {
+            return $kandidaten;   // Erdung ist eine Verbesserung, keine Voraussetzung
+        }
+
+        return array_map(static function (array $k) use ($felder): array {
+            $row = $felder->get((int) ($k['id'] ?? 0));
+            if ($row === null) {
+                return $k;
+            }
+            $k['zustand'] = ($row->condition ?? '') !== '' ? (string) $row->condition : null;
+            $k['verarbeitung'] = ($row->processing ?? '') !== '' ? (string) $row->processing : null;
+            $k['form'] = ($row->form ?? '') !== '' ? (string) $row->form : null;
+
+            return $k;
+        }, $kandidaten);
     }
 
     /**
