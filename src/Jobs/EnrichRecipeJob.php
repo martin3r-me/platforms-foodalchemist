@@ -237,6 +237,13 @@ class EnrichRecipeJob implements ShouldQueue
                 'status' => $status,
                 'error' => $error !== null ? Str::limit($error, 200) : null,
                 'coverage' => $coverage,                            // D-2: je Glied der Status
+                // TIEFE des Passes (2026-09-07). Das Badge zeigte „angereichert ✓" auch fuer
+                // einen Lauf mit completeCoverage=false, der Step-by-Step, Sensorik, Zeiten,
+                // Equipment und Pairings uebersprungen hat — genau der Fall in Lauf 65, wo am
+                // freigegebenen Rezept `work_time_min` null blieb. Explizit statt aus dem
+                // Fehlen von `coverage` erraten: coverageKurz() gibt auch null zurueck, wenn
+                // die Glieder leere Status tragen.
+                'tief' => $this->completeCoverage,
                 'at' => now()->toIso8601String(),
             ], fn ($v) => $v !== null);
             $step->update(['deferred' => $deferred]);

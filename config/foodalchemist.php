@@ -698,6 +698,20 @@ return [
      */
     'knowledge_team_scope' => env('FOODALCHEMIST_KNOWLEDGE_TEAM_SCOPE', false),
 
+    /*
+     * Schicht 3 — Konformitaets-Critic: die DETERMINISTISCHEN Regeln neben dem LLM-§-Pass.
+     * Was exakt entscheidbar ist, wird exakt entschieden (gemessene Lehre aus dem
+     * Regelwerk-Programm: code-erzwungen = 0 Befunde, prompt-gebunden = Befunde bleiben).
+     */
+    'conformance' => [
+        // Anteil an der Einsatzmasse, ab dem eine Konzentrat-/Trockenform als Hauptmasse gilt
+        // (RecipeConformanceAdapter::deterministischeBefunde). Fachliche Setzung, nicht gemessen:
+        // Lauf 65 hatte 57,9 % Trockentomate in einer Cremesuppe, legitime Reduktionen und
+        // Tomatenmark liegen klar unter 20 %. Senken erzeugt Befunde an Saucen, heben verliert
+        // den Fall. 0 oder >= 1 schaltet die Regel aus.
+        'konzentrat_anteil_max' => (float) env('FOODALCHEMIST_KONZENTRAT_ANTEIL_MAX', 0.20),
+    ],
+
     'semantic_search' => [
         // Phase 0 (2026-08-06): RAG-Hot-Path war HART AUS — der mysql-Embedding-Store macht
         // Cosine-in-PHP und blockierte/OOMte generiere() bei „Kontext & Wissen", VOR dem LLM.
@@ -718,6 +732,41 @@ return [
         // Anker-Auflösung (B): höhere Schwelle — eine FALSCHE Anker-Auflösung
         // injiziert falsche Pairing-Kanten, das ist schlimmer als „unbekannt".
         'anker_min_score' => (float) env('FOODALCHEMIST_SEMANTIC_ANKER_MIN_SCORE', 0.55),
+
+        // ── Recall-Pool: EINE breite Vektorsuche, danach je Kategorie schneiden ──
+        // Befund 2026-09-07 (Lauf 65 „Creme-Suppe: Tomate-Speck"): searchSlugs holte
+        // global die Top-`limit * 3` und filterte ERST DANACH auf die Kategorie. Bei
+        // limit=4 waren das 12 Treffer über ~870 Dossiers — der Domain-Kanal bekam nur,
+        // was zufaellig durchkam. Fuer den Tomatensuppen-Brief kein einziges der vier
+        // vorhandenen `fruchtgemuse-*`-Dossiers, obwohl sie (bei 4000er Fenster) KOMPLETT
+        // im Vektor liegen. Je kleiner die Kategorie, desto unwahrscheinlicher ein
+        // Treffer — unabhaengig von der Relevanz.
+        // 200 deckt bei ~870 Dossiers auch kleine Kategorien ab und bleibt eine Suche.
+        // Hochsetzen kostet nur Store-Zeit (kein zusaetzlicher Embedding-Call), macht die
+        // Kanaele aber nicht besser, wenn der Relevanz-Boden greift.
+        'recall_pool' => (int) env('FOODALCHEMIST_SEMANTIC_RECALL_POOL', 200),
+
+        // ── Relevanz-Boden je Discovery-Kanal ─────────────────────────────────
+        // Ein Kanal DARF leer bleiben. Vorher gab es nach dem Merge von Semantik und
+        // Lexik kein Gate mehr: Kategorien mit max_docs=1 (weltkueche, signatur_kuechen,
+        // kreativ_input, ernaehrung, prasentation_service) fuellten praktisch immer auf.
+        // In Lauf 65 kostete das zwei Plaetze an `weltkueche_uruguayisch` und
+        // `ganache_kennwerte--1` — bei einer Tomaten-Speck-Cremesuppe (beide kamen ueber
+        // die SEMANTIK: lexikalisch skoren sie 0, ihre Slug-Tokens stehen nicht im Brief).
+        // Der Boden nimmt nicht nur Rauschen weg, er gibt Budget frei
+        // (RECIPE_MAX_KNOWLEDGE_CHARS ist fix und heute schon gerissen).
+        //
+        // DEFAULT 0.0 = NO-OP: dann gilt weiter `min_score`, das Verhalten ist unveraendert.
+        // Der scharfe Wert MUSS aus der Messung kommen, nicht aus dem Gefuehl —
+        // `foodalchemist:wissen-kanal-probe --team=… --query=…` zeigt je Kategorie die
+        // Kandidaten MIT Cosine, dort liest man ab, wo relevant und irrelevant auseinander
+        // gehen. Rollback = ENV weg, kein Redeploy.
+        'discovery_floor' => (float) env('FOODALCHEMIST_DISCOVERY_FLOOR', 0.0),
+        // Stummel-Dossiers: der Spec-50-Split hat Fragmente wie
+        // „produktion-arbeitszeit-und-personenminuten--suchbegriffe" (425 Zeichen) erzeugt.
+        // Als Recall-Anker nuetzlich, im Prompt aber die Verschwendung eines Slots — anders
+        // als der Boden oben ist das keine Ermessensfrage, darum aktiv per Default.
+        'discovery_min_doc_chars' => (int) env('FOODALCHEMIST_DISCOVERY_MIN_DOC_CHARS', 600),
 
         // ── Embedding-Fenster je Wissens-Dossier (Titel + erste N Zeichen) ────
         // Gehört mit dem Dossier-Deckel zusammen (Spec 50 Strang III, Dominique

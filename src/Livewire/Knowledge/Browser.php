@@ -501,15 +501,47 @@ class Browser extends Component
                 ->where('mode', '!=', 'none')->orderBy('feature')->get()
             : collect();
 
-        // #469 Chip-Wahrheit: der Kategorie-Routing-Chip allein ist irreführend, weil die
-        // Laufzeit für cross_cutting NUR die fest verdrahtete 7er-Kernliste lädt
-        // (KnowledgeContextService::ALWAYS_LOAD_CROSS_CUTTING), nicht jedes cross_cutting-Doc.
-        // false = trotz Kategorie-Route NICHT automatisch geladen (nur via Bindung wirksam).
-        // true = wird/kann geladen; null = keine Auswahl.
-        $autoGeladen = $selected === null ? null
-            : ($selected->category === 'cross_cutting'
-                ? in_array($selected->slug, \Platform\FoodAlchemist\Services\Ai\KnowledgeContextService::ALWAYS_LOAD_CROSS_CUTTING, true)
-                : true);
+        // #469 Chip-Wahrheit: der Kategorie-Routing-Chip allein ist irreführend, weil
+        // `cross_cutting:always` NICHT sucht, sondern eine feste Slug-Liste lädt.
+        //
+        // ⚠ KORREKTUR 2026-09-07 (Dominique am Doc `rezept_aufbau_prozessstufen--…`): die
+        // Warnung feuerte für JEDES Nicht-Kern-Doc, unabhängig vom Routing-Modus — und der
+        // @else-Zweig im Blade unterdrückte dabei die Routing-Chips komplett. Damit behauptete
+        // das Panel „wirkt erst, wenn du es bindest" auch dort, wo die Kategorie längst per
+        // `discovery` über den GANZEN Bestand sucht. Gegenbeleg aus Lauf 65: der Geschwister-
+        // Split `rezept_aufbau_prozessstufen--niveau-unabhaengig` war unter den 13 Recherche-
+        // Dossiers, ohne jede Bindung.
+        //
+        // Schlimmer als nur falsch: dem Rat zu folgen kostet. Layer-Bindings matchen den
+        // Prompt-Key ODER dessen Bereichs-Präfix (AiGatewayService: explode('.', $promptKey)[0]),
+        // eine Bindung an `recipe` landet also in JEDEM `recipe.*`-Prompt — an target_key
+        // 'recipe' hängen live ~24.500 Zeichen.
+        //
+        // Die Liste ist zudem seit Spec 50 Welle 2 nicht mehr die Konstante: `always`-Features
+        // überschreiben sie per config `ai.cross_cutting_slugs` (crossCuttingSlugs()).
+        // Maßgeblich ist deshalb: gibt es für diese Kategorie ein `always`-Routing, und steht
+        // dieses Doc in der EFFEKTIVEN Liste des jeweiligen Features?
+        //
+        // false = es gibt `always`-Features, dieses Doc steht in keiner ihrer Listen
+        //         (dort wirkt es nur via Bindung — Discovery-Features laden es trotzdem).
+        // true  = wird/kann geladen; null = keine Auswahl.
+        $alwaysFeatures = $routings->where('mode', 'always')->pluck('feature')
+            ->map(static fn ($f) => (string) $f)->all();
+        $autoGeladen = $selected === null ? null : true;
+        if ($selected !== null && $selected->category === 'cross_cutting' && $alwaysFeatures !== []) {
+            $ctx = app(\Platform\FoodAlchemist\Services\Ai\KnowledgeContextService::class);
+            $inEffektiverListe = false;
+            foreach ($alwaysFeatures as $feature) {
+                if (in_array((string) $selected->slug, $ctx->crossCuttingSlugs($feature), true)) {
+                    $inEffektiverListe = true;
+                    break;
+                }
+            }
+            $autoGeladen = $inEffektiverListe;
+        }
+        // Nur die Features, für die die Fest-Liste wirklich gilt — der Warntext nennt sie
+        // beim Namen, statt pauschal „die Laufzeit" zu behaupten.
+        $festlistenFeatures = $autoGeladen === false ? $alwaysFeatures : [];
 
         // v2-Ziele: pflegbare Einsatzorte/Layer
         $layers = DB::table('foodalchemist_knowledge_layers')->whereNull('deleted_at')
@@ -545,6 +577,7 @@ class Browser extends Component
             'bindings' => $bindings,
             'routings' => $routings,
             'autoGeladen' => $autoGeladen,
+            'festlistenFeatures' => $festlistenFeatures,
             'layers' => $layers,
             'layerLabels' => $layerLabels,
             'traceResults' => $traceResults,

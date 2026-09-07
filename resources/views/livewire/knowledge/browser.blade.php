@@ -128,14 +128,10 @@
 
                     <div>
                     <p class="text-[11px] font-medium text-gray-600 mb-1">Grobe Ebene — automatisch via Kategorie «{{ $selected->category }}»</p>
-                    @if($selected->category === 'cross_cutting' && $autoGeladen === false)
-                    {{-- #469 Chip-Wahrheit: cross_cutting lädt zur Laufzeit NUR die 7 Kern-Files --}}
-                    <span class="text-[11px] text-amber-600" data-wissen-auto-warnung>
-                    @svg('heroicon-o-exclamation-triangle', 'w-3.5 h-3.5 inline-block align-middle') Die Laufzeit lädt automatisch nur die 7 Kern-cross_cutting-Files
-                    (Substitutionen, Saisonkalender, Synonyme, Sauce-Mutterstrukturen, Mengen-Defaults, Techniken, Brühen&nbsp;/&nbsp;Fonds).
-                    Dieses Doc gehört <strong>nicht</strong> dazu → es wirkt erst, wenn du es unten an einen Einsatzort bindest.
-                    </span>
-                    @else
+                    {{-- Routing-Chips IMMER zeigen (Korrektur 2026-09-07): vorher verdrängte die
+                         cross_cutting-Warnung sie komplett, und das Panel behauptete „wirkt erst
+                         nach Bindung" auch für Kategorien, die längst per discovery über den
+                         ganzen Bestand suchen. --}}
                     @forelse($routings as $r)
                     <span class="inline-flex items-center gap-1 text-[11px] {{ $pill }} mr-1.5" wire:key="rt-{{ $r->id }}">
                     {{ $r->feature }} <span class="text-gray-500">· {{ $r->mode }}</span>
@@ -143,9 +139,22 @@
                     @empty
                     <span class="text-[11px] text-gray-500">Keine Feature-Routings für diese Kategorie.</span>
                     @endforelse
-                    @if(in_array($selected->category, ['domain', 'pairing'], true) && $routings->isNotEmpty())
-                    <span class="block text-[10px] text-gray-400 mt-1">Nur geladen, wenn die Rezept-Beschreibung thematisch matcht (Discovery), nicht garantiert.</span>
+                    @if($routings->where('mode', 'discovery')->isNotEmpty())
+                    <span class="block text-[10px] text-gray-400 mt-1">«discovery» sucht über den ganzen Bestand der Kategorie — geladen wird, was thematisch matcht und den Relevanz-Boden schafft, nicht garantiert.</span>
                     @endif
+                    {{-- Die Fest-Liste gilt NUR für always-Routings, und auch dort ist sie per
+                         config `ai.cross_cutting_slugs` je Feature überschrieben. Darum die
+                         betroffenen Features beim Namen nennen statt „die Laufzeit". --}}
+                    @if($autoGeladen === false && ($festlistenFeatures ?? []) !== [])
+                    <span class="block text-[11px] text-amber-600 mt-1" data-wissen-auto-warnung>
+                    @svg('heroicon-o-exclamation-triangle', 'w-3.5 h-3.5 inline-block align-middle')
+                    <strong>{{ implode(', ', $festlistenFeatures) }}</strong>
+                    @if(count($festlistenFeatures) === 1) lädt @else laden @endif «always» eine feste Slug-Liste, keine Suche —
+                    dieses Doc steht nicht darin und wirkt dort erst über eine Bindung.
+                    @if($routings->where('mode', 'discovery')->isNotEmpty())
+                    Die «discovery»-Features oben finden es ohne Bindung.
+                    @endif
+                    </span>
                     @endif
                     </div>
 

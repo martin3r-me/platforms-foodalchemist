@@ -47,6 +47,9 @@ class KnowledgeEmbeddingService
     /** Polymorpher entity_type im Core-Store. */
     public const ENTITY_TYPE = 'foodalchemist_knowledge_document';
 
+    /** Recall-Pool je (Query, minScore) — s. recallPool(). Instanz-lokal, kein persistenter Cache. */
+    private array $recallPoolMemo = [];
+
     /** entity_type für das Anker-Vokabular (semantische Anker-Auflösung, B). */
     public const ENTITY_TYPE_ANKER = 'foodalchemist_pairing_anker';
 
@@ -502,14 +505,41 @@ class KnowledgeEmbeddingService
      */
     public function searchSlugs(string $query, array $kategorien, int $limit = 4, ?float $minScore = null): array
     {
+        return array_map('strval', array_keys($this->searchScoredSlugs($query, $kategorien, $limit, $minScore)));
+    }
+
+    /**
+     * Wie {@see searchSlugs}, aber MIT Score je Slug (absteigend) — damit der Aufrufer
+     * semantische Rangfolge weiterverwenden kann, statt sie wegzuwerfen.
+     *
+     * WARUM DAS EXISTIERT (Befund 2026-09-07, Lauf 65 „Creme-Suppe: Tomate-Speck"):
+     * Vorher holte diese Methode global die Top-`limit * 3` über den GESAMTEN Korpus und
+     * filterte ERST DANACH auf die Kategorie. Bei `limit = 4` waren das 12 Treffer über
+     * ~870 Dossiers — der Domain-Kanal bekam nur, was zufaellig in den globalen Top-12
+     * stand. Fuer den Tomatensuppen-Brief war das von Suppen-/Technik-Dossiers dominiert:
+     * KEINES der vier vorhandenen `fruchtgemuse-*`-Dossiers kam durch, obwohl „Tomate" im
+     * ersten Absatz von `fruchtgemuse-sorten-ubersicht` steht (also im Embedding-Fenster).
+     * Pro-Kategorie-Recall war damit systematisch ausgehungert: je kleiner die Kategorie,
+     * desto unwahrscheinlicher ein Treffer, unabhaengig von der Relevanz.
+     *
+     * Jetzt: EIN breiter Recall-Pool (`semantic_search.recall_pool`, Default 200), danach
+     * je Kategorie schneiden. Zweiter Effekt, der genauso wichtig ist: `contextFor` ruft
+     * die Semantik EINMAL PRO KATEGORIE (rund 9× je Generierung) — mit demselben
+     * Query-Text. Der Pool wird darum je (Query, minScore) für die Dauer der Instanz
+     * gemerkt, aus 9 Vektorsuchen wird eine.
+     *
+     * @param  list<string>  $kategorien
+     * @return array<string, float>  Slug => Score, bestes Match zuerst
+     */
+    public function searchScoredSlugs(string $query, array $kategorien, int $limit = 4, ?float $minScore = null): array
+    {
         $query = trim($query);
-        if ($query === '' || $limit <= 0 || ! $this->isProviderAvailable()) {
+        if ($query === '' || $limit <= 0 || $kategorien === [] || ! $this->isProviderAvailable()) {
             return [];
         }
         $minScore ??= (float) config('foodalchemist.semantic_search.min_score', 0.30);
 
-        $hits = $this->searchMerged($query, self::ENTITY_TYPE, $limit * 3, $minScore);
-
+        $hits = $this->recallPool($query, $minScore);
         if ($hits === []) {
             return [];
         }
@@ -530,17 +560,39 @@ class KnowledgeEmbeddingService
             if ($doc === null) {
                 continue;
             }
-            $slug = $doc->slug;
+            $slug = (string) $doc->slug;
             if ($doc->category === 'pairing' && str_starts_with($slug, 'pairing.')) {
                 $slug = substr($slug, 8);                           // Stem-Form
             }
-            $slugs[$slug] = true;
+            if (! isset($slugs[$slug])) {
+                $slugs[$slug] = (float) ($hit['score'] ?? 0.0);
+            }
             if (count($slugs) >= $limit) {
                 break;
             }
         }
 
-        return array_map('strval', array_keys($slugs));
+        return $slugs;
+    }
+
+    /**
+     * Der breite Recall-Pool je (Query, minScore) — EINE Vektorsuche, danach je Kategorie
+     * geschnitten. Instanz-gemerkt, weil `contextFor` pro Kategorie einmal anfragt und der
+     * Query-Text dabei identisch ist. Kein Cache über die Instanz hinaus: der Korpus kann
+     * sich zwischen zwei Generierungen aendern (Aktivieren/Embedden), und die Ersparnis
+     * liegt ohnehin innerhalb EINES Kontext-Baus.
+     *
+     * @return list<array{entity_id: int, score: float}>
+     */
+    private function recallPool(string $query, float $minScore): array
+    {
+        $pool = max(1, (int) config('foodalchemist.semantic_search.recall_pool', 200));
+        $key = $pool.'|'.$minScore.'|'.$query;
+        if (! array_key_exists($key, $this->recallPoolMemo)) {
+            $this->recallPoolMemo[$key] = $this->searchMerged($query, self::ENTITY_TYPE, $pool, $minScore);
+        }
+
+        return $this->recallPoolMemo[$key];
     }
 
     /**

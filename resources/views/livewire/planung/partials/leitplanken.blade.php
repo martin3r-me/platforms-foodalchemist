@@ -76,7 +76,7 @@
                 <input type="checkbox" wire:model="regler.{{ $scope }}.voll_anreichern" class="mt-0.5" data-planung-voll-anreichern />
                 <span>⚡ Voll anreichern</span>
             </label>
-            <p class="text-[11px] text-gray-500 mt-1">An = bei der Freigabe auch Schritte, Sensorik, Equipment und weitere Produktionsdaten erzeugen. Aus = leichte Anreicherung der Kernfelder; Vollanreicherung später bewusst starten.</p>
+            <p class="text-[11px] text-gray-500 mt-1">An (Standard) = bei der Freigabe auch Schritte, Sensorik, Arbeits- und Rüstzeit, Equipment, Posten und geerdete Pairings erzeugen. Aus = nur die Kernfelder; Schritte und Zeiten bleiben leer, die Zeile wird als <em>leicht angereichert</em> markiert. Kostet einen Textlauf je Rezept — die teure Achse sind die KI-Fotos darunter.</p>
         </div>
 
         <div data-richtung="ki-bilder">

@@ -28,6 +28,18 @@ class GpConformanceAdapter implements ConformanceAdapter
         return true;   // LA-First-Re-Derive (Slice 5) — heilt tentative GPs aus dem Quell-LA
     }
 
+    /**
+     * Keine deterministischen Regeln in v1 — der §-Pass für diesen Artefakt-Typ ist rein
+     * KI-getragen. Bewusst leer statt „irgendetwas": ein erfundener Check wäre schlimmer
+     * als keiner. Kandidat für später wäre der GP-Naming-Check
+     * ({@see \Platform\FoodAlchemist\Services\GpNamingService::validateGpName}), der heute
+     * nur an createGp/updateGp und im GP-Editor hängt.
+     */
+    public function deterministischeBefunde(Team $team, int $id): array
+    {
+        return [];
+    }
+
     public function pruefauftrag(Team $team, int $id): array
     {
         $gp = app(GpService::class)->find($id, $team);

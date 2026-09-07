@@ -30,6 +30,120 @@ class RecipeConformanceAdapter implements ConformanceAdapter
         return true;                                                 // Freitext-Revise via recipe.ueberarbeiten
     }
 
+    /**
+     * KONZENTRATIONS-MARKER: Zutaten-Formen, deren Masse durch Wasserentzug oder Einkochen
+     * bereits reduziert ist. Sie sind Würz- und Aromakomponenten, nie die Hauptmasse eines
+     * Gerichts — 1 kg Trockentomate entspricht grob 8–14 kg Frischware.
+     *
+     * Geprüft wird gegen NAME + `processing` + `form`, nicht gegen `condition`: `condition`
+     * trägt nur die vier §9-Zustände (frisch|TK|trocken|konserviert), und „getrocknet" steckt
+     * in der Verarbeitung. GP 13757 („Tomaten: TK, getrocknet") hat sogar `condition = NULL` —
+     * ein zustand-basierter Check wäre dort blind.
+     */
+    private const KONZENTRAT_MARKER = [
+        'getrocknet', 'trockentomate', 'konzentrat', 'pulver', 'granulat', 'extrakt',
+        'reduktion', 'demi-glace', 'instant',
+    ];
+
+    /**
+     * Anteil an der Einsatzmasse, ab dem eine Konzentrat-Zutat als Hauptmasse gilt.
+     *
+     * FACHLICHE SETZUNG, nicht gemessen — darum konfigurierbar und als `hart`, aber NICHT
+     * blockierend. 20 % ist bewusst hoch angesetzt: legitime Fälle (eine Pfeffer-Reduktion in
+     * einer Sauce, Tomatenmark als Röstbasis) liegen deutlich darunter, der Fall aus Lauf 65
+     * lag bei 57,9 %. Wer den Wert senkt, bekommt Befunde an Saucen; wer ihn hebt, verliert den
+     * Fall. Er gehört Dominique, nicht dem Code.
+     */
+    private const KONZENTRAT_ANTEIL_MAX = 0.20;
+
+    public function deterministischeBefunde(Team $team, int $id): array
+    {
+        $r = app(RecipeService::class)->detailAnySicht($team, $id);
+        if ($r === null) {
+            return [];
+        }
+        $schwelle = (float) config('foodalchemist.conformance.konzentrat_anteil_max', self::KONZENTRAT_ANTEIL_MAX);
+        if ($schwelle <= 0.0 || $schwelle >= 1.0) {
+            return [];
+        }
+
+        // Einsatzmasse nur aus Zeilen mit MASSEN-Einheit bilden. Eine Stück-/Bund-Zeile trägt
+        // hier 0 g bei und würde den Anteil künstlich hochrechnen — dieselbe Falle, die im
+        // Yield-Check von DataQualityService dokumentiert ist. Ist die Masse nicht sauber
+        // bestimmbar, wird NICHT geraten und der Check schweigt.
+        $gewichte = [];
+        $summe = 0.0;
+        $unklar = false;
+        foreach ($r->ingredients as $z) {
+            $menge = (float) $z->quantity;
+            $slug = (string) ($z->unit?->slug ?? '');
+            $gramm = match ($slug) {
+                'g', 'ml' => $menge,                    // ml ≈ g: für einen Anteils-Check genügt das
+                'kg', 'l' => $menge * 1000.0,
+                default => null,
+            };
+            if ($gramm === null || $menge <= 0.0) {
+                if ($menge > 0.0) {
+                    $unklar = true;
+                }
+
+                continue;
+            }
+            $summe += $gramm;
+            $gewichte[] = [$z, $gramm];
+        }
+        if ($unklar || $summe <= 0.0 || $gewichte === []) {
+            return [];
+        }
+
+        $befunde = [];
+        foreach ($gewichte as [$z, $gramm]) {
+            $gp = $z->gp;
+            if ($gp === null) {
+                continue;                               // ungeerdete Zeile: andere Baustelle
+            }
+            $text = mb_strtolower(trim(
+                (string) $gp->name.' '.(string) ($gp->processing ?? '').' '.(string) ($gp->form ?? '')
+            ));
+            $marker = null;
+            foreach (self::KONZENTRAT_MARKER as $m) {
+                if (str_contains($text, $m)) {
+                    $marker = $m;
+
+                    break;
+                }
+            }
+            if ($marker === null) {
+                continue;
+            }
+            $anteil = $gramm / $summe;
+            if ($anteil <= $schwelle) {
+                continue;
+            }
+            $befunde[] = [
+                'paragraph' => '§6',                    // Mengen, Einheiten & Yield
+                'schweregrad' => 'hart',
+                'feld' => 'zutaten',
+                'begruendung' => sprintf(
+                    '»%s« ist eine Konzentrat-/Trockenform (Marker »%s») und trägt %s %% der '
+                    .'Einsatzmasse (%s g von %s g). Solche Formen sind Würz- und Aromakomponenten, '
+                    .'nicht die Hauptmasse — als Hauptzutat ist die Menge um etwa eine '
+                    .'Größenordnung zu hoch.',
+                    (string) $gp->name,
+                    $marker,
+                    number_format($anteil * 100, 1, ',', '.'),
+                    number_format($gramm, 0, ',', '.'),
+                    number_format($summe, 0, ',', '.'),
+                ),
+                'vorschlag' => 'Entweder die Menge auf eine Würz-Dosierung senken, oder auf die '
+                    .'passende Grundform wechseln (frisch / konserviert / passiert).',
+                'konfidenz' => 1.0,                     // deterministisch gerechnet, nicht geschätzt
+            ];
+        }
+
+        return $befunde;
+    }
+
     public function pruefauftrag(Team $team, int $id): array
     {
         $r = app(RecipeService::class)->detailAnySicht($team, $id);

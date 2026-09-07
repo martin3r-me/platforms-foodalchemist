@@ -19,6 +19,11 @@
     // B3 (2026-08-20): Hardstop-Zeile aus dem »Nur Bestand«-Fanout (kein DB-Treffer). status ist
     // technisch `skipped`, darf aber NICHT als „übernommen" gelesen werden — eigener Warnhinweis.
     $hardstop = (is_array($st->deferred) && is_array($st->deferred['hardstop'] ?? null)) ? $st->deferred['hardstop'] : null;
+    // 2026-09-07: Reifegrad einer ÜBERNAHME. `skipped` heißt „übernommen" — aber nur ein
+    // produktionsreifes Bestands-Rezept ist damit auch fertig. Lauf 65 übernahm ein `draft`
+    // mit 0 Schritten und unbepreist, und die Zeile sah aus wie ein Abschluss.
+    $reuse = (is_array($st->deferred) && is_array($st->deferred['reuse'] ?? null)) ? $st->deferred['reuse'] : null;
+    $reuseUnreif = $st->status === 'skipped' && $reuse !== null && ! ($reuse['reif'] ?? false);
 @endphp
 <div wire:key="step-{{ $st->id }}" class="{{ $indent ? 'ml-1 pl-3 border-l border-white/10' : '' }}">
     <div class="flex items-center justify-between gap-3 text-xs">
@@ -27,7 +32,11 @@
             @if($hardstop)
                 <span class="text-amber-300" title="Die Datenbank hat dafür kein passendes Grundprodukt/Basisrezept. Zutat am Gericht per Picker binden oder den Kreativ-Modus wechseln.">⚠ kein Bestand — wählen</span>
             @else
-                <span class="{{ $stepColor[$st->status] ?? 'text-gray-400' }}">{{ $stepLabel[$st->status] ?? $st->status }}</span>
+                <span class="{{ $reuseUnreif ? 'text-amber-300' : ($stepColor[$st->status] ?? 'text-gray-400') }}">{{ $stepLabel[$st->status] ?? $st->status }}</span>
+                @if($reuseUnreif)
+                    {{-- Was genau fehlt, steht in der Zeile — nicht nur „unfertig". --}}
+                    <span class="text-[10px] text-amber-300/90" title="Bestands-Rezept ist nicht produktionsreif: {{ implode(' · ', (array) ($reuse['luecken'] ?? [])) }}">Bestand unfertig{{ ($reuse['luecken'] ?? []) === [] ? '' : ' — ' . implode(', ', (array) $reuse['luecken']) }}</span>
+                @endif
             @endif
             {{-- `skipped` = übernommenes Bestands-Rezept (Reuse): ansehen ja, bearbeiten/freigeben nein
                  (es ist fremdes, lebendes Artefakt — kein Draft dieses Laufs). --}}
@@ -47,13 +56,32 @@
                 $enr = (is_array($st->deferred) && is_array($st->deferred['enrich'] ?? null)) ? $st->deferred['enrich'] : null;
                 $enrStatus = $enr['status'] ?? null;
             @endphp
-            @if($st->status === 'freigegeben' && in_array($st->kind, ['rezept', 'gericht'], true))
+            {{-- `skipped` mit aufgenommen (2026-09-07): eine unreife eigene Übernahme wird bei der
+                 Freigabe mitangereichert, und ohne dieses Gate konnte die Zeile ihren Zustand nie
+                 zeigen — kein ✓, kein Spinner, nicht einmal den „neu anreichern"-Knopf, obwohl
+                 reAnreichern() sie längst akzeptiert. --}}
+            @if(in_array($st->status, ['freigegeben', 'skipped'], true) && in_array($st->kind, ['rezept', 'gericht'], true))
                 @if($enrStatus === 'done')
-                    <span class="text-[10px] text-emerald-400/80" title="angereichert {{ $enr['at'] ?? '' }}">angereichert ✓</span>
+                    {{-- Tiefe ehrlich zeigen (2026-09-07): ein Pass mit complete_coverage=false
+                         laesst Schritte, Sensorik, Arbeits-/Ruestzeit, Equipment, Posten und
+                         Pairings leer. Vorher stand hier in beiden Faellen dasselbe ✓. --}}
+                    @if(($enr['tief'] ?? true) === false)
+                        <span class="text-[10px] text-gray-400" title="Kernfelder gefüllt ({{ $enr['at'] ?? '' }}) — ohne Schritte, Sensorik, Zeiten, Equipment und Pairings (Leitplanke „Voll anreichern" war aus).">leicht angereichert</span>
+                        <button wire:click="neuAnreichern({{ $st->id }}, true)" class="text-[10px] text-violet-300 hover:text-violet-200 underline" title="Jetzt in voller Tiefe anreichern: Schritte, Sensorik, Arbeits- und Rüstzeit, Equipment, Posten, geerdete Pairings.">voll anreichern</button>
+                    @else
+                        <span class="text-[10px] text-emerald-400/80" title="voll angereichert {{ $enr['at'] ?? '' }}">angereichert ✓</span>
+                    @endif
                 @elseif(in_array($enrStatus, ['queued', 'running'], true))
                     <span class="text-[10px] text-amber-300/80 inline-flex items-center gap-1">@svg('heroicon-o-arrow-path', 'w-3 h-3 animate-spin') reichert an …</span>
                 @elseif($enrStatus === 'failed')
                     <button wire:click="neuAnreichern({{ $st->id }})" class="text-[10px] text-rose-300 hover:text-rose-200 underline" title="{{ $enr['error'] ?? '' }}">Anreicherung fehlgeschlagen — neu anreichern</button>
+                @elseif($reuseUnreif)
+                    {{-- Kein Auto-Lauf: das übernommene Rezept ist entweder FREMD (Referenz eines
+                         übergeordneten Teams) oder schon freigegeben — daran hängen möglicherweise
+                         Gerichte, Foodbooks und Speisepläne. Die Kaskade schreibt da nicht von
+                         selbst hinein; die Entscheidung gehört dem Menschen. --}}
+                    <button wire:click="neuAnreichern({{ $st->id }})" class="text-[10px] text-amber-300 hover:text-amber-200 underline"
+                            title="Bestands-Rezept{{ ($reuse['eigen'] ?? false) ? '' : ' eines anderen Teams' }}{{ ($reuse['status'] ?? '') === 'approved' ? ', bereits freigegeben' : '' }} — Anreicherung bewusst anstoßen. Vorhandene Inhalte können dabei neu erzeugt werden.">Bestand anreichern</button>
                 @endif
                 {{-- Etappe 7 — Bild-Status: erzeugt / fehlgeschlagen / angefordert-aber-leer, analog
                      zum Anreicherungs-Badge. Nur wenn KI-Fotos angefordert waren ($bilderAngefordert,

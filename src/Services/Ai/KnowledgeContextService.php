@@ -127,6 +127,14 @@ class KnowledgeContextService
     private const DISCOVERY_MIN_SCORE = 0.05;
 
     /**
+     * Deckel fuer die Zutaten-Terme in der Discovery-Query ({@see zutatTerme}). Die Query ist
+     * ein Suchtext, kein Kontext — sie soll den Hauptzutat-Anker tragen, nicht den Brief
+     * verdoppeln. Zu viele Terme verwaessern den Query-Vektor genauso wie ein zu grosses
+     * Embedding-Fenster das Doc verwaessert (gemessen, s. KnowledgeEmbeddingService).
+     */
+    private const ZUTAT_TERME_MAX = 12;
+
+    /**
      * Pro-Doc-Deckel für achsen-aufgelöstes Wissen (Anlass-Playbook, Segment-Profil).
      * Bewusst knapp: das sind PRÄZISE Treffer, die den unpräzisen Discovery-Treffern
      * Budget wegnehmen — das ist der Sinn der Sache, aber es darf sie nicht verdrängen.
@@ -665,7 +673,53 @@ class KnowledgeContextService
             }
         }
 
-        return trim($description . ' ' . implode(' ', $werte));
+        // C4 — DIE ZUTATEN IN DIE QUERY. Vorher war die Suchquery ausschliesslich
+        // Brief-Freitext + Reglerwerte: kein Rezepttitel, keine Zutatenzeile. Der Brief zu
+        // Lauf 65 sagt „Tomatensuppe" (Kompositum), nicht „Tomate" — die vier vorhandenen
+        // `fruchtgemuse-*`-Dossiers hatten damit keinen Anker im Text.
+        $terme = $this->zutatTerme($description, $params);
+
+        return trim($description . ' ' . implode(' ', $werte) . ($terme === [] ? '' : ' ' . implode(' ', $terme)));
+    }
+
+    /**
+     * Zusaetzliche Zutaten-Terme fuer die Discovery-Query, aus zwei Quellen:
+     *
+     *  (a) `_zutat_terme` — explizit uebergeben. Die Anreicherungs-Pfade (`recipe.steps`,
+     *      `recipe.eigenschaften`) bauen ihre Beschreibung ohnehin aus Name + Zutatenzeilen;
+     *      der Schluessel existiert fuer Aufrufer, die die gematchten GPs kennen und den
+     *      Hauptzutat-Slug gezielt setzen wollen.
+     *  (b) DECOMPOUNDING des Beschreibungstexts. Deutsche Komposita sind der Grund, warum
+     *      der Generierungs-Pfad die Hauptzutat verliert: er hat NUR den Brief, und im Brief
+     *      steht „Tomatensuppe". {@see TerminologyService::decompoundPhrasesFor} zerlegt das
+     *      ueber die vorhandenen COMPOUND_HEADS zu „tomaten suppe" und — ueber die
+     *      Fugen-Variante — „tomate suppe". Damit hat sowohl die Lexik (Slug-Token) als auch
+     *      die Semantik (Query-Text) den Hauptzutat-Anker.
+     *
+     * Fail-soft: kein TerminologyService / Fehler ⇒ keine Zusatzterme, Query wie vorher.
+     *
+     * @return list<string>
+     */
+    private function zutatTerme(string $description, array $params): array
+    {
+        $terme = [];
+        foreach ((array) ($params['_zutat_terme'] ?? []) as $t) {
+            if (is_scalar($t) && trim((string) $t) !== '') {
+                $terme[] = str_replace(['_', '-'], ' ', (string) $t);
+            }
+        }
+        try {
+            foreach (app(\Platform\FoodAlchemist\Services\TerminologyService::class)
+                ->decompoundPhrasesFor($description) as $phrase) {
+                if (trim((string) $phrase) !== '') {
+                    $terme[] = (string) $phrase;
+                }
+            }
+        } catch (\Throwable) {
+            // Decompounding ist eine Verbesserung, keine Voraussetzung.
+        }
+
+        return array_slice(array_values(array_unique($terme)), 0, self::ZUTAT_TERME_MAX);
     }
 
     /** @return list<string> */
@@ -742,6 +796,67 @@ class KnowledgeContextService
         } catch (\Throwable) {
             return [];
         }
+    }
+
+    /**
+     * Wie {@see semanticSlugs}, aber MIT Cosine je Slug — damit die Aufrufer die
+     * semantische Rangfolge weiterverwenden koennen statt sie wegzuwerfen.
+     *
+     * Anlass (2026-09-07): `discoverDomains()` sortierte die vereinigte Kandidatenmenge
+     * ALPHABETISCH, bevor es Top-4 schnitt. Alias-Treffer, Jaccard und Cosine waren damit
+     * wirkungslos — bei Lauf 65 standen die vier Domain-Chips exakt in der Reihenfolge
+     * b < f < ka < kr. Ohne Score kann man das nicht reparieren.
+     *
+     * @param  list<string>  $kategorien
+     * @return array<string, float>  Slug => Cosine, bestes Match zuerst
+     */
+    private function semanticScored(string $description, array $kategorien, int $limit): array
+    {
+        if ($limit <= 0 || ! config('foodalchemist.semantic_search.enabled', false)) {
+            return [];
+        }
+        try {
+            $svc = app(KnowledgeEmbeddingService::class);
+            if (! $svc->searchEnabled()) {
+                return [];
+            }
+
+            return $svc->searchScoredSlugs($description, $kategorien, $limit);
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
+    /**
+     * Relevanz-Boden je Discovery-Kanal: ein Kanal DARF leer bleiben.
+     *
+     * Vorher gab es NACH dem Merge von Semantik und Lexik kein Gate mehr — Kategorien mit
+     * `max_docs = 1` fuellten ihre Quote praktisch immer auf. In Lauf 65 kostete das zwei
+     * Plaetze an `weltkueche_uruguayisch` (Kategorie weltkueche, top_k 1) und
+     * `ganache_kennwerte--1` (kueche, top_k 2) — bei einer Tomaten-Speck-Cremesuppe. Beide
+     * kamen ueber die Semantik: lexikalisch skoren sie 0, ihre Slug-Tokens stehen nicht im
+     * Brief.
+     *
+     * Default 0.0 ⇒ es gilt weiter `min_score`, also No-op. Der scharfe Wert kommt aus
+     * `foodalchemist:wissen-kanal-probe`, nicht aus dem Gefuehl.
+     */
+    private function discoveryFloor(): float
+    {
+        $floor = (float) config('foodalchemist.semantic_search.discovery_floor', 0.0);
+        $min = (float) config('foodalchemist.semantic_search.min_score', 0.30);
+
+        return $floor > 0.0 ? max($floor, $min) : $min;
+    }
+
+    /**
+     * Mindestlaenge, ab der ein Dossier prompt-wuerdig ist. Der Spec-50-Split hat
+     * Fragmente wie „…--suchbegriffe" (425 Zeichen) erzeugt: als Recall-Anker nuetzlich,
+     * im Prompt die Verschwendung eines Slots. Anders als der Boden ist das keine
+     * Ermessensfrage — darum per Default aktiv.
+     */
+    private function minDocChars(): int
+    {
+        return max(0, (int) config('foodalchemist.semantic_search.discovery_min_doc_chars', 0));
     }
 
     /**
@@ -1226,23 +1341,55 @@ class KnowledgeContextService
         // auf die aktiven Kategorie-Docs. Deaktiviert (Default) / kein Provider ⇒ leer ⇒ die reine
         // Lexik bleibt führend (byte-identisches Alt-Verhalten).
         $docsBySlug = $docs->keyBy('slug');
-        $semantisch = $this->semanticSlugs($query, [$category], $topK);
+        // C3 — RELEVANZ-BODEN: ein Kanal darf leer bleiben. Vorher gab es nach diesem Merge
+        // kein Gate mehr, und Kategorien mit `max_docs = 1` fuellten ihre Quote praktisch
+        // immer auf — in Lauf 65 mit `weltkueche_uruguayisch` und `ganache_kennwerte--1`
+        // bei einer Tomaten-Speck-Cremesuppe. Beide kamen ueber die SEMANTIK (lexikalisch
+        // skoren sie 0). Default-Boden = min_score ⇒ No-op, scharfer Wert per ENV nach
+        // `foodalchemist:wissen-kanal-probe`.
+        // Ueberfetch, damit nach Boden + Stummel-Gate noch Auswahl fuer $topK bleibt.
+        $boden = $this->discoveryFloor();
+        $semScores = [];
+        foreach ($this->semanticScored($query, [$category], $topK * 3) as $slug => $cos) {
+            if ((float) $cos >= $boden) {
+                $semScores[(string) $slug] = (float) $cos;
+            }
+        }
+        $semantisch = array_keys($semScores);
         $pick = [];
         foreach ([...$semantisch, ...$ordered] as $slug) {
             if (isset($docsBySlug[$slug])) {
                 $pick[$slug] = true;
             }
         }
-        $pick = array_slice(array_keys($pick), 0, $topK);
-        if ($pick === []) {
+        $kandidaten = array_slice(array_keys($pick), 0, max($topK, $topK * 3));
+        if ($kandidaten === []) {
             return null;
         }
 
         // W0-6: Volltext erst JETZT — für die Gewinner, nicht für die Kategorie.
         $semSet = array_flip($semantisch);
         $inhalte = DB::table('foodalchemist_knowledge_documents')->tap($this->nurSichtbar($team))
-            ->whereIn('slug', $pick)->where('active', 1)->whereNull('deleted_at')
+            ->whereIn('slug', $kandidaten)->where('active', 1)->whereNull('deleted_at')
             ->get(['slug', 'content_md'])->keyBy('slug');
+
+        // Stummel-Gate: der Spec-50-Split hat Fragmente wie „…--suchbegriffe" (425 Zeichen)
+        // erzeugt — als Recall-Anker nuetzlich, im Prompt die Verschwendung eines Slots.
+        // Erst hier moeglich, weil die Laenge am content_md haengt.
+        $min = $this->minDocChars();
+        $pick = [];
+        foreach ($kandidaten as $slug) {
+            if ($min > 0 && mb_strlen((string) ($inhalte->get($slug)->content_md ?? '')) < $min) {
+                continue;
+            }
+            $pick[] = $slug;
+            if (count($pick) >= $topK) {
+                break;
+            }
+        }
+        if ($pick === []) {
+            return null;
+        }
 
         $label = mb_strtoupper($category);
         $blocks = [];
@@ -1255,7 +1402,7 @@ class KnowledgeContextService
             // diese Zuordnung ist nicht feststellbar, welcher Pfad die Treffer liefert
             // (und damit auch nicht, ob ein Score-Gate richtig sitzt).
             $this->herkunft[$slug] = isset($semSet[$slug])
-                ? ['score' => null, 'via' => 'semantic']
+                ? ['score' => round($semScores[$slug] ?? 0.0, 4), 'via' => 'semantic']
                 : ($lexScores[$slug] ?? ['score' => null, 'via' => 'unbekannt']);
             $this->herkunft[$slug]['chars'] = mb_strlen($inhalt);
             $this->herkunft[$slug]['sent'] = min(mb_strlen($inhalt), $maxChars);
@@ -1312,7 +1459,19 @@ class KnowledgeContextService
     private function discoverDomains(?Team $team, string $description, array $allowedSlugs = []): array
     {
         $tokens = $this->tokenize($description);
-        $slugs = [];
+        // Kandidat => [Rang, Score, Herkunft]. Rang kodiert die Signal-STAERKE, nicht den
+        // Zahlenwert: Alias (explizit kuratiert) > Semantik (Cosine) > Slug-Token-Lexik
+        // (Jaccard) — dieselbe Reihenfolge, die discoverGenericBlock schon nutzt (Alias
+        // +1.0-Bonus, Semantik vor die Lexik gereiht). Die Scores der drei Pfade liegen auf
+        // verschiedenen Skalen und werden darum NICHT vermischt, sondern nur innerhalb
+        // ihres Rangs verglichen.
+        $kandidaten = [];
+        $merke = function (string $slug, int $rang, float $score, string $via) use (&$kandidaten): void {
+            if (! isset($kandidaten[$slug]) || $rang > $kandidaten[$slug][0]
+                || ($rang === $kandidaten[$slug][0] && $score > $kandidaten[$slug][1])) {
+                $kandidaten[$slug] = [$rang, $score, $via];
+            }
+        };
 
         if ($tokens !== []) {
             // 2a. Explizites Alias-Mapping
@@ -1326,7 +1485,7 @@ class KnowledgeContextService
                     if ($t === $a
                         || (mb_strlen($t) >= 4 && str_contains($a, $t))
                         || (mb_strlen($a) >= 4 && str_contains($t, $a))) {
-                        $slugs[$alias->slug] = true;
+                        $merke((string) $alias->slug, 3, 1.0, 'alias');
                         break;
                     }
                 }
@@ -1334,8 +1493,7 @@ class KnowledgeContextService
         }
 
         // 2b. Fallback: Slug-/Titel-Token-Match, nur wenn das Mapping kaum greift
-        if (count($slugs) < 2 && $tokens !== []) {
-            $scored = [];
+        if (count($kandidaten) < 2 && $tokens !== []) {
             foreach ($this->domainSlugs($team) as $slug) {
                 $slugTokens = $this->tokenize($slug);
                 $score = $this->jaccard($tokens, $slugTokens);
@@ -1343,12 +1501,8 @@ class KnowledgeContextService
                     || count(array_filter($slugTokens, fn ($st) => str_contains($st, $t))) > 0));
                 $combined = $score + $wordHits * 0.1;
                 if ($combined > 0.0) {
-                    $scored[] = [$slug, $combined];
+                    $merke((string) $slug, 1, $combined, 'lexical');
                 }
-            }
-            usort($scored, fn ($x, $y) => $y[1] <=> $x[1]);
-            foreach (array_slice($scored, 0, max(0, self::DOMAIN_TOP_K - count($slugs))) as [$slug]) {
-                $slugs[$slug] = true;
             }
         }
 
@@ -1356,22 +1510,49 @@ class KnowledgeContextService
         // passende Domains treten der Kandidatenmenge IMMER bei (nicht erst bei dünner Lexik) und
         // können via Top-K lexikalische verdrängen (RAG darf korrigieren). Deaktiviert (Default) /
         // kein Provider ⇒ leer ⇒ unverändertes Verhalten.
-        foreach ($this->semanticSlugs($description, ['domain'], self::DOMAIN_TOP_K) as $slug) {
-            $slugs[$slug] = true;
+        // Seit C1 kommt der Recall aus EINEM breiten Pool und ist danach auf `domain`
+        // geschnitten — vorher waren es die globalen Top-`4*3`, in denen kleine Kategorien
+        // systematisch untergingen. Ueberfetch, damit der Boden unten noch Auswahl hat.
+        $boden = $this->discoveryFloor();
+        foreach ($this->semanticScored($description, ['domain'], self::DOMAIN_TOP_K * 3) as $slug => $cos) {
+            if ($cos >= $boden) {
+                $merke((string) $slug, 2, (float) $cos, 'semantic');
+            }
         }
 
-        $slugList = array_map('strval', array_keys($slugs));
-        sort($slugList);
-        if ($allowedSlugs !== []) {
-            $slugList = array_values(array_intersect($slugList, $allowedSlugs));
+        if ($kandidaten === []) {
+            return [];
         }
-        $topK = array_slice($slugList, 0, self::DOMAIN_TOP_K);
+        if ($allowedSlugs !== []) {
+            $kandidaten = array_intersect_key($kandidaten, array_flip($allowedSlugs));
+        }
+        // C2: nach SIGNAL sortieren, nicht alphabetisch. Vorher stand hier `sort($slugList)`
+        // direkt vor `array_slice(…, 0, 4)` — der Anfangsbuchstabe entschied, sobald mehr als
+        // vier Kandidaten anfielen.
+        uasort($kandidaten, static fn ($x, $y) => [$y[0], $y[1]] <=> [$x[0], $x[1]]);
+        $topK = array_slice(array_keys($kandidaten), 0, self::DOMAIN_TOP_K);
         $docs = $this->domainDocsBySlug($team, $topK);   // Volltext NUR für die gewählten (Tauri-Muster)
 
-        return array_values(array_filter(array_map(
-            fn ($slug) => $docs->get($slug),
-            $topK
-        )));
+        $min = $this->minDocChars();
+        $out = [];
+        foreach ($topK as $slug) {
+            $doc = $docs->get($slug);
+            if ($doc === null) {
+                continue;
+            }
+            // Stummel-Dossiers (Spec-50-Splits) belegen keinen Slot.
+            if ($min > 0 && mb_strlen((string) ($doc->content_md ?? '')) < $min) {
+                continue;
+            }
+            [$rang, $score, $via] = $kandidaten[$slug];
+            // Herkunfts-Messung: discoverDomains schrieb nie in $this->herkunft — Domain-
+            // Treffer hatten im Kontext-Inspektor kein via/score, der C2-Fehler war damit
+            // unsichtbar. Ohne diese Zeile ist der Fix nicht nachprüfbar.
+            $this->herkunft[$slug] = ['score' => round($score, 4), 'via' => $via];
+            $out[] = $doc;
+        }
+
+        return $out;
     }
 
     /**
