@@ -78,6 +78,7 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                 // W1-1: misst Findbarkeit jenseits des Embedding-Fensters (vor/nach).
                 \Platform\FoodAlchemist\Console\WissenRecallProbeCommand::class,
                 \Platform\FoodAlchemist\Console\WissenSteuerdatenW0Command::class,
+                \Platform\FoodAlchemist\Console\WissenDeckelCheckCommand::class,
                 \Platform\FoodAlchemist\Console\KnowledgeEmbedCommand::class,
                 // Spec 50 Strang III: Arbeitsliste zu großer Dossiers (ein Thema pro Dossier ≤ Deckel).
                 \Platform\FoodAlchemist\Console\KnowledgeOversizedCommand::class,
@@ -182,6 +183,20 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                 ->onOneServer()
                 ->runInBackground()
                 ->description('FoodAlchemist: Wissens-Steuerdaten gegen das Soll prüfen (Drift → Signal)');
+
+            // Spec 50 · Etappe 8b — der Deckel- und Verdrahtungs-Wächter.
+            //
+            // Zwei Invarianten, die beide STILL brechen: ein Dossier über 4.000 Zeichen fällt
+            // erst auf, wenn jemand die Fehlermeldung in der Oberfläche sieht; ein Dossier, das
+            // im Register fehlt, fällt GAR NICHT auf — `ablauf.GET` liefert es einfach nie.
+            // Nach dem Split liegen sieben Dossiers zwischen 3.900 und 3.993 Zeichen, die
+            // nächste Ergänzung kippt eines davon. Deshalb wöchentlich statt auf Zuruf.
+            $schedule->command(\Platform\FoodAlchemist\Console\WissenDeckelCheckCommand::class)
+                ->weeklyOn(1, config('foodalchemist.scheduler.deckel_check_zeit', '06:45'))
+                ->withoutOverlapping()
+                ->onOneServer()
+                ->runInBackground()
+                ->description('FoodAlchemist: Wissens-Dossiers gegen Zeichen-Deckel und Vorgangs-Verdrahtung prüfen');
 
             // Trendradar-Automatisierung: NUR wenn explizit eingeschaltet (Default aus) —
             // der Lauf ruft das Modell pro Trend/Team und gibt sonst ungefragt Provider-Geld aus.

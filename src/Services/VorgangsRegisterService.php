@@ -66,15 +66,17 @@ class VorgangsRegisterService
             'titel' => 'Gericht / Verkaufsrezept anlegen',
             'kind' => 'gericht',
             // EIN Prozess, zwei Ausführende — Weg A die SaaS-KI über die Planungs-Leitstelle,
-            // Weg B der Agent in ihrer Rolle, mit derselben Schrittfolge. Auf drei Dossiers
+            // Weg B der Agent in ihrer Rolle, mit derselben Schrittfolge. Auf vier Dossiers
             // verteilt, weil keines über 4.000 Zeichen gehen darf: das Leit-Dossier trägt die
-            // Regeln, die für BEIDE Wege gelten, die beiden anderen je einen Weg.
+            // Regeln, die für BEIDE Wege gelten, zwei je einen Weg, das vierte den gemeinsamen
+            // Abschluss (Speisen-Klasse, Kalkulation, Definition of Done).
             // Der ältere `workflow.gericht_anlegen_mcp` beschrieb nur Weg A und ist globales
             // Master-Wissen (per MCP weder editier- noch deaktivierbar).
             'doc_slugs' => [
                 'workflow.verkaufsgericht_anlegen_mcp',
                 'workflow.gericht_weg_a_leitstelle',
                 'workflow.gericht_weg_b_eigenregie',
+                'workflow.gericht_abschluss',
             ],
             'feature' => 'ai_generate_recipe',
             'prompt_keys' => ['vk.generator'],
