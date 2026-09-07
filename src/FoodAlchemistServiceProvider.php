@@ -77,6 +77,8 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                 \Platform\FoodAlchemist\Console\WissenDeckungCommand::class,
                 // W1-1: misst Findbarkeit jenseits des Embedding-Fensters (vor/nach).
                 \Platform\FoodAlchemist\Console\WissenRecallProbeCommand::class,
+                // One-Shot: Reifegrad an bestehenden Uebernahme-Schritten nachtragen.
+                \Platform\FoodAlchemist\Console\ReuseReifeBackfillCommand::class,
                 \Platform\FoodAlchemist\Console\WissenSteuerdatenW0Command::class,
                 \Platform\FoodAlchemist\Console\WissenDeckelCheckCommand::class,
                 \Platform\FoodAlchemist\Console\KnowledgeEmbedCommand::class,

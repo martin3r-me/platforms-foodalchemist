@@ -240,3 +240,34 @@ it('A8: nach erfolgreicher Anreicherung wird der Reifegrad NACHGEZOGEN — sonst
         // Lücke zu ⇒ die Übernahme zählt wieder als Abschluss.
         ->and($run->fresh()->status)->toBe('done');
 });
+
+it('A9: der Backfill traegt den Reifegrad an BESTEHENDEN Uebernahmen nach (sonst wirkt der Fix nur auf neue Laeufe)', function () {
+    // Der Anlassfall auf demo (Lauf 65 / Step 460) traegt keinen Marker — er entstand vor
+    // dieser Aenderung. Ohne Backfill greift nichts, was daran haengt, und genau dieser Lauf
+    // sieht unveraendert aus.
+    $bruehe = $this->makeRecipe($this->rootTeam, 'Basisrezept: Gemüsebrühe', ['status' => 'draft']);
+    ($this->zutat)($bruehe, null, 20, ($this->gramm)(), 'Petersilienstiele');
+
+    $run = FoodAlchemistCascadeRun::create([
+        'team_id' => $this->rootTeam->id, 'scope' => 'rezept', 'status' => 'done', 'staged' => true,
+    ]);
+    FoodAlchemistCascadeRunStep::create([
+        'team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'rezept',
+        'status' => 'freigegeben', 'ref_type' => 'recipe',
+        'ref_id' => $this->makeRecipe($this->rootTeam, 'Crème-Suppe: Tomate-Speck', ['status' => 'approved'])->id,
+    ]);
+    $alt = FoodAlchemistCascadeRunStep::create([
+        'team_id' => $this->rootTeam->id, 'cascade_run_id' => $run->id, 'kind' => 'rezept',
+        'status' => 'skipped', 'ref_type' => 'recipe', 'ref_id' => $bruehe->id, 'depth' => 1,
+        'label' => 'Basisrezept: Gemüsebrühe',
+        'deferred' => null,                       // <- der Ist-Zustand auf demo
+    ]);
+
+    $this->artisan('foodalchemist:reuse-reife-backfill', ['--apply' => true])->assertExitCode(0);
+
+    expect($alt->fresh()->deferred['reuse']['reif'] ?? null)->toBeFalse()
+        ->and($alt->fresh()->deferred['reuse']['eigen'] ?? null)->toBeTrue()
+        ->and($alt->fresh()->deferred['reuse']['luecken'] ?? null)->toContain('keine Schritte')
+        // Und der Lauf gibt seinen falschen Abschluss zurueck.
+        ->and($run->fresh()->status)->toBe('review');
+});
