@@ -187,6 +187,7 @@ class Browser extends Component
         $this->form = [
             'title' => $doc->title,
             'category' => $doc->category,
+            'art' => $doc->art ?? '',
             'active' => (bool) $doc->active,
             'content_md' => $doc->content_md,
         ];
@@ -203,6 +204,7 @@ class Browser extends Component
             'title' => '',
             'category' => (string) DB::table('foodalchemist_knowledge_categories')->whereNull('deleted_at')
                 ->where('active', true)->orderBy('sort_order')->value('slug'),
+            'art' => '',
             'active' => true,
             'content_md' => '',
         ];
@@ -212,6 +214,7 @@ class Browser extends Component
     {
         $title = trim((string) ($this->form['title'] ?? ''));
         $category = trim((string) ($this->form['category'] ?? ''));
+        $art = trim((string) ($this->form['art'] ?? ''));
         if ($title === '' || $category === '') {
             $this->fehler = 'Titel und Kategorie sind Pflicht.';
 
@@ -221,6 +224,7 @@ class Browser extends Component
         $payload = [
             'title' => $title,
             'category' => $category,
+            'art' => $art,
             'active' => (bool) ($this->form['active'] ?? true),
             'content_md' => $content,
             'char_count' => Str::length($content),
@@ -426,6 +430,11 @@ class Browser extends Component
 
         $suche = trim($this->search);
         $spalten = ['id', 'slug', 'title', 'category', 'active', 'char_count'];
+        // Spec 52/H1: die Art steuert, WIE das Dossier benutzt werden darf. Vor der Migration
+        // (frische Umgebung, Deploy-Reihenfolge) darf die Liste deshalb nicht sterben.
+        if (\Illuminate\Support\Facades\Schema::hasColumn('foodalchemist_knowledge_documents', 'art')) {
+            $spalten[] = 'art';
+        }
 
         // Semantik-Modus (#469): Embedding-Recall, sofern aktiviert, Query nicht leer
         // und ein Provider verfügbar ist. Sonst graceful Fallback auf SQL-LIKE + Hinweis.

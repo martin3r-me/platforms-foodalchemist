@@ -1300,6 +1300,62 @@ Weg, den `feedback_fa_test_harness_layout_blind` vorschreibt.
 
 ---
 
+## ✅ Etappe H1 — die Wissensart als Feld (2026-09-07)
+
+**Vorgezogen, damit die neuen Dossiers sie von Anfang an tragen.** Bestand markieren, der
+ohnehin ersetzt wird, wäre Arbeit für die Tonne — deshalb `nullable`, **ohne Backfill**.
+
+### Warum die Kategorie als Steuergrösse nicht reicht
+
+Die Kategorie sagt, *worum* es geht. Sie sagt nicht, *wie* das Wissen benutzt werden darf —
+und daran ist die Steuerung bisher gescheitert:
+
+- **`workflow`** mischt Handwerkswissen für den Prompt
+  (`workflow.basisrezept_erstellungs_dossier`, Mutterstruktur einer Sauce) mit
+  Agenten-Anleitungen (`workflow.basisrezept_regeln`, „Regel 1: alles ist Entwurf",
+  `primaer=lieferantenartikel_waehlen`). Ein Routing auf die Kategorie hätte beides in jeden
+  Prompt gezogen — **deshalb hat `workflow` bis heute gar kein Routing.**
+- **`cross_cutting`** mischt Nachschlagewerke (`mengen_defaults` — eine Tabelle, die man über
+  Gang × Rolle × Portion auflöst) mit echtem Suchmaterial (`geschmacksbalance`).
+
+### Fünf Arten, als Code-Konstante
+
+`Services\Knowledge\Wissensart`: `regel` · `datenwerk` · `fachwissen` · `referenz` · `ablauf`.
+
+**Bewusst kein pflegbares Vokabular.** Der Code entscheidet anhand dieser Werte — wäre die
+Liste zur Laufzeit erweiterbar, könnte er sich nicht darauf verlassen, dass `ablauf` „niemals
+in einen Prompt" heisst, und ein frei erfundener Wert wäre still wirkungslos. Die Kategorie
+bleibt pflegbar, die Art nicht.
+
+### Was das Feld am ersten Tag TUT
+
+Damit es nicht dekorativ ist: **`ablauf` kommt in keinen Prompt.** Gefiltert an den drei
+Stellen, die Prompts bauen — `crossCuttingDocs()`, `alwaysCategoryBlock()`,
+`discoverGenericBlock()` (über den neuen `nurFuerPrompt()`-Helfer) und
+`KnowledgeCanonService::documentsFor()`.
+
+★ **Und es verschwindet nicht still:** steht ein `ablauf`-Dossier im Kanon, meldet
+`unaufloesbareZeilen()` es als **blockierenden** Befund `art_nie_im_prompt` mit dem Hinweis,
+dass Agenten es über `ablauf.GET` erreichen. Genau die Lehre dieser Spec — was der Prompt-Bau
+weglässt, muss irgendwo auftauchen.
+
+**Der Filter sitzt bewusst NICHT in `nurSichtbar()`**, obwohl das die eine Stelle wäre, die
+alle 20 Query-Sites erwischt: `knowledge.SEARCH` und der Browser müssen `ablauf`-Dossiers
+weiter **finden** — genau darüber holen sich Agenten ihre Anleitung. Ein Blanket-Filter hätte
+H1 den Agenten-Weg gekappt. Ein Test pinnt beides.
+
+`art IS NULL` bleibt überall erlaubt — sonst fiele der gesamte, noch nicht eingeordnete
+Bestand aus jedem Prompt.
+
+### Flächen (Grundsatz E)
+
+`knowledge.POST` / `.PUT` nehmen `art` (Leerstring = zurücksetzen), `knowledge.LIST` gibt sie
+zurück, und der **Wissens-Browser** hat einen Auswahl-Knopf mit den fünf Arten samt
+Erklärung. Der Vault-Re-Import überschreibt sie nicht (`KnowledgeImportCommand:172` schreibt
+nur Inhalt/Titel/Version/Hashes).
+
+---
+
 ## Runbook — Messung auf demo (nach jedem Deploy dieser Etappe)
 
 Immer **mit `--team=6`**: ohne Nutzer greift nur die globale Partition, und der Bericht

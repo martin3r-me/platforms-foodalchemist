@@ -93,6 +93,20 @@
                                     <option value="{{ $kat->slug }}">{{ $kat->label }}</option>
                                 @endforeach
                             </select>
+
+                            {{-- Spec 52/H1: die Kategorie sagt WORUM, die Art sagt WIE benutzt werden darf. --}}
+                            <label class="{{ $dt }} mt-2 block">Wissensart</label>
+                            <select wire:model="form.art" class="{{ $input }} w-full" data-wissen-art>
+                                <option value="">— noch nicht eingeordnet —</option>
+                                @foreach(\Platform\FoodAlchemist\Services\Knowledge\Wissensart::LABELS as $wert => $label)
+                                    <option value="{{ $wert }}">{{ $label }}</option>
+                                @endforeach
+                            </select>
+                            <p class="text-[10px] text-gray-500 mt-0.5">
+                                <span class="font-medium">datenwerk</span> wird über Achsen aufgelöst, nicht gesucht ·
+                                <span class="font-medium">ablauf</span> geht an Agenten (<code>ablauf.GET</code>) und
+                                kommt in <span class="font-medium">keinen</span> Prompt.
+                            </p>
                         </div>
                         <label class="flex items-center gap-1.5 text-xs text-gray-600">
                             <input type="checkbox" wire:model="form.active" /> aktiv

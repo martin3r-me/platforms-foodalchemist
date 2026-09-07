@@ -163,6 +163,8 @@ class WissensProfilService
                 'text' => match ($z['grund']) {
                     'dossier_fehlt' => 'Kanon-Zeile zeigt auf ein Dossier, das es nicht mehr gibt.',
                     'dossier_geloescht' => 'Dossier ist gelöscht — die Kanon-Zeile ist über keinen Lesepfad mehr sichtbar.',
+                    'art_nie_im_prompt' => 'Dieses Dossier ist eine Ablauf-Anleitung für Agenten und gehört in keinen '
+                        .'Prompt — der Generator ruft keine Werkzeuge. Aus dem Kanon nehmen; Agenten erreichen es über `ablauf.GET`.',
                     default => 'Dossier ist deaktiviert — die Zeile wird beim Prompt-Bau still übersprungen.',
                 },
             ];

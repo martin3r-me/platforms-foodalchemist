@@ -39,6 +39,7 @@ class KnowledgeUpdateTool extends FoodAlchemistTool implements ToolContract, Too
                 'slug' => ['type' => 'string'],
                 'title' => ['type' => 'string'],
                 'category' => ['type' => 'string'],
+                'art' => ['type' => 'string', 'description' => 'Wissensart — steuert, WIE das Wissen benutzt werden darf (die Kategorie sagt nur, WORUM es geht): regel (verbindlich) | datenwerk (Nachschlagewerk: wird ueber Achsen aufgeloest, nicht gesucht) | fachwissen (echter Suchfall) | referenz (Inspiration) | ablauf (Anleitung fuer AGENTEN — gehoert in KEINEN Prompt). Weglassen = noch nicht eingeordnet.'],
                 'content_md' => ['type' => 'string'],
                 'active' => ['type' => 'boolean'],
                 'aliases' => ['type' => 'array', 'items' => ['type' => 'string']],
@@ -66,7 +67,7 @@ class KnowledgeUpdateTool extends FoodAlchemistTool implements ToolContract, Too
         }
 
         $data = array_intersect_key($arguments, array_flip([
-            'title', 'category', 'content_md', 'active', 'aliases', 'bind_layers',
+            'title', 'category', 'art', 'content_md', 'active', 'aliases', 'bind_layers',
         ]));
 
         try {
@@ -84,6 +85,7 @@ class KnowledgeUpdateTool extends FoodAlchemistTool implements ToolContract, Too
                 'slug' => $doc->slug,
                 'title' => $doc->title,
                 'category' => $doc->category,
+                'art' => $doc->art ?? null,
                 'version' => (int) $doc->version,
                 'active' => (bool) $doc->active,
                 'created_via' => $doc->created_via,
