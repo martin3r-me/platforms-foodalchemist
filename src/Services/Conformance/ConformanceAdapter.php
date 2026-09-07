@@ -45,4 +45,23 @@ interface ConformanceAdapter
      * gelingt sie nicht, bleibt der Verstoß als Hinweis stehen (kein Block).
      */
     public function revise(Team $team, int $id, string $direktive, array $befunde = []): void;
+
+    /**
+     * DETERMINISTISCHE Befunde — was ohne KI prüfbar ist, wird ohne KI geprüft.
+     *
+     * Anlass (2026-09-07): das Rezept „Crème-Suppe: Tomate-Speck" trug 1.600 g
+     * `Tomaten: TK, getrocknet` als Hauptmasse — 57,9 % einer 2,764-kg-Suppe. Das hat
+     * JEDE Stufe passiert, den Konformitäts-Critic eingeschlossen (er meldete drei
+     * andere Befunde). Ein LLM-§-Pass ist dafür das falsche Werkzeug: die Rechnung ist
+     * exakt, und was exakt entscheidbar ist, darf nicht von einem Sampling abhängen.
+     * Gemessene Lehre aus dem Regelwerk-Programm: code-erzwungen = 0 Befunde,
+     * prompt-gebunden = Befunde bleiben.
+     *
+     * Rückgabe in der Form von {@see ConformanceService::normalisiere} (paragraph,
+     * schweregrad, feld, begruendung, vorschlag, konfidenz). Leeres Array = nichts zu
+     * melden; ein Adapter ohne deterministische Regeln gibt immer [] zurück.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function deterministischeBefunde(Team $team, int $id): array;
 }

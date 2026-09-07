@@ -481,9 +481,43 @@ class RecipeService
      */
     public function findByTokenSet(Team $team, string $name): ?FoodAlchemistRecipe
     {
-        $treffer = $this->findByTokenSetMitReife($team, $name);
+        // ALLE Stadien, inkl. `stub` — das ist die reine Namens-Auflösung und der Dedupe-Eingang
+        // von {@see createSubRecipeStub}: fände sie den bestehenden Stub NICHT, würde bei jeder
+        // Stub-Anlage ein Duplikat entstehen (SubRecipeStubTest hält das fest).
+        // Für das REUSE-GATE der Kaskade ist das die falsche Frage — dort zählt, ob der Treffer
+        // wirklich Bestand IST: {@see findByTokenSetMitReife}.
+        return $this->tokenSetTreffer($team, $name)->first();
+    }
 
-        return $treffer['recipe'] ?? null;
+    /**
+     * Basisrezepte mit identischem Namens-Token-Set, nach `id` — die geteilte Grundlage von
+     * {@see findByTokenSet} und {@see findByTokenSetMitReife}. Ein Ort für das Matching, damit
+     * die zwei Fragen (»gibt es den Namen?« / »ist es Bestand?«) nicht auseinanderlaufen.
+     *
+     * @return \Illuminate\Support\Collection<int, FoodAlchemistRecipe>
+     */
+    private function tokenSetTreffer(Team $team, string $name): \Illuminate\Support\Collection
+    {
+        $name = trim($name);
+        if ($name === '') {
+            return collect();
+        }
+        $engine = app(\Platform\FoodAlchemist\Services\Matching\TokenEngine::class);
+        $zielTokens = $engine->tokenize($name);
+        sort($zielTokens);
+        if ($zielTokens === []) {
+            return collect();
+        }
+        $out = collect();
+        foreach (FoodAlchemistRecipe::visibleToTeam($team)->basis()->orderBy('id')->cursor() as $r) {
+            $tokens = $engine->tokenize((string) $r->name);
+            sort($tokens);
+            if ($tokens === $zielTokens) {
+                $out->push($r);
+            }
+        }
+
+        return $out;
     }
 
     /**
@@ -513,30 +547,13 @@ class RecipeService
      */
     public function findByTokenSetMitReife(Team $team, string $name): ?array
     {
-        $name = trim($name);
-        if ($name === '') {
-            return null;
-        }
-        $engine = app(\Platform\FoodAlchemist\Services\Matching\TokenEngine::class);
-        $zielTokens = $engine->tokenize($name);
-        sort($zielTokens);
-        if ($zielTokens === []) {
-            return null;
-        }
-        $kandidaten = [];
-        foreach (FoodAlchemistRecipe::visibleToTeam($team)->basis()->orderBy('id')->cursor() as $r) {
-            $tokens = $engine->tokenize((string) $r->name);
-            sort($tokens);
-            if ($tokens !== $zielTokens) {
-                continue;
-            }
-            // Stub = leere Hülle, kein Bestand. Bewusst ausgeschlossen statt „unreif":
-            // eine Hülle zu binden liefert dem Eltern-Rezept nicht einmal eine Zutat.
-            if ($r->status === RecipeStatus::Stub) {
-                continue;
-            }
-            $kandidaten[] = $r;
-        }
+        // Stub = leere Hülle, kein Bestand. Bewusst ausgeschlossen statt nur „unreif": eine
+        // Hülle zu binden liefert dem Eltern-Rezept nicht einmal eine Zutat. Die reine
+        // Namens-Auflösung ({@see findByTokenSet}) sieht Stubs weiter — sie ist der
+        // Dedupe-Eingang der Stub-Anlage und braucht sie.
+        $kandidaten = $this->tokenSetTreffer($team, $name)
+            ->reject(fn ($r) => $r->status === RecipeStatus::Stub)
+            ->values()->all();
         if ($kandidaten === []) {
             return null;
         }

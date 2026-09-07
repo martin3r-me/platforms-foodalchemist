@@ -87,10 +87,16 @@ it('A2: ein produktionsreifes Rezept hat keine Lücken', function () {
     expect(app(RecipeService::class)->reifegrad($fertig->fresh())['reif'])->toBeTrue();
 });
 
-it('A3: findByTokenSet gibt NIE einen stub als Bestand zurück (leere Hülle ist kein Rezept)', function () {
-    $this->makeRecipe($this->rootTeam, 'Basisrezept: Gemüsebrühe', ['status' => 'stub']);
+it('A3: ein stub ist NAMENS-Treffer, aber kein Bestand — die zwei Fragen sind getrennt', function () {
+    // Genau hier lag eine Regression im ersten Anlauf: `findByTokenSet` ist der Dedupe-Eingang
+    // von `createSubRecipeStub` und MUSS Stubs finden (sonst entsteht bei jeder Stub-Anlage ein
+    // Duplikat — SubRecipeStubTest hält das fest). Das REUSE-GATE stellt eine andere Frage:
+    // „ist der Treffer wirklich Bestand?" — und eine leere Hülle ist das nie.
+    $stub = $this->makeRecipe($this->rootTeam, 'Basisrezept: Gemüsebrühe', ['status' => 'stub']);
+    $svc = app(RecipeService::class);
 
-    expect(app(RecipeService::class)->findByTokenSet($this->rootTeam, 'Basisrezept: Gemüsebrühe'))->toBeNull();
+    expect($svc->findByTokenSet($this->rootTeam, 'Basisrezept: Gemüsebrühe')?->id)->toBe($stub->id)
+        ->and($svc->findByTokenSetMitReife($this->rootTeam, 'Basisrezept: Gemüsebrühe'))->toBeNull();
 });
 
 it('A4: bei Namens-Gleichstand gewinnt das REIFE Rezept, nicht die kleinere id', function () {

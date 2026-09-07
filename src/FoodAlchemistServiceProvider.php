@@ -77,6 +77,8 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                 \Platform\FoodAlchemist\Console\WissenDeckungCommand::class,
                 // W1-1: misst Findbarkeit jenseits des Embedding-Fensters (vor/nach).
                 \Platform\FoodAlchemist\Console\WissenRecallProbeCommand::class,
+                // One-Shot: condition (§9) nachtragen, wo der Name ihn nennt und das Feld leer ist.
+                \Platform\FoodAlchemist\Console\GpZustandBackfillCommand::class,
                 // One-Shot: Reifegrad an bestehenden Uebernahme-Schritten nachtragen.
                 \Platform\FoodAlchemist\Console\ReuseReifeBackfillCommand::class,
                 \Platform\FoodAlchemist\Console\WissenSteuerdatenW0Command::class,
