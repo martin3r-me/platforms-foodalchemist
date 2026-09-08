@@ -195,9 +195,8 @@ class KnowledgeContextService
      */
     public function contextFor(?Team $team, string $feature, string $description, ?string $stil = null, array $hauptzutatSlugs = [], array $params = []): array
     {
-        $routing = DB::table('foodalchemist_knowledge_routings')
-            ->where('feature', $feature)
-            ->get()->keyBy(fn ($r) => $r->category . ':' . $r->mode);
+        $routing = $this->routingZeilen($feature)
+            ->keyBy(fn ($r) => $r->category . ':' . $r->mode);
 
         $filesUsed = [];
         $usedByCategory = [];
@@ -225,7 +224,7 @@ class KnowledgeContextService
             $this->ausgeschlossen = array_merge($this->ausgeschlossen, $kanonSlugs);
         }
         $this->ausgeschlossen = array_values(array_unique($this->ausgeschlossen));
-        $recipeBudget = $feature === 'ai_generate_recipe';
+        $recipeBudget = in_array($feature, self::REZEPT_BUDGET_KEYS, true);
         $scopeSlugs = $this->knowledgeScopeSlugs($params['_knowledge_scope'] ?? []);
 
         // Kontext-Inspektor (2026-08-07): jedem Block das Delta an $filesUsed SEINER Kategorie
@@ -660,8 +659,9 @@ class KnowledgeContextService
      */
     public function pflichtZeichen(string $feature): int
     {
-        $zeilen = DB::table('foodalchemist_knowledge_routings')
-            ->where('feature', $feature)->where('mode', 'always')->get();
+        // Ueber denselben Helfer wie contextFor, sonst meldete die W0-Invariante fuer
+        // `recipe.generator` eine Pflichtmenge von 0, obwohl der Alt-Name Zeilen traegt.
+        $zeilen = $this->routingZeilen($feature)->where('mode', 'always');
 
         $summe = 0;
         foreach ($zeilen as $r) {
@@ -682,7 +682,7 @@ class KnowledgeContextService
     /** W0-5: das aufgelöste Zeichenbudget eines Features (für Prüf-Werkzeuge). */
     public function budgetFuer(string $feature): int
     {
-        return $this->knowledgeBudget($feature, $feature === 'ai_generate_recipe');
+        return $this->knowledgeBudget($feature, in_array($feature, self::REZEPT_BUDGET_KEYS, true));
     }
 
     /**
@@ -714,6 +714,45 @@ class KnowledgeContextService
     public static function routingFeatureFuer(string $promptKey): string
     {
         return self::ROUTING_ALIAS[$promptKey] ?? $promptKey;
+    }
+
+    /**
+     * Spec 52/Paket 2 — Aufrufe, die die REZEPT-Deckel benutzen.
+     *
+     * ★ Vorher stand hier ein String-Vergleich: `$feature === 'ai_generate_recipe'`. Der
+     * gatete **acht** Verhaltensweisen, darunter jeden Pro-Dossier-Deckel
+     * (`RECIPE_MAX_CHARS_PER_DOC` 2.400 statt der Kategorie-Defaults 1.800/2.500). Den Alt-Namen
+     * einfach durch den Prompt-Key zu ersetzen hätte deshalb JEDEN Rezept-Prompt anders gekappt
+     * — still, ohne dass ein Test rot wird. Genau die Fehlerklasse, die diese Spec abbaut.
+     *
+     * Als Satz geschrieben, ist die Umstellung verhaltensneutral: `recipe.generator` und
+     * `vk.generator` bekommen dieselben Deckel wie der Alt-Name, und der Alt-Name funktioniert
+     * weiter, solange Aufrufer oder Steuerdaten ihn noch tragen.
+     *
+     * @var list<string>
+     */
+    public const REZEPT_BUDGET_KEYS = ['ai_generate_recipe', 'recipe.generator', 'vk.generator'];
+
+    /**
+     * Routing-Zeilen eines Features — mit Rückfall auf den Alt-Namen.
+     *
+     * Damit wird `knowledge_routings.PUT` auf `vk.generator` erstmals wirksam (vorher schrieb
+     * es stumm ins Leere, weil der Generator unter `ai_generate_recipe` nachsah), ohne dass die
+     * bestehenden Zeilen migriert sein müssen: eigene Zeilen gewinnen, sonst gilt der Alt-Name.
+     * Dasselbe „Neues gewinnt, Altes bleibt Fallback" wie bei Kanon ⇄ Bindung und Achse ⇄ Config.
+     */
+    private function routingZeilen(string $feature): \Illuminate\Support\Collection
+    {
+        $eigene = DB::table('foodalchemist_knowledge_routings')->where('feature', $feature)->get();
+        if ($eigene->isNotEmpty()) {
+            return $eigene;
+        }
+
+        $alt = self::ROUTING_ALIAS[$feature] ?? null;
+
+        return $alt === null
+            ? $eigene
+            : DB::table('foodalchemist_knowledge_routings')->where('feature', $alt)->get();
     }
 
     /**
@@ -1073,7 +1112,18 @@ class KnowledgeContextService
      */
     public function regelwerkDokumentFuer(?Team $team, string $feature, array $spalten = ['slug', 'title', 'char_count', 'version']): ?object
     {
-        $slugLike = self::REGELWERK_SLUG_LIKE[$feature] ?? self::REGELWERK_SLUG_LIKE['ai_generate_recipe'];
+        // ★ Spec 52/Paket 2 — KEIN Blind-Default mehr.
+        //
+        // Vorher fiel jedes unbekannte Feature auf `%basisrezept%` zurueck. Das widersprach dem
+        // Prinzip, das direkt ueber der Karte steht („ein falsches waere schlimmer als keines"),
+        // und traf real drei Vorgaenge: `gp_aus_la_anlegen` bekam das Basisrezepte-Regelwerk
+        // statt des GP-Regelwerks, Angebot/Speiseplan/Preis-Monitoring bekamen eines, obwohl es
+        // fuer sie gar keins gibt. Ein Vorgang ohne Regelwerk soll KEINES nennen — `regelwerk.GET`
+        // sagt dann `quelle: keine`, und das ist die Wahrheit.
+        $slugLike = self::REGELWERK_SLUG_LIKE[$feature] ?? null;
+        if ($slugLike === null) {
+            return null;
+        }
 
         return DB::table('foodalchemist_knowledge_documents')->tap($this->nurSichtbar($team))
             ->where('category', 'regelwerk')->where('active', 1)->whereNull('deleted_at')
@@ -1083,15 +1133,39 @@ class KnowledgeContextService
     }
 
     /**
-     * Feature → Slug-Muster des zugehörigen Regelwerks. `format.grundgeruest` ist bewusst
-     * eigen eingetragen, damit es NICHT auf den Basisrezept-Fallback rutscht — es gibt (noch)
-     * kein Format-Regelwerk, und ein falsches wäre schlimmer als keines.
+     * Feature/Prompt-Key → Slug-Muster des zugehörigen Regelwerks. `format.grundgeruest` ist
+     * bewusst eigen eingetragen, damit es NICHT auf den Basisrezept-Fallback rutscht — es gibt
+     * (noch) kein Format-Regelwerk, und ein falsches wäre schlimmer als keines.
+     *
+     * ★ **Spec 52/Paket 2 — genau dieses Prinzip war für Gerichte verletzt.** `vk.generator`
+     * hatte keinen Eintrag, und der Blind-Default (`?? ['ai_generate_recipe']`) liefert
+     * `%basisrezept%`. Ohne Kanon bekam der Gericht-Pfad damit das **Basisrezepte**-Regelwerk,
+     * obwohl `regelwerk.regelwerk_verkaufsgerichte--*` existiert — dieselbe Fehlerklasse wie
+     * der schon dokumentierte Fall „vk bekam Basisrezepte statt Verkaufsgerichte", nur an
+     * anderer Stelle. Auf demo fiel es nicht auf, weil der Kanon greift; auf einer frischen DB
+     * (Migrationsstand: `regelwerk always`) hätte es zugeschlagen.
+     *
+     * ⚠ Die Auswahl INNERHALB eines Musters bleibt beliebig: `regelwerkDokumentFuer()` nimmt
+     * `orderBy('slug')->first()`, also das alphabetisch erste von 61 Regelwerks-Dossiers. Für
+     * VK ist das §1.2a statt §1. Dieser Pfad gehört deshalb weg (Paket 3) — hier steht nur,
+     * dass er bis dahin nicht das FALSCHE Regelwerk trifft.
      */
     public const REGELWERK_SLUG_LIKE = [
         'concept.brief_geruest' => '%concept%',
         'foodbook.grundgeruest' => '%foodbook%',
         'format.grundgeruest' => '%format%',
         'ai_generate_recipe' => '%basisrezept%',
+        // Paket 2: der eine Schlüsselraum — Prompt-Keys explizit, Basis und VK getrennt.
+        'recipe.generator' => '%basisrezept%',
+        'recipe.ueberarbeiten' => '%basisrezept%',
+        'recipe.review' => '%basisrezept%',
+        'recipe.eigenschaften' => '%basisrezept%',
+        'vk.generator' => '%verkaufsgerichte%',
+        'vk.ueberarbeiten' => '%verkaufsgerichte%',
+        'vk.review' => '%verkaufsgerichte%',
+        // Der GP-Vorgang fiel auf `%basisrezept%` zurueck, obwohl `regelwerk-gp-*` existiert.
+        'gp.suggest' => '%regelwerk-gp%',
+        'gp.conformance_revise' => '%regelwerk-gp%',
     ];
 
     private function regelwerkBlock(?Team $team, string $feature, int $maxChars, array &$filesUsed): ?string
