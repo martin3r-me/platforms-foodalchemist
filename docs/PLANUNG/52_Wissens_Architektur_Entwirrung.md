@@ -1557,6 +1557,25 @@ Also: **auf demo** entscheidet Semantik (Inhalt, erste ~2.000 Zeichen) mit lexik
 Ergänzung; **auf einer frischen Installation** allein der Slug. Für den Korpus-Umbau sind das
 zwei Hebel in Dominiques Hand — Slug-Benennung und die ersten 2.000 Zeichen.
 
+### ★ Nachtrag: ein Konstruktionsfehler von mir, beim Verifizieren gefunden
+
+Meine erste Fassung von `routingZeilen()` gab die eigenen Zeilen zurück, **sobald es welche
+gab** — also alles-oder-nichts pro Feature. Wer EINE VK-Zeile setzt, hätte damit still die
+anderen elf verloren: `vk.generator` hätte plötzlich nur noch `weltkueche` gehabt, ohne dass
+irgendwo steht, dass `domain`, `kueche` und `cross_cutting` weg sind. Genau die Fehlerklasse,
+gegen die diese Spec antritt — selbst gebaut.
+
+Das brach auch das Muster, das überall sonst gilt: der Kanon überschreibt die Bindungen **pro
+Prompt-Key**, eine Achsen-Zeile die Config **pro Achsenwert** — immer pro Element, nie pro
+Gruppe. Der Rückfall wirkt jetzt **pro Kategorie**.
+
+Und „VK soll diese Kategorie nicht" wird ausdrücklich mit `mode = none` gesagt, nicht durch
+Weglassen — sonst wäre „bewusst leer" von „noch nicht gepflegt" nicht unterscheidbar, also
+genau die Unterscheidung kaputt, die der Versorgungs-Bericht trifft. Beide Richtungen gepinnt.
+
+**Praktische Folge:** eine einzelne VK-Zeile genügt, der Rest bleibt geerbt. Ohne den Fix hätte
+man erst alle zwölf Zeilen kopieren müssen, und die Strafe fürs Vergessen wäre lautlos gewesen.
+
 ### Nicht in diesem Paket
 
 Die **volle Zusammenlegung der zwei Budget-Bäume** (`ai.knowledge_budget` feature-gekeyt vs.

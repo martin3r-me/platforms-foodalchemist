@@ -744,15 +744,28 @@ class KnowledgeContextService
     private function routingZeilen(string $feature): \Illuminate\Support\Collection
     {
         $eigene = DB::table('foodalchemist_knowledge_routings')->where('feature', $feature)->get();
-        if ($eigene->isNotEmpty()) {
+        $alt = self::ROUTING_ALIAS[$feature] ?? null;
+        if ($alt === null) {
             return $eigene;
         }
 
-        $alt = self::ROUTING_ALIAS[$feature] ?? null;
+        // ★ Der Rückfall wirkt PRO KATEGORIE, nicht pro Feature.
+        //
+        // Meine erste Fassung gab die eigenen Zeilen zurück, sobald es welche gab — also
+        // alles-oder-nichts. Wer EINE VK-Zeile setzt, hätte damit still die anderen elf
+        // verloren: `vk.generator` hätte plötzlich nur noch `weltkueche` gehabt, ohne dass
+        // irgendwo etwas anzeigt, dass `domain`, `kueche` und `cross_cutting` weg sind.
+        //
+        // Das bricht auch das Muster, das überall sonst gilt: der Kanon überschreibt die
+        // Bindungen **pro Prompt-Key**, eine Achsen-Zeile die Config **pro Achsenwert** — immer
+        // pro Element, nie pro Gruppe. „Bewusst leer" wird ausdrücklich mit `mode = none`
+        // gesagt, nicht durch das Fehlen einer Zeile.
+        $eigeneKategorien = $eigene->pluck('category')->map(fn ($c) => (string) $c)->all();
 
-        return $alt === null
-            ? $eigene
-            : DB::table('foodalchemist_knowledge_routings')->where('feature', $alt)->get();
+        return DB::table('foodalchemist_knowledge_routings')->where('feature', $alt)->get()
+            ->reject(fn ($r) => in_array((string) $r->category, $eigeneKategorien, true))
+            ->concat($eigene)
+            ->values();
     }
 
     /**
