@@ -1916,6 +1916,157 @@ Tabellen-Drop gehört zu `F5`, zusammen mit `_sections`/`_chunks`.
 
 ---
 
+## ▶ Der Rest, vollständig — Stand 2026-09-08
+
+**Wir sind bei etwa der Hälfte.** Paket 1–3 waren die **Steuerschicht**: drei Tabellen auf
+eine, vier Rechner auf drei, zwei Injektionspunkte auf einen, ein totes Schema weg. Was
+bleibt, ist der **Zusammenbau** — wer den Prompt baut, woraus, und wie man verhindert, dass
+es wieder auseinanderläuft.
+
+### Erledigt
+
+| Etappe | |
+|---|---|
+| **A** Grundlinie + Werkzeuge | ✅ PR #48/#49 |
+| **D** Ein Schlüsselraum | ✅ Paket 2 (D1–D3, D6, D8, D9) — offen nur **D4** |
+| **F** Alt-Struktur abräumen | ✅ Paket 3 (F1–F5, F7); F8 durch den Korpus-Umbau erledigt |
+| **H** Art & Achse | ✅ H1 (Feld), H2 (Kanon-Scope), H6 (Verbindungen) |
+| **C0/C0b** Profil + Fingerabdruck | ✅ |
+
+### Offen, in der Reihenfolge, die die Abhängigkeiten vorgeben
+
+---
+
+**0 · Arten & Achsen scharf machen — VOR dem Korpus-Umbau** ⟨H1-Rest · H2-Ausbau · B6 · B7⟩
+
+Der einzige Punkt mit hartem Termin. Heute steuerst du VERDRAHTUNG: 71 Prompt-Keys × 21
+Kategorien plus je Key eine Kanon-Liste. Bei 2.600 Dossiers nicht mehr pflegbar — nicht weil
+die UI fehlt, sondern weil die Frage falsch gestellt ist.
+
+Zielmodell: **das Dossier sagt, was es ist; der Schritt sagt, was er benutzen darf.**
+
+| Art | Weg in den Prompt | Wer pflegt |
+|---|---|---|
+| `regel` | Kanon — explizit, klein | Mensch, einmal je Regel |
+| `datenwerk` | **Join über Achsen**, keine Suche | Mensch beim Schreiben |
+| `fachwissen` | Suche, wenn der Schritt es darf | niemand |
+| `referenz` | Suche, optional, gekennzeichnet | niemand |
+
+**Warum der Termin hart ist:** `art` und Achsenwerte sind LEER (alle 1.100 Dossiers
+`art: null`). Wer die Dossiers ohnehin neu schreibt, ordnet sie dabei fast kostenlos ein.
+Hinterher sind es 2.600 Einzelentscheidungen — das ist `H3`, das damit weitgehend entfällt.
+
+Zu bauen: Routing über **Arten** statt Kategorie-Paare · `knowledge_axis_map` über die
+heutigen zwei Achsen hinaus · **Resolver für Datenwerke** (`B6`/`B7`): ein per Achse
+gefundenes Markdown erfüllt den Vertrag nicht, es braucht strukturierte Einträge mit
+Bezugsgröße und Einheit. ⚠ `mengen_defaults` verlässt den Kanon erst, wenn das steht — sonst
+tauschen wir Prosa gegen Lücke.
+
+---
+
+**1 · Etappe B — die Riegel gegen stille Verluste** ⟨B0 · B1 · B2 · B4 · B5⟩
+
+Klein, unabhängig, und einer davon ist ein aktiver Defekt.
+
+★ **B2 ist der wichtigste: `truncate($block, $budget)` schneidet mitten im Text.** Halbe
+Tabelle statt ein Dossier weniger. Spec 46 §2d hat den Satz selbst geschrieben: *„Ein
+Tabellen-Anschnitt ist kein Wissen, nur Kosten."*
+
+Dazu: `B0` drei Grössen trennen (Kandidatenlimit ≠ Endauswahl ≠ Kontextbudget) · `B1` die
+Budget-Zahlen, damit Pflichtwissen hineinpasst · `B4` den W0-5-Wächter schärfen · `B5`
+`domain` bei den Generatoren deckeln (heute `max_docs: null` bei 192 Dossiers) und
+`DISCOVERY_MIN_SCORE` messen statt raten.
+
+`B3` (dropped_chars überall) ist teil-erledigt.
+
+---
+
+**2 · Etappe E — EIN Rechner** ⟨E1 · E2 · E3 · E4⟩ · „Paket 4"
+
+Korpus-unabhängig, wirkt auf jede Suche. Das ist der Rest der **26,7-Punkte-Recall-Lücke**:
+das Embedding-Fenster hat 10,7 Punkte gebracht (Schwanz 47,5 % → 55,0 % bei n=120), der Rest
+liegt am **Ranking**, nicht am Index.
+
+Heute drei Formeln auf einem Korpus (war 4 vor `F2`): Generator-Discovery (Jaccard +
+Substring + Alias), `knowledge.SEARCH` (Token-Schnittmenge + Alias×2), Browser (rohes `LIKE`
+ODER rein semantisch, kein Hybrid). Ziel: lexikalisch und semantisch unabhängig ermitteln,
+dann fusioniert bewerten (RRF), EIN Tokenizer, EINE Stoppwortliste. Dazu `E3`/`E4`: **der
+Kurator sieht im Browser, was der Generator sieht** — heute ist Kuratieren Blindflug.
+
+---
+
+**3 · Etappe C — der senkrechte Durchlauf** ⟨C1–C8⟩ · **der grösste Block**
+
+In der Spec ausdrücklich **„der Beweis"**, und der Teil, der verhindert, dass alles
+zurückdriftet.
+
+★ **Warum das kein Aufräumen ist:** `propose()` nimmt das Wissen weiterhin **vom Aufrufer**
+entgegen, und `$kontext` ist ein freies Array, in das jeder Regeltext schreiben kann. Wir
+haben aufgeräumt, WER was liefert — die Tür steht offen. Grundsatz B heisst wörtlich
+*strukturell, nicht vereinbart*: Konventionen sind genau das, was hierher geführt hat
+(`_kanon_prompt_key` an 2 von 14 Stellen, `knowledge_dropped_chars` an 2 von 14).
+
+Drei **aktive Defekte** stecken hier, keine Hygiene:
+
+| | |
+|---|---|
+| `C4` | Der Konformitäts-Critic lädt die Regelwerke per `slug LIKE` **ungekappt**, an Kanon/Routing/allem vorbei (Befund `G5`) |
+| `C5` | Die **Selbstheilung** bekommt gar keinen Kontext — kein Retrieval, kein Kanon (Befund `I5`), und rankt gegen die Rezeptbeschreibung statt gegen den Befund (`I6`) |
+| `C3` | Das **Sidebar-Mikrofon** hat weder Kanon noch Routing (Befund `D1`) — am Mikrofon gelten die Regeln nicht |
+
+Dazu die strukturellen: `C1` getippter Auftrag + Lauf-ID über den ganzen Vorgang · `C2`
+Kontext-Aufbau ins Gateway, ein übergebenes `knowledge` wird **abgewiesen** statt ignoriert ·
+`C6` Provenienz-Invariante (nur der zentrale Aufbau schreibt in den System-Regelblock) ·
+`C7` fünf sichtbare Felder je Aufruf, auch für die drei Folge-Calls (`G6`) · `C8` Abnahme-Lauf
+mit eingebautem Fehler.
+
+**`C9` gestrichen** — die Kanon-Sicherung (Paket 3/1) deckt die Wiederherstellung ab.
+
+---
+
+**4 · D4 — die zwei Budget-Bäume**
+
+Eigener Schnitt mit Messung davor/danach, weil er die Prompt-Grösse jedes Generators ändert.
+★ Die zwei sind NICHT dasselbe: `ai.bound_knowledge_budget` deckelt den Kanon,
+`ai.knowledge_budget` das Retrieval. Der echte Defekt: verschiedene Schlüsselräume, und
+**niemand deckelt die Summe**. Überschneidet sich mit `B1` — zusammen schneiden.
+
+---
+
+**5 · H7 — hängende §-Verweise**
+
+Der Defekt, den der Split erzeugt hat. Vorher war `Regelwerk_Basisrezepte` EIN Dokument, §2
+konnte inline auf §4 und §11 verweisen. Nach dem Split ist der Verweis ein Textstring ohne
+Ziel: der Kanon von `recipe.generator` trägt §1.0–1.5, §2, §3, §4, §6 — **nicht** §11
+(Derivate), **nicht** §1.10/§1.11 (Anti-Patterns), auf die §2 verweist. Ein Prüfer muss jeden
+§-Verweis melden, dessen Ziel nicht im selben Prompt steht.
+
+---
+
+**6 · Kleinkram, wo er reinpasst**
+
+Die **9 Alt-Bindungen** per `knowledge.UNBIND` (zwei Minuten; inert, aber sie stehen als
+`bindung_altlast` in jedem Bericht) · den Riegel `routing_always_tot` auf **alle** toten
+Modus-Kombinationen ausweiten (`grounding` ausserhalb `pairing`, `always` bei Kategorien ohne
+Handler) · `H5` Kategorie-Vokabular aufräumen.
+
+---
+
+**7 · Nach dem Korpus-Umbau: die 56 ungesteuerten Keys triagieren** ⟨H4 dazu⟩
+
+Je Key eine Entscheidung: Kanon-Zeile, Routing-Zeile oder ausdrücklich `none`. **Die andere
+Hälfte des Ausgangssymptoms** („Wissen fehlte komplett"), und sie hängt am Korpus, nicht an
+der Architektur. Unter den 56: `recipe.description`, `recipe.geschmack`, `recipe.sensorik`,
+`recipe.name_putzen`, `recipe.titel_vorschlag` — genau die Schritte hinter „KI-Erstellen".
+
+---
+
+**Vertagt (Entscheidung Dominique):** Etappe **G** — Zugriffsmodell/Tenancy, bis zum Umzug in
+die echte Umgebung. Empfehlung bleibt „Eigentum und Lesefreigabe trennen", nicht global und
+keine erfundene `parent_team_id`-Hierarchie.
+
+---
+
 ## Runbook — Messung auf demo (nach jedem Deploy dieser Etappe)
 
 Immer **mit `--team=6`**: ohne Nutzer greift nur die globale Partition, und der Bericht

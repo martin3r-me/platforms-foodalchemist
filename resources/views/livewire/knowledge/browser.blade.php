@@ -176,6 +176,47 @@
                     </div>
 
                     <div>
+                    {{--
+                        Spec 52 · F7 — der KANON am Dossier.
+                        Die Wissens-Steuerung geht vom PROMPT-KEY aus („was gehört in
+                        recipe.generator?"). Hier steht die Gegenfrage, die ein Kurator vor
+                        einem Dossier hat: „in welchen Prompts ist DAS hier verbindlich?" —
+                        und der Weg, es dorthin zu bekommen. Sie fehlte, weil ich den
+                        wirkungslosen „+ einbinden"-Knopf entfernt und nichts an seine Stelle
+                        gesetzt hatte (Dominique, 2026-09-08: „wo kann man das denn dem Kanon
+                        einstellen?").
+                    --}}
+                    <p class="text-[11px] font-medium text-gray-600 mb-1">Kanon — <span class="font-normal">wo dieses Wissen VERBINDLICH ist</span></p>
+                    <div class="flex flex-wrap gap-1.5 mb-2" data-wissen-kanon>
+                    @forelse($kanonZeilen as $k)
+                    <span class="inline-flex items-center gap-1 text-[11px] {{ $pill }}" wire:key="kn-{{ $k['scope_key'] }}">
+                    <code>{{ $k['scope_key'] }}</code>
+                    <span class="text-gray-500">· {{ $k['mode'] }}@if(! $k['active']) · inaktiv @endif</span>
+                    @if($darfKanon)
+                    <button type="button" wire:click="kanonRemove('{{ $k['scope_key'] }}')" class="text-gray-500 hover:text-red-500" title="aus dem Kanon nehmen">&times;</button>
+                    @endif
+                    </span>
+                    @empty
+                    <span class="text-[11px] text-gray-500">In keinem Kanon — dieses Dossier ist nur über die Suche erreichbar.</span>
+                    @endforelse
+                    </div>
+                    @if($darfKanon)
+                    <div class="flex flex-wrap items-center gap-2 rounded-lg bg-black/[0.03] px-2.5 py-2 mb-3">
+                    <select wire:model="kanonPromptKey" class="{{ $input }} !py-1 text-xs w-64" data-kanon-key>
+                    <option value="">— Prompt-Key wählen —</option>
+                    @foreach($promptKeys as $pk)<option value="{{ $pk }}">{{ $pk }}</option>@endforeach
+                    </select>
+                    <select wire:model="kanonMode" class="{{ $input }} !py-1 text-xs w-40" title="pflicht = immer im Prompt · wenn_platz = nur wenn das Budget reicht">
+                    <option value="pflicht">pflicht</option>
+                    <option value="wenn_platz">wenn_platz</option>
+                    </select>
+                    <button type="button" wire:click="kanonAdd" class="{{ $btnGhostXs }}" data-kanon-add>+ verbindlich machen</button>
+                    </div>
+                    @endif
+                    @if($hinweis)
+                    <p class="text-[11px] text-amber-600 mb-2">@svg('heroicon-o-information-circle', 'w-3.5 h-3.5 inline-block align-middle') {{ $hinweis }}</p>
+                    @endif
+
                     <p class="text-[11px] font-medium text-gray-600 mb-1">Alt-Bindungen <span class="font-normal text-gray-500">— abgeschafft, nur noch lösbar</span></p>
                     {{--
                         Spec 52/F2+F3 (2026-09-08): der Gateway liest `knowledge_bindings` nicht
