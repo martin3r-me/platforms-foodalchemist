@@ -86,6 +86,15 @@ class WissenProfilCommand extends Command
             $bericht['gesteuert'], $bericht['bewusst_leer'], $bericht['ungesteuert'], $bericht['fehlerhaft'],
         ));
 
+        if (($bericht['datenwerk_ohne_achse'] ?? []) !== []) {
+            $this->newLine();
+            $this->warn('Als `datenwerk` deklariert, aber an KEINER Achse — liegt damit im Suchtopf statt aufgeloest zu werden:');
+            foreach ($bericht['datenwerk_ohne_achse'] as $slug) {
+                $this->line("  · {$slug}");
+            }
+            $this->line('  Verdrahten: knowledge_canon.PUT mit scope=achse, scope_key=<achse>:<wert>.');
+        }
+
         foreach ($mitBefund as $p) {
             $this->newLine();
             $blockiert = array_filter($p['befunde'], fn ($b) => $b['schwere'] === 'blockiert') !== [];

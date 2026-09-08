@@ -34,7 +34,25 @@ use Symfony\Component\Uid\UuidV7;
  */
 class KnowledgeCanonService
 {
-    public const SCOPES = ['feature', 'prompt_key'];
+    /**
+     * Spec 52/H2 — `achse` ist der dritte Scope, und bewusst KEINE eigene Tabelle.
+     *
+     * Eine Achsen-Bindung beantwortet dieselbe Frage wie der Kanon („welches Dossier gilt
+     * verbindlich"), nur mit einem anderen Schlüssel: statt eines Prompt-Keys ein aufgelöster
+     * Achsenwert, `scope_key = "<achse>:<wert>"` — etwa `occasion:dinner`. Eine zweite Tabelle
+     * hätte Tenancy, Integritätsprüfung, MCP-Tool und UI gedoppelt, also genau das Muster, das
+     * diese Spec abbaut.
+     *
+     * `ord` traegt die Kandidaten-Reihenfolge (der erste aktive gewinnt), `mode` bleibt
+     * `pflicht`: ein Achsenwert bringt sein Dossier immer mit, oder er hat keins.
+     */
+    public const SCOPES = ['feature', 'prompt_key', 'achse'];
+
+    /** Scope-Schlüssel einer Achsen-Bindung: `occasion:dinner`. */
+    public static function achsenKey(string $achse, string $wert): string
+    {
+        return trim($achse).':'.trim($wert);
+    }
     public const ROLES = ['root', 'child'];
     public const MODES = ['pflicht', 'wenn_platz'];
 
@@ -165,6 +183,43 @@ class KnowledgeCanonService
             // gilt immer und wird nie gekappt — kommt sie nicht an, ist die Antwort ungedeckt.
             'schwere' => (string) $r->mode === 'pflicht' ? 'blockiert' : 'hinweis',
         ])->all();
+    }
+
+    /**
+     * Spec 52/H2 — alle Achsen-Bindungen, gruppiert: Achse → Wert → Slugs in `ord`-Reihenfolge.
+     *
+     * Ersetzt für gepflegte Achsen die hartkodierte `config('ai.knowledge_axis_map')`. Der
+     * Config-Baum bleibt Fallback, damit ein Bestand ohne Zeilen unverändert läuft — dasselbe
+     * Muster wie beim Kanon selbst („Zeilen da → Zeilen gewinnen, sonst wie vorher").
+     *
+     * @return array<string, array<string, list<string>>>
+     */
+    public function achsenBindungen(Team $team): array
+    {
+        $rows = $this->sichtbareZeilen($team)
+            ->where('c.scope', 'achse')->where('c.active', 1)->where('d.active', 1)
+            ->orderBy('c.ord')->orderBy('c.id')
+            ->get(['c.scope_key', 'c.ord', 'c.team_id as canon_team_id', 'd.slug']);
+
+        $raus = [];
+        foreach ($rows as $r) {
+            $key = (string) $r->scope_key;
+            if (! str_contains($key, ':')) {
+                continue;                                  // ohne `achse:wert` nicht auflösbar
+            }
+            [$achse, $wert] = explode(':', $key, 2);
+            $achse = trim($achse);
+            $wert = trim($wert);
+            if ($achse === '' || $wert === '') {
+                continue;
+            }
+            $slug = (string) $r->slug;
+            if (! in_array($slug, $raus[$achse][$wert] ?? [], true)) {
+                $raus[$achse][$wert][] = $slug;
+            }
+        }
+
+        return $raus;
     }
 
     /** Hat dieser Scope/Key überhaupt einen Kanon (aktive Zeilen, unabhängig vom Doc-Status)? */

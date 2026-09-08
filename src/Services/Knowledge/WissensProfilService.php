@@ -3,9 +3,11 @@
 namespace Platform\FoodAlchemist\Services\Knowledge;
 
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Services\Ai\AiGatewayService;
 use Platform\FoodAlchemist\Services\Ai\KnowledgeContextService;
+use Platform\FoodAlchemist\Support\TeamScope;
 
 /**
  * Spec 52 · C0 + D6 — das aufgelöste Regelprofil eines Prompt-Keys, mit Fingerabdruck.
@@ -225,6 +227,7 @@ class WissensProfilService
 
         return [
             'keys' => count($profile),
+            'datenwerk_ohne_achse' => $this->datenwerkOhneAchse($team),
             'gesteuert' => $zaehl('gesteuert'),
             'bewusst_leer' => $zaehl('bewusst_leer'),
             'ungesteuert' => $zaehl('ungesteuert'),
@@ -232,5 +235,50 @@ class WissensProfilService
             'blockierend' => $blockierend,
             'profile' => $profile,
         ];
+    }
+
+    /**
+     * Spec 52/H2 — Dossiers, die als `datenwerk` deklariert sind, aber an keiner Achse hängen.
+     *
+     * Ein Nachschlagewerk soll **aufgelöst** werden, nicht gesucht (Grundsatz A). Hängt es an
+     * keiner Achse, passiert genau das Gegenteil: es liegt als Prosa im Suchtopf und
+     * konkurriert um Rangplätze — der Fall, den die Messung „Mengen-Standard auf Platz 7"
+     * gezeigt hat. Hinweis, kein Fehler: solange die Achse fehlt, ist die Suche immerhin ein Weg.
+     *
+     * @return list<string>
+     */
+    private function datenwerkOhneAchse(Team $team): array
+    {
+        if (! Schema::hasColumn('foodalchemist_knowledge_documents', 'art')) {
+            return [];
+        }
+
+        $gebunden = [];
+        foreach ($this->canon->achsenBindungen($team) as $werte) {
+            foreach ($werte as $slugs) {
+                foreach ($slugs as $slug) {
+                    $gebunden[$slug] = true;
+                }
+            }
+        }
+        // Der Config-Baum zaehlt genauso als „aufgeloest" — sonst meldete der Bericht die
+        // Achsen als Luecke, die seit jeher ueber `knowledge_axis_map` laufen.
+        $map = config('foodalchemist.ai.knowledge_axis_map', []);
+        foreach (is_array($map) ? $map : [] as $werte) {
+            foreach (is_array($werte) ? $werte : [] as $slugs) {
+                foreach (is_array($slugs) ? $slugs : [] as $slug) {
+                    $gebunden[(string) $slug] = true;
+                }
+            }
+        }
+
+        $q = DB::table('foodalchemist_knowledge_documents')
+            ->where('art', Wissensart::DATENWERK)->where('active', 1)->whereNull('deleted_at');
+        TeamScope::applyVisible($q, 'team_id', $team);
+
+        return $q->orderBy('slug')->pluck('slug')
+            ->map(fn ($s) => (string) $s)
+            ->reject(fn ($s) => isset($gebunden[$s]))
+            ->values()->all();
     }
 }
