@@ -545,32 +545,66 @@ class KnowledgeContextService
         };
     }
 
-    private function achsenBlock(?Team $team, array $params, array &$filesUsed): ?string
+    /**
+     * Spec 52/H2 — Achse → Kandidaten-Slugs, aus dem KANON, mit der Config als Fallback.
+     *
+     * `datenwerk`-Wissen (Grundsatz A) wird **aufgelöst, nicht gesucht**: ein Standard, der für
+     * einen Anlass verbindlich gilt, darf nicht davon abhängen, ob die Suche das passende
+     * Dossier unter die ersten drei Treffer bekommt. Dieses Muster gab es schon — es lag nur
+     * als hartkodierter Config-Baum da und war damit nicht pflegbar (Grundsatz E).
+     *
+     * Jetzt: Kanon-Zeilen mit `scope='achse'`, `scope_key='<achse>:<wert>'` gewinnen; hat eine
+     * Achse/Wert-Kombination keine Zeile, greift `config('ai.knowledge_axis_map')` unverändert.
+     * Achsen-NAMEN kommen aus beiden Quellen, damit eine ganz neue Achse ohne Deploy verdrahtet
+     * werden kann.
+     *
+     * @param array<string, mixed> $params
+     * @return array<string, list<string>>
+     */
+    private function achsenKandidaten(?Team $team, array $params): array
     {
         $map = config('foodalchemist.ai.knowledge_axis_map', []);
-        if (! is_array($map) || $map === []) {
-            return null;
-        }
+        $map = is_array($map) ? $map : [];
+        $gepflegt = $team !== null
+            ? app(KnowledgeCanonService::class)->achsenBindungen($team)
+            : [];
 
-        // Achse → gewünschte Slugs in Kandidaten-Reihenfolge
+        $achsen = array_values(array_unique(array_merge(
+            array_map('strval', array_keys($map)),
+            array_map('strval', array_keys($gepflegt)),
+        )));
+
         $gesucht = [];
-        foreach ($map as $achse => $werte) {
-            $wert = $params[(string) $achse] ?? null;
-            if (! is_string($wert) || trim($wert) === '' || ! is_array($werte)) {
+        foreach ($achsen as $achse) {
+            $wert = $params[$achse] ?? null;
+            if (! is_string($wert) || trim($wert) === '') {
                 continue;
             }
-            $kandidaten = $werte[trim($wert)] ?? null;
+            $wert = trim($wert);
+
+            // Kanon zuerst — eine gepflegte Zeile schlaegt den Config-Default.
+            $kandidaten = $gepflegt[$achse][$wert] ?? null;
+            if (! is_array($kandidaten) || $kandidaten === []) {
+                $kandidaten = (is_array($map[$achse] ?? null) ? ($map[$achse][$wert] ?? null) : null);
+            }
             if (is_array($kandidaten) && $kandidaten !== []) {
-                $gesucht[(string) $achse] = array_values(array_filter(array_map('strval', $kandidaten)));
+                $gesucht[$achse] = array_values(array_filter(array_map('strval', $kandidaten)));
             }
         }
+
+        return $gesucht;
+    }
+
+    private function achsenBlock(?Team $team, array $params, array &$filesUsed): ?string
+    {
+        $gesucht = $this->achsenKandidaten($team, $params);
         if ($gesucht === []) {
             return null;
         }
 
         // EINE Query für alle Achsen, danach je Achse der erste aktive Treffer.
         $alle = array_values(array_unique(array_merge(...array_values($gesucht))));
-        $docs = DB::table('foodalchemist_knowledge_documents')->tap($this->nurSichtbar($team))
+        $docs = DB::table('foodalchemist_knowledge_documents')->tap($this->nurFuerPrompt($team))
             ->whereIn('slug', $alle)->where('active', 1)->whereNull('deleted_at')
             ->when($this->ausgeschlossen !== [], fn ($q) => $q->whereNotIn('slug', $this->ausgeschlossen))
             ->get(['slug', 'title', 'content_md', 'version'])->keyBy('slug');

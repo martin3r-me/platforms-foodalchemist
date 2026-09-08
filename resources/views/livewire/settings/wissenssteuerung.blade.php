@@ -115,6 +115,57 @@
         </tbody>
     </table>
 
+    {{-- ── Achsen-Bindungen (Spec 52/H2) ── --}}
+    <div class="space-y-2" data-ws-achsen>
+        <div>
+            <p class="{{ $dt }}">Achsen — Wissen, das AUFGELÖST wird statt gesucht</p>
+            <p class="text-[11px] text-gray-500">
+                Trägt eine Leitplanke den Wert, kommt das Dossier mit — unabhängig von jedem
+                Suchrang. Technisch Kanon-Zeilen mit <code>scope=achse</code>,
+                <code>scope_key=&lt;achse&gt;:&lt;wert&gt;</code>. Pflege bis zum Kanon-Editor über
+                <code>knowledge_canon.PUT</code> (braucht einen Dossier-Wähler).
+            </p>
+        </div>
+
+        @php($achsenNamen = collect(array_keys($achsen))->merge(array_keys($achsenConfig))->unique()->sort()->values())
+        @forelse($achsenNamen as $achse)
+            @php($werteGepflegt = $achsen[$achse] ?? [])
+            @php($werteConfig = $achsenConfig[$achse] ?? [])
+            <div class="rounded-lg bg-black/[0.03] px-3 py-2">
+                <p class="text-[11px] font-medium text-gray-700 font-mono">{{ $achse }}</p>
+                @foreach(collect(array_keys($werteGepflegt))->merge(array_keys($werteConfig))->unique()->sort() as $wert)
+                    @php($gepflegt = $werteGepflegt[$wert] ?? null)
+                    <p class="text-[11px] text-gray-600">
+                        <span class="font-mono">{{ $wert }}</span> →
+                        @if($gepflegt !== null)
+                            <span class="font-mono">{{ implode(', ', $gepflegt) }}</span>
+                            <span class="text-[10px] text-emerald-600">gepflegt</span>
+                        @elseif(($werteConfig[$wert] ?? []) !== [])
+                            <span class="font-mono text-gray-500">{{ implode(', ', $werteConfig[$wert]) }}</span>
+                            <span class="text-[10px] text-gray-400">aus der Config</span>
+                        @else
+                            <span class="text-[10px] text-amber-600">kein Dossier — dieser Wert bringt kein Wissen mit</span>
+                        @endif
+                    </p>
+                @endforeach
+            </div>
+        @empty
+            <p class="text-[11px] text-gray-400">Keine Achse verdrahtet.</p>
+        @endforelse
+
+        @if($datenwerkOhneAchse !== [])
+            <div class="rounded-lg bg-amber-50 px-3 py-2">
+                <p class="text-[11px] font-medium text-amber-800">
+                    Als <span class="font-mono">datenwerk</span> deklariert, aber an keiner Achse —
+                    liegt damit im Suchtopf statt aufgelöst zu werden:
+                </p>
+                @foreach($datenwerkOhneAchse as $slug)
+                    <p class="text-[11px] font-mono text-amber-700">{{ $slug }}</p>
+                @endforeach
+            </div>
+        @endif
+    </div>
+
     {{-- ── Routing-Editor ── --}}
     <div class="space-y-2" data-ws-routings>
         <div>

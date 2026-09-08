@@ -1356,6 +1356,53 @@ nur Inhalt/Titel/Version/Hashes).
 
 ---
 
+## ✅ Etappe H2 — Achsen als dritter Kanon-Scope (2026-09-08)
+
+★ **Kein viertes Steuer-Konstrukt.** Eine Achsen-Bindung beantwortet dieselbe Frage wie der
+Kanon („welches Dossier gilt verbindlich"), nur mit einem anderen Schlüssel. Also erweitert
+sie den Kanon statt daneben zu stehen: `scope='achse'`, `scope_key='<achse>:<wert>'`, etwa
+`occasion:dinner`. `ord` trägt die Kandidaten-Reihenfolge, `mode` bleibt `pflicht`.
+
+**Der Payoff der Wiederverwendung:** Tenancy, `unaufloesbareZeilen()`, **alle drei
+MCP-Tools** und die künftige Kanon-UI gelten sofort mit — alle drei Tools lesen
+`KnowledgeCanonService::SCOPES`, ein `achse` in der Konstante genügte. Eine eigene Tabelle
+hätte all das gedoppelt, also genau das Muster erzeugt, das diese Spec abbaut. Keine Migration.
+
+### Was sich am Verhalten ändert
+
+`achsenBlock()` liest jetzt über `achsenKandidaten()`: **Kanon-Zeile gewinnt, Config ist
+Fallback** — dasselbe Muster wie beim Kanon selbst. Achsen-*Namen* kommen aus Config ∪ Kanon,
+damit eine ganz neue Achse **ohne Deploy** verdrahtet werden kann (Grundsatz E). Und
+`achsenBlock()` filtert jetzt über `nurFuerPrompt()`, also auch hier kein `ablauf`.
+
+Bestandsschutz ist gepinnt: ohne Kanon-Zeile läuft der Config-Baum unverändert. Wäre er nach
+dieser Änderung tot, verlören alle Anlässe ihr Wissen, ohne dass ein Test rot wird.
+
+### Neuer Befund `datenwerk_ohne_achse`
+
+Ein Dossier, das als `datenwerk` deklariert ist, aber an keiner Achse hängt, macht das
+Gegenteil des Gewollten: es liegt als Prosa im Suchtopf und konkurriert um Rangplätze — der
+Fall, den die Messung mit „Mengen-Standard auf Platz 7" gezeigt hat. Gemeldet als **Hinweis**,
+nicht als Fehler: solange die Achse fehlt, ist die Suche immerhin ein Weg. Sichtbar im
+Kommando, im MCP-Bericht und auf der Steuerungs-Seite.
+
+### Was ich NICHT gebaut habe — und warum
+
+**`B6` (`mengen_defaults` in einen Resolver) bleibt liegen.** Ein Mengen-Standard wird nicht
+über *einen* Achsenwert bestimmt, sondern über **Gang × Komponentenrolle × Portionskontext** —
+das ist eine Tabelle, kein Dossier, und der ehrliche Fix heisst: Zahlen aus der Prosa
+herauslösen und dem Generator als Werte geben statt als Text.
+
+Genau diese Prosa wird aber gerade neu geschrieben. Eine Tabelle aus Inhalt zu extrahieren,
+der in Tagen ersetzt wird, ist dieselbe „Arbeit für die Tonne", aus der `H3` gestrichen wurde.
+**Voraussetzung für B6 ist der fertige Korpus** — die Achsen-Mechanik steht jetzt bereit, und
+sobald die neuen Mengen-Dossiers existieren, sind sie ohne Deploy verdrahtbar.
+
+Die dokumentierte Lücke `sektor:restaurant` (kein Segment-Dossier, bewusst nicht umgebogen)
+kann Dominique damit selbst schliessen, sobald er das Dossier schreibt.
+
+---
+
 ## Runbook — Messung auf demo (nach jedem Deploy dieser Etappe)
 
 Immer **mit `--team=6`**: ohne Nutzer greift nur die globale Partition, und der Bericht

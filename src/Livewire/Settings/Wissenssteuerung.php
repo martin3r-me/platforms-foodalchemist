@@ -172,6 +172,14 @@ class Wissenssteuerung extends Component
                 ->orderBy('feature')->orderBy('category')->get(),
             'kategorien' => DB::table('foodalchemist_knowledge_categories')
                 ->whereNull('deleted_at')->where('active', 1)->orderBy('slug')->pluck('slug')->all(),
+            // Spec 52/H2: Achsen-Bindungen sind Kanon-Zeilen mit scope='achse'. Hier erst
+            // SICHTBAR — bearbeiten laeuft bis zum Kanon-Editor ueber knowledge_canon.PUT,
+            // weil es einen Dossier-Waehler braucht. Das steht so auch auf der Seite.
+            'achsen' => $team !== null
+                ? app(\Platform\FoodAlchemist\Services\Knowledge\KnowledgeCanonService::class)->achsenBindungen($team)
+                : [],
+            'achsenConfig' => (array) config('foodalchemist.ai.knowledge_axis_map', []),
+            'datenwerkOhneAchse' => $bericht['datenwerk_ohne_achse'] ?? [],
             'darfSchreiben' => $this->darfSchreiben(),
             'alias' => KnowledgeContextService::ROUTING_ALIAS,
         ]);

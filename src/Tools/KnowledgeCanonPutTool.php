@@ -37,7 +37,7 @@ class KnowledgeCanonPutTool extends FoodAlchemistTool implements ToolContract, T
             'required' => ['scope', 'scope_key', 'slug'],
             'properties' => [
                 'scope' => ['type' => 'string', 'enum' => KnowledgeCanonService::SCOPES],
-                'scope_key' => ['type' => 'string', 'maxLength' => 64, 'description' => 'Feature-Name oder Prompt-Key'],
+                'scope_key' => ['type' => 'string', 'maxLength' => 64, 'description' => 'Feature-Name, Prompt-Key ODER — bei scope=achse — der aufgeloeste Achsenwert im Format <achse>:<wert>, z. B. occasion:dinner oder sektor:restaurant. Eine Achsen-Bindung wird AUFGELOEST statt gesucht: sie greift, sobald die Leitplanken diesen Wert tragen, unabhaengig von jedem Suchrang.'],
                 'slug' => ['type' => 'string', 'description' => 'Slug des Wissens-Dossiers (knowledge.LIST/SEARCH)'],
                 'role' => ['type' => 'string', 'enum' => KnowledgeCanonService::ROLES, 'default' => 'root'],
                 'mode' => ['type' => 'string', 'enum' => KnowledgeCanonService::MODES, 'default' => 'pflicht'],
