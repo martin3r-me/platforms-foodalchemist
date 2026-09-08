@@ -107,7 +107,7 @@ class WissenProfilCommand extends Command
 
         if ($bericht['blockierend'] > 0) {
             $this->newLine();
-            $this->error($bericht['blockierend'].' Prompt-Key(s) mit blockierendem Befund — Pflichtwissen kommt dort nicht an.');
+            $this->error($bericht['blockierend'].' Prompt-Key(s) mit blockierendem Befund — Steuerung und Prompt stimmen nicht ueberein.');
 
             return self::FAILURE;
         }

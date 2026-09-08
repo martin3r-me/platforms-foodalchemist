@@ -37,6 +37,7 @@ class WissensProfilService
         private readonly KnowledgeCanonService $canon,
         private readonly KnowledgeContextService $wissen,
         private readonly AiGatewayService $gateway,
+        private readonly KnowledgeLinkService $links,
     ) {}
 
     /**
@@ -76,11 +77,12 @@ class WissensProfilService
             ->whereNull('d.deleted_at')->where('d.active', 1)
             ->pluck('d.slug')->map(fn ($x) => (string) $x)->all();
 
-        $befunde = $this->befunde($kaputt, $pflichtZeichen, $budgetBound, $pflicht);
+        $befunde = $this->befunde($kaputt, $pflichtZeichen, $budgetBound, $pflicht, $team);
         if ($docs->isNotEmpty() && $lauerndeBindungen !== []) {
             $befunde[] = [
                 'code' => 'bindung_wuerde_scharf',
                 'schwere' => 'hinweis',
+                'nachfolger' => [],
                 'slug' => null,
                 'text' => 'Dieser Key hat Kanon UND '.count($lauerndeBindungen).' aktive Bindung(en) ('
                     .implode(', ', $lauerndeBindungen).'). Die Bindungen sind heute stumm — verliert der Key '
@@ -153,14 +155,23 @@ class WissensProfilService
      * @param \Illuminate\Support\Collection<int, object> $pflicht
      * @return list<array<string, mixed>>
      */
-    private function befunde(array $kaputt, int $pflichtZeichen, int $budgetBound, $pflicht): array
+    private function befunde(array $kaputt, int $pflichtZeichen, int $budgetBound, $pflicht, Team $team): array
     {
         $befunde = [];
 
         foreach ($kaputt as $z) {
+            // ★ H6 zahlt hier ein: statt „etwas ist kaputt" nennt der Befund den NACHFOLGER.
+            // Aus einer Fehlermeldung wird eine Handlungsanweisung — genau der Unterschied,
+            // den der Korpus-Umbau braucht.
+            $nachfolger = $z['slug'] !== null ? $this->links->nachfolgerVon($team, $z['slug']) : [];
+            $zusatz = $nachfolger !== []
+                ? ' Nachfolger laut Verbindung: '.implode(', ', $nachfolger).' — Kanon-Zeile dorthin umhängen.'
+                : '';
+
             $befunde[] = [
                 'code' => $z['grund'],
                 'schwere' => $z['schwere'],
+                'nachfolger' => $nachfolger,
                 'slug' => $z['slug'] ?? ('#'.$z['document_id']),
                 'text' => match ($z['grund']) {
                     'dossier_fehlt' => 'Kanon-Zeile zeigt auf ein Dossier, das es nicht mehr gibt.',
@@ -168,7 +179,7 @@ class WissensProfilService
                     'art_nie_im_prompt' => 'Dieses Dossier ist eine Ablauf-Anleitung für Agenten und gehört in keinen '
                         .'Prompt — der Generator ruft keine Werkzeuge. Aus dem Kanon nehmen; Agenten erreichen es über `ablauf.GET`.',
                     default => 'Dossier ist deaktiviert — die Zeile wird beim Prompt-Bau still übersprungen.',
-                },
+                }.$zusatz,
             ];
         }
 
@@ -179,6 +190,7 @@ class WissensProfilService
             $befunde[] = [
                 'code' => 'pflicht_ueber_budget',
                 'schwere' => 'blockiert',
+                'nachfolger' => [],
                 'slug' => null,
                 'text' => 'Pflichtwissen ('.number_format($pflichtZeichen, 0, ',', '.').' Z.) überschreitet das Budget ('
                     .number_format($budgetBound, 0, ',', '.').' Z.). Pflicht wird nicht gekappt — es verdrängt das übrige Wissen.',
@@ -191,6 +203,7 @@ class WissensProfilService
                 $befunde[] = [
                     'code' => 'dossier_ueber_deckel',
                     'schwere' => 'hinweis',
+                    'nachfolger' => [],
                     'slug' => (string) $d->slug,
                     'text' => 'Pflicht-Dossier ist '.number_format((int) $d->char_count, 0, ',', '.').' Z. gross (Deckel '
                         .number_format($deckel, 0, ',', '.').' Z.) — ein Thema pro Dossier ist verletzt.',
@@ -228,6 +241,9 @@ class WissensProfilService
         return [
             'keys' => count($profile),
             'datenwerk_ohne_achse' => $this->datenwerkOhneAchse($team),
+            // H6: beim Neuschnitt die Liste, die man abarbeiten will — deaktiviert, ohne dass
+            // jemand gesagt hat, was an seine Stelle tritt.
+            'abgeloest_ohne_nachfolger' => $this->links->abgeloestOhneNachfolger($team),
             'gesteuert' => $zaehl('gesteuert'),
             'bewusst_leer' => $zaehl('bewusst_leer'),
             'ungesteuert' => $zaehl('ungesteuert'),
