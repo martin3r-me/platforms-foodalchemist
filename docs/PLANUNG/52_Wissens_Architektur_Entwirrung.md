@@ -1467,6 +1467,108 @@ nicht, er prüft nur die zwei Generator-Keys.
 
 ---
 
+## ✅ Paket 2 — ein Schlüsselraum (2026-09-08)
+
+Die Wurzel der Ausgangsfrage. `RecipeGenerationContextService:88` übergibt jetzt den
+**Prompt-Key** statt des hartkodierten `'ai_generate_recipe'`.
+
+### ★ Die Falle, die den naiven Austausch verhindert hätte
+
+`$recipeBudget` hing an genau diesem String-Vergleich — und gatete **acht** Verhaltensweisen,
+darunter jeden Pro-Dossier-Deckel (`RECIPE_MAX_CHARS_PER_DOC` 2.400 statt der Kategorie-
+Defaults 1.800/2.500). Den Namen einfach zu tauschen hätte **jeden Rezept-Prompt anders
+gekappt**, still, ohne dass ein Test rot wird — genau die Fehlerklasse, die diese Spec abbaut.
+
+Jetzt ein expliziter Satz `REZEPT_BUDGET_KEYS`, und der wichtigste Test der Etappe vergleicht
+**byte-identisch**, dass beide Wege dasselbe liefern (`block`, `files_used`, `total_chars`,
+`dropped_chars`).
+
+### Was das freischaltet
+
+`routingZeilen()` löst mit **Rückfall auf den Alt-Namen** auf: eigene Zeilen gewinnen, sonst
+gilt der Alias. Damit
+- wirkt ein `knowledge_routings.PUT` auf `vk.generator` **erstmals** (vorher schrieb es stumm
+  ins Leere),
+- sind Basisrezept und Gericht getrennt steuerbar (vorher zwangsweise eine Politik),
+- bleiben die 13 Alt-Zeilen wirksam, ohne Migration. Bestandsschutz gepinnt.
+
+### Drei latente Fehler in der Regelwerk-Rückfallkarte
+
+`REGELWERK_SLUG_LIKE` hatte einen **Blind-Default** (`?? ['ai_generate_recipe']` → `%basisrezept%`),
+der dem Prinzip direkt über der Karte widersprach („ein falsches wäre schlimmer als keines"):
+
+| Vorgang | bekam | bekommt |
+|---|---|---|
+| `vk.generator` / Gericht anlegen | **Basisrezepte**-Regelwerk | `%verkaufsgerichte%` |
+| `gp_aus_la_anlegen` | **Basisrezepte**-Regelwerk | `%regelwerk-gp%` |
+| Angebot · Speiseplan · Preis-Monitoring | **Basisrezepte**-Regelwerk | **keines** (`quelle: keine`) |
+
+Auf demo verdeckt der Kanon das; auf einer frischen DB (`regelwerk always`) hätte es
+zugeschlagen. Dieselbe Fehlerklasse wie der dokumentierte Fall „vk bekam Basisrezepte statt
+Verkaufsgerichte", nur an anderer Stelle. **Der Blind-Default ist weg.**
+
+⚠ Die Auswahl *innerhalb* eines Musters bleibt beliebig (`orderBy('slug')->first()` über 61
+Dossiers, für VK also §1.2a statt §1). Dieser Pfad gehört weg — Paket 3. Hier steht nur, dass
+er bis dahin nicht das *falsche* Regelwerk trifft.
+
+### Der Drift-Wächter prüft jetzt Code gegen DB
+
+Der bestehende Test hielt zwei **Code-Listen** gegeneinander, und nur für `ai_generate_recipe`.
+Der neue vergleicht die Seed-Politik mit dem **tatsächlichen DB-Stand über alle Features** —
+er hätte `G1` gefunden.
+
+Die drei widersprüchlichen Zeilen (`recipe.eigenschaften`, `recipe.ueberarbeiten`,
+`vk.ueberarbeiten`) richtet eine Migration auf den Seed-Wert, **nur wo der Alt-Wert noch
+steht** — ein bewusst abweichender Bestand wird nicht überfahren.
+
+★ **Und eine vierte Abweichung bleibt bewusst offen:** `ai_generate_recipe × regelwerk`,
+Migration `always 1×9500` gegen Seed `none`. Der Seed hat recht, **solange ein Kanon
+existiert**. Ohne Kanon — der Wiederherstellungs-Fall — bekäme der Generator bei `none`
+**gar kein** Regelwerk, während `always` wenigstens ein beliebiges liefert. Die Zeile ist
+deshalb kein Versäumnis, sondern der Beleg, dass der Kanon einen Wiederherstellungs-Pfad
+braucht (`H7`). Sie steht als bedingt erlaubt im Test, mit Begründung — nicht still.
+
+### Zwei kleinere Löcher zu
+
+- **`concept.brief_geruest`** hat einen `bound_knowledge_budget`-Eintrag (12.000): der Key
+  fehlte und fiel auf den konservativen Default 4.200 zurück, während sein Kanon 10.399 Z.
+  Pflichtwissen trägt. Gefunden vom eigenen Wächter auf demo.
+- **Sechs Kategorien** (`ernaehrung`, `weltkueche`, `signatur_kuechen`,
+  `prasentation_service`, `produktion_kapazitat`, `referenzgericht`) stehen im Routing, waren
+  aber nie global geseedet. Auf demo existieren sie als Team-Zeilen — bei einem neuen Kunden
+  wären die Routing-Zeilen Vorwärtsdeklarationen ohne Wirkung, und `knowledge.POST` scheiterte
+  an „Unbekannte Kategorie". Migration seedet **nur, wenn der Slug nirgends existiert**, damit
+  auf demo keine Dubletten neben den Team-Zeilen entstehen.
+
+### ★ Nebenbefund, der Paket 4 neu einordnet: die lexikalische Discovery bewertet nur den SLUG
+
+Beim Testen fielen drei Fälle durch, und der Grund war der Befund selbst:
+
+```
+score = jaccard(queryTokens, slugTokens) + 0,1 × substringTreffer + (alias ? 1,0 : 0)
+```
+
+Der **Inhalt geht nicht ein.** Ein Dossier ist lexikalisch nur findbar, wenn sein *Slug* Wörter
+der Anfrage trägt — oder ein gepflegter Alias passt (der wiegt 1,0 und dominiert damit alles).
+`semantic_search.enabled` ist per Default **aus** (ENV `FOODALCHEMIST_SEMANTIC_SEARCH`); auf
+demo ist es an, dort wird semantisch **vor** die Lexik gereiht.
+
+Also: **auf demo** entscheidet Semantik (Inhalt, erste ~2.000 Zeichen) mit lexikalischer
+Ergänzung; **auf einer frischen Installation** allein der Slug. Für den Korpus-Umbau sind das
+zwei Hebel in Dominiques Hand — Slug-Benennung und die ersten 2.000 Zeichen.
+
+### Nicht in diesem Paket
+
+Die **volle Zusammenlegung der zwei Budget-Bäume** (`ai.knowledge_budget` feature-gekeyt vs.
+`ai.bound_knowledge_budget` prompt-key-gekeyt). Der akute Fall ist zu, der Umbau selbst ist ein
+eigener Schnitt — und er gehört zu Paket 3, wo auch der Bindungs-Zweig und damit der zweite
+Abnehmer von `bound_knowledge_budget` verschwindet.
+
+Ebenso das **Duplizieren der 13 Alt-Zeilen** auf beide Generator-Keys: der Rückfall macht sie
+unnötig, und sie gehören zum Abräumen des Alias (Paket 3).
+
+---
+
 ## Runbook — Messung auf demo (nach jedem Deploy dieser Etappe)
 
 Immer **mit `--team=6`**: ohne Nutzer greift nur die globale Partition, und der Bericht

@@ -58,7 +58,9 @@ class VorgangsRegisterService
                 'workflow.basisrezept_komponenten',
                 'workflow.basisrezept_abschluss',
             ],
-            'feature' => 'ai_generate_recipe',
+            // Spec 52/Paket 2: ein Schluesselraum. Der Alt-Name lieferte ueber
+            // REGELWERK_SLUG_LIKE fuer BEIDE Vorgaenge `%basisrezept%`.
+            'feature' => 'recipe.generator',
             'prompt_keys' => ['recipe.generator'],
             'einstieg' => 'foodalchemist.recipes.POST',
         ],
@@ -78,7 +80,9 @@ class VorgangsRegisterService
                 'workflow.gericht_weg_b_eigenregie',
                 'workflow.gericht_abschluss',
             ],
-            'feature' => 'ai_generate_recipe',
+            // Spec 52/Paket 2: der Gericht-Vorgang faellt jetzt auf das VK-Regelwerk zurueck,
+            // nicht mehr auf das Basisrezepte-Regelwerk.
+            'feature' => 'vk.generator',
             'prompt_keys' => ['vk.generator'],
             'einstieg' => 'foodalchemist.verkaufsrezepte.POST',
         ],
@@ -110,7 +114,8 @@ class VorgangsRegisterService
             'titel' => 'Speiseplan erstellen',
             'kind' => 'speiseplan',
             'doc_slugs' => ['workflow.speiseplan_erstellen_mcp'],
-            'feature' => 'ai_generate_recipe',
+            // Fuer diesen Vorgang gibt es KEIN Regelwerk — lieber keines nennen als ein falsches.
+            'feature' => null,
             'prompt_keys' => [],
             'einstieg' => 'foodalchemist.speiseplaene.POST',
         ],
@@ -118,7 +123,8 @@ class VorgangsRegisterService
             'titel' => 'Speisekarte anlegen',
             'kind' => 'speisekarte',
             'doc_slugs' => ['workflow.speisekarte_anlegen_mcp'],
-            'feature' => 'ai_generate_recipe',
+            // Fuer diesen Vorgang gibt es KEIN Regelwerk — lieber keines nennen als ein falsches.
+            'feature' => null,
             // Das Karten-Wording laeuft ueber `foodbook.kundentext` (SpeisekarteService::kiWordingVorschlag)
             // — es gibt keine eigene Registry-Zeile `speisekarte.wording`.
             'prompt_keys' => ['foodbook.kundentext'],
@@ -137,7 +143,8 @@ class VorgangsRegisterService
             // Grundprodukte haben keinen Reife-Adapter — es gibt kein Soll zu melden.
             'kind' => null,
             'doc_slugs' => ['workflow.gp_aus_la_anlegen_mcp'],
-            'feature' => 'ai_generate_recipe',
+            // Spec 52/Paket 2: das GP-Regelwerk, nicht das Basisrezepte-Regelwerk.
+            'feature' => 'gp.suggest',
             'prompt_keys' => [],
             'einstieg' => 'foodalchemist.gps.MATCH',
         ],
@@ -145,7 +152,8 @@ class VorgangsRegisterService
             'titel' => 'Preis- und Margen-Monitoring',
             'kind' => null,
             'doc_slugs' => ['workflow.preis_margen_monitoring_mcp'],
-            'feature' => 'ai_generate_recipe',
+            // Fuer diesen Vorgang gibt es KEIN Regelwerk — lieber keines nennen als ein falsches.
+            'feature' => null,
             'prompt_keys' => [],
             'einstieg' => 'foodalchemist.kalkulation.GET',
         ],
@@ -276,7 +284,10 @@ class VorgangsRegisterService
         }
 
         // Dieselbe Auswahl, die der Generator trifft — nicht eine zweite, die daneben liegen könnte.
-        $doc = $this->wissen->regelwerkDokumentFuer($team, $v['feature']);
+        // `feature === null` heisst ausdruecklich „fuer diesen Vorgang gibt es kein Regelwerk"
+        // (Spec 52/Paket 2) — vorher fielen genau diese Vorgaenge blind aufs Basisrezepte-
+        // Regelwerk zurueck.
+        $doc = $v['feature'] === null ? null : $this->wissen->regelwerkDokumentFuer($team, $v['feature']);
 
         return [
             'quelle' => $doc !== null ? 'dossier' : 'keine',

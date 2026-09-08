@@ -538,6 +538,14 @@ return [
             // recipe.generator (alt): §2+§3+§4+§6 + Erstellungs-Dossier = 11.075 + 7.446 = 18.521
             // → Welle 2: 30.000 → 36.000 (Kanon Σ 33.902 + Puffer ~ein Split-Dossier ≤ 4.000)
             'recipe.generator' => ['docs' => 13, 'chars_per_doc' => 11000, 'total' => 36000],
+            // ★ Spec 52/Paket 2: `concept.brief_geruest` fehlte hier — und fiel damit auf den
+            // konservativen Default (3 Docs / 1.400 / 4.200 total) zurück, während sein Kanon
+            // 10.399 Zeichen Pflichtwissen trägt. Gefunden vom eigenen Wächter auf demo; der
+            // Montags-Wächter sieht es nicht, weil er nur die zwei Generator-Keys prüft.
+            // `pflicht` ignoriert den Deckel per Vertrag, das Wissen kam also an — aber die
+            // Config log über den realen Prompt, und `wenn_platz` wäre gegen 4.200 statt gegen
+            // die Wahrheit budgetiert worden. 12.000 trägt die Pflichtmenge mit Luft.
+            'concept.brief_geruest' => ['docs' => 6, 'chars_per_doc' => 4000, 'total' => 12000],
             // vk.generator (alt): dieselben + regelwerk.regelwerk_verkaufsgerichte 8.309 = 26.830
             // → Welle 2: Kanon Σ 31.673 ≤ 37.000, Deckel bleibt.
             'vk.generator' => ['docs' => 13, 'chars_per_doc' => 11000, 'total' => 37000],

@@ -85,7 +85,18 @@ class RecipeGenerationContextService
         $genKey = $vkModus ? 'vk.generator' : 'recipe.generator';
         $genBereich = $vkModus ? 'vk' : 'recipe';
         // Spec 50: der Kanon von $genKey steht ohnehin im Prompt → Retrieval lädt ihn nicht doppelt.
-        $wissen = $this->knowledge->contextFor($team, 'ai_generate_recipe', $description, $parameter['kompositions_stil'] ?? null, [], $parameter + ['rezept_typ' => $rezeptTyp, '_kanon_prompt_key' => $genKey]);
+        //
+        // ★ Spec 52/Paket 2: hier stand bis 2026-09-08 das hartkodierte `'ai_generate_recipe'`.
+        // Damit trug DERSELBE Aufruf zwei Identitäten — der Kanon wurde über den Prompt-Key
+        // aufgelöst, das Routing über den Alt-Namen. Zwei Folgen, beide gemessen:
+        //   · Basisrezept und Gericht teilten ZWANGSWEISE eine Suchpolitik (eine Zeile für beide),
+        //   · ein `knowledge_routings.PUT` auf `vk.generator` schrieb stumm ins Leere, weil der
+        //     Generator dort nie nachsah.
+        // Jetzt ein Schlüssel. Die Alt-Zeilen bleiben wirksam, solange sie nicht migriert sind
+        // (`routingZeilen()` fällt auf den Alias zurück), und die Rezept-Deckel hängen an
+        // `REZEPT_BUDGET_KEYS` statt an einem String-Vergleich — sonst hätte diese eine Zeile
+        // jeden Rezept-Prompt anders gekappt.
+        $wissen = $this->knowledge->contextFor($team, $genKey, $description, $parameter['kompositions_stil'] ?? null, [], $parameter + ['rezept_typ' => $rezeptTyp, '_kanon_prompt_key' => $genKey]);
         /*
          * Transparenz: die an recipe.generator/vk.generator GEBUNDENEN Dossiers stehen nicht in
          * contextFor()->files_used, sollen aber im „Verwendetes Wissen"-Chip auftauchen.

@@ -31,9 +31,25 @@ it('Registry-Smoke: verkaufsrezepte.REVISE registriert', function () {
     expect($tool->getSchema()['type'] ?? null)->toBe('object');
 });
 
-it('Workstream W: Routing-Zeile vk.ueberarbeiten→regelwerk:always existiert (Migration)', function () {
-    expect(DB::table('foodalchemist_knowledge_routings')
-        ->where('feature', 'vk.ueberarbeiten')->where('category', 'regelwerk')->where('mode', 'always')->exists())->toBeTrue();
+it('Workstream W: Routing-Zeile vk.ueberarbeiten→regelwerk existiert — als discovery', function () {
+    // ★ Bis 2026-09-08 pinnte dieser Test `mode = always` — die VERLIERENDE Haelfte eines
+    // dokumentierten Widerspruchs: die Migration setzte `always 1x7000`, der Seed
+    // (`KnowledgePolicySeedCommand::ROUTINGS`) `discovery 3x4000`, und welcher Zustand galt,
+    // entschied allein die Reihenfolge der Skripte. demo fuhr `discovery`, eine frische DB
+    // `always` — zwei Umgebungen, zwei Auswahl-Algorithmen (`always` nimmt per
+    // `orderBy('slug')->first()` EIN von 61 Regelwerks-Dossiers, `discovery` rankt drei).
+    //
+    // Spec 52/Paket 2 macht den Seed-Wert zur einzigen Wahrheit; der Test zieht nach. Er
+    // prueft weiter, DASS die Zeile existiert — das war sein Zweck (Workstream W) — nur nicht
+    // mehr mit dem falschen Modus.
+    $zeile = DB::table('foodalchemist_knowledge_routings')
+        ->where('feature', 'vk.ueberarbeiten')->where('category', 'regelwerk')
+        ->first(['mode', 'max_docs', 'max_chars_per_doc']);
+
+    expect($zeile)->not->toBeNull()
+        ->and($zeile->mode)->toBe('discovery')
+        ->and((int) $zeile->max_docs)->toBe(3)
+        ->and((int) $zeile->max_chars_per_doc)->toBe(4000);
 });
 
 it('Vorschau auf draft-Gericht (grounded, ohne accept)', function () {
