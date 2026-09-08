@@ -1600,6 +1600,14 @@ return [
                 . 'Konzept/Marke (thematisch benannt) oder ein einzelnes Menue (z.B. «Menue 01»). '
                 . 'Bei «ein Menue» oder «ein Kapitel» im Brief -> GENAU EIN kapitel-Slot. Nur so viele Kapitel wie der Brief wirklich hergibt. '
                 . 'ERZEUGE NIE gang- oder station-Slots. Preise netto p. P.',
+            // ⚠ Anti-Pattern-Regeln stehen NICHT hier, sondern im Dossier
+            // `regelwerk-foodbook-grundgerust` (§5) — das kommt über den Kanon in den Prompt und
+            // ist im Wissensmodul editierbar. Beim F4-Umbau hatte ich «NIE Vorspeisen/Hauptgaenge/
+            // Desserts als Kapitel» hier ergaenzt, weil ich den geloeschten Code-Header ersetzen
+            // wollte. Falsch: das Dossier sagt es laengst, und eine Code-Kopie haette Dominique
+            // die Hoheit ueber eine Regel genommen, die ihm gehoert (Dominique 2026-09-08:
+            // „dadurch kann ich den nicht mehr anpassen ueber das Wissen oder?"). Genau die
+            // Doppelung, die Spec 52 abbaut — im Abbau selbst gebaut.
         ],
         // Format-GRUNDGERUEST (owner=format): ein gebrandetes FOODKONZEPT (z.B. CHEFS.CORNER, Taste & Fly,
         // Lunchbuffet, Dinner) — eine Marke/Vorlage EINE Ebene ueber dem Concept. Das Geruest liefert die

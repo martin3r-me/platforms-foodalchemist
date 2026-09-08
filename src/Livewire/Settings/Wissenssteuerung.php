@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Livewire\Component;
 use Platform\FoodAlchemist\Services\Ai\KnowledgeContextService;
+use Platform\FoodAlchemist\Services\Knowledge\KnowledgeCanonService;
 use Platform\FoodAlchemist\Services\Knowledge\WissensProfilService;
 use Platform\FoodAlchemist\Support\TeamScope;
 
@@ -22,9 +23,14 @@ use Platform\FoodAlchemist\Support\TeamScope;
  *   · **sichtbar** — je Prompt-Key das aufgelöste Profil, sein Zustand und seine Befunde
  *     ({@see WissensProfilService}). Das ist die Antwort auf „welches Wissen bekommt dieser
  *     Schritt", die es im UI vorher nirgends gab.
- *   · **einstellbar** — der Routing-Editor (feature × category → Modus + Deckel). Bewusst
- *     zuerst das Routing und nicht der Kanon: Routing ist einfache Zeilen-Pflege, der Kanon
- *     braucht eine Dossier-Suche und kommt als eigener Schritt.
+ *   · **einstellbar** — der Routing-Editor (feature × category → Modus + Deckel) UND seit
+ *     Spec 52 · Paket 3 der **Kanon-Editor**: welches Dossier ist für diesen Schritt
+ *     verbindlich, in welcher Reihenfolge, `pflicht` oder `wenn_platz`. Der stand hier als
+ *     „eigener Schritt" angekündigt, weil er eine Dossier-Suche braucht — das ist er jetzt.
+ *
+ * ★ Warum der Kanon-Editor nicht nachrangig ist: seit F2 ist der Kanon die EINZIGE Quelle für
+ * „muss in diesen Prompt". Ohne Oberfläche wäre die wichtigste Steuerung des Moduls nur per
+ * MCP erreichbar — und die alte, abgeschaffte Ebene hätte weiterhin die einzige UI gehabt.
  *
  * Schreibrecht: `knowledge_routings` ist **globaler Master** (keine `team_id`-Spalte) — es gilt
  * für alle Teams. Deshalb darf nur das Master-Team schreiben, gleiche Regel wie beim globalen
@@ -44,6 +50,15 @@ class Wissenssteuerung extends Component
     ];
 
     public ?int $editId = null;
+
+    /** Prompt-Key, dessen Kanon gerade bearbeitet wird (null = keiner). */
+    public ?string $kanonKey = null;
+
+    /** Freitext-Suche im Dossier-Wähler. */
+    public string $kanonSuche = '';
+
+    /** @var array{slug: string, mode: string, ord: string} */
+    public array $kanonForm = ['slug' => '', 'mode' => 'pflicht', 'ord' => ''];
 
     public ?string $fehler = null;
 
@@ -149,6 +164,81 @@ class Wissenssteuerung extends Component
         $this->offen = $this->offen === $key ? null : $key;
     }
 
+    /** Kanon-Editor für EINEN Prompt-Key auf/zu. */
+    public function kanonEdit(?string $promptKey): void
+    {
+        $this->kanonKey = $this->kanonKey === $promptKey ? null : $promptKey;
+        $this->kanonForm = ['slug' => '', 'mode' => 'pflicht', 'ord' => ''];
+        $this->kanonSuche = '';
+        $this->fehler = null;
+        $this->hinweis = null;
+    }
+
+    /**
+     * Dossier in den Kanon eines Prompt-Keys aufnehmen.
+     *
+     * Über {@see KnowledgeCanonService::set()} und NICHT per Insert: dort leben Tenancy,
+     * Enum-Prüfung, der Changelog-Guard („kein Changelog im Prompt") und der Deckel-Hinweis.
+     * Der Wissens-Browser hatte genau diesen Fehler in der Gegenrichtung — ein roher
+     * `addBinding()`-Insert an den Garantien des Service vorbei (Befund `F`).
+     */
+    public function kanonAdd(): void
+    {
+        $this->fehler = $this->hinweis = null;
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team === null || $this->kanonKey === null) {
+            return;
+        }
+        $slug = trim($this->kanonForm['slug']);
+        if ($slug === '') {
+            $this->fehler = 'Bitte ein Dossier wählen.';
+
+            return;
+        }
+
+        try {
+            $ergebnis = app(KnowledgeCanonService::class)->set($team, [
+                'scope' => 'prompt_key',
+                'scope_key' => $this->kanonKey,
+                'slug' => $slug,
+                'mode' => $this->kanonForm['mode'] ?: 'pflicht',
+                'ord' => $this->kanonForm['ord'] !== '' ? (int) $this->kanonForm['ord'] : null,
+            ]);
+        } catch (\Throwable $e) {
+            $this->fehler = $e->getMessage();
+
+            return;
+        }
+
+        // Die Hinweise des Service NICHT schlucken: „Dossier über dem Deckel" und „Dossier ist
+        // inaktiv" sind genau die Fälle, in denen die Zeile entsteht und trotzdem nicht liefert.
+        $this->hinweis = $ergebnis['hinweise'] !== []
+            ? 'Gesetzt — mit Hinweis: '.implode(' · ', $ergebnis['hinweise'])
+            : 'Dossier ist jetzt verbindlich für «'.$this->kanonKey.'».';
+        $this->kanonForm = ['slug' => '', 'mode' => 'pflicht', 'ord' => ''];
+        $this->kanonSuche = '';
+    }
+
+    /** Dossier aus dem Kanon nehmen. Idempotent; meldet, wenn nichts zu entfernen war. */
+    public function kanonRemove(string $promptKey, string $slug): void
+    {
+        $this->fehler = $this->hinweis = null;
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team === null) {
+            return;
+        }
+        try {
+            $n = app(KnowledgeCanonService::class)->remove($team, 'prompt_key', $promptKey, $slug);
+        } catch (\Throwable $e) {
+            $this->fehler = $e->getMessage();
+
+            return;
+        }
+        $this->hinweis = $n > 0
+            ? '«'.$slug.'» ist für «'.$promptKey.'» nicht mehr verbindlich.'
+            : 'Nichts entfernt — die Zeile gehört einem anderen Team oder ist global.';
+    }
+
     public function render()
     {
         $team = Auth::user()?->currentTeamRelation;
@@ -181,6 +271,18 @@ class Wissenssteuerung extends Component
             'achsenConfig' => (array) config('foodalchemist.ai.knowledge_axis_map', []),
             'datenwerkOhneAchse' => $bericht['datenwerk_ohne_achse'] ?? [],
             'darfSchreiben' => $this->darfSchreiben(),
+            // Dossier-Wähler: erst ab 2 Zeichen suchen — eine Liste über 1.100 Dossiers ist
+            // kein Wähler, sondern eine Wand. Inaktive bewusst MIT: eine Kanon-Zeile darauf ist
+            // ein legitimer Vorbereitungs-Schritt, und der Service warnt beim Setzen.
+            'kanonTreffer' => mb_strlen(trim($this->kanonSuche)) >= 2
+                ? DB::table('foodalchemist_knowledge_documents')
+                    ->whereNull('deleted_at')
+                    ->where(fn ($q) => $q->where('slug', 'like', '%'.trim($this->kanonSuche).'%')
+                        ->orWhere('title', 'like', '%'.trim($this->kanonSuche).'%'))
+                    ->tap(fn ($q) => TeamScope::applyVisible($q, 'team_id', $team))
+                    ->orderBy('slug')->limit(15)
+                    ->get(['slug', 'title', 'category', 'char_count', 'active'])
+                : collect(),
             'alias' => KnowledgeContextService::ROUTING_ALIAS,
         ]);
     }

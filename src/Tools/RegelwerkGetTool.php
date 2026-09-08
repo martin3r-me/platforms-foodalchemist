@@ -128,8 +128,9 @@ class RegelwerkGetTool extends FoodAlchemistTool implements ToolContract, ToolMe
      *
      * Zwei ehrliche Antworten statt einer Ausrede:
      *   · `routing` — eine Route greift; wir nennen Kategorie, Modus und Deckel, und dazu die
-     *     Auswahl-Mechanik: `always` holt per `->first()` **genau EIN** Dossier (bei 61
-     *     Regelwerks-Splits praktisch eine Zufallsauswahl), `discovery` rankt bis zu `max_docs`.
+     *     Auswahl-Mechanik: `discovery` rankt bis zu `max_docs`. Steht dort `always`, ist die
+     *     Zeile seit Spec 52 · F4 TOT (der dedizierte Zweig ist gelöscht) — auch das wird
+     *     gesagt, statt es als „unzuverlässig" zu beschönigen.
      *   · `ungesteuert` — nichts davon. Dann erreicht diesen Prompt kein Regelwerk, und das
      *     soll auch so dastehen.
      *
@@ -164,10 +165,16 @@ class RegelwerkGetTool extends FoodAlchemistTool implements ToolContract, ToolMe
                     'max_docs' => $route->max_docs !== null ? (int) $route->max_docs : null,
                     'max_chars_per_doc' => $route->max_chars_per_doc !== null ? (int) $route->max_chars_per_doc : null,
                 ],
+                // ★ `always` ist seit Spec 52 · F4 TOT, nicht mehr nur unzuverlässig. Vorher warnte
+                // diese Zeile vor der `->first()`-Lotterie; heute wäre das zu freundlich — der
+                // dedizierte Zweig ist gelöscht und der generische Pfad kennt nur `discovery`.
+                // Die Zeile lädt NICHTS. Wer das nicht sagt, lässt den Agenten glauben, er habe
+                // ein Regelwerk.
                 'hinweis' => $mode === 'always'
-                    ? 'Kein Kanon. Das Routing lädt `regelwerk` als `always` — und das holt per '
-                        . '`->first()` genau EIN Dossier. Bei vielen §-Splits ist das keine Auswahl, '
-                        . 'sondern ein Zufall. Eine Kanon-Zeile ist hier die verlässliche Antwort.'
+                    ? 'Kein Kanon — und das Routing steht auf `always`, was seit Spec 52 NICHTS mehr '
+                        . 'lädt: der dedizierte always-Zweig ist gelöscht, der generische Pfad kennt nur '
+                        . '`discovery`. Diese Zeile sieht aus wie Versorgung und ist keine. Verbindlich '
+                        . 'machen: `knowledge_canon.PUT`; suchen lassen: Modus auf `discovery` stellen.'
                     : 'Kein Kanon. Das Routing lädt `regelwerk` per `discovery`, also bis zu '
                         . (string) ((int) ($route->max_docs ?? 0)) . ' Dossier(s) nach Relevanz zur '
                         . 'Aufgabenbeschreibung — welche das sind, entscheidet die Suche pro Aufruf.',

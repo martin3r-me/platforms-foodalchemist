@@ -34,10 +34,13 @@ beforeEach(function () {
             'active' => 1, 'created_at' => now(), 'updated_at' => now(),
         ]);
     };
-    $this->route = function (string $feature, string $kategorie): void {
+    // `$mode` seit Spec 52 · F4 explizit: für `regelwerk` gibt es `always` nicht mehr (der
+    // dedizierte Zweig ist gelöscht), die Kategorie läuft über die generische Discovery. Die
+    // übrigen Kategorien haben ihren always-Handler behalten.
+    $this->route = function (string $feature, string $kategorie, string $mode = 'always'): void {
         DB::table('foodalchemist_knowledge_routings')->updateOrInsert(
             ['feature' => $feature, 'category' => $kategorie],
-            ['mode' => 'always', 'max_docs' => 1, 'max_chars_per_doc' => 4000, 'created_at' => now(), 'updated_at' => now()],
+            ['mode' => $mode, 'max_docs' => 1, 'max_chars_per_doc' => 4000, 'created_at' => now(), 'updated_at' => now()],
         );
     };
     $this->kanon = fn (string $scopeKey, string $slug, string $mode = 'pflicht') => app(KnowledgeCanonService::class)
@@ -45,17 +48,24 @@ beforeEach(function () {
     $this->slugs = fn (array $wissen) => array_map(fn ($f) => preg_replace('/@v\d+$/', '', $f), $wissen['files_used']);
 });
 
-it('schliesst die pflicht-Kanon-Dossiers aus dem Regelwerk-Block aus — ohne Schlüssel unverändert', function () {
-    // orderBy slug → ohne Ausschluss gewinnt «…-a», das im Kanon steht.
+it('schliesst die pflicht-Kanon-Dossiers aus der Regelwerk-Discovery aus — ohne Schlüssel unverändert', function () {
+    // ★ Spec 52 · F4: lief bis dahin über `regelwerk:always` und den `->first()`-Block. Beides
+    // ist gelöscht, `regelwerk` geht über die generische Discovery. Die AUSSAGE ist dieselbe
+    // und wichtiger denn je — der Ausschluss muss auf dem Pfad greifen, den es noch gibt.
+    //
+    // Die Anfrage nennt «Kanon», damit das a-Dossier per Jaccard vorne liegt: ohne Ausschluss
+    // gewinnt es, mit Ausschluss muss das b-Dossier nachrücken. Bei `always` erzwang das
+    // vorher `orderBy(slug)`; Discovery braucht dafür einen Token.
     ($this->mkDoc)('regelwerk-foodbook-a-kanon', 'regelwerk');
     ($this->mkDoc)('regelwerk-foodbook-b-frei', 'regelwerk');
-    ($this->route)('foodbook.grundgeruest', 'regelwerk');
+    ($this->route)('foodbook.grundgeruest', 'regelwerk', 'discovery');
     ($this->kanon)('foodbook.grundgeruest', 'regelwerk-foodbook-a-kanon');
 
     $kcs = app(KnowledgeContextService::class);
+    $anfrage = 'Regelwerk Foodbook Kanon';
 
-    $ohne = $kcs->contextFor($this->rootTeam, 'foodbook.grundgeruest', 'Sommerfest');
-    $mit = $kcs->contextFor($this->rootTeam, 'foodbook.grundgeruest', 'Sommerfest', null, [], ['_kanon_prompt_key' => 'foodbook.grundgeruest']);
+    $ohne = $kcs->contextFor($this->rootTeam, 'foodbook.grundgeruest', $anfrage);
+    $mit = $kcs->contextFor($this->rootTeam, 'foodbook.grundgeruest', $anfrage, null, [], ['_kanon_prompt_key' => 'foodbook.grundgeruest']);
 
     expect(($this->slugs)($ohne))->toBe(['regelwerk-foodbook-a-kanon'])
         ->and(($this->slugs)($mit))->toBe(['regelwerk-foodbook-b-frei'])
@@ -66,11 +76,11 @@ it('schliesst die pflicht-Kanon-Dossiers aus dem Regelwerk-Block aus — ohne Sc
 it('wenn_platz-Kanon-Dossiers bleiben findbar — sie koennen dem Kanon-Budget zum Opfer fallen', function () {
     ($this->mkDoc)('regelwerk-foodbook-a-optional', 'regelwerk');
     ($this->mkDoc)('regelwerk-foodbook-b-frei', 'regelwerk');
-    ($this->route)('foodbook.grundgeruest', 'regelwerk');
+    ($this->route)('foodbook.grundgeruest', 'regelwerk', 'discovery');
     ($this->kanon)('foodbook.grundgeruest', 'regelwerk-foodbook-a-optional', 'wenn_platz');
 
     $mit = app(KnowledgeContextService::class)
-        ->contextFor($this->rootTeam, 'foodbook.grundgeruest', 'Sommerfest', null, [], ['_kanon_prompt_key' => 'foodbook.grundgeruest']);
+        ->contextFor($this->rootTeam, 'foodbook.grundgeruest', 'Regelwerk Foodbook Optional', null, [], ['_kanon_prompt_key' => 'foodbook.grundgeruest']);
 
     expect(($this->slugs)($mit))->toBe(['regelwerk-foodbook-a-optional']);
 });

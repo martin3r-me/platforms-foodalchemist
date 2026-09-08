@@ -130,15 +130,27 @@ it('unbekannter Vorgang nennt die bekannten', function () {
         ->and($res->error)->toContain('basisrezept_anlegen');
 });
 
-it('regelwerk.GET fällt ohne Kanon auf das ganze Dossier zurück und sagt das', function () {
+it('regelwerk.GET nennt ohne Kanon die Bereichs-Dossiers — als NACHSCHLAGEN, nicht als Versorgung', function () {
+    // ★ Spec 52 · F4 hat die Bedeutung dieser Antwort geändert, nicht nur ihr Wort.
+    //
+    // Vorher hiess sie `dossier` und meinte: „genau dieses Dossier zieht der Generator per
+    // `regelwerk:always` in den Prompt" — der Register-Kommentar sagte wörtlich „dieselbe
+    // Auswahl, die der Generator trifft". Diesen Pfad gibt es nicht mehr; verbindliches Wissen
+    // kommt aus dem Kanon. Die Antwort ist damit KEINE Aussage mehr über den Prompt, sondern
+    // über die fachliche Zuordnung: „das gehoert zu diesem Vorgang, lies es".
+    //
+    // Sie weiter `dossier` zu nennen wäre die bequeme Lüge — der Agent hielte es für
+    // Versorgung. Deshalb `nachschlagen`, und deshalb ein Hinweis, der den Unterschied sagt.
     ($this->mkDoc)('regelwerk.regelwerk_basisrezepte', 'regelwerk', str_repeat('Regel Basisrezept. ', 50));
 
     $res = ($this->run)('foodalchemist.regelwerk.GET', ['vorgang' => 'basisrezept_anlegen']);
 
     expect($res->success)->toBeTrue('regelwerk: ' . ($res->error ?? ''))
-        ->and($res->data['quelle'])->toBe('dossier')
+        ->and($res->data['quelle'])->toBe('nachschlagen')
         ->and($res->data['dokumente'])->toHaveCount(1)
         ->and($res->data['dokumente'][0]['slug'])->toBe('regelwerk.regelwerk_basisrezepte')
+        ->and($res->data['dokumente'][0]['mode'])->toBe('nachschlagen')
+        ->and($res->data['hinweis'])->toContain('NICHT automatisch in den Prompt')
         ->and($res->data['lesen_mit'])->toBe('foodalchemist.knowledge.GET');
 });
 

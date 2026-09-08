@@ -62,10 +62,14 @@ it('sagt ungesteuert, wenn diesen Prompt-Key kein Regelwerk erreicht', function 
         ->and($res->data['hinweis'])->not->toContain('ablauf.GET');
 });
 
-it('nennt bei always-Routing die ->first()-Mechanik, statt sie zu verschweigen', function () {
-    // Der Frisch-DB-Zustand: `regelwerk:always 1×7000`. `regelwerkBlock()` holt per `->first()`
-    // GENAU EIN Dossier — bei vielen §-Splits ist das keine Auswahl, sondern Zufall. Wer das
-    // nicht sagt, lässt den Agenten glauben, er habe das passende Regelwerk.
+it('sagt bei always-Routing, dass die Zeile NICHTS mehr laedt', function () {
+    // ★ Die Aussage hat sich mit Spec 52 · F4 verschaerft. Vorher warnte die Auskunft vor der
+    // `->first()`-Lotterie — richtig, solange der dedizierte always-Zweig ein Dossier zog.
+    // Der ist geloescht, und der generische Pfad verarbeitet nur `discovery`. Eine
+    // `regelwerk:always`-Zeile ist damit tote Konfiguration.
+    //
+    // „Unzuverlaessig" waere jetzt die freundlichere, aber falsche Auskunft: der Agent haelt
+    // sie fuer „bekomme irgendein Regelwerk" statt fuer „bekomme keines".
     ($this->mkDoc)('regelwerk-basisrezepte-1-naming');
     ($this->mkRouting)('recipe.ueberarbeiten', 'always', 1);
 
@@ -73,8 +77,8 @@ it('nennt bei always-Routing die ->first()-Mechanik, statt sie zu verschweigen',
 
     expect($res->data['quelle'])->toBe('routing')
         ->and($res->data['routing']['mode'])->toBe('always')
-        ->and($res->data['hinweis'])->toContain('->first()')
-        ->and($res->data['hinweis'])->toContain('Zufall');
+        ->and($res->data['hinweis'])->toContain('NICHTS mehr')
+        ->and($res->data['hinweis'])->toContain('knowledge_canon.PUT');
 });
 
 it('macht den Alt-Schluessel sichtbar: recipe.generator routet unter ai_generate_recipe', function () {

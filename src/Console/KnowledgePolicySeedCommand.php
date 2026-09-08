@@ -70,7 +70,12 @@ class KnowledgePolicySeedCommand extends Command
         ['ai_generate_recipe', 'prasentation_service', 'discovery', 1, 1500],
 
         // ── übrige Features: unverändert übernommen ──
-        ['concept.brief_geruest', 'regelwerk', 'always', 1, 9000],
+        // Spec 52 · F4: war `always 1×9000` — der dedizierte always-Zweig ist gelöscht, die Zeile
+        // hätte NICHTS mehr geladen. `discovery 3×8000` ist der Live-Stand auf demo; ein frisches
+        // Team bekommt damit dasselbe Verhalten statt eines stillen Nichts. Verbindlich wird das
+        // Concept-Regelwerk über den Kanon (demo: 3 Zeilen) — den seedet niemand, er kommt aus
+        // `database/kanon/` bzw. `wissen-kanon-sicherung import`.
+        ['concept.brief_geruest', 'regelwerk', 'discovery', 3, 8000],
         ['recipe.steps', 'cross_cutting', 'always', null, null],
         ['recipe.steps', 'domain', 'discovery', null, null],
         ['recipe.steps', 'kueche', 'discovery', 3, 3000],
