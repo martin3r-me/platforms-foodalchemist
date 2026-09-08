@@ -80,9 +80,15 @@ class KnowledgeProfilGetTool extends FoodAlchemistTool implements ToolContract, 
             $bericht['profile'] = array_values(array_filter($bericht['profile'], fn ($p) => $p['befunde'] !== []));
         }
 
+        // Die Zusammenfassung darf nicht mehr behaupten, als die Befunde hergeben: `pflicht`
+        // ignoriert das Budget per Vertrag, ein `pflicht_ueber_budget` heisst also NICHT, dass
+        // das Wissen fehlt — es heisst, die Config luegt und verdraengt alles andere. Die erste
+        // Fassung warf beides in einen Satz.
         $bericht['hinweis'] = $bericht['blockierend'] > 0
-            ? $bericht['blockierend'].' Prompt-Key(s) mit blockierendem Befund: dort ist Pflichtwissen hinterlegt, '
-                .'kommt aber nicht an. Das sieht von aussen wie ein normaler Lauf aus.'
+            ? $bericht['blockierend'].' Prompt-Key(s) mit blockierendem Befund. Je nach Code heisst das '
+                .'Unterschiedliches: `dossier_*` und `art_nie_im_prompt` → hinterlegtes Wissen kommt NICHT an. '
+                .'`pflicht_ueber_budget` → es kommt an, aber der Deckel ist zu klein und verdraengt das '
+                .'uebrige Wissen. Beides sieht von aussen wie ein normaler Lauf aus.'
             : null;
 
         return ToolResult::success($bericht);

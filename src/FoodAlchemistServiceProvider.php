@@ -1051,6 +1051,8 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\KnowledgeVersorgungGetTool::class,
                     // Spec 52/C0+D6: aufgeloestes Profil + Integritaet (was gilt, und loest es auf).
                     \Platform\FoodAlchemist\Tools\KnowledgeProfilGetTool::class,
+                    // Spec 52/H6: Dossier→Dossier-Kanten, vor allem `ersetzt` fuer den Neuschnitt.
+                    \Platform\FoodAlchemist\Tools\KnowledgeLinksTool::class,
                     \Platform\FoodAlchemist\Tools\KnowledgeCategoriesGetTool::class,
                     \Platform\FoodAlchemist\Tools\KnowledgeCategoriesPostTool::class,
                     \Platform\FoodAlchemist\Tools\KnowledgeSetActiveTool::class,

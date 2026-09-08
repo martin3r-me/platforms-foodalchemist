@@ -1403,6 +1403,70 @@ kann Dominique damit selbst schliessen, sobald er das Dossier schreibt.
 
 ---
 
+## ✅ Etappe H6 — Verbindungen zwischen Dossiers (2026-09-08)
+
+**Der Anlass:** beim Neuschnitt werden aus einem Dossier zwei und aus dreien eins. Diese
+Information lässt sich hinterher **nicht rekonstruieren** — anders als eine vergessene
+Kategorie, die man nachträgt, indem man das Dossier liest. Deshalb vor dem Umbau.
+
+### Warum hier eine eigene Tabelle richtig ist
+
+Diese Spec argumentiert durchgehend gegen neue Tabellen — bei `H2` habe ich Achsen deshalb in
+den Kanon gelegt. Hier ist es anders: die drei Steuertabellen tragen alle die Form
+**Schlüssel → Dossier** (`feature`/`prompt_key`/`achse` → doc, `target_key` → doc). Eine Kante
+**Dossier → Dossier** passt in keine davon, und `knowledge_aliases` ist Begriff → Dossier.
+Wiederverwendung wäre hier ein Formfehler, keine Sparsamkeit.
+
+Vier Arten, wieder als Code-Konstante: `ersetzt` · `verfeinert` · `siehe_auch` ·
+`widerspricht`. `widerspricht` ist bewusst festhaltbar, statt zur Auflösung zu zwingen — ob
+zwei Dossiers sich widersprechen dürfen, ist eine fachliche Frage.
+
+### ★ Was `ersetzt` am ersten Tag tut
+
+Zeigt eine Kanon-Zeile auf ein abgelöstes Dossier, **nennt der Integritäts-Bericht jetzt den
+Nachfolger**: „Nachfolger laut Verbindung: X — Kanon-Zeile dorthin umhängen." Aus einer
+Fehlermeldung wird eine Handlungsanweisung. Dazu die Liste `abgeloest_ohne_nachfolger` — beim
+Umbau genau das, was man abarbeiten will.
+
+Ein Kreis-Riegel verhindert Nachfolge-Schleifen (sonst liefe die Empfehlung endlos).
+`siehe_auch` darf dagegen gegenseitig sein — nur `ersetzt` braucht die Richtung.
+
+**Schreibrecht:** die Kante gehört dem **Ausgangs**-Dossier. Ein Team darf damit seine eigenen
+Dossiers auf den geerbten Master-Katalog beziehen (`verfeinert` wäre für Kundenteams sonst
+tot), aber niemand hängt Kanten an fremdes Wissen.
+
+### Der Nachtrag, den die Migration gleich mitnimmt
+
+`2026_09_07_000001_split_global_workflow_dossiers` hat zwei Monolithen stillgelegt und durch je
+vier Ein-Thema-Dossiers ersetzt — **die Zuordnung stand danach nur im Docblock jener
+Migration.** Genau die Sorte Information, für die diese Tabelle da ist. Die H6-Migration trägt
+sie nach, solange sie noch bekannt ist.
+
+`workflow.rezept_anlegen_mcp` ist damit belegt. `workflow.gericht_anlegen_mcp` bleibt offen:
+seine vier Nachfolger sind **team-eigene** Dossiers, die keine Migration anlegt — auf demo
+existieren sie, in der Test-Fixture nicht. Der Nachtrag überspringt fehlende Slugs still,
+statt zu scheitern.
+
+**Nebenbefund aus dem Bau:** meine ersten zwei Tests behaupteten `toBe([])` auf die Liste der
+abgelösten Dossiers — und wurden rot, weil die Fixture die Migrationen mitbringt. Das war kein
+Testfehler in der Sache, sondern ein Test gegen den Migrationsstand statt gegen den
+Mechanismus ([[feedback_testfixture_zeigt_migrationsstand]]). Umgestellt auf die eigenen Slugs,
+plus ein eigener Test für den Nachtrag.
+
+### Eine eigene Korrektur im selben Zug
+
+Der Befund `pflicht_ueber_budget` stand als `blockiert` in einer Zusammenfassung, die sagte
+„Pflichtwissen kommt dort nicht an". **Das stimmt für diesen Code nicht** — `pflicht` ignoriert
+das Budget per Vertrag, das Wissen kommt an. Falsch ist die Config, nicht die Lieferung. Der
+Sammeltext unterscheidet die Fälle jetzt.
+
+Gefunden hat das der eigene Wächter auf demo: **`concept.brief_geruest` hat 10.399 Z.
+Pflichtwissen bei `budget_bound` 4.200** — der konservative Default, weil dieser Key in
+`ai.bound_knowledge_budget` schlicht **keinen Eintrag** hat. Der Montags-Wächter sieht das
+nicht, er prüft nur die zwei Generator-Keys.
+
+---
+
 ## Runbook — Messung auf demo (nach jedem Deploy dieser Etappe)
 
 Immer **mit `--team=6`**: ohne Nutzer greift nur die globale Partition, und der Bericht
