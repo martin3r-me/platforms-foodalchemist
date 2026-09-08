@@ -93,6 +93,43 @@ it('macht ein Routing auf vk.generator erstmals wirksam', function () {
     expect($wissen['files_used'])->toContain('karotte-weltkueche-vk@v1');
 });
 
+it('laesst eine einzelne VK-Zeile die anderen Kategorien NICHT verlieren', function () {
+    // ★ Konstruktionsfehler meiner ersten Fassung: der Rueckfall wirkte alles-oder-nichts pro
+    // FEATURE. Wer eine VK-Zeile setzt, haette damit still die anderen elf verloren —
+    // `vk.generator` haette nur noch `weltkueche` gehabt, ohne dass irgendwo steht, dass
+    // `kueche` und `domain` weg sind.
+    //
+    // Jetzt wirkt der Rueckfall PRO KATEGORIE, wie ueberall sonst im Modul: der Kanon
+    // ueberschreibt Bindungen pro Prompt-Key, eine Achsen-Zeile die Config pro Achsenwert.
+    // „Bewusst leer" sagt man mit `mode = none`, nicht durch das Fehlen einer Zeile.
+    ($this->mkDoc)('karotte-kueche-geerbt', 'kueche');
+    ($this->mkDoc)('karotte-weltkueche-eigen', 'weltkueche');
+    ($this->mkRouting)('ai_generate_recipe', 'kueche', 'discovery', 2, 2500);
+    ($this->mkRouting)('ai_generate_recipe', 'weltkueche', 'discovery', 1, 2000);
+    // EINE eigene Zeile, mit anderem Deckel als der Alt-Name.
+    ($this->mkRouting)('vk.generator', 'weltkueche', 'discovery', 1, 4000);
+
+    $wissen = app(KnowledgeContextService::class)
+        ->contextFor($this->rootTeam, 'vk.generator', 'Karotte Ingwer Pueree');
+
+    expect($wissen['files_used'])
+        ->toContain('karotte-weltkueche-eigen@v1')   // eigene Zeile greift
+        ->toContain('karotte-kueche-geerbt@v1');     // und die uebrigen bleiben geerbt
+});
+
+it('laesst eine eigene Zeile mit mode=none die geerbte ausdruecklich abschalten', function () {
+    // Der Gegen-Weg: „VK soll diese Kategorie NICHT" wird explizit gesagt, nicht durch
+    // Weglassen. Sonst waere „bewusst leer" von „noch nicht gepflegt" nicht unterscheidbar.
+    ($this->mkDoc)('karotte-kueche-geerbt', 'kueche');
+    ($this->mkRouting)('ai_generate_recipe', 'kueche', 'discovery', 2, 2500);
+    ($this->mkRouting)('vk.generator', 'kueche', 'none');
+
+    $wissen = app(KnowledgeContextService::class)
+        ->contextFor($this->rootTeam, 'vk.generator', 'Karotte Ingwer Pueree');
+
+    expect($wissen['files_used'])->not->toContain('karotte-kueche-geerbt@v1');
+});
+
 it('trennt Basisrezept und Gericht, sobald VK eigene Zeilen hat', function () {
     // DAS ist die neue Faehigkeit: eine eigene Zeile fuer VK gewinnt gegen den geteilten
     // Alt-Namen. Vorher war eine unterschiedliche Politik nicht einstellbar.
@@ -100,12 +137,14 @@ it('trennt Basisrezept und Gericht, sobald VK eigene Zeilen hat', function () {
     ($this->mkDoc)('karotte-nur-vk', 'weltkueche');
     ($this->mkRouting)('ai_generate_recipe', 'kueche', 'discovery', 2, 2500);
     ($this->mkRouting)('vk.generator', 'weltkueche', 'discovery', 1, 4000);
+    // Ausdrueckliches Abschalten fuer VK — durch Weglassen geht es bewusst NICHT (s. o.).
+    ($this->mkRouting)('vk.generator', 'kueche', 'none');
 
     $dienst = app(KnowledgeContextService::class);
     $basis = $dienst->contextFor($this->rootTeam, 'recipe.generator', 'Karotte Ingwer Pueree');
     $vk = $dienst->contextFor($this->rootTeam, 'vk.generator', 'Karotte Ingwer Pueree');
 
-    // Basis erbt den Alt-Namen (keine eigenen Zeilen), VK hat eigene → andere Auswahl.
+    // Basis erbt den Alt-Namen, VK hat eine eigene Politik → wirklich getrennt steuerbar.
     expect($basis['files_used'])->toContain('karotte-gemeinsam@v1')
         ->and($vk['files_used'])->toContain('karotte-nur-vk@v1')
         ->and($vk['files_used'])->not->toContain('karotte-gemeinsam@v1');
