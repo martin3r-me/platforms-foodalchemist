@@ -90,6 +90,7 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                 // VERSORGUNGS-Richtung („welches Wissen erreicht diesen Prompt überhaupt").
                 \Platform\FoodAlchemist\Console\WissenVersorgungCommand::class,
                 \Platform\FoodAlchemist\Console\WissenProfilCommand::class,
+                \Platform\FoodAlchemist\Console\WissenKanonSicherungCommand::class,
                 // Spec 52/A1: Grundlinie am tatsächlich versendeten Aufruf — inkl. der drei
                 // Folge-Calls, die der Kontext-Inspektor ausblendet.
                 \Platform\FoodAlchemist\Console\WissenGrundlinieCommand::class,
@@ -211,6 +212,27 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                 ->onOneServer()
                 ->runInBackground()
                 ->description('FoodAlchemist: Wissens-Dossiers gegen Zeichen-Deckel und Vorgangs-Verdrahtung prüfen');
+
+            // Spec 52 · Paket 3 — hält die Kanon-Sicherung gegen den Live-Stand.
+            //
+            // Der Kanon entsteht nur über MCP und lebt danach ausschliesslich als DB-Zeilen (H7).
+            // Jede Kuration, die nicht exportiert wurde, ist bei einem Neuaufbau weg — und weil
+            // `hasCanon()` dann false liefert, greift der Bindungs-Fallback, den es dort ebenfalls
+            // nicht gibt. Der Generator läuft ohne Regelwerk, ohne Fehler. Genau die Sorte Verlust,
+            // die niemand bemerkt, solange niemand danach fragt: also wöchentlich fragen.
+            // `kanon_team = 0` schaltet ihn ab — eine frische Instanz ohne dieses Team soll
+            // keinen wöchentlich fehlschlagenden Wächter erben, sondern gar keinen.
+            $kanonTeam = (int) config('foodalchemist.scheduler.kanon_team', 6);
+            if ($kanonTeam > 0) {
+                $schedule->command(\Platform\FoodAlchemist\Console\WissenKanonSicherungCommand::class, [
+                    'richtung' => 'pruefen', '--team' => $kanonTeam,
+                ])
+                    ->weeklyOn(1, config('foodalchemist.scheduler.kanon_sicherung_zeit', '06:50'))
+                    ->withoutOverlapping()
+                    ->onOneServer()
+                    ->runInBackground()
+                    ->description('FoodAlchemist: Kanon-Sicherung gegen den Live-Kanon prüfen (Drift → Signal)');
+            }
 
             // Trendradar-Automatisierung: NUR wenn explizit eingeschaltet (Default aus) —
             // der Lauf ruft das Modell pro Trend/Team und gibt sonst ungefragt Provider-Geld aus.
@@ -1051,6 +1073,9 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\KnowledgeVersorgungGetTool::class,
                     // Spec 52/C0+D6: aufgeloestes Profil + Integritaet (was gilt, und loest es auf).
                     \Platform\FoodAlchemist\Tools\KnowledgeProfilGetTool::class,
+                    // Spec 52/Paket 3: ist die Kanon-Kuration gesichert? Der Kanon lebt nur als
+                    // DB-Zeilen (H7) — ohne diese Frage merkt es erst der Neuaufbau, und still.
+                    \Platform\FoodAlchemist\Tools\KnowledgeKanonSicherungGetTool::class,
                     // Spec 52/H6: Dossier→Dossier-Kanten, vor allem `ersetzt` fuer den Neuschnitt.
                     \Platform\FoodAlchemist\Tools\KnowledgeLinksTool::class,
                     \Platform\FoodAlchemist\Tools\KnowledgeCategoriesGetTool::class,

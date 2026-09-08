@@ -382,6 +382,12 @@ return [
         'trend_konzepte_enabled' => env('FOODALCHEMIST_TREND_KONZEPTE', true),
         'trend_konzepte_zeit' => env('FOODALCHEMIST_TREND_KONZEPTE_ZEIT', '08:00'),
         'trend_konzepte_limit' => (int) env('FOODALCHEMIST_TREND_KONZEPTE_LIMIT', 3),
+        // Spec 52/Paket 3: Team, dessen Kanon-Sicherung wöchentlich geprüft wird.
+        // **0 schaltet den Lauf ab.** Der Kanon ist team-gebunden und es gibt keinen sinnvollen
+        // Default über Installationen hinweg — eine frische Instanz ohne Team 6 soll deshalb
+        // keinen wöchentlich fehlschlagenden Wächter erben, sondern gar keinen.
+        'kanon_team' => (int) env('FOODALCHEMIST_KANON_TEAM', 6),
+        'kanon_sicherung_zeit' => env('FOODALCHEMIST_KANON_SICHERUNG_ZEIT', '06:50'),
     ],
 
     'stt' => [
@@ -745,10 +751,13 @@ return [
         // Gehört mit dem Dossier-Deckel zusammen (Spec 50 Strang III, Dominique
         // 2026-09-05: „ein Dossier = ein Thema", Kanon zeigt auf Dossiers, kein
         // Chunking): ein Dossier darf so groß sein wie das Fenster, nicht größer.
-        // 2000 ist der gemessene Stand (W1-1, s. KnowledgeEmbeddingService); 4000 ist
-        // der Kandidat für Ein-Themen-Dossiers — NUR nach `wissen-recall-probe`
-        // vor/nach ändern, nicht nach Gefühl. Rollback = ENV weg + Re-Embed.
-        'embed_lead_chars' => (int) env('FOODALCHEMIST_EMBED_LEAD_CHARS', 2000),
+        // 4000 ist GEMESSEN und entschieden (2026-09-07, `wissen-recall-probe --team=6
+        // --k=10`, n=120): Schwanz 47,5 % → 55,0 %, Kopf 85,0 % → 81,7 %. Struktureller
+        // Gewinn — 29 % des Korpus lagen vorher gar nicht im Vektor. Details und die
+        // Lehre „n=40 ist zu klein" s. KnowledgeEmbeddingService::DOMAIN_LEAD_CHARS.
+        // NUR nach erneutem Probe vor/nach ändern. Jede Änderung verlangt einen
+        // Re-Embed, sonst mischen sich alte und neue Vektoren.
+        'embed_lead_chars' => (int) env('FOODALCHEMIST_EMBED_LEAD_CHARS', 4000),
         // Größen-Deckel für den Kurations-Guard (Wissens-Browser/MCP warnen darüber).
         // Soll dem Fenster entsprechen; getrennt konfigurierbar, weil der Deckel
         // eine Kurationsregel ist und das Fenster eine Index-Eigenschaft.

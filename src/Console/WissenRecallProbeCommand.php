@@ -12,9 +12,9 @@ use Platform\FoodAlchemist\Services\Ai\KnowledgeEmbeddingService;
  * W1-1-MESSUNG: ist Wissen JENSEITS des Embedding-Fensters findbar?
  *
  * `KnowledgeEmbeddingService` embeddet ein Doc als `Titel + erste N Zeichen`
- * (DOMAIN_LEAD_CHARS). Bei N = 2000 sind rechnerisch nur 52 % des Korpus im Vektor —
- * 78 % der Dokumente sind länger. Diese Zahl ist aber eine ZEICHEN-Rechnung, keine über
- * FINDBARKEIT. Ohne Messung wäre „Fenster hoch = besser" eine Behauptung.
+ * ({@see KnowledgeEmbeddingService::DOMAIN_LEAD_CHARS}). Wie viele Zeichen dabei
+ * ausserhalb des Vektors landen, ist eine ZEICHEN-Rechnung — keine über FINDBARKEIT.
+ * Ohne Messung wäre „Fenster hoch = besser" eine Behauptung.
  *
  * Der Probe misst es direkt: für jedes lange Dokument werden Begriffe gesucht, die
  * AUSSCHLIESSLICH hinter dem Fenster stehen (im Kopf nicht vorkommen), daraus eine
@@ -27,15 +27,26 @@ use Platform\FoodAlchemist\Services\Ai\KnowledgeEmbeddingService;
  * fehlende Tokens, sortiert), damit ein Lauf vor und nach der Fenster-Änderung dieselben
  * Anfragen stellt. Nur der Index dazwischen ändert sich.
  *
+ * ★ **Zwei Bedienregeln, beide teuer gelernt:**
+ *
+ * 1. **`--limit` nie unter 120.** Bei n=40 ist ein Treffer 2,5 Punkte wert, und der
+ *    Schwanz sprang zwischen n=40 (50,0 %) und n=120 (55,0 %) um 5 Punkte — mehr als
+ *    der gemessene Effekt selbst. Ein Vor/Nach-Vergleich auf n=40 vergleicht Rauschen.
+ * 2. **`--fenster` beim Vergleich NICHT mitziehen.** Der Wert ist die Kopf/Schwanz-Grenze
+ *    der MESSUNG, nicht das Live-Fenster. Er bleibt zwischen Vorher- und Nachher-Lauf
+ *    gleich (2026-09-07: beide Läufe mit `--fenster=2000`), sonst stellt der zweite Lauf
+ *    andere Fragen und die beiden Zahlen sind nicht vergleichbar. Genau dafür ist die
+ *    Begriffs-Auswahl deterministisch.
+ *
  * Kosten: eine winzige Query-Einbettung je Stichprobe.
  */
 class WissenRecallProbeCommand extends Command
 {
     protected $signature = 'foodalchemist:wissen-recall-probe
         {--team= : PFLICHT — die Suchpartitionen hängen daran (wie bei embed-eval)}
-        {--limit=40 : Anzahl Stichproben-Dokumente}
+        {--limit=120 : Anzahl Stichproben-Dokumente — ★ NICHT unter 120, s. Docblock}
         {--k=10 : Top-K, in denen das Dokument auftauchen muss}
-        {--fenster=2000 : angenommenes Embedding-Fenster (Kopf/Schwanz-Grenze)}
+        {--fenster=2000 : Kopf/Schwanz-GRENZE der Messung — bewusst FEST, nicht das Live-Fenster}
         {--kategorie=* : nur diese Kategorien}
         {--min-score= : Score-Untergrenze der Suche (Default: Service-Wert)}
         {--kontrolle : GEGENPROBE — Anfrage aus dem KOPF (innerhalb des Fensters) bauen}

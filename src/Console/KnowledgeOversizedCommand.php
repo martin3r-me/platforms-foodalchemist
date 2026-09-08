@@ -4,6 +4,7 @@ namespace Platform\FoodAlchemist\Console;
 
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
+use Platform\FoodAlchemist\Services\Ai\KnowledgeEmbeddingService;
 use Platform\FoodAlchemist\Services\Knowledge\KnowledgeCanonService;
 
 /**
@@ -30,7 +31,10 @@ class KnowledgeOversizedCommand extends Command
     public function handle(KnowledgeCanonService $canon): int
     {
         $deckel = (int) ($this->option('deckel') ?: $canon->dossierMaxChars());
-        $fenster = (int) config('foodalchemist.semantic_search.embed_lead_chars', 2000);
+        // Fenster über leadChars() und NICHT per eigenem config()-Aufruf: der Fallback stand
+        // hier als Zahl 2000 nochmal getippt und wäre bei der Umstellung auf 4000 sitzengeblieben.
+        // Genau die Doppelung, die Spec 52 abbaut — ein Besitzer je Frage.
+        $fenster = app(KnowledgeEmbeddingService::class)->leadChars();
 
         $q = DB::table('foodalchemist_knowledge_documents')
             ->whereNull('deleted_at')
