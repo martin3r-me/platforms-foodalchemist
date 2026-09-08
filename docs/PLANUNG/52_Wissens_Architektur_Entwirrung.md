@@ -1576,6 +1576,33 @@ genau die Unterscheidung kaputt, die der Versorgungs-Bericht trifft. Beide Richt
 **Praktische Folge:** eine einzelne VK-Zeile genügt, der Rest bleibt geerbt. Ohne den Fix hätte
 man erst alle zwölf Zeilen kopieren müssen, und die Strafe fürs Vergessen wäre lautlos gewesen.
 
+### ★ Und ein zweiter: der Bericht log über die Laufzeit
+
+Beim Beweis am echten System: eine auf demo gesetzte `vk.generator`-Routing-Zeile wirkte im
+Prompt-Bau, und `knowledge_profil.GET` zeigte weiter den **geerbten Alias-Wert**. Grund: die
+beiden Berichts-Dienste fragten die Routings über eine **eigene Query** ab — also eine zweite
+Wahrheit neben der, die der Generator benutzt.
+
+Ein Diagnose-Werkzeug, das über die Laufzeit lügt, ist schlimmer als keines. Prompt-Bau,
+Profil-Bericht und Versorgungs-Bericht teilen jetzt **eine** Auflösung
+(`KnowledgeContextService::wirksameRoutings()`) — das Prinzip „Eine Formel pro fachlicher
+Wahrheit" aus `docs/ARCHITEKTUR.md`.
+
+In derselben Korrektur steckte gleich der nächste: ich übergab der geteilten Auflösung zuerst
+den **Alias** statt des Prompt-Keys, womit sie die eigenen VK-Zeilen wieder nicht gesehen
+hätte. Vor dem Behaupten durchgerechnet.
+
+### Was diese drei Selbstkorrekturen über das Modul sagen
+
+Drei in einem Paket — Rückfall pro Feature statt pro Kategorie, Bericht mit eigener Query,
+Alias statt Prompt-Key — und **alle drei mit derselben Signatur: eine zweite Stelle, die
+dieselbe Frage anders beantwortet.** Genau das Muster, das diese Spec abbaut, eingebaut
+während des Abbauens.
+
+Das ist der stärkste Beleg dafür, dass die **Wächter wichtiger sind als die Einzelfixes**: der
+Versorgungs- und der Profil-Bericht haben zwei der drei Fehler selbst gefunden, und zwar erst
+am echten System. Ein Fix, den niemand nachmisst, ist eine Behauptung.
+
 ### Nicht in diesem Paket
 
 Die **volle Zusammenlegung der zwei Budget-Bäume** (`ai.knowledge_budget` feature-gekeyt vs.

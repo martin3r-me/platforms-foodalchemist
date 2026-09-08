@@ -88,9 +88,17 @@ class WissensVersorgungService
         // zweite Query kostet — sie trug noch das v1-Schema `knowledge_section_id`.
         $kanon = $this->canon->documentsFor('prompt_key', $promptKey, $team);
 
-        $routing = DB::table('foodalchemist_knowledge_routings')
-            ->where('feature', $routingKey)->orderBy('category')
-            ->get(['category', 'mode', 'max_docs', 'max_chars_per_doc'])
+        // ★ Über `wirksameRoutings()`, NICHT per eigener Query: der Prompt-Bau führt eigene
+        // Zeilen und Alias-Zeilen pro Kategorie zusammen. Eine eigene Query zeigte die
+        // Alias-Werte, während zur Laufzeit die eigenen galten — der Bericht log über die
+        // Politik, die er erklären soll. Auf demo aufgefallen, als eine gesetzte VK-Zeile wirkte
+        // und hier weiter der geerbte Wert stand.
+        // Mit dem PROMPT-KEY fragen, nicht mit dem Alias — sonst sieht die Zusammenfuehrung
+        // die eigenen Zeilen nicht (`wirksameRoutings('ai_generate_recipe')` kennt keinen
+        // Alias mehr und liefert nur die Alt-Zeilen). Der Bericht muss denselben Schluessel
+        // benutzen, mit dem der Generator ruft.
+        $routing = app(KnowledgeContextService::class)->wirksameRoutings($promptKey)
+            ->sortBy('category')->values()
             ->map(fn ($r) => [
                 'category' => (string) $r->category,
                 'mode' => (string) $r->mode,
@@ -136,7 +144,7 @@ class WissensVersorgungService
             'bindungen_stumm' => $kanonDa ? $bindungenLebend : 0,
             'bindungs_slugs' => $bindungen->pluck('slug')->all(),
             'budget_bound' => (int) $this->gateway->boundBudgetFuer($promptKey)['total'],
-            'budget_retrieval' => $this->wissen->budgetFuer($routingKey),
+            'budget_retrieval' => $this->wissen->budgetFuer($promptKey),
             'verdikt' => $verdikt,
         ];
     }
