@@ -29,37 +29,29 @@ use Platform\FoodAlchemist\Support\DossierText;
 class AiGatewayService
 {
     /**
-     * W0-3 — Deckel des Layer-Bound-Kanals.
+     * Deckel des VERBINDLICHEN Regelwerk-Blocks — heute also des Kanons.
      *
-     * Vorher 3 Docs à 1400 Zeichen. An `recipe.generator` hängen aber 9 bewusst gebundene
-     * Dossiers (Bau-§§ 2–7 + Erstellungs-Dossier + substitutionen + mengen_defaults):
-     * 6 davon erreichten den Prompt nie, §5 Default-GPs kam als 29-%-Fragment an. Der
-     * Kanal war damit genau für den Fall unbrauchbar, für den er gebaut wurde — prozedurale
-     * Regeln, die per Discovery nicht surfacen, weil sie kein Gericht nennen.
+     * ⚠ **Der Name lügt inzwischen halb.** Als W0-3 diese Deckel setzte, bedienten sie den
+     * Layer-Bound-Kanal; seit Spec 52 · F2 (2026-09-08) ist der Kanal weg und der einzige
+     * Abnehmer ist `selectKanon()`. Umbenannt wird mit `D4` (die zwei Budget-Bäume
+     * zusammenlegen) — bis dahin heissen die Konstanten wie ihr Config-Schlüssel
+     * `ai.bound_knowledge_budget`, weil zwei Dienste den lesen und ein halber Rename
+     * schlimmer wäre als der schiefe Name.
      *
      * ⚠ Die Deckel gelten NICHT global, sondern je Prompt-Key über
-     * config('foodalchemist.ai.bound_knowledge_budget'). Grund: selectBoundKnowledge()
-     * matcht Bindings auf den Prompt-Key ODER dessen BEREICHS-Präfix — an `target_key='recipe'`
-     * hängen live 3 Dossiers mit 24.520 Zeichen, die sonst jeden `recipe.*`-Prompt
-     * (steps, pairing, review, sensorik, …) von 4.200 auf 20.000 Zeichen aufblasen würden.
-     * Ein global gehobener Deckel wäre also keine Blutstillung, sondern eine Kosten-
-     * ausweitung auf ~15 Prompts, die die Bau-§§ gar nicht brauchen.
+     * config('foodalchemist.ai.bound_knowledge_budget'). Die Konstanten hier sind der
+     * konservative DEFAULT; die großzügigen Budgets stehen explizit bei `recipe.generator`
+     * und `vk.generator`, wo die Bau-§-Dossiers hingehören.
      *
-     * Die Konstanten hier sind daher der konservative DEFAULT (= Verhalten vor Welle 0);
-     * die großzügigen Budgets stehen explizit bei `recipe.generator` / `vk.generator`,
-     * wo die Bau-§-Dossiers hingehören.
+     * Historie, weil sie die Grössenordnung erklärt: vor W0-3 waren es 3 Docs à 1400
+     * Zeichen — an `recipe.generator` hingen 9 Dossiers, 6 davon erreichten den Prompt nie
+     * und §5 kam als 29-%-Fragment an. Genau der Fall, für den der Kanal gebaut war.
      */
     private const BOUND_KNOWLEDGE_MAX_DOCS = 3;
 
     private const BOUND_KNOWLEDGE_CHARS_PER_DOC = 1400;
 
     private const BOUND_KNOWLEDGE_MAX_TOTAL_CHARS = 4200;
-
-    /**
-     * Fenster für das Relevanz-Token-Matching der `discovery`-Bindings. 1200 Zeichen trafen
-     * bei mehrseitigen Dossiers nur die Einleitung; die eigentliche Regel liegt dahinter.
-     */
-    private const BOUND_KNOWLEDGE_MATCH_WINDOW = 4000;
 
     /**
      * GL-07 Propose: Task-Prompt + Kontext → validiertes Vorschlags-DTO.
@@ -195,39 +187,30 @@ class AiGatewayService
             }
         }
 
-        // #469: an diesen Layer gebundenes Wissen additiv laden — Prompt-Key (fein) ODER Bereich (Präfix, grob).
-        // Macht „einbinden" für JEDEN Prompt wirksam (zentraler Punkt, alle Prompts laufen durch propose()).
-        // Welle 2: nur noch FALLBACK — hat der Prompt-Key einen Kanon, sind die Bindings für ihn stumm
-        // (sonst doppelt: altes Ganz-Dossier per Binding + §-Dossier per Kanon).
+        // ── #469-Bindungen: ENTFERNT (Spec 52 · F2, 2026-09-08) ─────────────────────────
+        //
+        // Hier stand der zweite Injektionspfad: `knowledge_bindings` × `target_key`, additiv
+        // geladen mit eigenem Tokenizer (Mindestlänge 4) und eigener Formel
+        // (`always×1000 + Treffer×10 + weight`). Er war seit Welle 2 nur noch Fallback für
+        // Prompt-Keys ohne Kanon — und genau das ist das Problem gewesen: ein Fallback, der
+        // sich STILL scharf schaltet, sobald ein Kanon wegbricht. Der Profil-Wächter musste
+        // dafür einen eigenen Befund führen (`bindung_wuerde_scharf`).
+        //
+        // Gemessen am 2026-09-08 auf demo, bevor er rausging: **9 Bindungen, 9 davon
+        // wirkungslos** — alle auf `recipe.generator`/`vk.generator`, also genau die zwei
+        // Keys, die einen Kanon haben, und alle auf Slugs, die dort ohnehin als `pflicht`
+        // stehen. Keine einzige Bereichs-Präfix-Bindung (`recipe`, `vk`), keine auf einem
+        // anderen Key. Die Plan-Annahme „für ~45 Prompt-Keys ist das der einzige Pfad" war
+        // falsch: für die gibt es überhaupt keine Bindungen.
+        //
+        // Damit fällt nicht nur der Zweig, sondern auch der dritte Tokenizer und die dritte
+        // Relevanz-Formel (Spec 52 · C2). Was ein Prompt verbindlich bekommt, sagt ab jetzt
+        // ausschliesslich der Kanon — eine Frage, eine Tabelle.
+        //
+        // `prompt_parts['bound']` bleibt als Schlüssel mit 0 stehen: das Call-Log trägt ihn
+        // historisch, und ein verschwundener Schlüssel machte alte und neue Läufe
+        // unvergleichbar. Er ist ab jetzt strukturell 0, nicht zufällig.
         $boundSlugs = [];
-        $boundBlock = null;
-        if ($kanonBlock === null && \Illuminate\Support\Facades\Schema::hasTable('foodalchemist_knowledge_bindings')) {
-            $bereich = str_contains($promptKey, '.') ? explode('.', $promptKey, 2)[0] : $promptKey;
-            $bound = \Illuminate\Support\Facades\DB::table('foodalchemist_knowledge_bindings as b')
-                ->join('foodalchemist_knowledge_documents as d', 'd.id', '=', 'b.knowledge_document_id')
-                ->whereNull('b.deleted_at')->where('b.active', 1)
-                ->where('b.binding_type', 'layer')->whereIn('b.target_key', array_unique([$promptKey, $bereich]))
-                ->where('d.active', 1)->whereNull('d.deleted_at')
-                ->orderByDesc('b.weight')
-                ->get(['d.slug', 'd.title', 'd.category', 'd.version', 'd.content_md', 'b.mode', 'b.weight']);
-            [$bBlocks, $boundSlugs, $boundVerworfen] = $this->selectBoundKnowledge(
-                $bound,
-                $context,
-                is_array($options['knowledge_used'] ?? null) ? $options['knowledge_used'] : [],
-                $this->boundBudget($promptKey),
-            );
-            $promptParts['dropped'] += $boundVerworfen;
-            if ($bBlocks !== []) {
-                // W3-1: NICHT mehr an $wissen anhängen. Der Bound-Block besteht ausschliesslich
-                // aus `always`-Dossiers und ist damit über alle Calls eines Prompt-Keys
-                // BYTE-IDENTISCH — er ist der Kern des Cache-Prefix und gehört deshalb VOR
-                // alles Variable, als eigene system-Message. Im User-Content stand er hinter
-                // dem variablen Retrieval-Block und war damit für den Prefix-Cache wertlos.
-                $boundBlock = "# VERBINDLICHES REGELWERK (gilt für jede Antwort dieses Auftrags)\n\n"
-                    . implode("\n\n---\n\n", $bBlocks);
-                $promptParts['bound'] = mb_strlen($boundBlock);
-            }
-        }
 
         $knowledgeUsed = $options['knowledge_used'] ?? null;
         if ($boundSlugs !== [] || $kanonSlugs !== []) {
@@ -296,12 +279,10 @@ class AiGatewayService
          * `prompt_cache_key` ist NICHT setzbar (applySupportedSamplingParams ist eine
          * geschlossene Whitelist) — der Nutzen hängt vollständig an dieser Reihenfolge.
          */
-        // Welle 2: Kanon und Bindings schliessen sich aus (s. o.) — es steht also genau EIN
-        // Regelwerk-Block, an derselben Stelle, byte-stabil je Prompt-Key.
+        // Genau EIN Regelwerk-Block, an derselben Stelle, byte-stabil je Prompt-Key. Bis F2
+        // stand hier ein `elseif` auf den Bindungs-Block — die Alternative gibt es nicht mehr.
         if ($kanonBlock !== null) {
             $messages[] = ['role' => 'system', 'content' => $kanonBlock];
-        } elseif ($boundBlock !== null) {
-            $messages[] = ['role' => 'system', 'content' => $boundBlock];
         }
 
         $userContent = $prompt['task']
@@ -502,102 +483,6 @@ class AiGatewayService
         return [$blocks, $slugs, $verworfen];
     }
 
-    private function selectBoundKnowledge($rows, array $context, array $alreadyUsed, array $budget): array
-    {
-        $bereits = [];
-        foreach ($alreadyUsed as $used) {
-            $slug = preg_replace('/@v\d+$/', '', (string) $used);
-            if ($slug !== '') {
-                $bereits[$slug] = true;
-            }
-        }
-
-        $query = json_encode($context, JSON_UNESCAPED_UNICODE) ?: '';
-        $queryTokens = $this->knowledgeTokens($query);
-        $kandidaten = [];
-        foreach ($rows as $row) {
-            $slug = (string) $row->slug;
-            if (isset($bereits[$slug])) {
-                continue;
-            }
-            $mode = (string) ($row->mode ?: 'discovery');
-            if ($mode === 'reference' || $mode === 'none') {
-                continue;
-            }
-            $always = $mode === 'always';
-            $docTokens = $this->knowledgeTokens(implode(' ', [
-                $slug, (string) $row->title, (string) $row->category,
-                mb_substr((string) $row->content_md, 0, self::BOUND_KNOWLEDGE_MATCH_WINDOW),
-            ]));
-            $hits = count(array_intersect($queryTokens, $docTokens));
-            if (! $always && $hits === 0) {
-                continue;
-            }
-            $kandidaten[] = [
-                'row' => $row,
-                'score' => ($always ? 1000 : 0) + $hits * 10 + (int) $row->weight,
-            ];
-        }
-        usort($kandidaten, fn ($a, $b) => $b['score'] <=> $a['score']);
-
-        $blocks = [];
-        $slugs = [];
-        $verbraucht = 0;
-        $verworfen = 0;
-        foreach (array_slice($kandidaten, 0, $budget['docs']) as $kandidat) {
-            $doc = $kandidat['row'];
-            // Provenienz-Vorspann der §-Dossiers raus: identischer Textbaustein in jedem
-            // Dossier, keine Regel darin, und der Titel trägt die Herkunft schon. Am
-            // Generator sind das 4 gebundene §-Dossiers × ~490 Z. ≈ 1.950 Zeichen je Call,
-            // bei vk.generator 6 × ≈ 2.900 — Platz, der bisher den PFLICHT-Deckel
-            // aufgefressen hat. Siehe DossierText für die Messung.
-            $content = DossierText::ohneVorspann((string) $doc->content_md);
-            $laenge = mb_strlen($content);
-
-            // Kandidaten sind nach Score sortiert, `always` bekommt +1000 — Pflicht-Dossiers
-            // ziehen ihr Budget also VOR den score-gegateten. Unter 500 Zeichen Restbudget
-            // ist ein weiterer Anschnitt nur noch Rauschen: abbrechen und den Rest als
-            // `dropped` ausweisen, statt ihn unsichtbar zu verlieren.
-            $rest = $budget['total'] - $verbraucht;
-            if ($rest < 500) {
-                $verworfen += $laenge;
-                continue;
-            }
-            $deckel = min($budget['chars_per_doc'], $rest);
-
-            if ($laenge > $deckel) {
-                $blocks[] = "## GEBUNDEN: {$doc->slug}\n\n" . mb_substr($content, 0, $deckel) . "\n\n[…gekürzt für KI-Kontext…]";
-                $verbraucht += $deckel;
-                $verworfen += $laenge - $deckel;
-            } else {
-                $blocks[] = "## GEBUNDEN: {$doc->slug}\n\n" . $content;
-                $verbraucht += $laenge;
-            }
-            $slugs[] = "{$doc->slug}@v{$doc->version}";
-        }
-
-        return [$blocks, $slugs, $verworfen];
-    }
-
-    /** @return list<string> */
-    private function knowledgeTokens(string $text): array
-    {
-        $text = str_replace(['ä', 'ö', 'ü', 'ß'], ['ae', 'oe', 'ue', 'ss'], mb_strtolower($text));
-        $text = (string) preg_replace('/[^[:alnum:]]+/u', ' ', $text);
-        $stop = array_flip([
-            'der', 'die', 'das', 'den', 'dem', 'des', 'und', 'oder', 'mit', 'ohne', 'fuer',
-            'von', 'aus', 'ein', 'eine', 'einer', 'eines', 'einen', 'ist', 'sind', 'wird',
-            'werden', 'rezept', 'gericht', 'basisrezept', 'komponente', 'zutaten', 'werte',
-        ]);
-        $tokens = [];
-        foreach (preg_split('/\s+/u', $text, -1, PREG_SPLIT_NO_EMPTY) ?: [] as $token) {
-            if (mb_strlen($token) >= 4 && ! isset($stop[$token])) {
-                $tokens[$token] = true;
-            }
-        }
-
-        return array_keys($tokens);
-    }
 
     /**
      * M7-10 / 06_KI §2 Tier D: agentischer Tool-Loop — provider-agnostisch

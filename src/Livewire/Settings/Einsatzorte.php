@@ -8,10 +8,16 @@ use Livewire\Component;
 use Platform\FoodAlchemist\Support\TeamScope;
 
 /**
- * Wissens-Modul #469: Einsatzorte/Layer (Bindungs-Ziele fürs Wissen).
- * Bereiche (grob) + KI-Prompts (fein, aus der Registry). Registry-abgeleitet →
- * kein Anlegen; pflegbar = aktiv/inaktiv + Label/Beschreibung. Der Gateway lädt
- * gebundenes Wissen bei Prompt X (exakt) oder dessen Bereich (Präfix).
+ * ALTLAST (#469) — Einsatzorte/Layer waren die Ziel-Slugs der Bindungen.
+ *
+ * Seit Spec 52 · F2 liest der Gateway `knowledge_bindings` nicht mehr; dieses Vokabular
+ * steuert damit nichts. Die Komponente bleibt nur, weil der Wissens-Browser die LABELS der
+ * verbliebenen Alt-Bindungen daraus auflöst — aus der Settings-Navigation ist sie raus
+ * ({@see Index::SEKTIONEN}), damit niemand ein totes Vokabular pflegt. Sie verschwindet
+ * zusammen mit `knowledge_layers` und `knowledge_bindings`, sobald die Alt-Zeilen weg sind.
+ *
+ * Was heute steuert: der KANON (was MUSS in diesen Prompt) und das ROUTING (welche Kategorie
+ * DARF gesucht werden) — beides in der Sektion `wissenssteuerung`.
  */
 class Einsatzorte extends Component
 {

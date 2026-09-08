@@ -40,7 +40,6 @@ class Browser extends Component
     public string $newAlias = '';
 
     /** v2: neue Bindung (Doc → Einsatzort/Layer). Eine Achse. */
-    public array $newBinding = ['target_key' => '', 'mode' => 'discovery'];
 
     /** v2: Rückwärts-Ansicht — was hängt an diesem Einsatzort. */
     public string $traceTarget = '';
@@ -372,47 +371,28 @@ class Browser extends Component
         }
     }
 
-    /** v2: Bindung anlegen (Doc → Einsatzort/Layer) = „einbinden" aus dem Modul. */
-    public function addBinding(): void
-    {
-        if ($this->selectedId === null) {
-            return;
-        }
-        if ($this->eigenesDoc($this->selectedId) === null) {          // MVP-037
-            return;
-        }
-        $target = trim((string) ($this->newBinding['target_key'] ?? ''));
-        if ($target === '') {
-            $this->fehler = 'Bitte einen Einsatzort wählen.';
-
-            return;
-        }
-        $mode = $this->newBinding['mode'] ?: 'discovery';
-        $exists = DB::table('foodalchemist_knowledge_bindings')->whereNull('deleted_at')
-            ->where('knowledge_document_id', $this->selectedId)
-            ->where('binding_type', 'layer')->where('target_key', $target)->exists();
-        if ($exists) {
-            $this->fehler = 'Diese Bindung gibt es schon.';
-
-            return;
-        }
-        DB::table('foodalchemist_knowledge_bindings')->insert([
-            'uuid' => (string) Str::uuid7(),
-            'team_id' => Auth::user()?->currentTeamRelation?->id,
-            'knowledge_document_id' => $this->selectedId,
-            'binding_type' => 'layer',
-            'target_key' => $target,
-            'mode' => $mode,
-            'weight' => 0,
-            'active' => true,
-            'source' => 'ui',
-            'created_by' => Auth::id(),
-            'created_at' => now(), 'updated_at' => now(),
-        ]);
-        $this->newBinding = ['target_key' => '', 'mode' => 'discovery'];
-        $this->fehler = null;
-    }
-
+    /**
+     * ENTFERNT (Spec 52 · F3, 2026-09-08) — „Einbinden" gibt es nicht mehr.
+     *
+     * Hier stand `addBinding()`: ein ROHER Insert in `foodalchemist_knowledge_bindings`, an
+     * `KnowledgeService::bindLayer()` vorbei und damit ohne dessen Layer-Prüfung und
+     * Soft-Delete-Revive (Befund `F`: derselbe Schreibvorgang zweimal implementiert, einmal
+     * mit Garantien und einmal ohne).
+     *
+     * Der Grund fürs Löschen ist aber nicht die Doppelung, sondern Befund `J`: die
+     * Oberfläche hat den Kurator angewiesen, Dossiers „an einen Einsatzort zu binden" — an
+     * `recipe.generator` und `vk.generator` bewirkte das nachweislich NICHTS, weil der Kanon
+     * gewinnt. Seit F2 bewirkt es überall nichts. Ein Knopf, der nichts tut, ist schlimmer
+     * als kein Knopf.
+     *
+     * Verbindlich machen geht jetzt über den Kanon, suchbar machen über das Routing —
+     * beides in der Wissenssteuerung. {@see removeBinding()} bleibt als Aufräumweg.
+     */
+    /**
+     * Alt-Bindung lösen — der einzige verbliebene Weg an dieser Tabelle in der Oberfläche.
+     * Bleibt, weil der Rückweg offen bleiben muss: beim Abschalten standen auf demo 9
+     * Alt-Bindungen, alle wirkungslos, die jemand loswerden können soll.
+     */
     public function removeBinding(int $bindingId): void
     {
         // MVP-037: Eltern-Doc über die Binding-ID auflösen und Eigentum prüfen (wie removeAlias).

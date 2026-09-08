@@ -9,9 +9,15 @@ use Platform\Core\Contracts\ToolResult;
 use Platform\FoodAlchemist\Services\KnowledgeService;
 
 /**
- * #469: löst eine Layer-Bindung eines bestehenden Dokuments — aber NUR eine
- * team-eigene Bindung (globale/Fremd-Bindungen bleiben unberührt). Gegenstück
- * zu knowledge.BIND. Soft-Delete, idempotent.
+ * Löst eine Alt-Bindung (#469) — der einzige verbliebene Bindungs-Schreibpfad.
+ *
+ * Sein Gegenstück `knowledge.BIND` ist mit Spec 52 · F2/F3 GELÖSCHT: der Gateway liest
+ * `knowledge_bindings` nicht mehr, eine neue Bindung wäre eine Zeile, die nichts tut.
+ * Dieses Tool bleibt, weil der Rückweg offen bleiben muss — auf demo standen zum Zeitpunkt
+ * der Abschaffung 9 Alt-Bindungen, alle wirkungslos, die jemand loswerden können soll.
+ *
+ * Nur team-eigene Bindungen; globale/Fremd-Bindungen bleiben unberührt. Soft-Delete,
+ * idempotent.
  */
 class KnowledgeUnbindTool extends FoodAlchemistTool implements ToolContract, ToolMetadataContract
 {
@@ -22,8 +28,11 @@ class KnowledgeUnbindTool extends FoodAlchemistTool implements ToolContract, Too
 
     public function getDescription(): string
     {
-        return 'Löst eine Einsatzort-Bindung eines Wissens-Dokuments (Gegenstück zu knowledge.BIND). '
-            . 'Entfernt nur team-eigene Bindungen. Wenn keine passende (aktive) Bindung existiert, passiert nichts (idempotent).';
+        return 'Löst eine Einsatzort-Bindung eines Wissens-Dokuments — AUFRÄUM-Werkzeug für Alt-Bindungen. '
+            . 'Bindungen wirken seit Spec 52 nicht mehr; `knowledge.BIND` ist entfernt. Verbindlich machen: '
+            . '`knowledge_canon.PUT`; suchbar machen: `knowledge_routings.PUT`. Welche Alt-Bindungen es noch '
+            . 'gibt, zeigt `knowledge_bindings.GET`. Entfernt nur team-eigene Bindungen; existiert keine '
+            . 'passende (aktive), passiert nichts (idempotent).';
     }
 
     public function getSchema(): array
@@ -73,7 +82,7 @@ class KnowledgeUnbindTool extends FoodAlchemistTool implements ToolContract, Too
             'read_only' => false, 'idempotent' => true, 'risk_level' => 'write',
             'requires_auth' => true, 'requires_team' => true,
             'side_effects' => ['deletes'], 'cost_class' => 'local_db',
-            'related_tools' => ['foodalchemist.knowledge.BIND', 'foodalchemist.knowledge.SEARCH'],
+            'related_tools' => ['foodalchemist.knowledge_bindings.GET', 'foodalchemist.knowledge.SEARCH'],
             'examples' => ['Löse die Bindung von "regelwerk_grundprodukte" am Einsatzort "gp.suggest"'],
         ];
     }

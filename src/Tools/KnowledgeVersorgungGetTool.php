@@ -24,8 +24,11 @@ use Platform\FoodAlchemist\Services\Knowledge\WissensVersorgungService;
  * Verdikt je Zeile:
  *   · `gesteuert`   — Kanon und/oder ein wirksames Routing greifen
  *   · `none`        — ausdrücklich leer geroutet (bewusste Entscheidung)
- *   · `nur-bindung` — nur über die Alt-Struktur versorgt (#469-Fallback)
  *   · `UNGESTEUERT` — aus dem Wissens-Korpus erreicht diesen Prompt NICHTS. Ein Befund.
+ *
+ * `nur-bindung` gab es bis Spec 52 · F2 als vierten Fall („nur über die Alt-Struktur
+ * versorgt"). Der Gateway liest `knowledge_bindings` nicht mehr — solche Keys heissen jetzt
+ * ehrlich `UNGESTEUERT`, und vorhandene Bindungen stehen als Ballast in `bindungen_stumm`.
  *
  * ⚠ `UNGESTEUERT` heisst nicht „der Prompt hat keine Regeln" — ein Prompt-Task kann Regeln im
  * Text tragen. Die Aussage ist: kein Dossier kommt an.
@@ -41,8 +44,9 @@ class KnowledgeVersorgungGetTool extends FoodAlchemistTool implements ToolContra
     {
         return 'Zeigt je Prompt-Key der KI-Registry, welches Wissen ihn TATSÄCHLICH erreicht: '
             . 'Kanon-Dossiers, Routing (feature × category, inkl. des hartkodierten Alt-Schlüssels '
-            . 'wie ai_generate_recipe für recipe.generator), Bindungen der Alt-Struktur und die '
-            . 'beiden Budgets. Verdikt je Zeile: gesteuert | none (bewusst leer) | nur-bindung | '
+            . 'wie ai_generate_recipe für recipe.generator), verbliebene Alt-Bindungen (wirken seit '
+            . 'Spec 52 nicht mehr — reiner Ballast) und die beiden Budgets. Verdikt je Zeile: '
+            . 'gesteuert | none (bewusst leer) | '
             . 'UNGESTEUERT (kein Dossier erreicht den Prompt — ein Befund). Nennt zusätzlich '
             . 'Routing-Features ohne jeden Aufrufer (konfigurierte Politik, die nichts steuert). '
             . 'Read-only. Ändern via knowledge_canon.PUT bzw. knowledge_routings.PUT.';

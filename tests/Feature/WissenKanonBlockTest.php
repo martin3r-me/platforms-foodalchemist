@@ -11,13 +11,17 @@ use Symfony\Component\Uid\UuidV7;
 uses(TestCase::class, SeedsTeamHierarchy::class);
 
 /**
- * Spec 50 / Welle 2 — der KANON kommt in den Prompt.
+ * Spec 50 / Welle 2 — der KANON kommt in den Prompt. Seit Spec 52 · F2: **nur** der Kanon.
  *
- * Bis hier war der Kanon eine Packliste ohne Packer: `KnowledgeCanonService::documentsFor()`
- * wurde nur vom MCP-Tool gelesen, der Generator zog sein „VERBINDLICHES REGELWERK" weiter aus
- * den always-Bindings der Original-Dossiers (`d.active = 1`). Deaktiviert man die Originale
- * (Split in §-Dossiers), fiele der Block still auf null. Deshalb: hat ein Prompt-Key Kanon-
- * Zeilen, baut der Gateway den Block aus dem Kanon und die Bindings sind für ihn stumm.
+ * Bis Welle 2 war der Kanon eine Packliste ohne Packer: `documentsFor()` las nur das
+ * MCP-Tool, der Generator zog sein „VERBINDLICHES REGELWERK" aus den always-Bindings der
+ * Original-Dossiers. Welle 2 drehte die Rangfolge um (Kanon gewinnt, Bindungen stumm), F2
+ * hat den zweiten Weg dann ganz entfernt.
+ *
+ * Der Unterschied ist keine Kosmetik: „stumm, solange ein Kanon steht" hiess, dass ein
+ * verlorener Kanon die Bindungen STILL wieder scharf schaltete — ein Prompt-Key wechselte
+ * lautlos seine Wissensquelle. Heute bleibt der Regelwerk-Block einfach leer, und das ist
+ * ein Zustand, den `wissen-profil` und `wissen-steuerdaten-w0 --verify` melden können.
  */
 beforeEach(function () {
     $this->seedTeamHierarchy();
@@ -48,6 +52,8 @@ beforeEach(function () {
             'active' => 1, 'created_at' => now(), 'updated_at' => now(),
         ]);
     };
+    // Bindungen entstehen nur noch per Insert — die Schreibpfade sind zu (F3). Die Fixture
+    // stellt damit den ALTBESTAND, so wie er auf demo liegt.
     $this->bind = function (string $slug, string $targetKey): void {
         DB::table('foodalchemist_knowledge_bindings')->insert([
             'uuid' => (string) UuidV7::generate(),
@@ -61,7 +67,7 @@ beforeEach(function () {
     $this->log = fn () => DB::table('foodalchemist_ai_call_log')->where('feature', 'recipe.description')->latest('id')->first();
 });
 
-it('baut den Regelwerk-Block aus dem Kanon und stellt die Bindings dafür stumm', function () {
+it('baut den Regelwerk-Block aus dem Kanon — eine Alt-Bindung daneben ändert nichts', function () {
     ($this->mkDoc)('k2-alt-ganz', 900, 'Altes Ganzdossier');
     ($this->bind)('k2-alt-ganz', 'recipe.description');
     ($this->mkDoc)('k2-p10', 700, 'Anti Pattern');
@@ -74,7 +80,7 @@ it('baut den Regelwerk-Block aus dem Kanon und stellt die Bindings dafür stumm'
     $log = ($this->log)();
     $parts = json_decode((string) $log->prompt_parts, true);
 
-    // Kanon ist da (500 + 700 + Header), der Bound-Kanal ist für diesen Prompt-Key AUS.
+    // Kanon ist da (500 + 700 + Header), der Bound-Kanal existiert nicht mehr.
     expect($parts['kanon'])->toBeGreaterThan(1200)->and($parts['kanon'])->toBeLessThan(1400)
         ->and($parts['bound'])->toBe(0)
         ->and($parts['dropped'])->toBe(0)
@@ -97,14 +103,32 @@ it('baut den Regelwerk-Block aus dem Kanon und stellt die Bindings dafür stumm'
         ->and(json_encode($this->messages))->not->toContain('GEBUNDEN')->not->toContain('Altes Ganzdossier');
 });
 
-it('ohne Kanon-Zeilen bleibt alles wie vorher: Bindings tragen den Block', function () {
+it('ohne Kanon bleibt der Regelwerk-Block LEER — auch mit Alt-Bindung', function () {
+    // ★ Die Umkehrung des alten Tests, und der eigentliche Gewinn von F2.
+    //
+    // Vorher stand hier: „ohne Kanon-Zeilen tragen die Bindings den Block" — und genau das
+    // war die Falle. Ein Prompt-Key, der seinen Kanon verlor (Dossier hart geloescht, FK
+    // `cascade`), wechselte damit STILL auf ein veraltetes Ganzdossier. Von aussen sah der
+    // Lauf normal aus.
+    //
+    // Heute ist der Block leer. Das ist nicht „schlechter", sondern EHRLICH: ein leerer
+    // Regelwerk-Block ist ein Zustand, den der Waechter melden kann; ein still getauschter
+    // ist es nicht.
     ($this->mkDoc)('k2-alt-ganz', 900, 'Altes Ganzdossier');
     ($this->bind)('k2-alt-ganz', 'recipe.description');
+    ($this->bind)('k2-alt-ganz', 'recipe');                    // auch der Bereichs-Praefix zieht nicht mehr
 
     app(AiGatewayService::class)->propose('recipe.description', ['description' => 'Klarer Fond.']);
 
     $parts = json_decode((string) ($this->log)()->prompt_parts, true);
-    expect($parts['kanon'])->toBe(0)->and($parts['bound'])->toBeGreaterThan(900);
+    expect($parts['kanon'])->toBe(0)
+        ->and($parts['bound'])->toBe(0)
+        ->and(json_encode($this->messages))->not->toContain('Altes Ganzdossier')
+        ->not->toContain('GEBUNDEN');
+
+    // `bound` bleibt als Schluessel im Call-Log — strukturell 0, nicht verschwunden. Ein
+    // fehlender Schluessel machte alte und neue Laeufe unvergleichbar.
+    expect($parts)->toHaveKey('bound');
 });
 
 it('pflicht kommt immer ganz, wenn_platz nur im Budget und nie angeschnitten', function () {

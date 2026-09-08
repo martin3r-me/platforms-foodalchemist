@@ -76,31 +76,34 @@ it('weist eine unbekannte Kategorie mit Vokabular-Liste ab', function () {
         ->and($res->error)->toContain('Verfügbar:');
 });
 
-it('setzt Aliase und eine Einsatzort-Bindung mit source=mcp', function () {
+it('setzt Aliase — Bindungen dagegen nicht mehr (Spec 52 · F3)', function () {
     $res = $this->registry->get('foodalchemist.knowledge.POST')->execute([
         'title' => 'Know-how: Sous-vide Zeiten',
         'category' => 'cross_cutting',
         'content_md' => '# Sous-vide',
         'aliases' => ['sousvide', 'niedertemperatur'],
-        'bind_layers' => [['target_key' => 'recipe', 'mode' => 'grounding']],
     ], $this->kontext);
     expect($res->success)->toBeTrue();
     $docId = DB::table('foodalchemist_knowledge_documents')->where('slug', $res->data['document']['slug'])->value('id');
 
-    expect(DB::table('foodalchemist_knowledge_aliases')->where('knowledge_document_id', $docId)->count())->toBe(2);
-    $bind = DB::table('foodalchemist_knowledge_bindings')->where('knowledge_document_id', $docId)->first();
-    expect($bind)->not->toBeNull()
-        ->and($bind->target_key)->toBe('recipe')
-        ->and($bind->mode)->toBe('grounding')
-        ->and($bind->source)->toBe('mcp');
+    expect(DB::table('foodalchemist_knowledge_aliases')->where('knowledge_document_id', $docId)->count())->toBe(2)
+        ->and(DB::table('foodalchemist_knowledge_bindings')->where('knowledge_document_id', $docId)->exists())->toBeFalse();
 });
 
-it('lehnt eine unbekannte Einsatzort-Bindung ab', function () {
+it('weist bind_layers AB, statt es still zu verwerfen', function () {
+    // Vorher stand hier „lehnt eine unbekannte Einsatzort-Bindung ab" — geprüft wurde also,
+    // dass ein FALSCHES Ziel auffällt. Heute fällt jedes Ziel auf: der Kanal ist weg.
+    //
+    // Der Unterschied, auf den es ankommt: NICHT still verwerfen. Ein `success` ohne Wirkung
+    // ist die Fehlerklasse, gegen die Spec 52 antritt (Befund J). Details in
+    // WissenBindungAbgeschafftTest.
     $res = $this->registry->get('foodalchemist.knowledge.POST')->execute([
         'title' => 'X', 'category' => 'trend',
-        'bind_layers' => [['target_key' => 'gibtsnicht']],
+        'bind_layers' => [['target_key' => 'recipe', 'mode' => 'grounding']],
     ], $this->kontext);
-    expect($res->success)->toBeFalse()->and($res->error)->toContain('Einsatzort');
+    expect($res->success)->toBeFalse()
+        ->and($res->error)->toContain('abgeschafft')
+        ->and($res->error)->toContain('knowledge_canon.PUT');
 });
 
 it('aktualisiert ein MCP-Doc: content ⇒ version+1', function () {

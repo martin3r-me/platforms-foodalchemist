@@ -32,8 +32,10 @@ class KnowledgeCreateTool extends FoodAlchemistTool implements ToolContract, Too
         return 'Legt ein neues Wissens-Dokument an (created_via=mcp) — z. B. einen Trend oder '
             . 'Know-how-Baustein. Es ist SOFORT AKTIV und wirkt im KI-Kontext seiner Kategorie; mit '
             . 'active=false entsteht stattdessen ein Entwurf, den ein Mensch im Wissens-Browser freischaltet. '
-            . 'category muss ein bestehender Kategorie-Slug sein. Optional: aliases (Findbarkeit) '
-            . 'und bind_layers (an Einsatzorte binden: target_key = Bereich/Prompt-Slug, mode). '
+            . 'category muss ein bestehender Kategorie-Slug sein. Optional: aliases (Findbarkeit). '
+            . 'Damit das Dossier VERBINDLICH in einen Prompt kommt, danach `knowledge_canon.PUT`; damit '
+            . 'seine Kategorie überhaupt gesucht wird, `knowledge_routings.PUT`. Einsatzort-Bindungen '
+            . 'gibt es nicht mehr (Spec 52). '
             . 'Vault-Regelwerke NICHT hier neu anlegen — die kommen aus dem Vault-Import.';
     }
 
@@ -49,18 +51,6 @@ class KnowledgeCreateTool extends FoodAlchemistTool implements ToolContract, Too
                 'content_md' => ['type' => 'string', 'description' => 'Inhalt als Markdown'],
                 'active' => ['type' => 'boolean', 'default' => true, 'description' => 'Default true: wirkt sofort im KI-Kontext. false = Entwurf in Quarantäne, den ein Mensch freischaltet.'],
                 'aliases' => ['type' => 'array', 'items' => ['type' => 'string'], 'description' => 'Begriffe, unter denen die KI das Doc findet'],
-                'bind_layers' => [
-                    'type' => 'array',
-                    'description' => 'Einsatzort-Bindungen (optional)',
-                    'items' => [
-                        'type' => 'object',
-                        'properties' => [
-                            'target_key' => ['type' => 'string', 'description' => 'Slug eines Einsatzorts (Bereich wie gp/recipe/vk oder einzelner Prompt)'],
-                            'mode' => ['type' => 'string', 'enum' => ['always', 'discovery', 'grounding', 'reference'], 'default' => 'discovery'],
-                        ],
-                        'required' => ['target_key'],
-                    ],
-                ],
             ],
             'required' => ['title', 'category'],
         ];
@@ -81,7 +71,12 @@ class KnowledgeCreateTool extends FoodAlchemistTool implements ToolContract, Too
                 'slug' => isset($arguments['slug']) ? (string) $arguments['slug'] : null,
                 'content_md' => $arguments['content_md'] ?? '',
                 'aliases' => $arguments['aliases'] ?? [],
-                'bind_layers' => $arguments['bind_layers'] ?? [],
+                // ★ `bind_layers` steht nicht mehr im Schema — WIRD ABER WEITERGEREICHT.
+                // Erst ohne diese Zeile war es still weg: der Riegel in
+                // `KnowledgeService::verweigereBindLayers()` bekam nichts zu sehen und der
+                // Aufrufer ein `success`, das nichts getan hat. Genau die Fehlerklasse, gegen
+                // die dieser Umbau antritt — im Umbau selbst gebaut, von einem Test gefangen.
+                'bind_layers' => $arguments['bind_layers'] ?? null,
                 'active' => array_key_exists('active', $arguments) ? (bool) $arguments['active'] : true,
                 'source' => 'mcp',
             ]);

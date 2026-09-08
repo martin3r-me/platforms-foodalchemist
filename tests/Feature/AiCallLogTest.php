@@ -2,10 +2,11 @@
 
 use Illuminate\Support\Facades\DB;
 use Platform\FoodAlchemist\Services\Ai\AiGatewayService;
+use Platform\FoodAlchemist\Tests\Support\SeedsKanon;
 use Platform\FoodAlchemist\Tests\Support\SeedsTeamHierarchy;
 use Platform\FoodAlchemist\Tests\TestCase;
 
-uses(TestCase::class, SeedsTeamHierarchy::class);
+uses(TestCase::class, SeedsTeamHierarchy::class, SeedsKanon::class);
 
 /**
  * M7-01/02: ai_call_log (06_KI §5) + Tiering (V-01) — jeder Call loggt VOR
@@ -111,32 +112,37 @@ it('GL-13-Audit-Faden: Generator schreibt knowledge_used ins Log (vorher verlore
         ->and(json_decode($log->knowledge_used, true))->toBe(['substitutionen@v1']);
 });
 
-it('direkte Wissensbindungen respektieren always, discovery und reference statt alles zu laden', function () {
+it('der Kanon respektiert pflicht und wenn_platz statt alles zu laden', function () {
+    // Vorher: „direkte Wissensbindungen respektieren always, discovery und reference".
+    // Die drei Bindungs-Modi sind mit Spec 52 · F2 weg; die AUSSAGE bleibt — der Kanon lädt
+    // nicht alles, sondern nach kuratiertem Modus, und das Call-Log weist genau das aus.
+    //
+    // Der Modus-Satz ist dabei kleiner und klarer geworden: `pflicht` (immer, ignoriert das
+    // Budget) und `wenn_platz` (nur wenn Platz ist). Ein score-gegateter Modus wie
+    // `discovery` am verbindlichen Kanal gibt es nicht mehr — der war der Grund, warum der
+    // Block als Cache-Prefix unbrauchbar war (W3-1).
     $docs = [
-        ['slug' => 'workflow-pflicht', 'title' => 'Pflicht', 'content' => 'Allgemeiner verbindlicher Ablauf', 'mode' => 'always'],
-        ['slug' => 'kartoffel-technik', 'title' => 'Kartoffel Technik', 'content' => 'Kartoffel Stärke und Garung', 'mode' => 'discovery'],
-        ['slug' => 'miso-curry', 'title' => 'Miso Curry', 'content' => 'Gochujang Reis und Dashi', 'mode' => 'discovery'],
-        ['slug' => 'nur-nachschlagen', 'title' => 'Referenz', 'content' => 'Kartoffel Referenz', 'mode' => 'reference'],
+        ['slug' => 'kanon-pflicht-a', 'content' => str_repeat('Verbindlicher Ablauf. ', 40), 'mode' => 'pflicht'],
+        ['slug' => 'kanon-platz-b', 'content' => str_repeat('Kartoffel Staerke. ', 40), 'mode' => 'wenn_platz'],
+        ['slug' => 'kanon-nicht-drin', 'content' => str_repeat('Gochujang Dashi. ', 40), 'mode' => null],
     ];
-    foreach ($docs as $doc) {
+    foreach ($docs as $i => $doc) {
         $id = DB::table('foodalchemist_knowledge_documents')->insertGetId([
             'uuid' => (string) \Symfony\Component\Uid\UuidV7::generate(),
-            'slug' => $doc['slug'], 'title' => $doc['title'], 'category' => 'domain',
+            'slug' => $doc['slug'], 'title' => $doc['slug'], 'category' => 'domain',
             'content_md' => $doc['content'], 'version' => 1,
             'content_hash' => hash('sha256', $doc['content']), 'char_count' => strlen($doc['content']),
             'active' => 1, 'created_at' => now(), 'updated_at' => now(),
         ]);
-        DB::table('foodalchemist_knowledge_bindings')->insert([
-            'uuid' => (string) \Symfony\Component\Uid\UuidV7::generate(),
-            'knowledge_document_id' => $id, 'binding_type' => 'layer',
-            'target_key' => 'recipe.description', 'mode' => $doc['mode'], 'weight' => 0,
-            'active' => 1, 'source' => 'ui', 'created_at' => now(), 'updated_at' => now(),
-        ]);
+        if ($doc['mode'] === null) {
+            continue;                                       // kein Kanon → darf nicht ankommen
+        }
+        $this->kanonZeile((int) $this->rootTeam->id, 'recipe.description', $doc['slug'], $doc['mode'], ($i + 1) * 10);
     }
 
     $this->gw->propose('recipe.description', ['description' => 'Kartoffel schonend garen']);
 
     $used = json_decode(DB::table('foodalchemist_ai_call_log')->latest('id')->value('knowledge_used'), true);
-    expect($used)->toContain('workflow-pflicht@v1', 'kartoffel-technik@v1')
-        ->not->toContain('miso-curry@v1', 'nur-nachschlagen@v1');
+    expect($used)->toContain('kanon-pflicht-a@v1', 'kanon-platz-b@v1')
+        ->not->toContain('kanon-nicht-drin@v1');
 });

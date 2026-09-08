@@ -2,11 +2,12 @@
 
 use Illuminate\Support\Facades\DB;
 use Platform\FoodAlchemist\Services\Ai\KnowledgeContextService;
+use Platform\FoodAlchemist\Tests\Support\SeedsKanon;
 use Platform\FoodAlchemist\Tests\Support\SeedsTeamHierarchy;
 use Platform\FoodAlchemist\Tests\TestCase;
 use Symfony\Component\Uid\UuidV7;
 
-uses(TestCase::class, SeedsTeamHierarchy::class);
+uses(TestCase::class, SeedsTeamHierarchy::class, SeedsKanon::class);
 
 beforeEach(function () {
     $this->seedTeamHierarchy();
@@ -164,25 +165,14 @@ it('deckelt cross_cutting ueber die Konstante, nicht ueber die Routing-Zeile', f
         ->and($ctx['block'])->toContain('[…gekürzt für KI-Kontext…]');
 });
 
-/** Layer-Binding auf einen Prompt-Key/Bereich legen. */
-function w0Bind(string $slug, string $targetKey, string $mode = 'always', int $weight = 0): void
-{
-    $docId = DB::table('foodalchemist_knowledge_documents')->where('slug', $slug)->value('id');
-    DB::table('foodalchemist_knowledge_bindings')->insert([
-        'uuid' => (string) UuidV7::generate(),
-        'knowledge_document_id' => $docId, 'binding_type' => 'layer',
-        'target_key' => $targetKey, 'mode' => $mode, 'weight' => $weight,
-        'active' => 1, 'source' => 'test', 'created_at' => now(), 'updated_at' => now(),
-    ]);
-}
 
 /*
- * W0-3 — der Kern des Bugs: an `recipe.generator` hängen 9 bewusst gebundene Dossiers,
- * von denen vor Welle 0 nur 3 den Prompt erreichten (jedes auf 1.400 Zeichen gekappt,
- * §5 Default-GPs also als 29-%-Fragment). Dieser Test hält fest, dass jetzt ALLE
- * Pflicht-Dossiers ganz ankommen.
+ * W0-3 — der Kern des Bugs: an `recipe.generator` hingen 9 Pflicht-Dossiers, von denen vor
+ * Welle 0 nur 3 den Prompt erreichten (jedes auf 1.400 Zeichen gekappt, §5 Default-GPs also
+ * als 29-%-Fragment). Der Test hält fest, dass ALLE Pflicht-Dossiers ganz ankommen —
+ * seit Spec 52 · F2 über den Kanon statt über Bindungen.
  */
-it('liefert alle gebundenen Bau-Dossiers vollstaendig an den Rezeptgenerator', function () {
+it('liefert alle Pflicht-Dossiers vollstaendig an den Rezeptgenerator', function () {
     config(['foodalchemist.ai.provider' => 'fake']);
     $this->actingAs($this->makeUser($this->rootTeam));
 
@@ -190,7 +180,7 @@ it('liefert alle gebundenen Bau-Dossiers vollstaendig an den Rezeptgenerator', f
     foreach ([1968, 2459, 2630, 4796, 2609, 1599, 1409] as $i => $chars) {
         $slug = "regelwerk-basisrezepte-w0-{$i}";
         w0Doc($slug, 'w0bindcat', $chars, 'Bau Regel');
-        w0Bind($slug, 'recipe.generator', 'always', 100 - $i);
+        $this->kanonZeile((int) $this->rootTeam->id, 'recipe.generator', $slug, 'pflicht', ($i + 1) * 10);
         $slugs[] = $slug;
     }
 
@@ -206,28 +196,31 @@ it('liefert alle gebundenen Bau-Dossiers vollstaendig an den Rezeptgenerator', f
     }
 
     $parts = json_decode((string) $log->prompt_parts, true);
-    expect($parts['bound'])->toBeGreaterThan(17000)         // Summe 17.470 kommt ganz an
-        ->and($parts['bound'])->toBeLessThanOrEqual(20000 + 400)
-        ->and($parts['dropped'])->toBe(0);                  // nichts gekappt
+    expect($parts['kanon'])->toBeGreaterThan(17000)         // Summe 17.470 kommt ganz an
+        ->and($parts['dropped'])->toBe(0)                   // nichts gekappt
+        ->and($parts['bound'])->toBe(0);                    // und der Alt-Kanal bleibt leer
 });
 
 /*
- * Die Gegenprobe, und der Grund für die prompt-key-scoped Budgets: Bindings matchen auch
- * auf das BEREICHS-Präfix. An `target_key='recipe'` hängen live 24.520 Zeichen. Würde der
- * große Deckel global gelten, verteuerte W0-3 jeden `recipe.*`-Prompt statt nur die
+ * Der Grund für die prompt-key-scoped Budgets: ein Prompt-Key ohne eigenen Deckel bleibt beim
+ * konservativen Default, sonst verteuerte W0-3 jeden `recipe.*`-Prompt statt nur die
  * Generatoren — aus einer Blutstillung würde eine Kostenausweitung.
+ *
+ * Vorher prüfte dieser Test das am BEREICHS-Präfix (`target_key='recipe'`, live 24.520
+ * Zeichen, die jeden `recipe.*`-Prompt trafen). Diese Vererbung gibt es nicht mehr: der
+ * Kanon ist eine Liste je exaktem Key. Geprüft wird deshalb der Deckel selbst — mit
+ * `wenn_platz`, denn `pflicht` ignoriert ihn per Vertrag.
  */
-it('laesst Prompts ohne eigenes Bound-Budget beim konservativen Default', function () {
+it('laesst Prompts ohne eigenes Kanon-Budget beim konservativen Default', function () {
     config(['foodalchemist.ai.provider' => 'fake']);
     $this->actingAs($this->makeUser($this->rootTeam));
 
     foreach ([10670, 7089, 6761] as $i => $chars) {
-        $slug = "bereich-recipe-dossier-{$i}";
+        $slug = "kein-eigenes-budget-{$i}";
         w0Doc($slug, 'cross_cutting', $chars, 'Bereichs Wissen');
-        w0Bind($slug, 'recipe', 'always', 50 - $i);
+        $this->kanonZeile((int) $this->rootTeam->id, 'recipe.description', $slug, 'wenn_platz', ($i + 1) * 10);
     }
 
-    // recipe.description erbt die Bindings über das Präfix `recipe`.
     app(\Platform\FoodAlchemist\Services\Ai\AiGatewayService::class)
         ->propose('recipe.description', ['description' => 'Klarer Fond.'], []);
 
@@ -235,7 +228,7 @@ it('laesst Prompts ohne eigenes Bound-Budget beim konservativen Default', functi
     $parts = json_decode((string) $log->prompt_parts, true);
 
     // Default-Deckel 4.200 (+ Block-Overhead), NICHT 20.000.
-    expect($parts['bound'])->toBeLessThanOrEqual(4200 + 400)
+    expect($parts['kanon'])->toBeLessThanOrEqual(4200 + 400)
         // Und das Verworfene wird ausgewiesen statt still zu verschwinden.
         ->and($parts['dropped'])->toBeGreaterThan(0);
 });
@@ -305,18 +298,20 @@ it('rechnet die Pflichtmenge nach den Ist-Deckeln der Block-Builder', function (
 });
 
 /*
- * W0-3b — der teuerste Fund der Welle, und der subtilste.
+ * W0-3b — der teuerste Fund der Welle, und der subtilste. **Gilt für den Kanon unverändert.**
  *
- * RecipeGenerationContextService spiegelte die gebundenen Dossiers nach `files_used`, um sie
- * im „Verwendetes Wissen"-Chip anzuzeigen. `files_used` geht aber als `knowledge_used` an
- * propose() und ist dort der DEDUP-EINGANG von selectBoundKnowledge(). Ergebnis: von 7 als
- * `always` gebundenen Bau-Dossiers kam NULL im Prompt an — die Transparenz-Anzeige hatte
- * genau den Kanal abgeschaltet, den sie sichtbar machen wollte. Gemessen auf demo am
- * 2026-09-02: prompt_parts.bound = 0 bei vk.generator.
+ * RecipeGenerationContextService spiegelte die verbindlichen Dossiers nach `files_used`, um
+ * sie im „Verwendetes Wissen"-Chip anzuzeigen. `files_used` geht aber als `knowledge_used` an
+ * `propose()` und ist dort der DEDUP-EINGANG. Ergebnis: von 7 Pflicht-Dossiers kam NULL im
+ * Prompt an — die Transparenz-Anzeige hatte genau den Kanal abgeschaltet, den sie sichtbar
+ * machen wollte. Gemessen auf demo am 2026-09-02: prompt_parts.bound = 0 bei vk.generator.
  *
- * Der Test prüft beide Richtungen: der Kanal liefert, UND die Anzeige bekommt ihre Liste.
+ * ★ Warum dieser Test mit F2 NICHT wegfällt: `selectKanon()` hat **denselben Dedup-Eingang**
+ * (`options['knowledge_used']`). Die Falle ist also nicht mit dem Bound-Kanal verschwunden,
+ * sie ist mitgewandert. Deshalb prüft der Test jetzt dasselbe am Kanon — beide Richtungen:
+ * der Kanal liefert, UND die Anzeige bekommt ihre Liste.
  */
-it('spiegelt gebundene Dossiers NICHT in files_used — sonst frisst der Dedup den Bound-Kanal', function () {
+it('spiegelt Pflicht-Dossiers NICHT in files_used — sonst frisst der Dedup den Kanon', function () {
     config(['foodalchemist.ai.provider' => 'fake']);
     $this->actingAs($this->makeUser($this->rootTeam));
 
@@ -329,7 +324,7 @@ it('spiegelt gebundene Dossiers NICHT in files_used — sonst frisst der Dedup d
     foreach ([1968, 2459, 2630] as $i => $chars) {
         $slug = "w0b-bau-regel-{$i}";
         w0Doc($slug, 'w0bindcat', $chars, 'Bau Regel');
-        w0Bind($slug, 'recipe.generator', 'always', 100 - $i);
+        $this->kanonZeile((int) $this->rootTeam->id, 'recipe.generator', $slug, 'pflicht', ($i + 1) * 10);
         $slugs[] = $slug;
     }
 
@@ -343,18 +338,19 @@ it('spiegelt gebundene Dossiers NICHT in files_used — sonst frisst der Dedup d
     }
 
     // 2. Die Anzeige bekommt sie trotzdem — im Kanal, den der Inspektor auch liest.
-    expect($ctx['kontext']['wissen'])->toHaveKey('gebunden')
-        ->and(implode(' ', $ctx['kontext']['wissen']['gebunden']))->toContain($slugs[0]);
+    //    Der heisst `kanon`; `gebunden` gab es bis F2 daneben und ist mit dem Kanal weg.
+    expect($ctx['kontext']['wissen'])->toHaveKey('kanon')
+        ->and(implode(' ', $ctx['kontext']['wissen']['kanon']))->toContain($slugs[0]);
 });
 
-it('liefert gebundene Dossiers in den Prompt, wenn der Kontext-Dienst sie nicht als verwendet meldet', function () {
+it('liefert Pflicht-Dossiers in den Prompt, wenn der Kontext-Dienst sie nicht als verwendet meldet', function () {
     config(['foodalchemist.ai.provider' => 'fake']);
     $this->actingAs($this->makeUser($this->rootTeam));
 
     foreach ([1968, 2459, 2630] as $i => $chars) {
         $slug = "w0c-bau-regel-{$i}";
         w0Doc($slug, 'w0bindcat', $chars, 'Bau Regel');
-        w0Bind($slug, 'recipe.generator', 'always', 100 - $i);
+        $this->kanonZeile((int) $this->rootTeam->id, 'recipe.generator', $slug, 'pflicht', ($i + 1) * 10);
     }
 
     $ctx = app(\Platform\FoodAlchemist\Services\RecipeGenerationContextService::class)
@@ -370,7 +366,7 @@ it('liefert gebundene Dossiers in den Prompt, wenn der Kontext-Dienst sie nicht 
     $parts = json_decode((string) $log->prompt_parts, true);
 
     // 1968 + 2459 + 2630 = 7.057 Zeichen Pflichtwissen müssen ankommen.
-    expect($parts['bound'])->toBeGreaterThan(7000);
+    expect($parts['kanon'])->toBeGreaterThan(7000);
 });
 
 /*
@@ -467,10 +463,14 @@ it('ueberlebt das Gesamtbudget — Achsen-Wissen wird nicht als Erstes gekappt',
 /*
  * W3-1 — MESSAGE-LAYOUT FÜR DEN PREFIX-CACHE.
  *
- * Der Bound-Block (nur `always`-Dossiers) ist über alle Calls eines Prompt-Keys
- * byte-identisch. Nur wenn er VOR allem Variablen steht, kann der implizite Prefix-Cache
- * greifen (10 % des Input-Preises). Vorher stand das variable Retrieval-Wissen als Erstes
- * im User-Content — gemessene Cache-Quote: 0,35 %.
+ * Der Regelwerk-Block ist über alle Calls eines Prompt-Keys byte-identisch. Nur wenn er VOR
+ * allem Variablen steht, kann der implizite Prefix-Cache greifen (10 % des Input-Preises).
+ * Vorher stand das variable Retrieval-Wissen als Erstes im User-Content — gemessene
+ * Cache-Quote: 0,35 %.
+ *
+ * Der Kanon erfüllt die Byte-Stabilität sogar besser als der alte Bound-Block: er ist eine
+ * kuratierte Liste, während dort ein score-gegatetes `discovery`-Dossier den Prefix bei
+ * jedem zweiten Aufruf brechen konnte (dafür gab es einen eigenen Wächter-Befund).
  */
 it('legt das verbindliche Regelwerk als system-Message VOR alles Variable', function () {
     config(['foodalchemist.ai.provider' => 'fake']);
@@ -479,7 +479,7 @@ it('legt das verbindliche Regelwerk als system-Message VOR alles Variable', func
     // 900 Zeichen: passt unter den konservativen Default-Deckel (1.400/Doc) von
     // `recipe.description` — so ist die Zerlegung ohne Kürzung nachrechenbar.
     w0Doc('w31-regel', 'w0bindcat', 900, 'Bau Regel');
-    w0Bind('w31-regel', 'recipe.description', 'always');
+    $this->kanonZeile((int) $this->rootTeam->id, 'recipe.description', 'w31-regel');
 
     app(\Platform\FoodAlchemist\Services\Ai\AiGatewayService::class)
         ->propose('recipe.description', ['description' => 'Klarer Fond.'], ['knowledge' => "# RETRIEVAL\n\nVariables Wissen."]);
@@ -488,15 +488,15 @@ it('legt das verbindliche Regelwerk als system-Message VOR alles Variable', func
     $parts = json_decode((string) $log->prompt_parts, true);
 
     // Der Block ist da, als eigener Topf ausgewiesen …
-    expect($parts['bound'])->toBeGreaterThan(900)
-        ->and($parts['bound'])->toBeLessThan(1100)          // 900 + Block-/Doc-Header, ungekürzt
-        // … und die Zerlegung geht auf: kein Doppelzählen zwischen huelle und bound.
+    expect($parts['kanon'])->toBeGreaterThan(900)
+        ->and($parts['kanon'])->toBeLessThan(1100)          // 900 + Block-/Doc-Header, ungekürzt
+        // … und die Zerlegung geht auf: kein Doppelzählen zwischen huelle und kanon.
         ->and($parts['huelle'])->toBeGreaterThan(0)
         // Die Zerlegung muss prompt_chars EXAKT ergeben — sonst ist die Sonde als Grundlage
         // für Budget-Entscheidungen wertlos. Separatoren: "\n\n" vor dem Retrieval-Block (2)
         // und "\n\nKontext:\n" vor dem Kontext-JSON (11).
         ->and((int) $log->prompt_chars)->toBe(
-            $parts['huelle'] + $parts['bound'] + $parts['task']
+            $parts['huelle'] + $parts['kanon'] + $parts['bound'] + $parts['task']
             + ($parts['retrieval'] > 0 ? 2 + $parts['retrieval'] : 0)
             + 11 + $parts['kontext']
         );

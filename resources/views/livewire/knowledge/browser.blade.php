@@ -176,21 +176,22 @@
                     </div>
 
                     <div>
-                    <p class="text-[11px] font-medium text-gray-600 mb-1">Feine Ebene — an Einsatzorte gebunden (direkt einbinden)</p>
+                    <p class="text-[11px] font-medium text-gray-600 mb-1">Alt-Bindungen <span class="font-normal text-gray-500">— abgeschafft, nur noch lösbar</span></p>
                     {{--
-                        Spec 52/A4: Bindungen sind seit Welle 2 nur noch FALLBACK. Hat ein
-                        Prompt-Key Kanon-Zeilen, stellt der Gateway die Bindungen fuer ihn stumm
-                        (AiGatewayService:178) — eine Bindung auf `recipe.generator`,
-                        `vk.generator` oder `concept.brief_geruest` bewirkt heute nichts. Das
-                        muss hier stehen, sonst kuratiert ein Mensch ins Leere.
+                        Spec 52/F2+F3 (2026-09-08): der Gateway liest `knowledge_bindings` nicht
+                        mehr. Hier stand ein „+ einbinden"-Knopf samt Warnung, dass er an den
+                        Generatoren nichts bewirkt — Befund J: die Oberfläche wies den Kurator
+                        aktiv in die tote Struktur. Ein Knopf, der nichts tut, ist schlimmer als
+                        kein Knopf. Lösen bleibt, damit Alt-Zeilen wegkönnen.
                     --}}
+                    @if($bindings->isNotEmpty())
                     <p class="text-[11px] text-amber-600 mb-2">
                     @svg('heroicon-o-information-circle', 'w-3.5 h-3.5 inline-block align-middle')
-                    Bindungen sind <strong>Fallback</strong>: hat ein Prompt-Key einen Kanon,
-                    werden sie für ihn <strong>stumm</strong> gestellt. Für die Generatoren
-                    (<code>recipe.generator</code>, <code>vk.generator</code>) und
-                    <code>concept.brief_geruest</code> wirkt hier nichts — dort zählt der Kanon.
+                    Diese Bindungen <strong>wirken nicht mehr</strong>. Verbindlich wird ein Dossier
+                    über den <strong>Kanon</strong>, gesucht wird eine Kategorie über das
+                    <strong>Routing</strong> — beides in der Wissenssteuerung. Hier nur noch lösen.
                     </p>
+                    @endif
                     <div class="flex flex-wrap gap-1.5 mb-2">
                     @forelse($bindings as $b)
                     <span class="inline-flex items-center gap-1 text-[11px] {{ $pill }}" wire:key="bd-{{ $b->id }}">
@@ -198,24 +199,8 @@
                     <button type="button" wire:click="removeBinding({{ $b->id }})" class="text-gray-500 hover:text-red-500" title="Bindung lösen">&times;</button>
                     </span>
                     @empty
-                    <span class="text-[11px] text-gray-500">Noch keine Bindungen.</span>
+                    <span class="text-[11px] text-gray-500">Keine Alt-Bindungen — so soll es sein.</span>
                     @endforelse
-                    </div>
-                    {{-- Bindung hinzufügen: Bereich (grob) oder Einzel-Prompt (fein) --}}
-                    <div class="flex flex-wrap items-center gap-2 rounded-lg bg-black/[0.03] px-2.5 py-2">
-                    <select wire:model="newBinding.target_key" class="{{ $input }} !py-1 text-xs w-64" data-bind-target>
-                    <option value="">— Einsatzort wählen —</option>
-                    <optgroup label="Bereiche (grob)">
-                    @foreach($layers->where('kind', 'bereich') as $l)<option value="{{ $l->slug }}">{{ $l->label }}</option>@endforeach
-                    </optgroup>
-                    <optgroup label="Einzel-Prompts (fein)">
-                    @foreach($layers->where('kind', 'prompt') as $l)<option value="{{ $l->slug }}">{{ $l->slug }}</option>@endforeach
-                    </optgroup>
-                    </select>
-                    <select wire:model="newBinding.mode" class="{{ $input }} !py-1 text-xs w-32" title="Injektions-Modus">
-                    @foreach(['always','discovery','grounding','reference'] as $m)<option value="{{ $m }}">{{ $m }}</option>@endforeach
-                    </select>
-                    <button type="button" wire:click="addBinding" class="{{ $btnGhostXs }}" data-bind-add>+ einbinden</button>
                     </div>
                     </div>
                     </div>

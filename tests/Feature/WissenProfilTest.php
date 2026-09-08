@@ -84,20 +84,46 @@ it('sieht eine Kanon-Zeile auf ein GELOESCHTES Dossier, die sonst nirgends sicht
         ->and(app(KnowledgeCanonService::class)->hasCanon('prompt_key', 'test.key', $this->rootTeam))->toBeFalse();
 });
 
-it('warnt, dass stumme Bindungen sich wieder scharf schalten wuerden', function () {
-    // Der schwerste Umbau-Fall: wird ein Dossier HART geloescht, nimmt der cascade-FK die
-    // Kanon-Zeile mit, hasCanon() wird false — und der Bindungs-Zweig im Gateway greift wieder.
-    // Auf demo sind das 9 Bindungen auf den zwei Generator-Keys.
+it('meldet Alt-Bindungen als Ballast — nicht mehr als lauernde Gefahr', function () {
+    // ★ Die Aussage hat sich mit Spec 52 · F2 abgeschwaecht, und das ist der Fortschritt.
+    //
+    // Vorher hiess der Befund `bindung_wuerde_scharf`: die Bindungen waren stumm, SOLANGE
+    // ein Kanon stand. Wurde ein Dossier HART geloescht, nahm der cascade-FK die Kanon-Zeile
+    // mit, `hasCanon()` wurde false — und der Bindungs-Zweig hob veraltete Originale in den
+    // Prompt. Ein Key wechselte still seine Wissensquelle.
+    //
+    // Der Gateway liest die Tabelle nicht mehr. Die Zeilen sind Ballast; der Befund sagt das
+    // und nennt den Rueckweg, statt vor einer Zukunft zu warnen, die es nicht mehr gibt.
     config(['foodalchemist.prompts' => ['recipe.generator' => ['tier' => 'B', 'task' => 'x']]]);
     ($this->mkKanon)(($this->mkDoc)('kanon-regel'), 'recipe.generator');
     ($this->mkBindung)(($this->mkDoc)('alte-bindung'), 'recipe.generator');
 
     $p = app(WissensProfilService::class)->profil('recipe.generator', $this->rootTeam);
 
-    expect($p['lauernde_bindungen'])->toBe(['alte-bindung'])
-        ->and(collect($p['befunde'])->pluck('code'))->toContain('bindung_wuerde_scharf')
+    expect($p['alt_bindungen'])->toBe(['alte-bindung'])
+        ->and(collect($p['befunde'])->pluck('code'))->toContain('bindung_altlast')
+        ->and(collect($p['befunde'])->pluck('code'))->not->toContain('bindung_wuerde_scharf')
+        ->and(collect($p['befunde'])->firstWhere('code', 'bindung_altlast')['text'])->toContain('UNBIND')
         // Ein Hinweis darf den Zustand NICHT kippen, sonst waeren die gesunden Keys fehlerhaft.
         ->and($p['zustand'])->toBe('gesteuert');
+});
+
+it('meldet Alt-Bindungen AUCH ohne Kanon — sie versorgen den Key ja nicht mehr', function () {
+    // Vorher war der Befund an `$docs->isNotEmpty()` gehaengt: ohne Kanon galten die
+    // Bindungen als die Versorgung und waren kein Befund. Heute versorgt sie niemand mehr,
+    // also ist auch so ein Key ungesteuert — mit Ballast daneben.
+    //
+    // ⚠ Fixture-Hinweis: NICHT `recipe.generator` nehmen. Der loest ueber den Alt-Schluessel
+    // auf `ai_generate_recipe` auf, und dafuer seeden die Migrationen Routings — der Key
+    // waere zu Recht `gesteuert`, und der Test pruefte etwas anderes als er behauptet.
+    // (Genau so gebaut und vom Lauf gefangen; vgl. feedback_testfixture_zeigt_migrationsstand.)
+    config(['foodalchemist.prompts' => ['test.nur_altbindung' => ['tier' => 'B', 'task' => 'x']]]);
+    ($this->mkBindung)(($this->mkDoc)('nur-bindung-da'), 'test.nur_altbindung');
+
+    $p = app(WissensProfilService::class)->profil('test.nur_altbindung', $this->rootTeam);
+
+    expect(collect($p['befunde'])->pluck('code'))->toContain('bindung_altlast')
+        ->and($p['zustand'])->toBe('ungesteuert');
 });
 
 it('meldet Pflichtwissen ueber Budget, weil Pflicht nie gekappt wird', function () {
