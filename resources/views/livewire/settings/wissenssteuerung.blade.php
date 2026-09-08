@@ -78,10 +78,30 @@
                     <tr wire:key="d-{{ $p['prompt_key'] }}">
                         <td colspan="6" class="{{ $td }} !pt-0">
                             <div class="rounded-lg bg-black/[0.03] px-3 py-2 space-y-2">
+                                {{--
+                                    KANON-EDITOR (Spec 52 · Paket 3). Bis hier war diese Seite nur
+                                    ein Bericht: sie zeigte, was verbindlich ist, und zum Ändern
+                                    musste man nach MCP. Seit F2 ist der Kanon die EINZIGE Quelle
+                                    für „muss in diesen Prompt" — ohne Editor hätte die
+                                    abgeschaffte Bindungs-Ebene weiterhin die einzige UI gehabt.
+                                --}}
                                 <div>
-                                    <p class="{{ $dt }}">Pflicht (kommt immer vollständig, wird nie gekappt)</p>
+                                    <div class="flex items-center justify-between">
+                                        <p class="{{ $dt }}">Pflicht (kommt immer vollständig, wird nie gekappt)</p>
+                                        @if($darfSchreiben)
+                                            <button type="button" wire:click="kanonEdit('{{ $p['prompt_key'] }}')" class="{{ $btnGhostXs }}">
+                                                {{ $kanonKey === $p['prompt_key'] ? 'fertig' : 'Kanon bearbeiten' }}
+                                            </button>
+                                        @endif
+                                    </div>
                                     @forelse($p['pflicht'] as $d)
-                                        <p class="text-[11px] font-mono text-gray-600">{{ $d['slug'] }} <span class="text-gray-400">@v{{ $d['version'] }} · {{ number_format($d['zeichen'], 0, ',', '.') }} Z.</span></p>
+                                        <p class="text-[11px] font-mono text-gray-600" wire:key="kp-{{ $p['prompt_key'] }}-{{ $d['slug'] }}">
+                                            {{ $d['slug'] }} <span class="text-gray-400">@v{{ $d['version'] }} · {{ number_format($d['zeichen'], 0, ',', '.') }} Z.</span>
+                                            @if($darfSchreiben && $kanonKey === $p['prompt_key'])
+                                                <button type="button" wire:click="kanonRemove('{{ $p['prompt_key'] }}', '{{ $d['slug'] }}')"
+                                                        class="text-gray-400 hover:text-red-500" title="aus dem Kanon nehmen">&times;</button>
+                                            @endif
+                                        </p>
                                     @empty
                                         <p class="text-[11px] text-gray-400">—</p>
                                     @endforelse
@@ -90,8 +110,50 @@
                                     <div>
                                         <p class="{{ $dt }}">wenn Platz (fällt bei Budgetmangel ganz weg, nie angeschnitten)</p>
                                         @foreach($p['wenn_platz'] as $d)
-                                            <p class="text-[11px] font-mono text-gray-600">{{ $d['slug'] }} <span class="text-gray-400">@v{{ $d['version'] }}</span></p>
+                                            <p class="text-[11px] font-mono text-gray-600" wire:key="kw-{{ $p['prompt_key'] }}-{{ $d['slug'] }}">
+                                                {{ $d['slug'] }} <span class="text-gray-400">@v{{ $d['version'] }}</span>
+                                                @if($darfSchreiben && $kanonKey === $p['prompt_key'])
+                                                    <button type="button" wire:click="kanonRemove('{{ $p['prompt_key'] }}', '{{ $d['slug'] }}')"
+                                                            class="text-gray-400 hover:text-red-500" title="aus dem Kanon nehmen">&times;</button>
+                                                @endif
+                                            </p>
                                         @endforeach
+                                    </div>
+                                @endif
+
+                                @if($darfSchreiben && $kanonKey === $p['prompt_key'])
+                                    <div class="rounded-lg border border-black/10 bg-white px-2.5 py-2 space-y-2" data-kanon-editor>
+                                        <p class="{{ $dt }}">Dossier verbindlich machen</p>
+                                        <div class="flex flex-wrap items-center gap-2">
+                                            <input type="text" wire:model.live.debounce.300ms="kanonSuche" placeholder="Dossier suchen (Slug oder Titel, ab 2 Zeichen)…"
+                                                   class="{{ $input }} !py-1 text-xs w-72" data-kanon-suche />
+                                            <select wire:model="kanonForm.mode" class="{{ $input }} !py-1 text-xs w-36" title="pflicht = immer · wenn_platz = nur im Budget">
+                                                <option value="pflicht">pflicht</option>
+                                                <option value="wenn_platz">wenn_platz</option>
+                                            </select>
+                                            <input type="number" wire:model="kanonForm.ord" placeholder="Reihenfolge" class="{{ $input }} !py-1 text-xs w-28" />
+                                            <button type="button" wire:click="kanonAdd" class="{{ $btnGhostXs }}" data-kanon-add
+                                                    @disabled($kanonForm['slug'] === '')>+ aufnehmen</button>
+                                        </div>
+
+                                        @if($kanonForm['slug'] !== '')
+                                            <p class="text-[11px] text-gray-600">gewählt: <span class="font-mono">{{ $kanonForm['slug'] }}</span></p>
+                                        @endif
+
+                                        @foreach($kanonTreffer as $t)
+                                            <button type="button" wire:key="kt-{{ $t->slug }}" wire:click="$set('kanonForm.slug', '{{ $t->slug }}')"
+                                                    class="block w-full text-left text-[11px] px-1.5 py-1 rounded hover:bg-black/[0.04]">
+                                                <span class="font-mono">{{ $t->slug }}</span>
+                                                <span class="text-gray-400">· {{ $t->category }} · {{ number_format($t->char_count, 0, ',', '.') }} Z.</span>
+                                                @unless($t->active)<span class="text-amber-600">· inaktiv</span>@endunless
+                                            </button>
+                                        @endforeach
+
+                                        <p class="text-[10px] text-gray-400">
+                                            <strong>pflicht</strong> ignoriert das Budget und kommt immer ganz —
+                                            <strong>wenn_platz</strong> fällt bei Budgetmangel als GANZES Dossier weg, nie als Anschnitt.
+                                            Ein inaktives Dossier lässt sich aufnehmen (Vorbereitung), liefert aber erst nach dem Aktivieren.
+                                        </p>
                                     </div>
                                 @endif
                                 <div>

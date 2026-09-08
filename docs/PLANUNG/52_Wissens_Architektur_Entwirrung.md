@@ -1827,6 +1827,85 @@ warnt wörtlich davor, und der **parallele** Lauf zeigt es nicht (jeder Worker l
 eigenen Dateien) — nur der sequentielle. Der Helfer liegt jetzt als `tests/Support/SeedsKanon`
 dort, wo geteilte Helfer hingehören.
 
+## ✅ Paket 3 · Schnitt 3 — `regelwerkBlock()` gelöscht, Kanon-UI, totes Schema weg (2026-09-08)
+
+### F4 — der `->first()`-Pfad ist weg
+
+`regelwerkBlock()` wählte das Regelwerk per Slug-Muster und nahm `orderBy('slug')->first()`.
+Bei `%basisrezept%` sind das rund zwanzig §-Dossiers: keine Auswahl, ein Los.
+
+**Drei Dinge kamen anders als geplant, alle aus der Messung:**
+
+**1. `REGELWERK_SLUG_LIKE` bleibt — der Plan wollte sie löschen.** Sie trägt zwei Dinge unter
+einem Namen: eine *Injektions-Regel* (tot) und ein *Nachschlagen* (lebt). `ablauf.GET` und
+`regelwerk.GET` beantworten damit „welches Regelwerk gehört fachlich zu diesem Bereich" — eine
+Auskunft, kein Prompt-Bau. Weg ist stattdessen das `->first()`: `regelwerkDossiersFuer()` gibt
+**alle** Treffer zurück. Einem Agenten §1.0 von zwanzig zu nennen war schlimmer als keine
+Antwort — er hält es für vollständig.
+
+**2. Das Löschen hätte ein neues Loch gerissen.** Der generische Pfad verarbeitet
+ausschliesslich `discovery`. Eine `regelwerk:always`-Zeile hätte ab sofort **gar nichts**
+geladen — kein Fehler, kein Log. Also braucht F4 drei Dinge, die nicht im Plan standen:
+
+| | |
+|---|---|
+| Migration `000004` | stellt Bestandszeilen um, mit **expliziter Ziel-Liste** je Feature |
+| Befund `routing_always_tot` | `wissen-profil` meldet jede künftige `always`-Zeile als blockierend |
+| `pflichtZeichen()` | zählt `regelwerk:always` mit **0** statt Budget für Wissen zu reservieren, das nie kommt |
+
+★ Mein erster Migrations-Entwurf setzte *jedes* `always` auf `none`. Damit wäre
+`concept.brief_geruest` durch eine **Aufräum**-Migration ärmer geworden. Der Drift-Test hat es
+gefangen. Jetzt: `none` nur, wo der Kanon trägt (`ai_generate_recipe`, `foodbook.grundgeruest`),
+sonst `discovery` — eine Aufräum-Migration darf nicht wegnehmen.
+
+**3. ★ Der Header-„Umzug" war ein Fehler, den Dominique gefunden hat.** Ich hatte den
+gelöschten Code-Header ersetzen wollen und die Regel „NIE «Vorspeisen/Hauptgänge/Desserts» als
+Kapitel" in den Prompt-Task geschrieben. Seine Frage: *„dadurch kann ich den nicht mehr
+anpassen über das Wissen oder?"* — genau so. Das Dossier `regelwerk-foodbook-grundgerust` trägt
+die Regel in **§5 Anti-Pattern** längst, und es kommt über den Kanon in den Prompt. Meine
+Kopie hätte die Hoheit über eine kuratierbare Regel in den Code geholt: die Doppelung, die
+diese Spec abbaut, im Abbau selbst gebaut. Zurückgenommen, und ein Test pinnt beide Richtungen
+(die Regel FEHLT im Prompt und KOMMT über den Kanon).
+
+Damit ist auch der Rest des Headers erledigt: §1–§5 des Dossiers decken alles ab, was er sagte.
+`regelwerkBlock()` zu löschen verliert **nichts**, nicht nur „fast nichts".
+
+### F5 — `_sections`/`_chunks` gedroppt
+
+Ein Schema mit lauffähigem Producer (`knowledge-sectionize`) und **ohne jeden Leser**. W1-4/W3-3
+planten die Retrieval-Einheit vom Dossier auf den Abschnitt umzustellen; bevor der erste Leser
+entstand, entschied Spec 50 Strang III den anderen Weg („ein Dossier = ein Thema"). Migration
+`000010` schrieb damals ausdrücklich: *„Drop ist eine eigene Entscheidung."* Das ist sie.
+
+Weg: zwei Tabellen, `KnowledgeSectionizeCommand`, `KnowledgeSectionizer`, `KnowledgeChunker`,
+`KnowledgeSectionizerTest`. Die Migration **zählt vor dem Drop** und bricht bei Zeilen ab.
+
+### Kanon-UI — Grundsatz E eingelöst
+
+Der Docblock der `Wissenssteuerung` hatte ihn selbst angekündigt: *„Routing ist einfache
+Zeilen-Pflege, der Kanon braucht eine Dossier-Suche und kommt als eigener Schritt."*
+
+Je Prompt-Key: Pflicht- und wenn_platz-Dossiers mit ✕, ein Dossier-Wähler (Suche ab 2 Zeichen
+über Slug **und** Titel — 1.100 Treffer sind kein Wähler), Modus und Reihenfolge. Über
+`KnowledgeCanonService::set()`, **nicht** per Insert: dort leben Tenancy, Enum-Prüfung,
+Changelog-Guard und Deckel-Hinweis. Der Wissens-Browser hatte in der Gegenrichtung genau
+diesen Fehler (`Browser::addBinding()`, roher Insert an den Garantien vorbei, Befund `F`).
+
+Und die Hinweise des Service werden **nicht geschluckt**: „Dossier ist inaktiv" bzw. „über dem
+Deckel" sind die Fälle, in denen die Zeile entsteht, im Bericht nach Versorgung aussieht und
+nichts liefert. Ein eigener Test pinnt, dass eine **globale** Zeile nicht angefasst wird und
+die UI das sagt, statt Erfolg zu melden.
+
+### Bewusst NICHT dabei: D4 (Budget-Bäume)
+
+Die zwei Bäume sind nicht dasselbe — einer deckelt den Kanon, einer das Retrieval. Der echte
+Defekt aus `H5` ist, dass sie verschieden verschlüsselt sind (feature vs. prompt_key) und
+**niemand die Summe deckelt**. Das sauber zu lösen heisst: neue Config-Form, alle Aufrufer
+umziehen, und dabei ändert sich die Prompt-Grösse jedes Generators. Das gehört in einen eigenen
+Schnitt mit Messung davor/danach, nicht in ein Bündel.
+
+---
+
 ### Was jetzt noch an der Tabelle hängt
 
 Die neun Alt-Zeilen auf demo sind **nicht** gelöscht — sie sind inert, und sie wegzuräumen ist

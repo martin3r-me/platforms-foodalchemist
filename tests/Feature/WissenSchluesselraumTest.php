@@ -170,10 +170,30 @@ it('gibt dem Gericht-Vorgang das VK-Regelwerk, nicht das Basisrezepte-Regelwerk'
     ($this->mkDoc)('regelwerk.regelwerk_verkaufsgerichte--1-naming', 'regelwerk');
     $dienst = app(KnowledgeContextService::class);
 
-    expect($dienst->regelwerkDokumentFuer($this->rootTeam, 'vk.generator')?->slug)
-        ->toBe('regelwerk.regelwerk_verkaufsgerichte--1-naming')
-        ->and($dienst->regelwerkDokumentFuer($this->rootTeam, 'recipe.generator')?->slug)
-        ->toBe('regelwerk-basisrezepte-1-naming');
+    expect($dienst->regelwerkDossiersFuer($this->rootTeam, 'vk.generator')->pluck('slug')->all())
+        ->toBe(['regelwerk.regelwerk_verkaufsgerichte--1-naming'])
+        ->and($dienst->regelwerkDossiersFuer($this->rootTeam, 'recipe.generator')->pluck('slug')->all())
+        ->toBe(['regelwerk-basisrezepte-1-naming']);
+});
+
+it('nennt ALLE Dossiers des Bereichs, nicht das alphabetisch erste', function () {
+    // ★ Spec 52 · F4. Vorher nahm die Methode `orderBy('slug')->first()` — das war richtig,
+    // solange sie einen PROMPT-Block baute (dort passt nur eines). Als reines Nachschlagen
+    // für `regelwerk.GET` und das Vorgangs-Register ist es falsch: `%basisrezept%` trifft
+    // rund zwanzig §-Dossiers, und dem Agenten §1.0 zu nennen statt aller ist schlechter
+    // als gar keine Antwort — er hält es für vollständig.
+    foreach (['regelwerk-basisrezepte-1-naming', 'regelwerk-basisrezepte-2-verarbeitung',
+        'regelwerk-basisrezepte-6-mengen'] as $slug) {
+        ($this->mkDoc)($slug, 'regelwerk');
+    }
+
+    expect(app(KnowledgeContextService::class)
+        ->regelwerkDossiersFuer($this->rootTeam, 'recipe.generator')->pluck('slug')->all())
+        ->toBe([
+            'regelwerk-basisrezepte-1-naming',
+            'regelwerk-basisrezepte-2-verarbeitung',
+            'regelwerk-basisrezepte-6-mengen',
+        ]);
 });
 
 it('nennt lieber KEIN Regelwerk als ein falsches', function () {
@@ -183,7 +203,7 @@ it('nennt lieber KEIN Regelwerk als ein falsches', function () {
     ($this->mkDoc)('regelwerk-basisrezepte-1-naming', 'regelwerk');
 
     expect(app(KnowledgeContextService::class)
-        ->regelwerkDokumentFuer($this->rootTeam, 'angebot.irgendwas'))->toBeNull();
+        ->regelwerkDossiersFuer($this->rootTeam, 'angebot.irgendwas'))->toBeEmpty();
 });
 
 it('gibt dem GP-Vorgang das GP-Regelwerk', function () {
@@ -192,8 +212,8 @@ it('gibt dem GP-Vorgang das GP-Regelwerk', function () {
     ($this->mkDoc)('regelwerk-gp-6-benennungsschema', 'regelwerk');
 
     expect(app(KnowledgeContextService::class)
-        ->regelwerkDokumentFuer($this->rootTeam, 'gp.suggest')?->slug)
-        ->toBe('regelwerk-gp-6-benennungsschema');
+        ->regelwerkDossiersFuer($this->rootTeam, 'gp.suggest')->pluck('slug')->all())
+        ->toBe(['regelwerk-gp-6-benennungsschema']);
 });
 
 it('meldet fuer einen Vorgang ohne Regelwerk `keine`, statt eines zu erfinden', function () {
@@ -241,7 +261,8 @@ it('haelt die Seed-Politik gegen den tatsaechlichen DB-Stand, ueber alle Feature
         if (! isset($soll[$key]) || in_array($key, $bedingtErlaubt, true)) {
             continue;                       // nur im Bestand → kein Widerspruch, nur ungedeckt
         }
-        // Der MODUS ist die Weiche (always → regelwerkBlock mit ->first(), discovery → Jaccard).
+        // Der MODUS ist die Weiche. Für `regelwerk` ist `always` seit Spec 52 · F4 sogar tot
+        // (lädt nichts), für die übrigen Kategorien wählt er zwischen festem Set und Jaccard.
         // Abweichende Deckel sind Feinjustage; ein abweichender Modus ist ein anderer Algorithmus.
         if ((string) $ist->mode !== $soll[$key]['mode']) {
             $widersprueche[] = $key.': DB='.$ist->mode.' vs. Seed='.$soll[$key]['mode'];

@@ -288,9 +288,11 @@ it('rechnet die Pflichtmenge nach den Ist-Deckeln der Block-Builder', function (
     expect(app(KnowledgeContextService::class)->pflichtZeichen('w0pflicht.cc'))
         ->toBe(7 * KnowledgeContextService::CROSS_CUTTING_TRUNCATE_CHARS);
 
-    // regelwerk holt per ->first() genau EIN Doc — max_docs ist dort irrelevant.
+    // ★ regelwerk zählt seit Spec 52 · F4 NULL: der dedizierte always-Zweig ist gelöscht, die
+    // Zeile lädt nichts. Sie weiter als Pflichtmenge zu führen hiesse, Budget für Wissen zu
+    // reservieren, das nie kommt — die Invariante prüfte dann Phantasiewerte.
     w0Routing('w0pflicht.rw', 'regelwerk', 'always', 5, 6000);
-    expect(app(KnowledgeContextService::class)->pflichtZeichen('w0pflicht.rw'))->toBe(6000);
+    expect(app(KnowledgeContextService::class)->pflichtZeichen('w0pflicht.rw'))->toBe(0);
 
     // concept: max_docs × Doc-Deckel.
     w0Routing('w0pflicht.co', 'concept', 'always', 4, 4000);

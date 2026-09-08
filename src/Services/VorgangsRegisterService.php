@@ -283,18 +283,34 @@ class VorgangsRegisterService
             }
         }
 
-        // Dieselbe Auswahl, die der Generator trifft — nicht eine zweite, die daneben liegen könnte.
-        // `feature === null` heisst ausdruecklich „fuer diesen Vorgang gibt es kein Regelwerk"
-        // (Spec 52/Paket 2) — vorher fielen genau diese Vorgaenge blind aufs Basisrezepte-
-        // Regelwerk zurueck.
-        $doc = $v['feature'] === null ? null : $this->wissen->regelwerkDokumentFuer($team, $v['feature']);
+        // Kein Kanon → nachschlagen, welcher Regelwerks-BEREICH fachlich zu diesem Vorgang
+        // gehoert. `feature === null` heisst ausdruecklich „fuer diesen Vorgang gibt es kein
+        // Regelwerk" (Spec 52/Paket 2) — vorher fielen genau diese Vorgaenge blind aufs
+        // Basisrezepte-Regelwerk zurueck.
+        //
+        // ★ **Die Bedeutung dieser Antwort hat sich mit Spec 52 · F4 geaendert, und das muss
+        // hier stehen.** Vorher galt: „dieselbe Auswahl, die der Generator trifft" — der zog
+        // per `regelwerk:always` genau dieses eine Dossier in den Prompt. Diesen Pfad gibt es
+        // nicht mehr; verbindliches Wissen kommt aus dem Kanon. Was hier steht, ist also
+        // NICHT mehr „was der Prompt bekommt", sondern „was ein Mensch/Agent zu diesem
+        // Vorgang lesen sollte". Deshalb `quelle: 'nachschlagen'` statt `'dossier'`, und
+        // deshalb ALLE Treffer statt des alphabetisch ersten: `%basisrezept%` trifft rund
+        // zwanzig §-Dossiers, und eines davon zu nennen waere schlechter als alle.
+        $docs = $v['feature'] === null
+            ? collect()
+            : $this->wissen->regelwerkDossiersFuer($team, $v['feature']);
 
         return [
-            'quelle' => $doc !== null ? 'dossier' : 'keine',
-            'dokumente' => $doc !== null ? [[
-                'slug' => $doc->slug, 'titel' => $doc->title, 'kategorie' => 'regelwerk',
-                'mode' => 'pflicht', 'zeichen' => (int) $doc->char_count, 'prompt_key' => null,
-            ]] : [],
+            'quelle' => $docs->isNotEmpty() ? 'nachschlagen' : 'keine',
+            'dokumente' => $docs->map(fn ($d) => [
+                'slug' => $d->slug, 'titel' => $d->title, 'kategorie' => 'regelwerk',
+                'mode' => 'nachschlagen', 'zeichen' => (int) $d->char_count, 'prompt_key' => null,
+            ])->values()->all(),
+            'hinweis' => $docs->isNotEmpty()
+                ? 'Kein Kanon fuer diesen Vorgang — diese Dossiers gehoeren fachlich dazu, werden aber '
+                    .'NICHT automatisch in den Prompt gelegt. Wer sie verbindlich machen will: '
+                    .'`knowledge_canon.PUT` auf den passenden Prompt-Key.'
+                : null,
         ];
     }
 

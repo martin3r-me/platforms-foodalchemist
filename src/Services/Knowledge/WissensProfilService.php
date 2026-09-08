@@ -96,6 +96,29 @@ class WissensProfilService
             ->pluck('d.slug')->map(fn ($x) => (string) $x)->all();
 
         $befunde = $this->befunde($kaputt, $pflichtZeichen, $budgetBound, $pflicht, $team);
+
+        // ★ Spec 52 · F4 — eine Routing-Zeile, die NICHTS mehr lädt.
+        //
+        // Der dedizierte `regelwerk:always`-Zweig ist gelöscht, und der generische Pfad
+        // verarbeitet ausschliesslich `discovery`. Eine `regelwerk:always`-Zeile ist damit
+        // Konfiguration, die aussieht wie „lädt immer" und faktisch nichts tut — genau die
+        // Sorte stiller Verlust, gegen die diese Spec antritt. Deshalb ein eigener Befund
+        // statt Schweigen. Eine Migration hat die Bestandszeilen umgestellt; das hier fängt
+        // die nächste, die jemand von Hand setzt.
+        foreach ($routing as $r) {
+            if ($r['category'] === 'regelwerk' && $r['mode'] === 'always') {
+                $befunde[] = [
+                    'code' => 'routing_always_tot',
+                    'schwere' => 'blockiert',
+                    'nachfolger' => [],
+                    'slug' => null,
+                    'text' => 'Routing `regelwerk:always` lädt seit Spec 52 NICHTS — der dedizierte '
+                        .'always-Zweig ist gelöscht, der generische Pfad kennt nur `discovery`. Diese Zeile '
+                        .'sieht aus wie Versorgung und ist keine. Verbindlich machen: `knowledge_canon.PUT`; '
+                        .'suchen lassen: Modus auf `discovery` stellen.',
+                ];
+            }
+        }
         if ($altBindungen !== []) {
             $befunde[] = [
                 'code' => 'bindung_altlast',

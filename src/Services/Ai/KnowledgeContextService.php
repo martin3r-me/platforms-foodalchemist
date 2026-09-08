@@ -271,25 +271,21 @@ class KnowledgeContextService
             $snap('trend', $before);
         }
 
-        // ── 0c. REGELWERK (Etappe 1 »Mise en Place« + Spec 41 B1: pro Feature das RICHTIGE Regelwerk) ──
-        // Verbindliche Bau-/Gerüst-Regel VOR dem Food-Wissen. `always` + dediziert (NICHT die
-        // generische discovery — Regelwerk ist Handwerk, kein Produkt; s. regelwerkBlock). Welches
-        // Regelwerk kommt, entscheidet das FEATURE (ai_generate_recipe → Basisrezepte inkl. §12;
-        // concept.brief_geruest → Concept). Leere/fehlende Kategorie ⇒ kein Block (Invariante 6).
-        if (($r = $routing->get('regelwerk:always')) !== null) {
-            $before = count($filesUsed);
-            $regelwerk = $this->regelwerkBlock($team, 
-                    $feature,
-                    $recipeBudget
-                        ? min(self::RECIPE_MAX_CHARS_PER_DOC, (int) ($r->max_chars_per_doc ?: self::REGELWERK_TRUNCATE_CHARS))
-                        : (int) ($r->max_chars_per_doc ?: self::REGELWERK_TRUNCATE_CHARS),
-                    $filesUsed
-                );
-            if ($regelwerk !== null) {
-                $parts[] = $regelwerk;
-            }
-            $snap('regelwerk', $before);
-        }
+        // ── 0c. REGELWERK: ENTFERNT (Spec 52 · F4, 2026-09-08) ────────────────────────
+        //
+        // Hier stand der `regelwerk:always`-Zweig mit `regelwerkBlock()`. Er wählte das
+        // Regelwerk per Slug-Muster (`REGELWERK_SLUG_LIKE`) und nahm davon
+        // `orderBy('slug')->first()` — bei `%basisrezept%` also EINES von rund zwanzig
+        // §-Dossiers, alphabetisch. Das ist keine Auswahl, das ist ein Los.
+        //
+        // Verbindliches Wissen kommt seit Spec 50 aus dem KANON, und seit F2 ausschliesslich
+        // von dort. Als letztes lebendes Feature auf diesem Pfad stand `foodbook.grundgeruest`
+        // (`%foodbook%` traf genau EIN Dossier, die Auswahl war dort also zufällig richtig);
+        // es hat mit F4 eine Kanon-Zeile bekommen und sein Routing steht auf `none`.
+        //
+        // Das Regelwerk als KATEGORIE bleibt normal routbar — `recipe.eigenschaften`,
+        // `recipe.review`, `*.ueberarbeiten` ziehen es per `discovery` über die generische
+        // Auswahl weiter unten. Weggefallen ist nur der dedizierte `always`-Sonderweg.
 
         // ── 0d. ACHSEN-WISSEN: Anlass-Playbook + Segment-Profil, deterministisch aufgelöst ──
         // Hoch priorisiert (direkt nach dem Regelwerk): das sind exakte Treffer aus den
@@ -653,7 +649,11 @@ class KnowledgeContextService
      *
      * Die Rechnung spiegelt die Ist-Deckel der jeweiligen Block-Builder:
      *   · cross_cutting — 7 feste Slugs, Routing-Werte werden ignoriert
-     *   · regelwerk     — `->first()`, also genau EIN Doc
+     *   · regelwerk     — **0**, seit Spec 52 · F4: der dedizierte always-Zweig ist gelöscht,
+     *     die Zeile lädt nichts. Sie hier weiter als Pflichtmenge zu zählen, hiesse Budget für
+     *     Wissen zu reservieren, das nie kommt — und die W0-5-Invariante würde Phantasiewerte
+     *     prüfen. Dass so eine Zeile überhaupt existiert, meldet `wissen-profil` als Befund
+     *     `routing_always_tot`; hier ist sie schlicht 0.
      *   · concept       — max_docs (Default CONCEPT_MAX_DOCS) × Doc-Deckel
      *   · sonst         — alwaysCategoryBlock: max_docs (Default 2) × Doc-Deckel
      */
@@ -670,7 +670,7 @@ class KnowledgeContextService
                 // Dieselbe feature-genaue Auflösung wie crossCuttingDocs() — sonst prüft die
                 // Invariante eine Pflichtmenge, die es für dieses Feature nie gibt.
                 'cross_cutting' => count($this->crossCuttingSlugs($feature)) * self::CROSS_CUTTING_TRUNCATE_CHARS,
-                'regelwerk' => $docDeckel ?: self::REGELWERK_TRUNCATE_CHARS,
+                'regelwerk' => 0,                                   // F4: lädt nichts mehr, s. Docblock
                 'concept' => ((int) ($r->max_docs ?: self::CONCEPT_MAX_DOCS)) * ($docDeckel ?: self::CONCEPT_TRUNCATE_CHARS),
                 default => ((int) ($r->max_docs ?: 2)) * ($docDeckel ?: 4000),
             };
@@ -1123,25 +1123,27 @@ class KnowledgeContextService
      * kompakt). Deterministisch über den Slug gewählt; unbekanntes Feature ⇒ Basisrezepte
      * (Bestand). Extrahiert wird nur die tragende Region (nicht der ganze ~50k-Text — §2 beginnt
      * erst bei ~17k, ein blinder Head-Truncate verfehlt sie). Fehlt der Doc ⇒ null (Invariante 6);
-     * fehlen die §-Marker ⇒ ganzer Text (Aufrufer Head-Truncatet).
-     *
-     * @param  list<string>  $filesUsed  by-ref-Audit
-     */
     /**
-     * Spec 50 · E-4 — welches Regelwerk-Dossier zu einem Feature gehört.
+     * Spec 50 · E-4 — welche Regelwerk-Dossiers zu einem Feature gehören.
      *
-     * Bis Etappe 8 steckte diese Auswahl ausschliesslich in {@see regelwerkBlock()}, das
-     * `private` ist und einen fertigen PROMPT-Block baut. `regelwerk.GET` braucht aber das
-     * DOKUMENT, nicht den Block. Statt die Auswahl ein zweites Mal zu schreiben — der Fehler,
-     * vor dem `docs/ARCHITEKTUR.md` unter „Eine Formel pro fachlicher Wahrheit" warnt — steht
-     * sie hier einmal, und beide rufen sie auf.
+     * ★ **Von `->first()` auf eine LISTE umgestellt (Spec 52 · F4).**
      *
-     * Bewusst dieselbe Query wie zuvor, inklusive `ausgeschlossen`-Filter und `orderBy('slug')`:
-     * wenn der Generator dieses Dossier lädt, muss `regelwerk.GET` genau dieses nennen.
+     * Bis Etappe 8 lag die Auswahl in `regelwerkBlock()` und lieferte per `orderBy('slug')
+     * ->first()` genau EIN Dossier — als Prompt-Block. `regelwerk.GET` und das
+     * Vorgangs-Register riefen dieselbe Methode, damit „die Auskunft nennt, was der Generator
+     * lädt". Richtig gedacht, und mit F4 hinfällig: der Generator lädt hier gar nichts mehr,
+     * verbindliches Wissen kommt aus dem Kanon.
+     *
+     * Damit verliert das `->first()` seine Rechtfertigung — und war ohnehin die schwächste
+     * Stelle: `%basisrezept%` trifft rund zwanzig §-Dossiers, und dem Agenten eines davon zu
+     * nennen ist schlechter als ihm alle zu nennen. Diese Methode ist ab jetzt reines
+     * **Nachschlagen für die Auskunft** („welches Regelwerk gehört zu diesem Bereich"), kein
+     * Injektionspfad. Sie gibt deshalb alle Treffer zurück.
      *
      * @param  list<string>  $spalten
+     * @return \Illuminate\Support\Collection<int, object>
      */
-    public function regelwerkDokumentFuer(?Team $team, string $feature, array $spalten = ['slug', 'title', 'char_count', 'version']): ?object
+    public function regelwerkDossiersFuer(?Team $team, string $feature, array $spalten = ['slug', 'title', 'char_count', 'version']): \Illuminate\Support\Collection
     {
         // ★ Spec 52/Paket 2 — KEIN Blind-Default mehr.
         //
@@ -1153,14 +1155,14 @@ class KnowledgeContextService
         // sagt dann `quelle: keine`, und das ist die Wahrheit.
         $slugLike = self::REGELWERK_SLUG_LIKE[$feature] ?? null;
         if ($slugLike === null) {
-            return null;
+            return collect();
         }
 
         return DB::table('foodalchemist_knowledge_documents')->tap($this->nurSichtbar($team))
             ->where('category', 'regelwerk')->where('active', 1)->whereNull('deleted_at')
             ->where('slug', 'like', $slugLike)
             ->when($this->ausgeschlossen !== [], fn ($q) => $q->whereNotIn('slug', $this->ausgeschlossen))
-            ->orderBy('slug')->first($spalten);
+            ->orderBy('slug')->get($spalten);
     }
 
     /**
@@ -1176,10 +1178,19 @@ class KnowledgeContextService
      * anderer Stelle. Auf demo fiel es nicht auf, weil der Kanon greift; auf einer frischen DB
      * (Migrationsstand: `regelwerk always`) hätte es zugeschlagen.
      *
-     * ⚠ Die Auswahl INNERHALB eines Musters bleibt beliebig: `regelwerkDokumentFuer()` nimmt
-     * `orderBy('slug')->first()`, also das alphabetisch erste von 61 Regelwerks-Dossiers. Für
-     * VK ist das §1.2a statt §1. Dieser Pfad gehört deshalb weg (Paket 3) — hier steht nur,
-     * dass er bis dahin nicht das FALSCHE Regelwerk trifft.
+     * ★ **Diese Karte trug zwei Dinge unter einem Namen — eines ist mit Spec 52 · F4 weg.**
+     *
+     *  1. *Injektion*: welches Dossier der Generator per `regelwerk:always` in den Prompt
+     *     hebt. **Gelöscht.** Verbindliches Wissen kommt aus dem Kanon.
+     *  2. *Nachschlagen*: welcher Regelwerks-BEREICH fachlich zu einem Feature gehört —
+     *     für `regelwerk.GET` und das Vorgangs-Register. **Bleibt**, und das ist legitim:
+     *     einem Agenten zu sagen „für Gerichte gilt das VK-Regelwerk" ist eine Auskunft,
+     *     kein Prompt-Bau.
+     *
+     * Der Plan wollte die Karte ganz löschen. Das hielt der Messung nicht stand — sie hat
+     * einen zweiten, gesunden Abnehmer. Weg ist stattdessen das `->first()`
+     * ({@see regelwerkDossiersFuer()}): ein Muster wie `%basisrezept%` trifft rund zwanzig
+     * §-Dossiers, und eines davon alphabetisch zu greifen war der eigentliche Defekt.
      */
     public const REGELWERK_SLUG_LIKE = [
         'concept.brief_geruest' => '%concept%',
@@ -1198,100 +1209,6 @@ class KnowledgeContextService
         'gp.suggest' => '%regelwerk-gp%',
         'gp.conformance_revise' => '%regelwerk-gp%',
     ];
-
-    private function regelwerkBlock(?Team $team, string $feature, int $maxChars, array &$filesUsed): ?string
-    {
-        $map = [
-            'concept.brief_geruest' => [
-                'slug_like' => '%concept%',
-                'extract' => 'concept',
-                'header' => "# REGELWERK CONCEPT (verbindliche Gerüst-Regel — §2 Archetypen · §3 Container nie atomar · §4 Vokabular · §5 Preislogik)\n\n"
-                    . "Ein Concept ist eine ZUSAMMENSTELLUNG (Menü / Buffet / Paket), NIE eine atomare "
-                    . "Position: erzeuge IMMER ein Sektions-/Gänge-Gerüst mit Kapitel-Überschriften + "
-                    . "Platzhalter-Slots (Menü → Gänge, Buffet → Stationen). Das strukturelle Sektionieren "
-                    . "eines Containers ist erlaubt und Pflicht (kein Gericht/Preis/Fakt erfinden). Halte dich an diese Regeln:\n\n",
-            ],
-            'foodbook.grundgeruest' => [
-                'slug_like' => '%foodbook%',
-                'extract' => 'foodbook',
-                'header' => "# REGELWERK FOODBOOK-GRUNDGERÜST (verbindliche Gerüst-Regel — KAPITEL statt Gänge)\n\n"
-                    . "Das Grundgerüst eines Foodbooks sind seine KAPITEL — ein Kapitel = ein Menü, Thema, Anlass "
-                    . "oder Service-Format (Menü · Menü-Buffet/Stationen · Flying · Fingerfood/Empfang · Grillbuffet · "
-                    . "Foodstationen · Frühstück/Lunch/Dinner · Konzept/Marke). NIE «Vorspeisen/Hauptgänge/Desserts» "
-                    . "als Top-Level und NIE ein einzelner Gang als Kapitel. Die einzelnen Gänge "
-                    . "(Vorspeise→Hauptgang→Dessert) sind die INNERE Struktur eines Menü-Kapitels und entstehen erst "
-                    . "im Kapitel-Concept, nicht auf Buch-Ebene. Halte dich an diese Regeln:\n\n",
-            ],
-            // format.grundgeruest hat (noch) KEIN eigenes Regelwerk — expliziter Eintrag, damit der
-            // Basisrezept-Fallback unten NIE fälschlich ans Format-Gerüst gehängt wird (slug_like matcht
-            // kein Regelwerk → sauberes null). Nur relevant, falls jemand später ein regelwerk:always-Routing setzt.
-            'format.grundgeruest' => [
-                'slug_like' => '%format%',
-                'extract' => 'concept',
-                'header' => "# REGELWERK FORMAT\n\n",
-            ],
-            'ai_generate_recipe' => [
-                'slug_like' => '%basisrezept%',
-                'extract' => 'basisrezept',
-                'header' => "# REGELWERK BASISREZEPTE (verbindliche Bau-Regel — §2 Verarbeitungs-Reduktion · §3 Pürees · §4 Sub-Rezept-Hierarchie · §12 Zutaten-/Komponenten-Reihenfolge)\n\n"
-                    . "Baue das Gericht AUS BASISREZEPTEN: Sauce/Jus/Fond/Sud/Püree/Espuma sind eigene "
-                    . "Sub-Basisrezepte, keine flachen Rohzutaten (kein «Steinpilz-Rahmsauce» aus "
-                    . "Steinpilzen + Sahne). Ordne Zutaten/Komponenten in logischer Koch-/Verwendungs-Reihenfolge "
-                    . "(§12: Fett/Aromaten → Hauptmasse → Flüssigkeit → Bindung → Würze/Finish; Gericht: "
-                    . "Sauce/Basis → Hauptkomponente → Beilage → Garnitur), NICHT nach Menge/Anteil. Halte dich an diese Regeln:\n\n",
-            ],
-        ];
-        $cfg = $map[$feature] ?? $map['ai_generate_recipe'];    // Bestand-Fallback
-
-        $doc = $this->regelwerkDokumentFuer($team, $feature, ['slug', 'content_md', 'version']);
-        if ($doc === null) {
-            return null;                                             // Invariante 6: fehlende Quelle = leerer Kontext
-        }
-
-        $kern = trim($this->extrahiereRegelwerkKern((string) $doc->content_md, $cfg['extract']));
-        if ($kern === '') {
-            return null;
-        }
-        $filesUsed[] = "{$doc->slug}@v{$doc->version}";
-
-        return $cfg['header'] . $this->truncate($kern, $maxChars);
-    }
-
-    /**
-     * Schneidet aus einem Regelwerk-Doc die für die Erzeugung tragende Region.
-     * - `concept`: ganzer Text (Concept-Regelwerk ist kompakt ~8,7k, der Aufrufer truncatet).
-     * - `basisrezept` (Default): §2–§4-Bauregion (»## §2 …« bis exkl. »## §5 …«) PLUS die
-     *   §12-Reihenfolge-Region (»## §12 …« bis zur nächsten Level-2-Überschrift). Fehlt §12
-     *   (Doc-Stand vor Spec 41) ⇒ nur §2–§4 (golden-safe). Ohne §2-Marker ⇒ ganzer Text.
-     * Rein string-basiert, keine DB — robust gegen künftige Umnummerierung (nie Fehler, Invariante 6).
-     */
-    private function extrahiereRegelwerkKern(string $md, string $mode = 'basisrezept'): string
-    {
-        // concept + foodbook: das ganze (kurze) Regelwerk injizieren — keine §-Regionen-Extraktion.
-        if ($mode === 'concept' || $mode === 'foodbook') {
-            return $md;
-        }
-
-        $regionen = [];
-
-        // §2–§4-Bauregion (bis exkl. §5)
-        $start = mb_strpos($md, '## §2');
-        if ($start !== false) {
-            $rest = mb_substr($md, $start);
-            $end = mb_strpos($rest, '## §5');
-            $regionen[] = $end === false ? $rest : mb_substr($rest, 0, $end);
-        }
-
-        // §12-Reihenfolge-Region (bis zur nächsten Level-2-Überschrift; robust ggü. §13-Nummerierung)
-        $s12 = mb_strpos($md, '## §12');
-        if ($s12 !== false) {
-            $rest12 = mb_substr($md, $s12);
-            $next = mb_strpos($rest12, "\n## ", 5);
-            $regionen[] = $next === false ? $rest12 : mb_substr($rest12, 0, $next);
-        }
-
-        return $regionen === [] ? $md : implode("\n\n", $regionen);
-    }
 
     /**
      * TREND-WISSEN (Trendradar, `foodbook.plan` / `concept.brief_geruest`): discovery
