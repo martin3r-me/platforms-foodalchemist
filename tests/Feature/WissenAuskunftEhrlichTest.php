@@ -89,9 +89,14 @@ it('macht den Alt-Schluessel sichtbar: recipe.generator routet unter ai_generate
         ->and($res->data['routing']['alt_schluessel'])->toBeTrue();
 });
 
-it('meldet die Praefix-Streuung, wenn nur eine Bereichs-Bindung versorgt', function () {
-    // Eine Bindung auf `recipe` hängt dasselbe Dossier an ALLE recipe.*-Prompts — gemessen
-    // sind das 23. Die Auskunft muss das benennen, sonst sieht es nach gezielter Kuration aus.
+it('nennt einen Key mit NUR einer Alt-Bindung ungesteuert — und sagt, warum sie nichts tut', function () {
+    // ★ Umkehrung mit Spec 52 · F2. Vorher lautete die Antwort `quelle: bindung` mit dem
+    // Hinweis, dass eine Bindung auf `recipe` dasselbe Dossier an ALLE 23 recipe.*-Prompts
+    // hängt. Das war richtig — und ist es nicht mehr.
+    //
+    // Die Antwort muss jetzt zweierlei leisten: ehrlich `ungesteuert` sagen UND erklären,
+    // warum der Wissens-Browser trotzdem eine Verdrahtung anzeigt. Ohne den zweiten Teil
+    // sieht die Auskunft für den Kurator aus wie ein Widerspruch.
     $docId = ($this->mkDoc)('produktion-arbeitszeit');
     DB::table('foodalchemist_knowledge_bindings')->insert([
         'uuid' => (string) UuidV7::generate(), 'team_id' => null,
@@ -102,9 +107,11 @@ it('meldet die Praefix-Streuung, wenn nur eine Bereichs-Bindung versorgt', funct
 
     $res = ($this->run)('foodalchemist.regelwerk.GET', ['prompt_key' => 'recipe.geschmack']);
 
-    expect($res->data['quelle'])->toBe('bindung')
-        ->and($res->data['dokumente'][0]['ueber'])->toBe('recipe')
-        ->and($res->data['hinweis'])->toContain('ALLEN Prompts dieses Bereichs');
+    expect($res->data['quelle'])->toBe('ungesteuert')
+        ->and($res->data['dokumente'])->toBe([])
+        ->and($res->data['alt_bindungen'])->toBe(['produktion-arbeitszeit'])
+        ->and($res->data['hinweis'])->toContain('wirken seit Spec 52 aber NICHT mehr')
+        ->and($res->data['hinweis'])->toContain('knowledge_canon.PUT');
 });
 
 it('zaehlt eine Bindung auf ein inaktives Dossier nicht als Auskunft', function () {

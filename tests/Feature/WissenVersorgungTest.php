@@ -94,17 +94,26 @@ it('behandelt mode=none als bewusste Entscheidung, nicht als Luecke', function (
         ->assertExitCode(0);
 });
 
-it('macht sichtbar, wenn ein Key NUR ueber die Alt-Struktur versorgt wird', function () {
-    // Das Bereichs-Präfix trifft ALLE `recipe.*`-Prompts (AiGatewayService:179). Gemessen
-    // hängen so zwei Dossiers an 23 Keys — der Bericht muss das benennen, sonst sieht es
-    // wie „gesteuert" aus, obwohl kein Mensch diese Zuordnung je entschieden hat.
+it('nennt einen Key mit NUR Alt-Bindungen ehrlich UNGESTEUERT', function () {
+    // ★ Umkehrung mit Spec 52 · F2. Vorher lautete das Verdikt `nur-bindung`: das Bereichs-
+    // Präfix traf ALLE `recipe.*`-Prompts, zwei Dossiers hingen so an 23 Keys, und der
+    // Bericht musste das benennen, damit es nicht wie „gesteuert" aussieht.
+    //
+    // Heute liest der Gateway keine Bindungen. Aus dem Korpus erreicht diesen Prompt also
+    // NICHTS — und genau das muss der Bericht sagen. `nur-bindung` waere jetzt die
+    // freundlichere, aber falsche Auskunft.
     config(['foodalchemist.prompts' => ['recipe.irgendwas' => ['tier' => 'B', 'task' => 'Tu etwas.']]]);
     ($this->mkBindung)(($this->mkDoc)('praefix-doc'), 'recipe');
 
     $this->artisan('foodalchemist:wissen-versorgung', ['--team' => $this->rootTeam->id])
-        ->expectsOutputToContain('nur-bindung')
-        ->expectsOutputToContain('Nur über die ALT-Struktur versorgt')
-        ->assertExitCode(0);
+        ->expectsOutputToContain('UNGESTEUERT')
+        ->expectsOutputToContain('ALT-BINDUNGEN, die niemand mehr liest')
+        ->assertExitCode(1);   // ungesteuerte Keys sind ein Befund, kein Erfolg
+});
+
+it('kennt das Verdikt `nur-bindung` nicht mehr', function () {
+    expect(\Platform\FoodAlchemist\Services\Knowledge\WissensVersorgungService::VERDIKTE)
+        ->toBe(['gesteuert', 'none', 'UNGESTEUERT']);
 });
 
 it('loest den Alt-Schluessel auf: ein Routing auf ai_generate_recipe versorgt recipe.generator', function () {

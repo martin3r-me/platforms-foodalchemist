@@ -26,7 +26,9 @@ class KnowledgeUpdateTool extends FoodAlchemistTool implements ToolContract, Too
     public function getDescription(): string
     {
         return 'Aktualisiert ein bestehendes Wissens-Dokument (slug aus knowledge.SEARCH/LIST/GET). '
-            . 'Änderbar: title, category (Vokabular-Slug), content_md (⇒ version+1), active, aliases, bind_layers. '
+            . 'Änderbar: title, category (Vokabular-Slug), art, content_md (⇒ version+1), active, aliases. '
+            . 'Verbindlich in einen Prompt: `knowledge_canon.PUT`. Suchbar: `knowledge_routings.PUT`. '
+            . 'Einsatzort-Bindungen gibt es nicht mehr (Spec 52). '
             . 'Auch Vault-verwaltete Docs des eigenen Teams editierbar (Import-Guard schützt den Edit vor '
             . 'Re-Import-Überschreiben); nur globales Master-/Seed-Wissen bleibt read-only.';
     }
@@ -43,17 +45,6 @@ class KnowledgeUpdateTool extends FoodAlchemistTool implements ToolContract, Too
                 'content_md' => ['type' => 'string'],
                 'active' => ['type' => 'boolean'],
                 'aliases' => ['type' => 'array', 'items' => ['type' => 'string']],
-                'bind_layers' => [
-                    'type' => 'array',
-                    'items' => [
-                        'type' => 'object',
-                        'properties' => [
-                            'target_key' => ['type' => 'string'],
-                            'mode' => ['type' => 'string', 'enum' => ['always', 'discovery', 'grounding', 'reference'], 'default' => 'discovery'],
-                        ],
-                        'required' => ['target_key'],
-                    ],
-                ],
             ],
             'required' => ['slug'],
         ];
@@ -67,6 +58,8 @@ class KnowledgeUpdateTool extends FoodAlchemistTool implements ToolContract, Too
         }
 
         $data = array_intersect_key($arguments, array_flip([
+            // `bind_layers` bleibt in dieser Liste, obwohl es nicht mehr im Schema steht: nur
+            // so erreicht es den Riegel im Service und wird ABGEWIESEN statt still verworfen.
             'title', 'category', 'art', 'content_md', 'active', 'aliases', 'bind_layers',
         ]));
 

@@ -5,10 +5,11 @@ use Platform\FoodAlchemist\Console\KnowledgePolicySeedCommand;
 use Platform\FoodAlchemist\Console\WissenSteuerdatenW0Command;
 use Platform\FoodAlchemist\Enums\SignalTyp;
 use Platform\FoodAlchemist\Models\FoodAlchemistSignal;
+use Platform\FoodAlchemist\Tests\Support\SeedsKanon;
 use Platform\FoodAlchemist\Tests\Support\SeedsTeamHierarchy;
 use Platform\FoodAlchemist\Tests\TestCase;
 
-uses(TestCase::class, SeedsTeamHierarchy::class);
+uses(TestCase::class, SeedsTeamHierarchy::class, SeedsKanon::class);
 
 beforeEach(fn () => $this->seedTeamHierarchy());
 
@@ -126,19 +127,17 @@ it('verify meldet Drift als Signal — und schliesst es wieder, wenn sie weg ist
         ->and($signal->description)->toContain('--apply');
 });
 
-it('schreibt Bindings mit einem source-Wert, der in die Spalte UND ins Kanal-Vokabular passt', function () {
-    // Live auf demo gebrochen (SQLSTATE[22001], 2026-09-03): der Wert war der Kommandoname
-    // `wissen-steuerdaten-w0` — 21 Zeichen in einer varchar(16)-Spalte, und dazu die falsche
-    // Sorte Wert. Die Suite war grün, weil SQLite string()-Längen NICHT erzwingt; MySQL schon.
-    // Dieser Test ist die Ersatz-Bremse für genau diese Engine-Lücke.
-    //
-    // Beide Hälften prüfen, nicht nur die Länge: `cli-w0` würde hineinpassen und wäre trotzdem
-    // falsch, weil die Spalte laut ihrem eigenen Migrations-Kommentar ein Kanal-Enum trägt.
-    $erlaubt = ['ui', 'mcp', 'import', 'frontmatter'];   // Spalten-Kommentar der Migration
-
-    expect(mb_strlen(WissenSteuerdatenW0Command::BINDING_SOURCE))->toBeLessThanOrEqual(16)
-        ->and(WissenSteuerdatenW0Command::BINDING_SOURCE)->toBeIn($erlaubt);
-});
+/*
+ * Hier stand `schreibt Bindings mit einem source-Wert, der in die Spalte UND ins
+ * Kanal-Vokabular passt` — die Ersatzbremse fuer eine Engine-Luecke (SQLite erzwingt
+ * string()-Laengen nicht, MySQL schon; der Wert war 21 Zeichen in varchar(16) und brach
+ * auf demo mit SQLSTATE[22001]).
+ *
+ * Der Befehl schreibt seit Spec 52 · F3 keine Bindungen mehr, `BINDING_SOURCE` ist weg.
+ * Die LEHRE ist es nicht: sie steht als eigener Riegel in
+ * `feedback_sqlite_tests_no_varchar_length` und gilt fuer jede kuenftige varchar-Spalte,
+ * die aus dem Code befuellt wird.
+ */
 
 /*
  * Spec 50 Welle 2 (2026-09-06): der Kanon hat die Layer-Bindings an den Generatoren abgelöst.
@@ -160,24 +159,14 @@ function w0MkDoc(string $slug, string $kategorie, bool $aktiv = true, int $chars
     ]);
 }
 
-function w0Kanon(int $teamId, string $scopeKey, string $slug, string $mode = 'pflicht'): void
-{
-    $docId = (int) DB::table('foodalchemist_knowledge_documents')->where('slug', $slug)->value('id');
-    DB::table('foodalchemist_knowledge_canon')->insert([
-        'uuid' => (string) \Symfony\Component\Uid\UuidV7::generate(),
-        'team_id' => $teamId, 'scope' => 'prompt_key', 'scope_key' => $scopeKey, 'role' => 'root',
-        'ord' => 0, 'knowledge_document_id' => $docId, 'mode' => $mode, 'active' => true,
-        'created_at' => now(), 'updated_at' => now(),
-    ]);
-}
 
 it('verify prueft bei vorhandenem Kanon den KANON — inaktive Originale hinter ihm sind keine Drift', function () {
     // Zustand nach Welle 2: das gebundene Original ist inaktiv, sein Split steckt im Kanon.
     w0MkDoc('mengen_defaults', 'cross_cutting', aktiv: false);
     w0MkDoc('mengen_defaults--hauptgang-komponenten', 'cross_cutting', teamId: $this->rootTeam->id);
     w0MkDoc('regelwerk-basisrezepte-2-verarbeitungs-reduktion-brunoise-roh-form', 'regelwerk', teamId: $this->rootTeam->id);
-    w0Kanon($this->rootTeam->id, 'recipe.generator', 'mengen_defaults--hauptgang-komponenten');
-    w0Kanon($this->rootTeam->id, 'recipe.generator', 'regelwerk-basisrezepte-2-verarbeitungs-reduktion-brunoise-roh-form');
+    $this->kanonZeile($this->rootTeam->id, 'recipe.generator', 'mengen_defaults--hauptgang-komponenten');
+    $this->kanonZeile($this->rootTeam->id, 'recipe.generator', 'regelwerk-basisrezepte-2-verarbeitungs-reduktion-brunoise-roh-form');
 
     $this->artisan('foodalchemist:wissen-steuerdaten-w0', ['--verify' => true, '--team' => $this->rootTeam->id])
         ->expectsOutputToContain('recipe.generator   Kanon-Pflicht: 2 Dossiers');
@@ -193,8 +182,8 @@ it('verify prueft bei vorhandenem Kanon den KANON — inaktive Originale hinter 
 it('verify meldet ein INAKTIVES Kanon-Pflicht-Dossier — es faellt genauso still aus dem Prompt wie frueher ein gebundenes', function () {
     w0MkDoc('regelwerk-basisrezepte-2-verarbeitungs-reduktion-brunoise-roh-form', 'regelwerk', teamId: $this->rootTeam->id);
     w0MkDoc('geschmacksbalance--grundprinzipien', 'cross_cutting', aktiv: false, teamId: $this->rootTeam->id);
-    w0Kanon($this->rootTeam->id, 'vk.generator', 'regelwerk-basisrezepte-2-verarbeitungs-reduktion-brunoise-roh-form');
-    w0Kanon($this->rootTeam->id, 'vk.generator', 'geschmacksbalance--grundprinzipien');
+    $this->kanonZeile($this->rootTeam->id, 'vk.generator', 'regelwerk-basisrezepte-2-verarbeitungs-reduktion-brunoise-roh-form');
+    $this->kanonZeile($this->rootTeam->id, 'vk.generator', 'geschmacksbalance--grundprinzipien');
 
     $this->artisan('foodalchemist:wissen-steuerdaten-w0', ['--verify' => true, '--team' => $this->rootTeam->id])
         ->assertExitCode(1);
@@ -227,13 +216,18 @@ it('verify meldet einen cross_cutting:always-Slug ohne aktives Dossier — die s
         ->and($befunde->contains(fn ($f) => str_contains($f, '«synonyme»')))->toBeFalse();
 });
 
-it('apply fasst an einem Kanon-Ziel KEINE Bindings an und (re)aktiviert nie eine Bindung auf ein inaktives Dossier', function () {
-    // recipe.generator hat einen Kanon → Bindings dort bleiben, wie sie sind (stumm im Gateway).
-    // vk.generator hat keinen → Fallback greift, aber nur für AKTIVE Dossiers.
+it('apply fasst GAR KEINE Bindungen mehr an — auch nicht die, die frueher stillgelegt wurden', function () {
+    // Vorher pinnte dieser Test die feine Bindungs-Choreografie des Befehls: Kanon-Ziele
+    // auslassen, Fallback-Ziele auf `always` heben, inaktive Dossiers nicht reaktivieren,
+    // UMBINDEN-Reste stilllegen. Vier Regeln fuer einen Kanal, den es seit Spec 52 · F2
+    // nicht mehr gibt.
+    //
+    // Die neue Aussage ist eine Zeile und wichtiger als die vier alten: der Befehl LAESST
+    // die Tabelle in Ruhe. Wer sie aufraeumt, ist ein Mensch mit `knowledge.UNBIND` — nicht
+    // ein Waechter, der montags 06:30 Zeilen umschreibt, die niemand liest.
     $bau = w0MkDoc('regelwerk-basisrezepte-2-verarbeitungs-reduktion-brunoise-roh-form', 'regelwerk');
     $md = w0MkDoc('mengen_defaults', 'cross_cutting', aktiv: false);
-    $gb = w0MkDoc('geschmacksbalance', 'cross_cutting', aktiv: false);
-    w0Kanon($this->rootTeam->id, 'recipe.generator', 'regelwerk-basisrezepte-2-verarbeitungs-reduktion-brunoise-roh-form');
+    $this->kanonZeile($this->rootTeam->id, 'recipe.generator', 'regelwerk-basisrezepte-2-verarbeitungs-reduktion-brunoise-roh-form');
 
     $binding = fn (int $docId, string $ziel, string $mode, int $active) => [
         'uuid' => (string) \Illuminate\Support\Str::uuid(), 'team_id' => null, 'knowledge_document_id' => $docId,
@@ -241,24 +235,28 @@ it('apply fasst an einem Kanon-Ziel KEINE Bindings an und (re)aktiviert nie eine
         'source' => 'import', 'created_at' => now(), 'updated_at' => now(),
     ];
     DB::table('foodalchemist_knowledge_bindings')->insert([
-        $binding($bau, 'recipe.generator', 'discovery', 0),   // Kanon-Ziel: darf NICHT angefasst werden
-        $binding($bau, 'vk.generator', 'discovery', 0),       // Fallback-Ziel: wird always/aktiv
-        $binding($md, 'vk.generator', 'discovery', 0),        // inaktives Dossier: bleibt, wie es ist
-        $binding($gb, 'vk.generator', 'always', 1),           // inaktives UMBINDEN-Dossier: wird stillgelegt
+        $binding($bau, 'recipe.generator', 'discovery', 0),
+        $binding($bau, 'vk.generator', 'discovery', 0),
+        $binding($md, 'vk.generator', 'always', 1),
     ]);
+    $vorher = DB::table('foodalchemist_knowledge_bindings')
+        ->orderBy('id')->get(['knowledge_document_id', 'target_key', 'mode', 'active'])->toArray();
 
     $this->artisan('foodalchemist:wissen-steuerdaten-w0', ['--apply' => true, '--team' => $this->rootTeam->id]);
 
-    $b = fn (int $docId, string $ziel) => DB::table('foodalchemist_knowledge_bindings')
-        ->where('knowledge_document_id', $docId)->where('target_key', $ziel)->whereNull('deleted_at')->first();
+    $nachher = DB::table('foodalchemist_knowledge_bindings')
+        ->orderBy('id')->get(['knowledge_document_id', 'target_key', 'mode', 'active'])->toArray();
+    expect($nachher)->toEqual($vorher);
+});
 
-    expect($b($bau, 'recipe.generator')->mode)->toBe('discovery')
-        ->and((int) $b($bau, 'recipe.generator')->active)->toBe(0)
-        ->and($b($bau, 'vk.generator')->mode)->toBe('always')
-        ->and((int) $b($bau, 'vk.generator')->active)->toBe(1)
-        ->and($b($md, 'vk.generator')->mode)->toBe('discovery')
-        ->and((int) $b($md, 'vk.generator')->active)->toBe(0)
-        ->and((int) $b($gb, 'vk.generator')->active)->toBe(0)
-        // und am Kanon-Ziel ist durch UMBINDEN nichts Neues entstanden
-        ->and(DB::table('foodalchemist_knowledge_bindings')->where('target_key', 'recipe.generator')->count())->toBe(1);
+it('verify meldet einen LEEREN Kanon am Generator als Fehler — frueher fiel der Fall still in die Bindungen', function () {
+    // ★ Der Zustand, den F2 ueberhaupt erst sichtbar macht. Vorher hiess „kein Kanon"
+    // stillschweigend „dann eben Bindungen"; heute heisst es „dieser Prompt bekommt kein
+    // Regelwerk", und genau das soll der Montags-Lauf sagen.
+    $this->artisan('foodalchemist:wissen-steuerdaten-w0', ['--verify' => true, '--team' => $this->rootTeam->id]);
+
+    $signal = DB::table('foodalchemist_signals')->where('dedup_key', 'wissen-steuerdaten')->latest('id')->first();
+    expect($signal)->not->toBeNull()
+        ->and($signal->description)->toContain('KEIN Kanon')
+        ->and($signal->description)->toContain('wissen-kanon-sicherung');
 });

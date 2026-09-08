@@ -59,12 +59,14 @@ class WissenVersorgungCommand extends Command
         }
 
         $ungesteuert = array_values(array_filter($bericht['zeilen'], fn ($z) => $z['verdikt'] === 'UNGESTEUERT'));
-        $nurBindung = array_values(array_filter($bericht['zeilen'], fn ($z) => $z['verdikt'] === 'nur-bindung'));
+        // Alt-Bindungen sind seit Spec 52 · F2 nie mehr Versorgung, nur noch Ballast — als
+        // eigene Zeile ausgewiesen, damit man sieht, was noch wegzuräumen ist.
+        $altBindungen = array_values(array_filter($bericht['zeilen'], fn ($z) => (int) $z['bindungen'] > 0));
         $ausgabe = $this->option('nur-befunde') ? $ungesteuert : $bericht['zeilen'];
 
         if ($ausgabe !== []) {
             $this->table(
-                ['Prompt-Key', 'Routing-Schlüssel', 'Kanon', 'Routing', 'Bindung', 'Budget (bound/retr.)', 'Verdikt'],
+                ['Prompt-Key', 'Routing-Schlüssel', 'Kanon', 'Routing', 'Alt-Bindung', 'Budget (bound/retr.)', 'Verdikt'],
                 array_map(fn ($z) => [
                     $z['prompt_key'],
                     $z['alt_schluessel'] ? $z['routing_key'].' (alt)' : '=',
@@ -82,10 +84,10 @@ class WissenVersorgungCommand extends Command
 
         $this->newLine();
         $this->info(sprintf(
-            'Registry: %d Prompt-Keys%s · gesteuert %d · bewusst none %d · nur Bindung %d · UNGESTEUERT %d',
+            'Registry: %d Prompt-Keys%s · gesteuert %d · bewusst none %d · UNGESTEUERT %d',
             $bericht['keys'],
             $praefix !== '' ? " (Präfix «{$praefix}»)" : '',
-            $bericht['gesteuert'], $bericht['none'], $bericht['nur_bindung'], $bericht['ungesteuert'],
+            $bericht['gesteuert'], $bericht['none'], $bericht['ungesteuert'],
         ));
 
         $rf = $bericht['routing_features'];
@@ -112,21 +114,23 @@ class WissenVersorgungCommand extends Command
             $this->line('  (als Aufrufer-Eigenname dokumentiert: '.implode(', ', $rf['aufrufer_eigenname']).')');
         }
 
-        if ($nurBindung !== []) {
+        if ($altBindungen !== []) {
             $this->newLine();
-            $this->warn('Nur über die ALT-Struktur versorgt (Bindung, kein Kanon/Routing) — Spec 52/F1:');
-            foreach ($nurBindung as $z) {
+            $this->warn('ALT-BINDUNGEN, die niemand mehr liest (Spec 52 · F2) — Ballast, kein Verlust:');
+            foreach ($altBindungen as $z) {
                 $this->line("  · {$z['prompt_key']} — ".implode(', ', $z['bindungs_slugs']));
             }
+            $this->line('  Lösen: `foodalchemist.knowledge.UNBIND` bzw. im Wissens-Browser am Dossier.');
         }
 
         if ($ungesteuert !== []) {
             $this->newLine();
-            $this->error(count($ungesteuert).' Prompt-Key(s) erhalten weder Kanon noch Routing noch Bindung:');
+            $this->error(count($ungesteuert).' Prompt-Key(s) erhalten weder Kanon noch Routing:');
             foreach ($ungesteuert as $z) {
-                // Eine Bindung auf ein deaktiviertes Dossier ist der SCHLIMMERE Fall: sie sieht
-                // im Browser nach Verdrahtung aus und liefert nichts. Genau so ist beim
-                // 155-Originale-Cutover still Wissen verschwunden.
+                // Eine Bindung auf ein deaktiviertes Dossier sah früher nach Verdrahtung aus
+                // und lieferte nichts — genau so ist beim 155-Originale-Cutover still Wissen
+                // verschwunden. Seit F2 liefert KEINE Bindung mehr etwas; die Zeile bleibt,
+                // weil so eine Leiche im Browser weiter nach Verdrahtung aussieht.
                 $tot = $z['bindungen_tot'] > 0
                     ? " — ACHTUNG: {$z['bindungen_tot']} tot(e) Bindung(en) auf INAKTIVE Dossiers ("
                         .implode(', ', $z['bindungs_slugs']).')'

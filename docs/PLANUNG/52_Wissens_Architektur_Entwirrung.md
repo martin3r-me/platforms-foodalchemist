@@ -1742,9 +1742,98 @@ Grenze der Messung, nicht das Live-Fenster.
 
 ### Was in Paket 3 noch offen ist
 
-Kanon-UI · die neun stummen Bindungen löschen (mit dem Korpus-Umbau) · den Bindungs-Zweig aus
-dem Gateway · `regelwerkBlock()` samt `->first()` **löschen**, nicht entschärfen ·
+Kanon-UI · `regelwerkBlock()` samt `->first()` **löschen**, nicht entschärfen ·
 `_sections`/`_chunks` droppen · die zwei Budget-Bäume zusammenlegen.
+
+---
+
+## ✅ Paket 3 · Schnitt 2 — die Bindungen sind weg (2026-09-08)
+
+**Die vertagte Entscheidung, jetzt mit Zahl.** Der Plan hat `F1`/`F2` bewusst offen gelassen,
+bis der Bestand gemessen ist — und ich hatte notiert, die Bindungen seien „der Pfad, der heute
+für ~45 Prompt-Keys der einzige ist". `knowledge_bindings.GET` auf demo, 2026-09-08:
+
+| | |
+|---|---|
+| Bindungen gesamt | **9** |
+| davon wirkungslos | **9** |
+| Bereichs-Präfix-Bindungen (`recipe`, `vk`) | **0** |
+| auf inaktive Dossiers | 0 |
+
+**Meine Annahme war falsch.** Alle neun hängen an `recipe.generator` / `vk.generator` — genau
+den zwei Keys mit Kanon — und alle auf Slugs, die dort ohnehin als `pflicht` stehen. Für die 45
+ungesteuerten Keys existiert **keine einzige** Bindung. Der Kanal war kein Fallback, sondern
+Doppelpflege mit einer Falle: bricht ein Kanon weg, schalten sich die neun still scharf.
+
+### Was entfernt ist
+
+**Laufzeit (`F2`):** der Bindungs-Zweig in `propose()`, `selectBoundKnowledge()`, der **dritte
+Tokenizer** (Mindestlänge 4, eigene Stoppwortliste) und die **dritte Relevanz-Formel**
+(`always×1000 + Treffer×10 + weight`). Befund `C2` ist damit von vier Formeln auf drei.
+`prompt_parts.bound` bleibt als Schlüssel mit 0 — strukturell, nicht zufällig; ein
+verschwundener Schlüssel machte alte und neue Läufe unvergleichbar.
+
+**Schreibpfade (`F3`, zwingend im selben Schnitt):** `knowledge.BIND` gelöscht ·
+`bindLayer()`/`bindExisting()` werfen · `bind_layers` aus `knowledge.POST/PUT` ·
+`Browser::addBinding()` samt „+ einbinden"-Knopf · `Einsatzorte` aus der Settings-Navigation ·
+die bindungsschreibende Hälfte des W0-Wächters. Hätte ich `F2` allein deployt, wären
+Schreibpfade übrig geblieben, die **still ins Leere schreiben** — schlechter als der Zustand
+vorher, und exakt die Fehlerklasse aus Befund `J`.
+
+Deshalb wirft `bind_layers`, statt ignoriert zu werden: ein `success` ohne Wirkung ist der
+Kern des Problems, nicht seine Lösung. Und `knowledge.BIND` ist **gelöscht** statt verweigernd
+— ein Werkzeug, das nur scheitern kann, ist Rauschen in dem Katalog, den die Agenten
+durchsuchen. `knowledge.UNBIND` bleibt: der Rückweg für die neun Alt-Zeilen muss offen sein.
+
+### Drei Aussagen übersetzt statt gestrichen
+
+**1. `ENTBUNDEN` im W0-Wächter.** Prüfte „ist dieses Dossier an keinen Layer gebunden". Die
+Invariante war aber *„gehört nicht in den Prompt"* — und der Weg dorthin ist heute der Kanon.
+Also wird gegen den Kanon geprüft. Gleiche Aussage, richtige Stelle.
+
+**2. Leerer Kanon = Fehler.** Vorher hiess „kein Kanon" stillschweigend „dann eben Bindungen".
+Der Wächter meldet das jetzt als Drift ins Signale-Cockpit und nennt
+`wissen-kanon-sicherung import` als Reparatur. Der Kreis aus `H7` ist damit nicht nur zu,
+sondern **sichtbar** — vorher war genau das der stille Pfad.
+
+**3. Der teuerste Fund der Welle 0 wandert mit.** `files_used` ging als `knowledge_used` an
+`propose()` und war dort der **Dedup-Eingang**: von 7 Pflicht-Dossiers kam null an, weil die
+Transparenz-Anzeige den Kanal abschaltete, den sie sichtbar machen wollte.
+★ `selectKanon()` hat **denselben Dedup-Eingang**. Die Falle ist nicht mit dem Kanal
+verschwunden, nur umgezogen — der Test bleibt, jetzt am Kanon.
+
+### Zwei Berichte mussten ihre Wahrheit ändern
+
+| Bericht | vorher | jetzt |
+|---|---|---|
+| `wissen-versorgung` | Verdikt `nur-bindung` | fällt weg — solche Keys sind ehrlich `UNGESTEUERT`; Bindungen erscheinen als Ballast |
+| `wissen-profil` | Befund `bindung_wuerde_scharf` | `bindung_altlast` — kein Zukunftsrisiko mehr, nur Ballast, mit `UNBIND` als Rückweg |
+| `regelwerk.GET` | `quelle: "bindung"` | `ungesteuert` + eine Erklärung, warum der Browser trotzdem eine Verdrahtung zeigt |
+
+Die letzte Zeile ist die wichtigste: eine Auskunft, die „bindung" sagt, während der Gateway die
+Tabelle nicht liest, ist genau die Sorte Lüge, gegen die `A4` antritt.
+
+### Tests: 14 Dateien, nicht 6
+
+Befund `H8` hatte sechs Dateien genannt, die die Alt-Struktur festschreiben. Es waren
+**vierzehn**. Zwei sind gelöscht bzw. ersetzt (`KnowledgeBindToolTest` →
+`WissenBindungAbgeschafftTest`, das jetzt die Gegenrichtung pinnt), fünf Welle-0-Tests laufen
+auf den Kanon um, vier Fixtures stellen den Altbestand nur noch per Insert, drei pinnen die
+gedrehten Verdikte.
+
+★ **Und der erste volle Lauf ist an mir gescheitert, nicht an der Sache:** zwei Testdateien
+deklarierten beide ein globales `w0Kanon()` → `Cannot redeclare`. Der Kopf von `fa_test.sh`
+warnt wörtlich davor, und der **parallele** Lauf zeigt es nicht (jeder Worker lädt nur seine
+eigenen Dateien) — nur der sequentielle. Der Helfer liegt jetzt als `tests/Support/SeedsKanon`
+dort, wo geteilte Helfer hingehören.
+
+### Was jetzt noch an der Tabelle hängt
+
+Die neun Alt-Zeilen auf demo sind **nicht** gelöscht — sie sind inert, und sie wegzuräumen ist
+ein eigener, umkehrbarer Handgriff (`knowledge.UNBIND`), der zum Korpus-Umbau passt. Ebenso
+bleiben `knowledge_bindings` und `knowledge_layers` als Tabellen: `knowledge_bindings.GET`
+liest sie als Bestandsnachweis, und der Wissens-Browser löst die Labels daraus auf. Der
+Tabellen-Drop gehört zu `F5`, zusammen mit `_sections`/`_chunks`.
 
 ---
 

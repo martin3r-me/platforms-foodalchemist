@@ -3,10 +3,11 @@
 use Illuminate\Support\Facades\DB;
 use Platform\FoodAlchemist\Services\Ai\AiGatewayService;
 use Platform\FoodAlchemist\Support\DossierText;
+use Platform\FoodAlchemist\Tests\Support\SeedsKanon;
 use Platform\FoodAlchemist\Tests\Support\SeedsTeamHierarchy;
 use Platform\FoodAlchemist\Tests\TestCase;
 
-uses(TestCase::class, SeedsTeamHierarchy::class);
+uses(TestCase::class, SeedsTeamHierarchy::class, SeedsKanon::class);
 
 beforeEach(fn () => $this->seedTeamHierarchy());
 
@@ -83,7 +84,7 @@ it('greift nicht bei fett gesetztem Text, der nur zufaellig so anfaengt', functi
         ->and(DossierText::ohneVorspann($md))->toContain('Liste');
 })->skip('Bewusst offen: das Muster ist eng auf den Split-Vorspann geeicht, nicht auf jede fette Zeile. Wenn ein echtes Sammel-Dokument mit **Regelwerk… beginnt, ist der Verlust ein Einleitungssatz — dokumentiert statt stillschweigend.');
 
-it('schrumpft den gebundenen Block im echten Prompt, ohne eine Regel zu verlieren', function () {
+it('schrumpft den Regelwerk-Block im echten Prompt, ohne eine Regel zu verlieren', function () {
     config(['foodalchemist.ai.provider' => 'fake']);
     $this->actingAs($this->makeUser($this->rootTeam));
 
@@ -110,18 +111,9 @@ it('schrumpft den gebundenen Block im echten Prompt, ohne eine Regel zu verliere
             'active' => 1,
             'created_at' => now(), 'updated_at' => now(),
         ]);
-        DB::table('foodalchemist_knowledge_bindings')->insert([
-            'uuid' => (string) \Illuminate\Support\Str::uuid(),
-            'team_id' => $this->rootTeam->id,
-            'knowledge_document_id' => DB::table('foodalchemist_knowledge_documents')->where('slug', $slug)->value('id'),
-            'binding_type' => 'layer',
-            'target_key' => 'recipe.generator',
-            'mode' => 'always',
-            'weight' => 100 - $i,
-            'active' => 1,
-            'source' => 'test',
-            'created_at' => now(), 'updated_at' => now(),
-        ]);
+        // Seit Spec 52 · F2 über den Kanon statt über eine Bindung — `DossierText::ohneVorspann()`
+        // wird von `selectKanon()` genauso aufgerufen, die Aussage des Tests bleibt dieselbe.
+        $this->kanonZeile((int) $this->rootTeam->id, 'recipe.generator', $slug, 'pflicht', ($i + 1) * 10);
     }
 
     app(AiGatewayService::class)->propose('recipe.generator', ['description' => 'Rinderfilet'], []);
@@ -131,8 +123,9 @@ it('schrumpft den gebundenen Block im echten Prompt, ohne eine Regel zu verliere
 
     // 4 Dossiers × ~490 Z. Vorspann ≈ 1.960 Zeichen, die nicht mehr im Prompt stehen.
     // Der Block trägt nur noch Kopfzeilen + die vier §-Körper.
-    expect($parts['bound'])->toBeLessThan(1600)
-        ->and($parts['bound'])->toBeGreaterThan(300);
+    expect($parts['kanon'])->toBeLessThan(1600)
+        ->and($parts['kanon'])->toBeGreaterThan(300)
+        ->and($parts['bound'])->toBe(0);
 
     // … und JEDE Regel ist weiter da. Das ist die Hälfte, die zählt.
     $audit = implode(' ', json_decode((string) $log->knowledge_used, true) ?: []);

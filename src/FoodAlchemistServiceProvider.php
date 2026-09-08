@@ -687,7 +687,9 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\TrendradarImportTool::class,
                     \Platform\FoodAlchemist\Tools\PresentationDesignsDuplicateTool::class,
                     \Platform\FoodAlchemist\Tools\PresentationDesignsGenerateCssTool::class,
-                    \Platform\FoodAlchemist\Tools\KnowledgeBindTool::class,
+                    // `knowledge.BIND` ist GELÖSCHT (Spec 52 · F2/F3): Bindungen wirken nicht mehr.
+                    // Verbindlich machen → `knowledge_canon.PUT`, suchbar machen →
+                    // `knowledge_routings.PUT`. UNBIND bleibt als Aufräumweg für Alt-Zeilen.
                     \Platform\FoodAlchemist\Tools\KnowledgeUnbindTool::class,
                     \Platform\FoodAlchemist\Tools\PairingsGetTool::class,
                     \Platform\FoodAlchemist\Tools\PairingsSuggestTool::class,

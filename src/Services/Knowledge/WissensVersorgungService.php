@@ -30,8 +30,14 @@ use Platform\FoodAlchemist\Services\Ai\KnowledgeContextService;
  */
 class WissensVersorgungService
 {
-    /** Verdikte, in der Reihenfolge ihrer Schwere. */
-    public const VERDIKTE = ['gesteuert', 'none', 'nur-bindung', 'UNGESTEUERT'];
+    /**
+     * Verdikte, in der Reihenfolge ihrer Schwere.
+     *
+     * `nur-bindung` ist mit Spec 52 · F2 WEGGEFALLEN: der Gateway liest `knowledge_bindings`
+     * nicht mehr, ein Key kann also nicht mehr allein über eine Bindung versorgt sein. Wo
+     * früher `nur-bindung` stand, steht heute ehrlich `UNGESTEUERT`.
+     */
+    public const VERDIKTE = ['gesteuert', 'none', 'UNGESTEUERT'];
 
     public function __construct(
         private readonly KnowledgeCanonService $canon,
@@ -66,7 +72,10 @@ class WissensVersorgungService
             'keys' => count($zeilen),
             'gesteuert' => $zaehl('gesteuert'),
             'none' => $zaehl('none'),
-            'nur_bindung' => $zaehl('nur-bindung'),
+            // Bleibt als Schlüssel mit 0: das Feld steht in Berichten und im MCP-Vertrag, und
+            // ein verschwundener Schlüssel machte alte und neue Läufe unvergleichbar. Es ist
+            // seit F2 strukturell 0, nicht zufällig.
+            'nur_bindung' => 0,
             'ungesteuert' => $zaehl('UNGESTEUERT'),
             'routing_features' => $this->routingFeaturesOhnePromptKey(),
             'zeilen' => $zeilen,
@@ -116,15 +125,14 @@ class WissensVersorgungService
 
         $wirksamesRouting = array_values(array_filter($routing, fn ($r) => $r['mode'] !== 'none'));
         $bindungenTot = $bindungen->filter(fn ($b) => (int) $b->doc_active !== 1)->count();
-        $bindungenLebend = $bindungen->count() - $bindungenTot;
 
-        // Rangfolge wie im Gateway: Kanon gewinnt; Bindungen sind Fallback und bei vorhandenem
-        // Kanon STUMM (AiGatewayService:178). Eine Bindung an einem Key mit Kanon ist deshalb
-        // keine Versorgung, sondern Ballast.
+        // Rangfolge wie im Gateway. Bis Spec 52 · F2 stand hier ein dritter Fall: Bindungen als
+        // Fallback, wenn kein Kanon da war. Den gibt es nicht mehr — der Gateway liest die
+        // Tabelle nicht. Eine Bindung ist damit NIE Versorgung, immer nur Ballast, und ein Key
+        // mit Bindungen und sonst nichts ist ehrlich UNGESTEUERT statt `nur-bindung`.
         $kanonDa = $kanon->isNotEmpty();
         $verdikt = match (true) {
             $kanonDa || $wirksamesRouting !== [] => 'gesteuert',
-            $bindungenLebend > 0 => 'nur-bindung',
             $routing !== [] => 'none',
             default => 'UNGESTEUERT',
         };
@@ -141,7 +149,8 @@ class WissensVersorgungService
             'routing' => $routing,
             'bindungen' => $bindungen->count(),
             'bindungen_tot' => $bindungenTot,
-            'bindungen_stumm' => $kanonDa ? $bindungenLebend : 0,
+            // Seit F2 sind ALLE lebenden Bindungen stumm, nicht nur die an Keys mit Kanon.
+            'bindungen_stumm' => $bindungen->count() - $bindungenTot,
             'bindungs_slugs' => $bindungen->pluck('slug')->all(),
             'budget_bound' => (int) $this->gateway->boundBudgetFuer($promptKey)['total'],
             'budget_retrieval' => $this->wissen->budgetFuer($promptKey),

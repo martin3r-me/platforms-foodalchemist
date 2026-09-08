@@ -27,9 +27,14 @@ use Platform\FoodAlchemist\Support\TeamScope;
  *
  * ★ Warum das VOR einem Korpus-Umbau stehen muss: der Kanon hängt an
  * `knowledge_document_id`. Umbenennen ist deshalb harmlos. **Löschen und Neuanlegen nicht** —
- * der FK ist `cascade`, die Kanon-Zeile geht mit, `hasCanon()` wird `false`, und der Gateway
- * schaltet damit **die alten Bindungen wieder scharf**. Ohne diese Prüfung merkt das niemand;
- * es gäbe nur schlechtere Rezepte.
+ * der FK ist `cascade`, die Kanon-Zeile geht lautlos mit, und der Key steht danach ohne
+ * Regelwerk da, ohne dass irgendetwas fehlschlägt.
+ *
+ * Bis Spec 52 · F2 kam die zweite Hälfte dazu: `hasCanon()` wurde `false` und der Gateway
+ * schaltete **die alten Bindungen wieder scharf** — ein Key wechselte also still seine
+ * Wissensquelle. Diese Falle ist zu; der Gateway liest `knowledge_bindings` nicht mehr.
+ * Der erste Teil bleibt aber genauso gefährlich, und die Sicherung des Kanons
+ * ({@see KanonSicherungService}) ist der Rückweg, nicht die Vermeidung.
  */
 class WissensProfilService
 {
@@ -76,9 +81,14 @@ class WissensProfilService
         $pflichtZeichen = (int) $pflicht->sum('char_count');
         $wirksamesRouting = array_values(array_filter($routing, fn ($r) => $r['mode'] !== 'none'));
 
-        // Bindungen, die scharf wuerden, wenn der Kanon verschwaende (siehe Klassen-Docblock).
+        // Alt-Bindungen an diesem Key. Bis Spec 52 · F2 hiess dieser Befund
+        // `bindung_wuerde_scharf`: die Bindungen waren stumm, SOLANGE ein Kanon stand, und
+        // schalteten sich still wieder scharf, wenn er wegbrach. Seit F2 liest der Gateway
+        // `knowledge_bindings` gar nicht mehr — die Falle ist strukturell zu, uebrig sind
+        // Datenzeilen ohne Wirkung. Deshalb neuer Code und schwaechere Aussage: kein
+        // Zukunftsrisiko mehr, nur noch Ballast, der weg kann.
         $bereich = str_contains($promptKey, '.') ? explode('.', $promptKey, 2)[0] : $promptKey;
-        $lauerndeBindungen = DB::table('foodalchemist_knowledge_bindings as b')
+        $altBindungen = DB::table('foodalchemist_knowledge_bindings as b')
             ->join('foodalchemist_knowledge_documents as d', 'd.id', '=', 'b.knowledge_document_id')
             ->whereNull('b.deleted_at')->where('b.active', 1)->where('b.binding_type', 'layer')
             ->whereIn('b.target_key', array_unique([$promptKey, $bereich]))
@@ -86,18 +96,19 @@ class WissensProfilService
             ->pluck('d.slug')->map(fn ($x) => (string) $x)->all();
 
         $befunde = $this->befunde($kaputt, $pflichtZeichen, $budgetBound, $pflicht, $team);
-        if ($docs->isNotEmpty() && $lauerndeBindungen !== []) {
+        if ($altBindungen !== []) {
             $befunde[] = [
-                'code' => 'bindung_wuerde_scharf',
+                'code' => 'bindung_altlast',
                 'schwere' => 'hinweis',
                 'nachfolger' => [],
                 'slug' => null,
-                'text' => 'Dieser Key hat Kanon UND '.count($lauerndeBindungen).' aktive Bindung(en) ('
-                    .implode(', ', $lauerndeBindungen).'). Die Bindungen sind heute stumm — verliert der Key '
-                    .'seinen Kanon (z. B. weil ein Dossier geloescht wird), schalten sie sich STILL wieder scharf.',
+                'text' => count($altBindungen).' Alt-Bindung(en) an diesem Key ('
+                    .implode(', ', $altBindungen).'). Sie wirken seit Spec 52 nicht mehr — der Gateway '
+                    .'liest die Tabelle nicht. Loesen mit `knowledge.UNBIND`; verbindlich machen '
+                    .'stattdessen ueber den Kanon.',
             ];
         }
-        // NUR `blockiert` kippt den Zustand. Ein `hinweis` (z. B. lauernde Bindungen) ist eine
+        // NUR `blockiert` kippt den Zustand. Ein `hinweis` (z. B. Alt-Bindungen) ist eine
         // Warnung fuer spaeter, kein Defekt von heute — sonst staenden die gesunden Kanon-Keys
         // als fehlerhaft da und die Meldung waere nach einer Woche Rauschen.
         $blockiert = array_filter($befunde, fn ($b) => $b['schwere'] === 'blockiert') !== [];
@@ -124,7 +135,7 @@ class WissensProfilService
             // auseinander, ist genau der stille Fall eingetreten.
             'kanon_zeilen_vorhanden' => $hatKanonZeilen,
             'kanon_aufgeloest' => $docs->count(),
-            'lauernde_bindungen' => $lauerndeBindungen,
+            'alt_bindungen' => $altBindungen,
             'befunde' => $befunde,
             'fingerabdruck' => $this->fingerabdruck($promptKey, $role, $routingKey, $pflicht, $wennPlatz, $routing, $budgetBound),
         ];

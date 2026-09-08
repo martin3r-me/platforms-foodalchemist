@@ -27,7 +27,6 @@ use Symfony\Component\Uid\UuidV7;
  */
 class KnowledgeService
 {
-    private const BINDING_MODES = ['always', 'discovery', 'grounding', 'reference'];
 
     /** Max. Slug-Länge einer Wissens-Kategorie = Breite von foodalchemist_knowledge_documents.category (VARCHAR 24). */
     private const MAX_CATEGORY_SLUG_LEN = 24;
@@ -84,9 +83,7 @@ class KnowledgeService
                 'created_at' => $now, 'updated_at' => $now,
             ]);
         }
-        foreach ($this->cleanBindings($data['bind_layers'] ?? []) as $b) {
-            $this->bindLayer($team, $id, $b['target_key'], $b['mode'], $source);
-        }
+        $this->verweigereBindLayers($data['bind_layers'] ?? null);
 
         return $this->find($slug);
     }
@@ -150,9 +147,7 @@ class KnowledgeService
                 'created_at' => $now, 'updated_at' => $now,
             ]);
         }
-        foreach ($this->cleanBindings($data['bind_layers'] ?? []) as $b) {
-            $this->bindLayer($team, (int) $doc->id, $b['target_key'], $b['mode'], 'mcp');
-        }
+        $this->verweigereBindLayers($data['bind_layers'] ?? null);
 
         $fresh = $this->find($slug);
         // Recall-Index nachziehen (A1): Inhalts-/Status-Edit ⇒ neu embedden bzw. bei
@@ -230,54 +225,27 @@ class KnowledgeService
         DB::table('foodalchemist_knowledge_aliases')->where('id', $aliasId)->delete();
     }
 
-    /** Bindet ein Doc an einen Einsatzort (knowledge_layers-Slug), Provenienz $source. */
+    /** Der Satz, den jeder Bindungs-Schreibpfad ausgibt — einmal formuliert, nicht dreimal. */
+    public const BINDUNG_ABGESCHAFFT = 'Bindungen (`knowledge_bindings`) sind abgeschafft (Spec 52 · F2). '
+        . 'Sie wurden zur Laufzeit nicht mehr gelesen — eine neue Bindung wäre eine Zeile, die nichts tut. '
+        . 'Was ein Prompt verbindlich bekommt, sagt der Kanon: `foodalchemist.knowledge_canon.PUT` '
+        . '(scope=prompt_key, scope_key=<Prompt-Key>, slug=<Dossier>, mode=pflicht|wenn_platz). '
+        . 'Welche Kategorie ein Schritt SUCHEN darf, sagt `foodalchemist.knowledge_routings.PUT`. '
+        . 'Bestehende Alt-Bindungen lösen: `foodalchemist.knowledge.UNBIND`.';
+
+    /**
+     * ABGESCHAFFT (Spec 52 · F2, 2026-09-08). Wirft, statt eine wirkungslose Zeile anzulegen.
+     *
+     * Der Grund für „wirft" statt „ignoriert": eine Bindung, die entsteht und nichts tut,
+     * ist exakt die Fehlerklasse, gegen die diese Spec antritt — der Kurator wird angewiesen,
+     * etwas zu tun, das nachweislich nichts bewirkt (Befund `J`). Lieber ein lauter Fehler
+     * mit dem richtigen Weg im Text.
+     *
+     * Der Rückweg bleibt offen: {@see unbindExisting()} löst Alt-Bindungen weiterhin.
+     */
     public function bindLayer(Team $team, int $docId, string $targetKey, string $mode, string $source = 'mcp'): void
     {
-        $targetKey = trim($targetKey);
-        $layer = DB::table('foodalchemist_knowledge_layers')->whereNull('deleted_at')
-            ->where('active', true)->where('slug', $targetKey)->first();
-        if ($layer === null) {
-            $verfuegbar = DB::table('foodalchemist_knowledge_layers')->whereNull('deleted_at')
-                ->where('active', true)->orderBy('slug')->pluck('slug')->implode(', ');
-            throw new RuntimeException("Unbekannter Einsatzort \"{$targetKey}\". Verfügbar: {$verfuegbar}");
-        }
-        $mode = in_array($mode, self::BINDING_MODES, true) ? $mode : 'discovery';
-
-        // Bindungen sind team-scoped (team_id des Callers, siehe bindExisting-Docblock +
-        // team-scoped Unique-Index fa_know_bind_team_uq). Idempotenz UND Soft-Delete-Revive
-        // in einem Schritt — team-scoped abgefragt, soft-gelöschte Zeilen eingeschlossen:
-        //   • aktive eigene Bindung  → No-op (nicht doppeln)
-        //   • soft-gelöschte eigene  → wiederbeleben (das im UNBIND versprochene „sauberes
-        //     Re-Bind"; ein Insert würde am Unique-Index mit der Leiche kollidieren)
-        //   • keine eigene           → neu anlegen
-        // Fremd-/globale Bindungen am selben Doc/Ziel bleiben unberührt (eigener team_id-Scope).
-        $eigene = DB::table('foodalchemist_knowledge_bindings')
-            ->where('knowledge_document_id', $docId)
-            ->where('binding_type', 'layer')->where('target_key', $targetKey)
-            ->where('team_id', $team->id)->first();
-        if ($eigene !== null && $eigene->deleted_at === null) {
-            return;
-        }
-        if ($eigene !== null) {
-            DB::table('foodalchemist_knowledge_bindings')->where('id', $eigene->id)->update([
-                'deleted_at' => null, 'active' => true, 'mode' => $mode, 'updated_at' => now(),
-            ]);
-
-            return;
-        }
-        DB::table('foodalchemist_knowledge_bindings')->insert([
-            'uuid' => (string) UuidV7::generate(),
-            'team_id' => $team->id,
-            'knowledge_document_id' => $docId,
-            'binding_type' => 'layer',
-            'target_key' => $targetKey,
-            'mode' => $mode,
-            'weight' => 0,
-            'active' => true,
-            'source' => $source,
-            'created_by' => Auth::id(),
-            'created_at' => now(), 'updated_at' => now(),
-        ]);
+        throw new RuntimeException(self::BINDUNG_ABGESCHAFFT);
     }
 
     /**
@@ -528,24 +496,26 @@ class KnowledgeService
     }
 
     /** @return list<array{target_key:string,mode:string}> */
-    private function cleanBindings(mixed $bindings): array
+    /**
+     * `bind_layers` in POST/PUT: abweisen, nicht ignorieren.
+     *
+     * Hier stand `cleanBindings()` — es normalisierte die Eingabe und legte Bindungen an.
+     * Seit F2 liest die Laufzeit sie nicht mehr. Sie stillschweigend zu verwerfen wäre die
+     * schlimmere Variante: der Aufrufer bekäme `success` und hätte nichts erreicht. Genau
+     * diese Sorte „technisch vorhanden, faktisch unsichtbar" ist der Kern von Spec 52.
+     *
+     * Ein leeres Array oder `null` ist kein Fehler — nur ein Versuch, wirklich zu binden.
+     */
+    private function verweigereBindLayers(mixed $bindings): void
     {
         if (! is_array($bindings)) {
-            return [];
+            return;
         }
-        $out = [];
         foreach ($bindings as $b) {
-            if (! is_array($b)) {
-                continue;
+            if (is_array($b) && trim((string) ($b['target_key'] ?? '')) !== '') {
+                throw new RuntimeException(self::BINDUNG_ABGESCHAFFT);
             }
-            $key = trim((string) ($b['target_key'] ?? ''));
-            if ($key === '') {
-                continue;
-            }
-            $out[] = ['target_key' => $key, 'mode' => (string) ($b['mode'] ?? 'discovery')];
         }
-
-        return $out;
     }
 
     /** Volle Doc-Zeile per Slug (auch inaktiv — anders als KnowledgeContextService::getDocument). */

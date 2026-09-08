@@ -126,14 +126,18 @@ class RegelwerkGetTool extends FoodAlchemistTool implements ToolContract, ToolMe
     /**
      * Spec 52/A4 — was bekommt dieser Prompt-Key an Regelwerk, wenn KEIN Kanon hinterlegt ist?
      *
-     * Drei ehrliche Antworten statt einer Ausrede:
+     * Zwei ehrliche Antworten statt einer Ausrede:
      *   · `routing` — eine Route greift; wir nennen Kategorie, Modus und Deckel, und dazu die
      *     Auswahl-Mechanik: `always` holt per `->first()` **genau EIN** Dossier (bei 61
      *     Regelwerks-Splits praktisch eine Zufallsauswahl), `discovery` rankt bis zu `max_docs`.
-     *   · `bindung` — kein Kanon, kein Routing, aber eine Bindung hängt am Prompt-Key oder an
-     *     seinem Bereichs-Präfix. Das ist die Alt-Struktur, und sie ist gedeckelt.
      *   · `ungesteuert` — nichts davon. Dann erreicht diesen Prompt kein Regelwerk, und das
      *     soll auch so dastehen.
+     *
+     * ★ `bindung` gab es bis Spec 52 · F2 als dritte Antwort. Der Gateway liest
+     * `knowledge_bindings` nicht mehr — eine vorhandene Alt-Bindung ist also KEINE Versorgung
+     * und darf hier nicht als Quelle erscheinen. Sie wird stattdessen als Ballast erwähnt,
+     * damit der Befund „ungesteuert" nicht wie ein Widerspruch zum Wissens-Browser wirkt, der
+     * die Zeile weiter anzeigt.
      *
      * @return array<string, mixed>
      */
@@ -170,31 +174,27 @@ class RegelwerkGetTool extends FoodAlchemistTool implements ToolContract, ToolMe
             ];
         }
 
-        $bindung = DB::table('foodalchemist_knowledge_bindings as b')
+        // Alt-Bindungen NUR noch erwähnen, nie als Quelle ausgeben. Wer sie im Wissens-Browser
+        // stehen sieht, soll hier lesen, warum sie trotzdem nichts liefern.
+        $altBindungen = DB::table('foodalchemist_knowledge_bindings as b')
             ->join('foodalchemist_knowledge_documents as d', 'd.id', '=', 'b.knowledge_document_id')
             ->whereNull('b.deleted_at')->where('b.active', 1)->where('b.binding_type', 'layer')
             ->whereIn('b.target_key', array_unique([$promptKey, $bereich]))
             ->where('d.active', 1)->whereNull('d.deleted_at')
-            ->get(['d.slug', 'b.target_key']);
-
-        if ($bindung->isNotEmpty()) {
-            return [
-                'quelle' => 'bindung',
-                'dokumente' => $bindung->map(fn ($b) => [
-                    'slug' => (string) $b->slug, 'ueber' => (string) $b->target_key,
-                ])->values()->all(),
-                'hinweis' => 'Kein Kanon und kein Regelwerk-Routing. Versorgt wird dieser Prompt nur über '
-                    . 'die Alt-Struktur (Bindung) — bei einem Ziel wie «' . $bereich . '» hängt dasselbe '
-                    . 'Dossier an ALLEN Prompts dieses Bereichs, unabhängig von der Aufgabe.',
-            ];
-        }
+            ->pluck('d.slug')->map(fn ($x) => (string) $x)->all();
 
         return [
             'quelle' => 'ungesteuert',
             'dokumente' => [],
-            'hinweis' => 'Diesen Prompt-Key erreicht KEIN Regelwerk: kein Kanon, kein Routing, keine '
-                . 'Bindung. Das ist ein Befund, kein Normalzustand — `foodalchemist:wissen-versorgung` '
-                . 'listet alle solchen Keys.',
+            'alt_bindungen' => $altBindungen,
+            'hinweis' => 'Diesen Prompt-Key erreicht KEIN Regelwerk: kein Kanon, kein Routing. Das ist '
+                . 'ein Befund, kein Normalzustand — `foodalchemist:wissen-versorgung` listet alle solchen '
+                . 'Keys.'
+                . ($altBindungen !== []
+                    ? ' Es hängen zwar noch ' . count($altBindungen) . ' Alt-Bindung(en) daran ('
+                        . implode(', ', $altBindungen) . '), die wirken seit Spec 52 aber NICHT mehr — '
+                        . 'der Gateway liest die Tabelle nicht. Verbindlich machen: `knowledge_canon.PUT`.'
+                    : ''),
         ];
     }
 
