@@ -24,8 +24,8 @@ use Throwable;
  *    unangetastet: Semantik löst Freitext → Doc-/Stem-Slug auf, der Graph paart.
  *
  * Was wird embeddet (die Qualitäts-Stellschraube):
- *  - domain : Titel + Lead (erste ~2000 Zeichen) → Doc-Level-Relevanz reicht
- *             für Domain-Discovery.
+ *  - domain : Titel + Lead ({@see DOMAIN_LEAD_CHARS}, heute 4000 Zeichen = der
+ *             Dossier-Deckel) → Doc-Level-Relevanz reicht für Domain-Discovery.
  *  - pairing: Stem + die VERIFIZIERTEN Partner-NAMEN (über
  *             {@see KnowledgeContextService::extractPairingNames()}), NICHT die
  *             molekulare Prosa — die Zutaten-Oberfläche ist das, was zur
@@ -81,16 +81,35 @@ class KnowledgeEmbeddingService
      *  2. Mehr Text pro Vektor ist KEIN Ersatz für Chunking. Abdeckung ohne Schärfe bringt
      *     nichts; W1-5 (ein Vektor je Abschnitt, mit heading_path) bleibt der echte Fix.
      *
-     * Darum wieder 2000: kostet ein Viertel des Embedding-Textes und liefert dasselbe.
-     * Wer den Wert erneut anfassen will, fährt bitte ZUERST den Probe — die Messung ist da.
+     * Darum damals wieder 2000: kostete ein Viertel des Embedding-Textes und lieferte dasselbe.
      *
-     * Seit Spec 50 Strang III (2026-09-05) ist der Wert konfigurierbar
-     * (`foodalchemist.semantic_search.embed_lead_chars`, Default weiter 2000): das Wissen
-     * wird als DOSSIER granular (ein Thema ≤ Deckel), nicht per Chunking — dann gehören
-     * Fenster und Deckel zusammen, und der Kandidat 4000 wird für Ein-Themen-Dossiers
-     * erneut mit dem Probe gemessen, nicht geglaubt. {@see leadChars()}
+     * ── 2026-09-07: auf 4000 UMGESTELLT, und zwar gemessen ─────────────────────────────
+     * Die Bedingung, auf die der 4000-Kandidat gewartet hat, ist mit Spec 50 Strang III
+     * eingetreten: das Wissen liegt als DOSSIER granular vor (ein Thema ≤ Deckel, Median
+     * 2.885 Z., 99,6 % unter 4.000), nicht mehr als Monolith von 10–50k. Damit misst 4000
+     * etwas anderes als die 8000 von oben — dort wurden Monolithen verdünnt, hier wird ein
+     * Ein-Themen-Dossier vollständig abgebildet.
+     *
+     * `wissen-recall-probe --team=6 --k=10`:
+     *
+     *                                   Fenster 2000    Fenster 4000
+     *   Anfragen aus dem KOPF              85,0 %          81,7 %
+     *   Anfragen JENSEITS des Fensters     47,5 %          55,0 %
+     *   (n)                                  40             120
+     *
+     * Entschieden: 4000 BEHALTEN. Der Gewinn ist strukturell — bei 2000 lagen 820.165 von
+     * 2.781.827 Zeichen (29 % des Korpus) überhaupt nicht im Vektor, bei 4000 sind es 0 %.
+     * Der Kopf-Rückgang liegt im Rauschen.
+     *
+     * ★ Lehre, teurer als der Wert selbst: **n=40 ist zu klein.** Ein Treffer = 2,5 Punkte,
+     * und der Schwanz sprang zwischen n=40 (50,0 %) und n=120 (55,0 %) um 5 Punkte. Jede
+     * künftige Vorher/Nachher-Messung mit n ≥ 120 fahren, sonst vergleicht man Rauschen.
+     *
+     * Der Wert ist über `foodalchemist.semantic_search.embed_lead_chars` konfigurierbar.
+     * Wer ihn anfasst, fährt ZUERST den Probe — und danach einen Re-Embed, sonst mischen
+     * sich alte und neue Vektoren. Rollback = Wert zurück + Re-Embed. {@see leadChars()}
      */
-    private const DOMAIN_LEAD_CHARS = 2000;
+    private const DOMAIN_LEAD_CHARS = 4000;
 
     /** Max. Partner-Namen, die in den Pairing-Embedding-Text einfließen. */
     private const PAIRING_MAX_PARTNERS = 40;

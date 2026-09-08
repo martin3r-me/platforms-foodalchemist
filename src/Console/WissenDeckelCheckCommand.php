@@ -12,8 +12,10 @@ use Platform\FoodAlchemist\Services\VorgangsRegisterService;
  * Spec 50 · Etappe 8b — zwei Invarianten der Wissensbasis, die niemand von Hand halten kann.
  *
  * **(1) Der Zeichen-Deckel.** Kein Dossier darf über {@see KnowledgeCanonService::dossierMaxChars()}
- * gehen: das Embedding-Fenster liegt bei 2.000 Zeichen, alles dahinter ist semantisch kaum
- * auffindbar, und die Wissens-Oberfläche meldet grössere Dossiers als Fehler. Gemessen
+ * gehen: das Embedding-Fenster liegt seit 2026-09-07 bei 4.000 Zeichen — genau auf dem Deckel,
+ * damit ein Dossier, das die Kuration erlaubt, auch vollständig im Vektor steckt. Alles
+ * DARÜBER ist semantisch nur noch über den Kopf auffindbar (gemessen 55 %), und die
+ * Wissens-Oberfläche meldet grössere Dossiers als Fehler. Gemessen
  * 2026-09-06 lagen 6 von 864 Dokumenten darüber — nach dem Split keines mehr, aber **sieben
  * Dossiers liegen zwischen 3.900 und 3.993**. Die nächste inhaltliche Ergänzung kippt eines
  * davon, und auffallen würde es erst, wenn jemand die Fehlermeldung sieht.

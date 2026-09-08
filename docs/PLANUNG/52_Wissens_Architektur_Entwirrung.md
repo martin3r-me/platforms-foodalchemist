@@ -1553,9 +1553,31 @@ der Anfrage trägt — oder ein gepflegter Alias passt (der wiegt 1,0 und domini
 `semantic_search.enabled` ist per Default **aus** (ENV `FOODALCHEMIST_SEMANTIC_SEARCH`); auf
 demo ist es an, dort wird semantisch **vor** die Lexik gereiht.
 
-Also: **auf demo** entscheidet Semantik (Inhalt, erste ~2.000 Zeichen) mit lexikalischer
-Ergänzung; **auf einer frischen Installation** allein der Slug. Für den Korpus-Umbau sind das
-zwei Hebel in Dominiques Hand — Slug-Benennung und die ersten 2.000 Zeichen.
+Also: **auf demo** entscheidet Semantik (Titel + Inhalt bis zum Embedding-Fenster) mit
+lexikalischer Ergänzung; **auf einer frischen Installation** allein der Slug. Für den
+Korpus-Umbau sind das zwei Hebel in Dominiques Hand — Slug-Benennung und der Dossier-Anfang.
+
+> **Korrektur 2026-09-08 (meine, nicht die des Codes):** hier stand „erste ~2.000 Zeichen".
+> Falsch. Ich hatte den Config-Default gelesen statt der Live-ENV. Das Fenster steht auf demo
+> seit 2026-09-07 auf **4.000** — gleich dem Dossier-Deckel, ein Dossier steckt also
+> vollständig im Vektor. Gemessen mit `wissen-recall-probe --team=6 --k=10 --fenster=2000`:
+>
+> | | Schwanz | Kopf | Lücke |
+> |---|---|---|---|
+> | Fenster 2000, n=40 | 47,5 % | 85,0 % | 37,5 |
+> | Fenster 4000, n=120 | **55,0 %** | 81,7 % | **26,7** |
+>
+> Zwei Folgen für diese Spec: (a) der von mir gemeldete „Widerspruch Deckel 4.000 vs. Fenster
+> 2.000" **besteht auf demo nicht** — er bestand im **Repo**, wo der Default weiter 2.000 war
+> und eine frische Umgebung still das halbe Fenster bekommen hätte. Genau das Muster aus `H7`,
+> nur in einer anderen Zeile; mit Paket 3 ist der Default auf 4.000 gezogen und ein Test pinnt
+> Konstante ⇄ Config gegeneinander. (b) Die **26,7 Punkte Restlücke** sind damit nachweislich
+> **kein** Fenster-Problem mehr. Was sie verursacht, gehört in Paket 4 zum Rechner (`E1`),
+> nicht zum Index.
+>
+> ★ Und die teuerste Zeile der Messung: **n=40 ist zu klein.** Ein Treffer = 2,5 Punkte, der
+> Schwanz sprang zwischen n=40 (50,0 %) und n=120 (55,0 %) um 5 Punkte — mehr als der Effekt.
+> `wissen-recall-probe` hat deshalb jetzt `--limit=120` als Default.
 
 ### ★ Nachtrag: ein Konstruktionsfehler von mir, beim Verifizieren gefunden
 
@@ -1612,6 +1634,117 @@ Abnehmer von `bound_knowledge_budget` verschwindet.
 
 Ebenso das **Duplizieren der 13 Alt-Zeilen** auf beide Generator-Keys: der Rückfall macht sie
 unnötig, und sie gehören zum Abräumen des Alias (Paket 3).
+
+---
+
+## ✅ Paket 3 · Schnitt 1 — der Kanon bekommt einen Rückweg (2026-09-08)
+
+**Warum das zuerst kommt.** Paket 3 räumt die Alt-Struktur ab: die neun stummen Bindungen, den
+Bindungs-Zweig im Gateway, `regelwerkBlock()` samt `->first()`. Jeder dieser Schritte nimmt dem
+System einen Fallback weg — und der Fallback fängt heute genau einen Fall auf, den sonst nichts
+auffängt: **eine Umgebung ohne Kanon.**
+
+`H7` hat den Kreis beschrieben, er schliesst sich still:
+
+```
+frische DB  →  kein Kanon (nur MCP schreibt ihn, kein Seeder)
+            →  hasCanon() = false
+            →  Gateway schaltet die Bindungen scharf
+            →  die gibt es dort auch nicht
+            →  Generator läuft ohne Regelwerk. Kein Fehler. Nur schlechtere Rezepte.
+```
+
+Wer erst die Bindungen entfernt und dann den Kanon absichert, hat zwischendurch nichts. Also
+andersherum.
+
+### Was gebaut ist
+
+| Fläche | Was sie kann |
+|---|---|
+| `KanonSicherungService` | die ganze Rechnung: `zeilen()`, `lade()`, `abgleich()`, `spielEin()` |
+| `foodalchemist:wissen-kanon-sicherung export\|pruefen\|import` | Shell-Weg, `import` schreibt erst mit `--apply` |
+| `foodalchemist.knowledge_kanon_sicherung.GET` | MCP-Weg (Grundsatz E) — auf demo der einzige, dort gibt es keine Shell |
+| `database/kanon/kanon-team-6.json` | der gesicherte Stand: **28 Zeilen**, Team 6, 2026-09-08 |
+
+Die Rechnung liegt im Dienst und nicht im Kommando — wie bei `WissensVersorgungService`. Zwei
+Implementierungen derselben Frage wären die Doppelung, gegen die diese Spec antritt.
+
+**Kein Seeder mit Liste im Code.** Der Kanon ist Kuration, keine Politik: welche §-Dossiers
+verbindlich sind, entscheidet ein Mensch und ändert sich. Eine Liste im Code wäre der fünfte
+Routing-Schreiber (`H1`) in grün. Stattdessen eine exportierte Datei, die das Repo trägt — und
+ein Test, der sie gegen genau den Parser hält, der sie beim Neuaufbau lesen muss.
+
+### Drei Entscheidungen, die nicht offensichtlich waren
+
+**1. Gesichert wird die Kuration, nicht ihr Ergebnis.** Der Export läuft über
+`list(includeInactive: true)`, nicht über `documentsFor()`. Eine bewusst stillgelegte Zeile ist
+Teil der Entscheidung; über `documentsFor()` verlöre die Sicherung genau das, was der
+Integritäts-Bericht als Befund meldet.
+
+**2. `active` und `global` müssen mit.** ★ Meine erste Fassung schrieb beim Import nur
+scope/key/role/ord/mode/slug. Eine stillgelegte Kanon-Zeile wäre damit **scharf** zurückgekommen
+und eine globale als Team-Zeile — die Sicherung hätte die Kuration verändert statt sie zu retten.
+Gefunden, weil ich `set()` gelesen habe, bevor ich es benutzt habe; jetzt gepinnt.
+
+**3. „Deckungsgleich" und „einspielbar" sind zwei Fragen.** Der Abgleich trennt vier Aussagen:
+
+| Feld | Heisst |
+|---|---|
+| `nur_live` | kuratiert, aber nicht gesichert → beim Neuaufbau weg |
+| `nur_datei` | gesichert, live entfernt → entweder Absicht (neu exportieren) oder still verloren |
+| `abweichend` | dieselbe Zeile, anderes `mode`/`ord`/`active` |
+| `ohne_dossier` | **die Sicherung nennt einen Slug, den es hier nicht gibt** |
+
+Die letzte Zeile ist die wichtige: eine perfekt deckungsgleiche Sicherung ist wertlos, wenn ihre
+Slugs neu geschnitten wurden. Nach dem anstehenden Korpus-Umbau ist genau das der Normalfall —
+deshalb ein eigener Befund und kein Fehler, und deshalb der Verweis auf `knowledge_links.SET`
+mit `art=ersetzt`.
+
+### Zwei Doppelungen nebenbei mitgenommen
+
+- **`gesichert` hiess zweierlei.** Im Abgleich die Zeilen-Zahl, im Tool die Ja/Nein-Frage. `+`
+  behält den linken Operanden, also gewann die Zahl und das Tool meldete `1` statt `true`. Ein
+  Test hat es gefangen. Die Zähler heissen jetzt `datei_zeilen` / `live_zeilen`.
+- **`KnowledgeCanonService::DOCS` ist public.** Der neue Dienst hätte sonst den 28. rohen
+  Tabellennamen getippt (`G7`: kein Model, kein Repository, 27 Dateien greifen direkt zu). Eine
+  geteilte Konstante ist kein Engpass, aber der kleinste Schritt dorthin.
+
+### Nebenbefund, ausserhalb des Schnitts: das Embedding-Fenster stand im Repo auf 2.000
+
+Beim Nachrechnen einer eigenen Behauptung aufgefallen — ich hatte den Config-Default zitiert und
+als Aussage über demo hingestellt. Dominique hat korrigiert, und die Messung gibt ihm recht:
+
+| `wissen-recall-probe --team=6 --k=10 --fenster=2000` | Schwanz | Kopf | Lücke |
+|---|---|---|---|
+| Fenster 2000, n=40 (Baseline) | 47,5 % | 85,0 % | 37,5 |
+| Fenster 4000, n=120 | **55,0 %** | 81,7 % | **26,7** |
+
+Umgestellt und entschieden am 2026-09-07 („4000 BEHALTEN"), aber **nur per ENV auf demo** — der
+Code-Default, die Konstante `DOMAIN_LEAD_CHARS` und zwei weitere hartkodierte Rückfälle standen
+weiter auf 2.000. Eine frische Umgebung hätte still das halbe Fenster bekommen. Dasselbe Muster
+wie `H7`, nur in einer anderen Zeile: demo handgerichtet, Repo hinterher.
+
+Nachgezogen: Default und Konstante auf 4.000, die beiden Rückfälle lesen jetzt `leadChars()`
+statt die Zahl neu zu tippen, und ein Test hält Konstante ⇄ Config gegeneinander. `WissenEmbedFensterTest`
+pinnte den **alten** Beschluss samt alter Messung — er pinnt jetzt den neuen, mit beiden
+Messungen im Docblock, damit niemand die eine gegen die andere ausspielt. Die 8000-Messung von
+W1-1 bleibt gültig: sie galt Monolithen von 10–50k, nicht Ein-Themen-Dossiers.
+
+**Zwei Folgen für den Rest der Spec:** (a) der von mir gemeldete Widerspruch „Deckel 4.000 vs.
+Fenster 2.000" bestand **auf demo nicht**, im Repo schon — jetzt beides zu. (b) Die **26,7 Punkte
+Restlücke** sind nachweislich **kein** Fenster-Problem. Sie gehören in Paket 4 zum Rechner (`E1`).
+
+★ Und die teuerste Zeile der Messung: **n=40 ist zu klein.** Ein Treffer = 2,5 Punkte, der
+Schwanz sprang zwischen n=40 (50,0 %) und n=120 (55,0 %) um 5 Punkte — mehr als der gemessene
+Effekt. `wissen-recall-probe` hat deshalb jetzt `--limit=120` als Default, und der Docblock sagt
+ausserdem, dass `--fenster` zwischen Vorher- und Nachher-Lauf **gleich bleiben muss**: es ist die
+Grenze der Messung, nicht das Live-Fenster.
+
+### Was in Paket 3 noch offen ist
+
+Kanon-UI · die neun stummen Bindungen löschen (mit dem Korpus-Umbau) · den Bindungs-Zweig aus
+dem Gateway · `regelwerkBlock()` samt `->first()` **löschen**, nicht entschärfen ·
+`_sections`/`_chunks` droppen · die zwei Budget-Bäume zusammenlegen.
 
 ---
 

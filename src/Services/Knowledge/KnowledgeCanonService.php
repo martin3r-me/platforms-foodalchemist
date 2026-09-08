@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use InvalidArgumentException;
 use Platform\Core\Models\Team;
+use Platform\FoodAlchemist\Services\Ai\KnowledgeEmbeddingService;
 use Platform\FoodAlchemist\Support\TeamScope;
 use RuntimeException;
 use Symfony\Component\Uid\UuidV7;
@@ -57,7 +58,11 @@ class KnowledgeCanonService
     public const MODES = ['pflicht', 'wenn_platz'];
 
     private const TABLE = 'foodalchemist_knowledge_canon';
-    private const DOCS = 'foodalchemist_knowledge_documents';
+    // Öffentlich, damit Nachbarn im Wissens-Namespace nicht den 28. rohen Tabellennamen
+    // tippen (Spec 52 · G7: kein Model, kein Repository, 27 Dateien greifen direkt zu — das
+    // ist die strukturelle Ursache, nicht die Folge). Bis es einen echten Engpass gibt, ist
+    // eine geteilte Konstante der kleinste Schritt in die richtige Richtung.
+    public const DOCS = 'foodalchemist_knowledge_documents';
 
     /**
      * Vertrag für den Prompt-Bau (KnowledgeContextService, Peer-Strang):
@@ -387,7 +392,7 @@ class KnowledgeCanonService
         return sprintf(
             'Dossier hat %d Zeichen (Deckel %d, Embedding-Fenster %d): Inhalt jenseits des Fensters ist semantisch '
             . 'kaum findbar. Ein Thema pro Dossier — %s.',
-            $charCount, $deckel, (int) config('foodalchemist.semantic_search.embed_lead_chars', 2000),
+            $charCount, $deckel, app(KnowledgeEmbeddingService::class)->leadChars(),
             $abschnitte > 1 ? "die {$abschnitte} ##-Abschnitte sind die natürliche Trennlinie" : 'bitte teilen'
         );
     }

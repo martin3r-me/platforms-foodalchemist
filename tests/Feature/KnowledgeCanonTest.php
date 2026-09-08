@@ -198,13 +198,14 @@ it('validiert scope/role/mode und unbekannte Slugs', function () {
     expect($put->execute(['scope' => 'feature', 'scope_key' => 'f', 'slug' => 'rw_fremd'], $ktxA)->error)->toContain('nicht gefunden');
 });
 
-it('Embedding-Fenster ist konfigurierbar, Default 2000', function () {
+it('Embedding-Fenster ist konfigurierbar, Default 4000 (gemessen 2026-09-07)', function () {
     $svc = app(KnowledgeEmbeddingService::class);
-    expect($svc->leadChars())->toBe(2000);
-    config()->set('foodalchemist.semantic_search.embed_lead_chars', 4000);
     expect($svc->leadChars())->toBe(4000);
-    config()->set('foodalchemist.semantic_search.embed_lead_chars', 0);
+    config()->set('foodalchemist.semantic_search.embed_lead_chars', 2000);
     expect($svc->leadChars())->toBe(2000);
+    // Unsinnige Werte fallen auf den gemessenen Stand zurück, nicht auf 0.
+    config()->set('foodalchemist.semantic_search.embed_lead_chars', 0);
+    expect($svc->leadChars())->toBe(4000);
 });
 
 it('knowledge-oversized listet zu große Dossiers mit ##-Struktur und Fenster-Markierung', function () {
