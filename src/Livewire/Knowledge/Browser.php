@@ -42,9 +42,28 @@ class Browser extends Component
     /** v2: neue Bindung (Doc → Einsatzort/Layer). Eine Achse. */
 
     /** v2: Rückwärts-Ansicht — was hängt an diesem Einsatzort. */
+    /**
+     * Spec 52 · F7 — der KANON am Dossier, die Gegenrichtung zur Wissenssteuerung.
+     *
+     * Dort steht die Packliste je Prompt-Key („was gehört in recipe.generator?"). Hier steht
+     * die andere Frage, die ein Kurator genauso oft hat: „in welchen Prompts ist DIESES
+     * Dossier verbindlich?" — und wie er es dorthin bekommt.
+     *
+     * Dass die fehlte, ist mir erst aufgefallen, als Dominique vor genau diesem Panel stand
+     * und fragte „wo kann man das denn dem Kanon einstellen?" (2026-09-08). Ich hatte den
+     * wirkungslosen „+ einbinden"-Knopf entfernt und nichts an seine Stelle gesetzt — die
+     * H7-Asymmetrie andersherum.
+     */
+    public string $kanonPromptKey = '';
+
+    public string $kanonMode = 'pflicht';
+
     public string $traceTarget = '';
 
     public ?string $fehler = null;
+
+    /** Nicht-blockierende Rückmeldung (Dossier über dem Deckel, Dossier inaktiv). */
+    public ?string $hinweis = null;
 
     public bool $creating = false;
 
@@ -403,6 +422,75 @@ class Browser extends Component
         DB::table('foodalchemist_knowledge_bindings')->where('id', $bindingId)->delete();
     }
 
+    /**
+     * Dossier in den Kanon eines Prompt-Keys aufnehmen.
+     *
+     * Über `KnowledgeCanonService::set()` und NICHT per Insert: Tenancy, Enum-Prüfung, der
+     * Changelog-Guard und der Deckel-Hinweis leben dort. Der Browser hatte für Bindungen
+     * einen eigenen rohen Schreibpfad — genau die Doppelung (Befund `F`), die hier nicht
+     * wieder entstehen soll.
+     */
+    public function kanonAdd(): void
+    {
+        $this->fehler = null;
+        if ($this->selectedId === null) {
+            return;
+        }
+        $key = trim($this->kanonPromptKey);
+        if ($key === '') {
+            $this->fehler = 'Bitte einen Prompt-Key wählen.';
+
+            return;
+        }
+
+        $doc = $this->sichtbaresDoc($this->selectedId, ['id', 'slug']);
+        $team = Auth::user()?->currentTeamRelation;
+        if ($doc === null || $team === null) {
+            return;
+        }
+
+        try {
+            $ergebnis = app(\Platform\FoodAlchemist\Services\Knowledge\KnowledgeCanonService::class)
+                ->set($team, ['scope' => 'prompt_key', 'scope_key' => $key, 'slug' => (string) $doc->slug,
+                    'mode' => $this->kanonMode]);
+        } catch (\Throwable $e) {
+            $this->fehler = $e->getMessage();
+
+            return;
+        }
+
+        // Hinweise (Dossier über dem Deckel, Dossier inaktiv) sind KEINE Fehler, aber sie
+        // dürfen nicht verschwinden — sonst sieht ein halb wirksamer Eintrag aus wie ein
+        // ganzer.
+        $this->hinweis = $ergebnis['hinweise'] !== [] ? implode(' · ', $ergebnis['hinweise']) : null;
+        $this->kanonPromptKey = '';
+        $this->savedToast();
+    }
+
+    /** Dossier aus dem Kanon eines Prompt-Keys nehmen (soft, reversibel). */
+    public function kanonRemove(string $promptKey): void
+    {
+        $this->fehler = null;
+        if ($this->selectedId === null) {
+            return;
+        }
+        $doc = $this->sichtbaresDoc($this->selectedId, ['id', 'slug']);
+        $team = Auth::user()?->currentTeamRelation;
+        if ($doc === null || $team === null) {
+            return;
+        }
+
+        try {
+            app(\Platform\FoodAlchemist\Services\Knowledge\KnowledgeCanonService::class)
+                ->remove($team, 'prompt_key', $promptKey, (string) $doc->slug);
+        } catch (\Throwable $e) {
+            $this->fehler = $e->getMessage();
+
+            return;
+        }
+        $this->savedToast();
+    }
+
     public function render()
     {
         $kategorien = DB::table('foodalchemist_knowledge_categories')->whereNull('deleted_at')
@@ -556,6 +644,21 @@ class Browser extends Component
             'traceResults' => $traceResults,
             'semanticNote' => $semanticNote,
             'semanticAktiv' => $semanticAktiv,
+            // Spec 52 · F7 — die Kanon-Sicht AM DOSSIER (Gegenrichtung zur Wissenssteuerung,
+            // die vom Prompt-Key ausgeht). `include_inactive`, weil eine stillgelegte Zeile
+            // Kuration ist und nicht verschwinden darf.
+            'kanonZeilen' => ($selected === null || ($kanonTeam = Auth::user()?->currentTeamRelation) === null)
+                ? []
+                : collect(app(\Platform\FoodAlchemist\Services\Knowledge\KnowledgeCanonService::class)
+                    ->list($kanonTeam, 'prompt_key', null, null, includeInactive: true))
+                    ->where('slug', $selected->slug)->sortBy('scope_key')->values()->all(),
+            'promptKeys' => array_keys((array) config('foodalchemist.prompts', [])),
+            // Kanon setzen ist KURATION, nicht Inhalts-Edit: es geht auch an geerbtem
+            // Master-/Vault-Wissen (der Doc-Inhalt wird nicht angefasst) — anders als
+            // `$editable`, das Besitz verlangt. Die harten Regeln (Tenancy, global nur
+            // Master, Changelog-Guard) erzwingt `KnowledgeCanonService::set()`; hier steht
+            // nur, ob überhaupt ein Team im Kontext ist.
+            'darfKanon' => $selected !== null && Auth::user()?->currentTeamRelation !== null,
         ])->layout('platform::layouts.app');
     }
 }
