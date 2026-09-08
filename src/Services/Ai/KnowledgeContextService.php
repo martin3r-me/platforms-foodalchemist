@@ -741,6 +741,24 @@ class KnowledgeContextService
      * bestehenden Zeilen migriert sein müssen: eigene Zeilen gewinnen, sonst gilt der Alt-Name.
      * Dasselbe „Neues gewinnt, Altes bleibt Fallback" wie bei Kanon ⇄ Bindung und Achse ⇄ Config.
      */
+    /**
+     * Die WIRKSAMEN Routing-Zeilen eines Features — für Berichte und Wächter.
+     *
+     * ★ Warum das öffentlich ist: `WissensProfilService` und `WissensVersorgungService` haben
+     * die Zeilen zuerst selbst abgefragt (`where('feature', $routingKey)`) und damit die
+     * ALIAS-Zeilen gezeigt, während der Prompt-Bau bereits die zusammengeführten benutzte.
+     * Gefunden beim Verifizieren auf demo: eine gesetzte VK-Zeile wirkte, der Bericht zeigte
+     * weiter den geerbten Wert. Ein Diagnose-Werkzeug, das über die Laufzeit lügt, ist
+     * schlimmer als keines — und es ist genau die Fehlerklasse, die diese Spec abbaut.
+     *
+     * Deshalb: eine Formel, drei Abnehmer (`docs/ARCHITEKTUR.md` — „Eine Formel pro fachlicher
+     * Wahrheit").
+     */
+    public function wirksameRoutings(string $feature): \Illuminate\Support\Collection
+    {
+        return $this->routingZeilen($feature);
+    }
+
     private function routingZeilen(string $feature): \Illuminate\Support\Collection
     {
         $eigene = DB::table('foodalchemist_knowledge_routings')->where('feature', $feature)->get();

@@ -267,3 +267,42 @@ it('seedet die sechs Kategorien, die im Routing stehen aber im Vokabular fehlten
 
     expect(array_values(array_diff($ausRoutings, $vokabular)))->toBe([]);
 });
+
+/**
+ * ★ Der Bericht muss zeigen, was zur LAUFZEIT gilt — nicht, was in einer Tabelle steht.
+ *
+ * Gefunden beim Verifizieren auf demo: eine gesetzte `vk.generator`-Zeile wirkte im
+ * Prompt-Bau, und `knowledge_profil.GET` zeigte weiter den geerbten Alias-Wert. Der Grund war
+ * eine zweite, eigene Query im Berichts-Dienst — also eine zweite Wahrheit neben der, die der
+ * Generator benutzt.
+ *
+ * Ein Diagnose-Werkzeug, das über die Laufzeit lügt, ist schlimmer als keines: es ist genau die
+ * Fehlerklasse, wegen der diese Spec existiert. Jetzt teilen Prompt-Bau, Profil-Bericht und
+ * Versorgungs-Bericht EINE Auflösung (`wirksameRoutings()`).
+ */
+it('zeigt im Profil-Bericht die wirksame Politik, nicht die Alias-Zeile', function () {
+    config(['foodalchemist.prompts' => ['vk.generator' => ['tier' => 'B', 'task' => 'x']]]);
+    ($this->mkRouting)('ai_generate_recipe', 'weltkueche', 'discovery', 1, 2000);
+    ($this->mkRouting)('ai_generate_recipe', 'kueche', 'discovery', 2, 2500);
+    // Eigene VK-Zeile mit ANDEREN Deckeln als der Alt-Name.
+    ($this->mkRouting)('vk.generator', 'weltkueche', 'discovery', 4, 6000);
+
+    $profil = app(\Platform\FoodAlchemist\Services\Knowledge\WissensProfilService::class)
+        ->profil('vk.generator', $this->rootTeam);
+    $nach = collect($profil['routing'])->keyBy('category');
+
+    expect($nach['weltkueche']['max_docs'])->toBe(4)             // eigene Zeile, nicht 1
+        ->and($nach['weltkueche']['max_chars_per_doc'])->toBe(6000)
+        ->and($nach['kueche']['max_docs'])->toBe(2);             // geerbt bleibt geerbt
+});
+
+it('zeigt im Versorgungs-Bericht dieselbe wirksame Politik', function () {
+    config(['foodalchemist.prompts' => ['vk.generator' => ['tier' => 'B', 'task' => 'x']]]);
+    ($this->mkRouting)('ai_generate_recipe', 'weltkueche', 'discovery', 1, 2000);
+    ($this->mkRouting)('vk.generator', 'weltkueche', 'discovery', 4, 6000);
+
+    $zeile = app(\Platform\FoodAlchemist\Services\Knowledge\WissensVersorgungService::class)
+        ->zeileFuer('vk.generator', $this->rootTeam);
+
+    expect(collect($zeile['routing'])->firstWhere('category', 'weltkueche')['max_docs'])->toBe(4);
+});
