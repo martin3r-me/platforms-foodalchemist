@@ -1983,8 +1983,14 @@ Die vollständige Suite des vorangehenden Suchrechner-Stands ist grün: 4.217 Te
 4.211 bestanden, 6 übersprungen. Für Arten/Achsen sind 25 neue Regressionen enthalten;
 der abschließende gezielte Lauf mit Achsen-/Profiltests ist grün (42 Tests, 95 Assertions).
 Die danach ergänzte Erhaltung des UI-Suchindex-Updates ist separat grün (1 Test, 5 Assertions).
-Ein zusätzlicher großer Testlauf ist noch aktiv; für diesen neuen Stand wird keine
-vollständig grüne Modulsuite behauptet. Der Mechanismus
+Der zusätzliche Gesamtlauf ist beendet: 4.242 Tests, 4.234 bestanden, 6 übersprungen,
+ein Fehler und eine fehlgeschlagene Erwartung. Die Index-Erwartung lief noch gegen
+den während des Laufs älteren UI-Pfad; der spätere Einzeltest bestätigt die Korrektur.
+Der zweite Befund betraf die unnötige Übernahme aller zulässigen IDs in die nachgelagerte
+Volltext-Abfrage. Diese lädt jetzt ausschließlich die bereits ausgewählten Gewinner.
+Der gezielte Nachlauf für Speichergrenze, Arten/Achsen und gemeinsamen Rechner ist grün
+(36 Tests, 93 Assertions). Eine vollständig grüne Gesamtsuite dieses neuen Stands wird
+weiterhin nicht behauptet. Der Mechanismus
 ersetzt nicht die noch ausstehende Kuratierung des Livebestands. Ebenso bleiben der
 zentrale Auftragsvertrag, Critic/Selbstheilung/Sprache (C), das gemeinsame Budget (D4) und
 hängende Paragraphenverweise (H7) eigenständige offene Arbeiten.

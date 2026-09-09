@@ -1388,7 +1388,9 @@ class KnowledgeContextService
             return null;
         }
         // Volltext erst nach gemeinsamer Rangfusion und Endauswahl laden.
-        $contents = (clone $base)->whereIn('id', array_column($hits, 'id'))->pluck('content_md', 'id');
+        $contents = DB::table('foodalchemist_knowledge_documents')->tap($this->nurSichtbar($team))
+            ->where('active', 1)->whereNull('deleted_at')
+            ->whereIn('id', array_column($hits, 'id'))->pluck('content_md', 'id');
         $label = mb_strtoupper($category);
         $blocks = [];
         foreach ($hits as $hit) {
@@ -1489,7 +1491,9 @@ class KnowledgeContextService
             return collect();
         }
 
-        return DB::table('foodalchemist_knowledge_documents')->tap($this->nurFuerPrompt($team))
+        // Geltung und Art wurden vor dem Ranking geprüft. Hier nur die Gewinner laden,
+        // nicht erneut die gesamte Menge zulässiger IDs an die Volltext-Abfrage hängen.
+        return DB::table('foodalchemist_knowledge_documents')->tap($this->nurSichtbar($team))
             ->where('category', 'domain')->where('active', 1)->whereNull('deleted_at')
             ->whereIn('slug', $slugs)
             ->get(['slug', 'content_md', 'version'])->keyBy('slug');
