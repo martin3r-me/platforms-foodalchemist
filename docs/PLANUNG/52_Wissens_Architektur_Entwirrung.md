@@ -21,7 +21,17 @@
 - Profil, Versorgung, Einstellungen und Vorschau zeigen das gemeinsame Budget. Arten/Achsen sind in der Basis enthalten; Korpus-Kuration und Live-Validierung stehen aus.
 - Basis `f1ff7c72`: vollständige Suite grün (4.243 Tests, 4.237 bestanden, 6 übersprungen). Erster B1/D4-Gesamtlauf: 4.249 Tests, 4.226 bestanden, 7 fehlgeschlagen, 10 Fehler, 6 übersprungen (26 Minuten).
 - Nacharbeit: gemeinsamer Kanon-Textrenderer löst die Budgetmessung vom KI-Gateway; dadurch bleiben Gateway-Testdoubles und die Rezeptanreicherung funktionsfähig. Vier Testverträge wurden auf vollständige Dossiers, automatische Kanon-Erkennung und expliziten Budgetabbruch umgestellt; der DB-Abfragetest bekommt Budget für drei vollständige Gewinner.
-- Alle 17 beanstandeten Fälle bestehen in den gezielten Nachläufen: zunächst 78 von 79, anschließend der korrigierte Abfragetest samt seinen zwei Nachbartests (3 von 3). Vollständiger Wiederholungslauf steht noch aus. Noch nicht deployt.
+- Alle 17 beanstandeten Fälle bestehen in den gezielten Nachläufen: zunächst 78 von 79, anschließend der korrigierte Abfragetest samt seinen zwei Nachbartests (3 von 3). Vollständiger Wiederholungslauf grün: 4.249 Tests, 4.243 bestanden, 6 übersprungen, 22.095 Assertions (25 Minuten), Commit `db9e9e88`. Noch nicht deployt.
+
+
+## Umsetzung 2026-09-09 — C4 erster Slice (Branch feat/wissen-conformance)
+
+- Scope laut Etappe C: Basisrezepte. `ConformanceService` übergibt für diese keinen selbst geladenen Regeltext mehr. Der Gateway baut Retrieval für `conformance.check` und bezieht den Kanon explizit aus `recipe.generator`.
+- Kein Rückfall auf Slug-Präfixe bei fehlendem Pflichtkanon. Fehlende/inaktive Pflichtquellen, fremdes aktives Team und Budgetüberschreitung stoppen vor dem Modell. Externe Wissensoptionen werden am migrierten Gateway-Eingang abgewiesen.
+- Das gemeinsame Prüfbudget für `conformance.check` beträgt 48.000 Zeichen (auch für die noch nicht migrierten Artefakttypen). Geroutetes Zusatzwissen bleibt im Userblock, der Kanon im Systemblock; die Quellen erscheinen im bestehenden Call-Log.
+- Beleg bei unverändertem Korpus: identischer System-Kanon-Fingerprint von Generator und Critic; vollständiges geroutetes Fachwissen; kein Präfix-Fallback; externe Wissenseinspeisung abgewiesen; fehlende zweite Pflichtquelle und zu kleines Budget blockieren.
+- Gezielte Tests: 41 bestanden, 1 übersprungen; zusätzlicher Vertragslauf 20 bestanden. Vollständige Suite folgt separat. Noch nicht deployt.
+- **C4 noch nicht vollständig abgenommen:** die Versionsfixierung über einen ganzen Lauf benötigt C1 (Lauf-ID/Profil-Snapshot). Der generische Profil-/Vorschaupfad kennt die artefaktspezifische Generator-Kanonquelle noch nicht; die Anzeige muss mit C7 nachgezogen werden. VK/GP/LA behalten zunächst den Präfix-Lader. Selbstheil-Kontext (C5), typisierter Gesamtvertrag (C1/C2) und Sidebar-Sprache (C3) sind offen.
 
 
 ## Context

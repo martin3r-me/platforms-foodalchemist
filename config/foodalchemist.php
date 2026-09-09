@@ -533,6 +533,7 @@ return [
         // Review/Überarbeitung und Brief-Gerüst haben explizite Reserve für ganze Quellen.
         // Fachliche Live-Abnahme bleibt nötig; zu große Pflichtmengen werden gemeldet.
         'knowledge_budget' => [
+            'conformance.check' => 48000, // Basisrezept-Critic: gemeinsamer Pflichtkanon + geroutetes Wissen
             'default' => 16200,
             'recipe.generator' => 48000,       // bisher 36.000 Kanon + 12.000 Retrieval
             'vk.generator' => 49000,           // bisher 37.000 + 12.000

@@ -36,6 +36,11 @@ beforeEach(function () {
         'updated_at' => now(),
     ]);
 
+    app(\Platform\FoodAlchemist\Services\Knowledge\KnowledgeCanonService::class)->set($this->rootTeam, [
+        'scope' => 'prompt_key', 'scope_key' => 'recipe.generator',
+        'slug' => 'regelwerk-basisrezepte-6-mengen-einheiten-yield', 'mode' => 'pflicht',
+    ]);
+
     $this->rezept = FoodAlchemistRecipe::create([
         'team_id' => $this->rootTeam->id,
         'recipe_key' => 'bx-heal',

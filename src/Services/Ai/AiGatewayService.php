@@ -59,6 +59,29 @@ class AiGatewayService
             throw new \Platform\FoodAlchemist\Exceptions\KiDeaktiviertException();
         }
 
+        $kanonKey = $promptKey;
+        // C4, erster migrierter Prüfpfad: Regelquelle ist der Basisrezept-Generator.
+        // Nur dieser Artefakttyp wird umgestellt; die übrigen Critic-Pfade folgen separat.
+        if ($promptKey === 'conformance.check' && ($context['artefakt_typ'] ?? '') === 'Basisrezept/Komponente') {
+            foreach (['knowledge', 'knowledge_used', 'knowledge_channels', 'knowledge_dropped_chars'] as $external) {
+                if (array_key_exists($external, $options)) {
+                    throw new \InvalidArgumentException('Der Basisrezept-Critic baut sein Wissen selbst; externe Wissensoptionen sind nicht erlaubt.');
+                }
+            }
+            if ($team === null) throw new RuntimeException('Kein aktives Team für die Basisrezept-Prüfung.');
+            $kanonKey = 'recipe.generator';
+            $canon = app(\Platform\FoodAlchemist\Services\Knowledge\KnowledgeCanonService::class);
+            if ($canon->documentsFor('prompt_key', $kanonKey, $team)->where('mode', 'pflicht')->isEmpty()
+                || collect($canon->unaufloesbareZeilen($team, $kanonKey))->where('mode', 'pflicht')->where('scope', 'prompt_key')->where('role', 'root')->isNotEmpty()) {
+                throw new RuntimeException('Kein vollständiger aktiver Pflichtkanon für die Basisrezept-Prüfung.');
+            }
+            $wissen = app(KnowledgeContextService::class)->contextFor($team, $promptKey,
+                trim((string) ($context['name'] ?? '').' '.(string) ($context['beschreibung'] ?? '')),
+                null, [], ['_kanon_prompt_key' => $kanonKey]);
+            $options = array_merge($options, KnowledgeContextService::proposeOptionen($wissen));
+            $options['knowledge_channels'] = $wissen['used_by_category'];
+        }
+
         // Literaler Array-Zugriff — Prompt-Keys enthalten Punkte (config()-Dot-Notation würde sie als Pfad lesen)
         $prompt = config('foodalchemist.prompts', [])[$promptKey] ?? null;
         if (!is_array($prompt) || empty($prompt['task'])) {
@@ -125,7 +148,7 @@ class AiGatewayService
         $kanonBlock = null;
         if ($team !== null && \Illuminate\Support\Facades\Schema::hasTable('foodalchemist_knowledge_canon')) {
             [$kBlocks, $kanonSlugs, $kanonVerworfen] = $this->selectKanon(
-                app(\Platform\FoodAlchemist\Services\Knowledge\KnowledgeCanonService::class)->documentsFor('prompt_key', $promptKey, $team),
+                app(\Platform\FoodAlchemist\Services\Knowledge\KnowledgeCanonService::class)->documentsFor('prompt_key', $kanonKey, $team),
                 is_array($options['knowledge_used'] ?? null) ? $options['knowledge_used'] : [],
                 ['total' => KnowledgeBudget::forKey($promptKey) - $promptParts['retrieval'], 'key' => $promptKey, 'global' => KnowledgeBudget::forKey($promptKey), 'retrieval' => $promptParts['retrieval']],
             );
@@ -149,7 +172,7 @@ class AiGatewayService
             // — und der Bindungs-Zweig unten schaltet sich wieder scharf. Deshalb meldet der
             // Waechter zusaetzlich Prompt-Keys, die ihren Kanon komplett verloren haben.
             $unaufloesbar = app(\Platform\FoodAlchemist\Services\Knowledge\KnowledgeCanonService::class)
-                ->unaufloesbareZeilen($team, $promptKey);
+                ->unaufloesbareZeilen($team, $kanonKey);
             if ($unaufloesbar !== []) {
                 \Illuminate\Support\Facades\Log::warning('foodalchemist.kanon.unaufloesbar', [
                     'prompt_key' => $promptKey,
