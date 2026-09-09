@@ -187,7 +187,7 @@ it('GT-13-10: Pairing-Block klassisch — eine salbei-Zeile, nur Klassisch-Partn
         ->and($ctx['block'])->toContain('erfinde KEINE unbelegten Paarungen');
 });
 
-it('GT-13-11: Grounding koriander → beide Sorten-Dokus per Präfix, je 1.400 Z., dedupliziert', function () {
+it('GT-13-11: Grounding koriander → beide Sorten-Dokus per Präfix, vollständig, dedupliziert', function () {
     ($this->mkRouting)('ai_infer_ankers', 'pairing', 'grounding', 3, 1400);
     ($this->mkDoc)('pairing.koriander_blatt', 'pairing', str_repeat('B', 2000));
     ($this->mkDoc)('pairing.koriander_saat', 'pairing', str_repeat('S', 2000));
@@ -203,8 +203,8 @@ it('GT-13-11: Grounding koriander → beide Sorten-Dokus per Präfix, je 1.400 Z
 
     expect(substr_count($ctx['block'], '### Pairing-Doku: koriander_blatt'))->toBe(1)
         ->and(substr_count($ctx['block'], '### Pairing-Doku: koriander_saat'))->toBe(1)
-        ->and(substr_count($ctx['block'], '[…gekürzt für KI-Kontext…]'))->toBe(2)
-        ->and(str_contains($ctx['block'], str_repeat('B', 1401)))->toBeFalse();
+        ->and(substr_count($ctx['block'], '[…gekürzt für KI-Kontext…]'))->toBe(0)
+        ->and($ctx['block'])->toContain(str_repeat('B', 2000), str_repeat('S', 2000));
 });
 
 it('Inv. 7: ai_extract_recipe bleibt BEWUSST ohne Wissen (Routing none)', function () {

@@ -12,6 +12,16 @@
 > „Warum kein Modul-Umbau".
 
 
+## Umsetzung 2026-09-09 — B1/D4 (Branch feat/wissen-budget)
+
+- Eine Budgetquelle `ai.knowledge_budget` pro Prompt-Key zählt die gerenderten Kanon- und Retrieval-Blöcke einschließlich Überschriften und Trennern. Die Startwerte führen überwiegend die bisherigen beiden Obergrenzen zusammen; sie sind keine neue Live-Korpus-Messung.
+- Pflichtkanon wird vor Retrieval reserviert. Übersteigt die kombinierte Pflichtmenge das Budget, stoppt der Modellaufruf mit einem expliziten Befund. Optionale Quellen passen vollständig oder entfallen; spätere kleinere Quellen bleiben möglich.
+- Keine Dossier-Kürzung mehr im Kontextbau. `max_chars_per_doc` bleibt als inaktives Kompatibilitätsfeld erhalten. Der explizit gekürzte MCP-GET-Leseauszug ist davon unabhängig.
+- Gateway und Vorschau wenden dasselbe Gesamtbudget an, auch auf übergebenes Rohwissen. Der typisierte Kontextvertrag aus Etappe C bleibt offen. Das Budget betrifft Wissenszeichen, nicht den gesamten Prompt oder das Tokenlimit.
+- Profil, Versorgung, Einstellungen und Vorschau zeigen das gemeinsame Budget. Arten/Achsen sind in der Basis enthalten; Korpus-Kuration und Live-Validierung stehen aus.
+- Basis `f1ff7c72`: vollständige Suite grün (4.243 Tests, 4.237 bestanden, 6 übersprungen). B1/D4: zuletzt 101 gezielte Tests bestanden; vollständige Suite wird nach Abschluss der Änderungen separat ausgeführt. Noch nicht deployt.
+
+
 ## Context
 
 Symptom (Dominique, 2026-09-07): Beim Erstellen eines **Basisrezepts** oder eines **Gerichts**

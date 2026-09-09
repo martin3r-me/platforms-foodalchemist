@@ -438,22 +438,16 @@ class WissenSteuerdatenW0Command extends Command
             }
             $zeilen[] = [$feature, number_format($pflicht, 0, ',', '.'), number_format($budget, 0, ',', '.'), $ok ? 'ok' : 'ZU KLEIN'];
             if (! $ok) {
-                $fehler[] = "Budget von «{$feature}» ist {$budget} Zeichen, die always-gerouteten Pflicht-Inhalte brauchen {$pflicht} — der Wissensaufbau stoppt mit einem Konfigurationsfehler.";
+                $fehler[] = "Budget von «{$feature}» ist {$budget} Zeichen, Kanon und weitere Pflicht-Inhalte brauchen {$pflicht} — der Wissensaufbau stoppt mit einem Konfigurationsfehler.";
             }
         }
         if ($zeilen !== []) {
             $this->newLine();
             $this->line('W0-5-Invariante — Budget muss die Pflicht-Inhalte tragen:');
-            $this->table(['feature', 'pflicht (always)', 'budget', 'status'], $zeilen);
+            $this->table(['feature', 'pflicht gesamt', 'budget', 'status'], $zeilen);
         }
 
-        $this->line(sprintf(
-            'Konstanten: RECIPE_MAX_KNOWLEDGE_CHARS=%d, RECIPE_MAX_CHARS_PER_DOC=%d, CROSS_CUTTING=%d, DOMAIN=%d',
-            KnowledgeContextService::RECIPE_MAX_KNOWLEDGE_CHARS,
-            KnowledgeContextService::RECIPE_MAX_CHARS_PER_DOC,
-            KnowledgeContextService::CROSS_CUTTING_TRUNCATE_CHARS,
-            KnowledgeContextService::DOMAIN_TRUNCATE_CHARS,
-        ));
+        $this->line('Gemeinsames Wissensbudget: ai.knowledge_budget; Dossiers werden vollständig übernommen oder ausgelassen.');
 
         $this->meldeDrift($fehler);
 

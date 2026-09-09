@@ -131,7 +131,7 @@ it('meldet Pflichtwissen ueber Budget, weil Pflicht nie gekappt wird', function 
     // nicht die Pflicht, sondern alles andere — still.
     config([
         'foodalchemist.prompts' => ['test.eng' => ['tier' => 'B', 'task' => 'x']],
-        'foodalchemist.ai.bound_knowledge_budget' => ['test.eng' => ['docs' => 5, 'chars_per_doc' => 4000, 'total' => 1000]],
+        'foodalchemist.ai.knowledge_budget' => ['test.eng' => 1000],
     ]);
     ($this->mkKanon)(($this->mkDoc)('gross', zeichen: 3000), 'test.eng');
 

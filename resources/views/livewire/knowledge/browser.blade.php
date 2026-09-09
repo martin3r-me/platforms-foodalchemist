@@ -126,7 +126,7 @@
                     @if($previewError)<p class="text-xs text-red-700" role="alert">{{ $previewError }}</p>@endif
                     @if($knowledgePreview !== null)
                         <div class="text-xs space-y-2" data-wissen-vorschau-ergebnis>
-                            <p>{{ number_format($knowledgePreview['total_chars'], 0, ',', '.') }} Zeichen Wissen ·
+                            <p>{{ number_format($knowledgePreview['total_chars'], 0, ',', '.') }} / {{ number_format($knowledgePreview['budget_total'], 0, ',', '.') }} Zeichen Wissen ·
                                 {{ number_format($knowledgePreview['dropped_chars'], 0, ',', '.') }} Zeichen ausgelassen</p>
                             @if(($knowledgePreview['datenwerk'] ?? null) !== null)
                                 @foreach($knowledgePreview['datenwerk']['ergebnisse'] as $result)

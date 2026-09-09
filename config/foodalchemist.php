@@ -527,96 +527,29 @@ return [
             ],
         ],
 
-        'bound_knowledge_budget' => [
-            // ⚠ Spec 50 Welle 2 (2026-09-06): an `recipe.generator`/`vk.generator` steuert der
-            // KANON (`foodalchemist_knowledge_canon`, KnowledgeCanonService) — die Bindings sind
-            // dort stumm (AiGatewayService: Kanon vorhanden → kein Bound-Block). Für den Kanon gilt:
-            // `pflicht` kommt IMMER vollständig (ignoriert diesen Deckel und den Dedup),
-            // `wenn_platz` wird gegen `total` budgetiert. Der Deckel ist also nur noch für
-            // (a) den Bindings-Fallback ohne Kanon und (b) `wenn_platz`-Zeilen relevant.
-            // Kanon-Wahrheit (demo, 28 Zeilen alle pflicht): recipe.generator 13 Dossiers
-            // Σ 33.902 Z., vk.generator 12 Dossiers Σ 31.673 Z. Der `total` muss die Pflicht-
-            // summe tragen, sonst lügt die Config über den realen Prompt — `wissen-steuerdaten-w0
-            // --verify` prüft genau das (Kanon-Pflicht ≤ Deckel).
-            // Historie: Deckel = Pflichtmenge + EIN vollständiges Universal-Dossier (mengen_defaults,
-            // 7.446 Z.). Bewusst kein Puffer für ein zweites: ein Kopf-Anschnitt einer
-            // Referenztabelle ist kein Wissen, nur Kosten (das war der `substitutionen`-Fall).
-            // recipe.generator (alt): §2+§3+§4+§6 + Erstellungs-Dossier = 11.075 + 7.446 = 18.521
-            // → Welle 2: 30.000 → 36.000 (Kanon Σ 33.902 + Puffer ~ein Split-Dossier ≤ 4.000)
-            'recipe.generator' => ['docs' => 13, 'chars_per_doc' => 11000, 'total' => 36000],
-            // ★ Spec 52/Paket 2: `concept.brief_geruest` fehlte hier — und fiel damit auf den
-            // konservativen Default (3 Docs / 1.400 / 4.200 total) zurück, während sein Kanon
-            // 10.399 Zeichen Pflichtwissen trägt. Gefunden vom eigenen Wächter auf demo; der
-            // Montags-Wächter sieht es nicht, weil er nur die zwei Generator-Keys prüft.
-            // `pflicht` ignoriert den Deckel per Vertrag, das Wissen kam also an — aber die
-            // Config log über den realen Prompt, und `wenn_platz` wäre gegen 4.200 statt gegen
-            // die Wahrheit budgetiert worden. 12.000 trägt die Pflichtmenge mit Luft.
-            'concept.brief_geruest' => ['docs' => 6, 'chars_per_doc' => 4000, 'total' => 12000],
-            // vk.generator (alt): dieselben + regelwerk.regelwerk_verkaufsgerichte 8.309 = 26.830
-            // → Welle 2: Kanon Σ 31.673 ≤ 37.000, Deckel bleibt.
-            'vk.generator' => ['docs' => 13, 'chars_per_doc' => 11000, 'total' => 37000],
-
-            // NEU 2026-09-03 — Dossier-Routing nach dem Prinzip „dort nutzen, wo es benutzt wird"
-            // (Dominique). `geschmacksbalance` (10.670 Z.) hing am Bereichs-Präfix `recipe` und
-            // wurde von ALLEN 22 `recipe.*`-Prompts mitgeschluckt; jetzt hängt es gezielt an den
-            // zwei Generatoren, weil es dort GEBRAUCHT wird („braucht es bei Gerichten und
-            // Basisrezepten"). Als `always`, damit es ganz ankommt und der Block byte-stabil
-            // bleibt — deshalb die Deckel hoch: 19.000 → 30.000 bzw. 27.500 → 37.000, und
-            // chars_per_doc 8.400 → 11.000, sonst käme das Dossier als 8.400-Anschnitt.
-            //
-            // Kosten ehrlich: +10.670 Zeichen ≈ +3.560 Token je Generierung, bei ~288
-            // Generierungen/30 T. ≈ 1,0 M Token ≈ $5/Monat. Unter Prompt-Caching ist ein
-            // GRÖSSERER stabiler Prefix billiger, nicht teurer (Cache = 10 % des Preises) —
-            // aber das ist eine Erwartung, keine Zusage: gemessen hat der Prefix auf zwei
-            // Testcalls NICHT gegriffen, im Echtbetrieb dagegen zu 98 % bzw. 23 %.
-            //
-            // `recipe.eigenschaften` ist der einzige Prompt, der Arbeitszeit wirklich SETZT
-            // (work_time_min/Minuten) — dorthin gehört `produktion-arbeitszeit-und-
-            // personenminuten` (7.089 Z.), nicht in jeden Rezept-Prompt. Ohne eigenen Deckel
-            // griffe hier der konservative Default (3 × 1.400 = 4.200) und das Dossier käme
-            // als 1.400-Zeichen-Kopf an.
-            'recipe.eigenschaften' => ['docs' => 2, 'chars_per_doc' => 7500, 'total' => 8000],
-        ],
-
+        // B1/D4: EIN Gesamtbudget für den gerenderten Kanon + Retrieval, inklusive
+        // Quellenüberschriften/Trenner. Die beiden früheren Kanalbudgets werden nicht
+        // mehr unabhängig ausgeschöpft. Übergangswerte bewahren ihre bisherige Summe;
+        // Review/Überarbeitung und Brief-Gerüst haben explizite Reserve für ganze Quellen.
+        // Fachliche Live-Abnahme bleibt nötig; zu große Pflichtmengen werden gemeldet.
         'knowledge_budget' => [
-            'concept.brief_geruest' => 10000,
-            'foodbook.kapitel_ideen' => 12000,
-            // cross_cutting:always (geseedet) = 7 × 1.800 = 12.600
-            'recipe.steps' => 13000,
-
-            /*
-             * ⚠ INVARIANTE: Der Deckel muss MINDESTENS die `always`-gerouteten Inhalte des
-             * Features tragen. Sonst kappt das Gesamtbudget genau das Pflichtwissen weg, das
-             * Welle 0 schützen soll — und zwar still (der Block wird am Ende abgeschnitten,
-             * das letzte `always`-Dossier verschwindet mitsamt seiner Überschrift).
-             * Gesichert durch WissenTokenWelle0Test „Budget traegt die Pflicht-Inhalte" und
-             * `foodalchemist:wissen-steuerdaten-w0 --verify` (gegen die LIVE-Tabelle).
-             *
-             * ⚠ Die Zahlen sind an der GESEEDETEN Routing-Lage bemessen, nicht an demo:
-             * die Live-Tabelle wurde von Hand auf `discovery` gedreht und weicht von den
-             * Migrationen ab. Eine frische DB (Disaster Recovery) hat also viel größere
-             * Pflicht-Blöcke als demo — der Deckel muss beide Zustände tragen.
-             *
-             * concept:always 4 × 4000 = 16.000 (+ Block-/Doc-Header, Kürzungs-Marker)
-             */
-            'concept.plan' => 29000,
-            'foodbook.plan' => 29000,
-            // concept:always 3 × 4000 = 12.000
-            'format.grundgeruest' => 13000,
-            // cross_cutting:always — seit B3 feature-genau: 2 Slugs × 1.800 = 3.600 statt 12.600.
-            'concept.wording' => 5000,
-            'foodbook.kundentext' => 5000,
-            // regelwerk:always 1 × 7000
-            'recipe.ueberarbeiten' => 8000,
-            'vk.ueberarbeiten' => 8000,
-            'foodbook.grundgeruest' => 8000,
-            // regelwerk:always 6.000 + produktion_kapazitat:always 3 × 7.000 = 27.000.
-            // Liegt ÜBER dem heutigen Ist-Verbrauch (⌀ 4.031 Tk) — der Deckel greift also
-            // praktisch nicht. Das ist Absicht: hier ist nicht das Budget zu klein, sondern
-            // die Pflichtmenge absurd groß für einen Klassifikations-Prompt. Reduziert wird
-            // sie in Welle 2, wenn der Kanon die `always`-Routings ersetzt; bis dahin darf
-            // der Deckel sie nicht stillschweigend abschneiden.
-            'recipe.eigenschaften' => 27500,
+            'default' => 16200,
+            'recipe.generator' => 48000,       // bisher 36.000 Kanon + 12.000 Retrieval
+            'vk.generator' => 49000,           // bisher 37.000 + 12.000
+            'concept.brief_geruest' => 28000,   // ganze Pflichtquellen statt 10.000er Anschnitt
+            'foodbook.kapitel_ideen' => 16200,
+            'recipe.steps' => 17200,
+            'concept.plan' => 33200,
+            'foodbook.plan' => 33200,
+            'format.grundgeruest' => 17200,
+            'concept.wording' => 9200,
+            'foodbook.kundentext' => 9200,
+            'recipe.ueberarbeiten' => 18000,
+            'vk.ueberarbeiten' => 18000,
+            'recipe.review' => 18000,
+            'vk.review' => 18000,
+            'foodbook.grundgeruest' => 12200,
+            'recipe.eigenschaften' => 35500,   // bisher 27.500 + 8.000; ein gemeinsamer Deckel
         ],
 
         /*

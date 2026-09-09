@@ -29,31 +29,6 @@ use Platform\FoodAlchemist\Support\DossierText;
 class AiGatewayService
 {
     /**
-     * Deckel des VERBINDLICHEN Regelwerk-Blocks — heute also des Kanons.
-     *
-     * ⚠ **Der Name lügt inzwischen halb.** Als W0-3 diese Deckel setzte, bedienten sie den
-     * Layer-Bound-Kanal; seit Spec 52 · F2 (2026-09-08) ist der Kanal weg und der einzige
-     * Abnehmer ist `selectKanon()`. Umbenannt wird mit `D4` (die zwei Budget-Bäume
-     * zusammenlegen) — bis dahin heissen die Konstanten wie ihr Config-Schlüssel
-     * `ai.bound_knowledge_budget`, weil zwei Dienste den lesen und ein halber Rename
-     * schlimmer wäre als der schiefe Name.
-     *
-     * ⚠ Die Deckel gelten NICHT global, sondern je Prompt-Key über
-     * config('foodalchemist.ai.bound_knowledge_budget'). Die Konstanten hier sind der
-     * konservative DEFAULT; die großzügigen Budgets stehen explizit bei `recipe.generator`
-     * und `vk.generator`, wo die Bau-§-Dossiers hingehören.
-     *
-     * Historie, weil sie die Grössenordnung erklärt: vor W0-3 waren es 3 Docs à 1400
-     * Zeichen — an `recipe.generator` hingen 9 Dossiers, 6 davon erreichten den Prompt nie
-     * und §5 kam als 29-%-Fragment an. Genau der Fall, für den der Kanal gebaut war.
-     */
-    private const BOUND_KNOWLEDGE_MAX_DOCS = 3;
-
-    private const BOUND_KNOWLEDGE_CHARS_PER_DOC = 1400;
-
-    private const BOUND_KNOWLEDGE_MAX_TOTAL_CHARS = 4200;
-
-    /**
      * GL-07 Propose: Task-Prompt + Kontext → validiertes Vorschlags-DTO.
      * Persistiert nur den AUDIT-Eintrag (06_KI §5), nie Fachdaten (GL-07 I3).
      *
@@ -145,13 +120,15 @@ class AiGatewayService
         // Gateway kennt den Prompt-Key, nicht das Routing-Feature — für den Generator also
         // `prompt_key=recipe.generator`, nicht `feature=ai_generate_recipe`. Bewusst OHNE
         // Bereichs-Präfix: der Kanon ist eine explizite Liste („dort nutzen, wo es benutzt wird").
+        if ($promptParts['retrieval'] > KnowledgeBudget::forKey($promptKey)) throw new KnowledgeBudgetExceeded($promptKey, $promptParts['retrieval'], KnowledgeBudget::forKey($promptKey));
+
         $kanonSlugs = [];
         $kanonBlock = null;
         if ($team !== null && \Illuminate\Support\Facades\Schema::hasTable('foodalchemist_knowledge_canon')) {
             [$kBlocks, $kanonSlugs, $kanonVerworfen] = $this->selectKanon(
                 app(\Platform\FoodAlchemist\Services\Knowledge\KnowledgeCanonService::class)->documentsFor('prompt_key', $promptKey, $team),
                 is_array($options['knowledge_used'] ?? null) ? $options['knowledge_used'] : [],
-                $this->boundBudget($promptKey),
+                ['total' => KnowledgeBudget::forKey($promptKey) - $promptParts['retrieval'], 'key' => $promptKey, 'global' => KnowledgeBudget::forKey($promptKey), 'retrieval' => $promptParts['retrieval']],
             );
             $promptParts['dropped'] += $kanonVerworfen;
             if ($kBlocks !== []) {
@@ -397,45 +374,18 @@ class AiGatewayService
      *
      * @return array{0:list<string>,1:list<string>}
      */
-    /**
-     * Bound-Budget für einen Prompt-Key: {docs, chars_per_doc, total}.
-     * Override in config('foodalchemist.ai.bound_knowledge_budget'), sonst die Defaults.
-     *
-     * @return array{docs: int, chars_per_doc: int, total: int}
-     */
-    /**
-     * Spec 52/A2: das aufgelöste Bound-/Kanon-Budget eines Prompt-Keys für Prüf-Werkzeuge.
-     * Spiegelt {@see KnowledgeContextService::budgetFuer()} — der Deckungs-Bericht muss die
-     * Zahl nennen können, die der Gateway wirklich anwendet, ohne sie nachzurechnen (eine
-     * zweite Rechnung driftet).
-     *
-     * @return array{docs: int, chars_per_doc: int, total: int}
-     */
+    /** @deprecated Name aus dem alten Bound-Kanal; liefert jetzt ausschließlich das gemeinsame Gesamtbudget. @return array{total:int} */
     public function boundBudgetFuer(string $promptKey): array
     {
         return $this->boundBudget($promptKey);
     }
 
     /**
-     * @return array{docs: int, chars_per_doc: int, total: int}
+     * @return array{total: int}
      */
     private function boundBudget(string $promptKey): array
     {
-        $default = [
-            'docs' => self::BOUND_KNOWLEDGE_MAX_DOCS,
-            'chars_per_doc' => self::BOUND_KNOWLEDGE_CHARS_PER_DOC,
-            'total' => self::BOUND_KNOWLEDGE_MAX_TOTAL_CHARS,
-        ];
-        $konfig = config('foodalchemist.ai.bound_knowledge_budget', []);
-        if (! is_array($konfig) || ! isset($konfig[$promptKey]) || ! is_array($konfig[$promptKey])) {
-            return $default;
-        }
-
-        return [
-            'docs' => (int) ($konfig[$promptKey]['docs'] ?? $default['docs']),
-            'chars_per_doc' => (int) ($konfig[$promptKey]['chars_per_doc'] ?? $default['chars_per_doc']),
-            'total' => (int) ($konfig[$promptKey]['total'] ?? $default['total']),
-        ];
+        return ['total' => KnowledgeBudget::forKey($promptKey)];
     }
 
     /**
@@ -447,7 +397,7 @@ class AiGatewayService
     public function knowledgePreview(\Platform\Core\Models\Team $team, string $promptKey, array $retrieval): array
     {
         $rows = app(\Platform\FoodAlchemist\Services\Knowledge\KnowledgeCanonService::class)->documentsFor('prompt_key', $promptKey, $team);
-        [$blocks, $files, $dropped] = $this->selectKanon($rows, $retrieval['files_used'] ?? [], $this->boundBudget($promptKey));
+        [$blocks, $files, $dropped] = $this->selectKanon($rows, $retrieval['files_used'] ?? [], ['total' => KnowledgeBudget::forKey($promptKey) - (int) ($retrieval['total_chars'] ?? 0), 'key' => $promptKey, 'global' => KnowledgeBudget::forKey($promptKey), 'retrieval' => (int) ($retrieval['total_chars'] ?? 0)]);
         $allFiles = $rows->map(static fn ($doc) => "{$doc->slug}@v{$doc->version}")->all();
 
         return ['kanon_files' => $files, 'kanon_chars' => mb_strlen($this->kanonBlockText($blocks)),
@@ -476,16 +426,9 @@ class AiGatewayService
     }
 
     /**
-     * Welle 2 (Spec 50) — Kanon-Block: `pflicht`-Dossiers kommen IMMER und VOLLSTÄNDIG (nur der
-     * Provenienz-Vorspann fällt weg), unabhängig von Budget und Retrieval — der Block muss je
-     * Prompt-Key byte-identisch bleiben (Cache-Prefix, W3-1), und ein Kanon-Dossier ist per
-     * Kuration ≤ Deckel (4.000). `wenn_platz`-Dossiers folgen in `ord`-Reihenfolge, solange das
-     * Budget (`bound_knowledge_budget[total]` des Prompt-Keys) reicht und das Retrieval sie nicht
-     * schon geliefert hat; was nicht passt, wird als `dropped` ausgewiesen, nie angeschnitten
-     * (ein Kopf-Anschnitt eines §-Dossiers ist keine Regel).
-     *
-     * @param  \Illuminate\Support\Collection<int, object>  $rows  documentsFor()-Zeilen in ord-Reihenfolge
-     * @return array{0: list<string>, 1: list<string>, 2: int}  [Blöcke, slug@vN, verworfene Zeichen]
+     * Ganze Kanon-Dossiers im verbleibenden GEMEINSAMEN Budget. Pflicht vor optional,
+     * einschließlich sämtlicher Header/Trenner; kein Überschreiten und kein Anschneiden.
+     * @return array{0:list<string>,1:list<string>,2:int}
      */
     private function selectKanon($rows, array $alreadyUsed, array $budget): array
     {
@@ -497,25 +440,24 @@ class AiGatewayService
             }
         }
 
-        $blocks = [];
-        $slugs = [];
-        $verbraucht = 0;
-        $verworfen = 0;
-        foreach ($rows as $doc) {
-            $content = DossierText::ohneVorspann((string) $doc->content_md);
-            $laenge = mb_strlen($content);
-            $pflicht = ((string) $doc->mode) === 'pflicht';
-            if (! $pflicht) {
-                if (isset($bereits[(string) $doc->slug]) || $verbraucht + $laenge > $budget['total']) {
-                    $verworfen += $laenge;
-                    continue;
-                }
-            }
-            $blocks[] = $this->kanonDokumentText($doc);
-            $verbraucht += $laenge;
-            $slugs[] = "{$doc->slug}@v{$doc->version}";
+        $required = $rows->filter(fn ($doc) => (string) $doc->mode === 'pflicht');
+        $requiredChars = $this->kanonPflichtZeichen($required);
+        if ($requiredChars > $budget['total']) {
+            throw new KnowledgeBudgetExceeded($budget['key'], $requiredChars + $budget['retrieval'], $budget['global']);
         }
-
+        // Reservieren, bevor optionale Zeilen in ord-Reihenfolge betrachtet werden.
+        $selected = $required->keys()->all();
+        $eligible = $rows->filter(fn ($doc) => (string) $doc->mode === 'pflicht' || ! isset($bereits[(string) $doc->slug]));
+        foreach ($eligible as $index => $doc) {
+            if ((string) $doc->mode === 'pflicht') continue;
+            $candidate = $eligible->only([...$selected, $index])->map(fn ($row) => $this->kanonDokumentText($row))->all();
+            if (mb_strlen($this->kanonBlockText($candidate)) <= $budget['total']) $selected[] = $index;
+        }
+        $picked = $eligible->only($selected);
+        $blocks = $picked->map(fn ($doc) => $this->kanonDokumentText($doc))->values()->all();
+        $slugs = $picked->map(fn ($doc) => "{$doc->slug}@v{$doc->version}")->values()->all();
+        $allText = $this->kanonBlockText($eligible->map(fn ($doc) => $this->kanonDokumentText($doc))->values()->all());
+        $verworfen = mb_strlen($allText) - mb_strlen($this->kanonBlockText($blocks));
         return [$blocks, $slugs, $verworfen];
     }
 

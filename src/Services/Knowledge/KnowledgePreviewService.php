@@ -31,6 +31,8 @@ class KnowledgePreviewService
 
         return [
             'prompt_key' => $promptKey,
+            'budget_total' => $retrieval['knowledge_budget'],
+            'required_chars' => $retrieval['required_chars'],
             'datenwerk' => $retrieval['datenwerk'] ?? null,
             'retrieval' => $retrieval['files_used'], 'kanon' => $canon['kanon_files'],
             'dropped' => array_values(array_unique([...$retrieval['files_dropped'], ...$canon['kanon_dropped']])),

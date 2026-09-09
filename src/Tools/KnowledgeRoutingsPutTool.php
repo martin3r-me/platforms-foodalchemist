@@ -24,7 +24,7 @@ class KnowledgeRoutingsPutTool extends FoodAlchemistTool implements ToolContract
         return 'Setzt oder entfernt EIN Wissens-Routing (globaler Master, wirkt sofort). feature und genau eines von art oder category '
             . 'Pflicht. mode ∈ always|discovery|grounding|none — discovery für WACHSENDE Kategorien (gedeckelt, '
             . 'skalierbar), always nur für kleine fixe Sets (jede Doc immer im Prompt = Bloat), none = bewusst '
-            . 'leer. Optional max_docs / max_chars_per_doc als Cap (leer/0 = Service-Default). Mit delete=true wird '
+            . 'leer. max_docs begrenzt die Quellenzahl. max_chars_per_doc ist ein wirkungsloser Altparameter; es werden ganze Dossiers im gemeinsamen Budget ausgewählt. Mit delete=true wird '
             . 'das Routing entfernt → die Kategorie ist dann search-only (nur Browser/Suche, kein Auto-Grounding).';
     }
 
@@ -39,7 +39,7 @@ class KnowledgeRoutingsPutTool extends FoodAlchemistTool implements ToolContract
                 'category' => ['type' => 'string', 'description' => 'Wissens-Kategorie, z. B. niveau, kueche, domain'],
                 'mode' => ['type' => 'string', 'enum' => [...KnowledgeRoutingService::MODES, 'resolve'], 'description' => 'Lade-Modus (bei delete=true ignoriert)'],
                 'max_docs' => ['type' => 'integer', 'minimum' => 1, 'description' => 'Cap Top-K (leer = Service-Default)'],
-                'max_chars_per_doc' => ['type' => 'integer', 'minimum' => 1, 'description' => 'Cap Zeichen je Doc (leer = Service-Default)'],
+                'max_chars_per_doc' => ['type' => 'integer', 'minimum' => 1, 'description' => 'Veraltet: wird nur noch gespeichert, begrenzt oder kürzt keine Dossiers mehr.'],
                 'delete' => ['type' => 'boolean', 'description' => 'true → Routing entfernen (Kategorie wird search-only)'],
             ],
         ];
@@ -90,7 +90,7 @@ class KnowledgeRoutingsPutTool extends FoodAlchemistTool implements ToolContract
             return ToolResult::error($e->getMessage(), 'VALIDATION_ERROR');
         }
 
-        return ToolResult::success(['routing' => $row, 'hinweis' => 'Gesetzt — wirkt sofort beim nächsten KI-Kontext-Bau.']);
+        return ToolResult::success(['routing' => $row, 'hinweis' => 'Gesetzt. Ganze Dossiers werden im gemeinsamen Wissensbudget ausgewählt; max_chars_per_doc hat keine Wirkung mehr.']);
     }
 
     public function getMetadata(): array

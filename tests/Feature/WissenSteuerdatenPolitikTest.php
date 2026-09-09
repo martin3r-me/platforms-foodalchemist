@@ -268,9 +268,9 @@ it('B4: prüft Kanonbudgets auch außerhalb der beiden Generatoren samt Übersch
         $this->kanonZeile($this->rootTeam->id, $key, 'budget-regel');
     }
     // Der Inhalt passt genau; erst die reale Prompt-Hülle überschreitet das Budget.
-    config()->set('foodalchemist.ai.bound_knowledge_budget', [
-        'recipe.generator' => ['total' => 500], 'vk.generator' => ['total' => 500],
-        'recipe.review' => ['total' => 100],
+    config()->set('foodalchemist.ai.knowledge_budget', [
+        'recipe.generator' => 500, 'vk.generator' => 500,
+        'recipe.review' => 100,
     ]);
     $this->artisan('foodalchemist:wissen-steuerdaten-w0', ['--verify' => true, '--team' => $this->rootTeam->id])
         ->assertExitCode(1);

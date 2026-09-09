@@ -153,8 +153,7 @@ class WissensVersorgungService
             // Seit F2 sind ALLE lebenden Bindungen stumm, nicht nur die an Keys mit Kanon.
             'bindungen_stumm' => $bindungen->count() - $bindungenTot,
             'bindungs_slugs' => $bindungen->pluck('slug')->all(),
-            'budget_bound' => (int) $this->gateway->boundBudgetFuer($promptKey)['total'],
-            'budget_retrieval' => $this->wissen->budgetFuer($promptKey),
+            'budget_total' => (int) $this->gateway->boundBudgetFuer($promptKey)['total'],
             'verdikt' => $verdikt,
         ];
     }

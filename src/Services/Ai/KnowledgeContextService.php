@@ -125,7 +125,7 @@ class KnowledgeContextService
      */
     public const RECIPE_MAX_CHARS_PER_DOC = 2400;
 
-    public const RECIPE_MAX_KNOWLEDGE_CHARS = 12000;
+    public const RECIPE_MAX_KNOWLEDGE_CHARS = 48000; // Kompatibilitätskonstante; Laufzeit: KnowledgeBudget
 
     /**
      * W0-5 — Gesamtbudget für JEDES Feature.
@@ -137,7 +137,7 @@ class KnowledgeContextService
      * config('foodalchemist.ai.knowledge_budget'), damit sie diff- und PR-fähig bleiben
      * statt als unversionierte Handdaten in einer Tabelle zu driften (wie die Routings).
      */
-    public const MAX_KNOWLEDGE_CHARS_DEFAULT = 12000;
+    public const MAX_KNOWLEDGE_CHARS_DEFAULT = KnowledgeBudget::DEFAULT_CHARS;
 
     /** Spec 08 P6: Fallback-Budget für `concept:always`, wenn die Routing-Zeile nichts vorgibt. */
     public const CONCEPT_MAX_DOCS = 4;
@@ -178,16 +178,18 @@ class KnowledgeContextService
             }
         }
         // Spec 50 Welle 2 (2026-09-06): `_kanon_prompt_key` = der Prompt-Key, dessen KANON der
-        // Gateway ohnehin vollständig in den Prompt stellt (`pflicht` ignoriert Budget UND Dedup,
+        // Gateway vollständig reserviert (bei Budgetüberschreitung wird abgebrochen,
         // KnowledgeCanonService/AiGatewayService). Diese Dossiers darf das Retrieval nicht ein
         // zweites Mal laden — gemessen: `ai_generate_recipe × cross_cutting discovery 6×8000` zog
         // die mengen_defaults-/geschmacksbalance-Splits erneut. `wenn_platz` bleibt ABSICHTLICH
         // draußen: die können dem Kanon-Budget zum Opfer fallen und sollen dann noch findbar sein.
         // Der Aufrufer kennt nur seinen Prompt-Key; die Auflösung passiert hier, an EINEM Ort.
-        $kanonKey = trim((string) ($params['_kanon_prompt_key'] ?? ''));
+        $kanonKey = KnowledgeBudget::promptKey(trim((string) ($params['_kanon_prompt_key'] ?? $feature)));
+        $kanonPflichtChars = 0;
         if ($kanonKey !== '' && $team !== null) {
-            $kanonSlugs = app(KnowledgeCanonService::class)->documentsFor('prompt_key', $kanonKey, $team)
-                ->where('mode', 'pflicht')->pluck('slug')->map(static fn ($s) => (string) $s)->all();
+            $kanonDocs = app(KnowledgeCanonService::class)->documentsFor('prompt_key', $kanonKey, $team);
+            $kanonPflichtChars = app(AiGatewayService::class)->kanonPflichtZeichen($kanonDocs);
+            $kanonSlugs = $kanonDocs->where('mode', 'pflicht')->pluck('slug')->map(static fn ($s) => (string) $s)->all();
             $this->ausgeschlossen = array_merge($this->ausgeschlossen, $kanonSlugs);
         }
         $this->ausgeschlossen = array_values(array_unique($this->ausgeschlossen));
@@ -270,7 +272,7 @@ class KnowledgeContextService
             $crossDocs = $this->crossCuttingDocs($team, $feature);
             foreach ($crossDocs as $doc) {
                 $maxChars = $recipeBudget ? self::RECIPE_MAX_CHARS_PER_DOC : self::CROSS_CUTTING_TRUNCATE_CHARS;
-                $blocks[] = ['file' => "{$doc->slug}@v{$doc->version}", 'text' => "## CROSS_CUTTING: {$doc->slug}\n\n" . $this->truncate($doc->content_md, $maxChars)];
+                $blocks[] = ['file' => "{$doc->slug}@v{$doc->version}", 'text' => "## CROSS_CUTTING: {$doc->slug}\n\n" . (string) $doc->content_md];
                 $filesUsed[] = "{$doc->slug}@v{$doc->version}";
             }
             $snap('cross_cutting', $before);
@@ -281,8 +283,8 @@ class KnowledgeContextService
                 (int) ($routing->get('domain:discovery')->max_docs ?: self::DOMAIN_TOP_K));
             foreach ($domainDocs as $doc) {
                 $maxChars = $recipeBudget ? self::RECIPE_MAX_CHARS_PER_DOC : self::DOMAIN_TRUNCATE_CHARS;
-                $blocks[] = ['file' => "{$doc->slug}@v{$doc->version}", 'text' => "## DOMAIN: {$doc->slug}\n\n" . $this->truncate($doc->content_md, $maxChars)];
-                $this->herkunft[$doc->slug]['sent'] = min(mb_strlen((string) $doc->content_md), $maxChars);
+                $blocks[] = ['file' => "{$doc->slug}@v{$doc->version}", 'text' => "## DOMAIN: {$doc->slug}\n\n" . (string) $doc->content_md];
+                $this->herkunft[$doc->slug]['sent'] = mb_strlen((string) $doc->content_md);
                 $filesUsed[] = "{$doc->slug}@v{$doc->version}";
             }
             $snap('domain', $before);
@@ -449,11 +451,17 @@ class KnowledgeContextService
                 array_push($requiredFiles, ...($usedByCategory[(string) $row->category] ?? []));
             }
         }
-        $budget = $this->knowledgeBudget($feature, $recipeBudget);
-        // Zuerst die echte Pflichtmenge gegen die konfigurierte Obergrenze prüfen.
-        $selection = KnowledgeContextBlock::assemble($parts, $requiredFiles, $budget, $feature);
-        if (($override = (int) ($params['_max_chars'] ?? 0)) > 0 && $override < $budget) {
-            $selection = KnowledgeContextBlock::assemble($parts, $requiredFiles, $override, $feature, callerOverride: true);
+        $budget = KnowledgeBudget::forKey($kanonKey);
+        if ($kanonPflichtChars > $budget) throw new KnowledgeBudgetExceeded($kanonKey, $kanonPflichtChars, $budget);
+        try {
+            // Pflichtkanon reservieren, bevor die Retrieval-Auswahl optionale Quellen aufnimmt.
+            $restBudget = $budget - $kanonPflichtChars;
+            $selection = KnowledgeContextBlock::assemble($parts, $requiredFiles, $restBudget, $kanonKey);
+            if (($override = (int) ($params['_max_chars'] ?? 0)) > 0 && $override < $restBudget) {
+                $selection = KnowledgeContextBlock::assemble($parts, $requiredFiles, $override, $kanonKey, callerOverride: true);
+            }
+        } catch (KnowledgeBudgetExceeded $exception) {
+            throw new KnowledgeBudgetExceeded($kanonKey, $kanonPflichtChars + $exception->requiredChars, $budget);
         }
         $block = $selection['block'];
         $sentFiles = $selection['files_used'];
@@ -484,7 +492,9 @@ class KnowledgeContextService
             // Budget-Schnitt nicht von „Wissen fehlt jetzt" zu unterscheiden.
             // files_used nennt ausschließlich Quellen im tatsächlich gesendeten Block.
             'built_chars' => $gebaut,
-            'required_chars' => $selection['required_chars'],
+            'required_chars' => $selection['required_chars'] + $kanonPflichtChars,
+            'kanon_required_chars' => $kanonPflichtChars,
+            'knowledge_budget' => $budget,
             'dropped_chars' => max(0, $gebaut - mb_strlen($block)),
             'herkunft' => $this->herkunft,
         ];
@@ -655,13 +665,13 @@ class KnowledgeContextService
                 $doc = $docs[$slug];
                 if ($doc->art === Wissensart::REGEL) $this->achsenPflichtFiles[] = "{$doc->slug}@v{$doc->version}";
                 $bloecke[] = ['file' => "{$doc->slug}@v{$doc->version}", 'text' => '## ' . mb_strtoupper((string) $achse) . ": {$doc->title}\n\n"
-                    . ($doc->art === Wissensart::REGEL ? (string) $doc->content_md : $this->truncate((string) $doc->content_md, self::ACHSEN_TRUNCATE_CHARS))];
+                    . (string) $doc->content_md];
                 $filesUsed[] = "{$doc->slug}@v{$doc->version}";
                 $this->herkunft[$slug] = [
                     'score' => null,
                     'via' => 'achse:' . $achse,
                     'chars' => mb_strlen((string) $doc->content_md),
-                    'sent' => $doc->art === Wissensart::REGEL ? mb_strlen((string) $doc->content_md) : min(mb_strlen((string) $doc->content_md), self::ACHSEN_TRUNCATE_CHARS),
+                    'sent' => mb_strlen((string) $doc->content_md),
                 ];
                 break;                                               // ein Dossier je Achse
             }
@@ -926,12 +936,7 @@ class KnowledgeContextService
      */
     private function knowledgeBudget(string $feature, bool $recipeBudget): int
     {
-        $overrides = config('foodalchemist.ai.knowledge_budget', []);
-        if (is_array($overrides) && isset($overrides[$feature]) && (int) $overrides[$feature] > 0) {
-            return (int) $overrides[$feature];
-        }
-
-        return $recipeBudget ? self::RECIPE_MAX_KNOWLEDGE_CHARS : self::MAX_KNOWLEDGE_CHARS_DEFAULT;
+        return KnowledgeBudget::forKey($feature);
     }
 
     /**
@@ -1130,7 +1135,7 @@ class KnowledgeContextService
 
         $blocks = [];
         foreach ($docs as $doc) {
-            $blocks[] = ['file' => "{$doc->slug}@v{$doc->version}", 'text' => "## CONCEPT: {$doc->slug}\n\n" . $this->truncate((string) $doc->content_md, $maxChars)];
+            $blocks[] = ['file' => "{$doc->slug}@v{$doc->version}", 'text' => "## CONCEPT: {$doc->slug}\n\n" . (string) $doc->content_md];
             $filesUsed[] = "{$doc->slug}@v{$doc->version}";
         }
 
@@ -1280,7 +1285,7 @@ class KnowledgeContextService
             if ($doc === null) {
                 continue;
             }
-            $blocks[] = ['file' => "{$doc->slug}@v{$doc->version}", 'text' => "## TREND: {$doc->slug}\n\n" . $this->truncate((string) $doc->content_md, $maxChars)];
+            $blocks[] = ['file' => "{$doc->slug}@v{$doc->version}", 'text' => "## TREND: {$doc->slug}\n\n" . (string) $doc->content_md];
             $filesUsed[] = "{$doc->slug}@v{$doc->version}";
         }
         if ($blocks === []) {
@@ -1359,7 +1364,7 @@ class KnowledgeContextService
         }
         $blocks = [];
         foreach ($docs as $doc) {
-            $blocks[] = ['file' => "{$doc->slug}@v{$doc->version}", 'text' => '## ' . mb_strtoupper($category) . ": {$doc->slug}\n\n" . $this->truncate((string) $doc->content_md, $maxChars)];
+            $blocks[] = ['file' => "{$doc->slug}@v{$doc->version}", 'text' => '## ' . mb_strtoupper($category) . ": {$doc->slug}\n\n" . (string) $doc->content_md];
             $filesUsed[] = "{$doc->slug}@v{$doc->version}";
         }
 
@@ -1396,13 +1401,13 @@ class KnowledgeContextService
         foreach ($hits as $hit) {
             $content = (string) ($contents[$hit['id']] ?? '');
             $file = "{$hit['slug']}@v{$hit['version']}";
-            $blocks[] = ['file' => $file, 'text' => "## {$label}: {$hit['slug']}\n\n".$this->truncate($content, $maxChars)];
+            $blocks[] = ['file' => $file, 'text' => "## {$label}: {$hit['slug']}\n\n".$content];
             $filesUsed[] = $file;
             $this->herkunft[$hit['slug']] = [
                 'score' => $hit['score'], 'via' => $hit['via'],
                 'lexical_rank' => $hit['lexical_rank'], 'semantic_rank' => $hit['semantic_rank'],
                 'lexical_score' => $hit['lexical_score'], 'candidate_limit' => $hit['candidate_limit'],
-                'chars' => mb_strlen($content), 'sent' => min(mb_strlen($content), $maxChars),
+                'chars' => mb_strlen($content), 'sent' => mb_strlen($content),
             ];
         }
 
@@ -1447,7 +1452,7 @@ class KnowledgeContextService
 
         return new KnowledgeContextBlock("# NIVEAU-WISSEN\n\n", [[
             'file' => "{$doc->slug}@v{$doc->version}",
-            'text' => "## NIVEAU: {$doc->slug}\n\n" . $this->truncate((string) $doc->content_md, $maxChars),
+            'text' => "## NIVEAU: {$doc->slug}\n\n" . (string) $doc->content_md,
         ]]);
     }
 
@@ -1652,7 +1657,7 @@ class KnowledgeContextService
                     $doc = $this->pairingDoc($team, $stem);
                     if ($doc !== null) {
                         $geladen[$stem] = true;
-                        $blocks[] = ['file' => "{$doc->slug}@v{$doc->version}", 'text' => "### Pairing-Doku: {$stem}\n" . $this->truncate($doc->content_md, $maxChars)];
+                        $blocks[] = ['file' => "{$doc->slug}@v{$doc->version}", 'text' => "### Pairing-Doku: {$stem}\n" . (string) $doc->content_md];
                         $filesUsed[] = "{$doc->slug}@v{$doc->version}";
                     }
                 }
