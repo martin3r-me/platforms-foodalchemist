@@ -23,12 +23,12 @@
                 {{-- Suche: der Platzhalter sagt, WAS gesucht wird — das schaltet mit dem
                      semantischen Schalter mit. --}}
                 <input type="text" wire:model.live.debounce.300ms="search" data-wissen-suche
-                       placeholder="{{ $semantic ? 'Semantisch suchen (Bedeutung · Synonyme) …' : 'Suche (Titel · Slug · Inhalt) …' }}"
+                       placeholder="{{ $semantic ? 'Suche (Text · Bedeutung · Synonyme) …' : 'Suche (Titel · Slug · Aliase) …' }}"
                        class="{{ $input }}" />
 
                 <label class="flex items-center gap-1.5 text-[11px] text-gray-600 cursor-pointer"
                        title="Findet auch bedeutungsähnliche Dokumente ohne wörtliche Übereinstimmung">
-                    <input type="checkbox" wire:model.live="semantic" data-wissen-semantik /> semantisch suchen
+                    <input type="checkbox" wire:model.live="semantic" data-wissen-semantik /> Bedeutung einbeziehen
                 </label>
 
                 @if($semanticNote !== null)
@@ -53,7 +53,7 @@
                 </div>
 
                 <p class="text-[11px] text-gray-500" data-wissen-anzahl>
-                    {{ $docs->count() }} Dokument(e)@if($semanticAktiv) · nach Relevanz @endif
+                    {{ $docs->count() }} Dokument(e)@if(trim($search) !== '') · nach Relevanz @endif
                 </p>
 
                 <div class="space-y-0.5 max-h-[58vh] overflow-y-auto -mx-1 px-1">
@@ -82,6 +82,56 @@
     {{-- RECHTS: wofür wird dieses Wissen genutzt --}}
     <x-slot name="activity">
         <x-foodalchemist::detail-sidebar title="Verwendung" width="w-96" :maxWidth="760" scope="activity_knowledge" side="right">
+            <details class="m-4 {{ $card }} p-4" data-wissen-vorschau>
+                <summary class="text-sm font-medium cursor-pointer">Wissens-Vorschau für einen Auftrag</summary>
+                <div class="mt-3 space-y-3">
+                    <label class="block {{ $label }}">Arbeitsschritt
+                        <select wire:model="previewPromptKey" class="{{ $input }} mt-1">
+                            @foreach($promptKeys as $key)<option value="{{ $key }}">{{ $key }}</option>@endforeach
+                        </select>
+                    </label>
+                    <label class="block {{ $label }}">Auftrag
+                        <textarea wire:model="previewQuery" rows="3" class="{{ $input }} mt-1" placeholder="Zum Beispiel: Cremige Linsensuppe für ein Winterbuffet"></textarea>
+                    </label>
+                    <label class="block {{ $label }}">Niveau
+                        <select wire:model="previewLevel" class="{{ $input }} mt-1">
+                            <option value="">Nicht vorgegeben</option><option value="klassisch">Klassisch</option>
+                            <option value="gehoben">Gehoben</option><option value="haute_cuisine">Haute Cuisine</option>
+                        </select>
+                    </label>
+                    <label class="block {{ $label }}">Anlass
+                        <select wire:model="previewOccasion" class="{{ $input }} mt-1">
+                            <option value="">Nicht vorgegeben</option><option value="fruehstueck">Frühstück</option>
+                            <option value="lunch">Lunch</option><option value="konferenz">Konferenz</option>
+                            <option value="empfang">Empfang</option><option value="dinner">Dinner</option><option value="late_night">Late Night</option>
+                        </select>
+                    </label>
+                    <label class="block {{ $label }}">Verpflegungskontext
+                        <select wire:model="previewSector" class="{{ $input }} mt-1">
+                            <option value="">Nicht vorgegeben</option><option value="betriebsgastronomie">Betriebsgastronomie</option>
+                            <option value="catering">Catering</option><option value="care">Care</option>
+                            <option value="schule_kita">Schule / Kita</option><option value="restaurant">Restaurant</option>
+                        </select>
+                    </label>
+                    <button type="button" wire:click="previewKnowledge" wire:loading.attr="disabled" wire:target="previewKnowledge"
+                            class="px-3 py-2 rounded-lg bg-violet-600 text-white text-xs">Wissensauswahl prüfen</button>
+                    <p class="text-[11px] text-gray-500">Zeigt die Wissensauswahl für diese Angaben. Es wird kein Rezept erstellt.</p>
+                    @if($previewError)<p class="text-xs text-red-700" role="alert">{{ $previewError }}</p>@endif
+                    @if($knowledgePreview !== null)
+                        <div class="text-xs space-y-2" data-wissen-vorschau-ergebnis>
+                            <p>{{ number_format($knowledgePreview['total_chars'], 0, ',', '.') }} Zeichen Wissen ·
+                                {{ number_format($knowledgePreview['dropped_chars'], 0, ',', '.') }} Zeichen ausgelassen</p>
+                            @foreach(['kanon' => 'Verbindliches Wissen', 'retrieval' => 'Ausgewähltes Fachwissen', 'dropped' => 'Wegen Budget ausgelassen'] as $group => $labelText)
+                                <div><p class="font-medium">{{ $labelText }}</p>
+                                    @forelse($knowledgePreview[$group] as $file)
+                                        <p class="break-words text-gray-600">{{ $file }}</p>
+                                    @empty<p class="text-gray-500">Keine Quellen</p>@endforelse
+                                </div>
+                            @endforeach
+                        </div>
+                    @endif
+                </div>
+            </details>
             @if($selected)
                 <div class="p-4 space-y-4">
                     <div class="{{ $card }} p-4 space-y-3" data-wissen-einordnung>

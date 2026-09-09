@@ -438,6 +438,23 @@ class AiGatewayService
         ];
     }
 
+    /**
+     * E3: dieselbe Kanon-Auswahl wie propose(), ohne Modellaufruf oder Schreibwirkung.
+     * Die Retrieval-Auswahl stammt bereits aus contextFor(); auch der Dedup ist identisch.
+     *
+     * @return array{kanon_files: list<string>, kanon_chars: int, kanon_dropped: list<string>, dropped_chars: int}
+     */
+    public function knowledgePreview(\Platform\Core\Models\Team $team, string $promptKey, array $retrieval): array
+    {
+        $rows = app(\Platform\FoodAlchemist\Services\Knowledge\KnowledgeCanonService::class)->documentsFor('prompt_key', $promptKey, $team);
+        [$blocks, $files, $dropped] = $this->selectKanon($rows, $retrieval['files_used'] ?? [], $this->boundBudget($promptKey));
+        $allFiles = $rows->map(static fn ($doc) => "{$doc->slug}@v{$doc->version}")->all();
+
+        return ['kanon_files' => $files, 'kanon_chars' => mb_strlen($this->kanonBlockText($blocks)),
+            'kanon_dropped' => array_values(array_diff($allFiles, $files, $retrieval['files_used'] ?? [])),
+            'dropped_chars' => $dropped];
+    }
+
     /** Tatsächliche Pflichtgröße inklusive Quellenüberschriften und Trennern. */
     public function kanonPflichtZeichen(\Illuminate\Support\Collection $rows): int
     {

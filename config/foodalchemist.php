@@ -726,6 +726,14 @@ return [
         'konzentrat_anteil_max' => (float) env('FOODALCHEMIST_KONZENTRAT_ANTEIL_MAX', 0.20),
     ],
 
+    // Spec 52/E: Kandidaten werden vor der kontextspezifischen Endauswahl fusioniert.
+    'knowledge_search' => [
+        'candidate_limit' => 100,
+        'min_lexical_score' => 0.05,
+        // Begrenztes Nachladen, falls semantische Treffer außerhalb des Filters liegen.
+        'semantic_scan_limit' => 5000,
+    ],
+
     'semantic_search' => [
         // Phase 0 (2026-08-06): RAG-Hot-Path war HART AUS — der mysql-Embedding-Store macht
         // Cosine-in-PHP und blockierte/OOMte generiere() bei „Kontext & Wissen", VOR dem LLM.

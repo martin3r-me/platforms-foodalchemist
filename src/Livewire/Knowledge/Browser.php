@@ -8,6 +8,7 @@ use Illuminate\Support\Str;
 use Livewire\Attributes\Url;
 use Livewire\Component;
 use Platform\FoodAlchemist\Services\Ai\KnowledgeEmbeddingService;
+use Platform\FoodAlchemist\Services\Ai\KnowledgeSearchService;
 use Platform\FoodAlchemist\Support\TeamScope;
 
 /**
@@ -28,7 +29,7 @@ class Browser extends Component
     #[Url(as: 'status')]
     public string $filterStatus = 'all';
 
-    /** Semantik-Suche (#469): Embedding-Recall statt SQL-LIKE, wenn ein Provider verfügbar ist. */
+    /** Semantik-Suche (#469): Semantik ergänzt dieselbe Textsuche wie im Generator und MCP. */
     #[Url(as: 'sem')]
     public bool $semantic = false;
 
@@ -59,6 +60,15 @@ class Browser extends Component
     public string $kanonMode = 'pflicht';
 
     public string $traceTarget = '';
+
+    public string $previewPromptKey = 'recipe.generator';
+    public string $previewQuery = '';
+    public string $previewLevel = '';
+    public string $previewOccasion = '';
+    public string $previewSector = '';
+    public ?array $knowledgePreview = null;
+    public ?string $previewError = null;
+
 
     public ?string $fehler = null;
 
@@ -185,6 +195,10 @@ class Browser extends Component
      */
     public function mount(): void
     {
+        if (! request()->has('sem')) {
+            $this->semantic = (bool) config('foodalchemist.semantic_search.enabled', false);
+        }
+
         if ($this->selectedId !== null) {
             $this->select($this->selectedId);
         }
@@ -491,6 +505,26 @@ class Browser extends Component
         $this->savedToast();
     }
 
+    public function previewKnowledge(): void
+    {
+        $this->knowledgePreview = null;
+        $this->previewError = null;
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team === null) {
+            $this->previewError = 'Kein Team im Kontext.';
+            return;
+        }
+        try {
+            $this->knowledgePreview = app(\Platform\FoodAlchemist\Services\Knowledge\KnowledgePreviewService::class)->preview(
+                $team, $this->previewPromptKey, $this->previewQuery, [
+                    'level' => $this->previewLevel, 'occasion' => $this->previewOccasion, 'sektor' => $this->previewSector,
+                ],
+            );
+        } catch (\InvalidArgumentException|\RuntimeException $exception) {
+            $this->previewError = $exception->getMessage();
+        }
+    }
+
     public function render()
     {
         $kategorien = DB::table('foodalchemist_knowledge_categories')->whereNull('deleted_at')
@@ -507,18 +541,10 @@ class Browser extends Component
         // Semantik-Modus (#469): Embedding-Recall, sofern aktiviert, Query nicht leer
         // und ein Provider verfügbar ist. Sonst graceful Fallback auf SQL-LIKE + Hinweis.
         $semanticNote = null;
-        $semanticIds = null;
         $semanticAktiv = false;
         if ($this->semantic && $suche !== '') {
-            $svc = app(KnowledgeEmbeddingService::class);
-            if ($svc->isProviderAvailable()) {
-                $semanticAktiv = true;
-                $semanticIds = $svc->searchDocIds($suche, 50);
-                if ($semanticIds === []) {
-                    $semanticNote = 'Keine semantischen Treffer — evtl. ist der Korpus noch nicht indiziert '
-                        . '(php artisan foodalchemist:knowledge-embed).';
-                }
-            } else {
+            $semanticAktiv = app(KnowledgeEmbeddingService::class)->isProviderAvailable();
+            if (! $semanticAktiv) {
                 $semanticNote = 'Semantische Suche nicht verfügbar (kein Embedding-Provider) — es wird die Textsuche genutzt.';
             }
         }
@@ -533,23 +559,11 @@ class Browser extends Component
             ->when($this->filterStatus === 'active', fn ($q) => $q->where('active', true))
             ->when($this->filterStatus === 'inactive', fn ($q) => $q->where('active', false));
 
-        if ($semanticAktiv) {
-            // Score-Reihenfolge in PHP herstellen (DB-agnostisch, kein FIELD()).
-            // Kategorie-/Status-Filter greifen weiter, der LIKE-Filter entfällt (Recall-Zweck).
-            if ($semanticIds === null || $semanticIds === []) {
-                $docs = collect();
-            } else {
-                $rows = $basis->whereIn('id', $semanticIds)->get($spalten)->keyBy('id');
-                $docs = collect($semanticIds)->map(fn ($id) => $rows->get($id))->filter()->values();
-            }
+        if ($suche !== '') {
+            $hits = app(KnowledgeSearchService::class)->search($basis, $suche, 100, $semanticAktiv, Auth::user()?->currentTeamRelation);
+            $docs = collect($hits)->map(static fn ($hit) => (object) $hit);
         } else {
-            $docs = $basis
-                ->when($suche !== '', function ($q) use ($suche) {
-                    $s = '%' . $suche . '%';
-                    $q->where(fn ($w) => $w->where('title', 'like', $s)->orWhere('slug', 'like', $s)->orWhere('content_md', 'like', $s));
-                })
-                ->orderBy('category')->orderBy('title')
-                ->get($spalten);
+            $docs = $basis->orderBy('category')->orderBy('title')->get($spalten);
         }
 
         $selected = $this->selectedId !== null

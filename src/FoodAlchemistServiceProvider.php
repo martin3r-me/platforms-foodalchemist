@@ -672,6 +672,7 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\StrukturVokabularGetTool::class,
                     // Phase K: Wissen + Pairing-Graph für externe LLM-Clients
                     \Platform\FoodAlchemist\Tools\KnowledgeSearchTool::class,
+                    \Platform\FoodAlchemist\Tools\KnowledgePreviewTool::class,
                     \Platform\FoodAlchemist\Tools\KnowledgeListTool::class,
                     \Platform\FoodAlchemist\Tools\KnowledgeGetTool::class,
                     \Platform\FoodAlchemist\Tools\KnowledgeCreateTool::class,

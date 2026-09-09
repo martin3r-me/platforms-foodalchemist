@@ -2001,8 +2001,26 @@ Für die Umsetzung konkret:
    bestehenden Kontext-Aufbau und später aus dem zentralen Auftrag (C), nicht aus einem
    zweiten Browser-Nachbau der Routing-Logik.
 
-E ist damit vorbereitet, aber **nicht implementiert**. Ohne Team-6-Referenzmessung wird keine
-Verbesserung der genannten Recall-Prozentpunkte behauptet. Die vorhandene
+**Lokaler Umsetzungsstand 2026-09-09:** Der gemeinsame `KnowledgeSearchService` ist jetzt
+in generischer Discovery, Domain-Discovery, MCP-Suche und Browser eingebunden. Ein
+`KnowledgeTokenizer` liefert die Textnormalisierung. Lexik (Slug, Titel, Aliase) und
+Semantik werden unabhängig ermittelt und per RRF vor der Endauswahl fusioniert.
+`knowledge_search.candidate_limit` begrenzt jede Kandidatenliste auf 100; die semantische
+Suche lädt bei ausgeschlossenen Treffern innerhalb eines begrenzten Fensters nach
+(`semantic_scan_limit`, 5.000). Dieses Fenster ist weiterhin eine Recall-Grenze.
+
+`KnowledgePreviewService`, Browser und `foodalchemist.knowledge.PREVIEW` verwenden den
+echten Kontext-Aufbau und dieselbe Kanon-Auswahl wie das Gateway. Auftrag, Prompt-Key
+und fachliche Leitplanken sind Eingaben; Quellenauswahl, Budget-Auslassungen und Zeichen
+sind Ausgabe. Die Vorschau bildet die übergebenen Angaben ab; eine bereits durchlaufene
+Zutatenauflösung mit Hauptzutat-Slugs wird hier noch nicht simuliert.
+
+Neun neue Regressionstests sind grün, darunter unabhängige Rangfusion trotz voller
+lexikalischer Endauswahl, gleiche Rangfolge an den drei Einstiegen, Domain-Relevanz,
+Aliasnormalisierung, Filterung sowie UI/MCP-Vorschau und Abgleich mit dem Gateway-Audit.
+Die vollständige Suite für diesen Stand läuft; E ist **noch nicht live abgenommen oder
+deployt**. Ohne Team-6-Referenzmessung wird keine Verbesserung der genannten
+Recall-Prozentpunkte behauptet. Die vorhandene
 `wissen-recall-probe` misst ausschließlich den Embedding-Pfad und wäre alleine noch kein
 Nachweis für den neuen Hybrid-Rechner.
 

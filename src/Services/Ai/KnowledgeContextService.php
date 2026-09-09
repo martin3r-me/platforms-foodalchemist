@@ -84,51 +84,6 @@ class KnowledgeContextService
     public const MAX_PARTNERS = 28;
 
     /**
-     * W0-6 — Stoppwörter für die Retrieval-Lexik.
-     *
-     * Bis Welle 0 gab es zwei Tokenizer: dieser hier ohne Stoppliste (min. 3 Zeichen) und
-     * AiGatewayService::knowledgeTokens() mit Liste (min. 4). Folge: Füllwörter der
-     * Beschreibung („der", „mit", „ohne") wurden echte Ranking-Tokens und trafen über den
-     * Substring-Term beliebige Slugs — `der` ⊂ `moderne` ist ein real beobachteter Fall.
-     *
-     * Die Mindestlänge bleibt bewusst bei 3 und wird NICHT auf 4 gehoben (so stand es im
-     * Plan): `aal`, `oel`, `jus`, `roh`, `bio` sind bedeutungstragende Kurz-Tokens der
-     * Domäne. Die Fehltreffer kamen von Funktionswörtern, nicht von der Länge — also
-     * werden Funktionswörter entfernt, statt Fachvokabular mit abzuschneiden.
-     */
-    private const STOPWORDS = [
-        'der' => true, 'die' => true, 'das' => true, 'den' => true, 'dem' => true, 'des' => true,
-        'und' => true, 'oder' => true, 'mit' => true, 'ohne' => true, 'fuer' => true, 'auf' => true,
-        'von' => true, 'aus' => true, 'ein' => true, 'eine' => true, 'einer' => true, 'eines' => true,
-        'einen' => true, 'ist' => true, 'sind' => true, 'wird' => true, 'werden' => true,
-        'als' => true, 'auch' => true, 'sehr' => true, 'sowie' => true, 'nach' => true, 'bei' => true,
-        'rezept' => true, 'gericht' => true, 'basisrezept' => true, 'komponente' => true,
-        'zutaten' => true, 'werte' => true,
-    ];
-
-    /**
-     * W0-6 — der Substring-Term (+0,1 je Query-Token, das in einem Slug-Token steckt) darf
-     * erst ab dieser Länge feuern. Kurze Fragmente stecken zufällig in fast jedem Kompositum;
-     * ab 5 Zeichen ist ein Substring-Treffer in der Regel echt („steinpilz" ⊂
-     * „steinpilzrahmsauce").
-     */
-    private const DISCOVERY_SUBSTRING_MIN_LEN = 5;
-
-    /**
-     * W0-6 — Mindest-Score für lexikalische Discovery-Treffer.
-     *
-     * Bewusst NIEDRIG (Plan nannte 0,12) und nicht scharf gezogen: ein einzelner ECHTER
-     * Token-Treffer auf einem 5-Token-Slug gegen eine 12-Token-Query ergibt bereits nur
-     * Jaccard 1/16 = 0,0625 — ein Gate bei 0,12 würde ohne mitfeuernden Substring-Term
-     * genau die echten Treffer verwerfen. Die eigentliche Rausch-Quelle (Funktionswörter ×
-     * Substring) ist mit STOPWORDS + DISCOVERY_SUBSTRING_MIN_LEN an der Wurzel weg.
-     *
-     * Der finale Wert wird gegen echte Läufe kalibriert — dafür liefert contextFor() ab
-     * jetzt `score` und `via` je Treffer zurück, statt den Wert zu behaupten.
-     */
-    private const DISCOVERY_MIN_SCORE = 0.05;
-
-    /**
      * Pro-Doc-Deckel für achsen-aufgelöstes Wissen (Anlass-Playbook, Segment-Profil).
      * Bewusst knapp: das sind PRÄZISE Treffer, die den unpräzisen Discovery-Treffern
      * Budget wegnehmen — das ist der Sinn der Sache, aber es darf sie nicht verdrängen.
@@ -136,7 +91,7 @@ class KnowledgeContextService
     private const ACHSEN_TRUNCATE_CHARS = 2400;
 
     /**
-     * W0-6 — Herkunft je ausgewähltem Doc-Slug: `via` (lexical|alias|semantic), `score`,
+     * W0-6 — Herkunft je ausgewähltem Doc-Slug: `via` (lexical|alias|semantic|hybrid), `score`,
      * `chars` (Doc-Größe) und `sent` (was nach dem Pro-Doc-Deckel wirklich rausging).
      * Wird je contextFor()-Lauf zurückgesetzt und mit dem Block zurückgegeben.
      *
@@ -311,15 +266,12 @@ class KnowledgeContextService
         }
         if ($routing->has('domain:discovery')) {
             $before = count($filesUsed);
-            $domainDocs = $this->discoverDomains($team, $this->discoveryQuery($description, $params), $scopeSlugs);
-            if ($recipeBudget) {
-                // Kein globales Dokument-Limit: alle wirklich gematchten Domains dürfen hinein.
-                // Die Routing-Grenze und das Gesamtzeichenbudget verhindern weiterhin Bloat.
-                $domainDocs = array_slice($domainDocs, 0, (int) ($routing->get('domain:discovery')->max_docs ?: self::DOMAIN_TOP_K));
-            }
+            $domainDocs = $this->discoverDomains($team, $this->discoveryQuery($description, $params), $scopeSlugs,
+                (int) ($routing->get('domain:discovery')->max_docs ?: self::DOMAIN_TOP_K));
             foreach ($domainDocs as $doc) {
                 $maxChars = $recipeBudget ? self::RECIPE_MAX_CHARS_PER_DOC : self::DOMAIN_TRUNCATE_CHARS;
                 $blocks[] = ['file' => "{$doc->slug}@v{$doc->version}", 'text' => "## DOMAIN: {$doc->slug}\n\n" . $this->truncate($doc->content_md, $maxChars)];
+                $this->herkunft[$doc->slug]['sent'] = min(mb_strlen((string) $doc->content_md), $maxChars);
                 $filesUsed[] = "{$doc->slug}@v{$doc->version}";
             }
             $snap('domain', $before);
@@ -966,16 +918,7 @@ class KnowledgeContextService
      */
     public function tokenize(string $s): array
     {
-        $s = str_replace(['ä', 'ö', 'ü', 'ß'], ['ae', 'oe', 'ue', 'ss'], mb_strtolower($s));
-        $s = (string) preg_replace('/[^[:alnum:]]+/u', ' ', $s);
-        $tokens = [];
-        foreach (preg_split('/\s+/u', $s, -1, PREG_SPLIT_NO_EMPTY) ?: [] as $tok) {
-            if (mb_strlen($tok) >= 3 && ! isset(self::STOPWORDS[$tok])) {
-                $tokens[$tok] = true;
-            }
-        }
-
-        return array_map('strval', array_keys($tokens));
+        return app(KnowledgeTokenizer::class)->tokenize($s);
     }
 
     /** @param list<string> $a @param list<string> $b */
@@ -991,34 +934,8 @@ class KnowledgeContextService
     }
 
     /**
-     * Hybrid-Recall: semantische Slugs aus dem Embedding-Store, opt-in über
-     * config foodalchemist.semantic_search.enabled. Leerer Rückgabewert wenn
-     * deaktiviert (Default) / kein Provider — die Lexik bleibt führend, Fehler
-     * werden geschluckt (Invariante 6: fehlende Quelle = leerer Kontext, nie Fehler).
-     *
-     * @param  list<string>  $kategorien
-     * @return list<string>
-     */
-    private function semanticSlugs(string $description, array $kategorien, int $limit): array
-    {
-        if ($limit <= 0 || ! config('foodalchemist.semantic_search.enabled', false)) {
-            return [];
-        }
-        try {
-            $svc = app(KnowledgeEmbeddingService::class);
-            if (! $svc->searchEnabled()) {
-                return [];
-            }
-
-            return $svc->searchSlugs($description, $kategorien, $limit);
-        } catch (\Throwable) {
-            return [];
-        }
-    }
-
-    /**
      * Semantischer Recall für Pairing über die ANKER-Embeddings (embedAnkers), nicht die
-     * Pairing-Docs. Gleiche Gates wie semanticSlugs (config + Provider), damit deaktivierte
+     * Pairing-Docs. Gates: Config + Provider, damit deaktivierte
      * Semantik/kein Provider sauber zu no-op werden.
      *
      * @return list<string> Anker-Slugs, bestes zuerst
@@ -1382,110 +1299,39 @@ class KnowledgeContextService
     /**
      * S1 (Skalierbarkeit): generische discovery für JEDE als `discovery` geroutete Kategorie
      * OHNE eigenen Spezial-Handler. Rankt die aktiven Docs der Kategorie gegen die (Leitplanken-
-     * augmentierte) Query — Alias-Bonus, dann Slug-Token (Jaccard + Wort-Treffer, wie der
-     * Domain-Fallback) — und lädt Top-K gedeckelt. So trägt jedes neu gepflegte Doc automatisch,
+     * augmentierte) Query über den gemeinsamen KnowledgeSearchService und lädt erst
+     * nach Rangfusion die ausgewählten Volltexte. So trägt jedes neu gepflegte Doc automatisch,
      * ohne Service-Änderung; der Prompt bleibt durch top_k/chars beschränkt (O(1), nicht O(n)).
      */
     private function discoverGenericBlock(?Team $team, string $category, string $query, int $topK, int $maxChars, array &$filesUsed, array $allowedSlugs = []): ?KnowledgeContextBlock
     {
-        $tokens = $this->tokenize($query);
-        if ($topK <= 0) {
-            return null;
-        }
-
-        // W0-6 Rank-vor-Load: NUR die Ranking-Felder holen. Vorher lud diese Query
-        // `content_md` ALLER aktiven Docs der Kategorie in den PHP-Speicher, um damit
-        // ausschließlich Slug-Tokens zu vergleichen — bei `cross_cutting` 403.108 Zeichen
-        // für nichts, und mit dem Korpus mitwachsend. `discoverDomains()` macht das über
-        // domainSlugs()/domainDocsBySlug() schon richtig; der generische Pfad nicht.
-        $docs = DB::table('foodalchemist_knowledge_documents')->tap($this->nurFuerPrompt($team))
+        $base = DB::table('foodalchemist_knowledge_documents')->tap($this->nurFuerPrompt($team))
             ->where('category', $category)->where('active', 1)->whereNull('deleted_at')
             ->when($allowedSlugs !== [], fn ($q) => $q->whereIn('slug', $allowedSlugs))
-            ->when($this->ausgeschlossen !== [], fn ($q) => $q->whereNotIn('slug', $this->ausgeschlossen))
-            ->get(['id', 'slug', 'version']);
-        if ($docs->isEmpty()) {
+            ->when($this->ausgeschlossen !== [], fn ($q) => $q->whereNotIn('slug', $this->ausgeschlossen));
+        $hits = app(KnowledgeSearchService::class)->search($base, $query, $topK,
+            (bool) config('foodalchemist.semantic_search.enabled', false), $team);
+        if ($hits === []) {
             return null;
         }
-
-        // Alias-Treffer (falls gepflegt) → Bonus, damit ein exakt passendes Doc sicher oben landet.
-        $aliasBySlug = [];
-        foreach (DB::table('foodalchemist_knowledge_aliases as a')->tap($this->nurSichtbar($team, 'd.team_id'))
-            ->join('foodalchemist_knowledge_documents as d', 'd.id', 'a.knowledge_document_id')
-            ->where('d.category', $category)->where('d.active', 1)->whereNull('d.deleted_at')
-            ->get(['a.alias_slug', 'd.slug']) as $al) {
-            $a = mb_strtolower($al->alias_slug);
-            foreach ($tokens as $t) {
-                if ($t === $a || (mb_strlen($t) >= 4 && str_contains($a, $t)) || (mb_strlen($a) >= 4 && str_contains($t, $a))) {
-                    $aliasBySlug[$al->slug] = true;
-                    break;
-                }
-            }
-        }
-
-        $scored = [];
-        foreach ($docs as $doc) {
-            $slugTokens = $this->tokenize((string) $doc->slug);
-            $substringHits = count(array_filter(
-                $tokens,
-                fn ($t) => mb_strlen($t) >= self::DISCOVERY_SUBSTRING_MIN_LEN
-                    && count(array_filter($slugTokens, fn ($st) => str_contains($st, $t))) > 0,
-            ));
-            $alias = isset($aliasBySlug[$doc->slug]);
-            $score = $this->jaccard($tokens, $slugTokens)
-                + 0.1 * $substringHits
-                + ($alias ? 1.0 : 0.0);
-            if ($score >= self::DISCOVERY_MIN_SCORE) {
-                $scored[] = [$doc, $score, $alias];
-            }
-        }
-        usort($scored, fn ($x, $y) => $y[1] <=> $x[1]);
-        $ordered = array_map(static fn ($s) => (string) $s[0]->slug, $scored);   // Lexik-Rangfolge
-        $lexScores = [];
-        foreach ($scored as $sc) {
-            $lexScores[(string) $sc[0]->slug] = ['score' => round((float) $sc[1], 4), 'via' => $sc[2] ? 'alias' : 'lexical'];
-        }
-
-        // B2 — Semantischer Recall (Hybrid, opt-in): MERGEN statt nur auffüllen. Meaning-matched
-        // Slugs werden VOR die Lexik gereiht (RAG darf korrigieren, nicht bloß ergänzen), gefiltert
-        // auf die aktiven Kategorie-Docs. Deaktiviert (Default) / kein Provider ⇒ leer ⇒ die reine
-        // Lexik bleibt führend (byte-identisches Alt-Verhalten).
-        $docsBySlug = $docs->keyBy('slug');
-        $semantisch = $this->semanticSlugs($query, [$category], $topK);
-        $pick = [];
-        foreach ([...$semantisch, ...$ordered] as $slug) {
-            if (isset($docsBySlug[$slug])) {
-                $pick[$slug] = true;
-            }
-        }
-        $pick = array_slice(array_keys($pick), 0, $topK);
-        if ($pick === []) {
-            return null;
-        }
-
-        // W0-6: Volltext erst JETZT — für die Gewinner, nicht für die Kategorie.
-        $semSet = array_flip($semantisch);
-        $inhalte = DB::table('foodalchemist_knowledge_documents')->tap($this->nurSichtbar($team))
-            ->whereIn('slug', $pick)->where('active', 1)->whereNull('deleted_at')
-            ->get(['slug', 'content_md'])->keyBy('slug');
-
+        // Volltext erst nach gemeinsamer Rangfusion und Endauswahl laden.
+        $contents = (clone $base)->whereIn('id', array_column($hits, 'id'))->pluck('content_md', 'id');
         $label = mb_strtoupper($category);
         $blocks = [];
-        foreach ($pick as $slug) {
-            $doc = $docsBySlug->get($slug);
-            $inhalt = (string) ($inhalte->get($slug)->content_md ?? '');
-            $blocks[] = ['file' => "{$doc->slug}@v{$doc->version}", 'text' => "## {$label}: {$doc->slug}\n\n" . $this->truncate($inhalt, $maxChars)];
-            $filesUsed[] = "{$doc->slug}@v{$doc->version}";
-            // Herkunfts-Messung: semantischer Recall darf die Lexik überstimmen — ohne
-            // diese Zuordnung ist nicht feststellbar, welcher Pfad die Treffer liefert
-            // (und damit auch nicht, ob ein Score-Gate richtig sitzt).
-            $this->herkunft[$slug] = isset($semSet[$slug])
-                ? ['score' => null, 'via' => 'semantic']
-                : ($lexScores[$slug] ?? ['score' => null, 'via' => 'unbekannt']);
-            $this->herkunft[$slug]['chars'] = mb_strlen($inhalt);
-            $this->herkunft[$slug]['sent'] = min(mb_strlen($inhalt), $maxChars);
+        foreach ($hits as $hit) {
+            $content = (string) ($contents[$hit['id']] ?? '');
+            $file = "{$hit['slug']}@v{$hit['version']}";
+            $blocks[] = ['file' => $file, 'text' => "## {$label}: {$hit['slug']}\n\n".$this->truncate($content, $maxChars)];
+            $filesUsed[] = $file;
+            $this->herkunft[$hit['slug']] = [
+                'score' => $hit['score'], 'via' => $hit['via'],
+                'lexical_rank' => $hit['lexical_rank'], 'semantic_rank' => $hit['semantic_rank'],
+                'lexical_score' => $hit['lexical_score'], 'candidate_limit' => $hit['candidate_limit'],
+                'chars' => mb_strlen($content), 'sent' => min(mb_strlen($content), $maxChars),
+            ];
         }
 
-        return new KnowledgeContextBlock('# ' . $label . "-WISSEN\n\n", $blocks);
+        return new KnowledgeContextBlock('# '.$label."-WISSEN\n\n", $blocks);
     }
 
     /**
@@ -1531,89 +1377,33 @@ class KnowledgeContextService
     }
 
     /**
-     * Invariante 2 — Domain-Discovery zweistufig: (a) Alias-Mapping (ersetzt
-     * HAUPTZUTAT_TO_DOMAIN) gegen die tokenisierte Beschreibung; (b) nur wenn
-     * <2 Treffer: Filename-Token-Fallback (Jaccard + 0,1·Wort-Treffer). Max 4,
-     * alphabetisch sortiert geladen.
+     * Domain-Discovery benutzt denselben Rechner wie alle generischen Kategorien.
+     * Das Routing begrenzt erst die Endauswahl; kein alphabetischer Vorab-Deckel.
      */
-    private function discoverDomains(?Team $team, string $description, array $allowedSlugs = []): array
+    private function discoverDomains(?Team $team, string $description, array $allowedSlugs = [], int $topK = self::DOMAIN_TOP_K): array
     {
-        $tokens = $this->tokenize($description);
-        $slugs = [];
-
-        if ($tokens !== []) {
-            // 2a. Explizites Alias-Mapping
-            $aliases = DB::table('foodalchemist_knowledge_aliases as a')->tap($this->nurSichtbar($team, 'd.team_id'))
-                ->join('foodalchemist_knowledge_documents as d', 'd.id', 'a.knowledge_document_id')
-                ->where('d.category', 'domain')->where('d.active', 1)->whereNull('d.deleted_at')
-                ->get(['a.alias_slug', 'd.slug']);
-            foreach ($aliases as $alias) {
-                $a = mb_strtolower($alias->alias_slug);
-                foreach ($tokens as $t) {
-                    if ($t === $a
-                        || (mb_strlen($t) >= 4 && str_contains($a, $t))
-                        || (mb_strlen($a) >= 4 && str_contains($t, $a))) {
-                        $slugs[$alias->slug] = true;
-                        break;
-                    }
-                }
-            }
-        }
-
-        // 2b. Fallback: Slug-/Titel-Token-Match, nur wenn das Mapping kaum greift
-        if (count($slugs) < 2 && $tokens !== []) {
-            $scored = [];
-            foreach ($this->domainSlugs($team) as $slug) {
-                $slugTokens = $this->tokenize($slug);
-                $score = $this->jaccard($tokens, $slugTokens);
-                $wordHits = count(array_filter($tokens, fn ($t) => str_contains($slug, $t)
-                    || count(array_filter($slugTokens, fn ($st) => str_contains($st, $t))) > 0));
-                $combined = $score + $wordHits * 0.1;
-                if ($combined > 0.0) {
-                    $scored[] = [$slug, $combined];
-                }
-            }
-            usort($scored, fn ($x, $y) => $y[1] <=> $x[1]);
-            foreach (array_slice($scored, 0, max(0, self::DOMAIN_TOP_K - count($slugs))) as [$slug]) {
-                $slugs[$slug] = true;
-            }
-        }
-
-        // 2c. Semantischer Recall (Hybrid, opt-in): B2 — MERGEN statt nur auffüllen. Semantisch
-        // passende Domains treten der Kandidatenmenge IMMER bei (nicht erst bei dünner Lexik) und
-        // können via Top-K lexikalische verdrängen (RAG darf korrigieren). Deaktiviert (Default) /
-        // kein Provider ⇒ leer ⇒ unverändertes Verhalten.
-        foreach ($this->semanticSlugs($description, ['domain'], self::DOMAIN_TOP_K) as $slug) {
-            $slugs[$slug] = true;
-        }
-
-        $slugList = array_map('strval', array_keys($slugs));
-        sort($slugList);
-        if ($allowedSlugs !== []) {
-            $slugList = array_values(array_intersect($slugList, $allowedSlugs));
-        }
-        $topK = array_slice($slugList, 0, self::DOMAIN_TOP_K);
-        $docs = $this->domainDocsBySlug($team, $topK);   // Volltext NUR für die gewählten (Tauri-Muster)
-
-        return array_values(array_filter(array_map(
-            fn ($slug) => $docs->get($slug),
-            $topK
-        )));
-    }
-
-    /**
-     * Nur die Domain-Slugs (KEIN content_md) fürs Discovery-Scoring — spiegelt die Tauri-App
-     * (`vault_context.rs`: Verzeichnis listen + nach Dateinamen scoren). Früher zog `domainDocs()`
-     * ALLE Dossier-Volltexte in den PHP-Speicher, nur um Slugs zu scoren (2×/Lauf, ungecacht) —
-     * das war der zweite Speicherfresser neben der (abgeschalteten) Embedding-Schicht.
-     *
-     * @return list<string>
-     */
-    private function domainSlugs(?Team $team): array
-    {
-        return DB::table('foodalchemist_knowledge_documents')->tap($this->nurSichtbar($team))
+        $base = DB::table('foodalchemist_knowledge_documents')->tap($this->nurFuerPrompt($team))
             ->where('category', 'domain')->where('active', 1)->whereNull('deleted_at')
-            ->orderBy('slug')->pluck('slug')->map(fn ($s) => (string) $s)->all();
+            ->when($allowedSlugs !== [], fn ($q) => $q->whereIn('slug', $allowedSlugs))
+            ->when($this->ausgeschlossen !== [], fn ($q) => $q->whereNotIn('slug', $this->ausgeschlossen));
+        $hits = app(KnowledgeSearchService::class)->search($base, $description, $topK,
+            (bool) config('foodalchemist.semantic_search.enabled', false), $team);
+        $docs = $this->domainDocsBySlug($team, array_column($hits, 'slug'));
+        $selected = [];
+        foreach ($hits as $hit) {
+            if (($doc = $docs->get($hit['slug'])) === null) {
+                continue;
+            }
+            $selected[] = $doc;
+            $this->herkunft[$hit['slug']] = [
+                'score' => $hit['score'], 'via' => $hit['via'],
+                'lexical_rank' => $hit['lexical_rank'], 'semantic_rank' => $hit['semantic_rank'],
+                'lexical_score' => $hit['lexical_score'], 'candidate_limit' => $hit['candidate_limit'],
+                'chars' => mb_strlen((string) $doc->content_md),
+            ];
+        }
+
+        return $selected;
     }
 
     /**
@@ -1844,81 +1634,16 @@ class KnowledgeContextService
      */
     public function searchDocuments(?Team $team, string $q, ?string $kategorie = null, int $limit = 10, bool $includeInactive = false): array
     {
-        $tokens = $this->tokenize($q);
-        if ($tokens === []) {
-            return [];
-        }
-        $limit = max(1, min(50, $limit));
-
-        // Alias-Treffer: exakte Token-Übereinstimmung zählt doppelt.
-        // BEWUSST ohne Team-Filter: `foodalchemist_knowledge_aliases` trägt gar keine
-        // team_id (Alias-Zeilen sind nur über ihr Eltern-Doc mandantiert), und diese Map ist
-        // eine reine Bonus-Nachschlagetabelle nach Doc-ID. Die Dokumente selbst sind unten
-        // gefiltert — eine fremde ID kann in $docs also nie auftauchen. Ein Filter hier wäre
-        // wirkungslos und würde Sicherheit vortäuschen.
-        $aliasHits = DB::table('foodalchemist_knowledge_aliases')
-            ->whereIn('alias_slug', $tokens)
-            ->pluck('knowledge_document_id')
-            ->countBy()->all();
-
-        $scored = [];
-        $docs = DB::table('foodalchemist_knowledge_documents')->tap($this->nurSichtbar($team))
+        $base = DB::table('foodalchemist_knowledge_documents')->tap($this->nurSichtbar($team))
             ->whereNull('deleted_at')
             ->when(! $includeInactive, fn ($query) => $query->where('active', 1))
-            ->when($kategorie !== null, fn ($query) => $query->where('category', $kategorie))
-            ->get(['id', 'slug', 'title', 'category', 'active', 'version', 'char_count']);
-        foreach ($docs as $doc) {
-            $haystack = $this->tokenize($doc->slug . ' ' . $doc->title);
-            $score = count(array_intersect($tokens, $haystack))
-                + 2.0 * ($aliasHits[$doc->id] ?? 0);
-            if ($score > 0) {
-                $scored[] = ['doc' => $doc, 'score' => $score];
-            }
-        }
-        usort($scored, fn ($a, $b) => ($b['score'] <=> $a['score']) ?: strcmp($a['doc']->slug, $b['doc']->slug));
+            ->when($kategorie !== null, fn ($query) => $query->where('category', $kategorie));
+        $hits = app(KnowledgeSearchService::class)->search($base, $q, max(1, min(50, $limit)),
+            (bool) config('foodalchemist.semantic_search.enabled', false), $team);
 
-        $out = array_map(fn ($item) => [
-            'slug' => $item['doc']->slug,
-            'title' => $item['doc']->title,
-            'category' => $item['doc']->category,
-            'active' => (bool) $item['doc']->active,
-            'version' => (int) $item['doc']->version,
-            'char_count' => (int) $item['doc']->char_count,
-            'score' => $item['score'],
-            'via' => 'lexical',
-        ], array_slice($scored, 0, $limit));
-
-        // E4 (#507): semantische Ergänzung (nutzte bisher nur der Browser) — Docs,
-        // die die Token-/Alias-Lexik verfehlt, werden angehängt. Graceful ohne Provider.
-        if (count($out) < $limit) {
-            $embed = app(KnowledgeEmbeddingService::class);
-            if ($embed->searchEnabled()) {
-                $vorhanden = array_flip(array_column($out, 'slug'));
-                $ids = $embed->searchDocIds($q, $limit * 2);
-                if ($ids !== []) {
-                    $semDocs = DB::table('foodalchemist_knowledge_documents')->tap($this->nurSichtbar($team))
-                        ->whereIn('id', $ids)->whereNull('deleted_at')
-                        ->when(! $includeInactive, fn ($query) => $query->where('active', 1))
-                        ->when($kategorie !== null, fn ($query) => $query->where('category', $kategorie))
-                        ->get(['id', 'slug', 'title', 'category', 'active', 'version', 'char_count'])->keyBy('id');
-                    foreach ($ids as $id) {            // bereits Score-sortiert
-                        $doc = $semDocs->get($id);
-                        if ($doc === null || isset($vorhanden[$doc->slug]) || count($out) >= $limit) {
-                            continue;
-                        }
-                        $vorhanden[$doc->slug] = true;
-                        $out[] = [
-                            'slug' => $doc->slug, 'title' => $doc->title, 'category' => $doc->category,
-                            'active' => (bool) $doc->active,
-                            'version' => (int) $doc->version, 'char_count' => (int) $doc->char_count,
-                            'score' => 0, 'via' => 'semantic',
-                        ];
-                    }
-                }
-            }
-        }
-
-        return $out;
+        return array_map(static fn ($hit) => array_replace($hit, [
+            'active' => (bool) $hit['active'], 'version' => (int) $hit['version'], 'char_count' => (int) $hit['char_count'],
+        ]), $hits);
     }
 
     /**
