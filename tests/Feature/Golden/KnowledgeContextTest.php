@@ -214,28 +214,19 @@ it('Inv. 7: ai_extract_recipe bleibt BEWUSST ohne Wissen (Routing none)', functi
     expect($this->svc->contextFor(null, 'ai_extract_recipe', 'Lachs mit Butter')['block'])->toBe('');
 });
 
-it('DoD: Assembly hält das Gesamtbudget — Rezeptwissen auf RECIPE_MAX_KNOWLEDGE_CHARS gedeckelt', function () {
+it('DoD: Assembly stoppt wenn allein die Pflichtquellen das Gesamtbudget übersteigen', function () {
     ($this->seedGenerator)(str_repeat('D', 20000));
     DB::table('foodalchemist_knowledge_documents')->where('category', 'cross_cutting')
         ->update(['content_md' => str_repeat('C', 20000)]);
-    ($this->mkDoc)('schwein', 'domain', str_repeat('D', 20000));      // 4. Domain via Fallback unmöglich — Aliase decken 3
 
-    $ctx = $this->svc->contextFor(null, 'ai_generate_recipe', 'Lachs mit brauner Butter und Walnuss');
-
-    // +40 Toleranz für den Kürzungs-Marker, den truncate() NACH dem Deckel anhängt
-    // (gleiche Toleranz wie RecipeKnowledgeBudgetTest).
-    expect($ctx['total_chars'])->toBeLessThanOrEqual(KnowledgeContextService::RECIPE_MAX_KNOWLEDGE_CHARS + 40)
-        ->and($ctx['total_chars'])->toBe(mb_strlen($ctx['block']))
-        // Der Block endet im Marker = das Gesamtbudget hat wirklich zugeschlagen.
-        ->and($ctx['block'])->toEndWith('[…gekürzt für KI-Kontext…]')
-        // Jedes geladene Dossier ist zusätzlich pro Doc gekappt. Eine EXAKTE Marker-Zahl
-        // (früher 7+3) ist seit W0-4 nicht mehr aussagekräftig: bei 12.000 Gesamtdeckel
-        // und 2.400 pro Doc ist der Block schon zu Ende, bevor alle zehn Dossiers
-        // angehängt sind — die hinteren Marker existieren gar nicht mehr im Ergebnis.
-        ->and(substr_count($ctx['block'], '[…gekürzt für KI-Kontext…]'))->toBeGreaterThanOrEqual(2)
-        // W0-0/W0-6: das Verworfene wird ausgewiesen statt still zu verschwinden.
-        ->and($ctx['built_chars'])->toBeGreaterThan($ctx['total_chars'])
-        ->and($ctx['dropped_chars'])->toBeGreaterThan(0);
+    // Sieben always-Quellen à 2.400 Zeichen passen schon ohne Domain-Discovery
+    // nicht in 12.000 Zeichen. Der frühere Test verlangte genau den Defekt:
+    // Pflichttexte abschneiden und die fehlenden Quellen trotzdem als benutzt melden.
+    expect(fn () => $this->svc->contextFor(null, 'ai_generate_recipe', 'Lachs mit brauner Butter und Walnuss'))
+        ->toThrow(\Platform\FoodAlchemist\Services\Ai\KnowledgeBudgetExceeded::class);
+    $measurement = $this->svc->pflichtBudgetFuer(null, 'ai_generate_recipe');
+    expect($measurement['ok'])->toBeFalse()
+        ->and($measurement['required_chars'])->toBeGreaterThan(KnowledgeContextService::RECIPE_MAX_KNOWLEDGE_CHARS);
 });
 
 // ── S1 (2026-08-07): generische, skalierbare discovery für wachsende Kategorien ──

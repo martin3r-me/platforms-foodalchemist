@@ -544,7 +544,8 @@ it('respektiert einen Budget-Override des Aufrufers', function () {
         ->and($mit['total_chars'])->toBeLessThan($ohne['total_chars'])
         // … aber NIE unter die Pflichtmenge: ein Override, der `always`-Inhalte abschneidet,
         // wäre genau der stille Fehler, den die W0-5-Invariante verhindern soll.
-        ->and($mit['total_chars'])->toBeGreaterThanOrEqual($svc->pflichtZeichen('concept.plan'));
+        ->and($mit['total_chars'])->toBeLessThanOrEqual(8000)
+        ->and($mit['required_chars'])->toBe(0); // leere always-Kategorien reservieren keine Phantomzeichen
 });
 
 it('klemmt einen zu kleinen Override auf die Pflichtmenge statt Pflichtwissen zu kappen', function () {
@@ -623,6 +624,7 @@ it('laedt fuer einen Kundentext nur die passenden Cross-Cutting-Dossiers', funct
     // Vergleichs-Feature ohne Überschreibung (statt ai_generate_recipe, dessen
     // RECIPE_MAX_CHARS_PER_DOC-Klemme das Bild verfälschen würde).
     w0Routing('w0cc.generator', 'cross_cutting', 'always');
+    config()->set('foodalchemist.ai.knowledge_budget', array_merge(config('foodalchemist.ai.knowledge_budget'), ['w0cc.generator' => 14000]));
     $svc = app(KnowledgeContextService::class);
 
     $text = $svc->contextFor(null, 'foodbook.kundentext', 'Sommerliches Buffet', null, [], []);

@@ -5,6 +5,7 @@ namespace Platform\FoodAlchemist\Console;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 use Platform\FoodAlchemist\Services\Ai\KnowledgeContextService;
+use Platform\FoodAlchemist\Services\Ai\AiGatewayService;
 use Platform\Core\Models\Team;
 use Platform\FoodAlchemist\Enums\SignalSeverity;
 use Platform\FoodAlchemist\Enums\SignalTyp;
@@ -247,7 +248,7 @@ class WissenSteuerdatenW0Command extends Command
             TeamScope::applyVisible($q, 'c.team_id', $team);
         }
 
-        return $q->orderBy('c.ord')->get(['d.slug', 'c.mode', 'd.char_count', 'd.active as doc_active']);
+        return $q->orderBy('c.ord')->get(['d.slug', 'c.mode', 'd.char_count', 'd.content_md', 'd.active as doc_active']);
     }
 
     /**
@@ -257,13 +258,7 @@ class WissenSteuerdatenW0Command extends Command
      */
     private function boundDeckel(string $promptKey): int
     {
-        $konfig = config('foodalchemist.ai.bound_knowledge_budget', []);
-        if (is_array($konfig) && isset($konfig[$promptKey]['total'])) {
-            return (int) $konfig[$promptKey]['total'];
-        }
-
-        // Fallback = konservativer Default in AiGatewayService (3 × 1.400).
-        return 4200;
+        return (int) app(AiGatewayService::class)->boundBudgetFuer($promptKey)['total'];
     }
 
     /**
@@ -361,7 +356,12 @@ class WissenSteuerdatenW0Command extends Command
         // LEERER Kanon an einem Generator-Key ist kein „dann eben Bindungen", sondern ein
         // Fehler. Genau der Fall, den `KanonSicherungService` reparieren kann.
         $dossierDeckel = app(\Platform\FoodAlchemist\Services\Knowledge\KnowledgeCanonService::class)->dossierMaxChars();
-        foreach ($this->generatorKeys() as $targetKey) {
+        $canonKeys = DB::table('foodalchemist_knowledge_canon as c')
+            ->where('c.scope', 'prompt_key')->where('c.role', 'root')
+            ->where('c.active', 1)->whereNull('c.deleted_at')
+            ->when($team !== null, fn ($query) => TeamScope::applyVisible($query, 'c.team_id', $team))
+            ->pluck('c.scope_key')->all();
+        foreach (array_unique([...$this->generatorKeys(), ...$canonKeys]) as $targetKey) {
             $kanon = $this->kanonZeilen($targetKey, $team);
             if ($kanon->isEmpty()) {
                 $fehler[] = "{$targetKey}: KEIN Kanon — dieser Prompt bekommt kein Regelwerk, und es gibt "
@@ -380,7 +380,7 @@ class WissenSteuerdatenW0Command extends Command
                     $fehler[] = "{$targetKey}: Kanon-Pflicht «{$z->slug}» hat {$z->char_count} Zeichen > Dossier-Deckel {$dossierDeckel} — kein Ein-Thema-Dossier mehr.";
                 }
             }
-            $summe = (int) $pflicht->sum('char_count');
+            $summe = app(AiGatewayService::class)->kanonPflichtZeichen($pflicht);
             $deckel = $this->boundDeckel($targetKey);
             $this->line(sprintf(
                 '%-18s Kanon-Pflicht: %d Dossiers, %s Zeichen (Deckel %s)',
@@ -403,11 +403,12 @@ class WissenSteuerdatenW0Command extends Command
         // Verbliebene Alt-Bindungen sind kein Fehler mehr, sondern Ballast; wer sie sehen
         // will, fragt `knowledge_bindings.GET` (dort mit `wirkungslos`-Zähler).
 
-        // W0-5-Invariante über ALLE Features: Budget >= Pflichtmenge (always-Routings).
-        // Ist der Deckel kleiner, kappt er genau das Pflichtwissen — still.
+        // B4: Pflichtquellen messen, optionale Kandidatenmengen sind kein Budgetfehler.
+        // Auch kanonische Keys prüfen, deren always-Politik aus einem Alias stammt.
         $kcs = app(KnowledgeContextService::class);
         $features = DB::table('foodalchemist_knowledge_routings')
-            ->where('mode', 'always')->distinct()->pluck('feature');
+            ->where('mode', 'always')->distinct()->pluck('feature')
+            ->merge(array_keys((array) config('foodalchemist.prompts', [])))->unique();
         $zeilen = [];
 
         // Cross-Cutting-Wächter (2026-09-06): `cross_cutting:always` lädt eine FEST VERDRAHTETE
@@ -428,12 +429,16 @@ class WissenSteuerdatenW0Command extends Command
         }
 
         foreach ($features as $feature) {
-            $pflicht = $kcs->pflichtZeichen((string) $feature);
-            $budget = $kcs->budgetFuer((string) $feature);
-            $ok = $budget >= $pflicht;
+            $messung = $kcs->pflichtBudgetFuer($team, (string) $feature);
+            $pflicht = $messung['required_chars'];
+            $budget = $messung['budget'];
+            $ok = $messung['ok'];
+            if ($pflicht === 0) {
+                continue;
+            }
             $zeilen[] = [$feature, number_format($pflicht, 0, ',', '.'), number_format($budget, 0, ',', '.'), $ok ? 'ok' : 'ZU KLEIN'];
             if (! $ok) {
-                $fehler[] = "Budget von «{$feature}» ist {$budget} Zeichen, die always-gerouteten Pflicht-Inhalte brauchen {$pflicht} — das letzte Pflicht-Dossier wird still abgeschnitten.";
+                $fehler[] = "Budget von «{$feature}» ist {$budget} Zeichen, die always-gerouteten Pflicht-Inhalte brauchen {$pflicht} — der Wissensaufbau stoppt mit einem Konfigurationsfehler.";
             }
         }
         if ($zeilen !== []) {

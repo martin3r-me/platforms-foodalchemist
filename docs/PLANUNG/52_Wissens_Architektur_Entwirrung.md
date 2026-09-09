@@ -1916,6 +1916,110 @@ Tabellen-Drop gehört zu `F5`, zusammen mit `_sections`/`_chunks`.
 
 ---
 
+## ▶ Fortsetzung 2026-09-09 — Riegel und tatsächliche Quellenauswahl
+
+**Reihenfolge geklärt (Dominique):** Der Dossier-Umbau beginnt **erst, wenn das Wissensmodul
+steht**. Deshalb zuerst die korpus-unabhängigen Riegel und der gemeinsame Rechner. Der
+Ausbau von Arten/Achsen und der Datenwerk-Vertrag bleiben Voraussetzung für den späteren
+Korpus-Umbau; aus der Antwort folgt keine Freigabe, bestehende Dossiers jetzt umzuordnen.
+
+**Arbeitsstand:** Branch `feat/wissen-riegel`, Worktree `15_GITHUB/wt-wissen-riegel`, eigene
+Test-Sandbox `15_GITHUB/sandbox-wissen-riegel`. Basis `cb826dc2` (PR #61). Noch nicht deployt.
+
+### B2 — Gesamtbudget an strukturellen Quellgrenzen
+
+- Alle Retrieval-Kanäle liefern jetzt `KnowledgeContextBlock` mit getrenntem Vorspann,
+  Quellen und Trenner. Auch Achsen, Niveau und Pairing behalten ihre Quellgrenzen bis zur
+  Endauswahl. Markdown-Überschriften oder `---` im Dossier werden **nicht** als Grenzen geparst.
+- Das Gesamtbudget nimmt vollständige **vorbereitete Quellenblöcke** auf oder lässt sie aus.
+  Nach einem zu großen optionalen Block können kleinere Quellen noch passen. Leere
+  Kategorieüberschriften verschwinden. Bei ausreichendem Budget bleibt der Text unverändert.
+- `files_used` und `used_by_category` nennen nur noch tatsächlich gesendete Quellen.
+  `files_dropped` nennt ausgelassene Quellen; deren `herkunft.sent` wird 0. `dropped_chars`
+  zählt die Differenz des gerenderten Textes einschließlich entfallener Hüllen und Trenner.
+- `always`-Quellen werden vor der optionalen Auswahl reserviert. Die **reale gerenderte**
+  Pflichtmenge ist maßgeblich, nicht `max_docs × max_chars_per_doc`: die alte Schätzung
+  reservierte selbst bei leeren Kategorien Zeichen und vergaß gleichzeitig die Überschriften.
+  Konfiguriertes Budget zu klein → `KnowledgeBudgetExceeded` mit Key, Bedarf und Budget.
+  Ein kleiner Kompositions-Override wird auf die reale Pflichtmenge angehoben.
+
+**B2 noch nicht vollständig geschlossen:** Die vorgelagerten **Pro-Dossier-Deckel**
+(`truncate(content_md, max_chars_per_doc)` und die spezialisierten Konstanten) sind weiterhin
+aktiv. Sie können eine einzelne große Quelle bereits vor dem Zusammenbau kürzen. Ihr Ersatz
+gehört mit den realen Korpus-Größen in B1/D4; ohne diese Messung entweder alle Grenzen zu
+entfernen oder alle übergroßen Dossiers wegzulassen wäre eine ungemessene Versorgungsänderung.
+Der aktive Defekt `truncate(fertiger_Block, Gesamtbudget)` ist dagegen entfernt.
+
+### B4 — Pflicht messen und alle gepflegten Kanon-Keys prüfen
+
+- `wissen-steuerdaten-w0 --verify` prüft zusätzlich zu den zwei obligatorischen Generatoren
+  **alle aktiven Kanon-Keys mit `scope=prompt_key`, `role=root`** im sichtbaren Team-Kontext.
+- Die Kanon-Messung verwendet die Textformatierung des Gateways, einschließlich Überschriften,
+  Trennern und Entfernung des Provenienz-Vorspanns. Eine eigene Budget-Default-Zahl im Wächter
+  wurde durch `AiGatewayService::boundBudgetFuer()` ersetzt.
+- Retrieval-Pflicht wird über `KnowledgeContextService::pflichtBudgetFuer()` mit denselben
+  Quellen und demselben Renderer wie der Laufzeitpfad gemessen, ohne Discovery oder Modellcall.
+  Große **optionale** Kandidatenmengen und leere `always`-Kategorien sind kein Budgetfehler.
+- B1/D4 bleiben offen: insbesondere die gemeinsame Obergrenze für Kanon + Retrieval und die
+  Laufzeitbehandlung eines zu großen **Kanon**-Blocks (derzeit weiter vollständig gesendet).
+
+### Korrektur für B5/E — Domain ist bereits begrenzt, aber falsch sortiert
+
+Auf `cb826dc2` kappt `discoverDomains()` mit `array_slice(..., DOMAIN_TOP_K)` bereits auf
+**vier** Dokumente, unabhängig von `max_docs: null`. Das Generator-Routing kann anschließend
+weiter verkleinern. Die Aussage „domain ungekappt bei 192 Dossiers“ beschreibt den aktuellen
+Code daher nicht mehr. Stattdessen geht die Rangfolge vor dieser Auswahl durch
+`sort($slugList)` verloren: die Endauswahl ist alphabetisch, einschließlich der hinzugefügten
+semantischen Treffer. B0/E2 muss den Vorab-Deckel aus der Kandidatenermittlung entfernen und
+B5 muss die reale gemeinsame Rangfolge messen, statt bloß einen weiteren Deckel einzubauen.
+
+### Schnitt für den gemeinsamen Rechner (E/B0), gegen aktuellen Code geprüft
+
+Der gemeinsame Ranking-Dienst muss sowohl `discoverGenericBlock()` als auch
+`discoverDomains()`, `searchDocuments()` und die Browser-Suche versorgen. Die Sonderwege
+für **deterministische** Achsen/Niveau und den **Pairing-Graphen** sind davon zu unterscheiden:
+sie suchen keine konkurrierenden Dossiers und werden nicht in den allgemeinen Suchrang
+umgedeutet. `selectBoundKnowledge` aus der ursprünglichen E1-Liste existiert seit F2 nicht mehr.
+
+Für die Umsetzung konkret:
+
+1. Ein eigener Kandidatendeckel pro Suchverfahren, unabhängig vom `max_docs` der Endauswahl.
+   Lexik und Semantik immer beide ermitteln; weder „nur wenn Lexik zu wenig“ (MCP) noch
+   „alle semantischen Treffer vor Lexik“ (generischer Generator) bleiben bestehen.
+2. Eine lexikalische Bewertung für Slug, **Titel** und Aliase, ein Tokenizer/eine Stoppliste.
+   Der generische Generator berücksichtigt heute nicht einmal den Titel. Volltext erst für
+   die ausgewählten Quellen laden; keine Kopie sämtlicher Dossier-Inhalte pro Kategorie.
+3. Rangfusion mit nachvollziehbaren `lexical_rank`, `semantic_rank`, Gesamtrang und Auswahlgrund.
+   Kategorie, inaktive Quellen, `_knowledge_scope` und Kanon-Ausschlüsse **vor** der Endauswahl
+   berücksichtigen. Der Kandidatendeckel darf nicht von unsichtbaren/falschen Kategorien
+   verbraucht werden. Kein neuer Tokenizer nur für den Browser.
+4. Browser-Suche auf dieselbe Bewertung führen; die bestehenden Zugriffsregeln dabei erhalten
+   (Etappe G ist weiter vertagt). Ein identischer Suchrang ist nur bei identischen Filtern
+   und identischer sichtbarer Dokumentmenge ein sinnvoller Vergleich.
+5. Die Vorschau benötigt Prompt-Key **und** Auftrag/Leitplanken. Eine freie Suchanfrage allein
+   ist keine Vorschau des Generator-Kontexts. Quellenauswahl und Auslassungen kommen aus dem
+   bestehenden Kontext-Aufbau und später aus dem zentralen Auftrag (C), nicht aus einem
+   zweiten Browser-Nachbau der Routing-Logik.
+
+E ist damit vorbereitet, aber **nicht implementiert**. Ohne Team-6-Referenzmessung wird keine
+Verbesserung der genannten Recall-Prozentpunkte behauptet. Die vorhandene
+`wissen-recall-probe` misst ausschließlich den Embedding-Pfad und wäre alleine noch kein
+Nachweis für den neuen Hybrid-Rechner.
+
+### Verifikation und verbleibende Live-Grenze
+
+Die gezielten Tests für Quellgrenzen/Pflichtschutz sowie Wächter/Kanon sind grün; die
+vollständige Modulsuite wird für diesen Stand ausgeführt. Die neuen Regressionen decken
+3→2 Quellen, Tabellen/Markdown-Trenner im Inhalt, leeres Restbudget, kleinere Folgetreffer,
+späte Pflichtquellen, Pflichtüberlauf und den Kanon eines Nicht-Generator-Prompts ab.
+
+Der BHG-MCP-Connector antwortet in dieser Sitzung mit **401 Unauthenticated** (Endpoint
+`office.bhgdigital.de/mcp`). Es wurde damit **keine** Live-Referenzmessung gegen demo durchgeführt
+und es wurden **keine** Live-Steuerdaten verändert. Die obigen Codebefunde sind lokal belegt;
+B1/D4/B5 und die Abnahme nach Deploy benötigen weiterhin den Team-6-Live-Abgleich.
+
+---
+
 ## ▶ Der Rest, vollständig — Stand 2026-09-08
 
 **Wir sind bei etwa der Hälfte.** Paket 1–3 waren die **Steuerschicht**: drei Tabellen auf

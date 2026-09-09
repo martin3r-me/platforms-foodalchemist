@@ -155,8 +155,7 @@ class AiGatewayService
             );
             $promptParts['dropped'] += $kanonVerworfen;
             if ($kBlocks !== []) {
-                $kanonBlock = "# VERBINDLICHES REGELWERK (gilt für jede Antwort dieses Auftrags)\n\n"
-                    . implode("\n\n---\n\n", $kBlocks);
+                $kanonBlock = $this->kanonBlockText($kBlocks);
                 $promptParts['kanon'] = mb_strlen($kanonBlock);
             }
 
@@ -439,6 +438,26 @@ class AiGatewayService
         ];
     }
 
+    /** Tatsächliche Pflichtgröße inklusive Quellenüberschriften und Trennern. */
+    public function kanonPflichtZeichen(\Illuminate\Support\Collection $rows): int
+    {
+        $blocks = $rows->where('mode', 'pflicht')->map(fn ($doc) => $this->kanonDokumentText($doc))->all();
+
+        return mb_strlen($this->kanonBlockText($blocks));
+    }
+
+    private function kanonDokumentText(object $doc): string
+    {
+        return "## KANON: {$doc->slug}\n\n".DossierText::ohneVorspann((string) $doc->content_md);
+    }
+
+    /** @param list<string> $blocks */
+    private function kanonBlockText(array $blocks): string
+    {
+        return $blocks === [] ? '' : "# VERBINDLICHES REGELWERK (gilt für jede Antwort dieses Auftrags)\n\n"
+            .implode("\n\n---\n\n", $blocks);
+    }
+
     /**
      * Welle 2 (Spec 50) — Kanon-Block: `pflicht`-Dossiers kommen IMMER und VOLLSTÄNDIG (nur der
      * Provenienz-Vorspann fällt weg), unabhängig von Budget und Retrieval — der Block muss je
@@ -475,7 +494,7 @@ class AiGatewayService
                     continue;
                 }
             }
-            $blocks[] = "## KANON: {$doc->slug}\n\n" . $content;
+            $blocks[] = $this->kanonDokumentText($doc);
             $verbraucht += $laenge;
             $slugs[] = "{$doc->slug}@v{$doc->version}";
         }

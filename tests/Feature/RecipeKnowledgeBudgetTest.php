@@ -34,7 +34,8 @@ it('begrenzt Rezeptwissen nach Zeichenbudget statt nach einer starren Dokumentza
     );
 
     expect($ctx['files_used'])->each->toContain('rinderfilet-wissen-')
-        ->and($ctx['files_used'])->toHaveCount(14)
+        ->and($ctx['files_used'])->toHaveCount(4)
+        ->and($ctx['files_dropped'])->toHaveCount(10)
         ->and($ctx['total_chars'])->toBeLessThanOrEqual(KnowledgeContextService::RECIPE_MAX_KNOWLEDGE_CHARS + 40);
 });
 

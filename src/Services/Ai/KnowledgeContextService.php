@@ -191,11 +191,12 @@ class KnowledgeContextService
      * Haupt-Einstieg (Pseudocode §3): baut den Wissens-Block für ein KI-Feature.
      *
      * @param  list<string>  $hauptzutatSlugs  nur für Grounding-Features (ai_suggest_pairings, ai_infer_ankers)
-     * @return array{block: string, files_used: list<string>, used_by_category: array<string, list<string>>, total_chars: int, built_chars: int, dropped_chars: int, herkunft: array<string, array<string, mixed>>}
+     * @return array{block: string, files_used: list<string>, files_dropped: list<string>, used_by_category: array<string, list<string>>, total_chars: int, built_chars: int, dropped_chars: int, herkunft: array<string, array<string, mixed>>}
      */
     public function contextFor(?Team $team, string $feature, string $description, ?string $stil = null, array $hauptzutatSlugs = [], array $params = []): array
     {
         $routing = $this->routingZeilen($feature)
+            ->when(! empty($params['_required_only']), fn ($rows) => $rows->where('mode', 'always'))
             ->keyBy(fn ($r) => $r->category . ':' . $r->mode);
 
         $filesUsed = [];
@@ -303,7 +304,7 @@ class KnowledgeContextService
             $crossDocs = $this->crossCuttingDocs($team, $feature);
             foreach ($crossDocs as $doc) {
                 $maxChars = $recipeBudget ? self::RECIPE_MAX_CHARS_PER_DOC : self::CROSS_CUTTING_TRUNCATE_CHARS;
-                $blocks[] = "## CROSS_CUTTING: {$doc->slug}\n\n" . $this->truncate($doc->content_md, $maxChars);
+                $blocks[] = ['file' => "{$doc->slug}@v{$doc->version}", 'text' => "## CROSS_CUTTING: {$doc->slug}\n\n" . $this->truncate($doc->content_md, $maxChars)];
                 $filesUsed[] = "{$doc->slug}@v{$doc->version}";
             }
             $snap('cross_cutting', $before);
@@ -318,16 +319,16 @@ class KnowledgeContextService
             }
             foreach ($domainDocs as $doc) {
                 $maxChars = $recipeBudget ? self::RECIPE_MAX_CHARS_PER_DOC : self::DOMAIN_TRUNCATE_CHARS;
-                $blocks[] = "## DOMAIN: {$doc->slug}\n\n" . $this->truncate($doc->content_md, $maxChars);
+                $blocks[] = ['file' => "{$doc->slug}@v{$doc->version}", 'text' => "## DOMAIN: {$doc->slug}\n\n" . $this->truncate($doc->content_md, $maxChars)];
                 $filesUsed[] = "{$doc->slug}@v{$doc->version}";
             }
             $snap('domain', $before);
         }
         if ($blocks !== []) {
-            $parts[] = "# VAULT-WISSEN (Catering-Wissensbasis)\n\n"
+            $parts[] = new KnowledgeContextBlock("# VAULT-WISSEN (Catering-Wissensbasis)\n\n"
                 . "Folgende Domain- und Cross-Cutting-Files aus der Wissensbasis sind für diesen Generator-Call relevant.\n"
-                . "Nutze sie als Souschef-Wissen: klassische Verhältnisse, Substitutionen, Synonyme, Sub-Rezept-Patterns.\n\n"
-                . implode("\n\n---\n\n", $blocks);
+                . "Nutze sie als Souschef-Wissen: klassische Verhältnisse, Substitutionen, Synonyme, Sub-Rezept-Patterns.\n\n",
+                $blocks);
         }
 
         // ── 2. FLAVOR-PAIRING-Block (Generator-Features; SQL-Anker-Graph bleibt primär, GL-10) ──
@@ -437,30 +438,48 @@ class KnowledgeContextService
             $snap((string) $r->category, $before);
         }
 
-        // (#469-Bindungs-Injektion passiert jetzt zentral im AiGatewayService::propose für ALLE Prompts.)
-
-        $block = implode("\n\n", $parts);
-        $gebaut = mb_strlen($block);
+        $gebaut = mb_strlen(KnowledgeContextBlock::join($parts));
+        $requiredFiles = [];
+        foreach ($routing as $row) {
+            if ($row->mode === 'always') {
+                array_push($requiredFiles, ...($usedByCategory[(string) $row->category] ?? []));
+            }
+        }
         $budget = $this->knowledgeBudget($feature, $recipeBudget);
-        // B1: Aufrufer-Override für komponierte Blöcke — aber NIE unter die Pflichtmenge.
-        // Ein Override, der `always`-Inhalte abschneidet, wäre genau der stille Fehler, den
-        // die W0-5-Invariante verhindern soll; deshalb hier dieselbe Untergrenze.
-        if (($ueberschreib = (int) ($params['_max_chars'] ?? 0)) > 0) {
-            $budget = max($ueberschreib, $this->pflichtZeichen($feature));
+        // Zuerst die echte Pflichtmenge gegen die konfigurierte Obergrenze prüfen.
+        $selection = KnowledgeContextBlock::assemble($parts, $requiredFiles, $budget, $feature);
+        if (($override = (int) ($params['_max_chars'] ?? 0)) > 0 && $override < $budget) {
+            $selection = KnowledgeContextBlock::assemble($parts, $requiredFiles, $override, $feature, callerOverride: true);
         }
-        if ($gebaut > $budget) {
-            $block = $this->truncate($block, $budget);
+        $block = $selection['block'];
+        $sentFiles = $selection['files_used'];
+        $droppedFiles = array_values(array_diff($filesUsed, $sentFiles));
+        $filesUsed = $sentFiles;
+        foreach ($usedByCategory as $category => $files) {
+            $usedByCategory[$category] = array_values(array_intersect($files, $sentFiles));
+            if ($usedByCategory[$category] === []) {
+                unset($usedByCategory[$category]);
+            }
         }
+        $sentSlugs = array_fill_keys(array_map(static fn ($file) => preg_replace('/@v\d+$/', '', $file), $sentFiles), true);
+        foreach ($this->herkunft as $slug => &$source) {
+            if (! isset($sentSlugs[$slug])) {
+                $source['sent'] = 0;
+            }
+        }
+        unset($source);
 
         return [
             'block' => $block,
             'files_used' => $filesUsed,
+            'files_dropped' => $droppedFiles,
             'used_by_category' => $usedByCategory,
             'total_chars' => mb_strlen($block),
             // W0-0/W0-6: was gebaut und dann verworfen wurde. Ohne diese Zahl ist ein
-            // Budget-Schnitt nicht von „Wissen fehlt jetzt" zu unterscheiden — und
-            // `files_used` listet weiterhin Dossiers, deren Text der Deckel gekappt hat.
+            // Budget-Schnitt nicht von „Wissen fehlt jetzt" zu unterscheiden.
+            // files_used nennt ausschließlich Quellen im tatsächlich gesendeten Block.
             'built_chars' => $gebaut,
+            'required_chars' => $selection['required_chars'],
             'dropped_chars' => max(0, $gebaut - mb_strlen($block)),
             'herkunft' => $this->herkunft,
         ];
@@ -590,7 +609,7 @@ class KnowledgeContextService
         return $gesucht;
     }
 
-    private function achsenBlock(?Team $team, array $params, array &$filesUsed): ?string
+    private function achsenBlock(?Team $team, array $params, array &$filesUsed): ?KnowledgeContextBlock
     {
         $gesucht = $this->achsenKandidaten($team, $params);
         if ($gesucht === []) {
@@ -614,8 +633,8 @@ class KnowledgeContextService
                     continue;                                        // deaktiviert → nächster Kandidat
                 }
                 $doc = $docs[$slug];
-                $bloecke[] = '## ' . mb_strtoupper((string) $achse) . ": {$doc->title}\n\n"
-                    . $this->truncate((string) $doc->content_md, self::ACHSEN_TRUNCATE_CHARS);
+                $bloecke[] = ['file' => "{$doc->slug}@v{$doc->version}", 'text' => '## ' . mb_strtoupper((string) $achse) . ": {$doc->title}\n\n"
+                    . $this->truncate((string) $doc->content_md, self::ACHSEN_TRUNCATE_CHARS)];
                 $filesUsed[] = "{$doc->slug}@v{$doc->version}";
                 $this->herkunft[$slug] = [
                     'score' => null,
@@ -631,10 +650,10 @@ class KnowledgeContextService
             return null;
         }
 
-        return "# ANLASS- & SEGMENT-WISSEN (aus den Leitplanken aufgelöst — verbindlicher Rahmen)\n\n"
+        return new KnowledgeContextBlock("# ANLASS- & SEGMENT-WISSEN (aus den Leitplanken aufgelöst — verbindlicher Rahmen)\n\n"
             . "Diese Dossiers gehören zum gewählten Anlass bzw. Verpflegungskontext. Sie setzen den\n"
-            . "Rahmen für Portionierung, Service-Logik und Erwartungshaltung — nicht die Zutatenwahl.\n\n"
-            . implode("\n\n---\n\n", $bloecke);
+            . "Rahmen für Portionierung, Service-Logik und Erwartungshaltung — nicht die Zutatenwahl.\n\n",
+            $bloecke);
     }
 
     /**
@@ -677,6 +696,28 @@ class KnowledgeContextService
         }
 
         return $summe;
+    }
+
+    /**
+     * Spec 52/B4: gemessene Retrieval-Pflicht, aus denselben Quellen und mit
+     * denselben Überschriften wie zur Laufzeit. Keine Discovery, kein Modellaufruf.
+     * Die historische pflichtZeichen()-Formel ist nur eine Konfigurationsobergrenze.
+     *
+     * @return array{required_chars: int, budget: int, ok: bool}
+     */
+    public function pflichtBudgetFuer(?Team $team, string $feature): array
+    {
+        $budget = $this->budgetFuer($feature);
+        try {
+            $context = $this->contextFor($team, $feature, '', null, [], [
+                '_required_only' => true, '_kanon_prompt_key' => $feature,
+            ]);
+            $required = $context['required_chars'];
+        } catch (KnowledgeBudgetExceeded $exception) {
+            $required = $exception->requiredChars;
+        }
+
+        return ['required_chars' => $required, 'budget' => $budget, 'ok' => $required <= $budget];
     }
 
     /** W0-5: das aufgelöste Zeichenbudget eines Features (für Prüf-Werkzeuge). */
@@ -1090,7 +1131,7 @@ class KnowledgeContextService
      *
      * @param  list<string>  $filesUsed  by-ref-Audit
      */
-    private function conceptBlock(?Team $team, int $maxDocs, int $maxChars, array &$filesUsed): ?string
+    private function conceptBlock(?Team $team, int $maxDocs, int $maxChars, array &$filesUsed): ?KnowledgeContextBlock
     {
         $docs = DB::table('foodalchemist_knowledge_documents')->tap($this->nurSichtbar($team))
             ->where('category', 'concept')->where('active', 1)->whereNull('deleted_at')
@@ -1102,13 +1143,13 @@ class KnowledgeContextService
 
         $blocks = [];
         foreach ($docs as $doc) {
-            $blocks[] = "## CONCEPT: {$doc->slug}\n\n" . $this->truncate((string) $doc->content_md, $maxChars);
+            $blocks[] = ['file' => "{$doc->slug}@v{$doc->version}", 'text' => "## CONCEPT: {$doc->slug}\n\n" . $this->truncate((string) $doc->content_md, $maxChars)];
             $filesUsed[] = "{$doc->slug}@v{$doc->version}";
         }
 
-        return "# CONCEPTING-WISSEN (Konzept-/Menü-Handwerk: Dramaturgie, Gang-Aufbau, Anlass- und Gäste-Fit, Balance)\n\n"
-            . "Maßstab für den PLAN: es sagt, WIE ein gutes Konzept gebaut ist — nicht, welches Gericht darin steht.\n\n"
-            . implode("\n\n---\n\n", $blocks);
+        return new KnowledgeContextBlock("# CONCEPTING-WISSEN (Konzept-/Menü-Handwerk: Dramaturgie, Gang-Aufbau, Anlass- und Gäste-Fit, Balance)\n\n"
+            . "Maßstab für den PLAN: es sagt, WIE ein gutes Konzept gebaut ist — nicht, welches Gericht darin steht.\n\n",
+            $blocks);
     }
 
     /**
@@ -1219,7 +1260,7 @@ class KnowledgeContextService
      *
      * @param  list<string>  $filesUsed  by-ref-Audit
      */
-    private function trendBlock(?Team $team, int $maxDocs, int $maxChars, string $description, array &$filesUsed): ?string
+    private function trendBlock(?Team $team, int $maxDocs, int $maxChars, string $description, array &$filesUsed): ?KnowledgeContextBlock
     {
         $maxDocs = max(1, $maxDocs);
         $tokens = $this->tokenize($description);
@@ -1252,17 +1293,17 @@ class KnowledgeContextService
             if ($doc === null) {
                 continue;
             }
-            $blocks[] = "## TREND: {$doc->slug}\n\n" . $this->truncate((string) $doc->content_md, $maxChars);
+            $blocks[] = ['file' => "{$doc->slug}@v{$doc->version}", 'text' => "## TREND: {$doc->slug}\n\n" . $this->truncate((string) $doc->content_md, $maxChars)];
             $filesUsed[] = "{$doc->slug}@v{$doc->version}";
         }
         if ($blocks === []) {
             return null;
         }
 
-        return "# TREND-WISSEN (aktuelle Food-Trends aus dem Trendradar)\n\n"
+        return new KnowledgeContextBlock("# TREND-WISSEN (aktuelle Food-Trends aus dem Trendradar)\n\n"
             . "Diese Signale sagen, WAS gerade relevant ist — nutze sie als Anlass/Inspiration. "
-            . "Erfinde nichts hinzu, was die Trends nicht hergeben.\n\n"
-            . implode("\n\n---\n\n", $blocks);
+            . "Erfinde nichts hinzu, was die Trends nicht hergeben.\n\n",
+            $blocks);
     }
 
     /** Die 7 Always-Load-Dokumente in Ist-Reihenfolge (fehlende werden still übersprungen). */
@@ -1317,7 +1358,7 @@ class KnowledgeContextService
      * rankt und eine General-Referenz mit Score 0 verfehlen würde) — hier zählt die Kategorie-
      * Zugehörigkeit, nicht der Rezept-Bezug.
      */
-    private function alwaysCategoryBlock(?Team $team, string $category, int $maxDocs, int $maxChars, array &$filesUsed): ?string
+    private function alwaysCategoryBlock(?Team $team, string $category, int $maxDocs, int $maxChars, array &$filesUsed): ?KnowledgeContextBlock
     {
         if ($maxDocs <= 0) {
             return null;
@@ -1331,11 +1372,11 @@ class KnowledgeContextService
         }
         $blocks = [];
         foreach ($docs as $doc) {
-            $blocks[] = '## ' . mb_strtoupper($category) . ": {$doc->slug}\n\n" . $this->truncate((string) $doc->content_md, $maxChars);
+            $blocks[] = ['file' => "{$doc->slug}@v{$doc->version}", 'text' => '## ' . mb_strtoupper($category) . ": {$doc->slug}\n\n" . $this->truncate((string) $doc->content_md, $maxChars)];
             $filesUsed[] = "{$doc->slug}@v{$doc->version}";
         }
 
-        return "# REFERENZ-WISSEN ({$category})\n\n" . implode("\n\n---\n\n", $blocks);
+        return new KnowledgeContextBlock("# REFERENZ-WISSEN ({$category})\n\n", $blocks);
     }
 
     /**
@@ -1345,7 +1386,7 @@ class KnowledgeContextService
      * Domain-Fallback) — und lädt Top-K gedeckelt. So trägt jedes neu gepflegte Doc automatisch,
      * ohne Service-Änderung; der Prompt bleibt durch top_k/chars beschränkt (O(1), nicht O(n)).
      */
-    private function discoverGenericBlock(?Team $team, string $category, string $query, int $topK, int $maxChars, array &$filesUsed, array $allowedSlugs = []): ?string
+    private function discoverGenericBlock(?Team $team, string $category, string $query, int $topK, int $maxChars, array &$filesUsed, array $allowedSlugs = []): ?KnowledgeContextBlock
     {
         $tokens = $this->tokenize($query);
         if ($topK <= 0) {
@@ -1432,7 +1473,7 @@ class KnowledgeContextService
         foreach ($pick as $slug) {
             $doc = $docsBySlug->get($slug);
             $inhalt = (string) ($inhalte->get($slug)->content_md ?? '');
-            $blocks[] = "## {$label}: {$doc->slug}\n\n" . $this->truncate($inhalt, $maxChars);
+            $blocks[] = ['file' => "{$doc->slug}@v{$doc->version}", 'text' => "## {$label}: {$doc->slug}\n\n" . $this->truncate($inhalt, $maxChars)];
             $filesUsed[] = "{$doc->slug}@v{$doc->version}";
             // Herkunfts-Messung: semantischer Recall darf die Lexik überstimmen — ohne
             // diese Zuordnung ist nicht feststellbar, welcher Pfad die Treffer liefert
@@ -1444,7 +1485,7 @@ class KnowledgeContextService
             $this->herkunft[$slug]['sent'] = min(mb_strlen($inhalt), $maxChars);
         }
 
-        return '# ' . $label . "-WISSEN\n\n" . implode("\n\n---\n\n", $blocks);
+        return new KnowledgeContextBlock('# ' . $label . "-WISSEN\n\n", $blocks);
     }
 
     /**
@@ -1457,7 +1498,7 @@ class KnowledgeContextService
      *
      * @param  list<string>  $filesUsed  by-ref-Audit
      */
-    private function niveauBlock(?Team $team, int $maxChars, string $level, string $rezeptTyp, array &$filesUsed): ?string
+    private function niveauBlock(?Team $team, int $maxChars, string $level, string $rezeptTyp, array &$filesUsed): ?KnowledgeContextBlock
     {
         $levelToken = match ($level) {
             'haute_cuisine' => 'haute',
@@ -1483,7 +1524,10 @@ class KnowledgeContextService
         }
         $filesUsed[] = "{$doc->slug}@v{$doc->version}";
 
-        return "# NIVEAU-WISSEN\n\n## NIVEAU: {$doc->slug}\n\n" . $this->truncate((string) $doc->content_md, $maxChars);
+        return new KnowledgeContextBlock("# NIVEAU-WISSEN\n\n", [[
+            'file' => "{$doc->slug}@v{$doc->version}",
+            'text' => "## NIVEAU: {$doc->slug}\n\n" . $this->truncate((string) $doc->content_md, $maxChars),
+        ]]);
     }
 
     /**
@@ -1596,7 +1640,7 @@ class KnowledgeContextService
      *
      * @param  list<string>  $filesUsed  by-ref-Audit
      */
-    private function pairingBlock(string $description, ?string $stil, array &$filesUsed, int $maxAnchors = self::PAIRING_TOP_K): ?string
+    private function pairingBlock(string $description, ?string $stil, array &$filesUsed, int $maxAnchors = self::PAIRING_TOP_K): ?KnowledgeContextBlock
     {
         // Graph-first (2026-07-13): Partner kommen aus dem Anker-Graphen (PairingService),
         // NICHT mehr aus dem Markdown-Volltext. Der Graph ist das Gehirn (kuratiert + Buch +
@@ -1675,7 +1719,7 @@ class KnowledgeContextService
                     fn ($name, $sym) => $name . $sym,
                     array_keys($namen), array_values($namen),
                 ));
-                $zeilen[] = "- {$stem}: {$partnerText}";
+                $zeilen[] = ['file' => "graph:{$res['anker']['slug']}", 'text' => "- {$stem}: {$partnerText}"];
                 $filesUsed[] = "graph:{$res['anker']['slug']}";
             }
         }
@@ -1683,12 +1727,12 @@ class KnowledgeContextService
             return null;
         }
 
-        return "# FLAVOR-PAIRING (gemessene Harmonie aus dem Anker-Graphen{$stilHint}"
+        return new KnowledgeContextBlock("# FLAVOR-PAIRING (gemessene Harmonie aus dem Anker-Graphen{$stilHint}"
             . " — ●●● = beste, ●● = gute Harmonie (geteilte Aromastoffe); bevorzuge diese fuer"
             . " Komponenten + Garnitur, erfinde KEINE unbelegten Paarungen. Kontrast (bewusstes"
             . " Gegeneinander von Saeure/Fett/Textur) leite aus dem Pairing-Prinzip + Kochwissen"
-            . " ab, NICHT aus dieser Harmonie-Liste):\n"
-            . implode("\n", $zeilen);
+            . " ab, NICHT aus dieser Harmonie-Liste):\n",
+            $zeilen, "\n");
     }
 
     /**
@@ -1718,7 +1762,7 @@ class KnowledgeContextService
      * @param  list<string>  $hauptzutatSlugs
      * @param  list<string>  $filesUsed  by-ref-Audit
      */
-    private function groundingBlock(?Team $team, array $hauptzutatSlugs, int $maxDocs, int $maxChars, array &$filesUsed): string
+    private function groundingBlock(?Team $team, array $hauptzutatSlugs, int $maxDocs, int $maxChars, array &$filesUsed): KnowledgeContextBlock
     {
         $blocks = [];
         $geladen = [];
@@ -1741,17 +1785,17 @@ class KnowledgeContextService
                     $doc = $this->pairingDoc($team, $stem);
                     if ($doc !== null) {
                         $geladen[$stem] = true;
-                        $blocks[] = "### Pairing-Doku: {$stem}\n" . $this->truncate($doc->content_md, $maxChars);
+                        $blocks[] = ['file' => "{$doc->slug}@v{$doc->version}", 'text' => "### Pairing-Doku: {$stem}\n" . $this->truncate($doc->content_md, $maxChars)];
                         $filesUsed[] = "{$doc->slug}@v{$doc->version}";
                     }
                 }
             }
         }
         if ($blocks === []) {
-            return '(keine spezifische Doku gefunden — nutze allgemeines Wissen)';
+            return new KnowledgeContextBlock('', [['file' => null, 'text' => '(keine spezifische Doku gefunden — nutze allgemeines Wissen)']]);
         }
 
-        return implode("\n\n", $blocks);
+        return new KnowledgeContextBlock('', $blocks, "\n\n");
     }
 
     /**
