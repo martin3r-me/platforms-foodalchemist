@@ -50,6 +50,7 @@ class KnowledgeRoutingsGetTool extends FoodAlchemistTool implements ToolContract
         return ToolResult::success([
             'total' => count($routings),
             'modi' => KnowledgeRoutingService::MODES,
+            'arten_modi' => ['fachwissen' => ['discovery', 'none'], 'referenz' => ['discovery', 'none'], 'datenwerk' => ['resolve', 'none']],
             'routings' => $routings,
         ]);
     }

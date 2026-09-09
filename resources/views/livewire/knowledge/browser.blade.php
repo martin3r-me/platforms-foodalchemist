@@ -113,6 +113,13 @@
                             <option value="schule_kita">Schule / Kita</option><option value="restaurant">Restaurant</option>
                         </select>
                     </label>
+                    <details><summary class="text-xs cursor-pointer">Weitere Geltungsbedingungen</summary>
+                        @foreach(\Platform\FoodAlchemist\Services\Knowledge\WissensGeltung::ACHSEN as $axis => $axisLabel)
+                            @if(! in_array($axis, ['niveau', 'occasion', 'sektor']))
+                                <label class="block text-xs">{{ $axisLabel }}<input wire:model="previewAxes.{{ $axis }}" class="{{ $input }} w-full" /></label>
+                            @endif
+                        @endforeach
+                    </details>
                     <button type="button" wire:click="previewKnowledge" wire:loading.attr="disabled" wire:target="previewKnowledge"
                             class="px-3 py-2 rounded-lg bg-violet-600 text-white text-xs">Wissensauswahl prüfen</button>
                     <p class="text-[11px] text-gray-500">Zeigt die Wissensauswahl für diese Angaben. Es wird kein Rezept erstellt.</p>
@@ -121,6 +128,12 @@
                         <div class="text-xs space-y-2" data-wissen-vorschau-ergebnis>
                             <p>{{ number_format($knowledgePreview['total_chars'], 0, ',', '.') }} Zeichen Wissen ·
                                 {{ number_format($knowledgePreview['dropped_chars'], 0, ',', '.') }} Zeichen ausgelassen</p>
+                            @if(($knowledgePreview['datenwerk'] ?? null) !== null)
+                                @foreach($knowledgePreview['datenwerk']['ergebnisse'] as $result)
+                                    <p class="{{ $result['status'] === 'widerspruch' ? 'text-red-700' : 'text-gray-700' }}">{{ $result['kennzahl'] }}: {{ $result['status'] === 'widerspruch' ? 'Widerspruch — keine automatische Auswahl' : $result['werte']['min'].'–'.$result['werte']['max'].' '.$result['werte']['einheit'].' · '.$result['werte']['bezug'] }}</p>
+                                @endforeach
+                                @foreach($knowledgePreview['datenwerk']['luecken'] as $gap)<p class="text-amber-700">Datenlücke: {{ $gap['grund'] }}</p>@endforeach
+                            @endif
                             @foreach(['kanon' => 'Verbindliches Wissen', 'retrieval' => 'Ausgewähltes Fachwissen', 'dropped' => 'Wegen Budget ausgelassen'] as $group => $labelText)
                                 <div><p class="font-medium">{{ $labelText }}</p>
                                     @forelse($knowledgePreview[$group] as $file)
@@ -137,26 +150,7 @@
                     <div class="{{ $card }} p-4 space-y-3" data-wissen-einordnung>
                         <p class="{{ $dt }}">Einordnung</p>
                         <div>
-                            <label class="{{ $label }}">Kategorie</label>
-                            <select wire:model="form.category" class="{{ $input }} w-full" data-wissen-kategorie>
-                                @foreach($kategorien as $kat)
-                                    <option value="{{ $kat->slug }}">{{ $kat->label }}</option>
-                                @endforeach
-                            </select>
-
-                            {{-- Spec 52/H1: die Kategorie sagt WORUM, die Art sagt WIE benutzt werden darf. --}}
-                            <label class="{{ $dt }} mt-2 block">Wissensart</label>
-                            <select wire:model="form.art" class="{{ $input }} w-full" data-wissen-art>
-                                <option value="">— noch nicht eingeordnet —</option>
-                                @foreach(\Platform\FoodAlchemist\Services\Knowledge\Wissensart::LABELS as $wert => $label)
-                                    <option value="{{ $wert }}">{{ $label }}</option>
-                                @endforeach
-                            </select>
-                            <p class="text-[10px] text-gray-500 mt-0.5">
-                                <span class="font-medium">datenwerk</span> wird über Achsen aufgelöst, nicht gesucht ·
-                                <span class="font-medium">ablauf</span> geht an Agenten (<code>ablauf.GET</code>) und
-                                kommt in <span class="font-medium">keinen</span> Prompt.
-                            </p>
+                            @include('foodalchemist::livewire.knowledge.einordnung')
                         </div>
                         <label class="flex items-center gap-1.5 text-xs text-gray-600">
                             <input type="checkbox" wire:model="form.active" /> aktiv
@@ -352,6 +346,7 @@
                             </h2>
                         @else
                             <label class="{{ $label }}">Titel</label>
+                            @if($creating) @include('foodalchemist::livewire.knowledge.einordnung') @endif
                             <input type="text" wire:model="form.title" class="{{ $input }} w-full" data-wissen-titel />
                         @endif
                     </div>

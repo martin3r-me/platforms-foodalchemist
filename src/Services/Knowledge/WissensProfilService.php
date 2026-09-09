@@ -67,9 +67,10 @@ class WissensProfilService
         // Alias mehr und liefert nur die Alt-Zeilen). Der Bericht muss denselben Schluessel
         // benutzen, mit dem der Generator ruft.
         $routing = app(KnowledgeContextService::class)->wirksameRoutings($promptKey)
-            ->sortBy('category')->values()
+            ->sortBy(fn ($r) => ! empty($r->art) ? 'art:'.$r->art : $r->category)->values()
             ->map(fn ($r) => [
                 'category' => (string) $r->category,
+                ...(! empty($r->art) ? ['art' => $r->art] : []),
                 'mode' => (string) $r->mode,
                 'max_docs' => $r->max_docs !== null ? (int) $r->max_docs : null,
                 'max_chars_per_doc' => $r->max_chars_per_doc !== null ? (int) $r->max_chars_per_doc : null,
@@ -184,7 +185,7 @@ class WissensProfilService
             'p' => $pflicht->map(fn ($d) => $d->slug.'@'.$d->version)->all(),
             'w' => $wennPlatz->map(fn ($d) => $d->slug.'@'.$d->version)->all(),
             'ro' => array_map(
-                fn ($r) => $r['category'].':'.$r['mode'].':'.($r['max_docs'] ?? '-').':'.($r['max_chars_per_doc'] ?? '-'),
+                fn ($r) => (isset($r['art']) ? 'art:'.$r['art'] : $r['category']).':'.$r['mode'].':'.($r['max_docs'] ?? '-').':'.($r['max_chars_per_doc'] ?? '-'),
                 $routing,
             ),
         ];
@@ -334,7 +335,7 @@ class WissensProfilService
             ->where('art', Wissensart::DATENWERK)->where('active', 1)->whereNull('deleted_at');
         TeamScope::applyVisible($q, 'team_id', $team);
 
-        return $q->orderBy('slug')->pluck('slug')
+        return $q->orderBy('slug')->get(['slug', 'geltung', 'datenwerte'])->reject(fn ($d) => WissensGeltung::lesen($d->geltung) !== [] || collect(WissensGeltung::lesen($d->datenwerte))->contains(fn ($v) => ! empty($v['geltung'])))->pluck('slug')
             ->map(fn ($s) => (string) $s)
             ->reject(fn ($s) => isset($gebunden[$s]))
             ->values()->all();

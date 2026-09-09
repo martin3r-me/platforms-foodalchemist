@@ -18,7 +18,7 @@ class KnowledgePreviewService
             throw new \InvalidArgumentException('Bitte einen Auftrag für die Vorschau eingeben.');
         }
         $allowed = ['niveau', 'level', 'sektor', 'convenience', 'frische', 'bio', 'bio_pref',
-            'bestand', 'diaet_hart', 'allergen_nogo', 'aroma', 'aroma_kueche', 'occasion',
+            'gang', 'komponentenrolle', 'portionskontext', 'warengruppe', 'format', 'bestand', 'diaet_hart', 'allergen_nogo', 'aroma', 'aroma_kueche', 'occasion',
             'serviceform', 'kompositions_stil', 'saison', 'ziel_we_pct', 'rezept_typ'];
         if (array_diff(array_keys($parameters), $allowed) !== []) {
             throw new \InvalidArgumentException('Die Vorschau akzeptiert ausschließlich fachliche Leitplanken.');
@@ -31,6 +31,7 @@ class KnowledgePreviewService
 
         return [
             'prompt_key' => $promptKey,
+            'datenwerk' => $retrieval['datenwerk'] ?? null,
             'retrieval' => $retrieval['files_used'], 'kanon' => $canon['kanon_files'],
             'dropped' => array_values(array_unique([...$retrieval['files_dropped'], ...$canon['kanon_dropped']])),
             'dropped_chars' => $retrieval['dropped_chars'] + $canon['dropped_chars'],

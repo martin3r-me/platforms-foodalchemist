@@ -45,6 +45,7 @@ class KnowledgeService
         }
         $this->assertKategorie($team, $category);
         $art = $this->pruefeArt($data['art'] ?? null);
+        $einordnung = \Platform\FoodAlchemist\Services\Knowledge\WissensGeltung::payload($art, $data['geltung'] ?? [], $data['datenwerte'] ?? []);
 
         $content = (string) ($data['content_md'] ?? '');
         $source = ((string) ($data['source'] ?? 'mcp')) ?: 'mcp';
@@ -59,7 +60,7 @@ class KnowledgeService
             'slug' => $slug,
             'title' => $title,
             'category' => $category,
-            'art' => $art,
+            ...$einordnung,
             'content_md' => $content,
             'version' => 1,
             'content_hash' => hash('sha256', $content),
@@ -136,6 +137,14 @@ class KnowledgeService
             $payload['content_md'] = $content;
             $payload['content_hash'] = hash('sha256', $content);
             $payload['char_count'] = mb_strlen($content);
+            $payload['version'] = (int) $doc->version + 1;
+        }
+        if (array_intersect(['art', 'geltung', 'datenwerte'], array_keys($data)) !== []) {
+            $payload = array_merge($payload, \Platform\FoodAlchemist\Services\Knowledge\WissensGeltung::payload(
+                array_key_exists('art', $payload) ? $payload['art'] : ($doc->art ?? null),
+                $data['geltung'] ?? \Platform\FoodAlchemist\Services\Knowledge\WissensGeltung::lesen($doc->geltung ?? null),
+                $data['datenwerte'] ?? \Platform\FoodAlchemist\Services\Knowledge\WissensGeltung::lesen($doc->datenwerte ?? null),
+            ));
             $payload['version'] = (int) $doc->version + 1;
         }
         DB::table('foodalchemist_knowledge_documents')->where('id', $doc->id)->update($payload);

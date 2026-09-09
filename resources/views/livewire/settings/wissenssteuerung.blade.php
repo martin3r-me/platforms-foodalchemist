@@ -160,7 +160,7 @@
                                     <p class="{{ $dt }}">Suche — Routing auf «{{ $p['routing_key'] }}» (Budget {{ number_format($p['budget_retrieval'], 0, ',', '.') }} Z.)</p>
                                     @forelse($p['routing'] as $r)
                                         <p class="text-[11px] text-gray-600">
-                                            <span class="font-mono">{{ $r['category'] }}</span> → {{ $r['mode'] }}
+                                            <span class="font-mono">{{ $r['art'] ?? $r['category'] }}</span> → {{ $r['mode'] }}
                                             @if($r['max_docs'])<span class="text-gray-400">({{ $r['max_docs'] }} × {{ number_format($r['max_chars_per_doc'], 0, ',', '.') }} Z.)</span>@endif
                                         </p>
                                     @empty
@@ -228,6 +228,28 @@
         @endif
     </div>
 
+    <div class="space-y-3 border rounded p-4" data-ws-arten>
+        <p class="{{ $dt }}">Arten — welches Wissen darf ein Arbeitsschritt benutzen?</p>
+        <p class="text-xs text-gray-500">Regeln kommen aus dem Kanon. Datenwerke werden über Bedingungen aufgelöst. Fachwissen und Referenzen werden gesucht. Mit dem ersten Arten-Routing gilt die Kategorie-Steuerung dieses Schritts nur noch für nicht eingeordnete Dossiers.</p>
+        @foreach($routings->filter(fn ($r) => ! empty($r->art)) as $r)
+            <p class="text-sm">{{ $r->feature }} · {{ $r->art }} · {{ $r->mode }}
+                @if($r->mode === 'discovery') · {{ $r->max_docs ?? 'Standard' }} Suchtreffer @endif
+                @if($darfSchreiben)
+                    <button type="button" wire:click="editArt({{ $r->id }})" class="{{ $btnGhostXs }}">Bearbeiten</button>
+                    <button type="button" wire:click="delete({{ $r->id }})" wire:confirm="Arten-Routing entfernen? Ohne verbleibende Arten-Routings gilt wieder die Kategorie-Steuerung." class="{{ $btnGhostXs }}">Entfernen</button>
+                @endif
+            </p>
+        @endforeach
+        @if($darfSchreiben)
+            <label class="block text-xs">Arbeitsschritt<input wire:model="artForm.feature" class="{{ $input }}" placeholder="recipe.generator" /></label>
+            <label class="block text-xs">Art<select wire:model="artForm.art" class="{{ $input }}"><option value="fachwissen">Fachwissen</option><option value="referenz">Referenz</option><option value="datenwerk">Datenwerk</option></select></label>
+            <label class="block text-xs">Verwendung<select wire:model="artForm.mode" class="{{ $input }}"><option value="discovery">Suchen</option><option value="resolve">Werte auflösen</option><option value="none">Bewusst nicht verwenden</option></select></label>
+            <label class="block text-xs">Maximale Suchtreffer<input wire:model="artForm.max_docs" type="number" min="1" class="{{ $input }}" /></label>
+            <label class="block text-xs">Zeichen je Suchtreffer (leer = Standard)<input wire:model="artForm.max_chars_per_doc" type="number" min="1" class="{{ $input }}" /></label>
+            <button type="button" wire:click="saveArt" class="{{ $btnGhostXs }}">Arten-Routing setzen</button>
+        @endif
+    </div>
+
     {{-- ── Routing-Editor ── --}}
     <div class="space-y-2" data-ws-routings>
         <div>
@@ -243,7 +265,7 @@
         <table class="{{ $table }}">
             <thead><tr class="text-left">@foreach(['Feature', 'Kategorie', 'Modus', 'max Docs', 'Zeichen/Doc', ''] as $h)<th class="{{ $th }}">{{ $h }}</th>@endforeach</tr></thead>
             <tbody>
-                @foreach($routings as $r)
+                @foreach($routings->filter(fn ($r) => empty($r->art)) as $r)
                     <tr class="{{ $tr }}" wire:key="r-{{ $r->id }}">
                         @if($editId === $r->id)
                             <td class="{{ $td }} font-mono text-[11px] text-gray-500">{{ $r->feature }}</td>

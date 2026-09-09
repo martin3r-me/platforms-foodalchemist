@@ -50,6 +50,11 @@ use Platform\FoodAlchemist\Support\TeamScope;
  */
 class KnowledgeContextService
 {
+    private bool $artenRoutingAktiv = false;
+    private array $geltungsParameter = [];
+    private ?array $geltungsIds = null;
+    private array $achsenPflichtFiles = [];
+
     /**
      * Invariante 1: diese 7 gehen bei `cross_cutting:always`-Features IMMER mit (Reihenfolge = Ist).
      *
@@ -150,7 +155,13 @@ class KnowledgeContextService
      */
     public function contextFor(?Team $team, string $feature, string $description, ?string $stil = null, array $hauptzutatSlugs = [], array $params = []): array
     {
-        $routing = $this->routingZeilen($feature)
+        $allRouting = $this->routingZeilen($feature);
+        $artRouting = $allRouting->filter(fn ($r) => ! empty($r->art));
+        $this->artenRoutingAktiv = $artRouting->isNotEmpty();
+        $this->geltungsParameter = $params;
+        $this->geltungsIds = null;
+        $this->achsenPflichtFiles = [];
+        $routing = $allRouting->filter(fn ($r) => empty($r->art))
             ->when(! empty($params['_required_only']), fn ($rows) => $rows->where('mode', 'always'))
             ->keyBy(fn ($r) => $r->category . ':' . $r->mode);
 
@@ -390,8 +401,49 @@ class KnowledgeContextService
             $snap((string) $r->category, $before);
         }
 
+        $datenwerkFiles = [];
+        $datenwerkErgebnis = null;
+        foreach ($artRouting as $route) {
+            $before = count($filesUsed);
+            if ($route->mode === 'discovery' && empty($params['_required_only'])) {
+                $part = $this->discoverGenericBlock($team, $route->art, $leitplankenQuery,
+                    (int) ($route->max_docs ?: 3), (int) ($route->max_chars_per_doc ?: 3000), $filesUsed, $scopeSlugs, $route->art);
+                if ($part !== null) $parts[] = $part;
+            } elseif ($route->art === 'datenwerk' && $route->mode === 'resolve') {
+                $base = DB::table('foodalchemist_knowledge_documents')->tap($this->nurSichtbar($team));
+                $datenwerkErgebnis = app(\Platform\FoodAlchemist\Services\Knowledge\DatenwerkResolver::class)->resolve($base, $params);
+                $entries = [];
+                foreach ($datenwerkErgebnis['ergebnisse'] as $result) {
+                    foreach ($result['kandidaten'] as $candidate) {
+                        $file = $candidate['dossier'];
+                        $entries[] = ['file' => $file, 'text' => '## '.($result['status'] === 'widerspruch' ? 'WIDERSPRUCH — keinen Wert automatisch verwenden: ' : 'DATENWERT: ')
+                            .$result['kennzahl']."\n".json_encode($candidate, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)];
+                        $filesUsed[] = $file;
+                        $datenwerkFiles[] = $file;
+                        $this->herkunft[explode('@v', $file)[0]] = ['via' => 'datenwerk:resolve', 'status' => $result['status']];
+                    }
+                }
+                $grouped = [];
+                foreach ($entries as $entry) {
+                    if (isset($grouped[$entry['file']])) $grouped[$entry['file']]['text'] .= "\n\n".$entry['text'];
+                    else $grouped[$entry['file']] = $entry;
+                }
+                $entries = array_values($grouped);
+                foreach ($entries as $entry) {
+                    $slug = explode('@v', $entry['file'])[0];
+                    $this->herkunft[$slug]['score'] = null;
+                    $this->herkunft[$slug]['chars'] = mb_strlen($entry['text']);
+                    $this->herkunft[$slug]['sent'] = mb_strlen($entry['text']);
+                }
+                $filesUsed = array_values(array_unique($filesUsed));
+                foreach ($datenwerkErgebnis['luecken'] as $gap) $entries[] = ['file' => null, 'required' => true, 'text' => 'DATENLÜCKE — keinen Wert erfinden: '.json_encode($gap, JSON_UNESCAPED_UNICODE)];
+                $parts[] = new KnowledgeContextBlock("# STRUKTURIERTE DATENWERKE\n\n", $entries);
+            }
+            $snap('art:'.$route->art, $before);
+        }
+
         $gebaut = mb_strlen(KnowledgeContextBlock::join($parts));
-        $requiredFiles = [];
+        $requiredFiles = [...$datenwerkFiles, ...$this->achsenPflichtFiles];
         foreach ($routing as $row) {
             if ($row->mode === 'always') {
                 array_push($requiredFiles, ...($usedByCategory[(string) $row->category] ?? []));
@@ -422,6 +474,7 @@ class KnowledgeContextService
         unset($source);
 
         return [
+            'datenwerk' => $datenwerkErgebnis,
             'block' => $block,
             'files_used' => $filesUsed,
             'files_dropped' => $droppedFiles,
@@ -495,19 +548,30 @@ class KnowledgeContextService
      * `art IS NULL` bleibt erlaubt — sonst fiele der gesamte, noch nicht eingeordnete Bestand
      * aus jedem Prompt. Einordnen ist eine Kurations-Aufgabe, kein Schalter.
      */
+    private function geltendeDokumentIds(?Team $team): array
+    {
+        return $this->geltungsIds ??= DB::table('foodalchemist_knowledge_documents')->tap($this->nurSichtbar($team))->get(['id', 'geltung'])
+            ->filter(fn ($d) => \Platform\FoodAlchemist\Services\Knowledge\WissensGeltung::passt(
+                \Platform\FoodAlchemist\Services\Knowledge\WissensGeltung::lesen($d->geltung), $this->geltungsParameter))->pluck('id')->all();
+    }
+
     private function nurFuerPrompt(?Team $team, string $spalte = 'team_id', string $artSpalte = 'art'): \Closure
     {
         $sichtbar = $this->nurSichtbar($team, $spalte);
 
-        return static function ($q) use ($sichtbar, $artSpalte) {
+        $eligible = $this->geltendeDokumentIds($team);
+        $idColumn = str_contains($artSpalte, '.') ? substr($artSpalte, 0, strrpos($artSpalte, '.') + 1).'id' : 'id';
+        $strict = $this->artenRoutingAktiv;
+        return static function ($q) use ($sichtbar, $artSpalte, $strict, $eligible, $idColumn) {
             $sichtbar($q);
+            $q->whereIn($idColumn, $eligible);
 
             if (! Schema::hasColumn('foodalchemist_knowledge_documents', 'art')) {
                 return $q;    // vor der H1-Migration: unveraendert
             }
 
             return $q->where(fn ($w) => $w->whereNull($artSpalte)
-                ->orWhereNotIn($artSpalte, Wissensart::NIE_IM_PROMPT));
+                ->when(! $strict, fn ($w) => $w->orWhereIn($artSpalte, [Wissensart::FACHWISSEN, Wissensart::REFERENZ])));
         };
     }
 
@@ -529,6 +593,7 @@ class KnowledgeContextService
      */
     private function achsenKandidaten(?Team $team, array $params): array
     {
+        $params['niveau'] ??= $params['level'] ?? null;
         $map = config('foodalchemist.ai.knowledge_axis_map', []);
         $map = is_array($map) ? $map : [];
         $gepflegt = $team !== null
@@ -570,10 +635,13 @@ class KnowledgeContextService
 
         // EINE Query für alle Achsen, danach je Achse der erste aktive Treffer.
         $alle = array_values(array_unique(array_merge(...array_values($gesucht))));
-        $docs = DB::table('foodalchemist_knowledge_documents')->tap($this->nurFuerPrompt($team))
+        $docs = DB::table('foodalchemist_knowledge_documents')->tap($this->nurSichtbar($team))
+            ->whereIn('id', $this->geltendeDokumentIds($team))
+            ->where(fn ($q) => $q->whereNull('art')->orWhere('art', Wissensart::REGEL)
+                ->when(! $this->artenRoutingAktiv, fn ($q) => $q->orWhereIn('art', [Wissensart::FACHWISSEN, Wissensart::REFERENZ])))
             ->whereIn('slug', $alle)->where('active', 1)->whereNull('deleted_at')
             ->when($this->ausgeschlossen !== [], fn ($q) => $q->whereNotIn('slug', $this->ausgeschlossen))
-            ->get(['slug', 'title', 'content_md', 'version'])->keyBy('slug');
+            ->get(['slug', 'title', 'content_md', 'version', 'art'])->keyBy('slug');
         if ($docs->isEmpty()) {
             return null;
         }
@@ -585,14 +653,15 @@ class KnowledgeContextService
                     continue;                                        // deaktiviert → nächster Kandidat
                 }
                 $doc = $docs[$slug];
+                if ($doc->art === Wissensart::REGEL) $this->achsenPflichtFiles[] = "{$doc->slug}@v{$doc->version}";
                 $bloecke[] = ['file' => "{$doc->slug}@v{$doc->version}", 'text' => '## ' . mb_strtoupper((string) $achse) . ": {$doc->title}\n\n"
-                    . $this->truncate((string) $doc->content_md, self::ACHSEN_TRUNCATE_CHARS)];
+                    . ($doc->art === Wissensart::REGEL ? (string) $doc->content_md : $this->truncate((string) $doc->content_md, self::ACHSEN_TRUNCATE_CHARS))];
                 $filesUsed[] = "{$doc->slug}@v{$doc->version}";
                 $this->herkunft[$slug] = [
                     'score' => null,
                     'via' => 'achse:' . $achse,
                     'chars' => mb_strlen((string) $doc->content_md),
-                    'sent' => min(mb_strlen((string) $doc->content_md), self::ACHSEN_TRUNCATE_CHARS),
+                    'sent' => $doc->art === Wissensart::REGEL ? mb_strlen((string) $doc->content_md) : min(mb_strlen((string) $doc->content_md), self::ACHSEN_TRUNCATE_CHARS),
                 ];
                 break;                                               // ein Dossier je Achse
             }
@@ -771,10 +840,11 @@ class KnowledgeContextService
         // Bindungen **pro Prompt-Key**, eine Achsen-Zeile die Config **pro Achsenwert** — immer
         // pro Element, nie pro Gruppe. „Bewusst leer" wird ausdrücklich mit `mode = none`
         // gesagt, nicht durch das Fehlen einer Zeile.
-        $eigeneKategorien = $eigene->pluck('category')->map(fn ($c) => (string) $c)->all();
+        $selector = static fn ($r) => ! empty($r->art) ? 'art:'.$r->art : 'category:'.$r->category;
+        $eigeneKategorien = $eigene->map($selector)->all();
 
         return DB::table('foodalchemist_knowledge_routings')->where('feature', $alt)->get()
-            ->reject(fn ($r) => in_array((string) $r->category, $eigeneKategorien, true))
+            ->reject(fn ($r) => in_array($selector($r), $eigeneKategorien, true))
             ->concat($eigene)
             ->values();
     }
@@ -1050,7 +1120,7 @@ class KnowledgeContextService
      */
     private function conceptBlock(?Team $team, int $maxDocs, int $maxChars, array &$filesUsed): ?KnowledgeContextBlock
     {
-        $docs = DB::table('foodalchemist_knowledge_documents')->tap($this->nurSichtbar($team))
+        $docs = DB::table('foodalchemist_knowledge_documents')->tap($this->nurFuerPrompt($team))
             ->where('category', 'concept')->where('active', 1)->whereNull('deleted_at')
             ->orderBy('slug')->limit(max(1, $maxDocs))
             ->get(['slug', 'content_md', 'version']);
@@ -1183,7 +1253,7 @@ class KnowledgeContextService
         $tokens = $this->tokenize($description);
         $weight = ['high' => 3, 'medium' => 2, 'low' => 1];
 
-        $rows = DB::table('foodalchemist_knowledge_documents as d')->tap($this->nurSichtbar($team, 'd.team_id'))
+        $rows = DB::table('foodalchemist_knowledge_documents as d')->tap($this->nurFuerPrompt($team, 'd.team_id', 'd.art'))
             ->leftJoin('foodalchemist_trend_meta as m', 'm.knowledge_document_id', '=', 'd.id')
             ->where('d.category', 'trend')->where('d.active', 1)->whereNull('d.deleted_at')
             ->get(['d.id', 'd.slug', 'd.title', 'd.version', 'm.relevance', 'm.trend_class', 'm.category']);
@@ -1201,7 +1271,7 @@ class KnowledgeContextService
         $top = array_slice($scored, 0, $maxDocs);
 
         $ids = array_map(fn ($p) => $p[0]->id, $top);
-        $docs = DB::table('foodalchemist_knowledge_documents')->tap($this->nurSichtbar($team))->whereIn('id', $ids)
+        $docs = DB::table('foodalchemist_knowledge_documents')->tap($this->nurFuerPrompt($team))->whereIn('id', $ids)
             ->get(['id', 'slug', 'content_md', 'version'])->keyBy('id');
 
         $blocks = [];
@@ -1303,12 +1373,15 @@ class KnowledgeContextService
      * nach Rangfusion die ausgewählten Volltexte. So trägt jedes neu gepflegte Doc automatisch,
      * ohne Service-Änderung; der Prompt bleibt durch top_k/chars beschränkt (O(1), nicht O(n)).
      */
-    private function discoverGenericBlock(?Team $team, string $category, string $query, int $topK, int $maxChars, array &$filesUsed, array $allowedSlugs = []): ?KnowledgeContextBlock
+    private function discoverGenericBlock(?Team $team, string $category, string $query, int $topK, int $maxChars, array &$filesUsed, array $allowedSlugs = [], ?string $art = null): ?KnowledgeContextBlock
     {
-        $base = DB::table('foodalchemist_knowledge_documents')->tap($this->nurFuerPrompt($team))
-            ->where('category', $category)->where('active', 1)->whereNull('deleted_at')
+        $base = DB::table('foodalchemist_knowledge_documents')->tap($art === null ? $this->nurFuerPrompt($team) : $this->nurSichtbar($team))
+            ->when($art === null, fn ($q) => $q->where('category', $category), fn ($q) => $q->where('art', $art))->where('active', 1)->whereNull('deleted_at')
             ->when($allowedSlugs !== [], fn ($q) => $q->whereIn('slug', $allowedSlugs))
             ->when($this->ausgeschlossen !== [], fn ($q) => $q->whereNotIn('slug', $this->ausgeschlossen));
+        $eligible = (clone $base)->get(['id', 'geltung'])->filter(fn ($doc) => \Platform\FoodAlchemist\Services\Knowledge\WissensGeltung::passt(
+            \Platform\FoodAlchemist\Services\Knowledge\WissensGeltung::lesen($doc->geltung), $this->geltungsParameter))->pluck('id')->all();
+        $base->whereIn('id', $eligible);
         $hits = app(KnowledgeSearchService::class)->search($base, $query, $topK,
             (bool) config('foodalchemist.semantic_search.enabled', false), $team);
         if ($hits === []) {
@@ -1331,7 +1404,7 @@ class KnowledgeContextService
             ];
         }
 
-        return new KnowledgeContextBlock('# '.$label."-WISSEN\n\n", $blocks);
+        return new KnowledgeContextBlock($art === Wissensart::REFERENZ ? "# REFERENZEN (optionale Inspiration; keine verbindlichen Regeln)\n\n" : '# '.$label."-WISSEN\n\n", $blocks);
     }
 
     /**
@@ -1356,7 +1429,7 @@ class KnowledgeContextService
             return null;
         }
         $istBasis = $rezeptTyp === 'basisrezept';
-        $doc = DB::table('foodalchemist_knowledge_documents')->tap($this->nurSichtbar($team))
+        $doc = DB::table('foodalchemist_knowledge_documents')->tap($this->nurFuerPrompt($team))
             ->where('category', 'niveau')->where('active', 1)->whereNull('deleted_at')
             ->where('slug', 'like', '%' . $levelToken . '%')
             ->when(
@@ -1416,7 +1489,7 @@ class KnowledgeContextService
             return collect();
         }
 
-        return DB::table('foodalchemist_knowledge_documents')->tap($this->nurSichtbar($team))
+        return DB::table('foodalchemist_knowledge_documents')->tap($this->nurFuerPrompt($team))
             ->where('category', 'domain')->where('active', 1)->whereNull('deleted_at')
             ->whereIn('slug', $slugs)
             ->get(['slug', 'content_md', 'version'])->keyBy('slug');
@@ -1612,7 +1685,7 @@ class KnowledgeContextService
 
     private function pairingDoc(?Team $team, string $stem): ?object
     {
-        return DB::table('foodalchemist_knowledge_documents')->tap($this->nurSichtbar($team))
+        return DB::table('foodalchemist_knowledge_documents')->tap($this->nurFuerPrompt($team))
             ->where('category', 'pairing')->where('active', 1)->whereNull('deleted_at')
             ->whereIn('slug', ["pairing.{$stem}", $stem])
             ->first(['slug', 'content_md', 'version']);
@@ -1672,7 +1745,7 @@ class KnowledgeContextService
             ->select('category', DB::raw('COUNT(*) AS c'))->groupBy('category')
             ->pluck('c', 'category')->map(fn ($c) => (int) $c)->all();
 
-        $spalten = ['slug', 'title', 'category', 'active', 'version', 'char_count', 'updated_at'];
+        $spalten = ['slug', 'title', 'category', 'active', 'version', 'char_count', 'updated_at', 'geltung'];
         // Spec 52/H1: die Art gehoert in die Inventar-Sicht — beim Korpus-Umbau ist „welche
         // Dossiers sind noch nicht eingeordnet" genau die Frage, die man an LIST stellt.
         // Schema-Wache, damit die Liste vor der Migration nicht stirbt.
@@ -1691,6 +1764,7 @@ class KnowledgeContextService
                 'title' => $doc->title,
                 'category' => $doc->category,
                 'art' => $doc->art ?? null,
+                'geltung' => json_decode($doc->geltung ?? '[]', true),
                 'active' => (bool) $doc->active,
                 'version' => (int) $doc->version,
                 'char_count' => (int) $doc->char_count,
@@ -1816,6 +1890,6 @@ class KnowledgeContextService
     {
         return DB::table('foodalchemist_knowledge_documents')->tap($this->nurSichtbar($team))
             ->where('slug', $slug)->where('active', 1)->whereNull('deleted_at')
-            ->first(['slug', 'title', 'category', 'version', 'char_count', 'content_md']);
+            ->first(['slug', 'title', 'category', 'art', 'geltung', 'datenwerte', 'version', 'char_count', 'content_md']);
     }
 }

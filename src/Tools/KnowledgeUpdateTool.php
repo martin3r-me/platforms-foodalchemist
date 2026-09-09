@@ -42,6 +42,12 @@ class KnowledgeUpdateTool extends FoodAlchemistTool implements ToolContract, Too
                 'title' => ['type' => 'string'],
                 'category' => ['type' => 'string'],
                 'art' => ['type' => 'string', 'description' => 'Wissensart — steuert, WIE das Wissen benutzt werden darf (die Kategorie sagt nur, WORUM es geht): regel (verbindlich) | datenwerk (Nachschlagewerk: wird ueber Achsen aufgeloest, nicht gesucht) | fachwissen (echter Suchfall) | referenz (Inspiration) | ablauf (Anleitung fuer AGENTEN — gehoert in KEINEN Prompt). Weglassen = noch nicht eingeordnet.'],
+                'geltung' => ['type' => 'object', 'description' => 'UND zwischen Achsen, ODER zwischen Werten: gang, komponentenrolle, portionskontext, niveau, saison, warengruppe, occasion, sektor, format. Werte als Listen von Strings. Leer = uneingeschränkt.'],
+                'datenwerte' => ['type' => 'array', 'items' => ['type' => 'object', 'properties' => [
+                    'kennzahl' => ['type' => 'string'], 'min' => ['type' => 'number'], 'max' => ['type' => 'number'],
+                    'einheit' => ['type' => 'string'], 'bezug' => ['type' => 'string', 'description' => 'Zum Beispiel Rohgewicht pro Portion oder verzehrfertig pro Ansatz.'],
+                    'quelle' => ['type' => 'string'], 'geltung' => ['type' => 'object'],
+                ], 'required' => ['kennzahl', 'min', 'max', 'einheit', 'bezug', 'quelle']], 'description' => 'Nur Datenwerke. Einzelwert: min=max. Quelle und Dossierversion bleiben nachvollziehbar.'],
                 'content_md' => ['type' => 'string'],
                 'active' => ['type' => 'boolean'],
                 'aliases' => ['type' => 'array', 'items' => ['type' => 'string']],
@@ -60,7 +66,7 @@ class KnowledgeUpdateTool extends FoodAlchemistTool implements ToolContract, Too
         $data = array_intersect_key($arguments, array_flip([
             // `bind_layers` bleibt in dieser Liste, obwohl es nicht mehr im Schema steht: nur
             // so erreicht es den Riegel im Service und wird ABGEWIESEN statt still verworfen.
-            'title', 'category', 'art', 'content_md', 'active', 'aliases', 'bind_layers',
+            'title', 'category', 'art', 'geltung', 'datenwerte', 'content_md', 'active', 'aliases', 'bind_layers',
         ]));
 
         try {
@@ -79,6 +85,8 @@ class KnowledgeUpdateTool extends FoodAlchemistTool implements ToolContract, Too
                 'title' => $doc->title,
                 'category' => $doc->category,
                 'art' => $doc->art ?? null,
+                'geltung' => json_decode($doc->geltung ?? '[]', true),
+                'datenwerte' => json_decode($doc->datenwerte ?? '[]', true),
                 'version' => (int) $doc->version,
                 'active' => (bool) $doc->active,
                 'created_via' => $doc->created_via,

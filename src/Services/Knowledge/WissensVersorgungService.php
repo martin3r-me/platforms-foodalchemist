@@ -107,9 +107,10 @@ class WissensVersorgungService
         // Alias mehr und liefert nur die Alt-Zeilen). Der Bericht muss denselben Schluessel
         // benutzen, mit dem der Generator ruft.
         $routing = app(KnowledgeContextService::class)->wirksameRoutings($promptKey)
-            ->sortBy('category')->values()
+            ->sortBy(fn ($r) => ! empty($r->art) ? 'art:'.$r->art : $r->category)->values()
             ->map(fn ($r) => [
                 'category' => (string) $r->category,
+                ...(! empty($r->art) ? ['art' => $r->art] : []),
                 'mode' => (string) $r->mode,
                 'max_docs' => $r->max_docs !== null ? (int) $r->max_docs : null,
                 'max_chars_per_doc' => $r->max_chars_per_doc !== null ? (int) $r->max_chars_per_doc : null,

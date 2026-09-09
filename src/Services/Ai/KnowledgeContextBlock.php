@@ -45,7 +45,7 @@ final class KnowledgeContextBlock
         $indices = [];
         $selected = [];
         foreach ($blocks as $key => $block) {
-            $indices[$key] = array_keys(array_filter($block->documents, static fn ($document) => in_array($document['file'], $requiredFiles, true)));
+            $indices[$key] = array_keys(array_filter($block->documents, static fn ($document) => ($document['required'] ?? false) || in_array($document['file'], $requiredFiles, true)));
             $selected[$key] = $block->select($indices[$key]);
         }
         $requiredChars = mb_strlen(self::join($selected));

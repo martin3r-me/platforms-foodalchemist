@@ -1916,6 +1916,79 @@ Tabellen-Drop gehört zu `F5`, zusammen mit `_sections`/`_chunks`.
 
 ---
 
+## ▶ Arten und Achsen — Umsetzung 2026-09-09
+
+**Auftrag:** Arten und Achsen vor dem Korpus-Umbau nutzbar machen. Lokaler Branch
+`feat/wissen-arten-achsen`, auf `feat/wissen-rechner` (`dd7db2b6`). Keine Umklassifizierung
+bestehender Dossiers und keine erfundenen Mengenwerte. Noch nicht deployt.
+
+### H1-Rest: Art steuert den Verwendungsweg
+
+Die vorhandenen fünf Arten bleiben unverändert. `knowledge_routings` bekommt einen
+alternativen Selektor `art`; eine Zeile hat entweder Kategorie oder Art. Kein paralleler
+Steuerspeicher. Für Arten sind ausschließlich folgende Kombinationen zulässig:
+
+| Art | Modus | Wirkung |
+|---|---|---|
+| fachwissen | discovery / none | Kategorieübergreifende Suche oder bewusst aus |
+| referenz | discovery / none | Optionale, ausdrücklich als Inspiration markierte Suche |
+| datenwerk | resolve / none | Strukturierte Werte nach Geltung oder bewusst aus |
+| regel | kein Arten-Routing | Expliziter Kanon, einschließlich Achsen-Kanon |
+| ablauf | kein Arten-Routing | Bleibt im Agenten-Zugang, kein Retrieval-Kontext |
+
+Sobald ein Schritt Arten-Routings hat, bedienen seine Kategorie-Routings nur noch
+`art IS NULL`. Ohne Arten-Routing bleiben Fachwissen/Referenzen über die bisherigen
+Kategorie-Routings verfügbar. Regeln und Datenwerk-Prosa gelangen nicht mehr über diese
+Suchpfade in den Kontext. Die freie Inventarsuche in Browser/MCP zeigt weiterhin alle Arten.
+Globale Arten-Routings sind über Einstellungen und MCP mit derselben Master-Schreibgrenze
+pflegbar. Profile/Fingerprints und Versorgungsberichte zeigen den Art-Selektor mit an.
+
+### H2-Ausbau: Geltung am Dossier
+
+Das Feld `geltung` gehört zum Dossier und seiner Version. Unterstützt sind `gang`,
+`komponentenrolle`, `portionskontext`, `niveau`, `saison`, `warengruppe`, `occasion`, `sektor`
+und `format`. UND zwischen Achsen, ODER innerhalb der Werte einer Achse. Fehlende
+Auftragsparameter erfüllen eine Bedingung nicht. `level` wird als Niveau akzeptiert.
+
+Die Filterung erfolgt vor der Rangbildung/Top-K. Datenwerke werden ohne Suchrang anhand
+der Bedingungen aufgelöst. Achsen-Kanon und bisheriger Anlass-/Segment-Fallback bleiben
+für nicht umgestellten Bestand erhalten. Für Regeln bleibt die explizite Kanon-Zuordnung
+maßgeblich; Geltungsfilter am Dokument werden für Regel/Ablauf deshalb nicht scheinbar
+wirksam gespeichert. Die Restaurant-Lücke bleibt unbesetzt, bis ein fachlich passendes
+Dossier existiert — kein automatisches Umbiegen auf einen anderen Sektor.
+
+### B6/B7: Strukturierte Werte und ehrliche Lücken
+
+`datenwerte` ist eine Liste am Datenwerk, keine extrahierte Markdown-Tabelle. Ein Eintrag
+enthält Kennzahl, Minimum/Maximum (gleich für Einzelwert), Einheit, Bezugsgröße,
+Quelle/Fundstelle und optional zusätzliche Geltung. Dossier-Slug und Version ergänzen die
+Provenienz zur Laufzeit. Dossier- und Eintragsbedingungen müssen beide erfüllt sein.
+
+`DatenwerkResolver` führt keine Formeln aus; `ProportionService` bleibt der vorhandene
+Grammaturen-Rechner. Der Resolver wählt kuratierte Werte aus. Gleiche Werte behalten alle
+Quellen; unterschiedliche Werte, Einheiten oder Bezugsgrößen derselben Kennzahl ergeben
+`widerspruch` ohne gewählten Wert. Kein Treffer bzw. fehlende strukturierte Einträge ergeben
+`luecke`. Die Modellnachricht benennt beides ausdrücklich. Datenwerte und Lückenhinweise
+werden als Pflichtanteil budgetiert, nicht still weggeschnitten.
+
+UI und `knowledge.POST/PUT/GET/LIST` nutzen denselben Einordnungsvertrag. Die Vorschau
+(UI/MCP) erlaubt alle Achsen und zeigt Werte, Konflikte und Lücken. Änderungen der
+Einordnung/Datenwerte erhöhen die Dossierversion. Import schreibt die neuen Felder nicht
+zurück auf leer. `mengen_defaults` bleibt im Kanon; ein produktiver Ersatz setzt die
+kuratierte Befüllung und fachliche Referenzprüfung voraus.
+
+### Abnahmegrenze
+
+Die vollständige Suite des vorangehenden Suchrechner-Stands ist grün: 4.217 Tests,
+4.211 bestanden, 6 übersprungen. Für Arten/Achsen sind 25 neue Regressionen enthalten;
+der abschließende gezielte Lauf mit Achsen-/Profiltests ist grün (42 Tests, 95 Assertions).
+Die danach ergänzte Erhaltung des UI-Suchindex-Updates ist separat grün (1 Test, 5 Assertions).
+Ein zusätzlicher großer Testlauf ist noch aktiv; für diesen neuen Stand wird keine
+vollständig grüne Modulsuite behauptet. Der Mechanismus
+ersetzt nicht die noch ausstehende Kuratierung des Livebestands. Ebenso bleiben der
+zentrale Auftragsvertrag, Critic/Selbstheilung/Sprache (C), das gemeinsame Budget (D4) und
+hängende Paragraphenverweise (H7) eigenständige offene Arbeiten.
+
 ## ▶ Fortsetzung 2026-09-09 — Riegel und tatsächliche Quellenauswahl
 
 **Reihenfolge geklärt (Dominique):** Der Dossier-Umbau beginnt **erst, wenn das Wissensmodul

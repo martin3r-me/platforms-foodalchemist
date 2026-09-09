@@ -21,7 +21,7 @@ class KnowledgeRoutingsPutTool extends FoodAlchemistTool implements ToolContract
 
     public function getDescription(): string
     {
-        return 'Setzt oder entfernt EIN Wissens-Routing (globaler Master, wirkt sofort). feature + category '
+        return 'Setzt oder entfernt EIN Wissens-Routing (globaler Master, wirkt sofort). feature und genau eines von art oder category '
             . 'Pflicht. mode ∈ always|discovery|grounding|none — discovery für WACHSENDE Kategorien (gedeckelt, '
             . 'skalierbar), always nur für kleine fixe Sets (jede Doc immer im Prompt = Bloat), none = bewusst '
             . 'leer. Optional max_docs / max_chars_per_doc als Cap (leer/0 = Service-Default). Mit delete=true wird '
@@ -32,11 +32,12 @@ class KnowledgeRoutingsPutTool extends FoodAlchemistTool implements ToolContract
     {
         return [
             'type' => 'object',
-            'required' => ['feature', 'category'],
+            'required' => ['feature'],
             'properties' => [
                 'feature' => ['type' => 'string', 'description' => 'KI-Feature, z. B. ai_generate_recipe'],
+                'art' => ['type' => 'string', 'enum' => ['fachwissen', 'referenz', 'datenwerk'], 'description' => 'Arten-Routing statt category: Fachwissen/Referenz discovery, Datenwerk resolve.'],
                 'category' => ['type' => 'string', 'description' => 'Wissens-Kategorie, z. B. niveau, kueche, domain'],
-                'mode' => ['type' => 'string', 'enum' => KnowledgeRoutingService::MODES, 'description' => 'Lade-Modus (bei delete=true ignoriert)'],
+                'mode' => ['type' => 'string', 'enum' => [...KnowledgeRoutingService::MODES, 'resolve'], 'description' => 'Lade-Modus (bei delete=true ignoriert)'],
                 'max_docs' => ['type' => 'integer', 'minimum' => 1, 'description' => 'Cap Top-K (leer = Service-Default)'],
                 'max_chars_per_doc' => ['type' => 'integer', 'minimum' => 1, 'description' => 'Cap Zeichen je Doc (leer = Service-Default)'],
                 'delete' => ['type' => 'boolean', 'description' => 'true → Routing entfernen (Kategorie wird search-only)'],
@@ -52,6 +53,18 @@ class KnowledgeRoutingsPutTool extends FoodAlchemistTool implements ToolContract
         }
         $feature = trim((string) ($arguments['feature'] ?? ''));
         $category = trim((string) ($arguments['category'] ?? ''));
+        $art = trim((string) ($arguments['art'] ?? ''));
+        if ($art !== '') {
+            if ($category !== '') return ToolResult::error('Genau art oder category angeben.', 'VALIDATION_ERROR');
+            if (! \Platform\FoodAlchemist\Support\TeamScope::mayWrite(null, $team)) return ToolResult::error('Arten-Routings sind global — nur das Master-Team darf sie ändern.', 'FORBIDDEN');
+            try {
+                $svc = app(KnowledgeRoutingService::class);
+                if (($arguments['delete'] ?? false) === true) return ToolResult::success(['deleted' => $svc->removeArt($feature, $art)]);
+                return ToolResult::success(['routing' => $svc->setArt($feature, $art, (string) ($arguments['mode'] ?? ''),
+                    isset($arguments['max_docs']) ? (int) $arguments['max_docs'] : null,
+                    isset($arguments['max_chars_per_doc']) ? (int) $arguments['max_chars_per_doc'] : null)]);
+            } catch (\InvalidArgumentException $e) { return ToolResult::error($e->getMessage(), 'VALIDATION_ERROR'); }
+        }
         if ($feature === '' || $category === '') {
             return ToolResult::error('feature und category sind Pflicht.', 'VALIDATION_ERROR');
         }
