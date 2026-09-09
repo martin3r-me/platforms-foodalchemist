@@ -93,6 +93,8 @@ it('Scoring läuft über Slugs allein — die Volltext-Query bindet höchstens T
 
 it('bindet auch bei generischer Discovery nur Gewinner-IDs an die Volltext-Abfrage', function () {
     config()->set('foodalchemist.semantic_search.enabled', false);
+    // Die drei vollständigen Gewinner passen; dieser Test prüft die DB-Abfrage, nicht die Budgetauswahl.
+    config()->set('foodalchemist.ai.knowledge_budget', ['test.memory' => 60000]);
     for ($i = 1; $i <= 12; $i++) {
         makeDomainDoc("gratin-fachwissen-{$i}", "Gratin Fachwissen {$i}");
     }

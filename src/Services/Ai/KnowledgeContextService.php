@@ -188,7 +188,7 @@ class KnowledgeContextService
         $kanonPflichtChars = 0;
         if ($kanonKey !== '' && $team !== null) {
             $kanonDocs = app(KnowledgeCanonService::class)->documentsFor('prompt_key', $kanonKey, $team);
-            $kanonPflichtChars = app(AiGatewayService::class)->kanonPflichtZeichen($kanonDocs);
+            $kanonPflichtChars = KnowledgeCanonText::requiredChars($kanonDocs);
             $kanonSlugs = $kanonDocs->where('mode', 'pflicht')->pluck('slug')->map(static fn ($s) => (string) $s)->all();
             $this->ausgeschlossen = array_merge($this->ausgeschlossen, $kanonSlugs);
         }

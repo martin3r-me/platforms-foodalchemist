@@ -48,13 +48,13 @@ beforeEach(function () {
     $this->slugs = fn (array $wissen) => array_map(fn ($f) => preg_replace('/@v\d+$/', '', $f), $wissen['files_used']);
 });
 
-it('schliesst die pflicht-Kanon-Dossiers aus der Regelwerk-Discovery aus — ohne Schlüssel unverändert', function () {
+it('schliesst die pflicht-Kanon-Dossiers aus der Regelwerk-Discovery aus — auch ohne expliziten Schlüssel', function () {
     // ★ Spec 52 · F4: lief bis dahin über `regelwerk:always` und den `->first()`-Block. Beides
     // ist gelöscht, `regelwerk` geht über die generische Discovery. Die AUSSAGE ist dieselbe
     // und wichtiger denn je — der Ausschluss muss auf dem Pfad greifen, den es noch gibt.
     //
     // Die Anfrage nennt «Kanon», damit das a-Dossier per Jaccard vorne liegt: ohne Ausschluss
-    // gewinnt es, mit Ausschluss muss das b-Dossier nachrücken. Bei `always` erzwang das
+    // würde es gewinnen; der automatische wie der explizite Ausschluss lassen b nachrücken. Bei `always` erzwang das
     // vorher `orderBy(slug)`; Discovery braucht dafür einen Token.
     ($this->mkDoc)('regelwerk-foodbook-a-kanon', 'regelwerk');
     ($this->mkDoc)('regelwerk-foodbook-b-frei', 'regelwerk');
@@ -67,7 +67,7 @@ it('schliesst die pflicht-Kanon-Dossiers aus der Regelwerk-Discovery aus — ohn
     $ohne = $kcs->contextFor($this->rootTeam, 'foodbook.grundgeruest', $anfrage);
     $mit = $kcs->contextFor($this->rootTeam, 'foodbook.grundgeruest', $anfrage, null, [], ['_kanon_prompt_key' => 'foodbook.grundgeruest']);
 
-    expect(($this->slugs)($ohne))->toBe(['regelwerk-foodbook-a-kanon'])
+    expect(($this->slugs)($ohne))->toBe(['regelwerk-foodbook-b-frei'])
         ->and(($this->slugs)($mit))->toBe(['regelwerk-foodbook-b-frei'])
         // und der Kanon-Slug taucht auch in der Herkunft nicht als Retrieval-Fund auf
         ->and(array_key_exists('regelwerk-foodbook-a-kanon', $mit['herkunft']))->toBeFalse();

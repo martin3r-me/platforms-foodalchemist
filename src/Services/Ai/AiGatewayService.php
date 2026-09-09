@@ -7,7 +7,6 @@ use Illuminate\Support\Facades\DB;
 use Platform\Core\Contracts\LLMProviderContract;
 use Platform\Core\Services\LLMProviderRegistry;
 use RuntimeException;
-use Platform\FoodAlchemist\Support\DossierText;
 
 /**
  * M0-14: KI-Gateway-Basis — Fassade vor dem Plattform-LLM (D3-Entscheid, hybrid).
@@ -408,21 +407,18 @@ class AiGatewayService
     /** Tatsächliche Pflichtgröße inklusive Quellenüberschriften und Trennern. */
     public function kanonPflichtZeichen(\Illuminate\Support\Collection $rows): int
     {
-        $blocks = $rows->where('mode', 'pflicht')->map(fn ($doc) => $this->kanonDokumentText($doc))->all();
-
-        return mb_strlen($this->kanonBlockText($blocks));
+        return KnowledgeCanonText::requiredChars($rows);
     }
 
     private function kanonDokumentText(object $doc): string
     {
-        return "## KANON: {$doc->slug}\n\n".DossierText::ohneVorspann((string) $doc->content_md);
+        return KnowledgeCanonText::document($doc);
     }
 
     /** @param list<string> $blocks */
     private function kanonBlockText(array $blocks): string
     {
-        return $blocks === [] ? '' : "# VERBINDLICHES REGELWERK (gilt für jede Antwort dieses Auftrags)\n\n"
-            .implode("\n\n---\n\n", $blocks);
+        return KnowledgeCanonText::block($blocks);
     }
 
     /**

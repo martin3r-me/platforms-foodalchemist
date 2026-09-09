@@ -19,7 +19,9 @@
 - Keine Dossier-Kürzung mehr im Kontextbau. `max_chars_per_doc` bleibt als inaktives Kompatibilitätsfeld erhalten. Der explizit gekürzte MCP-GET-Leseauszug ist davon unabhängig.
 - Gateway und Vorschau wenden dasselbe Gesamtbudget an, auch auf übergebenes Rohwissen. Der typisierte Kontextvertrag aus Etappe C bleibt offen. Das Budget betrifft Wissenszeichen, nicht den gesamten Prompt oder das Tokenlimit.
 - Profil, Versorgung, Einstellungen und Vorschau zeigen das gemeinsame Budget. Arten/Achsen sind in der Basis enthalten; Korpus-Kuration und Live-Validierung stehen aus.
-- Basis `f1ff7c72`: vollständige Suite grün (4.243 Tests, 4.237 bestanden, 6 übersprungen). B1/D4: zuletzt 101 gezielte Tests bestanden; vollständige Suite wird nach Abschluss der Änderungen separat ausgeführt. Noch nicht deployt.
+- Basis `f1ff7c72`: vollständige Suite grün (4.243 Tests, 4.237 bestanden, 6 übersprungen). Erster B1/D4-Gesamtlauf: 4.249 Tests, 4.226 bestanden, 7 fehlgeschlagen, 10 Fehler, 6 übersprungen (26 Minuten).
+- Nacharbeit: gemeinsamer Kanon-Textrenderer löst die Budgetmessung vom KI-Gateway; dadurch bleiben Gateway-Testdoubles und die Rezeptanreicherung funktionsfähig. Vier Testverträge wurden auf vollständige Dossiers, automatische Kanon-Erkennung und expliziten Budgetabbruch umgestellt; der DB-Abfragetest bekommt Budget für drei vollständige Gewinner.
+- Alle 17 beanstandeten Fälle bestehen in den gezielten Nachläufen: zunächst 78 von 79, anschließend der korrigierte Abfragetest samt seinen zwei Nachbartests (3 von 3). Vollständiger Wiederholungslauf steht noch aus. Noch nicht deployt.
 
 
 ## Context
