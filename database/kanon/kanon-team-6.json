@@ -1,5 +1,5 @@
 {
-    "erzeugt_am": "2026-09-08",
+    "erzeugt_am": "2026-09-10",
     "team_id": 6,
     "zeilen": [
         {
@@ -29,6 +29,16 @@
             "ord": 30,
             "mode": "pflicht",
             "slug": "regelwerk.regelwerk_concept--5-preislogik-einzelpreise-buendelpreis-datenmode",
+            "active": true,
+            "global": false
+        },
+        {
+            "scope": "prompt_key",
+            "scope_key": "foodbook.grundgeruest",
+            "role": "root",
+            "ord": 10,
+            "mode": "pflicht",
+            "slug": "regelwerk-foodbook-grundgerust",
             "active": true,
             "global": false
         },
