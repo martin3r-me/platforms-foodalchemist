@@ -20,6 +20,24 @@ final class RecipeKnowledgeRun
             ->map(static fn (array $row) => (object) $row);
     }
 
+    /** Nur im Audit tatsächlich verwendete Quellen; keine heutige DB-Auflösung. */
+    public function selectedDocuments(array $files): array
+    {
+        $selected = array_fill_keys($files, true);
+        $found = [];
+        foreach ($this->snapshot['profiles'] ?? [] as $keys) {
+            foreach ($keys as $roles) {
+                foreach ($roles as $rows) {
+                    foreach ($rows as $row) {
+                        $file = $row['slug'].'@v'.$row['version'];
+                        if (isset($selected[$file])) $found[$file] = ['file' => $file, 'text' => $row['content_md']];
+                    }
+                }
+            }
+        }
+        return array_values($found);
+    }
+
     public function missing(?string $key): array
     {
         return array_values(array_filter($this->snapshot['missing'] ?? [],

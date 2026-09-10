@@ -130,6 +130,37 @@ class RecipeKiKontextService
         })->values()->all();
     }
 
+    /** Historische Anzeige: Audit-Auswahl + gespeicherte Quellversionen, keine neue Suche. */
+    public function historieFuerRezept(FoodAlchemistRecipe $recipe): array
+    {
+        $team = \Platform\Core\Models\Team::find($recipe->team_id);
+        if ($team === null) return [];
+        $runs = [];
+        $calls = $this->alleCallsFuerRezept($recipe);
+        foreach ($calls as &$call) {
+            $call['snapshot_quellen'] = [];
+            $call['snapshot_fehler'] = null;
+            $id = $call['knowledge_run_id'];
+            if ($id !== null) {
+                if (! array_key_exists($id, $runs)) {
+                    try {
+                        $runs[$id] = app(\Platform\FoodAlchemist\Services\Knowledge\KnowledgeRunService::class)->load($team, $id);
+                    } catch (\RuntimeException|\JsonException $e) {
+                        $runs[$id] = null;
+                    }
+                }
+                $run = $runs[$id];
+                if ($run === null || $run->snapshotHash !== $call['knowledge_snapshot_hash']) {
+                    $call['snapshot_fehler'] = 'Gespeicherter Kanonstand fehlt oder ist nicht verifizierbar.';
+                } else {
+                    $call['snapshot_quellen'] = $run->selectedDocuments($call['wissen_slugs']);
+                }
+            }
+            $call['ohne_gespeicherten_text'] = array_values(array_diff($call['wissen_slugs'], array_column($call['snapshot_quellen'], 'file')));
+        }
+        return $calls;
+    }
+
     /**
      * Die ECHTEN Prompt-Größen aus der Messsonde (W3-5) — null, wenn die Sonde für diese
      * Zeile nichts hat (keine erfundenen Nullen).

@@ -188,3 +188,19 @@ it('C4: eine fehlende zweite Pflichtquelle verhindert eine unvollständige Prüf
         ->toThrow(RuntimeException::class, 'Pflichtkanon');
     expect(DB::table('foodalchemist_ai_call_log')->count())->toBe(0);
 });
+
+it('C7: Critic-Vorschau zeigt denselben Kanon und dieselben Zeichen wie der echte Aufruf', function () {
+    $preview = app(\Platform\FoodAlchemist\Services\Knowledge\KnowledgePreviewService::class)
+        ->preview($this->rootTeam, 'conformance.check', 'Tomaten Gewürfelt');
+    CopilotStub::bind([]);
+    app(ConformanceService::class)->pruefe($this->rootTeam, 'basisrezept', $this->rezept->id);
+    $log = DB::table('foodalchemist_ai_call_log')->latest('id')->first();
+    $channels = json_decode($log->knowledge_channels, true);
+    $parts = json_decode($log->prompt_parts, true);
+    expect($preview['canon_prompt_key'])->toBe('recipe.generator')
+        ->and($preview['kanon'])->toBe($channels['kanon'])
+        ->and($preview['total_chars'])->toBe($parts['kanon'] + $parts['retrieval']);
+    DB::table('foodalchemist_knowledge_documents')->update(['active' => 0]);
+    expect(fn () => app(\Platform\FoodAlchemist\Services\Knowledge\KnowledgePreviewService::class)->preview($this->rootTeam, 'conformance.check', 'Test'))
+        ->toThrow(RuntimeException::class, 'Pflichtkanon');
+});

@@ -238,6 +238,7 @@ class DetailPanel extends Component
             'rezept' => $rezept,
             // KI-Kontext der Erstellung (2026-09-06): Call-Log-Zeile des Generators, ans Rezept gehängt.
             'kiKontext' => $rezept !== null ? app(\Platform\FoodAlchemist\Services\Ai\RecipeKiKontextService::class)->fuerRezept($rezept) : null,
+            'kiHistorie' => $rezept !== null ? app(\Platform\FoodAlchemist\Services\Ai\RecipeKiKontextService::class)->historieFuerRezept($rezept) : [],
             // Spec 43: Gericht-Foto als Mini-Bild im Detail-Panel (Basisrezepte + Gerichte).
             'rezeptBildUrl' => ($rezept !== null && ($rezept->image_context_file_id || $rezept->image_path))
                 ? app(\Platform\FoodAlchemist\Services\FoodAlchemistMediaService::class)->url($rezept->image_context_file_id, $rezept->image_path)

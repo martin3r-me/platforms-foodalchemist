@@ -69,12 +69,8 @@ class AiGatewayService
                 }
             }
             if ($team === null) throw new RuntimeException('Kein aktives Team für die Basisrezept-Prüfung.');
-            $kanonKey = 'recipe.generator';
-            $canon = app(\Platform\FoodAlchemist\Services\Knowledge\KnowledgeCanonService::class);
-            if ($canon->documentsFor('prompt_key', $kanonKey, $team)->where('mode', 'pflicht')->isEmpty()
-                || collect($canon->unaufloesbareZeilen($team, $kanonKey))->where('mode', 'pflicht')->where('scope', 'prompt_key')->where('role', 'root')->isNotEmpty()) {
-                throw new RuntimeException('Kein vollständiger aktiver Pflichtkanon für die Basisrezept-Prüfung.');
-            }
+            $kanonKey = \Platform\FoodAlchemist\Services\Knowledge\ConformanceKnowledge::CANON_KEY;
+            \Platform\FoodAlchemist\Services\Knowledge\ConformanceKnowledge::assertAvailable($team);
             $wissen = app(KnowledgeContextService::class)->contextFor($team, $promptKey,
                 trim((string) ($context['name'] ?? '').' '.(string) ($context['beschreibung'] ?? '')),
                 null, [], ['_kanon_prompt_key' => $kanonKey]);
@@ -419,9 +415,9 @@ class AiGatewayService
      *
      * @return array{kanon_files: list<string>, kanon_chars: int, kanon_dropped: list<string>, dropped_chars: int}
      */
-    public function knowledgePreview(\Platform\Core\Models\Team $team, string $promptKey, array $retrieval): array
+    public function knowledgePreview(\Platform\Core\Models\Team $team, string $promptKey, array $retrieval, ?string $canonKey = null): array
     {
-        $rows = app(\Platform\FoodAlchemist\Services\Knowledge\KnowledgeCanonService::class)->documentsFor('prompt_key', $promptKey, $team);
+        $rows = app(\Platform\FoodAlchemist\Services\Knowledge\KnowledgeCanonService::class)->documentsFor('prompt_key', $canonKey ?? $promptKey, $team);
         [$blocks, $files, $dropped] = $this->selectKanon($rows, $retrieval['files_used'] ?? [], ['total' => KnowledgeBudget::forKey($promptKey) - (int) ($retrieval['total_chars'] ?? 0), 'key' => $promptKey, 'global' => KnowledgeBudget::forKey($promptKey), 'retrieval' => (int) ($retrieval['total_chars'] ?? 0)]);
         $allFiles = $rows->map(static fn ($doc) => "{$doc->slug}@v{$doc->version}")->all();
 

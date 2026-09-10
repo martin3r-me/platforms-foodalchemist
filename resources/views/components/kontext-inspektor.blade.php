@@ -36,8 +36,8 @@
     $docCount = array_sum(array_map(fn ($v) => is_array($v) ? count($v) : 0, $wissen));
     $hatInhalt = $docCount > 0 || $templates !== [];
 
-    // "slug@vN" / "graph:anker" → lesbarer Slug (Version + graph:-Präfix weg).
-    $pretty = fn (string $e): string => (string) preg_replace('/^graph:/', '', explode('@', $e, 2)[0]);
+    // Quellen behalten ihre Version; nur das technische graph:-Präfix entfällt.
+    $pretty = fn (string $e): string => (string) preg_replace('/^graph:/', '', $e);
 @endphp
 
 @if($hatInhalt)
@@ -108,7 +108,7 @@
                 </div>
             @endif
 
-            <p class="text-[10px] text-gray-400 pt-1 leading-snug">Wissens-Grounding, das der Generator beim Erstellen gelesen hat. GP-Kandidaten, Bestands-Inventar und gebundene Regelwerk-Layer sind separate Kanäle (hier nicht gelistet).</p>
+            <p class="text-[10px] text-gray-400 pt-1 leading-snug">Für diesen Aufruf protokollierte Wissensquellen mit Versionsnummer. GP-Kandidaten und Bestands-Inventar sind hier nicht enthalten.</p>
         </div>
     </details>
 @endif

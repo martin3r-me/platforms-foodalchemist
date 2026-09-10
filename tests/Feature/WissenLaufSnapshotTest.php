@@ -137,3 +137,23 @@ it('liest auch Aufrufe ohne eigenes Rezeptziel über die Lauf-ID und hält Teams
     DB::table('foodalchemist_ai_call_log')->where('id', $id)->update(['team_id' => $this->childA->id]);
     expect(app(\Platform\FoodAlchemist\Services\Ai\RecipeKiKontextService::class)->alleCallsFuerRezept($recipe))->toBeEmpty();
 });
+
+it('C7: Historie rendert gespeicherte Regelversionen und ersetzt sie nicht durch heutige Texte', function () {
+    $run = app(KnowledgeRunService::class)->start($this->rootTeam);
+    $recipe = $this->makeRecipe($this->rootTeam, 'Historie Snapshot');
+    $recipe->forceFill(['knowledge_run_id' => $run->id, 'is_sales_recipe' => false])->save();
+    CopilotStub::bind([]);
+    app(KnowledgeRunContext::class)->within($run, fn () => app(AiGatewayService::class)->propose('recipe.generator', [], [
+        'knowledge' => 'Nicht gespeichertes Fachwissen', 'knowledge_used' => ['suchquelle@v3'],
+    ]));
+    DB::table('foodalchemist_knowledge_documents')->where('slug', 'regel-snapshot')->update(['content_md' => 'NEUER_TEXT', 'version' => 2]);
+    $history = app(\Platform\FoodAlchemist\Services\Ai\RecipeKiKontextService::class)->historieFuerRezept($recipe);
+    expect($history[0]['snapshot_quellen'])->toBe([['file' => 'regel-snapshot@v1', 'text' => 'REGEL_VERSION_EINS']])
+        ->and($history[0]['ohne_gespeicherten_text'])->toBe(['suchquelle@v3']);
+    $html = view('foodalchemist::livewire.recipes.partials.ki-kontext', ['kiKontext' => null, 'kiHistorie' => $history])->render();
+    expect($html)->toContain($run->id, $run->snapshotHash, 'REGEL_VERSION_EINS', 'regel-snapshot@v1', 'suchquelle@v3')
+        ->not->toContain('NEUER_TEXT');
+    DB::table('foodalchemist_knowledge_runs')->where('id', $run->id)->update(['snapshot' => '{}']);
+    $history = app(\Platform\FoodAlchemist\Services\Ai\RecipeKiKontextService::class)->historieFuerRezept($recipe);
+    expect($history[0]['snapshot_fehler'])->not->toBeNull()->and($history[0]['snapshot_quellen'])->toBe([]);
+});

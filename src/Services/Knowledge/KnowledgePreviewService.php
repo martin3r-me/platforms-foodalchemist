@@ -24,13 +24,23 @@ class KnowledgePreviewService
             throw new \InvalidArgumentException('Die Vorschau akzeptiert ausschließlich fachliche Leitplanken.');
         }
         $parameters['rezept_typ'] ??= str_starts_with($promptKey, 'vk.') ? 'gericht' : 'basisrezept';
-        $parameters['_kanon_prompt_key'] = $promptKey;
+        $canonKey = $promptKey;
+        if ($promptKey === 'conformance.check') {
+            if ($parameters['rezept_typ'] !== 'basisrezept') {
+                throw new \InvalidArgumentException('Die Critic-Vorschau unterstützt derzeit nur Basisrezepte.');
+            }
+            ConformanceKnowledge::assertAvailable($team);
+            $canonKey = ConformanceKnowledge::CANON_KEY;
+        }
+        $parameters['_kanon_prompt_key'] = $canonKey;
         $retrieval = app(KnowledgeContextService::class)->contextFor($team, $promptKey, $query,
             $parameters['kompositions_stil'] ?? null, [], $parameters);
-        $canon = app(AiGatewayService::class)->knowledgePreview($team, $promptKey, $retrieval);
+        $canon = app(AiGatewayService::class)->knowledgePreview($team, $promptKey, $retrieval, $canonKey);
 
         return [
             'prompt_key' => $promptKey,
+            'canon_prompt_key' => $canonKey,
+            'rezept_typ' => $parameters['rezept_typ'],
             'budget_total' => $retrieval['knowledge_budget'],
             'required_chars' => $retrieval['required_chars'],
             'datenwerk' => $retrieval['datenwerk'] ?? null,

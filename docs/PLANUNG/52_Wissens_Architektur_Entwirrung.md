@@ -46,6 +46,16 @@
 - **Grenze:** Dies ist ein Kanon-Snapshot, noch kein vollständiger Profil-/Korpus-Snapshot. Discovery, Routing, Datenwerte, Budgets und Prompt-Texte bleiben live. Der vollständige getippte `RecipeAuftrag` und der Entzug externer Wissensoptionen bei allen Generator-Aufrufen (C2) sind noch offen. Die artefaktspezifische Vorschau/Inspektor-Anzeige (C7), Befund-Erdung (C5), Sidebar-Sprache und der Abnahmelauf bleiben ausstehend.
 
 
+## Umsetzung 2026-09-10 — C7 Vorschau und historische Aufrufe (Branch feat/wissen-inspektor)
+
+- Der Basisrezept-Critic und seine Vorschau verwenden `ConformanceKnowledge` für Kanonquelle und Integritätsprüfung. Vorschau für `conformance.check` zeigt explizit `recipe.generator`; andere Artefakttypen werden in dieser Vorschau als noch nicht unterstützt abgewiesen. Gateway-Budget und Quellenauswahl bleiben dieselben.
+- Rezept-/Gericht-Detailpanels zeigen die KI-Aufrufhistorie einschließlich Folgeaufrufen, Lauf-ID, Kanon-Hash, Fehlern, Größen und Quellen mit Versionsnummer. Die Historie wird auch angezeigt, wenn kein Generator-Eintrag existiert.
+- Historische Quelltexte kommen ausschließlich aus dem verifizierten Snapshot und werden auf die im jeweiligen Audit protokollierten Slug@Version-Einträge begrenzt. Eine heutige Dossieränderung ersetzt niemals den alten Text. Texte werden escaped dargestellt. Fehlende/beschädigte Snapshots erscheinen als Hinweis; Quellen ohne gespeicherten Volltext bleiben ausdrücklich nur Referenzen.
+- Keine historische Discovery-Neuberechnung: Routing, Budgets, Prompt-Texte und Suchwissen wurden nicht vollständig eingefroren. Der Kanon-Hash ist weiterhin kein vollständiger Profil-Fingerprint. Ein Snapshot wird innerhalb eines Historie-Aufbaus nur einmal je Lauf geladen.
+- Die generische Profil-Kuration (`WissensProfilService`) bleibt prompt-key-basiert und ist noch keine artefaktspezifische Critic-Profilansicht. C0/C1/C2, C5, C3 und Live-Abnahme bleiben offen. Neue ausgelassene Quellenlisten/Prüfbefund-Volltexte werden in diesem Slice nicht nachträglich ins Audit erfunden; die bestehenden Größen- und Fehlerdaten werden angezeigt.
+- Tests: 39/40 im ersten gezielten Lauf; einzige Abweichung war die alte Erwartung, Versionsnummern zu verbergen. Darstellungstest auf sichtbare Versionen geändert; abschließender gezielter Lauf grün: 40/40, 159 Assertions. Vollständige Suite folgt. Nicht deployt.
+
+
 ## Context
 
 Symptom (Dominique, 2026-09-07): Beim Erstellen eines **Basisrezepts** oder eines **Gerichts**
