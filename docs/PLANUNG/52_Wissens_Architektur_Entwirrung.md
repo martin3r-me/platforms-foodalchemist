@@ -53,7 +53,7 @@
 - Historische Quelltexte kommen ausschließlich aus dem verifizierten Snapshot und werden auf die im jeweiligen Audit protokollierten Slug@Version-Einträge begrenzt. Eine heutige Dossieränderung ersetzt niemals den alten Text. Texte werden escaped dargestellt. Fehlende/beschädigte Snapshots erscheinen als Hinweis; Quellen ohne gespeicherten Volltext bleiben ausdrücklich nur Referenzen.
 - Keine historische Discovery-Neuberechnung: Routing, Budgets, Prompt-Texte und Suchwissen wurden nicht vollständig eingefroren. Der Kanon-Hash ist weiterhin kein vollständiger Profil-Fingerprint. Ein Snapshot wird innerhalb eines Historie-Aufbaus nur einmal je Lauf geladen.
 - Die generische Profil-Kuration (`WissensProfilService`) bleibt prompt-key-basiert und ist noch keine artefaktspezifische Critic-Profilansicht. C0/C1/C2, C5, C3 und Live-Abnahme bleiben offen. Neue ausgelassene Quellenlisten/Prüfbefund-Volltexte werden in diesem Slice nicht nachträglich ins Audit erfunden; die bestehenden Größen- und Fehlerdaten werden angezeigt.
-- Tests: 39/40 im ersten gezielten Lauf; einzige Abweichung war die alte Erwartung, Versionsnummern zu verbergen. Darstellungstest auf sichtbare Versionen geändert; abschließender gezielter Lauf grün: 40/40, 159 Assertions. Vollständige Suite folgt. Nicht deployt.
+- Tests: 39/40 im ersten gezielten Lauf; einzige Abweichung war die alte Erwartung, Versionsnummern zu verbergen. Darstellungstest auf sichtbare Versionen geändert; abschließender gezielter Lauf grün: 40/40, 159 Assertions. Vollständige Suite auf `24664d91` grün: 4.265 Tests, 4.259 bestanden, 6 übersprungen, 22.169 Assertions, 34 Min. 14 Sek. Log `/tmp/wissen-inspektor-full.log`. Nicht deployt.
 
 
 ## Context

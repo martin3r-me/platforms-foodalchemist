@@ -1,5 +1,19 @@
 # Übergabe an Claude — Food Alchemist, Spec 52
 
+## Nachtrag — Paket Vorschau/Inspektor abgeschlossen
+
+Der Nutzer gab die Weiterarbeit nach der Übergabe wieder frei. **Aktueller Branch ist jetzt `feat/wissen-inspektor`**, weiterhin im Worktree `/Users/dbeutin/COOKING JARVIS/15_GITHUB/wt-wissen-budget`. Die Angaben zum früheren Branch und Teststand unten sind historisch.
+
+- Geprüfter Code-Commit: `24664d91` (baut auf `5a97cbde` auf).
+- Vollständige Suite: **4.265 Tests, 4.259 bestanden, 6 übersprungen, keine Fehler**, 22.169 Assertions, 34 Min. 14 Sek. Ergebnis: `/tmp/wissen-inspektor-full.log`. Kein Testprozess mehr aktiv.
+- Critic-Vorschau und echter Basisrezept-Aufruf teilen sich `ConformanceKnowledge` für Kanonquelle (`recipe.generator`) und Prüfung der Pflichtquellen. Andere Critic-Artefakte werden in der Vorschau als noch nicht unterstützt abgewiesen.
+- Beide Rezept-Detailpanels zeigen jetzt die Aufrufhistorie mit Lauf-ID, Kanon-Hash, Größen, Fehlern und Quellversionen. Historische Volltexte kommen ausschließlich aus dem verifizierten Snapshot und nur für tatsächlich protokollierte Quellen. Nicht gespeicherte Suchtexte bleiben ausdrücklich Referenzen; beschädigte/fehlende Snapshots werden angezeigt. Kein Nachladen heutiger Dossiertexte als vermeintlicher Altstand.
+- Zusätzliche Regressionen prüfen Vorschau/Audit-Gleichheit und historische Darstellung nach Dossieränderung sowie beschädigten Snapshot. Darstellungstests erwarten jetzt sichtbare Versionsnummern.
+- **Offen:** generische artefaktspezifische Profil-Kuration, vollständiger typisierter Auftrag/Gateway-Vertrag, fachliche Befund-Erdung der Selbstheilung (C5), Sprache, Live-Abnahme und Rollout auf weitere Generatoren. Der Kanon-Snapshot bleibt ausdrücklich kein vollständiger Profil-/Korpus-Snapshot. Ausgelassene Quellen sind historisch nur soweit protokolliert verfügbar (bestehende Größen), keine nachträglich erfundene Quellenliste.
+- Nächstes sinnvolles Implementierungspaket: **C5 Selbstheilung**, konkrete Regel-ID/Paragraph und Befund statt Rezeptbeschreibung als Suchanlass.
+- Weiterhin **nichts gepusht, gemergt oder deployt**. Nach dem geprüften Code-Commit folgt nur die Dokumentation des Testergebnisses.
+
+
 Stand: 2026-09-10. Nutzer: Dominique. Auftrag zuletzt: vollständige Suite fertigstellen, dann diese Übergabe. Keine neue Implementierung nach der Übergabe begonnen.
 
 ## Sofort relevante Fakten
