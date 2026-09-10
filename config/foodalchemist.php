@@ -532,6 +532,25 @@ return [
         // mehr unabhängig ausgeschöpft. Übergangswerte bewahren ihre bisherige Summe;
         // Review/Überarbeitung und Brief-Gerüst haben explizite Reserve für ganze Quellen.
         // Fachliche Live-Abnahme bleibt nötig; zu große Pflichtmengen werden gemeldet.
+        /*
+         * Spec 52/C4 — welcher Critic-Artefakttyp seinen Prüfkontext ZENTRAL bauen lässt.
+         * Schlüssel = stabiler Domänen-Schlüssel aus `ConformanceAdapter::pruefauftrag()['artefakt']`,
+         * Wert = Prompt-Key, dessen Kanon die Regelquelle ist.
+         *
+         * Kein Eintrag = nicht migriert = bisheriger Präfix-Lader. Das ist eine
+         * Konfigurationsentscheidung, kein stiller Ausfall.
+         *
+         * ⚠ Eintrag NUR setzen, wenn der Prompt-Key einen kuratierten Pflichtkanon hat —
+         * sonst wirft `ConformanceKnowledge::assertAvailable()` zur Laufzeit und der Prüfpass
+         * stirbt, statt zurückzufallen. Gemessen am 2026-09-10 (Team 6):
+         * `recipe.generator` 13 Zeilen · `vk.generator` 12 · `gp` 0 · `la` 0.
+         * Deshalb stehen `gp` und `la` hier NICHT — dort ist erst Kuration nötig.
+         */
+        'conformance_kanon' => [
+            'basisrezept' => 'recipe.generator',
+            'vk' => 'vk.generator',
+        ],
+
         'knowledge_budget' => [
             'conformance.check' => 48000, // Basisrezept-Critic: gemeinsamer Pflichtkanon + geroutetes Wissen
             'default' => 16200,
@@ -545,8 +564,12 @@ return [
             'format.grundgeruest' => 17200,
             'concept.wording' => 9200,
             'foodbook.kundentext' => 9200,
-            'recipe.ueberarbeiten' => 18000,
-            'vk.ueberarbeiten' => 18000,
+            // C5: die Selbstheilung ERBT den Kanon ihres Erzeugers (sonst repariert sie einen
+            // §-Verstoss, ohne den § zu kennen). Damit gilt hier dieselbe Rechnung wie beim
+            // Generator: Pflichtkanon + eigenes Retrieval. Mit den alten 18.000 haette der
+            // Aufbau geworfen, weil allein der Kanon ~36.000 Zeichen traegt.
+            'recipe.ueberarbeiten' => 48000,
+            'vk.ueberarbeiten' => 49000,
             'recipe.review' => 18000,
             'vk.review' => 18000,
             'foodbook.grundgeruest' => 12200,

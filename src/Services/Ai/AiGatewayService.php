@@ -59,18 +59,43 @@ class AiGatewayService
             throw new \Platform\FoodAlchemist\Exceptions\KiDeaktiviertException();
         }
 
-        $kanonKey = $promptKey;
-        // C4, erster migrierter Prüfpfad: Regelquelle ist der Basisrezept-Generator.
-        // Nur dieser Artefakttyp wird umgestellt; die übrigen Critic-Pfade folgen separat.
-        if ($promptKey === 'conformance.check' && ($context['artefakt_typ'] ?? '') === 'Basisrezept/Komponente') {
+        /*
+         * Welcher Kanon gilt? Standard: der Prompt-Key selbst.
+         *
+         * Spec 52/C5 — ein Folgeschritt darf die Regelquelle seines ERZEUGERS erben. Die
+         * Selbstheilung läuft unter `recipe.ueberarbeiten`; dieser Key hat keine Kanon-Zeile,
+         * also stand das Modell bis 2026-09-10 ohne den § da, den es reparieren sollte.
+         * `_kanon_prompt_key` ist derselbe Begriff, den `contextFor()` schon kennt — bewusst
+         * EIN Name für eine Sache, nicht zwei.
+         *
+         * Kein Sicherheitsloch: der Aufrufer wählt ohnehin frei den Prompt-Key. Der abgeleitete
+         * Critic-Kanon weiter unten gewinnt gegen diese Angabe.
+         */
+        $kanonKey = is_string($options['_kanon_prompt_key'] ?? null) && $options['_kanon_prompt_key'] !== ''
+            ? $options['_kanon_prompt_key']
+            : $promptKey;
+        // C4: migrierte Prüfpfade bauen ihren Wissenskontext hier. WELCHE das sind, sagt
+        // `ai.conformance_kanon` — angesprochen über den stabilen Artefakt-Schlüssel, den
+        // der Adapter liefert.
+        //
+        // ★ Bis 2026-09-10 stand hier ein Vergleich auf `$context['artefakt_typ']` gegen den
+        // deutschen Anzeigetext 'Basisrezept/Komponente'. Dieser Text wandert über den Kontext
+        // in den Prompt; eine Umformulierung hätte den migrierten Pfad stumm abgeschaltet und
+        // wäre ohne Fehlermeldung auf den Präfix-Lader zurückgefallen.
+        // Vgl. [[feedback_prompt_wortlaut_ist_keine_schnittstelle]].
+        $conformanceKanon = $promptKey === 'conformance.check'
+            ? \Platform\FoodAlchemist\Services\Knowledge\ConformanceKnowledge::kanonKeyFuer(
+                is_string($options['conformance_artefakt'] ?? null) ? $options['conformance_artefakt'] : null)
+            : null;
+        if ($conformanceKanon !== null) {
             foreach (['knowledge', 'knowledge_used', 'knowledge_channels', 'knowledge_dropped_chars'] as $external) {
                 if (array_key_exists($external, $options)) {
-                    throw new \InvalidArgumentException('Der Basisrezept-Critic baut sein Wissen selbst; externe Wissensoptionen sind nicht erlaubt.');
+                    throw new \InvalidArgumentException('Der migrierte Critic baut sein Wissen selbst; externe Wissensoptionen sind nicht erlaubt.');
                 }
             }
-            if ($team === null) throw new RuntimeException('Kein aktives Team für die Basisrezept-Prüfung.');
-            $kanonKey = \Platform\FoodAlchemist\Services\Knowledge\ConformanceKnowledge::CANON_KEY;
-            \Platform\FoodAlchemist\Services\Knowledge\ConformanceKnowledge::assertAvailable($team);
+            if ($team === null) throw new RuntimeException('Kein aktives Team für die Konformitäts-Prüfung.');
+            $kanonKey = $conformanceKanon;
+            \Platform\FoodAlchemist\Services\Knowledge\ConformanceKnowledge::assertAvailable($team, $kanonKey);
             $wissen = app(KnowledgeContextService::class)->contextFor($team, $promptKey,
                 trim((string) ($context['name'] ?? '').' '.(string) ($context['beschreibung'] ?? '')),
                 null, [], ['_kanon_prompt_key' => $kanonKey]);
@@ -235,7 +260,7 @@ class AiGatewayService
         $fbFoodDna = $options['food_dna_foodbook_id'] ?? null;
         $agFoodDna = $options['food_dna_angebot_id'] ?? null;
         $kdFoodDna = $options['food_dna_crm_company_id'] ?? null;  // Ebene 2: Endkunde (Kunde-DNA)
-        unset($options['knowledge'], $options['knowledge_used'], $options['knowledge_channels'], $options['knowledge_dropped_chars'], $options['tier'], $options['target_table'], $options['target_id'], $options['food_dna_concept_id'], $options['food_dna_foodbook_id'], $options['food_dna_angebot_id'], $options['food_dna_crm_company_id']);
+        unset($options['conformance_artefakt'], $options['_kanon_prompt_key'], $options['knowledge'], $options['knowledge_used'], $options['knowledge_channels'], $options['knowledge_dropped_chars'], $options['tier'], $options['target_table'], $options['target_id'], $options['food_dna_concept_id'], $options['food_dna_foodbook_id'], $options['food_dna_angebot_id'], $options['food_dna_crm_company_id']);
 
         // #389/Canvas: stehenden Marken-/Brief-Kontext NUR in kreative Prompts mergen
         // (Klassifikatoren ausgenommen). Kaskade Team-DNA → Kunde-DNA → Angebot → Foodbook → Concept (CanvasService).

@@ -26,11 +26,16 @@ class KnowledgePreviewService
         $parameters['rezept_typ'] ??= str_starts_with($promptKey, 'vk.') ? 'gericht' : 'basisrezept';
         $canonKey = $promptKey;
         if ($promptKey === 'conformance.check') {
-            if ($parameters['rezept_typ'] !== 'basisrezept') {
-                throw new \InvalidArgumentException('Die Critic-Vorschau unterstützt derzeit nur Basisrezepte.');
+            // Die Vorschau muss den Rollout MITMACHEN, sonst zeigt sie etwas anderes als der
+            // echte Prüf-Call. Dieselbe Quelle wie dort: `ai.conformance_kanon` über den
+            // stabilen Artefakt-Schlüssel. `rezept_typ` ist die Vorschau-Sprache dafür.
+            $artefakt = ['basisrezept' => 'basisrezept', 'gericht' => 'vk'][$parameters['rezept_typ']] ?? null;
+            $canonKey = ConformanceKnowledge::kanonKeyFuer($artefakt);
+            if ($canonKey === null) {
+                throw new \InvalidArgumentException('Für diesen Artefakt-Typ ist der zentrale Prüfkontext nicht eingerichtet '
+                    . '(config foodalchemist.ai.conformance_kanon).');
             }
-            ConformanceKnowledge::assertAvailable($team);
-            $canonKey = ConformanceKnowledge::CANON_KEY;
+            ConformanceKnowledge::assertAvailable($team, $canonKey);
         }
         $parameters['_kanon_prompt_key'] = $canonKey;
         $retrieval = app(KnowledgeContextService::class)->contextFor($team, $promptKey, $query,

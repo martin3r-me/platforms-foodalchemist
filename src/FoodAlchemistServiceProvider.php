@@ -90,6 +90,7 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                 // VERSORGUNGS-Richtung („welches Wissen erreicht diesen Prompt überhaupt").
                 \Platform\FoodAlchemist\Console\WissenVersorgungCommand::class,
                 \Platform\FoodAlchemist\Console\WissenProfilCommand::class,
+                \Platform\FoodAlchemist\Console\WissenVerweiseCommand::class,
                 \Platform\FoodAlchemist\Console\WissenKanonSicherungCommand::class,
                 // Spec 52/A1: Grundlinie am tatsächlich versendeten Aufruf — inkl. der drei
                 // Folge-Calls, die der Kontext-Inspektor ausblendet.

@@ -34,6 +34,68 @@ class RecipesGenerateTool extends FoodAlchemistTool implements ToolContract, Too
         'occasion', 'serviceform', 'kompositions_stil',
     ];
 
+    /**
+     * Spec 52/H2 — die Geltungs-Achsen sind ebenfalls Durchreich-Parameter.
+     *
+     * ★ Die Namen kommen aus {@see WissensGeltung::ACHSEN}, NICHT aus einer zweiten Liste:
+     * `contextFor()` liest `$params[<achse>]`, und `WissensGeltung::passt()` vergleicht gegen
+     * denselben Schlüssel. Eine eigene Aufzählung hier wäre die vierte Stelle, die dasselbe
+     * behauptet — genau das Muster, das Spec 52 abbaut. `occasion`/`sektor` stehen schon in
+     * PILL_KEYS (mit Enum) und werden beim Zusammenführen entdoppelt; `niveau` löst
+     * `passt()` selbst auf den vorhandenen `level` auf.
+     *
+     * @return list<string>
+     */
+    private static function durchreichSchluessel(): array
+    {
+        return array_values(array_unique(array_merge(
+            self::PILL_KEYS,
+            array_keys(\Platform\FoodAlchemist\Services\Knowledge\WissensGeltung::ACHSEN),
+        )));
+    }
+
+    /**
+     * Beispielwerte je Achse — reine BESCHREIBUNG, keine Mitgliedschaftsliste.
+     * Fehlt ein Eintrag, bekommt die Achse einen generischen Text; sie erscheint
+     * trotzdem im Schema. So zieht eine neue Achse in `WissensGeltung::ACHSEN`
+     * die MCP-Fläche automatisch nach und kann nicht vergessen werden.
+     */
+    private const ACHSEN_BEISPIELE = [
+        'gang' => 'vorspeise | hauptgang | dessert | amuse_bouche | petit_four',
+        'komponentenrolle' => 'protein | beilage | suppe | getraenk',
+        'portionskontext' => 'menue | einzelgericht',
+        'saison' => 'fruehling | sommer | herbst | winter',
+        'warengruppe' => 'fleisch_rind | obst_zitrus | getreide_pseudogetreide | schokolade',
+        'format' => 'a_la_carte | bankett_buffet | bankett_tellergericht | volumen_catering | foodtruck | sweet_table',
+    ];
+
+    /**
+     * Spec 52/H2 — Schema-Einträge für die Geltungs-Achsen, aus DERSELBEN Quelle wie
+     * {@see self::durchreichSchluessel()}. Zwei Handlisten (Schema hier, Filter dort)
+     * wären wieder zwei Stellen mit derselben Behauptung.
+     *
+     * `niveau`, `occasion` und `sektor` sind bereits als `level`/Enum deklariert — die
+     * werden nicht überschrieben (`+` behält den linken Operanden).
+     *
+     * @return array<string, array<string, string>>
+     */
+    private static function achsenSchema(): array
+    {
+        $out = [];
+        foreach (\Platform\FoodAlchemist\Services\Knowledge\WissensGeltung::ACHSEN as $achse => $label) {
+            if ($achse === 'niveau') {
+                continue;   // trägt historisch den Namen `level`; passt() löst den Alias auf
+            }
+            $beispiele = self::ACHSEN_BEISPIELE[$achse] ?? null;
+            $out[$achse] = ['type' => 'string', 'description' => "Geltungs-Achse {$label}: bestimmt, welche "
+                . 'Datenwerke (Mengen-Standards, Garverluste, Vokabulare) AUFGELOEST werden — die werden nicht '
+                . 'gesucht. Fehlt die Achse, meldet der Resolver eine Luecke statt einen Wert zu raten.'
+                . ($beispiele !== null ? " Werte wie {$beispiele}." : '')];
+        }
+
+        return $out;
+    }
+
     public function getName(): string
     {
         return 'foodalchemist.recipes.GENERATE';
@@ -88,7 +150,7 @@ class RecipesGenerateTool extends FoodAlchemistTool implements ToolContract, Too
                 'use_favorites_list' => ['type' => 'boolean', 'default' => false, 'description' => '06·H3: bevorzugt aus der kuratierten Favoriten-GP-Liste bauen (bevorzugt, nicht ausschließlich)'],
                 'favorites_convenience_only' => ['type' => 'boolean', 'default' => false, 'description' => '06·H4b: Favoriten-Block auf Convenience-getaggte GPs verengen (nur wirksam mit use_favorites_list)'],
                 'seed_anker' => ['type' => 'array', 'items' => ['type' => 'string'], 'description' => 'Foodpairing-Composer: Liste von Aroma-Anker-SLUGS/Namen (z. B. ["rauch","vanille","apfel"]), auf die das Rezept gezielt gebaut wird. Wirkt zweifach: (1) erdet die GP-Kandidatensuche auf diese Leit-Aromen, (2) erzeugt einen VERBINDLICHEN Leit-Aromen-Block (die Anker MÜSSEN als Zutaten/Komponenten vorkommen) samt Harmonie-Palette je Anker. Slugs vorher via foodalchemist.composer.ANKER_SUCHE (Name→Slug) oder pairing_inspiration.GET wählen; mit composer.KOHAESION prüfen, ob die Menge zusammenhält. Gilt genau für diesen Lauf (nicht vererbt).'],
-            ],
+            ] + self::achsenSchema(),
             'required' => ['description'],
         ];
     }
@@ -136,7 +198,7 @@ class RecipesGenerateTool extends FoodAlchemistTool implements ToolContract, Too
         // Parameter-Bau wie in den beiden Modals: leere Strings strippen (sonst
         // landet "(egal)" als Vorgabe im Prompt), bools NACH dem Filter setzen.
         $parameter = [];
-        foreach (self::PILL_KEYS as $key) {
+        foreach (self::durchreichSchluessel() as $key) {
             $wert = $arguments[$key] ?? null;
             if (is_string($wert) && trim($wert) !== '') {
                 $parameter[$key] = trim($wert);

@@ -142,7 +142,7 @@ it('C4: fällt bei fehlendem Kanon nicht auf passende Slug-Präfixe zurück', fu
 
 it('C4: weist externes Wissen am migrierten Gateway-Eingang ab', function () {
     expect(fn () => app(\Platform\FoodAlchemist\Services\Ai\AiGatewayService::class)->propose(
-        'conformance.check', ['artefakt_typ' => 'Basisrezept/Komponente'], ['knowledge' => 'Fremde Regeln']))
+        'conformance.check', [], ['conformance_artefakt' => 'basisrezept', 'knowledge' => 'Fremde Regeln']))
         ->toThrow(InvalidArgumentException::class, 'externe Wissensoptionen');
 });
 
@@ -203,4 +203,46 @@ it('C7: Critic-Vorschau zeigt denselben Kanon und dieselben Zeichen wie der echt
     DB::table('foodalchemist_knowledge_documents')->update(['active' => 0]);
     expect(fn () => app(\Platform\FoodAlchemist\Services\Knowledge\KnowledgePreviewService::class)->preview($this->rootTeam, 'conformance.check', 'Test'))
         ->toThrow(RuntimeException::class, 'Pflichtkanon');
+});
+
+/**
+ * Spec 52/C4 — die Weiche darf NICHT am Prompt-Text hängen.
+ *
+ * Bis 2026-09-10 entschied ein Vergleich auf `kontext['artefakt_typ'] === 'Basisrezept/Komponente'`,
+ * ob der zentrale Wissensaufbau greift. Dieser Text wandert über den Kontext in den Prompt.
+ * Eine Umformulierung hätte den migrierten Pfad stumm abgeschaltet — ohne Fehlermeldung,
+ * mit Rückfall auf den Präfix-Lader. Vgl. [[feedback_prompt_wortlaut_ist_keine_schnittstelle]].
+ */
+it('C4: ein umformulierter Anzeigetext verändert den Prüfpfad NICHT', function () {
+    expect(fn () => app(\Platform\FoodAlchemist\Services\Ai\AiGatewayService::class)->propose(
+        'conformance.check',
+        ['artefakt_typ' => 'Voellig anders formuliert'],   // Anzeigetext ist egal …
+        ['conformance_artefakt' => 'basisrezept', 'knowledge' => 'Fremde Regeln']))
+        ->toThrow(InvalidArgumentException::class, 'externe Wissensoptionen');   // … der Schluessel zaehlt
+
+    // Und umgekehrt: der alte Anzeigetext allein schaltet den migrierten Pfad NICHT mehr ein —
+    // ohne Schluessel gilt der Alt-Vertrag, das uebergebene Wissen landet im Userblock.
+    CopilotStub::bind([]);
+    app(\Platform\FoodAlchemist\Services\Ai\AiGatewayService::class)->propose(
+        'conformance.check', ['artefakt_typ' => 'Basisrezept/Komponente'], ['knowledge' => 'Fremde Regeln']);
+    expect($GLOBALS['l6_user_prompt'])->toContain('Fremde Regeln');
+});
+
+it('C4-Rollout: das Verkaufsgericht laeuft ueber denselben zentralen Aufbau wie das Basisrezept', function () {
+    // Nicht der Adapter entscheidet, sondern die Konfiguration — ein Rollout ist eine Zeile.
+    expect(\Platform\FoodAlchemist\Services\Knowledge\ConformanceKnowledge::kanonKeyFuer('basisrezept'))->toBe('recipe.generator')
+        ->and(\Platform\FoodAlchemist\Services\Knowledge\ConformanceKnowledge::kanonKeyFuer('vk'))->toBe('vk.generator');
+
+    // GP/LA sind bewusst NICHT eingetragen: dort gibt es (Stand 2026-09-10) keinen Kanon.
+    // Ein Eintrag ohne kuratierte Pflichtzeilen wuerde den Pruefpass toeten statt ihn umzustellen.
+    expect(\Platform\FoodAlchemist\Services\Knowledge\ConformanceKnowledge::kanonKeyFuer('gp'))->toBeNull()
+        ->and(\Platform\FoodAlchemist\Services\Knowledge\ConformanceKnowledge::kanonKeyFuer('la'))->toBeNull()
+        ->and(\Platform\FoodAlchemist\Services\Knowledge\ConformanceKnowledge::kanonKeyFuer(null))->toBeNull();
+});
+
+it('C4: jeder Adapter liefert einen stabilen Artefakt-Schluessel, nicht nur einen Anzeigetext', function () {
+    $auftrag = app(\Platform\FoodAlchemist\Services\Conformance\RecipeConformanceAdapter::class)
+        ->pruefauftrag($this->rootTeam, $this->rezept->id);
+    expect($auftrag)->toHaveKey('artefakt')
+        ->and($auftrag['artefakt'])->toBe('basisrezept');
 });
