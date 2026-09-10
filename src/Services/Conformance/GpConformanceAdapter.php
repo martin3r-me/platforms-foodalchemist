@@ -86,6 +86,7 @@ class GpConformanceAdapter implements ConformanceAdapter
         }
 
         return [
+            'artefakt' => 'gp',
             'kontext' => $kontext,
             'regelwerk_praefixe' => ['regelwerk-gp-'],
             'target_table' => 'foodalchemist_gps',

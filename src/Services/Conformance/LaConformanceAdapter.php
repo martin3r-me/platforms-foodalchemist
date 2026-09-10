@@ -65,6 +65,7 @@ class LaConformanceAdapter implements ConformanceAdapter
         ];
 
         return [
+            'artefakt' => 'la',
             'kontext' => $kontext,
             'regelwerk_praefixe' => ['regelwerk-la-'],
             'target_table' => 'foodalchemist_supplier_items',

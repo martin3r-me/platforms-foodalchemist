@@ -193,3 +193,43 @@ it('verwendet bei wiederverwendetem Dienst die Geltung des aktuellen Auftrags', 
     expect($service->contextFor($this->rootTeam, 'test.cache', 'Karotte', null, [], ['gang' => 'hauptgang'])['files_used'])->toBe(['hauptgang@v1']);
     expect($service->contextFor($this->rootTeam, 'test.cache', 'Karotte', null, [], ['gang' => 'vorspeise'])['files_used'])->toBe(['vorspeise@v1']);
 });
+
+/**
+ * Spec 52/H2 — die Lücke, an der die Datenwerke sonst stumm bleiben.
+ *
+ * `contextFor()` liest die Achse als `$params[<achse>]`, und `WissensGeltung::passt()`
+ * vergleicht gegen denselben Schlüssel. Aber `recipes.GENERATE` filtert die Eingabe gegen
+ * eine Whitelist — stand eine Achse dort nicht drin, fiel sie weg, der Resolver sah keinen
+ * Parameter und meldete eine LÜCKE. Gemessen am 2026-09-10: von neun Achsen kamen drei an.
+ *
+ * Das ist absichtlich ein VERTRAGS-Test gegen `WissensGeltung::ACHSEN` statt gegen eine
+ * abgeschriebene Liste: eine neue Achse muss die MCP-Fläche mitziehen, sonst ist sie eine
+ * Vorwärtsdeklaration, die niemandem auffällt.
+ */
+it('Spec 52/H2: jede Geltungs-Achse ist an der MCP-Fläche annehmbar — sonst löst kein Datenwerk auf', function () {
+    $schema = app(ToolRegistry::class)->get('foodalchemist.recipes.GENERATE')->getSchema();
+    $felder = array_keys($schema['properties'] ?? []);
+
+    foreach (array_keys(WissensGeltung::ACHSEN) as $achse) {
+        // `niveau` trägt historisch den Namen `level`; passt() löst den Alias selbst auf.
+        expect($felder)->toContain($achse === 'niveau' ? 'level' : $achse);
+    }
+});
+
+it('Spec 52/H2: eine Achse, die das Schema kennt, überlebt auch den Parameter-Filter', function () {
+    $tool = app(ToolRegistry::class)->get('foodalchemist.recipes.GENERATE');
+
+    // Der Filter ist privat — geprüft wird sein Ergebnis: der Aufbau, den der Generator
+    // bekommt. Ohne Durchreichung stünde hier kein `gang`, und der Resolver bliebe blind.
+    $spiegel = new ReflectionMethod($tool, 'durchreichSchluessel');
+    $spiegel->setAccessible(true);
+    $schluessel = $spiegel->invoke(null);
+
+    foreach (array_keys(WissensGeltung::ACHSEN) as $achse) {
+        expect($schluessel)->toContain($achse);
+    }
+    // Und die Pills dürfen dabei nicht verloren gehen.
+    foreach (['convenience', 'frische', 'bestand', 'level', 'aroma', 'serviceform', 'kompositions_stil'] as $pill) {
+        expect($schluessel)->toContain($pill);
+    }
+});

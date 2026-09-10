@@ -187,6 +187,8 @@ class RecipeConformanceAdapter implements ConformanceAdapter
         }
 
         return [
+            // Stabiler Domaenen-Schluessel — NICHT der Anzeigetext aus dem Kontext.
+            'artefakt' => $vk ? 'vk' : 'basisrezept',
             'kontext' => $kontext,
             'regelwerk_praefixe' => $praefixe,
             'target_table' => 'foodalchemist_recipes',

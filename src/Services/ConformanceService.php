@@ -10,13 +10,15 @@ use Platform\FoodAlchemist\Services\Conformance\ConformanceAdapter;
 use Platform\FoodAlchemist\Services\Conformance\GpConformanceAdapter;
 use Platform\FoodAlchemist\Services\Conformance\LaConformanceAdapter;
 use Platform\FoodAlchemist\Services\Conformance\RecipeConformanceAdapter;
+use Platform\FoodAlchemist\Services\Knowledge\ConformanceKnowledge;
 use Platform\FoodAlchemist\Support\DossierText;
 
 /**
  * Schicht 3 — der GENERISCHE Konformitäts-Critic. EIN Prompt (`conformance.check`),
  * EIN Service, ein kleiner Adapter je Artefakt-Typ. Prüft ein Artefakt §-genau
- * gegen den expliziten Generator-Kanon bei Basisrezepten. Der Gateway baut diesen
- * Kontext mit Routing und Budget. Weitere Artefakte nutzen bis zu ihrer Migration
+ * gegen den Generator-Kanon des jeweiligen Artefakts. Der Gateway baut diesen Kontext
+ * mit Routing und Budget; WELCHE Artefakte migriert sind, sagt `ai.conformance_kanon`
+ * (Stand 2026-09-10: Basisrezept + Verkaufsgericht). Nicht migrierte Artefakte behalten
  * den bisherigen Präfix-Lader. Liefert Regelverstöße mit §-Referenz + Schweregrad.
  *
  * Slice 1: read-only. Persistiert nichts ausser dem Gateway-Audit. Die Ablage
@@ -133,9 +135,12 @@ class ConformanceService
     {
         $auftrag = $adapter->pruefauftrag($team, $id);
 
-        $options = ['target_table' => $auftrag['target_table'], 'target_id' => $id];
-        if (($auftrag['kontext']['artefakt_typ'] ?? '') === 'Basisrezept/Komponente') {
+        $artefakt = (string) ($auftrag['artefakt'] ?? '');
+        $options = ['target_table' => $auftrag['target_table'], 'target_id' => $id, 'conformance_artefakt' => $artefakt];
+        if (ConformanceKnowledge::kanonKeyFuer($artefakt) !== null) {
             // C4: der Gateway baut diesen migrierten Prüfkontext selbst. Kein Präfix-Fallback.
+            // Die Weiche hängt am stabilen Artefakt-Schlüssel, NICHT mehr am Anzeigetext im
+            // Kontext — der wandert in den Prompt und wäre damit umformulierbar.
             if ((int) auth()->user()?->currentTeamRelation?->id !== (int) $team->id) {
                 throw new \RuntimeException('Prüfteam und aktives KI-Team stimmen nicht überein.');
             }

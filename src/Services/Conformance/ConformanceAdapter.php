@@ -31,7 +31,18 @@ interface ConformanceAdapter
     /**
      * Der Prüfauftrag für EIN Artefakt: was beschrieben und wogegen geprüft wird.
      *
+     * `artefakt` ist der STABILE Domänen-Schlüssel (`basisrezept|vk|gp|la`) und entscheidet,
+     * ob der zentrale Wissensaufbau greift ({@see \Platform\FoodAlchemist\Services\Knowledge\ConformanceKnowledge}).
+     *
+     * ★ Bis 2026-09-10 traf diese Entscheidung ein String-Vergleich auf `kontext['artefakt_typ']`
+     * — einen deutschen ANZEIGETEXT, der über den Kontext in den Prompt wandert. Wer ihn aus
+     * Prompt-Gründen umformuliert hätte, hätte den migrierten Pfad stumm abgeschaltet und wäre
+     * ohne Fehlermeldung auf den Präfix-Lader zurückgefallen — genau der stille Rückfall, den
+     * die Migrations-Regel von Spec 52 verbietet. `artifactType()` taugte nicht als Ersatz:
+     * Basisrezept und VK teilen sich dort bewusst „recipe" (dieselbe Tabelle).
+     *
      * @return array{
+     *     artefakt: string,
      *     kontext: array<string, mixed>,
      *     regelwerk_praefixe: array<int, string>,
      *     target_table: string
