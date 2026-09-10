@@ -2,6 +2,7 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 
 /**
@@ -27,8 +28,27 @@ use Illuminate\Support\Facades\Schema;
  *
  * Reihenfolge: erst `_chunks` (FK auf `_sections`), dann `_sections`.
  *
- * ⚠ Vor dem Drop wird gezählt. Sind wider Erwarten Zeilen drin, bricht die Migration ab statt
- * Daten wegzuwerfen — dieselbe Vorsicht wie in `000010`.
+ * ★ **Korrektur 2026-09-09 — der erste Anlauf hat den demo-Deploy blockiert.**
+ *
+ * Die Migration warf ab, wenn Zeilen drin waren, „weil sie nie einen Leser hatten". Auf demo
+ * liegen aber **2.574 Zeilen in `_chunks`** — jemand hat `knowledge-sectionize` gefahren.
+ * Ergebnis: `migrate` schlug fehl, und weil eine fehlgeschlagene Migration den ganzen Deploy
+ * abbricht, war ab da JEDER Deploy blockiert, auch fremde.
+ *
+ * Zwei Fehler, beide meine:
+ *   1. Ich habe „die Tabellen sind leer" BEHAUPTET, statt es auf demo zu messen. Der Satz
+ *      stammte aus dem Docblock von `2026_09_05_000010` („bis hier bewusst LEER") — der galt
+ *      für `_canon`, nicht für `_chunks`.
+ *   2. Der Riegel prüfte das falsche Kriterium. Zeilen sind kein Beleg für Nutzung; der
+ *      Beleg für Nutzung ist ein LESER. Und den gibt es nicht — `grep` über `src/` und
+ *      `resources/` findet null Zugriff auf `knowledge_sections`/`knowledge_chunks`
+ *      (2026-09-09 geprüft, nach dem Löschen von Sectionizer/Chunker/Kommando). Die Zeilen
+ *      sind abgeleitete Daten aus `knowledge_documents`, die nichts konsumiert.
+ *
+ * Deshalb: droppen und die Zahl protokollieren, statt abbrechen. Die Daten sind nach dem
+ * Wegfall des Producers nicht mehr erzeugbar — das ist in Ordnung, denn der Weg wurde am
+ * 2026-09-05 verworfen (Dominique: „ein Dossier = ein Thema"), und wer die Abschnitts-Idee
+ * neu aufgreift, baut sie gegen den dann geltenden Stand.
  */
 return new class extends Migration
 {
@@ -38,14 +58,12 @@ return new class extends Migration
             if (! Schema::hasTable($tabelle)) {
                 continue;
             }
+
+            // Die Zahl ins Log, nicht in eine Exception: sie ist Beleg, kein Hindernis.
+            // Wer je wissen will, wie viel abgeleitetes Material hier lag, findet es hier.
             $zeilen = DB::table($tabelle)->count();
-            if ($zeilen > 0) {
-                throw new RuntimeException(
-                    "«{$tabelle}» enthält {$zeilen} Zeile(n). Der Drop ist auf LEERE Tabellen ausgelegt "
-                    .'(sie hatten nie einen Leser). Erst klären, wer sie befüllt hat — '
-                    .'`foodalchemist:knowledge-sectionize` ist mit dieser Migration entfernt.'
-                );
-            }
+            Log::info('foodalchemist.spec52.f5.drop', ['tabelle' => $tabelle, 'zeilen' => $zeilen]);
+
             Schema::drop($tabelle);
         }
     }
