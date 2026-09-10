@@ -2490,3 +2490,74 @@ Test-Sandbox per `cp -al`, der bestehende Symlink wird **nicht** umgebogen.
   (`26_LLM_MCP_Funktionsmatrix.md`) gegen die Live-Steuerdaten. Die Doku ist an mindestens
   einer Stelle veraltet (`vk.behaelter` existiert laut Spec 50 nicht mehr). Der Deckungs-Bericht
   aus A2 muss gegen `config('foodalchemist.prompts')` laufen, nicht gegen die Doku.
+
+---
+
+## Auslieferung Etappen B/E/D4 + Arten/Achsen + Lauf-Snapshot — 2026-09-10
+
+`origin/main` **`3c977e94`** (PR #64), demo **`714c531`**, Migrationen Batch 289, 0 offen.
+Volle Suite vor dem Deploy: **4.271 / 4.265 passed / 6 skipped / 0 Fehler**, 22.181
+Assertions, 45:38. Nach dem Deploy strukturell geprüft: alle sechs neuen Schema-Objekte
+vorhanden, **73 Routings und 29 Kanon-Zeilen unverändert**, `routings.art` überall NULL —
+der neue Arten-Pfad ist inert, weil H3 (Bestand markieren) fehlt. So gewollt.
+
+### Etappe E gemessen — Mechanik geliefert, Abnahme verfehlt
+
+⚠ **Die Recall-Sonde ist für Etappe E die falsche Sonde.** `wissen-recall-probe` ruft
+`KnowledgeEmbeddingService::searchDocIds()`, also reine Vektorsuche; RRF sitzt in
+`KnowledgeSearchService`. Ihre Werte von heute bleiben als Embedding-Baseline gültig
+(Kopf **81,7 %** = 98/120, Schwanz **55,0 %** = 66/120, Lücke 26,7 Punkte — identisch mit
+dem 07.09.-Wert), sind aber kein Nachweis für den Rechner. Gemessen wurde stattdessen mit
+den vier Proben aus Befund C über `knowledge.SEARCH`:
+
+| Probe | vorher (alter Rechner) | nachher (RRF) |
+|---|---|---|
+| „Gramm Hauptkomponente pro Person" | Platz 5 | **Platz 11** |
+| „Naming-Syntax Basisrezept Typ-Vokabular" | 1 + 2 | 1 + 3 |
+| „Erdapfel" | 5 | 5 |
+| „Akkord-Theorie" | 1 (nur lexikalisch) | 1 (hybrid) |
+
+**Vorher war die Rangfolge bei Prosa alphabetisch nach Slug** — alle zehn Treffer hatten
+Score 1. Das ist schärfer als Befund C es formuliert hatte („Begriffszählung"). Der neue
+Rechner liefert echte Fusion mit getrenntem `lexical_rank`/`semantic_rank`, unterscheidende
+Scores und ein sichtbares `candidate_limit: 100` (Grundsatz C erfüllt).
+
+**Warum Probe 1 fällt** — nachgerechnet gegen `KnowledgeSearchService::RRF_K = 60`,
+Score `1/(60+lexRang) + 1/(60+semRang)`, fehlende Liste 0.0:
+
+- `mengen_defaults--hauptgang-komponenten`: semantic_rank **1**, lexical_rank **null**
+  → `1/61 = 0,016393`
+- Spitzenreiter `gericht_kreation--leitidee`: lex 16 + sem 2 → `1/76 + 1/62 = 0,029287`
+
+Die Obergrenze für ein Dossier, das nur ein Verfahren findet, liegt damit unter dem, was
+jedes mittelmäßig doppelt gefundene erreicht. Ein kleineres `k` dreht das nicht — RRF
+bevorzugt Doppel-Präsenz konstruktionsbedingt.
+
+### ★ Die E1-Abnahme widerspricht Grundsatz A derselben Spec
+
+Grundsatz A sagt: *„ein verbindlicher Mengen-Standard darf nicht davon abhängen, ob die
+Suche ihn unter den ersten drei Treffern findet."* `mengen_defaults--hauptgang-komponenten`
+ist genau so ein Fall — ein **Datenwerk**. Die E1-Abnahme („Platz 1–3 der Suche") ist damit
+die falsche Prüfung und wird hiermit korrigiert: der Nachweis für dieses Dossier ist
+**B6/H3** (`art=datenwerk` + Achsen-Auflösung), nicht der Suchrang. `DatenwerkResolver` und
+die Spalten sind seit diesem Deploy live; es fehlt die Bestandsmarkierung.
+
+**Kein Betriebsproblem:** das Dossier steht `pflicht` im Kanon von `recipe.generator` **und**
+`vk.generator`. Betroffen ist der Pull-Pfad (MCP-Agent, Sidebar-Mikrofon) und der Browser,
+nicht die Generatoren.
+
+### C4-Rollout — Befund vor der Umsetzung
+
+Die Weiche „läuft der migrierte Prüfpfad?" ist heute an zwei Stellen ein String-Vergleich
+auf `'Basisrezept/Komponente'` (`ConformanceService:137`, `AiGatewayService:65`) — einen
+Anzeigetext, den `RecipeConformanceAdapter:156` erzeugt und der über `$context` **in den
+Prompt** wandert. Wer ihn umformuliert, schaltet C4 stumm ab; der Rückfall auf den
+Präfix-Lader passiert ohne Fehlermeldung und verletzt die Migrations-Regel dieser Spec.
+Schritt 0 des Rollouts: `pruefauftrag()` liefert `artefakt` als stabilen Domänen-Schlüssel
+(`basisrezept|vk|gp|la|konzept`), das Gateway schlägt den Kanon-Key in der Config nach.
+
+Und der Rollout ist zur Hälfte keine Code-Aufgabe. Kanon-Bestand (verifiziert an
+`database/kanon/kanon-team-6.json`, 29 Zeilen): `recipe.generator` 13 · **`vk.generator` 12**
+· `concept.brief_geruest` 3 · `foodbook.grundgeruest` 1 · **GP 0** · **LA 0**. VK kann sofort
+folgen; GP und LA brauchen erst kuratierte Kanon-Zeilen, sonst wirft
+`ConformanceKnowledge::assertAvailable()` zur Laufzeit statt zurückzufallen.
