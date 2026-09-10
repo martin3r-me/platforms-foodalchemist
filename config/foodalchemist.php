@@ -564,8 +564,12 @@ return [
             'format.grundgeruest' => 17200,
             'concept.wording' => 9200,
             'foodbook.kundentext' => 9200,
-            'recipe.ueberarbeiten' => 18000,
-            'vk.ueberarbeiten' => 18000,
+            // C5: die Selbstheilung ERBT den Kanon ihres Erzeugers (sonst repariert sie einen
+            // §-Verstoss, ohne den § zu kennen). Damit gilt hier dieselbe Rechnung wie beim
+            // Generator: Pflichtkanon + eigenes Retrieval. Mit den alten 18.000 haette der
+            // Aufbau geworfen, weil allein der Kanon ~36.000 Zeichen traegt.
+            'recipe.ueberarbeiten' => 48000,
+            'vk.ueberarbeiten' => 49000,
             'recipe.review' => 18000,
             'vk.review' => 18000,
             'foodbook.grundgeruest' => 12200,

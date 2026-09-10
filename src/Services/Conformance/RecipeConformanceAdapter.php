@@ -210,7 +210,38 @@ class RecipeConformanceAdapter implements ConformanceAdapter
             return;
         }
 
-        $vorschlag = app(AiGatewayService::class)->propose($r->is_sales_recipe ? 'vk.ueberarbeiten' : 'recipe.ueberarbeiten', [
+        $promptKey = $r->is_sales_recipe ? 'vk.ueberarbeiten' : 'recipe.ueberarbeiten';
+
+        /*
+         * Spec 52/C5 — die Selbstheilung war der einzige Schritt OHNE jedes Wissen.
+         *
+         * Gemessen 2026-09-10: `propose()` bekam hier genau ein Argument. Kanon gibt es für
+         * `recipe.ueberarbeiten` nicht (keine Zeile), Bindungen sind seit Paket 3 abgeschafft,
+         * und `contextFor()` wurde nie gerufen. Das Modell sollte also einen §-Verstoß
+         * korrigieren, ohne den § zu kennen.
+         *
+         * Zwei Korrekturen, beide aus Befund I5/I6:
+         *  · Regelquelle ist der KANON DES GENERATORS — dieselben verbindlichen §§, gegen die
+         *    das Rezept erzeugt und geprüft wurde. Nicht drei per Ähnlichkeit gewürfelte aus 61.
+         *  · Suchanlass ist der BEFUND (Paragraph + Begründung), nicht die Rezeptbeschreibung.
+         *    Bei „Menge auf 4 Portionen" entschied sonst der Text „Cremiges Karottenpüree mit
+         *    Ingwer", welches Fachwissen mitkam.
+         *
+         * Kein stiller Ausfall: fehlt der Kanon, wirft der Aufbau — dann ist die Konfiguration
+         * kaputt und nicht die Heilung heimlich blind.
+         */
+        $kanonKey = $r->is_sales_recipe ? 'vk.generator' : 'recipe.generator';
+        $anlass = trim($direktive.' '.collect($befunde)
+            ->map(fn ($b) => trim((string) ($b['paragraph'] ?? '').' '.(string) ($b['reason'] ?? '')))
+            ->filter()->implode(' '));
+        $wissen = app(\Platform\FoodAlchemist\Services\Ai\KnowledgeContextService::class)->contextFor(
+            $team, $promptKey, $anlass !== '' ? $anlass : (string) $r->name,
+            null, [], ['_kanon_prompt_key' => $kanonKey],
+        );
+        $optionen = \Platform\FoodAlchemist\Services\Ai\KnowledgeContextService::proposeOptionen($wissen)
+            + ['_kanon_prompt_key' => $kanonKey];
+
+        $vorschlag = app(AiGatewayService::class)->propose($promptKey, [
             'anweisung' => $direktive,
             'name' => $r->name,
             'kategorie' => $r->is_sales_recipe ? $r->dishMainGroup?->code : $r->kategorie?->label,
@@ -223,7 +254,7 @@ class RecipeConformanceAdapter implements ConformanceAdapter
                 'quantity' => (float) $z->quantity,
                 'einheit_slug' => $z->unit?->slug,
             ])->values()->all(),
-        ]);
+        ], $optionen);
 
         $werte = $vorschlag->werte;
         $conf = max(0.0, min(1.0, $vorschlag->confidence));

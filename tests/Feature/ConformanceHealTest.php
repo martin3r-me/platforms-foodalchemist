@@ -134,3 +134,27 @@ it('Ablage: wertfreier Fingerprint dedupliziert (seen_count↑), verworfen bleib
     expect($z['verschwunden'])->toBe(1);
     expect($row->fresh()->status)->toBe('verschwunden');
 });
+
+/**
+ * Spec 52/C5 — die Selbstheilung war der einzige Schritt ohne jedes Wissen.
+ *
+ * Gemessen 2026-09-10: `RecipeConformanceAdapter::revise()` rief `propose()` mit EINEM
+ * Argument. `recipe.ueberarbeiten` hat keine Kanon-Zeile, Bindungen sind seit Paket 3
+ * abgeschafft, `contextFor()` wurde nie gerufen — das Modell sollte einen §-Verstoss
+ * korrigieren, ohne den § zu kennen.
+ *
+ * Geprueft wird am AUDIT, nicht am Prompt-Wortlaut: `prompt_parts.kanon` ist eine Zahl,
+ * kein Satz, und bleibt gueltig, wenn jemand die Formulierung aendert.
+ */
+it('C5: die Selbstheil-Runde erbt den Kanon ihres Erzeugers — der verletzte § steht im Prompt', function () use ($befund) {
+    ConformanceHealStub::bind([[$befund()], []], ['name' => 'Tomate: gewürfelt']);
+
+    app(ConformanceService::class)->pruefeUndHeile($this->rootTeam, 'basisrezept', $this->rezept->id);
+
+    $revise = DB::table('foodalchemist_ai_call_log')
+        ->where('feature', 'recipe.ueberarbeiten')->orderByDesc('id')->first();
+
+    expect($revise)->not->toBeNull();
+    $teile = json_decode((string) $revise->prompt_parts, true) ?: [];
+    expect($teile['kanon'] ?? 0)->toBeGreaterThan(0);
+});
