@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Platform\Core\Services\EmbeddingProviderRegistry;
 use Platform\Core\Services\EmbeddingService;
+use Platform\Core\Models\Team;
 use Throwable;
 
 /**
@@ -592,9 +593,46 @@ class KnowledgeEmbeddingService
      *
      * @return list<int>
      */
-    private function searchPartitions(): array
+    /**
+     * E2: Semantik-Kandidaten innerhalb der bereits gefilterten Dokumentmenge.
+     * Der Store-Contract kennt keine Dokument-ID-Filter. Deshalb ein eigenes,
+     * begrenztes Suchfenster vergrößern, statt fremde Kategorien die Endplätze
+     * verbrauchen zu lassen. Kandidatenlimit und Endauswahl sind unabhängig.
+     *
+     * @param list<int> $eligibleIds
+     * @return list<int>
+     */
+    public function searchEligibleDocIds(string $query, array $eligibleIds, int $candidateLimit, ?Team $team = null): array
     {
-        $team = Auth::user()?->currentTeamRelation;
+        if (trim($query) === '' || $eligibleIds === [] || $candidateLimit <= 0 || ! $this->isProviderAvailable()) {
+            return [];
+        }
+        $eligible = array_fill_keys($eligibleIds, true);
+        $maxWindow = max($candidateLimit, min(10000, (int) config('foodalchemist.knowledge_search.semantic_scan_limit', 5000)));
+        $window = min($maxWindow, max(100, $candidateLimit * 3));
+        $minScore = (float) config('foodalchemist.semantic_search.min_score', 0.30);
+        do {
+            $hits = $this->searchMerged($query, self::ENTITY_TYPE, $window, $minScore, $team);
+            $ids = [];
+            foreach ($hits as $hit) {
+                $id = (int) $hit['entity_id'];
+                if (isset($eligible[$id])) {
+                    $ids[] = $id;
+                    if (count($ids) >= $candidateLimit) {
+                        return $ids;
+                    }
+                }
+            }
+            if (count($hits) < $window || $window >= $maxWindow || count($ids) >= count($eligible)) {
+                return $ids;
+            }
+            $window = min($maxWindow, $window * 2);
+        } while (true);
+    }
+
+    private function searchPartitions(?Team $team = null): array
+    {
+        $team ??= Auth::user()?->currentTeamRelation;
         if ($team === null) {
             return [$this->globalTeamId()];
         }
@@ -612,11 +650,11 @@ class KnowledgeEmbeddingService
      *
      * @return list<array{entity_id: int, score: float}>
      */
-    private function searchMerged(string $query, string $entityType, int $limit, float $minScore): array
+    private function searchMerged(string $query, string $entityType, int $limit, float $minScore, ?Team $team = null): array
     {
         $service = app(EmbeddingService::class);
         $best = [];   // entity_id => max. Score
-        foreach ($this->searchPartitions() as $partition) {
+        foreach ($this->searchPartitions($team) as $partition) {
             try {
                 $hits = $service->search(
                     teamId: $partition,

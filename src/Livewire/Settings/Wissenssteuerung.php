@@ -38,6 +38,8 @@ use Platform\FoodAlchemist\Support\TeamScope;
  */
 class Wissenssteuerung extends Component
 {
+    public array $artForm = ['feature' => '', 'art' => 'fachwissen', 'mode' => 'discovery', 'max_docs' => '3', 'max_chars_per_doc' => ''];
+
     public string $bereich = '';
 
     public bool $nurBefunde = false;
@@ -72,6 +74,25 @@ class Wissenssteuerung extends Component
     private function darfSchreiben(): bool
     {
         return TeamScope::mayWrite(null, Auth::user()?->currentTeamRelation);
+    }
+
+    public function editArt(int $id): void
+    {
+        $row = DB::table('foodalchemist_knowledge_routings')->where('id', $id)->whereNotNull('art')->first();
+        if ($row === null) return;
+        $this->artForm = ['feature' => $row->feature, 'art' => $row->art, 'mode' => $row->mode, 'max_docs' => (string) ($row->max_docs ?? 3), 'max_chars_per_doc' => (string) ($row->max_chars_per_doc ?? '')];
+    }
+
+    public function saveArt(): void
+    {
+        $this->fehler = $this->hinweis = null;
+        if (! $this->darfSchreiben()) { $this->fehler = 'Arten-Routings sind global — nur das Master-Team darf sie ändern.'; return; }
+        try {
+            app(\Platform\FoodAlchemist\Services\KnowledgeRoutingService::class)->setArt(
+                $this->artForm['feature'], $this->artForm['art'], $this->artForm['mode'], (int) $this->artForm['max_docs'],
+                $this->artForm['max_chars_per_doc'] === '' ? null : (int) $this->artForm['max_chars_per_doc']);
+            $this->hinweis = 'Arten-Routing gespeichert.';
+        } catch (\InvalidArgumentException $e) { $this->fehler = $e->getMessage(); }
     }
 
     public function edit(int $id): void
@@ -122,6 +143,10 @@ class Wissenssteuerung extends Component
         ];
 
         if ($this->editId !== null) {
+            if (DB::table('foodalchemist_knowledge_routings')->where('id', $this->editId)->whereNotNull('art')->exists()) {
+                $this->fehler = 'Bitte Arten-Routings über den Arten-Editor bearbeiten.';
+                return;
+            }
             DB::table('foodalchemist_knowledge_routings')->where('id', $this->editId)->update($daten);
             $this->hinweis = 'Routing gespeichert — wirkt ab dem nächsten KI-Aufruf.';
             $this->cancel();

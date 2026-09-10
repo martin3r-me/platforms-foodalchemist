@@ -27,11 +27,11 @@ it('rendert das Wissen gruppiert je Kanal + bereinigt Präfixe/Versionen', funct
     expect($html)->toContain('Verwendetes Wissen')
         ->toContain('Cross-Cutting')->toContain('Domänen')->toContain('Niveau')->toContain('Pairing-Anker')
         ->toContain('>tomate<')            // graph:-Präfix entfernt
-        ->toContain('>substitutionen<')    // @vN am Chip abgeschnitten
+        ->toContain('>substitutionen@v1<') // Versionsstand bleibt sichtbar
         ->toContain('Vinaigrette-Basis')   // gematchtes Template
         ->toContain('12.345')              // Zeichen-Budget, dt. formatiert
         ->not->toContain('graph:tomate')   // Präfix nicht mehr roh sichtbar
-        ->not->toContain('@v1');           // Version wird am Chip gekappt
+        ->toContain('saisonkalender@v2');  // auch unterschiedliche Versionen erkennbar
 });
 
 it('ist fail-safe: null oder leerer Kontext rendert nichts (Panel verschwindet)', function () {

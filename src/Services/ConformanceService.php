@@ -15,8 +15,9 @@ use Platform\FoodAlchemist\Support\DossierText;
 /**
  * Schicht 3 — der GENERISCHE Konformitäts-Critic. EIN Prompt (`conformance.check`),
  * EIN Service, ein kleiner Adapter je Artefakt-Typ. Prüft ein Artefakt §-genau
- * gegen die VOLLEN Regelwerk-Dossiers (bewusst ungekappt — hier zählt Vollständigkeit,
- * nicht Relevanz) und liefert Regelverstöße mit §-Referenz + Schweregrad.
+ * gegen den expliziten Generator-Kanon bei Basisrezepten. Der Gateway baut diesen
+ * Kontext mit Routing und Budget. Weitere Artefakte nutzen bis zu ihrer Migration
+ * den bisherigen Präfix-Lader. Liefert Regelverstöße mit §-Referenz + Schweregrad.
  *
  * Slice 1: read-only. Persistiert nichts ausser dem Gateway-Audit. Die Ablage
  * (artefakt-agnostische Findings-Tabelle) und die Selbstheil-Runde (bei Verstoß
@@ -33,7 +34,7 @@ class ConformanceService
      */
     public function pruefe(Team $team, string $typ, int $id): array
     {
-        return $this->pruefeAdapter($team, $this->adapter($typ), $id);
+        return $this->imWissenslauf($team, $typ, $id, fn () => $this->pruefeAdapter($team, $this->adapter($typ), $id));
     }
 
     /**
@@ -44,6 +45,19 @@ class ConformanceService
      * @return array{gesamturteil:string, confidence:float, befunde:array<int,array<string,mixed>>, geheilt:int, ablage:array<string,int>}
      */
     public function pruefeUndHeile(Team $team, string $typ, int $id, ?int $runId = null): array
+    {
+        return $this->imWissenslauf($team, $typ, $id, fn () => $this->pruefeUndHeileImLauf($team, $typ, $id, $runId));
+    }
+
+    private function imWissenslauf(Team $team, string $typ, int $id, callable $action): array
+    {
+        if (! in_array($typ, ['recipe', 'basisrezept', 'vk', 'gericht'], true)) return $action();
+        $recipe = app(RecipeService::class)->detailAnySicht($team, $id);
+        if ($recipe === null) throw new \RuntimeException('Rezept nicht gefunden oder nicht sichtbar.');
+        return app(\Platform\FoodAlchemist\Services\Knowledge\KnowledgeRunService::class)->withRecipe($team, $recipe, $action);
+    }
+
+    private function pruefeUndHeileImLauf(Team $team, string $typ, int $id, ?int $runId = null): array
     {
         $adapter = $this->adapter($typ);
         $vorher = $this->pruefeAdapter($team, $adapter, $id);
@@ -119,16 +133,22 @@ class ConformanceService
     {
         $auftrag = $adapter->pruefauftrag($team, $id);
 
-        $wissen = $this->ladeRegelwerke($team, $auftrag['regelwerk_praefixe']);
-        if ($wissen === '') {
-            throw new \RuntimeException('Kein aktives Regelwerk-Dossier für die Prüfung gefunden.');
+        $options = ['target_table' => $auftrag['target_table'], 'target_id' => $id];
+        if (($auftrag['kontext']['artefakt_typ'] ?? '') === 'Basisrezept/Komponente') {
+            // C4: der Gateway baut diesen migrierten Prüfkontext selbst. Kein Präfix-Fallback.
+            if ((int) auth()->user()?->currentTeamRelation?->id !== (int) $team->id) {
+                throw new \RuntimeException('Prüfteam und aktives KI-Team stimmen nicht überein.');
+            }
+        } else {
+            // Noch nicht migrierte Artefakte behalten ihren bisherigen Vertrag (Scope Etappe C).
+            $wissen = $this->ladeRegelwerke($team, $auftrag['regelwerk_praefixe']);
+            if ($wissen === '') {
+                throw new \RuntimeException('Kein aktives Regelwerk-Dossier für die Prüfung gefunden.');
+            }
+            $options['knowledge'] = $wissen;
         }
 
-        $vorschlag = app(AiGatewayService::class)->propose(
-            'conformance.check',
-            $auftrag['kontext'],
-            ['knowledge' => $wissen, 'target_table' => $auftrag['target_table'], 'target_id' => $id],
-        );
+        $vorschlag = app(AiGatewayService::class)->propose('conformance.check', $auftrag['kontext'], $options);
 
         $roh = $vorschlag->werte['befunde'] ?? [];
         $befunde = is_array($roh) ? $this->normalisiere($roh) : [];

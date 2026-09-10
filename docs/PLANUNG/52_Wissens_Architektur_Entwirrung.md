@@ -12,6 +12,50 @@
 > „Warum kein Modul-Umbau".
 
 
+## Umsetzung 2026-09-09 — B1/D4 (Branch feat/wissen-budget)
+
+- Eine Budgetquelle `ai.knowledge_budget` pro Prompt-Key zählt die gerenderten Kanon- und Retrieval-Blöcke einschließlich Überschriften und Trennern. Die Startwerte führen überwiegend die bisherigen beiden Obergrenzen zusammen; sie sind keine neue Live-Korpus-Messung.
+- Pflichtkanon wird vor Retrieval reserviert. Übersteigt die kombinierte Pflichtmenge das Budget, stoppt der Modellaufruf mit einem expliziten Befund. Optionale Quellen passen vollständig oder entfallen; spätere kleinere Quellen bleiben möglich.
+- Keine Dossier-Kürzung mehr im Kontextbau. `max_chars_per_doc` bleibt als inaktives Kompatibilitätsfeld erhalten. Der explizit gekürzte MCP-GET-Leseauszug ist davon unabhängig.
+- Gateway und Vorschau wenden dasselbe Gesamtbudget an, auch auf übergebenes Rohwissen. Der typisierte Kontextvertrag aus Etappe C bleibt offen. Das Budget betrifft Wissenszeichen, nicht den gesamten Prompt oder das Tokenlimit.
+- Profil, Versorgung, Einstellungen und Vorschau zeigen das gemeinsame Budget. Arten/Achsen sind in der Basis enthalten; Korpus-Kuration und Live-Validierung stehen aus.
+- Basis `f1ff7c72`: vollständige Suite grün (4.243 Tests, 4.237 bestanden, 6 übersprungen). Erster B1/D4-Gesamtlauf: 4.249 Tests, 4.226 bestanden, 7 fehlgeschlagen, 10 Fehler, 6 übersprungen (26 Minuten).
+- Nacharbeit: gemeinsamer Kanon-Textrenderer löst die Budgetmessung vom KI-Gateway; dadurch bleiben Gateway-Testdoubles und die Rezeptanreicherung funktionsfähig. Vier Testverträge wurden auf vollständige Dossiers, automatische Kanon-Erkennung und expliziten Budgetabbruch umgestellt; der DB-Abfragetest bekommt Budget für drei vollständige Gewinner.
+- Alle 17 beanstandeten Fälle bestehen in den gezielten Nachläufen: zunächst 78 von 79, anschließend der korrigierte Abfragetest samt seinen zwei Nachbartests (3 von 3). Vollständiger Wiederholungslauf grün: 4.249 Tests, 4.243 bestanden, 6 übersprungen, 22.095 Assertions (25 Minuten), Commit `db9e9e88`. Noch nicht deployt.
+
+
+## Umsetzung 2026-09-09 — C4 erster Slice (Branch feat/wissen-conformance)
+
+- Scope laut Etappe C: Basisrezepte. `ConformanceService` übergibt für diese keinen selbst geladenen Regeltext mehr. Der Gateway baut Retrieval für `conformance.check` und bezieht den Kanon explizit aus `recipe.generator`.
+- Kein Rückfall auf Slug-Präfixe bei fehlendem Pflichtkanon. Fehlende/inaktive Pflichtquellen, fremdes aktives Team und Budgetüberschreitung stoppen vor dem Modell. Externe Wissensoptionen werden am migrierten Gateway-Eingang abgewiesen.
+- Das gemeinsame Prüfbudget für `conformance.check` beträgt 48.000 Zeichen (auch für die noch nicht migrierten Artefakttypen). Geroutetes Zusatzwissen bleibt im Userblock, der Kanon im Systemblock; die Quellen erscheinen im bestehenden Call-Log.
+- Beleg bei unverändertem Korpus: identischer System-Kanon-Fingerprint von Generator und Critic; vollständiges geroutetes Fachwissen; kein Präfix-Fallback; externe Wissenseinspeisung abgewiesen; fehlende zweite Pflichtquelle und zu kleines Budget blockieren.
+- Gezielte Tests: 41 bestanden, 1 übersprungen; zusätzlicher Vertragslauf 20 bestanden. Vollständige Suite grün: 4.255 Tests, 4.249 bestanden, 6 übersprungen, 22.111 Assertions (knapp 25 Minuten), Commit `13c5d9ef`. Noch nicht deployt.
+- **C4 noch nicht vollständig abgenommen:** die Kanon-Versionsfixierung ist inzwischen im nachfolgenden C1-Slice implementiert; vollständiger Profil-Snapshot und End-to-End-Abnahme fehlen weiterhin. Der generische Profil-/Vorschaupfad kennt die artefaktspezifische Generator-Kanonquelle noch nicht; die Anzeige muss mit C7 nachgezogen werden. VK/GP/LA behalten zunächst den Präfix-Lader. Selbstheil-Kontext (C5), typisierter Gesamtvertrag (C1/C2) und Sidebar-Sprache (C3) sind offen.
+
+
+## Umsetzung 2026-09-10 — C1 Lauf-ID und Kanon-Snapshot (Branch feat/wissen-lauf-snapshot)
+
+- Eine neue Basisrezept-Generierung legt einen unveränderlichen Kanon-Snapshot mit UUID an. Gespeichert werden sichtbare explizite Kanon-Bindungen sämtlicher Scopes/Rollen, die vollständigen Quelltexte, Dossierversionen und bereits vorhandene Integritätsbefunde. Der Hash ist gegen JSON-Schlüssel-Umsortierung stabil.
+- Die Lauf-ID liegt am erzeugten Rezept. Anreicherung, Review und Konformität inklusive ihrer Heilrunde können den Stand wieder aufnehmen. Enrich-/Conformance-Jobs tragen die beim Dispatch ermittelte ID über Queue-Grenzen; ein inzwischen erneuerter Rezeptzeiger überschreibt sie nicht.
+- Der explizite Re-Check in der Planungs-Leitstelle beginnt einen neuen Wissenslauf. Alte Rezepte ohne Laufzuordnung verwenden weiter Live-Wissen. VK-Generierungen und der Override-/Streaming-Einstieg erzeugen in diesem Slice keinen neuen Snapshot.
+- Der Kanon-Schreibdienst bleibt unverändert: Dossier-/Bindungsänderungen beeinflussen neue Snapshots, aber nicht laufende Prüfungen. Fehlende/beschädigte Snapshots oder falsche Teams führen nicht zu einem Live-Fallback. Der aktive Kontext wird mit `finally` zurückgesetzt, auch bei verschachtelten Läufen und Exceptions.
+- Call-Log: `knowledge_run_id` und `knowledge_snapshot_hash`. Die Rezept-Aufrufhistorie findet damit auch Folge-Calls ohne eigenes `target_id`, einschließlich früherer am Rezept verankerter Läufe, mit unverändertem Teamfilter.
+- Gezielte Prüfung: erster Lauf 73/74 (ein falsch benannter Team-Testwert, korrigiert), danach 43/43 und 22/22. Belegt sind Wiederaufnahme nach Änderungen, Kopien statt veränderlicher Snapshot-Referenzen, Queue-Serialisierung, Generator-Verknüpfung, gemeinsames Audit, Teamgrenzen und Kontextbereinigung. Vollständige Suite nach MCP-Korrektur grün, siehe folgenden Punkt. Nicht deployt.
+- Nacharbeit zum ersten Gesamtlauf (4.262 Tests: 4.255 bestanden, 1 fehlgeschlagen, 6 übersprungen): MCP lieferte das Team explizit, der Gateway las den bisherigen globalen Auth-Nutzer. `RecipesGenerateTool` setzt nun für den vollständigen Aufruf einen temporären Nutzer-Klon mit dem MCP-Team und stellt den ursprünglichen Auth-Kontext in `finally` wieder her, ohne Login oder gespeicherten Teamwechsel. 53 gezielte Tests grün, einschließlich Rezept-/Snapshot-/Audit-Tenancy und Fehlerpfad. Vollständiger Wiederholungslauf grün auf `02b74488`: 4.263 Tests, 4.257 bestanden, 6 übersprungen, 22.154 Assertions, 29 Min. 9 Sek. Log: `/tmp/wissen-lauf-full-rerun.log`. Keine offenen Testfehler.
+- **Grenze:** Dies ist ein Kanon-Snapshot, noch kein vollständiger Profil-/Korpus-Snapshot. Discovery, Routing, Datenwerte, Budgets und Prompt-Texte bleiben live. Der vollständige getippte `RecipeAuftrag` und der Entzug externer Wissensoptionen bei allen Generator-Aufrufen (C2) sind noch offen. Die artefaktspezifische Vorschau/Inspektor-Anzeige (C7), Befund-Erdung (C5), Sidebar-Sprache und der Abnahmelauf bleiben ausstehend.
+
+
+## Umsetzung 2026-09-10 — C7 Vorschau und historische Aufrufe (Branch feat/wissen-inspektor)
+
+- Der Basisrezept-Critic und seine Vorschau verwenden `ConformanceKnowledge` für Kanonquelle und Integritätsprüfung. Vorschau für `conformance.check` zeigt explizit `recipe.generator`; andere Artefakttypen werden in dieser Vorschau als noch nicht unterstützt abgewiesen. Gateway-Budget und Quellenauswahl bleiben dieselben.
+- Rezept-/Gericht-Detailpanels zeigen die KI-Aufrufhistorie einschließlich Folgeaufrufen, Lauf-ID, Kanon-Hash, Fehlern, Größen und Quellen mit Versionsnummer. Die Historie wird auch angezeigt, wenn kein Generator-Eintrag existiert.
+- Historische Quelltexte kommen ausschließlich aus dem verifizierten Snapshot und werden auf die im jeweiligen Audit protokollierten Slug@Version-Einträge begrenzt. Eine heutige Dossieränderung ersetzt niemals den alten Text. Texte werden escaped dargestellt. Fehlende/beschädigte Snapshots erscheinen als Hinweis; Quellen ohne gespeicherten Volltext bleiben ausdrücklich nur Referenzen.
+- Keine historische Discovery-Neuberechnung: Routing, Budgets, Prompt-Texte und Suchwissen wurden nicht vollständig eingefroren. Der Kanon-Hash ist weiterhin kein vollständiger Profil-Fingerprint. Ein Snapshot wird innerhalb eines Historie-Aufbaus nur einmal je Lauf geladen.
+- Die generische Profil-Kuration (`WissensProfilService`) bleibt prompt-key-basiert und ist noch keine artefaktspezifische Critic-Profilansicht. C0/C1/C2, C5, C3 und Live-Abnahme bleiben offen. Neue ausgelassene Quellenlisten/Prüfbefund-Volltexte werden in diesem Slice nicht nachträglich ins Audit erfunden; die bestehenden Größen- und Fehlerdaten werden angezeigt.
+- Tests: 39/40 im ersten gezielten Lauf; einzige Abweichung war die alte Erwartung, Versionsnummern zu verbergen. Darstellungstest auf sichtbare Versionen geändert; abschließender gezielter Lauf grün: 40/40, 159 Assertions. Vollständige Suite auf `24664d91` grün: 4.265 Tests, 4.259 bestanden, 6 übersprungen, 22.169 Assertions, 34 Min. 14 Sek. Log `/tmp/wissen-inspektor-full.log`. Nicht deployt.
+
+
 ## Context
 
 Symptom (Dominique, 2026-09-07): Beim Erstellen eines **Basisrezepts** oder eines **Gerichts**
@@ -1913,6 +1957,207 @@ ein eigener, umkehrbarer Handgriff (`knowledge.UNBIND`), der zum Korpus-Umbau pa
 bleiben `knowledge_bindings` und `knowledge_layers` als Tabellen: `knowledge_bindings.GET`
 liest sie als Bestandsnachweis, und der Wissens-Browser löst die Labels daraus auf. Der
 Tabellen-Drop gehört zu `F5`, zusammen mit `_sections`/`_chunks`.
+
+---
+
+## ▶ Arten und Achsen — Umsetzung 2026-09-09
+
+**Auftrag:** Arten und Achsen vor dem Korpus-Umbau nutzbar machen. Lokaler Branch
+`feat/wissen-arten-achsen`, auf `feat/wissen-rechner` (`dd7db2b6`). Keine Umklassifizierung
+bestehender Dossiers und keine erfundenen Mengenwerte. Noch nicht deployt.
+
+### H1-Rest: Art steuert den Verwendungsweg
+
+Die vorhandenen fünf Arten bleiben unverändert. `knowledge_routings` bekommt einen
+alternativen Selektor `art`; eine Zeile hat entweder Kategorie oder Art. Kein paralleler
+Steuerspeicher. Für Arten sind ausschließlich folgende Kombinationen zulässig:
+
+| Art | Modus | Wirkung |
+|---|---|---|
+| fachwissen | discovery / none | Kategorieübergreifende Suche oder bewusst aus |
+| referenz | discovery / none | Optionale, ausdrücklich als Inspiration markierte Suche |
+| datenwerk | resolve / none | Strukturierte Werte nach Geltung oder bewusst aus |
+| regel | kein Arten-Routing | Expliziter Kanon, einschließlich Achsen-Kanon |
+| ablauf | kein Arten-Routing | Bleibt im Agenten-Zugang, kein Retrieval-Kontext |
+
+Sobald ein Schritt Arten-Routings hat, bedienen seine Kategorie-Routings nur noch
+`art IS NULL`. Ohne Arten-Routing bleiben Fachwissen/Referenzen über die bisherigen
+Kategorie-Routings verfügbar. Regeln und Datenwerk-Prosa gelangen nicht mehr über diese
+Suchpfade in den Kontext. Die freie Inventarsuche in Browser/MCP zeigt weiterhin alle Arten.
+Globale Arten-Routings sind über Einstellungen und MCP mit derselben Master-Schreibgrenze
+pflegbar. Profile/Fingerprints und Versorgungsberichte zeigen den Art-Selektor mit an.
+
+### H2-Ausbau: Geltung am Dossier
+
+Das Feld `geltung` gehört zum Dossier und seiner Version. Unterstützt sind `gang`,
+`komponentenrolle`, `portionskontext`, `niveau`, `saison`, `warengruppe`, `occasion`, `sektor`
+und `format`. UND zwischen Achsen, ODER innerhalb der Werte einer Achse. Fehlende
+Auftragsparameter erfüllen eine Bedingung nicht. `level` wird als Niveau akzeptiert.
+
+Die Filterung erfolgt vor der Rangbildung/Top-K. Datenwerke werden ohne Suchrang anhand
+der Bedingungen aufgelöst. Achsen-Kanon und bisheriger Anlass-/Segment-Fallback bleiben
+für nicht umgestellten Bestand erhalten. Für Regeln bleibt die explizite Kanon-Zuordnung
+maßgeblich; Geltungsfilter am Dokument werden für Regel/Ablauf deshalb nicht scheinbar
+wirksam gespeichert. Die Restaurant-Lücke bleibt unbesetzt, bis ein fachlich passendes
+Dossier existiert — kein automatisches Umbiegen auf einen anderen Sektor.
+
+### B6/B7: Strukturierte Werte und ehrliche Lücken
+
+`datenwerte` ist eine Liste am Datenwerk, keine extrahierte Markdown-Tabelle. Ein Eintrag
+enthält Kennzahl, Minimum/Maximum (gleich für Einzelwert), Einheit, Bezugsgröße,
+Quelle/Fundstelle und optional zusätzliche Geltung. Dossier-Slug und Version ergänzen die
+Provenienz zur Laufzeit. Dossier- und Eintragsbedingungen müssen beide erfüllt sein.
+
+`DatenwerkResolver` führt keine Formeln aus; `ProportionService` bleibt der vorhandene
+Grammaturen-Rechner. Der Resolver wählt kuratierte Werte aus. Gleiche Werte behalten alle
+Quellen; unterschiedliche Werte, Einheiten oder Bezugsgrößen derselben Kennzahl ergeben
+`widerspruch` ohne gewählten Wert. Kein Treffer bzw. fehlende strukturierte Einträge ergeben
+`luecke`. Die Modellnachricht benennt beides ausdrücklich. Datenwerte und Lückenhinweise
+werden als Pflichtanteil budgetiert, nicht still weggeschnitten.
+
+UI und `knowledge.POST/PUT/GET/LIST` nutzen denselben Einordnungsvertrag. Die Vorschau
+(UI/MCP) erlaubt alle Achsen und zeigt Werte, Konflikte und Lücken. Änderungen der
+Einordnung/Datenwerte erhöhen die Dossierversion. Import schreibt die neuen Felder nicht
+zurück auf leer. `mengen_defaults` bleibt im Kanon; ein produktiver Ersatz setzt die
+kuratierte Befüllung und fachliche Referenzprüfung voraus.
+
+### Abnahmegrenze
+
+Die vollständige Suite des vorangehenden Suchrechner-Stands ist grün: 4.217 Tests,
+4.211 bestanden, 6 übersprungen. Für Arten/Achsen sind 25 neue Regressionen enthalten;
+der abschließende gezielte Lauf mit Achsen-/Profiltests ist grün (42 Tests, 95 Assertions).
+Die danach ergänzte Erhaltung des UI-Suchindex-Updates ist separat grün (1 Test, 5 Assertions).
+Der zusätzliche Gesamtlauf ist beendet: 4.242 Tests, 4.234 bestanden, 6 übersprungen,
+ein Fehler und eine fehlgeschlagene Erwartung. Die Index-Erwartung lief noch gegen
+den während des Laufs älteren UI-Pfad; der spätere Einzeltest bestätigt die Korrektur.
+Der zweite Befund betraf die unnötige Übernahme aller zulässigen IDs in die nachgelagerte
+Volltext-Abfrage. Diese lädt jetzt ausschließlich die bereits ausgewählten Gewinner.
+Der gezielte Nachlauf für Speichergrenze, Arten/Achsen und gemeinsamen Rechner ist grün
+(36 Tests, 93 Assertions). Eine vollständig grüne Gesamtsuite dieses neuen Stands wird
+weiterhin nicht behauptet. Der Mechanismus
+ersetzt nicht die noch ausstehende Kuratierung des Livebestands. Ebenso bleiben der
+zentrale Auftragsvertrag, Critic/Selbstheilung/Sprache (C), das gemeinsame Budget (D4) und
+hängende Paragraphenverweise (H7) eigenständige offene Arbeiten.
+
+## ▶ Fortsetzung 2026-09-09 — Riegel und tatsächliche Quellenauswahl
+
+**Reihenfolge geklärt (Dominique):** Der Dossier-Umbau beginnt **erst, wenn das Wissensmodul
+steht**. Deshalb zuerst die korpus-unabhängigen Riegel und der gemeinsame Rechner. Der
+Ausbau von Arten/Achsen und der Datenwerk-Vertrag bleiben Voraussetzung für den späteren
+Korpus-Umbau; aus der Antwort folgt keine Freigabe, bestehende Dossiers jetzt umzuordnen.
+
+**Arbeitsstand:** Branch `feat/wissen-riegel`, Worktree `15_GITHUB/wt-wissen-riegel`, eigene
+Test-Sandbox `15_GITHUB/sandbox-wissen-riegel`. Basis `cb826dc2` (PR #61). Noch nicht deployt.
+
+### B2 — Gesamtbudget an strukturellen Quellgrenzen
+
+- Alle Retrieval-Kanäle liefern jetzt `KnowledgeContextBlock` mit getrenntem Vorspann,
+  Quellen und Trenner. Auch Achsen, Niveau und Pairing behalten ihre Quellgrenzen bis zur
+  Endauswahl. Markdown-Überschriften oder `---` im Dossier werden **nicht** als Grenzen geparst.
+- Das Gesamtbudget nimmt vollständige **vorbereitete Quellenblöcke** auf oder lässt sie aus.
+  Nach einem zu großen optionalen Block können kleinere Quellen noch passen. Leere
+  Kategorieüberschriften verschwinden. Bei ausreichendem Budget bleibt der Text unverändert.
+- `files_used` und `used_by_category` nennen nur noch tatsächlich gesendete Quellen.
+  `files_dropped` nennt ausgelassene Quellen; deren `herkunft.sent` wird 0. `dropped_chars`
+  zählt die Differenz des gerenderten Textes einschließlich entfallener Hüllen und Trenner.
+- `always`-Quellen werden vor der optionalen Auswahl reserviert. Die **reale gerenderte**
+  Pflichtmenge ist maßgeblich, nicht `max_docs × max_chars_per_doc`: die alte Schätzung
+  reservierte selbst bei leeren Kategorien Zeichen und vergaß gleichzeitig die Überschriften.
+  Konfiguriertes Budget zu klein → `KnowledgeBudgetExceeded` mit Key, Bedarf und Budget.
+  Ein kleiner Kompositions-Override wird auf die reale Pflichtmenge angehoben.
+
+**B2 noch nicht vollständig geschlossen:** Die vorgelagerten **Pro-Dossier-Deckel**
+(`truncate(content_md, max_chars_per_doc)` und die spezialisierten Konstanten) sind weiterhin
+aktiv. Sie können eine einzelne große Quelle bereits vor dem Zusammenbau kürzen. Ihr Ersatz
+gehört mit den realen Korpus-Größen in B1/D4; ohne diese Messung entweder alle Grenzen zu
+entfernen oder alle übergroßen Dossiers wegzulassen wäre eine ungemessene Versorgungsänderung.
+Der aktive Defekt `truncate(fertiger_Block, Gesamtbudget)` ist dagegen entfernt.
+
+### B4 — Pflicht messen und alle gepflegten Kanon-Keys prüfen
+
+- `wissen-steuerdaten-w0 --verify` prüft zusätzlich zu den zwei obligatorischen Generatoren
+  **alle aktiven Kanon-Keys mit `scope=prompt_key`, `role=root`** im sichtbaren Team-Kontext.
+- Die Kanon-Messung verwendet die Textformatierung des Gateways, einschließlich Überschriften,
+  Trennern und Entfernung des Provenienz-Vorspanns. Eine eigene Budget-Default-Zahl im Wächter
+  wurde durch `AiGatewayService::boundBudgetFuer()` ersetzt.
+- Retrieval-Pflicht wird über `KnowledgeContextService::pflichtBudgetFuer()` mit denselben
+  Quellen und demselben Renderer wie der Laufzeitpfad gemessen, ohne Discovery oder Modellcall.
+  Große **optionale** Kandidatenmengen und leere `always`-Kategorien sind kein Budgetfehler.
+- B1/D4 bleiben offen: insbesondere die gemeinsame Obergrenze für Kanon + Retrieval und die
+  Laufzeitbehandlung eines zu großen **Kanon**-Blocks (derzeit weiter vollständig gesendet).
+
+### Korrektur für B5/E — Domain ist bereits begrenzt, aber falsch sortiert
+
+Auf `cb826dc2` kappt `discoverDomains()` mit `array_slice(..., DOMAIN_TOP_K)` bereits auf
+**vier** Dokumente, unabhängig von `max_docs: null`. Das Generator-Routing kann anschließend
+weiter verkleinern. Die Aussage „domain ungekappt bei 192 Dossiers“ beschreibt den aktuellen
+Code daher nicht mehr. Stattdessen geht die Rangfolge vor dieser Auswahl durch
+`sort($slugList)` verloren: die Endauswahl ist alphabetisch, einschließlich der hinzugefügten
+semantischen Treffer. B0/E2 muss den Vorab-Deckel aus der Kandidatenermittlung entfernen und
+B5 muss die reale gemeinsame Rangfolge messen, statt bloß einen weiteren Deckel einzubauen.
+
+### Schnitt für den gemeinsamen Rechner (E/B0), gegen aktuellen Code geprüft
+
+Der gemeinsame Ranking-Dienst muss sowohl `discoverGenericBlock()` als auch
+`discoverDomains()`, `searchDocuments()` und die Browser-Suche versorgen. Die Sonderwege
+für **deterministische** Achsen/Niveau und den **Pairing-Graphen** sind davon zu unterscheiden:
+sie suchen keine konkurrierenden Dossiers und werden nicht in den allgemeinen Suchrang
+umgedeutet. `selectBoundKnowledge` aus der ursprünglichen E1-Liste existiert seit F2 nicht mehr.
+
+Für die Umsetzung konkret:
+
+1. Ein eigener Kandidatendeckel pro Suchverfahren, unabhängig vom `max_docs` der Endauswahl.
+   Lexik und Semantik immer beide ermitteln; weder „nur wenn Lexik zu wenig“ (MCP) noch
+   „alle semantischen Treffer vor Lexik“ (generischer Generator) bleiben bestehen.
+2. Eine lexikalische Bewertung für Slug, **Titel** und Aliase, ein Tokenizer/eine Stoppliste.
+   Der generische Generator berücksichtigt heute nicht einmal den Titel. Volltext erst für
+   die ausgewählten Quellen laden; keine Kopie sämtlicher Dossier-Inhalte pro Kategorie.
+3. Rangfusion mit nachvollziehbaren `lexical_rank`, `semantic_rank`, Gesamtrang und Auswahlgrund.
+   Kategorie, inaktive Quellen, `_knowledge_scope` und Kanon-Ausschlüsse **vor** der Endauswahl
+   berücksichtigen. Der Kandidatendeckel darf nicht von unsichtbaren/falschen Kategorien
+   verbraucht werden. Kein neuer Tokenizer nur für den Browser.
+4. Browser-Suche auf dieselbe Bewertung führen; die bestehenden Zugriffsregeln dabei erhalten
+   (Etappe G ist weiter vertagt). Ein identischer Suchrang ist nur bei identischen Filtern
+   und identischer sichtbarer Dokumentmenge ein sinnvoller Vergleich.
+5. Die Vorschau benötigt Prompt-Key **und** Auftrag/Leitplanken. Eine freie Suchanfrage allein
+   ist keine Vorschau des Generator-Kontexts. Quellenauswahl und Auslassungen kommen aus dem
+   bestehenden Kontext-Aufbau und später aus dem zentralen Auftrag (C), nicht aus einem
+   zweiten Browser-Nachbau der Routing-Logik.
+
+**Lokaler Umsetzungsstand 2026-09-09:** Der gemeinsame `KnowledgeSearchService` ist jetzt
+in generischer Discovery, Domain-Discovery, MCP-Suche und Browser eingebunden. Ein
+`KnowledgeTokenizer` liefert die Textnormalisierung. Lexik (Slug, Titel, Aliase) und
+Semantik werden unabhängig ermittelt und per RRF vor der Endauswahl fusioniert.
+`knowledge_search.candidate_limit` begrenzt jede Kandidatenliste auf 100; die semantische
+Suche lädt bei ausgeschlossenen Treffern innerhalb eines begrenzten Fensters nach
+(`semantic_scan_limit`, 5.000). Dieses Fenster ist weiterhin eine Recall-Grenze.
+
+`KnowledgePreviewService`, Browser und `foodalchemist.knowledge.PREVIEW` verwenden den
+echten Kontext-Aufbau und dieselbe Kanon-Auswahl wie das Gateway. Auftrag, Prompt-Key
+und fachliche Leitplanken sind Eingaben; Quellenauswahl, Budget-Auslassungen und Zeichen
+sind Ausgabe. Die Vorschau bildet die übergebenen Angaben ab; eine bereits durchlaufene
+Zutatenauflösung mit Hauptzutat-Slugs wird hier noch nicht simuliert.
+
+Neun neue Regressionstests sind grün, darunter unabhängige Rangfusion trotz voller
+lexikalischer Endauswahl, gleiche Rangfolge an den drei Einstiegen, Domain-Relevanz,
+Aliasnormalisierung, Filterung sowie UI/MCP-Vorschau und Abgleich mit dem Gateway-Audit.
+Die vollständige Suite für diesen Stand läuft; E ist **noch nicht live abgenommen oder
+deployt**. Ohne Team-6-Referenzmessung wird keine Verbesserung der genannten
+Recall-Prozentpunkte behauptet. Die vorhandene
+`wissen-recall-probe` misst ausschließlich den Embedding-Pfad und wäre alleine noch kein
+Nachweis für den neuen Hybrid-Rechner.
+
+### Verifikation und verbleibende Live-Grenze
+
+Die gezielten Tests für Quellgrenzen/Pflichtschutz sowie Wächter/Kanon sind grün; die
+vollständige Modulsuite wird für diesen Stand ausgeführt. Die neuen Regressionen decken
+3→2 Quellen, Tabellen/Markdown-Trenner im Inhalt, leeres Restbudget, kleinere Folgetreffer,
+späte Pflichtquellen, Pflichtüberlauf und den Kanon eines Nicht-Generator-Prompts ab.
+
+Der BHG-MCP-Connector antwortet in dieser Sitzung mit **401 Unauthenticated** (Endpoint
+`office.bhgdigital.de/mcp`). Es wurde damit **keine** Live-Referenzmessung gegen demo durchgeführt
+und es wurden **keine** Live-Steuerdaten verändert. Die obigen Codebefunde sind lokal belegt;
+B1/D4/B5 und die Abnahme nach Deploy benötigen weiterhin den Team-6-Live-Abgleich.
 
 ---
 

@@ -89,6 +89,12 @@ class RecipeOneShotService
      */
     public function anreichern(Team $team, FoodAlchemistRecipe $recipe, ?float $zielVk = null, bool $completeCoverage = false, bool $refresh = false, ?callable $shouldStop = null): array
     {
+        return app(\Platform\FoodAlchemist\Services\Knowledge\KnowledgeRunService::class)->withRecipe($team, $recipe,
+            fn () => $this->anreichernImLauf($team, $recipe, $zielVk, $completeCoverage, $refresh, $shouldStop));
+    }
+
+    private function anreichernImLauf(Team $team, FoodAlchemistRecipe $recipe, ?float $zielVk = null, bool $completeCoverage = false, bool $refresh = false, ?callable $shouldStop = null): array
+    {
         $alle = $recipe->is_sales_recipe ? BulkEnrichService::SCHRITTE_VK : BulkEnrichService::SCHRITTE;
         // #4: `refresh` = bewusster „Alles anreichern"-Klick im Editor → auch gefüllte, nicht-manuelle
         // Textfelder neu erzeugen (nach Zutatenänderung). Der Auto-Pfad (Generierung / Kaskaden-Job)

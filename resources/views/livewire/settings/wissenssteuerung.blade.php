@@ -55,7 +55,7 @@
                     <td class="{{ $td }} text-[11px] text-gray-600">{{ count($p['pflicht']) ?: '–' }}</td>
                     <td class="{{ $td }} text-[11px] text-gray-600">{{ count(array_filter($p['routing'], fn ($r) => $r['mode'] !== 'none')) ?: '–' }}</td>
                     <td class="{{ $td }} text-[11px] text-gray-600">
-                        {{ number_format($p['pflicht_zeichen'], 0, ',', '.') }} / {{ number_format($p['budget_bound'], 0, ',', '.') }}
+                        {{ number_format($p['pflicht_zeichen'], 0, ',', '.') }} / {{ number_format($p['budget_total'], 0, ',', '.') }}
                     </td>
                     <td class="{{ $td }} font-mono text-[10px] text-gray-400">{{ $p['fingerabdruck'] }}</td>
                 </tr>
@@ -150,18 +150,18 @@
                                         @endforeach
 
                                         <p class="text-[10px] text-gray-400">
-                                            <strong>pflicht</strong> ignoriert das Budget und kommt immer ganz —
+                                            <strong>pflicht</strong> kommt vollständig. Ist das Gesamtbudget dafür zu klein, wird der Aufruf gestoppt.
                                             <strong>wenn_platz</strong> fällt bei Budgetmangel als GANZES Dossier weg, nie als Anschnitt.
                                             Ein inaktives Dossier lässt sich aufnehmen (Vorbereitung), liefert aber erst nach dem Aktivieren.
                                         </p>
                                     </div>
                                 @endif
                                 <div>
-                                    <p class="{{ $dt }}">Suche — Routing auf «{{ $p['routing_key'] }}» (Budget {{ number_format($p['budget_retrieval'], 0, ',', '.') }} Z.)</p>
+                                    <p class="{{ $dt }}">Suche — Routing auf «{{ $p['routing_key'] }}» (gemeinsames Wissensbudget {{ number_format($p['budget_total'], 0, ',', '.') }} Z.)</p>
                                     @forelse($p['routing'] as $r)
                                         <p class="text-[11px] text-gray-600">
-                                            <span class="font-mono">{{ $r['category'] }}</span> → {{ $r['mode'] }}
-                                            @if($r['max_docs'])<span class="text-gray-400">({{ $r['max_docs'] }} × {{ number_format($r['max_chars_per_doc'], 0, ',', '.') }} Z.)</span>@endif
+                                            <span class="font-mono">{{ $r['art'] ?? $r['category'] }}</span> → {{ $r['mode'] }}
+                                            @if($r['max_docs'])<span class="text-gray-400">(max. {{ $r['max_docs'] }} Quellen)</span>@endif
                                         </p>
                                     @empty
                                         <p class="text-[11px] text-gray-400">—</p>
@@ -228,6 +228,28 @@
         @endif
     </div>
 
+    <div class="space-y-3 border rounded p-4" data-ws-arten>
+        <p class="{{ $dt }}">Arten — welches Wissen darf ein Arbeitsschritt benutzen?</p>
+        <p class="text-xs text-gray-500">Regeln kommen aus dem Kanon. Datenwerke werden über Bedingungen aufgelöst. Fachwissen und Referenzen werden gesucht. Mit dem ersten Arten-Routing gilt die Kategorie-Steuerung dieses Schritts nur noch für nicht eingeordnete Dossiers.</p>
+        @foreach($routings->filter(fn ($r) => ! empty($r->art)) as $r)
+            <p class="text-sm">{{ $r->feature }} · {{ $r->art }} · {{ $r->mode }}
+                @if($r->mode === 'discovery') · {{ $r->max_docs ?? 'Standard' }} Suchtreffer @endif
+                @if($darfSchreiben)
+                    <button type="button" wire:click="editArt({{ $r->id }})" class="{{ $btnGhostXs }}">Bearbeiten</button>
+                    <button type="button" wire:click="delete({{ $r->id }})" wire:confirm="Arten-Routing entfernen? Ohne verbleibende Arten-Routings gilt wieder die Kategorie-Steuerung." class="{{ $btnGhostXs }}">Entfernen</button>
+                @endif
+            </p>
+        @endforeach
+        @if($darfSchreiben)
+            <label class="block text-xs">Arbeitsschritt<input wire:model="artForm.feature" class="{{ $input }}" placeholder="recipe.generator" /></label>
+            <label class="block text-xs">Art<select wire:model="artForm.art" class="{{ $input }}"><option value="fachwissen">Fachwissen</option><option value="referenz">Referenz</option><option value="datenwerk">Datenwerk</option></select></label>
+            <label class="block text-xs">Verwendung<select wire:model="artForm.mode" class="{{ $input }}"><option value="discovery">Suchen</option><option value="resolve">Werte auflösen</option><option value="none">Bewusst nicht verwenden</option></select></label>
+            <label class="block text-xs">Maximale Suchtreffer<input wire:model="artForm.max_docs" type="number" min="1" class="{{ $input }}" /></label>
+            <label class="block text-xs">Alter Einzeldeckel (ohne Wirkung)<input disabled wire:model="artForm.max_chars_per_doc" type="number" min="1" class="{{ $input }}" /></label>
+            <button type="button" wire:click="saveArt" class="{{ $btnGhostXs }}">Arten-Routing setzen</button>
+        @endif
+    </div>
+
     {{-- ── Routing-Editor ── --}}
     <div class="space-y-2" data-ws-routings>
         <div>
@@ -241,9 +263,9 @@
         </div>
 
         <table class="{{ $table }}">
-            <thead><tr class="text-left">@foreach(['Feature', 'Kategorie', 'Modus', 'max Docs', 'Zeichen/Doc', ''] as $h)<th class="{{ $th }}">{{ $h }}</th>@endforeach</tr></thead>
+            <thead><tr class="text-left">@foreach(['Feature', 'Kategorie', 'Modus', 'max Docs', 'Alter Deckel (inaktiv)', ''] as $h)<th class="{{ $th }}">{{ $h }}</th>@endforeach</tr></thead>
             <tbody>
-                @foreach($routings as $r)
+                @foreach($routings->filter(fn ($r) => empty($r->art)) as $r)
                     <tr class="{{ $tr }}" wire:key="r-{{ $r->id }}">
                         @if($editId === $r->id)
                             <td class="{{ $td }} font-mono text-[11px] text-gray-500">{{ $r->feature }}</td>
@@ -254,7 +276,7 @@
                                 </select>
                             </td>
                             <td class="{{ $td }}"><input type="text" wire:model="form.max_docs" class="{{ $input }} !py-1 !w-16 text-right" placeholder="—" /></td>
-                            <td class="{{ $td }}"><input type="text" wire:model="form.max_chars_per_doc" class="{{ $input }} !py-1 !w-20 text-right" placeholder="—" /></td>
+                            <td class="{{ $td }}"><input type="text" disabled wire:model="form.max_chars_per_doc" class="{{ $input }} !py-1 !w-20 text-right" placeholder="—" /></td>
                             <td class="{{ $td }} whitespace-nowrap">
                                 <button type="button" wire:click="save" class="{{ $btnPrimary }}" data-ws-save>Speichern</button>
                                 <button type="button" wire:click="cancel" class="{{ $btnGhostXs }}">Abbrechen</button>
@@ -302,7 +324,7 @@
                         @foreach(['always', 'discovery', 'grounding', 'none'] as $m)<option value="{{ $m }}">{{ $m }}</option>@endforeach
                     </select>
                     <input type="text" wire:model="form.max_docs" placeholder="Docs" class="{{ $input }} !py-1 !w-16 text-right" />
-                    <input type="text" wire:model="form.max_chars_per_doc" placeholder="Zeichen" class="{{ $input }} !py-1 !w-24 text-right" />
+                    <input type="text" disabled wire:model="form.max_chars_per_doc" placeholder="Zeichen" class="{{ $input }} !py-1 !w-24 text-right" />
                     <button type="button" wire:click="save" class="{{ $btnPrimary }}" data-ws-neu-anlegen>+ Setzen</button>
                 </div>
             </div>

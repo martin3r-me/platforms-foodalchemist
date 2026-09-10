@@ -72,7 +72,7 @@ class WissenProfilCommand extends Command
                     $p['zustand'],
                     count($p['pflicht']) ?: '–',
                     count($p['wenn_platz']) ?: '–',
-                    number_format($p['pflicht_zeichen'], 0, ',', '.').' / '.number_format($p['budget_bound'], 0, ',', '.'),
+                    number_format($p['pflicht_zeichen'], 0, ',', '.').' / '.number_format($p['budget_total'], 0, ',', '.'),
                     $p['fingerabdruck'],
                 ], $bericht['profile'])
             );
@@ -129,7 +129,7 @@ class WissenProfilCommand extends Command
         $this->newLine();
 
         $this->line('<comment>Pflicht</comment> ('.number_format($p['pflicht_zeichen'], 0, ',', '.').' Z. von '
-            .number_format($p['budget_bound'], 0, ',', '.').' Budget):');
+            .number_format($p['budget_total'], 0, ',', '.').' Budget):');
         foreach ($p['pflicht'] as $d) {
             $this->line('  · '.$d['slug'].' @v'.$d['version'].'  ('.number_format($d['zeichen'], 0, ',', '.').' Z.)');
         }
@@ -147,10 +147,10 @@ class WissenProfilCommand extends Command
 
         $this->newLine();
         $this->line('<comment>Suche</comment> (Routing auf «'.$p['routing_key'].'», Budget '
-            .number_format($p['budget_retrieval'], 0, ',', '.').' Z.):');
+            .number_format($p['budget_total'], 0, ',', '.').' Z.):');
         foreach ($p['routing'] as $r) {
-            $this->line('  · '.$r['category'].' → '.$r['mode']
-                .($r['max_docs'] ? ' ('.$r['max_docs'].' × '.$r['max_chars_per_doc'].' Z.)' : ''));
+            $this->line('  · '.($r['art'] ?? $r['category']).' → '.$r['mode']
+                .($r['max_docs'] ? ' (max. '.$r['max_docs'].' Quellen)' : ''));
         }
         if ($p['routing'] === []) {
             $this->line('  –');

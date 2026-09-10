@@ -49,7 +49,9 @@ class KnowledgeRoutingsGetTool extends FoodAlchemistTool implements ToolContract
 
         return ToolResult::success([
             'total' => count($routings),
+            'hinweis' => 'max_chars_per_doc ist historisch und ohne Wirkung. Das gemeinsame Wissensbudget entscheidet über ganze Quellen.',
             'modi' => KnowledgeRoutingService::MODES,
+            'arten_modi' => ['fachwissen' => ['discovery', 'none'], 'referenz' => ['discovery', 'none'], 'datenwerk' => ['resolve', 'none']],
             'routings' => $routings,
         ]);
     }

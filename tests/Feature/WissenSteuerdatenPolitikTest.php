@@ -260,3 +260,37 @@ it('verify meldet einen LEEREN Kanon am Generator als Fehler — frueher fiel de
         ->and($signal->description)->toContain('KEIN Kanon')
         ->and($signal->description)->toContain('wissen-kanon-sicherung');
 });
+
+it('B4: prüft Kanonbudgets auch außerhalb der beiden Generatoren samt Überschriften', function () {
+    DB::table('foodalchemist_knowledge_routings')->delete();
+    w0MkDoc('budget-regel', 'regelwerk', chars: 100);
+    foreach (['recipe.generator', 'vk.generator', 'recipe.review'] as $key) {
+        $this->kanonZeile($this->rootTeam->id, $key, 'budget-regel');
+    }
+    // Der Inhalt passt genau; erst die reale Prompt-Hülle überschreitet das Budget.
+    config()->set('foodalchemist.ai.knowledge_budget', [
+        'recipe.generator' => 500, 'vk.generator' => 500,
+        'recipe.review' => 100,
+    ]);
+    $this->artisan('foodalchemist:wissen-steuerdaten-w0', ['--verify' => true, '--team' => $this->rootTeam->id])
+        ->assertExitCode(1);
+    $signal = FoodAlchemistSignal::where('team_id', $this->rootTeam->id)
+        ->where('type', SignalTyp::SteuerdatenDrift->value)->first();
+    expect($signal->description)->toContain('recipe.review: Kanon-Pflicht summiert');
+});
+
+it('B4: großer optionaler Korpus und leere always-Kategorien bleiben budgetseitig grün', function () {
+    DB::table('foodalchemist_knowledge_routings')->delete();
+    w0MkDoc('budget-kleine-regel', 'regelwerk', chars: 100);
+    foreach (['recipe.generator', 'vk.generator'] as $key) {
+        $this->kanonZeile($this->rootTeam->id, $key, 'budget-kleine-regel');
+    }
+    DB::table('foodalchemist_knowledge_routings')->insert([
+        ['feature' => 'test.optionalbudget', 'category' => 'leere-kategorie', 'mode' => 'always', 'max_docs' => 100, 'max_chars_per_doc' => 8000],
+        ['feature' => 'test.optionalbudget', 'category' => 'optionalbudget', 'mode' => 'discovery', 'max_docs' => 100, 'max_chars_per_doc' => 8000],
+    ]);
+    w0MkDoc('riesiges-suchdossier', 'optionalbudget', chars: 20000);
+    config()->set('foodalchemist.ai.knowledge_budget', ['test.optionalbudget' => 100]);
+    $this->artisan('foodalchemist:wissen-steuerdaten-w0', ['--verify' => true, '--team' => $this->rootTeam->id])
+        ->assertExitCode(0);
+});

@@ -73,6 +73,9 @@ class KnowledgeCanonService
      */
     public function documentsFor(string $scope, string $scopeKey, Team $team, string $role = 'root'): Collection
     {
+        if ($run = app(KnowledgeRunContext::class)->current((int) $team->id)) {
+            return $run->documents($scope, $scopeKey, $role);
+        }
         $rows = $this->sichtbareZeilen($team)
             ->where('c.scope', $scope)->where('c.scope_key', $scopeKey)->where('c.role', $role)
             ->where('c.active', 1)
@@ -140,6 +143,9 @@ class KnowledgeCanonService
      */
     public function unaufloesbareZeilen(Team $team, ?string $scopeKey = null): array
     {
+        if ($run = app(KnowledgeRunContext::class)->current((int) $team->id)) {
+            return $run->missing($scopeKey);
+        }
         $q = DB::table(self::TABLE . ' as c')
             ->leftJoin(self::DOCS . ' as d', 'd.id', '=', 'c.knowledge_document_id')
             ->whereNull('c.deleted_at')
@@ -418,7 +424,20 @@ class KnowledgeCanonService
             ]);
     }
 
-    /** Global ∪ eigene Ahnenkette — auf Kanon-Zeile UND Dossier (Doppelfilter, kein Leak über die Zeile). */
+    /** Alle sichtbaren expliziten Kanon-Profile einschließlich Text und Versionsnummer. */
+    public function snapshotFor(Team $team): array
+    {
+        $profiles = [];
+        $keys = $this->sichtbareZeilen($team)->where('c.active', 1)
+            ->select('c.scope', 'c.scope_key', 'c.role')->distinct()->orderBy('c.scope')->orderBy('c.scope_key')->orderBy('c.role')->get();
+        foreach ($keys as $key) {
+            $profiles[$key->scope][$key->scope_key][$key->role] = $this->documentsFor($key->scope, $key->scope_key, $team, $key->role)
+                ->map(static fn ($row) => (array) $row)->all();
+        }
+        return ['version' => 1, 'profiles' => $profiles, 'missing' => $this->unaufloesbareZeilen($team)];
+    }
+
+    /** Global ∪ eigene Ahnenkette — auf Kanon-Zeile UND Dossier. */
     private function sichtbareZeilen(Team $team): \Illuminate\Database\Query\Builder
     {
         $q = $this->zeilenQuery();

@@ -3689,6 +3689,11 @@ class Index extends Component
         if ($recipe === null) {
             return;
         }
+        // Eine ausdrücklich neu gestartete Prüfung verwendet den heutigen Kanon.
+        if (! $recipe->is_sales_recipe && (int) $recipe->team_id === (int) $team->id) {
+            $run = app(\Platform\FoodAlchemist\Services\Knowledge\KnowledgeRunService::class)->start($team);
+            $recipe->forceFill(['knowledge_run_id' => $run->id])->save();
+        }
         \Platform\FoodAlchemist\Jobs\ConformanceCheckJob::dispatch(
             $team->id, (int) Auth::id(), $recipe->is_sales_recipe ? 'gericht' : 'basisrezept', $recipeId,
         );

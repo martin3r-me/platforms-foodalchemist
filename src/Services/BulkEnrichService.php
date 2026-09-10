@@ -373,7 +373,7 @@ class BulkEnrichService
     {
         $katalog = $this->behaelterKatalog($team);
         $wissen = app(KnowledgeContextService::class)->contextFor(
-            $team, 'recipe.eigenschaften', trim($r->name.' Behälter Füllmenge Füllgrad Dichte')
+            $team, 'recipe.dichteklasse', trim($r->name.' Behälter Füllmenge Füllgrad Dichte')
         );
         // Spec 52/B3: Messfelder über den Helfer, sonst bleibt `dropped` hier blind.
         $opts = KnowledgeContextService::proposeOptionen($wissen)

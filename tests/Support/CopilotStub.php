@@ -34,6 +34,8 @@ final class CopilotStub
 
             public function chat(array $messages, array $options = []): array
             {
+                $GLOBALS['l6_all_prompt'] = implode("\n", array_column($messages, 'content'));
+                $GLOBALS['l6_messages'] = $messages;
                 $GLOBALS['l6_user_prompt'] = collect($messages)->where('role', 'user')->last()['content'] ?? '';
 
                 return ['content' => json_encode(['werte' => ['befunde' => $this->befunde, 'gesamturteil' => $this->urteil],

@@ -34,8 +34,13 @@ it('begrenzt Rezeptwissen nach Zeichenbudget statt nach einer starren Dokumentza
     );
 
     expect($ctx['files_used'])->each->toContain('rinderfilet-wissen-')
-        ->and($ctx['files_used'])->toHaveCount(14)
+        ->and($ctx['files_used'])->toHaveCount(6)
+        ->and($ctx['files_dropped'])->toHaveCount(8)
         ->and($ctx['total_chars'])->toBeLessThanOrEqual(KnowledgeContextService::RECIPE_MAX_KNOWLEDGE_CHARS + 40);
+    foreach ($ctx['files_used'] as $file) {
+        $body = DB::table('foodalchemist_knowledge_documents')->where('slug', explode('@v', $file)[0])->value('content_md');
+        expect($ctx['block'])->toContain($body)->not->toContain('gekürzt');
+    }
 });
 
 it('verwendet den Wissensplan des Gerichts als Scope für ein Basisrezept', function () {

@@ -83,7 +83,7 @@ it('bleibt bei leerer Kategorie ohne Block (Invariante 6)', function () {
         ->and($ctx['block'])->toContain('# VAULT-WISSEN');
 });
 
-it('respektiert den Routing-Deckel und kürzt mit Marker', function () {
+it('respektiert max_docs und übernimmt vollständige Dossiers', function () {
     foreach (['a', 'b', 'c', 'd', 'e'] as $i => $s) {
         ($this->mkDoc)("concept.{$s}", 'concept', str_repeat('X', 5000) . 'ENDE');
     }
@@ -91,8 +91,8 @@ it('respektiert den Routing-Deckel und kürzt mit Marker', function () {
     $ctx = $this->svc->contextFor(null, 'concept.plan', 'Brief');
 
     expect(substr_count($ctx['block'], '## CONCEPT: '))->toBe(4)   // max_docs = 4
-        ->and($ctx['block'])->toContain('[…gekürzt für KI-Kontext…]')
-        ->and($ctx['block'])->not->toContain('ENDE')
+        ->and($ctx['block'])->not->toContain('[…gekürzt für KI-Kontext…]')
+        ->and(substr_count($ctx['block'], str_repeat('X', 5000).'ENDE'))->toBe(4)
         ->and($ctx['block'])->not->toContain('## CONCEPT: concept.e');  // Slug-stabile Reihenfolge
 });
 

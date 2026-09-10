@@ -958,7 +958,7 @@ class RecipeModal extends Component
         // Rezepten. Leeres Routing = leerer Block, also fail-soft.
         $wissenBlock = $wissen->contextFor(
             Auth::user()?->currentTeamRelation,
-            'recipe.eigenschaften',
+            'recipe.dichteklasse',
             trim($r->name.' Behälter Füllmenge Füllgrad Dichte')
         );
         $wissenOpts = \Platform\FoodAlchemist\Services\Ai\KnowledgeContextService::proposeOptionen($wissenBlock); // Spec 52/B3: dropped mitmessen

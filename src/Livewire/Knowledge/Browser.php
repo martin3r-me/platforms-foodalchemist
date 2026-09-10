@@ -8,6 +8,7 @@ use Illuminate\Support\Str;
 use Livewire\Attributes\Url;
 use Livewire\Component;
 use Platform\FoodAlchemist\Services\Ai\KnowledgeEmbeddingService;
+use Platform\FoodAlchemist\Services\Ai\KnowledgeSearchService;
 use Platform\FoodAlchemist\Support\TeamScope;
 
 /**
@@ -28,7 +29,7 @@ class Browser extends Component
     #[Url(as: 'status')]
     public string $filterStatus = 'all';
 
-    /** Semantik-Suche (#469): Embedding-Recall statt SQL-LIKE, wenn ein Provider verfügbar ist. */
+    /** Semantik-Suche (#469): Semantik ergänzt dieselbe Textsuche wie im Generator und MCP. */
     #[Url(as: 'sem')]
     public bool $semantic = false;
 
@@ -59,6 +60,16 @@ class Browser extends Component
     public string $kanonMode = 'pflicht';
 
     public string $traceTarget = '';
+
+    public string $previewPromptKey = 'recipe.generator';
+    public string $previewQuery = '';
+    public array $previewAxes = [];
+    public string $previewLevel = '';
+    public string $previewOccasion = '';
+    public string $previewSector = '';
+    public ?array $knowledgePreview = null;
+    public ?string $previewError = null;
+
 
     public ?string $fehler = null;
 
@@ -185,6 +196,10 @@ class Browser extends Component
      */
     public function mount(): void
     {
+        if (! request()->has('sem')) {
+            $this->semantic = (bool) config('foodalchemist.semantic_search.enabled', false);
+        }
+
         if ($this->selectedId !== null) {
             $this->select($this->selectedId);
         }
@@ -206,6 +221,8 @@ class Browser extends Component
             'title' => $doc->title,
             'category' => $doc->category,
             'art' => $doc->art ?? '',
+            'geltung' => array_map(fn ($v) => implode(', ', $v), json_decode($doc->geltung ?? '[]', true) ?: []),
+            'datenwerte' => array_map(fn ($row) => array_replace($row, ['geltung' => array_map(fn ($v) => implode(', ', $v), $row['geltung'] ?? [])]), json_decode($doc->datenwerte ?? '[]', true) ?: []),
             'active' => (bool) $doc->active,
             'content_md' => $doc->content_md,
         ];
@@ -223,66 +240,41 @@ class Browser extends Component
             'category' => (string) DB::table('foodalchemist_knowledge_categories')->whereNull('deleted_at')
                 ->where('active', true)->orderBy('sort_order')->value('slug'),
             'art' => '',
+            'geltung' => [], 'datenwerte' => [],
             'active' => true,
             'content_md' => '',
         ];
     }
 
+    public function addDatenwert(): void
+    {
+        $this->form['datenwerte'][] = ['kennzahl' => '', 'min' => '', 'max' => '', 'einheit' => '', 'bezug' => '', 'quelle' => '', 'geltung' => []];
+    }
+
+    public function removeDatenwert(int $index): void
+    {
+        unset($this->form['datenwerte'][$index]);
+        $this->form['datenwerte'] = array_values($this->form['datenwerte']);
+    }
+
     public function save(): void
     {
-        $title = trim((string) ($this->form['title'] ?? ''));
-        $category = trim((string) ($this->form['category'] ?? ''));
-        $art = trim((string) ($this->form['art'] ?? ''));
-        if ($title === '' || $category === '') {
-            $this->fehler = 'Titel und Kategorie sind Pflicht.';
-
-            return;
-        }
-        $content = (string) ($this->form['content_md'] ?? '');
-        $payload = [
-            'title' => $title,
-            'category' => $category,
-            'art' => $art,
-            'active' => (bool) ($this->form['active'] ?? true),
-            'content_md' => $content,
-            'char_count' => Str::length($content),
-            'content_hash' => hash('sha256', $content),
-            'updated_at' => now(),
-        ];
-
-        if ($this->creating) {
-            $slug = Str::slug($title, '-');
-            $base = $slug;
-            $i = 2;
-            while (DB::table('foodalchemist_knowledge_documents')->where('slug', $slug)->exists()) {
-                $slug = $base . '-' . $i++;
-            }
-            $id = DB::table('foodalchemist_knowledge_documents')->insertGetId($payload + [
-                'uuid' => (string) Str::uuid7(),
-                'team_id' => Auth::user()?->currentTeamRelation?->id,
-                'slug' => $slug,
-                'version' => 1,
-                'source_path' => null,
-                'created_via' => 'ui',
-                'created_at' => now(),
-            ]);
-            $this->creating = false;
-            $this->selectedId = $id;
-        } else {
-            $besitz = DB::table('foodalchemist_knowledge_documents')->where('id', $this->selectedId)->first(['team_id']);
-            if ($besitz === null || ! TeamScope::owns($besitz->team_id, Auth::user()?->currentTeamRelation)) {
-                $this->fehler = 'Geerbtes/Master-Wissen — nur das Besitzer-Team kann bearbeiten.';
-
-                return;
-            }
-            DB::table('foodalchemist_knowledge_documents')->where('id', $this->selectedId)
-                ->update($payload + ['version' => DB::raw('version + 1')]);
-        }
-        // Recall-Index (A1) nachziehen — Anlage/Edit/Aktivierung im Browser ist die menschliche
-        // Freigabe (Quarantäne): erst dann soll das Doc semantisch auffindbar werden.
-        $this->reembed((int) $this->selectedId);
-        $this->savedToast('Wissensdokument gespeichert');
         $this->fehler = null;
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team === null) { $this->fehler = 'Kein Team im Kontext.'; return; }
+        try {
+            $service = app(\Platform\FoodAlchemist\Services\KnowledgeService::class);
+            if ($this->creating) {
+                $doc = $service->create($team, $this->form + ['source' => 'ui']);
+                $this->reembed((int) $doc->id);
+            } else {
+                $owned = $this->eigenesDoc((int) $this->selectedId);
+                if ($owned === null) return;
+                $doc = $service->update($team, $owned->slug, $this->form);
+            }
+            $this->select((int) $doc->id);
+            $this->savedToast('Wissensdokument gespeichert');
+        } catch (\RuntimeException $e) { $this->fehler = $e->getMessage(); }
     }
 
     public function toggleActive(int $id): void
@@ -491,6 +483,26 @@ class Browser extends Component
         $this->savedToast();
     }
 
+    public function previewKnowledge(): void
+    {
+        $this->knowledgePreview = null;
+        $this->previewError = null;
+        $team = Auth::user()?->currentTeamRelation;
+        if ($team === null) {
+            $this->previewError = 'Kein Team im Kontext.';
+            return;
+        }
+        try {
+            $this->knowledgePreview = app(\Platform\FoodAlchemist\Services\Knowledge\KnowledgePreviewService::class)->preview(
+                $team, $this->previewPromptKey, $this->previewQuery, [
+                    ...$this->previewAxes, 'level' => $this->previewLevel, 'occasion' => $this->previewOccasion, 'sektor' => $this->previewSector,
+                ],
+            );
+        } catch (\InvalidArgumentException|\RuntimeException $exception) {
+            $this->previewError = $exception->getMessage();
+        }
+    }
+
     public function render()
     {
         $kategorien = DB::table('foodalchemist_knowledge_categories')->whereNull('deleted_at')
@@ -507,18 +519,10 @@ class Browser extends Component
         // Semantik-Modus (#469): Embedding-Recall, sofern aktiviert, Query nicht leer
         // und ein Provider verfügbar ist. Sonst graceful Fallback auf SQL-LIKE + Hinweis.
         $semanticNote = null;
-        $semanticIds = null;
         $semanticAktiv = false;
         if ($this->semantic && $suche !== '') {
-            $svc = app(KnowledgeEmbeddingService::class);
-            if ($svc->isProviderAvailable()) {
-                $semanticAktiv = true;
-                $semanticIds = $svc->searchDocIds($suche, 50);
-                if ($semanticIds === []) {
-                    $semanticNote = 'Keine semantischen Treffer — evtl. ist der Korpus noch nicht indiziert '
-                        . '(php artisan foodalchemist:knowledge-embed).';
-                }
-            } else {
+            $semanticAktiv = app(KnowledgeEmbeddingService::class)->isProviderAvailable();
+            if (! $semanticAktiv) {
                 $semanticNote = 'Semantische Suche nicht verfügbar (kein Embedding-Provider) — es wird die Textsuche genutzt.';
             }
         }
@@ -533,23 +537,11 @@ class Browser extends Component
             ->when($this->filterStatus === 'active', fn ($q) => $q->where('active', true))
             ->when($this->filterStatus === 'inactive', fn ($q) => $q->where('active', false));
 
-        if ($semanticAktiv) {
-            // Score-Reihenfolge in PHP herstellen (DB-agnostisch, kein FIELD()).
-            // Kategorie-/Status-Filter greifen weiter, der LIKE-Filter entfällt (Recall-Zweck).
-            if ($semanticIds === null || $semanticIds === []) {
-                $docs = collect();
-            } else {
-                $rows = $basis->whereIn('id', $semanticIds)->get($spalten)->keyBy('id');
-                $docs = collect($semanticIds)->map(fn ($id) => $rows->get($id))->filter()->values();
-            }
+        if ($suche !== '') {
+            $hits = app(KnowledgeSearchService::class)->search($basis, $suche, 100, $semanticAktiv, Auth::user()?->currentTeamRelation);
+            $docs = collect($hits)->map(static fn ($hit) => (object) $hit);
         } else {
-            $docs = $basis
-                ->when($suche !== '', function ($q) use ($suche) {
-                    $s = '%' . $suche . '%';
-                    $q->where(fn ($w) => $w->where('title', 'like', $s)->orWhere('slug', 'like', $s)->orWhere('content_md', 'like', $s));
-                })
-                ->orderBy('category')->orderBy('title')
-                ->get($spalten);
+            $docs = $basis->orderBy('category')->orderBy('title')->get($spalten);
         }
 
         $selected = $this->selectedId !== null

@@ -66,17 +66,17 @@ class WissenVersorgungCommand extends Command
 
         if ($ausgabe !== []) {
             $this->table(
-                ['Prompt-Key', 'Routing-Schlüssel', 'Kanon', 'Routing', 'Alt-Bindung', 'Budget (bound/retr.)', 'Verdikt'],
+                ['Prompt-Key', 'Routing-Schlüssel', 'Kanon', 'Routing', 'Alt-Bindung', 'Wissensbudget gesamt', 'Verdikt'],
                 array_map(fn ($z) => [
                     $z['prompt_key'],
                     $z['alt_schluessel'] ? $z['routing_key'].' (alt)' : '=',
                     $z['kanon_docs'] > 0 ? $z['kanon_docs'].' · '.number_format($z['kanon_chars'], 0, ',', '.').' Z.' : '–',
                     $z['routing'] === [] ? '–' : implode(', ', array_map(
-                        fn ($r) => $r['category'].':'.$r['mode'].($r['max_docs'] ? ' '.$r['max_docs'].'×'.$r['max_chars_per_doc'] : ''),
+                        fn ($r) => ($r['art'] ?? $r['category']).':'.$r['mode'].($r['max_docs'] ? ' max. '.$r['max_docs'].' Quellen' : ''),
                         $z['routing']
                     )),
                     $this->bindungsZelle($z),
-                    number_format($z['budget_bound'], 0, ',', '.').' / '.number_format($z['budget_retrieval'], 0, ',', '.'),
+                    number_format($z['budget_total'], 0, ',', '.'),
                     $z['verdikt'],
                 ], $ausgabe)
             );

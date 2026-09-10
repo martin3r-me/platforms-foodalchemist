@@ -30,10 +30,11 @@ class KnowledgeRoutingService
         return DB::table(self::T)
             ->when($feature !== null && $feature !== '', fn ($q) => $q->where('feature', $feature))
             ->orderBy('feature')->orderBy('category')
-            ->get(['feature', 'category', 'mode', 'max_docs', 'max_chars_per_doc'])
+            ->get(['feature', 'category', 'mode', 'max_docs', 'max_chars_per_doc', 'art'])
             ->map(fn ($r) => [
                 'feature' => (string) $r->feature,
                 'category' => (string) $r->category,
+                ...($r->art !== null ? ['art' => $r->art] : []),
                 'mode' => (string) $r->mode,
                 'max_docs' => $r->max_docs !== null ? (int) $r->max_docs : null,
                 'max_chars_per_doc' => $r->max_chars_per_doc !== null ? (int) $r->max_chars_per_doc : null,
@@ -77,6 +78,32 @@ class KnowledgeRoutingService
             'feature' => $feature, 'category' => $category, 'mode' => $mode,
             'max_docs' => $maxDocs, 'max_chars_per_doc' => $maxChars,
         ];
+    }
+
+    /** Ein Arten-Routing ersetzt für eingeordnete Dossiers dieses Schritts die Kategorieauswahl. */
+    public function setArt(string $feature, string $art, string $mode, ?int $maxDocs = null, ?int $maxChars = null): array
+    {
+        $feature = trim($feature);
+        if ($feature === '') throw new \InvalidArgumentException('feature ist Pflicht.');
+        $allowed = ['fachwissen' => ['discovery', 'none'], 'referenz' => ['discovery', 'none'],
+            'datenwerk' => ['resolve', 'none']];
+        if (! in_array($mode, $allowed[$art] ?? [], true)) {
+            throw new \InvalidArgumentException('Fachwissen/Referenz: discovery oder none. Datenwerk: resolve oder none. Regeln werden im Kanon gepflegt; Abläufe gehören nicht in den Prompt.');
+        }
+        $maxDocs = $maxDocs !== null && $maxDocs > 0 ? $maxDocs : null;
+        $maxChars = $maxChars !== null && $maxChars > 0 ? $maxChars : null;
+        DB::table(self::T)->updateOrInsert(['feature' => $feature, 'art' => $art], [
+            'category' => null, 'mode' => $mode, 'max_docs' => $maxDocs,
+            'max_chars_per_doc' => $maxChars,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        return ['feature' => $feature, 'art' => $art, 'mode' => $mode,
+            'max_docs' => $maxDocs, 'max_chars_per_doc' => $maxChars];
+    }
+
+    public function removeArt(string $feature, string $art): int
+    {
+        return DB::table(self::T)->where('feature', trim($feature))->where('art', $art)->delete();
     }
 
     /** Routing entfernen (feature+category) → search-only (keine Auto-Grounding-Zeile mehr). Anzahl gelöschter Zeilen. */

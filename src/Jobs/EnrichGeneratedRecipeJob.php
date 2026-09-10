@@ -22,6 +22,8 @@ class EnrichGeneratedRecipeJob implements ShouldQueue
     public int $timeout = 300;
     public int $tries = 1;
 
+    public ?string $knowledgeRunId = null;
+
     public function __construct(
         public string $runId,
         public int $teamId,
@@ -29,10 +31,27 @@ class EnrichGeneratedRecipeJob implements ShouldQueue
         public int $recipeId,
         public array $recipePayload,
         public ?float $zielVk = null,
+        ?string $knowledgeRunId = null,
     ) {
+        $this->knowledgeRunId = $knowledgeRunId;
+        if ($this->knowledgeRunId === null && true) {
+            $this->knowledgeRunId = \Platform\FoodAlchemist\Models\FoodAlchemistRecipe::query()
+                ->where('team_id', $this->teamId)->where('is_sales_recipe', false)->whereKey($this->recipeId)->value('knowledge_run_id');
+        }
     }
 
     public function handle(RecipeOneShotService $oneShot): void
+    {
+        $team = Team::find($this->teamId);
+        if ($this->knowledgeRunId === null || $team === null) {
+            $this->handleInRun($oneShot);
+            return;
+        }
+        $run = app(\Platform\FoodAlchemist\Services\Knowledge\KnowledgeRunService::class)->load($team, $this->knowledgeRunId);
+        app(\Platform\FoodAlchemist\Services\Knowledge\KnowledgeRunContext::class)->within($run, fn () => $this->handleInRun($oneShot));
+    }
+
+    private function handleInRun(RecipeOneShotService $oneShot): void
     {
         $team = Team::find($this->teamId);
         $user = User::find($this->userId);
@@ -54,7 +73,7 @@ class EnrichGeneratedRecipeJob implements ShouldQueue
             // anstoßen — best-effort, ein Dispatch-Fehler kippt das fertige Rezept nicht.
             try {
                 ConformanceCheckJob::dispatch(
-                    $this->teamId, $this->userId, $recipe->is_sales_recipe ? 'gericht' : 'basisrezept', (int) $recipe->id,
+                    $this->teamId, $this->userId, $recipe->is_sales_recipe ? 'gericht' : 'basisrezept', (int) $recipe->id, $this->knowledgeRunId,
                 );
             } catch (\Throwable $e) {
                 // schlucken — Konformität ist nachgelagert, nie ein Grund für einen Enrich-Fehler.

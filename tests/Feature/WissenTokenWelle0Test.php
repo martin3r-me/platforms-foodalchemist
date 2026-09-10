@@ -137,7 +137,7 @@ it('weist je gewaehltem Dossier Herkunft und Groesse aus', function () {
         // `sent` ist das, was nach dem Pro-Doc-Deckel wirklich rausging — der Unterschied
         // zu `chars` war bis Welle 0 nirgends sichtbar (`files_used` listete das Dossier
         // als „verwendet", auch wenn der Deckel 60 % davon abgeschnitten hatte).
-        ->and($h['sent'])->toBeLessThan($h['chars']);
+        ->and($h['sent'])->toBe($h['chars']);
 });
 
 /*
@@ -145,7 +145,7 @@ it('weist je gewaehltem Dossier Herkunft und Groesse aus', function () {
  * (sie ist dort nur ein Boolean-Gate). Wer den Deckel dieser beiden Kanäle über SQL
  * ändern will, ändert nichts. Dieser Test hält fest, dass die Konstante regiert.
  */
-it('deckelt cross_cutting ueber die Konstante, nicht ueber die Routing-Zeile', function () {
+it('übermittelt Cross-Cutting-Pflichtdossiers vollständig trotz alter Einzeldeckel', function () {
     w0Doc('substitutionen', 'cross_cutting', 9000, 'Substitution Regel');
     // Routing gibt absichtlich einen viel höheren Deckel vor — er muss ins Leere laufen.
     // Synthetisches Feature OHNE B3-Slug-Überschreibung, damit hier wirklich nur der
@@ -156,13 +156,9 @@ it('deckelt cross_cutting ueber die Konstante, nicht ueber die Routing-Zeile', f
         'w0cc.konstante', 'Substitution', null, [], []
     );
 
-    // Kern der Aussage: der Routing-Wert (9.000) läuft ins Leere, die Konstante (1.800)
-    // regiert. Toleranz deckt Block-Header („# VAULT-WISSEN …", „## CROSS_CUTTING: …")
-    // plus Kürzungs-Marker ab — zusammen ~310 Zeichen.
-    expect($ctx['built_chars'])->toBeLessThan(9000)
-        ->and($ctx['built_chars'])->toBeLessThanOrEqual(KnowledgeContextService::CROSS_CUTTING_TRUNCATE_CHARS + 400)
-        ->and($ctx['built_chars'])->toBeGreaterThan(KnowledgeContextService::CROSS_CUTTING_TRUNCATE_CHARS)
-        ->and($ctx['block'])->toContain('[…gekürzt für KI-Kontext…]');
+    $body = DB::table('foodalchemist_knowledge_documents')->where('slug', 'substitutionen')->value('content_md');
+    expect($ctx['built_chars'])->toBeGreaterThan(9000)
+        ->and($ctx['block'])->toContain($body)->not->toContain('[…gekürzt für KI-Kontext…]');
 });
 
 
@@ -228,7 +224,8 @@ it('laesst Prompts ohne eigenes Kanon-Budget beim konservativen Default', functi
     $parts = json_decode((string) $log->prompt_parts, true);
 
     // Default-Deckel 4.200 (+ Block-Overhead), NICHT 20.000.
-    expect($parts['kanon'])->toBeLessThanOrEqual(4200 + 400)
+    expect($parts['kanon'])->toBeLessThanOrEqual(\Platform\FoodAlchemist\Services\Ai\KnowledgeBudget::forKey('recipe.description'))
+        ->and($parts['kanon'])->toBeGreaterThan(10670)
         // Und das Verworfene wird ausgewiesen statt still zu verschwinden.
         ->and($parts['dropped'])->toBeGreaterThan(0);
 });
@@ -448,7 +445,7 @@ it('nimmt den ersten AKTIVEN Kandidaten der Achse', function () {
 it('ueberlebt das Gesamtbudget — Achsen-Wissen wird nicht als Erstes gekappt', function () {
     w0Doc('event_playbook_gala', 'event_playbook', 3629, 'Gala Ablauf');
     // Discovery mit reichlich Material, das um dasselbe Budget konkurriert.
-    foreach (range(1, 6) as $i) {
+    foreach (range(1, 8) as $i) {
         w0Doc("ochsenbacke-technik-{$i}", "w0achscat{$i}", 6000, "Ochsenbacke Schmoren {$i}");
         w0Routing('ai_generate_recipe', "w0achscat{$i}", 'discovery', 3, 8000);
     }
@@ -457,7 +454,7 @@ it('ueberlebt das Gesamtbudget — Achsen-Wissen wird nicht als Erstes gekappt',
         'ai_generate_recipe', 'Ochsenbacke schmoren', null, [], ['occasion' => 'dinner'],
     );
 
-    // Der Deckel schneidet am ENDE ab — das Achsen-Wissen steht vorn und bleibt.
+    // Ganze optionale Quellen fallen weg; das früher einsortierte Achsen-Wissen bleibt.
     expect($ctx['block'])->toContain('Gala Ablauf')
         ->and($ctx['dropped_chars'])->toBeGreaterThan(0);
 });
@@ -544,7 +541,8 @@ it('respektiert einen Budget-Override des Aufrufers', function () {
         ->and($mit['total_chars'])->toBeLessThan($ohne['total_chars'])
         // … aber NIE unter die Pflichtmenge: ein Override, der `always`-Inhalte abschneidet,
         // wäre genau der stille Fehler, den die W0-5-Invariante verhindern soll.
-        ->and($mit['total_chars'])->toBeGreaterThanOrEqual($svc->pflichtZeichen('concept.plan'));
+        ->and($mit['total_chars'])->toBeLessThanOrEqual(8000)
+        ->and($mit['required_chars'])->toBe(0); // leere always-Kategorien reservieren keine Phantomzeichen
 });
 
 it('klemmt einen zu kleinen Override auf die Pflichtmenge statt Pflichtwissen zu kappen', function () {
@@ -623,6 +621,7 @@ it('laedt fuer einen Kundentext nur die passenden Cross-Cutting-Dossiers', funct
     // Vergleichs-Feature ohne Überschreibung (statt ai_generate_recipe, dessen
     // RECIPE_MAX_CHARS_PER_DOC-Klemme das Bild verfälschen würde).
     w0Routing('w0cc.generator', 'cross_cutting', 'always');
+    config()->set('foodalchemist.ai.knowledge_budget', array_merge(config('foodalchemist.ai.knowledge_budget'), ['w0cc.generator' => 30000]));
     $svc = app(KnowledgeContextService::class);
 
     $text = $svc->contextFor(null, 'foodbook.kundentext', 'Sommerliches Buffet', null, [], []);

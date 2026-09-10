@@ -96,6 +96,29 @@ class RecipesGenerateTool extends FoodAlchemistTool implements ToolContract, Too
     public function execute(array $arguments, ToolContext $context): ToolResult
     {
         $team = $this->team($context);
+        if ($team === null) return ToolResult::error('Kein Team im Kontext.', 'NO_TEAM');
+        if (! $context->user instanceof \Platform\Core\Models\User) {
+            return ToolResult::error('Kein unterstützter Nutzer im Kontext.', 'NO_USER');
+        }
+        // MCP ist die Autorität für diesen Aufruf. Kein Login/Teamwechsel in der Sitzung:
+        // nur ein temporärer Nutzer-Klon für bestehende Auth-basierte KI-Dienste.
+        $guard = auth()->guard();
+        $previous = $guard->user();
+        $actor = clone $context->user;
+        $actor->setAttribute('current_team_id', $team->id);
+        $actor->setRelation('currentTeamRelation', $team);
+        $actor->setRelation('currentTeam', $team);
+        $guard->setUser($actor);
+        try {
+            return $this->executeInContext($arguments, $context);
+        } finally {
+            $previous === null ? $guard->forgetUser() : $guard->setUser($previous);
+        }
+    }
+
+    private function executeInContext(array $arguments, ToolContext $context): ToolResult
+    {
+        $team = $this->team($context);
         if ($team === null) {
             return ToolResult::error('Kein Team im Kontext.', 'NO_TEAM');
         }

@@ -187,7 +187,7 @@ it('GT-13-10: Pairing-Block klassisch — eine salbei-Zeile, nur Klassisch-Partn
         ->and($ctx['block'])->toContain('erfinde KEINE unbelegten Paarungen');
 });
 
-it('GT-13-11: Grounding koriander → beide Sorten-Dokus per Präfix, je 1.400 Z., dedupliziert', function () {
+it('GT-13-11: Grounding koriander → beide Sorten-Dokus per Präfix, vollständig, dedupliziert', function () {
     ($this->mkRouting)('ai_infer_ankers', 'pairing', 'grounding', 3, 1400);
     ($this->mkDoc)('pairing.koriander_blatt', 'pairing', str_repeat('B', 2000));
     ($this->mkDoc)('pairing.koriander_saat', 'pairing', str_repeat('S', 2000));
@@ -203,8 +203,8 @@ it('GT-13-11: Grounding koriander → beide Sorten-Dokus per Präfix, je 1.400 Z
 
     expect(substr_count($ctx['block'], '### Pairing-Doku: koriander_blatt'))->toBe(1)
         ->and(substr_count($ctx['block'], '### Pairing-Doku: koriander_saat'))->toBe(1)
-        ->and(substr_count($ctx['block'], '[…gekürzt für KI-Kontext…]'))->toBe(2)
-        ->and(str_contains($ctx['block'], str_repeat('B', 1401)))->toBeFalse();
+        ->and(substr_count($ctx['block'], '[…gekürzt für KI-Kontext…]'))->toBe(0)
+        ->and($ctx['block'])->toContain(str_repeat('B', 2000), str_repeat('S', 2000));
 });
 
 it('Inv. 7: ai_extract_recipe bleibt BEWUSST ohne Wissen (Routing none)', function () {
@@ -214,28 +214,19 @@ it('Inv. 7: ai_extract_recipe bleibt BEWUSST ohne Wissen (Routing none)', functi
     expect($this->svc->contextFor(null, 'ai_extract_recipe', 'Lachs mit Butter')['block'])->toBe('');
 });
 
-it('DoD: Assembly hält das Gesamtbudget — Rezeptwissen auf RECIPE_MAX_KNOWLEDGE_CHARS gedeckelt', function () {
+it('DoD: Assembly stoppt wenn allein die Pflichtquellen das Gesamtbudget übersteigen', function () {
     ($this->seedGenerator)(str_repeat('D', 20000));
     DB::table('foodalchemist_knowledge_documents')->where('category', 'cross_cutting')
         ->update(['content_md' => str_repeat('C', 20000)]);
-    ($this->mkDoc)('schwein', 'domain', str_repeat('D', 20000));      // 4. Domain via Fallback unmöglich — Aliase decken 3
 
-    $ctx = $this->svc->contextFor(null, 'ai_generate_recipe', 'Lachs mit brauner Butter und Walnuss');
-
-    // +40 Toleranz für den Kürzungs-Marker, den truncate() NACH dem Deckel anhängt
-    // (gleiche Toleranz wie RecipeKnowledgeBudgetTest).
-    expect($ctx['total_chars'])->toBeLessThanOrEqual(KnowledgeContextService::RECIPE_MAX_KNOWLEDGE_CHARS + 40)
-        ->and($ctx['total_chars'])->toBe(mb_strlen($ctx['block']))
-        // Der Block endet im Marker = das Gesamtbudget hat wirklich zugeschlagen.
-        ->and($ctx['block'])->toEndWith('[…gekürzt für KI-Kontext…]')
-        // Jedes geladene Dossier ist zusätzlich pro Doc gekappt. Eine EXAKTE Marker-Zahl
-        // (früher 7+3) ist seit W0-4 nicht mehr aussagekräftig: bei 12.000 Gesamtdeckel
-        // und 2.400 pro Doc ist der Block schon zu Ende, bevor alle zehn Dossiers
-        // angehängt sind — die hinteren Marker existieren gar nicht mehr im Ergebnis.
-        ->and(substr_count($ctx['block'], '[…gekürzt für KI-Kontext…]'))->toBeGreaterThanOrEqual(2)
-        // W0-0/W0-6: das Verworfene wird ausgewiesen statt still zu verschwinden.
-        ->and($ctx['built_chars'])->toBeGreaterThan($ctx['total_chars'])
-        ->and($ctx['dropped_chars'])->toBeGreaterThan(0);
+    // Sieben always-Quellen à 2.400 Zeichen passen schon ohne Domain-Discovery
+    // nicht in 12.000 Zeichen. Der frühere Test verlangte genau den Defekt:
+    // Pflichttexte abschneiden und die fehlenden Quellen trotzdem als benutzt melden.
+    expect(fn () => $this->svc->contextFor(null, 'ai_generate_recipe', 'Lachs mit brauner Butter und Walnuss'))
+        ->toThrow(\Platform\FoodAlchemist\Services\Ai\KnowledgeBudgetExceeded::class);
+    $measurement = $this->svc->pflichtBudgetFuer(null, 'ai_generate_recipe');
+    expect($measurement['ok'])->toBeFalse()
+        ->and($measurement['required_chars'])->toBeGreaterThan(KnowledgeContextService::RECIPE_MAX_KNOWLEDGE_CHARS);
 });
 
 // ── S1 (2026-08-07): generische, skalierbare discovery für wachsende Kategorien ──

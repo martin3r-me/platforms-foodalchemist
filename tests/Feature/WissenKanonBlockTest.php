@@ -132,7 +132,7 @@ it('ohne Kanon bleibt der Regelwerk-Block LEER — auch mit Alt-Bindung', functi
 });
 
 it('pflicht kommt immer ganz, wenn_platz nur im Budget und nie angeschnitten', function () {
-    // recipe.description hat keinen eigenen Deckel → Default total 4.200.
+    config()->set('foodalchemist.ai.knowledge_budget', ['recipe.description' => 4200]);
     ($this->mkDoc)('k2-pflicht', 3000, 'Pflicht');
     ($this->mkDoc)('k2-platz-ok', 1000, 'Platz');
     ($this->mkDoc)('k2-platz-zu-gross', 1500, 'Zuviel');
@@ -153,18 +153,18 @@ it('pflicht kommt immer ganz, wenn_platz nur im Budget und nie angeschnitten', f
     expect($block)->toContain('## KANON: k2-pflicht')->toContain('## KANON: k2-platz-ok')
         ->not->toContain('k2-platz-zu-gross')->not->toContain('k2-platz-schon-da')
         ->not->toContain('[…gekürzt')
-        ->and($parts['dropped'])->toBe(1500 + 200)
+        ->and($parts['dropped'])->toBe(mb_strlen("## KANON: k2-platz-zu-gross\n\n") + 1500 + 7)
         ->and(json_decode((string) $log->knowledge_used, true))->toContain('k2-platz-schon-da@v1')->toContain('k2-pflicht@v1');
 });
 
-it('pflicht wird auch über dem Budget nicht gekappt — Kuration entscheidet, nicht der Deckel', function () {
+it('stoppt vor dem Modellaufruf wenn Pflichtwissen das gemeinsame Budget überschreitet', function () {
+    config()->set('foodalchemist.ai.knowledge_budget', ['recipe.description' => 4200]);
     ($this->mkDoc)('k2-pflicht-a', 3900, 'Alpha');
     ($this->mkDoc)('k2-pflicht-b', 3900, 'Beta');
     ($this->kanon)('k2-pflicht-a', 10);
     ($this->kanon)('k2-pflicht-b', 20);
 
-    app(AiGatewayService::class)->propose('recipe.description', ['description' => 'Fond.']);
-
-    $parts = json_decode((string) ($this->log)()->prompt_parts, true);
-    expect($parts['kanon'])->toBeGreaterThan(7800)->and($parts['dropped'])->toBe(0);
+    expect(fn () => app(AiGatewayService::class)->propose('recipe.description', ['description' => 'Fond.']))
+        ->toThrow(\Platform\FoodAlchemist\Services\Ai\KnowledgeBudgetExceeded::class);
+    expect($this->messages)->toBe([]);
 });

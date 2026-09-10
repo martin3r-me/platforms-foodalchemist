@@ -67,9 +67,10 @@ class WissensProfilService
         // Alias mehr und liefert nur die Alt-Zeilen). Der Bericht muss denselben Schluessel
         // benutzen, mit dem der Generator ruft.
         $routing = app(KnowledgeContextService::class)->wirksameRoutings($promptKey)
-            ->sortBy('category')->values()
+            ->sortBy(fn ($r) => ! empty($r->art) ? 'art:'.$r->art : $r->category)->values()
             ->map(fn ($r) => [
                 'category' => (string) $r->category,
+                ...(! empty($r->art) ? ['art' => $r->art] : []),
                 'mode' => (string) $r->mode,
                 'max_docs' => $r->max_docs !== null ? (int) $r->max_docs : null,
                 'max_chars_per_doc' => $r->max_chars_per_doc !== null ? (int) $r->max_chars_per_doc : null,
@@ -77,8 +78,8 @@ class WissensProfilService
 
         $pflicht = $docs->where('mode', 'pflicht')->values();
         $wennPlatz = $docs->where('mode', 'wenn_platz')->values();
-        $budgetBound = (int) $this->gateway->boundBudgetFuer($promptKey)['total'];
-        $pflichtZeichen = (int) $pflicht->sum('char_count');
+        $budgetTotal = (int) $this->gateway->boundBudgetFuer($promptKey)['total'];
+        $pflichtZeichen = $this->wissen->pflichtBudgetFuer($team, $promptKey)['required_chars'];
         $wirksamesRouting = array_values(array_filter($routing, fn ($r) => $r['mode'] !== 'none'));
 
         // Alt-Bindungen an diesem Key. Bis Spec 52 · F2 hiess dieser Befund
@@ -95,7 +96,7 @@ class WissensProfilService
             ->whereNull('d.deleted_at')->where('d.active', 1)
             ->pluck('d.slug')->map(fn ($x) => (string) $x)->all();
 
-        $befunde = $this->befunde($kaputt, $pflichtZeichen, $budgetBound, $pflicht, $team);
+        $befunde = $this->befunde($kaputt, $pflichtZeichen, $budgetTotal, $pflicht, $team);
 
         // ★ Spec 52 · F4 — eine Routing-Zeile, die NICHTS mehr lädt.
         //
@@ -152,15 +153,14 @@ class WissensProfilService
             'wenn_platz' => $wennPlatz->map(fn ($d) => ['slug' => $d->slug, 'version' => $d->version, 'zeichen' => $d->char_count])->all(),
             'pflicht_zeichen' => $pflichtZeichen,
             'routing' => $routing,
-            'budget_bound' => $budgetBound,
-            'budget_retrieval' => $this->wissen->budgetFuer($promptKey),
+            'budget_total' => $budgetTotal,
             // hasCanon() ohne Doc-Status vs. tatsächlich aufgelöste Docs: klaffen sie
             // auseinander, ist genau der stille Fall eingetreten.
             'kanon_zeilen_vorhanden' => $hatKanonZeilen,
             'kanon_aufgeloest' => $docs->count(),
             'alt_bindungen' => $altBindungen,
             'befunde' => $befunde,
-            'fingerabdruck' => $this->fingerabdruck($promptKey, $role, $routingKey, $pflicht, $wennPlatz, $routing, $budgetBound),
+            'fingerabdruck' => $this->fingerabdruck($promptKey, $role, $routingKey, $pflicht, $wennPlatz, $routing, $budgetTotal),
         ];
     }
 
@@ -177,14 +177,14 @@ class WissensProfilService
      */
     private function fingerabdruck(
         string $promptKey, string $role, string $routingKey,
-        $pflicht, $wennPlatz, array $routing, int $budgetBound,
+        $pflicht, $wennPlatz, array $routing, int $budgetTotal,
     ): string {
         $teile = [
-            'k' => $promptKey, 'r' => $role, 'rk' => $routingKey, 'b' => $budgetBound,
+            'k' => $promptKey, 'r' => $role, 'rk' => $routingKey, 'b' => $budgetTotal,
             'p' => $pflicht->map(fn ($d) => $d->slug.'@'.$d->version)->all(),
             'w' => $wennPlatz->map(fn ($d) => $d->slug.'@'.$d->version)->all(),
             'ro' => array_map(
-                fn ($r) => $r['category'].':'.$r['mode'].':'.($r['max_docs'] ?? '-').':'.($r['max_chars_per_doc'] ?? '-'),
+                fn ($r) => (isset($r['art']) ? 'art:'.$r['art'] : $r['category']).':'.$r['mode'].':'.($r['max_docs'] ?? '-'),
                 $routing,
             ),
         ];
@@ -197,7 +197,7 @@ class WissensProfilService
      * @param \Illuminate\Support\Collection<int, object> $pflicht
      * @return list<array<string, mixed>>
      */
-    private function befunde(array $kaputt, int $pflichtZeichen, int $budgetBound, $pflicht, Team $team): array
+    private function befunde(array $kaputt, int $pflichtZeichen, int $budgetTotal, $pflicht, Team $team): array
     {
         $befunde = [];
 
@@ -228,14 +228,14 @@ class WissensProfilService
         // Pflicht wird NIE gekappt (WissenKanonBlockTest). Reisst sie den Deckel, geht das
         // Budget nicht auf Kosten der Pflicht, sondern auf Kosten von allem anderen — der
         // Retrieval-Block schrumpft still. Deshalb ein Befund, kein Automatismus.
-        if ($pflichtZeichen > $budgetBound && $budgetBound > 0) {
+        if ($pflichtZeichen > $budgetTotal && $budgetTotal > 0) {
             $befunde[] = [
                 'code' => 'pflicht_ueber_budget',
                 'schwere' => 'blockiert',
                 'nachfolger' => [],
                 'slug' => null,
                 'text' => 'Pflichtwissen ('.number_format($pflichtZeichen, 0, ',', '.').' Z.) überschreitet das Budget ('
-                    .number_format($budgetBound, 0, ',', '.').' Z.). Pflicht wird nicht gekappt — es verdrängt das übrige Wissen.',
+                    .number_format($budgetTotal, 0, ',', '.').' Z.). Pflicht wird nicht gekappt — es verdrängt das übrige Wissen.',
             ];
         }
 
@@ -334,7 +334,7 @@ class WissensProfilService
             ->where('art', Wissensart::DATENWERK)->where('active', 1)->whereNull('deleted_at');
         TeamScope::applyVisible($q, 'team_id', $team);
 
-        return $q->orderBy('slug')->pluck('slug')
+        return $q->orderBy('slug')->get(['slug', 'geltung', 'datenwerte'])->reject(fn ($d) => WissensGeltung::lesen($d->geltung) !== [] || collect(WissensGeltung::lesen($d->datenwerte))->contains(fn ($v) => ! empty($v['geltung'])))->pluck('slug')
             ->map(fn ($s) => (string) $s)
             ->reject(fn ($s) => isset($gebunden[$s]))
             ->values()->all();

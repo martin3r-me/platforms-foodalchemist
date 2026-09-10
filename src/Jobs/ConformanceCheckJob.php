@@ -32,16 +32,35 @@ class ConformanceCheckJob implements ShouldQueue
 
     public int $tries = 1;
 
+    public ?string $knowledgeRunId = null;
+
     public function __construct(
         public int $teamId,
         public int $userId,
         /** Adapter-Typ: basisrezept | gericht (vk) | … */
         public string $artifactTyp,
         public int $artifactId,
+        ?string $knowledgeRunId = null,
     ) {
+        $this->knowledgeRunId = $knowledgeRunId;
+        if ($this->knowledgeRunId === null && in_array($this->artifactTyp, ['recipe', 'basisrezept'], true)) {
+            $this->knowledgeRunId = \Platform\FoodAlchemist\Models\FoodAlchemistRecipe::query()
+                ->where('team_id', $this->teamId)->where('is_sales_recipe', false)->whereKey($this->artifactId)->value('knowledge_run_id');
+        }
     }
 
     public function handle(ConformanceService $conformance): void
+    {
+        $team = Team::find($this->teamId);
+        if ($this->knowledgeRunId === null || $team === null) {
+            $this->handleInRun($conformance);
+            return;
+        }
+        $run = app(\Platform\FoodAlchemist\Services\Knowledge\KnowledgeRunService::class)->load($team, $this->knowledgeRunId);
+        app(\Platform\FoodAlchemist\Services\Knowledge\KnowledgeRunContext::class)->within($run, fn () => $this->handleInRun($conformance));
+    }
+
+    private function handleInRun(ConformanceService $conformance): void
     {
         $team = Team::find($this->teamId);
         $user = User::find($this->userId);

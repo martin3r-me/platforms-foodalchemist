@@ -94,19 +94,10 @@ it('eine ALT-Bindung am Bereich wirkt ebenfalls nicht mehr — auch nicht ohne K
         ->and((string) $log->knowledge_used)->not->toContain('dr-alt-bindung');
 });
 
-it('die Deckel tragen die Pflichtmenge — sonst kommt das Dossier als Anschnitt', function () {
-    // Unverändert gültig: der Deckel gehört jetzt dem Kanon (der Bound-Kanal ist weg), aber
-    // die Zahlen und ihr Grund bleiben dieselben.
-    $b = config('foodalchemist.ai.bound_knowledge_budget');
-
-    // Kanon-Pflicht recipe.generator = 13 Dossiers Σ 33.902 — der Deckel muss die Summe
-    // tragen, sonst behauptet die Config ein Budget, das der Prompt längst reisst.
-    expect($b['recipe.generator']['total'])->toBeGreaterThanOrEqual(33902)
-        // …und chars_per_doc muss das GRÖSSTE Pflicht-Dossier ganz fassen, nicht 8.400 davon.
-        ->and($b['recipe.generator']['chars_per_doc'])->toBeGreaterThanOrEqual(10670)
-        ->and($b['vk.generator']['total'])->toBeGreaterThanOrEqual(36091)
-        ->and($b['vk.generator']['chars_per_doc'])->toBeGreaterThanOrEqual(10670)
-        // recipe.eigenschaften braucht einen EIGENEN Deckel — der Default (3 × 1.400)
-        // hätte 7.089 Zeichen auf einen 1.400-Zeichen-Kopf geschnitten.
-        ->and($b['recipe.eigenschaften']['chars_per_doc'])->toBeGreaterThanOrEqual(7089);
+it('das gemeinsame Budget trägt die bisherige Pflichtmenge ohne Einzeldeckel', function () {
+    $b = config('foodalchemist.ai.knowledge_budget');
+    expect(config('foodalchemist.ai.bound_knowledge_budget'))->toBeNull()
+        ->and($b['recipe.generator'])->toBeGreaterThanOrEqual(33902)
+        ->and($b['vk.generator'])->toBeGreaterThanOrEqual(36091)
+        ->and($b['recipe.eigenschaften'])->toBeGreaterThanOrEqual(7089);
 });

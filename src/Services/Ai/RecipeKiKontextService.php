@@ -81,9 +81,9 @@ class RecipeKiKontextService
      * blendet drei davon aus. Wer wissen will, ob ein Anreicherungs-Schritt Wissen bekam, sieht
      * es dort nie.
      *
-     * Solange es keine Lauf-ID gibt (Spec 52/C1), ist `target_table`/`target_id` die einzige
-     * Klammer — und die trägt nur, was der Aufrufer selbst gesetzt hat. Fehlt eine Zeile hier,
-     * heisst das also nicht „kein Aufruf", sondern „nicht ans Rezept gehängt". Deshalb gibt
+     * C1: Zielzuordnung und Wissens-Lauf-ID ergänzen sich. Folge-Calls desselben Laufs
+     * werden auch ohne eigenes Rezept-Ziel erfasst. Bei Alt-Läufen bedeutet eine fehlende
+     * Zeile weiterhin möglicherweise nur „nicht ans Rezept gehängt". Deshalb gibt
      * diese Methode zurück, was sie findet, und behauptet keine Vollständigkeit.
      *
      * @return list<array<string, mixed>>
@@ -92,20 +92,33 @@ class RecipeKiKontextService
     {
         $hatKanaele = \Illuminate\Support\Facades\Schema::hasColumn('foodalchemist_ai_call_log', 'knowledge_channels');
 
+        $hatLaeufe = \Illuminate\Support\Facades\Schema::hasColumn('foodalchemist_ai_call_log', 'knowledge_run_id');
+        $linkedRuns = DB::table('foodalchemist_ai_call_log')
+            ->where('team_id', (int) $rezept->team_id)->where('target_table', 'foodalchemist_recipes')
+            ->where('target_id', (int) $rezept->id)->whereNotNull('knowledge_run_id')->select('knowledge_run_id');
+
         $rows = DB::table('foodalchemist_ai_call_log')
             ->where('team_id', (int) $rezept->team_id)
-            ->where('target_table', 'foodalchemist_recipes')
-            ->where('target_id', (int) $rezept->id)
+            ->where(function ($query) use ($rezept, $hatLaeufe, $linkedRuns) {
+                $query->where(fn ($target) => $target->where('target_table', 'foodalchemist_recipes')->where('target_id', (int) $rezept->id));
+                if ($hatLaeufe) {
+                    $query->orWhereIn('knowledge_run_id', $linkedRuns);
+                    if ($rezept->knowledge_run_id !== null) $query->orWhere('knowledge_run_id', $rezept->knowledge_run_id);
+                }
+            })
             ->orderBy('id')
             ->get(['id', 'feature', 'model', 'tier', 'knowledge_used', 'prompt_chars', 'prompt_parts',
                 'tokens_in', 'tokens_out', 'tokens_cached', 'error', 'created_at',
-                ...($hatKanaele ? ['knowledge_channels'] : [])]);
+                ...($hatKanaele ? ['knowledge_channels'] : []),
+                ...($hatLaeufe ? ['knowledge_run_id', 'knowledge_snapshot_hash'] : [])]);
 
         return $rows->map(function ($row) {
             $kanaele = is_string($row->knowledge_channels ?? null) ? (json_decode($row->knowledge_channels, true) ?: []) : [];
             $flach = is_string($row->knowledge_used) ? (json_decode($row->knowledge_used, true) ?: []) : [];
 
             return [
+                'knowledge_run_id' => $row->knowledge_run_id ?? null,
+                'knowledge_snapshot_hash' => $row->knowledge_snapshot_hash ?? null,
                 'call_log_id' => (int) $row->id,
                 'feature' => (string) $row->feature,
                 'erstellt_am' => $row->created_at !== null ? (string) $row->created_at : null,
@@ -115,6 +128,37 @@ class RecipeKiKontextService
                 'wissen_slugs' => is_array($flach) ? array_values($flach) : [],
             ];
         })->values()->all();
+    }
+
+    /** Historische Anzeige: Audit-Auswahl + gespeicherte Quellversionen, keine neue Suche. */
+    public function historieFuerRezept(FoodAlchemistRecipe $recipe): array
+    {
+        $team = \Platform\Core\Models\Team::find($recipe->team_id);
+        if ($team === null) return [];
+        $runs = [];
+        $calls = $this->alleCallsFuerRezept($recipe);
+        foreach ($calls as &$call) {
+            $call['snapshot_quellen'] = [];
+            $call['snapshot_fehler'] = null;
+            $id = $call['knowledge_run_id'];
+            if ($id !== null) {
+                if (! array_key_exists($id, $runs)) {
+                    try {
+                        $runs[$id] = app(\Platform\FoodAlchemist\Services\Knowledge\KnowledgeRunService::class)->load($team, $id);
+                    } catch (\RuntimeException|\JsonException $e) {
+                        $runs[$id] = null;
+                    }
+                }
+                $run = $runs[$id];
+                if ($run === null || $run->snapshotHash !== $call['knowledge_snapshot_hash']) {
+                    $call['snapshot_fehler'] = 'Gespeicherter Kanonstand fehlt oder ist nicht verifizierbar.';
+                } else {
+                    $call['snapshot_quellen'] = $run->selectedDocuments($call['wissen_slugs']);
+                }
+            }
+            $call['ohne_gespeicherten_text'] = array_values(array_diff($call['wissen_slugs'], array_column($call['snapshot_quellen'], 'file')));
+        }
+        return $calls;
     }
 
     /**

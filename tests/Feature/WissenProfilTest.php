@@ -131,7 +131,7 @@ it('meldet Pflichtwissen ueber Budget, weil Pflicht nie gekappt wird', function 
     // nicht die Pflicht, sondern alles andere — still.
     config([
         'foodalchemist.prompts' => ['test.eng' => ['tier' => 'B', 'task' => 'x']],
-        'foodalchemist.ai.bound_knowledge_budget' => ['test.eng' => ['docs' => 5, 'chars_per_doc' => 4000, 'total' => 1000]],
+        'foodalchemist.ai.knowledge_budget' => ['test.eng' => 1000],
     ]);
     ($this->mkKanon)(($this->mkDoc)('gross', zeichen: 3000), 'test.eng');
 
@@ -187,11 +187,9 @@ it('MCP: knowledge_profil.GET liefert dasselbe und weist unbekannte Keys ab', fu
     expect($einzeln->success)->toBeTrue((string) ($einzeln->error ?? ''))
         ->and($einzeln->data['profil']['zustand'])->toBe('fehlerhaft')
         ->and($alle->data['blockierend'])->toBe(1)
-        // Der Sammeltext MUSS die Faelle unterscheiden: `pflicht` ignoriert das Budget per
-        // Vertrag, ein `pflicht_ueber_budget` heisst also nicht „kommt nicht an". Die erste
-        // Fassung warf beides in einen Satz — dieser Test hielt den Ueberclaim fest.
+        // Der Hinweis unterscheidet fehlende Quellen vom expliziten Budgetabbruch.
         ->and($alle->data['hinweis'])->toContain('dossier_*')
-        ->and($alle->data['hinweis'])->toContain('kommt an, aber der Deckel ist zu klein')
+        ->and($alle->data['hinweis'])->toContain('der Modellaufruf wird bis zur Korrektur abgebrochen')
         ->and($tool->execute(['prompt_key' => 'gibt.es.nicht'], $kontext)->errorCode)->toBe('VALIDATION_ERROR')
         ->and($tool->execute(['role' => 'quatsch'], $kontext)->errorCode)->toBe('VALIDATION_ERROR');
 });
