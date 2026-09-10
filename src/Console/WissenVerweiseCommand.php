@@ -88,11 +88,25 @@ class WissenVerweiseCommand extends Command
      */
     private function pruefe($docs): array
     {
-        // Was der Prompt LIEFERT: die §§ aus den Titeln. Ein Bereichstitel („§1.6–§1.9")
-        // nennt beide Enden; die Zwischenstufen deckt die Präfix-Regel unten mit ab.
+        /*
+         * Was der Prompt LIEFERT: die §§ aus dem Titel UND aus den Überschriften des Inhalts.
+         *
+         * ★ Die Überschriften sind nicht optional. Gemessen auf demo (2026-09-10): das Dossier
+         * `regelwerk-foodbook-grundgerust` heißt schlicht „Regelwerk Foodbook-Grundgerüst" und
+         * trägt §1–§5 als `## §n`-Überschriften im eigenen Text. Ohne die Überschriften meldete
+         * der Wächter dort fünf hängende Verweise, die alle IM SELBEN Dokument stehen — fünf
+         * von neunzehn Befunden wären falsch gewesen. Ein Wächter, der Fehlalarme liefert,
+         * wird abgeschaltet statt befolgt.
+         *
+         * Ein Bereichstitel („§1.6–§1.9") nennt beide Enden; die Zwischenstufen deckt die
+         * Präfix-Regel unten mit ab.
+         */
         $bereitgestellt = [];
         foreach ($docs as $d) {
-            foreach ($this->paragraphen((string) ($d->title ?? '')) as $p) {
+            $quellen = (string) ($d->title ?? '');
+            preg_match_all('/^#{1,6}[^\n]*/mu', (string) ($d->content_md ?? ''), $ueberschriften);
+            $quellen .= "\n".implode("\n", $ueberschriften[0] ?? []);
+            foreach ($this->paragraphen($quellen) as $p) {
                 $bereitgestellt[$p] = true;
             }
         }
