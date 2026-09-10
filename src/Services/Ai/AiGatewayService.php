@@ -226,7 +226,10 @@ class AiGatewayService
         if ($boundSlugs !== []) {
             $knowledgeChannels['gebunden'] = array_values($boundSlugs);
         }
+        $knowledgeRun = app(\Platform\FoodAlchemist\Services\Knowledge\KnowledgeRunContext::class)->current($team === null ? null : (int) $team->id);
         $audit = [
+            'knowledge_run_id' => $knowledgeRun?->id,
+            'knowledge_snapshot_hash' => $knowledgeRun?->snapshotHash,
             'knowledge_used' => $knowledgeUsed,
             'knowledge_channels' => $knowledgeChannels !== [] ? $knowledgeChannels : null,
             'target_table' => $options['target_table'] ?? null,
@@ -694,6 +697,10 @@ class AiGatewayService
                 $values['prompt_chars'] = (int) $audit['prompt_chars'];
                 $values['prompt_parts'] = is_array($audit['prompt_parts'] ?? null)
                     ? json_encode($audit['prompt_parts'], JSON_UNESCAPED_UNICODE) : null;
+            }
+            if (isset($audit['knowledge_run_id'])) {
+                $values['knowledge_run_id'] = $audit['knowledge_run_id'];
+                $values['knowledge_snapshot_hash'] = $audit['knowledge_snapshot_hash'];
             }
             DB::table('foodalchemist_ai_call_log')->insert($values);
 

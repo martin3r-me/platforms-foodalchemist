@@ -34,7 +34,7 @@ class ConformanceService
      */
     public function pruefe(Team $team, string $typ, int $id): array
     {
-        return $this->pruefeAdapter($team, $this->adapter($typ), $id);
+        return $this->imWissenslauf($team, $typ, $id, fn () => $this->pruefeAdapter($team, $this->adapter($typ), $id));
     }
 
     /**
@@ -45,6 +45,19 @@ class ConformanceService
      * @return array{gesamturteil:string, confidence:float, befunde:array<int,array<string,mixed>>, geheilt:int, ablage:array<string,int>}
      */
     public function pruefeUndHeile(Team $team, string $typ, int $id, ?int $runId = null): array
+    {
+        return $this->imWissenslauf($team, $typ, $id, fn () => $this->pruefeUndHeileImLauf($team, $typ, $id, $runId));
+    }
+
+    private function imWissenslauf(Team $team, string $typ, int $id, callable $action): array
+    {
+        if (! in_array($typ, ['recipe', 'basisrezept', 'vk', 'gericht'], true)) return $action();
+        $recipe = app(RecipeService::class)->detailAnySicht($team, $id);
+        if ($recipe === null) throw new \RuntimeException('Rezept nicht gefunden oder nicht sichtbar.');
+        return app(\Platform\FoodAlchemist\Services\Knowledge\KnowledgeRunService::class)->withRecipe($team, $recipe, $action);
+    }
+
+    private function pruefeUndHeileImLauf(Team $team, string $typ, int $id, ?int $runId = null): array
     {
         $adapter = $this->adapter($typ);
         $vorher = $this->pruefeAdapter($team, $adapter, $id);

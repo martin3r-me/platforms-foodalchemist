@@ -46,6 +46,7 @@ class FoodAlchemistServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
+        $this->app->scoped(\Platform\FoodAlchemist\Services\Knowledge\KnowledgeRunContext::class);
         /**
          * Config laden
          * 

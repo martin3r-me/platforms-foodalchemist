@@ -57,6 +57,14 @@ class RecipeReviewService
      */
     public function pruefe(Team $team, int $recipeId): array
     {
+        $recipe = app(RecipeService::class)->detailAnySicht($team, $recipeId);
+        if ($recipe === null) throw new \RuntimeException('Rezept nicht gefunden oder nicht sichtbar.');
+        return app(\Platform\FoodAlchemist\Services\Knowledge\KnowledgeRunService::class)->withRecipe($team, $recipe,
+            fn () => $this->pruefeImLauf($team, $recipeId));
+    }
+
+    private function pruefeImLauf(Team $team, int $recipeId): array
+    {
         $r = app(RecipeService::class)->detailAnySicht($team, $recipeId);
         if ($r === null) {
             throw new \RuntimeException('Rezept nicht gefunden oder nicht sichtbar.');

@@ -30,8 +30,19 @@
 - Kein Rückfall auf Slug-Präfixe bei fehlendem Pflichtkanon. Fehlende/inaktive Pflichtquellen, fremdes aktives Team und Budgetüberschreitung stoppen vor dem Modell. Externe Wissensoptionen werden am migrierten Gateway-Eingang abgewiesen.
 - Das gemeinsame Prüfbudget für `conformance.check` beträgt 48.000 Zeichen (auch für die noch nicht migrierten Artefakttypen). Geroutetes Zusatzwissen bleibt im Userblock, der Kanon im Systemblock; die Quellen erscheinen im bestehenden Call-Log.
 - Beleg bei unverändertem Korpus: identischer System-Kanon-Fingerprint von Generator und Critic; vollständiges geroutetes Fachwissen; kein Präfix-Fallback; externe Wissenseinspeisung abgewiesen; fehlende zweite Pflichtquelle und zu kleines Budget blockieren.
-- Gezielte Tests: 41 bestanden, 1 übersprungen; zusätzlicher Vertragslauf 20 bestanden. Vollständige Suite folgt separat. Noch nicht deployt.
+- Gezielte Tests: 41 bestanden, 1 übersprungen; zusätzlicher Vertragslauf 20 bestanden. Vollständige Suite grün: 4.255 Tests, 4.249 bestanden, 6 übersprungen, 22.111 Assertions (knapp 25 Minuten), Commit `13c5d9ef`. Noch nicht deployt.
 - **C4 noch nicht vollständig abgenommen:** die Versionsfixierung über einen ganzen Lauf benötigt C1 (Lauf-ID/Profil-Snapshot). Der generische Profil-/Vorschaupfad kennt die artefaktspezifische Generator-Kanonquelle noch nicht; die Anzeige muss mit C7 nachgezogen werden. VK/GP/LA behalten zunächst den Präfix-Lader. Selbstheil-Kontext (C5), typisierter Gesamtvertrag (C1/C2) und Sidebar-Sprache (C3) sind offen.
+
+
+## Umsetzung 2026-09-10 — C1 Lauf-ID und Kanon-Snapshot (Branch feat/wissen-lauf-snapshot)
+
+- Eine neue Basisrezept-Generierung legt einen unveränderlichen Kanon-Snapshot mit UUID an. Gespeichert werden sichtbare explizite Kanon-Bindungen sämtlicher Scopes/Rollen, die vollständigen Quelltexte, Dossierversionen und bereits vorhandene Integritätsbefunde. Der Hash ist gegen JSON-Schlüssel-Umsortierung stabil.
+- Die Lauf-ID liegt am erzeugten Rezept. Anreicherung, Review und Konformität inklusive ihrer Heilrunde können den Stand wieder aufnehmen. Enrich-/Conformance-Jobs tragen die beim Dispatch ermittelte ID über Queue-Grenzen; ein inzwischen erneuerter Rezeptzeiger überschreibt sie nicht.
+- Der explizite Re-Check in der Planungs-Leitstelle beginnt einen neuen Wissenslauf. Alte Rezepte ohne Laufzuordnung verwenden weiter Live-Wissen. VK-Generierungen und der Override-/Streaming-Einstieg erzeugen in diesem Slice keinen neuen Snapshot.
+- Der Kanon-Schreibdienst bleibt unverändert: Dossier-/Bindungsänderungen beeinflussen neue Snapshots, aber nicht laufende Prüfungen. Fehlende/beschädigte Snapshots oder falsche Teams führen nicht zu einem Live-Fallback. Der aktive Kontext wird mit `finally` zurückgesetzt, auch bei verschachtelten Läufen und Exceptions.
+- Call-Log: `knowledge_run_id` und `knowledge_snapshot_hash`. Die Rezept-Aufrufhistorie findet damit auch Folge-Calls ohne eigenes `target_id`, einschließlich früherer am Rezept verankerter Läufe, mit unverändertem Teamfilter.
+- Gezielte Prüfung: erster Lauf 73/74 (ein falsch benannter Team-Testwert, korrigiert), danach 43/43 und 22/22. Belegt sind Wiederaufnahme nach Änderungen, Kopien statt veränderlicher Snapshot-Referenzen, Queue-Serialisierung, Generator-Verknüpfung, gemeinsames Audit, Teamgrenzen und Kontextbereinigung. Vollständige Suite folgt separat. Nicht deployt.
+- **Grenze:** Dies ist ein Kanon-Snapshot, noch kein vollständiger Profil-/Korpus-Snapshot. Discovery, Routing, Datenwerte, Budgets und Prompt-Texte bleiben live. Der vollständige getippte `RecipeAuftrag` und der Entzug externer Wissensoptionen bei allen Generator-Aufrufen (C2) sind noch offen. Die artefaktspezifische Vorschau/Inspektor-Anzeige (C7), Befund-Erdung (C5), Sidebar-Sprache und der Abnahmelauf bleiben ausstehend.
 
 
 ## Context

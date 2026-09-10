@@ -49,6 +49,23 @@ class RecipeGeneratorService
      */
     public function generiere(Team $team, string $description, array $parameter = [], ?array $kiRezeptOverride = null, bool $vkModus = false, ?string $createdVia = null, ?array $preparedContext = null, ?callable $onProgress = null): array
     {
+        if ($vkModus || $kiRezeptOverride !== null) {
+            return $this->generiereImLauf($team, $description, $parameter, $kiRezeptOverride, $vkModus, $createdVia, $preparedContext, $onProgress);
+        }
+        $runs = app(\Platform\FoodAlchemist\Services\Knowledge\KnowledgeRunService::class);
+        $run = $runs->start($team);
+        return app(\Platform\FoodAlchemist\Services\Knowledge\KnowledgeRunContext::class)->within($run,
+            function () use ($team, $description, $parameter, $createdVia, $preparedContext, $onProgress, $run) {
+                $result = $this->generiereImLauf($team, $description, $parameter, null, false, $createdVia, $preparedContext, $onProgress);
+                $recipe = $result['recipe'];
+                $recipe->forceFill(['knowledge_run_id' => $run->id])->save();
+                $result['knowledge_run_id'] = $run->id;
+                return $result;
+            });
+    }
+
+    private function generiereImLauf(Team $team, string $description, array $parameter = [], ?array $kiRezeptOverride = null, bool $vkModus = false, ?string $createdVia = null, ?array $preparedContext = null, ?callable $onProgress = null): array
+    {
         // P0.2: feine Fortschritts-Stufen — die UI zeigt live, WO der Lauf steht; ein
         // OOM-/Hänger-Tod bleibt am zuletzt gemeldeten Schritt stehen (Pinpoint der Ursache).
         $melde = static function (string $stufe) use ($onProgress): void {
