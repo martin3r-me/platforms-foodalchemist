@@ -233,10 +233,17 @@ it('#504-Muster: Tenancy — Rezept landet im Kontext-Team, Fremd-Team-GP wird N
     $res = $this->registry->get('foodalchemist.recipes.GENERATE')
         ->execute(['description' => 'Nordische Marinade'], new ToolContext($this->makeUser($this->childB, 'Kind B User'), $this->childB));
 
-    expect($res->success)->toBeTrue()
+    expect($res->success)->toBeTrue((string) $res->error)
         ->and($res->data['statistik']['bestand_gp'])->toBe(0)          // kein Leak über die Team-Grenze
         ->and($res->data['statistik']['offen'])->toBe(1)
-        ->and(FoodAlchemistRecipe::find($res->data['recipe']['id'])->team_id)->toBe($this->childB->id);
+        ->and(FoodAlchemistRecipe::find($res->data['recipe']['id'])->team_id)->toBe($this->childB->id)
+        ->and(auth()->user())->toBe($this->user);
+    $call = \Illuminate\Support\Facades\DB::table('foodalchemist_ai_call_log')->where('feature', 'recipe.generator')->latest('id')->first();
+    $recipe = FoodAlchemistRecipe::find($res->data['recipe']['id']);
+    expect($call->team_id)->toBe($this->childB->id)
+        ->and($call->knowledge_run_id)->toBe($recipe->knowledge_run_id)
+        ->and(\Illuminate\Support\Facades\DB::table('foodalchemist_knowledge_runs')->where('id', $call->knowledge_run_id)->value('team_id'))
+        ->toBe($this->childB->id);
 });
 
 it('#504-Muster: ohne Team im Kontext kein Schreibzugriff', function () {
@@ -322,4 +329,18 @@ it('L7a: voll_anreichern=true hängt die Kaskade an — die Lücken sind nach de
         ->and($r->taste_direction)->toBe('herzhaft')
         ->and($r->status->value)->toBe('draft')                          // One-Shot ≠ Freigabe
         ->and($r->created_via)->toBe('mcp');
+});
+
+
+it('stellt den vorherigen Nutzer auch nach einem Generatorfehler wieder her', function () {
+    ($this->stubKi)(['name' => 'Ohne Zutaten']);
+    $actor = $this->makeUser($this->childB, 'Fehlerpfad User');
+    $originalTeam = $actor->current_team_id;
+    $res = $this->registry->get('foodalchemist.recipes.GENERATE')->execute(
+        ['description' => 'Test'], new ToolContext($actor, $this->rootTeam));
+    expect($res->success)->toBeFalse()
+        ->and(auth()->user())->toBe($this->user)
+        ->and($actor->current_team_id)->toBe($originalTeam)
+        ->and($actor->fresh()->current_team_id)->toBe($originalTeam)
+        ->and(app(\Platform\FoodAlchemist\Services\Knowledge\KnowledgeRunContext::class)->current())->toBeNull();
 });
