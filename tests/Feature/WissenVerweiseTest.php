@@ -73,3 +73,18 @@ it('H7: die Gegenrichtung ist NICHT gedeckt — §1.0 deckt keinen Verweis auf �
 it('H7: ohne --team bricht der Wächter ab statt gegen die falsche Partition zu prüfen', function () {
     $this->artisan('foodalchemist:wissen-verweise')->assertExitCode(2);
 });
+
+/**
+ * Der Fehlalarm, den der erste Wurf auf demo produziert hat: ein Dossier, das seine §§
+ * als Überschriften im EIGENEN Text trägt statt im Titel. `regelwerk-foodbook-grundgerust`
+ * heisst nur „Regelwerk Foodbook-Grundgerüst" und enthält `## §1` bis `## §5` — der
+ * Waechter meldete dort fuenf haengende Verweise, die alle im selben Dokument stehen.
+ */
+it('H7: §§ aus den ÜBERSCHRIFTEN des Dossiers zählen als geliefert, nicht nur aus dem Titel', function () {
+    ($this->dossier)('rw-monolith', 'Regelwerk Foodbook-Grundgerüst',
+        "# Regelwerk Foodbook-Grundgerüst\n## §1 Grundgerüst\nSiehe §2.\n## §2 Kapitel-Typen\nSiehe §1.");
+
+    $this->artisan('foodalchemist:wissen-verweise', ['--team' => $this->rootTeam->id, '--prompt-key' => ['recipe.generator']])
+        ->expectsOutputToContain('kein hängender Verweis')
+        ->assertExitCode(0);
+});
