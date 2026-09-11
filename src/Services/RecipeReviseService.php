@@ -157,7 +157,8 @@ class RecipeReviseService
         $r->loadMissing(['ingredients.gp', 'ingredients.referencedRecipe', 'ingredients.unit']);
 
         $wissen = app(\Platform\FoodAlchemist\Services\Ai\KnowledgeContextService::class)
-            ->contextFor($team, 'recipe.ueberarbeiten', (string) ($r->description ?: $r->name));
+            ->contextFor($team, 'recipe.ueberarbeiten', (string) ($r->description ?: $r->name),
+                null, [], \Platform\FoodAlchemist\Services\Knowledge\RezeptAchsen::fuer($r));
 
         $vorschlag = app(\Platform\FoodAlchemist\Services\Ai\AiGatewayService::class)->propose('recipe.ueberarbeiten', [
             'anweisung' => trim($anweisung),
@@ -199,7 +200,8 @@ class RecipeReviseService
         ];
 
         $wissen = app(\Platform\FoodAlchemist\Services\Ai\KnowledgeContextService::class)
-            ->contextFor($team, 'vk.ueberarbeiten', (string) ($r->description ?: $r->name));
+            ->contextFor($team, 'vk.ueberarbeiten', (string) ($r->description ?: $r->name),
+                null, [], \Platform\FoodAlchemist\Services\Knowledge\RezeptAchsen::fuer($r));
 
         $vorschlag = app(\Platform\FoodAlchemist\Services\Ai\AiGatewayService::class)->propose('vk.ueberarbeiten', [
             'anweisung' => trim($anweisung),

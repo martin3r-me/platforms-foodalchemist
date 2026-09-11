@@ -649,7 +649,11 @@ class RecipeModal extends Component
         // A (Dominique 2026-08-27): gezielter Wissens-Pull — die Eigenschaften-KI bekommt jetzt das
         // Regelwerk (recipe.eigenschaften-Routing; regelwerkBlock fällt für dieses Feature auf das
         // Basisrezepte-Regelwerk zurück). Leeres Routing = leerer Block (no-op), also fail-soft.
-        $wissenBlock = $wissen->contextFor(Auth::user()?->currentTeamRelation, 'recipe.eigenschaften', trim(($this->form['name'] ?? '').' '.implode(' · ', $zutaten)));
+        // Spec 52/C: Gang und Warengruppe aus dem gespeicherten Rezept — beim Neuanlegen
+        // gibt es noch keins, dann bleibt die Auswahl wie bisher.
+        $wissenBlock = $wissen->contextFor(Auth::user()?->currentTeamRelation, 'recipe.eigenschaften',
+            trim(($this->form['name'] ?? '').' '.implode(' · ', $zutaten)),
+            null, [], $r !== null ? \Platform\FoodAlchemist\Services\Knowledge\RezeptAchsen::fuer($r) : []);
         $wissenOpts = \Platform\FoodAlchemist\Services\Ai\KnowledgeContextService::proposeOptionen($wissenBlock); // Spec 52/B3: dropped mitmessen
         // Der Prompt fordert „vorhandene Zubereitung beachten" — Zubereitung + Portionen als Basis mitgeben.
         try {
@@ -959,7 +963,8 @@ class RecipeModal extends Component
         $wissenBlock = $wissen->contextFor(
             Auth::user()?->currentTeamRelation,
             'recipe.dichteklasse',
-            trim($r->name.' Behälter Füllmenge Füllgrad Dichte')
+            trim($r->name.' Behälter Füllmenge Füllgrad Dichte'),
+            null, [], \Platform\FoodAlchemist\Services\Knowledge\RezeptAchsen::fuer($r)
         );
         $wissenOpts = \Platform\FoodAlchemist\Services\Ai\KnowledgeContextService::proposeOptionen($wissenBlock); // Spec 52/B3: dropped mitmessen
 

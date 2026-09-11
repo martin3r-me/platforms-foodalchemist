@@ -236,7 +236,7 @@ class RecipeConformanceAdapter implements ConformanceAdapter
             ->filter()->implode(' '));
         $wissen = app(\Platform\FoodAlchemist\Services\Ai\KnowledgeContextService::class)->contextFor(
             $team, $promptKey, $anlass !== '' ? $anlass : (string) $r->name,
-            null, [], ['_kanon_prompt_key' => $kanonKey],
+            null, [], ['_kanon_prompt_key' => $kanonKey] + \Platform\FoodAlchemist\Services\Knowledge\RezeptAchsen::fuer($r),
         );
         $optionen = \Platform\FoodAlchemist\Services\Ai\KnowledgeContextService::proposeOptionen($wissen)
             + ['_kanon_prompt_key' => $kanonKey];

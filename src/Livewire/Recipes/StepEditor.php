@@ -553,7 +553,7 @@ class StepEditor extends Component
         )->filter()->implode(', '));
         $wissen = app(KnowledgeContextService::class)->contextFor($this->team(), $prompt, $beschreibung, null, [], [
             'rezept_typ' => $recipe->is_sales_recipe ? 'gericht' : 'basisrezept',
-        ]);
+        ] + \Platform\FoodAlchemist\Services\Knowledge\RezeptAchsen::fuer($recipe));
 
         return [
             'block' => (string) ($wissen['block'] ?? ''),
