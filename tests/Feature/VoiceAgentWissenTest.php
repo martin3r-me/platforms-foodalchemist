@@ -13,10 +13,15 @@ uses(TestCase::class);
  * und die System-Nachricht erwaehnte das Wissensmodul mit keinem Wort. Ein Werkzeug, von dem
  * das Modell nichts weiss, existiert fuer es nicht.
  */
-it('★ der Startkatalog nennt den Ablauf und die Wissenssuche', function () {
-    expect(VoiceCommandService::TOOLS)
-        ->toContain('foodalchemist.ablauf.GET')
-        ->toContain('foodalchemist.knowledge.SEARCH');
+it('★ der Startkatalog nennt den Ablauf', function () {
+    expect(VoiceCommandService::TOOLS)->toContain('foodalchemist.ablauf.GET');
+});
+
+it('★ knowledge.SEARCH bleibt bewusst AUS dem Warmstart — der Katalog wird je Runde bezahlt', function () {
+    // Gemessen: ablauf.GET 783 Zeichen, knowledge.SEARCH 1.341. Zusammen reissen sie den
+    // Token-Deckel von 8.000 (VoiceGlobalPolicyTest). Der Agent holt sich die Suche ueber
+    // tool_registry.SEARCH; ihr Name steht dafuer in der System-Nachricht.
+    expect(VoiceCommandService::TOOLS)->not->toContain('foodalchemist.knowledge.SEARCH');
 });
 
 it('die Wissens-Werkzeuge sind auch von der Policy freigegeben', function () {
