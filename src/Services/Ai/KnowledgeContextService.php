@@ -158,6 +158,9 @@ class KnowledgeContextService
         $allRouting = $this->routingZeilen($feature);
         $artRouting = $allRouting->filter(fn ($r) => ! empty($r->art));
         $this->artenRoutingAktiv = $artRouting->isNotEmpty();
+        // Spec 52: `ausgabeform` aus Sektor x Serviceform, EINMAL zentral — damit Achsen-Block,
+        // Geltungs-Filter und Datenwerk-Resolver denselben Parametersatz sehen.
+        $params = \Platform\FoodAlchemist\Services\Knowledge\WissensGeltung::mitAbleitung($params);
         $this->geltungsParameter = $params;
         $this->geltungsIds = null;
         $this->achsenPflichtFiles = [];

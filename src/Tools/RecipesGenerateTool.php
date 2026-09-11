@@ -61,12 +61,12 @@ class RecipesGenerateTool extends FoodAlchemistTool implements ToolContract, Too
      * die MCP-Fläche automatisch nach und kann nicht vergessen werden.
      */
     private const ACHSEN_BEISPIELE = [
-        'gang' => 'vorspeise | hauptgang | dessert | amuse_bouche | petit_four',
-        'komponentenrolle' => 'protein | beilage | suppe | getraenk',
+        'gang' => 'vorspeise | zwischengang | hauptgang | dessert | amuse_bouche (aus den Speisen-Hauptgruppen)',
+        'komponentenrolle' => 'aroma_treiber | komponente | beilage | garnitur (Vokabular aus SpeisenKlassenService::ROLLEN)',
         'portionskontext' => 'menue | einzelgericht',
         'saison' => 'fruehling | sommer | herbst | winter',
-        'warengruppe' => 'fleisch_rind | obst_zitrus | getreide_pseudogetreide | schokolade',
-        'format' => 'a_la_carte | bankett_buffet | bankett_tellergericht | volumen_catering | foodtruck | sweet_table',
+        'warengruppe' => 'aus der GP-Taxonomie (foodalchemist_lookup_commodity_groups), z. B. Gemuese, Obst, Fleisch, Fisch, Getreide',
+        'ausgabeform' => 'a_la_carte | bankett_tellergericht | bankett_buffet | volumen_catering | foodtruck | sweet_table — wird aus sektor x serviceform ABGELEITET, hier nur bei abweichendem Fall angeben',
     ];
 
     /**

@@ -546,6 +546,29 @@ return [
          * `recipe.generator` 13 Zeilen · `vk.generator` 12 · `gp` 0 · `la` 0.
          * Deshalb stehen `gp` und `la` hier NICHT — dort ist erst Kuration nötig.
          */
+        /*
+         * Spec 52 — `ausgabeform` aus Sektor × Serviceform. Schluessel: "<sektor>|<serviceform>",
+         * "<sektor>|*" gilt unabhaengig von der Serviceform.
+         *
+         * Warum kombiniert: Serviceform allein genuegt nicht. Bankett-Buffet und
+         * Kantinen-Buffet tragen verschiedene Mengen-Faktoren (0,75-0,85 vs. 0,85-0,95) bei
+         * identischer Serviceform — erst der Sektor entscheidet.
+         *
+         * ★ Was hier NICHT steht, wird NICHT geraten: catering|flying, care|boxed und alles
+         * uebrige ergibt keine Ausgabeform, der Resolver meldet eine Luecke. Ein falscher
+         * Mengen-Faktor ist teurer als ein fehlender. `foodtruck` und `sweet_table` haben
+         * bewusst keine Kombination — sie bleiben ausdruecklich setzbar.
+         *
+         * Die Werte muessen zu den Geltungen der Multiplikator-Datenwerke passen
+         * (`mengen_defaults--format-multiplikatoren-*`).
+         */
+        'ausgabeform_ableitung' => [
+            'restaurant|tellerservice' => 'a_la_carte',
+            'catering|tellerservice' => 'bankett_tellergericht',
+            'catering|buffet' => 'bankett_buffet',
+            'betriebsgastronomie|*' => 'volumen_catering',
+        ],
+
         'conformance_kanon' => [
             'basisrezept' => 'recipe.generator',
             'vk' => 'vk.generator',
