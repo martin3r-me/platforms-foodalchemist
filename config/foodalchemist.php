@@ -693,6 +693,28 @@ return [
     'knowledge_team_scope' => env('FOODALCHEMIST_KNOWLEDGE_TEAM_SCOPE', false),
 
     /*
+     * Der EINE Kurator des globalen Wissens (Entscheid Dominique 2026-09-11).
+     *
+     * Bis hierher galt: `team_id NULL` ist für JEDEN unveränderlich, gepflegt nur per
+     * Vault-Import. Das war richtig, solange global „geerbter Seed" hiess. Es ist falsch,
+     * sobald der kuratierte Bestand SELBST global wird — er wäre eingefroren. Genau deshalb
+     * stand in {@see \Platform\FoodAlchemist\Support\TeamScope} die Empfehlung, ihn nicht
+     * global zu legen. Diese Zeile hebt die Voraussetzung dieser Empfehlung auf:
+     * global heisst ab jetzt „gehört dem Master", nicht „gehört niemandem".
+     *
+     * UNGESETZT (null) bleibt die bisherige strukturelle Antwort `parent_team_id === null`
+     * — an der Master-Frage ändert sich dann nichts.
+     *
+     * GESETZT ist genau dieses Team Master. Das ist die schärfere Aussage und die, die auf
+     * demo gilt: dort tragen historisch ALLE Teams `parent_team_id = NULL` (die Hierarchie
+     * wurde nie gepflegt), die strukturelle Antwort hiesse dort also „jeder ist Master".
+     * Die Config macht aus „zufällig elternlos" eine Entscheidung.
+     *
+     * Rollback = Zeile aus der .env entfernen, kein Deploy.
+     */
+    'master_team_id' => env('FOODALCHEMIST_MASTER_TEAM_ID'),
+
+    /*
      * Schicht 3 — Konformitaets-Critic: die DETERMINISTISCHEN Regeln neben dem LLM-§-Pass.
      * Was exakt entscheidbar ist, wird exakt entschieden (gemessene Lehre aus dem
      * Regelwerk-Programm: code-erzwungen = 0 Befunde, prompt-gebunden = Befunde bleiben).

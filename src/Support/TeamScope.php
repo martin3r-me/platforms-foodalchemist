@@ -50,10 +50,29 @@ final class TeamScope
         return $team !== null && $rowTeamId !== null && (int) $rowTeamId === (int) $team->id;
     }
 
-    /** Master = Team ohne Eltern. Die einzige Instanz, die GLOBALE Zeilen pflegen darf. */
+    /**
+     * Master = der EINE Kurator des globalen Bestands. Die einzige Instanz, die GLOBALE
+     * Zeilen pflegen darf.
+     *
+     * Konfiguriert (`foodalchemist.master_team_id`) gewinnt: genau dieses Team. Ungesetzt
+     * gilt weiter die strukturelle Antwort „Team ohne Eltern" — dieselbe wie vor 2026-09-11.
+     *
+     * Warum die Config die schärfere Aussage ist: auf demo tragen ALLE Teams
+     * `parent_team_id = NULL`, weil die Hierarchie nie gepflegt wurde. „Elternlos" ist dort
+     * kein Master-Signal, sondern ein Zufall — und sobald globales Wissen schreibbar wird,
+     * wäre dieser Zufall ein Schreibrecht. Die Config benennt den Kurator, statt ihn aus
+     * einer ungepflegten Spalte zu erraten.
+     */
     public static function isMaster(?Team $team): bool
     {
-        return $team !== null && $team->parent_team_id === null;
+        if ($team === null) {
+            return false;
+        }
+        $konfiguriert = config('foodalchemist.master_team_id');
+
+        return is_numeric($konfiguriert)
+            ? (int) $team->id === (int) $konfiguriert
+            : $team->parent_team_id === null;
     }
 
     /**
@@ -74,24 +93,23 @@ final class TeamScope
      * begründet; sie stand danach zweimal kopiert in den Einstellungen. Hier lebt sie an
      * EINER Stelle.
      *
-     * ⚠ NICHT FÜR WISSENS-DOKUMENTE. Dort gilt eine andere, ausdrücklich getestete Regel:
-     * global geseedetes Wissen (team_id NULL) ist für JEDEN unveränderlich und wird nur per
-     * Import gepflegt — gepinnt in `KnowledgeWriteToolsTest`, `KnowledgeSetActiveToolTest`
-     * und `KnowledgeBindToolTest` („sperrt globales Master/Seed-Wissen"). Ich habe die
-     * Wissens-Schreibpfade am 2026-09-03 versuchsweise hierauf umgestellt; drei Tests haben
-     * es zu Recht abgelehnt. Sie nutzen weiter `owns()`.
+     * ⚠ HISTORIE, damit niemand zurückdreht: bis 2026-09-11 stand hier die umgekehrte
+     * Warnung — Wissens-Dokumente seien ausgenommen, globales Wissen für JEDEN
+     * unveränderlich, und der kuratierte Korpus dürfe deshalb NICHT auf `team_id NULL`
+     * wandern. Das war unter der damaligen Annahme richtig. Dominiques Entscheid vom
+     * 2026-09-11 hebt die Annahme auf: er IST der Master, sein Bestand ist global, und er
+     * pflegt ihn weiter. Damit heisst global „gehört dem Master", nicht „gehört niemandem",
+     * und die Wissens-Schreibpfade fragen `mayWrite()` wie alle anderen auch.
      *
-     * FOLGE FÜR DAS MANDANTEN-MODELL: weil globales Wissen unveränderlich ist, darf der
-     * kuratierte Korpus NICHT auf `team_id NULL` wandern — er wäre eingefroren. Der Weg zu
-     * „global lesbar, team-eigen schreibbar" führt über `teams.parent_team_id`: Kundenteams
-     * werden Kinder des Kurator-Teams, dann liefert `applyVisible` genau das gewünschte
-     * Bild, und der Kurator behält sein Schreibrecht.
+     * Die Sperre verschwindet dabei nicht, sie bekommt einen Namen: ein FREMDES Team darf
+     * globales Wissen unverändert nicht anfassen. Gepinnt in `WissenMasterSchreibrechtTest`.
      *
-     * Verwendet wird `mayWrite()` darum nur für VOKABULAR-Tabellen (Wissenskategorien,
-     * Einsatzorte) — dort führte `delete()` die Master-Ausnahme schon vor mir.
+     * `KnowledgeLinkService::docFuerSchreiben()` sagte das übrigens schon vor diesem
+     * Entscheid („Verbindungen daran setzt das Master-Team") — der Rest des Moduls holt hier
+     * nur auf.
      *
-     * Bewusst NICHT geändert: `owns()` selbst. 27 Aufrufstellen verlassen sich auf die
-     * strikte Bedeutung; wer die Ausnahme will, fragt danach.
+     * Bewusst NICHT geändert: `owns()` selbst. Die strikte Bedeutung bleibt für alle
+     * Katalog-Tabellen richtig; wer die Ausnahme will, fragt danach.
      */
     public static function mayWrite(mixed $rowTeamId, ?Team $team): bool
     {

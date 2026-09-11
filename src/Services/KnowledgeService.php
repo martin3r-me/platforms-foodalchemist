@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Platform\Core\Models\Team;
+use Platform\FoodAlchemist\Exceptions\WissenGesperrtException;
 use Platform\FoodAlchemist\Services\Ai\KnowledgeEmbeddingService;
 use Platform\FoodAlchemist\Support\TeamScope;
 use RuntimeException;
@@ -16,14 +17,15 @@ use Symfony\Component\Uid\UuidV7;
  * LLM-First: Tools rufen diesen Service, nie Models direkt.
  *
  * Leitplanken (analog Phase-A-Rezept-Kaskade):
- *  - Neu angelegte Docs sind INAKTIV (Quarantäne) — ein Mensch aktiviert sie im
- *    Browser, erst dann fließen sie in den KI-Kontext (~48 Prompts). Kein stiller
- *    Einzug KI-generierten Wissens.
  *  - Herkunft `created_via='mcp'`; Bindungen `source='mcp'` (Provenienz/Audit).
  *  - Vault-verwaltete Docs des EIGENEN Teams sind via MCP editierbar (Browser-Parität) —
  *    der Import-Guard (App-wins) schützt den Edit: content_hash weicht dann von
  *    imported_hash ab, der Re-Import überschreibt NICHT (außer --force). source_path bleibt
- *    (Provenienz). Globales Master-/Seed-Wissen (team_id NULL) bleibt read-only.
+ *    (Provenienz).
+ *  - GLOBALES Wissen (team_id NULL) gehört dem MASTER-Team und wird von ihm gepflegt; für
+ *    jedes andere Team ist es read-only. Bis 2026-09-11 war es für JEDEN unveränderlich —
+ *    das passte, solange global „geerbter Seed" hiess, und friert den kuratierten Bestand
+ *    ein, sobald er selbst global ist. Der eine Riegel dafür ist {@see findAenderbar()}.
  */
 class KnowledgeService
 {
@@ -56,7 +58,10 @@ class KnowledgeService
 
         $id = DB::table('foodalchemist_knowledge_documents')->insertGetId([
             'uuid' => (string) UuidV7::generate(),
-            'team_id' => $team->id,
+            // Entscheid Dominique 2026-09-11: „alles was ich jetzt reingebe ist master".
+            // Der Kurator legt GLOBAL an — sein Bestand IST der globale Bestand. Jedes
+            // andere Team legt weiter team-eigen an.
+            'team_id' => TeamScope::isMaster($team) ? null : $team->id,
             'slug' => $slug,
             'title' => $title,
             'category' => $category,
@@ -90,31 +95,58 @@ class KnowledgeService
     }
 
     /**
+     * Der EINE Schreib-Riegel für Wissens-Dokumente: findet das Dossier und prüft in
+     * demselben Schritt, ob dieses Team es anfassen darf.
+     *
+     * Warum öffentlich und warum überhaupt eine eigene Methode: `knowledge.EINORDNEN
+     * --pruefen` versprach am 2026-09-11 sechzehn Einordnungen und schrieb zwölf. Der
+     * Trockenlauf prüfte das FORMAT (`WissensGeltung::payload`) und nannte das im Kommentar
+     * „dieselbe Pruefung wie beim Schreiben" — er prüfte weder Existenz noch Recht. Eine
+     * Zusage, die von der Tat abweicht, ist schlimmer als keine Zusage. Seitdem rufen beide
+     * Seiten dieselbe Methode.
+     *
+     * Die Meldungen trennen bewusst zwei Fälle: globales Wissen heisst beim Namen (der Master
+     * pflegt es), ein FREMD-Team-Dossier heisst „nicht gefunden" — sonst verrät die
+     * Fehlermeldung die Existenz fremder Slugs.
+     *
+     * @param  string  $verb  passt die Meldung an die Handlung an („editierbar", „löschbar", …)
+     *
+     * @throws RuntimeException             wenn es das Dossier nicht (sichtbar) gibt
+     * @throws WissenGesperrtException      wenn es global ist und dieses Team nicht Master
+     */
+    public function findAenderbar(Team $team, string $slug, string $verb = 'editierbar'): object
+    {
+        $doc = DB::table('foodalchemist_knowledge_documents')->where('slug', $slug)->whereNull('deleted_at')->first();
+        if ($doc === null) {
+            throw new RuntimeException("Wissens-Dokument \"{$slug}\" nicht gefunden.");
+        }
+        if (! TeamScope::mayWrite($doc->team_id, $team)) {
+            if ($doc->team_id === null) {
+                throw new WissenGesperrtException(
+                    "\"{$slug}\" ist globales Master-Wissen — nur das Master-Team hat es {$verb}."
+                );
+            }
+            throw new RuntimeException("Wissens-Dokument \"{$slug}\" nicht gefunden.");
+        }
+
+        return $doc;
+    }
+
+    /**
      * Aktualisiert ein Wissens-Dokument (per slug) — auch Vault-verwaltete des EIGENEN
      * Teams (Browser-Parität; der Import-Guard schützt den Edit vor Re-Import-Überschreiben,
-     * s. Klassen-Doc). Globales Master-/Seed-Wissen (team_id NULL) bleibt read-only.
+     * s. Klassen-Doc). Globales Wissen pflegt das Master-Team, sonst niemand.
      * Inhalts-Änderung ⇒ version+1 + neuer content_hash. Optional: Aliase/Bindungen ergänzen.
      *
      * @param  array{title?:string,category?:string,content_md?:string,active?:bool,aliases?:array,bind_layers?:array}  $data
      */
     public function update(Team $team, string $slug, array $data): object
     {
-        $doc = DB::table('foodalchemist_knowledge_documents')->where('slug', $slug)->whereNull('deleted_at')->first();
-        if ($doc === null) {
-            throw new RuntimeException("Wissens-Dokument \"{$slug}\" nicht gefunden.");
-        }
         // Vault-Lock aufgehoben (Browser-Parität): auch Vault-verwaltete Docs des EIGENEN
         // Teams sind editierbar. Der Inhalts-Edit bumpt content_hash, lässt imported_hash
         // unberührt ⇒ der knowledge-import erkennt „in-App editiert" und überschreibt NICHT
         // (App-wins, außer --force). source_path bleibt (Provenienz + reversibel via --force).
-        if (! TeamScope::owns($doc->team_id, $team)) {
-            // Globales Master-/Seed-Wissen (team_id NULL) bleibt read-only — das pflegt das
-            // Master-Team bzw. der Vault-Import. Fremd-Team-Docs: "nicht gefunden" (kein Leak).
-            if ($doc->team_id === null) {
-                throw new RuntimeException("\"{$slug}\" ist globales Master-/Seed-Wissen — via MCP nicht editierbar (Master-Team bzw. Vault-Import).");
-            }
-            throw new RuntimeException("Wissens-Dokument \"{$slug}\" nicht gefunden.");
-        }
+        $doc = $this->findAenderbar($team, $slug, 'editierbar');
 
         $payload = ['updated_at' => now()];
         if (array_key_exists('title', $data) && trim((string) $data['title']) !== '') {
@@ -172,22 +204,12 @@ class KnowledgeService
      */
     public function delete(Team $team, string $slug): void
     {
-        $doc = DB::table('foodalchemist_knowledge_documents')->where('slug', $slug)->whereNull('deleted_at')->first();
-        if ($doc === null) {
-            throw new \RuntimeException("Wissens-Dokument \"{$slug}\" nicht gefunden.");
-        }
-        if (! TeamScope::owns($doc->team_id, $team)) {
-            if ($doc->team_id === null) {
-                throw new \RuntimeException("\"{$slug}\" ist globales Master-/Seed-Wissen — via MCP nicht löschbar.");
-            }
-            throw new \RuntimeException("Wissens-Dokument \"{$slug}\" nicht gefunden.");
-        }
-        try {
-            app(\Platform\Core\Services\EmbeddingService::class)
-                ->delete((int) $doc->team_id, KnowledgeEmbeddingService::ENTITY_TYPE, (int) $doc->id);
-        } catch (\Throwable) {
-            // Index-Bereinigung ist Beiwerk — nie den Löschvorgang daran hängen.
-        }
+        $doc = $this->findAenderbar($team, $slug, 'löschbar');
+        // ⚠ Partition über partitionTeamId, NICHT `(int) $doc->team_id`: bei globalem Wissen
+        // wäre das eine 0 — gelöscht würde in einer Partition, in der nie etwas lag, und der
+        // echte Vektor bliebe als Waise zurück. Fiel bis 2026-09-11 nicht auf, weil die
+        // Sperre vorher griff und globale Dossiers nie hier ankamen.
+        app(KnowledgeEmbeddingService::class)->deleteDocument((int) $doc->id, $doc->team_id);
         DB::table('foodalchemist_knowledge_documents')->where('id', $doc->id)->delete();
     }
 
@@ -197,10 +219,7 @@ class KnowledgeService
      */
     public function addAlias(Team $team, string $slug, string $alias): string
     {
-        $doc = DB::table('foodalchemist_knowledge_documents')->where('slug', $slug)->whereNull('deleted_at')->first();
-        if ($doc === null || ! TeamScope::owns($doc->team_id, $team)) {
-            throw new \RuntimeException("Wissens-Dokument \"{$slug}\" nicht gefunden oder nicht team-eigen.");
-        }
+        $doc = $this->findAenderbar($team, $slug, 'mit Aliassen pflegbar');
         $aliasSlug = Str::slug(trim($alias), '_');
         if ($aliasSlug === '') {
             throw new \RuntimeException('Alias darf nicht leer sein.');
@@ -228,7 +247,7 @@ class KnowledgeService
             throw new \RuntimeException('Alias nicht gefunden.');
         }
         $doc = DB::table('foodalchemist_knowledge_documents')->where('id', (int) $docId)->first();
-        if ($doc === null || ! TeamScope::owns($doc->team_id, $team)) {
+        if ($doc === null || ! TeamScope::mayWrite($doc->team_id, $team)) {
             throw new \RuntimeException('Alias nicht team-eigen.');
         }
         DB::table('foodalchemist_knowledge_aliases')->where('id', $aliasId)->delete();
@@ -448,9 +467,9 @@ class KnowledgeService
     public function setActive(Team $team, string $slug, bool $active): array
     {
         $doc = $this->findSichtbar($team, $slug);
-        if (! TeamScope::owns($doc->team_id, $team)) {
-            throw new RuntimeException(
-                "\"{$slug}\" ist geerbtes/globales Master-Wissen — nur das Besitzer-Team kann es (de)aktivieren."
+        if (! TeamScope::mayWrite($doc->team_id, $team)) {
+            throw new WissenGesperrtException(
+                "\"{$slug}\" ist geerbtes/globales Master-Wissen — nur Besitzer bzw. Master-Team kann es (de)aktivieren."
             );
         }
         $changed = (bool) $doc->active !== $active;

@@ -381,6 +381,41 @@ class KnowledgeEmbeddingService
         return ['available' => true, 'deleted' => $deleted, 'probed' => $probed];
     }
 
+    /**
+     * Räumt die Vektoren einer VERLASSENEN Partition weg — die Lücke, die `purgeStale` nicht
+     * schliessen kann.
+     *
+     * Anlass: der Umzug des kuratierten Bestands von `team_id = 6` auf global (2026-09-11).
+     * Die Partition wird beim Embedden aus `team_id` berechnet und BEIM VEKTOR GESPEICHERT
+     * ({@see queueDocument}). Zieht ein Dossier um, bleibt sein alter Vektor liegen — und
+     * `purgeStale` erreicht ihn nie, weil sie jede ID überspringt, die noch in der Tabelle
+     * steht („isset($existing[$id]) → continue"). Der Vektor wäre also dauerhaft da, mit dem
+     * Textstand von damals: {@see searchMerged} entdoppelt zwar je entity_id auf den besseren
+     * Score, aber gewinnt der alte, zieht die Suche einen überholten Text.
+     *
+     * Darum hier gezielt statt heuristisch: ALLE heute bekannten Doc-IDs einmal aus der
+     * genannten Partition löschen. Ein Delete auf einen nicht vorhandenen Punkt ist ein
+     * gefahrloser No-op (Qdrant/MySQL) — dieselbe Zusicherung, auf der schon der Probe-Purge
+     * ruht. Kein `$deep`-Brute-Force über [1..maxId] nötig, weil die IDs bekannt sind.
+     *
+     * @return array{available: bool, deleted: int}
+     */
+    public function purgePartition(int $partition): array
+    {
+        if (! $this->isProviderAvailable()) {
+            return ['available' => false, 'deleted' => 0];
+        }
+        $service = app(EmbeddingService::class);
+        $deleted = 0;
+        foreach (DB::table('foodalchemist_knowledge_documents')->pluck('id') as $id) {
+            $this->safeStoreDelete($service, $partition, (int) $id);
+            $deleted++;
+        }
+        Log::info('[KnowledgeEmbeddingService] purgePartition', ['partition' => $partition, 'deleted' => $deleted]);
+
+        return ['available' => true, 'deleted' => $deleted];
+    }
+
     /** Store-Delete eines einzelnen Vektors, fehler-tolerant (ein fehlender Punkt ist ein No-op). */
     private function safeStoreDelete(EmbeddingService $service, int $teamId, int $id): void
     {

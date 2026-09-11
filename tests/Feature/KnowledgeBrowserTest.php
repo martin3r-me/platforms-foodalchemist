@@ -132,7 +132,11 @@ it('lehnt das Löschen von geerbtem/globalem Wissen ab (read-only für Nicht-Bes
         ->call('select', $id)
         ->assertViewHas('editable', false)         // kein Besitz → kein Löschen-Button
         ->call('delete', $id)
-        ->assertSet('fehler', fn ($f) => $f !== null && str_contains($f, 'Besitzer-Team'));
+        // Auf „es gibt einen Fehler" prüfen, nicht auf den Wortlaut: der Satz ist
+        // Oberflächentext und ändert sich (2026-09-11: „nur das Besitzer-Team" →
+        // „Besitzer bzw. Master-Team", weil global jetzt einen Eigentümer hat). Der Vertrag
+        // ist editable=false + Fehler gesetzt + Doc unangetastet, nicht die Formulierung.
+        ->assertSet('fehler', fn ($f) => $f !== null && $f !== '');
 
     // Doc bleibt unangetastet.
     expect(DB::table('foodalchemist_knowledge_documents')->where('id', $id)->whereNull('deleted_at')->exists())->toBeTrue();

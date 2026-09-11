@@ -106,7 +106,12 @@ class KnowledgeEinordnenTool extends FoodAlchemistTool implements ToolContract, 
 
             try {
                 if ($trocken) {
-                    // Dieselbe Pruefung wie beim Schreiben, nur ohne zu schreiben.
+                    // Dieselbe Pruefung wie beim Schreiben, nur ohne zu schreiben — und zwar
+                    // WIRKLICH dieselbe. Vorher stand hier nur die Format-Pruefung: der Lauf
+                    // versprach 16 Einordnungen und schrieb 12, weil er weder Existenz noch
+                    // Schreibrecht ansah. Eine Zusage, die von der Tat abweicht, ist schlimmer
+                    // als keine Zusage.
+                    app(KnowledgeService::class)->findAenderbar($team, $slug, 'einordenbar');
                     \Platform\FoodAlchemist\Services\Knowledge\WissensGeltung::payload(
                         $daten['art'] ?? null, $daten['geltung'] ?? [], $daten['datenwerte'] ?? []);
                     $ok[] = ['slug' => $slug, 'art' => $daten['art'] ?? null, 'geschrieben' => false];

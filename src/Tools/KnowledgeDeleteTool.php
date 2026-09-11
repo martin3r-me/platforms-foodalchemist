@@ -6,6 +6,7 @@ use Platform\Core\Contracts\ToolContract;
 use Platform\Core\Contracts\ToolContext;
 use Platform\Core\Contracts\ToolMetadataContract;
 use Platform\Core\Contracts\ToolResult;
+use Platform\FoodAlchemist\Exceptions\WissenGesperrtException;
 use Platform\FoodAlchemist\Services\KnowledgeService;
 
 /**
@@ -52,6 +53,8 @@ class KnowledgeDeleteTool extends FoodAlchemistTool implements ToolContract, Too
 
         try {
             app(KnowledgeService::class)->delete($team, $slug);
+        } catch (WissenGesperrtException $e) {
+            return ToolResult::error($e->getMessage(), 'LOCKED');
         } catch (\RuntimeException $e) {
             return ToolResult::error($e->getMessage(), 'VALIDATION_ERROR');
         }

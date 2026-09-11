@@ -120,7 +120,13 @@ it('aktualisiert ein MCP-Doc: content ⇒ version+1', function () {
     expect(DB::table('foodalchemist_knowledge_documents')->where('slug', $slug)->value('content_md'))->toContain('v2');
 });
 
-it('sperrt globales Master-/Seed-Wissen (team_id NULL) für den MCP-Pfad (LOCKED)', function () {
+it('sperrt globales Master-Wissen gegen ein FREMDES Team (LOCKED)', function () {
+    // Seit 2026-09-11 heisst global „gehört dem Master", nicht „gehört niemandem" — der
+    // Kurator pflegt seinen eigenen Bestand. Die Sperre bleibt, sie zielt jetzt auf jeden
+    // ANDEREN: `childA` hat ein Eltern-Team und ist damit nie Master.
+    $kind = $this->makeUser($this->childA, 'Kind-Nutzer');
+    $this->kontext = new ToolContext($kind, $this->childA);
+
     DB::table('foodalchemist_knowledge_documents')->insert([
         'uuid' => (string) UuidV7::generate(), 'slug' => 'regelwerk.grundprodukte',
         'title' => 'Regelwerk Grundprodukte', 'category' => 'regelwerk',

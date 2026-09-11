@@ -6,6 +6,7 @@ use Platform\Core\Contracts\ToolContract;
 use Platform\Core\Contracts\ToolContext;
 use Platform\Core\Contracts\ToolMetadataContract;
 use Platform\Core\Contracts\ToolResult;
+use Platform\FoodAlchemist\Exceptions\WissenGesperrtException;
 use Platform\FoodAlchemist\Services\Knowledge\KnowledgeCanonService;
 use Platform\FoodAlchemist\Services\KnowledgeService;
 
@@ -71,12 +72,15 @@ class KnowledgeUpdateTool extends FoodAlchemistTool implements ToolContract, Too
 
         try {
             $doc = app(KnowledgeService::class)->update($team, (string) $arguments['slug'], $data);
+        } catch (WissenGesperrtException $e) {
+            // Eigener Typ statt Textvergleich: `LOCKED` hing bis 2026-09-11 daran, dass die
+            // Meldung das Wort „Master-/Seed-Wissen" enthielt. Beim Umformulieren waere der
+            // Code still zu VALIDATION_ERROR geworden, und der Test haette es nicht gemerkt.
+            return ToolResult::error($e->getMessage(), 'LOCKED');
         } catch (\RuntimeException $e) {
             $msg = $e->getMessage();
-            $code = str_contains($msg, 'nicht gefunden') ? 'NOT_FOUND'
-                : (str_contains($msg, 'Master-/Seed-Wissen') ? 'LOCKED' : 'VALIDATION_ERROR');
 
-            return ToolResult::error($msg, $code);
+            return ToolResult::error($msg, str_contains($msg, 'nicht gefunden') ? 'NOT_FOUND' : 'VALIDATION_ERROR');
         }
 
         return ToolResult::success([
