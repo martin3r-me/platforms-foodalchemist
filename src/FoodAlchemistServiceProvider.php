@@ -92,6 +92,7 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                 \Platform\FoodAlchemist\Console\WissenProfilCommand::class,
                 \Platform\FoodAlchemist\Console\WissenVerweiseCommand::class,
                 \Platform\FoodAlchemist\Console\WissenSpurenCommand::class,
+                \Platform\FoodAlchemist\Console\WissenGlobalHebenCommand::class,
                 \Platform\FoodAlchemist\Console\WissenKanonSicherungCommand::class,
                 // Spec 52/A1: Grundlinie am tatsächlich versendeten Aufruf — inkl. der drei
                 // Folge-Calls, die der Kontext-Inspektor ausblendet.

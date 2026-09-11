@@ -6,6 +6,7 @@ use Platform\Core\Contracts\ToolContract;
 use Platform\Core\Contracts\ToolContext;
 use Platform\Core\Contracts\ToolMetadataContract;
 use Platform\Core\Contracts\ToolResult;
+use Platform\FoodAlchemist\Exceptions\WissenGesperrtException;
 use Platform\FoodAlchemist\Services\Knowledge\KnowledgeLinkService;
 use Platform\FoodAlchemist\Services\Knowledge\Wissensverbindung;
 
@@ -103,6 +104,8 @@ class KnowledgeLinksTool extends FoodAlchemistTool implements ToolContract, Tool
             }
 
             return ToolResult::error('action muss get, set oder delete sein.', 'VALIDATION_ERROR');
+        } catch (WissenGesperrtException $e) {
+            return ToolResult::error($e->getMessage(), 'LOCKED');
         } catch (\RuntimeException $e) {
             $msg = $e->getMessage();
 

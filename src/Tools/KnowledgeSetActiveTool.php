@@ -6,6 +6,7 @@ use Platform\Core\Contracts\ToolContract;
 use Platform\Core\Contracts\ToolContext;
 use Platform\Core\Contracts\ToolMetadataContract;
 use Platform\Core\Contracts\ToolResult;
+use Platform\FoodAlchemist\Exceptions\WissenGesperrtException;
 use Platform\FoodAlchemist\Services\KnowledgeService;
 
 /**
@@ -61,6 +62,8 @@ class KnowledgeSetActiveTool extends FoodAlchemistTool implements ToolContract, 
 
         try {
             $doc = app(KnowledgeService::class)->setActive($team, $slug, $active);
+        } catch (WissenGesperrtException $e) {
+            return ToolResult::error($e->getMessage(), 'LOCKED');
         } catch (\RuntimeException $e) {
             $code = str_contains($e->getMessage(), 'nicht gefunden') ? 'NOT_FOUND' : 'VALIDATION_ERROR';
 

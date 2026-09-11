@@ -5,6 +5,7 @@ namespace Platform\FoodAlchemist\Services\Knowledge;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Platform\Core\Models\Team;
+use Platform\FoodAlchemist\Exceptions\WissenGesperrtException;
 use Platform\FoodAlchemist\Support\TeamScope;
 use RuntimeException;
 use Symfony\Component\Uid\UuidV7;
@@ -247,8 +248,8 @@ class KnowledgeLinkService
             throw new RuntimeException("Wissens-Dokument \"{$slug}\" nicht gefunden.");
         }
         if (! $nurLesen && ! TeamScope::mayWrite($doc->team_id, $team)) {
-            throw new RuntimeException(
-                "\"{$slug}\" ist globales Master-/Seed-Wissen — Verbindungen daran setzt das Master-Team."
+            throw new WissenGesperrtException(
+                "\"{$slug}\" ist globales Master-Wissen — Verbindungen daran setzt das Master-Team."
             );
         }
 

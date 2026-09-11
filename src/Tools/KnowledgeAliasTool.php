@@ -6,6 +6,7 @@ use Platform\Core\Contracts\ToolContract;
 use Platform\Core\Contracts\ToolContext;
 use Platform\Core\Contracts\ToolMetadataContract;
 use Platform\Core\Contracts\ToolResult;
+use Platform\FoodAlchemist\Exceptions\WissenGesperrtException;
 use Platform\FoodAlchemist\Services\KnowledgeService;
 
 /** MCP-Steuerbarkeit · D12: Alias eines team-eigenen Wissensdokuments hinzufügen/entfernen (action-enum). */
@@ -64,6 +65,8 @@ class KnowledgeAliasTool extends FoodAlchemistTool implements ToolContract, Tool
 
                 return ToolResult::success(['action' => 'remove', 'alias_id' => $aliasId, 'removed' => true]);
             }
+        } catch (WissenGesperrtException $e) {
+            return ToolResult::error($e->getMessage(), 'LOCKED');
         } catch (\RuntimeException $e) {
             return ToolResult::error($e->getMessage(), 'VALIDATION_ERROR');
         }

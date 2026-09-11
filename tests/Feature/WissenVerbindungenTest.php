@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\DB;
 use Platform\Core\Contracts\ToolContext;
 use Platform\Core\Tools\ToolRegistry;
+use Platform\FoodAlchemist\Exceptions\WissenGesperrtException;
 use Platform\FoodAlchemist\Services\Knowledge\KnowledgeLinkService;
 use Platform\FoodAlchemist\Services\Knowledge\WissensProfilService;
 use Platform\FoodAlchemist\Services\Knowledge\Wissensverbindung;
@@ -147,7 +148,7 @@ it('erlaubt Gegenseitigkeit bei siehe_auch, aber nie Selbstbezug', function () {
 it('laesst auf fremdes Wissen VERWEISEN, aber nicht daran schreiben', function () {
     // Die Kante gehoert dem Ausgangs-Dossier. Ein Team muss seine eigenen Dossiers auf den
     // geerbten Master-Katalog beziehen duerfen — sonst waere `verfeinert` fuer Kundenteams tot.
-    // Umgekehrt darf niemand am globalen Katalog Kanten aufhaengen.
+    // Umgekehrt haengt am globalen Katalog nur der Master Kanten auf; `childA` ist es nicht.
     ($this->mkDoc)('global-regel', teamId: null);
     ($this->mkDoc)('eigenes', teamId: $this->childA->id);
     $dienst = app(KnowledgeLinkService::class);
@@ -155,8 +156,11 @@ it('laesst auf fremdes Wissen VERWEISEN, aber nicht daran schreiben', function (
     $dienst->set($this->childA, 'eigenes', 'global-regel', Wissensverbindung::VERFEINERT);
     expect($dienst->fuerDossier($this->childA, 'eigenes')['raus'][0]['slug'])->toBe('global-regel');
 
+    // Auf den TYP prüfen, nicht auf den Satz: bis 2026-09-11 stand hier 'Master-/Seed-Wissen',
+    // und genau dieser Textvergleich entschied an drei Stellen im Code über den Fehlercode
+    // LOCKED. Beim Umformulieren der Meldung wäre er still zu VALIDATION_ERROR gekippt.
     expect(fn () => $dienst->set($this->childA, 'global-regel', 'eigenes', Wissensverbindung::SIEHE_AUCH))
-        ->toThrow(RuntimeException::class, 'Master-/Seed-Wissen');
+        ->toThrow(WissenGesperrtException::class);
 });
 
 it('MCP: setzt, liest und loest eine Verbindung', function () {

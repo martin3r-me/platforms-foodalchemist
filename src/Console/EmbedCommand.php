@@ -19,7 +19,8 @@ class EmbedCommand extends Command
     protected $signature = 'foodalchemist:embed
         {--pool=all : gps|recipes|knowledge|suppliers|concepts|foodbooks|lab_notes|speisekarten|angebote|pakete|formate|la|all}
         {--team= : nur diese reale team_id (Default: alle Partitionen)}
-        {--purge : (nur pool=knowledge/all) verwaiste Vektoren entfernen — Probe-Delete über [1..maxId], off-peak (A2)}';
+        {--purge : (nur pool=knowledge/all) verwaiste Vektoren entfernen — Probe-Delete über [1..maxId], off-peak (A2)}
+        {--alt-partition= : (nur pool=knowledge/all) NACH dem Embedden die genannte Partition leerräumen — für Dossiers, die das Team gewechselt haben (Umzug auf global). purgeStale erreicht die nicht.}';
 
     protected $description = 'Backfill der Embedding-Pools (GPs, Rezepte, Wissen) für die semantische Recall-Schicht (#507)';
 
@@ -104,6 +105,13 @@ class EmbedCommand extends Command
             $rows[] = ['Wissen (alle Kategorien)', $stats['candidates'], implode(', ', array_keys($stats['kategorien']))];
             if (isset($stats['purge'])) {
                 $rows[] = ['Wissen — Purge (Waisen)', $stats['purge']['deleted'], 'probed: ' . $stats['purge']['probed']];
+            }
+            // Zweite Hälfte des Umzugs: die Vektoren der VERLASSENEN Partition. Erst embedden
+            // (neue Partition gefüllt), dann die alte leeren — in dieser Reihenfolge gibt es
+            // keinen Moment, in dem das Dossier gar nicht findbar ist.
+            if (($alt = $this->option('alt-partition')) !== null && is_numeric($alt)) {
+                $weg = $knowledge->purgePartition((int) $alt);
+                $rows[] = ['Wissen — Alt-Partition '.(int) $alt, $weg['deleted'], 'Vektoren geräumt'];
             }
             $anker = $knowledge->embedAnkers();
             $rows[] = ['Anker (Vokabular)', $anker['candidates'], '—'];

@@ -179,8 +179,8 @@ class Browser extends Component
     private function eigenesDoc(int $id): ?object
     {
         $doc = $this->sichtbaresDoc($id, ['id', 'team_id', 'slug']);
-        if ($doc === null || ! TeamScope::owns($doc->team_id, Auth::user()?->currentTeamRelation)) {
-            $this->fehler = 'Geerbtes/Master-Wissen — Aliasse und Bindungen pflegt nur das Besitzer-Team.';
+        if ($doc === null || ! TeamScope::mayWrite($doc->team_id, Auth::user()?->currentTeamRelation)) {
+            $this->fehler = 'Fremdes Wissen — Aliasse und Verbindungen pflegt Besitzer bzw. Master-Team.';
 
             return null;
         }
@@ -283,8 +283,8 @@ class Browser extends Component
         if ($doc === null) {
             return;
         }
-        if (! TeamScope::owns($doc->team_id, Auth::user()?->currentTeamRelation)) {
-            $this->fehler = 'Geerbtes/Master-Wissen — nur das Besitzer-Team kann (de)aktivieren.';
+        if (! TeamScope::mayWrite($doc->team_id, Auth::user()?->currentTeamRelation)) {
+            $this->fehler = 'Fremdes Wissen — nur Besitzer bzw. Master-Team kann (de)aktivieren.';
 
             return;
         }
@@ -333,8 +333,8 @@ class Browser extends Component
         if ($doc === null) {
             return;
         }
-        if (! TeamScope::owns($doc->team_id, Auth::user()?->currentTeamRelation)) {
-            $this->fehler = 'Geerbtes/Master-Wissen — nur das Besitzer-Team kann löschen.';
+        if (! TeamScope::mayWrite($doc->team_id, Auth::user()?->currentTeamRelation)) {
+            $this->fehler = 'Fremdes Wissen — nur Besitzer bzw. Master-Team kann löschen.';
 
             return;
         }
@@ -548,11 +548,12 @@ class Browser extends Component
             ? $this->sichtbaresDoc($this->selectedId)          // MVP-036: nur Sichtbares ins Detail
             : null;
 
-        // Nur das Besitzer-Team darf bearbeiten/löschen (Master/geerbt/global = read-only).
-        // Steuert die Sichtbarkeit des Löschen-Buttons — die delete()-Methode prüft dasselbe
-        // nochmal serverseitig (nie der Client-Sichtbarkeit vertrauen).
+        // Besitzer-Team — oder das Master-Team am globalen Bestand (Entscheid 2026-09-11:
+        // global heisst „gehört dem Master", nicht „gehört niemandem"). Steuert die
+        // Sichtbarkeit des Löschen-Buttons; delete() prüft dasselbe nochmal serverseitig
+        // (nie der Client-Sichtbarkeit vertrauen).
         $editable = $selected !== null
-            && TeamScope::owns($selected->team_id, Auth::user()?->currentTeamRelation);
+            && TeamScope::mayWrite($selected->team_id, Auth::user()?->currentTeamRelation);
 
         $aliases = $selected
             ? DB::table('foodalchemist_knowledge_aliases')->where('knowledge_document_id', $selected->id)

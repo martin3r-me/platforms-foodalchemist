@@ -78,7 +78,11 @@ it('liefert NOT_FOUND für einen unbekannten Slug', function () {
     expect($res->success)->toBeFalse()->and($res->errorCode)->toBe('NOT_FOUND');
 });
 
-it('sperrt geerbtes/globales Master-Wissen (team_id NULL)', function () {
+it('sperrt globales Master-Wissen gegen ein FREMDES Team', function () {
+    // s. KnowledgeWriteToolsTest: global gehört ab 2026-09-11 dem Master. `childA` ist es nicht.
+    $kind = $this->makeUser($this->childA, 'Kind-Nutzer');
+    $this->kontext = new ToolContext($kind, $this->childA);
+
     DB::table('foodalchemist_knowledge_documents')->insert([
         'uuid' => (string) UuidV7::generate(),
         'team_id' => null,
@@ -98,7 +102,7 @@ it('sperrt geerbtes/globales Master-Wissen (team_id NULL)', function () {
 
     $res = $this->registry->get('foodalchemist.knowledge.SET_ACTIVE')->execute(['slug' => 'domain.global-seed', 'active' => false], $this->kontext);
     expect($res->success)->toBeFalse()
-        ->and($res->errorCode)->toBe('VALIDATION_ERROR')
+        ->and($res->errorCode)->toBe('LOCKED')     // typisiert statt aus dem Satzbau geraten
         ->and($res->error)->toContain('Master-Wissen');
     expect((bool) DB::table('foodalchemist_knowledge_documents')->where('slug', 'domain.global-seed')->value('active'))->toBeTrue();
 });
