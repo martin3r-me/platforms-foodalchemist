@@ -51,6 +51,11 @@ class VoiceCommandService
         'foodalchemist.verkaufsrezepte.SEARCH', 'foodalchemist.artikel.SEARCH',
         'foodalchemist.recipe_klasse.POST',
         'foodalchemist.ui.OPEN',
+        // Ohne diese zwei handelt der Sprach-Agent aus dem Bauch. Sie waren ueber die Policy
+        // zwar erlaubt (jedes lesende foodalchemist.*-Tool ist es), aber nichts im Katalog und
+        // nichts in der System-Nachricht sagte ihm, dass es ein Wissensmodul gibt — und ein
+        // Werkzeug, von dem das Modell nichts weiss, existiert fuer es nicht.
+        'foodalchemist.ablauf.GET', 'foodalchemist.knowledge.SEARCH',
     ];
 
     /**
@@ -128,7 +133,12 @@ class VoiceCommandService
                     . '"name_glob":"foodalchemist.*"}) — Tools anderer Module sind gesperrt, jede Anfrage dorthin '
                     . 'kostet nur eine Runde. Freigeschaltet sind LESENDE foodalchemist.*-Tools. Schreibende sind '
                     . 'gesperrt; Änderungen laufen über die Proposal-Tools und werden vom Menschen bestätigt. '
-                    . 'Zum Navigieren foodalchemist.ui.OPEN nutzen.',
+                    . 'Zum Navigieren foodalchemist.ui.OPEN nutzen. '
+                    . 'ARBEITSWEISE: geht es um eine Fach-Aufgabe (Rezept, Gericht, Konzept, Foodbook, GP), '
+                    . 'hole ZUERST den hinterlegten Ablauf mit foodalchemist.ablauf.GET — dort stehen die '
+                    . 'verbindlichen Regeln und die Reihenfolge. Einzelne Fachfragen beantwortet '
+                    . 'foodalchemist.knowledge.SEARCH. Nicht aus dem Gedächtnis arbeiten und keine Werte '
+                    . 'erfinden: fehlt etwas, ist die Lücke die Antwort.',
             ],
         );
 
