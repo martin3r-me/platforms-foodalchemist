@@ -28,8 +28,17 @@ class RecipeImageService
 {
     private const SIZE = '1024x1024';
 
-    /** Bis zum Core-Update ist `low` die gemeinsame, von Core und OpenAI akzeptierte Qualität. */
-    private const QUALITY = 'low';
+    /**
+     * `medium` — seit dem Core-Update vom 09.09.2026 (platforms-core #8, Ticket #903).
+     *
+     * Vorher stand hier `low`, weil Core nur `low|standard|high` zuliess und OpenAI inzwischen
+     * `low|medium|high|auto` erwartet: die Schnittmenge war `low`. Core kennt jetzt dieselben
+     * vier Stufen (Default dort `medium`) — die Klammer ist weg.
+     *
+     * ⚠ `standard` gibt es NICHT mehr. Wer hier auf einen alten Wert zurückstellt, bekommt vom
+     * Core eine Ablehnung, bevor ein Call rausgeht.
+     */
+    private const QUALITY = 'medium';
 
     private const MODEL = 'gpt-image-1.5';
 
@@ -260,12 +269,47 @@ class RecipeImageService
         };
     }
 
+    /**
+     * Der gemeinsame Stil-Anker EINES Rezepts — dieselbe Kette in jedem Bild dazu.
+     *
+     * Das Problem, das er löst: die Schritt-Prompts verlangten schon „same neutral stainless-steel
+     * catering kitchen" — nur hatte „same" keinen Bezugspunkt. Jedes Bild ist ein eigener Call ohne
+     * Gedächtnis, also erfand das Modell jedes Mal eine andere Küche, andere Gefässe, anderes Licht.
+     * Und das Produktfoto lief über einen ganz anderen Prompt (deutsch, ohne Stilregeln) — Hero und
+     * Schritte passten nicht einmal zueinander.
+     *
+     * Der Anker ersetzt „dieselbe Küche" durch benannte Konstanten. Sie werden aus der Rezept-ID
+     * abgeleitet: stabil über Wiederholungen desselben Rezepts (ein Nachlauf sieht aus wie der
+     * erste), aber verschieden zwischen Rezepten — sonst sähe der ganze Katalog gleich aus.
+     *
+     * ⚠ Was er NICHT kann: ein am Rezept hinterlegtes Foto nachahmen. Dafür müsste das Bild ans
+     * Modell gehen (Vision), und dieser Weg existiert in FA noch nicht — der Core-Bilddienst kennt
+     * nur `/v1/images/generations`, keinen Referenzbild-Pfad. Der Anker ist die textliche Fassung
+     * derselben Absicht, keine Bild-zu-Bild-Übertragung.
+     */
+    public function stilAnker(FoodAlchemistRecipe $recipe): string
+    {
+        $n = (int) $recipe->id;
+        $flaeche = ['brushed stainless-steel counter', 'dark slate worktop', 'light grey concrete worktop'][$n % 3];
+        $gefaess = ['matte white porcelain and stainless gastronorm', 'off-white stoneware and stainless gastronorm'][$n % 2];
+        $licht = ['soft daylight from the left', 'soft daylight from the right'][($n >> 2) % 2];
+
+        return "Consistent visual identity for ALL images of this recipe: {$flaeche}, {$gefaess}, "
+            ."{$licht}, 45-degree angle, 50mm look, shallow but readable depth of field, neutral "
+            .'colour grade. Keep surface, vessels, light direction and framing IDENTICAL across every '
+            .'image of this recipe — they are one series, not separate photos.';
+    }
+
     /** Ein Foto des fertig angerichteten Gerichts (Hero/Endergebnis, ohne Schritt-Kopplung → is_result). */
     public function produktFoto(Team $team, FoodAlchemistRecipe $recipe): FoodAlchemistRecipeStepPhoto
     {
-        $prompt = trim('Professionelles, appetitliches Food-Foto des fertig angerichteten Gerichts «'.$recipe->name.'». '
+        // Englisch und mit demselben Anker wie die Schritte: der Hero ist Bild 0 derselben Serie,
+        // nicht ein Bild aus einer anderen Welt. Vorher war dies der einzige deutsche Prompt ohne
+        // jede Stilregel — entsprechend passte er zu keinem Schrittbild.
+        $prompt = trim('Photorealistic professional food photo of the finished, plated dish «'.$recipe->name.'». '
             .mb_strimwidth((string) ($recipe->description ?? ''), 0, 280)
-            .' Natürliches Licht, Restaurant-Qualität, klarer Fokus auf das Gericht, kein Text, kein Logo.');
+            ."\n\n".$this->stilAnker($recipe)
+            ."\n\nNo people, no hands, no text, no labels, no logos, no packaging.");
 
         return $this->generiereFoto($team, $recipe, $prompt, 'KI-Produktfoto', 0, true, self::FEATURE_PRODUKTFOTO, null);
     }
@@ -289,6 +333,7 @@ class RecipeImageService
     /** Eine zentrale Prompt-Wahrheit für Planung, Rezept-/Gerichte-Editor und MCP. */
     public function schrittPrompt(FoodAlchemistRecipe $recipe, FoodAlchemistRecipeStep $step): string
     {
+        $anker = $this->stilAnker($recipe);
         $zutaten = $recipe->ingredients->pluck('raw_text')->take(20)->filter()->implode(', ');
         $alleSchritte = FoodAlchemistRecipeStep::where('recipe_id', $recipe->id)
             ->orderBy('position')->orderBy('id')
@@ -310,7 +355,8 @@ Full service sequence for continuity only:
 
 Dish rules: all recipe components are already professionally prepared. Never show their production from raw ingredients. Show only the current action: mise en place for service, regeneration, final seasoning, portioning, assembly, saucing, garnishing or plating as stated. Show one coherent serving of this exact dish and the food state immediately after the current action. If the step contains alternatives such as "or", show only the first stated method; never show multiple alternatives in parallel. Do not invent extra components, garnishes, tableware or processing stages.
 
-Style rules: realistic food photography, same neutral stainless-steel restaurant pass or catering kitchen, 45-degree angle, natural light, clean professional gastro containers and plating tools, no people, no hands, no faces, no text, no labels, no logos, no packaging, no surreal props. Do not show a finished plated dish before the plating or finishing step.
+{$anker}
+Style rules: realistic food photography, clean professional gastro containers and plating tools, no people, no hands, no faces, no text, no labels, no logos, no packaging, no surreal props. Do not show a finished plated dish before the plating or finishing step.
 PROMPT);
         }
 
@@ -327,7 +373,8 @@ Full step sequence for continuity only:
 
 Content rules: show only the current step, as one unambiguous action, and the food state immediately after that action. Use only ingredients, tools and containers relevant to this step. Do not depict actions from earlier or later steps. If the step contains alternatives such as "or", show only the first stated method; never show multiple alternative methods in parallel. Do not invent additional ingredients, garnishes, vessels or processing stages.
 
-Style rules: realistic food photography, same neutral stainless-steel catering kitchen, 45-degree angle, natural light, clean gastro containers and pans, no people, no hands, no faces, no text, no labels, no logos, no packaging, no surreal props. Show the food state of this step, not the final plated dish unless the step is plating or finishing.
+{$anker}
+Style rules: realistic food photography, clean gastro containers and pans, no people, no hands, no faces, no text, no labels, no logos, no packaging, no surreal props. Show the food state of this step, not the final plated dish unless the step is plating or finishing.
 PROMPT);
     }
 

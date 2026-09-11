@@ -5,6 +5,7 @@ namespace Platform\FoodAlchemist\Livewire\Settings;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Livewire\Component;
+use Platform\FoodAlchemist\Services\Ai\KnowledgeBudget;
 use Platform\FoodAlchemist\Services\Ai\KnowledgeContextService;
 use Platform\FoodAlchemist\Services\Knowledge\KnowledgeCanonService;
 use Platform\FoodAlchemist\Services\Knowledge\WissensProfilService;
@@ -62,6 +63,11 @@ class Wissenssteuerung extends Component
     /** @var array{slug: string, mode: string, ord: string} */
     public array $kanonForm = ['slug' => '', 'mode' => 'pflicht', 'ord' => ''];
 
+    /** Prompt-Key, dessen Budget gerade bearbeitet wird (null = keiner). */
+    public ?string $budgetKey = null;
+
+    public string $budgetWert = '';
+
     public ?string $fehler = null;
 
     public ?string $hinweis = null;
@@ -74,6 +80,60 @@ class Wissenssteuerung extends Component
     private function darfSchreiben(): bool
     {
         return TeamScope::mayWrite(null, Auth::user()?->currentTeamRelation);
+    }
+
+    /**
+     * Budget eines Arbeitsschritts bearbeiten.
+     *
+     * Die Seite ZEIGTE „Σ Pflicht / Budget" von Anfang an — und wer sah, dass ein Schritt an
+     * seiner Grenze steht, konnte nichts tun ausser einen Deploy bestellen. Ein Grenzwert, den
+     * man sieht aber nicht bewegt, ist eine Diagnose ohne Therapie.
+     */
+    public function editBudget(string $key): void
+    {
+        $this->fehler = $this->hinweis = null;
+        $this->budgetKey = $key;
+        $this->budgetWert = (string) KnowledgeBudget::forKey($key);
+    }
+
+    public function saveBudget(): void
+    {
+        $this->fehler = $this->hinweis = null;
+        if ($this->budgetKey === null) return;
+        if (! $this->darfSchreiben()) { $this->fehler = 'Das Wissensbudget ist global — nur das Master-Team darf es ändern.'; return; }
+        $wert = (int) $this->budgetWert;
+        $team = Auth::user()?->currentTeamRelation;
+        $pflicht = 0;
+        if ($team !== null) {
+            try {
+                $pflicht = (int) (app(WissensProfilService::class)->profil($this->budgetKey, $team)['pflicht_zeichen'] ?? 0);
+            } catch (\Throwable) {
+                $pflicht = 0;   // kein Profil ⇒ kein Riegel, aber auch kein Absturz beim Speichern
+            }
+        }
+        // Vorwarnen statt zur Laufzeit abbrechen: Pflichtwissen wird nie gekappt, ein zu kleines
+        // Budget legt den Schritt beim naechsten Aufruf still — und niemand braechte das mit
+        // dieser Zahl in Verbindung.
+        if ($pflicht > 0 && $wert < $pflicht) {
+            $this->fehler = sprintf('Budget %s liegt unter der Pflichtmenge von %s Zeichen — der Schritt wuerde abbrechen statt zu kuerzen. Erst den Kanon kuerzen.',
+                number_format($wert, 0, ',', '.'), number_format($pflicht, 0, ',', '.'));
+
+            return;
+        }
+        try {
+            KnowledgeBudget::setze($this->budgetKey, $wert);
+            $this->hinweis = 'Budget gespeichert.';
+            $this->budgetKey = null;
+        } catch (\RuntimeException $e) { $this->fehler = $e->getMessage(); }
+    }
+
+    public function resetBudget(string $key): void
+    {
+        $this->fehler = $this->hinweis = null;
+        if (! $this->darfSchreiben()) { $this->fehler = 'Das Wissensbudget ist global — nur das Master-Team darf es ändern.'; return; }
+        KnowledgeBudget::setze($key, null);
+        $this->budgetKey = null;
+        $this->hinweis = 'Budget zurueck auf den ausgelieferten Standard.';
     }
 
     public function editArt(int $id): void
@@ -282,6 +342,7 @@ class Wissenssteuerung extends Component
         return view('foodalchemist::livewire.settings.wissenssteuerung', [
             'bericht' => $bericht,
             'profile' => $profile,
+            'eingestellteBudgets' => KnowledgeBudget::eingestellt(),
             'bereiche' => $bereiche,
             'routings' => DB::table('foodalchemist_knowledge_routings')
                 ->orderBy('feature')->orderBy('category')->get(),

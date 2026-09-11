@@ -156,7 +156,10 @@ it('KI-Fotos erzeugt Bilder fuer alle Schritte ohne Foto und laesst bestehende F
                 ->and($contextType)->toBe('foodalchemist.recipe')
                 ->and($userId)->toBe($user->id)
                 ->and($teamId)->toBe($rootTeamId)
-                ->and($options)->toBe(['size' => '1024x1024', 'quality' => 'low']);
+                // `medium` seit dem Core-Update vom 09.09.2026 (platforms-core #8): Core kannte
+                // vorher nur low|standard|high, OpenAI erwartet low|medium|high|auto — die
+                // Schnittmenge war `low`. Die Klammer ist weg.
+                ->and($options)->toBe(['size' => '1024x1024', 'quality' => 'medium']);
 
             $token = 'ki-step-'.$lauf.'-'.Str::random(8);
             $file = ContextFile::create([

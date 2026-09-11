@@ -54,8 +54,29 @@
                     </td>
                     <td class="{{ $td }} text-[11px] text-gray-600">{{ count($p['pflicht']) ?: '–' }}</td>
                     <td class="{{ $td }} text-[11px] text-gray-600">{{ count(array_filter($p['routing'], fn ($r) => $r['mode'] !== 'none')) ?: '–' }}</td>
+                    {{-- Das Budget war hier immer nur ABLESBAR — eine Diagnose ohne Therapie.
+                         Jetzt ist die rechte Zahl der Knopf: er ist der Hebel fuer Kosten gegen
+                         Qualitaet, und er gehoert dem Betreiber, nicht dem Release-Zyklus. --}}
                     <td class="{{ $td }} text-[11px] text-gray-600">
-                        {{ number_format($p['pflicht_zeichen'], 0, ',', '.') }} / {{ number_format($p['budget_total'], 0, ',', '.') }}
+                        @if($budgetKey === $p['prompt_key'])
+                            <div class="flex items-center gap-1">
+                                <span>{{ number_format($p['pflicht_zeichen'], 0, ',', '.') }} /</span>
+                                <input type="number" min="1" step="100" wire:model="budgetWert"
+                                       class="{{ $input }} !py-0.5 !px-1 text-[11px] w-24" wire:keydown.enter="saveBudget">
+                                <button type="button" wire:click="saveBudget" class="text-[10px] underline">sichern</button>
+                                <button type="button" wire:click="resetBudget('{{ $p['prompt_key'] }}')"
+                                        class="text-[10px] underline text-gray-400" title="zurueck auf den ausgelieferten Standard">Standard</button>
+                                <button type="button" wire:click="$set('budgetKey', null)" class="text-[10px] text-gray-400">×</button>
+                            </div>
+                        @else
+                            <button type="button" wire:click="editBudget('{{ $p['prompt_key'] }}')"
+                                    class="hover:underline" title="Wissensbudget aendern">
+                                {{ number_format($p['pflicht_zeichen'], 0, ',', '.') }} / <span class="font-medium">{{ number_format($p['budget_total'], 0, ',', '.') }}</span>
+                                @if(($eingestellteBudgets[$p['prompt_key']] ?? null) !== null)
+                                    <span class="text-[9px] text-[var(--ui-primary)]" title="abweichend vom ausgelieferten Standard">◆</span>
+                                @endif
+                            </button>
+                        @endif
                     </td>
                     <td class="{{ $td }} font-mono text-[10px] text-gray-400">{{ $p['fingerabdruck'] }}</td>
                 </tr>
