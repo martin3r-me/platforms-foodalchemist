@@ -907,7 +907,11 @@ class ReportExportService
                         'id' => (int) $foto->id,
                         'caption' => $foto->caption,
                         'url' => $foto->url(),
-                        'src' => $this->photoDataUri($foto->pfad) ?? $foto->url(),
+                        // ⚠ BEIDE Argumente. Hier stand `photoDataUri($foto->pfad)` — der Pfad
+                        // landete im `?int`-Slot und der Aufruf warf einen TypeError, sobald ein
+                        // Anrichte-Schritt ein Foto trug. Als die Methode um den ContextFile
+                        // erweitert wurde, zog nur die Schwester-Stelle unten (Zubereitung) mit.
+                        'src' => $this->photoDataUri($foto->context_file_id, $foto->pfad) ?? $foto->url(),
                     ])->values()->all()
                     : [],
             ])->all(),
