@@ -5,10 +5,22 @@ namespace Platform\FoodAlchemist\Services\Knowledge;
 /** Fachlicher Vertrag: UND zwischen Achsen, ODER zwischen Werten einer Achse. */
 final class WissensGeltung
 {
+    /**
+     * ★ `ausgabeform` hiess bis 2026-09-11 `format` — umbenannt, weil „Format" in
+     * FoodAlchemist bereits eine **Konzeptzusammenstellung** ist (ein Produkt mit Slots,
+     * Druck und Kalkulation; auf demo z. B. „TAiste & fly"). Ein Kurator konnte nicht
+     * wissen, welches der beiden gemeint war. Die Achse meint die Form, in der das Essen
+     * herausgeht — sie bestimmt den Mengen-Multiplikator.
+     *
+     * Der Umbenennung musste eine Datenmigration beiliegen: {@see self::lesen()} validiert
+     * NICHT, es decodiert nur. Eine zurückgebliebene `format`-Geltung hätte gegen einen
+     * Parameter geprüft, den niemand mehr schickt — und damit nie mehr getroffen, ohne
+     * Fehlermeldung.
+     */
     public const ACHSEN = [
         'gang' => 'Gang', 'komponentenrolle' => 'Komponentenrolle', 'portionskontext' => 'Portionskontext',
         'niveau' => 'Niveau', 'saison' => 'Saison', 'warengruppe' => 'Warengruppe',
-        'occasion' => 'Anlass', 'sektor' => 'Verpflegungskontext', 'format' => 'Format',
+        'occasion' => 'Anlass', 'sektor' => 'Verpflegungskontext', 'ausgabeform' => 'Ausgabeform',
     ];
 
     public static function normalisieren(mixed $input): array
@@ -31,9 +43,47 @@ final class WissensGeltung
         return $result;
     }
 
+    /**
+     * Spec 52 — `ausgabeform` aus Sektor × Serviceform ABLEITEN.
+     *
+     * Beide Werte schickt die Leitstelle ohnehin mit; eine eigene Auswahl wäre ein drittes
+     * Feld für eine Information, die schon da ist. Dass Serviceform allein nicht genügt, ist
+     * der Grund für die Kombination: Bankett-Buffet und Kantinen-Buffet tragen verschiedene
+     * Mengen-Faktoren (0,75–0,85 vs. 0,85–0,95) bei identischer Serviceform.
+     *
+     * ★ **Nicht gelistete Kombination = KEINE Ausgabeform.** Catering+Flying, Care+Boxed und
+     * alles andere ergibt hier nichts — der Resolver meldet dann eine Lücke statt einen
+     * falschen Faktor anzuwenden. `foodtruck` und `sweet_table` haben bewusst keine
+     * Kombination; die bleiben ausdrücklich setzbar.
+     *
+     * Eine explizit übergebene `ausgabeform` gewinnt immer: der Mensch weiss mehr als die Regel.
+     */
+    public static function mitAbleitung(array $params): array
+    {
+        if (isset($params['ausgabeform']) && is_string($params['ausgabeform']) && trim($params['ausgabeform']) !== '') {
+            return $params;
+        }
+        $sektor = is_string($params['sektor'] ?? null) ? mb_strtolower(trim($params['sektor'])) : '';
+        $service = is_string($params['serviceform'] ?? null) ? mb_strtolower(trim($params['serviceform'])) : '';
+        if ($sektor === '') {
+            return $params;
+        }
+
+        $regeln = config('foodalchemist.ai.ausgabeform_ableitung', []);
+        $regeln = is_array($regeln) ? $regeln : [];
+        // Erst die genaue Kombination, dann die serviceform-unabhängige Regel des Sektors.
+        $treffer = $regeln[$sektor.'|'.$service] ?? $regeln[$sektor.'|*'] ?? null;
+        if (is_string($treffer) && $treffer !== '') {
+            $params['ausgabeform'] = $treffer;
+        }
+
+        return $params;
+    }
+
     public static function passt(array $geltung, array $params): bool
     {
         $params['niveau'] ??= $params['level'] ?? null;
+        $params = self::mitAbleitung($params);
         foreach ($geltung as $axis => $values) {
             $actual = $params[$axis] ?? null;
             $actual = is_array($actual) ? $actual : [$actual];
