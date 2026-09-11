@@ -412,7 +412,7 @@ class KnowledgeContextService
                     (int) ($route->max_docs ?: 3), (int) ($route->max_chars_per_doc ?: 3000), $filesUsed, $scopeSlugs, $route->art);
                 if ($part !== null) $parts[] = $part;
             } elseif ($route->art === 'datenwerk' && $route->mode === 'resolve') {
-                $base = DB::table('foodalchemist_knowledge_documents')->tap($this->nurSichtbar($team));
+                $base = $this->sichtbareDokumente($team);
                 $datenwerkErgebnis = app(\Platform\FoodAlchemist\Services\Knowledge\DatenwerkResolver::class)->resolve($base, $params);
                 $entries = [];
                 foreach ($datenwerkErgebnis['ergebnisse'] as $result) {
@@ -538,6 +538,18 @@ class KnowledgeContextService
      *
      * Bei $team === null bleibt genau der globale Seed übrig — nicht alles, nicht nichts.
      */
+    /**
+     * Die sichtbaren Dossiers als Abfrage-Basis — EINE Stelle für „was darf dieses Team sehen".
+     *
+     * Öffentlich, damit Aufrufer ausserhalb dieses Services (Datenwerk-Auflösung per MCP)
+     * dieselbe Regel benutzen statt sie abzuschreiben. Die Sichtbarkeit dreimal zu
+     * formulieren ist genau das Muster, das Spec 52 abbaut.
+     */
+    public function sichtbareDokumente(?Team $team): \Illuminate\Database\Query\Builder
+    {
+        return DB::table('foodalchemist_knowledge_documents')->tap($this->nurSichtbar($team));
+    }
+
     private function nurSichtbar(?Team $team, string $spalte = 'team_id'): \Closure
     {
         if (! (bool) config('foodalchemist.knowledge_team_scope', false)) {

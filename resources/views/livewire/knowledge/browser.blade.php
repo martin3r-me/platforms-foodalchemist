@@ -281,7 +281,7 @@
                     <div class="flex flex-wrap gap-1.5 mb-2">
                     @forelse($bindings as $b)
                     <span class="inline-flex items-center gap-1 text-[11px] {{ $pill }}" wire:key="bd-{{ $b->id }}">
-                    {{ $layerLabels[$b->target_key] ?? $b->target_key }}@if($b->mode) <span class="text-gray-500">· {{ $b->mode }}</span>@endif
+                    {{ $b->target_key }}@if($b->mode) <span class="text-gray-500">· {{ $b->mode }}</span>@endif
                     <button type="button" wire:click="removeBinding({{ $b->id }})" class="text-gray-500 hover:text-red-500" title="Bindung lösen">&times;</button>
                     </span>
                     @empty
@@ -292,16 +292,12 @@
                     </div>
 
                     <div class="{{ $card }} p-4 space-y-2" data-wissen-trace>
-                    <p class="{{ $dt }}">Rückwärts nachvollziehen <span class="text-[10px] text-gray-500">— was hängt an einem KI-Layer / einer Warengruppe?</span></p>
+                    {{-- Spec 52: fragt den KANON, nicht die abgeschafften Bindungen. --}}
+                    <p class="{{ $dt }}">Rückwärts nachvollziehen <span class="text-[10px] text-gray-500">— was bekommt dieser Arbeitsschritt verbindlich?</span></p>
                     <div class="flex flex-wrap items-center gap-2">
                     <select wire:model.live="traceTarget" class="{{ $input }} !py-1 text-xs w-64">
-                    <option value="">— Einsatzort wählen —</option>
-                    <optgroup label="Bereiche">
-                    @foreach($layers->where('kind', 'bereich') as $l)<option value="{{ $l->slug }}">{{ $l->label }}</option>@endforeach
-                    </optgroup>
-                    <optgroup label="Einzel-Prompts">
-                    @foreach($layers->where('kind', 'prompt') as $l)<option value="{{ $l->slug }}">{{ $l->slug }}</option>@endforeach
-                    </optgroup>
+                    <option value="">— Arbeitsschritt wählen —</option>
+                    @foreach($traceKeys as $k)<option value="{{ $k }}">{{ $k }}</option>@endforeach
                     </select>
                     </div>
                     @if($traceTarget !== '')
@@ -311,7 +307,7 @@
                     {{ $t->title }} <span class="text-gray-500">· {{ $t->category }}@if($t->mode) · {{ $t->mode }}@endif</span>
                     </button>
                     @empty
-                    <p class="text-[11px] text-gray-500">Nichts an diesem Ziel gebunden.</p>
+                    <p class="text-[11px] text-gray-500">Dieser Schritt hat keinen Kanon — er bekommt nichts Verbindliches.</p>
                     @endforelse
                     </div>
                     @endif
