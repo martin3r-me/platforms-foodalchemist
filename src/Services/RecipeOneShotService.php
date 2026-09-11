@@ -807,7 +807,7 @@ class RecipeOneShotService
         $wTeam = $recipe->team_id !== null ? \Platform\Core\Models\Team::find((int) $recipe->team_id) : null;
         $wissen = app(Ai\KnowledgeContextService::class)->contextFor($wTeam, 'recipe.steps', $beschreibung, null, [], [
             'rezept_typ' => $recipe->is_sales_recipe ? 'gericht' : 'basisrezept',
-        ]);
+        ] + \Platform\FoodAlchemist\Services\Knowledge\RezeptAchsen::fuer($recipe));
 
         return [
             'block' => (string) ($wissen['block'] ?? ''),

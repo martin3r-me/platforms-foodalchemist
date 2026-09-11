@@ -680,6 +680,7 @@ class FoodAlchemistServiceProvider extends ServiceProvider
                     \Platform\FoodAlchemist\Tools\KnowledgeGetTool::class,
                     \Platform\FoodAlchemist\Tools\KnowledgeCreateTool::class,
                     \Platform\FoodAlchemist\Tools\KnowledgeUpdateTool::class,
+                    \Platform\FoodAlchemist\Tools\KnowledgeEinordnenTool::class,
                     // D12: Wissen-Löschen/Alias (3 neue Service-Methoden) + Canvas-Einträge + Controlling
                     // + Trendradar + Präsentations-Designs. match_proposals.RESOLVE = bereits match_proposals.PUT.
                     \Platform\FoodAlchemist\Tools\KnowledgeDeleteTool::class,
