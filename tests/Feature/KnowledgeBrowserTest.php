@@ -192,3 +192,41 @@ it('warnt bei cross_cutting nur, wenn ausschliesslich always-Routen greifen und 
         ->assertViewHas('ccAlwaysFeatures', fn ($f) => in_array('concept.wording', $f, true))
         ->assertSee('Kanon-Zeile');
 });
+
+/**
+ * Spec 52 — die Rückwärts-Sicht fragte bis 2026-09-11 die abgeschafften Bindungen.
+ *
+ * Sie bot „Einsatzorte" aus `knowledge_layers` an und zeigte, was per
+ * `knowledge_bindings` daran hing. Beides ist seit Paket 3 wirkungslos: die Laufzeit
+ * liest keine Bindung mehr. Gemessen auf demo waren es neun Zeilen, die nichts
+ * steuerten — und anders als der Block darüber sagte die Fläche das nicht.
+ *
+ * Die FRAGE bleibt richtig, die Quelle war falsch: jetzt der Kanon.
+ */
+it('Spec 52: die Rückwärts-Sicht bietet Arbeitsschritte MIT KANON an, keine Einsatzorte', function () {
+    $id = ($this->mkDoc)('rw-trace', 'regelwerk', 'Regelwerk §2', 'Inhalt.');
+    app(\Platform\FoodAlchemist\Services\Knowledge\KnowledgeCanonService::class)->set($this->rootTeam, [
+        'scope' => 'prompt_key', 'scope_key' => 'recipe.generator', 'slug' => 'rw-trace', 'mode' => 'pflicht',
+    ]);
+
+    Livewire::test(Browser::class)
+        ->assertViewHas('traceKeys', fn ($k) => in_array('recipe.generator', $k->all(), true))
+        ->set('traceTarget', 'recipe.generator')
+        ->assertViewHas('traceResults', fn ($r) => $r->pluck('title')->contains('Regelwerk §2'));
+});
+
+it('Spec 52: eine Alt-Bindung taucht in der Rückwärts-Sicht NICHT mehr auf', function () {
+    $id = ($this->mkDoc)('rw-alt', 'regelwerk', 'Nur gebunden, kein Kanon', 'Inhalt.');
+    DB::table('foodalchemist_knowledge_bindings')->insert([
+        'uuid' => (string) UuidV7::generate(), 'team_id' => $this->rootTeam->id,
+        'knowledge_document_id' => $id, 'binding_type' => 'layer', 'target_key' => 'recipe.generator',
+        'mode' => 'always', 'weight' => 0, 'source' => 'test', 'active' => 1,
+        'created_at' => now(), 'updated_at' => now(),
+    ]);
+
+    Livewire::test(Browser::class)
+        ->set('traceTarget', 'recipe.generator')
+        // Ohne Kanon-Zeile ist das Dossier fuer diesen Schritt NICHT verbindlich —
+        // die Bindung allein darf es nicht mehr erscheinen lassen.
+        ->assertViewHas('traceResults', fn ($r) => ! $r->pluck('title')->contains('Nur gebunden, kein Kanon'));
+});

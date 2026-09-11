@@ -594,23 +594,30 @@ class Browser extends Component
                 ? ($ccDiscovery || $ccTraegtSlug || $ccAlwaysFeatures === [])
                 : true);
 
-        // v2-Ziele: pflegbare Einsatzorte/Layer
-        $layers = DB::table('foodalchemist_knowledge_layers')->whereNull('deleted_at')
-            ->where('active', true)->orderBy('sort_order')->orderBy('label')->get();
-        $layerLabels = $layers->pluck('label', 'slug');
+        /*
+         * Spec 52 — die Rückwärts-Sicht fragt den KANON, nicht die Bindungen.
+         *
+         * Bis 2026-09-11 las diese Fläche `knowledge_bindings` und bot die „Einsatzorte" aus
+         * `knowledge_layers` zur Auswahl an. Beide sind seit Paket 3 wirkungslos: die Laufzeit
+         * liest keine Bindung mehr. Die Fläche zeigte damit neun Zeilen, die nichts steuern —
+         * und anders als der Block darüber sagte sie das NICHT. Eine Kurations-Oberfläche, die
+         * in eine tote Struktur weist, ist schädlicher als gar keine (Befund J).
+         *
+         * Die FRAGE bleibt richtig — „was hängt an diesem Arbeitsschritt?". Nur die Quelle war
+         * falsch. Jetzt: die Prompt-Keys mit Kanon zur Auswahl, und darunter die Dossiers, die
+         * dieser Schritt verbindlich bekommt.
+         */
+        $traceKeys = DB::table('foodalchemist_knowledge_canon')
+            ->where('scope', 'prompt_key')->where('active', true)->whereNull('deleted_at')
+            ->where(fn ($q) => $q->whereNull('team_id')->orWhere('team_id', Auth::user()?->currentTeamRelation?->id))
+            ->distinct()->orderBy('scope_key')->pluck('scope_key');
 
-        // v2: Rückwärts-Ansicht — welche Docs hängen am gewählten Einsatzort
-        $traceResults = $this->traceTarget !== ''
-            ? TeamScope::applyVisible(
-                DB::table('foodalchemist_knowledge_bindings as b')
-                    ->join('foodalchemist_knowledge_documents as d', 'd.id', '=', 'b.knowledge_document_id')
-                    ->whereNull('b.deleted_at')->where('b.active', true)
-                    ->where('b.binding_type', 'layer')->where('b.target_key', $this->traceTarget)
-                    ->whereNull('d.deleted_at'),
-                'd.team_id', Auth::user()?->currentTeamRelation          // MVP-036: Rückansicht nur eigene/globale Docs
-            )
-                ->orderBy('d.title')
-                ->get(['d.id', 'd.title', 'd.category', 'b.mode'])
+        $traceResults = $this->traceTarget !== '' && Auth::user()?->currentTeamRelation !== null
+            ? app(\Platform\FoodAlchemist\Services\Knowledge\KnowledgeCanonService::class)
+                ->documentsFor('prompt_key', $this->traceTarget, Auth::user()->currentTeamRelation)
+                ->map(fn ($d) => (object) ['id' => $d->document_id, 'title' => $d->title,
+                    'category' => $d->category, 'mode' => $d->mode ?? null])
+                ->sortBy('title')->values()
             : collect();
 
         return view('foodalchemist::livewire.knowledge.browser', [
@@ -631,8 +638,7 @@ class Browser extends Component
             // Spec 52/A4: der Hinweis muss sagen, WELCHE Features die Kategorie fest laden —
             // sonst steht dort eine Behauptung ohne Adresse.
             'ccAlwaysFeatures' => $ccAlwaysFeatures,
-            'layers' => $layers,
-            'layerLabels' => $layerLabels,
+            'traceKeys' => $traceKeys,
             'traceResults' => $traceResults,
             'semanticNote' => $semanticNote,
             'semanticAktiv' => $semanticAktiv,
