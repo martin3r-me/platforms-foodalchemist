@@ -387,7 +387,10 @@
                 <p class="muted">Einsatzmomente: {{ implode(', ', $format['moments'] ?? []) ?: '—' }} · Saison: {{ implode(', ', $format['seasons'] ?? []) ?: '—' }}</p>
             @endif
             @if(($opt['bilder'] ?? false) && ($format['hero'] ?? null))
-                <div class="step-photos"><span class="step-photo"><img src="{{ $format['hero'] }}" alt="{{ $format['name'] ?? '' }}"></span></div>
+                {{-- `.step-photos`/`.step-photo` hatten NIE eine CSS-Regel — das Bild rendert
+                     sonst in Naturgroesse (1024 px) und laeuft aus der Spalte. Hier gilt die
+                     Haus-Regel wie ueberall sonst im Bericht. --}}
+                <div class="photo-strip"><span class="ps-item"><img src="{{ $format['hero'] }}" alt="{{ $format['name'] ?? '' }}"></span></div>
             @endif
         </section>
 
