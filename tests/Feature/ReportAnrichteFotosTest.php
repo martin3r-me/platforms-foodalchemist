@@ -97,3 +97,28 @@ it('ohne Bilder-Schalter bleiben die Fotos leer — der Schalter ist der Schalte
 
     expect($daten['recipe']['anrichte_schritte'][0]['photos'])->toBe([]);
 });
+
+it('★ rendert Anrichte-Fotos in der gedeckelten Haus-Reihe, nicht als seitenfuellenden Kasten', function () {
+    // Der gemeldete Fall: die Bilder kamen in Naturgroesse (1024 px) und sprengten die Spalte.
+    // Ursache war nicht die Bildgroesse, sondern dass `.step-photos`/`.step-photo` NIE eine
+    // CSS-Regel hatten. Die Zubereitung hatte dasselbe Problem laengst geloest — der Kommentar
+    // im CSS nennt es „der groesste Papierfresser: 3 Schritte belegten fast eine ganze Seite".
+    // Anrichten benutzt jetzt dasselbe Muster, statt ein zweites zu pflegen.
+    $schritt = FoodAlchemistRecipeStep::create([
+        'team_id' => $this->rootTeam->id, 'recipe_id' => $this->rezept->id,
+        'ebene' => FoodAlchemistRecipeStep::EBENE_ANRICHTEN,
+        'position' => 1, 'phase' => 'Anrichten', 'text' => 'Sauce spiegeln.',
+    ]);
+    $foto = FoodAlchemistRecipeStepPhoto::create([
+        'team_id' => $this->rootTeam->id, 'recipe_id' => $this->rezept->id,
+        'pfad' => 'foodalchemist/rezepte/1/teller.webp', 'caption' => 'Angerichtet',
+    ]);
+    $schritt->photos()->attach($foto->id, ['position' => 1]);
+
+    $daten = $this->report->rezeptDaten($this->rootTeam, $this->rezept->id, ['bilder' => true, 'anrichten' => true]);
+    $html = view('foodalchemist::dokumente.report', $daten + ['istPdf' => false])->render();
+
+    expect($html)->toContain('photo-strip')
+        ->and($html)->not->toContain('class="step-photos"')   // die Klasse ohne CSS
+        ->and($html)->not->toContain('class="step-photo"');
+});

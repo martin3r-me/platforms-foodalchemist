@@ -155,24 +155,38 @@
              Gerichte, deren Anrichte-Ebene noch keine Schritte trägt (Altbestand). --}}
         @if($opt['anrichten'] ?? false)
             @if(count($node['anrichte_schritte'] ?? []))
+                @php($aSchritte = collect($node['anrichte_schritte']))
+                @php($aFotos = ($opt['bilder'] ?? false)
+                    ? $aSchritte->flatMap(fn ($s) => collect($s['photos'] ?? [])->map(fn ($f) => $f + ['step' => $s['position']]))
+                    : collect())
                 <h4>Anrichten &amp; Ausgabe</h4>
-                @foreach($node['anrichte_schritte'] as $s)
-                    <div class="step">
-                        <div><span class="step-nr">{{ $s['position'] }}.</span> @if($s['phase'])<span class="step-phase">{{ $s['phase'] }}:</span> @endif{{ $s['text'] }}</div>
-                        @if(($opt['bilder'] ?? false) && count($s['photos'] ?? []))
-                            <div class="step-photos">
-                                @foreach($s['photos'] as $foto)
-                                    @if($foto['src'] ?? null)
-                                        <span class="step-photo">
-                                            <img src="{{ $foto['src'] }}" alt="{{ $foto['caption'] ?? ('Anrichten ' . $s['position']) }}">
-                                            @if($foto['caption'] ?? null)<span class="caption">{{ $foto['caption'] }}</span>@endif
-                                        </span>
-                                    @endif
-                                @endforeach
-                            </div>
-                        @endif
+                {{-- Dasselbe Muster wie die Anleitung darüber, und zwar aus demselben Grund:
+                     ein Kasten je Schritt mit ungedeckeltem Bild ist der groesste Papierfresser
+                     (der Kommentar in report-node-css nennt „3 Schritte = fast eine Seite").
+                     Diese Sektion kam spaeter dazu, brachte eigenes Markup mit — `.step`,
+                     `.step-photos`, `.step-photo` — und fuer das gab es NIE eine CSS-Regel.
+                     Die Bilder rendersten also in Naturgroesse (1024 px) und liefen aus der
+                     Spalte. Statt ein zweites Muster zu stylen, benutzt Anrichten jetzt das
+                     bereits geloeste: dichte Zeilen, Fotos als EINE Reihe darunter. --}}
+                <div class="steps">
+                    @foreach($aSchritte as $s)
+                        <div class="step-row"><span class="step-nr">{{ $s['position'] }}</span>@if($s['phase'])<span class="step-phase">{{ $s['phase'] }}:</span> @endif{{ $s['text'] }}</div>
+                    @endforeach
+                </div>
+                @if($aFotos->isNotEmpty())
+                    <div class="photo-strip">
+                        @foreach($aFotos as $foto)
+                            <span class="ps-item">
+                                @if($foto['src'] ?? null)
+                                    <img src="{{ $foto['src'] }}" alt="Anrichten {{ $foto['step'] }}">
+                                @else
+                                    <span class="photo-missing">Bild nicht verfügbar</span>
+                                @endif
+                                <span class="ps-cap"><strong>Schritt {{ $foto['step'] }}</strong>@if($foto['caption'] ?? null) · {{ $foto['caption'] }}@endif</span>
+                            </span>
+                        @endforeach
                     </div>
-                @endforeach
+                @endif
             @elseif($node['plating_text'] ?? null)
                 <h4>Anrichten &amp; Ausgabe</h4>
                 <div class="copy"><p>{{ $node['plating_text'] }}</p></div>
