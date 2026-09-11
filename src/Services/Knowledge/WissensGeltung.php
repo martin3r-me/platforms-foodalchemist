@@ -17,6 +17,25 @@ final class WissensGeltung
      * Parameter geprüft, den niemand mehr schickt — und damit nie mehr getroffen, ohne
      * Fehlermeldung.
      */
+    /**
+     * Gebräuchliche Bezugsgrössen — als ORIENTIERUNG, nicht als Schranke.
+     *
+     * ⚠ Bewusst NICHT erzwungen. Diese Liste entstand für sechs Mengen-Dossiers und deckt
+     * nachweislich nicht alles ab: ein bestehender Vertragstest nutzt „verzehrfertig pro
+     * Portion" — eine völlig sinnvolle Angabe, die hier fehlt. Eine geschlossene Liste würde
+     * Leute zwingen, falsch zu taggen. Bevor daraus ein Vokabular wird, braucht es eine
+     * Bestandsaufnahme der tatsächlich benutzten Bezüge; das gehört in den Korpus-Umbau.
+     *
+     * Erzwungen wird nur die Kleinschreibung (s. u.) — dafür gibt es einen harten Grund.
+     *
+     * ★ Der Bezug ist das Feld, das den Wert erst benutzbar macht: „180 g" allein sagt nicht,
+     * ob roh oder gegart. Bei 30 % Garverlust sind das 80 g Unterschied pro Person im Einkauf.
+     */
+    public const BEZUGSGROESSEN = [
+        'roh', 'gegart', 'trocken', 'mit_knochen', 'mit_schale', 'stueck', 'ganzes_tier',
+        'relativ_a_la_carte',
+    ];
+
     public const ACHSEN = [
         'gang' => 'Gang', 'komponentenrolle' => 'Komponentenrolle', 'portionskontext' => 'Portionskontext',
         'niveau' => 'Niveau', 'saison' => 'Saison', 'warengruppe' => 'Warengruppe',
@@ -35,7 +54,17 @@ final class WissensGeltung
             foreach ($values as $value) {
                 if (! is_string($value) || mb_strlen($value) > 100) throw new \RuntimeException("Ungültiger Achsenwert für {$axis}.");
                 $value = mb_strtolower(trim($value));
-                if ($value !== '') $clean[] = $value;
+                if ($value === '') continue;
+                // ★ Prüfen statt still annehmen. Ein erfundener Wert faellt sonst NICHT auf —
+                // er trifft einfach nie, und niemand merkt es. Genau so sind meine ersten
+                // Tags entstanden (`protein` statt `komponente`, `obst_zitrus` statt der
+                // GP-Warengruppe). Freie Achsen und leere Quellen schraenken nicht ein.
+                if (! WissensAchsenVokabular::gueltig($axis, $value)) {
+                    $erlaubt = WissensAchsenVokabular::werteListe($axis) ?? [];
+                    throw new \RuntimeException(sprintf('Unbekannter Wert "%s" fuer die Achse %s. Erlaubt: %s.',
+                        $value, $axis, implode(', ', array_slice($erlaubt, 0, 20)).(count($erlaubt) > 20 ? ' …' : '')));
+                }
+                $clean[] = $value;
             }
             if ($clean !== []) $result[$axis] = array_values(array_unique($clean));
         }
@@ -112,6 +141,10 @@ final class WissensGeltung
             foreach (['kennzahl', 'einheit', 'bezug', 'quelle'] as $key) {
                 if (! is_string($row[$key] ?? null) || trim($row[$key]) === '') throw new \RuntimeException("Datenwerk: {$key} ist Pflicht.");
             }
+            // NORMALISIEREN, nicht einschraenken. Der Resolver erkennt einen Widerspruch ueber
+            // [min, max, einheit, bezug] — „Roh" und „roh" waeren sonst zwei verschiedene
+            // Bezuege und damit ein Widerspruch, den es nicht gibt.
+            $bezug = mb_strtolower(trim($row['bezug']));
             if (! is_numeric($row['min'] ?? null) || ! is_numeric($row['max'] ?? null)
                 || ! is_finite((float) $row['min']) || ! is_finite((float) $row['max']) || (float) $row['min'] > (float) $row['max']) {
                 throw new \RuntimeException('Datenwerk: gültigen Wert oder Bereich min ≤ max angeben.');
@@ -120,7 +153,7 @@ final class WissensGeltung
             if ($geltung === [] && $conditions === []) throw new \RuntimeException('Datenwerk: mindestens eine Geltungsbedingung angeben.');
             $normalized[] = [
                 'kennzahl' => trim($row['kennzahl']), 'min' => (float) $row['min'], 'max' => (float) $row['max'],
-                'einheit' => trim($row['einheit']), 'bezug' => trim($row['bezug']), 'quelle' => trim($row['quelle']),
+                'einheit' => trim($row['einheit']), 'bezug' => $bezug, 'quelle' => trim($row['quelle']),
                 'geltung' => $conditions,
             ];
         }

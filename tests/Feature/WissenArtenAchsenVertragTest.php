@@ -26,7 +26,7 @@ beforeEach(function () {
         'content_md' => 'Vollständiges Wissen ohne Mengenannahmen.',
     ], $extra));
     $this->value = fn ($min = 100) => ['kennzahl' => 'hauptkomponente', 'min' => $min, 'max' => $min,
-        'einheit' => 'g', 'bezug' => 'verzehrfertig pro Portion', 'quelle' => 'Testquelle, Tabelle 1', 'geltung' => []];
+        'einheit' => 'g', 'bezug' => 'verzehrfertig pro portion', 'quelle' => 'Testquelle, Tabelle 1', 'geltung' => []];
 });
 
 it('verknüpft Achsen mit UND und Alternativen mit ODER und erfindet fehlende Parameter nicht', function () {
@@ -57,13 +57,13 @@ it('prüft Geltung vor Top-K und verwendet keine passende Suche aus falschem Kon
 });
 
 it('löst Datenwerke ohne Suchwort auf und übermittelt Wert Einheit Bezug und Version statt Prosa', function () {
-    ($this->doc)('portion', 'datenwerk', ['geltung' => ['gang' => ['hauptgang'], 'komponentenrolle' => ['hauptkomponente']],
+    ($this->doc)('portion', 'datenwerk', ['geltung' => ['gang' => ['hauptgang'], 'komponentenrolle' => ['komponente']],
         'datenwerte' => [($this->value)()], 'content_md' => 'Diese Prosa darf nicht verwendet werden.']);
     app(KnowledgeRoutingService::class)->setArt('test.data', 'datenwerk', 'resolve');
     $context = app(KnowledgeContextService::class)->contextFor($this->rootTeam, 'test.data', 'Keine Textübereinstimmung', null, [],
-        ['gang' => 'hauptgang', 'komponentenrolle' => 'hauptkomponente']);
+        ['gang' => 'hauptgang', 'komponentenrolle' => 'komponente']);
     expect($context['datenwerk']['ergebnisse'][0]['status'])->toBe('aufgeloest')
-        ->and($context['block'])->toContain('verzehrfertig pro Portion', 'Testquelle', 'portion@v1')
+        ->and($context['block'])->toContain('verzehrfertig pro portion', 'Testquelle', 'portion@v1')
         ->not->toContain('Diese Prosa')
         ->and($context['files_used'])->toBe(['portion@v1']);
 });
@@ -95,7 +95,7 @@ it('speichert Einordnung über denselben Vertrag in UI und MCP und versioniert �
         ->call('save')->assertSet('fehler', null)->assertSee('Strukturierte Datenwerte');
     $get = app(ToolRegistry::class)->get('foodalchemist.knowledge.GET')->execute(['slug' => 'ui-doc'], new ToolContext($this->user, $this->rootTeam));
     expect($get->data['geltung'])->toBe(['gang' => ['hauptgang']])->and($get->data['version'])->toBe(2)
-        ->and($get->data['datenwerte'][0]['bezug'])->toBe('verzehrfertig pro Portion');
+        ->and($get->data['datenwerte'][0]['bezug'])->toBe('verzehrfertig pro portion');
 });
 
 it('bietet Arten-Routing in der Steuerungsoberfläche an', function () {
@@ -107,9 +107,13 @@ it('bietet Arten-Routing in der Steuerungsoberfläche an', function () {
 });
 
 it('unterstützt jede ausgebaute Achse ohne Suchrang', function ($axis) {
-    ($this->doc)('standard', 'datenwerk', ['geltung' => [$axis => ['passend']], 'datenwerte' => [($this->value)()]]);
+    // Der Wert kommt AUS dem Vokabular der Achse — ein hartkodierter Platzhalter wuerde
+    // seit Runde B abgewiesen, und eine eigene Liste hier waere die naechste Doppelung.
+    // Freie Achsen (ohne Vokabular) behalten den Platzhalter.
+    $wert = \Platform\FoodAlchemist\Services\Knowledge\WissensAchsenVokabular::werteListe($axis)[0] ?? 'passend';
+    ($this->doc)('standard', 'datenwerk', ['geltung' => [$axis => [$wert]], 'datenwerte' => [($this->value)()]]);
     app(KnowledgeRoutingService::class)->setArt('test.axes', 'datenwerk', 'resolve');
-    $context = app(KnowledgeContextService::class)->contextFor($this->rootTeam, 'test.axes', '', null, [], [$axis => 'passend']);
+    $context = app(KnowledgeContextService::class)->contextFor($this->rootTeam, 'test.axes', '', null, [], [$axis => $wert]);
     expect($context['files_used'])->toBe(['standard@v1']);
 })->with(array_keys(WissensGeltung::ACHSEN));
 
