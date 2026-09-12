@@ -354,6 +354,36 @@
         },
         {
             "scope": "prompt_key",
+            "scope_key": "recipe.level",
+            "role": "root",
+            "ord": 10,
+            "mode": "pflicht",
+            "slug": "niveau.niveau_basis_1_haute_cuisine",
+            "active": true,
+            "global": false
+        },
+        {
+            "scope": "prompt_key",
+            "scope_key": "recipe.level",
+            "role": "root",
+            "ord": 20,
+            "mode": "pflicht",
+            "slug": "niveau.niveau_basis_2_gehoben",
+            "active": true,
+            "global": false
+        },
+        {
+            "scope": "prompt_key",
+            "scope_key": "recipe.level",
+            "role": "root",
+            "ord": 30,
+            "mode": "pflicht",
+            "slug": "niveau.niveau_basis_3_klassisch",
+            "active": true,
+            "global": false
+        },
+        {
+            "scope": "prompt_key",
             "scope_key": "recipe.name_putzen",
             "role": "root",
             "ord": 10,
@@ -559,6 +589,26 @@
             "ord": 130,
             "mode": "pflicht",
             "slug": "mengen_defaults--format-multiplikatoren-von-a-la-carte-ausgehend",
+            "active": true,
+            "global": false
+        },
+        {
+            "scope": "prompt_key",
+            "scope_key": "signal.recipe_naming_suggest",
+            "role": "root",
+            "ord": 10,
+            "mode": "pflicht",
+            "slug": "regelwerk-basisrezepte-10-12-naming-grundprinzip-typ-vokabular--1-naming-syntax-formalisiert",
+            "active": true,
+            "global": false
+        },
+        {
+            "scope": "prompt_key",
+            "scope_key": "signal.recipe_naming_suggest",
+            "role": "root",
+            "ord": 20,
+            "mode": "pflicht",
+            "slug": "regelwerk-basisrezepte-10-12-naming-grundprinzip-typ-vokabular--1-2-typ-vokabular-kontrolliert",
             "active": true,
             "global": false
         },
