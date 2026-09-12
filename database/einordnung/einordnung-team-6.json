@@ -9412,8 +9412,6 @@
             "datenwerte": [],
             "aliase": [
                 "buehnenlicht_schwarzraum",
-                "chefs_corner",
-                "chefscorner",
                 "chefscorner_signatur",
                 "leuchtende_insel",
                 "setup_chefscorner"
@@ -10664,6 +10662,9 @@
             "geltung": [],
             "datenwerte": [],
             "aliase": [
+                "burnt_wood",
+                "chefs_corner",
+                "chefscorner",
                 "cinematic_food",
                 "dark_and_moody",
                 "dark_food_photography",
@@ -10671,7 +10672,8 @@
                 "dark_moody",
                 "dunkel_stimmungsvoll",
                 "fine_dining_moody_stil",
-                "moody_food"
+                "moody_food",
+                "verbranntes_holz"
             ]
         },
         {
@@ -11046,14 +11048,12 @@
             "geltung": [],
             "datenwerte": [],
             "aliase": [
-                "burnt_wood",
                 "eichenholz_untergrund",
                 "marmor_untergrund",
                 "oberflaechen_baukasten",
                 "schiefer_untergrund",
                 "tisch_baukasten",
-                "untergrund_katalog",
-                "verbranntes_holz"
+                "untergrund_katalog"
             ]
         },
         {
